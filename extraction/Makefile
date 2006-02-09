@@ -36,9 +36,13 @@ COQEXEC=coqtop $(COQINCL) -batch -load-vernac-source
 
 ../ccomp: $(FILES:.ml=.cmo)
 	$(OCAMLC) -o ../ccomp $(FILES:.ml=.cmo)
+clean::
+	rm -f ../ccomp
 
 ../ccomp.opt: Pack.cmx
 	$(OCAMLOPT) -o ../ccomp.opt Pack.cmx
+clean::
+	rm -f ../ccomp.opt
 
 Pack.cmx: $(FILES:.ml=.cmx)
 	$(OCAMLOPT) -pack -o Pack.cmx $(FILES:.ml=.cmx)
@@ -81,7 +85,6 @@ clean::
 	rm -f $(GENFILES)
 	rm -f *.cm? *.o
 	cd ../caml && rm -f *.cm? *.o
-	rm -f ccomp
 
 depend: beforedepend
 	$(OCAMLDEP) ../caml/*.mli ../caml/*.ml *.mli *.ml > .depend
