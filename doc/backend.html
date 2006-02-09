@@ -61,60 +61,60 @@ License</A> version 2.</P>
 <H3>Libraries, algorithms, data structures</H3>
 
 <UL>
-<LI> <A HREF="Coqlib.html">Coqlib</A>: addendum to the Coq standard library.
+<LI> <A HREF="lib.Coqlib.html">Coqlib</A>: addendum to the Coq standard library.
      (Coq source file with proofs:
       <A HREF="Coqlib.v"><code>Coqlib.v</code></a>.)
-<LI> <A HREF="Maps.html">Maps</A>: finite maps.
+<LI> <A HREF="lib.Maps.html">Maps</A>: finite maps.
      (Coq source file with proofs:
       <A HREF="Maps.v"><code>Maps.v</code></a>.)
-<LI> <A HREF="Sets.html">Sets</A>: finite sets.
-<LI> <A HREF="union_find.html">Union-find</A>: representation of
+<LI> <A HREF="lib.Sets.html">Sets</A>: finite sets.
+<LI> <A HREF="lib.union_find.html">Union-find</A>: representation of
 equivalence classes.
      (Coq source file with proofs:
       <A HREF="union_find.v"><code>union_find.v</code></a>.)
-<LI> <A HREF="Inclusion.html">Inclusion</A>: tactics to prove list inclusions.
-<LI> <A HREF="AST.html">AST</A>: identifiers, whole programs and other
+<LI> <A HREF="lib.Inclusion.html">Inclusion</A>: tactics to prove list inclusions.
+<LI> <A HREF="backend.AST.html">AST</A>: identifiers, whole programs and other
 common elements of abstract syntaxes.
      (Coq source file with proofs:
       <A HREF="AST.v"><code>AST.v</code></a>.)
-<LI> <A HREF="Integers.html">Integers</A>: machine integers.
+<LI> <A HREF="lib.Integers.html">Integers</A>: machine integers.
      (Coq source file with proofs:
       <A HREF="Integers.v"><code>Integers.v</code></a>.)
-<LI> <A HREF="Floats.html">Floats</A>: machine floating-point numbers.
-<LI> <A HREF="Mem.html">Mem</A>: the memory model.
-<LI> <A HREF="Globalenvs.html">Globalenvs</A>: global execution environments.
-<LI> <A HREF="Op.html">Op</A>: operators, addressing modes and their
+<LI> <A HREF="lib.Floats.html">Floats</A>: machine floating-point numbers.
+<LI> <A HREF="backend.Mem.html">Mem</A>: the memory model.
+<LI> <A HREF="backend.Globalenvs.html">Globalenvs</A>: global execution environments.
+<LI> <A HREF="backend.Op.html">Op</A>: operators, addressing modes and their
 semantics.
-<LI> <A HREF="Ordered.html">Ordered</A>: construction of
+<LI> <A HREF="lib.Ordered.html">Ordered</A>: construction of
 ordered types.
-<LI> <A HREF="Lattice.html">Lattice</A>: construction of
+<LI> <A HREF="lib.Lattice.html">Lattice</A>: construction of
 semi-lattices.
-<LI> <A HREF="Kildall.html">Kildall</A>: resolution of dataflow
+<LI> <A HREF="backend.Kildall.html">Kildall</A>: resolution of dataflow
 inequations by fixpoint iteration.
 </UL>
 
 <H3>Source, intermediate and target languages: syntax and semantics</H3>
 
 <UL>
-<LI> <A HREF="Csharpminor.html">Csharpminor</A>: low-level structured language.
-<LI> <A HREF="Cminor.html">Cminor</A>: low-level structured
+<LI> <A HREF="backend.Csharpminor.html">Csharpminor</A>: low-level structured language.
+<LI> <A HREF="backend.Cminor.html">Cminor</A>: low-level structured
 language, with explicit stack allocation of certain local variables.
-<LI> <A HREF="RTL.html">RTL</A>: register transfer language (3-address
+<LI> <A HREF="backend.RTL.html">RTL</A>: register transfer language (3-address
 code, control-flow graph, infinitely many pseudo-registers). <BR>
-See also: <A HREF="Registers.html">Registers</A> (representation of
+See also: <A HREF="backend.Registers.html">Registers</A> (representation of
 pseudo-registers).
-<LI> <A HREF="LTL.html">LTL</A>: location transfer language (3-address
+<LI> <A HREF="backend.LTL.html">LTL</A>: location transfer language (3-address
 code, control-flow graph, finitely many physical registers, infinitely
 many stack slots). <BR>
-See also: <A HREF="Locations.html">Locations</A> (representation of
+See also: <A HREF="backend.Locations.html">Locations</A> (representation of
 locations).
-<LI> <A HREF="Linear.html">Linear</A>: like LTL, but the CFG is
+<LI> <A HREF="backend.Linear.html">Linear</A>: like LTL, but the CFG is
 replaced by a linear list of instructions with explicit branches and labels.
-<LI> <A HREF="Mach.html">Mach</A>: like Linear, with a more concrete
+<LI> <A HREF="backend.Mach.html">Mach</A>: like Linear, with a more concrete
 view of the activation record.  <BR>
 See also: an alternate semantics for the same
-syntax is given in <A HREF="Machabstr.html">Machabstr</A>. <BR>
-<LI> <A HREF="PPC.html">PPC</A>: abstract syntax for PowerPC assembly
+syntax is given in <A HREF="backend.Machabstr.html">Machabstr</A>. <BR>
+<LI> <A HREF="backend.PPC.html">PPC</A>: abstract syntax for PowerPC assembly
 code.
 </UL>
 
@@ -131,87 +131,87 @@ code.
 <TR valign="top">
   <TD>Recognition of operators and addressing modes</TD>
   <TD>Csharpminor to Cminor</TD>
-  <TD><A HREF="Cmconstr.html">Cmconstr</A></TD>
-  <TD><A HREF="Cmconstrproof.html">Cmconstrproof</A></TD>
+  <TD><A HREF="backend.Cmconstr.html">Cmconstr</A></TD>
+  <TD><A HREF="backend.Cmconstrproof.html">Cmconstrproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Stack allocation of local variables<br>whose address is taken</TD>
   <TD>Csharpminor to Cminor</TD>
-  <TD><A HREF="Cminorgen.html">Cminorgen</A></TD>
-  <TD><A HREF="Cminorgenproof.html">Cminorgenproof</A></TD>
+  <TD><A HREF="backend.Cminorgen.html">Cminorgen</A></TD>
+  <TD><A HREF="backend.Cminorgenproof.html">Cminorgenproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Construction of the CFG, <br>3-address code generation</TD>
   <TD>Cminor to RTL</TD>
-  <TD><A HREF="RTLgen.html">RTLgen</A></TD>
-  <TD><A HREF="RTLgenproof1.html">RTLgenproof1</A><BR>
-      <A HREF="RTLgenproof.html">RTLgenproof</A></TD>
+  <TD><A HREF="backend.RTLgen.html">RTLgen</A></TD>
+  <TD><A HREF="backend.RTLgenproof1.html">RTLgenproof1</A><BR>
+      <A HREF="backend.RTLgenproof.html">RTLgenproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Constant propagation</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="Constprop.html">Constprop</A></TD>
-  <TD><A HREF="Constpropproof.html">Constpropproof</A></TD>
+  <TD><A HREF="backend.Constprop.html">Constprop</A></TD>
+  <TD><A HREF="backend.Constpropproof.html">Constpropproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Common subexpression elimination</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="CSE.html">CSE</A></TD>
-  <TD><A HREF="CSEproof.html">CSEproof</A></TD>
+  <TD><A HREF="backend.CSE.html">CSE</A></TD>
+  <TD><A HREF="backend.CSEproof.html">CSEproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Register allocation by coloring<br>of an interference graph</TD>
   <TD>RTL to LTL</TD>
-  <TD><A HREF="Conventions.html">Conventions</A><BR>
-      <A HREF="InterfGraph.html">InterfGraph</A><BR>
-      <A HREF="Coloring.html">Coloring</A><BR>
-      <A HREF="Parallelmove.html">Parallelmove</A><BR>
-      <A HREF="Allocation.html">Allocation</A></TD>
+  <TD><A HREF="backend.Conventions.html">Conventions</A><BR>
+      <A HREF="backend.InterfGraph.html">InterfGraph</A><BR>
+      <A HREF="backend.Coloring.html">Coloring</A><BR>
+      <A HREF="backend.Parallelmove.html">Parallelmove</A><BR>
+      <A HREF="backend.Allocation.html">Allocation</A></TD>
   <TD><BR>
       <BR>
-      <A HREF="Coloringproof.html">Coloringproof</A><BR>
-      <A HREF="Allocproof_aux.html">Allocproof_aux</A><BR>
-      <A HREF="Allocproof.html">Allocproof</A></TD>
+      <A HREF="backend.Coloringproof.html">Coloringproof</A><BR>
+      <A HREF="backend.Allocproof_aux.html">Allocproof_aux</A><BR>
+      <A HREF="backend.Allocproof.html">Allocproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Branch tunneling</TD>
   <TD>LTL to LTL</TD>
-  <TD><A HREF="Tunneling.html">Tunneling</A></TD>
-  <TD><A HREF="Tunnelingproof.html">Tunnelingproof</A></TD>
+  <TD><A HREF="backend.Tunneling.html">Tunneling</A></TD>
+  <TD><A HREF="backend.Tunnelingproof.html">Tunnelingproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Linearization of the CFG</TD>
   <TD>LTL to Linear</TD>
-  <TD><A HREF="Linearize.html">Linearize</A></TD>
-  <TD><A HREF="Linearizeproof.html">Linearizeproof</A></TD>
+  <TD><A HREF="backend.Linearize.html">Linearize</A></TD>
+  <TD><A HREF="backend.Linearizeproof.html">Linearizeproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Laying out the activation records</TD>
   <TD>Linear to Mach</TD>
-  <TD><A HREF="Stacking.html">Stacking</A></TD>
-  <TD><A HREF="Stackingroof.html">Stackingproof</A></TD>
+  <TD><A HREF="backend.Stacking.html">Stacking</A></TD>
+  <TD><A HREF="backend.Stackingroof.html">Stackingproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Storing the activation records in memory</TD>
   <TD>Mach to Mach</TD>
   <TD>(none)
-  <TD><A HREF="Machabstr2mach.html">Machabstr2mach</A></TD>
+  <TD><A HREF="backend.Machabstr2mach.html">Machabstr2mach</A></TD>
 
 <TR valign="top">
   <TD>Emission of PowerPC assembly</TD>
   <TD>Mach to PPC</TD>
-  <TD><A HREF="PPCgen.html">PPCgen</A></TD>
-  <TD><A HREF="PPCgenproof1.html">PPCgenproof1</A><BR>
-      <A HREF="PPCgenproof.html">PPCgenproof</A></TD>
+  <TD><A HREF="backend.PPCgen.html">PPCgen</A></TD>
+  <TD><A HREF="backend.PPCgenproof1.html">PPCgenproof1</A><BR>
+      <A HREF="backend.PPCgenproof.html">PPCgenproof</A></TD>
 </TR>
 </TABLE>
 
@@ -220,25 +220,25 @@ code.
 Trivial type systems are used to statically capture well-formedness
 conditions on the intermediate languages.
 <UL>
-<LI> <A HREF="RTLtyping.html">RTLtyping</A>: typing for RTL + type
+<LI> <A HREF="backend.RTLtyping.html">RTLtyping</A>: typing for RTL + type
 reconstruction.
-<LI> <A HREF="LTLtyping.html">LTLtyping</A>: typing for LTL.
-<LI> <A HREF="Lineartyping.html">Lineartyping</A>: typing for Linear.
-<LI> <A HREF="Machtyping.html">Machtyping</A>: typing for Mach.
+<LI> <A HREF="backend.LTLtyping.html">LTLtyping</A>: typing for LTL.
+<LI> <A HREF="backend.Lineartyping.html">Lineartyping</A>: typing for Linear.
+<LI> <A HREF="backend.Machtyping.html">Machtyping</A>: typing for Mach.
 </UL>
 Proofs that compiler passes are type-preserving:
 <UL>
-<LI> <A HREF="Alloctyping_aux.html">Alloctyping_aux</A> and
-     <A HREF="Alloctyping.html">Alloctyping</A> (register allocation).
-<LI> <A HREF="Tunnelingtyping.html">Tunnelingtyping</A> (branch tunneling).
-<LI> <A HREF="Lineartyping.html">Lineartyping</A> (branch tunneling).
-<LI> <A HREF="Stackingtyping.html">Stackingtyping</A> (layout of activation records).
+<LI> <A HREF="backend.Alloctyping_aux.html">Alloctyping_aux</A> and
+     <A HREF="backend.Alloctyping.html">Alloctyping</A> (register allocation).
+<LI> <A HREF="backend.Tunnelingtyping.html">Tunnelingtyping</A> (branch tunneling).
+<LI> <A HREF="backend.Lineartyping.html">Lineartyping</A> (branch tunneling).
+<LI> <A HREF="backend.Stackingtyping.html">Stackingtyping</A> (layout of activation records).
 </UL>
 
 <H3>All together</H3>
 
 <UL>
-<LI> <A HREF="Main.html">Main</A>: composing the passes together; the
+<LI> <A HREF="backend.Main.html">Main</A>: composing the passes together; the
 final semantic preservation theorems.
 </UL>
 
