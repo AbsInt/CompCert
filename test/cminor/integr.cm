@@ -1,0 +1,25 @@
+"square" (x): float -> float
+{
+  return x *f x;
+}
+
+"integr"(f, low, high, n): int -> float -> float -> int -> float
+{
+  var h, x, s, i;
+  h = (high -f low) /f floatofint n;
+  x = low;
+  s = 0.0;
+  i = n;
+  {{ loop {
+      if (! (i > 0)) exit;
+      s = s +f (f(x): float -> float);
+      x = x +f h;
+      i = i - 1;
+  } }}
+  return s *f h;
+}
+
+"test"(n) : int -> float
+{
+  return "integr"("square", 0.0, 1.0, n): int -> float -> float -> int -> float;
+}

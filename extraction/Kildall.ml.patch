@@ -1,0 +1,22 @@
+*** Kildall.ml.orig	2006-02-09 11:47:52.000000000 +0100
+--- Kildall.ml	2006-02-09 13:42:35.103321691 +0100
+***************
+*** 191,199 ****
+                       Maps.PMap.t option **)
+    
+    let fixpoint successors topnode transf entrypoints =
+!     DS.fixpoint (fun s ->
+!       Maps.PMap.get s (make_predecessors successors topnode)) topnode transf
+!       entrypoints
+   end
+  
+  module type ORDERED_TYPE_WITH_TOP = 
+--- 191,198 ----
+                       Maps.PMap.t option **)
+    
+    let fixpoint successors topnode transf entrypoints =
+!     let pred = make_predecessors successors topnode in
+!     DS.fixpoint (fun s -> Maps.PMap.get s pred) topnode transf entrypoints
+   end
+  
+  module type ORDERED_TYPE_WITH_TOP = 

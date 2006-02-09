@@ -1,0 +1,6 @@
+#!/bin/sh
+echo $1 | sed -e 'h
+s/\(.\).*/\1/
+y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/
+G
+s/\n.//'
