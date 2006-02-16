@@ -97,7 +97,6 @@ Fixpoint code_tail (pos: Z) (c: code) {struct c} : code :=
   | nil => nil
   | i :: il => if zeq pos 0 then c else code_tail (pos - 1) il
   end.
-Proof.
 
 Lemma find_instr_tail:
   forall c pos,
