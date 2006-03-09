@@ -1,7 +1,7 @@
 (* Library of useful Caml <-> Coq conversions *)
 
 open Datatypes
-open List
+open CList
 open BinPos
 open BinInt
 

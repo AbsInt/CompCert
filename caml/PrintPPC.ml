@@ -4,7 +4,7 @@
 
 open Printf
 open Datatypes
-open List
+open CList
 open Camlcoq
 open AST
 open PPC

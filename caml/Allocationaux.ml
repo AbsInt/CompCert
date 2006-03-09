@@ -1,6 +1,6 @@
 open Camlcoq
 open Datatypes
-open List
+open CList
 open AST
 open Locations
 
@@ -36,4 +36,4 @@ let parallel_move_order lsrc ldst =
   for i = 0 to n - 1 do
     if status.(i) = To_move then move_one i
   done;
-  List.rev !moves
+  CList.rev !moves

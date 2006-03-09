@@ -1,6 +1,6 @@
 FILES=\
   Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml \
-  Bool.ml List.ml Sumbool.ml BinPos.ml BinNat.ml BinInt.ml \
+  Bool.ml CList.ml Sumbool.ml BinPos.ml BinNat.ml BinInt.ml \
   ZArith_dec.ml Zeven.ml Zmin.ml Zmisc.ml Zbool.ml Zpower.ml Zdiv.ml \
   FSetInterface.ml FSetBridge.ml FSetList.ml FSetAVL.ml \
   Coqlib.ml Maps.ml Sets.ml union_find.ml AST.ml Integers.ml \
@@ -39,22 +39,23 @@ COQEXEC=coqtop $(COQINCL) -batch -load-vernac-source
 clean::
 	rm -f ../ccomp
 
-../ccomp.opt: Pack.cmx
-	$(OCAMLOPT) -o ../ccomp.opt Pack.cmx
+../ccomp.opt: $(FILES:.ml=.cmx)
+	$(OCAMLOPT) -o ../ccomp.opt $(FILES:.ml=.cmx)
 clean::
 	rm -f ../ccomp.opt
-
-Pack.cmx: $(FILES:.ml=.cmx)
-	$(OCAMLOPT) -pack -o Pack.cmx $(FILES:.ml=.cmx)
 
 extraction:
 	@rm -f $(GENFILES)
 	$(COQEXEC) extraction.v
 	@echo "Fixing file names..."
+	@mv list.ml CList.ml
+	@mv list.mli CList.mli
 	@for i in $(GENFILES); do \
           j=`./uncapitalize $$i`; \
           test -f $$i || (test -f $$j && mv $$j $$i); \
          done
+	@echo "Conversion List -> CList..."
+	@perl -p -i -e 's/\bList\b/CList/g;' $(GENFILES)
 	@echo "Patching files..."
 	@for i in *.patch; do patch < $$i; done
 

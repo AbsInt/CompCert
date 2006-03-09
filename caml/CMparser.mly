@@ -2,7 +2,7 @@
 
 %{
 open Datatypes
-open List
+open CList
 open Camlcoq
 open BinPos
 open BinInt
@@ -134,9 +134,9 @@ let orbool e1 e2 =
 
 prog:
     global_declarations proc_list EOF
-      { { prog_funct = List.rev $2;
+      { { prog_funct = CList.rev $2;
           prog_main = intern_string "main";
-          prog_vars = List.rev $1; } }
+          prog_vars = CList.rev $1; } }
 ;
 
 global_declarations:
@@ -164,8 +164,8 @@ proc:
     RBRACE
       { Coq_pair($1,
          { fn_sig = $6;
-           fn_params = List.rev $3;
-           fn_vars = List.rev $9;
+           fn_params = CList.rev $3;
+           fn_vars = CList.rev $9;
            fn_stackspace = $8;
            fn_body = $10 }) }
 ;
@@ -196,7 +196,7 @@ stack_declaration:
 
 var_declarations:
     /* empty */                                 { Coq_nil }
-  | var_declarations var_declaration            { List.app $2 $1 }
+  | var_declarations var_declaration            { CList.app $2 $1 }
 ;
 
 var_declaration:
