@@ -208,9 +208,9 @@ var_declaration:
 stmt:
     expr SEMICOLON                              { Sexpr $1 }
   | IF LPAREN expr RPAREN stmts ELSE stmts      { Cmconstr.ifthenelse $3 $5 $7 }
-  | IF LPAREN expr RPAREN stmts                 { Cmconstr.ifthenelse $3 $5 Snil }
+  | IF LPAREN expr RPAREN stmts                 { Cmconstr.ifthenelse $3 $5 Sskip }
   | LOOP stmts                                  { Sloop($2) }
-  | LBRACELBRACE stmts RBRACERBRACE             { Sblock($2) }
+  | LBRACELBRACE stmt_list RBRACERBRACE         { Sblock($2) }
   | EXIT SEMICOLON                              { Sexit O }
   | EXIT INTLIT SEMICOLON                       { Sexit (nat_of_camlint(Int32.pred $2)) }
   | RETURN SEMICOLON                            { Sreturn None }
@@ -219,12 +219,12 @@ stmt:
 
 stmts:
     LBRACE stmt_list RBRACE                     { $2 }
-  | stmt                                        { Scons($1, Snil) }
+  | stmt                                        { $1 }
 ;
 
 stmt_list:
-    /* empty */                                 { Snil }
-  | stmt stmt_list                              { Scons($1, $2) }
+    /* empty */                                 { Sskip }
+  | stmt stmt_list                              { Sseq($1, $2) }
 ;
 
 /* Expressions */
