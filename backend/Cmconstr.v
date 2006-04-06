@@ -907,5 +907,5 @@ Definition store (chunk: memory_chunk) (e1 e2: expr) :=
 
 (** ** If-then-else statement *)
 
-Definition ifthenelse (e: expr) (ifso ifnot: stmtlist) : stmt :=
+Definition ifthenelse (e: expr) (ifso ifnot: stmt) : stmt :=
   Sifthenelse (condexpr_of_expr e) ifso ifnot.

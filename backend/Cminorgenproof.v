@@ -1390,7 +1390,7 @@ Lemma store_parameters_correct:
   mem_inject f m1 tm1 ->
   match_callstack f (mkframe cenv e te1 sp lo hi :: cs) m1.(nextblock) tm1.(nextblock) m1 ->
   exists te2, exists tm2,
-     exec_stmtlist tge (Vptr sp Int.zero)
+     exec_stmt tge (Vptr sp Int.zero)
                    te1 tm1 (store_parameters cenv params)
                    te2 tm2 Out_normal
   /\ mem_inject f m2 tm2
@@ -1430,7 +1430,7 @@ Proof.
         as [te3 [tm3 [EXEC3 [MINJ3 MATCH3]]]].
   exists te3; exists tm3. 
   (* execution *)
-  split. apply exec_Scons_continue with te2 tm1. 
+  split. apply exec_Sseq_continue with te2 tm1. 
   econstructor. unfold te2. constructor. assumption. 
   assumption.
   (* meminj & match_callstack *)
@@ -1453,7 +1453,7 @@ Proof.
               H12 H6 MINJ2 MATCH2) as [te3 [tm3 [EVAL4 [MINJ3 MATCH3]]]].
   exists te3; exists tm3.
   (* execution *)
-  split. apply exec_Scons_continue with te1 tm2. 
+  split. apply exec_Sseq_continue with te1 tm2. 
   econstructor. eauto.
   assumption.
   (* meminj & match_callstack *)
@@ -1537,9 +1537,9 @@ Lemma function_entry_ok:
   mem_inject f m tm ->
   list_norepet (fn_params_names fn ++ fn_vars_names fn) ->
   exists f2, exists te2, exists tm2,
-     exec_stmtlist tge (Vptr sp Int.zero)
-                  te tm1 (store_parameters cenv fn.(Csharpminor.fn_params))
-                  te2 tm2 Out_normal
+     exec_stmt tge (Vptr sp Int.zero)
+               te tm1 (store_parameters cenv fn.(Csharpminor.fn_params))
+               te2 tm2 Out_normal
   /\ mem_inject f2 m2 tm2
   /\ inject_incr f f2
   /\ match_callstack f2
@@ -1713,22 +1713,11 @@ Definition exec_stmt_prop
         (mkframe cenv e te2 sp lo hi :: cs)
         m2.(nextblock) tm2.(nextblock) m2.
 
-Definition exec_stmtlist_prop
-    (e: Csharpminor.env) (m1: mem) (s: Csharpminor.stmtlist) (m2: mem) (out: Csharpminor.outcome): Prop :=
-  forall cenv ts f1 te1 tm1 sp lo hi cs
-  (TR: transl_stmtlist cenv s = Some ts)
-  (MINJ: mem_inject f1 m1 tm1)
-  (MATCH: match_callstack f1
-           (mkframe cenv e te1 sp lo hi :: cs)
-           m1.(nextblock) tm1.(nextblock) m1),
-  exists f2, exists te2, exists tm2, exists tout,
-     exec_stmtlist tge (Vptr sp Int.zero) te1 tm1 ts te2 tm2 tout
-  /\ outcome_inject f2 out tout
-  /\ mem_inject f2 m2 tm2
-  /\ inject_incr f1 f2
-  /\ match_callstack f2
-        (mkframe cenv e te2 sp lo hi :: cs)
-        m2.(nextblock) tm2.(nextblock) m2.
+Check (eval_funcall_ind4 ge
+     eval_expr_prop
+     eval_exprlist_prop
+     eval_funcall_prop
+     exec_stmt_prop).
 
 (** There are as many cases in the inductive proof as there are evaluation
   rules in the Csharpminor semantics.  We treat each case as a separate
@@ -2051,8 +2040,8 @@ Lemma transl_funcall_correct:
    list_norepet (fn_params_names f ++ fn_vars_names f) ->
    alloc_variables empty_env m (fn_variables f) e m1 lb ->
    bind_parameters e m1 (Csharpminor.fn_params f) vargs m2 ->
-   Csharpminor.exec_stmtlist ge e m2 (Csharpminor.fn_body f) m3 out ->
-   exec_stmtlist_prop e m2 (Csharpminor.fn_body f) m3 out ->
+   Csharpminor.exec_stmt ge e m2 (Csharpminor.fn_body f) m3 out ->
+   exec_stmt_prop e m2 (Csharpminor.fn_body f) m3 out ->
    Csharpminor.outcome_result_value out (sig_res (Csharpminor.fn_sig f)) vres ->
    eval_funcall_prop m f vargs (free_list m3 lb) vres.
 Proof.
@@ -2085,9 +2074,8 @@ Proof.
   exists f3; exists (Mem.free tm3 sp); exists tvres.
   (* execution *)
   split. rewrite <- H6; econstructor; simpl; eauto.
-  apply exec_Scons_continue with te2 tm2.
-  change Out_normal with (outcome_block Out_normal).
-  apply exec_Sblock. exact STOREPARAM.
+  apply exec_Sseq_continue with te2 tm2.
+  exact STOREPARAM.
   eexact EXECBODY.
   (* val_inject *)
   split. assumption.
@@ -2105,6 +2093,15 @@ Proof.
   intros. elim (BLOCKS b); intros B1 B2. generalize (B2 H7). omega.
 Qed.
 
+Lemma transl_stmt_Sskip_correct:
+  forall (e : Csharpminor.env) (m : mem),
+  exec_stmt_prop e m Csharpminor.Sskip m Csharpminor.Out_normal.
+Proof.
+  intros; red; intros. monadInv TR. 
+  exists f1; exists te1; exists tm1; exists Out_normal.
+  intuition. subst ts; constructor. constructor.
+Qed.
+
 Lemma transl_stmt_Sexpr_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
      (m1 : mem) (v : val),
@@ -2120,15 +2117,51 @@ Proof.
   constructor.
 Qed.
 
+Lemma transl_stmt_Sseq_continue_correct:
+  forall (e : Csharpminor.env) (m : mem) (s1 s2 : Csharpminor.stmt)
+         (m1 m2 : mem) (out : Csharpminor.outcome),
+  Csharpminor.exec_stmt ge e m s1 m1 Csharpminor.Out_normal ->
+  exec_stmt_prop e m s1 m1 Csharpminor.Out_normal ->
+  Csharpminor.exec_stmt ge e m1 s2 m2 out ->
+  exec_stmt_prop e m1 s2 m2 out ->
+  exec_stmt_prop e m (Csharpminor.Sseq s1 s2) m2 out.
+Proof.
+  intros; red; intros; monadInv TR.
+  destruct (H0 _ _ _ _ _ _ _ _ _ EQ MINJ MATCH)
+  as [f2 [te2 [tm2 [tout1 [EXEC1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  destruct (H2 _ _ _ _ _ _ _ _ _ EQ0 MINJ2 MATCH2)
+  as [f3 [te3 [tm3 [tout2 [EXEC2 [OINJ2 [MINJ3 [INCR3 MATCH3]]]]]]]].
+  exists f3; exists te3; exists tm3; exists tout2.
+  intuition. subst ts; eapply exec_Sseq_continue; eauto.
+  inversion OINJ1. subst tout1. auto.
+  eapply inject_incr_trans; eauto.
+Qed.
+
+Lemma transl_stmt_Sseq_stop_correct:
+  forall (e : Csharpminor.env) (m : mem) (s1 s2 : Csharpminor.stmt)
+         (m1 : mem) (out : Csharpminor.outcome),
+  Csharpminor.exec_stmt ge e m s1 m1 out ->
+  exec_stmt_prop e m s1 m1 out ->
+  out <> Csharpminor.Out_normal ->
+  exec_stmt_prop e m (Csharpminor.Sseq s1 s2) m1 out.
+Proof.
+  intros; red; intros; monadInv TR.
+  destruct (H0 _ _ _ _ _ _ _ _ _ EQ MINJ MATCH)
+  as [f2 [te2 [tm2 [tout1 [EXEC1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  exists f2; exists te2; exists tm2; exists tout1.
+  intuition. subst ts; eapply exec_Sseq_stop; eauto.
+  inversion OINJ1; subst out tout1; congruence.
+Qed.
+
 Lemma transl_stmt_Sifthenelse_true_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
-     (sl1 sl2 : Csharpminor.stmtlist) (m1 : mem) (v1 : val) (m2 : mem)
+     (sl1 sl2 : Csharpminor.stmt) (m1 : mem) (v1 : val) (m2 : mem)
      (out : Csharpminor.outcome),
    Csharpminor.eval_expr ge nil e m a m1 v1 ->
    eval_expr_prop nil e m a m1 v1 ->
    Val.is_true v1 ->
-   Csharpminor.exec_stmtlist ge e m1 sl1 m2 out ->
-   exec_stmtlist_prop e m1 sl1 m2 out ->
+   Csharpminor.exec_stmt ge e m1 sl1 m2 out ->
+   exec_stmt_prop e m1 sl1 m2 out ->
    exec_stmt_prop e m (Csharpminor.Sifthenelse a sl1 sl2) m2 out.
 Proof.
   intros; red; intros. monadInv TR.
@@ -2145,13 +2178,13 @@ Qed.
 
 Lemma transl_stmt_Sifthenelse_false_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
-     (sl1 sl2 : Csharpminor.stmtlist) (m1 : mem) (v1 : val) (m2 : mem)
+     (sl1 sl2 : Csharpminor.stmt) (m1 : mem) (v1 : val) (m2 : mem)
      (out : Csharpminor.outcome),
    Csharpminor.eval_expr ge nil e m a m1 v1 ->
    eval_expr_prop nil e m a m1 v1 ->
    Val.is_false v1 ->
-   Csharpminor.exec_stmtlist ge e m1 sl2 m2 out ->
-   exec_stmtlist_prop e m1 sl2 m2 out ->
+   Csharpminor.exec_stmt ge e m1 sl2 m2 out ->
+   exec_stmt_prop e m1 sl2 m2 out ->
    exec_stmt_prop e m (Csharpminor.Sifthenelse a sl1 sl2) m2 out.
 Proof.
   intros; red; intros. monadInv TR.
@@ -2167,10 +2200,10 @@ Proof.
 Qed.
 
 Lemma transl_stmt_Sloop_loop_correct:
-   forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmtlist)
+   forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmt)
      (m1 m2 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmtlist ge e m sl m1 Csharpminor.Out_normal ->
-   exec_stmtlist_prop e m sl m1 Csharpminor.Out_normal ->
+   Csharpminor.exec_stmt ge e m sl m1 Csharpminor.Out_normal ->
+   exec_stmt_prop e m sl m1 Csharpminor.Out_normal ->
    Csharpminor.exec_stmt ge e m1 (Csharpminor.Sloop sl) m2 out ->
    exec_stmt_prop e m1 (Csharpminor.Sloop sl) m2 out ->
    exec_stmt_prop e m (Csharpminor.Sloop sl) m2 out.
@@ -2189,10 +2222,10 @@ Qed.
 
 
 Lemma transl_stmt_Sloop_exit_correct:
-   forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmtlist)
+   forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmt)
      (m1 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmtlist ge e m sl m1 out ->
-   exec_stmtlist_prop e m sl m1 out ->
+   Csharpminor.exec_stmt ge e m sl m1 out ->
+   exec_stmt_prop e m sl m1 out ->
    out <> Csharpminor.Out_normal ->
    exec_stmt_prop e m (Csharpminor.Sloop sl) m1 out.
 Proof.
@@ -2205,10 +2238,10 @@ Proof.
 Qed.
 
 Lemma transl_stmt_Sblock_correct:
-   forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmtlist)
+   forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmt)
      (m1 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmtlist ge e m sl m1 out ->
-   exec_stmtlist_prop e m sl m1 out ->
+   Csharpminor.exec_stmt ge e m sl m1 out ->
+   exec_stmt_prop e m sl m1 out ->
    exec_stmt_prop e m (Csharpminor.Sblock sl) m1
      (Csharpminor.outcome_block out).
 Proof.
@@ -2258,51 +2291,6 @@ Proof.
   intuition. subst ts; econstructor; eauto. constructor; auto.
 Qed.
 
-Lemma transl_stmtlist_Snil_correct:
-   forall (e : Csharpminor.env) (m : mem),
-   exec_stmtlist_prop e m Csharpminor.Snil m Csharpminor.Out_normal.
-Proof.
-  intros; red; intros; monadInv TR.
-  exists f1; exists te1; exists tm1; exists Out_normal.
-  intuition. subst ts; constructor. constructor.
-Qed.
-
-Lemma transl_stmtlist_Scons_2_correct:
-   forall (e : Csharpminor.env) (m : mem) (s : Csharpminor.stmt)
-     (sl : Csharpminor.stmtlist) (m1 m2 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmt ge e m s m1 Csharpminor.Out_normal ->
-   exec_stmt_prop e m s m1 Csharpminor.Out_normal ->
-   Csharpminor.exec_stmtlist ge e m1 sl m2 out ->
-   exec_stmtlist_prop e m1 sl m2 out ->
-   exec_stmtlist_prop e m (Csharpminor.Scons s sl) m2 out.
-Proof.
-  intros; red; intros; monadInv TR.
-  destruct (H0 _ _ _ _ _ _ _ _ _ EQ MINJ MATCH)
-  as [f2 [te2 [tm2 [tout1 [EXEC1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
-  destruct (H2 _ _ _ _ _ _ _ _ _ EQ0 MINJ2 MATCH2)
-  as [f3 [te3 [tm3 [tout2 [EXEC2 [OINJ2 [MINJ3 [INCR3 MATCH3]]]]]]]].
-  exists f3; exists te3; exists tm3; exists tout2.
-  intuition. subst ts; eapply exec_Scons_continue; eauto.
-  inversion OINJ1. subst tout1. auto.
-  eapply inject_incr_trans; eauto.
-Qed.
-
-Lemma transl_stmtlist_Scons_1_correct:
-   forall (e : Csharpminor.env) (m : mem) (s : Csharpminor.stmt)
-     (sl : Csharpminor.stmtlist) (m1 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmt ge e m s m1 out ->
-   exec_stmt_prop e m s m1 out ->
-   out <> Csharpminor.Out_normal ->
-   exec_stmtlist_prop e m (Csharpminor.Scons s sl) m1 out.
-Proof.
-  intros; red; intros; monadInv TR.
-  destruct (H0 _ _ _ _ _ _ _ _ _ EQ MINJ MATCH)
-  as [f2 [te2 [tm2 [tout1 [EXEC1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
-  exists f2; exists te2; exists tm2; exists tout1.
-  intuition. subst ts; eapply exec_Scons_stop; eauto.
-  inversion OINJ1; subst out tout1; congruence.
-Qed.
-
 (** We conclude by an induction over the structure of the Csharpminor
   evaluation derivation, using the lemmas above for each case. *)
 
@@ -2311,12 +2299,11 @@ Lemma transl_function_correct:
    Csharpminor.eval_funcall ge m1 f vargs m2 vres ->
    eval_funcall_prop m1 f vargs m2 vres.
 Proof
-  (eval_funcall_ind5 ge
+  (eval_funcall_ind4 ge
      eval_expr_prop
      eval_exprlist_prop
      eval_funcall_prop
      exec_stmt_prop
-     exec_stmtlist_prop
 
      transl_expr_Evar_correct
      transl_expr_Eassign_correct
@@ -2333,7 +2320,10 @@ Proof
      transl_exprlist_Enil_correct
      transl_exprlist_Econs_correct
      transl_funcall_correct
+     transl_stmt_Sskip_correct
      transl_stmt_Sexpr_correct
+     transl_stmt_Sseq_continue_correct
+     transl_stmt_Sseq_stop_correct
      transl_stmt_Sifthenelse_true_correct
      transl_stmt_Sifthenelse_false_correct
      transl_stmt_Sloop_loop_correct
@@ -2341,10 +2331,7 @@ Proof
      transl_stmt_Sblock_correct
      transl_stmt_Sexit_correct
      transl_stmt_Sreturn_none_correct
-     transl_stmt_Sreturn_some_correct
-     transl_stmtlist_Snil_correct
-     transl_stmtlist_Scons_2_correct
-     transl_stmtlist_Scons_1_correct).
+     transl_stmt_Sreturn_some_correct).
 
 (** The [match_globalenvs] relation holds for the global environments
   of the source program and the transformed program. *)

@@ -1390,52 +1390,21 @@ Proof (proj2 (proj2 transl_expr_condition_exprlist_incr)).
 
 Hint Resolve transl_expr_incr transl_condition_incr transl_exprlist_incr: rtlg.
 
-Scheme stmt_ind2 := Induction for stmt Sort Prop
-  with stmtlist_ind2 := Induction for stmtlist Sort Prop.
-
-Lemma stmt_stmtlist_ind:
-forall (P : stmt -> Prop) (P0 : stmtlist -> Prop),
-       (forall e : expr, P (Sexpr e)) ->
-       (forall (c : condexpr) (s : stmtlist),
-        P0 s -> forall s0 : stmtlist, P0 s0 -> P (Sifthenelse c s s0)) ->
-       (forall s : stmtlist, P0 s -> P (Sloop s)) ->
-       (forall s : stmtlist, P0 s -> P (Sblock s)) ->
-       (forall n : nat, P (Sexit n)) ->
-       (forall o : option expr, P (Sreturn o)) ->
-       P0 Snil ->
-       (forall s : stmt,
-        P s -> forall s0 : stmtlist, P0 s0 -> P0 (Scons s s0)) ->
-       (forall s : stmt, P s) /\
-       (forall sl : stmtlist, P0 sl).
-Proof.
-  intros. split. apply (stmt_ind2 P P0); assumption.
-  apply (stmtlist_ind2 P P0); assumption.
-Qed.
-
-Definition transl_stmt_incr_pred (a: stmt) : Prop :=
-  forall map nd nexits nret rret s ns s',
+Lemma transl_stmt_incr:
+  forall a map nd nexits nret rret s ns s',
   transl_stmt map a nd nexits nret rret s = OK ns s' ->
   state_incr s s'.
-Definition transl_stmtlist_incr_pred (al: stmtlist) : Prop :=
-  forall map nd nexits nret rret s ns s',
-  transl_stmtlist map al nd nexits nret rret s = OK ns s' ->
-  state_incr s s'.
-
-Lemma transl_stmt_stmtlist_incr:
-  (forall a, transl_stmt_incr_pred a) /\
-  (forall al, transl_stmtlist_incr_pred al).
 Proof.
-  apply stmt_stmtlist_ind;
-  unfold transl_stmt_incr_pred,
-         transl_stmtlist_incr_pred;
-  simpl; intros; 
+  induction a; simpl; intros; 
   try (monadInv H); try (monadInv H0); 
   try (monadInv H1); try (monadInv H2);
   eauto 6 with rtlg.
 
-  generalize H1. case (more_likely c s s0); monadSimpl; eauto 6 with rtlg.
+  subst s'; auto with rtlg.
 
-  subst s'. apply update_instr_incr with s1 s2 (Inop n0) n u;
+  generalize H. case (more_likely c a1 a2); monadSimpl; eauto 6 with rtlg.
+
+  subst s' s5. apply update_instr_incr with s3 s4 (Inop n2) n1 u0;
   eauto with rtlg.
 
   generalize H; destruct (nth_error nexits n); monadSimpl.
@@ -1444,20 +1413,7 @@ Proof.
   generalize H. destruct o; destruct rret; try monadSimpl.
   eauto with rtlg.
   subst s'; auto with rtlg.
-  subst s'; auto with rtlg.
 Qed.
 
-Lemma transl_stmt_incr:
-  forall a map nd nexits nret rret s ns s',
-  transl_stmt map a nd nexits nret rret s = OK ns s' ->
-  state_incr s s'.
-Proof (proj1 transl_stmt_stmtlist_incr).
-
-Lemma transl_stmtlist_incr:
-  forall al map nd nexits nret rret s ns s',
-  transl_stmtlist map al nd nexits nret rret s = OK ns s' ->
-  state_incr s s'.
-Proof (proj2 transl_stmt_stmtlist_incr).
-
-Hint Resolve transl_stmt_incr transl_stmtlist_incr: rtlg.
+Hint Resolve transl_stmt_incr: rtlg.
 

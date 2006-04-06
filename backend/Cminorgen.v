@@ -231,18 +231,24 @@ with transl_exprlist (cenv: compilenv) (el: Csharpminor.exprlist)
 Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
                      {struct s}: option stmt :=
   match s with
+  | Csharpminor.Sskip =>
+      Some Sskip
   | Csharpminor.Sexpr e =>
       do te <- transl_expr cenv e; Some(Sexpr te)
+  | Csharpminor.Sseq s1 s2 =>
+      do ts1 <- transl_stmt cenv s1;
+      do ts2 <- transl_stmt cenv s2;
+      Some (Sseq ts1 ts2)
   | Csharpminor.Sifthenelse e s1 s2 =>
       do te <- transl_expr cenv e;
-      do ts1 <- transl_stmtlist cenv s1;
-      do ts2 <- transl_stmtlist cenv s2;
+      do ts1 <- transl_stmt cenv s1;
+      do ts2 <- transl_stmt cenv s2;
       Some (Cmconstr.ifthenelse te ts1 ts2)
   | Csharpminor.Sloop s =>
-      do ts <- transl_stmtlist cenv s;
+      do ts <- transl_stmt cenv s;
       Some (Sloop ts)
   | Csharpminor.Sblock s =>
-      do ts <- transl_stmtlist cenv s;
+      do ts <- transl_stmt cenv s;
       Some (Sblock ts)
   | Csharpminor.Sexit n =>
       Some (Sexit n)
@@ -251,16 +257,6 @@ Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
   | Csharpminor.Sreturn (Some e) =>
       do te <- transl_expr cenv e;
       Some (Sreturn (Some te))
-  end
-
-with transl_stmtlist (cenv: compilenv) (s: Csharpminor.stmtlist)
-                     {struct s}: option stmtlist :=
-  match s with
-  | Csharpminor.Snil => Some Snil
-  | Csharpminor.Scons s1 s2 =>
-      do ts1 <- transl_stmt cenv s1;
-      do ts2 <- transl_stmtlist cenv s2;
-      Some (Scons ts1 ts2)
   end.
 
 (** Computation of the set of variables whose address is taken in
@@ -296,22 +292,18 @@ with addr_taken_exprlist (e: Csharpminor.exprlist): Identset.t :=
 
 Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
   match s with
+  | Csharpminor.Sskip => Identset.empty
   | Csharpminor.Sexpr e => addr_taken_expr e
+  | Csharpminor.Sseq s1 s2 =>
+      Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2)
   | Csharpminor.Sifthenelse e s1 s2 =>
       Identset.union (addr_taken_expr e)
-        (Identset.union (addr_taken_stmtlist s1) (addr_taken_stmtlist s2))
-  | Csharpminor.Sloop s => addr_taken_stmtlist s
-  | Csharpminor.Sblock s => addr_taken_stmtlist s
+        (Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2))
+  | Csharpminor.Sloop s => addr_taken_stmt s
+  | Csharpminor.Sblock s => addr_taken_stmt s
   | Csharpminor.Sexit n => Identset.empty
   | Csharpminor.Sreturn None => Identset.empty
   | Csharpminor.Sreturn (Some e) => addr_taken_expr e
-  end
-
-with addr_taken_stmtlist (s: Csharpminor.stmtlist): Identset.t :=
-  match s with
-  | Csharpminor.Snil => Identset.empty
-  | Csharpminor.Scons s1 s2 =>
-      Identset.union (addr_taken_stmt s1) (addr_taken_stmtlist s2)
   end.
 
 (** Layout of the Cminor stack data block and construction of the 
@@ -351,7 +343,7 @@ Fixpoint assign_variables
 
 Definition build_compilenv (f: Csharpminor.function) : compilenv * Z :=
   assign_variables
-    (addr_taken_stmtlist f.(Csharpminor.fn_body))
+    (addr_taken_stmt f.(Csharpminor.fn_body))
     (fn_variables f)
     (PMap.init Var_global, 0).
 
@@ -361,19 +353,19 @@ Definition build_compilenv (f: Csharpminor.function) : compilenv * Z :=
 
 Fixpoint store_parameters
        (cenv: compilenv) (params: list (ident * memory_chunk))
-       {struct params} : stmtlist :=
+       {struct params} : stmt :=
   match params with
-  | nil => Snil
+  | nil => Sskip
   | (id, chunk) :: rem =>
       match PMap.get id cenv with
       | Var_local chunk =>
-          Scons (Sexpr (Eassign id (make_cast chunk (Evar id))))
-                (store_parameters cenv rem)
+          Sseq (Sexpr (Eassign id (make_cast chunk (Evar id))))
+               (store_parameters cenv rem)
       | Var_stack_scalar chunk ofs =>
-          Scons (Sexpr (make_store chunk (make_stackaddr ofs) (Evar id)))
-                (store_parameters cenv rem)
+          Sseq (Sexpr (make_store chunk (make_stackaddr ofs) (Evar id)))
+               (store_parameters cenv rem)
       | _ =>
-          Snil (* should never happen *)
+          Sskip (* should never happen *)
       end
   end.
 
@@ -385,13 +377,13 @@ Fixpoint store_parameters
 Definition transl_function (f: Csharpminor.function): option function :=
   let (cenv, stacksize) := build_compilenv f in
   if zle stacksize Int.max_signed then
-    do tbody <- transl_stmtlist cenv f.(Csharpminor.fn_body);
+    do tbody <- transl_stmt cenv f.(Csharpminor.fn_body);
        Some (mkfunction
               (Csharpminor.fn_sig f)
               (Csharpminor.fn_params_names f)
               (Csharpminor.fn_vars_names f)
               stacksize
-              (Scons (Sblock (store_parameters cenv f.(Csharpminor.fn_params))) tbody))
+              (Sseq (store_parameters cenv f.(Csharpminor.fn_params)) tbody))
   else None.
 
 Definition transl_program (p: Csharpminor.program) : option program :=

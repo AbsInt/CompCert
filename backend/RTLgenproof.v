@@ -203,8 +203,8 @@ Definition match_return_outcome
       end
   end.
 
-(** The simulation diagram for the translation of statements and
-  lists of statements is of the following form:
+(** The simulation diagram for the translation of statements
+  is of the following form:
 <<
                     I /\ P
        e, m, a ------------- ns, rs, m
@@ -237,20 +237,6 @@ Definition transl_stmt_correct
   forall map ncont nexits nret rret s ns s' nd rs
     (MWF: map_wf map s)
     (TE: transl_stmt map a ncont nexits nret rret s = OK ns s')
-    (ME: match_env map e nil rs)
-    (OUT: outcome_node out ncont nexits nret nd)
-    (RRG: return_reg_ok s map rret),
-  exists rs',
-     exec_instrs tge s'.(st_code) sp ns rs m nd rs' m'
-  /\ match_env map e' nil rs'
-  /\ match_return_outcome out rret rs'.
-
-Definition transl_stmtlist_correct 
-  (sp: val) (e: env) (m: mem) (al: stmtlist)
-            (e': env) (m': mem) (out: outcome) : Prop :=
-  forall map ncont nexits nret rret s ns s' nd rs
-    (MWF: map_wf map s)
-    (TE: transl_stmtlist map al ncont nexits nret rret s = OK ns s')
     (ME: match_env map e nil rs)
     (OUT: outcome_node out ncont nexits nret nd)
     (RRG: return_reg_ok s map rret),
@@ -917,8 +903,8 @@ Lemma transl_funcall_correct:
     (out : outcome) (vres : val),
   Mem.alloc m 0 (fn_stackspace f) = (m1, sp) ->
   set_locals (Cminor.fn_vars f) (set_params vargs (Cminor.fn_params f)) = e ->
-  exec_stmtlist ge (Vptr sp Int.zero) e m1 (fn_body f) e2 m2 out ->
-  transl_stmtlist_correct (Vptr sp Int.zero) e m1 (fn_body f) e2 m2 out ->
+  exec_stmt ge (Vptr sp Int.zero) e m1 (fn_body f) e2 m2 out ->
+  transl_stmt_correct (Vptr sp Int.zero) e m1 (fn_body f) e2 m2 out ->
   outcome_result_value out f.(Cminor.fn_sig).(sig_res) vres ->
   transl_function_correct m f vargs (Mem.free m2 sp) vres.
 Proof.
@@ -969,6 +955,60 @@ Proof.
   destruct o; contradiction||auto.
 Qed.
 
+Lemma transl_stmt_Sskip_correct:
+  forall (sp: val) (e : env) (m : mem),
+  transl_stmt_correct sp e m Sskip e m Out_normal.
+Proof.
+  intros; red; intros. simpl in TE. monadInv TE.
+  subst s'; subst ns.
+  simpl in OUT. subst ncont. 
+  exists rs. simpl. intuition. apply exec_refl.
+Qed.
+
+Lemma transl_stmt_Sseq_continue_correct:
+  forall (sp : val) (e : env) (m : mem) (s1 : stmt) (e1 : env)
+         (m1 : mem) (s2 : stmt) (e2 : env) (m2 : mem) (out : outcome),
+  exec_stmt ge sp e m s1 e1 m1 Out_normal ->
+  transl_stmt_correct sp e m s1 e1 m1 Out_normal ->
+  exec_stmt ge sp e1 m1 s2 e2 m2 out ->
+  transl_stmt_correct sp e1 m1 s2 e2 m2 out ->
+  transl_stmt_correct sp e m (Sseq s1 s2) e2 m2 out.
+Proof.
+  intros; red; intros. simpl in TE; monadInv TE. intro EQ0.
+  assert (MWF1: map_wf map s0). eauto with rtlg.
+  assert (OUTs: outcome_node Out_normal n nexits nret n).
+    simpl. auto.
+  assert (RRG1: return_reg_ok s0 map rret). eauto with rtlg.
+  generalize (H0 _ _ _ _ _ _ _ _ _ _ MWF1 EQ0 ME OUTs RRG1).
+  intros [rs1 [EX1 [ME1 MR1]]].
+  generalize (H2 _ _ _ _ _ _ _ _ _ _ MWF EQ ME1 OUT RRG).
+  intros [rs2 [EX2 [ME2 MR2]]].
+  exists rs2.
+(* Exec *)
+  split. eapply exec_trans. eexact EX1. 
+  apply exec_instrs_incr with s0. eauto with rtlg.
+  exact EX2.
+(* Match-env + return *)
+  tauto.
+Qed.
+
+Lemma transl_stmt_Sseq_stop_correct:
+  forall (sp : val) (e : env) (m : mem) (s1 s2 : stmt) (e1 : env)
+         (m1 : mem) (out : outcome),
+  exec_stmt ge sp e m s1 e1 m1 out ->
+  transl_stmt_correct sp e m s1 e1 m1 out ->
+  out <> Out_normal ->
+  transl_stmt_correct sp e m (Sseq s1 s2) e1 m1 out.
+Proof.
+  intros; red; intros. 
+  simpl in TE; monadInv TE. intro EQ0; clear TE.
+  assert (MWF1: map_wf map s0). eauto with rtlg.
+  assert (OUTs: outcome_node out n nexits nret nd).
+    destruct out; simpl; auto. tauto. 
+  assert (RRG1: return_reg_ok s0 map rret). eauto with rtlg.
+  exact (H0 _ _ _ _ _ _ _ _ _ _ MWF1 EQ0 ME OUTs RRG1).
+Qed.
+
 Lemma transl_stmt_Sexpr_correct:
   forall (sp: val) (e : env) (m : mem) (a : expr) 
     (e1 : env) (m1 : mem) (v : val),
@@ -988,12 +1028,12 @@ Qed.
 
 Lemma transl_stmt_Sifthenelse_correct:
   forall (sp: val) (e : env) (m : mem) (a : condexpr)
-    (sl1 sl2 : stmtlist) (e1 : env) (m1 : mem) 
+    (sl1 sl2 : stmt) (e1 : env) (m1 : mem) 
     (v1 : bool) (e2 : env) (m2 : mem) (out : outcome),
   eval_condexpr ge sp nil e m a e1 m1 v1 ->
   transl_condition_correct sp nil e m a e1 m1 v1 ->
-  exec_stmtlist ge sp e1 m1 (if v1 then sl1 else sl2) e2 m2 out ->
-  transl_stmtlist_correct sp e1 m1 (if v1 then sl1 else sl2) e2 m2 out ->
+  exec_stmt ge sp e1 m1 (if v1 then sl1 else sl2) e2 m2 out ->
+  transl_stmt_correct sp e1 m1 (if v1 then sl1 else sl2) e2 m2 out ->
   transl_stmt_correct sp e m (Sifthenelse a sl1 sl2) e2 m2 out.
 Proof.
   intros; red; intros until rs; intro MWF.
@@ -1038,11 +1078,11 @@ Proof.
 Qed.
 
 Lemma transl_stmt_Sloop_loop_correct:
-  forall (sp: val) (e : env) (m : mem) (sl : stmtlist) 
+  forall (sp: val) (e : env) (m : mem) (sl : stmt) 
     (e1 : env) (m1 : mem) (e2 : env) (m2 : mem) 
     (out : outcome),
-  exec_stmtlist ge sp e m sl e1 m1 Out_normal ->
-  transl_stmtlist_correct sp e m sl e1 m1 Out_normal ->
+  exec_stmt ge sp e m sl e1 m1 Out_normal ->
+  transl_stmt_correct sp e m sl e1 m1 Out_normal ->
   exec_stmt ge sp e1 m1 (Sloop sl) e2 m2 out ->
   transl_stmt_correct sp e1 m1 (Sloop sl) e2 m2 out ->
   transl_stmt_correct sp e m (Sloop sl) e2 m2 out.
@@ -1077,10 +1117,10 @@ Proof.
 Qed.
 
 Lemma transl_stmt_Sloop_stop_correct:
-  forall (sp: val) (e : env) (m : mem) (sl : stmtlist) 
+  forall (sp: val) (e : env) (m : mem) (sl : stmt) 
     (e1 : env) (m1 : mem) (out : outcome),
-  exec_stmtlist ge sp e m sl e1 m1 out ->
-  transl_stmtlist_correct sp e m sl e1 m1 out ->
+  exec_stmt ge sp e m sl e1 m1 out ->
+  transl_stmt_correct sp e m sl e1 m1 out ->
   out <> Out_normal ->
   transl_stmt_correct sp e m (Sloop sl) e1 m1 out.
 Proof.
@@ -1105,10 +1145,10 @@ Proof.
 Qed.  
 
 Lemma transl_stmt_Sblock_correct:
-  forall (sp: val) (e : env) (m : mem) (sl : stmtlist) 
+  forall (sp: val) (e : env) (m : mem) (sl : stmt) 
     (e1 : env) (m1 : mem) (out : outcome),
-  exec_stmtlist ge sp e m sl e1 m1 out ->
-  transl_stmtlist_correct sp e m sl e1 m1 out ->
+  exec_stmt ge sp e m sl e1 m1 out ->
+  transl_stmt_correct sp e m sl e1 m1 out ->
   transl_stmt_correct sp e m (Sblock sl) e1 m1 (outcome_block out).
 Proof.
   intros; red; intros. simpl in TE. 
@@ -1168,85 +1208,28 @@ Proof.
 
   monadSimpl.
 Qed.
-  
-Lemma transl_stmtlist_Snil_correct:
-  forall (sp: val) (e : env) (m : mem),
-  transl_stmtlist_correct sp e m Snil e m Out_normal.
-Proof.
-  intros; red; intros. simpl in TE. monadInv TE.
-  subst s'; subst ns.
-  simpl in OUT. subst ncont. 
-  exists rs. simpl. intuition. apply exec_refl.
-Qed.
-
-Lemma transl_stmtlist_Scons_continue_correct:
-  forall (sp: val) (e : env) (m : mem) (s : stmt) 
-    (sl : stmtlist) (e1 : env) (m1 : mem) (e2 : env) 
-    (m2 : mem) (out : outcome),
-  exec_stmt ge sp e m s e1 m1 Out_normal ->
-  transl_stmt_correct sp e m s e1 m1 Out_normal ->
-  exec_stmtlist ge sp e1 m1 sl e2 m2 out ->
-  transl_stmtlist_correct sp e1 m1 sl e2 m2 out ->
-  transl_stmtlist_correct sp e m (Scons s sl) e2 m2 out.
-Proof.
-  intros; red; intros. simpl in TE; monadInv TE. intro EQ0.
-  assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (OUTs: outcome_node Out_normal n nexits nret n).
-    simpl. auto.
-  assert (RRG1: return_reg_ok s1 map rret). eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ _ _ MWF1 EQ0 ME OUTs RRG1).
-  intros [rs1 [EX1 [ME1 MR1]]].
-  generalize (H2 _ _ _ _ _ _ _ _ _ _ MWF EQ ME1 OUT RRG).
-  intros [rs2 [EX2 [ME2 MR2]]].
-  exists rs2.
-(* Exec *)
-  split. eapply exec_trans. eexact EX1. 
-  apply exec_instrs_incr with s1. eauto with rtlg.
-  exact EX2.
-(* Match-env + return *)
-  tauto.
-Qed.
-
-Lemma transl_stmtlist_Scons_stop_correct:
-  forall (sp: val) (e : env) (m : mem) (s : stmt) 
-    (sl : stmtlist) (e1 : env) (m1 : mem) (out : outcome),
-  exec_stmt ge sp e m s e1 m1 out ->
-  transl_stmt_correct sp e m s e1 m1 out ->
-  out <> Out_normal ->
-  transl_stmtlist_correct sp e m (Scons s sl) e1 m1 out.
-Proof.
-  intros; red; intros. 
-  simpl in TE; monadInv TE. intro EQ0; clear TE.
-  assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (OUTs: outcome_node out n nexits nret nd).
-    destruct out; simpl; auto. tauto. 
-  assert (RRG1: return_reg_ok s1 map rret). eauto with rtlg.
-  exact (H0 _ _ _ _ _ _ _ _ _ _ MWF1 EQ0 ME OUTs RRG1).
-Qed.
 
 (** The correctness of the translation then follows by application
   of the mutual induction principle for Cminor evaluation derivations
   to the lemmas above. *)
 
-Scheme eval_expr_ind_6 := Minimality for eval_expr Sort Prop
-  with eval_condexpr_ind_6 := Minimality for eval_condexpr Sort Prop
-  with eval_exprlist_ind_6 := Minimality for eval_exprlist Sort Prop
-  with eval_funcall_ind_6 := Minimality for eval_funcall Sort Prop
-  with exec_stmt_ind_6 := Minimality for exec_stmt Sort Prop
-  with exec_stmtlist_ind_6 := Minimality for exec_stmtlist Sort Prop.
+Scheme eval_expr_ind_5 := Minimality for eval_expr Sort Prop
+  with eval_condexpr_ind_5 := Minimality for eval_condexpr Sort Prop
+  with eval_exprlist_ind_5 := Minimality for eval_exprlist Sort Prop
+  with eval_funcall_ind_5 := Minimality for eval_funcall Sort Prop
+  with exec_stmt_ind_5 := Minimality for exec_stmt Sort Prop.
 
 Theorem transl_function_correctness:
   forall m f vargs m' vres,
   eval_funcall ge m f vargs m' vres ->
   transl_function_correct m f vargs m' vres.
 Proof
-  (eval_funcall_ind_6 ge
+  (eval_funcall_ind_5 ge
     transl_expr_correct
     transl_condition_correct
     transl_exprlist_correct
     transl_function_correct
     transl_stmt_correct
-    transl_stmtlist_correct
 
     transl_expr_Evar_correct
     transl_expr_Eassign_correct
@@ -1264,17 +1247,17 @@ Proof
     transl_exprlist_Enil_correct
     transl_exprlist_Econs_correct
     transl_funcall_correct
+    transl_stmt_Sskip_correct
     transl_stmt_Sexpr_correct
     transl_stmt_Sifthenelse_correct
+    transl_stmt_Sseq_continue_correct
+    transl_stmt_Sseq_stop_correct
     transl_stmt_Sloop_loop_correct
     transl_stmt_Sloop_stop_correct
     transl_stmt_Sblock_correct
     transl_stmt_Sexit_correct
     transl_stmt_Sreturn_none_correct
-    transl_stmt_Sreturn_some_correct
-    transl_stmtlist_Snil_correct
-    transl_stmtlist_Scons_continue_correct
-    transl_stmtlist_Scons_stop_correct).
+    transl_stmt_Sreturn_some_correct).
 
 Theorem transl_program_correct:
   forall (r: val),

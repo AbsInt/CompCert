@@ -107,7 +107,7 @@ Inductive local_variable : Set :=
 (** Functions are composed of a signature, a list of parameter names
   with associated memory chunks (parameters must be scalar), a list of
   local variables with associated [local_variable] description, and a
-  list of statements representing the function body.  *)
+  statement representing the function body.  *)
 
 Record function : Set := mkfunction {
   fn_sig: signature;

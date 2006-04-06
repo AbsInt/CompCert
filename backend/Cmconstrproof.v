@@ -1128,7 +1128,7 @@ Theorem exec_ifthenelse_true:
   forall sp e1 m1 a e2 m2 v ifso ifnot e3 m3 out,
   eval_expr ge sp nil e1 m1 a e2 m2 v ->
   Val.is_true v ->
-  exec_stmtlist ge sp e2 m2 ifso e3 m3 out ->
+  exec_stmt ge sp e2 m2 ifso e3 m3 out ->
   exec_stmt ge sp e1 m1 (ifthenelse a ifso ifnot) e3 m3 out.
 Proof.
   intros. unfold ifthenelse.
@@ -1141,7 +1141,7 @@ Theorem exec_ifthenelse_false:
   forall sp e1 m1 a e2 m2 v ifso ifnot e3 m3 out,
   eval_expr ge sp nil e1 m1 a e2 m2 v ->
   Val.is_false v ->
-  exec_stmtlist ge sp e2 m2 ifnot e3 m3 out ->
+  exec_stmt ge sp e2 m2 ifnot e3 m3 out ->
   exec_stmt ge sp e1 m1 (ifthenelse a ifso ifnot) e3 m3 out.
 Proof.
   intros. unfold ifthenelse.

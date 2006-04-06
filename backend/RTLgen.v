@@ -376,7 +376,7 @@ with transl_exprlist (map: mapping) (mut: list ident)
   no impact on program correctness.  We delegate the choice to an
   external heuristic (written in OCaml), declared below.  *)
 
-Parameter more_likely: condexpr -> stmtlist -> stmtlist -> bool.
+Parameter more_likely: condexpr -> stmt -> stmt -> bool.
 
 (** Translation of statements.  [transl_stmt map s nd nexits nret rret]
   enriches the current CFG with the RTL instructions necessary to
@@ -391,26 +391,31 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
                      (nexits: list node) (nret: node) (rret: option reg)
                      {struct s} : mon node :=
   match s with
+  | Sskip =>
+      ret nd
   | Sexpr a =>
       let mut := mutated_expr a in
       do r <- alloc_reg map mut a; transl_expr map mut a r nd
+  | Sseq s1 s2 =>
+      do ns <- transl_stmt map s2 nd nexits nret rret;
+      transl_stmt map s1 ns nexits nret rret
   | Sifthenelse a strue sfalse =>
       let mut := mutated_condexpr a in
       (if more_likely a strue sfalse then
-        do nfalse <- transl_stmtlist map sfalse nd nexits nret rret;
-        do ntrue  <- transl_stmtlist map strue  nd nexits nret rret;
+        do nfalse <- transl_stmt map sfalse nd nexits nret rret;
+        do ntrue  <- transl_stmt map strue  nd nexits nret rret;
         transl_condition map mut a ntrue nfalse
        else
-        do ntrue  <- transl_stmtlist map strue  nd nexits nret rret;
-        do nfalse <- transl_stmtlist map sfalse nd nexits nret rret;
+        do ntrue  <- transl_stmt map strue  nd nexits nret rret;
+        do nfalse <- transl_stmt map sfalse nd nexits nret rret;
         transl_condition map mut a ntrue nfalse)
   | Sloop sbody =>
       do nloop <- reserve_instr;
-      do nbody <- transl_stmtlist map sbody nloop nexits nret rret;
+      do nbody <- transl_stmt map sbody nloop nexits nret rret;
       do x <- update_instr nloop (Inop nbody);
       ret nbody
   | Sblock sbody =>
-      transl_stmtlist map sbody nd (nd :: nexits) nret rret
+      transl_stmt map sbody nd (nd :: nexits) nret rret
   | Sexit n =>
       match nth_error nexits n with
       | None => error node
@@ -422,18 +427,6 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       | Some a, Some r => transl_expr map (mutated_expr a) a r nret
       | _, _ => error node
       end
-  end
-
-(** Translation of lists of statements. *)
-
-with transl_stmtlist (map: mapping) (sl: stmtlist) (nd: node)
-                  (nexits: list node) (nret: node) (rret: option reg)
-                  {struct sl} : mon node :=
-  match sl with
-  | Snil => ret nd
-  | Scons s1 ss =>
-      do ns <- transl_stmtlist map ss nd nexits nret rret;
-      transl_stmt map s1 ns nexits nret rret
   end.
 
 (** Translation of a Cminor function. *)
@@ -450,7 +443,7 @@ Definition transl_fun (f: Cminor.function) : mon (node * list reg) :=
   do rret <- new_reg;
   let orret := ret_reg f.(Cminor.fn_sig) rret in
   do nret <- add_instr (Ireturn orret);
-  do nentry <- transl_stmtlist map2 f.(Cminor.fn_body) nret nil nret orret;
+  do nentry <- transl_stmt map2 f.(Cminor.fn_body) nret nil nret orret;
   ret (nentry, rparams).
 
 Definition transl_function (f: Cminor.function) : option RTL.function :=
