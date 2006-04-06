@@ -86,16 +86,14 @@ with exprlist : Set :=
   [Sblock] statements. *)
 
 Inductive stmt : Set :=
+  | Sskip: stmt
   | Sexpr: expr -> stmt
-  | Sifthenelse: expr -> stmtlist -> stmtlist -> stmt
-  | Sloop: stmtlist -> stmt
-  | Sblock: stmtlist -> stmt
+  | Sseq: stmt -> stmt -> stmt
+  | Sifthenelse: expr -> stmt -> stmt -> stmt
+  | Sloop: stmt -> stmt
+  | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
-  | Sreturn: option expr -> stmt
-
-with stmtlist : Set :=
-  | Snil: stmtlist
-  | Scons: stmt -> stmtlist -> stmtlist.
+  | Sreturn: option expr -> stmt.
 
 (** The local variables of a function can be either scalar variables
   (whose type, size and signedness are given by a [memory_chunk]
@@ -115,7 +113,7 @@ Record function : Set := mkfunction {
   fn_sig: signature;
   fn_params: list (ident * memory_chunk);
   fn_vars: list (ident * local_variable);
-  fn_body: stmtlist
+  fn_body: stmt
 }.
 
 Definition program := AST.program function.
@@ -411,7 +409,7 @@ with eval_funcall:
       list_norepet (fn_params_names f ++ fn_vars_names f) ->
       alloc_variables empty_env m (fn_variables f) e m1 lb ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
-      exec_stmtlist e m2 f.(fn_body) m3 out ->
+      exec_stmt e m2 f.(fn_body) m3 out ->
       outcome_result_value out f.(fn_sig).(sig_res) vres ->
       eval_funcall m f vargs (Mem.free_list m3 lb) vres
 
@@ -423,35 +421,48 @@ with exec_stmt:
          env ->
          mem -> stmt ->
          mem -> outcome -> Prop :=
+  | exec_Sskip:
+      forall e m,
+      exec_stmt e m Sskip m Out_normal
   | exec_Sexpr:
       forall e m a m1 v,
       eval_expr nil e m a m1 v ->
       exec_stmt e m (Sexpr a) m1 Out_normal
+  | exec_Sseq_continue:
+      forall e m s1 s2 m1 m2 out,
+      exec_stmt e m s1 m1 Out_normal ->
+      exec_stmt e m1 s2 m2 out ->
+      exec_stmt e m (Sseq s1 s2) m2 out
+  | exec_Sseq_stop:
+      forall e m s1 s2 m1 out,
+      exec_stmt e m s1 m1 out ->
+      out <> Out_normal ->
+      exec_stmt e m (Sseq s1 s2) m1 out
   | exec_Sifthenelse_true:
       forall e m a sl1 sl2 m1 v1 m2 out,
       eval_expr nil e m a m1 v1 ->
       Val.is_true v1 ->
-      exec_stmtlist e m1 sl1 m2 out ->
+      exec_stmt e m1 sl1 m2 out ->
       exec_stmt e m (Sifthenelse a sl1 sl2) m2 out
   | exec_Sifthenelse_false:
       forall e m a sl1 sl2 m1 v1 m2 out,
       eval_expr nil e m a m1 v1 ->
       Val.is_false v1 ->
-      exec_stmtlist e m1 sl2 m2 out ->
+      exec_stmt e m1 sl2 m2 out ->
       exec_stmt e m (Sifthenelse a sl1 sl2) m2 out
   | exec_Sloop_loop:
       forall e m sl m1 m2 out,
-      exec_stmtlist e m sl m1 Out_normal ->
+      exec_stmt e m sl m1 Out_normal ->
       exec_stmt e m1 (Sloop sl) m2 out ->
       exec_stmt e m (Sloop sl) m2 out
   | exec_Sloop_stop:
       forall e m sl m1 out,
-      exec_stmtlist e m sl m1 out ->
+      exec_stmt e m sl m1 out ->
       out <> Out_normal ->
       exec_stmt e m (Sloop sl) m1 out
   | exec_Sblock:
       forall e m sl m1 out,
-      exec_stmtlist e m sl m1 out ->
+      exec_stmt e m sl m1 out ->
       exec_stmt e m (Sblock sl) m1 (outcome_block out)
   | exec_Sexit:
       forall e m n,
@@ -462,37 +473,12 @@ with exec_stmt:
   | exec_Sreturn_some:
       forall e m a m1 v,
       eval_expr nil e m a m1 v ->
-      exec_stmt e m (Sreturn (Some a)) m1 (Out_return (Some v))
+      exec_stmt e m (Sreturn (Some a)) m1 (Out_return (Some v)).
 
-(** Execution of a list of statements: [exec_stmtlist ge e m sl m' out]
-  means that the list [sl] of statements executes sequentially
-  with outcome [out].  Execution stops at the first statement that
-  leads an outcome different from [Out_normal].
-  The other parameters are as in [eval_expr]. *)
-
-with exec_stmtlist:
-         env ->
-         mem -> stmtlist ->
-         mem -> outcome -> Prop :=
-  | exec_Snil:
-      forall e m,
-      exec_stmtlist e m Snil m Out_normal
-  | exec_Scons_continue:
-      forall e m s sl m1 m2 out,
-      exec_stmt e m s m1 Out_normal ->
-      exec_stmtlist e m1 sl m2 out ->
-      exec_stmtlist e m (Scons s sl) m2 out
-  | exec_Scons_stop:
-      forall e m s sl m1 out,
-      exec_stmt e m s m1 out ->
-      out <> Out_normal ->
-      exec_stmtlist e m (Scons s sl) m1 out.
-
-Scheme eval_expr_ind5 := Minimality for eval_expr Sort Prop
-  with eval_exprlist_ind5 := Minimality for eval_exprlist Sort Prop
-  with eval_funcall_ind5 := Minimality for eval_funcall Sort Prop
-  with exec_stmt_ind5 := Minimality for exec_stmt Sort Prop
-  with exec_stmtlist_ind5 := Minimality for exec_stmtlist Sort Prop.
+Scheme eval_expr_ind4 := Minimality for eval_expr Sort Prop
+  with eval_exprlist_ind4 := Minimality for eval_exprlist Sort Prop
+  with eval_funcall_ind4 := Minimality for eval_funcall Sort Prop
+  with exec_stmt_ind4 := Minimality for exec_stmt Sort Prop.
 
 End RELSEM.
 
