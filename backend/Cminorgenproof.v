@@ -21,14 +21,15 @@ Section TRANSLATION.
 Variable prog: Csharpminor.program.
 Variable tprog: program.
 Hypothesis TRANSL: transl_program prog = Some tprog.
-Let ge : Csharpminor.genv := Genv.globalenv prog.
+Let ge : Csharpminor.genv := Genv.globalenv (program_of_program prog).
 Let tge: genv := Genv.globalenv tprog.
+Let gce : compilenv := build_global_compilenv prog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof.
   intro. unfold ge, tge. 
-  apply Genv.find_symbol_transf_partial with transl_function.
+  apply Genv.find_symbol_transf_partial with (transl_function gce).
   exact TRANSL.
 Qed.
 
@@ -36,12 +37,12 @@ Lemma function_ptr_translated:
   forall (b: block) (f: Csharpminor.function),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge b = Some tf /\ transl_function f = Some tf.
+  Genv.find_funct_ptr tge b = Some tf /\ transl_function gce f = Some tf.
 Proof.
   intros. 
   generalize 
-   (Genv.find_funct_ptr_transf_partial transl_function TRANSL H).
-  case (transl_function f).
+   (Genv.find_funct_ptr_transf_partial (transl_function gce) TRANSL H).
+  case (transl_function gce f).
   intros tf [A B]. exists tf. tauto.
   intros [A B]. elim B. reflexivity.
 Qed.
@@ -50,14 +51,53 @@ Lemma functions_translated:
   forall (v: val) (f: Csharpminor.function),
   Genv.find_funct ge v = Some f ->
   exists tf,
-  Genv.find_funct tge v = Some tf /\ transl_function f = Some tf.
+  Genv.find_funct tge v = Some tf /\ transl_function gce f = Some tf.
 Proof.
   intros. 
   generalize 
-   (Genv.find_funct_transf_partial transl_function TRANSL H).
-  case (transl_function f).
+   (Genv.find_funct_transf_partial (transl_function gce) TRANSL H).
+  case (transl_function gce f).
   intros tf [A B]. exists tf. tauto.
   intros [A B]. elim B. reflexivity.
+Qed.
+
+Definition var_info_global (id: ident) (vi: var_info) (lv: variable_info) :=
+  match vi with
+  | Var_global_scalar chunk => lv = Vscalar chunk
+  | Var_global_array => exists sz, lv = Varray sz
+  | _ => False
+  end.
+
+Lemma global_compilenv_charact:
+  forall id vi, gce!id = Some vi -> 
+  exists lv, (global_var_env prog)!id = Some lv /\ var_info_global id vi lv.
+Proof.
+  set (mkgve := fun gv vars =>
+         List.fold_left
+          (fun gv (id_vi: ident * variable_info) => PTree.set (fst id_vi) (snd id_vi) gv)
+          vars gv).
+  assert (forall vars gv ce,
+            (forall id vi, ce!id = Some vi ->
+             exists lv, gv!id = Some lv /\ var_info_global id vi lv) ->
+            (forall id vi,
+              (List.fold_left assign_global_variable vars ce)!id = Some vi ->
+              exists lv, (mkgve gv vars)!id = Some lv /\ var_info_global id vi lv)).
+  induction vars; simpl; intros.
+  eauto.
+  apply IHvars with (assign_global_variable ce a); auto.
+  intros until vi0. unfold assign_global_variable. destruct a as [id1 vi1].
+  simpl. destruct vi1. 
+  repeat rewrite PTree.gsspec. case (peq id0 id1); intros. 
+  inversion H1. exists (Vscalar m). split. auto. red; auto.
+  eauto.
+  repeat rewrite PTree.gsspec. case (peq id0 id1); intros. 
+  inversion H1. exists (Varray z). split. auto. red. exists z; auto.
+  eauto.
+
+  intros. change (global_var_env prog) with (mkgve (PTree.empty variable_info) prog.(Csharpminor.prog_vars)).
+  apply H with (PTree.empty var_info). 
+  intros until vi0. rewrite PTree.gempty. congruence.
+  exact H0.
 Qed.
 
 (** * Correspondence between Csharpminor's and Cminor's environments and memory states *)
@@ -78,20 +118,7 @@ Qed.
   in our proof of simulation between Csharpminor and Cminor executions.
 
   In the remainder of this section, we define relations between
-  Csharpminor and Cminor environments and call stacks.
-
-  Global environments match if the memory injection [f] leaves unchanged
-  the references to global symbols and functions. *)
-
-Record match_globalenvs (f: meminj) : Prop := 
-  mk_match_globalenvs {
-    mg_symbols:
-      forall id b,
-      Genv.find_symbol ge id = Some b ->
-      f b = Some (b, 0) /\ Genv.find_symbol tge id = Some b;
-    mg_functions:
-      forall b, b < 0 -> f b = Some(b, 0)
-  }.
+  Csharpminor and Cminor environments and call stacks. *)
 
 (** Matching for a Csharpminor variable [id].
 - If this variable is mapped to a Cminor local variable, the
@@ -109,7 +136,7 @@ Inductive match_var (f: meminj) (id: ident)
                     var_info -> Prop :=
   | match_var_local:
       forall chunk b v v',
-      PTree.get id e = Some (b, LVscalar chunk) ->
+      PTree.get id e = Some (b, Vscalar chunk) ->
       Mem.load chunk m b 0 = Some v ->
       f b = None ->
       PTree.get id te = Some v' ->
@@ -117,17 +144,24 @@ Inductive match_var (f: meminj) (id: ident)
       match_var f id e m te sp (Var_local chunk)
   | match_var_stack_scalar:
       forall chunk ofs b,
-      PTree.get id e = Some (b, LVscalar chunk) ->
+      PTree.get id e = Some (b, Vscalar chunk) ->
       val_inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
       match_var f id e m te sp (Var_stack_scalar chunk ofs)
   | match_var_stack_array:
       forall ofs sz b,
-      PTree.get id e = Some (b, LVarray sz) ->
+      PTree.get id e = Some (b, Varray sz) ->
       val_inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
       match_var f id e m te sp (Var_stack_array ofs)
-  | match_var_global:
+  | match_var_global_scalar:
+      forall chunk,
       PTree.get id e = None ->
-      match_var f id e m te sp (Var_global).
+      PTree.get id (global_var_env prog) = Some (Vscalar chunk) ->
+      match_var f id e m te sp (Var_global_scalar chunk)
+  | match_var_global_array:
+      forall sz,
+      PTree.get id e = None ->
+      PTree.get id (global_var_env prog) = Some (Varray sz) ->
+      match_var f id e m te sp (Var_global_array).
 
 (** Matching between a Csharpminor environment [e] and a Cminor
   environment [te].  The [lo] and [hi] parameters delimit the range
@@ -141,7 +175,7 @@ Record match_env (f: meminj) (cenv: compilenv)
 (** Each variable mentioned in the compilation environment must match
   as defined above. *)
     me_vars:
-      forall id, match_var f id e m te sp (PMap.get id cenv);
+      forall id vi, PTree.get id cenv = Some vi -> match_var f id e m te sp vi;
 
 (** The range [lo, hi] must not be empty. *)
     me_low_high:
@@ -171,6 +205,19 @@ Record match_env (f: meminj) (cenv: compilenv)
     me_incr:
       forall b tb delta,
       f b = Some(tb, delta) -> b < lo -> tb < sp
+  }.
+
+(** Global environments match if the memory injection [f] leaves unchanged
+  the references to global symbols and functions. *)
+
+Record match_globalenvs (f: meminj) : Prop := 
+  mk_match_globalenvs {
+    mg_symbols:
+      forall id b,
+      Genv.find_symbol ge id = Some b ->
+      f b = Some (b, 0) /\ Genv.find_symbol tge id = Some b;
+    mg_functions:
+      forall b, b < 0 -> f b = Some(b, 0)
   }.
 
 (** Call stacks represent abstractly the execution state of the current
@@ -223,8 +270,8 @@ Lemma match_env_store_mapped:
 Proof.
   intros. inversion H1. constructor; auto.
   (* vars *)
-  intros. generalize (me_vars0 id); intro. 
-  inversion H2; econstructor; eauto.
+  intros. generalize (me_vars0 _ _ H2); intro. 
+  inversion H3; econstructor; eauto.
   rewrite <- H5. eapply load_store_other; eauto. 
   left. congruence.
 Qed.
@@ -271,7 +318,7 @@ Qed.
 
 Lemma match_env_store_local:
   forall f cenv e m1 m2 te sp lo hi id b chunk v tv,
-  e!id = Some(b, LVscalar chunk) ->
+  e!id = Some(b, Vscalar chunk) ->
   val_inject f v tv ->
   val_normalized chunk tv ->
   store chunk m1 b 0 v = Some m2 ->
@@ -279,13 +326,13 @@ Lemma match_env_store_local:
   match_env f cenv e m2 (PTree.set id tv te) sp lo hi.
 Proof.
   intros. inversion H3. constructor; auto.
-  intros. generalize (me_vars0 id0); intro.
-  inversion H4.
+  intros. generalize (me_vars0 _ _ H4); intro.
+  inversion H5; subst.
   (* var_local *)
   case (peq id id0); intro.
     (* the stored variable *)
     subst id0. 
-    change Csharpminor.local_variable with local_variable in H6. 
+    change Csharpminor.variable_info with variable_info in H6. 
     rewrite H in H6. injection H6; clear H6; intros; subst b0 chunk0.
     econstructor. eauto. 
     eapply load_store_same; eauto. auto. 
@@ -301,7 +348,9 @@ Proof.
   econstructor; eauto.
   (* var_stack_array *)
   econstructor; eauto.
-  (* var_global *)
+  (* var_global_scalar *)
+  econstructor; eauto.
+  (* var_global_array *)
   econstructor; eauto.
 Qed.
 
@@ -313,8 +362,8 @@ Lemma match_env_store_above:
   match_env f cenv e m2 te sp lo hi.
 Proof.
   intros. inversion H1; constructor; auto.
-  intros. generalize (me_vars0 id); intro.
-  inversion H2; econstructor; eauto.
+  intros. generalize (me_vars0 _ _ H2); intro.
+  inversion H3; econstructor; eauto.
   rewrite <- H5. eapply load_store_other; eauto.
   left. generalize (me_bounded0 _ _ _ H4). unfold block in *. omega.
 Qed.
@@ -335,7 +384,7 @@ Qed.
 
 Lemma match_callstack_store_local:
   forall f cenv e te sp lo hi cs bound tbound m1 m2 id b chunk v tv,
-  e!id = Some(b, LVscalar chunk) ->
+  e!id = Some(b, Vscalar chunk) ->
   val_inject f v tv ->
   val_normalized chunk tv ->
   store chunk m1 b 0 v = Some m2 ->
@@ -362,14 +411,14 @@ Lemma match_env_extensional:
   match_env f cenv e m te2 sp lo hi.
 Proof.
   induction 1; intros; econstructor; eauto.
-  intros. generalize (me_vars0 id); intro. 
-  inversion H0; econstructor; eauto.
+  intros. generalize (me_vars0 _ _ H0); intro. 
+  inversion H1; econstructor; eauto.
   rewrite H. auto.
 Qed.
 
 Lemma match_callstack_store_local_unchanged:
   forall f cenv e te sp lo hi cs bound tbound m1 m2 id b chunk v tv,
-  e!id = Some(b, LVscalar chunk) ->
+  e!id = Some(b, Vscalar chunk) ->
   val_inject f v tv ->
   val_normalized chunk tv ->
   store chunk m1 b 0 v = Some m2 ->
@@ -419,10 +468,10 @@ Lemma match_env_freelist:
   match_env f cenv e (free_list m fbl) te sp lo hi.
 Proof.
   intros. inversion H. econstructor; eauto.
-  intros. generalize (me_vars0 id); intro. 
-  inversion H1; econstructor; eauto.
+  intros. generalize (me_vars0 _ _ H1); intro. 
+  inversion H2; econstructor; eauto.
   rewrite <- H4. apply load_freelist. 
-  intros. generalize (H0 _ H8); intro. 
+  intros. generalize (H0 _ H9); intro. 
   generalize (me_bounded0 _ _ _ H3). unfold block; omega.
 Qed.  
 
@@ -476,15 +525,16 @@ Lemma match_env_alloc_same:
   forall m1 lv m2 b info f1 cenv1 e1 te sp lo id data tv,
   alloc m1 0 (sizeof lv) = (m2, b) ->
   match info with
-    | Var_local chunk => data = None /\ lv = LVscalar chunk
-    | Var_stack_scalar chunk pos => data = Some(sp, pos) /\ lv = LVscalar chunk
-    | Var_stack_array pos => data = Some(sp, pos) /\ exists sz, lv = LVarray sz
-    | Var_global => False
+    | Var_local chunk => data = None /\ lv = Vscalar chunk
+    | Var_stack_scalar chunk pos => data = Some(sp, pos) /\ lv = Vscalar chunk
+    | Var_stack_array pos => data = Some(sp, pos) /\ exists sz, lv = Varray sz
+    | Var_global_scalar chunk => False
+    | Var_global_array => False
   end ->
   match_env f1 cenv1 e1 m1 te sp lo m1.(nextblock) ->
   te!id = Some tv ->
   let f2 := extend_inject b data f1 in
-  let cenv2 := PMap.set id info cenv1 in
+  let cenv2 := PTree.set id info cenv1 in
   let e2 := PTree.set id (b, lv) e1 in
   inject_incr f1 f2 ->
   match_env f2 cenv2 e2 m2 te sp lo m2.(nextblock).
@@ -496,9 +546,9 @@ Proof.
     injection H; intros. rewrite <- H6; reflexivity.
   inversion H1. constructor.
   (* me_vars *)
-  intros. unfold cenv2. rewrite PMap.gsspec. case (peq id0 id); intro.
+  intros id0 vi. unfold cenv2. rewrite PTree.gsspec. case (peq id0 id); intros.
     (* same var *)
-    subst id0. destruct info.
+    subst id0. injection H6; clear H6; intro; subst vi. destruct info.
       (* info = Var_local chunk *)
       elim H0; intros.
       apply match_var_local with b Vundef tv.
@@ -524,12 +574,14 @@ Proof.
       rewrite Int.add_commut. rewrite Int.add_zero. auto.
       (* info = Var_global *)
       contradiction.
+      contradiction.
     (* other vars *)
-    generalize (me_vars0 id0); intros.
-    inversion H6; econstructor; eauto.
+    generalize (me_vars0 _ _ H6); intros.
+    inversion H7; econstructor; eauto.
     unfold e2; rewrite PTree.gso; auto. 
     unfold f2, extend_inject, eq_block; rewrite zeq_false; auto.
     generalize (me_bounded0 _ _ _ H8). unfold block in *; omega.
+    unfold e2; rewrite PTree.gso; eauto. 
     unfold e2; rewrite PTree.gso; eauto. 
     unfold e2; rewrite PTree.gso; eauto. 
     unfold e2; rewrite PTree.gso; eauto. 
@@ -576,8 +628,8 @@ Proof.
   rewrite <- H4 in H1.
   inversion H2. constructor; auto.
   (* me_vars *)
-  intros. generalize (me_vars0 id); intro. 
-  inversion H5; econstructor; eauto.
+  intros. generalize (me_vars0 _ _ H5); intro. 
+  inversion H6; econstructor; eauto.
   unfold f2, extend_inject, eq_block. rewrite zeq_false. auto.
   generalize (me_bounded0 _ _ _ H7). unfold block in *; omega.
   (* me_bounded *)
@@ -604,6 +656,7 @@ Proof.
   induction 1; intros.
   constructor. 
     inversion H. constructor. 
+    intros. auto.
     intros. elim (mg_symbols0 _ _ H4); intros.
     split; auto. elim (H3 b0); intros; congruence.
     intros. generalize (mg_functions0 _ H4). elim (H3 b0); congruence.
@@ -619,15 +672,16 @@ Lemma match_callstack_alloc_left:
   forall m1 lv m2 b info f1 cenv1 e1 te sp lo id data cs tv tbound,
   alloc m1 0 (sizeof lv) = (m2, b) ->
   match info with
-    | Var_local chunk => data = None /\ lv = LVscalar chunk
-    | Var_stack_scalar chunk pos => data = Some(sp, pos) /\ lv = LVscalar chunk
-    | Var_stack_array pos => data = Some(sp, pos) /\ exists sz, lv = LVarray sz
-    | Var_global => False
+    | Var_local chunk => data = None /\ lv = Vscalar chunk
+    | Var_stack_scalar chunk pos => data = Some(sp, pos) /\ lv = Vscalar chunk
+    | Var_stack_array pos => data = Some(sp, pos) /\ exists sz, lv = Varray sz
+    | Var_global_scalar chunk => False
+    | Var_global_array => False
   end ->
   match_callstack f1 (mkframe cenv1 e1 te sp lo m1.(nextblock) :: cs) m1.(nextblock) tbound m1 ->
   te!id = Some tv ->
   let f2 := extend_inject b data f1 in
-  let cenv2 := PMap.set id info cenv1 in
+  let cenv2 := PTree.set id info cenv1 in
   let e2 := PTree.set id (b, lv) e1 in
   inject_incr f1 f2 ->
   match_callstack f2 (mkframe cenv2 e2 te sp lo m2.(nextblock) :: cs) m2.(nextblock) tbound m2.
@@ -639,6 +693,7 @@ Proof.
   elim H0; intros. rewrite H19. auto.
   elim H0; intros. rewrite H19. omega.
   elim H0; intros. rewrite H19. omega.
+  contradiction.
   contradiction.
   inversion H17; omega. 
 Qed.
@@ -876,6 +931,17 @@ Proof.
   rewrite Int.add_commut. apply Int.add_zero.
 Qed.
 
+Lemma make_globaladdr_correct:
+  forall sp le te tm id b,
+  Genv.find_symbol tge id = Some b ->
+  eval_expr tge (Vptr sp Int.zero) le
+            te tm (make_globaladdr id)
+            te tm (Vptr b Int.zero).
+Proof.
+  intros; unfold make_globaladdr.
+  eapply eval_Eop. econstructor. simpl. rewrite H. auto.
+Qed.
+
 (** Correctness of [make_load] and [make_store]. *)
 
 Lemma make_load_correct:
@@ -950,83 +1016,89 @@ Lemma var_get_correct:
   var_get cenv id = Some a ->
   match_callstack f (mkframe cenv e te sp lo hi :: cs) m.(nextblock) tm.(nextblock) m ->
   mem_inject f m tm ->
-  e!id = Some(b, LVscalar chunk) ->
+  eval_var prog e id b (Vscalar chunk) ->
   load chunk m b 0 = Some v ->
   exists tv,
     eval_expr tge (Vptr sp Int.zero) le te tm a te tm tv /\
     val_inject f v tv.
 Proof.
   unfold var_get; intros.
-  assert (match_var f id e m te sp cenv!!id).
+  caseEq (cenv!id); [intros vi EQ | intros EQ]; rewrite EQ in H; try discriminate.
+  assert (match_var f id e m te sp vi).
     inversion H0. inversion H17. auto.
-  caseEq (cenv!!id); intros; rewrite H5 in H; simplify_eq H; clear H; intros; subst a.
+  caseEq vi; intros; rewrite H5 in H; simplify_eq H; clear H; intros; subst a vi.
   (* var_local *)
-  rewrite H5 in H4. inversion H4. 
+  inversion H4. subst m0. inversion H2. subst. 
   exists v'; split.
   apply eval_Evar. auto. 
   replace v with v0. auto. congruence.
+  congruence.
   (* var_stack_scalar *)
-  rewrite H5 in H4. inversion H4. 
-  inversion H8. subst b1 b2 ofs1 ofs2.
+  inversion H4. subst m0 z. inversion H2; [subst|congruence].
+  inversion H7. subst.
   assert (b0 = b). congruence. subst b0.
-  assert (m0 = chunk). congruence. subst m0.
+  assert (chunk0 = chunk). congruence. subst chunk0.
   assert (loadv chunk m (Vptr b Int.zero) = Some v). assumption.
-  generalize (loadv_inject _ _ _ _ _ _ _ H1 H H8).
-  subst chunk0.
+  generalize (loadv_inject _ _ _ _ _ _ _ H1 H5 H7).
   intros [tv [LOAD INJ]].
   exists tv; split. 
   eapply make_load_correct; eauto. eapply make_stackaddr_correct; eauto.
   auto.
+  (* var_global_scalar *)
+  inversion H4. subst m0. inversion H2; [congruence|subst]. 
+  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
+  inversion H9. destruct (mg_symbols0 _ _ H7) as [A B].
+  assert (chunk0 = chunk). congruence. subst chunk0.
+  assert (loadv chunk m (Vptr b Int.zero) = Some v). assumption.
+  assert (val_inject f (Vptr b Int.zero) (Vptr b Int.zero)).
+    econstructor; eauto. 
+  generalize (loadv_inject _ _ _ _ _ _ _ H1 H10 H11).
+  intros [tv [LOAD INJ]].
+  exists tv; split. 
+  eapply make_load_correct; eauto. eapply make_globaladdr_correct; eauto.
+  auto.
 Qed.
 
-Lemma var_addr_local_correct:
+Lemma var_addr_correct:
   forall cenv id a f e te sp lo hi m cs tm b lv le,
   var_addr cenv id = Some a ->
   match_callstack f (mkframe cenv e te sp lo hi :: cs) m.(nextblock) tm.(nextblock) m ->
-  e!id = Some(b, lv) ->
+  eval_var prog e id b lv ->
   exists tv,
     eval_expr tge (Vptr sp Int.zero) le te tm a te tm tv /\
     val_inject f (Vptr b Int.zero) tv.
 Proof.
-  unfold var_addr; intros.
-  assert (match_var f id e m te sp cenv!!id).
+  intros until le. unfold var_addr. 
+  caseEq (cenv!id). 2: intros; discriminate.
+  intros vi EQ. intros.
+  assert (match_var f id e m te sp vi).
     inversion H0. inversion H15. auto.
-  caseEq (cenv!!id); intros; rewrite H3 in H; simplify_eq H; clear H; intros; subst a;
+  caseEq vi; intros; rewrite H3 in H; simplify_eq H; clear H; intros; subst a;
   rewrite H3 in H2; inversion H2.
   (* var_stack_scalar *)
-  exists (Vptr sp (Int.repr z)); split.
+  subst m0 z. inversion H1; [subst|congruence]. 
+  exists (Vptr sp (Int.repr ofs)); split.
   eapply make_stackaddr_correct.
   replace b with b0. auto. congruence.
   (* var_stack_array *)
-  exists (Vptr sp (Int.repr z)); split.
+  subst z. inversion H1; [subst|congruence]. 
+  exists (Vptr sp (Int.repr ofs)); split.
   eapply make_stackaddr_correct.
   replace b with b0. auto. congruence.
-  (* var_global *)
-  congruence.
-Qed.
-
-Lemma var_addr_global_correct:
-  forall cenv id a f e te sp lo hi m cs tm b le,
-  var_addr cenv id = Some a ->
-  match_callstack f (mkframe cenv e te sp lo hi :: cs) m.(nextblock) tm.(nextblock) m ->
-  e!id = None ->
-  Genv.find_symbol ge id = Some b ->
-  exists tv,
-    eval_expr tge (Vptr sp Int.zero) le te tm a te tm tv /\
-    val_inject f (Vptr b Int.zero) tv.
-Proof.
-  unfold var_addr; intros.
-  assert (match_var f id e m te sp cenv!!id).
-    inversion H0. inversion H16. auto.
-  destruct (cenv!!id); inversion H3; try congruence.
-  injection H; intro; subst a.
-  (* var_global *)
-  generalize (match_callstack_match_globalenvs _ _ _ _ _ H0); intro.
-  inversion H5. 
-  elim (mg_symbols0 _ _ H2); intros.
+  (* var_global_scalar *)
+  subst m0. inversion H1; [congruence|subst].
+  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
+  inversion H3. destruct (mg_symbols0 _ _ H6) as [A B].
   exists (Vptr b Int.zero); split.
-  eapply eval_Eop. econstructor. simpl. rewrite H7. auto.
-  econstructor. eauto. reflexivity.
+  eapply make_globaladdr_correct. eauto.
+  econstructor; eauto. 
+  (* var_global_array *)
+  inversion H1; [congruence|subst].
+  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
+  inversion H3. destruct (mg_symbols0 _ _ H6) as [A B].
+  exists (Vptr b Int.zero); split.
+  eapply make_globaladdr_correct. eauto.
+  econstructor; eauto. 
 Qed.
 
 Lemma var_set_correct:
@@ -1036,7 +1108,7 @@ Lemma var_set_correct:
   eval_expr tge (Vptr sp Int.zero) le te1 tm1 rhs te2 tm2 vrhs ->
   val_inject f v1 vrhs ->
   mem_inject f m2 tm2 ->
-  e!id = Some(b, LVscalar chunk) ->
+  eval_var prog e id b (Vscalar chunk) ->
   cast chunk v1 = Some v2 ->
   store chunk m2 b 0 v2 = Some m3 ->
   exists te3, exists tm3, exists tv,
@@ -1045,15 +1117,16 @@ Lemma var_set_correct:
     mem_inject f m3 tm3 /\
     match_callstack f (mkframe cenv e te3 sp lo hi :: cs) m3.(nextblock) tm3.(nextblock) m3.
 Proof.
-  unfold var_set; intros.
+  intros until m3. unfold var_set.
+  caseEq (cenv!id). 2:intros;congruence. intros vi EQ; intros.
   assert (NEXTBLOCK: nextblock m3 = nextblock m2).
     generalize (store_inv _ _ _ _ _ _ H6). simpl. tauto.
   inversion H0. subst f0 cenv0 e0 te sp0 lo0 hi0 cs0 bound tbound m.
   inversion H20. 
-  caseEq (cenv!!id); intros; rewrite H7 in H; simplify_eq H; clear H; intros; subst a.
+  caseEq vi; intros; subst vi; simplify_eq H; clear H; intros; subst a.
   (* var_local *)
-  generalize (me_vars0 id); intro. rewrite H7 in H. inversion H.
-  subst chunk0. 
+  generalize (me_vars0 _ _ EQ); intro. inversion H. subst chunk0.
+  inversion H4; [subst|congruence]. 
   assert (b0 = b). congruence. subst b0.
   assert (m = chunk). congruence. subst m.  
   elim (make_cast_correct _ _ _ _ _ _ _ _ _ _ _ _ H1 H5 H2).
@@ -1064,14 +1137,33 @@ Proof.
   split. eapply store_unmapped_inject; eauto. 
   rewrite NEXTBLOCK. eapply match_callstack_store_local; eauto.
   (* var_stack_scalar *)
-  generalize (me_vars0 id); intro. rewrite H7 in H. inversion H.
+  generalize (me_vars0 _ _ EQ); intro. inversion H.
   subst chunk0 z. 
+  inversion H4; [subst|congruence]. 
   assert (b0 = b). congruence. subst b0.
   assert (m = chunk). congruence. subst m.  
   assert (storev chunk m2 (Vptr b Int.zero) v2 = Some m3). assumption.
   generalize (make_stackaddr_correct sp le te1 tm1 ofs). intro EVALSTACKADDR.
   generalize (make_store_correct _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                 EVALSTACKADDR H1 H5 H8 H3 H11 H2).
+                 EVALSTACKADDR H1 H5 H8 H3 H10 H2).
+  intros [tm3 [tv [EVAL [MEMINJ [VALINJ TNEXTBLOCK]]]]].
+  exists te2; exists tm3; exists tv.
+  split. auto. split. auto. split. auto. 
+  rewrite NEXTBLOCK; rewrite TNEXTBLOCK.
+  eapply match_callstack_mapped; eauto. 
+  inversion H10; congruence.
+  (* var_global_scalar *)
+  generalize (me_vars0 _ _ EQ); intro. inversion H.
+  subst chunk0.
+  inversion H4; [congruence|subst]. 
+  assert (m = chunk). congruence. subst m.  
+  assert (storev chunk m2 (Vptr b Int.zero) v2 = Some m3). assumption.
+  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
+  inversion H13. destruct (mg_symbols0 _ _ H10) as [A B].
+  assert (val_inject f (Vptr b Int.zero) (Vptr b Int.zero)). econstructor; eauto.    
+  generalize (make_globaladdr_correct sp le te1 tm1 id b B). intro EVALGLOBALADDR.
+  generalize (make_store_correct _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                 EVALGLOBALADDR H1 H5 H12 H3 H14 H2).
   intros [tm3 [tv [EVAL [MEMINJ [VALINJ TNEXTBLOCK]]]]].
   exists te2; exists tm3; exists tv.
   split. auto. split. auto. split. auto. 
@@ -1092,7 +1184,7 @@ Remark assign_variables_incr:
 Proof.
   induction vars; intros until sz'; simpl.
   intro. replace sz' with sz. omega. congruence.
-  destruct a. destruct l. case (Identset.mem i atk); intros.
+  destruct a. destruct v. case (Identset.mem i atk); intros.
   generalize (IHvars _ _ _ _ H). 
   generalize (size_chunk_pos m). intro.
   generalize (align_le sz (size_chunk m) H0). omega.
@@ -1262,14 +1354,14 @@ Qed.
 
 Lemma match_callstack_alloc_variables:
   forall fn cenv sz m e m' lb tm tm' sp f cs targs,
-  build_compilenv fn = (cenv, sz) ->
+  build_compilenv gce fn = (cenv, sz) ->
   sz <= Int.max_signed ->
   alloc_variables Csharpminor.empty_env m (fn_variables fn) e m' lb ->
   Mem.alloc tm 0 sz = (tm', sp) ->
   match_callstack f cs m.(nextblock) tm.(nextblock) m ->
   mem_inject f m tm ->
   let tparams := List.map (@fst ident memory_chunk) fn.(Csharpminor.fn_params) in
-  let tvars := List.map (@fst ident local_variable) fn.(Csharpminor.fn_vars) in
+  let tvars := List.map (@fst ident variable_info) fn.(Csharpminor.fn_vars) in
   let te := set_locals tvars (set_params targs tparams) in
   exists f',
      inject_incr f f'
@@ -1288,8 +1380,16 @@ Proof.
   constructor. omega. change (valid_block tm' sp). eapply valid_new_block; eauto.
   constructor. 
     (* me_vars *)
-    intros. rewrite PMap.gi. constructor. 
-    unfold Csharpminor.empty_env. apply PTree.gempty. 
+    intros. generalize (global_compilenv_charact _ _ H5). 
+    intros [lv [A B]].
+    destruct vi; simpl in B; try contradiction.
+    constructor.
+      unfold Csharpminor.empty_env. apply PTree.gempty. 
+      congruence.
+    destruct B as [sz1 C].
+    apply match_var_global_array with sz1.
+      unfold Csharpminor.empty_env. apply PTree.gempty. 
+      congruence.
     (* me_low_high *)
     omega.
     (* me_bounded *)
@@ -1389,6 +1489,7 @@ Lemma store_parameters_correct:
   list_norepet (List.map (@fst ident memory_chunk) params) ->
   mem_inject f m1 tm1 ->
   match_callstack f (mkframe cenv e te1 sp lo hi :: cs) m1.(nextblock) tm1.(nextblock) m1 ->
+  (forall id chunk, In (id, chunk) params -> cenv!id <> None) ->
   exists te2, exists tm2,
      exec_stmt tge (Vptr sp Int.zero)
                    te1 tm1 (store_parameters cenv params)
@@ -1407,26 +1508,28 @@ Proof.
   inversion NOREPET. subst hd tl.
   assert (NEXT: nextblock m1 = nextblock m).
     generalize (store_inv _ _ _ _ _ _ H1). simpl; tauto. 
-  generalize (me_vars0 id); intro MV. inversion MV.
-  (* cenv!!id = Var_local chunk *)
-  change Csharpminor.local_variable with local_variable in H4.
-  rewrite H in H4. injection H4; clear H4; intros; subst b0 chunk0.
+  caseEq (cenv!id); intros.
+  destruct v; generalize (me_vars0 _ _ H3); intro MV; inversion MV; subst.
+  (* cenv!id = Some(Var_local chunk) *)
+  assert (b0 = b). congruence. subst b0.
+  assert (m0 = chunk). congruence. subst m0.
   assert (v' = tv). congruence. subst v'.
   assert (eval_expr tge (Vptr sp Int.zero) nil te1 tm1 (Evar id) te1 tm1 tv).
     constructor. auto.
   generalize (make_cast_correct _ _ _ _ _ _ _ _ _ _ _ _
-               H4 H0 H11).
+               H7 H0 H11).
   intros [tv' [EVAL1 [VINJ1 VNORM]]].
   set (te2 := PTree.set id tv' te1).
   assert (VVM2: vars_vals_match f params vl te2).
     apply vars_vals_match_extensional with te1; auto.
     intros. unfold te2; apply PTree.gso. red; intro; subst id0.
     elim H5. change id with (fst (id, lv)). apply List.in_map; auto.
-  generalize (store_unmapped_inject _ _ _ _ _ _ _ _ MINJ H1 H8); intro MINJ2.
+  generalize (store_unmapped_inject _ _ _ _ _ _ _ _ MINJ H1 H13); intro MINJ2.
   generalize (match_callstack_store_local _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
                 H VINJ1 VNORM H1 MATCH); 
   fold te2; rewrite <- NEXT; intro MATCH2.
-  destruct (IHbind_parameters _ _ _ _ _ _ _ _ VVM2 H6 MINJ2 MATCH2)
+  assert (forall id chunk, In (id, chunk) params -> cenv!id <> None). intros; eauto.
+  destruct (IHbind_parameters _ _ _ _ _ _ _ _ VVM2 H6 MINJ2 MATCH2 H16)
         as [te3 [tm3 [EXEC3 [MINJ3 MATCH3]]]].
   exists te3; exists tm3. 
   (* execution *)
@@ -1436,21 +1539,22 @@ Proof.
   (* meminj & match_callstack *)
   tauto.
 
-  (* cenv!!id = Var_stack_scalar *)
-  change Csharpminor.local_variable with local_variable in H4.
-  rewrite H in H4. injection H4; clear H4; intros; subst b0 chunk0.
-  pose (EVAL1 := make_stackaddr_correct sp nil te1 tm1 ofs).
+  (* cenv!!id = Some(Var_stack_scalar) *)
+  assert (b0 = b). congruence. subst b0.
+  assert (m0 = chunk). congruence. subst m0.
+  pose (EVAL1 := make_stackaddr_correct sp nil te1 tm1 z).
   assert (EVAL2: eval_expr tge (Vptr sp Int.zero) nil te1 tm1 (Evar id) te1 tm1 tv).
     constructor. auto.
   destruct (make_store_correct _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
               (Vptr b Int.zero) _
-              EVAL1 EVAL2 H0 H1 MINJ H7 H11) 
+              EVAL1 EVAL2 H0 H1 MINJ H13 H11) 
   as [tm2 [tv' [EVAL3 [MINJ2 [VINJ NEXT1]]]]].
-  assert (f b <> None). inversion H7. congruence.
-  generalize (match_callstack_mapped _ _ _ _ _ MATCH _ _ _ _ _ H4 H1).
+  assert (f b <> None). inversion H13. congruence.
+  generalize (match_callstack_mapped _ _ _ _ _ MATCH _ _ _ _ _ H7 H1).
   rewrite <- NEXT; rewrite <- NEXT1; intro MATCH2.
+  assert (forall id chunk, In (id, chunk) params -> cenv!id <> None). intros; eauto.
   destruct (IHbind_parameters _ _ _ _ _ _ _ _
-              H12 H6 MINJ2 MATCH2) as [te3 [tm3 [EVAL4 [MINJ3 MATCH3]]]].
+              H12 H6 MINJ2 MATCH2 H8) as [te3 [tm3 [EVAL4 [MINJ3 MATCH3]]]].
   exists te3; exists tm3.
   (* execution *)
   split. apply exec_Sseq_continue with te1 tm2. 
@@ -1460,10 +1564,10 @@ Proof.
   tauto.
 
   (* Impossible cases on cenv!!id *)
-  change Csharpminor.local_variable with local_variable in H4.
+  congruence. 
   congruence.
-  change Csharpminor.local_variable with local_variable in H4.
   congruence.
+  elim (H4 id chunk); auto.
 Qed.
 
 Lemma vars_vals_match_holds_1:
@@ -1494,10 +1598,10 @@ Lemma vars_vals_match_holds:
   List.length params = List.length args ->
   val_list_inject f args targs ->
   forall vars,
-  list_norepet (List.map (@fst ident local_variable) vars
+  list_norepet (List.map (@fst ident variable_info) vars
              ++ List.map (@fst ident memory_chunk) params) ->
   vars_vals_match f params args
-    (set_locals (List.map (@fst ident local_variable) vars)
+    (set_locals (List.map (@fst ident variable_info) vars)
       (set_params targs (List.map (@fst ident memory_chunk) params))).
 Proof.
   induction vars; simpl; intros.
@@ -1517,6 +1621,42 @@ Proof.
   induction 1; simpl; eauto.
 Qed.
 
+Lemma build_compilenv_domain:
+  forall f id chunk,
+  In (id, chunk) f.(Csharpminor.fn_params) -> 
+  (fst (build_compilenv gce f))!id <> None.
+Proof.
+  assert (forall atk id lv cenv_sz id0,
+    let cenv_sz' := assign_variable atk (id, lv) cenv_sz in
+    (fst cenv_sz')!id <> None
+    /\ ((fst cenv_sz)!id0 <> None -> (fst cenv_sz')!id0 <> None)).
+  intros. unfold cenv_sz'. destruct cenv_sz as [cenv sz].
+  unfold assign_variable. destruct lv.
+  case (Identset.mem id atk); simpl. split. rewrite PTree.gss. congruence.
+  rewrite PTree.gsspec. case (peq id0 id); intros. congruence. auto.
+  split. rewrite PTree.gss. congruence.
+  rewrite PTree.gsspec. case (peq id0 id); intros. congruence. auto.
+  simpl. split. rewrite PTree.gss. congruence.
+  rewrite PTree.gsspec. case (peq id0 id); intros. congruence. auto.
+
+  assert (forall atk id_lv_list cenv_sz id lv,
+    In (id, lv) id_lv_list \/ (fst cenv_sz)!id <> None ->
+    (fst (assign_variables atk id_lv_list cenv_sz))!id <> None).
+  induction id_lv_list; simpl; intros. 
+  tauto.
+  apply IHid_lv_list with lv. 
+  destruct a as [id0 lv0].
+  generalize (H atk id0 lv0 cenv_sz id). 
+  simpl. intro. intuition. injection H0; intros; subst id0 lv0. intuition. 
+
+  intros. unfold build_compilenv. apply H0 with (Vscalar chunk). 
+  left. unfold fn_variables. apply List.in_or_app. left. 
+  set (g := fun (id_chunk : ident * memory_chunk) => (fst id_chunk, Vscalar (snd id_chunk))).
+  change positive with ident.
+  change (id, Vscalar chunk) with (g (id, chunk)). 
+  apply List.in_map. auto.
+Qed.
+
 (** The final result in this section: the behaviour of function entry
   in the generated Cminor code (allocate stack data block and store
   parameters whose address is taken) simulates what happens at function
@@ -1528,7 +1668,7 @@ Lemma function_entry_ok:
   alloc_variables empty_env m (fn_variables fn) e m1 lb ->
   bind_parameters e m1 fn.(Csharpminor.fn_params) vargs m2 ->
   match_callstack f cs m.(nextblock) tm.(nextblock) m ->
-  build_compilenv fn = (cenv, sz) ->
+  build_compilenv gce fn = (cenv, sz) ->
   sz <= Int.max_signed ->
   Mem.alloc tm 0 sz = (tm1, sp) ->
   let te :=
@@ -1561,8 +1701,9 @@ Proof.
   assert (NOREPET: list_norepet (List.map (@fst ident memory_chunk) fn.(Csharpminor.fn_params))).
     unfold fn_params_names in H7.
     eapply list_norepet_append_left; eauto.
+  generalize (build_compilenv_domain fn). rewrite H2. intro.
   destruct (store_parameters_correct _ _ _ _ _ H0 _ _ _ _ _ _ _ _
-                    VVM NOREPET MINJ1 MATCH1)
+                    VVM NOREPET MINJ1 MATCH1 H8)
   as [te2 [tm2 [EXEC [MINJ2 MATCH2]]]].
   exists f1; exists te2; exists tm2.
   split. auto. split. auto. split. auto. split. auto.
@@ -1673,7 +1814,7 @@ Definition eval_exprlist_prop
 Definition eval_funcall_prop
     (m1: mem) (fn: Csharpminor.function) (args: list val) (m2: mem) (res: val) : Prop :=
   forall tfn f1 tm1 cs targs
-  (TR: transl_function fn = Some tfn)
+  (TR: transl_function gce fn = Some tfn)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1 cs m1.(nextblock) tm1.(nextblock) m1)
   (ARGSINJ: val_list_inject f1 args targs),
@@ -1713,11 +1854,13 @@ Definition exec_stmt_prop
         (mkframe cenv e te2 sp lo hi :: cs)
         m2.(nextblock) tm2.(nextblock) m2.
 
-Check (eval_funcall_ind4 ge
+(*
+Check (eval_funcall_ind4 prog
      eval_expr_prop
      eval_exprlist_prop
      eval_funcall_prop
      exec_stmt_prop).
+*)
 
 (** There are as many cases in the inductive proof as there are evaluation
   rules in the Csharpminor semantics.  We treat each case as a separate
@@ -1725,9 +1868,9 @@ Check (eval_funcall_ind4 ge
 
 Lemma transl_expr_Evar_correct:
    forall (le : Csharpminor.letenv)
-     (e : PTree.t (block * local_variable)) (m : mem) (id : positive)
+     (e : Csharpminor.env) (m : mem) (id : positive)
      (b : block) (chunk : memory_chunk) (v : val),
-   e ! id = Some (b, LVscalar chunk) ->
+   eval_var prog e id b (Vscalar chunk) ->
    load chunk m b 0 = Some v ->
    eval_expr_prop le e m (Csharpminor.Evar id) m v.
 Proof.
@@ -1742,9 +1885,9 @@ Lemma transl_expr_Eassign_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (id : positive) (a : Csharpminor.expr) (m1 : mem) (b : block)
      (chunk : memory_chunk) (v1 v2 : val) (m2 : mem),
-   Csharpminor.eval_expr ge le e m a m1 v1 ->
+   Csharpminor.eval_expr prog le e m a m1 v1 ->
    eval_expr_prop le e m a m1 v1 ->
-   e ! id = Some (b, LVscalar chunk) ->
+   eval_var prog e id b (Vscalar chunk) ->
    cast chunk v1 = Some v2 ->
    store chunk m1 b 0 v2 = Some m2 ->
    eval_expr_prop le e m (Csharpminor.Eassign id a) m2 v2.
@@ -1758,31 +1901,16 @@ Proof.
   exists f2; exists te3; exists tm3; exists tv2. tauto.
 Qed.
 
-Lemma transl_expr_Eaddrof_local_correct:
+Lemma transl_expr_Eaddrof_correct:
    forall (le : Csharpminor.letenv)
-     (e : PTree.t (block * local_variable)) (m : mem) (id : positive)
-     (b : block) (lv : local_variable),
-   e ! id = Some (b, lv) ->
+     (e : Csharpminor.env) (m : mem) (id : positive)
+     (b : block) (lv : variable_info),
+   eval_var prog e id b lv ->
    eval_expr_prop le e m (Eaddrof id) m (Vptr b Int.zero).
 Proof.
   intros; red; intros. simpl in TR. 
-  generalize (var_addr_local_correct _ _ _ _ _ _ _ _ _ _ _ _ _ _ tle
+  generalize (var_addr_correct _ _ _ _ _ _ _ _ _ _ _ _ _ _ tle
                 TR MATCH H).
-  intros [tv [EVAL VINJ]].
-  exists f1; exists te1; exists tm1; exists tv. intuition.
-Qed.
-
-Lemma transl_expr_Eaddrof_global_correct:
-   forall (le : Csharpminor.letenv)
-     (e : PTree.t (block * local_variable)) (m : mem) (id : positive)
-     (b : block),
-   e ! id = None ->
-   Genv.find_symbol ge id = Some b ->
-   eval_expr_prop le e m (Eaddrof id) m (Vptr b Int.zero).
-Proof.
-  intros; red; intros. simpl in TR. 
-  generalize (var_addr_global_correct _ _ _ _ _ _ _ _ _ _ _ _ _ tle
-                TR MATCH H H0).
   intros [tv [EVAL VINJ]].
   exists f1; exists te1; exists tm1; exists tv. intuition.
 Qed.
@@ -1791,7 +1919,7 @@ Lemma transl_expr_Eop_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (op : Csharpminor.operation) (al : Csharpminor.exprlist) (m1 : mem)
      (vl : list val) (v : val),
-   Csharpminor.eval_exprlist ge le e m al m1 vl ->
+   Csharpminor.eval_exprlist prog le e m al m1 vl ->
    eval_exprlist_prop le e m al m1 vl ->
    Csharpminor.eval_operation op vl m1 = Some v ->
    eval_expr_prop le e m (Csharpminor.Eop op al) m1 v.
@@ -1809,7 +1937,7 @@ Lemma transl_expr_Eload_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (chunk : memory_chunk) (a : Csharpminor.expr) (m1 : mem)
      (v1 v : val),
-   Csharpminor.eval_expr ge le e m a m1 v1 ->
+   Csharpminor.eval_expr prog le e m a m1 v1 ->
    eval_expr_prop le e m a m1 v1 ->
    loadv chunk m1 v1 = Some v ->
    eval_expr_prop le e m (Csharpminor.Eload chunk a) m1 v.
@@ -1829,9 +1957,9 @@ Lemma transl_expr_Estore_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (chunk : memory_chunk) (a b : Csharpminor.expr) (m1 : mem)
      (v1 : val) (m2 : mem) (v2 : val) (m3 : mem) (v3 : val),
-   Csharpminor.eval_expr ge le e m a m1 v1 ->
+   Csharpminor.eval_expr prog le e m a m1 v1 ->
    eval_expr_prop le e m a m1 v1 ->
-   Csharpminor.eval_expr ge le e m1 b m2 v2 ->
+   Csharpminor.eval_expr prog le e m1 b m2 v2 ->
    eval_expr_prop le e m1 b m2 v2 ->
    cast chunk v2 = Some v3 ->
    storev chunk m2 v1 v3 = Some m3 ->
@@ -1859,10 +1987,10 @@ Proof.
 Qed.
 
 Lemma sig_transl_function:
-  forall f tf, transl_function f = Some tf -> tf.(fn_sig) = f.(Csharpminor.fn_sig).
+  forall f tf, transl_function gce f = Some tf -> tf.(fn_sig) = f.(Csharpminor.fn_sig).
 Proof.
   intros f tf. unfold transl_function.
-  destruct (build_compilenv f).
+  destruct (build_compilenv gce f).
   case (zle z Int.max_signed); intros. 
   monadInv H. subst tf; reflexivity.
   congruence.
@@ -1873,13 +2001,13 @@ Lemma transl_expr_Ecall_correct:
      (sig : signature) (a : Csharpminor.expr) (bl : Csharpminor.exprlist)
      (m1 m2 m3 : mem) (vf : val) (vargs : list val) (vres : val)
      (f : Csharpminor.function),
-   Csharpminor.eval_expr ge le e m a m1 vf ->
+   Csharpminor.eval_expr prog le e m a m1 vf ->
    eval_expr_prop le e m a m1 vf ->
-   Csharpminor.eval_exprlist ge le e m1 bl m2 vargs ->
+   Csharpminor.eval_exprlist prog le e m1 bl m2 vargs ->
    eval_exprlist_prop le e m1 bl m2 vargs ->
    Genv.find_funct ge vf = Some f ->
    Csharpminor.fn_sig f = sig ->
-   Csharpminor.eval_funcall ge m2 f vargs m3 vres ->
+   Csharpminor.eval_funcall prog m2 f vargs m3 vres ->
    eval_funcall_prop m2 f vargs m3 vres ->
    eval_expr_prop le e m (Csharpminor.Ecall sig a bl) m3 vres.
 Proof.
@@ -1911,10 +2039,10 @@ Lemma transl_expr_Econdition_true_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (a b c : Csharpminor.expr) (m1 : mem) (v1 : val) (m2 : mem)
      (v2 : val),
-   Csharpminor.eval_expr ge le e m a m1 v1 ->
+   Csharpminor.eval_expr prog le e m a m1 v1 ->
    eval_expr_prop le e m a m1 v1 ->
    Val.is_true v1 ->
-   Csharpminor.eval_expr ge le e m1 b m2 v2 ->
+   Csharpminor.eval_expr prog le e m1 b m2 v2 ->
    eval_expr_prop le e m1 b m2 v2 ->
    eval_expr_prop le e m (Csharpminor.Econdition a b c) m2 v2.
 Proof.
@@ -1935,10 +2063,10 @@ Lemma transl_expr_Econdition_false_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (a b c : Csharpminor.expr) (m1 : mem) (v1 : val) (m2 : mem)
      (v2 : val),
-   Csharpminor.eval_expr ge le e m a m1 v1 ->
+   Csharpminor.eval_expr prog le e m a m1 v1 ->
    eval_expr_prop le e m a m1 v1 ->
    Val.is_false v1 ->
-   Csharpminor.eval_expr ge le e m1 c m2 v2 ->
+   Csharpminor.eval_expr prog le e m1 c m2 v2 ->
    eval_expr_prop le e m1 c m2 v2 ->
    eval_expr_prop le e m (Csharpminor.Econdition a b c) m2 v2.
 Proof.
@@ -1958,9 +2086,9 @@ Qed.
 Lemma transl_expr_Elet_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (a b : Csharpminor.expr) (m1 : mem) (v1 : val) (m2 : mem) (v2 : val),
-   Csharpminor.eval_expr ge le e m a m1 v1 ->
+   Csharpminor.eval_expr prog le e m a m1 v1 ->
    eval_expr_prop le e m a m1 v1 ->
-   Csharpminor.eval_expr ge (v1 :: le) e m1 b m2 v2 ->
+   Csharpminor.eval_expr prog (v1 :: le) e m1 b m2 v2 ->
    eval_expr_prop (v1 :: le) e m1 b m2 v2 ->
    eval_expr_prop le e m (Csharpminor.Elet a b) m2 v2.
 Proof.
@@ -2015,9 +2143,9 @@ Lemma transl_exprlist_Econs_correct:
    forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
      (a : Csharpminor.expr) (bl : Csharpminor.exprlist) (m1 : mem)
      (v : val) (m2 : mem) (vl : list val),
-   Csharpminor.eval_expr ge le e m a m1 v ->
+   Csharpminor.eval_expr prog le e m a m1 v ->
    eval_expr_prop le e m a m1 v ->
-   Csharpminor.eval_exprlist ge le e m1 bl m2 vl ->
+   Csharpminor.eval_exprlist prog le e m1 bl m2 vl ->
    eval_exprlist_prop le e m1 bl m2 vl ->
    eval_exprlist_prop le e m (Csharpminor.Econs a bl) m2 (v :: vl).
 Proof.
@@ -2040,14 +2168,14 @@ Lemma transl_funcall_correct:
    list_norepet (fn_params_names f ++ fn_vars_names f) ->
    alloc_variables empty_env m (fn_variables f) e m1 lb ->
    bind_parameters e m1 (Csharpminor.fn_params f) vargs m2 ->
-   Csharpminor.exec_stmt ge e m2 (Csharpminor.fn_body f) m3 out ->
+   Csharpminor.exec_stmt prog e m2 (Csharpminor.fn_body f) m3 out ->
    exec_stmt_prop e m2 (Csharpminor.fn_body f) m3 out ->
    Csharpminor.outcome_result_value out (sig_res (Csharpminor.fn_sig f)) vres ->
    eval_funcall_prop m f vargs (free_list m3 lb) vres.
 Proof.
   intros; red. intros tfn f1 tm; intros.
   unfold transl_function in TR. 
-  caseEq (build_compilenv f); intros cenv stacksize CENV.
+  caseEq (build_compilenv gce f); intros cenv stacksize CENV.
   rewrite CENV in TR. 
   destruct (zle stacksize Int.max_signed); try discriminate.
   monadInv TR. clear TR. 
@@ -2105,7 +2233,7 @@ Qed.
 Lemma transl_stmt_Sexpr_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
      (m1 : mem) (v : val),
-   Csharpminor.eval_expr ge nil e m a m1 v ->
+   Csharpminor.eval_expr prog nil e m a m1 v ->
    eval_expr_prop nil e m a m1 v ->
    exec_stmt_prop e m (Csharpminor.Sexpr a) m1 Csharpminor.Out_normal.
 Proof.
@@ -2120,9 +2248,9 @@ Qed.
 Lemma transl_stmt_Sseq_continue_correct:
   forall (e : Csharpminor.env) (m : mem) (s1 s2 : Csharpminor.stmt)
          (m1 m2 : mem) (out : Csharpminor.outcome),
-  Csharpminor.exec_stmt ge e m s1 m1 Csharpminor.Out_normal ->
+  Csharpminor.exec_stmt prog e m s1 m1 Csharpminor.Out_normal ->
   exec_stmt_prop e m s1 m1 Csharpminor.Out_normal ->
-  Csharpminor.exec_stmt ge e m1 s2 m2 out ->
+  Csharpminor.exec_stmt prog e m1 s2 m2 out ->
   exec_stmt_prop e m1 s2 m2 out ->
   exec_stmt_prop e m (Csharpminor.Sseq s1 s2) m2 out.
 Proof.
@@ -2140,7 +2268,7 @@ Qed.
 Lemma transl_stmt_Sseq_stop_correct:
   forall (e : Csharpminor.env) (m : mem) (s1 s2 : Csharpminor.stmt)
          (m1 : mem) (out : Csharpminor.outcome),
-  Csharpminor.exec_stmt ge e m s1 m1 out ->
+  Csharpminor.exec_stmt prog e m s1 m1 out ->
   exec_stmt_prop e m s1 m1 out ->
   out <> Csharpminor.Out_normal ->
   exec_stmt_prop e m (Csharpminor.Sseq s1 s2) m1 out.
@@ -2157,10 +2285,10 @@ Lemma transl_stmt_Sifthenelse_true_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
      (sl1 sl2 : Csharpminor.stmt) (m1 : mem) (v1 : val) (m2 : mem)
      (out : Csharpminor.outcome),
-   Csharpminor.eval_expr ge nil e m a m1 v1 ->
+   Csharpminor.eval_expr prog nil e m a m1 v1 ->
    eval_expr_prop nil e m a m1 v1 ->
    Val.is_true v1 ->
-   Csharpminor.exec_stmt ge e m1 sl1 m2 out ->
+   Csharpminor.exec_stmt prog e m1 sl1 m2 out ->
    exec_stmt_prop e m1 sl1 m2 out ->
    exec_stmt_prop e m (Csharpminor.Sifthenelse a sl1 sl2) m2 out.
 Proof.
@@ -2180,10 +2308,10 @@ Lemma transl_stmt_Sifthenelse_false_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
      (sl1 sl2 : Csharpminor.stmt) (m1 : mem) (v1 : val) (m2 : mem)
      (out : Csharpminor.outcome),
-   Csharpminor.eval_expr ge nil e m a m1 v1 ->
+   Csharpminor.eval_expr prog nil e m a m1 v1 ->
    eval_expr_prop nil e m a m1 v1 ->
    Val.is_false v1 ->
-   Csharpminor.exec_stmt ge e m1 sl2 m2 out ->
+   Csharpminor.exec_stmt prog e m1 sl2 m2 out ->
    exec_stmt_prop e m1 sl2 m2 out ->
    exec_stmt_prop e m (Csharpminor.Sifthenelse a sl1 sl2) m2 out.
 Proof.
@@ -2202,9 +2330,9 @@ Qed.
 Lemma transl_stmt_Sloop_loop_correct:
    forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmt)
      (m1 m2 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmt ge e m sl m1 Csharpminor.Out_normal ->
+   Csharpminor.exec_stmt prog e m sl m1 Csharpminor.Out_normal ->
    exec_stmt_prop e m sl m1 Csharpminor.Out_normal ->
-   Csharpminor.exec_stmt ge e m1 (Csharpminor.Sloop sl) m2 out ->
+   Csharpminor.exec_stmt prog e m1 (Csharpminor.Sloop sl) m2 out ->
    exec_stmt_prop e m1 (Csharpminor.Sloop sl) m2 out ->
    exec_stmt_prop e m (Csharpminor.Sloop sl) m2 out.
 Proof.
@@ -2224,7 +2352,7 @@ Qed.
 Lemma transl_stmt_Sloop_exit_correct:
    forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmt)
      (m1 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmt ge e m sl m1 out ->
+   Csharpminor.exec_stmt prog e m sl m1 out ->
    exec_stmt_prop e m sl m1 out ->
    out <> Csharpminor.Out_normal ->
    exec_stmt_prop e m (Csharpminor.Sloop sl) m1 out.
@@ -2240,7 +2368,7 @@ Qed.
 Lemma transl_stmt_Sblock_correct:
    forall (e : Csharpminor.env) (m : mem) (sl : Csharpminor.stmt)
      (m1 : mem) (out : Csharpminor.outcome),
-   Csharpminor.exec_stmt ge e m sl m1 out ->
+   Csharpminor.exec_stmt prog e m sl m1 out ->
    exec_stmt_prop e m sl m1 out ->
    exec_stmt_prop e m (Csharpminor.Sblock sl) m1
      (Csharpminor.outcome_block out).
@@ -2279,7 +2407,7 @@ Qed.
 Lemma transl_stmt_Sreturn_some_correct:
    forall (e : Csharpminor.env) (m : mem) (a : Csharpminor.expr)
      (m1 : mem) (v : val),
-   Csharpminor.eval_expr ge nil e m a m1 v ->
+   Csharpminor.eval_expr prog nil e m a m1 v ->
    eval_expr_prop nil e m a m1 v ->
    exec_stmt_prop e m (Csharpminor.Sreturn (Some a)) m1
      (Csharpminor.Out_return (Some v)).
@@ -2296,10 +2424,10 @@ Qed.
 
 Lemma transl_function_correct:
    forall m1 f vargs m2 vres,
-   Csharpminor.eval_funcall ge m1 f vargs m2 vres ->
+   Csharpminor.eval_funcall prog m1 f vargs m2 vres ->
    eval_funcall_prop m1 f vargs m2 vres.
 Proof
-  (eval_funcall_ind4 ge
+  (eval_funcall_ind4 prog
      eval_expr_prop
      eval_exprlist_prop
      eval_funcall_prop
@@ -2307,8 +2435,7 @@ Proof
 
      transl_expr_Evar_correct
      transl_expr_Eassign_correct
-     transl_expr_Eaddrof_local_correct
-     transl_expr_Eaddrof_global_correct
+     transl_expr_Eaddrof_correct
      transl_expr_Eop_correct
      transl_expr_Eload_correct
      transl_expr_Estore_correct
@@ -2337,12 +2464,13 @@ Proof
   of the source program and the transformed program. *)
 
 Lemma match_globalenvs_init:
-  let m := Genv.init_mem prog in
+  let m := Genv.init_mem (program_of_program prog) in
   let tm := Genv.init_mem tprog in
   let f := fun b => if zlt b m.(nextblock) then Some(b, 0) else None in
   match_globalenvs f.
 Proof.
   intros. constructor.
+  (* globalvars *)
   (* symbols *)
   intros. split.
   unfold f. rewrite zlt_true. auto. unfold m. 
@@ -2362,7 +2490,7 @@ Theorem transl_program_correct:
 Proof.
   intros n [b [fn [m [FINDS [FINDF [SIG EVAL]]]]]].
   elim (function_ptr_translated _ _ FINDF). intros tfn [TFIND TR].
-  set (m0 := Genv.init_mem prog) in *.
+  set (m0 := Genv.init_mem (program_of_program prog)) in *.
   set (f := fun b => if zlt b m0.(nextblock) then Some(b, 0) else None).
   assert (MINJ0: mem_inject f m0 m0).
     unfold f; constructor; intros.
@@ -2372,7 +2500,7 @@ Proof.
     split. auto. 
     constructor. compute. split; congruence. left; auto. 
     intros; omega. 
-    generalize (Genv.initmem_undef prog b0). fold m0. intros [lo [hi EQ]].
+    generalize (Genv.initmem_undef (program_of_program prog) b0). fold m0. intros [lo [hi EQ]].
     rewrite EQ. simpl. constructor. 
     destruct (zlt b1 (nextblock m0)); try discriminate.
     destruct (zlt b2 (nextblock m0)); try discriminate.
@@ -2385,11 +2513,13 @@ Proof.
   as [f1 [tm1 [tres [TEVAL [VINJ [MINJ1 [INCR MATCH1]]]]]]].
   exists b; exists tfn; exists tm1.
   split. fold tge. rewrite <- FINDS. 
-  replace (prog_main prog) with (prog_main tprog). fold ge. apply symbols_preserved.
-  apply transform_partial_program_main with transl_function. assumption.
+  replace (prog_main prog) with (AST.prog_main tprog). fold ge. apply symbols_preserved.
+  transitivity (AST.prog_main (program_of_program prog)).
+  apply transform_partial_program_main with (transl_function gce). assumption.
+  reflexivity.
   split. assumption.
   split. rewrite <- SIG. apply sig_transl_function; auto.
-  rewrite (Genv.init_mem_transf_partial transl_function _ TRANSL).
+  rewrite (Genv.init_mem_transf_partial (transl_function gce) _ TRANSL).
   inversion VINJ; subst tres. assumption. 
 Qed.
 

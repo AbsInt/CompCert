@@ -95,28 +95,32 @@ Inductive stmt : Set :=
   | Sexit: nat -> stmt
   | Sreturn: option expr -> stmt.
 
-(** The local variables of a function can be either scalar variables
+(** The variables can be either scalar variables
   (whose type, size and signedness are given by a [memory_chunk]
   or array variables (of the indicated sizes).  The only operation
   permitted on an array variable is taking its address. *)
 
-Inductive local_variable : Set :=
-  | LVscalar: memory_chunk -> local_variable
-  | LVarray: Z -> local_variable.
+Inductive variable_info : Set :=
+  | Vscalar: memory_chunk -> variable_info
+  | Varray: Z -> variable_info.
 
 (** Functions are composed of a signature, a list of parameter names
   with associated memory chunks (parameters must be scalar), a list of
-  local variables with associated [local_variable] description, and a
+  local variables with associated [variable_info] description, and a
   statement representing the function body.  *)
 
 Record function : Set := mkfunction {
   fn_sig: signature;
   fn_params: list (ident * memory_chunk);
-  fn_vars: list (ident * local_variable);
+  fn_vars: list (ident * variable_info);
   fn_body: stmt
 }.
 
-Definition program := AST.program function.
+Record program : Set := mkprogram {
+  prog_funct: list (ident * function);
+  prog_main: ident;
+  prog_vars: list (ident * variable_info)
+}.
 
 (** * Operational semantics *)
 
@@ -146,33 +150,45 @@ Definition outcome_block (out: outcome) : outcome :=
   | Out_return optv => Out_return optv
   end.
 
-(** Three kinds of evaluation environments are involved:
+(** Four kinds of evaluation environments are involved:
 - [genv]: global environments, define symbols and functions;
-- [env]: local environments, map local variables to memory blocks;
+- [gvarenv]: map global variables to var info;
+- [env]: local environments, map local variables to memory blocks + var info;
 - [lenv]: let environments, map de Bruijn indices to values.
 *)
 Definition genv := Genv.t function.
-Definition env := PTree.t (block * local_variable).
-Definition empty_env : env := PTree.empty (block * local_variable).
+Definition gvarenv := PTree.t variable_info.
+Definition env := PTree.t (block * variable_info).
+Definition empty_env : env := PTree.empty (block * variable_info).
 Definition letenv := list val.
 
-Definition sizeof (lv: local_variable) : Z :=
+Definition sizeof (lv: variable_info) : Z :=
   match lv with
-  | LVscalar chunk => size_chunk chunk
-  | LVarray sz => Zmax 0 sz
+  | Vscalar chunk => size_chunk chunk
+  | Varray sz => Zmax 0 sz
   end.
+
+Definition program_of_program (p: program): AST.program function :=
+  AST.mkprogram
+    p.(prog_funct)
+    p.(prog_main)
+    (List.map (fun id_vi => (fst id_vi, sizeof (snd id_vi))) p.(prog_vars)).
 
 Definition fn_variables (f: function) :=
   List.map
-    (fun id_chunk => (fst id_chunk, LVscalar (snd id_chunk))) f.(fn_params)
+    (fun id_chunk => (fst id_chunk, Vscalar (snd id_chunk))) f.(fn_params)
   ++ f.(fn_vars).
 
 Definition fn_params_names (f: function) :=
   List.map (@fst ident memory_chunk) f.(fn_params).
 
 Definition fn_vars_names (f: function) :=
-  List.map (@fst ident local_variable) f.(fn_vars).
+  List.map (@fst ident variable_info) f.(fn_vars).
 
+Definition global_var_env (p: program): gvarenv :=
+  List.fold_left
+    (fun gve id_vi => PTree.set (fst id_vi) (snd id_vi) gve)
+    p.(prog_vars) (PTree.empty variable_info).
 
 (** Evaluation of operator applications. *)
 
@@ -266,7 +282,7 @@ Definition cast (chunk: memory_chunk) (v: val) : option val :=
   bound to the reference to a fresh block of the appropriate size. *)
 
 Inductive alloc_variables: env -> mem ->
-                           list (ident * local_variable) ->
+                           list (ident * variable_info) ->
                            env -> mem -> list block -> Prop :=
   | alloc_variables_nil:
       forall e m,
@@ -289,7 +305,7 @@ Inductive bind_parameters: env ->
       bind_parameters e m nil nil m
   | bind_parameters_cons:
       forall e m id chunk params v1 v2 vl b m1 m2,
-      PTree.get id e = Some(b, LVscalar chunk) ->
+      PTree.get id e = Some (b, Vscalar chunk) ->
       cast chunk v1 = Some v2 ->
       Mem.store chunk m b 0 v2 = Some m1 ->
       bind_parameters e m1 params vl m2 ->
@@ -297,38 +313,49 @@ Inductive bind_parameters: env ->
 
 Section RELSEM.
 
-Variable ge: genv.
+Variable prg: program.
+Let ge := Genv.globalenv (program_of_program prg).
 
-(** Evaluation of an expression: [eval_expr ge le e m a m' v] states
+(* Evaluation of a variable reference: [eval_var prg ge e id b vi] states
+   that variable [id] in environment [e] evaluates to block [b]
+   and is associated with the variable info [vi]. *)
+
+Inductive eval_var: env -> ident -> block -> variable_info -> Prop :=
+  | eval_var_local:
+      forall e id b vi,
+      PTree.get id e = Some (b, vi) ->
+      eval_var e id b vi
+  | eval_var_global:
+      forall e id b vi,
+      PTree.get id e = None ->
+      Genv.find_symbol ge id = Some b ->
+      PTree.get id (global_var_env prg) = Some vi ->
+      eval_var e id b vi.
+
+(** Evaluation of an expression: [eval_expr prg le e m a m' v] states
   that expression [a], in initial memory state [m], evaluates to value
   [v].  [m'] is the final memory state, respectively, reflecting
-  memory stores possibly performed by [a].  [ge], [e] and [le] are the
-  global environment, local environment and let environment
-  respectively.  They do not change during evaluation.  *)
+  memory stores possibly performed by [a].  [e] and [le] are the
+  local environment and let environment respectively. *)
 
 Inductive eval_expr:
          letenv -> env ->
          mem -> expr -> mem -> val -> Prop :=
   | eval_Evar:
       forall le e m id b chunk v,
-      PTree.get id e = Some (b, LVscalar chunk) ->
+      eval_var e id b (Vscalar chunk) ->
       Mem.load chunk m b 0 = Some v ->
       eval_expr le e m (Evar id) m v
   | eval_Eassign:
       forall le e m id a m1 b chunk v1 v2 m2,
       eval_expr le e m a m1 v1 ->
-      PTree.get id e = Some (b, LVscalar chunk) ->
+      eval_var e id b (Vscalar chunk) ->
       cast chunk v1 = Some v2 ->
       Mem.store chunk m1 b 0 v2 = Some m2 ->
       eval_expr le e m (Eassign id a) m2 v2
-  | eval_Eaddrof_local:
+  | eval_Eaddrof:
       forall le e m id b lv,
-      PTree.get id e = Some (b, lv) ->
-      eval_expr le e m (Eaddrof id) m (Vptr b Int.zero)
-  | eval_Eaddrof_global:
-      forall le e m id b,
-      PTree.get id e = None ->
-      Genv.find_symbol ge id = Some b ->
+      eval_var e id b lv ->
       eval_expr le e m (Eaddrof id) m (Vptr b Int.zero)
   | eval_Eop:
       forall le e m op al m1 vl v,
@@ -378,7 +405,7 @@ Inductive eval_expr:
       eval_expr le e m (Eletvar n) m v
 
 (** Evaluation of a list of expressions:
-  [eval_exprlist ge le al m a m' vl]
+  [eval_exprlist prg le al m a m' vl]
   states that the list [al] of expressions evaluate 
   to the list [vl] of values.
   The other parameters are as in [eval_expr].
@@ -397,7 +424,7 @@ with eval_exprlist:
       eval_exprlist le e m1 bl m2 vl ->
       eval_exprlist le e m (Econs a bl) m2 (v :: vl)
 
-(** Evaluation of a function invocation: [eval_funcall ge m f args m' res]
+(** Evaluation of a function invocation: [eval_funcall prg m f args m' res]
   means that the function [f], applied to the arguments [args] in
   memory state [m], returns the value [res] in modified memory state [m'].
 *)
@@ -413,7 +440,7 @@ with eval_funcall:
       outcome_result_value out f.(fn_sig).(sig_res) vres ->
       eval_funcall m f vargs (Mem.free_list m3 lb) vres
 
-(** Execution of a statement: [exec_stmt ge e m s m' out]
+(** Execution of a statement: [exec_stmt prg e m s m' out]
   means that statement [s] executes with outcome [out].
   The other parameters are as in [eval_expr]. *)
 
@@ -487,11 +514,11 @@ End RELSEM.
   in the initial memory state for [p] eventually returns value [r]. *)
 
 Definition exec_program (p: program) (r: val) : Prop :=
-  let ge := Genv.globalenv p in
-  let m0 := Genv.init_mem p in
+  let ge := Genv.globalenv (program_of_program p) in
+  let m0 := Genv.init_mem (program_of_program p) in
   exists b, exists f, exists m,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\
   f.(fn_sig) = mksignature nil (Some Tint) /\
-  eval_funcall ge m0 f nil m r.
+  eval_funcall p m0 f nil m r.
 
