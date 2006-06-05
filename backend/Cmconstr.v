@@ -187,19 +187,6 @@ Fixpoint notbool (e: expr) {struct e} : expr :=
       notbool_base e
   end.
 
-(** ** Truncations and sign extensions *)
-
-Definition cast8signed (e: expr) := Eop Ocast8signed (e ::: Enil).
-
-Definition cast8unsigned (e: expr) :=
-  Eop (Orolm Int.zero (Int.repr 255)) (e ::: Enil).
-Definition cast16signed (e: expr) :=
-  Eop Ocast16signed (e ::: Enil).
-Definition cast16unsigned (e: expr) :=
-  Eop (Orolm Int.zero (Int.repr 65535)) (e ::: Enil).
-Definition singleoffloat (e: expr) :=
-  Eop Osingleoffloat (e ::: Enil).
-
 (** ** Integer addition and pointer addition *)
 
 (*
@@ -805,6 +792,79 @@ Definition subf (e1: expr) (e2: expr) :=
 
 Definition mulf (e1 e2: expr) := Eop Omulf (e1:::e2:::Enil).
 Definition divf (e1 e2: expr) := Eop Odivf (e1:::e2:::Enil).
+
+(** ** Truncations and sign extensions *)
+
+Definition cast8unsigned (e: expr) :=
+  rolm e Int.zero (Int.repr 255).
+Definition cast16unsigned (e: expr) :=
+  rolm e Int.zero (Int.repr 65535).
+
+Inductive cast8signed_cases: forall (e1: expr), Set :=
+  | cast8signed_case1:
+      forall (e2: expr),
+      cast8signed_cases (Eop Ocast8signed (e2 ::: Enil))
+  | cast8signed_default:
+      forall (e1: expr),
+      cast8signed_cases e1.
+
+Definition cast8signed_match (e1: expr) :=
+  match e1 as z1 return cast8signed_cases z1 with
+  | Eop Ocast8signed (e2 ::: Enil) =>
+      cast8signed_case1 e2
+  | e1 =>
+      cast8signed_default e1
+  end.
+
+Definition cast8signed (e: expr) := 
+  match cast8signed_match e with
+  | cast8signed_case1 e1 => e
+  | cast8signed_default e1 => Eop Ocast8signed (e1 ::: Enil)
+  end.
+
+Inductive cast16signed_cases: forall (e1: expr), Set :=
+  | cast16signed_case1:
+      forall (e2: expr),
+      cast16signed_cases (Eop Ocast16signed (e2 ::: Enil))
+  | cast16signed_default:
+      forall (e1: expr),
+      cast16signed_cases e1.
+
+Definition cast16signed_match (e1: expr) :=
+  match e1 as z1 return cast16signed_cases z1 with
+  | Eop Ocast16signed (e2 ::: Enil) =>
+      cast16signed_case1 e2
+  | e1 =>
+      cast16signed_default e1
+  end.
+
+Definition cast16signed (e: expr) := 
+  match cast16signed_match e with
+  | cast16signed_case1 e1 => e
+  | cast16signed_default e1 => Eop Ocast16signed (e1 ::: Enil)
+  end.
+
+Inductive singleoffloat_cases: forall (e1: expr), Set :=
+  | singleoffloat_case1:
+      forall (e2: expr),
+      singleoffloat_cases (Eop Osingleoffloat (e2 ::: Enil))
+  | singleoffloat_default:
+      forall (e1: expr),
+      singleoffloat_cases e1.
+
+Definition singleoffloat_match (e1: expr) :=
+  match e1 as z1 return singleoffloat_cases z1 with
+  | Eop Osingleoffloat (e2 ::: Enil) =>
+      singleoffloat_case1 e2
+  | e1 =>
+      singleoffloat_default e1
+  end.
+
+Definition singleoffloat (e: expr) := 
+  match singleoffloat_match e with
+  | singleoffloat_case1 e1 => e
+  | singleoffloat_default e1 => Eop Osingleoffloat (e1 ::: Enil)
+  end.
 
 (** ** Comparisons and conditional expressions *)
 

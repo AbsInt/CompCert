@@ -329,44 +329,6 @@ Proof.
   destruct v1; eauto.
 Qed.
 
-Theorem eval_cast8signed:
-  forall sp le e1 m1 a e2 m2 x,
-  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
-  eval_expr ge sp le e1 m1 (cast8signed a) e2 m2 (Vint (Int.cast8signed x)).
-Proof. TrivialOp cast8signed. Qed.
-
-Theorem eval_cast8unsigned:
-  forall sp le e1 m1 a e2 m2 x,
-  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
-  eval_expr ge sp le e1 m1 (cast8unsigned a) e2 m2 (Vint (Int.cast8unsigned x)).
-Proof. 
-  TrivialOp cast8unsigned. simpl. 
-  rewrite Int.rolm_zero. rewrite Int.cast8unsigned_and. auto.
-Qed.
-    
-Theorem eval_cast16signed:
-  forall sp le e1 m1 a e2 m2 x,
-  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
-  eval_expr ge sp le e1 m1 (cast16signed a) e2 m2 (Vint (Int.cast16signed x)).
-Proof. TrivialOp cast16signed. Qed.
-
-Theorem eval_cast16unsigned:
-  forall sp le e1 m1 a e2 m2 x,
-  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
-  eval_expr ge sp le e1 m1 (cast16unsigned a) e2 m2 (Vint (Int.cast16unsigned x)).
-Proof. 
-  TrivialOp cast16unsigned. simpl. 
-  rewrite Int.rolm_zero. rewrite Int.cast16unsigned_and. auto.
-Qed.
-
-Theorem eval_singleoffloat:
-  forall sp le e1 m1 a e2 m2 x,
-  eval_expr ge sp le e1 m1 a e2 m2 (Vfloat x) ->
-  eval_expr ge sp le e1 m1 (singleoffloat a) e2 m2 (Vfloat (Float.singleoffloat x)).
-Proof. 
-  TrivialOp singleoffloat. 
-Qed.
-
 Theorem eval_addimm:
   forall sp le e1 m1 n a e2 m2 x,
   eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
@@ -928,6 +890,54 @@ Theorem eval_divf:
   eval_expr ge sp le e2 m2 b e3 m3 (Vfloat y) ->
   eval_expr ge sp le e1 m1 (divf a b) e3 m3 (Vfloat (Float.div x y)).
 Proof. TrivialOp divf. Qed.
+
+Theorem eval_cast8signed:
+  forall sp le e1 m1 a e2 m2 x,
+  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
+  eval_expr ge sp le e1 m1 (cast8signed a) e2 m2 (Vint (Int.cast8signed x)).
+Proof. 
+  intros until x; unfold cast8signed; case (cast8signed_match a); intros.
+  InvEval H. FuncInv. EvalOp. subst x. rewrite Int.cast8_signed_idem. reflexivity.
+  EvalOp.
+Qed.
+
+Theorem eval_cast8unsigned:
+  forall sp le e1 m1 a e2 m2 x,
+  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
+  eval_expr ge sp le e1 m1 (cast8unsigned a) e2 m2 (Vint (Int.cast8unsigned x)).
+Proof. 
+  intros. unfold cast8unsigned. rewrite Int.cast8unsigned_and.
+  rewrite <- Int.rolm_zero. eapply eval_rolm; eauto. 
+Qed.
+    
+Theorem eval_cast16signed:
+  forall sp le e1 m1 a e2 m2 x,
+  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
+  eval_expr ge sp le e1 m1 (cast16signed a) e2 m2 (Vint (Int.cast16signed x)).
+Proof. 
+  intros until x; unfold cast16signed; case (cast16signed_match a); intros.
+  InvEval H. FuncInv. EvalOp. subst x. rewrite Int.cast16_signed_idem. reflexivity.
+  EvalOp.
+Qed.
+
+Theorem eval_cast16unsigned:
+  forall sp le e1 m1 a e2 m2 x,
+  eval_expr ge sp le e1 m1 a e2 m2 (Vint x) ->
+  eval_expr ge sp le e1 m1 (cast16unsigned a) e2 m2 (Vint (Int.cast16unsigned x)).
+Proof. 
+  intros. unfold cast16unsigned. rewrite Int.cast16unsigned_and.
+  rewrite <- Int.rolm_zero. eapply eval_rolm; eauto. 
+Qed.
+
+Theorem eval_singleoffloat:
+  forall sp le e1 m1 a e2 m2 x,
+  eval_expr ge sp le e1 m1 a e2 m2 (Vfloat x) ->
+  eval_expr ge sp le e1 m1 (singleoffloat a) e2 m2 (Vfloat (Float.singleoffloat x)).
+Proof. 
+  intros until x; unfold singleoffloat; case (singleoffloat_match a); intros.
+  InvEval H. FuncInv. EvalOp. subst x. rewrite Float.singleoffloat_idem. reflexivity.
+  EvalOp.
+Qed.
 
 Theorem eval_cmp:
   forall sp le c e1 m1 a e2 m2 x b e3 m3 y,
