@@ -1390,25 +1390,56 @@ Proof (proj2 (proj2 transl_expr_condition_exprlist_incr)).
 
 Hint Resolve transl_expr_incr transl_condition_incr transl_exprlist_incr: rtlg.
 
+Lemma transl_exit_incr:
+  forall nexits n s ns s',
+  transl_exit nexits n s = OK ns s' ->
+  state_incr s s'.
+Proof.
+  intros until s'. unfold transl_exit. 
+  destruct (nth_error nexits n); intros; simplify_eq H; intros; subst s'.
+  auto with rtlg.
+Qed.
+
+Hint Resolve transl_exit_incr: rtlg.
+
+Lemma transl_switch_incr:
+  forall r nexits default cases s n s',
+  transl_switch r nexits cases default s = OK n s' ->
+  state_incr s s'.
+Proof.
+  induction cases; simpl; intros.
+  eauto with rtlg.
+  destruct a as [key1 exit1].
+  monadInv H. intros EQ2.
+  apply state_incr_trans with s0. eauto.
+  eauto with rtlg. 
+Qed. 
+
+Hint Resolve transl_switch_incr: rtlg.
+
 Lemma transl_stmt_incr:
   forall a map nd nexits nret rret s ns s',
   transl_stmt map a nd nexits nret rret s = OK ns s' ->
   state_incr s s'.
 Proof.
-  induction a; simpl; intros; 
-  try (monadInv H); try (monadInv H0); 
-  try (monadInv H1); try (monadInv H2);
-  eauto 6 with rtlg.
+  induction a; simpl; intros.
 
-  subst s'; auto with rtlg.
+  monadInv H. subst s'. auto with rtlg.
+
+  monadInv H. eauto with rtlg.
+
+  monadInv H. eauto with rtlg.
 
   generalize H. case (more_likely c a1 a2); monadSimpl; eauto 6 with rtlg.
 
-  subst s' s5. apply update_instr_incr with s3 s4 (Inop n2) n1 u0;
+  monadInv H. subst s'. 
+  apply update_instr_incr with s0 s1 (Inop n0) n u; eauto with rtlg.
+
+  eauto.
+
   eauto with rtlg.
 
-  generalize H; destruct (nth_error nexits n); monadSimpl.
-  subst s'; auto with rtlg.
+  monadInv H. eauto 6 with rtlg.
 
   generalize H. destruct o; destruct rret; try monadSimpl.
   eauto with rtlg.
