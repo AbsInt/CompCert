@@ -378,6 +378,26 @@ with transl_exprlist (map: mapping) (mut: list ident)
 
 Parameter more_likely: condexpr -> stmt -> stmt -> bool.
 
+(** Auxiliary for translating [Sswitch] statements. *)
+
+Definition transl_exit (nexits: list node) (n: nat) : mon node :=
+  match nth_error nexits n with
+  | None => error node
+  | Some ne => ret ne
+  end.
+
+Fixpoint transl_switch (r: reg) (nexits: list node)
+                       (cases: list (int * nat)) (default: nat)
+                       {struct cases} : mon node :=
+  match cases with
+  | nil =>
+      transl_exit nexits default
+  | (key1, exit1) :: cases' =>
+      do ncont <- transl_switch r nexits cases' default;
+      do nfound <- transl_exit nexits exit1;
+      add_instr (Icond (Ccompimm Ceq key1) (r :: nil) nfound ncont)
+  end.
+
 (** Translation of statements.  [transl_stmt map s nd nexits nret rret]
   enriches the current CFG with the RTL instructions necessary to
   execute the Cminor statement [s], and returns the node of the first
@@ -417,10 +437,12 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Sblock sbody =>
       transl_stmt map sbody nd (nd :: nexits) nret rret
   | Sexit n =>
-      match nth_error nexits n with
-      | None => error node
-      | Some ne => ret ne
-      end
+      transl_exit nexits n
+  | Sswitch a cases default =>
+      let mut := mutated_expr a in
+      do r <- alloc_reg map mut a;
+      do ns <- transl_switch r nexits cases default;
+      transl_expr map mut a r ns
   | Sreturn opt_a =>
       match opt_a, rret with
       | None, None => ret nret

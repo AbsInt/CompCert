@@ -59,6 +59,7 @@ Inductive stmt : Set :=
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
+  | Sswitch: expr -> list (int * nat) -> nat -> stmt
   | Sreturn: option expr -> stmt.
 
 (** Functions are composed of a signature, a list of parameter names,
@@ -104,6 +105,13 @@ Definition outcome_block (out: outcome) : outcome :=
   | Out_exit O => Out_normal
   | Out_exit (S n) => Out_exit n
   | Out_return optv => Out_return optv
+  end.
+
+Fixpoint switch_target (n: int) (dfl: nat) (cases: list (int * nat))
+                       {struct cases} : nat :=
+  match cases with
+  | nil => dfl
+  | (n1, lbl1) :: rem => if Int.eq n n1 then lbl1 else switch_target n dfl rem
   end.
 
 (** Three kinds of evaluation environments are involved:
@@ -310,6 +318,11 @@ with exec_stmt:
   | exec_Sexit:
       forall sp e m n,
       exec_stmt sp e m (Sexit n) e m (Out_exit n)
+  | exec_Sswitch:
+      forall sp e m a cases default e1 m1 n,
+      eval_expr sp nil e m a e1 m1 (Vint n) ->
+      exec_stmt sp e m (Sswitch a cases default)
+                   e1 m1 (Out_exit (switch_target n default cases))
   | exec_Sreturn_none:
       forall sp e m,
       exec_stmt sp e m (Sreturn None) e m (Out_return None)

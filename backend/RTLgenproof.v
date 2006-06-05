@@ -1169,16 +1169,74 @@ Proof.
   destruct n; simpl; auto.
 Qed.
 
+Lemma transl_exit_correct:
+  forall nexits ex s nd s',
+  transl_exit nexits ex s = OK nd s' ->
+  nth_error nexits ex = Some nd.
+Proof.
+  intros until s'. unfold transl_exit. 
+  case (nth_error nexits ex); intros; simplify_eq H; congruence.
+Qed.
+
 Lemma transl_stmt_Sexit_correct:
   forall (sp: val) (e : env) (m : mem) (n : nat),
   transl_stmt_correct sp e m (Sexit n) e m (Out_exit n).
 Proof.
   intros; red; intros. 
-  generalize TE. simpl. caseEq (nth_error nexits n).
-  intros n' NE. monadSimpl. subst n'.
-  simpl in OUT. assert (ns = nd). congruence. subst ns.
-  exists rs. intuition. apply exec_refl.
-  intro. monadSimpl.
+  simpl in TE. simpl in OUT. 
+  generalize (transl_exit_correct _ _ _ _ _ TE); intro.
+  assert (ns = nd). congruence. subst ns.
+  exists rs. simpl. intuition. apply exec_refl.
+Qed.
+
+Lemma transl_switch_correct:
+  forall sp rs m r i nexits nd default cases s ns s',
+  transl_switch r nexits cases default s = OK ns s' ->
+  nth_error nexits (switch_target i default cases) = Some nd ->
+  rs#r = Vint i ->
+  exec_instrs tge s'.(st_code) sp ns rs m nd rs m.
+Proof.
+  induction cases; simpl; intros.
+  generalize (transl_exit_correct _ _ _ _ _ H). intros.
+  assert (ns = nd). congruence. subst ns. apply exec_refl.
+  destruct a as [key1 exit1]. monadInv H. clear H. intro EQ1.
+  caseEq (Int.eq i key1); intro IEQ; rewrite IEQ in H0.
+  (* i = key1 *)
+  apply exec_trans with n0 rs m. apply exec_one. 
+  eapply exec_Icond_true. eauto with rtlg. simpl. rewrite H1. congruence.
+  generalize (transl_exit_correct _ _ _ _ _ EQ0); intro.
+  assert (n0 = nd). congruence. subst n0. apply exec_refl.
+  (* i <> key1 *)
+  apply exec_trans with n rs m. apply exec_one.
+  eapply exec_Icond_false. eauto with rtlg. simpl. rewrite H1. congruence.
+  apply exec_instrs_incr with s0; eauto with rtlg. 
+Qed.
+
+Lemma transl_stmt_Sswitch_correct:
+  forall (sp : val) (e : env) (m : mem) (a : expr)
+         (cases : list (int * nat)) (default : nat) (e1 : env) (m1 : mem)
+         (n : int),
+  eval_expr ge sp nil e m a e1 m1 (Vint n) ->
+  transl_expr_correct sp nil e m a e1 m1 (Vint n) ->
+  transl_stmt_correct sp e m (Sswitch a cases default) e1 m1
+         (Out_exit (switch_target n default cases)).
+Proof.
+  intros; red; intros. monadInv TE. clear TE; intros EQ1.
+  simpl in OUT. 
+  assert (state_incr s s1). eauto with rtlg.
+
+  red in H0. 
+  assert (MWF1: map_wf map s1). eauto with rtlg.
+  assert (TRG1: target_reg_ok s1 map (mutated_expr a) a r). eauto with rtlg.
+  destruct (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME (incl_refl _) TRG1)
+        as [rs' [EXEC1 [ME1 [RES1 OTHER1]]]].
+  simpl. exists rs'.
+  (* execution *)
+  split. eapply exec_trans. eexact EXEC1. 
+  apply exec_instrs_incr with s1. eauto with rtlg.
+  eapply transl_switch_correct; eauto. 
+  (* match_env & match_reg *)
+  tauto.
 Qed.
 
 Lemma transl_stmt_Sreturn_none_correct:
@@ -1256,6 +1314,7 @@ Proof
     transl_stmt_Sloop_stop_correct
     transl_stmt_Sblock_correct
     transl_stmt_Sexit_correct
+    transl_stmt_Sswitch_correct
     transl_stmt_Sreturn_none_correct
     transl_stmt_Sreturn_some_correct).
 
