@@ -264,11 +264,12 @@ Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
       Some (Sblock ts)
   | Csharpminor.Sexit n =>
       Some (Sexit n)
+  | Csharpminor.Sswitch e cases default =>
+      do te <- transl_expr cenv e; Some(Sswitch te cases default)
   | Csharpminor.Sreturn None =>
       Some (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>
-      do te <- transl_expr cenv e;
-      Some (Sreturn (Some te))
+      do te <- transl_expr cenv e; Some (Sreturn (Some te))
   end.
 
 (** Computation of the set of variables whose address is taken in
@@ -314,6 +315,7 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
   | Csharpminor.Sloop s => addr_taken_stmt s
   | Csharpminor.Sblock s => addr_taken_stmt s
   | Csharpminor.Sexit n => Identset.empty
+  | Csharpminor.Sswitch e cases default => addr_taken_expr e
   | Csharpminor.Sreturn None => Identset.empty
   | Csharpminor.Sreturn (Some e) => addr_taken_expr e
   end.
@@ -326,7 +328,7 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
 
 Definition assign_variable
     (atk: Identset.t)
-    (id_lv: ident * variable_info)
+    (id_lv: ident * var_kind)
     (cenv_stacksize: compilenv * Z) : compilenv * Z :=
   let (cenv, stacksize) := cenv_stacksize in
   match id_lv with
@@ -344,7 +346,7 @@ Definition assign_variable
 
 Fixpoint assign_variables
     (atk: Identset.t)
-    (id_lv_list: list (ident * variable_info))
+    (id_lv_list: list (ident * var_kind))
     (cenv_stacksize: compilenv * Z)
     {struct id_lv_list}: compilenv * Z :=
   match id_lv_list with
@@ -361,7 +363,7 @@ Definition build_compilenv
     (globenv, 0).
 
 Definition assign_global_variable
-     (ce: compilenv) (id_vi: ident * variable_info) : compilenv :=
+     (ce: compilenv) (id_vi: ident * var_kind) : compilenv :=
   match id_vi with
   | (id, Vscalar chunk) => PTree.set id (Var_global_scalar chunk) ce
   | (id, Varray sz) => PTree.set id Var_global_array ce

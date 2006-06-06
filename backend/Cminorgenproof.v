@@ -61,7 +61,7 @@ Proof.
   intros [A B]. elim B. reflexivity.
 Qed.
 
-Definition var_info_global (id: ident) (vi: var_info) (lv: variable_info) :=
+Definition var_info_global (id: ident) (vi: var_info) (lv: var_kind) :=
   match vi with
   | Var_global_scalar chunk => lv = Vscalar chunk
   | Var_global_array => exists sz, lv = Varray sz
@@ -74,7 +74,7 @@ Lemma global_compilenv_charact:
 Proof.
   set (mkgve := fun gv vars =>
          List.fold_left
-          (fun gv (id_vi: ident * variable_info) => PTree.set (fst id_vi) (snd id_vi) gv)
+          (fun gv (id_vi: ident * var_kind) => PTree.set (fst id_vi) (snd id_vi) gv)
           vars gv).
   assert (forall vars gv ce,
             (forall id vi, ce!id = Some vi ->
@@ -94,7 +94,7 @@ Proof.
   inversion H1. exists (Varray z). split. auto. red. exists z; auto.
   eauto.
 
-  intros. change (global_var_env prog) with (mkgve (PTree.empty variable_info) prog.(Csharpminor.prog_vars)).
+  intros. change (global_var_env prog) with (mkgve (PTree.empty var_kind) prog.(Csharpminor.prog_vars)).
   apply H with (PTree.empty var_info). 
   intros until vi0. rewrite PTree.gempty. congruence.
   exact H0.
@@ -332,7 +332,7 @@ Proof.
   case (peq id id0); intro.
     (* the stored variable *)
     subst id0. 
-    change Csharpminor.variable_info with variable_info in H6. 
+    change Csharpminor.var_kind with var_kind in H6. 
     rewrite H in H6. injection H6; clear H6; intros; subst b0 chunk0.
     econstructor. eauto. 
     eapply load_store_same; eauto. auto. 
@@ -1361,7 +1361,7 @@ Lemma match_callstack_alloc_variables:
   match_callstack f cs m.(nextblock) tm.(nextblock) m ->
   mem_inject f m tm ->
   let tparams := List.map (@fst ident memory_chunk) fn.(Csharpminor.fn_params) in
-  let tvars := List.map (@fst ident variable_info) fn.(Csharpminor.fn_vars) in
+  let tvars := List.map (@fst ident var_kind) fn.(Csharpminor.fn_vars) in
   let te := set_locals tvars (set_params targs tparams) in
   exists f',
      inject_incr f f'
@@ -1598,10 +1598,10 @@ Lemma vars_vals_match_holds:
   List.length params = List.length args ->
   val_list_inject f args targs ->
   forall vars,
-  list_norepet (List.map (@fst ident variable_info) vars
+  list_norepet (List.map (@fst ident var_kind) vars
              ++ List.map (@fst ident memory_chunk) params) ->
   vars_vals_match f params args
-    (set_locals (List.map (@fst ident variable_info) vars)
+    (set_locals (List.map (@fst ident var_kind) vars)
       (set_params targs (List.map (@fst ident memory_chunk) params))).
 Proof.
   induction vars; simpl; intros.
@@ -1904,7 +1904,7 @@ Qed.
 Lemma transl_expr_Eaddrof_correct:
    forall (le : Csharpminor.letenv)
      (e : Csharpminor.env) (m : mem) (id : positive)
-     (b : block) (lv : variable_info),
+     (b : block) (lv : var_kind),
    eval_var prog e id b lv ->
    eval_expr_prop le e m (Eaddrof id) m (Vptr b Int.zero).
 Proof.
@@ -2394,6 +2394,24 @@ Proof.
   intuition. subst ts; constructor. constructor.
 Qed.
 
+Lemma transl_stmt_Sswitch_correct:
+  forall (e : Csharpminor.env) (m : mem)
+         (a : Csharpminor.expr) (cases : list (int * nat)) (default : nat)
+         (m1 : mem) (n : int),
+  Csharpminor.eval_expr prog nil e m a m1 (Vint n) ->
+  eval_expr_prop nil e m a m1 (Vint n) ->
+  exec_stmt_prop e m (Csharpminor.Sswitch a cases default) m1
+       (Csharpminor.Out_exit (Csharpminor.switch_target n default cases)).
+Proof.
+  intros; red; intros. monadInv TR.
+  destruct (H0 _ _ _ _ _ _ _ _ _ _ EQ (val_nil_inject f1) MINJ MATCH)
+  as [f2 [te2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]]].
+  exists f2; exists te2; exists tm2; 
+  exists (Out_exit (switch_target n default cases)). intuition. 
+  subst ts. constructor. inversion VINJ1. subst tv1. assumption.
+  constructor. 
+Qed.
+
 Lemma transl_stmt_Sreturn_none_correct:
    forall (e : Csharpminor.env) (m : mem),
    exec_stmt_prop e m (Csharpminor.Sreturn None) m
@@ -2457,6 +2475,7 @@ Proof
      transl_stmt_Sloop_exit_correct
      transl_stmt_Sblock_correct
      transl_stmt_Sexit_correct
+     transl_stmt_Sswitch_correct
      transl_stmt_Sreturn_none_correct
      transl_stmt_Sreturn_some_correct).
 

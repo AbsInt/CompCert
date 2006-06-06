@@ -93,6 +93,7 @@ Inductive stmt : Set :=
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
+  | Sswitch: expr -> list (int * nat) -> nat -> stmt
   | Sreturn: option expr -> stmt.
 
 (** The variables can be either scalar variables
@@ -100,26 +101,26 @@ Inductive stmt : Set :=
   or array variables (of the indicated sizes).  The only operation
   permitted on an array variable is taking its address. *)
 
-Inductive variable_info : Set :=
-  | Vscalar: memory_chunk -> variable_info
-  | Varray: Z -> variable_info.
+Inductive var_kind : Set :=
+  | Vscalar: memory_chunk -> var_kind
+  | Varray: Z -> var_kind.
 
 (** Functions are composed of a signature, a list of parameter names
   with associated memory chunks (parameters must be scalar), a list of
-  local variables with associated [variable_info] description, and a
+  local variables with associated [var_kind] description, and a
   statement representing the function body.  *)
 
 Record function : Set := mkfunction {
   fn_sig: signature;
   fn_params: list (ident * memory_chunk);
-  fn_vars: list (ident * variable_info);
+  fn_vars: list (ident * var_kind);
   fn_body: stmt
 }.
 
 Record program : Set := mkprogram {
   prog_funct: list (ident * function);
   prog_main: ident;
-  prog_vars: list (ident * variable_info)
+  prog_vars: list (ident * var_kind)
 }.
 
 (** * Operational semantics *)
@@ -150,6 +151,13 @@ Definition outcome_block (out: outcome) : outcome :=
   | Out_return optv => Out_return optv
   end.
 
+Fixpoint switch_target (n: int) (dfl: nat) (cases: list (int * nat))
+                       {struct cases} : nat :=
+  match cases with
+  | nil => dfl
+  | (n1, lbl1) :: rem => if Int.eq n n1 then lbl1 else switch_target n dfl rem
+  end.
+
 (** Four kinds of evaluation environments are involved:
 - [genv]: global environments, define symbols and functions;
 - [gvarenv]: map global variables to var info;
@@ -157,12 +165,12 @@ Definition outcome_block (out: outcome) : outcome :=
 - [lenv]: let environments, map de Bruijn indices to values.
 *)
 Definition genv := Genv.t function.
-Definition gvarenv := PTree.t variable_info.
-Definition env := PTree.t (block * variable_info).
-Definition empty_env : env := PTree.empty (block * variable_info).
+Definition gvarenv := PTree.t var_kind.
+Definition env := PTree.t (block * var_kind).
+Definition empty_env : env := PTree.empty (block * var_kind).
 Definition letenv := list val.
 
-Definition sizeof (lv: variable_info) : Z :=
+Definition sizeof (lv: var_kind) : Z :=
   match lv with
   | Vscalar chunk => size_chunk chunk
   | Varray sz => Zmax 0 sz
@@ -183,12 +191,12 @@ Definition fn_params_names (f: function) :=
   List.map (@fst ident memory_chunk) f.(fn_params).
 
 Definition fn_vars_names (f: function) :=
-  List.map (@fst ident variable_info) f.(fn_vars).
+  List.map (@fst ident var_kind) f.(fn_vars).
 
 Definition global_var_env (p: program): gvarenv :=
   List.fold_left
     (fun gve id_vi => PTree.set (fst id_vi) (snd id_vi) gve)
-    p.(prog_vars) (PTree.empty variable_info).
+    p.(prog_vars) (PTree.empty var_kind).
 
 (** Evaluation of operator applications. *)
 
@@ -282,7 +290,7 @@ Definition cast (chunk: memory_chunk) (v: val) : option val :=
   bound to the reference to a fresh block of the appropriate size. *)
 
 Inductive alloc_variables: env -> mem ->
-                           list (ident * variable_info) ->
+                           list (ident * var_kind) ->
                            env -> mem -> list block -> Prop :=
   | alloc_variables_nil:
       forall e m,
@@ -320,7 +328,7 @@ Let ge := Genv.globalenv (program_of_program prg).
    that variable [id] in environment [e] evaluates to block [b]
    and is associated with the variable info [vi]. *)
 
-Inductive eval_var: env -> ident -> block -> variable_info -> Prop :=
+Inductive eval_var: env -> ident -> block -> var_kind -> Prop :=
   | eval_var_local:
       forall e id b vi,
       PTree.get id e = Some (b, vi) ->
@@ -494,6 +502,11 @@ with exec_stmt:
   | exec_Sexit:
       forall e m n,
       exec_stmt e m (Sexit n) m (Out_exit n)
+  | exec_Sswitch:
+      forall e m a cases default m1 n,
+      eval_expr nil e m a m1 (Vint n) ->
+      exec_stmt e m (Sswitch a cases default)
+                  m1 (Out_exit (switch_target n default cases))
   | exec_Sreturn_none:
       forall e m,
       exec_stmt e m (Sreturn None) m (Out_return None)
