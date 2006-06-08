@@ -91,9 +91,10 @@ Definition transf_cminor_function (f: Cminor.function) : option PPC.code :=
 
 (** And here is the translation for Csharpminor functions. *)
 
-Definition transf_csharpminor_function (f: Csharpminor.function) : option PPC.code :=
+Definition transf_csharpminor_function 
+     (gce: Cminorgen.compilenv) (f: Csharpminor.function) : option PPC.code :=
   Some f 
-  @@@ Cminorgen.transl_function
+  @@@ Cminorgen.transl_function gce
   @@@ transf_cminor_function.
 
 (** The corresponding translations for whole program follow. *)
@@ -102,7 +103,10 @@ Definition transf_cminor_program (p: Cminor.program) : option PPC.program :=
   transform_partial_program transf_cminor_function p.
 
 Definition transf_csharpminor_program (p: Csharpminor.program) : option PPC.program :=
-  transform_partial_program transf_csharpminor_function p.
+  let gce := Cminorgen.build_global_compilenv p in
+  transform_partial_program 
+    (transf_csharpminor_function gce)
+    (Csharpminor.program_of_program p).
 
 (** * Equivalence with whole program transformations *)
 
