@@ -39,12 +39,12 @@ static void do_test(unsigned char * txt, unsigned char * expected_output)
  *  8498 3E44 1C3B D26E BAAE  4AA1 F951 29E5 E546 70F1
  */
 
-unsigned char * test_input_1 = "abc";
+unsigned char * test_input_1 = (unsigned char *) "abc";
 unsigned char test_output_1[20] =
 { 0xA9, 0x99, 0x3E, 0x36, 0x47, 0x06, 0x81, 0x6A, 0xBA, 0x3E ,
   0x25, 0x71, 0x78, 0x50, 0xC2, 0x6C, 0x9C, 0xD0, 0xD8, 0x9D };
 
-unsigned char * test_input_2 =
+unsigned char * test_input_2 = (unsigned char *)
   "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
 unsigned char test_output_2[20] =
 { 0x84, 0x98, 0x3E, 0x44, 0x1C, 0x3B, 0xD2, 0x6E, 0xBA, 0xAE,
