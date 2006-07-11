@@ -326,9 +326,7 @@ let print_function oc (Coq_pair(name, code)) =
   coqlist_iter (print_instruction oc (labels_of_code code)) code
 
 let print_var oc (Coq_pair(name, size)) =
-  fprintf oc "	.globl	%a\n" print_symb name;
-  fprintf oc "%a:\n" print_symb name;
-  fprintf oc "	.space	%ld\n" (camlint_of_z size)
+  fprintf oc "	.comm	%a, %ld\n" print_symb name (camlint_of_z size)
 
 let print_program oc p =
   coqlist_iter (print_var oc) p.prog_vars;
