@@ -139,42 +139,41 @@ Inductive var_info: Set :=
   | Var_global_scalar: memory_chunk -> var_info
   | Var_global_array: var_info.
 
-Definition compilenv := PTree.t var_info.
+Definition compilenv := PMap.t var_info.
 
 (** Generation of Cminor code corresponding to accesses to Csharpminor 
   local variables: reads, assignments, and taking the address of. *)
 
 Definition var_get (cenv: compilenv) (id: ident): option expr :=
-  match PTree.get id cenv with
-  | Some(Var_local chunk) =>
+  match PMap.get id cenv with
+  | Var_local chunk =>
       Some(Evar id)
-  | Some(Var_stack_scalar chunk ofs) =>
+  | Var_stack_scalar chunk ofs =>
       Some(make_load chunk (make_stackaddr ofs))
-  | Some(Var_global_scalar chunk) =>
+  | Var_global_scalar chunk =>
       Some(make_load chunk (make_globaladdr id))
   | _ =>
       None
   end.
 
 Definition var_set (cenv: compilenv) (id: ident) (rhs: expr): option expr :=
-  match PTree.get id cenv with
-  | Some(Var_local chunk) =>
+  match PMap.get id cenv with
+  | Var_local chunk =>
       Some(Eassign id (make_cast chunk rhs))
-  | Some(Var_stack_scalar chunk ofs) =>
+  | Var_stack_scalar chunk ofs =>
       Some(make_store chunk (make_stackaddr ofs) rhs)
-  | Some(Var_global_scalar chunk) =>
+  | Var_global_scalar chunk =>
       Some(make_store chunk (make_globaladdr id) rhs)
   | _ =>
       None
   end.
 
 Definition var_addr (cenv: compilenv) (id: ident): option expr :=
-  match PTree.get id cenv with
-  | Some(Var_stack_scalar chunk ofs) => Some (make_stackaddr ofs)
-  | Some(Var_stack_array ofs) => Some (make_stackaddr ofs)
-  | Some(Var_global_scalar chunk) => Some (make_globaladdr id)
-  | Some(Var_global_array) => Some (make_globaladdr id)
-  | _ => None
+  match PMap.get id cenv with
+  | Var_local chunk => None
+  | Var_stack_scalar chunk ofs => Some (make_stackaddr ofs)
+  | Var_stack_array ofs => Some (make_stackaddr ofs)
+  | _ => Some (make_globaladdr id)
   end.
 
 (** The translation from Csharpminor to Cminor can fail, which we
@@ -334,14 +333,14 @@ Definition assign_variable
   match id_lv with
   | (id, Varray sz) =>
       let ofs := align stacksize 8 in
-      (PTree.set id (Var_stack_array ofs) cenv, ofs + Zmax 0 sz)
+      (PMap.set id (Var_stack_array ofs) cenv, ofs + Zmax 0 sz)
   | (id, Vscalar chunk) =>
       if Identset.mem id atk then
         let sz := Mem.size_chunk chunk in
         let ofs := align stacksize sz in
-        (PTree.set id (Var_stack_scalar chunk ofs) cenv, ofs + sz)
+        (PMap.set id (Var_stack_scalar chunk ofs) cenv, ofs + sz)
       else
-        (PTree.set id (Var_local chunk) cenv, stacksize)
+        (PMap.set id (Var_local chunk) cenv, stacksize)
   end.
 
 Fixpoint assign_variables
@@ -365,13 +364,13 @@ Definition build_compilenv
 Definition assign_global_variable
      (ce: compilenv) (id_vi: ident * var_kind) : compilenv :=
   match id_vi with
-  | (id, Vscalar chunk) => PTree.set id (Var_global_scalar chunk) ce
-  | (id, Varray sz) => PTree.set id Var_global_array ce
+  | (id, Vscalar chunk) => PMap.set id (Var_global_scalar chunk) ce
+  | (id, Varray sz) => PMap.set id Var_global_array ce
   end.
 
 Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
   List.fold_left assign_global_variable 
-                 p.(prog_vars) (PTree.empty var_info).
+                 p.(prog_vars) (PMap.init Var_global_array).
 
 (** Function parameters whose address is taken must be stored in their
   stack slots at function entry.  (Cminor passes these parameters in
@@ -383,11 +382,11 @@ Fixpoint store_parameters
   match params with
   | nil => Sskip
   | (id, chunk) :: rem =>
-      match PTree.get id cenv with
-      | Some(Var_local chunk) =>
+      match PMap.get id cenv with
+      | Var_local chunk =>
           Sseq (Sexpr (Eassign id (make_cast chunk (Evar id))))
                (store_parameters cenv rem)
-      | Some(Var_stack_scalar chunk ofs) =>
+      | Var_stack_scalar chunk ofs =>
           Sseq (Sexpr (make_store chunk (make_stackaddr ofs) (Evar id)))
                (store_parameters cenv rem)
       | _ =>

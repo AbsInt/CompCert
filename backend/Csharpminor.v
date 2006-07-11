@@ -324,21 +324,37 @@ Section RELSEM.
 Variable prg: program.
 Let ge := Genv.globalenv (program_of_program prg).
 
-(* Evaluation of a variable reference: [eval_var prg ge e id b vi] states
-   that variable [id] in environment [e] evaluates to block [b]
-   and is associated with the variable info [vi]. *)
+(* Evaluation of the address of a variable: 
+   [eval_var_addr prg ge e id b] states that variable [id] 
+   in environment [e] evaluates to block [b]. *)
 
-Inductive eval_var: env -> ident -> block -> var_kind -> Prop :=
-  | eval_var_local:
+Inductive eval_var_addr: env -> ident -> block -> Prop :=
+  | eval_var_addr_local:
       forall e id b vi,
       PTree.get id e = Some (b, vi) ->
-      eval_var e id b vi
-  | eval_var_global:
-      forall e id b vi,
+      eval_var_addr e id b
+  | eval_var_addr_global:
+      forall e id b,
       PTree.get id e = None ->
       Genv.find_symbol ge id = Some b ->
-      PTree.get id (global_var_env prg) = Some vi ->
-      eval_var e id b vi.
+      eval_var_addr e id b.
+
+(* Evaluation of a reference to a scalar variable:
+   [eval_var_ref prg ge e id b chunk] states
+   that variable [id] in environment [e] evaluates to block [b]
+   and is associated with the memory chunk [chunk]. *)
+
+Inductive eval_var_ref: env -> ident -> block -> memory_chunk -> Prop :=
+  | eval_var_ref_local:
+      forall e id b chunk,
+      PTree.get id e = Some (b, Vscalar chunk) ->
+      eval_var_ref e id b chunk
+  | eval_var_ref_global:
+      forall e id b chunk,
+      PTree.get id e = None ->
+      Genv.find_symbol ge id = Some b ->
+      PTree.get id (global_var_env prg) = Some (Vscalar chunk) ->
+      eval_var_ref e id b chunk.
 
 (** Evaluation of an expression: [eval_expr prg le e m a m' v] states
   that expression [a], in initial memory state [m], evaluates to value
@@ -351,19 +367,19 @@ Inductive eval_expr:
          mem -> expr -> mem -> val -> Prop :=
   | eval_Evar:
       forall le e m id b chunk v,
-      eval_var e id b (Vscalar chunk) ->
+      eval_var_ref e id b chunk ->
       Mem.load chunk m b 0 = Some v ->
       eval_expr le e m (Evar id) m v
   | eval_Eassign:
       forall le e m id a m1 b chunk v1 v2 m2,
       eval_expr le e m a m1 v1 ->
-      eval_var e id b (Vscalar chunk) ->
+      eval_var_ref e id b chunk ->
       cast chunk v1 = Some v2 ->
       Mem.store chunk m1 b 0 v2 = Some m2 ->
       eval_expr le e m (Eassign id a) m2 v2
   | eval_Eaddrof:
-      forall le e m id b lv,
-      eval_var e id b lv ->
+      forall le e m id b,
+      eval_var_addr e id b ->
       eval_expr le e m (Eaddrof id) m (Vptr b Int.zero)
   | eval_Eop:
       forall le e m op al m1 vl v,
