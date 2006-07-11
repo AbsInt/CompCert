@@ -21,6 +21,7 @@ L$0:
 	GLUE asin
 	GLUE sqrt
 	GLUE fmod
+	GLUE fabs
         GLUE memcpy
         GLUE memset
         
