@@ -1,6 +1,7 @@
 ../caml/Allocationaux.cmi: Locations.cmi Datatypes.cmi 
 ../caml/CMlexer.cmi: ../caml/CMparser.cmi 
 ../caml/CMparser.cmi: Cminor.cmi AST.cmi 
+../caml/CMtypecheck.cmi: Cminor.cmi 
 ../caml/Coloringaux.cmi: Registers.cmi RTLtyping.cmi RTL.cmi Locations.cmi \
     InterfGraph.cmi 
 ../caml/PrintPPC.cmi: PPC.cmi 
@@ -22,6 +23,10 @@
 ../caml/CMparser.cmx: Op.cmx Integers.cmx Datatypes.cmx Cminor.cmx \
     Cmconstr.cmx ../caml/Camlcoq.cmx CList.cmx BinPos.cmx BinInt.cmx AST.cmx \
     ../caml/CMparser.cmi 
+../caml/CMtypecheck.cmo: Op.cmi Datatypes.cmi Cminor.cmi ../caml/Camlcoq.cmo \
+    CList.cmi AST.cmi ../caml/CMtypecheck.cmi 
+../caml/CMtypecheck.cmx: Op.cmx Datatypes.cmx Cminor.cmx ../caml/Camlcoq.cmx \
+    CList.cmx AST.cmx ../caml/CMtypecheck.cmi 
 ../caml/Coloringaux.cmo: Registers.cmi RTLtyping.cmi RTL.cmi Maps.cmi \
     Locations.cmi InterfGraph.cmi Datatypes.cmi Conventions.cmi \
     ../caml/Camlcoq.cmo BinPos.cmi BinInt.cmi AST.cmi ../caml/Coloringaux.cmi 
@@ -31,9 +36,9 @@
 ../caml/Floataux.cmo: ../caml/Camlcoq.cmo AST.cmi 
 ../caml/Floataux.cmx: ../caml/Camlcoq.cmx AST.cmx 
 ../caml/Main2.cmo: ../caml/PrintPPC.cmi Main.cmi Datatypes.cmi \
-    ../caml/CMparser.cmi ../caml/CMlexer.cmi 
+    ../caml/CMtypecheck.cmi ../caml/CMparser.cmi ../caml/CMlexer.cmi 
 ../caml/Main2.cmx: ../caml/PrintPPC.cmx Main.cmx Datatypes.cmx \
-    ../caml/CMparser.cmx ../caml/CMlexer.cmx 
+    ../caml/CMtypecheck.cmx ../caml/CMparser.cmx ../caml/CMlexer.cmx 
 ../caml/PrintPPC.cmo: PPC.cmi Datatypes.cmi ../caml/Camlcoq.cmo CList.cmi \
     AST.cmi ../caml/PrintPPC.cmi 
 ../caml/PrintPPC.cmx: PPC.cmx Datatypes.cmx ../caml/Camlcoq.cmx CList.cmx \
@@ -54,8 +59,8 @@ Cmconstr.cmi: Specif.cmi Op.cmi Integers.cmi Datatypes.cmi Compare_dec.cmi \
 Cminorgen.cmi: Zmin.cmi Specif.cmi Op.cmi Mem.cmi Maps.cmi Integers.cmi \
     Datatypes.cmi Csharpminor.cmi Coqlib.cmi Cminor.cmi Cmconstr.cmi \
     CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
-Cminor.cmi: Values.cmi Op.cmi Maps.cmi Globalenvs.cmi Datatypes.cmi CList.cmi \
-    BinInt.cmi AST.cmi 
+Cminor.cmi: Values.cmi Op.cmi Maps.cmi Integers.cmi Globalenvs.cmi \
+    Datatypes.cmi CList.cmi BinInt.cmi AST.cmi 
 Coloring.cmi: Specif.cmi Registers.cmi RTLtyping.cmi RTL.cmi Op.cmi Maps.cmi \
     Locations.cmi InterfGraph.cmi Datatypes.cmi Coqlib.cmi Conventions.cmi \
     CList.cmi BinInt.cmi AST.cmi 
@@ -121,8 +126,8 @@ PPC.cmi: Values.cmi Specif.cmi Mem.cmi Integers.cmi Globalenvs.cmi Floats.cmi \
     Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
 Registers.cmi: Specif.cmi Maps.cmi Datatypes.cmi Coqlib.cmi CList.cmi \
     BinPos.cmi AST.cmi 
-RTLgen.cmi: Specif.cmi Registers.cmi RTL.cmi Op.cmi Maps.cmi Datatypes.cmi \
-    Coqlib.cmi Cminor.cmi CList.cmi BinPos.cmi AST.cmi 
+RTLgen.cmi: Specif.cmi Registers.cmi RTL.cmi Op.cmi Maps.cmi Integers.cmi \
+    Datatypes.cmi Coqlib.cmi Cminor.cmi CList.cmi BinPos.cmi AST.cmi 
 RTL.cmi: Values.cmi Registers.cmi Op.cmi Maps.cmi Integers.cmi Globalenvs.cmi \
     Datatypes.cmi CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
 RTLtyping.cmi: Specif.cmi Registers.cmi RTL.cmi Op.cmi Maps.cmi Datatypes.cmi \
@@ -178,10 +183,10 @@ Cminorgen.cmo: Zmin.cmi Specif.cmi Sets.cmi Op.cmi Mem.cmi Maps.cmi \
 Cminorgen.cmx: Zmin.cmx Specif.cmx Sets.cmx Op.cmx Mem.cmx Maps.cmx \
     Integers.cmx Datatypes.cmx Csharpminor.cmx Coqlib.cmx Cminor.cmx \
     Cmconstr.cmx CList.cmx BinPos.cmx BinInt.cmx AST.cmx Cminorgen.cmi 
-Cminor.cmo: Values.cmi Op.cmi Maps.cmi Globalenvs.cmi Datatypes.cmi CList.cmi \
-    BinInt.cmi AST.cmi Cminor.cmi 
-Cminor.cmx: Values.cmx Op.cmx Maps.cmx Globalenvs.cmx Datatypes.cmx CList.cmx \
-    BinInt.cmx AST.cmx Cminor.cmi 
+Cminor.cmo: Values.cmi Op.cmi Maps.cmi Integers.cmi Globalenvs.cmi \
+    Datatypes.cmi CList.cmi BinInt.cmi AST.cmi Cminor.cmi 
+Cminor.cmx: Values.cmx Op.cmx Maps.cmx Integers.cmx Globalenvs.cmx \
+    Datatypes.cmx CList.cmx BinInt.cmx AST.cmx Cminor.cmi 
 Coloring.cmo: Specif.cmi Registers.cmi RTLtyping.cmi RTL.cmi Op.cmi Maps.cmi \
     Locations.cmi InterfGraph.cmi Datatypes.cmi Coqlib.cmi Conventions.cmi \
     ../caml/Coloringaux.cmi CList.cmi BinInt.cmi AST.cmi Coloring.cmi 
@@ -337,11 +342,11 @@ Registers.cmo: Specif.cmi Sets.cmi Maps.cmi Datatypes.cmi Coqlib.cmi \
 Registers.cmx: Specif.cmx Sets.cmx Maps.cmx Datatypes.cmx Coqlib.cmx \
     CList.cmx BinPos.cmx AST.cmx Registers.cmi 
 RTLgen.cmo: Specif.cmi Registers.cmi ../caml/RTLgenaux.cmo RTL.cmi Op.cmi \
-    Maps.cmi Datatypes.cmi Coqlib.cmi Cminor.cmi CList.cmi BinPos.cmi AST.cmi \
-    RTLgen.cmi 
+    Maps.cmi Integers.cmi Datatypes.cmi Coqlib.cmi Cminor.cmi CList.cmi \
+    BinPos.cmi AST.cmi RTLgen.cmi 
 RTLgen.cmx: Specif.cmx Registers.cmx ../caml/RTLgenaux.cmx RTL.cmx Op.cmx \
-    Maps.cmx Datatypes.cmx Coqlib.cmx Cminor.cmx CList.cmx BinPos.cmx AST.cmx \
-    RTLgen.cmi 
+    Maps.cmx Integers.cmx Datatypes.cmx Coqlib.cmx Cminor.cmx CList.cmx \
+    BinPos.cmx AST.cmx RTLgen.cmi 
 RTL.cmo: Values.cmi Registers.cmi Op.cmi Maps.cmi Integers.cmi Globalenvs.cmi \
     Datatypes.cmi CList.cmi BinPos.cmi BinInt.cmi AST.cmi RTL.cmi 
 RTL.cmx: Values.cmx Registers.cmx Op.cmx Maps.cmx Integers.cmx Globalenvs.cmx \

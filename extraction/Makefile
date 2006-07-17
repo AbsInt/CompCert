@@ -20,7 +20,7 @@ FILES=\
   Mach.ml Stacking.ml \
   PPC.ml PPCgen.ml \
   Main.ml \
-  ../caml/CMparser.ml ../caml/CMlexer.ml \
+  ../caml/CMparser.ml ../caml/CMlexer.ml ../caml/CMtypecheck.ml \
   ../caml/PrintPPC.ml ../caml/Main2.ml
 
 EXTRACTEDFILES:=$(filter-out ../caml/%, $(FILES))

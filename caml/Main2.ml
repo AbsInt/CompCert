@@ -6,7 +6,9 @@ let process_cminor_file sourcename =
   let ic = open_in sourcename in
   let lb = Lexing.from_channel ic in
   try
-    match Main.transf_cminor_program (CMparser.prog CMlexer.token lb) with
+    match Main.transf_cminor_program
+            (CMtypecheck.type_program
+              (CMparser.prog CMlexer.token lb)) with
     | None ->
         eprintf "Compiler failure\n";
         exit 2
@@ -21,6 +23,10 @@ let process_cminor_file sourcename =
      | CMlexer.Error msg ->  
          eprintf "File %s, character %d: %s\n"
                  sourcename (Lexing.lexeme_start lb) msg;
+         exit 2
+     | CMtypecheck.Error msg ->
+         eprintf "File %s, type-checking error:\n%s"
+                 sourcename msg;
          exit 2
 
 let process_file filename =

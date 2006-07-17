@@ -19,6 +19,10 @@ let camlint_of_z = function
 
 let camlint_of_coqint : Integers.int -> int32 = camlint_of_z
 
+let rec camlint_of_nat = function
+  | O -> 0
+  | S n -> camlint_of_nat n + 1
+
 let rec nat_of_camlint n =
   assert (n >= 0l);
   if n = 0l then O else S (nat_of_camlint (Int32.sub n 1l))
@@ -57,7 +61,7 @@ let extern_atom a =
   try
     Hashtbl.find string_of_atom a
   with Not_found ->
-    "<unknown atom>"
+    Printf.sprintf "<unknown atom %ld>" (camlint_of_positive a)
 
 (* Lists *)
 
