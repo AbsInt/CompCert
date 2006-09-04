@@ -275,8 +275,12 @@ Definition transl_op
       end
   | Ocast8signed, a1 :: nil =>
       Pextsb (ireg_of r) (ireg_of a1) :: k
+  | Ocast8unsigned, a1 :: nil =>
+      Prlwinm (ireg_of r) (ireg_of a1) Int.zero (Int.repr 255) :: k
   | Ocast16signed, a1 :: nil =>
       Pextsh (ireg_of r) (ireg_of a1) :: k
+  | Ocast16unsigned, a1 :: nil =>
+      Prlwinm (ireg_of r) (ireg_of a1) Int.zero (Int.repr 65535) :: k
   | Oadd, a1 :: a2 :: nil =>
       Padd (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Oaddimm n, a1 :: nil =>
@@ -470,6 +474,8 @@ Definition transl_instr (i: Mach.instruction) (k: code) :=
       Pmtctr (ireg_of r) :: Pbctrl :: k
   | Mcall sig (inr symb) =>
       Pbl symb :: k
+  | Malloc =>
+      Pallocblock :: k
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>
@@ -504,11 +510,14 @@ Fixpoint code_size (c: code) : Z :=
   | instr :: c' => code_size c' + 1
   end.
 
-Definition transf_function (f: Mach.function) :=
+Definition transf_function (f: Mach.function) : option PPC.code :=
   let c := transl_function f in
   if zlt Int.max_unsigned (code_size c)
   then None
   else Some c.
 
+Definition transf_fundef (f: Mach.fundef) : option PPC.fundef :=
+  transf_partial_fundef transf_function f.
+
 Definition transf_program (p: Mach.program) : option PPC.program :=
-  transform_partial_program transf_function p.
+  transform_partial_program transf_fundef p.

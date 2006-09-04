@@ -26,10 +26,23 @@ let label_for_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
+(* Record identifiers of external functions *)
+
+module IdentSet = Set.Make(struct type t = ident let compare = compare end)
+
+let extfuns = ref IdentSet.empty
+
+let record_extfun (Coq_pair(name, defn)) =
+  match defn with
+  | Internal _ -> ()
+  | External _ -> extfuns := IdentSet.add name !extfuns
+
 (* Basic printing functions *)
 
 let print_symb oc symb =
-  fprintf oc "_%s" (extern_atom symb)
+  if IdentSet.mem symb !extfuns
+  then fprintf oc "L%s$stub" (extern_atom symb)
+  else fprintf oc "_%s" (extern_atom symb)
 
 let print_label oc lbl =
   fprintf oc "L%d" (label_for_label lbl)
@@ -99,6 +112,8 @@ let print_instruction oc labels = function
       fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 print_constant c
   | Paddze(r1, r2) ->
       fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
+  | Pallocblock ->
+      fprintf oc "	bl	_compcert_alloc\n"
   | Pallocframe(lo, hi) ->
       let lo = camlint_of_coqint lo
       and hi = camlint_of_coqint hi in
@@ -317,7 +332,7 @@ let rec labels_of_code = function
       Labelset.add lbl (labels_of_code c)
   | Coq_cons(_, c) -> labels_of_code c
 
-let print_function oc (Coq_pair(name, code)) =
+let print_function oc name code =
   Hashtbl.clear current_function_labels;
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
@@ -325,10 +340,52 @@ let print_function oc (Coq_pair(name, code)) =
   fprintf oc "%a:\n" print_symb name;
   coqlist_iter (print_instruction oc (labels_of_code code)) code
 
-let print_var oc (Coq_pair(name, size)) =
-  fprintf oc "	.comm	%a, %ld\n" print_symb name (camlint_of_z size)
+let print_external_function oc name =
+  let name = extern_atom name in
+  fprintf oc "	.text\n";
+  fprintf oc "	.align 2\n";
+  fprintf oc "L%s$stub:\n" name;
+  fprintf oc "	addis	r11, 0, ha16(L%s$ptr)\n" name;
+  fprintf oc "	lwz	r11, lo16(L%s$ptr)(r11)\n" name;
+  fprintf oc "	mtctr	r11\n";
+  fprintf oc "	bctr\n";
+  fprintf oc "	.non_lazy_symbol_pointer\n";
+  fprintf oc "L%s$ptr:\n" name;
+  fprintf oc "	.indirect_symbol _%s\n" name;
+  fprintf oc "	.long	0\n"
+
+let print_fundef oc (Coq_pair(name, defn)) =
+  match defn with
+  | Internal code -> print_function oc name code
+  | External ef -> print_external_function oc name
+
+let print_init_data oc = function
+  | Init_int8 n ->
+      fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
+  | Init_int16 n ->
+      fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
+  | Init_int32 n ->
+      fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
+  | Init_float32 n ->
+      fprintf oc "	.long	%ld # %g \n" (Int32.bits_of_float n) n
+  | Init_float64 n ->
+      fprintf oc "	.quad	%Ld # %g \n" (Int64.bits_of_float n) n
+  | Init_space n ->
+      let n = camlint_of_z n in
+      if n > 0l then fprintf oc "	.space	%ld\n" n
+
+let print_var oc (Coq_pair(name, init_data)) =
+  match init_data with
+  | Coq_nil -> ()
+  | _  ->
+      fprintf oc "	.data\n";
+      fprintf oc "	.globl	%a\n" print_symb name;
+      fprintf oc "%a:" print_symb name;
+      coqlist_iter (print_init_data oc) init_data
 
 let print_program oc p =
+  extfuns := IdentSet.empty;
+  coqlist_iter record_extfun p.prog_funct;
   coqlist_iter (print_var oc) p.prog_vars;
-  coqlist_iter (print_function oc) p.prog_funct
+  coqlist_iter (print_fundef oc) p.prog_funct
 

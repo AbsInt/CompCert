@@ -10,9 +10,11 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
+Require Conventions.
 
 (** * Abstract syntax *)
 
@@ -43,6 +45,7 @@ Inductive instruction: Set :=
   | Mload: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mcall: signature -> mreg + ident -> instruction
+  | Malloc: instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction
@@ -56,9 +59,17 @@ Record function: Set := mkfunction
     fn_stacksize: Z;
     fn_framesize: Z }.
 
-Definition program := AST.program function.
+Definition fundef := AST.fundef function.
 
-Definition genv := Genv.t function.
+Definition program := AST.program fundef.
+
+Definition funsig (fd: fundef) :=
+  match fd with
+  | Internal f => f.(fn_sig)
+  | External ef => ef.(ef_sig)
+  end.
+
+Definition genv := Genv.t fundef.
 
 (** * Dynamic semantics *)
 
@@ -122,7 +133,7 @@ Section RELSEM.
 
 Variable ge: genv.
 
-Definition find_function (ros: mreg + ident) (rs: regset) : option function :=
+Definition find_function (ros: mreg + ident) (rs: regset) : option fundef :=
   match ros with
   | inl r => Genv.find_funct ge (rs r)
   | inr symb =>
@@ -141,95 +152,104 @@ Definition find_function (ros: mreg + ident) (rs: regset) : option function :=
 
 Inductive exec_instr:
       function -> val ->
-      code -> regset -> mem ->
+      code -> regset -> mem -> trace ->
       code -> regset -> mem -> Prop :=
   | exec_Mlabel:
       forall f sp lbl c rs m,
       exec_instr f sp
                  (Mlabel lbl :: c) rs m
-                 c rs m
+              E0 c rs m
   | exec_Mgetstack:
       forall f sp ofs ty dst c rs m v,
       load_stack m sp ty ofs = Some v ->
       exec_instr f sp
                  (Mgetstack ofs ty dst :: c) rs m
-                 c (rs#dst <- v) m
+              E0 c (rs#dst <- v) m
   | exec_Msetstack:
       forall f sp src ofs ty c rs m m',
       store_stack m sp ty ofs (rs src) = Some m' ->
       exec_instr f sp
                  (Msetstack src ofs ty :: c) rs m
-                 c rs m'
+              E0 c rs m'
   | exec_Mgetparam:
       forall f sp parent ofs ty dst c rs m v,
       load_stack m sp Tint (Int.repr 0) = Some parent ->
       load_stack m parent ty ofs = Some v ->
       exec_instr f sp
                  (Mgetparam ofs ty dst :: c) rs m
-                 c (rs#dst <- v) m
+              E0 c (rs#dst <- v) m
   | exec_Mop:
       forall f sp op args res c rs m v,
       eval_operation ge sp op rs##args = Some v ->
       exec_instr f sp
                  (Mop op args res :: c) rs m
-                 c (rs#res <- v) m
+              E0 c (rs#res <- v) m
   | exec_Mload:
       forall f sp chunk addr args dst c rs m a v,
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.loadv chunk m a = Some v ->
       exec_instr f sp 
                  (Mload chunk addr args dst :: c) rs m
-                 c (rs#dst <- v) m
+              E0 c (rs#dst <- v) m
   | exec_Mstore:
       forall f sp chunk addr args src c rs m m' a,
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.storev chunk m a (rs src) = Some m' ->
       exec_instr f sp
                  (Mstore chunk addr args src :: c) rs m
-                 c rs m'
+              E0 c rs m'
   | exec_Mcall:
-      forall f sp sig ros c rs m f' rs' m',
+      forall f sp sig ros c rs m f' t rs' m',
       find_function ros rs = Some f' ->
-      exec_function f' sp rs m rs' m' ->
+      exec_function f' sp rs m t rs' m' ->
       exec_instr f sp
                  (Mcall sig ros :: c) rs m
-                 c rs' m'
+               t c rs' m'
+  | exec_Malloc:
+      forall f sp c rs m sz m' blk,
+      rs (Conventions.loc_alloc_argument) = Vint sz ->
+      Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
+      exec_instr f sp 
+                 (Malloc :: c) rs m
+              E0 c (rs#Conventions.loc_alloc_result <- 
+                                              (Vptr blk Int.zero)) m'
   | exec_Mgoto:
       forall f sp lbl c rs m c',
       find_label lbl f.(fn_code) = Some c' ->
       exec_instr f sp
                  (Mgoto lbl :: c) rs m
-                 c' rs m
+              E0 c' rs m
   | exec_Mcond_true:
       forall f sp cond args lbl c rs m c',
       eval_condition cond rs##args = Some true ->
       find_label lbl f.(fn_code) = Some c' ->
       exec_instr f sp
                  (Mcond cond args lbl :: c) rs m
-                 c' rs m
+              E0 c' rs m
   | exec_Mcond_false:
       forall f sp cond args lbl c rs m,
       eval_condition cond rs##args = Some false ->
       exec_instr f sp
                  (Mcond cond args lbl :: c) rs m
-                 c rs m
+              E0 c rs m
 
 with exec_instrs:
       function -> val ->
-      code -> regset -> mem ->
+      code -> regset -> mem -> trace ->
       code -> regset -> mem -> Prop :=
   | exec_refl:
       forall f sp c rs m,
-      exec_instrs f sp  c rs m  c rs m
+      exec_instrs f sp  c rs m E0 c rs m
   | exec_one:
-      forall f sp c rs m c' rs' m',
-      exec_instr f sp c rs m  c' rs' m' ->
-      exec_instrs f sp c rs m  c' rs' m'
+      forall f sp c rs m t c' rs' m',
+      exec_instr f sp c rs m t c' rs' m' ->
+      exec_instrs f sp c rs m t c' rs' m'
   | exec_trans:
-      forall f sp c1 rs1 m1 c2 rs2 m2 c3 rs3 m3,
-      exec_instrs f sp  c1 rs1 m1  c2 rs2 m2 ->
-      exec_instrs f sp  c2 rs2 m2  c3 rs3 m3 ->
-      exec_instrs f sp  c1 rs1 m1  c3 rs3 m3
+      forall f sp c1 rs1 m1 t1 c2 rs2 m2 t2 c3 rs3 m3 t3,
+      exec_instrs f sp  c1 rs1 m1 t1 c2 rs2 m2 ->
+      exec_instrs f sp  c2 rs2 m2 t2 c3 rs3 m3 ->
+      t3 = t1 ** t2 ->
+      exec_instrs f sp  c1 rs1 m1 t3 c3 rs3 m3
 
 (** In addition to reserving the word at offset 0 in the activation 
   record for maintaining the linking of activation records,
@@ -252,9 +272,9 @@ with exec_instrs:
 
 with exec_function_body:
       function -> val -> val ->
-      regset -> mem -> regset -> mem -> Prop :=
+      regset -> mem -> trace -> regset -> mem -> Prop :=
   | exec_funct_body:
-      forall f parent ra rs m rs' m1 m2 m3 m4 stk c,
+      forall f parent ra rs m t rs' m1 m2 m3 m4 stk c,
       Mem.alloc m (- f.(fn_framesize))
                   (align_16_top (- f.(fn_framesize)) f.(fn_stacksize))
                                                         = (m1, stk) ->
@@ -263,19 +283,25 @@ with exec_function_body:
       store_stack m2 sp Tint (Int.repr 4) ra = Some m3 ->
       exec_instrs f sp
                   f.(fn_code) rs m3
-                 (Mreturn :: c) rs' m4 ->
+                t (Mreturn :: c) rs' m4 ->
       load_stack m4 sp Tint (Int.repr 0) = Some parent ->
       load_stack m4 sp Tint (Int.repr 4) = Some ra ->
-      exec_function_body f parent ra rs m rs' (Mem.free m4 stk)
+      exec_function_body f parent ra rs m t rs' (Mem.free m4 stk)
 
 with exec_function:
-      function -> val -> regset -> mem -> regset -> mem -> Prop :=
-  | exec_funct:
-      forall f parent rs m rs' m',
+      fundef -> val -> regset -> mem -> trace -> regset -> mem -> Prop :=
+  | exec_funct_internal:
+      forall f parent rs m t rs' m',
       (forall ra,
          Val.has_type ra Tint ->
-         exec_function_body f parent ra rs m rs' m') ->
-      exec_function f parent rs m rs' m'.
+         exec_function_body f parent ra rs m t rs' m') ->
+      exec_function (Internal f) parent rs m t rs' m'
+  | exec_funct_external:
+      forall ef parent args res rs1 rs2 m t,
+      event_match ef args t res ->
+      args = rs1##(Conventions.loc_external_arguments ef.(ef_sig)) ->
+      rs2 = (rs1#(Conventions.loc_result ef.(ef_sig)) <- res) ->
+      exec_function (External ef) parent rs1 m t rs2 m.
 
 Scheme exec_instr_ind4 := Minimality for exec_instr Sort Prop
   with exec_instrs_ind4 := Minimality for exec_instrs Sort Prop
@@ -284,12 +310,13 @@ Scheme exec_instr_ind4 := Minimality for exec_instr Sort Prop
 
 End RELSEM.
 
-Definition exec_program (p: program) (r: val) : Prop :=
+Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in
   let m0 := Genv.init_mem p in
   exists b, exists f, exists rs, exists m,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\
-  exec_function ge f (Vptr Mem.nullptr Int.zero) (Regmap.init Vundef) m0 rs m /\
+  exec_function ge f (Vptr Mem.nullptr Int.zero) (Regmap.init Vundef) m0
+                     t rs m /\
   rs R3 = r.
 

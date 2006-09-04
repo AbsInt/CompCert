@@ -19,12 +19,11 @@ Require Import Locations.
   of callee- and caller-save registers.
 *)
 
-Definition destroyed_at_call_regs :=
-  R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 ::
-  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
+Definition int_caller_save_regs :=
+  R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: nil.
 
-Definition destroyed_at_call :=
-  List.map R destroyed_at_call_regs.
+Definition float_caller_save_regs :=
+  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
 
 Definition int_callee_save_regs :=
   R13 :: R14 :: R15 :: R16 :: R17 :: R18 :: R19 :: R20 :: R21 :: R22 :: 
@@ -33,6 +32,12 @@ Definition int_callee_save_regs :=
 Definition float_callee_save_regs :=
   F14 :: F15 :: F16 :: F17 :: F18 :: F19 :: F20 :: F21 :: F22 :: 
   F23 :: F24 :: F25 :: F26 :: F27 :: F28 :: F29 :: F30 :: F31 :: nil.
+
+Definition destroyed_at_call_regs :=
+  int_caller_save_regs ++ float_caller_save_regs.
+
+Definition destroyed_at_call :=
+  List.map R destroyed_at_call_regs.
 
 Definition temporaries := 
   R IT1 :: R IT2 :: R IT3 :: R FT1 :: R FT2 :: R FT3 :: nil.
@@ -298,6 +303,18 @@ Proof.
   simpl; OrEq.
 Qed.
 
+(** The result location is not a callee-save register. *)
+
+Lemma loc_result_not_callee_save:
+  forall (s: signature),
+  ~(In (loc_result s) int_callee_save_regs \/ In (loc_result s) float_callee_save_regs).
+Proof.
+  intros. generalize (loc_result_acceptable s).
+  generalize (int_callee_save_not_destroyed (loc_result s)).
+  generalize (float_callee_save_not_destroyed (loc_result s)).
+  tauto.
+Qed.
+
 (** ** Location of function arguments *)
 
 (** The PowerPC ABI states the following convention for passing arguments
@@ -316,11 +333,6 @@ Qed.
 These conventions are somewhat baroque, but they are mandated by the ABI.
 *)
 
-Definition drop1 (x: list mreg) :=
-  match x with nil => nil | hd :: tl => tl end.
-Definition drop2 (x: list mreg) :=
-  match x with nil => nil | hd :: nil => nil | hd1 :: hd2 :: tl => tl end.
-
 Fixpoint loc_arguments_rec
     (tyl: list typ) (iregl: list mreg) (fregl: list mreg)
     (ofs: Z) {struct tyl} : list loc :=
@@ -331,13 +343,13 @@ Fixpoint loc_arguments_rec
       | nil => S (Outgoing ofs Tint)
       | ireg :: _ => R ireg
       end ::
-      loc_arguments_rec tys (drop1 iregl) fregl (ofs + 1)
+      loc_arguments_rec tys (list_drop1 iregl) fregl (ofs + 1)
   | Tfloat :: tys =>
       match fregl with
       | nil => S (Outgoing ofs Tfloat)
       | freg :: _ => R freg
       end ::
-      loc_arguments_rec tys (drop2 iregl) (drop1 fregl) (ofs + 2)
+      loc_arguments_rec tys (list_drop2 iregl) (list_drop1 fregl) (ofs + 2)
   end.
 
 Definition int_param_regs :=
@@ -374,18 +386,6 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
   | _ => False
   end.
 
-Remark drop1_incl:
-  forall x l, In x (drop1 l) -> In x l.
-Proof.
-  intros. destruct l. elim H. simpl in H. auto with coqlib.
-Qed.
-Remark drop2_incl:
-  forall x l, In x (drop2 l) -> In x l.
-Proof.
-  intros. destruct l. elim H. destruct l. elim H.
-  simpl in H. auto with coqlib.
-Qed.
-
 Remark loc_arguments_rec_charact:
   forall tyl iregl fregl ofs l,
   In l (loc_arguments_rec tyl iregl fregl ofs) ->
@@ -400,12 +400,12 @@ Proof.
   destruct a; elim H; intros.
   destruct iregl; subst l. omega. left; auto with coqlib.
   generalize (IHtyl _ _ _ _ H0). 
-  destruct l. intros [A|B]. left; apply drop1_incl; auto. tauto.
+  destruct l. intros [A|B]. left; apply list_drop1_incl; auto. tauto.
   destruct s; try contradiction. omega.
   destruct fregl; subst l. omega. right; auto with coqlib.
   generalize (IHtyl _ _ _ _ H0). 
-  destruct l. intros [A|B]. left; apply drop2_incl; auto. 
-  right; apply drop1_incl; auto.
+  destruct l. intros [A|B]. left; apply list_drop2_incl; auto. 
+  right; apply list_drop1_incl; auto.
   destruct s; try contradiction. omega.
 Qed.
 
@@ -425,18 +425,6 @@ Hint Resolve loc_arguments_acceptable: locs.
 
 (** Arguments are parwise disjoint (in the sense of [Loc.norepet]). *)
 
-Remark drop1_norepet:
-  forall l, list_norepet l -> list_norepet (drop1 l).
-Proof.
-  intros. destruct l; simpl. constructor. inversion H. auto.
-Qed.
-Remark drop2_norepet:
-  forall l, list_norepet l -> list_norepet (drop2 l).
-Proof.
-  intros. destruct l; simpl. constructor.
-  destruct l; simpl. constructor. inversion H. inversion H3. auto.
-Qed.
-
 Remark loc_arguments_rec_notin_reg:
   forall tyl iregl fregl ofs r,
   ~(In r iregl) -> ~(In r fregl) ->
@@ -446,10 +434,10 @@ Proof.
   auto.
   destruct a; simpl; split.
   destruct iregl. auto. red; intro; subst m. apply H. auto with coqlib.
-  apply IHtyl. red; intro. apply H. apply drop1_incl; auto. auto.
+  apply IHtyl. red; intro. apply H. apply list_drop1_incl; auto. auto.
   destruct fregl. auto. red; intro; subst m. apply H0. auto with coqlib.
-  apply IHtyl. red; intro. apply H. apply drop2_incl; auto.
-  red; intro. apply H0. apply drop1_incl; auto.
+  apply IHtyl. red; intro. apply H. apply list_drop2_incl; auto.
+  red; intro. apply H0. apply list_drop1_incl; auto.
 Qed.
 
 Remark loc_arguments_rec_notin_local:
@@ -494,16 +482,16 @@ Proof.
   apply loc_arguments_rec_notin_outgoing. simpl; omega.
   apply loc_arguments_rec_notin_reg. simpl. inversion H. auto.
   apply list_disjoint_notin with (m :: iregl); auto with coqlib.
-  apply IHtyl. apply drop1_norepet; auto. auto. 
-  red; intros. apply H1. apply drop1_incl; auto. auto.
+  apply IHtyl. apply list_drop1_norepet; auto. auto. 
+  red; intros. apply H1. apply list_drop1_incl; auto. auto.
   destruct fregl. 
   apply loc_arguments_rec_notin_outgoing. simpl; omega.
   apply loc_arguments_rec_notin_reg. simpl. 
-  red; intro. apply (H1 m m). apply drop2_incl; auto. 
+  red; intro. apply (H1 m m). apply list_drop2_incl; auto. 
   auto with coqlib. auto.
   simpl. inversion H0. auto.
-  apply IHtyl. apply drop2_norepet; auto. apply drop1_norepet; auto.
-  red; intros. apply H1. apply drop2_incl; auto. apply drop1_incl; auto.
+  apply IHtyl. apply list_drop2_norepet; auto. apply list_drop1_norepet; auto.
+  red; intros. apply H1. apply list_drop2_incl; auto. apply list_drop1_incl; auto.
 
   intro. unfold loc_arguments. apply H.
   unfold int_param_regs. NoRepet.
@@ -601,11 +589,11 @@ Proof.
   destruct a; simpl; apply (f_equal2 (@cons typ)).
   destruct iregl.  reflexivity. simpl. apply H. auto with coqlib.
   apply IHtyl.
-  intros. apply H. apply drop1_incl. auto. auto.
+  intros. apply H. apply list_drop1_incl. auto. auto.
   destruct fregl.  reflexivity. simpl. apply H0. auto with coqlib.
   apply IHtyl.
-  intros. apply H. apply drop2_incl. auto. 
-  intros. apply H0. apply drop1_incl. auto.
+  intros. apply H. apply list_drop2_incl. auto. 
+  intros. apply H0. apply list_drop1_incl. auto.
 
   intros. unfold loc_arguments. apply H. 
   intro; simpl. ElimOrEq; reflexivity.
@@ -688,3 +676,30 @@ Proof.
   intros; simpl. tauto.
 Qed.
 
+(** ** Location of arguments to external functions *)
+
+Definition loc_external_arguments (s: signature) : list mreg :=
+  List.map
+    (fun l => match l with R r => r | S _ => IT1 end)
+    (loc_arguments s).
+
+Definition sig_external_ok (s: signature) : Prop :=
+  forall sl, ~In (S sl) (loc_arguments s).
+
+Lemma loc_external_arguments_loc_arguments:
+  forall s, 
+  sig_external_ok s ->
+  loc_arguments s = List.map R (loc_external_arguments s).
+Proof.
+  intros. unfold loc_external_arguments.
+  rewrite list_map_compose.
+  transitivity (List.map (fun x => x) (loc_arguments s)).
+  symmetry; apply list_map_identity.
+  apply list_map_exten; intros.
+  destruct x. auto. elim (H _ H0).
+Qed.
+
+(** ** Location of argument and result of dynamic allocation *)
+
+Definition loc_alloc_argument := R3.
+Definition loc_alloc_result := R3.

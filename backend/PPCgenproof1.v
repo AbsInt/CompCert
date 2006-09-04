@@ -14,6 +14,7 @@ Require Import Mach.
 Require Import Machtyping.
 Require Import PPC.
 Require Import PPCgen.
+Require Conventions.
 
 (** * Properties of low half/high half decomposition *)
 
@@ -429,6 +430,75 @@ Proof.
   intros. reflexivity.
 Qed.
 Hint Resolve gpr_or_zero_not_zero gpr_or_zero_zero: ppcgen.
+
+(** Connection between Mach and PPC calling conventions for external
+    functions. *)
+
+Lemma loc_external_result_match:
+  forall sg,
+  PPC.loc_external_result sg = preg_of (Conventions.loc_result sg).
+Proof.
+  intros. destruct sg as [sargs sres]. 
+  destruct sres. destruct t; reflexivity. reflexivity.
+Qed.
+
+Remark list_map_drop1:
+  forall (A B: Set) (f: A -> B) (l: list A), list_drop1 (map f l) = map f (list_drop1 l).
+Proof.
+  intros; destruct l; reflexivity.
+Qed.
+
+Remark list_map_drop2:
+  forall (A B: Set) (f: A -> B) (l: list A), list_drop2 (map f l) = map f (list_drop2 l).
+Proof.
+  intros; destruct l. reflexivity. destruct l; reflexivity.
+Qed.
+
+Lemma loc_external_arguments_rec_match:
+  forall tyl iregl fregl ofs,
+  (forall r, In r iregl -> mreg_type r = Tint) ->
+  (forall r, In r fregl -> mreg_type r = Tfloat) ->
+  PPC.loc_external_arguments_rec tyl (map ireg_of iregl) (map freg_of fregl) =
+  List.map
+    (fun l => preg_of (match l with R r => r | S _ => IT1 end))
+    (Conventions.loc_arguments_rec tyl iregl fregl ofs).
+Proof.
+  induction tyl; intros; simpl.
+  auto.
+  destruct a; simpl; apply (f_equal2 (@cons preg)). 
+  destruct iregl; simpl. 
+  reflexivity. unfold preg_of; rewrite (H m); auto with coqlib.
+  rewrite list_map_drop1. apply IHtyl. 
+  intros; apply H; apply list_drop1_incl; auto. 
+  assumption.
+  destruct fregl; simpl. 
+  reflexivity. unfold preg_of; rewrite (H0 m); auto with coqlib.
+  rewrite list_map_drop1. rewrite list_map_drop2. apply IHtyl. 
+  intros; apply H; apply list_drop2_incl; auto. 
+  intros; apply H0; apply list_drop1_incl; auto. 
+Qed.
+
+Ltac ElimOrEq :=
+  match goal with
+  |  |- (?x = ?y) \/ _ -> _ =>
+       let H := fresh in
+       (intro H; elim H; clear H;
+        [intro H; rewrite <- H; clear H | ElimOrEq])
+  |  |- False -> _ =>
+       let H := fresh in (intro H; contradiction)
+  end.
+
+Lemma loc_external_arguments_match:
+  forall sg,
+  PPC.loc_external_arguments sg = List.map preg_of (Conventions.loc_external_arguments sg).
+Proof.
+  intros. destruct sg as [sgargs sgres]; unfold loc_external_arguments, Conventions.loc_external_arguments.
+  rewrite list_map_compose. unfold Conventions.loc_arguments.
+  rewrite <- loc_external_arguments_rec_match.
+  reflexivity.
+  intro; simpl; ElimOrEq; reflexivity.  
+  intro; simpl; ElimOrEq; reflexivity.  
+Qed.
 
 (** * Execution of straight-line code *)
 
@@ -1198,6 +1268,22 @@ Proof.
   rewrite (sp_val ms sp rs). auto. auto. 
   (* Oundef again *)
   congruence.
+  (* Ocast8unsigned *)
+  exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (ms m0) Int.zero (Int.repr 255)))).
+  split. apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs)); auto. reflexivity.
+  replace (Val.cast8unsigned (ms m0))
+      with (Val.rolm (ms m0) Int.zero (Int.repr 255)).
+  auto with ppcgen. 
+  unfold Val.rolm, Val.cast8unsigned. destruct (ms m0); auto. 
+  rewrite Int.rolm_zero. rewrite Int.cast8unsigned_and. auto.
+  (* Ocast16unsigned *)
+  exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (ms m0) Int.zero (Int.repr 65535)))).
+  split. apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs)); auto. reflexivity.
+  replace (Val.cast16unsigned (ms m0))
+      with (Val.rolm (ms m0) Int.zero (Int.repr 65535)).
+  auto with ppcgen. 
+  unfold Val.rolm, Val.cast16unsigned. destruct (ms m0); auto. 
+  rewrite Int.rolm_zero. rewrite Int.cast16unsigned_and. auto.
   (* Oaddimm *)
   generalize (addimm_correct (ireg_of res) (ireg_of m0) i k rs m
                             (ireg_of_not_GPR2 m0)).
@@ -1560,6 +1646,32 @@ Proof.
   rewrite H4. auto.
   auto with ppcgen. auto with ppcgen. 
   auto. auto.
+Qed.
+
+(** Translation of allocations *)
+
+Lemma transl_alloc_correct:
+  forall ms sp rs sz m m' blk k,
+  agree ms sp rs ->
+  ms Conventions.loc_alloc_argument = Vint sz ->
+  Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
+  let ms' := Regmap.set Conventions.loc_alloc_result (Vptr blk Int.zero) ms in
+  exists rs',
+    exec_straight (Pallocblock :: k) rs m k rs' m'
+  /\ agree ms' sp rs'.
+Proof.
+  intros. 
+  pose (rs' := nextinstr (rs#GPR3 <- (Vptr blk Int.zero) #LR <- (Val.add rs#PC Vone))).
+  exists rs'; split.
+  apply exec_straight_one. unfold exec_instr. 
+  generalize (preg_val _ _ _ Conventions.loc_alloc_argument H).
+  unfold preg_of; intro. simpl in H2. rewrite <- H2. rewrite H0.
+  rewrite H1. reflexivity.
+  reflexivity. 
+  unfold ms', rs'. apply agree_nextinstr. apply agree_set_other. 
+  change (IR GPR3) with (preg_of Conventions.loc_alloc_result).
+  apply agree_set_mreg. auto.
+  simpl. tauto.
 Qed.
 
 End STRAIGHTLINE.

@@ -148,6 +148,8 @@ Fixpoint linearize_block (b: block) (k: code) {struct b} : code :=
       Lstore chunk addr args src :: linearize_block b k
   | Bcall sig ros b =>
       Lcall sig ros :: linearize_block b k
+  | Balloc b =>
+      Lalloc :: linearize_block b k
   | Bgoto s =>
       Lgoto s :: k
   | Bcond cond args s1 s2 =>
@@ -208,5 +210,8 @@ Definition cleanup_function (f: Linear.function) : Linear.function :=
 Definition transf_function (f: LTL.function) : Linear.function :=
   cleanup_function (linearize_function f).
 
+Definition transf_fundef (f: LTL.fundef) : Linear.fundef :=
+  AST.transf_fundef transf_function f.
+
 Definition transf_program (p: LTL.program) : Linear.program :=
-  transform_program transf_function p.
+  transform_program transf_fundef p.

@@ -73,6 +73,10 @@ Inductive wt_block : block -> Prop :=
       match ros with inl r => mreg_type r = Tint | _ => True end ->
       wt_block b ->
       wt_block (Bcall sig ros b)
+  | wt_Balloc:
+      forall b,
+      wt_block b ->
+      wt_block (Balloc b)
   | wt_Bgoto:
       forall lbl,
       wt_block (Bgoto lbl)
@@ -88,6 +92,14 @@ End WT_BLOCK.
 Definition wt_function (f: function) : Prop :=
   forall pc b, f.(fn_code)!pc = Some b -> wt_block f b.
 
+Inductive wt_fundef: fundef -> Prop :=
+  | wt_fundef_external: forall ef,
+      Conventions.sig_external_ok ef.(ef_sig) ->
+      wt_fundef (External ef)
+  | wt_function_internal: forall f,
+      wt_function f ->
+      wt_fundef (Internal f).
+
 Definition wt_program (p: program) : Prop :=
-  forall i f, In (i, f) (prog_funct p) -> wt_function f.
+  forall i f, In (i, f) (prog_funct p) -> wt_fundef f.
 

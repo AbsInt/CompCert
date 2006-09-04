@@ -33,20 +33,7 @@ Ltac destructEq name :=
 
 Ltac decEq :=
   match goal with
-  | [ |- (_, _) = (_, _) ] =>
-      apply injective_projections; unfold fst,snd; try reflexivity
-  | [ |- (@Some ?T _ = @Some ?T _) ] =>
-      apply (f_equal (@Some T)); try reflexivity
-  | [ |- (?X _ _ _ _ _ = ?X _ _ _ _ _) ] =>
-      apply (f_equal5 X); try reflexivity
-  | [ |- (?X _ _ _ _ = ?X _ _ _ _) ] =>
-      apply (f_equal4 X); try reflexivity
-  | [ |- (?X _ _ _ = ?X _ _ _) ] =>
-      apply (f_equal3 X); try reflexivity
-  | [ |- (?X _ _ = ?X _ _) ] =>
-      apply (f_equal2 X); try reflexivity
-  | [ |- (?X _ = ?X _) ] =>
-      apply (f_equal X); try reflexivity
+  | [ |- _ = _ ] => f_equal
   | [ |- (?X ?A <> ?X ?B) ] =>
       cut (A <> B); [intro; congruence | try discriminate]
   end.
@@ -56,6 +43,46 @@ Ltac byContradiction :=
 
 Ltac omegaContradiction :=
   cut False; [contradiction|omega].
+
+Lemma modusponens: forall (P Q: Prop), P -> (P -> Q) -> Q.
+Proof. auto. Qed.
+
+Ltac exploit x :=
+    refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _ _) _)
+ || refine (modusponens _ _ (x _ _ _) _)
+ || refine (modusponens _ _ (x _ _) _)
+ || refine (modusponens _ _ (x _) _).
 
 (** * Definitions and theorems over the type [positive] *)
 
@@ -510,6 +537,13 @@ Proof.
   induction l; simpl. reflexivity. rewrite IHl; reflexivity.
 Qed.
 
+Lemma list_map_identity:
+  forall (A: Set) (l: list A),
+  List.map (fun (x:A) => x) l = l.
+Proof.
+  induction l; simpl; congruence.
+Qed.
+
 Lemma list_map_nth:
   forall (A B: Set) (f: A -> B) (l: list A) (n: nat),
   nth_error (List.map f l) n = option_map f (nth_error l n).
@@ -544,6 +578,27 @@ Lemma list_append_map:
 Proof.
   induction l1; simpl; intros.
   auto. rewrite IHl1. auto.
+Qed.
+
+(** Properties of list membership. *)
+
+Lemma in_cns:
+  forall (A: Set) (x y: A) (l: list A), In x (y :: l) <-> y = x \/ In x l.
+Proof.
+  intros. simpl. tauto.
+Qed.
+
+Lemma in_app:
+  forall (A: Set) (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
+Proof.
+  intros. split; intro. apply in_app_or. auto. apply in_or_app. auto.
+Qed.
+
+Lemma list_in_insert:
+  forall (A: Set) (x: A) (l1 l2: list A) (y: A),
+  In x (l1 ++ l2) -> In x (l1 ++ y :: l2).
+Proof.
+  intros. apply in_or_app; simpl. elim (in_app_or _ _ _ H); intro; auto.
 Qed.
 
 (** [list_disjoint l1 l2] holds iff [l1] and [l2] have no elements 
@@ -644,35 +699,42 @@ Proof.
   red; intro; elim H3. apply in_or_app. tauto.
 Qed.
 
+Lemma list_norepet_app:
+  forall (A: Set) (l1 l2: list A),
+  list_norepet (l1 ++ l2) <->
+  list_norepet l1 /\ list_norepet l2 /\ list_disjoint l1 l2.
+Proof.
+  induction l1; simpl; intros; split; intros.
+  intuition. constructor. red;simpl;auto.
+  tauto.
+  inversion H; subst. rewrite IHl1 in H3. rewrite in_app in H2.
+  intuition.
+  constructor; auto. red; intros. elim H2; intro. congruence. auto. 
+  destruct H as [B [C D]]. inversion B; subst. 
+  constructor. rewrite in_app. intuition. elim (D a a); auto. apply in_eq. 
+  rewrite IHl1. intuition. red; intros. apply D; auto. apply in_cons; auto. 
+Qed.
+
 Lemma list_norepet_append:
   forall (A: Set) (l1 l2: list A),
   list_norepet l1 -> list_norepet l2 -> list_disjoint l1 l2 ->
   list_norepet (l1 ++ l2).
 Proof.
-  induction l1; simpl; intros.
-  auto.
-  inversion H. subst hd tl. 
-  constructor. red; intro. apply (H1 a a). auto with coqlib. 
-  elim (in_app_or _ _ _ H2); tauto. auto.
-  apply IHl1. auto. auto. 
-  red; intros; apply H1; auto with coqlib. 
+  generalize list_norepet_app; firstorder.
 Qed.
 
 Lemma list_norepet_append_right:
   forall (A: Set) (l1 l2: list A),
   list_norepet (l1 ++ l2) -> list_norepet l2.
 Proof.
-  induction l1; intros.
-  assumption.
-  simpl in H. inversion H. eauto. 
+  generalize list_norepet_app; firstorder.
 Qed.
 
 Lemma list_norepet_append_left:
   forall (A: Set) (l1 l2: list A),
   list_norepet (l1 ++ l2) -> list_norepet l1.
 Proof.
-  intros. apply list_norepet_append_right with l2. 
-  apply list_norepet_append_commut. auto.
+  generalize list_norepet_app; firstorder.
 Qed.
 
 (** [list_forall2 P [x1 ... xN] [y1 ... yM] holds iff [N = M] and
@@ -707,3 +769,37 @@ Proof.
   constructor. auto with coqlib. apply IHlist_forall2; auto. 
   intros. auto with coqlib.
 Qed.
+
+(** Dropping the first or first two elements of a list. *)
+
+Definition list_drop1 (A: Set) (x: list A) :=
+  match x with nil => nil | hd :: tl => tl end.
+Definition list_drop2 (A: Set) (x: list A) :=
+  match x with nil => nil | hd :: nil => nil | hd1 :: hd2 :: tl => tl end.
+
+Lemma list_drop1_incl:
+  forall (A: Set) (x: A) (l: list A), In x (list_drop1 l) -> In x l.
+Proof.
+  intros. destruct l. elim H. simpl in H. auto with coqlib.
+Qed.
+
+Lemma list_drop2_incl:
+  forall (A: Set) (x: A) (l: list A), In x (list_drop2 l) -> In x l.
+Proof.
+  intros. destruct l. elim H. destruct l. elim H.
+  simpl in H. auto with coqlib.
+Qed.
+
+Lemma list_drop1_norepet:
+  forall (A: Set) (l: list A), list_norepet l -> list_norepet (list_drop1 l).
+Proof.
+  intros. destruct l; simpl. constructor. inversion H. auto.
+Qed.
+
+Lemma list_drop2_norepet:
+  forall (A: Set) (l: list A), list_norepet l -> list_norepet (list_drop2 l).
+Proof.
+  intros. destruct l; simpl. constructor.
+  destruct l; simpl. constructor. inversion H. inversion H3. auto.
+Qed.
+

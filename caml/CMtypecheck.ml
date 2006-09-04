@@ -5,6 +5,7 @@ open Datatypes
 open CList
 open Camlcoq
 open AST
+open Integers
 open Op
 open Cminor
 
@@ -95,6 +96,8 @@ let type_operation = function
   | Oundef -> [], newvar()
   | Ocast8signed -> [tint], tint
   | Ocast16signed -> [tint], tint
+  | Ocast8unsigned -> [tint], tint
+  | Ocast16unsigned -> [tint], tint
   | Oadd -> [tint;tint], tint
   | Oaddimm _ -> [tint], tint
   | Osub -> [tint;tint], tint
@@ -141,6 +144,8 @@ let name_of_operation = function
   | Oundef -> "undef"
   | Ocast8signed -> "cast8signed"
   | Ocast16signed -> "cast16signed"
+  | Ocast8unsigned -> "cast8unsigned"
+  | Ocast16unsigned -> "cast16unsigned"
   | Oadd -> "add"
   | Oaddimm n -> sprintf "addimm %ld" (camlint_of_coqint n)
   | Osub -> "sub"
@@ -282,6 +287,14 @@ let rec type_expr env lenv e =
       te2
   | Eletvar n ->
       type_letvar lenv n
+  | Ealloc e ->
+      let te = type_expr env lenv e in
+      begin try
+        unify tint te
+      with Error s ->
+        raise (Error (sprintf "In alloc:\n%s" s))
+      end;
+      tint
 
 and type_exprlist env lenv el =
   match el with
@@ -349,7 +362,7 @@ let rec env_of_vars idl =
   | Coq_nil -> []
   | Coq_cons(id1, idt) -> (id1, newvar()) :: env_of_vars idt
 
-let type_function (Coq_pair (id, f)) =
+let type_function id f =
   try
     type_stmt
        (env_of_vars f.fn_vars @ env_of_vars f.fn_params)
@@ -357,5 +370,10 @@ let type_function (Coq_pair (id, f)) =
   with Error s ->
     raise (Error (sprintf "In function %s:\n%s" (extern_atom id) s))
 
+let type_fundef (Coq_pair (id, fd)) =
+  match fd with
+  | Internal f -> type_function id f
+  | External ef -> ()
+
 let type_program p =
-  coqlist_iter type_function p.prog_funct; p
+  coqlist_iter type_fundef p.prog_funct; p

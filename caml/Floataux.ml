@@ -1,4 +1,5 @@
 open Camlcoq
+open Integers
 
 let singleoffloat f =
   Int32.float_of_bits (Int32.bits_of_float f)
@@ -15,9 +16,9 @@ let floatofintu i =
 
 let cmp c (x: float) (y: float) =
   match c with
-  | AST.Ceq -> x = y
-  | AST.Cne -> x <> y
-  | AST.Clt -> x < y
-  | AST.Cle -> x <= y
-  | AST.Cgt -> x > y
-  | AST.Cge -> x >= y
+  | Ceq -> x = y
+  | Cne -> x <> y
+  | Clt -> x < y
+  | Cle -> x <= y
+  | Cgt -> x > y
+  | Cge -> x >= y

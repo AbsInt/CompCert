@@ -100,6 +100,8 @@ Fixpoint tunnel_block (f: LTL.function) (b: block) {struct b} : block :=
       Bstore chunk addr args src (tunnel_block f b)
   | Bcall sig ros b =>
       Bcall sig ros (tunnel_block f b)
+  | Balloc b =>
+      Balloc (tunnel_block f b)
   | Bgoto s =>
       Bgoto (branch_target f s)
   | Bcond cond args s1 s2 =>
@@ -126,6 +128,9 @@ Definition tunnel_function (f: LTL.function) : LTL.function :=
     (fn_entrypoint f)
     (wf_tunneled_code f).
 
+Definition tunnel_fundef (f: LTL.fundef) : LTL.fundef :=
+  transf_fundef tunnel_function f.
+
 Definition tunnel_program (p: LTL.program) : LTL.program :=
-  transform_program tunnel_function p.
+  transform_program tunnel_fundef p.
 

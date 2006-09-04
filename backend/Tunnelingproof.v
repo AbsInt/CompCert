@@ -5,6 +5,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
@@ -82,68 +83,75 @@ Let tge := Genv.globalenv tp.
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
-  Genv.find_funct tge v = Some (tunnel_function f).
-Proof (@Genv.find_funct_transf _ _ tunnel_function p).
+  Genv.find_funct tge v = Some (tunnel_fundef f).
+Proof (@Genv.find_funct_transf _ _ tunnel_fundef p).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
-  Genv.find_funct_ptr tge v = Some (tunnel_function f).
-Proof (@Genv.find_funct_ptr_transf _ _ tunnel_function p).
+  Genv.find_funct_ptr tge v = Some (tunnel_fundef f).
+Proof (@Genv.find_funct_ptr_transf _ _ tunnel_fundef p).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ tunnel_function p).
+Proof (@Genv.find_symbol_transf _ _ tunnel_fundef p).
+
+Lemma sig_preserved:
+  forall f, funsig (tunnel_fundef f) = funsig f.
+Proof.
+  destruct f; reflexivity.
+Qed.
 
 (** These are inversion lemmas, characterizing what happens in the LTL
   semantics when executing [Bgoto] instructions or basic blocks. *)
 
 Lemma exec_instrs_Bgoto_inv:
-  forall sp b1 ls1 m1 b2 ls2 m2,
-  exec_instrs ge sp b1 ls1 m1 b2 ls2 m2 ->
+  forall sp b1 ls1 m1 t b2 ls2 m2,
+  exec_instrs ge sp b1 ls1 m1 t b2 ls2 m2 ->
   forall s1,
-  b1 = Bgoto s1 -> b2 = b1 /\ ls2 = ls1 /\ m2 = m1.
+  b1 = Bgoto s1 -> t = E0 /\ b2 = b1 /\ ls2 = ls1 /\ m2 = m1.
 Proof.
   induction 1. 
   intros. tauto.
-  intros. subst b1. inversion H.
-  intros. generalize (IHexec_instrs1 s1 H1). intros [A [B C]].
-  subst b2; subst rs2; subst m2. eauto.
+  intros. subst b1. inversion H. 
+  intros. generalize (IHexec_instrs1 s1 H2). intros [A [B [C D]]].
+  subst t1 b2 rs2 m2. 
+  generalize (IHexec_instrs2 s1 H2). intros [A [B [C D]]].
+  subst t2 b3 rs3 m3. intuition. traceEq. 
 Qed.
 
 Lemma exec_block_Bgoto_inv:
-  forall sp s ls1 m1 out ls2 m2,  
-  exec_block ge sp (Bgoto s) ls1 m1 out ls2 m2 ->
-  out = Cont s /\ ls2 = ls1 /\ m2 = m1.
+  forall sp s ls1 m1 t out ls2 m2,  
+  exec_block ge sp (Bgoto s) ls1 m1 t out ls2 m2 ->
+  t = E0 /\ out = Cont s /\ ls2 = ls1 /\ m2 = m1.
 Proof.
   intros. inversion H;
-  generalize (exec_instrs_Bgoto_inv _ _ _ _ _ _ _ H0 s (refl_equal _));
-  intros [A [B C]]. 
-  split. congruence. tauto.
-  discriminate.
-  discriminate.
-  discriminate.
+  generalize (exec_instrs_Bgoto_inv _ _ _ _ _ _ _ _ H0 s (refl_equal _));
+  intros [A [B [C D]]];
+  try discriminate.
+  intuition congruence.
 Qed.
 
 Lemma exec_blocks_Bgoto_inv:
-  forall c sp pc1 ls1 m1 out ls2 m2 s,
-  exec_blocks ge c sp pc1 ls1 m1 out ls2 m2 ->
+  forall c sp pc1 ls1 m1 t out ls2 m2 s,
+  exec_blocks ge c sp pc1 ls1 m1 t out ls2 m2 ->
   c!pc1 = Some (Bgoto s) ->
-  (out = Cont pc1 /\ ls2 = ls1 /\ m2 = m1)
-  \/ exec_blocks ge c sp s ls1 m1 out ls2 m2.
+  (t = E0 /\ out = Cont pc1 /\ ls2 = ls1 /\ m2 = m1)
+  \/ exec_blocks ge c sp s ls1 m1 t out ls2 m2.
 Proof.
   induction 1; intros.
   left; tauto.
   assert (b = Bgoto s). congruence. subst b. 
-  generalize (exec_block_Bgoto_inv _ _ _ _ _ _ _ H0). 
-  intros [A [B C]]. subst out; subst rs'; subst m'.
+  generalize (exec_block_Bgoto_inv _ _ _ _ _ _ _ _ H0). 
+  intros [A [B [C D]]]. subst t out rs' m'.
   right. apply exec_blocks_refl.
-  elim (IHexec_blocks1 H1).
-  intros [A [B C]]. 
-  assert (pc2 = pc1). congruence. subst rs2; subst m2; subst pc2.
-  apply IHexec_blocks2; auto.
-  intro. right. apply exec_blocks_trans with pc2 rs2 m2; auto.
+  elim (IHexec_blocks1 H2).
+  intros [A [B [C D]]]. 
+  assert (pc2 = pc1). congruence. subst t1 rs2 m2 pc2.
+  replace t with t2. apply IHexec_blocks2; auto. traceEq.
+  intro. right. 
+  eapply exec_blocks_trans; eauto. 
 Qed.
 
 (** The following [exec_*_prop] predicates state the correctness
@@ -163,43 +171,43 @@ Definition tunnel_outcome (f: function) (out: outcome) :=
   end.
 
 Definition exec_instr_prop
-  (sp: val) (b1: block) (ls1: locset) (m1: mem)
+  (sp: val) (b1: block) (ls1: locset) (m1: mem) (t: trace)
             (b2: block) (ls2: locset) (m2: mem) : Prop :=
   forall f,
   exec_instr tge sp (tunnel_block f b1) ls1 m1
-                    (tunnel_block f b2) ls2 m2.
+                  t (tunnel_block f b2) ls2 m2.
 
 Definition exec_instrs_prop
-  (sp: val) (b1: block) (ls1: locset) (m1: mem)
+  (sp: val) (b1: block) (ls1: locset) (m1: mem) (t: trace)
             (b2: block) (ls2: locset) (m2: mem) : Prop :=
   forall f,
   exec_instrs tge sp (tunnel_block f b1) ls1 m1
-                     (tunnel_block f b2) ls2 m2.
+                   t (tunnel_block f b2) ls2 m2.
 
 Definition exec_block_prop
-  (sp: val) (b1: block) (ls1: locset) (m1: mem)
+  (sp: val) (b1: block) (ls1: locset) (m1: mem) (t: trace)
             (out: outcome) (ls2: locset) (m2: mem) : Prop :=
   forall f,
   exec_block tge sp (tunnel_block f b1) ls1 m1
-                    (tunnel_outcome f out) ls2 m2.
+                  t (tunnel_outcome f out) ls2 m2.
 
 Definition tunneled_code (f: function) :=
   PTree.map (fun pc b => tunnel_block f b) (fn_code f).
 
 Definition exec_blocks_prop
      (c: code) (sp: val)
-     (pc: node) (ls1: locset) (m1: mem)
+     (pc: node) (ls1: locset) (m1: mem) (t: trace)
      (out: outcome) (ls2: locset) (m2: mem) : Prop :=
   forall f,
   f.(fn_code) = c ->
   exec_blocks tge (tunneled_code f) sp
               (branch_target f pc) ls1 m1
-              (tunnel_outcome f out) ls2 m2.
+            t (tunnel_outcome f out) ls2 m2.
 
 Definition exec_function_prop
-    (f: function) (ls1: locset) (m1: mem) 
-                  (ls2: locset) (m2: mem) : Prop :=
-  exec_function tge (tunnel_function f) ls1 m1 ls2 m2.
+    (f: fundef) (ls1: locset) (m1: mem) (t: trace)
+                (ls2: locset) (m2: mem) : Prop :=
+  exec_function tge (tunnel_fundef f) ls1 m1 t ls2 m2.
 
 Scheme exec_instr_ind5 := Minimality for LTL.exec_instr Sort Prop
   with exec_instrs_ind5 := Minimality for LTL.exec_instrs Sort Prop
@@ -212,9 +220,9 @@ Scheme exec_instr_ind5 := Minimality for LTL.exec_instr Sort Prop
   using the [exec_*_prop] predicates above as induction hypotheses. *)
 
 Lemma tunnel_function_correct:
-  forall f ls1 m1 ls2 m2,
-  exec_function ge f ls1 m1 ls2 m2 ->
-  exec_function_prop f ls1 m1 ls2 m2.
+  forall f ls1 m1 t ls2 m2,
+  exec_function ge f ls1 m1 t ls2 m2 ->
+  exec_function_prop f ls1 m1 t ls2 m2.
 Proof.
   apply (exec_function_ind5 ge
            exec_instr_prop
@@ -239,19 +247,21 @@ Proof.
   apply eval_addressing_preserved. exact symbols_preserved.
   auto.
   (* call *)
-  apply exec_Bcall with (tunnel_function f). 
+  apply exec_Bcall with (tunnel_fundef f). 
   generalize H; unfold find_function; destruct ros.
   intro. apply functions_translated; auto.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
   intro. apply function_ptr_translated; auto. congruence.
-  rewrite H0; reflexivity.
+  generalize (sig_preserved f). congruence. 
   apply H2. 
+  (* alloc *)
+  eapply exec_Balloc; eauto. 
   (* instr_refl *)
   apply exec_refl.
   (* instr_one *)
   apply exec_one. apply H0.
   (* instr_trans *)
-  apply exec_trans with (tunnel_block f b2) rs2 m2; auto.
+  apply exec_trans with t1 (tunnel_block f b2) rs2 m2 t2; auto.
   (* goto *)
   apply exec_Bgoto. red in H0. simpl in H0. apply H0. 
   (* cond, true *)
@@ -270,13 +280,13 @@ Proof.
   reflexivity. apply H1.
   intros [pc' [ATpc BTS]]. 
   assert (b = Bgoto pc'). congruence. subst b.
-  generalize (exec_block_Bgoto_inv _ _ _ _ _ _ _ H0).
-  intros [A [B C]]. subst out; subst rs'; subst m'.
+  generalize (exec_block_Bgoto_inv _ _ _ _ _ _ _ _ H0).
+  intros [A [B [C D]]]. subst t out rs' m'.
   simpl. rewrite BTS. apply exec_blocks_refl.
   (* blocks_trans *)
-  apply exec_blocks_trans with (branch_target f pc2) rs2 m2.
-  exact (H0 f H3). exact (H2 f H3). 
-  (* function *)
+  apply exec_blocks_trans with t1 (branch_target f pc2) rs2 m2 t2.
+  exact (H0 f H4). exact (H2 f H4). auto.
+  (* internal function *)
   econstructor. eexact H. 
   change (fn_code (tunnel_function f)) with (tunneled_code f).
   simpl.
@@ -284,28 +294,30 @@ Proof.
   intro BT. rewrite <- BT. exact (H1 f (refl_equal _)).
   intros [pc [ATpc BT]].
   apply exec_blocks_trans with 
-     (branch_target f (fn_entrypoint f)) (call_regs rs) m1.
+     E0 (branch_target f (fn_entrypoint f)) (call_regs rs) m1 t.
   eapply exec_blocks_one. 
   unfold tunneled_code. rewrite PTree.gmap. rewrite ATpc.
   simpl. reflexivity. 
   apply exec_Bgoto. rewrite BT. apply exec_refl.
-  exact (H1 f (refl_equal _)).
+  exact (H1 f (refl_equal _)). traceEq.
+  (* external function *)
+  econstructor; eauto. 
 Qed.
 
 End PRESERVATION.
 
 Theorem transf_program_correct:
-  forall (p: program) (r: val),
-  exec_program p r ->
-  exec_program (tunnel_program p) r.
+  forall (p: program) (t: trace) (r: val),
+  exec_program p t r ->
+  exec_program (tunnel_program p) t r.
 Proof.
-  intros p r [b [f [ls [m [FIND1 [FIND2 [SIG [EX RES]]]]]]]].
-  red. exists b; exists (tunnel_function f); exists ls; exists m.
+  intros p t r [b [f [ls [m [FIND1 [FIND2 [SIG [EX RES]]]]]]]].
+  red. exists b; exists (tunnel_fundef f); exists ls; exists m.
   split. change (prog_main (tunnel_program p)) with (prog_main p).
   rewrite <- FIND1. apply symbols_preserved.
   split. apply function_ptr_translated. assumption.
-  split. rewrite <- SIG. reflexivity. 
+  split. generalize (sig_preserved f). congruence.
   split. apply tunnel_function_correct. 
   unfold tunnel_program. rewrite Genv.init_mem_transf. auto.
-  exact RES.
+  rewrite sig_preserved. exact RES.
 Qed.

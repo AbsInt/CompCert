@@ -28,6 +28,7 @@ Fixpoint mutated_expr (a: expr) : list ident :=
   | Econdition b c d => mutated_condexpr b ++ mutated_expr c ++ mutated_expr d
   | Elet b c => mutated_expr b ++ mutated_expr c
   | Eletvar n => nil
+  | Ealloc b => mutated_expr b
   end
 
 with mutated_condexpr (a: condexpr) : list ident :=
@@ -328,6 +329,10 @@ Fixpoint transl_expr (map: mapping) (mut: list ident)
          transl_expr map mut b r nc
   | Eletvar n =>
       do r <- find_letvar map n; add_move r rd nd
+  | Ealloc a =>
+      do r <- alloc_reg map mut a;
+      do no <- add_instr (Ialloc r rd nd);
+         transl_expr map mut a r no
   end
 
 (** Translation of a conditional expression.  Similar to [transl_expr],
@@ -473,16 +478,18 @@ Definition transl_function (f: Cminor.function) : option RTL.function :=
   | Error => None
   | OK (nentry, rparams) s =>
       Some (RTL.mkfunction
-        f.(Cminor.fn_sig)
-        rparams
-        f.(Cminor.fn_stackspace)
-        s.(st_code)
-        nentry
-        s.(st_nextnode)
-        s.(st_wf))
+             f.(Cminor.fn_sig)
+             rparams
+             f.(Cminor.fn_stackspace)
+             s.(st_code)
+             nentry
+             s.(st_nextnode)
+             s.(st_wf))
   end.
+
+Definition transl_fundef := transf_partial_fundef transl_function.
 
 (** Translation of a whole program. *)
 
 Definition transl_program (p: Cminor.program) : option RTL.program :=
-  transform_partial_program transl_function p.
+  transform_partial_program transl_fundef p.

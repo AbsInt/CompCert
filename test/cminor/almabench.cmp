@@ -28,12 +28,20 @@
 #define sl(x,y) float64["sl" + ((x) * 80 + (y) * 8)]
 
 /* Function calls */
-#define cos(x) ("cos_static"(x): float -> float)
-#define sin(x) ("sin_static"(x): float -> float)
-#define atan2(x,y) ("atan2_static"(x,y): float -> float -> float)
-#define asin(x) ("asin_static"(x): float -> float)
-#define sqrt(x) ("sqrt_static"(x): float -> float)
-#define fmod(x,y) ("fmod_static"(x,y): float -> float -> float)
+
+extern "cos": float -> float
+extern "sin": float -> float
+extern "atan2": float -> float -> float
+extern "asin": float -> float
+extern "sqrt": float -> float
+extern "fmod": float -> float -> float
+
+#define cos(x) ("cos"(x): float -> float)
+#define sin(x) ("sin"(x): float -> float)
+#define atan2(x,y) ("atan2"(x,y): float -> float -> float)
+#define asin(x) ("asin"(x): float -> float)
+#define sqrt(x) ("sqrt"(x): float -> float)
+#define fmod(x,y) ("fmod"(x,y): float -> float -> float)
 #define anpm(x) ("anpm"(x) : float -> float)
 
 "anpm"(a): float -> float
@@ -90,7 +98,7 @@
         k = k + 1;
     } }}
 
-    dl = "fmod_static"(dl,TWOPI) : float -> float -> float;
+    dl = "fmod"(dl,TWOPI) : float -> float -> float;
 
     am = dl -f dp;
     ae = am +f de *f sin(am);

@@ -24,6 +24,7 @@ let orbool e1 e2 =
 %token ABSF
 %token AMPERSAND
 %token AMPERSANDAMPERSAND
+%token ALLOC
 %token BANG
 %token BANGEQUAL
 %token BANGEQUALF
@@ -41,6 +42,7 @@ let orbool e1 e2 =
 %token EQUALEQUALU
 %token EOF
 %token EXIT
+%token EXTERN
 %token FLOAT
 %token FLOAT32
 %token FLOAT64
@@ -120,7 +122,7 @@ let orbool e1 e2 =
 %left LESSLESS GREATERGREATER GREATERGREATERU
 %left PLUS PLUSF MINUS MINUSF
 %left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU
-%nonassoc BANG TILDE p_uminus ABSF INTOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32
+%nonassoc BANG TILDE p_uminus ABSF INTOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 ALLOC
 %left LPAREN
 
 /* Entry point */
@@ -145,7 +147,8 @@ global_declarations:
 ;
 
 global_declaration:
-    VAR STRINGLIT LBRACKET INTLIT RBRACKET      { Coq_pair($2, z_of_camlint $4) }
+    VAR STRINGLIT LBRACKET INTLIT RBRACKET
+      { Coq_pair($2, Coq_cons(Init_space (z_of_camlint $4), Coq_nil)) }
 ;
 
 proc_list:
@@ -163,11 +166,15 @@ proc:
       stmt_list
     RBRACE
       { Coq_pair($1,
-         { fn_sig = $6;
-           fn_params = CList.rev $3;
-           fn_vars = CList.rev $9;
-           fn_stackspace = $8;
-           fn_body = $10 }) }
+        Internal { fn_sig = $6;
+                   fn_params = CList.rev $3;
+                   fn_vars = CList.rev $9;
+                   fn_stackspace = $8;
+                   fn_body = $10 }) }
+  | EXTERN STRINGLIT COLON signature 
+      { Coq_pair($2,
+        External { ef_id = $2;
+                   ef_sig = $4 }) }
 ;
 
 signature:
@@ -250,6 +257,7 @@ expr:
   | INT16S expr                                 { Cmconstr.cast16signed $2 }
   | INT16U expr                                 { Cmconstr.cast16unsigned $2 }
   | FLOAT32 expr                                { Cmconstr.singleoffloat $2 }
+  | ALLOC expr                                  { Ealloc $2 }
   | expr PLUS expr                              { Cmconstr.add $1 $3 }
   | expr MINUS expr                             { Cmconstr.sub $1 $3 }
   | expr STAR expr                              { Cmconstr.mul $1 $3 }

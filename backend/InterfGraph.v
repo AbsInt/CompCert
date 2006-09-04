@@ -1,7 +1,8 @@
 (** Representation of interference graphs for register allocation. *)
 
 Require Import Coqlib.
-Require Import FSet.
+Require Import FSets.
+Require Import FSetAVL.
 Require Import Maps.
 Require Import Ordered.
 Require Import Registers.
@@ -39,10 +40,14 @@ Module OrderedRegReg := OrderedPair(OrderedReg)(OrderedReg).
 Module OrderedMreg := OrderedIndexed(IndexedMreg).
 Module OrderedRegMreg := OrderedPair(OrderedReg)(OrderedMreg).
 
+(*
 Module SetDepRegReg := FSetAVL.Make(OrderedRegReg).
 Module SetRegReg := NodepOfDep(SetDepRegReg).
 Module SetDepRegMreg := FSetAVL.Make(OrderedRegMreg).
 Module SetRegMreg := NodepOfDep(SetDepRegMreg).
+*)
+Module SetRegReg := FSetAVL.Make(OrderedRegReg).
+Module SetRegMreg := FSetAVL.Make(OrderedRegMreg).
 
 Record graph: Set := mkgraph {
   interf_reg_reg: SetRegReg.t;
@@ -197,12 +202,15 @@ Qed.
 (** [all_interf_regs g] returns the set of pseudo-registers that
   are nodes of [g]. *)
 
+Definition add_intf2 (r1r2: reg * reg) (u: Regset.t) : Regset.t :=
+  Regset.add (fst r1r2) (Regset.add (snd r1r2) u).
+Definition add_intf1 (r1m2: reg * mreg) (u: Regset.t) : Regset.t :=
+  Regset.add (fst r1m2) u.
+
 Definition all_interf_regs (g: graph) : Regset.t :=
-  SetRegReg.fold
-    (fun r1r2 u => Regset.add (fst r1r2) (Regset.add (snd r1r2) u))
+  SetRegReg.fold _ add_intf2
     g.(interf_reg_reg)
-    (SetRegMreg.fold
-      (fun r1m2 u => Regset.add (fst r1m2) u)
+    (SetRegMreg.fold _ add_intf1
       g.(interf_reg_mreg)
       Regset.empty).
 
@@ -215,53 +223,63 @@ Proof.
   rewrite Regset.mem_add_other; auto.
 Qed.
 
-Lemma all_interf_regs_correct_aux_1:
-  forall l u r,
+Lemma in_setregreg_fold:
+  forall g r1 r2 u,
+  SetRegReg.In (r1, r2) g \/ Regset.mem r1 u = true /\ Regset.mem r2 u = true ->
+  Regset.mem r1 (SetRegReg.fold _ add_intf2 g u) = true /\
+  Regset.mem r2 (SetRegReg.fold _ add_intf2 g u) = true.
+Proof.
+  set (add_intf2' := fun u r1r2 => add_intf2 r1r2 u).
+  assert (forall l r1 r2 u,
+    InA OrderedRegReg.eq (r1,r2) l \/ Regset.mem r1 u = true /\ Regset.mem r2 u = true ->
+    Regset.mem r1 (List.fold_left add_intf2' l u) = true /\
+    Regset.mem r2 (List.fold_left add_intf2' l u) = true).
+  induction l; intros; simpl.
+  elim H; intro. inversion H0. auto.
+  apply IHl. destruct a as [a1 a2].
+  elim H; intro. inversion H0; subst. 
+  red in H2. simpl in H2. destruct H2. red in H1. red in H2. subst r1 r2.
+  right; unfold add_intf2', add_intf2; simpl; split. 
+  apply Regset.mem_add_same. apply mem_add_tail. apply Regset.mem_add_same.
+  tauto.
+  right; unfold add_intf2', add_intf2; simpl; split;
+  apply mem_add_tail; apply mem_add_tail; tauto.
+
+  intros. rewrite SetRegReg.fold_1. apply H. 
+  intuition. left. apply SetRegReg.elements_1. auto.
+Qed.
+
+Lemma in_setregreg_fold':
+  forall g r u,
   Regset.mem r u = true ->
-  Regset.mem r
-    (List.fold_right
-      (fun r1r2 u => Regset.add (fst r1r2) (Regset.add (snd r1r2) u))
-      u l) = true.
+  Regset.mem r (SetRegReg.fold _ add_intf2 g u) = true.
 Proof.
-  induction l; simpl; intros.
-  auto.
-  apply mem_add_tail. apply mem_add_tail. auto.
+  intros. exploit in_setregreg_fold. eauto. 
+  intros [A B]. eauto.
 Qed.
 
-Lemma all_interf_regs_correct_aux_2:
-  forall l u r1 r2,
-  InList OrderedRegReg.eq (r1, r2) l ->
-  let u' :=
-    List.fold_right
-      (fun r1r2 u => Regset.add (fst r1r2) (Regset.add (snd r1r2) u))
-      u l in
-  Regset.mem r1 u' = true /\ Regset.mem r2 u' = true.
+Lemma in_setregmreg_fold:
+  forall g r1 mr2 u,
+  SetRegMreg.In (r1, mr2) g \/ Regset.mem r1 u = true ->
+  Regset.mem r1 (SetRegMreg.fold _ add_intf1 g u) = true.
 Proof.
-  induction l; simpl; intros.
-  inversion H.
-  inversion H. elim H1. simpl. unfold OrderedReg.eq. 
-  intros; subst r1; subst r2.
-  split. apply Regset.mem_add_same. 
-  apply mem_add_tail. apply Regset.mem_add_same.
-  generalize (IHl u r1 r2 H1). intros [A B].
-  split; repeat rewrite mem_add_tail; auto.
-Qed.
-
-Lemma all_interf_regs_correct_aux_3:
-  forall l u r1 r2,
-  InList OrderedRegMreg.eq (r1, r2) l ->
-  let u' :=
-    List.fold_right
-      (fun r1r2 u => Regset.add (fst r1r2) u)
-      u l in
-  Regset.mem r1 u' = true.
-Proof.
-  induction l; simpl; intros.
-  inversion H.
-  inversion H. elim H1. simpl. unfold OrderedReg.eq. 
-  intros; subst r1.
+  set (add_intf1' := fun u r1mr2 => add_intf1 r1mr2 u).
+  assert (forall l r1 mr2 u,
+    InA OrderedRegMreg.eq (r1,mr2) l \/ Regset.mem r1 u = true ->
+    Regset.mem r1 (List.fold_left add_intf1' l u) = true).
+  induction l; intros; simpl.
+  elim H; intro. inversion H0. auto.
+  apply IHl with mr2. destruct a as [a1 a2].
+  elim H; intro. inversion H0; subst. 
+  red in H2. simpl in H2. destruct H2. red in H1. red in H2. subst r1 mr2.
+  right; unfold add_intf1', add_intf1; simpl.
   apply Regset.mem_add_same. 
-  apply mem_add_tail. apply IHl with r2. auto.
+  tauto.
+  right; unfold add_intf1', add_intf1; simpl.
+  apply mem_add_tail; auto.
+
+  intros. rewrite SetRegMreg.fold_1. apply H with mr2. 
+  intuition. left. apply SetRegMreg.elements_1. auto.
 Qed.
 
 Lemma all_interf_regs_correct_1:
@@ -271,16 +289,7 @@ Lemma all_interf_regs_correct_1:
   Regset.mem r2 (all_interf_regs g) = true.
 Proof.
   intros. unfold all_interf_regs. 
-  generalize (SetRegReg.fold_1
-    g.(interf_reg_reg)
-    (SetRegMreg.fold
-        (fun (r1m2 : SetDepRegMreg.elt) (u : Regset.t) =>
-         Regset.add (fst r1m2) u) (interf_reg_mreg g) Regset.empty)
-    (fun (r1r2 : SetDepRegReg.elt) (u : Regset.t) =>
-      Regset.add (fst r1r2) (Regset.add (snd r1r2) u))).
-  intros [l [UN [INEQ EQ]]].
-  rewrite EQ. apply all_interf_regs_correct_aux_2.
-  elim (INEQ (r1, r2)); intros. auto.
+  apply in_setregreg_fold. tauto.
 Qed.
 
 Lemma all_interf_regs_correct_2:
@@ -289,22 +298,6 @@ Lemma all_interf_regs_correct_2:
   Regset.mem r1 (all_interf_regs g) = true.
 Proof.
   intros. unfold all_interf_regs.
-  generalize (SetRegReg.fold_1
-    g.(interf_reg_reg)
-    (SetRegMreg.fold
-        (fun (r1m2 : SetDepRegMreg.elt) (u : Regset.t) =>
-         Regset.add (fst r1m2) u) (interf_reg_mreg g) Regset.empty)
-    (fun (r1r2 : SetDepRegReg.elt) (u : Regset.t) =>
-      Regset.add (fst r1r2) (Regset.add (snd r1r2) u))).
-  intros [l [UN [INEQ EQ]]].
-  rewrite EQ. apply all_interf_regs_correct_aux_1.
-  generalize (SetRegMreg.fold_1
-    g.(interf_reg_mreg)
-    Regset.empty
-    (fun (r1r2 : SetDepRegMreg.elt) (u : Regset.t) =>
-      Regset.add (fst r1r2) u)).
-  change (PTree.t unit) with Regset.t.
-  intros [l' [UN' [INEQ' EQ']]].
-  rewrite EQ'. apply all_interf_regs_correct_aux_3 with mr2.
-  elim (INEQ' (r1, mr2)); intros. auto.
+  apply in_setregreg_fold'. eapply in_setregmreg_fold. eauto.
 Qed.
+

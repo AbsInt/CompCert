@@ -1,9 +1,8 @@
+Require Iteration.
 Require Floats.
-Require Kildall.
 Require RTLgen.
 Require Coloring.
 Require Allocation.
-Require Cmconstr.
 Require Main.
 
 (* Standard lib *)
@@ -28,8 +27,21 @@ Extract Constant Floats.Float.div => "( /. )".
 Extract Constant Floats.Float.cmp => "Floataux.cmp".
 Extract Constant Floats.Float.eq_dec => "fun (x: float) (y: float) -> x = y".
 
+(* Iteration *)
+Extract Constant Iteration.dependent_description' =>
+  "fun x -> assert false".
+
+Extract Constant Iteration.GenIter.iterate =>
+  "let rec iter f a =
+     match f a with Coq_inl b -> Some b | Coq_inr a' -> iter f a'
+   in iter".
+
+
 (* RTLgen *)
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".
+
+(* RTLtyping *)
+Extract Constant RTLtyping.infer_type_environment => "RTLtypingaux.infer_type_environment".
 
 (* Coloring *)
 Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
@@ -49,5 +61,3 @@ Extract Constant PPC.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 
 (* Go! *)
 Recursive Extraction Library Main.
-(*Extraction Library Compare_dec.
-  Extraction Library Cmconstr.*)

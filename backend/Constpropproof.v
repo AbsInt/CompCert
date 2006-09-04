@@ -6,6 +6,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
+Require Import Events.
 Require Import Mem.
 Require Import Globalenvs.
 Require Import Op.
@@ -144,10 +145,11 @@ Proof.
   case (eval_static_operation_match op al); intros;
   InvVLMA; simpl in *; FuncInv; try congruence.
 
-  replace v with v0. auto. congruence.
-
   destruct (Genv.find_symbol ge s). exists b. intuition congruence.
   congruence.
+
+  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
+  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
 
   exists b. split. auto. congruence. 
   exists b. split. auto. congruence.
@@ -178,11 +180,16 @@ Proof.
   replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
+  rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
+
   caseEq (eval_static_condition c vl0).
   intros. generalize (eval_static_condition_correct _ _ _ _ H H1).
   intro. rewrite H2 in H0. 
   destruct b; injection H0; intro; subst v; simpl; auto.
   intros; simpl; auto.
+
+  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
+  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
 
   auto.
 Qed.
@@ -193,8 +200,8 @@ Qed.
   the static approximation returned by the transfer function. *)
 
 Lemma transfer_correct:
-  forall f c sp pc rs m pc' rs' m' ra,
-  exec_instr ge c sp pc rs m pc' rs' m' ->
+  forall f c sp pc rs m t pc' rs' m' ra,
+  exec_instr ge c sp pc rs m t pc' rs' m' ->
   c = f.(fn_code) ->
   regs_match_approx ra rs ->
   regs_match_approx (transfer f pc ra) rs'.
@@ -208,6 +215,8 @@ Proof.
   apply regs_match_approx_update; auto. simpl; auto.
   (* Icall *)
   apply regs_match_approx_update; auto. simpl; auto.
+  (* Ialloc *)
+  apply regs_match_approx_update; auto. simpl; auto.
 Qed.
 
 (** The correctness of the static analysis follows from the results
@@ -217,8 +226,8 @@ Qed.
 Lemma analyze_correct_1:
   forall f approxs,
   analyze f = Some approxs ->
-  forall c sp pc rs m pc' rs' m',
-  exec_instr ge c sp pc rs m pc' rs' m' ->
+  forall c sp pc rs m t pc' rs' m',
+  exec_instr ge c sp pc rs m t pc' rs' m' ->
   c = f.(fn_code) ->
   regs_match_approx approxs!!pc rs ->
   regs_match_approx approxs!!pc' rs'.
@@ -228,7 +237,7 @@ Proof.
   eapply DS.fixpoint_solution. 
   unfold analyze in H. eexact H. 
   elim (fn_code_wf f pc); intro. auto. 
-  generalize (exec_instr_present _ _ _ _ _ _ _ _ _ H0).
+  generalize (exec_instr_present _ _ _ _ _ _ _ _ _ _ H0).
   rewrite H1. intro. contradiction.
   eapply successors_correct. rewrite <- H1. eauto.
   eapply transfer_correct; eauto.
@@ -237,8 +246,8 @@ Qed.
 Lemma analyze_correct_2:
   forall f approxs,
   analyze f = Some approxs ->
-  forall c sp pc rs m pc' rs' m',
-  exec_instrs ge c sp pc rs m pc' rs' m' ->
+  forall c sp pc rs m t pc' rs' m',
+  exec_instrs ge c sp pc rs m t pc' rs' m' ->
   c = f.(fn_code) ->
   regs_match_approx approxs!!pc rs ->
   regs_match_approx approxs!!pc' rs'.
@@ -638,19 +647,28 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf transf_function prog).
+Proof (Genv.find_symbol_transf transf_fundef prog).
 
 Lemma functions_translated:
-  forall (v: val) (f: RTL.function),
+  forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
-  Genv.find_funct tge v = Some (transf_function f).
-Proof (@Genv.find_funct_transf _ _ transf_function prog).
+  Genv.find_funct tge v = Some (transf_fundef f).
+Proof (@Genv.find_funct_transf _ _ transf_fundef prog).
 
 Lemma function_ptr_translated:
-  forall (v: block) (f: RTL.function),
+  forall (v: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge v = Some f ->
-  Genv.find_funct_ptr tge v = Some (transf_function f).
-Proof (@Genv.find_funct_ptr_transf _ _ transf_function prog).
+  Genv.find_funct_ptr tge v = Some (transf_fundef f).
+Proof (@Genv.find_funct_ptr_transf _ _ transf_fundef prog).
+
+Lemma sig_translated:
+  forall (f: RTL.fundef),
+  funsig (transf_fundef f) = funsig f.
+Proof.
+  intro. case f; intros; simpl. 
+  unfold transf_function. case (analyze f0); intros; reflexivity.
+  reflexivity.
+Qed.
 
 (** The proof of semantic preservation is a simulation argument
   based on diagrams of the following form:
@@ -676,30 +694,30 @@ Proof (@Genv.find_funct_ptr_transf _ _ transf_function prog).
 
 Definition exec_instr_prop
         (c: code) (sp: val)
-        (pc: node) (rs: regset) (m: mem)
+        (pc: node) (rs: regset) (m: mem) (t: trace)
         (pc': node) (rs': regset) (m': mem) : Prop :=
-  exec_instr tge c sp pc rs m pc' rs' m' /\
+  exec_instr tge c sp pc rs m t pc' rs' m' /\
   forall f approxs
          (CF: c = f.(RTL.fn_code))
          (ANL: analyze f = Some approxs)
          (MATCH: regs_match_approx ge approxs!!pc rs),
-  exec_instr tge (transf_code approxs c) sp pc rs m pc' rs' m'.
+  exec_instr tge (transf_code approxs c) sp pc rs m t pc' rs' m'.
 
 Definition exec_instrs_prop
         (c: code) (sp: val)
-        (pc: node) (rs: regset) (m: mem)
+        (pc: node) (rs: regset) (m: mem) (t: trace)
         (pc': node) (rs': regset) (m': mem) : Prop :=
-  exec_instrs tge c sp pc rs m pc' rs' m' /\
+  exec_instrs tge c sp pc rs m t pc' rs' m' /\
   forall f approxs
          (CF: c = f.(RTL.fn_code))
          (ANL: analyze f = Some approxs)
          (MATCH: regs_match_approx ge approxs!!pc rs),
-  exec_instrs tge (transf_code approxs c) sp pc rs m pc' rs' m'.
+  exec_instrs tge (transf_code approxs c) sp pc rs m t pc' rs' m'.
 
 Definition exec_function_prop
-        (f: RTL.function) (args: list val) (m: mem)
+        (f: RTL.fundef) (args: list val) (m: mem) (t: trace)
         (res: val) (m': mem) : Prop :=
-  exec_function tge (transf_function f) args m res m'.
+  exec_function tge (transf_fundef f) args m t res m'.
 
 Ltac TransfInstr :=
   match goal with
@@ -716,9 +734,9 @@ Ltac TransfInstr :=
   evaluation derivation of the original code. *)
 
 Lemma transf_funct_correct:
-  forall f args m res m',
-  exec_function ge f args m res m' ->
-  exec_function_prop f args m res m'.
+  forall f args m t res m',
+  exec_function ge f args m t res m' ->
+  exec_function_prop f args m t res m'.
 Proof.
   apply (exec_function_ind_3 ge
           exec_instr_prop exec_instrs_prop exec_function_prop);
@@ -773,13 +791,13 @@ Proof.
     rewrite ASR; simpl. congruence.
   intro. eapply exec_Istore; eauto. 
   (* Icall *)
-  assert (find_function tge ros rs = Some (transf_function f)).
+  assert (find_function tge ros rs = Some (transf_fundef f)).
   generalize H0; unfold find_function; destruct ros.
   apply functions_translated. 
   rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
   apply function_ptr_translated. congruence.
-  assert (sig = fn_sig (transf_function f)).
-  rewrite H1. unfold transf_function. destruct (analyze f); reflexivity.
+  assert (funsig (transf_fundef f) = sig).
+    generalize (sig_translated f). congruence.
   split; [idtac| intros; TransfInstr].
   eapply exec_Icall; eauto.
   set (ros' :=
@@ -802,6 +820,11 @@ Proof.
   rewrite <- symbols_preserved in A. 
   generalize H4. simpl. rewrite A. rewrite B. subst i0. 
   rewrite Genv.find_funct_find_funct_ptr. auto.
+
+  (* Ialloc *)
+  split; [idtac|intros; TransfInstr].
+  eapply exec_Ialloc; eauto. 
+  intros. eapply exec_Ialloc; eauto. 
 
   (* Icond, true *)
   split; [idtac| intros; TransfInstr].
@@ -844,37 +867,38 @@ Proof.
   (* trans *)
   elim H0; intros. elim H2; intros.
   split.
-  apply exec_trans with pc2 rs2 m2; auto.
-  intros; apply exec_trans with pc2 rs2 m2.
-  eapply H4; eauto. eapply H6; eauto.
-  eapply analyze_correct_2; eauto.
+  apply exec_trans with t1 pc2 rs2 m2 t2; auto.
+  intros; apply exec_trans with t1 pc2 rs2 m2 t2.
+  eapply H5; eauto. eapply H7; eauto.
+  eapply analyze_correct_2; eauto. auto.
 
-  (* function *)
+  (* internal function *)
   elim H1; intros.
-  unfold transf_function.
+  simpl. unfold transf_function. 
   caseEq (analyze f). 
   intros approxs ANL.
-  eapply exec_funct; simpl; eauto. 
+  eapply exec_funct_internal; simpl; eauto. 
   eapply H5. reflexivity. auto. 
   apply analyze_correct_3; auto.
   TransfInstr; auto.
-  intros. eapply exec_funct; eauto.
+  intros. eapply exec_funct_internal; eauto.
+  (* external function *)
+  unfold transf_function; simpl. apply exec_funct_external; auto.
 Qed.
 
 (** The preservation of the observable behavior of the program then
   follows. *)
 
 Theorem transf_program_correct:
-  forall (r: val),
-  exec_program prog r -> exec_program tprog r.
+  forall (t: trace) (r: val),
+  exec_program prog t r -> exec_program tprog t r.
 Proof.
-  intros r [b [f [m [SYMB [FIND [SIG EXEC]]]]]].
-  red. exists b. exists (transf_function f). exists m. 
+  intros t r [b [f [m [SYMB [FIND [SIG EXEC]]]]]].
+  red. exists b. exists (transf_fundef f). exists m. 
   split. change (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. auto.
   split. apply function_ptr_translated; auto.
-  split. unfold transf_function. 
-  rewrite <- SIG. destruct (analyze f); reflexivity.
+  split. generalize (sig_translated f). congruence.
   apply transf_funct_correct. 
   unfold tprog, transf_program. rewrite Genv.init_mem_transf. 
   exact EXEC.

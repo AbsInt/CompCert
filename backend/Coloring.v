@@ -150,6 +150,12 @@ Definition add_edges_instr
           (add_interf_op res live
             (add_interf_call
               (Regset.remove res live) destroyed_at_call_regs g)))
+  | Ialloc arg res s =>
+      add_pref_mreg arg loc_alloc_argument
+        (add_pref_mreg res loc_alloc_result
+          (add_interf_op res live
+            (add_interf_call
+              (Regset.remove res live) destroyed_at_call_regs g)))
   | Ireturn (Some r) =>
       add_pref_mreg r (loc_result sig) g
   | _ => g

@@ -38,6 +38,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lstore chunk addr args src => src :: args
   | Lcall sig (inl fn) => fn :: nil
   | Lcall sig (inr _) => nil
+  | Lalloc => nil
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => args
@@ -231,6 +232,8 @@ Inductive wt_instr : instruction -> Prop :=
       size_arguments sig <= bound_outgoing b ->
       match ros with inl r => mreg_type r = Tint | _ => True end ->
       wt_instr (Lcall sig ros)
+  | wt_Lalloc:
+      wt_instr Lalloc
   | wt_Llabel:
       forall lbl,
       wt_instr (Llabel lbl)
@@ -249,6 +252,14 @@ End WT_INSTR.
 Definition wt_function (f: function) : Prop :=
   forall instr, In instr f.(fn_code) -> wt_instr f instr.
 
+Inductive wt_fundef: fundef -> Prop :=
+  | wt_fundef_external: forall ef,
+      Conventions.sig_external_ok ef.(ef_sig) ->
+      wt_fundef (External ef)
+  | wt_function_internal: forall f,
+      wt_function f ->
+      wt_fundef (Internal f).
+
 Definition wt_program (p: program) : Prop :=
-  forall i f, In (i, f) (prog_funct p) -> wt_function f.
+  forall i f, In (i, f) (prog_funct p) -> wt_fundef f.
 

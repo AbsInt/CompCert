@@ -20,6 +20,7 @@ rule token = parse
   | blank +      { token lexbuf }
   | "/*"         { comment lexbuf; token lexbuf }
   | "absf" { ABSF }
+  | "alloc" { ALLOC }
   | "&" { AMPERSAND }
   | "&&" { AMPERSANDAMPERSAND }
   | "!"    { BANG }
@@ -38,6 +39,7 @@ rule token = parse
   | "==f"    { EQUALEQUALF }
   | "==u"    { EQUALEQUALU }
   | "exit"    { EXIT }
+  | "extern"    { EXTERN }
   | "float"    { FLOAT }
   | "float32"    { FLOAT32 }
   | "float64"    { FLOAT64 }

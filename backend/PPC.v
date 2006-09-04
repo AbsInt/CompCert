@@ -7,6 +7,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 
 (** * Abstract syntax *)
@@ -85,6 +86,7 @@ Inductive instruction : Set :=
   | Paddi: ireg -> ireg -> constant -> instruction            (**r add immediate *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
   | Paddze: ireg -> ireg -> instruction                       (**r add Carry bit *)
+  | Pallocblock: instruction                                  (**r allocate new heap block *)
   | Pallocframe: Z -> Z -> instruction                        (**r allocate new stack frame *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
@@ -260,6 +262,12 @@ lbl:    .long   0x43300000, 0x00000000
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
 
+- [Pallocheap]: in the formal semantics, this pseudo-instruction
+  allocates a heap block of size the contents of [GPR3], and leaves
+  a pointer to this block in [GPR3].  In the generated assembly code,
+  it is turned into a call to the allocation function of the run-time
+  system.
+
 - [Piundef] and [Pfundef]: set an integer or float register (respectively)
   to the [Vundef] value.  Expand to nothing, as the PowerPC processor has
   no notion of ``undefined value''.  These two pseudo-instructions are used
@@ -277,7 +285,8 @@ lbl:    .long   0x43300000, 0x00000000
 *)
 
 Definition code := list instruction.
-Definition program := AST.program code.
+Definition fundef := AST.fundef code.
+Definition program := AST.program fundef.
 
 (** * Operational semantics *)
 
@@ -317,7 +326,7 @@ Module Pregmap := EMap(PregEq).
   [Vzero] or [Vone]. *)
   
 Definition regset := Pregmap.t val.
-Definition genv := Genv.t code.
+Definition genv := Genv.t fundef.
 
 Notation "a # b" := (a b) (at level 1, only parsing).
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
@@ -540,6 +549,14 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
   | Paddze rd r1 =>
       OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY))) m
+  | Pallocblock =>
+      match rs#GPR3 with
+      | Vint n =>
+          let (m', b) := Mem.alloc m 0 (Int.signed n) in
+          OK (nextinstr (rs#GPR3 <- (Vptr b Int.zero)
+                           #LR <- (Val.add rs#PC Vone))) m'
+      | _ => Error
+      end
   | Pallocframe lo hi =>
       let (m1, stk) := Mem.alloc m lo hi in
       let sp := Vptr stk (Int.repr lo) in
@@ -735,36 +752,84 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr rs) m
   end.
 
+(** Calling conventions for external functions.  These are compatible with
+    the calling conventions in module [Conventions], except that
+    we use PPC registers instead of locations. *)
+
+Fixpoint loc_external_arguments_rec
+    (tyl: list typ) (iregl: list ireg) (fregl: list freg)
+    {struct tyl} : list preg :=
+  match tyl with
+  | nil => nil
+  | Tint :: tys =>
+      match iregl with
+      | nil => IR GPR11 (* should not happen *)
+      | ireg :: _ => IR ireg
+      end ::
+      loc_external_arguments_rec tys (list_drop1 iregl) fregl
+  | Tfloat :: tys =>
+      match fregl with
+      | nil => IR GPR11 (* should not happen *)
+      | freg :: _ => FR freg
+      end ::
+      loc_external_arguments_rec tys (list_drop2 iregl) (list_drop1 fregl)
+  end.
+
+Definition int_param_regs :=
+  GPR3 :: GPR4 :: GPR5 :: GPR6 :: GPR7 :: GPR8 :: GPR9 :: GPR10 :: nil.
+Definition float_param_regs :=
+  FPR1 :: FPR2 :: FPR3 :: FPR4 :: FPR5 :: FPR6 :: FPR7 :: FPR8 :: FPR9 :: FPR10 :: nil.
+
+Definition loc_external_arguments (s: signature) : list preg :=
+  loc_external_arguments_rec s.(sig_args) int_param_regs float_param_regs.
+
+Definition loc_external_result (s: signature) : preg :=
+  match s.(sig_res) with
+  | None => GPR3
+  | Some Tint => GPR3
+  | Some Tfloat => FPR1
+  end.
+
 (** Execution of the instruction at [rs#PC]. *)
 
-Inductive exec_step: regset -> mem -> regset -> mem -> Prop :=
-  | exec_step_intro:
+Inductive exec_step: regset -> mem -> trace -> regset -> mem -> Prop :=
+  | exec_step_internal:
       forall b ofs c i rs m rs' m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some c ->
+      Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some i ->
       exec_instr c i rs m = OK rs' m' ->
-      exec_step rs m rs' m'.
+      exec_step rs m E0 rs' m'
+  | exec_step_external:
+      forall b ef args res rs m t rs',
+      rs PC = Vptr b Int.zero ->
+      Genv.find_funct_ptr ge b = Some (External ef) ->
+      event_match ef args t res ->
+      args = List.map (fun r => rs#r) (loc_external_arguments ef.(ef_sig)) ->
+      rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
+               #PC <- (rs LR)) ->
+      exec_step rs m t rs' m.
 
 (** Execution of zero, one or several instructions starting at [rs#PC]. *)
 
-Inductive exec_steps: regset -> mem -> regset -> mem -> Prop :=
+Inductive exec_steps: regset -> mem -> trace -> regset -> mem -> Prop :=
   | exec_refl:
       forall rs m,
-      exec_steps rs m rs m
+      exec_steps rs m E0 rs m
   | exec_one:
-      forall rs m rs' m',
-      exec_step rs m rs' m' ->
-      exec_steps rs m rs' m'
+      forall rs m t rs' m',
+      exec_step rs m t rs' m' ->
+      exec_steps rs m t rs' m'
   | exec_trans:
-      forall rs1 m1 rs2 m2 rs3 m3,
-      exec_steps rs1 m1 rs2 m2 ->
-      exec_steps rs2 m2 rs3 m3 ->
-      exec_steps rs1 m1 rs3 m3.
+      forall rs1 m1 t1 rs2 m2 t2 rs3 m3 t3,
+      exec_steps rs1 m1 t1 rs2 m2 ->
+      exec_steps rs2 m2 t2 rs3 m3 ->
+      t3 = t1 ** t2 ->
+      exec_steps rs1 m1 t3 rs3 m3.
 
 End RELSEM.
 
-Definition exec_program (p: program) (r: val) : Prop :=
+Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in
   let m0 := Genv.init_mem p in
   let rs0 :=
@@ -772,4 +837,4 @@ Definition exec_program (p: program) (r: val) : Prop :=
                           # LR <- Vzero
                           # GPR1 <- (Vptr Mem.nullptr Int.zero) in
   exists rs, exists m,
-  exec_steps ge rs0 m0 rs m /\ rs#PC = Vzero /\ rs#GPR3 = r.
+  exec_steps ge rs0 m0 t rs m /\ rs#PC = Vzero /\ rs#GPR3 = r.

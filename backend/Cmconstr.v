@@ -57,6 +57,8 @@ Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
   | Elet b c => Elet (lift_expr p b) (lift_expr (S p) c)
   | Eletvar n =>
       if le_gt_dec p n then Eletvar (S n) else Eletvar n
+  | Ealloc b =>
+      Ealloc (lift_expr p b)
   end
 
 with lift_condexpr (p: nat) (a: condexpr) {struct a}: condexpr :=
@@ -795,11 +797,6 @@ Definition divf (e1 e2: expr) := Eop Odivf (e1:::e2:::Enil).
 
 (** ** Truncations and sign extensions *)
 
-Definition cast8unsigned (e: expr) :=
-  rolm e Int.zero (Int.repr 255).
-Definition cast16unsigned (e: expr) :=
-  rolm e Int.zero (Int.repr 65535).
-
 Inductive cast8signed_cases: forall (e1: expr), Set :=
   | cast8signed_case1:
       forall (e2: expr),
@@ -822,6 +819,28 @@ Definition cast8signed (e: expr) :=
   | cast8signed_default e1 => Eop Ocast8signed (e1 ::: Enil)
   end.
 
+Inductive cast8unsigned_cases: forall (e1: expr), Set :=
+  | cast8unsigned_case1:
+      forall (e2: expr),
+      cast8unsigned_cases (Eop Ocast8unsigned (e2 ::: Enil))
+  | cast8unsigned_default:
+      forall (e1: expr),
+      cast8unsigned_cases e1.
+
+Definition cast8unsigned_match (e1: expr) :=
+  match e1 as z1 return cast8unsigned_cases z1 with
+  | Eop Ocast8unsigned (e2 ::: Enil) =>
+      cast8unsigned_case1 e2
+  | e1 =>
+      cast8unsigned_default e1
+  end.
+
+Definition cast8unsigned (e: expr) := 
+  match cast8unsigned_match e with
+  | cast8unsigned_case1 e1 => e
+  | cast8unsigned_default e1 => Eop Ocast8unsigned (e1 ::: Enil)
+  end.
+
 Inductive cast16signed_cases: forall (e1: expr), Set :=
   | cast16signed_case1:
       forall (e2: expr),
@@ -842,6 +861,28 @@ Definition cast16signed (e: expr) :=
   match cast16signed_match e with
   | cast16signed_case1 e1 => e
   | cast16signed_default e1 => Eop Ocast16signed (e1 ::: Enil)
+  end.
+
+Inductive cast16unsigned_cases: forall (e1: expr), Set :=
+  | cast16unsigned_case1:
+      forall (e2: expr),
+      cast16unsigned_cases (Eop Ocast16unsigned (e2 ::: Enil))
+  | cast16unsigned_default:
+      forall (e1: expr),
+      cast16unsigned_cases e1.
+
+Definition cast16unsigned_match (e1: expr) :=
+  match e1 as z1 return cast16unsigned_cases z1 with
+  | Eop Ocast16unsigned (e2 ::: Enil) =>
+      cast16unsigned_case1 e2
+  | e1 =>
+      cast16unsigned_default e1
+  end.
+
+Definition cast16unsigned (e: expr) := 
+  match cast16unsigned_match e with
+  | cast16unsigned_case1 e1 => e
+  | cast16unsigned_default e1 => Eop Ocast16unsigned (e1 ::: Enil)
   end.
 
 Inductive singleoffloat_cases: forall (e1: expr), Set :=

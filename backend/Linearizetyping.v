@@ -274,6 +274,8 @@ Proof.
   (* call *)
   constructor; auto. 
   eapply size_arguments_bound; eauto.
+  (* alloc *)
+  constructor.
   (* goto *)
   constructor. 
   (* cond *)
@@ -327,14 +329,24 @@ Proof.
   apply cleanup_function_conservation_2; auto.
 Qed.
 
+Lemma wt_transf_fundef:
+  forall f,
+  LTLtyping.wt_fundef f ->
+  wt_fundef (transf_fundef f). 
+Proof.
+  induction 1; simpl.
+  constructor; assumption.
+  constructor; apply wt_transf_function; assumption.
+Qed.
+
 Lemma program_typing_preserved:
   forall (p: LTL.program),
   LTLtyping.wt_program p ->
   Lineartyping.wt_program (transf_program p).
 Proof.
   intros; red; intros.
-  generalize (transform_program_function transf_function p i f H0).
+  generalize (transform_program_function transf_fundef p i f H0).
   intros [f0 [IN TR]].
-  subst f. apply wt_transf_function; auto. 
+  subst f. apply wt_transf_fundef; auto. 
   apply (H i f0 IN).
 Qed.

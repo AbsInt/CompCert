@@ -5,6 +5,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
+Require Import Events.
 Require Import Values.
 Require Import Mem.
 Require Import Op.
@@ -35,6 +36,7 @@ Inductive expr : Set :=
   | Econdition : condexpr -> expr -> expr -> expr
   | Elet : expr -> expr -> expr
   | Eletvar : nat -> expr
+  | Ealloc : expr -> expr
 
 with condexpr : Set :=
   | CEtrue: condexpr
@@ -77,7 +79,14 @@ Record function : Set := mkfunction {
   fn_body: stmt
 }.
 
-Definition program := AST.program function.
+Definition fundef := AST.fundef function.
+Definition program := AST.program fundef.
+
+Definition funsig (fd: fundef) :=
+  match fd with
+  | Internal f => f.(fn_sig)
+  | External ef => ef.(ef_sig)
+  end.
 
 (** * Operational semantics *)
 
@@ -120,7 +129,7 @@ Fixpoint switch_target (n: int) (dfl: nat) (cases: list (int * nat))
 - [lenv]: let environments, map de Bruijn indices to values.
 *)
 
-Definition genv := Genv.t function.
+Definition genv := Genv.t fundef.
 Definition env := PTree.t val.
 Definition letenv := list val.
 
@@ -157,56 +166,65 @@ Variable ge: genv.
 
 Inductive eval_expr:
          val -> letenv ->
-         env -> mem -> expr ->
+         env -> mem -> expr -> trace ->
          env -> mem -> val -> Prop :=
   | eval_Evar:
       forall sp le e m id v,
       PTree.get id e = Some v ->
-      eval_expr sp le e m (Evar id) e m v
+      eval_expr sp le e m (Evar id) E0 e m v
   | eval_Eassign:
-      forall sp le e m id a e1 m1 v,
-      eval_expr sp le e m a e1 m1 v ->
-      eval_expr sp le e m (Eassign id a) (PTree.set id v e1) m1 v
+      forall sp le e m id a t e1 m1 v,
+      eval_expr sp le e m a t e1 m1 v ->
+      eval_expr sp le e m (Eassign id a) t (PTree.set id v e1) m1 v
   | eval_Eop:
-      forall sp le e m op al e1 m1 vl v,
-      eval_exprlist sp le e m al e1 m1 vl ->
+      forall sp le e m op al t e1 m1 vl v,
+      eval_exprlist sp le e m al t e1 m1 vl ->
       eval_operation ge sp op vl = Some v ->
-      eval_expr sp le e m (Eop op al) e1 m1 v
+      eval_expr sp le e m (Eop op al) t e1 m1 v
   | eval_Eload:
-      forall sp le e m chunk addr al e1 m1 v vl a,
-      eval_exprlist sp le e m al e1 m1 vl ->
+      forall sp le e m chunk addr al t e1 m1 v vl a,
+      eval_exprlist sp le e m al t e1 m1 vl ->
       eval_addressing ge sp addr vl = Some a ->
       Mem.loadv chunk m1 a = Some v ->
-      eval_expr sp le e m (Eload chunk addr al) e1 m1 v
+      eval_expr sp le e m (Eload chunk addr al) t e1 m1 v
   | eval_Estore:
-      forall sp le e m chunk addr al b e1 m1 vl e2 m2 m3 v a,
-      eval_exprlist sp le e m al e1 m1 vl ->
-      eval_expr sp le e1 m1 b e2 m2 v ->
+      forall sp le e m chunk addr al b t t1 e1 m1 vl t2 e2 m2 m3 v a,
+      eval_exprlist sp le e m al t1 e1 m1 vl ->
+      eval_expr sp le e1 m1 b t2 e2 m2 v ->
       eval_addressing ge sp addr vl = Some a ->
       Mem.storev chunk m2 a v = Some m3 ->
-      eval_expr sp le e m (Estore chunk addr al b) e2 m3 v
+      t = t1 ** t2 ->
+      eval_expr sp le e m (Estore chunk addr al b) t e2 m3 v
   | eval_Ecall:
-      forall sp le e m sig a bl e1 e2 m1 m2 m3 vf vargs vres f,
-      eval_expr sp le e m a e1 m1 vf ->
-      eval_exprlist sp le e1 m1 bl e2 m2 vargs ->
+      forall sp le e m sig a bl t t1 e1 m1 t2 e2 m2 t3 m3 vf vargs vres f,
+      eval_expr sp le e m a t1 e1 m1 vf ->
+      eval_exprlist sp le e1 m1 bl t2 e2 m2 vargs ->
       Genv.find_funct ge vf = Some f ->
-      f.(fn_sig) = sig ->
-      eval_funcall m2 f vargs m3 vres ->
-      eval_expr sp le e m (Ecall sig a bl) e2 m3 vres
+      funsig f = sig ->
+      eval_funcall m2 f vargs t3 m3 vres ->
+      t = t1 ** t2 ** t3 ->
+      eval_expr sp le e m (Ecall sig a bl) t e2 m3 vres
   | eval_Econdition:
-      forall sp le e m a b c e1 m1 v1 e2 m2 v2,
-      eval_condexpr sp le e m a e1 m1 v1 ->
-      eval_expr sp le e1 m1 (if v1 then b else c) e2 m2 v2 ->
-      eval_expr sp le e m (Econdition a b c) e2 m2 v2
+      forall sp le e m a b c t t1 e1 m1 v1 t2 e2 m2 v2,
+      eval_condexpr sp le e m a t1 e1 m1 v1 ->
+      eval_expr sp le e1 m1 (if v1 then b else c) t2 e2 m2 v2 ->
+      t = t1 ** t2 ->
+      eval_expr sp le e m (Econdition a b c) t e2 m2 v2
   | eval_Elet:
-      forall sp le e m a b e1 m1 v1 e2 m2 v2,
-      eval_expr sp le e m a e1 m1 v1 ->
-      eval_expr sp (v1::le) e1 m1 b e2 m2 v2 ->
-      eval_expr sp le e m (Elet a b) e2 m2 v2
+      forall sp le e m a b t t1 e1 m1 v1 t2 e2 m2 v2,
+      eval_expr sp le e m a t1 e1 m1 v1 ->
+      eval_expr sp (v1::le) e1 m1 b t2 e2 m2 v2 ->
+      t = t1 ** t2 ->
+      eval_expr sp le e m (Elet a b) t e2 m2 v2
   | eval_Eletvar:
       forall sp le e m n v,
       nth_error le n = Some v ->
-      eval_expr sp le e m (Eletvar n) e m v
+      eval_expr sp le e m (Eletvar n) E0 e m v
+  | eval_Ealloc:
+      forall sp le e m a t e1 m1 n m2 b,
+      eval_expr sp le e m a t e1 m1 (Vint n) ->
+      Mem.alloc m1 0 (Int.signed n) = (m2, b) ->
+      eval_expr sp le e m (Ealloc a) t e1 m2 (Vptr b Int.zero)
 
 (** Evaluation of a condition expression:
   [eval_condexpr ge sp le e m a e' m' b]
@@ -216,24 +234,25 @@ Inductive eval_expr:
 
 with eval_condexpr:
          val -> letenv ->
-         env -> mem -> condexpr ->
+         env -> mem -> condexpr -> trace ->
          env -> mem -> bool -> Prop :=
   | eval_CEtrue:
       forall sp le e m,
-      eval_condexpr sp le e m CEtrue e m true
+      eval_condexpr sp le e m CEtrue E0 e m true
   | eval_CEfalse:
       forall sp le e m,
-      eval_condexpr sp le e m CEfalse e m false
+      eval_condexpr sp le e m CEfalse E0 e m false
   | eval_CEcond:
-      forall sp le e m cond al e1 m1 vl b,
-      eval_exprlist sp le e m al e1 m1 vl ->
+      forall sp le e m cond al t1 e1 m1 vl b,
+      eval_exprlist sp le e m al t1 e1 m1 vl ->
       eval_condition cond vl = Some b ->
-      eval_condexpr sp le e m (CEcond cond al) e1 m1 b
+      eval_condexpr sp le e m (CEcond cond al) t1 e1 m1 b
   | eval_CEcondition:
-      forall sp le e m a b c e1 m1 vb1 e2 m2 vb2,
-      eval_condexpr sp le e m a e1 m1 vb1 ->
-      eval_condexpr sp le e1 m1 (if vb1 then b else c) e2 m2 vb2 ->
-      eval_condexpr sp le e m (CEcondition a b c) e2 m2 vb2
+      forall sp le e m a b c t t1 e1 m1 vb1 t2 e2 m2 vb2,
+      eval_condexpr sp le e m a t1 e1 m1 vb1 ->
+      eval_condexpr sp le e1 m1 (if vb1 then b else c) t2 e2 m2 vb2 ->
+      t = t1 ** t2 ->
+      eval_condexpr sp le e m (CEcondition a b c) t e2 m2 vb2
 
 (** Evaluation of a list of expressions:
   [eval_exprlist ge sp le al m a e' m' vl]
@@ -244,16 +263,17 @@ with eval_condexpr:
 
 with eval_exprlist:
          val -> letenv ->
-         env -> mem -> exprlist ->
+         env -> mem -> exprlist -> trace ->
          env -> mem -> list val -> Prop :=
   | eval_Enil:
       forall sp le e m,
-      eval_exprlist sp le e m Enil e m nil
+      eval_exprlist sp le e m Enil E0 e m nil
   | eval_Econs:
-      forall sp le e m a bl e1 m1 v e2 m2 vl,
-      eval_expr sp le e m a e1 m1 v ->
-      eval_exprlist sp le e1 m1 bl e2 m2 vl ->
-      eval_exprlist sp le e m (Econs a bl) e2 m2 (v :: vl)
+      forall sp le e m a bl t t1 e1 m1 v t2 e2 m2 vl,
+      eval_expr sp le e m a t1 e1 m1 v ->
+      eval_exprlist sp le e1 m1 bl t2 e2 m2 vl ->
+      t = t1 ** t2 ->
+      eval_exprlist sp le e m (Econs a bl) t e2 m2 (v :: vl)
 
 (** Evaluation of a function invocation: [eval_funcall ge m f args m' res]
   means that the function [f], applied to the arguments [args] in
@@ -261,15 +281,19 @@ with eval_exprlist:
 *)
 
 with eval_funcall:
-        mem -> function -> list val ->
+        mem -> fundef -> list val -> trace ->
         mem -> val -> Prop :=
-  | eval_funcall_intro:
-      forall m f vargs m1 sp e e2 m2 out vres,
+  | eval_funcall_internal:
+      forall m f vargs m1 sp e t e2 m2 out vres,
       Mem.alloc m 0 f.(fn_stackspace) = (m1, sp) ->
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
-      exec_stmt (Vptr sp Int.zero) e m1 f.(fn_body) e2 m2 out ->
+      exec_stmt (Vptr sp Int.zero) e m1 f.(fn_body) t e2 m2 out ->
       outcome_result_value out f.(fn_sig).(sig_res) vres ->
-      eval_funcall m f vargs (Mem.free m2 sp) vres
+      eval_funcall m (Internal f) vargs t (Mem.free m2 sp) vres
+  | eval_funcall_external:
+      forall ef m args t res,
+      event_match ef args t res ->
+      eval_funcall m (External ef) args t m res
 
 (** Execution of a statement: [exec_stmt ge sp e m s e' m' out]
   means that statement [s] executes with outcome [out].
@@ -277,59 +301,62 @@ with eval_funcall:
 
 with exec_stmt:
          val ->
-         env -> mem -> stmt ->
+         env -> mem -> stmt -> trace ->
          env -> mem -> outcome -> Prop :=
   | exec_Sskip:
       forall sp e m,
-      exec_stmt sp e m Sskip e m Out_normal
+      exec_stmt sp e m Sskip E0 e m Out_normal
   | exec_Sexpr:
-      forall sp e m a e1 m1 v,
-      eval_expr sp nil e m a e1 m1 v ->
-      exec_stmt sp e m (Sexpr a) e1 m1 Out_normal
+      forall sp e m a t e1 m1 v,
+      eval_expr sp nil e m a t e1 m1 v ->
+      exec_stmt sp e m (Sexpr a) t e1 m1 Out_normal
   | exec_Sifthenelse:
-      forall sp e m a s1 s2 e1 m1 v1 e2 m2 out,
-      eval_condexpr sp nil e m a e1 m1 v1 ->
-      exec_stmt sp e1 m1 (if v1 then s1 else s2) e2 m2 out ->
-      exec_stmt sp e m (Sifthenelse a s1 s2) e2 m2 out
+      forall sp e m a s1 s2 t t1 e1 m1 v1 t2 e2 m2 out,
+      eval_condexpr sp nil e m a t1 e1 m1 v1 ->
+      exec_stmt sp e1 m1 (if v1 then s1 else s2) t2 e2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt sp e m (Sifthenelse a s1 s2) t e2 m2 out
   | exec_Sseq_continue:
-      forall sp e m s1 e1 m1 s2 e2 m2 out,
-      exec_stmt sp e m s1 e1 m1 Out_normal ->
-      exec_stmt sp e1 m1 s2 e2 m2 out ->
-      exec_stmt sp e m (Sseq s1 s2) e2 m2 out
+      forall sp e m t s1 t1 e1 m1 s2 t2 e2 m2 out,
+      exec_stmt sp e m s1 t1 e1 m1 Out_normal ->
+      exec_stmt sp e1 m1 s2 t2 e2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt sp e m (Sseq s1 s2) t e2 m2 out
   | exec_Sseq_stop:
-      forall sp e m s1 s2 e1 m1 out,
-      exec_stmt sp e m s1 e1 m1 out ->
+      forall sp e m t s1 s2 e1 m1 out,
+      exec_stmt sp e m s1 t e1 m1 out ->
       out <> Out_normal ->
-      exec_stmt sp e m (Sseq s1 s2) e1 m1 out
+      exec_stmt sp e m (Sseq s1 s2) t e1 m1 out
   | exec_Sloop_loop:
-      forall sp e m s e1 m1 e2 m2 out,
-      exec_stmt sp e m s e1 m1 Out_normal ->
-      exec_stmt sp e1 m1 (Sloop s) e2 m2 out ->
-      exec_stmt sp e m (Sloop s) e2 m2 out
+      forall sp e m s t t1 e1 m1 t2 e2 m2 out,
+      exec_stmt sp e m s t1 e1 m1 Out_normal ->
+      exec_stmt sp e1 m1 (Sloop s) t2 e2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt sp e m (Sloop s) t e2 m2 out
   | exec_Sloop_stop:
-      forall sp e m s e1 m1 out,
-      exec_stmt sp e m s e1 m1 out ->
+      forall sp e m t s e1 m1 out,
+      exec_stmt sp e m s t e1 m1 out ->
       out <> Out_normal ->
-      exec_stmt sp e m (Sloop s) e1 m1 out
+      exec_stmt sp e m (Sloop s) t e1 m1 out
   | exec_Sblock:
-      forall sp e m s e1 m1 out,
-      exec_stmt sp e m s e1 m1 out ->
-      exec_stmt sp e m (Sblock s) e1 m1 (outcome_block out)
+      forall sp e m s t e1 m1 out,
+      exec_stmt sp e m s t e1 m1 out ->
+      exec_stmt sp e m (Sblock s) t e1 m1 (outcome_block out)
   | exec_Sexit:
       forall sp e m n,
-      exec_stmt sp e m (Sexit n) e m (Out_exit n)
+      exec_stmt sp e m (Sexit n) E0 e m (Out_exit n)
   | exec_Sswitch:
-      forall sp e m a cases default e1 m1 n,
-      eval_expr sp nil e m a e1 m1 (Vint n) ->
+      forall sp e m a cases default t1 e1 m1 n,
+      eval_expr sp nil e m a t1 e1 m1 (Vint n) ->
       exec_stmt sp e m (Sswitch a cases default)
-                   e1 m1 (Out_exit (switch_target n default cases))
+                t1 e1 m1 (Out_exit (switch_target n default cases))
   | exec_Sreturn_none:
       forall sp e m,
-      exec_stmt sp e m (Sreturn None) e m (Out_return None)
+      exec_stmt sp e m (Sreturn None) E0 e m (Out_return None)
   | exec_Sreturn_some:
-      forall sp e m a e1 m1 v,
-      eval_expr sp nil e m a e1 m1 v ->
-      exec_stmt sp e m (Sreturn (Some a)) e1 m1 (Out_return (Some v)).
+      forall sp e m a t e1 m1 v,
+      eval_expr sp nil e m a t e1 m1 v ->
+      exec_stmt sp e m (Sreturn (Some a)) t e1 m1 (Out_return (Some v)).
 
 End RELSEM.
 
@@ -337,12 +364,12 @@ End RELSEM.
   holds if the application of [p]'s main function to no arguments
   in the initial memory state for [p] eventually returns value [r]. *)
 
-Definition exec_program (p: program) (r: val) : Prop :=
+Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in
   let m0 := Genv.init_mem p in
   exists b, exists f, exists m,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\
-  f.(fn_sig) = mksignature nil (Some Tint) /\
-  eval_funcall ge m0 f nil m r.
+  funsig f = mksignature nil (Some Tint) /\
+  eval_funcall ge m0 f nil t m r.
 

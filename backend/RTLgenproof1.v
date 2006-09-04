@@ -5,6 +5,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
+Require Import Events.
 Require Import Mem.
 Require Import Globalenvs.
 Require Import Op.
@@ -200,28 +201,28 @@ Variable s1 s2: state.
 Hypothesis EXT: state_extends s1 s2.
 
 Lemma exec_instr_not_halt:
-  forall ge c sp pc rs m pc' rs' m',
-  exec_instr ge c sp pc rs m pc' rs' m' -> c!pc <> None.
+  forall ge c sp pc rs m t pc' rs' m',
+  exec_instr ge c sp pc rs m t pc' rs' m' -> c!pc <> None.
 Proof.
   induction 1; rewrite H; discriminate.
 Qed.
 
 Lemma exec_instr_in_s2:
-  forall ge sp pc rs m pc' rs' m',
-  exec_instr ge s1.(st_code) sp pc rs m pc' rs' m' ->
+  forall ge sp pc rs m t pc' rs' m',
+  exec_instr ge s1.(st_code) sp pc rs m t pc' rs' m' ->
   s2.(st_code)!pc = s1.(st_code)!pc.
 Proof.
   intros.
   elim (EXT pc); intro.
-  elim (exec_instr_not_halt _ _ _ _ _ _ _ _ _ H H0).
+  elim (exec_instr_not_halt _ _ _ _ _ _ _ _ _ _ H H0).
   assumption.
 Qed.
 
 Lemma exec_instr_extends_rec:
-  forall ge c sp pc rs m pc' rs' m',
-  exec_instr ge c sp  pc rs m  pc' rs' m' ->
+  forall ge c sp pc rs m t pc' rs' m',
+  exec_instr ge c sp  pc rs m t pc' rs' m' ->
   forall c', c!pc = c'!pc ->
-  exec_instr ge c' sp  pc rs m  pc' rs' m'.
+  exec_instr ge c' sp  pc rs m t pc' rs' m'.
 Proof.
   induction 1; intros.
   apply exec_Inop. congruence.
@@ -230,14 +231,15 @@ Proof.
   apply exec_Istore with chunk addr args src a.
     congruence. auto. auto.
   apply exec_Icall with sig ros args f; auto. congruence.
+  apply exec_Ialloc with arg sz; auto. congruence. 
   apply exec_Icond_true with cond args ifnot; auto. congruence.
   apply exec_Icond_false with cond args ifso; auto. congruence.
 Qed.
 
 Lemma exec_instr_extends:
-  forall ge sp pc rs m pc' rs' m',
-  exec_instr ge s1.(st_code) sp pc rs m pc' rs' m' ->
-  exec_instr ge s2.(st_code) sp pc rs m pc' rs' m'.
+  forall ge sp pc rs m t pc' rs' m',
+  exec_instr ge s1.(st_code) sp pc rs m t pc' rs' m' ->
+  exec_instr ge s2.(st_code) sp pc rs m t pc' rs' m'.
 Proof.
   intros.
   apply exec_instr_extends_rec with (st_code s1).
@@ -246,21 +248,21 @@ Proof.
 Qed.
 
 Lemma exec_instrs_extends_rec:
-  forall ge c sp pc rs m pc' rs' m',
-  exec_instrs ge c sp  pc rs m  pc' rs' m' ->
+  forall ge c sp pc rs m t pc' rs' m',
+  exec_instrs ge c sp  pc rs m t pc' rs' m' ->
   c = s1.(st_code) ->
-  exec_instrs ge s2.(st_code) sp  pc rs m  pc' rs' m'.
+  exec_instrs ge s2.(st_code) sp  pc rs m t pc' rs' m'.
 Proof.
   induction 1; intros.
   apply exec_refl.
   apply exec_one. apply exec_instr_extends; auto. rewrite <- H0; auto.
-  apply exec_trans with pc2 rs2 m2; auto.
+  apply exec_trans with t1 pc2 rs2 m2 t2; auto.
 Qed.
 
 Lemma exec_instrs_extends:
-  forall ge sp pc rs m pc' rs' m',
-  exec_instrs ge s1.(st_code) sp  pc rs m  pc' rs' m' ->
-  exec_instrs ge s2.(st_code) sp  pc rs m  pc' rs' m'.
+  forall ge sp pc rs m t pc' rs' m',
+  exec_instrs ge s1.(st_code) sp  pc rs m t pc' rs' m' ->
+  exec_instrs ge s2.(st_code) sp  pc rs m t pc' rs' m'.
 Proof.
   intros.
   apply exec_instrs_extends_rec with (st_code s1); auto.
@@ -281,9 +283,9 @@ Variable s1 s2: state.
 Hypothesis INCR: state_incr s1 s2.
 
 Lemma exec_instr_incr:
-  forall ge sp pc rs m pc' rs' m',
-  exec_instr ge s1.(st_code) sp  pc rs m  pc' rs' m' ->
-  exec_instr ge s2.(st_code) sp  pc rs m  pc' rs' m'.
+  forall ge sp pc rs m t pc' rs' m',
+  exec_instr ge s1.(st_code) sp  pc rs m t pc' rs' m' ->
+  exec_instr ge s2.(st_code) sp  pc rs m t pc' rs' m'.
 Proof.
   intros.
   apply exec_instr_extends with s1.
@@ -292,9 +294,9 @@ Proof.
 Qed.
 
 Lemma exec_instrs_incr:
-  forall ge sp pc rs m pc' rs' m',
-  exec_instrs ge s1.(st_code) sp  pc rs m  pc' rs' m' ->
-  exec_instrs ge s2.(st_code) sp  pc rs m  pc' rs' m'.
+  forall ge sp pc rs m t pc' rs' m',
+  exec_instrs ge s1.(st_code) sp  pc rs m t pc' rs' m' ->
+  exec_instrs ge s2.(st_code) sp  pc rs m t pc' rs' m'.
 Proof.
   intros.
   apply exec_instrs_extends with s1.
@@ -1318,6 +1320,7 @@ forall (P : expr -> Prop) (P0 : condexpr -> Prop)
         P e -> forall e0 : expr, P e0 -> P (Econdition c e e0)) ->
        (forall e : expr, P e -> forall e0 : expr, P e0 -> P (Elet e e0)) ->
        (forall n : nat, P (Eletvar n)) ->
+       (forall e : expr, P e -> P (Ealloc e)) ->
        P0 CEtrue ->
        P0 CEfalse ->
        (forall (c : condition) (e : exprlist), P1 e -> P0 (CEcond c e)) ->

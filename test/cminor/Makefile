@@ -1,10 +1,11 @@
 CCOMP=../../ccomp
 CPP=cpp -P
 CC=gcc
-CFLAGS=-g
+CFLAGS=-arch ppc -g
+ASFLAGS=-arch ppc
 VPATH=../harness ../lib
 
-PROGS=fib integr qsort fft sha1 aes almabench manyargs
+PROGS=fib integr qsort fft sha1 aes almabench manyargs lists
 
 all_s: $(PROGS:%=%.s)
 
@@ -27,13 +28,13 @@ qsort: qsort.o mainqsort.o
 clean::
 	rm -f qsort
 
-fft: fft.o mainfft.o staticlib.o
-	$(CC) $(CFLAGS) -o fft fft.o mainfft.o staticlib.o -lm
+fft: fft.o mainfft.o
+	$(CC) $(CFLAGS) -o fft fft.o mainfft.o -lm
 clean::
 	rm -f fft
 
-sha1: sha1.o mainsha1.o staticlib.o
-	$(CC) $(CFLAGS) -o sha1 sha1.o mainsha1.o staticlib.o
+sha1: sha1.o mainsha1.o
+	$(CC) $(CFLAGS) -o sha1 sha1.o mainsha1.o
 clean::
 	rm -f sha1 sha1.cm
 
@@ -42,8 +43,8 @@ aes: aes.o mainaes.o
 clean::
 	rm -f aes aes.cm
 
-almabench: almabench.o mainalmabench.o staticlib.o
-	$(CC) $(CFLAGS) -o almabench almabench.o mainalmabench.o staticlib.o -lm
+almabench: almabench.o mainalmabench.o
+	$(CC) $(CFLAGS) -o almabench almabench.o mainalmabench.o -lm
 clean::
 	rm -f almabench almabench.cm
 
@@ -51,6 +52,11 @@ manyargs: manyargs.o mainmanyargs.o
 	$(CC) $(CFLAGS) -o manyargs manyargs.o mainmanyargs.o
 clean::
 	rm -f manyargs
+
+lists: lists.o mainlists.o
+	$(CC) $(CFLAGS) -o lists lists.o mainlists.o
+clean::
+	rm -f lists
 
 .SUFFIXES:
 

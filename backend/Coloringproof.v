@@ -332,6 +332,10 @@ Proof.
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
   apply add_interf_call_incl.
+  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
+  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
+  eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
+  apply add_interf_call_incl.
   destruct o.
   apply add_pref_mreg_incl.
   apply graph_incl_refl.
@@ -370,6 +374,15 @@ Definition correct_interf_instr
    /\ (forall r,
         Regset.mem r live = true ->
         r <> res -> interfere r res g)
+  | Ialloc arg res s =>
+      (forall r mr,
+        Regset.mem r live = true ->
+        In mr destroyed_at_call_regs ->
+        r <> res ->
+        interfere_mreg r mr g)
+   /\ (forall r,
+        Regset.mem r live = true ->
+        r <> res -> interfere r res g)
   | _ =>
       True
   end.
@@ -385,6 +398,9 @@ Proof.
   destruct (is_move_operation o l).
   intros. eapply interfere_incl; eauto.
   intros. eapply interfere_incl; eauto.
+  intros. eapply interfere_incl; eauto.
+  intros [A B]. split.
+  intros. eapply interfere_mreg_incl; eauto.
   intros. eapply interfere_incl; eauto.
   intros [A B]. split.
   intros. eapply interfere_mreg_incl; eauto.
@@ -416,6 +432,19 @@ Proof.
   eapply interfere_incl.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   apply add_pref_mreg_incl.
+  apply add_interf_op_correct; auto.
+
+  split; intros.
+  apply interfere_mreg_incl with
+    (add_interf_call (Regset.remove r0 live) destroyed_at_call_regs g).
+  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
+  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
+  apply add_interf_op_incl.
+  apply add_interf_call_correct; auto.
+  rewrite Regset.mem_remove_other; auto.
+
+  eapply interfere_incl.
+  eapply graph_incl_trans; apply add_pref_mreg_incl.
   apply add_interf_op_correct; auto.
 Qed.
 
@@ -541,7 +570,7 @@ Proof.
                   then false else true)).
   red. unfold OrderedRegReg.eq. unfold OrderedReg.eq.
   intros x y [EQ1 EQ2]. rewrite EQ1; rewrite EQ2; auto.
-  generalize (SetRegReg.for_all_2 H1 H H0). 
+  generalize (SetRegReg.for_all_2 _ _ H1 H _ H0). 
   simpl. case (Loc.eq (coloring r1) (coloring r2)); intro.
   intro; discriminate. auto.
 Qed.
@@ -558,7 +587,7 @@ Proof.
                   then false else true)).
   red. unfold OrderedRegMreg.eq. unfold OrderedReg.eq.
   intros x y [EQ1 EQ2]. rewrite EQ1; rewrite EQ2; auto.
-  generalize (SetRegMreg.for_all_2 H1 H H0). 
+  generalize (SetRegMreg.for_all_2 _ _ H1 H _ H0). 
   simpl. case (Loc.eq (coloring r1) (R mr2)); intro.
   intro; discriminate. auto.
 Qed.
@@ -702,6 +731,14 @@ Definition correct_alloc_instr
    /\ (forall r,
         Regset.mem r live!!pc = true ->
         r <> res -> alloc r <> alloc res)
+  | Ialloc arg res s =>
+      (forall r,
+        Regset.mem r live!!pc = true ->
+        r <> res ->
+        ~(In (alloc r) Conventions.destroyed_at_call))
+   /\ (forall r,
+        Regset.mem r live!!pc = true ->
+        r <> res -> alloc r <> alloc res)
   | _ =>
       True
   end.
@@ -778,6 +815,14 @@ Proof.
   generalize (list_in_map_inv R _ _ H1). 
   intros [mr [EQ IN]]. 
   generalize (A r0 mr H IN H0). intro.
+  generalize (ALL2 _ _ H2). contradiction.
+  auto.
+  intros [A B]. split. 
+  intros; red; intros. 
+  unfold destroyed_at_call in H1.
+  generalize (list_in_map_inv R _ _ H1). 
+  intros [mr [EQ IN]]. 
+  generalize (A r1 mr H IN H0). intro.
   generalize (ALL2 _ _ H2). contradiction.
   auto.
 Qed.

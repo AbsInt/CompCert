@@ -78,34 +78,34 @@ Notation "a @@ b" :=
   
   The translation of a Cminor function to a PPC function is as follows. *)
 
-Definition transf_cminor_function (f: Cminor.function) : option PPC.code :=
+Definition transf_cminor_fundef (f: Cminor.fundef) : option PPC.fundef :=
   Some f
-  @@@ RTLgen.transl_function
-   @@ Constprop.transf_function
-   @@ CSE.transf_function
-  @@@ Allocation.transf_function
-   @@ Tunneling.tunnel_function
-   @@ Linearize.transf_function
-  @@@ Stacking.transf_function
-  @@@ PPCgen.transf_function.
+  @@@ RTLgen.transl_fundef
+   @@ Constprop.transf_fundef
+   @@ CSE.transf_fundef
+  @@@ Allocation.transf_fundef
+   @@ Tunneling.tunnel_fundef
+   @@ Linearize.transf_fundef
+  @@@ Stacking.transf_fundef
+  @@@ PPCgen.transf_fundef.
 
 (** And here is the translation for Csharpminor functions. *)
 
-Definition transf_csharpminor_function 
-     (gce: Cminorgen.compilenv) (f: Csharpminor.function) : option PPC.code :=
+Definition transf_csharpminor_fundef
+     (gce: Cminorgen.compilenv) (f: Csharpminor.fundef) : option PPC.fundef :=
   Some f 
-  @@@ Cminorgen.transl_function gce
-  @@@ transf_cminor_function.
+  @@@ Cminorgen.transl_fundef gce
+  @@@ transf_cminor_fundef.
 
 (** The corresponding translations for whole program follow. *)
 
 Definition transf_cminor_program (p: Cminor.program) : option PPC.program :=
-  transform_partial_program transf_cminor_function p.
+  transform_partial_program transf_cminor_fundef p.
 
 Definition transf_csharpminor_program (p: Csharpminor.program) : option PPC.program :=
   let gce := Cminorgen.build_global_compilenv p in
   transform_partial_program 
-    (transf_csharpminor_function gce)
+    (transf_csharpminor_fundef gce)
     (Csharpminor.program_of_program p).
 
 (** * Equivalence with whole program transformations *)
@@ -194,7 +194,7 @@ Qed.
 Lemma transf_cminor_program_equiv:
   forall p, transf_cminor_program2 p = transf_cminor_program p.
 Proof.
-  intro. unfold transf_cminor_program, transf_cminor_program2, transf_cminor_function.
+  intro. unfold transf_cminor_program, transf_cminor_program2, transf_cminor_fundef.
   simpl. 
   unfold RTLgen.transl_program,
          Constprop.transf_program, RTL.program.
@@ -223,7 +223,7 @@ Lemma transf_csharpminor_program_equiv:
   forall p, transf_csharpminor_program2 p = transf_csharpminor_program p.
 Proof.
   intros. 
-  unfold transf_csharpminor_program2, transf_csharpminor_program, transf_csharpminor_function.
+  unfold transf_csharpminor_program2, transf_csharpminor_program, transf_csharpminor_fundef.
   simpl. 
   replace transf_cminor_program2 with transf_cminor_program.
   unfold transf_cminor_program, Cminorgen.transl_program, Cminor.program, PPC.program.
@@ -237,10 +237,10 @@ Qed.
   composes the semantic preservation results for each pass. *)
 
 Lemma transf_cminor_program2_correct:
-  forall p tp n,
+  forall p tp t n,
   transf_cminor_program2 p = Some tp ->
-  Cminor.exec_program p (Vint n) ->
-  PPC.exec_program tp (Vint n).
+  Cminor.exec_program p t (Vint n) ->
+  PPC.exec_program tp t (Vint n).
 Proof.
   intros until n.
   unfold transf_cminor_program2.
@@ -274,10 +274,10 @@ Proof.
 Qed.
 
 Lemma transf_csharpminor_program2_correct:
-  forall p tp n,
+  forall p tp t n,
   transf_csharpminor_program2 p = Some tp ->
-  Csharpminor.exec_program p (Vint n) ->
-  PPC.exec_program tp (Vint n).
+  Csharpminor.exec_program p t (Vint n) ->
+  PPC.exec_program tp t (Vint n).
 Proof.
   intros until n; unfold transf_csharpminor_program2; simpl.
   caseEq (Cminorgen.transl_program p).
@@ -291,20 +291,20 @@ Qed.
 (** It follows that the whole compiler is semantic-preserving. *)
 
 Theorem transf_cminor_program_correct:
-  forall p tp n,
+  forall p tp t n,
   transf_cminor_program p = Some tp ->
-  Cminor.exec_program p (Vint n) ->
-  PPC.exec_program tp (Vint n).
+  Cminor.exec_program p t (Vint n) ->
+  PPC.exec_program tp t (Vint n).
 Proof.
   intros. apply transf_cminor_program2_correct with p. 
   rewrite transf_cminor_program_equiv. assumption. assumption.
 Qed.
 
 Theorem transf_csharpminor_program_correct:
-  forall p tp n,
+  forall p tp t n,
   transf_csharpminor_program p = Some tp ->
-  Csharpminor.exec_program p (Vint n) ->
-  PPC.exec_program tp (Vint n).
+  Csharpminor.exec_program p t (Vint n) ->
+  PPC.exec_program tp t (Vint n).
 Proof.
   intros. apply transf_csharpminor_program2_correct with p. 
   rewrite transf_csharpminor_program_equiv. assumption. assumption.

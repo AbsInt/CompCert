@@ -1,6 +1,7 @@
 (** Solvers for dataflow inequations. *)
 
 Require Import Coqlib.
+Require Import Iteration.
 Require Import Maps.
 Require Import Lattice.
 
@@ -39,128 +40,6 @@ range over any ordered type having a greatest element [top].  It simply
 sets [X(n) = top] for all merge points [n], that is, program points having
 several predecessors.  This solver is useful when least upper bounds of
 approximations do not exist or are too expensive to compute. *)
-
-(** * Bounded iteration *)
-
-(** The three solvers proceed iteratively, increasing the value of one of
-  the unknowns [X(n)] at each iteration until a solution is reached.
-  This section defines the general form of iteration used. *)
-
-Section BOUNDED_ITERATION.
-
-Variables A B: Set.
-Variable step: A -> B + A.
-
-(** The [step] parameter represents one step of the iteration.  From a 
-  current iteration state [a: A], it either returns a value of type [B],
-  meaning that iteration is over and that this [B] value is the final
-  result of the iteration, or a value [a' : A] which is the next state
-  of the iteration.
-
-  The naive way to define the iteration is:
-<<
-Fixpoint iterate (a: A) : B :=
-  match step a with
-  | inl b => b
-  | inr a' => iterate a'
-  end.
->>
-  However, this is a general recursion, not guaranteed to terminate,
-  and therefore not expressible in Coq.  The standard way to work around
-  this difficulty is to use Noetherian recursion (Coq module [Wf]).
-  This requires that we equip the type [A] with a well-founded ordering [<]
-  (no infinite ascending chains) and we demand that [step] satisfies
-  [step a = inr a' -> a < a'].  For the types [A] that are of interest to us
-  in this development, it is however very painful to define adequate
-  well-founded orderings, even though we know our iterations always
-  terminate.
-
-  Instead, we choose to bound the number of iterations by an arbitrary
-  constant.  [iterate] then becomes a function that can fail,
-  of type [A -> option B].  The [None] result denotes failure to reach
-  a result in the number of iterations prescribed, or, in other terms,
-  failure to find a solution to the dataflow problem.  The compiler
-  passes that exploit dataflow analysis (the [Constprop], [CSE] and
-  [Allocation] passes) will, in this case, either fail ([Allocation])
-  or turn off the optimization pass ([Constprop] and [CSE]).
-
-  Since we know (informally) that our computations terminate, we can
-  take a very large constant as the maximal number of iterations.
-  Failure will therefore never happen in practice, but of
-  course our proofs also cover the failure case and show that 
-  nothing bad happens in this hypothetical case either.  *)
-
-Definition num_iterations := 1000000000000%positive.
-
-(** The simple definition of bounded iteration is:
-<<
-Fixpoint iterate (niter: nat) (a: A) {struct niter} : option B :=
-  match niter with
-  | O => None
-  | S niter' =>
-      match step a with
-      | inl b => b
-      | inr a' => iterate niter' a'
-      end
-  end.
->>
-  This function is structural recursive over the parameter [niter]
-  (number of iterations), represented here as a Peano integer (type [nat]).
-  However, we want to use very large values of [niter].  As Peano integers,
-  these values would be much too large to fit in memory.  Therefore,
-  we must express iteration counts as a binary integer (type [positive]).
-  However, Peano induction over type [positive] is not structural recursion,
-  so we cannot define [iterate] as a Coq fixpoint and must use
-  Noetherian recursion instead. *)
-
-Definition iter_step (x: positive)
-                     (next: forall y, Plt y x -> A -> option B)
-                     (s: A) : option B :=
-  match peq x xH with
-  | left EQ => None
-  | right NOTEQ =>
-      match step s with
-      | inl res => Some res
-      | inr s'  => next (Ppred x) (Ppred_Plt x NOTEQ) s'
-      end
-  end.
-
-Definition iterate: positive -> A -> option B :=
-  Fix Plt_wf (fun _ => A -> option B) iter_step.
-
-(** We then prove the expected unrolling equations for [iterate]. *)
-
-Remark unroll_iterate:
-  forall x, iterate x = iter_step x (fun y _ => iterate y).
-Proof.
-  unfold iterate; apply (Fix_eq Plt_wf (fun _ => A -> option B) iter_step).
-  intros. unfold iter_step. apply extensionality. intro s. 
-  case (peq x xH); intro. auto. 
-  rewrite H. auto. 
-Qed.
-
-Lemma iterate_base:
-  forall s, iterate 1%positive s = None.
-Proof.
-  intro; rewrite unroll_iterate; unfold iter_step.
-  case (peq 1 1); congruence.
-Qed.
-
-Lemma iterate_step:
-  forall x s, 
-  iterate (Psucc x) s =
-    match step s with
-    | inl res => Some res
-    | inr s'  => iterate x s'
-    end.
-Proof.
-  intro; rewrite unroll_iterate; unfold iter_step; intros.
-  case (peq (Psucc x) 1); intro.
-  destruct x; simpl in e; discriminate.
-  rewrite Ppred_succ. auto.
-Qed.
-
-End BOUNDED_ITERATION.
 
 (** * Solving forward dataflow problems using Kildall's algorithm *)
 
@@ -316,7 +195,7 @@ Definition step (s: state) : PMap.t L.t + state :=
   the start state. *)
 
 Definition fixpoint : option (PMap.t L.t) :=
-  iterate _ _ step num_iterations start_state.
+  PrimIter.iterate _ _ step start_state.
 
 (** ** Monotonicity properties *)
 
@@ -361,33 +240,24 @@ Proof.
   apply propagate_succ_incr. auto.
 Qed. 
 
-Lemma iterate_incr:
-  forall n st res,
-  iterate _ _ step n st = Some res ->
-  in_incr st.(st_in) res.
-Proof.
-  intro n; pattern n. apply positive_Peano_ind; intros until res.
-  rewrite iterate_base. congruence.
-  rewrite iterate_step. unfold step.
-  destruct st.(st_wrk); intros.
-  injection H0; intro; subst res. 
-  red; intros; apply L.ge_refl.
-  apply in_incr_trans with
-    (propagate_succ_list (mkstate (st_in st) l)
-                         (transf p (st_in st)!!p)
-                         (successors p)).(st_in).
-  change (st_in st) with (st_in (mkstate (st_in st) l)).
-  apply propagate_succ_list_incr.
-  apply H. auto.
-Qed.
-
 Lemma fixpoint_incr:
   forall res,
   fixpoint = Some res -> in_incr (start_state_in entrypoints) res.
 Proof.
   unfold fixpoint; intros.
   change (start_state_in entrypoints) with start_state.(st_in).
-  apply iterate_incr with num_iterations; auto.
+  eapply (PrimIter.iterate_prop _ _ step
+    (fun st => in_incr start_state.(st_in) st.(st_in))
+    (fun res => in_incr start_state.(st_in) res)).
+
+  intros st INCR. unfold step.
+  destruct st.(st_wrk) as [ | n rem ]. 
+  auto.
+  apply in_incr_trans with st.(st_in). auto. 
+  change st.(st_in) with (mkstate st.(st_in) rem).(st_in).
+  apply propagate_succ_list_incr.
+
+  eauto. apply in_incr_refl.
 Qed.
 
 (** ** Correctness invariant *)
@@ -563,30 +433,8 @@ Qed.
 (** ** Correctness of the solution returned by [iterate]. *)
 
 (** As a consequence of the [good_state] invariant, the result of
-  [iterate], if defined, is a solution of the dataflow inequations,
-  since [st_wrk] is empty when [iterate] terminates. *)
-
-Lemma iterate_solution:
-  forall niter st res n s,
-  good_state st ->
-  iterate _ _ step niter st = Some res ->
-  Plt n topnode -> In s (successors n) ->
-  L.ge res!!s (transf n res!!n).
-Proof.
-  intro niter; pattern niter; apply positive_Peano_ind; intros until s.
-  rewrite iterate_base. congruence.
-  intro GS. rewrite iterate_step. 
-  unfold step; caseEq (st.(st_wrk)).
-  intros. injection H1; intros; subst res. 
-  elim (GS n H2); intro.
-  rewrite H0 in H4. elim H4.
-  auto.
-  intros. apply H with 
-    (propagate_succ_list (mkstate st.(st_in) l)
-        (transf p st.(st_in)!!p) (successors p)). 
-  apply step_state_good; auto.
-  auto. auto. auto.
-Qed.
+  [fixpoint], if defined, is a solution of the dataflow inequations,
+  since [st_wrk] is empty when the iteration terminates. *)
 
 Theorem fixpoint_solution:
   forall res n s,
@@ -594,10 +442,20 @@ Theorem fixpoint_solution:
   Plt n topnode -> In s (successors n) ->
   L.ge res!!s (transf n res!!n).
 Proof.
-  unfold fixpoint. intros.
-  apply iterate_solution with num_iterations start_state.
-  apply start_state_good.
-  auto. auto. auto.
+  assert (forall res, fixpoint = Some res ->
+          forall n s, Plt n topnode -> In s (successors n) ->
+                      L.ge res!!s (transf n res!!n)).
+  unfold fixpoint. intros res PI. pattern res. 
+  eapply (PrimIter.iterate_prop _ _ step good_state).
+
+  intros st GOOD. unfold step. 
+  caseEq (st.(st_wrk)). 
+  intros. elim (GOOD n H0); intro. 
+  rewrite H in H2. contradiction.
+  auto.
+  intros n rem WRK. apply step_state_good; auto.
+
+  eauto. apply start_state_good. eauto.
 Qed.
 
 (** As a consequence of the monotonicity property, the result of
@@ -936,8 +794,7 @@ Definition basic_block_list (bb: bbmap) : list positive :=
 
 Definition fixpoint : option result :=
   let bb := basic_block_map in
-  iterate _ _ (step bb) num_iterations 
-              (mkstate (PMap.init L.top) (basic_block_list bb)).
+  PrimIter.iterate _ _ (step bb) (mkstate (PMap.init L.top) (basic_block_list bb)).
 
 (** ** Properties of predecessors and multiple-predecessors nodes *)
 
@@ -1121,23 +978,6 @@ Proof.
   right. assumption.
 Qed.
 
-Lemma analyze_invariant:
-  forall res count st,
-  iterate _ _ (step basic_block_map) count st = Some res ->
-  state_invariant st ->
-  state_invariant (mkstate res nil).
-Proof.
-  intros until count. pattern count. 
-  apply positive_Peano_ind; intros until st.
-  rewrite iterate_base. congruence.
-  rewrite iterate_step. unfold step at 1. case st; intros r w; simpl.
-  case w.
-  intros. replace res with r. auto. congruence.
-  intros pc wl. case (plt pc topnode); intros.
-  eapply H. eauto. apply propagate_successors_invariant; auto.
-  eapply H. eauto. eapply discard_top_worklist_invariant; eauto.
-Qed.
-
 Lemma initial_state_invariant:
   state_invariant (mkstate (PMap.init L.top) (basic_block_list basic_block_map)).
 Proof.
@@ -1145,6 +985,27 @@ Proof.
   apply PMap.gi.
   right. intros. repeat rewrite PMap.gi. apply L.top_ge.
 Qed.
+
+Lemma analyze_invariant:
+  forall res,
+  fixpoint = Some res ->
+  state_invariant (mkstate res nil).
+Proof.
+  unfold fixpoint; intros. pattern res.
+  eapply (PrimIter.iterate_prop _ _ (step basic_block_map)
+           state_invariant).
+
+  intros st INV. destruct st as [stin stwrk]. 
+  unfold step. simpl. caseEq stwrk.
+  intro. congruence.
+
+  intros pc rem WRK. case (plt pc topnode); intro.
+  apply propagate_successors_invariant; auto. congruence. 
+  eapply discard_top_worklist_invariant; eauto. congruence.
+
+  eauto. apply initial_state_invariant.
+Qed.
+
 
 (** ** Correctness of the returned solution *)
 
@@ -1154,10 +1015,9 @@ Theorem fixpoint_solution:
   Plt n topnode -> In s (successors n) ->
   L.ge res!!s (transf n res!!n).
 Proof.
-  unfold fixpoint. 
   intros. 
   assert (state_invariant (mkstate res nil)).
-  eapply analyze_invariant; eauto. apply initial_state_invariant.
+  eapply analyze_invariant; eauto. 
   elim H2; simpl; intros. 
   elim (H4 n H0); intros. 
   contradiction.
@@ -1169,10 +1029,9 @@ Theorem fixpoint_entry:
   fixpoint = Some res ->
   res!!entrypoint = L.top.
 Proof.
-  unfold fixpoint. 
   intros. 
   assert (state_invariant (mkstate res nil)).
-  eapply analyze_invariant; eauto. apply initial_state_invariant.
+  eapply analyze_invariant; eauto. 
   elim H0; simpl; intros. 
   apply H1. unfold basic_block_map, is_basic_block_head.
   fold predecessors. 
@@ -1201,28 +1060,21 @@ Proof.
   auto. apply H0.
 Qed.
 
-Lemma analyze_P:
-  forall bb res count st,
-  iterate _ _ (step bb) count st = Some res -> 
-  Pstate st ->
-  (forall pc,  P res!!pc).
-Proof.
-  intros until count; pattern count; apply positive_Peano_ind; intros until st.
-  rewrite iterate_base. congruence.
-  rewrite iterate_step; unfold step at 1; destruct st.(st_wrk).
-  intros. inversion H0. apply H1.
-  destruct (plt p topnode).
-  intros. eapply H. eauto. 
-  apply propagate_successors_P. apply Ptransf. apply H1. 
-  red; intro; simpl. apply H1. 
-  intros. eauto.
-Qed.
-
 Theorem fixpoint_invariant:
   forall res pc, fixpoint = Some res -> P res!!pc.
 Proof.
-  intros. unfold fixpoint in H. eapply analyze_P; eauto.
-  red; intro; simpl. rewrite PMap.gi. apply Ptop.
+  unfold fixpoint; intros. pattern res. 
+  eapply (PrimIter.iterate_prop _ _ (step basic_block_map) Pstate).
+
+  intros st PS. unfold step. destruct (st.(st_wrk)).
+  apply PS.
+  assert (PS2: Pstate (mkstate st.(st_in) l)).
+    red; intro; simpl. apply PS.
+  case (plt p topnode); intro.
+  apply propagate_successors_P. auto. auto. 
+  auto.
+
+  eauto. red; intro; simpl. rewrite PMap.gi. apply Ptop.
 Qed.
 
 End Solver.

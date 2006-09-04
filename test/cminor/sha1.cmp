@@ -3,6 +3,9 @@
 
 /* To be preprocessed by cpp -P */
 
+extern "memcpy" : int -> int -> int -> void
+extern "memset" : int -> int -> int -> void
+
 #define ARCH_BIG_ENDIAN
 
 #define rol1(x) (((x) << 1) | ((x) >>u 31))
@@ -12,7 +15,7 @@
 "SHA1_copy_and_swap"(src, dst, numwords) : int -> int -> int -> void
 {
 #ifdef ARCH_BIG_ENDIAN
-  "memcpy_static"(dst, src, numwords * 4) : int -> int -> int -> void;
+  "memcpy"(dst, src, numwords * 4) : int -> int -> int -> void;
 #else
   var s, d, a, b;
   s = src;
@@ -134,12 +137,12 @@
   if (context_numbytes(ctx) != 0) {
     t = 64 - context_numbytes(ctx);
     if (len <u t) {
-      "memcpy_static"(context_buffer(ctx) + context_numbytes(ctx), data, len)
+      "memcpy"(context_buffer(ctx) + context_numbytes(ctx), data, len)
         : int -> int -> int -> void;
       context_numbytes(ctx) = context_numbytes(ctx) + len;
       return;
     }
-    "memcpy_static"(context_buffer(ctx) + context_numbytes(ctx), data, t)
+    "memcpy"(context_buffer(ctx) + context_numbytes(ctx), data, t)
         : int -> int -> int -> void;
     "SHA1_transform"(ctx) : int -> void;
     data = data + t;
@@ -148,14 +151,14 @@
   /* Munge data in 64-byte chunks */
   {{ loop {
     if (! (len >=u 64)) exit;
-    "memcpy_static"(context_buffer(ctx), data, 64)
+    "memcpy"(context_buffer(ctx), data, 64)
         : int -> int -> int -> void;
     "SHA1_transform"(ctx) : int -> void;
     data = data + 64;
     len = len - 64;
   } }}
   /* Save remaining data */
-  "memcpy_static"(context_buffer(ctx), data, len)
+  "memcpy"(context_buffer(ctx), data, len)
         : int -> int -> int -> void;
   context_numbytes(ctx) = len;
 }
@@ -170,13 +173,13 @@
   /* If we do not have room for the length (8 bytes), pad to 64 bytes
      with zeroes and munge the data block */
   if (i > 56) {
-    "memset_static"(context_buffer(ctx) + i, 0, 64 - i)
+    "memset"(context_buffer(ctx) + i, 0, 64 - i)
         : int -> int -> int -> void;
     "SHA1_transform"(ctx) : int -> void;
     i = 0;
   }
   /* Pad to byte 56 with zeroes */
-  "memset_static"(context_buffer(ctx) + i, 0, 56 - i)
+  "memset"(context_buffer(ctx) + i, 0, 56 - i)
         : int -> int -> int -> void;
   /* Add length in big-endian */
   "SHA1_copy_and_swap"(context_length(ctx), context_buffer(ctx) + 56, 2)

@@ -195,7 +195,9 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | Ofloatconst n, nil => F n
   | Oaddrsymbol s n, nil => S s n
   | Ocast8signed, I n1 :: nil => I(Int.cast8signed n)
+  | Ocast8unsigned, I n1 :: nil => I(Int.cast8unsigned n)
   | Ocast16signed, I n1 :: nil => I(Int.cast16signed n)
+  | Ocast16unsigned, I n1 :: nil => I(Int.cast16unsigned n)
   | Oadd, I n1 :: I n2 :: nil => I(Int.add n1 n2)
   | Oadd, S s1 n1 :: I n2 :: nil => S s1 (Int.add n1 n2)
   | Oaddimm n, I n1 :: nil => I (Int.add n1 n)
@@ -379,6 +381,12 @@ Inductive eval_static_operation_cases: forall (op: operation) (vl: list approx),
   | eval_static_operation_case47:
       forall c vl,
       eval_static_operation_cases (Ocmp c) (vl)
+  | eval_static_operation_case48:
+      forall n1,
+      eval_static_operation_cases (Ocast8unsigned) (I n1 :: nil)
+  | eval_static_operation_case49:
+      forall n1,
+      eval_static_operation_cases (Ocast16unsigned) (I n1 :: nil)
   | eval_static_operation_default:
       forall (op: operation) (vl: list approx),
       eval_static_operation_cases op vl.
@@ -475,6 +483,10 @@ Definition eval_static_operation_match (op: operation) (vl: list approx) :=
       eval_static_operation_case46 n1
   | Ocmp c, vl =>
       eval_static_operation_case47 c vl
+  | Ocast8unsigned, I n1 :: nil =>
+      eval_static_operation_case48 n1
+  | Ocast16unsigned, I n1 :: nil =>
+      eval_static_operation_case49 n1
   | op, vl =>
       eval_static_operation_default op vl
   end.
@@ -574,6 +586,10 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
       | None => Unknown
       | Some b => I(if b then Int.one else Int.zero)
       end
+  | eval_static_operation_case48 n1 =>
+      I(Int.cast8unsigned n1)
+  | eval_static_operation_case49 n1 =>
+      I(Int.cast16unsigned n1)
   | eval_static_operation_default op vl =>
       Unknown
   end.
@@ -602,6 +618,8 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
       | Istore chunk addr args src s =>
           before
       | Icall sig ros args res s =>
+          D.set res Unknown before
+      | Ialloc arg res s =>
           D.set res Unknown before
       | Icond cond args ifso ifnot =>
           before
@@ -986,6 +1004,8 @@ Definition transf_instr (approx: D.t) (instr: instruction) :=
         | inr s => ros
         end in
       Icall sig ros' args res s
+  | Ialloc arg res s =>
+      Ialloc arg res s
   | Icond cond args s1 s2 =>
       match eval_static_condition cond (approx_regs args approx) with
       | Some b =>
@@ -1028,5 +1048,7 @@ Definition transf_function (f: function) : function :=
         (transf_code_wf f approxs f.(fn_code_wf))
   end.
 
+Definition transf_fundef := AST.transf_fundef transf_function.
+
 Definition transf_program (p: program) : program :=
-  transform_program transf_function p.
+  transform_program transf_fundef p.

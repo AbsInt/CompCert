@@ -46,7 +46,9 @@ Inductive operation : Set :=
   | Oundef: operation                   (**r set [rd] to undefined value *)
 (*c Integer arithmetic: *)
   | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
+  | Ocast8unsigned: operation           (**r [rd] is 8-bit zero extension of [r1] *)
   | Ocast16signed: operation            (**r [rd] is 16-bit sign extension of [r1] *)
+  | Ocast16unsigned: operation          (**r [rd] is 16-bit zero extension of [r1] *)
   | Oadd: operation                     (**r [rd = r1 + r2] *)
   | Oaddimm: int -> operation           (**r [rd = r1 + n] *)
   | Osub: operation                     (**r [rd = r1 - r2] *)
@@ -166,8 +168,10 @@ Definition eval_operation
       end
   | Oaddrstack ofs, nil => offset_sp sp ofs
   | Oundef, nil => Some Vundef
-  | Ocast8signed, Vint n1 :: nil => Some (Vint (Int.cast8signed n1))
-  | Ocast16signed, Vint n1 :: nil => Some (Vint (Int.cast16signed n1))
+  | Ocast8signed, v1 :: nil => Some (Val.cast8signed v1)
+  | Ocast8unsigned, v1 :: nil => Some (Val.cast8unsigned v1)
+  | Ocast16signed, v1 :: nil => Some (Val.cast16signed v1)
+  | Ocast16unsigned, v1 :: nil => Some (Val.cast16unsigned v1)
   | Oadd, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.add n1 n2))
   | Oadd, Vint n1 :: Vptr b2 n2 :: nil => Some (Vptr b2 (Int.add n2 n1))
   | Oadd, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.add n1 n2))
@@ -215,8 +219,8 @@ Definition eval_operation
       Some (Vfloat (Float.add (Float.mul f1 f2) f3))
   | Omulsubf, Vfloat f1 :: Vfloat f2 :: Vfloat f3 :: nil =>
       Some (Vfloat (Float.sub (Float.mul f1 f2) f3))
-  | Osingleoffloat, Vfloat f1 :: nil =>
-      Some (Vfloat (Float.singleoffloat f1))
+  | Osingleoffloat, v1 :: nil =>
+      Some (Val.singleoffloat v1)
   | Ointoffloat, Vfloat f1 :: nil => 
       Some (Vint (Float.intoffloat f1))
   | Ofloatofint, Vint n1 :: nil => 
@@ -396,7 +400,9 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Oaddrstack _ => (nil, Tint)
   | Oundef => (nil, Tint)  (* treated specially *)
   | Ocast8signed => (Tint :: nil, Tint)
+  | Ocast8unsigned => (Tint :: nil, Tint)
   | Ocast16signed => (Tint :: nil, Tint)
+  | Ocast16unsigned => (Tint :: nil, Tint)
   | Oadd => (Tint :: Tint :: nil, Tint)
   | Oaddimm _ => (Tint :: nil, Tint)
   | Osub => (Tint :: Tint :: nil, Tint)
@@ -476,6 +482,10 @@ Proof.
   destruct (Genv.find_symbol genv i); simplify_eq H1; intro; subst v; exact I.
   simpl. unfold offset_sp in H1. destruct sp; try discriminate.
   inversion H1. exact I.
+  destruct v0; exact I. 
+  destruct v0; exact I. 
+  destruct v0; exact I. 
+  destruct v0; exact I. 
   destruct (eq_block b b0). injection H1; intro; subst v; exact I.
   discriminate.
   destruct (Int.eq i0 Int.zero). discriminate. 
@@ -492,6 +502,7 @@ Proof.
   injection H1; intro; subst v; exact I. discriminate.
   destruct (Int.ltu i0 (Int.repr 32)).
   injection H1; intro; subst v; exact I. discriminate.
+  destruct v0; exact I.
   destruct (eval_condition c vl). 
   destruct b; injection H1; intro; subst v; exact I.
   discriminate.
@@ -550,7 +561,9 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Oaddrstack ofs, nil => Val.add sp (Vint ofs)
   | Oundef, nil => Vundef
   | Ocast8signed, v1::nil => Val.cast8signed v1
+  | Ocast8unsigned, v1::nil => Val.cast8unsigned v1
   | Ocast16signed, v1::nil => Val.cast16signed v1
+  | Ocast16unsigned, v1::nil => Val.cast16unsigned v1
   | Oadd, v1::v2::nil => Val.add v1 v2
   | Oaddimm n, v1::nil => Val.add v1 (Vint n)
   | Osub, v1::v2::nil => Val.sub v1 v2

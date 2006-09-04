@@ -1,11 +1,40 @@
 (** Formalizations of integers modulo $2^32$ #2<sup>32</sup>#. *)
 
 Require Import Coqlib.
-Require Import AST.
 
 Definition wordsize : nat := 32%nat.
 Definition modulus : Z := two_power_nat wordsize.
 Definition half_modulus : Z := modulus / 2.
+
+(** * Comparisons *)
+
+Inductive comparison : Set :=
+  | Ceq : comparison               (**r same *)
+  | Cne : comparison               (**r different *)
+  | Clt : comparison               (**r less than *)
+  | Cle : comparison               (**r less than or equal *)
+  | Cgt : comparison               (**r greater than *)
+  | Cge : comparison.              (**r greater than or equal *)
+
+Definition negate_comparison (c: comparison): comparison :=
+  match c with
+  | Ceq => Cne
+  | Cne => Ceq
+  | Clt => Cge
+  | Cle => Cgt
+  | Cgt => Cle
+  | Cge => Clt
+  end.
+
+Definition swap_comparison (c: comparison): comparison :=
+  match c with
+  | Ceq => Ceq
+  | Cne => Cne
+  | Clt => Cgt
+  | Cle => Cge
+  | Cgt => Clt
+  | Cge => Cle
+  end.
 
 (** * Representation of machine integers *)
 
@@ -13,17 +42,7 @@ Definition half_modulus : Z := modulus / 2.
   integer (type [Z]) plus a proof that it is in the range 0 (included) to
   [modulus] (excluded. *)
 
-Definition in_range (x: Z) :=
-  match x ?= 0 with
-  | Lt => False
-  | _  =>
-    match x ?= modulus with
-    | Lt => True
-    | _  => False
-    end
-  end.
-
-Record int: Set := mkint { intval: Z; intrange: in_range intval }.
+Record int: Set := mkint { intval: Z; intrange: 0 <= intval < modulus }.
 
 Module Int.
 
@@ -43,14 +62,10 @@ Definition signed (n: int) : Z :=
   else unsigned n - modulus.
 
 Lemma mod_in_range:
-  forall x, in_range (Zmod x modulus).
+  forall x, 0 <= Zmod x modulus < modulus.
 Proof.
   intro.
-  generalize (Z_mod_lt x modulus (two_power_nat_pos wordsize)).
-  intros [A B].
-  assert (C: x mod modulus >= 0). omega.
-  red. red in C. red in B. 
-  rewrite B. destruct (x mod modulus ?= 0); auto. 
+  exact (Z_mod_lt x modulus (two_power_nat_pos wordsize)).
 Qed.
 
 (** Conversely, [repr] takes a Coq integer and returns the corresponding
@@ -550,26 +565,10 @@ Proof.
   apply eqmod_refl. red; exists (-1); ring. 
 Qed.
 
-Lemma in_range_range:
-  forall z, in_range z -> 0 <= z < modulus.
-Proof.
-  intros. 
-  assert (z >= 0 /\ z < modulus).
-  generalize H. unfold in_range, Zge, Zlt.
-  destruct (z ?= 0).
-  destruct (z ?= modulus); try contradiction.
-  intuition congruence.
-  contradiction.
-  destruct (z ?= modulus); try contradiction.
-  intuition congruence.
-  omega.
-Qed.
-
 Theorem unsigned_range:
   forall i, 0 <= unsigned i < modulus.
 Proof.
-  destruct i; simpl. 
-  apply in_range_range. auto.
+  destruct i; simpl. auto.
 Qed.
 Hint Resolve unsigned_range: ints.
 
@@ -597,7 +596,7 @@ Theorem repr_unsigned:
   forall i, repr (unsigned i) = i.
 Proof.
   destruct i; simpl. unfold repr. apply mkint_eq.
-  apply Zmod_small. apply in_range_range; auto.
+  apply Zmod_small. auto.
 Qed.
 Hint Resolve repr_unsigned: ints.
 

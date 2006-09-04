@@ -6,6 +6,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
@@ -25,19 +26,25 @@ Let tge := Genv.globalenv tprog.
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
-  Genv.find_funct tge v = Some (transf_function f).
-Proof (@Genv.find_funct_transf _ _ transf_function prog).
+  Genv.find_funct tge v = Some (transf_fundef f).
+Proof (@Genv.find_funct_transf _ _ transf_fundef prog).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
-  Genv.find_funct_ptr tge v = Some (transf_function f).
-Proof (@Genv.find_funct_ptr_transf _ _ transf_function prog).
+  Genv.find_funct_ptr tge v = Some (transf_fundef f).
+Proof (@Genv.find_funct_ptr_transf _ _ transf_fundef prog).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ transf_function prog).
+Proof (@Genv.find_symbol_transf _ _ transf_fundef prog).
+
+Lemma sig_preserved:
+  forall f, funsig (transf_fundef f) = LTL.funsig f.
+Proof.
+  destruct f; reflexivity.
+Qed.
 
 (** * Correctness of reachability analysis *)
 
@@ -80,9 +87,9 @@ Qed.
   [pc] is reachable, then [pc'] is reachable. *)
 
 Lemma reachable_correct_1:
-  forall f sp pc rs m pc' rs' m' b,
+  forall f sp pc rs m t pc' rs' m' b,
   f.(LTL.fn_code)!pc = Some b ->
-  exec_block ge sp b rs m (Cont pc') rs' m' ->
+  exec_block ge sp b rs m t (Cont pc') rs' m' ->
   (reachable f)!!pc = true ->
   (reachable f)!!pc' = true.
 Proof.
@@ -92,8 +99,8 @@ Proof.
 Qed.
 
 Lemma reachable_correct_2:
-  forall c sp pc rs m out rs' m',
-  exec_blocks ge c sp pc rs m out rs' m' ->  
+  forall c sp pc rs m t out rs' m',
+  exec_blocks ge c sp pc rs m t out rs' m' ->  
   forall f pc',
   c = f.(LTL.fn_code) ->
   out = Cont pc' ->
@@ -236,18 +243,19 @@ Lemma starts_with_correct:
   starts_with lbl c1 = true ->
   find_label lbl c2 = Some c3 ->
   exec_instrs tge f sp (cleanup_code c1) ls m 
-                       (cleanup_code c3) ls m.
+                    E0 (cleanup_code c3) ls m.
 Proof.
   induction c1.
   simpl; intros; discriminate.
   simpl starts_with. destruct a; try (intros; discriminate).
-  intros. apply exec_trans with (cleanup_code c1) ls m.
+  intros. apply exec_trans with E0 (cleanup_code c1) ls m E0.
   simpl. 
   constructor. constructor. 
   destruct (peq lbl l).
   subst l. replace c3 with c1. constructor.
   apply find_label_unique with lbl c2; auto.
   apply IHc1 with c2; auto. eapply is_tail_cons_left; eauto.
+  traceEq.
 Qed.
 
 (** Code cleanup preserves the labeling of the code. *)
@@ -273,13 +281,13 @@ Qed.
   or one transitions in the cleaned-up code. *)
 
 Lemma cleanup_code_correct_1:
-  forall f sp c1 ls1 m1 c2 ls2 m2,
-  exec_instr tge f sp c1 ls1 m1 c2 ls2 m2 ->
+  forall f sp c1 ls1 m1 t c2 ls2 m2,
+  exec_instr tge f sp c1 ls1 m1 t c2 ls2 m2 ->
   is_tail c1 f.(fn_code) ->
   unique_labels f.(fn_code) ->
   exec_instrs tge (cleanup_function f) sp 
                        (cleanup_code c1) ls1 m1
-                       (cleanup_code c2) ls2 m2.
+                     t (cleanup_code c2) ls2 m2.
 Proof.
   induction 1; simpl; intros;
   try (apply exec_one; econstructor; eauto; fail).
@@ -310,8 +318,8 @@ Proof.
 Qed.
 
 Lemma is_tail_exec_instr:
-  forall f sp c1 ls1 m1 c2 ls2 m2,
-  exec_instr tge f sp c1 ls1 m1 c2 ls2 m2 ->
+  forall f sp c1 ls1 m1 t c2 ls2 m2,
+  exec_instr tge f sp c1 ls1 m1 t c2 ls2 m2 ->
   is_tail c1 f.(fn_code) -> is_tail c2 f.(fn_code).
 Proof.
   induction 1; intros;
@@ -321,8 +329,8 @@ Proof.
 Qed.
 
 Lemma is_tail_exec_instrs:
-  forall f sp c1 ls1 m1 c2 ls2 m2,
-  exec_instrs tge f sp c1 ls1 m1 c2 ls2 m2 ->
+  forall f sp c1 ls1 m1 t c2 ls2 m2,
+  exec_instrs tge f sp c1 ls1 m1 t c2 ls2 m2 ->
   is_tail c1 f.(fn_code) -> is_tail c2 f.(fn_code).
 Proof.
   induction 1; intros.
@@ -335,31 +343,32 @@ Qed.
   to zero, one or several transitions in the cleaned-up code. *)
 
 Lemma cleanup_code_correct_2:
-  forall f sp c1 ls1 m1 c2 ls2 m2,
-  exec_instrs tge f sp c1 ls1 m1 c2 ls2 m2 ->
+  forall f sp c1 ls1 m1 t c2 ls2 m2,
+  exec_instrs tge f sp c1 ls1 m1 t c2 ls2 m2 ->
   is_tail c1 f.(fn_code) ->
   unique_labels f.(fn_code) ->
   exec_instrs tge (cleanup_function f) sp 
                        (cleanup_code c1) ls1 m1
-                       (cleanup_code c2) ls2 m2.
+                     t (cleanup_code c2) ls2 m2.
 Proof.
   induction 1; simpl; intros.
   apply exec_refl.
   eapply cleanup_code_correct_1; eauto.
-  apply exec_trans with (cleanup_code b2) rs2 m2.
+  apply exec_trans with t1 (cleanup_code b2) rs2 m2 t2.
   auto. 
   apply IHexec_instrs2; auto.
   eapply is_tail_exec_instrs; eauto.
+  auto.
 Qed.
 
 Lemma cleanup_function_correct:
-  forall f ls1 m1 ls2 m2,
-  exec_function tge f ls1 m1 ls2 m2 ->
+  forall f ls1 m1 t ls2 m2,
+  exec_function tge (Internal f) ls1 m1 t ls2 m2 ->
   unique_labels f.(fn_code) ->
-  exec_function tge (cleanup_function f) ls1 m1 ls2 m2. 
+  exec_function tge (Internal (cleanup_function f)) ls1 m1 t ls2 m2. 
 Proof.
-  induction 1; intro.
-  generalize (cleanup_code_correct_2 _ _ _ _ _ _ _ _ H0 (is_tail_refl _) H1).
+  intros. inversion H; subst.
+  generalize (cleanup_code_correct_2 _ _ _ _ _ _ _ _ _ H3 (is_tail_refl _) H0).
   simpl. intro.
   econstructor; eauto.
 Qed.
@@ -479,8 +488,8 @@ Definition valid_outcome (f: LTL.function) (out: outcome) :=
 (** Auxiliary lemma used to establish the [valid_outcome] property. *)
 
 Lemma exec_blocks_valid_outcome:
-  forall c sp pc ls1 m1 out ls2 m2,
-  exec_blocks ge c sp pc ls1 m1 out ls2 m2 ->
+  forall c sp pc ls1 m1 t out ls2 m2,
+  exec_blocks ge c sp pc ls1 m1 t out ls2 m2 ->
   forall f,
   c = f.(LTL.fn_code) ->
   (reachable f)!!pc = true ->
@@ -514,34 +523,34 @@ Inductive cont_for_outcome: LTL.function -> outcome -> code -> Prop :=
 
 Definition exec_instr_prop 
   (sp: val) (b1: block) (ls1: locset) (m1: mem)
-            (b2: block) (ls2: locset) (m2: mem) : Prop :=
+  (t: trace) (b2: block) (ls2: locset) (m2: mem) : Prop :=
   forall f k,
   exec_instr tge (linearize_function f) sp
                  (linearize_block b1 k) ls1 m1
-                 (linearize_block b2 k) ls2 m2.
+               t (linearize_block b2 k) ls2 m2.
 
 Definition exec_instrs_prop
   (sp: val) (b1: block) (ls1: locset) (m1: mem)
-            (b2: block) (ls2: locset) (m2: mem) : Prop :=
+  (t: trace) (b2: block) (ls2: locset) (m2: mem) : Prop :=
   forall f k,
   exec_instrs tge (linearize_function f) sp
                   (linearize_block b1 k) ls1 m1
-                  (linearize_block b2 k) ls2 m2.
+                t (linearize_block b2 k) ls2 m2.
 
 Definition exec_block_prop
   (sp: val) (b: block) (ls1: locset) (m1: mem) 
-            (out: outcome) (ls2: locset) (m2: mem): Prop :=
+  (t: trace) (out: outcome) (ls2: locset) (m2: mem): Prop :=
   forall f k,
   valid_outcome f out ->
   exists k',
   exec_instrs tge (linearize_function f) sp
                   (linearize_block b k) ls1 m1
-                  k' ls2 m2
+                t k' ls2 m2
   /\ cont_for_outcome f out k'.
 
 Definition exec_blocks_prop
   (c: LTL.code) (sp: val) (pc: node) (ls1: locset) (m1: mem) 
-                      (out: outcome) (ls2: locset) (m2: mem): Prop :=
+         (t: trace) (out: outcome) (ls2: locset) (m2: mem): Prop :=
   forall f k,
   c = f.(LTL.fn_code) ->
   (reachable f)!!pc = true ->
@@ -550,12 +559,13 @@ Definition exec_blocks_prop
   exists k',
   exec_instrs tge (linearize_function f) sp
                   k ls1 m1
-                  k' ls2 m2
+                t k' ls2 m2
   /\ cont_for_outcome f out k'.
 
 Definition exec_function_prop
-  (f: LTL.function) (ls1: locset) (m1: mem) (ls2: locset) (m2: mem): Prop :=
-  exec_function tge (transf_function f) ls1 m1 ls2 m2.
+  (f: LTL.fundef) (ls1: locset) (m1: mem) (t: trace)
+  (ls2: locset) (m2: mem): Prop :=
+  exec_function tge (transf_fundef f) ls1 m1 t ls2 m2.
 
 Scheme exec_instr_ind5 := Minimality for LTL.exec_instr Sort Prop
   with exec_instrs_ind5 := Minimality for LTL.exec_instrs Sort Prop
@@ -567,9 +577,9 @@ Scheme exec_instr_ind5 := Minimality for LTL.exec_instr Sort Prop
   derivation. *)
 
 Lemma transf_function_correct:
-  forall f ls1 m1 ls2 m2,
-  LTL.exec_function ge f ls1 m1 ls2 m2 ->
-  exec_function_prop f ls1 m1 ls2 m2.
+  forall f ls1 m1 t ls2 m2,
+  LTL.exec_function ge f ls1 m1 t ls2 m2 ->
+  exec_function_prop f ls1 m1 t ls2 m2.
 Proof.
   apply (exec_function_ind5 ge
            exec_instr_prop
@@ -596,27 +606,29 @@ Proof.
   exact symbols_preserved.
   auto.
   (* call *)
-  apply exec_Lcall with (transf_function f).
+  apply exec_Lcall with (transf_fundef f).
   generalize H. destruct ros; simpl.
   intro; apply functions_translated; auto.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
   intro; apply function_ptr_translated; auto. congruence.
-  rewrite H0; reflexivity.
+  generalize (sig_preserved f). congruence.
   apply H2. 
+  (* alloc *)
+  eapply exec_Lalloc; eauto. 
   (* instr_refl *)
   apply exec_refl.
   (* instr_one *)
   apply exec_one. apply H0. 
   (* instr_trans *)
-  apply exec_trans with (linearize_block b2 k) rs2 m2.
-  apply H0. apply H2.
+  apply exec_trans with t1 (linearize_block b2 k) rs2 m2 t2.
+  apply H0. apply H2. auto.
   (* goto *)
   elim H1. intros REACH [b2 AT2]. 
   generalize (H0 f k). simpl. intro.
   elim (find_label_lin f s b2 AT2 REACH). intros k2 FIND.
   exists (linearize_block b2 k2).
   split. 
-  eapply exec_trans. eexact H2. constructor. constructor. auto.
+  eapply exec_trans. eexact H2. constructor. constructor. auto. traceEq.
   constructor. auto. 
   (* cond, true *)
   elim H2. intros REACH [b2 AT2]. 
@@ -628,10 +640,10 @@ Proof.
   eapply exec_trans. eexact H3. 
   eapply exec_trans. apply exec_one. apply exec_Lcond_false.
   change false with (negb true). apply eval_negate_condition. auto.
-  apply exec_one. apply exec_Lgoto. auto. 
+  apply exec_one. apply exec_Lgoto. auto. reflexivity. traceEq.
   eapply exec_trans. eexact H3. 
   apply exec_one. apply exec_Lcond_true.
-  auto. auto. 
+  auto. auto. traceEq.
   constructor; auto.
   (* cond, false *)
   elim H2. intros REACH [b2 AT2]. 
@@ -643,10 +655,10 @@ Proof.
   eapply exec_trans. eexact H3. 
   apply exec_one. apply exec_Lcond_true. 
   change true with (negb false). apply eval_negate_condition. auto.
-  auto. 
+  auto. traceEq.
   eapply exec_trans. eexact H3.
   eapply exec_trans. apply exec_one. apply exec_Lcond_false. auto.
-  apply exec_one. apply exec_Lgoto. auto. 
+  apply exec_one. apply exec_Lgoto. auto. reflexivity. traceEq.
   constructor; auto.
   (* return *)
   exists (Lreturn :: k). split. 
@@ -663,11 +675,11 @@ Proof.
     eapply reachable_correct_2. eexact H. auto. auto. auto.
   assert (valid_outcome f (Cont pc2)).
     eapply exec_blocks_valid_outcome; eauto.
-  generalize (H0 f k H3 H4 H5 H8). intros [k1 [EX1 CFO2]].
+  generalize (H0 f k H4 H5 H6 H9). intros [k1 [EX1 CFO2]].
   inversion CFO2. 
-  generalize (H2 f k1 H3 H7 H11 H6). intros [k2 [EX2 CFO3]].
+  generalize (H2 f k1 H4 H8 H12 H7). intros [k2 [EX2 CFO3]].
   exists k2. split. eapply exec_trans; eauto. auto.
-  (* function -- TA-DA! *)
+  (* internal function -- TA-DA! *)
   assert (REACH0: (reachable f)!!(fn_entrypoint f) = true).
     apply reachable_entrypoint.
   assert (VO2: valid_outcome f Return). simpl; auto.
@@ -687,25 +699,27 @@ Proof.
   inversion CO. subst k'. 
   unfold transf_function. apply cleanup_function_correct.
   econstructor. eauto. rewrite EQ. eapply exec_trans.
-  apply exec_one. constructor. eauto.
+  apply exec_one. constructor. eauto. traceEq.
   apply unique_labels_lin_function.
+  (* external function *)
+  econstructor; eauto.
 Qed.
 
 End LINEARIZATION.
 
 Theorem transf_program_correct:
-  forall (p: LTL.program) (r: val),
-  LTL.exec_program p r ->
-  Linear.exec_program (transf_program p) r.
+  forall (p: LTL.program) (t: trace) (r: val),
+  LTL.exec_program p t r ->
+  Linear.exec_program (transf_program p) t r.
 Proof.
-  intros p r [b [f [ls [m [FIND1 [FIND2 [SIG [EX RES]]]]]]]].
-  red. exists b; exists (transf_function f); exists ls; exists m.
+  intros p t r [b [f [ls [m [FIND1 [FIND2 [SIG [EX RES]]]]]]]].
+  red. exists b; exists (transf_fundef f); exists ls; exists m.
   split. change (prog_main (transf_program p)) with (prog_main p).
   rewrite symbols_preserved; auto.
   split. apply function_ptr_translated. auto.
-  split. auto.
+  split. generalize (sig_preserved f); congruence.
   split. apply transf_function_correct. 
   unfold transf_program. rewrite Genv.init_mem_transf. auto.
-  exact RES.
+  rewrite sig_preserved. exact RES.
 Qed.
 

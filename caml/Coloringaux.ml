@@ -266,15 +266,13 @@ let class_of_type = function Tint -> 0 | Tfloat -> 1
 let num_register_classes = 2
 
 let caller_save_registers = [|
-  [| R3; R4; R5; R6; R7; R8; R9; R10 |];
-  [| F1; F2; F3; F4; F5; F6; F7; F8; F9; F10 |]
+  array_of_coqlist Conventions.int_caller_save_regs;
+  array_of_coqlist Conventions.float_caller_save_regs
 |]
 
 let callee_save_registers = [|
-  [| R13; R14; R15; R16; R17; R18; R19; R20; R21; R22; 
-     R23; R24; R25; R26; R27; R28; R29; R30; R31 |];
-  [| F14; F15; F16; F17; F18; F19; F20; F21; F22; 
-     F23; F24; F25; F26; F27; F28; F29; F30; F31 |]
+  array_of_coqlist Conventions.int_callee_save_regs;
+  array_of_coqlist Conventions.float_callee_save_regs
 |]
 
 let num_available_registers = 

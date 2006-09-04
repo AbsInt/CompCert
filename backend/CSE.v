@@ -178,6 +178,15 @@ Definition add_load (n: numbering) (rd: reg)
   let (n1, vs) := valnum_regs n rs in
   add_rhs n1 rd (Load chunk addr vs).
 
+(** [add_unknown n rd] returns a numbering where [rd] is mapped to a
+   fresh value number, and no equations are added.  This is useful
+   to model instructions with unpredictable results such as [Ialloc]. *)
+
+Definition add_unknown (n: numbering) (rd: reg) :=
+  mknumbering (Psucc n.(num_next))
+              n.(num_eqs)
+              (PTree.set rd n.(num_next) n.(num_reg)).
+
 (** [kill_load n] removes all equations involving memory loads.
   It is used to reflect the effect of a memory store, which can
   potentially invalidate all such equations. *)
@@ -328,6 +337,8 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           kill_loads before
       | Icall sig ros args res s =>
           empty_numbering
+      | Ialloc arg res s =>
+          add_unknown before res
       | Icond cond args ifso ifnot =>
           before
       | Ireturn optarg =>
@@ -415,6 +426,8 @@ Definition transf_function (f: function) : function :=
         f.(fn_nextpc)
         (transf_code_wf f approxs f.(fn_code_wf)).
 
+Definition transf_fundef := AST.transf_fundef transf_function.
+
 Definition transf_program (p: program) : program :=
-  transform_program transf_function p.
+  transform_program transf_fundef p.
 

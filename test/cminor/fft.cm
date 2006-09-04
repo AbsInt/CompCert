@@ -5,6 +5,9 @@
 /*     Length is n.                                     */
 /********************************************************/
 
+extern "cos" : float -> float
+extern "sin" : float -> float
+
 "dfft"(x, y, np): int /*float ptr*/ -> int /*float ptr*/ -> int -> int
 {
   var px, py, /*float ptr*/
@@ -48,11 +51,11 @@
     j = 1;
     {{ loop {
       if (! (j <= n4)) exit;
-      cc1 = "cos_static"(a) : float -> float; 
-      ss1 = "sin_static"(a) : float -> float;
+      cc1 = "cos"(a) : float -> float; 
+      ss1 = "sin"(a) : float -> float;
       a3 = 3.0 *f a; 
-      cc3 = "cos_static"(a3) : float -> float; 
-      ss3 = "sin_static"(a3) : float -> float; 
+      cc3 = "cos"(a3) : float -> float; 
+      ss3 = "sin"(a3) : float -> float; 
       a = e *f floatofint(j);
       is = j; 
       id = 2 * n2;

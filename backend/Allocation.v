@@ -87,6 +87,8 @@ Definition transfer
       | Icall sig ros args res s =>
           reg_list_live args
            (reg_sum_live ros (reg_dead res after))
+      | Ialloc arg res s =>
+          reg_live arg (reg_dead res after)
       | Icond cond args ifso ifnot =>
           reg_list_live args after
       | Ireturn optarg =>
@@ -214,20 +216,10 @@ Definition add_move (src dst: loc) (k: block) :=
   length.  This is a parallel move, meaning that arbitrary overlap
   between the sources and destinations is permitted. *)
 
-Fixpoint listsLoc2Moves (src dst : list loc) {struct src} : Moves :=
-  match src, dst with
-  | nil, _ => nil
-  | s :: srcs, nil => nil
-  | s :: srcs, d :: dsts => (s, d) :: listsLoc2Moves srcs dsts
-  end.
-
-Definition parallel_move_order (src dst : list loc) :=
-   Parallelmove.P_move (listsLoc2Moves src dst).
-
 Definition parallel_move (srcs dsts: list loc) (k: block) : block :=
-  List.fold_left
-    (fun k p => add_move (fst p) (snd p) k)
-     (parallel_move_order srcs dsts) k.
+  List.fold_right
+    (fun p k => add_move (fst p) (snd p) k)
+     k (parmove srcs dsts).
 
 (** ** Constructors for LTL instructions *)
 
@@ -260,6 +252,10 @@ Definition add_store (chunk: memory_chunk) (addr: addressing)
       add_reloads (src :: args) (rsrc :: rargs)
         (Bstore chunk addr rargs rsrc (Bgoto s))
   end.
+
+Definition add_alloc (arg: loc) (res: loc) (s: node) :=
+  add_reload arg Conventions.loc_alloc_argument
+    (Balloc (add_spill Conventions.loc_alloc_result res (Bgoto s))).
 
 (** For function calls, we also add appropriate moves to and from
   the canonical locations for function arguments and function results,
@@ -344,10 +340,12 @@ Definition transf_instr
   | Icall sig ros args res s =>
       add_call sig (sum_left_map assign ros) (List.map assign args)
                    (assign res) s
+  | Ialloc arg res s =>
+      add_alloc (assign arg) (assign res) s
   | Icond cond args ifso ifnot =>
       add_cond cond (List.map assign args) ifso ifnot
   | Ireturn optarg =>
-      add_return (RTL.fn_sig f) (option_map assign optarg)
+      add_return f.(RTL.fn_sig) (option_map assign optarg)
   end.
 
 Definition transf_entrypoint
@@ -391,7 +389,7 @@ Qed.
   transformation as described above. *)
 
 Definition transf_function (f: RTL.function) : option LTL.function :=
-  match type_rtl_function f with
+  match type_function f with
   | None => None
   | Some env =>
     match analyze f with
@@ -413,6 +411,17 @@ Definition transf_function (f: RTL.function) : option LTL.function :=
     end
   end.
 
+Definition transf_fundef (fd: RTL.fundef) : option LTL.fundef :=
+  match fd with
+  | External ef =>
+      if type_external_function ef then Some (External ef) else None
+  | Internal f =>
+      match transf_function f with
+      | None => None
+      | Some tf => Some (Internal tf)
+      end
+  end.
+
 Definition transf_program (p: RTL.program) : option LTL.program :=
-  transform_partial_program transf_function p.
+  transform_partial_program transf_fundef p.
 

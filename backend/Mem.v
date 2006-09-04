@@ -619,6 +619,88 @@ Qed.
 
 Hint Resolve store_in_bounds store_inv.
 
+(** Build a block filled with the given initialization data. *)
+
+Fixpoint contents_init_data (pos: Z) (id: list init_data) {struct id}: contentmap :=
+  match id with
+  | nil => (fun y => Undef)
+  | Init_int8 n :: id' =>
+      store_contents Size8 (contents_init_data (pos + 1) id') pos (Vint n)
+  | Init_int16 n :: id' =>
+      store_contents Size16 (contents_init_data (pos + 2) id') pos (Vint n)
+  | Init_int32 n :: id' =>
+      store_contents Size32 (contents_init_data (pos + 4) id') pos (Vint n)
+  | Init_float32 f :: id' =>
+      store_contents Size32 (contents_init_data (pos + 4) id') pos (Vfloat f)
+  | Init_float64 f :: id' =>
+      store_contents Size64 (contents_init_data (pos + 8) id') pos (Vfloat f)
+  | Init_space n :: id' =>
+      contents_init_data (pos + Zmax n 0) id'
+  end.
+
+Definition size_init_data (id: init_data) : Z :=
+  match id with
+  | Init_int8 _ => 1
+  | Init_int16 _ => 2
+  | Init_int32 _ => 4
+  | Init_float32 _ => 4
+  | Init_float64 _ => 8
+  | Init_space n => Zmax n 0
+  end.
+
+Definition size_init_data_list (id: list init_data): Z :=
+  List.fold_right (fun id sz => size_init_data id + sz) 0 id.
+
+Remark size_init_data_list_pos:
+  forall id, size_init_data_list id >= 0.
+Proof.
+  induction id; simpl.
+  omega.
+  assert (size_init_data a >= 0). destruct a; simpl; try omega. 
+  generalize (Zmax2 z 0). omega. omega.
+Qed.
+
+Remark contents_init_data_undef_outside:
+  forall id pos x,
+  x < pos \/ x >= pos + size_init_data_list id ->
+  contents_init_data pos id x = Undef.
+Proof.
+  induction id; simpl; intros.
+  auto.
+  generalize (size_init_data_list_pos id); intro.
+  assert (forall n delta dt,
+    delta = 1 + Z_of_nat n ->
+    x < pos \/ x >= pos + (delta + size_init_data_list id) ->
+    setN n pos dt (contents_init_data (pos + delta) id) x = Undef).
+  intros. unfold setN. rewrite update_o. 
+  transitivity (contents_init_data (pos + delta) id x).
+  apply set_cont_outside.  omega. 
+  apply IHid. omega. omega.
+  unfold size_init_data in H; destruct a;
+  try (apply H1; [reflexivity|assumption]).
+  apply IHid. generalize (Zmax2 z 0). omega. 
+Qed.
+
+Definition block_init_data (id: list init_data) : block_contents :=
+  mkblock 0 (size_init_data_list id) 
+          (contents_init_data 0 id)
+          (contents_init_data_undef_outside id 0).
+
+Definition alloc_init_data (m: mem) (id: list init_data) : mem * block :=
+  (mkmem (update m.(nextblock)
+                 (block_init_data id)
+                 m.(blocks))
+         (Zsucc m.(nextblock))
+         (succ_nextblock_pos m),
+   m.(nextblock)).
+
+Remark block_init_data_empty:
+  block_init_data nil = empty_block 0 0.
+Proof.
+  unfold block_init_data, empty_block. simpl. 
+  decEq. apply proof_irrelevance. 
+Qed.
+
 (** * Properties of the memory operations *)
 
 (** ** Properties related to block validity *)
@@ -2032,6 +2114,32 @@ Proof.
    apply free_first_list_inject. auto.
 Qed. 
 
+Lemma contents_init_data_inject:
+  forall id, contentmap_inject (contents_init_data 0 id) (contents_init_data 0 id) 0 (size_init_data_list id) 0.
+Proof.
+  intro id0. 
+  set (sz0 := size_init_data_list id0).
+  assert (forall id pos,
+    0 <= pos -> pos + size_init_data_list id <= sz0 ->
+    contentmap_inject (contents_init_data pos id) (contents_init_data pos id) 0 sz0 0).
+  induction id; simpl; intros.
+  red; intros; constructor.
+  assert (forall n dt,
+    size_init_data a = 1 + Z_of_nat n ->
+    content_inject dt dt ->
+    contentmap_inject (setN n pos dt (contents_init_data (pos + size_init_data a) id))
+                      (setN n pos dt (contents_init_data (pos + size_init_data a) id))
+                      0 sz0 0).
+  intros. set (pos' := pos) in |- * at 3. replace pos' with (pos + 0).
+  apply setN_inject. apply IHid. omega. omega. auto. auto. 
+  generalize (size_init_data_list_pos id). omega. unfold pos'; omega.
+  destruct a;
+  try (apply H1; [reflexivity|repeat constructor]).
+  apply IHid. generalize (Zmax2 z 0). omega. simpl in H0; omega.
+
+  apply H. omega. unfold sz0. omega.
+Qed.
+
 End MEM_INJECT.
 
 Hint Resolve val_inject_int val_inject_float val_inject_ptr val_inject_undef.
@@ -2250,4 +2358,28 @@ Proof.
   subst b1'. generalize (H7 _ _ H9). intro.
   right. intros. omega. left. auto.
   apply mi_no_overlap0; auto.
+Qed.
+
+Lemma alloc_parallel_inject:
+  forall f m1 m2 lo hi m1' m2' b1 b2,
+  mem_inject f m1 m2 ->
+  alloc m1 lo hi = (m1', b1) ->
+  alloc m2 lo hi = (m2', b2) ->
+  Int.min_signed <= lo -> hi <= Int.max_signed ->
+  mem_inject (extend_inject b1 (Some(b2,0)) f) m1' m2' /\
+  inject_incr f (extend_inject b1 (Some(b2,0)) f).
+Proof.
+  intros. 
+  generalize (low_bound_alloc _ _ b2 _ _ _ H1). rewrite zeq_true; intro LOW.
+  generalize (high_bound_alloc _ _ b2 _ _ _ H1). rewrite zeq_true; intro HIGH.
+  eapply alloc_mapped_inject; eauto.
+  eapply alloc_right_inject; eauto.
+  eapply valid_new_block; eauto.
+  compute. intuition congruence.
+  rewrite LOW; auto.
+  rewrite HIGH; auto.
+  rewrite LOW; omega.
+  rewrite HIGH; omega.
+  intros. elim (mi_mappedblocks _ _ _ H _ _ _ H4); intros.
+  injection H1; intros. rewrite H7 in H5. omegaContradiction.
 Qed.

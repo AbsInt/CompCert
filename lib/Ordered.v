@@ -1,7 +1,7 @@
 (** Constructions of ordered types, for use with the [FSet] functors
   for finite sets. *)
 
-Require Import FSet.
+Require Import FSets.
 Require Import Coqlib.
 Require Import Maps.
 
@@ -26,10 +26,10 @@ Proof Plt_ne.
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros. case (plt x y); intro.
-  apply Lt. auto.
+  apply LT. auto.
   case (peq x y); intro.
-  apply Eq. auto.
-  apply Gt. red; unfold Plt in *. 
+  apply EQ. auto.
+  apply GT. red; unfold Plt in *. 
   assert (Zpos x <> Zpos y). congruence. omega.
 Qed.
 
@@ -64,9 +64,9 @@ Qed.
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros. case (OrderedPositive.compare (A.index x) (A.index y)); intro.
-  apply Lt. exact l. 
-  apply Eq. red; red in e. apply A.index_inj; auto.
-  apply Gt. exact l.
+  apply LT. exact l. 
+  apply EQ. red; red in e. apply A.index_inj; auto.
+  apply GT. exact l.
 Qed.
 
 End OrderedIndexed.
@@ -144,12 +144,12 @@ Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros.
   case (A.compare (fst x) (fst y)); intro.
-  apply Lt. red. left. auto.
+  apply LT. red. left. auto.
   case (B.compare (snd x) (snd y)); intro.
-  apply Lt. red. right. tauto.
-  apply Eq. red. tauto.
-  apply Gt. red. right. split. apply A.eq_sym. auto. auto.
-  apply Gt. red. left. auto.
+  apply LT. red. right. tauto.
+  apply EQ. red. tauto.
+  apply GT. red. right. split. apply A.eq_sym. auto. auto.
+  apply GT. red. left. auto.
 Qed.
 
 End OrderedPair.

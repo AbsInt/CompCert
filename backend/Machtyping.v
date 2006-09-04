@@ -7,6 +7,7 @@ Require Import Mem.
 Require Import Integers.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
@@ -57,6 +58,8 @@ Inductive wt_instr : instruction -> Prop :=
       forall sig ros,
       match ros with inl r => mreg_type r = Tint | inr s => True end ->
       wt_instr (Mcall sig ros)
+  | wt_Malloc:
+      wt_instr Malloc
   | wt_Mgoto:
       forall lbl,
       wt_instr (Mgoto lbl)
@@ -78,8 +81,16 @@ Record wt_function (f: function) : Prop := mk_wt_function {
     f.(fn_framesize) <= -Int.min_signed
 }.
 
+Inductive wt_fundef: fundef -> Prop :=
+  | wt_fundef_external: forall ef,
+      Conventions.sig_external_ok ef.(ef_sig) ->
+      wt_fundef (External ef)
+  | wt_function_internal: forall f,
+      wt_function f ->
+      wt_fundef (Internal f).
+
 Definition wt_program (p: program) : Prop :=
-  forall i f, In (i, f) (prog_funct p) -> wt_function f.
+  forall i f, In (i, f) (prog_funct p) -> wt_fundef f.
 
 (** * Type soundness *)
 
@@ -89,8 +100,8 @@ Require Import Machabstr.
     of Mach: for a well-typed Mach program, if a transition is taken
     from a state where registers hold values of their static types,
     registers in the final state hold values of their static types
-    as well.  This is a progress theorem for our type system.
-    It is used in the proof of implcation from the abstract Mach
+    as well.  This is a subject reduction theorem for our type system.
+    It is used in the proof of implication from the abstract Mach
     semantics to the concrete Mach semantics (file [Machabstr2mach]).
 *)
 
@@ -183,6 +194,14 @@ Proof.
   apply incl_tl; auto.
 Qed.
 
+Lemma wt_event_match:
+  forall ef args t res,
+  event_match ef args t res ->
+  Val.has_type res (proj_sig_res ef.(ef_sig)).
+Proof.
+  induction 1. inversion H0; exact I.
+Qed.
+
 Section SUBJECT_REDUCTION.
 
 Variable p: program.
@@ -191,7 +210,7 @@ Let ge := Genv.globalenv p.
 
 Definition exec_instr_prop 
   (f: function) (sp: val) (parent: frame)
-  (c1: code) (rs1: regset) (fr1: frame) (m1: mem)
+  (c1: code) (rs1: regset) (fr1: frame) (m1: mem) (t: trace)
   (c2: code) (rs2: regset) (fr2: frame) (m2: mem) :=
     forall (WTF: wt_function f)
            (INCL: incl c1 f.(fn_code))
@@ -201,7 +220,7 @@ Definition exec_instr_prop
     incl c2 f.(fn_code) /\ wt_regset rs2 /\ wt_frame fr2.
 Definition exec_function_body_prop
   (f: function) (parent: frame) (link ra: val)
-  (rs1: regset) (m1: mem) (rs2: regset) (m2: mem) :=
+  (rs1: regset) (m1: mem) (t: trace) (rs2: regset) (m2: mem) :=
     forall (WTF: wt_function f)
            (WTRS: wt_regset rs1)
            (WTPA: wt_frame parent)
@@ -209,26 +228,26 @@ Definition exec_function_body_prop
            (WTRA: Val.has_type ra Tint),
     wt_regset rs2.
 Definition exec_function_prop
-  (f: function) (parent: frame)
-  (rs1: regset) (m1: mem) (rs2: regset) (m2: mem) :=
-    forall (WTF: wt_function f)
+  (f: fundef) (parent: frame)
+  (rs1: regset) (m1: mem) (t: trace) (rs2: regset) (m2: mem) :=
+    forall (WTF: wt_fundef f)
            (WTRS: wt_regset rs1)
            (WTPA: wt_frame parent),
     wt_regset rs2.
 
 Lemma subject_reduction:
-   (forall f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2,
-      exec_instr ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2)
-/\ (forall f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2,
-      exec_instrs ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2)
-/\ (forall f parent link ra rs1 m1 rs2 m2,
-      exec_function_body ge f parent link ra rs1 m1 rs2 m2 ->
-      exec_function_body_prop f parent link ra rs1 m1 rs2 m2)
-/\ (forall f parent rs1 m1 rs2 m2,
-      exec_function ge f parent rs1 m1 rs2 m2 ->
-      exec_function_prop f parent rs1 m1 rs2 m2).
+   (forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
+      exec_instr ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
+      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2)
+/\ (forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
+      exec_instrs ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
+      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2)
+/\ (forall f parent link ra rs1 m1 t rs2 m2,
+      exec_function_body ge f parent link ra rs1 m1 t rs2 m2 ->
+      exec_function_body_prop f parent link ra rs1 m1 t rs2 m2)
+/\ (forall f parent rs1 m1 t rs2 m2,
+      exec_function ge f parent rs1 m1 t rs2 m2 ->
+      exec_function_prop f parent rs1 m1 t rs2 m2).
 Proof.
   apply exec_mutual_induction; red; intros; 
   try (generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))); intro;
@@ -249,7 +268,7 @@ Proof.
     subst args; subst op. simpl in H. 
     replace v with Vundef. simpl; auto. congruence.
     replace (mreg_type res) with (snd (type_of_operation op)).
-    apply type_of_operation_sound with function ge rs##args sp; auto.
+    apply type_of_operation_sound with fundef ge rs##args sp; auto.
     rewrite <- H6; reflexivity.
 
   apply wt_setreg; auto. inversion H1. rewrite H7.
@@ -257,10 +276,12 @@ Proof.
 
   apply H1; auto.
   destruct ros; simpl in H. 
-  apply (Genv.find_funct_prop wt_function wt_p H).
+  apply (Genv.find_funct_prop wt_fundef wt_p H).
   destruct (Genv.find_symbol ge i). 
-  apply (Genv.find_funct_ptr_prop wt_function wt_p H).
+  apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
   discriminate.
+
+  apply wt_setreg; auto. exact I. 
 
   apply incl_find_label with lbl; auto. 
   apply incl_find_label with lbl; auto. 
@@ -277,26 +298,34 @@ Proof.
   generalize (H3 WTF (incl_refl _) WTRS WTFR2 WTPA).
   tauto.
 
-  apply (H0 Vzero Vzero). exact I. exact I. auto. auto. auto. 
+  apply (H0 Vzero Vzero). exact I. exact I. 
+  inversion WTF; auto. auto. auto. 
   exact I. exact I.
+
+  rewrite H1. apply wt_setreg; auto. 
+  generalize (wt_event_match _ _ _ _ H). 
+  unfold proj_sig_res, Conventions.loc_result.
+  destruct (sig_res (ef_sig ef)).
+  destruct t; simpl; auto.
+  simpl; auto.
 Qed.
 
 Lemma subject_reduction_instr:
-   forall f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2,
-      exec_instr ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2.
+   forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
+      exec_instr ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
+      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2.
 Proof (proj1 subject_reduction).
 
 Lemma subject_reduction_instrs:
-   forall f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2,
-      exec_instrs ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2.
+   forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
+      exec_instrs ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
+      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2.
 Proof (proj1 (proj2 subject_reduction)).
 
 Lemma subject_reduction_function:
-  forall f parent rs1 m1 rs2 m2,
-      exec_function ge f parent rs1 m1 rs2 m2 ->
-      exec_function_prop f parent rs1 m1 rs2 m2.
+  forall f parent rs1 m1 t rs2 m2,
+      exec_function ge f parent rs1 m1 t rs2 m2 ->
+      exec_function_prop f parent rs1 m1 t rs2 m2.
 Proof (proj2 (proj2 (proj2 subject_reduction))).
 
 End SUBJECT_REDUCTION.
@@ -335,8 +364,8 @@ Proof.
 Qed.
 
 Lemma exec_instr_link_invariant:
-  forall ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2,
-  exec_instr ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2 ->
+  forall ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
+  exec_instr ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
   wt_function f ->
   incl c1 f.(fn_code) ->
   incl c2 f.(fn_code) /\ link_invariant fr1 fr2.
@@ -351,8 +380,8 @@ Proof.
 Qed.
 
 Lemma exec_instrs_link_invariant:
-  forall ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2,
-  exec_instrs ge f sp parent c1 rs1 fr1 m1 c2 rs2 fr2 m2 ->
+  forall ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
+  exec_instrs ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
   wt_function f ->
   incl c1 f.(fn_code) ->
   incl c2 f.(fn_code) /\ link_invariant fr1 fr2.
@@ -360,8 +389,8 @@ Proof.
   induction 1; intros.
   split. auto. apply link_invariant_refl.
   eapply exec_instr_link_invariant; eauto.
-  generalize (IHexec_instrs1 H1 H2); intros [A B].
-  generalize (IHexec_instrs2 H1 A); intros [C D].
+  generalize (IHexec_instrs1 H2 H3); intros [A B].
+  generalize (IHexec_instrs2 H2 A); intros [C D].
   split. auto. red; auto.
 Qed.
 

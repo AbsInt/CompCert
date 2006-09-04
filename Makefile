@@ -2,16 +2,16 @@ COQC=coqc $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
 COQDOC=coqdoc
 
-INCLUDES=-I lib -I backend
+INCLUDES=-I lib -I backend -I cfrontend
 
 # Files in lib/
 
 LIB=Coqlib.v Maps.v Sets.v union_find.v Inclusion.v Lattice.v Ordered.v \
-  Integers.v Floats.v
+  Iteration.v Integers.v Floats.v Parmov.v
 
 # Files in backend/
 
-BACKEND=AST.v Values.v Mem.v Globalenvs.v \
+BACKEND=AST.v Values.v Mem.v Events.v Globalenvs.v \
   Op.v Cminor.v \
   Cmconstr.v Cmconstrproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v \
@@ -24,8 +24,7 @@ BACKEND=AST.v Values.v Mem.v Globalenvs.v \
   Locations.v Conventions.v LTL.v LTLtyping.v \
   InterfGraph.v Coloring.v Coloringproof.v \
   Parallelmove.v Allocation.v \
-  Allocproof_aux.v Allocproof.v \
-  Alloctyping_aux.v Alloctyping.v \
+  Allocproof.v Alloctyping.v \
   Tunneling.v Tunnelingproof.v Tunnelingtyping.v \
   Linear.v Lineartyping.v \
   Linearize.v Linearizeproof.v Linearizetyping.v \
@@ -35,11 +34,16 @@ BACKEND=AST.v Values.v Mem.v Globalenvs.v \
   PPC.v PPCgen.v PPCgenproof1.v PPCgenproof.v \
   Main.v
 
+# Files in cfrontend/
+
+CFRONTEND=Csyntax.v Csem.v Ctyping.v Cshmgen.v \
+  Cshmgenproof1.v Cshmgenproof2.v Cshmgenproof3.v 
+
 # All source files
 
-FILES=$(LIB:%=lib/%) $(BACKEND:%=backend/%)
+FILES=$(LIB:%=lib/%) $(BACKEND:%=backend/%) $(CFRONTEND:%=cfrontend/%)
 
-FLATFILES=$(LIB) $(BACKEND)
+FLATFILES=$(LIB) $(BACKEND) $(CFRONTEND)
 
 proof: $(FILES:.v=.vo)
 

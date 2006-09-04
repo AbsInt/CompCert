@@ -70,15 +70,20 @@ Module Type GENV.
     (forall id f, In (id, f) (prog_funct p) -> P f) ->
     find_funct (globalenv p) v = Some f ->
     P f.
+  Hypothesis find_funct_ptr_symbol_inversion:
+    forall (F: Set) (p: program F) (id: ident) (b: block) (f: F),
+    find_symbol (globalenv p) id = Some b ->
+    find_funct_ptr (globalenv p) b = Some f ->
+    In (id, f) p.(prog_funct).
+
   Hypothesis initmem_nullptr:
     forall (F: Set) (p: program F),
     let m := init_mem p in
     valid_block m nullptr /\
     m.(blocks) nullptr = empty_block 0 0.
-  Hypothesis initmem_undef:
+  Hypothesis initmem_block_init:
     forall (F: Set) (p: program F) (b: block),
-    exists lo, exists hi, 
-    (init_mem p).(blocks) b = empty_block lo hi.
+    exists id, (init_mem p).(blocks) b = block_init_data id.
   Hypothesis find_funct_ptr_inv:
     forall (F: Set) (p: program F) (b: block) (f: F),
     find_funct_ptr (globalenv p) b = Some f -> b < 0.
@@ -206,12 +211,12 @@ Definition add_functs (init: genv) (fns: list (ident * funct)) : genv :=
   List.fold_right add_funct init fns.
 
 Definition add_globals 
-        (init: genv * mem) (vars: list (ident * Z)) : genv * mem :=
+        (init: genv * mem) (vars: list (ident * list init_data)) : genv * mem :=
   List.fold_right
-    (fun (id_sz: ident * Z) (g_st: genv * mem) =>
-       let (id, sz) := id_sz in
+    (fun (id_init: ident * list init_data) (g_st: genv * mem) =>
+       let (id, init) := id_init in
        let (g, st) := g_st in
-       let (st', b) := Mem.alloc st 0 sz in
+       let (st', b) := Mem.alloc_init_data st init in
        (add_symbol id b g, st'))
     init vars.
 
@@ -229,7 +234,7 @@ Lemma functions_globalenv:
   forall (p: program funct),
   functions (globalenv p) = functions (add_functs empty p.(prog_funct)).
 Proof.
-  assert (forall (init: genv * mem) (vars: list (ident * Z)),
+  assert (forall init vars,
      functions (fst (add_globals init vars)) = functions (fst init)).
   induction vars; simpl.
   reflexivity.
@@ -248,11 +253,11 @@ Lemma initmem_nullptr:
   m.(blocks) nullptr = mkblock 0 0 (fun y => Undef) (undef_undef_outside 0 0).
 Proof.
   assert
-   (forall (init: genv * mem),
+   (forall init,
     let m1 := snd init in
     0 < m1.(nextblock) ->
     m1.(blocks) nullptr = mkblock 0 0 (fun y => Undef) (undef_undef_outside 0 0) ->
-    forall (vars: list (ident * Z)),
+    forall vars,
     let m2 := snd (add_globals init vars) in
     0 < m2.(nextblock) /\
     m2.(blocks) nullptr = mkblock 0 0 (fun y => Undef) (undef_undef_outside 0 0)).
@@ -268,23 +273,21 @@ Proof.
   unfold valid_block. apply H. simpl. omega. reflexivity.
 Qed. 
 
-Lemma initmem_undef:
+Lemma initmem_block_init:
   forall (p: program funct) (b: block),
-  exists lo, exists hi, 
-  (init_mem p).(blocks) b = empty_block lo hi.
+  exists id, (init_mem p).(blocks) b = block_init_data id.
 Proof.
   assert (forall g0 vars g1 m b,
       add_globals (g0, Mem.empty) vars = (g1, m) ->
-      exists lo, exists hi, 
-      m.(blocks) b = empty_block lo hi).
+      exists id, m.(blocks) b = block_init_data id).
   induction vars; simpl.
   intros. inversion H. unfold Mem.empty; simpl. 
-  exists 0; exists 0. auto.
+  exists (@nil init_data). symmetry. apply Mem.block_init_data_empty.
   destruct a. caseEq (add_globals (g0, Mem.empty) vars). intros g1 m1 EQ. 
   intros g m b EQ1. injection EQ1; intros EQ2 EQ3; clear EQ1.
   rewrite <- EQ2; simpl. unfold update.
   case (zeq b (nextblock m1)); intro.
-  exists 0; exists z; auto.
+  exists l; auto.
   eauto.
   intros. caseEq (globalenv_initmem p). 
   intros g m EQ. unfold init_mem; rewrite EQ; simpl. 
@@ -372,6 +375,59 @@ Proof.
   intros. eapply find_funct_ptr_prop; eauto.
 Qed.
 
+Lemma find_funct_ptr_symbol_inversion:
+  forall (F: Set) (p: program F) (id: ident) (b: block) (f: F),
+  find_symbol (globalenv p) id = Some b ->
+  find_funct_ptr (globalenv p) b = Some f ->
+  In (id, f) p.(prog_funct).
+Proof.
+  intros until f.
+  assert (forall fns,
+           let g := add_functs (empty F) fns in
+           PTree.get id g.(symbols) = Some b ->
+           b > g.(nextfunction)).
+    induction fns; simpl.
+    rewrite PTree.gempty. congruence.
+    rewrite PTree.gsspec. case (peq id (fst a)); intro.
+    intro EQ. inversion EQ. unfold Zpred. omega.
+    intros. generalize (IHfns H). unfold Zpred; omega.
+  assert (forall fns,
+           let g := add_functs (empty F) fns in
+           PTree.get id g.(symbols) = Some b ->
+           ZMap.get b g.(functions) = Some f ->
+           In (id, f) fns).
+    induction fns; simpl.
+    rewrite ZMap.gi. congruence.
+    set (g := add_functs (empty F) fns). 
+    rewrite PTree.gsspec. rewrite ZMap.gsspec. 
+    case (peq id (fst a)); intro.
+    intro EQ. inversion EQ. unfold ZIndexed.eq. rewrite zeq_true. 
+    intro EQ2. left. destruct a. simpl in *. congruence. 
+    intro. unfold ZIndexed.eq. rewrite zeq_false. intro. eauto.
+    generalize (H _ H0). fold g. unfold block. omega.
+  assert (forall g0 m0, b < 0 ->
+          forall vars g m,
+          @add_globals F (g0, m0) vars = (g, m) ->
+          PTree.get id g.(symbols) = Some b ->
+          PTree.get id g0.(symbols) = Some b).
+    induction vars; simpl.
+    intros. inversion H2. auto.
+    destruct a. caseEq (add_globals (g0, m0) vars). 
+    intros g1 m1 EQ g m EQ1. injection EQ1; simpl; clear EQ1.
+    unfold add_symbol; intros A B. rewrite <- B. simpl. 
+    rewrite PTree.gsspec. case (peq id i); intros.
+    assert (b > 0). injection H2; intros. rewrite <- H3. apply nextblock_pos. 
+    omegaContradiction.
+    eauto. 
+  intros. 
+  generalize (find_funct_ptr_inv _ _ H3). intro.
+  pose (g := add_functs (empty F) (prog_funct p)). 
+  apply H0.  
+  apply H1 with Mem.empty (prog_vars p) (globalenv p) (init_mem p).
+  auto. unfold globalenv, init_mem. rewrite <- surjective_pairing.
+  reflexivity. assumption. rewrite <- functions_globalenv. assumption.
+Qed.
+
 (* Global environments and program transformations. *)
 
 Section TRANSF_PROGRAM_PARTIAL.
@@ -420,7 +476,7 @@ Proof.
 Qed.
 
 Lemma mem_add_globals_transf:
-  forall (g1: genv A) (g2: genv B) (m: mem) (vars: list (ident * Z)),
+  forall (g1: genv A) (g2: genv B) (m: mem) (vars: list (ident * list init_data)),
   snd (add_globals (g1, m) vars) = snd (add_globals (g2, m) vars).
 Proof.
   induction vars; simpl.
@@ -433,7 +489,7 @@ Qed.
 Lemma symbols_add_globals_transf:
   forall (g1: genv A) (g2: genv B) (m: mem),
   symbols g1 = symbols g2 ->
-  forall (vars: list (ident * Z)),
+  forall (vars: list (ident * list init_data)),
   symbols (fst (add_globals (g1, m) vars)) =
   symbols (fst (add_globals (g2, m) vars)).
 Proof.

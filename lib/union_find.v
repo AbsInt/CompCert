@@ -1,6 +1,7 @@
 (** A purely functional union-find algorithm *)
 
 Require Import Wf.
+Require Recdef.
 
 (** The ``union-find'' algorithm is used to represent equivalence classes
   over a given type.  It maintains a data structure representing a partition
@@ -26,21 +27,6 @@ Require Import Wf.
   storing pointers within elements.  Here, we give a purely functional
   presentation where the mapping is a separate functional data structure.
 *)
-
-Ltac CaseEq name :=
-  generalize (refl_equal name); pattern name at -1 in |- *; case name.
-
-Ltac IntroElim :=
-  match goal with
-  |  |- (forall id : exists x : _, _, _) =>
-      intro id; elim id; clear id; IntroElim
-  |  |- (forall id : _ /\ _, _) => intro id; elim id; clear id; IntroElim
-  |  |- (forall id : _ \/ _, _) => intro id; elim id; clear id; IntroElim
-  |  |- (_ -> _) => intro; IntroElim
-  | _ => idtac
-  end.
-
-Ltac MyElim n := elim n; IntroElim.
 
 (** The elements of equivalence classes are represented by the following
   signature: a type with a decidable equality. *)
@@ -139,81 +125,46 @@ Definition repr_order (m: M.T) (a a': elt) : Prop :=
 (** The canonical representative of an element.  
   Needs Noetherian recursion. *)
 
-Lemma option_sum:
-  forall (x: option elt), {y: elt | x = Some y} + {x = None}.
+Section REPR.
+
+Variable m: M.T.
+Variable wf: well_founded (repr_order m).
+
+Function repr_aux (a: elt) {wf (repr_order m) a} : elt :=
+  match M.get a m with
+  | Some a' => repr_aux a'
+  | None => a
+  end.
 Proof.
-  intro x. case x.
-  left. exists e. auto.
-  right. auto.
-Qed.
-
-Definition repr_rec
-  (m: M.T) (a: elt) (rec: forall b: elt, repr_order m b a -> elt) :=
-     match option_sum (M.get a m) with
-     | inleft (exist b P) => rec b P
-     | inright _ => a
-     end.
-
-Definition repr_aux
-    (m: M.T) (wf: well_founded (repr_order m)) (a: elt) : elt :=
-  Fix wf (fun (_: elt) => elt) (repr_rec m) a.
-
-Lemma repr_rec_ext:
-  forall (m: M.T) (x: elt) (f g: forall y:elt, repr_order m y x -> elt),
-  (forall (y: elt) (p: repr_order m y x), f y p = g y p) ->
-  repr_rec m x f = repr_rec m x g.
-Proof.
-  intros. unfold repr_rec. 
-  case (option_sum (M.get x m)).
-  intros. elim s; intros. apply H.
-  intros. auto.
+  intros.  assumption.
+  assumption.
 Qed.
 
 Lemma repr_aux_none:
-  forall (m: M.T) (wf: well_founded (repr_order m)) (a: elt),
+  forall (a: elt),
   M.get a m = None ->
-  repr_aux m wf a = a.
+  repr_aux a = a.
 Proof.
-  intros. 
-  generalize (Fix_eq wf (fun (_:elt) => elt) (repr_rec m) (repr_rec_ext m) a). 
-  intro. unfold repr_aux. rewrite H0. 
-  unfold repr_rec. 
-  case (option_sum (M.get a m)).
-  intro s; elim s; intros.
-  rewrite H in p; discriminate.
-  intros. auto.
+  intros. rewrite repr_aux_equation. rewrite H. auto.
 Qed.
 
 Lemma repr_aux_some:
-  forall (m: M.T) (wf: well_founded (repr_order m)) (a a': elt),
+  forall (a a': elt),
   M.get a m = Some a' ->
-  repr_aux m wf a = repr_aux m wf a'.
+  repr_aux a = repr_aux a'.
 Proof.
-  intros. 
-  generalize (Fix_eq wf (fun (_:elt) => elt) (repr_rec m) (repr_rec_ext m) a). 
-  intro. unfold repr_aux. rewrite H0. unfold repr_rec.
-  case (option_sum (M.get a m)).
-  intro s; elim s; intros.
-  rewrite H in p. injection p; intros. rewrite H1. auto.
-  intros. rewrite H in e. discriminate.
+  intros. rewrite repr_aux_equation. rewrite H. auto.
 Qed.
- 
+
 Lemma repr_aux_canon:
-  forall (m: M.T) (wf: well_founded (repr_order m)) (a: elt),
-  M.get (repr_aux m wf a) m = None.
+  forall (a: elt), M.get (repr_aux a) m = None.
 Proof.
-  intros.
-  apply (well_founded_ind wf (fun (a: elt) => M.get (repr_aux m wf a) m = None)).
-  intros.
-  generalize (Fix_eq wf (fun (_:elt) => elt) (repr_rec m) (repr_rec_ext m) x). 
-  intro. unfold repr_aux. rewrite H0. 
-  unfold repr_rec.
-  case (option_sum (M.get x m)).
-  intro s; elim s; intros. 
-  unfold repr_aux in H. apply H.
-  unfold repr_order. auto.
-  intro. auto.
+  intros a0.
+  apply (repr_aux_ind (fun a a' => M.get a' m = None)).
+  auto. auto.
 Qed.
+
+End REPR.
 
 (** The empty partition (each element in its own class) is well founded. *)
 
@@ -282,11 +233,9 @@ Proof.
 
   induction 1.
   apply Acc_intro. intros.
-  MyElim (identify_base_repr_order y x H1).
+  destruct (identify_base_repr_order y x H1) as [A | [A B]].
   apply H0; auto.
-  rewrite H3.
-  apply Acc_intro.
-  intros z H4.
+  subst x y. apply Acc_intro. intros z H4.
   red in H4. rewrite identify_base_b_canon in H4. discriminate.
 Qed.
 
@@ -312,31 +261,29 @@ Lemma identify_base_repr:
   repr_aux identify_base identify_base_order_wf x =
   (if E.eq (repr_aux m mwf x) a then b else repr_aux m mwf x).
 Proof.
-  intro x0.
   apply (well_founded_ind mwf
     (fun (x: elt) =>
       repr_aux identify_base identify_base_order_wf x =
       (if E.eq (repr_aux m mwf x) a then b else repr_aux m mwf x)));
   intros.
-  MyElim (identify_aux_decomp x).
+  destruct (identify_aux_decomp x) as [[A B] | [[A [B C]] | [y [A B]]]].
 
-  rewrite (repr_aux_none identify_base).
-  rewrite (repr_aux_none m mwf x).
+  rewrite (repr_aux_none identify_base); auto.
+  rewrite (repr_aux_none m mwf x); auto.
   case (E.eq x a); intro.
   subst x.
-  rewrite identify_base_a_maps_to_b in H1.
-  discriminate.
-  auto. auto. auto.
+  rewrite identify_base_a_maps_to_b in B. discriminate.
+  auto. 
 
   subst x. rewrite (repr_aux_none m mwf a); auto.
   case (E.eq a a); intro.
-  rewrite (repr_aux_some identify_base identify_base_order_wf a b).
-  rewrite (repr_aux_none identify_base identify_base_order_wf b).
-  auto. apply identify_base_b_canon. auto. 
+  rewrite (repr_aux_some identify_base identify_base_order_wf a b); auto.
+  rewrite (repr_aux_none identify_base identify_base_order_wf b); auto.
+  apply identify_base_b_canon. 
   tauto.
 
-  rewrite (repr_aux_some identify_base identify_base_order_wf x x1); auto.
-  rewrite (repr_aux_some m mwf x x1); auto.
+  rewrite (repr_aux_some identify_base identify_base_order_wf x y); auto.
+  rewrite (repr_aux_some m mwf x y); auto.
 Qed.
 
 Lemma identify_base_sameclass_1:

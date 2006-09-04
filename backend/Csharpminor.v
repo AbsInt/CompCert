@@ -7,13 +7,14 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 
 (** Abstract syntax *)
 
-(** Cminor is a low-level imperative language structured in expressions,
+(** Csharpminor is a low-level imperative language structured in expressions,
   statements, functions and programs.  Expressions include
-  reading and writing local variables, reading and writing store locations,
+  reading global or local variables, reading store locations,
   arithmetic operations, function calls, and conditional expressions
   (similar to [e1 ? e2 : e3] in C).  The [Elet] and [Eletvar] constructs
   enable sharing the computations of subexpressions.  De Bruijn notation
@@ -67,20 +68,20 @@ Inductive operation : Set :=
 Inductive expr : Set :=
   | Evar : ident -> expr                (**r reading a scalar variable  *)
   | Eaddrof : ident -> expr             (**r taking the address of a variable *)
-  | Eassign : ident -> expr -> expr     (**r assignment to a scalar variable  *)
   | Eop : operation -> exprlist -> expr (**r arithmetic operation *)
   | Eload : memory_chunk -> expr -> expr (**r memory read *)
-  | Estore : memory_chunk -> expr -> expr -> expr (**r memory write *)
   | Ecall : signature -> expr -> exprlist -> expr (**r function call *)
   | Econdition : expr -> expr -> expr -> expr (**r conditional expression *)
   | Elet : expr -> expr -> expr         (**r let binding  *)
   | Eletvar : nat -> expr               (**r reference to a let-bound variable *)
+  | Ealloc : expr -> expr               (**r memory allocation *)
 
 with exprlist : Set :=
   | Enil: exprlist
   | Econs: expr -> exprlist -> exprlist.
 
-(** Statements include expression evaluation, an if/then/else conditional,
+(** Statements include expression evaluation, variable assignment,
+  memory stores, an if/then/else conditional,
   infinite loops, blocks and early block exits, and early function returns.
   [Sexit n] terminates prematurely the execution of the [n+1] enclosing
   [Sblock] statements. *)
@@ -88,6 +89,8 @@ with exprlist : Set :=
 Inductive stmt : Set :=
   | Sskip: stmt
   | Sexpr: expr -> stmt
+  | Sassign : ident -> expr -> stmt
+  | Sstore : memory_chunk -> expr -> expr -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: expr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -117,11 +120,19 @@ Record function : Set := mkfunction {
   fn_body: stmt
 }.
 
+Definition fundef := AST.fundef function.
+
 Record program : Set := mkprogram {
-  prog_funct: list (ident * function);
+  prog_funct: list (ident * fundef);
   prog_main: ident;
-  prog_vars: list (ident * var_kind)
+  prog_vars: list (ident * var_kind * list init_data)
 }.
+
+Definition funsig (fd: fundef) :=
+  match fd with
+  | Internal f => f.(fn_sig)
+  | External ef => ef.(ef_sig)
+  end.
 
 (** * Operational semantics *)
 
@@ -164,7 +175,7 @@ Fixpoint switch_target (n: int) (dfl: nat) (cases: list (int * nat))
 - [env]: local environments, map local variables to memory blocks + var info;
 - [lenv]: let environments, map de Bruijn indices to values.
 *)
-Definition genv := Genv.t function.
+Definition genv := Genv.t fundef.
 Definition gvarenv := PTree.t var_kind.
 Definition env := PTree.t (block * var_kind).
 Definition empty_env : env := PTree.empty (block * var_kind).
@@ -176,11 +187,11 @@ Definition sizeof (lv: var_kind) : Z :=
   | Varray sz => Zmax 0 sz
   end.
 
-Definition program_of_program (p: program): AST.program function :=
+Definition program_of_program (p: program): AST.program fundef :=
   AST.mkprogram
     p.(prog_funct)
     p.(prog_main)
-    (List.map (fun id_vi => (fst id_vi, sizeof (snd id_vi))) p.(prog_vars)).
+    (List.map (fun x => match x with (id, k, init) => (id, init) end) p.(prog_vars)).
 
 Definition fn_variables (f: function) :=
   List.map
@@ -195,7 +206,7 @@ Definition fn_vars_names (f: function) :=
 
 Definition global_var_env (p: program): gvarenv :=
   List.fold_left
-    (fun gve id_vi => PTree.set (fst id_vi) (snd id_vi) gve)
+    (fun gve x => match x with (id, k, init) => PTree.set id k gve end)
     p.(prog_vars) (PTree.empty var_kind).
 
 (** Evaluation of operator applications. *)
@@ -270,22 +281,6 @@ Definition eval_operation (op: operation) (vl: list val) (m: mem): option val :=
   | _, _ => None
   end.
 
-(** ``Casting'' a value to a memory chunk.  The value is truncated and
-  zero- or sign-extended as dictated by the memory chunk. *)
-
-Definition cast (chunk: memory_chunk) (v: val) : option val :=
-  match chunk, v with
-  | Mint8signed, Vint n => Some (Vint (Int.cast8signed n))
-  | Mint8unsigned, Vint n => Some (Vint (Int.cast8unsigned n))
-  | Mint16signed, Vint n => Some (Vint (Int.cast16signed n))
-  | Mint16unsigned, Vint n => Some (Vint (Int.cast16unsigned n))
-  | Mint32, Vint n => Some(Vint n)
-  | Mint32, Vptr b ofs => Some(Vptr b ofs)
-  | Mfloat32, Vfloat f => Some(Vfloat(Float.singleoffloat f))
-  | Mfloat64, Vfloat f => Some(Vfloat f)
-  | _, _ => None
-  end.
-
 (** Allocation of local variables at function entry.  Each variable is
   bound to the reference to a fresh block of the appropriate size. *)
 
@@ -312,10 +307,9 @@ Inductive bind_parameters: env ->
       forall e m,
       bind_parameters e m nil nil m
   | bind_parameters_cons:
-      forall e m id chunk params v1 v2 vl b m1 m2,
+      forall e m id chunk params v1 vl b m1 m2,
       PTree.get id e = Some (b, Vscalar chunk) ->
-      cast chunk v1 = Some v2 ->
-      Mem.store chunk m b 0 v2 = Some m1 ->
+      Mem.store chunk m b 0 v1 = Some m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, chunk) :: params) (v1 :: vl) m2.
 
@@ -364,69 +358,64 @@ Inductive eval_var_ref: env -> ident -> block -> memory_chunk -> Prop :=
 
 Inductive eval_expr:
          letenv -> env ->
-         mem -> expr -> mem -> val -> Prop :=
+         mem -> expr -> trace -> mem -> val -> Prop :=
   | eval_Evar:
       forall le e m id b chunk v,
       eval_var_ref e id b chunk ->
       Mem.load chunk m b 0 = Some v ->
-      eval_expr le e m (Evar id) m v
-  | eval_Eassign:
-      forall le e m id a m1 b chunk v1 v2 m2,
-      eval_expr le e m a m1 v1 ->
-      eval_var_ref e id b chunk ->
-      cast chunk v1 = Some v2 ->
-      Mem.store chunk m1 b 0 v2 = Some m2 ->
-      eval_expr le e m (Eassign id a) m2 v2
+      eval_expr le e m (Evar id) E0 m v
   | eval_Eaddrof:
       forall le e m id b,
       eval_var_addr e id b ->
-      eval_expr le e m (Eaddrof id) m (Vptr b Int.zero)
+      eval_expr le e m (Eaddrof id) E0 m (Vptr b Int.zero)
   | eval_Eop:
-      forall le e m op al m1 vl v,
-      eval_exprlist le e m al m1 vl ->
+      forall le e m op al t m1 vl v,
+      eval_exprlist le e m al t m1 vl ->
       eval_operation op vl m1 = Some v ->
-      eval_expr le e m (Eop op al) m1 v
+      eval_expr le e m (Eop op al) t m1 v
   | eval_Eload:
-      forall le e m chunk a m1 v1 v,
-      eval_expr le e m a m1 v1 ->
+      forall le e m chunk a t m1 v1 v,
+      eval_expr le e m a t m1 v1 ->
       Mem.loadv chunk m1 v1 = Some v ->
-      eval_expr le e m (Eload chunk a) m1 v
-  | eval_Estore:
-      forall le e m chunk a b m1 v1 m2 v2 m3 v3,
-      eval_expr le e m a m1 v1 ->
-      eval_expr le e m1 b m2 v2 ->
-      cast chunk v2 = Some v3 ->
-      Mem.storev chunk m2 v1 v3 = Some m3 ->
-      eval_expr le e m (Estore chunk a b) m3 v3
+      eval_expr le e m (Eload chunk a) t m1 v
   | eval_Ecall:
-      forall le e m sig a bl m1 m2 m3 vf vargs vres f,
-      eval_expr le e m a m1 vf ->
-      eval_exprlist le e m1 bl m2 vargs ->
+      forall le e m sig a bl t1 m1 t2 m2 t3 m3 vf vargs vres f t,
+      eval_expr le e m a t1 m1 vf ->
+      eval_exprlist le e m1 bl t2 m2 vargs ->
       Genv.find_funct ge vf = Some f ->
-      f.(fn_sig) = sig ->
-      eval_funcall m2 f vargs m3 vres ->
-      eval_expr le e m (Ecall sig a bl) m3 vres
+      funsig f = sig ->
+      eval_funcall m2 f vargs t3 m3 vres ->
+      t = t1 ** t2 ** t3 ->
+      eval_expr le e m (Ecall sig a bl) t m3 vres
   | eval_Econdition_true:
-      forall le e m a b c m1 v1 m2 v2,
-      eval_expr le e m a m1 v1 ->
+      forall le e m a b c t1 m1 v1 t2 m2 v2 t,
+      eval_expr le e m a t1 m1 v1 ->
       Val.is_true v1 ->
-      eval_expr le e m1 b m2 v2 ->
-      eval_expr le e m (Econdition a b c) m2 v2
+      eval_expr le e m1 b t2 m2 v2 ->
+      t = t1 ** t2 ->
+      eval_expr le e m (Econdition a b c) t m2 v2
   | eval_Econdition_false:
-      forall le e m a b c m1 v1 m2 v2,
-      eval_expr le e m a m1 v1 ->
+      forall le e m a b c t1 m1 v1 t2 m2 v2 t,
+      eval_expr le e m a t1 m1 v1 ->
       Val.is_false v1 ->
-      eval_expr le e m1 c m2 v2 ->
-      eval_expr le e m (Econdition a b c) m2 v2
+      eval_expr le e m1 c t2 m2 v2 ->
+      t = t1 ** t2 ->
+      eval_expr le e m (Econdition a b c) t m2 v2
   | eval_Elet:
-      forall le e m a b m1 v1 m2 v2,
-      eval_expr le e m a m1 v1 ->
-      eval_expr (v1::le) e m1 b m2 v2 ->
-      eval_expr le e m (Elet a b) m2 v2
+      forall le e m a b t1 m1 v1 t2 m2 v2 t,
+      eval_expr le e m a t1 m1 v1 ->
+      eval_expr (v1::le) e m1 b t2 m2 v2 ->
+      t = t1 ** t2 ->
+      eval_expr le e m (Elet a b) t m2 v2
   | eval_Eletvar:
       forall le e m n v,
       nth_error le n = Some v ->
-      eval_expr le e m (Eletvar n) m v
+      eval_expr le e m (Eletvar n) E0 m v
+  | eval_Ealloc:
+      forall le e m a t m1 n m2 b,
+      eval_expr le e m a t m1 (Vint n) ->
+      Mem.alloc m1 0 (Int.signed n) = (m2, b) ->
+      eval_expr le e m (Ealloc a) t m2 (Vptr b Int.zero)
 
 (** Evaluation of a list of expressions:
   [eval_exprlist prg le al m a m' vl]
@@ -437,32 +426,37 @@ Inductive eval_expr:
 
 with eval_exprlist:
          letenv -> env ->
-         mem -> exprlist ->
+         mem -> exprlist -> trace ->
          mem -> list val -> Prop :=
   | eval_Enil:
       forall le e m,
-      eval_exprlist le e m Enil m nil
+      eval_exprlist le e m Enil E0 m nil
   | eval_Econs:
-      forall le e m a bl m1 v m2 vl,
-      eval_expr le e m a m1 v ->
-      eval_exprlist le e m1 bl m2 vl ->
-      eval_exprlist le e m (Econs a bl) m2 (v :: vl)
+      forall le e m a bl t1 m1 v t2 m2 vl t,
+      eval_expr le e m a t1 m1 v ->
+      eval_exprlist le e m1 bl t2 m2 vl ->
+      t = t1 ** t2 ->
+      eval_exprlist le e m (Econs a bl) t m2 (v :: vl)
 
 (** Evaluation of a function invocation: [eval_funcall prg m f args m' res]
   means that the function [f], applied to the arguments [args] in
   memory state [m], returns the value [res] in modified memory state [m'].
 *)
 with eval_funcall:
-        mem -> function -> list val ->
+        mem -> fundef -> list val -> trace ->
         mem -> val -> Prop :=
-  | eval_funcall_intro:
-      forall m f vargs e m1 lb m2 m3 out vres,
+  | eval_funcall_internal:
+      forall m f vargs e m1 lb m2 t m3 out vres,
       list_norepet (fn_params_names f ++ fn_vars_names f) ->
       alloc_variables empty_env m (fn_variables f) e m1 lb ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
-      exec_stmt e m2 f.(fn_body) m3 out ->
+      exec_stmt e m2 f.(fn_body) t m3 out ->
       outcome_result_value out f.(fn_sig).(sig_res) vres ->
-      eval_funcall m f vargs (Mem.free_list m3 lb) vres
+      eval_funcall m (Internal f) vargs t (Mem.free_list m3 lb) vres
+  | eval_funcall_external:
+      forall m ef vargs t vres,
+      event_match ef vargs t vres ->
+      eval_funcall m (External ef) vargs t m vres
 
 (** Execution of a statement: [exec_stmt prg e m s m' out]
   means that statement [s] executes with outcome [out].
@@ -470,66 +464,83 @@ with eval_funcall:
 
 with exec_stmt:
          env ->
-         mem -> stmt ->
+         mem -> stmt -> trace ->
          mem -> outcome -> Prop :=
   | exec_Sskip:
       forall e m,
-      exec_stmt e m Sskip m Out_normal
+      exec_stmt e m Sskip E0 m Out_normal
   | exec_Sexpr:
-      forall e m a m1 v,
-      eval_expr nil e m a m1 v ->
-      exec_stmt e m (Sexpr a) m1 Out_normal
+      forall e m a t m1 v,
+      eval_expr nil e m a t m1 v ->
+      exec_stmt e m (Sexpr a) t m1 Out_normal
+  | eval_Sassign:
+      forall e m id a t m1 b chunk v m2,
+      eval_expr nil e m a t m1 v ->
+      eval_var_ref e id b chunk ->
+      Mem.store chunk m1 b 0 v = Some m2 ->
+      exec_stmt e m (Sassign id a) t m2 Out_normal
+  | eval_Sstore:
+      forall e m chunk a b t1 m1 v1 t2 m2 v2 t3 m3,
+      eval_expr nil e m a t1 m1 v1 ->
+      eval_expr nil e m1 b t2 m2 v2 ->
+      Mem.storev chunk m2 v1 v2 = Some m3 ->
+      t3 = t1 ** t2 ->
+      exec_stmt e m (Sstore chunk a b) t3 m3 Out_normal
   | exec_Sseq_continue:
-      forall e m s1 s2 m1 m2 out,
-      exec_stmt e m s1 m1 Out_normal ->
-      exec_stmt e m1 s2 m2 out ->
-      exec_stmt e m (Sseq s1 s2) m2 out
+      forall e m s1 s2 t1 t2 m1 m2 t out,
+      exec_stmt e m s1 t1 m1 Out_normal ->
+      exec_stmt e m1 s2 t2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt e m (Sseq s1 s2) t m2 out
   | exec_Sseq_stop:
-      forall e m s1 s2 m1 out,
-      exec_stmt e m s1 m1 out ->
+      forall e m s1 s2 t1 m1 out,
+      exec_stmt e m s1 t1 m1 out ->
       out <> Out_normal ->
-      exec_stmt e m (Sseq s1 s2) m1 out
+      exec_stmt e m (Sseq s1 s2) t1 m1 out
   | exec_Sifthenelse_true:
-      forall e m a sl1 sl2 m1 v1 m2 out,
-      eval_expr nil e m a m1 v1 ->
+      forall e m a sl1 sl2 t1 m1 v1 t2 m2 out t,
+      eval_expr nil e m a t1 m1 v1 ->
       Val.is_true v1 ->
-      exec_stmt e m1 sl1 m2 out ->
-      exec_stmt e m (Sifthenelse a sl1 sl2) m2 out
+      exec_stmt e m1 sl1 t2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt e m (Sifthenelse a sl1 sl2) t m2 out
   | exec_Sifthenelse_false:
-      forall e m a sl1 sl2 m1 v1 m2 out,
-      eval_expr nil e m a m1 v1 ->
+      forall e m a sl1 sl2 t1 m1 v1 t2 m2 out t,
+      eval_expr nil e m a t1 m1 v1 ->
       Val.is_false v1 ->
-      exec_stmt e m1 sl2 m2 out ->
-      exec_stmt e m (Sifthenelse a sl1 sl2) m2 out
+      exec_stmt e m1 sl2 t2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt e m (Sifthenelse a sl1 sl2) t m2 out
   | exec_Sloop_loop:
-      forall e m sl m1 m2 out,
-      exec_stmt e m sl m1 Out_normal ->
-      exec_stmt e m1 (Sloop sl) m2 out ->
-      exec_stmt e m (Sloop sl) m2 out
+      forall e m sl t1 m1 t2 m2 out t,
+      exec_stmt e m sl t1 m1 Out_normal ->
+      exec_stmt e m1 (Sloop sl) t2 m2 out ->
+      t = t1 ** t2 ->
+      exec_stmt e m (Sloop sl) t m2 out
   | exec_Sloop_stop:
-      forall e m sl m1 out,
-      exec_stmt e m sl m1 out ->
+      forall e m sl t1 m1 out,
+      exec_stmt e m sl t1 m1 out ->
       out <> Out_normal ->
-      exec_stmt e m (Sloop sl) m1 out
+      exec_stmt e m (Sloop sl) t1 m1 out
   | exec_Sblock:
-      forall e m sl m1 out,
-      exec_stmt e m sl m1 out ->
-      exec_stmt e m (Sblock sl) m1 (outcome_block out)
+      forall e m sl t1 m1 out,
+      exec_stmt e m sl t1 m1 out ->
+      exec_stmt e m (Sblock sl) t1 m1 (outcome_block out)
   | exec_Sexit:
       forall e m n,
-      exec_stmt e m (Sexit n) m (Out_exit n)
+      exec_stmt e m (Sexit n) E0 m (Out_exit n)
   | exec_Sswitch:
-      forall e m a cases default m1 n,
-      eval_expr nil e m a m1 (Vint n) ->
+      forall e m a cases default t1 m1 n,
+      eval_expr nil e m a t1 m1 (Vint n) ->
       exec_stmt e m (Sswitch a cases default)
-                  m1 (Out_exit (switch_target n default cases))
+               t1 m1 (Out_exit (switch_target n default cases))
   | exec_Sreturn_none:
       forall e m,
-      exec_stmt e m (Sreturn None) m (Out_return None)
+      exec_stmt e m (Sreturn None) E0 m (Out_return None)
   | exec_Sreturn_some:
-      forall e m a m1 v,
-      eval_expr nil e m a m1 v ->
-      exec_stmt e m (Sreturn (Some a)) m1 (Out_return (Some v)).
+      forall e m a t1 m1 v,
+      eval_expr nil e m a t1 m1 v ->
+      exec_stmt e m (Sreturn (Some a)) t1 m1 (Out_return (Some v)).
 
 Scheme eval_expr_ind4 := Minimality for eval_expr Sort Prop
   with eval_exprlist_ind4 := Minimality for eval_exprlist Sort Prop
@@ -542,12 +553,11 @@ End RELSEM.
   holds if the application of [p]'s main function to no arguments
   in the initial memory state for [p] eventually returns value [r]. *)
 
-Definition exec_program (p: program) (r: val) : Prop :=
+Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv (program_of_program p) in
   let m0 := Genv.init_mem (program_of_program p) in
   exists b, exists f, exists m,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\
-  f.(fn_sig) = mksignature nil (Some Tint) /\
-  eval_funcall p m0 f nil m r.
-
+  funsig f = mksignature nil (Some Tint) /\
+  eval_funcall p m0 f nil t m r.

@@ -2,6 +2,8 @@
   the abstract syntax trees of many of the intermediate languages. *)
 
 Require Import Coqlib.
+Require Import Integers.
+Require Import Floats.
 
 Set Implicit Arguments.
 
@@ -33,6 +35,12 @@ Record signature : Set := mksignature {
   sig_res: option typ
 }.
 
+Definition proj_sig_res (s: signature) : typ :=
+  match s.(sig_res) with
+  | None => Tint
+  | Some t => t
+  end.
+
 (** Memory accesses (load and store instructions) are annotated by
   a ``memory chunk'' indicating the type, size and signedness of the
   chunk of memory being accessed. *)
@@ -46,41 +54,20 @@ Inductive memory_chunk : Set :=
   | Mfloat32 : memory_chunk        (**r 32-bit single-precision float *)
   | Mfloat64 : memory_chunk.       (**r 64-bit double-precision float *)
 
-(** Comparison instructions can perform one of the six following comparisons
-  between their two operands. *)
+(** Initialization data for global variables. *)
 
-Inductive comparison : Set :=
-  | Ceq : comparison               (**r same *)
-  | Cne : comparison               (**r different *)
-  | Clt : comparison               (**r less than *)
-  | Cle : comparison               (**r less than or equal *)
-  | Cgt : comparison               (**r greater than *)
-  | Cge : comparison.              (**r greater than or equal *)
-
-Definition negate_comparison (c: comparison): comparison :=
-  match c with
-  | Ceq => Cne
-  | Cne => Ceq
-  | Clt => Cge
-  | Cle => Cgt
-  | Cgt => Cle
-  | Cge => Clt
-  end.
-
-Definition swap_comparison (c: comparison): comparison :=
-  match c with
-  | Ceq => Ceq
-  | Cne => Cne
-  | Clt => Cgt
-  | Cle => Cge
-  | Cgt => Clt
-  | Cge => Cle
-  end.
+Inductive init_data: Set :=
+  | Init_int8: int -> init_data
+  | Init_int16: int -> init_data
+  | Init_int32: int -> init_data
+  | Init_float32: float -> init_data
+  | Init_float64: float -> init_data
+  | Init_space: Z -> init_data.
 
 (** Whole programs consist of:
 - a collection of function definitions (name and description);
 - the name of the ``main'' function that serves as entry point in the program;
-- a collection of global variable declarations (name and size in bytes).
+- a collection of global variable declarations (name and initializer).
 
 The type of function descriptions varies among the various intermediate
 languages and is taken as parameter to the [program] type.  The other parts
@@ -89,7 +76,7 @@ of whole programs are common to all languages. *)
 Record program (funct: Set) : Set := mkprogram {
   prog_funct: list (ident * funct);
   prog_main: ident;
-  prog_vars: list (ident * Z)
+  prog_vars: list (ident * list init_data)
 }.
 
 (** We now define a general iterator over programs that applies a given
@@ -214,3 +201,50 @@ Proof.
 Qed.
 
 End TRANSF_PARTIAL_PROGRAM.
+
+(** For most languages, the functions composing the program are either
+  internal functions, defined within the language, or external functions
+  (a.k.a. system calls) that emit an event when applied.  We define
+  a type for such functions and some generic transformation functions. *)
+
+Record external_function : Set := mkextfun {
+  ef_id: ident;
+  ef_sig: signature
+}.
+
+Inductive fundef (F: Set): Set :=
+  | Internal: F -> fundef F
+  | External: external_function -> fundef F.
+
+Implicit Arguments External [F].
+
+Section TRANSF_FUNDEF.
+
+Variable A B: Set.
+Variable transf: A -> B.
+
+Definition transf_fundef (fd: fundef A): fundef B :=
+  match fd with
+  | Internal f => Internal (transf f)
+  | External ef => External ef
+  end.
+
+End TRANSF_FUNDEF.
+
+Section TRANSF_PARTIAL_FUNDEF.
+
+Variable A B: Set.
+Variable transf_partial: A -> option B.
+
+Definition transf_partial_fundef (fd: fundef A): option (fundef B) :=
+  match fd with
+  | Internal f =>
+      match transf_partial f with
+      | None => None
+      | Some f' => Some (Internal f')
+      end
+  | External ef => Some (External ef)
+  end.
+
+End TRANSF_PARTIAL_FUNDEF.
+

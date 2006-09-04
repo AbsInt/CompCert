@@ -9,6 +9,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
+Require Import Events.
 Require Import Mem.
 Require Import Globalenvs.
 Require Import Op.
@@ -39,6 +40,7 @@ Inductive block: Set :=
   | Bload: memory_chunk -> addressing -> list mreg -> mreg -> block -> block
   | Bstore: memory_chunk -> addressing -> list mreg -> mreg -> block -> block
   | Bcall: signature -> mreg + ident -> block -> block
+  | Balloc: block -> block
   | Bgoto: node -> block
   | Bcond: condition -> list mreg -> node -> node -> block
   | Breturn: block.
@@ -60,11 +62,19 @@ Record function: Set := mkfunction {
     forall (pc: node), Plt pc (Psucc fn_entrypoint) \/ fn_code!pc = None
 }.
 
-Definition program := AST.program function.
+Definition fundef := AST.fundef function.
+
+Definition program := AST.program fundef.
+
+Definition funsig (fd: fundef) :=
+  match fd with
+  | Internal f => f.(fn_sig)
+  | External ef => ef.(ef_sig)
+  end.
 
 (** * Operational semantics *)
 
-Definition genv := Genv.t function.
+Definition genv := Genv.t fundef.
 Definition locset := Locmap.t.
 
 Section RELSEM.
@@ -117,7 +127,7 @@ Definition return_regs (caller callee: locset) : locset :=
 
 Variable ge: genv.
 
-Definition find_function (ros: mreg + ident) (rs: locset) : option function :=
+Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
   match ros with
   | inl r => Genv.find_funct ge (rs (R r))
   | inr symb =>
@@ -166,104 +176,119 @@ Inductive outcome: Set :=
   | Return: outcome.
 
 Inductive exec_instr: val ->
-                      block -> locset -> mem ->
+                      block -> locset -> mem -> trace ->
                       block -> locset -> mem -> Prop :=
   | exec_Bgetstack:
       forall sp sl r b rs m,
       exec_instr sp (Bgetstack sl r b) rs m
-                    b (Locmap.set (R r) (rs (S sl)) rs) m
+                 E0 b (Locmap.set (R r) (rs (S sl)) rs) m
   | exec_Bsetstack:
       forall sp r sl b rs m,
       exec_instr sp (Bsetstack r sl b) rs m
-                    b (Locmap.set (S sl) (rs (R r)) rs) m
+                 E0 b (Locmap.set (S sl) (rs (R r)) rs) m
   | exec_Bop:
       forall sp op args res b rs m v,
       eval_operation ge sp op (reglist args rs) = Some v ->
       exec_instr sp (Bop op args res b) rs m
-                    b (Locmap.set (R res) v rs) m
+                 E0 b (Locmap.set (R res) v rs) m
   | exec_Bload:
       forall sp chunk addr args dst b rs m a v,
       eval_addressing ge sp addr (reglist args rs) = Some a ->
       loadv chunk m a = Some v ->
       exec_instr sp (Bload chunk addr args dst b) rs m
-                    b (Locmap.set (R dst) v rs) m
+                 E0 b (Locmap.set (R dst) v rs) m
   | exec_Bstore:
       forall sp chunk addr args src b rs m m' a,
       eval_addressing ge sp addr (reglist args rs) = Some a ->
       storev chunk m a (rs (R src)) = Some m' ->
       exec_instr sp (Bstore chunk addr args src b) rs m
-                    b rs m'
+                 E0 b rs m'
   | exec_Bcall:
-      forall sp sig ros b rs m f rs' m',
+      forall sp sig ros b rs m t f rs' m',
       find_function ros rs = Some f ->
-      sig = f.(fn_sig) ->
-      exec_function f rs m rs' m' ->
+      sig = funsig f ->
+      exec_function f rs m t rs' m' ->
       exec_instr sp (Bcall sig ros b) rs m
-                    b (return_regs rs rs') m'
+                  t b (return_regs rs rs') m'
+  | exec_Balloc:
+      forall sp b rs m sz m' blk,
+      rs (R Conventions.loc_alloc_argument) = Vint sz ->
+      Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
+      exec_instr sp (Balloc b) rs m E0 b
+                 (Locmap.set (R Conventions.loc_alloc_result) 
+                             (Vptr blk Int.zero) rs) m'
 
 with exec_instrs: val ->
-                  block -> locset -> mem ->
+                  block -> locset -> mem -> trace ->
                   block -> locset -> mem -> Prop :=
   | exec_refl:
       forall sp b rs m,
-      exec_instrs sp b rs m b rs m
+      exec_instrs sp b rs m E0 b rs m
   | exec_one:
-      forall sp b1 rs1 m1 b2 rs2 m2,
-      exec_instr sp b1 rs1 m1 b2 rs2 m2 ->
-      exec_instrs sp b1 rs1 m1 b2 rs2 m2
+      forall sp b1 rs1 m1 t b2 rs2 m2,
+      exec_instr sp b1 rs1 m1 t b2 rs2 m2 ->
+      exec_instrs sp b1 rs1 m1 t b2 rs2 m2
   | exec_trans:
-      forall sp b1 rs1 m1 b2 rs2 m2 b3 rs3 m3,
-      exec_instrs sp b1 rs1 m1 b2 rs2 m2 ->
-      exec_instrs sp b2 rs2 m2 b3 rs3 m3 ->
-      exec_instrs sp b1 rs1 m1 b3 rs3 m3
+      forall sp b1 rs1 m1 t t1 b2 rs2 m2 t2 b3 rs3 m3,
+      exec_instrs sp b1 rs1 m1 t1 b2 rs2 m2 ->
+      exec_instrs sp b2 rs2 m2 t2 b3 rs3 m3 ->
+      t = t1 ** t2 ->
+      exec_instrs sp b1 rs1 m1 t b3 rs3 m3
 
 with exec_block: val ->
-                 block -> locset -> mem ->
+                 block -> locset -> mem -> trace ->
                  outcome -> locset -> mem -> Prop :=
   | exec_Bgoto:
-      forall sp b rs m s rs' m',
-      exec_instrs sp b rs m (Bgoto s) rs' m' ->
-      exec_block sp b rs m (Cont s) rs' m'
+      forall sp b rs m t s rs' m',
+      exec_instrs sp b rs m t (Bgoto s) rs' m' ->
+      exec_block sp b rs m t (Cont s) rs' m'
   | exec_Bcond_true:
-      forall sp b rs m cond args ifso ifnot rs' m',
-      exec_instrs sp b rs m (Bcond cond args ifso ifnot) rs' m' ->
+      forall sp b rs m t cond args ifso ifnot rs' m',
+      exec_instrs sp b rs m t (Bcond cond args ifso ifnot) rs' m' ->
       eval_condition cond (reglist args rs') = Some true ->
-      exec_block sp b rs m (Cont ifso) rs' m'
+      exec_block sp b rs m t (Cont ifso) rs' m'
   | exec_Bcond_false:
-      forall sp b rs m cond args ifso ifnot rs' m',
-      exec_instrs sp b rs m (Bcond cond args ifso ifnot) rs' m' ->
+      forall sp b rs m t cond args ifso ifnot rs' m',
+      exec_instrs sp b rs m t (Bcond cond args ifso ifnot) rs' m' ->
       eval_condition cond (reglist args rs') = Some false ->
-      exec_block sp b rs m (Cont ifnot) rs' m'
+      exec_block sp b rs m t (Cont ifnot) rs' m'
   | exec_Breturn:
-      forall sp b rs m rs' m',
-      exec_instrs sp b rs m Breturn rs' m' ->
-      exec_block sp b rs m Return rs' m'
+      forall sp b rs m t rs' m',
+      exec_instrs sp b rs m t Breturn rs' m' ->
+      exec_block sp b rs m t Return rs' m'
 
 with exec_blocks: code -> val ->
-                  node -> locset -> mem ->
+                  node -> locset -> mem -> trace ->
                   outcome -> locset -> mem -> Prop :=
   | exec_blocks_refl:
       forall c sp pc rs m,
-      exec_blocks c sp pc rs m (Cont pc) rs m
+      exec_blocks c sp pc rs m E0 (Cont pc) rs m
   | exec_blocks_one:
-      forall c sp pc b m rs out rs' m',
+      forall c sp pc b m rs t out rs' m',
       c!pc = Some b ->
-      exec_block sp b rs m out rs' m' ->
-      exec_blocks c sp pc rs m out rs' m'
+      exec_block sp b rs m t out rs' m' ->
+      exec_blocks c sp pc rs m t out rs' m'
   | exec_blocks_trans:
-      forall c sp pc1 rs1 m1 pc2 rs2 m2 out rs3 m3,
-      exec_blocks c sp pc1 rs1 m1 (Cont pc2) rs2 m2 ->
-      exec_blocks c sp pc2 rs2 m2 out rs3 m3 ->
-      exec_blocks c sp pc1 rs1 m1 out rs3 m3
+      forall c sp pc1 rs1 m1 t t1 pc2 rs2 m2 t2 out rs3 m3,
+      exec_blocks c sp pc1 rs1 m1 t1 (Cont pc2) rs2 m2 ->
+      exec_blocks c sp pc2 rs2 m2 t2 out rs3 m3 ->
+      t = t1 ** t2 ->
+      exec_blocks c sp pc1 rs1 m1 t out rs3 m3
 
-with exec_function: function -> locset -> mem ->
+with exec_function: fundef -> locset -> mem -> trace ->
                                 locset -> mem -> Prop :=
-  | exec_funct:
-      forall f rs m m1 stk rs2 m2,
+  | exec_funct_internal:
+      forall f rs m m1 stk t rs2 m2,
       alloc m 0 f.(fn_stacksize) = (m1, stk) ->
       exec_blocks f.(fn_code) (Vptr stk Int.zero)
-                  f.(fn_entrypoint) (call_regs rs) m1 Return rs2 m2 ->
-      exec_function f rs m rs2 (free m2 stk).
+                  f.(fn_entrypoint) (call_regs rs) m1 t Return rs2 m2 ->
+      exec_function (Internal f) rs m t rs2 (free m2 stk)
+  | exec_funct_external:
+      forall ef args res rs1 rs2 m t,
+      event_match ef args t res ->
+      args = List.map rs1 (Conventions.loc_arguments ef.(ef_sig)) ->
+      rs2 = Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs1 ->
+      exec_function (External ef) rs1 m t rs2 m.
 
 End RELSEM.
 
@@ -272,15 +297,15 @@ End RELSEM.
   main function, to be found in the machine register dictated
   by the calling conventions. *)
 
-Definition exec_program (p: program) (r: val) : Prop :=
+Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in
   let m0 := Genv.init_mem p in
   exists b, exists f, exists rs, exists m,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b  = Some f /\
-  f.(fn_sig) = mksignature nil (Some Tint) /\
-  exec_function ge f (Locmap.init Vundef) m0 rs m /\
-  rs (R (Conventions.loc_result f.(fn_sig))) = r.
+  funsig f = mksignature nil (Some Tint) /\
+  exec_function ge f (Locmap.init Vundef) m0 t rs m /\
+  rs (R (Conventions.loc_result (funsig f))) = r.
 
 (** We remark that the [exec_blocks] relation is stable if
   the control-flow graph is extended by adding new basic blocks
@@ -293,9 +318,9 @@ Variable c1 c2: code.
 Hypothesis EXT: forall pc, c2!pc = c1!pc \/ c1!pc = None.
 
 Lemma exec_blocks_extends:
-  forall sp pc1 rs1 m1 out rs2 m2,
-  exec_blocks ge c1 sp pc1 rs1 m1 out rs2 m2 ->
-  exec_blocks ge c2 sp pc1 rs1 m1 out rs2 m2.
+  forall sp pc1 rs1 m1 t out rs2 m2,
+  exec_blocks ge c1 sp pc1 rs1 m1 t out rs2 m2 ->
+  exec_blocks ge c2 sp pc1 rs1 m1 t out rs2 m2.
 Proof.
   induction 1. 
   apply exec_blocks_refl.
@@ -319,6 +344,7 @@ Fixpoint successors_aux (b: block) : list node :=
   | Bload chunk addr args dst b => successors_aux b
   | Bstore chunk addr args src b => successors_aux b
   | Bcall sig ros b => successors_aux b
+  | Balloc b => successors_aux b
   | Bgoto n => n :: nil
   | Bcond cond args ifso ifnot => ifso :: ifnot :: nil
   | Breturn => nil
@@ -331,8 +357,8 @@ Definition successors (f: function) (pc: node) : list node :=
   end.
 
 Lemma successors_aux_invariant:
-  forall ge sp b rs m b' rs' m',
-  exec_instrs ge sp b rs m b' rs' m' ->
+  forall ge sp b rs m t b' rs' m',
+  exec_instrs ge sp b rs m t b' rs' m' ->
   successors_aux b = successors_aux b'.
 Proof.
   induction 1; simpl; intros.
@@ -342,16 +368,16 @@ Proof.
 Qed.
 
 Lemma successors_correct:
-  forall ge f sp pc rs m pc' rs' m' b,
+  forall ge f sp pc rs m t pc' rs' m' b,
   f.(fn_code)!pc = Some b ->
-  exec_block ge sp b rs m (Cont pc') rs' m' ->
+  exec_block ge sp b rs m t (Cont pc') rs' m' ->
   In pc' (successors f pc).
 Proof.
   intros. unfold successors. rewrite H. inversion H0.
-  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ H6); simpl.
+  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ _ H7); simpl.
   tauto.
-  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ H2); simpl.
+  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ _ H2); simpl.
   tauto.
-  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ H2); simpl.
+  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ _ H2); simpl.
   tauto.
 Qed.

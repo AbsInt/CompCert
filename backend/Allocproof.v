@@ -8,6 +8,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Registers.
@@ -17,8 +18,8 @@ Require Import Locations.
 Require Import Conventions.
 Require Import Coloring.
 Require Import Coloringproof.
+Require Import Parallelmove.
 Require Import Allocation.
-Require Import Allocproof_aux.
 
 (** * Semantic properties of calling conventions *)
 
@@ -473,7 +474,7 @@ Qed.
 Lemma add_reload_correct:
   forall src dst k rs m,
   exists rs',
-  exec_instrs ge sp (add_reload src dst k) rs m k rs' m /\
+  exec_instrs ge sp (add_reload src dst k) rs m E0 k rs' m /\
   rs' (R dst) = rs src /\
   forall l, Loc.diff (R dst) l -> rs' l = rs l.
 Proof.
@@ -493,7 +494,7 @@ Qed.
 Lemma add_spill_correct:
   forall src dst k rs m,
   exists rs',
-  exec_instrs ge sp (add_spill src dst k) rs m k rs' m /\
+  exec_instrs ge sp (add_spill src dst k) rs m E0 k rs' m /\
   rs' dst = rs (R src) /\
   forall l, Loc.diff dst l -> rs' l = rs l.
 Proof.
@@ -520,7 +521,7 @@ Lemma add_reloads_correct_rec:
   list_norepet itmps ->
   list_norepet ftmps ->
   exists rs',
-  exec_instrs ge sp (add_reloads srcs (regs_for_rec srcs itmps ftmps) k) rs m k rs' m /\
+  exec_instrs ge sp (add_reloads srcs (regs_for_rec srcs itmps ftmps) k) rs m E0 k rs' m /\
   reglist (regs_for_rec srcs itmps ftmps) rs' = map rs srcs /\
   (forall r, ~(In r itmps) -> ~(In r ftmps) -> rs' (R r) = rs (R r)) /\
   (forall s, rs' (S s) = rs (S s)).
@@ -578,7 +579,7 @@ Proof.
   generalize (IHsrcs itmps ftmps k rs1 m R1 R2 R3 R4 R5 R6 R7).
   intros [rs' [EX [RES [OTH1 OTH2]]]].
   exists rs'.
-  split. eapply exec_trans; eauto.
+  split. eapply exec_trans; eauto. traceEq.
   split. simpl. apply (f_equal2 (@cons val)). 
   rewrite OTH1; auto.
   rewrite RES. apply list_map_exten. intros.
@@ -599,7 +600,7 @@ Lemma add_reloads_correct:
   (List.length srcs <= 3)%nat ->
   Loc.disjoint srcs temporaries ->
   exists rs',
-  exec_instrs ge sp (add_reloads srcs (regs_for srcs) k) rs m k rs' m /\
+  exec_instrs ge sp (add_reloads srcs (regs_for srcs) k) rs m E0 k rs' m /\
   reglist (regs_for srcs) rs' = List.map rs srcs /\
   forall l, Loc.notin l temporaries -> rs' l = rs l.
 Proof.
@@ -638,7 +639,7 @@ Qed.
 Lemma add_move_correct:
   forall src dst k rs m,
   exists rs',
-  exec_instrs ge sp (add_move src dst k) rs m k rs' m /\
+  exec_instrs ge sp (add_move src dst k) rs m E0 k rs' m /\
   rs' dst = rs src /\
   forall l, Loc.diff l dst -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> rs' l = rs l.
 Proof.
@@ -660,11 +661,31 @@ Proof.
   generalize (add_spill_correct tmp (S s0) k rs1 m);
   intros [rs2 [EX2 [RES2 OTH2]]].
   exists rs2. split.
-  eapply exec_trans; eauto.
+  eapply exec_trans; eauto. traceEq.
   split. congruence.
   intros. rewrite OTH2. apply OTH1. 
   apply Loc.diff_sym. unfold tmp; case (slot_type s); auto.
   apply Loc.diff_sym; auto.
+Qed.
+
+Lemma effect_move_sequence:
+  forall k moves rs m,
+  let k' := List.fold_right (fun p k => add_move (fst p) (snd p) k) k moves in
+  exists rs',
+  exec_instrs ge sp k' rs m E0 k rs' m /\
+  effect_seqmove moves rs rs'.
+Proof.
+  induction moves; intros until m; simpl.
+  exists rs; split. constructor. constructor.
+  destruct a as [src dst]; simpl.
+  set (k1 := fold_right
+              (fun (p : loc * loc) (k : block) => add_move (fst p) (snd p) k)
+              k moves) in *.
+  destruct (add_move_correct src dst k1 rs m) as [rs1 [A [B C]]].
+  destruct (IHmoves rs1 m) as [rs' [D E]].
+  exists rs'; split. 
+  eapply exec_trans; eauto. traceEq.
+  econstructor; eauto. red. tauto. 
 Qed.
 
 Theorem parallel_move_correct:
@@ -675,13 +696,16 @@ Theorem parallel_move_correct:
   Loc.disjoint srcs temporaries ->
   Loc.disjoint dsts temporaries ->
   exists rs',
-  exec_instrs ge sp (parallel_move srcs dsts k) rs m k rs' m /\
+  exec_instrs ge sp (parallel_move srcs dsts k) rs m E0 k rs' m /\
   List.map rs' dsts = List.map rs srcs /\
   rs' (R IT3) = rs (R IT3) /\
   forall l, Loc.notin l dsts -> Loc.notin l temporaries -> rs' l = rs l.
 Proof.
-  apply (parallel_move_correctX ge sp).
-  apply add_move_correct.
+  intros. 
+  generalize (effect_move_sequence k (parmove srcs dsts) rs m).
+  intros [rs' [EXEC EFFECT]].
+  exists rs'. split. exact EXEC. 
+  apply effect_parmove; auto.
 Qed.
  
 Lemma add_op_correct:
@@ -690,7 +714,7 @@ Lemma add_op_correct:
   Loc.disjoint args temporaries ->
   eval_operation ge sp op (List.map rs args) = Some v ->
   exists rs',
-  exec_block ge sp (add_op op args res s) rs m (Cont s) rs' m /\
+  exec_block ge sp (add_op op args res s) rs m E0 (Cont s) rs' m /\
   rs' res =  v /\
   forall l, Loc.diff l res -> Loc.notin l temporaries -> rs' l = rs l.
 Proof.
@@ -721,7 +745,7 @@ Proof.
   split. apply exec_Bgoto. eapply exec_trans. eexact EX1. 
   eapply exec_trans; eauto. 
   apply exec_one. unfold rs2. apply exec_Bop. 
-  unfold rargs. rewrite RES1. auto.
+  unfold rargs. rewrite RES1. auto. traceEq.
   split. rewrite RES3. unfold rs2; apply Locmap.gss. 
   intros. rewrite OTHER3. unfold rs2. rewrite Locmap.gso.
   apply OTHER1. assumption. 
@@ -737,7 +761,7 @@ Lemma add_load_correct:
   eval_addressing ge sp addr (List.map rs args) = Some a ->
   loadv chunk m a = Some v ->
   exists rs',
-  exec_block ge sp (add_load chunk addr args res s) rs m (Cont s) rs' m /\
+  exec_block ge sp (add_load chunk addr args res s) rs m E0 (Cont s) rs' m /\
   rs' res = v /\
   forall l, Loc.diff l res -> Loc.notin l temporaries -> rs' l = rs l.
 Proof.
@@ -755,7 +779,7 @@ Proof.
   split. apply exec_Bgoto. eapply exec_trans; eauto.
   eapply exec_trans; eauto. 
   apply exec_one.  unfold rs2. apply exec_Bload with a.
-  unfold rargs; rewrite RES1. assumption. assumption.
+  unfold rargs; rewrite RES1. assumption. assumption. traceEq.
   split. rewrite RES3. unfold rs2; apply Locmap.gss.
   intros. rewrite OTHER3. unfold rs2. rewrite Locmap.gso. 
   apply OTHER1. assumption. 
@@ -772,7 +796,7 @@ Lemma add_store_correct:
   eval_addressing ge sp addr (List.map rs args) = Some a ->
   storev chunk m a (rs src) = Some m' ->
   exists rs',
-  exec_block ge sp (add_store chunk addr args src s) rs m (Cont s) rs' m' /\
+  exec_block ge sp (add_store chunk addr args src s) rs m E0 (Cont s) rs' m' /\
   forall l, Loc.notin l temporaries -> rs' l = rs l.
 Proof.
   intros. 
@@ -795,8 +819,40 @@ Proof.
   split. apply exec_Bgoto. 
   eapply exec_trans. rewrite <- EQ. eexact EX1. 
   apply exec_one. apply exec_Bstore with a. 
-  rewrite RES2. assumption. rewrite RES3. assumption.
+  rewrite RES2. assumption. rewrite RES3. assumption. traceEq.
   exact OTHER1.
+Qed.
+
+Lemma add_alloc_correct:
+  forall arg res s rs m m' sz b,
+  rs arg = Vint sz ->
+  Mem.alloc m 0 (Int.signed sz) = (m', b) ->
+  exists rs',
+  exec_block ge sp (add_alloc arg res s) rs m E0 (Cont s) rs' m' /\
+  rs' res = Vptr b Int.zero /\
+  forall l,
+    Loc.diff l (R Conventions.loc_alloc_argument) ->
+    Loc.diff l (R Conventions.loc_alloc_result) ->
+    Loc.diff l res -> 
+    rs' l = rs l.
+Proof.
+  intros; unfold add_alloc.
+  generalize (add_reload_correct arg loc_alloc_argument
+                (Balloc (add_spill loc_alloc_result res (Bgoto s)))
+                rs m).
+  intros [rs1 [EX1 [RES1 OTHER1]]].
+  pose (rs2 := Locmap.set (R loc_alloc_result) (Vptr b Int.zero) rs1).
+  generalize (add_spill_correct loc_alloc_result res (Bgoto s) rs2 m').
+  intros [rs3 [EX3 [RES3 OTHER3]]].
+  exists rs3.
+  split. apply exec_Bgoto. eapply exec_trans. eexact EX1.
+  eapply exec_trans. apply exec_one. eapply exec_Balloc; eauto. congruence. 
+  fold rs2. eexact EX3. reflexivity. traceEq. 
+  split. rewrite RES3; unfold rs2. apply Locmap.gss.
+  intros. rewrite OTHER3. unfold rs2. rewrite Locmap.gso.
+  apply OTHER1. apply Loc.diff_sym; auto.
+  apply Loc.diff_sym; auto.
+  apply Loc.diff_sym; auto.
 Qed.
 
 Lemma add_cond_correct:
@@ -806,7 +862,7 @@ Lemma add_cond_correct:
   eval_condition cond (List.map rs args) = Some b ->
   s = (if b then ifso else ifnot) ->
   exists rs',
-  exec_block ge sp (add_cond cond args ifso ifnot) rs m (Cont s) rs' m /\
+  exec_block ge sp (add_cond cond args ifso ifnot) rs m E0 (Cont s) rs' m /\
   forall l, Loc.notin l temporaries -> rs' l = rs l.
 Proof.
   intros. unfold add_cond.
@@ -825,7 +881,7 @@ Proof.
   exact OTHER1.
 Qed.
 
-Definition find_function2 (los: loc + ident) (ls: locset) : option function :=
+Definition find_function2 (los: loc + ident) (ls: locset) : option fundef :=
   match los with
   | inl l => Genv.find_funct ge (ls l)
   | inr symb =>
@@ -836,21 +892,21 @@ Definition find_function2 (los: loc + ident) (ls: locset) : option function :=
   end.
 
 Lemma add_call_correct:
-  forall f vargs m vres m' sig los args res s ls
+  forall f vargs m t vres m' sig los args res s ls
     (EXECF:
       forall lsi,
-        List.map lsi (loc_arguments f.(fn_sig)) = vargs ->
+        List.map lsi (loc_arguments (funsig f)) = vargs ->
         exists lso,
-            exec_function ge f lsi m lso m'
-         /\ lso (R (loc_result f.(fn_sig))) = vres)
+            exec_function ge f lsi m t lso m'
+         /\ lso (R (loc_result (funsig f))) = vres)
     (FIND: find_function2 los ls = Some f)
-    (SIG: sig = f.(fn_sig))
+    (SIG: sig = funsig f)
     (VARGS: List.map ls args = vargs)
     (LARGS: List.length args = List.length sig.(sig_args))
     (AARGS: locs_acceptable args)
     (RES: loc_acceptable res),
   exists ls',
-  exec_block ge sp (add_call sig los args res s) ls m (Cont s) ls' m' /\
+  exec_block ge sp (add_call sig los args res s) ls m t (Cont s) ls' m' /\
   ls' res = vres /\
   forall l,
     Loc.notin l destroyed_at_call -> loc_acceptable l -> Loc.diff l res ->
@@ -896,7 +952,7 @@ Proof.
   eapply exec_trans. apply exec_one. apply exec_Bcall with f.
   unfold find_function. rewrite TMP2. rewrite RES1. 
   assumption. assumption. eexact EX3.
-  exact EX5.
+  eexact EX5. reflexivity. reflexivity. traceEq.
   (* Result *)
   split. rewrite RES5. unfold ls4. rewrite return_regs_result. 
   assumption.
@@ -936,7 +992,7 @@ Proof.
   eapply exec_trans. eexact EX2.
   eapply exec_trans. apply exec_one. apply exec_Bcall with f.
   unfold find_function. assumption. assumption. eexact EX3.
-  exact EX5.
+  eexact EX5. reflexivity. traceEq.
   (* Result *)
   split. rewrite RES5. 
   unfold ls4. rewrite return_regs_result. 
@@ -955,7 +1011,7 @@ Lemma add_undefs_correct:
   (forall l, In l res -> loc_acceptable l) ->
   (forall ofs ty, In (S (Local ofs ty)) res -> ls (S (Local ofs ty)) = Vundef) ->
   exists ls',
-  exec_instrs ge sp (add_undefs res b) ls m b ls' m /\
+  exec_instrs ge sp (add_undefs res b) ls m E0 b ls' m /\
   (forall l, In l res -> ls' l = Vundef) /\
   (forall l, Loc.notin l res -> ls' l = ls l).
 Proof.
@@ -972,7 +1028,7 @@ Proof.
   intros [ls2 [EX2 [RES2 OTHER2]]].
   exists ls2. split.
   eapply exec_trans. apply exec_one. apply exec_Bop. 
-  simpl; reflexivity. exact EX2.
+  simpl; reflexivity. eexact EX2. traceEq.
   split. intros. case (In_dec Loc.eq l res); intro.
   apply RES2; auto. 
   rewrite OTHER2. elim H1; intro.
@@ -1006,7 +1062,7 @@ Lemma add_entry_correct:
   locs_acceptable undefs ->
   (forall ofs ty, ls (S (Local ofs ty)) = Vundef) ->
   exists ls',
-  exec_block ge sp (add_entry sig params undefs s) ls m (Cont s) ls' m /\
+  exec_block ge sp (add_entry sig params undefs s) ls m E0 (Cont s) ls' m /\
   List.map ls' params = List.map ls (loc_parameters sig) /\
   (forall l, In l undefs -> ls' l = Vundef).
 Proof.
@@ -1029,7 +1085,7 @@ Proof.
   intros [ls2 [EX2 [RES2 OTHER2]]].
   exists ls2.
   split. apply exec_Bgoto. unfold add_entry. 
-  eapply exec_trans. eexact EX1. eexact EX2.
+  eapply exec_trans. eexact EX1. eexact EX2. traceEq.
   split. rewrite <- RES1. apply list_map_exten. 
   intros. symmetry. apply OTHER2. eapply Loc.disjoint_notin; eauto.
   exact RES2.
@@ -1038,7 +1094,7 @@ Qed.
 Lemma add_return_correct:
   forall sig optarg ls m,
   exists ls',
-  exec_block ge sp (add_return sig optarg) ls m Return ls' m /\
+  exec_block ge sp (add_return sig optarg) ls m E0 Return ls' m /\
   match optarg with
   | Some arg => ls' (R (loc_result sig)) = ls arg
   | None => ls' (R (loc_result sig)) = Vundef
@@ -1131,51 +1187,53 @@ Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof.
   intro. unfold ge, tge.
-  apply Genv.find_symbol_transf_partial with transf_function.
+  apply Genv.find_symbol_transf_partial with transf_fundef.
   exact TRANSF.
 Qed.
 
 Lemma functions_translated:
-  forall (v: val) (f: RTL.function),
+  forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
   exists tf,
-  Genv.find_funct tge v = Some tf /\ transf_function f = Some tf.
+  Genv.find_funct tge v = Some tf /\ transf_fundef f = Some tf.
 Proof.  
   intros. 
   generalize 
-   (Genv.find_funct_transf_partial transf_function TRANSF H).
-  case (transf_function f).
+   (Genv.find_funct_transf_partial transf_fundef TRANSF H).
+  case (transf_fundef f).
   intros tf [A B]. exists tf. tauto.
   intros [A B]. elim B. reflexivity.
 Qed.
 
 Lemma function_ptr_translated:
-  forall (b: Values.block) (f: RTL.function),
+  forall (b: Values.block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge b = Some tf /\ transf_function f = Some tf.
+  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = Some tf.
 Proof.  
   intros. 
   generalize 
-   (Genv.find_funct_ptr_transf_partial transf_function TRANSF H).
-  case (transf_function f).
+   (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF H).
+  case (transf_fundef f).
   intros tf [A B]. exists tf. tauto.
   intros [A B]. elim B. reflexivity.
 Qed.
 
 Lemma sig_function_translated:
   forall f tf,
-  transf_function f = Some tf ->
-  tf.(LTL.fn_sig) = f.(RTL.fn_sig).
+  transf_fundef f = Some tf ->
+  LTL.funsig tf = RTL.funsig f.
 Proof.
-  intros f tf. unfold transf_function.
-  destruct (type_rtl_function f).
+  intros f tf. destruct f; simpl. 
+  unfold transf_function.
+  destruct (type_function f).
   destruct (analyze f).
-  destruct (regalloc f t0). 
+  destruct (regalloc f t). 
   intro EQ; injection EQ; intro EQ1; rewrite <- EQ1; simpl; auto.
-  intros; discriminate.
-  intros; discriminate.
-  intros; discriminate.
+  congruence. congruence. congruence.
+  destruct (type_external_function e).
+  intro EQ; inversion EQ; subst tf. reflexivity.
+  congruence.
 Qed.
 
 Lemma entrypoint_function_translated:
@@ -1184,9 +1242,9 @@ Lemma entrypoint_function_translated:
   tf.(LTL.fn_entrypoint) = f.(RTL.fn_nextpc).
 Proof.
   intros f tf. unfold transf_function.
-  destruct (type_rtl_function f).
+  destruct (type_function f).
   destruct (analyze f).
-  destruct (regalloc f t0). 
+  destruct (regalloc f t). 
   intro EQ; injection EQ; intro EQ1; rewrite <- EQ1; simpl; auto.
   intros; discriminate.
   intros; discriminate.
@@ -1220,43 +1278,43 @@ Qed.
 
 Definition exec_instr_prop
         (c: RTL.code) (sp: val)
-        (pc: node) (rs: regset) (m: mem)
+        (pc: node) (rs: regset) (m: mem) (t: trace)
         (pc': node) (rs': regset) (m': mem) : Prop :=
   forall f env live assign ls
          (CF: c = f.(RTL.fn_code))
-         (WT: wt_function env f)
+         (WT: wt_function f env)
          (ASG: regalloc f live (live0 f live) env = Some assign)
          (AG: agree assign (transfer f pc live!!pc) rs ls),
   let tc := PTree.map (transf_instr f live assign) c in
   exists ls',
-    exec_blocks tge tc sp pc ls m (Cont pc') ls' m' /\
+    exec_blocks tge tc sp pc ls m t (Cont pc') ls' m' /\
     agree assign live!!pc rs' ls'.
 
 Definition exec_instrs_prop
         (c: RTL.code) (sp: val)
-        (pc: node) (rs: regset) (m: mem)
+        (pc: node) (rs: regset) (m: mem) (t: trace)
         (pc': node) (rs': regset) (m': mem) : Prop :=
   forall f env live assign ls,
   forall (CF: c = f.(RTL.fn_code))
-         (WT: wt_function env f)
+         (WT: wt_function f env)
          (ANL: analyze f = Some live)
          (ASG: regalloc f live (live0 f live) env = Some assign)
          (AG: agree assign (transfer f pc live!!pc) rs ls)
          (VALIDPC': c!pc' <> None),
   let tc := PTree.map (transf_instr f live assign) c in
   exists ls',
-    exec_blocks tge tc sp pc ls m (Cont pc') ls' m' /\
+    exec_blocks tge tc sp pc ls m t (Cont pc') ls' m' /\
     agree assign (transfer f pc' live!!pc') rs' ls'.
 
 Definition exec_function_prop
-        (f: RTL.function) (args: list val) (m: mem)
-        (res: val) (m': mem) : Prop :=
+        (f: RTL.fundef) (args: list val) (m: mem)
+        (t: trace) (res: val) (m': mem) : Prop :=
   forall ls tf,
-  transf_function f = Some tf ->
-  List.map ls (Conventions.loc_arguments tf.(fn_sig)) = args ->
+  transf_fundef f = Some tf ->
+  List.map ls (Conventions.loc_arguments (funsig tf)) = args ->
   exists ls',
-    LTL.exec_function tge tf ls m ls' m' /\
-    ls' (R (Conventions.loc_result tf.(fn_sig))) = res.
+    LTL.exec_function tge tf ls m t ls' m' /\
+    ls' (R (Conventions.loc_result (funsig tf))) = res.
 
 (** The simulation proof is by structural induction over the RTL evaluation
   derivation.  We prove each case of the proof as a separate lemma.
@@ -1298,7 +1356,7 @@ Lemma transl_Inop_correct:
  forall (c : PTree.t instruction) (sp: val) (pc : positive)
     (rs : regset) (m : mem) (pc' : RTL.node),
   c ! pc = Some (Inop pc') ->
-  exec_instr_prop c sp pc rs m pc' rs m.
+  exec_instr_prop c sp pc rs m E0 pc' rs m.
 Proof.
   intros; red; intros; CleanupHyps.
   exists ls. split.
@@ -1312,7 +1370,7 @@ Lemma transl_Iop_correct:
     (res : reg) (pc' : RTL.node) (v: val),
   c ! pc = Some (Iop op args res pc') ->
   eval_operation ge sp op (rs ## args) = Some v ->
-  exec_instr_prop c sp pc rs m pc' (rs # res <- v) m.
+  exec_instr_prop c sp pc rs m E0 pc' (rs # res <- v) m.
 Proof.
   intros; red; intros; CleanupHyps.
   caseEq (Regset.mem res live!!pc); intro LV;
@@ -1364,7 +1422,7 @@ Lemma transl_Iload_correct:
   c ! pc = Some (Iload chunk addr args dst pc') ->
   eval_addressing ge sp addr rs ## args = Some a ->
   loadv chunk m a = Some v ->
-  exec_instr_prop c sp pc rs m pc' rs # dst <- v m.
+  exec_instr_prop c sp pc rs m E0 pc' rs # dst <- v m.
 Proof.
   intros; red; intros; CleanupHyps.
   caseEq (Regset.mem dst live!!pc); intro LV;
@@ -1407,7 +1465,7 @@ Lemma transl_Istore_correct:
   c ! pc = Some (Istore chunk addr args src pc') ->
   eval_addressing ge sp addr rs ## args = Some a ->
   storev chunk m a rs # src = Some m' ->
-  exec_instr_prop c sp pc rs m pc' rs m'.
+  exec_instr_prop c sp pc rs m E0 pc' rs m'.
 Proof.
   intros; red; intros; CleanupHyps.
   assert (LL: (List.length (List.map assign args) <= 2)%nat).
@@ -1444,19 +1502,19 @@ Lemma transl_Icall_correct:
  forall (c : PTree.t instruction) (sp: val) (pc : positive)
     (rs : regset) (m : mem) (sig : signature) (ros : reg + ident)
     (args : list reg) (res : reg) (pc' : RTL.node)
-    (f : RTL.function) (vres : val) (m' : mem),
+    (f : RTL.fundef) (vres : val) (m' : mem) (t: trace),
   c ! pc = Some (Icall sig ros args res pc') ->
   RTL.find_function ge ros rs = Some f ->
-  sig = RTL.fn_sig f ->
-  RTL.exec_function ge f (rs##args) m vres m' ->
-  exec_function_prop f (rs##args) m vres m' ->
-  exec_instr_prop c sp pc rs m pc' (rs#res <- vres) m'.
+  RTL.funsig f = sig ->
+  RTL.exec_function ge f (rs##args) m t vres m' ->
+  exec_function_prop f (rs##args) m t vres m' ->
+  exec_instr_prop c sp pc rs m t pc' (rs#res <- vres) m'.
 Proof.
   intros; red; intros; CleanupHyps.
   set (los := sum_left_map assign ros).
   assert (FIND: exists tf,
             find_function2 tge los ls = Some tf /\
-            transf_function f = Some tf).
+            transf_fundef f = Some tf).
     unfold los. destruct ros; simpl; simpl in H0.
     apply functions_translated. 
     replace (ls (assign r)) with rs#r. assumption.
@@ -1466,7 +1524,7 @@ Proof.
     apply function_ptr_translated. auto.
     discriminate.
   elim FIND; intros tf [AFIND TRF]; clear FIND.
-  assert (ASIG: sig = fn_sig tf).
+  assert (ASIG: sig = funsig tf).
     rewrite (sig_function_translated _ _ TRF). auto.
   generalize (fun ls => H3 ls tf TRF); intro AEXECF.
   assert (AVARGS: List.map ls (List.map assign args) = rs##args).
@@ -1482,7 +1540,7 @@ Proof.
   unfold correct_alloc_instr. intros [CORR1 CORR2].
   assert (ARES: loc_acceptable (assign res)).
     eapply regalloc_acceptable; eauto.
-  generalize (add_call_correct tge sp tf _ _ _ _ _ _ _ _ pc' _
+  generalize (add_call_correct tge sp tf _ _ _ _ _ _ _ _ _ pc' _
                 AEXECF AFIND ASIG AVARGS ALARGS
                 AACCEPT ARES).
   intros [ls' [EX [RES OTHER]]].
@@ -1491,13 +1549,42 @@ Proof.
   simpl. eapply agree_call; eauto.
 Qed.
 
+Lemma transl_Ialloc_correct:
+  forall (c : PTree.t instruction) (sp: val) (pc : positive)
+    (rs : Regmap.t val) (m : mem) (pc': RTL.node) (arg res: reg)
+    (sz: int) (m': mem) (b: Values.block),
+  c ! pc = Some (Ialloc arg res pc') ->
+  rs#arg = Vint sz ->
+  Mem.alloc m 0 (Int.signed sz) = (m', b) ->
+  exec_instr_prop c sp pc rs m E0 pc' (rs # res <- (Vptr b Int.zero)) m'.
+Proof.
+  intros; red; intros; CleanupHyps.
+  assert (SZ: ls (assign arg) = Vint sz).
+    rewrite <- H0. eapply agree_eval_reg. eauto.
+  generalize (add_alloc_correct tge sp (assign arg) (assign res)
+                                pc' ls m m' sz b SZ H1).
+  intros [ls' [EX [RES OTHER]]].
+  exists ls'. 
+  split. CleanupGoal. exact EX. 
+  rewrite CF in H.
+  generalize (regalloc_correct_1 f env live _ _ _ _ ASG H). 
+  unfold correct_alloc_instr.  intros [CORR1 CORR2].
+  eapply agree_call with (args := arg :: nil) (ros := inr reg 1%positive) (ls := ls) (ls' := ls'); eauto.
+  intros. apply OTHER. 
+  eapply Loc.in_notin_diff; eauto. 
+  unfold loc_alloc_argument, destroyed_at_call; simpl; tauto.
+  eapply Loc.in_notin_diff; eauto. 
+  unfold loc_alloc_argument, destroyed_at_call; simpl; tauto.
+  auto.
+Qed.
+
 Lemma transl_Icond_true_correct:
  forall (c : PTree.t instruction) (sp: val) (pc : positive)
     (rs : Regmap.t val) (m : mem) (cond : condition) (args : list reg)
     (ifso ifnot : RTL.node),
   c ! pc = Some (Icond cond args ifso ifnot) ->
   eval_condition cond rs ## args = Some true ->
-  exec_instr_prop c sp pc rs m ifso rs m.
+  exec_instr_prop c sp pc rs m E0 ifso rs m.
 Proof.
   intros; red; intros; CleanupHyps.
   assert (LL: (List.length (map assign args) <= 3)%nat).
@@ -1523,7 +1610,7 @@ Lemma transl_Icond_false_correct:
     (ifso ifnot : RTL.node),
   c ! pc = Some (Icond cond args ifso ifnot) ->
   eval_condition cond rs ## args = Some false ->
-  exec_instr_prop c sp pc rs m ifnot rs m.
+  exec_instr_prop c sp pc rs m E0 ifnot rs m.
 Proof.
   intros; red; intros; CleanupHyps.
   assert (LL: (List.length (map assign args) <= 3)%nat).
@@ -1545,7 +1632,7 @@ Qed.
 
 Lemma transl_refl_correct:
  forall (c : RTL.code) (sp: val) (pc : RTL.node) (rs : regset)
-    (m : mem), exec_instrs_prop c sp pc rs m pc rs m.
+    (m : mem), exec_instrs_prop c sp pc rs m E0 pc rs m.
 Proof.
   intros; red; intros. 
   exists ls. split. apply exec_blocks_refl. assumption.
@@ -1553,10 +1640,10 @@ Qed.
 
 Lemma transl_one_correct:
  forall (c : RTL.code) (sp: val) (pc : RTL.node) (rs : regset)
-    (m : mem) (pc' : RTL.node) (rs' : regset) (m' : mem),
-  RTL.exec_instr ge c sp pc rs m pc' rs' m' ->
-  exec_instr_prop c sp pc rs m pc' rs' m' ->
-  exec_instrs_prop c sp pc rs m pc' rs' m'.
+    (m : mem) (t: trace) (pc' : RTL.node) (rs' : regset) (m' : mem),
+  RTL.exec_instr ge c sp pc rs m t pc' rs' m' ->
+  exec_instr_prop c sp pc rs m t pc' rs' m' ->
+  exec_instrs_prop c sp pc rs m t pc' rs' m'.
 Proof.
   intros; red; intros.
   generalize (H0 f env live assign ls CF WT ASG AG).
@@ -1573,13 +1660,14 @@ Qed.
 
 Lemma transl_trans_correct:
  forall (c : RTL.code) (sp: val) (pc1 : RTL.node) (rs1 : regset)
-    (m1 : mem) (pc2 : RTL.node) (rs2 : regset) (m2 : mem)
-    (pc3 : RTL.node) (rs3 : regset) (m3 : mem),
-  RTL.exec_instrs ge c sp pc1 rs1 m1 pc2 rs2 m2 ->
-  exec_instrs_prop c sp pc1 rs1 m1 pc2 rs2 m2 ->
-  RTL.exec_instrs ge c sp pc2 rs2 m2 pc3 rs3 m3 ->
-  exec_instrs_prop c sp pc2 rs2 m2 pc3 rs3 m3 ->
-  exec_instrs_prop c sp pc1 rs1 m1 pc3 rs3 m3.
+    (m1 : mem) (t1: trace) (pc2 : RTL.node) (rs2 : regset) (m2 : mem)
+    (t2: trace) (pc3 : RTL.node) (rs3 : regset) (m3 : mem) (t3: trace),
+  RTL.exec_instrs ge c sp pc1 rs1 m1 t1 pc2 rs2 m2 ->
+  exec_instrs_prop c sp pc1 rs1 m1 t1 pc2 rs2 m2 ->
+  RTL.exec_instrs ge c sp pc2 rs2 m2 t2 pc3 rs3 m3 ->
+  exec_instrs_prop c sp pc2 rs2 m2 t2 pc3 rs3 m3 ->
+  t3 = t1 ** t2 ->
+  exec_instrs_prop c sp pc1 rs1 m1 t3 pc3 rs3 m3.
 Proof.
   intros; red; intros.
   assert (VALIDPC2: c!pc2 <> None).
@@ -1589,7 +1677,7 @@ Proof.
   generalize (H2 f env live assign ls1 CF WT ANL ASG AG1 VALIDPC'). 
   intros [ls2 [EX2 AG2]].
   exists ls2. split.
-  eapply exec_blocks_trans. eexact EX1. exact EX2.
+  eapply exec_blocks_trans. eexact EX1. eexact EX2. auto.
   exact AG2.
 Qed.
 
@@ -1609,14 +1697,14 @@ Qed.
 
 Lemma transf_entrypoint_correct:
   forall f env live assign c ls args sp m,
-  wt_function env f ->
+  wt_function f env ->
   regalloc f live (live0 f live) env = Some assign ->
   c!(RTL.fn_nextpc f) = None ->
   List.map ls (loc_parameters (RTL.fn_sig f)) = args ->
   (forall ofs ty, ls (S (Local ofs ty)) = Vundef) ->
   let tc := transf_entrypoint f live assign c in
   exists ls',
-  exec_blocks tge tc sp (RTL.fn_nextpc f) ls m
+  exec_blocks tge tc sp (RTL.fn_nextpc f) ls m E0
                         (Cont (RTL.fn_entrypoint f)) ls' m /\
   agree assign (transfer f (RTL.fn_entrypoint f) live!!(RTL.fn_entrypoint f))
         (init_regs args (RTL.fn_params f)) ls'.
@@ -1680,20 +1768,20 @@ Qed.
 
 Lemma transl_function_correct:
  forall (f : RTL.function) (m m1 : mem) (stk : Values.block)
-    (args : list val) (pc : RTL.node) (rs : regset) (m2 : mem)
+    (args : list val) (t: trace) (pc : RTL.node) (rs : regset) (m2 : mem)
     (or : option reg) (vres : val),
   alloc m 0 (RTL.fn_stacksize f) = (m1, stk) ->
   RTL.exec_instrs ge (RTL.fn_code f) (Vptr stk Int.zero)
-    (RTL.fn_entrypoint f) (init_regs args (fn_params f)) m1 pc rs m2 ->
+    (RTL.fn_entrypoint f) (init_regs args (fn_params f)) m1 t pc rs m2 ->
   exec_instrs_prop (RTL.fn_code f) (Vptr stk Int.zero)
-    (RTL.fn_entrypoint f) (init_regs args (fn_params f)) m1 pc rs m2 ->
+    (RTL.fn_entrypoint f) (init_regs args (fn_params f)) m1 t pc rs m2 ->
   (RTL.fn_code f) ! pc = Some (Ireturn or) ->
   vres = regmap_optget or Vundef rs ->
-  exec_function_prop f args m vres (free m2 stk).
+  exec_function_prop (Internal f) args m t vres (free m2 stk).
 Proof.
   intros; red; intros until tf.
-  unfold transf_function.
-  caseEq (type_rtl_function f).
+  unfold transf_fundef, transf_function.
+  caseEq (type_function f).
   intros env TRF. 
   caseEq (analyze f).
   intros live ANL.
@@ -1704,7 +1792,7 @@ Proof.
   set (tc1 := PTree.map (transf_instr f live alloc) (RTL.fn_code f)).
   set (tc2 := transf_entrypoint f live alloc tc1).
   intro EQ; injection EQ; intro TF; clear EQ. intro VARGS. 
-  generalize (type_rtl_function_correct _ _ TRF); intro WTF.
+  generalize (type_function_correct _ _ TRF); intro WTF.
   assert (NEWINSTR: tc1!(RTL.fn_nextpc f) = None).
     unfold tc1; rewrite PTree.gmap. unfold option_map.
     elim (RTL.fn_code_wf f (fn_nextpc f)); intro.
@@ -1712,7 +1800,7 @@ Proof.
     rewrite H4. auto.
   pose (ls1 := call_regs ls).
   assert (VARGS1: List.map ls1 (loc_parameters (RTL.fn_sig f)) = args).
-    replace (RTL.fn_sig f) with (fn_sig tf).
+    replace (RTL.fn_sig f) with (funsig tf).
     rewrite <- VARGS. unfold loc_parameters.
     rewrite list_map_compose. apply list_map_exten.
     intros. symmetry. unfold ls1. eapply call_regs_param_of_arg; eauto.
@@ -1732,9 +1820,9 @@ Proof.
   intros [ls4 [EX4 RES4]].
   exists ls4. 
   (* Execution *)
-  split. apply exec_funct with m1. 
-  rewrite <- TF; simpl; assumption.
-  rewrite <- TF; simpl. fold ls1. 
+  split. rewrite <- TF; apply exec_funct_internal with m1; simpl.
+  assumption.
+  fold ls1. 
   eapply exec_blocks_trans. eexact EX2. 
   apply exec_blocks_extends with tc1.
   intro p. unfold tc2. unfold transf_entrypoint.
@@ -1746,7 +1834,7 @@ Proof.
   eapply exec_blocks_trans. eexact EX3.
   eapply exec_blocks_one. 
   unfold tc1. rewrite PTree.gmap. rewrite H2. simpl. reflexivity.
-  exact EX4.
+  eexact EX4. reflexivity. traceEq.
   destruct or.
   simpl in RES4. simpl in H3.
   rewrite H3. rewrite <- TF; simpl. rewrite RES4.
@@ -1760,6 +1848,20 @@ Proof.
   intros; discriminate.
 Qed.
 
+Lemma transl_external_function_correct:
+  forall (ef : external_function) (args : list val) (m : mem)
+         (t: trace) (res: val),
+  event_match ef args t res ->
+  exec_function_prop (External ef) args m t res m.
+Proof.
+  intros; red; intros.
+  simpl in H0. 
+  destruct (type_external_function ef); simplify_eq H0; intro.
+  exists (Locmap.set (R (loc_result (funsig tf))) res ls); split.
+  subst tf. eapply exec_funct_external; eauto. 
+  apply Locmap.gss.
+Qed.
+
 (** The correctness of the code transformation is obtained by
   structural induction (and case analysis on the last rule used)
   on the RTL evaluation derivation.
@@ -1767,14 +1869,10 @@ Qed.
   [exec_instrs_prop] and [exec_function_prop] as the induction
   hypotheses, and the lemmas above as cases for the induction. *)
 
-Scheme exec_instr_ind_3 := Minimality for RTL.exec_instr Sort Prop
-  with exec_instrs_ind_3 := Minimality for RTL.exec_instrs Sort Prop
-  with exec_function_ind_3 := Minimality for RTL.exec_function Sort Prop.
-
 Theorem transl_function_correctness:
-  forall f args m res m',
-  RTL.exec_function ge f args m res m' ->
-  exec_function_prop f args m res m'.
+  forall f args m t res m',
+  RTL.exec_function ge f args m t res m' ->
+  exec_function_prop f args m t res m'.
 Proof
   (exec_function_ind_3 ge 
           exec_instr_prop 
@@ -1786,6 +1884,7 @@ Proof
           transl_Iload_correct
           transl_Istore_correct
           transl_Icall_correct
+          transl_Ialloc_correct
           transl_Icond_true_correct
           transl_Icond_false_correct
 
@@ -1793,23 +1892,24 @@ Proof
           transl_one_correct
           transl_trans_correct
 
-          transl_function_correct).
+          transl_function_correct
+          transl_external_function_correct).
 
 (** The semantic equivalence between the original and transformed programs
   follows easily. *)
 
 Theorem transl_program_correct:
-  forall (r: val),
-  RTL.exec_program prog r -> LTL.exec_program tprog r.
+  forall (t: trace) (r: val),
+  RTL.exec_program prog t r -> LTL.exec_program tprog t r.
 Proof.
-  intros r [b [f [m [FIND1 [FIND2 [SIG EXEC]]]]]].
+  intros t r [b [f [m [FIND1 [FIND2 [SIG EXEC]]]]]].
   generalize (function_ptr_translated _ _ FIND2).
   intros [tf [TFIND TRF]].
-  assert (SIG2: tf.(fn_sig) = mksignature nil (Some Tint)).
+  assert (SIG2: funsig tf = mksignature nil (Some Tint)).
     rewrite <- SIG. apply sig_function_translated; auto.
-  assert (VPARAMS: map (Locmap.init Vundef) (loc_arguments (fn_sig tf)) = nil).
+  assert (VPARAMS: map (Locmap.init Vundef) (loc_arguments (funsig tf)) = nil).
     rewrite SIG2. reflexivity.
-  generalize (transl_function_correctness _ _ _ _ _ EXEC
+  generalize (transl_function_correctness _ _ _ _ _ _ EXEC
                 (Locmap.init Vundef) tf TRF VPARAMS).
   intros [ls' [TEXEC RES]].
   red. exists b; exists tf; exists ls'; exists m.

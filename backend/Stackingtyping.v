@@ -166,6 +166,8 @@ Proof.
   (* call *)
   apply wt_instrs_cons; auto.
   constructor; auto.
+  (* alloc *)
+  apply wt_instrs_cons; auto. constructor. 
   (* label *)
   apply wt_instrs_cons; auto.
   constructor.
@@ -208,6 +210,20 @@ Proof.
   rewrite H2. eapply size_no_overflow; eauto.
 Qed.
 
+Lemma wt_transf_fundef:
+  forall f tf, 
+  Lineartyping.wt_fundef f ->
+  transf_fundef f = Some tf ->
+  wt_fundef tf.
+Proof.
+  intros f tf WT. inversion WT; subst.
+  simpl; intros; inversion H0. constructor; auto.
+  unfold transf_fundef, transf_partial_fundef.
+  caseEq (transf_function f0); try congruence.
+  intros tfn TRANSF EQ. inversion EQ; subst tf.
+  constructor; eapply wt_transf_function; eauto. 
+Qed.
+
 Lemma program_typing_preserved:
   forall (p: Linear.program) (tp: Mach.program),
   transf_program p = Some tp ->
@@ -215,8 +231,8 @@ Lemma program_typing_preserved:
   Machtyping.wt_program tp.
 Proof.
   intros; red; intros.
-  generalize (transform_partial_program_function transf_function p i f H H1).
+  generalize (transform_partial_program_function transf_fundef p i f H H1).
   intros [f0 [IN TRANSF]].
-  apply wt_transf_function with f0; auto.
+  apply wt_transf_fundef with f0; auto.
   eapply H0; eauto.
 Qed.

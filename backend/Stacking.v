@@ -186,6 +186,8 @@ Definition transl_instr
       Mstore chunk (transl_addr fe addr) args src :: k
   | Lcall sig ros =>
       Mcall sig ros :: k
+  | Lalloc =>
+      Malloc :: k
   | Llabel lbl =>
       Mlabel lbl :: k
   | Lgoto lbl =>
@@ -222,5 +224,8 @@ Definition transf_function (f: Linear.function) : option Mach.function :=
          f.(Linear.fn_stacksize)
          fe.(fe_size)).
 
+Definition transf_fundef (f: Linear.fundef) : option Mach.fundef :=
+  AST.transf_partial_fundef transf_function f.
+
 Definition transf_program (p: Linear.program) : option Mach.program :=
-  transform_partial_program transf_function p.
+  transform_partial_program transf_fundef p.

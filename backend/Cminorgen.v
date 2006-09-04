@@ -104,18 +104,27 @@ Definition make_cast (chunk: memory_chunk) (e: expr): expr :=
 Definition make_load (chunk: memory_chunk) (e: expr): expr :=
   Cmconstr.load chunk e.
 
-(** In Csharpminor, the value of a store expression is the stored data
-  normalized to the memory chunk.  In Cminor, it is the stored data.
-  For the translation, we could normalize before storing.  However,
-  the memory model performs automatic normalization of the stored
-  data.  It is therefore correct to store the data as is, then
-  normalize the result value of the store expression.  This is more
-  efficient in general because often the result value is ignored:
-  the normalization code will therefore be eliminated later as dead
-  code. *)
+Definition store_arg (chunk: memory_chunk) (e: expr) : expr :=
+  match e with
+  | Eop op (Econs e1 Enil) =>
+      match op with
+      | Ocast8signed =>
+          match chunk with Mint8signed => e1 | _ => e end
+      | Ocast8unsigned =>
+          match chunk with Mint8unsigned => e1 | _ => e end
+      | Ocast16signed =>
+          match chunk with Mint16signed => e1 | _ => e end
+      | Ocast16unsigned =>
+          match chunk with Mint16unsigned => e1 | _ => e end
+      | Osingleoffloat =>
+          match chunk with Mfloat32 => e1 | _ => e end
+      | _ => e
+      end
+  | _ => e
+  end.
 
-Definition make_store (chunk: memory_chunk) (e1 e2: expr): expr :=
-  make_cast chunk (Cmconstr.store chunk e1 e2).
+Definition make_store (chunk: memory_chunk) (e1 e2: expr): stmt :=
+  Sexpr(Cmconstr.store chunk e1 (store_arg chunk e2)).
 
 Definition make_stackaddr (ofs: Z): expr :=
   Eop (Oaddrstack (Int.repr ofs)) Enil.
@@ -156,10 +165,10 @@ Definition var_get (cenv: compilenv) (id: ident): option expr :=
       None
   end.
 
-Definition var_set (cenv: compilenv) (id: ident) (rhs: expr): option expr :=
+Definition var_set (cenv: compilenv) (id: ident) (rhs: expr): option stmt :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      Some(Eassign id (make_cast chunk rhs))
+      Some(Sexpr(Eassign id (make_cast chunk rhs)))
   | Var_stack_scalar chunk ofs =>
       Some(make_store chunk (make_stackaddr ofs) rhs)
   | Var_global_scalar chunk =>
@@ -199,16 +208,10 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
   match e with
   | Csharpminor.Evar id => var_get cenv id
   | Csharpminor.Eaddrof id => var_addr cenv id
-  | Csharpminor.Eassign id e =>
-      do te <- transl_expr cenv e; var_set cenv id te
   | Csharpminor.Eop op el =>
       do tel <- transl_exprlist cenv el; make_op op tel
   | Csharpminor.Eload chunk e =>
       do te <- transl_expr cenv e; Some (make_load chunk te)
-  | Csharpminor.Estore chunk e1 e2 =>
-      do te1 <- transl_expr cenv e1;
-      do te2 <- transl_expr cenv e2;
-      Some (make_store chunk te1 te2)
   | Csharpminor.Ecall sig e el =>
       do te <- transl_expr cenv e;
       do tel <- transl_exprlist cenv el;
@@ -224,6 +227,9 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
       Some (Elet te1 te2)
   | Csharpminor.Eletvar n =>
       Some (Eletvar n)
+  | Csharpminor.Ealloc e =>
+      do te <- transl_expr cenv e;
+      Some (Ealloc te)
   end
 
 with transl_exprlist (cenv: compilenv) (el: Csharpminor.exprlist)
@@ -246,6 +252,12 @@ Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
       Some Sskip
   | Csharpminor.Sexpr e =>
       do te <- transl_expr cenv e; Some(Sexpr te)
+  | Csharpminor.Sassign id e =>
+      do te <- transl_expr cenv e; var_set cenv id te
+  | Csharpminor.Sstore chunk e1 e2 =>
+      do te1 <- transl_expr cenv e1;
+      do te2 <- transl_expr cenv e2;
+      Some (make_store chunk te1 te2)
   | Csharpminor.Sseq s1 s2 =>
       do ts1 <- transl_stmt cenv s1;
       do ts2 <- transl_stmt cenv s2;
@@ -280,11 +292,8 @@ Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   match e with
   | Csharpminor.Evar id => Identset.empty
   | Csharpminor.Eaddrof id => Identset.add id Identset.empty
-  | Csharpminor.Eassign id e => addr_taken_expr e
   | Csharpminor.Eop op el => addr_taken_exprlist el
   | Csharpminor.Eload chunk e => addr_taken_expr e
-  | Csharpminor.Estore chunk e1 e2 =>
-      Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Ecall sig e el =>
       Identset.union (addr_taken_expr e) (addr_taken_exprlist el)
   | Csharpminor.Econdition e1 e2 e3 =>
@@ -293,6 +302,7 @@ Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   | Csharpminor.Elet e1 e2 =>
       Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Eletvar n => Identset.empty
+  | Csharpminor.Ealloc e => addr_taken_expr e
   end
 
 with addr_taken_exprlist (e: Csharpminor.exprlist): Identset.t :=
@@ -306,6 +316,9 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
   match s with
   | Csharpminor.Sskip => Identset.empty
   | Csharpminor.Sexpr e => addr_taken_expr e
+  | Csharpminor.Sassign id e => addr_taken_expr e
+  | Csharpminor.Sstore chunk e1 e2 =>
+      Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Sseq s1 s2 =>
       Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2)
   | Csharpminor.Sifthenelse e s1 s2 =>
@@ -362,10 +375,10 @@ Definition build_compilenv
     (globenv, 0).
 
 Definition assign_global_variable
-     (ce: compilenv) (id_vi: ident * var_kind) : compilenv :=
-  match id_vi with
-  | (id, Vscalar chunk) => PMap.set id (Var_global_scalar chunk) ce
-  | (id, Varray sz) => PMap.set id Var_global_array ce
+     (ce: compilenv) (info: ident * var_kind * list init_data) : compilenv :=
+  match info with
+  | (id, Vscalar chunk, _) => PMap.set id (Var_global_scalar chunk) ce
+  | (id, Varray _, _) => PMap.set id Var_global_array ce
   end.
 
 Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
@@ -387,7 +400,7 @@ Fixpoint store_parameters
           Sseq (Sexpr (Eassign id (make_cast chunk (Evar id))))
                (store_parameters cenv rem)
       | Var_stack_scalar chunk ofs =>
-          Sseq (Sexpr (make_store chunk (make_stackaddr ofs) (Evar id)))
+          Sseq (make_store chunk (make_stackaddr ofs) (Evar id))
                (store_parameters cenv rem)
       | _ =>
           Sskip (* should never happen *)
@@ -412,6 +425,9 @@ Definition transl_function
               (Sseq (store_parameters cenv f.(Csharpminor.fn_params)) tbody))
   else None.
 
+Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): option fundef :=
+  transf_partial_fundef (transl_function gce) f.
+
 Definition transl_program (p: Csharpminor.program) : option program :=
   let gce := build_global_compilenv p in
-  transform_partial_program (transl_function gce) (program_of_program p).
+  transform_partial_program (transl_fundef gce) (program_of_program p).

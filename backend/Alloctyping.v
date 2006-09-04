@@ -15,7 +15,7 @@ Require Import Allocproof.
 Require Import RTLtyping.
 Require Import LTLtyping.
 Require Import Conventions.
-Require Import Alloctyping_aux.
+Require Import Parallelmove.
 
 (** This file proves that register allocation (the translation from
   RTL to LTL defined in file [Allocation]) preserves typing:
@@ -30,13 +30,13 @@ Variable live: PMap.t Regset.t.
 Variable alloc: reg -> loc.
 Variable tf: LTL.function.
 
-Hypothesis TYPE_RTL: type_rtl_function f = Some env.
+Hypothesis TYPE_RTL: type_function f = Some env.
 Hypothesis ALLOC: regalloc f live (live0 f live) env = Some alloc.
 Hypothesis TRANSL: transf_function f = Some tf.
 
-Lemma wt_rtl_function: RTLtyping.wt_function env f.
+Lemma wt_rtl_function: RTLtyping.wt_function f env.
 Proof.
-  apply type_rtl_function_correct; auto.
+  apply type_function_correct; auto.
 Qed.
 
 Lemma alloc_type: forall r, Loc.type (alloc r) = env r.
@@ -213,15 +213,34 @@ Proof.
   auto.
 Qed.
 
+Lemma wt_add_moves:
+  forall b moves,
+  (forall s d, In (s, d) moves ->
+      loc_read_ok s /\ loc_write_ok d /\ Loc.type s = Loc.type d) ->
+  wt_block tf b ->
+  wt_block tf 
+    (List.fold_right (fun p k => add_move (fst p) (snd p) k) b moves).
+Proof.
+  induction moves; simpl; intros.
+  auto.
+  destruct a as [s d]. simpl. 
+  elim (H s d). intros A [B C]. apply wt_add_move; auto. auto. 
+Qed.
+
 Theorem wt_parallel_move:
  forall srcs dsts b,
  List.map Loc.type srcs = List.map Loc.type dsts ->
  locs_read_ok srcs ->
  locs_write_ok dsts -> wt_block tf b ->  wt_block tf (parallel_move srcs dsts b).
 Proof.
-  unfold locs_read_ok, locs_write_ok.
-  apply wt_parallel_moveX; simpl; auto.
-  exact wt_add_move.
+  intros. unfold parallel_move. apply wt_add_moves; auto.
+  intros. 
+  elim (parmove_prop_2 _ _ _ _ H3); intros A B.
+  split. destruct A as [C|[C|C]]. 
+  apply H0; auto. subst s; exact I. subst s; exact I.
+  split. destruct B as [C|[C|C]]. 
+  apply H1; auto. subst d; exact I. subst d; exact I.
+  eapply parmove_prop_3; eauto.
 Qed.
  
 Lemma wt_add_op_move:
@@ -340,6 +359,18 @@ Proof.
   rewrite loc_result_type. auto. constructor.
 Qed.
 
+Lemma wt_add_alloc:
+  forall arg res s,
+  Loc.type arg = Tint -> Loc.type res = Tint ->
+  loc_read_ok arg -> loc_write_ok res ->
+  wt_block tf (add_alloc arg res s).
+Proof.
+  intros. 
+  unfold add_alloc. apply wt_add_reload. auto. rewrite H; reflexivity.
+  apply wt_Balloc. apply wt_add_spill. auto. rewrite H0; reflexivity.
+  apply wt_Bgoto. 
+Qed.
+
 Lemma wt_add_cond:
   forall cond args ifso ifnot,
   List.map Loc.type args = type_of_condition cond ->
@@ -387,7 +418,10 @@ Lemma wt_add_entry:
 Proof.
   set (sig := RTL.fn_sig f).
   assert (sig = tf.(fn_sig)).
-    unfold sig. symmetry. apply Allocproof.sig_function_translated. auto.
+    unfold sig. 
+    assert (transf_fundef (Internal f) = Some (Internal tf)).
+      unfold transf_fundef; rewrite TRANSL; auto.
+    generalize (Allocproof.sig_function_translated _ _ H). simpl; auto.
   assert (locs_read_ok (loc_parameters sig)).
     red; unfold loc_parameters. intros. 
     generalize (list_in_map_inv _ _ _ H0). intros [l1 [EQ IN]].
@@ -406,7 +440,7 @@ Qed.
 
 Lemma wt_transf_instr:
   forall pc instr,
-  RTLtyping.wt_instr env f instr ->
+  RTLtyping.wt_instr env f.(RTL.fn_sig) instr ->
   wt_block tf (transf_instr f live alloc pc instr).
 Proof.
   intros. inversion H; simpl.
@@ -441,6 +475,9 @@ Proof.
   auto with allocty.
   destruct ros; simpl; auto with allocty.
   auto with allocty.
+  (* alloc *)
+  apply wt_add_alloc; auto with allocty.
+  rewrite alloc_type; auto. rewrite alloc_type; auto.
   (* cond *)
   apply wt_add_cond. rewrite alloc_types; auto. auto with allocty.
   (* return *)
@@ -483,7 +520,7 @@ Lemma wt_transf_function:
   transf_function f = Some tf -> wt_function tf.
 Proof.
   intros. generalize H; unfold transf_function.
-  caseEq (type_rtl_function f). intros env TYP. 
+  caseEq (type_function f). intros env TYP. 
   caseEq (analyze f). intros live ANL.
   change (transfer f (RTL.fn_entrypoint f)
                      live!!(RTL.fn_entrypoint f))
@@ -497,13 +534,26 @@ Proof.
   intros; discriminate.
 Qed. 
 
+Lemma wt_transf_fundef:
+  forall f tf,
+  transf_fundef f = Some tf -> wt_fundef tf.
+Proof.
+  intros until tf; destruct f; simpl. 
+  caseEq (transf_function f). intros g TF EQ. inversion EQ.
+  constructor. eapply wt_transf_function; eauto.
+  congruence.
+  caseEq (type_external_function e); intros.
+  inversion H0. constructor. apply type_external_function_correct. auto.
+  congruence.
+Qed.
+
 Lemma program_typing_preserved:
   forall (p: RTL.program) (tp: LTL.program),
   transf_program p = Some tp ->
   LTLtyping.wt_program tp.
 Proof.
   intros; red; intros.
-  generalize (transform_partial_program_function transf_function p i f H H0).
+  generalize (transform_partial_program_function transf_fundef p i f H H0).
   intros [f0 [IN TRANSF]].
-  apply wt_transf_function with f0; auto.
+  apply wt_transf_fundef with f0; auto.
 Qed.

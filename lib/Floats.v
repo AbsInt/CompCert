@@ -6,7 +6,6 @@
   and the associated operations.  *)
 
 Require Import Bool.
-Require Import AST.
 Require Import Integers.
 
 Parameter float: Set.

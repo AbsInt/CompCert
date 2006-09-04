@@ -1,19 +1,20 @@
 FILES=\
   Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml \
   Bool.ml CList.ml Sumbool.ml BinPos.ml BinNat.ml BinInt.ml \
-  ZArith_dec.ml Zeven.ml Zmin.ml Zmisc.ml Zbool.ml Zpower.ml Zdiv.ml \
-  FSetInterface.ml FSetBridge.ml FSetList.ml FSetAVL.ml \
-  Coqlib.ml Maps.ml Sets.ml union_find.ml AST.ml Integers.ml \
-  ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Values.ml \
+  ZArith_dec.ml Zeven.ml Zmax.ml Zmisc.ml Zbool.ml Zpower.ml Zdiv.ml \
+  Int.ml OrderedType.ml FSetList.ml FSetAVL.ml \
+  Coqlib.ml Maps.ml Sets.ml AST.ml Iteration.ml Integers.ml \
+  ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
   Op.ml Cminor.ml Cmconstr.ml \
   Csharpminor.ml Cminorgen.ml \
   Registers.ml RTL.ml \
   ../caml/RTLgenaux.ml RTLgen.ml \
-  RTLtyping.ml \
+  Locations.ml Conventions.ml \
+  ../caml/RTLtypingaux.ml RTLtyping.ml \
   Lattice.ml Kildall.ml \
   Constprop.ml CSE.ml \
-  Locations.ml Conventions.ml LTL.ml \
+  LTL.ml \
   Ordered.ml InterfGraph.ml ../caml/Coloringaux.ml Coloring.ml \
   Parallelmove.ml Allocation.ml  \
   Tunneling.ml Linear.ml Lineartyping.ml Linearize.ml \

@@ -6,6 +6,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
@@ -757,6 +758,36 @@ Proof.
   exists ms'. split. auto. eapply callstack_store_aux; eauto.
 Qed.
 
+(** Allocations of heap blocks can be performed in parallel in
+    both semantics, preserving [callstack_invariant]. *)
+
+Lemma callstack_alloc:
+  forall cs mm ms lo hi mm' blk,
+  callstack_invariant cs mm ms ->
+  Mem.alloc mm lo hi = (mm', blk) ->
+  exists ms',
+    Mem.alloc ms lo hi = (ms', blk) /\
+    callstack_invariant cs mm' ms'.
+Proof.
+  intros. inversion H. 
+  caseEq (alloc ms lo hi). intros ms' blk' ALLOC'.
+  injection H0; intros. injection ALLOC'; intros.
+  assert (blk' = blk). congruence. rewrite H5 in H3. rewrite H5. 
+  exists ms'; split. auto.
+  constructor. 
+  (* frame *)
+  intros; eapply frame_match_alloc; eauto.
+  (* linked *)
+  auto.
+  (* others *)
+  intros. rewrite <- H2; rewrite <- H4; simpl.
+  rewrite H1; rewrite H3. unfold update. case (zeq b blk); auto.
+  (* next *)
+  rewrite <- H2; rewrite <- H4; simpl; congruence.
+  (* dom *)
+  eapply callstack_dom_incr; eauto. rewrite <- H4; simpl. omega.
+Qed.
+
 (** At function entry, a new frame is pushed on the call stack,
   and memory blocks are allocated in both semantics.  Moreover,
   the back link to the caller's activation record is set up
@@ -905,7 +936,7 @@ Let ge := Genv.globalenv p.
 
 Definition exec_instr_prop
     (f: function) (sp: val) (parent: frame)
-    (c: code) (rs: regset) (fr: frame) (mm: mem)
+    (c: code) (rs: regset) (fr: frame) (mm: mem) (t: trace)
     (c': code) (rs': regset) (fr': frame) (mm': mem) : Prop :=
   forall ms stk base pstk pbase cs
          (WTF: wt_function f)
@@ -916,12 +947,12 @@ Definition exec_instr_prop
          (CSI: callstack_invariant ((fr, stk, base) :: (parent, pstk, pbase) :: cs) mm ms)
          (SP: sp = Vptr stk base),
   exists ms',
-    exec_instr ge f sp c rs ms c' rs' ms' /\
+    exec_instr ge f sp c rs ms t c' rs' ms' /\
     callstack_invariant ((fr', stk, base) :: (parent, pstk, pbase) :: cs) mm' ms'.
 
 Definition exec_instrs_prop
     (f: function) (sp: val) (parent: frame)
-    (c: code) (rs: regset) (fr: frame) (mm: mem)
+    (c: code) (rs: regset) (fr: frame) (mm: mem) (t: trace)
     (c': code) (rs': regset) (fr': frame) (mm': mem) : Prop :=
   forall ms stk base pstk pbase cs
          (WTF: wt_function f)
@@ -932,12 +963,12 @@ Definition exec_instrs_prop
          (CSI: callstack_invariant ((fr, stk, base) :: (parent, pstk, pbase) :: cs) mm ms)
          (SP: sp = Vptr stk base),
   exists ms',
-    exec_instrs ge f sp c rs ms c' rs' ms' /\
+    exec_instrs ge f sp c rs ms t c' rs' ms' /\
     callstack_invariant ((fr', stk, base) :: (parent, pstk, pbase) :: cs) mm' ms'.
 
 Definition exec_function_body_prop
     (f: function) (parent: frame) (link ra: val)
-    (rs: regset) (mm: mem)
+    (rs: regset) (mm: mem) (t: trace)
     (rs': regset) (mm': mem) : Prop :=
   forall ms pstk pbase cs
          (WTF: wt_function f)
@@ -947,26 +978,26 @@ Definition exec_function_body_prop
          (LINK: link = Vptr pstk pbase)
          (CSI: callstack_invariant ((parent, pstk, pbase) :: cs) mm ms),
   exists ms',
-    exec_function_body ge f (Vptr pstk pbase) ra rs ms rs' ms' /\
+    exec_function_body ge f (Vptr pstk pbase) ra rs ms t rs' ms' /\
     callstack_invariant ((parent, pstk, pbase) :: cs) mm' ms'.
 
 Definition exec_function_prop
-    (f: function) (parent: frame)
-    (rs: regset) (mm: mem)
+    (f: fundef) (parent: frame)
+    (rs: regset) (mm: mem) (t: trace)
     (rs': regset) (mm': mem) : Prop :=
   forall ms pstk pbase cs
-         (WTF: wt_function f)
+         (WTF: wt_fundef f)
          (WTRS: wt_regset rs)
          (WTPA: wt_frame parent)
          (CSI: callstack_invariant ((parent, pstk, pbase) :: cs) mm ms),
   exists ms',
-    exec_function ge f (Vptr pstk pbase) rs ms rs' ms' /\
+    exec_function ge f (Vptr pstk pbase) rs ms t rs' ms' /\
     callstack_invariant ((parent, pstk, pbase) :: cs) mm' ms'.
 
 Lemma exec_function_equiv:
-  forall f parent rs mm rs' mm',
-  Machabstr.exec_function ge f parent rs mm rs' mm' ->
-  exec_function_prop f parent rs mm rs' mm'.
+  forall f parent rs mm t rs' mm',
+  Machabstr.exec_function ge f parent rs mm t rs' mm' ->
+  exec_function_prop f parent rs mm t rs' mm'.
 Proof.
   apply (Machabstr.exec_function_ind4 ge
            exec_instr_prop
@@ -1009,15 +1040,21 @@ Proof.
   auto. 
   (* Mcall *)
   red in H1. 
-  assert (WTF': wt_function f').
+  assert (WTF': wt_fundef f').
     destruct ros; simpl in H.
-    apply (Genv.find_funct_prop wt_function wt_p H).
+    apply (Genv.find_funct_prop wt_fundef wt_p H).
     destruct (Genv.find_symbol ge i); try discriminate.
-    apply (Genv.find_funct_ptr_prop wt_function wt_p H).
+    apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
   generalize (H1 _ _ _ _ WTF' WTRS WTFR CSI). 
   intros [ms' [EXF CSI']].
   exists ms'. split. apply exec_Mcall with f'; auto. 
   rewrite SP. auto.
+  auto.
+  (* Malloc *)
+  generalize (callstack_alloc _ _ _ _ _ _ _ CSI H0). 
+  intros [ms' [ALLOC' CSI']].
+  exists ms'; split.
+  eapply exec_Malloc; eauto.
   auto.
   (* Mgoto *)
   exists ms. split. constructor; auto. auto.
@@ -1033,7 +1070,7 @@ Proof.
   exists ms'. split. apply exec_one; auto. auto.
   (* trans *)
   generalize (subject_reduction_instrs p wt_p 
-               _ _ _ _ _ _ _ _ _ _ _ H WTF INCL WTRS WTFR WTPA).
+               _ _ _ _ _ _ _ _ _ _ _ _ H WTF INCL WTRS WTFR WTPA).
   intros [INCL2 [WTRS2 WTFR2]].
   generalize (H0 _ _ _ _ _ _ WTF INCL WTRS WTFR WTPA CSI SP).
   intros [ms1 [EX1 CSI1]].
@@ -1069,7 +1106,7 @@ Proof.
   generalize (H3 _ _ _ _ _ _ WTF (incl_refl _) WTRS WTFR2 WTPA
                 CSI3 (refl_equal _)).
   intros [ms4 [EXEC CSI4]].
-  generalize (exec_instrs_link_invariant _ _ _ _ _ _ _ _ _ _ _ _
+  generalize (exec_instrs_link_invariant _ _ _ _ _ _ _ _ _ _ _ _ _
                 H2 WTF (incl_refl _)).
   intros [INCL LINKINV].
   exists (free ms4 stk). split.
@@ -1082,39 +1119,42 @@ Proof.
   apply LINKINV. rewrite FOUR. omega. eapply slot_gss; eauto. auto.
   eapply callstack_function_return; eauto.
 
-  (* function *)
+  (* internal function *)
+  inversion WTF. subst f0. 
   generalize (H0 (Vptr pstk pbase) Vzero I I
-                 ms pstk pbase cs WTF WTRS WTPA I (refl_equal _) CSI).
+                 ms pstk pbase cs H2 WTRS WTPA I (refl_equal _) CSI).
   intros [ms' [EXEC CSI']].
   exists ms'. split. constructor. intros.
   generalize (H0 (Vptr pstk pbase) ra I H1 
-                ms pstk pbase cs WTF WTRS WTPA H1 (refl_equal _) CSI).
+                ms pstk pbase cs H2 WTRS WTPA H1 (refl_equal _) CSI).
   intros [ms1 [EXEC1 CSI1]].
   rewrite (callstack_exten _ _ _ _ CSI' CSI1). auto.
   auto.
+
+  (* external function *)
+  exists ms; split. econstructor; eauto. auto.
 Qed.  
 
 End SIMULATION.
 
 Theorem exec_program_equiv:
-  forall p r, 
+  forall p t r, 
   wt_program p ->
-  Machabstr.exec_program p r -> 
-  Mach.exec_program p r.
+  Machabstr.exec_program p t r -> 
+  Mach.exec_program p t r.
 Proof.
-  intros p r WTP [fptr [f [rs [mm [FINDPTR [FINDF [SIG [EXEC RES]]]]]]]].
-  assert (WTF: wt_function f).
-    apply (Genv.find_funct_ptr_prop wt_function WTP FINDF).
+  intros p t r WTP [fptr [f [rs [mm [FINDPTR [FINDF [EXEC RES]]]]]]].
+  assert (WTF: wt_fundef f).
+    apply (Genv.find_funct_ptr_prop wt_fundef WTP FINDF).
   assert (WTRS: wt_regset (Regmap.init Vundef)).
     red; intros. rewrite Regmap.gi; simpl; auto.
   assert (WTFR: wt_frame empty_frame).
     red; intros. simpl. auto.
   generalize (exec_function_equiv p WTP
                 f empty_frame
-                (Regmap.init Vundef) (Genv.init_mem p) rs mm
+                (Regmap.init Vundef) (Genv.init_mem p) t rs mm
                 EXEC (Genv.init_mem p) nullptr Int.zero nil
                 WTF WTRS WTFR (callstack_init p)).
   intros [ms' [EXEC' CSI]].
-  red. exists fptr; exists f; exists rs; exists ms'. 
-  intuition. rewrite SIG in RES. exact RES.
+  red. exists fptr; exists f; exists rs; exists ms'. tauto.
 Qed.

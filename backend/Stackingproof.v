@@ -15,6 +15,7 @@ Require Import Integers.
 Require Import Values.
 Require Import Op.
 Require Import Mem.
+Require Import Events.
 Require Import Globalenvs.
 Require Import Locations.
 Require Import Mach.
@@ -299,7 +300,7 @@ Lemma exec_Mgetstack':
   get_slot fr ty (offset_of_index fe idx) v ->
   Machabstr.exec_instrs tge tf sp parent
     (Mgetstack (Int.repr (offset_of_index fe idx)) ty dst :: c) rs fr m
-    c (rs#dst <- v) fr m.
+    E0 c (rs#dst <- v) fr m.
 Proof.
   intros. apply Machabstr.exec_one. apply Machabstr.exec_Mgetstack.
   rewrite offset_of_index_no_overflow. auto. auto.
@@ -311,7 +312,7 @@ Lemma exec_Msetstack':
   set_slot fr ty (offset_of_index fe idx) (rs src) fr' ->
   Machabstr.exec_instrs tge tf sp parent
     (Msetstack src (Int.repr (offset_of_index fe idx)) ty :: c) rs fr m
-    c rs fr' m.
+    E0 c rs fr' m.
 Proof.
   intros. apply Machabstr.exec_one. apply Machabstr.exec_Msetstack.
   rewrite offset_of_index_no_overflow. auto. auto.
@@ -632,7 +633,7 @@ Lemma save_int_callee_save_correct_rec:
   exists fr',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (save_int_callee_save fe) k l) rs fr m
-       k rs fr' m
+       E0 k rs fr' m
   /\ fr'.(high) = 0
   /\ fr'.(low) = -fe.(fe_size)
   /\ (forall r,
@@ -670,7 +671,7 @@ Proof.
   intros [fr' [A [B [C [D E]]]]].
   exists fr'. 
   split. eapply Machabstr.exec_trans. apply exec_Msetstack'; eauto with stacking.
-  exact A.
+  eexact A. traceEq.
   split. auto.
   split. auto.
   split. intros. elim H3; intros. subst r. 
@@ -701,7 +702,7 @@ Lemma save_int_callee_save_correct:
   exists fr',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (save_int_callee_save fe) k int_callee_save_regs) rs fr m
-       k rs fr' m
+       E0 k rs fr' m
   /\ fr'.(high) = 0
   /\ fr'.(low) = -fe.(fe_size)
   /\ (forall r,
@@ -733,7 +734,7 @@ Lemma save_float_callee_save_correct_rec:
   exists fr',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (save_float_callee_save fe) k l) rs fr m
-       k rs fr' m
+      E0 k rs fr' m
   /\ fr'.(high) = 0
   /\ fr'.(low) = -fe.(fe_size)
   /\ (forall r,
@@ -771,7 +772,7 @@ Proof.
   intros [fr' [A [B [C [D E]]]]].
   exists fr'. 
   split. eapply Machabstr.exec_trans. apply exec_Msetstack'; eauto with stacking.
-  exact A.
+  eexact A. traceEq.
   split. auto.
   split. auto.
   split. intros. elim H3; intros. subst r. 
@@ -802,7 +803,7 @@ Lemma save_float_callee_save_correct:
   exists fr',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (save_float_callee_save fe) k float_callee_save_regs) rs fr m
-       k rs fr' m
+       E0 k rs fr' m
   /\ fr'.(high) = 0
   /\ fr'.(low) = -fe.(fe_size)
   /\ (forall r,
@@ -846,7 +847,7 @@ Lemma save_callee_save_correct:
   exists fr',
     Machabstr.exec_instrs tge tf sp parent
       (save_callee_save fe k) rs fr m
-      k rs fr' m
+      E0 k rs fr' m
   /\ agree (LTL.call_regs ls) rs fr' parent rs.
 Proof.
   intros. unfold save_callee_save.
@@ -857,7 +858,7 @@ Proof.
   generalize (save_float_callee_save_correct k sp parent rs fr1 m B1 C1).
   intros [fr2 [A2 [B2 [C2 [D2 E2]]]]].
   exists fr2.
-  split. eapply Machabstr.exec_trans. eexact A1. eexact A2.
+  split. eapply Machabstr.exec_trans. eexact A1. eexact A2. traceEq.
   constructor; unfold LTL.call_regs; auto.
   (* agree_local *)
   intros. rewrite E2; auto with stacking. 
@@ -886,7 +887,7 @@ Lemma restore_int_callee_save_correct_rec:
   exists ls', exists rs',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (restore_int_callee_save fe) k l) rs fr m
-      k rs' fr m
+      E0 k rs' fr m
   /\ (forall r, In r l -> rs' r = rs0 r)
   /\ (forall r, ~(In r l) -> rs' r = rs r)
   /\ agree ls' rs' fr parent rs0.
@@ -916,11 +917,11 @@ Proof.
   generalize (IHl ls1 rs1 R1 R2 R3). 
   intros [ls' [rs' [A [B [C D]]]]].
   exists ls'. exists rs'. 
-  split. apply Machabstr.exec_trans with k1 rs1 fr m. 
+  split. apply Machabstr.exec_trans with E0 k1 rs1 fr m E0. 
   unfold rs1; apply exec_Mgetstack'; eauto with stacking.
   apply get_slot_index; eauto with stacking.
   symmetry. eauto with stacking. 
-  eauto with stacking.
+  eauto with stacking. traceEq.
   split. intros. elim H2; intros.
   subst r. rewrite C. unfold rs1. apply Regmap.gss. inversion H0; auto.
   auto.
@@ -945,7 +946,7 @@ Lemma restore_int_callee_save_correct:
   exists ls', exists rs',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (restore_int_callee_save fe) k int_callee_save_regs) rs fr m
-      k rs' fr m
+      E0 k rs' fr m
   /\ (forall r, In r int_callee_save_regs -> rs' r = rs0 r)
   /\ (forall r, ~(In r int_callee_save_regs) -> rs' r = rs r)
   /\ agree ls' rs' fr parent rs0.
@@ -962,7 +963,7 @@ Lemma restore_float_callee_save_correct_rec:
   exists ls', exists rs',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (restore_float_callee_save fe) k l) rs fr m
-      k rs' fr m
+      E0 k rs' fr m
   /\ (forall r, In r l -> rs' r = rs0 r)
   /\ (forall r, ~(In r l) -> rs' r = rs r)
   /\ agree ls' rs' fr parent rs0.
@@ -992,11 +993,11 @@ Proof.
   generalize (IHl ls1 rs1 R1 R2 R3). 
   intros [ls' [rs' [A [B [C D]]]]].
   exists ls'. exists rs'. 
-  split. apply Machabstr.exec_trans with k1 rs1 fr m. 
+  split. apply Machabstr.exec_trans with E0 k1 rs1 fr m E0. 
   unfold rs1; apply exec_Mgetstack'; eauto with stacking.
   apply get_slot_index; eauto with stacking.
   symmetry. eauto with stacking. 
-  exact A.
+  exact A. traceEq.
   split. intros. elim H2; intros.
   subst r. rewrite C. unfold rs1. apply Regmap.gss. inversion H0; auto.
   auto.
@@ -1021,7 +1022,7 @@ Lemma restore_float_callee_save_correct:
   exists ls', exists rs',
     Machabstr.exec_instrs tge tf sp parent
       (List.fold_right (restore_float_callee_save fe) k float_callee_save_regs) rs fr m
-      k rs' fr m
+      E0 k rs' fr m
   /\ (forall r, In r float_callee_save_regs -> rs' r = rs0 r)
   /\ (forall r, ~(In r float_callee_save_regs) -> rs' r = rs r)
   /\ agree ls' rs' fr parent rs0.
@@ -1036,7 +1037,7 @@ Lemma restore_callee_save_correct:
   exists rs',
     Machabstr.exec_instrs tge tf sp parent
       (restore_callee_save fe k) rs fr m
-      k rs' fr m
+      E0 k rs' fr m
   /\ (forall r, 
         In r int_callee_save_regs \/ In r float_callee_save_regs -> 
         rs' r = rs0 r)
@@ -1053,7 +1054,7 @@ Proof.
   generalize (restore_float_callee_save_correct sp parent
                 k fr m rs0 ls1 rs1 D).
   intros [ls2 [rs2 [P [Q [R S]]]]].
-  exists rs2. split. eapply Machabstr.exec_trans. eexact A. exact P.
+  exists rs2. split. eapply Machabstr.exec_trans. eexact A. eexact P. traceEq.
   split. intros. elim H0; intros.
   rewrite R. apply B. auto. apply list_disjoint_notin with int_callee_save_regs.
   apply int_float_callee_save_disjoint. auto.
@@ -1148,8 +1149,8 @@ Proof.
 Qed.
 
 Lemma exec_instr_incl:
-  forall f sp c1 ls1 m1 c2 ls2 m2,
-  Linear.exec_instr ge f sp c1 ls1 m1 c2 ls2 m2 ->
+  forall f sp c1 ls1 m1 t c2 ls2 m2,
+  Linear.exec_instr ge f sp c1 ls1 m1 t c2 ls2 m2 ->
   incl c1 f.(fn_code) ->
   incl c2 f.(fn_code).
 Proof.
@@ -1159,8 +1160,8 @@ Proof.
 Qed.
 
 Lemma exec_instrs_incl:
-  forall f sp c1 ls1 m1 c2 ls2 m2,
-  Linear.exec_instrs ge f sp c1 ls1 m1 c2 ls2 m2 ->
+  forall f sp c1 ls1 m1 t c2 ls2 m2,
+  Linear.exec_instrs ge f sp c1 ls1 m1 t c2 ls2 m2 ->
   incl c1 f.(fn_code) ->
   incl c2 f.(fn_code).
 Proof.
@@ -1174,7 +1175,7 @@ Lemma symbols_preserved:
   forall id, Genv.find_symbol tge id = Genv.find_symbol ge id.
 Proof.
   intros. unfold ge, tge. 
-  apply Genv.find_symbol_transf_partial with transf_function.
+  apply Genv.find_symbol_transf_partial with transf_fundef.
   exact TRANSF. 
 Qed.
 
@@ -1182,11 +1183,11 @@ Lemma functions_translated:
   forall f v,
   Genv.find_funct ge v = Some f ->
   exists tf,
-  Genv.find_funct tge v = Some tf /\ transf_function f = Some tf.
+  Genv.find_funct tge v = Some tf /\ transf_fundef f = Some tf.
 Proof.
   intros. 
-  generalize (Genv.find_funct_transf_partial transf_function TRANSF H).
-  case (transf_function f).
+  generalize (Genv.find_funct_transf_partial transf_fundef TRANSF H).
+  case (transf_fundef f).
   intros tf [A B]. exists tf. tauto.
   intros. tauto.
 Qed.
@@ -1195,13 +1196,24 @@ Lemma function_ptr_translated:
   forall f v,
   Genv.find_funct_ptr ge v = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge v = Some tf /\ transf_function f = Some tf.
+  Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = Some tf.
 Proof.
   intros. 
-  generalize (Genv.find_funct_ptr_transf_partial transf_function TRANSF H).
-  case (transf_function f).
+  generalize (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF H).
+  case (transf_fundef f).
   intros tf [A B]. exists tf. tauto.
   intros. tauto.
+Qed.
+
+Lemma sig_preserved:
+  forall f tf, transf_fundef f = Some tf -> Mach.funsig tf = Linear.funsig f.
+Proof.
+  intros until tf; unfold transf_fundef, transf_partial_fundef.
+  destruct f. unfold transf_function. 
+  destruct (zlt (fn_stacksize f) 0). congruence.
+  destruct (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))). congruence.
+  intros. inversion H; reflexivity. 
+  intro. inversion H. reflexivity.
 Qed.
 
 (** Correctness of stack pointer relocation in operations and
@@ -1287,7 +1299,7 @@ Qed.
 
 Definition exec_instr_prop
       (f: function) (sp: val)
-      (c: code) (ls: locset) (m: mem)
+      (c: code) (ls: locset) (m: mem) (t: trace)
       (c': code) (ls': locset) (m': mem) :=
   forall tf rs fr parent rs0
      (TRANSL: transf_function f = Some tf)
@@ -1297,7 +1309,7 @@ Definition exec_instr_prop
   exists rs', exists fr',
     Machabstr.exec_instrs tge tf (shift_sp tf sp) parent
        (transl_code (make_env (function_bounds f)) c) rs fr m
-       (transl_code (make_env (function_bounds f)) c') rs' fr' m'
+     t (transl_code (make_env (function_bounds f)) c') rs' fr' m'
   /\ agree f ls' rs' fr' parent rs0.
 
 (** The simulation property for function calls has different preconditions
@@ -1306,19 +1318,19 @@ Definition exec_instr_prop
   postconditions (preservation of callee-save registers). *)
 
 Definition exec_function_prop
-      (f: function) 
-      (ls: locset) (m: mem)
+      (f: fundef) 
+      (ls: locset) (m: mem) (t: trace)
       (ls': locset) (m': mem) :=
   forall tf rs parent
-     (TRANSL: transf_function f = Some tf)
-     (WTF: wt_function f)
+     (TRANSL: transf_fundef f = Some tf)
+     (WTF: wt_fundef f)
      (AG1: forall r, rs r = ls (R r))
      (AG2: forall ofs ty, 
              6 <= ofs -> 
-             ofs + typesize ty <= size_arguments f.(fn_sig) ->
+             ofs + typesize ty <= size_arguments (funsig f) ->
              get_slot parent ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))),
   exists rs',
-    Machabstr.exec_function tge tf parent rs m rs' m'
+    Machabstr.exec_function tge tf parent rs m t rs' m'
  /\ (forall r,
         In (R r) temporaries \/ In (R r) destroyed_at_call ->
         rs' r = ls' (R r))
@@ -1329,9 +1341,9 @@ Definition exec_function_prop
 Hypothesis wt_prog: wt_program prog.
 
 Lemma transf_function_correct:
-  forall f ls m ls' m',
-  Linear.exec_function ge f ls m ls' m' ->
-  exec_function_prop f ls m ls' m'.
+  forall f ls m t ls' m',
+  Linear.exec_function ge f ls m t ls' m' ->
+  exec_function_prop f ls m t ls' m'.
 Proof.
   assert (RED: forall f i c,
           transl_code (make_env (function_bounds f)) (i :: c) = 
@@ -1412,13 +1424,13 @@ Proof.
 
   (* Lcall *)
   inversion WTI.
-  assert (WTF': wt_function f').
+  assert (WTF': wt_fundef f').
     destruct ros; simpl in H.
-    apply (Genv.find_funct_prop wt_function wt_prog H).
+    apply (Genv.find_funct_prop wt_fundef wt_prog H).
     destruct (Genv.find_symbol ge i); try discriminate.
-    apply (Genv.find_funct_ptr_prop wt_function wt_prog H).
+    apply (Genv.find_funct_ptr_prop wt_fundef wt_prog H).
   assert (TR: exists tf', Mach.find_function tge ros rs0 = Some tf'
-                       /\ transf_function f' = Some tf').
+                       /\ transf_fundef f' = Some tf').
     destruct ros; simpl in H; simpl.
     eapply functions_translated. 
     rewrite (agree_eval_reg _ _ _ _ _ _ m0 AG). auto. 
@@ -1430,7 +1442,7 @@ Proof.
     intro. symmetry. eapply agree_reg; eauto.
   assert (AG2: forall ofs ty, 
              6 <= ofs -> 
-             ofs + typesize ty <= size_arguments f'.(fn_sig) ->
+             ofs + typesize ty <= size_arguments (funsig f') ->
              get_slot fr ty (Int.signed (Int.repr (4 * ofs))) (rs (S (Outgoing ofs ty)))).
     intros. 
     assert (slot_bounded f (Outgoing ofs ty)).
@@ -1445,6 +1457,13 @@ Proof.
   exists rs2; exists fr. split.
   apply Machabstr.exec_one; apply Machabstr.exec_Mcall with tf'; auto.
   apply agree_return_regs with rs0; auto.
+
+  (* Lalloc *)
+  exists (rs0#loc_alloc_result <- (Vptr blk Int.zero)); exists fr. split.
+  apply Machabstr.exec_one; eapply Machabstr.exec_Malloc; eauto.
+  rewrite (agree_eval_reg _ _ _ _ _ _ loc_alloc_argument AG). auto.
+  apply agree_set_reg; auto.
+  red. simpl. generalize (max_over_regs_of_funct_pos f int_callee_save). omega.
 
   (* Llabel *)
   exists rs0; exists fr. split.
@@ -1483,25 +1502,30 @@ Proof.
   generalize (H2 tf rs' fr' parent rs0 TRANSL WTF B INCL').
   intros [rs'' [fr'' [C D]]].
   exists rs''; exists fr''. split.
-  eapply Machabstr.exec_trans. eexact A. eexact C.
+  eapply Machabstr.exec_trans. eexact A. eexact C. auto.
   auto.
 
   (* function *)
+  generalize TRANSL; clear TRANSL. 
+  unfold transf_fundef, transf_partial_fundef.
+  caseEq (transf_function f); try congruence.
+  intros tfn TRANSL EQ. inversion EQ; clear EQ; subst tf.
+  inversion WTF as [|f' WTFN]. subst f'.
   assert (X: forall link ra,
    exists rs' : regset,
-   Machabstr.exec_function_body tge tf parent link ra rs0 m rs' (free m2 stk) /\
+   Machabstr.exec_function_body tge tfn parent link ra rs0 m t rs' (free m2 stk) /\
    (forall r : mreg,
     In (R r) temporaries \/ In (R r) destroyed_at_call -> rs' r = rs2 (R r)) /\
    (forall r : mreg,
     In r int_callee_save_regs \/ In r float_callee_save_regs -> rs' r = rs0 r)).
   intros.
   set (sp := Vptr stk Int.zero) in *.
-  set (tsp := shift_sp tf sp).
+  set (tsp := shift_sp tfn sp).
   set (fe := make_env (function_bounds f)).
-  assert (low (init_frame tf) = -fe.(fe_size)).
+  assert (low (init_frame tfn) = -fe.(fe_size)).
     simpl low. rewrite (unfold_transf_function _ _ TRANSL).
     reflexivity.
-  assert (exists fr1, set_slot (init_frame tf) Tint 0 link fr1).
+  assert (exists fr1, set_slot (init_frame tfn) Tint 0 link fr1).
     apply set_slot_ok. reflexivity. omega. rewrite H2. generalize (size_pos f). 
     unfold fe. simpl typesize. omega.
   elim H3; intros fr1 SET1; clear H3.
@@ -1526,28 +1550,29 @@ Proof.
     apply slot_gi. omega. omega. 
     simpl typesize. omega. simpl typesize. omega. 
     inversion H8. symmetry. exact H11.
-  generalize (save_callee_save_correct f tf TRANSL
+  generalize (save_callee_save_correct f tfn TRANSL
                 tsp parent
                 (transl_code (make_env (function_bounds f)) f.(fn_code))
                 rs0 fr2 m1 rs AG1 AG2 H5 H6 UNDEF).
   intros [fr [EXP AG]].
-  generalize (H1 tf rs0 fr parent rs0 TRANSL WTF AG (incl_refl _)).
+  generalize (H1 tfn rs0 fr parent rs0 TRANSL WTFN AG (incl_refl _)).
   intros [rs' [fr' [EXB AG']]].
-  generalize (restore_callee_save_correct f tf TRANSL tsp parent
+  generalize (restore_callee_save_correct f tfn TRANSL tsp parent
                 (Mreturn :: transl_code (make_env (function_bounds f)) b)
                 fr' m2 rs0 rs2 rs' AG').
   intros [rs'' [EXX [REGS1 REGS2]]].
   exists rs''. split. eapply Machabstr.exec_funct_body.
-    rewrite (unfold_transf_function f tf TRANSL); eexact H. 
+    rewrite (unfold_transf_function f tfn TRANSL); eexact H. 
     eexact SET1. eexact SET2. 
-    replace (Mach.fn_code tf) with
+    replace (Mach.fn_code tfn) with
             (transl_body f (make_env (function_bounds f))).    
-    replace (Vptr stk (Int.repr (- fn_framesize tf))) with tsp.
+    replace (Vptr stk (Int.repr (- fn_framesize tfn))) with tsp.
     eapply Machabstr.exec_trans. eexact EXP. 
-    eapply Machabstr.exec_trans. eexact EXB. eexact EXX.
+    eapply Machabstr.exec_trans. eexact EXB. eexact EXX. 
+    reflexivity. traceEq.
     unfold tsp, shift_sp, sp. unfold Val.add. 
     rewrite Int.add_commut. rewrite Int.add_zero. auto.
-    rewrite (unfold_transf_function f tf TRANSL). simpl. auto.
+    rewrite (unfold_transf_function f tfn TRANSL). simpl. auto.
   split. intros. rewrite REGS2. symmetry; eapply agree_reg; eauto.
   apply int_callee_save_not_destroyed; auto.
   apply float_callee_save_not_destroyed; auto.
@@ -1563,21 +1588,36 @@ Proof.
     rewrite REGS2'. apply REGS2. auto. auto.
   rewrite H4. auto.
   split; auto.
+
+  (* external function *)
+  simpl in TRANSL. inversion TRANSL; subst tf.
+  inversion WTF. subst ef0. set (sg := ef_sig ef) in *.
+  exists (rs#(loc_result sg) <- res). 
+  split. econstructor. eauto. 
+  fold sg. rewrite H0. rewrite Conventions.loc_external_arguments_loc_arguments; auto.
+  rewrite list_map_compose. apply list_map_exten; intros. auto. 
+  reflexivity.
+  split; intros. rewrite H1. 
+  unfold Regmap.set. case (RegEq.eq r (loc_result sg)); intro.
+  rewrite e. rewrite Locmap.gss; auto. rewrite Locmap.gso; auto.
+  red; auto.
+  apply Regmap.gso. red; intro; subst r.
+  elim (Conventions.loc_result_not_callee_save _ H2).
 Qed.
 
 End PRESERVATION.
 
 Theorem transl_program_correct:
-  forall (p: Linear.program) (tp: Mach.program) (r: val),
+  forall (p: Linear.program) (tp: Mach.program) (t: trace) (r: val),
   wt_program p ->
   transf_program p = Some tp ->
-  Linear.exec_program p r ->
-  Machabstr.exec_program tp r.
+  Linear.exec_program p t r ->
+  Machabstr.exec_program tp t r.
 Proof.
-  intros p tp r WTP TRANSF
+  intros p tp t r WTP TRANSF
          [fptr [f [ls' [m [FINDSYMB [FINDFUNC [SIG [EXEC RES]]]]]]]].
-  assert (WTF: wt_function f).
-    apply (Genv.find_funct_ptr_prop wt_function WTP FINDFUNC).
+  assert (WTF: wt_fundef f).
+    apply (Genv.find_funct_ptr_prop wt_fundef WTP FINDFUNC).
   set (ls := Locmap.init Vundef) in *.
   set (rs := Regmap.init Vundef).
   set (fr := empty_frame).
@@ -1585,26 +1625,25 @@ Proof.
     intros; reflexivity.
   assert (AG2: forall ofs ty, 
              6 <= ofs -> 
-             ofs + typesize ty <= size_arguments f.(fn_sig) ->
+             ofs + typesize ty <= size_arguments (funsig f) ->
              get_slot fr ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))).
     rewrite SIG. unfold size_arguments, sig_args, size_arguments_rec.
     intros. generalize (typesize_pos ty). 
     intro. omegaContradiction.
   generalize (function_ptr_translated p tp TRANSF f _ FINDFUNC).
   intros [tf [TFIND TRANSL]]. 
-  generalize (transf_function_correct p tp TRANSF WTP _ _ _ _ _ EXEC
+  generalize (transf_function_correct p tp TRANSF WTP _ _ _ _ _ _ EXEC
                 tf rs fr TRANSL WTF AG1 AG2).
   intros [rs' [A [B C]]].
   red. exists fptr; exists tf; exists rs'; exists m.
   split. rewrite (symbols_preserved p tp TRANSF). 
-  rewrite (transform_partial_program_main transf_function p TRANSF).
+  rewrite (transform_partial_program_main transf_fundef p TRANSF).
   assumption.
   split. assumption.
-  split. rewrite (unfold_transf_function f tf TRANSL); simpl. 
-  assumption.
   split. replace (Genv.init_mem tp) with (Genv.init_mem p).
-  exact A. symmetry. apply Genv.init_mem_transf_partial with transf_function. 
+  exact A. symmetry. apply Genv.init_mem_transf_partial with transf_fundef. 
   exact TRANSF.
-  rewrite <- RES. rewrite (unfold_transf_function f tf TRANSL); simpl. 
+  rewrite <- RES. replace R3 with (loc_result (funsig f)).
   apply B. right. apply loc_result_acceptable. 
+  rewrite SIG; reflexivity.
 Qed.
