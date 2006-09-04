@@ -32,7 +32,7 @@ OCAMLC=ocamlc -g $(CAMLINCL)
 OCAMLOPT=ocamlopt $(CAMLINCL)
 OCAMLDEP=ocamldep $(CAMLINCL)
 
-COQINCL=-I ../lib -I ../backend
+COQINCL=-I ../lib -I ../common -I ../backend -I ../cfrontend
 COQEXEC=coqtop $(COQINCL) -batch -load-vernac-source
 
 ../ccomp: $(FILES:.ml=.cmo)

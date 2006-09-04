@@ -2,19 +2,22 @@ COQC=coqc $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
 COQDOC=coqdoc
 
-INCLUDES=-I lib -I backend -I cfrontend
+INCLUDES=-I lib -I common -I backend -I cfrontend
 
 # Files in lib/
 
 LIB=Coqlib.v Maps.v Sets.v union_find.v Inclusion.v Lattice.v Ordered.v \
   Iteration.v Integers.v Floats.v Parmov.v
 
+# Files in common/
+
+COMMON=AST.v Events.v Globalenvs.v Mem.v Values.v Main.v
+
 # Files in backend/
 
-BACKEND=AST.v Values.v Mem.v Events.v Globalenvs.v \
+BACKEND=\
   Op.v Cminor.v \
   Cmconstr.v Cmconstrproof.v \
-  Csharpminor.v Cminorgen.v Cminorgenproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenproof1.v RTLgenproof.v \
   RTLtyping.v \
@@ -31,17 +34,17 @@ BACKEND=AST.v Values.v Mem.v Events.v Globalenvs.v \
   Mach.v Machabstr.v Machtyping.v \
   Stacking.v Stackingproof.v Stackingtyping.v \
   Machabstr2mach.v \
-  PPC.v PPCgen.v PPCgenproof1.v PPCgenproof.v \
-  Main.v
+  PPC.v PPCgen.v PPCgenproof1.v PPCgenproof.v
 
 # Files in cfrontend/
 
 CFRONTEND=Csyntax.v Csem.v Ctyping.v Cshmgen.v \
-  Cshmgenproof1.v Cshmgenproof2.v Cshmgenproof3.v 
+  Cshmgenproof1.v Cshmgenproof2.v Cshmgenproof3.v \
+  Csharpminor.v Cminorgen.v Cminorgenproof.v
 
 # All source files
 
-FILES=$(LIB:%=lib/%) $(BACKEND:%=backend/%) $(CFRONTEND:%=cfrontend/%)
+FILES=$(LIB:%=lib/%) $(COMMON:%=common/%) $(BACKEND:%=backend/%) $(CFRONTEND:%=cfrontend/%)
 
 FLATFILES=$(LIB) $(BACKEND) $(CFRONTEND)
 
