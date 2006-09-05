@@ -27,18 +27,18 @@ Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_transf _ _ transf_fundef prog).
+Proof (@Genv.find_funct_transf _ _ _ transf_fundef prog).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   Genv.find_funct_ptr tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ transf_fundef prog).
+Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ transf_fundef prog).
+Proof (@Genv.find_symbol_transf _ _ _ transf_fundef prog).
 
 Lemma sig_preserved:
   forall f, funsig (transf_fundef f) = LTL.funsig f.

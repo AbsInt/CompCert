@@ -562,8 +562,10 @@ with transl_lblstmts (nbrk ncnt: nat) (sl: labeled_statements) (body: stmt)
 
 (*** Translation of functions *)
 
-Definition transl_params := transf_partial_program chunk_of_type.
-Definition transl_vars := transf_partial_program var_kind_of_type.
+Definition transl_params (l: list (ident * type)) :=
+   AST.map_partial chunk_of_type l.
+Definition transl_vars (l: list (ident * type)) :=
+   AST.map_partial var_kind_of_type l.
 
 Definition transl_function (f: Csyntax.function) : option function :=
   do tparams <- transl_params (Csyntax.fn_params f);
@@ -581,18 +583,7 @@ Definition transl_fundef (f: Csyntax.fundef) : option fundef :=
 
 (** ** Translation of programs *)
 
-Fixpoint transl_global_vars
-      (vl: list (ident * type * list init_data)) :
-      option (list (ident * var_kind * list init_data)) :=
-  match vl with
-  | nil => Some nil
-  | (id, ty, init) :: rem =>
-      do vk <- var_kind_of_type ty;
-      do trem <- transl_global_vars rem;
-      Some ((id, vk, init) :: trem)
-  end.
+Definition transl_globvar (ty: type) := var_kind_of_type ty.
 
 Definition transl_program (p: Csyntax.program) : option program :=
-  do tfun <- transf_partial_program transl_fundef (Csyntax.prog_funct p);
-  do tvars <- transl_global_vars (Csyntax.prog_defs p);
-  Some (mkprogram tfun (Csyntax.prog_main p) tvars).
+  transform_partial_program2 transl_fundef transl_globvar p.

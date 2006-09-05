@@ -466,10 +466,10 @@ Proof.
   apply wt_regset_assign. auto. rewrite H11. rewrite <- H1.
   assert (wt_fundef f).
     destruct ros; simpl in H0.
-    pattern f. apply Genv.find_funct_prop with fundef p (rs#r).
+    pattern f. apply Genv.find_funct_prop with fundef unit p (rs#r).
     exact wt_p. exact H0. 
     caseEq (Genv.find_symbol ge i); intros; rewrite H12 in H0.
-    pattern f. apply Genv.find_funct_ptr_prop with fundef p b.
+    pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
     exact wt_p. exact H0.
     discriminate.
   eapply H3. auto. rewrite H1. rewrite <- H10.

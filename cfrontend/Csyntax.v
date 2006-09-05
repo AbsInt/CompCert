@@ -130,11 +130,7 @@ Inductive fundef : Set :=
 
 (** Program *)
 
-Record program : Set := mkprogram {
-    prog_funct: list (ident * fundef);
-    prog_defs: list (ident * type * list init_data);
-    prog_main: ident
-}.
+Definition program : Set := AST.program fundef type.
 
 (** ** Operations over types *)
 
@@ -292,17 +288,6 @@ Definition access_mode (ty: type) : mode :=
   | Tstruct fList => By_nothing
   | Tunion fList => By_nothing
 end.
-
-(** Conversion of a Clight program into an AST program *)
-
-Definition extract_global_var (id_ty_init: ident * type * list init_data) :=
-  match id_ty_init with (id, ty, init) => (id, init) end.
-
-Definition program_of_program (p: program) : AST.program fundef :=
-  AST.mkprogram
-    p.(prog_funct)
-    p.(prog_main)
-    (List.map extract_global_var p.(prog_defs)).
 
 (** Classification of arithmetic operations and comparisons *)
 

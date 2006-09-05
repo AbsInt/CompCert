@@ -286,7 +286,7 @@ lbl:    .long   0x43300000, 0x00000000
 
 Definition code := list instruction.
 Definition fundef := AST.fundef code.
-Definition program := AST.program fundef.
+Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
 

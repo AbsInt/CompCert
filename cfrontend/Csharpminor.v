@@ -122,11 +122,7 @@ Record function : Set := mkfunction {
 
 Definition fundef := AST.fundef function.
 
-Record program : Set := mkprogram {
-  prog_funct: list (ident * fundef);
-  prog_main: ident;
-  prog_vars: list (ident * var_kind * list init_data)
-}.
+Definition program : Set := AST.program fundef var_kind.
 
 Definition funsig (fd: fundef) :=
   match fd with
@@ -187,12 +183,6 @@ Definition sizeof (lv: var_kind) : Z :=
   | Varray sz => Zmax 0 sz
   end.
 
-Definition program_of_program (p: program): AST.program fundef :=
-  AST.mkprogram
-    p.(prog_funct)
-    p.(prog_main)
-    (List.map (fun x => match x with (id, k, init) => (id, init) end) p.(prog_vars)).
-
 Definition fn_variables (f: function) :=
   List.map
     (fun id_chunk => (fst id_chunk, Vscalar (snd id_chunk))) f.(fn_params)
@@ -206,7 +196,7 @@ Definition fn_vars_names (f: function) :=
 
 Definition global_var_env (p: program): gvarenv :=
   List.fold_left
-    (fun gve x => match x with (id, k, init) => PTree.set id k gve end)
+    (fun gve x => match x with (id, init, k) => PTree.set id k gve end)
     p.(prog_vars) (PTree.empty var_kind).
 
 (** Evaluation of operator applications. *)
@@ -316,7 +306,7 @@ Inductive bind_parameters: env ->
 Section RELSEM.
 
 Variable prg: program.
-Let ge := Genv.globalenv (program_of_program prg).
+Let ge := Genv.globalenv prg.
 
 (* Evaluation of the address of a variable: 
    [eval_var_addr prg ge e id b] states that variable [id] 
@@ -554,8 +544,8 @@ End RELSEM.
   in the initial memory state for [p] eventually returns value [r]. *)
 
 Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := Genv.globalenv (program_of_program p) in
-  let m0 := Genv.init_mem (program_of_program p) in
+  let ge := Genv.globalenv p in
+  let m0 := Genv.init_mem p in
   exists b, exists f, exists m,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\

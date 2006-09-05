@@ -136,11 +136,11 @@ Inductive wt_fundef: typenv -> fundef -> Prop :=
       wt_fundef env (External id args res).
 
 Definition add_global_var
-     (env: typenv) (id_ty_init: ident * type * list init_data) : typenv :=
-  match id_ty_init with (id, ty, init) => PTree.set id ty env end.
+     (env: typenv) (id_ty_init: ident * list init_data * type) : typenv :=
+  match id_ty_init with (id, init, ty) => PTree.set id ty env end.
 
 Definition add_global_vars
-     (env: typenv) (vars: list(ident * type * list init_data)) : typenv :=
+     (env: typenv) (vars: list(ident * list init_data * type)) : typenv :=
   List.fold_left add_global_var vars env.
 
 Definition add_global_fun
@@ -152,7 +152,7 @@ Definition add_global_funs
   List.fold_left add_global_fun funs env.
 
 Definition global_typenv (p: program) :=
-  add_global_vars (add_global_funs (PTree.empty type) p.(prog_funct)) p.(prog_defs).
+  add_global_vars (add_global_funs (PTree.empty type) p.(prog_funct)) p.(prog_vars).
 
 Record wt_program (p: program) : Prop :=  mk_wt_program {
   wt_program_funct:

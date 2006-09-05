@@ -653,13 +653,13 @@ Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_transf _ _ transf_fundef prog).
+Proof (@Genv.find_funct_transf _ _ _ transf_fundef prog).
 
 Lemma function_ptr_translated:
   forall (v: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge v = Some f ->
   Genv.find_funct_ptr tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ transf_fundef prog).
+Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
 
 Lemma sig_translated:
   forall (f: RTL.fundef),

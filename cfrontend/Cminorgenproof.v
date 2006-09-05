@@ -22,7 +22,7 @@ Section TRANSLATION.
 Variable prog: Csharpminor.program.
 Variable tprog: program.
 Hypothesis TRANSL: transl_program prog = Some tprog.
-Let ge : Csharpminor.genv := Genv.globalenv (program_of_program prog).
+Let ge : Csharpminor.genv := Genv.globalenv prog.
 Let tge: genv := Genv.globalenv tprog.
 Let gce : compilenv := build_global_compilenv prog.
 
@@ -30,7 +30,7 @@ Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof.
   intro. unfold ge, tge. 
-  apply Genv.find_symbol_transf_partial with (transl_fundef gce).
+  apply Genv.find_symbol_transf_partial2 with (transl_fundef gce) transl_globvar.
   exact TRANSL.
 Qed.
 
@@ -42,7 +42,7 @@ Lemma function_ptr_translated:
 Proof.
   intros. 
   generalize 
-   (Genv.find_funct_ptr_transf_partial (transl_fundef gce) TRANSL H).
+   (Genv.find_funct_ptr_transf_partial2 (transl_fundef gce) transl_globvar TRANSL H).
   case (transl_fundef gce f).
   intros tf [A B]. exists tf. tauto.
   intros [A B]. elim B. reflexivity.
@@ -56,7 +56,7 @@ Lemma functions_translated:
 Proof.
   intros. 
   generalize 
-   (Genv.find_funct_transf_partial (transl_fundef gce) TRANSL H).
+   (Genv.find_funct_transf_partial2 (transl_fundef gce) transl_globvar TRANSL H).
   case (transl_fundef gce f).
   intros tf [A B]. exists tf. tauto.
   intros [A B]. elim B. reflexivity.
@@ -86,9 +86,9 @@ Definition global_compilenv_match (ce: compilenv) (gv: gvarenv) : Prop :=
 Lemma global_compilenv_charact:
   global_compilenv_match gce (global_var_env prog).
 Proof.
-  set (mkgve := fun gv (vars: list (ident * var_kind * list init_data)) =>
+  set (mkgve := fun gv (vars: list (ident * list init_data * var_kind)) =>
          List.fold_left
-          (fun gve x => match x with (id, k, init) => PTree.set id k gve end)
+          (fun gve x => match x with (id, init, k) => PTree.set id k gve end)
           vars gv).
   assert (forall vars gv ce,
             global_compilenv_match ce gv ->
@@ -97,11 +97,11 @@ Proof.
   induction vars; simpl; intros.
   auto.
   apply IHvars. intro id1. unfold assign_global_variable.
-  destruct a as [[id2 lv2] init2]. destruct lv2; simpl; rewrite PMap.gsspec; rewrite PTree.gsspec.
+  destruct a as [[id2 init2] lv2]. destruct lv2; simpl; rewrite PMap.gsspec; rewrite PTree.gsspec.
   case (peq id1 id2); intro. auto. apply H. 
   case (peq id1 id2); intro. auto. apply H.
 
-  change (global_var_env prog) with (mkgve (PTree.empty var_kind) prog.(Csharpminor.prog_vars)).
+  change (global_var_env prog) with (mkgve (PTree.empty var_kind) prog.(prog_vars)).
   unfold gce, build_global_compilenv. apply H. 
   intro. rewrite PMap.gi. auto.
 Qed.
@@ -2534,7 +2534,7 @@ Proof
   of the source program and the transformed program. *)
 
 Lemma match_globalenvs_init:
-  let m := Genv.init_mem (program_of_program prog) in
+  let m := Genv.init_mem prog in
   let tm := Genv.init_mem tprog in
   let f := fun b => if zlt b m.(nextblock) then Some(b, 0) else None in
   match_globalenvs f.
@@ -2560,7 +2560,7 @@ Theorem transl_program_correct:
 Proof.
   intros t n [b [fn [m [FINDS [FINDF [SIG EVAL]]]]]].
   elim (function_ptr_translated _ _ FINDF). intros tfn [TFIND TR].
-  set (m0 := Genv.init_mem (program_of_program prog)) in *.
+  set (m0 := Genv.init_mem prog) in *.
   set (f := fun b => if zlt b m0.(nextblock) then Some(b, 0) else None).
   assert (MINJ0: mem_inject f m0 m0).
     unfold f; constructor; intros.
@@ -2570,7 +2570,7 @@ Proof.
     split. auto. 
     constructor. compute. split; congruence. left; auto. 
     intros; omega. 
-    generalize (Genv.initmem_block_init (program_of_program prog) b0). fold m0. intros [idata EQ].
+    generalize (Genv.initmem_block_init prog b0). fold m0. intros [idata EQ].
     rewrite EQ. simpl. apply Mem.contents_init_data_inject. 
     destruct (zlt b1 (nextblock m0)); try discriminate.
     destruct (zlt b2 (nextblock m0)); try discriminate.
@@ -2583,12 +2583,10 @@ Proof.
   exists b; exists tfn; exists tm1.
   split. fold tge. rewrite <- FINDS. 
   replace (prog_main prog) with (AST.prog_main tprog). fold ge. apply symbols_preserved.
-  transitivity (AST.prog_main (program_of_program prog)).
-  apply transform_partial_program_main with (transl_fundef gce). assumption.
-  reflexivity.
+  apply transform_partial_program2_main with (transl_fundef gce) transl_globvar. assumption.
   split. assumption.
   split. rewrite <- SIG. apply sig_preserved; auto.
-  rewrite (Genv.init_mem_transf_partial (transl_fundef gce) _ TRANSL).
+  rewrite (Genv.init_mem_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
   inversion VINJ; subst tres. assumption. 
 Qed.
 

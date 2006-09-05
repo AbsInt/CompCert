@@ -61,7 +61,7 @@ Record function: Set := mkfunction
 
 Definition fundef := AST.fundef function.
 
-Definition program := AST.program fundef.
+Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with

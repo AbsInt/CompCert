@@ -100,50 +100,32 @@ Proof.
   simpl; intro EQ; inversion EQ; subst vk; auto.
 Qed.
 
-(** Transformation of programs and functions *)
-
-Lemma transform_program_of_program:
-  forall prog tprog,
-  transl_program prog = Some tprog ->
-  transform_partial_program transl_fundef (Csyntax.program_of_program prog) =
-  Some (program_of_program tprog).
-Proof.
-  intros prog tprog TRANSL.  
-  monadInv TRANSL. rewrite <- H0. unfold program_of_program; simpl. 
-  unfold transform_partial_program, Csyntax.program_of_program; simpl.
-  rewrite EQ. decEq. decEq. 
-  generalize EQ0. generalize l0. generalize (prog_defs prog).
-  induction l1; simpl; intros. 
-  inversion EQ1; subst l1. reflexivity.
-  destruct a as [[id ty] init]. monadInv EQ1. subst l2. simpl. decEq. apply IHl1. auto. 
-Qed.
-
 (** ** Some properties of the translation functions *)
 
-Lemma transf_partial_program_names:
+Lemma map_partial_names:
   forall (A B: Set) (f: A -> option B)
          (l: list (ident * A)) (tl: list (ident * B)),
-  transf_partial_program f l = Some tl ->
+  map_partial f l = Some tl ->
   List.map (@fst ident B) tl = List.map (@fst ident A) l.
 Proof.
   induction l; simpl.
   intros. inversion H. reflexivity.
   intro tl. destruct a as [id x]. destruct (f x); try congruence.
-  caseEq (transf_partial_program f l); intros; try congruence.
+  caseEq (map_partial f l); intros; try congruence.
   inversion H0; subst tl. simpl. decEq. auto.
 Qed.
    
-Lemma transf_partial_program_append:
+Lemma map_partial_append:
   forall (A B: Set) (f: A -> option B)
          (l1 l2: list (ident * A)) (tl1 tl2: list (ident * B)),
-  transf_partial_program f l1 = Some tl1 ->
-  transf_partial_program f l2 = Some tl2 ->
-  transf_partial_program f (l1 ++ l2) = Some (tl1 ++ tl2).
+  map_partial f l1 = Some tl1 ->
+  map_partial f l2 = Some tl2 ->
+  map_partial f (l1 ++ l2) = Some (tl1 ++ tl2).
 Proof.
   induction l1; intros until tl2; simpl.
   intros. inversion H. simpl; auto.
   destruct a as [id x]. destruct (f x); try congruence.
-  caseEq (transf_partial_program f l1); intros; try congruence.
+  caseEq (map_partial f l1); intros; try congruence.
   inversion H0. rewrite (IHl1 _ _ _ H H1). auto.
 Qed.
  
@@ -152,7 +134,7 @@ Lemma transl_params_names:
   transl_params vars = Some tvars ->
   List.map (@fst ident memory_chunk) tvars = Ctyping.var_names vars.
 Proof.
-  exact (transf_partial_program_names _ _ chunk_of_type).
+  exact (map_partial_names _ _ chunk_of_type).
 Qed.
 
 Lemma transl_vars_names:
@@ -160,7 +142,7 @@ Lemma transl_vars_names:
   transl_vars vars = Some tvars ->
   List.map (@fst ident var_kind) tvars = Ctyping.var_names vars.
 Proof.
-  exact (transf_partial_program_names _ _ var_kind_of_type).
+  exact (map_partial_names _ _ var_kind_of_type).
 Qed.
 
 Lemma transl_names_norepet:
@@ -182,7 +164,7 @@ Lemma transl_vars_append:
   transl_vars l1 = Some tl1 -> transl_vars l2 = Some tl2 ->
   transl_vars (l1 ++ l2) = Some (tl1 ++ tl2).
 Proof.
-  exact (transf_partial_program_append _ _ var_kind_of_type).
+  exact (map_partial_append _ _ var_kind_of_type).
 Qed.
 
 Lemma transl_params_vars:

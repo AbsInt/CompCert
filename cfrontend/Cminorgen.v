@@ -375,10 +375,10 @@ Definition build_compilenv
     (globenv, 0).
 
 Definition assign_global_variable
-     (ce: compilenv) (info: ident * var_kind * list init_data) : compilenv :=
+     (ce: compilenv) (info: ident * list init_data * var_kind) : compilenv :=
   match info with
-  | (id, Vscalar chunk, _) => PMap.set id (Var_global_scalar chunk) ce
-  | (id, Varray _, _) => PMap.set id Var_global_array ce
+  | (id, _, Vscalar chunk) => PMap.set id (Var_global_scalar chunk) ce
+  | (id, _, Varray _) => PMap.set id Var_global_array ce
   end.
 
 Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
@@ -428,6 +428,8 @@ Definition transl_function
 Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): option fundef :=
   transf_partial_fundef (transl_function gce) f.
 
+Definition transl_globvar (vk: var_kind) := Some tt.
+
 Definition transl_program (p: Csharpminor.program) : option program :=
   let gce := build_global_compilenv p in
-  transform_partial_program (transl_fundef gce) (program_of_program p).
+  transform_partial_program2 (transl_fundef gce) transl_globvar p.

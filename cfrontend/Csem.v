@@ -367,12 +367,6 @@ Inductive cast : val -> type -> type -> val -> Prop :=
 
 Definition genv := Genv.t fundef.
 
-Definition globalenv (p: program) : genv :=
-  Genv.globalenv (program_of_program p).
-
-Definition init_mem (p: program) : mem :=  
-  Genv.init_mem (program_of_program p).
-
 (** Local environment *)
 
 Definition env := PTree.t block. (* map variable -> location *)
@@ -743,8 +737,8 @@ End RELSEM.
 (** Execution of a whole program *)
 
 Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := globalenv p in 
-  let m0 := init_mem p in
+  let ge := Genv.globalenv p in 
+  let m0 := Genv.init_mem p in
   exists b, exists f, exists m1,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\

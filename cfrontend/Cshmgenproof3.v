@@ -24,15 +24,15 @@ Variable tprog: Csharpminor.program.
 Hypothesis WTPROG: wt_program prog.
 Hypothesis TRANSL: transl_program prog = Some tprog.
 
-Let ge := Csem.globalenv prog.
-Let tge := Genv.globalenv (Csharpminor.program_of_program tprog).
+Let ge := Genv.globalenv prog.
+Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall s, Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof.
-  intros. unfold ge, Csem.globalenv, tge. 
-  apply Genv.find_symbol_transf_partial with transl_fundef.
-  apply transform_program_of_program; auto.
+  intros. unfold ge, tge. 
+  apply Genv.find_symbol_transf_partial2 with transl_fundef transl_globvar.
+  auto.
 Qed.
 
 Lemma functions_translated:
@@ -41,7 +41,7 @@ Lemma functions_translated:
   exists tf, Genv.find_funct tge v = Some tf /\ transl_fundef f = Some tf.
 Proof.
   intros. 
-  generalize (Genv.find_funct_transf_partial transl_fundef (transform_program_of_program _ _ TRANSL) H).
+  generalize (Genv.find_funct_transf_partial2 transl_fundef transl_globvar TRANSL H).
   intros [A B]. 
   destruct (transl_fundef f). exists f0; split. assumption. auto. congruence.
 Qed.
@@ -52,7 +52,7 @@ Lemma function_ptr_translated:
   exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = Some tf.
 Proof.
   intros. 
-  generalize (Genv.find_funct_ptr_transf_partial transl_fundef (transform_program_of_program _ _ TRANSL) H).
+  generalize (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar TRANSL H).
   intros [A B]. 
   destruct (transl_fundef f). exists f0; split. assumption. auto. congruence.
 Qed.
@@ -63,8 +63,7 @@ Lemma functions_well_typed:
   wt_fundef (global_typenv prog) f.
 Proof.
   intros. inversion WTPROG. 
-  apply (@Genv.find_funct_prop _ (wt_fundef (global_typenv prog)) 
-                               (Csyntax.program_of_program prog) v f).
+  apply (@Genv.find_funct_prop _ _ (wt_fundef (global_typenv prog)) prog v f).
   intros. apply wt_program_funct with id. assumption.
   assumption.
 Qed.
@@ -75,8 +74,7 @@ Lemma function_ptr_well_typed:
   wt_fundef (global_typenv prog) f.
 Proof.
   intros. inversion WTPROG. 
-  apply (@Genv.find_funct_ptr_prop _ (wt_fundef (global_typenv prog)) 
-                               (Csyntax.program_of_program prog) b f).
+  apply (@Genv.find_funct_ptr_prop _ _ (wt_fundef (global_typenv prog)) prog b f).
   intros. apply wt_program_funct with id. assumption.
   assumption.
 Qed.
@@ -230,9 +228,9 @@ Qed.
 
 Definition globvarenv 
     (gv: gvarenv)
-    (vars: list (ident * var_kind * list init_data)) :=
+    (vars: list (ident * list init_data * var_kind)) :=
   List.fold_left
-    (fun gve x => match x with (id, k, init) => PTree.set id k gve end)
+    (fun gve x => match x with (id, init, k) => PTree.set id k gve end)
     vars gv.
 
 Definition type_not_by_value (ty: type) : Prop :=
@@ -259,14 +257,14 @@ Proof.
 Qed.
 
 Definition global_fun_typenv :=
-  add_global_funs (PTree.empty type) (Csyntax.prog_funct prog).
+  add_global_funs (PTree.empty type) prog.(prog_funct).
 
 Lemma add_global_funs_match_global_env:
   match_globalenv global_fun_typenv (PTree.empty var_kind).
 Proof.
   intros; red; intros.
   assert (type_not_by_value ty).
-    apply add_global_funs_charact with (Csyntax.prog_funct prog) (PTree.empty type) id.
+    apply add_global_funs_charact with (prog_funct prog) (PTree.empty type) id.
     intros until ty0. rewrite PTree.gempty. congruence.
     assumption.
   red in H1. rewrite H0 in H1. contradiction.
@@ -275,17 +273,21 @@ Qed.
 Lemma add_global_var_match_globalenv:
   forall vars tenv gv tvars,
   match_globalenv tenv gv ->
-  transl_global_vars vars = Some tvars ->
+  map_partial transl_globvar vars = Some tvars ->
   match_globalenv (add_global_vars tenv vars) (globvarenv gv tvars).
 Proof.
-  induction vars; intros; simpl.
-  simpl in H0. inversion H0. simpl. auto.
-  destruct a as [[id ty] init]. monadInv H0. subst tvars.
-  simpl. apply IHvars; auto.
+  induction vars; simpl.
+  intros. inversion H0. assumption.
+  destruct a as [[id init] ty]. intros until tvars; intro.
+  caseEq (transl_globvar ty); try congruence. intros vk VK. 
+  caseEq (map_partial transl_globvar vars); try congruence. intros tvars' EQ1 EQ2.
+  inversion EQ2; clear EQ2. simpl. 
+  apply IHvars; auto.
   red. intros until chunk. repeat rewrite PTree.gsspec. 
   destruct (peq id0 id); intros.
-  inversion H1; clear H1; subst id0 ty0. 
-  generalize (var_kind_by_value _ _ H2). congruence.
+  inversion H0; clear H0; subst id0 ty0. 
+  generalize (var_kind_by_value _ _ H2). 
+  unfold transl_globvar in VK. congruence.
   red in H. eauto. 
 Qed.
 
@@ -297,7 +299,7 @@ Proof.
   unfold global_typenv.
   apply add_global_var_match_globalenv.
   apply add_global_funs_match_global_env. 
-  monadInv TRANSL. rewrite <- H0. reflexivity.
+  unfold transl_program in TRANSL. functional inversion TRANSL. auto.
 Qed.
 
 (** ** Variable accessors *)
@@ -1481,23 +1483,18 @@ Proof.
   
   assert (type_of_fundef f = Tfunction Tnil (Tint I32 Signed)).
     apply wt_program_main.
-    change (Csyntax.prog_funct prog)
-      with (AST.prog_funct (Csyntax.program_of_program prog)).
     eapply Genv.find_funct_ptr_symbol_inversion; eauto. 
   exploit function_ptr_translated; eauto. intros [tf [TFINDF TRANSLFD]].
   exists b; exists tf; exists m1.
   split. 
     rewrite (symbols_preserved _ _ TRANSL).
-    monadInv TRANSL. rewrite <- H1. simpl. auto.
+    rewrite (transform_partial_program2_main transl_fundef transl_globvar prog TRANSL). auto.
   split. auto.
   split. 
     generalize (transl_fundef_sig2 _ _ _ _ TRANSLFD H). simpl; auto.
-  rewrite (@Genv.init_mem_transf_partial _ _ transl_fundef 
-             (Csyntax.program_of_program prog)
-             (Csharpminor.program_of_program tprog)).
+  rewrite (@Genv.init_mem_transf_partial2 _ _ _ _ transl_fundef transl_globvar prog tprog TRANSL).
   generalize (transl_funcall_correct _ _ WT TRANSL _ _ _ _ _ _ EVAL).
   intro. eapply H0. 
   eapply function_ptr_well_typed; eauto.
   auto.
-  apply transform_program_of_program; auto.
 Qed.
