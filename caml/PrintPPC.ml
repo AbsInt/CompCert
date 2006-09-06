@@ -374,7 +374,7 @@ let print_init_data oc = function
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
 
-let print_var oc (Coq_pair(name, init_data)) =
+let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
   | Coq_nil -> ()
   | _  ->

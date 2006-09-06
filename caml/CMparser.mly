@@ -148,7 +148,9 @@ global_declarations:
 
 global_declaration:
     VAR STRINGLIT LBRACKET INTLIT RBRACKET
-      { Coq_pair($2, Coq_cons(Init_space (z_of_camlint $4), Coq_nil)) }
+      { Coq_pair(Coq_pair($2,
+                          Coq_cons(Init_space (z_of_camlint $4), Coq_nil)),
+                 ()) }
 ;
 
 proc_list:
