@@ -335,6 +335,16 @@ Definition cast_float_float (sz: floatsize) (f: float) : float :=
   | F64 => f
   end.
 
+Inductive neutral_for_cast: type -> Prop :=
+  | nfc_int: forall sg,
+      neutral_for_cast (Tint I32 sg)
+  | nfc_ptr: forall ty,
+      neutral_for_cast (Tpointer ty)
+  | nfc_array: forall ty sz,
+      neutral_for_cast (Tarray ty sz)
+  | nfc_fun: forall targs tres,
+      neutral_for_cast (Tfunction targs tres).
+
 Inductive cast : val -> type -> type -> val -> Prop :=
   | cast_ii:   forall i sz2 sz1 si1 si2,
       cast (Vint i) (Tint sz1 si1) (Tint sz2 si2)
@@ -348,18 +358,12 @@ Inductive cast : val -> type -> type -> val -> Prop :=
   | cast_ff:   forall f sz1 sz2,
       cast (Vfloat f) (Tfloat sz1) (Tfloat sz2)
            (Vfloat (cast_float_float sz2 f))
-  | cast_ip_p:   forall b ofs t1 si2,
-      cast (Vptr b ofs) (Tint I32 si2) (Tpointer t1) (Vptr b ofs)
-  | cast_pi_p:   forall b ofs t1 si2,
-      cast (Vptr b ofs) (Tpointer t1) (Tint I32 si2) (Vptr b ofs)
-  | cast_pp_p:    forall b ofs t1 t2,
-      cast (Vptr b ofs) (Tpointer t1) (Tpointer t2) (Vptr b ofs)
-  | cast_ip_i:   forall n t1 si2,
-      cast (Vint n) (Tint I32 si2) (Tpointer t1) (Vint n)
-  | cast_pi_i:   forall n t1 si2,
-      cast (Vint n) (Tpointer t1) (Tint I32 si2) (Vint n)
-  | cast_pp_i:    forall n t1 t2,
-      cast (Vint n) (Tpointer t1) (Tpointer t2) (Vint n).
+  | cast_nn_p: forall b ofs t1 t2,
+      neutral_for_cast t1 -> neutral_for_cast t2 ->
+      cast (Vptr b ofs) t1 t2 (Vptr b ofs)
+  | cast_nn_i: forall n t1 t2,
+      neutral_for_cast t1 -> neutral_for_cast t2 ->
+      cast (Vint n) t1 t2 (Vint n).
 
 (** ** Operational semantics *)
 

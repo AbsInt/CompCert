@@ -373,7 +373,7 @@ Lemma make_cast_correct:
 Proof.
   unfold make_cast, make_cast1, make_cast2, make_unop.
   intros until v'; intros EVAL CAST.
-  inversion CAST; clear CAST; subst; auto.
+  inversion CAST; clear CAST; subst.
   (* cast_int_int *)
     destruct sz2; destruct si2; repeat econstructor; eauto with cshm.
   (* cast_float_int *)
@@ -382,6 +382,10 @@ Proof.
     destruct sz2; destruct si1; unfold make_floatofint, make_unop; repeat econstructor; eauto with cshm; simpl; auto.
   (* cast_float_float *)
     destruct sz2; repeat econstructor; eauto with cshm.
+  (* neutral, ptr *)
+   inversion H0; auto; inversion H; auto.
+  (* neutral, int *)
+   inversion H0; auto; inversion H; auto.
 Qed.
 
 Lemma make_load_correct:
