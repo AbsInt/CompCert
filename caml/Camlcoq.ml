@@ -7,11 +7,6 @@ open BinInt
 
 (* Integers *)
 
-let rec camlint_of_nat n =
-  match n with
-  | O -> 0l
-  | S n -> Int32.add (camlint_of_nat n) 1l
-
 let rec camlint_of_positive = function
   | Coq_xI p -> Int32.add (Int32.shift_left (camlint_of_positive p) 1) 1l
   | Coq_xO p -> Int32.shift_left (camlint_of_positive p) 1
