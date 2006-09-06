@@ -162,7 +162,7 @@ Record wt_program (p: program) : Prop :=  mk_wt_program {
   wt_program_main:
     forall fd,
     In (p.(prog_main), fd) p.(prog_funct) ->
-    type_of_fundef fd = Tfunction Tnil (Tint I32 Signed)
+    exists targs, type_of_fundef fd = Tfunction targs (Tint I32 Signed)
 }.
 
 (** ** Type-checking algorithm *)
@@ -386,14 +386,18 @@ Definition typecheck_fundef (main: ident) (env: typenv) (id_fd: ident * fundef) 
   | External _ _ _ => true
   end &&
   if ident_eq id main
-  then eq_type (type_of_fundef fd) (Tfunction Tnil (Tint I32 Signed))
+  then match type_of_fundef fd with
+       | Tfunction targs tres => eq_type tres (Tint I32 Signed)
+       | _ => false
+       end
   else true.
 
 Lemma typecheck_fundef_correct:
   forall main env id fd,
   typecheck_fundef main env (id, fd) = true ->
   wt_fundef env fd /\
-  (id = main -> type_of_fundef fd = Tfunction Tnil (Tint I32 Signed)).
+  (id = main ->
+   exists targs, type_of_fundef fd = Tfunction targs (Tint I32 Signed)).
 Proof.
   intros. unfold typecheck_fundef in H; TrueInv.
   split. 
@@ -401,7 +405,8 @@ Proof.
     constructor. apply typecheck_function_correct; auto. 
     constructor.
   intro. destruct (ident_eq id main). 
-  apply eq_type_correct; auto.
+  destruct (type_of_fundef fd); try discriminate. 
+  exists t; decEq; auto. apply eq_type_correct; auto.
   congruence.
 Qed.
 

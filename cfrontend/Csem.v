@@ -742,5 +742,4 @@ Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   exists b, exists f, exists m1,
   Genv.find_symbol ge p.(prog_main) = Some b /\
   Genv.find_funct_ptr ge b = Some f /\
-  type_of_fundef f = Tfunction Tnil (Tint I32 Signed) /\
   eval_funcall ge m0 f nil t m1 r.

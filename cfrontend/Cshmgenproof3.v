@@ -1478,12 +1478,19 @@ Theorem transl_program_correct:
   Csem.exec_program prog t r ->
   Csharpminor.exec_program tprog t r.
 Proof.
-  intros until r. intros TRANSL WT [b [f [m1 [FINDS [FINDF [TYP EVAL]]]]]].
+  intros until r. intros TRANSL WT [b [f [m1 [FINDS [FINDF EVAL]]]]].
   inversion WT; subst.
-  
-  assert (type_of_fundef f = Tfunction Tnil (Tint I32 Signed)).
+
+  assert (exists targs, type_of_fundef f = Tfunction targs (Tint I32 Signed)).
     apply wt_program_main.
     eapply Genv.find_funct_ptr_symbol_inversion; eauto. 
+  elim H; clear H; intros targs TYP.
+  assert (targs = Tnil).
+    inversion EVAL; subst; simpl in TYP.
+    inversion H0; subst. injection TYP. rewrite <- H6. simpl; auto.
+    inversion TYP; subst targs0 tres. inversion H. simpl in H0. 
+    inversion H0. destruct targs; simpl in H8; congruence.
+  subst targs.
   exploit function_ptr_translated; eauto. intros [tf [TFINDF TRANSLFD]].
   exists b; exists tf; exists m1.
   split. 
@@ -1491,10 +1498,10 @@ Proof.
     rewrite (transform_partial_program2_main transl_fundef transl_globvar prog TRANSL). auto.
   split. auto.
   split. 
-    generalize (transl_fundef_sig2 _ _ _ _ TRANSLFD H). simpl; auto.
+    generalize (transl_fundef_sig2 _ _ _ _ TRANSLFD TYP). simpl; auto.
   rewrite (@Genv.init_mem_transf_partial2 _ _ _ _ transl_fundef transl_globvar prog tprog TRANSL).
   generalize (transl_funcall_correct _ _ WT TRANSL _ _ _ _ _ _ EVAL).
-  intro. eapply H0. 
+  intro. eapply H. 
   eapply function_ptr_well_typed; eauto.
   auto.
 Qed.
