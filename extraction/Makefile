@@ -6,6 +6,8 @@ FILES=\
   Coqlib.ml Maps.ml Sets.ml AST.ml Iteration.ml Integers.ml \
   ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
+  csyntax.ml ctyping.ml \
+  cshmgen.ml \
   Op.ml Cminor.ml Cmconstr.ml \
   Csharpminor.ml Cminorgen.ml \
   Registers.ml RTL.ml \

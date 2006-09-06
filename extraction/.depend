@@ -76,11 +76,15 @@ CSE.cmi: Specif.cmi Registers.cmi RTL.cmi Op.cmi Maps.cmi Integers.cmi \
 Csharpminor.cmi: Zmax.cmi Values.cmi Specif.cmi Mem.cmi Maps.cmi Integers.cmi \
     Globalenvs.cmi Floats.cmi Datatypes.cmi CList.cmi BinPos.cmi BinInt.cmi \
     AST.cmi 
+cshmgen.cmi: Peano.cmi Integers.cmi Floats.cmi Datatypes.cmi csyntax.cmi \
+    Csharpminor.cmi CList.cmi AST.cmi 
+csyntax.cmi: Zmax.cmi Specif.cmi Integers.cmi Floats.cmi Datatypes.cmi \
+    Coqlib.cmi CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
+ctyping.cmi: Specif.cmi Maps.cmi Datatypes.cmi csyntax.cmi Coqlib.cmi \
+    CList.cmi AST.cmi 
 Floats.cmi: Specif.cmi Integers.cmi Datatypes.cmi 
 FSetAVL.cmi: Wf.cmi Specif.cmi Peano.cmi OrderedType.cmi Int.cmi \
     Datatypes.cmi CList.cmi BinPos.cmi BinInt.cmi 
-FSetBridge.cmi: Specif.cmi FSetInterface.cmi Datatypes.cmi CList.cmi 
-FSetInterface.cmi: Specif.cmi Datatypes.cmi CList.cmi 
 FSetList.cmi: Specif.cmi OrderedType.cmi Datatypes.cmi CList.cmi 
 Globalenvs.cmi: Values.cmi Mem.cmi Maps.cmi Integers.cmi Datatypes.cmi \
     CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
@@ -109,8 +113,8 @@ Mach.cmi: Zmax.cmi Zdiv.cmi Values.cmi Specif.cmi Op.cmi Mem.cmi \
     Locations.cmi Integers.cmi Globalenvs.cmi Datatypes.cmi Coqlib.cmi \
     CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
 Main.cmi: Tunneling.cmi Stacking.cmi RTLgen.cmi PPCgen.cmi PPC.cmi \
-    Linearize.cmi Datatypes.cmi Csharpminor.cmi Constprop.cmi Cminorgen.cmi \
-    Cminor.cmi CSE.cmi Allocation.cmi AST.cmi 
+    Linearize.cmi Datatypes.cmi ctyping.cmi csyntax.cmi cshmgen.cmi \
+    Constprop.cmi Cminorgen.cmi Cminor.cmi CSE.cmi Allocation.cmi AST.cmi 
 Maps.cmi: Specif.cmi Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi BinNat.cmi \
     BinInt.cmi 
 Mem.cmi: Zmax.cmi Values.cmi Specif.cmi Integers.cmi Datatypes.cmi Coqlib.cmi \
@@ -141,8 +145,7 @@ Stacking.cmi: Specif.cmi Op.cmi Mach.cmi Locations.cmi Lineartyping.cmi \
     Linear.cmi Integers.cmi Datatypes.cmi Coqlib.cmi Conventions.cmi \
     CList.cmi BinPos.cmi BinInt.cmi AST.cmi 
 Sumbool.cmi: Specif.cmi Datatypes.cmi 
-Tunneling.cmi: Maps.cmi LTL.cmi Datatypes.cmi CList.cmi AST.cmi 
-union_find.cmi: Wf.cmi Specif.cmi Datatypes.cmi 
+Tunneling.cmi: Maps.cmi LTL.cmi Datatypes.cmi AST.cmi 
 Values.cmi: Specif.cmi Integers.cmi Floats.cmi Datatypes.cmi Coqlib.cmi \
     BinPos.cmi BinInt.cmi AST.cmi 
 ZArith_dec.cmi: Sumbool.cmi Specif.cmi Datatypes.cmi BinInt.cmi 
@@ -152,7 +155,6 @@ Zdiv.cmi: Zbool.cmi ZArith_dec.cmi Specif.cmi Datatypes.cmi BinPos.cmi \
     BinInt.cmi 
 Zeven.cmi: Specif.cmi Datatypes.cmi BinPos.cmi BinInt.cmi 
 Zmax.cmi: Datatypes.cmi BinInt.cmi 
-Zmin.cmi: Datatypes.cmi BinInt.cmi 
 Zmisc.cmi: Datatypes.cmi BinPos.cmi BinInt.cmi 
 Zpower.cmi: Zmisc.cmi Datatypes.cmi BinPos.cmi BinInt.cmi 
 Allocation.cmo: Specif.cmi Registers.cmi RTLtyping.cmi RTL.cmi \
@@ -225,6 +227,18 @@ Csharpminor.cmo: Zmax.cmi Values.cmi Specif.cmi Mem.cmi Maps.cmi Integers.cmi \
 Csharpminor.cmx: Zmax.cmx Values.cmx Specif.cmx Mem.cmx Maps.cmx Integers.cmx \
     Globalenvs.cmx Floats.cmx Datatypes.cmx CList.cmx BinPos.cmx BinInt.cmx \
     AST.cmx Csharpminor.cmi 
+cshmgen.cmo: Peano.cmi Integers.cmi Floats.cmi Datatypes.cmi csyntax.cmi \
+    Csharpminor.cmi CList.cmi AST.cmi cshmgen.cmi 
+cshmgen.cmx: Peano.cmx Integers.cmx Floats.cmx Datatypes.cmx csyntax.cmx \
+    Csharpminor.cmx CList.cmx AST.cmx cshmgen.cmi 
+csyntax.cmo: Zmax.cmi Specif.cmi Integers.cmi Floats.cmi Datatypes.cmi \
+    Coqlib.cmi CList.cmi BinPos.cmi BinInt.cmi AST.cmi csyntax.cmi 
+csyntax.cmx: Zmax.cmx Specif.cmx Integers.cmx Floats.cmx Datatypes.cmx \
+    Coqlib.cmx CList.cmx BinPos.cmx BinInt.cmx AST.cmx csyntax.cmi 
+ctyping.cmo: Specif.cmi Maps.cmi Datatypes.cmi csyntax.cmi Coqlib.cmi \
+    CList.cmi AST.cmi ctyping.cmi 
+ctyping.cmx: Specif.cmx Maps.cmx Datatypes.cmx csyntax.cmx Coqlib.cmx \
+    CList.cmx AST.cmx ctyping.cmi 
 Datatypes.cmo: Datatypes.cmi 
 Datatypes.cmx: Datatypes.cmi 
 Floats.cmo: Specif.cmi Integers.cmi ../caml/Floataux.cmo Datatypes.cmi \
@@ -235,12 +249,6 @@ FSetAVL.cmo: Wf.cmi Specif.cmi Peano.cmi OrderedType.cmi Int.cmi FSetList.cmi \
     Datatypes.cmi CList.cmi BinPos.cmi BinInt.cmi FSetAVL.cmi 
 FSetAVL.cmx: Wf.cmx Specif.cmx Peano.cmx OrderedType.cmx Int.cmx FSetList.cmx \
     Datatypes.cmx CList.cmx BinPos.cmx BinInt.cmx FSetAVL.cmi 
-FSetBridge.cmo: Specif.cmi FSetInterface.cmi Datatypes.cmi CList.cmi \
-    FSetBridge.cmi 
-FSetBridge.cmx: Specif.cmx FSetInterface.cmx Datatypes.cmx CList.cmx \
-    FSetBridge.cmi 
-FSetInterface.cmo: Specif.cmi Datatypes.cmi CList.cmi FSetInterface.cmi 
-FSetInterface.cmx: Specif.cmx Datatypes.cmx CList.cmx FSetInterface.cmi 
 FSetList.cmo: Specif.cmi OrderedType.cmi Datatypes.cmi CList.cmi FSetList.cmi 
 FSetList.cmx: Specif.cmx OrderedType.cmx Datatypes.cmx CList.cmx FSetList.cmi 
 Globalenvs.cmo: Values.cmi Mem.cmi Maps.cmi Integers.cmi Datatypes.cmi \
@@ -304,11 +312,13 @@ Mach.cmx: Zmax.cmx Zdiv.cmx Values.cmx Specif.cmx Op.cmx Mem.cmx Maps.cmx \
     Locations.cmx Integers.cmx Globalenvs.cmx Datatypes.cmx Coqlib.cmx \
     CList.cmx BinPos.cmx BinInt.cmx AST.cmx Mach.cmi 
 Main.cmo: Tunneling.cmi Stacking.cmi RTLgen.cmi PPCgen.cmi PPC.cmi \
-    Linearize.cmi Datatypes.cmi Csharpminor.cmi Constprop.cmi Cminorgen.cmi \
-    Cminor.cmi CSE.cmi Allocation.cmi AST.cmi Main.cmi 
+    Linearize.cmi Datatypes.cmi ctyping.cmi csyntax.cmi cshmgen.cmi \
+    Constprop.cmi Cminorgen.cmi Cminor.cmi CSE.cmi Allocation.cmi AST.cmi \
+    Main.cmi 
 Main.cmx: Tunneling.cmx Stacking.cmx RTLgen.cmx PPCgen.cmx PPC.cmx \
-    Linearize.cmx Datatypes.cmx Csharpminor.cmx Constprop.cmx Cminorgen.cmx \
-    Cminor.cmx CSE.cmx Allocation.cmx AST.cmx Main.cmi 
+    Linearize.cmx Datatypes.cmx ctyping.cmx csyntax.cmx cshmgen.cmx \
+    Constprop.cmx Cminorgen.cmx Cminor.cmx CSE.cmx Allocation.cmx AST.cmx \
+    Main.cmi 
 Maps.cmo: Specif.cmi Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi BinNat.cmi \
     BinInt.cmi Maps.cmi 
 Maps.cmx: Specif.cmx Datatypes.cmx Coqlib.cmx CList.cmx BinPos.cmx BinNat.cmx \
@@ -379,10 +389,8 @@ Stacking.cmx: Specif.cmx Op.cmx Mach.cmx Locations.cmx Lineartyping.cmx \
     CList.cmx BinPos.cmx BinInt.cmx AST.cmx Stacking.cmi 
 Sumbool.cmo: Specif.cmi Datatypes.cmi Sumbool.cmi 
 Sumbool.cmx: Specif.cmx Datatypes.cmx Sumbool.cmi 
-Tunneling.cmo: Maps.cmi LTL.cmi Datatypes.cmi CList.cmi AST.cmi Tunneling.cmi 
-Tunneling.cmx: Maps.cmx LTL.cmx Datatypes.cmx CList.cmx AST.cmx Tunneling.cmi 
-union_find.cmo: Wf.cmi Specif.cmi Datatypes.cmi union_find.cmi 
-union_find.cmx: Wf.cmx Specif.cmx Datatypes.cmx union_find.cmi 
+Tunneling.cmo: Maps.cmi LTL.cmi Datatypes.cmi AST.cmi Tunneling.cmi 
+Tunneling.cmx: Maps.cmx LTL.cmx Datatypes.cmx AST.cmx Tunneling.cmi 
 Values.cmo: Specif.cmi Integers.cmi Floats.cmi Datatypes.cmi Coqlib.cmi \
     BinPos.cmi BinInt.cmi AST.cmi Values.cmi 
 Values.cmx: Specif.cmx Integers.cmx Floats.cmx Datatypes.cmx Coqlib.cmx \
@@ -405,8 +413,6 @@ Zeven.cmo: Specif.cmi Datatypes.cmi BinPos.cmi BinInt.cmi Zeven.cmi
 Zeven.cmx: Specif.cmx Datatypes.cmx BinPos.cmx BinInt.cmx Zeven.cmi 
 Zmax.cmo: Datatypes.cmi BinInt.cmi Zmax.cmi 
 Zmax.cmx: Datatypes.cmx BinInt.cmx Zmax.cmi 
-Zmin.cmo: Datatypes.cmi BinInt.cmi Zmin.cmi 
-Zmin.cmx: Datatypes.cmx BinInt.cmx Zmin.cmi 
 Zmisc.cmo: Datatypes.cmi BinPos.cmi BinInt.cmi Zmisc.cmi 
 Zmisc.cmx: Datatypes.cmx BinPos.cmx BinInt.cmx Zmisc.cmi 
 Zpower.cmo: Zmisc.cmi Datatypes.cmi BinPos.cmi BinInt.cmi Zpower.cmi 
