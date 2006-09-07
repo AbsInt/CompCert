@@ -1,0 +1,38 @@
+*** ../cil/src/ext/usedef.ml	2006-05-21 06:14:15.000000000 +0200
+--- ../cil_patch/src/ext/usedef.ml	2006-06-20 17:36:16.000000000 +0200
+***************
+*** 1,3 ****
+--- 1,5 ----
++ (* MODIF: Loop constructor replaced by 3 constructors: While, DoWhile, For. *)
++ 
+  
+  open Cil
+  open Pretty
+***************
+*** 130,136 ****
+--- 132,141 ----
+      | Return (Some e, _) -> ve e
+      | If (e, _, _, _) -> ve e
+      | Break _ | Goto _ | Continue _ -> ()
++ (*
+      | Loop (_, _, _, _) -> ()
++ *)
++     | While _ | DoWhile _ | For _ -> ()
+      | Switch (e, _, _, _) -> ve e
+      | Instr il -> 
+          List.iter (fun i -> ignore (visitCilInstr useDefVisitor i)) il
+***************
+*** 165,171 ****
+--- 170,181 ----
+        let u'', d'' = handle_block fb in
+        (VS.union (VS.union u u') u'', VS.union (VS.union d d') d'')
+    | Break _ | Goto _ | Continue _ -> !varUsed, !varDefs
++ (*
+    | Loop (b, _, _, _) -> handle_block b
++ *)
++   | While (_, b, _) -> handle_block b
++   | DoWhile (_, b, _) -> handle_block b
++   | For (_, _, _, b, _) -> handle_block b
+    | Switch (e, b, _, _) -> 
+        let _ = ve e in
+        let u, d = !varUsed, !varDefs in

@@ -1,6 +1,7 @@
 COQC=coqc $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
 COQDOC=coqdoc
+CILDISTRIB=cil-1.3.5.tar.gz
 
 INCLUDES=-I lib -I common -I backend -I cfrontend
 
@@ -52,9 +53,16 @@ proof: $(FILES:.v=.vo)
 
 all:
 	$(MAKE) proof
+	$(MAKE) cil
 	$(MAKE) -C extraction extraction
 	$(MAKE) -C extraction depend
 	$(MAKE) -C extraction
+
+cil:
+	tar xzf $(CILDISTRIB)
+	for i in cil.patch/*; do patch -p1 < $$i; done
+	cd cil; ./configure
+	$(MAKE) -C cil
 
 documentation:
 	$(COQDOC) --html -d doc $(FLATFILES:%.v=--glob-from doc/%.glob) $(FILES)

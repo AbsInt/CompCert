@@ -6,10 +6,9 @@ FILES=\
   Coqlib.ml Maps.ml Sets.ml AST.ml Iteration.ml Integers.ml \
   ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
-  csyntax.ml ctyping.ml \
-  cshmgen.ml \
+  Csyntax.ml Ctyping.ml Csharpminor.ml Cshmgen.ml \
   Op.ml Cminor.ml Cmconstr.ml \
-  Csharpminor.ml Cminorgen.ml \
+  Cminorgen.ml \
   Registers.ml RTL.ml \
   ../caml/RTLgenaux.ml RTLgen.ml \
   Locations.ml Conventions.ml \
@@ -23,27 +22,30 @@ FILES=\
   Mach.ml Stacking.ml \
   PPC.ml PPCgen.ml \
   Main.ml \
+  ../caml/Cil2Csyntax.ml \
   ../caml/CMparser.ml ../caml/CMlexer.ml ../caml/CMtypecheck.ml \
-  ../caml/PrintPPC.ml ../caml/Main2.ml
+  ../caml/PrintCsyntax.ml ../caml/PrintPPC.ml \
+  ../caml/Main2.ml
 
 EXTRACTEDFILES:=$(filter-out ../caml/%, $(FILES))
 GENFILES:=$(EXTRACTEDFILES) $(EXTRACTEDFILES:.ml=.mli)
 
-CAMLINCL=-I ../caml
+CAMLINCL=-I ../caml -I ../cil/obj/x86_LINUX
 OCAMLC=ocamlc -g $(CAMLINCL)
 OCAMLOPT=ocamlopt $(CAMLINCL)
 OCAMLDEP=ocamldep $(CAMLINCL)
+OCAMLLIBS=unix.cma str.cma cil.cma
 
 COQINCL=-I ../lib -I ../common -I ../backend -I ../cfrontend
 COQEXEC=coqtop $(COQINCL) -batch -load-vernac-source
 
 ../ccomp: $(FILES:.ml=.cmo)
-	$(OCAMLC) -o ../ccomp $(FILES:.ml=.cmo)
+	$(OCAMLC) -o ../ccomp $(OCAMLLIBS) $(FILES:.ml=.cmo)
 clean::
 	rm -f ../ccomp
 
 ../ccomp.opt: $(FILES:.ml=.cmx)
-	$(OCAMLOPT) -o ../ccomp.opt $(FILES:.ml=.cmx)
+	$(OCAMLOPT) -o ../ccomp.opt $(OCAMLLIBS:.cma=.cmxa) $(FILES:.ml=.cmx)
 clean::
 	rm -f ../ccomp.opt
 

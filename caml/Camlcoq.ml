@@ -31,8 +31,8 @@ let rec positive_of_camlint n =
   if n = 0l then assert false else
   if n = 1l then Coq_xH else
   if Int32.logand n 1l = 0l
-  then Coq_xO (positive_of_camlint (Int32.shift_right n 1))
-  else Coq_xI (positive_of_camlint (Int32.shift_right n 1))
+  then Coq_xO (positive_of_camlint (Int32.shift_right_logical n 1))
+  else Coq_xI (positive_of_camlint (Int32.shift_right_logical n 1))
 
 let z_of_camlint n =
   if n = 0l then Z0 else

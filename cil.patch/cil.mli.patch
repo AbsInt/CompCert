@@ -1,0 +1,59 @@
+*** ../cil/src/cil.mli	2006-05-21 06:14:15.000000000 +0200
+--- ../cil_patch/src/cil.mli	2006-06-21 10:56:23.555126082 +0200
+***************
+*** 1,3 ****
+--- 1,5 ----
++ (* MODIF: Loop constructor replaced by 3 constructors: While, DoWhile, For. *)
++ 
+  (*
+   *
+   * Copyright (c) 2001-2002, 
+***************
+*** 918,927 ****
+      * statement. The target statement MUST have at least a label. *)
+  
+    | Break of location                   
+!    (** A break to the end of the nearest enclosing Loop or Switch *)
+  
+    | Continue of location                
+!    (** A continue to the start of the nearest enclosing [Loop] *)
+    | If of exp * block * block * location 
+     (** A conditional. Two successors, the "then" and the "else" branches. 
+      * Both branches fall-through to the successor of the If statement. *)
+--- 920,929 ----
+      * statement. The target statement MUST have at least a label. *)
+  
+    | Break of location                   
+!    (** A break to the end of the nearest enclosing loop or Switch *)
+  
+    | Continue of location                
+!    (** A continue to the start of the nearest enclosing loop *)
+    | If of exp * block * block * location 
+     (** A conditional. Two successors, the "then" and the "else" branches. 
+      * Both branches fall-through to the successor of the If statement. *)
+***************
+*** 932,943 ****
+--- 934,956 ----
+      * among its labels what cases it implements. The statements that 
+      * implement the cases are somewhere within the provided [block]. *)
+  
++ (*
+    | Loop of block * location * (stmt option) * (stmt option)
+      (** A [while(1)] loop. The termination test is implemented in the body of 
+       * a loop using a [Break] statement. If prepareCFG has been called,
+       * the first stmt option will point to the stmt containing the continue
+       * label for this loop and the second will point to the stmt containing
+       * the break label for this loop. *)
++ *)
++ 
++   | While of exp * block * location
++     (** A [while] loop. *)
++ 
++   | DoWhile of exp * block * location
++     (** A [do...while] loop. *)
++ 
++   | For of block * exp * block * block * location
++     (** A [for] loop. *)
+  
+    | Block of block                      
+      (** Just a block of statements. Use it as a way to keep some block 

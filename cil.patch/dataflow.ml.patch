@@ -1,0 +1,27 @@
+*** ../cil/src/ext/dataflow.ml	2006-05-21 06:14:15.000000000 +0200
+--- ../cil_patch/src/ext/dataflow.ml	2006-06-20 17:28:35.000000000 +0200
+***************
+*** 1,3 ****
+--- 1,4 ----
++ (* MODIF: Loop constructor replaced by 3 constructors: While, DoWhile, For. *)
+  
+  module IH = Inthash
+  module E = Errormsg
+***************
+*** 219,225 ****
+  
+              | Goto _ | Break _ | Continue _ | If _ 
+              | TryExcept _ | TryFinally _ 
+!             | Switch _ | Loop _ | Return _ | Block _ -> curr
+            in
+            currentLoc := get_stmtLoc s.skind;
+                  
+--- 220,227 ----
+  
+              | Goto _ | Break _ | Continue _ | If _ 
+              | TryExcept _ | TryFinally _ 
+!             | Switch _ | (*Loop _*) While _ | DoWhile _ | For _
+! 	    | Return _ | Block _ -> curr
+            in
+            currentLoc := get_stmtLoc s.skind;
+                  
