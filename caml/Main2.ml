@@ -78,14 +78,14 @@ let process_c_file sourcename =
       Cil2CsyntaxTranslator.convertFile cil
     with
     | Cil2CsyntaxTranslator.Unsupported msg ->
-        eprintf "Unsupported C feature: %s\n" msg;
+        eprintf "%s\n" msg;
         exit 2
-    | Failure msg ->
-        eprintf "Error in translation CIL -> Csyntax:\n%s\n" msg;
+    | Cil2CsyntaxTranslator.Internal_error msg ->
+        eprintf "%s\nPlease report it.\n" msg;
         exit 2 in
   (* Save Csyntax if requested *)
   if !save_csyntax then begin
-    let oc = open_out (targetname ^ ".csyntax") in
+    let oc = open_out (targetname ^ ".clight") in
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
@@ -138,7 +138,7 @@ let starts_with s1 s2 =
 let rec parse_cmdline i =
   if i < Array.length Sys.argv then begin
     let s = Sys.argv.(i) in
-    if s = "-dcsyntax" then begin
+    if s = "-dump-c" then begin
       save_csyntax := true;
       parse_cmdline (i + 1)
     end else

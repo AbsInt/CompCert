@@ -340,18 +340,41 @@ let print_function oc name code =
   fprintf oc "%a:\n" print_symb name;
   coqlist_iter (print_instruction oc (labels_of_code code)) code
 
+let re_variadic_stub = Str.regexp "\\(.*\\)\\$\\([if]*\\)$"
+
 let print_external_function oc name =
   let name = extern_atom name in
+  let (basename, types) =
+    if Str.string_match re_variadic_stub name 0
+    then (Str.matched_group 1 name, Str.matched_group 2 name)
+    else (name, "") in
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
   fprintf oc "L%s$stub:\n" name;
+  (* Insertion of copies from float regs to pairs of int regs *)
+  let rec insert_copy i gpr fpr =
+    if i < String.length types then begin
+      match types.[i] with
+      | 'i' ->
+          insert_copy (i + 1) (gpr + 1) fpr
+      | 'f' ->
+          if gpr <= 10 then begin
+            fprintf oc "	stfd	f%d, 24(r1)\n" fpr;
+            fprintf oc "	lwz	r%d, 24(r1)\n" gpr;
+            if gpr <= 9 then
+              fprintf oc "	lwz	r%d, 28(r1)\n" (gpr + 1)
+          end;
+          insert_copy (i + 1) (gpr + 2) (fpr + 1)
+      |  _  -> assert false
+    end in
+  insert_copy 0 3 1;
   fprintf oc "	addis	r11, 0, ha16(L%s$ptr)\n" name;
   fprintf oc "	lwz	r11, lo16(L%s$ptr)(r11)\n" name;
   fprintf oc "	mtctr	r11\n";
   fprintf oc "	bctr\n";
   fprintf oc "	.non_lazy_symbol_pointer\n";
   fprintf oc "L%s$ptr:\n" name;
-  fprintf oc "	.indirect_symbol _%s\n" name;
+  fprintf oc "	.indirect_symbol _%s\n" basename;
   fprintf oc "	.long	0\n"
 
 let print_fundef oc (Coq_pair(name, defn)) =
@@ -367,9 +390,14 @@ let print_init_data oc = function
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.long	%ld # %g \n" (Int32.bits_of_float n) n
+      fprintf oc "	.long	%ld ; %g \n" (Int32.bits_of_float n) n
   | Init_float64 n ->
-      fprintf oc "	.quad	%Ld # %g \n" (Int64.bits_of_float n) n
+      (* .quad not working on all versions of the MacOSX assembler *)
+      let b = Int64.bits_of_float n in
+      fprintf oc "	.long	%Ld, %Ld ; %g \n"
+                 (Int64.shift_right_logical b 32)
+                 (Int64.logand b 0xFFFFFFFFL)
+                 n
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
@@ -380,7 +408,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   | _  ->
       fprintf oc "	.data\n";
       fprintf oc "	.globl	%a\n" print_symb name;
-      fprintf oc "%a:" print_symb name;
+      fprintf oc "%a:\n" print_symb name;
       coqlist_iter (print_init_data oc) init_data
 
 let print_program oc p =

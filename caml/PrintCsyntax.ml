@@ -93,13 +93,18 @@ let rec name_cdecl id ty =
       then Buffer.add_string b "(*)"
       else Buffer.add_string b (parenthesize_if_pointer id);
       Buffer.add_char b '(';
-      let rec add_args first = function
-      | Tnil -> ()
-      | Tcons(t1, tl) ->
-          if not first then Buffer.add_string b ", ";
-          Buffer.add_string b (name_cdecl "" t1);
-          add_args false tl in
-      add_args true args;
+      begin match args with
+      | Tnil ->
+          Buffer.add_string b "void"
+      | _ ->
+          let rec add_args first = function
+          | Tnil -> ()
+          | Tcons(t1, tl) ->
+              if not first then Buffer.add_string b ", ";
+              Buffer.add_string b (name_cdecl "" t1);
+              add_args false tl in
+          add_args true args
+      end;
       Buffer.add_char b ')';
       name_cdecl (Buffer.contents b) res
   | Tstruct fld ->
@@ -274,13 +279,18 @@ let name_function_parameters fun_name params =
   let b = Buffer.create 20 in
   Buffer.add_string b fun_name;
   Buffer.add_char b '(';
-  let rec add_params first = function
-  | Coq_nil -> ()
-  | Coq_cons(Coq_pair(id, ty), rem) ->
-      if not first then Buffer.add_string b ", ";
-      Buffer.add_string b (name_cdecl (extern_atom id) ty);
-      add_params false rem in
-  add_params true params;
+  begin match params with
+  | Coq_nil ->
+      Buffer.add_string b "void"
+  | _ ->
+      let rec add_params first = function
+      | Coq_nil -> ()
+      | Coq_cons(Coq_pair(id, ty), rem) ->
+          if not first then Buffer.add_string b ", ";
+          Buffer.add_string b (name_cdecl (extern_atom id) ty);
+          add_params false rem in
+      add_params true params
+  end;
   Buffer.add_char b ')';
   Buffer.contents b
 
@@ -300,7 +310,7 @@ let print_function p id f =
 let print_fundef p (Coq_pair(id, fd)) =
   match fd with
   | External(_, args, res) ->
-      fprintf p "extern %s;@ "
+      fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res)))
   | Internal f ->
       print_function p id f
@@ -316,16 +326,16 @@ let print_init p = function
 let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
   match init with
   | Coq_nil ->
-      fprintf p "extern %s;@ "
+      fprintf p "extern %s;@ @ "
               (name_cdecl (extern_atom id) ty)
   | Coq_cons(Init_space _, Coq_nil) ->
-      fprintf p "%s;@ "
+      fprintf p "%s;@ @ "
               (name_cdecl (extern_atom id) ty)
   | _ ->
       fprintf p "@[<hov 2>%s = {@ "
               (name_cdecl (extern_atom id) ty);
       coqlist_iter (print_init p) init;
-      fprintf p "};@]@ "
+      fprintf p "};@]@ @ "
 
 (* Collect struct and union types *)
 
@@ -408,13 +418,13 @@ let collect_program p =
   coqlist_iter collect_fundef p.prog_funct
 
 let print_struct_or_union p ((kind, fld), name) =
-  fprintf p "@[<v 2>%s %s{@ " 
+  fprintf p "@[<v 2>%s %s {" 
     (match kind with Struct -> "struct" | Union -> "union")
     name;
   let rec print_fields = function
   | Fnil -> ()
   | Fcons(id, ty, rem) ->
-      fprintf p "%s; @ " (name_cdecl (extern_atom id) ty);
+      fprintf p "@ %s;" (name_cdecl (extern_atom id) ty);
       print_fields rem in
   print_fields fld;
   fprintf p "@;<0 -2>}@]@ "
@@ -425,9 +435,7 @@ let print_program p prog =
   collect_program prog;
   fprintf p "@[<v 0>";
   List.iter (print_struct_or_union p) !struct_union_names;
-  fprintf p "@ ";
   coqlist_iter (print_globvar p) prog.prog_vars;
-  fprintf p "@ ";
   coqlist_iter (print_fundef p) prog.prog_funct;
   fprintf p "@]@."
 

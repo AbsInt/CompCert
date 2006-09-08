@@ -24,22 +24,13 @@ module Make(TS: TypeSpecifierTranslator) = struct
 (*-----------------------------------------------------------------------*)
 
 
-(** Exception raised when an unsupported feature is encountered *)
-exception Unsupported of string
-
-
 (** Pre-defined constants *)
 let constInt32 = Tint (I32, Signed)
 let constInt32uns = Tint (I32, Unsigned)
 let const0 = Expr (Econst_int (coqint_of_camlint Int32.zero), constInt32)
 
 
-(** Identifiers for struct and union fields *)
-let fieldTable = Hashtbl.create 47   (* hash-table *)
-let fieldNum = ref Int32.one   (* identifier of the next field *)
-
-
-(** Other global variables *)
+(** Global variables *)
 let currentLocation = ref Cil.locUnknown
 let mainFound = ref false
 let currentGlobalPrefix = ref ""
@@ -48,20 +39,10 @@ let stringTable = Hashtbl.create 47
 
 (** ** Functions related to [struct]s and [union]s *)
 
-(** Return a unique integer corresponding to a [struct] field *)
-let ident_of_string str =
-  try Hashtbl.find fieldTable str
-  with Not_found -> let id = positive_of_camlint !fieldNum in
-                      Hashtbl.add fieldTable str id;
-                      fieldNum := Int32.succ !fieldNum;
-                      id
-
 (* Return the type of a [struct] field *)
 let rec getFieldType f = function
   | Fnil -> raise Not_found
   | Fcons(idf, t, rem) -> if idf = f then t else getFieldType f rem
-
-
 
 (** ** Some functions over lists *)
 
@@ -106,6 +87,22 @@ let currentLoc() =
   match !currentLocation with { line=l; file=f } ->
     f ^ ":" ^ (if l = -1 then "?" else string_of_int l) ^ ": "
 
+(** Exception raised when an unsupported feature is encountered *)
+exception Unsupported of string
+let unsupported msg =
+  raise (Unsupported(currentLoc() ^ "Unsupported C feature: " ^ msg))
+
+(** Exception raised when an internal error is encountered *)
+exception Internal_error of string
+let internal_error msg =
+  raise (Internal_error(currentLoc() ^ "Internal error: " ^ msg))
+
+(** Warning messages *)
+let warning msg =
+  prerr_string (currentLoc());
+  prerr_string "Warning: ";
+  prerr_endline msg
+
 (** ** Functions used to handle string literals *)
 let name_for_string_literal s =
   try
@@ -137,21 +134,53 @@ let globals_for_strings globs =
     (fun s id l -> CList.Coq_cons(global_for_string s id, l))
     stringTable globs
 
+(** ** Handling of stubs for variadic functions *)
+
+let stub_function_table = Hashtbl.create 47
+
+let register_stub_function name tres targs =
+  try
+    Hashtbl.find stub_function_table name
+  with Not_found ->
+    let rec letters_of_type = function
+      | Tnil -> []
+      | Tcons(Tfloat _, tl) -> "f" :: letters_of_type tl
+      | Tcons(_, tl) -> "i" :: letters_of_type tl in
+    let stub_name =
+      name ^ "$" ^ String.concat "" (letters_of_type targs) in
+    let rec types_of_types = function
+      | Tnil -> Tnil
+      | Tcons(Tfloat _, tl) -> Tcons(Tfloat F64, types_of_types tl)
+      | Tcons(_, tl) -> Tcons(Tpointer Tvoid, types_of_types tl) in
+    let stub_type = Tfunction (types_of_types targs, tres) in
+    Hashtbl.add stub_function_table name (stub_name, stub_type);
+    (stub_name, stub_type)
+
+let declare_stub_function name (stub_name, stub_type) =
+  match stub_type with
+  | Tfunction(targs, tres) ->
+      Datatypes.Coq_pair(intern_string stub_name,
+                         External(intern_string stub_name, targs, tres))
+  | _ -> assert false
+
+let declare_stub_functions k =
+  Hashtbl.fold (fun n i k -> CList.Coq_cons(declare_stub_function n i, k))
+               stub_function_table k
+
 (** ** Translation functions *)
 
 (** Convert a [Cil.ikind] into a pair [(intsize * signedness)] *)
 let convertIkind ik =
   match TS.convertIkind ik with
     | Some p -> p
-    | None -> raise (Unsupported (currentLoc() ^ "integer type specifier"))
+    | None -> unsupported "integer type specifier"
 
 
 (** Convert a [Cil.fkind] into a [floatsize] *)
 let convertFkind fk =
   match TS.convertFkind fk with
     | Some fs -> fs
-    | None -> raise (Unsupported
-		       (currentLoc() ^ "floating-point type specifier"))
+    | None -> unsupported "floating-point type specifier"
 
 
 (** Convert a [Cil.constant] into a [CabsCoq.expr] *)
@@ -163,7 +192,7 @@ let rec convertConstant = function
       let symb = name_for_string_literal s in
       Expr (Evar symb, typeStringLiteral s)
   | CWStr _ ->
-      raise (Unsupported (currentLoc() ^ "wide string literal"))
+      unsupported "wide string literal"
   | CChr c  ->
       let i = coqint_of_camlint (Int32.of_int (Char.code c)) in
       Expr (Econst_int i, constInt32)
@@ -251,7 +280,7 @@ and processCast t e =
     if compatibleTypes t' te then
       let e' = convertExp e in
 	Expr (Ecast (t', e'), t')
-    else failwith (currentLoc() ^ "processCast: illegal cast")
+    else internal_error "processCast: illegal cast"
 
 
 (** Convert a [Cil.exp list] into an [CamlCoq.exprlist] *)
@@ -260,29 +289,38 @@ and processParamsE = function
   | e :: l ->
       let (Expr (_, t)) as e' = convertExp e in
 	match t with
-	  | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                 "function parameter of type struct or union"))
+	  | Tstruct _ | Tunion _ ->
+              unsupported "function parameter of struct or union type"
 	  | _ -> Econs (e', processParamsE l)
 
 
 (** Convert a [Cil.exp] into a [CabsCoq.expr] *)
 and convertExp = function
-  | Const c                -> convertConstant c
-  | Lval lv                -> convertLval lv
-  | SizeOf t               -> Expr (Esizeof (convertTyp t), constInt32uns)
-  | SizeOfE e              -> let ty = convertTyp (Cil.typeOf e) in
-                                Expr (Esizeof ty, constInt32uns)
-  | SizeOfStr str          -> raise (Unsupported
-				   (currentLoc() ^ "size of a string literal"))
-  | AlignOf t              -> raise (Unsupported
-				    (currentLoc() ^ "GCC alignment directive"))
-  | AlignOfE e             -> raise (Unsupported
-				    (currentLoc() ^ "GCC alignment directive"))
-  | UnOp (uop, e, t)       -> convertUnop uop e t
-  | BinOp (bop, e1, e2, t) -> convertBinop bop e1 e2 t
-  | CastE (t, e)           -> processCast t e
-  | AddrOf lv              -> let (Expr (_, t)) as e = convertLval lv in
-                                Expr (Eaddrof e, Tpointer t)
+  | Const c ->
+      convertConstant c
+  | Lval lv ->
+      convertLval lv
+  | SizeOf t ->
+      Expr (Esizeof (convertTyp t), constInt32uns)
+  | SizeOfE e ->
+      let ty = convertTyp (Cil.typeOf e) in
+      Expr (Esizeof ty, constInt32uns)
+  | SizeOfStr str ->
+      let n = coqint_of_camlint (Int32.of_int(String.length str)) in
+      Expr (Econst_int n, constInt32uns)
+  | AlignOf t ->
+      unsupported "GCC `alignof' construct"
+  | AlignOfE e ->
+      unsupported "GCC `alignof' construct"
+  | UnOp (uop, e, t) ->
+      convertUnop uop e t
+  | BinOp (bop, e1, e2, t) ->
+      convertBinop bop e1 e2 t
+  | CastE (t, e) ->
+      processCast t e
+  | AddrOf lv ->
+      let (Expr (_, t)) as e = convertLval lv in
+      Expr (Eaddrof e, Tpointer t)
   | StartOf lv ->
       (* convert an array into a pointer to the beginning of the array *)
       match Cil.unrollType (Cil.typeOfLval lv) with
@@ -296,8 +334,8 @@ and convertExp = function
 	      (* array A replaced by &(A[0]) *)
 	      Expr (Eaddrof (Expr (Eindex (e, const0), t')), tPtr)
 *)		
-	| _ -> failwith (currentLoc() ^ "convertExp: StartOf applied to a \
-                                         lvalue whose type is not an array")
+	| _ -> internal_error "convertExp: StartOf applied to a \
+                                         lvalue whose type is not an array"
 
 
 (** Convert a [Cil.lval] into a [CabsCoq.expression] *)
@@ -309,29 +347,28 @@ and convertLval lv =
 	begin match t with
 	  | Tstruct fList ->
 	      begin try
-		let idf = ident_of_string f.fname in
+		let idf = intern_string f.fname in
 		let t' = getFieldType idf fList in
                   processOffset (Expr (Efield (e, idf), t')) ofs
 	      with Not_found ->
-		failwith (currentLoc() ^ "processOffset: no such struct field")
+		internal_error "processOffset: no such struct field"
 	      end
 	  | Tunion fList ->
 	      begin try
-		let idf = ident_of_string f.fname in
+		let idf = intern_string f.fname in
 		let t' = getFieldType idf fList in
 		  processOffset (Expr (Efield (e, idf), t')) ofs
 	      with Not_found ->
-		failwith (currentLoc() ^ "processOffset: no such union field")
+		internal_error "processOffset: no such union field"
 	      end
-	  | _ -> failwith
-	      (currentLoc() ^ "processOffset: Field on a non-struct nor union")
+	  | _ ->
+              internal_error "processOffset: Field on a non-struct nor union"
 	end
     | Index (e', ofs) ->
 	match t with
 	  | Tarray (t', _) -> let e'' = Eindex (e, convertExp e') in
                                 processOffset (Expr (e'', t')) ofs
-	  | _ -> failwith
-	      (currentLoc() ^ "processOffset: Index on a non-array")
+	  | _ -> internal_error "processOffset: Index on a non-array"
   in
     (* convert the lvalue *)
     match lv with
@@ -342,8 +379,7 @@ and convertLval lv =
 	  match Cil.unrollType (Cil.typeOf e) with
 	    | TPtr (t, _) -> let e' = Ederef (convertExp e) in
                                processOffset (Expr (e', convertTyp t)) ofs
-	    | _ -> failwith
-		(currentLoc() ^ "convertLval: Mem on a non-pointer")
+	    | _ -> internal_error "convertLval: Mem on a non-pointer"
 	 
 
 (** Convert a [(Cil.string * Cil.typ * Cil.attributes)] list
@@ -353,103 +389,54 @@ and processParamsT convert = function
   | (_, t, _) :: l ->
       let t' = convert t in
 	match t' with
-	  | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                 "function parameter of type struct or union"))
+	  | Tstruct _ | Tunion _ ->
+              unsupported "function parameter of struct or union type"
 	  | _ -> Tcons (t', processParamsT convert l)
 
 
 (** Convert a [Cil.typ] into a [coq_type] *)
-and convertTyp = function
+and convertTypGen env = function
   | TVoid _ -> Tvoid
-  | TInt (k, _) -> let (x,y) = convertIkind k in Tint (x, y)
+  | TInt (k, _) -> let (x, y) = convertIkind k in Tint (x, y)
   | TFloat (k, _) -> Tfloat (convertFkind k)
-  | TPtr (t, _) -> Tpointer (convertTyp t)
+  | TPtr (t, _) -> Tpointer (convertTypGen env t)
   | TArray (t, eOpt, _) ->
       begin match eOpt with
 	| Some (Const (CInt64 (i64, _, _))) ->
-	    Tarray (convertTyp t, coqint_of_camlint (Int64.to_int32 i64))
-	| Some _ -> raise (Unsupported
-		 (currentLoc() ^ "size of array type not an integer constant"))
-	| None -> raise (Unsupported
-			   (currentLoc() ^ "array type of unspecified size"))
+	    Tarray (convertTypGen env t,
+                    coqint_of_camlint (Int64.to_int32 i64))
+	| Some _ -> unsupported "size of array type not an integer constant"
+	| None -> unsupported "array type of unspecified size"
       end
   | TFun (t, argListOpt, vArg, _) ->
-      (* Treat unprototyped functions as 0-argument functions,
-         and treat variadic functions as fixed-arity functions.
-         We will get type mismatches at applications, which we
-         compensate by casting the function type to the type
-         derived from the types of the actual arguments. *)
+      if vArg then unsupported "variadic function type";
       let argList =
         match argListOpt with
-          | None -> []
+          | None -> unsupported "un-prototyped function type"
           | Some l -> l
       in
-      let t' = convertTyp t in
-        begin match t' with
-          | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                     "return value of type struct or union"))
-          | _ -> Tfunction (processParamsT convertTyp argList, t')
-        end
-  | TNamed (tinfo, _) -> convertTyp tinfo.ttype
-  | TComp (c, _) ->
-      let rec convertFieldList = function
-        | [] -> Fnil
-        | {fname=str; ftype=t} :: rem ->
-            let idf = ident_of_string str in
-	    let t' = convertCompositeType [c.ckey] t in
-            Fcons(idf, t', convertFieldList rem) in
-      let fList = convertFieldList c.cfields in
-      if c.cstruct then Tstruct fList else Tunion fList
-  | TEnum _ -> constInt32   (* enum constants are integers *)
-  | TBuiltin_va_list _ -> raise (Unsupported
-				   (currentLoc() ^ "GCC built-in function"))
-
-(** Convert a [Cil.typ] within a composite structure into a [coq_type] *)
-and convertCompositeType env = function
-  | TNamed (tinfo, _) -> convertCompositeType env tinfo.ttype
-  | TPtr _ -> Tpointer Tvoid
-  | TArray (ta, eOpt, _) ->
-      begin match eOpt with
-	| Some (Const (CInt64 (i64, _, _))) ->
-	    let ta' = convertCompositeType env ta in
-	      Tarray (ta', coqint_of_camlint (Int64.to_int32 i64))
-	| Some _ -> raise (Unsupported
-		 (currentLoc() ^ "size of array type not an integer constant"))
-	| None -> raise (Unsupported
-			   (currentLoc() ^ "array type of unspecified size"))
+      let t' = convertTypGen env t in
+      begin match t' with
+        | Tstruct _ | Tunion _ -> 
+            unsupported "return type is a struct or union"
+        | _ -> Tfunction (processParamsT (convertTypGen env) argList, t')
       end
-  | TFun (t, argListOpt, vArg, _) ->
-      if vArg then raise (Unsupported (currentLoc() ^ "variadic function"))
-      else
-	let argList =
-	  match argListOpt with
-	    | None ->
-		print_string ("Warning: " ^
-				currentLoc() ^ "unknown function signature\n");
-		[]
-	    | Some l -> l
-	in
-        let convert = convertCompositeType env in
-        let t' = convert t in
-	  begin match t' with
-	    | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                       "return value of type struct or union"))
-	    | _ -> Tfunction (processParamsT convert argList, t')
-	  end
+  | TNamed (tinfo, _) -> convertTypGen env tinfo.ttype
   | TComp (c, _) ->
-      if List.mem c.ckey env then
-        failwith (currentLoc() ^ 
-                  "convertCompositeType: illegal recursive structure");
-      let rec convertFieldList = function
-        | [] -> Fnil
-        | {fname=str; ftype=t} :: rem ->
-            let idf = ident_of_string str in
-	    let t' = convertCompositeType (c.ckey :: env) t in
-            Fcons(idf, t', convertFieldList rem) in
-      let fList = convertFieldList c.cfields in
-      if c.cstruct then Tstruct fList else Tunion fList
-  | t -> convertTyp t
+      if List.mem c.ckey env then Tvoid else begin
+        let rec convertFieldList = function
+          | [] -> Fnil
+          | {fname=str; ftype=t} :: rem ->
+              let idf = intern_string str in
+              let t' = convertTypGen (c.ckey :: env) t in
+              Fcons(idf, t', convertFieldList rem) in
+        let fList = convertFieldList c.cfields in
+        if c.cstruct then Tstruct fList else Tunion fList
+      end
+  | TEnum _ -> constInt32   (* enum constants are integers *)
+  | TBuiltin_va_list _ -> unsupported "GCC `builtin va_list' type"
 
+and convertTyp ty = convertTypGen [] ty
 
 (** Convert a [Cil.varinfo] into a pair [(ident * coq_type)] *)
 let convertVarinfo v =
@@ -465,8 +452,8 @@ let convertVarinfoParam v =
   let id = intern_string v.vname in
   let t' = convertTyp v.vtype in
     match t' with
-      | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                 "function parameter of type struct or union"))
+      | Tstruct _ | Tunion _ ->
+          unsupported "function parameter of struct or union type"
       | _ -> Datatypes.Coq_pair (id, t')
 
 
@@ -474,32 +461,40 @@ let convertVarinfoParam v =
     (used only to translate function calls) *)
 let convertExpFuncall e tfun eList =
   match tfun with
-    | TFun (t, argListOpt, vArg, _) ->
-	let params = processParamsE eList in
-	let (Expr (efun, tfun)) as e' = convertExp e in
-	  begin match argListOpt, vArg with
-          | Some argList, false ->
-              if List.length argList = List.length eList then (e', params)
-              else failwith
-              (currentLoc() ^ "convertExpFuncall: wrong number of arguments")
-          | _, _ ->
-            (* For variadic or unprototyped functions, we synthesize the
-               "real" type of the function from that of the actual
-               arguments, and insert a cast around e'. *)
-            begin match tfun with
-            | Tfunction (_, tret) ->
-                let rec typeOfExprList = function
-                  | Enil -> Tnil
-                  | Econs (Expr (_, ty), rem) ->
-                      Tcons (ty, typeOfExprList rem) in
-                let tfun = Tfunction (typeOfExprList params, tret) in
-                (Expr (Ecast(tfun, e'), tfun), params)
-            | _ -> failwith
-                  (currentLoc() ^ "convertExpFuncall: incorrect function type")
-            end
-	  end
-    | _ -> failwith (currentLoc() ^ "convertExpFuncall: not a function")
-
+  | TFun (res, argListOpt, vArg, _) ->
+      begin match argListOpt, vArg with
+      | Some argList, false ->
+          (* Prototyped, non-variadic function *)
+          if List.length argList <> List.length eList then
+            internal_error "convertExpFuncall: wrong number of arguments";
+          (convertExp e, processParamsE eList)
+      | _, _ ->
+          (* Variadic or unprototyped function: generate a call to
+             a stub function with the appropriate number and types
+             of arguments.  Works only if the function expression e
+             is a global variable. *)
+          let params = processParamsE eList in
+          let fun_name =
+            match e with
+            | Lval(Var v, NoOffset) ->
+                warning "working around a call to a variadic or non-prototyped function";
+                v.vname
+            | _ ->
+                unsupported "call to variadic or non-prototyped function" in
+          let rec typeOfExprList = function
+            | Enil -> Tnil
+            | Econs (Expr (_, ty), rem) -> Tcons (ty, typeOfExprList rem) in
+          let targs = typeOfExprList params in
+          let tres = convertTyp res in
+          let tfun = Tfunction(targs, tres) in
+          let (stub_fun_name, stub_fun_typ) =
+            register_stub_function fun_name tres targs in
+          ((Expr(Ecast(tfun, Expr(Evar(intern_string stub_fun_name),
+                                  stub_fun_typ)),
+                 tfun)),
+           params)
+      end
+  | _ -> internal_error "convertExpFuncall: not a function"
 
 (** Convert a [Cil.instr list] into a [CabsCoq.statement] *)
 let rec processInstrList l =
@@ -508,8 +503,7 @@ let rec processInstrList l =
     | Set (lv, e, loc) ->
 	updateLoc(loc);
         begin match convertTyp (Cil.typeOf e) with
-        | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                               "struct or union assignment"))
+        | Tstruct _ | Tunion _ -> unsupported "struct or union assignment"
         | t -> Sassign (convertLval lv, convertExp e)
         end
     | Call (lvOpt, e, eList, loc) ->
@@ -524,8 +518,8 @@ let rec processInstrList l =
 		  | Some lv ->
 		      let (Expr (_, tlv)) as elv = convertLval lv in
 			begin match tlv with
-			  | Tstruct _ | Tunion _ -> raise (Unsupported
-				 (currentLoc() ^ "struct or union assignment"))
+			  | Tstruct _ | Tunion _ ->
+                              unsupported "struct or union assignment"
 			  | _ ->
 			      if tlv = t' then
 				Sassign (elv, e')
@@ -534,15 +528,14 @@ let rec processInstrList l =
 				if compatibleTypes tlv t' then
 				  Sassign (elv,
 				           Expr (Ecast (tlv, e'), tlv))
-				else failwith
-				  (currentLoc() ^ "processCast: illegal cast")
+				else internal_error "processCast: illegal cast"
 			end
 		end
-	  | _ -> failwith (currentLoc() ^ "convertInstr: illegal call")
+	  | _ -> internal_error "convertInstr: illegal call"
 	end
     | Asm (_, _, _, _, _, loc) ->
 	updateLoc(loc);
-        raise (Unsupported (currentLoc() ^ "inline assembly"))
+        unsupported "inline assembly"
   in
     (* convert a list of instructions *)
     match l with
@@ -574,16 +567,15 @@ and getCaseList lblList =
 		| None -> None
 		| Some cl -> Some (n :: cl)
 	      end
-	  | _ -> failwith (currentLoc() ^ "getCaseList: case label does not \
-                                           reduce to an integer constant")
+	  | _ -> internal_error "getCaseList: case label does not \
+                                           reduce to an integer constant"
 	end
 
 
 (** Convert a list of integers into a [CabsCoq.lblStatementList] *)
 and processCaseList cl s lrem =
   match cl with
-    | [] -> failwith
-	(currentLoc() ^ "processCaseList: syntax error in switch statement")
+    | [] -> internal_error "processCaseList: syntax error in switch statement"
     | [n] -> LScase (n, s, lrem)
     | n1 :: l -> LScase (n1, Sskip, processCaseList l s lrem)
 
@@ -604,8 +596,7 @@ and processLblStmtList switchBody = function
       if ls.labels = ls'.labels then processLblStmtList switchBody l
       else
 	begin match getCaseList ls.labels with
-	  | None -> raise (Unsupported (currentLoc() ^ 
-		     "default case is not at the end of the switch structure"))
+	  | None -> unsupported "default case is not at the end of this `switch' statement"
 	  | Some cl ->
 	      let s = processStmtList (keepBetween ls ls' switchBody) in
 	      let lrem = processLblStmtList switchBody l in
@@ -626,7 +617,7 @@ and convertStmt s =
           Sreturn eOpt'
     | Goto (_, loc) ->
 	updateLoc(loc);
-        raise (Unsupported (currentLoc() ^ "goto statement"))
+        unsupported "`goto' statement"
     | Break loc ->
 	updateLoc(loc);
 	Sbreak
@@ -656,25 +647,23 @@ and convertStmt s =
     | Block b -> processStmtList b.bstmts
     | TryFinally (_, _, loc) ->
 	updateLoc(loc);
-        raise (Unsupported (currentLoc() ^ "try...finally statement"))
+        unsupported "`try'...`finally' statement"
     | TryExcept (_, _, _, loc) ->
 	updateLoc(loc);
-        raise (Unsupported (currentLoc() ^ "try...except statement"))
-
+        unsupported "`try'...`except' statement"
 
 (** Convert a [Cil.GFun] into a pair [(ident * coq_fundecl)] *)
 let convertGFun fdec =
   let v = fdec.svar in
   let ret = match v.vtype with
     | TFun (t, _, vArg, _) ->
-	if vArg then raise (Unsupported (currentLoc() ^ "variadic function"))
-	else
-	  begin match convertTyp t with
-	    | Tstruct _ | Tunion _ -> raise (Unsupported (currentLoc() ^ 
-                                       "return value of type struct or union"))
-	    | t' -> t'
-	  end
-    | _ -> failwith (currentLoc() ^ "convertGFun: incorrect function type")
+	if vArg then unsupported "variadic function";
+        begin match convertTyp t with
+	| Tstruct _ | Tunion _ -> 
+            unsupported "return value of struct or union type"
+	| t' -> t'
+        end
+    | _ -> internal_error "convertGFun: incorrect function type"
   in
   let args = map_coqlist convertVarinfoParam fdec.sformals in   (* parameters*)
   let varList = map_coqlist convertVarinfo fdec.slocals in   (* local vars *)
@@ -700,42 +689,64 @@ let rec initDataLen accu = function
       initDataLen (Int32.add sz accu) il
 
 (** Convert a [Cil.init] into a list of [AST.init_data] prepended to
-    the given list [k]. *)
+    the given list [k].  Result is in reverse order. *)
+
+(* Cil.constFold does not reduce floating-point operations.
+   We treat here those that appear naturally in initializers. *)
+
+type init_constant =
+  | ICint of int64 * intsize
+  | ICfloat of float * floatsize
+  | ICnone
+
+let rec extract_constant e =
+  match e with
+  | Const (CInt64(n, ikind, _)) ->
+      ICint(n, fst (convertIkind ikind))
+  | Const (CReal(n, fkind, _)) ->
+      ICfloat(n, convertFkind fkind)
+  | CastE (ty, e1) ->
+      begin match extract_constant e1, convertTyp ty with
+      | ICfloat(n, _), Tfloat sz ->
+          ICfloat(n, sz)
+      | ICint(n, _), Tfloat sz ->
+          ICfloat(Int64.to_float n, sz)
+      | _, _ ->
+          ICnone
+      end
+  | UnOp (Neg, e1, _) ->
+      begin match extract_constant e1 with
+      | ICfloat(n, sz) -> ICfloat(-. n, sz)
+      | _ -> ICnone
+      end
+  | _ -> ICnone
 
 let rec convertInit init k =
   match init with
   | SingleInit e ->
-      begin match Cil.constFold true e with
-      | Const (CInt64(n, ikind, _)) ->
-          begin match convertIkind ikind with
-          | (I8, _) ->
-               CList.Coq_cons(Init_int8 (coqint_of_camlint (Int64.to_int32 n)), k)
-          | (I16, _) ->
-               CList.Coq_cons(Init_int16 (coqint_of_camlint (Int64.to_int32 n)), k)
-          | (I32, _) ->
-               CList.Coq_cons(Init_int32 (coqint_of_camlint (Int64.to_int32 n)), k)
-          end
-      | Const (CReal(n, fkind, _)) ->
-          begin match convertFkind fkind with
-          | F32 ->
-               CList.Coq_cons(Init_float32 n, k)
-          | F64 ->
-               CList.Coq_cons(Init_float64 n, k)
-          end
-      | _ ->
-          raise (Unsupported (currentLoc() ^
-                 "this kind of expression is not supported in global initializers"))
-      end
+      begin match extract_constant(Cil.constFold true e) with
+      | ICint(n, I8) ->
+          CList.Coq_cons(Init_int8 (coqint_of_camlint (Int64.to_int32 n)), k)
+      | ICint(n, I16) ->
+          CList.Coq_cons(Init_int16 (coqint_of_camlint (Int64.to_int32 n)), k)
+      | ICint(n, I32) ->
+          CList.Coq_cons(Init_int32 (coqint_of_camlint (Int64.to_int32 n)), k)
+      | ICfloat(n, F32) ->
+          CList.Coq_cons(Init_float32 n, k)
+      | ICfloat(n, F64) ->
+          CList.Coq_cons(Init_float64 n, k)
+      | ICnone ->
+          unsupported "this kind of expression is not supported in global initializers"
+    end
   | CompoundInit(ty, data) ->
-      let init =  (* in reverse order *)
-        Cil.foldLeftCompoundAll
-          ~doinit: (fun ofs init ty k -> convertInit init k)
-          ~ct: ty
-          ~initl: data
-          ~acc: CList.Coq_nil in
-      (* For struct or union, pad to size of type *)
       begin match Cil.unrollType ty with
       | TComp _ ->
+          let init =
+            Cil.foldLeftCompoundAll
+              ~doinit: (fun ofs init ty k -> convertInit init k)
+              ~ct: ty
+              ~initl: data
+              ~acc: CList.Coq_nil in
           let act_len = initDataLen 0l init in
           let exp_len = camlint_of_z (Csyntax.sizeof (convertTyp ty)) in
           assert (act_len <= exp_len);
@@ -744,9 +755,13 @@ let rec convertInit init k =
             then let spc = z_of_camlint (Int32.sub exp_len act_len) in
                  CList.Coq_cons(Init_space spc, init)
             else init in
-          revappend init' k
+          CList.app init' k
       | _ ->
-        revappend init k
+          Cil.foldLeftCompoundAll
+            ~doinit: (fun ofs init ty k -> convertInit init k)
+            ~ct: ty
+            ~initl: data
+            ~acc: k
       end
 
 (** Convert a [Cil.initinfo] into a list of [AST.init_data] *)
@@ -756,7 +771,7 @@ let convertInitInfo ty info =
   | None -> 
       CList.Coq_cons(Init_space(Csyntax.sizeof (convertTyp ty)), CList.Coq_nil)
   | Some init ->
-      convertInit init CList.Coq_nil
+      CList.rev (convertInit init CList.Coq_nil)
 
 (** Convert a [Cil.GVar] into a global variable definition *)
 
@@ -803,10 +818,16 @@ let rec processGlobals = function
 	  | GVarDecl (v, loc) ->
 	      updateLoc(loc);
               (* Functions become external declarations,
+                 variadic and unprototyped functions are skipped,
                  variables become uninitialized variables *)
-              if Cil.isFunctionType v.vtype
-              then (CList.Coq_cons (convertExtFun v, fList), vList)
-              else (fList, CList.Coq_cons (convertExtVar v, vList))
+              begin match Cil.unrollType v.vtype with
+              | TFun (tres, Some targs, false, _) ->
+                  (CList.Coq_cons (convertExtFun v, fList), vList)
+              | TFun (tres, _, _, _) ->
+                  rem
+              | _ ->
+                  (fList, CList.Coq_cons (convertExtVar v, vList))
+              end
 	  | GVar (v, init, loc) ->
 	      updateLoc(loc);
               (fList, CList.Coq_cons (convertGVar v init, vList))
@@ -815,13 +836,12 @@ let rec processGlobals = function
               (CList.Coq_cons (convertGFun fdec, fList), vList)
 	  | GAsm (_, loc) ->
 	      updateLoc(loc);
-              raise (Unsupported (currentLoc() ^ "asm statement"))
-	| GPragma (_, loc) ->
-	    updateLoc(loc);
-	    print_string ("Warning: " ^
-			    currentLoc() ^ "pragma directive ignored\n");
-	    rem
-	| GText _ -> rem   (* comments are ignored *)
+              unsupported "inline assembly"
+	  | GPragma (_, loc) ->
+	      updateLoc(loc);
+              warning "#pragma directive ignored";
+              rem
+	  | GText _ -> rem   (* comments are ignored *)
 
 (** Eliminate forward declarations of globals that are defined later *)
 
@@ -843,17 +863,19 @@ let convertFile f =
     Filename.chop_extension (Filename.basename f.fileName);
   stringNum := 0;
   Hashtbl.clear stringTable;
+  Hashtbl.clear stub_function_table;
   let (funList, defList) = processGlobals (cleanupGlobals f.globals) in
-  let funList' = match f.globinit with
-    | Some fdec -> CList.Coq_cons (convertGFun fdec, funList)
-    | None -> funList in
+  let funList' = declare_stub_functions funList in
+  let funList'' = match f.globinit with
+    | Some fdec -> CList.Coq_cons (convertGFun fdec, funList')
+    | None -> funList' in
   let defList' = globals_for_strings defList in
 (***
   if not !mainFound then   (* no main function *)
-    print_string ("Warning: program has no main function! (you should \
-                         probably have used ccomp's -nomain option)\n");
+    warning "program has no main function! (you should \
+                         probably have used ccomp's -nomain option)\n";
 ***)
-  { AST.prog_funct = funList';
+  { AST.prog_funct = funList'';
     AST.prog_vars = defList';
     AST.prog_main = intern_string "main" }
 
