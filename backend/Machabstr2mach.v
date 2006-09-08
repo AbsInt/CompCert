@@ -1091,10 +1091,10 @@ Proof.
   intros [ms2 [STORELINK [CSI2 EQ]]].
   subst stk1.
   assert (ZERO: Int.signed (Int.repr 0) = 0). reflexivity.
-  assert (FOUR: Int.signed (Int.repr 4) = 4). reflexivity.
-  assert (BND: 4 <= Int.signed (Int.repr 4)).
-    rewrite FOUR; omega.
-  rewrite <- FOUR in H1.
+  assert (TWELVE: Int.signed (Int.repr 12) = 12). reflexivity.
+  assert (BND: 4 <= Int.signed (Int.repr 12)).
+    rewrite TWELVE; omega.
+  rewrite <- TWELVE in H1.
   generalize (callstack_set_slot _ _ _ _ _ _ _ _ _ _
                CSI2 H1 BND).
   intros [ms3 [STORERA CSI3]].
@@ -1116,7 +1116,7 @@ Proof.
   eapply slot_gso; eauto. rewrite ZERO. eapply slot_gss; eauto. 
   exact I. 
   eapply callstack_get_slot. eexact CSI4.
-  apply LINKINV. rewrite FOUR. omega. eapply slot_gss; eauto. auto.
+  apply LINKINV. rewrite TWELVE. omega. eapply slot_gss; eauto. auto.
   eapply callstack_function_return; eauto.
 
   (* internal function *)

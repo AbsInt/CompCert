@@ -17,9 +17,9 @@ Require Import Conventions.
 (** The general shape of activation records is as follows,
   from bottom (lowest offsets) to top:
 - 24 reserved bytes.  The first 4 bytes hold the back pointer to the
-  activation record of the caller.  The next 4 bytes will be used
-  to store the return address.  The remaining 16 bytes are unused
-  but reserved in accordance with the PowerPC application binary interface.
+  activation record of the caller.  We use the 4 bytes at offset 12
+  to store the return address.  (These are reserved by the PowerPC
+  application binary interface.)  The remaining bytes are unused.
 - Space for outgoing arguments to function calls.
 - Local stack slots of integer type.
 - Saved values of integer callee-save registers used by the function.

@@ -205,7 +205,7 @@ with exec_function_body:
       forall f parent link ra rs m t rs' m1 m2 stk fr1 fr2 fr3 c,
       Mem.alloc m 0 f.(fn_stacksize) = (m1, stk) ->
       set_slot (init_frame f) Tint 0 link fr1 ->
-      set_slot fr1 Tint 4 ra fr2 ->
+      set_slot fr1 Tint 12 ra fr2 ->
       exec_instrs f (Vptr stk (Int.repr (-f.(fn_framesize)))) parent
                   f.(fn_code) rs fr2 m1
                 t (Mreturn :: c) rs' fr3 m2 ->
@@ -347,7 +347,7 @@ Lemma exec_mutual_induction:
           (stk : block) (fr1 fr2 fr3 : frame) (c : list instruction),
         alloc m 0 (fn_stacksize f13) = (m1, stk) ->
         set_slot (init_frame f13) Tint 0 link fr1 ->
-        set_slot fr1 Tint 4 ra fr2 ->
+        set_slot fr1 Tint 12 ra fr2 ->
         exec_instrs f13 (Vptr stk (Int.repr (- fn_framesize f13))) parent
           (fn_code f13) rs fr2 m1 t (Mreturn :: c) rs' fr3 m2 ->
         P0 f13 (Vptr stk (Int.repr (- fn_framesize f13))) parent

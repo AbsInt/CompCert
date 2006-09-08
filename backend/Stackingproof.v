@@ -1533,7 +1533,7 @@ Proof.
     inversion SET1. reflexivity.
   assert (low fr1 = -fe.(fe_size)).
     inversion SET1. rewrite <- H2. reflexivity.
-  assert (exists fr2, set_slot fr1 Tint 4 ra fr2).
+  assert (exists fr2, set_slot fr1 Tint 12 ra fr2).
     apply set_slot_ok. auto. omega. rewrite H4. generalize (size_pos f). 
     unfold fe. simpl typesize. omega.
   elim H5; intros fr2 SET2; clear H5.

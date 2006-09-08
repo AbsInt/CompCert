@@ -253,7 +253,7 @@ with exec_instrs:
 
 (** In addition to reserving the word at offset 0 in the activation 
   record for maintaining the linking of activation records,
-  we need to reserve the word at offset 4 to store the return address
+  we need to reserve the word at offset 12 to store the return address
   into the caller.  However, the return address (a pointer within
   the code of the caller) is not precisely known at this point:
   it will be determined only after the final translation to PowerPC
@@ -280,12 +280,12 @@ with exec_function_body:
                                                         = (m1, stk) ->
       let sp := Vptr stk (Int.repr (-f.(fn_framesize))) in
       store_stack m1 sp Tint (Int.repr 0) parent = Some m2 ->
-      store_stack m2 sp Tint (Int.repr 4) ra = Some m3 ->
+      store_stack m2 sp Tint (Int.repr 12) ra = Some m3 ->
       exec_instrs f sp
                   f.(fn_code) rs m3
                 t (Mreturn :: c) rs' m4 ->
       load_stack m4 sp Tint (Int.repr 0) = Some parent ->
-      load_stack m4 sp Tint (Int.repr 4) = Some ra ->
+      load_stack m4 sp Tint (Int.repr 12) = Some ra ->
       exec_function_body f parent ra rs m t rs' (Mem.free m4 stk)
 
 with exec_function:

@@ -1061,11 +1061,11 @@ Lemma exec_function_body_prop_:
       (align_16_top (- fn_framesize f) (fn_stacksize f)) = (m1, stk) ->
    let sp := Vptr stk (Int.repr (- fn_framesize f)) in
    store_stack m1 sp Tint (Int.repr 0) parent = Some m2 ->
-   store_stack m2 sp Tint (Int.repr 4) ra = Some m3 ->
+   store_stack m2 sp Tint (Int.repr 12) ra = Some m3 ->
    exec_instrs ge f sp (fn_code f) ms m3 t (Mreturn :: c) ms' m4 ->
    exec_instr_prop f sp (fn_code f) ms m3 t (Mreturn :: c) ms' m4 ->
    load_stack m4 sp Tint (Int.repr 0) = Some parent ->
-   load_stack m4 sp Tint (Int.repr 4) = Some ra ->
+   load_stack m4 sp Tint (Int.repr 12) = Some ra ->
    exec_function_body_prop f parent ra ms m t ms' (free m4 stk).
 Proof.
   intros; red; intros.

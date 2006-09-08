@@ -485,7 +485,7 @@ Definition transl_instr (i: Mach.instruction) (k: code) :=
       transl_cond cond args
         (if (snd p) then Pbt (fst p) lbl :: k else Pbf (fst p) lbl :: k)
   | Mreturn =>
-      Plwz GPR2 (Cint (Int.repr 4)) GPR1 ::
+      Plwz GPR2 (Cint (Int.repr 12)) GPR1 ::
       Pmtlr GPR2 :: Pfreeframe :: Pblr :: k
   end.
 
@@ -501,7 +501,7 @@ Definition transl_function (f: Mach.function) :=
   Pallocframe (- f.(fn_framesize))
               (align_16_top (-f.(fn_framesize)) f.(fn_stacksize)) ::
   Pmflr GPR2 ::
-  Pstw GPR2 (Cint (Int.repr 4)) GPR1 ::
+  Pstw GPR2 (Cint (Int.repr 12)) GPR1 ::
   transl_code f.(fn_code).
 
 Fixpoint code_size (c: code) : Z :=

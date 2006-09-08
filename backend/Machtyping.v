@@ -335,7 +335,7 @@ End SUBJECT_REDUCTION.
 (** We now show another result useful for the proof of implication
     between the two Mach semantics: well-typed functions do not
     change the values of the back link and return address fields
-    of the frame slot (at offsets 0 and 4) during their execution.
+    of the frame slot (at offsets 0 and 12) during their execution.
     Actually, we show that the whole reserved part of the frame
     (between offsets 0 and 24) does not change. *)
 
