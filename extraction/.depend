@@ -9,9 +9,9 @@
 ../caml/Camlcoq.cmx: Integers.cmx Datatypes.cmx CList.cmx BinPos.cmx \
     BinInt.cmx 
 ../caml/Cil2Csyntax.cmo: Datatypes.cmi Csyntax.cmi ../caml/Camlcoq.cmo \
-    CList.cmi BinInt.cmi AST.cmi 
+    CList.cmi AST.cmi 
 ../caml/Cil2Csyntax.cmx: Datatypes.cmx Csyntax.cmx ../caml/Camlcoq.cmx \
-    CList.cmx BinInt.cmx AST.cmx 
+    CList.cmx AST.cmx 
 ../caml/CMlexer.cmo: ../caml/Camlcoq.cmo ../caml/CMparser.cmi \
     ../caml/CMlexer.cmi 
 ../caml/CMlexer.cmx: ../caml/Camlcoq.cmx ../caml/CMparser.cmx \
