@@ -711,6 +711,8 @@ let rec extract_constant e =
           ICfloat(n, sz)
       | ICint(n, _), Tfloat sz ->
           ICfloat(Int64.to_float n, sz)
+      | ICint(n, sz), Tpointer _ ->
+          ICint(n, sz)
       | _, _ ->
           ICnone
       end
