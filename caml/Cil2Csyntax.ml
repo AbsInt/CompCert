@@ -491,12 +491,9 @@ let convertExpFuncall e tfun eList =
             | Econs (Expr (_, ty), rem) -> Tcons (ty, typeOfExprList rem) in
           let targs = typeOfExprList params in
           let tres = convertTyp res in
-          let tfun = Tfunction(targs, tres) in
           let (stub_fun_name, stub_fun_typ) =
             register_stub_function fun_name tres targs in
-          ((Expr(Ecast(tfun, Expr(Evar(intern_string stub_fun_name),
-                                  stub_fun_typ)),
-                 tfun)),
+          (Expr(Evar(intern_string stub_fun_name), stub_fun_typ),
            params)
       end
   | _ -> internal_error "convertExpFuncall: not a function"
