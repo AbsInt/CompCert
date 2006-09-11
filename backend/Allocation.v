@@ -100,7 +100,7 @@ Definition transfer
     general framework for backward dataflow analysis provided by
     module [Kildall].  *)
 
-Module DS := Backward_Dataflow_Solver(Regset).
+Module DS := Backward_Dataflow_Solver(Regset)(NodeSetBackward).
 
 Definition analyze (f: RTL.function): option (PMap.t Regset.t) :=
   DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) nil.

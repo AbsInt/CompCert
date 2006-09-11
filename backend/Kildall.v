@@ -87,10 +87,37 @@ Module Type DATAFLOW_SOLVER.
 
 End DATAFLOW_SOLVER.
 
+(** Kildall's algorithm manipulates worklists, which are sets of CFG nodes
+  equipped with a ``pick next node to examine'' operation.
+  The algorithm converges faster if the nodes are chosen in an order
+  consistent with a reverse postorder traversal of the CFG.
+  For now, we parameterize the dataflow solver over a module
+  that implements sets of CFG nodes. *)
+
+Module Type NODE_SET.
+
+  Variable t: Set.
+  Variable add: positive -> t -> t.
+  Variable pick: t -> option (positive * t).
+  Variable initial: positive -> t.
+
+  Variable In: positive -> t -> Prop.
+  Hypothesis add_spec:
+    forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
+  Hypothesis pick_none:
+    forall s n, pick s = None -> ~In n s.
+  Hypothesis pick_some:
+    forall s n s', pick s = Some(n, s') ->
+    forall n', In n' s <-> n = n' \/ In n' s'.
+  Hypothesis initial_spec:
+    forall numnodes n, Plt n numnodes -> In n (initial numnodes).
+
+End NODE_SET.
+
 (** We now define a generic solver that works over 
     any semi-lattice structure. *)
 
-Module Dataflow_Solver (LAT: SEMILATTICE):
+Module Dataflow_Solver (LAT: SEMILATTICE) (NS: NODE_SET):
                           DATAFLOW_SOLVER with Module L := LAT.
 
 Module L := LAT.
@@ -109,7 +136,7 @@ Variable entrypoints: list (positive * L.t).
 *)
 
 Record state : Set :=
-  mkstate { st_in: PMap.t L.t; st_wrk: list positive }.
+  mkstate { st_in: PMap.t L.t; st_wrk: NS.t }.
 
 (** Kildall's algorithm, in pseudo-code, is as follows:
 <<
@@ -143,19 +170,8 @@ Fixpoint start_state_in (ep: list (positive * L.t)) : PMap.t L.t :=
       let m := start_state_in rem in PMap.set n (L.lub m!!n v) m
   end.
 
-Definition start_state_wrk :=
-  positive_rec (list positive) nil (@cons positive) topnode.
-
 Definition start_state :=
-  mkstate (start_state_in entrypoints) start_state_wrk.
-
-(** The worklist is actually treated as a set: it is not useful
-  (and detrimental to performance) to put the same point twice in the
-  worklist.  The following function adds a point to the worklist if
-  it was not already there. *)
-
-Definition add_to_worklist (n: positive) (wrk: list positive) :=
-  if List.In_dec peq n wrk then wrk else n :: wrk.
+  mkstate (start_state_in entrypoints) (NS.initial topnode).
 
 (** [propagate_succ] corresponds, in the pseudocode,
   to the body of the [for] loop iterating over all successors. *)
@@ -165,7 +181,7 @@ Definition propagate_succ (s: state) (out: L.t) (n: positive) :=
   let newl := L.lub oldl out in
   if L.eq oldl newl
   then s
-  else mkstate (PMap.set n newl s.(st_in)) (add_to_worklist n s.(st_wrk)).
+  else mkstate (PMap.set n newl s.(st_in)) (NS.add n s.(st_wrk)).
 
 (** [propagate_succ_list] corresponds, in the pseudocode,
   to the [for] loop iterating over all successors. *)
@@ -181,10 +197,10 @@ Fixpoint propagate_succ_list (s: state) (out: L.t) (succs: list positive)
   pseudocode. *)
 
 Definition step (s: state) : PMap.t L.t + state :=
-  match s.(st_wrk) with
-  | nil => 
+  match NS.pick s.(st_wrk) with
+  | None => 
       inl _ s.(st_in)
-  | n :: rem =>
+  | Some(n, rem) =>
       inr _ (propagate_succ_list
               (mkstate s.(st_in) rem)
               (transf n s.(st_in)!!n)
@@ -251,11 +267,11 @@ Proof.
     (fun res => in_incr start_state.(st_in) res)).
 
   intros st INCR. unfold step.
-  destruct st.(st_wrk) as [ | n rem ]. 
-  auto.
+  destruct (NS.pick st.(st_wrk)) as [ [n rem] | ].
   apply in_incr_trans with st.(st_in). auto. 
-  change st.(st_in) with (mkstate st.(st_in) rem).(st_in).
-  apply propagate_succ_list_incr.
+  change st.(st_in) with (mkstate st.(st_in) rem).(st_in). 
+  apply propagate_succ_list_incr. 
+  auto. 
 
   eauto. apply in_incr_refl.
 Qed.
@@ -272,7 +288,7 @@ Qed.
 Definition good_state (st: state) : Prop :=
   forall n,
   Plt n topnode ->
-  In n st.(st_wrk) \/
+  NS.In n st.(st_wrk) \/
   (forall s, In s (successors n) -> 
                 L.ge st.(st_in)!!s (transf n st.(st_in)!!n)).
 
@@ -283,27 +299,7 @@ Lemma start_state_good:
   good_state start_state.
 Proof.
   unfold good_state, start_state; intros.
-  left; simpl. unfold start_state_wrk.
-  generalize H. pattern topnode. apply positive_Peano_ind.
-  intro. compute in H0. destruct n; discriminate.
-  intros. rewrite positive_rec_succ. 
-  elim (Plt_succ_inv _ _ H1); intro.
-  auto with coqlib.
-  subst x; auto with coqlib.
-Qed.
-
-Lemma add_to_worklist_1:
-  forall n wkl, In n (add_to_worklist n wkl).
-Proof.
-  intros. unfold add_to_worklist.
-  case (In_dec peq n wkl); auto with coqlib.
-Qed.
-
-Lemma add_to_worklist_2:
-  forall n wkl n', In n' wkl -> In n' (add_to_worklist n wkl).
-Proof.
-  intros. unfold add_to_worklist.
-  case (In_dec peq n wkl); auto with coqlib.
+  left; simpl. apply NS.initial_spec. auto.
 Qed.
 
 Lemma propagate_succ_charact:
@@ -344,43 +340,41 @@ Proof.
 Qed.
 
 Lemma propagate_succ_incr_worklist:
-  forall st out n,
-  incl st.(st_wrk) (propagate_succ st out n).(st_wrk).
+  forall st out n x,
+  NS.In x st.(st_wrk) -> NS.In x (propagate_succ st out n).(st_wrk).
 Proof.
   intros. unfold propagate_succ. 
   case (L.eq (st_in st) !! n (L.lub (st_in st) !! n out)); intro.
-  apply incl_refl.
-  simpl. red; intros. apply add_to_worklist_2; auto.
+  auto.
+  simpl. rewrite NS.add_spec. auto.
 Qed.
 
 Lemma propagate_succ_list_incr_worklist:
-  forall out succs st,
-  incl st.(st_wrk) (propagate_succ_list st out succs).(st_wrk).
+  forall out succs st x,
+  NS.In x st.(st_wrk) -> NS.In x (propagate_succ_list st out succs).(st_wrk).
 Proof.
   induction succs; simpl; intros.
-  apply incl_refl.
-  apply incl_tran with (propagate_succ st out a).(st_wrk).
-  apply propagate_succ_incr_worklist.
   auto.
+  apply IHsuccs. apply propagate_succ_incr_worklist. auto.
 Qed.
 
 Lemma propagate_succ_records_changes:
   forall st out n s,
   let st' := propagate_succ st out n in
-  In s st'.(st_wrk) \/ st'.(st_in)!!s = st.(st_in)!!s.
+  NS.In s st'.(st_wrk) \/ st'.(st_in)!!s = st.(st_in)!!s.
 Proof.
   simpl. intros. unfold propagate_succ. 
   case (L.eq (st_in st) !! n (L.lub (st_in st) !! n out)); intro.
   right; auto.
   case (peq s n); intro.
-  subst s. left. simpl. apply add_to_worklist_1.
+  subst s. left. simpl. rewrite NS.add_spec. auto.
   right. simpl. apply PMap.gso. auto.
 Qed.
 
 Lemma propagate_succ_list_records_changes:
   forall out succs st s,
   let st' := propagate_succ_list st out succs in
-  In s st'.(st_wrk) \/ st'.(st_in)!!s = st.(st_in)!!s.
+  NS.In s st'.(st_wrk) \/ st'.(st_in)!!s = st.(st_in)!!s.
 Proof.
   induction succs; simpl; intros.
   right; auto.
@@ -391,15 +385,15 @@ Qed.
 
 Lemma step_state_good:
   forall st n rem,
-  st.(st_wrk) = n :: rem ->
+  NS.pick st.(st_wrk) = Some(n, rem) ->
   good_state st ->
   good_state (propagate_succ_list (mkstate st.(st_in) rem)
                                   (transf n st.(st_in)!!n)
                                   (successors n)).
 Proof.
   unfold good_state. intros st n rem WKL GOOD x LTx.
+  generalize (NS.pick_some _ _ _ WKL); intro PICK.
   set (out := transf n st.(st_in)!!n).
-  rewrite WKL in GOOD.
   elim (propagate_succ_list_records_changes 
           out (successors n) (mkstate st.(st_in) rem) x).
   intro; left; auto.
@@ -415,7 +409,7 @@ Proof.
   elim (GOOD x LTx); intro.
   (* Case 2.1: x was already in worklist, still is *)
   left. apply propagate_succ_list_incr_worklist.
-  simpl. elim H; intro. elim n0; auto. auto.
+  simpl. rewrite PICK in H. elim H; intro. congruence. auto.
   (* Case 2.2: x was not in worklist *)
   right; intros.
   case (In_dec peq s (successors n)); intro.
@@ -449,13 +443,13 @@ Proof.
   eapply (PrimIter.iterate_prop _ _ step good_state).
 
   intros st GOOD. unfold step. 
-  caseEq (st.(st_wrk)). 
+  caseEq (NS.pick st.(st_wrk)). 
+  intros [n rem] PICK. apply step_state_good; auto. 
   intros. elim (GOOD n H0); intro. 
-  rewrite H in H2. contradiction.
+  elim (NS.pick_none _ n H). auto.
   auto.
-  intros n rem WRK. apply step_state_good; auto.
 
-  eauto. apply start_state_good. eauto.
+  eauto. apply start_state_good. auto.
 Qed.
 
 (** As a consequence of the monotonicity property, the result of
@@ -587,12 +581,12 @@ End BACKWARD_DATAFLOW_SOLVER.
   semi-lattice structure, by applying the forward dataflow solver
   with the predecessor relation instead of the successor relation. *)
 
-Module Backward_Dataflow_Solver (LAT: SEMILATTICE):
+Module Backward_Dataflow_Solver (LAT: SEMILATTICE) (NS: NODE_SET):
                    BACKWARD_DATAFLOW_SOLVER with Module L := LAT.
 
 Module L := LAT.
 
-Module DS := Dataflow_Solver L.
+Module DS := Dataflow_Solver L NS.
 
 Section Kildall.
 
@@ -1080,4 +1074,151 @@ Qed.
 End Solver.
 
 End BBlock_solver.
+
+(** ** Node sets *)
+
+(** We now define implementations of the [NODE_SET] interface
+  appropriate for forward and backward dataflow analysis.
+  As mentioned earlier, we aim for a traversal of the CFG nodes
+  in reverse postorder (for forward analysis) or postorder
+  (for backward analysis).  We take advantage of the following
+  fact, valid for all CFG generated by translation from Cminor:
+  the enumeration [n-1], [n-2], ..., 3, 2, 1 where [n] is the
+  top CFG node is a reverse postorder traversal.
+  Therefore, for forward analysis, we will use an implementation
+  of [NODE_SET] where the greatest node in the working list 
+  is selected by the [pick] operation.  For backward analysis,
+  we will similarly pick the smallest node in the working list. *)
+
+Require Import FSets.
+Require Import FSetAVL.
+
+Module OrderedPositive <: OrderedType with Definition t := positive.
+  Definition t := positive.
+  Definition eq (x y: t) := x = y.
+  Definition lt := Plt.
+
+  Lemma eq_refl : forall x : t, eq x x.
+  Proof. unfold eq; auto. Qed.
+
+  Lemma eq_sym : forall x y : t, eq x y -> eq y x.
+  Proof. unfold eq; auto. Qed.
+
+  Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
+  Proof. unfold eq; intros. transitivity y; auto. Qed.
+
+  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+  Proof Plt_trans.
+
+  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+  Proof Plt_ne.
+
+  Lemma compare : forall x y : t, Compare lt eq x y.
+  Proof. 
+    intros.
+    caseEq (Zcompare (Zpos x) (Zpos y)); intros.
+    apply EQ. unfold eq. generalize (Zcompare_Eq_eq _ _ H). congruence.
+    apply LT. exact H. 
+    apply GT. rewrite Zcompare_Gt_Lt_antisym in H. exact H.
+  Qed.
+End OrderedPositive.
+
+Module PositiveSet := FSetAVL.Make(OrderedPositive).
+Module PositiveSetFacts := FSetFacts.Facts(PositiveSet).
+
+Module NodeSetForward <: NODE_SET.
+  Definition t := PositiveSet.t.
+  Definition add (n: positive) (s: t) : t := PositiveSet.add n s.
+  Definition pick (s: t) :=
+    match PositiveSet.max_elt s with
+    | Some n => Some(n, PositiveSet.remove n s)
+    | None => None
+    end.
+  Definition initial (top: positive) :=
+    positive_rec t PositiveSet.empty PositiveSet.add top.
+
+  Definition In := PositiveSet.In.
+
+  Lemma add_spec:
+    forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
+  Proof.
+    intros. exact (PositiveSetFacts.add_iff s n n').
+  Qed.
+    
+  Lemma pick_none:
+    forall s n, pick s = None -> ~In n s.
+  Proof.
+    intros until n; unfold pick. caseEq (PositiveSet.max_elt s); intros.
+    congruence.
+    apply PositiveSet.max_elt_3. auto.
+  Qed.
+
+  Lemma pick_some:
+    forall s n s', pick s = Some(n, s') ->
+    forall n', In n' s <-> n = n' \/ In n' s'.
+  Proof.
+    intros until s'; unfold pick. caseEq (PositiveSet.max_elt s); intros.
+    inversion H0; clear H0; subst. 
+    split; intros. 
+    destruct (peq n n'). auto. right. apply PositiveSet.remove_2; assumption.
+    elim H0; intro. subst n'. apply PositiveSet.max_elt_1. auto. 
+    apply PositiveSet.remove_3 with n; assumption.
+    congruence.
+  Qed.
+
+  Lemma initial_spec:
+    forall numnodes n, Plt n numnodes -> In n (initial numnodes).
+  Proof.
+    intros numnodes; pattern numnodes. 
+    apply positive_Peano_ind; unfold initial; intros.
+    assert (Zpos n > 0). compute; auto. red in H. omegaContradiction.
+    rewrite positive_rec_succ. rewrite PositiveSetFacts.add_iff. 
+    elim (Plt_succ_inv _ _ H0); intro.
+    right. apply H. auto.
+    left. red. red. auto.
+  Qed.
+End NodeSetForward.
+
+Module NodeSetBackward <: NODE_SET.
+  Definition t := PositiveSet.t.
+  Definition add (n: positive) (s: t) : t := PositiveSet.add n s.
+  Definition pick (s: t) :=
+    match PositiveSet.min_elt s with
+    | Some n => Some(n, PositiveSet.remove n s)
+    | None => None
+    end.
+  Definition initial (top: positive) :=
+    positive_rec t PositiveSet.empty PositiveSet.add top.
+
+  Definition In := PositiveSet.In.
+
+  Lemma add_spec:
+    forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
+  Proof NodeSetForward.add_spec.
+    
+  Lemma pick_none:
+    forall s n, pick s = None -> ~In n s.
+  Proof.
+    intros until n; unfold pick. caseEq (PositiveSet.min_elt s); intros.
+    congruence.
+    apply PositiveSet.min_elt_3. auto.
+  Qed.
+
+  Lemma pick_some:
+    forall s n s', pick s = Some(n, s') ->
+    forall n', In n' s <-> n = n' \/ In n' s'.
+  Proof.
+    intros until s'; unfold pick. caseEq (PositiveSet.min_elt s); intros.
+    inversion H0; clear H0; subst. 
+    split; intros. 
+    destruct (peq n n'). auto. right. apply PositiveSet.remove_2; assumption.
+    elim H0; intro. subst n'. apply PositiveSet.min_elt_1. auto. 
+    apply PositiveSet.remove_3 with n; assumption.
+    congruence.
+  Qed.
+
+  Lemma initial_spec:
+    forall numnodes n, Plt n numnodes -> In n (initial numnodes).
+  Proof NodeSetForward.initial_spec.
+End NodeSetBackward.
 

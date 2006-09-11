@@ -634,7 +634,7 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
   to approximations.  It can fail to reach a fixpoint in a reasonable
   number of iterations, in which case [None] is returned. *)
 
-Module DS := Dataflow_Solver D.
+Module DS := Dataflow_Solver(D)(NodeSetForward).
 
 Definition analyze (f: RTL.function): option (PMap.t D.t) :=
   DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) 

@@ -80,7 +80,7 @@ Require Import Lattice.
   of a reachable block are reachable, by the very
   definition of reachability. *)
 
-Module DS := Dataflow_Solver(LBoolean).
+Module DS := Dataflow_Solver(LBoolean)(NodeSetForward).
 
 Definition reachable_aux (f: LTL.function) : option (PMap.t bool) :=
   DS.fixpoint
