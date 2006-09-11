@@ -3,7 +3,7 @@ CFLAGS=-O2 -Wall
 CCOMP=../../ccomp
 CCOMPFLAGS=-dump-c
 
-PROGS=fib integr qsort fft sha1 aes almabench
+PROGS=fib integr qsort fft sha1 aes almabench lists
 
 all_s: $(PROGS:%=%.s)
 
@@ -17,4 +17,4 @@ all: $(PROGS)
 
 clean:
 	rm -f $(PROGS)
-	rm -f *.clight *.s *.o *~ 
+	rm -f *.light.c *.s *.o *~ 
