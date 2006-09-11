@@ -85,7 +85,7 @@ let process_c_file sourcename =
         exit 2 in
   (* Save Csyntax if requested *)
   if !save_csyntax then begin
-    let oc = open_out (targetname ^ ".clight") in
+    let oc = open_out (targetname ^ ".light.c") in
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
