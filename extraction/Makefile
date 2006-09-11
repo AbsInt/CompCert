@@ -2,7 +2,7 @@ FILES=\
   Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml \
   Bool.ml CList.ml Sumbool.ml BinPos.ml BinNat.ml BinInt.ml \
   ZArith_dec.ml Zeven.ml Zmax.ml Zmisc.ml Zbool.ml Zpower.ml Zdiv.ml \
-  Int.ml OrderedType.ml FSetList.ml FSetAVL.ml \
+  Int.ml OrderedType.ml FSetInterface.ml FSetFacts.ml FSetList.ml FSetAVL.ml \
   Coqlib.ml Maps.ml Sets.ml AST.ml Iteration.ml Integers.ml \
   ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
@@ -39,13 +39,15 @@ OCAMLLIBS=unix.cma str.cma cil.cma
 COQINCL=-I ../lib -I ../common -I ../backend -I ../cfrontend
 COQEXEC=coqtop $(COQINCL) -batch -load-vernac-source
 
-../ccomp: $(FILES:.ml=.cmo)
-	$(OCAMLC) -o ../ccomp $(OCAMLLIBS) $(FILES:.ml=.cmo)
+executables: ../ccomp ../ccomp.byt
+
+../ccomp.byt: $(FILES:.ml=.cmo)
+	$(OCAMLC) -o ../ccomp.byt $(OCAMLLIBS) $(FILES:.ml=.cmo)
 clean::
 	rm -f ../ccomp
 
-../ccomp.opt: $(FILES:.ml=.cmx)
-	$(OCAMLOPT) -o ../ccomp.opt $(OCAMLLIBS:.cma=.cmxa) $(FILES:.ml=.cmx)
+../ccomp: $(FILES:.ml=.cmx)
+	$(OCAMLOPT) -o ../ccomp $(OCAMLLIBS:.cma=.cmxa) $(FILES:.ml=.cmx)
 clean::
 	rm -f ../ccomp.opt
 
