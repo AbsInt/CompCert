@@ -1,8 +1,10 @@
-*** ../cil/src/frontc/cabs2cil.ml	2006-05-21 06:14:15.000000000 +0200
---- ../cil_patch/src/frontc/cabs2cil.ml	2006-07-25 10:45:51.136500945 +0200
+*** ../cil_orig/src/frontc/cabs2cil.ml	2006-05-21 06:14:15.000000000 +0200
+--- ../cil/src/frontc/cabs2cil.ml	2006-09-11 18:01:47.323285775 +0200
 ***************
 *** 1,3 ****
---- 1,7 ----
+--- 1,9 ----
++ (* MODIF: for pointer comparison, avoid systematic cast to unsigned int *)
++ 
 + (* MODIF: Loop constructor replaced by 3 constructors: While, DoWhile, For. *)
 + (* MODIF: Return statement no longer added when the body of the function
 +           falls-through. *)
@@ -25,7 +27,7 @@
               (* We can just copy it because there is nothing to share here. 
                * Except maybe for the ref cell in Goto but it is Ok to share 
                * that, I think *)
---- 820,835 ----
+--- 822,837 ----
             (fun s -> 
               if s.labels != [] then 
                 raise (Failure "cannot duplicate: has labels");
@@ -44,7 +46,7 @@
                * that, I think *)
 ***************
 *** 838,843 ****
---- 845,851 ----
+--- 847,853 ----
       let canDrop (c: chunk) =
         List.for_all canDropStatement c.stmts
   
@@ -54,7 +56,7 @@
         let loop = mkStmt (Loop (c2block body, !currentLoc, None, None)) in
 ***************
 *** 845,850 ****
---- 853,885 ----
+--- 855,887 ----
           postins = [];
           cases = body.cases;
         } 
@@ -90,7 +92,7 @@
         { stmts = [ mkStmt (Break l) ];
 ***************
 *** 959,964 ****
---- 994,1000 ----
+--- 996,1002 ----
   
   
   (************ Labels ***********)
@@ -100,7 +102,7 @@
    * marker in a list saying what kinds of loop it is. When we see a continue 
 ***************
 *** 971,980 ****
---- 1007,1035 ----
+--- 1009,1037 ----
   
   let startLoop iswhile = 
     continues := (if iswhile then While else NotWhile (ref "")) :: !continues
@@ -132,7 +134,7 @@
       [] -> E.s (error "continue not in a loop")
 ***************
 *** 990,995 ****
---- 1045,1051 ----
+--- 1047,1053 ----
       [] -> E.s (error "labContinue not in a loop")
     | While :: rest -> c
     | NotWhile lr :: rest -> if !lr = "" then c else consLabel !lr c !currentLoc false
@@ -140,6 +142,60 @@
   
   let exitLoop () = 
     match !continues with
+***************
+*** 4141,4151 ****
+      | _ -> E.s (error "%a operator on a non-integer type" d_binop bop)
+    in
+    let pointerComparison e1 t1 e2 t2 = 
+!     (* Cast both sides to an integer *)
+!     let commontype = !upointType in
+      intType,
+!     optConstFoldBinOp false bop (mkCastT e1 t1 commontype) 
+!       (mkCastT e2 t2 commontype) intType
+    in
+  
+    match bop with
+--- 4199,4207 ----
+      | _ -> E.s (error "%a operator on a non-integer type" d_binop bop)
+    in
+    let pointerComparison e1 t1 e2 t2 = 
+!     (* XL: Do not cast both sides -- what's the point? *)
+      intType,
+!     optConstFoldBinOp false bop e1 e2 intType
+    in
+  
+    match bop with
+***************
+*** 4194,4207 ****
+  
+    | (Eq|Ne|Le|Lt|Ge|Gt) when isPointerType t1 && isArithmeticType t2 ->
+        ignore (warnOpt "Comparison of pointer and non-pointer");
+!       (* Cast both values to upointType *)
+!       doBinOp bop (mkCastT e1 t1 !upointType) !upointType 
+!                   (mkCastT e2 t2 !upointType) !upointType
+    | (Eq|Ne|Le|Lt|Ge|Gt) when isArithmeticType t1 && isPointerType t2 ->
+        ignore (warnOpt "Comparison of pointer and non-pointer");
+!       (* Cast both values to upointType *)
+!       doBinOp bop (mkCastT e1 t1 !upointType) !upointType 
+!                   (mkCastT e2 t2 !upointType) !upointType
+  
+    | _ -> E.s (error "doBinOp: %a\n" d_plainexp (BinOp(bop,e1,e2,intType)))
+  
+--- 4250,4263 ----
+  
+    | (Eq|Ne|Le|Lt|Ge|Gt) when isPointerType t1 && isArithmeticType t2 ->
+        ignore (warnOpt "Comparison of pointer and non-pointer");
+!       (* Cast both values to void * *)
+!       doBinOp bop (mkCastT e1 t1 voidPtrType) voidPtrType 
+!                   (mkCastT e2 t2 voidPtrType) voidPtrType
+    | (Eq|Ne|Le|Lt|Ge|Gt) when isArithmeticType t1 && isPointerType t2 ->
+        ignore (warnOpt "Comparison of pointer and non-pointer");
+!       (* Cast both values to void * *)
+!       doBinOp bop (mkCastT e1 t1 voidPtrType) voidPtrType 
+!                   (mkCastT e2 t2 voidPtrType) voidPtrType
+  
+    | _ -> E.s (error "doBinOp: %a\n" d_plainexp (BinOp(bop,e1,e2,intType)))
+  
 ***************
 *** 5465,5473 ****
 --- 5521,5534 ----
