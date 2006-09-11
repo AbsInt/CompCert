@@ -100,3 +100,29 @@ let array_of_coqlist = function
         | Coq_cons(hd, tl) -> a.(i) <- hd; fill (i + 1) tl in
       fill 1 tl
 
+(* Timing facility *)
+
+(*
+let timers = (Hashtbl.create 9 : (string, float) Hashtbl.t)
+
+let add_to_timer name time =
+  let old = try Hashtbl.find timers name with Not_found -> 0.0 in
+  Hashtbl.replace timers name (old +. time)
+
+let time name fn arg =
+  let start = Unix.gettimeofday() in
+  try
+    let res = fn arg in
+    add_to_timer name (Unix.gettimeofday() -. start);
+    res
+  with x ->
+    add_to_timer name (Unix.gettimeofday() -. start);
+    raise x
+
+let print_timers () =
+  Hashtbl.iter
+    (fun name time -> Printf.printf "%-20s %.3f\n" name time)
+    timers
+
+let _ = at_exit print_timers
+*)
