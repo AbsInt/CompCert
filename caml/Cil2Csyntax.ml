@@ -345,7 +345,7 @@ and convertLval lv =
     | NoOffset -> e
     | Field (f, ofs) ->
 	begin match t with
-	  | Tstruct fList ->
+	  | Tstruct(_, fList) ->
 	      begin try
 		let idf = intern_string f.fname in
 		let t' = getFieldType idf fList in
@@ -353,7 +353,7 @@ and convertLval lv =
 	      with Not_found ->
 		internal_error "processOffset: no such struct field"
 	      end
-	  | Tunion fList ->
+	  | Tunion(_, fList) ->
 	      begin try
 		let idf = intern_string f.fname in
 		let t' = getFieldType idf fList in
@@ -399,6 +399,8 @@ and convertTypGen env = function
   | TVoid _ -> Tvoid
   | TInt (k, _) -> let (x, y) = convertIkind k in Tint (x, y)
   | TFloat (k, _) -> Tfloat (convertFkind k)
+  | TPtr (TComp(c, _), _) when List.mem c.ckey env ->
+      Tcomp_ptr (intern_string (Cil.compFullName c))
   | TPtr (t, _) -> Tpointer (convertTypGen env t)
   | TArray (t, eOpt, _) ->
       begin match eOpt with
@@ -423,7 +425,9 @@ and convertTypGen env = function
       end
   | TNamed (tinfo, _) -> convertTypGen env tinfo.ttype
   | TComp (c, _) ->
-      if List.mem c.ckey env then Tvoid else begin
+      if List.mem c.ckey env then
+        unsupported "ill-formed recursive structure or union"
+      else begin
         let rec convertFieldList = function
           | [] -> Fnil
           | {fname=str; ftype=t} :: rem ->
@@ -431,7 +435,8 @@ and convertTypGen env = function
               let t' = convertTypGen (c.ckey :: env) t in
               Fcons(idf, t', convertFieldList rem) in
         let fList = convertFieldList c.cfields in
-        if c.cstruct then Tstruct fList else Tunion fList
+        let id = intern_string (Cil.compFullName c) in
+        if c.cstruct then Tstruct(id, fList) else Tunion(id, fList)
       end
   | TEnum _ -> constInt32   (* enum constants are integers *)
   | TBuiltin_va_list _ -> unsupported "GCC `builtin va_list' type"

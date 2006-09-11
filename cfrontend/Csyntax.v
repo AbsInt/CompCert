@@ -29,8 +29,9 @@ Inductive type : Set :=
   | Tpointer: type -> type
   | Tarray: type -> Z -> type
   | Tfunction: typelist -> type -> type
-  | Tstruct: fieldlist -> type
-  | Tunion: fieldlist -> type
+  | Tstruct: ident -> fieldlist -> type
+  | Tunion: ident ->fieldlist -> type
+  | Tcomp_ptr: ident -> type
 
 with typelist : Set :=
   | Tnil: typelist
@@ -164,8 +165,9 @@ Fixpoint alignof (t: type) : Z :=
   | Tpointer _ => 4
   | Tarray t' n => alignof t'
   | Tfunction _ _ => 1
-  | Tstruct fld => alignof_fields fld
-  | Tunion fld => alignof_fields fld
+  | Tstruct _ fld => alignof_fields fld
+  | Tunion _ fld => alignof_fields fld
+  | Tcomp_ptr _ => 4
   end
 
 with alignof_fields (f: fieldlist) : Z :=
@@ -208,8 +210,9 @@ Fixpoint sizeof (t: type) : Z :=
   | Tpointer _ => 4
   | Tarray t' n => sizeof t' * Zmax 1 n
   | Tfunction _ _ => 1
-  | Tstruct fld => align (Zmax 1 (sizeof_struct fld 0)) (alignof t)
-  | Tunion fld => align (Zmax 1 (sizeof_union fld)) (alignof t)
+  | Tstruct _ fld => align (Zmax 1 (sizeof_struct fld 0)) (alignof t)
+  | Tunion _ fld => align (Zmax 1 (sizeof_union fld)) (alignof t)
+  | Tcomp_ptr _ => 4
   end
 
 with sizeof_struct (fld: fieldlist) (pos: Z) {struct fld} : Z :=
@@ -285,8 +288,9 @@ Definition access_mode (ty: type) : mode :=
   | Tpointer _ => By_value Mint32
   | Tarray _ _ => By_reference
   | Tfunction _ _ => By_reference
-  | Tstruct fList => By_nothing
-  | Tunion fList => By_nothing
+  | Tstruct _ fList => By_nothing
+  | Tunion _ fList => By_nothing
+  | Tcomp_ptr _ => By_value Mint32
 end.
 
 (** Classification of arithmetic operations and comparisons *)

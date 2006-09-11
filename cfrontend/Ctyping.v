@@ -190,8 +190,12 @@ Fixpoint eq_type (t1 t2: type) {struct t1}: bool :=
       eq_type u1 u2 && if zeq sz1 sz2 then true else false
   | Tfunction args1 res1, Tfunction args2 res2 =>
       eq_typelist args1 args2 && eq_type res1 res2
-  | Tstruct f1, Tstruct f2 => eq_fieldlist f1 f2
-  | Tunion f1, Tunion f2 => eq_fieldlist f1 f2
+  | Tstruct id1 f1, Tstruct id2 f2 =>
+      if ident_eq id1 id2 then eq_fieldlist f1 f2 else false
+  | Tunion id1 f1, Tunion id2 f2 =>
+      if ident_eq id1 id2 then eq_fieldlist f1 f2 else false
+  | Tcomp_ptr id1, Tcomp_ptr id2 =>
+      if ident_eq id1 id2 then true else false
   | _, _ => false
   end
 
@@ -239,8 +243,9 @@ Proof.
   decEq; auto.
   TrueInv. decEq; auto.
   TrueInv. decEq; auto.
-  decEq; auto.
-  decEq; auto.
+  TrueInv. subst i0. decEq; auto.
+  TrueInv. subst i0. decEq; auto.
+  TrueInv. congruence.
   auto.
   TrueInv. decEq; auto.
   auto.

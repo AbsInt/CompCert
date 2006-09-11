@@ -556,15 +556,15 @@ with eval_lvalue: env -> mem -> expr -> trace -> mem -> block -> int -> Prop :=
       sem_add v1 (typeof a1) v2 (typeof a2) = Some (Vptr l ofs) ->
       eval_lvalue e m (Expr (Eindex a1 a2) ty)
                   (t1 ** t2) m2 l ofs
- | eval_Efield_struct:   forall e m a t m1 l ofs fList i ty delta,
+ | eval_Efield_struct:   forall e m a t m1 l ofs id fList i ty delta,
       eval_lvalue e m a t m1 l ofs ->
-      typeof a = Tstruct fList ->
+      typeof a = Tstruct id fList ->
       field_offset i fList = Some delta ->
       eval_lvalue e m (Expr (Efield a i) ty)
                   t m1 l (Int.add ofs (Int.repr delta))
- | eval_Efield_union:   forall e m a t m1 l ofs fList i ty,
+ | eval_Efield_union:   forall e m a t m1 l ofs id fList i ty,
       eval_lvalue e m a t m1 l ofs ->
-      typeof a = Tunion fList ->
+      typeof a = Tunion id fList ->
       eval_lvalue e m (Expr (Efield a i) ty) 
                   t m1 l ofs
 

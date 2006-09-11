@@ -725,11 +725,11 @@ Qed.
 
 Lemma transl_Efield_struct_correct:
        (forall (e : Csem.env) (m : mem) (a : Csyntax.expr) (t : trace)
-          (m1 : mem) (l : block) (ofs : int) (fList : fieldlist) (i : ident)
+          (m1 : mem) (l : block) (ofs : int) (id: ident) (fList : fieldlist) (i : ident)
           (ty : type) (delta : Z),
         eval_lvalue ge e m a t m1 l ofs ->
         eval_lvalue_prop e m a t m1 l ofs ->
-        typeof a = Tstruct fList ->
+        typeof a = Tstruct id fList ->
         field_offset i fList = Some delta ->
         eval_lvalue_prop e m (Expr (Efield a i) ty) t m1 l
           (Int.add ofs (Int.repr delta))).
@@ -743,11 +743,11 @@ Qed.
 
 Lemma transl_Efield_union_correct:
        (forall (e : Csem.env) (m : mem) (a : Csyntax.expr) (t : trace)
-          (m1 : mem) (l : block) (ofs : int) (fList : fieldlist) (i : ident)
+          (m1 : mem) (l : block) (ofs : int) (id: ident) (fList : fieldlist) (i : ident)
           (ty : type),
         eval_lvalue ge e m a t m1 l ofs ->
         eval_lvalue_prop e m a t m1 l ofs ->
-        typeof a = Tunion fList ->
+        typeof a = Tunion id fList ->
         eval_lvalue_prop e m (Expr (Efield a i) ty) t m1 l ofs).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. 
@@ -925,13 +925,9 @@ Lemma exit_if_false_true:
   exec_stmt tprog te m1 ts t m2 Out_normal.
 Proof.
   intros. monadInv H. rewrite <- H5. 
-  eapply exec_Sifthenelse_false with (v1 := Vfalse).
-  eapply make_notbool_correct with (va := v); eauto.
-  inversion H3; subst; simpl; auto.
-  rewrite Int.eq_false; auto.
-  rewrite Int.eq_false; auto.
-  rewrite Float.eq_zero_false; auto.
-  simpl; auto.
+  exploit make_boolean_correct_true. eapply H0; eauto. eauto.
+  intros [vb [EVAL ISTRUE]].
+  eapply exec_Sifthenelse_true with (v1 := vb); eauto. 
   constructor. traceEq.
 Qed.
  
@@ -945,11 +941,9 @@ Lemma exit_if_false_false:
   exec_stmt tprog te m1 ts t m2 (Out_exit 0).
 Proof.
   intros. monadInv H. rewrite <- H5. 
-  eapply exec_Sifthenelse_true with (v1 := Vtrue).
-  eapply make_notbool_correct with (va := v); eauto.
-  inversion H3; subst; simpl; auto.
-  rewrite Float.eq_zero_true; auto.
-  simpl; apply Int.one_not_zero.
+  exploit make_boolean_correct_false. eapply H0; eauto. eauto.
+  intros [vb [EVAL ISFALSE]].
+  eapply exec_Sifthenelse_false with (v1 := vb); eauto. 
   constructor. traceEq.
 Qed.
 

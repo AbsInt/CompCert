@@ -41,8 +41,9 @@ Definition var_kind_of_type (ty: type): option var_kind :=
   | Tpointer _ => Some(Vscalar Mint32)
   | Tarray _ _ => Some(Varray (Csyntax.sizeof ty))
   | Tfunction _ _ => None
-  | Tstruct fList => Some(Varray (Csyntax.sizeof ty))
-  | Tunion fList => Some(Varray (Csyntax.sizeof ty))
+  | Tstruct _ fList => Some(Varray (Csyntax.sizeof ty))
+  | Tunion _ fList => Some(Varray (Csyntax.sizeof ty))
+  | Tcomp_ptr _ => Some(Vscalar Mint32)
 end.
   
 (** ** Csharpminor constructors *)
@@ -359,13 +360,13 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : option expr :=
       Some(make_intconst (Int.repr (Csyntax.sizeof ty)))
   | Expr (Csyntax.Efield b i) ty => 
       match typeof b with
-      | Tstruct fld =>
+      | Tstruct _ fld =>
           do tb <- transl_lvalue b;
           do ofs <- field_offset i fld;
           make_load
             (make_binop Oadd tb (make_intconst (Int.repr ofs)))
             ty
-      | Tunion fld =>
+      | Tunion _ fld =>
           do tb <- transl_lvalue b;
           make_load tb ty
       | _ => None
@@ -389,11 +390,11 @@ with transl_lvalue (a: Csyntax.expr) {struct a} : option expr :=
       make_add tb (typeof b) tc (typeof c)
   | Expr (Csyntax.Efield b i) ty => 
       match typeof b with
-      | Tstruct fld =>
+      | Tstruct _ fld =>
           do tb <- transl_lvalue b;
           do ofs <- field_offset i fld;
           Some (make_binop Oadd tb (make_intconst (Int.repr ofs)))
-      | Tunion fld =>
+      | Tunion _ fld =>
           transl_lvalue b
       | _ => None
       end
@@ -430,9 +431,9 @@ Definition is_variable (e: Csyntax.expr) : option ident :=
 Definition exit_if_false (e: Csyntax.expr) : option stmt :=
   do te <- transl_expr e;
   Some(Sifthenelse
-        (make_notbool te (typeof e))
-        (Sexit 0%nat)
-        Sskip).
+        (make_boolean te (typeof e))
+        Sskip
+        (Sexit 0%nat)).
 
 (* [transl_statement nbrk ncnt s] returns a Csharpminor statement
    that performs the same computations as the CabsCoq statement [s].

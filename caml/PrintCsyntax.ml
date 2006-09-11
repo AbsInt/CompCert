@@ -45,25 +45,17 @@ let name_floattype sz =
   | F32 -> "float"
   | F64 -> "double"
 
-(* Naming of structs and unions *)
+(* Collecting the names and fields of structs and unions *)
 
-type su_kind = Struct | Union
+module StructUnionSet = Set.Make(struct
+  type t = string * fieldlist
+  let compare = (compare: t -> t -> int)
+end)
 
-let struct_union_names = ref []
-let struct_union_name_counter = ref 0
+let struct_unions = ref StructUnionSet.empty
 
-let register_struct_union kind fld =
-  if not (List.mem_assoc (kind, fld) !struct_union_names) then begin
-    incr struct_union_name_counter;
-    let s =
-      match kind with
-      | Struct -> sprintf "s%d" !struct_union_name_counter
-      | Union  -> sprintf "u%d" !struct_union_name_counter in
-    struct_union_names := ((kind, fld), s) :: !struct_union_names
-  end
-      
-let struct_union_name kind fld =
-  try List.assoc (kind, fld) !struct_union_names with Not_found -> "<unknown>"
+let register_struct_union id fld =
+  struct_unions := StructUnionSet.add (extern_atom id, fld) !struct_unions
 
 (* Declarator (identifier + type) *)
 
@@ -107,10 +99,12 @@ let rec name_cdecl id ty =
       end;
       Buffer.add_char b ')';
       name_cdecl (Buffer.contents b) res
-  | Tstruct fld ->
-      "struct " ^ struct_union_name Struct fld ^ name_optid id
-  | Tunion fld ->
-      "union " ^ struct_union_name Union fld ^ name_optid id
+  | Tstruct(name, fld) ->
+      extern_atom name ^ name_optid id
+  | Tunion(name, fld) ->
+      extern_atom name ^ name_optid id
+  | Tcomp_ptr name ->
+      extern_atom name ^ " *" ^ id
 
 (* Type *)
 
@@ -346,8 +340,9 @@ let rec collect_type = function
   | Tpointer t -> collect_type t
   | Tarray(t, n) -> collect_type t
   | Tfunction(args, res) -> collect_type_list args; collect_type res
-  | Tstruct fld -> register_struct_union Struct fld; collect_fields fld
-  | Tunion fld -> register_struct_union Union fld; collect_fields fld
+  | Tstruct(id, fld) -> register_struct_union id fld; collect_fields fld
+  | Tunion(id, fld) -> register_struct_union id fld; collect_fields fld
+  | Tcomp_ptr _ -> ()
 
 and collect_type_list = function
   | Tnil -> ()
@@ -417,10 +412,11 @@ let collect_program p =
   coqlist_iter collect_globvar p.prog_vars;
   coqlist_iter collect_fundef p.prog_funct
 
-let print_struct_or_union p ((kind, fld), name) =
-  fprintf p "@[<v 2>%s %s {" 
-    (match kind with Struct -> "struct" | Union -> "union")
-    name;
+let declare_struct_or_union p (name, fld) =
+  fprintf p "%s;@ @ " name
+
+let print_struct_or_union p (name, fld) =
+  fprintf p "@[<v 2>%s {" name;
   let rec print_fields = function
   | Fnil -> ()
   | Fcons(id, ty, rem) ->
@@ -430,11 +426,11 @@ let print_struct_or_union p ((kind, fld), name) =
   fprintf p "@;<0 -2>}@]@ "
 
 let print_program p prog =
-  struct_union_names := [];
-  struct_union_name_counter := 0;
+  struct_unions := StructUnionSet.empty;
   collect_program prog;
   fprintf p "@[<v 0>";
-  List.iter (print_struct_or_union p) !struct_union_names;
+  StructUnionSet.iter (declare_struct_or_union p) !struct_unions;
+  StructUnionSet.iter (print_struct_or_union p) !struct_unions;
   coqlist_iter (print_globvar p) prog.prog_vars;
   coqlist_iter (print_fundef p) prog.prog_funct;
   fprintf p "@]@."
