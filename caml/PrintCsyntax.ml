@@ -423,7 +423,7 @@ let print_struct_or_union p (name, fld) =
       fprintf p "@ %s;" (name_cdecl (extern_atom id) ty);
       print_fields rem in
   print_fields fld;
-  fprintf p "@;<0 -2>}@]@ "
+  fprintf p "@;<0 -2>};@]@ "
 
 let print_program p prog =
   struct_unions := StructUnionSet.empty;
