@@ -404,11 +404,15 @@ and convertTypGen env = function
   | TPtr (t, _) -> Tpointer (convertTypGen env t)
   | TArray (t, eOpt, _) ->
       begin match eOpt with
-	| Some (Const (CInt64 (i64, _, _))) ->
-	    Tarray (convertTypGen env t,
-                    coqint_of_camlint (Int64.to_int32 i64))
-	| Some _ -> unsupported "size of array type not an integer constant"
-	| None -> unsupported "array type of unspecified size"
+	| None ->
+            warning "array type of unspecified size";
+            Tarray (convertTypGen env t, coqint_of_camlint 0l)
+	| Some e ->
+            match Cil.constFold true e with
+            | Const (CInt64 (i64, _, _)) ->
+                Tarray (convertTypGen env t,
+                        coqint_of_camlint (Int64.to_int32 i64))
+            | _ -> unsupported "size of array type not an integer constant"
       end
   | TFun (t, argListOpt, vArg, _) ->
       if vArg then unsupported "variadic function type";
