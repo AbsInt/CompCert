@@ -97,7 +97,7 @@ Definition function_bounds :=
                 (max_over_slots_of_funct outgoing_slot))).
 
 (** We show that bounds computed by [function_bounds] are all positive
-  or null, and moreiver [bound_outgoing] is greater or equal to 6.
+  or null, and moreover [bound_outgoing] is greater or equal to 6.
   These properties are used later to reason about the layout of
   the activation record. *)
 
