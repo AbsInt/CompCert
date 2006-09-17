@@ -36,11 +36,11 @@ typedef unsigned char	u8;
 typedef unsigned short	u16;	
 typedef unsigned int	u32;
 
-#if defined(__i386__) || defined(__x86_64__)
-#undef ARCH_BIG_ENDIAN
-#elif defined(__ppc__)
+#if defined(__ppc__)
 #define ARCH_BIG_ENDIAN
-#elif
+#elif defined(__i386__) || defined(__x86_64__)
+#undef ARCH_BIG_ENDIAN
+#else
 #error "unknown endianness"
 #endif
 

@@ -13,10 +13,10 @@
 typedef unsigned int bits;
 #define	NBITS	(8 * sizeof(bits))
 
-static unsigned long
-nsieve(unsigned long m)
+static unsigned int
+nsieve(unsigned int m)
 {
-	unsigned long count, i, j;
+	unsigned int count, i, j;
 	bits * a;
         a = malloc((m / NBITS) * sizeof(bits));
 	memset(a, (1 << 8) - 1, (m / NBITS) * sizeof(bits));
@@ -31,22 +31,21 @@ nsieve(unsigned long m)
 }
 
 static void
-test(unsigned long n)
+test(unsigned int n)
 {
-	unsigned long count, m;
+	unsigned int count, m;
 
 	m = (1 << n) * 10000;
 	count = nsieve(m);
-	printf("Primes up to %8ju %8ju\n", m, count);
+	printf("Primes up to %8u %8u\n", m, count);
 }
 
 int
 main(int ac, char **av)
 {
-	unsigned long n;
-	char *cp;
+	unsigned int n;
 
-	n = ac < 2 ? 9 : strtoul(av[1], &cp, 10);
+	n = ac < 2 ? 9 : atoi(av[1]);
 	test(n);
 	if (n >= 1)
 		test(n - 1);
