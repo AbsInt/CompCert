@@ -340,42 +340,120 @@ let print_function oc name code =
   fprintf oc "%a:\n" print_symb name;
   coqlist_iter (print_instruction oc (labels_of_code code)) code
 
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$\\([if]*\\)$"
+(* Generation of stub code for variadic functions, e.g. printf.
+   Calling conventions for variadic functions are:
+     - always reserve 8 stack words (offsets 24 to 52) so that the
+       variadic function can save there the integer registers parameters
+       r3 ... r10
+     - treat float arguments as pairs of integers, i.e. if we
+       must pass them in registers, use a pair of integer registers
+       for this purpose.
+   The code we generate is:
+     - allocate large enough stack frame
+     - save return address
+     - copy our arguments (registers and stack) to the stack frame,
+       starting at offset 24
+     - load relevant integer parameter registers r3...r10 from the
+       stack frame, limited by the actual number of arguments
+     - call the variadic thing
+     - deallocate stack frame and return
+*)
 
-let print_external_function oc name =
-  let name = extern_atom name in
-  let (basename, types) =
-    if Str.string_match re_variadic_stub name 0
-    then (Str.matched_group 1 name, Str.matched_group 2 name)
-    else (name, "") in
-  fprintf oc "	.text\n";
-  fprintf oc "	.align 2\n";
-  fprintf oc "L%s$stub:\n" name;
-  (* Insertion of copies from float regs to pairs of int regs *)
-  let rec insert_copy i gpr fpr =
-    if i < String.length types then begin
-      match types.[i] with
-      | 'i' ->
-          insert_copy (i + 1) (gpr + 1) fpr
-      | 'f' ->
-          if gpr <= 10 then begin
-            fprintf oc "	stfd	f%d, 24(r1)\n" fpr;
-            fprintf oc "	lwz	r%d, 24(r1)\n" gpr;
-            if gpr <= 9 then
-              fprintf oc "	lwz	r%d, 28(r1)\n" (gpr + 1)
-          end;
-          insert_copy (i + 1) (gpr + 2) (fpr + 1)
-      |  _  -> assert false
-    end in
-  insert_copy 0 3 1;
+let variadic_stub oc stub_name fun_name ty_args =
+  (* Compute total size of arguments *)
+  let arg_size =
+    List.fold_left
+     (fun sz ty -> match ty with Tint -> sz + 4 | Tfloat -> sz + 8)
+     0 ty_args in
+  (* Stack size is linkage area + argument size, with a minimum of 56 bytes *)
+  let frame_size = max 56 (24 + arg_size) in
+  fprintf oc "	mflr	r0\n";
+  fprintf oc "	stwu	r1, %d(r1)\n" (-frame_size);
+  fprintf oc "	stw	r0, %d(r1)\n" frame_size;
+  (* Copy our parameters to our stack frame.
+     As an optimization, don't copy parameters that are already in
+     integer registers, since these stay in place. *)
+  let rec copy gpr fpr src_ofs dst_ofs = function
+    | [] -> ()
+    | Tint :: rem ->
+        if gpr > 10 then begin
+          fprintf oc "	lwz	r0, %d(r1)\n" src_ofs;
+          fprintf oc "	stw	r0, %d(r1)\n" dst_ofs
+        end;
+        copy (gpr + 1) fpr (src_ofs + 4) (dst_ofs + 4) rem
+    | Tfloat :: rem ->
+        if fpr <= 10 then begin
+          fprintf oc "	stfd	r%d, %d(r1)\n" gpr dst_ofs
+        end else begin
+          fprintf oc "	lfd	f0, %d(r1)\n" src_ofs;
+          fprintf oc "	stfd	f0, %d(r1)\n" dst_ofs
+        end;
+        copy (gpr + 2) (fpr + 1) (src_ofs + 8) (dst_ofs + 8) rem
+  in copy 3 1 (frame_size + 24) 24 ty_args;
+  (* Load the first parameters into integer registers.
+     As an optimization, don't load parameters that are already
+     in the correct integer registers. *)
+  let rec load gpr ofs = function
+    | [] -> ()
+    | Tint :: rem ->
+        load (gpr + 1) (ofs + 4) rem
+    | Tfloat :: rem ->
+        if gpr <= 10 then
+          fprintf oc "	lwz	r%d, %d(r1)\n" gpr ofs;
+        if gpr + 1 <= 10 then
+          fprintf oc "	lwz	r%d, %d(r1)\n" (gpr + 1) (ofs + 4);
+        load (gpr + 2) (ofs + 8) rem
+  in load 3 24 ty_args;
+  (* Call the function *)
+  fprintf oc "	addis	r11, 0, ha16(L%s$ptr)\n" stub_name;
+  fprintf oc "	lwz	r11, lo16(L%s$ptr)(r11)\n" stub_name;
+  fprintf oc "	mtctr	r11\n";
+  fprintf oc "	bctrl\n";
+  (* Free our frame and return *)
+  fprintf oc "	lwz	r0, %d(r1)\n" frame_size;
+  fprintf oc "	mtlr	r0\n";
+  fprintf oc "	addi	r1, %d, r1\n" frame_size;
+  fprintf oc "	blr\n";
+  (* The function pointer *)
+  fprintf oc "	.non_lazy_symbol_pointer\n";
+  fprintf oc "L%s$ptr:\n" stub_name;
+  fprintf oc "	.indirect_symbol _%s\n" fun_name;
+  fprintf oc "	.long	0\n"
+
+(* Stubs for fixed-type functions are much simpler *)
+
+let non_variadic_stub oc name =
   fprintf oc "	addis	r11, 0, ha16(L%s$ptr)\n" name;
   fprintf oc "	lwz	r11, lo16(L%s$ptr)(r11)\n" name;
   fprintf oc "	mtctr	r11\n";
   fprintf oc "	bctr\n";
   fprintf oc "	.non_lazy_symbol_pointer\n";
   fprintf oc "L%s$ptr:\n" name;
-  fprintf oc "	.indirect_symbol _%s\n" basename;
+  fprintf oc "	.indirect_symbol _%s\n" name;
   fprintf oc "	.long	0\n"
+
+(* Turn a "iiifff" string into a list of types *)
+
+let extract_types s =
+  let rec extract i accu =
+    if i < 0 then accu else
+      match s.[i] with
+      | 'i' -> extract (i - 1) (Tint :: accu)
+      | 'f' -> extract (i - 1) (Tfloat :: accu)
+      |  _  -> assert false
+  in extract (String.length s - 1) []
+
+let re_variadic_stub = Str.regexp "\\(.*\\)\\$\\([if]*\\)$"
+
+let print_external_function oc name =
+  let name = extern_atom name in
+  fprintf oc "	.text\n";
+  fprintf oc "	.align 2\n";
+  fprintf oc "L%s$stub:\n" name;
+  if Str.string_match re_variadic_stub name 0
+  then variadic_stub oc name (Str.matched_group 1 name)
+                        (extract_types (Str.matched_group 2 name))
+  else non_variadic_stub oc name
 
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
