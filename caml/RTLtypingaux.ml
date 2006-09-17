@@ -46,12 +46,21 @@ let type_instr retty (Coq_pair(pc, i)) =
       set_types args (type_of_addressing addr);
       set_type src (type_of_chunk chunk)
   | Icall(sg, ros, args, res, _) ->
-      begin match ros with
-      | Coq_inl r -> set_type r Tint
-      | Coq_inr _ -> ()
-      end;
-      set_types args sg.sig_args;
-      set_type res (match sg.sig_res with None -> Tint | Some ty -> ty)
+      begin try
+        begin match ros with
+        | Coq_inl r -> set_type r Tint
+        | Coq_inr _ -> ()
+        end;
+        set_types args sg.sig_args;
+        set_type res (match sg.sig_res with None -> Tint | Some ty -> ty)
+      with Type_error msg ->
+        let name =
+          match ros with
+          | Coq_inl _ -> "<reg>"
+          | Coq_inr id -> extern_atom id in
+        raise(Type_error (Printf.sprintf "type mismatch in Icall(%s): %s"
+                                         name msg))
+      end
   | Ialloc(arg, res, _) ->
       set_type arg Tint; set_type res Tint
   | Icond(cond, args, _, _) ->
