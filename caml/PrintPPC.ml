@@ -382,7 +382,9 @@ let print_fundef oc (Coq_pair(name, defn)) =
   | Internal code -> print_function oc name code
   | External ef -> print_external_function oc name
 
-let print_init_data oc = function
+let init_data_queue = ref []
+
+let print_init oc = function
   | Init_int8 n ->
       fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
   | Init_int16 n ->
@@ -401,6 +403,23 @@ let print_init_data oc = function
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
+  | Init_pointer id ->
+      let lbl = new_label() in
+      fprintf oc "	.long	L%d\n" lbl;
+      init_data_queue := (lbl, id) :: !init_data_queue
+
+let print_init_data oc id =
+  init_data_queue := [];
+  coqlist_iter (print_init oc) id;
+  let rec print_remainder () =
+    match !init_data_queue with
+    | [] -> ()
+    | (lbl, id) :: rem ->
+        init_data_queue := rem;
+        fprintf oc "L%d:\n" lbl;
+        coqlist_iter (print_init oc) id;
+        print_remainder()
+  in print_remainder()
 
 let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
@@ -409,7 +428,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
       fprintf oc "	.data\n";
       fprintf oc "	.globl	%a\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
-      coqlist_iter (print_init_data oc) init_data
+      print_init_data oc init_data
 
 let print_program oc p =
   extfuns := IdentSet.empty;

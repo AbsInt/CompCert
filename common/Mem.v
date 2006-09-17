@@ -636,6 +636,9 @@ Fixpoint contents_init_data (pos: Z) (id: list init_data) {struct id}: contentma
       store_contents Size64 (contents_init_data (pos + 8) id') pos (Vfloat f)
   | Init_space n :: id' =>
       contents_init_data (pos + Zmax n 0) id'
+  | Init_pointer x :: id' =>
+      (* Not handled properly yet *)
+      contents_init_data (pos + 4) id'
   end.
 
 Definition size_init_data (id: init_data) : Z :=
@@ -646,6 +649,7 @@ Definition size_init_data (id: init_data) : Z :=
   | Init_float32 _ => 4
   | Init_float64 _ => 8
   | Init_space n => Zmax n 0
+  | Init_pointer _ => 4
   end.
 
 Definition size_init_data_list (id: list init_data): Z :=
@@ -679,6 +683,7 @@ Proof.
   unfold size_init_data in H; destruct a;
   try (apply H1; [reflexivity|assumption]).
   apply IHid. generalize (Zmax2 z 0). omega. 
+  apply IHid. omega. 
 Qed.
 
 Definition block_init_data (id: list init_data) : block_contents :=
@@ -2136,7 +2141,7 @@ Proof.
   destruct a;
   try (apply H1; [reflexivity|repeat constructor]).
   apply IHid. generalize (Zmax2 z 0). omega. simpl in H0; omega.
-
+  apply IHid. omega. simpl size_init_data in H0. omega. 
   apply H. omega. unfold sz0. omega.
 Qed.
 

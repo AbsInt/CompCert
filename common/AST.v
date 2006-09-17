@@ -62,7 +62,8 @@ Inductive init_data: Set :=
   | Init_int32: int -> init_data
   | Init_float32: float -> init_data
   | Init_float64: float -> init_data
-  | Init_space: Z -> init_data.
+  | Init_space: Z -> init_data
+  | Init_pointer: list init_data -> init_data.
 
 (** Whole programs consist of:
 - a collection of function definitions (name and description);

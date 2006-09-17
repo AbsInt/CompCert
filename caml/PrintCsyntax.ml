@@ -309,6 +309,34 @@ let print_fundef p (Coq_pair(id, fd)) =
   | Internal f ->
       print_function p id f
 
+let string_of_init id =
+  try
+    let s = String.create (length_coqlist id) in
+    let i = ref 0 in
+    coqlist_iter
+      (function
+        | Init_int8 n ->
+            s.[!i] <- Char.chr(Int32.to_int(camlint_of_coqint n));
+            incr i
+        | _ -> raise Not_found)
+      id;
+    Some s
+  with Not_found -> None
+
+let print_escaped_string p s =
+  fprintf p "\"";
+  for i = 0 to String.length s - 1 do
+    match s.[i] with
+    | ('\"' | '\\') as c -> fprintf p "\\%c" c
+    | '\n' -> fprintf p "\\n"
+    | '\t' -> fprintf p "\\t"
+    | '\r' -> fprintf p "\\r"
+    | c    -> if c >= ' ' && c <= '~'
+              then fprintf p "%c" c
+              else fprintf p "\\x%02x" (Char.code c)
+  done;
+  fprintf p "\""
+
 let print_init p = function
   | Init_int8 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
   | Init_int16 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
@@ -316,6 +344,10 @@ let print_init p = function
   | Init_float32 n -> fprintf p "%F,@ " n
   | Init_float64 n -> fprintf p "%F,@ " n
   | Init_space n -> fprintf p "/* skip %ld*/@ " (camlint_of_coqint n)
+  | Init_pointer id ->
+      match string_of_init id with
+      | None -> fprintf p "/* pointer to other init*/,@ "
+      | Some s -> fprintf p "%a,@ " print_escaped_string s
 
 let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
   match init with
