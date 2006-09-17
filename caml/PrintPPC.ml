@@ -171,9 +171,8 @@ let print_instruction oc labels = function
       fprintf oc "	fcmpu	cr0, %a, %a\n" freg r1 freg r2
   | Pfcti(r1, r2) ->
       fprintf oc "	fctiwz	f13, %a\n" freg r2;
-      fprintf oc "	stfdu	f13, -8(r1)\n";
-      fprintf oc "	lwz	%a, 4(r1)\n" ireg r1;
-      fprintf oc "	addi	r1, r1, 8\n"
+      fprintf oc "	stfd	f13, -8(r1)\n";
+      fprintf oc "	lwz	%a, -4(r1)\n" ireg r1
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfmadd(r1, r2, r3, r4) ->
@@ -193,13 +192,12 @@ let print_instruction oc labels = function
   | Pictf(r1, r2) ->
       let lbl = new_label() in
       fprintf oc "	addis	r2, 0, 0x4330\n";
-      fprintf oc "	stwu	r2, -8(r1)\n";
+      fprintf oc "	stw	r2, -8(r1)\n";
       fprintf oc "	addis	r2, %a, 0x8000\n" ireg r2;
-      fprintf oc "	stw	r2, 4(r1)\n";
+      fprintf oc "	stw	r2, -4(r1)\n";
       fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl;
       fprintf oc "	lfd	f13, lo16(L%d)(r2)\n" lbl;
-      fprintf oc "	lfd	%a, 0(r1)\n" freg r1;
-      fprintf oc "	addi	r1, r1, 8\n";
+      fprintf oc "	lfd	%a, -8(r1)\n" freg r1;
       fprintf oc "	fsub	%a, %a, f13\n" freg r1 freg r1;
       fprintf oc "	.const_data\n";
       fprintf oc "L%d:	.long	0x43300000, 0x80000000\n" lbl;
@@ -207,13 +205,12 @@ let print_instruction oc labels = function
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
       fprintf oc "	addis	r2, 0, 0x4330\n";
-      fprintf oc "	stwu	r2, -8(r1)\n";
-      fprintf oc "	stw	%a, 4(r1)\n" ireg r2;
+      fprintf oc "	stw	r2, -8(r1)\n";
+      fprintf oc "	stw	%a, -4(r1)\n" ireg r2;
       fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl;
       fprintf oc "	lfd	f13, lo16(L%d)(r2)\n" lbl;
-      fprintf oc "	lfd	%a, 0(r1)\n" freg r1;
-      fprintf oc "	addi	r1, r1, 8\n";
-      fprintf oc "	fsub	%a, %a, f12\n" freg r1 freg r1;
+      fprintf oc "	lfd	%a, -8(r1)\n" freg r1;
+      fprintf oc "	fsub	%a, %a, f13\n" freg r1 freg r1;
       fprintf oc "	.const_data\n";
       fprintf oc "L%d:	.long	0x43300000, 0x00000000\n" lbl;
       fprintf oc "	.text\n"
@@ -369,7 +366,7 @@ let variadic_stub oc stub_name fun_name ty_args =
   let frame_size = max 56 (24 + arg_size) in
   fprintf oc "	mflr	r0\n";
   fprintf oc "	stwu	r1, %d(r1)\n" (-frame_size);
-  fprintf oc "	stw	r0, %d(r1)\n" frame_size;
+  fprintf oc "	stw	r0, %d(r1)\n" (frame_size + 4);
   (* Copy our parameters to our stack frame.
      As an optimization, don't copy parameters that are already in
      integer registers, since these stay in place. *)
@@ -383,7 +380,7 @@ let variadic_stub oc stub_name fun_name ty_args =
         copy (gpr + 1) fpr (src_ofs + 4) (dst_ofs + 4) rem
     | Tfloat :: rem ->
         if fpr <= 10 then begin
-          fprintf oc "	stfd	r%d, %d(r1)\n" gpr dst_ofs
+          fprintf oc "	stfd	f%d, %d(r1)\n" fpr dst_ofs
         end else begin
           fprintf oc "	lfd	f0, %d(r1)\n" src_ofs;
           fprintf oc "	stfd	f0, %d(r1)\n" dst_ofs
@@ -410,9 +407,9 @@ let variadic_stub oc stub_name fun_name ty_args =
   fprintf oc "	mtctr	r11\n";
   fprintf oc "	bctrl\n";
   (* Free our frame and return *)
-  fprintf oc "	lwz	r0, %d(r1)\n" frame_size;
+  fprintf oc "	lwz	r0, %d(r1)\n" (frame_size + 4);
   fprintf oc "	mtlr	r0\n";
-  fprintf oc "	addi	r1, %d, r1\n" frame_size;
+  fprintf oc "	addi	r1, r1, %d\n" frame_size;
   fprintf oc "	blr\n";
   (* The function pointer *)
   fprintf oc "	.non_lazy_symbol_pointer\n";
