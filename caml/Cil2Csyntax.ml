@@ -139,24 +139,24 @@ let globals_for_strings globs =
 let stub_function_table = Hashtbl.create 47
 
 let register_stub_function name tres targs =
+  let rec letters_of_type = function
+    | Tnil -> []
+    | Tcons(Tfloat _, tl) -> "f" :: letters_of_type tl
+    | Tcons(_, tl) -> "i" :: letters_of_type tl in
+  let stub_name =
+    name ^ "$" ^ String.concat "" (letters_of_type targs) in
   try
-    Hashtbl.find stub_function_table name
+    (stub_name, Hashtbl.find stub_function_table stub_name)
   with Not_found ->
-    let rec letters_of_type = function
-      | Tnil -> []
-      | Tcons(Tfloat _, tl) -> "f" :: letters_of_type tl
-      | Tcons(_, tl) -> "i" :: letters_of_type tl in
-    let stub_name =
-      name ^ "$" ^ String.concat "" (letters_of_type targs) in
     let rec types_of_types = function
       | Tnil -> Tnil
       | Tcons(Tfloat _, tl) -> Tcons(Tfloat F64, types_of_types tl)
       | Tcons(_, tl) -> Tcons(Tpointer Tvoid, types_of_types tl) in
     let stub_type = Tfunction (types_of_types targs, tres) in
-    Hashtbl.add stub_function_table name (stub_name, stub_type);
+    Hashtbl.add stub_function_table stub_name stub_type;
     (stub_name, stub_type)
 
-let declare_stub_function name (stub_name, stub_type) =
+let declare_stub_function stub_name stub_type =
   match stub_type with
   | Tfunction(targs, tres) ->
       Datatypes.Coq_pair(intern_string stub_name,
@@ -547,14 +547,20 @@ let rec processInstrList l =
     match l with
       | [] -> Sskip
       | [s] -> convertInstr s
-      | s :: l -> Ssequence (convertInstr s, processInstrList l)
+      | s :: l -> 
+          let cs = convertInstr s in
+          let cl = processInstrList l in
+          Ssequence (cs, cl)
 
 
 (** Convert a [Cil.stmt list] into a [CabsCoq.statement] *)
 let rec processStmtList = function
   | [] -> Sskip
   | [s] -> convertStmt s
-  | s :: l -> Ssequence (convertStmt s, processStmtList l)
+  | s :: l ->
+      let cs = convertStmt s in
+      let cl = processStmtList l in
+      Ssequence (cs, cl)
 
 
 (** Return the list of the constant expressions in a label list
@@ -691,7 +697,8 @@ let rec initDataLen accu = function
       | Init_int32 _ -> 4l
       | Init_float32 _ -> 4l
       | Init_float64 _ -> 8l
-      | Init_space n -> camlint_of_z n in
+      | Init_space n -> camlint_of_z n
+      | Init_pointer _ -> 4l in
       initDataLen (Int32.add sz accu) il
 
 (** Convert a [Cil.init] into a list of [AST.init_data] prepended to
@@ -703,6 +710,7 @@ let rec initDataLen accu = function
 type init_constant =
   | ICint of int64 * intsize
   | ICfloat of float * floatsize
+  | ICstring of string
   | ICnone
 
 let rec extract_constant e =
@@ -711,6 +719,8 @@ let rec extract_constant e =
       ICint(n, fst (convertIkind ikind))
   | Const (CReal(n, fkind, _)) ->
       ICfloat(n, convertFkind fkind)
+  | Const (CStr s) ->
+      ICstring s
   | CastE (ty, e1) ->
       begin match extract_constant e1, convertTyp ty with
       | ICfloat(n, _), Tfloat sz ->
@@ -719,6 +729,8 @@ let rec extract_constant e =
           ICfloat(Int64.to_float n, sz)
       | ICint(n, sz), Tpointer _ ->
           ICint(n, sz)
+      | ICstring s, (Tint _ | Tpointer _) ->
+          ICstring s
       | _, _ ->
           ICnone
       end
@@ -728,6 +740,14 @@ let rec extract_constant e =
       | _ -> ICnone
       end
   | _ -> ICnone
+
+let init_data_of_string s =
+  let id = ref CList.Coq_nil in
+  for i = String.length s - 1 downto 0 do
+    let n = coqint_of_camlint(Int32.of_int(Char.code s.[i])) in
+    id := CList.Coq_cons(Init_int8 n, !id)
+  done;
+  !id
 
 let rec convertInit init k =
   match init with
@@ -743,6 +763,8 @@ let rec convertInit init k =
           CList.Coq_cons(Init_float32 n, k)
       | ICfloat(n, F64) ->
           CList.Coq_cons(Init_float64 n, k)
+      | ICstring s ->
+          CList.Coq_cons(Init_pointer(init_data_of_string s), k)
       | ICnone ->
           unsupported "this kind of expression is not supported in global initializers"
     end
@@ -816,13 +838,12 @@ let convertExtFun v =
 let rec processGlobals = function
   | [] -> (CList.Coq_nil, CList.Coq_nil)
   | g :: l ->
-      let (fList, vList) as rem = processGlobals l in
 	match g with
-	  | GType _ -> rem   (* typedefs are unrolled... *)
-	  | GCompTag _ -> rem
-	  | GCompTagDecl _ -> rem
-	  | GEnumTag _ -> rem   (* enum constants are folded... *)
-	  | GEnumTagDecl _ -> rem
+	  | GType _ -> processGlobals l (* typedefs are unrolled... *)
+	  | GCompTag _ -> processGlobals l 
+	  | GCompTagDecl _ -> processGlobals l 
+	  | GEnumTag _ -> processGlobals l (* enum constants are folded... *)
+	  | GEnumTagDecl _ -> processGlobals l
 	  | GVarDecl (v, loc) ->
 	      updateLoc(loc);
               (* Functions become external declarations,
@@ -830,26 +851,34 @@ let rec processGlobals = function
                  variables become uninitialized variables *)
               begin match Cil.unrollType v.vtype with
               | TFun (tres, Some targs, false, _) ->
-                  (CList.Coq_cons (convertExtFun v, fList), vList)
+                  let fn = convertExtFun v in
+                  let (fList, vList) = processGlobals l in
+                  (CList.Coq_cons (fn, fList), vList)
               | TFun (tres, _, _, _) ->
-                  rem
+                  processGlobals l
               | _ ->
-                  (fList, CList.Coq_cons (convertExtVar v, vList))
+                  let var = convertExtVar v in
+                  let (fList, vList) = processGlobals l in
+                  (fList, CList.Coq_cons (var, vList))
               end
 	  | GVar (v, init, loc) ->
 	      updateLoc(loc);
-              (fList, CList.Coq_cons (convertGVar v init, vList))
+              let var = convertGVar v init in
+              let (fList, vList) = processGlobals l in
+              (fList, CList.Coq_cons (var, vList))
 	  | GFun (fdec, loc) ->
 	      updateLoc(loc);
-              (CList.Coq_cons (convertGFun fdec, fList), vList)
+              let fn = convertGFun fdec in
+              let (fList, vList) = processGlobals l in
+              (CList.Coq_cons (fn, fList), vList)
 	  | GAsm (_, loc) ->
 	      updateLoc(loc);
               unsupported "inline assembly"
 	  | GPragma (_, loc) ->
 	      updateLoc(loc);
               warning "#pragma directive ignored";
-              rem
-	  | GText _ -> rem   (* comments are ignored *)
+              processGlobals l
+	  | GText _ -> processGlobals l (* comments are ignored *)
 
 (** Eliminate forward declarations of globals that are defined later *)
 
