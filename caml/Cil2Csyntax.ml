@@ -39,6 +39,32 @@ let stringTable = Hashtbl.create 47
 
 (** ** Functions related to [struct]s and [union]s *)
 
+(* Unroll recursion in struct or union types:
+   substitute [Tcomp_ptr id] by [Tpointer compty] in [ty]. *)
+
+let unrollType id compty ty =
+  let rec unrType ty =
+    match ty with
+    | Tvoid -> ty
+    | Tint(sz, sg) -> ty
+    | Tfloat sz -> ty
+    | Tpointer ty -> Tpointer (unrType ty)
+    | Tarray(ty, sz) -> Tarray (unrType ty, sz)
+    | Tfunction(args, res) -> Tfunction(unrTypelist args, unrType res)
+    | Tstruct(id', fld) ->
+        if id' = id then ty else Tstruct(id', unrFieldlist fld)
+    | Tunion(id', fld) ->
+        if id' = id then ty else Tunion(id', unrFieldlist fld)
+    | Tcomp_ptr id' ->
+        if id' = id then Tpointer compty else ty
+  and unrTypelist = function
+    | Tnil -> Tnil
+    | Tcons(hd, tl) -> Tcons(unrType hd, unrTypelist tl)
+  and unrFieldlist = function
+    | Fnil -> Fnil
+    | Fcons(id, ty, tl) -> Fcons(id, unrType ty, unrFieldlist tl)
+  in unrType ty
+
 (* Return the type of a [struct] field *)
 let rec getFieldType f = function
   | Fnil -> raise Not_found
@@ -345,18 +371,18 @@ and convertLval lv =
     | NoOffset -> e
     | Field (f, ofs) ->
 	begin match t with
-	  | Tstruct(_, fList) ->
+	  | Tstruct(id, fList) ->
 	      begin try
 		let idf = intern_string f.fname in
-		let t' = getFieldType idf fList in
+		let t' = unrollType id t (getFieldType idf fList) in
                   processOffset (Expr (Efield (e, idf), t')) ofs
 	      with Not_found ->
 		internal_error "processOffset: no such struct field"
 	      end
-	  | Tunion(_, fList) ->
+	  | Tunion(id, fList) ->
 	      begin try
 		let idf = intern_string f.fname in
-		let t' = getFieldType idf fList in
+		let t' = unrollType id t (getFieldType idf fList) in
 		  processOffset (Expr (Efield (e, idf), t')) ofs
 	      with Not_found ->
 		internal_error "processOffset: no such union field"
@@ -684,7 +710,6 @@ let convertGFun fdec =
     Datatypes.Coq_pair
       (intern_string v.vname,
        Internal { fn_return=ret; fn_params=args; fn_vars=varList; fn_body=s })
-
 
 (** Auxiliary for [convertInit] *)
 
