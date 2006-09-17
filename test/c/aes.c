@@ -36,7 +36,13 @@ typedef unsigned char	u8;
 typedef unsigned short	u16;	
 typedef unsigned int	u32;
 
+#if defined(__i386__) || defined(__x86_64__)
+#undef ARCH_BIG_ENDIAN
+#elif defined(__ppc__)
 #define ARCH_BIG_ENDIAN
+#elif
+#error "unknown endianness"
+#endif
 
 #ifdef ARCH_BIG_ENDIAN
 #define GETU32(pt) (*(u32 *)(pt))
@@ -1427,7 +1433,6 @@ static void do_bench(int nblocks)
 
 int main(int argc, char ** argv)
 {
-  if (argc < 2) {
   do_test(128, 
           (u8 *)"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F",
           (u8 *)"\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF",
@@ -1443,8 +1448,6 @@ int main(int argc, char ** argv)
           (u8 *)"\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF",
           (u8 *)"\x8E\xA2\xB7\xCA\x51\x67\x45\xBF\xEA\xFC\x49\x90\x4B\x49\x60\x89",
           5, 6);
-  } else {
-    do_bench(atoi(argv[1]));
-  }
+  do_bench(1000000);
   return 0;
 }

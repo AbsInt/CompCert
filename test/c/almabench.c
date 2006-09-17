@@ -186,7 +186,7 @@ double anpm (double a)
 void planetpv (double epoch[2], int np, double pv[2][3])
 {
     // working storage
-    int i, j, k;
+    int k;
     double t, da, dl, de, dp, di, doh, dmu, arga, argl, am;
     double ae, dae, ae2, at, r, v, si2, xq, xp, tl, xsw;
     double xcw, xm2, xf, ci2, xms, xmc, xpxq2, x, y, z;
@@ -345,9 +345,7 @@ static void bench(int nloops)
 
 int main(int argc, char ** argv)
 {
-  if (argc >= 2)
-    bench(atoi(argv[1]));
-  else
-    test();
+  test();
+  bench(1);
   return 0;
 }

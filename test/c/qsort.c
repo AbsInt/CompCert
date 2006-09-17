@@ -18,10 +18,10 @@ void quicksort(int lo, int hi, int base[])
   }
 }
 
-int cmplong(const void * i, const void * j)
+int cmpint(const void * i, const void * j)
 {
-  long vi = *((long *) i);
-  long vj = *((long *) j);
+  int vi = *((int *) i);
+  int vj = *((int *) j);
   if (vi == vj) return 0;
   if (vi < vj) return -1;
   return 1;
@@ -30,17 +30,17 @@ int cmplong(const void * i, const void * j)
 int main(int argc, char ** argv)
 {
   int n, i;
-  long * a, * b;
+  int * a, * b;
   int bench = 0;
 
-  if (argc >= 2) n = atoi(argv[1]); else n = 1000;
+  if (argc >= 2) n = atoi(argv[1]); else n = 1000000;
   if (argc >= 3) bench = 1;
-  a = malloc(n * sizeof(long));
-  b = malloc(n * sizeof(long));
+  a = malloc(n * sizeof(int));
+  b = malloc(n * sizeof(int));
   for (i = 0; i < n; i++) b[i] = a[i] = rand() & 0xFFFF;
   quicksort(0, n - 1, a);
   if (!bench) {
-    qsort(b, n, sizeof(long), cmplong);
+    qsort(b, n, sizeof(int), cmpint);
     for (i = 0; i < n; i++) {
       if (a[i] != b[i]) { printf("Bug!\n"); return 2; }
     }

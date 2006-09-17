@@ -5,7 +5,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if defined(__i386__) || defined(__x86_64__)
+#undef ARCH_BIG_ENDIAN
+#elif defined(__ppc__)
 #define ARCH_BIG_ENDIAN
+#elif
+#error "unknown endianness"
+#endif
 
 typedef unsigned int u32;
 
@@ -219,11 +225,8 @@ static void do_bench(int nblocks)
 
 int main(int argc, char ** argv)
 {
-  if (argc < 2) {
-    do_test(test_input_1, test_output_1);
-    do_test(test_input_2, test_output_2);
-  } else {
-    do_bench(atoi(argv[1]));
-  }
+  do_test(test_input_1, test_output_1);
+  do_test(test_input_2, test_output_2);
+  do_bench(1000000);
   return 0;
 }
