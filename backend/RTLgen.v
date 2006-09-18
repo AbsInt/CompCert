@@ -10,42 +10,6 @@ Require Import Registers.
 Require Import Cminor.
 Require Import RTL.
 
-(** * Mutated variables *)
-
-(** The following functions compute the list of local Cminor variables
-  possibly modified during the evaluation of the given expression.
-  It is used in the [alloc_reg] function to avoid unnecessary 
-  register-to-register moves in the generated RTL. *)
-
-Fixpoint mutated_expr (a: expr) : list ident :=
-  match a with
-  | Evar id => nil
-  | Eassign id b => id :: mutated_expr b
-  | Eop op bl => mutated_exprlist bl
-  | Eload _ _ bl => mutated_exprlist bl
-  | Estore _ _ bl c => mutated_exprlist bl ++ mutated_expr c
-  | Ecall _ b cl => mutated_expr b ++ mutated_exprlist cl
-  | Econdition b c d => mutated_condexpr b ++ mutated_expr c ++ mutated_expr d
-  | Elet b c => mutated_expr b ++ mutated_expr c
-  | Eletvar n => nil
-  | Ealloc b => mutated_expr b
-  end
-
-with mutated_condexpr (a: condexpr) : list ident :=
-  match a with
-  | CEtrue => nil
-  | CEfalse => nil
-  | CEcond cond bl => mutated_exprlist bl
-  | CEcondition b c d =>
-      mutated_condexpr b ++ mutated_condexpr c ++ mutated_condexpr d
-  end
-
-with mutated_exprlist (l: exprlist) : list ident :=
-  match l with
-  | Enil => nil
-  | Econs a bl => mutated_expr a ++ mutated_exprlist bl
-  end.
-
 (** * Translation environments and state *)
 
 (** The translation functions are parameterized by the following 
@@ -239,37 +203,32 @@ Definition find_letvar (map: mapping) (idx: nat) : mon reg :=
 
 (** ** Optimized temporary generation *)
 
-(** [alloc_reg map mut a] returns the RTL register where the evaluation
+(** [alloc_reg map a] returns the RTL register where the evaluation
   of expression [a] should leave its result -- the ``target register''
   for evaluating [a].  In general, this is a
   fresh temporary register.  Exception: if [a] is a let-bound variable
-  or a non-mutated local variable, we return the RTL register associated
+  or a local variable, we return the RTL register associated
   with that variable instead.  Returning a fresh temporary in all cases
   would be semantically correct, but would generate less efficient 
   RTL code. *)
 
-Definition alloc_reg (map: mapping) (mut: list ident) (a: expr) : mon reg :=
+Definition alloc_reg (map: mapping) (a: expr) : mon reg :=
   match a with
-  | Evar id =>
-      if In_dec ident_eq id mut
-      then new_reg
-      else find_var map id
-  | Eletvar n =>
-      find_letvar map n
-  | _ =>
-      new_reg
+  | Evar id   => find_var map id
+  | Eletvar n => find_letvar map n
+  | _         => new_reg
   end.
 
 (** [alloc_regs] is similar, but for a list of expressions. *)
 
-Fixpoint alloc_regs (map: mapping) (mut:list ident) (al: exprlist)
+Fixpoint alloc_regs (map: mapping) (al: exprlist)
                     {struct al}: mon (list reg) :=
   match al with
   | Enil =>
       ret nil
   | Econs a bl =>
-      do rl <- alloc_regs map mut bl;
-      do r  <- alloc_reg map mut a;
+      do rl <- alloc_regs map bl;
+      do r  <- alloc_reg map a;
       ret (r :: rl)
   end.
 
@@ -287,52 +246,46 @@ Definition add_move (rs rd: reg) (nd: node) : mon node :=
   to compute the value of Cminor expression [a], leave its result
   in register [rd], and branch to node [nd].  It returns the node
   of the first instruction in this sequence.  [map] is the compile-time
-  translation environment, and [mut] is an over-approximation of
-  the set of local variables possibly modified during 
-  the evaluation of [a]. *)
+  translation environment. *)
 
-Fixpoint transl_expr (map: mapping) (mut: list ident)
-                     (a: expr) (rd: reg) (nd: node)
+Fixpoint transl_expr (map: mapping) (a: expr) (rd: reg) (nd: node)
                      {struct a}: mon node :=
   match a with
   | Evar v =>
       do r <- find_var map v; add_move r rd nd
-  | Eassign v b =>
-      do r <- find_var map v;
-      do no <- add_move rd r nd; transl_expr map mut b rd no
   | Eop op al =>
-      do rl <- alloc_regs map mut al;
+      do rl <- alloc_regs map al;
       do no <- add_instr (Iop op rl rd nd);
-         transl_exprlist map mut al rl no
+         transl_exprlist map al rl no
   | Eload chunk addr al =>
-      do rl <- alloc_regs map mut al;
+      do rl <- alloc_regs map al;
       do no <- add_instr (Iload chunk addr rl rd nd);
-         transl_exprlist map mut al rl no
+         transl_exprlist map al rl no
   | Estore chunk addr al b =>
-      do rl <- alloc_regs map mut al;
+      do rl <- alloc_regs map al;
       do no <- add_instr (Istore chunk addr rl rd nd);
-      do ns <- transl_expr map mut b rd no;
-         transl_exprlist map mut al rl ns
+      do ns <- transl_expr map b rd no;
+         transl_exprlist map al rl ns
   | Ecall sig b cl =>
-      do rf <- alloc_reg map mut b;
-      do rargs <- alloc_regs map mut cl;
+      do rf <- alloc_reg map b;
+      do rargs <- alloc_regs map cl;
       do n1 <- add_instr (Icall sig (inl _ rf) rargs rd nd);
-      do n2 <- transl_exprlist map mut cl rargs n1;
-         transl_expr map mut b rf n2
+      do n2 <- transl_exprlist map cl rargs n1;
+         transl_expr map b rf n2
   | Econdition b c d =>
-      do nfalse <- transl_expr map mut d rd nd;
-      do ntrue  <- transl_expr map mut c rd nd;
-         transl_condition map mut b ntrue nfalse
+      do nfalse <- transl_expr map d rd nd;
+      do ntrue  <- transl_expr map c rd nd;
+         transl_condition map b ntrue nfalse
   | Elet b c =>
       do r  <- new_reg;
-      do nc <- transl_expr (add_letvar map r) mut c rd nd;
-         transl_expr map mut b r nc
+      do nc <- transl_expr (add_letvar map r) c rd nd;
+         transl_expr map b r nc
   | Eletvar n =>
       do r <- find_letvar map n; add_move r rd nd
   | Ealloc a =>
-      do r <- alloc_reg map mut a;
+      do r <- alloc_reg map a;
       do no <- add_instr (Ialloc r rd nd);
-         transl_expr map mut a r no
+         transl_expr map a r no
   end
 
 (** Translation of a conditional expression.  Similar to [transl_expr],
@@ -340,8 +293,7 @@ Fixpoint transl_expr (map: mapping) (mut: list ident)
   code branches to one of two possible continuation nodes [ntrue] or 
   [nfalse] depending on the truth value of [a]. *)
 
-with transl_condition (map: mapping) (mut: list ident)
-                      (a: condexpr) (ntrue nfalse: node)
+with transl_condition (map: mapping) (a: condexpr) (ntrue nfalse: node)
                       {struct a}: mon node :=
   match a with
   | CEtrue =>
@@ -349,26 +301,25 @@ with transl_condition (map: mapping) (mut: list ident)
   | CEfalse =>
       ret nfalse
   | CEcond cond bl =>
-      do rl <- alloc_regs map mut bl;
+      do rl <- alloc_regs map bl;
       do nt <- add_instr (Icond cond rl ntrue nfalse);
-         transl_exprlist map mut bl rl nt
+         transl_exprlist map bl rl nt
   | CEcondition b c d =>
-      do nd <- transl_condition map mut d ntrue nfalse;
-      do nc <- transl_condition map mut c ntrue nfalse;
-         transl_condition map mut b nc nd
+      do nd <- transl_condition map d ntrue nfalse;
+      do nc <- transl_condition map c ntrue nfalse;
+         transl_condition map b nc nd
   end
 
 (** Translation of a list of expressions.  The expressions are evaluated
   left-to-right, and their values left in the given list of registers. *)
 
-with transl_exprlist (map: mapping) (mut: list ident) 
-                     (al: exprlist) (rl: list reg) (nd: node)
+with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
                      {struct al} : mon node :=
   match al, rl with
   | Enil, nil =>
       ret nd
   | Econs b bs, r :: rs =>
-      do no <- transl_exprlist map mut bs rs nd; transl_expr map mut b r no
+      do no <- transl_exprlist map bs rs nd; transl_expr map b r no
   | _, _ =>
       error node
   end.
@@ -419,21 +370,24 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Sskip =>
       ret nd
   | Sexpr a =>
-      let mut := mutated_expr a in
-      do r <- alloc_reg map mut a; transl_expr map mut a r nd
+      do r <- alloc_reg map a; transl_expr map a r nd
+  | Sassign v b =>
+      do rv <- find_var map v;
+      do rt <- alloc_reg map b;
+      do no <- add_move rt rv nd;
+      transl_expr map b rt no
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits nret rret;
       transl_stmt map s1 ns nexits nret rret
   | Sifthenelse a strue sfalse =>
-      let mut := mutated_condexpr a in
-      (if more_likely a strue sfalse then
+      if more_likely a strue sfalse then
         do nfalse <- transl_stmt map sfalse nd nexits nret rret;
         do ntrue  <- transl_stmt map strue  nd nexits nret rret;
-        transl_condition map mut a ntrue nfalse
-       else
+        transl_condition map a ntrue nfalse
+      else
         do ntrue  <- transl_stmt map strue  nd nexits nret rret;
         do nfalse <- transl_stmt map sfalse nd nexits nret rret;
-        transl_condition map mut a ntrue nfalse)
+        transl_condition map a ntrue nfalse
   | Sloop sbody =>
       do nloop <- reserve_instr;
       do nbody <- transl_stmt map sbody nloop nexits nret rret;
@@ -444,14 +398,13 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Sexit n =>
       transl_exit nexits n
   | Sswitch a cases default =>
-      let mut := mutated_expr a in
-      do r <- alloc_reg map mut a;
+      do r <- alloc_reg map a;
       do ns <- transl_switch r nexits cases default;
-      transl_expr map mut a r ns
+      transl_expr map a r ns
   | Sreturn opt_a =>
       match opt_a, rret with
       | None, None => ret nret
-      | Some a, Some r => transl_expr map (mutated_expr a) a r nret
+      | Some a, Some r => transl_expr map a r nret
       | _, _ => error node
       end
   end.

@@ -851,14 +851,14 @@ Qed.
   provided arguments match pairwise ([val_list_inject f] hypothesis). *)
 
 Lemma make_op_correct:
-  forall al a op vl m2 v sp le te1 tm1 t te2 tm2 tvl f,
+  forall al a op vl m2 v sp le te tm1 t tm2 tvl f,
   make_op op al = Some a ->
   Csharpminor.eval_operation op vl m2 = Some v ->
-  eval_exprlist tge (Vptr sp Int.zero) le te1 tm1 al t te2 tm2 tvl ->
+  eval_exprlist tge (Vptr sp Int.zero) le te tm1 al t tm2 tvl ->
   val_list_inject f vl tvl ->
   mem_inject f m2 tm2 ->
   exists tv,
-     eval_expr tge (Vptr sp Int.zero) le te1 tm1 a t te2 tm2 tv
+     eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 tv
   /\ val_inject f v tv.
 Proof.
   intros. 
@@ -867,7 +867,7 @@ Proof.
   [idtac | destruct al as [ | a3 al]]];
   simpl in H; try discriminate.
   (* Constant operators *)
-  inversion H1. subst sp0 le0 e m te2 tm1 tvl.
+  inversion H1. subst sp0 le0 e m tm1 tvl.
   inversion H2. subst vl.
   destruct op; simplify_eq H; intro; subst a;
   simpl in H0; injection H0; intro; subst v.
@@ -965,13 +965,12 @@ Qed.
   normalized according to the given memory chunk. *)
 
 Lemma make_cast_correct:
-  forall f sp le te1 tm1 a t te2 tm2 v chunk tv,
-  eval_expr tge (Vptr sp Int.zero) le te1 tm1 a t te2 tm2 tv ->
+  forall f sp le te tm1 a t tm2 v chunk tv,
+  eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 tv ->
   val_inject f v tv ->
   exists tv',
   eval_expr tge (Vptr sp Int.zero) le
-            te1 tm1 (make_cast chunk a)
-          t te2 tm2 tv'
+            te tm1 (make_cast chunk a) t tm2 tv'
   /\ val_inject f (Val.load_result chunk v) tv'.
 Proof.
   intros. destruct chunk.
@@ -1009,7 +1008,7 @@ Lemma make_stackaddr_correct:
   forall sp le te tm ofs,
   eval_expr tge (Vptr sp Int.zero) le
             te tm (make_stackaddr ofs)
-         E0 te tm (Vptr sp (Int.repr ofs)).
+            E0 tm (Vptr sp (Int.repr ofs)).
 Proof.
   intros; unfold make_stackaddr.
   eapply eval_Eop. econstructor. simpl. decEq. decEq.
@@ -1021,7 +1020,7 @@ Lemma make_globaladdr_correct:
   Genv.find_symbol tge id = Some b ->
   eval_expr tge (Vptr sp Int.zero) le
             te tm (make_globaladdr id)
-         E0 te tm (Vptr b Int.zero).
+            E0 tm (Vptr b Int.zero).
 Proof.
   intros; unfold make_globaladdr.
   eapply eval_Eop. econstructor. simpl. rewrite H. auto.
@@ -1030,28 +1029,28 @@ Qed.
 (** Correctness of [make_load] and [make_store]. *)
 
 Lemma make_load_correct:
-  forall sp le te1 tm1 a t te2 tm2 va chunk v,
-  eval_expr tge (Vptr sp Int.zero) le te1 tm1 a t te2 tm2 va ->
+  forall sp le te tm1 a t tm2 va chunk v,
+  eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 va ->
   Mem.loadv chunk tm2 va = Some v ->
   eval_expr tge (Vptr sp Int.zero) le
-            te1 tm1 (make_load chunk a)
-          t te2 tm2 v.
+            te tm1 (make_load chunk a)
+            t  tm2 v.
 Proof.
   intros; unfold make_load.
   eapply eval_load; eauto.
 Qed.
 
 Lemma store_arg_content_inject:
-  forall f sp le te1 tm1 a t te2 tm2 v va chunk,
-  eval_expr tge (Vptr sp Int.zero) le te1 tm1 a t te2 tm2 va ->
+  forall f sp le te tm1 a t tm2 v va chunk,
+  eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 va ->
   val_inject f v va ->
   exists vb,
-  eval_expr tge (Vptr sp Int.zero) le te1 tm1 (store_arg chunk a) t te2 tm2 vb  
+  eval_expr tge (Vptr sp Int.zero) le te tm1 (store_arg chunk a) t tm2 vb  
   /\ val_content_inject f (mem_chunk chunk) v vb.
 Proof.
   intros. 
   assert (exists vb,
-    eval_expr tge (Vptr sp Int.zero) le te1 tm1 a t te2 tm2 vb  
+    eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 vb  
     /\ val_content_inject f (mem_chunk chunk) v vb).
   exists va; split. assumption. constructor. assumption.
   inversion H; clear H; subst; simpl; trivial.
@@ -1070,20 +1069,20 @@ Proof.
 Qed.
 
 Lemma make_store_correct:
-  forall f sp te1 tm1 addr te2 tm2 tvaddr rhs te3 tm3 tvrhs
+  forall f sp te tm1 addr tm2 tvaddr rhs tm3 tvrhs
          chunk vrhs m3 vaddr m4 t1 t2,
   eval_expr tge (Vptr sp Int.zero) nil
-            te1 tm1 addr t1 te2 tm2 tvaddr ->
+            te tm1 addr t1 tm2 tvaddr ->
   eval_expr tge (Vptr sp Int.zero) nil
-            te2 tm2 rhs t2 te3 tm3 tvrhs ->
+            te tm2 rhs t2 tm3 tvrhs ->
   Mem.storev chunk m3 vaddr vrhs = Some m4 ->
   mem_inject f m3 tm3 ->
   val_inject f vaddr tvaddr ->
   val_inject f vrhs tvrhs ->
   exists tm4,
   exec_stmt tge (Vptr sp Int.zero)
-            te1 tm1 (make_store chunk addr rhs)
-            (t1**t2) te3 tm4 Out_normal
+            te tm1 (make_store chunk addr rhs)
+            (t1**t2) te tm4 Out_normal
   /\ mem_inject f m4 tm4
   /\ nextblock tm4 = nextblock tm3.
 Proof.
@@ -1112,7 +1111,7 @@ Lemma var_get_correct:
   eval_var_ref prog e id b chunk ->
   load chunk m b 0 = Some v ->
   exists tv,
-    eval_expr tge (Vptr sp Int.zero) le te tm a E0 te tm tv /\
+    eval_expr tge (Vptr sp Int.zero) le te tm a E0 tm tv /\
     val_inject f v tv.
 Proof.
   unfold var_get; intros.
@@ -1155,7 +1154,7 @@ Lemma var_addr_correct:
   var_addr cenv id = Some a ->
   eval_var_addr prog e id b ->
   exists tv,
-    eval_expr tge (Vptr sp Int.zero) le te tm a E0 te tm tv /\
+    eval_expr tge (Vptr sp Int.zero) le te tm a E0 tm tv /\
     val_inject f (Vptr b Int.zero) tv.
 Proof.
   unfold var_addr; intros.
@@ -1189,24 +1188,24 @@ Proof.
 Qed.
 
 Lemma var_set_correct:
-  forall cenv id rhs a f e te2 sp lo hi m2 cs tm2 te1 tm1 tv b chunk v m3 t,
+  forall cenv id rhs a f e te sp lo hi m2 cs tm2 tm1 tv b chunk v m3 t,
   var_set cenv id rhs = Some a ->
-  match_callstack f (mkframe cenv e te2 sp lo hi :: cs) m2.(nextblock) tm2.(nextblock) m2 ->
-  eval_expr tge (Vptr sp Int.zero) nil te1 tm1 rhs t te2 tm2 tv ->
+  match_callstack f (mkframe cenv e te sp lo hi :: cs) m2.(nextblock) tm2.(nextblock) m2 ->
+  eval_expr tge (Vptr sp Int.zero) nil te tm1 rhs t tm2 tv ->
   val_inject f v tv ->
   mem_inject f m2 tm2 ->
   eval_var_ref prog e id b chunk ->
   store chunk m2 b 0 v = Some m3 ->
   exists te3, exists tm3,
-    exec_stmt tge (Vptr sp Int.zero) te1 tm1 a t te3 tm3 Out_normal /\
+    exec_stmt tge (Vptr sp Int.zero) te tm1 a t te3 tm3 Out_normal /\
     mem_inject f m3 tm3 /\
     match_callstack f (mkframe cenv e te3 sp lo hi :: cs) m3.(nextblock) tm3.(nextblock) m3.
 Proof.
   unfold var_set; intros.
   assert (NEXTBLOCK: nextblock m3 = nextblock m2).
     exploit store_inv; eauto. simpl; tauto.
-  inversion H0. subst f0 cenv0 e0 te sp0 lo0 hi0 cs0 bound tbound m.
-  assert (match_var f id e m2 te2 sp cenv!!id). inversion H19; auto.
+  inversion H0. subst.
+  assert (match_var f id e m2 te sp cenv!!id). inversion H19; auto.
   inversion H6; subst; rewrite <- H7 in H; inversion H; subst; clear H.
   (* var_local *)
   inversion H4; [subst|congruence]. 
@@ -1214,8 +1213,8 @@ Proof.
   assert (chunk0 = chunk). congruence. subst chunk0.
   exploit make_cast_correct; eauto.  
   intros [tv' [EVAL INJ]].
-  exists (PTree.set id tv' te2); exists tm2.
-  split. eapply exec_Sexpr. eapply eval_Eassign. eauto. 
+  exists (PTree.set id tv' te); exists tm2.
+  split. eapply exec_Sassign. eauto. 
   split. eapply store_unmapped_inject; eauto. 
   rewrite NEXTBLOCK. eapply match_callstack_store_local; eauto.
   (* var_stack_scalar *)
@@ -1227,7 +1226,7 @@ Proof.
     eapply make_stackaddr_correct.
     eauto. eauto. eauto. eauto. eauto. 
   rewrite E0_left. intros [tm3 [EVAL [MEMINJ TNEXTBLOCK]]].
-  exists te2; exists tm3.
+  exists te; exists tm3.
   split. auto. split. auto.  
   rewrite NEXTBLOCK; rewrite TNEXTBLOCK.
   eapply match_callstack_mapped; eauto. 
@@ -1242,7 +1241,7 @@ Proof.
     eapply make_globaladdr_correct; eauto.
     eauto. eauto. eauto. eauto. eauto. 
   rewrite E0_left. intros [tm3 [EVAL [MEMINJ TNEXTBLOCK]]].
-  exists te2; exists tm3.
+  exists te; exists tm3.
   split. auto. split. auto. 
   rewrite NEXTBLOCK; rewrite TNEXTBLOCK.
   eapply match_callstack_mapped; eauto. congruence.
@@ -1586,8 +1585,7 @@ Proof.
   exists te3; exists tm3. 
   (* execution *)
   split. apply exec_Sseq_continue with E0 te2 tm1 E0. 
-  econstructor. unfold te2. constructor. eassumption. 
-  assumption. traceEq.
+  unfold te2. constructor. eassumption. assumption. traceEq.
   (* meminj & match_callstack *)
   tauto.
 
@@ -1784,38 +1782,38 @@ Ltac monadInv H :=
 
 Definition eval_expr_prop
     (le: Csharpminor.letenv) (e: Csharpminor.env) (m1: mem) (a: Csharpminor.expr) (t: trace) (m2: mem) (v: val) : Prop :=
-  forall cenv ta f1 tle te1 tm1 sp lo hi cs
+  forall cenv ta f1 tle te tm1 sp lo hi cs
   (TR: transl_expr cenv a = Some ta)
   (LINJ: val_list_inject f1 le tle)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1
-           (mkframe cenv e te1 sp lo hi :: cs)
+           (mkframe cenv e te sp lo hi :: cs)
            m1.(nextblock) tm1.(nextblock) m1),
-  exists f2, exists te2, exists tm2, exists tv,
-     eval_expr tge (Vptr sp Int.zero) tle te1 tm1 ta t te2 tm2 tv
+  exists f2, exists tm2, exists tv,
+     eval_expr tge (Vptr sp Int.zero) tle te tm1 ta t tm2 tv
   /\ val_inject f2 v tv
   /\ mem_inject f2 m2 tm2
   /\ inject_incr f1 f2
   /\ match_callstack f2
-        (mkframe cenv e te2 sp lo hi :: cs)
+        (mkframe cenv e te sp lo hi :: cs)
         m2.(nextblock) tm2.(nextblock) m2.
 
 Definition eval_exprlist_prop
     (le: Csharpminor.letenv) (e: Csharpminor.env) (m1: mem) (al: Csharpminor.exprlist) (t: trace) (m2: mem) (vl: list val) : Prop :=
-  forall cenv tal f1 tle te1 tm1 sp lo hi cs
+  forall cenv tal f1 tle te tm1 sp lo hi cs
   (TR: transl_exprlist cenv al = Some tal)
   (LINJ: val_list_inject f1 le tle)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1
-           (mkframe cenv e te1 sp lo hi :: cs)
+           (mkframe cenv e te sp lo hi :: cs)
            m1.(nextblock) tm1.(nextblock) m1),
-  exists f2, exists te2, exists tm2, exists tvl,
-     eval_exprlist tge (Vptr sp Int.zero) tle te1 tm1 tal t te2 tm2 tvl
+  exists f2, exists tm2, exists tvl,
+     eval_exprlist tge (Vptr sp Int.zero) tle te tm1 tal t tm2 tvl
   /\ val_list_inject f2 vl tvl
   /\ mem_inject f2 m2 tm2
   /\ inject_incr f1 f2
   /\ match_callstack f2
-        (mkframe cenv e te2 sp lo hi :: cs)
+        (mkframe cenv e te sp lo hi :: cs)
         m2.(nextblock) tm2.(nextblock) m2.
 
 Definition eval_funcall_prop
@@ -1876,7 +1874,7 @@ Proof.
   intros; red; intros. unfold transl_expr in TR.
   exploit var_get_correct; eauto.
   intros [tv [EVAL VINJ]].
-  exists f1; exists te1; exists tm1; exists tv; intuition eauto.
+  exists f1; exists tm1; exists tv; intuition eauto.
 Qed.
 
 Lemma transl_expr_Eaddrof_correct:
@@ -1889,7 +1887,7 @@ Proof.
   intros; red; intros. simpl in TR. 
   exploit var_addr_correct; eauto.
   intros [tv [EVAL VINJ]].
-  exists f1; exists te1; exists tm1; exists tv. intuition eauto.
+  exists f1; exists tm1; exists tv. intuition eauto.
 Qed.
 
 Lemma transl_expr_Eop_correct:
@@ -1903,10 +1901,10 @@ Lemma transl_expr_Eop_correct:
 Proof.
   intros; red; intros. monadInv TR; intro EQ0.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tvl [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]]].
+  intros [f2 [tm2 [tvl [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
   exploit make_op_correct; eauto.
   intros [tv [EVAL2 VINJ2]].
-  exists f2; exists te2; exists tm2; exists tv. intuition.
+  exists f2; exists tm2; exists tv. intuition.
 Qed.
 
 Lemma transl_expr_Eload_correct:
@@ -1921,10 +1919,10 @@ Proof.
   intros; red; intros.
   monadInv TR. 
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]].
   exploit loadv_inject; eauto. 
   intros [tv [TLOAD VINJ]].
-  exists f2; exists te2; exists tm2; exists tv.
+  exists f2; exists tm2; exists tv.
   intuition.
   subst ta. eapply make_load_correct; eauto. 
 Qed.
@@ -1948,10 +1946,10 @@ Lemma transl_expr_Ecall_correct:
 Proof.
   intros;red;intros. monadInv TR. subst ta. 
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
   exploit H2.
     eauto. eapply val_list_inject_incr; eauto. eauto. eauto. 
-  intros [f3 [te3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
   assert (tv1 = vf).
     elim (Genv.find_funct_inv H3). intros bf VF. rewrite VF in H3.
     rewrite Genv.find_funct_find_funct_ptr in H3. 
@@ -1964,7 +1962,7 @@ Proof.
   subst tv1. elim (functions_translated _ _ H3). intros tf [FIND TRF].
   exploit H6; eauto.
   intros [f4 [tm4 [tres [EVAL3 [VINJ3 [MINJ3 [INCR3 MATCH3]]]]]]].
-  exists f4; exists te3; exists tm4; exists tres. intuition.
+  exists f4; exists tm4; exists tres. intuition.
   eapply eval_Ecall; eauto. 
   rewrite <- H4. apply sig_preserved; auto.
   apply inject_incr_trans with f2; auto. 
@@ -1985,11 +1983,11 @@ Lemma transl_expr_Econdition_true_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
   exploit H3.
     eauto. eapply val_list_inject_incr; eauto. eauto. eauto.
-  intros [f3 [te3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]]].
-  exists f3; exists te3; exists tm3; exists tv2.
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
+  exists f3; exists tm3; exists tv2.
   intuition.
   rewrite <- H6. subst t; eapply eval_conditionalexpr_true; eauto. 
   inversion VINJ1; subst v1 tv1; simpl in H1; simpl; contradiction || auto.
@@ -2010,11 +2008,11 @@ Lemma transl_expr_Econdition_false_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
   exploit H3.
     eauto. eapply val_list_inject_incr; eauto. eauto. eauto.
-  intros [f3 [te3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]]].
-  exists f3; exists te3; exists tm3; exists tv2.
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
+  exists f3; exists tm3; exists tv2.
   intuition.
   rewrite <- H6. subst t; eapply eval_conditionalexpr_false; eauto. 
   inversion VINJ1; subst v1 tv1; simpl in H1; simpl; contradiction || auto.
@@ -2034,13 +2032,13 @@ Lemma transl_expr_Elet_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
   exploit H2.
     eauto. 
     constructor. eauto. eapply val_list_inject_incr; eauto.
     eauto. eauto.
-  intros [f3 [te3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]]].
-  exists f3; exists te3; exists tm3; exists tv2.
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
+  exists f3; exists tm3; exists tv2.
   intuition.
   subst ta; eapply eval_Elet; eauto.
   eapply inject_incr_trans; eauto.
@@ -2065,7 +2063,7 @@ Lemma transl_expr_Eletvar_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit val_list_inject_nth; eauto. intros [tv [A B]].
-  exists f1; exists te1; exists tm1; exists tv.
+  exists f1; exists tm1; exists tv.
   intuition.
   subst ta. eapply eval_Eletvar; auto.
 Qed.
@@ -2080,7 +2078,7 @@ Lemma transl_expr_Ealloc_correct:
 Proof.
   intros; red; intros. monadInv TR. 
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
   inversion VINJ1. subst tv1 i. 
   caseEq (alloc tm2 0 (Int.signed n)). intros tm3 tb TALLOC.
   assert (LB: Int.min_signed <= 0). compute. congruence.
@@ -2089,7 +2087,7 @@ Proof.
   exploit alloc_parallel_inject; eauto.
   intros [MINJ3 INCR3].
   exists (extend_inject b (Some (tb, 0)) f2); 
-  exists te2; exists tm3; exists (Vptr tb Int.zero).
+  exists tm3; exists (Vptr tb Int.zero).
   split. subst ta; econstructor; eauto.
   split. econstructor. unfold extend_inject, eq_block. rewrite zeq_true. reflexivity.
   reflexivity.
@@ -2103,7 +2101,7 @@ Lemma transl_exprlist_Enil_correct:
    eval_exprlist_prop le e m Csharpminor.Enil E0 m nil.
 Proof.
   intros; red; intros. monadInv TR. 
-  exists f1; exists te1; exists tm1; exists (@nil val).
+  exists f1; exists tm1; exists (@nil val).
   intuition. subst tal; constructor.
 Qed.
 
@@ -2121,11 +2119,11 @@ Lemma transl_exprlist_Econs_correct:
 Proof.
   intros; red; intros. monadInv TR. 
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
   exploit H2.
     eauto. eapply val_list_inject_incr; eauto. eauto. eauto.
-  intros [f3 [te3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ3 [INCR3 MATCH3]]]]]]]].
-  exists f3; exists te3; exists tm3; exists (tv1 :: tv2).
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ3 [INCR3 MATCH3]]]]]]].
+  exists f3; exists tm3; exists (tv1 :: tv2).
   intuition. subst tal; econstructor; eauto.
   constructor. eapply val_inject_incr; eauto. auto.
   eapply inject_incr_trans; eauto.
@@ -2226,8 +2224,8 @@ Lemma transl_stmt_Sexpr_correct:
 Proof.
   intros; red; intros. monadInv TR. 
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
-  exists f2; exists te2; exists tm2; exists Out_normal.
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
+  exists f2; exists te1; exists tm2; exists Out_normal.
   intuition. subst ts. econstructor; eauto.
   constructor.
 Qed.
@@ -2244,7 +2242,7 @@ Lemma transl_stmt_Sassign_correct:
 Proof.
   intros; red; intros. monadInv TR; intro EQ0. 
   exploit H0; eauto. 
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR12 MATCH1]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR12 MATCH1]]]]]]].
   exploit var_set_correct; eauto.
   intros [te3 [tm3 [EVAL2 [MINJ2 MATCH2]]]].
   exists f2; exists te3; exists tm3; exists Out_normal.
@@ -2266,17 +2264,17 @@ Lemma transl_stmt_Sstore_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
   exploit H2.
     eauto. 
     eapply val_list_inject_incr; eauto.
     eauto. eauto. 
-  intros [f3 [te3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ3 [INCR3 MATCH3]]]]]]]].
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ3 [INCR3 MATCH3]]]]]]].
   exploit make_store_correct.
     eexact EVAL1. eexact EVAL2. eauto. eauto. 
     eapply val_inject_incr; eauto. eauto.
   intros [tm4 [EVAL [MINJ4 NEXTBLOCK]]].
-  exists f3; exists te3; exists tm4; exists Out_normal.
+  exists f3; exists te1; exists tm4; exists Out_normal.
   rewrite <- H6. subst t3. intuition. 
   constructor.
   eapply inject_incr_trans; eauto.
@@ -2340,7 +2338,7 @@ Lemma transl_stmt_Sifthenelse_true_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
   exploit H3; eauto.
   intros [f3 [te3 [tm3 [tout [EVAL2 [OINJ [MINJ3 [INCR3 MATCH3]]]]]]]].
   exists f3; exists te3; exists tm3; exists tout.
@@ -2365,7 +2363,7 @@ Lemma transl_stmt_Sifthenelse_false_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
+  intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
   exploit H3; eauto.
   intros [f3 [te3 [tm3 [tout [EVAL2 [OINJ [MINJ3 [INCR3 MATCH3]]]]]]]].
   exists f3; exists te3; exists tm3; exists tout.
@@ -2454,8 +2452,8 @@ Lemma transl_stmt_Sswitch_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exploit H0; eauto. 
-  intros [f2 [te2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]]].
-  exists f2; exists te2; exists tm2; 
+  intros [f2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]].
+  exists f2; exists te1; exists tm2; 
   exists (Out_exit (switch_target n default cases)). intuition. 
   subst ts. constructor. inversion VINJ1. subst tv1. assumption.
   constructor. 
@@ -2481,8 +2479,8 @@ Lemma transl_stmt_Sreturn_some_correct:
 Proof.
   intros; red; intros; monadInv TR.
   exploit H0; eauto.
-  intros [f2 [te2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]]].
-  exists f2; exists te2; exists tm2; exists (Out_return (Some tv1)).
+  intros [f2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]].
+  exists f2; exists te1; exists tm2; exists (Out_return (Some tv1)).
   intuition. subst ts; econstructor; eauto. constructor; auto.
 Qed.
 

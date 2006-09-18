@@ -42,7 +42,8 @@
       rk(5) = rk(1) ^ rk(4);
       rk(6) = rk(2) ^ rk(5);
       rk(7) = rk(3) ^ rk(6);
-      if ((i = i + 1) == 10) {
+      i = i + 1;
+      if (i == 10) {
         return 10;
       }
       rk_ = rk_ + 4 * 4;
@@ -62,7 +63,8 @@
       rk( 7) = rk( 1) ^ rk( 6);
       rk( 8) = rk( 2) ^ rk( 7);
       rk( 9) = rk( 3) ^ rk( 8);
-      if ((i = i + 1) == 8) {
+      i = i + 1;
+      if (i == 8) {
         return 12;
       }
       rk(10) = rk( 4) ^ rk( 9);
@@ -84,7 +86,8 @@
       rk( 9) = rk( 1) ^ rk( 8);
       rk(10) = rk( 2) ^ rk( 9);
       rk(11) = rk( 3) ^ rk(10);
-      if ((i = i + 1) == 7) {
+      i = i + 1;
+      if (i == 7) {
         return 14;
       }
       temp = rk(11);
@@ -198,7 +201,8 @@
       rk(7);
 
     rk_ = rk_ + 8 * 4;
-    if ((r = r - 1) == 0) exit;
+    r = r - 1;
+    if (r == 0) exit;
 
     s0 =
       Te0((t0 >>u 24)       ) ^
@@ -302,7 +306,8 @@
       rk(7);
     
     rk_ = rk_ + 8 * 4;
-    if ((r = r - 1) == 0) exit;
+    r = r - 1;
+    if (r == 0) exit;
 
     s0 =
       Td0((t0 >>u 24)       ) ^

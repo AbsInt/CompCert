@@ -168,7 +168,7 @@ Definition var_get (cenv: compilenv) (id: ident): option expr :=
 Definition var_set (cenv: compilenv) (id: ident) (rhs: expr): option stmt :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      Some(Sexpr(Eassign id (make_cast chunk rhs)))
+      Some(Sassign id (make_cast chunk rhs))
   | Var_stack_scalar chunk ofs =>
       Some(make_store chunk (make_stackaddr ofs) rhs)
   | Var_global_scalar chunk =>
@@ -397,7 +397,7 @@ Fixpoint store_parameters
   | (id, chunk) :: rem =>
       match PMap.get id cenv with
       | Var_local chunk =>
-          Sseq (Sexpr (Eassign id (make_cast chunk (Evar id))))
+          Sseq (Sassign id (make_cast chunk (Evar id)))
                (store_parameters cenv rem)
       | Var_stack_scalar chunk ofs =>
           Sseq (make_store chunk (make_stackaddr ofs) (Evar id))

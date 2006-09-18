@@ -216,6 +216,7 @@ var_declaration:
 
 stmt:
     expr SEMICOLON                              { Sexpr $1 }
+  | IDENT EQUAL expr SEMICOLON                  { Sassign($1, $3) }
   | IF LPAREN expr RPAREN stmts ELSE stmts      { Cmconstr.ifthenelse $3 $5 $7 }
   | IF LPAREN expr RPAREN stmts                 { Cmconstr.ifthenelse $3 $5 Sskip }
   | LOOP stmts                                  { Sloop($2) }
@@ -241,7 +242,6 @@ stmt_list:
 expr:
     LPAREN expr RPAREN                          { $2 }
   | IDENT                                       { Evar $1 }
-  | IDENT EQUAL expr                            { Eassign($1, $3) }
   | INTLIT                                      { intconst $1 }
   | FLOATLIT                                    { Eop(Ofloatconst $1, Enil) }
   | STRINGLIT                                   { Eop(Oaddrsymbol($1, Int.zero), Enil) }

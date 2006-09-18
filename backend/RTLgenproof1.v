@@ -402,20 +402,6 @@ Proof.
 Qed.
 Hint Resolve reg_in_map_valid: rtlg.
 
-(** A register is mutated if it is associated with a Cminor local variable
-  that belongs to the given set of mutated variables. *)
-
-Definition mutated_reg (map: mapping) (mut: list ident) (r: reg) : Prop :=
-  exists id, In id mut /\ map.(map_vars)!id = Some r.
-
-Lemma mutated_reg_in_map:
-  forall map mut r, mutated_reg map mut r -> reg_in_map map r.
-Proof.
-  intros. elim H. intros id [IN EQ]. 
-  left. exists id; auto.
-Qed.
-Hint Resolve mutated_reg_in_map: rtlg.
-
 (** * Properties of basic operations over the state *)
 
 (** Properties of [add_instr]. *)
@@ -538,16 +524,6 @@ Proof.
 Qed. 
 Hint Resolve new_reg_not_in_map: rtlg.
 
-Lemma new_reg_not_mutated:
-  forall s1 s2 m mut r,
-  new_reg s1 = OK r s2 -> map_wf m s1 -> ~(mutated_reg m mut r).
-Proof.
-  unfold not; intros. 
-  generalize (mutated_reg_in_map _ _ _ H1); intro.
-  exact (new_reg_not_in_map _ _ _ _ H H0 H2).
-Qed.
-Hint Resolve new_reg_not_mutated: rtlg.
-
 (** * Properties of operations over compilation environments *)
 
 Lemma init_mapping_wf:
@@ -592,21 +568,6 @@ Proof.
 Qed.
 Hint Resolve find_var_valid: rtlg.
 
-Lemma find_var_not_mutated:
-  forall s1 s2 map name r mut,
-  find_var map name s1 = OK r s2 ->
-  map_wf map s1 ->
-  ~(In name mut) ->
-  ~(mutated_reg map mut r).
-Proof.
-  intros until mut. unfold find_var; caseEq (map.(map_vars)!name).
-  intros r0 EQ. monadSimpl; intros; subst r0.
-  red; unfold mutated_reg; intros [id [IN EQ2]]. 
-  assert (name = id). eauto with rtlg.
-  subst id. contradiction.
-  intro; monadSimpl.
-Qed.
-Hint Resolve find_var_not_mutated: rtlg.
 
 (** Properties of [find_letvar]. *)
 
@@ -640,20 +601,6 @@ Proof.
   eauto with rtlg.
 Qed.
 Hint Resolve find_letvar_valid: rtlg.
-
-Lemma find_letvar_not_mutated:
-  forall s1 s2 map idx mut r,
-  find_letvar map idx s1 = OK r s2 ->
-  map_wf map s1 ->
-  ~(mutated_reg map mut r).
-Proof.
-  intros until r. unfold find_letvar.
-  caseEq (nth_error (map_letvars map) idx).
-  intros r' NTH. monadSimpl. unfold not; unfold mutated_reg.
-  intros MWF (id, (IN, MV)). subst r'. eauto with rtlg coqlib.
-  intro; monadSimpl.
-Qed.
-Hint Resolve find_letvar_not_mutated: rtlg.
 
 (** Properties of [add_var]. *)
 
@@ -781,38 +728,34 @@ Qed.
 (** * Properties of [alloc_reg] and [alloc_regs] *)
 
 Lemma alloc_reg_incr:
-  forall a s1 s2 map mut r,
-  alloc_reg map mut a s1 = OK r s2 -> state_incr s1 s2.
+  forall a s1 s2 map r,
+  alloc_reg map a s1 = OK r s2 -> state_incr s1 s2.
 Proof.
   intros until r.  unfold alloc_reg.
   case a; eauto with rtlg.
-  intro i; case (In_dec ident_eq i mut); eauto with rtlg.
 Qed.
 Hint Resolve alloc_reg_incr: rtlg.
 
 Lemma alloc_reg_valid:
-  forall a s1 s2 map mut r,
+  forall a s1 s2 map r,
   map_wf map s1 ->
-  alloc_reg map mut a s1 = OK r s2 -> reg_valid r s2.
+  alloc_reg map a s1 = OK r s2 -> reg_valid r s2.
 Proof.
   intros until r.  unfold alloc_reg.
   case a; eauto with rtlg.
-  intro i; case (In_dec ident_eq i mut); eauto with rtlg.
 Qed.
 Hint Resolve alloc_reg_valid: rtlg.
 
 Lemma alloc_reg_fresh_or_in_map:
-  forall map mut a s r s',
+  forall map a s r s',
   map_wf map s ->
-  alloc_reg map mut a s = OK r s' ->
+  alloc_reg map a s = OK r s' ->
   reg_in_map map r \/ reg_fresh r s.
 Proof.
   intros until s'. unfold alloc_reg.
-  destruct a; try (right; eauto with rtlg; fail).
-  case (In_dec ident_eq i mut); intros.
-  right; eauto with rtlg.
+  destruct a; intros; try (right; eauto with rtlg; fail).
   left; eauto with rtlg.
-  intros; left; eauto with rtlg.
+  left; eauto with rtlg.
 Qed.
 
 Lemma add_vars_letenv:
@@ -830,74 +773,57 @@ Qed.
 (** A register is an adequate target for holding the value of an
   expression if
 - either the register is associated with a Cminor let-bound variable
-  or a Cminor local variable that is not modified;
+  or a Cminor local variable;
 - or the register is valid and not associated with any Cminor variable. *)
 
-Inductive target_reg_ok: state -> mapping -> list ident -> expr -> reg -> Prop :=
-  | target_reg_immut_var:
-      forall s map mut id r,
-      ~(In id mut) -> map.(map_vars)!id = Some r ->
-      target_reg_ok s map mut (Evar id) r
+Inductive target_reg_ok: state -> mapping -> expr -> reg -> Prop :=
+  | target_reg_var:
+      forall s map id r,
+      map.(map_vars)!id = Some r ->
+      target_reg_ok s map (Evar id) r
   | target_reg_letvar:
-      forall s map mut idx r,
+      forall s map idx r,
       nth_error map.(map_letvars) idx = Some r ->
-      target_reg_ok s map mut (Eletvar idx) r
+      target_reg_ok s map (Eletvar idx) r
   | target_reg_other:
-      forall s map mut a r,
+      forall s map a r,
       ~(reg_in_map map r) ->
       reg_valid r s ->
-      target_reg_ok s map mut a r.
+      target_reg_ok s map a r.
 
 Lemma target_reg_ok_incr:
-  forall s1 s2 map mut e r,
+  forall s1 s2 map e r,
   state_incr s1 s2 ->
-  target_reg_ok s1 map mut e r ->
-  target_reg_ok s2 map mut e r.
+  target_reg_ok s1 map e r ->
+  target_reg_ok s2 map e r.
 Proof.
   intros. inversion H0. 
-  apply target_reg_immut_var; auto.
+  apply target_reg_var; auto.
   apply target_reg_letvar; auto.
   apply target_reg_other; eauto with rtlg.
 Qed.
 Hint Resolve target_reg_ok_incr: rtlg.
 
 Lemma target_reg_valid:
-  forall s map mut e r,
+  forall s map e r,
   map_wf map s ->
-  target_reg_ok s map mut e r ->
+  target_reg_ok s map e r ->
   reg_valid r s.
 Proof.
   intros. inversion H0; eauto with rtlg coqlib.
 Qed.
 Hint Resolve target_reg_valid: rtlg.
 
-Lemma target_reg_not_mutated:
-  forall s map mut e r,
-  map_wf map s ->
-  target_reg_ok s map mut e r ->
-  ~(mutated_reg map mut r).
-Proof.
-  unfold not; unfold mutated_reg; intros until r.
-  intros MWF TRG [id [IN MV]].
-  inversion TRG.
-  assert (id = id0); eauto with rtlg. subst id0. contradiction.
-  assert (In r (map_letvars map)). eauto with coqlib. eauto with rtlg.
-  apply H. red. left; exists id; assumption.
-Qed.
-Hint Resolve target_reg_not_mutated: rtlg.
-
 Lemma alloc_reg_target_ok:
-  forall a s1 s2 map mut r,
+  forall a s1 s2 map r,
   map_wf map s1 ->
-  alloc_reg map mut a s1 = OK r s2 ->
-  target_reg_ok s2 map mut a r.
+  alloc_reg map a s1 = OK r s2 ->
+  target_reg_ok s2 map a r.
 Proof.
   intros until r; intro MWF. unfold alloc_reg.
   case a; intros; try (eapply target_reg_other; eauto with rtlg; fail).
-  generalize H; case (In_dec ident_eq i mut); intros.
-  apply target_reg_other; eauto with rtlg.
-  apply target_reg_immut_var; auto.
-  generalize H0; unfold find_var. 
+  apply target_reg_var. 
+  generalize H; unfold find_var. 
   case (map_vars map)!i.
   intro. monadSimpl. congruence.
   monadSimpl.
@@ -910,8 +836,8 @@ Qed.
 Hint Resolve alloc_reg_target_ok: rtlg.
 
 Lemma alloc_regs_incr:
-  forall al s1 s2 map mut rl,
-  alloc_regs map mut al s1 = OK rl s2 -> state_incr s1 s2.
+  forall al s1 s2 map rl,
+  alloc_regs map al s1 = OK rl s2 -> state_incr s1 s2.
 Proof.
   induction al; simpl; intros.
   monadInv H. subst s2. eauto with rtlg.
@@ -920,9 +846,9 @@ Qed.
 Hint Resolve alloc_regs_incr: rtlg.
 
 Lemma alloc_regs_valid:
-  forall al s1 s2 map mut rl,
+  forall al s1 s2 map rl,
   map_wf map s1 ->
-  alloc_regs map mut al s1 = OK rl s2 ->
+  alloc_regs map al s1 = OK rl s2 ->
   forall r, In r rl -> reg_valid r s2.
 Proof.
   induction al; simpl; intros.
@@ -935,9 +861,9 @@ Qed.
 Hint Resolve alloc_regs_valid: rtlg.
 
 Lemma alloc_regs_fresh_or_in_map:
-  forall map mut al s rl s',
+  forall map al s rl s',
   map_wf map s ->
-  alloc_regs map mut al s = OK rl s' ->
+  alloc_regs map al s = OK rl s' ->
   forall r, In r rl -> reg_in_map map r \/ reg_fresh r s.
 Proof.
   induction al; simpl; intros.
@@ -945,28 +871,28 @@ Proof.
   monadInv H0. subst rl. elim (in_inv H1); intro.
   subst r. 
   assert (MWF: map_wf map s0). eauto with rtlg.
-  elim (alloc_reg_fresh_or_in_map map mut e s0 r0 s1 MWF EQ0); intro.
+  elim (alloc_reg_fresh_or_in_map map e s0 r0 s1 MWF EQ0); intro.
   left; assumption. right; eauto with rtlg.
   eauto with rtlg.
 Qed.
 
-Inductive target_regs_ok: state -> mapping -> list ident -> exprlist -> list reg -> Prop :=
+Inductive target_regs_ok: state -> mapping -> exprlist -> list reg -> Prop :=
   | target_regs_nil:
-      forall s map mut,
-      target_regs_ok s map mut Enil nil
+      forall s map,
+      target_regs_ok s map Enil nil
   | target_regs_cons:
-      forall s map mut a r al rl,
+      forall s map a r al rl,
       reg_in_map map r \/ ~(In r rl) ->
-      target_reg_ok s map mut a r ->
-      target_regs_ok s map mut al rl ->
-      target_regs_ok s map mut (Econs a al) (r :: rl).
+      target_reg_ok s map a r ->
+      target_regs_ok s map al rl ->
+      target_regs_ok s map (Econs a al) (r :: rl).
 
 Lemma target_regs_ok_incr:
-  forall s1 map mut al rl,
-  target_regs_ok s1 map mut al rl ->
+  forall s1 map al rl,
+  target_regs_ok s1 map al rl ->
   forall s2,
   state_incr s1 s2 ->
-  target_regs_ok s2 map mut al rl.
+  target_regs_ok s2 map al rl.
 Proof.
   induction 1; intros.
   apply target_regs_nil. 
@@ -975,8 +901,8 @@ Qed.
 Hint Resolve target_regs_ok_incr: rtlg.
 
 Lemma target_regs_valid:
-  forall s map mut al rl,
-  target_regs_ok s map mut al rl ->
+  forall s map al rl,
+  target_regs_ok s map al rl ->
   map_wf map s ->
   forall r, In r rl -> reg_valid r s.
 Proof.
@@ -988,31 +914,18 @@ Proof.
 Qed.
 Hint Resolve target_regs_valid: rtlg.
 
-Lemma target_regs_not_mutated:
-  forall s map mut el rl,
-  target_regs_ok s map mut el rl ->
-  map_wf map s ->
-  forall r, In r rl -> ~(mutated_reg map mut r).
-Proof.
-  induction 1; simpl; intros.
-  contradiction.
-  elim H3; intro. subst r0. eauto with rtlg.
-  auto. 
-Qed. 
-Hint Resolve target_regs_not_mutated: rtlg.
-
 Lemma alloc_regs_target_ok:
-  forall al s1 s2 map mut rl,
+  forall al s1 s2 map rl,
   map_wf map s1 ->
-  alloc_regs map mut al s1 = OK rl s2 ->
-  target_regs_ok s2 map mut al rl.
+  alloc_regs map al s1 = OK rl s2 ->
+  target_regs_ok s2 map al rl.
 Proof.
   induction al; simpl; intros.
   monadInv H0. subst rl; apply target_regs_nil.
   monadInv H0. subst s0; subst rl. 
   apply target_regs_cons; eauto 6 with rtlg.
   assert (MWF: map_wf map s). eauto with rtlg.
-  elim (alloc_reg_fresh_or_in_map map mut e s r s2 MWF EQ0); intro.
+  elim (alloc_reg_fresh_or_in_map map e s r s2 MWF EQ0); intro.
   left; assumption. right; red; intro; eauto with rtlg.
 Qed.
 Hint Resolve alloc_regs_target_ok: rtlg.
@@ -1306,7 +1219,6 @@ Lemma expr_condexpr_exprlist_ind:
 forall (P : expr -> Prop) (P0 : condexpr -> Prop)
          (P1 : exprlist -> Prop),
        (forall i : ident, P (Evar i)) ->
-       (forall (i : ident) (e : expr), P e -> P (Eassign i e)) ->
        (forall (o : operation) (e : exprlist), P1 e -> P (Eop o e)) ->
        (forall (m : memory_chunk) (a : addressing) (e : exprlist),
         P1 e -> P (Eload m a e)) ->
@@ -1341,14 +1253,14 @@ Proof.
 Qed.
 
 Definition transl_expr_incr_pred (a: expr) : Prop :=
-  forall map mut rd nd s ns s',
-  transl_expr map mut a rd nd s = OK ns s' -> state_incr s s'.
+  forall map rd nd s ns s',
+  transl_expr map a rd nd s = OK ns s' -> state_incr s s'.
 Definition transl_condition_incr_pred (c: condexpr) : Prop :=
-  forall map mut ntrue nfalse s ns s',
-  transl_condition map mut c ntrue nfalse s = OK ns s' -> state_incr s s'.
+  forall map ntrue nfalse s ns s',
+  transl_condition map c ntrue nfalse s = OK ns s' -> state_incr s s'.
 Definition transl_exprlist_incr_pred (al: exprlist) : Prop :=
-  forall map mut rl nd s ns s',
-  transl_exprlist map mut al rl nd s = OK ns s' -> state_incr s s'.
+  forall map rl nd s ns s',
+  transl_exprlist map al rl nd s = OK ns s' -> state_incr s s'.
 
 Lemma transl_expr_condition_exprlist_incr:
   (forall a, transl_expr_incr_pred a) /\
@@ -1377,18 +1289,18 @@ Proof.
 Qed.
 
 Lemma transl_expr_incr:
-  forall a map mut rd nd s ns s',
-  transl_expr map mut a rd nd s = OK ns s' -> state_incr s s'.
+  forall a map rd nd s ns s',
+  transl_expr map a rd nd s = OK ns s' -> state_incr s s'.
 Proof (proj1 transl_expr_condition_exprlist_incr).
 
 Lemma transl_condition_incr:
-  forall a map mut ntrue nfalse s ns s',
-  transl_condition map mut a ntrue nfalse s = OK ns s' -> state_incr s s'.
+  forall a map ntrue nfalse s ns s',
+  transl_condition map a ntrue nfalse s = OK ns s' -> state_incr s s'.
 Proof (proj1 (proj2 transl_expr_condition_exprlist_incr)).
 
 Lemma transl_exprlist_incr:
-  forall al map mut rl nd s ns s',
-  transl_exprlist map mut al rl nd s = OK ns s' -> state_incr s s'.
+  forall al map rl nd s ns s',
+  transl_exprlist map al rl nd s = OK ns s' -> state_incr s s'.
 Proof (proj2 (proj2 transl_expr_condition_exprlist_incr)).
 
 Hint Resolve transl_expr_incr transl_condition_incr transl_exprlist_incr: rtlg.
@@ -1430,6 +1342,8 @@ Proof.
   monadInv H. subst s'. auto with rtlg.
 
   monadInv H. eauto with rtlg.
+
+  monadInv H. intro. apply state_incr_trans3 with s0 s1 s2; eauto with rtlg.
 
   monadInv H. eauto with rtlg.
 

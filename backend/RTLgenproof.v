@@ -133,57 +133,48 @@ Qed.
 
 Definition transl_expr_correct 
   (sp: val) (le: letenv) (e: env) (m: mem) (a: expr)
-              (t: trace) (e': env) (m': mem) (v: val) : Prop :=
-  forall map mut rd nd s ns s' rs
+              (t: trace) (m': mem) (v: val) : Prop :=
+  forall map rd nd s ns s' rs
     (MWF: map_wf map s)
-    (TE: transl_expr map mut a rd nd s = OK ns s')
+    (TE: transl_expr map a rd nd s = OK ns s')
     (ME: match_env map e le rs)
-    (MUT: incl (mutated_expr a) mut)
-    (TRG: target_reg_ok s map mut a rd),
+    (TRG: target_reg_ok s map a rd),
   exists rs',
      exec_instrs tge s'.(st_code) sp ns rs m t nd rs' m'
-  /\ match_env map e' le rs'
+  /\ match_env map e le rs'
   /\ rs'#rd = v
   /\ (forall r,
-       reg_valid r s -> ~(mutated_reg map mut r) ->
-       reg_in_map map r \/ r <> rd ->
-       rs'#r = rs#r).
+       reg_valid r s -> reg_in_map map r \/ r <> rd -> rs'#r = rs#r).
 
 (** The simulation properties for lists of expressions and for
   conditional expressions are similar. *)
 
 Definition transl_exprlist_correct 
   (sp: val) (le: letenv) (e: env) (m: mem) (al: exprlist)
-              (t: trace) (e': env) (m': mem) (vl: list val) : Prop :=
-  forall map mut rl nd s ns s' rs
+              (t: trace) (m': mem) (vl: list val) : Prop :=
+  forall map rl nd s ns s' rs
     (MWF: map_wf map s)
-    (TE: transl_exprlist map mut al rl nd s = OK ns s')
+    (TE: transl_exprlist map al rl nd s = OK ns s')
     (ME: match_env map e le rs)
-    (MUT: incl (mutated_exprlist al) mut)
-    (TRG: target_regs_ok s map mut al rl),
+    (TRG: target_regs_ok s map al rl),
   exists rs',
      exec_instrs tge s'.(st_code) sp ns rs m t nd rs' m'
-  /\ match_env map e' le rs'
+  /\ match_env map e le rs'
   /\ rs'##rl = vl
   /\ (forall r,
-       reg_valid r s -> ~(mutated_reg map mut r) ->
-       reg_in_map map r \/ ~(In r rl) ->
-       rs'#r = rs#r).
+       reg_valid r s -> reg_in_map map r \/ ~(In r rl) -> rs'#r = rs#r).
 
 Definition transl_condition_correct 
   (sp: val) (le: letenv) (e: env) (m: mem) (a: condexpr)
-              (t: trace) (e': env) (m': mem) (vb: bool) : Prop :=
-  forall map mut ntrue nfalse s ns s' rs
+              (t: trace) (m': mem) (vb: bool) : Prop :=
+  forall map ntrue nfalse s ns s' rs
     (MWF: map_wf map s)
-    (TE: transl_condition map mut a ntrue nfalse s = OK ns s')
-    (ME: match_env map e le rs)
-    (MUT: incl (mutated_condexpr a) mut),
+    (TE: transl_condition map a ntrue nfalse s = OK ns s')
+    (ME: match_env map e le rs),
   exists rs',
      exec_instrs tge s'.(st_code) sp ns rs m t (if vb then ntrue else nfalse) rs' m'
-  /\ match_env map e' le rs'
-  /\ (forall r,
-        reg_valid r s -> ~(mutated_reg map mut r) ->
-        rs'#r = rs#r).
+  /\ match_env map e le rs'
+  /\ (forall r, reg_valid r s -> rs'#r = rs#r).
 
 (** For statements, we define the following auxiliary predicates
   relating the outcome of the Cminor execution with the final node
@@ -283,7 +274,7 @@ Definition transl_function_correct
 Lemma transl_expr_Evar_correct:
   forall (sp: val) (le: letenv) (e: env) (m: mem) (id: ident) (v: val),
   e!id = Some v ->
-  transl_expr_correct sp le e m (Evar id) E0 e m v.
+  transl_expr_correct sp le e m (Evar id) E0 m v.
 Proof.
   intros; red; intros. monadInv TE. intro. 
   generalize EQ; unfold find_var. caseEq (map_vars map)!id.
@@ -294,43 +285,40 @@ Proof.
 (* Exec *)
   split. assumption.
 (* Match-env *)
-  split. inversion TRG.
+  split. inversion TRG; subst.
   (* Optimized case rd = r *)
-  rewrite MV in H5; injection H5; intro; subst r.
+  rewrite MV in H3; injection H3; intro; subst r.
   apply match_env_exten with rs.
   intros. case (Reg.eq r rd); intro.
   subst r; assumption. apply OTHER1; assumption.
   assumption. 
   (* General case rd is temp *)
   apply match_env_invariant with rs.
-  assumption. intros. apply OTHER1. red; intro; subst r1. contradiction.
+  assumption. intros. apply OTHER1. congruence. 
 (* Result value *)
   split. rewrite RES1. eauto with rtlg.
 (* Other regs *)
-  intros. case (Reg.eq rd r0); intro.
-  subst r0. inversion TRG. 
-  rewrite MV in H8; injection H8; intro; subst r. apply RES1.
-  byContradiction. tauto. 
-  apply OTHER1; auto.
+  intros. destruct (Reg.eq rd r0).
+  subst r0. inversion TRG; subst. 
+  congruence.
+  byContradiction. tauto.
+  auto.
 
   intro; monadSimpl.
 Qed.
 
 Lemma transl_expr_Eop_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem) (op : operation)
-         (al : exprlist) (t: trace) (e1 : env) (m1 : mem) (vl : list val)
+         (al : exprlist) (t: trace) (m1 : mem) (vl : list val)
          (v: val),
-  eval_exprlist ge sp le e m al t e1 m1 vl ->
-  transl_exprlist_correct sp le e m al t e1 m1 vl ->
+  eval_exprlist ge sp le e m al t m1 vl ->
+  transl_exprlist_correct sp le e m al t m1 vl ->
   eval_operation ge sp op vl = Some v ->
-  transl_expr_correct sp le e m (Eop op al) t e1 m1 v.
+  transl_expr_correct sp le e m (Eop op al) t m1 v.
 Proof.
   intros until v. intros EEL TEL EOP. red; intros.
   simpl in TE. monadInv TE. intro EQ1. 
-  simpl in MUT. 
-  assert (TRG': target_regs_ok s1 map mut al l); eauto with rtlg.
-  assert (MWF': map_wf map s1). eauto with rtlg.
-  generalize (TEL _ _ _ _ _ _ _ _ MWF' EQ1 ME MUT TRG').
+  exploit TEL. 2: eauto. eauto with rtlg. eauto. eauto with rtlg.
   intros [rs1 [EX1 [ME1 [RR1 RO1]]]].
   exists (rs1#rd <- v).
 (* Exec *)
@@ -347,74 +335,31 @@ Proof.
   split. apply Regmap.gss.
 (* Other regs *)
   intros. rewrite Regmap.gso.
-  apply RO1. eauto with rtlg. assumption.
-  case (In_dec Reg.eq r l); intro.
-  left. elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWF EQ r i); intro.
-  assumption. byContradiction; eauto with rtlg.
-  right; assumption.
+  apply RO1. eauto with rtlg. 
+  destruct (In_dec Reg.eq r l).
+  left. elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWF EQ r i); intro.
+  auto. byContradiction; eauto with rtlg.  
+  right; auto.
   red; intro; subst r. 
-  elim H1; intro. inversion TRG. contradiction.
+  elim H0; intro. inversion TRG. contradiction.
   tauto.
-Qed.
-
-Lemma transl_expr_Eassign_correct:
- forall (sp: val) (le : letenv) (e : env) (m : mem) 
-    (id : ident) (a : expr) (t: trace) (e1 : env) (m1 : mem) 
-    (v : val),
-  eval_expr ge sp le e m a t e1 m1 v ->
-  transl_expr_correct sp le e m a t e1 m1 v ->
-  transl_expr_correct sp le e m (Eassign id a) t (PTree.set id v e1) m1 v.
-Proof.
-  intros; red; intros.
-  simpl in TE. monadInv TE. intro EQ1. 
-  simpl in MUT.
-  assert (MWF0: map_wf map s1). eauto with rtlg.
-  assert (MUTa: incl (mutated_expr a) mut). 
-  red. intros. apply MUT. simpl. tauto. 
-  assert (TRGa: target_reg_ok s1 map mut a rd).
-  inversion TRG. apply target_reg_other; eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF0 EQ1 ME MUTa TRGa).
-  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  generalize (add_move_correct _ _ sp _ _ _ _ rs1 m1 EQ0).
-  intros [rs2 [EX2 [RES2 OTHER2]]].
-  exists rs2.
-(* Exec *)
-  split. eapply exec_trans. eexact EX1.
-  apply exec_instrs_incr with s1. eauto with rtlg.
-  eexact EX2. traceEq.
-(* Match-env *)
-  split. 
-  apply match_env_update_var with rs1 r s s0; auto.
-  congruence.
-(* Result *)
-  split. case (Reg.eq rd r); intro.
-  subst r. congruence.
-  rewrite OTHER2; auto.
-(* Other regs *)
-  intros. transitivity (rs1#r0). 
-  apply OTHER2. red; intro; subst r0. 
-  apply H2. red. exists id. split. apply MUT. red; tauto.
-  generalize EQ; unfold find_var. 
-  destruct ((map_vars map)!id); monadSimpl. congruence. 
-  apply OTHER1. eauto with rtlg. assumption. assumption.
 Qed.
 
 Lemma transl_expr_Eload_correct:
  forall (sp: val) (le : letenv) (e : env) (m : mem)
     (chunk : memory_chunk) (addr : addressing) 
-    (al : exprlist) (t: trace) (e1 : env) (m1 : mem) (v : val) 
+    (al : exprlist) (t: trace) (m1 : mem) (v : val) 
     (vl : list val) (a: val),
-  eval_exprlist ge sp le e m al t e1 m1 vl ->
-  transl_exprlist_correct sp le e m al t e1 m1 vl ->
+  eval_exprlist ge sp le e m al t m1 vl ->
+  transl_exprlist_correct sp le e m al t m1 vl ->
   eval_addressing ge sp addr vl = Some a ->
   Mem.loadv chunk m1 a = Some v ->
-  transl_expr_correct sp le e m (Eload chunk addr al) t e1 m1 v.
+  transl_expr_correct sp le e m (Eload chunk addr al) t m1 v.
 Proof.
   intros; red; intros. simpl in TE. monadInv TE. intro EQ1. clear TE.
-  simpl in MUT.
   assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (TRG1: target_regs_ok s1 map mut al l). eauto with rtlg. 
-  generalize (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME MUT TRG1).
+  assert (TRG1: target_regs_ok s1 map al l). eauto with rtlg. 
+  generalize (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME TRG1).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
   exists (rs1#rd <- v).
 (* Exec *)
@@ -429,9 +374,9 @@ Proof.
   split. apply Regmap.gss.
 (* Other regs *)
   intros. rewrite Regmap.gso. apply OTHER1.
-  eauto with rtlg. assumption. 
+  eauto with rtlg.  
   case (In_dec Reg.eq r l); intro.
-  elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWF EQ r i); intro.
+  elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWF EQ r i); intro.
   tauto. byContradiction. eauto with rtlg.
   tauto.
   red; intro; subst r. inversion TRG. tauto. 
@@ -440,34 +385,31 @@ Qed.
 Lemma transl_expr_Estore_correct:
  forall (sp: val) (le : letenv) (e : env) (m : mem)
     (chunk : memory_chunk) (addr : addressing) 
-    (al : exprlist) (b : expr) (t t1: trace) (e1 : env) (m1 : mem) 
-    (vl : list val) (t2: trace) (e2 : env) (m2 m3 : mem) 
+    (al : exprlist) (b : expr) (t t1: trace) (m1 : mem) 
+    (vl : list val) (t2: trace) (m2 m3 : mem) 
     (v : val) (a: val),
-  eval_exprlist ge sp le e m al t1 e1 m1 vl ->
-  transl_exprlist_correct sp le e m al t1 e1 m1 vl ->
-  eval_expr ge sp le e1 m1 b t2 e2 m2 v ->
-  transl_expr_correct sp le e1 m1 b t2 e2 m2 v ->
+  eval_exprlist ge sp le e m al t1 m1 vl ->
+  transl_exprlist_correct sp le e m al t1 m1 vl ->
+  eval_expr ge sp le e m1 b t2 m2 v ->
+  transl_expr_correct sp le e m1 b t2 m2 v ->
   eval_addressing ge sp addr vl = Some a -> 
   Mem.storev chunk m2 a v = Some m3 ->
   t = t1 ** t2 ->
-  transl_expr_correct sp le e m (Estore chunk addr al b) t e2 m3 v.
+  transl_expr_correct sp le e m (Estore chunk addr al b) t m3 v.
 Proof.
   intros; red; intros. simpl in TE; monadInv TE. intro EQ2; clear TE.
-  simpl in MUT. 
   assert (MWF2: map_wf map s2). 
     apply map_wf_incr with s. 
     apply state_incr_trans2 with s0 s1; eauto with rtlg.
     assumption. 
-  assert (MUT2: incl (mutated_exprlist al) mut). eauto with coqlib.
-  assert (TRG2: target_regs_ok s2 map mut al l). 
+  assert (TRG2: target_regs_ok s2 map al l). 
     apply target_regs_ok_incr with s0; eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF2 EQ2 ME MUT2 TRG2).
+  generalize (H0 _ _ _ _ _ _ _ MWF2 EQ2 ME TRG2).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
   assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (MUT1: incl (mutated_expr b) mut). eauto with coqlib.
-  assert (TRG1: target_reg_ok s1 map mut b rd).
+  assert (TRG1: target_reg_ok s1 map b rd).
     inversion TRG. apply target_reg_other; eauto with rtlg.
-  generalize (H2 _ _ _ _ _ _ _ _ MWF1 EQ1 ME1 MUT1 TRG1).
+  generalize (H2 _ _ _ _ _ _ _ MWF1 EQ1 ME1 TRG1).
   intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
   exists rs2.
 (* Exec *)
@@ -479,7 +421,7 @@ Proof.
   assert (rs2##l = rs1##l).
     apply list_map_exten. intros r' IN. symmetry. apply OTHER2.
     eauto with rtlg. eauto with rtlg. 
-    elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWF EQ r' IN); intro.
+    elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWF EQ r' IN); intro.
     tauto. right. apply sym_not_equal. 
     apply valid_fresh_different with s. inversion TRG; assumption.
     assumption.
@@ -495,55 +437,53 @@ Proof.
 (* Other regs *)
   intro r'; intros. transitivity (rs1#r').
   apply OTHER2. apply reg_valid_incr with s; eauto with rtlg. 
-  assumption. assumption.
+  assumption. 
   apply OTHER1. apply reg_valid_incr with s.
   apply state_incr_trans2 with s0 s1; eauto with rtlg. assumption.
-  assumption. case (In_dec Reg.eq r' l); intro.
-    elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWF EQ r' i); intro.
+  case (In_dec Reg.eq r' l); intro.
+    elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWF EQ r' i); intro.
   tauto. byContradiction; eauto with rtlg. tauto.
 Qed.  
 
 Lemma transl_expr_Ecall_correct:
  forall (sp: val) (le : letenv) (e : env) (m : mem) 
     (sig : signature) (a : expr) (bl : exprlist) (t t1: trace)
-    (e1: env) (m1: mem) (t2: trace) (e2 : env) (m2 : mem) 
+    (m1: mem) (t2: trace) (m2 : mem) 
     (t3: trace) (m3: mem) (vf : val) 
     (vargs : list val) (vres : val) (f : Cminor.fundef),
-  eval_expr ge sp le e m a t1 e1 m1 vf ->
-  transl_expr_correct sp le e m a t1 e1 m1 vf ->
-  eval_exprlist ge sp le e1 m1 bl t2 e2 m2 vargs ->
-  transl_exprlist_correct sp le e1 m1 bl t2 e2 m2 vargs ->
+  eval_expr ge sp le e m a t1 m1 vf ->
+  transl_expr_correct sp le e m a t1 m1 vf ->
+  eval_exprlist ge sp le e m1 bl t2 m2 vargs ->
+  transl_exprlist_correct sp le e m1 bl t2 m2 vargs ->
   Genv.find_funct ge vf = Some f ->
   Cminor.funsig f = sig ->
   eval_funcall ge m2 f vargs t3 m3 vres ->
   transl_function_correct m2 f vargs t3 m3 vres ->
   t = t1 ** t2 ** t3 ->
-  transl_expr_correct sp le e m (Ecall sig a bl) t e2 m3 vres.
+  transl_expr_correct sp le e m (Ecall sig a bl) t m3 vres.
 Proof.
   intros. red; simpl; intros.
   monadInv TE. intro EQ3. clear TE.
-  assert (MUTa: incl (mutated_expr a) mut). eauto with coqlib.
-  assert (MUTbl: incl (mutated_exprlist bl) mut). eauto with coqlib.
   assert (MWFa: map_wf map s3).
     apply map_wf_incr with s. 
     apply state_incr_trans3 with s0 s1 s2; eauto with rtlg.
     assumption.
-  assert (TRGr: target_reg_ok s3 map mut a r). 
+  assert (TRGr: target_reg_ok s3 map a r). 
     apply target_reg_ok_incr with s0.
     apply state_incr_trans2 with s1 s2; eauto with rtlg.
     eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWFa EQ3 ME MUTa TRGr).
+  generalize (H0 _ _ _ _ _ _ _ MWFa EQ3 ME TRGr).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  clear MUTa MWFa TRGr.
+  clear MWFa TRGr.
   assert (MWFbl: map_wf map s2).
     apply map_wf_incr with s. 
     apply state_incr_trans2 with s0 s1; eauto with rtlg.
     assumption.
-  assert (TRGl: target_regs_ok s2 map mut bl l).
+  assert (TRGl: target_regs_ok s2 map bl l).
     apply target_regs_ok_incr with s1; eauto with rtlg.
-  generalize (H2 _ _ _ _ _ _ _ _ MWFbl EQ2 ME1 MUTbl TRGl).
+  generalize (H2 _ _ _ _ _ _ _ MWFbl EQ2 ME1 TRGl).
   intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
-  clear MUTbl MWFbl TRGl.
+  clear MWFbl TRGl.
  
   generalize (functions_translated vf f H3). intros [tf [TFIND TF]]. 
   generalize (H6 tf TF). intro EXF.
@@ -554,11 +494,9 @@ Proof.
   eauto with rtlg. simpl. replace (rs2#r) with vf. eexact TFIND.
   rewrite <- RES1. symmetry. apply OTHER2.
   apply reg_valid_incr with s0; eauto with rtlg.
-  apply target_reg_not_mutated with s0 a. 
-  eauto with rtlg. eauto with rtlg.
   assert (MWFs0: map_wf map s0). eauto with rtlg.
   case (In_dec Reg.eq r l); intro.
-  elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWFs0 EQ0 r i); intro.
+  elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWFs0 EQ0 r i); intro.
   tauto. byContradiction. apply valid_fresh_absurd with r s0.
   eauto with rtlg. assumption.
   tauto.
@@ -584,10 +522,9 @@ Proof.
     apply reg_valid_incr with s. 
     apply state_incr_trans2 with s0 s1; eauto with rtlg.
     assumption.
-    assumption.
     assert (MWFs0: map_wf map s0). eauto with rtlg.
     case (In_dec Reg.eq r0 l); intro.
-    elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWFs0 EQ0 r0 i); intro.
+    elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWFs0 EQ0 r0 i); intro.
     tauto. byContradiction. apply valid_fresh_absurd with r0 s0.
     eauto with rtlg. assumption.
     tauto.
@@ -595,10 +532,9 @@ Proof.
     apply reg_valid_incr with s.
     apply state_incr_trans3 with s0 s1 s2; eauto with rtlg.
     assumption.
-    assumption.
     case (Reg.eq r0 r); intro.
     subst r0.
-    elim (alloc_reg_fresh_or_in_map _ _ _ _ _ _ MWF EQ); intro.
+    elim (alloc_reg_fresh_or_in_map _ _ _ _ _ MWF EQ); intro.
     tauto. byContradiction; eauto with rtlg.
     tauto.
   red; intro; subst r0.
@@ -607,30 +543,27 @@ Qed.
 
 Lemma transl_expr_Econdition_correct:
  forall (sp: val) (le : letenv) (e : env) (m : mem) 
-    (a : condexpr) (b c : expr) (t t1: trace) (e1 : env) (m1 : mem) 
-    (v1 : bool) (t2: trace) (e2 : env) (m2 : mem) (v2 : val),
-  eval_condexpr ge sp le e m a t1 e1 m1 v1 ->
-  transl_condition_correct sp le e m a t1 e1 m1 v1 ->
-  eval_expr ge sp le e1 m1 (if v1 then b else c) t2 e2 m2 v2 ->
-  transl_expr_correct sp le e1 m1 (if v1 then b else c) t2 e2 m2 v2 ->
+    (a : condexpr) (b c : expr) (t t1: trace) (m1 : mem) 
+    (v1 : bool) (t2: trace) (m2 : mem) (v2 : val),
+  eval_condexpr ge sp le e m a t1 m1 v1 ->
+  transl_condition_correct sp le e m a t1 m1 v1 ->
+  eval_expr ge sp le e m1 (if v1 then b else c) t2 m2 v2 ->
+  transl_expr_correct sp le e m1 (if v1 then b else c) t2 m2 v2 ->
   t = t1 ** t2 ->
-  transl_expr_correct sp le e m (Econdition a b c) t e2 m2 v2.
+  transl_expr_correct sp le e m (Econdition a b c) t m2 v2.
 Proof.
   intros; red; intros. simpl in TE; monadInv TE. intro EQ1; clear TE.
-  simpl in MUT. 
 
   assert (MWF1: map_wf map s1).
     apply map_wf_incr with s. eauto with rtlg. assumption.
-  assert (MUT1: incl (mutated_condexpr a) mut). eauto with coqlib.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME MUT1).
+  generalize (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME).
   intros [rs1 [EX1 [ME1 OTHER1]]].
   destruct v1.
 
   assert (MWF0: map_wf map s0). eauto with rtlg.
-  assert (MUT0: incl (mutated_expr b) mut). eauto with coqlib.
-  assert (TRG0: target_reg_ok s0 map mut b rd).
+  assert (TRG0: target_reg_ok s0 map b rd).
     inversion TRG. apply target_reg_other; eauto with rtlg.
-  generalize (H2 _ _ _ _ _ _ _ _ MWF0 EQ0 ME1 MUT0 TRG0).  
+  generalize (H2 _ _ _ _ _ _ _ MWF0 EQ0 ME1 TRG0).  
   intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
   exists rs2.
 (* Exec *)
@@ -647,10 +580,9 @@ Proof.
   apply OTHER1; auto. apply reg_valid_incr with s.
   apply state_incr_trans with s0; eauto with rtlg. assumption.
 
-  assert (MUTc: incl (mutated_expr c) mut). eauto with coqlib.
-  assert (TRGc: target_reg_ok s map mut c rd).
+  assert (TRGc: target_reg_ok s map c rd).
     inversion TRG. apply target_reg_other; auto.
-  generalize (H2 _ _ _ _ _ _ _ _ MWF EQ ME1 MUTc TRGc).  
+  generalize (H2 _ _ _ _ _ _ _ MWF EQ ME1 TRGc).  
   intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
   exists rs2.
 (* Exec *)
@@ -670,38 +602,35 @@ Qed.
 
 Lemma transl_expr_Elet_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem) 
-    (a b : expr) (t t1: trace) (e1 : env) (m1 : mem) (v1 : val) 
-    (t2: trace) (e2 : env) (m2 : mem) (v2 : val),
-  eval_expr ge sp le e m a t1 e1 m1 v1 ->
-  transl_expr_correct sp le e m a t1 e1 m1 v1 ->
-  eval_expr ge sp (v1 :: le) e1 m1 b t2 e2 m2 v2 ->
-  transl_expr_correct sp (v1 :: le) e1 m1 b t2 e2 m2 v2 ->
+    (a b : expr) (t t1: trace) (m1 : mem) (v1 : val) 
+    (t2: trace) (m2 : mem) (v2 : val),
+  eval_expr ge sp le e m a t1 m1 v1 ->
+  transl_expr_correct sp le e m a t1 m1 v1 ->
+  eval_expr ge sp (v1 :: le) e m1 b t2 m2 v2 ->
+  transl_expr_correct sp (v1 :: le) e m1 b t2 m2 v2 ->
   t = t1 ** t2 ->
-  transl_expr_correct sp le e m (Elet a b) t e2 m2 v2.
+  transl_expr_correct sp le e m (Elet a b) t m2 v2.
 Proof.
   intros; red; intros.
   simpl in TE; monadInv TE. intro EQ1.
-  simpl in MUT.
   assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (MUT1: incl (mutated_expr a) mut). eauto with coqlib.
-  assert (TRG1: target_reg_ok s1 map mut a r).
+  assert (TRG1: target_reg_ok s1 map a r).
   eapply target_reg_other; eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME MUT1 TRG1).
+  generalize (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME TRG1).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
   assert (MWF2: map_wf (add_letvar map r) s0). 
   apply add_letvar_wf; eauto with rtlg. 
-  assert (MUT2: incl (mutated_expr b) mut). eauto with coqlib.
-  assert (ME2: match_env (add_letvar map r) e1 (v1 :: le) rs1).
+  assert (ME2: match_env (add_letvar map r) e (v1 :: le) rs1).
   apply match_env_letvar; assumption.
-  assert (TRG2: target_reg_ok s0 (add_letvar map r) mut b rd).
+  assert (TRG2: target_reg_ok s0 (add_letvar map r) b rd).
   inversion TRG. apply target_reg_other. 
   unfold reg_in_map, add_letvar; simpl. red; intro.
-  elim H11; intro. apply H4. left. assumption.
-  elim H12; intro. apply valid_fresh_absurd with rd s.
-  assumption. rewrite <- H13. eauto with rtlg.
+  elim H10; intro. apply H4. left. assumption.
+  elim H11; intro. apply valid_fresh_absurd with rd s.
+  assumption. rewrite <- H12. eauto with rtlg.
   apply H4. right. assumption.
   eauto with rtlg.
-  generalize (H2 _ _ _ _ _ _ _ _ MWF2 EQ0 ME2 MUT2 TRG2).
+  generalize (H2 _ _ _ _ _ _ _ MWF2 EQ0 ME2 TRG2).
   intros [rs2 [EX2 [ME3 [RES2 OTHER2]]]].
   exists rs2.
 (* Exec *)
@@ -716,22 +645,20 @@ Proof.
 (* Other regs *)
   intros. transitivity (rs1#r0). 
   apply OTHER2. eauto with rtlg. 
-  unfold mutated_reg. unfold add_letvar; simpl. assumption.
-  elim H6; intro. left. 
+  elim H5; intro. left. 
   unfold reg_in_map, add_letvar; simpl.
-  unfold reg_in_map in H7; tauto.
+  unfold reg_in_map in H6; tauto.
   tauto.
   apply OTHER1. eauto with rtlg.
-  assumption. 
   right. red; intro. apply valid_fresh_absurd with r0 s.
-  assumption. rewrite H7. eauto with rtlg.
+  assumption. rewrite H6. eauto with rtlg.
 Qed.
 
 Lemma transl_expr_Eletvar_correct:
   forall (sp: val) (le : list val) (e : env) 
     (m : mem) (n : nat) (v : val),
   nth_error le n = Some v ->
-  transl_expr_correct sp le e m (Eletvar n) E0 e m v.
+  transl_expr_correct sp le e m (Eletvar n) E0 m v.
 Proof.
   intros; red; intros. 
   simpl in TE; monadInv TE. intro EQ1.
@@ -766,19 +693,18 @@ Qed.
 
 Lemma transl_expr_Ealloc_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem) 
-    (a : expr) (t: trace) (e1 : env) (m1 : mem) (n: int)
+    (a : expr) (t: trace) (m1 : mem) (n: int)
     (m2: mem) (b: block),
-  eval_expr ge sp le e m a t e1 m1 (Vint n) ->
-  transl_expr_correct sp le e m a t e1 m1 (Vint n) ->
+  eval_expr ge sp le e m a t m1 (Vint n) ->
+  transl_expr_correct sp le e m a t m1 (Vint n) ->
   Mem.alloc m1 0 (Int.signed n) = (m2, b) ->
-  transl_expr_correct sp le e m (Ealloc a) t e1 m2 (Vptr b Int.zero).
+  transl_expr_correct sp le e m (Ealloc a) t m2 (Vptr b Int.zero).
 Proof.
   intros until b; intros EE TEC ALLOC; red; intros.
   simpl in TE. monadInv TE. intro EQ1.
-  simpl in MUT.
-  assert (TRG': target_reg_ok s1 map mut a r); eauto with rtlg.
+  assert (TRG': target_reg_ok s1 map a r); eauto with rtlg.
   assert (MWF': map_wf map s1). eauto with rtlg.
-  generalize (TEC _ _ _ _ _ _ _ _ MWF' EQ1 ME MUT TRG').
+  generalize (TEC _ _ _ _ _ _ _ MWF' EQ1 ME TRG').
   intros [rs1 [EX1 [ME1 [RR1 RO1]]]].
   exists (rs1#rd <- (Vptr b Int.zero)).
 (* Exec *)
@@ -792,18 +718,18 @@ Proof.
   split. apply Regmap.gss.
 (* Other regs *)
   intros. rewrite Regmap.gso.
-  apply RO1. eauto with rtlg. assumption.
+  apply RO1. eauto with rtlg. 
   case (Reg.eq r0 r); intro.
-  subst r0. left. elim (alloc_reg_fresh_or_in_map _ _ _ _ _ _ MWF EQ); intro. 
+  subst r0. left. elim (alloc_reg_fresh_or_in_map _ _ _ _ _ MWF EQ); intro. 
   auto. byContradiction; eauto with rtlg.
   right; assumption.
-  elim H1; intro. red; intro. subst r0. inversion TRG. contradiction. 
+  elim H0; intro. red; intro. subst r0. inversion TRG. contradiction. 
   auto.
 Qed.
 
 Lemma transl_condition_CEtrue_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem),
-  transl_condition_correct sp le e m CEtrue E0 e m true.
+  transl_condition_correct sp le e m CEtrue E0 m true.
 Proof.
   intros; red; intros. simpl in TE; monadInv TE. subst ns.
   exists rs. split. apply exec_refl. split. auto. auto.
@@ -811,7 +737,7 @@ Qed.
 
 Lemma transl_condition_CEfalse_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem),
-  transl_condition_correct sp le e m CEfalse E0 e m false.
+  transl_condition_correct sp le e m CEfalse E0 m false.
 Proof.
   intros; red; intros. simpl in TE; monadInv TE. subst ns.
   exists rs. split. apply exec_refl. split. auto. auto.
@@ -819,19 +745,17 @@ Qed.
 
 Lemma transl_condition_CEcond_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem)
-    (cond : condition) (al : exprlist) (t1: trace) (e1 : env) 
+    (cond : condition) (al : exprlist) (t1: trace)
     (m1 : mem) (vl : list val) (b : bool),
-  eval_exprlist ge sp le e m al t1 e1 m1 vl ->
-  transl_exprlist_correct sp le e m al t1 e1 m1 vl ->
+  eval_exprlist ge sp le e m al t1 m1 vl ->
+  transl_exprlist_correct sp le e m al t1 m1 vl ->
   eval_condition cond vl =  Some b ->
-  transl_condition_correct sp le e m (CEcond cond al) t1 e1 m1 b.
+  transl_condition_correct sp le e m (CEcond cond al) t1 m1 b.
 Proof.
   intros; red; intros. simpl in TE; monadInv TE. intro EQ1; clear TE.
   assert (MWF1: map_wf map s1). eauto with rtlg.
-  simpl in MUT.
-  assert (TRG: target_regs_ok s1 map mut al l).
-    eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME MUT TRG).
+  assert (TRG: target_regs_ok s1 map al l).  eauto with rtlg.
+  generalize (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME TRG).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
   exists rs1.
 (* Exec *)
@@ -847,35 +771,32 @@ Proof.
 (* Match-env *)
   split. assumption.
 (* Regs *)
-  intros. apply OTHER1. eauto with rtlg. assumption.
+  intros. apply OTHER1. eauto with rtlg. 
   case (In_dec Reg.eq r l); intro.
-  elim (alloc_regs_fresh_or_in_map _ _ _ _ _ _ MWF EQ r i); intro.
+  elim (alloc_regs_fresh_or_in_map _ _ _ _ _ MWF EQ r i); intro.
   tauto. byContradiction; eauto with rtlg.
   tauto.
 Qed.
 
 Lemma transl_condition_CEcondition_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem)
-    (a b c : condexpr) (t t1: trace) (e1 : env) (m1 : mem) 
-    (vb1 : bool) (t2: trace) (e2 : env) (m2 : mem) (vb2 : bool),
-  eval_condexpr ge sp le e m a t1 e1 m1 vb1 ->
-  transl_condition_correct sp le e m a t1 e1 m1 vb1 ->
-  eval_condexpr ge sp le e1 m1 (if vb1 then b else c) t2 e2 m2 vb2 ->
-  transl_condition_correct sp le e1 m1 (if vb1 then b else c) t2 e2 m2 vb2 ->
+    (a b c : condexpr) (t t1: trace) (m1 : mem) 
+    (vb1 : bool) (t2: trace) (m2 : mem) (vb2 : bool),
+  eval_condexpr ge sp le e m a t1 m1 vb1 ->
+  transl_condition_correct sp le e m a t1 m1 vb1 ->
+  eval_condexpr ge sp le e m1 (if vb1 then b else c) t2 m2 vb2 ->
+  transl_condition_correct sp le e m1 (if vb1 then b else c) t2 m2 vb2 ->
   t = t1 ** t2 ->
-  transl_condition_correct sp le e m (CEcondition a b c) t e2 m2 vb2.
+  transl_condition_correct sp le e m (CEcondition a b c) t m2 vb2.
 Proof.
   intros; red; intros. simpl in TE; monadInv TE. intro EQ1; clear TE.
-  simpl in MUT.
   assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (MUTa: incl (mutated_condexpr a) mut). eauto with coqlib.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME MUTa).
+  generalize (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME).
   intros [rs1 [EX1 [ME1 OTHER1]]].
   destruct vb1.
 
   assert (MWF0: map_wf map s0). eauto with rtlg.
-  assert (MUTb: incl (mutated_condexpr b) mut). eauto with coqlib.
-  generalize (H2 _ _ _ _ _ _ _ _ MWF0 EQ0 ME1 MUTb).
+  generalize (H2 _ _ _ _ _ _ _ MWF0 EQ0 ME1).
   intros [rs2 [EX2 [ME2 OTHER2]]].
   exists rs2.
   split. eapply exec_trans. eexact EX1. 
@@ -886,8 +807,7 @@ Proof.
   apply OTHER2; eauto with rtlg.
   apply OTHER1; eauto with rtlg.
 
-  assert (MUTc: incl (mutated_condexpr c) mut). eauto with coqlib.
-  generalize (H2 _ _ _ _ _ _ _ _ MWF EQ ME1 MUTc).
+  generalize (H2 _ _ _ _ _ _ _ MWF EQ ME1).
   intros [rs2 [EX2 [ME2 OTHER2]]].
   exists rs2.
   split. eapply exec_trans. eexact EX1. 
@@ -901,7 +821,7 @@ Qed.
  
 Lemma transl_exprlist_Enil_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem),
-  transl_exprlist_correct sp le e m Enil E0 e m nil.
+  transl_exprlist_correct sp le e m Enil E0 m nil.
 Proof.
   intros; red; intros. 
   generalize TE. simpl. destruct rl; monadSimpl. 
@@ -914,26 +834,23 @@ Qed.
 
 Lemma transl_exprlist_Econs_correct:
   forall (sp: val) (le : letenv) (e : env) (m : mem) 
-    (a : expr) (bl : exprlist) (t t1: trace) (e1 : env) (m1 : mem) 
-    (v : val) (t2: trace) (e2 : env) (m2 : mem) (vl : list val),
-  eval_expr ge sp le e m a t1 e1 m1 v ->
-  transl_expr_correct sp le e m a t1 e1 m1 v ->
-  eval_exprlist ge sp le e1 m1 bl t2 e2 m2 vl ->
-  transl_exprlist_correct sp le e1 m1 bl t2 e2 m2 vl ->
+    (a : expr) (bl : exprlist) (t t1: trace) (m1 : mem) 
+    (v : val) (t2: trace) (m2 : mem) (vl : list val),
+  eval_expr ge sp le e m a t1 m1 v ->
+  transl_expr_correct sp le e m a t1 m1 v ->
+  eval_exprlist ge sp le e m1 bl t2 m2 vl ->
+  transl_exprlist_correct sp le e m1 bl t2 m2 vl ->
   t = t1 ** t2 ->
-  transl_exprlist_correct sp le e m (Econs a bl) t e2 m2 (v :: vl).
+  transl_exprlist_correct sp le e m (Econs a bl) t m2 (v :: vl).
 Proof.
   intros. red. intros. 
   inversion TRG.
-  rewrite <- H11 in TE. simpl in TE. monadInv TE. intro EQ1.
-  simpl in MUT.
-  assert (MUT1: incl (mutated_expr a) mut); eauto with coqlib.
-  assert (MUT2: incl (mutated_exprlist bl) mut); eauto with coqlib.
+  rewrite <- H10 in TE. simpl in TE. monadInv TE. intro EQ1.
   assert (MWF1: map_wf map s1); eauto with rtlg.
-  assert (TRG1: target_reg_ok s1 map mut a r); eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME MUT1 TRG1).
+  assert (TRG1: target_reg_ok s1 map a r); eauto with rtlg.
+  generalize (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME TRG1).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  generalize (H2 _ _ _ _ _ _ _ _ MWF EQ ME1 MUT2 H12).
+  generalize (H2 _ _ _ _ _ _ _ MWF EQ ME1 H11).
   intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
   exists rs2.
 (* Exec *)
@@ -947,13 +864,12 @@ Proof.
   reflexivity.
   eauto with rtlg. 
   eauto with rtlg.
-  assumption.
 (* Other regs *)
   simpl. intros.
   transitivity (rs1#r0).
   apply OTHER2; auto. tauto. 
   apply OTHER1; auto. eauto with rtlg. 
-  elim H15; intro. left; assumption. right; apply sym_not_equal; tauto.
+  elim H13; intro. left; assumption. right; apply sym_not_equal; tauto.
 Qed.
 
 Lemma transl_funcall_internal_correct:
@@ -1084,36 +1000,65 @@ Qed.
 
 Lemma transl_stmt_Sexpr_correct:
   forall (sp: val) (e : env) (m : mem) (a : expr) (t: trace)
-    (e1 : env) (m1 : mem) (v : val),
-  eval_expr ge sp nil e m a t e1 m1 v ->
-  transl_expr_correct sp nil e m a t e1 m1 v ->
-  transl_stmt_correct sp e m (Sexpr a) t e1 m1 Out_normal.
+    (m1 : mem) (v : val),
+  eval_expr ge sp nil e m a t m1 v ->
+  transl_expr_correct sp nil e m a t m1 v ->
+  transl_stmt_correct sp e m (Sexpr a) t e m1 Out_normal.
 Proof.
   intros; red; intros.
   simpl in OUT. subst nd.
   unfold transl_stmt in TE. monadInv TE. intro EQ1.
   assert (MWF0: map_wf map s0). eauto with rtlg.
-  assert (TRG: target_reg_ok s0 map (mutated_expr a) a r). eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF0 EQ1 ME (incl_refl (mutated_expr a)) TRG).
+  assert (TRG: target_reg_ok s0 map a r). eauto with rtlg.
+  generalize (H0 _ _ _ _ _ _ _ MWF0 EQ1 ME TRG).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
   exists rs1; simpl; tauto.
 Qed.
 
+Lemma transl_stmt_Sassign_correct:
+ forall (sp: val) (e : env) (m : mem) 
+    (id : ident) (a : expr) (t: trace) (m1 : mem) (v : val),
+  eval_expr ge sp nil e m a t m1 v ->
+  transl_expr_correct sp nil e m a t m1 v ->
+  transl_stmt_correct sp e m (Sassign id a) t (PTree.set id v e) m1 Out_normal.
+Proof.
+  intros; red; intros.
+  simpl in TE. monadInv TE. intro EQ2. 
+  assert (MWF0: map_wf map s2). 
+    apply map_wf_incr with s. eauto 6 with rtlg. auto.
+  assert (TRGa: target_reg_ok s2 map a r0). eauto 6 with rtlg.
+  generalize (H0 _ _ _ _ _ _ _ MWF0 EQ2 ME TRGa).
+  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
+  generalize (add_move_correct _ _ sp _ _ _ _ rs1 m1 EQ1).
+  intros [rs2 [EX2 [RES2 OTHER2]]].
+  exists rs2.
+(* Exec *)
+  split. inversion OUT; subst. eapply exec_trans. eexact EX1.
+  apply exec_instrs_incr with s2. eauto with rtlg.
+  eexact EX2. traceEq.
+(* Match-env *)
+  split. 
+  apply match_env_update_var with rs1 r s s0; auto.
+  congruence.
+(* Outcome *)
+  simpl; auto.
+Qed.
+
 Lemma transl_stmt_Sifthenelse_correct:
   forall (sp: val) (e : env) (m : mem) (a : condexpr)
-    (s1 s2 : stmt) (t t1: trace) (e1 : env) (m1 : mem) 
+    (s1 s2 : stmt) (t t1: trace) (m1 : mem) 
     (v1 : bool) (t2: trace) (e2 : env) (m2 : mem) (out : outcome),
-  eval_condexpr ge sp nil e m a t1 e1 m1 v1 ->
-  transl_condition_correct sp nil e m a t1 e1 m1 v1 ->
-  exec_stmt ge sp e1 m1 (if v1 then s1 else s2) t2 e2 m2 out ->
-  transl_stmt_correct sp e1 m1 (if v1 then s1 else s2) t2 e2 m2 out ->
+  eval_condexpr ge sp nil e m a t1 m1 v1 ->
+  transl_condition_correct sp nil e m a t1 m1 v1 ->
+  exec_stmt ge sp e m1 (if v1 then s1 else s2) t2 e2 m2 out ->
+  transl_stmt_correct sp e m1 (if v1 then s1 else s2) t2 e2 m2 out ->
   t = t1 ** t2 ->
   transl_stmt_correct sp e m (Sifthenelse a s1 s2) t e2 m2 out.
 Proof.
   intros; red; intros until rs; intro MWF.
   simpl. case (more_likely a s1 s2); monadSimpl; intro EQ2; intros.
   assert (MWF1: map_wf map s3). eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ rs MWF1 EQ2 ME (incl_refl _)).
+  generalize (H0 _ _ _ _ _ _ rs MWF1 EQ2 ME).
   intros [rs1 [EX1 [ME1 OTHER1]]].
   destruct v1.
   assert (MWF0: map_wf map s0). eauto with rtlg.
@@ -1132,7 +1077,7 @@ Proof.
   tauto.
 
   assert (MWF1: map_wf map s3). eauto with rtlg.
-  generalize (H0 _ _ _ _ _ _ _ rs MWF1 EQ2 ME (incl_refl _)).
+  generalize (H0 _ _ _ _ _ _ rs MWF1 EQ2 ME).
   intros [rs1 [EX1 [ME1 OTHER1]]].
   destruct v1.
   generalize (H2 _ _ _ _ _ _ _ _ _ _ MWF EQ ME1 OUT RRG).
@@ -1291,10 +1236,10 @@ Qed.
 Lemma transl_stmt_Sswitch_correct:
   forall (sp : val) (e : env) (m : mem) (a : expr)
          (cases : list (int * nat)) (default : nat) 
-         (t1 : trace) (e1 : env) (m1 : mem) (n : int),
-  eval_expr ge sp nil e m a t1 e1 m1 (Vint n) ->
-  transl_expr_correct sp nil e m a t1 e1 m1 (Vint n) ->
-  transl_stmt_correct sp e m (Sswitch a cases default) t1 e1 m1
+         (t1 : trace) (m1 : mem) (n : int),
+  eval_expr ge sp nil e m a t1 m1 (Vint n) ->
+  transl_expr_correct sp nil e m a t1 m1 (Vint n) ->
+  transl_stmt_correct sp e m (Sswitch a cases default) t1 e m1
          (Out_exit (switch_target n default cases)).
 Proof.
   intros; red; intros. monadInv TE. clear TE; intros EQ1.
@@ -1303,8 +1248,8 @@ Proof.
 
   red in H0. 
   assert (MWF1: map_wf map s1). eauto with rtlg.
-  assert (TRG1: target_reg_ok s1 map (mutated_expr a) a r). eauto with rtlg.
-  destruct (H0 _ _ _ _ _ _ _ _ MWF1 EQ1 ME (incl_refl _) TRG1)
+  assert (TRG1: target_reg_ok s1 map a r). eauto with rtlg.
+  destruct (H0 _ _ _ _ _ _ _ MWF1 EQ1 ME TRG1)
         as [rs' [EXEC1 [ME1 [RES1 OTHER1]]]].
   simpl. exists rs'.
   (* execution *)
@@ -1327,16 +1272,16 @@ Qed.
 
 Lemma transl_stmt_Sreturn_some_correct:
   forall (sp: val) (e : env) (m : mem) (a : expr) (t: trace)
-    (e1 : env) (m1 : mem) (v : val),
-  eval_expr ge sp nil e m a t e1 m1 v ->
-  transl_expr_correct sp nil e m a t e1 m1 v ->
-  transl_stmt_correct sp e m (Sreturn (Some a)) t e1 m1 (Out_return (Some v)).
+    (m1 : mem) (v : val),
+  eval_expr ge sp nil e m a t m1 v ->
+  transl_expr_correct sp nil e m a t m1 v ->
+  transl_stmt_correct sp e m (Sreturn (Some a)) t e m1 (Out_return (Some v)).
 Proof.
   intros; red; intros. generalize TE; simpl.
   destruct rret. intro EQ.
-  assert (TRG: target_reg_ok s map (mutated_expr a) a r).
+  assert (TRG: target_reg_ok s map a r).
   inversion RRG. apply target_reg_other; auto.
-  generalize (H0 _ _ _ _ _ _ _ _ MWF EQ ME (incl_refl _) TRG).
+  generalize (H0 _ _ _ _ _ _ _ MWF EQ ME TRG).
   intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
   simpl in OUT. subst nd. exists rs1. tauto.
 
@@ -1366,7 +1311,6 @@ Proof
     transl_stmt_correct
 
     transl_expr_Evar_correct
-    transl_expr_Eassign_correct
     transl_expr_Eop_correct
     transl_expr_Eload_correct
     transl_expr_Estore_correct
@@ -1385,6 +1329,7 @@ Proof
     transl_funcall_external_correct
     transl_stmt_Sskip_correct
     transl_stmt_Sexpr_correct
+    transl_stmt_Sassign_correct
     transl_stmt_Sifthenelse_correct
     transl_stmt_Sseq_continue_correct
     transl_stmt_Sseq_stop_correct

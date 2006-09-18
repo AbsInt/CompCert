@@ -46,7 +46,6 @@ Open Scope cminor_scope.
 Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
   match a with
   | Evar id => Evar id
-  | Eassign id b => Eassign id (lift_expr p b)
   | Eop op bl => Eop op (lift_exprlist p bl)
   | Eload chunk addr bl => Eload chunk addr (lift_exprlist p bl)
   | Estore chunk addr bl c =>

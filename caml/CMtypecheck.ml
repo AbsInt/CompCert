@@ -219,15 +219,6 @@ let rec type_expr env lenv e =
   match e with
   | Evar id ->
       type_var env id
-  | Eassign(id, e1) ->
-      let tid = type_var env id in
-      let te1 = type_expr env lenv e1 in
-      begin try
-        unify tid te1
-      with Error s ->
-        raise (Error (sprintf "In assignment to %s:\n%s" (extern_atom id) s))
-      end;
-      tid
   | Eop(op, el) ->
       let tel = type_exprlist env lenv el in
       let (targs, tres) = type_operation op in
@@ -325,6 +316,14 @@ let rec type_stmt env blk ret s =
   | Sskip -> ()
   | Sexpr e -> 
       ignore (type_expr env [] e)
+  | Sassign(id, e1) ->
+      let tid = type_var env id in
+      let te1 = type_expr env [] e1 in
+      begin try
+        unify tid te1
+      with Error s ->
+        raise (Error (sprintf "In assignment to %s:\n%s" (extern_atom id) s))
+      end
   | Sseq(s1, s2) ->
       type_stmt env blk ret s1;
       type_stmt env blk ret s2
