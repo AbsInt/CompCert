@@ -96,7 +96,10 @@ Definition make_neg (e: expr) (ty: type) :=
   end.
 
 Definition make_notbool (e: expr) (ty: type) :=
-  make_binop (Ocmp Ceq) (make_boolean e ty) (make_intconst Int.zero).
+  match ty with
+  | Tfloat _ => make_binop (Ocmpf Ceq) e (make_floatconst Float.zero)
+  | _ => make_unop Onotbool e
+  end.
 
 Definition make_notint (e: expr) (ty: type) :=
   make_unop Onotint e.

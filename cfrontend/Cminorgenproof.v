@@ -888,6 +888,13 @@ Proof.
   change (Vint (Int.cast8signed i)) with (Val.cast8signed (Vint i)). eauto with evalexpr.
   change (Vint (Int.cast16unsigned i)) with (Val.cast16unsigned (Vint i)). eauto with evalexpr.
   change (Vint (Int.cast16signed i)) with (Val.cast16signed (Vint i)). eauto with evalexpr.
+  replace (Int.eq i Int.zero) with (negb (negb (Int.eq i Int.zero))).
+  eapply eval_notbool. eauto. 
+  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intro; simpl.
+  rewrite H1; constructor. constructor; auto. 
+  apply negb_elim.
+  unfold Vfalse; TrivialOp. change (Vint Int.zero) with (Val.of_bool (negb true)). 
+  eapply eval_notbool. eauto. constructor. 
   change (Vfloat (Float.singleoffloat f0)) with (Val.singleoffloat (Vfloat f0)). eauto with evalexpr.
   (* Binary operations *)
   inversion H1; clear H1; subst. inversion H11; clear H11; subst.

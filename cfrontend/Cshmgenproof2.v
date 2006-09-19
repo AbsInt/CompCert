@@ -171,12 +171,6 @@ Proof.
   intros until m2; intro SEM. unfold make_notbool. 
   functional inversion SEM; intros; inversion H4; simpl;
   eauto with cshm.
-  eapply make_binop_correct. 
-  eapply make_binop_correct. eauto. eauto with cshm. 
-  simpl; reflexivity. reflexivity. eauto with cshm. 
-  simpl. rewrite Float.cmp_ne_eq. 
-  destruct (Float.cmp Ceq f Float.zero); reflexivity.
-  traceEq.
 Qed.
 
 Lemma make_notint_correct:

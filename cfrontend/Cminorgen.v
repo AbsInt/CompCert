@@ -50,6 +50,7 @@ Definition make_op (op: Csharpminor.operation) (el: exprlist): option expr :=
       | Csharpminor.Ocast16unsigned => Some(Cmconstr.cast16unsigned e1)
       | Csharpminor.Ocast16signed => Some(Cmconstr.cast16signed e1)
       | Csharpminor.Onotint => Some(Cmconstr.notint e1)
+      | Csharpminor.Onotbool => Some(Cmconstr.notbool e1)
       | Csharpminor.Onegf => Some(Cmconstr.negfloat e1)
       | Csharpminor.Oabsf => Some(Cmconstr.absfloat e1)
       | Csharpminor.Osingleoffloat => Some(Cmconstr.singleoffloat e1)
