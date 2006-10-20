@@ -1,0 +1,629 @@
+\documentclass{book}
+\usepackage{alltt}
+\title{A practical approach to Programming Language Semantics}
+\begin{document}
+
+The purpose of this book is to study programming language semantics
+in a way that highlights the practical aspects of this field.
+The main objective of programming language semantics is to understand
+what programs really mean.  The practical outcome of this understanding
+is that programming errors can be avoided.  In this book, we will actually
+insist on the following aspects.
+
+\begin{itemize}
+  \item
+    We will show that there is a continuous progression between
+    conventional programs and semantic descriptions.  We will start
+    by describing tools concerning  programming languages written
+    as simple programs, and we will show how the same tools are
+    related to more theoretical descriptions of programming languages.
+  \item Most of the questions we will study have a practical motivation.  In
+    general, this practical motivation will be to ensure that our tools
+    do what we mean.
+  \item Some of our work consists in mathematical proofs about programming
+    language descriptions.  All these proofs be will implemented as formal
+    proofs that can be verified using a mathematical proof tool.
+  \item We will only describe toy languages, so that the whole content
+    of the book can be used as an introduction to programming language
+    semantics.
+\end{itemize}
+
+We hope that this practical approach, starting with programs in
+conventional programming languages to describe a toy programming
+language will provide a gentle introduction to the more mathematically
+designed formalisms that are customarily used to describe programming
+languages and to the practice of proof-verification tools.
+Our attachment to the formal verification of semantics
+proofs may seem debatable: proof-checkers are still difficult to
+use and the constraints imposed by proof-checking add to the
+constraints imposed by the formal description of languages in ways
+that may discourage students who are already intimidated by the
+theoretical content of the course.  We believe that this extra cost is
+compensated in the following points:
+\begin{itemize}
+  \item A formal description of the concepts being used actually makes it
+    possible to reduce their ``theoretical load'': the fact that some
+    notations are just traditions hiding simple predicates is made explicit
+    in a formal description.
+  \item Formal descriptions are unambiguous.  If some explanation is not
+    well understood, the formal description can be consulted to disambiguate
+    the English-language explanations.  Moreover, the dependency between
+    theoretical concepts and practical considerations is more explicit
+    in formal documents.
+  \item Mechanical proofs and formal descriptions provide a playground for
+    students to build up their own experience in extending a language,
+    defining a new tool, or     proving extra properties of an existing
+    language.
+  \item Modern proof-checkers also provide ways to extract executable programs
+    from formal descriptions and proofs.  This characteristic will make it
+    possible to re-inforce the idea that the formal semantics of programming
+    languages are directly related to implementing tools to
+    program and avoid programming errors.
+\end{itemize}
+
+The book contain the description of three toy languages: a simple
+imperative programming language, a simple theoretical language inspired
+from the study of logic, and simple functional programming language; and three
+formal description styles: natural semantics, denotational semantics, and
+axiomatic semantics.  The practical tools that we will obtain
+from the formal descriptions will fall in the following categories:
+\begin{itemize}
+  \item Interpreters, that is, tools that execute programs,
+  \item Compilers, that is, tools that translate programs in other
+    languages,
+  \item Static analyzers, that is tools that help make sure that programs
+    do not contains certain categories of errors.
+\end{itemize}
+The purpose of mechanical verification of programming language semantics
+will be to ensure that these tools respect the intending meaning of programs.
+
+\chapter{A simple imperative programming language}
+\section{An informal description}
+We want to study a small programming language whose only instructions
+are sequences of assignments to memory locations, possibly repeated inside
+loops that are terminated when a test is satisfied.
+The values stored in each location will be integers, and for now, we will
+assume that the only operations available are additions and the only
+tests are strict comparison.  Here are a few examples of such instructions.
+
+\begin{itemize}
+  \item A program to compute a multiplication,
+\begin{verbatim}
+z:=0; while x > z do t := y + t; z:=z+1 done
+\end{verbatim}
+If {\tt x} contains a positive value, a machine executing this program
+should terminate in a state where {\tt t} contains the product of the values
+in {\tt y} and {\tt x}.
+\item A program to compute a square root,
+\begin{verbatim}
+y:=0; s := 1;
+ while x > s do
+  s:=0; y:=y+1; z:=0;
+  while y > z do s := y+s; z:= z+1 done
+done
+\end{verbatim}
+If {\tt x} contains a positive value, a machine executing this program
+should terminate in a state where {\tt y} contains the greatest integer
+whose square is smaller than the value in {\tt x}.
+\end{itemize}
+
+These instructions are incomplete in the sense that they do not
+indicate what are all the initial values of the memory locations they
+refer to.  To make complete programs we will choose to associate
+an instruction with a declaration of variables.  Programs will thus
+look as follows:
+\begin{verbatim}
+Variables 
+  x=10 y=0 s=1
+in
+while s < x do
+  s := 0; y:=y+1; z:=0;
+  while z < y do s := y+s; z:= z+1 done
+done
+\end{verbatim}
+
+Our programming language does not contain a conditional statement.
+This statement can be simulated with the help
+of while loops and describing the same language with an extra 
+conditional statement is not more difficult, just longer.
+
+\section{An interpreter, written in C}
+\subsection{Representing programs}
+In our interpreter, we want to have an abstract view of programs:
+we don't need to know whether programs were written all in one line or
+whether a lot of space was used to separate the location name from the
+assignment sign in an assignment instruction.  Actually, we don't even
+need to know whether assignments are written with {\tt :=} (as in Pascal)
+or {\tt =} (as in C).  The tradition is simply to describe programs
+as term structures, where each term has a label (to indicate what kind
+of term it is) and a collection of subterms.  For our simple programming
+language the various kinds of terms available are as follows:
+\begin{itemize}
+  \item {\tt VARIABLE\_LIST}, this term is used to hold all the variable
+   declarations at the beginning of a program.  Terms of this kind contain
+   a first subterm that describes the declaration of a single variable and
+   a second subterm that describes the rest of the declarations.  A variable
+   list is thus expected to be a nested collection of terms of kind
+   {\tt VARIABLE\_LIST},
+  \item {\tt VARIABLE\_VALUE}, this term is used to hold the pair of a variable
+   and a value in a single variable declaration.  Terms of this kind have
+   two subterms where the first one should be a variable and the second
+   should be a numeral.
+  \item {\tt NUMERAL}, this term is used to hold a number when it appears
+   in an assignment, a comparison or an addition.  Terms of this kind
+   contain an integer value,
+  \item {\tt VARIABLE}, this term is used to hold a memory location name.
+   Terms of this kind contain a string,
+  \item {\tt ADDITION}, this term is used to hold an addition.  Terms of
+   this kind have two subterms, which can themselves be other additions,
+   variables, or numerals,
+  \item {\tt GREATER}, this term is used to hold a comparison.  Terms
+   of this kind have two subterms, which can be additions, variables, or
+   numerals,
+  \item {\tt ASSIGNMENT}, this term is used to hold the instruction
+   assigning a value to a variable.  Terms of this kind contain two
+   subterms, where the first one is the variable being assigned to, and
+   the second is the expression that needs to be evaluated in order to
+   produce the value that is given to the variable,
+  \item {\tt SEQUENCE}, this term is used to hold two instructions that
+   should be executed one after the other.  Terms of this kind contain
+   two subterms, which can themselves be sequences, while terms, 
+   assignments, or skip statements,
+  \item {\tt WHILE}, this term is used to hold a while loop instruction.
+   Terms of this kind contain two subterms, where the first one is
+   a comparison (a term of the kind {\tt GREATER}) and the second one
+   is itself a while instruction, a sequence, an assignment, or a skip
+   statement,
+  \item {\tt SKIP}, this term is used to hold an instruction that does
+   nothing.  Terms of this kind have no subterms.
+\end{itemize}
+
+To keep track of these various kinds we define a collection of constant
+macros in our C program:
+
+\begin{verbatim}
+#define VARIABLE_LIST 1
+...
+#define WHILE 9
+#define SKIP 10
+\end{verbatim}
+
+We then define a data-structure that corresponds to these terms.  In
+this definition, we take into account the fact that a term contains
+either two subterms, a numeral, or a string of characters.
+
+\begin{verbatim}
+ typedef struct term {
+  short select;
+  union {
+    struct term **children;
+    int int_val;
+    char *string_val;
+  } term_body;
+} term;
+\end{verbatim}
+
+We then define a collection of functions that construct terms:
+the function {\tt numeral} takes an integer as argument and
+it constructs a term whose {\tt select} field is {\tt NUMERAL} and whose
+value is the given integer.  Similarly, a function {\tt sequence}
+takes two term arguments and construct a new term that represents the sequence
+of these two arguments.  In fact, all constructors rely on the following
+{\tt make\_term} function.
+\begin{verbatim}
+term *make_term(int tag) {
+  term *ptr;
+  if(!(ptr = (term *)malloc(sizeof(term)))) {
+    panic("allocation failed in make_term");
+  }
+  ptr->select = tag;
+  return ptr;
+}
+\end{verbatim}
+The {\tt panic} procedure used in this function simply reports the error
+message in terminates the interpreter.  The binary constructors rely on
+the following {\tt make\_binary\_term} function:
+\begin{verbatim}
+term *make_binary_term(int tag, term *i1, term *i2) {
+  term *ptr = make_term(tag);
+  if(!(ptr->term_body.children 
+           = (term **)malloc(sizeof(term*)*2))) {
+    panic("could not allocate memory in make_binary_term");
+  }
+  ptr->term_body.children[0] = i1;
+  ptr->term_body.children[1] = i2;
+  return ptr;
+}
+\end{verbatim}
+For instance, the {\tt variable} and {\tt addition} functions
+are defined as follows:
+\begin{verbatim}
+term *variable(char *s) {
+  term *ptr = make_term(VARIABLE);
+  ptr->term_body.string_val = s;
+  return ptr;
+}
+
+term *addition(term *i1, term *i2) {
+  make_binary_term(ADDITION, i1, i2);
+}
+\end{verbatim}
+
+Once we have defined all the constructors, we can combine them to build
+large terms.  For instance, the multiplication program is built by
+the following C expression:
+
+\begin{verbatim}
+sequence(assignment(variable("z"),numeral(0)),
+   term_while(greater(variable("x"),variable("z")),
+      sequence(
+       assignment(variable("t"),
+                  addition(variable("y"),variable("t"))),
+       assignment(variable("z"),
+                  addition(variable("z"),numeral(1))))))
+\end{verbatim}
+\subsection{Navigating in programs}
+When we have a term representing a program fragment, we access its
+sub-expressions using a function {\tt child} that has the following
+definition, such that executing
+\begin{verbatim}
+  child(assignment(variable("z"),numeral(1)),2)
+\end{verbatim}
+should return the same term as executing
+\begin{verbatim}
+  numeral(1)
+\end{verbatim}
+The function {\tt child} is defined as follows:
+\begin{verbatim}
+term *child(term *t, int rank) {
+  return (t->term_body.children[rank-1]);
+}
+\end{verbatim}
+
+We also define two functions {\tt variable\_name} and
+{\tt numeral\_value} to map terms of kind {\tt VARIABLE} and
+{\tt NUMERAL} to the values of type {\tt string} and {\tt int},
+respectively, that they contain:
+\begin{verbatim}
+char *variable_name(term *t) {
+  return(t->term_body.string_val);
+}
+
+int numeral_value(term *t) {
+  return(t->term_body.int_val);
+}
+\end{verbatim}
+\subsection{Execution environments}
+To simulate the execution of programs, we simply want to view their
+effect as modifying a collection of memory locations.  We don't need
+to know how these locations are laid out in memory, we simply need
+to record the fact that some variable is associated to some integer
+value.  To keep this record, we construct a simply linked list using terms
+of kind {\tt variable\_list} and {\tt variable\_value}.  We
+use the same kind of binary terms as for the program structure to
+represent these lists.  To represent the end of such a list, we use the
+conventional NULL pointer.
+
+With these conventions, we can build the representation of a state where
+the location {\tt x} contains 0 and the location {\tt y} contains 2 as
+follows:
+\begin{verbatim}
+variable_list(variable_value(variable("x"),numeral(0)),
+  variable_list(variable_value(variable("y"),numeral(2)),NULL))
+\end{verbatim}
+
+Given an arbitrary variable, we often need to compute the value
+associated to this variable in a given environment.  The following
+C function performs this task by navigating the list structure and
+stopping as soon as it finds a pair of a variable and a value that
+corresponds to the variable we are looking for and returns the
+corresponding integer.
+\begin{verbatim}
+int lookup(term *env, char *var) {
+  while(NULL != env) {
+    term *pair = child(env, 1);
+    if(strcmp(variable_name(child(pair, 1)), var)==0) {
+      return numeral_value(child(pair, 2));
+    } else {
+      env = child(env, 2);
+    }
+  }
+  fprintf(stderr, "%s : ", var);
+  panic("no such variable in environment for lookup");
+}
+\end{verbatim}
+In this function, we use the function {\tt strcmp} from the
+standard {\tt string} library of the C language.  This function
+is used to compare two strings, it returns 0 if, and only if, the two
+strings are the same.
+
+Similarly, we will also need to construct a new environment that
+only differs from a previous one in the fact the value of a single
+variable has changed.  We want this function to map the environment
+\begin{verbatim}
+variable_list(variable_value(variable("x"),numeral(0)),
+  variable_list(variable_value(variable("y"),numeral(2)),NULL)),
+\end{verbatim}
+the variable {\tt y} and the value {\tt 4} to the environment
+\begin{verbatim}
+variable_list(variable_value(variable("x"),numeral(0)),
+  variable_list(variable_value(variable("y"),numeral(4)),NULL)),
+\end{verbatim}
+
+
+Such a mapping is described with the following function:
+\begin{verbatim}
+term *update(term *env, char *var_name, term *val) {
+  if(NULL != env) {
+    term *var = child(child(env, 1), 1);
+    if(strcmp(variable_name(var), var_name) == 0) {
+      return(variable_list(variable_value(var, val),
+                           child(env, 2)));
+    } else {
+      return(variable_list(child(env, 1), 
+			   update(child(env, 2), var_name, val)));
+    }
+  } else {
+    fprintf(stderr, "%s : ", var_name);
+    panic("no such variable in environment for update");
+  }
+}
+\end{verbatim}
+\subsection{Evaluating expressions}
+Consider the following program:
+\begin{verbatim}
+x := 1;
+y := 2;
+x := (x + y) + 1;
+y := (x + y) + 1
+\end{verbatim}
+The first time the expression {\tt x + y} is executed, on the third line,
+the result should be be 4.  The second time this expression is executed,
+on the fourth line, the result should be 7.  The evaluation of expressions
+needs to take into account the value of variables.  This is the reason
+why we  have an environment data structure, to keep track of the
+value of all the variables used in the program.
+
+In our language there are three kinds of expressions.  For variables,
+we need to look in the environment to know the value that is currently
+recorded.  We can use the {\tt lookup} function that was defined in the
+previous section.
+
+When the expression we want to evaluate is numeral, the value is
+simply the value of this numeral.  On the other hand, when the
+expression is an addition, we need first to evaluate the two
+components of the expression.  This returns integer values that we can
+add to obtain the value of the whole addition expression.  Thus, the
+function that evaluates the expressions is a recursive function.
+This is easily described with the following function:
+\begin{verbatim}
+int evaluate(term *env, term *exp) {
+  int n1, n2;
+  switch(exp->select) {
+  case VARIABLE: return lookup(env, variable_name(exp));
+  case NUMERAL: return numeral_value(exp);
+  case ADDITION:
+    return (evaluate(env, child(exp, 1)) +
+            evaluate(env, child(exp, 2)));
+  }
+}
+\end{verbatim}
+We also need to evaluate comparison expressions and return a boolean value.
+The function that implements this simply needs to evaluate the two
+expressions that need to be compared in a given environment and then
+compare the integer values that are received.  Here is this function's
+code:
+\begin{verbatim}
+int evaluate_bool(term *env, term *exp) {
+  int n1 = evaluate(env, child(exp, 1));
+  int n2 = evaluate(env, child(exp, 2));
+  return (n1 > n2);
+}
+\end{verbatim}
+
+\subsection{Executing instructions}
+We now have enough functions to describe the behavior of the three instructions
+in our language.  We want to define a function {\tt execute} that takes
+two arguments, an environment and  an instruction.  For instance, when
+applied to the environment
+\begin{verbatim}
+variable_list(variable_value(variable("x"),numeral(0)),
+  variable_list(variable_value(variable("y"),numeral(2)),NULL)),
+and the instruction
+\begin{verbatim}
+  assignment(variable("x",addition(variable("y"),numeral(2)))
+\end{verbatim}
+we want this function {\tt execute} to return the following environment
+\begin{verbatim}
+variable_list(variable_value(variable("x"),numeral(0)),
+  variable_list(variable_value(variable("y"),numeral(4)),NULL)).
+\end{verbatim}
+\begin{enumerate}
+\item To execute an assignment instruction in a given environment,
+we simply need to evaluate the expression that occurs as this assignment's
+right-hand side (using the {\tt evaluate} function) and then to
+construct a new environment where only the assigned variable is changed
+(using the {\tt update} function),
+\item To execute a sequence of two instructions, we need to execute the
+first instruction and collect the resulting environment.  The second
+instruction must then be executed, but in that intermediate environment.
+\item To execute a while loop, we need to evaluate the condition as
+a boolean expression.  If the value of this expression is false, then
+we can return the input environment: the loop terminates without modifying
+its execution environment.  If the value of the expression is true, then
+the body of the while loop needs to be executed, the resulting environment
+must be collected, and the while loop must be executed again, starting
+from that environment. 
+\end{enumerate}
+These behaviors can be expressed very neatly by a simple composition of
+the functions, including the recursive calls of the execution function
+that is being defined:
+\begin{verbatim}
+term *execute(term *env, term *inst) {
+  switch(inst->select) {
+  case ASSIGNMENT:
+    return update(env, 
+                  variable_name(child(inst, 1)),
+                  numeral(evaluate(env,child(inst, 2))));
+  case SEQUENCE:
+    return execute(execute(env,child(inst, 1)),child(inst, 2));
+  case WHILE:
+    if(evaluate_bool(env,child(inst, 1))) {
+      return execute(execute(env,child(inst, 2)), inst);
+    } else {
+      return env;
+    }
+  }
+}
+\end{verbatim}
+\subsection{Practical aspects: adding a parser}
+It is not practical to test our interpreter if we have to build C
+expressions by combining the term constructors in a C program, recompile
+this C program and observe the result with the navigating functions.
+A practical alternative is to define a parser to read in programs written
+in a readable syntax and combine this parser with a the {\tt execute} 
+function.  We use the Bison tool to add a simple parser to this interpreter.
+For instance, the parsing rules for instructions have the following
+shape
+\begin{verbatim}
+nst: identifier T_ASSIGN exp {$$ = assignment($1,$3); }
+|  inst T_SCOLUMN inst {$$ = sequence($1,$3); }
+|  T_WHILE b_exp T_DO inst T_DONE {$$ = term_while($2,$4); }
+|  T_SKIP { $$ = skip(); }
+|  T_OPEN_B exp T_CLOSE_B { $$ = $2; }
+\end{verbatim}
+For most parsing rules, the associated semantic action is simply a
+term constructor, except for rules that are concerned with parentheses or
+brackets, like the last parsing rule above.
+
+The semantic rule for the program construct triggers
+the execution of the program with the initial state given by the
+list of variables that was parsed (this list is reversed, because
+our parser stores the variable declarations in the wrong order).
+\begin{verbatim}
+program : T_VARIABLES environment T_IN inst T_END
+{ print_env(execute(revert_env($2), $4)); exit(0); }
+;
+\end{verbatim}
+\section{The interpreter in OCaml}
+In the OCaml language, defining the terms and the constructors is
+directly done with a type definition:
+\begin{verbatim}
+type exp = 
+  Addition of exp*exp | Numeral of int | Variable of string;;
+type b_exp = Greater of exp*exp;;
+type inst = 
+  Assignment of string * exp | Sequence of inst * inst
+| While of b_exp * inst | Skip;;
+\end{verbatim}
+We simply use the pre-defined type of lists to represent environments,
+in fact we use lists of pairs, where the first component is a string
+and the second argument is a integer.
+\begin{verbatim}
+type environment = (string * int) list;;
+\end{verbatim}
+With this data-structure, the functions {\tt lookup} and {\tt update}
+are defined as follows:
+\begin{verbatim}
+let rec lookup (env:environment) (var:string) =
+  match env with
+      [] -> failwith(var ^ 
+             " : no such variable in environment for lookup")
+    | (a,v)::tl -> if a = var then v else lookup tl var;;
+
+let rec update (env:environment) (var:string) (n:int) =
+  match env with
+      [] -> failwith(var ^
+             " : no such variable in environment for update")
+    | ((a,v) as pair)::tl ->
+        if a = var then 
+          (a,n)::tl 
+        else
+          pair::(update tl var n);;
+\end{verbatim}
+The programming style of OCaml relies on pattern matching construct,
+with specific syntax to describe lists.  Thus the expression
+\begin{alltt}
+  match env with [] -> \(e\sub{1}\) | a::tl -> \(e\sub{2}\)
+\end{alltt}
+means ``if the input data is an empty list, then return the
+value of \(e_1\), otherwise, let {\tt a} be the first element of
+the list and {\tt tl} be the second element, compute the value
+of \(e_2\), which may depend on the value of {\tt a} and {\tt tl},
+and return this value.  In the functions, we know that the elements
+of the lists being processed are pairs and the pattern-matching
+construct also makes it possible to access the components of
+the first pair element concisely.
+
+The pattern-matching construct makes it possible to write the
+functions more concisely than in the C programming language.  This
+conciseness also helps in the description of the {\tt evaluate},
+{\tt b\_evaluate}, and {\tt execute} functions.
+\begin{verbatim}
+let rec evaluate (env:environment)(e:exp) =
+  match e with
+      Numeral n -> n
+    | Variable s -> lookup env s
+    | Addition(e1,e2) -> evaluate env e1 + evaluate env e2;;
+
+let evaluate_bool (env:environment)(e:b_exp) =
+  match e with
+      Greater(e1,e2) -> evaluate env e1 > evaluate env e2;;
+
+let rec execute (env:environment)(i:inst) =
+  match i with
+      Skip -> env
+    | Assignment(s,e) -> update env s (evaluate env e)
+    | Sequence(i1,i2) -> execute (execute env i1) i2
+    | While(b,i) as it ->
+        if (evaluate_bool env b) then
+            execute (execute env i) it
+        else
+            env;;
+\end{verbatim}
+The OCaml tools suite also provide means to define parsers.  We
+used the {\tt ocamlyacc} tool which is close to {\tt bison}.  In all,
+we are able to define the same interpreter more concisely with the
+OCaml language.
+
+\section{An interpreter written in Prolog}
+The Prolog programming style relies on the possibility to define
+predicates with multiple arguments.  Very often, these predicates
+can be used to describe functions, when the last argument is actually
+viewed as the result of processing the previous argument.
+
+Predicates are usually described in a style that is closed to OCaml's
+pattern-matching.  Thus, we will consider a predicate {\tt lookup}
+with three arguments, so that {\tt lookup(E,X,V)} can be read as
+``the value of {\tt X} in the environment {\tt E} is {\tt V}.
+This predicated can actually be defined with the following two clauses.
+\begin{verbatim}
+lookup([(X,V)|_], X, V) :- ! .
+lookup([(Y,_)|Tl], X, V) :- lookup(Tl, X, V).
+\end{verbatim}
+Prolog's treatement of definitions is that when a question is asked, the
+defining clauses are tried to solve the question.  The bang ponctuation
+means that no other clause should be tested if this one succeeded.  In
+effect, this ensures that the second clause is applied only when {\tt X}
+and {\tt Y} have different values.  The {\em anonymous} variable ``{\tt \_}''
+is used to indicate that the value found in the question where this
+variable lies is not important.  The two clauses defining {\tt lookup}
+can be read as follows: ``in any environment that is a list with
+a first pair ({\tt X}, {\tt V}), the value of the variable {\tt X} is {\tt V}.
+When the previous rule does not apply (when {\tt X} is different from {\tt Y},
+the value of {\tt Y} in an environment that starts with a pair
+of {\tt Y} and any value and whose tail is an environment {\tt Tl},
+the value of the variable {\tt X} is the same as the value it would
+have in the environment {\tt Tl}.
+
+Thus, in Prolog, the notation {\tt :-} can be read as an {\em if}
+construct.
+
+We can define the operation of updating environments similarly:
+\begin{verbatim}
+update([(X,_)|Tl], X, V1, [(X,V1)|Tl]) :- !.
+update([(Y,V)|Tl], X, V1, [(Y,V)|Tl1]) :- 
+  update(Tl, X, V1, Tl1).
+\end{verbatim}
+
+\end{document}
