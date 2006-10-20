@@ -41,8 +41,7 @@ identifier : ID { $$=variable(lextext); }
 variable_value : identifier num { $$=variable_value($1,$2);}
 ;
 environment : variable_value { $$ = variable_list($1, NULL); }
-| environment T_SCOLUMN variable_value { $$ = variable_list($3, $1);
-   printf ("foo\n"); }
+| environment T_SCOLUMN variable_value { $$ = variable_list($3, $1); }
 ;
 inst: identifier T_ASSIGN exp {$$ = assignment($1,$3); }
 |  inst T_SCOLUMN inst {$$ = sequence($1,$3); }
