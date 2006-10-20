@@ -1,0 +1,17 @@
+3[/usr/include/stdio.h:201.1]
+3[/usr/include/stdio.h:230.1]
+3[/usr/include/stdlib.h:119.1]
+3[/usr/include/stdio.h:201.1]
+Note: strictPointer mode is OFF
+Note: stack grows decreasingly!
+Treeadd with 20 levels
+About to enter TreeAlloc
+About to enter TreeAdd
+Iteration 0...done
+Received result of 1048575
+Total time: 47.640 u, 1.080 s
+Call init functions: 0.000 u, 0.000 s
+Process externs: 0.000 u, 0.010 s
+Prog_main: 47.640 u, 1.060 s
+processReturns : tot 5242883, empty 5242878, common 5
+47.64u 1.10s 0:52.27 93.2%

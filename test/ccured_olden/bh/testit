@@ -1,0 +1,21 @@
+#!/bin/sh
+# test a bh binary
+
+if [ "$1" = "" ]; then 
+  echo "usage: $0 ./code.exe"
+  exit 0
+fi
+
+echo "running: $1 <data.in >data.out 2>/dev/null"
+if ! $1 <data.in >data.out 2>/dev/null; then
+  echo "$1 failed directly"
+  exit 2
+fi
+
+if ! perl ./normalize.pl <data.out | diff - data.orig.out >/dev/null; then
+  echo "$1 got the wrong answer"
+  exit 4
+else
+  echo "$1 seems to work"
+fi
+

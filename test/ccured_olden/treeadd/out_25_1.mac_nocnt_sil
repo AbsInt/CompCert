@@ -1,0 +1,7 @@
+Some output (through starting TreeAlloc), then:
+
+[1]    Segmentation fault            treeadd-mac_nocnt_sil.instr 25 1 >& out_25_1.mac_nocnt_sil
+656.30u 109.95s 12:55.55 98.8%
+
+out_25_1: about 5-6 minutes (lost the output)
+

@@ -1,0 +1,22 @@
+#!/bin/sh
+# test a treeadd binary
+
+if [ "$1" = "" ]; then
+  echo "usage: $0 ./treeadd.exe"
+  exit
+fi
+
+# all of treeadd's output is to stderr
+echo "running: $1 21 1 2>output"
+if ! $1 21 1 2>output; then
+  echo "$1 failed directly"
+  exit 2
+fi
+
+if ! diff out.orig output >out.diff; then
+  echo "$1 got the wrong answer. See out.diff"
+  exit 4
+else
+  echo "$1 seems to work"
+fi
+ 

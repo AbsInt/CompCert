@@ -1,0 +1,6 @@
+Treeadd with 20 levels
+About to enter TreeAlloc
+About to enter TreeAdd
+Iteration 0...done
+Received result of 1048575
+48.41u 1.28s 0:49.87 99.6%

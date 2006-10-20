@@ -1,0 +1,28 @@
+58.54u 1.33s 1:00.23 99.4%
+
+[/usr/include/stdio.h:201.1] WARNING: extern with incomplete type not initialized
+[/usr/include/stdio.h:230.1] WARNING: extern with incomplete type not initialized
+[/usr/include/stdlib.h:119.1] WARNING: extern with incomplete type not initialized
+[/usr/include/stdio.h:201.1] WARNING: extern with incomplete type not initialized
+Note: strictPointer mode is OFF
+Note: stack grows decreasingly!
+Treeadd with 20 levels
+About to enter TreeAlloc
+About to enter TreeAdd
+Iteration 0...done
+Received result of 1048575
+Total time: 58.540 u, 1.310 s
+Call init functions: 0.000 u, 0.000 s
+Process externs: 0.000 u, 0.010 s
+Prog_main: 58.530 u, 1.300 s
+processReturns : tot 5242883, empty 5242878, common 5
+Macro counts (function counts):
+verifyPtr : char 0(0), aggr 0(0), etc 6291452(3145725)
+verifyTag : char 0(0), aggr 0(0), etc 19922937(0)
+  copyTag : char 0(0), aggr 0(0), etc 16777218(3145725)
+      setScalarTag : char 0(0), etc 11534344(0)
+setScalarUninitTag : char 0(0), etc 8388607(0)
+processArgTag : scalar 5242883(0) (promo 0), aggr 0(0)
+
+58.54u 1.33s 1:00.23 99.4%
+

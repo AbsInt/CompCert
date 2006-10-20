@@ -1,0 +1,13 @@
+Hash entry size = 16
+Hash size = 20
+Vertex size = 20
+Making graph of size 2048
+Make phase 1: Creating hash tables
+Make phase 3: Creating graph
+4192256 edges inserted
+Make returning
+Graph completed
+About to compute mst 
+Compute phase 1
+Compute phase 2
+MST has cost 13615

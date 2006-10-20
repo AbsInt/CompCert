@@ -1,0 +1,15 @@
+208.87u 14.48s 13:01.91 28.5%
+
+Treeadd with 22 levels
+About to enter TreeAlloc
+About to enter TreeAdd
+Iteration 0...done
+Received result of 4194303
+Total time: 208.870 u, 14.430 s
+Call init functions: 0.000 u, 0.000 s
+Process externs: 0.000 u, 0.000 s
+Prog_main: 208.850 u, 14.430 s
+processReturns : tot 20971523, empty 20971518, common 5
+
+208.87u 14.48s 13:01.91 28.5%
+

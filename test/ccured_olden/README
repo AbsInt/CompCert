@@ -1,0 +1,19 @@
+Olden v1.0 benchmark suite
+January 3, 1995
+
+Martin C. Carlisle
+
+see COPYRIGHT for copyright information
+
+Contains plain versions of the 10 benchmarks used in the PPoPP paper.
+
+KNOWN BUGS: (updated June 10, 1996)
+
+line 66 of health/health.c should read:
+    new->hosp.personnel = (int)pow(2.0, (double) (level - 1));
+instead of:
+    new->hosp.personnel = (int)pow(2, level - 1);
+
+This patch has not been applied and is not reflected in the data in the
+PPoPP submission.
+

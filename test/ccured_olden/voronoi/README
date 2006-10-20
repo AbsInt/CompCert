@@ -1,0 +1,22 @@
+/* For copyright information, see olden_v1.01/COPYRIGHT */
+**********************
+olden_v1.01/benchmarks/voronoi/README
+June 1996
+Martin C. Carlisle
+
+this directory contains the Voronoi Diagram benchmark:
+
+L. Guibas and J. Stolfi.  "General Subdivisions and Voronoi Diagrams"
+ACM Trans. on Graphics 4(2):74-123, 1985.
+
+Adapted for Olden by Martin C. Carlisle
+
+**********************
+
+Makefile - use "make voronoi" to create executable
+
+args.c - process command line args
+vector.c - vector math stuff
+newvor.c - main routine
+defines.h - definitions
+output.c - used for outputting results.

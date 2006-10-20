@@ -1,0 +1,62 @@
+README  README  README  README  README  README  README  README  README  README
+
+								  22 June 1993
+
+    This is the fourth release of the hierarchical N-body program.  The
+algorithm used to compute gravitational forces has asymptotic complexity of
+O(N log N).  This is achieved by building a tree structure to represent the
+mass distribution and estimating forces by a partial recursive descent of this
+tree.  See "A Hierarchical O(N log N) Force Calculation Algorithm", by Joshua
+Barnes and Piet Hut, Nature, 324, 446, and "Error Analysis of a Tree Code", by
+Joshua Barnes and Piet Hut, Astrophysical Journal Supplement, 70, 389, for
+more information.
+
+    The code has been rewritten in ANSI C for greater portability.  Prototypes
+have been provided for all functions.  Several functions associated with tree
+construction have been simplified; the resulting code should be easier to
+mantain.  Force calculation has been made more accurate by incorporating a new
+opening-angle criterion, and faster by adding additional pointers to the tree
+structure.  Quadrupole corrections for body-cell interactions are now included
+as a run-time option; see "Performance Characteristics of Tree Codes", by Lars
+Hernquist, Astrophysical Journal Supplement, 64, 715.
+
+    The source files for the tree code have been bundled together for ease of
+distribution.  On a UNIX system, you can split this file simply by invoking
+the Bourne shell on it (use the sh command).  On other systems, you may have
+to edit this file and split it up by hand; note that file X is delimited by
+lines containing the message End of X.  Once you have split this file, you can
+compile it by running make on a UNIX system.  On other systems, you are on
+your own; take a look at the Makefile for hints.  Running the program with the
+default input parameters (type a <CR> to all prompts) will start a short
+calculation with a few particles to test things out.
+
+    These sources include a few files which you may find generally useful:
+"stdinc.h", a standard include file with common definitions, "vectmath.h", a
+set of macros for elementary vector and matrix operations, "real.h", a set of
+definitions for floating-point code, "getparam.c", a simple, standardized user
+interface, and "util.c", some miscellaneous utilities.  These are part of a
+larger collection of software for numerical experiments with gravitating
+systems.
+
+    NO WARRANTY is offered on the software supplied here -- use it at your own
+risk.  NO RESTRICTIONS are imposed on use and distribution of the code -- you
+are free to use this software for any application, modify it in any way, use
+pieces in other programs, and give it away to anyone else.  You are encouraged
+to extend these rights to others who receive this software from you, following
+the philosophy and intentions of the Free Software Foundation.
+
+    You are asked to include a brief acknowledgement in any scientific papers
+you write using this code; I would appreciate receiving preprints or reprints
+of such papers.  I would also appreciate receiving reports of bugs and/or
+problems encountered in porting this code to other machines.
+
+    Have fun and stay in touch.
+
+	Joshua E. Barnes			barnes@zeno.ifa.hawaii.edu
+
+	Institute for Astronomy			(808) 956-8138
+	University of Hawaii
+	2680 Woodlawn Drive
+	Honolulu, Hawaii  96822
+
+README  README  README  README  README  README  README  README  README  README

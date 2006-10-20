@@ -1,0 +1,23 @@
+/* OLDEN parallel C for dynamic structures: compiler, runtime system
+   and benchmarks
+   
+   Copyright (C) 1994-1996 by Anne Rogers (amr@cs.princeton.edu) and
+   Martin Carlisle (mcc@cs.princeton.edu)
+   ALL RIGHTS RESERVED.
+
+   OLDEN is distributed under the following conditions:
+
+     You may make copies of OLDEN for your own use and modify those copies.
+
+     All copies of OLDEN must retain our names and copyright notice.
+
+     You may not sell OLDEN or distribute OLDEN in conjunction with a
+     commercial product or service without the expressed written consent of
+     Anne Rogers and Martin Carlisle.
+
+   THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+   IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+   PURPOSE.
+*/
+

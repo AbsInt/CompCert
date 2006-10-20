@@ -1,0 +1,20 @@
+/* For copyright information, see olden_v1.0/COPYRIGHT */
+**********************
+olden_v1.0/benchmarks/health/README
+January 3, 1995
+Martin C. Carlisle
+
+this directory contains the health benchmark:
+
+G. Lomow, J. Cleary, B. Unger and D. West.  "A Performance Study of Time Warp"
+In SCS Multiconference on Distributed Simulation, pages 50-55, Feb. 1988.
+
+as implemented for Olden by Gordon C. Mackenzie
+**********************
+
+Makefile - use "make health" to create executable
+
+args.c - process command line args
+health.[ch] - health routines
+list.c - list routines
+poisson.c - random routines

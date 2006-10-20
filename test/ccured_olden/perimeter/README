@@ -1,0 +1,20 @@
+/* For copyright information, see olden_v1.01/COPYRIGHT */
+**********************
+olden_v1.01/benchmarks/perimeter/README
+June 1996
+Martin C. Carlisle
+
+this directory contains the Perimeter benchmark:
+
+H. Samet.  "Computing Perimeters of Regions in Images Represented by Quad-
+Trees".  IEEE Trans. on Pattern Analysis and Machine Intelligence 
+PAMI-3(6), Nov. 1981
+
+as implemented for Olden by Martin C. Carlisle
+**********************
+
+Makefile - use "make perm" to create executable
+
+args.c - process command line args
+main.c,perimeter.h - main routines
+maketree.c - creates random quad-tree
