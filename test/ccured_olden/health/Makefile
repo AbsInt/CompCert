@@ -28,7 +28,7 @@ LIBPATH		=
 # ------- gcc ------
 else
 CC		= gcc -arch ppc
-CCOMP=../../../../ccomp
+CCOMP=../../../ccomp
 CCOMPFLAGS=-dump-c
 
 CFLAGS		= -O3

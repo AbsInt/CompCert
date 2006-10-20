@@ -8,7 +8,7 @@ PROGS		= main em3d make_graph util args ssplain
 OLDENHOME	= /tmp/olden
 
 CC		= gcc -arch ppc
-CCOMP		= ../../../../ccomp
+CCOMP		= ../../../ccomp
 CCOMPFLAGS=-dump-c
 
 SRC		= .c

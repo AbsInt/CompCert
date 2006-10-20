@@ -4,7 +4,7 @@ BINARY		= bisort
 PROGS		= bitonic args ssplain
 
 CC		= gcc -arch ppc
-CCOMP=../../../../ccomp
+CCOMP=../../../ccomp
 CCOMPFLAGS=-dump-c
 
 SRC		= .c

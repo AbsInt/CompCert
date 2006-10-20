@@ -19,7 +19,7 @@ LIBPATH		=
 else
 CC		= gcc -arch ppc          # MacOS X
 #CC=gcc                                  # other systems
-CCOMP=../../../../ccomp
+CCOMP=../../../ccomp
 CCOMPFLAGS=-dump-c
 
 SRC		= .c

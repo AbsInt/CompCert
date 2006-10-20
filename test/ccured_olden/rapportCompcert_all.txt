@@ -3,16 +3,8 @@
 
 ../../../../ccomp -dump-c  io.c
 /usr/include/stdio.h:250: Unsupported C feature: integer type specifier
--> int      fclose(FILE *);    ?????
+-> int      fclose(FILE );    ?????
 make: *** [io.compcert] Error 2
-
-../../../../ccomp -dump-c util.c
-In file included from /usr/include/machine/param.h:30,
-                 from /usr/include/sys/param.h:104,
-                 from util.c:17:
-/usr/include/ppc/param.h:111:2: error: #error code not ported to little endian targets yet
-Error during preprocessing.
-make: *** [util.compcert] Error 2
 
 ../../../../ccomp -dump-c getparam.c
 /usr/include/stdio.h:171: Warning: array type of unspecified size

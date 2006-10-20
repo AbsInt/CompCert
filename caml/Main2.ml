@@ -47,7 +47,7 @@ let save_csyntax = ref false
 let preprocess file =
   let temp = Filename.temp_file "compcert" ".i" in
   let cmd =
-    sprintf "gcc %s -D__COMPCERT__ -D__ppc__ -E %s > %s"
+    sprintf "gcc -arch ppc %s -D__COMPCERT__ -E %s > %s"
       (String.concat " " (List.rev !prepro_options))
       file
       temp in

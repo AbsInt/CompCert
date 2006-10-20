@@ -46,7 +46,7 @@ EXEOUT = -o
 CFLAGS += -DPLAIN
 CONLY  = -c
 CC     = gcc -arch ppc
-CCOMP=../../../../ccomp
+CCOMP=../../../ccomp
 CCOMPFLAGS=-dump-c
 
 endif

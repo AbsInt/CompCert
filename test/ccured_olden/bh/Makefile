@@ -16,7 +16,7 @@ CFLAGS = -DDOUBLEPREC -O3
 LDFLAGS = -O3
 
 # CompCert
-CCOMP=../../../../ccomp
+CCOMP=../../../ccomp
 CCOMPFLAGS=-dump-c
 
 CC=gcc -arch ppc                         # MacOS X
