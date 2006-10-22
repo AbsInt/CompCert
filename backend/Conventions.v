@@ -676,29 +676,6 @@ Proof.
   intros; simpl. tauto.
 Qed.
 
-(** ** Location of arguments to external functions *)
-
-Definition loc_external_arguments (s: signature) : list mreg :=
-  List.map
-    (fun l => match l with R r => r | S _ => IT1 end)
-    (loc_arguments s).
-
-Definition sig_external_ok (s: signature) : Prop :=
-  forall sl, ~In (S sl) (loc_arguments s).
-
-Lemma loc_external_arguments_loc_arguments:
-  forall s, 
-  sig_external_ok s ->
-  loc_arguments s = List.map R (loc_external_arguments s).
-Proof.
-  intros. unfold loc_external_arguments.
-  rewrite list_map_compose.
-  transitivity (List.map (fun x => x) (loc_arguments s)).
-  symmetry; apply list_map_identity.
-  apply list_map_exten; intros.
-  destruct x. auto. elim (H _ H0).
-Qed.
-
 (** ** Location of argument and result of dynamic allocation *)
 
 Definition loc_alloc_argument := R3.

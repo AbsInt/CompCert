@@ -637,6 +637,21 @@ Proof.
   apply sym_not_equal. apply H; auto.
 Qed.
 
+Lemma list_disjoint_dec:
+  forall (A: Set) (eqA_dec: forall (x y: A), {x=y} + {x<>y}) (l1 l2: list A),
+  {list_disjoint l1 l2} + {~list_disjoint l1 l2}.
+Proof.
+  induction l1; intros.
+  left; red; intros. elim H.
+  case (In_dec eqA_dec a l2); intro.
+  right; red; intro. apply (H a a); auto with coqlib. 
+  case (IHl1 l2); intro.
+  left; red; intros. elim H; intro. 
+    red; intro; subst a y. contradiction.
+    apply l; auto.
+  right; red; intros. elim n0. eapply list_disjoint_cons_left; eauto.
+Defined.
+
 (** [list_norepet l] holds iff the list [l] contains no repetitions,
   i.e. no element occurs twice. *)
 
@@ -658,7 +673,7 @@ Proof.
   right. red; intro. inversion H. contradiction. 
   left. constructor; auto.
   right. red; intro. inversion H. contradiction.
-Qed.
+Defined.
 
 Lemma list_map_norepet:
   forall (A B: Set) (f: A -> B) (l: list A),
@@ -801,5 +816,32 @@ Lemma list_drop2_norepet:
 Proof.
   intros. destruct l; simpl. constructor.
   destruct l; simpl. constructor. inversion H. inversion H3. auto.
+Qed.
+
+Lemma list_map_drop1:
+  forall (A B: Set) (f: A -> B) (l: list A), list_drop1 (map f l) = map f (list_drop1 l).
+Proof.
+  intros; destruct l; reflexivity.
+Qed.
+
+Lemma list_map_drop2:
+  forall (A B: Set) (f: A -> B) (l: list A), list_drop2 (map f l) = map f (list_drop2 l).
+Proof.
+  intros; destruct l. reflexivity. destruct l; reflexivity.
+Qed.
+
+(** * Definitions and theorems over boolean types *)
+
+Definition proj_sumbool (P Q: Prop) (a: {P} + {Q}) : bool :=
+  if a then true else false.
+
+Implicit Arguments proj_sumbool [P Q].
+
+Coercion proj_sumbool: sumbool >-> bool.
+
+Lemma proj_sumbool_true:
+  forall (P Q: Prop) (a: {P}+{Q}), proj_sumbool a = true -> P.
+Proof.
+  intros P Q a. destruct a; simpl. auto. congruence.
 Qed.
 

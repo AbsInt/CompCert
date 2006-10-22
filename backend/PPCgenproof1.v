@@ -442,40 +442,54 @@ Proof.
   destruct sres. destruct t; reflexivity. reflexivity.
 Qed.
 
-Remark list_map_drop1:
-  forall (A B: Set) (f: A -> B) (l: list A), list_drop1 (map f l) = map f (list_drop1 l).
-Proof.
-  intros; destruct l; reflexivity.
-Qed.
-
-Remark list_map_drop2:
-  forall (A B: Set) (f: A -> B) (l: list A), list_drop2 (map f l) = map f (list_drop2 l).
-Proof.
-  intros; destruct l. reflexivity. destruct l; reflexivity.
-Qed.
-
-Lemma loc_external_arguments_rec_match:
-  forall tyl iregl fregl ofs,
+Lemma extcall_args_match:
+  forall ms m sp rs,
+  agree ms sp rs ->
+  forall tyl iregl fregl ofs args,
   (forall r, In r iregl -> mreg_type r = Tint) ->
   (forall r, In r fregl -> mreg_type r = Tfloat) ->
-  PPC.loc_external_arguments_rec tyl (map ireg_of iregl) (map freg_of fregl) =
-  List.map
-    (fun l => preg_of (match l with R r => r | S _ => IT1 end))
-    (Conventions.loc_arguments_rec tyl iregl fregl ofs).
+  Mach.extcall_args ms m sp (Conventions.loc_arguments_rec tyl iregl fregl ofs) args ->
+  PPC.extcall_args rs m tyl (List.map ireg_of iregl) (List.map freg_of fregl) (4 * ofs) args.
 Proof.
-  induction tyl; intros; simpl.
-  auto.
-  destruct a; simpl; apply (f_equal2 (@cons preg)). 
-  destruct iregl; simpl. 
-  reflexivity. unfold preg_of; rewrite (H m); auto with coqlib.
-  rewrite list_map_drop1. apply IHtyl. 
-  intros; apply H; apply list_drop1_incl; auto. 
-  assumption.
-  destruct fregl; simpl. 
-  reflexivity. unfold preg_of; rewrite (H0 m); auto with coqlib.
-  rewrite list_map_drop1. rewrite list_map_drop2. apply IHtyl. 
-  intros; apply H; apply list_drop2_incl; auto. 
-  intros; apply H0; apply list_drop1_incl; auto. 
+  induction tyl; intros.
+  inversion H2; constructor.
+  destruct a. 
+  (* integer case *)
+  destruct iregl as [ | ir1 irl]. 
+  (* stack *)
+  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
+  constructor. replace (rs GPR1) with sp. assumption. 
+  eapply sp_val; eauto. 
+  change (@nil ireg) with (ireg_of ## nil). 
+  replace (4 * ofs + 4) with (4 * (ofs + 1)) by omega. 
+  apply IHtyl; auto. 
+  (* register *)
+  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
+  simpl map. econstructor. eapply ireg_val; eauto.
+  apply H0; simpl; auto. 
+  replace (4 * ofs + 4) with (4 * (ofs + 1)) by omega. 
+  apply IHtyl; auto. 
+  intros; apply H0; simpl; auto.
+  (* float case *)
+  destruct fregl as [ | fr1 frl]. 
+  (* stack *)
+  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
+  constructor. replace (rs GPR1) with sp. assumption. 
+  eapply sp_val; eauto. 
+  change (@nil freg) with (freg_of ## nil). 
+  replace (4 * ofs + 8) with (4 * (ofs + 2)) by omega. 
+  rewrite list_map_drop2. 
+  apply IHtyl; auto. 
+  intros. apply H0. apply list_drop2_incl. auto. 
+  (* register *)
+  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
+  simpl map. econstructor. eapply freg_val; eauto.
+  apply H1; simpl; auto. 
+  replace (4 * ofs + 8) with (4 * (ofs + 2)) by omega. 
+  rewrite list_map_drop2.
+  apply IHtyl; auto. 
+  intros; apply H0. apply list_drop2_incl. auto.
+  intros; apply H1; simpl; auto.
 Qed.
 
 Ltac ElimOrEq :=
@@ -488,14 +502,17 @@ Ltac ElimOrEq :=
        let H := fresh in (intro H; contradiction)
   end.
 
-Lemma loc_external_arguments_match:
-  forall sg,
-  PPC.loc_external_arguments sg = List.map preg_of (Conventions.loc_external_arguments sg).
+Lemma extcall_arguments_match:
+  forall ms m sp rs sg args,
+  agree ms sp rs ->
+  Mach.extcall_arguments ms m sp sg args ->
+  PPC.extcall_arguments rs m sg args.
 Proof.
-  intros. destruct sg as [sgargs sgres]; unfold loc_external_arguments, Conventions.loc_external_arguments.
-  rewrite list_map_compose. unfold Conventions.loc_arguments.
-  rewrite <- loc_external_arguments_rec_match.
-  reflexivity.
+  unfold Mach.extcall_arguments, PPC.extcall_arguments; intros.
+  change (extcall_args rs m sg.(sig_args)
+    (List.map ireg_of Conventions.int_param_regs)
+    (List.map freg_of Conventions.float_param_regs) (4 * 6) args).
+  eapply extcall_args_match; eauto. 
   intro; simpl; ElimOrEq; reflexivity.  
   intro; simpl; ElimOrEq; reflexivity.  
 Qed.

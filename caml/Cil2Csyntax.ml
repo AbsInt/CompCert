@@ -160,17 +160,6 @@ let globals_for_strings globs =
     (fun s id l -> CList.Coq_cons(global_for_string s id, l))
     stringTable globs
 
-(** Checking restrictions on external functions *)
-
-let acceptableExtFun targs =
-  let rec acceptable nint nfloat = function
-  | Tnil -> true
-  | Tcons(Tfloat _, rem) ->
-      nfloat > 0 && acceptable (nint - 2) (nfloat - 1) rem 
-  | Tcons(_, rem) ->
-      nint > 0 && acceptable (nint - 1) nfloat rem
-  in acceptable 8 10 targs
-
 (** ** Handling of stubs for variadic functions *)
 
 let stub_function_table = Hashtbl.create 47
@@ -185,8 +174,6 @@ let register_stub_function name tres targs =
   try
     (stub_name, Hashtbl.find stub_function_table stub_name)
   with Not_found ->
-    if not (acceptableExtFun targs) then
-      warning (name ^ ": too many parameters for a variadic function, will fail during Cminor -> PPC translation");
     let rec types_of_types = function
       | Tnil -> Tnil
       | Tcons(Tfloat _, tl) -> Tcons(Tfloat F64, types_of_types tl)
@@ -864,8 +851,6 @@ let convertExtFun v =
   updateLoc(v.vdecl);
   match convertTyp v.vtype with
   | Tfunction(args, res) ->
-      if not (acceptableExtFun args) then
-        warning (v.vname ^ ": too many parameters for an external function, will fail during Cminor -> PPC translation");
       let id = intern_string v.vname in
       Datatypes.Coq_pair (id, External(id, args, res))
   | _ ->

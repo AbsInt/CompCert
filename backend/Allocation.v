@@ -412,15 +412,7 @@ Definition transf_function (f: RTL.function) : option LTL.function :=
   end.
 
 Definition transf_fundef (fd: RTL.fundef) : option LTL.fundef :=
-  match fd with
-  | External ef =>
-      if type_external_function ef then Some (External ef) else None
-  | Internal f =>
-      match transf_function f with
-      | None => None
-      | Some tf => Some (Internal tf)
-      end
-  end.
+  transf_partial_fundef transf_function fd.
 
 Definition transf_program (p: RTL.program) : option LTL.program :=
   transform_partial_program transf_fundef p.

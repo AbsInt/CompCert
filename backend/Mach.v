@@ -143,6 +143,26 @@ Definition find_function (ros: mreg + ident) (rs: regset) : option fundef :=
       end
   end.
 
+(** Extract the values of the arguments of an external call. *)
+
+Inductive extcall_arg: regset -> mem -> val -> loc -> val -> Prop :=
+  | extcall_arg_reg: forall rs m sp r,
+      extcall_arg rs m sp (R r) (rs r)
+  | extcall_arg_stack: forall rs m sp ofs ty v,
+      load_stack m sp ty (Int.repr (4 * ofs)) = Some v ->
+      extcall_arg rs m sp (S (Outgoing ofs ty)) v.
+
+Inductive extcall_args: regset -> mem -> val -> list loc -> list val -> Prop :=
+  | extcall_args_nil: forall rs m sp,
+      extcall_args rs m sp nil nil
+  | extcall_args_cons: forall rs m sp l1 ll v1 vl,
+      extcall_arg rs m sp l1 v1 -> extcall_args rs m sp ll vl ->
+      extcall_args rs m sp (l1 :: ll) (v1 :: vl).
+
+Definition extcall_arguments
+   (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
+  extcall_args rs m sp (Conventions.loc_arguments sg) args.
+
 (** [exec_instr ge f sp c rs m c' rs' m'] reflects the execution of
   the first instruction in the current instruction sequence [c].  
   [c'] is the current instruction sequence after this execution.
@@ -299,7 +319,7 @@ with exec_function:
   | exec_funct_external:
       forall ef parent args res rs1 rs2 m t,
       event_match ef args t res ->
-      args = rs1##(Conventions.loc_external_arguments ef.(ef_sig)) ->
+      extcall_arguments rs1 m parent ef.(ef_sig) args ->
       rs2 = (rs1#(Conventions.loc_result ef.(ef_sig)) <- res) ->
       exec_function (External ef) parent rs1 m t rs2 m.
 

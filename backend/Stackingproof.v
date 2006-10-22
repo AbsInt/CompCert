@@ -1272,6 +1272,50 @@ Proof.
   apply shift_offset_sp; auto.
 Qed.
 
+(** Preservation of the arguments to an external call. *)
+
+Section EXTERNAL_ARGUMENTS.
+
+Variable ls: locset.
+Variable fr: frame.
+Variable rs: regset.
+Variable sg: signature.
+Hypothesis AG1: forall r, rs r = ls (R r).
+Hypothesis AG2: forall (ofs : Z) (ty : typ),
+      6 <= ofs ->
+      ofs + typesize ty <= size_arguments sg ->
+      get_slot fr ty (Int.signed (Int.repr (4 * ofs)))
+                     (ls (S (Outgoing ofs ty))).
+
+Lemma transl_external_arguments_rec:
+  forall locs,
+  (forall l, In l locs -> loc_argument_acceptable l) ->
+  (forall ofs ty, In (S (Outgoing ofs ty)) locs ->
+                  ofs + typesize ty <= size_arguments sg) ->
+  extcall_args rs fr locs ls##locs.
+Proof.
+  induction locs; simpl; intros.
+  constructor.
+  constructor. 
+  assert (loc_argument_acceptable a). apply H; auto.
+  destruct a; red in H1.
+  rewrite <- AG1. constructor. 
+  destruct s; try contradiction.
+  constructor. apply AG2. omega. apply H0. auto.
+  apply IHlocs; auto.
+Qed.
+
+Lemma transl_external_arguments:
+  extcall_arguments rs fr sg (ls ## (loc_arguments sg)).
+Proof.
+  unfold extcall_arguments. 
+  apply transl_external_arguments_rec. 
+  exact (Conventions.loc_arguments_acceptable sg).
+  exact (Conventions.loc_arguments_bounded sg).
+Qed.
+
+End EXTERNAL_ARGUMENTS.
+
 (** The proof of semantic preservation relies on simulation diagrams
   of the following form:
 <<
@@ -1594,8 +1638,7 @@ Proof.
   inversion WTF. subst ef0. set (sg := ef_sig ef) in *.
   exists (rs#(loc_result sg) <- res). 
   split. econstructor. eauto. 
-  fold sg. rewrite H0. rewrite Conventions.loc_external_arguments_loc_arguments; auto.
-  rewrite list_map_compose. apply list_map_exten; intros. auto. 
+  fold sg. rewrite H0. apply transl_external_arguments; assumption.
   reflexivity.
   split; intros. rewrite H1. 
   unfold Regmap.set. case (RegEq.eq r (loc_result sg)); intro.

@@ -420,7 +420,7 @@ Proof.
   assert (sig = tf.(fn_sig)).
     unfold sig. 
     assert (transf_fundef (Internal f) = Some (Internal tf)).
-      unfold transf_fundef; rewrite TRANSL; auto.
+      unfold transf_fundef, transf_partial_fundef. rewrite TRANSL; auto.
     generalize (Allocproof.sig_function_translated _ _ H). simpl; auto.
   assert (locs_read_ok (loc_parameters sig)).
     red; unfold loc_parameters. intros. 
@@ -542,9 +542,7 @@ Proof.
   caseEq (transf_function f). intros g TF EQ. inversion EQ.
   constructor. eapply wt_transf_function; eauto.
   congruence.
-  caseEq (type_external_function e); intros.
-  inversion H0. constructor. apply type_external_function_correct. auto.
-  congruence.
+  intros. inversion H. constructor. 
 Qed.
 
 Lemma program_typing_preserved:

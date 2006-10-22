@@ -1231,9 +1231,7 @@ Proof.
   destruct (regalloc f t). 
   intro EQ; injection EQ; intro EQ1; rewrite <- EQ1; simpl; auto.
   congruence. congruence. congruence.
-  destruct (type_external_function e).
   intro EQ; inversion EQ; subst tf. reflexivity.
-  congruence.
 Qed.
 
 Lemma entrypoint_function_translated:
@@ -1780,7 +1778,7 @@ Lemma transl_function_correct:
   exec_function_prop (Internal f) args m t vres (free m2 stk).
 Proof.
   intros; red; intros until tf.
-  unfold transf_fundef, transf_function.
+  unfold transf_fundef, transf_partial_fundef, transf_function.
   caseEq (type_function f).
   intros env TRF. 
   caseEq (analyze f).
@@ -1856,7 +1854,7 @@ Lemma transl_external_function_correct:
 Proof.
   intros; red; intros.
   simpl in H0. 
-  destruct (type_external_function ef); simplify_eq H0; intro.
+  simplify_eq H0; intro.
   exists (Locmap.set (R (loc_result (funsig tf))) res ls); split.
   subst tf. eapply exec_funct_external; eauto. 
   apply Locmap.gss.

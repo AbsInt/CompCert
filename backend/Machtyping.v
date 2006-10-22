@@ -83,7 +83,6 @@ Record wt_function (f: function) : Prop := mk_wt_function {
 
 Inductive wt_fundef: fundef -> Prop :=
   | wt_fundef_external: forall ef,
-      Conventions.sig_external_ok ef.(ef_sig) ->
       wt_fundef (External ef)
   | wt_function_internal: forall f,
       wt_function f ->

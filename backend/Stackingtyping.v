@@ -217,7 +217,7 @@ Lemma wt_transf_fundef:
   wt_fundef tf.
 Proof.
   intros f tf WT. inversion WT; subst.
-  simpl; intros; inversion H0. constructor; auto.
+  simpl; intros; inversion H. constructor.
   unfold transf_fundef, transf_partial_fundef.
   caseEq (transf_function f0); try congruence.
   intros tfn TRANSF EQ. inversion EQ; subst tf.

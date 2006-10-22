@@ -1185,7 +1185,7 @@ Lemma exec_function_external_prop:
          (res : val) (ms1 ms2: Mach.regset) (m : mem)
          (t : trace),
   event_match ef args t res ->
-  args = ms1 ## (Conventions.loc_external_arguments (ef_sig ef)) ->
+  Mach.extcall_arguments ms1 m parent ef.(ef_sig) args ->
   ms2 = Regmap.set (Conventions.loc_result (ef_sig ef)) res ms1 ->
   exec_function_prop (External ef) parent ms1 m t ms2 m.
 Proof.
@@ -1197,10 +1197,8 @@ Proof.
   split. apply exec_one. eapply exec_step_external; eauto.
   destruct (functions_translated _ _ AT) as [tf [A B]].
   simpl in B. congruence.
-  rewrite H0. rewrite loc_external_arguments_match. 
-  rewrite list_map_compose. apply list_map_exten; intros.
-  symmetry; eapply preg_val; eauto. 
-  reflexivity.
+  eapply extcall_arguments_match; eauto.
+  reflexivity. 
 Qed.
 
 (** We then conclude by induction on the structure of the Mach

@@ -756,32 +756,34 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
     the calling conventions in module [Conventions], except that
     we use PPC registers instead of locations. *)
 
-Fixpoint loc_external_arguments_rec
-    (tyl: list typ) (iregl: list ireg) (fregl: list freg)
-    {struct tyl} : list preg :=
-  match tyl with
-  | nil => nil
-  | Tint :: tys =>
-      match iregl with
-      | nil => IR GPR11 (* should not happen *)
-      | ireg :: _ => IR ireg
-      end ::
-      loc_external_arguments_rec tys (list_drop1 iregl) fregl
-  | Tfloat :: tys =>
-      match fregl with
-      | nil => IR GPR11 (* should not happen *)
-      | freg :: _ => FR freg
-      end ::
-      loc_external_arguments_rec tys (list_drop2 iregl) (list_drop1 fregl)
-  end.
+Inductive extcall_args (rs: regset) (m: mem):
+      list typ -> list ireg -> list freg -> Z -> list val -> Prop :=
+  | extcall_args_nil: forall irl frl ofs,
+      extcall_args rs m nil irl frl ofs nil
+  | extcall_args_int_reg: forall tyl ir1 irl frl ofs v1 vl,
+      v1 = rs (IR ir1) ->
+      extcall_args rs m tyl irl frl (ofs + 4) vl ->
+      extcall_args rs m (Tint :: tyl) (ir1 :: irl) frl ofs (v1 :: vl)
+  | extcall_args_int_stack: forall tyl frl ofs v1 vl,
+      Mem.loadv Mint32 m (Val.add (rs (IR GPR1)) (Vint (Int.repr ofs))) = Some v1 ->
+      extcall_args rs m tyl nil frl (ofs + 4) vl ->
+      extcall_args rs m (Tint :: tyl) nil frl ofs (v1 :: vl)
+  | extcall_args_float_reg: forall tyl irl fr1 frl ofs v1 vl,
+      v1 = rs (FR fr1) ->
+      extcall_args rs m tyl (list_drop2 irl) frl (ofs + 8) vl ->
+      extcall_args rs m (Tfloat :: tyl) irl (fr1 :: frl) ofs (v1 :: vl)
+  | extcall_args_float_stack: forall tyl irl ofs v1 vl,
+      Mem.loadv Mfloat64 m (Val.add (rs (IR GPR1)) (Vint (Int.repr ofs))) = Some v1 ->
+      extcall_args rs m tyl (list_drop2 irl) nil (ofs + 8) vl ->
+      extcall_args rs m (Tfloat :: tyl) irl nil ofs (v1 :: vl).
 
-Definition int_param_regs :=
-  GPR3 :: GPR4 :: GPR5 :: GPR6 :: GPR7 :: GPR8 :: GPR9 :: GPR10 :: nil.
-Definition float_param_regs :=
-  FPR1 :: FPR2 :: FPR3 :: FPR4 :: FPR5 :: FPR6 :: FPR7 :: FPR8 :: FPR9 :: FPR10 :: nil.
-
-Definition loc_external_arguments (s: signature) : list preg :=
-  loc_external_arguments_rec s.(sig_args) int_param_regs float_param_regs.
+Definition extcall_arguments
+    (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
+  extcall_args rs m
+    sg.(sig_args)
+    (GPR3 :: GPR4 :: GPR5 :: GPR6 :: GPR7 :: GPR8 :: GPR9 :: GPR10 :: nil)
+    (FPR1 :: FPR2 :: FPR3 :: FPR4 :: FPR5 :: FPR6 :: FPR7 :: FPR8 :: FPR9 :: FPR10 :: nil)
+    24 args.
 
 Definition loc_external_result (s: signature) : preg :=
   match s.(sig_res) with
@@ -805,7 +807,7 @@ Inductive exec_step: regset -> mem -> trace -> regset -> mem -> Prop :=
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       event_match ef args t res ->
-      args = List.map (fun r => rs#r) (loc_external_arguments ef.(ef_sig)) ->
+      extcall_arguments rs m ef.(ef_sig) args ->
       rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
                #PC <- (rs LR)) ->
       exec_step rs m t rs' m.

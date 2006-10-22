@@ -105,7 +105,6 @@ Record wt_function (f: function) (env: regenv): Prop :=
 
 Inductive wt_fundef: fundef -> Prop :=
   | wt_fundef_external: forall ef,
-      Conventions.sig_external_ok ef.(ef_sig) ->
       wt_fundef (External ef)
   | wt_function_internal: forall f env,
       wt_function f env ->
@@ -300,11 +299,6 @@ Definition type_function (f: function): option regenv :=
       then Some env else None
   end.
 
-Definition type_external_function (ef: external_function): bool :=
-  List.fold_right
-    (fun l b => match l with Locations.S _ => false | Locations.R _ => b end)
-    true (Conventions.loc_arguments ef.(ef_sig)).
-
 Lemma type_function_correct:
   forall f env,
   type_function f = Some env ->
@@ -324,19 +318,6 @@ Proof.
   destruct (list_norepet_dec Reg.eq (fn_params f)). auto. discriminate.
   intros. eapply check_instrs_correct. eauto. 
   unfold instrs. apply PTree.elements_correct. eauto.
-  congruence.
-Qed.
-
-Lemma type_external_function_correct:
-  forall ef,
-  type_external_function ef = true ->
-  Conventions.sig_external_ok ef.(ef_sig).
-Proof.
-  intro ef. unfold type_external_function, Conventions.sig_external_ok.
-  generalize (Conventions.loc_arguments (ef_sig ef)).
-  induction l; simpl.
-  tauto.
-  destruct a. intros. firstorder congruence.
   congruence.
 Qed.
 

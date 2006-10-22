@@ -906,6 +906,29 @@ Proof.
   constructor. exact A. constructor.
 Qed.
 
+(** Preservation of arguments to external functions. *)
+
+Lemma transl_extcall_arguments:
+  forall rs fr sg args stk base cs m ms,
+  Machabstr.extcall_arguments rs fr sg args ->
+  callstack_invariant ((fr, stk, base) :: cs) m ms ->
+  wt_frame fr ->
+  extcall_arguments rs ms (Vptr stk base) sg args.
+Proof.
+  unfold Machabstr.extcall_arguments, extcall_arguments; intros.
+  assert (forall locs vals,
+    Machabstr.extcall_args rs fr locs vals ->
+    extcall_args rs ms (Vptr stk base) locs vals).
+  induction locs; intros; inversion H2; subst; clear H2.
+  constructor.
+  constructor; auto.
+  inversion H7; subst; clear H7. 
+  constructor.
+  constructor. eapply callstack_get_slot; eauto. 
+  eapply wt_get_slot; eauto. 
+  auto.
+Qed.
+
 (** * The proof of simulation *)
 
 Section SIMULATION.
@@ -1132,7 +1155,9 @@ Proof.
   auto.
 
   (* external function *)
-  exists ms; split. econstructor; eauto. auto.
+  exists ms; split. econstructor; eauto. 
+  eapply transl_extcall_arguments; eauto.
+  auto.
 Qed.  
 
 End SIMULATION.

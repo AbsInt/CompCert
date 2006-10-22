@@ -88,6 +88,26 @@ Inductive set_slot: frame -> typ -> Z -> val -> frame -> Prop :=
 Definition init_frame (f: function) :=
   empty_block (- f.(fn_framesize)) 0.
 
+(** Extract the values of the arguments of an external call. *)
+
+Inductive extcall_arg: regset -> frame -> loc -> val -> Prop :=
+  | extcall_arg_reg: forall rs fr r,
+      extcall_arg rs fr (R r) (rs r)
+  | extcall_arg_stack: forall rs fr ofs ty v,
+      get_slot fr ty (Int.signed (Int.repr (4 * ofs))) v ->
+      extcall_arg rs fr (S (Outgoing ofs ty)) v.
+
+Inductive extcall_args: regset -> frame -> list loc -> list val -> Prop :=
+  | extcall_args_nil: forall rs fr,
+      extcall_args rs fr nil nil
+  | extcall_args_cons: forall rs fr l1 ll v1 vl,
+      extcall_arg rs fr l1 v1 -> extcall_args rs fr ll vl ->
+      extcall_args rs fr (l1 :: ll) (v1 :: vl).
+
+Definition extcall_arguments
+   (rs: regset) (fr: frame) (sg: signature) (args: list val) : Prop :=
+  extcall_args rs fr (Conventions.loc_arguments sg) args.
+    
 Section RELSEM.
 
 Variable ge: genv.
@@ -223,7 +243,7 @@ with exec_function:
   | exec_funct_external:
       forall ef parent args res rs1 rs2 m t,
       event_match ef args t res ->
-      args = rs1##(Conventions.loc_external_arguments ef.(ef_sig)) ->
+      extcall_arguments rs1 parent ef.(ef_sig) args ->
       rs2 = (rs1#(Conventions.loc_result ef.(ef_sig)) <- res) ->
       exec_function (External ef) parent rs1 m t rs2 m.
 
@@ -367,7 +387,7 @@ Lemma exec_mutual_induction:
           (res : val) (rs1 : mreg -> val) (rs2 : RegEq.t -> val) (m : mem)
           (t0 : trace),
         event_match ef args t0 res ->
-        args = rs1 ## (Conventions.loc_external_arguments (ef_sig ef)) ->
+        extcall_arguments rs1 parent ef.(ef_sig) args ->
         rs2 = rs1 # (Conventions.loc_result (ef_sig ef)) <- res ->
         P2 (External ef) parent rs1 m t0 rs2 m) ->
       (forall (f16 : function) (v : val) (f17 : frame) (c : code)
