@@ -8,7 +8,11 @@
    http://cvs.alioth.debian.org/cgi-bin/cvsweb.cgi/shootout/bench/Include/?cvsroot=shootout
 
 */
+#ifdef __COMPCERT__
+#include <compcert_stdio.h>
+#else
 #include <stdio.h>
+#endif
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>

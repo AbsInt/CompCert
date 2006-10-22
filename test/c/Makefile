@@ -1,13 +1,11 @@
 CCOMP=../../ccomp
-CCOMPFLAGS=-dump-c
+CCOMPFLAGS=-dump-c -I../lib
 
-CC=gcc -arch ppc                         # MacOS X
-#CC=gcc                                  # other systems
+CC=gcc -arch ppc
 
 CFLAGS=-O1 -Wall
 
-LIBS=                                    # MacOS X
-#LIBS=-lm                                # other systems
+LIBS=
 
 TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
 #TIME=time >/dev/null                    # Otherwise
@@ -23,7 +21,7 @@ all: $(PROGS:%=%.compcert)
 all_gcc: $(PROGS:%=%.gcc)
 
 %.compcert: %.s
-	$(CC) $(CFLAGS) -o $*.compcert $*.s $(LIBS)
+	$(CC) $(CFLAGS) -o $*.compcert $*.s ../lib/libcompcert.a $(LIBS)
 
 %.s: %.c ../../ccomp
 	$(CCOMP) $(CCOMPFLAGS) $*.c

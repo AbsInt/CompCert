@@ -10,7 +10,11 @@
    compile flags:  -O3 -ffast-math -march=pentium4 -funroll-loops
 */
 
+#ifdef __COMPCERT__
+#include <compcert_stdio.h>
+#else
 #include <stdio.h>
+#endif
 #include <stdlib.h>
 
 int main (int argc, char **argv)
