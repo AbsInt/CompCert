@@ -64,8 +64,10 @@ let process_c_file sourcename =
     try
       Frontc.parse preproname ()
     with
-      Frontc.ParseError msg ->
+    | Frontc.ParseError msg ->
         eprintf "Error during parsing: %s\n" msg;
+        exit 2
+    | Errormsg.Error ->
         exit 2 in
   Sys.remove preproname;
   (* Restore source file name before preprocessing *)
