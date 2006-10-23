@@ -1,8 +1,10 @@
 *** ../cil_orig/src/frontc/cabs2cil.ml	2006-05-21 06:14:15.000000000 +0200
---- ../cil/src/frontc/cabs2cil.ml	2006-09-11 18:01:47.323285775 +0200
+--- ../cil/src/frontc/cabs2cil.ml	2006-10-23 11:38:43.278308131 +0200
 ***************
 *** 1,3 ****
---- 1,9 ----
+--- 1,11 ----
++ (* MODIF: allow E.Error to propagate *)
++ 
 + (* MODIF: for pointer comparison, avoid systematic cast to unsigned int *)
 + 
 + (* MODIF: Loop constructor replaced by 3 constructors: While, DoWhile, For. *)
@@ -27,7 +29,7 @@
               (* We can just copy it because there is nothing to share here. 
                * Except maybe for the ref cell in Goto but it is Ok to share 
                * that, I think *)
---- 822,837 ----
+--- 824,839 ----
             (fun s -> 
               if s.labels != [] then 
                 raise (Failure "cannot duplicate: has labels");
@@ -46,7 +48,7 @@
                * that, I think *)
 ***************
 *** 838,843 ****
---- 847,853 ----
+--- 849,855 ----
       let canDrop (c: chunk) =
         List.for_all canDropStatement c.stmts
   
@@ -56,7 +58,7 @@
         let loop = mkStmt (Loop (c2block body, !currentLoc, None, None)) in
 ***************
 *** 845,850 ****
---- 855,887 ----
+--- 857,889 ----
           postins = [];
           cases = body.cases;
         } 
@@ -92,7 +94,7 @@
         { stmts = [ mkStmt (Break l) ];
 ***************
 *** 959,964 ****
---- 996,1002 ----
+--- 998,1004 ----
   
   
   (************ Labels ***********)
@@ -102,7 +104,7 @@
    * marker in a list saying what kinds of loop it is. When we see a continue 
 ***************
 *** 971,980 ****
---- 1009,1037 ----
+--- 1011,1039 ----
   
   let startLoop iswhile = 
     continues := (if iswhile then While else NotWhile (ref "")) :: !continues
@@ -134,7 +136,7 @@
       [] -> E.s (error "continue not in a loop")
 ***************
 *** 990,995 ****
---- 1047,1053 ----
+--- 1049,1055 ----
       [] -> E.s (error "labContinue not in a loop")
     | While :: rest -> c
     | NotWhile lr :: rest -> if !lr = "" then c else consLabel !lr c !currentLoc false
@@ -155,7 +157,7 @@
     in
   
     match bop with
---- 4199,4207 ----
+--- 4201,4209 ----
       | _ -> E.s (error "%a operator on a non-integer type" d_binop bop)
     in
     let pointerComparison e1 t1 e2 t2 = 
@@ -181,7 +183,7 @@
   
     | _ -> E.s (error "doBinOp: %a\n" d_plainexp (BinOp(bop,e1,e2,intType)))
   
---- 4250,4263 ----
+--- 4252,4265 ----
   
     | (Eq|Ne|Le|Lt|Ge|Gt) when isPointerType t1 && isArithmeticType t2 ->
         ignore (warnOpt "Comparison of pointer and non-pointer");
@@ -198,7 +200,7 @@
   
 ***************
 *** 5465,5473 ****
---- 5521,5534 ----
+--- 5523,5536 ----
                          * then the switch falls through. *)
                         blockFallsThrough b || blockCanBreak b
                      end
@@ -222,7 +224,7 @@
                     (* switches and loops catch any breaks in their bodies *)
                     false
                 | Block b -> blockCanBreak b
---- 5573,5579 ----
+--- 5575,5581 ----
                 | Break _ -> true
                 | If (_, b1, b2, _) -> 
                     blockCanBreak b1 || blockCanBreak b2
@@ -232,7 +234,7 @@
                 | Block b -> blockCanBreak b
 ***************
 *** 5522,5527 ****
---- 5583,5589 ----
+--- 5585,5591 ----
                 List.exists stmtCanBreak b.bstmts
               in
               if blockFallsThrough !currentFunctionFDEC.sbody then begin
@@ -241,8 +243,21 @@
                   match unrollType !currentReturnType with
                     TVoid _ -> None
 ***************
-*** 5537,5542 ****
---- 5599,5605 ----
+*** 5537,5549 ****
+                  !currentFunctionFDEC.sbody.bstmts <- 
+                    !currentFunctionFDEC.sbody.bstmts 
+                    @ [mkStmt (Return(retval, endloc))]
+              end;
+              
+              (* ignore (E.log "The env after finishing the body of %s:\n%t\n"
+                          n docEnv); *)
+              cabsPushGlobal (GFun (!currentFunctionFDEC, funloc));
+              empty
+!           with e -> begin
+              ignore (E.log "error in collectFunction %s: %s\n"
+                        n (Printexc.to_string e));
+              cabsPushGlobal (GAsm("error in function " ^ n, !currentLoc));
+--- 5601,5615 ----
                   !currentFunctionFDEC.sbody.bstmts <- 
                     !currentFunctionFDEC.sbody.bstmts 
                     @ [mkStmt (Return(retval, endloc))]
@@ -250,9 +265,68 @@
               end;
               
               (* ignore (E.log "The env after finishing the body of %s:\n%t\n"
+                          n docEnv); *)
+              cabsPushGlobal (GFun (!currentFunctionFDEC, funloc));
+              empty
+!           with E.Error as e -> raise e
+!              | e -> begin
+              ignore (E.log "error in collectFunction %s: %s\n"
+                        n (Printexc.to_string e));
+              cabsPushGlobal (GAsm("error in function " ^ n, !currentLoc));
+***************
+*** 5596,5609 ****
+          * local context  *)
+          addLocalToEnv (kindPlusName "type" n) (EnvTyp namedTyp);
+          cabsPushGlobal (GType (ti, !currentLoc))
+!       with e -> begin
+          ignore (E.log "Error on A.TYPEDEF (%s)\n"
+                    (Printexc.to_string e));
+          cabsPushGlobal (GAsm ("booo_typedef:" ^ n, !currentLoc))
+        end
+      in
+      List.iter createTypedef nl
+!   with e -> begin    
+      ignore (E.log "Error on A.TYPEDEF (%s)\n"
+                (Printexc.to_string e));
+      let fstname = 
+--- 5662,5677 ----
+          * local context  *)
+          addLocalToEnv (kindPlusName "type" n) (EnvTyp namedTyp);
+          cabsPushGlobal (GType (ti, !currentLoc))
+!       with E.Error as e -> raise e
+!          | e -> begin
+          ignore (E.log "Error on A.TYPEDEF (%s)\n"
+                    (Printexc.to_string e));
+          cabsPushGlobal (GAsm ("booo_typedef:" ^ n, !currentLoc))
+        end
+      in
+      List.iter createTypedef nl
+!   with E.Error as e -> raise e
+!      | e -> begin    
+      ignore (E.log "Error on A.TYPEDEF (%s)\n"
+                (Printexc.to_string e));
+      let fstname = 
+***************
+*** 5650,5656 ****
+      | _ -> 
+          ignore (warn "Ignoring un-named typedef that does not introduce a struct or enumeration type\n")
+              
+!   with e -> begin
+      ignore (E.log "Error on A.ONLYTYPEDEF (%s)\n"
+                (Printexc.to_string e));
+      cabsPushGlobal (GAsm ("booo_typedef", !currentLoc))
+--- 5718,5725 ----
+      | _ -> 
+          ignore (warn "Ignoring un-named typedef that does not introduce a struct or enumeration type\n")
+              
+!   with E.Error as e -> raise e
+!      | e -> begin
+      ignore (E.log "Error on A.ONLYTYPEDEF (%s)\n"
+                (Printexc.to_string e));
+      cabsPushGlobal (GAsm ("booo_typedef", !currentLoc))
 ***************
 *** 5738,5743 ****
---- 5801,5807 ----
+--- 5807,5813 ----
           doCondition false e st' sf'
   
       | A.WHILE(e,s,loc) ->
@@ -262,7 +336,7 @@
           exitLoop ();
 ***************
 *** 5746,5753 ****
---- 5810,5836 ----
+--- 5816,5842 ----
           loopChunk ((doCondition false e skipChunk
                         (breakChunk loc'))
                      @@ s')
@@ -300,7 +374,7 @@
           let loc' = convLoc loc in
           currentLoc := loc';
           enterScope (); (* Just in case we have a declaration *)
---- 5840,5866 ----
+--- 5846,5872 ----
           in
           exitLoop ();
           loopChunk (s' @@ s'')
@@ -330,7 +404,7 @@
           enterScope (); (* Just in case we have a declaration *)
 ***************
 *** 5784,5789 ****
---- 5886,5920 ----
+--- 5892,5926 ----
           exitScope ();
           res
       end
@@ -368,7 +442,7 @@
           currentLoc := loc';
 ***************
 *** 5792,5798 ****
---- 5923,5932 ----
+--- 5929,5938 ----
       | A.CONTINUE loc -> 
           let loc' = convLoc loc in
           currentLoc := loc';
