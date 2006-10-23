@@ -708,7 +708,8 @@ let convertGFun fdec =
   if v.vname = "main" then begin
     match ret with
     | Tint(_, _) -> ()
-    | _ -> unsupported "the return type of main() must be an integer type"
+    | _ -> updateLoc v.vdecl;
+           unsupported "the return type of main() must be an integer type"
   end;
   Datatypes.Coq_pair
     (intern_string v.vname,
