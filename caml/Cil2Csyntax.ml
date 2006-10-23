@@ -454,19 +454,15 @@ and convertTypGen env = function
       end
   | TNamed (tinfo, _) -> convertTypGen env tinfo.ttype
   | TComp (c, _) ->
-      if List.mem c.ckey env then
-        unsupported "ill-formed recursive structure or union"
-      else begin
-        let rec convertFieldList = function
-          | [] -> Fnil
-          | {fname=str; ftype=t} :: rem ->
-              let idf = intern_string str in
-              let t' = convertTypGen (c.ckey :: env) t in
-              Fcons(idf, t', convertFieldList rem) in
-        let fList = convertFieldList c.cfields in
-        let id = intern_string (Cil.compFullName c) in
-        if c.cstruct then Tstruct(id, fList) else Tunion(id, fList)
-      end
+      let rec convertFieldList = function
+        | [] -> Fnil
+        | {fname=str; ftype=t} :: rem ->
+            let idf = intern_string str in
+            let t' = convertTypGen (c.ckey :: env) t in
+            Fcons(idf, t', convertFieldList rem) in
+      let fList = convertFieldList c.cfields in
+      let id = intern_string (Cil.compFullName c) in
+      if c.cstruct then Tstruct(id, fList) else Tunion(id, fList)
   | TEnum _ -> constInt32   (* enum constants are integers *)
   | TBuiltin_va_list _ -> unsupported "GCC `builtin va_list' type"
 

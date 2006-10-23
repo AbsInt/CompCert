@@ -49,7 +49,7 @@ let name_floattype sz =
 
 module StructUnionSet = Set.Make(struct
   type t = string * fieldlist
-  let compare = (compare: t -> t -> int)
+  let compare (n1, _ : t) (n2, _ : t) = compare n1 n2
 end)
 
 let struct_unions = ref StructUnionSet.empty
