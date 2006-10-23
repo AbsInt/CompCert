@@ -32,7 +32,6 @@ let const0 = Expr (Econst_int (coqint_of_camlint Int32.zero), constInt32)
 
 (** Global variables *)
 let currentLocation = ref Cil.locUnknown
-let mainFound = ref false
 let currentGlobalPrefix = ref ""
 let stringNum = ref 0   (* number of next global for string literals *)
 let stringTable = Hashtbl.create 47
@@ -706,10 +705,14 @@ let convertGFun fdec =
   let args = map_coqlist convertVarinfoParam fdec.sformals in   (* parameters*)
   let varList = map_coqlist convertVarinfo fdec.slocals in   (* local vars *)
   let s = processStmtList fdec.sbody.bstmts in   (* function body *)
-    if v.vname = "main" then mainFound := true;
-    Datatypes.Coq_pair
-      (intern_string v.vname,
-       Internal { fn_return=ret; fn_params=args; fn_vars=varList; fn_body=s })
+  if v.vname = "main" then begin
+    match ret with
+    | Tint(_, _) -> ()
+    | _ -> unsupported "the return type of main() must be an integer type"
+  end;
+  Datatypes.Coq_pair
+    (intern_string v.vname,
+     Internal { fn_return=ret; fn_params=args; fn_vars=varList; fn_body=s })
 
 (** Auxiliary for [convertInit] *)
 
@@ -933,11 +936,6 @@ let convertFile f =
     | Some fdec -> CList.Coq_cons (convertGFun fdec, funList')
     | None -> funList' in
   let defList' = globals_for_strings defList in
-(***
-  if not !mainFound then   (* no main function *)
-    warning "program has no main function! (you should \
-                         probably have used ccomp's -nomain option)\n";
-***)
   { AST.prog_funct = funList'';
     AST.prog_vars = defList';
     AST.prog_main = intern_string "main" }
