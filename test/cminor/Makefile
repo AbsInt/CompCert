@@ -5,7 +5,7 @@ CFLAGS=-arch ppc -g
 ASFLAGS=-arch ppc
 VPATH=../harness ../lib
 
-PROGS=fib integr qsort fft sha1 aes almabench manyargs lists
+PROGS=fib integr qsort fft sha1 aes almabench manyargs lists stopcopy
 
 all_s: $(PROGS:%=%.s)
 
@@ -57,6 +57,11 @@ lists: lists.o mainlists.o
 	$(CC) $(CFLAGS) -o lists lists.o mainlists.o
 clean::
 	rm -f lists
+
+stopcopy: stopcopy.o maingc.o
+	$(CC) $(CFLAGS) -o stopcopy stopcopy.o maingc.o
+clean::
+	rm -f stopcopy
 
 .SUFFIXES:
 
