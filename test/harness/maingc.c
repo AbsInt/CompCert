@@ -19,9 +19,19 @@ extern void * alloc_block(struct rootblock * roots,
                           enum block_kind kind,
                           int size);
 
+#ifdef DEBUG
+extern void check_heap(void);
+#endif
+
 void gc_alarm(int live)
 {
-  printf("<GC...%d bytes live>\n", live);
+  if (live == -1)
+    printf("<GC...>\n");
+  else
+    printf("<GC...%d bytes live>\n", live);
+#ifdef DEBUG
+  check_heap();
+#endif
 }
 
 /* Test with binary trees */

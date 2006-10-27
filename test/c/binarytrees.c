@@ -160,4 +160,5 @@ stretch tree of depth 17	 check: -1
 128	 trees of depth 14	 check: -128
 32	 trees of depth 16	 check: -32
 long lived tree of depth 16	 check: -1
+skinny tree of depth 17          check: 17
 *********/
