@@ -9,7 +9,6 @@
   implementation of sets.
 *)
 
-Require Import Relations.
 Require Import Coqlib.
 Require Import Maps.
 Require Import Lattice.

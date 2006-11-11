@@ -1787,26 +1787,34 @@ End REFLECTION.
 Remark modu_and_masks_1:
   forall logn, 0 <= unsigned logn < Z_of_nat wordsize ->
   rol (shru mone logn) logn = shl mone logn.
-Proof (equal_on_range
-        (fun l => rol (shru mone l) l)
-        (fun l => shl mone l)
-        (refl_equal true)).
+Proof.
+  apply (equal_on_range
+          (fun l => rol (shru mone l) l)
+          (fun l => shl mone l)).
+  vm_compute; auto.
+Qed.
+
 Remark modu_and_masks_2:
   forall logn, 0 <= unsigned logn < Z_of_nat wordsize ->
   and (shl mone logn) (sub (repr (two_p (unsigned logn))) one) = zero.
-Proof (equal_on_range
-        (fun l => and (shl mone l)
-                      (sub (repr (two_p (unsigned l))) one))
-        (fun l => zero) 
-        (refl_equal true)).
+Proof.
+  apply (equal_on_range
+          (fun l => and (shl mone l)
+                        (sub (repr (two_p (unsigned l))) one))
+          (fun l => zero)).
+  vm_compute; auto.
+Qed.
+
 Remark modu_and_masks_3:
   forall logn, 0 <= unsigned logn < Z_of_nat wordsize ->
   or (shl mone logn) (sub (repr (two_p (unsigned logn))) one) = mone.
-Proof (equal_on_range
-        (fun l => or (shl mone l)
-                      (sub (repr (two_p (unsigned l))) one))
-        (fun l => mone)
-        (refl_equal true)).
+Proof.
+  apply (equal_on_range
+          (fun l => or (shl mone l)
+                        (sub (repr (two_p (unsigned l))) one))
+          (fun l => mone)).
+  vm_compute; auto.
+Qed.
 
 Theorem modu_and:
   forall x n logn,

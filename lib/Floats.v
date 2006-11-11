@@ -5,7 +5,7 @@
   simply axiomatize a type [float] for IEEE double-precision floats
   and the associated operations.  *)
 
-Require Import Bool.
+Require Import Coqlib.
 Require Import Integers.
 
 Parameter float: Set.

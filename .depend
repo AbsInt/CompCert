@@ -2,12 +2,11 @@ lib/Coqlib.vo: lib/Coqlib.v
 lib/Maps.vo: lib/Maps.v lib/Coqlib.vo
 lib/Sets.vo: lib/Sets.v lib/Coqlib.vo lib/Maps.vo lib/Lattice.vo
 lib/union_find.vo: lib/union_find.v
-lib/Inclusion.vo: lib/Inclusion.v
 lib/Lattice.vo: lib/Lattice.v lib/Coqlib.vo lib/Maps.vo
 lib/Ordered.vo: lib/Ordered.v lib/Coqlib.vo lib/Maps.vo
 lib/Iteration.vo: lib/Iteration.v lib/Coqlib.vo
 lib/Integers.vo: lib/Integers.v lib/Coqlib.vo
-lib/Floats.vo: lib/Floats.v lib/Integers.vo
+lib/Floats.vo: lib/Floats.v lib/Coqlib.vo lib/Integers.vo
 lib/Parmov.vo: lib/Parmov.v lib/Coqlib.vo
 common/AST.vo: common/AST.v lib/Coqlib.vo lib/Integers.vo lib/Floats.vo
 common/Events.vo: common/Events.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo

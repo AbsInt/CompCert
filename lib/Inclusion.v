@@ -22,6 +22,7 @@ A second tactic, [incl_tac], handles goals of the form
 *)
 
 Require Import List.
+Require Import Bool.
 Require Import ArithRing.
 
 Ltac all_app e :=

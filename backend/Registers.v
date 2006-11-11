@@ -4,7 +4,6 @@
   intermediate language, and of mappings from pseudo-registers to
   values as used in the dynamic semantics of RTL. *)
 
-Require Import Bool.
 Require Import Coqlib.
 Require Import AST.
 Require Import Maps.
