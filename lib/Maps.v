@@ -801,6 +801,14 @@ Module PMap <: MAP.
 
   Definition t (A : Set) : Set := (A * PTree.t A)%type.
 
+  Definition eq: forall (A: Set), (forall (x y: A), {x=y} + {x<>y}) ->
+                 forall (a b: t A), {a = b} + {a <> b}.
+  Proof.
+    intros. 
+    generalize (PTree.eq H). intros. 
+    decide equality.
+  Qed.
+
   Definition init (A : Set) (x : A) :=
     (x, PTree.empty A).
 
@@ -877,6 +885,8 @@ Module IMap(X: INDEXED_TYPE).
   Definition elt := X.t.
   Definition elt_eq := X.eq.
   Definition t : Set -> Set := PMap.t.
+  Definition eq: forall (A: Set), (forall (x y: A), {x=y} + {x<>y}) ->
+                 forall (a b: t A), {a = b} + {a <> b} := PMap.eq.
   Definition init (A: Set) (x: A) := PMap.init x.
   Definition get (A: Set) (i: X.t) (m: t A) := PMap.get (X.index i) m.
   Definition set (A: Set) (i: X.t) (v: A) (m: t A) := PMap.set (X.index i) v m.
