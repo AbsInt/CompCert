@@ -171,15 +171,16 @@ extern "malloc" : int -> int
 
 "init_heap"(hsize) : int -> int
 {
-  var hbase;
+  var from, to;
 
-  hbase = "malloc"(hsize * 2) : int -> int;
-  if (hbase == 0) return -1;
-  int32["fromspace_start_ptr"] = hbase;
-  int32["fromspace_end_ptr"] = hbase + hsize;
-  int32["tospace_start_ptr"] = hbase + hsize;
-  int32["tospace_end_ptr"] = hbase + hsize * 2;
-  int32["alloc_ptr"] = hbase;
+  from = "malloc"(hsize) : int -> int;
+  to = "malloc"(hsize) : int -> int;
+  if (from == 0 || to == 0) return -1;
+  int32["fromspace_start_ptr"] = from;
+  int32["fromspace_end_ptr"] = from + hsize;
+  int32["tospace_start_ptr"] = to;
+  int32["tospace_end_ptr"] = to + hsize;
+  int32["alloc_ptr"] = from;
   return 0;
 }
 
