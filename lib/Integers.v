@@ -812,8 +812,23 @@ Proof.
   decEq; apply mul_commut.
 Qed. 
 
-Axiom neg_mul_distr_l: forall x y, neg(mul x y) = mul (neg x) y.
-Axiom neg_mul_distr_r: forall x y, neg(mul x y) = mul x (neg y).
+Theorem neg_mul_distr_l: 
+  forall x y, neg(mul x y) = mul (neg x) y.
+Proof.
+  intros. unfold mul, neg.
+  set (x' := unsigned x).  set (y' := unsigned y).
+  apply eqm_samerepr. apply eqm_trans with (- (x' * y')).
+  auto with ints.
+  replace (- (x' * y')) with ((-x') * y') by ring.
+  auto with ints.
+Qed.
+
+Theorem neg_mul_distr_r:
+   forall x y, neg(mul x y) = mul x (neg y).
+Proof.
+  intros. rewrite (mul_commut x y). rewrite (mul_commut x (neg y)).
+  apply neg_mul_distr_l. 
+Qed.
 
 (** ** Properties of binary decompositions *)
 
