@@ -26,7 +26,6 @@ var "gray_cache_overflow"[4]
 #define KIND_RAWDATA 0
 #define KIND_PTRDATA 1
 #define KIND_CLOSURE 2
-#define KIND_FORWARDED 3
 
 #define COLOR_WHITE 0
 #define COLOR_GRAY 4
