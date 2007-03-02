@@ -1,5 +1,6 @@
 (** Correctness of graph coloring. *)
 
+Require Import SetoidList.
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
@@ -51,37 +52,36 @@ Lemma add_interf_live_incl:
   forall (filter: reg -> bool) res live g,
   graph_incl g (add_interf_live filter res live g).
 Proof.
-  intros. unfold add_interf_live. rewrite Regset.fold_spec.
+  intros. unfold add_interf_live. rewrite Regset.fold_1.
   apply add_interf_live_incl_aux.
 Qed.
 
 Lemma add_interf_live_correct_aux:
-  forall filter res live g r,
-  In r live ->  filter r = true ->
+  forall filter res r live,
+  InA Regset.E.eq r live -> filter r = true ->
+  forall g,
   interfere r res
     (List.fold_left
       (fun g r => if filter r then add_interf r res g else g)
       live g).
 Proof.
-  induction live; simpl; intros.
-  contradiction.
-  elim H; intros.
-  subst a. rewrite H0. 
-  generalize (add_interf_live_incl_aux filter res live (add_interf r res g)).
+  induction 1; simpl; intros.
+  hnf in H. subst y. rewrite H0.
+  generalize (add_interf_live_incl_aux filter res l (add_interf r res g)).
   intros [A B].
   apply A. apply add_interf_correct.
-  apply IHlive; auto.
+  apply IHInA; auto.
 Qed.
 
 Lemma add_interf_live_correct:
   forall filter res live g r,
-  Regset.mem r live = true ->
+  Regset.In r live ->
   filter r = true ->
   interfere r res (add_interf_live filter res live g).
 Proof.
-  intros.  unfold add_interf_live. rewrite Regset.fold_spec.
+  intros.  unfold add_interf_live. rewrite Regset.fold_1.
   apply add_interf_live_correct_aux; auto.
-  apply Regset.elements_correct. auto.
+  apply Regset.elements_1. auto.
 Qed.
 
 Lemma add_interf_op_incl: 
@@ -93,15 +93,13 @@ Qed.
 
 Lemma add_interf_op_correct:
   forall res live g r,
-  Regset.mem r live = true ->
+  Regset.In r live ->
   r <> res ->
   interfere r res (add_interf_op res live g).
 Proof.
   intros.  unfold add_interf_op.
   apply add_interf_live_correct.
-  auto. 
-  case (Reg.eq r res); intro.
-  contradiction. auto.
+  auto. destruct (Reg.eq r res); congruence. 
 Qed.
 
 Lemma add_interf_move_incl: 
@@ -113,18 +111,14 @@ Qed.
 
 Lemma add_interf_move_correct:
   forall arg res live g r,
-  Regset.mem r live = true ->
+  Regset.In r live ->
   r <> arg -> r <> res ->
   interfere r res (add_interf_move arg res live g).
 Proof.
   intros.  unfold add_interf_move.
   apply add_interf_live_correct.
-  auto. 
-  case (Reg.eq r res); intro.
-  contradiction. 
-  case (Reg.eq r arg); intro.
-  contradiction. 
   auto.
+  rewrite dec_eq_false; auto. rewrite dec_eq_false; auto.
 Qed.
 
 Lemma add_interf_call_incl_aux_1:
@@ -142,9 +136,9 @@ Qed.
 Lemma add_interf_call_incl_aux_2:
   forall mr live g,
   graph_incl g
-    (Regset.fold (fun g r => add_interf_mreg r mr g) live g).
+    (Regset.fold graph (fun r g => add_interf_mreg r mr g) live g).
 Proof.
-  intros. rewrite Regset.fold_spec. apply add_interf_call_incl_aux_1.
+  intros. rewrite Regset.fold_1. apply add_interf_call_incl_aux_1.
 Qed.
 
 Lemma add_interf_call_incl:
@@ -176,33 +170,32 @@ Proof.
 Qed.
 
 Lemma add_interf_call_correct_aux_1:
-  forall mr live g r,
-  In r live ->
+  forall mr r live,
+  InA Regset.E.eq r live ->
+  forall g,
   interfere_mreg r mr
     (List.fold_left (fun g r => add_interf_mreg r mr g) live g).
 Proof.
-  induction live; simpl; intros.
-  elim H.
-  elim H; intros.
-  subst a. eapply interfere_mreg_incl. 
+  induction 1; simpl; intros.
+  hnf in H; subst y. eapply interfere_mreg_incl. 
   apply add_interf_call_incl_aux_1.
   apply add_interf_mreg_correct.
-  apply IHlive; auto.
+  auto.
 Qed.
 
 Lemma add_interf_call_correct_aux_2:
   forall mr live g r,
-  Regset.mem r live = true ->
+  Regset.In r live ->
   interfere_mreg r mr
-    (Regset.fold (fun g r => add_interf_mreg r mr g) live g).
+    (Regset.fold graph (fun r g => add_interf_mreg r mr g) live g).
 Proof.
-  intros. rewrite Regset.fold_spec. apply add_interf_call_correct_aux_1.
-  apply Regset.elements_correct; auto.
+  intros. rewrite Regset.fold_1. apply add_interf_call_correct_aux_1.
+  apply Regset.elements_1. auto.
 Qed.
 
 Lemma add_interf_call_correct:
   forall live destroyed g r mr,
-  Regset.mem r live = true ->
+  Regset.In r live ->
   In mr destroyed ->
   interfere_mreg r mr (add_interf_call live destroyed g).
 Proof.
@@ -240,7 +233,7 @@ Qed.
 Lemma add_interf_entry_correct:
   forall params live g r1 r2,
   In r1 params ->
-  Regset.mem r2 live = true ->
+  Regset.In r2 live ->
   r1 <> r2 ->
   interfere r1 r2 (add_interf_entry params live g).
 Proof.
@@ -351,37 +344,37 @@ Definition correct_interf_instr
       match is_move_operation op args with
       | Some arg =>
           forall r,
-          Regset.mem res live = true ->
-          Regset.mem r live = true ->
+          Regset.In res live ->
+          Regset.In r live ->
           r <> res -> r <> arg -> interfere r res g
       | None =>
           forall r,
-          Regset.mem res live = true ->
-          Regset.mem r live = true ->
+          Regset.In res live ->
+          Regset.In r live ->
           r <> res -> interfere r res g
       end
   | Iload chunk addr args res s =>
       forall r,
-      Regset.mem res live = true ->
-      Regset.mem r live = true ->
+      Regset.In res live ->
+      Regset.In r live ->
       r <> res -> interfere r res g
   | Icall sig ros args res s =>
       (forall r mr,
-        Regset.mem r live = true ->
+        Regset.In r live ->
         In mr destroyed_at_call_regs ->
         r <> res ->
         interfere_mreg r mr g)
    /\ (forall r,
-        Regset.mem r live = true ->
+        Regset.In r live ->
         r <> res -> interfere r res g)
   | Ialloc arg res s =>
       (forall r mr,
-        Regset.mem r live = true ->
+        Regset.In r live ->
         In mr destroyed_at_call_regs ->
         r <> res ->
         interfere_mreg r mr g)
    /\ (forall r,
-        Regset.mem r live = true ->
+        Regset.In r live ->
         r <> res -> interfere r res g)
   | _ =>
       True
@@ -414,11 +407,11 @@ Proof.
   intros.
   destruct instr; unfold add_edges_instr; unfold correct_interf_instr; auto.
   destruct (is_move_operation o l); intros.
-  rewrite H. eapply interfere_incl. 
+  rewrite Regset.mem_1; auto. eapply interfere_incl. 
   apply add_pref_incl. apply add_interf_move_correct; auto.
-  rewrite H. apply add_interf_op_correct; auto. 
+  rewrite Regset.mem_1; auto. apply add_interf_op_correct; auto. 
 
-  intros. rewrite H. apply add_interf_op_correct; auto.
+  intros. rewrite Regset.mem_1; auto. apply add_interf_op_correct; auto.
 
   split; intros.
   apply interfere_mreg_incl with
@@ -427,7 +420,7 @@ Proof.
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   apply add_interf_op_incl.
   apply add_interf_call_correct; auto.
-  rewrite Regset.mem_remove_other; auto.
+  apply Regset.remove_2; auto. 
 
   eapply interfere_incl.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
@@ -441,7 +434,7 @@ Proof.
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   apply add_interf_op_incl.
   apply add_interf_call_correct; auto.
-  rewrite Regset.mem_remove_other; auto.
+  apply Regset.remove_2; auto.
 
   eapply interfere_incl.
   eapply graph_incl_trans; apply add_pref_mreg_incl.
@@ -534,7 +527,7 @@ Qed.
 Lemma interf_graph_correct_3:
   forall f live live0 r1 r2,
   In r1 f.(fn_params) ->
-  Regset.mem r2 live0 = true ->
+  Regset.In r2 live0 ->
   r1 <> r2 ->
   interfere r1 r2 (interf_graph f live live0).
 Proof.
@@ -617,8 +610,10 @@ Lemma check_coloring_3_correct:
   loc_acceptable (coloring r) /\ env r = Loc.type (coloring r).
 Proof.
   unfold check_coloring_3; intros.
-  generalize (Regset.for_all_spec _ H H0). intro.
-  elim (andb_prop _ _ H1); intros.
+  exploit Regset.for_all_2; eauto.
+  red; intros. hnf in H1. congruence.
+  apply Regset.mem_2. eauto.
+  simpl. intro. elim (andb_prop _ _ H1); intros.
   split. apply loc_is_acceptable_correct; auto.
   apply same_typ_correct; auto.
 Qed.
@@ -649,7 +644,7 @@ Proof.
   elim (andb_prop _ _ H); intros.
   generalize (all_interf_regs_correct_1 _ _ _ H0).
   intros [A B].
-  unfold allregs. rewrite A; rewrite B.
+  unfold allregs. rewrite Regset.mem_1; auto. rewrite Regset.mem_1; auto.
   eapply check_coloring_1_correct; eauto.
 Qed.
 
@@ -663,7 +658,7 @@ Proof.
   elim (andb_prop _ _ H); intros.
   elim (andb_prop _ _ H2); intros.
   generalize (all_interf_regs_correct_2 _ _ _ H0). intros.
-  unfold allregs. rewrite H5. 
+  unfold allregs. rewrite Regset.mem_1; auto. 
   eapply check_coloring_2_correct; eauto.
 Qed.
 
@@ -709,35 +704,35 @@ Definition correct_alloc_instr
       match is_move_operation op args with
       | Some arg =>
           forall r,
-          Regset.mem res live!!pc = true ->
-          Regset.mem r live!!pc = true ->
+          Regset.In res live!!pc ->
+          Regset.In r live!!pc ->
           r <> res -> r <> arg -> alloc r <> alloc res
       | None =>
           forall r,
-          Regset.mem res live!!pc = true ->
-          Regset.mem r live!!pc = true ->
+          Regset.In res live!!pc ->
+          Regset.In r live!!pc ->
           r <> res -> alloc r <> alloc res
       end
   | Iload chunk addr args res s =>
       forall r,
-      Regset.mem res live!!pc = true ->
-      Regset.mem r live!!pc = true ->
+      Regset.In res live!!pc ->
+      Regset.In r live!!pc ->
       r <> res -> alloc r <> alloc res
   | Icall sig ros args res s =>
       (forall r,
-        Regset.mem r live!!pc = true ->
+        Regset.In r live!!pc ->
         r <> res ->
         ~(In (alloc r) Conventions.destroyed_at_call))
    /\ (forall r,
-        Regset.mem r live!!pc = true ->
+        Regset.In r live!!pc ->
         r <> res -> alloc r <> alloc res)
   | Ialloc arg res s =>
       (forall r,
-        Regset.mem r live!!pc = true ->
+        Regset.In r live!!pc ->
         r <> res ->
         ~(In (alloc r) Conventions.destroyed_at_call))
    /\ (forall r,
-        Regset.mem r live!!pc = true ->
+        Regset.In r live!!pc ->
         r <> res -> alloc r <> alloc res)
   | _ =>
       True
@@ -869,7 +864,7 @@ Lemma regalloc_correct_3:
   forall r1 r2,
   regalloc f live live0 env = Some alloc ->
   In r1 f.(fn_params) ->
-  Regset.mem r2 live0 = true ->
+  Regset.In r2 live0 ->
   r1 <> r2 ->
   alloc r1 <> alloc r2.
 Proof.

@@ -1,0 +1,8 @@
+#!/usr/bin/perl -pi
+
+s/\bList\b/CList/g;
+s/\bInt\.Z_as_Int\b/CInt.Z_as_Int/g;
+s/\bInt\.Int\b/CInt.Int/g;
+s/\bInt\.MoreInt\b/CInt.MoreInt/g;
+s/^open Int$//;
+

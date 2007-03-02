@@ -214,6 +214,7 @@ Definition all_interf_regs (g: graph) : Regset.t :=
       g.(interf_reg_mreg)
       Regset.empty).
 
+(*
 Lemma mem_add_tail:
   forall r r' u,
   Regset.mem r u = true -> Regset.mem r (Regset.add r' u) = true.
@@ -222,28 +223,29 @@ Proof.
   subst r'. apply Regset.mem_add_same.
   rewrite Regset.mem_add_other; auto.
 Qed.
-
+*)
 Lemma in_setregreg_fold:
   forall g r1 r2 u,
-  SetRegReg.In (r1, r2) g \/ Regset.mem r1 u = true /\ Regset.mem r2 u = true ->
-  Regset.mem r1 (SetRegReg.fold _ add_intf2 g u) = true /\
-  Regset.mem r2 (SetRegReg.fold _ add_intf2 g u) = true.
+  SetRegReg.In (r1, r2) g \/ Regset.In r1 u /\ Regset.In r2 u ->
+  Regset.In r1 (SetRegReg.fold _ add_intf2 g u) /\
+  Regset.In r2 (SetRegReg.fold _ add_intf2 g u).
 Proof.
   set (add_intf2' := fun u r1r2 => add_intf2 r1r2 u).
   assert (forall l r1 r2 u,
-    InA OrderedRegReg.eq (r1,r2) l \/ Regset.mem r1 u = true /\ Regset.mem r2 u = true ->
-    Regset.mem r1 (List.fold_left add_intf2' l u) = true /\
-    Regset.mem r2 (List.fold_left add_intf2' l u) = true).
+    InA OrderedRegReg.eq (r1,r2) l \/ Regset.In r1 u /\ Regset.In r2 u ->
+    Regset.In r1 (List.fold_left add_intf2' l u) /\
+    Regset.In r2 (List.fold_left add_intf2' l u)).
   induction l; intros; simpl.
   elim H; intro. inversion H0. auto.
   apply IHl. destruct a as [a1 a2].
   elim H; intro. inversion H0; subst. 
   red in H2. simpl in H2. destruct H2. red in H1. red in H2. subst r1 r2.
-  right; unfold add_intf2', add_intf2; simpl; split. 
-  apply Regset.mem_add_same. apply mem_add_tail. apply Regset.mem_add_same.
+  right; unfold add_intf2', add_intf2; simpl; split.
+  apply Regset.add_1. auto. 
+  apply Regset.add_2. apply Regset.add_1. auto. 
   tauto.
   right; unfold add_intf2', add_intf2; simpl; split;
-  apply mem_add_tail; apply mem_add_tail; tauto.
+  apply Regset.add_2; apply Regset.add_2; tauto.
 
   intros. rewrite SetRegReg.fold_1. apply H. 
   intuition. left. apply SetRegReg.elements_1. auto.
@@ -251,8 +253,8 @@ Qed.
 
 Lemma in_setregreg_fold':
   forall g r u,
-  Regset.mem r u = true ->
-  Regset.mem r (SetRegReg.fold _ add_intf2 g u) = true.
+  Regset.In r u ->
+  Regset.In r (SetRegReg.fold _ add_intf2 g u).
 Proof.
   intros. exploit in_setregreg_fold. eauto. 
   intros [A B]. eauto.
@@ -260,23 +262,23 @@ Qed.
 
 Lemma in_setregmreg_fold:
   forall g r1 mr2 u,
-  SetRegMreg.In (r1, mr2) g \/ Regset.mem r1 u = true ->
-  Regset.mem r1 (SetRegMreg.fold _ add_intf1 g u) = true.
+  SetRegMreg.In (r1, mr2) g \/ Regset.In r1 u ->
+  Regset.In r1 (SetRegMreg.fold _ add_intf1 g u).
 Proof.
   set (add_intf1' := fun u r1mr2 => add_intf1 r1mr2 u).
   assert (forall l r1 mr2 u,
-    InA OrderedRegMreg.eq (r1,mr2) l \/ Regset.mem r1 u = true ->
-    Regset.mem r1 (List.fold_left add_intf1' l u) = true).
+    InA OrderedRegMreg.eq (r1,mr2) l \/ Regset.In r1 u ->
+    Regset.In r1 (List.fold_left add_intf1' l u)).
   induction l; intros; simpl.
   elim H; intro. inversion H0. auto.
   apply IHl with mr2. destruct a as [a1 a2].
   elim H; intro. inversion H0; subst. 
   red in H2. simpl in H2. destruct H2. red in H1. red in H2. subst r1 mr2.
   right; unfold add_intf1', add_intf1; simpl.
-  apply Regset.mem_add_same. 
+  apply Regset.add_1; auto.
   tauto.
   right; unfold add_intf1', add_intf1; simpl.
-  apply mem_add_tail; auto.
+  apply Regset.add_2; auto.
 
   intros. rewrite SetRegMreg.fold_1. apply H with mr2. 
   intuition. left. apply SetRegMreg.elements_1. auto.
@@ -285,8 +287,8 @@ Qed.
 Lemma all_interf_regs_correct_1:
   forall r1 r2 g,
   SetRegReg.In (r1, r2) g.(interf_reg_reg) ->
-  Regset.mem r1 (all_interf_regs g) = true /\
-  Regset.mem r2 (all_interf_regs g) = true.
+  Regset.In r1 (all_interf_regs g) /\
+  Regset.In r2 (all_interf_regs g).
 Proof.
   intros. unfold all_interf_regs. 
   apply in_setregreg_fold. tauto.
@@ -295,7 +297,7 @@ Qed.
 Lemma all_interf_regs_correct_2:
   forall r1 mr2 g,
   SetRegMreg.In (r1, mr2) g.(interf_reg_mreg) ->
-  Regset.mem r1 (all_interf_regs g) = true.
+  Regset.In r1 (all_interf_regs g).
 Proof.
   intros. unfold all_interf_regs.
   apply in_setregreg_fold'. eapply in_setregmreg_fold. eauto.

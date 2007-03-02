@@ -50,6 +50,11 @@ time_gcc:
 	   echo -n "$$i: "; $(TIME) ./$$i.gcc; \
          done
 
+time_compcert:
+	@for i in $(PROGS); do \
+	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
+         done
+
 clean:
 	rm -f *.compcert *.gcc
 	rm -f *.light.c *.s *.o *~ 

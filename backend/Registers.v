@@ -7,7 +7,9 @@
 Require Import Coqlib.
 Require Import AST.
 Require Import Maps.
-Require Import Sets.
+Require Import Ordered.
+Require Import FSets.
+Require FSetAVL.
 
 Definition reg: Set := positive.
 
@@ -45,4 +47,4 @@ Notation "a # b <- c" := (Regmap.set b c a) (at level 1, b at next level).
 
 (** Sets of registers *)
 
-Module Regset := MakeSet(PTree).
+Module Regset := FSetAVL.Make(OrderedPositive).

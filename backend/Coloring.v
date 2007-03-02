@@ -81,8 +81,8 @@ Require Import InterfGraph.
 
 Definition add_interf_live
     (filter: reg -> bool) (res: reg) (live: Regset.t) (g: graph): graph :=
-  Regset.fold
-    (fun g r => if filter r then add_interf r res g else g) live g.
+  Regset.fold graph
+    (fun r g => if filter r then add_interf r res g else g) live g.
 
 Definition add_interf_op
     (res: reg) (live: Regset.t) (g: graph): graph :=
@@ -101,7 +101,7 @@ Definition add_interf_move
 Definition add_interf_call
     (live: Regset.t) (destroyed: list mreg) (g: graph): graph :=
   List.fold_left
-    (fun g mr => Regset.fold (fun g r => add_interf_mreg r mr g) live g)
+    (fun g mr => Regset.fold graph (fun r g => add_interf_mreg r mr g) live g)
     destroyed g.
 
 Fixpoint add_prefs_call

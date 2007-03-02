@@ -179,7 +179,7 @@ Definition start_state :=
 Definition propagate_succ (s: state) (out: L.t) (n: positive) :=
   let oldl := s.(st_in)!!n in
   let newl := L.lub oldl out in
-  if L.eq oldl newl
+  if L.beq oldl newl
   then s
   else mkstate (PMap.set n newl s.(st_in)) (NS.add n s.(st_wrk)).
 
@@ -225,7 +225,7 @@ Definition in_incr (in1 in2: PMap.t L.t) : Prop :=
 Lemma in_incr_refl:
   forall in1, in_incr in1 in1.
 Proof.
-  unfold in_incr; intros. apply L.ge_refl.
+  unfold in_incr; intros. apply L.ge_refl. apply L.eq_refl.
 Qed.
 
 Lemma in_incr_trans:
@@ -239,11 +239,11 @@ Lemma propagate_succ_incr:
   in_incr st.(st_in) (propagate_succ st out n).(st_in).
 Proof.
   unfold in_incr, propagate_succ; simpl; intros.
-  case (L.eq st.(st_in)!!n (L.lub st.(st_in)!!n out)); intro.
-  apply L.ge_refl.
+  case (L.beq st.(st_in)!!n (L.lub st.(st_in)!!n out)).
+  apply L.ge_refl. apply L.eq_refl.
   simpl. case (peq n n0); intro.
   subst n0. rewrite PMap.gss. apply L.ge_lub_left.
-  rewrite PMap.gso; auto. apply L.ge_refl.
+  rewrite PMap.gso; auto. apply L.ge_refl. apply L.eq_refl.
 Qed.
 
 Lemma propagate_succ_list_incr:
@@ -309,11 +309,18 @@ Lemma propagate_succ_charact:
   (forall s, n <> s -> st'.(st_in)!!s = st.(st_in)!!s).
 Proof.
   unfold propagate_succ; intros; simpl.
-  case (L.eq (st_in st) !! n (L.lub (st_in st) !! n out)); intro.
-  split. rewrite e. rewrite L.lub_commut. apply L.ge_lub_left.
+  predSpec L.beq L.beq_correct
+           ((st_in st) !! n) (L.lub (st_in st) !! n out).
+  split.
+  eapply L.ge_trans. apply L.ge_refl. apply H; auto.
+  eapply L.ge_compat. apply L.lub_commut. apply L.eq_refl. 
+  apply L.ge_lub_left. 
   auto.
+
   simpl. split.
-  rewrite PMap.gss. rewrite L.lub_commut. apply L.ge_lub_left.
+  rewrite PMap.gss.
+  eapply L.ge_compat. apply L.lub_commut. apply L.eq_refl. 
+  apply L.ge_lub_left. 
   intros. rewrite PMap.gso; auto.
 Qed.
 
@@ -344,7 +351,7 @@ Lemma propagate_succ_incr_worklist:
   NS.In x st.(st_wrk) -> NS.In x (propagate_succ st out n).(st_wrk).
 Proof.
   intros. unfold propagate_succ. 
-  case (L.eq (st_in st) !! n (L.lub (st_in st) !! n out)); intro.
+  case (L.beq (st_in st) !! n (L.lub (st_in st) !! n out)).
   auto.
   simpl. rewrite NS.add_spec. auto.
 Qed.
@@ -364,7 +371,7 @@ Lemma propagate_succ_records_changes:
   NS.In s st'.(st_wrk) \/ st'.(st_in)!!s = st.(st_in)!!s.
 Proof.
   simpl. intros. unfold propagate_succ. 
-  case (L.eq (st_in st) !! n (L.lub (st_in st) !! n out)); intro.
+  case (L.beq (st_in st) !! n (L.lub (st_in st) !! n out)).
   right; auto.
   case (peq s n); intro.
   subst s. left. simpl. rewrite NS.add_spec. auto.
@@ -465,7 +472,9 @@ Proof.
   induction ep; simpl; intros.
   elim H.
   elim H; intros.
-  subst a. rewrite PMap.gss. rewrite L.lub_commut. apply L.ge_lub_left.
+  subst a. rewrite PMap.gss.
+  eapply L.ge_compat. apply L.lub_commut. apply L.eq_refl. 
+  apply L.ge_lub_left.
   destruct a. rewrite PMap.gsspec. case (peq n p); intro.
   subst p. apply L.ge_trans with (start_state_in ep)!!n.
   apply L.ge_lub_left. auto.

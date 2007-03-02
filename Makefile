@@ -7,7 +7,7 @@ INCLUDES=-I lib -I common -I backend -I cfrontend
 
 # Files in lib/
 
-LIB=Coqlib.v Maps.v Sets.v union_find.v Lattice.v Ordered.v \
+LIB=Coqlib.v Maps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Floats.v Parmov.v
 
 # Files in common/

@@ -1,8 +1,8 @@
 (** Correctness proof for Cminor generation. *)
 
+Require Import FSets.
 Require Import Coqlib.
 Require Import Maps.
-Require Import Sets. 
 Require Import AST.
 Require Import Integers.
 Require Import Floats.

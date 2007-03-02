@@ -2,6 +2,8 @@
   RTL to LTL). *)
 
 Require Import Relations.
+Require Import FSets.
+Require Import SetoidList.
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
@@ -83,7 +85,7 @@ Lemma analyze_correct:
   f.(fn_code)!n <> None ->
   f.(fn_code)!s <> None ->
   In s (successors f n) ->
-  Regset.ge live!!n (transfer f s live!!s).
+  RegsetLat.ge live!!n (transfer f s live!!s).
 Proof.
   intros.
   eapply DS.fixpoint_solution.
@@ -188,6 +190,7 @@ End REGALLOC_PROPERTIES.
 (** * Semantic agreement between RTL registers and LTL locations *)
 
 Require Import LTL.
+Module RegsetP := Properties(Regset).
 
 Section AGREE.
 
@@ -212,7 +215,7 @@ Hypothesis REGALLOC: regalloc f flive (live0 f flive) env = Some assign.
   of [assign r] can be arbitrary. *)
 
 Definition agree (live: Regset.t) (rs: regset) (ls: locset) : Prop :=
-  forall (r: reg), Regset.mem r live = true -> ls (assign r) = rs#r.
+  forall (r: reg), Regset.In r live -> ls (assign r) = rs#r.
 
 (** What follows is a long list of lemmas expressing properties
   of the [agree_live_regs] predicate that are useful for the 
@@ -222,7 +225,7 @@ Definition agree (live: Regset.t) (rs: regset) (ls: locset) : Prop :=
 
 Lemma agree_increasing:
   forall live1 live2 rs ls,
-  Regset.ge live1 live2 -> agree live1 rs ls ->
+  RegsetLat.ge live1 live2 -> agree live1 rs ls ->
   agree live2 rs ls.
 Proof.
   unfold agree; intros. 
@@ -231,14 +234,13 @@ Qed.
 
 (** Some useful special cases of [agree_increasing]. *)
 
+
 Lemma agree_reg_live:
   forall r live rs ls,
   agree (reg_live r live) rs ls -> agree live rs ls.
 Proof.
-  intros. apply agree_increasing with (reg_live r live).
-  red; intros. case (Reg.eq r r0); intro.
-  subst r0. apply Regset.mem_add_same.
-  rewrite Regset.mem_add_other; auto. auto.
+  intros. apply agree_increasing with (reg_live r live); auto.
+  red. apply RegsetP.subset_add_2. apply RegsetP.subset_refl.
 Qed.
 
 Lemma agree_reg_list_live:
@@ -266,7 +268,7 @@ Lemma agree_eval_reg:
   forall r live rs ls,
   agree (reg_live r live) rs ls -> ls (assign r) = rs#r.
 Proof.
-  intros. apply H. apply Regset.mem_add_same.
+  intros. apply H. apply Regset.add_1. auto. 
 Qed.
 
 (** Same, for a list of registers. *)
@@ -304,13 +306,13 @@ Qed.
 
 Lemma agree_assign_dead:
   forall live r rs ls v,
-  Regset.mem r live = false ->
+  ~Regset.In r live ->
   agree live rs ls ->
   agree live (rs#r <- v) ls.
 Proof.
   unfold agree; intros.
   case (Reg.eq r r0); intro.
-  subst r0. congruence.
+  subst r0. contradiction.
   rewrite Regmap.gso; auto. 
 Qed.
 
@@ -322,7 +324,7 @@ Qed.
 Lemma agree_assign_live:
   forall live r rs ls ls' v,
   (forall s,
-     Regset.mem s live = true -> s <> r -> assign s <> assign r) ->
+     Regset.In s live -> s <> r -> assign s <> assign r) ->
   ls' (assign r) = v ->
   (forall l, Loc.diff l (assign r) -> Loc.notin l temporaries -> ls' l = ls l) ->
   agree (reg_dead r live) rs ls ->
@@ -332,8 +334,8 @@ Proof.
   case (Reg.eq r r0); intro.
   subst r0. rewrite Regmap.gss. assumption.
   rewrite Regmap.gso; auto.
-  rewrite H1. apply H2. rewrite Regset.mem_remove_other. auto.
-  auto.  eapply regalloc_noteq_diff. eauto. apply H. auto.  auto.
+  rewrite H1. apply H2. apply Regset.remove_2; auto. 
+  eapply regalloc_noteq_diff. eauto. apply H. auto.  auto.
   eapply regalloc_not_temporary; eauto.
 Qed.
 
@@ -347,7 +349,7 @@ Qed.
 Lemma agree_move_live:
   forall live arg res rs (ls ls': locset),
   (forall r,
-     Regset.mem r live = true -> r <> res -> r <> arg -> 
+     Regset.In r live -> r <> res -> r <> arg -> 
      assign r <> assign res) ->
   ls' (assign res) = ls (assign arg) ->
   (forall l, Loc.diff l (assign res) -> Loc.notin l temporaries -> ls' l = ls l) ->
@@ -357,17 +359,16 @@ Proof.
   unfold agree; intros. 
   case (Reg.eq res r); intro.
   subst r. rewrite Regmap.gss. rewrite H0. apply H2.
-  apply Regset.mem_add_same.
+  apply Regset.add_1; auto.
   rewrite Regmap.gso; auto.
   case (Loc.eq (assign r) (assign res)); intro.
   rewrite e. rewrite H0.
   case (Reg.eq arg r); intro.
-  subst r. apply H2. apply Regset.mem_add_same.
+  subst r. apply H2. apply Regset.add_1; auto.
   elim (H r); auto.
   rewrite H1. apply H2. 
-  case (Reg.eq arg r); intro. subst r. apply Regset.mem_add_same.
-  rewrite Regset.mem_add_other; auto.
-  rewrite Regset.mem_remove_other; auto.
+  case (Reg.eq arg r); intro. subst r. apply Regset.add_1; auto.
+  apply Regset.add_2. apply Regset.remove_2. auto. auto. 
   eapply regalloc_noteq_diff; eauto.
   eapply regalloc_not_temporary; eauto.
 Qed.
@@ -379,11 +380,10 @@ Qed.
 Lemma agree_call:
   forall live args ros res rs v (ls ls': locset),
   (forall r,
-    Regset.mem r live = true ->
-    r <> res ->
+    Regset.In r live -> r <> res ->
     ~(In (assign r) Conventions.destroyed_at_call)) ->
   (forall r,
-    Regset.mem r live = true -> r <> res -> assign r <> assign res) ->
+    Regset.In r live -> r <> res -> assign r <> assign res) ->
   ls' (assign res) = v ->
   (forall l,
     Loc.notin l destroyed_at_call -> loc_acceptable l -> Loc.diff l (assign res) ->
@@ -399,7 +399,7 @@ Proof.
   case (Reg.eq r res); intro.
   subst r. rewrite Regmap.gss. assumption.
   rewrite Regmap.gso; auto. rewrite H2. apply H4.
-  rewrite Regset.mem_remove_other; auto.
+  apply Regset.remove_2; auto. 
   eapply regalloc_notin_notin; eauto. 
   eapply regalloc_acceptable; eauto.
   eapply regalloc_noteq_diff; eauto.
@@ -411,7 +411,7 @@ Qed.
 Lemma agree_init_regs:
   forall rl vl ls live,
   (forall r1 r2,
-    In r1 rl -> Regset.mem r2 live = true -> r1 <> r2 ->
+    In r1 rl -> Regset.In r2 live -> r1 <> r2 ->
     assign r1 <> assign r2) ->
   List.map ls (List.map assign rl) = vl ->
   agree (reg_list_dead rl live) (Regmap.init Vundef) ls ->
@@ -421,15 +421,13 @@ Proof.
   assumption.
   destruct vl. discriminate. 
   assert (agree (reg_dead a live) (init_regs vl rl) ls).
-  apply IHrl. intros. apply H. tauto. 
-  case (Reg.eq a r2); intro. subst r2. 
-  rewrite Regset.mem_remove_same in H3. discriminate.
-  rewrite Regset.mem_remove_other in H3; auto.
+  apply IHrl. intros. apply H. tauto.
+  eapply Regset.remove_3; eauto.
   auto. congruence. assumption.
   red; intros. case (Reg.eq a r); intro.
   subst r. rewrite Regmap.gss. congruence. 
-  rewrite Regmap.gso; auto. apply H2. 
-  rewrite Regset.mem_remove_other; auto.
+  rewrite Regmap.gso; auto. apply H2.
+  apply Regset.remove_2; auto. 
 Qed.
 
 Lemma agree_parameters:
@@ -437,7 +435,7 @@ Lemma agree_parameters:
   let params := f.(RTL.fn_params) in
   List.map ls (List.map assign params) = vl ->
   (forall r,
-     Regset.mem r (reg_list_dead params (live0 f flive)) = true ->
+     Regset.In r (reg_list_dead params (live0 f flive)) ->
      ls (assign r) = Vundef) ->
   agree (live0 f flive) (init_regs vl params) ls.
 Proof.
@@ -1373,6 +1371,7 @@ Proof.
   intros; red; intros; CleanupHyps.
   caseEq (Regset.mem res live!!pc); intro LV;
   rewrite LV in AG.
+  generalize (Regset.mem_2 _ _ LV). intro LV'.
   assert (LL: (List.length (List.map assign args) <= 3)%nat).
     rewrite list_length_map. 
     inversion WTI. simpl; omega. simpl; omega.
@@ -1409,7 +1408,8 @@ Proof.
   exists ls. split.
   CleanupGoal. rewrite LV. 
   apply exec_Bgoto; apply exec_refl.
-  apply agree_assign_dead; assumption.
+  apply agree_assign_dead; auto. 
+  red; intro. exploit Regset.mem_1; eauto. congruence.
 Qed.
 
 Lemma transl_Iload_correct:
@@ -1426,6 +1426,7 @@ Proof.
   caseEq (Regset.mem dst live!!pc); intro LV;
   rewrite LV in AG.
   (* dst is live *)
+  exploit Regset.mem_2; eauto. intro LV'.
   assert (LL: (List.length (List.map assign args) <= 2)%nat).
     rewrite list_length_map. 
     inversion WTI. 
@@ -1453,6 +1454,7 @@ Proof.
   CleanupGoal. rewrite LV. 
   apply exec_Bgoto; apply exec_refl.
   apply agree_assign_dead; auto.
+  red; intro; exploit Regset.mem_1; eauto. congruence.
 Qed.
 
 Lemma transl_Istore_correct:
@@ -1681,16 +1683,15 @@ Qed.
 
 Remark regset_mem_reg_list_dead:
   forall rl r live,
-  Regset.mem r (reg_list_dead rl live) = true ->
-  ~(In r rl) /\ Regset.mem r live = true.
+  Regset.In r (reg_list_dead rl live) ->
+  ~(In r rl) /\ Regset.In r live.
 Proof.
   induction rl; simpl; intros.
   tauto.
   elim (IHrl r (reg_dead a live) H). intros.
-  assert (a <> r). red; intro; subst r. 
-  rewrite Regset.mem_remove_same in H1. discriminate.
-  rewrite Regset.mem_remove_other in H1; auto.
-  tauto. 
+  assert (a <> r). red; intro; subst r.
+  exploit Regset.remove_1; eauto. 
+  intuition. eapply Regset.remove_3; eauto.
 Qed. 
 
 Lemma transf_entrypoint_correct:
@@ -1733,7 +1734,9 @@ Proof.
     intros [p [AP INP]]. clear INAP; subst ap.
     generalize (list_in_map_inv _ _ _ INAU).
     intros [u [AU INU]]. clear INAU; subst au.
-    generalize (Regset.elements_complete _ _ INU). intro.
+    assert (INU': InA Regset.E.eq u undefs).
+      rewrite InA_alt. exists u; intuition. 
+    generalize (Regset.elements_2 _ _ INU'). intro.
     generalize (regset_mem_reg_list_dead _ _ _ H4).
     intros [A B]. 
     eapply regalloc_noteq_diff; eauto.
@@ -1761,7 +1764,11 @@ Proof.
   rewrite PARAMS1. assumption.
   fold oldentry; fold params. intros.
   apply UNDEFS1. apply in_map. 
-  unfold undefs; apply Regset.elements_correct; auto.
+  unfold undefs.
+  change (transfer f oldentry live!!oldentry)
+    with (live0 f live).
+  exploit Regset.elements_1; eauto.
+  rewrite InA_alt. intros [r' [C D]]. hnf in C. subst r'. auto.
 Qed.
 
 Lemma transl_function_correct:

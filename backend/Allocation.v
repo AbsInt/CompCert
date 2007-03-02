@@ -3,6 +3,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Lattice.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
@@ -100,7 +101,8 @@ Definition transfer
     general framework for backward dataflow analysis provided by
     module [Kildall].  *)
 
-Module DS := Backward_Dataflow_Solver(Regset)(NodeSetBackward).
+Module RegsetLat := LFSet(Regset).
+Module DS := Backward_Dataflow_Solver(RegsetLat)(NodeSetBackward).
 
 Definition analyze (f: RTL.function): option (PMap.t Regset.t) :=
   DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) nil.

@@ -60,6 +60,19 @@ Module Type TREE.
     forall (A: Set) (i j: elt) (m: t A),
     i <> j -> get i (remove j m) = get i m.
 
+  (** Extensional equality between trees. *)
+  Variable beq: forall (A: Set), (A -> A -> bool) -> t A -> t A -> bool.
+  Hypothesis beq_correct:
+    forall (A: Set) (P: A -> A -> Prop) (cmp: A -> A -> bool),
+    (forall (x y: A), cmp x y = true -> P x y) ->
+    forall (t1 t2: t A), beq cmp t1 t2 = true ->
+    forall (x: elt),
+    match get x t1, get x t2 with
+    | None, None => True
+    | Some y1, Some y2 => P y1 y2
+    | _, _ => False
+    end.
+
   (** Applying a function to all data of a tree. *)
   Variable map:
     forall (A B: Set), (elt -> A -> B) -> t A -> t B.
@@ -304,6 +317,75 @@ Module PTree <: TREE.
      destruct (remove j (Node m1_1 o0 m1_2)); simpl; try rewrite (gleaf A i);
         auto.
   Qed.
+
+  Section EXTENSIONAL_EQUALITY.
+
+    Variable A: Set.
+    Variable eqA: A -> A -> Prop.
+    Variable beqA: A -> A -> bool.
+    Hypothesis beqA_correct: forall x y, beqA x y = true -> eqA x y.
+
+    Definition exteq (m1 m2: t A) : Prop :=
+      forall (x: elt),
+      match get x m1, get x m2 with
+      | None, None => True
+      | Some y1, Some y2 => eqA y1 y2
+      | _, _ => False
+      end.
+
+    Fixpoint bempty (m: t A) : bool :=
+      match m with
+      | Leaf => true
+      | Node l None r => bempty l && bempty r
+      | Node l (Some _) r => false
+      end.
+
+    Lemma bempty_correct:
+      forall m, bempty m = true -> forall x, get x m = None.
+    Proof.
+      induction m; simpl; intros. 
+      change (@Leaf A) with (empty A). apply gempty.
+      destruct o. congruence. destruct (andb_prop _ _ H). 
+      destruct x; simpl; auto.
+    Qed.
+
+    Fixpoint beq (m1 m2: t A) {struct m1} : bool :=
+      match m1, m2 with
+      | Leaf, _ => bempty m2
+      | _, Leaf => bempty m1
+      | Node l1 o1 r1, Node l2 o2 r2 =>
+          match o1, o2 with
+          | None, None => true
+          | Some y1, Some y2 => beqA y1 y2
+          | _, _ => false
+          end
+          && beq l1 l2 && beq r1 r2
+      end.
+
+    Lemma beq_correct:
+      forall m1 m2, beq m1 m2 = true -> exteq m1 m2.
+    Proof.
+      induction m1; destruct m2; simpl.
+      intros; red; intros. change (@Leaf A) with (empty A). 
+      repeat rewrite gempty. auto.
+      destruct o; intro. congruence. 
+      red; intros. change (@Leaf A) with (empty A). rewrite gempty.
+      rewrite bempty_correct. auto. assumption. 
+      destruct o; intro. congruence. 
+      red; intros. change (@Leaf A) with (empty A). rewrite gempty.
+      rewrite bempty_correct. auto. assumption. 
+      destruct o; destruct o0; simpl; intro; try congruence.
+      destruct (andb_prop _ _ H). destruct (andb_prop _ _ H0). 
+      red; intros. destruct x; simpl.
+      apply IHm1_2; auto. apply IHm1_1; auto. 
+      apply beqA_correct; auto. 
+      destruct (andb_prop _ _ H).
+      red; intros. destruct x; simpl.
+      apply IHm1_2; auto. apply IHm1_1; auto.
+      auto.
+    Qed.
+
+  End EXTENSIONAL_EQUALITY.
 
     Fixpoint append (i j : positive) {struct i} : positive :=
       match i with

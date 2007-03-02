@@ -1,9 +1,10 @@
 FILES=\
   Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml \
-  Bool.ml CList.ml Sumbool.ml BinPos.ml BinNat.ml BinInt.ml \
+  Bool.ml CList.ml Sumbool.ml Setoid.ml BinPos.ml BinNat.ml BinInt.ml \
   ZArith_dec.ml Zeven.ml Zmax.ml Zmisc.ml Zbool.ml Zpower.ml Zdiv.ml \
-  Int.ml OrderedType.ml FSetInterface.ml FSetFacts.ml FSetList.ml FSetAVL.ml \
-  Coqlib.ml Maps.ml Sets.ml AST.ml Iteration.ml Integers.ml \
+  OrderedType.ml FSetInterface.ml FSetFacts.ml FSetList.ml \
+  CInt.ml FSetAVL.ml \
+  Coqlib.ml Maps.ml Ordered.ml AST.ml Iteration.ml Integers.ml \
   ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
   Csyntax.ml Ctyping.ml Csharpminor.ml Cshmgen.ml \
@@ -16,7 +17,7 @@ FILES=\
   Lattice.ml Kildall.ml \
   Constprop.ml CSE.ml \
   LTL.ml \
-  Ordered.ml InterfGraph.ml ../caml/Coloringaux.ml Coloring.ml \
+  InterfGraph.ml ../caml/Coloringaux.ml Coloring.ml \
   Parallelmove.ml Allocation.ml  \
   Tunneling.ml Linear.ml Lineartyping.ml Linearize.ml \
   Mach.ml Stacking.ml \
@@ -30,7 +31,7 @@ FILES=\
 EXTRACTEDFILES:=$(filter-out ../caml/%, $(FILES))
 GENFILES:=$(EXTRACTEDFILES) $(EXTRACTEDFILES:.ml=.mli)
 
-CAMLINCL=-I ../caml -I ../cil/obj/x86_LINUX
+CAMLINCL=-I ../caml -I ../cil/obj/x86_LINUX -I ../cil/obj/ppc_DARWIN
 OCAMLC=ocamlc -g $(CAMLINCL)
 OCAMLOPT=ocamlopt $(CAMLINCL)
 OCAMLDEP=ocamldep $(CAMLINCL)
@@ -57,12 +58,14 @@ extraction:
 	@echo "Fixing file names..."
 	@mv list.ml CList.ml
 	@mv list.mli CList.mli
+	@mv int.ml CInt.ml
+	@mv int.mli CInt.mli
 	@for i in $(GENFILES); do \
           j=`./uncapitalize $$i`; \
           test -f $$i || (test -f $$j && mv $$j $$i); \
          done
-	@echo "Conversion List -> CList..."
-	@perl -p -i -e 's/\bList\b/CList/g;' $(GENFILES)
+	@echo "Conversion List -> CList and Int -> CInt..."
+	@./convert $(GENFILES)
 	@echo "Patching files..."
 	@for i in *.patch; do patch < $$i; done
 

@@ -36,7 +36,11 @@ Inductive approx : Set :=
 
 Module Approx <: SEMILATTICE_WITH_TOP.
   Definition t := approx.
-  Lemma eq: forall (x y: t), {x=y} + {x<>y}.
+  Definition eq (x y: t) := (x = y).
+  Definition eq_refl: forall x, eq x x := (@refl_equal t).
+  Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
+  Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+  Lemma eq_dec: forall (x y: t), {x=y} + {x<>y}.
   Proof.
     decide equality.
     apply Int.eq_dec.
@@ -44,15 +48,24 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     apply Int.eq_dec.
     apply ident_eq.
   Qed.
+  Definition beq (x y: t) := if eq_dec x y then true else false.
+  Lemma beq_correct: forall x y, beq x y = true -> x = y.
+  Proof.
+    unfold beq; intros.  destruct (eq_dec x y). auto. congruence.
+  Qed.
   Definition ge (x y: t) : Prop :=
     x = Unknown \/ y = Novalue \/ x = y.
-  Lemma ge_refl: forall x, ge x x.
+  Lemma ge_refl: forall x y, eq x y -> ge x y.
   Proof.
-    unfold ge; tauto.
+    unfold eq, ge; tauto.
   Qed.
   Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
   Proof.
     unfold ge; intuition congruence.
+  Qed.
+  Lemma ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
+  Proof.
+    unfold eq, ge; intros; congruence.
   Qed.
   Definition bot := Novalue.
   Definition top := Unknown.
@@ -65,23 +78,23 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     unfold ge, bot; tauto.
   Qed.
   Definition lub (x y: t) : t :=
-    if eq x y then x else
+    if eq_dec x y then x else
     match x, y with
     | Novalue, _ => y
     | _, Novalue => x
     | _, _ => Unknown
     end.
-  Lemma lub_commut: forall x y, lub x y = lub y x.
+  Lemma lub_commut: forall x y, eq (lub x y) (lub y x).
   Proof.
-    unfold lub; intros.
-    case (eq x y); case (eq y x); intros; try congruence.
+    unfold lub, eq; intros.
+    case (eq_dec x y); case (eq_dec y x); intros; try congruence.
     destruct x; destruct y; auto.
   Qed.
   Lemma ge_lub_left: forall x y, ge (lub x y) x.
   Proof.
     unfold lub; intros.
-    case (eq x y); intro.
-    apply ge_refl.
+    case (eq_dec x y); intro.
+    apply ge_refl. apply eq_refl.
     destruct x; destruct y; unfold ge; tauto.
   Qed.
 End Approx.

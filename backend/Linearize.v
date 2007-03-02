@@ -3,7 +3,6 @@
 
 Require Import Coqlib.
 Require Import Maps.
-Require Import Sets.
 Require Import AST.
 Require Import Values.
 Require Import Globalenvs.

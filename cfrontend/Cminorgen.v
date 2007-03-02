@@ -1,8 +1,10 @@
 (** Translation from Csharpminor to Cminor. *)
 
+Require Import FSets.
+Require FSetAVL.
 Require Import Coqlib.
 Require Import Maps.
-Require Import Sets. 
+Require Import Ordered.
 Require Import AST.
 Require Import Integers.
 Require Mem.
@@ -287,7 +289,7 @@ Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
 (** Computation of the set of variables whose address is taken in
   a piece of Csharpminor code. *)
 
-Module Identset := MakeSet(PTree).
+Module Identset := FSetAVL.Make(OrderedPositive).
 
 Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   match e with

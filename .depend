@@ -1,7 +1,5 @@
 lib/Coqlib.vo: lib/Coqlib.v
 lib/Maps.vo: lib/Maps.v lib/Coqlib.vo
-lib/Sets.vo: lib/Sets.v lib/Coqlib.vo lib/Maps.vo lib/Lattice.vo
-lib/union_find.vo: lib/union_find.v
 lib/Lattice.vo: lib/Lattice.v lib/Coqlib.vo lib/Maps.vo
 lib/Ordered.vo: lib/Ordered.v lib/Coqlib.vo lib/Maps.vo
 lib/Iteration.vo: lib/Iteration.v lib/Coqlib.vo
@@ -18,7 +16,7 @@ backend/Op.vo: backend/Op.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floa
 backend/Cminor.vo: backend/Cminor.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Events.vo common/Values.vo common/Mem.vo backend/Op.vo common/Globalenvs.vo
 backend/Cmconstr.vo: backend/Cmconstr.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo backend/Op.vo common/Globalenvs.vo backend/Cminor.vo
 backend/Cmconstrproof.vo: backend/Cmconstrproof.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo backend/Op.vo common/Globalenvs.vo backend/Cminor.vo backend/Cmconstr.vo
-backend/Registers.vo: backend/Registers.v lib/Coqlib.vo common/AST.vo lib/Maps.vo lib/Sets.vo
+backend/Registers.vo: backend/Registers.v lib/Coqlib.vo common/AST.vo lib/Maps.vo lib/Ordered.vo
 backend/RTL.vo: backend/RTL.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Events.vo common/Mem.vo common/Globalenvs.vo backend/Op.vo backend/Registers.vo
 backend/RTLgen.vo: backend/RTLgen.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo backend/Op.vo backend/Registers.vo backend/Cminor.vo backend/RTL.vo
 backend/RTLgenproof1.vo: backend/RTLgenproof1.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Events.vo common/Mem.vo common/Globalenvs.vo backend/Op.vo backend/Registers.vo backend/Cminor.vo backend/RTL.vo backend/RTLgen.vo
@@ -37,7 +35,7 @@ backend/InterfGraph.vo: backend/InterfGraph.v lib/Coqlib.vo lib/Maps.vo lib/Orde
 backend/Coloring.vo: backend/Coloring.v lib/Coqlib.vo lib/Maps.vo common/AST.vo backend/Op.vo backend/Registers.vo backend/RTL.vo backend/RTLtyping.vo backend/Locations.vo backend/Conventions.vo backend/InterfGraph.vo
 backend/Coloringproof.vo: backend/Coloringproof.v lib/Coqlib.vo lib/Maps.vo common/AST.vo backend/Op.vo backend/Registers.vo backend/RTL.vo backend/RTLtyping.vo backend/Locations.vo backend/Conventions.vo backend/InterfGraph.vo backend/Coloring.vo
 backend/Parallelmove.vo: backend/Parallelmove.v lib/Coqlib.vo lib/Parmov.vo common/Values.vo common/Events.vo common/AST.vo backend/Locations.vo backend/Conventions.vo
-backend/Allocation.vo: backend/Allocation.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Globalenvs.vo backend/Op.vo backend/Registers.vo backend/RTL.vo backend/RTLtyping.vo backend/Kildall.vo backend/Locations.vo backend/Conventions.vo backend/Coloring.vo backend/Parallelmove.vo backend/LTL.vo
+backend/Allocation.vo: backend/Allocation.v lib/Coqlib.vo lib/Maps.vo lib/Lattice.vo common/AST.vo lib/Integers.vo common/Values.vo common/Globalenvs.vo backend/Op.vo backend/Registers.vo backend/RTL.vo backend/RTLtyping.vo backend/Kildall.vo backend/Locations.vo backend/Conventions.vo backend/Coloring.vo backend/Parallelmove.vo backend/LTL.vo
 backend/Allocproof.vo: backend/Allocproof.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo backend/Op.vo backend/Registers.vo backend/RTL.vo backend/RTLtyping.vo backend/Locations.vo backend/Conventions.vo backend/Coloring.vo backend/Coloringproof.vo backend/Parallelmove.vo backend/Allocation.vo backend/LTL.vo
 backend/Alloctyping.vo: backend/Alloctyping.v lib/Coqlib.vo lib/Maps.vo common/AST.vo backend/Op.vo backend/Registers.vo backend/RTL.vo backend/Locations.vo backend/LTL.vo backend/Coloring.vo backend/Coloringproof.vo backend/Allocation.vo backend/Allocproof.vo backend/RTLtyping.vo backend/LTLtyping.vo backend/Conventions.vo backend/Parallelmove.vo
 backend/Tunneling.vo: backend/Tunneling.v lib/Coqlib.vo lib/Maps.vo common/AST.vo common/Values.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/LTL.vo
@@ -45,7 +43,7 @@ backend/Tunnelingproof.vo: backend/Tunnelingproof.v lib/Coqlib.vo lib/Maps.vo co
 backend/Tunnelingtyping.vo: backend/Tunnelingtyping.v lib/Coqlib.vo lib/Maps.vo common/AST.vo common/Values.vo common/Mem.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/LTL.vo backend/LTLtyping.vo backend/Tunneling.vo
 backend/Linear.vo: backend/Linear.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/LTL.vo backend/Conventions.vo
 backend/Lineartyping.vo: backend/Lineartyping.v lib/Coqlib.vo lib/Maps.vo common/AST.vo backend/Op.vo backend/RTL.vo backend/Locations.vo backend/Linear.vo backend/Conventions.vo
-backend/Linearize.vo: backend/Linearize.v lib/Coqlib.vo lib/Maps.vo lib/Sets.vo common/AST.vo common/Values.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/LTL.vo backend/Linear.vo backend/Kildall.vo lib/Lattice.vo
+backend/Linearize.vo: backend/Linearize.v lib/Coqlib.vo lib/Maps.vo common/AST.vo common/Values.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/LTL.vo backend/Linear.vo backend/Kildall.vo lib/Lattice.vo
 backend/Linearizeproof.vo: backend/Linearizeproof.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/LTL.vo backend/Linear.vo backend/Linearize.vo lib/Lattice.vo
 backend/Linearizetyping.vo: backend/Linearizetyping.v lib/Coqlib.vo lib/Maps.vo common/AST.vo backend/Op.vo backend/Locations.vo backend/LTL.vo backend/Linear.vo backend/Linearize.vo backend/LTLtyping.vo backend/Lineartyping.vo backend/Conventions.vo
 backend/Mach.vo: backend/Mach.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo backend/Op.vo backend/Locations.vo backend/Conventions.vo
@@ -67,5 +65,5 @@ cfrontend/Cshmgenproof1.vo: cfrontend/Cshmgenproof1.v lib/Coqlib.vo lib/Maps.vo 
 cfrontend/Cshmgenproof2.vo: cfrontend/Cshmgenproof2.v lib/Coqlib.vo lib/Maps.vo lib/Integers.vo lib/Floats.vo common/AST.vo common/Values.vo common/Events.vo common/Mem.vo common/Globalenvs.vo cfrontend/Csyntax.vo cfrontend/Csem.vo cfrontend/Ctyping.vo cfrontend/Csharpminor.vo cfrontend/Cshmgen.vo cfrontend/Cshmgenproof1.vo
 cfrontend/Cshmgenproof3.vo: cfrontend/Cshmgenproof3.v lib/Coqlib.vo lib/Maps.vo lib/Integers.vo lib/Floats.vo common/AST.vo common/Values.vo common/Events.vo common/Mem.vo common/Globalenvs.vo cfrontend/Csyntax.vo cfrontend/Csem.vo cfrontend/Ctyping.vo cfrontend/Csharpminor.vo cfrontend/Cshmgen.vo cfrontend/Cshmgenproof1.vo cfrontend/Cshmgenproof2.vo
 cfrontend/Csharpminor.vo: cfrontend/Csharpminor.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo
-cfrontend/Cminorgen.vo: cfrontend/Cminorgen.v lib/Coqlib.vo lib/Maps.vo lib/Sets.vo common/AST.vo lib/Integers.vo common/Mem.vo cfrontend/Csharpminor.vo backend/Op.vo backend/Cminor.vo backend/Cmconstr.vo
-cfrontend/Cminorgenproof.vo: cfrontend/Cminorgenproof.v lib/Coqlib.vo lib/Maps.vo lib/Sets.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo cfrontend/Csharpminor.vo backend/Op.vo backend/Cminor.vo backend/Cmconstr.vo cfrontend/Cminorgen.vo backend/Cmconstrproof.vo
+cfrontend/Cminorgen.vo: cfrontend/Cminorgen.v lib/Coqlib.vo lib/Maps.vo lib/Ordered.vo common/AST.vo lib/Integers.vo common/Mem.vo cfrontend/Csharpminor.vo backend/Op.vo backend/Cminor.vo backend/Cmconstr.vo
+cfrontend/Cminorgenproof.vo: cfrontend/Cminorgenproof.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo cfrontend/Csharpminor.vo backend/Op.vo backend/Cminor.vo backend/Cmconstr.vo cfrontend/Cminorgen.vo backend/Cmconstrproof.vo

@@ -2,6 +2,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import FSets.
 
 (** * Signatures of semi-lattices *)
 
@@ -13,14 +14,20 @@ Require Import Maps.
 Module Type SEMILATTICE.
 
   Variable t: Set.
-  Variable eq: forall (x y: t), {x=y} + {x<>y}.
+  Variable eq: t -> t -> Prop.
+  Hypothesis eq_refl: forall x, eq x x.
+  Hypothesis eq_sym: forall x y, eq x y -> eq y x.
+  Hypothesis eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
+  Variable beq: t -> t -> bool.
+  Hypothesis beq_correct: forall x y, beq x y = true -> eq x y.
   Variable ge: t -> t -> Prop.
-  Hypothesis ge_refl: forall x, ge x x.
+  Hypothesis ge_refl: forall x y, eq x y -> ge x y.
   Hypothesis ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
+  Hypothesis ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
   Variable bot: t.
   Hypothesis ge_bot: forall x, ge x bot.
   Variable lub: t -> t -> t.
-  Hypothesis lub_commut: forall x y, lub x y = lub y x.
+  Hypothesis lub_commut: forall x y, eq (lub x y) (lub y x).
   Hypothesis ge_lub_left: forall x y, ge (lub x y) x.
 
 End SEMILATTICE.
@@ -31,16 +38,22 @@ End SEMILATTICE.
 Module Type SEMILATTICE_WITH_TOP.
 
   Variable t: Set.
-  Variable eq: forall (x y: t), {x=y} + {x<>y}.
+  Variable eq: t -> t -> Prop.
+  Hypothesis eq_refl: forall x, eq x x.
+  Hypothesis eq_sym: forall x y, eq x y -> eq y x.
+  Hypothesis eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
+  Variable beq: t -> t -> bool.
+  Hypothesis beq_correct: forall x y, beq x y = true -> eq x y.
   Variable ge: t -> t -> Prop.
-  Hypothesis ge_refl: forall x, ge x x.
+  Hypothesis ge_refl: forall x y, eq x y -> ge x y.
   Hypothesis ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
+  Hypothesis ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
   Variable bot: t.
   Hypothesis ge_bot: forall x, ge x bot.
   Variable top: t.
   Hypothesis ge_top: forall x, ge top x.
   Variable lub: t -> t -> t.
-  Hypothesis lub_commut: forall x y, lub x y = lub y x.
+  Hypothesis lub_commut: forall x y, eq (lub x y) (lub y x).
   Hypothesis ge_lub_left: forall x y, ge (lub x y) x.
 
 End SEMILATTICE_WITH_TOP.
@@ -58,13 +71,6 @@ Inductive t_ : Set :=
   | Top_except: PTree.t L.t -> t_.
 
 Definition t: Set := t_.
-
-Lemma eq: forall (x y: t), {x=y} + {x<>y}.
-Proof.
-  assert (forall m1 m2: PTree.t L.t, {m1=m2} + {m1<>m2}).
-  apply PTree.eq. exact L.eq.
-  decide equality.
-Qed.
 
 Definition get (p: positive) (x: t) : L.t :=
   match x with
@@ -96,17 +102,58 @@ Proof.
   intros. destruct x; simpl; rewrite PTree.gso; auto.
 Qed.
 
+Definition eq (x y: t) : Prop :=
+  forall p, L.eq (get p x) (get p y).
+
+Lemma eq_refl: forall x, eq x x.
+Proof.
+  unfold eq; intros. apply L.eq_refl.
+Qed.
+
+Lemma eq_sym: forall x y, eq x y -> eq y x.
+Proof.
+  unfold eq; intros. apply L.eq_sym; auto.
+Qed.
+
+Lemma eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
+Proof.
+  unfold eq; intros. eapply L.eq_trans; eauto.
+Qed.
+
+Definition beq (x y: t) : bool :=
+  match x, y with
+  | Bot_except m, Bot_except n => PTree.beq L.beq m n
+  | Top_except m, Top_except n => PTree.beq L.beq m n
+  | _, _ => false
+  end.
+
+Lemma beq_correct: forall x y, beq x y = true -> eq x y.
+Proof.
+  destruct x; destruct y; simpl; intro; try congruence.
+  red; intro; simpl.
+  generalize (PTree.beq_correct L.eq L.beq L.beq_correct t0 t1 H p).
+  destruct (t0!p); destruct (t1!p); intuition. apply L.eq_refl.
+  red; intro; simpl.
+  generalize (PTree.beq_correct L.eq L.beq L.beq_correct t0 t1 H p).
+  destruct (t0!p); destruct (t1!p); intuition. apply L.eq_refl.
+Qed.
+
 Definition ge (x y: t) : Prop :=
   forall p, L.ge (get p x) (get p y).
 
-Lemma ge_refl: forall x, ge x x.
+Lemma ge_refl: forall x y, eq x y -> ge x y.
 Proof.
-  unfold ge; intros. apply L.ge_refl.
+  unfold ge, eq; intros. apply L.ge_refl. auto.
 Qed.
 
 Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
 Proof.
   unfold ge; intros. apply L.ge_trans with (get p y); auto.
+Qed.
+
+Lemma ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
+Proof.
+  unfold eq,ge; intros. eapply L.ge_compat; eauto.
 Qed.
 
 Definition bot := Bot_except (PTree.empty L.t).
@@ -177,11 +224,13 @@ Definition lub (x y: t) : t :=
   end.
 
 Lemma lub_commut:
-  forall x y, lub x y = lub y x.
+  forall x y, eq (lub x y) (lub y x).
 Proof.
-  destruct x; destruct y; unfold lub; decEq; 
-  apply PTree.combine_commut; intros;
-  (destruct i; destruct j; auto; decEq; apply L.lub_commut).
+  intros x y p. 
+  destruct x; destruct y; simpl;
+  repeat rewrite PTree.gcombine; auto;
+  destruct t0!p; destruct t1!p;
+  try apply L.eq_refl; try apply L.lub_commut.
 Qed.
 
 Lemma ge_lub_left:
@@ -191,7 +240,8 @@ Proof.
 
   rewrite PTree.gcombine. 
   destruct t0!p. destruct t1!p. apply L.ge_lub_left.
-  apply L.ge_refl. destruct t1!p. apply L.ge_bot. apply L.ge_refl.
+  apply L.ge_refl. apply L.eq_refl. 
+  destruct t1!p. apply L.ge_bot. apply L.ge_refl. apply L.eq_refl.
   auto.
 
   rewrite PTree.gcombine. 
@@ -201,15 +251,66 @@ Proof.
 
   rewrite PTree.gcombine. 
   destruct t0!p. destruct t1!p. apply L.ge_lub_left.
-  apply L.ge_refl. apply L.ge_refl. auto.
+  apply L.ge_refl. apply L.eq_refl. apply L.ge_refl. apply L.eq_refl. auto.
 
   rewrite PTree.gcombine. 
   destruct t0!p. destruct t1!p. apply L.ge_lub_left.
-  apply L.ge_top. apply L.ge_refl.
+  apply L.ge_top. apply L.ge_refl. apply L.eq_refl.
   auto.
 Qed.
 
 End LPMap.
+
+(** * Semi-lattice over a set. *)
+
+(** Given a set [S: FSetInterface.S], the following functor
+    implements a semi-lattice over these sets, ordered by inclusion. *)
+
+Module LFSet (S: FSetInterface.S) <: SEMILATTICE.
+
+  Definition t := S.t.
+
+  Definition eq (x y: t) := S.Equal x y.
+  Definition eq_refl: forall x, eq x x := S.eq_refl.
+  Definition eq_sym: forall x y, eq x y -> eq y x := S.eq_sym.
+  Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := S.eq_trans.
+  Definition beq: t -> t -> bool := S.equal.
+  Definition beq_correct: forall x y, beq x y = true -> eq x y := S.equal_2.
+
+  Definition ge (x y: t) := S.Subset y x.
+  Lemma ge_refl: forall x y, eq x y -> ge x y.
+  Proof.
+    unfold eq, ge, S.Equal, S.Subset; intros. firstorder. 
+  Qed.
+  Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
+  Proof.
+    unfold ge, S.Subset; intros. eauto.
+  Qed.
+  Lemma ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
+  Proof.
+    unfold ge, eq, S.Subset, S.Equal; intros. firstorder.
+  Qed.
+
+  Definition  bot: t := S.empty.
+  Lemma ge_bot: forall x, ge x bot.
+  Proof.
+    unfold ge, bot, S.Subset; intros. elim (S.empty_1 H).
+  Qed.
+
+  Definition lub: t -> t -> t := S.union.
+  Lemma lub_commut: forall x y, eq (lub x y) (lub y x).
+  Proof.
+    unfold lub, eq, S.Equal; intros. split; intro.
+    destruct (S.union_1 H). apply S.union_3; auto. apply S.union_2; auto.
+    destruct (S.union_1 H). apply S.union_3; auto. apply S.union_2; auto.
+  Qed.
+
+  Lemma ge_lub_left: forall x y, ge (lub x y) x.
+  Proof.
+    unfold lub, ge, S.Subset; intros. apply S.union_2; auto. 
+  Qed.
+
+End LFSet.
 
 (** * Flat semi-lattice *)
 
@@ -227,9 +328,23 @@ Inductive t_ : Set :=
 
 Definition t : Set := t_.
 
-Lemma eq: forall (x y: t), {x=y} + {x<>y}.
+Definition eq (x y: t) := (x = y).
+Definition eq_refl: forall x, eq x x := (@refl_equal t).
+Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
+Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+
+Definition beq (x y: t) : bool :=
+  match x, y with
+  | Bot, Bot => true
+  | Inj u, Inj v => if X.eq u v then true else false
+  | Top, Top => true
+  | _, _ => false
+  end.
+
+Lemma beq_correct: forall x y, beq x y = true -> eq x y.
 Proof.
-  decide equality. apply X.eq.
+  unfold eq; destruct x; destruct y; simpl; try congruence; intro.
+  destruct (X.eq t0 t1); congruence.
 Qed.
 
 Definition ge (x y: t) : Prop :=
@@ -240,15 +355,20 @@ Definition ge (x y: t) : Prop :=
   | _, _ => False
   end.
 
-Lemma ge_refl: forall x, ge x x.
+Lemma ge_refl: forall x y, eq x y -> ge x y.
 Proof.
-  unfold ge; destruct x; auto.
+  unfold eq, ge; intros; subst y; destruct x; auto.
 Qed.
 
 Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
 Proof.
   unfold ge; destruct x; destruct y; try destruct z; intuition.
   transitivity t1; auto.
+Qed.
+
+Lemma ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
+Proof.
+  unfold eq; intros; congruence.
 Qed.
 
 Definition bot: t := Bot.
@@ -274,9 +394,9 @@ Definition lub (x y: t) : t :=
   | Inj a, Inj b => if X.eq a b then Inj a else Top
   end.
 
-Lemma lub_commut: forall x y, lub x y = lub y x.
+Lemma lub_commut: forall x y, eq (lub x y) (lub y x).
 Proof.
-  destruct x; destruct y; simpl; auto.
+  unfold eq; destruct x; destruct y; simpl; auto.
   case (X.eq t0 t1); case (X.eq t1 t0); intros; congruence.
 Qed.
 
@@ -297,16 +417,28 @@ Module LBoolean <: SEMILATTICE_WITH_TOP.
 
 Definition t := bool.
 
-Lemma eq: forall (x y: t), {x=y} + {x<>y}.
-Proof. decide equality. Qed.
+Definition eq (x y: t) := (x = y).
+Definition eq_refl: forall x, eq x x := (@refl_equal t).
+Definition eq_sym: forall x y, eq x y -> eq y x := (@sym_equal t).
+Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@trans_equal t).
+
+Definition beq : t -> t -> bool := eqb.
+
+Lemma beq_correct: forall x y, beq x y = true -> eq x y.
+Proof eqb_prop.
 
 Definition ge (x y: t) : Prop := x = y \/ x = true.
 
-Lemma ge_refl: forall x, ge x x.
+Lemma ge_refl: forall x y, eq x y -> ge x y.
 Proof. unfold ge; tauto. Qed.
 
 Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
 Proof. unfold ge; intuition congruence. Qed.
+
+Lemma ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
+Proof.
+  unfold eq; intros; congruence.
+Qed.
 
 Definition bot := false.
 
@@ -320,12 +452,13 @@ Proof. unfold ge, top; tauto. Qed.
 
 Definition lub (x y: t) := x || y.
 
-Lemma lub_commut: forall x y, lub x y = lub y x.
-Proof. intros; unfold lub. apply orb_comm. Qed.
+Lemma lub_commut: forall x y, eq (lub x y) (lub y x).
+Proof. intros; unfold eq, lub. apply orb_comm. Qed.
 
 Lemma ge_lub_left: forall x y, ge (lub x y) x.
 Proof. destruct x; destruct y; compute; tauto. Qed.
 
 End LBoolean.
+
 
 
