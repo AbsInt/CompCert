@@ -846,3 +846,34 @@ Proof.
   intros P Q a. destruct a; simpl. auto. congruence.
 Qed.
 
+Section DECIDABLE_EQUALITY.
+
+Variable A: Set.
+Variable dec_eq: forall (x y: A), {x=y} + {x<>y}.
+Variable B: Set.
+
+Lemma dec_eq_true:
+  forall (x: A) (ifso ifnot: B),
+  (if dec_eq x x then ifso else ifnot) = ifso.
+Proof.
+  intros. destruct (dec_eq x x). auto. congruence.
+Qed.
+
+Lemma dec_eq_false:
+  forall (x y: A) (ifso ifnot: B),
+  x <> y -> (if dec_eq x y then ifso else ifnot) = ifnot.
+Proof.
+  intros. destruct (dec_eq x y). congruence. auto.
+Qed.
+
+Lemma dec_eq_sym:
+  forall (x y: A) (ifso ifnot: B),
+  (if dec_eq x y then ifso else ifnot) =
+  (if dec_eq y x then ifso else ifnot).
+Proof.
+  intros. destruct (dec_eq x y). 
+  subst y. rewrite dec_eq_true. auto.
+  rewrite dec_eq_false; auto.
+Qed.
+
+End DECIDABLE_EQUALITY.
