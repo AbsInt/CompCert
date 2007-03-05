@@ -6,10 +6,10 @@ Require Import FSets.
 
 (** * Signatures of semi-lattices *)
 
-(** A semi-lattice is a type [t] equipped with a decidable equality [eq],
-  a partial order [ge], a smallest element [bot], and an upper
-  bound operation [lub].  Note that we do not demand that [lub] computes
-  the least upper bound. *)
+(** A semi-lattice is a type [t] equipped with an equivalence relation [eq],
+  a boolean equivalence test [beq], a partial order [ge], a smallest element 
+  [bot], and an upper bound operation [lub].
+  Note that we do not demand that [lub] computes the least upper bound. *)
 
 Module Type SEMILATTICE.
 
