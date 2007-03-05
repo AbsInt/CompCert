@@ -1101,36 +1101,7 @@ End BBlock_solver.
 
 Require Import FSets.
 Require Import FSetAVL.
-
-Module OrderedPositive <: OrderedType with Definition t := positive.
-  Definition t := positive.
-  Definition eq (x y: t) := x = y.
-  Definition lt := Plt.
-
-  Lemma eq_refl : forall x : t, eq x x.
-  Proof. unfold eq; auto. Qed.
-
-  Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof. unfold eq; auto. Qed.
-
-  Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof. unfold eq; intros. transitivity y; auto. Qed.
-
-  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-  Proof Plt_trans.
-
-  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
-  Proof Plt_ne.
-
-  Lemma compare : forall x y : t, Compare lt eq x y.
-  Proof. 
-    intros.
-    caseEq (Zcompare (Zpos x) (Zpos y)); intros.
-    apply EQ. unfold eq. generalize (Zcompare_Eq_eq _ _ H). congruence.
-    apply LT. exact H. 
-    apply GT. rewrite Zcompare_Gt_Lt_antisym in H. exact H.
-  Qed.
-End OrderedPositive.
+Require Import Ordered.
 
 Module PositiveSet := FSetAVL.Make(OrderedPositive).
 Module PositiveSetFacts := FSetFacts.Facts(PositiveSet).
