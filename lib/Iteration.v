@@ -1,5 +1,6 @@
 (* Bounded and unbounded iterators *)
 
+Require Recdef.
 Require Import Coqlib.
 Require Import Classical.
 Require Import Max.
@@ -71,51 +72,15 @@ Fixpoint iterate (a: A) : B :=
 
 Definition num_iterations := 1000000000000%positive.
 
-(** The simple definition of bounded iteration is:
-<<
-Fixpoint iterate (niter: nat) (a: A) {struct niter} : option B :=
-  match niter with
-  | O => None
-  | S niter' =>
-      match step a with
-      | inl b => b
-      | inr a' => iterate niter' a'
-      end
-  end.
->>
-  This function is structural recursive over the parameter [niter]
-  (number of iterations), represented here as a Peano integer (type [nat]).
-  However, we want to use very large values of [niter].  As Peano integers,
-  these values would be much too large to fit in memory.  Therefore,
-  we must express iteration counts as a binary integer (type [positive]).
-  However, Peano induction over type [positive] is not structural recursion,
-  so we cannot define [iterate] as a Coq fixpoint and must use
-  Noetherian recursion instead. *)
-
-Definition iter_step (x: positive)
-                     (next: forall y, Plt y x -> A -> option B)
-                     (s: A) : option B :=
-  match peq x xH with
-  | left EQ => None
-  | right NOTEQ =>
-      match step s with
-      | inl res => Some res
-      | inr s'  => next (Ppred x) (Ppred_Plt x NOTEQ) s'
-      end
-  end.
-
-Definition iter: positive -> A -> option B :=
-  Fix Plt_wf (fun _ => A -> option B) iter_step.
-
-(** We then prove the expected unrolling equations for [iter]. *)
-
-Remark unroll_iter:
-  forall x, iter x = iter_step x (fun y _ => iter y).
+Function iter (niter: positive) (s: A) {wf Plt niter} : option B :=
+  if peq niter xH then None else
+    match step s with
+    | inl res => Some res
+    | inr s'  => iter (Ppred niter) s'
+    end.
 Proof.
-  unfold iter; apply (Fix_eq Plt_wf (fun _ => A -> option B) iter_step).
-  intros. unfold iter_step. apply extensionality. intro s. 
-  case (peq x xH); intro. auto. 
-  rewrite H. auto. 
+  intros. apply Ppred_Plt. auto.
+  apply Plt_wf.
 Qed.
 
 (** The [iterate] function is defined as [iter] up to
@@ -135,13 +100,10 @@ Hypothesis step_prop:
 Lemma iter_prop:
   forall n a b, P a -> iter n a = Some b -> Q b.
 Proof.
-  apply (well_founded_ind Plt_wf 
-         (fun p => forall a b, P a -> iter p a = Some b -> Q b)).
-  intros until b. intro. rewrite unroll_iter.
-  unfold iter_step. case (peq x 1); intro. congruence.
-  generalize (step_prop a H0).
-  case (step a); intros. congruence. 
-  apply H with (Ppred x) a0. apply Ppred_Plt; auto. auto. auto.
+  intros n a. functional induction (iter n a); intros.
+  discriminate.
+  inversion H0; subst b. generalize (step_prop s H). rewrite e0. auto.
+  apply IHo. generalize (step_prop s H). rewrite e0. auto. auto.
 Qed.
 
 Lemma iterate_prop:
