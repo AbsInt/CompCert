@@ -1,0 +1,44 @@
+\begin{figure}
+
+\begin{syntax}
+\syntaxclass{Statements:}
+s & ::=  & "skip" & empty statement \\
+  & \alt & a  & expression evaluation\\
+  & \alt & a_1 = a_2 &  assignment \\  
+  & \alt & s_1 ; s_2 & sequence \\
+  & \alt & "if"(a) ~ s_1 ~ "else" ~ s_2 & conditional \\
+  & \alt & "switch"(a) \ls & switch \\
+  & \alt & "while"(a) ~ s & ``while'' loop \\
+  & \alt & "do" ~ s ~ "while" (a) & ``do'' loop \\
+  & \alt & "for"(s_1, a, s_2)~s & ``for'' loop \\
+  & \alt & "break" & exit from the current loop \\
+  & \alt & "continue" & next iteration of the current loop\\
+  & \alt & "return"~\opt a & return from current function
+% 
+\syntaxclass{Switch branches:}
+\ls & ::=  & "default" (s) & default case switch \\
+     & \alt & "case" (n, s, \ls) & non default case switch
+     %
+\syntaxclass{Functions:}
+\cfn & ::= & (\ldots  \id_i: \tau_i \ldots): \tau & header\\
+    &     & \{ \ldots  \tau_j~ \id_j ; \ldots & local variables \\
+    &     & ~  s ~ \} & function body
+%
+\syntaxclass{Function signatures:}
+\sig & ::= & \ldots \tau_i \ldots \tau & \\
+%
+\syntaxclass{Function definitions:}
+\fn & ::= & \cfn & Clight (internal) function\\
+     & \alt & <\id  ~ \sig> & external function (system call)
+%
+\syntaxclass{Whole programs:}
+{\it init} & ::= & \ldots & \\
+\prog & ::= & \ldots (\id_i,{{{\it init}}_i}^*): \tau_i \ldots & global variables (names, \\
+& & &initialized data and types) \\
+      &     & \ldots \id_j = \fn_j \ldots  & functions (names and definitions) \\
+      &     & \id_{main}  & entry point
+\end{syntax}
+\caption{Abstract syntax of Clight (statements, functions and programs). }
+\label{fig:syntax2}
+\end{figure}
+

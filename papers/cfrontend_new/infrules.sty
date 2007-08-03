@@ -1,0 +1,224 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Style to compose inference rules
+
+% User commands:
+% For axioms:
+%       \srule  blah blah blah \end
+% For inference rules:
+%       \irule  premise1 & premise2 \\
+%               premise3 & premise 4
+%               ---------------
+%               conclusion
+%       \end
+% Premises are separated by & (horizontal concatenation)
+% or \\ (newline). The row of dashes must contain at least 4 dashes.
+% To build derivations: use
+%       {\subrule premises ----- conclusion \end}
+% for sub-derivations
+
+% Turnstyle: |- is recognized and becomes the turnstyle symbol. Works also
+% outside of inference rules. |blabla- is a turnstyle symbol with "blabla"
+% under the horizontal bar.
+
+% Layout of the rules:
+% - by default: one rule per line, centered (display math mode)
+% - inside \begin{pannel}...\end{pannel}:
+%       puts several rules per line, if possible.
+%       The rules are centered and evenly spread on the page.
+%       The rules are separated by at least 2em of space.
+% - inside \begin{centerpannel}...\end{centerpannel}:
+%       same as {pannel}, but the rules are grouped in the middle
+%       of the line (with 1em space between them), instead of
+%       being spread out evenly.
+% - inside \begin{simplepannel}...\end{simplepannel}:
+%       same as {pannel}, but no space is inserted between the rules.
+%       The user is expected to put the correct amount of space by
+%       hand.
+% In all three "pannel" environments, \\ forces a newline.
+
+% Numbering rules:
+% By default: no numbers.
+% Use \numberrules to turn numbering on, \nonumberrules to turn it off.
+% Also, use \nsrule axiom \end and \nirule premises ---- conclusion \end
+% to number a single rule.
+% Use \label{...} just after \end to label the rule number.
+% Do \rulenumber=10 to restart numbering at rule number 10.
+% Use \irulenumber{10} premises ---- conclusion \end
+% and \srulenumber{10} axiom \end
+% to number the rule with a given number (10, in this example).
+
+% User-definable dimensions:
+% \ampersandskip  amount of horizontal space inserted at & (default: 1.5em)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Turnstyle
+
+\let\|=|
+\catcode`|=\active
+\def|{\@ifnextchar-{\simpleturnstile}{\annotturnstile}}
+\def\simpleturnstile-{\vdash}
+\def\annotturnstile#1-{%
+  \vdash_{\!\!\!\lower0.05ex\hbox{\tiny #1}}}
+
+% Here is a list of the characters that have been specially catcoded:
+\def\dospecials{\do\ \do\\\do\{\do\}\do\$\do\&%
+  \do\#\do\^\do\_\do\%\do\~\do\|}
+\def\docspecials{\do\ \do\$\do\&%
+  \do\#\do\^\do\^^K\do\_\do\^^A\do\%\do\~\do\|}
+
+% Definition of &
+
+\def\ampersandskip{1.5em}
+\def\amper{\hspace*{\ampersandskip}\relax}
+{\catcode`&=\active \global\def&{\amper}}
+
+% Inference rules
+
+\def\mathmode{$$}               %overriden by the pannel environments
+\def\endmathmode{$$}            %ditto
+
+\def\irule{\mathmode\catcode`&=\active\begin{array}{@{}c@{}}\@irule}
+
+\def\@irule#1----#2\end{
+  #1
+  \\[-1.2ex] \hrulefill \hbox to 0pt{\@makerulenumber\hss} \\ \relax
+  \@gobbledashes #2
+  \end{array}%
+  \@rulenumber%
+  \endmathmode}
+
+% Skip any dashes at the beginning of the argument
+
+\def\@gobbledashes#1{%
+  \ifx-#1\let\@next=\@gobbledashes\else\let\@next=#1\fi\@next%
+}
+
+% Axioms
+
+\def\srule{\mathmode\catcode`&=\active\begin{array}{@{}c@{}}\@srule}
+
+\def\@srule#1\end{#1\end{array}\hbox to 0pt{\@makerulenumber\hss}\@rulenumber\endmathmode}
+
+% Sub-rules
+
+\def\subrule#1----#2\end{
+  \begin{array}[b]{@{}c@{}}
+  #1
+  \\[-1.2ex] \hrulefill \\ \relax
+  \@gobbledashes #2
+  \end{array}}
+
+\def\subrulenum#1----#2\end{
+  \begin{array}[b]{@{}c}
+  #1
+  \\[-1.2ex] \hrulefill \hbox to 0pt{\@makerulenumber\hss} \\ \relax
+  \@gobbledashes #2
+  \end{array}
+  \@rulenumber}
+
+% Rule numbering
+
+\def\rulenumberskip{0.5em}
+\def\@rulenumber{}
+\def\@makerulenumber{}
+
+\def\skiprulenumber{\setbox0=\hbox{\@makerulenumber}\hspace*{\wd0}}
+
+\newcount\rulenumber
+\rulenumber=1
+
+\def\numberrules{
+  \def\@makerulenumber{%
+     \kern\rulenumberskip\rm(\the\rulenumber)}%
+  \def\@rulenumber{%
+     \skiprulenumber%
+     \global\edef\@currentlabel{\the\rulenumber}%
+     \global\advance\rulenumber by1}}
+
+\def\nonumberrules{
+  \def\@rulenumber{}}
+
+% To number just one rule
+
+\def\@numberonerule{
+  \def\@makerulenumber{%
+     \kern\rulenumberskip\rm(\the\rulenumber)}%
+  \def\@rulenumber{%
+     \skiprulenumber%
+     \global\edef\@currentlabel{\the\rulenumber}%
+     \global\advance\rulenumber by1%
+     \global\def\@makerulenumber{}%
+     \global\def\@rulenumber{}}}
+
+\def\nirule{\@numberonerule\irule}
+\def\nsrule{\@numberonerule\srule}
+
+% To number just one rule with a given number
+
+\def\@setrulenumber#1{%
+  \def\@makerulenumber{%
+     \kern\rulenumberskip\rm(#1)}%
+  \def\@rulenumber{%
+     \skiprulenumber%
+     \global\def\@makerulenumber{}%
+     \global\def\@rulenumber{}}%
+}
+
+\def\@tempsetrulenumber#1{%
+  \def\@makerulenumber{%
+     \kern\rulenumberskip\rm(#1)}%
+  \def\@rulenumber{%
+     \skiprulenumber}%
+
+}
+
+\def\irulenumber#1{\@setrulenumber{#1}\irule}
+\def\srulenumber#1{\@setrulenumber{#1}\srule}
+
+\def\subrulenumber#1{\@tempsetrulenumber{#1}\subrulenum}
+
+% \begin{pannel} ... \end{pannel} puts several rules per line
+% whenever possible. The rules are centered on the page and evenly spread.
+
+\def\pannel{%
+\begin{center}%
+\def\mathmode{\hfilneg\hfil\hskip 1em$\displaystyle}%
+\def\endmathmode{$\hskip 1em\hfil}%
+\lineskip=1.5ex plus 0.4ex minus 0.1ex%
+\catcode`\^^M=10% space
+}
+
+\def\endpannel{%
+  \end{center}%
+}
+
+% Same as pannel, except that the rules are grouped in the middle of
+% the page
+
+\def\centerpannel{
+  \begin{center}
+  \def\mathmode{$\displaystyle}
+  \def\endmathmode{$\hskip 1em}
+  \lineskip=1.5ex plus 0.4ex minus 0.1ex
+  \catcode`\^^M=10 %space
+}
+
+\def\endcenterpannel{
+  \end{center}
+}
+
+% Same as pannel, except that no space is inserted between rules.
+% The user is resonsible for inserting the correct amount of space.
+
+\def\simplepannel{
+  \begin{center}
+  \def\mathmode{$\displaystyle}
+  \def\endmathmode{$}
+  \lineskip=1.5ex plus 0.4ex minus 0.1ex
+  \catcode`\^^M=10 %space
+}
+
+\def\endsimplepannel{
+  \end{center}
+}

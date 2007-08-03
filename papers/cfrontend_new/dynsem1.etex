@@ -1,0 +1,80 @@
+\begin{figure}
+
+\numberrules
+
+Expressions in l-value position:
+\begin{pannel}
+
+\irule
+        E(\id) = b
+        --------------------------------------------------
+        G, E |- \id^\tau, M \evallvalue (b, 0), \E0, M
+\end \label{rule:1}
+
+\irule
+%        G, E |- a, M \evalexpr {\tt Vptr}(\loc), \tr, M'
+        G, E |- a, M \evalexpr \loc, \tr, M'
+        --------------------------------------------------
+        G, E |- (\hbox{"*"}a)^\tau, M \evallvalue \loc, \tr, M'
+\end \label{rule:2}
+
+\irule
+        G, E |- \unannot{a_1}{\tau_1}, M \evalexpr v_1, \tr_1, M_1 \\
+        G, E |- \unannot{a_2}{\tau_2}, M_1 \evalexpr v_2, \tr_2, M_2 \\
+        "add" (v_1, \tau_1, v_2, \tau_2) = \some{\loc}
+        --------------------------------------------------
+        G, E |- (\unannot{a_1}{\tau_1} [\unannot{a_2}{\tau_2}])^\tau, M \evallvalue \loc, \cat {\tr_1} \tr_2, M_2
+\end \label{rule:3}
+
+\irule
+        G, E |- \unannot{a}{\tau}, M \evallvalue (b,\ofs), \tr, M' \\
+        \tau = "Tstruct" (\id, \fl) &
+%        "type_of" (a) = "Tstruct" (\id, \fl) &
+       "field_offset" (f, \fl) =  \some{\delta}
+        --------------------------------------------------
+        G, E |- (\unannot{a}{\tau} \dot f)^{\tau_s}, M \evallvalue (b,\ofs + "repr" (\delta)), \tr, M'
+\end \label{rule:4}
+
+\irule
+        G, E |- \unannot{a}{\tau}, M \evallvalue \loc, \tr, M' &
+         \tau = "Tunion" (\id, \fl) 
+        --------------------------------------------------
+        G, E |- (\unannot{a}{\tau} \dot f)^{\tau_u}, M \evallvalue \loc, \tr, M'
+\end \label{rule:5}
+
+\end{pannel}
+Expressions in r-value position:
+\begin{pannel}
+
+\irule
+        G, E |- \unannot{a}\tau, M \evallvalue \loc, \tr, M' &
+        "loadval" (\tau, M', \loc) = \some{v}
+        --------------------------------------------------
+        G, E |- \unannot{a}\tau, M \evalexpr v, \tr, M'
+\end \label{rule:6}
+
+\irule
+        G, E |- a, M \evallvalue \loc, \tr, M'
+        --------------------------------------------------
+        G, E |- (\hbox{"&"}a)^\tau, M \evalexpr \loc, \tr, M'
+\end \label{rule:7}
+
+\irule
+        G, E |- \unannot{a_1}{\tau_1}, M \evalexpr v_1, \tr_1, M_1 &
+        G, E |- \unannot{a_2}{\tau_2}, M_1 \evalexpr v_2, \tr_2, M_2 \\
+        "eval_binary_operation" (\op, v_1,\tau_1, v_2,\tau_2) =  \some{v}
+        --------------------------------------------------
+        G, E |- (\unannot{a_1}{\tau_1} \op \, \unannot{a_2}{\tau_2})^\tau, M \evalexpr v, \cat \tr_1 \tr_2, M_2
+\end \label{rule:8}
+
+\irule
+        G, E |- \unannot{a}{\tau_a}, M \evalexpr v', \tr, M' &
+        "cast" (v',\tau_a,\tau) = \some{v}
+        --------------------------------------------------
+        G, E |- ((\tau)\unannot{a}{\tau_a}))^\tau, M \evalexpr v, \tr, M'
+\end \label{rule:9}
+\end{pannel}
+
+\caption{Selected rules of the dynamic semantics of Clight (expression evaluation)}
+\label{fig:dynsem1}
+\end{figure}

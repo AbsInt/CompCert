@@ -1,0 +1,19 @@
+\begin{figure}
+
+\begin{syntax}
+\syntaxclass{Event values:}
+\evv & ::= & n & integer value\\
+  & \alt & f & floating-point value 
+%
+\syntaxclass{Events:}
+\ev & ::= & \id \, \evv^* \, \evv & 
+%
+\syntaxclass{Execution traces:}
+\tr & ::=  & \E0 & empty trace \\
+     & \alt & [\ev] & external call \\
+     & \alt & \cat \tr \tr& concatenation
+\end{syntax}
+\caption{Execution traces}
+\label{fig:trace}
+\end{figure}
+
