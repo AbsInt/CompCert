@@ -185,8 +185,8 @@ let init() =
 
 let interfere n1 n2 =
   if n1.degree < n2.degree
-  then list_memq n2 n1.adjlist
-  else list_memq n1 n2.adjlist
+  then List.memq n2 n1.adjlist
+  else List.memq n1 n2.adjlist
 
 (* Add an edge to the graph.  Assume edge is not in graph already *)
 
@@ -199,7 +199,7 @@ let addEdge n1 n2 =
 (* Apply the given function to the relevant adjacent nodes of a node *)
 
 let iterAdjacent f n =
-  list_iter
+  List.iter
     (fun n ->
       match n.nstate with
       | SelectStack | CoalescedNodes -> ()
@@ -214,12 +214,12 @@ let moveIsActiveOrWorklist m =
   | _ -> false
 
 let nodeMoves n =
-  list_filter moveIsActiveOrWorklist n.movelist
+  List.filter moveIsActiveOrWorklist n.movelist
 
 (* Determine whether a node is involved in a move *)
 
 let moveRelated n =
-  list_exists moveIsActiveOrWorklist n.movelist
+  List.exists moveIsActiveOrWorklist n.movelist
 
 (*i
 (* Check invariants *)
@@ -361,7 +361,7 @@ let build g typenv spillcosts =
 (* Enable moves that have become low-degree related *)
 
 let enableMoves n =
-  list_iter
+  List.iter
     (fun m ->
       if m.mstate = ActiveMoves
       then DLinkMove.move m activeMoves worklistMoves)
@@ -481,7 +481,7 @@ let freezeMoves u =
     && v.degree < num_available_registers.(v.regclass)
     && v.nstate <> Colored
     then DLinkNode.move v freezeWorklist simplifyWorklist in
-  list_iter freeze (nodeMoves u)
+  List.iter freeze (nodeMoves u)
 
 (* Pick a move and freeze it *)
 
@@ -577,7 +577,7 @@ let find_slot conflicts typ =
 
 let assign_color n =
   let conflicts = ref Locset.empty in
-  list_iter
+  List.iter
     (fun n' ->
       match (getAlias n').color with
       | None -> ()
@@ -607,7 +607,7 @@ let graph_coloring (f: coq_function) (g: graph) (env: regenv) (regs: Regset.t)
   init();
   Array.fill start_points 0 num_register_classes 0;
   let mapping = build g env (spill_costs f) in
-  list_iter assign_color (nodeOrder []);
+  List.iter assign_color (nodeOrder []);
   fun r ->
     try location_of_node (getAlias (Hashtbl.find mapping r))
     with Not_found -> R IT1 (* any location *)

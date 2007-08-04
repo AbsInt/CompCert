@@ -1,5 +1,5 @@
 (** Operators and addressing modes.  The abstract syntax and dynamic
-  semantics for the Cminor, RTL, LTL and Mach languages depend on the
+  semantics for the CminorSel, RTL, LTL and Mach languages depend on the
   following types, defined in this library:
 - [condition]:  boolean conditions for conditional branches;
 - [operation]: arithmetic and logical operations;
@@ -9,7 +9,7 @@
   processor can compute in one instruction.  In other terms, these
   types reflect the state of the program after instruction selection.
   For a processor-independent set of operations, see the abstract
-  syntax and dynamic semantics of the Csharpminor input language.
+  syntax and dynamic semantics of the Cminor language.
 *)
 
 Require Import Coqlib.
@@ -43,7 +43,6 @@ Inductive operation : Set :=
   | Ofloatconst: float -> operation     (**r [rd] is set to the given float constant *)
   | Oaddrsymbol: ident -> int -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
   | Oaddrstack: int -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
-  | Oundef: operation                   (**r set [rd] to undefined value *)
 (*c Integer arithmetic: *)
   | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
   | Ocast8unsigned: operation           (**r [rd] is 8-bit zero extension of [r1] *)
@@ -110,32 +109,28 @@ Definition eval_compare_null (c: comparison) (n: int) : option bool :=
   then match c with Ceq => Some false | Cne => Some true | _ => None end
   else None.
 
-Definition eval_condition (cond: condition) (vl: list val) : option bool :=
+Definition eval_condition (cond: condition) (vl: list val) (m: mem):
+               option bool :=
   match cond, vl with
   | Ccomp c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmp c n1 n2)
   | Ccomp c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if eq_block b1 b2 then Some (Int.cmp c n1 n2) else None
+      if valid_pointer m b1 (Int.signed n1)
+      && valid_pointer m b2 (Int.signed n2) then
+        if eq_block b1 b2 then Some (Int.cmp c n1 n2) else None
+      else None
   | Ccomp c, Vptr b1 n1 :: Vint n2 :: nil =>
       eval_compare_null c n2
   | Ccomp c, Vint n1 :: Vptr b2 n2 :: nil =>
       eval_compare_null c n1
   | Ccompu c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmpu c n1 n2)
-  | Ccompu c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if eq_block b1 b2 then Some (Int.cmpu c n1 n2) else None
-  | Ccompu c, Vptr b1 n1 :: Vint n2 :: nil =>
-      eval_compare_null c n2
-  | Ccompu c, Vint n1 :: Vptr b2 n2 :: nil =>
-      eval_compare_null c n1
   | Ccompimm c n, Vint n1 :: nil =>
       Some (Int.cmp c n1 n)
   | Ccompimm c n, Vptr b1 n1 :: nil =>
       eval_compare_null c n
   | Ccompuimm c n, Vint n1 :: nil =>
       Some (Int.cmpu c n1 n)
-  | Ccompuimm c n, Vptr b1 n1 :: nil =>
-      eval_compare_null c n
   | Ccompf c, Vfloat f1 :: Vfloat f2 :: nil =>
       Some (Float.cmp c f1 f2)
   | Cnotcompf c, Vfloat f1 :: Vfloat f2 :: nil =>
@@ -156,7 +151,7 @@ Definition offset_sp (sp: val) (delta: int) : option val :=
 
 Definition eval_operation
     (F: Set) (genv: Genv.t F) (sp: val)
-    (op: operation) (vl: list val) : option val :=
+    (op: operation) (vl: list val) (m: mem): option val :=
   match op, vl with
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
@@ -167,7 +162,6 @@ Definition eval_operation
       | Some b => Some (Vptr b ofs)
       end
   | Oaddrstack ofs, nil => offset_sp sp ofs
-  | Oundef, nil => Some Vundef
   | Ocast8signed, v1 :: nil => Some (Val.cast8signed v1)
   | Ocast8unsigned, v1 :: nil => Some (Val.cast8unsigned v1)
   | Ocast16signed, v1 :: nil => Some (Val.cast16signed v1)
@@ -228,7 +222,7 @@ Definition eval_operation
   | Ofloatofintu, Vint n1 :: nil => 
       Some (Vfloat (Float.floatofintu n1))
   | Ocmp c, _ =>
-      match eval_condition c vl with
+      match eval_condition c vl m with
       | None => None
       | Some false => Some Vfalse
       | Some true => Some Vtrue
@@ -297,26 +291,23 @@ Proof.
 Qed.
 
 Lemma eval_negate_condition:
-  forall (cond: condition) (vl: list val) (b: bool),
-  eval_condition cond vl = Some b ->
-  eval_condition (negate_condition cond) vl = Some (negb b).
+  forall (cond: condition) (vl: list val) (b: bool) (m: mem),
+  eval_condition cond vl m = Some b ->
+  eval_condition (negate_condition cond) vl m = Some (negb b).
 Proof.
   intros. 
   destruct cond; simpl in H; FuncInv; try subst b; simpl.
   rewrite Int.negate_cmp. auto.
   apply eval_negate_compare_null; auto.
   apply eval_negate_compare_null; auto.
+  destruct (valid_pointer m b0 (Int.signed i) &&
+            valid_pointer m b1 (Int.signed i0)).
   destruct (eq_block b0 b1). rewrite Int.negate_cmp. congruence.
-  discriminate.
+  discriminate. discriminate.
   rewrite Int.negate_cmpu. auto.
-  apply eval_negate_compare_null; auto.
-  apply eval_negate_compare_null; auto.
-  destruct (eq_block b0 b1). rewrite Int.negate_cmpu. congruence.
-  discriminate.
   rewrite Int.negate_cmp. auto.
   apply eval_negate_compare_null; auto.
   rewrite Int.negate_cmpu. auto.
-  apply eval_negate_compare_null; auto.
   auto.
   rewrite negb_elim. auto.
   auto.
@@ -337,8 +328,8 @@ Hypothesis agree_on_symbols:
   forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
 
 Lemma eval_operation_preserved:
-  forall sp op vl,
-  eval_operation ge2 sp op vl = eval_operation ge1 sp op vl.
+  forall sp op vl m,
+  eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
 Proof.
   intros.
   unfold eval_operation; destruct op; try rewrite agree_on_symbols;
@@ -355,6 +346,74 @@ Proof.
 Qed.
 
 End GENV_TRANSF.
+
+(** [eval_condition] and [eval_operation] depend on a memory store
+    (to check pointer validity in pointer comparisons).
+    We show that their results are preserved by a change of
+    memory if this change preserves pointer validity.
+    In particular, this holds in case of a memory allocation
+    or a memory store. *)
+
+Lemma eval_condition_change_mem:
+  forall m m' c args b,
+  (forall b ofs, valid_pointer m b ofs = true -> valid_pointer m' b ofs = true) ->
+  eval_condition c args m = Some b -> eval_condition c args m' = Some b.
+Proof.
+  intros until b. intro INV. destruct c; simpl; auto.
+  destruct args; auto. destruct v; auto. destruct args; auto.
+  destruct v; auto. destruct args; auto. 
+  caseEq (valid_pointer m b0 (Int.signed i)); intro.
+  caseEq (valid_pointer m b1 (Int.signed i0)); intro.
+  simpl. rewrite (INV _ _ H). rewrite (INV _ _ H0). auto.
+  simpl; congruence. simpl; congruence.
+Qed.
+
+Lemma eval_operation_change_mem:
+  forall (F: Set) m m' (ge: Genv.t F) sp op args v,
+  (forall b ofs, valid_pointer m b ofs = true -> valid_pointer m' b ofs = true) ->
+  eval_operation ge sp op args m = Some v -> eval_operation ge sp op args m' = Some v.
+Proof.
+  intros until v; intro INV. destruct op; simpl; auto.
+  caseEq (eval_condition c args m); intros.
+  rewrite (eval_condition_change_mem _ _ _ _ INV H). auto.
+  discriminate.
+Qed.
+
+Lemma eval_condition_alloc:
+  forall m lo hi m' b c args v,
+  Mem.alloc m lo hi = (m', b) ->
+  eval_condition c args m = Some v -> eval_condition c args m' = Some v.
+Proof.
+  intros. apply eval_condition_change_mem with m; auto.
+  intros. eapply valid_pointer_alloc; eauto.
+Qed.
+
+Lemma eval_operation_alloc:
+  forall (F: Set) m lo hi m' b (ge: Genv.t F) sp op args v,
+  Mem.alloc m lo hi = (m', b) ->
+  eval_operation ge sp op args m = Some v -> eval_operation ge sp op args m' = Some v.
+Proof.
+  intros. apply eval_operation_change_mem with m; auto.
+  intros. eapply valid_pointer_alloc; eauto.
+Qed.
+
+Lemma eval_condition_store:
+  forall chunk m b ofs v' m' c args v,
+  Mem.store chunk m b ofs v' = Some m' ->
+  eval_condition c args m = Some v -> eval_condition c args m' = Some v.
+Proof.
+  intros. apply eval_condition_change_mem with m; auto.
+  intros. eapply valid_pointer_store; eauto.
+Qed.
+
+Lemma eval_operation_store:
+  forall (F: Set) chunk m b ofs v' m' (ge: Genv.t F) sp op args v,
+  Mem.store chunk m b ofs v' = Some m' ->
+  eval_operation ge sp op args m = Some v -> eval_operation ge sp op args m' = Some v.
+Proof.
+  intros. apply eval_operation_change_mem with m; auto.
+  intros. eapply valid_pointer_store; eauto.
+Qed.
 
 (** Recognition of move operations. *)
 
@@ -398,7 +457,6 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Ofloatconst _ => (nil, Tfloat)
   | Oaddrsymbol _ _ => (nil, Tint)
   | Oaddrstack _ => (nil, Tint)
-  | Oundef => (nil, Tint)  (* treated specially *)
   | Ocast8signed => (Tint :: nil, Tint)
   | Ocast8unsigned => (Tint :: nil, Tint)
   | Ocast16signed => (Tint :: nil, Tint)
@@ -471,40 +529,40 @@ Variable A: Set.
 Variable genv: Genv.t A.
 
 Lemma type_of_operation_sound:
-  forall op vl sp v,
-  op <> Omove -> op <> Oundef ->
-  eval_operation genv sp op vl = Some v ->
+  forall op vl sp v m,
+  op <> Omove ->
+  eval_operation genv sp op vl m = Some v ->
   Val.has_type v (snd (type_of_operation op)).
 Proof.
   intros.
-  destruct op; simpl in H1; FuncInv; try subst v; try exact I.
+  destruct op; simpl in H0; FuncInv; try subst v; try exact I.
   congruence.
-  destruct (Genv.find_symbol genv i); simplify_eq H1; intro; subst v; exact I.
-  simpl. unfold offset_sp in H1. destruct sp; try discriminate.
-  inversion H1. exact I.
+  destruct (Genv.find_symbol genv i); simplify_eq H0; intro; subst v; exact I.
+  simpl. unfold offset_sp in H0. destruct sp; try discriminate.
+  inversion H0. exact I.
   destruct v0; exact I. 
   destruct v0; exact I. 
   destruct v0; exact I. 
   destruct v0; exact I. 
-  destruct (eq_block b b0). injection H1; intro; subst v; exact I.
+  destruct (eq_block b b0). injection H0; intro; subst v; exact I.
   discriminate.
   destruct (Int.eq i0 Int.zero). discriminate. 
-  injection H1; intro; subst v; exact I.
+  injection H0; intro; subst v; exact I.
   destruct (Int.eq i0 Int.zero). discriminate. 
-  injection H1; intro; subst v; exact I.
+  injection H0; intro; subst v; exact I.
   destruct (Int.ltu i0 (Int.repr 32)).
-  injection H1; intro; subst v; exact I. discriminate.
+  injection H0; intro; subst v; exact I. discriminate.
   destruct (Int.ltu i0 (Int.repr 32)).
-  injection H1; intro; subst v; exact I. discriminate.
+  injection H0; intro; subst v; exact I. discriminate.
   destruct (Int.ltu i (Int.repr 32)).
-  injection H1; intro; subst v; exact I. discriminate.
+  injection H0; intro; subst v; exact I. discriminate.
   destruct (Int.ltu i (Int.repr 32)).
-  injection H1; intro; subst v; exact I. discriminate.
+  injection H0; intro; subst v; exact I. discriminate.
   destruct (Int.ltu i0 (Int.repr 32)).
-  injection H1; intro; subst v; exact I. discriminate.
+  injection H0; intro; subst v; exact I. discriminate.
   destruct v0; exact I.
   destruct (eval_condition c vl). 
-  destruct b; injection H1; intro; subst v; exact I.
+  destruct b; injection H0; intro; subst v; exact I.
   discriminate.
 Qed.
 
@@ -519,7 +577,7 @@ Proof.
   intros until v. unfold Mem.loadv. 
   destruct addr; intros; try discriminate.
   generalize (Mem.load_inv _ _ _ _ _ H0).
-  intros [X [Y [Z W]]].  subst v.  apply H.
+  intros [X Y].  subst v.  apply H.
 Qed.
 
 End SOUNDNESS.
@@ -559,7 +617,6 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Ofloatconst n, nil => Vfloat n
   | Oaddrsymbol s ofs, nil => find_symbol_offset s ofs
   | Oaddrstack ofs, nil => Val.add sp (Vint ofs)
-  | Oundef, nil => Vundef
   | Ocast8signed, v1::nil => Val.cast8signed v1
   | Ocast8unsigned, v1::nil => Val.cast8unsigned v1
   | Ocast16signed, v1::nil => Val.cast16signed v1
@@ -625,23 +682,25 @@ Proof.
 Qed.
 
 Lemma eval_condition_weaken:
-  forall c vl b,
-  eval_condition c vl = Some b ->
+  forall c vl m b,
+  eval_condition c vl m = Some b ->
   eval_condition_total c vl = Val.of_bool b.
 Proof.
   intros. 
   unfold eval_condition in H; destruct c; FuncInv;
   try subst b; try reflexivity; simpl;
   try (apply eval_compare_null_weaken; auto).
+  destruct (valid_pointer m b0 (Int.signed i) &&
+            valid_pointer m b1 (Int.signed i0)).
   unfold eq_block in H. destruct (zeq b0 b1); congruence.
-  unfold eq_block in H. destruct (zeq b0 b1); congruence.
+  discriminate.
   symmetry. apply Val.notbool_negb_1. 
   symmetry. apply Val.notbool_negb_1. 
 Qed.
 
 Lemma eval_operation_weaken:
-  forall sp op vl v,
-  eval_operation genv sp op vl = Some v ->
+  forall sp op vl m v,
+  eval_operation genv sp op vl m = Some v ->
   eval_operation_total sp op vl = v.
 Proof.
   intros.
@@ -660,9 +719,9 @@ Proof.
   destruct (Int.ltu i (Int.repr 32)); congruence.
   destruct (Int.ltu i (Int.repr 32)); congruence.
   destruct (Int.ltu i0 (Int.repr 32)); congruence.
-  caseEq (eval_condition c vl); intros; rewrite H0 in H.
+  caseEq (eval_condition c vl m); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
-  apply eval_condition_weaken; auto.
+  eapply eval_condition_weaken; eauto.
   destruct b; simpl; congruence.
   discriminate.
 Qed.
@@ -702,3 +761,95 @@ Proof.
 Qed.
 
 End EVAL_OP_TOTAL.
+
+(** Compatibility of the evaluation functions with the
+    ``is less defined'' relation over values and memory states. *)
+
+Section EVAL_LESSDEF.
+
+Variable F: Set.
+Variable genv: Genv.t F.
+Variables m1 m2: mem.
+Hypothesis MEM: Mem.lessdef m1 m2.
+
+Ltac InvLessdef :=
+  match goal with
+  | [ H: Val.lessdef (Vint _) _ |- _ ] =>
+      inv H; InvLessdef
+  | [ H: Val.lessdef (Vfloat _) _ |- _ ] =>
+      inv H; InvLessdef
+  | [ H: Val.lessdef (Vptr _ _) _ |- _ ] =>
+      inv H; InvLessdef
+  | [ H: Val.lessdef_list nil _ |- _ ] =>
+      inv H; InvLessdef
+  | [ H: Val.lessdef_list (_ :: _) _ |- _ ] =>
+      inv H; InvLessdef
+  | _ => idtac
+  end.
+
+Lemma eval_condition_lessdef:
+  forall cond vl1 vl2 b,
+  Val.lessdef_list vl1 vl2 ->
+  eval_condition cond vl1 m1 = Some b ->
+  eval_condition cond vl2 m2 = Some b.
+Proof.
+  intros. destruct cond; simpl in *; FuncInv; InvLessdef; auto.
+  generalize H0.
+  caseEq (valid_pointer m1 b0 (Int.signed i)); intro; simpl; try congruence.
+  caseEq (valid_pointer m1 b1 (Int.signed i0)); intro; simpl; try congruence.
+  destruct (eq_block b0 b1); try congruence.
+  intro. inv H2. 
+  rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H1).
+  rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H).
+  auto.
+Qed.
+
+Ltac TrivialExists :=
+  match goal with
+  | [ |- exists v2, Some ?v1 = Some v2 /\ Val.lessdef ?v1 v2 ] =>
+      exists v1; split; [auto | constructor]
+  | _ => idtac
+  end.
+
+Lemma eval_operation_lessdef:
+  forall sp op vl1 vl2 v1,
+  Val.lessdef_list vl1 vl2 ->
+  eval_operation genv sp op vl1 m1 = Some v1 ->
+  exists v2, eval_operation genv sp op vl2 m2 = Some v2 /\ Val.lessdef v1 v2.
+Proof.
+  intros. destruct op; simpl in *; FuncInv; InvLessdef; TrivialExists.
+  exists v2; auto.
+  destruct (Genv.find_symbol genv i); inv H0. TrivialExists.
+  exists v1; auto.
+  exists (Val.cast8signed v2); split. auto. apply Val.cast8signed_lessdef; auto.
+  exists (Val.cast8unsigned v2); split. auto. apply Val.cast8unsigned_lessdef; auto.
+  exists (Val.cast16signed v2); split. auto. apply Val.cast16signed_lessdef; auto.
+  exists (Val.cast16unsigned v2); split. auto. apply Val.cast16unsigned_lessdef; auto.
+  destruct (eq_block b b0); inv H0. TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
+  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
+  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
+  destruct (Int.ltu i (Int.repr 32)); inv H0; TrivialExists.
+  destruct (Int.ltu i (Int.repr 32)); inv H0; TrivialExists.
+  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
+  exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
+  caseEq (eval_condition c vl1 m1); intros. rewrite H1 in H0. 
+  rewrite (eval_condition_lessdef c H H1).
+  destruct b; inv H0; TrivialExists.
+  rewrite H1 in H0. discriminate.
+Qed.
+
+Lemma eval_addressing_lessdef:
+  forall sp addr vl1 vl2 v1,
+  Val.lessdef_list vl1 vl2 ->
+  eval_addressing genv sp addr vl1 = Some v1 ->
+  exists v2, eval_addressing genv sp addr vl2 = Some v2 /\ Val.lessdef v1 v2.
+Proof.
+  intros. destruct addr; simpl in *; FuncInv; InvLessdef; TrivialExists.
+  destruct (Genv.find_symbol genv i); inv H0. TrivialExists.
+  destruct (Genv.find_symbol genv i); inv H0. TrivialExists.
+  exists v1; auto.
+Qed.
+
+End EVAL_LESSDEF.

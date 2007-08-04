@@ -1,32 +1,36 @@
 FILES=\
-  Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml \
+  Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml EqNat.ml \
   Bool.ml CList.ml Sumbool.ml Setoid.ml BinPos.ml BinNat.ml BinInt.ml \
   ZArith_dec.ml Zeven.ml Zmax.ml Zmisc.ml Zbool.ml Zpower.ml Zdiv.ml \
+  Ascii.ml CString.ml \
   OrderedType.ml FSetInterface.ml FSetFacts.ml FSetList.ml \
   CInt.ml FSetAVL.ml \
-  Coqlib.ml Maps.ml Ordered.ml AST.ml Iteration.ml Integers.ml \
+  Coqlib.ml Maps.ml Ordered.ml Errors.ml AST.ml Iteration.ml Integers.ml \
   ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
-  Csyntax.ml Ctyping.ml Csharpminor.ml Cshmgen.ml \
-  Op.ml Cminor.ml Cmconstr.ml \
+  Csyntax.ml Ctyping.ml Cminor.ml Csharpminor.ml Cshmgen.ml \
   Cminorgen.ml \
+  Op.ml CminorSel.ml \
+  Selection.ml \
   Registers.ml RTL.ml \
-  ../caml/RTLgenaux.ml RTLgen.ml \
+  Switch.ml ../caml/RTLgenaux.ml RTLgen.ml \
   Locations.ml Conventions.ml \
   ../caml/RTLtypingaux.ml RTLtyping.ml \
   Lattice.ml Kildall.ml \
   Constprop.ml CSE.ml \
-  LTL.ml \
+  LTL.ml LTLin.ml \
   InterfGraph.ml ../caml/Coloringaux.ml Coloring.ml \
-  Parallelmove.ml Allocation.ml  \
-  Tunneling.ml Linear.ml Lineartyping.ml Linearize.ml \
-  Mach.ml Stacking.ml \
+  Allocation.ml  \
+  Tunneling.ml Linear.ml Linearize.ml \
+  Parallelmove.ml Reload.ml \
+  Mach.ml Bounds.ml Stacking.ml \
   PPC.ml PPCgen.ml \
   Main.ml \
   ../caml/Cil2Csyntax.ml \
   ../caml/CMparser.ml ../caml/CMlexer.ml ../caml/CMtypecheck.ml \
   ../caml/PrintCsyntax.ml ../caml/PrintPPC.ml \
   ../caml/Main2.ml
+#  ../caml/Configuration.ml ../caml/Driver.ml
 
 EXTRACTEDFILES:=$(filter-out ../caml/%, $(FILES))
 GENFILES:=$(EXTRACTEDFILES) $(EXTRACTEDFILES:.ml=.mli)
@@ -58,13 +62,15 @@ extraction:
 	@echo "Fixing file names..."
 	@mv list.ml CList.ml
 	@mv list.mli CList.mli
+	@mv string.ml CString.ml
+	@mv string.mli CString.mli
 	@mv int.ml CInt.ml
 	@mv int.mli CInt.mli
 	@for i in $(GENFILES); do \
           j=`./uncapitalize $$i`; \
           test -f $$i || (test -f $$j && mv $$j $$i); \
          done
-	@echo "Conversion List -> CList and Int -> CInt..."
+	@echo "Conversion List -> CList, String -> CString, Int -> CInt..."
 	@./convert $(GENFILES)
 	@echo "Patching files..."
 	@for i in *.patch; do patch < $$i; done

@@ -6,7 +6,6 @@ open CList
 open Camlcoq
 open AST
 open Integers
-open Op
 open Cminor
 
 exception Error of string
@@ -67,135 +66,91 @@ let name_of_comparison = function
   | Cgt -> "gt"
   | Cge -> "ge"
 
-let type_condition = function
-  | Ccomp _ -> [tint;tint]
-  | Ccompu _ -> [tint;tint]
-  | Ccompimm _ -> [tint]
-  | Ccompuimm _ -> [tint]
-  | Ccompf _ -> [tfloat;tfloat]
-  | Cnotcompf _ -> [tfloat;tfloat]
-  | Cmaskzero _ -> [tint]
-  | Cmasknotzero _ -> [tint]
+let type_constant = function
+  | Ointconst _ -> tint
+  | Ofloatconst _ -> tfloat
+  | Oaddrsymbol _ -> tint
+  | Oaddrstack _ -> tint
 
-let name_of_condition = function
-  | Ccomp c -> sprintf "comp %s" (name_of_comparison c)
-  | Ccompu c ->  sprintf "compu %s" (name_of_comparison c)
-  | Ccompimm(c, n) -> sprintf "compimm %s %ld" (name_of_comparison c) (camlint_of_coqint n)
-  | Ccompuimm(c, n) -> sprintf "compuimm %s %ld" (name_of_comparison c) (camlint_of_coqint n)
-  | Ccompf c -> sprintf "compf %s" (name_of_comparison c)
-  | Cnotcompf c -> sprintf "notcompf %s" (name_of_comparison c)
-  | Cmaskzero n -> sprintf "maskzero %ld" (camlint_of_coqint n)
-  | Cmasknotzero n ->  sprintf "masknotzero %ld" (camlint_of_coqint n)
+let type_unary_operation = function
+  | Ocast8signed -> tint, tint
+  | Ocast16signed -> tint, tint
+  | Ocast8unsigned -> tint, tint
+  | Ocast16unsigned -> tint, tint
+  | Onegint -> tint, tint
+  | Onotbool -> tint, tint
+  | Onotint -> tint, tint
+  | Onegf -> tfloat, tfloat
+  | Oabsf -> tfloat, tfloat
+  | Osingleoffloat -> tfloat, tfloat
+  | Ointoffloat -> tfloat, tint
+  | Ofloatofint -> tint, tfloat
+  | Ofloatofintu -> tint, tfloat
 
-let type_operation = function
-  | Omove -> let v = newvar() in [v], v
-  | Ointconst _ -> [], tint
-  | Ofloatconst _ -> [], tfloat
-  | Oaddrsymbol _ -> [], tint
-  | Oaddrstack _ -> [], tint
-  | Oundef -> [], newvar()
-  | Ocast8signed -> [tint], tint
-  | Ocast16signed -> [tint], tint
-  | Ocast8unsigned -> [tint], tint
-  | Ocast16unsigned -> [tint], tint
-  | Oadd -> [tint;tint], tint
-  | Oaddimm _ -> [tint], tint
-  | Osub -> [tint;tint], tint
-  | Osubimm _ -> [tint], tint
-  | Omul -> [tint;tint], tint
-  | Omulimm _ -> [tint], tint
-  | Odiv -> [tint;tint], tint
-  | Odivu -> [tint;tint], tint
-  | Oand -> [tint;tint], tint
-  | Oandimm _ -> [tint], tint
-  | Oor -> [tint;tint], tint
-  | Oorimm _ -> [tint], tint
-  | Oxor -> [tint;tint], tint
-  | Oxorimm _ -> [tint], tint
-  | Onand -> [tint;tint], tint
-  | Onor -> [tint;tint], tint
-  | Onxor -> [tint;tint], tint
-  | Oshl -> [tint;tint], tint
-  | Oshr -> [tint;tint], tint
-  | Oshrimm _ -> [tint], tint
-  | Oshrximm _ -> [tint], tint
-  | Oshru -> [tint;tint], tint
-  | Orolm _ -> [tint], tint
-  | Onegf -> [tfloat], tfloat
-  | Oabsf -> [tfloat], tfloat
-  | Oaddf -> [tfloat;tfloat], tfloat
-  | Osubf -> [tfloat;tfloat], tfloat
-  | Omulf -> [tfloat;tfloat], tfloat
-  | Odivf -> [tfloat;tfloat], tfloat
-  | Omuladdf -> [tfloat;tfloat;tfloat], tfloat
-  | Omulsubf -> [tfloat;tfloat;tfloat], tfloat
-  | Osingleoffloat -> [tfloat], tfloat
-  | Ointoffloat -> [tfloat], tint
-  | Ofloatofint -> [tint], tfloat
-  | Ofloatofintu -> [tint], tfloat
-  | Ocmp c -> type_condition c, tint
+let type_binary_operation = function
+  | Oadd -> tint, tint, tint
+  | Osub -> tint, tint, tint
+  | Omul -> tint, tint, tint
+  | Odiv -> tint, tint, tint
+  | Odivu -> tint, tint, tint
+  | Omod -> tint, tint, tint
+  | Omodu -> tint, tint, tint
+  | Oand -> tint, tint, tint
+  | Oor -> tint, tint, tint
+  | Oxor -> tint, tint, tint
+  | Oshl -> tint, tint, tint
+  | Oshr -> tint, tint, tint
+  | Oshru -> tint, tint, tint
+  | Oaddf -> tfloat, tfloat, tfloat
+  | Osubf -> tfloat, tfloat, tfloat
+  | Omulf -> tfloat, tfloat, tfloat
+  | Odivf -> tfloat, tfloat, tfloat
+  | Ocmp _ -> tint, tint, tint
+  | Ocmpu _ -> tint, tint, tint
+  | Ocmpf _ -> tfloat, tfloat, tint
 
-let name_of_operation = function
-  | Omove -> "move"
+let name_of_constant = function
   | Ointconst n -> sprintf "intconst %ld" (camlint_of_coqint n)
   | Ofloatconst n -> sprintf "floatconst %g" n
   | Oaddrsymbol (s, ofs) -> sprintf "addrsymbol %s %ld" (extern_atom s) (camlint_of_coqint ofs)
   | Oaddrstack n -> sprintf "addrstack %ld" (camlint_of_coqint n)
-  | Oundef -> "undef"
+
+let name_of_unary_operation = function
   | Ocast8signed -> "cast8signed"
   | Ocast16signed -> "cast16signed"
   | Ocast8unsigned -> "cast8unsigned"
   | Ocast16unsigned -> "cast16unsigned"
-  | Oadd -> "add"
-  | Oaddimm n -> sprintf "addimm %ld" (camlint_of_coqint n)
-  | Osub -> "sub"
-  | Osubimm n -> sprintf "subimm %ld" (camlint_of_coqint n)
-  | Omul -> "mul"
-  | Omulimm n -> sprintf "mulimm %ld" (camlint_of_coqint n)
-  | Odiv -> "div"
-  | Odivu -> "divu"
-  | Oand -> "and"
-  | Oandimm n -> sprintf "andimm %ld" (camlint_of_coqint n)
-  | Oor -> "or"
-  | Oorimm n -> sprintf "orimm %ld" (camlint_of_coqint n)
-  | Oxor -> "xor"
-  | Oxorimm n -> sprintf "xorimm %ld" (camlint_of_coqint n)
-  | Onand -> "nand"
-  | Onor -> "nor"
-  | Onxor -> "nxor"
-  | Oshl -> "shl"
-  | Oshr -> "shr"
-  | Oshrimm n -> sprintf "shrimm %ld" (camlint_of_coqint n)
-  | Oshrximm n -> sprintf "shrximm %ld" (camlint_of_coqint n)
-  | Oshru -> "shru"
-  | Orolm(n, m) -> sprintf "rolm %ld %ld" (camlint_of_coqint n) (camlint_of_coqint m)
+  | Onegint -> "negint"
+  | Onotbool -> "notbool"
+  | Onotint -> "notint"
   | Onegf -> "negf"
   | Oabsf -> "absf"
-  | Oaddf -> "addf"
-  | Osubf -> "subf"
-  | Omulf -> "mulf"
-  | Odivf -> "divf"
-  | Omuladdf -> "muladdf"
-  | Omulsubf -> "mulsubf"
   | Osingleoffloat -> "singleoffloat"
   | Ointoffloat -> "intoffloat"
   | Ofloatofint -> "floatofint"
   | Ofloatofintu -> "floatofintu"
-  | Ocmp c -> name_of_condition c
 
-let type_addressing = function
-  | Aindexed _ -> [tint]
-  | Aindexed2 -> [tint;tint]
-  | Aglobal _ -> []
-  | Abased _ -> [tint]
-  | Ainstack _ -> []
-
-let name_of_addressing = function
-  | Aindexed n -> sprintf "indexed %ld" (camlint_of_coqint n)
-  | Aindexed2 -> sprintf "indexed2"
-  | Aglobal(s, ofs) -> sprintf "global %s %ld" (extern_atom s) (camlint_of_coqint ofs)
-  | Abased(s, ofs) -> sprintf "based %s %ld" (extern_atom s) (camlint_of_coqint ofs)
-  | Ainstack n -> sprintf "instack %ld" (camlint_of_coqint n)
+let name_of_binary_operation = function
+  | Oadd -> "add"
+  | Osub -> "sub"
+  | Omul -> "mul"
+  | Odiv -> "div"
+  | Odivu -> "divu"
+  | Omod -> "mod"
+  | Omodu -> "modu"
+  | Oand -> "and"
+  | Oor -> "or"
+  | Oxor -> "xor"
+  | Oshl -> "shl"
+  | Oshr -> "shr"
+  | Oshru -> "shru"
+  | Oaddf -> "addf"
+  | Osubf -> "subf"
+  | Omulf -> "mulf"
+  | Odivf -> "divf"
+  | Ocmp c -> sprintf "cmp %s" (name_of_comparison c)
+  | Ocmpu c -> sprintf "cmpu %s" (name_of_comparison c)
+  | Ocmpf c -> sprintf "cmpf %s" (name_of_comparison c)
 
 let type_chunk = function
   | Mint8signed -> tint
@@ -219,34 +174,47 @@ let rec type_expr env lenv e =
   match e with
   | Evar id ->
       type_var env id
-  | Eop(op, el) ->
-      let tel = type_exprlist env lenv el in
-      let (targs, tres) = type_operation op in
+  | Econst cst ->
+      type_constant cst
+  | Eunop(op, e1) ->
+      let te1 = type_expr env lenv e1 in
+      let (targ, tres) = type_unary_operation op in
       begin try
-        unify_list targs tel
+        unify targ te1
       with Error s ->
         raise (Error (sprintf "In application of operator %s:\n%s"
-                              (name_of_operation op) s))
+                              (name_of_unary_operation op) s))
       end;
       tres
-  | Eload(chunk, addr, el) ->
-      let tel = type_exprlist env lenv el in
+  | Ebinop(op, e1, e2) ->
+      let te1 = type_expr env lenv e1 in
+      let te2 = type_expr env lenv e2 in
+      let (targ1, targ2, tres) = type_binary_operation op in
       begin try
-        unify_list (type_addressing addr) tel
+        unify targ1 te1; unify targ2 te2
       with Error s ->
-        raise (Error (sprintf "In load %s %s:\n%s"
-                              (name_of_chunk chunk) (name_of_addressing addr) s))
+        raise (Error (sprintf "In application of operator %s:\n%s"
+                              (name_of_binary_operation op) s))
+      end;
+      tres
+  | Eload(chunk, e) ->
+      let te = type_expr env lenv e in
+      begin try
+        unify tint te
+      with Error s ->
+        raise (Error (sprintf "In load %s:\n%s"
+                              (name_of_chunk chunk) s))
       end;
       type_chunk chunk
-  | Estore(chunk, addr, el, e1) ->
-      let tel = type_exprlist env lenv el in
+  | Estore(chunk, e1, e2) ->
       let te1 = type_expr env lenv e1 in
+      let te2 = type_expr env lenv e2 in
       begin try
-        unify_list (type_addressing addr) tel;
-        unify (type_chunk chunk) te1
+        unify tint te1;
+        unify (type_chunk chunk) te2
       with Error s ->
-        raise (Error (sprintf "In store %s %s:\n%s"
-                              (name_of_chunk chunk) (name_of_addressing addr) s))
+        raise (Error (sprintf "In store %s:\n%s"
+                              (name_of_chunk chunk) s))
       end;
       te1
   | Ecall(sg, e1, el) ->
@@ -295,21 +263,13 @@ and type_exprlist env lenv el =
       let tet = type_exprlist env lenv et in
       (te1 :: tet)
 
-and type_condexpr env lenv ce =
-  match ce with
-  | CEtrue -> ()
-  | CEfalse -> ()
-  | CEcond(c, el) ->
-      let tel = type_exprlist env lenv el in
-      begin try
-        unify_list (type_condition c) tel
-      with Error s ->
-        raise (Error (sprintf "In condition %s:\n%s" (name_of_condition c) s))
-      end
-  | CEcondition(ce1, ce2, ce3) ->
-      type_condexpr env lenv ce1;
-      type_condexpr env lenv ce2;
-      type_condexpr env lenv ce3
+and type_condexpr env lenv e =
+  let te = type_expr env lenv e in
+  begin try
+    unify tint te
+  with Error s ->
+    raise (Error (sprintf "In condition:\n%s" s))
+  end
 
 let rec type_stmt env blk ret s =
   match s with
@@ -354,6 +314,15 @@ let rec type_stmt env blk ret s =
           with Error s ->
             raise (Error (sprintf "In return:\n%s" s))
           end
+      end
+  | Stailcall(sg, e1, el) ->
+      let te1 = type_expr env [] e1 in
+      let tel = type_exprlist env [] el in
+      begin try
+        unify tint te1;
+        unify_list (ty_of_sig_args sg.sig_args) tel
+      with Error s ->
+        raise (Error (sprintf "In tail call:\n%s" s))
       end
 
 let rec env_of_vars idl =

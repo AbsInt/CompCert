@@ -94,8 +94,8 @@ let process_c_file sourcename =
   (* Convert to PPC *)
   let ppc =
     match Main.transf_c_program csyntax with
-    | Datatypes.Some x -> x
-    | Datatypes.None ->
+    | Errors.OK x -> x
+    | Errors.Error msg ->
         eprintf "Error in translation Csyntax -> PPC\n";
         exit 2 in
   (* Save PPC asm *)
@@ -111,10 +111,10 @@ let process_cminor_file sourcename =
     match Main.transf_cminor_program
             (CMtypecheck.type_program
               (CMparser.prog CMlexer.token lb)) with
-    | Datatypes.None ->
+    | Errors.Error msg ->
         eprintf "Compiler failure\n";
         exit 2
-    | Datatypes.Some p ->
+    | Errors.OK p ->
         let oc = open_out targetname in
         PrintPPC.print_program oc p;
         close_out oc

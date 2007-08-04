@@ -1,10 +1,9 @@
 (** The RTL intermediate language: abstract syntax and semantics.
 
-  RTL (``Register Transfer Language'' is the first intermediate language
-  after Cminor.
+  RTL stands for "Register Transfer Language". This is the first
+  intermediate language after Cminor and CminorSel.
 *)
 
-(*Require Import Relations.*)
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
@@ -13,6 +12,7 @@ Require Import Values.
 Require Import Events.
 Require Import Mem.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Op.
 Require Import Registers.
 
@@ -55,6 +55,7 @@ Inductive instruction: Set :=
           function name), giving it the values of registers [args] 
           as arguments.  It stores the return value in [dest] and branches
           to [succ]. *)
+  | Itailcall: signature -> reg + ident -> list reg -> instruction
   | Ialloc: reg -> reg -> node -> instruction
       (** [Ialloc arg dest succ] allocates a fresh block of size
           the contents of register [arg], stores a pointer to this
@@ -111,6 +112,52 @@ Fixpoint init_regs (vl: list val) (rl: list reg) {struct rl} : regset :=
   | _, _ => Regmap.init Vundef
   end.
 
+Inductive stackframe : Set :=
+  | Stackframe:
+      forall (res: reg) (c: code) (sp: val) (pc: node) (rs: regset), 
+      stackframe.
+
+Inductive state : Set :=
+  | State:
+      forall (stack: list stackframe) (c: code) (sp: val) (pc: node)
+             (rs: regset) (m: mem), state
+  | Callstate:
+      forall (stack: list stackframe) (f: fundef) (args: list val) (m: mem),
+      state
+  | Returnstate:
+      forall (stack: list stackframe) (v: val) (m: mem),
+      state.
+
+(** The dynamic semantics of RTL is given in small-step style, as a 
+  set of transitions between states.  A state captures the current
+  point in the execution.  Three kinds of states appear in the transitions:
+
+- [State cs c sp pc rs m] describes an execution point within a function.
+  [c] is the code for the current function (a CFG).
+  [sp] is the pointer to the stack block for its current activation
+     (as in Cminor).
+  [pc] is the current program point (CFG node) within the code [c].
+  [rs] gives the current values for the pseudo-registers.
+  [m] is the current memory state.
+- [Callstate cs f args m] is an intermediate state that appears during
+  function calls.
+  [f] is the function definition that we are calling.
+  [args] (a list of values) are the arguments for this call.
+  [m] is the current memory state.
+- [Returnstate cs v m] is an intermediate state that appears when a
+  function terminates and returns to its caller.
+  [v] is the return value and [m] the current memory state.
+
+In all three kinds of states, the [cs] parameter represents the call stack.
+It is a list of frames [Stackframe res c sp pc rs].  Each frame represents
+a function call in progress.  
+[res] is the pseudo-register that will receive the result of the call.
+[c] is the code of the calling function.
+[sp] is its stack pointer.
+[pc] is the program point for the instruction that follows the call.
+[rs] is the state of registers in the calling function.
+*)
+
 Section RELSEM.
 
 Variable ge: genv.
@@ -126,194 +173,142 @@ Definition find_function
       end
   end.
 
-(** The dynamic semantics of RTL is a combination of small-step (transition)
-  semantics and big-step semantics.  Execution of an instruction performs
-  a single transition to the next instruction (small-step), except if
-  the instruction is a function call.  In this case, the whole body of
-  the called function is executed at once and the transition terminates
-  on the instruction immediately following the call in the caller function.
-  Such ``mixed-step'' semantics is convenient for reasoning over
-  intra-procedural analyses and transformations.  It also dispenses us
-  from making the call stack explicit in the semantics.
+(** The transitions are presented as an inductive predicate
+  [step ge st1 t st2], where [ge] is the global environment,
+  [st1] the initial state, [st2] the final state, and [t] the trace
+  of system calls performed during this transition. *)
 
-  The semantics is organized in three mutually inductive predicates.
-  The first is [exec_instr ge c sp pc rs m pc' rs' m'].  [ge] is the
-  global environment (see module [Genv]), [c] the CFG for the current
-  function, and [sp] the pointer to the stack block for its
-  current activation (as in Cminor).  [pc], [rs] and [m] is the 
-  initial state of the transition: program point (CFG node) [pc],
-  register state (mapping of pseudo-registers to values) [rs],
-  and memory state [m].  The final state is [pc'], [rs'] and [m']. *)
-
-Inductive exec_instr: code -> val ->
-                      node -> regset -> mem -> trace ->
-                      node -> regset -> mem -> Prop :=
+Inductive step: state -> trace -> state -> Prop :=
   | exec_Inop:
-      forall c sp pc rs m pc',
+      forall s c sp pc rs m pc',
       c!pc = Some(Inop pc') ->
-      exec_instr c sp  pc rs m  E0 pc' rs m
+      step (State s c sp pc rs m)
+        E0 (State s c sp pc' rs m)
   | exec_Iop:
-      forall c sp pc rs m op args res pc' v,
+      forall s c sp pc rs m op args res pc' v,
       c!pc = Some(Iop op args res pc') ->
-      eval_operation ge sp op rs##args = Some v ->
-      exec_instr c sp  pc rs m  E0 pc' (rs#res <- v) m
+      eval_operation ge sp op rs##args m = Some v ->
+      step (State s c sp pc rs m)
+        E0 (State s c sp pc' (rs#res <- v) m)
   | exec_Iload:
-      forall c sp pc rs m chunk addr args dst pc' a v,
+      forall s c sp pc rs m chunk addr args dst pc' a v,
       c!pc = Some(Iload chunk addr args dst pc') ->
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.loadv chunk m a = Some v ->
-      exec_instr c sp  pc rs m  E0 pc' (rs#dst <- v) m
+      step (State s c sp pc rs m)
+        E0 (State s c sp pc' (rs#dst <- v) m)
   | exec_Istore:
-      forall c sp pc rs m chunk addr args src pc' a m',
+      forall s c sp pc rs m chunk addr args src pc' a m',
       c!pc = Some(Istore chunk addr args src pc') ->
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.storev chunk m a rs#src = Some m' ->
-      exec_instr c sp  pc rs m  E0 pc' rs m'
+      step (State s c sp pc rs m)
+        E0 (State s c sp pc' rs m')
   | exec_Icall:
-      forall c sp pc rs m sig ros args res pc' f vres m' t,
+      forall s c sp pc rs m sig ros args res pc' f,
       c!pc = Some(Icall sig ros args res pc') ->
       find_function ros rs = Some f ->
       funsig f = sig ->
-      exec_function f rs##args m t vres m' ->
-      exec_instr c sp  pc rs m  t pc' (rs#res <- vres) m'
+      step (State s c sp pc rs m)
+        E0 (Callstate (Stackframe res c sp pc' rs :: s) f rs##args m)
+  | exec_Itailcall:
+      forall s c stk pc rs m sig ros args f,
+      c!pc = Some(Itailcall sig ros args) ->
+      find_function ros rs = Some f ->
+      funsig f = sig ->
+      step (State s c (Vptr stk Int.zero) pc rs m)
+        E0 (Callstate s f rs##args (Mem.free m stk))
   | exec_Ialloc:
-      forall c sp pc rs m pc' arg res sz m' b,
+      forall s c sp pc rs m pc' arg res sz m' b,
       c!pc = Some(Ialloc arg res pc') ->
       rs#arg = Vint sz ->
       Mem.alloc m 0 (Int.signed sz) = (m', b) ->
-      exec_instr c sp  pc rs m E0 pc' (rs#res <- (Vptr b Int.zero)) m'
+      step (State s c sp pc rs m)
+        E0 (State s c sp pc' (rs#res <- (Vptr b Int.zero)) m')
   | exec_Icond_true:
-      forall c sp pc rs m cond args ifso ifnot,
+      forall s c sp pc rs m cond args ifso ifnot,
       c!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args = Some true ->
-      exec_instr c sp  pc rs m  E0 ifso rs m
+      eval_condition cond rs##args m = Some true ->
+      step (State s c sp pc rs m)
+        E0 (State s c sp ifso rs m)
   | exec_Icond_false:
-      forall c sp pc rs m cond args ifso ifnot,
+      forall s c sp pc rs m cond args ifso ifnot,
       c!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args = Some false ->
-      exec_instr c sp  pc rs m  E0 ifnot rs m
-
-(** [exec_instrs ge c sp pc rs m pc' rs' m'] is the reflexive
-  transitive closure of [exec_instr].  It corresponds to the execution
-  of zero, one or finitely many transitions. *)
-
-with exec_instrs: code -> val ->
-                  node -> regset -> mem -> trace ->
-                  node -> regset -> mem -> Prop :=
-  | exec_refl:
-      forall c sp pc rs m,
-      exec_instrs c sp pc rs m E0 pc rs m
-  | exec_one:
-      forall c sp pc rs m t pc' rs' m',
-      exec_instr c sp pc rs m t pc' rs' m' ->
-      exec_instrs c sp pc rs m t pc' rs' m'
-  | exec_trans:
-      forall c sp pc1 rs1 m1 t1 pc2 rs2 m2 t2 pc3 rs3 m3 t3,
-      exec_instrs c sp pc1 rs1 m1 t1 pc2 rs2 m2 ->
-      exec_instrs c sp pc2 rs2 m2 t2 pc3 rs3 m3 ->
-      t3 = t1 ** t2 ->
-      exec_instrs c sp pc1 rs1 m1 t3 pc3 rs3 m3
-
-(** [exec_function ge f args m res m'] executes a function application.
-  [f] is the called function, [args] the values of its arguments,
-  and [m] the memory state at the beginning of the call.  [res] is
-  the returned value: the value of [r] if the function terminates with 
-  a [Ireturn (Some r)], or [Vundef] if it terminates with [Ireturn None].
-  Evaluation proceeds by executing transitions from the function's entry
-  point to the first [Ireturn] instruction encountered.  It is preceeded
-  by the allocation of the stack activation block and the binding
-  of register parameters to the provided arguments.
-  (Non-parameter registers are initialized to [Vundef].)  Before returning,
-  the stack activation block is freed. *)
-
-with exec_function: fundef -> list val -> mem -> trace ->
-                              val -> mem -> Prop :=
-  | exec_funct_internal:
-      forall f m m1 stk args t pc rs m2 or vres,
-      Mem.alloc m 0 f.(fn_stacksize) = (m1, stk) ->
-      exec_instrs f.(fn_code) (Vptr stk Int.zero) 
-                  f.(fn_entrypoint) (init_regs args f.(fn_params)) m1
-                  t pc rs m2 ->
-      f.(fn_code)!pc = Some(Ireturn or) ->
-      vres = regmap_optget or Vundef rs ->
-      exec_function (Internal f) args m t vres (Mem.free m2 stk)
-  | exec_funct_external:
-      forall ef args m t res,
+      eval_condition cond rs##args m = Some false ->
+      step (State s c sp pc rs m)
+        E0 (State s c sp ifnot rs m)
+  | exec_Ireturn:
+      forall s c stk pc rs m or,
+      c!pc = Some(Ireturn or) ->
+      step (State s c (Vptr stk Int.zero) pc rs m)
+        E0 (Returnstate s (regmap_optget or Vundef rs) (Mem.free m stk))
+  | exec_function_internal:
+      forall s f args m m' stk,
+      Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
+      step (Callstate s (Internal f) args m)
+        E0 (State s
+                  f.(fn_code)
+                  (Vptr stk Int.zero)
+                  f.(fn_entrypoint)
+                  (init_regs args f.(fn_params))
+                  m')
+  | exec_function_external:
+      forall s ef args res t m,
       event_match ef args t res ->
-      exec_function (External ef) args m t res m.
-
-Scheme exec_instr_ind_3 := Minimality for exec_instr Sort Prop
-  with exec_instrs_ind_3 := Minimality for exec_instrs Sort Prop
-  with exec_function_ind_3 := Minimality for exec_function Sort Prop.
-
-(** Some derived execution rules. *)
-
-Lemma exec_step:
-  forall c sp pc1 rs1 m1 t1 pc2 rs2 m2 t2 pc3 rs3 m3 t3,
-  exec_instr c sp pc1 rs1 m1 t1 pc2 rs2 m2 ->
-  exec_instrs c sp pc2 rs2 m2 t2 pc3 rs3 m3 ->
-  t3 = t1 ** t2 ->
-  exec_instrs c sp pc1 rs1 m1 t3 pc3 rs3 m3.
-Proof.
-  intros. eapply exec_trans. apply exec_one. eauto. eauto. auto.
-Qed.
+      step (Callstate s (External ef) args m)
+         t (Returnstate s res m)
+  | exec_return:
+      forall res c sp pc rs s vres m,
+      step (Returnstate (Stackframe res c sp pc rs :: s) vres m)
+        E0 (State s c sp pc (rs#res <- vres) m).
 
 Lemma exec_Iop':
-  forall c sp pc rs m op args res pc' rs' v,
+  forall s c sp pc rs m op args res pc' rs' v,
   c!pc = Some(Iop op args res pc') ->
-  eval_operation ge sp op rs##args = Some v ->
+  eval_operation ge sp op rs##args m = Some v ->
   rs' = (rs#res <- v) ->
-  exec_instr c sp  pc rs m  E0 pc' rs' m.
+  step (State s c sp pc rs m)
+    E0 (State s c sp pc' rs' m).
 Proof.
   intros. subst rs'. eapply exec_Iop; eauto.
 Qed.
 
 Lemma exec_Iload':
-  forall c sp pc rs m chunk addr args dst pc' rs' a v,
+  forall s c sp pc rs m chunk addr args dst pc' rs' a v,
   c!pc = Some(Iload chunk addr args dst pc') ->
   eval_addressing ge sp addr rs##args = Some a ->
   Mem.loadv chunk m a = Some v ->
   rs' = (rs#dst <- v) ->
-  exec_instr c sp  pc rs m E0 pc' rs' m.
+  step (State s c sp pc rs m)
+    E0 (State s c sp pc' rs' m).
 Proof.
   intros. subst rs'. eapply exec_Iload; eauto.
 Qed.
 
-(** If a transition can take place from [pc], the instruction at [pc]
-  is defined in the CFG. *)
-
-Lemma exec_instr_present:
-  forall c sp pc rs m t pc' rs' m',
-  exec_instr c sp  pc rs m  t pc' rs' m' ->
-  c!pc <> None.
-Proof.
-  induction 1; congruence.
-Qed.
-
-Lemma exec_instrs_present:
-  forall c sp pc rs m t pc' rs' m',
-  exec_instrs c sp  pc rs m  t pc' rs' m' ->
-  c!pc' <> None -> c!pc <> None.
-Proof.
-  induction 1; intros.
-  auto.
-  eapply exec_instr_present; eauto.
-  eauto.
-Qed.
-
 End RELSEM.
 
-(** Execution of whole programs.  As in Cminor, we call the ``main'' function
-  with no arguments and observe its return value. *)
+(** Execution of whole programs are described as sequences of transitions
+  from an initial state to a final state.  An initial state is a [Callstate]
+  corresponding to the invocation of the ``main'' function of the program
+  without arguments and with an empty call stack. *)
 
-Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := Genv.globalenv p in
-  let m0 := Genv.init_mem p in
-  exists b, exists f, exists m,
-  Genv.find_symbol ge p.(prog_main) = Some b /\
-  Genv.find_funct_ptr ge b = Some f /\
-  funsig f = mksignature nil (Some Tint) /\
-  exec_function ge f nil m0 t r m.
+Inductive initial_state (p: program): state -> Prop :=
+  | initial_state_intro: forall b f,
+      let ge := Genv.globalenv p in
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = mksignature nil (Some Tint) ->
+      initial_state p (Callstate nil f nil m0).
+
+(** A final state is a [Returnstate] with an empty call stack. *)
+
+Inductive final_state: state -> int -> Prop :=
+  | final_state_intro: forall r m,
+      final_state (Returnstate nil (Vint r) m) r.
+
+Definition exec_program (p: program) (beh: program_behavior) : Prop :=
+  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
 
 (** * Operations on RTL abstract syntax *)
 
@@ -330,20 +325,12 @@ Definition successors (f: function) (pc: node) : list node :=
       | Iload chunk addr args dst s => s :: nil
       | Istore chunk addr args src s => s :: nil
       | Icall sig ros args res s => s :: nil
+      | Itailcall sig ros args => nil
       | Ialloc arg res s => s :: nil
       | Icond cond args ifso ifnot => ifso :: ifnot :: nil
       | Ireturn optarg => nil
       end
   end.
-
-Lemma successors_correct:
-  forall ge f sp pc rs m t pc' rs' m',
-  exec_instr ge f.(fn_code) sp pc rs m t pc' rs' m' ->
-  In pc' (successors f pc).
-Proof.
-  intros ge f. unfold successors. generalize (fn_code f).
-  induction 1; rewrite H; simpl; tauto.
-Qed.
 
 (** Transformation of a RTL function instruction by instruction.
   This applies a given transformation function to all instructions

@@ -12,30 +12,32 @@ LIB=Coqlib.v Maps.v Lattice.v Ordered.v \
 
 # Files in common/
 
-COMMON=AST.v Events.v Globalenvs.v Mem.v Values.v Main.v
+COMMON=Errors.v AST.v Events.v Globalenvs.v Mem.v Values.v \
+  Smallstep.v Switch.v Main.v
 
 # Files in backend/
 
 BACKEND=\
-  Op.v Cminor.v \
-  Cmconstr.v Cmconstrproof.v \
+  Cminor.v Op.v CminorSel.v \
+  Selection.v Selectionproof.v \
   Registers.v RTL.v \
-  RTLgen.v RTLgenproof1.v RTLgenproof.v \
+  RTLgen.v RTLgenspec.v RTLgenproof.v \
   RTLtyping.v \
   Kildall.v \
   Constprop.v Constpropproof.v \
   CSE.v CSEproof.v \
   Locations.v Conventions.v LTL.v LTLtyping.v \
   InterfGraph.v Coloring.v Coloringproof.v \
-  Parallelmove.v Allocation.v \
-  Allocproof.v Alloctyping.v \
+  Allocation.v Allocproof.v Alloctyping.v \
   Tunneling.v Tunnelingproof.v Tunnelingtyping.v \
-  Linear.v Lineartyping.v \
+  LTLin.v LTLintyping.v \
   Linearize.v Linearizeproof.v Linearizetyping.v \
+  Linear.v Lineartyping.v \
+  Parallelmove.v Reload.v Reloadproof.v Reloadtyping.v \
   Mach.v Machabstr.v Machtyping.v \
-  Stacking.v Stackingproof.v Stackingtyping.v \
-  Machabstr2mach.v \
-  PPC.v PPCgen.v PPCgenproof1.v PPCgenproof.v
+  Bounds.v Stacking.v Stackingproof.v Stackingtyping.v \
+  Machconcr.v Machabstr2concr.v \
+  PPC.v PPCgen.v PPCgenretaddr.v PPCgenproof1.v PPCgenproof.v
 
 # Files in cfrontend/
 
@@ -47,7 +49,7 @@ CFRONTEND=Csyntax.v Csem.v Ctyping.v Cshmgen.v \
 
 FILES=$(LIB:%=lib/%) $(COMMON:%=common/%) $(BACKEND:%=backend/%) $(CFRONTEND:%=cfrontend/%)
 
-FLATFILES=$(LIB) $(BACKEND) $(CFRONTEND)
+FLATFILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND)
 
 proof: $(FILES:.v=.vo)
 
@@ -65,24 +67,30 @@ cil:
 	$(MAKE) -C cil
 
 documentation:
-	$(COQDOC) --html -d doc $(FLATFILES:%.v=--glob-from doc/%.glob) $(FILES)
-	doc/removeproofs doc/lib.*.html doc/backend.*.html
+	@ln -f $(FILES) doc/
+	@mkdir -p doc/html
+	cd doc; $(COQDOC) --html -d html \
+          $(FLATFILES:%.v=--glob-from %.glob) $(FLATFILES)
+	@cd doc; rm -f $(FLATFILES)
+	cp doc/coqdoc.css doc/html/coqdoc.css
+	doc/removeproofs doc/html/*.html
 
 latexdoc:
-	$(COQDOC) --latex -o doc/doc.tex -g $(FILES)
+	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
 
 .SUFFIXES: .v .vo
 
 .v.vo:
 	@rm -f doc/glob/$(*F).glob
-	$(COQC) -dump-glob doc/$(*F).glob $*.v
+	@echo "COQC $*.v"
+	@$(COQC) -dump-glob doc/$(*F).glob $*.v
 
 depend:
 	$(COQDEP) $(FILES) > .depend
 
 clean:
 	rm -f */*.vo *~ */*~
-	rm -f doc/lib.*.html doc/backend.*.html doc/*.glob
+	rm -rf doc/html doc/*.glob
 	$(MAKE) -C extraction clean
 	$(MAKE) -C test/cminor clean
 

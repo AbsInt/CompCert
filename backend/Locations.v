@@ -434,7 +434,7 @@ End Loc.
 
 (** The [Locmap] module defines mappings from locations to values,
   used as evaluation environments for the semantics of the [LTL] 
-  and [Linear] intermediate languages.  *)
+  and [LTLin] intermediate languages.  *)
 
 Set Implicit Arguments.
 

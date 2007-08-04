@@ -9,6 +9,7 @@ Require Import Values.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Cminor.
 
 (** Abstract syntax *)
 
@@ -24,52 +25,21 @@ Require Import Globalenvs.
   Unlike in Cminor (the next intermediate language of the back-end),
   Csharpminor local variables reside in memory, and their address can
   be taken using [Eaddrof] expressions.
+*)
 
-  Another difference with Cminor is that Csharpminor is entirely 
-  processor-neutral. In particular, Csharpminor uses a standard set of
-  operations: it does not reflect processor-specific operations nor
-  addressing modes. *)
+Inductive constant : Set :=
+  | Ointconst: int -> constant          (**r integer constant *)
+  | Ofloatconst: float -> constant.     (**r floating-point constant *)
 
-Inductive operation : Set :=
-  | Ointconst: int -> operation         (**r integer constant *)
-  | Ofloatconst: float -> operation     (**r floating-point constant *)
-  | Ocast8unsigned: operation           (**r 8-bit zero extension  *)
-  | Ocast8signed: operation             (**r 8-bit sign extension  *)
-  | Ocast16unsigned: operation          (**r 16-bit zero extension  *)
-  | Ocast16signed: operation            (**r 16-bit sign extension *)
-  | Onotbool: operation                 (**r boolean negation  *)
-  | Onotint: operation                  (**r bitwise complement  *)
-  | Oadd: operation                     (**r integer addition *)
-  | Osub: operation                     (**r integer subtraction *)
-  | Omul: operation                     (**r integer multiplication *)
-  | Odiv: operation                     (**r integer signed division *)
-  | Odivu: operation                    (**r integer unsigned division *)
-  | Omod: operation                     (**r integer signed modulus *)
-  | Omodu: operation                    (**r integer unsigned modulus *)
-  | Oand: operation                     (**r bitwise ``and'' *)
-  | Oor: operation                      (**r bitwise ``or'' *)
-  | Oxor: operation                     (**r bitwise ``xor'' *)
-  | Oshl: operation                     (**r left shift *)
-  | Oshr: operation                     (**r right signed shift *)
-  | Oshru: operation                    (**r right unsigned shift *)
-  | Onegf: operation                    (**r float opposite *)
-  | Oabsf: operation                    (**r float absolute value *)
-  | Oaddf: operation                    (**r float addition *)
-  | Osubf: operation                    (**r float subtraction *)
-  | Omulf: operation                    (**r float multiplication *)
-  | Odivf: operation                    (**r float division *)
-  | Osingleoffloat: operation           (**r float truncation *)
-  | Ointoffloat: operation              (**r integer to float *)
-  | Ofloatofint: operation              (**r float to signed integer *)
-  | Ofloatofintu: operation             (**r float to unsigned integer *)
-  | Ocmp: comparison -> operation       (**r integer signed comparison *)
-  | Ocmpu: comparison -> operation      (**r integer unsigned comparison *)
-  | Ocmpf: comparison -> operation.     (**r float comparison *)
+Definition unary_operation : Set := Cminor.unary_operation.
+Definition binary_operation : Set := Cminor.binary_operation.
 
 Inductive expr : Set :=
   | Evar : ident -> expr                (**r reading a scalar variable  *)
   | Eaddrof : ident -> expr             (**r taking the address of a variable *)
-  | Eop : operation -> exprlist -> expr (**r arithmetic operation *)
+  | Econst : constant -> expr
+  | Eunop : unary_operation -> expr -> expr
+  | Ebinop : binary_operation -> expr -> expr -> expr
   | Eload : memory_chunk -> expr -> expr (**r memory read *)
   | Ecall : signature -> expr -> exprlist -> expr (**r function call *)
   | Econdition : expr -> expr -> expr -> expr (**r conditional expression *)
@@ -202,77 +172,14 @@ Definition global_var_env (p: program): gvarenv :=
 
 (** Evaluation of operator applications. *)
 
-Definition eval_compare_null (c: comparison) (n: int) : option val :=
-  if Int.eq n Int.zero 
-  then match c with Ceq => Some Vfalse | Cne => Some Vtrue | _ => None end
-  else None.
-
-Definition eval_operation (op: operation) (vl: list val) (m: mem): option val :=
-  match op, vl with
-  | Ointconst n, nil => Some (Vint n)
-  | Ofloatconst n, nil => Some (Vfloat n)
-  | Ocast8unsigned, Vint n1 :: nil => Some (Vint (Int.cast8unsigned n1))
-  | Ocast8signed, Vint n1 :: nil => Some (Vint (Int.cast8signed n1))
-  | Ocast16unsigned, Vint n1 :: nil => Some (Vint (Int.cast16unsigned n1))
-  | Ocast16signed, Vint n1 :: nil => Some (Vint (Int.cast16signed n1))
-  | Onotbool, Vint n1 :: nil => Some (Val.of_bool (Int.eq n1 Int.zero))
-  | Onotbool, Vptr b1 n1 :: nil => Some (Vfalse)
-  | Onotint, Vint n1 :: nil => Some (Vint (Int.not n1))
-  | Oadd, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.add n1 n2))
-  | Oadd, Vint n1 :: Vptr b2 n2 :: nil => Some (Vptr b2 (Int.add n2 n1))
-  | Oadd, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.add n1 n2))
-  | Osub, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.sub n1 n2))
-  | Osub, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.sub n1 n2))
-  | Osub, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if eq_block b1 b2 then Some (Vint (Int.sub n1 n2)) else None
-  | Omul, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.mul n1 n2))
-  | Odiv, Vint n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.divs n1 n2))
-  | Odivu, Vint n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.divu n1 n2))
-  | Omod, Vint n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.mods n1 n2))
-  | Omodu, Vint n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.modu n1 n2))
-  | Oand, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.and n1 n2))
-  | Oor, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.or n1 n2))
-  | Oxor, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.xor n1 n2))
-  | Oshl, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shl n1 n2)) else None
-  | Oshr, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shr n1 n2)) else None
-  | Oshru, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shru n1 n2)) else None
-  | Onegf, Vfloat f1 :: nil => Some (Vfloat (Float.neg f1))
-  | Oabsf, Vfloat f1 :: nil => Some (Vfloat (Float.abs f1))
-  | Oaddf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.add f1 f2))
-  | Osubf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.sub f1 f2))
-  | Omulf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.mul f1 f2))
-  | Odivf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.div f1 f2))
-  | Osingleoffloat, Vfloat f1 :: nil =>
-      Some (Vfloat (Float.singleoffloat f1))
-  | Ointoffloat, Vfloat f1 :: nil => 
-      Some (Vint (Float.intoffloat f1))
-  | Ofloatofint, Vint n1 :: nil => 
-      Some (Vfloat (Float.floatofint n1))
-  | Ofloatofintu, Vint n1 :: nil => 
-      Some (Vfloat (Float.floatofintu n1))
-  | Ocmp c, Vint n1 :: Vint n2 :: nil =>
-      Some (Val.of_bool(Int.cmp c n1 n2))
-  | Ocmp c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if valid_pointer m b1 (Int.signed n1)
-      && valid_pointer m b2 (Int.signed n2) then
-        if eq_block b1 b2 then Some(Val.of_bool(Int.cmp c n1 n2)) else None
-      else
-        None
-  | Ocmp c, Vptr b1 n1 :: Vint n2 :: nil => eval_compare_null c n2
-  | Ocmp c, Vint n1 :: Vptr b2 n2 :: nil => eval_compare_null c n1
-  | Ocmpu c, Vint n1 :: Vint n2 :: nil =>
-      Some (Val.of_bool(Int.cmpu c n1 n2))
-  | Ocmpf c, Vfloat f1 :: Vfloat f2 :: nil =>
-      Some (Val.of_bool (Float.cmp c f1 f2))
-  | _, _ => None
+Definition eval_constant (cst: constant) : option val :=
+  match cst with
+  | Ointconst n => Some (Vint n)
+  | Ofloatconst n => Some (Vfloat n)
   end.
+
+Definition eval_unop := Cminor.eval_unop.
+Definition eval_binop := Cminor.eval_binop.
 
 (** Allocation of local variables at function entry.  Each variable is
   bound to the reference to a fresh block of the appropriate size. *)
@@ -361,11 +268,22 @@ Inductive eval_expr:
       forall le e m id b,
       eval_var_addr e id b ->
       eval_expr le e m (Eaddrof id) E0 m (Vptr b Int.zero)
-  | eval_Eop:
-      forall le e m op al t m1 vl v,
-      eval_exprlist le e m al t m1 vl ->
-      eval_operation op vl m1 = Some v ->
-      eval_expr le e m (Eop op al) t m1 v
+  | eval_Econst:
+      forall le e m cst v,
+      eval_constant cst = Some v ->
+      eval_expr le e m (Econst cst) E0 m v
+  | eval_Eunop:
+      forall le e m op a t m1 v1 v,
+      eval_expr le e m a t m1 v1 ->
+      eval_unop op v1 = Some v ->
+      eval_expr le e m (Eunop op a) t m1 v
+  | eval_Ebinop:
+      forall le e m op a1 a2 t1 m1 v1 t2 m2 v2 t v,
+      eval_expr le e m a1 t1 m1 v1 ->
+      eval_expr le e m1 a2 t2 m2 v2 ->
+      eval_binop op v1 v2 m2 = Some v ->
+      t = t1 ** t2 ->
+      eval_expr le e m (Ebinop op a1 a2) t m2 v
   | eval_Eload:
       forall le e m chunk a t m1 v1 v,
       eval_expr le e m a t m1 v1 ->

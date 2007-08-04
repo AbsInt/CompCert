@@ -3,6 +3,7 @@
 Require Import FSets.
 Require FSetAVL.
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import Ordered.
 Require Import AST.
@@ -11,7 +12,9 @@ Require Mem.
 Require Import Csharpminor.
 Require Import Op.
 Require Import Cminor.
-Require Cmconstr.
+
+Open Local Scope string_scope.
+Open Local Scope error_monad_scope.
 
 (** The main task in translating Csharpminor to Cminor is to explicitly
   stack-allocate local variables whose address is taken: these local
@@ -35,57 +38,12 @@ Require Cmconstr.
   the ``normalize at assignment-time'' semantics of Csharpminor.
 *)
 
-(** Translation of operators. *)
+(** Translation of constants. *)
 
-Definition make_op (op: Csharpminor.operation) (el: exprlist): option expr :=
-  match el with
-  | Enil =>
-      match op with
-      | Csharpminor.Ointconst n => Some(Eop (Ointconst n) Enil)
-      | Csharpminor.Ofloatconst n => Some(Eop (Ofloatconst n) Enil)
-      | _ => None
-      end
-  | Econs e1 Enil =>
-      match op with
-      | Csharpminor.Ocast8unsigned => Some(Cmconstr.cast8unsigned e1)
-      | Csharpminor.Ocast8signed => Some(Cmconstr.cast8signed e1)
-      | Csharpminor.Ocast16unsigned => Some(Cmconstr.cast16unsigned e1)
-      | Csharpminor.Ocast16signed => Some(Cmconstr.cast16signed e1)
-      | Csharpminor.Onotint => Some(Cmconstr.notint e1)
-      | Csharpminor.Onotbool => Some(Cmconstr.notbool e1)
-      | Csharpminor.Onegf => Some(Cmconstr.negfloat e1)
-      | Csharpminor.Oabsf => Some(Cmconstr.absfloat e1)
-      | Csharpminor.Osingleoffloat => Some(Cmconstr.singleoffloat e1)
-      | Csharpminor.Ointoffloat => Some(Cmconstr.intoffloat e1)
-      | Csharpminor.Ofloatofint => Some(Cmconstr.floatofint e1)
-      | Csharpminor.Ofloatofintu => Some(Cmconstr.floatofintu e1)
-      | _ => None
-      end
-  | Econs e1 (Econs e2 Enil) =>
-      match op with
-      | Csharpminor.Oadd => Some(Cmconstr.add e1 e2)
-      | Csharpminor.Osub => Some(Cmconstr.sub e1 e2)
-      | Csharpminor.Omul => Some(Cmconstr.mul e1 e2)
-      | Csharpminor.Odiv => Some(Cmconstr.divs e1 e2)
-      | Csharpminor.Odivu => Some(Cmconstr.divu e1 e2)
-      | Csharpminor.Omod => Some(Cmconstr.mods e1 e2)
-      | Csharpminor.Omodu => Some(Cmconstr.modu e1 e2)
-      | Csharpminor.Oand => Some(Cmconstr.and e1 e2)
-      | Csharpminor.Oor => Some(Cmconstr.or e1 e2)
-      | Csharpminor.Oxor => Some(Cmconstr.xor e1 e2)
-      | Csharpminor.Oshl => Some(Cmconstr.shl e1 e2)
-      | Csharpminor.Oshr => Some(Cmconstr.shr e1 e2)
-      | Csharpminor.Oshru => Some(Cmconstr.shru e1 e2)
-      | Csharpminor.Oaddf => Some(Cmconstr.addf e1 e2)
-      | Csharpminor.Osubf => Some(Cmconstr.subf e1 e2)
-      | Csharpminor.Omulf => Some(Cmconstr.mulf e1 e2)
-      | Csharpminor.Odivf => Some(Cmconstr.divf e1 e2)
-      | Csharpminor.Ocmp c => Some(Cmconstr.cmp c e1 e2)
-      | Csharpminor.Ocmpu c => Some(Cmconstr.cmpu c e1 e2)
-      | Csharpminor.Ocmpf c => Some(Cmconstr.cmpf c e1 e2)
-      | _ => None
-      end
-  | _ => None
+Definition transl_constant (cst: Csharpminor.constant): constant :=
+  match cst with
+  | Csharpminor.Ointconst n => Ointconst n
+  | Csharpminor.Ofloatconst n => Ofloatconst n
   end.
 
 (** [make_cast chunk e] returns a Cminor expression that normalizes
@@ -95,45 +53,38 @@ Definition make_op (op: Csharpminor.operation) (el: exprlist): option expr :=
 
 Definition make_cast (chunk: memory_chunk) (e: expr): expr :=
   match chunk with
-  | Mint8signed => Cmconstr.cast8signed e
-  | Mint8unsigned => Cmconstr.cast8unsigned e
-  | Mint16signed => Cmconstr.cast16signed e
-  | Mint16unsigned => Cmconstr.cast16unsigned e
+  | Mint8signed => Eunop Ocast8signed e
+  | Mint8unsigned => Eunop Ocast8unsigned e
+  | Mint16signed => Eunop Ocast16signed e
+  | Mint16unsigned => Eunop Ocast16unsigned e
   | Mint32 => e
-  | Mfloat32 => Cmconstr.singleoffloat e
+  | Mfloat32 => Eunop Osingleoffloat e
   | Mfloat64 => e
   end.
 
-Definition make_load (chunk: memory_chunk) (e: expr): expr :=
-  Cmconstr.load chunk e.
-
 Definition store_arg (chunk: memory_chunk) (e: expr) : expr :=
   match e with
-  | Eop op (Econs e1 Enil) =>
-      match op with
-      | Ocast8signed =>
-          match chunk with Mint8signed => e1 | _ => e end
-      | Ocast8unsigned =>
-          match chunk with Mint8unsigned => e1 | _ => e end
-      | Ocast16signed =>
-          match chunk with Mint16signed => e1 | _ => e end
-      | Ocast16unsigned =>
-          match chunk with Mint16unsigned => e1 | _ => e end
-      | Osingleoffloat =>
-          match chunk with Mfloat32 => e1 | _ => e end
-      | _ => e
-      end
+  | Eunop Ocast8signed e1 =>
+      match chunk with Mint8signed => e1 | _ => e end
+  | Eunop Ocast8unsigned e1 =>
+      match chunk with Mint8unsigned => e1 | _ => e end
+  | Eunop Ocast16signed e1 =>
+      match chunk with Mint16signed => e1 | _ => e end
+  | Eunop Ocast16unsigned e1 =>
+      match chunk with Mint16unsigned => e1 | _ => e end
+  | Eunop Osingleoffloat e1 =>
+      match chunk with Mfloat32 => e1 | _ => e end
   | _ => e
   end.
 
 Definition make_store (chunk: memory_chunk) (e1 e2: expr): stmt :=
-  Sexpr(Cmconstr.store chunk e1 (store_arg chunk e2)).
+  Sexpr (Estore chunk e1 (store_arg chunk e2)).
 
 Definition make_stackaddr (ofs: Z): expr :=
-  Eop (Oaddrstack (Int.repr ofs)) Enil.
+  Econst (Oaddrstack (Int.repr ofs)).
 
 Definition make_globaladdr (id: ident): expr :=
-  Eop (Oaddrsymbol id Int.zero) Enil.
+  Econst (Oaddrsymbol id Int.zero).
 
 (** Compile-time information attached to each Csharpminor
   variable: global variables, local variables, function parameters.
@@ -156,134 +107,127 @@ Definition compilenv := PMap.t var_info.
 (** Generation of Cminor code corresponding to accesses to Csharpminor 
   local variables: reads, assignments, and taking the address of. *)
 
-Definition var_get (cenv: compilenv) (id: ident): option expr :=
+Definition var_get (cenv: compilenv) (id: ident): res expr :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      Some(Evar id)
+      OK(Evar id)
   | Var_stack_scalar chunk ofs =>
-      Some(make_load chunk (make_stackaddr ofs))
+      OK(Eload chunk (make_stackaddr ofs))
   | Var_global_scalar chunk =>
-      Some(make_load chunk (make_globaladdr id))
+      OK(Eload chunk (make_globaladdr id))
   | _ =>
-      None
+      Error(msg "Cminorgen.var_get")
   end.
 
-Definition var_set (cenv: compilenv) (id: ident) (rhs: expr): option stmt :=
+Definition var_set (cenv: compilenv) (id: ident) (rhs: expr): res stmt :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      Some(Sassign id (make_cast chunk rhs))
+      OK(Sassign id (make_cast chunk rhs))
   | Var_stack_scalar chunk ofs =>
-      Some(make_store chunk (make_stackaddr ofs) rhs)
+      OK(make_store chunk (make_stackaddr ofs) rhs)
   | Var_global_scalar chunk =>
-      Some(make_store chunk (make_globaladdr id) rhs)
+      OK(make_store chunk (make_globaladdr id) rhs)
   | _ =>
-      None
+      Error(msg "Cminorgen.var_set")
   end.
 
-Definition var_addr (cenv: compilenv) (id: ident): option expr :=
+Definition var_addr (cenv: compilenv) (id: ident): res expr :=
   match PMap.get id cenv with
-  | Var_local chunk => None
-  | Var_stack_scalar chunk ofs => Some (make_stackaddr ofs)
-  | Var_stack_array ofs => Some (make_stackaddr ofs)
-  | _ => Some (make_globaladdr id)
+  | Var_local chunk => Error(msg "Cminorgen.var_addr")
+  | Var_stack_scalar chunk ofs => OK (make_stackaddr ofs)
+  | Var_stack_array ofs => OK (make_stackaddr ofs)
+  | _ => OK (make_globaladdr id)
   end.
-
-(** The translation from Csharpminor to Cminor can fail, which we
-  encode by returning option types ([None] denotes error).
-  Propagation of errors is done in monadic style, using the following
-  [bind] monadic composition operator, and a [do] notation inspired
-  by Haskell's. *)
-
-Definition bind (A B: Set) (a: option A) (b: A -> option B): option B :=
-  match a with
-  | None => None
-  | Some x => b x
-  end.
-
-Notation "'do' X <- A ; B" := (bind _ _ A (fun X => B))
-  (at level 200, X ident, A at level 100, B at level 200).
 
 (** Translation of expressions.  All the hard work is done by the
   [make_*] and [var_*] functions defined above. *)
 
 Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
-                     {struct e}: option expr :=
+                     {struct e}: res expr :=
   match e with
   | Csharpminor.Evar id => var_get cenv id
   | Csharpminor.Eaddrof id => var_addr cenv id
-  | Csharpminor.Eop op el =>
-      do tel <- transl_exprlist cenv el; make_op op tel
+  | Csharpminor.Econst cst =>
+      OK (Econst (transl_constant cst))
+  | Csharpminor.Eunop op e1 =>
+      do te1 <- transl_expr cenv e1;
+      OK (Eunop op te1)
+  | Csharpminor.Ebinop op e1 e2 =>
+      do te1 <- transl_expr cenv e1;
+      do te2 <- transl_expr cenv e2;
+      OK (Ebinop op te1 te2)
   | Csharpminor.Eload chunk e =>
-      do te <- transl_expr cenv e; Some (make_load chunk te)
+      do te <- transl_expr cenv e;
+      OK (Eload chunk te)
   | Csharpminor.Ecall sig e el =>
       do te <- transl_expr cenv e;
       do tel <- transl_exprlist cenv el;
-      Some (Ecall sig te tel)
+      OK (Ecall sig te tel)
   | Csharpminor.Econdition e1 e2 e3 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
       do te3 <- transl_expr cenv e3;
-      Some (Cmconstr.conditionalexpr te1 te2 te3)
+      OK (Econdition te1 te2 te3)
   | Csharpminor.Elet e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
-      Some (Elet te1 te2)
+      OK (Elet te1 te2)
   | Csharpminor.Eletvar n =>
-      Some (Eletvar n)
+      OK (Eletvar n)
   | Csharpminor.Ealloc e =>
       do te <- transl_expr cenv e;
-      Some (Ealloc te)
+      OK (Ealloc te)
   end
 
 with transl_exprlist (cenv: compilenv) (el: Csharpminor.exprlist)
-                     {struct el}: option exprlist :=
+                     {struct el}: res exprlist :=
   match el with
   | Csharpminor.Enil =>
-      Some Enil
+      OK Enil
   | Csharpminor.Econs e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_exprlist cenv e2;
-      Some (Econs te1 te2)
+      OK (Econs te1 te2)
   end.
 
 (** Translation of statements.  Entirely straightforward. *)
 
 Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
-                     {struct s}: option stmt :=
+                     {struct s}: res stmt :=
   match s with
   | Csharpminor.Sskip =>
-      Some Sskip
+      OK Sskip
   | Csharpminor.Sexpr e =>
-      do te <- transl_expr cenv e; Some(Sexpr te)
+      do te <- transl_expr cenv e; OK(Sexpr te)
   | Csharpminor.Sassign id e =>
       do te <- transl_expr cenv e; var_set cenv id te
   | Csharpminor.Sstore chunk e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
-      Some (make_store chunk te1 te2)
+      OK (make_store chunk te1 te2)
   | Csharpminor.Sseq s1 s2 =>
       do ts1 <- transl_stmt cenv s1;
       do ts2 <- transl_stmt cenv s2;
-      Some (Sseq ts1 ts2)
+      OK (Sseq ts1 ts2)
   | Csharpminor.Sifthenelse e s1 s2 =>
       do te <- transl_expr cenv e;
       do ts1 <- transl_stmt cenv s1;
       do ts2 <- transl_stmt cenv s2;
-      Some (Cmconstr.ifthenelse te ts1 ts2)
+      OK (Sifthenelse te ts1 ts2)
   | Csharpminor.Sloop s =>
       do ts <- transl_stmt cenv s;
-      Some (Sloop ts)
+      OK (Sloop ts)
   | Csharpminor.Sblock s =>
       do ts <- transl_stmt cenv s;
-      Some (Sblock ts)
+      OK (Sblock ts)
   | Csharpminor.Sexit n =>
-      Some (Sexit n)
+      OK (Sexit n)
   | Csharpminor.Sswitch e cases default =>
-      do te <- transl_expr cenv e; Some(Sswitch te cases default)
+      do te <- transl_expr cenv e; OK(Sswitch te cases default)
   | Csharpminor.Sreturn None =>
-      Some (Sreturn None)
+      OK (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>
-      do te <- transl_expr cenv e; Some (Sreturn (Some te))
+      do te <- transl_expr cenv e; OK (Sreturn (Some te))
   end.
 
 (** Computation of the set of variables whose address is taken in
@@ -295,7 +239,10 @@ Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   match e with
   | Csharpminor.Evar id => Identset.empty
   | Csharpminor.Eaddrof id => Identset.add id Identset.empty
-  | Csharpminor.Eop op el => addr_taken_exprlist el
+  | Csharpminor.Econst cst => Identset.empty
+  | Csharpminor.Eunop op e1 => addr_taken_expr e1
+  | Csharpminor.Ebinop op e1 e2 =>
+      Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Eload chunk e => addr_taken_expr e
   | Csharpminor.Ecall sig e el =>
       Identset.union (addr_taken_expr e) (addr_taken_exprlist el)
@@ -416,23 +363,23 @@ Fixpoint store_parameters
   overflow machine arithmetic and lead to incorrect code. *)
 
 Definition transl_function
-         (gce: compilenv) (f: Csharpminor.function): option function :=
+         (gce: compilenv) (f: Csharpminor.function): res function :=
   let (cenv, stacksize) := build_compilenv gce f in
   if zle stacksize Int.max_signed then
     do tbody <- transl_stmt cenv f.(Csharpminor.fn_body);
-       Some (mkfunction
+       OK (mkfunction
               (Csharpminor.fn_sig f)
               (Csharpminor.fn_params_names f)
               (Csharpminor.fn_vars_names f)
               stacksize
               (Sseq (store_parameters cenv f.(Csharpminor.fn_params)) tbody))
-  else None.
+  else Error(msg "Cminorgen: too many local variables, stack size exceeded").
 
-Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): option fundef :=
+Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): res fundef :=
   transf_partial_fundef (transl_function gce) f.
 
-Definition transl_globvar (vk: var_kind) := Some tt.
+Definition transl_globvar (vk: var_kind) := OK tt.
 
-Definition transl_program (p: Csharpminor.program) : option program :=
+Definition transl_program (p: Csharpminor.program) : res program :=
   let gce := build_global_compilenv p in
   transform_partial_program2 (transl_fundef gce) transl_globvar p.

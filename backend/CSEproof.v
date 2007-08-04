@@ -9,6 +9,7 @@ Require Import Values.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
@@ -218,6 +219,7 @@ Proof.
   apply wf_add_load; auto.
   apply wf_kill_loads; auto.
   apply wf_empty_numbering.
+  apply wf_empty_numbering.
   apply wf_add_unknown; auto.
 Qed.
 
@@ -387,7 +389,7 @@ Definition rhs_evals_to
     (valu: valnum -> val) (rh: rhs) (v: val) : Prop :=
   match rh with
   | Op op vl => 
-      eval_operation ge sp op (List.map valu vl) = Some v
+      eval_operation ge sp op (List.map valu vl) m = Some v
   | Load chunk addr vl =>
       exists a,
       eval_addressing ge sp addr (List.map valu vl) = Some a /\
@@ -468,7 +470,7 @@ Lemma add_op_satisfiable:
   forall n rs op args dst v,
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
-  eval_operation ge sp op rs##args = Some v ->
+  eval_operation ge sp op rs##args m = Some v ->
   numbering_satisfiable ge sp (rs#dst <- v) m (add_op n dst op args).
 Proof.
   intros. inversion H0.
@@ -545,7 +547,7 @@ Proof.
   intros. destruct H0 as [valu [A B]].
   exists valu; split; intros.
   generalize (A _ _ H0). destruct rh; simpl.
-  auto.
+  intro. eapply eval_operation_alloc; eauto. 
   intros [addr [C D]]. exists addr; split. auto.
   destruct addr; simpl in *; try discriminate. 
   eapply Mem.load_alloc_other; eauto. 
@@ -569,17 +571,21 @@ Proof.
 Qed.
 
 Lemma kill_load_satisfiable:
-  forall n rs m',
+  forall n rs chunk addr v m',
+  Mem.storev chunk m addr v = Some m' ->
   numbering_satisfiable ge sp rs m n ->
   numbering_satisfiable ge sp rs m' (kill_loads n).
 Proof.
-  intros. inversion H. inversion H0.
+  intros. inversion H0. inversion H1.
   generalize (kill_load_eqs_incl n.(num_eqs)). intro.
   exists x. split; intros.
-  generalize (H1 _ _ (H3 _ H4)). 
-  generalize (kill_load_eqs_ops _ _ _ H4).
-  destruct rh; simpl. auto. tauto.
-  apply H2. assumption.
+  generalize (H2 _ _ (H4 _ H5)). 
+  generalize (kill_load_eqs_ops _ _ _ H5).
+  destruct rh; simpl.
+  intros. destruct addr; simpl in H; try discriminate. 
+  eapply eval_operation_store; eauto.
+  tauto.
+  apply H3. assumption.
 Qed.
 
 (** Correctness of [reg_valnum]: if it returns a register [r],
@@ -633,7 +639,7 @@ Lemma find_op_correct:
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
   find_op n op args = Some r ->
-  eval_operation ge sp op rs##args = Some rs#r.
+  eval_operation ge sp op rs##args m = Some rs#r.
 Proof.
   intros until r. intros WF [valu NH].
   unfold find_op. caseEq (valnum_regs n args). intros n' vl VR FIND.
@@ -664,29 +670,6 @@ Qed.
 
 End SATISFIABILITY.
 
-(** The transfer function preserves satisfiability of numberings. *)
-
-Lemma transfer_correct:
-  forall ge c sp pc rs m t pc' rs' m' f n,
-  exec_instr ge c sp pc rs m t pc' rs' m' ->
-  c = f.(fn_code) ->
-  wf_numbering n ->
-  numbering_satisfiable ge sp rs m n ->
-  numbering_satisfiable ge sp rs' m' (transfer f pc n).
-Proof.
-  induction 1; intros; subst c; unfold transfer; rewrite H; auto.
-  (* Iop *)
-  eapply add_op_satisfiable; eauto.
-  (* Iload *)
-  eapply add_load_satisfiable; eauto.
-  (* Istore *)
-  eapply kill_load_satisfiable; eauto.
-  (* Icall *)
-  apply empty_numbering_satisfiable.
-  (* Ialloc *)
-  apply add_unknown_satisfiable; auto. eapply alloc_satisfiable; eauto.
-Qed.
-
 (** The numberings associated to each instruction by the static analysis
   are inductively satisfiable, in the following sense: the numbering
   at the function entry point is satisfiable, and for any RTL execution 
@@ -694,41 +677,23 @@ Qed.
   satisfiability at [pc']. *)
 
 Theorem analysis_correct_1:
-  forall ge c sp pc rs m t pc' rs' m' f,
-  exec_instr ge c sp pc rs m t pc' rs' m' ->
-  c = f.(fn_code) ->
-  numbering_satisfiable ge sp rs m (analyze f)!!pc ->
-  numbering_satisfiable ge sp rs' m' (analyze f)!!pc'.
+  forall ge sp rs m f pc pc',
+  In pc' (successors f pc) ->
+  numbering_satisfiable ge sp rs m (transfer f pc (analyze f)!!pc) ->
+  numbering_satisfiable ge sp rs m (analyze f)!!pc'.
 Proof.
-  intros until f. intros EXEC CODE.
+  intros until pc'.
   generalize (wf_analyze f pc).
   unfold analyze.
   caseEq (Solver.fixpoint (successors f) (fn_nextpc f) 
                           (transfer f) (fn_entrypoint f)).
-  intros res FIXPOINT WF NS.
-  assert (numbering_satisfiable ge sp rs' m' (transfer f pc res!!pc)).
-    eapply transfer_correct; eauto.
+  intros res FIXPOINT WF SUCC NS.
   assert (Numbering.ge res!!pc' (transfer f pc res!!pc)).
     eapply Solver.fixpoint_solution; eauto.
     elim (fn_code_wf f pc); intro. auto.
-    rewrite <- CODE in H0.
-    elim (exec_instr_present _ _ _ _ _ _ _ _ _ _ EXEC H0).
-    rewrite CODE in EXEC. eapply successors_correct; eauto.
-  apply H0. auto.
+    unfold successors in SUCC; rewrite H in SUCC; contradiction.
+  apply H. auto.
   intros. rewrite PMap.gi. apply empty_numbering_satisfiable.
-Qed.
-
-Theorem analysis_correct_N:
-  forall ge c sp pc rs m t pc' rs' m' f,
-  exec_instrs ge c sp pc rs m t pc' rs' m' ->
-  c = f.(fn_code) ->
-  numbering_satisfiable ge sp rs m (analyze f)!!pc ->
-  numbering_satisfiable ge sp rs' m' (analyze f)!!pc'.
-Proof.
-  induction 1; intros.
-  assumption.
-  eapply analysis_correct_1; eauto.
-  eauto.
 Qed.
 
 Theorem analysis_correct_entry:
@@ -773,49 +738,67 @@ Lemma funct_ptr_translated:
   Genv.find_funct_ptr tge b = Some (transf_fundef f).
 Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
 
-Lemma sig_translated:
-  forall (f: RTL.fundef),
-  funsig (transf_fundef f) = funsig f.
+Lemma sig_preserved:
+  forall f, funsig (transf_fundef f) = funsig f.
 Proof.
-  intros; case f; intros; reflexivity.
+  destruct f; reflexivity.
+Qed.
+
+Lemma find_function_translated:
+  forall ros rs f,
+  find_function ge ros rs = Some f ->
+  find_function tge ros rs = Some (transf_fundef f).
+Proof.
+  intros until f; destruct ros; simpl.
+  intro. apply functions_translated; auto.
+  rewrite symbols_preserved. destruct (Genv.find_symbol ge i); intro.
+  apply funct_ptr_translated; auto.
+  discriminate.
 Qed.
 
 (** The proof of semantic preservation is a simulation argument using
   diagrams of the following form:
 <<
-      pc, rs, m ------------------------ pc, rs, m
-          |                                  |
-          |                                  |
-          v                                  v
-     pc', rs', m' --------------------- pc', rs', m'
+           st1 --------------- st2
+            |                   |
+           t|                   |t
+            |                   |
+            v                   v
+           st1'--------------- st2'
 >>
   Left: RTL execution in the original program.  Right: RTL execution in
-  the optimized program.  Precondition (top): the numbering at [pc]
-  (returned by the static analysis) is satisfiable.  Postcondition: none. 
+  the optimized program.  Precondition (top) and postcondition (bottom):
+  agreement between the states, including the fact that
+  the numbering at [pc] (returned by the static analysis) is satisfiable.
 *)
 
-Definition exec_instr_prop
-        (c: code) (sp: val)
-        (pc: node) (rs: regset) (m: mem) (t: trace)
-        (pc': node) (rs': regset) (m': mem) : Prop :=
-  forall f
-         (CF: c = f.(RTL.fn_code))
-         (SAT: numbering_satisfiable ge sp rs m (analyze f)!!pc),
-  exec_instr tge (transf_code (analyze f) c) sp pc rs m t pc' rs' m'.
+Inductive match_stackframes: stackframe -> stackframe -> Prop :=
+  match_stackframes_intro:
+    forall res c sp pc rs f,
+    c = f.(RTL.fn_code) ->
+    (forall v m, numbering_satisfiable ge sp (rs#res <- v) m (analyze f)!!pc) ->
+    match_stackframes
+      (Stackframe res c sp pc rs)
+      (Stackframe res (transf_code (analyze f) c) sp pc rs).
 
-Definition exec_instrs_prop
-        (c: code) (sp: val)
-        (pc: node) (rs: regset) (m: mem) (t: trace)
-        (pc': node) (rs': regset) (m': mem) : Prop :=
-  forall f
-         (CF: c = f.(RTL.fn_code))
-         (SAT: numbering_satisfiable ge sp rs m (analyze f)!!pc),
-  exec_instrs tge (transf_code (analyze f) c) sp pc rs m t pc' rs' m'.
-
-Definition exec_function_prop
-        (f: RTL.fundef) (args: list val) (m: mem) (t: trace)
-        (res: val) (m': mem) : Prop :=
-  exec_function tge (transf_fundef f) args m t res m'.
+Inductive match_states: state -> state -> Prop :=
+  | match_states_intro:
+      forall s c sp pc rs m s' f
+             (CF: c = f.(RTL.fn_code))
+             (SAT: numbering_satisfiable ge sp rs m (analyze f)!!pc)
+             (STACKS: list_forall2 match_stackframes s s'),
+      match_states (State s c sp pc rs m)
+                   (State s' (transf_code (analyze f) c) sp pc rs m)
+  | match_states_call:
+      forall s f args m s',
+      list_forall2 match_stackframes s s' ->
+      match_states (Callstate s f args m)
+                   (Callstate s' (transf_fundef f) args m)
+  | match_states_return:
+      forall s s' v m,
+      list_forall2 match_stackframes s s' ->
+      match_states (Returnstate s v m)
+                   (Returnstate s' v m).
 
 Ltac TransfInstr :=
   match goal with
@@ -826,34 +809,49 @@ Ltac TransfInstr :=
         unfold option_map; rewrite H1; reflexivity ]
   end.
 
-(** The proof of simulation is by structural induction on the evaluation
-  derivation for the source program. *)
+(** The proof of simulation is a case analysis over the transition
+  in the source code. *)
 
-Lemma transf_function_correct:
-  forall f args m t res m',
-  exec_function ge f args m t res m' ->
-  exec_function_prop f args m t res m'.
+Lemma transf_step_correct:
+  forall s1 t s2, step ge s1 t s2 ->
+  forall s1' (MS: match_states s1 s1'),
+  exists s2', step tge s1' t s2' /\ match_states s2 s2'.
 Proof.
-  apply (exec_function_ind_3 ge
-          exec_instr_prop exec_instrs_prop exec_function_prop);
-  intros; red; intros; try TransfInstr.
+  induction 1; intros; inv MS; try (TransfInstr; intro C).
+
   (* Inop *)
-  intro; apply exec_Inop; auto.
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m); split.
+  apply exec_Inop; auto.
+  econstructor; eauto. 
+  apply analysis_correct_1 with pc. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H; auto.
+
   (* Iop *)
-  assert (eval_operation tge sp op rs##args = Some v).
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- v) m); split.
+  assert (eval_operation tge sp op rs##args m = Some v).
     rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
+  generalize C; clear C.
   case (is_trivial_op op).
   intro. eapply exec_Iop'; eauto. 
   caseEq (find_op (analyze f)!!pc op args). intros r FIND CODE.
   eapply exec_Iop'; eauto. simpl. 
-  assert (eval_operation ge sp op rs##args = Some rs#r).
+  assert (eval_operation ge sp op rs##args m = Some rs#r).
     eapply find_op_correct; eauto.
     eapply wf_analyze; eauto.
   congruence.
-  intros. eapply exec_Iop'; eauto. 
+  intros. eapply exec_Iop'; eauto.
+  econstructor; eauto.
+  apply analysis_correct_1 with pc.
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  eapply add_op_satisfiable; eauto. apply wf_analyze.
+
   (* Iload *)
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#dst <- v) m); split.
   assert (eval_addressing tge sp addr rs##args = Some a).
     rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  generalize C; clear C.
   caseEq (find_load (analyze f)!!pc chunk addr args). intros r FIND CODE.
   eapply exec_Iop'; eauto. simpl. 
   assert (exists a, eval_addressing ge sp addr rs##args = Some a
@@ -862,52 +860,125 @@ Proof.
     eapply wf_analyze; eauto.
   elim H3; intros a' [A B].
   congruence.
-  intros. eapply exec_Iload'; eauto. 
+  intros. eapply exec_Iload'; eauto.
+  econstructor; eauto.
+  apply analysis_correct_1 with pc.
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  eapply add_load_satisfiable; eauto. apply wf_analyze.
+
   (* Istore *)
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m'); split.
   assert (eval_addressing tge sp addr rs##args = Some a).
     rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
-  intro; eapply exec_Istore; eauto. 
+  eapply exec_Istore; eauto.
+  econstructor; eauto.
+  apply analysis_correct_1 with pc. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H.
+  eapply kill_load_satisfiable; eauto. 
+
   (* Icall *)
-  assert (find_function tge ros rs = Some (transf_fundef f)).
-    destruct ros; simpl in H0; simpl.
-    apply functions_translated; auto.
-    rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
-    apply funct_ptr_translated; auto. discriminate.
-  intro; eapply exec_Icall with (f := transf_fundef f); eauto. 
-  generalize (sig_translated f); congruence.
+  exploit find_function_translated; eauto. intro FIND'.
+  econstructor; split.
+  eapply exec_Icall with (f := transf_fundef f); eauto.
+  apply sig_preserved. 
+  econstructor; eauto. 
+  constructor; auto. 
+  econstructor; eauto. 
+  intros. apply analysis_correct_1 with pc.
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  apply empty_numbering_satisfiable.
+
+  (* Itailcall *)
+  exploit find_function_translated; eauto. intro FIND'.
+  econstructor; split.
+  eapply exec_Itailcall with (f := transf_fundef f); eauto.
+  apply sig_preserved. 
+  econstructor; eauto. 
+
   (* Ialloc *)
-  intro; eapply exec_Ialloc; eauto.
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- (Vptr b Int.zero)) m'); split.
+  eapply exec_Ialloc; eauto.
+  econstructor; eauto.
+  apply analysis_correct_1 with pc. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  apply add_unknown_satisfiable. apply wf_analyze; auto.
+  eapply alloc_satisfiable; eauto.
+
   (* Icond true *)
-  intro; eapply exec_Icond_true; eauto. 
+  econstructor; split.
+  eapply exec_Icond_true; eauto. 
+  econstructor; eauto.
+  apply analysis_correct_1 with pc. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H; auto.
+
   (* Icond false *)
-  intro; eapply exec_Icond_false; eauto. 
-  (* refl *)
-  apply exec_refl.
-  (* one *)
-  apply exec_one; auto.
-  (* trans *)
-  eapply exec_trans; eauto. apply H2; auto. 
-  eapply analysis_correct_N; eauto.
+  econstructor; split.
+  eapply exec_Icond_false; eauto. 
+  econstructor; eauto.
+  apply analysis_correct_1 with pc. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H; auto.
+
+  (* Ireturn *)
+  econstructor; split.
+  eapply exec_Ireturn; eauto.
+  constructor; auto.
+
   (* internal function *)
-  intro. unfold transf_function; simpl; eapply exec_funct_internal; simpl; eauto. 
-  eapply H1; eauto. eapply analysis_correct_entry; eauto.
+  simpl. econstructor; split.
+  eapply exec_function_internal; eauto. 
+  simpl. econstructor; eauto.
+  apply analysis_correct_entry. 
+
   (* external function *)
-  unfold transf_function; simpl. apply exec_funct_external; auto.
+  simpl. econstructor; split.
+  eapply exec_function_external; eauto.
+  econstructor; eauto.
+
+  (* return *)
+  inv H3. inv H1.
+  econstructor; split.
+  eapply exec_return; eauto.
+  econstructor; eauto. 
+Qed.
+
+Lemma transf_initial_states:
+  forall st1, initial_state prog st1 ->
+  exists st2, initial_state tprog st2 /\ match_states st1 st2.
+Proof.
+  intros. inversion H. 
+  exists (Callstate nil (transf_fundef f) nil (Genv.init_mem tprog)); split.
+  econstructor; eauto.
+  change (prog_main tprog) with (prog_main prog).
+  rewrite symbols_preserved. eauto.
+  apply funct_ptr_translated; auto.
+  rewrite <- H2. apply sig_preserved. 
+  replace (Genv.init_mem tprog) with (Genv.init_mem prog).
+  constructor. constructor. auto.
+  symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf.
+Qed.
+
+Lemma transf_final_states:
+  forall st1 st2 r, 
+  match_states st1 st2 -> final_state st1 r -> final_state st2 r.
+Proof.
+  intros. inv H0. inv H. inv H4. constructor. 
 Qed.
 
 Theorem transf_program_correct:
-  forall (t: trace) (r: val),
-  exec_program prog t r -> exec_program tprog t r.
+  forall (beh: program_behavior),
+  exec_program prog beh -> exec_program tprog beh.
 Proof.
-  intros t r [fptr [f [m [FINDS [FINDF [SIG EXEC]]]]]].
-  red. exists fptr; exists (transf_fundef f); exists m. 
-  split. change (prog_main tprog) with (prog_main prog).
-  rewrite symbols_preserved. assumption.
-  split. apply funct_ptr_translated; auto.
-  split. generalize (sig_translated f); congruence.
-  apply transf_function_correct. 
-  unfold tprog, transf_program. rewrite Genv.init_mem_transf. 
-  exact EXEC.
+  unfold exec_program; intros.
+  eapply simulation_step_preservation; eauto.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  exact transf_step_correct. 
 Qed.
 
 End PRESERVATION.

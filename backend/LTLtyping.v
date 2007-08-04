@@ -13,84 +13,99 @@ Require Import Conventions.
   of [RTL] (see file [RTLtyping]): it statically guarantees that operations
   and addressing modes are applied to the right number of arguments
   and that the arguments are of the correct types.  Moreover, it also
-  enforces some correctness conditions on the offsets of stack slots
-  accessed through [Bgetstack] and [Bsetstack] LTL instructions. *)
+  guarantees that the locations of arguments and results are "acceptable",
+  i.e. either non-temporary registers or [Local] stack locations. *)
 
-Section WT_BLOCK.
+Section WT_INSTR.
 
 Variable funct: function.
 
-Definition slot_bounded (s: slot) :=
-  match s with
-  | Local ofs ty => 0 <= ofs
-  | Outgoing ofs ty => 6 <= ofs
-  | Incoming ofs ty => 6 <= ofs /\ ofs + typesize ty <= size_arguments funct.(fn_sig)
-  end.
+Definition valid_successor (s: node) : Prop :=
+  exists i, funct.(fn_code)!s = Some i.
 
-Inductive wt_block : block -> Prop :=
-  | wt_Bgetstack:
-      forall s r b,
-      slot_type s = mreg_type r ->
-      slot_bounded s ->
-      wt_block b ->
-      wt_block (Bgetstack s r b)
-  | wt_Bsetstack:
-      forall r s b,
-      match s with Incoming _ _ => False | _ => True end ->
-      slot_type s = mreg_type r ->
-      slot_bounded s ->
-      wt_block b ->
-      wt_block (Bsetstack r s b)
-  | wt_Bopmove:
-      forall r1 r b,
-      mreg_type r1 = mreg_type r ->
-      wt_block b ->
-      wt_block (Bop Omove (r1 :: nil) r b)
-  | wt_Bopundef:
-      forall r b,
-      wt_block b ->
-      wt_block (Bop Oundef nil r b)
-  | wt_Bop:
-      forall op args res b,
-      op <> Omove -> op <> Oundef ->
-      (List.map mreg_type args, mreg_type res) = type_of_operation op ->
-      wt_block b ->
-      wt_block (Bop op args res b)
-  | wt_Bload:
-      forall chunk addr args dst b,
-      List.map mreg_type args = type_of_addressing addr ->
-      mreg_type dst = type_of_chunk chunk ->
-      wt_block b ->
-      wt_block (Bload chunk addr args dst b)
-  | wt_Bstore:
-      forall chunk addr args src b,
-      List.map mreg_type args = type_of_addressing addr ->
-      mreg_type src = type_of_chunk chunk ->
-      wt_block b ->
-      wt_block (Bstore chunk addr args src b)
-  | wt_Bcall:
-      forall sig ros b,
-      match ros with inl r => mreg_type r = Tint | _ => True end ->
-      wt_block b ->
-      wt_block (Bcall sig ros b)
-  | wt_Balloc:
-      forall b,
-      wt_block b ->
-      wt_block (Balloc b)
-  | wt_Bgoto:
-      forall lbl,
-      wt_block (Bgoto lbl)
-  | wt_Bcond:
-      forall cond args ifso ifnot,
-      List.map mreg_type args = type_of_condition cond ->
-      wt_block (Bcond cond args ifso ifnot)
-  | wt_Breturn: 
-      wt_block (Breturn).
+Inductive wt_instr : instruction -> Prop :=
+  | wt_Lnop:
+      forall s,
+      valid_successor s ->
+      wt_instr (Lnop s)
+  | wt_Lopmove:
+      forall r1 r s,
+      Loc.type r1 = Loc.type r -> loc_acceptable r1 -> loc_acceptable r ->
+      valid_successor s ->
+      wt_instr (Lop Omove (r1 :: nil) r s)
+  | wt_Lop:
+      forall op args res s,
+      op <> Omove ->
+      (List.map Loc.type args, Loc.type res) = type_of_operation op ->
+      locs_acceptable args -> loc_acceptable res ->
+      valid_successor s ->
+      wt_instr (Lop op args res s)
+  | wt_Lload:
+      forall chunk addr args dst s,
+      List.map Loc.type args = type_of_addressing addr ->
+      Loc.type dst = type_of_chunk chunk ->
+      locs_acceptable args -> loc_acceptable dst ->
+      valid_successor s ->
+      wt_instr (Lload chunk addr args dst s)
+  | wt_Lstore:
+      forall chunk addr args src s,
+      List.map Loc.type args = type_of_addressing addr ->
+      Loc.type src = type_of_chunk chunk ->
+      locs_acceptable args -> loc_acceptable src ->
+      valid_successor s ->
+      wt_instr (Lstore chunk addr args src s)
+  | wt_Lcall:
+      forall sig ros args res s,
+      match ros with inl r => Loc.type r = Tint | inr s => True end ->
+      List.map Loc.type args = sig.(sig_args) ->
+      Loc.type res = proj_sig_res sig ->
+      match ros with inl r => loc_acceptable r | inr s => True end ->
+      locs_acceptable args -> loc_acceptable res ->
+      valid_successor s ->
+      wt_instr (Lcall sig ros args res s)
+  | wt_Ltailcall:
+      forall sig ros args,
+      match ros with inl r => Loc.type r = Tint | inr s => True end ->
+      List.map Loc.type args = sig.(sig_args) ->
+      match ros with inl r => loc_acceptable r | inr s => True end ->
+      locs_acceptable args ->
+      sig.(sig_res) = funct.(fn_sig).(sig_res) ->
+      Conventions.tailcall_possible sig ->
+      wt_instr (Ltailcall sig ros args)
+  | wt_Lalloc:
+      forall arg res s,
+      Loc.type arg = Tint -> Loc.type res = Tint ->
+      loc_acceptable arg -> loc_acceptable res ->
+      valid_successor s ->
+      wt_instr (Lalloc arg res s)
+  | wt_Lcond:
+      forall cond args s1 s2,
+      List.map Loc.type args = type_of_condition cond ->
+      locs_acceptable args ->
+      valid_successor s1 -> valid_successor s2 ->
+      wt_instr (Lcond cond args s1 s2)
+  | wt_Lreturn: 
+      forall optres,
+      option_map Loc.type optres = funct.(fn_sig).(sig_res) ->
+      match optres with None => True | Some r => loc_acceptable r end ->
+      wt_instr (Lreturn optres).
 
-End WT_BLOCK.
+End WT_INSTR.
 
-Definition wt_function (f: function) : Prop :=
-  forall pc b, f.(fn_code)!pc = Some b -> wt_block f b.
+Record wt_function (f: function): Prop :=
+  mk_wt_function {
+    wt_params:
+      List.map Loc.type f.(fn_params) = f.(fn_sig).(sig_args);
+    wt_acceptable:
+      locs_acceptable f.(fn_params);
+    wt_norepet:
+      Loc.norepet f.(fn_params);
+    wt_instrs:
+      forall pc instr, 
+      f.(fn_code)!pc = Some instr -> wt_instr f instr;
+    wt_entrypoint:
+      valid_successor f f.(fn_entrypoint)
+}.
 
 Inductive wt_fundef: fundef -> Prop :=
   | wt_fundef_external: forall ef,
@@ -99,6 +114,5 @@ Inductive wt_fundef: fundef -> Prop :=
       wt_function f ->
       wt_fundef (Internal f).
 
-Definition wt_program (p: program) : Prop :=
+Definition wt_program (p: program): Prop :=
   forall i f, In (i, f) (prog_funct p) -> wt_fundef f.
-

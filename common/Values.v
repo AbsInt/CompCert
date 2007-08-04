@@ -885,4 +885,68 @@ Proof.
   elim H0; intro; subst v; reflexivity.
 Qed.
 
+(** The ``is less defined'' relation between values. 
+    A value is less defined than itself, and [Vundef] is
+    less defined than any value. *)
+
+Inductive lessdef: val -> val -> Prop :=
+  | lessdef_refl: forall v, lessdef v v
+  | lessdef_undef: forall v, lessdef Vundef v.
+
+Inductive lessdef_list: list val -> list val -> Prop :=
+  | lessdef_list_nil:
+      lessdef_list nil nil
+  | lessdef_list_cons:
+      forall v1 v2 vl1 vl2,
+      lessdef v1 v2 -> lessdef_list vl1 vl2 ->
+      lessdef_list (v1 :: vl1) (v2 :: vl2).
+
+Hint Resolve lessdef_refl lessdef_undef lessdef_list_nil lessdef_list_cons.
+
+Lemma lessdef_list_inv:
+  forall vl1 vl2, lessdef_list vl1 vl2 -> vl1 = vl2 \/ In Vundef vl1.
+Proof.
+  induction 1; simpl.
+  tauto.
+  inv H. destruct IHlessdef_list. 
+  left; congruence. tauto. tauto.
+Qed.
+
+Lemma load_result_lessdef:
+  forall chunk v1 v2,
+  lessdef v1 v2 -> lessdef (load_result chunk v1) (load_result chunk v2).
+Proof.
+  intros. inv H. auto. destruct chunk; simpl; auto.
+Qed.
+
+Lemma cast8signed_lessdef:
+  forall v1 v2, lessdef v1 v2 -> lessdef (cast8signed v1) (cast8signed v2).
+Proof.
+  intros; inv H; simpl; auto.
+Qed.
+
+Lemma cast8unsigned_lessdef:
+  forall v1 v2, lessdef v1 v2 -> lessdef (cast8unsigned v1) (cast8unsigned v2).
+Proof.
+  intros; inv H; simpl; auto.
+Qed.
+
+Lemma cast16signed_lessdef:
+  forall v1 v2, lessdef v1 v2 -> lessdef (cast16signed v1) (cast16signed v2).
+Proof.
+  intros; inv H; simpl; auto.
+Qed.
+
+Lemma cast16unsigned_lessdef:
+  forall v1 v2, lessdef v1 v2 -> lessdef (cast16unsigned v1) (cast16unsigned v2).
+Proof.
+  intros; inv H; simpl; auto.
+Qed.
+
+Lemma singleoffloat_lessdef:
+  forall v1 v2, lessdef v1 v2 -> lessdef (singleoffloat v1) (singleoffloat v2).
+Proof.
+  intros; inv H; simpl; auto.
+Qed.
+
 End Val.

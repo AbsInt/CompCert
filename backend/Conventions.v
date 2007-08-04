@@ -247,6 +247,31 @@ Proof.
   apply temporaries_not_acceptable. auto. 
 Qed.
 
+Lemma loc_acceptable_noteq_diff:
+  forall l1 l2,
+  loc_acceptable l1 -> l1 <> l2 -> Loc.diff l1 l2.
+Proof.
+  unfold loc_acceptable, Loc.diff; destruct l1; destruct l2;
+  try (destruct s); try (destruct s0); intros; auto; try congruence.
+  case (zeq z z0); intro. 
+  compare t t0; intro.
+  subst z0; subst t0; tauto.
+  tauto. tauto.
+  contradiction. contradiction.
+Qed.
+
+Lemma loc_acceptable_notin_notin:
+  forall r ll,
+  loc_acceptable r ->
+  ~(In r ll) -> Loc.notin r ll.
+Proof.
+  induction ll; simpl; intros.
+  auto.
+  split. apply loc_acceptable_noteq_diff. assumption. 
+  apply sym_not_equal. tauto. 
+  apply IHll. assumption. tauto. 
+Qed.
+
 (** * Function calling conventions *)
 
 (** The functions in this section determine the locations (machine registers
@@ -292,9 +317,20 @@ Proof.
   reflexivity.
 Qed.
 
-(** The result location is a caller-save register. *)
+(** The result location is acceptable. *)
 
 Lemma loc_result_acceptable:
+  forall sig, loc_acceptable (R (loc_result sig)).
+Proof.
+  intros. unfold loc_acceptable. red.
+  unfold loc_result. destruct (sig_res sig).
+  destruct t; simpl; NotOrEq.
+  simpl; NotOrEq.
+Qed.
+
+(** The result location is a caller-save register. *)
+
+Lemma loc_result_caller_save:
   forall (s: signature), In (R (loc_result s)) destroyed_at_call.
 Proof.
   intros; unfold loc_result.
@@ -309,7 +345,7 @@ Lemma loc_result_not_callee_save:
   forall (s: signature),
   ~(In (loc_result s) int_callee_save_regs \/ In (loc_result s) float_callee_save_regs).
 Proof.
-  intros. generalize (loc_result_acceptable s).
+  intros. generalize (loc_result_caller_save s).
   generalize (int_callee_save_not_destroyed (loc_result s)).
   generalize (float_callee_save_not_destroyed (loc_result s)).
   tauto.
@@ -340,16 +376,18 @@ Fixpoint loc_arguments_rec
   | nil => nil
   | Tint :: tys =>
       match iregl with
-      | nil => S (Outgoing ofs Tint)
-      | ireg :: _ => R ireg
-      end ::
-      loc_arguments_rec tys (list_drop1 iregl) fregl (ofs + 1)
+      | nil =>
+          S (Outgoing ofs Tint) :: loc_arguments_rec tys nil fregl (ofs + 1)
+      | ireg :: iregs =>
+          R ireg :: loc_arguments_rec tys iregs fregl ofs
+      end
   | Tfloat :: tys =>
       match fregl with
-      | nil => S (Outgoing ofs Tfloat)
-      | freg :: _ => R freg
-      end ::
-      loc_arguments_rec tys (list_drop2 iregl) (list_drop1 fregl) (ofs + 2)
+      | nil =>
+          S (Outgoing ofs Tfloat) :: loc_arguments_rec tys iregl nil (ofs + 2)
+      | freg :: fregs =>
+          R freg :: loc_arguments_rec tys (list_drop2 iregl) fregs ofs
+      end
   end.
 
 Definition int_param_regs :=
@@ -361,28 +399,45 @@ Definition float_param_regs :=
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list loc :=
-  loc_arguments_rec s.(sig_args) int_param_regs float_param_regs 6.
+  loc_arguments_rec s.(sig_args) int_param_regs float_param_regs 14.
 
 (** [size_arguments s] returns the number of [Outgoing] slots used
   to call a function with signature [s]. *)
 
-Fixpoint size_arguments_rec (tyl: list typ) : Z :=
+Fixpoint size_arguments_rec
+    (tyl: list typ) (iregl: list mreg) (fregl: list mreg)
+    (ofs: Z) {struct tyl} : Z :=
   match tyl with
-  | nil => 6
-  | Tint :: tys => 1 + size_arguments_rec tys
-  | Tfloat :: tys => 2 + size_arguments_rec tys
+  | nil => ofs
+  | Tint :: tys =>
+      match iregl with
+      | nil => size_arguments_rec tys nil fregl (ofs + 1)
+      | ireg :: iregs => size_arguments_rec tys iregs fregl ofs
+      end
+  | Tfloat :: tys =>
+      match fregl with
+      | nil => size_arguments_rec tys iregl nil (ofs + 2)
+      | freg :: fregs => size_arguments_rec tys (list_drop2 iregl) fregs ofs
+      end
   end.
 
 Definition size_arguments (s: signature) : Z :=
-  size_arguments_rec s.(sig_args).
+  size_arguments_rec s.(sig_args) int_param_regs float_param_regs 14.
+
+(** A tail-call is possible for a signature if the corresponding
+    arguments are all passed in registers. *)
+
+Definition tailcall_possible (s: signature) : Prop :=
+  forall l, In l (loc_arguments s) ->
+  match l with R _ => True | S _ => False end.
 
 (** Argument locations are either non-temporary registers or [Outgoing] 
-  stack slots at offset 6 or more. *)
+  stack slots at offset 14 or more. *)
 
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
   | R r => ~(In l temporaries)
-  | S (Outgoing ofs ty) => ofs >= 6
+  | S (Outgoing ofs ty) => ofs >= 14
   | _ => False
   end.
 
@@ -397,16 +452,18 @@ Remark loc_arguments_rec_charact:
 Proof.
   induction tyl; simpl loc_arguments_rec; intros.
   elim H.
-  destruct a; elim H; intros.
-  destruct iregl; subst l. omega. left; auto with coqlib.
-  generalize (IHtyl _ _ _ _ H0). 
-  destruct l. intros [A|B]. left; apply list_drop1_incl; auto. tauto.
-  destruct s; try contradiction. omega.
-  destruct fregl; subst l. omega. right; auto with coqlib.
-  generalize (IHtyl _ _ _ _ H0). 
-  destruct l. intros [A|B]. left; apply list_drop2_incl; auto. 
-  right; apply list_drop1_incl; auto.
-  destruct s; try contradiction. omega.
+  destruct a. 
+  destruct iregl; elim H; intro. 
+  subst l. omega.
+  generalize (IHtyl _ _ _ _ H0). destruct l; auto. destruct s; auto. omega.
+  subst l. auto with coqlib.
+  generalize (IHtyl _ _ _ _ H0). destruct l; auto. simpl; intuition.
+  destruct fregl; elim H; intro. 
+  subst l. omega.
+  generalize (IHtyl _ _ _ _ H0). destruct l; auto. destruct s; auto. omega.
+  subst l. auto with coqlib.
+  generalize (IHtyl _ _ _ _ H0). destruct l; auto.
+  intros [A|B]. left; apply list_drop2_incl; auto. right; auto with coqlib.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -432,12 +489,15 @@ Remark loc_arguments_rec_notin_reg:
 Proof.
   induction tyl; simpl; intros.
   auto.
-  destruct a; simpl; split.
-  destruct iregl. auto. red; intro; subst m. apply H. auto with coqlib.
-  apply IHtyl. red; intro. apply H. apply list_drop1_incl; auto. auto.
-  destruct fregl. auto. red; intro; subst m. apply H0. auto with coqlib.
-  apply IHtyl. red; intro. apply H. apply list_drop2_incl; auto.
-  red; intro. apply H0. apply list_drop1_incl; auto.
+  destruct a. 
+  destruct iregl; simpl. auto.
+  simpl in H. split. apply sym_not_equal. tauto.
+  apply IHtyl. tauto. tauto.
+  destruct fregl; simpl. auto.
+  simpl in H0. split. apply sym_not_equal. tauto.
+  apply IHtyl. 
+  red; intro. apply H. apply list_drop2_incl. auto.
+  tauto.
 Qed.
 
 Remark loc_arguments_rec_notin_local:
@@ -446,11 +506,9 @@ Remark loc_arguments_rec_notin_local:
 Proof.
   induction tyl; simpl; intros.
   auto.
-  destruct a; simpl; split.
-  destruct iregl. auto. auto.
-  apply IHtyl. 
-  destruct fregl. auto. auto.
-  apply IHtyl. 
+  destruct a.
+  destruct iregl; simpl; auto.
+  destruct fregl; simpl; auto.
 Qed.
 
 Remark loc_arguments_rec_notin_outgoing:
@@ -460,11 +518,13 @@ Remark loc_arguments_rec_notin_outgoing:
 Proof.
   induction tyl; simpl; intros.
   auto.
-  destruct a; simpl; split.
-  destruct iregl. omega. auto.
-  apply IHtyl. omega.
-  destruct fregl. omega. auto.
-  apply IHtyl. omega.
+  destruct a.
+  destruct iregl; simpl. 
+  split. omega. eapply IHtyl. omega.
+  auto.
+  destruct fregl; simpl. 
+  split. omega. eapply IHtyl. omega.
+  auto.
 Qed.
 
 Lemma loc_arguments_norepet:
@@ -477,21 +537,21 @@ Proof.
     Loc.norepet (loc_arguments_rec tyl iregl fregl ofs)).
   induction tyl; simpl; intros.
   constructor.
-  destruct a; constructor. 
-  destruct iregl. 
-  apply loc_arguments_rec_notin_outgoing. simpl; omega.
-  apply loc_arguments_rec_notin_reg. simpl. inversion H. auto.
+  destruct a. 
+  destruct iregl; constructor.
+  apply loc_arguments_rec_notin_outgoing. simpl; omega. auto.
+  apply loc_arguments_rec_notin_reg. inversion H. auto.
   apply list_disjoint_notin with (m :: iregl); auto with coqlib.
-  apply IHtyl. apply list_drop1_norepet; auto. auto. 
-  red; intros. apply H1. apply list_drop1_incl; auto. auto.
-  destruct fregl. 
-  apply loc_arguments_rec_notin_outgoing. simpl; omega.
-  apply loc_arguments_rec_notin_reg. simpl. 
+  apply IHtyl. inv H; auto. auto.
+  eapply list_disjoint_cons_left; eauto.
+  destruct fregl; constructor.
+  apply loc_arguments_rec_notin_outgoing. simpl; omega. auto.
+  apply loc_arguments_rec_notin_reg.
   red; intro. apply (H1 m m). apply list_drop2_incl; auto. 
-  auto with coqlib. auto.
-  simpl. inversion H0. auto.
-  apply IHtyl. apply list_drop2_norepet; auto. apply list_drop1_norepet; auto.
-  red; intros. apply H1. apply list_drop2_incl; auto. apply list_drop1_incl; auto.
+  auto with coqlib. auto. inv H0; auto.
+  apply IHtyl. apply list_drop2_norepet; auto.
+  inv H0; auto. 
+  red; intros. apply H1. apply list_drop2_incl; auto. auto with coqlib.
 
   intro. unfold loc_arguments. apply H.
   unfold int_param_regs. NoRepet.
@@ -501,32 +561,42 @@ Qed.
 
 (** The offsets of [Outgoing] arguments are below [size_arguments s]. *)
 
+Remark size_arguments_rec_above:
+  forall tyl iregl fregl ofs0,
+  ofs0 <= size_arguments_rec tyl iregl fregl ofs0.
+Proof.
+  induction tyl; simpl; intros.
+  omega.
+  destruct a.
+  destruct iregl. apply Zle_trans with (ofs0 + 1); auto; omega. auto.
+  destruct fregl. apply Zle_trans with (ofs0 + 2); auto; omega. auto.
+Qed.
+
+Lemma size_arguments_above:
+  forall s, size_arguments s >= 14.
+Proof.
+  intros; unfold size_arguments. apply Zle_ge. 
+  apply size_arguments_rec_above.
+Qed.
+
 Lemma loc_arguments_bounded:
   forall (s: signature) (ofs: Z) (ty: typ),
   In (S (Outgoing ofs ty)) (loc_arguments s) ->
   ofs + typesize ty <= size_arguments s.
 Proof.
   intros.
-  assert (forall tyl, size_arguments_rec tyl >= 6).
-    induction tyl; unfold size_arguments_rec; fold size_arguments_rec; intros.
-    omega.
-    destruct a; omega.
   assert (forall tyl iregl fregl ofs0,
     In (S (Outgoing ofs ty)) (loc_arguments_rec tyl iregl fregl ofs0) ->
-    ofs + typesize ty <= size_arguments_rec tyl + ofs0 - 6).
-  induction tyl; simpl loc_arguments_rec; intros.
-  elim H1.
-  unfold size_arguments_rec; fold size_arguments_rec.
-  destruct a. 
-  elim H1; intro. destruct iregl; simplify_eq H2; intros. 
-  subst ty; subst ofs. generalize (H0 tyl). simpl typesize. omega.
-  generalize (IHtyl _ _ _ H2). omega. 
-  elim H1; intro. destruct fregl; simplify_eq H2; intros. 
-  subst ty; subst ofs. generalize (H0 tyl). simpl typesize. omega.
-  generalize (IHtyl _ _ _ H2). omega. 
-  replace (size_arguments s) with (size_arguments s + 6 - 6).
-  unfold size_arguments. eapply H1. unfold loc_arguments in H. eauto.
-  omega.
+    ofs + typesize ty <= size_arguments_rec tyl iregl fregl ofs0).
+  induction tyl; simpl; intros.
+  elim H0.
+  destruct a. destruct iregl; elim H0; intro.
+  inv H1. simpl. apply size_arguments_rec_above. auto.
+  discriminate. auto. 
+  destruct fregl; elim H0; intro.
+  inv H1. simpl. apply size_arguments_rec_above. auto.
+  discriminate. auto. 
+  unfold size_arguments. eapply H0. unfold loc_arguments in H. eauto.
 Qed.
 
 (** Temporary registers do not overlap with argument locations. *)
@@ -542,6 +612,18 @@ Proof.
   simpl; ElimOrEq; auto.
 Qed.
 Hint Resolve loc_arguments_not_temporaries: locs.
+
+(** Argument registers are caller-save. *)
+
+Lemma arguments_caller_save:
+  forall sig r,
+  In (R r) (loc_arguments sig) -> In (R r) destroyed_at_call.
+Proof.
+  unfold loc_arguments; intros.
+  elim (loc_arguments_rec_charact _ _ _ _ _ H); simpl.
+  ElimOrEq; intuition.
+  ElimOrEq; intuition.
+Qed.
 
 (** Callee-save registers do not overlap with argument locations. *)
 
@@ -571,7 +653,9 @@ Proof.
     List.length (loc_arguments_rec tyl iregl fregl ofs) = List.length tyl).
   induction tyl; simpl; intros.
   auto.
-  destruct a; simpl; decEq; auto.
+  destruct a. 
+  destruct iregl; simpl; decEq; auto.
+  destruct fregl; simpl; decEq; auto.
   intros. unfold loc_arguments. auto.
 Qed.
 
@@ -586,14 +670,10 @@ Proof.
     List.map Loc.type (loc_arguments_rec tyl iregl fregl ofs) = tyl).
   induction tyl; simpl; intros.
   auto.
-  destruct a; simpl; apply (f_equal2 (@cons typ)).
-  destruct iregl.  reflexivity. simpl. apply H. auto with coqlib.
-  apply IHtyl.
-  intros. apply H. apply list_drop1_incl. auto. auto.
-  destruct fregl.  reflexivity. simpl. apply H0. auto with coqlib.
-  apply IHtyl.
-  intros. apply H. apply list_drop2_incl. auto. 
-  intros. apply H0. apply list_drop1_incl. auto.
+  destruct a; [destruct iregl|destruct fregl]; simpl;
+  f_equal; eauto with coqlib.
+  apply IHtyl. intros. apply H. apply list_drop2_incl; auto.
+  eauto with coqlib.
 
   intros. unfold loc_arguments. apply H. 
   intro; simpl. ElimOrEq; reflexivity.
@@ -616,6 +696,30 @@ Proof.
   intros. right; destruct s; auto.
   intros. right. auto.
   destruct s; try tauto. destruct s0; tauto.
+Qed.
+
+(** A tailcall is possible if and only if the size of arguments is 14. *)
+
+Lemma tailcall_possible_size:
+  forall s, tailcall_possible s <-> size_arguments s = 14.
+Proof.
+  intro; split; intro.
+  assert (forall tyl iregl fregl ofs,
+    (forall l, In l (loc_arguments_rec tyl iregl fregl ofs) ->
+               match l with R _ => True | S _ => False end) ->
+    size_arguments_rec tyl iregl fregl ofs = ofs).
+  induction tyl; simpl; intros.
+  auto.
+  destruct a. destruct iregl. elim (H0 _ (in_eq _ _)).
+  apply IHtyl; intros. apply H0. auto with coqlib.
+  destruct fregl. elim (H0 _ (in_eq _ _)).
+  apply IHtyl; intros. apply H0. auto with coqlib.
+  unfold size_arguments. apply H0. assumption.
+  red; intros.
+  generalize (loc_arguments_acceptable s l H0). 
+  destruct l; simpl. auto. destruct s0; intro; auto.
+  generalize (loc_arguments_bounded _ _ _ H0). 
+  generalize (typesize_pos t). omega.
 Qed.
 
 (** ** Location of function parameters *)
@@ -643,6 +747,13 @@ Proof.
   apply list_map_exten.
   intros. destruct x; simpl. auto. 
   destruct s; reflexivity.
+Qed.
+
+Lemma loc_parameters_length:
+  forall sg, List.length (loc_parameters sg) = List.length sg.(sig_args).
+Proof.
+  intros. unfold loc_parameters. rewrite list_length_map. 
+  apply loc_arguments_length.
 Qed.
 
 Lemma loc_parameters_not_temporaries:
@@ -676,7 +787,7 @@ Proof.
   intros; simpl. tauto.
 Qed.
 
-(** ** Location of argument and result of dynamic allocation *)
+(** ** Location of argument and result for dynamic memory allocation *)
 
 Definition loc_alloc_argument := R3.
 Definition loc_alloc_result := R3.

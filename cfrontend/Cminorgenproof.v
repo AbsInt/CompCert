@@ -2,6 +2,7 @@
 
 Require Import FSets.
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
@@ -11,68 +12,49 @@ Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Csharpminor.
-Require Import Op.
 Require Import Cminor.
-Require Cmconstr.
 Require Import Cminorgen.
-Require Import Cmconstrproof.
+
+Open Local Scope error_monad_scope.
 
 Section TRANSLATION.
 
 Variable prog: Csharpminor.program.
 Variable tprog: program.
-Hypothesis TRANSL: transl_program prog = Some tprog.
+Hypothesis TRANSL: transl_program prog = OK tprog.
 Let ge : Csharpminor.genv := Genv.globalenv prog.
 Let tge: genv := Genv.globalenv tprog.
 Let gce : compilenv := build_global_compilenv prog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intro. unfold ge, tge. 
-  apply Genv.find_symbol_transf_partial2 with (transl_fundef gce) transl_globvar.
-  exact TRANSL.
-Qed.
+Proof (Genv.find_symbol_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
 
 Lemma function_ptr_translated:
   forall (b: block) (f: Csharpminor.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge b = Some tf /\ transl_fundef gce f = Some tf.
-Proof.
-  intros. 
-  generalize 
-   (Genv.find_funct_ptr_transf_partial2 (transl_fundef gce) transl_globvar TRANSL H).
-  case (transl_fundef gce f).
-  intros tf [A B]. exists tf. tauto.
-  intros [A B]. elim B. reflexivity.
-Qed.
+  Genv.find_funct_ptr tge b = Some tf /\ transl_fundef gce f = OK tf.
+Proof (Genv.find_funct_ptr_transf_partial2 (transl_fundef gce) transl_globvar TRANSL).
+
 
 Lemma functions_translated:
   forall (v: val) (f: Csharpminor.fundef),
   Genv.find_funct ge v = Some f ->
   exists tf,
-  Genv.find_funct tge v = Some tf /\ transl_fundef gce f = Some tf.
-Proof.
-  intros. 
-  generalize 
-   (Genv.find_funct_transf_partial2 (transl_fundef gce) transl_globvar TRANSL H).
-  case (transl_fundef gce f).
-  intros tf [A B]. exists tf. tauto.
-  intros [A B]. elim B. reflexivity.
-Qed.
+  Genv.find_funct tge v = Some tf /\ transl_fundef gce f = OK tf.
+Proof (Genv.find_funct_transf_partial2 (transl_fundef gce) transl_globvar TRANSL).
 
 Lemma sig_preserved:
   forall f tf,
-  transl_fundef gce f = Some tf -> 
+  transl_fundef gce f = OK tf -> 
   Cminor.funsig tf = Csharpminor.funsig f.
 Proof.
   intros until tf; destruct f; simpl.
   unfold transl_function. destruct (build_compilenv gce f).
-  case (zle z Int.max_signed); try congruence.
-  intro. case (transl_stmt c (Csharpminor.fn_body f)); simpl; try congruence.
-  intros. inversion H. reflexivity.
-  intro. inversion H; reflexivity.
+  case (zle z Int.max_signed); simpl; try congruence.
+  intros. monadInv H. monadInv EQ. reflexivity.
+  intro. inv H. reflexivity.
 Qed.
 
 Definition global_compilenv_match (ce: compilenv) (gv: gvarenv) : Prop :=
@@ -510,15 +492,12 @@ Lemma load_from_alloc_is_undef:
   alloc m1 0 (size_chunk chunk) = (m2, b) ->
   load chunk m2 b 0 = Some Vundef.
 Proof.
-  intros. 
-  assert (valid_block m2 b). eapply valid_new_block; eauto.
-  assert (low_bound m2 b <= 0). 
-    generalize (low_bound_alloc _ _ b _ _ _ H). rewrite zeq_true. omega.
-  assert (0 + size_chunk chunk <= high_bound m2 b).
-    generalize (high_bound_alloc _ _ b _ _ _ H). rewrite zeq_true. omega.
-  elim (load_in_bounds _ _ _ _ H0 H1 H2). intros v LOAD.
-  assert (v = Vundef). eapply load_alloc_same; eauto.
-  congruence.
+  intros.
+  assert (exists v, load chunk m2 b 0 = Some v).
+    apply valid_access_load.
+    eapply valid_access_alloc_same; eauto; omega.
+  destruct H0 as [v LOAD]. rewrite LOAD. decEq. 
+  eapply load_alloc_same; eauto.
 Qed.
 
 Lemma match_env_alloc_same:
@@ -577,14 +556,20 @@ Proof.
       contradiction.
     (* other vars *)
     generalize (me_vars0 id0); intros.
-    inversion H6; econstructor; eauto.
-    unfold e2; rewrite PTree.gso; auto. 
-    unfold f2, extend_inject, eq_block; rewrite zeq_false; auto.
-    generalize (me_bounded0 _ _ _ H8). unfold block in *; omega.
-    unfold e2; rewrite PTree.gso; eauto. 
-    unfold e2; rewrite PTree.gso; eauto. 
-    unfold e2; rewrite PTree.gso; eauto. 
-    unfold e2; rewrite PTree.gso; eauto. 
+    inversion H6.
+    eapply match_var_local with (v := v); eauto.
+      unfold e2; rewrite PTree.gso; eauto.
+      eapply load_alloc_other; eauto. 
+      unfold f2, extend_inject, eq_block; rewrite zeq_false; auto.
+      generalize (me_bounded0 _ _ _ H8). unfold block in *; omega.
+    econstructor; eauto.
+      unfold e2; rewrite PTree.gso; eauto.
+    econstructor; eauto. 
+      unfold e2; rewrite PTree.gso; eauto. 
+    econstructor; eauto.
+      unfold e2; rewrite PTree.gso; eauto.
+    econstructor; eauto. 
+      unfold e2; rewrite PTree.gso; eauto. 
   (* lo <= hi *)
   unfold block in *; omega.
   (* me_bounded *)
@@ -629,9 +614,15 @@ Proof.
   inversion H2. constructor; auto.
   (* me_vars *)
   intros. generalize (me_vars0 id); intro. 
-  inversion H5; econstructor; eauto.
-  unfold f2, extend_inject, eq_block. rewrite zeq_false. auto.
-  generalize (me_bounded0 _ _ _ H7). unfold block in *; omega.
+  inversion H5.
+  eapply match_var_local with (v := v); eauto.
+    eapply load_alloc_other; eauto.
+    unfold f2, extend_inject, eq_block. rewrite zeq_false. auto.
+    generalize (me_bounded0 _ _ _ H7). unfold block in *; omega.
+  econstructor; eauto.
+  econstructor; eauto.
+  econstructor; eauto.
+  econstructor; eauto.
   (* me_bounded *)
   intros until delta. unfold f2, extend_inject, eq_block.
   case (zeq b0 b); intros. rewrite H5 in H0. omegaContradiction.
@@ -726,9 +717,10 @@ Proof.
   (* me_vars *)
   intros. generalize (me_vars0 id); intro. inversion H5.
     (* var_local *)
-    econstructor; eauto. 
+    eapply match_var_local with (v := v); eauto.
+    eapply load_alloc_other; eauto. 
     generalize (me_bounded0 _ _ _ H7). intro. 
-    unfold f2, extend_inject. case (eq_block b0 b); intro. 
+    unfold f2, extend_inject. case (zeq b0 b); intro. 
     subst b0. rewrite BEQ in H12. omegaContradiction. 
     auto.
     (* var_stack_scalar *)
@@ -740,12 +732,12 @@ Proof.
     (* var_global_array *)
     econstructor; eauto.
   (* me_bounded *)
-  intros until delta. unfold f2, extend_inject. case (eq_block b0 b); intro.
+  intros until delta. unfold f2, extend_inject. case (zeq b0 b); intro.
   intro. injection H5; clear H5; intros. 
   rewrite H6 in TBEQ. rewrite TBEQ in H3. omegaContradiction.
   eauto.
   (* me_inj *)
-  intros until delta. unfold f2, extend_inject. case (eq_block b0 b); intros.
+  intros until delta. unfold f2, extend_inject. case (zeq b0 b); intros.
   injection H5; clear H5; intros; subst b0 tb0 delta.
   rewrite BEQ in H6. omegaContradiction. 
   eauto.
@@ -804,16 +796,7 @@ Qed.
 
 (** * Correctness of Cminor construction functions *)
 
-Hint Resolve eval_negint eval_negfloat eval_absfloat eval_intoffloat
-  eval_floatofint eval_floatofintu eval_notint eval_notbool
-  eval_cast8signed eval_cast8unsigned eval_cast16signed
-  eval_cast16unsigned eval_singleoffloat eval_add eval_add_ptr
-  eval_add_ptr_2 eval_sub eval_sub_ptr_int eval_sub_ptr_ptr
-  eval_mul eval_divs eval_mods eval_divu eval_modu
-  eval_and eval_or eval_xor eval_shl eval_shr eval_shru 
-  eval_addf eval_subf eval_mulf eval_divf
-  eval_cmp eval_cmp_null_r eval_cmp_null_l eval_cmp_ptr
-  eval_cmpu eval_cmpf: evalexpr.
+Hint Resolve eval_Econst eval_Eunop eval_Ebinop eval_Eload: evalexpr.
 
 Remark val_inject_val_of_bool:
   forall f b, val_inject f (Val.of_bool b) (Val.of_bool b).
@@ -821,151 +804,146 @@ Proof.
   intros; destruct b; unfold Val.of_bool, Vtrue, Vfalse; constructor.
 Qed.
 
+Remark val_inject_bool_of_val:
+  forall f v b tv,
+  val_inject f v tv -> Val.bool_of_val v b -> Val.bool_of_val tv b.
+Proof.
+  intros. inv H; inv H0; constructor; auto.
+Qed.
+
+Remark val_inject_eval_compare_null:
+  forall f c i v,  
+  eval_compare_null c i = Some v ->
+  val_inject f v v.
+Proof.
+  unfold eval_compare_null; intros.
+  destruct (Int.eq i Int.zero). 
+  destruct c; inv H; unfold Vfalse, Vtrue; constructor.
+  discriminate.
+Qed.
+
 Ltac TrivialOp :=
   match goal with
-  | [ |- exists x, _ /\ val_inject _ (Vint ?x) _ ] =>
+  | [ |- exists y, _ /\ val_inject _ (Vint ?x) _ ] =>
       exists (Vint x); split;
       [eauto with evalexpr | constructor]
-  | [ |- exists x, _ /\ val_inject _ (Vfloat ?x) _ ] =>
+  | [ |- exists y, _ /\ val_inject _ (Vfloat ?x) _ ] =>
       exists (Vfloat x); split;
       [eauto with evalexpr | constructor]
-  | [ |- exists x, _ /\ val_inject _ (Val.of_bool ?x) _ ] =>
+  | [ |- exists y, _ /\ val_inject _ (Val.of_bool ?x) _ ] =>
       exists (Val.of_bool x); split;
       [eauto with evalexpr | apply val_inject_val_of_bool]
+  | [ |- exists y, Some ?x = Some y /\ val_inject _ _ _ ] =>
+      exists x; split; [auto | econstructor; eauto]
   | _ => idtac
   end.
 
-Remark eval_compare_null_inv:
-  forall c i v,
-  Csharpminor.eval_compare_null c i = Some v ->
-  i = Int.zero /\ (c = Ceq /\ v = Vfalse \/ c = Cne /\ v = Vtrue).
-Proof.
-  intros until v. unfold Csharpminor.eval_compare_null.
-  predSpec Int.eq Int.eq_spec i Int.zero.
-  case c; intro EQ; simplify_eq EQ; intro; subst v; tauto.
-  congruence.
-Qed.
+(** Correctness of [transl_constant]. *)
 
-(** Correctness of [make_op].  The generated Cminor code evaluates
-  to a value that matches the result value of the Csharpminor operation,
-  provided arguments match pairwise ([val_list_inject f] hypothesis). *)
-
-Lemma make_op_correct:
-  forall al a op vl m2 v sp le te tm1 t tm2 tvl f,
-  make_op op al = Some a ->
-  Csharpminor.eval_operation op vl m2 = Some v ->
-  eval_exprlist tge (Vptr sp Int.zero) le te tm1 al t tm2 tvl ->
-  val_list_inject f vl tvl ->
-  mem_inject f m2 tm2 ->
+Lemma transl_constant_correct:
+  forall f sp cst v,
+  Csharpminor.eval_constant cst = Some v ->
   exists tv,
-     eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 tv
+     eval_constant tge sp (transl_constant cst) = Some tv
   /\ val_inject f v tv.
 Proof.
-  intros. 
-  destruct al as [ | a1 al];
-  [idtac | destruct al as [ | a2 al];
-  [idtac | destruct al as [ | a3 al]]];
-  simpl in H; try discriminate.
-  (* Constant operators *)
-  inversion H1. subst sp0 le0 e m tm1 tvl.
-  inversion H2. subst vl.
-  destruct op; simplify_eq H; intro; subst a;
-  simpl in H0; injection H0; intro; subst v.
-  (* intconst *)
-  TrivialOp. econstructor. constructor. reflexivity. 
-  (* floatconst *)
-  TrivialOp. econstructor. constructor. reflexivity.
-  (* Unary operators *)
-  inversion H1; clear H1; subst.
-  inversion H11; clear H11; subst.
-  rewrite E0_right. 
-  inversion H2; clear H2; subst. inversion H8; clear H8; subst.
-  destruct op; simplify_eq H; intro; subst a;
-  simpl in H0; destruct v1; simplify_eq H0; intro; subst v;
-  inversion H7; subst v0;
-  TrivialOp.
-  change (Vint (Int.cast8unsigned i)) with (Val.cast8unsigned (Vint i)). eauto with evalexpr.
-  change (Vint (Int.cast8signed i)) with (Val.cast8signed (Vint i)). eauto with evalexpr.
-  change (Vint (Int.cast16unsigned i)) with (Val.cast16unsigned (Vint i)). eauto with evalexpr.
-  change (Vint (Int.cast16signed i)) with (Val.cast16signed (Vint i)). eauto with evalexpr.
-  replace (Int.eq i Int.zero) with (negb (negb (Int.eq i Int.zero))).
-  eapply eval_notbool. eauto. 
-  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intro; simpl.
-  rewrite H1; constructor. constructor; auto. 
-  apply negb_elim.
-  unfold Vfalse; TrivialOp. change (Vint Int.zero) with (Val.of_bool (negb true)). 
-  eapply eval_notbool. eauto. constructor. 
-  change (Vfloat (Float.singleoffloat f0)) with (Val.singleoffloat (Vfloat f0)). eauto with evalexpr.
-  (* Binary operations *)
-  inversion H1; clear H1; subst. inversion H11; clear H11; subst.
-  inversion H12; clear H12; subst. rewrite E0_right. 
-  inversion H2; clear H2; subst. inversion H9; clear H9; subst.
-  inversion H10; clear H10; subst.
-  destruct op; simplify_eq H; intro; subst a;
-  simpl in H0; destruct v2; destruct v3; simplify_eq H0; intro; try subst v;
-  inversion H7; inversion H8; subst v0; subst v1;
-  TrivialOp.
-  (* add int ptr *)
-  exists (Vptr b2 (Int.add ofs2 i)); split.
-  eauto with evalexpr. apply val_inject_ptr with x. auto.
-  subst ofs2. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  (* add ptr int *)
-  exists (Vptr b2 (Int.add ofs2 i0)); split.
-  eauto with evalexpr. apply val_inject_ptr with x. auto.
-  subst ofs2. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  (* sub ptr int *)
-  exists (Vptr b2 (Int.sub ofs2 i0)); split.
-  eauto with evalexpr. apply val_inject_ptr with x. auto.
-  subst ofs2. apply Int.sub_add_l. 
-  (* sub ptr ptr *)
-  destruct (eq_block b b0); simplify_eq H0; intro; subst v; subst b0.
-  assert (b4 = b2). congruence. subst b4.
-  exists (Vint (Int.sub ofs3 ofs2)); split. 
-  eauto with evalexpr. 
-  subst ofs2 ofs3. replace x0 with x. rewrite Int.sub_shifted. constructor.
-  congruence.
-  (* divs *)
-  generalize (Int.eq_spec i0 Int.zero); destruct (Int.eq i0 Int.zero); intro;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* divu *)
-  generalize (Int.eq_spec i0 Int.zero); destruct (Int.eq i0 Int.zero); intro;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* mods *)
-  generalize (Int.eq_spec i0 Int.zero); destruct (Int.eq i0 Int.zero); intro;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* modu *)
-  generalize (Int.eq_spec i0 Int.zero); destruct (Int.eq i0 Int.zero); intro;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* shl *)
-  caseEq (Int.ltu i0 (Int.repr 32)); intro EQ; rewrite EQ in H0;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* shr *)
-  caseEq (Int.ltu i0 (Int.repr 32)); intro EQ; rewrite EQ in H0;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* shru *)
-  caseEq (Int.ltu i0 (Int.repr 32)); intro EQ; rewrite EQ in H0;
-  simplify_eq H0; intro; subst v. TrivialOp.
-  (* cmp int ptr *)
-  elim (eval_compare_null_inv _ _ _ H0); intros; subst i1 i.
-  exists v; split. eauto with evalexpr. 
-  elim H12; intros [A B]; subst v; unfold Vtrue, Vfalse; constructor.
-  (* cmp ptr int *)
-  elim (eval_compare_null_inv _ _ _ H0); intros; subst i1 i0.
-  exists v; split. eauto with evalexpr. 
-  elim H12; intros [A B]; subst v; unfold Vtrue, Vfalse; constructor.
+  destruct cst; simpl; intros; inv H; TrivialOp.
+Qed.
+
+(** Compatibility of [eval_unop] with respect to [val_inject]. *)
+
+Lemma eval_unop_compat:
+  forall f op v1 tv1 v,
+  eval_unop op v1 = Some v ->
+  val_inject f v1 tv1 ->
+  exists tv,
+     eval_unop op tv1 = Some tv
+  /\ val_inject f v tv.
+Proof.
+  destruct op; simpl; intros.
+  inv H; inv H0; simpl; TrivialOp.
+  inv H; inv H0; simpl; TrivialOp.
+  inv H; inv H0; simpl; TrivialOp.
+  inv H; inv H0; simpl; TrivialOp.
+  inv H0; inv H. TrivialOp. 
+  inv H0; inv H. TrivialOp. unfold Vfalse; TrivialOp.
+  inv H0; inv H; TrivialOp.
+  inv H0; inv H; TrivialOp.
+  inv H0; inv H; TrivialOp.
+  inv H; inv H0; simpl; TrivialOp.
+  inv H0; inv H; TrivialOp.
+  inv H0; inv H; TrivialOp.
+  inv H0; inv H; TrivialOp.
+Qed.
+
+(** Compatibility of [eval_binop] with respect to [val_inject]. *)
+
+Lemma eval_binop_compat:
+  forall f op v1 tv1 v2 tv2 v m tm,
+  eval_binop op v1 v2 m = Some v ->
+  val_inject f v1 tv1 ->
+  val_inject f v2 tv2 ->
+  mem_inject f m tm ->
+  exists tv,
+     eval_binop op tv1 tv2 tm = Some tv
+  /\ val_inject f v tv.
+Proof.
+  destruct op; simpl; intros.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+    repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    apply Int.sub_add_l.
+    destruct (eq_block b1 b0); inv H4. 
+    assert (b3 = b2) by congruence. subst b3. 
+    unfold eq_block; rewrite zeq_true. TrivialOp.
+    replace x0 with x by congruence. decEq. decEq. 
+    apply Int.sub_shifted.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.ltu i0 (Int.repr 32)); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.ltu i0 (Int.repr 32)); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    destruct (Int.ltu i0 (Int.repr 32)); inv H1. TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
+    exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
   (* cmp ptr ptr *)
-  caseEq (valid_pointer m2 b (Int.signed i) && valid_pointer m2 b0 (Int.signed i0)); 
-  intro EQ; rewrite EQ in H0; try discriminate.
-  destruct (eq_block b b0); simplify_eq H0; intro; subst v b0.
-  assert (b4 = b2); [congruence|subst b4].
-  assert (x0 = x); [congruence|subst x0].
+  caseEq (valid_pointer m b1 (Int.signed ofs1) && valid_pointer m b0 (Int.signed ofs0)); 
+  intro EQ; rewrite EQ in H4; try discriminate.
+  destruct (eq_block b1 b0); inv H4.
+  assert (b3 = b2) by congruence. subst b3.
+  assert (x0 = x) by congruence. subst x0.
   elim (andb_prop _ _ EQ); intros.
-  exists (Val.of_bool (Int.cmp c ofs3 ofs2)); split.
-  eauto with evalexpr. 
-  subst ofs2 ofs3. rewrite Int.translate_cmp. 
+  exists (Val.of_bool (Int.cmp c ofs1 ofs0)); split.
+  exploit (Mem.valid_pointer_inject f m tm b0 ofs0); eauto. 
+  intro VP; rewrite VP; clear VP.
+  exploit (Mem.valid_pointer_inject f m tm b0 ofs1); eauto. 
+  intro VP; rewrite VP; clear VP.
+  unfold eq_block; rewrite zeq_true; simpl.
+  decEq. decEq. rewrite Int.translate_cmp. auto. 
+  eapply valid_pointer_inject_no_overflow; eauto.
+  eapply valid_pointer_inject_no_overflow; eauto.
   apply val_inject_val_of_bool. 
-  eapply valid_pointer_inject_no_overflow; eauto.
-  eapply valid_pointer_inject_no_overflow; eauto.
+  (* *)
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
 Qed.
 
 (** Correctness of [make_cast].  Note that the resulting Cminor value is
@@ -980,35 +958,28 @@ Lemma make_cast_correct:
             te tm1 (make_cast chunk a) t tm2 tv'
   /\ val_inject f (Val.load_result chunk v) tv'.
 Proof.
-  intros. destruct chunk.
+  intros. destruct chunk; simpl make_cast.
 
   exists (Val.cast8signed tv). 
-  split. apply eval_cast8signed; auto. 
-  inversion H0; simpl; constructor.
+  split. eauto with evalexpr. inversion H0; simpl; constructor.
 
   exists (Val.cast8unsigned tv). 
-  split. apply eval_cast8unsigned; auto. 
-  inversion H0; simpl; constructor.
+  split. eauto with evalexpr. inversion H0; simpl; constructor.
 
   exists (Val.cast16signed tv). 
-  split. apply eval_cast16signed; auto. 
-  inversion H0; simpl; constructor.
+  split. eauto with evalexpr. inversion H0; simpl; constructor.
 
   exists (Val.cast16unsigned tv). 
-  split. apply eval_cast16unsigned; auto. 
-  inversion H0; simpl; constructor.
+  split. eauto with evalexpr. inversion H0; simpl; constructor.
 
-  exists tv. 
-  split. simpl; auto.
-  inversion H0; simpl; econstructor; eauto.
+  exists tv.
+  split. auto. inversion H0; simpl; econstructor; eauto.
 
   exists (Val.singleoffloat tv). 
-  split. apply eval_singleoffloat; auto. 
-  inversion H0; simpl; constructor.
+  split. eauto with evalexpr. inversion H0; simpl; constructor.
 
-  exists tv. 
-  split. simpl; auto.
-  inversion H0; simpl; constructor. 
+  exists tv.
+  split. auto. inversion H0; simpl; econstructor; eauto.
 Qed.
 
 Lemma make_stackaddr_correct:
@@ -1018,7 +989,7 @@ Lemma make_stackaddr_correct:
             E0 tm (Vptr sp (Int.repr ofs)).
 Proof.
   intros; unfold make_stackaddr.
-  eapply eval_Eop. econstructor. simpl. decEq. decEq.
+  econstructor. simpl. decEq. decEq.
   rewrite Int.add_commut. apply Int.add_zero.
 Qed.
 
@@ -1030,22 +1001,10 @@ Lemma make_globaladdr_correct:
             E0 tm (Vptr b Int.zero).
 Proof.
   intros; unfold make_globaladdr.
-  eapply eval_Eop. econstructor. simpl. rewrite H. auto.
+  econstructor. simpl. rewrite H. auto.
 Qed.
 
-(** Correctness of [make_load] and [make_store]. *)
-
-Lemma make_load_correct:
-  forall sp le te tm1 a t tm2 va chunk v,
-  eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 va ->
-  Mem.loadv chunk tm2 va = Some v ->
-  eval_expr tge (Vptr sp Int.zero) le
-            te tm1 (make_load chunk a)
-            t  tm2 v.
-Proof.
-  intros; unfold make_load.
-  eapply eval_load; eauto.
-Qed.
+(** Correctness of [make_store]. *)
 
 Lemma store_arg_content_inject:
   forall f sp le te tm1 a t tm2 v va chunk,
@@ -1053,25 +1012,23 @@ Lemma store_arg_content_inject:
   val_inject f v va ->
   exists vb,
   eval_expr tge (Vptr sp Int.zero) le te tm1 (store_arg chunk a) t tm2 vb  
-  /\ val_content_inject f (mem_chunk chunk) v vb.
+  /\ val_content_inject f chunk v vb.
 Proof.
   intros. 
   assert (exists vb,
     eval_expr tge (Vptr sp Int.zero) le te tm1 a t tm2 vb  
-    /\ val_content_inject f (mem_chunk chunk) v vb).
+    /\ val_content_inject f chunk v vb).
   exists va; split. assumption. constructor. assumption.
-  inversion H; clear H; subst; simpl; trivial.
-  inversion H2; clear H2; subst; trivial.
-  inversion H4; clear H4; subst; trivial.
-  rewrite E0_right. rewrite E0_right in H1.
-  destruct op; trivial; destruct chunk; trivial;
-  exists v0; (split; [auto|
-  simpl in H3; inversion H3; clear H3; subst va; 
-  destruct v0; simpl in H0; inversion H0; subst; try (constructor; constructor)]).
-  apply val_content_inject_8. apply Int.cast8_unsigned_signed. 
-  apply val_content_inject_8. apply Int.cast8_unsigned_idem. 
-  apply val_content_inject_16. apply Int.cast16_unsigned_signed. 
-  apply val_content_inject_16. apply Int.cast16_unsigned_idem. 
+  destruct a; simpl store_arg; trivial;
+  destruct u; trivial;
+  destruct chunk; trivial;
+  inv H; simpl in H12; inv H12;
+  econstructor; (split; [eauto|idtac]);
+  destruct v1; simpl in H0; inv H0; try (constructor; constructor).
+  apply val_content_inject_8. auto. apply Int.cast8_unsigned_idem.
+  apply val_content_inject_8; auto. apply Int.cast8_unsigned_signed. 
+  apply val_content_inject_16; auto. apply Int.cast16_unsigned_idem. 
+  apply val_content_inject_16; auto. apply Int.cast16_unsigned_signed. 
   apply val_content_inject_32. apply Float.singleoffloat_idem. 
 Qed.
 
@@ -1098,13 +1055,11 @@ Proof.
   intros [tv [EVAL VCINJ]].
   exploit storev_mapped_inject_1; eauto.
   intros [tm4 [STORE MEMINJ]].
-  exploit eval_store. eexact H. eexact EVAL. eauto. 
-  intro EVALSTORE.
   exists tm4. 
-  split. apply exec_Sexpr with tv. auto. 
+  split. apply exec_Sexpr with tv. eapply eval_Estore; eauto. 
   split. auto. 
   unfold storev in STORE; destruct tvaddr; try discriminate.
-  exploit store_inv; eauto. simpl. tauto.
+  eapply nextblock_store; eauto.
 Qed.
 
 (** Correctness of the variable accessors [var_get], [var_set]
@@ -1112,7 +1067,7 @@ Qed.
 
 Lemma var_get_correct:
   forall cenv id a f e te sp lo hi m cs tm b chunk v le,
-  var_get cenv id = Some a ->
+  var_get cenv id = OK a ->
   match_callstack f (mkframe cenv e te sp lo hi :: cs) m.(nextblock) tm.(nextblock) m ->
   mem_inject f m tm ->
   eval_var_ref prog e id b chunk ->
@@ -1138,7 +1093,7 @@ Proof.
     unfold loadv. eexact H3. 
   intros [tv [LOAD INJ]].
   exists tv; split. 
-  eapply make_load_correct; eauto. eapply make_stackaddr_correct; eauto.
+  econstructor; eauto. eapply make_stackaddr_correct; eauto.
   auto.
   (* var_global_scalar *)
   inversion H2; [congruence|subst]. 
@@ -1151,14 +1106,14 @@ Proof.
   generalize (loadv_inject _ _ _ _ _ _ _ H1 H12 H13).
   intros [tv [LOAD INJ]].
   exists tv; split. 
-  eapply make_load_correct; eauto. eapply make_globaladdr_correct; eauto.
+  econstructor; eauto. eapply make_globaladdr_correct; eauto.
   auto.
 Qed.
 
 Lemma var_addr_correct:
   forall cenv id a f e te sp lo hi m cs tm b le,
   match_callstack f (mkframe cenv e te sp lo hi :: cs) m.(nextblock) tm.(nextblock) m ->
-  var_addr cenv id = Some a ->
+  var_addr cenv id = OK a ->
   eval_var_addr prog e id b ->
   exists tv,
     eval_expr tge (Vptr sp Int.zero) le te tm a E0 tm tv /\
@@ -1196,7 +1151,7 @@ Qed.
 
 Lemma var_set_correct:
   forall cenv id rhs a f e te sp lo hi m2 cs tm2 tm1 tv b chunk v m3 t,
-  var_set cenv id rhs = Some a ->
+  var_set cenv id rhs = OK a ->
   match_callstack f (mkframe cenv e te sp lo hi :: cs) m2.(nextblock) tm2.(nextblock) m2 ->
   eval_expr tge (Vptr sp Int.zero) nil te tm1 rhs t tm2 tv ->
   val_inject f v tv ->
@@ -1210,7 +1165,7 @@ Lemma var_set_correct:
 Proof.
   unfold var_set; intros.
   assert (NEXTBLOCK: nextblock m3 = nextblock m2).
-    exploit store_inv; eauto. simpl; tauto.
+    eapply nextblock_store; eauto.
   inversion H0. subst.
   assert (match_var f id e m2 te sp cenv!!id). inversion H19; auto.
   inversion H6; subst; rewrite <- H7 in H; inversion H; subst; clear H.
@@ -1337,7 +1292,7 @@ Proof.
       unfold f1; rewrite <- H2; eapply match_callstack_alloc_left; eauto.
       rewrite <- H1. omega.
       intros until delta; unfold f1, extend_inject, eq_block.
-      rewrite (high_bound_alloc _ _ b _ _ _ H).
+      rewrite (high_bound_alloc _ _ _ _ _ H b).
       case (zeq b b1); intros. 
       inversion H3. unfold sizeof; rewrite LV. omega.
       generalize (BOUND _ _ H3). omega. 
@@ -1350,7 +1305,7 @@ Proof.
     exploit IHalloc_variables; eauto.
       unfold f1; rewrite <- H2; eapply match_callstack_alloc_left; eauto.
       intros until delta; unfold f1, extend_inject, eq_block.
-      rewrite (high_bound_alloc _ _ b _ _ _ H).
+      rewrite (high_bound_alloc _ _ _ _ _ H b).
       case (zeq b b1); intros. discriminate.
       eapply BOUND; eauto.
     intros [f' [INCR2 [MINJ2 MATCH2]]].
@@ -1373,7 +1328,7 @@ Proof.
     unfold f1; rewrite <- H2; eapply match_callstack_alloc_left; eauto.
     rewrite <- H1. omega.
     intros until delta; unfold f1, extend_inject, eq_block.
-    rewrite (high_bound_alloc _ _ b _ _ _ H).
+    rewrite (high_bound_alloc _ _ _ _ _ H b).
     case (zeq b b1); intros. 
     inversion H6. unfold sizeof; rewrite LV. omega.
     generalize (BOUND _ _ H6). omega. 
@@ -1439,10 +1394,9 @@ Proof.
   intros. 
   assert (SP: sp = nextblock tm). injection H2; auto.
   unfold build_compilenv in H. 
-  eapply match_callstack_alloc_variables_rec with (sz' := sz); eauto.
-  eapply valid_new_block; eauto.
-  rewrite (low_bound_alloc _ _ sp _ _ _ H2). apply zeq_true.
-  rewrite (high_bound_alloc _ _ sp _ _ _ H2). apply zeq_true. 
+  eapply match_callstack_alloc_variables_rec with (sz' := sz); eauto with mem.
+  eapply low_bound_alloc_same; eauto.
+  eapply high_bound_alloc_same; eauto.
   (* match_callstack *)
   constructor. omega. change (valid_block tm' sp). eapply valid_new_block; eauto.
   constructor. 
@@ -1460,15 +1414,15 @@ Proof.
     (* me_inj *)
     intros until lv2. unfold Csharpminor.empty_env; rewrite PTree.gempty; congruence.
     (* me_inv *)
-    intros. exploit mi_mappedblocks; eauto. intros [A B].
+    intros. exploit mi_mappedblocks; eauto. intro A.
     elim (fresh_block_alloc _ _ _ _ _ H2 A).
     (* me_incr *)
-    intros. exploit mi_mappedblocks; eauto. intros [A B].
+    intros. exploit mi_mappedblocks; eauto. intro A.
     rewrite SP; auto.
   rewrite SP; auto.
   eapply alloc_right_inject; eauto.
   omega.
-  intros. exploit mi_mappedblocks; eauto. intros [A B].
+  intros. exploit mi_mappedblocks; eauto. unfold valid_block; intro.
   unfold block in SP; omegaContradiction.
   (* defined *)
   intros. unfold te. apply set_locals_params_defined. 
@@ -1569,7 +1523,7 @@ Proof.
   inversion H18.
   inversion NOREPET. subst hd tl.
   assert (NEXT: nextblock m1 = nextblock m).
-    exploit store_inv; eauto. simpl; tauto.
+    eapply nextblock_store; eauto.
   generalize (me_vars0 id). intro. inversion H2; subst.
   (* cenv!!id = Var_local chunk *)
   assert (b0 = b). congruence. subst b0.
@@ -1724,43 +1678,6 @@ Qed.
 
 (** * Semantic preservation for the translation *)
 
-(** These tactics simplify hypotheses of the form [f ... = Some x]. *)
-
-Ltac monadSimpl1 :=
-  match goal with
-  | [ |- (bind _ _ ?F ?G = Some ?X) -> _ ] =>
-      unfold bind at 1;
-      generalize (refl_equal F);
-      pattern F at -1 in |- *;
-      case F;
-      [ (let EQ := fresh "EQ" in
-          (intro; intro EQ;
-           try monadSimpl1))
-      | intros; discriminate ]
-  | [ |- (None = Some _) -> _ ] =>
-      intro; discriminate
-  | [ |- (Some _ = Some _) -> _ ] =>
-      let h := fresh "H" in
-      (intro h; injection h; intro; clear h)
-  end.
-
-Ltac monadSimpl :=
-  match goal with
-  | [ |- (bind _ _ ?F ?G = Some ?X) -> _ ] => monadSimpl1
-  | [ |- (None = Some _) -> _ ] => monadSimpl1
-  | [ |- (Some _ = Some _) -> _ ] => monadSimpl1
-  | [ |- (?F _ _ _ _ _ _ _ = Some _) -> _ ] => simpl F; monadSimpl1
-  | [ |- (?F _ _ _ _ _ _ = Some _) -> _ ] => simpl F; monadSimpl1
-  | [ |- (?F _ _ _ _ _ = Some _) -> _ ] => simpl F; monadSimpl1
-  | [ |- (?F _ _ _ _ = Some _) -> _ ] => simpl F; monadSimpl1
-  | [ |- (?F _ _ _ = Some _) -> _ ] => simpl F; monadSimpl1
-  | [ |- (?F _ _ = Some _) -> _ ] => simpl F; monadSimpl1
-  | [ |- (?F _ = Some _) -> _ ] => simpl F; monadSimpl1
-  end.
-
-Ltac monadInv H :=
-  generalize H; monadSimpl.
-
 (** The proof of semantic preservation uses simulation diagrams of the
   following form:
 <<
@@ -1790,7 +1707,7 @@ Ltac monadInv H :=
 Definition eval_expr_prop
     (le: Csharpminor.letenv) (e: Csharpminor.env) (m1: mem) (a: Csharpminor.expr) (t: trace) (m2: mem) (v: val) : Prop :=
   forall cenv ta f1 tle te tm1 sp lo hi cs
-  (TR: transl_expr cenv a = Some ta)
+  (TR: transl_expr cenv a = OK ta)
   (LINJ: val_list_inject f1 le tle)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1
@@ -1808,7 +1725,7 @@ Definition eval_expr_prop
 Definition eval_exprlist_prop
     (le: Csharpminor.letenv) (e: Csharpminor.env) (m1: mem) (al: Csharpminor.exprlist) (t: trace) (m2: mem) (vl: list val) : Prop :=
   forall cenv tal f1 tle te tm1 sp lo hi cs
-  (TR: transl_exprlist cenv al = Some tal)
+  (TR: transl_exprlist cenv al = OK tal)
   (LINJ: val_list_inject f1 le tle)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1
@@ -1826,7 +1743,7 @@ Definition eval_exprlist_prop
 Definition eval_funcall_prop
     (m1: mem) (fn: Csharpminor.fundef) (args: list val) (t: trace) (m2: mem) (res: val) : Prop :=
   forall tfn f1 tm1 cs targs
-  (TR: transl_fundef gce fn = Some tfn)
+  (TR: transl_fundef gce fn = OK tfn)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1 cs m1.(nextblock) tm1.(nextblock) m1)
   (ARGSINJ: val_list_inject f1 args targs),
@@ -1852,7 +1769,7 @@ Inductive outcome_inject (f: meminj) : Csharpminor.outcome -> outcome -> Prop :=
 Definition exec_stmt_prop
     (e: Csharpminor.env) (m1: mem) (s: Csharpminor.stmt) (t: trace) (m2: mem) (out: Csharpminor.outcome): Prop :=
   forall cenv ts f1 te1 tm1 sp lo hi cs
-  (TR: transl_stmt cenv s = Some ts)
+  (TR: transl_stmt cenv s = OK ts)
   (MINJ: mem_inject f1 m1 tm1)
   (MATCH: match_callstack f1
            (mkframe cenv e te1 sp lo hi :: cs)
@@ -1897,21 +1814,61 @@ Proof.
   exists f1; exists tm1; exists tv. intuition eauto.
 Qed.
 
-Lemma transl_expr_Eop_correct:
-   forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
-     (op : Csharpminor.operation) (al : Csharpminor.exprlist) 
-     (t: trace) (m1 : mem) (vl : list val) (v : val),
-   Csharpminor.eval_exprlist prog le e m al t m1 vl ->
-   eval_exprlist_prop le e m al t m1 vl ->
-   Csharpminor.eval_operation op vl m1 = Some v ->
-   eval_expr_prop le e m (Csharpminor.Eop op al) t m1 v.
+Lemma transl_expr_Econst_correct:
+  forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
+         (cst : Csharpminor.constant) (v : val),
+  Csharpminor.eval_constant cst = Some v ->
+  eval_expr_prop le e m (Csharpminor.Econst cst) E0 m v.
 Proof.
-  intros; red; intros. monadInv TR; intro EQ0.
+  intros; red; intros; monadInv TR.
+  exploit transl_constant_correct; eauto.
+  intros [tv [EVAL VINJ]].
+  exists f1; exists tm1; exists tv. intuition eauto. 
+  constructor; eauto.
+Qed.
+
+Lemma transl_expr_Eunop_correct:
+  forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
+         (op : unary_operation) (a : Csharpminor.expr) (t : trace)
+         (m1 : mem) (v1 v : val),
+  Csharpminor.eval_expr prog le e m a t m1 v1 ->
+  eval_expr_prop le e m a t m1 v1 ->
+  Csharpminor.eval_unop op v1 = Some v ->
+  eval_expr_prop le e m (Csharpminor.Eunop op a) t m1 v.
+Proof.
+  intros; red; intros. monadInv TR.
   exploit H0; eauto.
   intros [f2 [tm2 [tvl [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
-  exploit make_op_correct; eauto.
-  intros [tv [EVAL2 VINJ2]].
-  exists f2; exists tm2; exists tv. intuition.
+  exploit eval_unop_compat; eauto. intros [tv [EVAL VINJ]].
+  exists f2; exists tm2; exists tv; intuition.
+  econstructor; eauto.
+Qed.
+
+Lemma transl_expr_Ebinop_correct:
+  forall (le : Csharpminor.letenv) (e : Csharpminor.env) (m : mem)
+         (op : binary_operation) (a1 a2 : Csharpminor.expr) (t1 : trace)
+         (m1 : mem) (v1 : val) (t2 : trace) (m2 : mem) (v2 : val)
+         (t : trace) (v : val),
+  Csharpminor.eval_expr prog le e m a1 t1 m1 v1 ->
+  eval_expr_prop le e m a1 t1 m1 v1 ->
+  Csharpminor.eval_expr prog le e m1 a2 t2 m2 v2 ->
+  eval_expr_prop le e m1 a2 t2 m2 v2 ->
+  Csharpminor.eval_binop op v1 v2 m2 = Some v ->
+  t = t1 ** t2 ->
+  eval_expr_prop le e m (Csharpminor.Ebinop op a1 a2) t m2 v.
+Proof.
+  intros; red; intros. monadInv TR.
+  exploit H0; eauto.
+  intros [f2 [tm2 [tvl [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
+  exploit H2.
+    eauto. eapply val_list_inject_incr; eauto. eauto. eauto.  
+  intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
+  exploit eval_binop_compat.
+    eauto. eapply val_inject_incr; eauto. eauto. eauto. 
+  intros [tv [EVAL VINJ]].
+  exists f3; exists tm3; exists tv; intuition.
+  econstructor; eauto.
+  eapply inject_incr_trans; eauto.
 Qed.
 
 Lemma transl_expr_Eload_correct:
@@ -1931,7 +1888,7 @@ Proof.
   intros [tv [TLOAD VINJ]].
   exists f2; exists tm2; exists tv.
   intuition.
-  subst ta. eapply make_load_correct; eauto. 
+  econstructor; eauto.
 Qed.
 
 Lemma transl_expr_Ecall_correct:
@@ -1951,7 +1908,7 @@ Lemma transl_expr_Ecall_correct:
    t = t1 ** t2 ** t3 ->
    eval_expr_prop le e m (Csharpminor.Ecall sig a bl) t m3 vres.
 Proof.
-  intros;red;intros. monadInv TR. subst ta. 
+  intros;red;intros. monadInv TR. 
   exploit H0; eauto.
   intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR1 MATCH1]]]]]]].
   exploit H2.
@@ -1960,18 +1917,18 @@ Proof.
   assert (tv1 = vf).
     elim (Genv.find_funct_inv H3). intros bf VF. rewrite VF in H3.
     rewrite Genv.find_funct_find_funct_ptr in H3. 
-    generalize (Genv.find_funct_ptr_inv H3). intro.
+    generalize (Genv.find_funct_ptr_negative H3). intro.
     assert (match_globalenvs f2). eapply match_callstack_match_globalenvs; eauto.
-    generalize (mg_functions _ H9 _ H8). intro.
+    generalize (mg_functions _ H7 _ H4). intro.
     rewrite VF in VINJ1. inversion VINJ1. subst vf. 
     decEq. congruence. 
-    subst ofs2. replace x with 0. reflexivity. congruence.
+    subst ofs2. replace x1 with 0. reflexivity. congruence.
   subst tv1. elim (functions_translated _ _ H3). intros tf [FIND TRF].
   exploit H6; eauto.
   intros [f4 [tm4 [tres [EVAL3 [VINJ3 [MINJ3 [INCR3 MATCH3]]]]]]].
   exists f4; exists tm4; exists tres. intuition.
   eapply eval_Ecall; eauto. 
-  rewrite <- H4. apply sig_preserved; auto.
+  apply sig_preserved; auto.
   apply inject_incr_trans with f2; auto. 
   apply inject_incr_trans with f3; auto.
 Qed.
@@ -1996,8 +1953,8 @@ Proof.
   intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
   exists f3; exists tm3; exists tv2.
   intuition.
-  rewrite <- H6. subst t; eapply eval_conditionalexpr_true; eauto. 
-  inversion VINJ1; subst v1 tv1; simpl in H1; simpl; contradiction || auto.
+  eapply eval_Econdition with (b1 := true); eauto. 
+    eapply val_inject_bool_of_val; eauto. apply Val.bool_of_true_val; eauto.
   eapply inject_incr_trans; eauto.
 Qed.
 
@@ -2021,8 +1978,8 @@ Proof.
   intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
   exists f3; exists tm3; exists tv2.
   intuition.
-  rewrite <- H6. subst t; eapply eval_conditionalexpr_false; eauto. 
-  inversion VINJ1; subst v1 tv1; simpl in H1; simpl; contradiction || auto.
+  eapply eval_Econdition with (b1 := false); eauto. 
+    eapply val_inject_bool_of_val; eauto. apply Val.bool_of_false_val; eauto.
   eapply inject_incr_trans; eauto.
 Qed.
 
@@ -2047,7 +2004,7 @@ Proof.
   intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ2 [INCR2 MATCH2]]]]]]].
   exists f3; exists tm3; exists tv2.
   intuition.
-  subst ta; eapply eval_Elet; eauto.
+  eapply eval_Elet; eauto.
   eapply inject_incr_trans; eauto.
 Qed.
 
@@ -2072,7 +2029,7 @@ Proof.
   exploit val_list_inject_nth; eauto. intros [tv [A B]].
   exists f1; exists tm1; exists tv.
   intuition.
-  subst ta. eapply eval_Eletvar; auto.
+  eapply eval_Eletvar; auto.
 Qed.
 
 Lemma transl_expr_Ealloc_correct:
@@ -2095,7 +2052,7 @@ Proof.
   intros [MINJ3 INCR3].
   exists (extend_inject b (Some (tb, 0)) f2); 
   exists tm3; exists (Vptr tb Int.zero).
-  split. subst ta; econstructor; eauto.
+  split. econstructor; eauto.
   split. econstructor. unfold extend_inject, eq_block. rewrite zeq_true. reflexivity.
   reflexivity.
   split. assumption.
@@ -2109,7 +2066,7 @@ Lemma transl_exprlist_Enil_correct:
 Proof.
   intros; red; intros. monadInv TR. 
   exists f1; exists tm1; exists (@nil val).
-  intuition. subst tal; constructor.
+  intuition. constructor.
 Qed.
 
 Lemma transl_exprlist_Econs_correct:
@@ -2131,7 +2088,7 @@ Proof.
     eauto. eapply val_list_inject_incr; eauto. eauto. eauto.
   intros [f3 [tm3 [tv2 [EVAL2 [VINJ2 [MINJ3 [INCR3 MATCH3]]]]]]].
   exists f3; exists tm3; exists (tv1 :: tv2).
-  intuition. subst tal; econstructor; eauto.
+  intuition. econstructor; eauto.
   constructor. eapply val_inject_incr; eauto. auto.
   eapply inject_incr_trans; eauto.
 Qed.
@@ -2149,15 +2106,11 @@ Lemma transl_funcall_internal_correct:
    eval_funcall_prop m (Internal f) vargs t (free_list m3 lb) vres.
 Proof.
   intros; red. intros tfn f1 tm; intros.
-  generalize TR; clear TR.
-  unfold transl_fundef, transf_partial_fundef.
-  caseEq (transl_function gce f); try congruence. 
-  intros tf TR EQ. inversion EQ; clear EQ; subst tfn.
-  unfold transl_function in TR.
+  monadInv TR. generalize EQ.
+  unfold transl_function.
   caseEq (build_compilenv gce f); intros cenv stacksize CENV.
-  rewrite CENV in TR. 
-  destruct (zle stacksize Int.max_signed); try discriminate.
-  monadInv TR. clear TR. 
+  destruct (zle stacksize Int.max_signed); try congruence.
+  intro TR. monadInv TR.
   caseEq (alloc tm 0 stacksize). intros tm1 sp ALLOC.
   exploit function_entry_ok; eauto. 
   intros [f2 [te2 [tm2 [STOREPARAM [MINJ2 [INCR12 [MATCH2 BLOCKS]]]]]]].
@@ -2177,9 +2130,11 @@ Proof.
       exists v2; split. auto. subst vres; auto.
       contradiction.
   destruct H5 as [tvres [TOUT VINJRES]].
+  assert (outcome_free_mem tout tm3 sp = Mem.free tm3 sp).
+    inversion OUTINJ; auto.
   exists f3; exists (Mem.free tm3 sp); exists tvres.
   (* execution *)
-  split. rewrite <- H6; econstructor; simpl; eauto.
+  split. rewrite <- H5. econstructor; simpl; eauto.
   apply exec_Sseq_continue with E0 te2 tm2 t.
   exact STOREPARAM.
   eexact EXECBODY.
@@ -2195,7 +2150,7 @@ Proof.
   (* match_callstack *)
   assert (forall bl mm, nextblock (free_list mm bl) = nextblock mm).
     induction bl; intros. reflexivity. simpl. auto.
-  unfold free; simpl nextblock. rewrite H5. 
+  unfold free; simpl nextblock. rewrite H6. 
   eapply match_callstack_freelist; eauto. 
   intros. elim (BLOCKS b); intros B1 B2. generalize (B2 H7). omega.
 Qed.
@@ -2206,8 +2161,7 @@ Lemma transl_funcall_external_correct:
   event_match ef vargs t vres ->
   eval_funcall_prop m (External ef) vargs t m vres.
 Proof.
-  intros; red; intros.
-  simpl in TR. inversion TR; clear TR; subst tfn.
+  intros; red; intros. monadInv TR. 
   exploit event_match_inject; eauto. intros [A B].
   exists f1; exists tm1; exists vres; intuition.
   constructor; auto. 
@@ -2219,7 +2173,7 @@ Lemma transl_stmt_Sskip_correct:
 Proof.
   intros; red; intros. monadInv TR. 
   exists f1; exists te1; exists tm1; exists Out_normal.
-  intuition. subst ts; constructor. constructor.
+  intuition. constructor. constructor.
 Qed.
 
 Lemma transl_stmt_Sexpr_correct:
@@ -2233,7 +2187,7 @@ Proof.
   exploit H0; eauto.
   intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ2 [INCR2 MATCH2]]]]]]].
   exists f2; exists te1; exists tm2; exists Out_normal.
-  intuition. subst ts. econstructor; eauto.
+  intuition. econstructor; eauto.
   constructor.
 Qed.
 
@@ -2247,7 +2201,7 @@ Lemma transl_stmt_Sassign_correct:
    store chunk m1 b 0 v = Some m2 ->
    exec_stmt_prop e m (Csharpminor.Sassign id a) t m2 Csharpminor.Out_normal.
 Proof.
-  intros; red; intros. monadInv TR; intro EQ0. 
+  intros; red; intros. monadInv TR.
   exploit H0; eauto. 
   intros [f2 [tm2 [tv1 [EVAL1 [VINJ1 [MINJ1 [INCR12 MATCH1]]]]]]].
   exploit var_set_correct; eauto.
@@ -2282,15 +2236,15 @@ Proof.
     eapply val_inject_incr; eauto. eauto.
   intros [tm4 [EVAL [MINJ4 NEXTBLOCK]]].
   exists f3; exists te1; exists tm4; exists Out_normal.
-  rewrite <- H6. subst t3. intuition. 
+  intuition. 
   constructor.
   eapply inject_incr_trans; eauto.
   assert (val_inject f3 v1 tv1). eapply val_inject_incr; eauto.
   unfold storev in H3; destruct v1; try discriminate.
   inversion H4. 
   rewrite NEXTBLOCK. replace (nextblock m3) with (nextblock m2).
-  eapply match_callstack_mapped; eauto. congruence. 
-  exploit store_inv; eauto. simpl; symmetry; tauto.
+  eapply match_callstack_mapped; eauto. congruence.
+  symmetry. eapply nextblock_store; eauto. 
 Qed.
 
 Lemma transl_stmt_Sseq_continue_correct:
@@ -2309,7 +2263,7 @@ Proof.
   exploit H2; eauto.
   intros [f3 [te3 [tm3 [tout2 [EXEC2 [OINJ2 [MINJ3 [INCR3 MATCH3]]]]]]]].
   exists f3; exists te3; exists tm3; exists tout2.
-  intuition. subst ts; eapply exec_Sseq_continue; eauto.
+  intuition. eapply exec_Sseq_continue; eauto.
   inversion OINJ1. subst tout1. auto.
   eapply inject_incr_trans; eauto.
 Qed.
@@ -2326,7 +2280,7 @@ Proof.
   exploit H0; eauto.
   intros [f2 [te2 [tm2 [tout1 [EXEC1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
   exists f2; exists te2; exists tm2; exists tout1.
-  intuition. subst ts; eapply exec_Sseq_stop; eauto.
+  intuition. eapply exec_Sseq_stop; eauto.
   inversion OINJ1; subst out tout1; congruence.
 Qed.
 
@@ -2350,8 +2304,8 @@ Proof.
   intros [f3 [te3 [tm3 [tout [EVAL2 [OINJ [MINJ3 [INCR3 MATCH3]]]]]]]].
   exists f3; exists te3; exists tm3; exists tout.
   intuition. 
-  subst ts t. eapply exec_ifthenelse_true; eauto.
-  inversion VINJ1; subst v1 tv1; simpl in H1; simpl; contradiction || auto.
+  eapply exec_Sifthenelse with (b1 := true); eauto.
+  eapply val_inject_bool_of_val; eauto. apply Val.bool_of_true_val; auto.
   eapply inject_incr_trans; eauto.
 Qed.
 
@@ -2375,8 +2329,8 @@ Proof.
   intros [f3 [te3 [tm3 [tout [EVAL2 [OINJ [MINJ3 [INCR3 MATCH3]]]]]]]].
   exists f3; exists te3; exists tm3; exists tout.
   intuition. 
-  subst ts t. eapply exec_ifthenelse_false; eauto.
-  inversion VINJ1; subst v1 tv1; simpl in H1; simpl; contradiction || auto.
+  eapply exec_Sifthenelse with (b1 := false); eauto.
+  eapply val_inject_bool_of_val; eauto. apply Val.bool_of_false_val; auto.
   eapply inject_incr_trans; eauto.
 Qed.
 
@@ -2391,14 +2345,14 @@ Lemma transl_stmt_Sloop_loop_correct:
    t = t1 ** t2 ->
    exec_stmt_prop e m (Csharpminor.Sloop sl) t m2 out.
 Proof.
-  intros; red; intros. monadInv TR.
+  intros; red; intros. generalize TR; intro TR'; monadInv TR'.
   exploit H0; eauto.
   intros [f2 [te2 [tm2 [tout1 [EVAL1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
   exploit H2; eauto.
   intros [f3 [te3 [tm3 [tout2 [EVAL2 [OINJ2 [MINJ3 [INCR3 MATCH3]]]]]]]].
   exists f3; exists te3; exists tm3; exists tout2.
   intuition. 
-  subst ts. eapply exec_Sloop_loop; eauto.
+  eapply exec_Sloop_loop; eauto.
   inversion OINJ1; subst tout1; eauto.
   eapply inject_incr_trans; eauto.
 Qed.
@@ -2415,7 +2369,7 @@ Proof.
   exploit H0; eauto.
   intros [f2 [te2 [tm2 [tout1 [EVAL1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
   exists f2; exists te2; exists tm2; exists tout1.
-  intuition. subst ts; eapply exec_Sloop_stop; eauto.
+  intuition. eapply exec_Sloop_stop; eauto.
   inversion OINJ1; subst out tout1; congruence.
 Qed.
 
@@ -2431,7 +2385,7 @@ Proof.
   exploit H0; eauto.
   intros [f2 [te2 [tm2 [tout1 [EVAL1 [OINJ1 [MINJ2 [INCR2 MATCH2]]]]]]]].
   exists f2; exists te2; exists tm2; exists (outcome_block tout1).
-  intuition. subst ts; eapply exec_Sblock; eauto.
+  intuition. eapply exec_Sblock; eauto.
   inversion OINJ1; subst out tout1; simpl.
   constructor.
   destruct n; constructor.
@@ -2445,7 +2399,7 @@ Lemma transl_stmt_Sexit_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exists f1; exists te1; exists tm1; exists (Out_exit n).
-  intuition. subst ts; constructor. constructor.
+  intuition. constructor. constructor.
 Qed.
 
 Lemma transl_stmt_Sswitch_correct:
@@ -2462,7 +2416,7 @@ Proof.
   intros [f2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]].
   exists f2; exists te1; exists tm2; 
   exists (Out_exit (switch_target n default cases)). intuition. 
-  subst ts. constructor. inversion VINJ1. subst tv1. assumption.
+  constructor. inversion VINJ1. subst tv1. assumption.
   constructor. 
 Qed.
 
@@ -2473,7 +2427,7 @@ Lemma transl_stmt_Sreturn_none_correct:
 Proof.
   intros; red; intros. monadInv TR.
   exists f1; exists te1; exists tm1; exists (Out_return None).
-  intuition. subst ts; constructor. constructor.
+  intuition. constructor. constructor.
 Qed.
 
 Lemma transl_stmt_Sreturn_some_correct:
@@ -2488,7 +2442,7 @@ Proof.
   exploit H0; eauto.
   intros [f2 [tm2 [tv1 [EVAL [VINJ1 [MINJ2 [INCR MATCH2]]]]]]].
   exists f2; exists te1; exists tm2; exists (Out_return (Some tv1)).
-  intuition. subst ts; econstructor; eauto. constructor; auto.
+  intuition. econstructor; eauto. constructor; auto.
 Qed.
 
 (** We conclude by an induction over the structure of the Csharpminor
@@ -2499,7 +2453,7 @@ Lemma transl_function_correct:
    Csharpminor.eval_funcall prog m1 f vargs t m2 vres ->
    eval_funcall_prop m1 f vargs t m2 vres.
 Proof
-  (eval_funcall_ind4 prog
+  (Csharpminor.eval_funcall_ind4 prog
      eval_expr_prop
      eval_exprlist_prop
      eval_funcall_prop
@@ -2507,7 +2461,9 @@ Proof
 
      transl_expr_Evar_correct
      transl_expr_Eaddrof_correct
-     transl_expr_Eop_correct
+     transl_expr_Econst_correct
+     transl_expr_Eunop_correct
+     transl_expr_Ebinop_correct
      transl_expr_Eload_correct
      transl_expr_Ecall_correct
      transl_expr_Econdition_true_correct
@@ -2545,11 +2501,9 @@ Lemma match_globalenvs_init:
   match_globalenvs f.
 Proof.
   intros. constructor.
-  (* globalvars *)
-  (* symbols *)
   intros. split.
   unfold f. rewrite zlt_true. auto. unfold m. 
-  eapply Genv.find_symbol_inv; eauto.
+  eapply Genv.find_symbol_not_fresh; eauto.
   rewrite <- H. apply symbols_preserved.
   intros. unfold f. rewrite zlt_true. auto.
   generalize (nextblock_pos m). omega.
@@ -2566,20 +2520,10 @@ Proof.
   intros t n [b [fn [m [FINDS [FINDF [SIG EVAL]]]]]].
   elim (function_ptr_translated _ _ FINDF). intros tfn [TFIND TR].
   set (m0 := Genv.init_mem prog) in *.
-  set (f := fun b => if zlt b m0.(nextblock) then Some(b, 0) else None).
+  set (f := meminj_init m0).
   assert (MINJ0: mem_inject f m0 m0).
-    unfold f; constructor; intros.
-    apply zlt_false; auto.
-    destruct (zlt b0 (nextblock m0)); try discriminate.
-    inversion H; subst b' delta. 
-    split. auto. 
-    constructor. compute. split; congruence. left; auto. 
-    intros; omega. 
-    generalize (Genv.initmem_block_init prog b0). fold m0. intros [idata EQ].
-    rewrite EQ. simpl. apply Mem.contents_init_data_inject. 
-    destruct (zlt b1 (nextblock m0)); try discriminate.
-    destruct (zlt b2 (nextblock m0)); try discriminate.
-    left; congruence. 
+    unfold f; apply init_inject. 
+    unfold m0; apply Genv.initmem_inject_neutral.
   assert (MATCH0: match_callstack f nil m0.(nextblock) m0.(nextblock) m0).
     constructor. unfold f; apply match_globalenvs_init.
   fold ge in EVAL.

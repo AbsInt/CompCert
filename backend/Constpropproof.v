@@ -9,6 +9,7 @@ Require Import Values.
 Require Import Events.
 Require Import Mem.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
@@ -40,6 +41,13 @@ Definition val_match_approx (a: approx) (v: val) : Prop :=
 
 Definition regs_match_approx (a: D.t) (rs: regset) : Prop :=
   forall r, val_match_approx (D.get r a) rs#r.
+
+Lemma regs_match_approx_top:
+  forall rs, regs_match_approx D.top rs.
+Proof.
+  intros. red; intros. simpl. rewrite PTree.gempty. 
+  unfold Approx.top, val_match_approx. auto.
+Qed.
 
 Lemma val_match_approx_increasing:
   forall a1 a2 v,
@@ -123,10 +131,10 @@ Ltac InvVLMA :=
   approximations returned by [eval_static_operation]. *)
 
 Lemma eval_static_condition_correct:
-  forall cond al vl b,
+  forall cond al vl m b,
   val_list_match_approx al vl ->
   eval_static_condition cond al = Some b ->
-  eval_condition cond vl = Some b.
+  eval_condition cond vl m = Some b.
 Proof.
   intros until b.
   unfold eval_static_condition. 
@@ -135,9 +143,9 @@ Proof.
 Qed.
 
 Lemma eval_static_operation_correct:
-  forall op sp al vl v,
+  forall op sp al vl m v,
   val_list_match_approx al vl ->
-  eval_operation ge sp op vl = Some v ->
+  eval_operation ge sp op vl m = Some v ->
   val_match_approx (eval_static_operation op al) v.
 Proof.
   intros until v.
@@ -183,7 +191,7 @@ Proof.
   rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
 
   caseEq (eval_static_condition c vl0).
-  intros. generalize (eval_static_condition_correct _ _ _ _ H H1).
+  intros. generalize (eval_static_condition_correct _ _ _ m _ H H1).
   intro. rewrite H2 in H0. 
   destruct b; injection H0; intro; subst v; simpl; auto.
   intros; simpl; auto.
@@ -194,80 +202,40 @@ Proof.
   auto.
 Qed.
 
-(** The correctness of the transfer function follows: if the register
-  state before a transition matches the static approximations at that
-  program point, the register state after that transition matches
-  the static approximation returned by the transfer function. *)
-
-Lemma transfer_correct:
-  forall f c sp pc rs m t pc' rs' m' ra,
-  exec_instr ge c sp pc rs m t pc' rs' m' ->
-  c = f.(fn_code) ->
-  regs_match_approx ra rs ->
-  regs_match_approx (transfer f pc ra) rs'.
-Proof.
-  induction 1; intros; subst c; unfold transfer; rewrite H; auto.
-  (* Iop *)
-  apply regs_match_approx_update. 
-  apply eval_static_operation_correct with sp rs##args. 
-  eapply approx_regs_val_list. auto. auto. auto.
-  (* Iload *)
-  apply regs_match_approx_update; auto. simpl; auto.
-  (* Icall *)
-  apply regs_match_approx_update; auto. simpl; auto.
-  (* Ialloc *)
-  apply regs_match_approx_update; auto. simpl; auto.
-Qed.
-
 (** The correctness of the static analysis follows from the results
   above and the fact that the result of the static analysis is
   a solution of the forward dataflow inequations. *)
 
 Lemma analyze_correct_1:
-  forall f approxs,
-  analyze f = Some approxs ->
-  forall c sp pc rs m t pc' rs' m',
-  exec_instr ge c sp pc rs m t pc' rs' m' ->
-  c = f.(fn_code) ->
-  regs_match_approx approxs!!pc rs ->
-  regs_match_approx approxs!!pc' rs'.
+  forall f pc rs pc',
+  In pc' (successors f pc) ->
+  regs_match_approx (transfer f pc (analyze f)!!pc) rs ->
+  regs_match_approx (analyze f)!!pc' rs.
 Proof.
-  intros. 
+  intros until pc'. unfold analyze. 
+  caseEq (DS.fixpoint (successors f) (fn_nextpc f) (transfer f)
+                      ((fn_entrypoint f, D.top) :: nil)).
+  intros approxs; intros.
   apply regs_match_approx_increasing with (transfer f pc approxs!!pc).
-  eapply DS.fixpoint_solution. 
-  unfold analyze in H. eexact H. 
+  eapply DS.fixpoint_solution; eauto.
   elim (fn_code_wf f pc); intro. auto. 
-  generalize (exec_instr_present _ _ _ _ _ _ _ _ _ _ H0).
-  rewrite H1. intro. contradiction.
-  eapply successors_correct. rewrite <- H1. eauto.
-  eapply transfer_correct; eauto.
-Qed.
-
-Lemma analyze_correct_2:
-  forall f approxs,
-  analyze f = Some approxs ->
-  forall c sp pc rs m t pc' rs' m',
-  exec_instrs ge c sp pc rs m t pc' rs' m' ->
-  c = f.(fn_code) ->
-  regs_match_approx approxs!!pc rs ->
-  regs_match_approx approxs!!pc' rs'.
-Proof.
-  intros f approxs ANL. induction 1.
+  unfold successors in H0; rewrite H2 in H0; simpl; contradiction.
   auto.
-  intros. eapply analyze_correct_1; eauto.
-  eauto.
+  intros. rewrite PMap.gi. apply regs_match_approx_top. 
 Qed.
 
 Lemma analyze_correct_3:
-  forall f approxs rs,
-  analyze f = Some approxs ->
-  regs_match_approx approxs!!(f.(fn_entrypoint)) rs.
+  forall f rs,
+  regs_match_approx (analyze f)!!(f.(fn_entrypoint)) rs.
 Proof.
-  intros. 
+  intros. unfold analyze. 
+  caseEq (DS.fixpoint (successors f) (fn_nextpc f) (transfer f)
+                      ((fn_entrypoint f, D.top) :: nil)).
+  intros approxs; intros.
   apply regs_match_approx_increasing with D.top.
-  eapply DS.fixpoint_entry. unfold analyze in H; eexact H.
-  auto with coqlib.
-  red; intros. rewrite D.get_top. simpl; auto.
+  eapply DS.fixpoint_entry; eauto. auto with coqlib.
+  apply regs_match_approx_top. 
+  intros. rewrite PMap.gi. apply regs_match_approx_top.
 Qed.
 
 (** * Correctness of strength reduction *)
@@ -296,9 +264,9 @@ Proof.
 Qed.
 
 Lemma cond_strength_reduction_correct:
-  forall cond args,
+  forall cond args m,
   let (cond', args') := cond_strength_reduction approx cond args in
-  eval_condition cond' rs##args' = eval_condition cond rs##args.
+  eval_condition cond' rs##args' m = eval_condition cond rs##args m.
 Proof.
   intros. unfold cond_strength_reduction.
   case (cond_strength_reduction_match cond args); intros.
@@ -312,7 +280,6 @@ Proof.
   caseEq (intval approx r1); intros.
   simpl. rewrite (intval_correct _ _ H). 
   destruct (rs#r2); auto. rewrite Int.swap_cmpu. auto.
-  destruct c; reflexivity.
   caseEq (intval approx r2); intros.
   simpl. rewrite (intval_correct _ _ H0). auto.
   auto.
@@ -320,10 +287,10 @@ Proof.
 Qed.
 
 Lemma make_addimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_addimm n r in
-  eval_operation ge sp Oadd (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oadd (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_addimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -333,10 +300,10 @@ Proof.
 Qed.
   
 Lemma make_shlimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_shlimm n r in
-  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_shlimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -347,10 +314,10 @@ Proof.
 Qed.
 
 Lemma make_shrimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_shrimm n r in
-  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_shrimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -359,10 +326,10 @@ Proof.
 Qed.
 
 Lemma make_shruimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_shruimm n r in
-  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_shruimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -373,10 +340,10 @@ Proof.
 Qed.
 
 Lemma make_mulimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_mulimm n r in
-  eval_operation ge sp Omul (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Omul (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_mulimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -384,8 +351,8 @@ Proof.
   generalize (Int.eq_spec n Int.one); case (Int.eq n Int.one); intros.
   subst n. simpl in H1. simpl. FuncInv. rewrite Int.mul_one in H0. congruence.
   caseEq (Int.is_power2 n); intros.
-  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil))
-     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil)).
+  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil) m)
+     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil) m).
   apply make_shlimm_correct. 
   simpl. generalize (Int.is_power2_range _ _ H1). 
   change (Z_of_nat wordsize) with 32. intro. rewrite H2.
@@ -394,10 +361,10 @@ Proof.
 Qed.
 
 Lemma make_andimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_andimm n r in
-  eval_operation ge sp Oand (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oand (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_andimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -408,10 +375,10 @@ Proof.
 Qed.
 
 Lemma make_orimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_orimm n r in
-  eval_operation ge sp Oor (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oor (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_orimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -422,10 +389,10 @@ Proof.
 Qed.
 
 Lemma make_xorimm_correct:
-  forall n r v,
+  forall n r m v,
   let (op, args) := make_xorimm n r in
-  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_xorimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -434,18 +401,18 @@ Proof.
 Qed.
 
 Lemma op_strength_reduction_correct:
-  forall op args v,
+  forall op args m v,
   let (op', args') := op_strength_reduction approx op args in
-  eval_operation ge sp op rs##args = Some v ->
-  eval_operation ge sp op' rs##args' = Some v.
+  eval_operation ge sp op rs##args m = Some v ->
+  eval_operation ge sp op' rs##args' m = Some v.
 Proof.
   intros; unfold op_strength_reduction;
   case (op_strength_reduction_match op args); intros; simpl List.map.
   (* Oadd *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oadd (Vint i :: rs # r2 :: nil))
-     with (eval_operation ge sp Oadd (rs # r2 :: Vint i :: nil)).
+  replace (eval_operation ge sp Oadd (Vint i :: rs # r2 :: nil) m)
+     with (eval_operation ge sp Oadd (rs # r2 :: Vint i :: nil) m).
   apply make_addimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.add_commut; auto.
   caseEq (intval approx r2); intros.
@@ -456,16 +423,16 @@ Proof.
   rewrite (intval_correct _ _ H) in H0. assumption. 
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H0). 
-  replace (eval_operation ge sp Osub (rs # r1 :: Vint i :: nil))
-     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg i) :: nil)).
+  replace (eval_operation ge sp Osub (rs # r1 :: Vint i :: nil) m)
+     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg i) :: nil) m).
   apply make_addimm_correct.
   simpl. destruct rs#r1; auto; rewrite Int.sub_add_opp; auto. 
   assumption.
   (* Omul *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Omul (Vint i :: rs # r2 :: nil))
-     with (eval_operation ge sp Omul (rs # r2 :: Vint i :: nil)).
+  replace (eval_operation ge sp Omul (Vint i :: rs # r2 :: nil) m)
+     with (eval_operation ge sp Omul (rs # r2 :: Vint i :: nil) m).
   apply make_mulimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.mul_commut; auto.
   caseEq (intval approx r2); intros.
@@ -485,8 +452,8 @@ Proof.
   caseEq (intval approx r2); intros.
   caseEq (Int.is_power2 i); intros.
   rewrite (intval_correct _ _ H).
-  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil))
-     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil)).
+  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil) m)
+     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil) m).
   apply make_shruimm_correct. 
   simpl. destruct rs#r1; auto. 
   change 32 with (Z_of_nat wordsize). 
@@ -499,8 +466,8 @@ Proof.
   (* Oand *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oand (Vint i :: rs # r2 :: nil))
-     with (eval_operation ge sp Oand (rs # r2 :: Vint i :: nil)).
+  replace (eval_operation ge sp Oand (Vint i :: rs # r2 :: nil) m)
+     with (eval_operation ge sp Oand (rs # r2 :: Vint i :: nil) m).
   apply make_andimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.and_commut; auto.
   caseEq (intval approx r2); intros.
@@ -509,8 +476,8 @@ Proof.
   (* Oor *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oor (Vint i :: rs # r2 :: nil))
-     with (eval_operation ge sp Oor (rs # r2 :: Vint i :: nil)).
+  replace (eval_operation ge sp Oor (Vint i :: rs # r2 :: nil) m)
+     with (eval_operation ge sp Oor (rs # r2 :: Vint i :: nil) m).
   apply make_orimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.or_commut; auto.
   caseEq (intval approx r2); intros.
@@ -519,8 +486,8 @@ Proof.
   (* Oxor *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oxor (Vint i :: rs # r2 :: nil))
-     with (eval_operation ge sp Oxor (rs # r2 :: Vint i :: nil)).
+  replace (eval_operation ge sp Oxor (Vint i :: rs # r2 :: nil) m)
+     with (eval_operation ge sp Oxor (rs # r2 :: Vint i :: nil) m).
   apply make_xorimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.xor_commut; auto.
   caseEq (intval approx r2); intros.
@@ -647,261 +614,329 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf transf_fundef prog).
+Proof.
+  intros; unfold ge, tge, tprog, transf_program. 
+  apply Genv.find_symbol_transf.
+Qed.
 
 Lemma functions_translated:
-  forall (v: val) (f: RTL.fundef),
+  forall (v: val) (f: fundef),
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_transf _ _ _ transf_fundef prog).
+Proof.  
+  intros.
+  exact (Genv.find_funct_transf transf_fundef H).
+Qed.
 
 Lemma function_ptr_translated:
-  forall (v: block) (f: RTL.fundef),
-  Genv.find_funct_ptr ge v = Some f ->
-  Genv.find_funct_ptr tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
+  forall (b: block) (f: fundef),
+  Genv.find_funct_ptr ge b = Some f ->
+  Genv.find_funct_ptr tge b = Some (transf_fundef f).
+Proof.  
+  intros. 
+  exact (Genv.find_funct_ptr_transf transf_fundef H).
+Qed.
 
-Lemma sig_translated:
-  forall (f: RTL.fundef),
+Lemma sig_function_translated:
+  forall f,
   funsig (transf_fundef f) = funsig f.
 Proof.
-  intro. case f; intros; simpl. 
-  unfold transf_function. case (analyze f0); intros; reflexivity.
-  reflexivity.
+  intros. destruct f; reflexivity.
+Qed.
+
+Lemma transf_ros_correct:
+  forall ros rs f approx,
+  regs_match_approx ge approx rs ->
+  find_function ge ros rs = Some f ->
+  find_function tge (transf_ros approx ros) rs = Some (transf_fundef f).
+Proof.
+  intros until approx; intro MATCH.
+  destruct ros; simpl.
+  intro.
+  exploit functions_translated; eauto. intro FIND.  
+  caseEq (D.get r approx); intros; auto.
+  generalize (Int.eq_spec i0 Int.zero); case (Int.eq i0 Int.zero); intros; auto.
+  generalize (MATCH r). rewrite H0. intros [b [A B]].
+  rewrite <- symbols_preserved in A.
+  rewrite B in FIND. rewrite H1 in FIND. 
+  rewrite Genv.find_funct_find_funct_ptr in FIND.
+  simpl. rewrite A. auto.
+  rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
+  intro. apply function_ptr_translated. auto.
+  congruence.
 Qed.
 
 (** The proof of semantic preservation is a simulation argument
   based on diagrams of the following form:
 <<
-        pc, rs, m ------------------- pc, rs, m
-            |                             |
-            |                             |
-            v                             v
-        pc', rs', m' ---------------- pc', rs', m'
+           st1 --------------- st2
+            |                   |
+           t|                   |t
+            |                   |
+            v                   v
+           st1'--------------- st2'
 >>
   The left vertical arrow represents a transition in the
-  original RTL code.  The top horizontal bar expresses that the values
-  of registers [rs] match their compile-time approximations at point [pc].
+  original RTL code.  The top horizontal bar is the [match_states]
+  invariant between the initial state [st1] in the original RTL code
+  and an initial state [st2] in the transformed code.
+  This invariant expresses that all code fragments appearing in [st2]
+  are obtained by [transf_code] transformation of the corresponding
+  fragments in [st1].  Moreover, the values of registers in [st1]
+  must match their compile-time approximations at the current program
+  point.
   These two parts of the diagram are the hypotheses.  In conclusions,
   we want to prove the other two parts: the right vertical arrow,
   which is a transition in the transformed RTL code, and the bottom
-  horizontal bar, which means that [rs'] matches the compile-time
-  approximations at [pc'].
+  horizontal bar, which means that the [match_state] predicate holds
+  between the final states [st1'] and [st2']. *)
 
-  To help express those diagrams, we define the following propositions
-  parameterized by the transition in the original RTL code (left arrow)
-  and summarizing the three other arrows of the diagram.  *)
+Inductive match_stackframes: stackframe -> stackframe -> Prop :=
+   match_stackframe_intro:
+      forall res c sp pc rs f,
+      c = f.(RTL.fn_code) ->
+      (forall v, regs_match_approx ge (analyze f)!!pc (rs#res <- v)) ->
+    match_stackframes
+        (Stackframe res c sp pc rs)
+        (Stackframe res (transf_code (analyze f) c) sp pc rs).
 
-Definition exec_instr_prop
-        (c: code) (sp: val)
-        (pc: node) (rs: regset) (m: mem) (t: trace)
-        (pc': node) (rs': regset) (m': mem) : Prop :=
-  exec_instr tge c sp pc rs m t pc' rs' m' /\
-  forall f approxs
-         (CF: c = f.(RTL.fn_code))
-         (ANL: analyze f = Some approxs)
-         (MATCH: regs_match_approx ge approxs!!pc rs),
-  exec_instr tge (transf_code approxs c) sp pc rs m t pc' rs' m'.
-
-Definition exec_instrs_prop
-        (c: code) (sp: val)
-        (pc: node) (rs: regset) (m: mem) (t: trace)
-        (pc': node) (rs': regset) (m': mem) : Prop :=
-  exec_instrs tge c sp pc rs m t pc' rs' m' /\
-  forall f approxs
-         (CF: c = f.(RTL.fn_code))
-         (ANL: analyze f = Some approxs)
-         (MATCH: regs_match_approx ge approxs!!pc rs),
-  exec_instrs tge (transf_code approxs c) sp pc rs m t pc' rs' m'.
-
-Definition exec_function_prop
-        (f: RTL.fundef) (args: list val) (m: mem) (t: trace)
-        (res: val) (m': mem) : Prop :=
-  exec_function tge (transf_fundef f) args m t res m'.
+Inductive match_states: state -> state -> Prop :=
+  | match_states_intro:
+      forall s c sp pc rs m f s'
+           (CF: c = f.(RTL.fn_code))
+           (MATCH: regs_match_approx ge (analyze f)!!pc rs)
+           (STACKS: list_forall2 match_stackframes s s'),
+      match_states (State s c sp pc rs m)
+                   (State s' (transf_code (analyze f) c) sp pc rs m)
+  | match_states_call:
+      forall s f args m s',
+      list_forall2 match_stackframes s s' ->
+      match_states (Callstate s f args m)
+                   (Callstate s' (transf_fundef f) args m)
+  | match_states_return:
+      forall s s' v m,
+      list_forall2 match_stackframes s s' ->
+      match_states (Returnstate s v m)
+                   (Returnstate s' v m).
 
 Ltac TransfInstr :=
   match goal with
-  | H1: (PTree.get ?pc ?c = Some ?instr),
-    H2: (analyze ?f = Some ?approxs) |- _ =>
-      cut ((transf_code approxs c)!pc = Some(transf_instr approxs!!pc instr));
+  | H1: (PTree.get ?pc ?c = Some ?instr), f: function |- _ =>
+      cut ((transf_code (analyze f) c)!pc = Some(transf_instr (analyze f)!!pc instr));
       [ simpl
       | unfold transf_code; rewrite PTree.gmap; 
         unfold option_map; rewrite H1; reflexivity ]
   end.
 
-(** The predicates above serve as induction hypotheses in the proof of
-  simulation, which proceeds by induction over the
-  evaluation derivation of the original code. *)
+(** The proof of simulation proceeds by case analysis on the transition
+  taken in the source code. *)
 
-Lemma transf_funct_correct:
-  forall f args m t res m',
-  exec_function ge f args m t res m' ->
-  exec_function_prop f args m t res m'.
+Lemma transf_step_correct:
+  forall s1 t s2,
+  step ge s1 t s2 ->
+  forall s1' (MS: match_states s1 s1'),
+  exists s2', step tge s1' t s2' /\ match_states s2 s2'.
 Proof.
-  apply (exec_function_ind_3 ge
-          exec_instr_prop exec_instrs_prop exec_function_prop);
-  intros; red.
+  induction 1; intros; inv MS.
+
   (* Inop *)
-  split; [idtac| intros; TransfInstr].
-  apply exec_Inop; auto.
-  intros; apply exec_Inop; auto.
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m); split.
+  TransfInstr; intro. eapply exec_Inop; eauto.
+  econstructor; eauto.
+  eapply analyze_correct_1 with (pc := pc); eauto.
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. auto.
+
   (* Iop *)
-  split; [idtac| intros; TransfInstr].
-  apply exec_Iop with op args. auto. 
-  rewrite (eval_operation_preserved symbols_preserved). auto.
-  caseEq (op_strength_reduction approxs!!pc op args);
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- v) m); split.
+  TransfInstr. caseEq (op_strength_reduction (analyze f)!!pc op args);
   intros op' args' OSR.
-  assert (eval_operation tge sp op' rs##args' = Some v).
+  assert (eval_operation tge sp op' rs##args' m = Some v).
     rewrite (eval_operation_preserved symbols_preserved). 
-    generalize (op_strength_reduction_correct ge approxs!!pc sp rs
-                  MATCH op args v).
+    generalize (op_strength_reduction_correct ge (analyze f)!!pc sp rs
+                  MATCH op args m v).
     rewrite OSR; simpl. auto.
   generalize (eval_static_operation_correct ge op sp
-               (approx_regs args approxs!!pc) rs##args v
+               (approx_regs args (analyze f)!!pc) rs##args m v
                (approx_regs_val_list _ _ _ args MATCH) H0).
-  case (eval_static_operation op (approx_regs args approxs!!pc)); intros;
-  simpl in H1;
+  case (eval_static_operation op (approx_regs args (analyze f)!!pc)); intros;
+  simpl in H2;
   eapply exec_Iop; eauto; simpl.
-  simpl in H2; congruence.
-  simpl in H2; congruence.
+  congruence.
+  congruence.
   elim H2; intros b [A B]. rewrite symbols_preserved. 
   rewrite A; rewrite B; auto.
+  econstructor; eauto. 
+  eapply analyze_correct_1 with (pc := pc); eauto.
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  apply regs_match_approx_update; auto. 
+  eapply eval_static_operation_correct; eauto.
+  apply approx_regs_val_list; auto.
+
   (* Iload *)
-  split; [idtac| intros; TransfInstr].
-  eapply exec_Iload; eauto. 
-  rewrite (eval_addressing_preserved symbols_preserved). auto.
-  caseEq (addr_strength_reduction approxs!!pc addr args);
+  caseEq (addr_strength_reduction (analyze f)!!pc addr args);
   intros addr' args' ASR.
   assert (eval_addressing tge sp addr' rs##args' = Some a).
     rewrite (eval_addressing_preserved symbols_preserved). 
-    generalize (addr_strength_reduction_correct ge approxs!!pc sp rs
+    generalize (addr_strength_reduction_correct ge (analyze f)!!pc sp rs
                   MATCH addr args).
     rewrite ASR; simpl. congruence. 
-  intro. eapply exec_Iload; eauto. 
+  TransfInstr. rewrite ASR. intro.
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#dst <- v) m); split.
+  eapply exec_Iload; eauto.
+  econstructor; eauto. 
+  apply analyze_correct_1 with pc; auto. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  apply regs_match_approx_update; auto. simpl; auto.
+
   (* Istore *)
-  split; [idtac| intros; TransfInstr].
-  eapply exec_Istore; eauto.
-  rewrite (eval_addressing_preserved symbols_preserved). auto.
-  caseEq (addr_strength_reduction approxs!!pc addr args);
+  caseEq (addr_strength_reduction (analyze f)!!pc addr args);
   intros addr' args' ASR.
   assert (eval_addressing tge sp addr' rs##args' = Some a).
     rewrite (eval_addressing_preserved symbols_preserved). 
-    generalize (addr_strength_reduction_correct ge approxs!!pc sp rs
+    generalize (addr_strength_reduction_correct ge (analyze f)!!pc sp rs
                   MATCH addr args).
-    rewrite ASR; simpl. congruence.
-  intro. eapply exec_Istore; eauto. 
+    rewrite ASR; simpl. congruence. 
+  TransfInstr. rewrite ASR. intro.
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m'); split.
+  eapply exec_Istore; eauto.
+  econstructor; eauto. 
+  apply analyze_correct_1 with pc; auto. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. auto. 
+
   (* Icall *)
-  assert (find_function tge ros rs = Some (transf_fundef f)).
-  generalize H0; unfold find_function; destruct ros.
-  apply functions_translated. 
-  rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
-  apply function_ptr_translated. congruence.
-  assert (funsig (transf_fundef f) = sig).
-    generalize (sig_translated f). congruence.
-  split; [idtac| intros; TransfInstr].
-  eapply exec_Icall; eauto.
-  set (ros' :=
-     match ros with
-     | inl r =>
-         match D.get r approxs !! pc with
-         | Novalue => ros
-         | Unknown => ros
-         | I _ => ros
-         | F _ => ros
-         | S symb ofs => if Int.eq ofs Int.zero then inr reg symb else ros
-         end
-     | inr _ => ros
-     end).
-  intros; eapply exec_Icall; eauto. 
-  unfold ros'; destruct ros; auto.
-  caseEq (D.get r approxs!!pc); intros; auto.
-  generalize (Int.eq_spec i0 Int.zero); case (Int.eq i0 Int.zero); intros; auto.
-  generalize (MATCH r). rewrite H7. intros [b [A B]].
-  rewrite <- symbols_preserved in A. 
-  generalize H4. simpl. rewrite A. rewrite B. subst i0. 
-  rewrite Genv.find_funct_find_funct_ptr. auto.
+  exploit transf_ros_correct; eauto. intro FIND'.
+  TransfInstr; intro.
+  econstructor; split.
+  eapply exec_Icall; eauto. apply sig_function_translated; auto.
+  constructor; auto. constructor; auto.
+  econstructor; eauto. 
+  intros. apply analyze_correct_1 with pc; auto.
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H.
+  apply regs_match_approx_update; auto. simpl. auto.
+
+  (* Itailcall *)
+  exploit transf_ros_correct; eauto. intros FIND'.
+  TransfInstr; intro.
+  econstructor; split.
+  eapply exec_Itailcall; eauto. apply sig_function_translated; auto.
+  constructor; auto. 
 
   (* Ialloc *)
-  split; [idtac|intros; TransfInstr].
-  eapply exec_Ialloc; eauto. 
-  intros. eapply exec_Ialloc; eauto. 
+  TransfInstr; intro.
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- (Vptr b Int.zero)) m'); split.
+  eapply exec_Ialloc; eauto.
+  econstructor; eauto.
+  apply analyze_correct_1 with pc; auto. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H. 
+  apply regs_match_approx_update; auto. simpl; auto.
 
   (* Icond, true *)
-  split; [idtac| intros; TransfInstr].
-  eapply exec_Icond_true; eauto.
-  caseEq (cond_strength_reduction approxs!!pc cond args);
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp ifso rs m); split. 
+  caseEq (cond_strength_reduction (analyze f)!!pc cond args);
   intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' = Some true).
+  assert (eval_condition cond' rs##args' m = Some true).
     generalize (cond_strength_reduction_correct
-                  ge approxs!!pc rs MATCH cond args).
+                  ge (analyze f)!!pc rs MATCH cond args m).
     rewrite CSR.  intro. congruence.
-  caseEq (eval_static_condition cond (approx_regs args approxs!!pc)).
+  TransfInstr. rewrite CSR. 
+  caseEq (eval_static_condition cond (approx_regs args (analyze f)!!pc)).
   intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ _
+  generalize (eval_static_condition_correct ge cond _ _ m _
                (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
   replace b with true. intro; eapply exec_Inop; eauto. congruence.
-  intros. eapply exec_Icond_true; eauto. 
+  intros. eapply exec_Icond_true; eauto.
+  econstructor; eauto.
+  apply analyze_correct_1 with pc; auto. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H; auto.
 
   (* Icond, false *)
-  split; [idtac| intros; TransfInstr].
-  eapply exec_Icond_false; eauto.
-  caseEq (cond_strength_reduction approxs!!pc cond args);
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp ifnot rs m); split. 
+  caseEq (cond_strength_reduction (analyze f)!!pc cond args);
   intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' = Some false).
+  assert (eval_condition cond' rs##args' m = Some false).
     generalize (cond_strength_reduction_correct
-                  ge approxs!!pc rs MATCH cond args).
+                  ge (analyze f)!!pc rs MATCH cond args m).
     rewrite CSR.  intro. congruence.
-  caseEq (eval_static_condition cond (approx_regs args approxs!!pc)).
+  TransfInstr. rewrite CSR. 
+  caseEq (eval_static_condition cond (approx_regs args (analyze f)!!pc)).
   intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ _
+  generalize (eval_static_condition_correct ge cond _ _ m _
                (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
   replace b with false. intro; eapply exec_Inop; eauto. congruence.
-  intros. eapply exec_Icond_false; eauto. 
+  intros. eapply exec_Icond_false; eauto.
+  econstructor; eauto.
+  apply analyze_correct_1 with pc; auto. 
+  unfold successors; rewrite H; auto with coqlib.
+  unfold transfer; rewrite H; auto.
 
-  (* refl *)
-  split. apply exec_refl. intros. apply exec_refl.
-  (* one *)
-  elim H0; intros.
-  split. apply exec_one; auto.
-  intros. apply exec_one. eapply H2; eauto.
-  (* trans *)
-  elim H0; intros. elim H2; intros.
-  split.
-  apply exec_trans with t1 pc2 rs2 m2 t2; auto.
-  intros; apply exec_trans with t1 pc2 rs2 m2 t2.
-  eapply H5; eauto. eapply H7; eauto.
-  eapply analyze_correct_2; eauto. auto.
+  (* Ireturn *)
+  exists (Returnstate s' (regmap_optget or Vundef rs) (free m stk)); split.
+  eapply exec_Ireturn; eauto. TransfInstr; auto.
+  constructor; auto.
 
   (* internal function *)
-  elim H1; intros.
-  simpl. unfold transf_function. 
-  caseEq (analyze f). 
-  intros approxs ANL.
-  eapply exec_funct_internal; simpl; eauto. 
-  eapply H5. reflexivity. auto. 
+  simpl. unfold transf_function.
+  econstructor; split.
+  eapply exec_function_internal; simpl; eauto.
+  simpl. econstructor; eauto.
   apply analyze_correct_3; auto.
-  TransfInstr; auto.
-  intros. eapply exec_funct_internal; eauto.
+
   (* external function *)
-  unfold transf_function; simpl. apply exec_funct_external; auto.
+  simpl. econstructor; split.
+  eapply exec_function_external; eauto.
+  constructor; auto.
+
+  (* return *)
+  inv H3. inv H1. 
+  econstructor; split.
+  eapply exec_return; eauto. 
+  econstructor; eauto. 
+Qed.
+
+Lemma transf_initial_states:
+  forall st1, initial_state prog st1 ->
+  exists st2, initial_state tprog st2 /\ match_states st1 st2.
+Proof.
+  intros. inversion H.
+  exploit function_ptr_translated; eauto. intro FIND.
+  exists (Callstate nil (transf_fundef f) nil (Genv.init_mem tprog)); split.
+  econstructor; eauto.
+  replace (prog_main tprog) with (prog_main prog).
+  rewrite symbols_preserved. eauto.
+  reflexivity.
+  rewrite <- H2. apply sig_function_translated.
+  replace (Genv.init_mem tprog) with (Genv.init_mem prog).
+  constructor. constructor. auto.
+  symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf. 
+Qed.
+
+Lemma transf_final_states:
+  forall st1 st2 r, 
+  match_states st1 st2 -> final_state st1 r -> final_state st2 r.
+Proof.
+  intros. inv H0. inv H. inv H4. constructor. 
 Qed.
 
 (** The preservation of the observable behavior of the program then
-  follows. *)
+  follows, using the generic preservation theorem
+  [Smallstep.simulation_step_preservation]. *)
 
 Theorem transf_program_correct:
-  forall (t: trace) (r: val),
-  exec_program prog t r -> exec_program tprog t r.
+  forall (beh: program_behavior),
+  exec_program prog beh -> exec_program tprog beh.
 Proof.
-  intros t r [b [f [m [SYMB [FIND [SIG EXEC]]]]]].
-  red. exists b. exists (transf_fundef f). exists m. 
-  split. change (prog_main tprog) with (prog_main prog).
-  rewrite symbols_preserved. auto.
-  split. apply function_ptr_translated; auto.
-  split. generalize (sig_translated f). congruence.
-  apply transf_funct_correct. 
-  unfold tprog, transf_program. rewrite Genv.init_mem_transf. 
-  exact EXEC.
+  unfold exec_program; intros.
+  eapply simulation_step_preservation; eauto.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  exact transf_step_correct. 
 Qed.
 
 End PRESERVATION.

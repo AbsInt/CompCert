@@ -1,19 +1,14 @@
 Require Import Coqlib.
+Require Import Errors.
 Require Import Integers.
 Require Import Floats.
 Require Import AST.
 Require Import Csyntax.
+Require Import Cminor.
 Require Import Csharpminor.
 
-(** The error monad *)
-
-Definition bind (A B: Set) (f: option A) (g: A -> option B) :=
-  match f with None => None | Some x => g x end.
-
-Implicit Arguments bind [A B].
-
-Notation "'do' X <- A ; B" := (bind A (fun X => B))
-   (at level 200, X ident, A at level 100, B at level 200).
+Open Local Scope string_scope.
+Open Local Scope error_monad_scope.
 
 (** ** Operations on C types *)
 
@@ -22,28 +17,28 @@ Definition signature_of_function (f: Csyntax.function) : signature :=
    (typlist_of_typelist (type_of_params (Csyntax.fn_params f)))
    (opttyp_of_type (Csyntax.fn_return f)).
 
-Definition chunk_of_type (ty: type): option memory_chunk :=
+Definition chunk_of_type (ty: type): res memory_chunk :=
   match access_mode ty with
-  | By_value chunk => Some chunk
-  | _ => None
+  | By_value chunk => OK chunk
+  | _ => Error (msg "Cshmgen.chunk_of_type")
   end.
 
-Definition var_kind_of_type (ty: type): option var_kind :=
+Definition var_kind_of_type (ty: type): res var_kind :=
   match ty with
-  | Tint I8 Signed => Some(Vscalar Mint8signed)
-  | Tint I8 Unsigned => Some(Vscalar Mint8unsigned)
-  | Tint I16 Signed => Some(Vscalar Mint16signed)
-  | Tint I16 Unsigned => Some(Vscalar Mint16unsigned)
-  | Tint I32 _ => Some(Vscalar Mint32)
-  | Tfloat F32 => Some(Vscalar Mfloat32)
-  | Tfloat F64 => Some(Vscalar Mfloat64)
-  | Tvoid => None
-  | Tpointer _ => Some(Vscalar Mint32)
-  | Tarray _ _ => Some(Varray (Csyntax.sizeof ty))
-  | Tfunction _ _ => None
-  | Tstruct _ fList => Some(Varray (Csyntax.sizeof ty))
-  | Tunion _ fList => Some(Varray (Csyntax.sizeof ty))
-  | Tcomp_ptr _ => Some(Vscalar Mint32)
+  | Tint I8 Signed => OK(Vscalar Mint8signed)
+  | Tint I8 Unsigned => OK(Vscalar Mint8unsigned)
+  | Tint I16 Signed => OK(Vscalar Mint16signed)
+  | Tint I16 Unsigned => OK(Vscalar Mint16unsigned)
+  | Tint I32 _ => OK(Vscalar Mint32)
+  | Tfloat F32 => OK(Vscalar Mfloat32)
+  | Tfloat F64 => OK(Vscalar Mfloat64)
+  | Tvoid => Error (msg "Cshmgen.var_kind_of_type(void)")
+  | Tpointer _ => OK(Vscalar Mint32)
+  | Tarray _ _ => OK(Varray (Csyntax.sizeof ty))
+  | Tfunction _ _ => Error (msg "Cshmgen.var_kind_of_type(function)")
+  | Tstruct _ fList => OK(Varray (Csyntax.sizeof ty))
+  | Tunion _ fList => OK(Varray (Csyntax.sizeof ty))
+  | Tcomp_ptr _ => OK(Vscalar Mint32)
 end.
   
 (** ** Csharpminor constructors *)
@@ -60,19 +55,14 @@ end.
    denoting a case where the operation is not defined at the given types.
 *)
 
-Definition make_intconst (n: int) :=  Eop (Ointconst n) Enil.
+Definition make_intconst (n: int) :=  Econst (Ointconst n).
 
-Definition make_floatconst (f: float) :=  Eop (Ofloatconst f) Enil.
-
-Definition make_unop (op: operation) (e: expr) :=  Eop op (Econs e Enil).
-
-Definition make_binop (op: operation) (e1 e2: expr) :=
-    Eop op (Econs e1 (Econs e2 Enil)).
+Definition make_floatconst (f: float) :=  Econst (Ofloatconst f).
 
 Definition make_floatofint (e: expr) (sg: signedness) :=
   match sg with
-  | Signed => make_unop Ofloatofint e
-  | Unsigned => make_unop Ofloatofintu e
+  | Signed => Eunop Ofloatofint e
+  | Unsigned => Eunop Ofloatofintu e
   end.
 
 (* [make_boolean e ty] returns a Csharpminor expression that evaluates
@@ -84,98 +74,98 @@ Definition make_floatofint (e: expr) (sg: signedness) :=
 *)
 Definition make_boolean (e: expr) (ty: type) :=
   match ty with
-  | Tfloat _ => make_binop (Ocmpf Cne) e (make_floatconst Float.zero)
+  | Tfloat _ => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
   | _ => e
   end.
 
 Definition make_neg (e: expr) (ty: type) :=
   match ty with
-  | Tint _ _ => Some (make_binop Osub (make_intconst Int.zero) e)
-  | Tfloat _ => Some (make_unop Onegf e)
-  | _ => None
+  | Tint _ _ => OK (Eunop Onegint e)
+  | Tfloat _ => OK (Eunop Onegf e)
+  | _ => Error (msg "Cshmgen.make_neg")
   end.
 
 Definition make_notbool (e: expr) (ty: type) :=
   match ty with
-  | Tfloat _ => make_binop (Ocmpf Ceq) e (make_floatconst Float.zero)
-  | _ => make_unop Onotbool e
+  | Tfloat _ => Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero)
+  | _ => Eunop Onotbool e
   end.
 
 Definition make_notint (e: expr) (ty: type) :=
-  make_unop Onotint e.
+  Eunop Onotint e.
 
 Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
-  | add_case_ii => Some (make_binop Oadd e1 e2)
-  | add_case_ff => Some (make_binop Oaddf e1 e2)
+  | add_case_ii => OK (Ebinop Oadd e1 e2)
+  | add_case_ff => OK (Ebinop Oaddf e1 e2)
   | add_case_pi ty =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
-      Some (make_binop Oadd e1 (make_binop Omul n e2))
-  | add_default => None
+      OK (Ebinop Oadd e1 (Ebinop Omul n e2))
+  | add_default => Error (msg "Cshmgen.make_add")
   end.
 
 Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
-  | sub_case_ii => Some (make_binop Osub e1 e2)
-  | sub_case_ff => Some (make_binop Osubf e1 e2)
+  | sub_case_ii => OK (Ebinop Osub e1 e2)
+  | sub_case_ff => OK (Ebinop Osubf e1 e2)
   | sub_case_pi ty =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
-      Some (make_binop Osub e1 (make_binop Omul n e2))
+      OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
-      Some (make_binop Odivu (make_binop Osub e1 e2) n)
-  | sub_default => None
+      OK (Ebinop Odivu (Ebinop Osub e1 e2) n)
+  | sub_default => Error (msg "Cshmgen.make_sub")
   end.
 
 Definition make_mul (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_mul ty1 ty2 with
-  | mul_case_ii => Some (make_binop Omul e1 e2)
-  | mul_case_ff => Some (make_binop Omulf e1 e2)
-  | mul_default => None
+  | mul_case_ii => OK (Ebinop Omul e1 e2)
+  | mul_case_ff => OK (Ebinop Omulf e1 e2)
+  | mul_default => Error (msg "Cshmgen.make_mul")
   end.
 
 Definition make_div (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_div ty1 ty2 with
-  | div_case_I32unsi => Some (make_binop Odivu e1 e2)
-  | div_case_ii => Some (make_binop Odiv e1 e2)
-  | div_case_ff => Some (make_binop Odivf e1 e2)
-  | div_default => None
+  | div_case_I32unsi => OK (Ebinop Odivu e1 e2)
+  | div_case_ii => OK (Ebinop Odiv e1 e2)
+  | div_case_ff => OK (Ebinop Odivf e1 e2)
+  | div_default => Error (msg "Cshmgen.make_div")
   end.
 
 Definition make_mod (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_mod ty1 ty2 with
-  | mod_case_I32unsi => Some (make_binop Omodu e1 e2)
-  | mod_case_ii=> Some (make_binop Omod e1 e2)
-  | mod_default => None
+  | mod_case_I32unsi => OK (Ebinop Omodu e1 e2)
+  | mod_case_ii=> OK (Ebinop Omod e1 e2)
+  | mod_default => Error (msg "Cshmgen.make_mod")
   end.
 
 Definition make_and (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  Some(make_binop Oand e1 e2).
+  OK(Ebinop Oand e1 e2).
 
 Definition make_or (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  Some(make_binop Oor e1 e2).
+  OK(Ebinop Oor e1 e2).
 
 Definition make_xor (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  Some(make_binop Oxor e1 e2).
+  OK(Ebinop Oxor e1 e2).
 
 Definition make_shl (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  Some(make_binop Oshl e1 e2).
+  OK(Ebinop Oshl e1 e2).
 
 Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_shr ty1 ty2 with
-  | shr_case_I32unsi => Some (make_binop Oshru e1 e2)
-  | shr_case_ii=> Some (make_binop Oshr e1 e2)
-  | shr_default => None
+  | shr_case_I32unsi => OK (Ebinop Oshru e1 e2)
+  | shr_case_ii=> OK (Ebinop Oshr e1 e2)
+  | shr_default => Error (msg "Cshmgen.make_shr")
   end.
 
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
-  | cmp_case_I32unsi => Some (make_binop (Ocmpu c) e1 e2)
-  | cmp_case_ii => Some (make_binop (Ocmp c) e1 e2)
-  | cmp_case_ff => Some (make_binop (Ocmpf c) e1 e2)
-  | cmp_case_pi => Some (make_binop (Ocmp c) e1 e2)
-  | cmp_case_pp => Some (make_binop (Ocmp c) e1 e2)
-  | cmp_default => None
+  | cmp_case_I32unsi => OK (Ebinop (Ocmpu c) e1 e2)
+  | cmp_case_ii => OK (Ebinop (Ocmp c) e1 e2)
+  | cmp_case_ff => OK (Ebinop (Ocmpf c) e1 e2)
+  | cmp_case_pi => OK (Ebinop (Ocmp c) e1 e2)
+  | cmp_case_pp => OK (Ebinop (Ocmp c) e1 e2)
+  | cmp_default => Error (msg "Cshmgen.make_shr")
   end.
 
 Definition make_andbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
@@ -206,17 +196,17 @@ Definition make_orbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 Definition make_cast1 (from to: type) (e: expr) :=
   match from, to with
   | Tint _ uns, Tfloat _ => make_floatofint e uns
-  | Tfloat _, Tint _ _ => make_unop Ointoffloat e
+  | Tfloat _, Tint _ _ => Eunop Ointoffloat e
   | _, _ => e
   end.
 
 Definition make_cast2 (from to: type) (e: expr) :=
   match to with
-  | Tint I8 Signed => make_unop Ocast8signed e  
-  | Tint I8 Unsigned => make_unop Ocast8unsigned e  
-  | Tint I16 Signed => make_unop Ocast16signed e  
-  | Tint I16 Unsigned => make_unop Ocast16unsigned e  
-  | Tfloat F32 => make_unop Osingleoffloat e
+  | Tint I8 Signed => Eunop Ocast8signed e  
+  | Tint I8 Unsigned => Eunop Ocast8unsigned e  
+  | Tint I16 Signed => Eunop Ocast16signed e  
+  | Tint I16 Unsigned => Eunop Ocast16unsigned e  
+  | Tfloat F32 => Eunop Osingleoffloat e
   | _ => e
   end.
 
@@ -231,9 +221,9 @@ Definition make_cast (from to: type) (e: expr) :=
 
 Definition make_load (addr: expr) (ty_res: type) :=
   match (access_mode ty_res) with
-  | By_value chunk => Some (Eload chunk addr)
-  | By_reference => Some addr
-  | By_nothing => None
+  | By_value chunk => OK (Eload chunk addr)
+  | By_reference => OK addr
+  | By_nothing => Error (msg "Cshmgen.make_load")
   end.
 
 (* [make_store addr ty_res rhs ty_rhs] stores the value of the
@@ -243,8 +233,8 @@ Definition make_load (addr: expr) (ty_res: type) :=
 
 Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
   match access_mode ty with
-  | By_value chunk => Some (Sstore chunk addr rhs)
-  | _ => None
+  | By_value chunk => OK (Sstore chunk addr rhs)
+  | _ => Error (msg "Cshmgen.make_store")
   end.
 
 (** ** Reading and writing variables *)
@@ -258,9 +248,9 @@ Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
 
 Definition var_get (id: ident) (ty: type) :=
   match access_mode ty with
-  | By_value chunk => Some (Evar id)
-  | By_reference => Some (Eaddrof id)
-  | _ => None
+  | By_value chunk => OK (Evar id)
+  | By_reference => OK (Eaddrof id)
+  | _ => Error (MSG "Cshmgen.var_get " :: CTX id :: nil)
   end.
 
 (* [var_set id ty rhs] stores the value of the Csharpminor
@@ -269,21 +259,22 @@ Definition var_get (id: ident) (ty: type) :=
 
 Definition var_set (id: ident) (ty: type) (rhs: expr) :=
   match access_mode ty with
-  | By_value chunk => Some (Sassign id rhs)
-  | _ => None
+  | By_value chunk => OK (Sassign id rhs)
+  | _ => Error (MSG "Cshmgen.var_set " :: CTX id :: nil)
   end.
 
 (** ** Translation of operators *)
 
-Definition transl_unop (op: unary_operation) (a: expr) (ta: type) : option expr :=
+Definition transl_unop (op: Csyntax.unary_operation) (a: expr) (ta: type) : res expr :=
   match op with
-  | Csyntax.Onotbool => Some(make_notbool a ta)
-  | Csyntax.Onotint => Some(make_notint a ta)
+  | Csyntax.Onotbool => OK(make_notbool a ta)
+  | Csyntax.Onotint => OK(make_notint a ta)
   | Csyntax.Oneg => make_neg a ta
   end.
 
-Definition transl_binop (op: binary_operation) (a: expr) (ta: type)
-                                  (b: expr) (tb: type) : option expr :=
+Definition transl_binop (op: Csyntax.binary_operation)
+                        (a: expr) (ta: type)
+                        (b: expr) (tb: type) : res expr :=
   match op with
   | Csyntax.Oadd => make_add a ta b tb
   | Csyntax.Osub => make_sub a ta b tb
@@ -315,12 +306,12 @@ Definition transl_binop (op: binary_operation) (a: expr) (ta: type)
    a || b    --->    a ? 1 : (b ? 1 : 0)
 *)
 
-Fixpoint transl_expr (a: Csyntax.expr) {struct a} : option expr :=
+Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
   match a with
   | Expr (Csyntax.Econst_int n) _ =>
-      Some(make_intconst n)
+      OK(make_intconst n)
   | Expr (Csyntax.Econst_float n) _ =>
-      Some(make_floatconst n)
+      OK(make_floatconst n)
   | Expr (Csyntax.Evar id) ty =>
       var_get id ty
   | Expr (Csyntax.Ederef b) _ =>
@@ -337,7 +328,7 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : option expr :=
       transl_binop op tb (typeof b) tc (typeof c)
   | Expr (Csyntax.Ecast ty b) _ =>
       do tb <- transl_expr b;
-      Some (make_cast (typeof b) ty tb)
+      OK (make_cast (typeof b) ty tb)
   | Expr (Csyntax.Eindex b c) ty =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
@@ -348,31 +339,33 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : option expr :=
       | fun_case_f args res =>
           do tb <- transl_expr b;
           do tcl <- transl_exprlist cl;
-          Some(Ecall (signature_of_type args res) tb tcl)
-      | _ => None
+          OK(Ecall (signature_of_type args res) tb tcl)
+      | _ =>
+          Error(msg "Cshmgen.transl_expr(call)")
       end 
   | Expr (Csyntax.Eandbool b c) _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
-      Some(make_andbool tb (typeof b) tc (typeof c))
+      OK(make_andbool tb (typeof b) tc (typeof c))
   | Expr (Csyntax.Eorbool b c) _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
-      Some(make_orbool tb (typeof b) tc (typeof c))
+      OK(make_orbool tb (typeof b) tc (typeof c))
   | Expr (Csyntax.Esizeof ty) _ =>
-      Some(make_intconst (Int.repr (Csyntax.sizeof ty)))
+      OK(make_intconst (Int.repr (Csyntax.sizeof ty)))
   | Expr (Csyntax.Efield b i) ty => 
       match typeof b with
       | Tstruct _ fld =>
           do tb <- transl_lvalue b;
           do ofs <- field_offset i fld;
           make_load
-            (make_binop Oadd tb (make_intconst (Int.repr ofs)))
+            (Ebinop Oadd tb (make_intconst (Int.repr ofs)))
             ty
       | Tunion _ fld =>
           do tb <- transl_lvalue b;
           make_load tb ty
-      | _ => None
+      | _ =>
+          Error(msg "Cshmgen.transl_expr(field)")
       end
   end
 
@@ -381,10 +374,10 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : option expr :=
    where the value of [a] is stored.
 *)
 
-with transl_lvalue (a: Csyntax.expr) {struct a} : option expr :=
+with transl_lvalue (a: Csyntax.expr) {struct a} : res expr :=
   match a with
   | Expr (Csyntax.Evar id) _ =>
-      Some (Eaddrof id)
+      OK (Eaddrof id)
   | Expr (Csyntax.Ederef b) _ =>
       transl_expr b
   | Expr (Csyntax.Eindex b c) _ =>
@@ -396,25 +389,27 @@ with transl_lvalue (a: Csyntax.expr) {struct a} : option expr :=
       | Tstruct _ fld =>
           do tb <- transl_lvalue b;
           do ofs <- field_offset i fld;
-          Some (make_binop Oadd tb (make_intconst (Int.repr ofs)))
+          OK (Ebinop Oadd tb (make_intconst (Int.repr ofs)))
       | Tunion _ fld =>
           transl_lvalue b
-      | _ => None
+      | _ =>
+          Error(msg "Cshmgen.transl_lvalue(field)")
       end
-  | _ => None
+  | _ => 
+      Error(msg "Cshmgen.transl_lvalue")
   end
 
 (* [transl_exprlist al] returns a list of Csharpminor expressions
    that compute the values of the list [al] of Csyntax expressions.
    Used for function applications. *)
 
-with transl_exprlist (al: Csyntax.exprlist): option exprlist :=
+with transl_exprlist (al: Csyntax.exprlist): res exprlist :=
   match al with
-  | Csyntax.Enil => Some Enil
+  | Csyntax.Enil => OK Enil
   | Csyntax.Econs a1 a2 =>
       do ta1 <- transl_expr a1;
       do ta2 <- transl_exprlist a2;
-      Some (Econs ta1 ta2)
+      OK (Econs ta1 ta2)
   end.
 
 (** ** Translation of statements *)
@@ -431,9 +426,9 @@ Definition is_variable (e: Csyntax.expr) : option ident :=
    value of the CabsCoq expression [e] and performs an [exit 0] if [e]
    evaluates to false.
 *)
-Definition exit_if_false (e: Csyntax.expr) : option stmt :=
+Definition exit_if_false (e: Csyntax.expr) : res stmt :=
   do te <- transl_expr e;
-  Some(Sifthenelse
+  OK(Sifthenelse
         (make_boolean te (typeof e))
         Sskip
         (Sexit 0%nat)).
@@ -497,13 +492,13 @@ Fixpoint switch_table (sl: labeled_statements) (k: nat) {struct sl} : list (int 
   | LScase ni _ rem => (ni, k) :: switch_table rem (k+1)
   end.
 
-Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : option stmt :=
+Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : res stmt :=
   match s with
   | Csyntax.Sskip =>
-      Some Sskip
+      OK Sskip
   | Csyntax.Sexpr e =>
       do te <- transl_expr e;
-      Some (Sexpr te)
+      OK (Sexpr te)
   | Csyntax.Sassign b c =>
       match (is_variable b) with
       | Some id =>
@@ -517,35 +512,35 @@ Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : o
   | Csyntax.Ssequence s1 s2 =>
       do ts1 <- transl_statement nbrk ncnt s1;
       do ts2 <- transl_statement nbrk ncnt s2;
-      Some (Sseq ts1 ts2)
+      OK (Sseq ts1 ts2)
   | Csyntax.Sifthenelse e s1 s2 =>
       do te <- transl_expr e;
       do ts1 <- transl_statement nbrk ncnt s1;
       do ts2 <- transl_statement nbrk ncnt s2;
-      Some (Sifthenelse (make_boolean te (typeof e)) ts1 ts2)
+      OK (Sifthenelse (make_boolean te (typeof e)) ts1 ts2)
   | Csyntax.Swhile e s1 =>
       do te <- exit_if_false e;
       do ts1 <- transl_statement 1%nat 0%nat s1;
-      Some (Sblock (Sloop (Sseq te (Sblock ts1))))
+      OK (Sblock (Sloop (Sseq te (Sblock ts1))))
   | Csyntax.Sdowhile e s1 =>
       do te <- exit_if_false e;
       do ts1 <- transl_statement 1%nat 0%nat s1;
-      Some (Sblock (Sloop (Sseq (Sblock ts1) te)))
+      OK (Sblock (Sloop (Sseq (Sblock ts1) te)))
   | Csyntax.Sfor e1 e2 e3 s1 =>
       do te1 <- transl_statement nbrk ncnt e1;
       do te2 <- exit_if_false e2;
       do te3 <- transl_statement nbrk ncnt e3;
       do ts1 <- transl_statement 1%nat 0%nat s1;
-      Some (Sseq te1 (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3)))))
+      OK (Sseq te1 (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3)))))
   | Csyntax.Sbreak =>
-      Some (Sexit nbrk)
+      OK (Sexit nbrk)
   | Csyntax.Scontinue =>
-      Some (Sexit ncnt)
+      OK (Sexit ncnt)
   | Csyntax.Sreturn (Some e) =>
       do te <- transl_expr e;
-      Some (Sreturn (Some te))
+      OK (Sreturn (Some te))
   | Csyntax.Sreturn None =>
-      Some (Sreturn None)
+      OK (Sreturn None)
   | Csyntax.Sswitch e sl =>
       let cases := switch_table sl 0 in
       let ncases := List.length cases in
@@ -554,11 +549,11 @@ Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : o
   end
 
 with transl_lblstmts (nbrk ncnt: nat) (sl: labeled_statements) (body: stmt)
-                     {struct sl}: option stmt :=
+                     {struct sl}: res stmt :=
   match sl with
   | LSdefault s =>
       do ts <- transl_statement nbrk ncnt s;
-      Some (Sblock (Sseq body ts))
+      OK (Sblock (Sseq body ts))
   | LScase _ s rem =>
       do ts <- transl_statement nbrk ncnt s;
       transl_lblstmts (pred nbrk) (pred ncnt) rem (Sblock (Sseq body ts))
@@ -566,28 +561,31 @@ with transl_lblstmts (nbrk ncnt: nat) (sl: labeled_statements) (body: stmt)
 
 (*** Translation of functions *)
 
-Definition transl_params (l: list (ident * type)) :=
-   AST.map_partial chunk_of_type l.
-Definition transl_vars (l: list (ident * type)) :=
-   AST.map_partial var_kind_of_type l.
+Definition prefix_var_name (id: ident) : errmsg :=
+  MSG "In local variable " :: CTX id :: MSG ":\n" :: nil.
 
-Definition transl_function (f: Csyntax.function) : option function :=
+Definition transl_params (l: list (ident * type)) :=
+   AST.map_partial prefix_var_name chunk_of_type l.
+Definition transl_vars (l: list (ident * type)) :=
+   AST.map_partial prefix_var_name var_kind_of_type l.
+
+Definition transl_function (f: Csyntax.function) : res function :=
   do tparams <- transl_params (Csyntax.fn_params f);
   do tvars <- transl_vars (Csyntax.fn_vars f);
   do tbody <- transl_statement 1%nat 0%nat (Csyntax.fn_body f);
-  Some (mkfunction (signature_of_function f) tparams tvars tbody).
+  OK (mkfunction (signature_of_function f) tparams tvars tbody).
 
-Definition transl_fundef (f: Csyntax.fundef) : option fundef :=
+Definition transl_fundef (f: Csyntax.fundef) : res fundef :=
   match f with
   | Csyntax.Internal g => 
-      do tg <- transl_function g; Some(AST.Internal tg)
+      do tg <- transl_function g; OK(AST.Internal tg)
   | Csyntax.External id args res =>
-      Some(AST.External (external_function id args res))
+      OK(AST.External (external_function id args res))
   end.
 
 (** ** Translation of programs *)
 
 Definition transl_globvar (ty: type) := var_kind_of_type ty.
 
-Definition transl_program (p: Csyntax.program) : option program :=
+Definition transl_program (p: Csyntax.program) : res program :=
   transform_partial_program2 transl_fundef transl_globvar p.

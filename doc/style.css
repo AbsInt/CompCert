@@ -26,7 +26,9 @@ tr { background-color : White }
 # .doc { background-color :#66ff66  }
 .doc { margin-left: -5%; }
 .docright { margin-left: 40%; }
-h1 { margin-left: -10%; text-align: right; }
+div.doc code { color : #008000; font-weight: bold }
+h1.libtitle { text-align: center; }
+h1 { margin-left: -5%; }
 h2 { margin-left: -5%; }
 h3,h4,h5,h6 { margin-left: -3%; }
 hr { margin-left: -10%; margin-right:-10%; }

@@ -325,6 +325,7 @@ Proof.
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
   apply add_interf_call_incl.
+  apply add_prefs_call_incl.
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_interf_op_incl].

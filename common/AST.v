@@ -2,10 +2,13 @@
   the abstract syntax trees of many of the intermediate languages. *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Integers.
 Require Import Floats.
 
 Set Implicit Arguments.
+
+(** * Syntactic elements *)
 
 (** Identifiers (names of local variables, of global symbols and functions,
   etc) are represented by the type [positive] of positive integers. *)
@@ -14,8 +17,9 @@ Definition ident := positive.
 
 Definition ident_eq := peq.
 
-(** The languages are weakly typed, using only two types: [Tint] for
-  integers and pointers, and [Tfloat] for floating-point numbers. *)
+(** The intermediate languages are weakly typed, using only two types:
+  [Tint] for integers and pointers, and [Tfloat] for floating-point
+  numbers. *)
 
 Inductive typ : Set :=
   | Tint : typ
@@ -23,6 +27,9 @@ Inductive typ : Set :=
 
 Definition typesize (ty: typ) : Z :=
   match ty with Tint => 4 | Tfloat => 8 end.
+
+Lemma typesize_pos: forall ty, typesize ty > 0.
+Proof. destruct ty; simpl; omega. Qed.
 
 (** Additionally, function definitions and function calls are annotated
   by function signatures indicating the number and types of arguments,
@@ -82,6 +89,14 @@ Record program (F V: Set) : Set := mkprogram {
   prog_vars: list (ident * list init_data * V)
 }.
 
+Definition prog_funct_names (F V: Set) (p: program F V) : list ident :=
+  map (@fst ident F) p.(prog_funct).
+
+Definition prog_var_names (F V: Set) (p: program F V) : list ident :=
+  map (fun x: ident * list init_data * V => fst(fst x)) p.(prog_vars).
+
+(** * Generic transformations over programs *)
+
 (** We now define a general iterator over programs that applies a given
   code transformation function to all function descriptions and leaves
   the other parts of the program unchanged. *)
@@ -117,48 +132,63 @@ End TRANSF_PROGRAM.
   code transformation function can fail and therefore returns an
   option type. *)
 
+Open Local Scope error_monad_scope.
+Open Local Scope string_scope.
+
 Section MAP_PARTIAL.
 
 Variable A B C: Set.
-Variable f: B -> option C.
+Variable prefix_errmsg: A -> errmsg.
+Variable f: B -> res C.
 
-Fixpoint map_partial (l: list (A * B)) : option (list (A * C)) :=
+Fixpoint map_partial (l: list (A * B)) : res (list (A * C)) :=
   match l with
-  | nil => Some nil
+  | nil => OK nil
   | (a, b) :: rem =>
       match f b with
-      | None => None
-      | Some c =>
-          match map_partial rem with
-          | None => None
-          | Some res => Some ((a, c) :: res)
-          end
+      | Error msg => Error (prefix_errmsg a ++ msg)%list
+      | OK c =>
+          do rem' <- map_partial rem; 
+          OK ((a, c) :: rem')
       end
   end.
 
 Remark In_map_partial:
   forall l l' a c,
-  map_partial l = Some l' ->
+  map_partial l = OK l' ->
   In (a, c) l' ->
-  exists b, In (a, b) l /\ f b = Some c.
+  exists b, In (a, b) l /\ f b = OK c.
 Proof.
   induction l; simpl.
-  intros. inversion H; subst. elim H0.
-  destruct a as [a1 b1]. intros until c.
+  intros. inv H. elim H0.
+  intros until c. destruct a as [a1 b1].
   caseEq (f b1); try congruence.
-  intros c1 EQ1. caseEq (map_partial l); try congruence.
-  intros res EQ2 EQ3 IN. inversion EQ3; clear EQ3; subst l'.
-  elim IN; intro. inversion H; subst. 
-  exists b1; auto.
+  intro c1; intros. monadInv H0. 
+  elim H1; intro. inv H0. exists b1; auto. 
   exploit IHl; eauto. intros [b [P Q]]. exists b; auto.
+Qed.
+
+Remark map_partial_forall2:
+  forall l l',
+  map_partial l = OK l' ->
+  list_forall2
+    (fun (a_b: A * B) (a_c: A * C) =>
+       fst a_b = fst a_c /\ f (snd a_b) = OK (snd a_c))
+    l l'.
+Proof.
+  induction l; simpl.
+  intros. inv H. constructor.
+  intro l'. destruct a as [a b].
+  caseEq (f b). 2: congruence. intro c; intros. monadInv H0.  
+  constructor. simpl. auto. auto. 
 Qed.
 
 End MAP_PARTIAL.
 
 Remark map_partial_total:
-  forall (A B C: Set) (f: B -> C) (l: list (A * B)),
-  map_partial (fun b => Some (f b)) l =
-  Some (List.map (fun a_b => (fst a_b, f (snd a_b))) l).
+  forall (A B C: Set) (prefix: A -> errmsg) (f: B -> C) (l: list (A * B)),
+  map_partial prefix (fun b => OK (f b)) l =
+  OK (List.map (fun a_b => (fst a_b, f (snd a_b))) l).
 Proof.
   induction l; simpl.
   auto.
@@ -166,8 +196,8 @@ Proof.
 Qed.
 
 Remark map_partial_identity:
-  forall (A B: Set) (l: list (A * B)),
-  map_partial (fun b => Some b) l = Some l.
+  forall (A B: Set) (prefix: A -> errmsg) (l: list (A * B)),
+  map_partial prefix (fun b => OK b) l = OK l.
 Proof.
   induction l; simpl.
   auto.
@@ -177,39 +207,39 @@ Qed.
 Section TRANSF_PARTIAL_PROGRAM.
 
 Variable A B V: Set.
-Variable transf_partial: A -> option B.
+Variable transf_partial: A -> res B.
 
-Function transform_partial_program (p: program A V) : option (program B V) :=
-  match map_partial transf_partial p.(prog_funct) with
-  | None => None
-  | Some fl => Some (mkprogram fl p.(prog_main) p.(prog_vars))
-  end.
+Definition prefix_funct_name (id: ident) : errmsg :=
+  MSG "In function " :: CTX id :: MSG ":\n" :: nil.
+
+Definition transform_partial_program (p: program A V) : res (program B V) :=
+  do fl <- map_partial prefix_funct_name transf_partial p.(prog_funct);
+  OK (mkprogram fl p.(prog_main) p.(prog_vars)).
 
 Lemma transform_partial_program_function:
   forall p tp i tf,
-  transform_partial_program p = Some tp ->
+  transform_partial_program p = OK tp ->
   In (i, tf) tp.(prog_funct) ->
-  exists f, In (i, f) p.(prog_funct) /\ transf_partial f = Some tf.
+  exists f, In (i, f) p.(prog_funct) /\ transf_partial f = OK tf.
 Proof.
-  intros. functional inversion H. 
-  apply In_map_partial with fl; auto. 
-  inversion H; subst tp; assumption.
+  intros. monadInv H. simpl in H0.  
+  eapply In_map_partial; eauto.
 Qed.
 
 Lemma transform_partial_program_main:
   forall p tp,
-  transform_partial_program p = Some tp ->
+  transform_partial_program p = OK tp ->
   tp.(prog_main) = p.(prog_main).
 Proof.
-  intros. functional inversion H. reflexivity.
+  intros. monadInv H. reflexivity.
 Qed.
 
 Lemma transform_partial_program_vars:
   forall p tp,
-  transform_partial_program p = Some tp ->
+  transform_partial_program p = OK tp ->
   tp.(prog_vars) = p.(prog_vars).
 Proof.
-  intros. functional inversion H. reflexivity.
+  intros. monadInv H. reflexivity.
 Qed.
 
 End TRANSF_PARTIAL_PROGRAM.
@@ -221,48 +251,103 @@ End TRANSF_PARTIAL_PROGRAM.
 Section TRANSF_PARTIAL_PROGRAM2.
 
 Variable A B V W: Set.
-Variable transf_partial_function: A -> option B.
-Variable transf_partial_variable: V -> option W.
+Variable transf_partial_function: A -> res B.
+Variable transf_partial_variable: V -> res W.
 
-Function transform_partial_program2 (p: program A V) : option (program B W) :=
-  match map_partial transf_partial_function p.(prog_funct) with
-  | None => None
-  | Some fl =>
-      match map_partial transf_partial_variable p.(prog_vars) with
-      | None => None
-      | Some vl => Some (mkprogram fl p.(prog_main) vl)
-      end
-  end.
+Definition prefix_var_name (id_init: ident * list init_data) : errmsg :=
+  MSG "In global variable " :: CTX (fst id_init) :: MSG ":\n" :: nil.
+
+Definition transform_partial_program2 (p: program A V) : res (program B W) :=
+  do fl <- map_partial prefix_funct_name transf_partial_function p.(prog_funct);
+  do vl <- map_partial prefix_var_name transf_partial_variable p.(prog_vars);
+  OK (mkprogram fl p.(prog_main) vl).
 
 Lemma transform_partial_program2_function:
   forall p tp i tf,
-  transform_partial_program2 p = Some tp ->
+  transform_partial_program2 p = OK tp ->
   In (i, tf) tp.(prog_funct) ->
-  exists f, In (i, f) p.(prog_funct) /\ transf_partial_function f = Some tf.
+  exists f, In (i, f) p.(prog_funct) /\ transf_partial_function f = OK tf.
 Proof.
-  intros. functional inversion H. 
-  apply In_map_partial with fl. auto. subst tp; assumption.
+  intros. monadInv H.  
+  eapply In_map_partial; eauto. 
 Qed.
 
 Lemma transform_partial_program2_variable:
   forall p tp i tv,
-  transform_partial_program2 p = Some tp ->
+  transform_partial_program2 p = OK tp ->
   In (i, tv) tp.(prog_vars) ->
-  exists v, In (i, v) p.(prog_vars) /\ transf_partial_variable v = Some tv.
+  exists v, In (i, v) p.(prog_vars) /\ transf_partial_variable v = OK tv.
 Proof.
-  intros. functional inversion H. 
-  apply In_map_partial with vl. auto. subst tp; assumption.
+  intros. monadInv H. 
+  eapply In_map_partial; eauto. 
 Qed.
 
 Lemma transform_partial_program2_main:
   forall p tp,
-  transform_partial_program2 p = Some tp ->
+  transform_partial_program2 p = OK tp ->
   tp.(prog_main) = p.(prog_main).
 Proof.
-  intros. functional inversion H. reflexivity.
+  intros. monadInv H. reflexivity.
 Qed.
 
 End TRANSF_PARTIAL_PROGRAM2.
+
+(** The following is a relational presentation of 
+  [transform_program_partial2].  Given relations between function
+  definitions and between variable information, it defines a relation
+  between programs stating that the two programs have the same shape
+  (same global names, etc) and that identically-named function definitions 
+  are variable information are related. *)
+
+Section MATCH_PROGRAM.
+
+Variable A B V W: Set.
+Variable match_fundef: A -> B -> Prop.
+Variable match_varinfo: V -> W -> Prop.
+
+Definition match_funct_entry (x1: ident * A) (x2: ident * B) :=
+  match x1, x2 with
+  | (id1, fn1), (id2, fn2) => id1 = id2 /\ match_fundef fn1 fn2
+  end.
+
+Definition match_var_entry (x1: ident * list init_data * V) (x2: ident * list init_data * W) :=
+  match x1, x2 with
+  | (id1, init1, info1), (id2, init2, info2) => id1 = id2 /\ init1 = init2 /\ match_varinfo info1 info2
+  end.
+
+Definition match_program (p1: program A V) (p2: program B W) : Prop :=
+  list_forall2 match_funct_entry p1.(prog_funct) p2.(prog_funct)
+  /\ p1.(prog_main) = p2.(prog_main)
+  /\ list_forall2 match_var_entry p1.(prog_vars) p2.(prog_vars).
+
+End MATCH_PROGRAM.
+
+Remark transform_partial_program2_match:
+  forall (A B V W: Set)
+         (transf_partial_function: A -> res B)
+         (transf_partial_variable: V -> res W)
+         (p: program A V) (tp: program B W),
+  transform_partial_program2 transf_partial_function transf_partial_variable p = OK tp ->
+  match_program 
+    (fun fd tfd => transf_partial_function fd = OK tfd)
+    (fun info tinfo => transf_partial_variable info = OK tinfo)
+    p tp.
+Proof.
+  intros. monadInv H. split.
+  apply list_forall2_imply with
+    (fun (ab: ident * A) (ac: ident * B) =>
+       fst ab = fst ac /\ transf_partial_function (snd ab) = OK (snd ac)).
+  eapply map_partial_forall2. eauto. 
+  intros. destruct v1; destruct v2; simpl in *. auto.
+  split. auto.
+  apply list_forall2_imply with
+    (fun (ab: ident * list init_data * V) (ac: ident * list init_data * W) =>
+       fst ab = fst ac /\ transf_partial_variable (snd ab) = OK (snd ac)).
+  eapply map_partial_forall2. eauto. 
+  intros. destruct v1; destruct v2; simpl in *. destruct p0; destruct p1. intuition congruence.
+Qed.
+
+(** * External functions *)
 
 (** For most languages, the functions composing the program are either
   internal functions, defined within the language, or external functions
@@ -296,16 +381,12 @@ End TRANSF_FUNDEF.
 Section TRANSF_PARTIAL_FUNDEF.
 
 Variable A B: Set.
-Variable transf_partial: A -> option B.
+Variable transf_partial: A -> res B.
 
-Definition transf_partial_fundef (fd: fundef A): option (fundef B) :=
+Definition transf_partial_fundef (fd: fundef A): res (fundef B) :=
   match fd with
-  | Internal f =>
-      match transf_partial f with
-      | None => None
-      | Some f' => Some (Internal f')
-      end
-  | External ef => Some (External ef)
+  | Internal f => do f' <- transf_partial f; OK (Internal f')
+  | External ef => OK (External ef)
   end.
 
 End TRANSF_PARTIAL_FUNDEF.

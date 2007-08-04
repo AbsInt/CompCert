@@ -1,21 +1,25 @@
-(** Translation from Cminor to RTL. *)
+(** Translation from CminorSel to RTL. *)
 
 Require Import Coqlib.
+Require Errors.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
+Require Import Switch.
 Require Import Op.
 Require Import Registers.
-Require Import Cminor.
+Require Import CminorSel.
 Require Import RTL.
+
+Open Local Scope string_scope.
 
 (** * Translation environments and state *)
 
 (** The translation functions are parameterized by the following 
-  compile-time environment, which maps Cminor local variables and
+  compile-time environment, which maps CminorSel local variables and
   let-bound variables to RTL registers.   The mapping for local variables
-  is computed from the Cminor variable declarations at the beginning of
+  is computed from the CminorSel variable declarations at the beginning of
   the translation of a function, and does not change afterwards.
   The mapping for let-bound variables is initially empty and updated
   during translation of expressions, when crossing a [Elet] binding. *)
@@ -46,9 +50,10 @@ Record state: Set := mkstate {
   to modify the global state.  These luxuries are not available in Coq,
   however.  Instead, we use a monadic encoding of the translation:
   translation functions take the current global state as argument,
-  and return either [Error] to denote an error, or [OK r s] to denote
+  and return either [Error msg] to denote an error, or [OK r s] to denote
   success.  [s] is the modified state, and [r] the result value of the
-  translation function. 
+  translation function.  In the error case, [msg] is an error message
+  (see modules [Errors]) describing the problem.
 
   We now define this monadic encoding -- the ``state and error'' monad --
   as well as convenient syntax to express monadic computations. *)
@@ -56,19 +61,19 @@ Record state: Set := mkstate {
 Set Implicit Arguments.
 
 Inductive res (A: Set) : Set :=
-  | Error: res A
+  | Error: Errors.errmsg -> res A
   | OK: A -> state -> res A.
 
 Definition mon (A: Set) : Set := state -> res A.
 
 Definition ret (A: Set) (x: A) : mon A := fun (s: state) => OK x s.
 
-Definition error (A: Set) : mon A := fun (s: state) => Error A.
+Definition error (A: Set) (msg: Errors.errmsg) : mon A := fun (s: state) => Error A msg.
 
 Definition bind (A B: Set) (f: mon A) (g: A -> mon B) : mon B :=
   fun (s: state) =>
     match f s with
-    | Error => Error B
+    | Error msg => Error B msg
     | OK a s' => g a s'
     end.
 
@@ -155,7 +160,7 @@ Definition update_instr (n: node) (i: instruction) : mon unit :=
                        (PTree.set n i s.(st_code))
                        (@update_instr_wf s n i PEQ))
     | right _ =>
-        Error unit
+        Error unit (Errors.msg "RTLgen.update_instr")
     end.
 
 (** Generate a fresh RTL register. *)
@@ -188,7 +193,7 @@ Fixpoint add_vars (map: mapping) (names: list ident)
 
 Definition find_var (map: mapping) (name: ident) : mon reg :=
   match PTree.get name map.(map_vars) with
-  | None => error reg
+  | None => error reg (Errors.MSG "RTLgen: unbound variable " :: Errors.CTX name :: nil)
   | Some r => ret r
   end.
 
@@ -197,7 +202,7 @@ Definition add_letvar (map: mapping) (r: reg) : mapping :=
 
 Definition find_letvar (map: mapping) (idx: nat) : mon reg :=
   match List.nth_error map.(map_letvars) idx with
-  | None => error reg
+  | None => error reg (Errors.msg "RTLgen: unbound let variable")
   | Some r => ret r
   end.
 
@@ -227,8 +232,8 @@ Fixpoint alloc_regs (map: mapping) (al: exprlist)
   | Enil =>
       ret nil
   | Econs a bl =>
-      do rl <- alloc_regs map bl;
       do r  <- alloc_reg map a;
+      do rl <- alloc_regs map bl;
       ret (r :: rl)
   end.
 
@@ -241,9 +246,9 @@ Definition add_move (rs rd: reg) (nd: node) : mon node :=
   then ret nd
   else add_instr (Iop Omove (rs::nil) rd nd).
 
-(** Translation of an expression.  [transl_expr map mut a rd nd]
+(** Translation of an expression.  [transl_expr map a rd nd]
   enriches the current CFG with the RTL instructions necessary
-  to compute the value of Cminor expression [a], leave its result
+  to compute the value of CminorSel expression [a], leave its result
   in register [rd], and branch to node [nd].  It returns the node
   of the first instruction in this sequence.  [map] is the compile-time
   translation environment. *)
@@ -311,7 +316,7 @@ with transl_condition (map: mapping) (a: condexpr) (ntrue nfalse: node)
   end
 
 (** Translation of a list of expressions.  The expressions are evaluated
-  left-to-right, and their values left in the given list of registers. *)
+  left-to-right, and their values stored in the given list of registers. *)
 
 with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
                      {struct al} : mon node :=
@@ -321,7 +326,7 @@ with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
   | Econs b bs, r :: rs =>
       do no <- transl_exprlist map bs rs nd; transl_expr map b r no
   | _, _ =>
-      error node
+      error node (Errors.msg "RTLgen.transl_exprlist")
   end.
 
 (** Auxiliary for branch prediction.  When compiling an if/then/else
@@ -336,27 +341,32 @@ Parameter more_likely: condexpr -> stmt -> stmt -> bool.
 
 (** Auxiliary for translating [Sswitch] statements. *)
 
+Parameter compile_switch: nat -> table -> comptree.
+
 Definition transl_exit (nexits: list node) (n: nat) : mon node :=
   match nth_error nexits n with
-  | None => error node
+  | None => error node (Errors.msg "RTLgen: wrong exit")
   | Some ne => ret ne
   end.
 
-Fixpoint transl_switch (r: reg) (nexits: list node)
-                       (cases: list (int * nat)) (default: nat)
-                       {struct cases} : mon node :=
-  match cases with
-  | nil =>
-      transl_exit nexits default
-  | (key1, exit1) :: cases' =>
-      do ncont <- transl_switch r nexits cases' default;
-      do nfound <- transl_exit nexits exit1;
-      add_instr (Icond (Ccompimm Ceq key1) (r :: nil) nfound ncont)
+Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
+                       {struct t} : mon node :=
+  match t with
+  | CTaction act =>
+      transl_exit nexits act
+  | CTifeq key act t' =>
+      do ncont <- transl_switch r nexits t';
+      do nfound <- transl_exit nexits act;
+      add_instr (Icond (Ccompimm Ceq key) (r :: nil) nfound ncont)
+  | CTiflt key t1 t2 =>
+      do n2 <- transl_switch r nexits t2;
+      do n1 <- transl_switch r nexits t1;
+      add_instr (Icond (Ccompuimm Clt key) (r :: nil) n1 n2)
   end.
 
 (** Translation of statements.  [transl_stmt map s nd nexits nret rret]
   enriches the current CFG with the RTL instructions necessary to
-  execute the Cminor statement [s], and returns the node of the first
+  execute the CminorSel statement [s], and returns the node of the first
   instruction in this sequence.  The generated instructions continue
   at node [nd] if the statement terminates normally, at node [nret]
   if it terminates by early return, and at the [n]-th node in the list
@@ -398,18 +408,28 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Sexit n =>
       transl_exit nexits n
   | Sswitch a cases default =>
-      do r <- alloc_reg map a;
-      do ns <- transl_switch r nexits cases default;
-      transl_expr map a r ns
+      let t := compile_switch default cases in
+      if validate_switch default cases t then
+        (do r <- alloc_reg map a;
+         do ns <- transl_switch r nexits t;
+         transl_expr map a r ns)
+      else
+        error node (Errors.msg "RTLgen: wrong switch")
   | Sreturn opt_a =>
       match opt_a, rret with
       | None, None => ret nret
       | Some a, Some r => transl_expr map a r nret
-      | _, _ => error node
+      | _, _ => error node (Errors.msg "RTLgen: type mismatch on return")
       end
+  | Stailcall sig b cl =>
+      do rf <- alloc_reg map b;
+      do rargs <- alloc_regs map cl;
+      do n1 <- add_instr (Itailcall sig (inl _ rf) rargs);
+      do n2 <- transl_exprlist map cl rargs n1;
+         transl_expr map b rf n2
   end.
 
-(** Translation of a Cminor function. *)
+(** Translation of a CminorSel function. *)
 
 Definition ret_reg (sig: signature) (rd: reg) : option reg :=
   match sig.(sig_res) with
@@ -417,32 +437,32 @@ Definition ret_reg (sig: signature) (rd: reg) : option reg :=
   | Some ty => Some rd
   end.
 
-Definition transl_fun (f: Cminor.function) : mon (node * list reg) :=
-  do (rparams, map1) <- add_vars init_mapping f.(Cminor.fn_params);
-  do (rvars, map2) <- add_vars map1 f.(Cminor.fn_vars);
+Definition transl_fun (f: CminorSel.function) : mon (node * list reg) :=
+  do (rparams, map1) <- add_vars init_mapping f.(CminorSel.fn_params);
+  do (rvars, map2) <- add_vars map1 f.(CminorSel.fn_vars);
   do rret <- new_reg;
-  let orret := ret_reg f.(Cminor.fn_sig) rret in
+  let orret := ret_reg f.(CminorSel.fn_sig) rret in
   do nret <- add_instr (Ireturn orret);
-  do nentry <- transl_stmt map2 f.(Cminor.fn_body) nret nil nret orret;
+  do nentry <- transl_stmt map2 f.(CminorSel.fn_body) nret nil nret orret;
   ret (nentry, rparams).
 
-Definition transl_function (f: Cminor.function) : option RTL.function :=
+Definition transl_function (f: CminorSel.function) : Errors.res RTL.function :=
   match transl_fun f init_state with
-  | Error => None
+  | Error msg => Errors.Error msg
   | OK (nentry, rparams) s =>
-      Some (RTL.mkfunction
-             f.(Cminor.fn_sig)
-             rparams
-             f.(Cminor.fn_stackspace)
-             s.(st_code)
-             nentry
-             s.(st_nextnode)
-             s.(st_wf))
+      Errors.OK (RTL.mkfunction
+                   f.(CminorSel.fn_sig)
+                   rparams
+                   f.(CminorSel.fn_stackspace)
+                   s.(st_code)
+                   nentry
+                   s.(st_nextnode)
+                   s.(st_wf))
   end.
 
 Definition transl_fundef := transf_partial_fundef transl_function.
 
 (** Translation of a whole program. *)
 
-Definition transl_program (p: Cminor.program) : option RTL.program :=
+Definition transl_program (p: CminorSel.program) : Errors.res RTL.program :=
   transform_partial_program transl_fundef p.

@@ -1,6 +1,7 @@
 (** * Dynamic semantics for the Clight language *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import Integers.
 Require Import Floats.
@@ -559,7 +560,7 @@ with eval_lvalue: env -> mem -> expr -> trace -> mem -> block -> int -> Prop :=
  | eval_Efield_struct:   forall e m a t m1 l ofs id fList i ty delta,
       eval_lvalue e m a t m1 l ofs ->
       typeof a = Tstruct id fList ->
-      field_offset i fList = Some delta ->
+      field_offset i fList = OK delta ->
       eval_lvalue e m (Expr (Efield a i) ty)
                   t m1 l (Int.add ofs (Int.repr delta))
  | eval_Efield_union:   forall e m a t m1 l ofs id fList i ty,

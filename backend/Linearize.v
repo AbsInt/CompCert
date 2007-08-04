@@ -1,5 +1,5 @@
 (** Linearization of the control-flow graph: 
-    translation from LTL to Linear *)
+    translation from LTL to LTLin *)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -9,24 +9,24 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import LTL.
-Require Import Linear.
+Require Import LTLin.
 Require Import Kildall.
 Require Import Lattice.
 
-(** To translate from LTL to Linear, we must layout the basic blocks
+(** To translate from LTL to LTLin, we must lay out the basic blocks
   of the LTL control-flow graph in some linear order, and insert
   explicit branches and conditional branches to make sure that
   each basic block jumps to its successors as prescribed by the
   LTL control-flow graph.  However, branches are not necessary
-  if the fall-through behaviour of Linear instructions already
+  if the fall-through behaviour of LTLin instructions already
   implements the desired flow of control.  For instance,
-  consider the two LTL basic blocks
+  consider the two LTL instructions
 <<
-    L1: Bop op args res (Bgoto L2)
+    L1: Lop op args res L2
     L2: ...
 >>
-  If the blocks [L1] and [L2] are laid out consecutively in the Linear
-  code, we can generate the following Linear code:
+  If the instructions [L1] and [L2] are laid out consecutively in the LTLin
+  code, we can generate the following LTLin code:
 <<
     L1: Lop op args res
     L2: ...
@@ -49,19 +49,13 @@ Require Import Lattice.
 - Choosing an order for the basic blocks.  This returns an enumeration
   of CFG nodes stating that the basic blocks must be laid out in
   the order shown in the list.
-- Generate naive Linear code where each basic block branches explicitly
-  to its successors, even if one of these successors is the next basic
-  block.
-- Simplify the naive Linear code, removing unconditional branches to
-  a label that immediately follows:
-<<
-          ...                                  ...
-          Igoto L1;           becomes      L1: ...
-      L1: ...
->>
+- Generate LTLin code where each basic block branches explicitly
+  to its successors, except if one of these successors is the
+  immediately following instruction.
+
   The beauty of this approach is that correct code is generated
   under surprisingly weak hypotheses on the enumeration of
-  CFG nodes: it suffices that every reachable basic block occurs
+  CFG nodes: it suffices that every reachable instruction occurs
   exactly once in the enumeration.  While the enumeration heuristic we use
   is quite trivial, it is easy to implement more sophisticated
   trace picking heuristics: as long as they satisfy the property above,
@@ -73,10 +67,10 @@ Require Import Lattice.
 (** * Determination of the order of basic blocks *)
 
 (** We first compute a mapping from CFG nodes to booleans,
-  indicating whether a CFG basic block is reachable or not.
+  indicating whether a CFG instruction is reachable or not.
   This computation is a trivial forward dataflow analysis
   where the transfer function is the identity: the successors
-  of a reachable block are reachable, by the very
+  of a reachable instruction are reachable, by the very
   definition of reachability. *)
 
 Module DS := Dataflow_Solver(LBoolean)(NodeSetForward).
@@ -84,7 +78,7 @@ Module DS := Dataflow_Solver(LBoolean)(NodeSetForward).
 Definition reachable_aux (f: LTL.function) : option (PMap.t bool) :=
   DS.fixpoint
     (successors f)
-    (Psucc f.(fn_entrypoint))
+    (f.(fn_nextpc))
     (fun pc r => r)
     ((f.(fn_entrypoint), true) :: nil).
 
@@ -108,15 +102,17 @@ Definition enumerate (f: LTL.function) : list node :=
   let reach := reachable f in
   positive_rec (list node) nil
     (fun pc nodes => if reach!!pc then pc :: nodes else nodes)
-    (Psucc f.(fn_entrypoint)).
+    f.(fn_nextpc).
 
-(** * Translation from LTL to Linear *)
+(** * Translation from LTL to LTLin *)
 
 (** We now flatten the structure of the CFG graph, laying out
-  basic blocks consecutively in the order computed by [enumerate],
-  and inserting a branch at the end of every basic block.
+  LTL instructions consecutively in the order computed by [enumerate],
+  and inserting branches to the labels of sucessors if necessary.
+  Whether to insert a branch or not is determined by
+  the [starts_with] function below.
 
-  For blocks ending in a conditional branch [Bcond cond args s1 s2],
+  For LTL conditional branches [Lcond cond args s1 s2],
   we have two possible translations:
 <<
       Lcond cond args s1;       or     Lcond (not cond) args s2;
@@ -124,8 +120,8 @@ Definition enumerate (f: LTL.function) : list node :=
 >>
   We favour the first translation if [s2] is the label of the
   next instruction, and the second if [s1] is the label of the
-  next instruction, thus exhibiting more opportunities for
-  fall-through optimization later. *)
+  next instruction, thus avoiding the insertion of a redundant [Lgoto]
+  instruction. *)
 
 Fixpoint starts_with (lbl: label) (k: code) {struct k} : bool :=
   match k with
@@ -133,35 +129,35 @@ Fixpoint starts_with (lbl: label) (k: code) {struct k} : bool :=
   | _ => false
   end.
 
-Fixpoint linearize_block (b: block) (k: code) {struct b} : code :=
+Definition add_branch (s: label) (k: code) : code :=
+  if starts_with s k then k else Lgoto s :: k.
+
+Definition linearize_instr (b: LTL.instruction) (k: code) : code :=
   match b with
-  | Bgetstack s r b =>
-      Lgetstack s r :: linearize_block b k
-  | Bsetstack r s b =>
-      Lsetstack r s :: linearize_block b k
-  | Bop op args res b =>
-      Lop op args res :: linearize_block b k
-  | Bload chunk addr args dst b =>
-      Lload chunk addr args dst :: linearize_block b k
-  | Bstore chunk addr args src b =>
-      Lstore chunk addr args src :: linearize_block b k
-  | Bcall sig ros b =>
-      Lcall sig ros :: linearize_block b k
-  | Balloc b =>
-      Lalloc :: linearize_block b k
-  | Bgoto s =>
-      Lgoto s :: k
-  | Bcond cond args s1 s2 =>
+  | LTL.Lnop s =>
+      add_branch s k
+  | LTL.Lop op args res s =>
+      Lop op args res :: add_branch s k
+  | LTL.Lload chunk addr args dst s =>
+      Lload chunk addr args dst :: add_branch s k
+  | LTL.Lstore chunk addr args src s =>
+      Lstore chunk addr args src :: add_branch s k
+  | LTL.Lcall sig ros args res s =>
+      Lcall sig ros args res :: add_branch s k
+  | LTL.Ltailcall sig ros args =>
+      Ltailcall sig ros args :: k
+  | LTL.Lalloc arg res s =>
+      Lalloc arg res :: add_branch s k
+  | LTL.Lcond cond args s1 s2 =>
       if starts_with s1 k then
-        Lcond (negate_condition cond) args s2 :: Lgoto s1 :: k
+        Lcond (negate_condition cond) args s2 :: add_branch s1 k
       else
-        Lcond cond args s1 :: Lgoto s2 :: k
-  | Breturn =>
-      Lreturn :: k
+        Lcond cond args s1 :: add_branch s2 k
+  | LTL.Lreturn or =>
+      Lreturn or :: k
   end.
 
-(* Linearize a function body according to an enumeration of its
-   nodes.  *)
+(** Linearize a function body according to an enumeration of its nodes.  *)
 
 Fixpoint linearize_body (f: LTL.function) (enum: list node)
                         {struct enum} : code :=
@@ -170,47 +166,21 @@ Fixpoint linearize_body (f: LTL.function) (enum: list node)
   | pc :: rem =>
       match f.(LTL.fn_code)!pc with
       | None => linearize_body f rem
-      | Some b => Llabel pc :: linearize_block b (linearize_body f rem)
+      | Some b => Llabel pc :: linearize_instr b (linearize_body f rem)
       end
   end.
 
-Definition linearize_function (f: LTL.function) : Linear.function :=
-  mkfunction
-    (LTL.fn_sig f)
-    (LTL.fn_stacksize f)
-    (linearize_body f (enumerate f)).
-
-(** * Cleanup of the linearized code *)
-
-(** We now eliminate [Lgoto] instructions that branch to an
-  immediately following label: these are redundant, as the fall-through
-  behaviour obtained by removing the [Lgoto] instruction is
-  semantically equivalent. *)
-
-Fixpoint cleanup_code (c: code) {struct c} : code :=
-  match c with
-  | nil => nil
-  | Lgoto lbl :: c' => 
-      if starts_with lbl c'
-      then cleanup_code c'
-      else Lgoto lbl :: cleanup_code c'
-  | i :: c' =>
-      i :: cleanup_code c'
-  end.
-
-Definition cleanup_function (f: Linear.function) : Linear.function :=
-  mkfunction
-    (fn_sig f)
-    (fn_stacksize f)
-    (cleanup_code f.(fn_code)).
-
 (** * Entry points for code linearization *)
 
-Definition transf_function (f: LTL.function) : Linear.function :=
-  cleanup_function (linearize_function f).
+Definition transf_function (f: LTL.function) : LTLin.function :=
+  mkfunction
+    (LTL.fn_sig f)
+    (LTL.fn_params f)
+    (LTL.fn_stacksize f)
+    (add_branch (LTL.fn_entrypoint f) (linearize_body f (enumerate f))).
 
-Definition transf_fundef (f: LTL.fundef) : Linear.fundef :=
+Definition transf_fundef (f: LTL.fundef) : LTLin.fundef :=
   AST.transf_fundef transf_function f.
 
-Definition transf_program (p: LTL.program) : Linear.program :=
+Definition transf_program (p: LTL.program) : LTLin.program :=
   transform_program transf_fundef p.

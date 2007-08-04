@@ -1,6 +1,7 @@
 (** * Correctness of the C front end, part 3: semantic preservation *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import Integers.
 Require Import Floats.
@@ -12,6 +13,7 @@ Require Import Globalenvs.
 Require Import Csyntax.
 Require Import Csem.
 Require Import Ctyping.
+Require Import Cminor.
 Require Import Csharpminor.
 Require Import Cshmgen.
 Require Import Cshmgenproof1.
@@ -22,40 +24,26 @@ Section CORRECTNESS.
 Variable prog: Csyntax.program.
 Variable tprog: Csharpminor.program.
 Hypothesis WTPROG: wt_program prog.
-Hypothesis TRANSL: transl_program prog = Some tprog.
+Hypothesis TRANSL: transl_program prog = OK tprog.
 
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall s, Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intros. unfold ge, tge. 
-  apply Genv.find_symbol_transf_partial2 with transl_fundef transl_globvar.
-  auto.
-Qed.
+Proof (Genv.find_symbol_transf_partial2 transl_fundef transl_globvar _ TRANSL).
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
-  exists tf, Genv.find_funct tge v = Some tf /\ transl_fundef f = Some tf.
-Proof.
-  intros. 
-  generalize (Genv.find_funct_transf_partial2 transl_fundef transl_globvar TRANSL H).
-  intros [A B]. 
-  destruct (transl_fundef f). exists f0; split. assumption. auto. congruence.
-Qed.
+  exists tf, Genv.find_funct tge v = Some tf /\ transl_fundef f = OK tf.
+Proof (Genv.find_funct_transf_partial2 transl_fundef transl_globvar TRANSL).
 
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
-  exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = Some tf.
-Proof.
-  intros. 
-  generalize (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar TRANSL H).
-  intros [A B]. 
-  destruct (transl_fundef f). exists f0; split. assumption. auto. congruence.
-Qed.
+  exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
+Proof (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar TRANSL).
 
 Lemma functions_well_typed:
   forall v f,
@@ -119,7 +107,7 @@ Proof.
 Qed.
 
 Lemma match_var_kind_of_type:
-  forall ty vk, var_kind_of_type ty = Some vk -> match_var_kind ty vk.
+  forall ty vk, var_kind_of_type ty = OK vk -> match_var_kind ty vk.
 Proof.
   intros; red. 
   caseEq (access_mode ty); auto.
@@ -131,7 +119,7 @@ Lemma match_env_alloc_variables:
   Csem.alloc_variables e1 m1 vars e2 m2 lb ->
   forall tyenv te1 tvars,
   match_env tyenv e1 te1 ->
-  transl_vars vars = Some tvars ->
+  transl_vars vars = OK tvars ->
   exists te2,
   Csharpminor.alloc_variables te1 m1 tvars te2 m2 lb
   /\ match_env (Ctyping.add_vars tyenv vars) e2 te2.
@@ -140,8 +128,8 @@ Proof.
   simpl in H0. inversion H0; subst; clear H0. 
   exists te1; split. constructor. simpl. auto.
   generalize H2. simpl. 
-  caseEq (var_kind_of_type ty); [intros vk VK | congruence].
-  caseEq (transl_vars vars); [intros tvrs TVARS | congruence].
+  caseEq (var_kind_of_type ty); simpl; [intros vk VK | congruence].
+  caseEq (transl_vars vars); simpl; [intros tvrs TVARS | congruence].
   intro EQ; inversion EQ; subst tvars; clear EQ.
   set (te2 := PTree.set id (b1, vk) te1).
   assert (match_env (add_var tyenv (id, ty)) (PTree.set id b1 e) te2).
@@ -168,14 +156,14 @@ Lemma bind_parameters_match_rec:
   forall tyenv te tvars,
   (forall id ty, In (id, ty) vars -> tyenv!id = Some ty) ->
   match_env tyenv e te ->
-  transl_params vars = Some tvars ->
+  transl_params vars = OK tvars ->
   Csharpminor.bind_parameters te m1 tvars vals m2.
 Proof.
   induction 1; intros.
   simpl in H1. inversion H1. constructor.
   generalize H4; clear H4; simpl. 
-  caseEq (chunk_of_type ty); [intros chunk CHK | congruence].
-  caseEq (transl_params params); [intros tparams TPARAMS | congruence].
+  caseEq (chunk_of_type ty); simpl; [intros chunk CHK | congruence].
+  caseEq (transl_params params); simpl; [intros tparams TPARAMS | congruence].
   intro EQ; inversion EQ; clear EQ; subst tvars.
   generalize CHK. unfold chunk_of_type. 
   caseEq (access_mode ty); intros; try discriminate.
@@ -215,7 +203,7 @@ Lemma bind_parameters_match:
   Csem.bind_parameters e m1 params vals m2 ->
   list_norepet (var_names params ++ var_names vars) ->
   match_env (Ctyping.add_vars tyenv (params ++ vars)) e te ->
-  transl_params params = Some tvars ->
+  transl_params params = OK tvars ->
   Csharpminor.bind_parameters te m1 tvars vals m2.
 Proof.
   intros. 
@@ -273,14 +261,14 @@ Qed.
 Lemma add_global_var_match_globalenv:
   forall vars tenv gv tvars,
   match_globalenv tenv gv ->
-  map_partial transl_globvar vars = Some tvars ->
+  map_partial AST.prefix_var_name transl_globvar vars = OK tvars ->
   match_globalenv (add_global_vars tenv vars) (globvarenv gv tvars).
 Proof.
   induction vars; simpl.
   intros. inversion H0. assumption.
   destruct a as [[id init] ty]. intros until tvars; intro.
-  caseEq (transl_globvar ty); try congruence. intros vk VK. 
-  caseEq (map_partial transl_globvar vars); try congruence. intros tvars' EQ1 EQ2.
+  caseEq (transl_globvar ty); simpl; try congruence. intros vk VK. 
+  caseEq (map_partial AST.prefix_var_name transl_globvar vars); simpl; try congruence. intros tvars' EQ1 EQ2.
   inversion EQ2; clear EQ2. simpl. 
   apply IHvars; auto.
   red. intros until chunk. repeat rewrite PTree.gsspec. 
@@ -299,7 +287,7 @@ Proof.
   unfold global_typenv.
   apply add_global_var_match_globalenv.
   apply add_global_funs_match_global_env. 
-  unfold transl_program in TRANSL. functional inversion TRANSL. auto.
+  unfold transl_program in TRANSL. monadInv TRANSL. auto.
 Qed.
 
 (** ** Variable accessors *)
@@ -309,7 +297,7 @@ Lemma var_get_correct:
   Csem.eval_lvalue ge e m (Expr (Csyntax.Evar id) ty) E0 m loc ofs ->
   load_value_of_type ty m loc ofs = Some v ->
   wt_expr tyenv (Expr (Csyntax.Evar id) ty) ->
-  var_get id ty = Some code ->
+  var_get id ty = OK code ->
   match_env tyenv e te ->
   eval_expr tprog le te m code E0 m v.
 Proof.
@@ -356,7 +344,7 @@ Lemma var_set_correct:
   Csem.eval_lvalue ge e m (Expr (Csyntax.Evar id) ty) t1 m1 loc ofs ->
   store_value_of_type ty m2 loc ofs v = Some m3 ->
   wt_expr tyenv (Expr (Csyntax.Evar id) ty) ->
-  var_set id ty rhs = Some code ->
+  var_set id ty rhs = OK code ->
   match_env tyenv e te ->
   eval_expr tprog nil te m1 rhs t2 m2 v ->
   exec_stmt tprog te m code (t1 ** t2) m3 Out_normal.
@@ -394,7 +382,7 @@ Definition eval_expr_prop
     (e: Csem.env) (m1: mem) (a: Csyntax.expr) (t: trace) (m2: mem) (v: val) : Prop :=
   forall tyenv ta te tle
     (WT: wt_expr tyenv a)
-    (TR: transl_expr a = Some ta)
+    (TR: transl_expr a = OK ta)
     (MENV: match_env tyenv e te),
   Csharpminor.eval_expr tprog tle te m1 ta t m2 v.
 
@@ -403,7 +391,7 @@ Definition eval_lvalue_prop
     (m2: mem) (b: block) (ofs: int) : Prop :=
   forall tyenv ta te tle
     (WT: wt_expr tyenv a)
-    (TR: transl_lvalue a = Some ta)
+    (TR: transl_lvalue a = OK ta)
     (MENV: match_env tyenv e te),
   Csharpminor.eval_expr tprog tle te m1 ta t m2 (Vptr b ofs).
 
@@ -412,7 +400,7 @@ Definition eval_exprlist_prop
     (m2: mem) (vl: list val) : Prop :=
   forall tyenv tal te tle
     (WT: wt_exprlist tyenv al)
-    (TR: transl_exprlist al = Some tal)
+    (TR: transl_exprlist al = OK tal)
     (MENV: match_env tyenv e te),
   Csharpminor.eval_exprlist tprog tle te m1 tal t m2 vl.
 
@@ -429,7 +417,7 @@ Definition exec_stmt_prop
     (m2: mem) (out: Csem.outcome) : Prop :=
   forall tyenv nbrk ncnt ts te
     (WT: wt_stmt tyenv s)
-    (TR: transl_statement nbrk ncnt s = Some ts)   
+    (TR: transl_statement nbrk ncnt s = OK ts)   
     (MENV: match_env tyenv e te),
   Csharpminor.exec_stmt tprog te m1 ts t m2 (transl_outcome nbrk ncnt out).
 
@@ -440,7 +428,7 @@ Definition exec_lblstmts_prop
     (WT: wt_lblstmts tyenv s)
     (TR: transl_lblstmts (lblstmts_length s)
                          (1 + lblstmts_length s + ncnt)
-                         s body = Some ts)   
+                         s body = OK ts)   
     (MENV: match_env tyenv e te)
     (BODY: Csharpminor.exec_stmt tprog te m0 body t0 m1 Out_normal),
   Csharpminor.exec_stmt tprog te m0 ts (t0 ** t) m2 
@@ -451,7 +439,7 @@ Definition eval_funcall_prop
     (t: trace) (m2: mem) (res: val) : Prop :=
   forall tf
     (WT: wt_fundef (global_typenv prog) f)
-    (TR: transl_fundef f = Some tf),
+    (TR: transl_fundef f = OK tf),
    Csharpminor.eval_funcall tprog m1 tf params t m2 res.
 
 (*
@@ -465,7 +453,7 @@ Lemma transl_Econst_int_correct:
         eval_expr_prop e m (Expr (Econst_int i) ty) E0 m (Vint i)).
 Proof.
   intros; red; intros.
-  monadInv TR. subst ta. apply make_intconst_correct.
+  monadInv TR. apply make_intconst_correct.
 Qed.
 
 Lemma transl_Econst_float_correct:
@@ -473,7 +461,7 @@ Lemma transl_Econst_float_correct:
         eval_expr_prop e m (Expr (Econst_float f0) ty) E0 m (Vfloat f0)).
 Proof.
   intros; red; intros.
-  monadInv TR. subst ta. apply make_floatconst_correct.
+  monadInv TR. apply make_floatconst_correct.
 Qed.
 
 Lemma transl_Elvalue_correct:
@@ -512,16 +500,16 @@ Lemma transl_Esizeof_correct:
         eval_expr_prop e m (Expr (Esizeof ty') ty) E0 m
           (Vint (Int.repr (Csyntax.sizeof ty')))).
 Proof.
-  intros; red; intros. monadInv TR. subst ta. apply make_intconst_correct. 
+  intros; red; intros. monadInv TR. apply make_intconst_correct. 
 Qed.
 
 Lemma transl_Eunop_correct:
-       (forall (e : Csem.env) (m : mem) (op : unary_operation)
+       (forall (e : Csem.env) (m : mem) (op : Csyntax.unary_operation)
           (a : Csyntax.expr) (ty : type) (t : trace) (m1 : mem) (v1 v : val),
         Csem.eval_expr ge e m a t m1 v1 ->
         eval_expr_prop e m a t m1 v1 ->
         sem_unary_operation op v1 (typeof a) = Some v ->
-        eval_expr_prop e m (Expr (Eunop op a) ty) t m1 v).
+        eval_expr_prop e m (Expr (Csyntax.Eunop op a) ty) t m1 v).
 Proof.
   intros; red; intros.
   inversion WT; clear WT; subst.
@@ -530,7 +518,7 @@ Proof.
 Qed.
 
 Lemma transl_Ebinop_correct:
-       (forall (e : Csem.env) (m : mem) (op : binary_operation)
+       (forall (e : Csem.env) (m : mem) (op : Csyntax.binary_operation)
           (a1 a2 : Csyntax.expr) (ty : type) (t1 : trace) (m1 : mem)
           (v1 : val) (t2 : trace) (m2 : mem) (v2 v : val),
         Csem.eval_expr ge e m a1 t1 m1 v1 ->
@@ -538,7 +526,7 @@ Lemma transl_Ebinop_correct:
         Csem.eval_expr ge e m1 a2 t2 m2 v2 ->
         eval_expr_prop e m1 a2 t2 m2 v2 ->
         sem_binary_operation op v1 (typeof a1) v2 (typeof a2) m2 = Some v ->
-        eval_expr_prop e m (Expr (Ebinop op a1 a2) ty) (t1 ** t2) m2 v).
+        eval_expr_prop e m (Expr (Csyntax.Ebinop op a1 a2) ty) (t1 ** t2) m2 v).
 Proof.
   intros; red; intros.
   inversion WT; clear WT; subst.
@@ -555,7 +543,7 @@ Lemma transl_Eorbool_1_correct:
         eval_expr_prop e m (Expr (Eorbool a1 a2) ty) t m1 Vtrue).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
-  rewrite <- H3; unfold make_orbool.
+  unfold make_orbool.
   exploit make_boolean_correct_true; eauto. intros [vb [EVAL ISTRUE]].
   eapply eval_Econdition_true; eauto.
   unfold Vtrue; apply make_intconst_correct. traceEq.
@@ -574,7 +562,7 @@ Lemma transl_Eorbool_2_correct:
         eval_expr_prop e m (Expr (Eorbool a1 a2) ty) (t1 ** t2) m2 v).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
-  rewrite <- H6; unfold make_orbool.
+  unfold make_orbool.
   exploit make_boolean_correct_false. eapply H0; eauto. eauto. intros [vb [EVAL ISFALSE]].
   eapply eval_Econdition_false; eauto.
   inversion H4; subst.
@@ -595,7 +583,7 @@ Lemma transl_Eandbool_1_correct:
         eval_expr_prop e m (Expr (Eandbool a1 a2) ty) t m1 Vfalse).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
-  rewrite <- H3; unfold make_andbool.
+  unfold make_andbool.
   exploit make_boolean_correct_false; eauto. intros [vb [EVAL ISFALSE]].
   eapply eval_Econdition_false; eauto.
   unfold Vfalse; apply make_intconst_correct. traceEq.
@@ -614,7 +602,7 @@ Lemma transl_Eandbool_2_correct:
         eval_expr_prop e m (Expr (Eandbool a1 a2) ty) (t1 ** t2) m2 v).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
-  rewrite <- H6; unfold make_andbool.
+  unfold make_andbool.
   exploit make_boolean_correct_true. eapply H0; eauto. eauto. intros [vb [EVAL ISTRUE]].
   eapply eval_Econdition_true; eauto.
   inversion H4; subst.
@@ -634,7 +622,7 @@ Lemma transl_Ecast_correct:
         cast v1 (typeof a) ty v ->
         eval_expr_prop e m (Expr (Ecast ty a) ty) t m1 v).
 Proof.
-  intros; red; intros. inversion WT; clear WT; subst. monadInv TR. subst ta.
+  intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
   eapply make_cast_correct; eauto.
 Qed.
 
@@ -660,7 +648,7 @@ Proof.
   caseEq (classify_fun (typeof a)).
   2: intros; rewrite H7 in TR; discriminate.
   intros targs tres EQ. rewrite EQ in TR. 
-  monadInv TR. clear TR. subst ta.
+  monadInv TR. 
   rewrite <- H4 in EQ.
   exploit functions_translated; eauto. intros [tf [FIND TRL]].
   econstructor.
@@ -679,7 +667,7 @@ Lemma transl_Evar_local_correct:
         e ! id = Some l ->
         eval_lvalue_prop e m (Expr (Csyntax.Evar id) ty) E0 m l Int.zero).
 Proof.
-  intros; red; intros. inversion WT; clear WT; subst. monadInv TR. subst ta.
+  intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
   exploit (me_local _ _ _ MENV); eauto. intros [vk [A B]].
   econstructor. eapply eval_var_addr_local. eauto. 
 Qed.
@@ -691,7 +679,7 @@ Lemma transl_Evar_global_correct:
         Genv.find_symbol ge id = Some l ->
         eval_lvalue_prop e m (Expr (Csyntax.Evar id) ty) E0 m l Int.zero).
 Proof.
-  intros; red; intros. inversion WT; clear WT; subst. monadInv TR. subst ta.
+  intros; red; intros. inversion WT; clear WT; subst. monadInv TR. 
   exploit (me_global _ _ _ MENV); eauto. intros [A B].
   econstructor. eapply eval_var_addr_global. eauto. 
   rewrite symbols_preserved. auto.
@@ -730,13 +718,13 @@ Lemma transl_Efield_struct_correct:
         eval_lvalue ge e m a t m1 l ofs ->
         eval_lvalue_prop e m a t m1 l ofs ->
         typeof a = Tstruct id fList ->
-        field_offset i fList = Some delta ->
+        field_offset i fList = OK delta ->
         eval_lvalue_prop e m (Expr (Efield a i) ty) t m1 l
           (Int.add ofs (Int.repr delta))).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. 
   simpl in TR. rewrite H1 in TR. monadInv TR.
-  rewrite <- H5. eapply make_binop_correct; eauto.
+  econstructor; eauto.
   apply make_intconst_correct. 
   simpl. congruence. traceEq.
 Qed.
@@ -758,7 +746,7 @@ Lemma transl_Enil_correct:
        (forall (e : Csem.env) (m : mem),
         eval_exprlist_prop e m Csyntax.Enil E0 m nil).
 Proof.
-  intros; red; intros. monadInv TR. subst tal. constructor.
+  intros; red; intros. monadInv TR. constructor.
 Qed.
 
 Lemma transl_Econs_correct:
@@ -772,14 +760,14 @@ Lemma transl_Econs_correct:
         eval_exprlist_prop e m (Csyntax.Econs a bl) (t1 ** t2) m2 (v :: vl)).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR. 
-  subst tal. econstructor; eauto. 
+  econstructor; eauto. 
 Qed.
 
 Lemma transl_Sskip_correct:
        (forall (e : Csem.env) (m : mem),
         exec_stmt_prop e m Csyntax.Sskip E0 m Csem.Out_normal).
 Proof.
-  intros; red; intros. monadInv TR. subst ts. simpl. constructor.
+  intros; red; intros. monadInv TR. simpl. constructor.
 Qed.
 
 Lemma transl_Sexpr_correct:
@@ -790,8 +778,7 @@ Lemma transl_Sexpr_correct:
         exec_stmt_prop e m (Csyntax.Sexpr a) t m1 Csem.Out_normal).
 Proof.
   intros; red; intros; simpl. inversion WT; clear WT; subst. 
-  monadInv TR. subst ts. 
-  econstructor; eauto.
+  monadInv TR. econstructor; eauto.
 Qed.
 
 Lemma transl_Sassign_correct:
@@ -831,7 +818,7 @@ Lemma transl_Ssequence_1_correct:
         exec_stmt_prop e m (Ssequence s1 s2) (t1 ** t2) m2 out).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. red in H0; simpl in H0. eapply exec_Sseq_continue; eauto. 
+  red in H0; simpl in H0. eapply exec_Sseq_continue; eauto. 
 Qed.
 
 Lemma transl_Ssequence_2_correct:
@@ -843,7 +830,7 @@ Lemma transl_Ssequence_2_correct:
         exec_stmt_prop e m (Ssequence s1 s2) t1 m1 out).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. eapply exec_Sseq_stop; eauto. 
+  eapply exec_Sseq_stop; eauto. 
   destruct out; simpl; congruence.
 Qed.
 
@@ -860,7 +847,7 @@ Lemma transl_Sifthenelse_true_correct:
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
   exploit make_boolean_correct_true. eapply H0; eauto. eauto. intros [vb [EVAL ISTRUE]].
-  subst ts. eapply exec_Sifthenelse_true; eauto. 
+  eapply exec_Sifthenelse_true; eauto. 
 Qed.
 
 Lemma transl_Sifthenelse_false_correct:
@@ -876,7 +863,7 @@ Lemma transl_Sifthenelse_false_correct:
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
   exploit make_boolean_correct_false. eapply H0; eauto. eauto. intros [vb [EVAL ISFALSE]].
-  subst ts. eapply exec_Sifthenelse_false; eauto. 
+  eapply exec_Sifthenelse_false; eauto. 
 Qed.
 
 Lemma transl_Sreturn_none_correct:
@@ -884,7 +871,7 @@ Lemma transl_Sreturn_none_correct:
         exec_stmt_prop e m (Csyntax.Sreturn None) E0 m (Csem.Out_return None)).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl. apply exec_Sreturn_none. 
+  simpl. apply exec_Sreturn_none. 
 Qed.
 
 Lemma transl_Sreturn_some_correct:
@@ -896,7 +883,7 @@ Lemma transl_Sreturn_some_correct:
           (Csem.Out_return (Some v))).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl. eapply exec_Sreturn_some; eauto. 
+  simpl. eapply exec_Sreturn_some; eauto. 
 Qed.
 
 Lemma transl_Sbreak_correct:
@@ -904,7 +891,7 @@ Lemma transl_Sbreak_correct:
         exec_stmt_prop e m Sbreak E0 m Out_break).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl. apply exec_Sexit.  
+  simpl. apply exec_Sexit.  
 Qed.
 
 Lemma transl_Scontinue_correct:
@@ -912,19 +899,19 @@ Lemma transl_Scontinue_correct:
         exec_stmt_prop e m Scontinue E0 m Out_continue).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl. apply exec_Sexit.  
+  simpl. apply exec_Sexit.  
 Qed.
 
 Lemma exit_if_false_true:
   forall a ts e m1 t m2 v tyenv te,
-  exit_if_false a = Some ts ->
+  exit_if_false a = OK ts ->
   eval_expr_prop e m1 a t m2 v ->
   match_env tyenv e te ->
   wt_expr tyenv a ->
   is_true v (typeof a) ->
   exec_stmt tprog te m1 ts t m2 Out_normal.
 Proof.
-  intros. monadInv H. rewrite <- H5. 
+  intros. monadInv H. 
   exploit make_boolean_correct_true. eapply H0; eauto. eauto.
   intros [vb [EVAL ISTRUE]].
   eapply exec_Sifthenelse_true with (v1 := vb); eauto. 
@@ -933,14 +920,14 @@ Qed.
  
 Lemma exit_if_false_false:
   forall a ts e m1 t m2 v tyenv te,
-  exit_if_false a = Some ts ->
+  exit_if_false a = OK ts ->
   eval_expr_prop e m1 a t m2 v ->
   match_env tyenv e te ->
   wt_expr tyenv a ->
   is_false v (typeof a) ->
   exec_stmt tprog te m1 ts t m2 (Out_exit 0).
 Proof.
-  intros. monadInv H. rewrite <- H5. 
+  intros. monadInv H. 
   exploit make_boolean_correct_false. eapply H0; eauto. eauto.
   intros [vb [EVAL ISFALSE]].
   eapply exec_Sifthenelse_false with (v1 := vb); eauto. 
@@ -956,7 +943,7 @@ Lemma transl_Swhile_false_correct:
         exec_stmt_prop e m (Swhile a s) t m1 Csem.Out_normal).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl.
+  simpl.
   change Out_normal with (outcome_block (Out_exit 0)).
   apply exec_Sblock. apply exec_Sloop_stop. apply exec_Sseq_stop.
   eapply exit_if_false_false; eauto. congruence. congruence.
@@ -992,7 +979,7 @@ Lemma transl_Swhile_stop_correct:
         exec_stmt_prop e m (Swhile a s) (t1 ** t2) m2 out).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. rewrite (transl_out_break_or_return _ _ nbrk ncnt H4).
+  rewrite (transl_out_break_or_return _ _ nbrk ncnt H4).
   apply exec_Sblock. apply exec_Sloop_stop. 
   eapply exec_Sseq_continue. 
   eapply exit_if_false_true; eauto. 
@@ -1017,7 +1004,6 @@ Proof.
   intros; red; intros. 
   exploit H6; eauto. intro NEXTITER.
   inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. 
   inversion NEXTITER; subst.
   apply exec_Sblock. 
   eapply exec_Sloop_loop. eapply exec_Sseq_continue.
@@ -1041,7 +1027,7 @@ Lemma transl_Sdowhile_false_correct:
         exec_stmt_prop e m (Sdowhile a s) (t1 ** t2) m2 Csem.Out_normal).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl.
+  simpl.
   change Out_normal with (outcome_block (Out_exit 0)).
   apply exec_Sblock. apply exec_Sloop_stop. eapply exec_Sseq_continue.
   rewrite (transl_out_normal_or_continue out1 H1).
@@ -1058,7 +1044,7 @@ Lemma transl_Sdowhile_stop_correct:
         exec_stmt_prop e m (Sdowhile a s) t m1 out).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl.
+  simpl.
   assert (outcome_block (transl_outcome 1 0 out1) <> Out_normal).
     inversion H1; simpl; congruence.
   rewrite (transl_out_break_or_return _ _ nbrk ncnt H1). 
@@ -1084,7 +1070,6 @@ Proof.
   intros; red; intros. 
   exploit H6; eauto. intro NEXTITER.
   inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. 
   inversion NEXTITER; subst.
   apply exec_Sblock. 
   eapply exec_Sloop_loop. eapply exec_Sseq_continue.
@@ -1129,7 +1114,7 @@ Lemma transl_Sfor_false_correct:
         exec_stmt_prop e m (Sfor Csyntax.Sskip a2 a3 s) t m1 Csem.Out_normal).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl.
+  simpl.
   eapply exec_Sseq_continue. apply exec_Sskip.
   change Out_normal with (outcome_block (Out_exit 0)).
   apply exec_Sblock. apply exec_Sloop_stop. 
@@ -1150,7 +1135,7 @@ Lemma transl_Sfor_stop_correct:
         exec_stmt_prop e m (Sfor Csyntax.Sskip a2 a3 s) (t1 ** t2) m2 out).
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. simpl.
+  simpl.
   assert (outcome_block (transl_outcome 1 0 out2) <> Out_normal).
     inversion H4; simpl; congruence.
   rewrite (transl_out_break_or_return _ _ nbrk ncnt H4). 
@@ -1181,7 +1166,6 @@ Proof.
   intros; red; intros. 
   exploit H8; eauto. intro NEXTITER.
   inversion WT; clear WT; subst. simpl in TR; monadInv TR.
-  subst ts. 
   inversion NEXTITER; subst.
   inversion H11; subst.
   inversion H18; subst.   
@@ -1205,7 +1189,7 @@ Lemma transl_lblstmts_switch:
   transl_lblstmts 
     (lblstmts_length sl)
     (S (lblstmts_length sl + ncnt))
-    sl (Sblock body) = Some ts ->
+    sl (Sblock body) = OK ts ->
   wt_lblstmts tyenv sl ->
   match_env tyenv e te ->
   exec_lblstmts_prop e m1 (select_switch n sl) t2 m2 out ->
@@ -1226,7 +1210,7 @@ Proof.
   (* next case selected *)
   inversion H1; clear H1; subst.
   simpl in H0; monadInv H0.
-  eapply IHsl with (body := Sseq (Sblock body) s0); eauto.
+  eapply IHsl with (body := Sseq (Sblock body) x); eauto.
   apply exec_Sseq_stop. 
   change (Out_exit (switch_target n (lblstmts_length sl) (switch_table sl 0)))
     with (outcome_block (Out_exit (S (switch_target n (lblstmts_length sl) (switch_table sl 0))))).
@@ -1247,7 +1231,7 @@ Lemma transl_Sswitch_correct:
 Proof.
   intros; red; intros.
   inversion WT; clear WT; subst.
-  simpl in TR. monadInv TR; clear TR. 
+  simpl in TR. monadInv TR. 
   rewrite length_switch_table in EQ0. 
   replace (ncnt + lblstmts_length sl + 1)%nat
      with (S (lblstmts_length sl + ncnt))%nat in EQ0 by omega.
@@ -1265,7 +1249,6 @@ Proof.
   intros; red; intros.
   inversion WT; subst.
   simpl in TR. monadInv TR.
-  rewrite <- H3. 
   replace (transl_outcome nbrk ncnt (outcome_switch out))
      with (outcome_block (transl_outcome 0 (S ncnt) out)).
   constructor. 
@@ -1286,8 +1269,8 @@ Lemma transl_LScase_fallthrough_correct:
 Proof.
   intros; red; intros.
   inversion WT; subst.
-  simpl in TR. monadInv TR; clear TR.
-  assert (exec_stmt tprog te m0 (Sblock (Sseq body s0)) 
+  monadInv TR.
+  assert (exec_stmt tprog te m0 (Sblock (Sseq body x)) 
                   (t0 ** t1) m1 Out_normal).
   change Out_normal with
     (outcome_block (transl_outcome (S (lblstmts_length ls))
@@ -1311,19 +1294,19 @@ Lemma transl_LScase_stop_correct:
 Proof.
   intros; red; intros.
   inversion WT; subst.
-  simpl in TR. monadInv TR; clear TR.
+  monadInv TR.
   exploit H0; eauto. intro EXEC.
   destruct out; simpl; simpl in EXEC.
   (* out = Out_break *)
   change Out_normal with (outcome_block (Out_exit 0)).
-  eapply transl_lblstmts_exit with (body := Sblock (Sseq body s0)); eauto.
+  eapply transl_lblstmts_exit with (body := Sblock (Sseq body x)); eauto.
   rewrite plus_0_r. 
   change (Out_exit (lblstmts_length ls))
     with (outcome_block (Out_exit (S (lblstmts_length ls)))).
   constructor. eapply exec_Sseq_continue; eauto.
   (* out = Out_continue *)
   change (Out_exit ncnt) with (outcome_block (Out_exit (S ncnt))).
-  eapply transl_lblstmts_exit with (body := Sblock (Sseq body s0)); eauto.
+  eapply transl_lblstmts_exit with (body := Sblock (Sseq body x)); eauto.
   replace (Out_exit (lblstmts_length ls + S ncnt))
     with (outcome_block (Out_exit (S (S (lblstmts_length ls + ncnt))))).
   constructor. eapply exec_Sseq_continue; eauto.
@@ -1331,7 +1314,7 @@ Proof.
   (* out = Out_normal *)
   congruence.
   (* out = Out_return *)
-  eapply transl_lblstmts_return with (body := Sblock (Sseq body s0)); eauto.
+  eapply transl_lblstmts_return with (body := Sblock (Sseq body x)); eauto.
   change (Out_return o)
     with (outcome_block (Out_return o)).
   constructor. eapply exec_Sseq_continue; eauto.
@@ -1366,13 +1349,13 @@ Proof.
   inversion WT; clear WT; subst. 
   inversion H6; clear H6; subst.
   (* Exploitation of translation hypothesis *)
-  monadInv TR. subst tf. clear TR. 
-  monadInv EQ. clear EQ. subst f0.
+  monadInv TR. 
+  monadInv EQ.
   (* Allocation of variables *)
   exploit match_env_alloc_variables; eauto.
   apply match_globalenv_match_env_empty. 
   apply match_global_typenv.
-  eexact (transl_fn_variables _ _ (signature_of_function f) _ _ s EQ0 EQ1).
+  eexact (transl_fn_variables _ _ (signature_of_function f) _ _ x2 EQ0 EQ).
   intros [te [ALLOCVARS MATCHENV]].
   (* Execution *)
   econstructor; simpl.
@@ -1395,7 +1378,7 @@ Lemma transl_funcall_external_correct:
         eval_funcall_prop m (External id targs tres) vargs t m vres).
 Proof.
   intros; red; intros.
-  monadInv TR. subst tf. constructor. auto.
+  monadInv TR. constructor. auto.
 Qed.
 
 Theorem transl_funcall_correct:
@@ -1467,7 +1450,7 @@ End CORRECTNESS.
 
 Theorem transl_program_correct:
   forall prog tprog t r,
-  transl_program prog = Some tprog ->
+  transl_program prog = OK tprog ->
   Ctyping.wt_program prog ->
   Csem.exec_program prog t r ->
   Csharpminor.exec_program tprog t r.

@@ -2,13 +2,14 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
 Require Import RTL.
 Require Import Locations.
 Require Import Linear.
-Require Import Lineartyping.
+Require Import Bounds.
 Require Import Mach.
 Require Import Conventions.
 
@@ -87,43 +88,61 @@ Definition offset_of_index (fe: frame_env) (idx: frame_index) :=
   store in the frame the values of callee-save registers used by the
   current function. *)
 
-Definition save_int_callee_save (fe: frame_env) (cs: mreg) (k: Mach.code) :=
-  let i := index_int_callee_save cs in
-  if zlt i fe.(fe_num_int_callee_save)
-  then Msetstack cs (Int.repr (offset_of_index fe (FI_saved_int i))) Tint :: k
+Definition save_callee_save_reg
+    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
+    (ty: typ) (fe: frame_env) (cs: mreg) (k: Mach.code) :=
+  let i := number cs in
+  if zlt i (bound fe)
+  then Msetstack cs (Int.repr (offset_of_index fe (mkindex i))) ty :: k
   else k.
 
-Definition save_float_callee_save (fe: frame_env) (cs: mreg) (k: Mach.code) :=
-  let i := index_float_callee_save cs in
-  if zlt i fe.(fe_num_float_callee_save)
-  then Msetstack cs (Int.repr (offset_of_index fe (FI_saved_float i))) Tfloat :: k
-  else k.
+Definition save_callee_save_regs
+    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
+    (ty: typ) (fe: frame_env) (csl: list mreg) (k: Mach.code) :=
+  List.fold_right (save_callee_save_reg bound number mkindex ty fe) k csl.
+
+Definition save_callee_save_int (fe: frame_env) :=
+  save_callee_save_regs 
+    fe_num_int_callee_save index_int_callee_save FI_saved_int
+    Tint fe int_callee_save_regs.
+
+Definition save_callee_save_float (fe: frame_env) :=
+  save_callee_save_regs
+    fe_num_float_callee_save index_float_callee_save FI_saved_float 
+    Tfloat fe float_callee_save_regs.
 
 Definition save_callee_save (fe: frame_env) (k: Mach.code) :=
-  List.fold_right (save_int_callee_save fe)
-    (List.fold_right (save_float_callee_save fe) k float_callee_save_regs)
-    int_callee_save_regs.
+  save_callee_save_int fe (save_callee_save_float fe k).
 
 (** [restore_callee_save fe k] adds before [k] the instructions that
   re-load from the frame the values of callee-save registers used by the
   current function, restoring these registers to their initial values. *)
 
-Definition restore_int_callee_save (fe: frame_env) (cs: mreg) (k: Mach.code) :=
-  let i := index_int_callee_save cs in
-  if zlt i fe.(fe_num_int_callee_save)
-  then Mgetstack (Int.repr (offset_of_index fe (FI_saved_int i))) Tint cs :: k
+Definition restore_callee_save_reg
+    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
+    (ty: typ) (fe: frame_env) (cs: mreg) (k: Mach.code) :=
+  let i := number cs in
+  if zlt i (bound fe)
+  then Mgetstack (Int.repr (offset_of_index fe (mkindex i))) ty cs :: k
   else k.
 
-Definition restore_float_callee_save (fe: frame_env) (cs: mreg) (k: Mach.code) :=
-  let i := index_float_callee_save cs in
-  if zlt i fe.(fe_num_float_callee_save)
-  then Mgetstack (Int.repr (offset_of_index fe (FI_saved_float i))) Tfloat cs :: k
-  else k.
+Definition restore_callee_save_regs
+    (bound: frame_env -> Z) (number: mreg -> Z) (mkindex: Z -> frame_index)
+    (ty: typ) (fe: frame_env) (csl: list mreg) (k: Mach.code) :=
+  List.fold_right (restore_callee_save_reg bound number mkindex ty fe) k csl.
+
+Definition restore_callee_save_int (fe: frame_env) :=
+  restore_callee_save_regs 
+    fe_num_int_callee_save index_int_callee_save FI_saved_int
+    Tint fe int_callee_save_regs.
+
+Definition restore_callee_save_float (fe: frame_env) :=
+  restore_callee_save_regs
+    fe_num_float_callee_save index_float_callee_save FI_saved_float 
+    Tfloat fe float_callee_save_regs.
 
 Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
-  List.fold_right (restore_int_callee_save fe)
-    (List.fold_right (restore_float_callee_save fe) k float_callee_save_regs)
-    int_callee_save_regs.
+  restore_callee_save_int fe (restore_callee_save_float fe k).
 
 (** * Code transformation. *)
 
@@ -186,6 +205,8 @@ Definition transl_instr
       Mstore chunk (transl_addr fe addr) args src :: k
   | Lcall sig ros =>
       Mcall sig ros :: k
+  | Ltailcall sig ros =>
+      restore_callee_save fe (Mtailcall sig ros :: k)
   | Lalloc =>
       Malloc :: k
   | Llabel lbl =>
@@ -214,18 +235,23 @@ Definition transl_code
 Definition transl_body (f: Linear.function) (fe: frame_env) :=
   save_callee_save fe (transl_code fe f.(Linear.fn_code)).
 
-Definition transf_function (f: Linear.function) : option Mach.function :=
+Open Local Scope string_scope.
+
+Definition transf_function (f: Linear.function) : res Mach.function :=
   let fe := make_env (function_bounds f) in
-  if zlt f.(Linear.fn_stacksize) 0 then None else
-  if zlt (- Int.min_signed) fe.(fe_size) then None else
-  Some (Mach.mkfunction
+  if zlt f.(Linear.fn_stacksize) 0 then
+    Error (msg "Stacking.transf_function") 
+  else if zlt (- Int.min_signed) fe.(fe_size) then
+    Error (msg "Too many spilled variables, stack size exceeded")
+  else
+    OK (Mach.mkfunction
          f.(Linear.fn_sig)
          (transl_body f fe)
          f.(Linear.fn_stacksize)
          fe.(fe_size)).
 
-Definition transf_fundef (f: Linear.fundef) : option Mach.fundef :=
+Definition transf_fundef (f: Linear.fundef) : res Mach.fundef :=
   AST.transf_partial_fundef transf_function f.
 
-Definition transf_program (p: Linear.program) : option Mach.program :=
+Definition transf_program (p: Linear.program) : res Mach.program :=
   transform_partial_program transf_fundef p.

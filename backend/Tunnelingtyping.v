@@ -11,26 +11,65 @@ Require Import Locations.
 Require Import LTL.
 Require Import LTLtyping.
 Require Import Tunneling.
+Require Import Tunnelingproof.
 
 (** Tunneling preserves typing. *)
 
-Lemma wt_tunnel_block:
-  forall f b,
-  wt_block f b ->
-  wt_block (tunnel_function f) (tunnel_block f b).
+Lemma branch_target_rec_valid:
+  forall f, wt_function f ->
+  forall count pc pc',
+  branch_target_rec f pc count = Some pc' ->
+  valid_successor f pc ->
+  valid_successor f pc'.
 Proof.
-  induction 1; simpl; econstructor; eauto.
+  induction count; simpl.
+  intros; discriminate.
+  intros until pc'. caseEq (is_goto_instr (fn_code f)!pc); intros.
+  generalize (is_goto_instr_correct _ _ H0). intro.
+  eapply IHcount; eauto. 
+  generalize (wt_instrs _ H _ _ H3); intro WTI; inv WTI. auto.
+  inv H1; auto.
+Qed.
+
+Lemma tunnel_valid_successor:
+  forall f pc,
+  valid_successor f pc -> valid_successor (tunnel_function f) pc.
+Proof.
+  intros. destruct H as [i AT].
+  unfold valid_successor; simpl. rewrite PTree.gmap. rewrite AT. 
+  simpl. exists (tunnel_instr f i); auto.
+Qed.
+
+Lemma branch_target_valid:
+  forall f pc,
+  wt_function f ->
+  valid_successor f pc ->
+  valid_successor (tunnel_function f) (branch_target f pc).
+Proof.
+  intros. apply tunnel_valid_successor. 
+  unfold branch_target. caseEq (branch_target_rec f pc 10); intros.
+  eapply branch_target_rec_valid; eauto.
+  auto.
+Qed.
+  
+Lemma wt_tunnel_instr:
+  forall f i,
+  wt_function f ->
+  wt_instr f i -> wt_instr (tunnel_function f) (tunnel_instr f i).
+Proof.
+  intros; inv H0; simpl; econstructor; eauto;
+  eapply branch_target_valid; eauto.
 Qed.
 
 Lemma wt_tunnel_function:
   forall f, wt_function f -> wt_function (tunnel_function f).
 Proof.
-  unfold wt_function; intros until b.
-  simpl. rewrite PTree.gmap. unfold option_map. 
-  caseEq (fn_code f)!pc. intros b0 AT EQ. 
-  injection EQ; intros; subst b. 
-  apply wt_tunnel_block. eauto. 
-  intros; discriminate.
+  intros. inversion H. constructor; simpl; auto.
+  intros until instr. rewrite PTree.gmap. unfold option_map. 
+  caseEq (fn_code f)!pc. intros b0 AT EQ. inv EQ. 
+  apply wt_tunnel_instr; eauto.
+  congruence.
+  eapply branch_target_valid; eauto.
 Qed.
 
 Lemma wt_tunnel_fundef:

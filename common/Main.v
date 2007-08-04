@@ -1,40 +1,48 @@
-(** The compiler back-end and its proof of semantic preservation *)
+(** The whole compiler and its proof of semantic preservation *)
 
 (** Libraries. *)
 Require Import Coqlib.
 Require Import Maps.
+Require Import Errors.
 Require Import AST.
 Require Import Values.
+Require Import Smallstep.
 (** Languages (syntax and semantics). *)
 Require Csyntax.
 Require Csem.
 Require Csharpminor.
 Require Cminor.
+Require CminorSel.
 Require RTL.
 Require LTL.
+Require LTLin.
 Require Linear.
 Require Mach.
 Require PPC.
 (** Translation passes. *)
 Require Cshmgen.
 Require Cminorgen.
+Require Selection.
 Require RTLgen.
 Require Constprop.
 Require CSE.
 Require Allocation.
 Require Tunneling.
 Require Linearize.
+Require Reload.
 Require Stacking.
 Require PPCgen.
 (** Type systems. *)
 Require Ctyping.
 Require RTLtyping.
 Require LTLtyping.
+Require LTLintyping.
 Require Lineartyping.
 Require Machtyping.
 (** Proofs of semantic preservation and typing preservation. *)
 Require Cshmgenproof3.
 Require Cminorgenproof.
+Require Selectionproof.
 Require RTLgenproof.
 Require Constpropproof.
 Require CSEproof.
@@ -44,266 +52,234 @@ Require Tunnelingproof.
 Require Tunnelingtyping.
 Require Linearizeproof.
 Require Linearizetyping.
+Require Reloadproof.
+Require Reloadtyping.
 Require Stackingproof.
 Require Stackingtyping.
-Require Machabstr2mach.
+Require Machabstr2concr.
 Require PPCgenproof.
+
+Open Local Scope string_scope.
 
 (** * Composing the translation passes *)
 
 (** We first define useful monadic composition operators,
     along with funny (but convenient) notations. *)
 
-Definition apply_total (A B: Set) (x: option A) (f: A -> B) : option B :=
-  match x with None => None | Some x1 => Some (f x1) end.
+Definition apply_total (A B: Set) (x: res A) (f: A -> B) : res B :=
+  match x with Error msg => Error msg | OK x1 => OK (f x1) end.
 
 Definition apply_partial (A B: Set)
-                         (x: option A) (f: A -> option B) : option B :=
-  match x with None => None | Some x1 => f x1 end.
+                         (x: res A) (f: A -> res B) : res B :=
+  match x with Error msg => Error msg | OK x1 => f x1 end.
 
 Notation "a @@@ b" :=
    (apply_partial _ _ a b) (at level 50, left associativity).
 Notation "a @@ b" :=
    (apply_total _ _ a b) (at level 50, left associativity).
 
-(** We define two translation functions for whole programs: one starting with
-  a C program, the other with a Cminor program.  Both
-  translations produce PPC programs ready for pretty-printing and
-  assembling.  
+(** We define three translation functions for whole programs: one
+  starting with a C program, one with a Cminor program, one with an
+  RTL program.  The three translations produce PPC programs ready for
+  pretty-printing and assembling.
 
-  There are two ways to compose the compiler passes.  The first translates
-  every function from the Cminor program from Cminor to RTL, then to LTL, etc,
-  all the way to PPC, and iterates this transformation for every function.
-  The second translates the whole Cminor program to a RTL program, then to
-  an LTL program, etc.  We follow the first approach because it has lower
-  memory requirements.
+  There are two ways to compose the compiler passes.  The first
+  translates every function from the Cminor program from Cminor to
+  RTL, then to LTL, etc, all the way to PPC, and iterates this
+  transformation for every function.  The second translates the whole
+  Cminor program to a RTL program, then to an LTL program, etc. 
+  Between Cminor and PPC, we follow the first approach because it has
+  lower memory requirements.  The translation from Clight to PPC
+  follows the second approach.
   
-  The translation of a Cminor function to a PPC function is as follows. *)
+  The translation of an RTL function to a PPC function is as follows. *)
 
-Definition transf_cminor_fundef (f: Cminor.fundef) : option PPC.fundef :=
-  Some f
-  @@@ RTLgen.transl_fundef
+Definition transf_rtl_fundef (f: RTL.fundef) : res PPC.fundef :=
+   OK f
    @@ Constprop.transf_fundef
    @@ CSE.transf_fundef
   @@@ Allocation.transf_fundef
    @@ Tunneling.tunnel_fundef
    @@ Linearize.transf_fundef
+   @@ Reload.transf_fundef
   @@@ Stacking.transf_fundef
   @@@ PPCgen.transf_fundef.
 
+(* Here is the translation of a Cminor function to a PPC function. *)
+
+Definition transf_cminor_fundef (f: Cminor.fundef) : res PPC.fundef :=
+  OK f
+   @@ Selection.sel_fundef
+  @@@ RTLgen.transl_fundef
+  @@@ transf_rtl_fundef.
+
 (** The corresponding translations for whole program follow. *)
 
-Definition transf_cminor_program (p: Cminor.program) : option PPC.program :=
+Definition transf_rtl_program (p: RTL.program) : res PPC.program :=
+  transform_partial_program transf_rtl_fundef p.
+
+Definition transf_cminor_program (p: Cminor.program) : res PPC.program :=
   transform_partial_program transf_cminor_fundef p.
 
-Definition transf_c_program (p: Csyntax.program) : option PPC.program :=
+Definition transf_c_program (p: Csyntax.program) : res PPC.program :=
   match Ctyping.typecheck_program p with
-  | false => None
+  | false =>
+      Error (msg "Ctyping: type error")
   | true =>
-      Some p 
+      OK p 
       @@@ Cshmgen.transl_program
       @@@ Cminorgen.transl_program
       @@@ transf_cminor_program
   end.
 
-(** * Equivalence with whole program transformations *)
-
-(** To prove semantic preservation for the whole compiler, it is easier to reason
-  over the second way to compose the compiler pass: the one that translate
-  whole programs through each compiler pass.  We now define this second translation
-  and prove that it produces the same PPC programs as the first translation. *)
-
-Definition transf_cminor_program2 (p: Cminor.program) : option PPC.program :=
-  Some p
-  @@@ RTLgen.transl_program
-   @@ Constprop.transf_program
-   @@ CSE.transf_program
-  @@@ Allocation.transf_program
-   @@ Tunneling.tunnel_program
-   @@ Linearize.transf_program
-  @@@ Stacking.transf_program
-  @@@ PPCgen.transf_program.
+(** The following lemmas help reason over compositions of passes. *)
 
 Lemma map_partial_compose:
   forall (X A B C: Set)
-         (f1: A -> option B) (f2: B -> option C)
-         (p: list (X * A)),
-  map_partial f1 p @@@ map_partial f2 =
-  map_partial (fun f => f1 f @@@ f2) p.
+         (ctx: X -> errmsg)
+         (f1: A -> res B) (f2: B -> res C)
+         (pa: list (X * A)) (pc: list (X * C)),
+  map_partial ctx (fun f => f1 f @@@ f2) pa = OK pc ->
+  exists pb, map_partial ctx f1 pa = OK pb /\ map_partial ctx f2 pb = OK pc.
 Proof.
-  induction p. simpl. auto.
-  simpl. destruct a. destruct (f1 a). 
-  simpl. simpl in IHp. destruct (map_partial f1 p).
-  simpl. simpl in IHp. destruct (f2 b).
-  destruct (map_partial f2 l). 
-  rewrite <- IHp. auto.
-  rewrite <- IHp. auto.
-  auto.
-  simpl. rewrite <- IHp. simpl. destruct (f2 b); auto.
-  simpl. auto.
+  induction pa; simpl.
+  intros. inv H. econstructor; eauto.
+  intro pc. destruct a as [x a].
+  caseEq (f1 a); simpl; try congruence. intros b F1.
+  caseEq (f2 b); simpl; try congruence. intros c F2 EQ.
+  monadInv EQ. exploit IHpa; eauto. intros [pb [P Q]]. 
+  rewrite P; simpl.
+  exists ((x, b) :: pb); split. auto. simpl. rewrite F2. rewrite Q. auto. 
 Qed.
 
-(*
-Lemma transform_partial_program2_compose:
-  forall (A B C V W X: Set)
-         (f1: A -> option B) (g1: V -> option W)
-         (f2: B -> option C) (g2: W -> option X)
-         (p: program A V),
-  transform_partial_program2 f1 g1 p @@@
-                  (fun p' => transform_partial_program2 f2 g2 p') =
-  transform_partial_program2 (fun x => f1 x @@@ f2) (fun x => g1 x @@@ g2) p.
-Proof.
-  unfold transform_partial_program2; intros.
-  rewrite <- map_partial_compose; simpl.
-  rewrite <- map_partial_compose; simpl.
-  destruct (map_partial f1 (prog_funct p)); simpl; auto.
-  destruct (map_partial g1 (prog_vars p)); simpl; auto.
-  destruct (map_partial f2 l); auto.
-Qed.
-
-Lemma transform_program_partial2_partial:
-  forall (A B V: Set) (f: A -> option B) (p: program A V),
-  transform_partial_program f p =
-  transform_partial_program2 f (fun x => Some x) p.
-Proof.
-  intros. unfold transform_partial_program, transform_partial_program2.
-  rewrite map_partial_identity. auto.
-Qed.
-
-Lemma apply_partial_transf_program:
-  forall (A B V: Set) (f: A -> option B) (x: option (program A V)),
-  x @@@ (fun p => transform_partial_program f p) =
-  x @@@ (fun p => transform_partial_program2 f (fun x => Some x) p).
-Proof.
-  intros. unfold apply_partial. 
-  destruct x. apply transform_program_partial2_partial. auto.
-Qed.
-*)
 Lemma transform_partial_program_compose:
   forall (A B C V: Set)
-         (f1: A -> option B) (f2: B -> option C)
-         (p: program A V),
-  transform_partial_program f1 p @@@
-                       (fun p' => transform_partial_program f2 p') =
-  transform_partial_program (fun f => f1 f @@@ f2) p.
+         (f1: A -> res B) (f2: B -> res C)
+         (pa: program A V) (pc: program C V),
+  transform_partial_program (fun f => f1 f @@@ f2) pa = OK pc ->
+  exists pb, transform_partial_program f1 pa = OK pb /\
+             transform_partial_program f2 pb = OK pc.
 Proof.
-  unfold transform_partial_program; intros.
-  rewrite <- map_partial_compose. simpl. 
-  destruct (map_partial f1 (prog_funct p)); simpl.
-  auto. auto. 
+  intros. monadInv H. 
+  exploit map_partial_compose; eauto. intros [xb [P Q]].
+  exists (mkprogram xb (prog_main pa) (prog_vars pa)); split.
+  unfold transform_partial_program. rewrite P; auto. 
+  unfold transform_partial_program. simpl. rewrite Q; auto.
 Qed.
 
-Lemma transform_program_partial_total:
-  forall (A B V: Set) (f: A -> B) (p: program A V),
-  Some (transform_program f p) =
-    transform_partial_program (fun x => Some (f x)) p.
+Lemma transform_program_partial_program:
+  forall (A B V: Set) (f: A -> B) (p: program A V) (tp: program B V),
+  transform_partial_program (fun x => OK (f x)) p = OK tp ->
+  transform_program f p = tp.
 Proof.
-  intros. unfold transform_program, transform_partial_program.
-  rewrite map_partial_total. auto. 
+  intros until tp. unfold transform_partial_program. 
+  rewrite map_partial_total. simpl. intros. inv H. auto. 
 Qed.
 
-Lemma apply_total_transf_program:
-  forall (A B V: Set) (f: A -> B) (x: option (program A V)),
-  x @@ (fun p => transform_program f p) =
-  x @@@ (fun p => transform_partial_program (fun x => Some (f x)) p).
-Proof.
-  intros. unfold apply_total, apply_partial. 
-  destruct x. apply transform_program_partial_total. auto.
-Qed.
-
-Lemma transf_cminor_program_equiv:
-  forall p, transf_cminor_program2 p = transf_cminor_program p.
-Proof.
-  intro. unfold transf_cminor_program, transf_cminor_program2, transf_cminor_fundef.
-  simpl. 
-  unfold RTLgen.transl_program,
-         Constprop.transf_program, RTL.program.
-  rewrite apply_total_transf_program.  
-  rewrite transform_partial_program_compose.
-  unfold CSE.transf_program, RTL.program.
-  rewrite apply_total_transf_program.
-  rewrite transform_partial_program_compose.
-  unfold Allocation.transf_program,
-         LTL.program, RTL.program. 
-  rewrite transform_partial_program_compose.
-  unfold Tunneling.tunnel_program, LTL.program.
-  rewrite apply_total_transf_program.
-  rewrite transform_partial_program_compose.
-  unfold Linearize.transf_program, LTL.program, Linear.program.
-  rewrite apply_total_transf_program. 
-  rewrite transform_partial_program_compose.
-  unfold Stacking.transf_program, Linear.program, Mach.program.
-  rewrite transform_partial_program_compose.
-  unfold PPCgen.transf_program, Mach.program, PPC.program.
-  rewrite transform_partial_program_compose.
-  reflexivity.
-Qed.
-
-(*
-Lemma transf_csharpminor_program_equiv:
-  forall p, transf_csharpminor_program2 p = transf_csharpminor_program p.
+Lemma transform_program_compose:
+  forall (A B C V: Set)
+         (f1: A -> res B) (f2: B -> C)
+         (pa: program A V) (pc: program C V),
+  transform_partial_program (fun f => f1 f @@ f2) pa = OK pc ->
+  exists pb, transform_partial_program f1 pa = OK pb /\
+             transform_program f2 pb = pc.
 Proof.
   intros. 
-  unfold transf_csharpminor_program2, transf_csharpminor_program, transf_csharpminor_fundef.
-  simpl. 
-  replace transf_cminor_program2 with transf_cminor_program.
-  unfold transf_cminor_program, Cminorgen.transl_program, Cminor.program, PPC.program.
-  rewrite apply_partial_transf_program.
-  rewrite transform_partial_program2_compose.
-  reflexivity.
-  symmetry. apply extensionality. exact transf_cminor_program_equiv.
+  replace (fun f : A => f1 f @@ f2)
+     with (fun f : A => f1 f @@@ (fun x => OK (f2 x))) in H.
+  exploit transform_partial_program_compose; eauto.
+  intros [pb [X Y]]. exists pb; split. auto. 
+  apply transform_program_partial_program. auto. 
+  apply extensionality; intro. destruct(f1 x); auto. 
 Qed.
-*)
+
+Lemma transform_partial_program_identity:
+  forall (A V: Set) (pa pb: program A V),
+  transform_partial_program (@OK A) pa = OK pb ->
+  pa = pb.
+Proof.
+  intros until pb. unfold transform_partial_program. 
+  replace (@OK A) with (fun b => @OK A b).
+  rewrite map_partial_identity. simpl. destruct pa; simpl; congruence.
+  apply extensionality; auto. 
+Qed.
 
 (** * Semantic preservation *)
 
-(** We prove that the [transf_program] translations preserve semantics.  The proof
-  composes the semantic preservation results for each pass.
+(** We prove that the [transf_program] translations preserve semantics.
+  The proof composes the semantic preservation results for each pass.
   This establishes the correctness of the whole compiler! *)
 
-Theorem transf_cminor_program_correct:
-  forall p tp t n,
-  transf_cminor_program p = Some tp ->
-  Cminor.exec_program p t (Vint n) ->
-  PPC.exec_program tp t (Vint n).
+Theorem transf_rtl_program_correct:
+  forall p tp beh,
+  transf_rtl_program p = OK tp ->
+  RTL.exec_program p beh ->
+  PPC.exec_program tp beh.
 Proof.
-  intros until n.
-  rewrite <- transf_cminor_program_equiv.
-  unfold transf_cminor_program2.
-  simpl. caseEq (RTLgen.transl_program p). intros p1 EQ1. 
-  simpl. set (p2 := CSE.transf_program (Constprop.transf_program p1)).
-  caseEq (Allocation.transf_program p2). intros p3 EQ3.
-  simpl. set (p4 := Tunneling.tunnel_program p3).
-  set (p5 := Linearize.transf_program p4).
-  caseEq (Stacking.transf_program p5). intros p6 EQ6.
-  simpl. intros EQTP EXEC.
+  intros. unfold transf_rtl_program, transf_rtl_fundef in H.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p7 [H7 P7]].
+  clear H.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H7) as [p6 [H6 P6]].
+  clear H7.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H6) as [p5 [H5 P5]].
+  clear H6. generalize (transform_program_partial_program _ _ _ _ _ _ P5). clear P5. intro P5.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H5) as [p4 [H4 P4]].
+  clear H5. generalize (transform_program_partial_program _ _ _ _ _ _ P4). clear P4. intro P4.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H4) as [p3 [H3 P3]].
+  clear H4. generalize (transform_program_partial_program _ _ _ _ _ _ P3). clear P3. intro P3.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H3) as [p2 [H2 P2]].
+  clear H3.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ H2) as [p1 [H1 P1]].
+  clear H2.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ H1) as [p0 [H00 P0]].
+  clear H1.
+  generalize (transform_partial_program_identity _ _ _ _ H00). clear H00. intro. subst p0.
+
   assert (WT3 : LTLtyping.wt_program p3).
     apply Alloctyping.program_typing_preserved with p2. auto.
   assert (WT4 : LTLtyping.wt_program p4).
-    unfold p4. apply Tunnelingtyping.program_typing_preserved. auto.
-  assert (WT5 : Lineartyping.wt_program p5).
-    unfold p5. apply Linearizetyping.program_typing_preserved. auto.
-  assert (WT6: Machtyping.wt_program p6).
-    apply Stackingtyping.program_typing_preserved with p5. auto. auto.
-  apply PPCgenproof.transf_program_correct with p6; auto.
-  apply Machabstr2mach.exec_program_equiv; auto.
-  apply Stackingproof.transl_program_correct with p5; auto.
-  unfold p5; apply Linearizeproof.transf_program_correct. 
-  unfold p4; apply Tunnelingproof.transf_program_correct. 
-  apply Allocproof.transl_program_correct with p2; auto.
-  unfold p2; apply CSEproof.transf_program_correct;
-  apply Constpropproof.transf_program_correct.
-  apply RTLgenproof.transl_program_correct with p; auto.
-  simpl; intros; discriminate.
-  simpl; intros; discriminate.
-  simpl; intros; discriminate.
+    subst p4. apply Tunnelingtyping.program_typing_preserved. auto.
+  assert (WT5 : LTLintyping.wt_program p5).
+    subst p5. apply Linearizetyping.program_typing_preserved. auto.
+  assert (WT6 : Lineartyping.wt_program p6).
+    subst p6. apply Reloadtyping.program_typing_preserved. auto.
+  assert (WT7: Machtyping.wt_program p7).
+    apply Stackingtyping.program_typing_preserved with p6. auto. auto.
+
+  apply PPCgenproof.transf_program_correct with p7; auto.
+  apply Machabstr2concr.exec_program_equiv; auto.
+  apply Stackingproof.transf_program_correct with p6; auto.
+  subst p6; apply Reloadproof.transf_program_correct; auto.
+  subst p5; apply Linearizeproof.transf_program_correct; auto.
+  subst p4; apply Tunnelingproof.transf_program_correct. 
+  apply Allocproof.transf_program_correct with p2; auto.
+  subst p2; apply CSEproof.transf_program_correct.
+  subst p1; apply Constpropproof.transf_program_correct. auto.
+Qed.
+
+Theorem transf_cminor_program_correct:
+  forall p tp t n,
+  transf_cminor_program p = OK tp ->
+  Cminor.exec_program p t (Vint n) ->
+  PPC.exec_program tp (Terminates t n).
+Proof.
+  intros. unfold transf_cminor_program, transf_cminor_fundef in H.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [H3 P3]].
+  clear H.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H3) as [p2 [H2 P2]].
+  clear H3.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ H2) as [p1 [H1 P1]].
+  generalize (transform_partial_program_identity _ _ _ _ H1). clear H1. intro. subst p1.
+  apply transf_rtl_program_correct with p3. auto.
+  apply RTLgenproof.transl_program_correct with p2; auto.
+  rewrite <- P1. apply Selectionproof.sel_program_correct; auto.
 Qed.
 
 Theorem transf_c_program_correct:
   forall p tp t n,
-  transf_c_program p = Some tp ->
+  transf_c_program p = OK tp ->
   Csem.exec_program p t (Vint n) ->
-  PPC.exec_program tp t (Vint n).
+  PPC.exec_program tp (Terminates t n).
 Proof.
   intros until n; unfold transf_c_program; simpl.
   caseEq (Ctyping.typecheck_program p); try congruence; intro.

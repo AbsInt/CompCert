@@ -137,6 +137,8 @@ let print_instruction oc labels = function
       fprintf oc "	bf	%a, %a\n" print_crbit bit print_label lbl
   | Pbl s ->
       fprintf oc "	bl	%a\n" print_symb s
+  | Pbs s ->
+      fprintf oc "	b	%a\n" print_symb s
   | Pblr ->
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
@@ -318,10 +320,6 @@ let print_instruction oc labels = function
       fprintf oc "	xoris	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
   | Plabel lbl ->
       if Labelset.mem lbl labels then fprintf oc "%a:\n" print_label lbl
-  | Piundef r ->
-      fprintf oc "	# undef %a\n" ireg r
-  | Pfundef r ->
-      fprintf oc "	# undef %a\n" freg r
 
 let rec labels_of_code = function
   | Coq_nil -> Labelset.empty

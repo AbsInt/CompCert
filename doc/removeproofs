@@ -2,7 +2,7 @@
 
 for i in $*; do
   mv $i $i.bak
-  sed -e '/<code class="keyword">Proof<\/code>\./,/<code class="keyword">Qed<\/code>\./d' $i.bak > $i
+  sed -e '/<code class="keyword">Proof<\/code> *\./,/<code class="keyword">\(Qed\|Defined\)<\/code> *\./d' $i.bak > $i
   rm $i.bak
 done
 

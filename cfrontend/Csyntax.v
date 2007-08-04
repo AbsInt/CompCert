@@ -1,6 +1,7 @@
 (** * Abstract syntax for the Clight language *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Integers.
 Require Import Floats.
 Require Import AST.
@@ -251,17 +252,19 @@ Qed.
 
 (** Byte offset for a field in a struct. *)
 
+Open Local Scope string_scope.
+
 Fixpoint field_offset_rec (id: ident) (fld: fieldlist) (pos: Z)
-                              {struct fld} : option Z :=
+                              {struct fld} : res Z :=
   match fld with
-  | Fnil => None
+  | Fnil => Error (MSG "Unknown field " :: CTX id :: nil)
   | Fcons id' t fld' =>
       if ident_eq id id'
-      then Some (align pos (alignof t))
+      then OK (align pos (alignof t))
       else field_offset_rec id fld' (align pos (alignof t) + sizeof t)
   end.
 
-Definition field_offset (id: ident) (fld: fieldlist) : option Z :=
+Definition field_offset (id: ident) (fld: fieldlist) : res Z :=
   field_offset_rec id fld 0.
 
 (* Describe how a variable of the given type must be accessed:

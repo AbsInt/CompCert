@@ -251,7 +251,7 @@ Definition equation_holds
      (vres: valnum) (rh: rhs) : Prop :=
   match rh with
   | Op op vl =>
-      eval_operation ge sp op (List.map valuation vl) =
+      eval_operation ge sp op (List.map valuation vl) m =
       Some (valuation vres)
   | Load chunk addr vl =>
       exists a,
@@ -337,6 +337,8 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           kill_loads before
       | Icall sig ros args res s =>
           empty_numbering
+      | Itailcall sig ros args =>
+          empty_numbering
       | Ialloc arg res s =>
           add_unknown before res
       | Icond cond args ifso ifnot =>
@@ -373,7 +375,6 @@ Definition is_trivial_op (op: operation) : bool :=
   | Ointconst _ => true
   | Oaddrsymbol _ _ => true
   | Oaddrstack _ => true
-  | Oundef => true
   | _ => false
   end.
 
@@ -426,7 +427,8 @@ Definition transf_function (f: function) : function :=
         f.(fn_nextpc)
         (transf_code_wf f approxs f.(fn_code_wf)).
 
-Definition transf_fundef := AST.transf_fundef transf_function.
+Definition transf_fundef (f: fundef) : fundef :=
+  AST.transf_fundef transf_function f.
 
 Definition transf_program (p: program) : program :=
   transform_program transf_fundef p.

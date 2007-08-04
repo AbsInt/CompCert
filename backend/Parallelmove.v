@@ -1,3 +1,14 @@
+(** Translation of parallel moves into sequences of individual moves.
+
+  In this file, we adapt the generic "parallel move" algorithm
+  (developed and proved correct in module [Parmov]) to the idiosyncraties
+  of the [LTLin] and [Linear] intermediate languages.  While the generic
+  algorithm assumes that registers never overlap, the locations
+  used in [LTLin] and [Linear] can overlap, and assigning one location
+  can set the values of other, overlapping locations to [Vundef].
+  We address this issue in the remainder of this file.
+*)
+
 Require Import Coqlib.
 Require Parmov.
 Require Import Values.
@@ -6,16 +17,28 @@ Require Import AST.
 Require Import Locations.
 Require Import Conventions.
 
+(** * Instantiating the generic parallel move algorithm *)
+
+(** The temporary location to use for a move is determined
+  by the type of the data being moved: register [IT2] for an
+  integer datum, and register [FT2] for a floating-point datum. *)
+
 Definition temp_for (l: loc) : loc :=
   match Loc.type l with Tint => R IT2 | Tfloat => R FT2 end.
 
 Definition parmove (srcs dsts: list loc) :=
-  Parmov.parmove2 loc temp_for Loc.eq srcs dsts.
+  Parmov.parmove2 loc Loc.eq temp_for srcs dsts.
 
 Definition moves := (list (loc * loc))%type.
 
+(** [exec_seq m] gives semantics to a sequence of elementary moves.
+  This semantics ignores the possibility of overlap: only the
+  target locations are updated, but the locations they
+  overlap with are not set to [Vundef].  See [effect_seqmove] below
+  for a semantics that accounts for overlaps. *)
+
 Definition exec_seq (m: moves) (e: Locmap.t) : Locmap.t :=
-  Parmov.exec_seq loc val Loc.eq m e.
+  Parmov.exec_seq loc Loc.eq val m e.
   
 Lemma temp_for_charact:
   forall l, temp_for l = R IT2 \/ temp_for l = R FT2.
@@ -52,6 +75,12 @@ Proof.
   apply Loc.notin_not_in; auto. auto.
 Qed.
 
+(** Instantiating the theorems proved in [Parmov], we obtain
+  the following properties of semantic correctness and well-typedness
+  of the generated sequence of moves.  Note that the semantic
+  correctness result is stated in terms of the [exec_seq] semantics,
+  and therefore does not account for overlap between locations. *)
+
 Lemma parmove_prop_1:
   forall srcs dsts,
   List.length srcs = List.length dsts ->
@@ -69,8 +98,8 @@ Proof.
     intros. apply disjoint_temp_not_temp. apply Loc.disjoint_notin with srcs; auto.
   assert (NTD: forall r, In r dsts -> Parmov.is_not_temp loc temp_for r).
     intros. apply disjoint_temp_not_temp. apply Loc.disjoint_notin with dsts; auto.
-  generalize (Parmov.parmove2_correctness loc temp_for val Loc.eq srcs dsts H NR NTS NTD e).
-  change (Parmov.exec_seq loc val Loc.eq (Parmov.parmove2 loc temp_for Loc.eq srcs dsts) e) with e'.
+  generalize (Parmov.parmove2_correctness loc Loc.eq temp_for val srcs dsts H NR NTS NTD e).
+  change (Parmov.exec_seq loc Loc.eq val (Parmov.parmove2 loc Loc.eq temp_for srcs dsts) e) with e'.
   intros [A B].
   split. auto. intros. apply B. auto. rewrite is_not_temp_charact; auto.
 Qed.
@@ -97,7 +126,7 @@ Proof.
     tauto.
     right. apply temp_for_charact.
   intros. apply H. 
-  apply (Parmov.parmove2_wf_moves loc temp_for Loc.eq srcs dsts s d H0). 
+  apply (Parmov.parmove2_wf_moves loc Loc.eq temp_for srcs dsts s d H0). 
 Qed.
 
 Lemma loc_type_temp_for:
@@ -134,10 +163,20 @@ Proof.
   rewrite loc_type_temp_for; auto.
   rewrite loc_type_temp_for; auto.
   intros. apply H. 
-  apply (Parmov.parmove2_wf_moves loc temp_for Loc.eq srcs dsts s d H0). 
+  apply (Parmov.parmove2_wf_moves loc Loc.eq temp_for srcs dsts s d H0). 
 Qed.
 
+(** * Accounting for overlap between locations *)
+
 Section EQUIVALENCE.
+
+(** We now prove the correctness of the generated sequence of elementary
+  moves, accounting for possible overlap between locations.
+  The proof is conducted under the following hypotheses: there must
+  be no partial overlap between
+- two distinct destinations (hypothesis [NOREPET]);
+- a source location and a destination location (hypothesis [NO_OVERLAP]).
+*)
 
 Variables srcs dsts: list loc.
 Hypothesis LENGTH: List.length srcs = List.length dsts.
@@ -146,8 +185,15 @@ Hypothesis NO_OVERLAP: Loc.no_overlap srcs dsts.
 Hypothesis NO_SRCS_TEMP: Loc.disjoint srcs temporaries.
 Hypothesis NO_DSTS_TEMP: Loc.disjoint dsts temporaries.
 
+(** [no_overlap_dests l] holds if location [l] does not partially overlap
+  a destination location: either it is identical to one of the
+  destinations, or it is disjoint from all destinations. *)
+
 Definition no_overlap_dests (l: loc) : Prop :=
   forall d, In d dsts -> l = d \/ Loc.diff l d.
+
+(** We show that [no_overlap_dests] holds for any destination location
+  and for any source location. *)
 
 Lemma dests_no_overlap_dests:
   forall l, In l dsts -> no_overlap_dests l.
@@ -201,9 +247,18 @@ Proof.
   elim H2; intro; subst d; auto.
 Qed.
 
+(** [locmap_equiv e1 e2] holds if the location maps [e1] and [e2]
+  assign the same values to all locations except temporaries [IT1], [FT1]
+  and except locations that partially overlap a destination. *)
+
 Definition locmap_equiv (e1 e2: Locmap.t): Prop :=
   forall l,
   no_overlap_dests l -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> e2 l = e1 l.
+
+(** The following predicates characterize the effect of one move
+  move ([effect_move]) and of a sequence of elementary moves
+  ([effect_seqmove]).  We allow the code generated for one move
+  to use the temporaries [IT1] and [FT1] in any way it needs. *)
 
 Definition effect_move (src dst: loc) (e e': Locmap.t): Prop :=
   e' dst = e src /\
@@ -217,12 +272,18 @@ Inductive effect_seqmove: list (loc * loc) -> Locmap.t -> Locmap.t -> Prop :=
       effect_seqmove m e2 e3 ->
       effect_seqmove ((s, d) :: m) e1 e3.
 
+(** The following crucial lemma shows that [locmap_equiv] is preserved
+  by executing one move [d <- s], once using the [effect_move]
+  predicate that accounts for partial overlap and the use of
+  temporaries [IT1], [FT1], or via the [Parmov.update] function that
+  does not account for any of these. *)
+
 Lemma effect_move_equiv:
   forall s d e1 e2 e1',
   (In s srcs \/ s = R IT2 \/ s = R FT2) ->
   (In d dsts \/ d = R IT2 \/ d = R FT2) ->
   locmap_equiv e1 e2 -> effect_move s d e1 e1' ->
-  locmap_equiv e1' (Parmov.update loc val Loc.eq d (e2 s) e2).
+  locmap_equiv e1' (Parmov.update loc Loc.eq val d (e2 s) e2).
 Proof.
   intros. destruct H2. red; intros. 
   unfold Parmov.update. destruct (Loc.eq l d). 
@@ -230,6 +291,9 @@ Proof.
   rewrite H2. apply H1; auto. apply source_no_overlap_dests; auto.
   rewrite H3; auto. apply dest_noteq_diff; auto. 
 Qed.
+
+(** We then extend the previous lemma to a sequence [mu] of elementary moves.
+*)
 
 Lemma effect_seqmove_equiv:
   forall mu e1 e1',
@@ -248,6 +312,13 @@ Proof.
   destruct (H1 s d (in_eq _ _)).
   eapply effect_move_equiv; eauto. 
 Qed.
+
+(** Here is the main result in this file: executing the sequence
+  of moves returned by the [parmove] function results in the
+  desired state for locations: the final values of destination locations
+  are the initial values of source locations, and all locations
+  that are disjoint from the temporaries and the destinations
+  keep their initial values. *)
 
 Lemma effect_parmove:
   forall e e',

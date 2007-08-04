@@ -32,10 +32,6 @@ let type_instr retty (Coq_pair(pc, i)) =
       ()
   | Iop(Omove, _, _, _) -> 
       ()
-  | Iop(Oundef, Coq_nil, res, _) ->
-      ()
-  | Iop(Oundef, _, _, _) ->
-      raise (Type_error "wrong Oundef")
   | Iop(op, args, res, _) ->
       let (Coq_pair(targs, tres)) = type_of_operation op in
       set_types args targs; set_type res tres
@@ -59,6 +55,23 @@ let type_instr retty (Coq_pair(pc, i)) =
           | Coq_inl _ -> "<reg>"
           | Coq_inr id -> extern_atom id in
         raise(Type_error (Printf.sprintf "type mismatch in Icall(%s): %s"
+                                         name msg))
+      end
+  | Itailcall(sg, ros, args) ->
+      begin try
+        begin match ros with
+        | Coq_inl r -> set_type r Tint
+        | Coq_inr _ -> ()
+        end;
+        set_types args sg.sig_args;
+        if sg.sig_res <> retty then
+          raise (Type_error "mismatch on return type")
+      with Type_error msg ->
+        let name =
+          match ros with
+          | Coq_inl _ -> "<reg>"
+          | Coq_inr id -> extern_atom id in
+        raise(Type_error (Printf.sprintf "type mismatch in Itailcall(%s): %s"
                                          name msg))
       end
   | Ialloc(arg, res, _) ->

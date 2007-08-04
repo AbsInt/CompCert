@@ -8,40 +8,78 @@ Require Import Floats.
 Require Import Events.
 Require Import Values.
 Require Import Mem.
-Require Import Op.
 Require Import Globalenvs.
+Require Import Switch.
 
 (** * Abstract syntax *)
 
 (** Cminor is a low-level imperative language structured in expressions,
-  statements, functions and programs.  Expressions include
-  reading local variables, reading and writing store locations,
-  arithmetic operations, function calls, and conditional expressions
-  (similar to [e1 ? e2 : e3] in C).  The [Elet] and [Eletvar] constructs
-  enable sharing the computations of subexpressions.  De Bruijn notation
-  is used: [Eletvar n] refers to the value bound by then [n+1]-th enclosing
-  [Elet] construct.
+  statements, functions and programs.  We first define the constants
+  and operators that occur within expressions. *)
 
-  A variant [condexpr] of [expr] is used to represent expressions
-  which are evaluated for their boolean value only and not their exact value.
-*)
+Inductive constant : Set :=
+  | Ointconst: int -> constant     (**r integer constant *)
+  | Ofloatconst: float -> constant (**r floating-point constant *)
+  | Oaddrsymbol: ident -> int -> constant (**r address of the symbol plus the offset *)
+  | Oaddrstack: int -> constant.   (**r stack pointer plus the given offset *)
+
+Inductive unary_operation : Set :=
+  | Ocast8unsigned: unary_operation        (**r 8-bit zero extension  *)
+  | Ocast8signed: unary_operation          (**r 8-bit sign extension  *)
+  | Ocast16unsigned: unary_operation       (**r 16-bit zero extension  *)
+  | Ocast16signed: unary_operation         (**r 16-bit sign extension *)
+  | Onegint: unary_operation               (**r integer opposite *)
+  | Onotbool: unary_operation              (**r boolean negation  *)
+  | Onotint: unary_operation               (**r bitwise complement  *)
+  | Onegf: unary_operation                 (**r float opposite *)
+  | Oabsf: unary_operation                 (**r float absolute value *)
+  | Osingleoffloat: unary_operation        (**r float truncation *)
+  | Ointoffloat: unary_operation           (**r integer to float *)
+  | Ofloatofint: unary_operation           (**r float to signed integer *)
+  | Ofloatofintu: unary_operation.         (**r float to unsigned integer *)
+
+Inductive binary_operation : Set :=
+  | Oadd: binary_operation                 (**r integer addition *)
+  | Osub: binary_operation                 (**r integer subtraction *)
+  | Omul: binary_operation                 (**r integer multiplication *)
+  | Odiv: binary_operation                 (**r integer signed division *)
+  | Odivu: binary_operation                (**r integer unsigned division *)
+  | Omod: binary_operation                 (**r integer signed modulus *)
+  | Omodu: binary_operation                (**r integer unsigned modulus *)
+  | Oand: binary_operation                 (**r bitwise ``and'' *)
+  | Oor: binary_operation                  (**r bitwise ``or'' *)
+  | Oxor: binary_operation                 (**r bitwise ``xor'' *)
+  | Oshl: binary_operation                 (**r left shift *)
+  | Oshr: binary_operation                 (**r right signed shift *)
+  | Oshru: binary_operation                (**r right unsigned shift *)
+  | Oaddf: binary_operation                (**r float addition *)
+  | Osubf: binary_operation                (**r float subtraction *)
+  | Omulf: binary_operation                (**r float multiplication *)
+  | Odivf: binary_operation                (**r float division *)
+  | Ocmp: comparison -> binary_operation   (**r integer signed comparison *)
+  | Ocmpu: comparison -> binary_operation  (**r integer unsigned comparison *)
+  | Ocmpf: comparison -> binary_operation. (**r float comparison *)
+
+(** Expressions include reading local variables, constants and
+  arithmetic operations, reading and writing store locations,
+  function calls, and conditional expressions
+  (similar to [e1 ? e2 : e3] in C).
+  The [Elet] and [Eletvar] constructs enable sharing the computations
+  of subexpressions.  De Bruijn notation is used: [Eletvar n] refers
+  to the value bound by then [n+1]-th enclosing [Elet] construct. *)
 
 Inductive expr : Set :=
   | Evar : ident -> expr
-  | Eop : operation -> exprlist -> expr
-  | Eload : memory_chunk -> addressing -> exprlist -> expr
-  | Estore : memory_chunk -> addressing -> exprlist -> expr -> expr
+  | Econst : constant -> expr
+  | Eunop : unary_operation -> expr -> expr
+  | Ebinop : binary_operation -> expr -> expr -> expr
+  | Eload : memory_chunk -> expr -> expr
+  | Estore : memory_chunk -> expr -> expr -> expr
   | Ecall : signature -> expr -> exprlist -> expr
-  | Econdition : condexpr -> expr -> expr -> expr
+  | Econdition : expr -> expr -> expr -> expr
   | Elet : expr -> expr -> expr
   | Eletvar : nat -> expr
   | Ealloc : expr -> expr
-
-with condexpr : Set :=
-  | CEtrue: condexpr
-  | CEfalse: condexpr
-  | CEcond: condition -> exprlist -> condexpr
-  | CEcondition : condexpr -> condexpr -> condexpr -> condexpr
 
 with exprlist : Set :=
   | Enil: exprlist
@@ -57,12 +95,13 @@ Inductive stmt : Set :=
   | Sexpr: expr -> stmt
   | Sassign : ident -> expr -> stmt
   | Sseq: stmt -> stmt -> stmt
-  | Sifthenelse: condexpr -> stmt -> stmt -> stmt
+  | Sifthenelse: expr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
   | Sswitch: expr -> list (int * nat) -> nat -> stmt
-  | Sreturn: option expr -> stmt.
+  | Sreturn: option expr -> stmt
+  | Stailcall: signature -> expr -> exprlist -> stmt.
 
 (** Functions are composed of a signature, a list of parameter names,
   a list of local variables, and a  statement representing
@@ -97,30 +136,31 @@ Definition funsig (fd: fundef) :=
 Inductive outcome: Set :=
   | Out_normal: outcome                (**r continue in sequence *)
   | Out_exit: nat -> outcome           (**r terminate [n+1] enclosing blocks *)
-  | Out_return: option val -> outcome. (**r return immediately to caller *)
-
-Definition outcome_result_value
-                 (out: outcome) (ot: option typ) (v: val) : Prop :=
-  match out, ot with
-  | Out_normal, None => v = Vundef
-  | Out_return None, None => v = Vundef
-  | Out_return (Some v'), Some ty => v = v'
-  | _, _ => False
-  end.
+  | Out_return: option val -> outcome  (**r return immediately to caller *)
+  | Out_tailcall_return: val -> outcome. (**r already returned to caller via a tailcall *)
 
 Definition outcome_block (out: outcome) : outcome :=
   match out with
-  | Out_normal => Out_normal
   | Out_exit O => Out_normal
   | Out_exit (S n) => Out_exit n
-  | Out_return optv => Out_return optv
+  | out => out
   end.
 
-Fixpoint switch_target (n: int) (dfl: nat) (cases: list (int * nat))
-                       {struct cases} : nat :=
-  match cases with
-  | nil => dfl
-  | (n1, lbl1) :: rem => if Int.eq n n1 then lbl1 else switch_target n dfl rem
+Definition outcome_result_value
+    (out: outcome) (retsig: option typ) (vres: val) : Prop :=
+  match out, retsig with
+  | Out_normal, None => vres = Vundef
+  | Out_return None, None => vres = Vundef
+  | Out_return (Some v), Some ty => vres = v
+  | Out_tailcall_return v, _ => vres = v
+  | _, _ => False
+  end.
+
+Definition outcome_free_mem
+    (out: outcome) (m: mem) (sp: block) : mem :=
+  match out with
+  | Out_tailcall_return _ => m
+  | _ => Mem.free m sp
   end.
 
 (** Three kinds of evaluation environments are involved:
@@ -154,10 +194,105 @@ Section RELSEM.
 
 Variable ge: genv.
 
-(** Evaluation of an expression: [eval_expr ge sp le e m a m' v]
+(** Evaluation of constants and operator applications.
+    [None] is returned when the computation is undefined, e.g.
+    if arguments are of the wrong types, or in case of an integer division
+    by zero. *)
+
+Definition eval_constant (sp: val) (cst: constant) : option val :=
+  match cst with
+  | Ointconst n => Some (Vint n)
+  | Ofloatconst n => Some (Vfloat n)
+  | Oaddrsymbol s ofs =>
+      match Genv.find_symbol ge s with
+      | None => None
+      | Some b => Some (Vptr b ofs)
+      end
+  | Oaddrstack ofs =>
+      match sp with
+      | Vptr b n => Some (Vptr b (Int.add n ofs))
+      | _ => None
+      end
+  end.
+
+Definition eval_unop (op: unary_operation) (arg: val) : option val :=
+  match op, arg with
+  | Ocast8unsigned, _ => Some (Val.cast8unsigned arg)
+  | Ocast8signed, _ => Some (Val.cast8signed arg)
+  | Ocast16unsigned, _ => Some (Val.cast16unsigned arg)
+  | Ocast16signed, _ => Some (Val.cast16signed arg)
+  | Onegint, Vint n1 => Some (Vint (Int.neg n1))
+  | Onotbool, Vint n1 => Some (Val.of_bool (Int.eq n1 Int.zero))
+  | Onotbool, Vptr b1 n1 => Some Vfalse
+  | Onotint, Vint n1 => Some (Vint (Int.not n1))
+  | Onegf, Vfloat f1 => Some (Vfloat (Float.neg f1))
+  | Oabsf, Vfloat f1 => Some (Vfloat (Float.abs f1))
+  | Osingleoffloat, _ => Some (Val.singleoffloat arg)
+  | Ointoffloat, Vfloat f1 => Some (Vint (Float.intoffloat f1))
+  | Ofloatofint, Vint n1 => Some (Vfloat (Float.floatofint n1))
+  | Ofloatofintu, Vint n1 => Some (Vfloat (Float.floatofintu n1))
+  | _, _ => None
+  end.
+
+Definition eval_compare_null (c: comparison) (n: int) : option val :=
+  if Int.eq n Int.zero 
+  then match c with Ceq => Some Vfalse | Cne => Some Vtrue | _ => None end
+  else None.
+
+Definition eval_binop
+            (op: binary_operation) (arg1 arg2: val) (m: mem): option val :=
+  match op, arg1, arg2 with
+  | Oadd, Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
+  | Oadd, Vint n1, Vptr b2 n2 => Some (Vptr b2 (Int.add n2 n1))
+  | Oadd, Vptr b1 n1, Vint n2 => Some (Vptr b1 (Int.add n1 n2))
+  | Osub, Vint n1, Vint n2 => Some (Vint (Int.sub n1 n2))
+  | Osub, Vptr b1 n1, Vint n2 => Some (Vptr b1 (Int.sub n1 n2))
+  | Osub, Vptr b1 n1, Vptr b2 n2 =>
+      if eq_block b1 b2 then Some (Vint (Int.sub n1 n2)) else None
+  | Omul, Vint n1, Vint n2 => Some (Vint (Int.mul n1 n2))
+  | Odiv, Vint n1, Vint n2 =>
+      if Int.eq n2 Int.zero then None else Some (Vint (Int.divs n1 n2))
+  | Odivu, Vint n1, Vint n2 =>
+      if Int.eq n2 Int.zero then None else Some (Vint (Int.divu n1 n2))
+  | Omod, Vint n1, Vint n2 =>
+      if Int.eq n2 Int.zero then None else Some (Vint (Int.mods n1 n2))
+  | Omodu, Vint n1, Vint n2 =>
+      if Int.eq n2 Int.zero then None else Some (Vint (Int.modu n1 n2))
+  | Oand, Vint n1, Vint n2 => Some (Vint (Int.and n1 n2))
+  | Oor, Vint n1, Vint n2 => Some (Vint (Int.or n1 n2))
+  | Oxor, Vint n1, Vint n2 => Some (Vint (Int.xor n1 n2))
+  | Oshl, Vint n1, Vint n2 =>
+      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shl n1 n2)) else None
+  | Oshr, Vint n1, Vint n2 =>
+      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shr n1 n2)) else None
+  | Oshru, Vint n1, Vint n2 =>
+      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shru n1 n2)) else None
+   | Oaddf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.add f1 f2))
+  | Osubf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.sub f1 f2))
+  | Omulf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.mul f1 f2))
+  | Odivf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.div f1 f2))
+  | Ocmp c, Vint n1, Vint n2 =>
+      Some (Val.of_bool(Int.cmp c n1 n2))
+  | Ocmp c, Vptr b1 n1, Vptr b2 n2 =>
+      if valid_pointer m b1 (Int.signed n1)
+      && valid_pointer m b2 (Int.signed n2) then
+        if eq_block b1 b2 then Some(Val.of_bool(Int.cmp c n1 n2)) else None
+      else
+        None
+  | Ocmp c, Vptr b1 n1, Vint n2 => eval_compare_null c n2
+  | Ocmp c, Vint n1, Vptr b2 n2 => eval_compare_null c n1
+  | Ocmpu c, Vint n1, Vint n2 =>
+      Some (Val.of_bool(Int.cmpu c n1 n2))
+  | Ocmpf c, Vfloat f1, Vfloat f2 =>
+      Some (Val.of_bool (Float.cmp c f1 f2))
+  | _, _, _ => None
+  end.
+
+(** Evaluation of an expression: [eval_expr ge sp le e m a t m' v]
   states that expression [a], in initial local environment [e] and
   memory state [m], evaluates to value [v].  [m'] is the final
   memory state, reflecting memory stores possibly performed by [a].
+  [t] is the trace of I/O events generated during the evaluation.
   Expressions do not assign variables, therefore the local environment
   [e] is unchanged.  [ge] and [le] are the global environment and let
   environment respectively, and are unchanged during evaluation.  [sp]
@@ -172,25 +307,34 @@ Inductive eval_expr:
       forall sp le e m id v,
       PTree.get id e = Some v ->
       eval_expr sp le e m (Evar id) E0 m v
-  | eval_Eop:
-      forall sp le e m op al t m1 vl v,
-      eval_exprlist sp le e m al t m1 vl ->
-      eval_operation ge sp op vl = Some v ->
-      eval_expr sp le e m (Eop op al) t m1 v
-  | eval_Eload:
-      forall sp le e m chunk addr al t m1 v vl a,
-      eval_exprlist sp le e m al t m1 vl ->
-      eval_addressing ge sp addr vl = Some a ->
-      Mem.loadv chunk m1 a = Some v ->
-      eval_expr sp le e m (Eload chunk addr al) t m1 v
-  | eval_Estore:
-      forall sp le e m chunk addr al b t t1 m1 vl t2 m2 m3 v a,
-      eval_exprlist sp le e m al t1 m1 vl ->
-      eval_expr sp le e m1 b t2 m2 v ->
-      eval_addressing ge sp addr vl = Some a ->
-      Mem.storev chunk m2 a v = Some m3 ->
+  | eval_Econst:
+      forall sp le e m cst v,
+      eval_constant sp cst = Some v ->
+      eval_expr sp le e m (Econst cst) E0 m v
+  | eval_Eunop:
+      forall sp le e m op a t m1 v1 v,
+      eval_expr sp le e m a t m1 v1 ->
+      eval_unop op v1 = Some v ->
+      eval_expr sp le e m (Eunop op a) t m1 v
+  | eval_Ebinop:
+      forall sp le e m op a1 a2 t1 m1 v1 t2 m2 v2 t v,
+      eval_expr sp le e m a1 t1 m1 v1 ->
+      eval_expr sp le e m1 a2 t2 m2 v2 ->
+      eval_binop op v1 v2 m2 = Some v ->
       t = t1 ** t2 ->
-      eval_expr sp le e m (Estore chunk addr al b) t m3 v
+      eval_expr sp le e m (Ebinop op a1 a2) t m2 v
+  | eval_Eload:
+      forall sp le e m chunk a t m1 v1 v,
+      eval_expr sp le e m a t m1 v1 ->
+      Mem.loadv chunk m1 v1 = Some v ->
+      eval_expr sp le e m (Eload chunk a) t m1 v
+  | eval_Estore:
+      forall sp le e m chunk a1 a2 t t1 m1 v1 t2 m2 v2 m3,
+      eval_expr sp le e m a1 t1 m1 v1 ->
+      eval_expr sp le e m1 a2 t2 m2 v2 ->
+      Mem.storev chunk m2 v1 v2 = Some m3 ->
+      t = t1 ** t2 ->
+      eval_expr sp le e m (Estore chunk a1 a2) t m3 v2
   | eval_Ecall:
       forall sp le e m sig a bl t t1 m1 t2 m2 t3 m3 vf vargs vres f,
       eval_expr sp le e m a t1 m1 vf ->
@@ -201,11 +345,12 @@ Inductive eval_expr:
       t = t1 ** t2 ** t3 ->
       eval_expr sp le e m (Ecall sig a bl) t m3 vres
   | eval_Econdition:
-      forall sp le e m a b c t t1 m1 v1 t2 m2 v2,
-      eval_condexpr sp le e m a t1 m1 v1 ->
-      eval_expr sp le e m1 (if v1 then b else c) t2 m2 v2 ->
+      forall sp le e m a1 a2 a3 t t1 m1 v1 b1 t2 m2 v2,
+      eval_expr sp le e m a1 t1 m1 v1 ->
+      Val.bool_of_val v1 b1 ->
+      eval_expr sp le e m1 (if b1 then a2 else a3) t2 m2 v2 ->
       t = t1 ** t2 ->
-      eval_expr sp le e m (Econdition a b c) t m2 v2
+      eval_expr sp le e m (Econdition a1 a2 a3) t m2 v2
   | eval_Elet:
       forall sp le e m a b t t1 m1 v1 t2 m2 v2,
       eval_expr sp le e m a t1 m1 v1 ->
@@ -221,33 +366,6 @@ Inductive eval_expr:
       eval_expr sp le e m a t m1 (Vint n) ->
       Mem.alloc m1 0 (Int.signed n) = (m2, b) ->
       eval_expr sp le e m (Ealloc a) t m2 (Vptr b Int.zero)
-
-(** Evaluation of a condition expression:
-  [eval_condexpr ge sp le e m a m' b]
-  states that condition expression [a] evaluates to the boolean value [b].
-  The other parameters are as in [eval_expr].
-*)
-
-with eval_condexpr:
-         val -> letenv -> env ->
-         mem -> condexpr -> trace -> mem -> bool -> Prop :=
-  | eval_CEtrue:
-      forall sp le e m,
-      eval_condexpr sp le e m CEtrue E0 m true
-  | eval_CEfalse:
-      forall sp le e m,
-      eval_condexpr sp le e m CEfalse E0 m false
-  | eval_CEcond:
-      forall sp le e m cond al t1 m1 vl b,
-      eval_exprlist sp le e m al t1 m1 vl ->
-      eval_condition cond vl = Some b ->
-      eval_condexpr sp le e m (CEcond cond al) t1 m1 b
-  | eval_CEcondition:
-      forall sp le e m a b c t t1 m1 vb1 t2 m2 vb2,
-      eval_condexpr sp le e m a t1 m1 vb1 ->
-      eval_condexpr sp le e m1 (if vb1 then b else c) t2 m2 vb2 ->
-      t = t1 ** t2 ->
-      eval_condexpr sp le e m (CEcondition a b c) t m2 vb2
 
 (** Evaluation of a list of expressions:
   [eval_exprlist ge sp le al m a m' vl]
@@ -272,6 +390,7 @@ with eval_exprlist:
 (** Evaluation of a function invocation: [eval_funcall ge m f args m' res]
   means that the function [f], applied to the arguments [args] in
   memory state [m], returns the value [res] in modified memory state [m'].
+  [t] is the trace of observable events generated during the invocation.
 *)
 
 with eval_funcall:
@@ -283,7 +402,7 @@ with eval_funcall:
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       exec_stmt (Vptr sp Int.zero) e m1 f.(fn_body) t e2 m2 out ->
       outcome_result_value out f.(fn_sig).(sig_res) vres ->
-      eval_funcall m (Internal f) vargs t (Mem.free m2 sp) vres
+      eval_funcall m (Internal f) vargs t (outcome_free_mem out m2 sp) vres
   | eval_funcall_external:
       forall ef m args t res,
       event_match ef args t res ->
@@ -291,7 +410,10 @@ with eval_funcall:
 
 (** Execution of a statement: [exec_stmt ge sp e m s e' m' out]
   means that statement [s] executes with outcome [out].
-  The other parameters are as in [eval_expr]. *)
+  [e] is the initial environment and [m] is the initial memory state.
+  [e'] is the final environment, reflecting variable assignments performed
+  by [s].  [m'] is the final memory state, reflecting memory stores
+  performed by [s].  The other parameters are as in [eval_expr]. *)
 
 with exec_stmt:
          val ->
@@ -309,9 +431,10 @@ with exec_stmt:
       eval_expr sp nil e m a t m1 v ->
       exec_stmt sp e m (Sassign id a) t (PTree.set id v e) m1 Out_normal
   | exec_Sifthenelse:
-      forall sp e m a s1 s2 t t1 m1 v1 t2 e2 m2 out,
-      eval_condexpr sp nil e m a t1 m1 v1 ->
-      exec_stmt sp e m1 (if v1 then s1 else s2) t2 e2 m2 out ->
+      forall sp e m a s1 s2 t t1 m1 v1 b1 t2 e2 m2 out,
+      eval_expr sp nil e m a t1 m1 v1 ->
+      Val.bool_of_val v1 b1 ->
+      exec_stmt sp e m1 (if b1 then s1 else s2) t2 e2 m2 out ->
       t = t1 ** t2 ->
       exec_stmt sp e m (Sifthenelse a s1 s2) t e2 m2 out
   | exec_Sseq_continue:
@@ -354,13 +477,29 @@ with exec_stmt:
   | exec_Sreturn_some:
       forall sp e m a t m1 v,
       eval_expr sp nil e m a t m1 v ->
-      exec_stmt sp e m (Sreturn (Some a)) t e m1 (Out_return (Some v)).
+      exec_stmt sp e m (Sreturn (Some a)) t e m1 (Out_return (Some v))
+  | exec_Stailcall:
+      forall sp e m sig a bl t t1 m1 t2 m2 t3 m3 vf vargs vres f,
+      eval_expr (Vptr sp Int.zero) nil e m a t1 m1 vf ->
+      eval_exprlist (Vptr sp Int.zero) nil e m1 bl t2 m2 vargs ->
+      Genv.find_funct ge vf = Some f ->
+      funsig f = sig ->
+      eval_funcall (Mem.free m2 sp) f vargs t3 m3 vres ->
+      t = t1 ** t2 ** t3 ->
+      exec_stmt (Vptr sp Int.zero) e m (Stailcall sig a bl) t e m3 (Out_tailcall_return vres).
+
+Scheme eval_expr_ind4 := Minimality for eval_expr Sort Prop
+  with eval_exprlist_ind4 := Minimality for eval_exprlist Sort Prop
+  with eval_funcall_ind4 := Minimality for eval_funcall Sort Prop
+  with exec_stmt_ind4 := Minimality for exec_stmt Sort Prop.
 
 End RELSEM.
 
-(** Execution of a whole program: [exec_program p r]
+(** Execution of a whole program: [exec_program p t r]
   holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] eventually returns value [r]. *)
+  in the initial memory state for [p] performs the input/output
+  operations described in the trace [t], and eventually returns value [r].
+*)
 
 Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in

@@ -1,8 +1,9 @@
 (** Pseudo-registers and register states.
 
-  This library defines the type of pseudo-registers used in the RTL
-  intermediate language, and of mappings from pseudo-registers to
-  values as used in the dynamic semantics of RTL. *)
+  This library defines the type of pseudo-registers (also known as
+  "temporaries" in compiler literature) used in the RTL
+  intermediate language.  We also define finite sets and finite maps
+  over pseudo-registers. *)
 
 Require Import Coqlib.
 Require Import AST.

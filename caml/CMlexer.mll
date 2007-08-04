@@ -30,8 +30,10 @@ rule token = parse
   | "|"     { BAR }
   | "||"    { BARBAR }
   | "^"     { CARET }
+  | "case"  { CASE }
   | ":"    { COLON }
   | ","    { COMMA }
+  | "default" { DEFAULT }
   | "$"    { DOLLAR }
   | "else"    { ELSE }
   | "="    { EQUAL }
@@ -75,6 +77,7 @@ rule token = parse
   | "let"     { LET }
   | "loop"    { LOOP }
   | "("    { LPAREN }
+  | "match" { MATCH }
   | "-"    { MINUS }
   | "->"    { MINUSGREATER }
   | "-f"    { MINUSF }

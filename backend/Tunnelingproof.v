@@ -7,6 +7,7 @@ Require Import Values.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
 Require Import LTL.
@@ -14,41 +15,74 @@ Require Import Tunneling.
 
 (** * Properties of branch target computation *)
 
-Lemma is_goto_block_correct:
+Lemma is_goto_instr_correct:
   forall b s,
-  is_goto_block b = Some s -> b = Some (Bgoto s).
+  is_goto_instr b = Some s -> b = Some (Lnop s).
 Proof.
-  unfold is_goto_block; intros.
-  destruct b. destruct b; discriminate || congruence. 
-  discriminate.
+  unfold is_goto_instr; intros.
+  destruct b; try discriminate.
+  destruct i; discriminate || congruence. 
 Qed. 
 
 Lemma branch_target_rec_1:
   forall f pc n,
   branch_target_rec f pc n = Some pc
   \/ branch_target_rec f pc n = None
-  \/ exists pc', f.(fn_code)!pc = Some(Bgoto pc').
+  \/ exists pc', f.(fn_code)!pc = Some(Lnop pc').
 Proof.
   intros. destruct n; simpl.
   right; left; auto.
-  caseEq (is_goto_block f.(fn_code)!pc); intros.
-  right; right. exists n0. apply is_goto_block_correct; auto.
+  caseEq (is_goto_instr f.(fn_code)!pc); intros.
+  right; right. exists n0. apply is_goto_instr_correct; auto.
   left; auto.
 Qed.
 
 Lemma branch_target_rec_2:
   forall f n pc1 pc2 pc3,
-  f.(fn_code)!pc1 = Some (Bgoto pc2) ->
+  f.(fn_code)!pc1 = Some (Lnop pc2) ->
   branch_target_rec f pc1 n = Some pc3 ->
   branch_target_rec f pc2 n = Some pc3.
 Proof.
   induction n. 
   simpl. intros; discriminate.
   intros pc1 pc2 pc3 ATpc1 H. simpl in H. 
-  unfold is_goto_block in H; rewrite ATpc1 in H.
-  simpl. caseEq (is_goto_block f.(fn_code)!pc2); intros.
-  apply IHn with pc2. apply is_goto_block_correct; auto. auto.
+  unfold is_goto_instr in H; rewrite ATpc1 in H.
+  simpl. caseEq (is_goto_instr f.(fn_code)!pc2); intros.
+  apply IHn with pc2. apply is_goto_instr_correct; auto. auto.
   destruct n; simpl in H. discriminate. rewrite H0 in H. auto.
+Qed.
+
+(** Counting the number of consecutive gotos. *)
+
+Fixpoint count_goto_rec (f: LTL.function) (pc: node) (count: nat)
+                        {struct count} : nat :=
+  match count with
+  | Datatypes.O => Datatypes.O
+  | Datatypes.S count' =>
+      match is_goto_instr f.(fn_code)!pc with
+      | Some s => Datatypes.S (count_goto_rec f s count')
+      | None => Datatypes.O
+      end
+    end.
+
+Definition count_goto (f: LTL.function) (pc: node) : nat :=
+  count_goto_rec f pc 10%nat.
+
+Lemma count_goto_rec_prop:
+  forall f n pc1 pc2 pc3,
+  f.(fn_code)!pc1 = Some (Lnop pc2) ->
+  branch_target_rec f pc1 n = Some pc3 ->
+  (count_goto_rec f pc2 n < count_goto_rec f pc1 n)%nat.
+Proof.
+  induction n.
+  simpl; intros. discriminate.
+  intros pc1 pc2 pc3 ATpc1 H. simpl in H. 
+  unfold is_goto_instr in H; rewrite ATpc1 in H.
+  simpl. unfold is_goto_instr at 2. rewrite ATpc1. 
+  caseEq (is_goto_instr f.(fn_code)!pc2); intros.
+  exploit (IHn pc2); eauto. apply is_goto_instr_correct; eauto. 
+  omega.
+  omega.
 Qed.
 
 (** The following lemma captures the property of [branch_target]
@@ -57,8 +91,9 @@ Qed.
 Lemma branch_target_characterization:
   forall f pc,
   branch_target f pc = pc \/
-  (exists pc', f.(fn_code)!pc = Some(Bgoto pc')
-            /\ branch_target f pc' = branch_target f pc).
+  (exists pc', f.(fn_code)!pc = Some(Lnop pc')
+            /\ branch_target f pc' = branch_target f pc
+            /\ count_goto f pc' < count_goto f pc)%nat.
 Proof.
   intros. unfold branch_target. 
   generalize (branch_target_rec_1 f pc 10%nat). 
@@ -67,7 +102,8 @@ Proof.
   rewrite A. left; auto.
   caseEq (branch_target_rec f pc 10%nat). intros pcx BT.
   right. exists pc'. split. auto. 
-  rewrite (branch_target_rec_2 _ _ _ _ _ AT BT). auto.
+  split. rewrite (branch_target_rec_2 _ _ _ _ _ AT BT). auto.
+  unfold count_goto. eapply count_goto_rec_prop; eauto. 
   intro. left; auto.
 Qed.
 
@@ -103,221 +139,233 @@ Proof.
   destruct f; reflexivity.
 Qed.
 
-(** These are inversion lemmas, characterizing what happens in the LTL
-  semantics when executing [Bgoto] instructions or basic blocks. *)
-
-Lemma exec_instrs_Bgoto_inv:
-  forall sp b1 ls1 m1 t b2 ls2 m2,
-  exec_instrs ge sp b1 ls1 m1 t b2 ls2 m2 ->
-  forall s1,
-  b1 = Bgoto s1 -> t = E0 /\ b2 = b1 /\ ls2 = ls1 /\ m2 = m1.
+Lemma find_function_translated:
+  forall ros ls f,
+  find_function ge ros ls = Some f ->
+  find_function tge ros ls = Some (tunnel_fundef f).
 Proof.
-  induction 1. 
-  intros. tauto.
-  intros. subst b1. inversion H. 
-  intros. generalize (IHexec_instrs1 s1 H2). intros [A [B [C D]]].
-  subst t1 b2 rs2 m2. 
-  generalize (IHexec_instrs2 s1 H2). intros [A [B [C D]]].
-  subst t2 b3 rs3 m3. intuition. traceEq. 
-Qed.
-
-Lemma exec_block_Bgoto_inv:
-  forall sp s ls1 m1 t out ls2 m2,  
-  exec_block ge sp (Bgoto s) ls1 m1 t out ls2 m2 ->
-  t = E0 /\ out = Cont s /\ ls2 = ls1 /\ m2 = m1.
-Proof.
-  intros. inversion H;
-  generalize (exec_instrs_Bgoto_inv _ _ _ _ _ _ _ _ H0 s (refl_equal _));
-  intros [A [B [C D]]];
-  try discriminate.
-  intuition congruence.
-Qed.
-
-Lemma exec_blocks_Bgoto_inv:
-  forall c sp pc1 ls1 m1 t out ls2 m2 s,
-  exec_blocks ge c sp pc1 ls1 m1 t out ls2 m2 ->
-  c!pc1 = Some (Bgoto s) ->
-  (t = E0 /\ out = Cont pc1 /\ ls2 = ls1 /\ m2 = m1)
-  \/ exec_blocks ge c sp s ls1 m1 t out ls2 m2.
-Proof.
-  induction 1; intros.
-  left; tauto.
-  assert (b = Bgoto s). congruence. subst b. 
-  generalize (exec_block_Bgoto_inv _ _ _ _ _ _ _ _ H0). 
-  intros [A [B [C D]]]. subst t out rs' m'.
-  right. apply exec_blocks_refl.
-  elim (IHexec_blocks1 H2).
-  intros [A [B [C D]]]. 
-  assert (pc2 = pc1). congruence. subst t1 rs2 m2 pc2.
-  replace t with t2. apply IHexec_blocks2; auto. traceEq.
-  intro. right. 
-  eapply exec_blocks_trans; eauto. 
-Qed.
-
-(** The following [exec_*_prop] predicates state the correctness
-  of the tunneling transformation: for each LTL execution
-  in the original code (of an instruction, a sequence of instructions,
-  a basic block, a sequence of basic blocks, etc), there exists
-  a similar LTL execution in the tunneled code.  
-
-  Note that only the control-flow is changed: the values of locations
-  and the memory states are identical in the original and transformed 
-  codes. *)
-
-Definition tunnel_outcome (f: function) (out: outcome) :=
-  match out with
-  | Cont pc => Cont (branch_target f pc)
-  | Return => Return
-  end.
-
-Definition exec_instr_prop
-  (sp: val) (b1: block) (ls1: locset) (m1: mem) (t: trace)
-            (b2: block) (ls2: locset) (m2: mem) : Prop :=
-  forall f,
-  exec_instr tge sp (tunnel_block f b1) ls1 m1
-                  t (tunnel_block f b2) ls2 m2.
-
-Definition exec_instrs_prop
-  (sp: val) (b1: block) (ls1: locset) (m1: mem) (t: trace)
-            (b2: block) (ls2: locset) (m2: mem) : Prop :=
-  forall f,
-  exec_instrs tge sp (tunnel_block f b1) ls1 m1
-                   t (tunnel_block f b2) ls2 m2.
-
-Definition exec_block_prop
-  (sp: val) (b1: block) (ls1: locset) (m1: mem) (t: trace)
-            (out: outcome) (ls2: locset) (m2: mem) : Prop :=
-  forall f,
-  exec_block tge sp (tunnel_block f b1) ls1 m1
-                  t (tunnel_outcome f out) ls2 m2.
-
-Definition tunneled_code (f: function) :=
-  PTree.map (fun pc b => tunnel_block f b) (fn_code f).
-
-Definition exec_blocks_prop
-     (c: code) (sp: val)
-     (pc: node) (ls1: locset) (m1: mem) (t: trace)
-     (out: outcome) (ls2: locset) (m2: mem) : Prop :=
-  forall f,
-  f.(fn_code) = c ->
-  exec_blocks tge (tunneled_code f) sp
-              (branch_target f pc) ls1 m1
-            t (tunnel_outcome f out) ls2 m2.
-
-Definition exec_function_prop
-    (f: fundef) (ls1: locset) (m1: mem) (t: trace)
-                (ls2: locset) (m2: mem) : Prop :=
-  exec_function tge (tunnel_fundef f) ls1 m1 t ls2 m2.
-
-Scheme exec_instr_ind5 := Minimality for LTL.exec_instr Sort Prop
-  with exec_instrs_ind5 := Minimality for LTL.exec_instrs Sort Prop
-  with exec_block_ind5 := Minimality for LTL.exec_block Sort Prop
-  with exec_blocks_ind5 := Minimality for LTL.exec_blocks Sort Prop
-  with exec_function_ind5 := Minimality for LTL.exec_function Sort Prop.
-
-(** The proof of semantic preservation is a structural induction
-  over the LTL evaluation derivation of the original program,
-  using the [exec_*_prop] predicates above as induction hypotheses. *)
-
-Lemma tunnel_function_correct:
-  forall f ls1 m1 t ls2 m2,
-  exec_function ge f ls1 m1 t ls2 m2 ->
-  exec_function_prop f ls1 m1 t ls2 m2.
-Proof.
-  apply (exec_function_ind5 ge
-           exec_instr_prop
-           exec_instrs_prop
-           exec_block_prop
-           exec_blocks_prop
-           exec_function_prop);
-  intros; red; intros; simpl.
-  (* getstack *)
-  constructor.
-  (* setstack *)
-  constructor.
-  (* op *)
-  constructor. rewrite <- H. apply eval_operation_preserved.
-  exact symbols_preserved.
-  (* load *)
-  apply exec_Bload with a. rewrite <- H. 
-  apply eval_addressing_preserved. exact symbols_preserved.
-  auto.
-  (* store *)
-  apply exec_Bstore with a. rewrite <- H.
-  apply eval_addressing_preserved. exact symbols_preserved.
-  auto.
-  (* call *)
-  apply exec_Bcall with (tunnel_fundef f). 
-  generalize H; unfold find_function; destruct ros.
+  intros until f. destruct ros; simpl.
   intro. apply functions_translated; auto.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
-  intro. apply function_ptr_translated; auto. congruence.
-  generalize (sig_preserved f). congruence. 
-  apply H2. 
-  (* alloc *)
-  eapply exec_Balloc; eauto. 
-  (* instr_refl *)
-  apply exec_refl.
-  (* instr_one *)
-  apply exec_one. apply H0.
-  (* instr_trans *)
-  apply exec_trans with t1 (tunnel_block f b2) rs2 m2 t2; auto.
-  (* goto *)
-  apply exec_Bgoto. red in H0. simpl in H0. apply H0. 
-  (* cond, true *)
-  eapply exec_Bcond_true. red in H0. simpl in H0. apply H0.  auto.
-  (* cond, false *)
-  eapply exec_Bcond_false. red in H0. simpl in H0. apply H0. auto.
-  (* return *)
-  apply exec_Breturn. red in H0. simpl in H0. apply H0. 
-  (* block_refl *)
-  apply exec_blocks_refl.
-  (* block_one *)
-  red in H1. 
-  elim (branch_target_characterization f pc).
-  intro. rewrite H3. apply exec_blocks_one with (tunnel_block f b).
-  unfold tunneled_code. rewrite PTree.gmap. rewrite H2; rewrite H.
-  reflexivity. apply H1.
-  intros [pc' [ATpc BTS]]. 
-  assert (b = Bgoto pc'). congruence. subst b.
-  generalize (exec_block_Bgoto_inv _ _ _ _ _ _ _ _ H0).
-  intros [A [B [C D]]]. subst t out rs' m'.
-  simpl. rewrite BTS. apply exec_blocks_refl.
-  (* blocks_trans *)
-  apply exec_blocks_trans with t1 (branch_target f pc2) rs2 m2 t2.
-  exact (H0 f H4). exact (H2 f H4). auto.
-  (* internal function *)
-  econstructor. eexact H. 
-  change (fn_code (tunnel_function f)) with (tunneled_code f).
-  simpl.
-  elim (branch_target_characterization f (fn_entrypoint f)).
-  intro BT. rewrite <- BT. exact (H1 f (refl_equal _)).
-  intros [pc [ATpc BT]].
-  apply exec_blocks_trans with 
-     E0 (branch_target f (fn_entrypoint f)) (call_regs rs) m1 t.
-  eapply exec_blocks_one. 
-  unfold tunneled_code. rewrite PTree.gmap. rewrite ATpc.
-  simpl. reflexivity. 
-  apply exec_Bgoto. rewrite BT. apply exec_refl.
-  exact (H1 f (refl_equal _)). traceEq.
-  (* external function *)
+  apply function_ptr_translated; auto.
+  congruence.
+Qed.
+
+(** The proof of semantic preservation is a simulation argument
+  based on diagrams of the following form:
+<<
+           st1 --------------- st2
+            |                   |
+           t|                  ?|t
+            |                   |
+            v                   v
+           st1'--------------- st2'
+>>
+  The [match_states] predicate, defined below, captures the precondition
+  between states [st1] and [st2], as well as the postcondition between
+  [st1'] and [st2'].  One transition in the source code (left) can correspond
+  to zero or one transition in the transformed code (right).  The
+  "zero transition" case occurs when executing a [Lgoto] instruction
+  in the source code that has been removed by tunneling.
+
+  In the definition of [match_states], note that only the control-flow
+  (in particular, the current program point [pc]) is changed:
+  the values of locations and the memory states are identical in the
+  original and transformed codes. *)
+
+Definition tunneled_code (f: function) :=
+  PTree.map (fun pc b => tunnel_instr f b) (fn_code f).
+
+Inductive match_stackframes: stackframe -> stackframe -> Prop :=
+  | match_stackframes_intro:
+      forall res f sp ls0 pc,
+      match_stackframes
+         (Stackframe res f sp ls0 pc)
+         (Stackframe res (tunnel_function f) sp ls0 (branch_target f pc)).
+
+Inductive match_states: state -> state -> Prop :=
+  | match_states_intro:
+      forall s f sp pc ls m ts,
+      list_forall2 match_stackframes s ts ->
+      match_states (State s f sp pc ls m)
+                   (State ts (tunnel_function f) sp (branch_target f pc) ls m)
+  | match_states_call:
+      forall s f ls m ts,
+      list_forall2 match_stackframes s ts ->
+      match_states (Callstate s f ls m)
+                   (Callstate ts (tunnel_fundef f) ls m)
+  | match_states_return:
+      forall s sig ls m ts,
+      list_forall2 match_stackframes s ts ->
+      match_states (Returnstate s sig ls m)
+                   (Returnstate ts sig ls m).
+
+Lemma parent_locset_match:
+  forall s ts, list_forall2 match_stackframes s ts -> parent_locset ts = parent_locset s.
+Proof.
+  induction 1; simpl; auto. inv H; auto.
+Qed.
+
+(** To preserve non-terminating behaviours, we show that the transformed
+  code cannot take an infinity of "zero transition" cases.
+  We use the following [measure] function over source states,
+  which decreases strictly in the "zero transition" case. *)
+
+Definition measure (st: state) : nat :=
+  match st with
+  | State s f sp pc ls m => count_goto f pc
+  | Callstate s f ls m => 0%nat
+  | Returnstate s sig ls m => 0%nat
+  end.
+
+Lemma branch_target_identity:
+  forall f pc,
+  match f.(fn_code)!pc with Some(Lnop _) => False | _ => True end ->
+  branch_target f pc = pc.
+Proof.
+  intros. 
+  destruct (branch_target_characterization f pc) as [A | [pc' [B C]]].
+  auto. rewrite B in H. contradiction.
+Qed.
+
+Lemma tunnel_function_lookup:
+  forall f pc i,
+  f.(fn_code)!pc = Some i ->
+  (tunnel_function f).(fn_code)!pc = Some (tunnel_instr f i).
+Proof.
+  intros. simpl. rewrite PTree.gmap. rewrite H. auto.
+Qed.
+
+Lemma tunnel_step_correct:
+  forall st1 t st2, step ge st1 t st2 ->
+  forall st1' (MS: match_states st1 st1'),
+  (exists st2', step tge st1' t st2' /\ match_states st2 st2')
+  \/ (measure st2 < measure st1 /\ t = E0 /\ match_states st2 st1')%nat.
+Proof.
+  induction 1; intros; try inv MS.
+  (* Lnop *)
+  destruct (branch_target_characterization f pc) as [A | [pc1 [B [C D]]]].
+  left; econstructor; split.
+  eapply exec_Lnop. rewrite A. 
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
   econstructor; eauto. 
+  assert (pc1 = pc') by congruence. subst pc1.
+  right. split. simpl. auto. split. auto. 
+  rewrite <- C. econstructor; eauto. 
+  (* Lop *)
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; econstructor; split.
+  eapply exec_Lop with (v := v); eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
+  rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
+  econstructor; eauto.
+  (* Lload *)
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; econstructor; split.
+  eapply exec_Lload; eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
+  rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  econstructor; eauto.
+  (* Lstore *)
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; econstructor; split.
+  eapply exec_Lstore; eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
+  rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  econstructor; eauto.
+  (* Lcall *)
+  unfold rs1. inv MS. 
+  left; econstructor; split. 
+  eapply exec_Lcall with (f' := tunnel_fundef f'); eauto.
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  rewrite (tunnel_function_lookup _ _ _ H); simpl.
+  rewrite sig_preserved. auto.
+  apply find_function_translated; auto.
+  rewrite sig_preserved; auto. fold rs1. 
+  econstructor; eauto.
+  constructor; auto. 
+  constructor; auto.
+  (* Ltailcall *)
+  unfold rs2, rs1 in *. inv MS. fold rs1. fold rs2. 
+  left; econstructor; split. 
+  eapply exec_Ltailcall with (f' := tunnel_fundef f'); eauto.
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  rewrite (tunnel_function_lookup _ _ _ H); simpl.
+  rewrite sig_preserved. auto.
+  apply find_function_translated; auto.
+  rewrite sig_preserved; auto. fold rs1. 
+  rewrite (parent_locset_match _ _ H9).
+  econstructor; eauto.
+  (* Lalloc *)
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; exists (State ts (tunnel_function f) sp (branch_target f pc') rs3 m'); split.
+  unfold rs3, rs2, rs1; eapply exec_Lalloc; eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.
+  econstructor; eauto.
+  (* cond *)
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; econstructor; split.
+  eapply exec_Lcond_true; eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
+  econstructor; eauto.
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; econstructor; split.
+  eapply exec_Lcond_false; eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
+  econstructor; eauto.
+  (* return *)
+  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  left; econstructor; split.
+  eapply exec_Lreturn; eauto.
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
+  simpl. rewrite (parent_locset_match _ _ H7). constructor; auto.
+  (* internal function *)
+  simpl. left; econstructor; split.
+  eapply exec_function_internal; eauto.
+  simpl. econstructor; eauto. 
+  (* external function *)
+  simpl. left; econstructor; split.
+  eapply exec_function_external; eauto.
+  simpl. econstructor; eauto. 
+  (* return *)
+  inv H4. inv H1.
+  left; econstructor; split.
+  eapply exec_return; eauto.
+  fold rs1. constructor. auto.
+Qed.
+
+Lemma transf_initial_states:
+  forall st1, initial_state p st1 ->
+  exists st2, initial_state tp st2 /\ match_states st1 st2.
+Proof.
+  intros. inversion H. 
+  exists (Callstate nil (tunnel_fundef f) (Locmap.init Vundef) (Genv.init_mem tp)); split.
+  econstructor; eauto.
+  change (prog_main tp) with (prog_main p).
+  rewrite symbols_preserved. eauto.
+  apply function_ptr_translated; auto.
+  rewrite <- H2. apply sig_preserved. 
+  replace (Genv.init_mem tp) with (Genv.init_mem p).
+  constructor. constructor. auto.
+  symmetry. unfold tp, tunnel_program. apply Genv.init_mem_transf.
+Qed.
+
+Lemma transf_final_states:
+  forall st1 st2 r, 
+  match_states st1 st2 -> final_state st1 r -> final_state st2 r.
+Proof.
+  intros. inv H0. inv H. inv H6. constructor. auto. 
+Qed.
+
+Theorem transf_program_correct:
+  forall (beh: program_behavior),
+  exec_program p beh -> exec_program tp beh.
+Proof.
+  unfold exec_program; intros.
+  eapply simulation_opt_preservation; eauto.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  eexact tunnel_step_correct. 
 Qed.
 
 End PRESERVATION.
-
-Theorem transf_program_correct:
-  forall (p: program) (t: trace) (r: val),
-  exec_program p t r ->
-  exec_program (tunnel_program p) t r.
-Proof.
-  intros p t r [b [f [ls [m [FIND1 [FIND2 [SIG [EX RES]]]]]]]].
-  red. exists b; exists (tunnel_fundef f); exists ls; exists m.
-  split. change (prog_main (tunnel_program p)) with (prog_main p).
-  rewrite <- FIND1. apply symbols_preserved.
-  split. apply function_ptr_translated. assumption.
-  split. generalize (sig_preserved f). congruence.
-  split. apply tunnel_function_correct. 
-  unfold tunnel_program. rewrite Genv.init_mem_transf. auto.
-  rewrite sig_preserved. exact RES.
-Qed.

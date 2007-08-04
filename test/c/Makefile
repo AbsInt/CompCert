@@ -1,8 +1,7 @@
 CCOMP=../../ccomp
-CCOMPFLAGS=-dump-c -I../lib
+CCOMPFLAGS=-stdlib ../../runtime -dclight -dasm
 
 CC=gcc -arch ppc
-
 CFLAGS=-O1 -Wall
 
 LIBS=
@@ -20,11 +19,11 @@ all: $(PROGS:%=%.compcert)
 
 all_gcc: $(PROGS:%=%.gcc)
 
-%.compcert: %.s
-	$(CC) $(CFLAGS) -o $*.compcert $*.s ../lib/libcompcert.a $(LIBS)
+%.compcert: %.c $(CCOMP)
+	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)
 
 %.s: %.c ../../ccomp
-	$(CCOMP) $(CCOMPFLAGS) $*.c
+	$(CCOMP) $(CCOMPFLAGS) -S $*.c
 
 %.gcc: %.c
 	$(CC) $(CFLAGS) -o $*.gcc $*.c $(LIBS)

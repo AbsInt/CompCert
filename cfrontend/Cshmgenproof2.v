@@ -1,6 +1,7 @@
 (** * Correctness of the C front end, part 2: Csharpminor construction functions *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import Integers.
 Require Import Floats.
@@ -12,6 +13,7 @@ Require Import Globalenvs.
 Require Import Csyntax.
 Require Import Csem.
 Require Import Ctyping.
+Require Import Cminor.
 Require Import Csharpminor.
 Require Import Cshmgen.
 Require Import Cshmgenproof1.
@@ -25,14 +27,14 @@ Variable tprog: Csharpminor.program.
 Lemma transl_lblstmts_exit:
   forall e m1 t m2 sl body n tsl nbrk ncnt,
   exec_stmt tprog e m1 body t m2 (Out_exit (lblstmts_length sl + n)) ->
-  transl_lblstmts nbrk ncnt sl body = Some tsl ->
+  transl_lblstmts nbrk ncnt sl body = OK tsl ->
   exec_stmt tprog e m1 tsl t m2 (outcome_block (Out_exit n)).
 Proof.
   induction sl; intros.
   simpl in H; simpl in H0; monadInv H0. 
-  rewrite <- H2. constructor. apply exec_Sseq_stop. auto. congruence.
+  constructor. apply exec_Sseq_stop. auto. congruence.
   simpl in H; simpl in H0; monadInv H0.
-  eapply IHsl with (body := Sblock (Sseq body s0)); eauto.
+  eapply IHsl with (body := Sblock (Sseq body x)); eauto.
   change (Out_exit (lblstmts_length sl + n))
     with (outcome_block (Out_exit (S (lblstmts_length sl + n)))).
   constructor. apply exec_Sseq_stop. auto. congruence.
@@ -41,15 +43,15 @@ Qed.
 Lemma transl_lblstmts_return:
   forall e m1 t m2 sl body optv tsl nbrk ncnt,
   exec_stmt tprog e m1 body t m2 (Out_return optv) ->
-  transl_lblstmts nbrk ncnt sl body = Some tsl ->
+  transl_lblstmts nbrk ncnt sl body = OK tsl ->
   exec_stmt tprog e m1 tsl t m2 (Out_return optv).
 Proof.
   induction sl; intros.
   simpl in H; simpl in H0; monadInv H0. 
-  rewrite <- H2. change (Out_return optv) with (outcome_block (Out_return optv)).
+  change (Out_return optv) with (outcome_block (Out_return optv)).
   constructor. apply exec_Sseq_stop. auto. congruence.
   simpl in H; simpl in H0; monadInv H0.
-  eapply IHsl with (body := Sblock (Sseq body s0)); eauto.
+  eapply IHsl with (body := Sblock (Sseq body x)); eauto.
   change (Out_return optv) with (outcome_block (Out_return optv)).
   constructor. apply exec_Sseq_stop. auto. congruence.
 Qed.
@@ -61,41 +63,18 @@ Lemma make_intconst_correct:
   forall n le e m1,
   Csharpminor.eval_expr tprog le e m1 (make_intconst n) E0 m1 (Vint n).
 Proof.
-  intros. unfold make_intconst. econstructor. constructor. reflexivity. 
+  intros. unfold make_intconst. econstructor. constructor.  
 Qed.
 
 Lemma make_floatconst_correct:
   forall n le e m1,
   Csharpminor.eval_expr tprog le e m1 (make_floatconst n) E0 m1 (Vfloat n).
 Proof.
-  intros. unfold make_floatconst. econstructor. constructor. reflexivity. 
-Qed.
-
-Lemma make_unop_correct:
-  forall op le e m1 a ta m2 va v,
-  Csharpminor.eval_expr tprog le e m1 a ta m2 va ->
-  eval_operation op (va :: nil) m2 = Some v ->
-  Csharpminor.eval_expr tprog le e m1 (make_unop op a) ta m2 v.
-Proof.
-  intros. unfold make_unop. econstructor. econstructor. eauto. constructor.
-  traceEq. auto.
-Qed.
-
-Lemma make_binop_correct:
-  forall op le e m1 a ta m2 va b tb m3 vb t v,
-  Csharpminor.eval_expr tprog le e m1 a ta m2 va ->
-  Csharpminor.eval_expr tprog le e m2 b tb m3 vb ->
-  eval_operation op (va :: vb :: nil) m3 = Some v ->
-  t = ta ** tb ->
-  Csharpminor.eval_expr tprog le e m1 (make_binop op a b) t m3 v.
-Proof.
-  intros. unfold make_binop. 
-  econstructor. econstructor. eauto. econstructor. eauto. constructor.
-  reflexivity. traceEq. auto.
+  intros. unfold make_floatconst. econstructor. constructor.  
 Qed.
 
 Hint Resolve make_intconst_correct make_floatconst_correct
-             make_unop_correct make_binop_correct: cshm.
+             eval_Eunop eval_Ebinop: cshm.
 Hint Extern 2 (@eq trace _ _) => traceEq: cshm.
 
 Remark Vtrue_is_true: Val.is_true Vtrue.
@@ -120,7 +99,7 @@ Proof.
   destruct ty; simpl;
   try (exists v; intuition; inversion VTRUE; simpl; auto; fail).
   exists Vtrue; split.
-  eapply make_binop_correct; eauto with cshm. 
+  econstructor; eauto with cshm. 
   inversion VTRUE; simpl. 
   replace (Float.cmp Cne f0 Float.zero) with (negb (Float.cmp Ceq f0 Float.zero)).
   rewrite Float.eq_zero_false. reflexivity. auto.
@@ -140,7 +119,7 @@ Proof.
   destruct ty; simpl;
   try (exists v; intuition; inversion VFALSE; simpl; auto; fail).
   exists Vfalse; split.
-  eapply make_binop_correct; eauto with cshm. 
+  econstructor; eauto with cshm. 
   inversion VFALSE; simpl. 
   replace (Float.cmp Cne Float.zero Float.zero) with (negb (Float.cmp Ceq Float.zero Float.zero)).
   rewrite Float.eq_zero_true. reflexivity. 
@@ -151,13 +130,13 @@ Qed.
 Lemma make_neg_correct:
   forall a tya c ta va v le e m1 m2,
   sem_neg va tya = Some v ->
-  make_neg a tya = Some c ->  
+  make_neg a tya = OK c ->  
   eval_expr tprog le e m1 a ta m2 va ->
   eval_expr tprog le e m1 c ta m2 v.
 Proof.
   intros until m2; intro SEM. unfold make_neg. 
   functional inversion SEM; intros.
-  inversion H4. eapply make_binop_correct; eauto with cshm.
+  inversion H4. econstructor; eauto with cshm.
   inversion H4. eauto with cshm.
 Qed.
 
@@ -186,21 +165,21 @@ Proof.
 Qed.
 
 Definition binary_constructor_correct
-    (make: expr -> type -> expr -> type -> option expr)
+    (make: expr -> type -> expr -> type -> res expr)
     (sem: val -> type -> val -> type -> option val): Prop :=
   forall a tya b tyb c ta va tb vb v le e m1 m2 m3,
   sem va tya vb tyb = Some v ->
-  make a tya b tyb = Some c ->  
+  make a tya b tyb = OK c ->  
   eval_expr tprog le e m1 a ta m2 va ->
   eval_expr tprog le e m2 b tb m3 vb ->
   eval_expr tprog le e m1 c (ta ** tb) m3 v.
 
 Definition binary_constructor_correct'
-    (make: expr -> type -> expr -> type -> option expr)
+    (make: expr -> type -> expr -> type -> res expr)
     (sem: val -> val -> option val): Prop :=
   forall a tya b tyb c ta va tb vb v le e m1 m2 m3,
   sem va vb = Some v ->
-  make a tya b tyb = Some c ->  
+  make a tya b tyb = OK c ->  
   eval_expr tprog le e m1 a ta m2 va ->
   eval_expr tprog le e m2 b tb m3 vb ->
   eval_expr tprog le e m1 c (ta ** tb) m3 v.
@@ -212,8 +191,8 @@ Proof.
   inversion H7. eauto with cshm. 
   inversion H7. eauto with cshm.
   inversion H7. 
-  eapply make_binop_correct. eauto. 
-  eapply make_binop_correct. eauto with cshm. eauto.
+  econstructor. eauto. 
+  econstructor. eauto with cshm. eauto.
   simpl. reflexivity. reflexivity. 
   simpl. reflexivity. traceEq.
 Qed.
@@ -223,12 +202,12 @@ Proof.
   red; intros until m3. intro SEM. unfold make_sub. 
   functional inversion SEM; rewrite H0; intros;
   inversion H7; eauto with cshm. 
-  eapply make_binop_correct. eauto. 
-  eapply make_binop_correct. eauto with cshm. eauto.
+  econstructor. eauto. 
+  econstructor. eauto with cshm. eauto.
   simpl. reflexivity. reflexivity. 
   simpl. reflexivity. traceEq.
-  inversion H9. eapply make_binop_correct. 
-  eapply make_binop_correct; eauto. 
+  inversion H9. econstructor. 
+  econstructor; eauto. 
   simpl. unfold eq_block; rewrite H3. reflexivity.
   eauto with cshm. simpl. rewrite H8. reflexivity. traceEq.
 Qed.
@@ -244,9 +223,9 @@ Lemma make_div_correct: binary_constructor_correct make_div sem_div.
 Proof.
   red; intros until m3. intro SEM. unfold make_div. 
   functional inversion SEM; rewrite H0; intros.
-  inversion H8. eapply make_binop_correct; eauto with cshm. 
+  inversion H8. econstructor; eauto with cshm. 
   simpl. rewrite H7; auto.
-  inversion H8. eapply make_binop_correct; eauto with cshm. 
+  inversion H8. econstructor; eauto with cshm. 
   simpl. rewrite H7; auto.
   inversion H7; eauto with cshm. 
 Qed.
@@ -254,9 +233,9 @@ Qed.
 Lemma make_mod_correct: binary_constructor_correct make_mod sem_mod.
   red; intros until m3. intro SEM. unfold make_mod. 
   functional inversion SEM; rewrite H0; intros.
-  inversion H8. eapply make_binop_correct; eauto with cshm. 
+  inversion H8. econstructor; eauto with cshm. 
   simpl. rewrite H7; auto.
-  inversion H8. eapply make_binop_correct; eauto with cshm. 
+  inversion H8. econstructor; eauto with cshm. 
   simpl. rewrite H7; auto.
 Qed.
 
@@ -285,7 +264,7 @@ Lemma make_shl_correct: binary_constructor_correct' make_shl sem_shl.
 Proof.
   red; intros until m3. intro SEM. unfold make_shl. 
   functional inversion SEM. intros. inversion H5. 
-  eapply make_binop_correct; eauto with cshm. 
+  econstructor; eauto with cshm. 
   simpl. rewrite H4. auto.
 Qed.
 
@@ -293,16 +272,16 @@ Lemma make_shr_correct: binary_constructor_correct make_shr sem_shr.
 Proof.
   red; intros until m3. intro SEM. unfold make_shr. 
   functional inversion SEM; intros; rewrite H0 in H8; inversion H8.
-  eapply make_binop_correct; eauto with cshm.
+  econstructor; eauto with cshm.
   simpl; rewrite H7; auto.
-  eapply make_binop_correct; eauto with cshm.
+  econstructor; eauto with cshm.
   simpl; rewrite H7; auto.
 Qed.
 
 Lemma make_cmp_correct:
   forall cmp a tya b tyb c ta va tb vb v le e m1 m2 m3,
   sem_cmp cmp va tya vb tyb m3 = Some v ->
-  make_cmp cmp a tya b tyb = Some c ->  
+  make_cmp cmp a tya b tyb = OK c ->  
   eval_expr tprog le e m1 a ta m2 va ->
   eval_expr tprog le e m2 b tb m3 vb ->
   eval_expr tprog le e m1 c (ta ** tb) m3 v.
@@ -312,16 +291,16 @@ Proof.
   inversion H8. eauto with cshm.
   inversion H8. eauto with cshm.
   inversion H8. eauto with cshm.
-  inversion H9. eapply make_binop_correct; eauto with cshm.
+  inversion H9. econstructor; eauto with cshm.
   simpl. functional inversion H; subst; unfold eval_compare_null;
   rewrite H8; auto.
-  inversion H10. eapply make_binop_correct; eauto with cshm.
+  inversion H10. econstructor; eauto with cshm.
   simpl. rewrite H3. unfold eq_block; rewrite H9. auto.
 Qed.
 
 Lemma transl_unop_correct:
   forall op a tya c ta va v le e m1 m2, 
-  transl_unop op a tya = Some c ->
+  transl_unop op a tya = OK c ->
   sem_unary_operation op va tya = Some v ->
   eval_expr tprog le e m1 a ta m2 va ->
   eval_expr tprog le e m1 c ta m2 v.
@@ -334,7 +313,7 @@ Qed.
 
 Lemma transl_binop_correct:
 forall op a tya b tyb c ta va tb vb v le e m1 m2 m3,
-  transl_binop op a tya b tyb = Some c ->  
+  transl_binop op a tya b tyb = OK c ->  
   sem_binary_operation op va tya vb tyb m3 = Some v ->
   eval_expr tprog le e m1 a ta m2 va ->
   eval_expr tprog le e m2 b tb m3 vb ->
@@ -365,7 +344,7 @@ Lemma make_cast_correct:
    cast v ty1 ty2 v' ->
    eval_expr tprog le e m1 (make_cast ty1 ty2 a) t m2 v'.
 Proof.
-  unfold make_cast, make_cast1, make_cast2, make_unop.
+  unfold make_cast, make_cast1, make_cast2.
   intros until v'; intros EVAL CAST.
   inversion CAST; clear CAST; subst.
   (* cast_int_int *)
@@ -373,7 +352,7 @@ Proof.
   (* cast_float_int *)
     destruct sz2; destruct si2; repeat econstructor; eauto with cshm; simpl; auto.
   (* cast_int_float *)
-    destruct sz2; destruct si1; unfold make_floatofint, make_unop; repeat econstructor; eauto with cshm; simpl; auto.
+    destruct sz2; destruct si1; unfold make_floatofint; repeat econstructor; eauto with cshm; simpl; auto.
   (* cast_float_float *)
     destruct sz2; repeat econstructor; eauto with cshm.
   (* neutral, ptr *)
@@ -384,7 +363,7 @@ Qed.
 
 Lemma make_load_correct:
   forall addr ty code b ofs v le e m1 t m2,
-  make_load addr ty = Some code ->
+  make_load addr ty = OK code ->
   eval_expr tprog le e m1 addr t m2 (Vptr b ofs) ->
   load_value_of_type ty m2 b ofs = Some v ->
   eval_expr tprog le e m1 code t m2 v.
@@ -400,7 +379,7 @@ Qed.
 
 Lemma make_store_correct:
   forall addr ty rhs code e m1 t1 m2 b ofs t2 m3 v m4,
-  make_store addr ty rhs = Some code ->
+  make_store addr ty rhs = OK code ->
   eval_expr tprog nil e m1 addr t1 m2 (Vptr b ofs) ->
   eval_expr tprog nil e m2 rhs t2 m3 v ->
   store_value_of_type ty m3 b ofs v = Some m4 ->

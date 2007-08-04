@@ -34,29 +34,56 @@
   #</A>#
 *)
 
+Require Import Relations.
 Require Import Coqlib.
 Require Recdef.
 
 Section PARMOV.
 
+(** * Registers, moves, and their semantics *)
+
+(** The development is parameterized by the type of registers, 
+    equipped with a decidable equality. *)
+
 Variable reg: Set.
+Variable reg_eq : forall (r1 r2: reg), {r1=r2} + {r1<>r2}.
+
+(** The [temp] function maps every register [r] to the register that
+    should be used to save the value of [r] temporarily while performing
+    a cyclic assignment involving [r].  In the simplest case, there is
+    only one such temporary register [rtemp] and [temp] is the constant
+    function [fun r => rtemp].  In more realistic cases, different temporary
+    registers can be used to hold different values.  In the case of Compcert,
+    we have two temporary registers, one for integer values and the other
+    for floating-point values, and [temp] returns the appropriate temporary
+    depending on the type of its argument. *)
+
 Variable temp: reg -> reg.
+
+(** A set of moves is a list of pairs of registers, of the form
+    (source, destination). *)
 
 Definition moves := (list (reg * reg))%type.  (* src -> dst *)
 
 Definition srcs (m: moves) := List.map (@fst reg reg) m.
 Definition dests (m: moves) := List.map (@snd reg reg) m.
 
-(* Semantics of moves *)
+(** ** Semantics of moves *)
+
+(** The dynamic  semantics of moves is given in terms of environments.
+    An environment is a mapping of registers to their current values. *)
 
 Variable val: Set.
 Definition env := reg -> val.
-Variable reg_eq : forall (r1 r2: reg), {r1=r2} + {r1<>r2}.
 
 Lemma env_ext:
   forall (e1 e2: env),
   (forall r, e1 r = e2 r) -> e1 = e2.
 Proof (extensionality reg val).
+
+(** The main operation over environments is update: it assigns 
+  a value [v] to a register [r] and preserves the values of other
+  registers. *)
 
 Definition update (r: reg) (v: val) (e: env) : env :=
   fun r' => if reg_eq r' r then v else e r'.
@@ -97,17 +124,31 @@ Proof.
   destruct (reg_eq r0 r); auto.
 Qed.
 
+(** A list of moves [(src1, dst1), ..., (srcN, dstN)] can be given
+  three different semantics, as environment transformers.
+  The first semantics corresponds to a parallel assignment:
+  [dst1, ..., dstN] are set to the initial values of [src1, ..., srcN]. *)
+
 Fixpoint exec_par (m: moves) (e: env) {struct m}: env :=
   match m with
   | nil => e
   | (s, d) :: m' => update d (e s) (exec_par m' e)
   end.
 
+(** The second semantics corresponds to a sequence of individual
+  assignments: first, [dst1] is set to the initial value of [src1];
+  then, [dst2] is set to the current value of [src2] after the first
+  assignment; etc. *)
+
 Fixpoint exec_seq (m: moves) (e: env) {struct m}: env :=
   match m with
   | nil => e
   | (s, d) :: m' => exec_seq m' (update d (e s) e)
   end.
+
+(** The third semantics is also sequential, but executes the moves
+  in reverse order, starting with [srcN, dstN] and finishing with
+  [src1, dst1]. *)
 
 Fixpoint exec_seq_rev (m: moves) (e: env) {struct m}: env :=
   match m with
@@ -117,50 +158,57 @@ Fixpoint exec_seq_rev (m: moves) (e: env) {struct m}: env :=
       update d (e' s) e'
   end.
 
-(* Specification of the parallel move *)
+(** * Specification of the non-deterministic algorithm *)
+
+(** Rideau and Serpette's parallel move compilation algorithm is first
+   specified as a non-deterministic set of rewriting rules operating
+   over triples [(mu, sigma, tau)] of moves.  We define these rules
+   as an inductive predicate [transition] relating triples of moves,
+   and its reflexive transitive closure [transitions]. *)
+
+Inductive state: Set :=
+  State (mu: moves) (sigma: moves) (tau: moves) : state.
 
 Definition no_read (mu: moves) (d: reg) : Prop :=
   ~In d (srcs mu).
 
-Inductive transition: moves -> moves -> moves
-                   -> moves -> moves -> moves -> Prop :=
+Inductive transition: state -> state -> Prop :=
   | tr_nop: forall mu1 r mu2 sigma tau,
-      transition (mu1 ++ (r, r) :: mu2) sigma tau
-                 (mu1 ++ mu2) sigma tau
+      transition (State (mu1 ++ (r, r) :: mu2) sigma tau)
+                 (State (mu1 ++ mu2) sigma tau)
   | tr_start: forall mu1 s d mu2 tau,
-      transition (mu1 ++ (s, d) :: mu2) nil tau
-                 (mu1 ++ mu2) ((s, d) :: nil) tau
+      transition (State (mu1 ++ (s, d) :: mu2) nil tau)
+                 (State (mu1 ++ mu2) ((s, d) :: nil) tau)
   | tr_push: forall mu1 d r mu2 s sigma tau,
-      transition (mu1 ++ (d, r) :: mu2) ((s, d) :: sigma) tau
-                 (mu1 ++ mu2) ((d, r) :: (s, d) :: sigma) tau
+      transition (State (mu1 ++ (d, r) :: mu2) ((s, d) :: sigma) tau)
+                 (State (mu1 ++ mu2) ((d, r) :: (s, d) :: sigma) tau)
   | tr_loop: forall mu sigma s d tau,
-      transition mu (sigma ++ (s, d) :: nil) tau
-                 mu (sigma ++ (temp s, d) :: nil) ((s, temp s) :: tau)
+      transition (State mu (sigma ++ (s, d) :: nil) tau)
+                 (State mu (sigma ++ (temp s, d) :: nil) ((s, temp s) :: tau))
   | tr_pop: forall mu s0 d0 s1 d1 sigma tau,
       no_read mu d1 -> d1 <> s0 ->
-      transition mu ((s1, d1) :: sigma ++ (s0, d0) :: nil) tau
-                 mu (sigma ++ (s0, d0) :: nil) ((s1, d1) :: tau)
+      transition (State mu ((s1, d1) :: sigma ++ (s0, d0) :: nil) tau)
+                 (State mu (sigma ++ (s0, d0) :: nil) ((s1, d1) :: tau))
   | tr_last: forall mu s d tau,
       no_read mu d ->
-      transition mu ((s, d) :: nil) tau
-                 mu nil ((s, d) :: tau).
+      transition (State mu ((s, d) :: nil) tau)
+                 (State mu nil ((s, d) :: tau)).
 
-Inductive transitions: moves -> moves -> moves
-                    -> moves -> moves -> moves -> Prop :=
-  | tr_refl:
-      forall mu sigma tau,
-      transitions mu sigma tau mu sigma tau
-  | tr_one:
-      forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-      transition mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-      transitions mu1 sigma1 tau1 mu2 sigma2 tau2
-  | tr_trans:
-      forall mu1 sigma1 tau1 mu2 sigma2 tau2 mu3 sigma3 tau3,
-      transitions mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-      transitions mu2 sigma2 tau2 mu3 sigma3 tau3 ->
-      transitions mu1 sigma1 tau1 mu3 sigma3 tau3.
+Definition transitions: state -> state -> Prop :=
+  clos_refl_trans state transition.
 
-(* Well-formedness properties *)
+(** ** Well-formedness properties of states *)
+
+(** A state [mu, sigma, tau] is well-formed if the following properties hold:
+
+- [mu] concatenated with [sigma] is a ``mill'', that is, no destination
+  appears twice (predicate [is_mill] below).
+- No temporary register appears in [mu] (predicate [move_no_temp]).
+- No temporary register appears in [sigma] except perhaps as the source
+  of the last move in [sigma] (predicate [temp_last]).
+- [sigma] is a ``path'', that is, the source of a move is the destination
+  of the following move.
+*)
 
 Definition is_mill (m: moves) : Prop :=
   list_norepet (dests m).
@@ -191,13 +239,16 @@ Inductive is_path: moves -> Prop :=
       is_path m ->
       is_path ((s, d) :: m).
 
-Definition state_wf (mu sigma tau: moves) : Prop :=
-  is_mill (mu ++ sigma)
-  /\ move_no_temp mu
-  /\ temp_last sigma
-  /\ is_path sigma.
+Inductive state_wf: state -> Prop :=
+  | state_wf_intro:
+      forall mu sigma tau,
+      is_mill (mu ++ sigma) ->
+      move_no_temp mu ->
+      temp_last sigma ->
+      is_path sigma ->
+      state_wf (State mu sigma tau).
 
-(* Some properties of srcs and dests *)
+(** Some trivial properties of srcs and dests. *)
 
 Lemma dests_append:
   forall m1 m2, dests (m1 ++ m2) = dests m1 ++ dests m2.
@@ -236,7 +287,7 @@ Proof.
   elim (IHs d); intros. split; congruence. congruence.
 Qed.
 
-(* Some properties of is_mill and dests_disjoint *)
+(** Some properties of [is_mill] and [dests_disjoint]. *)
 
 Definition dests_disjoint (m1 m2: moves) : Prop :=
   list_disjoint (dests m1) (dests m2).
@@ -313,7 +364,7 @@ Proof.
   apply list_norepet_app.
 Qed.
 
-(* Some properties of move_no_temp *)
+(** Some properties of [move_no_temp]. *)
 
 Lemma move_no_temp_append:
   forall m1 m2,
@@ -329,7 +380,7 @@ Proof.
   intros; red; intros. apply H. rewrite <- List.In_rev. auto.
 Qed.
 
-(* Some properties of temp_last *)
+(** Some properties of [temp_last]. *)
 
 Lemma temp_last_change_last_source:
   forall s d s' sigma,
@@ -369,7 +420,7 @@ Proof.
   apply in_or_app. auto. 
 Qed.
 
-(* Some properties of is_path *)
+(** Some properties of [is_path]. *)
 
 Lemma is_path_pop:
   forall s d m,
@@ -420,7 +471,8 @@ Proof.
   intro. elim H1. elim (H2 _ H3); intro. congruence. auto.
 Qed.
 
-(* Populating a rewrite database. *)
+(** To benefit from some proof automation, we populate a rewrite database
+  with some of the properties above. *)
 
 Lemma notin_dests_cons:
   forall x s d m,
@@ -441,65 +493,76 @@ Hint Rewrite is_mill_cons is_mill_append
   dests_disjoint_append_left dests_disjoint_append_right
   notin_dests_cons notin_dests_append: pmov.
 
-(* Preservation of well-formedness *)
+(** ** Transitions preserve well-formedness *)
 
 Lemma transition_preserves_wf:
-  forall mu sigma tau mu' sigma' tau',
-  transition mu sigma tau mu' sigma' tau' ->
-  state_wf mu sigma tau -> state_wf mu' sigma' tau'.
+  forall st st',
+  transition st st' -> state_wf st -> state_wf st'.
 Proof.
-  induction 1; unfold state_wf; intros [A [B [C D]]];
-  autorewrite with pmov in A; autorewrite with pmov.
+  induction 1; intro WF; inversion WF as [mu0 sigma0 tau0 A B C D];
+  subst;
+  autorewrite with pmov in A; constructor; autorewrite with pmov.
 
   (* Nop *)
-  split. tauto.
-  split. red; intros. apply B. apply list_in_insert; auto.
-  split; auto.
+  tauto. 
+  red; intros. apply B. apply list_in_insert; auto.
+  auto. auto.
 
   (* Start *)
-  split. tauto.
-  split. red; intros. apply B. apply list_in_insert; auto.
-  split. red. simpl. split. elim (B s d). auto. 
+  tauto.
+  red; intros. apply B. apply list_in_insert; auto.
+  red. simpl. split. elim (B s d). auto. 
   apply in_or_app. right. apply in_eq. 
   red; simpl; tauto.
   constructor. exact I. constructor. 
 
   (* Push *)
-  split. intuition.
-  split. red; intros. apply B. apply list_in_insert; auto.
-  split. elim (B d r). apply temp_last_push; auto. 
+  intuition.
+  red; intros. apply B. apply list_in_insert; auto.
+  elim (B d r). apply temp_last_push; auto. 
   apply in_or_app; right; apply in_eq.
   constructor. simpl. auto. auto.
 
   (* Loop *)
-  split. tauto. 
-  split. auto.
-  split. eapply temp_last_change_last_source; eauto. 
+  tauto. 
+  auto.
+  eapply temp_last_change_last_source; eauto. 
   eapply is_path_change_last_source; eauto.
 
   (* Pop *)
-  split. intuition.
-  split. auto.
-  split. eapply temp_last_pop; eauto.
+  intuition.
+  auto.
+  eapply temp_last_pop; eauto.
   eapply is_path_pop; eauto.
 
   (* Last *)
-  split. intuition. 
-  split. auto.
-  split. unfold temp_last. simpl. auto.
+  intuition. 
+  auto.
+  unfold temp_last. simpl. auto.
   constructor.
 Qed.
 
 Lemma transitions_preserve_wf:
-  forall mu sigma tau mu' sigma' tau',
-  transitions mu sigma tau mu' sigma' tau' ->
-  state_wf mu sigma tau -> state_wf mu' sigma' tau'.
+  forall st st', transitions st st' -> state_wf st -> state_wf st'.
 Proof.
   induction 1; intros; eauto.
   eapply transition_preserves_wf; eauto.
 Qed.
 
-(* Properties of exec_ *)
+(** ** Transitions preserve semantics *)
+
+(** We define the semantics of states as follows.
+  For a triple [mu, sigma, tau], we perform the moves [tau] in
+  reverse sequential order, then the moves [mu ++ sigma] in parallel. *)
+
+Definition statemove (st: state) (e: env) :=
+  match st with 
+  | State mu sigma tau => exec_par (mu ++ sigma) (exec_seq_rev tau e)
+  end.
+
+(** In preparation to showing that transitions preserve semantics,
+  we prove various properties of the parallel and sequential interpretations
+  of moves. *)
 
 Lemma exec_par_outside:
   forall m e r, ~In r (dests m) -> exec_par m e r = e r.
@@ -609,12 +672,10 @@ Proof.
   intros. rewrite update_o. apply B. tauto. intuition.
 Qed.
 
-(* Semantics of triples (mu, sigma, tau) *)
-
-Definition statemove (mu sigma tau: moves) (e: env) :=
-  exec_par (mu ++ sigma) (exec_seq_rev tau e).
-
-(* Equivalence over non-temp regs *)
+(** [env_equiv] is an equivalence relation between environments
+  capturing the fact that two environments assign the same values to
+  non-temporary registers, but can disagree on the values of temporary
+  registers. *)
 
 Definition env_equiv (e1 e2: env) : Prop :=
   forall r, is_not_temp r -> e1 r = e2 r.
@@ -657,15 +718,15 @@ Proof.
   apply IHm; auto. 
 Qed.
 
-(* Preservation of semantics by transformations. *)
+(** The proof that transitions preserve semantics (up to the values of
+  temporary registers) follows. *)
 
 Lemma transition_preserves_semantics:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2 e,
-  transition mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  state_wf mu1 sigma1 tau1 ->
-  env_equiv (statemove mu2 sigma2 tau2 e) (statemove mu1 sigma1 tau1 e).
+  forall st st' e,
+  transition st st' -> state_wf st ->
+  env_equiv (statemove st' e) (statemove st e).
 Proof.
-  induction 1; intros [A [B [C D]]].
+  induction 1; intro WF; inversion WF as [mu0 sigma0 tau0 A B C D]; subst; simpl.
 
   (* nop *)
   apply env_equiv_refl'. unfold statemove. 
@@ -728,134 +789,133 @@ Proof.
 Qed.
 
 Lemma transitions_preserve_semantics:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2 e,
-  transitions mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  state_wf mu1 sigma1 tau1 ->
-  env_equiv (statemove mu2 sigma2 tau2 e) (statemove mu1 sigma1 tau1 e).
+  forall st st' e,
+  transitions st st' -> state_wf st ->
+  env_equiv (statemove st' e) (statemove st e).
 Proof.
   induction 1; intros. 
-  apply env_equiv_refl. 
   eapply transition_preserves_semantics; eauto.
-  apply env_equiv_trans with (statemove mu2 sigma2 tau2 e).
-  apply IHtransitions2. eapply transitions_preserve_wf; eauto.
-  apply IHtransitions1. auto.
+  apply env_equiv_refl. 
+  apply env_equiv_trans with (statemove y e); auto.
+  apply IHclos_refl_trans2. eapply transitions_preserve_wf; eauto.
 Qed.
 
 Lemma state_wf_start:
   forall mu,
   move_no_temp mu ->
   is_mill mu ->
-  state_wf mu nil nil.
+  state_wf (State mu nil nil).
 Proof.
-  split. rewrite <- app_nil_end. auto. 
-  split. auto.
-  split. red. simpl. auto.
+  intros. constructor. rewrite <- app_nil_end. auto.
+  auto. 
+  red. simpl. auto.
   constructor.
 Qed.  
+
+(** The main correctness result in this section is the following:
+  if we can transition repeatedly from an initial state [mu, nil, nil]
+  to a final state [nil, nil, tau], then the sequential execution
+  of the moves [rev tau] is semantically equivalent to the parallel
+  execution of the moves [mu]. *)
 
 Theorem transitions_correctness:
   forall mu tau,
   move_no_temp mu ->
   is_mill mu ->
-  transitions mu nil nil  nil nil tau ->
+  transitions (State mu nil nil) (State nil nil tau) ->
   forall e, env_equiv (exec_seq (List.rev tau) e) (exec_par mu e).
 Proof.
   intros. 
-  generalize (transitions_preserve_semantics _ _ _ _ _ _ e H1
+  generalize (transitions_preserve_semantics _ _ e H1
               (state_wf_start _ H H0)).
   unfold statemove. simpl. rewrite <- app_nil_end. 
   rewrite exec_seq_exec_seq_rev. auto.
 Qed.
 
-(* Determinisation of the transition relation *)
+(** * Determinisation of the transition relation *)
 
-Inductive dtransition: moves -> moves -> moves
-                    -> moves -> moves -> moves -> Prop :=
+(** We now define a deterministic variant [dtransition] of the
+  transition relation [transition].  [dtransition] is deterministic
+  in the sense that at most one transition applies to a given state. *)
+
+Inductive dtransition: state -> state -> Prop :=
   | dtr_nop: forall r mu tau,
-      dtransition ((r, r) :: mu) nil tau
-                   mu nil tau
+      dtransition (State ((r, r) :: mu) nil tau)
+                  (State mu nil tau)
   | dtr_start: forall s d mu tau,
       s <> d ->
-      dtransition ((s, d) :: mu) nil tau
-                   mu ((s, d) :: nil) tau
+      dtransition (State ((s, d) :: mu) nil tau)
+                  (State mu ((s, d) :: nil) tau)
   | dtr_push: forall mu1 d r mu2 s sigma tau,
       no_read mu1 d ->
-      dtransition (mu1 ++ (d, r) :: mu2) ((s, d) :: sigma) tau
-                   (mu1 ++ mu2) ((d, r) :: (s, d) :: sigma) tau
+      dtransition (State (mu1 ++ (d, r) :: mu2) ((s, d) :: sigma) tau)
+                  (State (mu1 ++ mu2) ((d, r) :: (s, d) :: sigma) tau)
   | dtr_loop_pop: forall mu s r0 d  sigma tau,
       no_read mu r0 ->
-      dtransition mu ((s, r0) :: sigma ++ (r0, d) :: nil) tau
-                   mu (sigma ++ (temp r0, d) :: nil) ((s, r0) :: (r0, temp r0) :: tau)
+      dtransition (State mu ((s, r0) :: sigma ++ (r0, d) :: nil) tau)
+                  (State mu (sigma ++ (temp r0, d) :: nil) ((s, r0) :: (r0, temp r0) :: tau))
   | dtr_pop: forall mu s0 d0 s1 d1 sigma tau,
       no_read mu d1 -> d1 <> s0 ->
-      dtransition mu ((s1, d1) :: sigma ++ (s0, d0) :: nil) tau
-                   mu (sigma ++ (s0, d0) :: nil) ((s1, d1) :: tau)
+      dtransition (State mu ((s1, d1) :: sigma ++ (s0, d0) :: nil) tau)
+                  (State mu (sigma ++ (s0, d0) :: nil) ((s1, d1) :: tau))
   | dtr_last: forall mu s d tau,
       no_read mu d ->
-      dtransition mu ((s, d) :: nil) tau
-                   mu nil ((s, d) :: tau).
+      dtransition (State mu ((s, d) :: nil) tau)
+                  (State mu nil ((s, d) :: tau)).
 
-Inductive dtransitions: moves -> moves -> moves
-                      -> moves -> moves -> moves -> Prop :=
-  | dtr_refl:
-      forall mu sigma tau,
-      dtransitions mu sigma tau mu sigma tau
-  | dtr_one:
-      forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-      dtransition mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-      dtransitions mu1 sigma1 tau1 mu2 sigma2 tau2
-  | dtr_trans:
-      forall mu1 sigma1 tau1 mu2 sigma2 tau2 mu3 sigma3 tau3,
-      dtransitions mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-      dtransitions mu2 sigma2 tau2 mu3 sigma3 tau3 ->
-      dtransitions mu1 sigma1 tau1 mu3 sigma3 tau3.
+Definition dtransitions: state -> state -> Prop :=
+  clos_refl_trans state dtransition.
+
+(** Every deterministic transition corresponds to a sequence of
+  non-deterministic transitions. *)
 
 Lemma transition_determ:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-  dtransition mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  state_wf mu1 sigma1 tau1 ->
-  transitions mu1 sigma1 tau1 mu2 sigma2 tau2.
+  forall st st',
+  dtransition st st' ->
+  state_wf st ->
+  transitions st st'.
 Proof.
-  induction 1; intro.
-  apply tr_one. exact (tr_nop nil r mu nil tau). 
-  apply tr_one. exact (tr_start nil s d mu tau). 
-  apply tr_one. apply tr_push. 
-  eapply tr_trans.
-    apply tr_one. 
+  induction 1; intro; unfold transitions.
+  apply rt_step. exact (tr_nop nil r mu nil tau). 
+  apply rt_step. exact (tr_start nil s d mu tau). 
+  apply rt_step. apply tr_push. 
+  eapply rt_trans.
+    apply rt_step. 
     change ((s, r0) :: sigma ++ (r0, d) :: nil)
       with (((s, r0) :: sigma) ++ (r0, d) :: nil).
     apply tr_loop. 
-    apply tr_one. simpl. apply tr_pop. auto. 
-    destruct H0 as [A [B [C D]]]. 
-    generalize C. 
+    apply rt_step. simpl. apply tr_pop. auto. 
+    inv H0.  generalize H6. 
     change ((s, r0) :: sigma ++ (r0, d) :: nil)
       with (((s, r0) :: sigma) ++ (r0, d) :: nil).
     unfold temp_last; rewrite List.rev_unit. intros [E F].
     elim (F s r0). unfold is_not_temp. auto. 
     rewrite <- List.In_rev. apply in_eq.
-  apply tr_one. apply tr_pop. auto. auto. 
-  apply tr_one. apply tr_last. auto. 
+  apply rt_step. apply tr_pop. auto. auto. 
+  apply rt_step. apply tr_last. auto. 
 Qed.
 
 Lemma transitions_determ:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-  dtransitions mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  state_wf mu1 sigma1 tau1 ->
-  transitions mu1 sigma1 tau1 mu2 sigma2 tau2.
+  forall st st',
+  dtransitions st st' ->
+  state_wf st ->
+  transitions st st'.
 Proof.
-  induction 1; intros.
-  apply tr_refl.
+  unfold transitions; induction 1; intros.
   eapply transition_determ; eauto.
-  eapply tr_trans.
-    apply IHdtransitions1. auto.
-    apply IHdtransitions2. eapply transitions_preserve_wf; eauto.
+  apply rt_refl.
+  apply rt_trans with y. auto.
+    apply IHclos_refl_trans2.
+    apply transitions_preserve_wf with x; auto. red; auto.
 Qed.
+
+(** The semantic correctness of deterministic transitions follows. *)
 
 Theorem dtransitions_correctness:
   forall mu tau,
   move_no_temp mu ->
   is_mill mu ->
-  dtransitions mu nil nil  nil nil tau ->
+  dtransitions (State mu nil nil) (State nil nil tau) ->
   forall e, env_equiv (exec_seq (List.rev tau) e) (exec_par mu e).
 Proof.
   intros. 
@@ -863,7 +923,11 @@ Proof.
   apply transitions_determ. auto. apply state_wf_start; auto. 
 Qed.
 
-(* Transition function *)
+(** * The compilation function *)
+
+(** We now define a function that takes a well-formed parallel move [mu]
+  and returns a sequence of elementary moves [tau] that is semantically
+  equivalent.  We start by defining a number of auxiliary functions. *)
 
 Function split_move (m: moves) (r: reg) {struct m} : option (moves * reg * moves) :=
   match m with
@@ -893,8 +957,6 @@ Function replace_last_source (r: reg) (m: moves) {struct m} : moves :=
   | s_d :: tl => s_d :: replace_last_source r tl
   end.
 
-Inductive state : Set := State: moves -> moves -> moves -> state.
-
 Definition final_state (st: state) : bool :=
   match st with
   | State nil nil _ => true
@@ -923,7 +985,7 @@ Function parmove_step (st: state) : state :=
       end
   end.
 
-(* Correctness properties of these functions *)
+(** Here are the main correctness properties of these functions. *)
 
 Lemma split_move_charact:
   forall m r,
@@ -966,54 +1028,50 @@ Proof.
 Qed.
 
 Lemma parmove_step_compatible:
-  forall mu sigma tau mu' sigma' tau',
-  final_state (State mu sigma tau) = false ->
-  parmove_step (State mu sigma tau) = State mu' sigma' tau' ->
-  dtransition mu sigma tau mu' sigma' tau'.
+  forall st,
+  final_state st = false ->
+  dtransition st (parmove_step st).
 Proof.
-  intros until tau'. intro NOTFINAL.
-  unfold parmove_step. 
+  intros st NOTFINAL. destruct st as [mu sigma tau]. unfold parmove_step.
   case_eq mu; [intros MEQ | intros [ms md] mtl MEQ]. 
   case_eq sigma; [intros SEQ | intros [ss sd] stl SEQ]. 
-  subst mu sigma. discriminate. 
+  subst mu sigma. simpl in NOTFINAL. discriminate. 
   simpl. 
   case_eq stl; [intros STLEQ | intros xx1 xx2 STLEQ].
-  intro R; inversion R; clear R; subst.
   apply dtr_last. red; simpl; auto.
   elim (@exists_last _ stl). 2:congruence. intros sigma1 [[ss1 sd1] SEQ2]. 
   rewrite <- STLEQ. clear STLEQ xx1 xx2. 
   generalize (is_last_source_charact sd ss1 sd1 sigma1). 
   rewrite SEQ2. destruct (is_last_source sd (sigma1 ++ (ss1, sd1) :: nil)).
-  intro. subst ss1. intro R; inversion R; clear R; subst.
+  intro. subst ss1. 
   rewrite replace_last_source_charact. apply dtr_loop_pop. 
   red; simpl; auto.
-  intro. intro R; inversion R; clear R; subst.
-  apply dtr_pop. red; simpl; auto. auto. 
+  intro. apply dtr_pop. red; simpl; auto. auto. 
 
   case_eq sigma; [intros SEQ | intros [ss sd] stl SEQ]. 
-  destruct (reg_eq ms md); intro R; inversion R; clear R; subst.
-  apply dtr_nop. 
+  destruct (reg_eq ms md). 
+  subst. apply dtr_nop. 
   apply dtr_start. auto.
 
   generalize (split_move_charact ((ms, md) :: mtl) sd).
   case (split_move ((ms, md) :: mtl) sd); [intros [[before r] after] | idtac].
-  intros [MEQ2 NOREAD]. intro R; inversion R; clear R; subst.
+  intros [MEQ2 NOREAD].
   rewrite MEQ2. apply dtr_push. auto.
   intro NOREAD.
   case_eq stl; [intros STLEQ | intros xx1 xx2 STLEQ].
-  intro R; inversion R; clear R; subst.
   apply dtr_last. auto.
   elim (@exists_last _ stl). 2:congruence. intros sigma1 [[ss1 sd1] SEQ2]. 
   rewrite <- STLEQ. clear STLEQ xx1 xx2. 
   generalize (is_last_source_charact sd ss1 sd1 sigma1). 
   rewrite SEQ2. destruct (is_last_source sd (sigma1 ++ (ss1, sd1) :: nil)).
-  intro. subst ss1. intro R; inversion R; clear R; subst.
+  intro. subst ss1.
   rewrite replace_last_source_charact. apply dtr_loop_pop. auto.
-  intro. intro R; inversion R; clear R; subst.
-  apply dtr_pop. auto. auto.
+  intro. apply dtr_pop. auto. auto.
 Qed.
 
-(* Decreasing measure over states *)
+(** The compilation function is obtained by iterating the [parmov_step]
+  function.  To show that this iteration always terminates, we introduce
+  the following measure over states. *)
 
 Open Scope nat_scope.
 
@@ -1023,9 +1081,8 @@ Definition measure (st: state) : nat :=
   end.
 
 Lemma measure_decreasing_1:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-  dtransition mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  measure (State mu2 sigma2 tau2) < measure (State mu1 sigma1 tau1).
+  forall st st',
+  dtransition st st' -> measure st' < measure st.
 Proof.
   induction 1; repeat (simpl; rewrite List.app_length); simpl; omega.
 Qed.
@@ -1035,13 +1092,10 @@ Lemma measure_decreasing_2:
   final_state st = false ->
   measure (parmove_step st) < measure st.
 Proof.
-  intros. destruct st as [mu sigma tau]. 
-  case_eq (parmove_step (State mu sigma tau)). intros mu' sigma' tau' EQ.
-  apply measure_decreasing_1. 
-  apply parmove_step_compatible; auto.
+  intros. apply measure_decreasing_1. apply parmove_step_compatible; auto.
 Qed.
 
-(* Compilation function for parallel moves *)
+(** Compilation function for parallel moves. *)
 
 Function parmove_aux (st: state) {measure measure st} : moves :=
   if final_state st 
@@ -1052,25 +1106,21 @@ Proof.
 Qed.
 
 Lemma parmove_aux_transitions:
-  forall mu sigma tau,
-  dtransitions mu sigma tau nil nil (parmove_aux (State mu sigma tau)).
+  forall st,
+  dtransitions st (State nil nil (parmove_aux st)).
 Proof.
-  assert (forall st,
-          match st with State mu sigma tau =>
-             dtransitions mu sigma tau nil nil (parmove_aux st)
-          end).
-    intro st. functional induction (parmove_aux st).
-    destruct _x; destruct _x0; simpl in e; discriminate || apply dtr_refl.
-    case_eq (parmove_step st). intros mu' sigma' tau' PSTEP.
-    destruct st as [mu sigma tau]. 
-    eapply dtr_trans. apply dtr_one. apply parmove_step_compatible; eauto. 
-    rewrite PSTEP in IHm. auto.
-
-  intros. apply (H (State mu sigma tau)). 
+  unfold dtransitions. intro st. functional induction (parmove_aux st).
+  destruct _x; destruct _x0; simpl in e; discriminate || apply rt_refl.
+  eapply rt_trans. apply rt_step. apply parmove_step_compatible; eauto.
+  auto. 
 Qed.
 
 Definition parmove (mu: moves) : moves :=
   List.rev (parmove_aux (State mu nil nil)).
+
+(** This is the main correctness theorem: the sequence of elementary
+  moves [parmove mu] is semantically equivalent to the parallel move
+  [mu] if the latter is well-formed. *)
 
 Theorem parmove_correctness:
   forall mu,
@@ -1081,6 +1131,10 @@ Proof.
   intros. unfold parmove. apply dtransitions_correctness; auto.
   apply parmove_aux_transitions. 
 Qed.
+
+(** Here is an alternate formulation of [parmove], where the
+  parallel move problem is given as two separate lists of sources
+  and destinations. *)
 
 Definition parmove2 (sl dl: list reg) : moves :=
   parmove (List.combine sl dl).
@@ -1111,7 +1165,13 @@ Proof.
   intros. transitivity (e1 r); auto.
 Qed.
 
-(* Additional properties on the generated sequence of moves. *)
+(** * Additional syntactic properties *)
+
+(** We now show an additional property of the sequence of moves
+  generated by [parmove mu]: any such move [s -> d] is either
+  already present in [mu], or of the form [temp s -> d] or [s -> temp s]
+  for some [s -> d] in [mu].  This syntactic property is useful
+  to show that [parmove] preserves typing, for instance. *)
 
 Section PROPERTIES.
 
@@ -1145,36 +1205,23 @@ Qed.
 
 Hint Rewrite wf_moves_cons wf_moves_append: pmov.
 
-Definition wf_state (mu sigma tau: moves) : Prop :=
-  wf_moves mu /\ wf_moves sigma /\ wf_moves tau.
+Inductive wf_state: state -> Prop :=
+  | wf_state_intro: forall mu sigma tau,
+      wf_moves mu -> wf_moves sigma -> wf_moves tau ->
+      wf_state (State mu sigma tau).
 
 Lemma dtransition_preserves_wf_state:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-  dtransition mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  wf_state mu1 sigma1 tau1 -> wf_state mu2 sigma2 tau2.
+  forall st st',
+  dtransition st st' -> wf_state st -> wf_state st'.
 Proof.
-  induction 1; intros [A [B C]]; unfold wf_state;
-  autorewrite with pmov in A; autorewrite with pmov in B; 
-  autorewrite with pmov in C; autorewrite with pmov.
-
-  tauto.
-
-  tauto.
-
-  tauto. 
-
-  intuition. apply wf_move_temp_left; auto. 
+  induction 1; intro WF; inv WF; constructor; autorewrite with pmov in *; intuition.
+  apply wf_move_temp_left; auto. 
   eapply wf_move_temp_right; eauto.
-
-  intuition. 
-
-  intuition.
 Qed.
 
 Lemma dtransitions_preserve_wf_state:
-  forall mu1 sigma1 tau1 mu2 sigma2 tau2,
-  dtransitions mu1 sigma1 tau1 mu2 sigma2 tau2 ->
-  wf_state mu1 sigma1 tau1 -> wf_state mu2 sigma2 tau2.
+  forall st st',
+  dtransitions st st' -> wf_state st -> wf_state st'.
 Proof.
   induction 1; intros; eauto. 
   eapply dtransition_preserves_wf_state; eauto.
@@ -1186,14 +1233,14 @@ Lemma parmove_wf_moves:
   forall mu, wf_moves mu (parmove mu).
 Proof.
   intros. 
-  assert (wf_state mu mu nil nil).
-    split. red; intros. apply wf_move_same. auto.
-    split. red; simpl; tauto. red; simpl; tauto.
+  assert (wf_state mu (State mu nil nil)).
+    constructor. red; intros. apply wf_move_same. auto.
+    red; simpl; tauto. red; simpl; tauto.
   generalize (dtransitions_preserve_wf_state mu
-              _ _ _ _ _ _
-              (parmove_aux_transitions mu nil nil) H).
-  intros [A [B C]].
-  unfold parmove. red; intros. apply C. 
+              _ _
+              (parmove_aux_transitions (State mu nil nil)) H).
+  intro WFS. inv WFS. 
+  unfold parmove. red; intros. apply H5.  
   rewrite List.In_rev. auto.
 Qed.
 

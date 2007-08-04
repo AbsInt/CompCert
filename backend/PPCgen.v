@@ -2,6 +2,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -268,11 +269,6 @@ Definition transl_op
       Pori (ireg_of r) (ireg_of r) (Csymbol_low_unsigned s ofs) :: k
   | Oaddrstack n, nil =>
       addimm (ireg_of r) GPR1 n k
-  | Oundef, nil =>
-      match mreg_type r with
-      | Tint => Piundef (ireg_of r) :: k
-      | Tfloat => Pfundef (freg_of r) :: k
-      end
   | Ocast8signed, a1 :: nil =>
       Pextsb (ireg_of r) (ireg_of a1) :: k
   | Ocast8unsigned, a1 :: nil =>
@@ -474,6 +470,17 @@ Definition transl_instr (i: Mach.instruction) (k: code) :=
       Pmtctr (ireg_of r) :: Pbctrl :: k
   | Mcall sig (inr symb) =>
       Pbl symb :: k
+  | Mtailcall sig (inl r) =>
+      Pmtctr (ireg_of r) :: 
+      Plwz GPR2 (Cint (Int.repr 12)) GPR1 ::
+      Pmtlr GPR2 ::
+      Pfreeframe :: 
+      Pbctr :: k
+  | Mtailcall sig (inr symb) =>
+      Plwz GPR2 (Cint (Int.repr 12)) GPR1 ::
+      Pmtlr GPR2 ::
+      Pfreeframe :: 
+      Pbs symb :: k
   | Malloc =>
       Pallocblock :: k
   | Mlabel lbl =>
@@ -510,14 +517,17 @@ Fixpoint code_size (c: code) : Z :=
   | instr :: c' => code_size c' + 1
   end.
 
-Definition transf_function (f: Mach.function) : option PPC.code :=
+Open Local Scope string_scope.
+
+Definition transf_function (f: Mach.function) : res PPC.code :=
   let c := transl_function f in
   if zlt Int.max_unsigned (code_size c)
-  then None
-  else Some c.
+  then Errors.Error (msg "code size exceeded")
+  else Errors.OK c.
 
-Definition transf_fundef (f: Mach.fundef) : option PPC.fundef :=
+Definition transf_fundef (f: Mach.fundef) : res PPC.fundef :=
   transf_partial_fundef transf_function f.
 
-Definition transf_program (p: Mach.program) : option PPC.program :=
+Definition transf_program (p: Mach.program) : res PPC.program :=
   transform_partial_program transf_fundef p.
+

@@ -8,16 +8,67 @@ open BinPos
 open BinInt
 open Integers
 open AST
-open Op
 open Cminor
 
 let intconst n =
-  Eop(Ointconst(coqint_of_camlint n), Enil)
+  Econst(Ointconst(coqint_of_camlint n))
 
 let andbool e1 e2 =
-  Cmconstr.conditionalexpr e1 e2 (intconst 0l)
+  Econdition(e1, e2, intconst 0l)
 let orbool e1 e2 =
-  Cmconstr.conditionalexpr e1 (intconst 1l) e2
+  Econdition(e1, intconst 1l, e2)
+
+let exitnum n = nat_of_camlint(Int32.pred n)
+
+let mkswitch expr (cases, dfl) =
+  let rec mktable = function
+  | [] -> Coq_nil
+  | (key, exit) :: rem ->
+      Coq_cons(Coq_pair(coqint_of_camlint key, exitnum exit), mktable rem) in
+  Sswitch(expr, mktable cases, exitnum dfl)
+
+(***
+   match (a) { case 0: s0; case 1: s1; case 2: s2; }  --->
+
+   block {
+   block {
+   block {
+   block {
+     switch(a) { case 0: exit 0; case 1: exit 1; default: exit 2; }
+   }; s0; exit 2;
+   }; s1; exit 1;
+   }; s2;
+   }
+
+   Note that matches are assumed to be exhaustive
+***)
+
+let mkmatch_aux expr cases =
+  let ncases = Int32.of_int (List.length cases) in
+  let rec mktable n = function
+    | [] -> assert false
+    | [key, action] -> Coq_nil
+    | (key, action) :: rem ->
+        Coq_cons(Coq_pair(coqint_of_camlint key, nat_of_camlint n),
+                 mktable (Int32.succ n) rem) in
+  let sw =
+    Sswitch(expr, mktable 0l cases, nat_of_camlint (Int32.pred ncases)) in
+  let rec mkblocks body n = function
+    | [] -> assert false
+    | [key, action] ->
+        Sblock(Sseq(body, action))
+    | (key, action) :: rem ->
+        mkblocks
+          (Sblock(Sseq(body, Sseq(action, Sexit (nat_of_camlint n)))))
+          (Int32.pred n)
+          rem in
+  mkblocks (Sblock sw) (Int32.pred ncases) cases
+
+let mkmatch expr cases =
+  match cases with
+  | [] -> Sskip (* ??? *)
+  | [key, action] -> action
+  | _ -> mkmatch_aux expr cases
 
 %}
 
@@ -32,8 +83,10 @@ let orbool e1 e2 =
 %token BAR
 %token BARBAR
 %token CARET
+%token CASE
 %token COLON
 %token COMMA
+%token DEFAULT
 %token DOLLAR
 %token ELSE
 %token EQUAL
@@ -81,6 +134,7 @@ let orbool e1 e2 =
 %token LET
 %token LOOP
 %token LPAREN
+%token MATCH
 %token MINUS
 %token MINUSF
 %token MINUSGREATER
@@ -200,7 +254,7 @@ parameter_list:
 
 stack_declaration:
     /* empty */                                 { Z0 }
-  | STACK INTLIT                                { z_of_camlint $2 }
+  | STACK INTLIT SEMICOLON                      { z_of_camlint $2 }
 ;
 
 var_declarations:
@@ -217,14 +271,18 @@ var_declaration:
 stmt:
     expr SEMICOLON                              { Sexpr $1 }
   | IDENT EQUAL expr SEMICOLON                  { Sassign($1, $3) }
-  | IF LPAREN expr RPAREN stmts ELSE stmts      { Cmconstr.ifthenelse $3 $5 $7 }
-  | IF LPAREN expr RPAREN stmts                 { Cmconstr.ifthenelse $3 $5 Sskip }
+  | IF LPAREN expr RPAREN stmts ELSE stmts      { Sifthenelse($3, $5, $7) }
+  | IF LPAREN expr RPAREN stmts                 { Sifthenelse($3, $5, Sskip) }
   | LOOP stmts                                  { Sloop($2) }
   | LBRACELBRACE stmt_list RBRACERBRACE         { Sblock($2) }
   | EXIT SEMICOLON                              { Sexit O }
-  | EXIT INTLIT SEMICOLON                       { Sexit (nat_of_camlint(Int32.pred $2)) }
+  | EXIT INTLIT SEMICOLON                       { Sexit (exitnum $2) }
   | RETURN SEMICOLON                            { Sreturn None }
   | RETURN expr SEMICOLON                       { Sreturn (Some $2) }
+  | SWITCH LPAREN expr RPAREN LBRACE switch_cases RBRACE
+                                                { mkswitch $3 $6 }
+  | MATCH LPAREN expr RPAREN LBRACE match_cases RBRACE
+                                                { mkmatch $3 $6 }
 ;
 
 stmts:
@@ -237,72 +295,84 @@ stmt_list:
   | stmt stmt_list                              { Sseq($1, $2) }
 ;
 
+switch_cases:
+    DEFAULT COLON EXIT INTLIT SEMICOLON
+           { ([], $4) }
+  | CASE INTLIT COLON EXIT INTLIT SEMICOLON switch_cases
+           { let (cases, dfl) = $7 in (($2, $5) :: cases, dfl) }
+;
+
+match_cases:
+    /* empty */                                 { [] }
+  | CASE INTLIT COLON stmt_list match_cases     { ($2, $4) :: $5 }
+;
+
 /* Expressions */
 
 expr:
     LPAREN expr RPAREN                          { $2 }
   | IDENT                                       { Evar $1 }
   | INTLIT                                      { intconst $1 }
-  | FLOATLIT                                    { Eop(Ofloatconst $1, Enil) }
-  | STRINGLIT                                   { Eop(Oaddrsymbol($1, Int.zero), Enil) }
-  | AMPERSAND INTLIT                            { Eop(Oaddrstack(coqint_of_camlint $2), Enil) }
-  | MINUS expr    %prec p_uminus                { Cmconstr.negint $2 }
-  | MINUSF expr   %prec p_uminus                { Cmconstr.negfloat $2 }
-  | ABSF expr                                   { Cmconstr.absfloat $2 }
-  | INTOFFLOAT expr                             { Cmconstr.intoffloat $2 }
-  | FLOATOFINT expr                             { Cmconstr.floatofint $2 }
-  | FLOATOFINTU expr                            { Cmconstr.floatofintu $2 }
-  | TILDE expr                                  { Cmconstr.notint $2 }
-  | BANG expr                                   { Cmconstr.notbool $2 }
-  | INT8S expr                                  { Cmconstr.cast8signed $2 }
-  | INT8U expr                                  { Cmconstr.cast8unsigned $2 }
-  | INT16S expr                                 { Cmconstr.cast16signed $2 }
-  | INT16U expr                                 { Cmconstr.cast16unsigned $2 }
-  | FLOAT32 expr                                { Cmconstr.singleoffloat $2 }
+  | FLOATLIT                                    { Econst(Ofloatconst $1) }
+  | STRINGLIT                                   { Econst(Oaddrsymbol($1, Int.zero)) }
+  | AMPERSAND INTLIT                            { Econst(Oaddrstack(coqint_of_camlint $2)) }
+  | MINUS expr    %prec p_uminus                { Eunop(Onegint, $2) }
+  | MINUSF expr   %prec p_uminus                { Eunop(Onegf, $2) }
+  | ABSF expr                                   { Eunop(Oabsf, $2) }
+  | INTOFFLOAT expr                             { Eunop(Ointoffloat, $2) }
+  | FLOATOFINT expr                             { Eunop(Ofloatofint, $2) }
+  | FLOATOFINTU expr                            { Eunop(Ofloatofintu, $2) }
+  | TILDE expr                                  { Eunop(Onotint, $2) }
+  | BANG expr                                   { Eunop(Onotbool, $2) }
+  | INT8S expr                                  { Eunop(Ocast8signed, $2) }
+  | INT8U expr                                  { Eunop(Ocast8unsigned, $2) }
+  | INT16S expr                                 { Eunop(Ocast16signed, $2) }
+  | INT16U expr                                 { Eunop(Ocast16unsigned, $2) }
+  | FLOAT32 expr                                { Eunop(Osingleoffloat, $2) }
   | ALLOC expr                                  { Ealloc $2 }
-  | expr PLUS expr                              { Cmconstr.add $1 $3 }
-  | expr MINUS expr                             { Cmconstr.sub $1 $3 }
-  | expr STAR expr                              { Cmconstr.mul $1 $3 }
-  | expr SLASH expr                             { Cmconstr.divs $1 $3 }
-  | expr PERCENT expr                           { Cmconstr.mods $1 $3 }
-  | expr SLASHU expr                            { Cmconstr.divu $1 $3 }
-  | expr PERCENTU expr                          { Cmconstr.modu $1 $3 }
-  | expr AMPERSAND expr                         { Cmconstr.coq_and $1 $3 }
-  | expr BAR expr                               { Cmconstr.coq_or $1 $3 }
-  | expr CARET expr                             { Cmconstr.xor $1 $3 }
-  | expr LESSLESS expr                          { Cmconstr.shl $1 $3 }
-  | expr GREATERGREATER expr                    { Cmconstr.shr $1 $3 }
-  | expr GREATERGREATERU expr                   { Cmconstr.shru $1 $3 }
-  | expr PLUSF expr                             { Cmconstr.addf $1 $3 }
-  | expr MINUSF expr                            { Cmconstr.subf $1 $3 }
-  | expr STARF expr                             { Cmconstr.mulf $1 $3 }
-  | expr SLASHF expr                            { Cmconstr.divf $1 $3 }
-  | expr EQUALEQUAL expr                        { Cmconstr.cmp Ceq $1 $3 }
-  | expr BANGEQUAL expr                         { Cmconstr.cmp Cne $1 $3 }
-  | expr LESS expr                              { Cmconstr.cmp Clt $1 $3 }
-  | expr LESSEQUAL expr                         { Cmconstr.cmp Cle $1 $3 }
-  | expr GREATER expr                           { Cmconstr.cmp Cgt $1 $3 }
-  | expr GREATEREQUAL expr                      { Cmconstr.cmp Cge $1 $3 }
-  | expr EQUALEQUALU expr                       { Cmconstr.cmpu Ceq $1 $3 }
-  | expr BANGEQUALU expr                        { Cmconstr.cmpu Cne $1 $3 }
-  | expr LESSU expr                             { Cmconstr.cmpu Clt $1 $3 }
-  | expr LESSEQUALU expr                        { Cmconstr.cmpu Cle $1 $3 }
-  | expr GREATERU expr                          { Cmconstr.cmpu Cgt $1 $3 }
-  | expr GREATEREQUALU expr                     { Cmconstr.cmpu Cge $1 $3 }
-  | expr EQUALEQUALF expr                       { Cmconstr.cmpf Ceq $1 $3 }
-  | expr BANGEQUALF expr                        { Cmconstr.cmpf Cne $1 $3 }
-  | expr LESSF expr                             { Cmconstr.cmpf Clt $1 $3 }
-  | expr LESSEQUALF expr                        { Cmconstr.cmpf Cle $1 $3 }
-  | expr GREATERF expr                          { Cmconstr.cmpf Cgt $1 $3 }
-  | expr GREATEREQUALF expr                     { Cmconstr.cmpf Cge $1 $3 }
-  | memory_chunk LBRACKET expr RBRACKET         { Cmconstr.load $1 $3 }
+  | expr PLUS expr                              { Ebinop(Oadd, $1, $3) }
+  | expr MINUS expr                             { Ebinop(Osub, $1, $3) }
+  | expr STAR expr                              { Ebinop(Omul, $1, $3) }
+  | expr SLASH expr                             { Ebinop(Odiv, $1, $3) }
+  | expr PERCENT expr                           { Ebinop(Omod, $1, $3) }
+  | expr SLASHU expr                            { Ebinop(Odivu, $1, $3) }
+  | expr PERCENTU expr                          { Ebinop(Omodu, $1, $3) }
+  | expr AMPERSAND expr                         { Ebinop(Oand, $1, $3) }
+  | expr BAR expr                               { Ebinop(Oor, $1, $3) }
+  | expr CARET expr                             { Ebinop(Oxor, $1, $3) }
+  | expr LESSLESS expr                          { Ebinop(Oshl, $1, $3) }
+  | expr GREATERGREATER expr                    { Ebinop(Oshr, $1, $3) }
+  | expr GREATERGREATERU expr                   { Ebinop(Oshru, $1, $3) }
+  | expr PLUSF expr                             { Ebinop(Oaddf, $1, $3) }
+  | expr MINUSF expr                            { Ebinop(Osubf, $1, $3) }
+  | expr STARF expr                             { Ebinop(Omulf, $1, $3) }
+  | expr SLASHF expr                            { Ebinop(Odivf, $1, $3) }
+  | expr EQUALEQUAL expr                        { Ebinop(Ocmp Ceq, $1, $3) }
+  | expr BANGEQUAL expr                         { Ebinop(Ocmp Cne, $1, $3) }
+  | expr LESS expr                              { Ebinop(Ocmp Clt, $1, $3) }
+  | expr LESSEQUAL expr                         { Ebinop(Ocmp Cle, $1, $3) }
+  | expr GREATER expr                           { Ebinop(Ocmp Cgt, $1, $3) }
+  | expr GREATEREQUAL expr                      { Ebinop(Ocmp Cge, $1, $3) }
+  | expr EQUALEQUALU expr                       { Ebinop(Ocmpu Ceq, $1, $3) }
+  | expr BANGEQUALU expr                        { Ebinop(Ocmpu Cne, $1, $3) }
+  | expr LESSU expr                             { Ebinop(Ocmpu Clt, $1, $3) }
+  | expr LESSEQUALU expr                        { Ebinop(Ocmpu Cle, $1, $3) }
+  | expr GREATERU expr                          { Ebinop(Ocmpu Cgt, $1, $3) }
+  | expr GREATEREQUALU expr                     { Ebinop(Ocmpu Cge, $1, $3) }
+  | expr EQUALEQUALF expr                       { Ebinop(Ocmpf Ceq, $1, $3) }
+  | expr BANGEQUALF expr                        { Ebinop(Ocmpf Cne, $1, $3) }
+  | expr LESSF expr                             { Ebinop(Ocmpf Clt, $1, $3) }
+  | expr LESSEQUALF expr                        { Ebinop(Ocmpf Cle, $1, $3) }
+  | expr GREATERF expr                          { Ebinop(Ocmpf Cgt, $1, $3) }
+  | expr GREATEREQUALF expr                     { Ebinop(Ocmpf Cge, $1, $3) }
+  | memory_chunk LBRACKET expr RBRACKET         { Eload($1, $3) }
   | memory_chunk LBRACKET expr RBRACKET EQUAL expr
-                                                { Cmconstr.store $1 $3 $6 }
+                                                { Estore($1, $3, $6) }
   | expr LPAREN expr_list RPAREN COLON signature
                                                 { Ecall($6, $1, $3) }
   | expr AMPERSANDAMPERSAND expr                { andbool $1 $3 }
   | expr BARBAR expr                            { orbool $1 $3 }
-  | expr QUESTION expr COLON expr               { Cmconstr.conditionalexpr $1 $3 $5 }
+  | expr QUESTION expr COLON expr               { Econdition($1, $3, $5) }
   | LET expr IN expr %prec p_let                { Elet($2, $4) }
   | DOLLAR INTLIT                               { Eletvar (nat_of_camlint $2) }
 ;

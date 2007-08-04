@@ -54,7 +54,7 @@ extern "memset" : int -> int -> int -> void
 
 "SHA1_transform"(ctx) : int -> void
 {
-  stack 320
+  stack 320;
   var i, p, a, b, c, d, e, t;
 
   /* Convert buffer data to 16 big-endian integers */

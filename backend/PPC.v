@@ -9,6 +9,7 @@ Require Import Values.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Smallstep.
 
 (** * Abstract syntax *)
 
@@ -97,7 +98,8 @@ Inductive instruction : Set :=
   | Pbctrl: instruction                                       (**r branch to contents of CTR and link *)
   | Pbf: crbit -> label -> instruction                        (**r branch if false *)
   | Pbl: ident -> instruction                                 (**r branch and link *)
-  | Pblr: instruction                                         (**r branch to contents: register LR *)
+  | Pbs: ident -> instruction                                 (**r branch to symbol *)
+  | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
   | Pcmplw: ireg -> ireg -> instruction                       (**r unsigned integer comparison *)
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
@@ -170,14 +172,11 @@ Inductive instruction : Set :=
   | Pxor: ireg -> ireg -> ireg -> instruction                 (**r bitwise xor *)
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
   | Pxoris: ireg -> ireg -> constant -> instruction           (**r bitwise xor with immediate high *)
-  | Piundef: ireg -> instruction                              (**r set int reg to [Vundef] *)
-  | Pfundef: freg -> instruction                              (**r set float reg to [Vundef] *)
   | Plabel: label -> instruction.                             (**r define a code label *)
 
 (** The pseudo-instructions are the following:
 
 - [Plabel]: define a code label at the current program point
-
 - [Plfi]: load a floating-point constant in a float register.
   Expands to a float load [lfd] from an address in the constant data section
   initialized with the floating-point constant:
@@ -190,7 +189,6 @@ lbl:    .double floatcst
 >>
   Initialized data in the constant data section are not modeled here,
   which is why we use a pseudo-instruction for this purpose.
-
 - [Pfcti]: convert a float to an integer.  This requires a transfer
   via memory of a 32-bit integer from a float register to an int register,
   which our memory model cannot express.  Expands to:
@@ -200,7 +198,6 @@ lbl:    .double floatcst
         lwz     rdst, 4(r1)
         addi    r1, r1, 8
 >>
-
 - [Pictf]: convert a signed integer to a float.  This requires complicated
   bit-level manipulations of IEEE floats through mixed float and integer 
   arithmetic over a memory word, which our memory model and axiomatization
@@ -221,7 +218,6 @@ lbl:    .long   0x43300000, 0x80000000
 >>
   (Don't worry if you do not understand this instruction sequence: intimate
   knowledge of IEEE float arithmetic is necessary.)
-
 - [Piuctf]: convert an unsigned integer to a float.  The expansion is close
   to that [Pictf], and equally obscure.
 <<
@@ -237,7 +233,6 @@ lbl:    .long   0x43300000, 0x80000000
 lbl:    .long   0x43300000, 0x00000000
         .text
 >>
-
 - [Pallocframe lo hi]: in the formal semantics, this pseudo-instruction
   allocates a memory block with bounds [lo] and [hi], stores the value
   of register [r1] (the stack pointer, by convention) at the bottom
@@ -250,7 +245,6 @@ lbl:    .long   0x43300000, 0x00000000
   This cannot be expressed in our memory model, which does not reflect
   the fact that stack frames are adjacent and allocated/freed
   following a stack discipline.
-
 - [Pfreeframe]: in the formal semantics, this pseudo-instruction
   reads the bottom word of the block pointed by [r1] (the stack pointer),
   frees this block, and sets [r1] to the value of the bottom word.
@@ -261,27 +255,11 @@ lbl:    .long   0x43300000, 0x00000000
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
-
 - [Pallocheap]: in the formal semantics, this pseudo-instruction
   allocates a heap block of size the contents of [GPR3], and leaves
   a pointer to this block in [GPR3].  In the generated assembly code,
   it is turned into a call to the allocation function of the run-time
   system.
-
-- [Piundef] and [Pfundef]: set an integer or float register (respectively)
-  to the [Vundef] value.  Expand to nothing, as the PowerPC processor has
-  no notion of ``undefined value''.  These two pseudo-instructions are used
-  to ensure that the generated PowerPC code computes exactly the same values
-  as predicted by the semantics of Cminor, which explicitly set uninitialized
-  local variables to the [Vundef] value.  A general property of our semantics,
-  not yet formally proved, is that they are monotone with respect to the
-  partial ordering [Vundef <= v] over values.  Consequently, if a program
-  evaluates to a non-[Vundef] result [r] from an initial state that contains
-  [Vundef] values, it will also evaluate to [r] if arbitrary values are put
-  in the initial state instead of the [Vundef] values.  This justifies
-  treating [Piundef] and [Pfundef] as no-operations, leaving in the target
-  register whatever value was already there instead of setting it to [Vundef].
-  The formal proof of this result remains to be done, however.
 *)
 
 Definition code := list instruction.
@@ -588,6 +566,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       end
   | Pbl ident =>
       OK (rs#LR <- (Val.add rs#PC Vone) #PC <- (symbol_offset ident Int.zero)) m
+  | Pbs ident =>
+      OK (rs#PC <- (symbol_offset ident Int.zero)) m
   | Pblr =>
       OK (rs#PC <- (rs#LR)) m
   | Pbt bit lbl =>
@@ -744,10 +724,6 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.xor rs#r1 (const_low cst)))) m
   | Pxoris rd r1 cst =>
       OK (nextinstr (rs#rd <- (Val.xor rs#r1 (const_high cst)))) m
-  | Piundef rd =>
-      OK (nextinstr (rs#rd <- Vundef)) m
-  | Pfundef rd =>
-      OK (nextinstr (rs#rd <- Vundef)) m
   | Plabel lbl =>
       OK (nextinstr rs) m
   end.
@@ -762,7 +738,7 @@ Inductive extcall_args (rs: regset) (m: mem):
       extcall_args rs m nil irl frl ofs nil
   | extcall_args_int_reg: forall tyl ir1 irl frl ofs v1 vl,
       v1 = rs (IR ir1) ->
-      extcall_args rs m tyl irl frl (ofs + 4) vl ->
+      extcall_args rs m tyl irl frl ofs vl ->
       extcall_args rs m (Tint :: tyl) (ir1 :: irl) frl ofs (v1 :: vl)
   | extcall_args_int_stack: forall tyl frl ofs v1 vl,
       Mem.loadv Mint32 m (Val.add (rs (IR GPR1)) (Vint (Int.repr ofs))) = Some v1 ->
@@ -770,11 +746,11 @@ Inductive extcall_args (rs: regset) (m: mem):
       extcall_args rs m (Tint :: tyl) nil frl ofs (v1 :: vl)
   | extcall_args_float_reg: forall tyl irl fr1 frl ofs v1 vl,
       v1 = rs (FR fr1) ->
-      extcall_args rs m tyl (list_drop2 irl) frl (ofs + 8) vl ->
+      extcall_args rs m tyl (list_drop2 irl) frl ofs vl ->
       extcall_args rs m (Tfloat :: tyl) irl (fr1 :: frl) ofs (v1 :: vl)
   | extcall_args_float_stack: forall tyl irl ofs v1 vl,
       Mem.loadv Mfloat64 m (Val.add (rs (IR GPR1)) (Vint (Int.repr ofs))) = Some v1 ->
-      extcall_args rs m tyl (list_drop2 irl) nil (ofs + 8) vl ->
+      extcall_args rs m tyl irl nil (ofs + 8) vl ->
       extcall_args rs m (Tfloat :: tyl) irl nil ofs (v1 :: vl).
 
 Definition extcall_arguments
@@ -783,7 +759,7 @@ Definition extcall_arguments
     sg.(sig_args)
     (GPR3 :: GPR4 :: GPR5 :: GPR6 :: GPR7 :: GPR8 :: GPR9 :: GPR10 :: nil)
     (FPR1 :: FPR2 :: FPR3 :: FPR4 :: FPR5 :: FPR6 :: FPR7 :: FPR8 :: FPR9 :: FPR10 :: nil)
-    24 args.
+    56 args.
 
 Definition loc_external_result (s: signature) : preg :=
   match s.(sig_res) with
@@ -794,14 +770,17 @@ Definition loc_external_result (s: signature) : preg :=
 
 (** Execution of the instruction at [rs#PC]. *)
 
-Inductive exec_step: regset -> mem -> trace -> regset -> mem -> Prop :=
+Inductive state: Set :=
+  | State: regset -> mem -> state.
+
+Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
       forall b ofs c i rs m rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some i ->
       exec_instr c i rs m = OK rs' m' ->
-      exec_step rs m E0 rs' m'
+      step (State rs m) E0 (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs',
       rs PC = Vptr b Int.zero ->
@@ -810,33 +789,26 @@ Inductive exec_step: regset -> mem -> trace -> regset -> mem -> Prop :=
       extcall_arguments rs m ef.(ef_sig) args ->
       rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
                #PC <- (rs LR)) ->
-      exec_step rs m t rs' m.
-
-(** Execution of zero, one or several instructions starting at [rs#PC]. *)
-
-Inductive exec_steps: regset -> mem -> trace -> regset -> mem -> Prop :=
-  | exec_refl:
-      forall rs m,
-      exec_steps rs m E0 rs m
-  | exec_one:
-      forall rs m t rs' m',
-      exec_step rs m t rs' m' ->
-      exec_steps rs m t rs' m'
-  | exec_trans:
-      forall rs1 m1 t1 rs2 m2 t2 rs3 m3 t3,
-      exec_steps rs1 m1 t1 rs2 m2 ->
-      exec_steps rs2 m2 t2 rs3 m3 ->
-      t3 = t1 ** t2 ->
-      exec_steps rs1 m1 t3 rs3 m3.
+      step (State rs m) t (State rs' m).
 
 End RELSEM.
 
-Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := Genv.globalenv p in
-  let m0 := Genv.init_mem p in
-  let rs0 :=
-    (Pregmap.init Vundef) # PC <- (symbol_offset ge p.(prog_main) Int.zero)
-                          # LR <- Vzero
-                          # GPR1 <- (Vptr Mem.nullptr Int.zero) in
-  exists rs, exists m,
-  exec_steps ge rs0 m0 t rs m /\ rs#PC = Vzero /\ rs#GPR3 = r.
+Inductive initial_state (p: program): state -> Prop :=
+  | initial_state_intro:
+      let ge := Genv.globalenv p in
+      let m0 := Genv.init_mem p in
+      let rs0 :=
+        (Pregmap.init Vundef)
+        # PC <- (symbol_offset ge p.(prog_main) Int.zero)
+        # LR <- Vzero
+        # GPR1 <- (Vptr Mem.nullptr Int.zero) in
+      initial_state p (State rs0 m0).
+
+Inductive final_state: state -> int -> Prop :=
+  | final_state_intro: forall rs m r,
+      rs#PC = Vzero ->
+      rs#GPR3 = Vint r ->
+      final_state (State rs m) r.
+      
+Definition exec_program (p: program) (beh: program_behavior) : Prop :=
+  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.

@@ -1,15 +1,16 @@
 (** Correctness proof for the translation from Linear to Mach. *)
 
 (** This file proves semantic preservation for the [Stacking] pass.
-  For the target language Mach, we use the alternate semantics
+  For the target language Mach, we use the abstract semantics
   given in file [Machabstr], where a part of the activation record
   is not resident in memory.  Combined with the semantic equivalence
-  result between the two Mach semantics (see file [Machabstr2mach]),
+  result between the two Mach semantics (see file [Machabstr2concr]),
   the proof in this file also shows semantic preservation with
-  respect to the standard Mach semantics. *)
+  respect to the concrete Mach semantics. *)
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
@@ -17,11 +18,13 @@ Require Import Op.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Locations.
-Require Import Mach.
-Require Import Machabstr.
 Require Import Linear.
 Require Import Lineartyping.
+Require Import Mach.
+Require Import Machabstr.
+Require Import Bounds.
 Require Import Conventions.
 Require Import Stacking.
 
@@ -29,25 +32,28 @@ Require Import Stacking.
 
 (** ``Good variable'' properties for frame accesses. *)
 
+Lemma typesize_typesize:
+  forall ty, AST.typesize ty = 4 * Locations.typesize ty.
+Proof.
+  destruct ty; auto.
+Qed.
+
 Lemma get_slot_ok:
   forall fr ty ofs,
-  0 <= ofs -> fr.(low) + ofs + 4 * typesize ty <= 0 ->
+  24 <= ofs -> fr.(fr_low) + ofs + 4 * typesize ty <= 0 ->
   exists v, get_slot fr ty ofs v.
 Proof.
-  intros. exists (load_contents (mem_type ty) fr.(contents) (fr.(low) + ofs)).
-  constructor; auto. 
+  intros. rewrite <- typesize_typesize in H0.
+  exists (fr.(fr_contents) ty (fr.(fr_low) + ofs)). constructor; auto. 
 Qed.
 
 Lemma set_slot_ok:
   forall fr ty ofs v,
-  fr.(high) = 0 -> 0 <= ofs -> fr.(low) + ofs + 4 * typesize ty <= 0 ->
+  24 <= ofs -> fr.(fr_low) + ofs + 4 * typesize ty <= 0 ->
   exists fr', set_slot fr ty ofs v fr'.
 Proof.
-  intros.
-  exists (mkblock fr.(low) fr.(high)
-           (store_contents (mem_type ty) fr.(contents) (fr.(low) + ofs) v)
-           (set_slot_undef_outside fr ty ofs v H H0 H1 fr.(undef_outside))).
-  constructor; auto. 
+  intros. rewrite <- typesize_typesize in H0.
+  econstructor. constructor; eauto.
 Qed.
 
 Lemma slot_gss: 
@@ -55,10 +61,45 @@ Lemma slot_gss:
   set_slot fr1 ty ofs v fr2 ->
   get_slot fr2 ty ofs v.
 Proof.
-  intros. induction H. 
-  constructor.
-  auto.  simpl.  auto. 
-  simpl. symmetry. apply load_store_contents_same. 
+  intros. inv H. constructor; auto.
+  simpl. destruct (typ_eq ty ty); try congruence.
+  rewrite zeq_true. auto.
+Qed.
+
+Remark frame_update_gso:
+  forall fr ty ofs v ty' ofs',
+  ofs' + 4 * typesize ty' <= ofs \/ ofs + 4 * typesize ty <= ofs' ->
+  fr_contents (update ty ofs v fr) ty' ofs' = fr_contents fr ty' ofs'.
+Proof.
+  intros.
+  generalize (typesize_pos ty); intro.
+  generalize (typesize_pos ty'); intro.
+  simpl. rewrite zeq_false. 2: omega.
+  repeat rewrite <- typesize_typesize in H.
+  destruct (zle (ofs' + AST.typesize ty') ofs). auto.
+  destruct (zle (ofs + AST.typesize ty) ofs'). auto.
+  omegaContradiction.
+Qed.
+
+Remark frame_update_overlap:
+  forall fr ty ofs v ty' ofs',
+  ofs <> ofs' ->
+  ofs' + 4 * typesize ty' > ofs -> ofs + 4 * typesize ty > ofs' ->
+  fr_contents (update ty ofs v fr) ty' ofs' = Vundef.
+Proof.
+  intros. simpl. rewrite zeq_false; auto.
+  rewrite <- typesize_typesize in H0. 
+  rewrite <- typesize_typesize in H1.
+  repeat rewrite zle_false; auto.
+Qed.
+
+Remark frame_update_mismatch:
+  forall fr ty ofs v ty',
+  ty <> ty' ->
+  fr_contents (update ty ofs v fr) ty' ofs = Vundef.
+Proof.
+  intros. simpl. rewrite zeq_true. 
+  destruct (typ_eq ty ty'); congruence.
 Qed.
 
 Lemma slot_gso:
@@ -68,38 +109,36 @@ Lemma slot_gso:
   ofs' + 4 * typesize ty' <= ofs \/ ofs + 4 * typesize ty <= ofs' ->
   get_slot fr2 ty' ofs' v'.
 Proof.
-  intros. induction H; inversion H0.
-  constructor.
-  auto.  simpl low. auto.
-  simpl. rewrite H3. symmetry. apply load_store_contents_other. 
-  repeat (rewrite size_mem_type). omega. 
+  intros. inv H. inv H0.
+  constructor; auto.
+  symmetry. simpl fr_low. apply frame_update_gso. omega.
 Qed.
 
 Lemma slot_gi:
   forall f ofs ty,
-  0 <= ofs -> (init_frame f).(low) + ofs + 4 * typesize ty <= 0 ->
+  24 <= ofs -> fr_low (init_frame f) + ofs + 4 * typesize ty <= 0 ->
   get_slot (init_frame f) ty ofs Vundef.
 Proof.
-  intros. constructor.
-  auto. auto. 
-  symmetry. apply load_contents_init. 
+  intros. rewrite <- typesize_typesize in H0. constructor; auto.
 Qed.
 
 Section PRESERVATION.
 
 Variable prog: Linear.program.
 Variable tprog: Mach.program.
-Hypothesis TRANSF: transf_program prog = Some tprog.
+Hypothesis TRANSF: transf_program prog = OK tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
+
 Section FRAME_PROPERTIES.
 
+Variable stack: list Machabstr.stackframe.
 Variable f: Linear.function.
 Let b := function_bounds f.
 Let fe := make_env b.
 Variable tf: Mach.function.
-Hypothesis TRANSF_F: transf_function f = Some tf.
+Hypothesis TRANSF_F: transf_function f = OK tf.
 
 Lemma unfold_transf_function:
   tf = Mach.mkfunction
@@ -109,7 +148,7 @@ Lemma unfold_transf_function:
          fe.(fe_size).
 Proof.
   generalize TRANSF_F. unfold transf_function.
-  case (zlt (fn_stacksize f) 0). intros; discriminate.
+  case (zlt (Linear.fn_stacksize f) 0). intros; discriminate.
   case (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))).
   intros; discriminate.
   intros. unfold fe. unfold b. congruence.
@@ -118,7 +157,7 @@ Qed.
 Lemma size_no_overflow: fe.(fe_size) <= -Int.min_signed.
 Proof.
   generalize TRANSF_F. unfold transf_function.
-  case (zlt (fn_stacksize f) 0). intros; discriminate.
+  case (zlt (Linear.fn_stacksize f) 0). intros; discriminate.
   case (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))).
   intros; discriminate.
   intros. unfold fe, b. omega.
@@ -131,7 +170,7 @@ Definition index_valid (idx: frame_index) :=
   match idx with
   | FI_local x Tint => 0 <= x < b.(bound_int_local)
   | FI_local x Tfloat => 0 <= x < b.(bound_float_local)
-  | FI_arg x ty => 6 <= x /\ x + typesize ty <= b.(bound_outgoing)
+  | FI_arg x ty => 14 <= x /\ x + typesize ty <= b.(bound_outgoing)
   | FI_saved_int x => 0 <= x < b.(bound_int_callee_save)
   | FI_saved_float x => 0 <= x < b.(bound_float_callee_save)
   end.
@@ -166,17 +205,12 @@ Proof.
 Qed.
 
 Ltac AddPosProps :=
-  assert (bound_int_local b >= 0);
-  [unfold b; apply bound_int_local_pos |
-  assert (bound_float_local b >= 0);
-  [unfold b; apply bound_float_local_pos |
-  assert (bound_int_callee_save b >= 0);
-  [unfold b; apply bound_int_callee_save_pos |
-  assert (bound_float_callee_save b >= 0);
-  [unfold b; apply bound_float_callee_save_pos |
-  assert (bound_outgoing b >= 6); 
-  [unfold b; apply bound_outgoing_pos |
-   generalize align_float_part; intro]]]]].
+  generalize (bound_int_local_pos b); intro;
+  generalize (bound_float_local_pos b); intro;
+  generalize (bound_int_callee_save_pos b); intro;
+  generalize (bound_float_callee_save_pos b); intro;
+  generalize (bound_outgoing_pos b); intro;
+  generalize align_float_part; intro.
 
 Lemma size_pos: fe.(fe_size) >= 24.
 Proof.
@@ -212,18 +246,18 @@ Qed.
 
 Lemma index_local_valid:
   forall ofs ty,
-  slot_bounded f (Local ofs ty) ->
+  slot_within_bounds f b (Local ofs ty) ->
   index_valid (FI_local ofs ty).
 Proof.
-  unfold slot_bounded, index_valid. auto.
+  unfold slot_within_bounds, index_valid. auto.
 Qed.
 
 Lemma index_arg_valid:
   forall ofs ty,
-  slot_bounded f (Outgoing ofs ty) ->
+  slot_within_bounds f b (Outgoing ofs ty) ->
   index_valid (FI_arg ofs ty).
 Proof.
-  unfold slot_bounded, index_valid, b. auto.
+  unfold slot_within_bounds, index_valid. auto.
 Qed.
 
 Lemma index_saved_int_valid:
@@ -280,10 +314,8 @@ Lemma offset_of_index_no_overflow:
 Proof.
   intros.
   generalize (offset_of_index_valid idx H). intros [A B].
-(* omega falls flat on its face... *)
   apply Int.signed_repr.
-  split. apply Zle_trans with 24. compute; intro; discriminate.
-  auto.
+  split. apply Zle_trans with 24; auto. compute; intro; discriminate.
   assert (offset_of_index fe idx < fe_size fe).
     generalize (typesize_pos (type_of_index idx)); intro. omega.
   apply Zlt_succ_le. 
@@ -295,26 +327,30 @@ Qed.
   instructions, in case the offset is computed with [offset_of_index]. *)
 
 Lemma exec_Mgetstack':
-  forall sp parent idx ty c rs fr dst m v,
+  forall sp idx ty c rs fr dst m v,
   index_valid idx ->
   get_slot fr ty (offset_of_index fe idx) v ->
-  Machabstr.exec_instrs tge tf sp parent
-    (Mgetstack (Int.repr (offset_of_index fe idx)) ty dst :: c) rs fr m
-    E0 c (rs#dst <- v) fr m.
+  step tge 
+     (State stack tf sp
+            (Mgetstack (Int.repr (offset_of_index fe idx)) ty dst :: c)
+            rs fr m)
+  E0 (State stack tf sp c (rs#dst <- v) fr m).
 Proof.
-  intros. apply Machabstr.exec_one. apply Machabstr.exec_Mgetstack.
+  intros. apply exec_Mgetstack.
   rewrite offset_of_index_no_overflow. auto. auto.
 Qed.
 
 Lemma exec_Msetstack':
-  forall sp parent idx ty c rs fr src m fr',
+  forall sp idx ty c rs fr src m fr',
   index_valid idx ->
   set_slot fr ty (offset_of_index fe idx) (rs src) fr' ->
-  Machabstr.exec_instrs tge tf sp parent
-    (Msetstack src (Int.repr (offset_of_index fe idx)) ty :: c) rs fr m
-    E0 c rs fr' m.
+  step tge
+     (State stack tf sp
+           (Msetstack src (Int.repr (offset_of_index fe idx)) ty :: c) 
+           rs fr m)
+  E0 (State stack tf sp c rs fr' m).
 Proof.
-  intros. apply Machabstr.exec_one. apply Machabstr.exec_Msetstack.
+  intros. apply exec_Msetstack.
   rewrite offset_of_index_no_overflow. auto. auto.
 Qed.
 
@@ -323,44 +359,42 @@ Qed.
   function. *)
 
 Definition index_val (idx: frame_index) (fr: frame) :=
-  load_contents (mem_type (type_of_index idx))
-                fr.(contents)
-                (fr.(low) + offset_of_index fe idx).
+  fr.(fr_contents) (type_of_index idx) (fr.(fr_low) + offset_of_index fe idx).
 
 Lemma get_slot_index:
   forall fr idx ty v,
   index_valid idx ->
-  fr.(low) = - fe.(fe_size) ->
+  fr.(fr_low) = -fe.(fe_size) ->
   ty = type_of_index idx ->
   v = index_val idx fr ->
   get_slot fr ty (offset_of_index fe idx) v.
 Proof.
   intros. subst v; subst ty.
   generalize (offset_of_index_valid idx H); intros [A B].
-  unfold index_val. apply get_slot_intro. omega. 
-  rewrite H0. omega. auto.
+  rewrite <- typesize_typesize in B. 
+  unfold index_val. apply get_slot_intro; auto.
+  rewrite H0. omega.
 Qed.
 
 Lemma set_slot_index:
   forall fr idx v,
   index_valid idx ->
-  fr.(high) = 0 ->
-  fr.(low) = - fe.(fe_size) ->
+  fr.(fr_low) = -fe.(fe_size) ->
   exists fr', set_slot fr (type_of_index idx) (offset_of_index fe idx) v fr'.
 Proof.
   intros. 
   generalize (offset_of_index_valid idx H); intros [A B].
-  apply set_slot_ok. auto. omega. rewrite H1; omega.
+  apply set_slot_ok; auto. rewrite H0. omega.
 Qed.
 
 (** Alternate ``good variable'' properties for [get_slot] and [set_slot]. *)
+
 Lemma slot_iss:
   forall fr idx v fr',
   set_slot fr (type_of_index idx) (offset_of_index fe idx) v fr' ->
   index_val idx fr' = v.
 Proof.
-  intros. inversion H. subst ofs ty.
-  unfold index_val; simpl. apply load_store_contents_same.
+  intros. exploit slot_gss; eauto. intro. inv H0. auto.
 Qed.
 
 Lemma slot_iso:
@@ -371,19 +405,20 @@ Lemma slot_iso:
   index_val idx' fr' = index_val idx' fr.
 Proof.
   intros. generalize (offset_of_index_disj idx idx' H1 H2 H0). intro.
-  unfold index_val. inversion H. subst ofs ty. simpl. 
-  apply load_store_contents_other. 
-  repeat rewrite size_mem_type. omega.
+  inv H. unfold index_val. simpl fr_low. apply frame_update_gso.
+  omega.
 Qed.
 
 (** * Agreement between location sets and Mach environments *)
 
-(** The following [agree] predicate expresses semantic agreement between
-  a location set on the Linear side and, on the Mach side,
-  a register set, plus the current and parent frames, plus the register
-  set [rs0] at function entry. *)
+(** The following [agree] predicate expresses semantic agreement between:
+- on the Linear side, the current location set [ls] and the location
+  set at function entry [ls0];
+- on the Mach side, a register set [rs] plus the current and parent frames
+  [fr] and [parent]. 
+*)
 
-Record agree (ls: locset) (rs: regset) (fr parent: frame) (rs0: regset) : Prop :=
+Record agree (ls: locset) (rs: regset) (fr parent: frame) (ls0: locset) : Prop :=
   mk_agree {
     (** Machine registers have the same values on the Linear and Mach sides. *)
     agree_reg:
@@ -393,25 +428,22 @@ Record agree (ls: locset) (rs: regset) (fr parent: frame) (rs0: regset) : Prop :
         have the same values they had at function entry.  In other terms,
         these registers are never assigned. *)
     agree_unused_reg:
-      forall r, ~(mreg_bounded f r) -> rs r = rs0 r;
+      forall r, ~(mreg_within_bounds b r) -> rs r = ls0 (R r);
 
-    (** The bounds of the current frame are [[- fe.(fe_size), 0]]. *)
-    agree_high:
-      fr.(high) = 0;
+    (** The low bound of the current frame is [- fe.(fe_size)]. *)
     agree_size:
-      fr.(low) = - fe.(fe_size);
+      fr.(fr_low) = -fe.(fe_size);
 
     (** Local and outgoing stack slots (on the Linear side) have
         the same values as the one loaded from the current Mach frame 
         at the corresponding offsets. *)
-
     agree_locals:
       forall ofs ty, 
-      slot_bounded f (Local ofs ty) ->
+      slot_within_bounds f b (Local ofs ty) ->
       ls (S (Local ofs ty)) = index_val (FI_local ofs ty) fr;
     agree_outgoing:
       forall ofs ty, 
-      slot_bounded f (Outgoing ofs ty) ->
+      slot_within_bounds f b (Outgoing ofs ty) ->
       ls (S (Outgoing ofs ty)) = index_val (FI_arg ofs ty) fr;
 
     (** Incoming stack slots (on the Linear side) have
@@ -419,7 +451,7 @@ Record agree (ls: locset) (rs: regset) (fr parent: frame) (rs0: regset) : Prop :
         at the corresponding offsets. *)
     agree_incoming:
       forall ofs ty,
-      slot_bounded f (Incoming ofs ty) ->
+      slot_within_bounds f b (Incoming ofs ty) ->
       get_slot parent ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Incoming ofs ty)));
 
     (** The areas of the frame reserved for saving used callee-save
@@ -429,35 +461,33 @@ Record agree (ls: locset) (rs: regset) (fr parent: frame) (rs0: regset) : Prop :
       forall r,
       In r int_callee_save_regs ->
       index_int_callee_save r < b.(bound_int_callee_save) ->
-      index_val (FI_saved_int (index_int_callee_save r)) fr = rs0 r;
+      index_val (FI_saved_int (index_int_callee_save r)) fr = ls0 (R r);
     agree_saved_float:
       forall r,
       In r float_callee_save_regs ->
       index_float_callee_save r < b.(bound_float_callee_save) ->
-      index_val (FI_saved_float (index_float_callee_save r)) fr = rs0 r
+      index_val (FI_saved_float (index_float_callee_save r)) fr = ls0 (R r)
   }.
 
-Hint Resolve agree_reg agree_unused_reg agree_size agree_high
+Hint Resolve agree_reg agree_unused_reg agree_size 
              agree_locals agree_outgoing agree_incoming
              agree_saved_int agree_saved_float: stacking.
 
 (** Values of registers and register lists. *)
 
 Lemma agree_eval_reg:
-  forall ls rs fr parent rs0 r,
-  agree ls rs fr parent rs0 -> rs r = ls (R r).
+  forall ls rs fr parent ls0 r,
+  agree ls rs fr parent ls0 -> rs r = ls (R r).
 Proof.
   intros. symmetry. eauto with stacking.
 Qed.
 
 Lemma agree_eval_regs:
-  forall ls rs fr parent rs0 rl,
-  agree ls rs fr parent rs0 -> rs##rl = LTL.reglist rl ls.
+  forall ls rs fr parent ls0 rl,
+  agree ls rs fr parent ls0 -> rs##rl = reglist ls rl.
 Proof.
   induction rl; simpl; intros.
-  auto. apply (f_equal2 (@cons val)).
-  eapply agree_eval_reg; eauto.
-  auto.
+  auto. f_equal. eapply agree_eval_reg; eauto. auto.
 Qed.
 
 Hint Resolve agree_eval_reg agree_eval_regs: stacking.
@@ -466,10 +496,10 @@ Hint Resolve agree_eval_reg agree_eval_regs: stacking.
   of machine registers, of local slots, of outgoing slots. *)
 
 Lemma agree_set_reg:
-  forall ls rs fr parent rs0 r v,
-  agree ls rs fr parent rs0 ->
-  mreg_bounded f r ->
-  agree (Locmap.set (R r) v ls) (Regmap.set r v rs) fr parent rs0.
+  forall ls rs fr parent ls0 r v,
+  agree ls rs fr parent ls0 ->
+  mreg_within_bounds b r ->
+  agree (Locmap.set (R r) v ls) (Regmap.set r v rs) fr parent ls0.
 Proof.
   intros. constructor; eauto with stacking.
   intros. case (mreg_eq r r0); intro.
@@ -484,25 +514,22 @@ Proof.
 Qed.
 
 Lemma agree_set_local:
-  forall ls rs fr parent rs0 v ofs ty,
-  agree ls rs fr parent rs0 ->
-  slot_bounded f (Local ofs ty) ->
+  forall ls rs fr parent ls0 v ofs ty,
+  agree ls rs fr parent ls0 ->
+  slot_within_bounds f b (Local ofs ty) ->
   exists fr',
     set_slot fr ty (offset_of_index fe (FI_local ofs ty)) v fr' /\
-    agree (Locmap.set (S (Local ofs ty)) v ls) rs fr' parent rs0.
+    agree (Locmap.set (S (Local ofs ty)) v ls) rs fr' parent ls0.
 Proof.
   intros.
   generalize (set_slot_index fr _ v (index_local_valid _ _ H0) 
-                (agree_high _ _ _ _ _ H)
                 (agree_size _ _ _ _ _ H)).
   intros [fr' SET].
   exists fr'. split. auto. constructor; eauto with stacking.
   (* agree_reg *)
   intros. rewrite Locmap.gso. eauto with stacking. red; auto.
-  (* agree_high *)
-  inversion SET. simpl high. eauto with stacking.
   (* agree_size *)
-  inversion SET. simpl low. eauto with stacking.
+  inversion SET. rewrite H3; simpl fr_low. eauto with stacking.
   (* agree_local *)
   intros. case (slot_eq (Local ofs ty) (Local ofs0 ty0)); intro.
   rewrite <- e. rewrite Locmap.gss. 
@@ -517,7 +544,7 @@ Proof.
   (* agree_outgoing *)
   intros. rewrite Locmap.gso. transitivity (index_val (FI_arg ofs0 ty0) fr).
   eauto with stacking. symmetry. eapply slot_iso; eauto.
-  red; auto. red; auto.
+  red; auto. red; auto. 
   (* agree_incoming *)
   intros. rewrite Locmap.gso. eauto with stacking. red. auto.
   (* agree_saved_int *)
@@ -529,30 +556,27 @@ Proof.
 Qed.
 
 Lemma agree_set_outgoing:
-  forall ls rs fr parent rs0 v ofs ty,
-  agree ls rs fr parent rs0 ->
-  slot_bounded f (Outgoing ofs ty) ->
+  forall ls rs fr parent ls0 v ofs ty,
+  agree ls rs fr parent ls0 ->
+  slot_within_bounds f b (Outgoing ofs ty) ->
   exists fr',
     set_slot fr ty (offset_of_index fe (FI_arg ofs ty)) v fr' /\
-    agree (Locmap.set (S (Outgoing ofs ty)) v ls) rs fr' parent rs0.
+    agree (Locmap.set (S (Outgoing ofs ty)) v ls) rs fr' parent ls0.
 Proof.
   intros. 
   generalize (set_slot_index fr _ v (index_arg_valid _ _ H0)
-                (agree_high _ _ _ _ _ H)
                 (agree_size _ _ _ _ _ H)).
   intros [fr' SET].
   exists fr'. split. exact SET. constructor; eauto with stacking.
   (* agree_reg *)
   intros. rewrite Locmap.gso. eauto with stacking. red; auto.
-  (* agree_high *)
-  inversion SET. simpl high. eauto with stacking.
   (* agree_size *)
-  inversion SET. simpl low. eauto with stacking.
+  inversion SET. subst fr'; simpl fr_low. eauto with stacking.
   (* agree_local *)
   intros. rewrite Locmap.gso. 
   transitivity (index_val (FI_local ofs0 ty0) fr).
   eauto with stacking. symmetry. eapply slot_iso; eauto.
-  red; auto. red; auto.
+  red; auto. red; auto. 
   (* agree_outgoing *)
   intros. unfold Locmap.set. 
   case (Loc.eq (S (Outgoing ofs ty)) (S (Outgoing ofs0 ty0))); intro.
@@ -562,18 +586,12 @@ Proof.
   congruence. congruence.
   (* overlapping locations *)
   caseEq (Loc.overlap (S (Outgoing ofs ty)) (S (Outgoing ofs0 ty0))); intros.
-  inversion SET. subst ofs1 ty1.
-  unfold index_val, type_of_index, offset_of_index.
-  set (ofs4 := 4 * ofs). set (ofs04 := 4 * ofs0). simpl.
-  unfold ofs4, ofs04. symmetry. 
-  case (zeq ofs ofs0); intro.
-  subst ofs0. apply load_store_contents_mismatch.
+  inv SET. unfold index_val, type_of_index, offset_of_index.
+  destruct (zeq ofs ofs0).
+  subst ofs0. symmetry. apply frame_update_mismatch. 
   destruct ty; destruct ty0; simpl; congruence.
-  generalize (Loc.overlap_not_diff _ _ H2). intro. simpl in H4.
-  apply load_store_contents_overlap. 
-  omega.
-  rewrite size_mem_type. omega.
-  rewrite size_mem_type. omega.
+  generalize (Loc.overlap_not_diff _ _ H2). intro. simpl in H5.
+  simpl fr_low. symmetry. apply frame_update_overlap. omega. omega. omega.
   (* different locations *)
   transitivity (index_val (FI_arg ofs0 ty0) fr).
   eauto with stacking.
@@ -588,17 +606,17 @@ Proof.
   intros. rewrite <- (agree_saved_float _ _ _ _ _ H r H1 H2). 
   eapply slot_iso; eauto with stacking. red; auto.
 Qed.
-
+(*
 Lemma agree_return_regs:
-  forall ls rs fr parent rs0 ls' rs',
-  agree ls rs fr parent rs0 ->
+  forall ls rs fr parent ls0 ls' rs',
+  agree ls rs fr parent ls0 ->
   (forall r,
     In (R r) temporaries \/ In (R r) destroyed_at_call ->
     rs' r = ls' (R r)) ->
   (forall r,
     In r int_callee_save_regs \/ In r float_callee_save_regs ->
     rs' r = rs r) ->
-  agree (LTL.return_regs ls ls') rs' fr parent rs0.
+  agree (LTL.return_regs ls ls') rs' fr parent ls0.
 Proof.
   intros. constructor; unfold LTL.return_regs; eauto with stacking.
   (* agree_reg *)
@@ -610,12 +628,117 @@ Proof.
   generalize (register_classification r); tauto.
   (* agree_unused_reg *)
   intros. rewrite H1. eauto with stacking.
-  generalize H2; unfold mreg_bounded; case (mreg_type r); intro.
+  generalize H2; unfold mreg_within_bounds; case (mreg_type r); intro.
   left. apply index_int_callee_save_pos2. 
-  generalize (bound_int_callee_save_pos f); intro. omega.
+  generalize (bound_int_callee_save_pos b); intro. omega.
   right. apply index_float_callee_save_pos2. 
-  generalize (bound_float_callee_save_pos f); intro. omega.
+  generalize (bound_float_callee_save_pos b); intro. omega.
 Qed. 
+*)
+
+Lemma agree_return_regs:
+  forall ls rs fr parent ls0 rs',
+  agree ls rs fr parent ls0 ->
+  (forall r,
+    ~In r int_callee_save_regs -> ~In r float_callee_save_regs ->
+    rs' r = rs r) ->
+  (forall r,
+    In r int_callee_save_regs \/ In r float_callee_save_regs ->
+    rs' r = ls0 (R r)) ->
+  (forall r, LTL.return_regs ls0 ls (R r) = rs' r).
+Proof.
+  intros; unfold LTL.return_regs.
+  case (In_dec Loc.eq (R r) temporaries); intro.
+  rewrite H0. eapply agree_reg; eauto. 
+    apply int_callee_save_not_destroyed; auto.
+    apply float_callee_save_not_destroyed; auto.
+  case (In_dec Loc.eq (R r) destroyed_at_call); intro.
+  rewrite H0. eapply agree_reg; eauto.
+    apply int_callee_save_not_destroyed; auto.
+    apply float_callee_save_not_destroyed; auto.
+  symmetry; apply H1.
+  generalize (register_classification r); tauto.
+Qed.
+
+(** Agreement over callee-save registers and stack locations *)
+
+Definition agree_callee_save (ls1 ls2: locset) : Prop :=
+  forall l,
+  match l with
+  | R r => In r int_callee_save_regs \/ In r float_callee_save_regs
+  | S s => True
+  end ->
+  ls2 l = ls1 l.
+
+Remark mreg_not_within_bounds:
+  forall r,
+  ~mreg_within_bounds b r -> In r int_callee_save_regs \/ In r float_callee_save_regs.
+Proof.
+  intro r; unfold mreg_within_bounds.
+  destruct (mreg_type r); intro.
+  left. apply index_int_callee_save_pos2. 
+  generalize (bound_int_callee_save_pos b). omega.
+  right. apply index_float_callee_save_pos2. 
+  generalize (bound_float_callee_save_pos b). omega.
+Qed.
+
+Lemma agree_callee_save_agree:
+  forall ls rs fr parent ls1 ls2,
+  agree ls rs fr parent ls1 ->
+  agree_callee_save ls1 ls2 ->
+  agree ls rs fr parent ls2.
+Proof.
+  intros. inv H. constructor; auto.
+  intros. rewrite agree_unused_reg0; auto.
+  symmetry. apply H0. apply mreg_not_within_bounds; auto.
+  intros. rewrite (H0 (R r)); auto. 
+  intros. rewrite (H0 (R r)); auto. 
+Qed.
+
+Lemma agree_callee_save_return_regs:
+  forall ls1 ls2,
+  agree_callee_save (LTL.return_regs ls1 ls2) ls1.
+Proof.
+  intros; red; intros.
+  unfold LTL.return_regs. destruct l; auto.
+  generalize (int_callee_save_not_destroyed m); intro.
+  generalize (float_callee_save_not_destroyed m); intro.
+  destruct (In_dec Loc.eq (R m) temporaries). tauto.
+  destruct (In_dec Loc.eq (R m) destroyed_at_call). tauto.
+  auto.
+Qed.
+
+Lemma agree_callee_save_set_result:
+  forall ls1 ls2 v sg,
+  agree_callee_save ls1 ls2 ->
+  agree_callee_save (Locmap.set (R (Conventions.loc_result sg)) v ls1) ls2.
+Proof.
+  intros; red; intros. rewrite H; auto. 
+  symmetry; apply Locmap.gso. destruct l; simpl; auto.
+  red; intro. subst m. elim (loc_result_not_callee_save _ H0).
+Qed.
+
+(** A variant of [agree] used for return frames. *)
+
+Definition agree_frame (ls: locset) (fr parent: frame) (ls0: locset) : Prop :=
+  exists rs, agree ls rs fr parent ls0.
+
+Lemma agree_frame_agree:
+  forall ls1 ls2 rs fr parent ls0,
+  agree_frame ls1 fr parent ls0 ->
+  agree_callee_save ls2 ls1 ->
+  (forall r, rs r = ls2 (R r)) ->
+  agree ls2 rs fr parent ls0.
+Proof.
+  intros. destruct H as [rs' AG]. inv AG.
+  constructor; auto.
+  intros. rewrite <- agree_unused_reg0; auto.
+  rewrite <- agree_reg0. rewrite H1. symmetry; apply H0.
+  apply mreg_not_within_bounds; auto.
+  intros. rewrite <- H0; auto.
+  intros. rewrite <- H0; auto.
+  intros. rewrite <- H0; auto.
+Qed.
 
 (** * Correctness of saving and restoring of callee-save registers *)
 
@@ -624,87 +747,100 @@ Qed.
   the register save areas of the current frame do contain the
   values of the callee-save registers used by the function. *)
 
-Lemma save_int_callee_save_correct_rec:
-  forall l k sp parent rs fr m,
-  incl l int_callee_save_regs ->
+Section SAVE_CALLEE_SAVE.
+
+Variable bound: frame_env -> Z.
+Variable number: mreg -> Z.
+Variable mkindex: Z -> frame_index.
+Variable ty: typ.
+Variable sp: val.
+Variable csregs: list mreg.
+Hypothesis number_inj: 
+  forall r1 r2, In r1 csregs -> In r2 csregs -> r1 <> r2 -> number r1 <> number r2.
+Hypothesis mkindex_valid:
+  forall r, In r csregs -> number r < bound fe -> index_valid (mkindex (number r)).
+Hypothesis mkindex_typ:
+  forall z, type_of_index (mkindex z) = ty.
+Hypothesis mkindex_inj:
+  forall z1 z2, z1 <> z2 -> mkindex z1 <> mkindex z2.
+Hypothesis mkindex_diff:
+  forall r idx,
+  idx <> mkindex (number r) -> index_diff (mkindex (number r)) idx.
+
+Lemma save_callee_save_regs_correct:
+  forall l k rs fr m,
+  incl l csregs ->
   list_norepet l ->
-  fr.(high) = 0 ->
-  fr.(low) = -fe.(fe_size) ->
+  fr.(fr_low) = -fe.(fe_size) ->
   exists fr',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (save_int_callee_save fe) k l) rs fr m
-       E0 k rs fr' m
-  /\ fr'.(high) = 0
-  /\ fr'.(low) = -fe.(fe_size)
+    star step tge 
+       (State stack tf sp
+         (save_callee_save_regs bound number mkindex ty fe l k) rs fr m)
+    E0 (State stack tf sp k rs fr' m)
+  /\ fr'.(fr_low) = - fe.(fe_size)
   /\ (forall r,
-       In r l -> index_int_callee_save r < bound_int_callee_save b ->
-       index_val (FI_saved_int (index_int_callee_save r)) fr' = rs r)
+       In r l -> number r < bound fe ->
+       index_val (mkindex (number r)) fr' = rs r)
   /\ (forall idx,
        index_valid idx ->
        (forall r,
-         In r l -> index_int_callee_save r < bound_int_callee_save b ->
-         idx <> FI_saved_int (index_int_callee_save r)) ->
+         In r l -> number r < bound fe -> idx <> mkindex (number r)) ->
        index_val idx fr' = index_val idx fr).
 Proof.
-  induction l.
+  induction l; intros; simpl save_callee_save_regs.
   (* base case *)
-  intros. simpl fold_right. exists fr. 
-  split. apply Machabstr.exec_refl. split. auto. split. auto. 
-  split. intros. elim H3. auto.
+  exists fr. split. apply star_refl. split. auto. 
+  split. intros. elim H2. auto.
   (* inductive case *)
-  intros. simpl fold_right. 
-  set (k1 := fold_right (save_int_callee_save fe) k l) in *.
-  assert (R1: incl l int_callee_save_regs). eauto with coqlib.
+  set (k1 := save_callee_save_regs bound number mkindex ty fe l k).
+  assert (R1: incl l csregs). eauto with coqlib.
   assert (R2: list_norepet l). inversion H0; auto.
-  unfold save_int_callee_save. 
-  case (zlt (index_int_callee_save a) (fe_num_int_callee_save fe));
-  intro;
-  unfold fe_num_int_callee_save, fe, make_env in z.
+  unfold save_callee_save_reg.
+  destruct (zlt (number a) (bound fe)).
   (* a store takes place *)
-  assert (IDX: index_valid (FI_saved_int (index_int_callee_save a))).
-    apply index_saved_int_valid. eauto with coqlib. auto.
-  generalize (set_slot_index _ _ (rs a) IDX H1 H2).
+  assert (VALID: index_valid (mkindex (number a))).
+    apply mkindex_valid. auto with coqlib. auto.
+  exploit set_slot_index; eauto.
   intros [fr1 SET].
-  assert (R3: high fr1 = 0). inversion SET. simpl high. auto.
-  assert (R4: low fr1 = -fe_size fe).  inversion SET. simpl low. auto.
-  generalize (IHl k sp parent rs fr1 m R1 R2 R3 R4).
-  intros [fr' [A [B [C [D E]]]]].
-  exists fr'. 
-  split. eapply Machabstr.exec_trans. apply exec_Msetstack'; eauto with stacking.
+  exploit (IHl k rs fr1 m); auto. inv SET; auto. 
+  fold k1. intros [fr' [A [B [C D]]]].
+  exists fr'.
+  split. eapply star_left.
+  apply exec_Msetstack'; eauto with stacking. rewrite <- (mkindex_typ (number a)). eauto.
   eexact A. traceEq.
-  split. auto.
-  split. auto.
-  split. intros. elim H3; intros. subst r. 
-    rewrite E. eapply slot_iss; eauto. auto. 
-    intros. decEq. apply index_int_callee_save_inj; auto with coqlib.
+  split. auto. 
+  split. intros. elim H2; intros. subst r. 
+    rewrite D. eapply slot_iss; eauto.  
+    apply mkindex_valid; auto.
+    intros. apply mkindex_inj. apply number_inj; auto with coqlib.
     inversion H0. red; intro; subst r; contradiction.
-    apply D; auto.
+    apply C; auto.
   intros. transitivity (index_val idx fr1).
-    apply E; auto. 
-    intros. apply H4; eauto with coqlib.
-    eapply slot_iso; eauto. 
-    destruct idx; simpl; auto. 
-    generalize (H4 a (in_eq _ _) z). congruence.
-  (* no store takes place *)
-  generalize (IHl k sp parent rs fr m R1 R2 H1 H2).
-  intros [fr' [A [B [C [D E]]]]].
-  exists fr'. split. exact A. split. exact B. split. exact C.
-  split. intros. elim H3; intros. subst r. omegaContradiction.
     apply D; auto. 
-  intros. apply E; auto.
-    intros. apply H4; auto with coqlib.
-Qed. 
+    intros. apply H3; eauto with coqlib.
+    eapply slot_iso; eauto.
+    apply mkindex_diff. apply H3. auto with coqlib.
+    auto.
+  (* no store takes place *)
+  exploit (IHl k rs fr m); auto. intros [fr' [A [B [C D]]]].
+  exists fr'. split. exact A. split. exact B.
+  split. intros. elim H2; intros. subst r. omegaContradiction.
+    apply C; auto. 
+  intros. apply D; auto.
+    intros. apply H3; auto with coqlib.
+Qed.
 
-Lemma save_int_callee_save_correct:
-  forall k sp parent rs fr m,
-  fr.(high) = 0 ->
-  fr.(low) = -fe.(fe_size) ->
+End SAVE_CALLEE_SAVE. 
+
+Lemma save_callee_save_int_correct:
+  forall k sp rs fr m,
+  fr.(fr_low) = - fe.(fe_size) ->
   exists fr',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (save_int_callee_save fe) k int_callee_save_regs) rs fr m
-       E0 k rs fr' m
-  /\ fr'.(high) = 0
-  /\ fr'.(low) = -fe.(fe_size)
+    star step tge 
+       (State stack tf sp
+         (save_callee_save_int fe k) rs fr m)
+    E0 (State stack tf sp k rs fr' m)
+  /\ fr'.(fr_low) = - fe.(fe_size)
   /\ (forall r,
        In r int_callee_save_regs ->
        index_int_callee_save r < bound_int_callee_save b ->
@@ -714,98 +850,30 @@ Lemma save_int_callee_save_correct:
        match idx with FI_saved_int _ => False | _ => True end ->
        index_val idx fr' = index_val idx fr).
 Proof.
-  intros. 
-  generalize (save_int_callee_save_correct_rec
-                int_callee_save_regs k sp parent rs fr m
-                (incl_refl _) int_callee_save_norepet H H0).
-  intros [fr' [A [B [C [D E]]]]]. 
-  exists fr'. 
-  split. assumption. split. assumption. split. assumption.
-  split. apply D. intros. apply E. auto. 
-  intros. red; intros; subst idx. contradiction.
+  intros.
+  exploit (save_callee_save_regs_correct fe_num_int_callee_save index_int_callee_save FI_saved_int
+                                         Tint sp int_callee_save_regs).
+  exact index_int_callee_save_inj.
+  intros. red. split; auto. generalize (index_int_callee_save_pos r H0). omega.
+  auto.
+  intros; congruence.
+  intros until idx. destruct idx; simpl; auto. congruence.
+  apply incl_refl.
+  apply int_callee_save_norepet. eauto.
+  intros [fr' [A [B [C D]]]]. 
+  exists fr'; intuition. unfold save_callee_save_int; eauto. 
+  apply D. auto. intros; subst idx. auto.
 Qed.
 
-Lemma save_float_callee_save_correct_rec:
-  forall l k sp parent rs fr m,
-  incl l float_callee_save_regs ->
-  list_norepet l ->
-  fr.(high) = 0 ->
-  fr.(low) = -fe.(fe_size) ->
+Lemma save_callee_save_float_correct:
+  forall k sp rs fr m,
+  fr.(fr_low) = - fe.(fe_size) ->
   exists fr',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (save_float_callee_save fe) k l) rs fr m
-      E0 k rs fr' m
-  /\ fr'.(high) = 0
-  /\ fr'.(low) = -fe.(fe_size)
-  /\ (forall r,
-       In r l -> index_float_callee_save r < bound_float_callee_save b ->
-       index_val (FI_saved_float (index_float_callee_save r)) fr' = rs r)
-  /\ (forall idx,
-       index_valid idx ->
-       (forall r,
-         In r l -> index_float_callee_save r < bound_float_callee_save b ->
-         idx <> FI_saved_float (index_float_callee_save r)) ->
-       index_val idx fr' = index_val idx fr).
-Proof.
-  induction l.
-  (* base case *)
-  intros. simpl fold_right. exists fr. 
-  split. apply Machabstr.exec_refl. split. auto. split. auto.
-  split. intros. elim H3. auto.
-  (* inductive case *)
-  intros. simpl fold_right. 
-  set (k1 := fold_right (save_float_callee_save fe) k l) in *.
-  assert (R1: incl l float_callee_save_regs). eauto with coqlib.
-  assert (R2: list_norepet l). inversion H0; auto.
-  unfold save_float_callee_save. 
-  case (zlt (index_float_callee_save a) (fe_num_float_callee_save fe));
-  intro;
-  unfold fe_num_float_callee_save, fe, make_env in z.
-  (* a store takes place *)
-  assert (IDX: index_valid (FI_saved_float (index_float_callee_save a))).
-    apply index_saved_float_valid. eauto with coqlib. auto.
-  generalize (set_slot_index _ _ (rs a) IDX H1 H2).
-  intros [fr1 SET].
-  assert (R3: high fr1 = 0).  inversion SET. simpl high. auto.
-  assert (R4: low fr1 = -fe_size fe).  inversion SET. simpl low. auto.
-  generalize (IHl k sp parent rs fr1 m R1 R2 R3 R4).
-  intros [fr' [A [B [C [D E]]]]].
-  exists fr'. 
-  split. eapply Machabstr.exec_trans. apply exec_Msetstack'; eauto with stacking.
-  eexact A. traceEq.
-  split. auto.
-  split. auto.
-  split. intros. elim H3; intros. subst r. 
-    rewrite E. eapply slot_iss; eauto. auto. 
-    intros. decEq. apply index_float_callee_save_inj; auto with coqlib.
-    inversion H0. red; intro; subst r; contradiction.
-    apply D; auto.
-  intros. transitivity (index_val idx fr1).
-    apply E; auto. 
-    intros. apply H4; eauto with coqlib.
-    eapply slot_iso; eauto. 
-    destruct idx; simpl; auto. 
-    generalize (H4 a (in_eq _ _) z). congruence.
-  (* no store takes place *)
-  generalize (IHl k sp parent rs fr m R1 R2 H1 H2).
-  intros [fr' [A [B [C [D E]]]]].
-  exists fr'. split. exact A. split. exact B. split. exact C.
-  split. intros. elim H3; intros. subst r. omegaContradiction.
-    apply D; auto. 
-  intros. apply E; auto.
-    intros. apply H4; auto with coqlib.
-Qed. 
-
-Lemma save_float_callee_save_correct:
-  forall k sp parent rs fr m,
-  fr.(high) = 0 ->
-  fr.(low) = -fe.(fe_size) ->
-  exists fr',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (save_float_callee_save fe) k float_callee_save_regs) rs fr m
-       E0 k rs fr' m
-  /\ fr'.(high) = 0
-  /\ fr'.(low) = -fe.(fe_size)
+    star step tge 
+       (State stack tf sp
+         (save_callee_save_float fe k) rs fr m)
+    E0 (State stack tf sp k rs fr' m)
+  /\ fr'.(fr_low) = - fe.(fe_size)
   /\ (forall r,
        In r float_callee_save_regs ->
        index_float_callee_save r < bound_float_callee_save b ->
@@ -815,63 +883,59 @@ Lemma save_float_callee_save_correct:
        match idx with FI_saved_float _ => False | _ => True end ->
        index_val idx fr' = index_val idx fr).
 Proof.
-  intros. 
-  generalize (save_float_callee_save_correct_rec
-                float_callee_save_regs k sp parent rs fr m
-                (incl_refl _) float_callee_save_norepet H H0).
-  intros [fr' [A [B [C [D E]]]]]. 
-  exists fr'. split. assumption. split. assumption. split. assumption.
-  split. apply D. intros. apply E. auto. 
-  intros. red; intros; subst idx. contradiction.
-Qed.
-
-Lemma index_val_init_frame:
-  forall idx,
-  index_valid idx ->
-  index_val idx (init_frame tf) = Vundef.
-Proof.
-  intros. unfold index_val, init_frame. simpl contents.
-  apply load_contents_init. 
+  intros.
+  exploit (save_callee_save_regs_correct fe_num_float_callee_save index_float_callee_save FI_saved_float
+                                         Tfloat sp float_callee_save_regs).
+  exact index_float_callee_save_inj.
+  intros. red. split; auto. generalize (index_float_callee_save_pos r H0). omega.
+  auto.
+  intros; congruence.
+  intros until idx. destruct idx; simpl; auto. congruence.
+  apply incl_refl.
+  apply float_callee_save_norepet. eauto.
+  intros [fr' [A [B [C D]]]]. 
+  exists fr'; intuition. unfold save_callee_save_float; eauto. 
+  apply D. auto. intros; subst idx. auto.
 Qed.
 
 Lemma save_callee_save_correct:
-  forall sp parent k rs fr m ls,
+  forall sp k rs fr m ls,
   (forall r, rs r = ls (R r)) ->
   (forall ofs ty, 
-     6 <= ofs -> 
-     ofs + typesize ty <= size_arguments f.(fn_sig) ->
-     get_slot parent ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))) ->
-  high fr = 0 ->
-  low fr = -fe.(fe_size) ->
+     14 <= ofs -> 
+     ofs + typesize ty <= size_arguments f.(Linear.fn_sig) ->
+     get_slot (parent_frame stack) ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))) ->
+  fr.(fr_low) = - fe.(fe_size) ->
   (forall idx, index_valid idx -> index_val idx fr = Vundef) ->
   exists fr',
-    Machabstr.exec_instrs tge tf sp parent
-      (save_callee_save fe k) rs fr m
-      E0 k rs fr' m
-  /\ agree (LTL.call_regs ls) rs fr' parent rs.
+    star step tge
+       (State stack tf sp (save_callee_save fe k) rs fr m)
+    E0 (State stack tf sp k rs fr' m)
+  /\ agree (LTL.call_regs ls) rs fr' (parent_frame stack) ls.
 Proof.
   intros. unfold save_callee_save.
-  generalize (save_int_callee_save_correct
-     (fold_right (save_float_callee_save fe) k float_callee_save_regs)
-     sp parent rs fr m H1 H2).
-  intros [fr1 [A1 [B1 [C1 [D1 E1]]]]].
-  generalize (save_float_callee_save_correct k sp parent rs fr1 m B1 C1).
-  intros [fr2 [A2 [B2 [C2 [D2 E2]]]]].
+  exploit save_callee_save_int_correct; eauto. 
+  intros [fr1 [A1 [B1 [C1 D1]]]].
+  exploit save_callee_save_float_correct. eexact B1. 
+  intros [fr2 [A2 [B2 [C2 D2]]]].
   exists fr2.
-  split. eapply Machabstr.exec_trans. eexact A1. eexact A2. traceEq.
+  split. eapply star_trans. eexact A1. eexact A2. traceEq.
   constructor; unfold LTL.call_regs; auto.
   (* agree_local *)
-  intros. rewrite E2; auto with stacking. 
-  rewrite E1; auto with stacking. 
+  intros. rewrite D2; auto with stacking. 
+  rewrite D1; auto with stacking. 
   symmetry. auto with stacking.
   (* agree_outgoing *)
-  intros. rewrite E2; auto with stacking. 
-  rewrite E1; auto with stacking. 
+  intros. rewrite D2; auto with stacking. 
+  rewrite D1; auto with stacking. 
   symmetry. auto with stacking. 
   (* agree_incoming *)
-  intros. simpl in H4. apply H0. tauto. tauto.
+  intros. simpl in H3. apply H0. tauto. tauto.
   (* agree_saved_int *)
-  intros. rewrite E2; auto with stacking. 
+  intros. rewrite D2; auto with stacking.
+  rewrite C1; auto with stacking. 
+  (* agree_saved_float *)
+  intros. rewrite C2; auto with stacking. 
 Qed.
 
 (** The following lemmas show the correctness of the register reloading
@@ -879,49 +943,66 @@ Qed.
   all callee-save registers contain the same values they had at
   function entry. *)
 
-Lemma restore_int_callee_save_correct_rec:
-  forall sp parent k fr m rs0 l ls rs,
-  incl l int_callee_save_regs ->
+Section RESTORE_CALLEE_SAVE.
+
+Variable bound: frame_env -> Z.
+Variable number: mreg -> Z.
+Variable mkindex: Z -> frame_index.
+Variable ty: typ.
+Variable sp: val.
+Variable csregs: list mreg.
+Hypothesis mkindex_valid:
+  forall r, In r csregs -> number r < bound fe -> index_valid (mkindex (number r)).
+Hypothesis mkindex_typ:
+  forall z, type_of_index (mkindex z) = ty.
+Hypothesis number_within_bounds:
+  forall r, In r csregs ->
+  (number r < bound fe <-> mreg_within_bounds b r).
+Hypothesis mkindex_val:
+  forall ls rs fr ls0 r, 
+  agree ls rs fr (parent_frame stack) ls0 -> In r csregs -> number r < bound fe ->
+  index_val (mkindex (number r)) fr = ls0 (R r).
+
+Lemma restore_callee_save_regs_correct:
+  forall k fr m ls0 l ls rs,
+  incl l csregs ->
   list_norepet l -> 
-  agree ls rs fr parent rs0 ->
+  agree ls rs fr (parent_frame stack) ls0 ->
   exists ls', exists rs',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (restore_int_callee_save fe) k l) rs fr m
-      E0 k rs' fr m
-  /\ (forall r, In r l -> rs' r = rs0 r)
+    star step tge
+      (State stack tf sp
+        (restore_callee_save_regs bound number mkindex ty fe l k) rs fr m)
+   E0 (State stack tf sp k rs' fr m)
+  /\ (forall r, In r l -> rs' r = ls0 (R r))
   /\ (forall r, ~(In r l) -> rs' r = rs r)
-  /\ agree ls' rs' fr parent rs0.
+  /\ agree ls' rs' fr (parent_frame stack) ls0.
 Proof.
-  induction l.
+  induction l; intros; simpl restore_callee_save_regs.
   (* base case *)
-  intros. simpl fold_right. exists ls. exists rs. 
-  split. apply Machabstr.exec_refl. 
+  exists ls. exists rs. 
+  split. apply star_refl. 
   split. intros. elim H2. 
   split. auto. auto.
   (* inductive case *)
-  intros. simpl fold_right. 
-  set (k1 := fold_right (restore_int_callee_save fe) k l) in *.
-  assert (R0: In a int_callee_save_regs). apply H; auto with coqlib.
-  assert (R1: incl l int_callee_save_regs). eauto with coqlib.
+  set (k1 := restore_callee_save_regs bound number mkindex ty fe l k).
+  assert (R0: In a csregs). apply H; auto with coqlib.
+  assert (R1: incl l csregs). eauto with coqlib.
   assert (R2: list_norepet l). inversion H0; auto.
-  unfold restore_int_callee_save.
-  case (zlt (index_int_callee_save a) (fe_num_int_callee_save fe));
-  intro;
-  unfold fe_num_int_callee_save, fe, make_env in z.
-  set (ls1 := Locmap.set (R a) (rs0 a) ls).
-  set (rs1 := Regmap.set a (rs0 a) rs).
-  assert (R3: agree ls1 rs1 fr parent rs0). 
+  unfold restore_callee_save_reg.
+  destruct (zlt (number a) (bound fe)).
+  set (ls1 := Locmap.set (R a) (ls0 (R a)) ls).
+  set (rs1 := Regmap.set a (ls0 (R a)) rs).
+  assert (R3: agree ls1 rs1 fr (parent_frame stack) ls0). 
     unfold ls1, rs1. apply agree_set_reg. auto. 
-    red. rewrite int_callee_save_type. exact z.
-    apply H. auto with coqlib.
+    rewrite <- number_within_bounds; auto. 
   generalize (IHl ls1 rs1 R1 R2 R3). 
   intros [ls' [rs' [A [B [C D]]]]].
-  exists ls'. exists rs'. 
-  split. apply Machabstr.exec_trans with E0 k1 rs1 fr m E0. 
+  exists ls'. exists rs'. split. 
+  apply star_left with E0 (State stack tf sp k1 rs1 fr m) E0.
   unfold rs1; apply exec_Mgetstack'; eauto with stacking.
   apply get_slot_index; eauto with stacking.
-  symmetry. eauto with stacking. 
-  eauto with stacking. traceEq.
+  symmetry. eapply mkindex_val; eauto.  
+  auto. traceEq.
   split. intros. elim H2; intros.
   subst r. rewrite C. unfold rs1. apply Regmap.gss. inversion H0; auto.
   auto.
@@ -934,127 +1015,82 @@ Proof.
   exists ls'; exists rs'. split. assumption.
   split. intros. elim H2; intros. 
   subst r. apply (agree_unused_reg _ _ _ _ _ D).
-  unfold mreg_bounded. rewrite int_callee_save_type; auto. 
-  auto.
+  rewrite <- number_within_bounds. auto. omega. auto.
   split. intros. simpl in H2. apply C. tauto.
   assumption.
 Qed.
+
+End RESTORE_CALLEE_SAVE.
 
 Lemma restore_int_callee_save_correct:
-  forall sp parent k fr m rs0 ls rs,
-  agree ls rs fr parent rs0 ->
+  forall sp k fr m ls0 ls rs,
+  agree ls rs fr (parent_frame stack) ls0 ->
   exists ls', exists rs',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (restore_int_callee_save fe) k int_callee_save_regs) rs fr m
-      E0 k rs' fr m
-  /\ (forall r, In r int_callee_save_regs -> rs' r = rs0 r)
+    star step tge
+       (State stack tf sp
+         (restore_callee_save_int fe k) rs fr m)
+    E0 (State stack tf sp k rs' fr m)
+  /\ (forall r, In r int_callee_save_regs -> rs' r = ls0 (R r))
   /\ (forall r, ~(In r int_callee_save_regs) -> rs' r = rs r)
-  /\ agree ls' rs' fr parent rs0.
+  /\ agree ls' rs' fr (parent_frame stack) ls0.
 Proof.
-  intros. apply restore_int_callee_save_correct_rec with ls. 
-  apply incl_refl. apply int_callee_save_norepet. auto.
-Qed.
-
-Lemma restore_float_callee_save_correct_rec:
-  forall sp parent k fr m rs0 l ls rs,
-  incl l float_callee_save_regs ->
-  list_norepet l -> 
-  agree ls rs fr parent rs0 ->
-  exists ls', exists rs',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (restore_float_callee_save fe) k l) rs fr m
-      E0 k rs' fr m
-  /\ (forall r, In r l -> rs' r = rs0 r)
-  /\ (forall r, ~(In r l) -> rs' r = rs r)
-  /\ agree ls' rs' fr parent rs0.
-Proof.
-  induction l.
-  (* base case *)
-  intros. simpl fold_right. exists ls. exists rs. 
-  split. apply Machabstr.exec_refl. 
-  split. intros. elim H2. 
-  split. auto. auto.
-  (* inductive case *)
-  intros. simpl fold_right. 
-  set (k1 := fold_right (restore_float_callee_save fe) k l) in *.
-  assert (R0: In a float_callee_save_regs). apply H; auto with coqlib.
-  assert (R1: incl l float_callee_save_regs). eauto with coqlib.
-  assert (R2: list_norepet l). inversion H0; auto.
-  unfold restore_float_callee_save.
-  case (zlt (index_float_callee_save a) (fe_num_float_callee_save fe));
-  intro;
-  unfold fe_num_float_callee_save, fe, make_env in z.
-  set (ls1 := Locmap.set (R a) (rs0 a) ls).
-  set (rs1 := Regmap.set a (rs0 a) rs).
-  assert (R3: agree ls1 rs1 fr parent rs0). 
-    unfold ls1, rs1. apply agree_set_reg. auto. 
-    red. rewrite float_callee_save_type. exact z.
-    apply H. auto with coqlib.
-  generalize (IHl ls1 rs1 R1 R2 R3). 
-  intros [ls' [rs' [A [B [C D]]]]].
-  exists ls'. exists rs'. 
-  split. apply Machabstr.exec_trans with E0 k1 rs1 fr m E0. 
-  unfold rs1; apply exec_Mgetstack'; eauto with stacking.
-  apply get_slot_index; eauto with stacking.
-  symmetry. eauto with stacking. 
-  exact A. traceEq.
-  split. intros. elim H2; intros.
-  subst r. rewrite C. unfold rs1. apply Regmap.gss. inversion H0; auto.
+  intros. unfold restore_callee_save_int.
+  apply restore_callee_save_regs_correct with int_callee_save_regs ls.
+  intros; simpl. split; auto. generalize (index_int_callee_save_pos r H0). omega.
   auto.
-  split. intros. simpl in H2. rewrite C. unfold rs1. apply Regmap.gso.
-  apply sym_not_eq; tauto. tauto.
-  assumption.
-  (* no load takes place *)
-  generalize (IHl ls rs R1 R2 H1).  
-  intros [ls' [rs' [A [B [C D]]]]].
-  exists ls'; exists rs'. split. assumption.
-  split. intros. elim H2; intros. 
-  subst r. apply (agree_unused_reg _ _ _ _ _ D).
-  unfold mreg_bounded. rewrite float_callee_save_type; auto. 
+  intros. unfold mreg_within_bounds. 
+  rewrite (int_callee_save_type r H0). tauto. 
+  eauto with stacking. 
+  apply incl_refl.
+  apply int_callee_save_norepet.
   auto.
-  split. intros. simpl in H2. apply C. tauto.
-  assumption.
 Qed.
 
 Lemma restore_float_callee_save_correct:
-  forall sp parent k fr m rs0 ls rs,
-  agree ls rs fr parent rs0 ->
+  forall sp k fr m ls0 ls rs,
+  agree ls rs fr (parent_frame stack) ls0 ->
   exists ls', exists rs',
-    Machabstr.exec_instrs tge tf sp parent
-      (List.fold_right (restore_float_callee_save fe) k float_callee_save_regs) rs fr m
-      E0 k rs' fr m
-  /\ (forall r, In r float_callee_save_regs -> rs' r = rs0 r)
+    star step tge
+       (State stack tf sp
+          (restore_callee_save_float fe k) rs fr m)
+    E0 (State stack tf sp k rs' fr m)
+  /\ (forall r, In r float_callee_save_regs -> rs' r = ls0 (R r))
   /\ (forall r, ~(In r float_callee_save_regs) -> rs' r = rs r)
-  /\ agree ls' rs' fr parent rs0.
+  /\ agree ls' rs' fr (parent_frame stack) ls0.
 Proof.
-  intros. apply restore_float_callee_save_correct_rec with ls. 
-  apply incl_refl. apply float_callee_save_norepet. auto.
+  intros. unfold restore_callee_save_float.
+  apply restore_callee_save_regs_correct with float_callee_save_regs ls.
+  intros; simpl. split; auto. generalize (index_float_callee_save_pos r H0). omega.
+  auto.
+  intros. unfold mreg_within_bounds. 
+  rewrite (float_callee_save_type r H0). tauto. 
+  eauto with stacking. 
+  apply incl_refl.
+  apply float_callee_save_norepet.
+  auto.
 Qed.
 
 Lemma restore_callee_save_correct:
-  forall sp parent k fr m rs0 ls rs,
-  agree ls rs fr parent rs0 ->
+  forall sp k fr m ls0 ls rs,
+  agree ls rs fr (parent_frame stack) ls0 ->
   exists rs',
-    Machabstr.exec_instrs tge tf sp parent
-      (restore_callee_save fe k) rs fr m
-      E0 k rs' fr m
+    star step tge
+       (State stack tf sp (restore_callee_save fe k) rs fr m)
+    E0 (State stack tf sp k rs' fr m)
   /\ (forall r, 
         In r int_callee_save_regs \/ In r float_callee_save_regs -> 
-        rs' r = rs0 r)
+        rs' r = ls0 (R r))
   /\ (forall r, 
         ~(In r int_callee_save_regs) ->
         ~(In r float_callee_save_regs) ->
         rs' r = rs r).
 Proof.
   intros. unfold restore_callee_save.
-  generalize (restore_int_callee_save_correct sp parent
-               (fold_right (restore_float_callee_save fe) k float_callee_save_regs)
-               fr m rs0 ls rs H).
+  exploit restore_int_callee_save_correct; eauto.
   intros [ls1 [rs1 [A [B [C D]]]]].
-  generalize (restore_float_callee_save_correct sp parent
-                k fr m rs0 ls1 rs1 D).
+  exploit restore_float_callee_save_correct. eexact D.
   intros [ls2 [rs2 [P [Q [R S]]]]].
-  exists rs2. split. eapply Machabstr.exec_trans. eexact A. eexact P. traceEq.
+  exists rs2. split. eapply star_trans. eexact A. eexact P. traceEq.
   split. intros. elim H0; intros.
   rewrite R. apply B. auto. apply list_disjoint_notin with int_callee_save_regs.
   apply int_float_callee_save_disjoint. auto.
@@ -1083,12 +1119,12 @@ Remark find_label_save_callee_save:
   forall fe lbl k,
   Mach.find_label lbl (save_callee_save fe k) = Mach.find_label lbl k.
 Proof.
-  intros. unfold save_callee_save.
+  intros. unfold save_callee_save, save_callee_save_int, save_callee_save_float, save_callee_save_regs.
   repeat rewrite find_label_fold_right. reflexivity.
-  intros. unfold save_float_callee_save. 
+  intros. unfold save_callee_save_reg. 
   case (zlt (index_float_callee_save x) (fe_num_float_callee_save fe));
   intro; reflexivity.
-  intros. unfold save_int_callee_save. 
+  intros. unfold save_callee_save_reg.  
   case (zlt (index_int_callee_save x) (fe_num_int_callee_save fe));
   intro; reflexivity.
 Qed.
@@ -1097,12 +1133,12 @@ Remark find_label_restore_callee_save:
   forall fe lbl k,
   Mach.find_label lbl (restore_callee_save fe k) = Mach.find_label lbl k.
 Proof.
-  intros. unfold restore_callee_save.
+  intros. unfold restore_callee_save, restore_callee_save_int, restore_callee_save_float, restore_callee_save_regs.
   repeat rewrite find_label_fold_right. reflexivity.
-  intros. unfold restore_float_callee_save. 
+  intros. unfold restore_callee_save_reg. 
   case (zlt (index_float_callee_save x) (fe_num_float_callee_save fe));
   intro; reflexivity.
-  intros. unfold restore_int_callee_save. 
+  intros. unfold restore_callee_save_reg. 
   case (zlt (index_int_callee_save x) (fe_num_int_callee_save fe));
   intro; reflexivity.
 Qed.
@@ -1117,13 +1153,14 @@ Proof.
   destruct a; unfold transl_instr; auto.
   destruct s; simpl; auto.
   destruct s; simpl; auto.
+  rewrite find_label_restore_callee_save. auto.
   simpl. case (peq lbl l); intro. reflexivity. auto.
   rewrite find_label_restore_callee_save. auto.
 Qed.
 
 Lemma transl_find_label:
   forall f tf lbl c,
-  transf_function f = Some tf ->
+  transf_function f = OK tf ->
   Linear.find_label lbl f.(Linear.fn_code) = Some c ->
   Mach.find_label lbl tf.(Mach.fn_code) = 
     Some (transl_code (make_env (function_bounds f)) c).
@@ -1143,30 +1180,9 @@ Lemma find_label_incl:
 Proof.
   induction c; simpl.
   intros; discriminate.
-  intro c'. case (is_label lbl a); intros.
+  intro c'. case (Linear.is_label lbl a); intros.
   injection H; intro; subst c'. red; intros; auto with coqlib. 
   apply incl_tl. auto.
-Qed.
-
-Lemma exec_instr_incl:
-  forall f sp c1 ls1 m1 t c2 ls2 m2,
-  Linear.exec_instr ge f sp c1 ls1 m1 t c2 ls2 m2 ->
-  incl c1 f.(fn_code) ->
-  incl c2 f.(fn_code).
-Proof.
-  induction 1; intros; eauto with coqlib.
-  eapply find_label_incl; eauto.
-  eapply find_label_incl; eauto.
-Qed.
-
-Lemma exec_instrs_incl:
-  forall f sp c1 ls1 m1 t c2 ls2 m2,
-  Linear.exec_instrs ge f sp c1 ls1 m1 t c2 ls2 m2 ->
-  incl c1 f.(fn_code) ->
-  incl c2 f.(fn_code).
-Proof.
-  induction 1; intros; auto.
-  eapply exec_instr_incl; eauto.
 Qed.
 
 (** Preservation / translation of global symbols and functions. *)
@@ -1180,40 +1196,57 @@ Proof.
 Qed.
 
 Lemma functions_translated:
-  forall f v,
+  forall v f,
   Genv.find_funct ge v = Some f ->
   exists tf,
-  Genv.find_funct tge v = Some tf /\ transf_fundef f = Some tf.
-Proof.
-  intros. 
-  generalize (Genv.find_funct_transf_partial transf_fundef TRANSF H).
-  case (transf_fundef f).
-  intros tf [A B]. exists tf. tauto.
-  intros. tauto.
-Qed.
+  Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
+Proof
+  (Genv.find_funct_transf_partial transf_fundef TRANSF).
 
 Lemma function_ptr_translated:
-  forall f v,
+  forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = Some tf.
-Proof.
-  intros. 
-  generalize (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF H).
-  case (transf_fundef f).
-  intros tf [A B]. exists tf. tauto.
-  intros. tauto.
-Qed.
+  Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
+Proof
+  (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF).
 
 Lemma sig_preserved:
-  forall f tf, transf_fundef f = Some tf -> Mach.funsig tf = Linear.funsig f.
+  forall f tf, transf_fundef f = OK tf -> Mach.funsig tf = Linear.funsig f.
 Proof.
   intros until tf; unfold transf_fundef, transf_partial_fundef.
   destruct f. unfold transf_function. 
-  destruct (zlt (fn_stacksize f) 0). congruence.
-  destruct (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))). congruence.
-  intros. inversion H; reflexivity. 
+  destruct (zlt (Linear.fn_stacksize f) 0). simpl; congruence.
+  destruct (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))). simpl; congruence.
+  unfold bind. intros. inversion H; reflexivity. 
   intro. inversion H. reflexivity.
+Qed.
+
+Lemma find_function_translated:
+  forall f0 ls rs fr parent ls0 ros f,
+  agree f0 ls rs fr parent ls0 ->
+  Linear.find_function ge ros ls = Some f ->
+  exists tf,
+  find_function tge ros rs = Some tf /\ transf_fundef f = OK tf.
+Proof.
+  intros until f; intro AG.
+  destruct ros; simpl.
+  rewrite (agree_eval_reg _ _ _ _ _ _ m AG). intro.
+  apply functions_translated; auto.
+  rewrite symbols_preserved. destruct (Genv.find_symbol ge i); try congruence.
+  intro. apply function_ptr_translated; auto.
+Qed.
+
+Hypothesis wt_prog: wt_program prog.
+
+Lemma find_function_well_typed:
+  forall ros ls f,
+  Linear.find_function ge ros ls = Some f -> wt_fundef f.
+Proof.
+  intros until f; destruct ros; simpl; unfold ge.
+  intro. eapply Genv.find_funct_prop; eauto.
+  destruct (Genv.find_symbol (Genv.globalenv prog) i); try congruence.
+  intro. eapply Genv.find_funct_ptr_prop; eauto. 
 Qed.
 
 (** Correctness of stack pointer relocation in operations and
@@ -1224,7 +1257,7 @@ Definition shift_sp (tf: Mach.function) (sp: val) :=
 
 Remark shift_offset_sp:
   forall f tf sp n v,
-  transf_function f = Some tf ->
+  transf_function f = OK tf ->
   offset_sp sp n = Some v ->
   offset_sp (shift_sp tf sp)
     (Int.add (Int.repr (fe_size (make_env (function_bounds f)))) n) = Some v.
@@ -1243,11 +1276,11 @@ Proof.
 Qed.
 
 Lemma shift_eval_operation:
-  forall f tf sp op args v,
-  transf_function f = Some tf ->
-  eval_operation ge sp op args = Some v ->
+  forall f tf sp op args m v,
+  transf_function f = OK tf ->
+  eval_operation ge sp op args m = Some v ->
   eval_operation tge (shift_sp tf sp) 
-                 (transl_op (make_env (function_bounds f)) op) args =
+                 (transl_op (make_env (function_bounds f)) op) args m =
   Some v.
 Proof.
   intros until v. destruct op; intros; auto.
@@ -1258,7 +1291,7 @@ Qed.
 
 Lemma shift_eval_addressing:
   forall f tf sp addr args v,
-  transf_function f = Some tf ->
+  transf_function f = OK tf ->
   eval_addressing ge sp addr args = Some v ->
   eval_addressing tge (shift_sp tf sp) 
                  (transl_addr (make_env (function_bounds f)) addr) args =
@@ -1282,7 +1315,7 @@ Variable rs: regset.
 Variable sg: signature.
 Hypothesis AG1: forall r, rs r = ls (R r).
 Hypothesis AG2: forall (ofs : Z) (ty : typ),
-      6 <= ofs ->
+      14 <= ofs ->
       ofs + typesize ty <= size_arguments sg ->
       get_slot fr ty (Int.signed (Int.repr (4 * ofs)))
                      (ls (S (Outgoing ofs ty))).
@@ -1319,374 +1352,336 @@ End EXTERNAL_ARGUMENTS.
 (** The proof of semantic preservation relies on simulation diagrams
   of the following form:
 <<
-        c, ls, m ------------------- T(c), rs, fr, m
-            |                             |
-            |                             |
-            v                             v
-       c', ls', m' ---------------- T(c'), rs', fr', m'
+           st1 --------------- st2
+            |                   |
+           t|                  +|t
+            |                   |
+            v                   v
+           st1'--------------- st2'
 >>
-  The left vertical arrow represents a transition in the
-  original Linear code.  The top horizontal bar captures three preconditions:
-- Agreement between [ls] on the Linear side and [rs], [fr], [rs0]
-  on the Mach side.
-- Inclusion between [c] and the code of the function [f] being
-  translated.
+  Matching between source and target states is defined by [match_states]
+  below.  It implies:
+- Agreement between, on the Linear side, the location sets [ls]
+  and [parent_locset s] of the current function and its caller,
+  and on the Mach side the register set [rs], the frame [fr]
+  and the caller's frame [parent_frame ts].
+- Inclusion between the Linear code [c] and the code of the
+  function [f] being executed.
 - Well-typedness of [f].
+*)
 
-  In conclusion, we want to prove the existence of [rs'], [fr'], [m']
-  that satisfies the right arrow (zero, one or several transitions in
-  the generated Mach code) and the postcondition (agreement between
-  [ls'] and [rs'], [fr'], [rs0]).
+Inductive match_stacks: list Linear.stackframe -> list Machabstr.stackframe -> Prop :=
+  | match_stacks_nil:
+      match_stacks nil nil
+  | match_stacks_cons:
+      forall f sp c ls tf fr s ts,
+      match_stacks s ts ->
+      transf_function f = OK tf ->
+      wt_function f ->
+      agree_frame f ls fr (parent_frame ts) (parent_locset s) ->
+      incl c (Linear.fn_code f) ->
+      match_stacks
+       (Linear.Stackframe f sp ls c :: s)
+       (Machabstr.Stackframe tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) c) fr :: ts).
 
-  As usual, we capture these diagrams as predicates parameterized
-  by the transition in the original Linear code. *)
+Inductive match_states: Linear.state -> Machabstr.state -> Prop :=
+  | match_states_intro:
+      forall s f sp c ls m ts tf rs fr
+        (STACKS: match_stacks s ts)
+        (TRANSL: transf_function f = OK tf)
+        (WTF: wt_function f)
+        (AG: agree f ls rs fr (parent_frame ts) (parent_locset s))
+        (INCL: incl c (Linear.fn_code f)),
+      match_states (Linear.State s f sp c ls m)
+                   (Machabstr.State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) c) rs fr m)
+  | match_states_call:
+      forall s f ls m ts tf rs
+        (STACKS: match_stacks s ts)
+        (TRANSL: transf_fundef f = OK tf)
+        (WTF: wt_fundef f)
+        (AG1: forall r, rs r = ls (R r))
+        (AG2: forall ofs ty, 
+                14 <= ofs -> 
+                ofs + typesize ty <= size_arguments (Linear.funsig f) ->
+                get_slot (parent_frame ts) ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty))))
+        (AG3: agree_callee_save ls (parent_locset s)),
+      match_states (Linear.Callstate s f ls m)
+                   (Machabstr.Callstate ts tf rs m)
+  | match_states_return:
+      forall s ls m ts rs
+        (STACKS: match_stacks s ts)
+        (AG1: forall r, rs r = ls (R r))
+        (AG2: agree_callee_save ls (parent_locset s)),
+      match_states (Linear.Returnstate s ls m)
+                   (Machabstr.Returnstate ts rs m).
 
-Definition exec_instr_prop
-      (f: function) (sp: val)
-      (c: code) (ls: locset) (m: mem) (t: trace)
-      (c': code) (ls': locset) (m': mem) :=
-  forall tf rs fr parent rs0
-     (TRANSL: transf_function f = Some tf)
-     (WTF: wt_function f)
-     (AG: agree f ls rs fr parent rs0)
-     (INCL: incl c f.(fn_code)),
-  exists rs', exists fr',
-    Machabstr.exec_instrs tge tf (shift_sp tf sp) parent
-       (transl_code (make_env (function_bounds f)) c) rs fr m
-     t (transl_code (make_env (function_bounds f)) c') rs' fr' m'
-  /\ agree f ls' rs' fr' parent rs0.
-
-(** The simulation property for function calls has different preconditions
-  (a slightly weaker notion of agreement between [ls] and the initial
-  register values [rs] and caller's frame [parent]) and different
-  postconditions (preservation of callee-save registers). *)
-
-Definition exec_function_prop
-      (f: fundef) 
-      (ls: locset) (m: mem) (t: trace)
-      (ls': locset) (m': mem) :=
-  forall tf rs parent
-     (TRANSL: transf_fundef f = Some tf)
-     (WTF: wt_fundef f)
-     (AG1: forall r, rs r = ls (R r))
-     (AG2: forall ofs ty, 
-             6 <= ofs -> 
-             ofs + typesize ty <= size_arguments (funsig f) ->
-             get_slot parent ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))),
-  exists rs',
-    Machabstr.exec_function tge tf parent rs m t rs' m'
- /\ (forall r,
-        In (R r) temporaries \/ In (R r) destroyed_at_call ->
-        rs' r = ls' (R r))
- /\ (forall r,
-        In r int_callee_save_regs \/ In r float_callee_save_regs ->
-        rs' r = rs r).
-
-Hypothesis wt_prog: wt_program prog.
-
-Lemma transf_function_correct:
-  forall f ls m t ls' m',
-  Linear.exec_function ge f ls m t ls' m' ->
-  exec_function_prop f ls m t ls' m'.
+Theorem transf_step_correct:
+  forall s1 t s2, Linear.step ge s1 t s2 ->
+  forall s1' (MS: match_states s1 s1'),
+  exists s2', plus step tge s1' t s2' /\ match_states s2 s2'.
 Proof.
   assert (RED: forall f i c,
           transl_code (make_env (function_bounds f)) (i :: c) = 
           transl_instr (make_env (function_bounds f)) i
                        (transl_code (make_env (function_bounds f)) c)).
     intros. reflexivity.
-  apply (Linear.exec_function_ind3 ge exec_instr_prop
-            exec_instr_prop exec_function_prop);
-  intros; red; intros; 
-  try rewrite RED; 
+  induction 1; intros;
+  try inv MS;
+  try rewrite RED;
   try (generalize (WTF _ (INCL _ (in_eq _ _))); intro WTI);
+  try (generalize (function_is_within_bounds f WTF _ (INCL _ (in_eq _ _)));
+       intro BOUND; simpl in BOUND);
   unfold transl_instr.
-
   (* Lgetstack *)
-  inversion WTI. exists (rs0#r <- (rs (S sl))); exists fr.
+  inv WTI. destruct BOUND.
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
+             (rs0#r <- (rs (S sl))) fr m).
   split. destruct sl. 
   (* Lgetstack, local *)
-  apply exec_Mgetstack'; auto.
+  apply plus_one. eapply exec_Mgetstack'; eauto.
   apply get_slot_index. apply index_local_valid. auto. 
   eapply agree_size; eauto. reflexivity. 
   eapply agree_locals; eauto.
   (* Lgetstack, incoming *)
-  apply Machabstr.exec_one; constructor.
+  apply plus_one; apply exec_Mgetparam.
   unfold offset_of_index. eapply agree_incoming; eauto.
   (* Lgetstack, outgoing *)
-  apply exec_Mgetstack'; auto.
+  apply plus_one; apply exec_Mgetstack'; eauto.
   apply get_slot_index. apply index_arg_valid. auto. 
   eapply agree_size; eauto. reflexivity. 
   eapply agree_outgoing; eauto.
   (* Lgetstack, common *)
+  econstructor; eauto with coqlib. 
   apply agree_set_reg; auto.
 
   (* Lsetstack *)
-  inversion WTI. destruct sl.
+  inv WTI. destruct sl.
+
   (* Lsetstack, local *)
-  generalize (agree_set_local _ _ _ _ _ _ (rs0 r) _ _ AG H3).
+  generalize (agree_set_local _ _ _ _ _ _ (rs0 r) _ _ AG BOUND).
   intros [fr' [SET AG']].
-  exists rs0; exists fr'. split.
-  apply exec_Msetstack'; auto.
+  econstructor; split.
+  apply plus_one. eapply exec_Msetstack'; eauto.
+  econstructor; eauto with coqlib.
   replace (rs (R r)) with (rs0 r). auto.
   symmetry. eapply agree_reg; eauto.
   (* Lsetstack, incoming *)
   contradiction.
   (* Lsetstack, outgoing *)
-  generalize (agree_set_outgoing _ _ _ _ _ _ (rs0 r) _ _ AG H3).
+  generalize (agree_set_outgoing _ _ _ _ _ _ (rs0 r) _ _ AG BOUND).
   intros [fr' [SET AG']].
-  exists rs0; exists fr'. split.
-  apply exec_Msetstack'; auto.
+  econstructor; split.
+  apply plus_one. eapply exec_Msetstack'; eauto.
+  econstructor; eauto with coqlib.
   replace (rs (R r)) with (rs0 r). auto.
   symmetry. eapply agree_reg; eauto.
 
   (* Lop *)
-  assert (mreg_bounded f res). inversion WTI; auto.
-  exists (rs0#res <- v); exists fr. split.
-  apply Machabstr.exec_one. constructor. 
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) (rs0#res <- v) fr m); split.
+  apply plus_one. apply exec_Mop. 
   apply shift_eval_operation. auto. 
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ args AG). auto.
+  econstructor; eauto with coqlib.
   apply agree_set_reg; auto.
 
   (* Lload *)
-  inversion WTI. exists (rs0#dst <- v); exists fr. split.
-  apply Machabstr.exec_one; econstructor.
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) (rs0#dst <- v) fr m); split.
+  apply plus_one; eapply exec_Mload; eauto.
   apply shift_eval_addressing; auto. 
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ args AG). eauto.
-  auto.
+  econstructor; eauto with coqlib.
   apply agree_set_reg; auto.
 
   (* Lstore *)
-  exists rs0; exists fr. split.
-  apply Machabstr.exec_one; econstructor.
-  apply shift_eval_addressing; auto. 
+  econstructor; split.
+  apply plus_one; eapply exec_Mstore; eauto.
+  apply shift_eval_addressing; eauto. 
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ args AG). eauto.
-  rewrite (agree_eval_reg _ _ _ _ _ _ src AG). auto.
-  auto.
+  rewrite (agree_eval_reg _ _ _ _ _ _ src AG). eauto.
+  econstructor; eauto with coqlib.
 
-  (* Lcall *)
-  inversion WTI.
-  assert (WTF': wt_fundef f').
-    destruct ros; simpl in H.
-    apply (Genv.find_funct_prop wt_fundef wt_prog H).
-    destruct (Genv.find_symbol ge i); try discriminate.
-    apply (Genv.find_funct_ptr_prop wt_fundef wt_prog H).
-  assert (TR: exists tf', Mach.find_function tge ros rs0 = Some tf'
-                       /\ transf_fundef f' = Some tf').
-    destruct ros; simpl in H; simpl.
-    eapply functions_translated. 
-    rewrite (agree_eval_reg _ _ _ _ _ _ m0 AG). auto. 
-    rewrite symbols_preserved. 
-    destruct (Genv.find_symbol ge i); try discriminate.
-    apply function_ptr_translated; auto.
-  elim TR;  intros tf' [FIND' TRANSL']; clear TR.
-  assert (AG1: forall r, rs0 r = rs (R r)).
-    intro. symmetry. eapply agree_reg; eauto.
-  assert (AG2: forall ofs ty, 
-             6 <= ofs -> 
-             ofs + typesize ty <= size_arguments (funsig f') ->
-             get_slot fr ty (Int.signed (Int.repr (4 * ofs))) (rs (S (Outgoing ofs ty)))).
-    intros. 
-    assert (slot_bounded f (Outgoing ofs ty)).
-      red. rewrite <- H0 in H8. omega.
-    change (4 * ofs) with (offset_of_index (make_env (function_bounds f)) (FI_arg ofs ty)).
-    rewrite (offset_of_index_no_overflow f tf); auto. 
-    apply get_slot_index. apply index_arg_valid. auto. 
-    eapply agree_size; eauto. reflexivity. 
-    eapply agree_outgoing; eauto. 
-  generalize (H2 tf' rs0 fr TRANSL' WTF' AG1 AG2).
-  intros [rs2 [EXF [REGS1 REGS2]]].
-  exists rs2; exists fr. split.
-  apply Machabstr.exec_one; apply Machabstr.exec_Mcall with tf'; auto.
-  apply agree_return_regs with rs0; auto.
+  (* Lcall *) 
+  assert (WTF': wt_fundef f'). eapply find_function_well_typed; eauto.
+  exploit find_function_translated; eauto. 
+  intros [tf' [FIND' TRANSL']].
+  econstructor; split.
+  apply plus_one; eapply exec_Mcall; eauto.
+  econstructor; eauto. 
+  econstructor; eauto with coqlib.
+  exists rs0; auto.
+  intro. symmetry. eapply agree_reg; eauto.
+  intros. 
+  assert (slot_within_bounds f (function_bounds f) (Outgoing ofs ty)).
+  red. simpl. omega. 
+  change (4 * ofs) with (offset_of_index (make_env (function_bounds f)) (FI_arg ofs ty)).
+  rewrite (offset_of_index_no_overflow f tf); auto. 
+  apply get_slot_index. apply index_arg_valid. auto. 
+  eapply agree_size; eauto. reflexivity. 
+  eapply agree_outgoing; eauto.
+  simpl. red; auto.
 
+  (* Ltailcall *) 
+  assert (WTF': wt_fundef f'). eapply find_function_well_typed; eauto.
+  generalize (find_function_translated _ _ _ _ _ _ _ _ AG H). 
+  intros [tf' [FIND' TRANSL']].
+  generalize (restore_callee_save_correct ts _ _ TRANSL
+               (shift_sp tf (Vptr stk Int.zero)) 
+               (Mtailcall (Linear.funsig f') ros :: transl_code (make_env (function_bounds f)) b)
+               _ m _ _ _ AG).
+  intros [rs2 [A [B C]]].
+  assert (FIND'': find_function tge ros rs2 = Some tf').
+    rewrite <- FIND'. destruct ros; simpl; auto.
+    inv WTI. rewrite C. auto. 
+    simpl. intuition congruence. simpl. intuition congruence. 
+  econstructor; split.
+  eapply plus_right. eexact A. 
+  simpl shift_sp. eapply exec_Mtailcall; eauto. traceEq.
+  econstructor; eauto. 
+  intros; symmetry; eapply agree_return_regs; eauto.
+  intros. inv WTI. rewrite tailcall_possible_size in H4.
+  rewrite H4 in H1. elimtype False. generalize (typesize_pos ty). omega.
+  apply agree_callee_save_return_regs. 
+ 
   (* Lalloc *)
-  exists (rs0#loc_alloc_result <- (Vptr blk Int.zero)); exists fr. split.
-  apply Machabstr.exec_one; eapply Machabstr.exec_Malloc; eauto.
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
+                          (rs0#loc_alloc_result <- (Vptr blk Int.zero)) fr m'); split.
+  apply plus_one; eapply exec_Malloc; eauto.
   rewrite (agree_eval_reg _ _ _ _ _ _ loc_alloc_argument AG). auto.
+  econstructor; eauto with coqlib.
   apply agree_set_reg; auto.
   red. simpl. generalize (max_over_regs_of_funct_pos f int_callee_save). omega.
 
   (* Llabel *)
-  exists rs0; exists fr. split.
-  apply Machabstr.exec_one; apply Machabstr.exec_Mlabel.
-  auto.
+  econstructor; split.
+  apply plus_one; apply exec_Mlabel.
+  econstructor; eauto with coqlib.
 
   (* Lgoto *)
-  exists rs0; exists fr. split.
-  apply Machabstr.exec_one; apply Machabstr.exec_Mgoto.
-  apply transl_find_label; auto.
-  auto.
+  econstructor; split.
+  apply plus_one; apply exec_Mgoto.
+  apply transl_find_label; eauto.
+  econstructor; eauto. 
+  eapply find_label_incl; eauto.
 
   (* Lcond, true *)
-  exists rs0; exists fr. split.
-  apply Machabstr.exec_one; apply Machabstr.exec_Mcond_true.
-  rewrite <- (agree_eval_regs _ _ _ _ _ _ args AG) in H; auto.
-  apply transl_find_label; auto.
-  auto.
+  econstructor; split.
+  apply plus_one; apply exec_Mcond_true.
+  rewrite <- (agree_eval_regs _ _ _ _ _ _ args AG) in H; eauto.
+  apply transl_find_label; eauto.
+  econstructor; eauto.
+  eapply find_label_incl; eauto.
 
   (* Lcond, false *)
-  exists rs0; exists fr. split.
-  apply Machabstr.exec_one; apply Machabstr.exec_Mcond_false.
+  econstructor; split.
+  apply plus_one; apply exec_Mcond_false.
   rewrite <- (agree_eval_regs _ _ _ _ _ _ args AG) in H; auto.
-  auto.
+  econstructor; eauto with coqlib.
 
-  (* refl *)
-  exists rs0; exists fr. split. apply Machabstr.exec_refl. auto.
+  (* Lreturn *)
+  exploit restore_callee_save_correct; eauto.
+  intros [ls' [A [B C]]].
+  econstructor; split.
+  eapply plus_right. eauto. 
+  simpl shift_sp. econstructor; eauto. traceEq.
+  econstructor; eauto. 
+  intros. symmetry. eapply agree_return_regs; eauto.
+  apply agree_callee_save_return_regs.  
 
-  (* one *)
-  apply H0; auto.
-
-  (* trans *)
-  generalize (H0 tf rs fr parent rs0 TRANSL WTF AG INCL).
-  intros [rs' [fr' [A B]]].
-  assert (INCL': incl b2 (fn_code f)). eapply exec_instrs_incl; eauto.
-  generalize (H2 tf rs' fr' parent rs0 TRANSL WTF B INCL').
-  intros [rs'' [fr'' [C D]]].
-  exists rs''; exists fr''. split.
-  eapply Machabstr.exec_trans. eexact A. eexact C. auto.
-  auto.
-
-  (* function *)
+  (* internal function *)
   generalize TRANSL; clear TRANSL. 
   unfold transf_fundef, transf_partial_fundef.
-  caseEq (transf_function f); try congruence.
+  caseEq (transf_function f); simpl; try congruence.
   intros tfn TRANSL EQ. inversion EQ; clear EQ; subst tf.
   inversion WTF as [|f' WTFN]. subst f'.
-  assert (X: forall link ra,
-   exists rs' : regset,
-   Machabstr.exec_function_body tge tfn parent link ra rs0 m t rs' (free m2 stk) /\
-   (forall r : mreg,
-    In (R r) temporaries \/ In (R r) destroyed_at_call -> rs' r = rs2 (R r)) /\
-   (forall r : mreg,
-    In r int_callee_save_regs \/ In r float_callee_save_regs -> rs' r = rs0 r)).
-  intros.
   set (sp := Vptr stk Int.zero) in *.
   set (tsp := shift_sp tfn sp).
   set (fe := make_env (function_bounds f)).
-  assert (low (init_frame tfn) = -fe.(fe_size)).
-    simpl low. rewrite (unfold_transf_function _ _ TRANSL).
+  assert (fr_low (init_frame tfn) = - fe.(fe_size)).
+    simpl fr_low. rewrite (unfold_transf_function _ _ TRANSL).
     reflexivity.
-  assert (exists fr1, set_slot (init_frame tfn) Tint 0 link fr1).
-    apply set_slot_ok. reflexivity. omega. rewrite H2. generalize (size_pos f). 
-    unfold fe. simpl typesize. omega.
-  elim H3; intros fr1 SET1; clear H3.
-  assert (high fr1 = 0).
-    inversion SET1. reflexivity.
-  assert (low fr1 = -fe.(fe_size)).
-    inversion SET1. rewrite <- H2. reflexivity.
-  assert (exists fr2, set_slot fr1 Tint 12 ra fr2).
-    apply set_slot_ok. auto. omega. rewrite H4. generalize (size_pos f). 
-    unfold fe. simpl typesize. omega.
-  elim H5; intros fr2 SET2; clear H5.
-  assert (high fr2 = 0).
-    inversion SET2. simpl. auto.
-  assert (low fr2 = -fe.(fe_size)).
-    inversion SET2. rewrite <- H4. reflexivity.
-  assert (UNDEF: forall idx, index_valid f idx -> index_val f idx fr2 = Vundef).
-    intros. 
-    assert (get_slot fr2 (type_of_index idx) (offset_of_index fe idx) Vundef).
-    generalize (offset_of_index_valid _ _ H7). fold fe. intros [XX YY].
-    eapply slot_gso; eauto. 
-    eapply slot_gso; eauto.
-    apply slot_gi. omega. omega. 
-    simpl typesize. omega. simpl typesize. omega. 
-    inversion H8. symmetry. exact H11.
-  generalize (save_callee_save_correct f tfn TRANSL
-                tsp parent
-                (transl_code (make_env (function_bounds f)) f.(fn_code))
-                rs0 fr2 m1 rs AG1 AG2 H5 H6 UNDEF).
+  assert (UNDEF: forall idx, index_valid f idx -> index_val f idx (init_frame tfn) = Vundef).
+    intros.
+    assert (get_slot (init_frame tfn) (type_of_index idx) (offset_of_index fe idx) Vundef).
+    generalize (offset_of_index_valid _ _ H1). fold fe. intros [XX YY].
+    apply slot_gi; auto. omega. 
+    inv H2; auto.
+  exploit save_callee_save_correct; eauto. 
   intros [fr [EXP AG]].
-  generalize (H1 tfn rs0 fr parent rs0 TRANSL WTFN AG (incl_refl _)).
-  intros [rs' [fr' [EXB AG']]].
-  generalize (restore_callee_save_correct f tfn TRANSL tsp parent
-                (Mreturn :: transl_code (make_env (function_bounds f)) b)
-                fr' m2 rs0 rs2 rs' AG').
-  intros [rs'' [EXX [REGS1 REGS2]]].
-  exists rs''. split. eapply Machabstr.exec_funct_body.
-    rewrite (unfold_transf_function f tfn TRANSL); eexact H. 
-    eexact SET1. eexact SET2. 
-    replace (Mach.fn_code tfn) with
-            (transl_body f (make_env (function_bounds f))).    
-    replace (Vptr stk (Int.repr (- fn_framesize tfn))) with tsp.
-    eapply Machabstr.exec_trans. eexact EXP. 
-    eapply Machabstr.exec_trans. eexact EXB. eexact EXX. 
-    reflexivity. traceEq.
-    unfold tsp, shift_sp, sp. unfold Val.add. 
-    rewrite Int.add_commut. rewrite Int.add_zero. auto.
-    rewrite (unfold_transf_function f tfn TRANSL). simpl. auto.
-  split. intros. rewrite REGS2. symmetry; eapply agree_reg; eauto.
-  apply int_callee_save_not_destroyed; auto.
-  apply float_callee_save_not_destroyed; auto.
-  auto.
-  generalize (X Vzero Vzero). intros [rs' [EX [REGS1 REGS2]]].
-  exists rs'. split.
-  constructor. intros.
-  generalize (X link ra). intros [rs'' [EX' [REGS1' REGS2']]].
-  assert (rs' = rs'').   
-    apply (@Regmap.exten val). intro r. 
-    elim (register_classification r); intro.
-    rewrite REGS1'. apply REGS1. auto. auto.
-    rewrite REGS2'. apply REGS2. auto. auto.
-  rewrite H4. auto.
-  split; auto.
+  econstructor; split.
+  eapply plus_left.
+  eapply exec_function_internal; eauto.
+  rewrite (unfold_transf_function f tfn TRANSL); simpl; eexact H. 
+  replace (Mach.fn_code tfn) with
+          (transl_body f (make_env (function_bounds f))).    
+  replace (Vptr stk (Int.repr (- fn_framesize tfn))) with tsp.
+  unfold transl_body. eexact EXP.
+  unfold tsp, shift_sp, sp. unfold Val.add. 
+  rewrite Int.add_commut. rewrite Int.add_zero. auto.
+  rewrite (unfold_transf_function f tfn TRANSL). simpl. auto.
+  traceEq.
+  unfold tsp. econstructor; eauto with coqlib.
+  eapply agree_callee_save_agree; eauto. 
 
   (* external function *)
   simpl in TRANSL. inversion TRANSL; subst tf.
-  inversion WTF. subst ef0. set (sg := ef_sig ef) in *.
-  exists (rs#(loc_result sg) <- res). 
-  split. econstructor. eauto. 
-  fold sg. rewrite H0. apply transl_external_arguments; assumption.
-  reflexivity.
-  split; intros. rewrite H1. 
-  unfold Regmap.set. case (RegEq.eq r (loc_result sg)); intro.
+  inversion WTF. subst ef0.
+  exploit transl_external_arguments; eauto. intro EXTARGS.
+  econstructor; split.
+  apply plus_one. eapply exec_function_external; eauto.
+  econstructor; eauto.
+  intros. unfold Regmap.set. case (RegEq.eq r (loc_result (ef_sig ef))); intro.
   rewrite e. rewrite Locmap.gss; auto. rewrite Locmap.gso; auto.
   red; auto.
-  apply Regmap.gso. red; intro; subst r.
-  elim (Conventions.loc_result_not_callee_save _ H2).
+  apply agree_callee_save_set_result; auto.
+
+  (* return *)
+  inv STACKS. 
+  econstructor; split.
+  apply plus_one. apply exec_return. 
+  econstructor; eauto. simpl in AG2.  
+  eapply agree_frame_agree; eauto.
+Qed.
+
+Lemma transf_initial_states:
+  forall st1, Linear.initial_state prog st1 ->
+  exists st2, Machabstr.initial_state tprog st2 /\ match_states st1 st2.
+Proof.
+  intros. inversion H.
+  exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
+  econstructor; split.
+  econstructor. 
+  rewrite (transform_partial_program_main _ _ TRANSF). 
+  rewrite symbols_preserved. eauto.
+  eauto. 
+  rewrite (Genv.init_mem_transf_partial _ _ TRANSF).
+  econstructor; eauto. constructor. 
+  eapply Genv.find_funct_ptr_prop; eauto.
+  intros. 
+  replace (size_arguments (Linear.funsig f)) with 14 in H5.
+  elimtype False. generalize (typesize_pos ty). omega.
+  rewrite H2; auto.
+  simpl; red; auto.
+Qed.
+
+Lemma transf_final_states:
+  forall st1 st2 r, 
+  match_states st1 st2 -> Linear.final_state st1 r -> Machabstr.final_state st2 r.
+Proof.
+  intros. inv H0. inv H. inv STACKS. econstructor. rewrite AG1; auto.
+Qed.
+
+Theorem transf_program_correct:
+  forall (beh: program_behavior),
+  Linear.exec_program prog beh -> Machabstr.exec_program tprog beh.
+Proof.
+  unfold Linear.exec_program, Machabstr.exec_program; intros.
+  eapply simulation_plus_preservation; eauto.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  eexact transf_step_correct. 
 Qed.
 
 End PRESERVATION.
-
-Theorem transl_program_correct:
-  forall (p: Linear.program) (tp: Mach.program) (t: trace) (r: val),
-  wt_program p ->
-  transf_program p = Some tp ->
-  Linear.exec_program p t r ->
-  Machabstr.exec_program tp t r.
-Proof.
-  intros p tp t r WTP TRANSF
-         [fptr [f [ls' [m [FINDSYMB [FINDFUNC [SIG [EXEC RES]]]]]]]].
-  assert (WTF: wt_fundef f).
-    apply (Genv.find_funct_ptr_prop wt_fundef WTP FINDFUNC).
-  set (ls := Locmap.init Vundef) in *.
-  set (rs := Regmap.init Vundef).
-  set (fr := empty_frame).
-  assert (AG1: forall r, rs r = ls (R r)).
-    intros; reflexivity.
-  assert (AG2: forall ofs ty, 
-             6 <= ofs -> 
-             ofs + typesize ty <= size_arguments (funsig f) ->
-             get_slot fr ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))).
-    rewrite SIG. unfold size_arguments, sig_args, size_arguments_rec.
-    intros. generalize (typesize_pos ty). 
-    intro. omegaContradiction.
-  generalize (function_ptr_translated p tp TRANSF f _ FINDFUNC).
-  intros [tf [TFIND TRANSL]]. 
-  generalize (transf_function_correct p tp TRANSF WTP _ _ _ _ _ _ EXEC
-                tf rs fr TRANSL WTF AG1 AG2).
-  intros [rs' [A [B C]]].
-  red. exists fptr; exists tf; exists rs'; exists m.
-  split. rewrite (symbols_preserved p tp TRANSF). 
-  rewrite (transform_partial_program_main transf_fundef p TRANSF).
-  assumption.
-  split. assumption.
-  split. replace (Genv.init_mem tp) with (Genv.init_mem p).
-  exact A. symmetry. apply Genv.init_mem_transf_partial with transf_fundef. 
-  exact TRANSF.
-  rewrite <- RES. replace R3 with (loc_result (funsig f)).
-  apply B. right. apply loc_result_acceptable. 
-  rewrite SIG; reflexivity.
-Qed.

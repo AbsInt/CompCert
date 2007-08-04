@@ -3,7 +3,6 @@
   LTL (``Location Transfer Language'') is the target language
   for register allocation and the source language for linearization. *)
 
-Require Import Relations.
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
@@ -12,54 +11,38 @@ Require Import Values.
 Require Import Events.
 Require Import Mem.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
-Require Conventions.
+Require Import Conventions.
 
 (** * Abstract syntax *)
 
-(** LTL is close to RTL, but uses locations instead of pseudo-registers,
-   and basic blocks instead of single instructions as nodes of its
-   control-flow graph. *)
+(** LTL is close to RTL, but uses locations instead of pseudo-registers. *)
 
 Definition node := positive.
 
-(** A basic block is a sequence of instructions terminated by
-    a [Bgoto], [Bcond] or [Breturn] instruction.  (This invariant
-    is enforced by the following inductive type definition.)
-    The instructions behave like the similarly-named instructions
-    of RTL.  They take machine registers (type [mreg]) as arguments
-    and results.  Two new instructions are added: [Bgetstack]
-    and [Bsetstack], which are ``move'' instructions between
-    a machine register and a stack slot. *)
+Inductive instruction: Set :=
+  | Lnop: node -> instruction
+  | Lop: operation -> list loc -> loc -> node -> instruction
+  | Lload: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
+  | Lstore: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
+  | Lcall: signature -> loc + ident -> list loc -> loc -> node -> instruction
+  | Ltailcall: signature -> loc + ident -> list loc -> instruction
+  | Lalloc: loc -> loc -> node -> instruction
+  | Lcond: condition -> list loc -> node -> node -> instruction
+  | Lreturn: option loc -> instruction.
 
-Inductive block: Set :=
-  | Bgetstack: slot -> mreg -> block -> block
-  | Bsetstack: mreg -> slot -> block -> block
-  | Bop: operation -> list mreg -> mreg -> block -> block
-  | Bload: memory_chunk -> addressing -> list mreg -> mreg -> block -> block
-  | Bstore: memory_chunk -> addressing -> list mreg -> mreg -> block -> block
-  | Bcall: signature -> mreg + ident -> block -> block
-  | Balloc: block -> block
-  | Bgoto: node -> block
-  | Bcond: condition -> list mreg -> node -> node -> block
-  | Breturn: block.
-
-Definition code: Set := PTree.t block.
-
-(** Unlike in RTL, parameter passing (passing values of the arguments
-  to a function call to the parameters of the called function) is done
-  via conventional locations (machine registers and stack slots).
-  Consequently, the [Bcall] instruction has no list of argument registers,
-  and function descriptions have no list of parameter registers. *)
+Definition code: Set := PTree.t instruction.
 
 Record function: Set := mkfunction {
   fn_sig: signature;
+  fn_params: list loc;
   fn_stacksize: Z;
   fn_code: code;
   fn_entrypoint: node;
-  fn_code_wf:
-    forall (pc: node), Plt pc (Psucc fn_entrypoint) \/ fn_code!pc = None
+  fn_nextpc: node;
+  fn_code_wf: forall (pc: node), Plt pc fn_nextpc \/ fn_code!pc = None
 }.
 
 Definition fundef := AST.fundef function.
@@ -107,7 +90,7 @@ Definition call_regs (caller: locset) : locset :=
   set [callee] of the callee at the return instruction.
 - Callee-save machine registers have the same values as in the caller
   before the call.
-- Caller-save and temporary machine registers have the same values
+- Caller-save machine registers have the same values
   as in the callee at the return point.
 - Stack slots have the same values as in the caller before the call.
 *)
@@ -125,11 +108,72 @@ Definition return_regs (caller callee: locset) : locset :=
     | S s => caller (S s)
     end.
 
+(** [parmov srcs dsts ls] performs the parallel assignment
+  of locations [dsts] to the values of the corresponding locations
+  [srcs].  *)
+
+Fixpoint parmov (srcs dsts: list loc) (ls: locset) {struct srcs} : locset :=
+  match srcs, dsts with
+  | s1 :: sl, d1 :: dl => Locmap.set d1 (ls s1) (parmov sl dl ls)
+  | _, _ => ls
+  end.
+
+Definition set_result_reg (s: signature) (or: option loc) (ls: locset) :=
+  match or with 
+  | Some r => Locmap.set (R (loc_result s)) (ls r) ls
+  | None => ls
+  end.
+
+(** The components of an LTL execution state are:
+
+- [State cs f sp pc ls m]: [f] is the function currently executing.
+  [sp] is the stack pointer (as in RTL).  [pc] is the current
+  program point (CFG node) within the code of [f].
+  [ls] maps locations to their current values. [m] is the current
+  memory state.
+- [Callstate cs f ls m]:
+  [f] is the function definition that we are calling.
+  [ls] is the values of locations just before the call.
+  [m] is the current memory state.
+- [Returnstate cs sig ls m]:
+  [sig] is the signature of the function that just returned.
+  [ls] is the values of locations just before the return.
+  [m] is the current memory state.
+
+[cs] is a list of stack frames [Stackframe res f sp ls pc],
+where [res] is the location that will receive the result of the call,
+[f] is the calling function, [sp] its stack pointer,
+[ls] the values of locations just before the call,
+and [pc] the program point within [f] of the successor of the
+[Lcall] instruction. *)
+
+Inductive stackframe : Set :=
+  | Stackframe:
+      forall (res: loc) (f: function) (sp: val) (ls: locset) (pc: node), 
+      stackframe.
+
+Inductive state : Set :=
+  | State:
+      forall (stack: list stackframe) (f: function) (sp: val)
+             (pc: node) (ls: locset) (m: mem), state
+  | Callstate:
+      forall (stack: list stackframe) (f: fundef) (ls: locset) (m: mem),
+      state
+  | Returnstate:
+      forall (stack: list stackframe) (sig: signature) (ls: locset) (m: mem),
+      state.
+
+Definition parent_locset (stack: list stackframe) : locset :=
+  match stack with
+  | nil => Locmap.init Vundef
+  | Stackframe res f sp ls pc :: stack' => ls
+  end.
+
 Variable ge: genv.
 
-Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
-  match ros with
-  | inl r => Genv.find_funct ge (rs (R r))
+Definition find_function (los: loc + ident) (rs: locset) : option fundef :=
+  match los with
+  | inl l => Genv.find_funct ge (rs l)
   | inr symb =>
       match Genv.find_symbol ge symb with
       | None => None
@@ -137,158 +181,140 @@ Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
       end
   end.
 
-Definition reglist (rl: list mreg) (rs: locset) : list val :=
-  List.map (fun r => rs (R r)) rl.
+(** The main difference between the LTL transition relation
+  and the RTL transition relation is the handling of function calls.
+  In RTL, arguments and results to calls are transmitted via
+  [vargs] and [vres] components of [Callstate] and [Returnstate],
+  respectively.  The semantics takes care of transferring these values
+  between the pseudo-registers of the caller and of the callee.
+  
+  In lower-level intermediate languages (e.g [Linear], [Mach], [PPC]),
+  arguments and results are transmitted implicitly: the generated
+  code for the caller arranges for arguments to be left in conventional
+  registers and stack locations, as determined by the calling conventions,
+  where the function being called will find them.  Similarly,
+  conventional registers will be used to pass the result value back
+  to the caller.
 
-(** The dynamic semantics of LTL, like that of RTL, is a combination
-  of small-step transition semantics and big-step semantics.
-  Function calls are treated in big-step style so that they appear
-  as a single transition in the caller function.  Other instructions
-  are treated in purely small-step style, as a single transition.
+  In LTL, we take an hybrid view of argument and result passing.
+  The LTL code does not contain (yet) instructions for moving
+  arguments and results to the conventional registers.  However,
+  the dynamic semantics "goes through the motions" of such code:
+- The [exec_Lcall] transition from [State] to [Callstate]
+  leaves the values of arguments in the conventional locations
+  given by [loc_arguments].
+- The [exec_function_internal] transition from [Callstate] to [State]
+  changes the view of stack slots ([Outgoing] slots slide to
+  [Incoming] slots as per [call_regs]), then recovers the
+  values of parameters from the conventional locations given by
+  [loc_parameters].
+- The [exec_Lreturn] transition from [State] to [Returnstate]
+  moves the result value to the conventional location [loc_result],
+  then restores the values of callee-save locations from
+  the location state of the caller, using [return_regs].
+- The [exec_return] transition from [Returnstate] to [State]
+  reads the result value from the conventional location [loc_result],
+  then stores it in the result location for the [Lcall] instruction.
 
-  The introduction of basic blocks increases the number of inductive
-  predicates needed to express the semantics:
-- [exec_instr ge sp b ls m b' ls' m'] is the execution of the first
-  instruction of block [b].  [b'] is the remainder of the block.
-- [exec_instrs ge sp b ls m b' ls' m'] is similar, but executes
-  zero, one or several instructions at the beginning of block [b].
-- [exec_block ge sp b ls m out ls' m'] executes all instructions
-  of block [b].  The outcome [out] is either [Cont s], indicating
-  that the block terminates by branching to block labeled [s],
-  or [Return], indicating that the block terminates by returning
-  from the current function.
-- [exec_blocks ge code sp pc ls m out ls' m'] executes a sequence
-  of zero, one or several blocks, starting at the block labeled [pc].
-  [code] is the control-flow graph for the current function.
-  The outcome [out] indicates how the last block in this sequence
-  terminates: by branching to another block or by returning from the
-  function.
-- [exec_function ge f ls m ls' m'] executes the body of function [f],
-  from its entry point to the first [Lreturn] instruction encountered.
-
-  In all these predicates, [ls] and [ls'] are the location sets
-  (values of locations) at the beginning and end of the transitions,
-  respectively.
+This complicated protocol will make it much easier to prove
+the correctness of the [Stacking] pass later, which inserts actual
+code that performs all the shuffling of arguments and results
+described above.
 *)
 
-Inductive outcome: Set :=
-  | Cont: node -> outcome
-  | Return: outcome.
-
-Inductive exec_instr: val ->
-                      block -> locset -> mem -> trace ->
-                      block -> locset -> mem -> Prop :=
-  | exec_Bgetstack:
-      forall sp sl r b rs m,
-      exec_instr sp (Bgetstack sl r b) rs m
-                 E0 b (Locmap.set (R r) (rs (S sl)) rs) m
-  | exec_Bsetstack:
-      forall sp r sl b rs m,
-      exec_instr sp (Bsetstack r sl b) rs m
-                 E0 b (Locmap.set (S sl) (rs (R r)) rs) m
-  | exec_Bop:
-      forall sp op args res b rs m v,
-      eval_operation ge sp op (reglist args rs) = Some v ->
-      exec_instr sp (Bop op args res b) rs m
-                 E0 b (Locmap.set (R res) v rs) m
-  | exec_Bload:
-      forall sp chunk addr args dst b rs m a v,
-      eval_addressing ge sp addr (reglist args rs) = Some a ->
-      loadv chunk m a = Some v ->
-      exec_instr sp (Bload chunk addr args dst b) rs m
-                 E0 b (Locmap.set (R dst) v rs) m
-  | exec_Bstore:
-      forall sp chunk addr args src b rs m m' a,
-      eval_addressing ge sp addr (reglist args rs) = Some a ->
-      storev chunk m a (rs (R src)) = Some m' ->
-      exec_instr sp (Bstore chunk addr args src b) rs m
-                 E0 b rs m'
-  | exec_Bcall:
-      forall sp sig ros b rs m t f rs' m',
-      find_function ros rs = Some f ->
-      sig = funsig f ->
-      exec_function f rs m t rs' m' ->
-      exec_instr sp (Bcall sig ros b) rs m
-                  t b (return_regs rs rs') m'
-  | exec_Balloc:
-      forall sp b rs m sz m' blk,
-      rs (R Conventions.loc_alloc_argument) = Vint sz ->
-      Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
-      exec_instr sp (Balloc b) rs m E0 b
-                 (Locmap.set (R Conventions.loc_alloc_result) 
-                             (Vptr blk Int.zero) rs) m'
-
-with exec_instrs: val ->
-                  block -> locset -> mem -> trace ->
-                  block -> locset -> mem -> Prop :=
-  | exec_refl:
-      forall sp b rs m,
-      exec_instrs sp b rs m E0 b rs m
-  | exec_one:
-      forall sp b1 rs1 m1 t b2 rs2 m2,
-      exec_instr sp b1 rs1 m1 t b2 rs2 m2 ->
-      exec_instrs sp b1 rs1 m1 t b2 rs2 m2
-  | exec_trans:
-      forall sp b1 rs1 m1 t t1 b2 rs2 m2 t2 b3 rs3 m3,
-      exec_instrs sp b1 rs1 m1 t1 b2 rs2 m2 ->
-      exec_instrs sp b2 rs2 m2 t2 b3 rs3 m3 ->
-      t = t1 ** t2 ->
-      exec_instrs sp b1 rs1 m1 t b3 rs3 m3
-
-with exec_block: val ->
-                 block -> locset -> mem -> trace ->
-                 outcome -> locset -> mem -> Prop :=
-  | exec_Bgoto:
-      forall sp b rs m t s rs' m',
-      exec_instrs sp b rs m t (Bgoto s) rs' m' ->
-      exec_block sp b rs m t (Cont s) rs' m'
-  | exec_Bcond_true:
-      forall sp b rs m t cond args ifso ifnot rs' m',
-      exec_instrs sp b rs m t (Bcond cond args ifso ifnot) rs' m' ->
-      eval_condition cond (reglist args rs') = Some true ->
-      exec_block sp b rs m t (Cont ifso) rs' m'
-  | exec_Bcond_false:
-      forall sp b rs m t cond args ifso ifnot rs' m',
-      exec_instrs sp b rs m t (Bcond cond args ifso ifnot) rs' m' ->
-      eval_condition cond (reglist args rs') = Some false ->
-      exec_block sp b rs m t (Cont ifnot) rs' m'
-  | exec_Breturn:
-      forall sp b rs m t rs' m',
-      exec_instrs sp b rs m t Breturn rs' m' ->
-      exec_block sp b rs m t Return rs' m'
-
-with exec_blocks: code -> val ->
-                  node -> locset -> mem -> trace ->
-                  outcome -> locset -> mem -> Prop :=
-  | exec_blocks_refl:
-      forall c sp pc rs m,
-      exec_blocks c sp pc rs m E0 (Cont pc) rs m
-  | exec_blocks_one:
-      forall c sp pc b m rs t out rs' m',
-      c!pc = Some b ->
-      exec_block sp b rs m t out rs' m' ->
-      exec_blocks c sp pc rs m t out rs' m'
-  | exec_blocks_trans:
-      forall c sp pc1 rs1 m1 t t1 pc2 rs2 m2 t2 out rs3 m3,
-      exec_blocks c sp pc1 rs1 m1 t1 (Cont pc2) rs2 m2 ->
-      exec_blocks c sp pc2 rs2 m2 t2 out rs3 m3 ->
-      t = t1 ** t2 ->
-      exec_blocks c sp pc1 rs1 m1 t out rs3 m3
-
-with exec_function: fundef -> locset -> mem -> trace ->
-                                locset -> mem -> Prop :=
-  | exec_funct_internal:
-      forall f rs m m1 stk t rs2 m2,
-      alloc m 0 f.(fn_stacksize) = (m1, stk) ->
-      exec_blocks f.(fn_code) (Vptr stk Int.zero)
-                  f.(fn_entrypoint) (call_regs rs) m1 t Return rs2 m2 ->
-      exec_function (Internal f) rs m t rs2 (free m2 stk)
-  | exec_funct_external:
-      forall ef args res rs1 rs2 m t,
+Inductive step: state -> trace -> state -> Prop :=
+  | exec_Lnop:
+      forall s f sp pc rs m pc',
+      (fn_code f)!pc = Some(Lnop pc') ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp pc' rs m)
+  | exec_Lop:
+      forall s f sp pc rs m op args res pc' v,
+      (fn_code f)!pc = Some(Lop op args res pc') ->
+      eval_operation ge sp op (map rs args) m = Some v ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp pc' (Locmap.set res v rs) m)
+  | exec_Lload:
+      forall s f sp pc rs m chunk addr args dst pc' a v,
+      (fn_code f)!pc = Some(Lload chunk addr args dst pc') ->
+      eval_addressing ge sp addr (map rs args) = Some a ->
+      Mem.loadv chunk m a = Some v ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp pc' (Locmap.set dst v rs) m)
+  | exec_Lstore:
+      forall s f sp pc rs m chunk addr args src pc' a m',
+      (fn_code f)!pc = Some(Lstore chunk addr args src pc') ->
+      eval_addressing ge sp addr (map rs args) = Some a ->
+      Mem.storev chunk m a (rs src) = Some m' ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp pc' rs m')
+  | exec_Lcall:
+      forall s f sp pc rs m sig ros args res pc' f',
+      (fn_code f)!pc = Some(Lcall sig ros args res pc') ->
+      find_function ros rs = Some f' ->
+      funsig f' = sig ->
+      let rs1 := parmov args (loc_arguments sig) rs in
+      step (State s f sp pc rs m)
+        E0 (Callstate (Stackframe res f sp rs1 pc' :: s) f' rs1 m)
+  | exec_Ltailcall:
+      forall s f stk pc rs m sig ros args f',
+      (fn_code f)!pc = Some(Ltailcall sig ros args) ->
+      find_function ros rs = Some f' ->
+      funsig f' = sig ->
+      let rs1 := parmov args (loc_arguments sig) rs in
+      let rs2 := return_regs (parent_locset s) rs1 in
+      step (State s f (Vptr stk Int.zero) pc rs m)
+        E0 (Callstate s f' rs2 (Mem.free m stk))
+  | exec_Lalloc:
+      forall s f sp pc rs m pc' arg res sz m' b,
+      (fn_code f)!pc = Some(Lalloc arg res pc') ->
+      rs arg = Vint sz ->
+      Mem.alloc m 0 (Int.signed sz) = (m', b) ->
+      let rs1 := Locmap.set (R loc_alloc_argument) (rs arg) rs in
+      let rs2 := Locmap.set (R loc_alloc_result) (Vptr b Int.zero) rs1 in
+      let rs3 := Locmap.set res (rs2 (R loc_alloc_result)) rs2 in
+      step (State s f sp pc rs m)
+        E0 (State s f sp pc' rs3 m')
+  | exec_Lcond_true:
+      forall s f sp pc rs m cond args ifso ifnot,
+      (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
+      eval_condition cond (map rs args) m = Some true ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp ifso rs m)
+  | exec_Lcond_false:
+      forall s f sp pc rs m cond args ifso ifnot,
+      (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
+      eval_condition cond (map rs args) m = Some false ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp ifnot rs m)
+  | exec_Lreturn:
+      forall s f stk pc rs m or,
+      (fn_code f)!pc = Some(Lreturn or) ->
+      let rs1 := set_result_reg f.(fn_sig) or rs in
+      let rs2 := return_regs (parent_locset s) rs1 in
+      step (State s f (Vptr stk Int.zero) pc rs m)
+        E0 (Returnstate s f.(fn_sig) rs2 (Mem.free m stk))
+  | exec_function_internal:
+      forall s f rs m m' stk,
+      Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
+      let rs1 := call_regs rs in
+      let rs2 := parmov (loc_parameters f.(fn_sig)) f.(fn_params) rs1 in
+      step (Callstate s (Internal f) rs m)
+        E0 (State s f (Vptr stk Int.zero) f.(fn_entrypoint) rs2 m')
+  | exec_function_external:
+      forall s ef t res rs m,
+      let args := map rs (Conventions.loc_arguments ef.(ef_sig)) in
       event_match ef args t res ->
-      args = List.map rs1 (Conventions.loc_arguments ef.(ef_sig)) ->
-      rs2 = Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs1 ->
-      exec_function (External ef) rs1 m t rs2 m.
+      let rs1 :=
+        Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs in
+      step (Callstate s (External ef) rs m)
+         t (Returnstate s ef.(ef_sig) rs1 m)
+  | exec_return:
+      forall res f sp rs0 pc s sig rs m,
+      let rs1 := Locmap.set res (rs (R (loc_result sig))) rs in
+      step (Returnstate (Stackframe res f sp rs0 pc :: s) 
+                        sig rs m)
+        E0 (State s f sp pc rs1 m).
 
 End RELSEM.
 
@@ -297,87 +323,41 @@ End RELSEM.
   main function, to be found in the machine register dictated
   by the calling conventions. *)
 
-Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := Genv.globalenv p in
-  let m0 := Genv.init_mem p in
-  exists b, exists f, exists rs, exists m,
-  Genv.find_symbol ge p.(prog_main) = Some b /\
-  Genv.find_funct_ptr ge b  = Some f /\
-  funsig f = mksignature nil (Some Tint) /\
-  exec_function ge f (Locmap.init Vundef) m0 t rs m /\
-  rs (R (Conventions.loc_result (funsig f))) = r.
+Inductive initial_state (p: program): state -> Prop :=
+  | initial_state_intro: forall b f,
+      let ge := Genv.globalenv p in
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = mksignature nil (Some Tint) ->
+      initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
-(** We remark that the [exec_blocks] relation is stable if
-  the control-flow graph is extended by adding new basic blocks
-  at previously unused graph nodes. *)
+Inductive final_state: state -> int -> Prop :=
+  | final_state_intro: forall sig rs m r,
+      rs (R (loc_result sig)) = Vint r ->
+      final_state (Returnstate nil sig rs m) r.
 
-Section EXEC_BLOCKS_EXTENDS.
-
-Variable ge: genv.
-Variable c1 c2: code.
-Hypothesis EXT: forall pc, c2!pc = c1!pc \/ c1!pc = None.
-
-Lemma exec_blocks_extends:
-  forall sp pc1 rs1 m1 t out rs2 m2,
-  exec_blocks ge c1 sp pc1 rs1 m1 t out rs2 m2 ->
-  exec_blocks ge c2 sp pc1 rs1 m1 t out rs2 m2.
-Proof.
-  induction 1. 
-  apply exec_blocks_refl.
-  apply exec_blocks_one with b. 
-    elim (EXT pc); intro; congruence. assumption.
-  eapply exec_blocks_trans; eauto.
-Qed.
-
-End EXEC_BLOCKS_EXTENDS.
+Definition exec_program (p: program) (beh: program_behavior) : Prop :=
+  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
 
 (** * Operations over LTL *)
 
-(** Computation of the possible successors of a basic block.
-  This is used for dataflow analyses. *)
-
-Fixpoint successors_aux (b: block) : list node :=
-  match b with
-  | Bgetstack s r b => successors_aux b
-  | Bsetstack r s b => successors_aux b
-  | Bop op args res b => successors_aux b
-  | Bload chunk addr args dst b => successors_aux b
-  | Bstore chunk addr args src b => successors_aux b
-  | Bcall sig ros b => successors_aux b
-  | Balloc b => successors_aux b
-  | Bgoto n => n :: nil
-  | Bcond cond args ifso ifnot => ifso :: ifnot :: nil
-  | Breturn => nil
-  end.
+(** Computation of the possible successors of an instruction.
+  This is used in particular for dataflow analyses. *)
 
 Definition successors (f: function) (pc: node) : list node :=
   match f.(fn_code)!pc with
   | None => nil
-  | Some b => successors_aux b
+  | Some i =>
+      match i with
+      | Lnop s => s :: nil
+      | Lop op args res s => s :: nil
+      | Lload chunk addr args dst s => s :: nil
+      | Lstore chunk addr args src s => s :: nil
+      | Lcall sig ros args res s => s :: nil
+      | Ltailcall sig ros args => nil
+      | Lalloc arg res s => s :: nil
+      | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
+      | Lreturn optarg => nil
+      end
   end.
-
-Lemma successors_aux_invariant:
-  forall ge sp b rs m t b' rs' m',
-  exec_instrs ge sp b rs m t b' rs' m' ->
-  successors_aux b = successors_aux b'.
-Proof.
-  induction 1; simpl; intros.
-  reflexivity.
-  inversion H; reflexivity.
-  transitivity (successors_aux b2); auto.
-Qed.
-
-Lemma successors_correct:
-  forall ge f sp pc rs m t pc' rs' m' b,
-  f.(fn_code)!pc = Some b ->
-  exec_block ge sp b rs m t (Cont pc') rs' m' ->
-  In pc' (successors f pc).
-Proof.
-  intros. unfold successors. rewrite H. inversion H0.
-  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ _ H7); simpl.
-  tauto.
-  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ _ H2); simpl.
-  tauto.
-  rewrite (successors_aux_invariant _ _ _ _ _ _ _ _ _ H2); simpl.
-  tauto.
-Qed.

@@ -11,6 +11,7 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
+Require Import Machconcr.
 Require Import Machtyping.
 Require Import PPC.
 Require Import PPCgen.
@@ -448,7 +449,7 @@ Lemma extcall_args_match:
   forall tyl iregl fregl ofs args,
   (forall r, In r iregl -> mreg_type r = Tint) ->
   (forall r, In r fregl -> mreg_type r = Tfloat) ->
-  Mach.extcall_args ms m sp (Conventions.loc_arguments_rec tyl iregl fregl ofs) args ->
+  Machconcr.extcall_args ms m sp (Conventions.loc_arguments_rec tyl iregl fregl ofs) args ->
   PPC.extcall_args rs m tyl (List.map ireg_of iregl) (List.map freg_of fregl) (4 * ofs) args.
 Proof.
   induction tyl; intros.
@@ -478,9 +479,7 @@ Proof.
   eapply sp_val; eauto. 
   change (@nil freg) with (freg_of ## nil). 
   replace (4 * ofs + 8) with (4 * (ofs + 2)) by omega. 
-  rewrite list_map_drop2. 
   apply IHtyl; auto. 
-  intros. apply H0. apply list_drop2_incl. auto. 
   (* register *)
   inversion H2; subst; clear H2. inversion H8; subst; clear H8.
   simpl map. econstructor. eapply freg_val; eauto.
@@ -505,13 +504,13 @@ Ltac ElimOrEq :=
 Lemma extcall_arguments_match:
   forall ms m sp rs sg args,
   agree ms sp rs ->
-  Mach.extcall_arguments ms m sp sg args ->
+  Machconcr.extcall_arguments ms m sp sg args ->
   PPC.extcall_arguments rs m sg args.
 Proof.
-  unfold Mach.extcall_arguments, PPC.extcall_arguments; intros.
+  unfold Machconcr.extcall_arguments, PPC.extcall_arguments; intros.
   change (extcall_args rs m sg.(sig_args)
     (List.map ireg_of Conventions.int_param_regs)
-    (List.map freg_of Conventions.float_param_regs) (4 * 6) args).
+    (List.map freg_of Conventions.float_param_regs) (4 * 14) args).
   eapply extcall_args_match; eauto. 
   intro; simpl; ElimOrEq; reflexivity.  
   intro; simpl; ElimOrEq; reflexivity.  
@@ -533,9 +532,11 @@ Variable fn: code.
 
 Inductive exec_straight: code -> regset -> mem -> 
                          code -> regset -> mem -> Prop :=
-  | exec_straight_refl:
-      forall c rs m,
-      exec_straight c rs m c rs m
+  | exec_straight_one:
+      forall i1 c rs1 m1 rs2 m2,
+      exec_instr ge fn i1 rs1 m1 = OK rs2 m2 ->
+      rs2#PC = Val.add rs1#PC Vone ->
+      exec_straight (i1 :: c) rs1 m1 c rs2 m2
   | exec_straight_step:
       forall i c rs1 m1 rs2 m2 c' rs3 m3,
       exec_instr ge fn i rs1 m1 = OK rs2 m2 ->
@@ -549,18 +550,9 @@ Lemma exec_straight_trans:
   exec_straight c2 rs2 m2 c3 rs3 m3 ->
   exec_straight c1 rs1 m1 c3 rs3 m3.
 Proof.
-  induction 1. auto. 
-  intro. apply exec_straight_step with rs2 m2; auto.
-Qed.
-
-Lemma exec_straight_one:
-  forall i1 c rs1 m1 rs2 m2,
-  exec_instr ge fn i1 rs1 m1 = OK rs2 m2 ->
-  rs2#PC = Val.add rs1#PC Vone ->
-  exec_straight (i1 :: c) rs1 m1 c rs2 m2.
-Proof.
-  intros. apply exec_straight_step with rs2 m2. auto. auto. 
-  apply exec_straight_refl.
+  induction 1; intros.
+  apply exec_straight_step with rs2 m2; auto.
+  apply exec_straight_step with rs2 m2; auto.
 Qed.
 
 Lemma exec_straight_two:
@@ -1182,7 +1174,7 @@ Lemma transl_cond_correct:
   forall cond args k ms sp rs m b,
   map mreg_type args = type_of_condition cond ->
   agree ms sp rs ->
-  eval_condition cond (map ms args) = Some b ->
+  eval_condition cond (map ms args) m = Some b ->
   exists rs',
      exec_straight (transl_cond cond args k) rs m k rs' m
   /\ rs'#(reg_of_crbit (fst (crbit_for_cond cond))) = 
@@ -1191,7 +1183,7 @@ Lemma transl_cond_correct:
         else Val.notbool (Val.of_bool b))
   /\ agree ms sp rs'.
 Proof.
-  intros. rewrite <- (eval_condition_weaken _ _ H1). 
+  intros. rewrite <- (eval_condition_weaken _ _ _ H1). 
   apply transl_cond_correct_aux; auto.
 Qed.
 
@@ -1221,12 +1213,12 @@ Lemma transl_op_correct:
   forall op args res k ms sp rs m v,
   wt_instr (Mop op args res) ->
   agree ms sp rs ->
-  eval_operation ge sp op (map ms args) = Some v ->
+  eval_operation ge sp op (map ms args) m = Some v ->
   exists rs',
      exec_straight (transl_op op args res k) rs m k rs' m
   /\ agree (Regmap.set res v ms) sp rs'.
 Proof.
-  intros. rewrite <- (eval_operation_weaken _ _ _ _ H1). clear H1; clear v.
+  intros. rewrite <- (eval_operation_weaken _ _ _ _ _ H1). clear H1; clear v.
   inversion H.
   (* Omove *)
   simpl. exists (nextinstr (rs#(preg_of res) <- (ms r1))).
@@ -1238,19 +1230,9 @@ Proof.
   simpl. unfold preg_of. rewrite <- H2. rewrite H5. reflexivity.
   auto with ppcgen.
   auto with ppcgen.
-  (* Oundef *)
-  simpl. exists (nextinstr (rs#(preg_of res) <- Vundef)).
-  split. caseEq (mreg_type res); intro.
-  apply exec_straight_one. simpl.   
-  unfold preg_of; rewrite H1. reflexivity.
-  auto with ppcgen.
-  apply exec_straight_one. simpl.   
-  unfold preg_of; rewrite H1. reflexivity.
-  auto with ppcgen.
-  auto with ppcgen.
   (* Other instructions *)
-  clear H1; clear H2; clear H3.
-  destruct op; simpl in H6; injection H6; clear H6; intros;
+  clear H1; clear H2; clear H4.
+  destruct op; simpl in H5; injection H5; clear H5; intros;
   TypeInv; simpl; try (TranslOpSimpl).
   (* Omove again *)
   congruence.
@@ -1283,8 +1265,6 @@ Proof.
   exists rs'. split. auto. 
   apply agree_set_mireg_exten with rs; auto.
   rewrite (sp_val ms sp rs). auto. auto. 
-  (* Oundef again *)
-  congruence.
   (* Ocast8unsigned *)
   exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (ms m0) Int.zero (Int.repr 255)))).
   split. apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs)); auto. reflexivity.

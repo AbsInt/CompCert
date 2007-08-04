@@ -23,6 +23,8 @@ Axiom proof_irrelevance:
 
 (** * Useful tactics *)
 
+Ltac inv H := inversion H; clear H; subst.
+
 Ltac predSpec pred predspec x y :=
   generalize (predspec x y); case (pred x y); intro.
 
@@ -751,6 +753,44 @@ Lemma list_norepet_append_left:
   list_norepet (l1 ++ l2) -> list_norepet l1.
 Proof.
   generalize list_norepet_app; firstorder.
+Qed.
+
+(** [is_tail l1 l2] holds iff [l2] is of the form [l ++ l1] for some [l]. *)
+
+Inductive is_tail (A: Set): list A -> list A -> Prop :=
+  | is_tail_refl:
+      forall c, is_tail c c
+  | is_tail_cons:
+      forall i c1 c2, is_tail c1 c2 -> is_tail c1 (i :: c2).
+
+Lemma is_tail_in:
+  forall (A: Set) (i: A) c1 c2, is_tail (i :: c1) c2 -> In i c2.
+Proof.
+  induction c2; simpl; intros.
+  inversion H.
+  inversion H. tauto. right; auto.
+Qed.
+
+Lemma is_tail_cons_left:
+  forall (A: Set) (i: A) c1 c2, is_tail (i :: c1) c2 -> is_tail c1 c2.
+Proof.
+  induction c2; intros; inversion H.
+  constructor. constructor. constructor. auto. 
+Qed.
+
+Hint Resolve is_tail_refl is_tail_cons is_tail_in is_tail_cons_left: coqlib.
+
+Lemma is_tail_incl:
+  forall (A: Set) (l1 l2: list A), is_tail l1 l2 -> incl l1 l2.
+Proof.
+  induction 1; eauto with coqlib.
+Qed.
+
+Lemma is_tail_trans:
+  forall (A: Set) (l1 l2: list A),
+  is_tail l1 l2 -> forall (l3: list A), is_tail l2 l3 -> is_tail l1 l3.
+Proof.
+  induction 1; intros. auto. apply IHis_tail. eapply is_tail_cons_left; eauto.
 Qed.
 
 (** [list_forall2 P [x1 ... xN] [y1 ... yM] holds iff [N = M] and

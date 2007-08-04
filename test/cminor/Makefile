@@ -1,4 +1,5 @@
 CCOMP=../../ccomp
+FLAGS=-S
 CPP=cpp -P
 CC=gcc
 CFLAGS=-arch ppc -g
@@ -68,6 +69,11 @@ marksweep: marksweep.o maingc.o marksweepcheck.o
 	$(CC) $(CFLAGS) -o marksweep marksweep.o maingc.o marksweepcheck.o
 clean::
 	rm -f stopcopy
+
+switchtbl: switchtbl.o mainswitchtbl.o
+	$(CC) $(CFLAGS) -o switchtbl switchtbl.o mainswitchtbl.o
+clean::
+	rm -f switchtbl
 
 .SUFFIXES:
 

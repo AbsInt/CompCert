@@ -26,7 +26,7 @@ Inductive wt_instr : instruction -> Prop :=
      wt_instr (Mgetstack ofs ty r)
   | wt_Msetstack:
      forall ofs ty r,
-     mreg_type r = ty -> 24 <= Int.signed ofs ->
+     mreg_type r = ty ->
      wt_instr (Msetstack r ofs ty)
   | wt_Mgetparam:
      forall ofs ty r,
@@ -36,12 +36,9 @@ Inductive wt_instr : instruction -> Prop :=
      forall r1 r,
      mreg_type r1 = mreg_type r ->
      wt_instr (Mop Omove (r1 :: nil) r)
-  | wt_Mopundef:
-     forall r,
-     wt_instr (Mop Oundef nil r)
   | wt_Mop:
      forall op args res,
-      op <> Omove -> op <> Oundef ->
+      op <> Omove ->
       (List.map mreg_type args, mreg_type res) = type_of_operation op ->
       wt_instr (Mop op args res)
   | wt_Mload:
@@ -58,6 +55,11 @@ Inductive wt_instr : instruction -> Prop :=
       forall sig ros,
       match ros with inl r => mreg_type r = Tint | inr s => True end ->
       wt_instr (Mcall sig ros)
+  | wt_Mtailcall:
+      forall sig ros,
+      Conventions.tailcall_possible sig ->
+      match ros with inl r => mreg_type r = Tint | inr s => True end ->
+      wt_instr (Mtailcall sig ros)
   | wt_Malloc:
       wt_instr Malloc
   | wt_Mgoto:
@@ -95,27 +97,20 @@ Definition wt_program (p: program) : Prop :=
 
 Require Import Machabstr.
 
-(** We show a weak type soundness result for the alternate semantics
+(** We show a weak type soundness result for the abstract semantics
     of Mach: for a well-typed Mach program, if a transition is taken
     from a state where registers hold values of their static types,
     registers in the final state hold values of their static types
     as well.  This is a subject reduction theorem for our type system.
     It is used in the proof of implication from the abstract Mach
-    semantics to the concrete Mach semantics (file [Machabstr2mach]).
+    semantics to the concrete Mach semantics (file [Machabstr2concr]).
 *)
 
 Definition wt_regset (rs: regset) : Prop :=
   forall r, Val.has_type (rs r) (mreg_type r).
 
-Definition wt_content (c: content) : Prop :=
-  match c with
-  | Datum32 v => Val.has_type v Tint
-  | Datum64 v => Val.has_type v Tfloat
-  | _ => True
-  end.
-
 Definition wt_frame (fr: frame) : Prop :=
-  forall ofs, wt_content (fr.(contents) ofs).
+  forall ty ofs, Val.has_type (fr.(fr_contents) ty ofs) ty.
 
 Lemma wt_setreg:
   forall (rs: regset) (r: mreg) (v: val),
@@ -134,17 +129,8 @@ Lemma wt_get_slot:
   wt_frame fr ->
   Val.has_type v ty. 
 Proof.
-  induction 1; intro. subst v. 
-  set (pos := low fr + ofs).
-  case ty; simpl.
-  unfold getN. case (check_cont 3 (pos + 1) (contents fr)).
-  generalize (H2 pos). unfold wt_content.
-  destruct (contents fr pos); simpl; tauto.
-  simpl; auto.
-  unfold getN. case (check_cont 7 (pos + 1) (contents fr)).
-  generalize (H2 pos). unfold wt_content.
-  destruct (contents fr pos); simpl; tauto.
-  simpl; auto.
+  induction 1; intros.
+  subst v. apply H2.
 Qed.
 
 Lemma wt_set_slot:
@@ -154,43 +140,37 @@ Lemma wt_set_slot:
   Val.has_type v ty ->
   wt_frame fr'.
 Proof.
-  intros. induction H. 
-  set (i := low fr + ofs).
-  red; intro j; simpl. 
-  assert (forall n ofs c,
-            let c' := set_cont n ofs c in
-            forall k, c' k = c k \/ c' k = Cont).
-    induction n; simpl; intros.
-    left; auto.
-    unfold update. case (zeq k ofs0); intro.
-    right; auto.
-    apply IHn.
-  destruct ty; simpl; unfold store_contents; unfold setN;
-  unfold update; case (zeq j i); intro.
-  red. assumption.
-  elim (H 3%nat (i + 1) (contents fr) j); intro; rewrite H2.
-  apply H0. red; auto. 
-  red. assumption.
-  elim (H 7%nat (i + 1) (contents fr) j); intro; rewrite H2.
-  apply H0. red; auto. 
+  intros. induction H. subst fr'; red; intros; simpl.
+  destruct (zeq (fr_low fr + ofs) ofs0).
+  destruct (typ_eq ty ty0). congruence. exact I.
+  destruct (zle (ofs0 + AST.typesize ty0) (fr_low fr + ofs)).
+  apply H0.
+  destruct (zle (fr_low fr + ofs + AST.typesize ty) ofs0).
+  apply H0.
+  exact I.
+Qed.
+
+Lemma wt_empty_frame:
+  wt_frame empty_frame.
+Proof.
+  intros; red; intros; exact I.
 Qed.
 
 Lemma wt_init_frame:
   forall f,
   wt_frame (init_frame f).
 Proof.
-  intros. unfold init_frame. 
-  red; intros. simpl. exact I.
+  intros; red; intros; exact I.
 Qed.
 
-Lemma incl_find_label:
-  forall lbl c c', find_label lbl c = Some c' -> incl c' c.
+Lemma is_tail_find_label:
+  forall lbl c c', find_label lbl c = Some c' -> is_tail c' c.
 Proof.
   induction c; simpl.
   intros; discriminate.
   case (is_label lbl a); intros.
-  injection H; intro; subst c'; apply incl_tl; apply incl_refl.
-  apply incl_tl; auto.
+  injection H; intro; subst c'. constructor. constructor.
+  constructor; auto.
 Qed.
 
 Lemma wt_event_match:
@@ -203,193 +183,115 @@ Qed.
 
 Section SUBJECT_REDUCTION.
 
+Inductive wt_stackframe: stackframe -> Prop :=
+  | wt_stackframe_intro: forall f sp c fr,
+      wt_function f ->
+      Val.has_type sp Tint ->
+      is_tail c f.(fn_code) ->
+      wt_frame fr ->
+      wt_stackframe (Stackframe f sp c fr).
+
+Inductive wt_state: state -> Prop :=
+  | wt_state_intro: forall stk f sp c rs fr m
+      (STK: forall s, In s stk -> wt_stackframe s)
+      (WTF: wt_function f)
+      (WTSP: Val.has_type sp Tint)
+      (TAIL: is_tail c f.(fn_code))
+      (WTRS: wt_regset rs)
+      (WTFR: wt_frame fr),
+      wt_state (State stk f sp c rs fr m)
+  | wt_state_call: forall stk f rs m,
+      (forall s, In s stk -> wt_stackframe s) ->
+      wt_fundef f ->
+      wt_regset rs ->
+      wt_state (Callstate stk f rs m)
+  | wt_state_return: forall stk rs m,
+      (forall s, In s stk -> wt_stackframe s) ->
+      wt_regset rs ->
+      wt_state (Returnstate stk rs m).
+
 Variable p: program.
 Hypothesis wt_p: wt_program p.
 Let ge := Genv.globalenv p.
 
-Definition exec_instr_prop 
-  (f: function) (sp: val) (parent: frame)
-  (c1: code) (rs1: regset) (fr1: frame) (m1: mem) (t: trace)
-  (c2: code) (rs2: regset) (fr2: frame) (m2: mem) :=
-    forall (WTF: wt_function f)
-           (INCL: incl c1 f.(fn_code))
-           (WTRS: wt_regset rs1)
-           (WTFR: wt_frame fr1)
-           (WTPA: wt_frame parent),
-    incl c2 f.(fn_code) /\ wt_regset rs2 /\ wt_frame fr2.
-Definition exec_function_body_prop
-  (f: function) (parent: frame) (link ra: val)
-  (rs1: regset) (m1: mem) (t: trace) (rs2: regset) (m2: mem) :=
-    forall (WTF: wt_function f)
-           (WTRS: wt_regset rs1)
-           (WTPA: wt_frame parent)
-           (WTLINK: Val.has_type link Tint)
-           (WTRA: Val.has_type ra Tint),
-    wt_regset rs2.
-Definition exec_function_prop
-  (f: fundef) (parent: frame)
-  (rs1: regset) (m1: mem) (t: trace) (rs2: regset) (m2: mem) :=
-    forall (WTF: wt_fundef f)
-           (WTRS: wt_regset rs1)
-           (WTPA: wt_frame parent),
-    wt_regset rs2.
-
 Lemma subject_reduction:
-   (forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
-      exec_instr ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2)
-/\ (forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
-      exec_instrs ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2)
-/\ (forall f parent link ra rs1 m1 t rs2 m2,
-      exec_function_body ge f parent link ra rs1 m1 t rs2 m2 ->
-      exec_function_body_prop f parent link ra rs1 m1 t rs2 m2)
-/\ (forall f parent rs1 m1 t rs2 m2,
-      exec_function ge f parent rs1 m1 t rs2 m2 ->
-      exec_function_prop f parent rs1 m1 t rs2 m2).
+  forall s1 t s2, step ge s1 t s2 ->
+  forall (WTS: wt_state s1), wt_state s2.
 Proof.
-  apply exec_mutual_induction; red; intros; 
-  try (generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))); intro;
-       intuition eauto with coqlib).
+  induction 1; intros; inv WTS;
+  try (generalize (wt_function_instrs _ WTF _ (is_tail_in TAIL)); intro;
+       eapply wt_state_intro; eauto with coqlib).
 
   apply wt_setreg; auto. 
   inversion H0. rewrite H2. apply wt_get_slot with fr (Int.signed ofs); auto.
 
   inversion H0. eapply wt_set_slot; eauto. 
-  rewrite <- H3. apply WTRS.
+  rewrite <- H2. apply WTRS.
 
+  assert (wt_frame (parent_frame s)).
+    destruct s; simpl. apply wt_empty_frame. 
+    generalize (STK s (in_eq _ _)); intro. inv H1. auto. 
   inversion H0. apply wt_setreg; auto.
-  rewrite H2. apply wt_get_slot with parent (Int.signed ofs); auto.
+  rewrite H3. apply wt_get_slot with (parent_frame s) (Int.signed ofs); auto.
 
-  apply wt_setreg; auto. inversion H0.
-    simpl. subst args; subst op. simpl in H. 
+  apply wt_setreg; auto. inv H0.
+    simpl in H. 
     rewrite <- H2. replace v with (rs r1). apply WTRS. congruence.
-    subst args; subst op. simpl in H. 
-    replace v with Vundef. simpl; auto. congruence.
     replace (mreg_type res) with (snd (type_of_operation op)).
-    apply type_of_operation_sound with fundef ge rs##args sp; auto.
-    rewrite <- H6; reflexivity.
+    apply type_of_operation_sound with fundef ge rs##args sp m; auto.
+    rewrite <- H5; reflexivity.
 
   apply wt_setreg; auto. inversion H1. rewrite H7.
   eapply type_of_chunk_correct; eauto.
 
-  apply H1; auto.
-  destruct ros; simpl in H. 
-  apply (Genv.find_funct_prop wt_fundef wt_p H).
-  destruct (Genv.find_symbol ge i). 
-  apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
-  discriminate.
+  assert (WTFD: wt_fundef f').
+    destruct ros; simpl in H.
+    apply (Genv.find_funct_prop wt_fundef wt_p H).
+    destruct (Genv.find_symbol ge i); try discriminate.
+    apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
+  econstructor; eauto.
+  intros. elim H0; intro. subst s0. econstructor; eauto with coqlib.
+  auto.
+
+  assert (WTFD: wt_fundef f').
+    destruct ros; simpl in H.
+    apply (Genv.find_funct_prop wt_fundef wt_p H).
+    destruct (Genv.find_symbol ge i); try discriminate.
+    apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
+  econstructor; eauto.
 
   apply wt_setreg; auto. exact I. 
 
-  apply incl_find_label with lbl; auto. 
-  apply incl_find_label with lbl; auto. 
+  apply is_tail_find_label with lbl; congruence.
+  apply is_tail_find_label with lbl; congruence. 
 
-  tauto.
-  apply H0; auto.
-  generalize (H0 WTF INCL WTRS WTFR WTPA). intros [A [B C]].
-  apply H2; auto.
+  econstructor; eauto.
 
-  assert (WTFR2: wt_frame fr2).
-    eapply wt_set_slot; eauto. 
-    eapply wt_set_slot; eauto.
-    apply wt_init_frame.
-  generalize (H3 WTF (incl_refl _) WTRS WTFR2 WTPA).
-  tauto.
+  econstructor; eauto with coqlib. inv H5; auto. exact I. 
+  apply wt_init_frame.
 
-  apply (H0 Vzero Vzero). exact I. exact I. 
-  inversion WTF; auto. auto. auto. 
-  exact I. exact I.
-
-  rewrite H1. apply wt_setreg; auto. 
+  econstructor; eauto. apply wt_setreg; auto.
   generalize (wt_event_match _ _ _ _ H). 
   unfold proj_sig_res, Conventions.loc_result.
   destruct (sig_res (ef_sig ef)).
-  destruct t; simpl; auto.
+  destruct t0; simpl; auto.
   simpl; auto.
+
+  generalize (H1 _ (in_eq _ _)); intro. inv H.
+  econstructor; eauto. 
+  eauto with coqlib.
 Qed.
-
-Lemma subject_reduction_instr:
-   forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
-      exec_instr ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2.
-Proof (proj1 subject_reduction).
-
-Lemma subject_reduction_instrs:
-   forall f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
-      exec_instrs ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
-      exec_instr_prop f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2.
-Proof (proj1 (proj2 subject_reduction)).
-
-Lemma subject_reduction_function:
-  forall f parent rs1 m1 t rs2 m2,
-      exec_function ge f parent rs1 m1 t rs2 m2 ->
-      exec_function_prop f parent rs1 m1 t rs2 m2.
-Proof (proj2 (proj2 (proj2 subject_reduction))).
-
-End SUBJECT_REDUCTION.
-
-(** * Preservation of the reserved frame slots during execution *)
-
-(** We now show another result useful for the proof of implication
-    between the two Mach semantics: well-typed functions do not
-    change the values of the back link and return address fields
-    of the frame slot (at offsets 0 and 12) during their execution.
-    Actually, we show that the whole reserved part of the frame
-    (between offsets 0 and 24) does not change. *)
-
-Definition link_invariant (fr1 fr2: frame) : Prop :=
-  forall pos v,
-  0 <= pos < 20 ->
-  get_slot fr1 Tint pos v -> get_slot fr2 Tint pos v.
-
-Remark link_invariant_refl:
-  forall fr, link_invariant fr fr.
-Proof.
-  intros; red; auto.
-Qed.
-
-Lemma set_slot_link_invariant:
-  forall fr ty ofs v fr',
-  set_slot fr ty ofs v fr' ->
-  24 <= ofs ->
-  link_invariant fr fr'.
-Proof.
-  induction 1. intros; red; intros.
-  inversion H1. constructor. auto. exact H3. 
-  simpl contents. simpl low. symmetry. rewrite H4. 
-  apply load_store_contents_other. simpl. simpl in H3.
-  omega.
-Qed.
-
-Lemma exec_instr_link_invariant:
-  forall ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
-  exec_instr ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
-  wt_function f ->
-  incl c1 f.(fn_code) ->
-  incl c2 f.(fn_code) /\ link_invariant fr1 fr2.
-Proof.
-  induction 1; intros; 
-  (split; [eauto with coqlib | try (apply link_invariant_refl)]).
-  eapply set_slot_link_invariant; eauto.
-  generalize (wt_function_instrs _ H0 _ (H1 _ (in_eq _ _))); intro.
-  inversion H2. auto.
-  eapply incl_find_label; eauto.
-  eapply incl_find_label; eauto.
-Qed.
-
-Lemma exec_instrs_link_invariant:
-  forall ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2,
-  exec_instrs ge f sp parent c1 rs1 fr1 m1 t c2 rs2 fr2 m2 ->
-  wt_function f ->
-  incl c1 f.(fn_code) ->
-  incl c2 f.(fn_code) /\ link_invariant fr1 fr2.
+(*
+Lemma subject_reduction_2:
+  forall s1 t s2, step ge s1 t s2 ->
+  forall (WTS: wt_state s1), wt_state s2.
 Proof.
   induction 1; intros.
-  split. auto. apply link_invariant_refl.
-  eapply exec_instr_link_invariant; eauto.
-  generalize (IHexec_instrs1 H2 H3); intros [A B].
-  generalize (IHexec_instrs2 H2 A); intros [C D].
-  split. auto. red; auto.
+  auto.
+  eapply subject_reduction; eauto.
+  auto.
 Qed.
+*)
+
+End SUBJECT_REDUCTION.
 

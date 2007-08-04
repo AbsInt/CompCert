@@ -1,6 +1,7 @@
 (** Typing rules and a type inference algorithm for RTL. *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import AST.
 Require Import Op.
@@ -22,15 +23,17 @@ Require Conventions.
   enabling each pseudo-register to be mapped to a single hardware register
   or stack location of the correct type.
 
+  Finally, we also check that the successors of instructions
+  are valid, i.e. refer to non-empty nodes in the CFG.
 
-  The typing judgement for instructions is of the form [wt_instr f env instr],
-  where [f] is the current function (used to type-check [Ireturn] 
-  instructions) and [env] is a typing environment associating types to
-  pseudo-registers.  Since pseudo-registers have unique types throughout
-  the function, the typing environment does not change during type-checking
-  of individual instructions.  One point to note is that we have two
-  polymorphic operators, [Omove] and [Oundef], which can work both
-  over integers and floats.
+  The typing judgement for instructions is of the form [wt_instr f env
+  instr], where [f] is the current function (used to type-check
+  [Ireturn] instructions) and [env] is a typing environment
+  associating types to pseudo-registers.  Since pseudo-registers have
+  unique types throughout the function, the typing environment does
+  not change during type-checking of individual instructions.  One
+  point to note is that we have one polymorphic operator, [Omove],
+  which can work over both integers and floats.
 *)
 
 Definition regenv := reg -> typ.
@@ -38,51 +41,67 @@ Definition regenv := reg -> typ.
 Section WT_INSTR.
 
 Variable env: regenv.
-Variable funsig: signature.
+Variable funct: function.
+
+Definition valid_successor (s: node) : Prop :=
+  exists i, funct.(fn_code)!s = Some i.
 
 Inductive wt_instr : instruction -> Prop :=
   | wt_Inop:
       forall s,
+      valid_successor s ->
       wt_instr (Inop s)
   | wt_Iopmove:
       forall r1 r s,
       env r1 = env r ->
+      valid_successor s ->
       wt_instr (Iop Omove (r1 :: nil) r s)
-  | wt_Iopundef:
-      forall r s,
-      wt_instr (Iop Oundef nil r s)
   | wt_Iop:
       forall op args res s,
-      op <> Omove -> op <> Oundef ->
+      op <> Omove ->
       (List.map env args, env res) = type_of_operation op ->
+      valid_successor s ->
       wt_instr (Iop op args res s)
   | wt_Iload:
       forall chunk addr args dst s,
       List.map env args = type_of_addressing addr ->
       env dst = type_of_chunk chunk ->
+      valid_successor s ->
       wt_instr (Iload chunk addr args dst s)
   | wt_Istore:
       forall chunk addr args src s,
       List.map env args = type_of_addressing addr ->
       env src = type_of_chunk chunk ->
+      valid_successor s ->
       wt_instr (Istore chunk addr args src s)
   | wt_Icall:
       forall sig ros args res s,
       match ros with inl r => env r = Tint | inr s => True end ->
       List.map env args = sig.(sig_args) ->
-      env res = match sig.(sig_res) with None => Tint | Some ty => ty end ->
+      env res = proj_sig_res sig ->
+      valid_successor s ->
       wt_instr (Icall sig ros args res s)
+  | wt_Itailcall:
+      forall sig ros args,
+      match ros with inl r => env r = Tint | inr s => True end ->
+      sig.(sig_res) = funct.(fn_sig).(sig_res) ->
+      List.map env args = sig.(sig_args) ->
+      Conventions.tailcall_possible sig ->
+      wt_instr (Itailcall sig ros args)
   | wt_Ialloc:
       forall arg res s,
       env arg = Tint -> env res = Tint ->
+      valid_successor s ->
       wt_instr (Ialloc arg res s)
   | wt_Icond:
       forall cond args s1 s2,
       List.map env args = type_of_condition cond ->
+      valid_successor s1 ->
+      valid_successor s2 ->
       wt_instr (Icond cond args s1 s2)
   | wt_Ireturn: 
       forall optres,
-      option_map env optres = funsig.(sig_res) ->
+      option_map env optres = funct.(fn_sig).(sig_res) ->
       wt_instr (Ireturn optres).
 
 End WT_INSTR.
@@ -90,7 +109,7 @@ End WT_INSTR.
 (** A function [f] is well-typed w.r.t. a typing environment [env],
    written [wt_function env f], if all instructions are well-typed,
    parameters agree in types with the function signature, and
-   names of parameters are pairwise distinct. *)
+   parameters are pairwise distinct. *)
 
 Record wt_function (f: function) (env: regenv): Prop :=
   mk_wt_function {
@@ -100,7 +119,9 @@ Record wt_function (f: function) (env: regenv): Prop :=
       list_norepet f.(fn_params);
     wt_instrs:
       forall pc instr, 
-      f.(fn_code)!pc = Some instr -> wt_instr env f.(fn_sig) instr
+      f.(fn_code)!pc = Some instr -> wt_instr env f instr;
+    wt_entrypoint:
+      valid_successor f f.(fn_entrypoint)
 }.
 
 Inductive wt_fundef: fundef -> Prop :=
@@ -142,6 +163,9 @@ Variable env: regenv.
 Lemma typ_eq: forall (t1 t2: typ), {t1=t2} + {t1<>t2}.
 Proof. decide equality. Qed.
 
+Lemma opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}.
+Proof. decide equality. apply typ_eq. Qed.
+
 Definition check_reg (r: reg) (ty: typ): bool :=
   if typ_eq (env r) ty then true else false.
 
@@ -156,34 +180,47 @@ Definition check_op (op: operation) (args: list reg) (res: reg): bool :=
   let (targs, tres) := type_of_operation op in
   check_regs args targs && check_reg res tres.
 
+Definition check_successor (s: node) : bool :=
+  match funct.(fn_code)!s with None => false | Some i => true end.
+
 Definition check_instr (i: instruction) : bool :=
   match i with
-  | Inop _ =>
-      true
-  | Iop Omove (arg::nil) res _ =>
-      if typ_eq (env arg) (env res) then true else false
-  | Iop Omove args res _ =>
+  | Inop s =>
+      check_successor s
+  | Iop Omove (arg::nil) res s =>
+      if typ_eq (env arg) (env res) 
+      then check_successor s
+      else false
+  | Iop Omove args res s =>
       false
-  | Iop Oundef nil res _ =>
-      true
-  | Iop Oundef args res _ =>
-      false
-  | Iop op args res _ =>
-      check_op op args res
-  | Iload chunk addr args dst _ =>
+  | Iop op args res s =>
+      check_op op args res && check_successor s
+  | Iload chunk addr args dst s =>
       check_regs args (type_of_addressing addr)
       && check_reg dst (type_of_chunk chunk)
-  | Istore chunk addr args src _ =>
+      && check_successor s
+  | Istore chunk addr args src s =>
       check_regs args (type_of_addressing addr)
       && check_reg src (type_of_chunk chunk)
-  | Icall sig ros args res _ =>
+      && check_successor s
+  | Icall sig ros args res s =>
       match ros with inl r => check_reg r Tint | inr s => true end
       && check_regs args sig.(sig_args)
-      && check_reg res (match sig.(sig_res) with None => Tint | Some ty => ty end)
-  | Ialloc arg res _ =>
-      check_reg arg Tint && check_reg res Tint
-  | Icond cond args _ _ =>
+      && check_reg res (proj_sig_res sig)
+      && check_successor s
+  | Itailcall sig ros args =>
+      match ros with inl r => check_reg r Tint | inr s => true end
+      && check_regs args sig.(sig_args)
+      && opt_typ_eq sig.(sig_res) funct.(fn_sig).(sig_res)
+      && zeq (Conventions.size_arguments sig) 14
+  | Ialloc arg res s =>
+      check_reg arg Tint 
+      && check_reg res Tint
+      && check_successor s
+  | Icond cond args s1 s2 =>
       check_regs args (type_of_condition cond)
+      && check_successor s1
+      && check_successor s2
   | Ireturn optres =>
       match optres, funct.(fn_sig).(sig_res) with
       | None, None => true
@@ -203,6 +240,14 @@ Fixpoint check_instrs (instrs: list (node * instruction)) : bool :=
 
 (** ** Correctness of the type-checking algorithm *)
 
+Ltac elimAndb :=
+  match goal with
+  | [ H: _ && _ = true |- _ ] =>
+      elim (andb_prop _ _ H); clear H; intros; elimAndb
+  | _ =>
+      idtac
+  end.
+
 Lemma check_reg_correct:
   forall r ty, check_reg r ty = true -> env r = ty.
 Proof.
@@ -215,8 +260,8 @@ Lemma check_regs_correct:
 Proof.
   induction rl; destruct tyl; simpl; intros.
   auto. discriminate. discriminate.
-  elim (andb_prop _ _ H); intros. 
-  rewrite (check_reg_correct _ _ H0). rewrite (IHrl tyl H1). auto.
+  elimAndb.
+  rewrite (check_reg_correct _ _ H). rewrite (IHrl tyl H0). auto.
 Qed.
 
 Lemma check_op_correct:
@@ -225,45 +270,65 @@ Lemma check_op_correct:
   (List.map env args, env res) = type_of_operation op.
 Proof.
   unfold check_op; intros.
-  destruct (type_of_operation op) as [targs tres]. 
-  elim (andb_prop _ _ H); intros.
-  rewrite (check_regs_correct _ _ H0).
-  rewrite (check_reg_correct _ _ H1).
+  destruct (type_of_operation op) as [targs tres].
+  elimAndb. 
+  rewrite (check_regs_correct _ _ H).
+  rewrite (check_reg_correct _ _ H0).
   auto.
 Qed.
 
-Lemma check_instr_correct:
-  forall i, check_instr i = true -> wt_instr env funct.(fn_sig) i.
+Lemma check_successor_correct:
+  forall s,
+  check_successor s = true -> valid_successor funct s.
 Proof.
-  unfold check_instr; intros; destruct i.
+  intro; unfold check_successor, valid_successor.
+  destruct (fn_code funct)!s; intro.
+  exists i; auto.
+  discriminate.
+Qed.
+
+Lemma check_instr_correct:
+  forall i, check_instr i = true -> wt_instr env funct i.
+Proof.
+  unfold check_instr; intros; destruct i; elimAndb.
   (* nop *)
-  constructor.
+  constructor. apply check_successor_correct; auto.
   (* op *)
-  destruct o;
-  try (apply wt_Iop; [congruence|congruence|apply check_op_correct;auto]).
+  destruct o; elimAndb;
+  try (apply wt_Iop; [ congruence
+                     | apply check_op_correct; auto
+                     | apply check_successor_correct; auto ]).
   destruct l; try discriminate. destruct l; try discriminate.
   destruct (typ_eq (env r0) (env r)); try discriminate.
-  apply wt_Iopmove; auto.
-  destruct l; try discriminate.
-  apply wt_Iopundef.
+  apply wt_Iopmove; auto. apply check_successor_correct; auto.
   (* load *)
-  elim (andb_prop _ _ H); intros.
   constructor. apply check_regs_correct; auto. apply check_reg_correct; auto.
+  apply check_successor_correct; auto.
   (* store *)
-  elim (andb_prop _ _ H); intros.
   constructor. apply check_regs_correct; auto. apply check_reg_correct; auto.
+  apply check_successor_correct; auto.
   (* call *)
-  elim (andb_prop _ _ H); clear H; intros.
-  elim (andb_prop _ _ H); clear H; intros.
   constructor.
   destruct s0; auto. apply check_reg_correct; auto.
   apply check_regs_correct; auto.
   apply check_reg_correct; auto.
+  apply check_successor_correct; auto.
+  (* tailcall *)
+  constructor.
+  destruct s0; auto. apply check_reg_correct; auto.
+  eapply proj_sumbool_true; eauto.
+  apply check_regs_correct; auto.
+  rewrite Conventions.tailcall_possible_size. 
+  eapply proj_sumbool_true; eauto.
   (* alloc *)
-  elim (andb_prop _ _ H); intros.
-  constructor; apply check_reg_correct; auto.
+  constructor. 
+  apply check_reg_correct; auto.
+  apply check_reg_correct; auto.
+  apply check_successor_correct; auto.
   (* cond *)
   constructor. apply check_regs_correct; auto.
+  apply check_successor_correct; auto.
+  apply check_successor_correct; auto.
   (* return *)
   constructor. 
   destruct o; simpl; destruct funct.(fn_sig).(sig_res); try discriminate.
@@ -274,11 +339,11 @@ Qed.
 Lemma check_instrs_correct:
   forall instrs,
   check_instrs instrs = true ->
-  forall pc i, In (pc, i) instrs -> wt_instr env funct.(fn_sig) i.
+  forall pc i, In (pc, i) instrs -> wt_instr env funct i.
 Proof.
   induction instrs; simpl; intros.
   elim H0.
-  destruct a as [pc' i']. elim (andb_prop _ _ H); clear H; intros.
+  destruct a as [pc' i']. elimAndb. 
   elim H0; intro.
   inversion H2; subst pc' i'. apply check_instr_correct; auto.
   eauto.
@@ -288,20 +353,24 @@ End TYPECHECKING.
 
 (** ** The type inference function **)
 
-Definition type_function (f: function): option regenv :=
+Open Scope string_scope.
+
+Definition type_function (f: function): res regenv :=
   let instrs := PTree.elements f.(fn_code) in
   match infer_type_environment f instrs with
-  | None => None
+  | None => Error (msg "RTL type inference error")
   | Some env =>
       if check_regs env f.(fn_params) f.(fn_sig).(sig_args)
       && check_params_norepet f.(fn_params)
       && check_instrs f env instrs
-      then Some env else None
+      && check_successor f f.(fn_entrypoint)
+      then OK env
+      else Error (msg "RTL type checking error")
   end.
 
 Lemma type_function_correct:
   forall f env,
-  type_function f = Some env ->
+  type_function f = OK env ->
   wt_function f env.
 Proof.
   unfold type_function; intros until env.
@@ -311,6 +380,7 @@ Proof.
   caseEq (check_regs env' f.(fn_params) f.(fn_sig).(sig_args)); intro; simpl; try congruence.
   caseEq (check_params_norepet f.(fn_params)); intro; simpl; try congruence.
   caseEq (check_instrs f env' instrs); intro; simpl; try congruence.
+  caseEq (check_successor f (fn_entrypoint f)); intro; simpl; try congruence.
   intro EQ; inversion EQ; subst env'.
   constructor. 
   apply check_regs_correct; auto.
@@ -318,6 +388,7 @@ Proof.
   destruct (list_norepet_dec Reg.eq (fn_params f)). auto. discriminate.
   intros. eapply check_instrs_correct. eauto. 
   unfold instrs. apply PTree.elements_correct. eauto.
+  apply check_successor_correct. auto.
   congruence.
 Qed.
 
@@ -330,7 +401,8 @@ Qed.
   property: if the execution does not fail because of a failed run-time
   test, the result values and register states match the static
   typing assumptions.  This preservation property will be useful
-  later for the proof of semantic equivalence between [Machabstr] and [Mach].
+  later for the proof of semantic equivalence between
+  [Machabstr] and [Machconcr].
   Even though we do not need it for [RTL], we show preservation for [RTL]
   here, as a warm-up exercise and because some of the lemmas will be
   useful later. *)
@@ -340,6 +412,7 @@ Require Import Values.
 Require Import Mem.
 Require Import Integers.
 Require Import Events.
+Require Import Smallstep.
 
 Definition wt_regset (env: regenv) (rs: regset) : Prop :=
   forall r, Val.has_type (rs#r) (env r).
@@ -385,6 +458,36 @@ Proof.
   induction 1. inversion H0; exact I.
 Qed.
 
+Inductive wt_stackframes: list stackframe -> option typ -> Prop :=
+  | wt_stackframes_nil:
+      wt_stackframes nil (Some Tint)
+  | wt_stackframes_cons:
+      forall s res f sp pc rs env tyres,
+      wt_function f env ->
+      wt_regset env rs ->
+      env res = match tyres with None => Tint | Some t => t end ->
+      wt_stackframes s (sig_res (fn_sig f)) ->
+      wt_stackframes (Stackframe res (fn_code f) sp pc rs :: s) tyres.
+
+Inductive wt_state: state -> Prop :=
+  | wt_state_intro:
+      forall s f sp pc rs m env
+        (WT_STK: wt_stackframes s (sig_res (fn_sig f)))
+        (WT_FN: wt_function f env)
+        (WT_RS: wt_regset env rs),
+      wt_state (State s (fn_code f) sp pc rs m)
+  | wt_state_call:
+      forall s f args m,
+      wt_stackframes s (sig_res (funsig f)) ->
+      wt_fundef f ->
+      Val.has_type_list args (sig_args (funsig f)) ->
+      wt_state (Callstate s f args m)
+  | wt_state_return:
+      forall s v m tyres,
+      wt_stackframes s tyres ->
+      Val.has_type v (match tyres with None => Tint | Some t => t end) ->
+      wt_state (Returnstate s v m).
+
 Section SUBJECT_REDUCTION.
 
 Variable p: program.
@@ -393,90 +496,77 @@ Hypothesis wt_p: wt_program p.
 
 Let ge := Genv.globalenv p.
 
-Definition exec_instr_subject_reduction
-    (c: code) (sp: val)
-    (pc: node) (rs: regset) (m: mem) (t: trace)
-    (pc': node) (rs': regset) (m': mem) : Prop :=
-  forall env f
-         (CODE: c = fn_code f)
-         (WT_FN: wt_function f env)
-         (WT_RS: wt_regset env rs),
-  wt_regset env rs'.
-
-Definition exec_function_subject_reduction
-    (f: fundef) (args: list val) (m: mem) (t: trace) (res: val) (m': mem) : Prop :=
-  wt_fundef f ->  
-  Val.has_type_list args (sig_args (funsig f)) ->
-  Val.has_type res (proj_sig_res (funsig f)).
-
 Lemma subject_reduction:
-  forall f args m t res m',
-  exec_function ge f args m t res m' ->
-  exec_function_subject_reduction f args m t res m'.
+  forall st1 t st2, step ge st1 t st2 ->
+  forall (WT: wt_state st1), wt_state st2.
 Proof.
-  apply (exec_function_ind_3 ge
-           exec_instr_subject_reduction
-           exec_instr_subject_reduction
-           exec_function_subject_reduction);
-  intros; red; intros;
-  try (rewrite CODE in H;
-       generalize (wt_instrs _ _ WT_FN pc _ H);
+  induction 1; intros; inv WT;
+  try (generalize (wt_instrs _ _ WT_FN pc _ H);
        intro WT_INSTR;
-       inversion WT_INSTR).
- 
-  assumption.
-
+       inv WT_INSTR).
+  (* Inop *)
+  econstructor; eauto.
+  (* Iop *)
+  econstructor; eauto.
   apply wt_regset_assign. auto. 
-  subst op. subst args. simpl in H0. injection H0; intro. 
-  subst v. rewrite <- H2. apply WT_RS.
-
-  apply wt_regset_assign. auto.
-  subst op; subst args; simpl in H0. injection H0; intro; subst v.
-  simpl; auto.
-
+  simpl in H0. inv H0. rewrite <- H3. apply WT_RS.
+  econstructor; eauto.
   apply wt_regset_assign. auto.
   replace (env res) with (snd (type_of_operation op)).
-  apply type_of_operation_sound with fundef ge rs##args sp; auto.
-  rewrite <- H7. reflexivity.
-
+  apply type_of_operation_sound with fundef ge rs##args sp m; auto.
+  rewrite <- H6. reflexivity.
+  (* Iload *)
+  econstructor; eauto.
   apply wt_regset_assign. auto. rewrite H8. 
   eapply type_of_chunk_correct; eauto.
-
-  assumption.
-
-  apply wt_regset_assign. auto. rewrite H11. rewrite <- H1.
+  (* Istore *)
+  econstructor; eauto.
+  (* Icall *)
   assert (wt_fundef f).
     destruct ros; simpl in H0.
     pattern f. apply Genv.find_funct_prop with fundef unit p (rs#r).
     exact wt_p. exact H0. 
-    caseEq (Genv.find_symbol ge i); intros; rewrite H12 in H0.
+    caseEq (Genv.find_symbol ge i); intros; rewrite H1 in H0.
     pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
     exact wt_p. exact H0.
     discriminate.
-  eapply H3. auto. rewrite H1. rewrite <- H10.
-  apply wt_regset_list; auto. 
-
-  apply wt_regset_assign. auto. rewrite H6; exact I. 
-
-  assumption.
-  assumption.
-  assumption.
-  eauto.
-  eauto.
-
-  inversion H4; subst f0.
-  assert (WT_INIT: wt_regset env (init_regs args (fn_params f))).
-    apply wt_init_regs. rewrite (wt_params _ _ H7). assumption.
-  generalize (H1 env f (refl_equal (fn_code f)) H7 WT_INIT). 
-  intro WT_RS.
-  generalize (wt_instrs _ _ H7 pc _ H2).
-  intro WT_INSTR; inversion WT_INSTR.
-  unfold proj_sig_res; simpl.
-  destruct or; simpl in H3; simpl in H8; rewrite <- H8.
-  rewrite H3. apply WT_RS. 
-  rewrite H3. simpl; auto.
-
-  simpl. eapply wt_event_match; eauto.
-Qed. 
+  econstructor; eauto.
+  econstructor; eauto.
+  rewrite <- H7. apply wt_regset_list. auto.
+  (* Itailcall *)
+  assert (wt_fundef f).
+    destruct ros; simpl in H0.
+    pattern f. apply Genv.find_funct_prop with fundef unit p (rs#r).
+    exact wt_p. exact H0. 
+    caseEq (Genv.find_symbol ge i); intros; rewrite H1 in H0.
+    pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
+    exact wt_p. exact H0.
+    discriminate.
+  econstructor; eauto.
+  rewrite H5; auto.
+  rewrite <- H6. apply wt_regset_list. auto.
+  (* Ialloc *)  
+  econstructor; eauto.
+  apply wt_regset_assign. auto. rewrite H6; exact I.
+  (* Icond *)
+  econstructor; eauto.
+  econstructor; eauto.
+  (* Ireturn *)
+  econstructor; eauto. 
+  destruct or; simpl in *.
+  rewrite <- H1. apply WT_RS. exact I.
+  (* internal function *)
+  simpl in *. inv H5. inversion H1; subst.  
+  econstructor; eauto.
+  apply wt_init_regs; auto. rewrite wt_params0; auto.
+  (* external function *)
+  simpl in *. inv H5. 
+  econstructor; eauto. 
+  change (Val.has_type res (proj_sig_res (ef_sig ef))).
+  eapply wt_event_match; eauto.
+  (* return *)
+  inv H1. econstructor; eauto. 
+  apply wt_regset_assign; auto. congruence. 
+Qed.
 
 End SUBJECT_REDUCTION.

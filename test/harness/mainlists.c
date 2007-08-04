@@ -2,11 +2,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-void * compcert_alloc(int sz)
-{
-  return malloc(sz);
-}
-
 struct cons { int hd; struct cons * tl; };
 typedef struct cons * list;
 

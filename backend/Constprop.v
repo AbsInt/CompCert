@@ -632,6 +632,8 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
           before
       | Icall sig ros args res s =>
           D.set res Unknown before
+      | Itailcall sig ros args =>
+          before
       | Ialloc arg res s =>
           D.set res Unknown before
       | Icond cond args ifso ifnot =>
@@ -649,9 +651,12 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
 
 Module DS := Dataflow_Solver(D)(NodeSetForward).
 
-Definition analyze (f: RTL.function): option (PMap.t D.t) :=
-  DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) 
-              ((f.(fn_entrypoint), D.top) :: nil).
+Definition analyze (f: RTL.function): PMap.t D.t :=
+  match DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) 
+                    ((f.(fn_entrypoint), D.top) :: nil) with
+  | None => PMap.init D.top
+  | Some res => res
+  end.
 
 (** * Code transformation *)
 
@@ -986,6 +991,16 @@ End STRENGTH_REDUCTION.
     and similarly for the addressing modes of load and store instructions.
     Other instructions are unchanged. *)
 
+Definition transf_ros (approx: D.t) (ros: reg + ident) : reg + ident :=
+  match ros with
+  | inl r =>
+      match D.get r approx with
+      | S symb ofs => if Int.eq ofs Int.zero then inr _ symb else ros
+      | _ => ros
+      end
+  | inr s => ros
+  end.
+
 Definition transf_instr (approx: D.t) (instr: instruction) :=
   match instr with
   | Iop op args res s =>
@@ -1007,16 +1022,9 @@ Definition transf_instr (approx: D.t) (instr: instruction) :=
       let (addr', args') := addr_strength_reduction approx addr args in
       Istore chunk addr' args' src s      
   | Icall sig ros args res s =>
-      let ros' :=
-        match ros with
-        | inl r =>
-            match D.get r approx with
-            | S symb ofs => if Int.eq ofs Int.zero then inr _ symb else ros
-            | _ => ros
-            end
-        | inr s => ros
-        end in
-      Icall sig ros' args res s
+      Icall sig (transf_ros approx ros) args res s
+  | Itailcall sig ros args =>
+      Itailcall sig (transf_ros approx ros) args
   | Ialloc arg res s =>
       Ialloc arg res s
   | Icond cond args s1 s2 =>
@@ -1048,20 +1056,18 @@ Proof.
 Qed.
 
 Definition transf_function (f: function) : function :=
-  match analyze f with
-  | None => f
-  | Some approxs =>
-      mkfunction
-        f.(fn_sig)
-        f.(fn_params)
-        f.(fn_stacksize)
-        (transf_code approxs f.(fn_code))
-        f.(fn_entrypoint)
-        f.(fn_nextpc)
-        (transf_code_wf f approxs f.(fn_code_wf))
-  end.
+  let approxs := analyze f in
+  mkfunction
+    f.(fn_sig)
+    f.(fn_params)
+    f.(fn_stacksize)
+    (transf_code approxs f.(fn_code))
+    f.(fn_entrypoint)
+    f.(fn_nextpc)
+    (transf_code_wf f approxs f.(fn_code_wf)).
 
-Definition transf_fundef := AST.transf_fundef transf_function.
+Definition transf_fundef (fd: fundef) : fundef :=
+  AST.transf_fundef transf_function fd.
 
 Definition transf_program (p: program) : program :=
   transform_program transf_fundef p.

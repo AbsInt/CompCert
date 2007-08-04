@@ -1,6 +1,7 @@
 (** * Correctness of the C front end, part 1: syntactic properties *)
 
 Require Import Coqlib.
+Require Import Errors.
 Require Import Maps.
 Require Import Integers.
 Require Import Floats.
@@ -12,64 +13,28 @@ Require Import Globalenvs.
 Require Import Csyntax.
 Require Import Csem.
 Require Import Ctyping.
+Require Import Cminor.
 Require Import Csharpminor.
 Require Import Cshmgen.
-
-(** Monadic simplification *)
-
-Ltac monadSimpl1 :=
-  match goal with
-  | [ |- (bind ?F ?G = Some ?X) -> _ ] =>
-      unfold bind at 1;
-      generalize (refl_equal F);
-      pattern F at -1 in |- *;
-      case F;
-      [ (let EQ := fresh "EQ" in
-           (intro; intro EQ; try monadSimpl1))
-      | intro; intro; discriminate ]
-  | [ |- (None = Some _) -> _ ] =>
-      intro; discriminate
-  | [ |- (Some _ = Some _) -> _ ] =>
-      let h := fresh "H" in
-      (intro h; injection h; intro; clear h)
-  | [ |- (_ = Some _) -> _ ] =>
-      let EQ := fresh "EQ" in intro EQ
-  end.
-
-Ltac monadSimpl :=
-  match goal with
-  | [ |- (bind ?F ?G = Some ?X) -> _ ] => monadSimpl1
-  | [ |- (None = Some _) -> _ ] => monadSimpl1
-  | [ |- (Some _ = Some _) -> _ ] => monadSimpl1
-  | [ |- (?F _ _ _ _ _ _ = Some _) -> _ ] => unfold F; fold F; monadSimpl1
-  | [ |- (?F _ _ _ _ _ = Some _) -> _ ] => unfold F; fold F; monadSimpl1
-  | [ |- (?F _ _ _ _ = Some _) -> _ ] => unfold F; fold F; monadSimpl1
-  | [ |- (?F _ _ _ = Some _) -> _ ] => unfold F; fold F; monadSimpl1
-  | [ |- (?F _ _ = Some _) -> _ ] => unfold F; fold F; monadSimpl1
-  | [ |- (?F _ = Some _) -> _ ] => unfold F; fold F; monadSimpl1
-  end.
-
-Ltac monadInv H :=
-  generalize H; monadSimpl.
 
 (** Operations on types *)
 
 Lemma transl_fundef_sig1:
   forall f tf args res,
-  transl_fundef f = Some tf ->
+  transl_fundef f = OK tf ->
   classify_fun (type_of_fundef f) = fun_case_f args res ->
   funsig tf = signature_of_type args res.
 Proof.
   intros. destruct f; monadInv H. 
-  monadInv EQ. rewrite <- H2. rewrite <- H3. simpl. 
+  monadInv EQ. simpl.  
   simpl in H0. inversion H0. reflexivity. 
-  rewrite <- H2. simpl. 
+  simpl. 
   simpl in H0. congruence.
 Qed.
 
 Lemma transl_fundef_sig2:
   forall f tf args res,
-  transl_fundef f = Some tf ->
+  transl_fundef f = OK tf ->
   type_of_fundef f = Tfunction args res ->
   funsig tf = signature_of_type args res.
 Proof.
@@ -80,7 +45,7 @@ Qed.
 Lemma var_kind_by_value:
   forall ty chunk,
   access_mode ty = By_value chunk ->
-  var_kind_of_type ty = Some(Vscalar chunk).
+  var_kind_of_type ty = OK(Vscalar chunk).
 Proof.
   intros ty chunk; destruct ty; simpl; try congruence.
   destruct i; try congruence; destruct s; congruence.
@@ -89,7 +54,7 @@ Qed.
 
 Lemma sizeof_var_kind_of_type:
   forall ty vk,
-  var_kind_of_type ty = Some vk ->
+  var_kind_of_type ty = OK vk ->
   Csharpminor.sizeof vk = Csyntax.sizeof ty.
 Proof.
   intros ty vk.
@@ -103,35 +68,35 @@ Qed.
 (** ** Some properties of the translation functions *)
 
 Lemma map_partial_names:
-  forall (A B: Set) (f: A -> option B)
+  forall (A B: Set) (f: A -> res B)
          (l: list (ident * A)) (tl: list (ident * B)),
-  map_partial f l = Some tl ->
+  map_partial prefix_var_name f l = OK tl ->
   List.map (@fst ident B) tl = List.map (@fst ident A) l.
 Proof.
   induction l; simpl.
   intros. inversion H. reflexivity.
   intro tl. destruct a as [id x]. destruct (f x); try congruence.
-  caseEq (map_partial f l); intros; try congruence.
-  inversion H0; subst tl. simpl. decEq. auto.
+  caseEq (map_partial prefix_var_name f l); simpl; intros; try congruence.
+  inv H0. simpl. decEq. auto.
 Qed.
    
 Lemma map_partial_append:
-  forall (A B: Set) (f: A -> option B)
+  forall (A B: Set) (f: A -> res B)
          (l1 l2: list (ident * A)) (tl1 tl2: list (ident * B)),
-  map_partial f l1 = Some tl1 ->
-  map_partial f l2 = Some tl2 ->
-  map_partial f (l1 ++ l2) = Some (tl1 ++ tl2).
+  map_partial prefix_var_name f l1 = OK tl1 ->
+  map_partial prefix_var_name f l2 = OK tl2 ->
+  map_partial prefix_var_name f (l1 ++ l2) = OK (tl1 ++ tl2).
 Proof.
   induction l1; intros until tl2; simpl.
   intros. inversion H. simpl; auto.
   destruct a as [id x]. destruct (f x); try congruence.
-  caseEq (map_partial f l1); intros; try congruence.
-  inversion H0. rewrite (IHl1 _ _ _ H H1). auto.
+  caseEq (map_partial prefix_var_name f l1); simpl; intros; try congruence.
+  inv H0. rewrite (IHl1 _ _ _ H H1). auto.
 Qed.
  
 Lemma transl_params_names:
   forall vars tvars,
-  transl_params vars = Some tvars ->
+  transl_params vars = OK tvars ->
   List.map (@fst ident memory_chunk) tvars = Ctyping.var_names vars.
 Proof.
   exact (map_partial_names _ _ chunk_of_type).
@@ -139,7 +104,7 @@ Qed.
 
 Lemma transl_vars_names:
   forall vars tvars,
-  transl_vars vars = Some tvars ->
+  transl_vars vars = OK tvars ->
   List.map (@fst ident var_kind) tvars = Ctyping.var_names vars.
 Proof.
   exact (map_partial_names _ _ var_kind_of_type).
@@ -148,8 +113,8 @@ Qed.
 Lemma transl_names_norepet:
   forall params vars sg tparams tvars body,
   list_norepet (var_names params ++ var_names vars) ->
-  transl_params params = Some tparams ->
-  transl_vars vars = Some tvars ->
+  transl_params params = OK tparams ->
+  transl_vars vars = OK tvars ->
   let f := Csharpminor.mkfunction sg tparams tvars body in
   list_norepet (fn_params_names f ++ fn_vars_names f).
 Proof.
@@ -161,35 +126,35 @@ Qed.
 
 Lemma transl_vars_append:
   forall l1 l2 tl1 tl2,
-  transl_vars l1 = Some tl1 -> transl_vars l2 = Some tl2 ->
-  transl_vars (l1 ++ l2) = Some (tl1 ++ tl2).
+  transl_vars l1 = OK tl1 -> transl_vars l2 = OK tl2 ->
+  transl_vars (l1 ++ l2) = OK (tl1 ++ tl2).
 Proof.
   exact (map_partial_append _ _ var_kind_of_type).
 Qed.
 
 Lemma transl_params_vars:
   forall params tparams,
-  transl_params params = Some tparams ->
+  transl_params params = OK tparams ->
   transl_vars params =
-  Some (List.map (fun id_chunk => (fst id_chunk, Vscalar (snd id_chunk))) tparams).
+  OK (List.map (fun id_chunk => (fst id_chunk, Vscalar (snd id_chunk))) tparams).
 Proof.
   induction params; intro tparams; simpl.
   intros. inversion H. reflexivity.
   destruct a as [id x]. 
   unfold chunk_of_type. caseEq (access_mode x); try congruence.
   intros chunk AM. 
-  caseEq (transl_params params); intros; try congruence.
-  inversion H0. 
+  caseEq (transl_params params); simpl; intros; try congruence.
+  inv H0. 
   rewrite (var_kind_by_value _ _ AM). 
   rewrite (IHparams _ H). reflexivity.
 Qed.
 
 Lemma transl_fn_variables:
   forall params vars sg tparams tvars body,
-  transl_params params = Some tparams ->
-  transl_vars vars = Some tvars ->
+  transl_params params = OK tparams ->
+  transl_vars vars = OK tvars ->
   let f := Csharpminor.mkfunction sg tparams tvars body in
-  transl_vars (params ++ vars) = Some (fn_variables f).
+  transl_vars (params ++ vars) = OK (fn_variables f).
 Proof.
   intros. 
   generalize (transl_params_vars _ _ H); intro.
@@ -212,35 +177,36 @@ Qed.
 Lemma transl_expr_lvalue:
   forall ge e m1 a ty t m2 loc ofs ta,
   Csem.eval_lvalue ge e m1 (Expr a ty) t m2 loc ofs ->
-  transl_expr (Expr a ty) = Some ta ->
-  (exists id, a = Csyntax.Evar id /\ var_get id ty = Some ta) \/
-  (exists tb, transl_lvalue (Expr a ty) = Some tb /\
-              make_load tb ty = Some ta).
+  transl_expr (Expr a ty) = OK ta ->
+  (exists id, a = Csyntax.Evar id /\ var_get id ty = OK ta) \/
+  (exists tb, transl_lvalue (Expr a ty) = OK tb /\
+              make_load tb ty = OK ta).
 Proof.
   intros. inversion H; subst; clear H; simpl in H0.
   left; exists id; auto.
   left; exists id; auto.
-  monadInv H0. right. exists e0; split; auto. 
-  simpl. monadInv H0. right. exists e2; split; auto. 
-  simpl. rewrite H6 in H0. rewrite H6. 
-  monadInv H0. right. 
-  exists (make_binop Oadd e0 (make_intconst (Int.repr z))). split; auto.
-  simpl. rewrite H10 in H0. rewrite H10. 
-  monadInv H0. right. 
-  exists e0; auto.
+  monadInv H0. right. exists x; split; auto. 
+  simpl. monadInv H0. right. exists x1; split; auto. 
+  simpl. rewrite EQ; rewrite EQ1. simpl. auto.
+  rewrite H6 in H0. monadInv H0. right.  
+  exists (Ebinop Oadd x (make_intconst (Int.repr x0))). split; auto.
+  simpl. rewrite H6. rewrite EQ. rewrite EQ1. auto.
+  rewrite H10 in H0. monadInv H0. right.
+  exists x; split; auto. 
+  simpl. rewrite H10. auto.
 Qed.
 
 Lemma transl_stmt_Sfor_start:
   forall nbrk ncnt s1 e2 s3 s4 ts,
-  transl_statement nbrk ncnt (Sfor s1 e2 s3 s4) = Some ts ->
+  transl_statement nbrk ncnt (Sfor s1 e2 s3 s4) = OK ts ->
   exists ts1, exists ts2,
     ts = Sseq ts1 ts2
-  /\ transl_statement nbrk ncnt s1 = Some ts1
-  /\ transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 s3 s4) = Some (Sseq Sskip ts2).
+  /\ transl_statement nbrk ncnt s1 = OK ts1
+  /\ transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 s3 s4) = OK (Sseq Sskip ts2).
 Proof.
-  intros. monadInv H. simpl. 
-  exists s; exists (Sblock (Sloop (Sseq s0 (Sseq (Sblock s5) s2)))).
-  intuition.
+  intros. monadInv H. econstructor; econstructor.
+  split. reflexivity. split. auto. simpl.
+  rewrite EQ1; rewrite EQ0; rewrite EQ2; auto.
 Qed.
 
 (** Properties related to switch constructs *)

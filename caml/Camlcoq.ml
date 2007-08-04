@@ -41,7 +41,7 @@ let z_of_camlint n =
 
 let coqint_of_camlint : int32 -> Integers.int = z_of_camlint
 
-(* Strings *)
+(* Atoms (positive integers representing strings) *)
 
 let atom_of_string = (Hashtbl.create 17 : (string, positive) Hashtbl.t)
 let string_of_atom = (Hashtbl.create 17 : (positive, string) Hashtbl.t)
@@ -69,24 +69,6 @@ let rec coqlist_iter f = function
     Coq_nil -> ()
   | Coq_cons(a,l) -> f a; coqlist_iter f l
 
-(* Helpers *)
-
-let rec list_iter f = function
-    [] -> ()
-  | a::l -> f a; list_iter f l
-
-let rec list_memq x = function
-    [] -> false
-  | a::l -> a == x || list_memq x l
-
-let rec list_exists p = function
-    [] -> false
-  | a::l -> p a || list_exists p l
-
-let rec list_filter p = function
-    [] -> []
-  | x :: l -> if p x then x :: list_filter p l else list_filter p l
-
 let rec length_coqlist = function
   | Coq_nil -> 0
   | Coq_cons (x, l) -> 1 + length_coqlist l
@@ -99,6 +81,31 @@ let array_of_coqlist = function
         | Coq_nil -> a
         | Coq_cons(hd, tl) -> a.(i) <- hd; fill (i + 1) tl in
       fill 1 tl
+
+(* Strings *)
+
+let char_of_ascii (Ascii.Ascii(a0, a1, a2, a3, a4, a5, a6, a7)) =
+  Char.chr(  (if a0 then 1 else 0)
+           + (if a1 then 2 else 0)
+           + (if a2 then 4 else 0)
+           + (if a3 then 8 else 0)
+           + (if a4 then 16 else 0)
+           + (if a5 then 32 else 0)
+           + (if a6 then 64 else 0)
+           + (if a7 then 128 else 0))
+
+let coqstring_length s =
+  let rec len accu = function
+  | CString.EmptyString -> accu
+  | CString.CString(_, s) -> len (accu + 1) s
+  in len 0 s
+
+let camlstring_of_coqstring s =
+  let r = String.create (coqstring_length s) in
+  let rec fill pos = function
+  | CString.EmptyString -> r
+  | CString.CString(c, s) -> r.[pos] <- char_of_ascii c; fill (pos + 1) s
+  in fill 0 s
 
 (* Timing facility *)
 
