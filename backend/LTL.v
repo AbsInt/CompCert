@@ -124,43 +124,37 @@ Definition set_result_reg (s: signature) (or: option loc) (ls: locset) :=
   | None => ls
   end.
 
-(** The components of an LTL execution state are:
-
-- [State cs f sp pc ls m]: [f] is the function currently executing.
-  [sp] is the stack pointer (as in RTL).  [pc] is the current
-  program point (CFG node) within the code of [f].
-  [ls] maps locations to their current values. [m] is the current
-  memory state.
-- [Callstate cs f ls m]:
-  [f] is the function definition that we are calling.
-  [ls] is the values of locations just before the call.
-  [m] is the current memory state.
-- [Returnstate cs sig ls m]:
-  [sig] is the signature of the function that just returned.
-  [ls] is the values of locations just before the return.
-  [m] is the current memory state.
-
-[cs] is a list of stack frames [Stackframe res f sp ls pc],
-where [res] is the location that will receive the result of the call,
-[f] is the calling function, [sp] its stack pointer,
-[ls] the values of locations just before the call,
-and [pc] the program point within [f] of the successor of the
-[Lcall] instruction. *)
+(** LTL execution states. *)
 
 Inductive stackframe : Set :=
   | Stackframe:
-      forall (res: loc) (f: function) (sp: val) (ls: locset) (pc: node), 
+      forall (res: loc)         (**r where to store the result *)
+             (f: function)      (**r calling function *)
+             (sp: val)          (**r stack pointer in calling function *)
+             (ls: locset)       (**r location state in calling function *)
+             (pc: node),        (**r program point in calling function *)
       stackframe.
 
 Inductive state : Set :=
   | State:
-      forall (stack: list stackframe) (f: function) (sp: val)
-             (pc: node) (ls: locset) (m: mem), state
+      forall (stack: list stackframe) (**r call stack *)
+             (f: function)            (**r function currently executing *)
+             (sp: val)                (**r stack pointer *)
+             (pc: node)               (**r current program point *)
+             (ls: locset)             (**r location state *)
+             (m: mem),                (**r memory state *)
+      state
   | Callstate:
-      forall (stack: list stackframe) (f: fundef) (ls: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (f: fundef)              (**r function to call *)
+             (ls: locset)             (**r location state at point of call *)
+             (m: mem),                (**r memory state *)
       state
   | Returnstate:
-      forall (stack: list stackframe) (sig: signature) (ls: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (sig: signature)         (**r signature of returning function *)
+             (ls: locset)             (**r location state at point of return *)
+             (m: mem),                (**r memory state *)
       state.
 
 Definition parent_locset (stack: list stackframe) : locset :=

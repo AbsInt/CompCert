@@ -112,22 +112,6 @@ Fixpoint init_regs (vl: list val) (rl: list reg) {struct rl} : regset :=
   | _, _ => Regmap.init Vundef
   end.
 
-Inductive stackframe : Set :=
-  | Stackframe:
-      forall (res: reg) (c: code) (sp: val) (pc: node) (rs: regset), 
-      stackframe.
-
-Inductive state : Set :=
-  | State:
-      forall (stack: list stackframe) (c: code) (sp: val) (pc: node)
-             (rs: regset) (m: mem), state
-  | Callstate:
-      forall (stack: list stackframe) (f: fundef) (args: list val) (m: mem),
-      state
-  | Returnstate:
-      forall (stack: list stackframe) (v: val) (m: mem),
-      state.
-
 (** The dynamic semantics of RTL is given in small-step style, as a 
   set of transitions between states.  A state captures the current
   point in the execution.  Three kinds of states appear in the transitions:
@@ -157,6 +141,36 @@ a function call in progress.
 [pc] is the program point for the instruction that follows the call.
 [rs] is the state of registers in the calling function.
 *)
+
+Inductive stackframe : Set :=
+  | Stackframe:
+      forall (res: reg)            (**r where to store the result *)
+             (c: code)             (**r code of calling function *)
+             (sp: val)             (**r stack pointer in calling function *)
+             (pc: node)            (**r program point in calling function *)
+             (rs: regset),         (**r register state in calling function *)
+      stackframe.
+
+Inductive state : Set :=
+  | State:
+      forall (stack: list stackframe) (**r call stack *)
+             (c: code)                (**r current code *)
+             (sp: val)                (**r stack pointer *)
+             (pc: node)               (**r current program point in [c] *)
+             (rs: regset)             (**r register state *)
+             (m: mem),                (**r memory state *)
+      state
+  | Callstate:
+      forall (stack: list stackframe) (**r call stack *)
+             (f: fundef)              (**r function to call *)
+             (args: list val)         (**r arguments to the call *)
+             (m: mem),                (**r memory state *)
+      state
+  | Returnstate:
+      forall (stack: list stackframe) (**r call stack *)
+             (v: val)                 (**r return value for the call *)
+             (m: mem),                (**r memory state *)
+      state.
 
 Section RELSEM.
 

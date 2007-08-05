@@ -26,16 +26,11 @@ Open Local Scope error_monad_scope.
   taken in the Csharpminor code can be mapped to Cminor local
   variable, since the latter do not reside in memory.  
 
-  Other tasks performed during the translation to Cminor:
-- Transformation of Csharpminor's standard set of operators and
-  trivial addressing modes to Cminor's processor-dependent operators
-  and addressing modes.  This is done using the optimizing Cminor
-  constructor functions provided in file [Cmconstr], therefore performing
-  instruction selection on the fly.
-- Insertion of truncation, zero- and sign-extension operations when
+  The other task performed during the translation to Cminor is the
+  insertion of truncation, zero- and sign-extension operations when
   assigning to a Csharpminor local variable of ``small'' type
   (e.g. [Mfloat32] or [Mint8signed]).  This is necessary to preserve
-  the ``normalize at assignment-time'' semantics of Csharpminor.
+  the ``normalize at assignment-time'' semantics of Clight and Csharpminor.
 *)
 
 (** Translation of constants. *)
@@ -61,6 +56,12 @@ Definition make_cast (chunk: memory_chunk) (e: expr): expr :=
   | Mfloat32 => Eunop Osingleoffloat e
   | Mfloat64 => e
   end.
+
+(** When the translation of an expression is stored in memory,
+  the normalization performed by [make_cast] can be redundant
+  with that implicitly performed by the memory store.
+  [store_arg] detects this case and strips away the redundant
+  normalization. *)
 
 Definition store_arg (chunk: memory_chunk) (e: expr) : expr :=
   match e with

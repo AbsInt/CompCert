@@ -100,18 +100,33 @@ Fixpoint find_label (lbl: label) (c: code) {struct c} : option code :=
 
 Inductive stackframe : Set :=
   | Stackframe:
-      forall (res: loc) (f: function) (sp: val) (ls: locset) (c: code), 
+      forall (res: loc)       (**r where to store the result *)
+             (f: function)    (**r calling function *)
+             (sp: val)        (**r stack pointer in calling function *)
+             (ls: locset)     (**r location state in calling function *)
+             (c: code),       (**r program point in calling function *)
       stackframe.
 
 Inductive state : Set :=
   | State:
-      forall (stack: list stackframe) (f: function) (sp: val)
-             (c: code) (ls: locset) (m: mem), state
+      forall (stack: list stackframe) (**r call stack *)
+             (f: function)            (**r function currently executing *)
+             (sp: val)                (**r stack pointer *)
+             (c: code)                (**r current program point *)
+             (ls: locset)             (**r location state *)
+             (m: mem),                (**r memory state *)
+      state
   | Callstate:
-      forall (stack: list stackframe) (f: fundef) (ls: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (f: fundef)              (**r function to call *)
+             (ls: locset)             (**r location state at point of call *)
+             (m: mem),                (**r memory state *)
       state
   | Returnstate:
-      forall (stack: list stackframe) (sig: signature) (ls: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (sig: signature)         (**r signature of returning function *)
+             (ls: locset)             (**r location state at point of return *)
+             (m: mem),                (**r memory state *)
       state.
 
 Definition parent_locset (stack: list stackframe) : locset :=

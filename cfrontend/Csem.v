@@ -1,4 +1,4 @@
-(** * Dynamic semantics for the Clight language *)
+(** Dynamic semantics for the Clight language *)
 
 Require Import Coqlib.
 Require Import Errors.
@@ -12,7 +12,12 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Csyntax.
 
-(** ** Semantics of type-dependent operations *)
+(** * Semantics of type-dependent operations *)
+
+(** Interpretation of values as truth values.
+  Non-zero integers, non-zero floats and non-null pointers are
+  considered as true.  The integer zero (which also represents
+  the null pointer) and the float 0.0 are false. *)
 
 Inductive is_false: val -> type -> Prop :=
   | is_false_int: forall sz sg,
@@ -44,6 +49,14 @@ Inductive bool_of_val : val -> type -> val -> Prop :=
   | bool_of_val_false:   forall v ty,
         is_false v ty ->
         bool_of_val v ty Vfalse.
+
+(** The following [sem_] functions compute the result of an operator
+  application.  Since operators are overloaded, the result depends
+  both on the static types of the arguments and on their run-time values.
+  Unlike in C, automatic conversions between integers and floats
+  are not performed.  For instance, [e1 + e2] is undefined if [e1]
+  is a float and [e2] an integer.  The Clight producer must have explicitly
+  promoted [e2] to a float. *)
 
 Function sem_neg (v: val) (ty: type) : option val :=
   match ty with
@@ -111,23 +124,23 @@ end.
 
 Function sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_sub t1 t2 with
-  | sub_case_ii =>               (* integer subtraction *)
+  | sub_case_ii =>               (**r integer subtraction *)
       match v1,v2 with
       | Vint n1, Vint n2 => Some (Vint (Int.sub n1 n2))
       | _,  _ => None
       end 
-  | sub_case_ff =>               (* float subtraction *)
+  | sub_case_ff =>               (**r float subtraction *)
       match v1,v2 with
       | Vfloat f1, Vfloat f2 => Some (Vfloat(Float.sub f1 f2))
       | _,  _ => None
       end
-  | sub_case_pi ty =>            (*array| pointer - offset *)
+  | sub_case_pi ty =>            (**r pointer minus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
             Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
       | _,  _ => None
       end
-  | sub_case_pp ty =>          (* array|pointer - array|pointer *)
+  | sub_case_pp ty =>          (**r pointer minus pointer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vptr b2 ofs2 =>
           if zeq b1 b2 then
@@ -315,6 +328,10 @@ Definition sem_binary_operation
   | Oge => sem_cmp Cge v1 t1 v2 t2 m
   end.
 
+(** Semantic of casts.  [cast v1 t1 t2 v2] holds if value [v1],
+  viewed with static type [t1], can be cast to type [t2],
+  resulting in value [v2].  *)
+
 Definition cast_int_int (sz: intsize) (sg: signedness) (i: int) : int :=
   match sz, sg with
   | I8, Signed => Int.cast8signed i
@@ -366,25 +383,31 @@ Inductive cast : val -> type -> type -> val -> Prop :=
       neutral_for_cast t1 -> neutral_for_cast t2 ->
       cast (Vint n) t1 t2 (Vint n).
 
-(** ** Operational semantics *)
+(** * Operational semantics *)
 
-(** Global environment *)
+(** The semantics uses two environments.  The global environment
+  maps names of functions and global variables to memory block references,
+  and function pointers to their definitions.  (See module [Globalenvs].) *)
 
 Definition genv := Genv.t fundef.
 
-(** Local environment *)
+(** The local environment maps local variables to block references.
+  The current value of the variable is stored in the associated memory
+  block. *)
 
 Definition env := PTree.t block. (* map variable -> location *)
 
 Definition empty_env: env := (PTree.empty block).
 
-(** Outcomes for statements *)
+(** The execution of a statement produces an ``outcome'', indicating
+  how the execution terminated: either normally or prematurely
+  through the execution of a [break], [continue] or [return] statement. *)
 
 Inductive outcome: Set :=
-   | Out_break: outcome
-   | Out_continue: outcome
-   | Out_normal: outcome
-   | Out_return: option val -> outcome.
+   | Out_break: outcome                 (**r terminated by [break] *)
+   | Out_continue: outcome              (**r terminated by [continue] *)
+   | Out_normal: outcome                (**r terminated normally *)
+   | Out_return: option val -> outcome. (**r terminated by [return] *)
 
 Inductive out_normal_or_continue : outcome -> Prop :=
   | Out_normal_or_continue_N: out_normal_or_continue Out_normal
@@ -409,7 +432,8 @@ Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
   | _, _ => False
   end. 
 
-(** Selection of the appropriate case of a [switch] *)
+(** Selection of the appropriate case of a [switch], given the value [n]
+  of the selector expression. *)
 
 Fixpoint select_switch (n: int) (sl: labeled_statements)
                        {struct sl}: labeled_statements :=
@@ -418,7 +442,11 @@ Fixpoint select_switch (n: int) (sl: labeled_statements)
   | LScase c s sl' => if Int.eq c n then sl else select_switch n sl'
   end.
 
-(** Loads and stores by type *)
+(** [load_value_of_type ty m b ofs] computes the value of a datum
+  of type [ty] residing in memory [m] at block [b], offset [ofs].
+  If the type [ty] indicates an access by value, the corresponding
+  memory load is performed.  If the type [ty] indicates an access by
+  reference, the pointer [Vptr b ofs] is returned. *)
 
 Definition load_value_of_type (ty: type) (m: mem) (b: block) (ofs: int) : option val :=
   match access_mode ty with
@@ -427,6 +455,11 @@ Definition load_value_of_type (ty: type) (m: mem) (b: block) (ofs: int) : option
   | By_nothing => None
   end.
 
+(** Symmetrically, [store_value_of_type ty m b ofs v] returns the
+  memory state after storing the value [v] in the datum
+  of type [ty] residing in memory [m] at block [b], offset [ofs].
+  This is allowed only if [ty] indicates an access by value. *)
+
 Definition store_value_of_type (ty_dest: type) (m: mem) (loc: block) (ofs: int) (v: val) : option mem :=
   match access_mode ty_dest with
   | By_value chunk => Mem.storev chunk m (Vptr loc ofs) v
@@ -434,7 +467,13 @@ Definition store_value_of_type (ty_dest: type) (m: mem) (loc: block) (ofs: int) 
   | By_nothing => None
   end.
 
-(** Allocation and initialization of function-local variables *)
+(** Allocation of function-local variables.
+  [alloc_variables e1 m1 vars e2 m2 bl] allocates one memory block
+  for each variable declared in [vars], and associates the variable
+  name with this block.  [e1] and [m1] are the initial local environment
+  and memory state.  [e2] and [m2] are the final local environment
+  and memory state.  The list [bl] collects the references to all
+  the blocks that were allocated. *)
 
 Inductive alloc_variables: env -> mem ->
                            list (ident * type) ->
@@ -447,6 +486,11 @@ Inductive alloc_variables: env -> mem ->
       Mem.alloc m 0 (sizeof ty) = (m1, b1) ->
       alloc_variables (PTree.set id b1 e) m1 vars e2 m2 lb ->
       alloc_variables e m ((id, ty) :: vars) e2 m2 (b1 :: lb).
+
+(** Initialization of local variables that are parameters to a function.
+  [bind_parameters e m1 params args m2] stores the values [args]
+  in the memory blocks corresponding to the variables [params].
+  [m1] is the initial memory state and [m2] the final memory state. *)
 
 Inductive bind_parameters: env ->
                            mem -> list (ident * type) -> list val ->
@@ -465,7 +509,11 @@ Section RELSEM.
 
 Variable ge: genv.
 
-(** Evaluation of an expression in r-value position *)
+(** [eval_expr ge e m1 a t m2 v] defines the evaluation of expression [a]
+  in r-value position.  [v] is the value of the expression.
+  [m1] is the initial memory state, [m2] the final memory state.
+  [t] is the trace of input/output events performed during this
+  evaluation. *)
 
 Inductive eval_expr: env -> mem -> expr -> trace -> mem -> val -> Prop :=
   | eval_Econst_int:   forall e m i ty,
@@ -535,7 +583,11 @@ Inductive eval_expr: env -> mem -> expr -> trace -> mem -> val -> Prop :=
       eval_expr e m (Expr (Ecall a bl) ty)
                 (t1 ** t2 ** t3) m3 vres 
 
-(** Evaluation of an expression in l-value position *)
+(** [eval_lvalue ge e m1 a t m2  b ofs] defines the evaluation of
+  expression [a] in r-value position.  The result of the evaluation
+  is the block reference [b] and the byte offset [ofs] of the
+  memory location where the value of [a] resides.
+  The other parameters are as in [eval_expr]. *)
 
 with eval_lvalue: env -> mem -> expr -> trace -> mem -> block -> int -> Prop :=
   | eval_Evar_local:   forall e m id l ty,
@@ -569,7 +621,8 @@ with eval_lvalue: env -> mem -> expr -> trace -> mem -> block -> int -> Prop :=
       eval_lvalue e m (Expr (Efield a i) ty) 
                   t m1 l ofs
 
-(** Evaluation of a list of expressions *)
+(** [eval_exprlist ge e m1 al t m2 vl] evaluates a list of r-value
+  expressions [al] to their values [vl]. *)
 
 with eval_exprlist: env -> mem -> exprlist -> trace -> mem -> list val -> Prop :=
   | eval_Enil:   forall e m,
@@ -580,7 +633,11 @@ with eval_exprlist: env -> mem -> exprlist -> trace -> mem -> list val -> Prop :
       eval_exprlist e m (Econs a bl)
                     (t1 ** t2) m2 (v :: vl)
 
-(** Execution of a statement *)
+(** [exec_stmt ge e m1 s t m2 out] describes the execution of 
+  the statement [s].  [out] is the outcome for this execution.
+  [m1] is the initial memory state, [m2] the final memory state.
+  [t] is the trace of input/output events performed during this
+  evaluation. *)
 
 with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
   | exec_Sskip:   forall e m,
@@ -703,7 +760,9 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
       exec_stmt e m (Sswitch a sl)
                 (t1 ** t2) m2 (outcome_switch out)
 
-(** Execution of a list of labeled statements *)
+(** [exec_lblstmts ge e m1 ls t m2 out] is a variant of [exec_stmt]
+  that executes in sequence all statements in the list of labeled
+  statements [ls]. *)
 
 with exec_lblstmts: env -> mem -> labeled_statements -> trace -> mem -> outcome -> Prop :=
   | exec_LSdefault: forall e m s t m1 out,
@@ -717,7 +776,9 @@ with exec_lblstmts: env -> mem -> labeled_statements -> trace -> mem -> outcome 
      exec_stmt e m s t m1 out -> out <> Out_normal ->
      exec_lblstmts e m (LScase n s ls) t m1 out
 
-(** Evaluation of a function invocation *)
+(** [eval_funcall m1 fd args t m2 res] describes the invocation of
+  function [fd] with arguments [args].  [res] is the value returned
+  by the call.  *)
 
 with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
   | eval_funcall_internal: forall m f vargs t e m1 lb m2 m3 out vres,
@@ -739,7 +800,11 @@ Scheme eval_expr_ind6 := Minimality for eval_expr Sort Prop
 
 End RELSEM.
 
-(** Execution of a whole program *)
+(** Execution of a whole program: [exec_program p t r]
+  holds if the application of [p]'s main function to no arguments
+  in the initial memory state for [p] performs the input/output
+  operations described in the trace [t], and eventually returns value [r].
+*)
 
 Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in 

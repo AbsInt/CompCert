@@ -71,40 +71,35 @@ Definition extcall_arguments
    (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
   extcall_args rs m sp (Conventions.loc_arguments sg) args.
 
-(** The components of an execution state are:
-
-- [State cs f sp c rs m]: [f] is the block reference corresponding
-  to the function currently executing.  [sp] is the stack pointer.
-  [c] is the list of instructions that remain to be executed.
-  [rs] assigns values to registers.  [m] is the memory state.
-- [Callstate cs f rs m]: [f] is the block reference corresponding
-  to the function being called. [rs] is the current values of registers,
-  and [m] the current memory state.
-- [Returnstate cs rs m]: [rs] is the current values of registers,
-  and [m] the current memory state.
-
-[cs] is a list of stack frames [Stackframe f sp retaddr c],
-where [f] is the block reference for the calling function,
-[c] the code within this function that follows the call instruction,
-[sp] its stack pointer, and [retaddr] the return address predicted
-by [PPCgenretaddr.return_address_offset].
-*)
+(** Mach execution states. *)
 
 Inductive stackframe: Set :=
   | Stackframe:
-      forall (f: block) (sp retaddr: val) (c: code),
+      forall (f: block)       (**r pointer to calling function *)
+             (sp: val)        (**r stack pointer in calling function *)
+             (retaddr: val)   (**r PPC return address in calling function *)
+             (c: code),       (**r program point in calling function *)
       stackframe.
 
 Inductive state: Set :=
   | State:
-      forall (stack: list stackframe) (f: block) (sp: val)
-             (c: code) (rs: regset) (m: mem),
+      forall (stack: list stackframe)  (**r call stack *)
+             (f: block)                (**r pointer to current function *)
+             (sp: val)                 (**r stack pointer *)
+             (c: code)                 (**r current program point *)
+             (rs: regset)              (**r register state *)
+             (m: mem),                 (**r memory state *)
       state
   | Callstate:
-      forall (stack: list stackframe) (f: block) (rs: regset) (m: mem),
+      forall (stack: list stackframe)  (**r call stack *)
+             (f: block)                (**r pointer to function to call *)
+             (rs: regset)              (**r register state *)
+             (m: mem),                 (**r memory state *)
       state
   | Returnstate:
-      forall (stack: list stackframe) (rs: regset) (m: mem),
+      forall (stack: list stackframe)  (**r call stack *)
+             (rs: regset)              (**r register state *)
+             (m: mem),                 (**r memory state *)
       state.
 
 Definition parent_sp (s: list stackframe) : val :=

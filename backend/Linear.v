@@ -104,44 +104,35 @@ Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
 Definition reglist (rs: locset) (rl: list mreg) : list val :=
   List.map (fun r => rs (R r)) rl.
 
-(** The components of a Linear execution state are:
-
-- [State cs f sp c rs m]: [f] is the function currently executing.
-  [sp] is the stack pointer.  [c] is the sequence of instructions
-  that remain to be executed.
-  [rs] maps locations to their current values. [m] is the current
-  memory state.
-
-- [Callstate cs f rs m]:
-  [f] is the function definition that we are calling.
-  [rs] is the values of locations just before the call.
-  [m] is the current memory state.
-
-- [Returnstate cs rs m]:
-  [rs] is the values of locations just before the return.
-  [m] is the current memory state.
-
-[cs] is a list of stack frames [Stackframe res f rs pc].
-[f] is the calling function, [sp] its stack pointer.
-[rs] the values of locations just before the call.
-[c] is the sequence of instructions following the call in the code of [f].
-*)
+(** Linear execution states. *)
 
 Inductive stackframe: Set :=
   | Stackframe:
-      forall (f: function) (sp: val) (rs: locset) (c: code),
+      forall (f: function)         (**r calling function *)
+             (sp: val)             (**r stack pointer in calling function *)
+             (rs: locset)          (**r location state in calling function *)
+             (c: code),            (**r program point in calling function *)
       stackframe.
 
 Inductive state: Set :=
   | State:
-      forall (stack: list stackframe) (f: function) (sp: val)
-             (c: code) (rs: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (f: function)            (**r function currently executing *)
+             (sp: val)                (**r stack pointer *)
+             (c: code)                (**r current program point *)
+             (rs: locset)             (**r location state *)
+             (m: mem),                (**r memory state *)
       state
   | Callstate:
-      forall (stack: list stackframe) (f: fundef) (rs: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (f: fundef)              (**r function to call *)
+             (rs: locset)             (**r location state at point of call *)
+             (m: mem),                (**r memory state *)
       state
   | Returnstate:
-      forall (stack: list stackframe) (rs: locset) (m: mem),
+      forall (stack: list stackframe) (**r call stack *)
+             (rs: locset)             (**r location state at point of return *)
+             (m: mem),                (**r memory state *)
       state.
 
 (** [parent_locset cs] returns the mapping of values for locations

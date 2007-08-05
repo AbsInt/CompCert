@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <HTML>
 <HEAD>
-<TITLE>The Compcert certified compiler back-end</TITLE>
+<TITLE>The Compcert certified compiler</TITLE>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
 
 <style type="text/css">
@@ -10,7 +10,8 @@ body {
   margin-left: 5%; margin-right: 5%;
 }
 h2 { margin-left: -5%;}
-h3,h4,h5,h6 { margin-left: -3%; }
+h3 { margin-left: -3%; }
+h1,h2,h3 { font-family: sans-serif; }
 hr { margin-left: -5%; margin-right:-5%; }
 a:visited {color : #416DFF; text-decoration : none; font-weight : bold}
 a:link {color : #416DFF; text-decoration : none; font-weight : bold}
@@ -22,36 +23,41 @@ a:active {color : Red; text-decoration : underline; }
 </HEAD>
 <BODY>
 
-<H1 align="center">The Compcert certified compiler back-end</H1>
+<H1 align="center">The Compcert certified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 0.2, 2006-01-07</H3>
+<H3 align="center">Version 1.0, 2007-08-03</H3>
 
 <H2>Introduction</H2>
 
-<P>The Compcert back-end is a compiler that generates PowerPC assembly
-code from a low-level intermediate language called Cminor and a
-slightly more expressive intermediate language called Csharpminor.
+<P>Compcert is a compiler that generates PowerPC assembly
+code from Clight, a large subset of the C programming language.
 The particularity of this compiler is that it is written mostly within
 the specification language of the Coq proof assistant, and its
 correctness --- the fact that the generated assembly code is
 semantically equivalent to its source program --- was entirely proved
 within the Coq proof assistant.</P>
 
-<P>A high-level overview of the Compcert back-end and its proof of 
-correctness can be found in the following paper:</P>
-<CITE>Xavier Leroy, <A
-HREF="http://pauillac.inria.fr/~xleroy/publi/compiler-certif.pdf">Formal
+<P>A high-level overview of the Compcert compiler and its proof of 
+correctness can be found in the following papers:</P>
+<UL>
+<LI>Xavier Leroy, <A
+HREF="http://gallium.inria.fr/~xleroy/publi/compiler-certif.pdf">Formal
 certification of a compiler back-end, or: programming a compiler with
-a proof assistant</A>.  Proceedings of the POPL 2006 symposium.</CITE>
+a proof assistant</A>.  Proceedings of the POPL 2006 symposium.
+<LI>Sandrine Blazy, Zaynah Dargaye and Xavier Leroy,
+<A HREF="http://gallium.inria.fr/~xleroy/publi/cfront.pdf">Formal
+verification of a C compiler front-end</A>. 
+Proceedings of Formal Methods 2006, LNCS 4085.
+</UL>
 
 <P>This Web site gives a commented listing of the underlying Coq
 specifications and proofs.  Proof scripts and the parts of the
 compiler written directly in Caml are omitted.  This development is a
-work in progress; some parts may have changed since the overview paper
-above was written.</P>
+work in progress; some parts have substantially changed since the
+overview papers above were written.</P>
 
 <P>This document and all Coq source files referenced from it are
-copyright 2005, 2006 Institut National de Recherche en Informatique et
+copyright 2005, 2006, 2007 Institut National de Recherche en Informatique et
 en Automatique (INRIA) and distributed under the terms of the <A
 HREF="http://www.gnu.org/licenses/gpl.html">GNU General Public
 License</A> version 2.</P>
@@ -100,9 +106,10 @@ semantics.
 <H3>Source, intermediate and target languages: syntax and semantics</H3>
 
 <UL>
-<!--
-  <LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level structured language.
--->
+<LI> <A HREF="html/Csyntax.html">Clight syntax</A> and its
+<A HREF="html/Csem.html">semantics</A>: the source language.
+<LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level
+ structured language.
 <LI> <A HREF="html/Cminor.html">Cminor</A>: low-level structured
 language, with explicit stack allocation of certain local variables.
 <LI> <A HREF="html/CminorSel.html">CminorSel</A>: like Cminor,
@@ -138,14 +145,20 @@ code.
   <TH>Correctness&nbsp;proof</TH>
 </TR>
 
-<!--
+<TR valign="top">
+  <TD>Simplification of control structures; <br>
+      explication of type-dependent computations</TD>
+  <TD>Clight to Csharpminor</TD>
+  <TD><A HREF="html/Cshmgen.html">Cshmgen</A></TD>
+  <TD><A HREF="html/Cshmgenproof1.html">Cshmgenproof1</A><br>
+      <A HREF="html/Cshmgenproof2.html">Cshmgenproof2</A><br>
+      <A HREF="html/Cshmgenproof3.html">Cshmgenproof3</A></TD>
 <TR valign="top">
   <TD>Stack allocation of local variables<br>whose address is taken</TD>
   <TD>Csharpminor to Cminor</TD>
   <TD><A HREF="html/Cminorgen.html">Cminorgen</A></TD>
   <TD><A HREF="html/Cminorgenproof.html">Cminorgenproof</A></TD>
 </TR>
--->
 
 <TR valign="top">
   <TD>Recognition of operators<br>and addressing modes</TD>
@@ -237,8 +250,9 @@ code.
 <H3>Type systems</H3>
 
 Trivial type systems are used to statically capture well-formedness
-conditions on the intermediate languages.
+conditions on the source and intermediate languages.
 <UL>
+<LI> <A HREF="html/Ctyping.html">Ctyping</A>: partial typing for Clight + type-checking
 <LI> <A HREF="html/RTLtyping.html">RTLtyping</A>: typing for RTL + type
 reconstruction.
 <LI> <A HREF="html/LTLtyping.html">LTLtyping</A>: typing for LTL.

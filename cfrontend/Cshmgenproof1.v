@@ -17,7 +17,7 @@ Require Import Cminor.
 Require Import Csharpminor.
 Require Import Cshmgen.
 
-(** Operations on types *)
+(** * Properties of operations over types *)
 
 Lemma transl_fundef_sig1:
   forall f tf args res,
@@ -65,7 +65,7 @@ Proof.
   simpl; intro EQ; inversion EQ; subst vk; auto.
 Qed.
 
-(** ** Some properties of the translation functions *)
+(** * Properties of the translation functions *)
 
 Lemma map_partial_names:
   forall (A B: Set) (f: A -> res B)
@@ -162,7 +162,7 @@ Proof.
   reflexivity.
 Qed.
 
-(** Transformation of expressions and statements *)
+(** Transformation of expressions and statements. *)
 
 Lemma is_variable_correct:
   forall a id,
@@ -209,7 +209,7 @@ Proof.
   rewrite EQ1; rewrite EQ0; rewrite EQ2; auto.
 Qed.
 
-(** Properties related to switch constructs *)
+(** Properties related to [switch] constructs. *)
 
 Fixpoint lblstmts_length (sl: labeled_statements) : nat :=
   match sl with

@@ -22,7 +22,7 @@ Section CONSTRUCTORS.
 
 Variable tprog: Csharpminor.program.
 
-(** Properties of the translation of [switch] constructs. *)
+(** * Properties of the translation of [switch] constructs. *)
 
 Lemma transl_lblstmts_exit:
   forall e m1 t m2 sl body n tsl nbrk ncnt,
@@ -57,7 +57,7 @@ Proof.
 Qed.
 
 
-(** Correctness of Csharpminor construction functions *)
+(** * Correctness of Csharpminor construction functions *)
 
 Lemma make_intconst_correct:
   forall n le e m1,

@@ -1,4 +1,4 @@
-(** * Abstract syntax for the Clight language *)
+(** Abstract syntax for the Clight language *)
 
 Require Import Coqlib.
 Require Import Errors.
@@ -6,9 +6,15 @@ Require Import Integers.
 Require Import Floats.
 Require Import AST.
 
-(** ** Abstract syntax *)
+(** * Abstract syntax *)
 
-(** Types *)
+(** ** Types *)
+
+(** Clight types are similar to those of C.  They include numeric types,
+  pointers, arrays, function types, and composite types (struct and 
+  union).  Numeric types (integers and floats) fully specify the
+  bit size of the type.  An integer type is a pair of a signed/unsigned
+  flag and a bit size: 8, 16 or 32 bits. *)
 
 Inductive signedness : Set :=
   | Signed: signedness
@@ -19,20 +25,58 @@ Inductive intsize : Set :=
   | I16: intsize
   | I32: intsize.
 
+(** Float types come in two sizes: 32 bits (single precision)
+  and 64-bit (double precision). *)
+
 Inductive floatsize : Set :=
   | F32: floatsize
   | F64: floatsize.
 
+(** The syntax of type expressions.  Some points to note:
+- Array types [Tarray n] carry the size [n] of the array.
+  Arrays with unknown sizes are represented by pointer types.
+- Function types [Tfunction targs tres] specify the number and types
+  of the function arguments (list [targs]), and the type of the
+  function result ([tres]).  Variadic functions and old-style unprototyped
+  functions are not supported.
+- In C, struct and union types are named and compared by name.
+  This enables the definition of recursive struct types such as
+<<
+  struct s1 { int n; struct * s1 next; };
+>>
+  Note that recursion within types must go through a pointer type.
+  For instance, the following is not allowed in C.
+<<
+  struct s2 { int n; struct s2 next; };
+>>
+  In Clight, struct and union types [Tstruct id fields] and
+  [Tunion id fields] are compared by structure: the [fields]
+  argument gives the names and types of the members.  The identifier
+  [id] is a local name which can be used in conjuction with the
+  [Tcomp_ptr] constructor to express recursive types.  [Tcomp_ptr id]
+  stands for a pointer type to the nearest enclosing [Tstruct]
+  or [Tunion] type named [id].  For instance. the structure [s1]
+  defined above in C is expressed by
+<<
+  Tstruct "s1" (Fcons "n" (Tint I32 Signed)
+               (Fcons "next" (Tcomp_ptr "id")
+               Fnil))
+>>
+  Note that the incorrect structure [s2] above cannot be expressed at
+  all, since [Tcomp_ptr] lets us refer to a pointer to an enclosing
+  structure or union, but not to the structure or union directly.
+*)
+
 Inductive type : Set :=
-  | Tvoid: type
-  | Tint: intsize -> signedness -> type
-  | Tfloat: floatsize -> type
-  | Tpointer: type -> type
-  | Tarray: type -> Z -> type
-  | Tfunction: typelist -> type -> type
-  | Tstruct: ident -> fieldlist -> type
-  | Tunion: ident ->fieldlist -> type
-  | Tcomp_ptr: ident -> type
+  | Tvoid: type                            (**r the [void] type *)
+  | Tint: intsize -> signedness -> type    (**r integer types *)
+  | Tfloat: floatsize -> type              (**r floating-point types *)
+  | Tpointer: type -> type                 (**r pointer types ([*ty]) *)
+  | Tarray: type -> Z -> type              (**r array types ([ty[len]]) *)
+  | Tfunction: typelist -> type -> type    (**r function types *)
+  | Tstruct: ident -> fieldlist -> type    (**r struct types *)
+  | Tunion: ident -> fieldlist -> type     (**r union types *)
+  | Tcomp_ptr: ident -> type               (**r pointer to named struct or union *)
 
 with typelist : Set :=
   | Tnil: typelist
@@ -42,51 +86,61 @@ with fieldlist : Set :=
   | Fnil: fieldlist
   | Fcons: ident -> type -> fieldlist -> fieldlist.
 
-(** Arithmetic and logical operators *)
+(** ** Expressions *)
+
+(** Arithmetic and logical operators. *)
 
 Inductive unary_operation : Set :=
-  | Onotbool : unary_operation
-  | Onotint : unary_operation
-  | Oneg : unary_operation.
+  | Onotbool : unary_operation          (**r boolean negation ([!] in C) *)
+  | Onotint : unary_operation           (**r integer complement ([~] in C) *)
+  | Oneg : unary_operation.             (**r opposite (unary [-]) *)
 
 Inductive binary_operation : Set :=
-  | Oadd : binary_operation
-  | Osub : binary_operation
-  | Omul : binary_operation
-  | Odiv : binary_operation
-  | Omod : binary_operation
-  | Oand : binary_operation
-  | Oor : binary_operation
-  | Oxor : binary_operation
-  | Oshl : binary_operation
-  | Oshr : binary_operation
-  | Oeq: binary_operation
-  | One: binary_operation
-  | Olt: binary_operation
-  | Ogt: binary_operation
-  | Ole: binary_operation
-  | Oge: binary_operation.
+  | Oadd : binary_operation             (**r addition (binary [+]) *)
+  | Osub : binary_operation             (**r subtraction (binary [-]) *)
+  | Omul : binary_operation             (**r multiplication (binary [*]) *)
+  | Odiv : binary_operation             (**r division ([/]) *)
+  | Omod : binary_operation             (**r remainder ([%]) *)
+  | Oand : binary_operation             (**r bitwise and ([&]) *)
+  | Oor : binary_operation              (**r bitwise or ([|]) *)
+  | Oxor : binary_operation             (**r bitwise xor ([^]) *)
+  | Oshl : binary_operation             (**r left shift ([<<]) *)
+  | Oshr : binary_operation             (**r right shift ([>>]) *)
+  | Oeq: binary_operation               (**r comparison ([==]) *)
+  | One: binary_operation               (**r comparison ([!=]) *)
+  | Olt: binary_operation               (**r comparison ([<]) *)
+  | Ogt: binary_operation               (**r comparison ([>]) *)
+  | Ole: binary_operation               (**r comparison ([<=]) *)
+  | Oge: binary_operation.              (**r comparison ([>=]) *)
 
-(** Expressions *)
+(** Clight expressions are a large subset of those of C.
+  The main omissions are string literals and assignment operators
+  ([=], [+=], [++], etc).  In Clight, assignment is a statement,
+  not an expression.  
+
+  All expressions are annotated with their types.  An expression
+  (type [expr]) is therefore a pair of a type and an expression
+  description (type [expr_descr]).
+*)
 
 Inductive expr : Set :=
   | Expr: expr_descr -> type -> expr
 
 with expr_descr : Set :=
-  | Econst_int: int -> expr_descr
-  | Econst_float: float -> expr_descr
-  | Evar: ident -> expr_descr
-  | Ederef: expr -> expr_descr
-  | Eaddrof: expr -> expr_descr
-  | Eunop: unary_operation -> expr -> expr_descr
-  | Ebinop: binary_operation -> expr -> expr -> expr_descr
-  | Ecast: type -> expr -> expr_descr
-  | Eindex: expr -> expr -> expr_descr 
-  | Ecall: expr -> exprlist -> expr_descr 
-  | Eandbool: expr -> expr -> expr_descr
-  | Eorbool: expr -> expr -> expr_descr
-  | Esizeof: type -> expr_descr
-  | Efield: expr -> ident -> expr_descr
+  | Econst_int: int -> expr_descr       (**r integer literal *)
+  | Econst_float: float -> expr_descr   (**r float literal *)
+  | Evar: ident -> expr_descr           (**r variable *)
+  | Ederef: expr -> expr_descr          (**r pointer dereference (unary [*]) *)
+  | Eaddrof: expr -> expr_descr         (**r address-of operator ([&]) *)
+  | Eunop: unary_operation -> expr -> expr_descr  (**r unary operation *)
+  | Ebinop: binary_operation -> expr -> expr -> expr_descr (**r binary operation *)
+  | Ecast: type -> expr -> expr_descr   (**r type cast ([(ty) e]) *)
+  | Eindex: expr -> expr -> expr_descr  (**r array indexing ([e1[e2]]) *)
+  | Ecall: expr -> exprlist -> expr_descr  (**r function call *)
+  | Eandbool: expr -> expr -> expr_descr (**r sequential and ([&&]) *)
+  | Eorbool: expr -> expr -> expr_descr (**r sequential or ([||]) *)
+  | Esizeof: type -> expr_descr         (**r size of a type *)
+  | Efield: expr -> ident -> expr_descr (**r access to a member of a struct or union *)
 
 with exprlist : Set :=
   | Enil: exprlist
@@ -97,27 +151,37 @@ with exprlist : Set :=
 Definition typeof (e: expr) : type :=
   match e with Expr de te => te end.
 
-(** Statements *)
+(** ** Statements *)
+
+(** Clight statements include all C statements except [goto] and labels.
+  Only structured forms of [switch] are supported; moreover,
+  the [default] case must occur last.  Blocks and block-scoped declarations
+  are not supported. *)
 
 Inductive statement : Set :=
-  | Sskip : statement
-  | Sexpr : expr -> statement
-  | Sassign : expr -> expr -> statement
-  | Ssequence : statement -> statement -> statement
-  | Sifthenelse : expr  -> statement -> statement -> statement
-  | Swhile : expr -> statement -> statement
-  | Sdowhile : expr -> statement -> statement
-  | Sfor: statement -> expr -> statement -> statement -> statement
-  | Sbreak : statement
-  | Scontinue : statement
-  | Sreturn : option expr -> statement
-  | Sswitch : expr -> labeled_statements -> statement
+  | Sskip : statement                   (**r do nothing *)
+  | Sexpr : expr -> statement           (**r evaluate expression for its side-effects *)
+  | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
+  | Ssequence : statement -> statement -> statement  (**r sequence *)
+  | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)
+  | Swhile : expr -> statement -> statement   (**r [while] loop *)
+  | Sdowhile : expr -> statement -> statement (**r [do] loop *)
+  | Sfor: statement -> expr -> statement -> statement -> statement (**r [for] loop *)
+  | Sbreak : statement                      (**r [break] statement *)
+  | Scontinue : statement                   (**r [continue] statement *)
+  | Sreturn : option expr -> statement      (**r [return] statement *)
+  | Sswitch : expr -> labeled_statements -> statement  (**r [switch] statement *)
 
-with labeled_statements : Set :=
+with labeled_statements : Set :=            (**r cases of a [switch] *)
   | LSdefault: statement -> labeled_statements
   | LScase: int -> statement -> labeled_statements -> labeled_statements.
 
-(** Function definition *)
+(** ** Functions *)
+
+(** A function definition is composed of its return type ([fn_return]),
+  the names and types of its parameters ([fn_params]), the names
+  and types of its local variables ([fn_vars]), and the body of the
+  function (a statement, [fn_body]). *)
 
 Record function : Set := mkfunction {
   fn_return: type;
@@ -126,17 +190,24 @@ Record function : Set := mkfunction {
   fn_body: statement
 }.
 
+(** Functions can either be defined ([Internal]) or declared as
+  external functions ([External]). *)
+
 Inductive fundef : Set :=
   | Internal: function -> fundef
   | External: ident -> typelist -> type -> fundef.
 
-(** Program *)
+(** ** Programs *)
+
+(** A program is a collection of named functions, plus a collection
+  of named global variables, carrying their types and optional initialization 
+  data.  See module [AST] for more details. *)
 
 Definition program : Set := AST.program fundef type.
 
-(** ** Operations over types *)
+(** * Operations over types *)
 
-(** The type of a function definition *)
+(** The type of a function definition. *)
 
 Fixpoint type_of_params (params: list (ident * type)) : typelist :=
   match params with
@@ -153,7 +224,7 @@ Definition type_of_fundef (f: fundef) : type :=
   | External id args res => Tfunction args res
   end.
 
-(** Natural alignment of a type *)
+(** Natural alignment of a type, in bytes. *)
 
 Fixpoint alignof (t: type) : Z :=
   match t with
@@ -198,7 +269,7 @@ Proof.
   apply alignof_fields_pos.
 Qed.
 
-(** Size of a type (in bytes) *)
+(** Size of a type, in bytes. *)
 
 Fixpoint sizeof (t: type) : Z :=
   match t with
@@ -250,7 +321,9 @@ Proof.
   generalize (align_le pos (alignof t) (alignof_pos t)). omega.
 Qed.
 
-(** Byte offset for a field in a struct. *)
+(** Byte offset for a field in a struct or union.
+  Field are laid out consecutively, and padding is inserted
+  to align each field to the natural alignment for its type. *)
 
 Open Local Scope string_scope.
 
@@ -267,11 +340,14 @@ Fixpoint field_offset_rec (id: ident) (fld: fieldlist) (pos: Z)
 Definition field_offset (id: ident) (fld: fieldlist) : res Z :=
   field_offset_rec id fld 0.
 
-(* Describe how a variable of the given type must be accessed:
-     - by value, i.e. by loading from the address of the variable
-       with the given chunk
-     - by reference, i.e. by just returning the address of the variable
-     - not at all, e.g. the [void] type. *)
+(** The [access_mode] function describes how a variable of the given
+type must be accessed:
+- [By_value ch]: access by value, i.e. by loading from the address
+  of the variable using the memory chunk [ch];
+- [By_reference]: access by reference, i.e. by just returning
+  the address of the variable;
+- [By_nothing]: no access is possible, e.g. for the [void] type.
+*)
 
 Inductive mode: Set :=
   | By_value: memory_chunk -> mode
@@ -296,13 +372,21 @@ Definition access_mode (ty: type) : mode :=
   | Tcomp_ptr _ => By_value Mint32
 end.
 
-(** Classification of arithmetic operations and comparisons *)
+(** Classification of arithmetic operations and comparisons.
+  The following [classify_] functions take as arguments the types
+  of the arguments of an operation.  They return enough information
+  to resolve overloading for this operator applications, such as
+  ``both arguments are floats'', or ``the first is a pointer
+  and the second is an integer''.  These functions are used to resolve
+  overloading both in the dynamic semantics (module [Csem]) and in the
+  compiler (module [Cshmgen]).
+*)
 
 Inductive classify_add_cases : Set :=
-  | add_case_ii: classify_add_cases         (* int , int *)
-  | add_case_ff: classify_add_cases         (* float , float *)
-  | add_case_pi: type -> classify_add_cases (* ptr | array, int *)
-  | add_default: classify_add_cases.        (* other *)
+  | add_case_ii: classify_add_cases         (**r int , int *)
+  | add_case_ff: classify_add_cases         (**r float , float *)
+  | add_case_pi: type -> classify_add_cases (**r ptr or array, int *)
+  | add_default: classify_add_cases.        (**r other *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
   match ty1, ty2 with
@@ -314,11 +398,11 @@ Definition classify_add (ty1: type) (ty2: type) :=
   end.
 
 Inductive classify_sub_cases : Set :=
-  | sub_case_ii: classify_sub_cases          (* int , int *)
-  | sub_case_ff: classify_sub_cases          (* float , float *)
-  | sub_case_pi: type -> classify_sub_cases  (* ptr | array , int *)
-  | sub_case_pp: type -> classify_sub_cases  (* ptr | array , ptr | array *)
-  | sub_default: classify_sub_cases .        (* other *)
+  | sub_case_ii: classify_sub_cases          (**r int , int *)
+  | sub_case_ff: classify_sub_cases          (**r float , float *)
+  | sub_case_pi: type -> classify_sub_cases  (**r ptr or array , int *)
+  | sub_case_pp: type -> classify_sub_cases  (**r ptr or array , ptr or array *)
+  | sub_default: classify_sub_cases .        (**r other *)
 
 Definition classify_sub (ty1: type) (ty2: type) :=
   match ty1, ty2 with
@@ -334,9 +418,9 @@ Definition classify_sub (ty1: type) (ty2: type) :=
   end.
 
 Inductive classify_mul_cases : Set:=
-  | mul_case_ii: classify_mul_cases (* int , int *)
-  | mul_case_ff: classify_mul_cases (* float , float *)
-  | mul_default: classify_mul_cases . (* other *)
+  | mul_case_ii: classify_mul_cases (**r int , int *)
+  | mul_case_ff: classify_mul_cases (**r float , float *)
+  | mul_default: classify_mul_cases . (**r other *)
 
 Definition classify_mul (ty1: type) (ty2: type) :=
   match ty1,ty2 with
@@ -346,10 +430,10 @@ Definition classify_mul (ty1: type) (ty2: type) :=
 end.
 
 Inductive classify_div_cases : Set:=
-  | div_case_I32unsi: classify_div_cases (* uns int32 , int *)
-  | div_case_ii: classify_div_cases    (* int , int *) 
-  | div_case_ff: classify_div_cases    (* float , float *)
-  | div_default: classify_div_cases. (* other *)
+  | div_case_I32unsi: classify_div_cases (**r unsigned int32 , int *)
+  | div_case_ii: classify_div_cases    (**r int , int *) 
+  | div_case_ff: classify_div_cases    (**r float , float *)
+  | div_default: classify_div_cases. (**r other *)
 
 Definition classify_div (ty1: type) (ty2: type) :=
   match ty1,ty2 with 
@@ -361,9 +445,9 @@ Definition classify_div (ty1: type) (ty2: type) :=
 end.
 
 Inductive classify_mod_cases : Set:=
-  | mod_case_I32unsi: classify_mod_cases  (* uns I32 , int *)
-  | mod_case_ii: classify_mod_cases  (* int , int *)
-  | mod_default: classify_mod_cases . (* other *)
+  | mod_case_I32unsi: classify_mod_cases  (**r unsigned I32 , int *)
+  | mod_case_ii: classify_mod_cases  (**r int , int *)
+  | mod_default: classify_mod_cases . (**r other *)
 
 Definition classify_mod (ty1: type) (ty2: type) :=
   match ty1,ty2 with
@@ -374,9 +458,9 @@ Definition classify_mod (ty1: type) (ty2: type) :=
 end .
 
 Inductive classify_shr_cases :Set:=
-  | shr_case_I32unsi:  classify_shr_cases (* uns I32 , int *)
-  | shr_case_ii :classify_shr_cases (* int , int *)
-  | shr_default : classify_shr_cases . (* other *)
+  | shr_case_I32unsi:  classify_shr_cases (**r unsigned I32 , int *)
+  | shr_case_ii :classify_shr_cases (**r int , int *)
+  | shr_default : classify_shr_cases . (**r other *)
 
 Definition classify_shr (ty1: type) (ty2: type) :=
   match ty1,ty2 with
@@ -386,12 +470,12 @@ Definition classify_shr (ty1: type) (ty2: type) :=
   end.
 
 Inductive classify_cmp_cases : Set:=
-  | cmp_case_I32unsi: classify_cmp_cases (* uns I32 , int *)
-  | cmp_case_ii: classify_cmp_cases  (* int , int*)
-  | cmp_case_ff: classify_cmp_cases  (* float , float *)
-  | cmp_case_pi: classify_cmp_cases  (* ptr | array , int *)
-  | cmp_case_pp:classify_cmp_cases   (* ptr | array , ptr | array *)
-  | cmp_default: classify_cmp_cases . (* other *)
+  | cmp_case_I32unsi: classify_cmp_cases (**r unsigned I32 , int *)
+  | cmp_case_ii: classify_cmp_cases  (**r int , int*)
+  | cmp_case_ff: classify_cmp_cases  (**r float , float *)
+  | cmp_case_pi: classify_cmp_cases  (**r ptr or array , int *)
+  | cmp_case_pp:classify_cmp_cases   (**r ptr or array , ptr or array *)
+  | cmp_default: classify_cmp_cases . (**r other *)
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
   match ty1,ty2 with 
@@ -409,8 +493,8 @@ Definition classify_cmp (ty1: type) (ty2: type) :=
   end.
 
 Inductive classify_fun_cases : Set:=
-  | fun_case_f: typelist -> type -> classify_fun_cases   (* type fun | ptr fun*)
-  | fun_default: classify_fun_cases . (* other *)
+  | fun_case_f: typelist -> type -> classify_fun_cases   (**r (pointer to) function *)
+  | fun_default: classify_fun_cases . (**r other *)
 
 Definition classify_fun (ty: type) :=
   match ty with 
@@ -419,7 +503,8 @@ Definition classify_fun (ty: type) :=
   | _ => fun_default
   end.
 
-(** Mapping between Clight types and Cminor types and external functions *)
+(** Translating Clight types to Cminor types, function signatures,
+  and external functions. *)
 
 Definition typ_of_type (t: type) : AST.typ :=
   match t with

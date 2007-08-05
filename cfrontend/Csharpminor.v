@@ -23,7 +23,7 @@ Require Cminor.
   [Elet] construct.
 
   Unlike in Cminor (the next intermediate language of the back-end),
-  Csharpminor local variables reside in memory, and their address can
+  Csharpminor local variables reside in memory, and their addresses can
   be taken using [Eaddrof] expressions.
 *)
 
@@ -37,9 +37,9 @@ Definition binary_operation : Set := Cminor.binary_operation.
 Inductive expr : Set :=
   | Evar : ident -> expr                (**r reading a scalar variable  *)
   | Eaddrof : ident -> expr             (**r taking the address of a variable *)
-  | Econst : constant -> expr
-  | Eunop : unary_operation -> expr -> expr
-  | Ebinop : binary_operation -> expr -> expr -> expr
+  | Econst : constant -> expr           (**r constants *)
+  | Eunop : unary_operation -> expr -> expr  (**r unary operation *)
+  | Ebinop : binary_operation -> expr -> expr -> expr (**r binary operation *)
   | Eload : memory_chunk -> expr -> expr (**r memory read *)
   | Ecall : signature -> expr -> exprlist -> expr (**r function call *)
   | Econdition : expr -> expr -> expr -> expr (**r conditional expression *)
@@ -138,10 +138,12 @@ Fixpoint switch_target (n: int) (dfl: nat) (cases: list (int * nat))
 
 (** Four kinds of evaluation environments are involved:
 - [genv]: global environments, define symbols and functions;
-- [gvarenv]: map global variables to var info;
-- [env]: local environments, map local variables to memory blocks + var info;
+- [gvarenv]: map global variables to variable informations (type [var_kind]);
+- [env]: local environments, map local variables 
+    to memory blocks and variable informations;
 - [lenv]: let environments, map de Bruijn indices to values.
 *)
+
 Definition genv := Genv.t fundef.
 Definition gvarenv := PTree.t var_kind.
 Definition env := PTree.t (block * var_kind).
@@ -250,11 +252,12 @@ Inductive eval_var_ref: env -> ident -> block -> memory_chunk -> Prop :=
       PTree.get id (global_var_env prg) = Some (Vscalar chunk) ->
       eval_var_ref e id b chunk.
 
-(** Evaluation of an expression: [eval_expr prg le e m a m' v] states
+(** Evaluation of an expression: [eval_expr prg le e m a t m' v] states
   that expression [a], in initial memory state [m], evaluates to value
   [v].  [m'] is the final memory state, respectively, reflecting
-  memory stores possibly performed by [a].  [e] and [le] are the
-  local environment and let environment respectively. *)
+  memory stores possibly performed by [a].  [t] is the trace of input/output
+  events generated during the evaluation.
+  [e] and [le] are the local environment and let environment respectively. *)
 
 Inductive eval_expr:
          letenv -> env ->
@@ -329,7 +332,7 @@ Inductive eval_expr:
       eval_expr le e m (Ealloc a) t m2 (Vptr b Int.zero)
 
 (** Evaluation of a list of expressions:
-  [eval_exprlist prg le al m a m' vl]
+  [eval_exprlist prg le al m a t m' vl]
   states that the list [al] of expressions evaluate 
   to the list [vl] of values.
   The other parameters are as in [eval_expr].
@@ -349,7 +352,7 @@ with eval_exprlist:
       t = t1 ** t2 ->
       eval_exprlist le e m (Econs a bl) t m2 (v :: vl)
 
-(** Evaluation of a function invocation: [eval_funcall prg m f args m' res]
+(** Evaluation of a function invocation: [eval_funcall prg m f args t m' res]
   means that the function [f], applied to the arguments [args] in
   memory state [m], returns the value [res] in modified memory state [m'].
 *)
@@ -369,7 +372,7 @@ with eval_funcall:
       event_match ef vargs t vres ->
       eval_funcall m (External ef) vargs t m vres
 
-(** Execution of a statement: [exec_stmt prg e m s m' out]
+(** Execution of a statement: [exec_stmt prg e m s t m' out]
   means that statement [s] executes with outcome [out].
   The other parameters are as in [eval_expr]. *)
 
@@ -460,9 +463,10 @@ Scheme eval_expr_ind4 := Minimality for eval_expr Sort Prop
 
 End RELSEM.
 
-(** Execution of a whole program: [exec_program p r]
+(** Execution of a whole program: [exec_program p t r]
   holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] eventually returns value [r]. *)
+  in the initial memory state for [p] performs the events described
+  in trace [t] and eventually returns value [r]. *)
 
 Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
   let ge := Genv.globalenv p in

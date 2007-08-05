@@ -68,7 +68,7 @@ clean::
 marksweep: marksweep.o maingc.o marksweepcheck.o
 	$(CC) $(CFLAGS) -o marksweep marksweep.o maingc.o marksweepcheck.o
 clean::
-	rm -f stopcopy
+	rm -f marksweep
 
 switchtbl: switchtbl.o mainswitchtbl.o
 	$(CC) $(CFLAGS) -o switchtbl switchtbl.o mainswitchtbl.o

@@ -1,4 +1,4 @@
-(** * Type well-formedness of C programs *)
+(** * Typing constraints on C programs *)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -7,10 +7,13 @@ Require Import Csyntax.
 
 (** ** Typing rules *)
 
-(** This ``type system'' is very coarse: we check only the typing properties
+(** We now define a simple, incomplete type system for the Clight language.
+  This ``type system'' is very coarse: we check only the typing properties
   that matter for the translation to be correct.  Essentially,
   we need to check that the types attached to variable references
   match the declaration types for those variables. *)
+
+(** A typing environment maps variable names to their types. *)
 
 Definition typenv := PTree.t type.
 
@@ -165,7 +168,10 @@ Record wt_program (p: program) : Prop :=  mk_wt_program {
     exists targs, type_of_fundef fd = Tfunction targs (Tint I32 Signed)
 }.
 
-(** ** Type-checking algorithm *)
+(* ** Type-checking algorithm *)
+
+(** We now define and prove correct a type-checking algorithm
+  for the type system defined above. *)
 
 Lemma eq_signedness: forall (s1 s2: signedness), {s1=s2} + {s1<>s2}.
 Proof. decide equality. Qed.

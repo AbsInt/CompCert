@@ -1,3 +1,13 @@
+(** Translation from Clight to Csharpminor. *)
+
+(** The main transformations performed by this first part are:
+- Resolution of all type-dependent behaviours: overloaded operators
+   are resolved, address computations for array and struct accesses
+   are made explicit, etc.
+- Translation of Clight's loops and [switch] statements into
+   Csharpminor's simpler control structures.
+*)
+
 Require Import Coqlib.
 Require Import Errors.
 Require Import Integers.
@@ -10,7 +20,7 @@ Require Import Csharpminor.
 Open Local Scope string_scope.
 Open Local Scope error_monad_scope.
 
-(** ** Operations on C types *)
+(** * Operations on C types *)
 
 Definition signature_of_function (f: Csyntax.function) : signature :=
   mksignature 
@@ -22,6 +32,9 @@ Definition chunk_of_type (ty: type): res memory_chunk :=
   | By_value chunk => OK chunk
   | _ => Error (msg "Cshmgen.chunk_of_type")
   end.
+
+(** [var_kind_of_type ty] returns the Csharpminor ``variable kind''
+  (scalar or array) that corresponds to the given Clight type [ty]. *)
 
 Definition var_kind_of_type (ty: type): res var_kind :=
   match ty with
@@ -41,14 +54,14 @@ Definition var_kind_of_type (ty: type): res var_kind :=
   | Tcomp_ptr _ => OK(Vscalar Mint32)
 end.
   
-(** ** Csharpminor constructors *)
+(** * Csharpminor constructors *)
 
-(* The following functions build Csharpminor expressions that compute
+(** The following functions build Csharpminor expressions that compute
    the value of a C operation.  Most construction functions take
    as arguments
-   - Csharpminor subexpressions that compute the values of the
+-  Csharpminor subexpressions that compute the values of the
      arguments of the operation;
-   - The C types of the arguments of the operation.  These types
+-  The C types of the arguments of the operation.  These types
      are used to insert the necessary numeric conversions and to
      resolve operation overloading.
    Most of these functions return an [option expr], with [None] 
@@ -65,11 +78,11 @@ Definition make_floatofint (e: expr) (sg: signedness) :=
   | Unsigned => Eunop Ofloatofintu e
   end.
 
-(* [make_boolean e ty] returns a Csharpminor expression that evaluates
+(** [make_boolean e ty] returns a Csharpminor expression that evaluates
    to the boolean value of [e].  Recall that:
-     - in Csharpminor, [false] is the integer 0,
+-  in Csharpminor, [false] is the integer 0,
        [true] any non-zero integer or any pointer
-     - in C, [false] is the integer 0, the null pointer, the float 0.0
+-  in C, [false] is the integer 0, the null pointer, the float 0.0
        [true] is any non-zero integer, non-null pointer, non-null float.
 *)
 Definition make_boolean (e: expr) (ty: type) :=
@@ -186,11 +199,12 @@ Definition make_orbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
        (make_intconst Int.one)
        (make_intconst Int.zero)).
 
-(* [make_cast from to e] applies to [e] the numeric conversions needed
+(** [make_cast from to e] applies to [e] the numeric conversions needed
    to transform a result of type [from] to a result of type [to].
    It is decomposed in two functions:
-   - [make_cast1]  converts between int/pointer and float if necessary
-   - [make_cast2]  converts to a "smaller" int or float type if necessary.
+-  [make_cast1]  converts between integer and pointers, on one side,
+     and floats on the other side.
+-  [make_cast2]  converts to a "smaller" int or float type if necessary.
 *)
 
 Definition make_cast1 (from to: type) (e: expr) :=
@@ -213,7 +227,7 @@ Definition make_cast2 (from to: type) (e: expr) :=
 Definition make_cast (from to: type) (e: expr) :=
   make_cast2 from to (make_cast1 from to e).
 
-(* [make_load addr ty_res] loads a value of type [ty_res] from
+(** [make_load addr ty_res] loads a value of type [ty_res] from
    the memory location denoted by the Csharpminor expression [addr].
    If [ty_res] is an array or function type, returns [addr] instead,
    as consistent with C semantics.
@@ -226,7 +240,7 @@ Definition make_load (addr: expr) (ty_res: type) :=
   | By_nothing => Error (msg "Cshmgen.make_load")
   end.
 
-(* [make_store addr ty_res rhs ty_rhs] stores the value of the
+(** [make_store addr ty_res rhs ty_rhs] stores the value of the
    Csharpminor expression [rhs] into the memory location denoted by the
    Csharpminor expression [addr].  
    [ty] is the type of the memory location. *)
@@ -237,12 +251,12 @@ Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
   | _ => Error (msg "Cshmgen.make_store")
   end.
 
-(** ** Reading and writing variables *)
+(** * Reading and writing variables *)
 
-(* [var_get id ty] builds Csharpminor code that evaluates to the
+(** [var_get id ty] returns Csharpminor code that evaluates to the
    value of C variable [id] with type [ty].  Note that 
    C variables of array or function type evaluate to the address
-   of the corresponding CabsCoq memory block, while variables of other types
+   of the corresponding Clight memory block, while variables of other types
    evaluate to the contents of the corresponding C memory block.
 *)
 
@@ -253,8 +267,8 @@ Definition var_get (id: ident) (ty: type) :=
   | _ => Error (MSG "Cshmgen.var_get " :: CTX id :: nil)
   end.
 
-(* [var_set id ty rhs] stores the value of the Csharpminor
-   expression [rhs] into the CabsCoq variable [id] of type [ty].
+(** Likewise, [var_set id ty rhs] stores the value of the Csharpminor
+   expression [rhs] into the Clight variable [id] of type [ty].
 *)
 
 Definition var_set (id: ident) (ty: type) (rhs: expr) :=
@@ -263,7 +277,7 @@ Definition var_set (id: ident) (ty: type) (rhs: expr) :=
   | _ => Error (MSG "Cshmgen.var_set " :: CTX id :: nil)
   end.
 
-(** ** Translation of operators *)
+(** * Translation of operators *)
 
 Definition transl_unop (op: Csyntax.unary_operation) (a: expr) (ta: type) : res expr :=
   match op with
@@ -294,16 +308,18 @@ Definition transl_binop (op: Csyntax.binary_operation)
   | Csyntax.Oge => make_cmp Cge a ta b tb
   end.
 
-(** ** Translation of expressions *)
+(** * Translation of expressions *)
 
-(* [transl_expr a] returns the Csharpminor code that computes the value
-   of expression [a]. The result is an option type to enable error reporting.
+(** [transl_expr a] returns the Csharpminor code that computes the value
+   of expression [a]. The computation is performed in the error monad
+   (see module [Errors]) to enable error reporting.
 
    Most cases are self-explanatory.  We outline the non-obvious cases:
-
+<<
    a && b    --->    a ? (b ? 1 : 0) : 0
 
    a || b    --->    a ? 1 : (b ? 1 : 0)
+>>
 *)
 
 Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
@@ -369,7 +385,7 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
       end
   end
 
-(* [transl_lvalue a] returns the Csharpminor code that evaluates
+(** [transl_lvalue a] returns the Csharpminor code that evaluates
    [a] as a lvalue, that is, code that returns the memory address
    where the value of [a] is stored.
 *)
@@ -399,7 +415,7 @@ with transl_lvalue (a: Csyntax.expr) {struct a} : res expr :=
       Error(msg "Cshmgen.transl_lvalue")
   end
 
-(* [transl_exprlist al] returns a list of Csharpminor expressions
+(** [transl_exprlist al] returns a list of Csharpminor expressions
    that compute the values of the list [al] of Csyntax expressions.
    Used for function applications. *)
 
@@ -412,7 +428,7 @@ with transl_exprlist (al: Csyntax.exprlist): res exprlist :=
       OK (Econs ta1 ta2)
   end.
 
-(** ** Translation of statements *)
+(** * Translation of statements *)
 
 (** Determine if a C expression is a variable *)
 
@@ -422,10 +438,11 @@ Definition is_variable (e: Csyntax.expr) : option ident :=
   | _ => None
   end.
 
-(* [exit_if_false e] return the statement that tests the boolean
-   value of the CabsCoq expression [e] and performs an [exit 0] if [e]
-   evaluates to false.
-*)
+(** [exit_if_false e] return the statement that tests the boolean
+   value of the Clight expression [e].  If [e] evaluates to false,
+   an [exit 0] is performed.  If [e] evaluates to true, the generated
+   statement continues in sequence. *)
+
 Definition exit_if_false (e: Csyntax.expr) : res stmt :=
   do te <- transl_expr e;
   OK(Sifthenelse
@@ -433,7 +450,7 @@ Definition exit_if_false (e: Csyntax.expr) : res stmt :=
         Sskip
         (Sexit 0%nat)).
 
-(* [transl_statement nbrk ncnt s] returns a Csharpminor statement
+(** [transl_statement nbrk ncnt s] returns a Csharpminor statement
    that performs the same computations as the CabsCoq statement [s].
 
    If the statement [s] terminates prematurely on a [break] construct,
@@ -444,11 +461,8 @@ Definition exit_if_false (e: Csyntax.expr) : res stmt :=
    construct, the generated Csharpminor statement terminates
    prematurely on an [exit ncnt] construct.
 
-   Immediately within a loop, [nbrk = 1] and [ncnt = 0], but this 
-   changes when we're inside a [switch] construct.
-
    The general translation for loops is as follows:
-
+<<
 while (e1) s;       --->     block {
                                loop {
                                  if (!e1) exit 0;
@@ -477,13 +491,19 @@ for (e1;e2;e3) s;   --->     e1;
                                }
                              }
                              // break in s branches here
-
+>>
+   For [switch] statements, we wrap the statements associated with
+   the various cases in a cascade of nested Csharpminor blocks.
+   The multi-way branch is performed by a Csharpminor [switch]
+   statement that exits to the appropriate case.  For instance:
+<<
 switch (e) {        --->    block { block { block { block {
   case N1: s1;                switch (e) { N1: exit 0; N2: exit 1; default: exit 2; }
   case N2: s2;                } ; s1  // with break -> exit 2  and continue -> exit 3
   default: s;                 } ; s2  // with break -> exit 1  and continue -> exit 2
 }                             } ; s   // with break -> exit 0  and continue -> exit 1
                               }
+>>
 *)
 
 Fixpoint switch_table (sl: labeled_statements) (k: nat) {struct sl} : list (int * nat) :=
@@ -559,7 +579,7 @@ with transl_lblstmts (nbrk ncnt: nat) (sl: labeled_statements) (body: stmt)
       transl_lblstmts (pred nbrk) (pred ncnt) rem (Sblock (Sseq body ts))
   end.
 
-(*** Translation of functions *)
+(** * Translation of functions and programs *)
 
 Definition prefix_var_name (id: ident) : errmsg :=
   MSG "In local variable " :: CTX id :: MSG ":\n" :: nil.
@@ -582,8 +602,6 @@ Definition transl_fundef (f: Csyntax.fundef) : res fundef :=
   | Csyntax.External id args res =>
       OK(AST.External (external_function id args res))
   end.
-
-(** ** Translation of programs *)
 
 Definition transl_globvar (ty: type) := var_kind_of_type ty.
 
