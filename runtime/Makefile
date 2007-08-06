@@ -1,7 +1,10 @@
+include ../Makefile.config
+
 CFLAGS=-arch ppc -O1 -g -Wall
 #CFLAGS=-O1 -g -Wall
 OBJS=stdio.o calloc.o
 LIB=libcompcert.a
+INCLUDES=stdio.h
 
 $(LIB): $(OBJS)
 	rm -f $(LIB)
@@ -11,3 +14,7 @@ stdio.o: stdio.h
 
 clean:
 	rm -f *.o $(LIB)
+
+install:
+	install -d $(LIBDIR)
+	install -c $(LIB) $(INCLUDES) $(LIBDIR)

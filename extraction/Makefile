@@ -1,3 +1,5 @@
+include ../Makefile.config
+
 FILES=\
   Datatypes.ml Logic.ml Wf.ml Peano.ml Specif.ml Compare_dec.ml EqNat.ml \
   Bool.ml CList.ml Sumbool.ml Setoid.ml BinPos.ml BinNat.ml BinInt.ml \
@@ -29,13 +31,12 @@ FILES=\
   ../caml/Cil2Csyntax.ml \
   ../caml/CMparser.ml ../caml/CMlexer.ml ../caml/CMtypecheck.ml \
   ../caml/PrintCsyntax.ml ../caml/PrintPPC.ml \
-  ../caml/Main2.ml
-#  ../caml/Configuration.ml ../caml/Driver.ml
+  ../caml/Configuration.ml ../caml/Driver.ml
 
 EXTRACTEDFILES:=$(filter-out ../caml/%, $(FILES))
 GENFILES:=$(EXTRACTEDFILES) $(EXTRACTEDFILES:.ml=.mli)
 
-CAMLINCL=-I ../caml -I ../cil/obj/x86_LINUX -I ../cil/obj/ppc_DARWIN
+CAMLINCL=-I ../caml -I ../cil/obj/$(ARCHOS)
 OCAMLC=ocamlc -g $(CAMLINCL)
 OCAMLOPT=ocamlopt $(CAMLINCL)
 OCAMLDEP=ocamldep $(CAMLINCL)
@@ -49,12 +50,12 @@ executables: ../ccomp ../ccomp.byt
 ../ccomp.byt: $(FILES:.ml=.cmo)
 	$(OCAMLC) -o ../ccomp.byt $(OCAMLLIBS) $(FILES:.ml=.cmo)
 clean::
-	rm -f ../ccomp
+	rm -f ../ccomp.byt
 
 ../ccomp: $(FILES:.ml=.cmx)
 	$(OCAMLOPT) -o ../ccomp $(OCAMLLIBS:.cma=.cmxa) $(FILES:.ml=.cmx)
 clean::
-	rm -f ../ccomp.opt
+	rm -f ../ccomp
 
 extraction:
 	@rm -f $(GENFILES)
@@ -89,6 +90,13 @@ beforedepend:: ../caml/CMlexer.ml
 clean::
 	rm -f ../caml/CMlexer.ml
 
+../caml/Configuration.ml: ../Makefile.config
+	echo 'let stdlib_path = "$(LIBDIR)"' > ../caml/Configuration.ml
+
+beforedepend:: ../caml/Configuration.ml
+clean::
+	rm -f ../caml/Configuration.ml
+
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
 .mli.cmi:
@@ -105,6 +113,10 @@ clean::
 
 depend: beforedepend
 	$(OCAMLDEP) ../caml/*.mli ../caml/*.ml *.mli *.ml > .depend
+
+install:
+	install -d $(BINDIR)
+	install ../ccomp ../ccomp.byt $(BINDIR)
 
 include .depend
 

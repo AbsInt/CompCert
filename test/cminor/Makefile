@@ -56,7 +56,7 @@ clean::
 	rm -f manyargs
 
 lists: lists.o mainlists.o
-	$(CC) $(CFLAGS) -o lists lists.o mainlists.o
+	$(CC) $(CFLAGS) -o lists lists.o mainlists.o -L../../runtime -lcompcert
 clean::
 	rm -f lists
 
