@@ -28,6 +28,20 @@ struct list * reverselist (struct list * l)
   return r;
 }
 
+struct list * reverse_inplace(struct list * l)
+{
+  struct list * prev, * next;
+
+  prev = NULL;
+  while (l != NULL) {
+    next = l->tl;
+    l->tl = prev;
+    prev = l;
+    l = next;
+  }
+  return prev;
+}
+
 int checklist(int n, struct list * l)
 {
   int i;
@@ -41,15 +55,27 @@ int checklist(int n, struct list * l)
 
 int main(int argc, char ** argv)
 {
-  int n;
+  int n, niter, i;
+  struct list * l;
 
-  if (argc >= 2) n = atoi(argv[1]); else n = 10;
-  if (checklist(n, reverselist(buildlist(n)))) {
+  if (argc >= 2) n = atoi(argv[1]); else n = 1000;
+  if (argc >= 3) niter = atoi(argv[1]); else niter = 100000;
+  l = buildlist(n);
+  if (checklist(n, reverselist(l))) {
     printf("OK\n");
-    return 0;
   } else {
     printf("Bug!\n");
     return 2;
   }
+  for (i = 0; i < 2*niter + 1; i++) {
+    l = reverse_inplace(l);
+  }
+  if (checklist(n, l)) {
+    printf("OK\n");
+  } else {
+    printf("Bug!\n");
+    return 2;
+  }
+  return 0;
 }
 
