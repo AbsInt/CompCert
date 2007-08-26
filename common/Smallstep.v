@@ -158,6 +158,16 @@ CoInductive forever (ge: genv): state -> traceinf -> Prop :=
       step ge s1 t s2 -> forever ge s2 T ->
       forever ge s1 (t *** T).
 
+Lemma star_forever:
+  forall ge s1 t s2, star ge s1 t s2 ->
+  forall T, forever ge s2 T ->
+  forever ge s1 (t *** T).
+Proof.
+  induction 1; intros. simpl. auto.
+  subst t. rewrite Eappinf_assoc. 
+  econstructor; eauto.
+Qed.  
+
 (** An alternate, equivalent definition of [forever] that is useful
     for coinductive reasoning. *)
 

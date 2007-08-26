@@ -14,7 +14,7 @@ LIB=Coqlib.v Maps.v Lattice.v Ordered.v \
 # Files in common/
 
 COMMON=Errors.v AST.v Events.v Globalenvs.v Mem.v Values.v \
-  Smallstep.v Switch.v Main.v
+  Smallstep.v Switch.v Main.v Complements.v
 
 # Files in backend/
 

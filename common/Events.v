@@ -29,7 +29,7 @@ Record event : Set := mkevent {
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) 
-  or infinite (type [traceinf]). *)
+  or possibly infinite (type [traceinf]). *)
 
 Definition trace := list event.
 
@@ -42,6 +42,7 @@ Definition Eextcall
 Definition Eapp (t1 t2: trace) : trace := t1 ++ t2.
 
 CoInductive traceinf : Set :=
+  | Enilinf: traceinf
   | Econsinf: event -> traceinf -> traceinf.
 
 Fixpoint Eappinf (t: trace) (T: traceinf) {struct t} : traceinf :=
@@ -202,3 +203,80 @@ Proof.
 Qed.
 
 End EVENT_MATCH_LESSDEF.
+
+(** Bisimilarity between infinite traces. *)
+
+CoInductive traceinf_sim: traceinf -> traceinf -> Prop :=
+  | traceinf_sim_nil:
+      traceinf_sim Enilinf Enilinf
+  | traceinf_sim_cons: forall e T1 T2,
+      traceinf_sim T1 T2 ->
+      traceinf_sim (Econsinf e T1) (Econsinf e T2).
+
+Lemma traceinf_sim_refl:
+  forall T, traceinf_sim T T.
+Proof.
+  cofix COINDHYP; intros.
+  destruct T. constructor. constructor. apply COINDHYP.
+Qed.
+ 
+Lemma traceinf_sim_sym:
+  forall T1 T2, traceinf_sim T1 T2 -> traceinf_sim T2 T1.
+Proof.
+  cofix COINDHYP; intros. inv H; constructor; auto.
+Qed.
+
+Lemma traceinf_sim_trans:
+  forall T1 T2 T3, 
+  traceinf_sim T1 T2 -> traceinf_sim T2 T3 -> traceinf_sim T1 T3.
+Proof.
+  cofix COINDHYP;intros. inv H; inv H0; constructor; eauto.
+Qed.
+
+(** The "is prefix of" relation between infinite traces. *)
+
+CoInductive traceinf_prefix: traceinf -> traceinf -> Prop :=
+  | traceinf_prefix_nil: forall T,
+      traceinf_prefix Enilinf T
+  | traceinf_prefix_cons: forall e T1 T2,
+      traceinf_prefix T1 T2 ->
+      traceinf_prefix (Econsinf e T1) (Econsinf e T2).
+
+Lemma traceinf_prefix_compat:
+  forall T1 T2 T1' T2',
+  traceinf_prefix T1 T2 -> traceinf_sim T1 T1' -> traceinf_sim T2 T2' ->
+  traceinf_prefix T1' T2'.
+Proof.
+  cofix COINDHYP; intros.
+  inv H; inv H0; inv H1; constructor; eapply COINDHYP; eauto.
+Qed.
+
+Transparent trace E0 Eapp.
+
+Lemma traceinf_prefix_app:
+  forall T1 T2 t,
+  traceinf_prefix T1 T2 ->
+  traceinf_prefix (t *** T1) (t *** T2).
+Proof.
+  induction t; simpl; intros. auto. constructor. auto.
+Qed.
+
+Lemma traceinf_sim_prefix:
+  forall T1 T2,
+  traceinf_sim T1 T2 -> traceinf_prefix T1 T2.
+Proof.
+  cofix COINDHYP; intros. 
+  inv H. constructor. constructor. apply COINDHYP; auto.
+Qed.
+
+Lemma traceinf_prefix_2_sim:
+  forall T1 T2,
+  traceinf_prefix T1 T2 -> traceinf_prefix T2 T1 ->
+  traceinf_sim T1 T2.
+Proof.
+  cofix COINDHYP; intros. 
+  inv H.
+  inv H0. constructor.
+  inv H0. constructor. apply COINDHYP; auto.
+Qed.
+

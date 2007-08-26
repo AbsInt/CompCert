@@ -793,6 +793,8 @@ Inductive step: state -> trace -> state -> Prop :=
 
 End RELSEM.
 
+(** Execution of whole programs. *)
+
 Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro:
       let ge := Genv.globalenv p in
@@ -812,3 +814,4 @@ Inductive final_state: state -> int -> Prop :=
       
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=
   program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+
