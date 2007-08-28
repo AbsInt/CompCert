@@ -206,30 +206,6 @@ let rec type_expr env lenv e =
                               (name_of_chunk chunk) s))
       end;
       type_chunk chunk
-  | Estore(chunk, e1, e2) ->
-      let te1 = type_expr env lenv e1 in
-      let te2 = type_expr env lenv e2 in
-      begin try
-        unify tint te1;
-        unify (type_chunk chunk) te2
-      with Error s ->
-        raise (Error (sprintf "In store %s:\n%s"
-                              (name_of_chunk chunk) s))
-      end;
-      te1
-  | Ecall(sg, e1, el) ->
-      let te1 = type_expr env lenv e1 in
-      let tel = type_exprlist env lenv el in
-      begin try
-        unify tint te1;
-        unify_list (ty_of_sig_args sg.sig_args) tel
-      with Error s ->
-        raise (Error (sprintf "In call:\n%s" s))
-      end;
-      begin match sg.sig_res with
-      | None -> tint (*???*)
-      | Some t -> ty_of_typ t
-      end
   | Econdition(e1, e2, e3) ->
       type_condexpr env lenv e1;
       let te2 = type_expr env lenv e2 in
@@ -240,25 +216,19 @@ let rec type_expr env lenv e =
         raise (Error (sprintf "In conditional expression:\n%s" s))
       end;
       te2
+(*
   | Elet(e1, e2) ->
       let te1 = type_expr env lenv e1 in
       let te2 = type_expr env (te1 :: lenv) e2 in
       te2
   | Eletvar n ->
       type_letvar lenv n
-  | Ealloc e ->
-      let te = type_expr env lenv e in
-      begin try
-        unify tint te
-      with Error s ->
-        raise (Error (sprintf "In alloc:\n%s" s))
-      end;
-      tint
+*)
 
 and type_exprlist env lenv el =
   match el with
-  | Enil -> []
-  | Econs (e1, et) ->
+  | Coq_nil -> []
+  | Coq_cons (e1, et) ->
       let te1 = type_expr env lenv e1 in
       let tet = type_exprlist env lenv et in
       (te1 :: tet)
@@ -274,8 +244,6 @@ and type_condexpr env lenv e =
 let rec type_stmt env blk ret s =
   match s with
   | Sskip -> ()
-  | Sexpr e -> 
-      ignore (type_expr env [] e)
   | Sassign(id, e1) ->
       let tid = type_var env id in
       let te1 = type_expr env [] e1 in
@@ -283,6 +251,42 @@ let rec type_stmt env blk ret s =
         unify tid te1
       with Error s ->
         raise (Error (sprintf "In assignment to %s:\n%s" (extern_atom id) s))
+      end
+  | Sstore(chunk, e1, e2) ->
+      let te1 = type_expr env [] e1 in
+      let te2 = type_expr env [] e2 in
+      begin try
+        unify tint te1;
+        unify (type_chunk chunk) te2
+      with Error s ->
+        raise (Error (sprintf "In store %s:\n%s"
+                              (name_of_chunk chunk) s))
+      end
+  | Scall(optid, sg, e1, el) ->
+      let te1 = type_expr env [] e1 in
+      let tel = type_exprlist env [] el in
+      begin try
+        unify tint te1;
+        unify_list (ty_of_sig_args sg.sig_args) tel;
+        let ty_res =
+          match sg.sig_res with
+          | None -> tint (*???*)
+          | Some t -> ty_of_typ t in
+        begin match optid with
+        | None -> ()
+        | Some id -> unify (type_var env id) ty_res
+        end
+      with Error s ->
+        raise (Error (sprintf "In call:\n%s" s))
+      end
+  | Salloc(id, e) ->
+      let tid = type_var env id in
+      let te = type_expr env [] e in
+      begin try
+        unify tint te;
+        unify tint tid
+      with Error s ->
+        raise (Error (sprintf "In alloc:\n%s" s))
       end
   | Sseq(s1, s2) ->
       type_stmt env blk ret s1;

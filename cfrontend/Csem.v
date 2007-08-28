@@ -11,6 +11,7 @@ Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Csyntax.
+Require Import Smallstep.
 
 (** * Semantics of type-dependent operations *)
 
@@ -509,129 +510,108 @@ Section RELSEM.
 
 Variable ge: genv.
 
-(** [eval_expr ge e m1 a t m2 v] defines the evaluation of expression [a]
+Section EXPR.
+
+Variable e: env.
+Variable m: mem.
+
+(** [eval_expr ge e m a v] defines the evaluation of expression [a]
   in r-value position.  [v] is the value of the expression.
-  [m1] is the initial memory state, [m2] the final memory state.
-  [t] is the trace of input/output events performed during this
-  evaluation. *)
+  [e] is the current environment and [m] is the current memory state. *)
 
-Inductive eval_expr: env -> mem -> expr -> trace -> mem -> val -> Prop :=
-  | eval_Econst_int:   forall e m i ty,
-      eval_expr e m (Expr (Econst_int i) ty)
-               E0 m (Vint i)
-  | eval_Econst_float:   forall e m f ty,
-      eval_expr e m (Expr (Econst_float f) ty)
-               E0 m (Vfloat f)
-  | eval_Elvalue: forall e m a ty t m1 loc ofs v,
-      eval_lvalue e m (Expr a ty) t m1 loc ofs ->
-      load_value_of_type ty m1 loc ofs = Some v ->
-      eval_expr e m (Expr a ty) 
-                t m1 v
-  | eval_Eaddrof: forall e m a t m1 loc ofs ty,
-      eval_lvalue e m a t m1 loc ofs ->
-      eval_expr e m (Expr (Eaddrof a) ty)
-                t m1 (Vptr loc ofs)
-  | eval_Esizeof: forall e m ty' ty,
-      eval_expr e m (Expr (Esizeof ty') ty) 
-               E0 m (Vint (Int.repr (sizeof ty')))
-  | eval_Eunop:  forall e m op a ty t m1 v1 v,
-      eval_expr e m a t m1 v1 ->
+Inductive eval_expr: expr -> val -> Prop :=
+  | eval_Econst_int:   forall i ty,
+      eval_expr (Expr (Econst_int i) ty) (Vint i)
+  | eval_Econst_float:   forall f ty,
+      eval_expr (Expr (Econst_float f) ty) (Vfloat f)
+  | eval_Elvalue: forall a ty loc ofs v,
+      eval_lvalue (Expr a ty) loc ofs ->
+      load_value_of_type ty m loc ofs = Some v ->
+      eval_expr (Expr a ty) v
+  | eval_Eaddrof: forall a ty loc ofs,
+      eval_lvalue a loc ofs ->
+      eval_expr (Expr (Eaddrof a) ty) (Vptr loc ofs)
+  | eval_Esizeof: forall ty' ty,
+      eval_expr (Expr (Esizeof ty') ty) (Vint (Int.repr (sizeof ty')))
+  | eval_Eunop:  forall op a ty v1 v,
+      eval_expr a v1 ->
       sem_unary_operation op v1 (typeof a) = Some v ->
-      eval_expr e m (Expr (Eunop op a) ty) 
-                t m1 v
-  | eval_Ebinop: forall e m op a1 a2 ty t1 m1 v1 t2 m2 v2 v,
-      eval_expr e m a1 t1 m1 v1 ->
-      eval_expr e m1 a2 t2 m2 v2 ->
-      sem_binary_operation op v1 (typeof a1) v2 (typeof a2) m2 = Some v ->
-      eval_expr e m (Expr (Ebinop op a1 a2) ty)
-                (t1 ** t2) m2 v
-  | eval_Eorbool_1: forall e m a1 a2 t m1 v1 ty,
-      eval_expr e m a1 t m1 v1 ->
+      eval_expr (Expr (Eunop op a) ty) v
+  | eval_Ebinop: forall op a1 a2 ty v1 v2 v,
+      eval_expr a1 v1 ->
+      eval_expr a2 v2 ->
+      sem_binary_operation op v1 (typeof a1) v2 (typeof a2) m = Some v ->
+      eval_expr (Expr (Ebinop op a1 a2) ty) v
+  | eval_Eorbool_1: forall a1 a2 ty v1,
+      eval_expr a1 v1 ->
       is_true v1 (typeof a1) ->
-      eval_expr e m (Expr (Eorbool a1 a2) ty)
-                  t m1 Vtrue
-  | eval_Eorbool_2: forall e m a1 a2 ty t1 m1 v1 t2 m2 v2 v,
-      eval_expr e m a1 t1 m1 v1 ->
+      eval_expr (Expr (Eorbool a1 a2) ty) Vtrue
+  | eval_Eorbool_2: forall a1 a2 ty v1 v2 v,
+      eval_expr a1 v1 ->
       is_false v1 (typeof a1) -> 
-      eval_expr e m1 a2 t2 m2 v2 ->
+      eval_expr a2 v2 ->
       bool_of_val v2 (typeof a2) v ->
-      eval_expr e m (Expr (Eorbool a1 a2) ty)
-                (t1 ** t2) m2 v
-  | eval_Eandbool_1: forall e m a1 a2 t m1 v1 ty,
-      eval_expr e m a1 t m1 v1 ->
+      eval_expr (Expr (Eorbool a1 a2) ty) v
+  | eval_Eandbool_1: forall a1 a2 ty v1,
+      eval_expr a1 v1 ->
       is_false v1 (typeof a1) ->
-      eval_expr e m (Expr (Eandbool a1 a2) ty)
-                  t m1 Vfalse
-  | eval_Eandbool_2: forall e m a1 a2 ty t1 m1 v1 t2 m2 v2 v,
-      eval_expr e m a1 t1 m1 v1 ->
+      eval_expr (Expr (Eandbool a1 a2) ty) Vfalse
+  | eval_Eandbool_2: forall a1 a2 ty v1 v2 v,
+      eval_expr a1 v1 ->
       is_true v1 (typeof a1) -> 
-      eval_expr e m1 a2 t2 m2 v2 ->
+      eval_expr a2 v2 ->
       bool_of_val v2 (typeof a2) v ->
-      eval_expr e m (Expr (Eandbool a1 a2) ty)
-                (t1 ** t2) m2 v
-  | eval_Ecast:   forall e m a ty t m1 v1 v,
-      eval_expr e m a t m1 v1 ->
+      eval_expr (Expr (Eandbool a1 a2) ty) v
+  | eval_Ecast:   forall a ty v1 v,
+      eval_expr a v1 ->
       cast v1 (typeof a) ty v ->
-      eval_expr e m (Expr (Ecast ty a) ty)
-                t m1 v
-  | eval_Ecall: forall e m a bl ty m3 vres t1 m1 vf t2 m2 vargs f t3,
-      eval_expr e m a t1 m1 vf ->
-      eval_exprlist e m1 bl t2 m2 vargs ->
-      Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = typeof a ->
-      eval_funcall m2 f vargs t3 m3 vres ->
-      eval_expr e m (Expr (Ecall a bl) ty)
-                (t1 ** t2 ** t3) m3 vres 
+      eval_expr (Expr (Ecast ty a) ty) v
 
-(** [eval_lvalue ge e m1 a t m2  b ofs] defines the evaluation of
-  expression [a] in r-value position.  The result of the evaluation
-  is the block reference [b] and the byte offset [ofs] of the
-  memory location where the value of [a] resides.
-  The other parameters are as in [eval_expr]. *)
+(** [eval_lvalue ge e m a b ofs] defines the evaluation of expression [a]
+  in l-value position.  The result is the memory location [b, ofs]
+  that contains the value of the expression [a]. *)
 
-with eval_lvalue: env -> mem -> expr -> trace -> mem -> block -> int -> Prop :=
-  | eval_Evar_local:   forall e m id l ty,
+with eval_lvalue: expr -> block -> int -> Prop :=
+  | eval_Evar_local:   forall id l ty,
       e!id = Some l ->
-      eval_lvalue e m (Expr (Evar id) ty) 
-                 E0 m l Int.zero
-  | eval_Evar_global: forall e m id l ty,
+      eval_lvalue (Expr (Evar id) ty) l Int.zero
+  | eval_Evar_global: forall id l ty,
       e!id = None ->
       Genv.find_symbol ge id = Some l ->
-      eval_lvalue e m (Expr (Evar id) ty)
-                 E0 m l Int.zero
-  | eval_Ederef: forall e m m1 a t ofs ty l,
-      eval_expr e m a t m1 (Vptr l ofs) ->
-      eval_lvalue e m (Expr (Ederef a) ty)
-                  t m1 l ofs
-  | eval_Eindex: forall e m a1 t1 m1 v1 a2 t2 m2 v2 l ofs ty,
-      eval_expr e m a1 t1 m1 v1 ->
-      eval_expr e m1 a2 t2 m2 v2 ->
+      eval_lvalue (Expr (Evar id) ty) l Int.zero
+  | eval_Ederef: forall a ty l ofs,
+      eval_expr a (Vptr l ofs) ->
+      eval_lvalue (Expr (Ederef a) ty) l ofs
+  | eval_Eindex: forall a1 a2 ty v1 v2 l ofs,
+      eval_expr a1 v1 ->
+      eval_expr a2 v2 ->
       sem_add v1 (typeof a1) v2 (typeof a2) = Some (Vptr l ofs) ->
-      eval_lvalue e m (Expr (Eindex a1 a2) ty)
-                  (t1 ** t2) m2 l ofs
- | eval_Efield_struct:   forall e m a t m1 l ofs id fList i ty delta,
-      eval_lvalue e m a t m1 l ofs ->
+      eval_lvalue (Expr (Eindex a1 a2) ty) l ofs
+ | eval_Efield_struct:   forall a i ty l ofs id fList delta,
+      eval_lvalue a l ofs ->
       typeof a = Tstruct id fList ->
       field_offset i fList = OK delta ->
-      eval_lvalue e m (Expr (Efield a i) ty)
-                  t m1 l (Int.add ofs (Int.repr delta))
- | eval_Efield_union:   forall e m a t m1 l ofs id fList i ty,
-      eval_lvalue e m a t m1 l ofs ->
+      eval_lvalue (Expr (Efield a i) ty) l (Int.add ofs (Int.repr delta))
+ | eval_Efield_union:   forall a i ty l ofs id fList,
+      eval_lvalue a l ofs ->
       typeof a = Tunion id fList ->
-      eval_lvalue e m (Expr (Efield a i) ty) 
-                  t m1 l ofs
+      eval_lvalue (Expr (Efield a i) ty) l ofs.
 
-(** [eval_exprlist ge e m1 al t m2 vl] evaluates a list of r-value
+Scheme eval_expr_ind2 := Minimality for eval_expr Sort Prop
+  with eval_lvalue_ind2 := Minimality for eval_lvalue Sort Prop.
+
+(** [eval_exprlist ge e m al vl] evaluates a list of r-value
   expressions [al] to their values [vl]. *)
 
-with eval_exprlist: env -> mem -> exprlist -> trace -> mem -> list val -> Prop :=
-  | eval_Enil:   forall e m,
-      eval_exprlist e m Enil E0 m nil
-  | eval_Econs:   forall e m a bl t1 m1 v t2 m2 vl,
-      eval_expr e m a t1 m1 v ->
-      eval_exprlist e m1 bl t2 m2 vl ->
-      eval_exprlist e m (Econs a bl)
-                    (t1 ** t2) m2 (v :: vl)
+Inductive eval_exprlist: list expr -> list val -> Prop :=
+  | eval_Enil:
+      eval_exprlist nil nil
+  | eval_Econs:   forall a bl v vl,
+      eval_expr a v ->
+      eval_exprlist bl vl ->
+      eval_exprlist (a :: bl) (v :: vl).
+
+End EXPR.
 
 (** [exec_stmt ge e m1 s t m2 out] describes the execution of 
   the statement [s].  [out] is the outcome for this execution.
@@ -639,20 +619,34 @@ with eval_exprlist: env -> mem -> exprlist -> trace -> mem -> list val -> Prop :
   [t] is the trace of input/output events performed during this
   evaluation. *)
 
-with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
+Inductive exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
   | exec_Sskip:   forall e m,
       exec_stmt e m Sskip
                E0 m Out_normal
-  | exec_Sexpr: forall e m a t m1 v,
-      eval_expr e m a t m1 v ->
-      exec_stmt e m (Sexpr a)
-                t m1 Out_normal 
-  | exec_Sassign:   forall e m a1 a2 t1 m1 loc ofs t2 m2 v2 m3,
-      eval_lvalue e m a1 t1 m1 loc ofs ->
-      eval_expr e m1 a2 t2 m2 v2 ->
-      store_value_of_type (typeof a1) m2 loc ofs v2 = Some m3 ->
+  | exec_Sassign:   forall e m a1 a2 loc ofs v2 m',
+      eval_lvalue e m a1 loc ofs ->
+      eval_expr e m a2 v2 ->
+      store_value_of_type (typeof a1) m loc ofs v2 = Some m' ->
       exec_stmt e m (Sassign a1 a2)
-                (t1 ** t2) m3 Out_normal
+               E0 m' Out_normal
+  | exec_Scall_none:   forall e m a al vf vargs f t m' vres,
+      eval_expr e m a vf ->
+      eval_exprlist e m al vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      eval_funcall m f vargs t m' vres ->
+      exec_stmt e m (Scall None a al)
+                t m' Out_normal
+  | exec_Scall_some:   forall e m lhs a al loc ofs vf vargs f t m' vres m'',
+      eval_lvalue e m lhs loc ofs ->
+      eval_expr e m a vf ->
+      eval_exprlist e m al vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      eval_funcall m f vargs t m' vres ->
+      store_value_of_type (typeof lhs) m' loc ofs vres = Some m'' ->
+      exec_stmt e m (Scall (Some lhs) a al)
+                t m'' Out_normal
   | exec_Sseq_1:   forall e m s1 s2 t1 m1 t2 m2 out,
       exec_stmt e m s1 t1 m1 Out_normal ->
       exec_stmt e m1 s2 t2 m2 out ->
@@ -663,102 +657,103 @@ with exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop :=
       out <> Out_normal ->
       exec_stmt e m (Ssequence s1 s2)
                 t1 m1 out
-  | exec_Sifthenelse_true: forall e m a s1 s2 t1 m1 v1 t2 m2 out,
-      eval_expr e m a t1 m1 v1 ->
+  | exec_Sifthenelse_true: forall e m a s1 s2 v1 t m' out,
+      eval_expr e m a v1 ->
       is_true v1 (typeof a) ->
-      exec_stmt e m1 s1 t2 m2 out ->
+      exec_stmt e m s1 t m' out ->
       exec_stmt e m (Sifthenelse a s1 s2)
-                (t1 ** t2) m2 out
-  | exec_Sifthenelse_false: forall e m a s1 s2 t1 m1 v1 t2 m2 out,
-      eval_expr e m a t1 m1 v1 ->
+                t m' out
+  | exec_Sifthenelse_false: forall e m a s1 s2 v1 t m' out,
+      eval_expr e m a v1 ->
       is_false v1 (typeof a) ->
-      exec_stmt e m1 s2 t2 m2 out ->
+      exec_stmt e m s2 t m' out ->
       exec_stmt e m (Sifthenelse a s1 s2)
-                (t1 ** t2) m2 out
+                t m' out
   | exec_Sreturn_none:   forall e m,
       exec_stmt e m (Sreturn None)
                E0 m (Out_return None)
-  | exec_Sreturn_some: forall e m a t m1 v,
-      eval_expr e m a t m1 v ->
+  | exec_Sreturn_some: forall e m a v,
+      eval_expr e m a v ->
       exec_stmt e m (Sreturn (Some a))
-                t m1 (Out_return (Some v))
+               E0 m (Out_return (Some v))
   | exec_Sbreak:   forall e m,
       exec_stmt e m Sbreak
                E0 m Out_break
   | exec_Scontinue:   forall e m,
       exec_stmt e m Scontinue
                E0 m Out_continue
-  | exec_Swhile_false: forall e m s a t v m1,
-      eval_expr e m a t m1 v ->
+  | exec_Swhile_false: forall e m a s v,
+      eval_expr e m a v ->
       is_false v (typeof a) ->
       exec_stmt e m (Swhile a s)
-                t m1 Out_normal
-  | exec_Swhile_stop: forall e m a t1 m1 v s m2 t2 out2 out,
-      eval_expr e m a t1 m1 v ->
+               E0 m Out_normal
+  | exec_Swhile_stop: forall e m a v s t m' out' out,
+      eval_expr e m a v ->
       is_true v (typeof a) ->
-      exec_stmt e m1 s t2 m2 out2 ->
-      out_break_or_return out2 out ->
+      exec_stmt e m s t m' out' ->
+      out_break_or_return out' out ->
       exec_stmt e m (Swhile a s)
-                (t1 ** t2) m2 out
-  | exec_Swhile_loop: forall e m a t1 m1 v s out2 out t2 m2 t3 m3,
-      eval_expr e m a t1 m1 v ->
+                t m' out
+  | exec_Swhile_loop: forall e m a s v t1 m1 out1 t2 m2 out,
+      eval_expr e m a v ->
       is_true v (typeof a) ->
-      exec_stmt e m1 s t2 m2 out2 ->
-      out_normal_or_continue out2 ->
-      exec_stmt e m2 (Swhile a s) t3 m3 out ->
-      exec_stmt e m (Swhile a s)
-                (t1 ** t2 ** t3) m3 out
-  | exec_Sdowhile_false: forall e m s a t1 m1 out1 v t2 m2,
       exec_stmt e m s t1 m1 out1 ->
       out_normal_or_continue out1 ->
-      eval_expr e m1 a t2 m2 v ->
+      exec_stmt e m1 (Swhile a s) t2 m2 out ->
+      exec_stmt e m (Swhile a s)
+                (t1 ** t2) m2 out
+  | exec_Sdowhile_false: forall e m s a t m1 out1 v,
+      exec_stmt e m s t m1 out1 ->
+      out_normal_or_continue out1 ->
+      eval_expr e m1 a v ->
       is_false v (typeof a) ->
       exec_stmt e m (Sdowhile a s)
-                (t1 ** t2) m2 Out_normal
+                t m1 Out_normal
   | exec_Sdowhile_stop: forall e m s a t m1 out1 out,
       exec_stmt e m s t m1 out1 ->
       out_break_or_return out1 out ->
       exec_stmt e m (Sdowhile a s)
                 t m1 out
-  | exec_Sdowhile_loop: forall e m s a m1 m2 m3 t1 t2 t3 out out1 v,
+  | exec_Sdowhile_loop: forall e m s a m1 m2 t1 t2 out out1 v,
       exec_stmt e m s t1 m1 out1 ->
       out_normal_or_continue out1 ->
-      eval_expr e m1 a t2 m2 v ->
+      eval_expr e m1 a v ->
       is_true v (typeof a) ->
-      exec_stmt e m2 (Sdowhile a s) t3 m3 out ->
+      exec_stmt e m1 (Sdowhile a s) t2 m2 out ->
       exec_stmt e m (Sdowhile a s) 
-                (t1 ** t2 ** t3) m3 out
+                (t1 ** t2) m2 out
   | exec_Sfor_start: forall e m s a1 a2 a3 out m1 m2 t1 t2,
+      a1 <> Sskip ->
       exec_stmt e m a1 t1 m1 Out_normal ->
       exec_stmt e m1 (Sfor Sskip a2 a3 s) t2 m2 out ->
       exec_stmt e m (Sfor a1 a2 a3 s) 
                 (t1 ** t2) m2 out
-  | exec_Sfor_false: forall e m s a2 a3 t v m1,
-      eval_expr e m a2 t m1 v ->
+  | exec_Sfor_false: forall e m s a2 a3 v,
+      eval_expr e m a2 v ->
       is_false v (typeof a2) ->
       exec_stmt e m (Sfor Sskip a2 a3 s)
-                t m1 Out_normal
-  | exec_Sfor_stop: forall e m s a2 a3 v m1 m2 t1 t2 out2 out,
-      eval_expr e m a2 t1 m1 v ->
+               E0 m Out_normal
+  | exec_Sfor_stop: forall e m s a2 a3 v m1 t out1 out,
+      eval_expr e m a2 v ->
       is_true v (typeof a2) ->
-      exec_stmt e m1 s t2 m2 out2 ->
-      out_break_or_return out2 out ->
+      exec_stmt e m s t m1 out1 ->
+      out_break_or_return out1 out ->
       exec_stmt e m (Sfor Sskip a2 a3 s)
-                (t1 ** t2) m2 out
-  | exec_Sfor_loop: forall e m s a2 a3 v m1 m2 m3 m4 t1 t2 t3 t4 out2 out,
-      eval_expr e m a2 t1 m1 v ->
+                t m1 out
+  | exec_Sfor_loop: forall e m s a2 a3 v m1 m2 m3 t1 t2 t3 out1 out,
+      eval_expr e m a2 v ->
       is_true v (typeof a2) ->
-      exec_stmt e m1 s t2 m2 out2 ->
-      out_normal_or_continue out2 ->
-      exec_stmt e m2 a3 t3 m3 Out_normal ->
-      exec_stmt e m3 (Sfor Sskip a2 a3 s) t4 m4 out ->
+      exec_stmt e m s t1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      exec_stmt e m1 a3 t2 m2 Out_normal ->
+      exec_stmt e m2 (Sfor Sskip a2 a3 s) t3 m3 out ->
       exec_stmt e m (Sfor Sskip a2 a3 s)
-                (t1 ** t2 ** t3 ** t4) m4 out
-  | exec_Sswitch:   forall e m a t1 m1 n sl t2 m2 out,
-      eval_expr e m a t1 m1 (Vint n) ->
-      exec_lblstmts e m1 (select_switch n sl) t2 m2 out ->
+                (t1 ** t2 ** t3) m3 out
+  | exec_Sswitch:   forall e m a t n sl m1 out,
+      eval_expr e m a (Vint n) ->
+      exec_lblstmts e m (select_switch n sl) t m1 out ->
       exec_stmt e m (Sswitch a sl)
-                (t1 ** t2) m2 (outcome_switch out)
+                t m1 (outcome_switch out)
 
 (** [exec_lblstmts ge e m1 ls t m2 out] is a variant of [exec_stmt]
   that executes in sequence all statements in the list of labeled
@@ -791,25 +786,137 @@ with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
       event_match (external_function id targs tres) vargs t vres ->
       eval_funcall m (External id targs tres) vargs t m vres.
 
-Scheme eval_expr_ind6 := Minimality for eval_expr Sort Prop
-  with eval_lvalue_ind6 := Minimality for eval_lvalue Sort Prop
-  with eval_exprlist_ind6 := Minimality for eval_exprlist Sort Prop
-  with exec_stmt_ind6 := Minimality for exec_stmt Sort Prop
-  with exec_lblstmts_ind6 := Minimality for exec_lblstmts Sort Prop
-  with eval_funcall_ind6 := Minimality for eval_funcall Sort Prop.
+Scheme exec_stmt_ind3 := Minimality for exec_stmt Sort Prop
+  with exec_lblstmts_ind3 := Minimality for exec_lblstmts Sort Prop
+  with eval_funcall_ind3 := Minimality for eval_funcall Sort Prop.
+
+(** Coinductive semantics for divergence.
+  [execinf_stmt ge e m s t] holds if the execution of statement [s]
+  diverges, i.e. loops infinitely.  [t] is the possibly infinite
+  trace of observable events performed during the execution. *)
+
+CoInductive execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
+  | execinf_Scall:   forall e m lhs a al vf vargs f t,
+      eval_expr e m a vf ->
+      eval_exprlist e m al vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      evalinf_funcall m f vargs t ->
+      execinf_stmt e m (Scall lhs a al) t
+  | execinf_Sseq_1:   forall e m s1 s2 t,
+      execinf_stmt e m s1 t ->
+      execinf_stmt e m (Ssequence s1 s2) t
+  | execinf_Sseq_2:   forall e m s1 s2 t1 m1 t2,
+      exec_stmt e m s1 t1 m1 Out_normal ->
+      execinf_stmt e m1 s2 t2 ->
+      execinf_stmt e m (Ssequence s1 s2) (t1 *** t2)
+  | execinf_Sifthenelse_true: forall e m a s1 s2 v1 t,
+      eval_expr e m a v1 ->
+      is_true v1 (typeof a) ->
+      execinf_stmt e m s1 t ->
+      execinf_stmt e m (Sifthenelse a s1 s2) t
+  | execinf_Sifthenelse_false: forall e m a s1 s2 v1 t,
+      eval_expr e m a v1 ->
+      is_false v1 (typeof a) ->
+      execinf_stmt e m s2 t ->
+      execinf_stmt e m (Sifthenelse a s1 s2) t
+  | execinf_Swhile_body: forall e m a v s t,
+      eval_expr e m a v ->
+      is_true v (typeof a) ->
+      execinf_stmt e m s t ->
+      execinf_stmt e m (Swhile a s) t
+  | execinf_Swhile_loop: forall e m a s v t1 m1 out1 t2,
+      eval_expr e m a v ->
+      is_true v (typeof a) ->
+      exec_stmt e m s t1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      execinf_stmt e m1 (Swhile a s) t2 ->
+      execinf_stmt e m (Swhile a s) (t1 *** t2)
+  | execinf_Sdowhile_body: forall e m s a t,
+      execinf_stmt e m s t ->
+      execinf_stmt e m (Sdowhile a s) t
+  | execinf_Sdowhile_loop: forall e m s a m1 t1 t2 out1 v,
+      exec_stmt e m s t1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      eval_expr e m1 a v ->
+      is_true v (typeof a) ->
+      execinf_stmt e m1 (Sdowhile a s) t2 ->
+      execinf_stmt e m (Sdowhile a s) (t1 *** t2)
+  | execinf_Sfor_start_1: forall e m s a1 a2 a3 t,
+      execinf_stmt e m a1 t ->
+      execinf_stmt e m (Sfor a1 a2 a3 s) t
+  | execinf_Sfor_start_2: forall e m s a1 a2 a3 m1 t1 t2,
+      a1 <> Sskip ->
+      exec_stmt e m a1 t1 m1 Out_normal ->
+      execinf_stmt e m1 (Sfor Sskip a2 a3 s) t2 ->
+      execinf_stmt e m (Sfor a1 a2 a3 s) (t1 *** t2)
+  | execinf_Sfor_body: forall e m s a2 a3 v t,
+      eval_expr e m a2 v ->
+      is_true v (typeof a2) ->
+      execinf_stmt e m s t ->
+      execinf_stmt e m (Sfor Sskip a2 a3 s) t
+  | execinf_Sfor_next: forall e m s a2 a3 v m1 t1 t2 out1,
+      eval_expr e m a2 v ->
+      is_true v (typeof a2) ->
+      exec_stmt e m s t1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      execinf_stmt e m1 a3 t2 ->
+      execinf_stmt e m (Sfor Sskip a2 a3 s) (t1 *** t2)
+  | execinf_Sfor_loop: forall e m s a2 a3 v m1 m2 t1 t2 t3 out1,
+      eval_expr e m a2 v ->
+      is_true v (typeof a2) ->
+      exec_stmt e m s t1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      exec_stmt e m1 a3 t2 m2 Out_normal ->
+      execinf_stmt e m2 (Sfor Sskip a2 a3 s) t3 ->
+      execinf_stmt e m (Sfor Sskip a2 a3 s) (t1 *** t2 *** t3)
+  | execinf_Sswitch:   forall e m a t n sl,
+      eval_expr e m a (Vint n) ->
+      execinf_lblstmts e m (select_switch n sl) t ->
+      execinf_stmt e m (Sswitch a sl) t
+
+with execinf_lblstmts: env -> mem -> labeled_statements -> traceinf -> Prop :=
+  | execinf_LSdefault: forall e m s t,
+     execinf_stmt e m s t ->
+     execinf_lblstmts e m (LSdefault s) t
+  | execinf_LScase_body: forall e m n s ls t,
+     execinf_stmt e m s t ->
+     execinf_lblstmts e m (LScase n s ls) t
+  | execinf_LScase_fallthrough: forall e m n s ls t1 m1 t2,
+     exec_stmt e m s t1 m1 Out_normal ->
+     execinf_lblstmts e m1 ls t2 ->
+     execinf_lblstmts e m (LScase n s ls) (t1 *** t2)
+
+(** [evalinf_funcall ge m fd args t] holds if the invocation of function
+    [fd] on arguments [args] diverges, with observable trace [t]. *)
+
+with evalinf_funcall: mem -> fundef -> list val -> traceinf -> Prop :=
+  | evalinf_funcall_internal: forall m f vargs t e m1 lb m2,
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 lb ->
+      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      execinf_stmt e m2 f.(fn_body) t ->
+      evalinf_funcall m (Internal f) vargs t.
 
 End RELSEM.
 
-(** Execution of a whole program: [exec_program p t r]
-  holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] performs the input/output
-  operations described in the trace [t], and eventually returns value [r].
-*)
+(** Execution of a whole program.  [exec_program p beh] holds
+  if the application of [p]'s main function to no arguments
+  in the initial memory state for [p] executes without errors and produces
+  the observable behaviour [beh]. *)
 
-Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := Genv.globalenv p in 
-  let m0 := Genv.init_mem p in
-  exists b, exists f, exists m1,
-  Genv.find_symbol ge p.(prog_main) = Some b /\
-  Genv.find_funct_ptr ge b = Some f /\
-  eval_funcall ge m0 f nil t m1 r.
+Inductive exec_program (p: program): program_behavior -> Prop :=
+  | program_terminates: forall b f m1 t r,
+      let ge := Genv.globalenv p in 
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      eval_funcall ge m0 f nil t m1 (Vint r) ->
+      exec_program p (Terminates t r)
+  | program_diverges: forall b f t,
+      let ge := Genv.globalenv p in 
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      evalinf_funcall ge m0 f nil t ->
+      exec_program p (Diverges t).
+

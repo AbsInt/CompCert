@@ -258,10 +258,10 @@ Proof.
 Qed.
 
 Theorem transf_cminor_program_correct:
-  forall p tp t n,
+  forall p tp beh,
   transf_cminor_program p = OK tp ->
-  Cminor.exec_program p t (Vint n) ->
-  PPC.exec_program tp (Terminates t n).
+  Cminor.exec_program p beh ->
+  PPC.exec_program tp beh.
 Proof.
   intros. unfold transf_cminor_program, transf_cminor_fundef in H.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [H3 P3]].
@@ -276,12 +276,12 @@ Proof.
 Qed.
 
 Theorem transf_c_program_correct:
-  forall p tp t n,
+  forall p tp beh,
   transf_c_program p = OK tp ->
-  Csem.exec_program p t (Vint n) ->
-  PPC.exec_program tp (Terminates t n).
+  Csem.exec_program p beh ->
+  PPC.exec_program tp beh.
 Proof.
-  intros until n; unfold transf_c_program; simpl.
+  intros until beh; unfold transf_c_program; simpl.
   caseEq (Ctyping.typecheck_program p); try congruence; intro.
   caseEq (Cshmgen.transl_program p); simpl; try congruence; intros p1 EQ1.
   caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2. 

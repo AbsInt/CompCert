@@ -2,7 +2,9 @@
 
 for i in $*; do
   mv $i $i.bak
-  sed -e '/<code class="keyword">Proof<\/code> *\./,/<code class="keyword">\(Qed\|Defined\)<\/code> *\./d' $i.bak > $i
+  sed -e '/<span class="keyword">Proof<\/span> *\./,/<span class="keyword">\(Qed\|Defined\)<\/span> *\./d' \
+      -e "s/\"'do' X <- A ; B\" error_monad_scope/doXAB error_monad_scope/g" \
+      $i.bak > $i
   rm $i.bak
 done
 

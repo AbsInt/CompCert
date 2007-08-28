@@ -79,7 +79,7 @@ Definition store_arg (chunk: memory_chunk) (e: expr) : expr :=
   end.
 
 Definition make_store (chunk: memory_chunk) (e1 e2: expr): stmt :=
-  Sexpr (Estore chunk e1 (store_arg chunk e2)).
+  Sstore chunk e1 (store_arg chunk e2).
 
 Definition make_stackaddr (ofs: Z): expr :=
   Econst (Oaddrstack (Int.repr ofs)).
@@ -160,35 +160,22 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
   | Csharpminor.Eload chunk e =>
       do te <- transl_expr cenv e;
       OK (Eload chunk te)
-  | Csharpminor.Ecall sig e el =>
-      do te <- transl_expr cenv e;
-      do tel <- transl_exprlist cenv el;
-      OK (Ecall sig te tel)
   | Csharpminor.Econdition e1 e2 e3 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
       do te3 <- transl_expr cenv e3;
       OK (Econdition te1 te2 te3)
-  | Csharpminor.Elet e1 e2 =>
-      do te1 <- transl_expr cenv e1;
-      do te2 <- transl_expr cenv e2;
-      OK (Elet te1 te2)
-  | Csharpminor.Eletvar n =>
-      OK (Eletvar n)
-  | Csharpminor.Ealloc e =>
-      do te <- transl_expr cenv e;
-      OK (Ealloc te)
-  end
+  end.
 
-with transl_exprlist (cenv: compilenv) (el: Csharpminor.exprlist)
-                     {struct el}: res exprlist :=
+Fixpoint transl_exprlist (cenv: compilenv) (el: list Csharpminor.expr)
+                     {struct el}: res (list expr) :=
   match el with
-  | Csharpminor.Enil =>
-      OK Enil
-  | Csharpminor.Econs e1 e2 =>
+  | nil =>
+      OK nil
+  | e1 :: e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_exprlist cenv e2;
-      OK (Econs te1 te2)
+      OK (te1 :: te2)
   end.
 
 (** Translation of statements.  Entirely straightforward. *)
@@ -198,14 +185,21 @@ Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
   match s with
   | Csharpminor.Sskip =>
       OK Sskip
-  | Csharpminor.Sexpr e =>
-      do te <- transl_expr cenv e; OK(Sexpr te)
   | Csharpminor.Sassign id e =>
       do te <- transl_expr cenv e; var_set cenv id te
   | Csharpminor.Sstore chunk e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
       OK (make_store chunk te1 te2)
+  | Csharpminor.Scall None sig e el =>
+      do te <- transl_expr cenv e;
+      do tel <- transl_exprlist cenv el;
+      OK (Scall None sig te tel)
+  | Csharpminor.Scall (Some id) sig e el =>
+      do te <- transl_expr cenv e;
+      do tel <- transl_exprlist cenv el;
+      do s <- var_set cenv id (Evar id);
+      OK (Sseq (Scall (Some id) sig te tel) s)
   | Csharpminor.Sseq s1 s2 =>
       do ts1 <- transl_stmt cenv s1;
       do ts2 <- transl_stmt cenv s2;
@@ -245,31 +239,26 @@ Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   | Csharpminor.Ebinop op e1 e2 =>
       Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Eload chunk e => addr_taken_expr e
-  | Csharpminor.Ecall sig e el =>
-      Identset.union (addr_taken_expr e) (addr_taken_exprlist el)
   | Csharpminor.Econdition e1 e2 e3 =>
       Identset.union (addr_taken_expr e1) 
         (Identset.union (addr_taken_expr e2) (addr_taken_expr e3))
-  | Csharpminor.Elet e1 e2 =>
-      Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
-  | Csharpminor.Eletvar n => Identset.empty
-  | Csharpminor.Ealloc e => addr_taken_expr e
-  end
+  end.
 
-with addr_taken_exprlist (e: Csharpminor.exprlist): Identset.t :=
+Fixpoint addr_taken_exprlist (e: list Csharpminor.expr): Identset.t :=
   match e with
-  | Csharpminor.Enil => Identset.empty
-  | Csharpminor.Econs e1 e2 =>
+  | nil => Identset.empty
+  | e1 :: e2 =>
       Identset.union (addr_taken_expr e1) (addr_taken_exprlist e2)
   end.
 
 Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
   match s with
   | Csharpminor.Sskip => Identset.empty
-  | Csharpminor.Sexpr e => addr_taken_expr e
   | Csharpminor.Sassign id e => addr_taken_expr e
   | Csharpminor.Sstore chunk e1 e2 =>
       Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
+  | Csharpminor.Scall optid sig e el =>
+      Identset.union (addr_taken_expr e) (addr_taken_exprlist el)
   | Csharpminor.Sseq s1 s2 =>
       Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2)
   | Csharpminor.Sifthenelse e s1 s2 =>
@@ -342,20 +331,13 @@ Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
 
 Fixpoint store_parameters
        (cenv: compilenv) (params: list (ident * memory_chunk))
-       {struct params} : stmt :=
+       {struct params} : res stmt :=
   match params with
-  | nil => Sskip
+  | nil => OK Sskip
   | (id, chunk) :: rem =>
-      match PMap.get id cenv with
-      | Var_local chunk =>
-          Sseq (Sassign id (make_cast chunk (Evar id)))
-               (store_parameters cenv rem)
-      | Var_stack_scalar chunk ofs =>
-          Sseq (make_store chunk (make_stackaddr ofs) (Evar id))
-               (store_parameters cenv rem)
-      | _ =>
-          Sskip (* should never happen *)
-      end
+      do s1 <- var_set cenv id (Evar id);
+      do s2 <- store_parameters cenv rem;
+      OK (Sseq s1 s2)
   end.
 
 (** Translation of a Csharpminor function.  We must check that the
@@ -368,12 +350,13 @@ Definition transl_function
   let (cenv, stacksize) := build_compilenv gce f in
   if zle stacksize Int.max_signed then
     do tbody <- transl_stmt cenv f.(Csharpminor.fn_body);
+    do sparams <- store_parameters cenv f.(Csharpminor.fn_params);
        OK (mkfunction
               (Csharpminor.fn_sig f)
               (Csharpminor.fn_params_names f)
               (Csharpminor.fn_vars_names f)
               stacksize
-              (Sseq (store_parameters cenv f.(Csharpminor.fn_params)) tbody))
+              (Sseq sparams tbody))
   else Error(msg "Cminorgen: too many local variables, stack size exceeded").
 
 Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): res fundef :=

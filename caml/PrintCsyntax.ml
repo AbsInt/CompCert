@@ -129,7 +129,6 @@ let parenthesis_level (Expr (e, ty)) =
       end
   | Ecast _ -> 30
   | Eindex(_, _) -> 20
-  | Ecall(_, _) -> 20
   | Eandbool(_, _) -> 80
   | Eorbool(_, _) -> 80
   | Esizeof _ -> 20
@@ -163,10 +162,6 @@ let rec print_expr p (Expr (eb, ty) as e) =
       fprintf p "@[<hov 2>%a@,[%a]@]"
                 print_expr_prec (level, e1)
                 print_expr_prec (level, e2)
-  | Ecall(e1, el) ->
-      fprintf p "@[<hov 2>%a@,(@[<hov 0>%a@])@]"
-                print_expr_prec (level, e1)
-                print_expr_list (true, el)
   | Eandbool(e1, e2) ->
       fprintf p "@[<hov 0>%a@ && %a@]"
                 print_expr_prec (level, e1)
@@ -186,10 +181,10 @@ and print_expr_prec p (context_prec, e) =
   then fprintf p "(%a)" print_expr e
   else print_expr p e
 
-and print_expr_list p (first, el) =
+let rec print_expr_list p (first, el) =
   match el with
-  | Enil -> ()
-  | Econs(e1, et) ->
+  | Coq_nil -> ()
+  | Coq_cons(e1, et) ->
       if not first then fprintf p ",@ ";
       print_expr p e1;
       print_expr_list p (false, et)
@@ -198,10 +193,17 @@ let rec print_stmt p s =
   match s with
   | Sskip ->
       fprintf p "/*skip*/;"
-  | Sexpr e ->
-      fprintf p "%a;" print_expr e
   | Sassign(e1, e2) ->
       fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
+  | Scall(None, e1, el) ->
+      fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
+                print_expr e1
+                print_expr_list (true, el)
+  | Scall(Some lhs, e1, el) ->
+      fprintf p "@[<hv 2>%a =@ %a@,(@[<hov 0>%a@]);@]"
+                print_expr lhs
+                print_expr e1
+                print_expr_list (true, el)
   | Ssequence(s1, s2) ->
       fprintf p "%a@ %a" print_stmt s1 print_stmt s2
   | Sifthenelse(e, s1, Sskip) ->
@@ -260,12 +262,19 @@ and print_stmt_for p s =
   match s with
   | Sskip ->
       fprintf p "/*nothing*/"
-  | Sexpr e ->
-      fprintf p "%a" print_expr e
   | Sassign(e1, e2) ->
       fprintf p "%a = %a" print_expr e1 print_expr e2
   | Ssequence(s1, s2) ->
       fprintf p "%a, %a" print_stmt_for s1 print_stmt_for s2
+  | Scall(None, e1, el) ->
+      fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@])@]"
+                print_expr e1
+                print_expr_list (true, el)
+  | Scall(Some lhs, e1, el) ->
+      fprintf p "@[<hv 2>%a =@ %a@,(@[<hov 0>%a@])@]"
+                print_expr lhs
+                print_expr e1
+                print_expr_list (true, el)
   | _ ->
       fprintf p "<impossible>"
 
@@ -395,20 +404,20 @@ let rec collect_expr (Expr(ed, ty)) =
   | Ebinop(op, e1, e2) -> collect_expr e1; collect_expr e2
   | Ecast(ty, e1) -> collect_type ty; collect_expr e1
   | Eindex(e1, e2) -> collect_expr e1; collect_expr e2
-  | Ecall(e1, el) -> collect_expr e1; collect_expr_list el
   | Eandbool(e1, e2) -> collect_expr e1; collect_expr e2
   | Eorbool(e1, e2) -> collect_expr e1; collect_expr e2
   | Esizeof ty -> collect_type ty
   | Efield(e1, id) -> collect_expr e1
 
-and collect_expr_list = function
-  | Enil -> ()
-  | Econs(hd, tl) -> collect_expr hd; collect_expr_list tl
+let rec collect_expr_list = function
+  | Coq_nil -> ()
+  | Coq_cons(hd, tl) -> collect_expr hd; collect_expr_list tl
 
 let rec collect_stmt = function
   | Sskip -> ()
-  | Sexpr e -> collect_expr e
   | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
+  | Scall(None, e1, el) -> collect_expr e1; collect_expr_list el
+  | Scall(Some lhs, e1, el) -> collect_expr lhs; collect_expr e1; collect_expr_list el
   | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
   | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2
   | Swhile(e, s) -> collect_expr e; collect_stmt s

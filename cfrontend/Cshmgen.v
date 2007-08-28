@@ -253,6 +253,14 @@ Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
 
 (** * Reading and writing variables *)
 
+(** Determine if a C expression is a variable *)
+
+Definition is_variable (e: Csyntax.expr) : option ident :=
+  match e with
+  | Expr (Csyntax.Evar id) _ => Some id
+  | _ => None
+  end.
+
 (** [var_get id ty] returns Csharpminor code that evaluates to the
    value of C variable [id] with type [ty].  Note that 
    C variables of array or function type evaluate to the address
@@ -277,7 +285,19 @@ Definition var_set (id: ident) (ty: type) (rhs: expr) :=
   | _ => Error (MSG "Cshmgen.var_set " :: CTX id :: nil)
   end.
 
-(** * Translation of operators *)
+(** Auxiliary for translating call statements *)
+
+Definition transl_lhs_call (opta: option Csyntax.expr) : res (option ident) :=
+  match opta with
+  | None => OK None
+  | Some a =>
+      match is_variable a with
+      | None => Error (msg "LHS of function call is not a variable")
+      | Some id => OK (Some id)
+      end
+  end.
+
+(** ** Translation of operators *)
 
 Definition transl_unop (op: Csyntax.unary_operation) (a: expr) (ta: type) : res expr :=
   match op with
@@ -350,15 +370,6 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
       do tc <- transl_expr c;
       do ts <- make_add tb (typeof b) tc (typeof c);
       make_load ts ty
-  | Expr (Csyntax.Ecall b cl) _ =>
-      match (classify_fun (typeof b)) with
-      | fun_case_f args res =>
-          do tb <- transl_expr b;
-          do tcl <- transl_exprlist cl;
-          OK(Ecall (signature_of_type args res) tb tcl)
-      | _ =>
-          Error(msg "Cshmgen.transl_expr(call)")
-      end 
   | Expr (Csyntax.Eandbool b c) _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
@@ -413,30 +424,22 @@ with transl_lvalue (a: Csyntax.expr) {struct a} : res expr :=
       end
   | _ => 
       Error(msg "Cshmgen.transl_lvalue")
-  end
+  end.
 
 (** [transl_exprlist al] returns a list of Csharpminor expressions
    that compute the values of the list [al] of Csyntax expressions.
    Used for function applications. *)
 
-with transl_exprlist (al: Csyntax.exprlist): res exprlist :=
+Fixpoint transl_exprlist (al: list Csyntax.expr): res (list expr) :=
   match al with
-  | Csyntax.Enil => OK Enil
-  | Csyntax.Econs a1 a2 =>
+  | nil => OK nil
+  | a1 :: a2 =>
       do ta1 <- transl_expr a1;
       do ta2 <- transl_exprlist a2;
-      OK (Econs ta1 ta2)
+      OK (ta1 :: ta2)
   end.
 
 (** * Translation of statements *)
-
-(** Determine if a C expression is a variable *)
-
-Definition is_variable (e: Csyntax.expr) : option ident :=
-  match e with
-  | Expr (Csyntax.Evar id) _ => Some id
-  | _ => None
-  end.
 
 (** [exit_if_false e] return the statement that tests the boolean
    value of the Clight expression [e].  If [e] evaluates to false,
@@ -512,15 +515,18 @@ Fixpoint switch_table (sl: labeled_statements) (k: nat) {struct sl} : list (int 
   | LScase ni _ rem => (ni, k) :: switch_table rem (k+1)
   end.
 
+Definition is_Sskip:
+  forall (s: Csyntax.statement), {s = Csyntax.Sskip} + {s <> Csyntax.Sskip}.
+Proof.
+  destruct s; ((left; reflexivity) || (right; congruence)).
+Qed.
+
 Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : res stmt :=
   match s with
   | Csyntax.Sskip =>
       OK Sskip
-  | Csyntax.Sexpr e =>
-      do te <- transl_expr e;
-      OK (Sexpr te)
   | Csyntax.Sassign b c =>
-      match (is_variable b) with
+      match is_variable b with
       | Some id =>
           do tc <- transl_expr c;
           var_set id (typeof b) tc
@@ -529,6 +535,15 @@ Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : r
           do tc <- transl_expr c;
           make_store tb (typeof b) tc
       end 
+  | Csyntax.Scall opta b cl =>
+      match classify_fun (typeof b) with
+      | fun_case_f args res =>
+          do optid <- transl_lhs_call opta;
+          do tb <- transl_expr b;
+          do tcl <- transl_exprlist cl;
+          OK(Scall optid (signature_of_type args res) tb tcl)
+      | _ => Error(msg "Cshmgen.transl_stmt(call)")
+      end
   | Csyntax.Ssequence s1 s2 =>
       do ts1 <- transl_statement nbrk ncnt s1;
       do ts2 <- transl_statement nbrk ncnt s2;
@@ -547,11 +562,17 @@ Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : r
       do ts1 <- transl_statement 1%nat 0%nat s1;
       OK (Sblock (Sloop (Sseq (Sblock ts1) te)))
   | Csyntax.Sfor e1 e2 e3 s1 =>
-      do te1 <- transl_statement nbrk ncnt e1;
-      do te2 <- exit_if_false e2;
-      do te3 <- transl_statement nbrk ncnt e3;
-      do ts1 <- transl_statement 1%nat 0%nat s1;
-      OK (Sseq te1 (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3)))))
+      if is_Sskip e1 then
+       (do te2 <- exit_if_false e2;
+        do te3 <- transl_statement nbrk ncnt e3;
+        do ts1 <- transl_statement 1%nat 0%nat s1;
+        OK (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3)))))
+      else
+       (do te1 <- transl_statement nbrk ncnt e1;
+        do te2 <- exit_if_false e2;
+        do te3 <- transl_statement nbrk ncnt e3;
+        do ts1 <- transl_statement 1%nat 0%nat s1;
+        OK (Sseq te1 (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3))))))
   | Csyntax.Sbreak =>
       OK (Sexit nbrk)
   | Csyntax.Scontinue =>
@@ -579,7 +600,7 @@ with transl_lblstmts (nbrk ncnt: nat) (sl: labeled_statements) (body: stmt)
       transl_lblstmts (pred nbrk) (pred ncnt) rem (Sblock (Sseq body ts))
   end.
 
-(** * Translation of functions and programs *)
+(*** Translation of functions *)
 
 Definition prefix_var_name (id: ident) : errmsg :=
   MSG "In local variable " :: CTX id :: MSG ":\n" :: nil.
@@ -602,6 +623,8 @@ Definition transl_fundef (f: Csyntax.fundef) : res fundef :=
   | Csyntax.External id args res =>
       OK(AST.External (external_function id args res))
   end.
+
+(** ** Translation of programs *)
 
 Definition transl_globvar (ty: type) := var_kind_of_type ty.
 

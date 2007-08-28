@@ -28,9 +28,9 @@ FILES=\
   Mach.ml Bounds.ml Stacking.ml \
   PPC.ml PPCgen.ml \
   Main.ml \
-  ../caml/Cil2Csyntax.ml \
+  ../caml/PrintCsyntax.ml ../caml/Cil2Csyntax.ml \
   ../caml/CMparser.ml ../caml/CMlexer.ml ../caml/CMtypecheck.ml \
-  ../caml/PrintCsyntax.ml ../caml/PrintPPC.ml \
+  ../caml/PrintPPC.ml \
   ../caml/Configuration.ml ../caml/Driver.ml
 
 EXTRACTEDFILES:=$(filter-out ../caml/%, $(FILES))

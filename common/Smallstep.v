@@ -172,12 +172,17 @@ Qed.
     for coinductive reasoning. *)
 
 CoInductive forever_N (ge: genv): nat -> state -> traceinf -> Prop :=
-  | forever_N_star: forall s1 t s2 p q T,
-      star ge s1 t s2 -> (p < q)%nat -> forever_N ge p s2 T ->
-      forever_N ge q s1 (t *** T)
-  | forever_N_plus: forall s1 t s2 p q T,
-      plus ge s1 t s2 -> forever_N ge p s2 T ->
-      forever_N ge q s1 (t *** T).
+  | forever_N_star: forall s1 t s2 p q T1 T2,
+      star ge s1 t s2 -> 
+      (p < q)%nat ->
+      forever_N ge p s2 T2 ->
+      T1 = t *** T2 ->
+      forever_N ge q s1 T1
+  | forever_N_plus: forall s1 t s2 p q T1 T2,
+      plus ge s1 t s2 ->
+      forever_N ge p s2 T2 ->
+      T1 = t *** T2 ->
+      forever_N ge q s1 T1.
 
 Remark Peano_induction:
   forall (P: nat -> Prop),
@@ -202,14 +207,14 @@ Proof.
   (* star case *)
   inv H1.
   (* no transition *)
-  change (E0 *** T0) with T0. apply H with p1. auto. auto. 
+  change (E0 *** T2) with T2. apply H with p1. auto. auto. 
   (* at least one transition *)
-  exists t1; exists s0; exists p0; exists (t2 *** T0).
+  exists t1; exists s0; exists p0; exists (t2 *** T2).
   split. auto. split. eapply forever_N_star; eauto.
   apply Eappinf_assoc.
   (* plus case *)
   inv H1.
-  exists t1; exists s0; exists (S p1); exists (t2 *** T0).
+  exists t1; exists s0; exists (S p1); exists (t2 *** T2).
   split. auto. split. eapply forever_N_star; eauto. 
   apply Eappinf_assoc.
 Qed.
@@ -348,12 +353,12 @@ Proof.
     forever_N step2 ge2 (measure st1) st2 T).
   cofix COINDHYP; intros.
   inversion H; subst. elim (simulation H1 H0).
-  intros [st2' [A B]]. apply forever_N_plus with st2' (measure s2).
-  auto. apply COINDHYP. assumption. assumption.
+  intros [st2' [A B]]. apply forever_N_plus with t st2' (measure s2) T0.
+  auto. apply COINDHYP. assumption. assumption. auto.
   intros [A [B C]].
-  apply forever_N_star with st2 (measure s2).
+  apply forever_N_star with t st2 (measure s2) T0.
   rewrite B. apply star_refl. auto.
-  apply COINDHYP. assumption. auto.
+  apply COINDHYP. assumption. auto. auto.
   intros. eapply forever_N_forever; eauto.
 Qed.
 

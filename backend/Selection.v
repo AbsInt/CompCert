@@ -38,16 +38,11 @@ Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
   | Evar id => Evar id
   | Eop op bl => Eop op (lift_exprlist p bl)
   | Eload chunk addr bl => Eload chunk addr (lift_exprlist p bl)
-  | Estore chunk addr bl c =>
-      Estore chunk addr (lift_exprlist p bl) (lift_expr p c)
-  | Ecall sig b cl => Ecall sig (lift_expr p b) (lift_exprlist p cl)
   | Econdition b c d =>
       Econdition (lift_condexpr p b) (lift_expr p c) (lift_expr p d)
   | Elet b c => Elet (lift_expr p b) (lift_expr (S p) c)
   | Eletvar n =>
       if le_gt_dec p n then Eletvar (S n) else Eletvar n
-  | Ealloc b =>
-      Ealloc (lift_expr p b)
   end
 
 with lift_condexpr (p: nat) (a: condexpr) {struct a}: condexpr :=
@@ -981,7 +976,7 @@ Definition load (chunk: memory_chunk) (e1: expr) :=
 
 Definition store (chunk: memory_chunk) (e1 e2: expr) :=
   match addressing e1 with
-  | (mode, args) => Estore chunk mode args e2
+  | (mode, args) => Sstore chunk mode args e2
   end.
 
 (** * Translation from Cminor to CminorSel *)
@@ -1046,20 +1041,15 @@ Fixpoint sel_expr (a: Cminor.expr) : expr :=
   | Cminor.Eunop op arg => sel_unop op (sel_expr arg)
   | Cminor.Ebinop op arg1 arg2 => sel_binop op (sel_expr arg1) (sel_expr arg2)
   | Cminor.Eload chunk addr => load chunk (sel_expr addr)
-  | Cminor.Estore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
-  | Cminor.Ecall sg fn args => Ecall sg (sel_expr fn) (sel_exprlist args)
   | Cminor.Econdition cond ifso ifnot =>
       Econdition (condexpr_of_expr (sel_expr cond))
                  (sel_expr ifso) (sel_expr ifnot)
-  | Cminor.Elet b c => Elet (sel_expr b) (sel_expr c)
-  | Cminor.Eletvar n => Eletvar n
-  | Cminor.Ealloc b => Ealloc (sel_expr b)
-  end
+  end.
 
-with sel_exprlist (al: Cminor.exprlist) : exprlist :=
+Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
   match al with
-  | Cminor.Enil => Enil
-  | Cminor.Econs a bl => Econs (sel_expr a) (sel_exprlist bl)
+  | nil => Enil
+  | a :: bl => Econs (sel_expr a) (sel_exprlist bl)
   end.
 
 (** Conversion from Cminor statements to Cminorsel statements. *)
@@ -1067,8 +1057,11 @@ with sel_exprlist (al: Cminor.exprlist) : exprlist :=
 Fixpoint sel_stmt (s: Cminor.stmt) : stmt :=
   match s with
   | Cminor.Sskip => Sskip
-  | Cminor.Sexpr e => Sexpr (sel_expr e)
   | Cminor.Sassign id e => Sassign id (sel_expr e)
+  | Cminor.Sstore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
+  | Cminor.Scall optid sg fn args =>
+      Scall optid sg (sel_expr fn) (sel_exprlist args)
+  | Cminor.Salloc id b => Salloc id (sel_expr b)
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt s1) (sel_stmt s2)
   | Cminor.Sifthenelse e ifso ifnot =>
       Sifthenelse (condexpr_of_expr (sel_expr e))

@@ -8,8 +8,11 @@ Require Import Values.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
+Require Import Csyntax.
+Require Import Csem.
 Require Import PPC.
 Require Import Main.
+Require Import Errors.
 
 (** * Determinism of PPC semantics *)
 
@@ -555,22 +558,29 @@ Proof.
   auto. apply traceinf_sim_sym; auto. apply traceinf_sim_refl.
 Qed.
 
-(** * Strong semantic preservation property *)
+(** * Additional semantic preservation property *)
 
-Require Import Errors.
+(** Combining the semantic preservation theorem from module [Main]
+  with the determinism of PPC executions, we easily obtain
+  additional, stronger semantic preservation properties.
+  The first property states that, when compiling a Clight
+  program that has well-defined semantics, all possible executions
+  of the resulting PPC code correspond to an execution of
+  the source Clight program, in the sense of the [matching_behaviors]
+  predicate. *)
 
-Theorem transf_rtl_program_correct_strong:
+Theorem transf_c_program_correct_strong:
   forall p tp b w,
-  transf_rtl_program p = OK tp ->
-  RTL.exec_program p b ->
+  transf_c_program p = OK tp ->
+  Csem.exec_program p b ->
   possible_behavior w b ->
   (exists b', exec_program' tp w b')
 /\(forall b', exec_program' tp w b' ->
-   exists b0, RTL.exec_program p b0 /\ matching_behaviors b0 b').
+   exists b0, Csem.exec_program p b0 /\ matching_behaviors b0 b').
 Proof.
   intros.
   assert (PPC.exec_program tp b).
-    eapply transf_rtl_program_correct; eauto.
+    eapply transf_c_program_correct; eauto.
   exploit exec_program_program'; eauto. 
   intros [b' [A B]].
   split. exists b'; auto.
@@ -578,3 +588,52 @@ Proof.
   apply matching_behaviors_same with b'. auto.
   eapply exec_program'_deterministic; eauto.
 Qed.
+
+Section SPECS_PRESERVED.
+
+(** The second additional results shows that if one execution
+  of the source Clight program satisfies a given specification
+  (a predicate on the observable behavior of the program),
+  then all executions of the produced PPC program satisfy
+  this specification as well.  *) 
+
+Variable spec: program_behavior -> Prop.
+
+(* Since the execution trace for a diverging Clight program
+   is not uniquely defined (the trace can contain events that
+   the program will never perform because it loops earlier),
+   this result holds only if the specification is closed under
+   prefixes in the case of diverging executions.  This is the
+   case for all safety properties (some undesirable event never
+   occurs), but not for liveness properties (some desirable event
+   always occurs). *)
+
+Hypothesis spec_safety:
+  forall T T', traceinf_prefix T T' -> spec (Diverges T') -> spec (Diverges T).
+
+Theorem transf_c_program_preserves_spec:
+  forall p tp b w,
+  transf_c_program p = OK tp ->
+  Csem.exec_program p b ->
+  possible_behavior w b ->
+  spec b ->
+  (exists b', exec_program' tp w b')
+/\(forall b', exec_program' tp w b' -> spec b').
+Proof.
+  intros.
+  assert (PPC.exec_program tp b).
+    eapply transf_c_program_correct; eauto.
+  exploit exec_program_program'; eauto. 
+  intros [b' [A B]].
+  split. exists b'; auto.
+  intros b'' EX.
+  assert (same_behaviors b' b''). eapply exec_program'_deterministic; eauto.
+  inv B; inv H4. 
+  auto.
+  apply spec_safety with T1. 
+  eapply traceinf_prefix_compat with T2 T1. 
+  auto. apply traceinf_sim_sym; auto. apply traceinf_sim_refl.
+  auto.
+Qed.
+
+End SPECS_PRESERVED.

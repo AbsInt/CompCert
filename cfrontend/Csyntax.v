@@ -136,15 +136,10 @@ with expr_descr : Set :=
   | Ebinop: binary_operation -> expr -> expr -> expr_descr (**r binary operation *)
   | Ecast: type -> expr -> expr_descr   (**r type cast ([(ty) e]) *)
   | Eindex: expr -> expr -> expr_descr  (**r array indexing ([e1[e2]]) *)
-  | Ecall: expr -> exprlist -> expr_descr  (**r function call *)
   | Eandbool: expr -> expr -> expr_descr (**r sequential and ([&&]) *)
   | Eorbool: expr -> expr -> expr_descr (**r sequential or ([||]) *)
   | Esizeof: type -> expr_descr         (**r size of a type *)
-  | Efield: expr -> ident -> expr_descr (**r access to a member of a struct or union *)
-
-with exprlist : Set :=
-  | Enil: exprlist
-  | Econs: expr -> exprlist -> exprlist.
+  | Efield: expr -> ident -> expr_descr. (**r access to a member of a struct or union *)
 
 (** Extract the type part of a type-annotated Clight expression. *)
 
@@ -160,8 +155,8 @@ Definition typeof (e: expr) : type :=
 
 Inductive statement : Set :=
   | Sskip : statement                   (**r do nothing *)
-  | Sexpr : expr -> statement           (**r evaluate expression for its side-effects *)
   | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
+  | Scall: option expr -> expr -> list expr -> statement (**r function call *)
   | Ssequence : statement -> statement -> statement  (**r sequence *)
   | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)
   | Swhile : expr -> statement -> statement   (**r [while] loop *)

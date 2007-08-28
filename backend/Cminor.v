@@ -9,6 +9,7 @@ Require Import Events.
 Require Import Values.
 Require Import Mem.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Switch.
 
 (** * Abstract syntax *)
@@ -61,12 +62,8 @@ Inductive binary_operation : Set :=
   | Ocmpf: comparison -> binary_operation. (**r float comparison *)
 
 (** Expressions include reading local variables, constants and
-  arithmetic operations, reading and writing store locations,
-  function calls, and conditional expressions
-  (similar to [e1 ? e2 : e3] in C).
-  The [Elet] and [Eletvar] constructs enable sharing the computations
-  of subexpressions.  De Bruijn notation is used: [Eletvar n] refers
-  to the value bound by then [n+1]-th enclosing [Elet] construct. *)
+  arithmetic operations, reading store locations, and conditional
+  expressions (similar to [e1 ? e2 : e3] in C). *)
 
 Inductive expr : Set :=
   | Evar : ident -> expr
@@ -74,26 +71,20 @@ Inductive expr : Set :=
   | Eunop : unary_operation -> expr -> expr
   | Ebinop : binary_operation -> expr -> expr -> expr
   | Eload : memory_chunk -> expr -> expr
-  | Estore : memory_chunk -> expr -> expr -> expr
-  | Ecall : signature -> expr -> exprlist -> expr
-  | Econdition : expr -> expr -> expr -> expr
-  | Elet : expr -> expr -> expr
-  | Eletvar : nat -> expr
-  | Ealloc : expr -> expr
-
-with exprlist : Set :=
-  | Enil: exprlist
-  | Econs: expr -> exprlist -> exprlist.
+  | Econdition : expr -> expr -> expr -> expr.
 
 (** Statements include expression evaluation, assignment to local variables,
-  an if/then/else conditional, infinite loops, blocks and early block
-  exits, and early function returns.  [Sexit n] terminates prematurely
-  the execution of the [n+1] enclosing [Sblock] statements. *)
+  memory stores, function calls, an if/then/else conditional, infinite
+  loops, blocks and early block exits, and early function returns.
+  [Sexit n] terminates prematurely the execution of the [n+1]
+  enclosing [Sblock] statements. *)
 
 Inductive stmt : Set :=
   | Sskip: stmt
-  | Sexpr: expr -> stmt
   | Sassign : ident -> expr -> stmt
+  | Sstore : memory_chunk -> expr -> expr -> stmt
+  | Scall : option ident -> signature -> expr -> list expr -> stmt
+  | Salloc : ident -> expr -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: expr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -101,7 +92,7 @@ Inductive stmt : Set :=
   | Sexit: nat -> stmt
   | Sswitch: expr -> list (int * nat) -> nat -> stmt
   | Sreturn: option expr -> stmt
-  | Stailcall: signature -> expr -> exprlist -> stmt.
+  | Stailcall: signature -> expr -> list expr -> stmt.
 
 (** Functions are composed of a signature, a list of parameter names,
   a list of local variables, and a  statement representing
@@ -163,15 +154,13 @@ Definition outcome_free_mem
   | _ => Mem.free m sp
   end.
 
-(** Three kinds of evaluation environments are involved:
+(** Two kinds of evaluation environments are involved:
 - [genv]: global environments, define symbols and functions;
-- [env]: local environments, map local variables to values;
-- [lenv]: let environments, map de Bruijn indices to values.
+- [env]: local environments, map local variables to values.
 *)
 
 Definition genv := Genv.t fundef.
 Definition env := PTree.t val.
-Definition letenv := list val.
 
 (** The following functions build the initial local environment at
   function entry, binding parameters to the provided arguments and
@@ -188,6 +177,12 @@ Fixpoint set_locals (il: list ident) (e: env) {struct il} : env :=
   match il with
   | nil => e
   | i1 :: is => PTree.set i1 Vundef (set_locals is e)
+  end.
+
+Definition set_optvar (optid: option ident) (v: val) (e: env) : env :=
+  match optid with
+  | None => e
+  | Some id => PTree.set id v e
   end.
 
 Section RELSEM.
@@ -288,112 +283,62 @@ Definition eval_binop
   | _, _, _ => None
   end.
 
-(** Evaluation of an expression: [eval_expr ge sp le e m a t m' v]
-  states that expression [a], in initial local environment [e] and
-  memory state [m], evaluates to value [v].  [m'] is the final
-  memory state, reflecting memory stores possibly performed by [a].
-  [t] is the trace of I/O events generated during the evaluation.
-  Expressions do not assign variables, therefore the local environment
-  [e] is unchanged.  [ge] and [le] are the global environment and let
-  environment respectively, and are unchanged during evaluation.  [sp]
-  is the pointer to the memory block allocated for this function
+(** Evaluation of an expression: [eval_expr ge sp e m a v]
+  states that expression [a] evaluates to value [v].
+  [ge] is the global environment, [e] the local environment,
+  and [m] the current memory state.  They are unchanged during evaluation.
+  [sp] is the pointer to the memory block allocated for this function
   (stack frame).
 *)
 
-Inductive eval_expr:
-         val -> letenv -> env ->
-         mem -> expr -> trace -> mem -> val -> Prop :=
-  | eval_Evar:
-      forall sp le e m id v,
+Section EVAL_EXPR.
+
+Variable sp: val.
+Variable e: env.
+Variable m: mem.
+
+Inductive eval_expr: expr -> val -> Prop :=
+  | eval_Evar: forall id v,
       PTree.get id e = Some v ->
-      eval_expr sp le e m (Evar id) E0 m v
-  | eval_Econst:
-      forall sp le e m cst v,
+      eval_expr (Evar id) v
+  | eval_Econst: forall cst v,
       eval_constant sp cst = Some v ->
-      eval_expr sp le e m (Econst cst) E0 m v
-  | eval_Eunop:
-      forall sp le e m op a t m1 v1 v,
-      eval_expr sp le e m a t m1 v1 ->
+      eval_expr (Econst cst) v
+  | eval_Eunop: forall op a1 v1 v,
+      eval_expr a1 v1 ->
       eval_unop op v1 = Some v ->
-      eval_expr sp le e m (Eunop op a) t m1 v
-  | eval_Ebinop:
-      forall sp le e m op a1 a2 t1 m1 v1 t2 m2 v2 t v,
-      eval_expr sp le e m a1 t1 m1 v1 ->
-      eval_expr sp le e m1 a2 t2 m2 v2 ->
-      eval_binop op v1 v2 m2 = Some v ->
-      t = t1 ** t2 ->
-      eval_expr sp le e m (Ebinop op a1 a2) t m2 v
-  | eval_Eload:
-      forall sp le e m chunk a t m1 v1 v,
-      eval_expr sp le e m a t m1 v1 ->
-      Mem.loadv chunk m1 v1 = Some v ->
-      eval_expr sp le e m (Eload chunk a) t m1 v
-  | eval_Estore:
-      forall sp le e m chunk a1 a2 t t1 m1 v1 t2 m2 v2 m3,
-      eval_expr sp le e m a1 t1 m1 v1 ->
-      eval_expr sp le e m1 a2 t2 m2 v2 ->
-      Mem.storev chunk m2 v1 v2 = Some m3 ->
-      t = t1 ** t2 ->
-      eval_expr sp le e m (Estore chunk a1 a2) t m3 v2
-  | eval_Ecall:
-      forall sp le e m sig a bl t t1 m1 t2 m2 t3 m3 vf vargs vres f,
-      eval_expr sp le e m a t1 m1 vf ->
-      eval_exprlist sp le e m1 bl t2 m2 vargs ->
-      Genv.find_funct ge vf = Some f ->
-      funsig f = sig ->
-      eval_funcall m2 f vargs t3 m3 vres ->
-      t = t1 ** t2 ** t3 ->
-      eval_expr sp le e m (Ecall sig a bl) t m3 vres
-  | eval_Econdition:
-      forall sp le e m a1 a2 a3 t t1 m1 v1 b1 t2 m2 v2,
-      eval_expr sp le e m a1 t1 m1 v1 ->
+      eval_expr (Eunop op a1) v
+  | eval_Ebinop: forall op a1 a2 v1 v2 v,
+      eval_expr a1 v1 ->
+      eval_expr a2 v2 ->
+      eval_binop op v1 v2 m = Some v ->
+      eval_expr (Ebinop op a1 a2) v
+  | eval_Eload: forall chunk addr vaddr v,
+      eval_expr addr vaddr ->
+      Mem.loadv chunk m vaddr = Some v ->     
+      eval_expr (Eload chunk addr) v
+  | eval_Econdition: forall a1 a2 a3 v1 b1 v2,
+      eval_expr a1 v1 ->
       Val.bool_of_val v1 b1 ->
-      eval_expr sp le e m1 (if b1 then a2 else a3) t2 m2 v2 ->
-      t = t1 ** t2 ->
-      eval_expr sp le e m (Econdition a1 a2 a3) t m2 v2
-  | eval_Elet:
-      forall sp le e m a b t t1 m1 v1 t2 m2 v2,
-      eval_expr sp le e m a t1 m1 v1 ->
-      eval_expr sp (v1::le) e m1 b t2 m2 v2 ->
-      t = t1 ** t2 ->
-      eval_expr sp le e m (Elet a b) t m2 v2
-  | eval_Eletvar:
-      forall sp le e m n v,
-      nth_error le n = Some v ->
-      eval_expr sp le e m (Eletvar n) E0 m v
-  | eval_Ealloc:
-      forall sp le e m a t m1 n m2 b,
-      eval_expr sp le e m a t m1 (Vint n) ->
-      Mem.alloc m1 0 (Int.signed n) = (m2, b) ->
-      eval_expr sp le e m (Ealloc a) t m2 (Vptr b Int.zero)
+      eval_expr (if b1 then a2 else a3) v2 ->
+      eval_expr (Econdition a1 a2 a3) v2.
 
-(** Evaluation of a list of expressions:
-  [eval_exprlist ge sp le al m a m' vl]
-  states that the list [al] of expressions evaluate 
-  to the list [vl] of values.
-  The other parameters are as in [eval_expr].
-*)
-
-with eval_exprlist:
-         val -> letenv -> env ->
-         mem -> exprlist -> trace -> mem -> list val -> Prop :=
+Inductive eval_exprlist: list expr -> list val -> Prop :=
   | eval_Enil:
-      forall sp le e m,
-      eval_exprlist sp le e m Enil E0 m nil
-  | eval_Econs:
-      forall sp le e m a bl t t1 m1 v t2 m2 vl,
-      eval_expr sp le e m a t1 m1 v ->
-      eval_exprlist sp le e m1 bl t2 m2 vl ->
-      t = t1 ** t2 ->
-      eval_exprlist sp le e m (Econs a bl) t m2 (v :: vl)
+      eval_exprlist nil nil
+  | eval_Econs: forall a1 al v1 vl,
+      eval_expr a1 v1 -> eval_exprlist al vl ->
+      eval_exprlist (a1 :: al) (v1 :: vl).
 
-(** Evaluation of a function invocation: [eval_funcall ge m f args m' res]
+End EVAL_EXPR.
+
+(** Evaluation of a function invocation: [eval_funcall ge m f args t m' res]
   means that the function [f], applied to the arguments [args] in
   memory state [m], returns the value [res] in modified memory state [m'].
   [t] is the trace of observable events generated during the invocation.
 *)
 
-with eval_funcall:
+Inductive eval_funcall:
         mem -> fundef -> list val -> trace ->
         mem -> val -> Prop :=
   | eval_funcall_internal:
@@ -408,12 +353,13 @@ with eval_funcall:
       event_match ef args t res ->
       eval_funcall m (External ef) args t m res
 
-(** Execution of a statement: [exec_stmt ge sp e m s e' m' out]
+(** Execution of a statement: [exec_stmt ge sp e m s t e' m' out]
   means that statement [s] executes with outcome [out].
   [e] is the initial environment and [m] is the initial memory state.
   [e'] is the final environment, reflecting variable assignments performed
   by [s].  [m'] is the final memory state, reflecting memory stores
-  performed by [s].  The other parameters are as in [eval_expr]. *)
+  performed by [s].  [t] is the trace of I/O events performed during
+  the execution.  The other parameters are as in [eval_expr]. *)
 
 with exec_stmt:
          val ->
@@ -422,21 +368,37 @@ with exec_stmt:
   | exec_Sskip:
       forall sp e m,
       exec_stmt sp e m Sskip E0 e m Out_normal
-  | exec_Sexpr:
-      forall sp e m a t m1 v,
-      eval_expr sp nil e m a t m1 v ->
-      exec_stmt sp e m (Sexpr a) t e m1 Out_normal
   | exec_Sassign:
-      forall sp e m id a t m1 v,
-      eval_expr sp nil e m a t m1 v ->
-      exec_stmt sp e m (Sassign id a) t (PTree.set id v e) m1 Out_normal
+      forall sp e m id a v,
+      eval_expr sp e m a v ->
+      exec_stmt sp e m (Sassign id a) E0 (PTree.set id v e) m Out_normal
+  | exec_Sstore:
+      forall sp e m chunk addr a vaddr v m',
+      eval_expr sp e m addr vaddr ->
+      eval_expr sp e m a v ->
+      Mem.storev chunk m vaddr v = Some m' ->
+      exec_stmt sp e m (Sstore chunk addr a) E0 e m' Out_normal
+  | exec_Scall:
+      forall sp e m optid sig a bl vf vargs f t m' vres e',
+      eval_expr sp e m a vf ->
+      eval_exprlist sp e m bl vargs ->
+      Genv.find_funct ge vf = Some f ->
+      funsig f = sig ->
+      eval_funcall m f vargs t m' vres ->
+      e' = set_optvar optid vres e ->
+      exec_stmt sp e m (Scall optid sig a bl) t e' m' Out_normal
+  | exec_Salloc:
+      forall sp e m id a n m' b,
+      eval_expr sp e m a (Vint n) ->
+      Mem.alloc m 0 (Int.signed n) = (m', b) ->
+      exec_stmt sp e m (Salloc id a) 
+                E0 (PTree.set id (Vptr b Int.zero) e) m' Out_normal
   | exec_Sifthenelse:
-      forall sp e m a s1 s2 t t1 m1 v1 b1 t2 e2 m2 out,
-      eval_expr sp nil e m a t1 m1 v1 ->
-      Val.bool_of_val v1 b1 ->
-      exec_stmt sp e m1 (if b1 then s1 else s2) t2 e2 m2 out ->
-      t = t1 ** t2 ->
-      exec_stmt sp e m (Sifthenelse a s1 s2) t e2 m2 out
+      forall sp e m a s1 s2 v b t e' m' out,
+      eval_expr sp e m a v ->
+      Val.bool_of_val v b ->
+      exec_stmt sp e m (if b then s1 else s2) t e' m' out ->
+      exec_stmt sp e m (Sifthenelse a s1 s2) t e' m' out
   | exec_Sseq_continue:
       forall sp e m t s1 t1 e1 m1 s2 t2 e2 m2 out,
       exec_stmt sp e m s1 t1 e1 m1 Out_normal ->
@@ -467,46 +429,121 @@ with exec_stmt:
       forall sp e m n,
       exec_stmt sp e m (Sexit n) E0 e m (Out_exit n)
   | exec_Sswitch:
-      forall sp e m a cases default t1 m1 n,
-      eval_expr sp nil e m a t1 m1 (Vint n) ->
+      forall sp e m a cases default n,
+      eval_expr sp e m a (Vint n) ->
       exec_stmt sp e m (Sswitch a cases default)
-                t1 e m1 (Out_exit (switch_target n default cases))
+                E0 e m (Out_exit (switch_target n default cases))
   | exec_Sreturn_none:
       forall sp e m,
       exec_stmt sp e m (Sreturn None) E0 e m (Out_return None)
   | exec_Sreturn_some:
-      forall sp e m a t m1 v,
-      eval_expr sp nil e m a t m1 v ->
-      exec_stmt sp e m (Sreturn (Some a)) t e m1 (Out_return (Some v))
+      forall sp e m a v,
+      eval_expr sp e m a v ->
+      exec_stmt sp e m (Sreturn (Some a)) E0 e m (Out_return (Some v))
   | exec_Stailcall:
-      forall sp e m sig a bl t t1 m1 t2 m2 t3 m3 vf vargs vres f,
-      eval_expr (Vptr sp Int.zero) nil e m a t1 m1 vf ->
-      eval_exprlist (Vptr sp Int.zero) nil e m1 bl t2 m2 vargs ->
+      forall sp e m sig a bl vf vargs f t m' vres,
+      eval_expr (Vptr sp Int.zero) e m a vf ->
+      eval_exprlist (Vptr sp Int.zero) e m bl vargs ->
       Genv.find_funct ge vf = Some f ->
       funsig f = sig ->
-      eval_funcall (Mem.free m2 sp) f vargs t3 m3 vres ->
-      t = t1 ** t2 ** t3 ->
-      exec_stmt (Vptr sp Int.zero) e m (Stailcall sig a bl) t e m3 (Out_tailcall_return vres).
+      eval_funcall (Mem.free m sp) f vargs t m' vres ->
+      exec_stmt (Vptr sp Int.zero) e m (Stailcall sig a bl) t e m' (Out_tailcall_return vres).
 
-Scheme eval_expr_ind4 := Minimality for eval_expr Sort Prop
-  with eval_exprlist_ind4 := Minimality for eval_exprlist Sort Prop
-  with eval_funcall_ind4 := Minimality for eval_funcall Sort Prop
-  with exec_stmt_ind4 := Minimality for exec_stmt Sort Prop.
+Scheme eval_funcall_ind2 := Minimality for eval_funcall Sort Prop
+  with exec_stmt_ind2 := Minimality for exec_stmt Sort Prop.
+
+(** Coinductive semantics for divergence.
+  [evalinf_funcall ge m f args t]
+  means that the function [f] diverges when applied to the arguments [args] in
+  memory state [m].  The infinite trace [t] is the trace of
+  observable events generated during the invocation.
+*)
+
+CoInductive evalinf_funcall:
+        mem -> fundef -> list val -> traceinf -> Prop :=
+  | evalinf_funcall_internal:
+      forall m f vargs m1 sp e t,
+      Mem.alloc m 0 f.(fn_stackspace) = (m1, sp) ->
+      set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
+      execinf_stmt (Vptr sp Int.zero) e m1 f.(fn_body) t ->
+      evalinf_funcall m (Internal f) vargs t
+
+(** [execinf_stmt ge sp e m s t] means that statement [s] diverges.
+  [e] is the initial environment, [m] is the initial memory state,
+  and [t] the trace of observable events performed during the execution. *)
+
+with execinf_stmt:
+         val -> env -> mem -> stmt -> traceinf -> Prop :=
+  | execinf_Scall:
+      forall sp e m optid sig a bl vf vargs f t,
+      eval_expr sp e m a vf ->
+      eval_exprlist sp e m bl vargs ->
+      Genv.find_funct ge vf = Some f ->
+      funsig f = sig ->
+      evalinf_funcall m f vargs t ->
+      execinf_stmt sp e m (Scall optid sig a bl) t
+  | execinf_Sifthenelse:
+      forall sp e m a s1 s2 v b t,
+      eval_expr sp e m a v ->
+      Val.bool_of_val v b ->
+      execinf_stmt sp e m (if b then s1 else s2) t ->
+      execinf_stmt sp e m (Sifthenelse a s1 s2) t
+  | execinf_Sseq_1:
+      forall sp e m t s1 s2,
+      execinf_stmt sp e m s1 t ->
+      execinf_stmt sp e m (Sseq s1 s2) t
+  | execinf_Sseq_2:
+      forall sp e m t s1 t1 e1 m1 s2 t2,
+      exec_stmt sp e m s1 t1 e1 m1 Out_normal ->
+      execinf_stmt sp e1 m1 s2 t2 ->
+      t = t1 *** t2 ->
+      execinf_stmt sp e m (Sseq s1 s2) t
+  | execinf_Sloop_body:
+      forall sp e m s t,
+      execinf_stmt sp e m s t ->
+      execinf_stmt sp e m (Sloop s) t
+  | execinf_Sloop_loop:
+      forall sp e m s t t1 e1 m1 t2,
+      exec_stmt sp e m s t1 e1 m1 Out_normal ->
+      execinf_stmt sp e1 m1 (Sloop s) t2 ->
+      t = t1 *** t2 ->
+      execinf_stmt sp e m (Sloop s) t
+  | execinf_Sblock:
+      forall sp e m s t,
+      execinf_stmt sp e m s t ->
+      execinf_stmt sp e m (Sblock s) t
+  | execinf_Stailcall:
+      forall sp e m sig a bl vf vargs f t,
+      eval_expr (Vptr sp Int.zero) e m a vf ->
+      eval_exprlist (Vptr sp Int.zero) e m bl vargs ->
+      Genv.find_funct ge vf = Some f ->
+      funsig f = sig ->
+      evalinf_funcall (Mem.free m sp) f vargs t ->
+      execinf_stmt (Vptr sp Int.zero) e m (Stailcall sig a bl) t.
 
 End RELSEM.
 
-(** Execution of a whole program: [exec_program p t r]
+(** Execution of a whole program: [exec_program p beh]
   holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] performs the input/output
-  operations described in the trace [t], and eventually returns value [r].
-*)
+  in the initial memory state for [p] has [beh] as observable
+  behavior. *)
 
-Definition exec_program (p: program) (t: trace) (r: val) : Prop :=
-  let ge := Genv.globalenv p in
-  let m0 := Genv.init_mem p in
-  exists b, exists f, exists m,
-  Genv.find_symbol ge p.(prog_main) = Some b /\
-  Genv.find_funct_ptr ge b = Some f /\
-  funsig f = mksignature nil (Some Tint) /\
-  eval_funcall ge m0 f nil t m r.
-
+Inductive exec_program (p: program): program_behavior -> Prop :=
+  | program_terminates:
+      forall b f t m r,
+      let ge := Genv.globalenv p in
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = mksignature nil (Some Tint) ->
+      eval_funcall ge m0 f nil t m (Vint r) ->
+      exec_program p (Terminates t r)
+  | program_diverges:
+      forall b f t,
+      let ge := Genv.globalenv p in
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = mksignature nil (Some Tint) ->
+      evalinf_funcall ge m0 f nil t ->
+      exec_program p (Diverges t).

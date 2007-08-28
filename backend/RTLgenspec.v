@@ -799,17 +799,6 @@ Inductive tr_expr (c: code):
       c!n1 = Some (Iload chunk addr rl rd nd) ->
       ~reg_in_map map rd -> ~In rd pr ->
       tr_expr c map pr (Eload chunk addr al) ns nd rd
-  | tr_Estore: forall map pr chunk addr al b ns nd rd n1 rl n2,
-      tr_exprlist c map pr al ns n1 rl ->
-      tr_expr c map (rl ++ pr) b n1 n2 rd ->
-      c!n2 = Some (Istore chunk addr rl rd nd) ->
-      tr_expr c map pr (Estore chunk addr al b) ns nd rd
-  | tr_Ecall: forall map pr sig b cl ns nd rd n1 rf n2 rargs,
-      tr_expr c map pr b ns n1 rf ->
-      tr_exprlist c map (rf :: pr) cl n1 n2 rargs ->
-      c!n2 = Some (Icall sig (inl _ rf) rargs rd nd) ->
-      ~reg_in_map map rd -> ~In rd pr ->
-      tr_expr c map pr (Ecall sig b cl) ns nd rd
   | tr_Econdition: forall map pr b ifso ifnot ns nd rd ntrue nfalse,
       tr_condition c map pr b ns ntrue nfalse ->
       tr_expr c map pr ifso ntrue nd rd ->
@@ -825,13 +814,8 @@ Inductive tr_expr (c: code):
       (rd = r \/ ~reg_in_map map rd /\ ~In rd pr) ->
       tr_move c ns r nd rd ->
       tr_expr c map pr (Eletvar n) ns nd rd
-  | tr_Ealloc: forall map pr a ns nd rd n1 r,
-      tr_expr c map pr a ns n1 r ->
-      c!n1 = Some (Ialloc r rd nd) ->
-      ~reg_in_map map rd -> ~In rd pr ->
-      tr_expr c map pr (Ealloc a) ns nd rd
 
-(** [tr_expr c map pr cond ns ntrue nfalse rd] holds if the graph [c],
+(** [tr_condition c map pr cond ns ntrue nfalse rd] holds if the graph [c],
   starting at node [ns], contains instructions that compute the truth
   value of the Cminor conditional expression [cond] and terminate
   on node [ntrue] if the condition holds and on node [nfalse] otherwise. *)
@@ -866,6 +850,19 @@ with tr_exprlist (c: code):
       tr_exprlist c map (r1 :: pr) al n1 nd rl ->
       tr_exprlist c map pr (Econs a1 al) ns nd (r1 :: rl).
 
+(** Auxiliary for the compilation of variable assignments. *)
+
+Definition tr_store_var (c: code) (map: mapping)
+                        (rs: reg) (id: ident) (ns nd: node): Prop :=
+  exists rv, map.(map_vars)!id = Some rv /\ tr_move c ns rs nd rv.
+
+Definition tr_store_optvar (c: code) (map: mapping)
+                 (rs: reg) (optid: option ident) (ns nd: node): Prop :=
+  match optid with
+  | None => ns = nd
+  | Some id => tr_store_var c map rs id ns nd
+  end.
+
 (** Auxiliary for the compilation of [switch] statements. *)
 
 Inductive tr_switch
@@ -898,14 +895,28 @@ Inductive tr_stmt (c: code) (map: mapping):
      stmt -> node -> node -> list node -> node -> option reg -> Prop :=
   | tr_Sskip: forall ns nexits nret rret,
      tr_stmt c map Sskip ns ns nexits nret rret
-  | tr_Sexpr: forall a ns nd nexits nret rret r,
-     tr_expr c map nil a ns nd r ->
-     tr_stmt c map (Sexpr a) ns nd nexits nret rret
-  | tr_Sassign: forall id a ns nd nexits nret rret rv rt n,
-     map.(map_vars)!id = Some rv ->
-     tr_move c n rt nd rv ->
+  | tr_Sassign: forall id a ns nd nexits nret rret rt n,
      tr_expr c map nil a ns n rt ->
+     tr_store_var c map rt id n nd ->
      tr_stmt c map (Sassign id a) ns nd nexits nret rret
+  | tr_Sstore: forall chunk addr al b ns nd nexits nret rret rd n1 rl n2,
+     tr_exprlist c map nil al ns n1 rl ->
+     tr_expr c map rl b n1 n2 rd ->
+     c!n2 = Some (Istore chunk addr rl rd nd) ->
+     tr_stmt c map (Sstore chunk addr al b) ns nd nexits nret rret
+  | tr_Scall: forall optid sig b cl ns nd nexits nret rret rd n1 rf n2 n3 rargs,
+     tr_expr c map nil b ns n1 rf ->
+     tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
+     c!n2 = Some (Icall sig (inl _ rf) rargs rd n3) ->
+     tr_store_optvar c map rd optid n3 nd ->
+     ~reg_in_map map rd ->
+     tr_stmt c map (Scall optid sig b cl) ns nd nexits nret rret
+  | tr_Salloc: forall id a ns nd nexits nret rret rd n1 n2 r,
+     tr_expr c map nil a ns n1 r ->
+     c!n1 = Some (Ialloc r rd n2) ->
+     tr_store_var c map rd id n2 nd ->
+     ~reg_in_map map rd ->
+     tr_stmt c map (Salloc id a) ns nd nexits nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits nret rret n,
      tr_stmt c map s2 n nd nexits nret rret ->
      tr_stmt c map s1 ns n nexits nret rret ->
@@ -975,10 +986,10 @@ Definition tr_expr_condition_exprlist_ind3
   (P : mapping -> list reg -> expr -> node -> node -> reg -> Prop)
   (P0 : mapping -> list reg -> condexpr -> node -> node -> node -> Prop)
   (P1 : mapping -> list reg -> exprlist -> node -> node -> list reg -> Prop) :=
-  fun a b c' d e f g h i j k l m n o =>
-  conj (tr_expr_ind3 c P P0 P1 a b c' d e f g h i j k l m n o)
-       (conj (tr_condition_ind3 c P P0 P1 a b c' d e f g h i j k l m n o)
-             (tr_exprlist_ind3 c P P0 P1 a b c' d e f g h i j k l m n o)).
+  fun a b c' d e f g h i j k l =>
+  conj (tr_expr_ind3 c P P0 P1 a b c' d e f g h i j k l)
+       (conj (tr_condition_ind3 c P P0 P1 a b c' d e f g h i j k l)
+             (tr_exprlist_ind3 c P P0 P1 a b c' d e f g h i j k l)).
 
 Lemma tr_move_extends:
   forall s1 s2, state_extends s1 s2 ->
@@ -1048,10 +1059,10 @@ Scheme expr_ind3 := Induction for expr Sort Prop
 
 Definition expr_condexpr_exprlist_ind 
     (P1: expr -> Prop) (P2: condexpr -> Prop) (P3: exprlist -> Prop) :=
-  fun a b c d e f g h i j k l m n o =>
-  conj (expr_ind3 P1 P2 P3 a b c d e f g h i j k l m n o)
-    (conj (condexpr_ind3 P1 P2 P3 a b c d e f g h i j k l m n o)
-          (exprlist_ind3 P1 P2 P3 a b c d e f g h i j k l m n o)).
+  fun a b c d e f g h i j k l =>
+  conj (expr_ind3 P1 P2 P3 a b c d e f g h i j k l)
+    (conj (condexpr_ind3 P1 P2 P3 a b c d e f g h i j k l)
+          (exprlist_ind3 P1 P2 P3 a b c d e f g h i j k l)).
 
 Lemma add_move_charact:
   forall s ns rs nd rd s',
@@ -1109,49 +1120,6 @@ Proof.
   split. econstructor; eauto.
   eapply instr_at_incr; eauto.
   apply state_incr_trans with s1; eauto with rtlg.
-  (* Estore *)
-  inv OK.
-  assert (state_incr s s1). eauto with rtlg. 
-  exploit (H0 _ _ _ _ _ _ (x ++ pr) EQ0).
-  eauto with rtlg.
-  apply target_reg_ok_append. constructor; auto. 
-  intros. exploit alloc_regs_fresh_or_in_map; eauto.
-  intros [A|B]. auto. right. apply sym_not_equal.
-  eapply valid_fresh_different; eauto with rtlg. 
-  red; intros. elim (in_app_or _ _ _ H4); intro. 
-  exploit alloc_regs_valid; eauto with rtlg.
-  generalize (VALID _ H5). eauto with rtlg. 
-  eauto with rtlg. 
-  intros [A B].
-  exploit (H _ _ _ _ _ _ pr EQ3); eauto with rtlg. 
-  intros [C D].
-  split. econstructor; eauto.
-  apply tr_expr_incr with s2; eauto with rtlg. 
-  apply instr_at_incr with s1; eauto with rtlg. 
-  eauto with rtlg.
-  (* Ecall *)
-  inv OK.
-  assert (state_incr s0 s3).
-    apply state_incr_trans with s1. eauto with rtlg.
-    apply state_incr_trans with s2; eauto with rtlg.
-  assert (regs_valid (x :: pr) s1).
-    apply regs_valid_cons; eauto with rtlg. 
-  exploit (H0 _ _ _ _ _ _ (x :: pr) EQ2).
-  eauto with rtlg. 
-  apply alloc_regs_target_ok with s1 s2; eauto with rtlg.
-  eauto with rtlg.
-  apply regs_valid_incr with s2; eauto with rtlg.
-  intros [A B].
-  exploit (H _ _ _ _ _ _ pr EQ4).
-  eauto with rtlg.
-  eauto with rtlg.
-  apply regs_valid_incr with s0; eauto with rtlg.
-  apply reg_valid_incr with s1; eauto with rtlg.
-  intros [C D].
-  split. econstructor; eauto.
-  apply tr_exprlist_incr with s4; eauto.
-  apply instr_at_incr with s3; eauto with rtlg. 
-  eauto with rtlg.
   (* Econdition *)
   inv OK.
   exploit (H1 _ _ _ _ _ _ pr EQ); eauto with rtlg.
@@ -1192,13 +1160,6 @@ Proof.
     inv OK. left; congruence. right; eauto.
   auto.
   monadInv EQ1.
-  (* Ealloc *)
-  inv OK. 
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg.
-  intros [A B].
-  split. econstructor; eauto.
-  eapply instr_at_incr; eauto.
-  apply state_incr_trans with s1; eauto with rtlg.
 
   (* CEtrue *)
   split. constructor. auto with rtlg.
@@ -1264,6 +1225,27 @@ Proof.
   intros. eapply B; eauto with rtlg.
 Qed.
 
+Lemma tr_store_var_extends:
+  forall s1 s2, state_extends s1 s2 ->
+  forall map rs id ns nd,
+  tr_store_var s1.(st_code) map rs id ns nd ->
+  tr_store_var s2.(st_code) map rs id ns nd.
+Proof.
+  intros. destruct H0 as [rv [A B]]. 
+  econstructor; split. eauto. eapply tr_move_extends; eauto.
+Qed.
+ 
+Lemma tr_store_optvar_extends:
+  forall s1 s2, state_extends s1 s2 ->
+  forall map rs optid ns nd,
+  tr_store_optvar s1.(st_code) map rs optid ns nd ->
+  tr_store_optvar s2.(st_code) map rs optid ns nd.
+Proof.
+  intros until nd. destruct optid; simpl. 
+  apply tr_store_var_extends; auto.
+  auto.
+Qed.
+
 Lemma tr_switch_extends:
   forall s1 s2, state_extends s1 s2 ->
   forall r nexits t ns,
@@ -1284,8 +1266,9 @@ Proof.
   intros s1 s2 EXT.
   destruct (tr_expr_condition_exprlist_extends s1 s2 EXT) as [A [B C]].
   pose (AT := fun pc i => instr_at_extends s1 s2 pc i EXT).
+  pose (STV := tr_store_var_extends s1 s2 EXT).
+  pose (STOV := tr_store_optvar_extends s1 s2 EXT).
   induction 1; econstructor; eauto.
-  eapply tr_move_extends; eauto.
   eapply tr_switch_extends; eauto.
 Qed.
 
@@ -1297,6 +1280,28 @@ Lemma tr_stmt_incr:
 Proof.
   intros. eapply tr_stmt_extends; eauto with rtlg.
 Qed.
+
+
+Lemma store_var_charact:
+  forall map rs id nd s ns s',
+  store_var map rs id nd s = OK ns s' ->
+  tr_store_var s'.(st_code) map rs id ns nd /\ state_incr s s'.
+Proof.
+  intros. monadInv H. generalize EQ. unfold find_var.
+  caseEq ((map_vars map)!id). 2: intros; discriminate. intros. monadInv EQ1.
+  exploit add_move_charact; eauto. intros [A B]. 
+  split; auto. exists x; auto.
+Qed.
+
+Lemma store_optvar_charact:
+  forall map rs optid nd s ns s',
+  store_optvar map rs optid nd s = OK ns s' ->
+  tr_store_optvar s'.(st_code) map rs optid ns nd /\ state_incr s s'.
+Proof.
+  intros. destruct optid; simpl in H; simpl.
+  eapply store_var_charact; eauto.
+  monadInv H. split. auto. apply state_incr_refl. 
+Qed. 
 
 Lemma transl_exit_charact:
   forall nexits n s ne s',
@@ -1344,18 +1349,85 @@ Proof.
   induction stmt; intros; simpl in TR; try (monadInv TR).
   (* Sskip *)
   split. constructor. auto with rtlg.
-  (* Sexpr *)
-  exploit transl_expr_charact; eauto with rtlg. intros [A B].
-  split. econstructor; eauto. eauto with rtlg.
   (* Sassign *)
-  exploit add_move_charact; eauto. intros [A B].
+  exploit store_var_charact; eauto. intros [A B].
   exploit transl_expr_charact; eauto with rtlg. 
-    apply map_valid_incr with s; eauto with rtlg. 
   intros [C D].
-  generalize EQ. unfold find_var. caseEq (map_vars map)!i; intros; inv EQ2.
   split. econstructor; eauto.
-  apply tr_move_extends with s2; eauto with rtlg.
+  apply tr_store_var_extends with s1; eauto with rtlg.
   eauto with rtlg. 
+  (* Sstore *)
+  assert (state_incr s s1). eauto with rtlg.
+  assert (state_incr s s2). eauto with rtlg.
+  assert (map_valid map s2). eauto with rtlg. 
+  destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
+  exploit (P1 _ _ _ _ _ _ _ x EQ2).
+    auto.
+    eapply alloc_reg_target_ok with (s1 := s0); eauto with rtlg.  
+    apply regs_valid_incr with s0; eauto with rtlg. 
+    apply reg_valid_incr with s1; eauto with rtlg.
+  intros [A B].
+  exploit (P3 _ _ _ _ _ _ _ nil EQ4).
+    apply map_valid_incr with s2; auto.
+    eapply alloc_regs_target_ok with (s1 := s); eauto with rtlg.
+    auto with rtlg.
+    apply regs_valid_incr with s0; eauto with rtlg. 
+  intros [C D].
+  split. econstructor; eauto.
+  apply tr_expr_incr with s3; eauto with rtlg. 
+  apply instr_at_incr with s2; eauto with rtlg.
+  eauto with rtlg.
+  (* Scall *)
+  assert (state_incr s0 s3).
+    apply state_incr_trans with s1. eauto with rtlg.
+    apply state_incr_trans with s2; eauto with rtlg.
+  exploit store_optvar_charact; eauto. intros [A B].
+  assert (state_incr s0 s5) by eauto with rtlg.
+  destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
+  exploit (P3 _ _ _ _ _ _ _ (x :: nil) EQ4).
+    apply map_valid_incr with s0; auto.
+    eapply alloc_regs_target_ok with (s1 := s1); eauto with rtlg.
+    apply regs_valid_cons; eauto with rtlg.
+    apply regs_valid_incr with s1. 
+    apply state_incr_trans with s3; eauto with rtlg. 
+    apply regs_valid_cons; eauto with rtlg.
+    apply regs_valid_incr with s2.
+    apply state_incr_trans with s3; eauto with rtlg.
+    eauto with rtlg.
+  intros [C D].
+  exploit (P1 _ _ _ _ _ _ _ nil EQ6).
+    apply map_valid_incr with s0; eauto with rtlg.
+    eapply alloc_reg_target_ok with (s1 := s0); eauto with rtlg.
+    auto with rtlg.
+    apply reg_valid_incr with s1.
+    apply state_incr_trans with s3; eauto with rtlg. 
+    eauto with rtlg.
+  intros [E F].
+  split. econstructor; eauto. 
+  apply tr_exprlist_incr with s6; eauto. 
+  apply instr_at_incr with s5; eauto with rtlg.
+  apply tr_store_optvar_extends with s4; eauto with rtlg.
+  red; intro.
+  apply valid_fresh_absurd with x1 s2. 
+  apply reg_valid_incr with s0; eauto with rtlg. 
+  eauto with rtlg.
+  eauto with rtlg.
+  (* Salloc *)
+  exploit store_var_charact; eauto. intros [A B].
+  exploit transl_expr_charact; eauto.
+    apply map_valid_incr with s; auto.
+    apply state_incr_trans with s1; eauto with rtlg.
+    eapply alloc_reg_target_ok with (s1 := s); eauto with rtlg.
+    apply reg_valid_incr with s0; eauto with rtlg.
+  intros [C D].
+  split. econstructor; eauto.
+  apply instr_at_incr with s3; eauto with rtlg.
+  apply tr_store_var_extends with s2; eauto with rtlg.
+  red; intro.
+  apply valid_fresh_absurd with x0 s0. 
+  apply reg_valid_incr with s; eauto with rtlg. 
+  eauto with rtlg.
+  apply state_incr_trans with s2; eauto with rtlg. 
   (* Sseq *)
   exploit IHstmt2; eauto with rtlg. intros [A B].
   exploit IHstmt1; eauto with rtlg. intros [C D].

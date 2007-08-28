@@ -47,10 +47,6 @@ Inductive wt_expr: expr -> Prop :=
   | wt_Eindex: forall e1 e2 ty,
      wt_expr e1 -> wt_expr e2 ->
      wt_expr (Expr (Eindex e1 e2) ty)
-  | wt_Ecall: forall e1 el ty,
-     wt_expr e1 ->
-     wt_exprlist el ->
-     wt_expr (Expr (Ecall e1 el) ty)
   | wt_Eandbool: forall e1 e2 ty,
      wt_expr e1 -> wt_expr e2 ->
      wt_expr (Expr (Eandbool e1 e2) ty)
@@ -61,23 +57,32 @@ Inductive wt_expr: expr -> Prop :=
      wt_expr (Expr (Esizeof ty') ty)
   | wt_Efield: forall e id ty,
      wt_expr e ->
-     wt_expr (Expr (Efield e id) ty)
+     wt_expr (Expr (Efield e id) ty).
 
-with wt_exprlist: exprlist -> Prop :=
+Inductive wt_optexpr: option expr -> Prop :=
+  | wt_Enone:
+      wt_optexpr None
+  | wt_Esome: forall e,
+      wt_expr e ->
+      wt_optexpr (Some e).
+
+Inductive wt_exprlist: list expr -> Prop :=
   | wt_Enil:
-     wt_exprlist Enil
+     wt_exprlist nil
   | wt_Econs: forall e el,
-     wt_expr e -> wt_exprlist el -> wt_exprlist (Econs e el).
+     wt_expr e -> wt_exprlist el -> wt_exprlist (e :: el).
 
 Inductive wt_stmt: statement -> Prop :=
   | wt_Sskip:
      wt_stmt Sskip
-  | wt_Sexpr: forall e,
-     wt_expr e ->
-     wt_stmt (Sexpr e)
   | wt_Sassign: forall e1 e2,
      wt_expr e1 -> wt_expr e2 ->
      wt_stmt (Sassign e1 e2)
+  | wt_Scall: forall lhs e1 el,
+     wt_optexpr lhs ->
+     wt_expr e1 ->
+     wt_exprlist el ->
+     wt_stmt (Scall lhs e1 el)
   | wt_Ssequence: forall s1 s2,
      wt_stmt s1 -> wt_stmt s2 ->
      wt_stmt (Ssequence s1 s2)
@@ -97,11 +102,9 @@ Inductive wt_stmt: statement -> Prop :=
      wt_stmt Sbreak
   | wt_Scontinue:
      wt_stmt Scontinue
-  | wt_Sreturn_some: forall e,
-     wt_expr e ->
-     wt_stmt (Sreturn (Some e))
-  | wt_Sreturn_none:
-     wt_stmt (Sreturn None)
+  | wt_Sreturn: forall opte,
+     wt_optexpr opte ->
+     wt_stmt (Sreturn opte)
   | wt_Sswitch: forall e sl,
      wt_expr e -> wt_lblstmts sl ->
      wt_stmt (Sswitch e sl)
@@ -282,49 +285,35 @@ with typecheck_exprdescr (a: Csyntax.expr_descr) (ty: type) {struct a} : bool :=
   | Csyntax.Ebinop op b c => typecheck_expr b && typecheck_expr c
   | Csyntax.Ecast ty b => typecheck_expr b
   | Csyntax.Eindex b c => typecheck_expr b && typecheck_expr c
-  | Csyntax.Ecall b cl => typecheck_expr b && typecheck_exprlist cl
   | Csyntax.Eandbool b c => typecheck_expr b && typecheck_expr c
   | Csyntax.Eorbool b c => typecheck_expr b && typecheck_expr c
   | Csyntax.Esizeof ty => true
   | Csyntax.Efield b i => typecheck_expr b
-  end
-
-with typecheck_exprlist (al: Csyntax.exprlist): bool :=
-  match al with
-  | Csyntax.Enil => true
-  | Csyntax.Econs a1 a2 => typecheck_expr a1 && typecheck_exprlist a2
   end.
 
-Scheme expr_ind_3 := Induction for expr Sort Prop
-  with expr_descr_ind_3 := Induction for expr_descr Sort Prop
-  with exprlist_ind_3 := Induction for exprlist Sort Prop.
+Fixpoint typecheck_exprlist (al: list Csyntax.expr): bool :=
+  match al with
+  | nil => true
+  | a1 :: a2 => typecheck_expr a1 && typecheck_exprlist a2
+  end.
+
+Definition typecheck_optexpr (opta: option Csyntax.expr): bool :=
+  match opta with
+  | None => true
+  | Some a => typecheck_expr a
+  end.
+
+Scheme expr_ind_2 := Induction for expr Sort Prop
+  with expr_descr_ind_2 := Induction for expr_descr Sort Prop.
 
 Lemma typecheck_expr_correct:
   forall a, typecheck_expr a = true -> wt_expr env a.
 Proof.
-  apply (expr_ind_3 (fun a => typecheck_expr a = true -> wt_expr env a)
-                    (fun a => forall ty, typecheck_exprdescr a ty = true -> wt_expr env (Expr a ty))
-                    (fun a => typecheck_exprlist a = true -> wt_exprlist env a));
-  simpl; intros; TrueInv.
-  auto.
-  constructor.
-  constructor.
-  constructor. destruct (env!i). decEq; symmetry; apply eq_type_correct; auto.
+  apply (expr_ind_2 (fun a => typecheck_expr a = true -> wt_expr env a)
+                    (fun a => forall ty, typecheck_exprdescr a ty = true -> wt_expr env (Expr a ty)));
+  simpl; intros; TrueInv; try constructor; auto.
+  destruct (env!i). decEq; symmetry; apply eq_type_correct; auto.
   discriminate.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  constructor; auto.
-  auto.
-  constructor; auto.
-  constructor; auto.
-  constructor.
-  constructor; auto.
 Qed.
 
 Lemma typecheck_exprlist_correct:
@@ -335,11 +324,19 @@ Proof.
   TrueInv. constructor; auto. apply typecheck_expr_correct; auto.
 Qed.
 
+Lemma typecheck_optexpr_correct:
+  forall a, typecheck_optexpr a = true -> wt_optexpr env a.
+Proof.
+  destruct a; simpl; intros.
+  constructor. apply typecheck_expr_correct; auto.
+  constructor.
+Qed.
+
 Fixpoint typecheck_stmt (s: Csyntax.statement) {struct s} : bool :=
   match s with
   | Csyntax.Sskip => true
-  | Csyntax.Sexpr e => typecheck_expr e
   | Csyntax.Sassign b c => typecheck_expr b && typecheck_expr c
+  | Csyntax.Scall a b cl => typecheck_optexpr a && typecheck_expr b && typecheck_exprlist cl
   | Csyntax.Ssequence s1 s2 => typecheck_stmt s1 && typecheck_stmt s2
   | Csyntax.Sifthenelse e s1 s2 =>
       typecheck_expr e && typecheck_stmt s1 && typecheck_stmt s2
@@ -368,10 +365,11 @@ Lemma typecheck_stmt_correct:
   forall s, typecheck_stmt s = true -> wt_stmt env s.
 Proof.
   generalize typecheck_expr_correct; intro.
+  generalize typecheck_exprlist_correct; intro.
+  generalize typecheck_optexpr_correct; intro.
   apply (stmt_ind_2 (fun s => typecheck_stmt s = true -> wt_stmt env s)
                     (fun s => typecheck_lblstmts s = true -> wt_lblstmts env s));
-  simpl; intros; TrueInv; try constructor; auto.
-  destruct o; constructor; auto.
+  simpl; intros; TrueInv; constructor; auto.
 Qed.
 
 End TYPECHECKING.

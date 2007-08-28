@@ -66,14 +66,18 @@ Proof. intros. unfold E0, Eapp. rewrite <- app_nil_end. auto. Qed.
 Lemma Eapp_assoc: forall t1 t2 t3, (t1 ** t2) ** t3 = t1 ** (t2 ** t3).
 Proof. intros. unfold Eapp, trace. apply app_ass. Qed.
 
+Lemma E0_left_inf: forall T, E0 *** T = T.
+Proof. auto. Qed.
+
 Lemma Eappinf_assoc: forall t1 t2 T, (t1 ** t2) *** T = t1 *** (t2 *** T).
 Proof.
   induction t1; intros; simpl. auto. decEq; auto.
 Qed.
 
-Hint Rewrite E0_left E0_right Eapp_assoc: trace_rewrite.
+Hint Rewrite E0_left E0_right Eapp_assoc
+             E0_left_inf Eappinf_assoc: trace_rewrite.
 
-Opaque trace E0 Eextcall Eapp.
+Opaque trace E0 Eextcall Eapp Eappinf.
 
 (** The following [traceEq] tactic proves equalities between traces
   or infinite traces. *)
@@ -251,7 +255,7 @@ Proof.
   inv H; inv H0; inv H1; constructor; eapply COINDHYP; eauto.
 Qed.
 
-Transparent trace E0 Eapp.
+Transparent trace E0 Eapp Eappinf.
 
 Lemma traceinf_prefix_app:
   forall T1 T2 t,

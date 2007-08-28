@@ -175,8 +175,8 @@ Proof.
 Qed.
 
 Lemma transl_expr_lvalue:
-  forall ge e m1 a ty t m2 loc ofs ta,
-  Csem.eval_lvalue ge e m1 (Expr a ty) t m2 loc ofs ->
+  forall ge e m a ty loc ofs ta,
+  Csem.eval_lvalue ge e m (Expr a ty) loc ofs ->
   transl_expr (Expr a ty) = OK ta ->
   (exists id, a = Csyntax.Evar id /\ var_get id ty = OK ta) \/
   (exists tb, transl_lvalue (Expr a ty) = OK tb /\
@@ -188,28 +188,44 @@ Proof.
   monadInv H0. right. exists x; split; auto. 
   simpl. monadInv H0. right. exists x1; split; auto. 
   simpl. rewrite EQ; rewrite EQ1. simpl. auto.
-  rewrite H6 in H0. monadInv H0. right.  
+  rewrite H4 in H0. monadInv H0. right.  
   exists (Ebinop Oadd x (make_intconst (Int.repr x0))). split; auto.
-  simpl. rewrite H6. rewrite EQ. rewrite EQ1. auto.
-  rewrite H10 in H0. monadInv H0. right.
+  simpl. rewrite H4. rewrite EQ. rewrite EQ1. auto.
+  rewrite H6 in H0. monadInv H0. right.
   exists x; split; auto. 
-  simpl. rewrite H10. auto.
+  simpl. rewrite H6. auto.
 Qed.
 
 Lemma transl_stmt_Sfor_start:
   forall nbrk ncnt s1 e2 s3 s4 ts,
   transl_statement nbrk ncnt (Sfor s1 e2 s3 s4) = OK ts ->
+  s1 <> Csyntax.Sskip ->
   exists ts1, exists ts2,
     ts = Sseq ts1 ts2
   /\ transl_statement nbrk ncnt s1 = OK ts1
-  /\ transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 s3 s4) = OK (Sseq Sskip ts2).
+  /\ transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 s3 s4) = OK ts2.
 Proof.
-  intros. monadInv H. econstructor; econstructor.
+  intros. simpl in H. destruct (is_Sskip s1). contradiction.
+  monadInv H. econstructor; econstructor.
   split. reflexivity. split. auto. simpl.
+  destruct (is_Sskip Csyntax.Sskip). 2: tauto. 
   rewrite EQ1; rewrite EQ0; rewrite EQ2; auto.
 Qed.
 
-(** Properties related to [switch] constructs. *)
+Open Local Scope error_monad_scope.
+
+Lemma transl_stmt_Sfor_not_start:
+  forall nbrk ncnt e2 e3 s1,
+  transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 e3 s1) =
+    (do te2 <- exit_if_false e2;
+     do te3 <- transl_statement nbrk ncnt e3;
+     do ts1 <- transl_statement 1%nat 0%nat s1;
+     OK (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3))))).
+Proof.
+  intros. simpl. destruct (is_Sskip Csyntax.Sskip). auto. congruence.
+Qed.
+
+(** Properties related to switch constructs *)
 
 Fixpoint lblstmts_length (sl: labeled_statements) : nat :=
   match sl with
@@ -232,5 +248,34 @@ Lemma length_switch_table:
 Proof.
   induction sl; intro; simpl. auto. decEq; auto. 
 Qed.
+
+Lemma block_seq_context_compose:
+  forall ctx2 ctx1,
+  block_seq_context ctx1 ->
+  block_seq_context ctx2 ->
+  block_seq_context (fun x => ctx1 (ctx2 x)).
+Proof.
+  induction 1; intros; constructor; auto.
+Qed.
+
+Lemma transl_lblstmts_context:
+  forall sl nbrk ncnt body s,
+  transl_lblstmts nbrk ncnt sl body = OK s ->
+  exists ctx, block_seq_context ctx /\ s = ctx body.
+Proof.
+  induction sl; simpl; intros.
+  monadInv H. exists (fun y => Sblock (Sseq y x)); split.
+  apply block_seq_context_ctx_1. apply block_seq_context_base_2.
+  auto.
+  monadInv H. exploit IHsl; eauto. intros [ctx [A B]].
+  exists (fun y => ctx (Sblock (Sseq y x))); split.
+  apply block_seq_context_compose with
+    (ctx1 := ctx)
+    (ctx2 := fun y => Sblock (Sseq y x)).
+  auto. apply block_seq_context_ctx_1. apply block_seq_context_base_2. 
+  auto.
+Qed.
+
+
 
 

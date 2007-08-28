@@ -125,11 +125,13 @@ extern "memset" : int -> int -> int -> void
 
 "SHA1_add_data"(ctx, data, len) : int -> int -> int -> void
 {
-  var t;
+  var t, t2;
 
   /* Update length */
   t = context_length_lo(ctx);
-  if ((context_length_lo(ctx) = t + (len << 3)) <u t)
+  t2 = t + (len << 3);
+  context_length_lo(ctx) = t2;
+  if (t2 <u t)
     context_length_hi(ctx) = context_length_hi(ctx) + 1;
   context_length_hi(ctx) = context_length_hi(ctx) + (len >>u 29);
 

@@ -99,6 +99,7 @@ rule token = parse
   | "*" { STAR }
   | "*f"    { STARF }
   | "switch"    { SWITCH }
+  | "tailcall"  { TAILCALL }
   | "~"    { TILDE }
   | "var"    { VAR }
   | "void"    { VOID }

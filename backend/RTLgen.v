@@ -266,17 +266,6 @@ Fixpoint transl_expr (map: mapping) (a: expr) (rd: reg) (nd: node)
       do rl <- alloc_regs map al;
       do no <- add_instr (Iload chunk addr rl rd nd);
          transl_exprlist map al rl no
-  | Estore chunk addr al b =>
-      do rl <- alloc_regs map al;
-      do no <- add_instr (Istore chunk addr rl rd nd);
-      do ns <- transl_expr map b rd no;
-         transl_exprlist map al rl ns
-  | Ecall sig b cl =>
-      do rf <- alloc_reg map b;
-      do rargs <- alloc_regs map cl;
-      do n1 <- add_instr (Icall sig (inl _ rf) rargs rd nd);
-      do n2 <- transl_exprlist map cl rargs n1;
-         transl_expr map b rf n2
   | Econdition b c d =>
       do nfalse <- transl_expr map d rd nd;
       do ntrue  <- transl_expr map c rd nd;
@@ -287,10 +276,6 @@ Fixpoint transl_expr (map: mapping) (a: expr) (rd: reg) (nd: node)
          transl_expr map b r nc
   | Eletvar n =>
       do r <- find_letvar map n; add_move r rd nd
-  | Ealloc a =>
-      do r <- alloc_reg map a;
-      do no <- add_instr (Ialloc r rd nd);
-         transl_expr map a r no
   end
 
 (** Translation of a conditional expression.  Similar to [transl_expr],
@@ -327,6 +312,20 @@ with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
       do no <- transl_exprlist map bs rs nd; transl_expr map b r no
   | _, _ =>
       error node (Errors.msg "RTLgen.transl_exprlist")
+  end.
+
+(** Generation of code for variable assignments. *)
+
+Definition store_var
+       (map: mapping) (rs: reg) (id: ident) (nd: node) : mon node :=
+  do rv <- find_var map id;
+  add_move rs rv nd.
+
+Definition store_optvar
+       (map: mapping) (rs: reg) (optid: option ident) (nd: node) : mon node :=
+  match optid with
+  | None => ret nd
+  | Some id => store_var map rs id nd
   end.
 
 (** Auxiliary for branch prediction.  When compiling an if/then/else
@@ -379,13 +378,30 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   match s with
   | Sskip =>
       ret nd
-  | Sexpr a =>
-      do r <- alloc_reg map a; transl_expr map a r nd
   | Sassign v b =>
-      do rv <- find_var map v;
       do rt <- alloc_reg map b;
-      do no <- add_move rt rv nd;
+      do no <- store_var map rt v nd;
       transl_expr map b rt no
+  | Sstore chunk addr al b =>
+      do rl <- alloc_regs map al;
+      do r <- alloc_reg map b;
+      do no <- add_instr (Istore chunk addr rl r nd);
+      do ns <- transl_expr map b r no;
+         transl_exprlist map al rl ns
+  | Scall optid sig b cl =>
+      do rf <- alloc_reg map b;
+      do rargs <- alloc_regs map cl;
+      do r <- new_reg;
+      do n1 <- store_optvar map r optid nd;
+      do n2 <- add_instr (Icall sig (inl _ rf) rargs r n1);
+      do n3 <- transl_exprlist map cl rargs n2;
+         transl_expr map b rf n3
+  | Salloc id a =>
+      do ra <- alloc_reg map a;
+      do rr <- new_reg;
+      do n1 <- store_var map rr id nd;
+      do n2 <- add_instr (Ialloc ra rr n1);
+         transl_expr map a ra n2
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits nret rret;
       transl_stmt map s1 ns nexits nret rret

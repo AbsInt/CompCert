@@ -3,6 +3,7 @@ CIL -> CabsCoq translator
 **************************************************************************)
 
 open Cil
+open CList
 open Camlcoq
 open AST
 open Csyntax
@@ -192,6 +193,17 @@ let declare_stub_functions k =
   Hashtbl.fold (fun n i k -> CList.Coq_cons(declare_stub_function n i, k))
                stub_function_table k
 
+(** ** Generation of temporary variable names *)
+
+let current_function = ref (None: Cil.fundec option)
+
+let make_temp typ =
+  match !current_function with
+  | None -> assert false
+  | Some f ->
+      let v = Cil.makeTempVar f typ in 
+      intern_string v.vname
+
 (** ** Translation functions *)
 
 (** Convert a [Cil.ikind] into a pair [(intsize * signedness)] *)
@@ -310,13 +322,13 @@ and processCast t e =
 
 (** Convert a [Cil.exp list] into an [CamlCoq.exprlist] *)
 and processParamsE = function
-  | [] -> Enil
+  | [] -> Coq_nil
   | e :: l ->
       let (Expr (_, t)) as e' = convertExp e in
 	match t with
 	  | Tstruct _ | Tunion _ ->
               unsupported "function parameter of struct or union type"
-	  | _ -> Econs (e', processParamsE l)
+	  | _ -> Coq_cons (e', processParamsE l)
 
 
 (** Convert a [Cil.exp] into a [CabsCoq.expr] *)
@@ -489,8 +501,8 @@ let convertVarinfoParam v =
 
 (** Convert a [Cil.exp] which has a function type into a [CabsCoq.expr]
     (used only to translate function calls) *)
-let convertExpFuncall e tfun eList =
-  match tfun with
+let convertExpFuncall e eList =
+  match typeOf e with
   | TFun (res, argListOpt, vArg, _) ->
       begin match argListOpt, vArg with
       | Some argList, false ->
@@ -512,8 +524,8 @@ let convertExpFuncall e tfun eList =
             | _ ->
                 unsupported "call to variadic or non-prototyped function" in
           let rec typeOfExprList = function
-            | Enil -> Tnil
-            | Econs (Expr (_, ty), rem) -> Tcons (ty, typeOfExprList rem) in
+            | Coq_nil -> Tnil
+            | Coq_cons (Expr (_, ty), rem) -> Tcons (ty, typeOfExprList rem) in
           let targs = typeOfExprList params in
           let tres = convertTyp res in
           let (stub_fun_name, stub_fun_typ) =
@@ -522,6 +534,33 @@ let convertExpFuncall e tfun eList =
            params)
       end
   | _ -> internal_error "convertExpFuncall: not a function"
+
+(** Auxiliaries for function calls *)
+
+let makeFuncall1 tyfun (Expr(_, tlhs) as elhs) efun eargs =
+  match tyfun with
+  | TFun (t, _, _, _) ->
+      let tres = convertTyp t in
+      if tlhs = tres then
+        Scall(Datatypes.Some elhs, efun, eargs)
+      else begin
+        let tmp = make_temp t in
+        let elhs' = Expr(Evar tmp, tres) in
+        Ssequence(Scall(Datatypes.Some elhs', efun, eargs),
+                  Sassign(elhs, Expr(Ecast(tlhs, elhs'), tlhs)))
+      end
+  | _ -> internal_error "wrong type for function in call"
+
+let makeFuncall2 tyfun tylhs elhs efun eargs =
+  match elhs with
+  | Expr(Evar _, _) ->
+      makeFuncall1 tyfun elhs efun eargs
+  | Expr(_, tlhs) ->
+      let tmp = make_temp tylhs in
+      let elhs' = Expr(Evar tmp, tlhs) in
+      Ssequence(makeFuncall1 tyfun elhs' efun eargs,
+                Sassign(elhs, elhs'))
+                
 
 (** Convert a [Cil.instr list] into a [CabsCoq.statement] *)
 let rec processInstrList l =
@@ -533,33 +572,14 @@ let rec processInstrList l =
         | Tstruct _ | Tunion _ -> unsupported "struct or union assignment"
         | t -> Sassign (convertLval lv, convertExp e)
         end
-    | Call (lvOpt, e, eList, loc) ->
+    | Call (None, e, eList, loc) ->
 	updateLoc(loc);
-	begin match Cil.unrollType (Cil.typeOf e) with
-	  | TFun (t, _, _, _) as tfun ->
-	      let t' = convertTyp t in
-	      let (efun, params) = convertExpFuncall e tfun eList in
-	      let e' = Expr (Ecall (efun, params), t') in
-		begin match lvOpt with
-		  | None -> Sexpr e'
-		  | Some lv ->
-		      let (Expr (_, tlv)) as elv = convertLval lv in
-			begin match tlv with
-			  | Tstruct _ | Tunion _ ->
-                              unsupported "struct or union assignment"
-			  | _ ->
-			      if tlv = t' then
-				Sassign (elv, e')
-			      else
-				(* a cast must be inserted *)
-				if compatibleTypes tlv t' then
-				  Sassign (elv,
-				           Expr (Ecast (tlv, e'), tlv))
-				else internal_error "processCast: illegal cast"
-			end
-		end
-	  | _ -> internal_error "convertInstr: illegal call"
-	end
+        let (efun, params) = convertExpFuncall e eList in
+        Scall(Datatypes.None, efun, params)
+    | Call (Some lv, e, eList, loc) ->
+	updateLoc(loc);
+        let (efun, params) = convertExpFuncall e eList in
+        makeFuncall2 (Cil.typeOf e) (Cil.typeOfLval lv) (convertLval lv) efun params
     | Asm (_, _, _, _, _, loc) ->
 	updateLoc(loc);
         unsupported "inline assembly"
@@ -687,6 +707,7 @@ and convertStmt s =
 
 (** Convert a [Cil.GFun] into a pair [(ident * coq_fundecl)] *)
 let convertGFun fdec =
+  current_function := Some fdec;
   let v = fdec.svar in
   let ret = match v.vtype with
     | TFun (t, _, vArg, _) ->
@@ -698,15 +719,16 @@ let convertGFun fdec =
         end
     | _ -> internal_error "convertGFun: incorrect function type"
   in
+  let s = processStmtList fdec.sbody.bstmts in   (* function body -- do it first because of generated temps *)
   let args = map_coqlist convertVarinfoParam fdec.sformals in   (* parameters*)
   let varList = map_coqlist convertVarinfo fdec.slocals in   (* local vars *)
-  let s = processStmtList fdec.sbody.bstmts in   (* function body *)
   if v.vname = "main" then begin
     match ret with
     | Tint(_, _) -> ()
     | _ -> updateLoc v.vdecl;
            unsupported "the return type of main() must be an integer type"
   end;
+  current_function := None;
   Datatypes.Coq_pair
     (intern_string v.vname,
      Internal { fn_return=ret; fn_params=args; fn_vars=varList; fn_body=s })
