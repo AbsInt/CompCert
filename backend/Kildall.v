@@ -147,7 +147,7 @@ Record state : Set :=
             compute in = lub st_in[s] out
             if in <> st_in[s]:
                 st_in[s] := in
-                st_wrk := st_wrk union {n}
+                st_wrk := st_wrk union {s}
             end if
         end for
     end while
