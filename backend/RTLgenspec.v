@@ -26,103 +26,99 @@ Require Import RTLgen.
 
 (** * Reasoning about monadic computations *)
 
-(** The tactics below simplify hypotheses of the form [f ... = OK x s]
+(** The tactics below simplify hypotheses of the form [f ... = OK x s i]
   where [f] is a monadic computation.  For instance, the hypothesis
-  [(do x <- a; b) s = OK y s'] will generate the additional witnesses
-  [x], [s1] and the additional hypotheses
-  [a s = OK x s1] and [b x s1 = OK y s'], reflecting the fact that
+  [(do x <- a; b) s = OK y s' i] will generate the additional witnesses
+  [x], [s1], [i1], [i'] and the additional hypotheses
+  [a s = OK x s1 i1] and [b x s1 = OK y s' i'], reflecting the fact that
   both monadic computations [a] and [b] succeeded.
 *)
 
 Remark bind_inversion:
-  forall (A B: Set) (f: mon A) (g: A -> mon B) (y: B) (s1 s3: state),
-  bind f g s1 = OK y s3 ->
-  exists x, exists s2, f s1 = OK x s2 /\ g x s2 = OK y s3.
+  forall (A B: Set) (f: mon A) (g: A -> mon B) 
+         (y: B) (s1 s3: state) (i: state_incr s1 s3),
+  bind f g s1 = OK y s3 i ->
+  exists x, exists s2, exists i1, exists i2,
+  f s1 = OK x s2 i1 /\ g x s2 = OK y s3 i2.
 Proof.
-  intros until s3. unfold bind. destruct (f s1); intros.
+  intros until i. unfold bind. destruct (f s1); intros.
   discriminate.
-  exists a; exists s; auto.
+  exists a; exists s'; exists s.
+  destruct (g a s'); inv H.
+  exists s0; auto.
 Qed.
 
 Remark bind2_inversion:
   forall (A B C: Set) (f: mon (A*B)) (g: A -> B -> mon C)
-         (z: C) (s1 s3: state),
-  bind2 f g s1 = OK z s3 ->
-  exists x, exists y, exists s2, f s1 = OK (x, y) s2 /\ g x y s2 = OK z s3.
+         (z: C) (s1 s3: state) (i: state_incr s1 s3),
+  bind2 f g s1 = OK z s3 i ->
+  exists x, exists y, exists s2, exists i1, exists i2,
+  f s1 = OK (x, y) s2 i1 /\ g x y s2 = OK z s3 i2.
 Proof.
-  intros until s3. unfold bind2, bind. destruct (f s1). congruence.
-  destruct p as [x y]; simpl; intro. 
-  exists x; exists y; exists s; auto. 
+  unfold bind2; intros.
+  exploit bind_inversion; eauto. 
+  intros [[x y] [s2 [i1 [i2 [P Q]]]]]. simpl in Q.
+  exists x; exists y; exists s2; exists i1; exists i2; auto.
 Qed.
 
 Ltac monadInv1 H :=
   match type of H with
-  | (OK _ _ = OK _ _) =>
+  | (OK _ _ _ = OK _ _ _) =>
       inversion H; clear H; try subst
-  | (Error _ _ = OK _ _) =>
+  | (Error _ _ = OK _ _ _) =>
       discriminate
-  | (ret _ _ = OK _ _) =>
+  | (ret _ _ = OK _ _ _) =>
       inversion H; clear H; try subst
-  | (error _ _ = OK _ _) =>
+  | (error _ _ = OK _ _ _) =>
       discriminate
-  | (bind ?F ?G ?S = OK ?X ?S') =>
+  | (bind ?F ?G ?S = OK ?X ?S' ?I) =>
       let x := fresh "x" in (
       let s := fresh "s" in (
+      let i1 := fresh "INCR" in (
+      let i2 := fresh "INCR" in (
       let EQ1 := fresh "EQ" in (
       let EQ2 := fresh "EQ" in (
-      destruct (bind_inversion _ _ F G X S S' H) as [x [s [EQ1 EQ2]]];
+      destruct (bind_inversion _ _ F G X S S' I H) as [x [s [i1 [i2 [EQ1 EQ2]]]]];
       clear H;
-      try (monadInv1 EQ2)))))
-  | (bind2 ?F ?G ?S = OK ?X ?S') =>
+      try (monadInv1 EQ2)))))))
+  | (bind2 ?F ?G ?S = OK ?X ?S' ?I) =>
       let x1 := fresh "x" in (
       let x2 := fresh "x" in (
       let s := fresh "s" in (
+      let i1 := fresh "INCR" in (
+      let i2 := fresh "INCR" in (
       let EQ1 := fresh "EQ" in (
       let EQ2 := fresh "EQ" in (
-      destruct (bind2_inversion _ _ _ F G X S S' H) as [x1 [x2 [s [EQ1 EQ2]]]];
+      destruct (bind2_inversion _ _ _ F G X S S' I H) as [x1 [x2 [s [i1 [i2 [EQ1 EQ2]]]]]];
       clear H;
-      try (monadInv1 EQ2))))))
+      try (monadInv1 EQ2))))))))
   end.
 
 Ltac monadInv H :=
   match type of H with
-  | (ret _ _ = OK _ _) => monadInv1 H
-  | (error _ _ = OK _ _) => monadInv1 H
-  | (bind ?F ?G ?S = OK ?X ?S') => monadInv1 H
-  | (bind2 ?F ?G ?S = OK ?X ?S') => monadInv1 H
-  | (?F _ _ _ _ _ _ _ _ = OK _ _) => 
+  | (ret _ _ = OK _ _ _) => monadInv1 H
+  | (error _ _ = OK _ _ _) => monadInv1 H
+  | (bind ?F ?G ?S = OK ?X ?S' ?I) => monadInv1 H
+  | (bind2 ?F ?G ?S = OK ?X ?S' ?I) => monadInv1 H
+  | (?F _ _ _ _ _ _ _ _ = OK _ _ _) => 
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ _ _ _ = OK _ _) => 
+  | (?F _ _ _ _ _ _ _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ _ _ = OK _ _) => 
+  | (?F _ _ _ _ _ _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ _ = OK _ _) => 
+  | (?F _ _ _ _ _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ _ = OK _ _) => 
+  | (?F _ _ _ _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ _ = OK _ _) => 
+  | (?F _ _ _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ _ = OK _ _) => 
+  | (?F _ _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
-  | (?F _ = OK _ _) => 
+  | (?F _ = OK _ _ _) =>
       ((progress simpl in H) || unfold F in H); monadInv1 H
   end.
 
 (** * Monotonicity properties of the state *)
-
-(** Operations over the global state satisfy a crucial monotonicity property:
-  nodes are only added to the CFG, but never removed nor their instructions
-  changed; similarly, fresh nodes and fresh registers are only consumed,
-  but never reused.  This property is captured by the following predicate
-  over states, which we show is a partial order. *)
-
-Inductive state_incr: state -> state -> Prop :=
-  state_incr_intro:
-    forall (s1 s2: state),
-    Ple s1.(st_nextnode) s2.(st_nextnode) ->
-    Ple s1.(st_nextreg) s2.(st_nextreg) ->
-    (forall pc, Plt pc s1.(st_nextnode) -> s2.(st_code)!pc = s1.(st_code)!pc) ->
-    state_incr s1 s2.
 
 Lemma instr_at_incr:
   forall s1 s2 n i,
@@ -132,26 +128,7 @@ Proof.
   rewrite H3. auto. elim (st_wf s1 n); intro.
   assumption. congruence.
 Qed.
-
-Lemma state_incr_refl:
-  forall s, state_incr s s.
-Proof.
-  intros. apply state_incr_intro.
-  apply Ple_refl. apply Ple_refl. intros; auto.
-Qed.
-Hint Resolve state_incr_refl: rtlg.
-
-Lemma state_incr_trans:
-  forall s1 s2 s3, state_incr s1 s2 -> state_incr s2 s3 -> state_incr s1 s3.
-Proof.
-  intros. inversion H. inversion H0. apply state_incr_intro.
-  apply Ple_trans with (st_nextnode s2); assumption. 
-  apply Ple_trans with (st_nextreg s2); assumption.
-  intros. transitivity (s2.(st_code)!pc).
-  apply H8. apply Plt_Ple_trans with s1.(st_nextnode); auto.
-  apply H3; auto.
-Qed.
-Hint Resolve state_incr_trans: rtlg.
+Hint Resolve instr_at_incr: rtlg.
 
 (** The following relation between two states is a weaker version of
   [state_incr].  It permits changing the contents at an already reserved
@@ -179,7 +156,7 @@ Proof.
   left. elim (s1.(st_wf) pc); intro.
   elim (n H5). auto.
 Qed.
-Hint Resolve state_incr_extends.
+Hint Resolve state_incr_extends: rtlg.
 
 (** * Validity and freshness of registers *)
 
@@ -276,91 +253,84 @@ Hint Resolve map_valid_incr: rtlg.
 
 (** Properties of [add_instr]. *)
 
-Lemma add_instr_incr:
-  forall s1 s2 i n,
-  add_instr i s1 = OK n s2 -> state_incr s1 s2.
-Proof.
-  intros. monadInv H.
-  apply state_incr_intro; simpl.
-  apply Ple_succ.
-  apply Ple_refl.
-  intros. apply PTree.gso; apply Plt_ne; auto.
-Qed.
-Hint Resolve add_instr_incr: rtlg.
-
 Lemma add_instr_at:
-  forall s1 s2 i n,
-  add_instr i s1 = OK n s2 -> s2.(st_code)!n = Some i.
+  forall s1 s2 incr i n,
+  add_instr i s1 = OK n s2 incr -> s2.(st_code)!n = Some i.
 Proof.
   intros. monadInv H. simpl. apply PTree.gss.
 Qed.
-Hint Resolve add_instr_at.
+Hint Resolve add_instr_at: rtlg.
 
-(** Properties of [reserve_instr] and [update_instr]. *)
-
-Lemma reserve_instr_incr:
-  forall s1 s2 n,
-  reserve_instr s1 = OK n s2 -> state_incr s1 s2.
-Proof.
-  intros. monadInv H. 
-  apply state_incr_intro; simpl.
-  apply Ple_succ.
-  apply Ple_refl.
-  auto.
-Qed.
-
-Lemma update_instr_incr:
-  forall s1 s2 s3 s4 i n t,
-  reserve_instr s1 = OK n s2 ->
-  state_incr s2 s3 ->
-  update_instr n i s3 = OK t s4 ->
-  state_incr s1 s4.
-Proof.
-  intros.
-  generalize H1; clear H1; unfold update_instr.
-  case (plt n (st_nextnode s3)); intros. 2: discriminate.
-  inv H1. inv H0. monadInv H; simpl in *.
-  apply state_incr_intro; simpl.
-  eapply Ple_trans; eauto. apply Plt_Ple. apply Plt_succ.
-  auto.
-  intros. rewrite PTree.gso.
-  apply H3. apply Plt_trans_succ; auto.
-  apply Plt_ne. auto.
-Qed.
+(** Properties of [update_instr] and [add_loop].  The following diagram
+  shows the evolutions of the code component of the state during [add_loop].
+  The vertical bar materializes the [st_nextnode] pointer.
+<<
+  s1:  I1   I2   ...   In  |None None None None None None None
+reserve_instr
+  s2:  I1   I2   ...   In   None|None None None None None None
+body n
+  s3:  I1   I2   ...   In   None Ip   ...  Iq  |None None None
+update_instr
+  s4:  I1   I2   ...   In   Inop Ip   ...  Iq  |None None None
+>>
+  It is apparent that [state_incr s1 s2] and [state_incr s1 s4] hold.
+  Moreover, [state_extends s3 s4] holds but not [state_incr s3 s4].
+*)
 
 Lemma update_instr_extends:
-  forall s1 s2 s3 s4 i n t,
-  reserve_instr s1 = OK n s2 ->
+  forall s1 s2 s3 i n,
+  reserve_instr s1 = (n, s2) ->
   state_incr s2 s3 ->
-  update_instr n i s3 = OK t s4 ->
-  state_extends s3 s4.
+  state_extends s3 (update_instr n i s3).
 Proof.
-  intros. injection H. intros EQ1 EQ2.  
-  red; intros. 
+  intros. injection H. intros EQ1 EQ2.
+  unfold update_instr. destruct (plt n (st_nextnode s3)).  
+  red; simpl; intros. rewrite PTree.gsspec.  
   case (peq pc n); intro.
-  subst pc. left. inversion H0. rewrite H4. rewrite <- EQ1; simpl.
-  destruct (s1.(st_wf) n). rewrite <- EQ2 in H7. elim (Plt_strict _ H7).
+  subst pc. left. inversion H0. subst s0 s4. rewrite H3. 
+  rewrite <- EQ1; simpl.
+  destruct (s1.(st_wf) n).
+  rewrite <- EQ2 in H4. elim (Plt_strict _ H4).
   auto.
   rewrite <- EQ1; rewrite <- EQ2; simpl. apply Plt_succ.
-  generalize H1; unfold update_instr.
-  case (plt n s3.(st_nextnode)); intros; inv H2. 
-  right; simpl. apply PTree.gso; auto.
+  auto.
+  red; intros; auto.
+Qed.
+
+Lemma add_loop_inversion:
+  forall f s1 nbody s4 i,
+  add_loop f s1 = OK nbody s4 i ->
+  exists nloop, exists s2, exists s3, exists i',
+     state_incr s1 s2
+  /\ f nloop s2 = OK nbody s3 i'
+  /\ state_extends s3 s4
+  /\ s4.(st_code)!nloop = Some(Inop nbody).
+Proof.
+  intros until i. unfold add_loop.
+  unfold reserve_instr; simpl.
+  set (s2 := mkstate (st_nextreg s1) (Psucc (st_nextnode s1)) (st_code s1)
+                     (reserve_instr_wf s1)).
+  set (nloop := st_nextnode s1).
+  case_eq (f nloop s2). intros; discriminate.
+  intros n s3 i' EQ1 EQ2. inv EQ2. 
+  exists nloop; exists s2; exists s3; exists i'.
+  split. 
+    unfold s2; constructor; simpl. 
+    apply Ple_succ. apply Ple_refl. auto.
+  split. auto.
+  split. apply update_instr_extends with s1 s2; auto. 
+  unfold update_instr. destruct (plt nloop (st_nextnode s3)).
+  simpl. apply PTree.gss. 
+  elim n. apply Plt_Ple_trans with (st_nextnode s2).
+  unfold nloop, s2; simpl; apply Plt_succ.
+  inversion i'; auto.
 Qed.
 
 (** Properties of [new_reg]. *)
 
-Lemma new_reg_incr:
-  forall s1 s2 r, new_reg s1 = OK r s2 -> state_incr s1 s2.
-Proof.
-  intros. monadInv H. 
-  apply state_incr_intro; simpl.
-  apply Ple_refl. apply Ple_succ. auto.
-Qed.
-Hint Resolve new_reg_incr: rtlg.
-
 Lemma new_reg_valid:
-  forall s1 s2 r,
-  new_reg s1 = OK r s2 -> reg_valid r s2.
+  forall s1 s2 r i,
+  new_reg s1 = OK r s2 i -> reg_valid r s2.
 Proof.
   intros. monadInv H.
   unfold reg_valid; simpl. apply Plt_succ.
@@ -368,8 +338,8 @@ Qed.
 Hint Resolve new_reg_valid: rtlg.
 
 Lemma new_reg_fresh:
-  forall s1 s2 r,
-  new_reg s1 = OK r s2 -> reg_fresh r s1.
+  forall s1 s2 r i,
+  new_reg s1 = OK r s2 i -> reg_fresh r s1.
 Proof.
   intros. monadInv H.
   unfold reg_fresh; simpl.
@@ -378,8 +348,8 @@ Qed.
 Hint Resolve new_reg_fresh: rtlg.
 
 Lemma new_reg_not_in_map:
-  forall s1 s2 m r,
-  new_reg s1 = OK r s2 -> map_valid m s1 -> ~(reg_in_map m r).
+  forall s1 s2 m r i,
+  new_reg s1 = OK r s2 i -> map_valid m s1 -> ~(reg_in_map m r).
 Proof.
   unfold not; intros; eauto with rtlg.
 Qed. 
@@ -398,19 +368,9 @@ Qed.
 
 (** Properties of [find_var]. *)
 
-Lemma find_var_incr:
-  forall s1 s2 map name r,
-  find_var map name s1 = OK r s2 -> state_incr s1 s2.
-Proof.
-  intros until r. unfold find_var.
-  case (map_vars map)!name; intros; monadInv H. 
-  auto with rtlg.
-Qed.
-Hint Resolve find_var_incr: rtlg.
-
 Lemma find_var_in_map:
-  forall s1 s2 map name r,
-  find_var map name s1 = OK r s2 -> reg_in_map map r.
+  forall s1 s2 map name r i,
+  find_var map name s1 = OK r s2 i -> reg_in_map map r.
 Proof.
   intros until r. unfold find_var; caseEq (map.(map_vars)!name).
   intros. inv H0. left; exists name; auto.
@@ -419,8 +379,8 @@ Qed.
 Hint Resolve find_var_in_map: rtlg.
 
 Lemma find_var_valid:
-  forall s1 s2 map name r,
-  find_var map name s1 = OK r s2 -> map_valid map s1 -> reg_valid r s1.
+  forall s1 s2 map name r i,
+  find_var map name s1 = OK r s2 i -> map_valid map s1 -> reg_valid r s1.
 Proof.
   eauto with rtlg.
 Qed.
@@ -428,19 +388,9 @@ Hint Resolve find_var_valid: rtlg.
 
 (** Properties of [find_letvar]. *)
 
-Lemma find_letvar_incr:
-  forall s1 s2 map idx r,
-  find_letvar map idx s1 = OK r s2 -> state_incr s1 s2.
-Proof.
-  intros until r. unfold find_letvar.
-  case (nth_error (map_letvars map) idx); intros; monadInv H.
-  auto with rtlg.
-Qed.
-Hint Resolve find_letvar_incr: rtlg.
-
 Lemma find_letvar_in_map:
-  forall s1 s2 map idx r,
-  find_letvar map idx s1 = OK r s2 -> reg_in_map map r.
+  forall s1 s2 map idx r i,
+  find_letvar map idx s1 = OK r s2 i -> reg_in_map map r.
 Proof.
   intros until r. unfold find_letvar.
   caseEq (nth_error (map_letvars map) idx); intros; monadInv H0.
@@ -449,8 +399,8 @@ Qed.
 Hint Resolve find_letvar_in_map: rtlg.
 
 Lemma find_letvar_valid:
-  forall s1 s2 map idx r,
-  find_letvar map idx s1 = OK r s2 -> map_valid map s1 -> reg_valid r s1.
+  forall s1 s2 map idx r i,
+  find_letvar map idx s1 = OK r s2 i -> map_valid map s1 -> reg_valid r s1.
 Proof.
   eauto with rtlg.
 Qed.
@@ -459,8 +409,8 @@ Hint Resolve find_letvar_valid: rtlg.
 (** Properties of [add_var]. *)
 
 Lemma add_var_valid:
-  forall s1 s2 map1 map2 name r, 
-  add_var map1 name s1 = OK (r, map2) s2 ->
+  forall s1 s2 map1 map2 name r i, 
+  add_var map1 name s1 = OK (r, map2) s2 i ->
   map_valid map1 s1 ->
   reg_valid r s2 /\ map_valid map2 s2.
 Proof.
@@ -475,33 +425,16 @@ Proof.
   apply H0. right; auto.
 Qed.
 
-Lemma add_var_incr:
-  forall s1 s2 map name rm, 
-  add_var map name s1 = OK rm s2 -> state_incr s1 s2.
-Proof.
-  intros. monadInv H. eauto with rtlg.
-Qed.
-Hint Resolve add_var_incr: rtlg.
-
 Lemma add_var_find:
-  forall s1 s2 map name r map',
-  add_var map name s1 = OK (r,map') s2 -> map'.(map_vars)!name = Some r.
+  forall s1 s2 map name r map' i,
+  add_var map name s1 = OK (r,map') s2 i -> map'.(map_vars)!name = Some r.
 Proof.
   intros. monadInv H. simpl. apply PTree.gss. 
 Qed.
 
-Lemma add_vars_incr:
-  forall names s1 s2 map r,
-  add_vars map names s1 = OK r s2 -> state_incr s1 s2.
-Proof.
-  induction names; simpl; intros; monadInv H.
-  auto with rtlg.
-  eauto with rtlg. 
-Qed.
-
 Lemma add_vars_valid:
-  forall namel s1 s2 map1 map2 rl, 
-  add_vars map1 namel s1 = OK (rl, map2) s2 ->
+  forall namel s1 s2 map1 map2 rl i, 
+  add_vars map1 namel s1 = OK (rl, map2) s2 i ->
   map_valid map1 s1 ->
   regs_valid rl s2 /\ map_valid map2 s2.
 Proof.
@@ -509,22 +442,21 @@ Proof.
   split. red; simpl; intros; tauto. auto.
   exploit IHnamel; eauto. intros [A B].
   exploit add_var_valid; eauto. intros [C D].
-  exploit add_var_incr; eauto. intros INCR.
   split. apply regs_valid_cons; eauto with rtlg.
   auto.
 Qed.
 
 Lemma add_var_letenv:
-  forall map1 i s1 r map2 s2,
-  add_var map1 i s1 = OK (r, map2) s2 ->
+  forall map1 id s1 r map2 s2 i,
+  add_var map1 id s1 = OK (r, map2) s2 i ->
   map2.(map_letvars) = map1.(map_letvars).
 Proof.
   intros; monadInv H. reflexivity.
 Qed.
 
 Lemma add_vars_letenv:
-  forall il map1 s1 rl map2 s2,
-  add_vars map1 il s1 = OK (rl, map2) s2 ->
+  forall il map1 s1 rl map2 s2 i,
+  add_vars map1 il s1 = OK (rl, map2) s2 i ->
   map2.(map_letvars) = map1.(map_letvars).
 Proof.
   induction il; simpl; intros; monadInv H.
@@ -551,19 +483,10 @@ Qed.
 
 (** * Properties of [alloc_reg] and [alloc_regs] *)
 
-Lemma alloc_reg_incr:
-  forall a s1 s2 map r,
-  alloc_reg map a s1 = OK r s2 -> state_incr s1 s2.
-Proof.
-  intros until r.  unfold alloc_reg.
-  case a; eauto with rtlg.
-Qed.
-Hint Resolve alloc_reg_incr: rtlg.
-
 Lemma alloc_reg_valid:
-  forall a s1 s2 map r,
+  forall a s1 s2 map r i,
   map_valid map s1 ->
-  alloc_reg map a s1 = OK r s2 -> reg_valid r s2.
+  alloc_reg map a s1 = OK r s2 i -> reg_valid r s2.
 Proof.
   intros until r.  unfold alloc_reg.
   case a; eauto with rtlg.
@@ -571,9 +494,9 @@ Qed.
 Hint Resolve alloc_reg_valid: rtlg.
 
 Lemma alloc_reg_fresh_or_in_map:
-  forall map a s r s',
+  forall map a s r s' i,
   map_valid map s ->
-  alloc_reg map a s = OK r s' ->
+  alloc_reg map a s = OK r s' i ->
   reg_in_map map r \/ reg_fresh r s.
 Proof.
   intros until s'. unfold alloc_reg.
@@ -582,18 +505,10 @@ Proof.
   left; eauto with rtlg.
 Qed.
 
-Lemma alloc_regs_incr:
-  forall al s1 s2 map rl,
-  alloc_regs map al s1 = OK rl s2 -> state_incr s1 s2.
-Proof.
-  induction al; simpl; intros; monadInv H; eauto with rtlg.
-Qed.
-Hint Resolve alloc_regs_incr: rtlg.
-
 Lemma alloc_regs_valid:
-  forall al s1 s2 map rl,
+  forall al s1 s2 map rl i,
   map_valid map s1 ->
-  alloc_regs map al s1 = OK rl s2 ->
+  alloc_regs map al s1 = OK rl s2 i ->
   regs_valid rl s2.
 Proof.
   induction al; simpl; intros; monadInv H0.
@@ -603,9 +518,9 @@ Qed.
 Hint Resolve alloc_regs_valid: rtlg.
 
 Lemma alloc_regs_fresh_or_in_map:
-  forall map al s rl s',
+  forall map al s rl s' i,
   map_valid map s ->
-  alloc_regs map al s = OK rl s' ->
+  alloc_regs map al s = OK rl s' i ->
   forall r, In r rl -> reg_in_map map r \/ reg_fresh r s.
 Proof.
   induction al; simpl; intros; monadInv H0.
@@ -613,7 +528,7 @@ Proof.
   elim H1; intro. 
   subst r.
   eapply alloc_reg_fresh_or_in_map; eauto.
-  exploit IHal. apply map_valid_incr with s0; eauto with rtlg. eauto. eauto.
+  exploit IHal. 2: eauto. apply map_valid_incr with s; eauto with rtlg. eauto.
   intros [A|B]. auto. right; eauto with rtlg.
 Qed.
 
@@ -674,10 +589,10 @@ Proof.
 Qed.
 
 Lemma new_reg_target_ok:
-  forall map pr s1 a r s2,
+  forall map pr s1 a r s2 i,
   map_valid map s1 ->
   regs_valid pr s1 ->
-  new_reg s1 = OK r s2 ->
+  new_reg s1 = OK r s2 i ->
   target_reg_ok map pr a r.
 Proof.
   intros. constructor. 
@@ -688,16 +603,16 @@ Proof.
 Qed.
 
 Lemma alloc_reg_target_ok:
-  forall map pr s1 a r s2,
+  forall map pr s1 a r s2 i,
   map_valid map s1 ->
   regs_valid pr s1 ->
-  alloc_reg map a s1 = OK r s2 ->
+  alloc_reg map a s1 = OK r s2 i ->
   target_reg_ok map pr a r.
 Proof.
   intros. unfold alloc_reg in H1. destruct a;
   try (eapply new_reg_target_ok; eauto; fail).
   (* Evar *)
-  generalize H1; unfold find_var. caseEq (map_vars map)!i; intros.
+  generalize H1; unfold find_var. caseEq (map_vars map)!i0; intros.
   inv H3. constructor. auto. inv H3.
   (* Elet *)
   generalize H1; unfold find_letvar. caseEq (nth_error (map_letvars map) n); intros.
@@ -705,17 +620,17 @@ Proof.
 Qed.
 
 Lemma alloc_regs_target_ok:
-  forall map al pr s1 rl s2,
+  forall map al pr s1 rl s2 i,
   map_valid map s1 ->
   regs_valid pr s1 ->
-  alloc_regs map al s1 = OK rl s2 ->
+  alloc_regs map al s1 = OK rl s2 i ->
   target_regs_ok map pr al rl.
 Proof.
   induction al; intros; monadInv H1.
   constructor.
   constructor.
   eapply alloc_reg_target_ok; eauto. 
-  apply IHal with s s2; eauto with rtlg. 
+  apply IHal with s s2 INCR1; eauto with rtlg. 
   apply regs_valid_cons; eauto with rtlg.
 Qed.
 
@@ -743,8 +658,8 @@ Qed.
 Hint Resolve return_reg_ok_incr: rtlg.
 
 Lemma new_reg_return_ok:
-  forall s1 r s2 map sig,
-  new_reg s1 = OK r s2 ->
+  forall s1 r s2 map sig i,
+  new_reg s1 = OK r s2 i ->
   map_valid map s1 ->
   return_reg_ok s2 map (ret_reg sig r).
 Proof.
@@ -957,9 +872,9 @@ Inductive tr_stmt (c: code) (map: mapping):
 
 Inductive tr_function: CminorSel.function -> RTL.function -> Prop :=
   | tr_function_intro:
-      forall f code rparams map1 s1 rvars map2 s2 nentry nret rret orret nextnode wfcode,
-      add_vars init_mapping f.(CminorSel.fn_params) init_state = OK (rparams, map1) s1 ->
-      add_vars map1 f.(CminorSel.fn_vars) s1 = OK (rvars, map2) s2 ->
+      forall f code rparams map1 s1 i1 rvars map2 s2 i2 nentry nret rret orret nextnode wfcode,
+      add_vars init_mapping f.(CminorSel.fn_params) init_state = OK (rparams, map1) s1 i1 ->
+      add_vars map1 f.(CminorSel.fn_vars) s1 = OK (rvars, map2) s2 i2 ->
       orret = ret_reg f.(CminorSel.fn_sig) rret ->
       tr_stmt code map2 f.(CminorSel.fn_body) nentry nret nil nret orret ->
       code!nret = Some(Ireturn orret) -> 
@@ -1065,161 +980,126 @@ Definition expr_condexpr_exprlist_ind
           (exprlist_ind3 P1 P2 P3 a b c d e f g h i j k l)).
 
 Lemma add_move_charact:
-  forall s ns rs nd rd s',
-  add_move rs rd nd s = OK ns s' -> 
-  tr_move s'.(st_code) ns rs nd rd /\ state_incr s s'.
+  forall s ns rs nd rd s' i,
+  add_move rs rd nd s = OK ns s' i -> 
+  tr_move s'.(st_code) ns rs nd rd.
 Proof.
   intros. unfold add_move in H. destruct (Reg.eq rs rd).
-  inv H. split. constructor. auto with rtlg.
-  split. constructor. eauto with rtlg. eauto with rtlg.
+  inv H. constructor.
+  constructor. eauto with rtlg.
 Qed.
 
 Lemma transl_expr_condexpr_list_charact:
-  (forall a map rd nd s ns s' pr
-     (TR: transl_expr map a rd nd s = OK ns s')
+  (forall a map rd nd s ns s' pr INCR
+     (TR: transl_expr map a rd nd s = OK ns s' INCR)
      (WF: map_valid map s)
      (OK: target_reg_ok map pr a rd)
      (VALID: regs_valid pr s)
      (VALID2: reg_valid rd s),
-   tr_expr s'.(st_code) map pr a ns nd rd
-   /\ state_incr s s')
+   tr_expr s'.(st_code) map pr a ns nd rd)
 /\
-  (forall a map ntrue nfalse s ns s' pr
-     (TR: transl_condition map a ntrue nfalse s = OK ns s')
+  (forall a map ntrue nfalse s ns s' pr INCR
+     (TR: transl_condition map a ntrue nfalse s = OK ns s' INCR)
      (WF: map_valid map s)
      (VALID: regs_valid pr s),
-   tr_condition s'.(st_code) map pr a ns ntrue nfalse
-   /\ state_incr s s')
+   tr_condition s'.(st_code) map pr a ns ntrue nfalse)
 /\
-  (forall al map rl nd s ns s' pr
-     (TR: transl_exprlist map al rl nd s = OK ns s')
+  (forall al map rl nd s ns s' pr INCR
+     (TR: transl_exprlist map al rl nd s = OK ns s' INCR)
      (WF: map_valid map s)
      (OK: target_regs_ok map pr al rl)
      (VALID1: regs_valid pr s)
      (VALID2: regs_valid rl s),
-   tr_exprlist s'.(st_code) map pr al ns nd rl
-   /\ state_incr s s').
+   tr_exprlist s'.(st_code) map pr al ns nd rl).
 Proof.
   apply expr_condexpr_exprlist_ind; intros; try (monadInv TR).
   (* Evar *)
   generalize EQ; unfold find_var. caseEq (map_vars map)!i; intros; inv EQ1.
-  exploit add_move_charact; eauto.
-  intros [A B].
-  split. econstructor; eauto.
-    inv OK. left; congruence. right; eauto.
-  auto.
+  econstructor; eauto.
+  inv OK. left; congruence. right; eauto.
+  eapply add_move_charact; eauto.
   (* Eop *)
-  inv OK. 
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg. intros [A B].
-  split. econstructor; eauto.
-  eapply instr_at_incr; eauto.
-  apply state_incr_trans with s1; eauto with rtlg.
+  inv OK.
+  econstructor; eauto with rtlg.
+  eapply H; eauto with rtlg.
   (* Eload *)
   inv OK.
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg. intros [A B].
-  split. econstructor; eauto.
-  eapply instr_at_incr; eauto.
-  apply state_incr_trans with s1; eauto with rtlg.
+  econstructor; eauto with rtlg.
+  eapply H; eauto with rtlg. 
   (* Econdition *)
   inv OK.
-  exploit (H1 _ _ _ _ _ _ pr EQ); eauto with rtlg.
-  constructor; auto.
-  intros [A B].
-  exploit (H0 _ _ _ _ _ _ pr EQ1); eauto with rtlg.
-  constructor; auto.
-  intros [C D].
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg.
-  intros [E F].
-  split. econstructor; eauto. 
-  apply tr_expr_incr with s1; auto.
-  apply tr_expr_incr with s0; eauto with rtlg.
-  apply state_incr_trans with s0; auto.
-  apply state_incr_trans with s1; auto.
+  econstructor; eauto with rtlg.
+  eapply H; eauto with rtlg.
+  apply tr_expr_incr with s1; auto. 
+  eapply H0; eauto with rtlg. constructor; auto. 
+  apply tr_expr_incr with s0; auto. 
+  eapply H1; eauto with rtlg. constructor; auto.
   (* Elet *)
   inv OK.
-  exploit (H0 _ _ _ _ _ _ pr EQ1). 
+  econstructor. eapply new_reg_not_in_map; eauto with rtlg.  
+  eapply H; eauto with rtlg.
+  apply tr_expr_incr with s1; auto.
+  eapply H0. eauto. 
   apply add_letvar_valid; eauto with rtlg. 
   constructor; auto. 
   red; unfold reg_in_map. simpl. intros [[id A] | [B | C]].
   elim H1. left; exists id; auto.
   subst x. apply valid_fresh_absurd with rd s. auto. eauto with rtlg.
   elim H1. right; auto.
-  eauto with rtlg. eauto with rtlg. 
-  intros [A B].
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg. intros [C D].
-  split. econstructor.
-  eapply new_reg_not_in_map; eauto with rtlg. eauto. 
-  apply tr_expr_incr with s1; auto.
-  eauto with rtlg.
+  eauto with rtlg. eauto with rtlg.
   (* Eletvar *)
   generalize EQ; unfold find_letvar. caseEq (nth_error (map_letvars map) n); intros; inv EQ0.
   monadInv EQ1.
-  exploit add_move_charact; eauto.
-  intros [A B].
-  split. econstructor; eauto. 
-    inv OK. left; congruence. right; eauto.
-  auto.
+  econstructor; eauto with rtlg. 
+  inv OK. left; congruence. right; eauto.
+  eapply add_move_charact; eauto.
   monadInv EQ1.
 
   (* CEtrue *)
-  split. constructor. auto with rtlg.
+  constructor.
   (* CEfalse *)
-  split. constructor. auto with rtlg.
+  constructor.
   (* CEcond *)
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg.
-  intros [A B].
-  split. econstructor; eauto. 
-  apply instr_at_incr with s1; eauto with rtlg. 
-  eauto with rtlg.
+  econstructor; eauto with rtlg.
+  eapply H; eauto with rtlg.
   (* CEcondition *)
-  exploit (H1 _ _ _ _ _ _ pr EQ); eauto with rtlg.
-  intros [A B].
-  exploit (H0 _ _ _ _ _ _ pr EQ1); eauto with rtlg.
-  intros [C D].
-  exploit (H _ _ _ _ _ _ pr EQ2); eauto with rtlg.
-  intros [E F].
-  split. econstructor; eauto. 
-  apply tr_condition_incr with s1; eauto with rtlg.
-  apply tr_condition_incr with s0; eauto with rtlg.
-  eauto with rtlg.
+  econstructor.
+  eapply H; eauto with rtlg.
+  apply tr_condition_incr with s1; auto.
+  eapply H0; eauto with rtlg.
+  apply tr_condition_incr with s0; auto.
+  eapply H1; eauto with rtlg.
 
   (* Enil *)
-  destruct rl; inv TR. split. constructor. eauto with rtlg.
+  destruct rl; inv TR. constructor.
   (* Econs *)
-  destruct rl; simpl in TR; monadInv TR. inv OK. 
-  exploit H0; eauto.
+  destruct rl; simpl in TR; monadInv TR. inv OK.
+  econstructor.
+  eapply H; eauto with rtlg.
+  generalize (VALID2 r (in_eq _ _)). eauto with rtlg.
+  apply tr_exprlist_incr with s0; auto.
+  eapply H0; eauto with rtlg.
   apply regs_valid_cons. apply VALID2. auto with coqlib. auto. 
   red; intros; apply VALID2; auto with coqlib.
-  intros [A B]. 
-  exploit H; eauto.
-  eauto with rtlg.
-  eauto with rtlg.
-  generalize (VALID2 r (in_eq _ _)). eauto with rtlg.
-  intros [C D].
-  split. econstructor; eauto.
-  apply tr_exprlist_incr with s0; auto.
-  apply state_incr_trans with s0; eauto with rtlg.
 Qed.
 
 Lemma transl_expr_charact:
-  forall a map rd nd s ns s'
-     (TR: transl_expr map a rd nd s = OK ns s')
+  forall a map rd nd s ns s' INCR
+     (TR: transl_expr map a rd nd s = OK ns s' INCR)
      (WF: map_valid map s)
      (OK: target_reg_ok map nil a rd)
      (VALID2: reg_valid rd s),
-   tr_expr s'.(st_code) map nil a ns nd rd
-   /\ state_incr s s'.
+   tr_expr s'.(st_code) map nil a ns nd rd.
 Proof.
   destruct transl_expr_condexpr_list_charact as [A [B C]].
   intros. eapply A; eauto with rtlg.
 Qed.
 
 Lemma transl_condexpr_charact:
-  forall a map ntrue nfalse s ns s'
-     (TR: transl_condition map a ntrue nfalse s = OK ns s')
+  forall a map ntrue nfalse s ns s' INCR
+     (TR: transl_condition map a ntrue nfalse s = OK ns s' INCR)
      (WF: map_valid map s),
-   tr_condition s'.(st_code) map nil a ns ntrue nfalse
-   /\ state_incr s s'.
+   tr_condition s'.(st_code) map nil a ns ntrue nfalse.
 Proof.
   destruct transl_expr_condexpr_list_charact as [A [B C]].
   intros. eapply B; eauto with rtlg.
@@ -1283,225 +1163,151 @@ Qed.
 
 
 Lemma store_var_charact:
-  forall map rs id nd s ns s',
-  store_var map rs id nd s = OK ns s' ->
-  tr_store_var s'.(st_code) map rs id ns nd /\ state_incr s s'.
+  forall map rs id nd s ns s' incr,
+  store_var map rs id nd s = OK ns s' incr ->
+  tr_store_var s'.(st_code) map rs id ns nd.
 Proof.
   intros. monadInv H. generalize EQ. unfold find_var.
   caseEq ((map_vars map)!id). 2: intros; discriminate. intros. monadInv EQ1.
-  exploit add_move_charact; eauto. intros [A B]. 
-  split; auto. exists x; auto.
+  exists x; split. auto. eapply add_move_charact; eauto.
 Qed.
 
 Lemma store_optvar_charact:
-  forall map rs optid nd s ns s',
-  store_optvar map rs optid nd s = OK ns s' ->
-  tr_store_optvar s'.(st_code) map rs optid ns nd /\ state_incr s s'.
+  forall map rs optid nd s ns s' incr,
+  store_optvar map rs optid nd s = OK ns s' incr ->
+  tr_store_optvar s'.(st_code) map rs optid ns nd.
 Proof.
   intros. destruct optid; simpl in H; simpl.
   eapply store_var_charact; eauto.
-  monadInv H. split. auto. apply state_incr_refl. 
+  monadInv H. auto. 
 Qed. 
 
 Lemma transl_exit_charact:
-  forall nexits n s ne s',
-  transl_exit nexits n s = OK ne s' ->
+  forall nexits n s ne s' incr,
+  transl_exit nexits n s = OK ne s' incr ->
   nth_error nexits n = Some ne /\ s' = s.
 Proof.
-  intros until s'. unfold transl_exit. 
+  intros until incr. unfold transl_exit. 
   destruct (nth_error nexits n); intro; monadInv H. auto.
 Qed.
 
 Lemma transl_switch_charact:
-  forall r nexits t s ns s',
-  transl_switch r nexits t s = OK ns s' ->
-  tr_switch s'.(st_code) r nexits t ns /\ state_incr s s'.
+  forall r nexits t s ns s' incr,
+  transl_switch r nexits t s = OK ns s' incr ->
+  tr_switch s'.(st_code) r nexits t ns.
 Proof.
   induction t; simpl; intros.
   exploit transl_exit_charact; eauto. intros [A B].
-  split. econstructor; eauto. subst s'; auto with rtlg.
+  econstructor; eauto.
 
   monadInv H.
   exploit transl_exit_charact; eauto. intros [A B]. subst s1.
-  exploit IHt; eauto. intros [C D].
-  split. econstructor; eauto with rtlg. 
+  econstructor; eauto with rtlg. 
   apply tr_switch_extends with s0; eauto with rtlg.
-  eauto with rtlg.
 
   monadInv H.
-  exploit IHt2; eauto. intros [A B].
-  exploit IHt1; eauto. intros [C D].
-  split. econstructor.
+  econstructor; eauto with rtlg. 
   apply tr_switch_extends with s1; eauto with rtlg.
   apply tr_switch_extends with s0; eauto with rtlg.
-  eauto with rtlg.
-  eauto with rtlg.
 Qed.
  
 Lemma transl_stmt_charact:
-  forall map stmt nd nexits nret rret s ns s'
-    (TR: transl_stmt map stmt nd nexits nret rret s = OK ns s')
+  forall map stmt nd nexits nret rret s ns s' INCR
+    (TR: transl_stmt map stmt nd nexits nret rret s = OK ns s' INCR)
     (WF: map_valid map s)
     (OK: return_reg_ok s map rret),
-  tr_stmt s'.(st_code) map stmt ns nd nexits nret rret
-  /\ state_incr s s'.
+  tr_stmt s'.(st_code) map stmt ns nd nexits nret rret.
 Proof.
   induction stmt; intros; simpl in TR; try (monadInv TR).
   (* Sskip *)
-  split. constructor. auto with rtlg.
+  constructor.
   (* Sassign *)
-  exploit store_var_charact; eauto. intros [A B].
-  exploit transl_expr_charact; eauto with rtlg. 
-  intros [C D].
-  split. econstructor; eauto.
-  apply tr_store_var_extends with s1; eauto with rtlg.
-  eauto with rtlg. 
+  econstructor. eapply transl_expr_charact; eauto with rtlg.
+  apply tr_store_var_extends with s1; auto with rtlg.
+  eapply store_var_charact; eauto.
   (* Sstore *)
-  assert (state_incr s s1). eauto with rtlg.
-  assert (state_incr s s2). eauto with rtlg.
-  assert (map_valid map s2). eauto with rtlg. 
   destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
-  exploit (P1 _ _ _ _ _ _ _ x EQ2).
-    auto.
-    eapply alloc_reg_target_ok with (s1 := s0); eauto with rtlg.  
-    apply regs_valid_incr with s0; eauto with rtlg. 
-    apply reg_valid_incr with s1; eauto with rtlg.
-  intros [A B].
-  exploit (P3 _ _ _ _ _ _ _ nil EQ4).
-    apply map_valid_incr with s2; auto.
-    eapply alloc_regs_target_ok with (s1 := s); eauto with rtlg.
-    auto with rtlg.
-    apply regs_valid_incr with s0; eauto with rtlg. 
-  intros [C D].
-  split. econstructor; eauto.
-  apply tr_expr_incr with s3; eauto with rtlg. 
-  apply instr_at_incr with s2; eauto with rtlg.
-  eauto with rtlg.
+  econstructor; eauto with rtlg.
+  eapply P3; eauto with rtlg. 
+  apply tr_expr_incr with s3; eauto with rtlg.
+  eapply P1; eauto with rtlg. 
   (* Scall *)
-  assert (state_incr s0 s3).
-    apply state_incr_trans with s1. eauto with rtlg.
-    apply state_incr_trans with s2; eauto with rtlg.
-  exploit store_optvar_charact; eauto. intros [A B].
-  assert (state_incr s0 s5) by eauto with rtlg.
   destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
-  exploit (P3 _ _ _ _ _ _ _ (x :: nil) EQ4).
-    apply map_valid_incr with s0; auto.
-    eapply alloc_regs_target_ok with (s1 := s1); eauto with rtlg.
-    apply regs_valid_cons; eauto with rtlg.
-    apply regs_valid_incr with s1. 
-    apply state_incr_trans with s3; eauto with rtlg. 
-    apply regs_valid_cons; eauto with rtlg.
-    apply regs_valid_incr with s2.
-    apply state_incr_trans with s3; eauto with rtlg.
-    eauto with rtlg.
-  intros [C D].
-  exploit (P1 _ _ _ _ _ _ _ nil EQ6).
-    apply map_valid_incr with s0; eauto with rtlg.
-    eapply alloc_reg_target_ok with (s1 := s0); eauto with rtlg.
-    auto with rtlg.
-    apply reg_valid_incr with s1.
-    apply state_incr_trans with s3; eauto with rtlg. 
-    eauto with rtlg.
-  intros [E F].
-  split. econstructor; eauto. 
-  apply tr_exprlist_incr with s6; eauto. 
-  apply instr_at_incr with s5; eauto with rtlg.
+  assert (state_incr s0 s3) by eauto with rtlg.
+  assert (state_incr s3 s6) by eauto with rtlg.
+  econstructor; eauto with rtlg.
+  eapply P1; eauto with rtlg.
+  apply tr_exprlist_incr with s6. auto. 
+  eapply P3; eauto with rtlg.
+  eapply alloc_regs_target_ok with (s1 := s1); eauto with rtlg.
+  apply regs_valid_cons; eauto with rtlg.
+  apply regs_valid_incr with s1; eauto with rtlg.
+  apply regs_valid_cons; eauto with rtlg.
+  apply regs_valid_incr with s2; eauto with rtlg.
   apply tr_store_optvar_extends with s4; eauto with rtlg.
-  red; intro.
-  apply valid_fresh_absurd with x1 s2. 
-  apply reg_valid_incr with s0; eauto with rtlg. 
-  eauto with rtlg.
-  eauto with rtlg.
+  eapply store_optvar_charact; eauto with rtlg.
   (* Salloc *)
-  exploit store_var_charact; eauto. intros [A B].
-  exploit transl_expr_charact; eauto.
-    apply map_valid_incr with s; auto.
-    apply state_incr_trans with s1; eauto with rtlg.
-    eapply alloc_reg_target_ok with (s1 := s); eauto with rtlg.
-    apply reg_valid_incr with s0; eauto with rtlg.
-  intros [C D].
-  split. econstructor; eauto.
-  apply instr_at_incr with s3; eauto with rtlg.
+  econstructor; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
   apply tr_store_var_extends with s2; eauto with rtlg.
-  red; intro.
-  apply valid_fresh_absurd with x0 s0. 
-  apply reg_valid_incr with s; eauto with rtlg. 
-  eauto with rtlg.
-  apply state_incr_trans with s2; eauto with rtlg. 
+  eapply store_var_charact; eauto with rtlg.
   (* Sseq *)
-  exploit IHstmt2; eauto with rtlg. intros [A B].
-  exploit IHstmt1; eauto with rtlg. intros [C D].
-  split. econstructor; eauto. apply tr_stmt_incr with s0; eauto with rtlg.
-  eauto with rtlg.
+  econstructor. 
+  apply tr_stmt_incr with s0; auto. 
+  eapply IHstmt2; eauto with rtlg.
+  eapply IHstmt1; eauto with rtlg.
   (* Sifthenelse *)
   destruct (more_likely c stmt1 stmt2); monadInv TR.
-  exploit IHstmt2; eauto. intros [A B].
-  exploit IHstmt1; eauto with rtlg. intros [C D].
-  exploit transl_condexpr_charact; eauto with rtlg. intros [E F].
-  split. econstructor; eauto. 
-  apply tr_stmt_incr with s1; eauto with rtlg.
-  apply tr_stmt_incr with s0; eauto with rtlg.
-  eauto with rtlg.
-  exploit IHstmt1; eauto. intros [A B].
-  exploit IHstmt2; eauto with rtlg. intros [C D].
-  exploit transl_condexpr_charact; eauto with rtlg. intros [E F].
-  split. econstructor; eauto. 
-  apply tr_stmt_incr with s0; eauto with rtlg.
-  apply tr_stmt_incr with s1; eauto with rtlg.
-  eauto with rtlg.
+  econstructor.
+  apply tr_stmt_incr with s1; auto. 
+  eapply IHstmt1; eauto with rtlg.
+  apply tr_stmt_incr with s0; auto.
+  eapply IHstmt2; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
+  econstructor.
+  apply tr_stmt_incr with s0; auto. 
+  eapply IHstmt1; eauto with rtlg.
+  apply tr_stmt_incr with s1; auto.
+  eapply IHstmt2; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
   (* Sloop *)
-  assert (state_incr s s0).
-    eapply reserve_instr_incr; eauto.  
-  exploit IHstmt; eauto with rtlg. intros [A B].
-  split. econstructor. 
-    apply tr_stmt_extends with s1; eauto.
-    eapply update_instr_extends; eauto.
-  unfold update_instr in EQ0.
-  destruct (plt x (st_nextnode s1)); inv EQ0.
-  simpl. apply PTree.gss. 
-  eapply update_instr_incr; eauto.
+  exploit add_loop_inversion; eauto. 
+  intros [nloop [s2 [s3 [INCR23 [INCR02 [EQ [EXT CODEAT]]]]]]].
+  econstructor. 
+  apply tr_stmt_extends with s3; auto. 
+  eapply IHstmt; eauto with rtlg. 
+  auto.
   (* Sblock *)
-  exploit IHstmt; eauto. intros [A B].
-  split. econstructor; eauto. auto.
+  econstructor. 
+  eapply IHstmt; eauto with rtlg.
   (* Sexit *)
-  exploit transl_exit_charact; eauto. intros [A B]. subst s'.
-  split. econstructor; eauto. auto with rtlg.
+  exploit transl_exit_charact; eauto. intros [A B].
+  econstructor. eauto.
   (* Sswitch *)
   generalize TR; clear TR.
   set (t := compile_switch n l).
   caseEq (validate_switch n l t); intro VALID; intros.
-  monadInv TR. 
-  exploit transl_switch_charact; eauto with rtlg. intros [A B].
-  exploit transl_expr_charact; eauto with rtlg. intros [C D].
-  split. econstructor; eauto with rtlg. 
-  apply tr_switch_extends with s1; eauto with rtlg.
-  eauto with rtlg.
+  monadInv TR.
+  econstructor; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
+  apply tr_switch_extends with s1; auto with rtlg.
+  eapply transl_switch_charact; eauto with rtlg.
   monadInv TR. 
   (* Sreturn *)
   destruct o; destruct rret; inv TR.
-  inv OK.  
-  exploit transl_expr_charact; eauto with rtlg.
+  inv OK.
+  econstructor; eauto with rtlg.   
+  eapply transl_expr_charact; eauto with rtlg.
   constructor. auto. simpl; tauto. 
-  intros [A B].
-  split. econstructor; eauto. auto.
-  split. constructor. auto with rtlg.
+  constructor.
   (* Stailcall *)
-  assert (state_incr s0 s2) by eauto with rtlg.
   destruct transl_expr_condexpr_list_charact as [A [B C]].
-  exploit (C _ _ _ _ _ _ _ (x ::nil) EQ2); eauto with rtlg.
-  apply alloc_regs_target_ok with s1 s2; eauto with rtlg. 
-  apply regs_valid_cons. eauto with rtlg. apply regs_valid_nil.
-  apply regs_valid_cons. apply reg_valid_incr with s1; eauto with rtlg.
-  apply regs_valid_nil.
-  apply regs_valid_incr with s2; eauto with rtlg.
-  intros [D E].
-  exploit (A _ _ _ _ _ _ _ nil EQ4); eauto with rtlg.
-  apply reg_valid_incr with s1; eauto with rtlg. 
-  intros [F G].
-  split. econstructor; eauto. 
-  apply tr_exprlist_incr with s4; eauto.
-  apply instr_at_incr with s3; eauto with rtlg.
-  eauto with rtlg.  
+  assert (RV: regs_valid (x :: nil) s1).
+    apply regs_valid_cons; eauto with rtlg. 
+  econstructor; eauto with rtlg.
+  eapply A; eauto with rtlg.
+  apply tr_exprlist_incr with s4; auto.
+  eapply C; eauto with rtlg.
 Qed.
 
 Lemma transl_function_charact:
@@ -1511,17 +1317,15 @@ Lemma transl_function_charact:
 Proof.
   intros until tf. unfold transl_function. 
   caseEq (transl_fun f init_state). congruence. 
-  intros [nentry rparams] sfinal TR E. inv E. 
+  intros [nentry rparams] sfinal INCR TR E. inv E. 
   monadInv TR.
   exploit add_vars_valid. eexact EQ. apply init_mapping_valid.
   intros [A B]. 
   exploit add_vars_valid. eexact EQ1. auto. 
   intros [C D].
-  exploit transl_stmt_charact; eauto with rtlg. 
+  eapply tr_function_intro; eauto with rtlg.
+  eapply transl_stmt_charact; eauto with rtlg. 
   unfold ret_reg. destruct (sig_res (CminorSel.fn_sig f)).
   constructor. eauto with rtlg. eauto with rtlg.
   constructor.
-  intros [E F].
-  eapply tr_function_intro; eauto with rtlg.
-  apply instr_at_incr with s2; eauto with rtlg. 
 Qed.

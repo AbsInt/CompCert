@@ -46,8 +46,8 @@ Proof.
 Qed.
 
 Lemma add_var_wf:
-  forall s1 s2 map name r map',
-  add_var map name s1 = OK (r,map') s2 -> 
+  forall s1 s2 map name r map' i,
+  add_var map name s1 = OK (r,map') s2 i -> 
   map_wf map -> map_valid map s1 -> map_wf map'.
 Proof.
   intros. monadInv H. 
@@ -74,8 +74,8 @@ Proof.
 Qed.
 
 Lemma add_vars_wf:
-  forall names s1 s2 map map' rl,
-  add_vars map names s1 = OK (rl,map') s2 ->
+  forall names s1 s2 map map' rl i,
+  add_vars map names s1 = OK (rl,map') s2 i ->
   map_wf map -> map_valid map s1 -> map_wf map'.
 Proof.
   induction names; simpl; intros; monadInv H. 
@@ -218,8 +218,8 @@ Qed.
   between environments. *)
 
 Lemma match_set_params_init_regs:
-  forall il rl s1 map2 s2 vl,
-  add_vars init_mapping il s1 = OK (rl, map2) s2 ->
+  forall il rl s1 map2 s2 vl i,
+  add_vars init_mapping il s1 = OK (rl, map2) s2 i ->
   match_env map2 (set_params vl il) nil (init_regs vl rl)
   /\ (forall r, reg_fresh r s2 -> (init_regs vl rl)#r = Vundef).
 Proof.
@@ -234,7 +234,7 @@ Proof.
   monadInv EQ1. 
   destruct vl as [ | v1 vs].
   (* vl = nil *)
-  destruct (IHil _ _ _ _ nil EQ) as [ME UNDEF]. inv ME. split.
+  destruct (IHil _ _ _ _ nil _ EQ) as [ME UNDEF]. inv ME. split.
   constructor; simpl.
   intros id v. repeat rewrite PTree.gsspec. destruct (peq id a); intros.
   subst a. inv H. exists x1; split. auto. apply Regmap.gi.
@@ -243,7 +243,7 @@ Proof.
   destruct (map_letvars x0). auto. simpl in me_letvars0. congruence.
   intros. apply Regmap.gi.
   (* vl = v1 :: vs *)
-  destruct (IHil _ _ _ _ vs EQ) as [ME UNDEF]. inv ME. split.
+  destruct (IHil _ _ _ _ vs _ EQ) as [ME UNDEF]. inv ME. split.
   constructor; simpl.
   intros id v. repeat rewrite PTree.gsspec. destruct (peq id a); intros.
   subst a. inv H. exists x1; split. auto. apply Regmap.gss.
@@ -261,10 +261,10 @@ Qed.
 Lemma match_set_locals:
   forall map1 s1,
   map_wf map1 ->
-  forall il rl map2 s2 e le rs,
+  forall il rl map2 s2 e le rs i,
   match_env map1 e le rs ->
   (forall r, reg_fresh r s1 -> rs#r = Vundef) ->
-  add_vars map1 il s1 = OK (rl, map2) s2 ->
+  add_vars map1 il s1 = OK (rl, map2) s2 i ->
   match_env map2 (set_locals il e) le rs.
 Proof.
   induction il; simpl in *; intros.
@@ -278,17 +278,16 @@ Proof.
   intros id v. simpl. repeat rewrite PTree.gsspec. 
   destruct (peq id a). subst a. intro. 
   exists x1. split. auto. inv H3. 
-  apply H1. apply reg_fresh_decr with s. 
-  eapply add_vars_incr; eauto.
+  apply H1. apply reg_fresh_decr with s. auto.
   eauto with rtlg.
   intros. eapply me_vars; eauto. 
   simpl. eapply me_letvars; eauto.
 Qed.
 
 Lemma match_init_env_init_reg:
-  forall params s0 rparams map1 s1 vars rvars map2 s2 vparams,
-  add_vars init_mapping params s0 = OK (rparams, map1) s1 ->
-  add_vars map1 vars s1 = OK (rvars, map2) s2 ->
+  forall params s0 rparams map1 s1 i1 vars rvars map2 s2 i2 vparams,
+  add_vars init_mapping params s0 = OK (rparams, map1) s1 i1 ->
+  add_vars map1 vars s1 = OK (rvars, map2) s2 i2 ->
   match_env map2 (set_locals vars (set_params vparams params))
             nil (init_regs vparams rparams).
 Proof.

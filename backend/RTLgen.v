@@ -40,6 +40,41 @@ Record state: Set := mkstate {
   st_wf: forall (pc: positive), Plt pc st_nextnode \/ st_code!pc = None
 }.
 
+(** Operations over the global state satisfy a crucial monotonicity property:
+  nodes are only added to the CFG, but are never removed nor their
+  instructions are changed; similarly, fresh nodes and fresh registers
+  are only consumed, but never reused.  This property is captured by
+  the following predicate over states, which we show is a partial
+  order. *)
+
+Inductive state_incr: state -> state -> Prop :=
+  state_incr_intro:
+    forall (s1 s2: state),
+    Ple s1.(st_nextnode) s2.(st_nextnode) ->
+    Ple s1.(st_nextreg) s2.(st_nextreg) ->
+    (forall pc, Plt pc s1.(st_nextnode) -> s2.(st_code)!pc = s1.(st_code)!pc) ->
+    state_incr s1 s2.
+
+Lemma state_incr_refl:
+  forall s, state_incr s s.
+Proof.
+  intros. apply state_incr_intro.
+  apply Ple_refl. apply Ple_refl. intros; auto.
+Qed.
+Hint Resolve state_incr_refl: rtlg.
+
+Lemma state_incr_trans:
+  forall s1 s2 s3, state_incr s1 s2 -> state_incr s2 s3 -> state_incr s1 s3.
+Proof.
+  intros. inversion H. inversion H0. apply state_incr_intro.
+  apply Ple_trans with (st_nextnode s2); assumption. 
+  apply Ple_trans with (st_nextreg s2); assumption.
+  intros. transitivity (s2.(st_code)!pc).
+  apply H8. apply Plt_Ple_trans with s1.(st_nextnode); auto.
+  apply H3; auto.
+Qed.
+Hint Resolve state_incr_trans: rtlg.
+
 (** ** The state and error monad *)
 
 (** The translation functions can fail to produce RTL code, for instance
@@ -50,35 +85,51 @@ Record state: Set := mkstate {
   to modify the global state.  These luxuries are not available in Coq,
   however.  Instead, we use a monadic encoding of the translation:
   translation functions take the current global state as argument,
-  and return either [Error msg] to denote an error, or [OK r s] to denote
-  success.  [s] is the modified state, and [r] the result value of the
-  translation function.  In the error case, [msg] is an error message
-  (see modules [Errors]) describing the problem.
+  and return either [Error msg] to denote an error, 
+  or [OK r s incr] to denote success.  [s] is the modified state, [r]
+  the result value of the translation function.  and [incr] a proof
+  that the final state is in the [state_incr] relation with the
+  initial state.  In the error case, [msg] is an error message (see
+  modules [Errors]) describing the problem.
 
   We now define this monadic encoding -- the ``state and error'' monad --
   as well as convenient syntax to express monadic computations. *)
 
-Set Implicit Arguments.
+Inductive res (A: Set) (s: state): Set :=
+  | Error: Errors.errmsg -> res A s
+  | OK: A -> forall (s': state), state_incr s s' -> res A s.
 
-Inductive res (A: Set) : Set :=
-  | Error: Errors.errmsg -> res A
-  | OK: A -> state -> res A.
+Implicit Arguments OK [A s].
+Implicit Arguments Error [A s].
 
-Definition mon (A: Set) : Set := state -> res A.
+Definition mon (A: Set) : Set := forall (s: state), res A s.
 
-Definition ret (A: Set) (x: A) : mon A := fun (s: state) => OK x s.
+Definition ret (A: Set) (x: A) : mon A :=
+  fun (s: state) => OK x s (state_incr_refl s).
 
-Definition error (A: Set) (msg: Errors.errmsg) : mon A := fun (s: state) => Error A msg.
+Implicit Arguments ret [A].
+
+Definition error (A: Set) (msg: Errors.errmsg) : mon A := fun (s: state) => Error msg.
+
+Implicit Arguments error [A].
 
 Definition bind (A B: Set) (f: mon A) (g: A -> mon B) : mon B :=
   fun (s: state) =>
     match f s with
-    | Error msg => Error B msg
-    | OK a s' => g a s'
+    | Error msg => Error msg
+    | OK a s' i =>
+        match g a s' with
+        | Error msg => Error msg
+        | OK b s'' i' => OK b s'' (state_incr_trans s s' s'' i i')
+        end
     end.
+
+Implicit Arguments bind [A B].
 
 Definition bind2 (A B C: Set) (f: mon (A * B)) (g: A -> B -> mon C) : mon C :=
   bind f (fun xy => g (fst xy) (snd xy)).
+
+Implicit Arguments bind2 [A B C].
 
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
    (at level 200, X ident, A at level 100, B at level 200).
@@ -89,7 +140,7 @@ Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
 
 (** The initial state (empty CFG). *)
 
-Lemma init_state_wf:
+Remark init_state_wf:
   forall pc, Plt pc 1%positive \/ (PTree.empty instruction)!pc = None.
 Proof. intros; right; apply PTree.gempty. Qed.
 
@@ -99,7 +150,7 @@ Definition init_state : state :=
 (** Adding a node with the given instruction to the CFG.  Return the
     label of the new node. *)
 
-Lemma add_instr_wf:
+Remark add_instr_wf:
   forall s i pc,
   let n := s.(st_nextnode) in
   Plt pc (Psucc n) \/ (PTree.set n i s.(st_code))!pc = None.
@@ -112,6 +163,20 @@ Proof.
   right; assumption.
 Qed.
 
+Remark add_instr_incr:
+  forall s i,
+  let n := s.(st_nextnode) in
+  state_incr s (mkstate s.(st_nextreg)
+                (Psucc n)
+                (PTree.set n i s.(st_code))
+                (add_instr_wf s i)).
+Proof.
+  constructor; simpl.
+  apply Ple_succ.
+  apply Ple_refl.
+  intros. apply PTree.gso. apply Plt_ne; auto.
+Qed.
+
 Definition add_instr (i: instruction) : mon node :=
   fun s =>
     let n := s.(st_nextnode) in
@@ -119,13 +184,14 @@ Definition add_instr (i: instruction) : mon node :=
        (mkstate s.(st_nextreg)
                 (Psucc n)
                 (PTree.set n i s.(st_code))
-                (add_instr_wf s i)).
+                (add_instr_wf s i))
+       (add_instr_incr s i).
 
 (** [add_instr] can be decomposed in two steps: reserving a fresh
   CFG node, and filling it later with an instruction.  This is needed
   to compile loops. *)
 
-Lemma reserve_instr_wf:
+Remark reserve_instr_wf:
   forall s pc,
   Plt pc (Psucc s.(st_nextnode)) \/ s.(st_code)!pc = None.
 Proof.
@@ -134,13 +200,14 @@ Proof.
   right; auto.
 Qed.
 
-Definition reserve_instr : mon node :=
-  fun s =>
-    let n := s.(st_nextnode) in
-    OK n (mkstate s.(st_nextreg) (Psucc n) s.(st_code)
-                  (reserve_instr_wf s)).
+Definition reserve_instr (s: state): (node * state)%type :=
+  let n := s.(st_nextnode) in
+  (n, mkstate s.(st_nextreg)
+              (Psucc n)
+              s.(st_code)
+              (reserve_instr_wf s)).
 
-Lemma update_instr_wf:
+Remark update_instr_wf:
   forall s n i,
   Plt n s.(st_nextnode) ->
   forall pc,
@@ -152,24 +219,62 @@ Proof.
   rewrite PTree.gso; auto. exact (st_wf s pc).
 Qed.
 
-Definition update_instr (n: node) (i: instruction) : mon unit :=
-  fun s =>
-    match plt n s.(st_nextnode) with
-    | left PEQ =>
-        OK tt (mkstate s.(st_nextreg) s.(st_nextnode)
-                       (PTree.set n i s.(st_code))
-                       (@update_instr_wf s n i PEQ))
-    | right _ =>
-        Error unit (Errors.msg "RTLgen.update_instr")
+Definition update_instr (n: node) (i: instruction) (s: state) : state :=
+  match plt n s.(st_nextnode) with
+  | left PLT =>
+      mkstate s.(st_nextreg) 
+              s.(st_nextnode)
+              (PTree.set n i s.(st_code))
+              (update_instr_wf s n i PLT)
+  | right _ => s (* never happens *)
+  end.
+
+Remark add_loop_incr:
+  forall s1 s3 i,
+  let n := fst (reserve_instr s1) in
+  let s2 := snd (reserve_instr s1) in
+  state_incr s2 s3 ->
+  state_incr s1 (update_instr n i s3).
+Proof.
+  intros. inv H. unfold update_instr. destruct (plt n (st_nextnode s3)).
+  constructor; simpl.
+  apply Ple_trans with (st_nextnode s2).
+  unfold s2; simpl. apply Ple_succ. auto.
+  assumption.
+  intros. rewrite PTree.gso. rewrite H2. reflexivity. 
+  unfold s2; simpl. apply Plt_trans_succ. auto. 
+  apply Plt_ne. assumption.
+  elim n0. apply Plt_Ple_trans with (st_nextnode s2). 
+  unfold n, s2; simpl; apply Plt_succ. auto.
+Qed.
+
+Definition add_loop (body: node -> mon node) : mon node :=
+  fun (s1: state) =>
+    let nloop := fst(reserve_instr s1) in
+    let s2 := snd(reserve_instr s1) in
+    match body nloop s2 with
+    | Error msg => Error msg
+    | OK nbody s3 i => 
+        OK nbody (update_instr nloop (Inop nbody) s3)
+                 (add_loop_incr s1 s3 (Inop nbody) i)
     end.
 
 (** Generate a fresh RTL register. *)
+
+Remark new_reg_incr:
+  forall s,
+  state_incr s (mkstate (Psucc s.(st_nextreg))
+                        s.(st_nextnode) s.(st_code) s.(st_wf)).
+Proof.
+  constructor; simpl. apply Ple_refl. apply Ple_succ. auto.
+Qed.
 
 Definition new_reg : mon reg :=
   fun s =>
     OK s.(st_nextreg)
        (mkstate (Psucc s.(st_nextreg))
-                s.(st_nextnode) s.(st_code) s.(st_wf)).
+                s.(st_nextnode) s.(st_code) s.(st_wf))
+       (new_reg_incr s).
 
 (** ** Operations on mappings *)
 
@@ -193,7 +298,7 @@ Fixpoint add_vars (map: mapping) (names: list ident)
 
 Definition find_var (map: mapping) (name: ident) : mon reg :=
   match PTree.get name map.(map_vars) with
-  | None => error reg (Errors.MSG "RTLgen: unbound variable " :: Errors.CTX name :: nil)
+  | None => error (Errors.MSG "RTLgen: unbound variable " :: Errors.CTX name :: nil)
   | Some r => ret r
   end.
 
@@ -202,7 +307,7 @@ Definition add_letvar (map: mapping) (r: reg) : mapping :=
 
 Definition find_letvar (map: mapping) (idx: nat) : mon reg :=
   match List.nth_error map.(map_letvars) idx with
-  | None => error reg (Errors.msg "RTLgen: unbound let variable")
+  | None => error (Errors.msg "RTLgen: unbound let variable")
   | Some r => ret r
   end.
 
@@ -311,7 +416,7 @@ with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
   | Econs b bs, r :: rs =>
       do no <- transl_exprlist map bs rs nd; transl_expr map b r no
   | _, _ =>
-      error node (Errors.msg "RTLgen.transl_exprlist")
+      error (Errors.msg "RTLgen.transl_exprlist")
   end.
 
 (** Generation of code for variable assignments. *)
@@ -344,7 +449,7 @@ Parameter compile_switch: nat -> table -> comptree.
 
 Definition transl_exit (nexits: list node) (n: nat) : mon node :=
   match nth_error nexits n with
-  | None => error node (Errors.msg "RTLgen: wrong exit")
+  | None => error (Errors.msg "RTLgen: wrong exit")
   | Some ne => ret ne
   end.
 
@@ -415,10 +520,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
         do nfalse <- transl_stmt map sfalse nd nexits nret rret;
         transl_condition map a ntrue nfalse
   | Sloop sbody =>
-      do nloop <- reserve_instr;
-      do nbody <- transl_stmt map sbody nloop nexits nret rret;
-      do x <- update_instr nloop (Inop nbody);
-      ret nbody
+      add_loop (fun nloop => transl_stmt map sbody nloop nexits nret rret)
   | Sblock sbody =>
       transl_stmt map sbody nd (nd :: nexits) nret rret
   | Sexit n =>
@@ -430,12 +532,12 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
          do ns <- transl_switch r nexits t;
          transl_expr map a r ns)
       else
-        error node (Errors.msg "RTLgen: wrong switch")
+        error (Errors.msg "RTLgen: wrong switch")
   | Sreturn opt_a =>
       match opt_a, rret with
       | None, None => ret nret
       | Some a, Some r => transl_expr map a r nret
-      | _, _ => error node (Errors.msg "RTLgen: type mismatch on return")
+      | _, _ => error (Errors.msg "RTLgen: type mismatch on return")
       end
   | Stailcall sig b cl =>
       do rf <- alloc_reg map b;
@@ -465,7 +567,7 @@ Definition transl_fun (f: CminorSel.function) : mon (node * list reg) :=
 Definition transl_function (f: CminorSel.function) : Errors.res RTL.function :=
   match transl_fun f init_state with
   | Error msg => Errors.Error msg
-  | OK (nentry, rparams) s =>
+  | OK (nentry, rparams) s i =>
       Errors.OK (RTL.mkfunction
                    f.(CminorSel.fn_sig)
                    rparams
