@@ -562,10 +562,10 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr a2 v2 ->
       bool_of_val v2 (typeof a2) v ->
       eval_expr (Expr (Eandbool a1 a2) ty) v
-  | eval_Ecast:   forall a ty v1 v,
+  | eval_Ecast:   forall a ty ty' v1 v,
       eval_expr a v1 ->
       cast v1 (typeof a) ty v ->
-      eval_expr (Expr (Ecast ty a) ty) v
+      eval_expr (Expr (Ecast ty a) ty') v
 
 (** [eval_lvalue ge e m a b ofs] defines the evaluation of expression [a]
   in l-value position.  The result is the memory location [b, ofs]

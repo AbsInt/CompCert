@@ -628,10 +628,10 @@ Proof.
 Qed.
 
 Lemma transl_Ecast_correct:
-  forall (a : Csyntax.expr) (ty : type) (v1 v : val),
+  forall (a : Csyntax.expr) (ty ty': type) (v1 v : val),
   Csem.eval_expr ge e m a v1 ->
   eval_expr_prop a v1 ->
-  cast v1 (typeof a) ty v -> eval_expr_prop (Expr (Ecast ty a) ty) v.
+  cast v1 (typeof a) ty v -> eval_expr_prop (Expr (Ecast ty a) ty') v.
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
   eapply make_cast_correct; eauto.
