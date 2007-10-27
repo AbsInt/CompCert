@@ -100,7 +100,7 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res PPC.fundef :=
    @@ CSE.transf_fundef
   @@@ Allocation.transf_fundef
    @@ Tunneling.tunnel_fundef
-   @@ Linearize.transf_fundef
+  @@@ Linearize.transf_fundef
    @@ Reload.transf_fundef
   @@@ Stacking.transf_fundef
   @@@ PPCgen.transf_fundef.
@@ -224,7 +224,7 @@ Proof.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H6) as [p5 [H5 P5]].
   clear H6. generalize (transform_program_partial_program _ _ _ _ _ _ P5). clear P5. intro P5.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H5) as [p4 [H4 P4]].
-  clear H5. generalize (transform_program_partial_program _ _ _ _ _ _ P4). clear P4. intro P4.
+  clear H5.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H4) as [p3 [H3 P3]].
   clear H4. generalize (transform_program_partial_program _ _ _ _ _ _ P3). clear P3. intro P3.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H3) as [p2 [H2 P2]].
@@ -240,7 +240,7 @@ Proof.
   assert (WT4 : LTLtyping.wt_program p4).
     subst p4. apply Tunnelingtyping.program_typing_preserved. auto.
   assert (WT5 : LTLintyping.wt_program p5).
-    subst p5. apply Linearizetyping.program_typing_preserved. auto.
+    apply Linearizetyping.program_typing_preserved with p4. auto. auto.
   assert (WT6 : Lineartyping.wt_program p6).
     subst p6. apply Reloadtyping.program_typing_preserved. auto.
   assert (WT7: Machtyping.wt_program p7).
@@ -250,7 +250,7 @@ Proof.
   apply Machabstr2concr.exec_program_equiv; auto.
   apply Stackingproof.transf_program_correct with p6; auto.
   subst p6; apply Reloadproof.transf_program_correct; auto.
-  subst p5; apply Linearizeproof.transf_program_correct; auto.
+  apply Linearizeproof.transf_program_correct with p4; auto.
   subst p4; apply Tunnelingproof.transf_program_correct. 
   apply Allocproof.transf_program_correct with p2; auto.
   subst p2; apply CSEproof.transf_program_correct.

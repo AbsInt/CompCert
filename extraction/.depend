@@ -42,10 +42,10 @@
     ../caml/CMlexer.cmx 
 ../caml/Floataux.cmo: Integers.cmi ../caml/Camlcoq.cmo 
 ../caml/Floataux.cmx: Integers.cmx ../caml/Camlcoq.cmx 
-../caml/PrintCshm.cmo: Integers.cmi Datatypes.cmi Csharpminor.cmi \
-    ../caml/Camlcoq.cmo CList.cmi AST.cmi 
-../caml/PrintCshm.cmx: Integers.cmx Datatypes.cmx Csharpminor.cmx \
-    ../caml/Camlcoq.cmx CList.cmx AST.cmx 
+../caml/Linearizeaux.cmo: Maps.cmi Lattice.cmi LTLin.cmi LTL.cmi \
+    Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi 
+../caml/Linearizeaux.cmx: Maps.cmx Lattice.cmx LTLin.cmx LTL.cmx \
+    Datatypes.cmx Coqlib.cmx CList.cmx BinPos.cmx 
 ../caml/PrintCsyntax.cmo: Datatypes.cmi Csyntax.cmi ../caml/Camlcoq.cmo \
     CList.cmi AST.cmi 
 ../caml/PrintCsyntax.cmx: Datatypes.cmx Csyntax.cmx ../caml/Camlcoq.cmx \
@@ -129,8 +129,9 @@ Kildall.cmi: Specif.cmi Setoid.cmi OrderedType.cmi Ordered.cmi Maps.cmi \
     BinPos.cmi BinInt.cmi 
 Lattice.cmi: Specif.cmi Maps.cmi FSetInterface.cmi Datatypes.cmi Bool.cmi \
     BinPos.cmi 
-Linearize.cmi: Specif.cmi Op.cmi Maps.cmi Lattice.cmi LTLin.cmi LTL.cmi \
-    Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi AST.cmi 
+Linearize.cmi: Specif.cmi OrderedType.cmi Ordered.cmi Op.cmi Maps.cmi \
+    Lattice.cmi LTLin.cmi LTL.cmi Errors.cmi Datatypes.cmi Coqlib.cmi \
+    CString.cmi CList.cmi CInt.cmi BinPos.cmi BinInt.cmi Ascii.cmi AST.cmi 
 Linear.cmi: Values.cmi Specif.cmi Op.cmi Mem.cmi Locations.cmi Integers.cmi \
     Globalenvs.cmi Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi BinInt.cmi \
     AST.cmi 
@@ -351,12 +352,14 @@ Lattice.cmo: Specif.cmi Maps.cmi FSetInterface.cmi Datatypes.cmi Bool.cmi \
     BinPos.cmi Lattice.cmi 
 Lattice.cmx: Specif.cmx Maps.cmx FSetInterface.cmx Datatypes.cmx Bool.cmx \
     BinPos.cmx Lattice.cmi 
-Linearize.cmo: Specif.cmi Op.cmi Maps.cmi Lattice.cmi LTLin.cmi LTL.cmi \
-    Kildall.cmi Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi AST.cmi \
-    Linearize.cmi 
-Linearize.cmx: Specif.cmx Op.cmx Maps.cmx Lattice.cmx LTLin.cmx LTL.cmx \
-    Kildall.cmx Datatypes.cmx Coqlib.cmx CList.cmx BinPos.cmx AST.cmx \
-    Linearize.cmi 
+Linearize.cmo: Specif.cmi OrderedType.cmi Ordered.cmi Op.cmi Maps.cmi \
+    ../caml/Linearizeaux.cmo Lattice.cmi LTLin.cmi LTL.cmi Kildall.cmi \
+    FSetAVL.cmi Errors.cmi Datatypes.cmi Coqlib.cmi CString.cmi CList.cmi \
+    BinPos.cmi BinInt.cmi Ascii.cmi AST.cmi Linearize.cmi 
+Linearize.cmx: Specif.cmx OrderedType.cmx Ordered.cmx Op.cmx Maps.cmx \
+    ../caml/Linearizeaux.cmx Lattice.cmx LTLin.cmx LTL.cmx Kildall.cmx \
+    FSetAVL.cmx Errors.cmx Datatypes.cmx Coqlib.cmx CString.cmx CList.cmx \
+    BinPos.cmx BinInt.cmx Ascii.cmx AST.cmx Linearize.cmi 
 Linear.cmo: Values.cmi Specif.cmi Op.cmi Mem.cmi Locations.cmi Integers.cmi \
     Globalenvs.cmi Datatypes.cmi Coqlib.cmi CList.cmi BinPos.cmi BinInt.cmi \
     AST.cmi Linear.cmi 

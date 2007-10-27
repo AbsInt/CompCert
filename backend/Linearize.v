@@ -3,9 +3,13 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Ordered.
+Require Import FSets.
+Require FSetAVL.
 Require Import AST.
 Require Import Values.
 Require Import Globalenvs.
+Require Import Errors.
 Require Import Op.
 Require Import Locations.
 Require Import LTL.
@@ -13,10 +17,12 @@ Require Import LTLin.
 Require Import Kildall.
 Require Import Lattice.
 
-(** To translate from LTL to LTLin, we must lay out the basic blocks
+Open Scope error_monad_scope.
+
+(** To translate from LTL to LTLin, we must lay out the nodes
   of the LTL control-flow graph in some linear order, and insert
   explicit branches and conditional branches to make sure that
-  each basic block jumps to its successors as prescribed by the
+  each node jumps to its successors as prescribed by the
   LTL control-flow graph.  However, branches are not necessary
   if the fall-through behaviour of LTLin instructions already
   implements the desired flow of control.  For instance,
@@ -39,29 +45,28 @@ Require Import Lattice.
     L2: ...
 >>
   The main challenge in code linearization is therefore to pick a
-  ``good'' order for the basic blocks that exploits well the
+  ``good'' order for the nodes that exploits well the
   fall-through behavior.  Many clever trace picking heuristics
   have been developed for this purpose.  
 
   In this file, we present linearization in a way that clearly
   separates the heuristic part (choosing an order for the basic blocks)
   from the actual code transformation parts.  We proceed in three passes:
-- Choosing an order for the basic blocks.  This returns an enumeration
-  of CFG nodes stating that the basic blocks must be laid out in
-  the order shown in the list.
-- Generate LTLin code where each basic block branches explicitly
-  to its successors, except if one of these successors is the
-  immediately following instruction.
+- Choosing an order for the nodes.  This returns an enumeration of CFG
+  nodes stating that they must be laid out in the order shown in the
+  list.
+- Generate LTLin code where each node branches explicitly to its
+  successors, except if one of these successors is the immediately
+  following instruction.
 
   The beauty of this approach is that correct code is generated
   under surprisingly weak hypotheses on the enumeration of
   CFG nodes: it suffices that every reachable instruction occurs
-  exactly once in the enumeration.  While the enumeration heuristic we use
-  is quite trivial, it is easy to implement more sophisticated
-  trace picking heuristics: as long as they satisfy the property above,
-  we do not need to re-do the proof of semantic preservation.
-  The enumeration could even be performed by external, untrusted
-  Caml code, then verified (for the property above) by certified Coq code.
+  exactly once in the enumeration.  We therefore follow an approach
+  based on validation a posteriori: a piece of untrusted Caml code
+  implements the node enumeration heuristics, and the resulting
+  enumeration is checked for correctness by Coq functions that are
+  proved to be sound.
 *)
 
 (** * Determination of the order of basic blocks *)
@@ -88,21 +93,44 @@ Definition reachable (f: LTL.function) : PMap.t bool :=
   | Some rs => rs
   end.
 
-(** We then enumerate the nodes of reachable basic blocks.  The heuristic
-  we take is trivial: nodes are enumerated in decreasing numerical
-  order.  Remember that CFG nodes are positive integers, and that
-  the [RTLgen] pass allocated fresh nodes 1, 2, 3, ..., but generated
-  instructions in roughly reverse control-flow order: often,
-  a basic block at label [n] has [n-1] as its only successor.
-  Therefore, by enumerating reachable nodes in decreasing order,
-  we recover a reasonable layout of basic blocks that globally respects
-  the structure of the original Cminor code. *)
+(** We then enumerate the nodes of reachable instructions.
+  This task is performed by external, untrusted Caml code. *)
 
-Definition enumerate (f: LTL.function) : list node :=
+Parameter enumerate_aux: LTL.function -> PMap.t bool -> list node.
+
+(** Now comes the validation of an enumeration a posteriori. *)
+
+Module Nodeset := FSetAVL.Make(OrderedPositive).
+
+(** Build a Nodeset.t from a list of nodes, checking that the list
+  contains no duplicates. *)
+
+Fixpoint nodeset_of_list (l: list node) (s: Nodeset.t)
+                         {struct l}: res Nodeset.t :=
+  match l with
+  | nil => OK s
+  | hd :: tl =>
+      if Nodeset.mem hd s 
+      then Error (msg "Linearize: duplicates in enumeration")
+      else nodeset_of_list tl (Nodeset.add hd s)
+  end.
+
+Definition check_reachable_aux
+     (reach: PMap.t bool) (s: Nodeset.t)
+     (ok: bool) (pc: node) (i: LTL.instruction) : bool :=
+  if reach!!pc then ok && Nodeset.mem pc s else ok.
+
+Definition check_reachable
+     (f: LTL.function) (reach: PMap.t bool) (s: Nodeset.t) : bool :=
+  PTree.fold (check_reachable_aux reach s) f.(LTL.fn_code) true.
+
+Definition enumerate (f: LTL.function) : res (list node) :=
   let reach := reachable f in
-  positive_rec (list node) nil
-    (fun pc nodes => if reach!!pc then pc :: nodes else nodes)
-    f.(fn_nextpc).
+  let enum := enumerate_aux f reach in
+  do s <- nodeset_of_list enum Nodeset.empty;
+  if check_reachable f reach s
+  then OK enum
+  else Error (msg "Linearize: wrong enumeration").
 
 (** * Translation from LTL to LTLin *)
 
@@ -172,15 +200,16 @@ Fixpoint linearize_body (f: LTL.function) (enum: list node)
 
 (** * Entry points for code linearization *)
 
-Definition transf_function (f: LTL.function) : LTLin.function :=
-  mkfunction
-    (LTL.fn_sig f)
-    (LTL.fn_params f)
-    (LTL.fn_stacksize f)
-    (add_branch (LTL.fn_entrypoint f) (linearize_body f (enumerate f))).
+Definition transf_function (f: LTL.function) : res LTLin.function :=
+  do enum <- enumerate f;
+  OK (mkfunction
+       (LTL.fn_sig f)
+       (LTL.fn_params f)
+       (LTL.fn_stacksize f)
+       (add_branch (LTL.fn_entrypoint f) (linearize_body f enum))).
 
-Definition transf_fundef (f: LTL.fundef) : LTLin.fundef :=
-  AST.transf_fundef transf_function f.
+Definition transf_fundef (f: LTL.fundef) : res LTLin.fundef :=
+  AST.transf_partial_fundef transf_function f.
 
-Definition transf_program (p: LTL.program) : LTLin.program :=
-  transform_program transf_fundef p.
+Definition transf_program (p: LTL.program) : res LTLin.program :=
+  transform_partial_program transf_fundef p.

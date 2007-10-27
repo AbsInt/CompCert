@@ -23,7 +23,7 @@ FILES=\
   LTL.ml LTLin.ml \
   InterfGraph.ml ../caml/Coloringaux.ml Coloring.ml \
   Allocation.ml  \
-  Tunneling.ml Linear.ml Linearize.ml \
+  Tunneling.ml Linear.ml ../caml/Linearizeaux.ml Linearize.ml \
   Parallelmove.ml Reload.ml \
   Mach.ml Bounds.ml Stacking.ml \
   PPC.ml PPCgen.ml \

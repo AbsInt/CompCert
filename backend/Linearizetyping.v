@@ -2,6 +2,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Errors.
 Require Import AST.
 Require Import Op.
 Require Import Locations.
@@ -65,33 +66,34 @@ Proof.
 Qed.
 
 Lemma wt_transf_function:
-  forall f,
+  forall f tf,
   LTLtyping.wt_function f ->
-  wt_function (transf_function f). 
+  transf_function f = OK tf ->
+  wt_function tf. 
 Proof.
-  intros. inv H. constructor; auto.
+  intros. inv H. monadInv H0. constructor; auto.
   simpl. apply wt_add_branch. 
   apply wt_linearize_body. auto. 
 Qed.
 
 Lemma wt_transf_fundef:
-  forall f,
+  forall f tf,
   LTLtyping.wt_fundef f ->
-  wt_fundef (transf_fundef f). 
+  transf_fundef f = OK tf ->
+  wt_fundef tf. 
 Proof.
-  induction 1; simpl.
-  constructor; assumption.
-  constructor; apply wt_transf_function; assumption.
+  induction 1; intros. monadInv H. constructor. 
+  monadInv H0. constructor; eapply wt_transf_function; eauto.
 Qed.
 
 Lemma program_typing_preserved:
-  forall (p: LTL.program),
+  forall (p: LTL.program) (tp: LTLin.program),
   LTLtyping.wt_program p ->
-  LTLintyping.wt_program (transf_program p).
+  transf_program p = OK tp ->
+  LTLintyping.wt_program tp.
 Proof.
   intros; red; intros.
-  generalize (transform_program_function transf_fundef p i f H0).
+  generalize (transform_partial_program_function transf_fundef _ _ _ H0 H1).
   intros [f0 [IN TR]].
-  subst f. apply wt_transf_fundef; auto. 
-  apply (H i f0 IN).
+  eapply wt_transf_fundef; eauto. 
 Qed.

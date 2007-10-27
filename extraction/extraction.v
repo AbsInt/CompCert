@@ -47,6 +47,9 @@ Extract Constant RTLtyping.infer_type_environment => "RTLtypingaux.infer_type_en
 (* Coloring *)
 Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
 
+(* Linearize *)
+Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
+
 (* PPC *)
 Extract Constant PPC.low_half_signed => "fun _ -> assert false".
 Extract Constant PPC.high_half_signed => "fun _ -> assert false".

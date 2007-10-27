@@ -2,12 +2,15 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Ordered.
+Require Import FSets.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Errors.
 Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
@@ -17,10 +20,14 @@ Require Import LTLin.
 Require Import Linearize.
 Require Import Lattice.
 
+Module NodesetFacts := FSetFacts.Facts(Nodeset).
+
 Section LINEARIZATION.
 
 Variable prog: LTL.program.
-Let tprog := transf_program prog.
+Variable tprog: LTLin.program.
+
+Hypothesis TRANSF: transf_program prog = OK tprog.
 
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
@@ -28,33 +35,40 @@ Let tge := Genv.globalenv tprog.
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
-  Genv.find_funct tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_transf _ _ _ transf_fundef prog).
+  exists tf,
+  Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
+Proof (Genv.find_funct_transf_partial transf_fundef TRANSF).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
-  Genv.find_funct_ptr tge v = Some (transf_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ _ transf_fundef prog).
+  exists tf,
+  Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
+Proof (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ _ transf_fundef prog).
+Proof (Genv.find_symbol_transf_partial transf_fundef _ TRANSF).
 
 Lemma sig_preserved:
-  forall f, funsig (transf_fundef f) = LTL.funsig f.
+  forall f tf,
+  transf_fundef f = OK tf ->
+  LTLin.funsig tf = LTL.funsig f.
 Proof.
-  destruct f; reflexivity.
+  unfold transf_fundef, transf_partial_fundef; intros.
+  destruct f. monadInv H. monadInv EQ. reflexivity.
+  inv H. reflexivity.
 Qed.
 
 Lemma find_function_translated:
   forall ros ls f,
   LTL.find_function ge ros ls = Some f ->
-  find_function tge ros ls = Some (transf_fundef f).
+  exists tf,
+  find_function tge ros ls = Some tf /\ transf_fundef f = OK tf.
 Proof.
-  intros until f. destruct ros; simpl.
-  intro. apply functions_translated; auto.
+  unfold LTL.find_function; intros; destruct ros; simpl.
+  apply functions_translated; auto.
   rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
   apply function_ptr_translated; auto.
   congruence.
@@ -102,54 +116,84 @@ Qed.
 - All nodes for reachable basic blocks must be in the list.
 - The list is without repetition (so that no code duplication occurs).
 
-We prove that our [enumerate] function satisfies all three. *)
+We prove that our [enumerate] function satisfies both conditions. *)
+
+
+Lemma nodeset_of_list_correct:
+  forall l s s',
+  nodeset_of_list l s = OK s' ->
+  list_norepet l
+  /\ (forall pc, Nodeset.In pc s' <-> Nodeset.In pc s \/ In pc l)
+  /\ (forall pc, In pc l -> ~Nodeset.In pc s).
+Proof.
+  induction l; simpl; intros. 
+  inv H. split. constructor. split. intro; tauto. intros; tauto.
+  generalize H; clear H; caseEq (Nodeset.mem a s); intros.
+  inv H0.
+  exploit IHl; eauto. intros [A [B C]].
+  split. constructor; auto. red; intro. elim (C a H1). apply Nodeset.add_1. hnf. auto.
+  split. intros. rewrite B. rewrite NodesetFacts.add_iff. 
+  unfold Nodeset.E.eq. unfold OrderedPositive.eq. tauto.
+  intros. destruct H1. subst pc. rewrite NodesetFacts.not_mem_iff. auto.
+  generalize (C pc H1). rewrite NodesetFacts.add_iff. tauto.
+Qed.
+
+Lemma check_reachable_correct:
+  forall f reach s pc i,
+  check_reachable f reach s = true ->
+  f.(LTL.fn_code)!pc = Some i ->
+  reach!!pc = true ->
+  Nodeset.In pc s.
+Proof.
+  intros f reach s.
+  assert (forall l ok, 
+    List.fold_left (fun a p => check_reachable_aux reach s a (fst p) (snd p)) l ok = true ->
+    ok = true /\
+    (forall pc i,
+     In (pc, i) l ->
+     reach!!pc = true ->
+     Nodeset.In pc s)).
+  induction l; simpl; intros.
+  split. auto. intros. destruct H0.
+  destruct a as [pc1 i1]. simpl in H. 
+  exploit IHl; eauto. intros [A B].
+  unfold check_reachable_aux in A. 
+  split. destruct (reach!!pc1). elim (andb_prop _ _ A). auto. auto.
+  intros. destruct H0. inv H0. rewrite H1 in A. destruct (andb_prop _ _ A). 
+  apply Nodeset.mem_2; auto.
+  eauto.
+
+  intros pc i. unfold check_reachable. rewrite PTree.fold_spec. intros.
+  exploit H; eauto. intros [A B]. eapply B; eauto. 
+  apply PTree.elements_correct. eauto.
+Qed.
 
 Lemma enumerate_complete:
-  forall f pc i,
+  forall f enum pc i,
+  enumerate f = OK enum ->
   f.(LTL.fn_code)!pc = Some i ->
   (reachable f)!!pc = true ->
-  In pc (enumerate f).
+  In pc enum.
 Proof.
-  intros. 
-  assert (forall p, 
-    Plt p f.(fn_nextpc) ->
-    (reachable f)!!p = true ->
-    In p (enumerate f)).
-  unfold enumerate. pattern (fn_nextpc f).
-  apply positive_Peano_ind. 
-  intros. compute in H1. destruct p; discriminate. 
-  intros. rewrite positive_rec_succ. elim (Plt_succ_inv _ _ H2); intro.
-  case (reachable f)!!x. apply in_cons. auto. auto.
-  subst x. rewrite H3. apply in_eq. 
-  elim (LTL.fn_code_wf f pc); intro. auto. congruence.
-Qed. 
+  intros until i. unfold enumerate. 
+  set (reach := reachable f).
+  intros. monadInv H. 
+  generalize EQ0; clear EQ0. caseEq (check_reachable f reach x); intros; inv EQ0.
+  exploit check_reachable_correct; eauto. intro.
+  exploit nodeset_of_list_correct; eauto. intros [A [B C]].
+  rewrite B in H2. destruct H2. elim (Nodeset.empty_1 pc H2). auto.
+Qed.
 
 Lemma enumerate_norepet:
-  forall f, list_norepet (enumerate f).
+  forall f enum,
+  enumerate f = OK enum ->
+  list_norepet enum.
 Proof.
-  intro. 
-  unfold enumerate. pattern (fn_nextpc f).
-  apply positive_Peano_ind.  
-  rewrite positive_rec_base. constructor.
-  intros. rewrite positive_rec_succ.
-  case (reachable f)!!x.
-  constructor. 
-  assert (forall y,
-    In y (positive_rec
-     (list node) nil
-     (fun (pc : positive) (nodes : list node) =>
-      if (reachable f) !! pc then pc :: nodes else nodes) x) ->
-    Plt y x).
-    pattern x. apply positive_Peano_ind. 
-    rewrite positive_rec_base. intros. elim H0.
-    intros until y. rewrite positive_rec_succ. 
-    case (reachable f)!!x0. 
-    simpl. intros [A|B].
-    subst x0. apply Plt_succ.
-    apply Plt_trans_succ. auto. 
-    intro. apply Plt_trans_succ. auto.
-  red; intro. generalize (H0 x H1). exact (Plt_strict x). auto.
-  auto.
+  intros until enum. unfold enumerate. 
+  set (reach := reachable f).
+  intros. monadInv H. 
+  generalize EQ0; clear EQ0. caseEq (check_reachable f reach x); intros; inv EQ0.
+  exploit nodeset_of_list_correct; eauto. intros [A [B C]]. auto.
 Qed.
 
 (** * Properties related to labels *)
@@ -243,23 +287,34 @@ Proof.
   auto.
 Qed.
 
+(*
+Lemma transf_function_inv:
+  forall f tf, transf_function f = OK tf ->
+  exists enum, enumerate f = OK enum /\ fn_code tf = add_branch (LTL.fn_entrypoint f) (linearize_body f enum).
+Proof.
+  intros. monadInv H. exists x; auto.
+Qed.
+*)
+
 Lemma find_label_lin:
-  forall f pc b,
+  forall f tf pc b,
+  transf_function f = OK tf ->
   f.(LTL.fn_code)!pc = Some b ->
   (reachable f)!!pc = true ->
   exists k,
-  find_label pc (fn_code (transf_function f)) = Some (linearize_instr b k).
+  find_label pc (fn_code tf) = Some (linearize_instr b k).
 Proof.
-  intros. unfold transf_function; simpl.
+  intros. monadInv H. simpl. 
   rewrite find_label_add_branch. apply find_label_lin_rec.
   eapply enumerate_complete; eauto. auto.
 Qed.
 
 Lemma find_label_lin_inv:
-  forall f pc b k ,
+  forall f tf pc b k,
+  transf_function f = OK tf ->
   f.(LTL.fn_code)!pc = Some b ->
   (reachable f)!!pc = true ->
-  find_label pc (fn_code (transf_function f)) = Some k ->
+  find_label pc (fn_code tf) = Some k ->
   exists k', k = linearize_instr b k'.
 Proof.
   intros. exploit find_label_lin; eauto. intros [k' FIND].
@@ -267,13 +322,14 @@ Proof.
 Qed.
 
 Lemma find_label_lin_succ:
-  forall f s,
+  forall f tf s,
+  transf_function f = OK tf ->
   valid_successor f s ->
   (reachable f)!!s = true ->
   exists k,
-  find_label s (fn_code (transf_function f)) = Some k.
+  find_label s (fn_code tf) = Some k.
 Proof.
-  intros. destruct H as [i AT]. 
+  intros. destruct H0 as [i AT]. 
   exploit find_label_lin; eauto. intros [k FIND].
   exists (linearize_instr i k); auto.
 Qed.
@@ -344,12 +400,13 @@ Proof.
 Qed.
 
 Lemma unique_labels_transf_function:
-  forall f,
-  unique_labels (fn_code (transf_function f)).
+  forall f tf,
+  transf_function f = OK tf ->
+  unique_labels (fn_code tf).
 Proof.
-  intros. unfold transf_function; simpl.
+  intros. monadInv H. simpl.
   apply unique_labels_add_branch. 
-  apply unique_labels_lin_rec. apply enumerate_norepet. 
+  apply unique_labels_lin_rec. eapply enumerate_norepet; eauto.
 Qed.
 
 (** Correctness of [add_branch]. *)
@@ -373,16 +430,17 @@ Proof.
 Qed.
 
 Lemma add_branch_correct:
-  forall lbl c k s f sp ls m,
-  is_tail k (transf_function f).(fn_code) ->
-  find_label lbl (transf_function f).(fn_code) = Some c ->
-  plus step tge (State s (transf_function f) sp (add_branch lbl k) ls m)
-             E0 (State s (transf_function f) sp c ls m).
+  forall lbl c k s f tf sp ls m,
+  transf_function f = OK tf ->
+  is_tail k tf.(fn_code) ->
+  find_label lbl tf.(fn_code) = Some c ->
+  plus step tge (State s tf sp (add_branch lbl k) ls m)
+             E0 (State s tf sp c ls m).
 Proof.
   intros. unfold add_branch.
   caseEq (starts_with lbl k); intro SW.
   eapply starts_with_correct; eauto.
-  apply unique_labels_transf_function.
+  eapply unique_labels_transf_function; eauto.
   apply plus_one. apply exec_Lgoto. auto.
 Qed.
 
@@ -407,30 +465,33 @@ Qed.
 
 Inductive match_stackframes: LTL.stackframe -> LTLin.stackframe -> Prop :=
   | match_stackframe_intro:
-      forall res f sp pc ls c,
+      forall res f sp pc ls tf c,
+      transf_function f = OK tf ->
       (reachable f)!!pc = true ->
       valid_successor f pc ->
-      is_tail c (fn_code (transf_function f)) ->
+      is_tail c (fn_code tf) ->
       wt_function f ->
       match_stackframes
         (LTL.Stackframe res f sp ls pc)
-        (LTLin.Stackframe res (transf_function f) sp ls (add_branch pc c)).
+        (LTLin.Stackframe res tf sp ls (add_branch pc c)).
 
 Inductive match_states: LTL.state -> LTLin.state -> Prop :=
   | match_states_intro:
-      forall s f sp pc ls m ts c
+      forall s f sp pc ls m tf ts c
         (STACKS: list_forall2 match_stackframes s ts)
+        (TRF: transf_function f = OK tf)
         (REACH: (reachable f)!!pc = true)
-        (AT: find_label pc (fn_code (transf_function f)) = Some c)
+        (AT: find_label pc (fn_code tf) = Some c)
         (WTF: wt_function f),
       match_states (LTL.State s f sp pc ls m)
-                   (LTLin.State ts (transf_function f) sp c ls m)
+                   (LTLin.State ts tf sp c ls m)
   | match_states_call:
-      forall s f ls m ts,
+      forall s f ls m tf ts,
       list_forall2 match_stackframes s ts ->
+      transf_fundef f = OK tf ->
       wt_fundef f ->
       match_states (LTL.Callstate s f ls m)
-                   (LTLin.Callstate ts (transf_fundef f) ls m)
+                   (LTLin.Callstate ts tf ls m)
   | match_states_return:
       forall s sig ls m ts,
       list_forall2 match_stackframes s ts ->
@@ -455,7 +516,7 @@ Proof.
   induction 1; intros; try (inv MS);
   try (generalize (wt_instrs _ WTF _ _ H); intro WTI).
   (* Lnop *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
   eapply reachable_successors; eauto.
@@ -466,7 +527,7 @@ Proof.
   eapply is_tail_add_branch. eapply is_tail_find_label. eauto.
   econstructor; eauto. 
   (* Lop *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
   eapply reachable_successors; eauto.
@@ -482,7 +543,7 @@ Proof.
   traceEq.
   econstructor; eauto.
   (* Lload *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
   eapply reachable_successors; eauto.
@@ -498,7 +559,7 @@ Proof.
   traceEq.
   econstructor; eauto.
   (* Lstore *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
   eapply reachable_successors; eauto.
@@ -516,16 +577,16 @@ Proof.
   (* Lcall *)
   unfold rs1 in *. inv MS. fold rs1.
   generalize (wt_instrs _ WTF _ _ H); intro WTI.
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
   eapply reachable_successors; eauto.
   unfold successors; rewrite H; auto with coqlib.
   assert (VALID: valid_successor f pc'). inv WTI; auto.
+  exploit find_function_translated; eauto. intros [tf' [A B]].
   econstructor; split.
-  apply plus_one. eapply exec_Lcall with (f' := transf_fundef f'); eauto.
-  apply find_function_translated; auto.
-  symmetry; apply sig_preserved.
+  apply plus_one. eapply exec_Lcall with (f' := tf'); eauto.
+  symmetry; apply sig_preserved; auto.
   econstructor; eauto.
   constructor; auto. econstructor; eauto.
   eapply is_tail_add_branch. eapply is_tail_cons_left. 
@@ -537,12 +598,12 @@ Proof.
 
   (* Ltailcall *)
   unfold rs2, rs1 in *. inv MS. fold rs1; fold rs2.
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
+  exploit find_function_translated; eauto. intros [tf' [A B]].
   econstructor; split.
-  apply plus_one. eapply exec_Ltailcall with (f' := transf_fundef f'); eauto.
-  apply find_function_translated; auto.
-  symmetry; apply sig_preserved.
+  apply plus_one. eapply exec_Ltailcall with (f' := tf'); eauto.
+  symmetry; apply sig_preserved; auto.
   rewrite (parent_locset_match _ _ STACKS).
   econstructor; eauto.
   destruct ros; simpl in H0.
@@ -551,7 +612,7 @@ Proof.
   eapply Genv.find_funct_ptr_prop; eauto.
 
   (* Lalloc *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
   eapply reachable_successors; eauto.
@@ -565,8 +626,9 @@ Proof.
   eapply is_tail_find_label. eauto.
   traceEq.
   econstructor; eauto.
+
   (* Lcond true *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!ifso = true).
   eapply reachable_successors; eauto.
@@ -585,8 +647,9 @@ Proof.
   econstructor; split.
   apply plus_one. eapply exec_Lcond_true; eauto.
   econstructor; eauto.
+
   (* Lcond false *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!ifnot = true).
   eapply reachable_successors; eauto.
@@ -605,29 +668,33 @@ Proof.
   eapply is_tail_find_label. eauto.
   traceEq.
   econstructor; eauto.
+
   (* Lreturn *)
-  destruct (find_label_lin_inv _ _ _ _ H REACH AT) as [c' EQ].
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   econstructor; split.
   apply plus_one. eapply exec_Lreturn; eauto.
   rewrite (parent_locset_match _ _ STACKS).
-  econstructor; eauto. 
+  monadInv TRF. simpl. econstructor; eauto.
+ 
   (* internal function *)
   assert (REACH: (reachable f)!!(LTL.fn_entrypoint f) = true).
     apply reachable_entrypoint.
-  inv H6. 
+  inv H7. monadInv H6.   
   exploit find_label_lin_succ; eauto. inv H1; auto. intros [c'' AT'].
-  simpl. econstructor; split.
+  generalize EQ; intro. monadInv EQ0. econstructor; simpl; split.
   eapply plus_left'.  
   eapply exec_function_internal; eauto.
-  simpl. eapply add_branch_correct. 
+  simpl. eapply add_branch_correct. eauto.  
   simpl. eapply is_tail_add_branch. constructor. eauto.
   traceEq.
   econstructor; eauto.
+
   (* external function *)
-  simpl. econstructor; split.
+  monadInv H6. econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
   econstructor; eauto.
+
   (* return *)
   inv H4. inv H1.
   exploit find_label_lin_succ; eauto. intros [c' AT].
@@ -642,17 +709,18 @@ Lemma transf_initial_states:
   forall st1, LTL.initial_state prog st1 ->
   exists st2, LTLin.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
-  intros. inversion H. 
-  exists (Callstate nil (transf_fundef f) (Locmap.init Vundef) (Genv.init_mem tprog)); split.
+  intros. inversion H.
+  exploit function_ptr_translated; eauto. intros [tf [A B]].  
+  exists (Callstate nil tf (Locmap.init Vundef) (Genv.init_mem tprog)); split.
   econstructor; eauto.
-  change (prog_main tprog) with (prog_main prog).
+  replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
-  apply function_ptr_translated; auto.
-  rewrite <- H2. apply sig_preserved.
+  symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF). 
+  rewrite <- H2. apply sig_preserved. auto.
   replace (Genv.init_mem tprog) with (Genv.init_mem prog).
-  constructor. constructor.
+  constructor. constructor. auto.
   eapply Genv.find_funct_ptr_prop; eauto.
-  symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf.
+  symmetry. apply Genv.init_mem_transf_partial with transf_fundef. auto.
 Qed.
 
 Lemma transf_final_states:
