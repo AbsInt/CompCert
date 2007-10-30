@@ -27,57 +27,47 @@ let rec int_of_pos = function
   | Coq_xO p -> int_of_pos p lsl 1
   | Coq_xH -> 1
 
-(* Count the reachable predecessors for each node *)
-
-let reachable_predecessors f reach =
-  let count = Array.make (int_of_pos f.fn_nextpc) 0 in
-  let increment pc =
-    let i = int_of_pos pc in
-    count.(i) <- count.(i) + 1 in
-  positive_rec
-    ()
-    (fun pc _ ->
-      if PMap.get pc reach then coqlist_iter increment (successors f pc))
-    f.fn_nextpc;
-  count
-
-(* Recognize instructions with only one successor *)
-
-let single_successor f pc =
-  match PTree.get pc f.fn_code with
-    | Some i ->
-        (match i with
-           | Lnop s -> Some s
-           | Lop (op, args, res, s) -> Some s
-           | Lload (chunk, addr, args, dst, s) -> Some s
-           | Lstore (chunk, addr, args, src, s) -> Some s
-           | Lcall (sig0, ros, args, res, s) -> Some s
-           | Ltailcall (sig0, ros, args) -> None
-           | Lalloc (arg, res, s) -> Some s
-           | Lcond (cond, args, ifso, ifnot) -> None
-           | Lreturn optarg -> None)
-    | None -> None
+let rec pos_of_int n =
+  if n = 0 then assert false else
+  if n = 1 then Coq_xH else
+  if n land 1 = 0
+  then Coq_xO (pos_of_int (n lsr 1))
+  else Coq_xI (pos_of_int (n lsr 1))
 
 (* Build the enumeration *)
 
+module IntSet = Set.Make(struct type t = int let compare = compare end)
+
 let enumerate_aux f reach =
-  let preds = reachable_predecessors f reach in
   let enum = ref Coq_nil in
   let emitted = Array.make (int_of_pos f.fn_nextpc) false in
-  let rec emit_basic_block pc =
-    enum := Coq_cons(pc, !enum);
-    emitted.(int_of_pos pc) <- true;
-    match single_successor f pc with
-    | None -> ()
-    | Some pc' ->
-        let npc' = int_of_pos pc' in
-        if preds.(npc') <= 1 && not emitted.(npc') then emit_basic_block pc' in
-  let rec emit_all pc =
-    if pc <> Coq_xH then begin
-      let pc = coq_Ppred pc in
-      if not emitted.(int_of_pos pc) && PMap.get pc reach
-      then emit_basic_block pc;
-      emit_all pc
+  let rec emit_block pending pc =
+    let npc = int_of_pos pc in
+    if emitted.(npc)
+    then emit_restart pending
+    else begin
+      enum := Coq_cons(pc, !enum);
+      emitted.(npc) <- true;
+      match PTree.get pc f.fn_code with
+      | None -> assert false
+      | Some i ->
+         match i with
+           | Lnop s -> emit_block pending s
+           | Lop (op, args, res, s) -> emit_block pending s
+           | Lload (chunk, addr, args, dst, s) -> emit_block pending s
+           | Lstore (chunk, addr, args, src, s) -> emit_block pending s
+           | Lcall (sig0, ros, args, res, s) -> emit_block pending s
+           | Ltailcall (sig0, ros, args) -> emit_restart pending
+           | Lalloc (arg, res, s) -> emit_block pending s
+           | Lcond (cond, args, ifso, ifnot) ->
+               emit_restart (IntSet.add (int_of_pos ifso)
+                             (IntSet.add (int_of_pos ifnot) pending))
+           | Lreturn optarg -> emit_restart pending
+    end
+  and emit_restart pending =
+    if not (IntSet.is_empty pending) then begin
+      let npc = IntSet.max_elt pending in
+      emit_block (IntSet.remove npc pending) (pos_of_int npc)
     end in
-  emit_all f.fn_nextpc;
+  emit_block IntSet.empty f.fn_entrypoint;
   CList.rev !enum
