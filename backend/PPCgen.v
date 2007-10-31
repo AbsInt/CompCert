@@ -265,8 +265,8 @@ Definition transl_op
   | Ofloatconst f, nil =>
       Plfi (freg_of r) f :: k
   | Oaddrsymbol s ofs, nil =>
-      Paddis (ireg_of r) GPR0 (Csymbol_high_unsigned s ofs) ::
-      Pori (ireg_of r) (ireg_of r) (Csymbol_low_unsigned s ofs) :: k
+      Paddis GPR2 GPR0 (Csymbol_high s ofs) ::
+      Paddi (ireg_of r) GPR2 (Csymbol_low s ofs) :: k
   | Oaddrstack n, nil =>
       addimm (ireg_of r) GPR1 n k
   | Ocast8signed, a1 :: nil =>
@@ -385,16 +385,16 @@ Definition transl_load_store
   | Aindexed2, a1 :: a2 :: nil =>
       mk2 (ireg_of a1) (ireg_of a2) :: k
   | Aglobal symb ofs, nil =>
-      Paddis GPR2 GPR0 (Csymbol_high_signed symb ofs) ::
-      mk1 (Csymbol_low_signed symb ofs) GPR2 :: k
+      Paddis GPR2 GPR0 (Csymbol_high symb ofs) ::
+      mk1 (Csymbol_low symb ofs) GPR2 :: k
   | Abased symb ofs, a1 :: nil =>
       if ireg_eq (ireg_of a1) GPR0 then
         Pmr GPR2 (ireg_of a1) ::
-        Paddis GPR2 GPR2 (Csymbol_high_signed symb ofs) ::
-        mk1 (Csymbol_low_signed symb ofs) GPR2 :: k
+        Paddis GPR2 GPR2 (Csymbol_high symb ofs) ::
+        mk1 (Csymbol_low symb ofs) GPR2 :: k
       else
-        Paddis GPR2 (ireg_of a1) (Csymbol_high_signed symb ofs) ::
-        mk1 (Csymbol_low_signed symb ofs) GPR2 :: k
+        Paddis GPR2 (ireg_of a1) (Csymbol_high symb ofs) ::
+        mk1 (Csymbol_low symb ofs) GPR2 :: k
   | Ainstack ofs, nil =>
       if Int.eq (high_s ofs) Int.zero then
         mk1 (Cint ofs) GPR1 :: k

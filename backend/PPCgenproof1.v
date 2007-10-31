@@ -19,23 +19,12 @@ Require Conventions.
 
 (** * Properties of low half/high half decomposition *)
 
-Lemma high_half_signed_zero:
-  forall v, Val.add (high_half_signed v) Vzero = high_half_signed v.
+Lemma high_half_zero:
+  forall v, Val.add (high_half v) Vzero = high_half v.
 Proof.
-  intros. generalize (high_half_signed_type v).
+  intros. generalize (high_half_type v).
   rewrite Val.add_commut. 
-  case (high_half_signed v); simpl; intros; try contradiction.
-  auto. 
-  rewrite Int.add_commut; rewrite Int.add_zero; auto. 
-  rewrite Int.add_zero; auto. 
-Qed.
-
-Lemma high_half_unsigned_zero:
-  forall v, Val.add (high_half_unsigned v) Vzero = high_half_unsigned v.
-Proof.
-  intros. generalize (high_half_unsigned_type v).
-  rewrite Val.add_commut. 
-  case (high_half_unsigned v); simpl; intros; try contradiction.
+  case (high_half v); simpl; intros; try contradiction.
   auto. 
   rewrite Int.add_commut; rewrite Int.add_zero; auto. 
   rewrite Int.add_zero; auto. 
@@ -1246,18 +1235,22 @@ Proof.
   split. apply exec_straight_one. reflexivity. reflexivity.
   auto with ppcgen.
   (* Oaddrsymbol *)
-  set (v := find_symbol_offset ge i i0).
-  pose (rs1 := nextinstr (rs#(ireg_of res) <- (high_half_unsigned v))).
+  change (find_symbol_offset ge i i0) with (symbol_offset ge i i0).
+  set (v := symbol_offset ge i i0).
+  pose (rs1 := nextinstr (rs#GPR2 <- (high_half v))).
   exists (nextinstr (rs1#(ireg_of res) <- v)).
   split. apply exec_straight_two with rs1 m.
   unfold exec_instr. rewrite gpr_or_zero_zero.
   unfold const_high. rewrite Val.add_commut. 
-  rewrite high_half_unsigned_zero. reflexivity. 
-  simpl. unfold rs1 at 1. rewrite nextinstr_inv; auto with ppcgen.
-  rewrite Pregmap.gss.
-  fold v. rewrite Val.or_commut. rewrite low_high_half_unsigned.
+  rewrite high_half_zero. reflexivity. 
+  simpl. rewrite gpr_or_zero_not_zero. 2: congruence. 
+  unfold rs1 at 1. rewrite nextinstr_inv; auto with ppcgen.
+  rewrite Pregmap.gss. 
+  fold v. rewrite Val.add_commut. unfold v. rewrite low_high_half.
   reflexivity. reflexivity. reflexivity. 
-  unfold rs1. auto with ppcgen.
+  unfold rs1. apply agree_nextinstr. apply agree_set_mireg; auto.
+  apply agree_set_mreg. apply agree_nextinstr.
+  apply agree_set_other. auto. simpl. tauto.
   (* Oaddrstack *)
   assert (GPR1 <> GPR2). discriminate.
   generalize (addimm_correct (ireg_of res) GPR1 i k rs m H2). 
@@ -1493,13 +1486,13 @@ Proof.
   apply H0. 
   simpl. repeat (rewrite (ireg_val ms sp rs); auto). auto.
   (* Aglobal *)
-  set (rs1 := nextinstr (rs#GPR2 <- (const_high ge (Csymbol_high_signed i i0)))).
+  set (rs1 := nextinstr (rs#GPR2 <- (const_high ge (Csymbol_high i i0)))).
   assert (ADDR: eval_addressing_total ge sp (Aglobal i i0) ms##nil =
-                Val.add rs1#GPR2 (const_low ge (Csymbol_low_signed i i0))).
+                Val.add rs1#GPR2 (const_low ge (Csymbol_low i i0))).
     simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     unfold const_high, const_low. 
     set (v := symbol_offset ge i i0).
-    symmetry. rewrite Val.add_commut. apply low_high_half_signed. 
+    symmetry. rewrite Val.add_commut. unfold v. apply low_high_half. 
     discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
   assert (NOT0: GPR2 <> GPR0). discriminate.
@@ -1507,7 +1500,7 @@ Proof.
   exists rs'. split. apply exec_straight_step with rs1 m.
   unfold exec_instr. rewrite gpr_or_zero_zero. 
   rewrite Val.add_commut. unfold const_high. 
-  rewrite high_half_signed_zero.
+  rewrite high_half_zero.
   reflexivity. reflexivity.
   assumption. assumption.
   (* Abased *)
@@ -1518,19 +1511,19 @@ Proof.
     agree ms sp rs1 ->
     exists rs',
       exec_straight
-        (Paddis GPR2 r (Csymbol_high_signed i i0)
-         :: mk1 (Csymbol_low_signed i i0) GPR2 :: k) rs1 m k rs' m'
+        (Paddis GPR2 r (Csymbol_high i i0)
+         :: mk1 (Csymbol_low i i0) GPR2 :: k) rs1 m k rs' m'
       /\ agree ms' sp rs').
   intros. 
-  set (rs2 := nextinstr (rs1#GPR2 <- (Val.add (ms t) (const_high ge (Csymbol_high_signed i i0))))).
+  set (rs2 := nextinstr (rs1#GPR2 <- (Val.add (ms t) (const_high ge (Csymbol_high i i0))))).
   assert (ADDR: eval_addressing_total ge sp (Abased i i0) ms##(t::nil) =
-                Val.add rs2#GPR2 (const_low ge (Csymbol_low_signed i i0))).
+                Val.add rs2#GPR2 (const_low ge (Csymbol_low i i0))).
     simpl. unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
     unfold const_high. 
     set (v := symbol_offset ge i i0).
     rewrite Val.add_assoc. 
-    rewrite (Val.add_commut (high_half_signed v)).
-    rewrite low_high_half_signed. apply Val.add_commut.
+    rewrite (Val.add_commut (high_half v)).
+    unfold v. rewrite low_high_half. apply Val.add_commut.
     discriminate.
   assert (AG: agree ms sp rs2). unfold rs2; auto with ppcgen.
   assert (NOT0: GPR2 <> GPR0). discriminate.

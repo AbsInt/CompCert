@@ -50,10 +50,8 @@ Proof. decide equality. Defined.
 
 Inductive constant: Set :=
   | Cint: int -> constant
-  | Csymbol_low_signed: ident -> int -> constant
-  | Csymbol_high_signed: ident -> int -> constant
-  | Csymbol_low_unsigned: ident -> int -> constant
-  | Csymbol_high_unsigned: ident -> int -> constant.
+  | Csymbol_low: ident -> int -> constant
+  | Csymbol_high: ident -> int -> constant.
 
 (** A note on constants: while immediate operands to PowerPC
   instructions must be representable in 16 bits (with
@@ -350,37 +348,36 @@ Definition gpr_or_zero (rs: regset) (r: ireg) :=
 
 Variable ge: genv.
 
+Definition symbol_offset (id: ident) (ofs: int) : val :=
+  match Genv.find_symbol ge id with
+  | Some b => Vptr b ofs
+  | None => Vundef
+  end.
+
 (** The four functions below axiomatize how the linker processes
   symbolic references [symbol + offset] and splits their
-  actual values into two 16-bit halves, the lower half
-  being either signed or unsigned. *)
+  actual values into two 16-bit halves. *)
 
-Parameter low_half_signed: val -> val.
-Parameter high_half_signed: val -> val.
-Parameter low_half_unsigned: val -> val.
-Parameter high_half_unsigned: val -> val.
+Parameter low_half: val -> val.
+Parameter high_half: val -> val.
 
-(** The fundamental property of these operations is that their
-  results can be recombined by addition or logical ``or'',
-  and this recombination rebuilds the original value. *)
+(** The fundamental property of these operations is that, when applied
+  to the address of a symbol, their results can be recombined by
+  addition, rebuilding the original address. *)
 
-Axiom low_high_half_signed:
-  forall v, Val.add (low_half_signed v) (high_half_signed v) = v.
-Axiom low_high_half_unsigned:
-  forall v, Val.or (low_half_unsigned v) (high_half_unsigned v) = v.
+Axiom low_high_half:
+  forall id ofs,
+  Val.add (low_half (symbol_offset id ofs)) (high_half (symbol_offset id ofs))
+  = symbol_offset id ofs.
 
 (** The other axioms we take is that the results of
   the [low_half] and [high_half] functions are of type [Tint],
   i.e. either integers, pointers or undefined values. *)
 
-Axiom low_half_signed_type: 
-  forall v, Val.has_type (low_half_signed v) Tint.
-Axiom high_half_signed_type: 
-  forall v, Val.has_type (high_half_signed v) Tint.
-Axiom low_half_unsigned_type: 
-  forall v, Val.has_type (low_half_unsigned v) Tint.
-Axiom high_half_unsigned_type: 
-  forall v, Val.has_type (high_half_unsigned v) Tint.
+Axiom low_half_type: 
+  forall v, Val.has_type (low_half v) Tint.
+Axiom high_half_type: 
+  forall v, Val.has_type (high_half v) Tint.
  
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.
@@ -390,28 +387,18 @@ Axiom high_half_unsigned_type:
   that the results of [high_half] are already shifted
   (their 16 low bits are equal to 0). *)
 
-Definition symbol_offset (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol ge id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
 Definition const_low (c: constant) :=
   match c with
   | Cint n => Vint n
-  | Csymbol_low_signed id ofs => low_half_signed (symbol_offset id ofs)
-  | Csymbol_high_signed id ofs => Vundef
-  | Csymbol_low_unsigned id ofs => low_half_unsigned (symbol_offset id ofs)
-  | Csymbol_high_unsigned id ofs => Vundef
+  | Csymbol_low id ofs => low_half (symbol_offset id ofs)
+  | Csymbol_high id ofs => Vundef
   end.
 
 Definition const_high (c: constant) :=
   match c with
   | Cint n => Vint (Int.shl n (Int.repr 16))
-  | Csymbol_low_signed id ofs => Vundef
-  | Csymbol_high_signed id ofs => high_half_signed (symbol_offset id ofs)
-  | Csymbol_low_unsigned id ofs => Vundef
-  | Csymbol_high_unsigned id ofs => high_half_unsigned (symbol_offset id ofs)
+  | Csymbol_low id ofs => Vundef
+  | Csymbol_high id ofs => high_half (symbol_offset id ofs)
   end.
 
 (** The semantics is purely small-step and defined as a function
