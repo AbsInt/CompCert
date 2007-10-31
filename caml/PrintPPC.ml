@@ -54,14 +54,10 @@ let print_symb_ofs oc (symb, ofs) =
 let print_constant oc = function
   | Cint n ->
       fprintf oc "%ld" (camlint_of_coqint n)
-  | Csymbol_low_signed(s, n) ->
+  | Csymbol_low(s, n) ->
       fprintf oc "lo16(%a)" print_symb_ofs (s, camlint_of_coqint n)
-  | Csymbol_high_signed(s, n) ->
+  | Csymbol_high(s, n) ->
       fprintf oc "ha16(%a)" print_symb_ofs (s, camlint_of_coqint n)
-  | Csymbol_low_unsigned(s, n) ->
-      fprintf oc "lo16(%a)" print_symb_ofs (s, camlint_of_coqint n)
-  | Csymbol_high_unsigned(s, n) ->
-      fprintf oc "hi16(%a)" print_symb_ofs (s, camlint_of_coqint n)
 
 let num_crbit = function
   | CRbit_0 -> 0
@@ -499,6 +495,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   | Coq_nil -> ()
   | _  ->
       fprintf oc "	.data\n";
+      fprintf oc "	.align	3\n";
       fprintf oc "	.globl	%a\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
       print_init_data oc init_data

@@ -796,50 +796,67 @@ let init_data_of_string s =
   done;
   !id
 
-let rec convertInit init k =
-  match init with
-  | SingleInit e ->
-      begin match extract_constant(Cil.constFold true e) with
-      | ICint(n, I8) ->
-          CList.Coq_cons(Init_int8 (coqint_of_camlint (Int64.to_int32 n)), k)
-      | ICint(n, I16) ->
-          CList.Coq_cons(Init_int16 (coqint_of_camlint (Int64.to_int32 n)), k)
-      | ICint(n, I32) ->
-          CList.Coq_cons(Init_int32 (coqint_of_camlint (Int64.to_int32 n)), k)
-      | ICfloat(n, F32) ->
-          CList.Coq_cons(Init_float32 n, k)
-      | ICfloat(n, F64) ->
-          CList.Coq_cons(Init_float64 n, k)
-      | ICstring s ->
-          CList.Coq_cons(Init_pointer(init_data_of_string s), k)
-      | ICnone ->
-          unsupported "this kind of expression is not supported in global initializers"
-    end
-  | CompoundInit(ty, data) ->
-      begin match Cil.unrollType ty with
-      | TComp _ ->
-          let init =
-            Cil.foldLeftCompoundAll
-              ~doinit: (fun ofs init ty k -> convertInit init k)
-              ~ct: ty
-              ~initl: data
-              ~acc: CList.Coq_nil in
-          let act_len = initDataLen 0l init in
-          let exp_len = camlint_of_z (Csyntax.sizeof (convertTyp ty)) in
-          assert (act_len <= exp_len);
-          let init' = 
-            if act_len < exp_len
-            then let spc = z_of_camlint (Int32.sub exp_len act_len) in
-                 CList.Coq_cons(Init_space spc, init)
-            else init in
-          CList.app init' k
-      | _ ->
-          Cil.foldLeftCompoundAll
-            ~doinit: (fun ofs init ty k -> convertInit init k)
-            ~ct: ty
-            ~initl: data
-            ~acc: k
+let convertInit init =
+  let k = ref Coq_nil
+  and pos = ref 0 in
+  let emit size datum =
+    k := Coq_cons(datum, !k);
+    pos := !pos + size in
+  let emit_space size =
+    emit size (Init_space (z_of_camlint (Int32.of_int size))) in
+  let check_align size =
+    assert (!pos land (size - 1) = 0) in
+  let align size =
+    let n = !pos land (size - 1) in
+    if n > 0 then emit_space (size - n) in
+
+  let rec cvtInit init =
+    match init with
+    | SingleInit e ->
+        begin match extract_constant(Cil.constFold true e) with
+        | ICint(n, I8) ->
+            let n' = coqint_of_camlint (Int64.to_int32 n) in
+            emit 1 (Init_int8 n')
+        | ICint(n, I16) ->
+            check_align 2;
+            let n' = coqint_of_camlint (Int64.to_int32 n) in
+            emit 2 (Init_int16 n')
+        | ICint(n, I32) ->
+            check_align 4;
+            let n' = coqint_of_camlint (Int64.to_int32 n) in
+            emit 4 (Init_int32 n')
+        | ICfloat(n, F32) ->
+            check_align 4;
+            emit 4 (Init_float32 n)
+        | ICfloat(n, F64) ->
+            check_align 8;
+            emit 8 (Init_float64 n)
+        | ICstring s ->
+            check_align 4;
+            emit 4 (Init_pointer(init_data_of_string s))
+        | ICnone ->
+            unsupported "this kind of expression is not supported in global initializers"
       end
+  | CompoundInit(ty, data) ->
+      let ty' = convertTyp ty in
+      let sz = Int32.to_int (camlint_of_z (Csyntax.sizeof ty')) in
+      let pos0 = !pos in
+      Cil.foldLeftCompoundAll
+          ~doinit: cvtCompoundInit
+          ~ct: ty
+          ~initl: data
+          ~acc: ();
+      let pos1 = !pos in
+      assert (pos1 <= pos0 + sz);
+      if pos1 < pos0 + sz then emit_space (pos0 + sz - pos1)
+
+  and cvtCompoundInit ofs init ty () =
+    let ty' = convertTyp ty in
+    let al = Int32.to_int (camlint_of_z (Csyntax.alignof ty')) in
+    align al;
+    cvtInit init
+
+  in cvtInit init; CList.rev !k
 
 (** Convert a [Cil.initinfo] into a list of [AST.init_data] *)
 
@@ -848,7 +865,7 @@ let convertInitInfo ty info =
   | None -> 
       CList.Coq_cons(Init_space(Csyntax.sizeof (convertTyp ty)), CList.Coq_nil)
   | Some init ->
-      CList.rev (convertInit init CList.Coq_nil)
+      convertInit init
 
 (** Convert a [Cil.GVar] into a global variable definition *)
 

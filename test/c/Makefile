@@ -9,9 +9,11 @@ LIBS=
 TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
 #TIME=time >/dev/null                    # Otherwise
 
-PROGS=fib integr qsort fft sha1 aes almabench lists \
+BENCHS=fib integr qsort fft sha1 aes almabench lists \
   binarytrees fannkuch knucleotide mandelbrot nbody \
   nsieve nsievebits spectral
+
+PROGS=$(BENCHS) initializers
 
 all_s: $(PROGS:%=%.s)
 
@@ -45,12 +47,12 @@ test_gcc:
          done
 
 time_gcc:
-	@for i in $(PROGS); do \
+	@for i in $(BENCHS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.gcc; \
          done
 
 time_compcert:
-	@for i in $(PROGS); do \
+	@for i in $(BENCHS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
          done
 

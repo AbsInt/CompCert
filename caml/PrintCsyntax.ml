@@ -352,7 +352,7 @@ let print_init p = function
   | Init_int32 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
   | Init_float32 n -> fprintf p "%F,@ " n
   | Init_float64 n -> fprintf p "%F,@ " n
-  | Init_space n -> fprintf p "/* skip %ld*/@ " (camlint_of_coqint n)
+  | Init_space n -> fprintf p "/* skip %ld, */@ " (camlint_of_coqint n)
   | Init_pointer id ->
       match string_of_init id with
       | None -> fprintf p "/* pointer to other init*/,@ "
