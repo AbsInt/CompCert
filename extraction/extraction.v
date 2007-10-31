@@ -51,10 +51,8 @@ Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
 (* PPC *)
-Extract Constant PPC.low_half_signed => "fun _ -> assert false".
-Extract Constant PPC.high_half_signed => "fun _ -> assert false".
-Extract Constant PPC.low_half_unsigned => "fun _ -> assert false".
-Extract Constant PPC.high_half_unsigned => "fun _ -> assert false".
+Extract Constant PPC.low_half => "fun _ -> assert false".
+Extract Constant PPC.high_half => "fun _ -> assert false".
 
 (* Suppression of stupidly big equality functions *)
 Extract Constant CSE.eq_rhs => "fun (x: rhs) (y: rhs) -> x = y".
