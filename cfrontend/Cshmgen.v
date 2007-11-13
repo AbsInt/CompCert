@@ -174,10 +174,8 @@ Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
   | cmp_case_I32unsi => OK (Ebinop (Ocmpu c) e1 e2)
-  | cmp_case_ii => OK (Ebinop (Ocmp c) e1 e2)
+  | cmp_case_ipip => OK (Ebinop (Ocmp c) e1 e2)
   | cmp_case_ff => OK (Ebinop (Ocmpf c) e1 e2)
-  | cmp_case_pi => OK (Ebinop (Ocmp c) e1 e2)
-  | cmp_case_pp => OK (Ebinop (Ocmp c) e1 e2)
   | cmp_default => Error (msg "Cshmgen.make_shr")
   end.
 

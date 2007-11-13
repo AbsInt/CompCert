@@ -466,24 +466,22 @@ Definition classify_shr (ty1: type) (ty2: type) :=
 
 Inductive classify_cmp_cases : Set:=
   | cmp_case_I32unsi: classify_cmp_cases (**r unsigned I32 , int *)
-  | cmp_case_ii: classify_cmp_cases  (**r int , int*)
+  | cmp_case_ipip: classify_cmp_cases  (**r int|ptr|array , int|ptr|array*)
   | cmp_case_ff: classify_cmp_cases  (**r float , float *)
-  | cmp_case_pi: classify_cmp_cases  (**r ptr or array , int *)
-  | cmp_case_pp:classify_cmp_cases   (**r ptr or array , ptr or array *)
   | cmp_default: classify_cmp_cases . (**r other *)
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
   match ty1,ty2 with 
   | Tint I32 Unsigned , Tint _ _ => cmp_case_I32unsi 
   | Tint _ _ , Tint I32 Unsigned => cmp_case_I32unsi 
-  | Tint _ _ , Tint _ _ => cmp_case_ii 
+  | Tint _ _ , Tint _ _ => cmp_case_ipip
   | Tfloat _ , Tfloat _ => cmp_case_ff
-  | Tpointer _ , Tint _ _ => cmp_case_pi 
-  | Tarray _ _ , Tint _ _ => cmp_case_pi 
-  | Tpointer _ , Tpointer _ => cmp_case_pp
-  | Tpointer _ , Tarray _ _ => cmp_case_pp
-  | Tarray _ _ ,Tpointer _ => cmp_case_pp
-  | Tarray _ _ ,Tarray _ _ => cmp_case_pp
+  | Tpointer _ , Tint _ _ => cmp_case_ipip
+  | Tarray _ _ , Tint _ _ => cmp_case_ipip
+  | Tpointer _ , Tpointer _ => cmp_case_ipip
+  | Tpointer _ , Tarray _ _ => cmp_case_ipip
+  | Tarray _ _ ,Tpointer _ => cmp_case_ipip
+  | Tarray _ _ ,Tarray _ _ => cmp_case_ipip
   | _ , _ => cmp_default
   end.
 

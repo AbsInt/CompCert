@@ -266,35 +266,30 @@ Function sem_cmp (c:comparison)
   match classify_cmp t1 t2 with
   | cmp_case_I32unsi =>
       match v1,v2 with
-      | Vint n1, Vint n2 =>Some (Val.of_bool (Int.cmpu c n1 n2))
+      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
       | _,  _ => None
       end
-  | cmp_case_ii =>
+  | cmp_case_ipip =>
       match v1,v2 with
-      | Vint n1, Vint n2 =>Some (Val.of_bool (Int.cmp c n1 n2))
-      | _,  _ => None
-      end
-  | cmp_case_ff =>
-      match v1,v2 with
-      | Vfloat f1, Vfloat f2 =>Some (Val.of_bool (Float.cmp c f1 f2))  
-      | _,  _ => None
-      end
-  | cmp_case_pi =>
-      match v1,v2 with
-      | Vptr b ofs, Vint n2 =>
-          if Int.eq n2 Int.zero then sem_cmp_mismatch c else None
-      | _,  _ => None
-      end
-  | cmp_case_pp =>
-      match v1,v2 with
+      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmp c n1 n2))
       | Vptr b1 ofs1,  Vptr b2 ofs2  =>
-          if valid_pointer m b1 (Int.signed ofs1) && valid_pointer m b2 (Int.signed ofs2) then
+          if valid_pointer m b1 (Int.signed ofs1)
+          && valid_pointer m b2 (Int.signed ofs2) then
             if zeq b1 b2
             then Some (Val.of_bool (Int.cmp c ofs1 ofs2))
             else None
           else None
+      | Vptr b ofs, Vint n =>
+          if Int.eq n Int.zero then sem_cmp_mismatch c else None
+      | Vint n, Vptr b ofs =>
+          if Int.eq n Int.zero then sem_cmp_mismatch c else None
       | _,  _ => None
-      end 
+      end
+  | cmp_case_ff =>
+      match v1,v2 with
+      | Vfloat f1, Vfloat f2 => Some (Val.of_bool (Float.cmp c f1 f2))  
+      | _,  _ => None
+      end
   | cmp_default => None
   end.
 
