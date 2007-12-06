@@ -114,6 +114,9 @@ Module Type GENV.
   Hypothesis find_symbol_not_fresh:
     forall (F V: Set) (p: program F V) (id: ident) (b: block),
     find_symbol (globalenv p) id = Some b -> b < nextblock (init_mem p).
+  Hypothesis find_symbol_not_nullptr:
+    forall (F V: Set) (p: program F V) (id: ident) (b: block),
+    find_symbol (globalenv p) id = Some b -> b <> nullptr.
   Hypothesis global_addresses_distinct:
     forall (F V: Set) (p: program F V) id1 id2 b1 b2,
     id1<>id2 ->
@@ -458,30 +461,30 @@ Proof.
   intros. eauto.
 Qed.
 
-Remark find_symbol_add_functs_neg:
+Remark find_symbol_add_functs_negative:
   forall (fns: list (ident * F)) s b,
-  find_symbol (add_functs empty fns) s = Some b ->
-  b < 0.
+  (symbols (add_functs empty fns)) ! s = Some b -> b < 0.
 Proof.
-  unfold find_symbol. induction fns; simpl; intros until b.
+  induction fns; simpl; intros until b.
   rewrite PTree.gempty. congruence.
   rewrite PTree.gsspec. destruct a; simpl. case (peq s i); intro.
   intro EQ; inversion EQ. apply nextfunction_add_functs_neg.
   eauto.
 Qed.
 
-Remark find_symbol_add_globals_not_fresh:
-  forall (fns: list (ident * F)) (vars: list (ident * list init_data * V)) g m s b,
+Remark find_symbol_add_symbols_not_fresh:
+  forall fns vars g m s b,
   add_globals (add_functs empty fns, Mem.empty) vars = (g, m) ->
   (symbols g)!s = Some b ->
   b < nextblock m.
 Proof.
   induction vars; simpl; intros until b.
-  intros. inv H. simpl. generalize (find_symbol_add_functs_neg _ _ H0). omega.
+  intros. inversion H. subst g m. simpl. 
+  generalize (find_symbol_add_functs_negative fns s H0). omega.
+  Transparent alloc_init_data.
   destruct a as [[id1 init1] info1]. 
   caseEq (add_globals (add_functs empty fns, Mem.empty) vars).
-  Transparent alloc_init_data. unfold alloc_init_data. 
-  intros g1 m1 ADG EQ. inv EQ.
+  intros g1 m1 ADG EQ. inversion EQ; subst g m; clear EQ.
   unfold add_symbol; simpl. rewrite PTree.gsspec. case (peq s id1); intro.
   intro EQ; inversion EQ. omega.
   intro. generalize (IHvars _ _ _ _ ADG H). omega.
@@ -494,22 +497,18 @@ Proof.
   intros until b. unfold find_symbol, globalenv, init_mem, globalenv_initmem; simpl.
   caseEq (add_globals (add_functs empty (prog_funct p), Mem.empty)
                       (prog_vars p)); intros g m EQ.
-  simpl; intros. eapply find_symbol_add_globals_not_fresh; eauto. 
+  simpl; intros. eapply find_symbol_add_symbols_not_fresh; eauto. 
 Qed.
 
-End GENV.
-
-(* Invariants on functions *)
-
 Lemma find_symbol_exists:
-  forall (F V: Set) (p: program F V)
+  forall (p: program F V)
          (id: ident) (init: list init_data) (v: V),
   In (id, init, v) (prog_vars p) ->
   exists b, find_symbol (globalenv p) id = Some b.
 Proof.
   intros until v.
   assert (forall initm vl, In (id, init, v) vl ->
-           exists b, PTree.get id (@symbols F (fst (add_globals initm vl))) = Some b).
+           exists b, PTree.get id (symbols (fst (add_globals initm vl))) = Some b).
   induction vl; simpl; intros.
   elim H.
   destruct a as [[id0 init0] v0]. 
@@ -520,8 +519,8 @@ Proof.
 Qed.
 
 Remark find_symbol_above_nextfunction:
-  forall (F: Set) (id: ident) (b: block) (fns: list (ident * F)),
-  let g := add_functs (empty F) fns in
+  forall (id: ident) (b: block) (fns: list (ident * F)),
+  let g := add_functs empty fns in
   PTree.get id g.(symbols) = Some b ->
   b > g.(nextfunction).
 Proof.
@@ -533,7 +532,7 @@ Proof.
 Qed.
 
 Remark find_symbol_add_globals:
-  forall (F V: Set) (id: ident) (ge_m: t F * mem) (vars: list (ident * list init_data * V)),
+  forall (id: ident) (ge_m: t * mem) (vars: list (ident * list init_data * V)),
   ~In id (map (fun x: ident * list init_data * V => fst(fst x)) vars) ->
   find_symbol (fst (add_globals ge_m vars)) id =
   find_symbol (fst ge_m) id.
@@ -547,7 +546,7 @@ Proof.
 Qed.
 
 Lemma find_funct_ptr_exists:
-  forall (F V: Set) (p: program F V) (id: ident) (f: F),
+  forall (p: program F V) (id: ident) (f: F),
   list_norepet (prog_funct_names p) ->
   list_disjoint (prog_funct_names p) (prog_var_names p) ->
   In (id, f) (prog_funct p) ->
@@ -558,8 +557,8 @@ Proof.
   assert (forall (fns: list (ident * F)),
            list_norepet (map (@fst ident F) fns) ->
            In (id, f) fns ->
-           exists b, find_symbol (add_functs (empty F) fns) id = Some b
-                   /\ find_funct_ptr (add_functs (empty F) fns) b = Some f).
+           exists b, find_symbol (add_functs empty fns) id = Some b
+                   /\ find_funct_ptr (add_functs empty fns) b = Some f).
   unfold find_symbol, find_funct_ptr. induction fns; intros.
   elim H0.
   destruct a as [id0 f0]; simpl in *. inv H. 
@@ -585,25 +584,25 @@ Proof.
 Qed.
 
 Lemma find_funct_ptr_inversion:
-  forall (F V: Set) (P: F -> Prop) (p: program F V) (b: block) (f: F),
+  forall (P: F -> Prop) (p: program F V) (b: block) (f: F),
   find_funct_ptr (globalenv p) b = Some f ->
   exists id, In (id, f) (prog_funct p).
 Proof.
   intros until f.
   assert (forall fns: list (ident * F),
-    find_funct_ptr (add_functs (empty F) fns) b = Some f ->
+    find_funct_ptr (add_functs empty fns) b = Some f ->
     exists id, In (id, f) fns).
   unfold find_funct_ptr. induction fns; simpl.
   rewrite ZMap.gi. congruence.
   destruct a as [id0 f0]; simpl. 
-  rewrite ZMap.gsspec. destruct (ZIndexed.eq b (nextfunction (add_functs (empty F) fns))).
+  rewrite ZMap.gsspec. destruct (ZIndexed.eq b (nextfunction (add_functs empty fns))).
   intro. inv H. exists id0; auto.
   intro. exploit IHfns; eauto. intros [id A]. exists id; auto.
   unfold find_funct_ptr; rewrite functions_globalenv. intros; apply H; auto.
 Qed.
 
 Lemma find_funct_ptr_prop:
-  forall (F V: Set) (P: F -> Prop) (p: program F V) (b: block) (f: F),
+  forall (P: F -> Prop) (p: program F V) (b: block) (f: F),
   (forall id f, In (id, f) (prog_funct p) -> P f) ->
   find_funct_ptr (globalenv p) b = Some f ->
   P f.
@@ -612,7 +611,7 @@ Proof.
 Qed.
 
 Lemma find_funct_inversion:
-  forall (F V: Set) (P: F -> Prop) (p: program F V) (v: val) (f: F),
+  forall (P: F -> Prop) (p: program F V) (v: val) (f: F),
   find_funct (globalenv p) v = Some f ->
   exists id, In (id, f) (prog_funct p).
 Proof.
@@ -622,7 +621,7 @@ Proof.
 Qed.
 
 Lemma find_funct_prop:
-  forall (F V: Set) (P: F -> Prop) (p: program F V) (v: val) (f: F),
+  forall (P: F -> Prop) (p: program F V) (v: val) (f: F),
   (forall id f, In (id, f) (prog_funct p) -> P f) ->
   find_funct (globalenv p) v = Some f ->
   P f.
@@ -631,20 +630,20 @@ Proof.
 Qed.
 
 Lemma find_funct_ptr_symbol_inversion:
-  forall (F V: Set) (p: program F V) (id: ident) (b: block) (f: F),
+  forall (p: program F V) (id: ident) (b: block) (f: F),
   find_symbol (globalenv p) id = Some b ->
   find_funct_ptr (globalenv p) b = Some f ->
   In (id, f) p.(prog_funct).
 Proof.
   intros until f.
   assert (forall fns,
-           let g := add_functs (empty F) fns in
+           let g := add_functs empty fns in
            PTree.get id g.(symbols) = Some b ->
            ZMap.get b g.(functions) = Some f ->
            In (id, f) fns).
     induction fns; simpl.
     rewrite ZMap.gi. congruence.
-    set (g := add_functs (empty F) fns). 
+    set (g := add_functs empty fns). 
     rewrite PTree.gsspec. rewrite ZMap.gsspec. 
     case (peq id (fst a)); intro.
     intro EQ. inversion EQ. unfold ZIndexed.eq. rewrite zeq_true. 
@@ -653,7 +652,7 @@ Proof.
     generalize (find_symbol_above_nextfunction _ _ H). fold g. unfold block. omega.
   assert (forall g0 m0, b < 0 ->
           forall vars g m,
-          @add_globals F V (g0, m0) vars = (g, m) ->
+          add_globals (g0, m0) vars = (g, m) ->
           PTree.get id g.(symbols) = Some b ->
           PTree.get id g0.(symbols) = Some b).
     induction vars; simpl.
@@ -667,15 +666,46 @@ Proof.
     eauto. 
   intros. 
   generalize (find_funct_ptr_negative _ _ H2). intro.
-  pose (g := add_functs (empty F) (prog_funct p)). 
+  pose (g := add_functs empty (prog_funct p)). 
   apply H.  
   apply H0 with Mem.empty (prog_vars p) (globalenv p) (init_mem p).
   auto. unfold globalenv, init_mem. rewrite <- surjective_pairing.
   reflexivity. assumption. rewrite <- functions_globalenv. assumption.
 Qed.
 
+Theorem find_symbol_not_nullptr:
+  forall (p: program F V) (id: ident) (b: block),
+  find_symbol (globalenv p) id = Some b -> b <> nullptr.
+Proof.
+  intros until b.
+  assert (forall fns, 
+          find_symbol (add_functs empty fns) id = Some b ->
+          b <> nullptr).
+    unfold find_symbol; induction fns; simpl.
+    rewrite PTree.gempty. congruence.
+    destruct a as [id1 f1]. simpl. rewrite PTree.gsspec.
+    destruct (peq id id1); intros. 
+    inversion H. generalize (nextfunction_add_functs_neg fns).
+    unfold block, nullptr; omega.
+    auto.
+  set (g0 := add_functs empty p.(prog_funct)).
+  assert (forall vars g m,
+          add_globals (g0, Mem.empty) vars = (g, m) ->
+          find_symbol g id = Some b ->
+          b <> nullptr).
+    induction vars; simpl; intros until m.
+    intros. inversion H0. subst g. apply H with (prog_funct p). auto.
+    destruct a as [[id1 init1] info1]. 
+    caseEq (add_globals (g0, Mem.empty) vars); intros g1 m1 EQ1 EQ2.
+    inv EQ2. unfold find_symbol, add_symbol; simpl. rewrite PTree.gsspec. 
+    destruct (peq id id1); intros. 
+    inv H0. generalize (nextblock_pos m1). unfold nullptr, block; omega.
+    eauto.
+  intros. eapply H0 with (vars := prog_vars p). apply surjective_pairing. auto.
+Qed. 
+
 Theorem global_addresses_distinct:
-  forall (F V: Set) (p: program F V) id1 id2 b1 b2,
+  forall (p: program F V) id1 id2 b1 b2,
   id1<>id2 ->
   find_symbol (globalenv p) id1 = Some b1 ->
   find_symbol (globalenv p) id2 = Some b2 ->
@@ -683,8 +713,8 @@ Theorem global_addresses_distinct:
 Proof.
   intros.
   assert (forall fns,
-    find_symbol (add_functs (empty F) fns) id1 = Some b1 ->
-    find_symbol (add_functs (empty F) fns) id2 = Some b2 ->
+    find_symbol (add_functs empty fns) id1 = Some b1 ->
+    find_symbol (add_functs empty fns) id2 = Some b2 ->
     b1 <> b2).
   unfold find_symbol. induction fns; simpl; intros.
   rewrite PTree.gempty in H2. discriminate.
@@ -697,7 +727,7 @@ Proof.
   destruct (peq id2 id). subst id. inv H3.
   generalize (find_symbol_above_nextfunction _ _ H2). unfold block. omega.
   eauto.
-  set (ge0 := add_functs (empty F) p.(prog_funct)).
+  set (ge0 := add_functs empty p.(prog_funct)).
   assert (forall (vars: list (ident * list init_data * V)) ge m,
     add_globals (ge0, Mem.empty) vars = (ge, m) ->
     find_symbol ge id1 = Some b1 ->
@@ -710,14 +740,16 @@ Proof.
   unfold add_symbol. simpl. intros.
   rewrite PTree.gsspec in H3; destruct (peq id1 id). subst id. inv H3.
   rewrite PTree.gso in H4; auto. 
-  generalize (find_symbol_add_globals_not_fresh _ _ _ A H4). unfold block; omega.
+  generalize (find_symbol_add_symbols_not_fresh _ _ _ A H4). unfold block; omega.
   rewrite PTree.gsspec in H4; destruct (peq id2 id). subst id. inv H4.
-  generalize (find_symbol_add_globals_not_fresh _ _ _ A H3). unfold block; omega.
+  generalize (find_symbol_add_symbols_not_fresh _ _ _ A H3). unfold block; omega.
   eauto.
   set (ge_m := add_globals (ge0, Mem.empty) p.(prog_vars)).
   apply H3 with (p.(prog_vars)) (fst ge_m) (snd ge_m).
   fold ge_m. apply surjective_pairing. auto. auto.
 Qed.
+
+End GENV.
 
 (* Global environments and program transformations. *)
 
