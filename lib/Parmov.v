@@ -966,7 +966,7 @@ Definition final_state (st: state) : bool :=
   | _ => false
   end.
 
-Function parmove_step (st: state) : state :=
+Definition parmove_step (st: state) : state :=
   match st with
   | State nil nil _ => st
   | State ((s, d) :: tl) nil l =>
