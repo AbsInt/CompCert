@@ -1,3 +1,15 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
 (** Constant propagation over RTL.  This is the first of the two
   optimizations performed at RTL level.  It proceeds by a standard
   dataflow analysis and the corresponding code transformation. *)

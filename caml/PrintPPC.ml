@@ -1,4 +1,14 @@
-(* $Id: PrintPPC.ml,v 1.2 2005/01/22 11:28:46 xleroy Exp $ *)
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
 
 (* Printing PPC assembly code in asm syntax *)
 

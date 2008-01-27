@@ -1,3 +1,18 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the GNU General Public License as published by  *)
+(*  the Free Software Foundation, either version 2 of the License, or  *)
+(*  (at your option) any later version.  This file is also distributed *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
 (** Global environments are a component of the dynamic semantics of 
   all languages involved in the compiler.  A global environment
   maps symbol names (names of functions and of global variables)
