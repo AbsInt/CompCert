@@ -40,7 +40,7 @@ This distribution includes a copy of the CIL library and modifications
 to this library in the form of patches.  The CIL library is Copyright
 2001-2005 George C. Necula, Scott McPeak, Wes Weimer and Ben Liblit.
 The modifications contained in the sub-directory cil.patches/ of this
-distribution are Copyright Institut National de Recherche en
+distribution are Copyright 2006, 2007 Institut National de Recherche en
 Informatique et en Automatique.  The CIL library and the
 modifications contained in the sub-directory cil.patches/ are
 distributed under the terms of the BSD license, included below.
