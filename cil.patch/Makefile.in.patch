@@ -1,0 +1,14 @@
+--- ../cil/Makefile.in.orig	2006-05-21 06:14:15.000000000 +0200
++++ ../cil/Makefile.in	2008-03-04 14:04:21.000000000 +0100
+@@ -243,9 +243,9 @@
+ 	echo "   Zrapp.feature;" >> $@  
+ endif
+ # Now the extra features, with the first letter capitalized
+-	echo -ne \
++	echo \
+           $(foreach f,@EXTRAFEATURES@, \
+-             `echo $f | cut -c 1 | tr "[a-z]" "[A-Z]"``echo $f | cut -c 2-`".feature;\n") >> $@
++             `echo $f | cut -c 1 | tr "[a-z]" "[A-Z]"``echo $f | cut -c 2-`".feature;") >> $@
+ 	echo "]"   >>$@ 
+ # Must delete main.d and remake it, because it may have been made
+ # before feature_config existed.
