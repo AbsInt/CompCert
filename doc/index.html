@@ -24,7 +24,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The Compcert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 1.1, 2007-09-17</H3>
+<H3 align="center">Version 1.2, 2008-02-13</H3>
 
 <H2>Introduction</H2>
 
@@ -55,11 +55,14 @@ compiler written directly in Caml are omitted.  This development is a
 work in progress; some parts have substantially changed since the
 overview papers above were written.</P>
 
-<P>This document and all Coq source files referenced from it are
-copyright 2005, 2006, 2007 Institut National de Recherche en Informatique et
-en Automatique (INRIA) and distributed under the terms of the <A
-HREF="http://www.gnu.org/licenses/gpl.html">GNU General Public
-License</A> version 2.</P>
+<P>The complete sources for Compcert can be downloaded from
+<A HREF="http://compcert.inria.fr/">the Compcert Web site</A>.</P>
+
+<P>This document and the Compcert sources are
+copyright 2005, 2006, 2007, 2008 Institut National de Recherche en
+Informatique et en Automatique (INRIA) and distributed under the terms
+of the following <A HREF="LICENSE">license</A>.
+</P>
 
 <H2>Table of contents</H2>
 
@@ -67,14 +70,8 @@ License</A> version 2.</P>
 
 <UL>
 <LI> <A HREF="html/Coqlib.html">Coqlib</A>: addendum to the Coq standard library.
-     (Coq source file with proofs:
-      <A HREF="Coqlib.v"><code>Coqlib.v</code></a>.)
 <LI> <A HREF="html/Maps.html">Maps</A>: finite maps.
-     (Coq source file with proofs:
-      <A HREF="Maps.v"><code>Maps.v</code></a>.)
 <LI> <A HREF="html/Integers.html">Integers</A>: machine integers.
-     (Coq source file with proofs:
-      <A HREF="Integers.v"><code>Integers.v</code></a>.)
 <LI> <A HREF="html/Floats.html">Floats</A>: machine floating-point numbers.
 <LI> <A HREF="html/Iteration.html">Iteration</A>: various forms of "while" loops.
 <LI> <A HREF="html/Ordered.html">Ordered</A>: construction of
@@ -92,7 +89,6 @@ inequations by fixpoint iteration.
 <LI> <A HREF="html/Errors.html">Errors</A>: the Error monad.
 <LI> <A HREF="html/AST.html">AST</A>: identifiers, whole programs and other
 common elements of abstract syntaxes.
-     (Coq source file with proofs: <A HREF="AST.v"><code>AST.v</code></a>.)
 <LI> <A HREF="html/Values.html">Values</A>: run-time values.
 <LI> <A HREF="html/Events.html">Events</A>: observable events and traces.
 <LI> <A HREF="html/Mem.html">Mem</A>: the memory model.

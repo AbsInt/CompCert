@@ -74,7 +74,7 @@ all:
 	$(MAKE) -C extraction
 	$(MAKE) -C runtime
 
-documentation:
+documentation: doc/removeproofs
 	@ln -f $(FILES) doc/
 	@mkdir -p doc/html
 	cd doc; $(COQDOC) --html -d html \
@@ -82,6 +82,12 @@ documentation:
 	@cd doc; rm -f $(FLATFILES)
 	cp doc/coqdoc.css doc/html/coqdoc.css
 	doc/removeproofs doc/html/*.html
+
+doc/removeproofs: doc/removeproofs.ml
+	ocamlopt -o doc/removeproofs doc/removeproofs.ml
+
+doc/removeproofs.ml: doc/removeproofs.mll
+	ocamllex doc/removeproofs.mll
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
@@ -103,6 +109,7 @@ install:
 clean:
 	rm -f */*.vo *~ */*~
 	rm -rf doc/html doc/*.glob
+	rm -f doc/removeproofs.ml doc/removeproofs
 	$(MAKE) -C extraction clean
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test/cminor clean
