@@ -128,8 +128,8 @@ Qed.
 - All nodes for reachable basic blocks must be in the list.
 - The list is without repetition (so that no code duplication occurs).
 
-We prove that our [enumerate] function satisfies both conditions. *)
-
+We prove that the result of the [enumerate] function satisfies both
+conditions. *)
 
 Lemma nodeset_of_list_correct:
   forall l s s',
@@ -211,7 +211,7 @@ Qed.
 (** * Properties related to labels *)
 
 (** If labels are globally unique and the LTLin code [c] contains
-  a subsequence [Llabel lbl :: c1], [find_label lbl c] returns [c1].
+  a subsequence [Llabel lbl :: c1], then [find_label lbl c] returns [c1].
 *)
 
 Fixpoint unique_labels (c: code) : Prop :=
@@ -298,15 +298,6 @@ Proof.
   simpl. rewrite peq_false. rewrite find_label_lin_instr. auto. auto.
   auto.
 Qed.
-
-(*
-Lemma transf_function_inv:
-  forall f tf, transf_function f = OK tf ->
-  exists enum, enumerate f = OK enum /\ fn_code tf = add_branch (LTL.fn_entrypoint f) (linearize_body f enum).
-Proof.
-  intros. monadInv H. exists x; auto.
-Qed.
-*)
 
 Lemma find_label_lin:
   forall f tf pc b,

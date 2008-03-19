@@ -63,7 +63,7 @@ Open Scope error_monad_scope.
 
   In this file, we present linearization in a way that clearly
   separates the heuristic part (choosing an order for the basic blocks)
-  from the actual code transformation parts.  We proceed in three passes:
+  from the actual code transformation parts.  We proceed in two passes:
 - Choosing an order for the nodes.  This returns an enumeration of CFG
   nodes stating that they must be laid out in the order shown in the
   list.
@@ -110,11 +110,11 @@ Definition reachable (f: LTL.function) : PMap.t bool :=
 
 Parameter enumerate_aux: LTL.function -> PMap.t bool -> list node.
 
-(** Now comes the validation of an enumeration a posteriori. *)
+(** Now comes the a posteriori validation of a node enumeration. *)
 
 Module Nodeset := FSetAVL.Make(OrderedPositive).
 
-(** Build a Nodeset.t from a list of nodes, checking that the list
+(** Build a [Nodeset.t] from a list of nodes, checking that the list
   contains no duplicates. *)
 
 Fixpoint nodeset_of_list (l: list node) (s: Nodeset.t)
