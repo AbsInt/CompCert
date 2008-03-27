@@ -791,6 +791,131 @@ Proof.
   EvalOp.
 Qed.
 
+Theorem eval_comp_int:
+  forall le c a x b y,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  eval_expr ge sp e m le (comp c a b) (Val.of_bool(Int.cmp c x y)).
+Proof.
+  intros until y.
+  unfold comp; case (comp_match a b); intros; InvEval.
+  EvalOp. simpl. rewrite Int.swap_cmp. destruct (Int.cmp c x y); reflexivity.
+  EvalOp. simpl. destruct (Int.cmp c x y); reflexivity.
+  EvalOp. simpl. destruct (Int.cmp c x y); reflexivity.
+Qed.
+
+Theorem eval_comp_ptr_int:
+  forall le c a x1 x2 b y v,
+  eval_expr ge sp e m le a (Vptr x1 x2) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  Cminor.eval_compare_null c y = Some v ->
+  eval_expr ge sp e m le (comp c a b) v.
+Proof.
+  intros until v.
+  unfold comp; case (comp_match a b); intros; InvEval.
+  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
+  destruct (Int.eq y Int.zero); try discriminate. 
+  destruct c; try discriminate; auto.
+  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
+  destruct (Int.eq y Int.zero); try discriminate. 
+  destruct c; try discriminate; auto.
+Qed.
+
+Theorem eval_comp_int_ptr:
+  forall le c a x b y1 y2 v,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vptr y1 y2) ->
+  Cminor.eval_compare_null c x = Some v ->
+  eval_expr ge sp e m le (comp c a b) v.
+Proof.
+  intros until v.
+  unfold comp; case (comp_match a b); intros; InvEval.
+  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
+  destruct (Int.eq x Int.zero); try discriminate. 
+  destruct c; simpl; try discriminate; auto.
+  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
+  destruct (Int.eq x Int.zero); try discriminate. 
+  destruct c; simpl; try discriminate; auto.
+Qed.
+
+Theorem eval_comp_ptr_ptr:
+  forall le c a x1 x2 b y1 y2,
+  eval_expr ge sp e m le a (Vptr x1 x2) ->
+  eval_expr ge sp e m le b (Vptr y1 y2) ->
+  valid_pointer m x1 (Int.signed x2) &&
+  valid_pointer m y1 (Int.signed y2) = true ->
+  x1 = y1 ->
+  eval_expr ge sp e m le (comp c a b) (Val.of_bool(Int.cmp c x2 y2)).
+Proof.
+  intros until y2.
+  unfold comp; case (comp_match a b); intros; InvEval.
+  EvalOp. simpl. rewrite H1. simpl. 
+  subst y1. rewrite dec_eq_true. 
+  destruct (Int.cmp c x2 y2); reflexivity.
+Qed.
+
+Theorem eval_compu:
+  forall le c a x b y,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  eval_expr ge sp e m le (compu c a b) (Val.of_bool(Int.cmpu c x y)).
+Proof.
+  intros until y.
+  unfold compu; case (comp_match a b); intros; InvEval.
+  EvalOp. simpl. rewrite Int.swap_cmpu. destruct (Int.cmpu c x y); reflexivity.
+  EvalOp. simpl. destruct (Int.cmpu c x y); reflexivity.
+  EvalOp. simpl. destruct (Int.cmpu c x y); reflexivity.
+Qed.
+
+Theorem eval_compf:
+  forall le c a x b y,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le b (Vfloat y) ->
+  eval_expr ge sp e m le (compf c a b) (Val.of_bool(Float.cmp c x y)).
+Proof.
+  intros. unfold compf. EvalOp. simpl. 
+  destruct (Float.cmp c x y); reflexivity.
+Qed.
+
+Lemma negate_condexpr_correct:
+  forall le a b,
+  eval_condexpr ge sp e m le a b ->
+  eval_condexpr ge sp e m le (negate_condexpr a) (negb b).
+Proof.
+  induction 1; simpl.
+  constructor.
+  constructor.
+  econstructor. eauto. apply eval_negate_condition. auto.
+  econstructor. eauto. destruct vb1; auto.
+Qed. 
+
+Scheme expr_ind2 := Induction for expr Sort Prop
+  with exprlist_ind2 := Induction for exprlist Sort Prop.
+
+Fixpoint forall_exprlist (P: expr -> Prop) (el: exprlist) {struct el}: Prop :=
+  match el with
+  | Enil => True
+  | Econs e el' => P e /\ forall_exprlist P el'
+  end.
+
+Lemma expr_induction_principle:
+  forall (P: expr -> Prop),
+  (forall i : ident, P (Evar i)) ->
+  (forall (o : operation) (e : exprlist),
+     forall_exprlist P e -> P (Eop o e)) ->
+  (forall (m : memory_chunk) (a : Op.addressing) (e : exprlist),
+     forall_exprlist P e -> P (Eload m a e)) ->
+  (forall (c : condexpr) (e : expr),
+     P e -> forall e0 : expr, P e0 -> P (Econdition c e e0)) ->
+  (forall e : expr, P e -> forall e0 : expr, P e0 -> P (Elet e e0)) ->
+  (forall n : nat, P (Eletvar n)) ->
+  forall e : expr, P e.
+Proof.
+  intros. apply expr_ind2 with (P := P) (P0 := forall_exprlist P); auto.
+  simpl. auto.
+  intros. simpl. auto.
+Qed.
+
 Lemma eval_base_condition_of_expr:
   forall le a v b,
   eval_expr ge sp e m le a v ->
@@ -804,28 +929,79 @@ Proof.
   inversion H0; simpl. rewrite Int.eq_false; auto. auto. auto.
 Qed.
 
+Lemma is_compare_neq_zero_correct:
+  forall c v b,
+  is_compare_neq_zero c = true ->
+  eval_condition c (v :: nil) m = Some b ->
+  Val.bool_of_val v b.
+Proof.
+  intros.
+  destruct c; simpl in H; try discriminate;
+  destruct c; simpl in H; try discriminate;
+  generalize (Int.eq_spec i Int.zero); rewrite H; intro; subst i.
+
+  simpl in H0. destruct v; inv H0. 
+  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intros; simpl.
+  subst i; constructor. constructor; auto. constructor.
+
+  simpl in H0. destruct v; inv H0. 
+  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intros; simpl.
+  subst i; constructor. constructor; auto.
+Qed.
+
+Lemma is_compare_eq_zero_correct:
+  forall c v b,
+  is_compare_eq_zero c = true ->
+  eval_condition c (v :: nil) m = Some b ->
+  Val.bool_of_val v (negb b).
+Proof.
+  intros. apply is_compare_neq_zero_correct with (negate_condition c).
+  destruct c; simpl in H; simpl; try discriminate;
+  destruct c; simpl; try discriminate; auto.
+  apply eval_negate_condition; auto.
+Qed.
+
 Lemma eval_condition_of_expr:
   forall a le v b,
   eval_expr ge sp e m le a v ->
   Val.bool_of_val v b ->
   eval_condexpr ge sp e m le (condexpr_of_expr a) b.
 Proof.
-  induction a; simpl; intros;
+  intro a0; pattern a0.
+  apply expr_induction_principle; simpl; intros;
     try (eapply eval_base_condition_of_expr; eauto; fail).
   
   destruct o; try (eapply eval_base_condition_of_expr; eauto; fail).
 
   destruct e0. InvEval. 
-  inversion H0. 
+  inversion H1. 
   rewrite Int.eq_false; auto. constructor.
   subst i; rewrite Int.eq_true. constructor.
   eapply eval_base_condition_of_expr; eauto.
 
-  inv H. eapply eval_CEcond; eauto. simpl in H6. 
-  destruct (eval_condition c vl m); try discriminate.
-  destruct b0; inv H6; inversion H0; congruence.
+  inv H0. simpl in H7.
+  assert (eval_condition c vl m = Some b).
+    destruct (eval_condition c vl m); try discriminate.
+    destruct b0; inv H7; inversion H1; congruence.
+  assert (eval_condexpr ge sp e m le (CEcond c e0) b).
+    eapply eval_CEcond; eauto.
+  destruct e0; auto. destruct e1; auto.
+  simpl in H. destruct H.
+  inv H5. inv H11.
 
-  inv H. destruct v1; eauto with evalexpr.
+  case_eq (is_compare_neq_zero c); intros.
+  eapply H; eauto.
+  apply is_compare_neq_zero_correct with c; auto.
+
+  case_eq (is_compare_eq_zero c); intros.
+  replace b with (negb (negb b)). apply negate_condexpr_correct.
+  eapply H; eauto.
+  apply is_compare_eq_zero_correct with c; auto.
+  apply negb_involutive.
+
+  auto.
+
+  inv H1. destruct v1; eauto with evalexpr.
 Qed.
 
 Lemma eval_addressing:
@@ -950,20 +1126,15 @@ Proof.
   apply eval_subf; auto.
   EvalOp.
   EvalOp.
-  EvalOp. simpl. destruct (Int.cmp c i i0); auto. 
-  EvalOp. simpl. generalize H1; unfold eval_compare_null, Cminor.eval_compare_null.
-  destruct (Int.eq i Int.zero). destruct c; intro EQ; inv EQ; auto.
-  auto.
-  EvalOp. simpl. generalize H1; unfold eval_compare_null, Cminor.eval_compare_null.
-  destruct (Int.eq i0 Int.zero). destruct c; intro EQ; inv EQ; auto.
-  auto.
-  EvalOp. simpl. 
-  destruct (valid_pointer m b (Int.signed i) && valid_pointer m b0 (Int.signed i0)).
-  destruct (eq_block b b0); inv H1. 
-  destruct (Int.cmp c i i0); auto.
-  auto.
-  EvalOp. simpl. destruct (Int.cmpu c i i0); auto.
-  EvalOp. simpl. destruct (Float.cmp c f f0); auto.
+  apply eval_comp_int; auto.
+  eapply eval_comp_int_ptr; eauto.
+  eapply eval_comp_ptr_int; eauto.
+  generalize H1; clear H1.
+  case_eq (valid_pointer m b (Int.signed i) && valid_pointer m b0 (Int.signed i0)); intros.
+  destruct (eq_block b b0); inv H2.
+  eapply eval_comp_ptr_ptr; eauto. discriminate.
+  eapply eval_compu; eauto.
+  eapply eval_compf; eauto.
 Qed.
 
 End CMCONSTR.

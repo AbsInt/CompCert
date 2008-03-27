@@ -902,16 +902,95 @@ Definition singleoffloat (e: expr) :=
   | singleoffloat_default e1 => Eop Osingleoffloat (e1 ::: Enil)
   end.
 
+(** ** Comparisons *)
+
+Inductive comp_cases: forall (e1: expr) (e2: expr), Set :=
+  | comp_case1:
+      forall n1 t2,
+      comp_cases (Eop (Ointconst n1) Enil) (t2)
+  | comp_case2:
+      forall t1 n2,
+      comp_cases (t1) (Eop (Ointconst n2) Enil)
+  | comp_default:
+      forall (e1: expr) (e2: expr),
+      comp_cases e1 e2.
+
+Definition comp_match (e1: expr) (e2: expr) :=
+  match e1 as z1, e2 as z2 return comp_cases z1 z2 with
+  | Eop (Ointconst n1) Enil, t2 =>
+      comp_case1 n1 t2
+  | t1, Eop (Ointconst n2) Enil =>
+      comp_case2 t1 n2
+  | e1, e2 =>
+      comp_default e1 e2
+  end.
+
+Definition comp (c: comparison) (e1: expr) (e2: expr) :=
+  match comp_match e1 e2 with
+  | comp_case1 n1 t2 =>
+      Eop (Ocmp (Ccompimm (swap_comparison c) n1)) (t2 ::: Enil)
+  | comp_case2 t1 n2 =>
+      Eop (Ocmp (Ccompimm c n2)) (t1 ::: Enil)
+  | comp_default e1 e2 =>
+      Eop (Ocmp (Ccomp c)) (e1 ::: e2 ::: Enil)
+  end.
+
+Definition compu (c: comparison) (e1: expr) (e2: expr) :=
+  match comp_match e1 e2 with
+  | comp_case1 n1 t2 =>
+      Eop (Ocmp (Ccompuimm (swap_comparison c) n1)) (t2 ::: Enil)
+  | comp_case2 t1 n2 =>
+      Eop (Ocmp (Ccompuimm c n2)) (t1 ::: Enil)
+  | comp_default e1 e2 =>
+      Eop (Ocmp (Ccompu c)) (e1 ::: e2 ::: Enil)
+  end.
+
+Definition compf (c: comparison) (e1: expr) (e2: expr) :=
+  Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
+
 (** ** Conditional expressions *)
+
+Fixpoint negate_condexpr (e: condexpr): condexpr :=
+  match e with
+  | CEtrue => CEfalse
+  | CEfalse => CEtrue
+  | CEcond c el => CEcond (negate_condition c) el
+  | CEcondition e1 e2 e3 =>
+      CEcondition e1 (negate_condexpr e2) (negate_condexpr e3)
+  end.
+
+
+Definition is_compare_neq_zero (c: condition) : bool :=
+  match c with
+  | Ccompimm Cne n => Int.eq n Int.zero
+  | Ccompuimm Cne n => Int.eq n Int.zero
+  | _ => false
+  end.
+
+Definition is_compare_eq_zero (c: condition) : bool :=
+  match c with
+  | Ccompimm Ceq n => Int.eq n Int.zero
+  | Ccompuimm Ceq n => Int.eq n Int.zero
+  | _ => false
+  end.
 
 Fixpoint condexpr_of_expr (e: expr) : condexpr :=
   match e with
   | Eop (Ointconst n) Enil =>
       if Int.eq n Int.zero then CEfalse else CEtrue
-  | Eop (Ocmp c) el => CEcond c el
-  | Econdition e1 e2 e3 =>
-      CEcondition e1 (condexpr_of_expr e2) (condexpr_of_expr e3)
-  | e => CEcond (Ccompimm Cne Int.zero) (e:::Enil)
+  | Eop (Ocmp c) (e1 ::: Enil) =>
+      if is_compare_neq_zero c then
+        condexpr_of_expr e1
+      else if is_compare_eq_zero c then
+        negate_condexpr (condexpr_of_expr e1)
+      else
+        CEcond c (e1 ::: Enil)
+  | Eop (Ocmp c) el =>
+      CEcond c el
+  | Econdition ce e1 e2 =>
+      CEcondition ce (condexpr_of_expr e1) (condexpr_of_expr e2)
+  | _ =>
+      CEcond (Ccompimm Cne Int.zero) (e:::Enil)
   end.
 
 (** ** Recognition of addressing modes for load and store operations *)
@@ -1039,9 +1118,9 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Osubf => subf arg1 arg2
   | Cminor.Omulf => Eop Omulf (arg1 ::: arg2 ::: Enil)
   | Cminor.Odivf => Eop Odivf (arg1 ::: arg2 ::: Enil)
-  | Cminor.Ocmp c => Eop (Ocmp (Ccomp c)) (arg1 ::: arg2 ::: Enil)
-  | Cminor.Ocmpu c => Eop (Ocmp (Ccompu c)) (arg1 ::: arg2 ::: Enil)
-  | Cminor.Ocmpf c => Eop (Ocmp (Ccompf c)) (arg1 ::: arg2 ::: Enil)
+  | Cminor.Ocmp c => comp c arg1 arg2
+  | Cminor.Ocmpu c => compu c arg1 arg2
+  | Cminor.Ocmpf c => compf c arg1 arg2
   end.
 
 (** Conversion from Cminor expression to Cminorsel expressions *)
