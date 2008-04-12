@@ -35,7 +35,7 @@ Variable funct: function.
 Definition slot_valid (s: slot) :=
   match s with
   | Local ofs ty => 0 <= ofs
-  | Outgoing ofs ty => 14 <= ofs
+  | Outgoing ofs ty => 0 <= ofs
   | Incoming ofs ty => In (S s) (loc_parameters funct.(fn_sig))
   end.
 

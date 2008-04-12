@@ -52,6 +52,8 @@ The [frame_env] compilation environment records the positions of
 the boundaries between areas in the frame part.
 *)
 
+Definition fe_ofs_arg := 24.
+
 Record frame_env : Set := mk_frame_env {
   fe_size: Z;
   fe_ofs_link: Z;
@@ -68,7 +70,7 @@ Record frame_env : Set := mk_frame_env {
   function. *)
 
 Definition make_env (b: bounds) :=
-  let oil := 4 * b.(bound_outgoing) in    (* integer locals *)
+  let oil := 24 + 4 * b.(bound_outgoing) in    (* integer locals *)
   let oics := oil + 4 * b.(bound_int_local) in (* integer callee-saves *)
   let oendi := oics + 4 * b.(bound_int_callee_save) in
   let ofl := align oendi 8 in       (* float locals *)
@@ -95,7 +97,7 @@ Definition offset_of_index (fe: frame_env) (idx: frame_index) :=
   | FI_retaddr => fe.(fe_ofs_retaddr)
   | FI_local x Tint => fe.(fe_ofs_int_local) + 4 * x
   | FI_local x Tfloat => fe.(fe_ofs_float_local) + 8 * x
-  | FI_arg x ty => 4 * x
+  | FI_arg x ty => fe_ofs_arg + 4 * x
   | FI_saved_int x => fe.(fe_ofs_int_callee_save) + 4 * x
   | FI_saved_float x => fe.(fe_ofs_float_callee_save) + 8 * x
   end.

@@ -25,6 +25,7 @@ Require Import Op.
 Require Import Locations.
 Require Conventions.
 Require Import Mach.
+Require Stacking.
 Require PPCgenretaddr.
 
 (** In the concrete semantics for Mach, the three stack-related Mach
@@ -69,7 +70,7 @@ Inductive extcall_arg: regset -> mem -> val -> loc -> val -> Prop :=
   | extcall_arg_reg: forall rs m sp r,
       extcall_arg rs m sp (R r) (rs r)
   | extcall_arg_stack: forall rs m sp ofs ty v,
-      load_stack m sp ty (Int.repr (4 * ofs)) = Some v ->
+      load_stack m sp ty (Int.repr (Stacking.fe_ofs_arg + 4 * ofs)) = Some v ->
       extcall_arg rs m sp (S (Outgoing ofs ty)) v.
 
 Inductive extcall_args: regset -> mem -> val -> list loc -> list val -> Prop :=

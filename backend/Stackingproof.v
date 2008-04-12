@@ -188,7 +188,7 @@ Definition index_valid (idx: frame_index) :=
   | FI_retaddr => True
   | FI_local x Tint => 0 <= x < b.(bound_int_local)
   | FI_local x Tfloat => 0 <= x < b.(bound_float_local)
-  | FI_arg x ty => 14 <= x /\ x + typesize ty <= b.(bound_outgoing)
+  | FI_arg x ty => 0 <= x /\ x + typesize ty <= b.(bound_outgoing)
   | FI_saved_int x => 0 <= x < b.(bound_int_callee_save)
   | FI_saved_float x => 0 <= x < b.(bound_float_callee_save)
   end.
@@ -220,8 +220,8 @@ Definition index_diff (idx1 idx2: frame_index) : Prop :=
   end.
 
 Remark align_float_part:
-  4 * bound_outgoing b + 4 * bound_int_local b + 4 * bound_int_callee_save b <=
-  align (4 * bound_outgoing b + 4 * bound_int_local b + 4 * bound_int_callee_save b) 8.
+  24 + 4 * bound_outgoing b + 4 * bound_int_local b + 4 * bound_int_callee_save b <=
+  align (24 + 4 * bound_outgoing b + 4 * bound_int_local b + 4 * bound_int_callee_save b) 8.
 Proof.
   apply align_le. omega.
 Qed.
@@ -256,7 +256,7 @@ Proof.
   unfold offset_of_index, fe, make_env,
     fe_size, fe_ofs_int_local, fe_ofs_int_callee_save,
     fe_ofs_float_local, fe_ofs_float_callee_save,
-    fe_ofs_link, fe_ofs_retaddr,
+    fe_ofs_link, fe_ofs_retaddr, fe_ofs_arg,
     type_of_index, typesize;
   simpl in H5; simpl in H6; simpl in H7;
   try omega.
@@ -322,7 +322,7 @@ Proof.
   unfold offset_of_index, fe, make_env,
     fe_size, fe_ofs_int_local, fe_ofs_int_callee_save,
     fe_ofs_float_local, fe_ofs_float_callee_save,
-    fe_ofs_link, fe_ofs_retaddr,
+    fe_ofs_link, fe_ofs_retaddr, fe_ofs_arg,
     type_of_index, typesize;
   simpl in H5;
   omega.
@@ -435,13 +435,20 @@ Proof.
   destruct (orb_prop _ _ H0). apply Loc.overlap_aux_true_1. auto. 
   apply Loc.overlap_aux_true_2. auto.
   unfold update. 
-  destruct (zeq (4 * ofs1 - fn_framesize tf) (4 * ofs2 - fn_framesize tf)).
+  destruct (zeq (fe_ofs_arg + 4 * ofs1 - fn_framesize tf)
+                (fe_ofs_arg + 4 * ofs2 - fn_framesize tf)).
   destruct (typ_eq ty1 ty2). 
   elim H. decEq. decEq. omega. auto.
   auto.
   repeat rewrite typesize_typesize.
   rewrite zle_false. apply zle_false. omega. omega.
 Qed.
+
+(** Accessing stack-based arguments in the caller's frame. *)
+
+Definition get_parent_slot (cs: list stackframe) (ofs: Z) (ty: typ) (v: val) : Prop :=
+  get_slot (parent_function cs) (parent_frame cs)
+           ty (Int.signed (Int.repr (fe_ofs_arg + 4 * ofs))) v.
 
 (** * Agreement between location sets and Mach environments *)
 
@@ -481,8 +488,7 @@ Record agree (ls ls0: locset) (rs: regset) (fr: frame) (cs: list stackframe): Pr
     agree_incoming:
       forall ofs ty,
       In (S (Incoming ofs ty)) (loc_parameters f.(Linear.fn_sig)) ->
-      get_slot (parent_function cs) (parent_frame cs)
-               ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Incoming ofs ty)));
+      get_parent_slot cs ofs ty (ls (S (Incoming ofs ty)));
 
     (** The areas of the frame reserved for saving used callee-save
         registers always contain the values that those registers had
@@ -977,8 +983,7 @@ Lemma save_callee_save_correct:
   (forall r, rs r = ls (R r)) ->
   (forall ofs ty,
      In (S (Outgoing ofs ty)) (loc_arguments f.(Linear.fn_sig)) ->
-     get_slot (parent_function cs) (parent_frame cs)
-              ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty)))) ->
+     get_parent_slot cs ofs ty (ls (S (Outgoing ofs ty)))) ->
   exists fr',
     star step tge
        (State stack tf sp (save_callee_save fe k) rs empty_frame m)
@@ -1390,21 +1395,20 @@ Qed.
 
 Section EXTERNAL_ARGUMENTS.
 
-Variable f: function.
+Variable cs: list Machabstr.stackframe.
 Variable ls: locset.
-Variable fr: frame.
 Variable rs: regset.
 Variable sg: signature.
+
 Hypothesis AG1: forall r, rs r = ls (R r).
 Hypothesis AG2: forall (ofs : Z) (ty : typ),
       In (S (Outgoing ofs ty)) (loc_arguments sg) ->
-      get_slot f fr ty (Int.signed (Int.repr (4 * ofs)))
-                       (ls (S (Outgoing ofs ty))).
+      get_parent_slot cs ofs ty (ls (S (Outgoing ofs ty))).
 
 Lemma transl_external_arguments_rec:
   forall locs,
   incl locs (loc_arguments sg) ->
-  extcall_args f rs fr locs ls##locs.
+  extcall_args (parent_function cs) rs (parent_frame cs) locs ls##locs.
 Proof.
   induction locs; simpl; intros.
   constructor.
@@ -1414,12 +1418,13 @@ Proof.
   destruct a; red in H0.
   rewrite <- AG1. constructor. 
   destruct s; try contradiction.
-  constructor. apply AG2. auto with coqlib. 
+  constructor. change (get_parent_slot cs z t (ls (S (Outgoing z t)))).
+apply AG2. auto with coqlib. 
   apply IHlocs; eauto with coqlib.
 Qed.
 
 Lemma transl_external_arguments:
-  extcall_arguments f rs fr sg (ls ## (loc_arguments sg)).
+  extcall_arguments (parent_function cs) rs (parent_frame cs) sg (ls ## (loc_arguments sg)).
 Proof.
   unfold extcall_arguments. 
   apply transl_external_arguments_rec.
@@ -1481,7 +1486,7 @@ Inductive match_states: Linear.state -> Machabstr.state -> Prop :=
         (AG1: forall r, rs r = ls (R r))
         (AG2: forall ofs ty, 
                 In (S (Outgoing ofs ty)) (loc_arguments (Linear.funsig f)) ->
-                get_slot (parent_function ts) (parent_frame ts) ty (Int.signed (Int.repr (4 * ofs))) (ls (S (Outgoing ofs ty))))
+                get_parent_slot ts ofs ty (ls (S (Outgoing ofs ty))))
         (AG3: agree_callee_save ls (parent_locset s)),
       match_states (Linear.Callstate s f ls m)
                    (Machabstr.Callstate ts tf rs m)
@@ -1521,7 +1526,8 @@ Proof.
   eapply agree_locals; eauto.
   (* Lgetstack, incoming *)
   apply plus_one; apply exec_Mgetparam.
-  unfold offset_of_index. eapply agree_incoming; eauto.
+  change (get_parent_slot ts z t (rs (S (Incoming z t)))).
+  eapply agree_incoming; eauto.
   (* Lgetstack, outgoing *)
   apply plus_one; apply exec_Mgetstack.
   apply get_slot_index. auto. apply index_arg_valid. auto. congruence. congruence. auto. 
@@ -1589,12 +1595,14 @@ Proof.
   econstructor; eauto with coqlib.
   exists rs0; auto.
   intro. symmetry. eapply agree_reg; eauto.
-  intros. unfold parent_function, parent_frame. 
+  intros.
   assert (slot_within_bounds f (function_bounds f) (Outgoing ofs ty)).
   red. simpl. generalize (loc_arguments_bounded _ _ _ H0). 
   generalize (loc_arguments_acceptable _ _ H0). unfold loc_argument_acceptable. 
-  omega. 
-  change (4 * ofs) with (offset_of_index (make_env (function_bounds f)) (FI_arg ofs ty)).
+  omega.
+  unfold get_parent_slot, parent_function, parent_frame. 
+  change (fe_ofs_arg + 4 * ofs)
+    with (offset_of_index (make_env (function_bounds f)) (FI_arg ofs ty)).
   apply get_slot_index. auto. apply index_arg_valid. auto. congruence. congruence. auto.
   eapply agree_outgoing; eauto.
   simpl. red; auto.

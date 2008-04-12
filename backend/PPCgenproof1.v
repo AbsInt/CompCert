@@ -451,7 +451,7 @@ Lemma extcall_args_match:
   (forall r, In r iregl -> mreg_type r = Tint) ->
   (forall r, In r fregl -> mreg_type r = Tfloat) ->
   Machconcr.extcall_args ms m sp (Conventions.loc_arguments_rec tyl iregl fregl ofs) args ->
-  PPC.extcall_args rs m tyl (List.map ireg_of iregl) (List.map freg_of fregl) (4 * ofs) args.
+  PPC.extcall_args rs m tyl (List.map ireg_of iregl) (List.map freg_of fregl) (Stacking.fe_ofs_arg + 4 * ofs) args.
 Proof.
   induction tyl; intros.
   inversion H2; constructor.
@@ -463,7 +463,7 @@ Proof.
   constructor. replace (rs GPR1) with sp. assumption. 
   eapply sp_val; eauto. 
   change (@nil ireg) with (ireg_of ## nil). 
-  replace (4 * ofs + 4) with (4 * (ofs + 1)) by omega. 
+  replace (Stacking.fe_ofs_arg + 4 * ofs + 4) with (Stacking.fe_ofs_arg + 4 * (ofs + 1)) by omega. 
   apply IHtyl; auto. 
   (* register *)
   inversion H2; subst; clear H2. inversion H8; subst; clear H8.
@@ -479,13 +479,12 @@ Proof.
   constructor. replace (rs GPR1) with sp. assumption. 
   eapply sp_val; eauto. 
   change (@nil freg) with (freg_of ## nil). 
-  replace (4 * ofs + 8) with (4 * (ofs + 2)) by omega. 
+  replace (Stacking.fe_ofs_arg + 4 * ofs + 8) with (Stacking.fe_ofs_arg + 4 * (ofs + 2)) by omega. 
   apply IHtyl; auto. 
   (* register *)
   inversion H2; subst; clear H2. inversion H8; subst; clear H8.
   simpl map. econstructor. eapply freg_val; eauto.
   apply H1; simpl; auto. 
-  replace (4 * ofs + 8) with (4 * (ofs + 2)) by omega. 
   rewrite list_map_drop2.
   apply IHtyl; auto. 
   intros; apply H0. apply list_drop2_incl. auto.
@@ -511,7 +510,8 @@ Proof.
   unfold Machconcr.extcall_arguments, PPC.extcall_arguments; intros.
   change (extcall_args rs m sg.(sig_args)
     (List.map ireg_of Conventions.int_param_regs)
-    (List.map freg_of Conventions.float_param_regs) (4 * 14) args).
+    (List.map freg_of Conventions.float_param_regs)
+    (Stacking.fe_ofs_arg + 4 * 8) args).
   eapply extcall_args_match; eauto. 
   intro; simpl; ElimOrEq; reflexivity.  
   intro; simpl; ElimOrEq; reflexivity.  

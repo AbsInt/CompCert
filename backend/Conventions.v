@@ -373,8 +373,7 @@ Qed.
   integer arguments.
 - Extra arguments are passed on the stack, in [Outgoing] slots, consecutively
   assigned (1 word for an integer argument, 2 words for a float),
-  starting at word offset 6 (the bottom 24 bytes of the stack are reserved
-  for other purposes).
+  starting at word offset 0.
 - Stack space is reserved (as unused [Outgoing] slots) for the arguments
   that are passed in registers.
 
@@ -411,7 +410,7 @@ Definition float_param_regs :=
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list loc :=
-  loc_arguments_rec s.(sig_args) int_param_regs float_param_regs 14.
+  loc_arguments_rec s.(sig_args) int_param_regs float_param_regs 8.
 
 (** [size_arguments s] returns the number of [Outgoing] slots used
   to call a function with signature [s]. *)
@@ -434,7 +433,7 @@ Fixpoint size_arguments_rec
   end.
 
 Definition size_arguments (s: signature) : Z :=
-  size_arguments_rec s.(sig_args) int_param_regs float_param_regs 14.
+  size_arguments_rec s.(sig_args) int_param_regs float_param_regs 8.
 
 (** A tail-call is possible for a signature if the corresponding
     arguments are all passed in registers. *)
@@ -444,12 +443,12 @@ Definition tailcall_possible (s: signature) : Prop :=
   match l with R _ => True | S _ => False end.
 
 (** Argument locations are either non-temporary registers or [Outgoing] 
-  stack slots at offset 14 or more. *)
+  stack slots at nonnegative offsets. *)
 
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
   | R r => ~(In l temporaries)
-  | S (Outgoing ofs ty) => ofs >= 14
+  | S (Outgoing ofs ty) => ofs >= 0
   | _ => False
   end.
 
@@ -488,7 +487,7 @@ Proof.
   intro H0; elim H0. simpl. unfold not. ElimOrEq; NotOrEq.
   simpl. unfold not. ElimOrEq; NotOrEq.
   destruct s0; try contradiction.
-  simpl. auto.
+  simpl. omega. 
 Qed. 
 Hint Resolve loc_arguments_acceptable: locs.
 
@@ -585,9 +584,9 @@ Proof.
 Qed.
 
 Lemma size_arguments_above:
-  forall s, size_arguments s >= 14.
+  forall s, size_arguments s >= 0.
 Proof.
-  intros; unfold size_arguments. apply Zle_ge. 
+  intros; unfold size_arguments. apply Zle_ge. apply Zle_trans with 8. omega. 
   apply size_arguments_rec_above.
 Qed.
 

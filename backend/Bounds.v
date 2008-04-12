@@ -41,7 +41,7 @@ Record bounds : Set := mkbounds {
   bound_float_local_pos: bound_float_local >= 0;
   bound_int_callee_save_pos: bound_int_callee_save >= 0;
   bound_float_callee_save_pos: bound_float_callee_save >= 0;
-  bound_outgoing_pos: bound_outgoing >= 6
+  bound_outgoing_pos: bound_outgoing >= 0
 }.
 
 (** The following predicates define the correctness of a set of bounds
@@ -62,7 +62,7 @@ Definition slot_within_bounds (s: slot) :=
   match s with
   | Local ofs Tint => 0 <= ofs < bound_int_local b
   | Local ofs Tfloat => 0 <= ofs < bound_float_local b
-  | Outgoing ofs ty => 14 <= ofs /\ ofs + typesize ty <= bound_outgoing b
+  | Outgoing ofs ty => 0 <= ofs /\ ofs + typesize ty <= bound_outgoing b
   | Incoming ofs ty => In (S s) (loc_parameters funct.(fn_sig))
   end.
 
@@ -176,26 +176,24 @@ Proof.
   intros. unfold max_over_regs_of_funct.
   unfold max_over_instrs. apply max_over_list_pos.
 Qed.
-
-Remark Zmax_6: forall x, Zmax 6 x >= 6.
-Proof.
-  intros. apply Zle_ge. apply Zmax_bound_l. omega.
-Qed.
  
-Definition function_bounds :=
+Program Definition function_bounds :=
   mkbounds
     (max_over_slots_of_funct int_local)
     (max_over_slots_of_funct float_local)
     (max_over_regs_of_funct int_callee_save)
     (max_over_regs_of_funct float_callee_save)
-    (Zmax 6
-          (Zmax (max_over_instrs outgoing_space)
-                (max_over_slots_of_funct outgoing_slot)))
+    (Zmax (max_over_instrs outgoing_space)
+          (max_over_slots_of_funct outgoing_slot))
     (max_over_slots_of_funct_pos int_local)
     (max_over_slots_of_funct_pos float_local)
     (max_over_regs_of_funct_pos int_callee_save)
     (max_over_regs_of_funct_pos float_callee_save)
-    (Zmax_6 _).
+    _.
+Next Obligation.
+  apply Zle_ge. eapply Zle_trans. 2: apply Zmax2.
+  apply Zge_le. apply max_over_slots_of_funct_pos.  
+Qed.
 
 (** We now show the correctness of the inferred bounds. *)
 
@@ -297,8 +295,7 @@ Lemma outgoing_slot_bound:
 Proof.
   intros. change (ofs + typesize ty) with (outgoing_slot (Outgoing ofs ty)).
   unfold function_bounds, bound_outgoing.
-  apply Zmax_bound_r. apply Zmax_bound_r. 
-  eapply max_over_slots_of_funct_bound; eauto.
+  apply Zmax_bound_r. eapply max_over_slots_of_funct_bound; eauto.
 Qed.
 
 Lemma size_arguments_bound:
@@ -308,8 +305,7 @@ Lemma size_arguments_bound:
 Proof.
   intros. change (size_arguments sig) with (outgoing_space (Lcall sig ros)).
   unfold function_bounds, bound_outgoing.
-  apply Zmax_bound_r. apply Zmax_bound_l.
-  apply max_over_instrs_bound; auto.
+  apply Zmax_bound_l. apply max_over_instrs_bound; auto.
 Qed.
 
 (** Consequently, all machine registers or stack slots mentioned by one
@@ -337,7 +333,7 @@ Proof.
   split. exact H1. eapply int_local_slot_bound; eauto.
   split. exact H1. eapply float_local_slot_bound; eauto.
   exact H1.
-  split. exact H1. eapply outgoing_slot_bound; eauto.
+  split. simpl in H1. exact H1. eapply outgoing_slot_bound; eauto.
 Qed.
 
 (** It follows that every instruction in the function is within bounds, 
