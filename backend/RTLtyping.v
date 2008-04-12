@@ -224,7 +224,7 @@ Definition check_instr (i: instruction) : bool :=
       match ros with inl r => check_reg r Tint | inr s => true end
       && check_regs args sig.(sig_args)
       && opt_typ_eq sig.(sig_res) funct.(fn_sig).(sig_res)
-      && zeq (Conventions.size_arguments sig) 14
+      && Conventions.tailcall_is_possible sig
   | Ialloc arg res s =>
       check_reg arg Tint 
       && check_reg res Tint
@@ -330,8 +330,7 @@ Proof.
   destruct s0; auto. apply check_reg_correct; auto.
   eapply proj_sumbool_true; eauto.
   apply check_regs_correct; auto.
-  rewrite Conventions.tailcall_possible_size. 
-  eapply proj_sumbool_true; eauto.
+  apply Conventions.tailcall_is_possible_correct; auto.
   (* alloc *)
   constructor. 
   apply check_reg_correct; auto.

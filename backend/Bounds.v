@@ -63,7 +63,7 @@ Definition slot_within_bounds (s: slot) :=
   | Local ofs Tint => 0 <= ofs < bound_int_local b
   | Local ofs Tfloat => 0 <= ofs < bound_float_local b
   | Outgoing ofs ty => 14 <= ofs /\ ofs + typesize ty <= bound_outgoing b
-  | Incoming ofs ty => 14 <= ofs /\ ofs + typesize ty <= size_arguments funct.(fn_sig)
+  | Incoming ofs ty => In (S s) (loc_parameters funct.(fn_sig))
   end.
 
 Definition instr_within_bounds (i: instruction) :=

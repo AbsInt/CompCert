@@ -46,53 +46,86 @@ Require Import Mach.
 
 (** * Structure of abstract stack frames *)
 
-(** An abstract stack frame comprises a low bound [fr_low] (the high bound
-  is implicitly 0) and a mapping from (type, offset) pairs to values. *)
+(** An abstract stack frame is a mapping from (type, offset) pairs to
+    values.  Like location sets (see module [Locations]), overlap
+    can occur. *)
 
-Record frame : Set := mkframe {
-  fr_low: Z;
-  fr_contents: typ -> Z -> val
-}.
+Definition frame : Set := typ -> Z -> val.
 
 Definition typ_eq: forall (ty1 ty2: typ), {ty1=ty2} + {ty1<>ty2}.
 Proof. decide equality. Defined.
 
 Definition update (ty: typ) (ofs: Z) (v: val) (f: frame) : frame :=
-  mkframe f.(fr_low)
-   (fun ty' ofs' => 
-     if zeq ofs ofs' then
-       if typ_eq ty ty' then v else Vundef
-     else
-       if zle (ofs' + AST.typesize ty') ofs then f.(fr_contents) ty' ofs'
-       else if zle (ofs + AST.typesize ty) ofs' then f.(fr_contents) ty' ofs'
-       else Vundef).
+  fun ty' ofs' => 
+    if zeq ofs ofs' then
+      if typ_eq ty ty' then v else Vundef
+    else
+      if zle (ofs' + AST.typesize ty') ofs then f ty' ofs'
+      else if zle (ofs + AST.typesize ty) ofs' then f ty' ofs'
+      else Vundef.
 
-Definition empty_frame := mkframe 0 (fun ty ofs => Vundef).
+Lemma update_same:
+  forall ty ofs v fr,
+  update ty ofs v fr ty ofs = v.
+Proof.
+  unfold update; intros. 
+  rewrite zeq_true. rewrite dec_eq_true. auto.
+Qed. 
 
-(** [get_slot fr ty ofs v] holds if the frame [fr] contains value [v]
+Lemma update_other:
+  forall ty ofs v fr ty' ofs',
+  ofs + AST.typesize ty <= ofs' \/ ofs' + AST.typesize ty' <= ofs ->
+  update ty ofs v fr ty' ofs' = fr ty' ofs'.
+Proof.
+  unfold update; intros.
+  generalize (AST.typesize_pos ty). 
+  generalize (AST.typesize_pos ty'). intros.
+  rewrite zeq_false.
+  destruct H. rewrite zle_false. apply zle_true. auto. omega.
+  apply zle_true. auto. 
+  omega.
+Qed.
+
+Definition empty_frame : frame := fun ty ofs => Vundef.
+
+Section FRAME_ACCESSES.
+
+Variable f: function.
+
+(** A slot [(ty, ofs)] within a frame is valid in function [f] if it lies
+  within the bounds of [f]'s frame, and it does not overlap with
+  the slots reserved for the return address and the back link. *)
+
+Inductive slot_valid: typ -> Z -> Prop :=
+  slot_valid_intro:
+    forall ty ofs,
+    0 <= ofs ->
+    ofs + AST.typesize ty <= f.(fn_framesize) ->
+    (ofs + AST.typesize ty <= Int.signed f.(fn_link_ofs)
+       \/ Int.signed f.(fn_link_ofs) + 4 <= ofs) ->
+    (ofs + AST.typesize ty <= Int.signed f.(fn_retaddr_ofs)
+       \/ Int.signed f.(fn_retaddr_ofs) + 4 <= ofs) ->
+    slot_valid ty ofs.
+
+(** [get_slot f fr ty ofs v] holds if the frame [fr] contains value [v]
   with type [ty] at word offset [ofs]. *)
 
 Inductive get_slot: frame -> typ -> Z -> val -> Prop :=
   | get_slot_intro:
       forall fr ty ofs v,
-      24 <= ofs ->
-      fr.(fr_low) + ofs + AST.typesize ty <= 0 ->
-      v = fr.(fr_contents) ty (fr.(fr_low) + ofs) -> 
+      slot_valid ty ofs ->
+      v = fr ty (ofs - f.(fn_framesize)) ->
       get_slot fr ty ofs v.
 
-(** [set_slot fr ty ofs v fr'] holds if frame [fr'] is obtained from
+(** [set_slot f fr ty ofs v fr'] holds if frame [fr'] is obtained from
   frame [fr] by storing value [v] with type [ty] at word offset [ofs]. *)
 
 Inductive set_slot: frame -> typ -> Z -> val -> frame -> Prop :=
   | set_slot_intro:
       forall fr ty ofs v fr',
-      24 <= ofs ->
-      fr.(fr_low) + ofs + AST.typesize ty <= 0 ->
-      fr' = update ty (fr.(fr_low) + ofs) v fr ->
+      slot_valid ty ofs ->
+      fr' = update ty (ofs - f.(fn_framesize)) v fr ->
       set_slot fr ty ofs v fr'.
-
-Definition init_frame (f: function) :=
-  mkframe (- f.(fn_framesize)) (fun ty ofs => Vundef).
 
 (** Extract the values of the arguments of an external call. *)
 
@@ -114,6 +147,8 @@ Definition extcall_arguments
    (rs: regset) (fr: frame) (sg: signature) (args: list val) : Prop :=
   extcall_args rs fr (Conventions.loc_arguments sg) args.
     
+End FRAME_ACCESSES.
+
 (** Mach execution states. *)
 
 Inductive stackframe: Set :=
@@ -148,12 +183,23 @@ Inductive state: Set :=
 
 (** [parent_frame s] returns the frame of the calling function.
   It is used to access function parameters that are passed on the stack
-  (the [Mgetparent] instruction). *)
+  (the [Mgetparent] instruction).
+  [parent_function s] returns the calling function itself.
+  Suitable defaults are used if there are no calling function. *)
 
 Definition parent_frame (s: list stackframe) : frame :=
   match s with
   | nil => empty_frame
   | Stackframe f sp c fr :: s => fr
+  end.
+
+Definition empty_function := 
+  mkfunction (mksignature nil None) nil 0 0 Int.zero Int.zero.
+
+Definition parent_function (s: list stackframe) : function :=
+  match s with
+  | nil => empty_function
+  | Stackframe f sp c fr :: s => f
   end.
 
 Section RELSEM.
@@ -177,17 +223,17 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp c rs fr m)
   | exec_Mgetstack:
       forall s f sp ofs ty dst c rs fr m v,
-      get_slot fr ty (Int.signed ofs) v ->
+      get_slot f fr ty (Int.signed ofs) v ->
       step (State s f sp (Mgetstack ofs ty dst :: c) rs fr m)
         E0 (State s f sp c (rs#dst <- v) fr m)
   | exec_Msetstack:
      forall s f sp src ofs ty c rs fr m fr',
-      set_slot fr ty (Int.signed ofs) (rs src) fr' ->
+      set_slot f fr ty (Int.signed ofs) (rs src) fr' ->
       step (State s f sp (Msetstack src ofs ty :: c) rs fr m)
         E0 (State s f sp c rs fr' m)
   | exec_Mgetparam:
       forall s f sp ofs ty dst c rs fr m v,
-      get_slot (parent_frame s) ty (Int.signed ofs) v ->
+      get_slot (parent_function s) (parent_frame s) ty (Int.signed ofs) v ->
       step (State s f sp (Mgetparam ofs ty dst :: c) rs fr m)
         E0 (State s f sp c (rs#dst <- v) fr m)
   | exec_Mop:
@@ -251,11 +297,11 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
       step (Callstate s (Internal f) rs m)
         E0 (State s f (Vptr stk (Int.repr (-f.(fn_framesize))))
-                  f.(fn_code) rs (init_frame f) m')
+                  f.(fn_code) rs empty_frame m')
   | exec_function_external:
       forall s ef args res rs1 rs2 m t,
       event_match ef args t res ->
-      extcall_arguments rs1 (parent_frame s) ef.(ef_sig) args ->
+      extcall_arguments (parent_function s) rs1 (parent_frame s) ef.(ef_sig) args ->
       rs2 = (rs1#(Conventions.loc_result ef.(ef_sig)) <- res) ->
       step (Callstate s (External ef) rs1 m)
          t (Returnstate s rs2 m)

@@ -70,7 +70,9 @@ Record function: Set := mkfunction
   { fn_sig: signature;
     fn_code: code;
     fn_stacksize: Z;
-    fn_framesize: Z }.
+    fn_framesize: Z;
+    fn_link_ofs: int;
+    fn_retaddr_ofs: int }.
 
 Definition fundef := AST.fundef function.
 
@@ -136,7 +138,4 @@ Definition find_function_ptr
   | inr symb =>
       Genv.find_symbol ge symb
   end.
-
-Definition align_16_top (lo hi: Z) :=
-  Zmax 0 (((hi - lo + 15) / 16) * 16 + lo).
 

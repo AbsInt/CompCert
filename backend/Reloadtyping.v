@@ -300,12 +300,13 @@ Proof.
   inv H. inv H1. constructor. unfold wt_function. simpl. 
   apply wt_parallel_move; auto with reloadty.
     rewrite loc_parameters_type. auto.
-    unfold loc_parameters; red; intros.
-    destruct (list_in_map_inv _ _ _ H) as [r [A B]]. rewrite A.
-    generalize (loc_arguments_acceptable _ _ B). 
-    destruct r; simpl; auto. destruct s; try tauto.
-    intros; simpl. split. omega. 
-    apply loc_arguments_bounded; auto.
+    red; intros.
+    destruct (list_in_map_inv _ _ _ H) as [r [A B]].
+    generalize (loc_arguments_acceptable _ _ B).
+    destruct r; intro.
+    rewrite A. simpl. auto.
+    red in H0. destruct s; try tauto.
+    simpl in A. subst l. simpl. auto.
   apply wt_transf_code; auto.
   constructor.
 Qed.

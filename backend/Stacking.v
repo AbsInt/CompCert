@@ -45,9 +45,8 @@ Require Import Conventions.
 To facilitate some of the proofs, the Cminor stack-allocated data
 starts at offset 0; the preceding areas in the activation record
 therefore have negative offsets.  This part (with negative offsets)
-is called the ``frame'' (see the [Machabstr] semantics for the Mach
-language), by opposition with the ``Cminor stack data'' which is the part
-with positive offsets.
+is called the ``frame'', by opposition with the ``Cminor stack data''
+which is the part with positive offsets.
 
 The [frame_env] compilation environment records the positions of
 the boundaries between areas in the frame part.
@@ -55,6 +54,8 @@ the boundaries between areas in the frame part.
 
 Record frame_env : Set := mk_frame_env {
   fe_size: Z;
+  fe_ofs_link: Z;
+  fe_ofs_retaddr: Z;
   fe_ofs_int_local: Z;
   fe_ofs_int_callee_save: Z;
   fe_num_int_callee_save: Z;
@@ -67,19 +68,22 @@ Record frame_env : Set := mk_frame_env {
   function. *)
 
 Definition make_env (b: bounds) :=
-  let oil := 4 * b.(bound_outgoing) in              (* integer locals *)
+  let oil := 4 * b.(bound_outgoing) in    (* integer locals *)
   let oics := oil + 4 * b.(bound_int_local) in (* integer callee-saves *)
   let oendi := oics + 4 * b.(bound_int_callee_save) in
   let ofl := align oendi 8 in       (* float locals *)
   let ofcs := ofl + 8 * b.(bound_float_local) in (* float callee-saves *)
   let sz := ofcs + 8 * b.(bound_float_callee_save) in (* total frame size *)
-  mk_frame_env sz oil oics b.(bound_int_callee_save)
+  mk_frame_env sz 0 12
+                  oil oics b.(bound_int_callee_save)
                   ofl ofcs b.(bound_float_callee_save).
 
 (** Computation the frame offset for the given component of the frame.
   The component is expressed by the following [frame_index] sum type. *)
 
 Inductive frame_index: Set :=
+  | FI_link: frame_index
+  | FI_retaddr: frame_index
   | FI_local: Z -> typ -> frame_index
   | FI_arg: Z -> typ -> frame_index
   | FI_saved_int: Z -> frame_index
@@ -87,6 +91,8 @@ Inductive frame_index: Set :=
 
 Definition offset_of_index (fe: frame_env) (idx: frame_index) :=
   match idx with
+  | FI_link => fe.(fe_ofs_link)
+  | FI_retaddr => fe.(fe_ofs_retaddr)
   | FI_local x Tint => fe.(fe_ofs_int_local) + 4 * x
   | FI_local x Tfloat => fe.(fe_ofs_float_local) + 8 * x
   | FI_arg x ty => 4 * x
@@ -218,7 +224,8 @@ Definition transl_instr
   | Lcall sig ros =>
       Mcall sig ros :: k
   | Ltailcall sig ros =>
-      restore_callee_save fe (Mtailcall sig ros :: k)
+      restore_callee_save fe
+        (Mtailcall sig ros :: k)
   | Lalloc =>
       Malloc :: k
   | Llabel lbl =>
@@ -228,7 +235,8 @@ Definition transl_instr
   | Lcond cond args lbl =>
       Mcond cond args lbl :: k
   | Lreturn =>
-      restore_callee_save fe (Mreturn :: k)
+      restore_callee_save fe
+        (Mreturn :: k)
   end.
 
 (** Translation of a function.  Code that saves the values of used
@@ -260,7 +268,9 @@ Definition transf_function (f: Linear.function) : res Mach.function :=
          f.(Linear.fn_sig)
          (transl_body f fe)
          f.(Linear.fn_stacksize)
-         fe.(fe_size)).
+         fe.(fe_size)
+         (Int.repr fe.(fe_ofs_link))
+         (Int.repr fe.(fe_ofs_retaddr))).
 
 Definition transf_fundef (f: Linear.fundef) : res Mach.fundef :=
   AST.transf_partial_fundef transf_function f.

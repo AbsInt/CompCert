@@ -90,9 +90,16 @@ Record wt_function (f: function) : Prop := mk_wt_function {
   wt_function_stacksize:
     f.(fn_stacksize) >= 0;
   wt_function_framesize:
-    f.(fn_framesize) >= 24;
-  wt_function_no_overflow:
-    f.(fn_framesize) <= -Int.min_signed
+    0 <= f.(fn_framesize) <= -Int.min_signed;
+  wt_function_link:
+    0 <= Int.signed f.(fn_link_ofs)
+    /\ Int.signed f.(fn_link_ofs) + 4 <= f.(fn_framesize);
+  wt_function_retaddr:
+    0 <= Int.signed f.(fn_retaddr_ofs)
+    /\ Int.signed f.(fn_retaddr_ofs) + 4 <= f.(fn_framesize);
+  wt_function_link_retaddr:
+    Int.signed f.(fn_retaddr_ofs) + 4 <= Int.signed f.(fn_link_ofs)
+    \/ Int.signed f.(fn_link_ofs) + 4 <= Int.signed f.(fn_retaddr_ofs)
 }.
 
 Inductive wt_fundef: fundef -> Prop :=
@@ -122,7 +129,7 @@ Definition wt_regset (rs: regset) : Prop :=
   forall r, Val.has_type (rs r) (mreg_type r).
 
 Definition wt_frame (fr: frame) : Prop :=
-  forall ty ofs, Val.has_type (fr.(fr_contents) ty ofs) ty.
+  forall ty ofs, Val.has_type (fr ty ofs) ty.
 
 Lemma wt_setreg:
   forall (rs: regset) (r: mreg) (v: val),
@@ -136,41 +143,34 @@ Proof.
 Qed.
 
 Lemma wt_get_slot:
-  forall fr ty ofs v,
-  get_slot fr ty ofs v ->
+  forall f fr ty ofs v,
+  get_slot f fr ty ofs v ->
   wt_frame fr ->
   Val.has_type v ty. 
 Proof.
   induction 1; intros.
-  subst v. apply H2.
+  subst v. apply H1.
 Qed.
 
 Lemma wt_set_slot:
-  forall fr ty ofs v fr',
-  set_slot fr ty ofs v fr' ->
+  forall f fr ty ofs v fr',
+  set_slot f fr ty ofs v fr' ->
   wt_frame fr ->
   Val.has_type v ty ->
   wt_frame fr'.
 Proof.
-  intros. induction H. subst fr'; red; intros; simpl.
-  destruct (zeq (fr_low fr + ofs) ofs0).
+  intros. induction H. subst fr'; red; intros. unfold update.
+  destruct (zeq (ofs - f.(fn_framesize)) ofs0).
   destruct (typ_eq ty ty0). congruence. exact I.
-  destruct (zle (ofs0 + AST.typesize ty0) (fr_low fr + ofs)).
+  destruct (zle (ofs0 + AST.typesize ty0) (ofs - f.(fn_framesize))).
   apply H0.
-  destruct (zle (fr_low fr + ofs + AST.typesize ty) ofs0).
+  destruct (zle (ofs - f.(fn_framesize) + AST.typesize ty) ofs0).
   apply H0.
   exact I.
 Qed.
 
 Lemma wt_empty_frame:
   wt_frame empty_frame.
-Proof.
-  intros; red; intros; exact I.
-Qed.
-
-Lemma wt_init_frame:
-  forall f,
-  wt_frame (init_frame f).
 Proof.
   intros; red; intros; exact I.
 Qed.
@@ -235,7 +235,7 @@ Proof.
        eapply wt_state_intro; eauto with coqlib).
 
   apply wt_setreg; auto. 
-  inversion H0. rewrite H2. apply wt_get_slot with fr (Int.signed ofs); auto.
+  inversion H0. rewrite H2. eapply wt_get_slot; eauto.
 
   inversion H0. eapply wt_set_slot; eauto. 
   rewrite <- H2. apply WTRS.
@@ -244,7 +244,7 @@ Proof.
     destruct s; simpl. apply wt_empty_frame. 
     generalize (STK s (in_eq _ _)); intro. inv H1. auto. 
   inversion H0. apply wt_setreg; auto.
-  rewrite H3. apply wt_get_slot with (parent_frame s) (Int.signed ofs); auto.
+  rewrite H3. eapply wt_get_slot; eauto.
 
   apply wt_setreg; auto. inv H0.
     simpl in H. 
@@ -280,7 +280,7 @@ Proof.
   econstructor; eauto.
 
   econstructor; eauto with coqlib. inv H5; auto. exact I. 
-  apply wt_init_frame.
+  apply wt_empty_frame.
 
   econstructor; eauto. apply wt_setreg; auto.
   generalize (wt_event_match _ _ _ _ H). 

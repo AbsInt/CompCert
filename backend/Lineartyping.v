@@ -36,7 +36,7 @@ Definition slot_valid (s: slot) :=
   match s with
   | Local ofs ty => 0 <= ofs
   | Outgoing ofs ty => 14 <= ofs
-  | Incoming ofs ty => 14 <= ofs /\ ofs + typesize ty <= size_arguments funct.(fn_sig)
+  | Incoming ofs ty => In (S s) (loc_parameters funct.(fn_sig))
   end.
 
 Definition slot_writable (s: slot) :=

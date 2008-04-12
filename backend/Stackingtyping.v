@@ -205,18 +205,33 @@ Proof.
   case (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))); intro.
   intros; discriminate. intro EQ.
   generalize (unfold_transf_function f tf H); intro.
-  assert (fn_framesize tf = fe_size (make_env (function_bounds f))).
+  set (b := function_bounds f) in *.
+  set (fe := make_env b) in *.
+  assert (fn_framesize tf = fe_size fe).
     subst tf; reflexivity.
+  assert (Int.signed tf.(fn_link_ofs) = offset_of_index fe FI_link).
+    rewrite H1; unfold fn_link_ofs. 
+    change (fe_ofs_link fe) with (offset_of_index fe FI_link).
+    unfold fe, b; eapply offset_of_index_no_overflow. eauto. red; auto. 
+  assert (Int.signed tf.(fn_retaddr_ofs) = offset_of_index fe FI_retaddr).
+    rewrite H1; unfold fn_retaddr_ofs. 
+    change (fe_ofs_retaddr fe) with (offset_of_index fe FI_retaddr).
+    unfold fe, b; eapply offset_of_index_no_overflow. eauto. red; auto. 
   constructor.
   change (wt_instrs (fn_code tf)).
   rewrite H1; simpl; unfold transl_body. 
-  apply wt_save_callee_save; auto. 
+  unfold fe, b; apply wt_save_callee_save; auto. 
   unfold transl_code. apply wt_fold_right. 
   intros. eapply wt_transl_instr; eauto. 
-  red; intros. elim H3.
+  red; intros. elim H5.
   subst tf; simpl; auto.
-  rewrite H2. eapply size_pos; eauto.
-  rewrite H2. eapply size_no_overflow; eauto.
+  rewrite H2. generalize (size_pos f). fold b; fold fe; omega.
+  rewrite H3; rewrite H2. change 4 with (4 * typesize (type_of_index FI_link)).
+  unfold fe, b; apply offset_of_index_valid. red; auto.
+  rewrite H4; rewrite H2. change 4 with (4 * typesize (type_of_index FI_retaddr)).
+  unfold fe, b; apply offset_of_index_valid. red; auto.
+  rewrite H3; rewrite H4.
+  apply (offset_of_index_disj f FI_retaddr FI_link); red; auto.
 Qed.
 
 Lemma wt_transf_fundef:

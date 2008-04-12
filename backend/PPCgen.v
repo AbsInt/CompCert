@@ -419,14 +419,14 @@ Definition transl_load_store
 
 (** Translation of a Mach instruction. *)
 
-Definition transl_instr (i: Mach.instruction) (k: code) :=
+Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
   match i with
   | Mgetstack ofs ty dst =>
       loadind GPR1 ofs ty dst k
   | Msetstack src ofs ty =>
       storeind src GPR1 ofs ty k
   | Mgetparam ofs ty dst =>
-      Plwz GPR2 (Cint (Int.repr 0)) GPR1 :: loadind GPR2 ofs ty dst k
+      Plwz GPR2 (Cint f.(fn_link_ofs)) GPR1 :: loadind GPR2 ofs ty dst k
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -484,14 +484,14 @@ Definition transl_instr (i: Mach.instruction) (k: code) :=
       Pbl symb :: k
   | Mtailcall sig (inl r) =>
       Pmtctr (ireg_of r) :: 
-      Plwz GPR2 (Cint (Int.repr 12)) GPR1 ::
+      Plwz GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR2 ::
-      Pfreeframe :: 
+      Pfreeframe f.(fn_link_ofs) :: 
       Pbctr :: k
   | Mtailcall sig (inr symb) =>
-      Plwz GPR2 (Cint (Int.repr 12)) GPR1 ::
+      Plwz GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR2 ::
-      Pfreeframe :: 
+      Pfreeframe f.(fn_link_ofs) :: 
       Pbs symb :: k
   | Malloc =>
       Pallocblock :: k
@@ -504,12 +504,14 @@ Definition transl_instr (i: Mach.instruction) (k: code) :=
       transl_cond cond args
         (if (snd p) then Pbt (fst p) lbl :: k else Pbf (fst p) lbl :: k)
   | Mreturn =>
-      Plwz GPR2 (Cint (Int.repr 12)) GPR1 ::
-      Pmtlr GPR2 :: Pfreeframe :: Pblr :: k
+      Plwz GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+      Pmtlr GPR2 ::
+      Pfreeframe f.(fn_link_ofs) ::
+      Pblr :: k
   end.
 
-Definition transl_code (il: list Mach.instruction) :=
-  List.fold_right transl_instr nil il.
+Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
+  List.fold_right (transl_instr f) nil il.
 
 (** Translation of a whole function.  Note that we must check
   that the generated code contains less than [2^32] instructions,
@@ -517,11 +519,10 @@ Definition transl_code (il: list Mach.instruction) :=
   around, leading to incorrect executions. *)
 
 Definition transl_function (f: Mach.function) :=
-  Pallocframe (- f.(fn_framesize))
-              (align_16_top (-f.(fn_framesize)) f.(fn_stacksize)) ::
+  Pallocframe (- f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) ::
   Pmflr GPR2 ::
-  Pstw GPR2 (Cint (Int.repr 12)) GPR1 ::
-  transl_code f.(fn_code).
+  Pstw GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+  transl_code f f.(fn_code).
 
 Fixpoint code_size (c: code) : Z :=
   match c with

@@ -710,28 +710,25 @@ Proof.
   destruct s; try tauto. destruct s0; tauto.
 Qed.
 
-(** A tailcall is possible if and only if the size of arguments is 14. *)
+(** Decide whether a tailcall is possible. *)
 
-Lemma tailcall_possible_size:
-  forall s, tailcall_possible s <-> size_arguments s = 14.
+Definition tailcall_is_possible (sg: signature) : bool :=
+  let fix tcisp (l: list loc) :=
+    match l with
+    | nil => true
+    | R _ :: l' => tcisp l'
+    | S _ :: l' => false
+    end
+  in tcisp (loc_arguments sg).
+
+Lemma tailcall_is_possible_correct:
+  forall s, tailcall_is_possible s = true -> tailcall_possible s.
 Proof.
-  intro; split; intro.
-  assert (forall tyl iregl fregl ofs,
-    (forall l, In l (loc_arguments_rec tyl iregl fregl ofs) ->
-               match l with R _ => True | S _ => False end) ->
-    size_arguments_rec tyl iregl fregl ofs = ofs).
-  induction tyl; simpl; intros.
-  auto.
-  destruct a. destruct iregl. elim (H0 _ (in_eq _ _)).
-  apply IHtyl; intros. apply H0. auto with coqlib.
-  destruct fregl. elim (H0 _ (in_eq _ _)).
-  apply IHtyl; intros. apply H0. auto with coqlib.
-  unfold size_arguments. apply H0. assumption.
-  red; intros.
-  generalize (loc_arguments_acceptable s l H0). 
-  destruct l; simpl. auto. destruct s0; intro; auto.
-  generalize (loc_arguments_bounded _ _ _ H0). 
-  generalize (typesize_pos t). omega.
+  intro s. unfold tailcall_is_possible, tailcall_possible.
+  generalize (loc_arguments s). induction l; simpl; intros.
+  elim H0.
+  destruct a. 
+  destruct H0. subst l0. auto. apply IHl. auto. auto. discriminate.
 Qed.
 
 (** ** Location of function parameters *)

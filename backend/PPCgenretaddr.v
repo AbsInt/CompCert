@@ -68,7 +68,7 @@ Qed.
 Inductive return_address_offset: Mach.function -> Mach.code -> int -> Prop :=
   | return_address_offset_intro:
       forall c f ofs,
-      code_tail ofs (transl_function f) (transl_code c) ->
+      code_tail ofs (transl_function f) (transl_code f c) ->
       return_address_offset f c (Int.repr ofs).
 
 (** We now show that such an offset always exists if the Mach code [c]
@@ -159,7 +159,7 @@ Proof. unfold transl_load_store; intros; destruct addr; IsTail. Qed.
 Hint Resolve transl_load_store_tail: ppcretaddr.
 
 Lemma transl_instr_tail:
-  forall i k, is_tail k (transl_instr i k).
+  forall f i k, is_tail k (transl_instr f i k).
 Proof.
   unfold transl_instr; intros; destruct i; IsTail.
   destruct m; IsTail.
@@ -170,7 +170,7 @@ Qed.
 Hint Resolve transl_instr_tail: ppcretaddr.
 
 Lemma transl_code_tail: 
-  forall c1 c2, is_tail c1 c2 -> is_tail (transl_code c1) (transl_code c2).
+  forall f c1 c2, is_tail c1 c2 -> is_tail (transl_code f c1) (transl_code f c2).
 Proof.
   induction 1; simpl. constructor. eapply is_tail_trans; eauto with ppcretaddr.
 Qed.
@@ -179,7 +179,7 @@ Lemma return_address_exists:
   forall f c, is_tail c f.(fn_code) ->
   exists ra, return_address_offset f c ra.
 Proof.
-  intros. assert (is_tail (transl_code c) (transl_function f)).
+  intros. assert (is_tail (transl_code f c) (transl_function f)).
   unfold transl_function. IsTail. apply transl_code_tail; auto.
   destruct (is_tail_code_tail _ _ H0) as [ofs A].
   exists (Int.repr ofs). constructor. auto.
