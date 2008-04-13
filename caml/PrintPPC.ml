@@ -120,11 +120,15 @@ let print_instruction oc labels = function
       fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
   | Pallocblock ->
       fprintf oc "	bl	_compcert_alloc\n"
-  | Pallocframe(lo, hi) ->
+  | Pallocframe(lo, hi, ofs) ->
       let lo = camlint_of_coqint lo
-      and hi = camlint_of_coqint hi in
-      let nsz = Int32.neg (Int32.sub hi lo) in
-      fprintf oc "	stwu	r1, %ld(r1)\n" nsz
+      and hi = camlint_of_coqint hi
+      and ofs = camlint_of_coqint ofs in
+      let sz = Int32.sub hi lo in
+      (* Keep stack 16-aligned *)
+      let sz16 = Int32.logand (Int32.add sz 15l) 0xFFFF_FFF0l in
+      assert (ofs = 0l);
+      fprintf oc "	stwu	r1, %ld(r1)\n" (Int32.neg sz16)
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandc(r1, r2, r3) ->
@@ -169,8 +173,8 @@ let print_instruction oc labels = function
       fprintf oc "	extsb	%a, %a\n" ireg r1 ireg r2
   | Pextsh(r1, r2) ->
       fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
-  | Pfreeframe ->
-      fprintf oc "	lwz	r1, 0(r1)\n"
+  | Pfreeframe ofs ->
+      fprintf oc "	lwz	r1, %ld(r1)\n" (camlint_of_coqint ofs)
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
   | Pfadd(r1, r2, r3) ->
