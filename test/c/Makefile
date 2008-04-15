@@ -11,7 +11,7 @@ TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
 
 BENCHS=fib integr qsort fft sha1 aes almabench lists \
   binarytrees fannkuch knucleotide mandelbrot nbody \
-  nsieve nsievebits spectral
+  nsieve nsievebits spectral vmach
 
 PROGS=$(BENCHS) initializers
 
