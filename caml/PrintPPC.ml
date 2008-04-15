@@ -367,9 +367,9 @@ let print_function oc name code =
 let variadic_stub oc stub_name fun_name ty_args =
   (* Compute total size of arguments *)
   let arg_size =
-    List.fold_left
+    CList.fold_left
      (fun sz ty -> match ty with Tint -> sz + 4 | Tfloat -> sz + 8)
-     0 ty_args in
+     ty_args 0 in
   (* Stack size is linkage area + argument size, with a minimum of 56 bytes *)
   let frame_size = max 56 (24 + arg_size) in
   fprintf oc "	mflr	r0\n";
@@ -379,14 +379,14 @@ let variadic_stub oc stub_name fun_name ty_args =
      As an optimization, don't copy parameters that are already in
      integer registers, since these stay in place. *)
   let rec copy gpr fpr src_ofs dst_ofs = function
-    | [] -> ()
-    | Tint :: rem ->
+    | Coq_nil -> ()
+    | Coq_cons(Tint, rem) ->
         if gpr > 10 then begin
           fprintf oc "	lwz	r0, %d(r1)\n" src_ofs;
           fprintf oc "	stw	r0, %d(r1)\n" dst_ofs
         end;
         copy (gpr + 1) fpr (src_ofs + 4) (dst_ofs + 4) rem
-    | Tfloat :: rem ->
+    | Coq_cons(Tfloat, rem) ->
         if fpr <= 10 then begin
           fprintf oc "	stfd	f%d, %d(r1)\n" fpr dst_ofs
         end else begin
@@ -399,10 +399,10 @@ let variadic_stub oc stub_name fun_name ty_args =
      As an optimization, don't load parameters that are already
      in the correct integer registers. *)
   let rec load gpr ofs = function
-    | [] -> ()
-    | Tint :: rem ->
+    | Coq_nil -> ()
+    | Coq_cons(Tint, rem) ->
         load (gpr + 1) (ofs + 4) rem
-    | Tfloat :: rem ->
+    | Coq_cons(Tfloat, rem) ->
         if gpr <= 10 then
           fprintf oc "	lwz	r%d, %d(r1)\n" gpr ofs;
         if gpr + 1 <= 10 then
@@ -437,33 +437,21 @@ let non_variadic_stub oc name =
   fprintf oc "	.indirect_symbol _%s\n" name;
   fprintf oc "	.long	0\n"
 
-(* Turn a "iiifff" string into a list of types *)
+let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
 
-let extract_types s =
-  let rec extract i accu =
-    if i < 0 then accu else
-      match s.[i] with
-      | 'i' -> extract (i - 1) (Tint :: accu)
-      | 'f' -> extract (i - 1) (Tfloat :: accu)
-      |  _  -> assert false
-  in extract (String.length s - 1) []
-
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$\\([if]*\\)$"
-
-let print_external_function oc name =
+let print_external_function oc name ef =
   let name = extern_atom name in
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
   fprintf oc "L%s$stub:\n" name;
   if Str.string_match re_variadic_stub name 0
-  then variadic_stub oc name (Str.matched_group 1 name)
-                        (extract_types (Str.matched_group 2 name))
+  then variadic_stub oc name (Str.matched_group 1 name) ef.ef_sig.sig_args
   else non_variadic_stub oc name
 
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code -> print_function oc name code
-  | External ef -> print_external_function oc name
+  | External ef -> print_external_function oc name ef
 
 let init_data_queue = ref []
 
