@@ -51,7 +51,9 @@ let z_of_camlint n =
   if n > 0l then Zpos (positive_of_camlint n)
   else Zneg (positive_of_camlint (Int32.neg n))
 
-let coqint_of_camlint : int32 -> Integers.int = z_of_camlint
+let coqint_of_camlint (n: int32) : Integers.int = 
+  (* Interpret n as unsigned so that resulting Z is in range *)
+  if n = 0l then Z0 else Zpos (positive_of_camlint n)
 
 (* Atoms (positive integers representing strings) *)
 

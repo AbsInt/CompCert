@@ -806,10 +806,11 @@ let rec extract_constant e =
 
 let init_data_of_string s =
   let id = ref CList.Coq_nil in
-  for i = String.length s - 1 downto 0 do
-    let n = coqint_of_camlint(Int32.of_int(Char.code s.[i])) in
-    id := CList.Coq_cons(Init_int8 n, !id)
-  done;
+  let enter_char c =
+    let n = coqint_of_camlint(Int32.of_int(Char.code c)) in
+    id := CList.Coq_cons(Init_int8 n, !id) in
+  enter_char '\000';
+  for i = String.length s - 1 downto 0 do enter_char s.[i] done;
   !id
 
 let convertInit init =
