@@ -80,25 +80,42 @@ Fixpoint split_eq (pivot: int) (cases: table)
       else (same, (key, act) :: others)
   end.
 
-Fixpoint validate_switch (default: nat) (cases: table) (t: comptree)
-                  {struct t} : bool :=
+Definition refine_low_bound (v lo: Z) :=
+  if zeq v lo then lo + 1 else lo.
+
+Definition refine_high_bound (v hi: Z) :=
+  if zeq v hi then hi - 1 else hi.
+
+Fixpoint validate (default: nat) (cases: table) (t: comptree)
+                  (lo hi: Z) {struct t} : bool :=
   match t with
   | CTaction act =>
       match cases with
-      | nil => beq_nat act default
-      | _ => false
+      | nil =>
+          beq_nat act default
+      | (key1, act1) :: _ =>
+          zeq (Int.unsigned key1) lo && zeq lo hi && beq_nat act act1
       end
   | CTifeq pivot act t' =>
       match split_eq pivot cases with
-      | (None, _) => false
-      | (Some act', others) => beq_nat act act' && validate_switch default others t'
+      | (None, _) =>
+          false
+      | (Some act', others) =>
+          beq_nat act act' 
+          && validate default others t'
+                      (refine_low_bound (Int.unsigned pivot) lo)
+                      (refine_high_bound (Int.unsigned pivot) hi)
       end
   | CTiflt pivot t1 t2 =>
       match split_lt pivot cases with
       | (lcases, rcases) =>
-          validate_switch default lcases t1 && validate_switch default rcases t2
+          validate default lcases t1 lo (Int.unsigned pivot - 1)
+          && validate default rcases t2 (Int.unsigned pivot) hi
       end
   end.
+
+Definition validate_switch (default: nat) (cases: table) (t: comptree) :=
+  validate default cases t 0 Int.max_unsigned.
 
 (** Correctness proof for validation. *)
 
@@ -146,35 +163,58 @@ Proof.
   auto.
 Qed.
 
+Lemma validate_correct_rec:
+  forall default v t cases lo hi,
+  validate default cases t lo hi = true ->
+  lo <= Int.unsigned v <= hi ->
+  switch_target v default cases = comptree_match v t.
+Proof.
+  induction t; simpl; intros until hi.
+  (* base case *)
+  destruct cases as [ | [key1 act1] cases1]; intros.
+  replace n with default. reflexivity. 
+  symmetry. apply beq_nat_eq. auto.
+  destruct (andb_prop _ _ H). destruct (andb_prop _ _ H1). clear H H1.
+  assert (Int.unsigned key1 = lo). eapply proj_sumbool_true; eauto.
+  assert (lo = hi). eapply proj_sumbool_true; eauto.
+  assert (Int.unsigned v = Int.unsigned key1). omega.
+  replace n with act1.
+  simpl. unfold Int.eq. rewrite H5. rewrite zeq_true. auto.
+  symmetry. apply beq_nat_eq. auto.
+  (* eq node *)
+  case_eq (split_eq i cases). intros optact cases' EQ. 
+  destruct optact as [ act | ]. 2: congruence.
+  intros. destruct (andb_prop _ _ H). clear H.
+  rewrite (split_eq_prop v default _ _ _ _ EQ).
+  predSpec Int.eq Int.eq_spec v i.
+  symmetry. apply beq_nat_eq; auto.
+  eapply IHt. eauto.
+  assert (Int.unsigned v <> Int.unsigned i).
+    rewrite <- (Int.repr_unsigned v) in H.
+    rewrite <- (Int.repr_unsigned i) in H.
+    congruence.
+  split.
+  unfold refine_low_bound. destruct (zeq (Int.unsigned i) lo); omega.
+  unfold refine_high_bound. destruct (zeq (Int.unsigned i) hi); omega.
+  (* lt node *)
+  case_eq (split_lt i cases). intros lcases rcases EQ V RANGE.
+  destruct (andb_prop _ _ V). clear V.
+  rewrite (split_lt_prop v default _ _ _ _ EQ). 
+  unfold Int.ltu. destruct (zlt (Int.unsigned v) (Int.unsigned i)).
+  eapply IHt1. eauto. omega.
+  eapply IHt2. eauto. omega.
+Qed.
+
 Definition table_tree_agree
     (default: nat) (cases: table) (t: comptree) : Prop :=
   forall v, switch_target v default cases = comptree_match v t.
 
-Lemma validate_switch_correct:
+Theorem validate_switch_correct:
   forall default t cases,
   validate_switch default cases t = true ->
   table_tree_agree default cases t.
 Proof.
-  induction t; simpl; intros until cases.
-  (* base case *)
-  destruct cases. 2: congruence.
-  intro. replace n with default. 
-  red; intros; simpl; auto.
-  symmetry. apply beq_nat_eq. auto. 
-  (* eq node *)
-  case_eq (split_eq i cases). intros optact cases' EQ. 
-  destruct optact as [ act | ]. 2: congruence.
-  intros. destruct (andb_prop _ _ H). 
-  replace n with act. 
-  generalize (IHt _ H1); intro.  
-  red; intros. simpl. rewrite <- H2.
-  change act with (match Some act with Some act => act | None => default end).
-  eapply split_eq_prop; eauto.
-  symmetry. apply beq_nat_eq. auto. 
-  (* lt node *)
-  case_eq (split_lt i cases). intros lcases rcases EQ V.
-  destruct (andb_prop _ _ V). 
-  red; intros. simpl. 
-  rewrite <- (IHt1 _ H). rewrite <- (IHt2 _ H0). 
-  eapply split_lt_prop; eauto.
+  unfold validate_switch, table_tree_agree; intros.
+  eapply validate_correct_rec; eauto. 
+  apply Int.unsigned_range_2.
 Qed.

@@ -1,6 +1,7 @@
 "f"(x): int -> int
 {
   match (x) {
+  case -1: return -11;
   case 0: return 00;
   case 1: return 11;
   case 2: return 22;
