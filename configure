@@ -40,6 +40,11 @@ cat > Makefile.config <<EOF
 PREFIX=$prefix
 BINDIR=$bindir
 LIBDIR=$libdir
+CC=gcc -arch ppc
+CPREPRO=gcc -arch ppc -U__GNUC__ -E
+CASM=gcc -arch ppc -c
+CLINKER=gcc -arch ppc
+LIBMATH=
 EOF
 
 # Extract and configure Cil

@@ -1,10 +1,11 @@
+include ../../Makefile.config
+
 CCOMP=../../ccomp
 CCOMPFLAGS=-stdlib ../../runtime -dclight -dasm
 
-CC=gcc -arch ppc
 CFLAGS=-O1 -Wall
 
-LIBS=
+LIBS=$(LIBMATH)
 
 TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
 #TIME=time >/dev/null                    # Otherwise

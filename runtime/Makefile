@@ -1,7 +1,6 @@
 include ../Makefile.config
 
-CFLAGS=-arch ppc -O1 -g -Wall
-#CFLAGS=-O1 -g -Wall
+CFLAGS=-O1 -g -Wall
 OBJS=stdio.o calloc.o
 LIB=libcompcert.a
 INCLUDES=stdio.h

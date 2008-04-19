@@ -1,9 +1,11 @@
+include ../../Makefile.config
+
 CCOMP=../../ccomp
 FLAGS=-S
 CPP=cpp -P
-CC=gcc
-CFLAGS=-arch ppc -g
-ASFLAGS=-arch ppc
+AS=$(CASM)
+CFLAGS=-g
+ASFLAGS=
 VPATH=../harness ../lib
 
 PROGS=fib integr qsort fft sha1 aes almabench manyargs lists \

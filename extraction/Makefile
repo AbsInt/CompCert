@@ -103,7 +103,11 @@ clean::
 	rm -f ../caml/CMlexer.ml
 
 ../caml/Configuration.ml: ../Makefile.config
-	echo 'let stdlib_path = "$(LIBDIR)"' > ../caml/Configuration.ml
+	(echo 'let stdlib_path = "$(LIBDIR)"'; \
+         echo 'let prepro = "$(CPREPRO)"'; \
+         echo 'let asm = "$(CASM)"'; \
+         echo 'let linker = "$(CLINKER)"') \
+        > ../caml/Configuration.ml
 
 beforedepend:: ../caml/Configuration.ml
 clean::

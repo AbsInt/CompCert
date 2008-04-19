@@ -98,7 +98,8 @@ module Cil2CsyntaxTranslator = Cil2Csyntax.Make(TypeSpecifierTranslator)
 
 let preprocess ifile ofile =
   let cmd =
-    sprintf "gcc -arch ppc -D__COMPCERT__ -I%s %s -E %s > %s"
+    sprintf "%s -D__COMPCERT__ -I%s %s %s > %s"
+      Configuration.prepro
       !stdlib_path
       (quote_options !prepro_options)
       ifile ofile in
@@ -190,8 +191,8 @@ let compile_cminor_file ifile ofile =
 
 let assemble ifile ofile =
   let cmd =
-    sprintf "gcc -arch ppc -c -o %s %s"
-      ofile ifile in
+    sprintf "%s -o %s %s"
+      Configuration.asm ofile ifile in
   let retcode = command cmd in
   if not !option_dasm then safe_remove ifile;
   if retcode <> 0 then begin
@@ -204,7 +205,8 @@ let assemble ifile ofile =
 
 let linker exe_name files =
   let cmd =
-    sprintf "gcc -arch ppc -o %s %s -L%s -lcompcert"
+    sprintf "%s -o %s %s -L%s -lcompcert"
+      Configuration.linker
       (Filename.quote exe_name)
       (quote_options files)
       !stdlib_path in
