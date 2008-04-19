@@ -291,7 +291,7 @@ and print_stmt_for p s =
                 print_expr e1
                 print_expr_list (true, el)
   | _ ->
-      fprintf p "<impossible>"
+      fprintf p "({ %a })" print_stmt s
 
 let name_function_parameters fun_name params =
   let b = Buffer.create 20 in
