@@ -220,6 +220,14 @@ let make_temp typ =
       let v = Cil.makeTempVar f typ in 
       intern_string v.vname
 
+(** Detect and report GCC's __builtin_ functions *)
+
+let check_builtin s =
+  let b = "__builtin_" in
+  if String.length s >= String.length b
+  && String.sub s 0 (String.length b) = b
+  then unsupported ("GCC `" ^ s ^ "' built-in function")
+
 (** ** Translation functions *)
 
 (** Convert a [Cil.ikind] into a pair [(intsize * signedness)] *)
@@ -426,6 +434,7 @@ and convertLval lv =
     (* convert the lvalue *)
     match lv with
       | (Var v, ofs) ->
+          check_builtin v.vname;
 	  let id = intern_string v.vname in
             processOffset (Expr (Evar id, convertTyp v.vtype)) ofs
       | (Mem e, ofs) ->
@@ -535,10 +544,10 @@ let convertExpFuncall e eList =
           let fun_name =
             match e with
             | Lval(Var v, NoOffset) ->
-                warning "working around a call to a variadic or non-prototyped function";
+                warning "working around a call to a variadic function";
                 v.vname
             | _ ->
-                unsupported "call to variadic or non-prototyped function" in
+                unsupported "call to variadic function" in
           let rec typeOfExprList = function
             | Coq_nil -> Tnil
             | Coq_cons (Expr (_, ty), rem) -> Tcons (ty, typeOfExprList rem) in
