@@ -1,5 +1,5 @@
-*** ../cil_orig/src/frontc/cabs2cil.ml	2006-05-21 06:14:15.000000000 +0200
---- ../cil/src/frontc/cabs2cil.ml	2006-10-23 11:38:43.278308131 +0200
+*** ../cil.orig/src/frontc/cabs2cil.ml	2006-05-21 06:14:15.000000000 +0200
+--- ../cil/src/frontc/cabs2cil.ml	2008-04-19 10:17:27.000000000 +0200
 ***************
 *** 1,3 ****
 --- 1,11 ----
@@ -104,7 +104,7 @@
    * marker in a list saying what kinds of loop it is. When we see a continue 
 ***************
 *** 971,980 ****
---- 1011,1039 ----
+--- 1011,1041 ----
   
   let startLoop iswhile = 
     continues := (if iswhile then While else NotWhile (ref "")) :: !continues
@@ -115,7 +115,8 @@
 +  * chunk of code we must duplicate before each continue statement
 +  * in order to preserve the semantics. *)
 + type loopMarker =
-+     DuplicateBeforeContinue of chunk
++   | DuplicateBeforeContinue of chunk
++   | ContinueUnchanged
 + 
 + let continues : loopMarker list ref = ref []
 +   
@@ -126,6 +127,7 @@
 +   match !continues with
 +     | []                             -> E.s (error "continue not in a loop")
 +     | DuplicateBeforeContinue c :: _ -> c @@ continueChunk l
++     | ContinueUnchanged :: _         -> continueChunk l
   
   (* Sometimes we need to create new label names *)
   let newLabelName (base: string) = fst (newAlphaName false "label" base)
@@ -136,7 +138,7 @@
       [] -> E.s (error "continue not in a loop")
 ***************
 *** 990,995 ****
---- 1049,1055 ----
+--- 1051,1057 ----
       [] -> E.s (error "labContinue not in a loop")
     | While :: rest -> c
     | NotWhile lr :: rest -> if !lr = "" then c else consLabel !lr c !currentLoc false
@@ -157,7 +159,7 @@
     in
   
     match bop with
---- 4201,4209 ----
+--- 4203,4211 ----
       | _ -> E.s (error "%a operator on a non-integer type" d_binop bop)
     in
     let pointerComparison e1 t1 e2 t2 = 
@@ -183,7 +185,7 @@
   
     | _ -> E.s (error "doBinOp: %a\n" d_plainexp (BinOp(bop,e1,e2,intType)))
   
---- 4252,4265 ----
+--- 4254,4267 ----
   
     | (Eq|Ne|Le|Lt|Ge|Gt) when isPointerType t1 && isArithmeticType t2 ->
         ignore (warnOpt "Comparison of pointer and non-pointer");
@@ -200,7 +202,7 @@
   
 ***************
 *** 5465,5473 ****
---- 5523,5536 ----
+--- 5525,5538 ----
                          * then the switch falls through. *)
                         blockFallsThrough b || blockCanBreak b
                      end
@@ -224,7 +226,7 @@
                     (* switches and loops catch any breaks in their bodies *)
                     false
                 | Block b -> blockCanBreak b
---- 5575,5581 ----
+--- 5577,5583 ----
                 | Break _ -> true
                 | If (_, b1, b2, _) -> 
                     blockCanBreak b1 || blockCanBreak b2
@@ -234,7 +236,7 @@
                 | Block b -> blockCanBreak b
 ***************
 *** 5522,5527 ****
---- 5585,5591 ----
+--- 5587,5593 ----
                 List.exists stmtCanBreak b.bstmts
               in
               if blockFallsThrough !currentFunctionFDEC.sbody then begin
@@ -257,7 +259,7 @@
               ignore (E.log "error in collectFunction %s: %s\n"
                         n (Printexc.to_string e));
               cabsPushGlobal (GAsm("error in function " ^ n, !currentLoc));
---- 5601,5615 ----
+--- 5603,5617 ----
                   !currentFunctionFDEC.sbody.bstmts <- 
                     !currentFunctionFDEC.sbody.bstmts 
                     @ [mkStmt (Return(retval, endloc))]
@@ -289,7 +291,7 @@
       ignore (E.log "Error on A.TYPEDEF (%s)\n"
                 (Printexc.to_string e));
       let fstname = 
---- 5662,5677 ----
+--- 5664,5679 ----
           * local context  *)
           addLocalToEnv (kindPlusName "type" n) (EnvTyp namedTyp);
           cabsPushGlobal (GType (ti, !currentLoc))
@@ -315,7 +317,7 @@
       ignore (E.log "Error on A.ONLYTYPEDEF (%s)\n"
                 (Printexc.to_string e));
       cabsPushGlobal (GAsm ("booo_typedef", !currentLoc))
---- 5718,5725 ----
+--- 5720,5727 ----
       | _ -> 
           ignore (warn "Ignoring un-named typedef that does not introduce a struct or enumeration type\n")
               
@@ -326,7 +328,7 @@
       cabsPushGlobal (GAsm ("booo_typedef", !currentLoc))
 ***************
 *** 5738,5743 ****
---- 5807,5813 ----
+--- 5809,5815 ----
           doCondition false e st' sf'
   
       | A.WHILE(e,s,loc) ->
@@ -336,7 +338,7 @@
           exitLoop ();
 ***************
 *** 5746,5753 ****
---- 5816,5842 ----
+--- 5818,5844 ----
           loopChunk ((doCondition false e skipChunk
                         (breakChunk loc'))
                      @@ s')
@@ -374,7 +376,7 @@
           let loc' = convLoc loc in
           currentLoc := loc';
           enterScope (); (* Just in case we have a declaration *)
---- 5846,5872 ----
+--- 5848,5874 ----
           in
           exitLoop ();
           loopChunk (s' @@ s'')
@@ -404,7 +406,7 @@
           enterScope (); (* Just in case we have a declaration *)
 ***************
 *** 5784,5789 ****
---- 5892,5926 ----
+--- 5894,5928 ----
           exitScope ();
           res
       end
@@ -427,22 +429,22 @@
 + 	let (bIter, _, _) = doExp false e3 ADrop in
 + 	  
 + 	(* Then doStatement(A.FOR(bInit, (bCond , eCond), bIter, s))
-+            = Cil.For({bInit; bCond}, eCond', bIter, {doStatement(s); bCond})
-+ 	   where doStatement(A.CONTINUE) = (bCond ; Cil.Continue). *)
++            = Cil.For({bInit; bCond}, eCond', {bIter; bCond}, {doStatement(s)})
++ 	   where doStatement(A.CONTINUE) = Cil.Continue. *)
 + 	  
-+ 	  startLoop (DuplicateBeforeContinue bCond);
++ 	  startLoop ContinueUnchanged;
 +           let s' = doStatement s in
 +             exitLoop ();
 +             let loc' = convLoc loc in
 +               currentLoc := loc';
-+               (forChunk (bInit @@ bCond) eCond' bIter (s' @@ bCond))
++               (forChunk (bInit @@ bCond) eCond' (bIter @@ bCond) s')
 + 
       | A.BREAK loc -> 
           let loc' = convLoc loc in
           currentLoc := loc';
 ***************
 *** 5792,5798 ****
---- 5929,5938 ----
+--- 5931,5940 ----
       | A.CONTINUE loc -> 
           let loc' = convLoc loc in
           currentLoc := loc';
