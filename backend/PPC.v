@@ -125,7 +125,8 @@ Inductive instruction : Set :=
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
-  | Pfcti: ireg -> freg -> instruction                        (**r float-to-int conversion *)
+  | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion *)
+  | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion *)
   | Pfdiv: freg -> freg -> freg -> instruction                (**r float division *)
   | Pfmadd: freg -> freg -> freg -> freg -> instruction       (**r float multiply-add *)
   | Pfmr: freg -> freg -> instruction                         (**r float move *)
@@ -199,7 +200,7 @@ lbl:    .double floatcst
 >>
   Initialized data in the constant data section are not modeled here,
   which is why we use a pseudo-instruction for this purpose.
-- [Pfcti]: convert a float to an integer.  This requires a transfer
+- [Pfcti]: convert a float to a signed integer.  This requires a transfer
   via memory of a 32-bit integer from a float register to an int register,
   which our memory model cannot express.  Expands to:
 <<
@@ -207,6 +208,30 @@ lbl:    .double floatcst
         stfdu   f13, -8(r1)
         lwz     rdst, 4(r1)
         addi    r1, r1, 8
+>>
+- [Pfctiu]: convert a float to an unsigned integer.  The PowerPC way
+  to do this is to compare the argument against the floating-point
+  constant [2^31], subtract [2^31] if bigger, then convert to a signed
+  integer as above, then add back [2^31] if needed.  Expands to:
+<<
+        addis   r2, 0, ha16(lbl1)
+        lfd     f13, lo16(lbl1)(r2)
+        fcmpu   cr7, rsrc, f13
+        cror    30, 29, 30
+        beq     cr7, lbl2
+        fctiwz  f13, rsrc
+        stfdu   f13, -8(r1)
+        lwz     rdst, 4(r1)
+        b       lbl3
+lbl2:   fsub    f13, rsrc, f13
+        fctiwz  f13, f13
+        stfdu   f13, -8(r1)
+        lwz     rdst, 4(r1)
+        addis   rdst, rdst, 0x8000
+lbl3:   addi    r1, r1, 8
+        .const_data
+lbl1:   .long   0x41e00000, 0x00000000    # 2^31 in double precision
+        .text
 >>
 - [Pictf]: convert a signed integer to a float.  This requires complicated
   bit-level manipulations of IEEE floats through mixed float and integer 
@@ -611,6 +636,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfcti rd r1 =>
       OK (nextinstr (rs#rd <- (Val.intoffloat rs#r1) #FPR13 <- Vundef)) m
+  | Pfctiu rd r1 =>
+      OK (nextinstr (rs#rd <- (Val.intuoffloat rs#r1) #FPR13 <- Vundef)) m
   | Pfdiv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfmadd rd r1 r2 r3 =>

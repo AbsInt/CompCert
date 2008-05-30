@@ -94,7 +94,8 @@ Inductive operation : Set :=
   | Omulsubf: operation                 (**r [rd = r1 * r2 - r3] *)
   | Osingleoffloat: operation           (**r [rd] is [r1] truncated to single-precision float *)
 (*c Conversions between int and float: *)
-  | Ointoffloat: operation              (**r [rd = int_of_float(r1)] *)
+  | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
+  | Ointuoffloat: operation             (**r [rd = unsigned_int_of_float(r1)] *)
   | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] *)
   | Ofloatofintu: operation             (**r [rd = float_of_unsigned_int(r1)] *)
 (*c Boolean tests: *)
@@ -229,6 +230,8 @@ Definition eval_operation
       Some (Val.singleoffloat v1)
   | Ointoffloat, Vfloat f1 :: nil => 
       Some (Vint (Float.intoffloat f1))
+  | Ointuoffloat, Vfloat f1 :: nil => 
+      Some (Vint (Float.intuoffloat f1))
   | Ofloatofint, Vint n1 :: nil => 
       Some (Vfloat (Float.floatofint n1))
   | Ofloatofintu, Vint n1 :: nil => 
@@ -506,6 +509,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Omulsubf => (Tfloat :: Tfloat :: Tfloat :: nil, Tfloat)
   | Osingleoffloat => (Tfloat :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
+  | Ointuoffloat => (Tfloat :: nil, Tint)
   | Ofloatofint => (Tint :: nil, Tfloat)
   | Ofloatofintu => (Tint :: nil, Tfloat)
   | Ocmp c => (type_of_condition c, Tint)
@@ -666,6 +670,7 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Omulsubf, v1::v2::v3::nil => Val.subf (Val.mulf v1 v2) v3
   | Osingleoffloat, v1::nil => Val.singleoffloat v1
   | Ointoffloat, v1::nil => Val.intoffloat v1
+  | Ointuoffloat, v1::nil => Val.intuoffloat v1
   | Ofloatofint, v1::nil => Val.floatofint v1
   | Ofloatofintu, v1::nil => Val.floatofintu v1
   | Ocmp c, _ => eval_condition_total c vl

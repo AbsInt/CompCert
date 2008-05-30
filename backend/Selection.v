@@ -1095,6 +1095,7 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Oabsf => Eop Oabsf (arg ::: Enil)
   | Cminor.Osingleoffloat => singleoffloat arg
   | Cminor.Ointoffloat => Eop Ointoffloat (arg ::: Enil)
+  | Cminor.Ointuoffloat => Eop Ointuoffloat (arg ::: Enil)
   | Cminor.Ofloatofint => Eop Ofloatofint (arg ::: Enil)
   | Cminor.Ofloatofintu => Eop Ofloatofintu (arg ::: Enil)
   end.

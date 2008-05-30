@@ -1386,6 +1386,11 @@ Proof.
   split. apply exec_straight_one. 
   repeat (rewrite (freg_val ms sp rs); auto).
   reflexivity. auto with ppcgen.
+  (* Ointuoffloat *)
+  exists (nextinstr (rs#(ireg_of res) <- (Val.intuoffloat (ms m0)) #FPR13 <- Vundef)).
+  split. apply exec_straight_one. 
+  repeat (rewrite (freg_val ms sp rs); auto).
+  reflexivity. auto with ppcgen.
   (* Ofloatofint *)
   exists (nextinstr (rs#(freg_of res) <- (Val.floatofint (ms m0)) #GPR2 <- Vundef #FPR13 <- Vundef)).
   split. apply exec_straight_one. 

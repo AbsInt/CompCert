@@ -34,6 +34,7 @@ Parameter neg: float -> float.
 Parameter abs: float -> float.
 Parameter singleoffloat: float -> float.
 Parameter intoffloat: float -> int.
+Parameter intuoffloat: float -> int.
 Parameter floatofint: int -> float.
 Parameter floatofintu: int -> float.
 

@@ -362,6 +362,8 @@ Definition transl_op
       Pfrsp (freg_of r) (freg_of a1) :: k
   | Ointoffloat, a1 :: nil =>
       Pfcti (ireg_of r) (freg_of a1) :: k
+  | Ointuoffloat, a1 :: nil =>
+      Pfctiu (ireg_of r) (freg_of a1) :: k
   | Ofloatofint, a1 :: nil =>
       Pictf (freg_of r) (ireg_of a1) :: k
   | Ofloatofintu, a1 :: nil =>

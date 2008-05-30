@@ -119,6 +119,12 @@ Definition intoffloat (v: val) : val :=
   | _ => Vundef
   end.
 
+Definition intuoffloat (v: val) : val :=
+  match v with
+  | Vfloat f => Vint (Float.intuoffloat f)
+  | _ => Vundef
+  end.
+
 Definition floatofint (v: val) : val :=
   match v with
   | Vint n => Vfloat (Float.floatofint n)

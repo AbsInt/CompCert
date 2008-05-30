@@ -259,6 +259,7 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | Omulsubf, F n1 :: F n2 :: F n3 :: nil => F(Float.sub (Float.mul n1 n2) n3)
   | Osingleoffloat, F n1 :: nil => F(Float.singleoffloat n1)
   | Ointoffloat, F n1 :: nil => I(Float.intoffloat n1)
+  | Ointuoffloat, F n1 :: nil => I(Float.intuoffloat n1)
   | Ofloatofint, I n1 :: nil => F(Float.floatofint n1)
   | Ofloatofintu, I n1 :: nil => F(Float.floatofintu n1)
   | Ocmp c, vl =>
@@ -412,6 +413,9 @@ Inductive eval_static_operation_cases: forall (op: operation) (vl: list approx),
   | eval_static_operation_case49:
       forall n1,
       eval_static_operation_cases (Ocast16unsigned) (I n1 :: nil)
+  | eval_static_operation_case50:
+      forall n1,
+      eval_static_operation_cases (Ointuoffloat) (F n1 :: nil)
   | eval_static_operation_default:
       forall (op: operation) (vl: list approx),
       eval_static_operation_cases op vl.
@@ -512,6 +516,8 @@ Definition eval_static_operation_match (op: operation) (vl: list approx) :=
       eval_static_operation_case48 n1
   | Ocast16unsigned, I n1 :: nil =>
       eval_static_operation_case49 n1
+  | Ointuoffloat, F n1 :: nil =>
+      eval_static_operation_case50 n1
   | op, vl =>
       eval_static_operation_default op vl
   end.
@@ -615,6 +621,8 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
       I(Int.cast8unsigned n1)
   | eval_static_operation_case49 n1 =>
       I(Int.cast16unsigned n1)
+  | eval_static_operation_case50 n1 =>
+      I(Float.intuoffloat n1)
   | eval_static_operation_default op vl =>
       Unknown
   end.

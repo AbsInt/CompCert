@@ -50,7 +50,8 @@ Inductive unary_operation : Set :=
   | Onegf: unary_operation                 (**r float opposite *)
   | Oabsf: unary_operation                 (**r float absolute value *)
   | Osingleoffloat: unary_operation        (**r float truncation *)
-  | Ointoffloat: unary_operation           (**r integer to float *)
+  | Ointoffloat: unary_operation           (**r signed integer to float *)
+  | Ointuoffloat: unary_operation          (**r unsigned integer to float *)
   | Ofloatofint: unary_operation           (**r float to signed integer *)
   | Ofloatofintu: unary_operation.         (**r float to unsigned integer *)
 
@@ -239,6 +240,7 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | Oabsf, Vfloat f1 => Some (Vfloat (Float.abs f1))
   | Osingleoffloat, _ => Some (Val.singleoffloat arg)
   | Ointoffloat, Vfloat f1 => Some (Vint (Float.intoffloat f1))
+  | Ointuoffloat, Vfloat f1 => Some (Vint (Float.intuoffloat f1))
   | Ofloatofint, Vint n1 => Some (Vfloat (Float.floatofint n1))
   | Ofloatofintu, Vint n1 => Some (Vfloat (Float.floatofintu n1))
   | _, _ => None

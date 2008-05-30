@@ -2383,3 +2383,349 @@ Proof.
   replace (high_bound m b0) with (high_bound m' b0). auto.
   unfold high_bound; rewrite <- B; simpl; rewrite A. rewrite update_o; auto.
 Qed.
+
+(** ** Memory shifting *)
+
+(** A special case of memory injection where blocks are not coalesced:
+  each source block injects in a distinct target block. *)
+
+Definition memshift := block -> option Z.
+
+(*
+Inductive val_shift (mi: memshift): val -> val -> Prop :=
+  | val_shift_int:
+      forall i, val_shift mi (Vint i) (Vint i)
+  | val_shift_float:
+      forall f, val_shift mi (Vfloat f) (Vfloat f)
+  | val_shift_ptr:
+      forall b ofs1 ofs2 x,
+      mi b = Some x ->
+      ofs2 = Int.add ofs1 (Int.repr x) ->
+      val_shift mi (Vptr b ofs1) (Vptr b ofs2)
+  | val_shift_undef: 
+      val_shift mi Vundef Vundef.
+*)
+
+Definition meminj_of_shift (mi: memshift) : meminj :=
+  fun b => match mi b with None => None | Some x => Some (b, x) end.
+
+Definition val_shift (mi: memshift) (v1 v2: val): Prop :=
+  val_inject (meminj_of_shift mi) v1 v2.
+
+Record mem_shift (f: memshift) (m1 m2: mem) : Prop :=
+  mk_mem_shift {
+    ms_inj:
+      mem_inj val_inject (meminj_of_shift f) m1 m2;
+    ms_samedomain:
+      nextblock m1 = nextblock m2;
+    ms_domain:
+      forall b, match f b with Some _ => b < nextblock m1 | None => b >= nextblock m1 end;
+    ms_range_1:
+      forall b delta,
+      f b = Some delta ->
+      Int.min_signed <= delta <= Int.max_signed;
+    ms_range_2:
+      forall b delta,
+      f b = Some delta ->
+      Int.min_signed <= low_bound m2 b /\ high_bound m2 b <= Int.max_signed
+  }.
+
+(** The following lemmas establish the absence of machine integer overflow
+  during address computations. *)
+
+Lemma address_shift:
+  forall f m1 m2 chunk b ofs1 delta,
+  mem_shift f m1 m2 ->
+  valid_access m1 chunk b (Int.signed ofs1) ->
+  f b = Some delta ->
+  Int.signed (Int.add ofs1 (Int.repr delta)) = Int.signed ofs1 + delta.
+Proof.
+  intros. inversion H.
+  elim (ms_range_4 _ _ H1); intros.
+  rewrite Int.add_signed.
+  repeat rewrite Int.signed_repr. auto.
+  eauto.
+  assert (valid_access m2 chunk b (Int.signed ofs1 + delta)).
+    eapply valid_access_inj with (mi := meminj_of_shift f); eauto.
+    unfold meminj_of_shift. rewrite H1; auto. 
+  inv H4. generalize (size_chunk_pos chunk); omega.
+  eauto.
+Qed.
+
+Lemma valid_pointer_shift_no_overflow:
+  forall f m1 m2 b ofs x,
+  mem_shift f m1 m2 ->
+  valid_pointer m1 b (Int.signed ofs) = true ->
+  f b = Some x ->
+  Int.min_signed <= Int.signed ofs + Int.signed (Int.repr x) <= Int.max_signed.
+Proof.
+  intros. inv H. rewrite valid_pointer_valid_access in H0.
+  assert (valid_access m2 Mint8unsigned b (Int.signed ofs + x)).
+    eapply valid_access_inj with (mi := meminj_of_shift f); eauto.
+    unfold meminj_of_shift. rewrite H1; auto. 
+  inv H. change (size_chunk Mint8unsigned) with 1 in H4.
+  rewrite Int.signed_repr; eauto.
+  exploit ms_range_4; eauto. intros [A B]. omega.
+Qed.
+
+Lemma valid_pointer_shift:
+  forall f m1 m2 b ofs b' ofs',
+  mem_shift f m1 m2 ->
+  valid_pointer m1 b (Int.signed ofs) = true ->
+  val_shift f (Vptr b ofs) (Vptr b' ofs') ->
+  valid_pointer m2 b' (Int.signed ofs') = true.
+Proof.
+  intros. unfold val_shift in H1. inv H1.
+  assert (f b = Some x). 
+    unfold meminj_of_shift in H5. destruct (f b); congruence. 
+  exploit valid_pointer_shift_no_overflow; eauto. intro NOOV.
+  inv H. rewrite Int.add_signed. rewrite Int.signed_repr; auto.
+  rewrite Int.signed_repr; eauto.
+  eapply valid_pointer_inj; eauto.
+Qed.
+
+(** Relation between shifts and loads. *)
+
+Lemma load_shift:
+  forall f m1 m2 chunk b ofs delta v1,
+  mem_shift f m1 m2 ->
+  load chunk m1 b ofs = Some v1 ->
+  f b = Some delta ->
+  exists v2, load chunk m2 b (ofs + delta) = Some v2 /\ val_shift f v1 v2.
+Proof.
+  intros. inversion H.
+  unfold val_shift. eapply ms_inj0; eauto.
+  unfold meminj_of_shift; rewrite H1; auto.
+Qed.
+
+Lemma loadv_shift:
+  forall f m1 m2 chunk a1 a2 v1,
+  mem_shift f m1 m2 ->
+  loadv chunk m1 a1 = Some v1 ->
+  val_shift f a1 a2 ->
+  exists v2, loadv chunk m2 a2 = Some v2 /\ val_shift f v1 v2.
+Proof.
+  intros. unfold val_shift in H1. inv H1; simpl in H0; try discriminate.
+  generalize H2. unfold meminj_of_shift. caseEq (f b1); intros; inv H3.
+  exploit load_shift; eauto. intros [v2 [LOAD INJ]].
+  exists v2; split; auto. simpl.
+  replace (Int.signed (Int.add ofs1 (Int.repr x)))
+     with (Int.signed ofs1 + x).
+  auto. symmetry. eapply address_shift; eauto with mem.
+Qed.
+
+(** Relation between shifts and stores. *)
+
+Lemma store_within_shift:
+  forall f chunk m1 b ofs v1 n1 m2 delta v2,
+  mem_shift f m1 m2 ->
+  store chunk m1 b ofs v1 = Some n1 ->
+  f b = Some delta ->
+  val_shift f v1 v2 ->
+  exists n2,
+    store chunk m2 b (ofs + delta) v2 = Some n2
+    /\ mem_shift f n1 n2.
+Proof.
+  intros. inversion H. 
+  exploit store_mapped_inj; eauto.
+  intros; constructor.
+  red. intros until delta2. unfold meminj_of_shift. 
+  destruct (f b1). destruct (f b2). intros. inv H4. inv H5. auto. 
+  congruence. congruence. 
+  unfold meminj_of_shift. rewrite H1. auto.
+  intros. apply load_result_inject with chunk; eauto.
+  unfold val_shift in H2. eauto. 
+  intros [n2 [STORE MINJ]].
+  exists n2; split. auto. constructor.
+  (* inj *)
+  auto.
+  (* samedomain *)
+  rewrite (nextblock_store _ _ _ _ _ _ H0).
+  rewrite (nextblock_store _ _ _ _ _ _ STORE).
+  auto.
+  (* domain *)
+  rewrite (nextblock_store _ _ _ _ _ _ H0). auto.
+  (* range *)
+  auto.
+  intros. 
+  repeat rewrite (low_bound_store _ _ _ _ _ _ STORE).
+  repeat rewrite (high_bound_store _ _ _ _ _ _ STORE).
+  eapply ms_range_4; eauto.
+Qed.
+
+Lemma store_outside_shift:
+  forall f chunk m1 b ofs m2 v m2' delta,
+  mem_shift f m1 m2 ->
+  f b = Some delta ->
+  high_bound m1 b + delta <= ofs
+  \/ ofs + size_chunk chunk <= low_bound m1 b + delta ->
+  store chunk m2 b ofs v = Some m2' ->
+  mem_shift f m1 m2'.
+Proof.
+  intros. inversion H. constructor.
+  (* inj *)
+  eapply store_outside_inj; eauto. 
+  unfold meminj_of_shift. intros b' d'. caseEq (f b'); intros; inv H4.
+  congruence.
+  (* samedomain *)
+  rewrite (nextblock_store _ _ _ _ _ _ H2).
+  auto.
+  (* domain *)
+  auto.
+  (* range *)
+  auto.
+  intros. 
+  repeat rewrite (low_bound_store _ _ _ _ _ _ H2).
+  repeat rewrite (high_bound_store _ _ _ _ _ _ H2).
+  eapply ms_range_4; eauto.
+Qed.
+
+Lemma storev_shift:
+  forall f chunk m1 a1 v1 n1 m2 a2 v2,
+  mem_shift f m1 m2 ->
+  storev chunk m1 a1 v1 = Some n1 ->
+  val_shift f a1 a2 ->
+  val_shift f v1 v2 ->
+  exists n2,
+    storev chunk m2 a2 v2 = Some n2 /\ mem_shift f n1 n2.
+Proof.
+  intros. unfold val_shift in H1. inv H1; simpl in H0; try discriminate.
+  generalize H3. unfold meminj_of_shift. caseEq (f b1); intros; inv H4.
+  exploit store_within_shift; eauto. intros [n2 [A B]].
+  exists n2; split; auto.
+  unfold storev. 
+  replace (Int.signed (Int.add ofs1 (Int.repr x)))
+     with (Int.signed ofs1 + x).
+  auto. symmetry. eapply address_shift; eauto with mem.
+Qed.
+
+(** Relation between shifts and [free]. *)
+
+Lemma free_shift:
+  forall f m1 m2 b,
+  mem_shift f m1 m2 ->
+  mem_shift f (free m1 b) (free m2 b).
+Proof.
+  intros. inv H. constructor.
+  (* inj *)
+  apply free_right_inj. apply free_left_inj; auto.
+  intros until ofs. unfold meminj_of_shift. caseEq (f b1); intros; inv H0.
+  apply valid_access_free_2.
+  (* samedomain *)
+  simpl. auto.
+  (* domain *)
+  simpl. auto.
+  (* range *)
+  auto.
+  intros. destruct (eq_block b0 b). 
+  subst b0. rewrite low_bound_free_same. rewrite high_bound_free_same.
+  vm_compute; intuition congruence.
+  rewrite low_bound_free; auto. rewrite high_bound_free; auto. eauto.
+Qed.
+
+(** Relation between shifts and allocation. *)
+
+Definition shift_incr (f1 f2: memshift) : Prop :=
+  forall b, f1 b = f2 b \/ f1 b = None.
+
+Remark shift_incr_inject_incr:
+  forall f1 f2,
+  shift_incr f1 f2 -> inject_incr (meminj_of_shift f1) (meminj_of_shift f2).
+Proof.
+  intros. unfold meminj_of_shift. red. intros. 
+  elim (H b); intro. rewrite H0. auto. rewrite H0. auto.
+Qed.
+
+Lemma val_shift_incr:
+  forall f1 f2 v1 v2,
+  shift_incr f1 f2 -> val_shift f1 v1 v2 -> val_shift f2 v1 v2.
+Proof.
+  unfold val_shift; intros. 
+  apply val_inject_incr with (meminj_of_shift f1).
+  apply shift_incr_inject_incr. auto. auto.
+Qed.
+
+(***
+Remark mem_inj_incr:
+  forall f1 f2 m1 m2,
+  inject_incr f1 f2 -> mem_inj val_inject f1 m1 m2 -> mem_inj val_inject f2 m1 m2.
+Proof.
+  intros; red; intros. 
+  destruct (H b1). rewrite <- H3 in H1.
+  exploit H0; eauto. intros [v2 [A B]]. 
+  exists v2; split. auto. apply val_inject_incr with f1; auto.
+  congruence.
+***)
+
+Lemma alloc_shift:
+  forall f m1 m2 lo1 hi1 m1' b delta lo2 hi2,
+  mem_shift f m1 m2 ->
+  alloc m1 lo1 hi1 = (m1', b) ->
+  lo2 <= lo1 + delta -> hi1 + delta <= hi2 ->
+  Int.min_signed <= delta <= Int.max_signed ->
+  Int.min_signed <= lo2 -> hi2 <= Int.max_signed ->
+  exists f', exists m2',
+     alloc m2 lo2 hi2 = (m2', b)
+  /\ mem_shift f' m1' m2'
+  /\ shift_incr f f'
+  /\ f' b = Some delta.
+Proof.
+  intros. inv H. caseEq (alloc m2 lo2 hi2). intros m2' b' ALLOC2.
+  assert (b' = b).
+    rewrite (alloc_result _ _ _ _ _ H0).
+    rewrite (alloc_result _ _ _ _ _ ALLOC2).
+    auto.
+  subst b'.
+  assert (f b = None).
+    generalize (ms_domain0 b). 
+    rewrite (alloc_result _ _ _ _ _ H0).
+    destruct (f (nextblock m1)). 
+    intros. omegaContradiction.
+    auto.
+  set (f' := fun (b': block) => if zeq b' b then Some delta else f b').
+  assert (shift_incr f f').
+    red; unfold f'; intros.
+    destruct (zeq b0 b); auto.
+    subst b0. auto.
+  exists f'; exists m2'.
+  split. auto.
+  (* mem_shift *)
+  split. constructor.
+  (* inj *)
+  assert (mem_inj val_inject (meminj_of_shift f') m1 m2).
+    red; intros.
+    assert (meminj_of_shift f b1 = Some (b2, delta0)).
+      rewrite <- H7. unfold meminj_of_shift, f'.
+      destruct (zeq b1 b); auto.
+      subst b1.
+      assert (valid_block m1 b) by eauto with mem. 
+      assert (~valid_block m1 b) by eauto with mem.
+      contradiction.
+    exploit ms_inj0; eauto. intros [v2 [A B]].
+    exists v2; split; auto. 
+    apply val_inject_incr with (meminj_of_shift f).
+    apply shift_incr_inject_incr. auto. auto.
+  eapply alloc_parallel_inj; eauto.
+  unfold meminj_of_shift, f'. rewrite zeq_true. auto.
+  (* samedomain *)
+  rewrite (nextblock_alloc _ _ _ _ _ H0).
+  rewrite (nextblock_alloc _ _ _ _ _ ALLOC2).
+  congruence.
+  (* domain *)
+  intros. unfold f'. 
+  rewrite (nextblock_alloc _ _ _ _ _ H0).
+  rewrite (alloc_result _ _ _ _ _ H0).
+  destruct (zeq b0 (nextblock m1)). omega.
+  generalize (ms_domain0 b0). destruct (f b0); omega.
+  (* range *)
+  unfold f'; intros. destruct (zeq b0 b). congruence. eauto. 
+  unfold f'; intros.
+  rewrite (low_bound_alloc _ _ _ _ _ ALLOC2). 
+  rewrite (high_bound_alloc _ _ _ _ _ ALLOC2). 
+  destruct (zeq b0 b). auto. eauto.
+  (* shift_incr *)
+  split. auto.
+  (* f' b = delta *)
+  unfold f'. apply zeq_true. 
+Qed.
+

@@ -867,6 +867,7 @@ Proof.
   inv H0; inv H; TrivialOp.
   inv H0; inv H; TrivialOp.
   inv H0; inv H; TrivialOp.
+  inv H0; inv H; TrivialOp.
 Qed.
 
 (** Compatibility of [eval_binop] with respect to [val_inject]. *)

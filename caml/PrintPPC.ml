@@ -185,6 +185,28 @@ let print_instruction oc labels = function
       fprintf oc "	fctiwz	f13, %a\n" freg r2;
       fprintf oc "	stfd	f13, -8(r1)\n";
       fprintf oc "	lwz	%a, -4(r1)\n" ireg r1
+  | Pfctiu(r1, r2) ->
+      let lbl1 = new_label() in
+      let lbl2 = new_label() in
+      let lbl3 = new_label() in
+      fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl1;
+      fprintf oc "	lfd	f13, lo16(L%d)(r2)\n" lbl1;
+      fprintf oc "	fcmpu	cr7, %a, f13\n" freg r2;
+      fprintf oc "	cror	30, 29, 30\n";
+      fprintf oc "	beq	cr7, L%d\n" lbl2;
+      fprintf oc "	fctiwz	f13, %a\n" freg r2;
+      fprintf oc "	stfdu	f13, -8(r1)\n";
+      fprintf oc "	lwz	%a, 4(r1)\n" ireg r1;
+      fprintf oc "	b	L%d\n" lbl3;
+      fprintf oc "L%d:	fsub	f13, %a, f13\n" lbl2 freg r2;
+      fprintf oc "	fctiwz	f13, f13\n";
+      fprintf oc "	stfdu	f13, -8(r1)\n";
+      fprintf oc "	lwz	%a, 4(r1)\n" ireg r1;
+      fprintf oc "	addis	%a, %a, 0x8000\n" ireg r1 ireg r1;
+      fprintf oc "L%d:	addi	r1, r1, 8\n" lbl3;
+      fprintf oc "	.const_data\n";
+      fprintf oc "L%d:	.long	0x41e00000, 0x00000000\n" lbl1;
+      fprintf oc "	.text\n"
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfmadd(r1, r2, r3, r4) ->

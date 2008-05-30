@@ -99,6 +99,7 @@ let type_unary_operation = function
   | Oabsf -> tfloat, tfloat
   | Osingleoffloat -> tfloat, tfloat
   | Ointoffloat -> tfloat, tint
+  | Ointuoffloat -> tfloat, tint
   | Ofloatofint -> tint, tfloat
   | Ofloatofintu -> tint, tfloat
 
@@ -142,6 +143,7 @@ let name_of_unary_operation = function
   | Oabsf -> "absf"
   | Osingleoffloat -> "singleoffloat"
   | Ointoffloat -> "intoffloat"
+  | Ointuoffloat -> "intuoffloat"
   | Ofloatofint -> "floatofint"
   | Ofloatofintu -> "floatofintu"
 

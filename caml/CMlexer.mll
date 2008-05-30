@@ -77,6 +77,7 @@ rule token = parse
   | "int8s"    { INT8S }
   | "int8u"    { INT8U }
   | "intoffloat"    { INTOFFLOAT }
+  | "intuoffloat"    { INTUOFFLOAT }
   | "{"    { LBRACE }
   | "{{"    { LBRACELBRACE }
   | "["    { LBRACKET }

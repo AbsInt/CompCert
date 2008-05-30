@@ -59,9 +59,9 @@
 ../caml/PrintPPC.cmx: PPC.cmx Datatypes.cmx ../caml/Camlcoq.cmx CList.cmx \
     AST.cmx ../caml/PrintPPC.cmi 
 ../caml/RTLgenaux.cmo: Switch.cmi Integers.cmi Datatypes.cmi CminorSel.cmi \
-    CList.cmi 
+    ../caml/Camlcoq.cmo CList.cmi 
 ../caml/RTLgenaux.cmx: Switch.cmx Integers.cmx Datatypes.cmx CminorSel.cmx \
-    CList.cmx 
+    ../caml/Camlcoq.cmx CList.cmx 
 ../caml/RTLtypingaux.cmo: Registers.cmi RTL.cmi Op.cmi Maps.cmi Datatypes.cmi \
     ../caml/Camlcoq.cmo CList.cmi AST.cmi 
 ../caml/RTLtypingaux.cmx: Registers.cmx RTL.cmx Op.cmx Maps.cmx Datatypes.cmx \
@@ -191,7 +191,8 @@ Stacking.cmi: Specif.cmi Op.cmi Mach.cmi Locations.cmi Linear.cmi \
     Integers.cmi Errors.cmi Datatypes.cmi Coqlib.cmi Conventions.cmi \
     CString.cmi CList.cmi Bounds.cmi BinPos.cmi BinInt.cmi Ascii.cmi AST.cmi 
 Sumbool.cmi: Specif.cmi Datatypes.cmi 
-Switch.cmi: Integers.cmi EqNat.cmi Datatypes.cmi CList.cmi 
+Switch.cmi: Specif.cmi Integers.cmi EqNat.cmi Datatypes.cmi Coqlib.cmi \
+    CList.cmi BinPos.cmi BinInt.cmi 
 Tunneling.cmi: Maps.cmi LTL.cmi Datatypes.cmi AST.cmi 
 Values.cmi: Specif.cmi Integers.cmi Floats.cmi Datatypes.cmi Coqlib.cmi \
     BinPos.cmi BinInt.cmi AST.cmi 
@@ -490,8 +491,10 @@ Stacking.cmx: Specif.cmx Op.cmx Mach.cmx Locations.cmx Linear.cmx \
     Stacking.cmi 
 Sumbool.cmo: Specif.cmi Datatypes.cmi Sumbool.cmi 
 Sumbool.cmx: Specif.cmx Datatypes.cmx Sumbool.cmi 
-Switch.cmo: Integers.cmi EqNat.cmi Datatypes.cmi CList.cmi Switch.cmi 
-Switch.cmx: Integers.cmx EqNat.cmx Datatypes.cmx CList.cmx Switch.cmi 
+Switch.cmo: Specif.cmi Integers.cmi EqNat.cmi Datatypes.cmi Coqlib.cmi \
+    CList.cmi BinPos.cmi BinInt.cmi Switch.cmi 
+Switch.cmx: Specif.cmx Integers.cmx EqNat.cmx Datatypes.cmx Coqlib.cmx \
+    CList.cmx BinPos.cmx BinInt.cmx Switch.cmi 
 Tunneling.cmo: Maps.cmi LTL.cmi Datatypes.cmi AST.cmi Tunneling.cmi 
 Tunneling.cmx: Maps.cmx LTL.cmx Datatypes.cmx AST.cmx Tunneling.cmi 
 Values.cmo: Specif.cmi Integers.cmi Floats.cmi Datatypes.cmi Coqlib.cmi \

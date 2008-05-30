@@ -30,6 +30,7 @@ Extract Constant Floats.Float.neg => "( ~-. )".
 Extract Constant Floats.Float.abs => "abs_float".
 Extract Constant Floats.Float.singleoffloat => "Floataux.singleoffloat".
 Extract Constant Floats.Float.intoffloat => "Floataux.intoffloat".
+Extract Constant Floats.Float.intuoffloat => "Floataux.intuoffloat".
 Extract Constant Floats.Float.floatofint => "Floataux.floatofint".
 Extract Constant Floats.Float.floatofintu => "Floataux.floatofintu".
 Extract Constant Floats.Float.add => "( +. )".

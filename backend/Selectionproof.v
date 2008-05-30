@@ -1088,6 +1088,7 @@ Proof.
   EvalOp.
   EvalOp.
   EvalOp.
+  EvalOp.
 Qed.
 
 Lemma eval_sel_binop:

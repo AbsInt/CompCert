@@ -252,6 +252,7 @@ let mkmatch expr cases =
 %token INT8U
 %token <int32> INTLIT
 %token INTOFFLOAT
+%token INTUOFFLOAT
 %token LBRACE
 %token LBRACELBRACE
 %token LBRACKET
@@ -308,7 +309,7 @@ let mkmatch expr cases =
 %left LESSLESS GREATERGREATER GREATERGREATERU
 %left PLUS PLUSF MINUS MINUSF
 %left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU
-%nonassoc BANG TILDE p_uminus ABSF INTOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 ALLOC
+%nonassoc BANG TILDE p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 ALLOC
 %left LPAREN
 
 /* Entry point */
@@ -459,6 +460,7 @@ expr:
   | MINUSF expr   %prec p_uminus                { Runop(Onegf, $2) }
   | ABSF expr                                   { Runop(Oabsf, $2) }
   | INTOFFLOAT expr                             { Runop(Ointoffloat, $2) }
+  | INTUOFFLOAT expr                            { Runop(Ointuoffloat, $2) }
   | FLOATOFINT expr                             { Runop(Ofloatofint, $2) }
   | FLOATOFINTU expr                            { Runop(Ofloatofintu, $2) }
   | TILDE expr                                  { Runop(Onotint, $2) }

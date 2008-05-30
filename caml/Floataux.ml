@@ -19,6 +19,9 @@ let singleoffloat f =
 let intoffloat f =
   coqint_of_camlint (Int32.of_float f)
 
+let intuoffloat f =
+  coqint_of_camlint (Int64.to_int32 (Int64.of_float f))
+
 let floatofint i =
   Int32.to_float (camlint_of_coqint i)
 
