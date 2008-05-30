@@ -305,14 +305,14 @@ Proof.
   (* ipip ptr ptr *)
   inversion H10. eapply eval_Ebinop; eauto with cshm.
   simpl. rewrite H3. unfold eq_block. rewrite H9. auto.
+  inversion H10. eapply eval_Ebinop; eauto with cshm.
+  simpl. rewrite H3. unfold eq_block. rewrite H9. auto.
   (* ipip ptr int *)
   inversion H9. eapply eval_Ebinop; eauto with cshm.
-  simpl. unfold eval_compare_null. rewrite H8. 
-  functional inversion H; subst; auto.
+  simpl. rewrite H8. auto.
   (* ipip int ptr *)
   inversion H9. eapply eval_Ebinop; eauto with cshm.
-  simpl. unfold eval_compare_null. rewrite H8. 
-  functional inversion H; subst; auto.
+  simpl. rewrite H8. auto.
   (* ff *)
   inversion H8. eauto with cshm.
 Qed.

@@ -808,16 +808,16 @@ Theorem eval_comp_ptr_int:
   forall le c a x1 x2 b y v,
   eval_expr ge sp e m le a (Vptr x1 x2) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Cminor.eval_compare_null c y = Some v ->
+  (if Int.eq y Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until v.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
-  destruct (Int.eq y Int.zero); try discriminate. 
+  EvalOp. simpl. destruct (Int.eq y Int.zero); try discriminate.
+  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
   destruct c; try discriminate; auto.
-  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
-  destruct (Int.eq y Int.zero); try discriminate. 
+  EvalOp. simpl. destruct (Int.eq y Int.zero); try discriminate.
+  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
   destruct c; try discriminate; auto.
 Qed.
 
@@ -825,17 +825,17 @@ Theorem eval_comp_int_ptr:
   forall le c a x b y1 y2 v,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vptr y1 y2) ->
-  Cminor.eval_compare_null c x = Some v ->
+  (if Int.eq x Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until v.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
-  destruct (Int.eq x Int.zero); try discriminate. 
-  destruct c; simpl; try discriminate; auto.
-  EvalOp. simpl. unfold Cminor.eval_compare_null in H1. unfold eval_compare_null.
-  destruct (Int.eq x Int.zero); try discriminate. 
-  destruct c; simpl; try discriminate; auto.
+  EvalOp. simpl. destruct (Int.eq x Int.zero); try discriminate.
+  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
+  destruct c; try discriminate; auto.
+  EvalOp. simpl. destruct (Int.eq x Int.zero); try discriminate.
+  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
+  destruct c; try discriminate; auto.
 Qed.
 
 Theorem eval_comp_ptr_ptr:
@@ -849,9 +849,24 @@ Theorem eval_comp_ptr_ptr:
 Proof.
   intros until y2.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. rewrite H1. simpl. 
-  subst y1. rewrite dec_eq_true. 
+  EvalOp. simpl. rewrite H1. subst y1. rewrite dec_eq_true. 
   destruct (Int.cmp c x2 y2); reflexivity.
+Qed.
+
+Theorem eval_comp_ptr_ptr_2:
+  forall le c a x1 x2 b y1 y2 v,
+  eval_expr ge sp e m le a (Vptr x1 x2) ->
+  eval_expr ge sp e m le b (Vptr y1 y2) ->
+  valid_pointer m x1 (Int.signed x2) &&
+  valid_pointer m y1 (Int.signed y2) = true ->
+  x1 <> y1 ->
+  Cminor.eval_compare_mismatch c = Some v ->
+  eval_expr ge sp e m le (comp c a b) v.
+Proof.
+  intros until y2.
+  unfold comp; case (comp_match a b); intros; InvEval.
+  EvalOp. simpl. rewrite H1. rewrite dec_eq_false; auto.
+  destruct c; simpl in H3; inv H3; auto.
 Qed.
 
 Theorem eval_compu:
@@ -1133,7 +1148,9 @@ Proof.
   generalize H1; clear H1.
   case_eq (valid_pointer m b (Int.signed i) && valid_pointer m b0 (Int.signed i0)); intros.
   destruct (eq_block b b0); inv H2.
-  eapply eval_comp_ptr_ptr; eauto. discriminate.
+  eapply eval_comp_ptr_ptr; eauto.
+  eapply eval_comp_ptr_ptr_2; eauto.
+  discriminate.
   eapply eval_compu; eauto.
   eapply eval_compf; eauto.
 Qed.

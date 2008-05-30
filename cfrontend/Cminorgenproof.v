@@ -791,14 +791,22 @@ Proof.
   intros; destruct b; unfold Val.of_bool, Vtrue, Vfalse; constructor.
 Qed.
 
-Remark val_inject_eval_compare_null:
-  forall f c i v,  
-  eval_compare_null c i = Some v ->
+Remark val_inject_eval_compare_mismatch:
+  forall f c v,  
+  eval_compare_mismatch c = Some v ->
   val_inject f v v.
 Proof.
-  unfold eval_compare_null; intros.
-  destruct (Int.eq i Int.zero). 
+  unfold eval_compare_mismatch; intros.
   destruct c; inv H; unfold Vfalse, Vtrue; constructor.
+Qed.
+
+Remark val_inject_eval_compare_null:
+  forall f i c v,  
+  (if Int.eq i Int.zero then eval_compare_mismatch c else None) = Some v ->
+  val_inject f v v.
+Proof.
+  intros. destruct (Int.eq i Int.zero). 
+  eapply val_inject_eval_compare_mismatch; eauto. 
   discriminate.
 Qed.
 
@@ -819,17 +827,6 @@ Ltac TrivialOp :=
       exists x; split; [auto | econstructor; eauto]
   | _ => idtac
   end.
-
-Remark eval_compare_null_inv:
-  forall c i v,
-  eval_compare_null c i = Some v ->
-  i = Int.zero /\ (c = Ceq /\ v = Vfalse \/ c = Cne /\ v = Vtrue).
-Proof.
-  intros until v. unfold eval_compare_null.
-  predSpec Int.eq Int.eq_spec i Int.zero.
-  case c; intro EQ; simplify_eq EQ; intro; subst v; tauto.
-  congruence.
-Qed.
 
 (** Correctness of [transl_constant]. *)
 
@@ -921,22 +918,34 @@ Proof.
   (* cmp ptr ptr *)
   caseEq (valid_pointer m b1 (Int.signed ofs1) && valid_pointer m b0 (Int.signed ofs0)); 
   intro EQ; rewrite EQ in H4; try discriminate.
-  destruct (eq_block b1 b0); inv H4.
-  assert (b3 = b2) by congruence. subst b3.
-  assert (x0 = x) by congruence. subst x0.
   elim (andb_prop _ _ EQ); intros.
-  exists (Val.of_bool (Int.cmp c ofs1 ofs0)); split.
   exploit (Mem.valid_pointer_inject f m tm b0 ofs0); eauto. 
   intro VP; rewrite VP; clear VP.
-  exploit (Mem.valid_pointer_inject f m tm b0 ofs1); eauto. 
+  exploit (Mem.valid_pointer_inject f m tm b1 ofs1); eauto. 
   intro VP; rewrite VP; clear VP.
+  destruct (eq_block b1 b0); inv H4.
+  (* same blocks in source *)
+  assert (b3 = b2) by congruence. subst b3.
+  assert (x0 = x) by congruence. subst x0.
+  exists (Val.of_bool (Int.cmp c ofs1 ofs0)); split.
   unfold eq_block; rewrite zeq_true; simpl.
   decEq. decEq. rewrite Int.translate_cmp. auto. 
   eapply valid_pointer_inject_no_overflow; eauto.
   eapply valid_pointer_inject_no_overflow; eauto.
-  apply val_inject_val_of_bool. 
-  (* *)
+  apply val_inject_val_of_bool.
+  (* different blocks in source *)
+  simpl. exists v; split; [idtac | eapply val_inject_eval_compare_mismatch; eauto].
+  destruct (eq_block b2 b3); auto.
+  exploit different_pointers_inject; eauto. intros [A|A]. 
+  congruence.
+  decEq. destruct c; simpl in H6; inv H6; unfold Int.cmp.
+  predSpec Int.eq Int.eq_spec (Int.add ofs1 (Int.repr x)) (Int.add ofs0 (Int.repr x0)).
+  congruence. auto.
+  predSpec Int.eq Int.eq_spec (Int.add ofs1 (Int.repr x)) (Int.add ofs0 (Int.repr x0)).
+  congruence. auto.
+  (* cmpu *)
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  (* cmpf *)
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
 Qed.
 

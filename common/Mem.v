@@ -1870,6 +1870,30 @@ Proof.
   eapply valid_pointer_inj; eauto.
 Qed.
 
+Lemma different_pointers_inject:
+  forall f m m' b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
+  mem_inject f m m' ->
+  b1 <> b2 ->
+  valid_pointer m b1 (Int.signed ofs1) = true ->
+  valid_pointer m b2 (Int.signed ofs2) = true ->
+  f b1 = Some (b1', delta1) ->
+  f b2 = Some (b2', delta2) ->
+  b1' <> b2' \/
+  Int.signed (Int.add ofs1 (Int.repr delta1)) <>
+  Int.signed (Int.add ofs2 (Int.repr delta2)).
+Proof.
+  intros. 
+  rewrite valid_pointer_valid_access in H1. 
+  rewrite valid_pointer_valid_access in H2. 
+  rewrite (address_inject _ _ _ _ _ _ _ _ H H1 H3). 
+  rewrite (address_inject _ _ _ _ _ _ _ _ H H2 H4). 
+  inv H1. simpl in H7. inv H2. simpl in H9.
+  exploit (mi_no_overlap _ _ _ H); eauto.
+  intros [A | [A | [A | [A | A]]]].
+  auto. omegaContradiction. omegaContradiction. 
+  right. omega. right. omega.
+Qed.
+
 (** Relation between injections and loads. *)
 
 Lemma load_inject:

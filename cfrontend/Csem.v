@@ -292,7 +292,7 @@ Function sem_cmp (c:comparison)
           && valid_pointer m b2 (Int.signed ofs2) then
             if zeq b1 b2
             then Some (Val.of_bool (Int.cmp c ofs1 ofs2))
-            else None
+            else sem_cmp_mismatch c
           else None
       | Vptr b ofs, Vint n =>
           if Int.eq n Int.zero then sem_cmp_mismatch c else None

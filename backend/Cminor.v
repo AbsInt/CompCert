@@ -246,10 +246,8 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | _, _ => None
   end.
 
-Definition eval_compare_null (c: comparison) (n: int) : option val :=
-  if Int.eq n Int.zero 
-  then match c with Ceq => Some Vfalse | Cne => Some Vtrue | _ => None end
-  else None.
+Definition eval_compare_mismatch (c: comparison) : option val :=
+  match c with Ceq => Some Vfalse | Cne => Some Vtrue | _ => None end.
 
 Definition eval_binop
             (op: binary_operation) (arg1 arg2: val) (m: mem): option val :=
@@ -288,11 +286,15 @@ Definition eval_binop
   | Ocmp c, Vptr b1 n1, Vptr b2 n2 =>
       if valid_pointer m b1 (Int.signed n1)
       && valid_pointer m b2 (Int.signed n2) then
-        if eq_block b1 b2 then Some(Val.of_bool(Int.cmp c n1 n2)) else None
+        if eq_block b1 b2
+        then Some(Val.of_bool(Int.cmp c n1 n2))
+        else eval_compare_mismatch c
       else
         None
-  | Ocmp c, Vptr b1 n1, Vint n2 => eval_compare_null c n2
-  | Ocmp c, Vint n1, Vptr b2 n2 => eval_compare_null c n1
+  | Ocmp c, Vptr b1 n1, Vint n2 =>
+      if Int.eq n2 Int.zero then eval_compare_mismatch c else None
+  | Ocmp c, Vint n1, Vptr b2 n2 =>
+      if Int.eq n1 Int.zero then eval_compare_mismatch c else None
   | Ocmpu c, Vint n1, Vint n2 =>
       Some (Val.of_bool(Int.cmpu c n1 n2))
   | Ocmpf c, Vfloat f1, Vfloat f2 =>

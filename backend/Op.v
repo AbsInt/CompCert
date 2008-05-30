@@ -117,10 +117,8 @@ Inductive addressing: Set :=
   operations such as division by zero.  [eval_condition] returns a boolean,
   [eval_operation] and [eval_addressing] return a value. *)
 
-Definition eval_compare_null (c: comparison) (n: int) : option bool :=
-  if Int.eq n Int.zero 
-  then match c with Ceq => Some false | Cne => Some true | _ => None end
-  else None.
+Definition eval_compare_mismatch (c: comparison) : option bool :=
+  match c with Ceq => Some false | Cne => Some true | _ => None end.
 
 Definition eval_condition (cond: condition) (vl: list val) (m: mem):
                option bool :=
@@ -130,18 +128,20 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem):
   | Ccomp c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
       if valid_pointer m b1 (Int.signed n1)
       && valid_pointer m b2 (Int.signed n2) then
-        if eq_block b1 b2 then Some (Int.cmp c n1 n2) else None
+        if eq_block b1 b2
+        then Some (Int.cmp c n1 n2)
+        else eval_compare_mismatch c
       else None
   | Ccomp c, Vptr b1 n1 :: Vint n2 :: nil =>
-      eval_compare_null c n2
+      if Int.eq n2 Int.zero then eval_compare_mismatch c else None
   | Ccomp c, Vint n1 :: Vptr b2 n2 :: nil =>
-      eval_compare_null c n1
+      if Int.eq n1 Int.zero then eval_compare_mismatch c else None
   | Ccompu c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmpu c n1 n2)
   | Ccompimm c n, Vint n1 :: nil =>
       Some (Int.cmp c n1 n)
   | Ccompimm c n, Vptr b1 n1 :: nil =>
-      eval_compare_null c n
+      if Int.eq n Int.zero then eval_compare_mismatch c else None
   | Ccompuimm c n, Vint n1 :: nil =>
       Some (Int.cmpu c n1 n)
   | Ccompf c, Vfloat f1 :: Vfloat f2 :: nil =>
@@ -294,15 +294,13 @@ Ltac FuncInv :=
       idtac
   end.
 
-Remark eval_negate_compare_null:
-  forall c n b,
-  eval_compare_null c n = Some b ->
-  eval_compare_null (negate_comparison c) n = Some (negb b).
+Remark eval_negate_compare_mismatch:
+  forall c b,
+  eval_compare_mismatch c = Some b ->
+  eval_compare_mismatch (negate_comparison c) = Some (negb b).
 Proof.
-  intros until b. unfold eval_compare_null.
-  case (Int.eq n Int.zero). 
-  destruct c; intro EQ; simplify_eq EQ; intros; subst b; reflexivity.
-  intro; discriminate. 
+  intros until b. unfold eval_compare_mismatch.
+  destruct c; intro EQ; inv EQ; auto. 
 Qed.
 
 Lemma eval_negate_condition:
@@ -313,15 +311,16 @@ Proof.
   intros. 
   destruct cond; simpl in H; FuncInv; try subst b; simpl.
   rewrite Int.negate_cmp. auto.
-  apply eval_negate_compare_null; auto.
-  apply eval_negate_compare_null; auto.
+  destruct (Int.eq i Int.zero). apply eval_negate_compare_mismatch; auto. discriminate.
+  destruct (Int.eq i0 Int.zero). apply eval_negate_compare_mismatch; auto. discriminate.
   destruct (valid_pointer m b0 (Int.signed i) &&
             valid_pointer m b1 (Int.signed i0)).
   destruct (eq_block b0 b1). rewrite Int.negate_cmp. congruence.
-  discriminate. discriminate.
+  apply eval_negate_compare_mismatch; auto. 
+  discriminate.
   rewrite Int.negate_cmpu. auto.
   rewrite Int.negate_cmp. auto.
-  apply eval_negate_compare_null; auto.
+  destruct (Int.eq i Int.zero). apply eval_negate_compare_mismatch; auto. discriminate.
   rewrite Int.negate_cmpu. auto.
   auto.
   rewrite negb_elim. auto.
@@ -688,14 +687,21 @@ Definition eval_addressing_total
   | _, _ => Vundef
   end.
 
-Lemma eval_compare_null_weaken:
-  forall c i b,
-  eval_compare_null c i = Some b ->
-  (if Int.eq i Int.zero then Val.cmp_mismatch c else Vundef) = Val.of_bool b.
+Lemma eval_compare_mismatch_weaken:
+  forall c b,
+  eval_compare_mismatch c = Some b ->
+  Val.cmp_mismatch c = Val.of_bool b.
 Proof.
-  unfold eval_compare_null. intros. 
-  destruct (Int.eq i Int.zero); try discriminate.
-  destruct c; try discriminate; inversion H; reflexivity.
+  unfold eval_compare_mismatch. intros. destruct c; inv H; auto.
+Qed.
+
+Lemma eval_compare_null_weaken:
+  forall n c b,
+  (if Int.eq n Int.zero then eval_compare_mismatch c else None) = Some b ->
+  (if Int.eq n Int.zero then Val.cmp_mismatch c else Vundef) = Val.of_bool b.
+Proof.
+  intros. destruct (Int.eq n Int.zero). apply eval_compare_mismatch_weaken. auto.
+  discriminate.
 Qed.
 
 Lemma eval_condition_weaken:
@@ -709,7 +715,9 @@ Proof.
   try (apply eval_compare_null_weaken; auto).
   destruct (valid_pointer m b0 (Int.signed i) &&
             valid_pointer m b1 (Int.signed i0)).
-  unfold eq_block in H. destruct (zeq b0 b1); congruence.
+  unfold eq_block in H. destruct (zeq b0 b1).
+  congruence.
+  apply eval_compare_mismatch_weaken; auto.
   discriminate.
   symmetry. apply Val.notbool_negb_1. 
   symmetry. apply Val.notbool_negb_1. 
@@ -814,10 +822,8 @@ Proof.
   generalize H0.
   caseEq (valid_pointer m1 b0 (Int.signed i)); intro; simpl; try congruence.
   caseEq (valid_pointer m1 b1 (Int.signed i0)); intro; simpl; try congruence.
-  destruct (eq_block b0 b1); try congruence.
-  intro. inv H2. 
   rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H1).
-  rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H).
+  rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H). simpl.
   auto.
 Qed.
 
