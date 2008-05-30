@@ -1125,12 +1125,6 @@ Module EMap(X: EQUALITY_TYPE) <: MAP.
   Proof.
     intros. unfold get, map. reflexivity.
   Qed.
-  Lemma exten:
-    forall (A: Set) (m1 m2: t A),
-    (forall x: X.t, m1 x = m2 x) -> m1 = m2.
-  Proof.
-    intros. unfold t. apply extensionality. assumption.
-  Qed.
 End EMap.
 
 (** * Useful notations *)
