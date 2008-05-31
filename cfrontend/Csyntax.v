@@ -396,6 +396,7 @@ Inductive classify_add_cases : Set :=
   | add_case_ii: classify_add_cases         (**r int , int *)
   | add_case_ff: classify_add_cases         (**r float , float *)
   | add_case_pi: type -> classify_add_cases (**r ptr or array, int *)
+  | add_case_ip: type -> classify_add_cases (**r int, ptr or array *)
   | add_default: classify_add_cases.        (**r other *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
@@ -404,6 +405,8 @@ Definition classify_add (ty1: type) (ty2: type) :=
   | Tfloat _, Tfloat _ => add_case_ff
   | Tpointer ty, Tint _ _ => add_case_pi ty
   | Tarray ty _, Tint _ _ => add_case_pi ty 
+  | Tint _ _, Tpointer ty => add_case_ip ty
+  | Tint _ _, Tarray ty _ => add_case_ip ty 
   | _, _ => add_default
   end.
 

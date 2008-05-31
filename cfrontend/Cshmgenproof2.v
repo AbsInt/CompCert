@@ -206,6 +206,10 @@ Proof.
   eapply eval_Ebinop. eauto. 
   eapply eval_Ebinop. eauto with cshm. eauto.
   simpl. reflexivity. reflexivity. 
+  inversion H7. 
+  eapply eval_Ebinop. eauto. 
+  eapply eval_Ebinop. eauto with cshm. eauto. 
+  simpl. reflexivity. simpl. reflexivity.
 Qed.
 
 Lemma make_sub_correct: binary_constructor_correct make_sub sem_sub.
@@ -369,7 +373,7 @@ Proof.
   (* cast_int_int *)
     destruct sz2; destruct si2; repeat econstructor; eauto with cshm.
   (* cast_float_int *)
-    destruct sz2; destruct si2; repeat econstructor; eauto with cshm; simpl; auto.
+    destruct sz2; destruct si2; unfold make_intoffloat; repeat econstructor; eauto with cshm; simpl; auto.
   (* cast_int_float *)
     destruct sz2; destruct si1; unfold make_floatofint; repeat econstructor; eauto with cshm; simpl; auto.
   (* cast_float_float *)

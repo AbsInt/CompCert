@@ -119,20 +119,26 @@ Function sem_notbool (v: val) (ty: type) : option val :=
 
 Function sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_add t1 t2 with 
-  | add_case_ii =>  
+  | add_case_ii =>                      (**r integer addition *)
       match v1, v2 with
       | Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
       | _,  _ => None
       end
-  | add_case_ff =>
+  | add_case_ff =>                      (**r float addition *)
       match v1, v2 with
       | Vfloat n1, Vfloat n2 => Some (Vfloat (Float.add n1 n2))
       | _,  _ => None
       end
-  | add_case_pi ty=>
+  | add_case_pi ty =>                   (**r pointer plus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
 	Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+      | _,  _ => None
+      end   
+  | add_case_ip ty =>                   (**r integer plus pointer *)
+      match v1,v2 with
+      | Vint n1, Vptr b2 ofs2 => 
+	Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
       | _,  _ => None
       end   
   | add_default => None
@@ -358,6 +364,12 @@ Definition cast_int_float (si : signedness) (i: int) : float :=
   | Unsigned => Float.floatofintu i
   end.
 
+Definition cast_float_int (si : signedness) (f: float) : int :=
+  match si with
+  | Signed => Float.intoffloat f
+  | Unsigned => Float.intuoffloat f
+  end.
+
 Definition cast_float_float (sz: floatsize) (f: float) : float :=
   match sz with
   | F32 => Float.singleoffloat f
@@ -375,22 +387,22 @@ Inductive neutral_for_cast: type -> Prop :=
       neutral_for_cast (Tfunction targs tres).
 
 Inductive cast : val -> type -> type -> val -> Prop :=
-  | cast_ii:   forall i sz2 sz1 si1 si2,
+  | cast_ii:   forall i sz2 sz1 si1 si2,            (**r int to int  *)
       cast (Vint i) (Tint sz1 si1) (Tint sz2 si2)
            (Vint (cast_int_int sz2 si2 i))
-  | cast_fi:   forall f sz1 sz2 si2,
+  | cast_fi:   forall f sz1 sz2 si2,                (**r float to int *)
       cast (Vfloat f) (Tfloat sz1) (Tint sz2 si2)
-           (Vint (cast_int_int sz2 si2 (Float.intoffloat f)))
-  | cast_if:   forall i sz1 sz2 si1,
+           (Vint (cast_int_int sz2 si2 (cast_float_int si2 f)))
+  | cast_if:   forall i sz1 sz2 si1,                (**r int to float  *)
       cast (Vint i) (Tint sz1 si1) (Tfloat sz2)
           (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
-  | cast_ff:   forall f sz1 sz2,
+  | cast_ff:   forall f sz1 sz2,                    (**r float to float *)
       cast (Vfloat f) (Tfloat sz1) (Tfloat sz2)
            (Vfloat (cast_float_float sz2 f))
-  | cast_nn_p: forall b ofs t1 t2,
+  | cast_nn_p: forall b ofs t1 t2, (**r no change in data representation *)
       neutral_for_cast t1 -> neutral_for_cast t2 ->
       cast (Vptr b ofs) t1 t2 (Vptr b ofs)
-  | cast_nn_i: forall n t1 t2,
+  | cast_nn_i: forall n t1 t2,     (**r no change in data representation *)
       neutral_for_cast t1 -> neutral_for_cast t2 ->
       cast (Vint n) t1 t2 (Vint n).
 

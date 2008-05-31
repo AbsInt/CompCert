@@ -90,6 +90,12 @@ Definition make_floatofint (e: expr) (sg: signedness) :=
   | Unsigned => Eunop Ofloatofintu e
   end.
 
+Definition make_intoffloat (e: expr) (sg: signedness) :=
+  match sg with
+  | Signed => Eunop Ointoffloat e
+  | Unsigned => Eunop Ointuoffloat e
+  end.
+
 (** [make_boolean e ty] returns a Csharpminor expression that evaluates
    to the boolean value of [e].  Recall that:
 -  in Csharpminor, [false] is the integer 0,
@@ -126,6 +132,9 @@ Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   | add_case_pi ty =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
+  | add_case_ip ty =>
+      let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
+      OK (Ebinop Oadd e2 (Ebinop Omul n e1))
   | add_default => Error (msg "Cshmgen.make_add")
   end.
 
@@ -212,15 +221,14 @@ Definition make_orbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 (** [make_cast from to e] applies to [e] the numeric conversions needed
    to transform a result of type [from] to a result of type [to].
    It is decomposed in two functions:
--  [make_cast1]  converts between integer and pointers, on one side,
-     and floats on the other side.
--  [make_cast2]  converts to a "smaller" int or float type if necessary.
+-  [make_cast1]  converts from integers to floats or from floats to integers;
+-  [make_cast2]  converts to a "small" int or float type if necessary.
 *)
 
 Definition make_cast1 (from to: type) (e: expr) :=
   match from, to with
   | Tint _ uns, Tfloat _ => make_floatofint e uns
-  | Tfloat _, Tint _ _ => Eunop Ointoffloat e
+  | Tfloat _, Tint _ uns => make_intoffloat e uns
   | _, _ => e
   end.
 
