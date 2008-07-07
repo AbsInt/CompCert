@@ -190,10 +190,10 @@ Definition tunneled_code (f: function) :=
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   | match_stackframes_intro:
-      forall res f sp ls0 pc,
+      forall sig res f sp ls0 pc,
       match_stackframes
-         (Stackframe res f sp ls0 pc)
-         (Stackframe res (tunnel_function f) sp ls0 (branch_target f pc)).
+         (Stackframe sig res f sp ls0 pc)
+         (Stackframe sig res (tunnel_function f) sp ls0 (branch_target f pc)).
 
 Inductive match_states: state -> state -> Prop :=
   | match_states_intro:
@@ -207,10 +207,10 @@ Inductive match_states: state -> state -> Prop :=
       match_states (Callstate s f ls m)
                    (Callstate ts (tunnel_fundef f) ls m)
   | match_states_return:
-      forall s sig ls m ts,
+      forall s ls m ts,
       list_forall2 match_stackframes s ts ->
-      match_states (Returnstate s sig ls m)
-                   (Returnstate ts sig ls m).
+      match_states (Returnstate s ls m)
+                   (Returnstate ts ls m).
 
 Lemma parent_locset_match:
   forall s ts, list_forall2 match_stackframes s ts -> parent_locset ts = parent_locset s.
@@ -227,7 +227,7 @@ Definition measure (st: state) : nat :=
   match st with
   | State s f sp pc ls m => count_goto f pc
   | Callstate s f ls m => 0%nat
-  | Returnstate s sig ls m => 0%nat
+  | Returnstate s ls m => 0%nat
   end.
 
 Lemma branch_target_identity:
@@ -340,7 +340,7 @@ Proof.
   eapply exec_function_external; eauto.
   simpl. econstructor; eauto. 
   (* return *)
-  inv H4. inv H1.
+  inv H3. inv H1.
   left; econstructor; split.
   eapply exec_return; eauto.
   fold rs1. constructor. auto.
@@ -366,7 +366,7 @@ Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H6. constructor. auto. 
+  intros. inv H0. inv H. inv H5. constructor. auto. 
 Qed.
 
 Theorem transf_program_correct:

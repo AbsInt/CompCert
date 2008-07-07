@@ -112,7 +112,8 @@ Fixpoint find_label (lbl: label) (c: code) {struct c} : option code :=
 
 Inductive stackframe : Set :=
   | Stackframe:
-      forall (res: loc)       (**r where to store the result *)
+      forall (sig: signature) (**r signature of call *)
+             (res: loc)       (**r where to store the result *)
              (f: function)    (**r calling function *)
              (sp: val)        (**r stack pointer in calling function *)
              (ls: locset)     (**r location state in calling function *)
@@ -136,7 +137,6 @@ Inductive state : Set :=
       state
   | Returnstate:
       forall (stack: list stackframe) (**r call stack *)
-             (sig: signature)         (**r signature of returning function *)
              (ls: locset)             (**r location state at point of return *)
              (m: mem),                (**r memory state *)
       state.
@@ -144,7 +144,13 @@ Inductive state : Set :=
 Definition parent_locset (stack: list stackframe) : locset :=
   match stack with
   | nil => Locmap.init Vundef
-  | Stackframe res f sp ls pc :: stack' => ls
+  | Stackframe sg res f sp ls pc :: stack' => ls
+  end.
+
+Definition parent_callsig (stack: list stackframe) : signature :=
+  match stack with
+  | nil => mksignature nil (Some Tint)
+  | Stackframe sg res f sp ls pc :: stack' => sg
   end.
 
 Section RELSEM.
@@ -185,7 +191,7 @@ Inductive step: state -> trace -> state -> Prop :=
       sig = funsig f' ->
       let rs1 := parmov args (loc_arguments sig) rs in
       step (State s f sp (Lcall sig ros args res :: b) rs m)
-        E0 (Callstate (Stackframe res f sp rs1 b :: s) f' rs1 m)
+        E0 (Callstate (Stackframe sig res f sp rs1 b :: s) f' rs1 m)
   | exec_Ltailcall:
       forall s f stk sig ros args b rs m f',
       find_function ros rs = Some f' ->
@@ -228,7 +234,7 @@ Inductive step: state -> trace -> state -> Prop :=
       let rs1 := set_result_reg f.(fn_sig) or rs in
       let rs2 := return_regs (parent_locset s) rs1 in
       step (State s f (Vptr stk Int.zero) (Lreturn or :: b) rs m)
-        E0 (Returnstate s f.(fn_sig) rs2 (Mem.free m stk))
+        E0 (Returnstate s rs2 (Mem.free m stk))
   | exec_function_internal:
       forall s f rs m m' stk,
       Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
@@ -243,11 +249,11 @@ Inductive step: state -> trace -> state -> Prop :=
       let rs1 :=
         Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs in
       step (Callstate s (External ef) rs m)
-         t (Returnstate s ef.(ef_sig) rs1 m)
+         t (Returnstate s rs1 m)
   | exec_return:
       forall res f sp rs0 b s sig rs m,
       let rs1 := Locmap.set res (rs (R (loc_result sig))) rs in
-      step (Returnstate (Stackframe res f sp rs0 b :: s) sig rs m)
+      step (Returnstate (Stackframe sig res f sp rs0 b :: s) rs m)
         E0 (State s f sp b rs1 m).
 
 End RELSEM.
@@ -262,9 +268,9 @@ Inductive initial_state (p: program): state -> Prop :=
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall sig rs m r,
-      rs (R (loc_result sig)) = Vint r ->
-      final_state (Returnstate nil sig rs m) r.
+  | final_state_intro: forall rs m r,
+      rs (R (loc_result (mksignature nil (Some Tint)))) = Vint r ->
+      final_state (Returnstate nil rs m) r.
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=
   program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.

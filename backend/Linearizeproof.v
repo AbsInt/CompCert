@@ -468,15 +468,15 @@ Qed.
 
 Inductive match_stackframes: LTL.stackframe -> LTLin.stackframe -> Prop :=
   | match_stackframe_intro:
-      forall res f sp pc ls tf c,
+      forall sig res f sp pc ls tf c,
       transf_function f = OK tf ->
       (reachable f)!!pc = true ->
       valid_successor f pc ->
       is_tail c (fn_code tf) ->
       wt_function f ->
       match_stackframes
-        (LTL.Stackframe res f sp ls pc)
-        (LTLin.Stackframe res tf sp ls (add_branch pc c)).
+        (LTL.Stackframe sig res f sp ls pc)
+        (LTLin.Stackframe sig res tf sp ls (add_branch pc c)).
 
 Inductive match_states: LTL.state -> LTLin.state -> Prop :=
   | match_states_intro:
@@ -496,10 +496,10 @@ Inductive match_states: LTL.state -> LTLin.state -> Prop :=
       match_states (LTL.Callstate s f ls m)
                    (LTLin.Callstate ts tf ls m)
   | match_states_return:
-      forall s sig ls m ts,
+      forall s ls m ts,
       list_forall2 match_stackframes s ts ->
-      match_states (LTL.Returnstate s sig ls m)
-                   (LTLin.Returnstate ts sig ls m).
+      match_states (LTL.Returnstate s ls m)
+                   (LTLin.Returnstate ts ls m).
 
 Remark parent_locset_match:
   forall s ts,
@@ -699,7 +699,7 @@ Proof.
   econstructor; eauto.
 
   (* return *)
-  inv H4. inv H1.
+  inv H3. inv H1.
   exploit find_label_lin_succ; eauto. intros [c' AT].
   econstructor; split.
   eapply plus_left'.
@@ -730,7 +730,7 @@ Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> LTL.final_state st1 r -> LTLin.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H6. constructor. auto. 
+  intros. inv H0. inv H. inv H5. constructor. auto. 
 Qed.
 
 Theorem transf_program_correct:

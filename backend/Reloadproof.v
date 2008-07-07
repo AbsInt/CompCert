@@ -770,26 +770,26 @@ Qed.
   only acceptable locations are accessed by this code.
 *)
 
-Inductive match_stackframes: list LTLin.stackframe -> list Linear.stackframe -> signature -> Prop :=
+Inductive match_stackframes: list LTLin.stackframe -> list Linear.stackframe -> Prop :=
   | match_stackframes_nil:
-      forall tyargs,
-      match_stackframes nil nil (mksignature tyargs (Some Tint))
+      match_stackframes nil nil
   | match_stackframes_cons:
       forall res f sp c rs s s' c' ls sig,
-      match_stackframes s s' (LTLin.fn_sig f) ->
+      match_stackframes s s' ->
+      sig_res (LTLin.fn_sig f) = sig_res (parent_callsig s) ->
       c' = add_spill (loc_result sig) res (transf_code f c) ->      
       agree rs ls ->
       loc_acceptable res ->
       wt_function f ->
       is_tail c (LTLin.fn_code f) ->
-      match_stackframes (LTLin.Stackframe res f sp rs c :: s)
-                        (Linear.Stackframe (transf_function f) sp ls c' :: s')
-                        sig.
+      match_stackframes (LTLin.Stackframe sig res f sp rs c :: s)
+                        (Linear.Stackframe (transf_function f) sp ls c' :: s').
 
 Inductive match_states: LTLin.state -> Linear.state -> Prop :=
   | match_states_intro:
       forall s f sp c rs m s' ls
-        (STACKS: match_stackframes s s' (LTLin.fn_sig f))
+        (STACKS: match_stackframes s s')
+        (SIG: sig_res (LTLin.fn_sig f) = sig_res (parent_callsig s))
         (AG: agree rs ls)
         (WT: wt_function f)
         (TL: is_tail c (LTLin.fn_code f)),
@@ -797,40 +797,28 @@ Inductive match_states: LTLin.state -> Linear.state -> Prop :=
                    (Linear.State s' (transf_function f) sp (transf_code f c) ls m)
   | match_states_call:
       forall s f rs m s' ls
-        (STACKS: match_stackframes s s' (LTLin.funsig f))
+        (STACKS: match_stackframes s s')
+        (SIG: sig_res (LTLin.funsig f) = sig_res (parent_callsig s))
         (AG: agree_arguments (LTLin.funsig f) rs ls)
         (WT: wt_fundef f),
       match_states (LTLin.Callstate s f rs m)
                    (Linear.Callstate s' (transf_fundef f) ls m)
   | match_states_return:
-      forall s sig rs m s' ls
-        (STACKS: match_stackframes s s' sig)
+      forall s rs m s' ls
+        (STACKS: match_stackframes s s')
         (AG: agree rs ls),
-      match_states (LTLin.Returnstate s sig rs m)
+      match_states (LTLin.Returnstate s rs m)
                    (Linear.Returnstate s' ls m).
 
 Remark parent_locset_match:
-  forall s s' sig,
-  match_stackframes s s' sig ->
+  forall s s',
+  match_stackframes s s' ->
   agree (LTLin.parent_locset s) (parent_locset s').
 Proof.
   induction 1; simpl.
   red; intros; auto.
   auto.
 Qed.
-
-Remark match_stackframes_inv:
-  forall s ts sig,
-  match_stackframes s ts sig ->
-  forall sig', sig_res sig' = sig_res sig ->
-  match_stackframes s ts sig'.
-Proof.
-  induction 1; intros.
-  destruct sig'. simpl in H; inv H. constructor.
-  assert (loc_result sig' = loc_result sig).
-  unfold loc_result. rewrite H5; auto.
-  econstructor; eauto. rewrite H6; auto.
-Qed. 
          
 Ltac ExploitWT :=
   match goal with
@@ -859,7 +847,7 @@ Definition measure (st: LTLin.state) : nat :=
   match st with
   | LTLin.State s f sp c ls m => List.length c
   | LTLin.Callstate s f ls m => 0%nat
-  | LTLin.Returnstate s sig ls m => 0%nat
+  | LTLin.Returnstate s ls m => 0%nat
   end.
 
 Theorem transf_step_correct:
@@ -995,8 +983,8 @@ Proof.
   eauto. traceEq.
   econstructor; eauto. 
   econstructor; eauto with coqlib.
-  rewrite H0. auto.
   eapply agree_arguments_agree; eauto.
+  simpl. congruence. 
   (* direct call *)
   destruct (parallel_move_arguments_correct tge s' (transf_function f) sp
               args sig
@@ -1017,8 +1005,8 @@ Proof.
   traceEq.
   econstructor; eauto.
   econstructor; eauto with coqlib.
-  rewrite H0; auto.
   eapply agree_arguments_agree; eauto.
+  simpl; congruence.
 
   (* Ltailcall *)
   inversion MS. subst s0 f0 sp c rs0 m0 s1'.
@@ -1055,8 +1043,7 @@ Proof.
     apply functions_translated. eauto.
     rewrite H0; symmetry; apply sig_preserved.
   eauto. traceEq.
-  econstructor; eauto.
-  eapply match_stackframes_inv; eauto. congruence.
+  econstructor; eauto. congruence. 
  
   (* direct call *)
   destruct (parallel_move_arguments_correct tge s' (transf_function f) (Vptr stk Int.zero)
@@ -1077,8 +1064,7 @@ Proof.
     apply function_ptr_translated; auto. congruence.
     rewrite H0. symmetry; apply sig_preserved.
   traceEq.
-  econstructor; eauto.
-  eapply match_stackframes_inv; eauto. congruence.
+  econstructor; eauto. congruence.
 
   (* Lalloc *)
   ExploitWT; inv WTI.
@@ -1213,7 +1199,7 @@ Proof.
   apply function_ptr_translated; eauto. 
   rewrite sig_preserved. auto.
   replace (Genv.init_mem tprog) with (Genv.init_mem prog).  
-  econstructor; eauto. rewrite H2. constructor.
+  econstructor; eauto. constructor. rewrite H2; auto.
   red; intros. auto.
   eapply Genv.find_funct_ptr_prop; eauto.
   symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf; auto.

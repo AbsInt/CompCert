@@ -552,12 +552,13 @@ Qed.
   The bottom horizontal bar is the [match_states] relation.
 *)
 
-Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
-  | match_stackframes_nil: forall ty_args,
-      match_stackframes nil nil (mksignature ty_args (Some Tint))
+Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> Prop :=
+  | match_stackframes_nil:
+      match_stackframes nil nil
   | match_stackframes_cons:
       forall s ts sig res f sp pc rs ls env live assign,
-      match_stackframes s ts (RTL.fn_sig f) ->
+      match_stackframes s ts ->
+      sig_res (RTL.fn_sig f) = sig_res (parent_callsig ts) ->
       wt_function f env ->
       analyze f = Some live ->
       regalloc f live (live0 f live) env = Some assign ->
@@ -569,13 +570,13 @@ Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signa
               (Locmap.set (assign res) (ls1 (R (loc_result sig))) ls1)) ->
       match_stackframes
         (RTL.Stackframe res (RTL.fn_code f) sp pc rs :: s)
-        (LTL.Stackframe (assign res) (transf_fun f live assign) sp ls pc :: ts)
-        sig.
+        (LTL.Stackframe sig (assign res) (transf_fun f live assign) sp ls pc :: ts).
 
 Inductive match_states: RTL.state -> LTL.state -> Prop :=
   | match_states_intro:
       forall s f sp pc rs m ts ls tm live assign env
-      (STACKS: match_stackframes s ts (RTL.fn_sig f))
+      (STACKS: match_stackframes s ts)
+      (SIG: sig_res(RTL.fn_sig f) = sig_res(parent_callsig ts))
       (WT: wt_function f env)
       (ANL: analyze f = Some live)
       (ASG: regalloc f live (live0 f live) env = Some assign)
@@ -585,7 +586,8 @@ Inductive match_states: RTL.state -> LTL.state -> Prop :=
                    (LTL.State ts (transf_fun f live assign) sp pc ls tm)
   | match_states_call:
       forall s f args m ts tf ls tm,
-      match_stackframes s ts (RTL.funsig f) ->
+      match_stackframes s ts ->
+      sig_res(RTL.funsig f) = sig_res(parent_callsig ts) ->
       transf_fundef f = OK tf ->
       Val.lessdef_list args (List.map ls (loc_arguments (funsig tf))) ->
       Mem.lessdef m tm ->
@@ -593,28 +595,13 @@ Inductive match_states: RTL.state -> LTL.state -> Prop :=
       match_states (RTL.Callstate s f args m)
                    (LTL.Callstate ts tf ls tm)
   | match_states_return:
-      forall s v m ts sig ls tm,
-      match_stackframes s ts sig ->
-      Val.lessdef v (ls (R (loc_result sig))) ->
+      forall s v m ts ls tm,
+      match_stackframes s ts ->
+      Val.lessdef v (ls (R (loc_result (parent_callsig ts)))) ->
       Mem.lessdef m tm ->
       (forall l, Loc.notin l destroyed_at_call -> loc_acceptable l -> ls l = parent_locset ts l) ->
       match_states (RTL.Returnstate s v m)
-                   (LTL.Returnstate ts sig ls tm).
-
-Remark match_stackframes_change:
-  forall s ts sig,
-  match_stackframes s ts sig ->
-  forall sig',
-  sig_res sig' = sig_res sig ->
-  match_stackframes s ts sig'.
-Proof.
-  induction 1; intros.
-  destruct sig'. simpl in H; inv H. constructor.
-  assert (loc_result sig' = loc_result sig).
-  unfold loc_result. rewrite H4; auto.
-  econstructor; eauto.
-  rewrite H5. auto. 
-Qed.
+                   (LTL.Returnstate ts ls tm).
 
 (** The simulation proof is by case analysis over the RTL transition
   taken in the source program. *)
@@ -808,8 +795,7 @@ Proof.
   rewrite (sig_function_translated _ _ TF). eauto.
   rewrite (sig_function_translated _ _ TF).
   econstructor; eauto.
-  apply match_stackframes_change with (RTL.fn_sig f0); auto.
-  inv WTI. auto.
+  inv WTI. congruence.
   rewrite (sig_function_translated _ _ TF).
   rewrite return_regs_arguments. 
   change Regset.elt with reg in PM1. 
@@ -865,13 +851,16 @@ Proof.
   econstructor; eauto.
   rewrite return_regs_result.  
   inv WTI. destruct or; simpl in *. 
+  replace (loc_result (parent_callsig ts))
+     with (loc_result (RTL.fn_sig f)).
   rewrite Locmap.gss. eapply agree_eval_reg; eauto.
+  unfold loc_result. rewrite SIG. auto.
   constructor. 
   apply free_lessdef; auto.
   intros. apply return_regs_not_destroyed; auto.
 
   (* internal function *)
-  generalize H6. simpl.  unfold transf_function.
+  generalize H7. simpl.  unfold transf_function.
   caseEq (type_function f); simpl; try congruence. intros env TYP.
   assert (WTF: wt_function f env). apply type_function_correct; auto.
   caseEq (analyze f); simpl; try congruence. intros live ANL.
@@ -902,13 +891,16 @@ Proof.
   apply list_map_exten. intros. symmetry. eapply call_regs_param_of_arg; eauto.
 
   (* external function *)
-  injection H6; intro EQ; inv EQ.
+  injection H7; intro EQ; inv EQ.
   exploit event_match_lessdef; eauto. intros [tres [A B]].
   econstructor; split.
   eapply exec_function_external; eauto.
   eapply match_states_return; eauto.
+  replace (loc_result (parent_callsig ts))
+     with (loc_result (ef_sig ef)).
   rewrite Locmap.gss. auto.
-  intros. rewrite <- H10; auto. apply Locmap.gso.
+  unfold loc_result. rewrite <- H6. auto.
+  intros. rewrite <- H11; auto. apply Locmap.gso.
   apply Loc.diff_sym. eapply Loc.in_notin_diff; eauto.
   apply loc_result_caller_save. 
 
@@ -940,7 +932,7 @@ Proof.
   econstructor; eauto.
   rewrite symbols_preserved. 
   rewrite (transform_partial_program_main _ _ TRANSF).  auto.
-  constructor; auto. rewrite H2; constructor. 
+  constructor; auto. constructor. rewrite H2; auto. 
 Qed.
 
 Lemma transf_final_states:
@@ -948,7 +940,7 @@ Lemma transf_final_states:
   match_states st1 st2 -> RTL.final_state st1 r -> LTL.final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv H3. econstructor.
-  inv H4. auto. 
+  simpl in H4. inv H4. auto. 
 Qed.
 
 Theorem transf_program_correct:
