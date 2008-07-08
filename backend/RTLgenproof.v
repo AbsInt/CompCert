@@ -355,7 +355,8 @@ Proof.
   intros until tf. unfold transl_fundef, transf_partial_fundef.
   case f; intro.
   unfold transl_function. 
-  case (transl_fun f0 init_state); simpl; intros.
+  destruct (reserve_labels (fn_body f0) (PTree.empty node, init_state)) as [ngoto s0].
+  case (transl_fun f0 ngoto s0); simpl; intros.
   discriminate.
   destruct p. simpl in H. inversion H. reflexivity.
   intro. inversion H. reflexivity.
@@ -415,6 +416,42 @@ Proof.
   exists rs; split. subst nd. apply star_refl. auto.  
 Qed.
 
+(** Correctness of the translation of [switch] statements *)
+
+Lemma transl_switch_correct:
+  forall cs sp rs m i code r nexits t ns,
+  tr_switch code r nexits t ns ->
+  rs#r = Vint i ->
+  exists nd,
+  star step tge (State cs code sp ns rs m) E0 (State cs code sp nd rs m) /\
+  nth_error nexits (comptree_match i t) = Some nd.
+Proof.
+  induction 1; intros; simpl.
+  exists n. split. apply star_refl. auto. 
+
+  caseEq (Int.eq i key); intros.
+  exists nfound; split. 
+  apply star_one. eapply exec_Icond_true; eauto. 
+  simpl. rewrite H2. congruence. auto.
+  exploit IHtr_switch; eauto. intros [nd [EX MATCH]].
+  exists nd; split.
+  eapply star_step. eapply exec_Icond_false; eauto. 
+  simpl. rewrite H2. congruence. eexact EX. traceEq.
+  auto.
+
+  caseEq (Int.ltu i key); intros.
+  exploit IHtr_switch1; eauto. intros [nd [EX MATCH]].
+  exists nd; split. 
+  eapply star_step. eapply exec_Icond_true; eauto. 
+  simpl. rewrite H2. congruence. eexact EX. traceEq.
+  auto.
+  exploit IHtr_switch2; eauto. intros [nd [EX MATCH]].
+  exists nd; split. 
+  eapply star_step. eapply exec_Icond_false; eauto. 
+  simpl. rewrite H2. congruence. eexact EX. traceEq.
+  auto.
+Qed.
+
 (** ** Semantic preservation for the translation of expressions *)
 
 Section CORRECTNESS_EXPR.
@@ -429,7 +466,7 @@ Variable m: mem.
                     I /\ P
     e, le, m, a ------------- State cs code sp ns rs m
          ||                      |
-        t||                     t|*
+         ||                      |*
          ||                      |
          \/                      v
     e, le, m', v ------------ State cs code sp nd rs' m'
@@ -824,7 +861,73 @@ Proof
 
 End CORRECTNESS_EXPR.
 
-(** ** Semantic preservation for the translation of terminating statements *)   
+(** ** Measure over CminorSel states *)
+
+Open Local Scope nat_scope.
+
+Fixpoint size_stmt (s: stmt) : nat :=
+  match s with
+  | Sskip => 0
+  | Sseq s1 s2 => (size_stmt s1 + size_stmt s2 + 1)
+  | Sifthenelse e s1 s2 => (size_stmt s1 + size_stmt s2 + 1)
+  | Sloop s1 => (size_stmt s1 + 1)
+  | Sblock s1 => (size_stmt s1 + 1)
+  | Sexit n => 0
+  | Slabel lbl s1 => (size_stmt s1 + 1)
+  | _ => 1
+  end.
+
+Fixpoint size_cont (k: cont) : nat :=
+  match k with
+  | Kseq s k1 => (size_stmt s + size_cont k1 + 1)
+  | Kblock k1 => (size_cont k1 + 1)
+  | _ => 0%nat
+  end.
+
+Definition measure_state (S: CminorSel.state) :=
+  match S with
+  | CminorSel.State _ s k _ _ _ =>
+      existS (fun (x: nat) => nat)
+             (size_stmt s + size_cont k)
+             (size_stmt s)
+  | _ =>
+      existS (fun (x: nat) => nat) 0 0
+  end.
+
+Require Import Relations.
+Require Import Wellfounded.
+
+Definition lt_state (S1 S2: CminorSel.state) :=
+  lexprod nat (fun (x: nat) => nat)
+          lt (fun (x: nat) => lt)
+          (measure_state S1) (measure_state S2).
+
+Lemma lt_state_intro:
+  forall f1 s1 k1 sp1 e1 m1 f2 s2 k2 sp2 e2 m2,
+  size_stmt s1 + size_cont k1 < size_stmt s2 + size_cont k2
+  \/ (size_stmt s1 + size_cont k1 = size_stmt s2 + size_cont k2
+      /\ size_stmt s1 < size_stmt s2) ->
+  lt_state (CminorSel.State f1 s1 k1 sp1 e1 m1)
+           (CminorSel.State f2 s2 k2 sp2 e2 m2).
+Proof.
+  intros. unfold lt_state. simpl. destruct H as [A | [A B]].
+  apply left_lex. auto.
+  rewrite A. apply right_lex. auto.
+Qed.
+
+Ltac Lt_state :=
+  apply lt_state_intro; simpl; try omega.
+
+Require Import Wf_nat.
+
+Lemma lt_state_wf:
+  well_founded lt_state.
+Proof.
+  unfold lt_state. apply wf_inverse_image with (f := measure_state).
+  apply wf_lexprod. apply lt_wf. intros. apply lt_wf. 
+Qed.
+
+(** ** Semantic preservation for the translation of statements *)   
 
 (** The simulation diagram for the translation of statements
   is of the following form:
@@ -854,718 +957,369 @@ End CORRECTNESS_EXPR.
   [e'].  Moreover, the program point reached must correspond to the outcome
   [out].  This is captured by the following [state_for_outcome] predicate. *)
 
-Inductive state_for_outcome
-           (ncont: node) (nexits: list node) (nret: node) (rret: option reg)
-           (cs: list stackframe) (c: code) (sp: val) (rs: regset) (m: mem):
-           outcome -> RTL.state -> Prop :=
-  | state_for_normal:
-      state_for_outcome ncont nexits nret rret cs c sp rs m
-                        Out_normal (State cs c sp ncont rs m)
-  | state_for_exit: forall n nexit,
-      nth_error nexits n = Some nexit ->
-      state_for_outcome ncont nexits nret rret cs c sp rs m
-                        (Out_exit n) (State cs c sp nexit rs m)
-  | state_for_return_none:
-      rret = None ->
-      state_for_outcome ncont nexits nret rret cs c sp rs m
-                        (Out_return None) (State cs c sp nret rs m)
-  | state_for_return_some: forall r v,
-      rret = Some r ->
-      rs#r = v ->
-      state_for_outcome ncont nexits nret rret cs c sp rs m
-                        (Out_return (Some v)) (State cs c sp nret rs m)
-  | state_for_return_tail: forall v,
-      state_for_outcome ncont nexits nret rret cs c sp rs m
-                        (Out_tailcall_return v) (Returnstate cs v m).
+Inductive tr_funbody (c: code) (map: mapping) (f: CminorSel.function)
+                     (ngoto: labelmap) (nret: node) (rret: option reg) : Prop :=
+  | tr_funbody_intro: forall nentry r,
+      rret = ret_reg f.(CminorSel.fn_sig) r ->
+      tr_stmt c map f.(fn_body) nentry nret nil ngoto nret rret ->
+      tr_funbody c map f ngoto nret rret.
 
-Definition transl_stmt_prop 
-  (sp: val) (e: env) (m: mem) (a: stmt)
-  (t: trace) (e': env) (m': mem) (out: outcome) : Prop :=
-  forall cs code map ns ncont nexits nret rret rs
-    (MWF: map_wf map)
-    (TE: tr_stmt code map a ns ncont nexits nret rret)
-    (ME: match_env map e nil rs),
-  exists rs', exists st,
-     state_for_outcome ncont nexits nret rret cs code sp rs' m' out st
-  /\ star step tge (State cs code sp ns rs m) t st
-  /\ match_env map e' nil rs'.
+Inductive tr_cont: RTL.code -> mapping -> 
+                   CminorSel.cont -> node -> list node -> labelmap -> node -> option reg ->
+                   list RTL.stackframe -> Prop :=
+  | tr_Kseq: forall c map s k nd nexits ngoto nret rret cs n,
+      tr_stmt c map s nd n nexits ngoto nret rret ->
+      tr_cont c map k n nexits ngoto nret rret cs ->
+      tr_cont c map (Kseq s k) nd nexits ngoto nret rret cs
+  | tr_Kblock: forall c map k nd nexits ngoto nret rret cs,
+      tr_cont c map k nd nexits ngoto nret rret cs ->
+      tr_cont c map (Kblock k) nd (nd :: nexits) ngoto nret rret cs
+  | tr_Kstop: forall c map ngoto nret rret cs,
+      c!nret = Some(Ireturn rret) ->
+      match_stacks Kstop cs ->
+      tr_cont c map Kstop nret nil ngoto nret rret cs
+  | tr_Kcall: forall c map optid f sp e k ngoto nret rret cs,
+      c!nret = Some(Ireturn rret) ->
+      match_stacks (Kcall optid f sp e k) cs ->
+      tr_cont c map (Kcall optid f sp e k) nret nil ngoto nret rret cs
 
-(** Finally, the correctness condition for the translation of functions
-  is that the translated RTL function, when applied to the same arguments
-  as the original Cminor function, returns the same value and performs
-  the same modifications on the memory state. *)
+with match_stacks: CminorSel.cont -> list RTL.stackframe -> Prop :=
+  | match_stacks_stop:
+      match_stacks Kstop nil
+  | match_stacks_call: forall optid f sp e k r c n rs cs map nexits ngoto nret rret n',
+      map_wf map ->
+      tr_funbody c map f ngoto nret rret ->
+      match_env map e nil rs ->
+      tr_store_optvar c map r optid n n' ->
+      ~reg_in_map map r ->
+      tr_cont c map k n' nexits ngoto nret rret cs ->
+      match_stacks (Kcall optid f sp e k) (Stackframe r c sp n rs :: cs).
 
-Definition transl_function_prop
-    (m: mem) (f: CminorSel.fundef) (vargs: list val)
-    (t: trace) (m': mem) (vres: val) : Prop :=
-  forall cs tf
-    (TE: transl_fundef f = OK tf),
-  star step tge (Callstate cs tf vargs m) t (Returnstate cs vres m').
+Inductive match_states: CminorSel.state -> RTL.state -> Prop :=
+  | match_state:
+      forall f s k sp e m cs c ns rs map ncont nexits ngoto nret rret
+        (MWF: map_wf map)
+        (TS: tr_stmt c map s ns ncont nexits ngoto nret rret)
+        (TF: tr_funbody c map f ngoto nret rret)
+        (TK: tr_cont c map k ncont nexits ngoto nret rret cs)
+        (ME: match_env map e nil rs),
+      match_states (CminorSel.State f s k sp e m)
+                   (RTL.State cs c sp ns rs m)
+  | match_callstate:
+      forall f args k m cs tf
+        (TF: transl_fundef f = OK tf)
+        (MS: match_stacks k cs),
+      match_states (CminorSel.Callstate f args k m)
+                   (RTL.Callstate cs tf args m)
+  | match_returnstate:
+      forall v k m cs
+        (MS: match_stacks k cs),
+      match_states (CminorSel.Returnstate v k m)
+                   (RTL.Returnstate cs v m).
 
-Lemma transl_funcall_internal_correct:
-  forall (m : mem) (f : CminorSel.function)
-         (vargs : list val) (m1 : mem) (sp : block) (e : env) (t : trace)
-         (e2 : env) (m2 : mem) (out: outcome) (vres : val),
-  Mem.alloc m 0 (fn_stackspace f) = (m1, sp) ->
-  set_locals (fn_vars f) (set_params vargs (CminorSel.fn_params f)) = e ->
-  exec_stmt ge (Vptr sp Int.zero) e m1 (fn_body f) t e2 m2 out ->
-  transl_stmt_prop (Vptr sp Int.zero) e m1 (fn_body f) t e2 m2 out ->
-  outcome_result_value out f.(CminorSel.fn_sig).(sig_res) vres ->
-  transl_function_prop m (Internal f) vargs t 
-                            (outcome_free_mem out m2 sp) vres.
+Lemma match_stacks_call_cont:
+  forall c map k ncont nexits ngoto nret rret cs,
+  tr_cont c map k ncont nexits ngoto nret rret cs ->
+  match_stacks (call_cont k) cs /\ c!nret = Some(Ireturn rret).
 Proof.
-  intros; red; intros.
-  generalize TE; simpl. caseEq (transl_function f); simpl. 2: congruence.
-  intros tfi EQ1 EQ2. injection EQ2; clear EQ2; intro EQ2.
-  assert (TR: tr_function f tfi). apply transl_function_charact; auto.
-  rewrite <- EQ2. inversion TR. subst f0. 
-
-  pose (rs := init_regs vargs rparams).
-  assert (ME: match_env map2 e nil rs).
-  rewrite <- H0. unfold rs. 
-  eapply match_init_env_init_reg; eauto.
-
-  assert (MWF: map_wf map2).
-    assert (map_valid init_mapping init_state) by apply init_mapping_valid.
-    exploit (add_vars_valid (CminorSel.fn_params f)); eauto. intros [A B].
-    eapply add_vars_wf; eauto. eapply add_vars_wf; eauto. apply init_mapping_wf.
-
-  exploit H2; eauto. intros [rs' [st [OUT [EX ME']]]].
-
-  eapply star_left.
-  eapply exec_function_internal; eauto. simpl.
-  inversion OUT; clear OUT; subst out st; simpl in H3; simpl.
-
-  (* Out_normal *)
-  unfold ret_reg in H6. destruct (sig_res (CminorSel.fn_sig f)). contradiction. 
-  subst vres orret. 
-  eapply star_right. unfold rs in EX. eexact EX.
-  change Vundef with (regmap_optget None Vundef rs').
-  apply exec_Ireturn. auto. reflexivity.
-
-  (* Out_exit *)
-  contradiction.
-
-  (* Out_return None *)
-  subst orret.
-  unfold ret_reg in H8. destruct (sig_res (CminorSel.fn_sig f)). contradiction.
-  subst vres. 
-  eapply star_right. unfold rs in EX. eexact EX. 
-  change Vundef with (regmap_optget None Vundef rs').
-  apply exec_Ireturn. auto.
-  reflexivity. 
-
-  (* Out_return Some *)
-  subst orret. 
-  unfold ret_reg in H8. unfold ret_reg in H9.
-  destruct (sig_res (CminorSel.fn_sig f)). inversion H9.
-  subst vres.    
-  eapply star_right. unfold rs in EX. eexact EX.
-  replace v with (regmap_optget (Some rret) Vundef rs').
-  apply exec_Ireturn. auto.
-  simpl. congruence. 
-  reflexivity.
-  contradiction.
-
-  (* a tail call *)
-  subst v. rewrite E0_right. auto. traceEq.
+  induction 1; simpl; auto.
 Qed.
 
-Lemma transl_funcall_external_correct:
-  forall (ef : external_function) (m : mem) (args : list val) (t: trace) (res : val),
-  event_match ef args t res ->
-  transl_function_prop m (External ef) args t m res.
+Lemma tr_cont_call_cont:
+  forall c map k ncont nexits ngoto nret rret cs,
+  tr_cont c map k ncont nexits ngoto nret rret cs ->
+  tr_cont c map (call_cont k) nret nil ngoto nret rret cs.
 Proof.
-  intros; red; intros. unfold transl_function in TE; simpl in TE.
-  inversion TE; subst tf. 
-  apply star_one. apply exec_function_external. auto.
+  induction 1; simpl; auto; econstructor; eauto.
 Qed.
 
-Lemma transl_stmt_Sskip_correct:
-  forall (sp: val) (e : env) (m : mem),
-  transl_stmt_prop sp e m Sskip E0 e m Out_normal.
+Lemma tr_find_label:
+  forall c map lbl n (ngoto: labelmap) nret rret s' k' cs,
+  ngoto!lbl = Some n ->
+  forall s k ns1 nd1 nexits1,
+  find_label lbl s k = Some (s', k') ->
+  tr_stmt c map s ns1 nd1 nexits1 ngoto nret rret ->
+  tr_cont c map k nd1 nexits1 ngoto nret rret cs ->
+  exists ns2, exists nd2, exists nexits2,
+     c!n = Some(Inop ns2)
+  /\ tr_stmt c map s' ns2 nd2 nexits2 ngoto nret rret
+  /\ tr_cont c map k' nd2 nexits2 ngoto nret rret cs.
 Proof.
-  intros; red; intros; inv TE.
-  exists rs; econstructor.
-  split. constructor.
-  split. apply star_refl.
-  auto.
+  induction s; intros until nexits1; simpl; try congruence.
+  (* seq *)
+  caseEq (find_label lbl s1 (Kseq s2 k)); intros.
+  inv H1. inv H2. eapply IHs1; eauto. econstructor; eauto.
+  inv H2. eapply IHs2; eauto. 
+  (* ifthenelse *)
+  caseEq (find_label lbl s1 k); intros.
+  inv H1. inv H2. eapply IHs1; eauto.
+  inv H2. eapply IHs2; eauto.
+  (* loop *)
+  intros. inversion H1; subst.
+  eapply IHs; eauto. econstructor; eauto.
+  (* block *)
+  intros. inv H1.
+  eapply IHs; eauto. econstructor; eauto.
+  (* label *)
+  destruct (ident_eq lbl l); intros.
+  inv H0. inv H1.
+  assert (n0 = n). change positive with node in H4. congruence. subst n0.
+  exists ns1; exists nd1; exists nexits1; auto.
+  inv H1. eapply IHs; eauto.
 Qed.
 
-Remark state_for_outcome_stop:
-  forall ncont1 ncont2 nexits nret rret cs code sp rs m out st,
-  state_for_outcome ncont1 nexits nret rret cs code sp rs m out st ->
-  out <> Out_normal ->
-  state_for_outcome ncont2 nexits nret rret cs code sp rs m out st.
+Theorem transl_step_correct:
+  forall S1 t S2, CminorSel.step ge S1 t S2 ->
+  forall R1, match_states S1 R1 ->
+  exists R2,
+  (plus RTL.step tge R1 t R2 \/ (star RTL.step tge R1 t R2 /\ lt_state S2 S1))
+  /\ match_states S2 R2.
 Proof.
-  intros. inv H; congruence || econstructor; eauto.
-Qed.
+  induction 1; intros R1 MSTATE; inv MSTATE.
 
-Lemma transl_stmt_Sseq_continue_correct:
-  forall (sp : val) (e : env) (m : mem) (t: trace) (s1 : stmt)
-         (t1: trace) (e1 : env) (m1 : mem) (s2 : stmt) (t2: trace)
-         (e2 : env) (m2 : mem) (out : outcome),
-  exec_stmt ge sp e m s1 t1 e1 m1 Out_normal ->
-  transl_stmt_prop sp e m s1 t1 e1 m1 Out_normal ->
-  exec_stmt ge sp e1 m1 s2 t2 e2 m2 out ->
-  transl_stmt_prop sp e1 m1 s2 t2 e2 m2 out ->
-  t = t1 ** t2 ->
-  transl_stmt_prop sp e m (Sseq s1 s2) t e2 m2 out.
-Proof.
-  intros; red; intros; inv TE. 
-  exploit H0; eauto. intros [rs1 [st1 [OUT1 [EX1 ME1]]]]. inv OUT1. 
-  exploit H2; eauto. intros [rs2 [st2 [OUT2 [EX2 ME2]]]].
-  exists rs2; exists st2.
-  split. eauto.
-  split. eapply star_trans; eauto.
-  auto.
-Qed.
+  (* skip seq *)
+  inv TS. inv TK. econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto.
 
-Lemma transl_stmt_Sseq_stop_correct:
-  forall (sp : val) (e : env) (m : mem) (t: trace) (s1 s2 : stmt) (e1 : env)
-         (m1 : mem) (out : outcome),
-  exec_stmt ge sp e m s1 t e1 m1 out ->
-  transl_stmt_prop sp e m s1 t e1 m1 out ->
-  out <> Out_normal ->
-  transl_stmt_prop sp e m (Sseq s1 s2) t e1 m1 out.
-Proof.
-  intros; red; intros; inv TE.
-  exploit H0; eauto. intros [rs1 [st1 [OUT1 [EX1 ME1]]]].
-  exists rs1; exists st1.
-  split. eapply state_for_outcome_stop; eauto. 
-  auto.
-Qed.
+  (* skip block *)
+  inv TS. inv TK. econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto. constructor.
 
-Lemma transl_stmt_Sassign_correct:
-  forall (sp : val) (e : env) (m : mem) (id : ident) (a : expr)
-         (v : val),
-  eval_expr ge sp e m nil a v ->
-  transl_stmt_prop sp e m (Sassign id a) E0 (PTree.set id v e) m Out_normal.
-Proof.
-  intros; red; intros; inv TE.
-  exploit transl_expr_correct; eauto.
-  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exploit tr_store_var_correct; eauto. intros [rs2 [EX2 ME2]].
-  exists rs2; econstructor.
-  split. constructor.
-  split. eapply star_trans. eexact EX1. eexact EX2. traceEq.
-  congruence. 
-Qed.
-
-Lemma transl_stmt_Sstore_correct:
-  forall (sp : val) (e : env) (m : mem) (chunk : memory_chunk)
-         (addr: addressing) (al: exprlist) (b: expr)
-         (vl: list val) (v: val) (vaddr: val) (m' : mem),
-  eval_exprlist ge sp e m nil al vl ->
-  eval_expr ge sp e m nil b v ->
-  eval_addressing ge sp addr vl = Some vaddr ->
-  storev chunk m vaddr v = Some m' ->
-  transl_stmt_prop sp e m (Sstore chunk addr al b) E0 e m' Out_normal.
-Proof.
-  intros; red; intros; inv TE.
-  exploit transl_exprlist_correct; eauto. intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exploit transl_expr_correct; eauto. intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
-  exists rs2; econstructor.
-  (* Outcome *)
-  split. constructor.
-  (* Exec *)
-  split. eapply star_trans. eexact EX1. 
-  eapply star_right. eexact EX2.
-  eapply exec_Istore; eauto.
-  assert (rs2##rl = rs1##rl).
-    apply list_map_exten. intros r' IN. symmetry. apply OTHER2. auto.
-  rewrite H3; rewrite RES1. 
-  rewrite (@eval_addressing_preserved _ _ ge tge). eexact H1.
-  exact symbols_preserved.
-  rewrite RES2. auto.
-  reflexivity. traceEq.
-  (* Match-env *)
-  auto.
-Qed.
-
-Lemma transl_stmt_Scall_correct:
-  forall (sp : val) (e : env) (m : mem) (optid : option ident)
-         (sig : signature) (a : expr) (bl : exprlist) (vf : val)
-         (vargs : list val) (f : CminorSel.fundef) (t : trace) (m' : mem)
-         (vres : val) (e' : env),
-  eval_expr ge sp e m nil a vf ->
-  eval_exprlist ge sp e m nil bl vargs ->
-  Genv.find_funct ge vf = Some f ->
-  CminorSel.funsig f = sig ->
-  eval_funcall ge m f vargs t m' vres ->
-  transl_function_prop m f vargs t m' vres ->
-  e' = set_optvar optid vres e ->
-  transl_stmt_prop sp e m (Scall optid sig a bl) t e' m' Out_normal.
-Proof.
-  intros; red; intros; inv TE.
-  exploit transl_expr_correct; eauto.
-  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exploit transl_exprlist_correct; eauto.
-  intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
-  exploit functions_translated; eauto. intros [tf [TFIND TF]].
-  exploit H4; eauto. intro EXF.
-  exploit (tr_store_optvar_correct (rs2#rd <- vres)); eauto.
-    apply match_env_update_temp; eauto.
-  intros [rs3 [EX3 ME3]].
-  exists rs3; econstructor.
-  (* Outcome *)
-  split. constructor.
-  (* Exec *)
-  split. eapply star_trans. eexact EX1.
-  eapply star_trans. eexact EX2. 
-  eapply star_left. eapply exec_Icall; eauto.
-  simpl. rewrite OTHER2. rewrite RES1. eauto. simpl; tauto. 
-  eapply sig_transl_function; eauto.
-  eapply star_trans. rewrite RES2. eexact EXF.
-  eapply star_left. apply exec_return.
-  eexact EX3. 
-  reflexivity. reflexivity. reflexivity. reflexivity. traceEq.
-  (* Match-env *)
-  rewrite Regmap.gss in ME3. auto.
-Qed. 
-
-Lemma transl_stmt_Salloc_correct:
-  forall (sp : val) (e : env) (m : mem) (id : ident) (a : expr)
-         (n : int) (m' : mem) (b : block),
-  eval_expr ge sp e m nil a (Vint n) ->
-  alloc m 0 (Int.signed n) = (m', b) ->
-  transl_stmt_prop sp e m (Salloc id a) E0
-                      (PTree.set id (Vptr b Int.zero) e) m' Out_normal.
-Proof.
-  intros; red; intros; inv TE.
-  exploit transl_expr_correct; eauto.
-  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exploit (tr_store_var_correct (rs1#rd <- (Vptr b Int.zero))); eauto.
-    apply match_env_update_temp; eauto.
-  intros [rs2 [EX2 ME2]].
-  exists rs2; econstructor.
-  (* Outcome *)
-  split. constructor.
-  (* Execution *)
-  split. eapply star_trans. eexact EX1. 
-  eapply star_left. 2: eexact EX2. 
-  eapply exec_Ialloc; eauto. 
-  reflexivity. traceEq.
-  (* Match-env *)
-  rewrite Regmap.gss in ME2. auto.
-Qed.
-
-Lemma transl_stmt_Sifthenelse_correct:
-  forall (sp : val) (e : env) (m : mem) (a : condexpr) (s1 s2 : stmt)
-         (v : bool) (t : trace) (e' : env) (m' : mem) (out : outcome),
-  eval_condexpr ge sp e m nil a v ->
-  exec_stmt ge sp e m (if v then s1 else s2) t e' m' out ->
-  transl_stmt_prop sp e m (if v then s1 else s2) t e' m' out ->
-  transl_stmt_prop sp e m (Sifthenelse a s1 s2) t e' m' out.
-Proof.
-  intros; red; intros; inv TE.
-  exploit transl_condexpr_correct; eauto.
-  intros [rs1 [EX1 [ME1 OTHER1]]].
-  assert (tr_stmt code map (if v then s1 else s2) (if v then ntrue else nfalse)
-                  ncont nexits nret rret).
-    destruct v; auto. 
-  exploit H1; eauto. intros [rs2 [st2 [OUT2 [EX2 ME2]]]].
-  exists rs2; exists st2.
-  split. eauto.
-  split. eapply star_trans. eexact EX1. eexact EX2. auto.
-  auto.
-Qed.
-
-Lemma transl_stmt_Sloop_loop_correct:
-  forall (sp: val) (e : env) (m : mem) (sl : stmt) (t t1: trace)
-    (e1 : env) (m1 : mem) (t2: trace) (e2 : env) (m2 : mem) 
-    (out : outcome),
-  exec_stmt ge sp e m sl t1 e1 m1 Out_normal ->
-  transl_stmt_prop sp e m sl t1 e1 m1 Out_normal ->
-  exec_stmt ge sp e1 m1 (Sloop sl) t2 e2 m2 out ->
-  transl_stmt_prop sp e1 m1 (Sloop sl) t2 e2 m2 out ->
-  t = t1 ** t2 ->
-  transl_stmt_prop sp e m (Sloop sl) t e2 m2 out.
-Proof.
-  intros; red; intros; inversion TE. subst. 
-  exploit H0; eauto. intros [rs1 [st1 [OUT1 [EX1 ME1]]]]. inv OUT1.
-  exploit H2; eauto. intros [rs2 [st2 [OUT2 [EX2 ME2]]]].
-  exists rs2; exists st2. 
-  split. eauto.
-  split. eapply star_trans. eexact EX1. 
-  eapply star_left. apply exec_Inop; eauto. eexact EX2. 
-  reflexivity. traceEq.
-  auto.
-Qed.
-
-Lemma transl_stmt_Sloop_stop_correct:
-  forall (sp: val) (e : env) (m : mem) (t: trace) (sl : stmt) 
-    (e1 : env) (m1 : mem) (out : outcome),
-  exec_stmt ge sp e m sl t e1 m1 out ->
-  transl_stmt_prop sp e m sl t e1 m1 out ->
-  out <> Out_normal ->
-  transl_stmt_prop sp e m (Sloop sl) t e1 m1 out.
-Proof.
-  intros; red; intros; inv TE. 
-  exploit H0; eauto. intros [rs1 [st1 [OUT1 [EX1 ME1]]]].
-  exists rs1; exists st1.
-  split. eapply state_for_outcome_stop; eauto.
-  auto.
-Qed.
-
-Lemma transl_stmt_Sblock_correct:
-  forall (sp: val) (e : env) (m : mem) (sl : stmt) (t: trace)
-    (e1 : env) (m1 : mem) (out : outcome),
-  exec_stmt ge sp e m sl t e1 m1 out ->
-  transl_stmt_prop sp e m sl t e1 m1 out ->
-  transl_stmt_prop sp e m (Sblock sl) t e1 m1 (outcome_block out).
-Proof.
-  intros; red; intros; inv TE.
-  exploit H0; eauto. intros [rs1 [st1 [OUT1 [EX1 ME1]]]].
-  exists rs1; exists st1.
-  split. inv OUT1; simpl; try (econstructor; eauto).
-  destruct n; simpl in H1.
-    inv H1. constructor.
-    constructor. auto.
-  auto.
-Qed.
-
-Lemma transl_stmt_Sexit_correct:
-  forall (sp: val) (e : env) (m : mem) (n : nat),
-  transl_stmt_prop sp e m (Sexit n) E0 e m (Out_exit n).
-Proof.
-  intros; red; intros; inv TE.
-  exists rs; econstructor.
-  split. econstructor; eauto.
-  split. apply star_refl.
-  auto.
-Qed.
-
-Lemma transl_switch_correct:
-  forall cs sp rs m i code r nexits t ns,
-  tr_switch code r nexits t ns ->
-  rs#r = Vint i ->
-  exists nd,
-  star step tge (State cs code sp ns rs m) E0 (State cs code sp nd rs m) /\
-  nth_error nexits (comptree_match i t) = Some nd.
-Proof.
-  induction 1; intros; simpl.
-  exists n. split. apply star_refl. auto. 
-
-  caseEq (Int.eq i key); intros.
-  exists nfound; split. 
-  apply star_one. eapply exec_Icond_true; eauto. 
-  simpl. rewrite H2. congruence. auto.
-  exploit IHtr_switch; eauto. intros [nd [EX MATCH]].
-  exists nd; split.
-  eapply star_step. eapply exec_Icond_false; eauto. 
-  simpl. rewrite H2. congruence. eexact EX. traceEq.
-  auto.
-
-  caseEq (Int.ltu i key); intros.
-  exploit IHtr_switch1; eauto. intros [nd [EX MATCH]].
-  exists nd; split. 
-  eapply star_step. eapply exec_Icond_true; eauto. 
-  simpl. rewrite H2. congruence. eexact EX. traceEq.
-  auto.
-  exploit IHtr_switch2; eauto. intros [nd [EX MATCH]].
-  exists nd; split. 
-  eapply star_step. eapply exec_Icond_false; eauto. 
-  simpl. rewrite H2. congruence. eexact EX. traceEq.
-  auto.
-Qed.
-
-Lemma transl_stmt_Sswitch_correct:
-  forall (sp : val) (e : env) (m : mem) (a : expr)
-         (cases : list (int * nat)) (default : nat) (n : int),
-  eval_expr ge sp e m nil a (Vint n) ->
-  transl_stmt_prop sp e m (Sswitch a cases default) E0 e m
-         (Out_exit (switch_target n default cases)).
-Proof.
-  intros; red; intros; inv TE.
+  (* skip return *)
+  inv TS. 
+  assert (c!ncont = Some(Ireturn rret) /\ match_stacks k cs).
+    inv TK; simpl in H; try contradiction; auto.
+  destruct H1.
+  assert (rret = None). 
+    inv TF. unfold ret_reg. rewrite H0. auto.
+  subst rret.
+  econstructor; split.
+  left; apply plus_one. eapply exec_Ireturn. eauto.
+  simpl. constructor; auto.
+  
+  (* assign *)
+  inv TS. 
   exploit transl_expr_correct; eauto. 
-  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exploit transl_switch_correct; eauto. intros [nd [EX2 MO2]].
-  exists rs1; econstructor.
-  split. econstructor. 
-  rewrite (validate_switch_correct _ _ _ H3 n). eauto.  
-  split. eapply star_trans. eexact EX1. eexact EX2. traceEq.
-  auto.
-Qed.
+  intros [rs' [A [B [C D]]]].
+  exploit tr_store_var_correct; eauto. 
+  intros [rs'' [E F]].
+  rewrite C in F.
+  econstructor; split.
+  right; split. eapply star_trans. eexact A. eexact E. traceEq. Lt_state.
+  econstructor; eauto. constructor.
 
-Lemma transl_stmt_Sreturn_none_correct:
-  forall (sp: val) (e : env) (m : mem),
-  transl_stmt_prop sp e m (Sreturn None) E0 e m (Out_return None).
-Proof.
-  intros; red; intros; inv TE.
-  exists rs; econstructor.
-  split. constructor. auto.
-  split. apply star_refl. 
-  auto.
-Qed.
-
-Lemma transl_stmt_Sreturn_some_correct:
-  forall (sp : val) (e : env) (m : mem) (a : expr) (v : val),
-  eval_expr ge sp e m nil a v ->
-  transl_stmt_prop sp e m (Sreturn (Some a)) E0 e m (Out_return (Some v)).
-Proof.
-  intros; red; intros; inv TE. 
+  (* store *)
+  inv TS.
+  exploit transl_exprlist_correct; eauto.
+  intros [rs' [A [B [C D]]]].
   exploit transl_expr_correct; eauto.
-  intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exists rs1; econstructor.
-  split. econstructor. reflexivity. auto.
-  eauto.
-Qed.
-
-Lemma transl_stmt_Stailcall_correct:
-  forall (sp : block) (e : env) (m : mem) (sig : signature) (a : expr)
-         (bl : exprlist) (vf : val) (vargs : list val) (f : CminorSel.fundef)
-         (t : trace) (m' : mem) (vres : val),
-  eval_expr ge (Vptr sp Int.zero) e m nil a vf ->
-  eval_exprlist ge (Vptr sp Int.zero) e m nil bl vargs ->
-  Genv.find_funct ge vf = Some f ->
-  CminorSel.funsig f = sig ->
-  eval_funcall ge (free m sp) f vargs t m' vres ->
-  transl_function_prop (free m sp) f vargs t m' vres ->
-  transl_stmt_prop (Vptr sp Int.zero) e m (Stailcall sig a bl) t e
-          m' (Out_tailcall_return vres).
-Proof.
-  intros; red; intros; inv TE.
-  exploit transl_expr_correct; eauto. intros [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  exploit transl_exprlist_correct; eauto. intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
-  exploit functions_translated; eauto. intros [tf [TFIND TF]].
-  exploit H4; eauto. intro EXF.
-  exists rs2; econstructor. 
-  split. constructor. 
-  split. 
-  eapply star_trans. eexact EX1. 
-  eapply star_trans. eexact EX2. 
-  eapply star_step. 
-  eapply exec_Itailcall; eauto.
-  simpl. rewrite OTHER2. rewrite RES1. eauto. simpl; tauto.
-  eapply sig_transl_function; eauto.
-  rewrite RES2. eexact EXF. 
-  reflexivity. reflexivity. traceEq.
-  auto.
-Qed.
-
-(** The correctness of the translation then follows by application
-  of the mutual induction principle for Cminor evaluation derivations
-  to the lemmas above. *)
-
-Theorem transl_function_correct:
-  forall m f vargs t m' vres,
-  eval_funcall ge m f vargs t m' vres ->
-  transl_function_prop m f vargs t m' vres.
-Proof
-  (eval_funcall_ind2 ge
-    transl_function_prop
-    transl_stmt_prop
-
-    transl_funcall_internal_correct
-    transl_funcall_external_correct
-    transl_stmt_Sskip_correct
-    transl_stmt_Sassign_correct
-    transl_stmt_Sstore_correct
-    transl_stmt_Scall_correct
-    transl_stmt_Salloc_correct
-    transl_stmt_Sifthenelse_correct
-    transl_stmt_Sseq_continue_correct
-    transl_stmt_Sseq_stop_correct
-    transl_stmt_Sloop_loop_correct
-    transl_stmt_Sloop_stop_correct
-    transl_stmt_Sblock_correct
-    transl_stmt_Sexit_correct
-    transl_stmt_Sswitch_correct
-    transl_stmt_Sreturn_none_correct
-    transl_stmt_Sreturn_some_correct
-    transl_stmt_Stailcall_correct).
-
-Theorem transl_stmt_correct:
-  forall sp e m s t e' m' out,
-  exec_stmt ge sp e m s t e' m' out ->
-  transl_stmt_prop sp e m s t e' m' out.
-Proof
-  (exec_stmt_ind2 ge
-    transl_function_prop
-    transl_stmt_prop
-
-    transl_funcall_internal_correct
-    transl_funcall_external_correct
-    transl_stmt_Sskip_correct
-    transl_stmt_Sassign_correct
-    transl_stmt_Sstore_correct
-    transl_stmt_Scall_correct
-    transl_stmt_Salloc_correct
-    transl_stmt_Sifthenelse_correct
-    transl_stmt_Sseq_continue_correct
-    transl_stmt_Sseq_stop_correct
-    transl_stmt_Sloop_loop_correct
-    transl_stmt_Sloop_stop_correct
-    transl_stmt_Sblock_correct
-    transl_stmt_Sexit_correct
-    transl_stmt_Sswitch_correct
-    transl_stmt_Sreturn_none_correct
-    transl_stmt_Sreturn_some_correct
-    transl_stmt_Stailcall_correct).
-
-(** ** Semantic preservation for the translation of divering statements *)   
-
-Fixpoint size_stmt (s: stmt) : nat :=
-  match s with
-  | Sseq s1 s2 => (1 + size_stmt s1 + size_stmt s2)%nat
-  | Sifthenelse e s1 s2 => (1 + size_stmt s1 + size_stmt s2)%nat
-  | Sloop s1 => (1 + size_stmt s1)%nat
-  | Sblock s1 => (1 + size_stmt s1)%nat
-  | _ => 1%nat
-  end.
-
-Theorem transl_function_correct_divergence:
-  forall m fd vargs t tfd cs,
-  evalinf_funcall ge m fd vargs t ->
-  transl_fundef fd = OK tfd ->
-  forever_N step tge O (Callstate cs tfd vargs m) t.
-Proof.
-  cofix FUNCALL.
-  assert (STMT: forall sp e m s t,
-     execinf_stmt ge sp e m s t ->
-     forall cs code map ns ncont nexits nret rret rs
-       (MWF: map_wf map)
-       (TE: tr_stmt code map s ns ncont nexits nret rret)
-       (ME: match_env map e nil rs),
-     forever_N step tge (size_stmt s) (State cs code sp ns rs m) t).
-  cofix STMT; intros. 
-  inv H; inversion TE; subst.
-  (* Scall *)
-  destruct (transl_expr_correct _ _ _ _ _ _ H0
-              cs _ _ _ _ _ _ _ MWF H7 ME)
-  as [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  destruct (transl_exprlist_correct _ _ _ _ _ _ H1
-              cs _ _ _ _ _ _ _ MWF H8 ME1)
-  as [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
-  destruct (functions_translated _ _ H2) as [tf [TFIND TF]].
-  eapply forever_N_star with (p := O).
-  eapply star_trans. eexact EX1. eexact EX2. reflexivity.
-  simpl; omega. 
-  eapply forever_N_plus with (p := O).
-  apply plus_one. eapply exec_Icall; eauto. 
-  simpl. rewrite OTHER2. rewrite RES1. eauto. simpl; tauto. 
-  eapply sig_transl_function; eauto.
-  eapply FUNCALL. rewrite RES2. eexact H4. assumption.
-  reflexivity. traceEq.    
-  (* Sifthenelse *)
-  destruct (transl_condexpr_correct _ _ _ _ _ _ H0
-              cs _ _ _ _ _ _ _ MWF H11 ME)
-  as [rs1 [EX1 [ME1 OTHER1]]].
-  eapply forever_N_star with (p := size_stmt (if v then s1 else s2)).
-  eexact EX1. destruct v; simpl; omega.
-  eapply STMT. eexact H1. eauto. destruct v; eauto. eauto.
-  traceEq. 
-  (* Sseq, 1 *)
-  eapply forever_N_star with (p := size_stmt s1).
-  apply star_refl. simpl; omega.
-  eapply STMT; eauto.
+  intros [rs'' [E [F [G J]]]].
+  assert (rs''##rl = vl).
+    rewrite <- C. apply list_map_exten. intros. symmetry. apply J. auto.
+  econstructor; split.
+  left; eapply plus_right. eapply star_trans. eexact A. eexact E. reflexivity.
+  eapply exec_Istore with (a := vaddr); eauto.
+  rewrite H3. rewrite <- H1. apply eval_addressing_preserved. exact symbols_preserved.
+  rewrite G. eauto.
   traceEq.
-  (* Sseq, 2 *)
-  destruct (transl_stmt_correct _ _ _ _ _ _ _ _ H0
-              cs _ _ _ _ _ _ _ _ MWF H9 ME)
-  as [rs1 [st1 [OUT1 [EX1 ME1]]]].
-  inv OUT1. 
-  eapply forever_N_star with (p := size_stmt s2).
-  eexact EX1. simpl; omega.
-  eapply STMT; eauto.
+  econstructor; eauto. constructor.
+
+  (* call *)
+  inv TS. 
+  exploit transl_expr_correct; eauto.
+  intros [rs' [A [B [C D]]]].
+  exploit transl_exprlist_correct; eauto.
+  intros [rs'' [E [F [G J]]]].
+  exploit functions_translated; eauto. intros [tf [P Q]].
+  econstructor; split.
+  left; eapply plus_right. eapply star_trans. eexact A. eexact E. reflexivity.
+  eapply exec_Icall; eauto. simpl. rewrite J. rewrite C. eauto. simpl; auto.
+  apply sig_transl_function; auto.
   traceEq.
-  (* Sloop, body *)
-  eapply forever_N_star with (p := size_stmt s0).
-  apply star_refl. simpl; omega.
-  eapply STMT; eauto.
+  rewrite G. constructor. auto. econstructor; eauto.
+
+  (* tailcall *)
+  inv TS. 
+  exploit transl_expr_correct; eauto.
+  intros [rs' [A [B [C D]]]].
+  exploit transl_exprlist_correct; eauto.
+  intros [rs'' [E [F [G J]]]].
+  exploit functions_translated; eauto. intros [tf [P Q]].
+  exploit match_stacks_call_cont; eauto. intros [U V].
+  econstructor; split.
+  left; eapply plus_right. eapply star_trans. eexact A. eexact E. reflexivity.
+  eapply exec_Itailcall; eauto. simpl. rewrite J. rewrite C. eauto. simpl; auto.
+  apply sig_transl_function; auto.
   traceEq.
-  (* Sloop, loop *)
-  destruct (transl_stmt_correct _ _ _ _ _ _ _ _ H0
-              cs _ _ _ _ _ _ _ _ MWF H2 ME)
-  as [rs1 [st1 [OUT1 [EX1 ME1]]]].
-  inv OUT1. 
-  eapply forever_N_plus with (p := size_stmt (Sloop s0)).
-  eapply plus_right. eexact EX1. eapply exec_Inop; eauto. reflexivity.
-  eapply STMT; eauto.
-  traceEq. 
-  (* Sblock *)
-  eapply forever_N_star with (p := size_stmt s0).
-  apply star_refl. simpl; omega.
-  eapply STMT; eauto.
-  traceEq.
-  (* Stailcall *)
-  destruct (transl_expr_correct _ _ _ _ _ _ H0
-              cs _ _ _ _ _ _ _ MWF H6 ME)
-  as [rs1 [EX1 [ME1 [RES1 OTHER1]]]].
-  destruct (transl_exprlist_correct _ _ _ _ _ _ H1
-              cs _ _ _ _ _ _ _ MWF H12 ME1)
-  as [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
-  destruct (functions_translated _ _ H2) as [tf [TFIND TF]].
-  eapply forever_N_star with (p := O).
-  eapply star_trans. eexact EX1. eexact EX2. reflexivity.
-  simpl; omega. 
-  eapply forever_N_plus with (p := O).
-  apply plus_one. eapply exec_Itailcall; eauto. 
-  simpl. rewrite OTHER2. rewrite RES1. eauto. simpl; tauto. 
-  eapply sig_transl_function; eauto.
-  eapply FUNCALL. rewrite RES2. eexact H4. assumption.
-  reflexivity. traceEq.
-  (* funcall *)
-  intros. inversion H. subst m0 fd vargs0 t0. 
-  generalize H0; simpl. caseEq (transl_function f); simpl. 2: congruence.
-  intros tfi EQ1 EQ2. injection EQ2; clear EQ2; intro EQ2.
-  assert (TR: tr_function f tfi). apply transl_function_charact; auto.
-  rewrite <- EQ2. inversion TR. subst f0. 
+  rewrite G. constructor; auto.
+
+  (* alloc *)
+  inv TS. 
+  exploit transl_expr_correct; eauto. 
+  intros [rs1 [A [B [C D]]]].
+  set (rs2 := rs1#rd <- (Vptr b Int.zero)).
+  assert (match_env map e nil rs2). unfold rs2; eauto with rtlg. 
+  exploit tr_store_var_correct. eauto. auto. eexact H1. 
+  intros [rs3 [E F]].
+  unfold rs2 in F. rewrite Regmap.gss in F.
+  econstructor; split.
+  left. apply plus_star_trans with E0 (State cs c sp n2 rs2 m') E0.
+  eapply plus_right. eexact A. unfold rs2. eapply exec_Ialloc; eauto. traceEq.
+  eexact E. traceEq.
+  econstructor; eauto. constructor.
+
+  (* seq *)
+  inv TS. 
+  econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto. econstructor; eauto. 
+
+  (* ifthenelse *)
+  inv TS.
+  exploit transl_condexpr_correct; eauto. 
+  intros [rs' [A [B C]]].
+  econstructor; split.
+  right; split. eexact A. destruct b; Lt_state.
+  destruct b; econstructor; eauto. 
+
+  (* loop *)
+  inversion TS; subst.
+  econstructor; split.
+  left. apply plus_one. eapply exec_Inop; eauto. 
+  econstructor; eauto. 
+  econstructor; eauto.
+
+  (* block *)
+  inv TS.
+  econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto. econstructor; eauto.
+
+  (* exit seq *)
+  inv TS. inv TK. 
+  econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto. econstructor; eauto.
+
+  (* exit block 0 *)
+  inv TS. inv TK. simpl in H0. inv H0.
+  econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto. econstructor; eauto.
+
+  (* exit block n+1 *)
+  inv TS. inv TK. simpl in H0.
+  econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto. econstructor; eauto.
+
+  (* switch *)
+  inv TS. 
+  exploit transl_expr_correct; eauto. 
+  intros [rs' [A [B [C D]]]].
+  exploit transl_switch_correct; eauto. 
+  intros [nd [E F]].
+  econstructor; split.
+  right; split. eapply star_trans. eexact A. eexact E.  traceEq. Lt_state. 
+  econstructor; eauto. 
+  rewrite (validate_switch_correct _ _ _ H3 n). constructor. auto.
+
+  (* return none *)
+  inv TS.
+  exploit match_stacks_call_cont; eauto. intros [U V].
+  econstructor; split.
+  left; apply plus_one. eapply exec_Ireturn; eauto.
+  simpl. constructor; auto.
+
+  (* return some *)
+  inv TS.
+  exploit transl_expr_correct; eauto.
+  intros [rs' [A [B [C D]]]].
+  exploit match_stacks_call_cont; eauto. intros [U V].  
+  econstructor; split.
+  left; eapply plus_right. eexact A. eapply exec_Ireturn; eauto. traceEq.
+  simpl. rewrite C. constructor; auto.
+
+  (* label *)
+  inv TS.
+  econstructor; split.
+  right; split. apply star_refl. Lt_state.
+  econstructor; eauto.
+
+  (* goto *)
+  inv TS. inversion TF; subst.
+  exploit tr_find_label; eauto. eapply tr_cont_call_cont; eauto. 
+  intros [ns2 [nd2 [nexits2 [A [B C]]]]].
+  econstructor; split.
+  left; apply plus_one. eapply exec_Inop; eauto.
+  econstructor; eauto. 
+
+  (* internal call *)
+  monadInv TF. exploit transl_function_charact; eauto. intro TRF.
+  inversion TRF. subst f0.
+  pose (e := set_locals (fn_vars f) (set_params vargs (CminorSel.fn_params f))).
   pose (rs := init_regs vargs rparams).
   assert (ME: match_env map2 e nil rs).
-  rewrite <- H2. unfold rs. 
-  eapply match_init_env_init_reg; eauto.
+    unfold rs, e. eapply match_init_env_init_reg; eauto.
   assert (MWF: map_wf map2).
-    assert (map_valid init_mapping init_state) by apply init_mapping_valid.
+    assert (map_valid init_mapping s0) by apply init_mapping_valid.
     exploit (add_vars_valid (CminorSel.fn_params f)); eauto. intros [A B].
     eapply add_vars_wf; eauto. eapply add_vars_wf; eauto. apply init_mapping_wf.
-  eapply forever_N_plus with (p := size_stmt (fn_body f)).
-  apply plus_one. eapply exec_function_internal; eauto.
-  simpl. eapply STMT; eauto.
-  traceEq.
+  econstructor; split.
+  left; apply plus_one. eapply exec_function_internal; simpl; eauto.
+  simpl. econstructor; eauto.
+  econstructor; eauto.
+  inversion MS; subst; econstructor; eauto.
+
+  (* external call *)
+  monadInv TF. 
+  econstructor; split.
+  left; apply plus_one. eapply exec_function_external; eauto. 
+  constructor; auto.
+
+  (* return *)
+  inv MS.
+  set (rs' := (rs#r <- v)).
+  assert (match_env map e nil rs'). unfold rs'; eauto with rtlg. 
+  exploit tr_store_optvar_correct. eauto. eauto. eexact H. intros [rs'' [A B]].
+  econstructor; split.
+  left; eapply plus_left. constructor. eexact A. traceEq.
+  econstructor; eauto. constructor. unfold rs' in B. rewrite Regmap.gss in B. auto.
 Qed.
 
-(** ** Semantic preservation for whole programs. *)
-
-(** The correctness of the translation follows: 
-  if the original Cminor program executes with observable behavior [beh],
-  then the generated RTL program executes with the same behavior. *)
-
-Theorem transl_program_correct:
-  forall (beh: program_behavior),
-  CminorSel.exec_program prog beh ->
-  RTL.exec_program tprog beh.
+Lemma transl_initial_states:
+  forall S, CminorSel.initial_state prog S ->
+  exists R, RTL.initial_state tprog R /\ match_states S R.
 Proof.
-  intros. inv H.
-  (* termination *)
-  exploit function_ptr_translated; eauto. intros [tf [TFIND TRANSLF]].
-  exploit transl_function_correct; eauto. intro EX.
-  econstructor.
-  econstructor. 
-  rewrite symbols_preserved. 
-  replace (prog_main tprog) with (prog_main prog). eauto.
-  symmetry; apply transform_partial_program_main with transl_fundef.
-  exact TRANSL.
-  eexact TFIND.
-  generalize (sig_transl_function _ _ TRANSLF). congruence.
-  unfold fundef; rewrite (Genv.init_mem_transf_partial transl_fundef prog TRANSL).
-  eexact EX. 
-  constructor.
-  (* divergence *)
-  exploit function_ptr_translated; eauto. intros [tf [TFIND TRANSLF]].
-  exploit transl_function_correct_divergence; eauto. intro EX.
-  econstructor.
-  econstructor. 
-  rewrite symbols_preserved. 
-  replace (prog_main tprog) with (prog_main prog). eauto.
-  symmetry; apply transform_partial_program_main with transl_fundef.
-  exact TRANSL.
-  eexact TFIND.
-  generalize (sig_transl_function _ _ TRANSLF). congruence.
-  eapply forever_N_forever. 
-  unfold fundef; rewrite (Genv.init_mem_transf_partial transl_fundef prog TRANSL).
-  eexact EX. 
+  induction 1.
+  exploit function_ptr_translated; eauto. intros [tf [A B]].
+  econstructor; split.
+  econstructor. rewrite (transform_partial_program_main _ _ TRANSL). fold tge.
+  rewrite symbols_preserved. eexact H.
+  eexact A.
+  rewrite <- H1. apply sig_transl_function; auto.
+  rewrite (Genv.init_mem_transf_partial _ _ TRANSL). constructor. auto. constructor.
+Qed.
+
+Lemma transl_final_states:
+  forall S R r,
+  match_states S R -> CminorSel.final_state S r -> RTL.final_state R r.
+Proof.
+  intros. inv H0. inv H. inv MS. constructor.
+Qed.
+
+Theorem transf_program_correct:
+  forall (beh: program_behavior),
+  CminorSel.exec_program prog beh -> RTL.exec_program tprog beh.
+Proof.
+  unfold CminorSel.exec_program, RTL.exec_program; intros.
+  eapply simulation_star_wf_preservation with (order := lt_state); eauto.
+  eexact transl_initial_states.
+  eexact transl_final_states.
+  apply lt_state_wf. 
+  exact transl_step_correct. 
 Qed.
 
 End CORRECTNESS.

@@ -64,7 +64,8 @@ Inductive state_incr: state -> state -> Prop :=
     forall (s1 s2: state),
     Ple s1.(st_nextnode) s2.(st_nextnode) ->
     Ple s1.(st_nextreg) s2.(st_nextreg) ->
-    (forall pc, Plt pc s1.(st_nextnode) -> s2.(st_code)!pc = s1.(st_code)!pc) ->
+    (forall pc,
+      s1.(st_code)!pc = None \/ s2.(st_code)!pc = s1.(st_code)!pc) ->
     state_incr s1 s2.
 
 Lemma state_incr_refl:
@@ -73,19 +74,15 @@ Proof.
   intros. apply state_incr_intro.
   apply Ple_refl. apply Ple_refl. intros; auto.
 Qed.
-Hint Resolve state_incr_refl: rtlg.
 
 Lemma state_incr_trans:
   forall s1 s2 s3, state_incr s1 s2 -> state_incr s2 s3 -> state_incr s1 s3.
 Proof.
-  intros. inversion H. inversion H0. apply state_incr_intro.
+  intros. inv H; inv H0. apply state_incr_intro.
   apply Ple_trans with (st_nextnode s2); assumption. 
   apply Ple_trans with (st_nextreg s2); assumption.
-  intros. transitivity (s2.(st_code)!pc).
-  apply H8. apply Plt_Ple_trans with s1.(st_nextnode); auto.
-  apply H3; auto.
+  intros. generalize (H3 pc) (H5 pc). intuition congruence.
 Qed.
-Hint Resolve state_incr_trans: rtlg.
 
 (** ** The state and error monad *)
 
@@ -148,6 +145,15 @@ Notation "'do' X <- A ; B" := (bind A (fun X => B))
 Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
    (at level 200, X ident, Y ident, A at level 100, B at level 200).
 
+Definition handle_error (A: Set) (f g: mon A) : mon A :=
+  fun (s: state) =>
+    match f s with
+    | OK a s' i => OK a s' i
+    | Error _ => g s
+    end.
+
+Implicit Arguments handle_error [A].
+
 (** ** Operations on state *)
 
 (** The initial state (empty CFG). *)
@@ -186,16 +192,14 @@ Proof.
   constructor; simpl.
   apply Ple_succ.
   apply Ple_refl.
-  intros. apply PTree.gso. apply Plt_ne; auto.
+  intros. destruct (st_wf s pc). right. apply PTree.gso. apply Plt_ne; auto. auto.
 Qed.
 
 Definition add_instr (i: instruction) : mon node :=
   fun s =>
     let n := s.(st_nextnode) in
     OK n
-       (mkstate s.(st_nextreg)
-                (Psucc n)
-                (PTree.set n i s.(st_code))
+       (mkstate s.(st_nextreg) (Psucc n) (PTree.set n i s.(st_code)) 
                 (add_instr_wf s i))
        (add_instr_incr s i).
 
@@ -212,12 +216,26 @@ Proof.
   right; auto.
 Qed.
 
-Definition reserve_instr (s: state): (node * state)%type :=
+Remark reserve_instr_incr:
+  forall s,
   let n := s.(st_nextnode) in
-  (n, mkstate s.(st_nextreg)
-              (Psucc n)
-              s.(st_code)
-              (reserve_instr_wf s)).
+  state_incr s (mkstate s.(st_nextreg)
+                (Psucc n)
+                s.(st_code)
+                (reserve_instr_wf s)).
+Proof.
+  intros; constructor; simpl.
+  apply Ple_succ.
+  apply Ple_refl.
+  auto.
+Qed.
+
+Definition reserve_instr: mon node :=
+  fun (s: state) =>
+  let n := s.(st_nextnode) in
+  OK n
+     (mkstate s.(st_nextreg) (Psucc n) s.(st_code) (reserve_instr_wf s))
+     (reserve_instr_incr s).
 
 Remark update_instr_wf:
   forall s n i,
@@ -231,44 +249,36 @@ Proof.
   rewrite PTree.gso; auto. exact (st_wf s pc).
 Qed.
 
-Definition update_instr (n: node) (i: instruction) (s: state) : state :=
-  match plt n s.(st_nextnode) with
-  | left PLT =>
-      mkstate s.(st_nextreg) 
-              s.(st_nextnode)
-              (PTree.set n i s.(st_code))
-              (update_instr_wf s n i PLT)
-  | right _ => s (* never happens *)
-  end.
-
-Remark add_loop_incr:
-  forall s1 s3 i,
-  let n := fst (reserve_instr s1) in
-  let s2 := snd (reserve_instr s1) in
-  state_incr s2 s3 ->
-  state_incr s1 (update_instr n i s3).
+Remark update_instr_incr:
+  forall s n i (LT: Plt n s.(st_nextnode)),
+  s.(st_code)!n = None ->
+  state_incr s
+             (mkstate s.(st_nextreg) s.(st_nextnode) (PTree.set n i s.(st_code))
+                     (update_instr_wf s n i LT)).
 Proof.
-  intros. inv H. unfold update_instr. destruct (plt n (st_nextnode s3)).
-  constructor; simpl.
-  apply Ple_trans with (st_nextnode s2).
-  unfold s2; simpl. apply Ple_succ. auto.
-  assumption.
-  intros. rewrite PTree.gso. rewrite H2. reflexivity. 
-  unfold s2; simpl. apply Plt_trans_succ. auto. 
-  apply Plt_ne. assumption.
-  elim n0. apply Plt_Ple_trans with (st_nextnode s2). 
-  unfold n, s2; simpl; apply Plt_succ. auto.
+  intros.
+  constructor; simpl; intros.
+  apply Ple_refl.
+  apply Ple_refl.
+  rewrite PTree.gsspec. destruct (peq pc n). left; congruence. right; auto.
 Qed.
 
-Definition add_loop (body: node -> mon node) : mon node :=
-  fun (s1: state) =>
-    let nloop := fst(reserve_instr s1) in
-    let s2 := snd(reserve_instr s1) in
-    match body nloop s2 with
-    | Error msg => Error msg
-    | OK nbody s3 i => 
-        OK nbody (update_instr nloop (Inop nbody) s3)
-                 (add_loop_incr s1 s3 (Inop nbody) i)
+Definition check_empty_node:
+  forall (s: state) (n: node), { s.(st_code)!n = None } + { True }.
+Proof.
+  intros. case (s.(st_code)!n); intros. right; auto. left; auto.
+Defined.
+
+Definition update_instr (n: node) (i: instruction) : mon unit :=
+  fun s =>
+    match plt n s.(st_nextnode), check_empty_node s n with
+    | left LT, left EMPTY =>
+        OK tt
+           (mkstate s.(st_nextreg) s.(st_nextnode) (PTree.set n i s.(st_code))
+                    (update_instr_wf s n i LT))
+           (update_instr_incr s n i LT EMPTY)
+    | _, _ =>
+        Error (Errors.msg "RTLgen.update_instr")
     end.
 
 (** Generate a fresh RTL register. *)
@@ -284,8 +294,7 @@ Qed.
 Definition new_reg : mon reg :=
   fun s =>
     OK s.(st_nextreg)
-       (mkstate (Psucc s.(st_nextreg))
-                s.(st_nextnode) s.(st_code) s.(st_wf))
+       (mkstate (Psucc s.(st_nextreg)) s.(st_nextnode) s.(st_code) s.(st_wf))
        (new_reg_incr s).
 
 (** ** Operations on mappings *)
@@ -489,8 +498,10 @@ Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
   [nlist] if it terminates by an [exit n] construct.  [rret] is the
   register where the return value of the function must be stored, if any. *)
 
+Definition labelmap : Set := PTree.t node.
+
 Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
-                     (nexits: list node) (nret: node) (rret: option reg)
+                     (nexits: list node) (ngoto: labelmap) (nret: node) (rret: option reg)
                      {struct s} : mon node :=
   match s with
   | Sskip =>
@@ -513,6 +524,12 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do n2 <- add_instr (Icall sig (inl _ rf) rargs r n1);
       do n3 <- transl_exprlist map cl rargs n2;
          transl_expr map b rf n3
+  | Stailcall sig b cl =>
+      do rf <- alloc_reg map b;
+      do rargs <- alloc_regs map cl;
+      do n1 <- add_instr (Itailcall sig (inl _ rf) rargs);
+      do n2 <- transl_exprlist map cl rargs n1;
+         transl_expr map b rf n2
   | Salloc id a =>
       do ra <- alloc_reg map a;
       do rr <- new_reg;
@@ -520,21 +537,24 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do n2 <- add_instr (Ialloc ra rr n1);
          transl_expr map a ra n2
   | Sseq s1 s2 =>
-      do ns <- transl_stmt map s2 nd nexits nret rret;
-      transl_stmt map s1 ns nexits nret rret
+      do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
+      transl_stmt map s1 ns nexits ngoto nret rret
   | Sifthenelse a strue sfalse =>
       if more_likely a strue sfalse then
-        do nfalse <- transl_stmt map sfalse nd nexits nret rret;
-        do ntrue  <- transl_stmt map strue  nd nexits nret rret;
+        do nfalse <- transl_stmt map sfalse nd nexits ngoto nret rret;
+        do ntrue  <- transl_stmt map strue  nd nexits ngoto nret rret;
         transl_condition map a ntrue nfalse
       else
-        do ntrue  <- transl_stmt map strue  nd nexits nret rret;
-        do nfalse <- transl_stmt map sfalse nd nexits nret rret;
+        do ntrue  <- transl_stmt map strue  nd nexits ngoto nret rret;
+        do nfalse <- transl_stmt map sfalse nd nexits ngoto nret rret;
         transl_condition map a ntrue nfalse
   | Sloop sbody =>
-      add_loop (fun nloop => transl_stmt map sbody nloop nexits nret rret)
+      do n1 <- reserve_instr;
+      do n2 <- transl_stmt map sbody n1 nexits ngoto nret rret;
+      do xx <- update_instr n1 (Inop n2);
+      ret n1
   | Sblock sbody =>
-      transl_stmt map sbody nd (nd :: nexits) nret rret
+      transl_stmt map sbody nd (nd :: nexits) ngoto nret rret
   | Sexit n =>
       transl_exit nexits n
   | Sswitch a cases default =>
@@ -551,12 +571,42 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       | Some a, Some r => transl_expr map a r nret
       | _, _ => error (Errors.msg "RTLgen: type mismatch on return")
       end
-  | Stailcall sig b cl =>
-      do rf <- alloc_reg map b;
-      do rargs <- alloc_regs map cl;
-      do n1 <- add_instr (Itailcall sig (inl _ rf) rargs);
-      do n2 <- transl_exprlist map cl rargs n1;
-         transl_expr map b rf n2
+  | Slabel lbl s' =>
+      do ns <- transl_stmt map s' nd nexits ngoto nret rret;
+      match ngoto!lbl with
+      | None => error (Errors.msg "RTLgen: unbound label")
+      | Some n =>
+          do xx <-
+            (handle_error (update_instr n (Inop ns))
+                          (error (Errors.MSG "Multiply-defined label " ::
+                                  Errors.CTX lbl :: nil)));
+          ret ns
+      end
+  | Sgoto lbl =>
+      match ngoto!lbl with
+      | None => error (Errors.MSG "Undefined defined label " ::
+                       Errors.CTX lbl :: nil)
+      | Some n => ret n
+      end
+  end.
+
+(** Preallocate CFG nodes for each label defined in the function body. *)
+
+Definition alloc_label (lbl: Cminor.label) (maps: labelmap * state) : labelmap * state :=
+  let (map, s) := maps in
+  let n := s.(st_nextnode) in
+  (PTree.set lbl n map,
+   mkstate s.(st_nextreg) (Psucc s.(st_nextnode)) s.(st_code) (reserve_instr_wf s)).
+
+Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
+                        {struct s} : labelmap * state :=
+  match s with
+  | Sseq s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
+  | Sifthenelse c s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
+  | Sloop s1 => reserve_labels s1 ms
+  | Sblock s1 => reserve_labels s1 ms
+  | Slabel lbl s1 => alloc_label lbl (reserve_labels s1 ms)
+  | _ => ms
   end.
 
 (** Translation of a CminorSel function. *)
@@ -567,17 +617,18 @@ Definition ret_reg (sig: signature) (rd: reg) : option reg :=
   | Some ty => Some rd
   end.
 
-Definition transl_fun (f: CminorSel.function) : mon (node * list reg) :=
+Definition transl_fun (f: CminorSel.function) (ngoto: labelmap): mon (node * list reg) :=
   do (rparams, map1) <- add_vars init_mapping f.(CminorSel.fn_params);
   do (rvars, map2) <- add_vars map1 f.(CminorSel.fn_vars);
   do rret <- new_reg;
   let orret := ret_reg f.(CminorSel.fn_sig) rret in
   do nret <- add_instr (Ireturn orret);
-  do nentry <- transl_stmt map2 f.(CminorSel.fn_body) nret nil nret orret;
+  do nentry <- transl_stmt map2 f.(CminorSel.fn_body) nret nil ngoto nret orret;
   ret (nentry, rparams).
 
 Definition transl_function (f: CminorSel.function) : Errors.res RTL.function :=
-  match transl_fun f init_state with
+  let (ngoto, s0) := reserve_labels f.(fn_body) (PTree.empty node, init_state) in
+  match transl_fun f ngoto s0 with
   | Error msg => Errors.Error msg
   | OK (nentry, rparams) s i =>
       Errors.OK (RTL.mkfunction

@@ -283,8 +283,8 @@ Proof.
   destruct (transform_program_compose _ _ _ _ _ _ _ _ H2) as [p1 [H1 P1]].
   generalize (transform_partial_program_identity _ _ _ _ H1). clear H1. intro. subst p1.
   apply transf_rtl_program_correct with p3. auto.
-  apply RTLgenproof.transl_program_correct with p2; auto.
-  rewrite <- P1. apply Selectionproof.sel_program_correct; auto.
+  apply RTLgenproof.transf_program_correct with p2; auto.
+  rewrite <- P1. apply Selectionproof.transf_program_correct; auto.
 Qed.
 
 Theorem transf_c_program_correct:

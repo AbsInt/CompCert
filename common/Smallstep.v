@@ -19,6 +19,8 @@
   the one-step transition relations that are used to specify
   operational semantics in small-step style. *)
 
+Require Import Wf.
+Require Import Wf_nat.
 Require Import Coqlib.
 Require Import AST.
 Require Import Events.
@@ -157,13 +159,22 @@ Proof.
 Qed.
 
 Lemma plus_inv:
-  forall ge s1 t s2,  plus ge s1 t s2 ->
+  forall ge s1 t s2, 
+  plus ge s1 t s2 ->
   step ge s1 t s2 \/ exists s', exists t1, exists t2, step ge s1 t1 s' /\ plus ge s' t2 s2 /\ t = t1 ** t2.
 Proof.
   intros. inversion H; subst. inversion H1; subst.
   left. rewrite E0_right. auto.
   right. exists s3; exists t1; exists (t0 ** t3); split. auto.
   split. econstructor; eauto. auto.
+Qed.
+
+Lemma star_inv:
+  forall ge s1 t s2,
+  star ge s1 t s2 ->
+  (s2 = s1 /\ t = E0) \/ plus ge s1 t s2.
+Proof.
+  intros. inv H. left; auto. right; econstructor; eauto.
 Qed.
 
 (** Infinitely many transitions *)
@@ -186,61 +197,86 @@ Qed.
 (** An alternate, equivalent definition of [forever] that is useful
     for coinductive reasoning. *)
 
-CoInductive forever_N (ge: genv): nat -> state -> traceinf -> Prop :=
-  | forever_N_star: forall s1 t s2 p q T1 T2,
-      star ge s1 t s2 -> 
-      (p < q)%nat ->
-      forever_N ge p s2 T2 ->
-      T1 = t *** T2 ->
-      forever_N ge q s1 T1
-  | forever_N_plus: forall s1 t s2 p q T1 T2,
-      plus ge s1 t s2 ->
-      forever_N ge p s2 T2 ->
-      T1 = t *** T2 ->
-      forever_N ge q s1 T1.
+Variable A: Set.
+Variable order: A -> A -> Prop.
 
-Remark Peano_induction:
-  forall (P: nat -> Prop),
-  (forall p, (forall q, (q < p)%nat -> P q) -> P p) ->
-  forall p, P p.
-Proof.
-  intros P IH.
-  assert (forall p, forall q, (q < p)%nat -> P q).
-  induction p; intros. elimtype False; omega.
-  apply IH. intros. apply IHp. omega.
-  intro. apply H with (S p). omega.
-Qed.
+CoInductive forever_N (ge: genv) : A -> state -> traceinf -> Prop :=
+  | forever_N_star: forall s1 t s2 a1 a2 T1 T2,
+      star ge s1 t s2 -> 
+      order a2 a1 ->
+      forever_N ge a2 s2 T2 ->
+      T1 = t *** T2 ->
+      forever_N ge a1 s1 T1
+  | forever_N_plus: forall s1 t s2 a1 a2 T1 T2,
+      plus ge s1 t s2 ->
+      forever_N ge a2 s2 T2 ->
+      T1 = t *** T2 ->
+      forever_N ge a1 s1 T1.
+
+Hypothesis order_wf: well_founded order.
 
 Lemma forever_N_inv:
-  forall ge p s T,
-  forever_N ge p s T ->
-  exists t, exists s', exists q, exists T',
-  step ge s t s' /\ forever_N ge q s' T' /\ T = t *** T'.
+  forall ge a s T,
+  forever_N ge a s T ->
+  exists t, exists s', exists a', exists T',
+  step ge s t s' /\ forever_N ge a' s' T' /\ T = t *** T'.
 Proof.
-  intros ge p. pattern p. apply Peano_induction; intros.
-  inv H0.
+  intros ge a0. pattern a0. apply (well_founded_ind order_wf).
+  intros. inv H0.
   (* star case *)
   inv H1.
   (* no transition *)
-  change (E0 *** T2) with T2. apply H with p1. auto. auto. 
+  change (E0 *** T2) with T2. apply H with a2. auto. auto. 
   (* at least one transition *)
-  exists t1; exists s0; exists p0; exists (t2 *** T2).
+  exists t1; exists s0; exists x; exists (t2 *** T2).
   split. auto. split. eapply forever_N_star; eauto.
   apply Eappinf_assoc.
   (* plus case *)
   inv H1.
-  exists t1; exists s0; exists (S p1); exists (t2 *** T2).
-  split. auto. split. eapply forever_N_star; eauto. 
+  exists t1; exists s0; exists a2; exists (t2 *** T2).
+  split. auto.
+  split. inv H3. auto.  
+  eapply forever_N_plus. econstructor; eauto. eauto. auto.
   apply Eappinf_assoc.
 Qed.
 
 Lemma forever_N_forever:
-  forall ge p s T, forever_N ge p s T -> forever ge s T.
+  forall ge a s T, forever_N ge a s T -> forever ge s T.
 Proof.
   cofix COINDHYP; intros.
-  destruct (forever_N_inv H) as [t [s' [q [T' [A [B C]]]]]].
-  rewrite C. apply forever_intro with s'. auto. 
-  apply COINDHYP with q; auto.
+  destruct (forever_N_inv H) as [t [s' [a' [T' [P [Q R]]]]]].
+  rewrite R. apply forever_intro with s'. auto. 
+  apply COINDHYP with a'; auto.
+Qed.
+
+(** Yet another alternative definition of [forever]. *)
+
+CoInductive forever_plus (ge: genv) : state -> traceinf -> Prop :=
+  | forever_plus_intro: forall s1 t s2 T1 T2,
+      plus ge s1 t s2 -> 
+      forever_plus ge s2 T2 ->
+      T1 = t *** T2 ->
+      forever_plus ge s1 T1.
+
+Lemma forever_plus_inv:
+  forall ge s T,
+  forever_plus ge s T ->
+  exists s', exists t, exists T',
+  step ge s t s' /\ forever_plus ge s' T' /\ T = t *** T'.
+Proof.
+  intros. inv H. inv H0. exists s0; exists t1; exists (t2 *** T2).
+  split. auto.
+  split. exploit star_inv; eauto. intros [[P Q] | R]. 
+    subst. simpl. auto. econstructor; eauto. 
+  traceEq.
+Qed.
+
+Lemma forever_plus_forever:
+  forall ge s T, forever_plus ge s T -> forever ge s T.
+Proof.
+  cofix COINDHYP; intros.
+  destruct (forever_plus_inv H) as [s' [t [T' [P [Q R]]]]].
+  subst. econstructor; eauto.
 Qed.
 
 (** * Outcomes for program executions *)
@@ -329,19 +365,21 @@ Hypothesis match_final_states:
     in the source program must correspond to infinitely many
     transitions in the second program. *)
 
-Section SIMULATION_STAR.
+Section SIMULATION_STAR_WF.
 
-(** [measure] is a nonnegative integer associated with states
-  of the first semantics.  It must decrease when we take 
-  a stuttering step. *)
+(** [order] is a well-founded ordering associated with states
+  of the first semantics.  Stuttering steps must correspond
+  to states that decrease w.r.t. [order]. *)
 
-Variable measure: state1 -> nat.
+Variable order: state1 -> state1 -> Prop.
+Hypothesis order_wf: well_founded order.
 
 Hypothesis simulation:
   forall st1 t st1', step1 ge1 st1 t st1' ->
   forall st2, match_states st1 st2 ->
-  (exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2')
-  \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat.
+  exists st2',
+  (plus step2 ge2 st2 t st2' \/ (star step2 ge2 st2 t st2' /\ order st1' st1))
+  /\ match_states st1' st2'.
 
 Lemma simulation_star_star:
   forall st1 t st1', star step1 ge1 st1 t st1' ->
@@ -350,12 +388,13 @@ Lemma simulation_star_star:
 Proof.
   induction 1; intros.
   exists st2; split. apply star_refl. auto.
-  elim (simulation H H2).
-  intros [st2' [A B]]. 
+  destruct (simulation H H2) as [st2' [A B]].
   destruct (IHstar _ B) as [st3' [C D]].
-  exists st3'; split. apply star_trans with t1 st2' t2.
-  apply plus_star; auto. auto. auto. auto.
-  intros [A [B C]]. rewrite H1. rewrite B. simpl. apply IHstar; auto.
+  exists st3'; split; auto.
+  apply star_trans with t1 st2' t2; auto. 
+  destruct A as [F | [F G]].
+  apply plus_star; auto.
+  auto.
 Qed.
 
 Lemma simulation_star_forever:
@@ -365,19 +404,19 @@ Lemma simulation_star_forever:
 Proof.
   assert (forall st1 st2 T,
     forever step1 ge1 st1 T -> match_states st1 st2 ->
-    forever_N step2 ge2 (measure st1) st2 T).
+    forever_N step2 order ge2 st1 st2 T).
   cofix COINDHYP; intros.
-  inversion H; subst. elim (simulation H1 H0).
-  intros [st2' [A B]]. apply forever_N_plus with t st2' (measure s2) T0.
+  inversion H; subst.
+  destruct (simulation H1 H0) as [st2' [A B]].
+  destruct A as [C | [C D]].
+  apply forever_N_plus with t st2' s2 T0.
   auto. apply COINDHYP. assumption. assumption. auto.
-  intros [A [B C]].
-  apply forever_N_star with t st2 (measure s2) T0.
-  rewrite B. apply star_refl. auto.
-  apply COINDHYP. assumption. auto. auto.
+  apply forever_N_star with t st2' s2 T0.
+  auto. auto. apply COINDHYP. assumption. auto. auto.
   intros. eapply forever_N_forever; eauto.
 Qed.
 
-Lemma simulation_star_preservation:
+Lemma simulation_star_wf_preservation:
   forall beh,
   program_behaves step1 initial_state1 final_state1 ge1 beh ->
   program_behaves step2 initial_state2 final_state2 ge2 beh.
@@ -389,6 +428,36 @@ Proof.
   destruct (match_initial_states H0) as [s2 [A B]].
   econstructor; eauto.
   eapply simulation_star_forever; eauto.
+Qed.
+
+End SIMULATION_STAR_WF.
+
+Section SIMULATION_STAR.
+
+(** We now consider the case where we have a nonnegative integer measure
+  associated with states of the first semantics.  It must decrease when we take 
+  a stuttering step. *)
+
+Variable measure: state1 -> nat.
+
+Hypothesis simulation:
+  forall st1 t st1', step1 ge1 st1 t st1' ->
+  forall st2, match_states st1 st2 ->
+  (exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2')
+  \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat.
+
+Lemma simulation_star_preservation:
+  forall beh,
+  program_behaves step1 initial_state1 final_state1 ge1 beh ->
+  program_behaves step2 initial_state2 final_state2 ge2 beh.
+Proof.
+  intros.
+  apply simulation_star_wf_preservation with (ltof _ measure).
+  apply well_founded_ltof. intros.
+  destruct (simulation H0 H1) as [[st2' [A B]] | [A [B C]]].
+  exists st2'; auto.
+  exists st2; split. right; split. rewrite B. apply star_refl. auto. auto.
+  auto.
 Qed.
 
 End SIMULATION_STAR.

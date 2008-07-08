@@ -1153,6 +1153,8 @@ Fixpoint sel_stmt (s: Cminor.stmt) : stmt :=
   | Cminor.Sstore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
   | Cminor.Scall optid sg fn args =>
       Scall optid sg (sel_expr fn) (sel_exprlist args)
+  | Cminor.Stailcall sg fn args => 
+      Stailcall sg (sel_expr fn) (sel_exprlist args)
   | Cminor.Salloc id b => Salloc id (sel_expr b)
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt s1) (sel_stmt s2)
   | Cminor.Sifthenelse e ifso ifnot =>
@@ -1164,8 +1166,8 @@ Fixpoint sel_stmt (s: Cminor.stmt) : stmt :=
   | Cminor.Sswitch e cases dfl => Sswitch (sel_expr e) cases dfl
   | Cminor.Sreturn None => Sreturn None
   | Cminor.Sreturn (Some e) => Sreturn (Some (sel_expr e))
-  | Cminor.Stailcall sg fn args => 
-      Stailcall sg (sel_expr fn) (sel_exprlist args)
+  | Cminor.Slabel lbl body => Slabel lbl (sel_stmt body)
+  | Cminor.Sgoto lbl => Sgoto lbl
   end.
 
 (** Conversion of functions and programs. *)

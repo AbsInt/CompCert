@@ -2461,7 +2461,7 @@ Theorem transl_program_correct:
   Csharpminor.exec_program prog beh ->
   exec_program tprog beh.
 Proof.
-  intros.
+  intros. apply exec_program_bigstep_transition.
   set (m0 := Genv.init_mem prog) in *.
   set (f := meminj_init m0).
   assert (MINJ0: mem_inject f m0 m0).

@@ -21,6 +21,7 @@ Require Import Values.
 Require Import Mem.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Cminor.
 Require Import Op.
 Require Import CminorSel.
@@ -1060,17 +1061,18 @@ Proof.
 Qed.
 
 Lemma eval_store:
-  forall chunk a1 a2 v1 v2 m',
+  forall chunk a1 a2 v1 v2 f k m',
   eval_expr ge sp e m nil a1 v1 ->
   eval_expr ge sp e m nil a2 v2 ->
   Mem.storev chunk m v1 v2 = Some m' ->
-  exec_stmt ge sp e m (store chunk a1 a2) E0 e m' Out_normal.
+  step ge (State f (store chunk a1 a2) k sp e m)
+       E0 (State f Sskip k sp e m').
 Proof.
   intros. generalize H1; destruct v1; simpl; intro; try discriminate.
   unfold store.
   generalize (eval_addressing _ _ _ _ _ H (refl_equal _)).
   destruct (addressing a1). intros [vl [EV EQ]]. 
-  eapply exec_Sstore; eauto. 
+  eapply step_store; eauto. 
 Qed.
 
 (** * Correctness of instruction selection for operators *)
@@ -1241,144 +1243,149 @@ Hint Resolve sel_exprlist_correct: evalexpr.
 
 (** Semantic preservation for terminating function calls and statements. *)
 
-Definition eval_funcall_exec_stmt_ind2
-  (P1 : mem -> Cminor.fundef -> list val -> trace -> mem -> val -> Prop)
-  (P2 : val -> env -> mem -> Cminor.stmt -> trace -> env -> mem -> outcome -> Prop) :=
-  fun a b c d e f g h i j k l m n o p q r =>
-  conj (Cminor.eval_funcall_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q r)
-       (Cminor.exec_stmt_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q r).
+Fixpoint sel_cont (k: Cminor.cont) : CminorSel.cont :=
+  match k with
+  | Cminor.Kstop => Kstop
+  | Cminor.Kseq s1 k1 => Kseq (sel_stmt s1) (sel_cont k1)
+  | Cminor.Kblock k1 => Kblock (sel_cont k1)
+  | Cminor.Kcall id f sp e k1 =>
+      Kcall id (sel_function f) sp e (sel_cont k1)
+  end.
 
-Lemma sel_function_stmt_correct:
-     (forall m fd vargs t m' vres,
-      Cminor.eval_funcall ge m fd vargs t m' vres ->
-      CminorSel.eval_funcall tge m (sel_fundef fd) vargs t m' vres)
-  /\ (forall sp e m s t e' m' out,
-      Cminor.exec_stmt ge sp e m s t e' m' out ->
-      CminorSel.exec_stmt tge sp e m (sel_stmt s) t e' m' out).
+Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
+  | match_state: forall f s k s' k' sp e m,
+      s' = sel_stmt s ->
+      k' = sel_cont k ->
+      match_states
+        (Cminor.State f s k sp e m)
+        (State (sel_function f) s' k' sp e m)
+  | match_callstate: forall f args k k' m,
+      k' = sel_cont k ->
+      match_states
+        (Cminor.Callstate f args k m)
+        (Callstate (sel_fundef f) args k' m)
+  | match_returnstate: forall v k k' m,
+      k' = sel_cont k ->
+      match_states
+        (Cminor.Returnstate v k m)
+        (Returnstate v k' m).
+
+Remark call_cont_commut:
+  forall k, call_cont (sel_cont k) = sel_cont (Cminor.call_cont k).
 Proof.
-  apply eval_funcall_exec_stmt_ind2; intros; simpl.
-  (* Internal function *)
-  econstructor; eauto. 
-  (* External function *)
-  econstructor; eauto.
-  (* Sskip *)
-  constructor.
-  (* Sassign *)
-  econstructor; eauto with evalexpr. 
-  (* Sstore *)
-  eapply eval_store; eauto with evalexpr. 
-  (* Scall *)
-  econstructor; eauto with evalexpr.
-  apply functions_translated; auto.
-  rewrite <- H2. apply sig_function_translated.
-  (* Salloc *)
-  econstructor; eauto with evalexpr.
-  (* Sifthenelse *)
-  econstructor; eauto with evalexpr.
-  eapply eval_condition_of_expr; eauto with evalexpr.
-  destruct b; auto.
-  (* Sseq *)
-  eapply exec_Sseq_continue; eauto.
-  eapply exec_Sseq_stop; eauto.
-  (* Sloop *)
-  eapply exec_Sloop_loop; eauto.
-  eapply exec_Sloop_stop; eauto.
-  (* Sblock *)
-  econstructor; eauto.
-  (* Sexit *)
-  constructor.
-  (* Sswitch *)
-  econstructor; eauto with evalexpr.
-  (* Sreturn *)
-  constructor.
-  econstructor; eauto with evalexpr.
-  (* Stailcall *)
-  econstructor; eauto with evalexpr.
-  apply functions_translated; auto.
-  rewrite <- H2. apply sig_function_translated.
+  induction k; simpl; auto.
 Qed.
 
-Lemma sel_function_correct:
-      forall m fd vargs t m' vres,
-      Cminor.eval_funcall ge m fd vargs t m' vres ->
-      CminorSel.eval_funcall tge m (sel_fundef fd) vargs t m' vres.
-Proof (proj1 sel_function_stmt_correct).
-
-Lemma sel_stmt_correct:
-      forall sp e m s t e' m' out,
-      Cminor.exec_stmt ge sp e m s t e' m' out ->
-      CminorSel.exec_stmt tge sp e m (sel_stmt s) t e' m' out.
-Proof (proj2 sel_function_stmt_correct).
-
-Hint Resolve sel_stmt_correct: evalexpr.
-
-(** Semantic preservation for diverging function calls and statements. *)
-
-Lemma sel_function_divergence_correct:
-  forall m fd vargs t,
-  Cminor.evalinf_funcall ge m fd vargs t ->
-  CminorSel.evalinf_funcall tge m (sel_fundef fd) vargs t.
+Remark find_label_commut:
+  forall lbl s k,
+  find_label lbl (sel_stmt s) (sel_cont k) =
+  option_map (fun sk => (sel_stmt (fst sk), sel_cont (snd sk)))
+             (Cminor.find_label lbl s k).
 Proof.
-  cofix FUNCALL.
-  assert (STMT: forall sp e m s t,
-            Cminor.execinf_stmt ge sp e m s t ->
-            CminorSel.execinf_stmt tge sp e m (sel_stmt s) t).
-  cofix STMT; intros.
-  inversion H; subst; simpl.
-  (* Call *)
-  econstructor; eauto with evalexpr.
-  apply functions_translated; auto.
-  apply sig_function_translated.
-  (* Ifthenelse *)
-  econstructor; eauto with evalexpr.
-  eapply eval_condition_of_expr; eauto with evalexpr.
-  destruct b; eapply STMT; eauto.
-  (* Seq *)
-  apply execinf_Sseq_1; eauto.
-  eapply execinf_Sseq_2; eauto with evalexpr.
-  (* Loop *)
-  eapply execinf_Sloop_body; eauto.
-  eapply execinf_Sloop_loop; eauto with evalexpr.
-  change (Sloop (sel_stmt s0)) with (sel_stmt (Cminor.Sloop s0)).
-  apply STMT. auto.
-  (* Block *)
-  apply execinf_Sblock; eauto.
-  (* Tailcall *)
-  econstructor; eauto with evalexpr.
-  apply functions_translated; auto.
-  apply sig_function_translated.
+  induction s; intros; simpl; auto.
+  unfold store. destruct (addressing (sel_expr e)); auto.
+  change (Kseq (sel_stmt s2) (sel_cont k))
+    with (sel_cont (Cminor.Kseq s2 k)).
+  rewrite IHs1. rewrite IHs2. 
+  destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)); auto.
+  rewrite IHs1. rewrite IHs2. 
+  destruct (Cminor.find_label lbl s1 k); auto.
+  change (Kseq (Sloop (sel_stmt s)) (sel_cont k))
+    with (sel_cont (Cminor.Kseq (Cminor.Sloop s) k)).
+  auto.
+  change (Kblock (sel_cont k))
+    with (sel_cont (Cminor.Kblock k)).
+  auto.
+  destruct o; auto.
+  destruct (ident_eq lbl l); auto.
+Qed.
 
-  intros. inv H; simpl.
-  (* Internal functions *)
+Lemma sel_step_correct:
+  forall S1 t S2, Cminor.step ge S1 t S2 ->
+  forall T1, match_states S1 T1 ->
+  exists T2, step tge T1 t T2 /\ match_states S2 T2.
+Proof.
+  induction 1; intros T1 ME; inv ME; simpl;
+  try (econstructor; split; [econstructor; eauto with evalexpr | econstructor; eauto]; fail).
+
+  (* skip call *)
+  econstructor; split. 
+  econstructor. destruct k; simpl in H; simpl; auto. 
+  rewrite <- H0; reflexivity.
+  constructor; auto.
+  (* assign *)
+  exists (State (sel_function f) Sskip (sel_cont k) sp (PTree.set id v e) m); split.
+  constructor. auto with evalexpr.
+  constructor; auto.
+  (* store *)
+  econstructor; split.
+  eapply eval_store; eauto with evalexpr.
+  constructor; auto.
+  (* Scall *)
+  econstructor; split.
   econstructor; eauto with evalexpr.
-  unfold sel_function; simpl. eapply STMT; eauto. 
-Qed. 
+  apply functions_translated; eauto. 
+  apply sig_function_translated.
+  constructor; auto.
+  (* Stailcall *)
+  econstructor; split.
+  econstructor; eauto with evalexpr.
+  apply functions_translated; eauto. 
+  apply sig_function_translated.
+  constructor; auto. apply call_cont_commut.
+  (* Salloc *)
+  exists (State (sel_function f) Sskip (sel_cont k) sp (PTree.set id (Vptr b Int.zero) e) m'); split.
+  econstructor; eauto with evalexpr.
+  constructor; auto.
+  (* Sifthenelse *)
+  exists (State (sel_function f) (if b then sel_stmt s1 else sel_stmt s2) (sel_cont k) sp e m); split.
+  constructor. eapply eval_condition_of_expr; eauto with evalexpr.
+  constructor; auto. destruct b; auto.
+  (* Sreturn None *)
+  econstructor; split. 
+  econstructor. rewrite <- H; reflexivity.
+  constructor; auto. apply call_cont_commut.
+  (* Sreturn Some *)
+  econstructor; split. 
+  econstructor. simpl. auto. eauto with evalexpr. 
+  constructor; auto. apply call_cont_commut.
+  (* Sgoto *)
+  econstructor; split.
+  econstructor. simpl. rewrite call_cont_commut. rewrite find_label_commut.
+  rewrite H. simpl. reflexivity. 
+  constructor; auto.
+Qed.
+
+Lemma sel_initial_states:
+  forall S, Cminor.initial_state prog S ->
+  exists R, initial_state tprog R /\ match_states S R.
+Proof.
+  induction 1.
+  econstructor; split.
+  econstructor.
+  simpl. fold tge. rewrite symbols_preserved. eexact H.
+  apply function_ptr_translated. eauto. 
+  rewrite <- H1. apply sig_function_translated; auto.
+  unfold tprog, sel_program. rewrite Genv.init_mem_transf.
+  constructor; auto.
+Qed.
+
+Lemma sel_final_states:
+  forall S R r,
+  match_states S R -> Cminor.final_state S r -> final_state R r.
+Proof.
+  intros. inv H0. inv H. simpl. constructor.
+Qed.
+
+Theorem transf_program_correct:
+  forall (beh: program_behavior),
+  Cminor.exec_program prog beh -> CminorSel.exec_program tprog beh.
+Proof.
+  unfold CminorSel.exec_program, Cminor.exec_program; intros.
+  eapply simulation_step_preservation; eauto.
+  eexact sel_initial_states.
+  eexact sel_final_states.
+  exact sel_step_correct. 
+Qed.
 
 End PRESERVATION.
-
-(** As a corollary, instruction selection preserves the observable
-   behaviour of programs. *)
-
-Theorem sel_program_correct:
-  forall prog beh,
-  Cminor.exec_program prog beh ->
-  CminorSel.exec_program (sel_program prog) beh.
-Proof.
-  intros. inv H. 
-  (* Terminating *)
-  apply program_terminates with b (sel_fundef f) m.
-  simpl. rewrite <- H0. unfold ge. apply symbols_preserved.
-  apply function_ptr_translated. auto.
-  rewrite <- H2. apply sig_function_translated. 
-  replace (Genv.init_mem (sel_program prog)) with (Genv.init_mem prog).
-  apply sel_function_correct; auto.
-  symmetry. unfold sel_program. apply Genv.init_mem_transf.
-  (* Diverging *)
-  apply program_diverges with b (sel_fundef f).
-  simpl. rewrite <- H0. unfold ge. apply symbols_preserved.
-  apply function_ptr_translated. auto.
-  rewrite <- H2. apply sig_function_translated. 
-  replace (Genv.init_mem (sel_program prog)) with (Genv.init_mem prog).
-  apply sel_function_divergence_correct; auto.
-  symmetry. unfold sel_program. apply Genv.init_mem_transf.
-Qed.

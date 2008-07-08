@@ -136,39 +136,27 @@ Lemma instr_at_incr:
   forall s1 s2 n i,
   state_incr s1 s2 -> s1.(st_code)!n = Some i -> s2.(st_code)!n = Some i.
 Proof.
-  intros. inversion H.
-  rewrite H3. auto. elim (st_wf s1 n); intro.
-  assumption. congruence.
+  intros. inv H.
+  destruct (H3 n); congruence.
 Qed.
 Hint Resolve instr_at_incr: rtlg.
 
-(** The following relation between two states is a weaker version of
-  [state_incr].  It permits changing the contents at an already reserved
-  graph node, but only from [None] to [Some i]. *)
+(*
+(** A useful tactic to reason over transitivity and reflexivity of [state_incr]. *)
 
-Definition state_extends (s1 s2: state): Prop :=
-  forall pc,
-  s1.(st_code)!pc = None \/ s2.(st_code)!pc = s1.(st_code)!pc.
+Ltac Show_state_incr :=
+  eauto;
+  match goal with
+  | |- (state_incr ?c ?c) => 
+         apply state_incr_refl
+  | |- (state_incr ?c1 ?c2) =>
+         eapply state_incr_trans; [eauto; fail | idtac]; Show_state_incr
+  end.
 
-Lemma instr_at_extends:
-  forall s1 s2 pc i,
-  state_extends s1 s2 -> 
-  s1.(st_code)!pc = Some i -> s2.(st_code)!pc = Some i.
-Proof.
-  intros. elim (H pc); intro. congruence. congruence.
-Qed.
+Hint Extern 2 (state_incr _ _) => Show_state_incr : rtlg.
+*)
 
-Lemma state_incr_extends:
-  forall s1 s2,
-  state_incr s1 s2 -> state_extends s1 s2.
-Proof.
-  unfold state_extends; intros. inversion H.   
-  case (plt pc s1.(st_nextnode)); intro.
-  right; apply H2; auto.
-  left. elim (s1.(st_wf) pc); intro.
-  elim (n H5). auto.
-Qed.
-Hint Resolve state_incr_extends: rtlg.
+Hint Resolve state_incr_refl state_incr_trans: rtlg.
 
 (** * Validity and freshness of registers *)
 
@@ -273,70 +261,18 @@ Proof.
 Qed.
 Hint Resolve add_instr_at: rtlg.
 
-(** Properties of [update_instr] and [add_loop].  The following diagram
-  shows the evolutions of the code component of the state during [add_loop].
-  The vertical bar materializes the [st_nextnode] pointer.
-<<
-  s1:  I1   I2   ...   In  |None None None None None None None
-reserve_instr
-  s2:  I1   I2   ...   In   None|None None None None None None
-body n
-  s3:  I1   I2   ...   In   None Ip   ...  Iq  |None None None
-update_instr
-  s4:  I1   I2   ...   In   Inop Ip   ...  Iq  |None None None
->>
-  It is apparent that [state_incr s1 s2] and [state_incr s1 s4] hold.
-  Moreover, [state_extends s3 s4] holds but not [state_incr s3 s4].
-*)
+(** Properties of [update_instr]. *)
 
-Lemma update_instr_extends:
-  forall s1 s2 s3 i n,
-  reserve_instr s1 = (n, s2) ->
-  state_incr s2 s3 ->
-  state_extends s3 (update_instr n i s3).
+Lemma update_instr_at:
+  forall n i s1 s2 incr u,
+  update_instr n i s1 = OK u s2 incr -> s2.(st_code)!n = Some i.
 Proof.
-  intros. injection H. intros EQ1 EQ2.
-  unfold update_instr. destruct (plt n (st_nextnode s3)).  
-  red; simpl; intros. rewrite PTree.gsspec.  
-  case (peq pc n); intro.
-  subst pc. left. inversion H0. subst s0 s4. rewrite H3. 
-  rewrite <- EQ1; simpl.
-  destruct (s1.(st_wf) n).
-  rewrite <- EQ2 in H4. elim (Plt_strict _ H4).
-  auto.
-  rewrite <- EQ1; rewrite <- EQ2; simpl. apply Plt_succ.
-  auto.
-  red; intros; auto.
+  intros. unfold update_instr in H. 
+  destruct (plt n (st_nextnode s1)); try discriminate.
+  destruct (check_empty_node s1 n); try discriminate.
+  inv H. simpl. apply PTree.gss.
 Qed.
-
-Lemma add_loop_inversion:
-  forall f s1 nbody s4 i,
-  add_loop f s1 = OK nbody s4 i ->
-  exists nloop, exists s2, exists s3, exists i',
-     state_incr s1 s2
-  /\ f nloop s2 = OK nbody s3 i'
-  /\ state_extends s3 s4
-  /\ s4.(st_code)!nloop = Some(Inop nbody).
-Proof.
-  intros until i. unfold add_loop.
-  unfold reserve_instr; simpl.
-  set (s2 := mkstate (st_nextreg s1) (Psucc (st_nextnode s1)) (st_code s1)
-                     (reserve_instr_wf s1)).
-  set (nloop := st_nextnode s1).
-  case_eq (f nloop s2). intros; discriminate.
-  intros n s3 i' EQ1 EQ2. inv EQ2. 
-  exists nloop; exists s2; exists s3; exists i'.
-  split. 
-    unfold s2; constructor; simpl. 
-    apply Ple_succ. apply Ple_refl. auto.
-  split. auto.
-  split. apply update_instr_extends with s1 s2; auto. 
-  unfold update_instr. destruct (plt nloop (st_nextnode s3)).
-  simpl. apply PTree.gss. 
-  elim n. apply Plt_Ple_trans with (st_nextnode s2).
-  unfold nloop, s2; simpl; apply Plt_succ.
-  inversion i'; auto.
-Qed.
+Hint Resolve update_instr_at: rtlg.
 
 (** Properties of [new_reg]. *)
 
@@ -819,76 +755,84 @@ Inductive tr_switch
   its value is deposited in register [rret]. *)
 
 Inductive tr_stmt (c: code) (map: mapping):
-     stmt -> node -> node -> list node -> node -> option reg -> Prop :=
-  | tr_Sskip: forall ns nexits nret rret,
-     tr_stmt c map Sskip ns ns nexits nret rret
-  | tr_Sassign: forall id a ns nd nexits nret rret rt n,
+     stmt -> node -> node -> list node -> labelmap -> node -> option reg -> Prop :=
+  | tr_Sskip: forall ns nexits ngoto nret rret,
+     tr_stmt c map Sskip ns ns nexits ngoto nret rret
+  | tr_Sassign: forall id a ns nd nexits ngoto nret rret rt n,
      tr_expr c map nil a ns n rt ->
      tr_store_var c map rt id n nd ->
-     tr_stmt c map (Sassign id a) ns nd nexits nret rret
-  | tr_Sstore: forall chunk addr al b ns nd nexits nret rret rd n1 rl n2,
+     tr_stmt c map (Sassign id a) ns nd nexits ngoto nret rret
+  | tr_Sstore: forall chunk addr al b ns nd nexits ngoto nret rret rd n1 rl n2,
      tr_exprlist c map nil al ns n1 rl ->
      tr_expr c map rl b n1 n2 rd ->
      c!n2 = Some (Istore chunk addr rl rd nd) ->
-     tr_stmt c map (Sstore chunk addr al b) ns nd nexits nret rret
-  | tr_Scall: forall optid sig b cl ns nd nexits nret rret rd n1 rf n2 n3 rargs,
+     tr_stmt c map (Sstore chunk addr al b) ns nd nexits ngoto nret rret
+  | tr_Scall: forall optid sig b cl ns nd nexits ngoto nret rret rd n1 rf n2 n3 rargs,
      tr_expr c map nil b ns n1 rf ->
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Icall sig (inl _ rf) rargs rd n3) ->
      tr_store_optvar c map rd optid n3 nd ->
      ~reg_in_map map rd ->
-     tr_stmt c map (Scall optid sig b cl) ns nd nexits nret rret
-  | tr_Salloc: forall id a ns nd nexits nret rret rd n1 n2 r,
+     tr_stmt c map (Scall optid sig b cl) ns nd nexits ngoto nret rret
+  | tr_Stailcall: forall sig b cl ns nd nexits ngoto nret rret n1 rf n2 rargs,
+     tr_expr c map nil b ns n1 rf ->
+     tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
+     c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
+     tr_stmt c map (Stailcall sig b cl) ns nd nexits ngoto nret rret
+  | tr_Salloc: forall id a ns nd nexits ngoto nret rret rd n1 n2 r,
      tr_expr c map nil a ns n1 r ->
      c!n1 = Some (Ialloc r rd n2) ->
      tr_store_var c map rd id n2 nd ->
      ~reg_in_map map rd ->
-     tr_stmt c map (Salloc id a) ns nd nexits nret rret
-  | tr_Sseq: forall s1 s2 ns nd nexits nret rret n,
-     tr_stmt c map s2 n nd nexits nret rret ->
-     tr_stmt c map s1 ns n nexits nret rret ->
-     tr_stmt c map (Sseq s1 s2) ns nd nexits nret rret
-  | tr_Sifthenelse: forall a strue sfalse ns nd nexits nret rret ntrue nfalse,
-     tr_stmt c map strue ntrue nd nexits nret rret ->
-     tr_stmt c map sfalse nfalse nd nexits nret rret ->
+     tr_stmt c map (Salloc id a) ns nd nexits ngoto nret rret
+  | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
+     tr_stmt c map s2 n nd nexits ngoto nret rret ->
+     tr_stmt c map s1 ns n nexits ngoto nret rret ->
+     tr_stmt c map (Sseq s1 s2) ns nd nexits ngoto nret rret
+  | tr_Sifthenelse: forall a strue sfalse ns nd nexits ngoto nret rret ntrue nfalse,
+     tr_stmt c map strue ntrue nd nexits ngoto nret rret ->
+     tr_stmt c map sfalse nfalse nd nexits ngoto nret rret ->
      tr_condition c map nil a ns ntrue nfalse ->
-     tr_stmt c map (Sifthenelse a strue sfalse) ns nd nexits nret rret
-  | tr_Sloop: forall sbody ns nd nexits nret rret nloop,
-     tr_stmt c map sbody ns nloop nexits nret rret ->
-     c!nloop = Some(Inop ns) ->
-     tr_stmt c map (Sloop sbody) ns nd nexits nret rret
-  | tr_Sblock: forall sbody ns nd nexits nret rret,
-     tr_stmt c map sbody ns nd (nd :: nexits) nret rret ->
-     tr_stmt c map (Sblock sbody) ns nd nexits nret rret
-  | tr_Sexit: forall n ns nd nexits nret rret,
+     tr_stmt c map (Sifthenelse a strue sfalse) ns nd nexits ngoto nret rret
+  | tr_Sloop: forall sbody ns nd nexits ngoto nret rret nloop,
+     tr_stmt c map sbody nloop ns nexits ngoto nret rret ->
+     c!ns = Some(Inop nloop) ->
+     tr_stmt c map (Sloop sbody) ns nd nexits ngoto nret rret
+  | tr_Sblock: forall sbody ns nd nexits ngoto nret rret,
+     tr_stmt c map sbody ns nd (nd :: nexits) ngoto nret rret ->
+     tr_stmt c map (Sblock sbody) ns nd nexits ngoto nret rret
+  | tr_Sexit: forall n ns nd nexits ngoto nret rret,
      nth_error nexits n = Some ns ->
-     tr_stmt c map (Sexit n) ns nd nexits nret rret
-  | tr_Sswitch: forall a cases default ns nd nexits nret rret n r t,
+     tr_stmt c map (Sexit n) ns nd nexits ngoto nret rret
+  | tr_Sswitch: forall a cases default ns nd nexits ngoto nret rret n r t,
      validate_switch default cases t = true ->
      tr_expr c map nil a ns n r ->
      tr_switch c r nexits t n ->
-     tr_stmt c map (Sswitch a cases default) ns nd nexits nret rret
-  | tr_Sreturn_none: forall nret nd nexits,
-     tr_stmt c map (Sreturn None) nret nd nexits nret None
-  | tr_Sreturn_some: forall a ns nd nexits nret rret,
+     tr_stmt c map (Sswitch a cases default) ns nd nexits ngoto nret rret
+  | tr_Sreturn_none: forall nret nd nexits ngoto,
+     tr_stmt c map (Sreturn None) nret nd nexits ngoto nret None
+  | tr_Sreturn_some: forall a ns nd nexits ngoto nret rret,
      tr_expr c map nil a ns nret rret ->
-     tr_stmt c map (Sreturn (Some a)) ns nd nexits nret (Some rret)
-  | tr_Stailcall: forall sig b cl ns nd nexits nret rret n1 rf n2 rargs,
-     tr_expr c map nil b ns n1 rf ->
-     tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
-     c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
-     tr_stmt c map (Stailcall sig b cl) ns nd nexits nret rret.
+     tr_stmt c map (Sreturn (Some a)) ns nd nexits ngoto nret (Some rret)
+  | tr_Slabel: forall lbl s ns nd nexits ngoto nret rret n,
+     ngoto!lbl = Some n ->
+     c!n = Some (Inop ns) ->
+     tr_stmt c map s ns nd nexits ngoto nret rret ->
+     tr_stmt c map (Slabel lbl s) ns nd nexits ngoto nret rret
+  | tr_Sgoto: forall lbl ns nd nexits ngoto nret rret,
+     ngoto!lbl = Some ns ->
+     tr_stmt c map (Sgoto lbl) ns nd nexits ngoto nret rret.
 
 (** [tr_function f tf] specifies the RTL function [tf] that 
   [RTLgen.transl_function] returns.  *)
 
 Inductive tr_function: CminorSel.function -> RTL.function -> Prop :=
   | tr_function_intro:
-      forall f code rparams map1 s1 i1 rvars map2 s2 i2 nentry nret rret orret nextnode wfcode,
-      add_vars init_mapping f.(CminorSel.fn_params) init_state = OK (rparams, map1) s1 i1 ->
+      forall f code rparams map1 s0 s1 i1 rvars map2 s2 i2 nentry ngoto nret rret orret nextnode wfcode,
+      add_vars init_mapping f.(CminorSel.fn_params) s0 = OK (rparams, map1) s1 i1 ->
       add_vars map1 f.(CminorSel.fn_vars) s1 = OK (rvars, map2) s2 i2 ->
       orret = ret_reg f.(CminorSel.fn_sig) rret ->
-      tr_stmt code map2 f.(CminorSel.fn_body) nentry nret nil nret orret ->
+      tr_stmt code map2 f.(CminorSel.fn_body) nentry nret nil ngoto nret orret ->
       code!nret = Some(Ireturn orret) -> 
       tr_function f (RTL.mkfunction
                        f.(CminorSel.fn_sig)
@@ -918,18 +862,17 @@ Definition tr_expr_condition_exprlist_ind3
        (conj (tr_condition_ind3 c P P0 P1 a b c' d e f g h i j k l)
              (tr_exprlist_ind3 c P P0 P1 a b c' d e f g h i j k l)).
 
-Lemma tr_move_extends:
-  forall s1 s2, state_extends s1 s2 ->
+Lemma tr_move_incr:
+  forall s1 s2, state_incr s1 s2 ->
   forall ns rs nd rd,
   tr_move s1.(st_code) ns rs nd rd ->
   tr_move s2.(st_code) ns rs nd rd.
 Proof.
-  induction 2; econstructor; eauto.
-  eapply instr_at_extends; eauto.
+  induction 2; econstructor; eauto with rtlg.
 Qed.
 
-Lemma tr_expr_condition_exprlist_extends:
-  forall s1 s2, state_extends s1 s2 ->
+Lemma tr_expr_condition_exprlist_incr:
+  forall s1 s2, state_incr s1 s2 ->
   (forall map pr a ns nd rd,
    tr_expr s1.(st_code) map pr a ns nd rd ->
    tr_expr s2.(st_code) map pr a ns nd rd)
@@ -941,10 +884,10 @@ Lemma tr_expr_condition_exprlist_extends:
    tr_exprlist s2.(st_code) map pr al ns nd rl).
 Proof.
   intros s1 s2 EXT. 
-  pose (AT := fun pc i => instr_at_extends s1 s2 pc i EXT).
+  pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
   apply tr_expr_condition_exprlist_ind3; intros; econstructor; eauto.
-  eapply tr_move_extends; eauto.
-  eapply tr_move_extends; eauto.
+  eapply tr_move_incr; eauto.
+  eapply tr_move_incr; eauto.
 Qed.
 
 Lemma tr_expr_incr:
@@ -954,8 +897,8 @@ Lemma tr_expr_incr:
   tr_expr s2.(st_code) map pr a ns nd rd.
 Proof.
   intros.
-  exploit tr_expr_condition_exprlist_extends. 
-  apply state_incr_extends; eauto. intros [A [B C]]. eauto.
+  exploit tr_expr_condition_exprlist_incr; eauto.
+  intros [A [B C]]. eauto.
 Qed.
 
 Lemma tr_condition_incr:
@@ -965,8 +908,8 @@ Lemma tr_condition_incr:
   tr_condition s2.(st_code) map pr a ns ntrue nfalse.
 Proof.
   intros.
-  exploit tr_expr_condition_exprlist_extends. 
-  apply state_incr_extends; eauto. intros [A [B C]]. eauto.
+  exploit tr_expr_condition_exprlist_incr; eauto. 
+  intros [A [B C]]. eauto.
 Qed.
 
 Lemma tr_exprlist_incr:
@@ -976,8 +919,8 @@ Lemma tr_exprlist_incr:
   tr_exprlist s2.(st_code) map pr al ns nd rl.
 Proof.
   intros.
-  exploit tr_expr_condition_exprlist_extends. 
-  apply state_incr_extends; eauto. intros [A [B C]]. eauto.
+  exploit tr_expr_condition_exprlist_incr; eauto.
+  intros [A [B C]]. eauto.
 Qed.
 
 Scheme expr_ind3 := Induction for expr Sort Prop
@@ -1117,62 +1060,50 @@ Proof.
   intros. eapply B; eauto with rtlg.
 Qed.
 
-Lemma tr_store_var_extends:
-  forall s1 s2, state_extends s1 s2 ->
+Lemma tr_store_var_incr:
+  forall s1 s2, state_incr s1 s2 ->
   forall map rs id ns nd,
   tr_store_var s1.(st_code) map rs id ns nd ->
   tr_store_var s2.(st_code) map rs id ns nd.
 Proof.
   intros. destruct H0 as [rv [A B]]. 
-  econstructor; split. eauto. eapply tr_move_extends; eauto.
+  econstructor; split. eauto. eapply tr_move_incr; eauto.
 Qed.
  
-Lemma tr_store_optvar_extends:
-  forall s1 s2, state_extends s1 s2 ->
+Lemma tr_store_optvar_incr:
+  forall s1 s2, state_incr s1 s2 ->
   forall map rs optid ns nd,
   tr_store_optvar s1.(st_code) map rs optid ns nd ->
   tr_store_optvar s2.(st_code) map rs optid ns nd.
 Proof.
   intros until nd. destruct optid; simpl. 
-  apply tr_store_var_extends; auto.
+  apply tr_store_var_incr; auto.
   auto.
 Qed.
 
-Lemma tr_switch_extends:
-  forall s1 s2, state_extends s1 s2 ->
+Lemma tr_switch_incr:
+  forall s1 s2, state_incr s1 s2 ->
   forall r nexits t ns,
   tr_switch s1.(st_code) r nexits t ns ->
   tr_switch s2.(st_code) r nexits t ns.
 Proof.
   induction 2; econstructor; eauto with rtlg.
-  eapply instr_at_extends; eauto.
-  eapply instr_at_extends; eauto.
-Qed.
-
-Lemma tr_stmt_extends:
-  forall s1 s2, state_extends s1 s2 ->
-  forall map s ns nd nexits nret rret,
-  tr_stmt s1.(st_code) map s ns nd nexits nret rret ->
-  tr_stmt s2.(st_code) map s ns nd nexits nret rret.
-Proof.
-  intros s1 s2 EXT.
-  destruct (tr_expr_condition_exprlist_extends s1 s2 EXT) as [A [B C]].
-  pose (AT := fun pc i => instr_at_extends s1 s2 pc i EXT).
-  pose (STV := tr_store_var_extends s1 s2 EXT).
-  pose (STOV := tr_store_optvar_extends s1 s2 EXT).
-  induction 1; econstructor; eauto.
-  eapply tr_switch_extends; eauto.
 Qed.
 
 Lemma tr_stmt_incr:
   forall s1 s2, state_incr s1 s2 ->
-  forall map s ns nd nexits nret rret,
-  tr_stmt s1.(st_code) map s ns nd nexits nret rret ->
-  tr_stmt s2.(st_code) map s ns nd nexits nret rret.
+  forall map s ns nd nexits ngoto nret rret,
+  tr_stmt s1.(st_code) map s ns nd nexits ngoto nret rret ->
+  tr_stmt s2.(st_code) map s ns nd nexits ngoto nret rret.
 Proof.
-  intros. eapply tr_stmt_extends; eauto with rtlg.
+  intros s1 s2 EXT.
+  destruct (tr_expr_condition_exprlist_incr s1 s2 EXT) as [A [B C]].
+  pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
+  pose (STV := tr_store_var_incr s1 s2 EXT).
+  pose (STOV := tr_store_optvar_incr s1 s2 EXT).
+  induction 1; econstructor; eauto.
+  eapply tr_switch_incr; eauto.
 Qed.
-
 
 Lemma store_var_charact:
   forall map rs id nd s ns s' incr,
@@ -1215,27 +1146,27 @@ Proof.
   monadInv H.
   exploit transl_exit_charact; eauto. intros [A B]. subst s1.
   econstructor; eauto with rtlg. 
-  apply tr_switch_extends with s0; eauto with rtlg.
+  apply tr_switch_incr with s0; eauto with rtlg.
 
   monadInv H.
   econstructor; eauto with rtlg. 
-  apply tr_switch_extends with s1; eauto with rtlg.
-  apply tr_switch_extends with s0; eauto with rtlg.
+  apply tr_switch_incr with s1; eauto with rtlg.
+  apply tr_switch_incr with s0; eauto with rtlg.
 Qed.
  
 Lemma transl_stmt_charact:
-  forall map stmt nd nexits nret rret s ns s' INCR
-    (TR: transl_stmt map stmt nd nexits nret rret s = OK ns s' INCR)
+  forall map stmt nd nexits ngoto nret rret s ns s' INCR
+    (TR: transl_stmt map stmt nd nexits ngoto nret rret s = OK ns s' INCR)
     (WF: map_valid map s)
     (OK: return_reg_ok s map rret),
-  tr_stmt s'.(st_code) map stmt ns nd nexits nret rret.
+  tr_stmt s'.(st_code) map stmt ns nd nexits ngoto nret rret.
 Proof.
   induction stmt; intros; simpl in TR; try (monadInv TR).
   (* Sskip *)
   constructor.
   (* Sassign *)
   econstructor. eapply transl_expr_charact; eauto with rtlg.
-  apply tr_store_var_extends with s1; auto with rtlg.
+  apply tr_store_var_incr with s1; auto with rtlg.
   eapply store_var_charact; eauto.
   (* Sstore *)
   destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
@@ -1256,12 +1187,20 @@ Proof.
   apply regs_valid_incr with s1; eauto with rtlg.
   apply regs_valid_cons; eauto with rtlg.
   apply regs_valid_incr with s2; eauto with rtlg.
-  apply tr_store_optvar_extends with s4; eauto with rtlg.
+  apply tr_store_optvar_incr with s4; eauto with rtlg.
   eapply store_optvar_charact; eauto with rtlg.
+  (* Stailcall *)
+  destruct transl_expr_condexpr_list_charact as [A [B C]].
+  assert (RV: regs_valid (x :: nil) s1).
+    apply regs_valid_cons; eauto with rtlg. 
+  econstructor; eauto with rtlg.
+  eapply A; eauto with rtlg.
+  apply tr_exprlist_incr with s4; auto.
+  eapply C; eauto with rtlg.
   (* Salloc *)
   econstructor; eauto with rtlg.
   eapply transl_expr_charact; eauto with rtlg.
-  apply tr_store_var_extends with s2; eauto with rtlg.
+  apply tr_store_var_incr with s2; eauto with rtlg.
   eapply store_var_charact; eauto with rtlg.
   (* Sseq *)
   econstructor. 
@@ -1283,12 +1222,10 @@ Proof.
   eapply IHstmt2; eauto with rtlg.
   eapply transl_condexpr_charact; eauto with rtlg.
   (* Sloop *)
-  exploit add_loop_inversion; eauto. 
-  intros [nloop [s2 [s3 [INCR23 [INCR02 [EQ [EXT CODEAT]]]]]]].
   econstructor. 
-  apply tr_stmt_extends with s3; auto. 
-  eapply IHstmt; eauto with rtlg. 
-  auto.
+  apply tr_stmt_incr with s1; auto. 
+  eapply IHstmt; eauto with rtlg.
+  eauto with rtlg.
   (* Sblock *)
   econstructor. 
   eapply IHstmt; eauto with rtlg.
@@ -1302,7 +1239,7 @@ Proof.
   monadInv TR.
   econstructor; eauto with rtlg.
   eapply transl_expr_charact; eauto with rtlg.
-  apply tr_switch_extends with s1; auto with rtlg.
+  apply tr_switch_incr with s1; auto with rtlg.
   eapply transl_switch_charact; eauto with rtlg.
   monadInv TR. 
   (* Sreturn *)
@@ -1312,14 +1249,15 @@ Proof.
   eapply transl_expr_charact; eauto with rtlg.
   constructor. auto. simpl; tauto. 
   constructor.
-  (* Stailcall *)
-  destruct transl_expr_condexpr_list_charact as [A [B C]].
-  assert (RV: regs_valid (x :: nil) s1).
-    apply regs_valid_cons; eauto with rtlg. 
-  econstructor; eauto with rtlg.
-  eapply A; eauto with rtlg.
-  apply tr_exprlist_incr with s4; auto.
-  eapply C; eauto with rtlg.
+  (* Slabel *)
+  generalize EQ0; clear EQ0. case_eq (ngoto!l); intros; monadInv EQ0.
+  generalize EQ1; clear EQ1. unfold handle_error. 
+  case_eq (update_instr n (Inop ns) s0); intros; inv EQ1.
+  econstructor. eauto. eauto with rtlg.
+  eapply tr_stmt_incr with s0; eauto with rtlg.
+  (* Sgoto *)
+  generalize TR; clear TR. case_eq (ngoto!l); intros; monadInv TR.
+  econstructor. auto.
 Qed.
 
 Lemma transl_function_charact:
@@ -1327,8 +1265,10 @@ Lemma transl_function_charact:
   transl_function f = Errors.OK tf ->
   tr_function f tf.
 Proof.
-  intros until tf. unfold transl_function. 
-  caseEq (transl_fun f init_state). congruence. 
+  intros until tf. unfold transl_function.
+  caseEq (reserve_labels (fn_body f) (PTree.empty node, init_state)). 
+  intros ngoto s0 RESERVE.
+  caseEq (transl_fun f ngoto s0). congruence. 
   intros [nentry rparams] sfinal INCR TR E. inv E. 
   monadInv TR.
   exploit add_vars_valid. eexact EQ. apply init_mapping_valid.
