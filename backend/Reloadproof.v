@@ -414,22 +414,22 @@ End LINEAR_CONSTRUCTORS.
   that is, non-temporary registers and [Local] stack slots. *)
 
 Definition agree (rs1 rs2: locset) : Prop :=
-  forall l, loc_acceptable l -> rs2 l = rs1 l.
+  forall l, loc_acceptable l -> Val.lessdef (rs1 l) (rs2 l).
 
 Lemma agree_loc:
   forall rs1 rs2 l,
-  agree rs1 rs2 -> loc_acceptable l -> rs2 l = rs1 l.
+  agree rs1 rs2 -> loc_acceptable l -> Val.lessdef (rs1 l) (rs2 l).
 Proof.
   auto.
 Qed.
 
 Lemma agree_locs:
   forall rs1 rs2 ll,
-  agree rs1 rs2 -> locs_acceptable ll -> map rs2 ll = map rs1 ll.
+  agree rs1 rs2 -> locs_acceptable ll -> Val.lessdef_list (map rs1 ll) (map rs2 ll).
 Proof.
   induction ll; simpl; intros.
-  auto.
-  f_equal. apply H. apply H0; auto with coqlib.
+  constructor.
+  constructor. apply H. apply H0; auto with coqlib.
   apply IHll; auto. red; intros. apply H0; auto with coqlib.
 Qed.
 
@@ -446,7 +446,7 @@ Qed.
 Lemma agree_set:
   forall rs1 rs2 rs2' l v,
   loc_acceptable l ->
-  rs2' l = v ->
+  Val.lessdef v (rs2' l) ->
   (forall l', Loc.diff l l' -> Loc.notin l' temporaries -> rs2' l' = rs2 l') ->
   agree rs1 rs2 -> agree (Locmap.set l v rs1) rs2'.
 Proof.
@@ -458,6 +458,7 @@ Proof.
   apply temporaries_not_acceptable; auto. 
 Qed.
 
+(*****
 Lemma agree_return_regs:
   forall rs1 ls1 rs2 ls2,
   agree rs1 ls1 -> agree rs2 ls2 ->
@@ -624,6 +625,140 @@ Proof.
   destruct (In_dec Loc.eq (R m) destroyed_at_call); auto.
   contradiction.
 Qed.
+**********)
+
+Lemma agree_find_funct:
+  forall (ge: Linear.genv) rs ls r f,
+  Genv.find_funct ge (rs r) = Some f ->
+  agree rs ls ->
+  loc_acceptable r ->
+  Genv.find_funct ge (ls r) = Some f.
+Proof.
+  intros. 
+  assert (Val.lessdef (rs r) (ls r)). eapply agree_loc; eauto.
+  exploit Genv.find_funct_inv; eauto. intros [b EQ]. rewrite EQ in H2.
+  inv H2. rewrite <- EQ. auto.
+Qed.
+
+Lemma agree_postcall_1:
+  forall rs ls,
+  agree rs ls ->
+  agree (LTL.postcall_regs rs) ls.
+Proof.
+  intros; red; intros. unfold LTL.postcall_regs.
+  destruct l; auto. 
+  destruct (In_dec Loc.eq (R m) temporaries). constructor.
+  destruct (In_dec Loc.eq (R m) destroyed_at_call). constructor.
+  auto.
+Qed.
+
+Lemma agree_postcall_2:
+  forall rs ls ls',
+  agree (LTL.postcall_regs rs) ls ->
+  (forall l, loc_acceptable l -> ~In l destroyed_at_call -> ~In l temporaries -> ls' l = ls l) ->
+  agree (LTL.postcall_regs rs) ls'.
+Proof.
+  intros; red; intros. generalize (H l H1). unfold LTL.postcall_regs. 
+  destruct l. 
+  destruct (In_dec Loc.eq (R m) temporaries). intro; constructor.
+  destruct (In_dec Loc.eq (R m) destroyed_at_call). intro; constructor.
+  intro. rewrite H0; auto. 
+  intro. rewrite H0; auto.
+  simpl. intuition congruence.
+  simpl. intuition congruence.
+Qed.
+
+Lemma agree_postcall_call:
+  forall rs ls ls' sig,
+  agree rs ls ->
+  (forall l, Loc.notin l (loc_arguments sig) -> Loc.notin l temporaries -> ls' l = ls l) ->
+  agree (LTL.postcall_regs rs) ls'.
+Proof.
+  intros. apply agree_postcall_2 with ls. apply agree_postcall_1; auto.
+  intros. apply H0.
+  apply arguments_not_preserved; auto.
+  destruct l; simpl. simpl in H2. intuition congruence. 
+  destruct s; tauto.
+  apply temporaries_not_acceptable; auto.
+Qed.
+
+Lemma agree_postcall_alloc:
+  forall rs ls ls2 v,
+  agree rs ls ->
+  (forall l, Loc.diff (R loc_alloc_argument) l -> ls2 l = ls l) ->
+  agree (LTL.postcall_regs rs) (Locmap.set (R loc_alloc_result) v ls2).
+Proof.
+  intros. apply agree_postcall_2 with ls. apply agree_postcall_1; auto.
+  intros. destruct (Loc.eq l (R loc_alloc_result)).
+  subst l. elim H2. simpl. tauto. 
+  rewrite Locmap.gso. apply H0.
+  red. destruct l; auto. red; intro. subst m. elim H2.
+  simpl. tauto.
+  apply Loc.diff_sym. apply loc_acceptable_noteq_diff; auto. 
+Qed.
+
+Lemma agree_init_locs:
+  forall ls dsts vl,
+  locs_acceptable dsts ->
+  Loc.norepet dsts ->
+  Val.lessdef_list vl (map ls dsts) ->
+  agree (LTL.init_locs vl dsts) ls.
+Proof.
+  induction dsts; intros; simpl.
+  red; intros. unfold Locmap.init. constructor.
+  simpl in H1. inv H1. inv H0. 
+  apply agree_set with ls. apply H; auto with coqlib. auto. auto.
+  apply IHdsts; auto. red; intros; apply H; auto with coqlib.
+Qed.
+
+Lemma call_regs_parameters:
+  forall ls sig,
+  map (call_regs ls) (loc_parameters sig) =
+  map ls (loc_arguments sig).
+Proof.
+  intros. unfold loc_parameters. rewrite list_map_compose. 
+  apply list_map_exten; intros. 
+  unfold call_regs, parameter_of_argument. 
+  generalize (loc_arguments_acceptable _ _ H). 
+  unfold loc_argument_acceptable. 
+  destruct x. auto.
+  destruct s; intros; try contradiction. auto.
+Qed. 
+
+Lemma return_regs_arguments:
+  forall ls1 ls2 sig,
+  tailcall_possible sig ->
+  map (return_regs ls1 ls2) (loc_arguments sig) = map ls2 (loc_arguments sig).
+Proof.
+  intros. symmetry. apply list_map_exten; intros.
+  unfold return_regs. generalize (H x H0). destruct x; intros.
+  destruct (In_dec Loc.eq (R m) temporaries). auto.
+  destruct (In_dec Loc.eq (R m) destroyed_at_call). auto.
+  elim n0. eapply arguments_caller_save; eauto.
+  contradiction.
+Qed.
+
+Lemma return_regs_result:
+  forall ls1 ls2 sig,
+  return_regs ls1 ls2 (R (loc_result sig)) = ls2 (R (loc_result sig)).
+Proof.
+  intros. unfold return_regs. 
+  destruct (In_dec Loc.eq (R (loc_result sig)) temporaries). auto.
+  destruct (In_dec Loc.eq (R (loc_result sig)) destroyed_at_call). auto.
+  elim n0. apply loc_result_caller_save.
+Qed.
+
+Lemma return_regs_preserve:
+  forall ls1 ls2 l,
+  ~ In l temporaries ->
+  ~ In l destroyed_at_call ->
+  return_regs ls1 ls2 l = ls1 l.
+Proof.
+  intros. unfold return_regs. destruct l; auto.
+  destruct (In_dec Loc.eq (R m) temporaries). contradiction.
+  destruct (In_dec Loc.eq (R m) destroyed_at_call). contradiction.
+  auto.
+Qed.
 
 (** * Preservation of labels and gotos *)
 
@@ -770,56 +905,63 @@ Qed.
   only acceptable locations are accessed by this code.
 *)
 
-Inductive match_stackframes: list LTLin.stackframe -> list Linear.stackframe -> Prop :=
+Inductive match_stackframes: list LTLin.stackframe -> list Linear.stackframe -> signature -> Prop :=
   | match_stackframes_nil:
-      match_stackframes nil nil
+      forall sig,
+      sig.(sig_res) = Some Tint ->
+      match_stackframes nil nil sig
   | match_stackframes_cons:
       forall res f sp c rs s s' c' ls sig,
-      match_stackframes s s' ->
-      sig_res (LTLin.fn_sig f) = sig_res (parent_callsig s) ->
+      match_stackframes s s' (LTLin.fn_sig f) ->
       c' = add_spill (loc_result sig) res (transf_code f c) ->      
-      agree rs ls ->
+      agree (LTL.postcall_regs rs) ls ->
       loc_acceptable res ->
       wt_function f ->
       is_tail c (LTLin.fn_code f) ->
-      match_stackframes (LTLin.Stackframe sig res f sp rs c :: s)
-                        (Linear.Stackframe (transf_function f) sp ls c' :: s').
+      match_stackframes (LTLin.Stackframe res f sp (LTL.postcall_regs rs) c :: s)
+                        (Linear.Stackframe (transf_function f) sp ls c' :: s')
+                        sig.
 
 Inductive match_states: LTLin.state -> Linear.state -> Prop :=
   | match_states_intro:
-      forall s f sp c rs m s' ls
-        (STACKS: match_stackframes s s')
-        (SIG: sig_res (LTLin.fn_sig f) = sig_res (parent_callsig s))
+      forall s f sp c rs m s' ls tm
+        (STACKS: match_stackframes s s' (LTLin.fn_sig f))
         (AG: agree rs ls)
         (WT: wt_function f)
-        (TL: is_tail c (LTLin.fn_code f)),
+        (TL: is_tail c (LTLin.fn_code f))
+        (MMD: Mem.lessdef m tm),
       match_states (LTLin.State s f sp c rs m)
-                   (Linear.State s' (transf_function f) sp (transf_code f c) ls m)
+                   (Linear.State s' (transf_function f) sp (transf_code f c) ls tm)
   | match_states_call:
-      forall s f rs m s' ls
-        (STACKS: match_stackframes s s')
-        (SIG: sig_res (LTLin.funsig f) = sig_res (parent_callsig s))
-        (AG: agree_arguments (LTLin.funsig f) rs ls)
-        (WT: wt_fundef f),
-      match_states (LTLin.Callstate s f rs m)
-                   (Linear.Callstate s' (transf_fundef f) ls m)
+      forall s f args m s' ls tm
+        (STACKS: match_stackframes s s' (LTLin.funsig f))
+        (AG: Val.lessdef_list args (map ls (Conventions.loc_arguments (LTLin.funsig f))))
+        (PRES: forall l, ~In l temporaries -> ~In l destroyed_at_call ->
+                 ls l = parent_locset s' l)
+        (WT: wt_fundef f)
+        (MMD: Mem.lessdef m tm),
+      match_states (LTLin.Callstate s f args m)
+                   (Linear.Callstate s' (transf_fundef f) ls tm)
   | match_states_return:
-      forall s rs m s' ls
-        (STACKS: match_stackframes s s')
-        (AG: agree rs ls),
-      match_states (LTLin.Returnstate s rs m)
-                   (Linear.Returnstate s' ls m).
+      forall s res m s' ls tm sig
+        (STACKS: match_stackframes s s' sig)
+        (AG: Val.lessdef res (ls (R (Conventions.loc_result sig))))
+        (PRES: forall l, ~In l temporaries -> ~In l destroyed_at_call ->
+                 ls l = parent_locset s' l)
+        (MMD: Mem.lessdef m tm),
+      match_states (LTLin.Returnstate s res m)
+                   (Linear.Returnstate s' ls tm).
 
-Remark parent_locset_match:
-  forall s s',
-  match_stackframes s s' ->
-  agree (LTLin.parent_locset s) (parent_locset s').
+Lemma match_stackframes_change_sig:
+  forall s s' sig1 sig2,
+  match_stackframes s s' sig1 ->
+  sig2.(sig_res) = sig1.(sig_res) ->
+  match_stackframes s s' sig2.
 Proof.
-  induction 1; simpl.
-  red; intros; auto.
-  auto.
+  intros. inv H. constructor. congruence.
+  econstructor; eauto. unfold loc_result. rewrite H0. auto.
 Qed.
-         
+
 Ltac ExploitWT :=
   match goal with
   | [ WT: wt_function _, TL: is_tail _ _ |- _ ] =>
@@ -850,6 +992,8 @@ Definition measure (st: LTLin.state) : nat :=
   | LTLin.Returnstate s ls m => 0%nat
   end.
 
+Axiom ADMITTED: forall (P: Prop), P.
+
 Theorem transf_step_correct:
   forall s1 t s2, LTLin.step ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1'),
@@ -863,18 +1007,18 @@ Proof.
   ExploitWT. inv WTI. 
   (* move *)
   simpl.
-  destruct (add_move_correct tge s' (transf_function f) sp r1 res (transf_code f b) ls m)
+  destruct (add_move_correct tge s' (transf_function f) sp r1 res (transf_code f b) ls tm)
         as [ls2 [A [B C]]].
   inv A. 
   right. split. omega. split. auto.
   rewrite H1. rewrite H1. econstructor; eauto with coqlib. 
-  apply agree_set with ls2; auto.
+  apply agree_set with ls2; auto. 
   rewrite B. simpl in H; inversion H. auto.
   left; econstructor; split. eapply plus_left; eauto. 
   econstructor; eauto with coqlib. 
   apply agree_set with ls; auto.
   rewrite B. simpl in H; inversion H. auto.
-  intros. simpl in H1. apply C. apply Loc.diff_sym; auto.
+  intros. apply C. apply Loc.diff_sym; auto.
   simpl in H7; tauto. simpl in H7; tauto.
   (* other ops *)
   assert (is_move_operation op args = None).
@@ -885,18 +1029,22 @@ Proof.
   exploit add_reloads_correct. 
     eapply length_op_args; eauto.
     apply locs_acceptable_disj_temporaries; auto.
-  intros [ls2 [A [B C]]].
+  intros [ls2 [A [B C]]]. instantiate (1 := ls) in B. 
+  assert (exists tv, eval_operation tge sp op (reglist ls2 (regs_for args)) tm = Some tv
+                     /\ Val.lessdef v tv).
+    apply eval_operation_lessdef with m (map rs args); auto.
+    rewrite B. eapply agree_locs; eauto. 
+    rewrite <- H. apply eval_operation_preserved. exact symbols_preserved.
+  destruct H1 as [tv [P Q]].
   exploit add_spill_correct.
   intros [ls3 [D [E F]]].
   left; econstructor; split.
   eapply star_plus_trans. eexact A. 
-  eapply plus_left. eapply exec_Lop with (v := v).
-    rewrite <- H. rewrite B. rewrite (agree_locs _ _ _ AG H5). 
-    apply eval_operation_preserved. exact symbols_preserved.
+  eapply plus_left. eapply exec_Lop with (v := tv); eauto.
   eexact D. eauto. traceEq.
   econstructor; eauto with coqlib.
   apply agree_set with ls; auto.
-  rewrite E. apply Locmap.gss.
+  rewrite E. rewrite Locmap.gss. auto.
   intros. rewrite F; auto. rewrite Locmap.gso. auto. 
   apply reg_for_diff; auto.
 
@@ -906,17 +1054,23 @@ Proof.
     apply le_S. eapply length_addr_args; eauto.
     apply locs_acceptable_disj_temporaries; auto.
   intros [ls2 [A [B C]]].
+  assert (exists ta, eval_addressing tge sp addr (reglist ls2 (regs_for args)) = Some ta
+                     /\ Val.lessdef a ta).
+    apply eval_addressing_lessdef with (map rs args); auto.
+    rewrite B. eapply agree_locs; eauto. 
+    rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
+  destruct H1 as [ta [P Q]].
+  exploit Mem.loadv_lessdef; eauto. 
+  intros [tv [R S]].
   exploit add_spill_correct.
   intros [ls3 [D [E F]]].
   left; econstructor; split.
   eapply star_plus_trans. eauto. 
   eapply plus_left. eapply exec_Lload; eauto.
-    rewrite B. rewrite <- H. rewrite (agree_locs _ _ _ AG H7).
-    apply eval_addressing_preserved. exact symbols_preserved.
   eauto. auto. traceEq.
   econstructor; eauto with coqlib.
   apply agree_set with ls; auto.
-  rewrite E. apply Locmap.gss.
+  rewrite E. rewrite Locmap.gss. auto.
   intros. rewrite F; auto. rewrite Locmap.gso. auto. 
   apply reg_for_diff; auto.
 
@@ -936,20 +1090,25 @@ Proof.
   intros [ls2 [A [B C]]]. rewrite EQ in A. rewrite EQ in B.
   injection B. intros D E. 
   simpl in B.
+  assert (exists ta, eval_addressing tge sp addr (reglist ls2 rargs) = Some ta
+                     /\ Val.lessdef a ta).
+    apply eval_addressing_lessdef with (map rs args); auto.
+    rewrite D. eapply agree_locs; eauto. 
+    rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
+  destruct H2 as [ta [P Q]].
+  assert (X: Val.lessdef (rs src) (ls2 (R rsrc))).
+    rewrite E. eapply agree_loc; eauto.
+  exploit Mem.storev_lessdef. eexact MMD. eexact Q. eexact X. eauto. 
+  intros [tm2 [Y Z]].
   left; econstructor; split. 
   eapply plus_right. eauto. 
-  eapply exec_Lstore with (a := a); eauto.
-    rewrite D. rewrite <- H. rewrite (agree_locs _ _ _ AG H7).
-    apply eval_addressing_preserved. exact symbols_preserved.
-  rewrite E. rewrite (agree_loc _ _ _ AG H8). eauto.
+  eapply exec_Lstore with (a := ta); eauto.
   traceEq.
   econstructor; eauto with coqlib.
   apply agree_exten with ls; auto.
 
   (* Lcall *)
-  inversion MS. subst s0 f0 sp0 c rs0 m0.
-  simpl transf_code.
-  ExploitWT. inversion WTI. subst sig0 ros0 args0 res0.
+  ExploitWT. inversion WTI. subst ros0 args0 res0. rewrite <- H0.  
   assert (WTF': wt_fundef f'). eapply find_function_wt; eauto.
   destruct ros as [fn | id].
   (* indirect call *)
@@ -957,44 +1116,41 @@ Proof.
               (parallel_move args (loc_arguments sig)
                 (Lcall sig (inl ident IT3)
                  :: add_spill (loc_result sig) res (transf_code f b)))
-              ls m)
+              ls tm)
   as [ls2 [A [B C]]].
+  rewrite <- H0 in H5.
   destruct (parallel_move_arguments_correct tge s' (transf_function f) sp 
               args sig
               (Lcall sig (inl ident IT3)
                 :: add_spill (loc_result sig) res (transf_code f b))
-              ls2 m H7 H10)
+              ls2 tm H5 H8)
   as [ls3 [D [E [F G]]]].
-  assert (AG_ARGS: agree_arguments (LTLin.funsig f') rs1 ls3).
-    rewrite <- H0.
-    unfold rs1. apply agree_set_arguments with ls; auto.
-    rewrite E. apply list_map_exten; intros. symmetry. apply C.
-    assert (Loc.notin x temporaries). apply temporaries_not_acceptable; auto.
-    simpl in H3. apply Loc.diff_sym. tauto.
-    intros. rewrite G; auto. apply C. 
-    simpl in H3. apply Loc.diff_sym. tauto.
+  assert (ARGS: Val.lessdef_list (map rs args) 
+                                 (map ls3 (loc_arguments sig))).
+    rewrite E. apply agree_locs. apply agree_exten with ls; auto.
+    intros. apply C. simpl in H1. apply Loc.diff_sym. tauto. auto. 
   left; econstructor; split.
-  eapply star_plus_trans. eauto. eapply plus_right. eauto. 
+  eapply star_plus_trans. eexact A. eapply plus_right. eexact D. 
   eapply exec_Lcall; eauto.
-    simpl. rewrite F. rewrite B. 
-    rewrite (agree_loc rs ls fn); auto.
+    simpl. rewrite F. rewrite B. eapply agree_find_funct; eauto. 
     apply functions_translated. eauto.
     rewrite H0; symmetry; apply sig_preserved.
   eauto. traceEq.
   econstructor; eauto. 
-  econstructor; eauto with coqlib.
-  eapply agree_arguments_agree; eauto.
-  simpl. congruence. 
+  econstructor; eauto with coqlib. rewrite H0; auto.
+  apply agree_postcall_call with ls sig; auto. 
+  intros. rewrite G; auto. apply C. simpl in H2. apply Loc.diff_sym. tauto.
+  congruence.
   (* direct call *)
+  rewrite <- H0 in H5.
   destruct (parallel_move_arguments_correct tge s' (transf_function f) sp
               args sig
               (Lcall sig (inr mreg id)
                 :: add_spill (loc_result sig) res (transf_code f b))
-              ls m H7 H10)
+              ls tm H5 H8)
   as [ls3 [D [E [F G]]]].
-  assert (AG_ARGS: agree_arguments (LTLin.funsig f') rs1 ls3).
-    rewrite <- H0.
-    unfold rs1. apply agree_set_arguments with ls; auto.
+  assert (ARGS: Val.lessdef_list (map rs args) (map ls3 (loc_arguments sig))).
+    rewrite E. apply agree_locs; auto.
   left; econstructor; split.
   eapply plus_right. eauto.
   eapply exec_Lcall; eauto.
@@ -1004,58 +1160,53 @@ Proof.
     rewrite H0. symmetry; apply sig_preserved.
   traceEq.
   econstructor; eauto.
-  econstructor; eauto with coqlib.
-  eapply agree_arguments_agree; eauto.
-  simpl; congruence.
+  econstructor; eauto with coqlib. rewrite H0; auto. 
+  apply agree_postcall_call with ls sig; auto.
+  congruence.
 
   (* Ltailcall *)
-  inversion MS. subst s0 f0 sp c rs0 m0 s1'.
-  simpl transf_code.
-  ExploitWT. inversion WTI. subst sig0 ros0 args0.
+  ExploitWT. inversion WTI. subst ros0 args0.
   assert (WTF': wt_fundef f'). eapply find_function_wt; eauto.
+  rewrite <- H0.
   destruct ros as [fn | id].
   (* indirect call *)
   destruct (add_reload_correct tge s' (transf_function f) (Vptr stk Int.zero) fn IT3
               (parallel_move args (loc_arguments sig)
                 (Ltailcall sig (inl ident IT3) :: transf_code f b))
-              ls m)
+              ls tm)
   as [ls2 [A [B C]]].
+  rewrite <- H0 in H4.
   destruct (parallel_move_arguments_correct tge s' (transf_function f) (Vptr stk Int.zero)
               args sig
               (Ltailcall sig (inl ident IT3) :: transf_code f b)
-              ls2 m H5 H7)
+              ls2 tm H4 H6)
   as [ls3 [D [E [F G]]]].
-  assert (AG_ARGS: agree_arguments (LTLin.funsig f') rs2 (LTL.return_regs (parent_locset s') ls3)).
-    rewrite <- H0. unfold rs2. 
-    apply agree_arguments_return_regs; auto.
-    eapply parent_locset_match; eauto.  
-    unfold rs1. apply agree_set_arguments with ls; auto.
-    rewrite E. apply list_map_exten; intros. symmetry. apply C.
-    assert (Loc.notin x temporaries). apply temporaries_not_acceptable; auto.
-    simpl in H2. apply Loc.diff_sym. tauto.
-    intros. rewrite G; auto. apply C. 
-    simpl in H2. apply Loc.diff_sym. tauto.
+  assert (ARGS: Val.lessdef_list (map rs args) 
+                                 (map ls3 (loc_arguments sig))).
+    rewrite E. apply agree_locs. apply agree_exten with ls; auto.
+    intros. apply C. simpl in H1. apply Loc.diff_sym. tauto. auto. 
   left; econstructor; split.
   eapply star_plus_trans. eauto. eapply plus_right. eauto.
   eapply exec_Ltailcall; eauto.
-    simpl. rewrite F. rewrite B. 
-    rewrite (agree_loc rs ls fn); auto.
+    simpl. rewrite F. rewrite B. eapply agree_find_funct; eauto. 
     apply functions_translated. eauto.
     rewrite H0; symmetry; apply sig_preserved.
   eauto. traceEq.
-  econstructor; eauto. congruence. 
- 
+  econstructor; eauto. 
+  eapply match_stackframes_change_sig; eauto.
+  rewrite return_regs_arguments; auto. congruence.
+  exact (return_regs_preserve (parent_locset s') ls3).
+  apply Mem.free_lessdef; auto. 
   (* direct call *)
+  rewrite <- H0 in H4.
   destruct (parallel_move_arguments_correct tge s' (transf_function f) (Vptr stk Int.zero)
               args sig
               (Ltailcall sig (inr mreg id) :: transf_code f b)
-              ls m H5 H7)
+              ls tm H4 H6)
   as [ls3 [D [E [F G]]]].
-  assert (AG_ARGS: agree_arguments (LTLin.funsig f') rs2 (LTL.return_regs (parent_locset s') ls3)).
-    rewrite <- H0. unfold rs2. 
-    apply agree_arguments_return_regs; auto.
-    eapply parent_locset_match; eauto.  
-    unfold rs1. apply agree_set_arguments with ls; auto.
+  assert (ARGS: Val.lessdef_list (map rs args) 
+                                 (map ls3 (loc_arguments sig))).
+    rewrite E. apply agree_locs. apply agree_exten with ls; auto. auto.
   left; econstructor; split.
   eapply plus_right. eauto.
   eapply exec_Ltailcall; eauto.
@@ -1064,28 +1215,33 @@ Proof.
     apply function_ptr_translated; auto. congruence.
     rewrite H0. symmetry; apply sig_preserved.
   traceEq.
-  econstructor; eauto. congruence.
+  econstructor; eauto.
+  eapply match_stackframes_change_sig; eauto.
+  rewrite return_regs_arguments; auto. congruence.
+  exact (return_regs_preserve (parent_locset s') ls3).
+  apply Mem.free_lessdef; auto. 
 
   (* Lalloc *)
   ExploitWT; inv WTI.
+  caseEq (alloc tm 0 (Int.signed sz)). intros tm' blk' TALLOC.
+  assert (blk = blk' /\ Mem.lessdef m' tm'). 
+    eapply Mem.alloc_lessdef; eauto.
   exploit add_reload_correct. intros [ls2 [A [B C]]]. 
   exploit add_spill_correct. intros [ls3 [D [E F]]].
+  destruct H1 as [P Q]. subst blk'. 
+  assert (ls arg = Vint sz).
+    assert (Val.lessdef (rs arg) (ls arg)). eapply agree_loc; eauto. 
+    rewrite H in H1; inversion H1; auto.
   left; econstructor; split.
   eapply star_plus_trans. eauto. 
   eapply plus_left. eapply exec_Lalloc; eauto.
-    rewrite B. rewrite <- H. apply AG. auto.
+    rewrite B. eauto. 
   eauto. eauto. traceEq.
   econstructor; eauto with coqlib.
-  unfold rs3; apply agree_set with (Locmap.set (R loc_alloc_result) (Vptr blk Int.zero) ls2).
-  auto. rewrite E. rewrite Locmap.gss. 
-  unfold rs2; rewrite Locmap.gss. auto.
-  auto.
-  unfold rs2. apply agree_set with ls2.
-  unfold loc_alloc_result; simpl; intuition congruence.
-  apply Locmap.gss. intros. apply Locmap.gso; auto.
-  unfold rs1. apply agree_set with ls.
-  unfold loc_alloc_argument; simpl; intuition congruence.
-  rewrite B. apply AG; auto. auto. auto.
+  apply agree_set with (Locmap.set (R loc_alloc_result) (Vptr blk Int.zero) ls2).
+  auto. rewrite E. rewrite Locmap.gss. constructor. 
+  auto. 
+  apply agree_postcall_alloc with ls; auto. 
 
   (* Llabel *)
   left; econstructor; split.
@@ -1106,7 +1262,8 @@ Proof.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lcond_true; eauto.
-  rewrite B. rewrite (agree_locs _ _ _ AG H5). auto.
+  rewrite B. apply eval_condition_lessdef with m (map rs args); auto.
+  eapply agree_locs; eauto. 
   apply find_label_transf_function; eauto.
   traceEq.
   econstructor; eauto.
@@ -1121,44 +1278,44 @@ Proof.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lcond_false; eauto.
-  rewrite B. rewrite (agree_locs _ _ _ AG H4). auto.
+  rewrite B. apply eval_condition_lessdef with m (map rs args); auto.
+  eapply agree_locs; eauto. 
   traceEq.
   econstructor; eauto with coqlib.
   apply agree_exten with ls; auto.
 
   (* Lreturn *)
   ExploitWT; inv WTI. 
-  unfold rs2, rs1; destruct or; simpl.
+  destruct or; simpl.
   (* with an argument *)
   exploit add_reload_correct.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lreturn; eauto. 
   traceEq.
-  econstructor; eauto. 
-  apply agree_return_regs; auto.
-  eapply parent_locset_match; eauto.
-  apply agree_set with ls. 
-  apply loc_result_acceptable.
-  rewrite B. eapply agree_loc; eauto.
-  auto. auto.
+  econstructor; eauto.
+  rewrite return_regs_result. rewrite B. apply agree_loc; auto.
+  apply return_regs_preserve.
+  apply Mem.free_lessdef; auto.
   (* without an argument *)
   left; econstructor; split.
   apply plus_one. eapply exec_Lreturn; eauto.  
   econstructor; eauto.
-  apply agree_return_regs; auto.
-  eapply parent_locset_match; eauto.
+  apply return_regs_preserve.
+  apply Mem.free_lessdef; auto.
 
   (* internal function *)
   simpl in WT. inversion_clear WT. inversion H0. simpl in AG.
+  caseEq (alloc tm 0 (LTLin.fn_stacksize f)). intros tm' tstk TALLOC.
+  exploit Mem.alloc_lessdef; eauto. intros [P Q]. subst tstk.
   destruct (parallel_move_parameters_correct tge s' (transf_function f)
                (Vptr stk Int.zero) (LTLin.fn_params f) (LTLin.fn_sig f)
-               (transf_code f (LTLin.fn_code f)) (LTL.call_regs ls) m'
+               (transf_code f (LTLin.fn_code f)) (call_regs ls) tm'
                wt_params wt_acceptable wt_norepet)
   as [ls2 [A [B [C D]]]].
-  assert (AG2: agree rs2 ls2).
-    unfold rs2. eapply agree_set_parameters; eauto.
-    unfold rs1. apply agree_call_regs; auto.
+  assert (AG2: agree (LTL.init_locs args (fn_params f)) ls2).
+    apply agree_init_locs; auto.
+    rewrite B. rewrite call_regs_parameters. auto. 
   left; econstructor; split.
   eapply plus_left.
   eapply exec_function_internal; eauto.
@@ -1166,15 +1323,14 @@ Proof.
   econstructor; eauto with coqlib.
 
   (* external function *)
+  exploit event_match_lessdef; eauto. 
+  intros [res' [A B]]. 
   left; econstructor; split.
   apply plus_one. eapply exec_function_external; eauto. 
-  unfold args. symmetry. eapply agree_arguments_locs; auto.
   econstructor; eauto.
-  unfold rs1. apply agree_set with ls; auto. 
-  apply loc_result_acceptable.
-  apply Locmap.gss.
-  intros. apply Locmap.gso; auto.
-  eapply agree_arguments_agree; eauto.
+  simpl. rewrite Locmap.gss. auto.
+  intros. rewrite Locmap.gso. auto. 
+  simpl. destruct l; auto. red; intro. elim H1. subst m0. apply loc_result_caller_save.
 
   (* return *)
   inv STACKS. 
@@ -1183,8 +1339,10 @@ Proof.
   eapply plus_left. eapply exec_return; eauto.
   eauto. traceEq.
   econstructor; eauto. 
-  unfold rs1. apply agree_set with ls; auto.
-  rewrite B. apply AG. apply loc_result_acceptable. 
+  apply agree_set with ls; auto.
+  rewrite B. auto.
+  unfold parent_locset in PRES.
+  apply agree_postcall_2 with ls0; auto. 
 Qed.
 
 Lemma transf_initial_states:
@@ -1200,9 +1358,9 @@ Proof.
   rewrite sig_preserved. auto.
   replace (Genv.init_mem tprog) with (Genv.init_mem prog).  
   econstructor; eauto. constructor. rewrite H2; auto.
-  red; intros. auto.
+  rewrite H2. simpl. constructor.
   eapply Genv.find_funct_ptr_prop; eauto.
-  symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf; auto.
+  apply Mem.lessdef_refl. symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf; auto.
 Qed.
 
 Lemma transf_final_states:
@@ -1210,8 +1368,7 @@ Lemma transf_final_states:
   match_states st1 st2 -> LTLin.final_state st1 r -> Linear.final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv STACKS. econstructor.
-  rewrite (agree_loc _ _ (R R3) AG). auto. 
-  simpl. intuition congruence.
+  unfold loc_result in AG. rewrite H in AG. inv AG. auto. 
 Qed.
 
 Theorem transf_program_correct:

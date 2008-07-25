@@ -726,9 +726,9 @@ Lemma agree_return_regs:
   (forall r,
     In r int_callee_save_regs \/ In r float_callee_save_regs ->
     rs' r = ls0 (R r)) ->
-  (forall r, LTL.return_regs ls0 ls (R r) = rs' r).
+  (forall r, return_regs ls0 ls (R r) = rs' r).
 Proof.
-  intros; unfold LTL.return_regs.
+  intros; unfold return_regs.
   case (In_dec Loc.eq (R r) temporaries); intro.
   rewrite H0. eapply agree_reg; eauto. 
     apply int_callee_save_not_destroyed; auto.
@@ -778,10 +778,10 @@ Qed.
 
 Lemma agree_callee_save_return_regs:
   forall ls1 ls2,
-  agree_callee_save (LTL.return_regs ls1 ls2) ls1.
+  agree_callee_save (return_regs ls1 ls2) ls1.
 Proof.
   intros; red; intros.
-  unfold LTL.return_regs. destruct l; auto.
+  unfold return_regs. destruct l; auto.
   generalize (int_callee_save_not_destroyed m); intro.
   generalize (float_callee_save_not_destroyed m); intro.
   destruct (In_dec Loc.eq (R m) temporaries). tauto.
@@ -988,7 +988,7 @@ Lemma save_callee_save_correct:
     star step tge
        (State stack tf sp (save_callee_save fe k) rs empty_frame m)
     E0 (State stack tf sp k rs fr' m)
-  /\ agree (LTL.call_regs ls) ls rs fr' cs.
+  /\ agree (call_regs ls) ls rs fr' cs.
 Proof.
   intros. unfold save_callee_save.
   exploit save_callee_save_int_correct; eauto. 
@@ -997,7 +997,7 @@ Proof.
   intros [fr2 [A2 [B2 C2]]].
   exists fr2.
   split. eapply star_trans. eexact A1. eexact A2. traceEq.
-  constructor; unfold LTL.call_regs; auto.
+  constructor; unfold call_regs; auto.
   (* agree_local *)
   intros. rewrite C2; auto with stacking. 
   rewrite C1; auto with stacking. 

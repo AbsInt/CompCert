@@ -468,15 +468,15 @@ Qed.
 
 Inductive match_stackframes: LTL.stackframe -> LTLin.stackframe -> Prop :=
   | match_stackframe_intro:
-      forall sig res f sp pc ls tf c,
+      forall res f sp pc ls tf c,
       transf_function f = OK tf ->
       (reachable f)!!pc = true ->
       valid_successor f pc ->
       is_tail c (fn_code tf) ->
       wt_function f ->
       match_stackframes
-        (LTL.Stackframe sig res f sp ls pc)
-        (LTLin.Stackframe sig res tf sp ls (add_branch pc c)).
+        (LTL.Stackframe res f sp ls pc)
+        (LTLin.Stackframe res tf sp ls (add_branch pc c)).
 
 Inductive match_states: LTL.state -> LTLin.state -> Prop :=
   | match_states_intro:
@@ -500,14 +500,6 @@ Inductive match_states: LTL.state -> LTLin.state -> Prop :=
       list_forall2 match_stackframes s ts ->
       match_states (LTL.Returnstate s ls m)
                    (LTLin.Returnstate ts ls m).
-
-Remark parent_locset_match:
-  forall s ts,
-  list_forall2 match_stackframes s ts ->
-  parent_locset ts = LTL.parent_locset s.
-Proof.
-  induction 1; simpl; auto. inv H; auto. 
-Qed.
 
 Hypothesis wt_prog: wt_program prog.
 
@@ -578,8 +570,6 @@ Proof.
   traceEq.
   econstructor; eauto.
   (* Lcall *)
-  unfold rs1 in *. inv MS. fold rs1.
-  generalize (wt_instrs _ WTF _ _ H); intro WTI.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
@@ -600,14 +590,12 @@ Proof.
   eapply Genv.find_funct_ptr_prop; eauto.
 
   (* Ltailcall *)
-  unfold rs2, rs1 in *. inv MS. fold rs1; fold rs2.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   exploit find_function_translated; eauto. intros [tf' [A B]].
   econstructor; split.
   apply plus_one. eapply exec_Ltailcall with (f' := tf'); eauto.
   symmetry; apply sig_preserved; auto.
-  rewrite (parent_locset_match _ _ STACKS).
   econstructor; eauto.
   destruct ros; simpl in H0.
   eapply Genv.find_funct_prop; eauto.
@@ -677,8 +665,7 @@ Proof.
   simpl in EQ. subst c.
   econstructor; split.
   apply plus_one. eapply exec_Lreturn; eauto.
-  rewrite (parent_locset_match _ _ STACKS).
-  monadInv TRF. simpl. econstructor; eauto.
+  econstructor; eauto.
  
   (* internal function *)
   assert (REACH: (reachable f)!!(LTL.fn_entrypoint f) = true).
@@ -714,7 +701,7 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].  
-  exists (Callstate nil tf (Locmap.init Vundef) (Genv.init_mem tprog)); split.
+  exists (Callstate nil tf nil (Genv.init_mem tprog)); split.
   econstructor; eauto.
   replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
@@ -730,7 +717,7 @@ Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> LTL.final_state st1 r -> LTLin.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H5. constructor. auto. 
+  intros. inv H0. inv H. inv H4. constructor.
 Qed.
 
 Theorem transf_program_correct:

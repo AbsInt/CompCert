@@ -116,6 +116,52 @@ Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
 Definition reglist (rs: locset) (rl: list mreg) : list val :=
   List.map (fun r => rs (R r)) rl.
 
+(** Calling conventions are reflected at the level of location sets
+  (environments mapping locations to values) by the following two 
+  functions.  
+
+  [call_regs caller] returns the location set at function entry,
+  as a function of the location set [caller] of the calling function.
+- Machine registers have the same values as in the caller.
+- Incoming stack slots (used for parameter passing) have the same
+  values as the corresponding outgoing stack slots (used for argument
+  passing) in the caller.
+- Local and outgoing stack slots are initialized to undefined values.
+*) 
+
+Definition call_regs (caller: locset) : locset :=
+  fun (l: loc) =>
+    match l with
+    | R r => caller (R r)
+    | S (Local ofs ty) => Vundef
+    | S (Incoming ofs ty) => caller (S (Outgoing ofs ty))
+    | S (Outgoing ofs ty) => Vundef
+    end.
+
+(** [return_regs caller callee] returns the location set after
+  a call instruction, as a function of the location set [caller]
+  of the caller before the call instruction and of the location
+  set [callee] of the callee at the return instruction.
+- Callee-save machine registers have the same values as in the caller
+  before the call.
+- Caller-save machine registers have the same values
+  as in the callee at the return point.
+- Stack slots have the same values as in the caller before the call.
+*)
+
+Definition return_regs (caller callee: locset) : locset :=
+  fun (l: loc) =>
+    match l with
+    | R r =>
+        if In_dec Loc.eq (R r) Conventions.temporaries then
+          callee (R r)
+        else if In_dec Loc.eq (R r) Conventions.destroyed_at_call then
+          callee (R r)
+        else
+          caller (R r)
+    | S s => caller (S s)
+    end.
+
 (** Linear execution states. *)
 
 Inductive stackframe: Set :=

@@ -190,10 +190,10 @@ Definition tunneled_code (f: function) :=
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   | match_stackframes_intro:
-      forall sig res f sp ls0 pc,
+      forall res f sp ls0 pc,
       match_stackframes
-         (Stackframe sig res f sp ls0 pc)
-         (Stackframe sig res (tunnel_function f) sp ls0 (branch_target f pc)).
+         (Stackframe res f sp ls0 pc)
+         (Stackframe res (tunnel_function f) sp ls0 (branch_target f pc)).
 
 Inductive match_states: state -> state -> Prop :=
   | match_states_intro:
@@ -211,12 +211,6 @@ Inductive match_states: state -> state -> Prop :=
       list_forall2 match_stackframes s ts ->
       match_states (Returnstate s ls m)
                    (Returnstate ts ls m).
-
-Lemma parent_locset_match:
-  forall s ts, list_forall2 match_stackframes s ts -> parent_locset ts = parent_locset s.
-Proof.
-  induction 1; simpl; auto. inv H; auto.
-Qed.
 
 (** To preserve non-terminating behaviours, we show that the transformed
   code cannot take an infinity of "zero transition" cases.
@@ -286,32 +280,27 @@ Proof.
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
   econstructor; eauto.
   (* Lcall *)
-  unfold rs1. inv MS. 
   left; econstructor; split. 
   eapply exec_Lcall with (f' := tunnel_fundef f'); eauto.
   rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
   rewrite (tunnel_function_lookup _ _ _ H); simpl.
   rewrite sig_preserved. auto.
   apply find_function_translated; auto.
-  rewrite sig_preserved; auto. fold rs1. 
   econstructor; eauto.
   constructor; auto. 
   constructor; auto.
   (* Ltailcall *)
-  unfold rs2, rs1 in *. inv MS. fold rs1. fold rs2. 
   left; econstructor; split. 
   eapply exec_Ltailcall with (f' := tunnel_fundef f'); eauto.
   rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
   rewrite (tunnel_function_lookup _ _ _ H); simpl.
   rewrite sig_preserved. auto.
   apply find_function_translated; auto.
-  rewrite sig_preserved; auto. fold rs1. 
-  rewrite (parent_locset_match _ _ H9).
   econstructor; eauto.
   (* Lalloc *)
   rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
-  left; exists (State ts (tunnel_function f) sp (branch_target f pc') rs3 m'); split.
-  unfold rs3, rs2, rs1; eapply exec_Lalloc; eauto.
+  left; exists (State ts (tunnel_function f) sp (branch_target f pc') (Locmap.set res (Vptr b Integers.Int.zero) (postcall_regs rs)) m'); split.
+  eapply exec_Lalloc; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.
   econstructor; eauto.
   (* cond *)
@@ -330,7 +319,7 @@ Proof.
   left; econstructor; split.
   eapply exec_Lreturn; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
-  simpl. rewrite (parent_locset_match _ _ H7). constructor; auto.
+  simpl. constructor; auto.
   (* internal function *)
   simpl. left; econstructor; split.
   eapply exec_function_internal; eauto.
@@ -343,7 +332,7 @@ Proof.
   inv H3. inv H1.
   left; econstructor; split.
   eapply exec_return; eauto.
-  fold rs1. constructor. auto.
+  constructor. auto.
 Qed.
 
 Lemma transf_initial_states:
@@ -351,7 +340,7 @@ Lemma transf_initial_states:
   exists st2, initial_state tp st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H. 
-  exists (Callstate nil (tunnel_fundef f) (Locmap.init Vundef) (Genv.init_mem tp)); split.
+  exists (Callstate nil (tunnel_fundef f) nil (Genv.init_mem tp)); split.
   econstructor; eauto.
   change (prog_main tp) with (prog_main p).
   rewrite symbols_preserved. eauto.
@@ -366,7 +355,7 @@ Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H5. constructor. auto. 
+  intros. inv H0. inv H. inv H4. constructor.  
 Qed.
 
 Theorem transf_program_correct:
