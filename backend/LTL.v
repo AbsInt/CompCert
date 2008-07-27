@@ -84,25 +84,12 @@ Fixpoint init_locs (vl: list val) (rl: list loc) {struct rl} : locset :=
   | _, _ => Locmap.init Vundef
   end.
 
-
-Section RELSEM.
-
-(** [parmov srcs dsts ls] performs the parallel assignment
-  of locations [dsts] to the values of the corresponding locations
-  [srcs].  *)
-
-Fixpoint parmov (srcs dsts: list loc) (ls: locset) {struct srcs} : locset :=
-  match srcs, dsts with
-  | s1 :: sl, d1 :: dl => Locmap.set d1 (ls s1) (parmov sl dl ls)
-  | _, _ => ls
-  end.
-
-(** [postcall_regs ls] returns the location set [ls] after a function
+(** [postcall_locs ls] returns the location set [ls] after a function
   call.  Caller-save registers and temporary registers
   are set to [undef], reflecting the fact that the called
   function can modify them freely. *)
 
-Definition postcall_regs (ls: locset) : locset :=
+Definition postcall_locs (ls: locset) : locset :=
   fun (l: loc) =>
     match l with
     | R r =>
@@ -147,6 +134,9 @@ Inductive state : Set :=
              (m: mem),                (**r memory state *)
       state.
 
+
+Section RELSEM.
+
 Variable ge: genv.
 
 Definition find_function (los: loc + ident) (rs: locset) : option fundef :=
@@ -159,46 +149,12 @@ Definition find_function (los: loc + ident) (rs: locset) : option fundef :=
       end
   end.
 
-(** The main difference between the LTL transition relation
-  and the RTL transition relation is the handling of function calls.
-  In RTL, arguments and results to calls are transmitted via
-  [vargs] and [vres] components of [Callstate] and [Returnstate],
-  respectively.  The semantics takes care of transferring these values
-  between the pseudo-registers of the caller and of the callee.
-  
-  In lower-level intermediate languages (e.g [Linear], [Mach], [PPC]),
-  arguments and results are transmitted implicitly: the generated
-  code for the caller arranges for arguments to be left in conventional
-  registers and stack locations, as determined by the calling conventions,
-  where the function being called will find them.  Similarly,
-  conventional registers will be used to pass the result value back
-  to the caller.
-
-  In LTL, we take an hybrid view of argument and result passing.
-  The LTL code does not contain (yet) instructions for moving
-  arguments and results to the conventional registers.  However,
-  the dynamic semantics "goes through the motions" of such code:
-- The [exec_Lcall] transition from [State] to [Callstate]
-  leaves the values of arguments in the conventional locations
-  given by [loc_arguments].
-- The [exec_function_internal] transition from [Callstate] to [State]
-  changes the view of stack slots ([Outgoing] slots slide to
-  [Incoming] slots as per [call_regs]), then recovers the
-  values of parameters from the conventional locations given by
-  [loc_parameters].
-- The [exec_Lreturn] transition from [State] to [Returnstate]
-  moves the result value to the conventional location [loc_result],
-  then restores the values of callee-save locations from
-  the location state of the caller, using [return_regs].
-- The [exec_return] transition from [Returnstate] to [State]
-  reads the result value from the conventional location [loc_result],
-  then stores it in the result location for the [Lcall] instruction.
-
-This complicated protocol will make it much easier to prove
-the correctness of the [Stacking] pass later, which inserts actual
-code that performs all the shuffling of arguments and results
-described above.
-*)
+(** The LTL transition relation is very similar to that of RTL,
+  with locations being used in place of pseudo-registers.
+  The main difference is for the [call] instruction: caller-save
+  registers are set to [Vundef] across the call, using the [postcall_locs]
+  function defined above.  This forces the LTL producer to avoid
+  storing values live across the call in a caller-save register. *)
 
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Lnop:
@@ -232,7 +188,7 @@ Inductive step: state -> trace -> state -> Prop :=
       find_function ros rs = Some f' ->
       funsig f' = sig ->
       step (State s f sp pc rs m)
-        E0 (Callstate (Stackframe res f sp (postcall_regs rs) pc' :: s)
+        E0 (Callstate (Stackframe res f sp (postcall_locs rs) pc' :: s)
                       f' (List.map rs args) m)
   | exec_Ltailcall:
       forall s f stk pc rs m sig ros args f',
@@ -247,7 +203,7 @@ Inductive step: state -> trace -> state -> Prop :=
       rs arg = Vint sz ->
       Mem.alloc m 0 (Int.signed sz) = (m', b) ->
       step (State s f sp pc rs m)
-        E0 (State s f sp pc' (Locmap.set res (Vptr b Int.zero) (postcall_regs rs)) m')
+        E0 (State s f sp pc' (Locmap.set res (Vptr b Int.zero) (postcall_locs rs)) m')
   | exec_Lcond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->

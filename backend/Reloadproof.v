@@ -410,8 +410,19 @@ End LINEAR_CONSTRUCTORS.
 (** * Agreement between values of locations *)
 
 (** The predicate [agree] states that two location maps
-  give the same values to all acceptable locations,
-  that is, non-temporary registers and [Local] stack slots. *)
+  give compatible values to all acceptable locations,
+  that is, non-temporary registers and [Local] stack slots.
+  The notion of compatibility used is the [Val.lessdef] ordering,
+  which enables a [Vundef] value in the original program to be refined
+  into any value in the transformed program.  
+
+  A typical situation where this refinement of values occurs is at
+  function entry point.  In LTLin, all registers except those
+  belonging to the function parameters are set to [Vundef].  In
+  Linear, these registers have whatever value they had in the caller
+  function.  This difference is harmless: if the original LTLin code
+  does not get stuck, we know that it does not use any of these
+  [Vundef] values. *)
 
 Definition agree (rs1 rs2: locset) : Prop :=
   forall l, loc_acceptable l -> Val.lessdef (rs1 l) (rs2 l).
@@ -425,7 +436,8 @@ Qed.
 
 Lemma agree_locs:
   forall rs1 rs2 ll,
-  agree rs1 rs2 -> locs_acceptable ll -> Val.lessdef_list (map rs1 ll) (map rs2 ll).
+  agree rs1 rs2 -> locs_acceptable ll -> 
+  Val.lessdef_list (map rs1 ll) (map rs2 ll).
 Proof.
   induction ll; simpl; intros.
   constructor.
@@ -458,175 +470,6 @@ Proof.
   apply temporaries_not_acceptable; auto. 
 Qed.
 
-(*****
-Lemma agree_return_regs:
-  forall rs1 ls1 rs2 ls2,
-  agree rs1 ls1 -> agree rs2 ls2 ->
-  agree (LTL.return_regs rs1 rs2) (LTL.return_regs ls1 ls2).
-Proof.
-  intros; red; intros. unfold LTL.return_regs.
-  assert (~In l temporaries). 
-  apply Loc.notin_not_in. apply temporaries_not_acceptable; auto.
-  destruct l.
-  destruct (In_dec Loc.eq (R m) temporaries). contradiction.
-  destruct (In_dec Loc.eq (R m) destroyed_at_call); auto.
-  auto.
-Qed.
-
-Lemma agree_set_result:
-  forall rs1 ls1 rs2 ls2 sig res ls3,
-  loc_acceptable res -> agree rs1 ls1 -> agree rs2 ls2 ->
-  ls3 res = LTL.return_regs ls1 ls2 (R (loc_result sig)) ->
-  (forall l : loc, Loc.diff res l -> ls3 l = LTL.return_regs ls1 ls2 l) ->
-  let rs_merge := LTL.return_regs rs1 rs2 in
-  agree (Locmap.set res (rs_merge (R (loc_result sig))) rs_merge) ls3.
-Proof.
-  intros. apply agree_set with (LTL.return_regs ls1 ls2); auto.
-  rewrite H2; unfold rs_merge. 
-  repeat rewrite return_regs_result. apply H1. apply loc_result_acceptable.
-  unfold rs_merge. apply agree_return_regs; auto.
-Qed.
-
-(** [agree_arguments] and [agree_parameters] are two stronger
-  variants of the predicate [agree].  They additionally demand
-  equality of the values of locations that are arguments or parameters
-  (respectively) for a call to a function of signature [sg]. *)
-
-Definition agree_arguments (sg: signature) (rs1 rs2: locset) : Prop :=
-  forall l, loc_acceptable l \/ In l (loc_arguments sg) -> rs2 l = rs1 l.
-
-Definition agree_parameters (sg: signature) (rs1 rs2: locset) : Prop :=
-  forall l, loc_acceptable l \/ In l (loc_parameters sg) -> rs2 l = rs1 l.
-
-Remark parallel_assignment:
-  forall (P: loc -> Prop) (rs1 rs2 ls1 ls2: locset) srcs dsts,
-  map rs2 dsts = map rs1 srcs ->
-  map ls2 dsts = map ls1 srcs ->
-  (forall l, In l srcs -> P l) ->
-  (forall l, P l -> ls1 l = rs1 l) ->
-  (forall l, In l dsts -> ls2 l = rs2 l).
-Proof.
-  induction srcs; destruct dsts; simpl; intros; try congruence.
-  contradiction.
-  inv H; inv H0. elim H3; intro. subst l0.
-  rewrite H5; rewrite H4. auto with coqlib.
-  eapply IHsrcs; eauto. 
-Qed.
-
-Lemma agree_set_arguments:
-  forall rs1 ls1 ls2 args sg,
-  agree rs1 ls1 ->
-  List.map Loc.type args = sg.(sig_args) ->
-  locs_acceptable args ->
-  List.map ls2 (loc_arguments sg) = map ls1 args ->
-  (forall l : loc,
-    Loc.notin l (loc_arguments sg) ->
-    Loc.notin l temporaries -> ls2 l = ls1 l) ->
-  agree_arguments sg (LTL.parmov args (loc_arguments sg) rs1) ls2.
-Proof.
-  intros.  
-  assert (Loc.norepet (loc_arguments sg)).
-    apply loc_arguments_norepet.
-  assert (List.length args = List.length (loc_arguments sg)).
-    rewrite loc_arguments_length. rewrite <- H0.
-    symmetry. apply list_length_map.
-  destruct (parmov_spec rs1 _ _ H4 H5) as [A B].
-  set (rs2 := LTL.parmov args (loc_arguments sg) rs1) in *.
-  assert (forall l, In l (loc_arguments sg) -> ls2 l = rs2 l).
-    intros.
-    eapply parallel_assignment with (P := loc_acceptable); eauto.
-  red; intros. 
-  destruct (In_dec Loc.eq l (loc_arguments sg)).
-  auto.
-  assert (loc_acceptable l) by tauto.
-  assert (Loc.notin l (loc_arguments sg)).
-    eapply loc_acceptable_notin_notin; eauto.
-  rewrite H3; auto. rewrite B; auto. 
-  apply temporaries_not_acceptable; auto.
-Qed.
-
-Lemma agree_arguments_agree:
-  forall sg rs ls, agree_arguments sg rs ls -> agree rs ls.
-Proof.
-  intros; red; intros; auto.
-Qed.
-
-Lemma agree_arguments_locs:
-  forall sg rs1 rs2,
-  agree_arguments sg rs1 rs2 ->
-  map rs2 (loc_arguments sg) = map rs1 (loc_arguments sg).
-Proof.
-  intros.
-  assert (forall ll, incl ll (loc_arguments sg) -> map rs2 ll = map rs1 ll).
-    induction ll; simpl; intros. auto.
-    f_equal. apply H. right. apply H0. auto with coqlib.
-    apply IHll. eapply incl_cons_inv; eauto.
-  apply H0. apply incl_refl.
-Qed.
-
-Lemma agree_set_parameters:
-  forall rs1 ls1 ls2 sg params,
-  agree_parameters sg rs1 ls1 ->
-  List.map Loc.type params = sg.(sig_args) ->
-  locs_acceptable params ->
-  Loc.norepet params ->
-  List.map ls2 params = List.map ls1 (loc_parameters sg) ->
-  (forall l : loc,
-    Loc.notin l params ->
-    Loc.notin l temporaries -> ls2 l = ls1 l) ->
-  agree (LTL.parmov (loc_parameters sg) params rs1) ls2.
-Proof.
-  intros.
-  assert (List.length (loc_parameters sg) = List.length params).
-    unfold loc_parameters. rewrite list_length_map. 
-    rewrite loc_arguments_length. rewrite <- H0.
-    apply list_length_map.
-  destruct (parmov_spec rs1 _ _ H2 H5) as [A B].
-  set (rs2 := LTL.parmov (loc_parameters sg) params rs1) in *.
-  red; intros.
-  assert (forall l, In l params -> ls2 l = rs2 l).
-    intros.
-    eapply parallel_assignment with (P := fun l => In l (loc_parameters sg)); eauto.
-  destruct (In_dec Loc.eq l params).
-  auto.
-  assert (Loc.notin l params).
-    eapply loc_acceptable_notin_notin; eauto.
-  rewrite B; auto. rewrite H4; auto. 
-  apply temporaries_not_acceptable; auto.
-Qed.
-
-Lemma agree_call_regs:
-  forall sg rs ls,
-  agree_arguments sg rs ls ->
-  agree_parameters sg (LTL.call_regs rs) (LTL.call_regs ls).
-Proof.
-  intros; red; intros. elim H0.
-  destruct l; simpl; auto. destruct s; auto.
-  unfold loc_parameters. intro. 
-  destruct (list_in_map_inv _ _ _ H1) as [r [A B]].
-  subst l. generalize (loc_arguments_acceptable _ _ B). 
-  destruct r; simpl; auto. destruct s; simpl; auto.
-Qed.
-
-Lemma agree_arguments_return_regs:
-  forall sg rs1 rs2 ls1 ls2,
-  tailcall_possible sg ->
-  agree rs1 ls1 ->
-  agree_arguments sg rs2 ls2 ->
-  agree_arguments sg (LTL.return_regs rs1 rs2) (LTL.return_regs ls1 ls2).
-Proof.
-  intros; red; intros. generalize (H1 l H2). intro.
-  elim H2; intro. generalize (H0 l H4); intro. 
-  unfold LTL.return_regs. destruct l; auto.
-  destruct (In_dec Loc.eq (R m) temporaries); auto.
-  destruct (In_dec Loc.eq (R m) destroyed_at_call); auto.
-  generalize (H l H4). unfold LTL.return_regs; destruct l; intro.
-  destruct (In_dec Loc.eq (R m) temporaries); auto.
-  destruct (In_dec Loc.eq (R m) destroyed_at_call); auto.
-  contradiction.
-Qed.
-**********)
-
 Lemma agree_find_funct:
   forall (ge: Linear.genv) rs ls r f,
   Genv.find_funct ge (rs r) = Some f ->
@@ -643,9 +486,9 @@ Qed.
 Lemma agree_postcall_1:
   forall rs ls,
   agree rs ls ->
-  agree (LTL.postcall_regs rs) ls.
+  agree (LTL.postcall_locs rs) ls.
 Proof.
-  intros; red; intros. unfold LTL.postcall_regs.
+  intros; red; intros. unfold LTL.postcall_locs.
   destruct l; auto. 
   destruct (In_dec Loc.eq (R m) temporaries). constructor.
   destruct (In_dec Loc.eq (R m) destroyed_at_call). constructor.
@@ -654,11 +497,13 @@ Qed.
 
 Lemma agree_postcall_2:
   forall rs ls ls',
-  agree (LTL.postcall_regs rs) ls ->
-  (forall l, loc_acceptable l -> ~In l destroyed_at_call -> ~In l temporaries -> ls' l = ls l) ->
-  agree (LTL.postcall_regs rs) ls'.
+  agree (LTL.postcall_locs rs) ls ->
+  (forall l,
+      loc_acceptable l -> ~In l destroyed_at_call -> ~In l temporaries ->
+      ls' l = ls l) ->
+  agree (LTL.postcall_locs rs) ls'.
 Proof.
-  intros; red; intros. generalize (H l H1). unfold LTL.postcall_regs. 
+  intros; red; intros. generalize (H l H1). unfold LTL.postcall_locs. 
   destruct l. 
   destruct (In_dec Loc.eq (R m) temporaries). intro; constructor.
   destruct (In_dec Loc.eq (R m) destroyed_at_call). intro; constructor.
@@ -671,8 +516,10 @@ Qed.
 Lemma agree_postcall_call:
   forall rs ls ls' sig,
   agree rs ls ->
-  (forall l, Loc.notin l (loc_arguments sig) -> Loc.notin l temporaries -> ls' l = ls l) ->
-  agree (LTL.postcall_regs rs) ls'.
+  (forall l,
+     Loc.notin l (loc_arguments sig) -> Loc.notin l temporaries -> 
+     ls' l = ls l) ->
+  agree (LTL.postcall_locs rs) ls'.
 Proof.
   intros. apply agree_postcall_2 with ls. apply agree_postcall_1; auto.
   intros. apply H0.
@@ -686,7 +533,7 @@ Lemma agree_postcall_alloc:
   forall rs ls ls2 v,
   agree rs ls ->
   (forall l, Loc.diff (R loc_alloc_argument) l -> ls2 l = ls l) ->
-  agree (LTL.postcall_regs rs) (Locmap.set (R loc_alloc_result) v ls2).
+  agree (LTL.postcall_locs rs) (Locmap.set (R loc_alloc_result) v ls2).
 Proof.
   intros. apply agree_postcall_2 with ls. apply agree_postcall_1; auto.
   intros. destruct (Loc.eq l (R loc_alloc_result)).
@@ -713,8 +560,7 @@ Qed.
 
 Lemma call_regs_parameters:
   forall ls sig,
-  map (call_regs ls) (loc_parameters sig) =
-  map ls (loc_arguments sig).
+  map (call_regs ls) (loc_parameters sig) = map ls (loc_arguments sig).
 Proof.
   intros. unfold loc_parameters. rewrite list_map_compose. 
   apply list_map_exten; intros. 
@@ -725,12 +571,24 @@ Proof.
   destruct s; intros; try contradiction. auto.
 Qed. 
 
+Lemma return_regs_preserve:
+  forall ls1 ls2 l,
+  ~ In l temporaries ->
+  ~ In l destroyed_at_call ->
+  return_regs ls1 ls2 l = ls1 l.
+Proof.
+  intros. unfold return_regs. destruct l; auto.
+  destruct (In_dec Loc.eq (R m) temporaries). contradiction.
+  destruct (In_dec Loc.eq (R m) destroyed_at_call). contradiction.
+  auto.
+Qed.
+
 Lemma return_regs_arguments:
   forall ls1 ls2 sig,
   tailcall_possible sig ->
   map (return_regs ls1 ls2) (loc_arguments sig) = map ls2 (loc_arguments sig).
 Proof.
-  intros. symmetry. apply list_map_exten; intros.
+  intros. apply list_map_exten; intros. 
   unfold return_regs. generalize (H x H0). destruct x; intros.
   destruct (In_dec Loc.eq (R m) temporaries). auto.
   destruct (In_dec Loc.eq (R m) destroyed_at_call). auto.
@@ -746,18 +604,6 @@ Proof.
   destruct (In_dec Loc.eq (R (loc_result sig)) temporaries). auto.
   destruct (In_dec Loc.eq (R (loc_result sig)) destroyed_at_call). auto.
   elim n0. apply loc_result_caller_save.
-Qed.
-
-Lemma return_regs_preserve:
-  forall ls1 ls2 l,
-  ~ In l temporaries ->
-  ~ In l destroyed_at_call ->
-  return_regs ls1 ls2 l = ls1 l.
-Proof.
-  intros. unfold return_regs. destruct l; auto.
-  destruct (In_dec Loc.eq (R m) temporaries). contradiction.
-  destruct (In_dec Loc.eq (R m) destroyed_at_call). contradiction.
-  auto.
 Qed.
 
 (** * Preservation of labels and gotos *)
@@ -899,13 +745,22 @@ Qed.
   it enforces are:
 - Agreement between the values of locations in the two programs,
   according to the [agree] or [agree_arguments] predicates.
+- Agreement between the memory states of the two programs,
+  according to the [Mem.lessdef] predicate.
 - Lists of LTLin instructions appearing in the source state
   are always suffixes of the code for the corresponding functions.
 - Well-typedness of the source code, which ensures that
   only acceptable locations are accessed by this code.
+- Agreement over return types during calls: the return type of a function
+  is always equal to the return type of the signature of the corresponding
+  call.  This invariant is necessary since the conventional location
+  used for passing return values depend on the return type.  This invariant
+  is enforced through the third parameter of the [match_stackframes]
+  predicate, which is the signature of the called function.
 *)
 
-Inductive match_stackframes: list LTLin.stackframe -> list Linear.stackframe -> signature -> Prop :=
+Inductive match_stackframes:
+       list LTLin.stackframe -> list Linear.stackframe -> signature -> Prop :=
   | match_stackframes_nil:
       forall sig,
       sig.(sig_res) = Some Tint ->
@@ -914,13 +769,14 @@ Inductive match_stackframes: list LTLin.stackframe -> list Linear.stackframe -> 
       forall res f sp c rs s s' c' ls sig,
       match_stackframes s s' (LTLin.fn_sig f) ->
       c' = add_spill (loc_result sig) res (transf_code f c) ->      
-      agree (LTL.postcall_regs rs) ls ->
+      agree (LTL.postcall_locs rs) ls ->
       loc_acceptable res ->
       wt_function f ->
       is_tail c (LTLin.fn_code f) ->
-      match_stackframes (LTLin.Stackframe res f sp (LTL.postcall_regs rs) c :: s)
-                        (Linear.Stackframe (transf_function f) sp ls c' :: s')
-                        sig.
+      match_stackframes
+         (LTLin.Stackframe res f sp (LTL.postcall_locs rs) c :: s)
+         (Linear.Stackframe (transf_function f) sp ls c' :: s')
+         sig.
 
 Inductive match_states: LTLin.state -> Linear.state -> Prop :=
   | match_states_intro:
@@ -991,8 +847,6 @@ Definition measure (st: LTLin.state) : nat :=
   | LTLin.Callstate s f ls m => 0%nat
   | LTLin.Returnstate s ls m => 0%nat
   end.
-
-Axiom ADMITTED: forall (P: Prop), P.
 
 Theorem transf_step_correct:
   forall s1 t s2, LTLin.step ge s1 t s2 ->

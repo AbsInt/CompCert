@@ -202,6 +202,40 @@ Definition parent_locset (stack: list stackframe) : locset :=
   | Stackframe f sp ls c :: stack' => ls
   end.
 
+(** The main difference between the Linear transition relation
+  and the LTL transition relation is the handling of function calls.
+  In LTL, arguments and results to calls are transmitted via
+  [vargs] and [vres] components of [Callstate] and [Returnstate],
+  respectively.  The semantics takes care of transferring these values
+  between the locations of the caller and of the callee.
+  
+  In Linear and lower-level languages (Mach, PPC), arguments and
+  results are transmitted implicitly: the generated code for the
+  caller arranges for arguments to be left in conventional registers
+  and stack locations, as determined by the calling conventions, where
+  the function being called will find them.  Similarly, conventional
+  registers will be used to pass the result value back to the caller.
+  This is reflected in the definition of [Callstate] and [Returnstate] 
+  above, where a whole location state [rs] is passed instead of just
+  the values of arguments or returns as in LTL.
+
+  These location states passed across calls are treated in a way that
+  reflects the callee-save/caller-save convention:
+- The [exec_Lcall] transition from [State] to [Callstate]
+  saves the current location state [ls] in the call stack,
+  and passes it to the callee.
+- The [exec_function_internal] transition from [Callstate] to [State]
+  changes the view of stack slots ([Outgoing] slots slide to
+  [Incoming] slots as per [call_regs]).
+- The [exec_Lreturn] transition from [State] to [Returnstate]
+  restores the values of callee-save locations from
+  the location state of the caller, using [return_regs].
+
+This protocol makes it much easier to later prove the correctness of
+the [Stacking] pass, which inserts actual code that performs the
+saving and restoring of callee-save registers described above.
+*)
+
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Lgetstack:
       forall s f sp sl r b rs m,

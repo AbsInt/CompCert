@@ -140,14 +140,6 @@ Inductive state : Set :=
              (m: mem),                (**r memory state *)
       state.
 
-(*
-Definition parent_callsig (stack: list stackframe) : signature :=
-  match stack with
-  | nil => mksignature nil (Some Tint)
-  | Stackframe sg res f sp ls pc :: stack' => sg
-  end.
-*)
-
 Section RELSEM.
 
 Variable ge: genv.
@@ -185,7 +177,7 @@ Inductive step: state -> trace -> state -> Prop :=
       find_function ros rs = Some f' ->
       sig = funsig f' ->
       step (State s f sp (Lcall sig ros args res :: b) rs m)
-        E0 (Callstate (Stackframe res f sp (postcall_regs rs) b :: s)
+        E0 (Callstate (Stackframe res f sp (postcall_locs rs) b :: s)
                       f' (List.map rs args) m)
   | exec_Ltailcall:
       forall s f stk sig ros args b rs m f',
@@ -198,7 +190,7 @@ Inductive step: state -> trace -> state -> Prop :=
       rs arg = Vint sz ->
       Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
       step (State s f sp (Lalloc arg res :: b) rs m)
-        E0 (State s f sp b (Locmap.set res (Vptr blk Int.zero) (postcall_regs rs)) m')
+        E0 (State s f sp b (Locmap.set res (Vptr blk Int.zero) (postcall_locs rs)) m')
   | exec_Llabel:
       forall s f sp lbl b rs m,
       step (State s f sp (Llabel lbl :: b) rs m)

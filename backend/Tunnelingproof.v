@@ -299,7 +299,7 @@ Proof.
   econstructor; eauto.
   (* Lalloc *)
   rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
-  left; exists (State ts (tunnel_function f) sp (branch_target f pc') (Locmap.set res (Vptr b Integers.Int.zero) (postcall_regs rs)) m'); split.
+  left; exists (State ts (tunnel_function f) sp (branch_target f pc') (Locmap.set res (Vptr b Integers.Int.zero) (postcall_locs rs)) m'); split.
   eapply exec_Lalloc; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.
   econstructor; eauto.

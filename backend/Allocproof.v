@@ -35,92 +35,6 @@ Require Import Coloring.
 Require Import Coloringproof.
 Require Import Allocation.
 
-(** * Semantic properties of calling conventions *)
-
-(*************
-(** The value of a parameter in the called function is the same
-  as the value of the corresponding argument in the caller function. *)
-
-Lemma call_regs_param_of_arg:
-  forall sig ls l,
-  In l (loc_arguments sig) ->
-  LTL.call_regs ls (parameter_of_argument l) = ls l.
-Proof.
-  intros. 
-  generalize (loc_arguments_acceptable sig l H).
-  unfold LTL.call_regs; unfold parameter_of_argument.
-  unfold loc_argument_acceptable.
-  destruct l. auto. destruct s; tauto.
-Qed.
-
-(** The return value, stored in the conventional return register,
-  is correctly passed from the callee back to the caller. *)
-
-Lemma return_regs_result:
-  forall sig caller callee,
-  LTL.return_regs caller callee (R (loc_result sig)) =
-    callee (R (loc_result sig)).
-Proof.
-  intros. unfold LTL.return_regs.
-  case (In_dec Loc.eq (R (loc_result sig)) temporaries); intro.
-  auto.
-  case (In_dec Loc.eq (R (loc_result sig)) destroyed_at_call); intro.
-  auto.
-  elim n0. apply loc_result_caller_save.
-Qed.
-
-(** Function arguments for a tail call are preserved by a
-    [return_regs] operation. *)
-
-Lemma return_regs_arguments:
-  forall sig caller callee,
-  tailcall_possible sig ->
-  map (LTL.return_regs caller callee) (loc_arguments sig) =
-  map callee (loc_arguments sig).
-Proof.
-  intros. apply list_map_exten; intros.
-  generalize (H x H0). destruct x; intro.
-  unfold LTL.return_regs.
-  destruct (In_dec Loc.eq (R m) temporaries). auto.
-  destruct (In_dec Loc.eq (R m) destroyed_at_call). auto.
-  elim n0. eapply arguments_caller_save; eauto.
-  contradiction.
-Qed. 
-
-(** Acceptable locations that are not destroyed at call keep
-  their values across a call. *)
-
-Lemma return_regs_not_destroyed:
-  forall caller callee l,
-  Loc.notin l destroyed_at_call -> loc_acceptable l ->
-  LTL.return_regs caller callee l = caller l.
-Proof.
-  unfold loc_acceptable, LTL.return_regs.
-  destruct l; auto.
-  intros. case (In_dec Loc.eq (R m) temporaries); intro.
-  contradiction.
-  case (In_dec Loc.eq (R m) destroyed_at_call); intro.
-  elim (Loc.notin_not_in _ _ H i). 
-  auto.
-Qed.
-
-(** Characterization of parallel assignments. *)
-
-Lemma parmov_spec:
-  forall ls srcs dsts,
-  Loc.norepet dsts -> List.length srcs = List.length dsts ->
-  List.map (LTL.parmov srcs dsts ls) dsts = List.map ls srcs /\
-  (forall l, Loc.notin l dsts -> LTL.parmov srcs dsts ls l = ls l).
-Proof.
-  induction srcs; destruct dsts; simpl; intros; try discriminate.
-  auto.
-  inv H. inv H0. destruct (IHsrcs _ H4 H1). split.
-  f_equal. apply Locmap.gss. rewrite <- H. apply list_map_exten; intros.
-  symmetry. apply Locmap.gso. eapply Loc.in_notin_diff; eauto. 
-  intros x [A B]. rewrite Locmap.gso; auto. apply Loc.diff_sym; auto.
-Qed.
-****************)
-
 (** * Properties of allocated locations *)
 
 (** We list here various properties of the locations [alloc r],
@@ -258,7 +172,6 @@ Proof.
 Qed.
 
 (** Some useful special cases of [agree_increasing]. *)
-
 
 Lemma agree_reg_live:
   forall r live rs ls,
@@ -423,7 +336,7 @@ Lemma agree_postcall:
   (forall r,
     Regset.In r live -> r <> res -> assign r <> assign res) ->
   agree (reg_list_live args (reg_sum_live ros (reg_dead res live))) rs ls ->
-  agree live (rs#res <- v) (Locmap.set (assign res) v (postcall_regs ls)).
+  agree live (rs#res <- v) (Locmap.set (assign res) v (postcall_locs ls)).
 Proof.
   intros. 
   assert (agree (reg_dead res live) rs ls).
@@ -433,7 +346,7 @@ Proof.
   subst r. rewrite Locmap.gss. auto.
   rewrite Locmap.gso. transitivity (ls (assign r)). 
   apply H2. apply Regset.remove_2; auto. 
-  unfold postcall_regs.
+  unfold postcall_locs.
   assert (~In (assign r) temporaries).
     apply Loc.notin_not_in. eapply regalloc_not_temporary; eauto.
   assert (~In (assign r) destroyed_at_call).
