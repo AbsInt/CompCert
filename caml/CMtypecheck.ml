@@ -345,6 +345,10 @@ let rec type_stmt env blk ret s =
       with Error s ->
         raise (Error (sprintf "In tail call:\n%s" s))
       end
+  | Slabel(lbl, s1) ->
+      type_stmt env blk ret s1
+  | Sgoto lbl ->
+      ()
 
 let rec env_of_vars idl =
   match idl with
