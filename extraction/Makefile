@@ -22,6 +22,7 @@ FILES=\
   Coqlib.ml Maps.ml Ordered.ml Errors.ml AST.ml Iteration.ml Integers.ml \
   ../caml/Camlcoq.ml ../caml/Floataux.ml Floats.ml Parmov.ml Values.ml \
   Mem.ml Globalenvs.ml \
+  ../caml/Clflags.ml \
   Csyntax.ml Ctyping.ml Cminor.ml Csharpminor.ml Cshmgen.ml \
   Cminorgen.ml \
   Op.ml CminorSel.ml \

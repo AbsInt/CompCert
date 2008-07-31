@@ -50,6 +50,9 @@ Extract Constant Iteration.GenIter.iterate =>
    in iter".
 
 
+(* Selection *)
+Extract Constant Selection.use_fused_mul => "(fun () -> !Clflags.option_fmadd)".
+
 (* RTLgen *)
 Extract Constant RTLgen.compile_switch => "RTLgenaux.compile_switch".
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".

@@ -722,13 +722,13 @@ Theorem eval_addf:
   eval_expr ge sp e m le b (Vfloat y) ->
   eval_expr ge sp e m le (addf a b) (Vfloat (Float.add x y)).
 Proof.
-  intros until y; unfold addf; case (addf_match a b); intros; InvEval.
+  intros until y; unfold addf.
+  destruct (use_fused_mul tt).
+  case (addf_match a b); intros; InvEval.
   EvalOp. simpl. congruence.
-  econstructor. eauto. EvalOp. econstructor. eauto with evalexpr. 
-  econstructor. eauto with evalexpr. econstructor. 
-  econstructor. simpl. reflexivity. constructor.
-  simpl. subst y. rewrite Float.addf_commut. auto.
+  EvalOp. simpl. rewrite Float.addf_commut. congruence.
   EvalOp.
+  intros. EvalOp.
 Qed.
  
 Theorem eval_subf:
@@ -737,9 +737,12 @@ Theorem eval_subf:
   eval_expr ge sp e m le b (Vfloat y) ->
   eval_expr ge sp e m le (subf a b) (Vfloat (Float.sub x y)).
 Proof.
-  intros until y; unfold subf; case (subf_match a b); intros.
+  intros until y; unfold subf.
+  destruct (use_fused_mul tt).
+  case (subf_match a b); intros.
   InvEval. EvalOp. simpl. congruence. 
   EvalOp.
+  intros. EvalOp.
 Qed.
 
 Theorem eval_cast8signed:

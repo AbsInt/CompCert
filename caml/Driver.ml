@@ -11,6 +11,7 @@
 (* *********************************************************************)
 
 open Printf
+open Clflags
 
 (* Location of the standard library *)
 
@@ -19,19 +20,6 @@ let stdlib_path = ref(
     Sys.getenv "COMPCERT_LIBRARY"
   with Not_found ->
     Configuration.stdlib_path)
-
-(* Command-line flags *)
-
-let prepro_options = ref ([]: string list)
-let linker_options = ref ([]: string list)
-let exe_name = ref "a.out"
-let option_flonglong = ref false
-let option_dclight = ref false
-let option_dasm = ref false
-let option_E = ref false
-let option_S = ref false
-let option_c = ref false
-let option_v = ref false
 
 let command cmd =
   if !option_v then begin
@@ -273,6 +261,7 @@ Preprocessing options:
   -U<symb>       Undefine preprocessor symbol
 Compilation options:
   -flonglong     Treat 'long long' as 'long' and 'long double' as 'double'
+  -fmadd         Use fused multiply-add and multiply-sub instructions
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
 Linking options:
@@ -306,6 +295,10 @@ let rec parse_cmdline i =
     end else
     if s = "-flonglong" then begin
       option_flonglong := true;
+      parse_cmdline (i + 1)
+    end else
+    if s = "-fmadd" then begin
+      option_fmadd := true;
       parse_cmdline (i + 1)
     end else
     if s = "-dclight" then begin

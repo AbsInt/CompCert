@@ -712,6 +712,8 @@ Definition shru (e1: expr) (e2: expr) :=
 
 (** ** Floating-point arithmetic *)
 
+Parameter use_fused_mul : unit -> bool.
+
 (*
 Definition addf (e1: expr) (e2: expr) :=
   match e1, e2 with
@@ -749,14 +751,16 @@ Definition addf_match (e1: expr) (e2: expr) :=
   end.
 
 Definition addf (e1: expr) (e2: expr) :=
-  match addf_match e1 e2 with
-  | addf_case1 t1 t2 t3 =>
-      Eop Omuladdf (t1:::t2:::t3:::Enil)
-  | addf_case2 t1 t2 t3 =>
-      Elet t1 (Eop Omuladdf (lift t2:::lift t3:::Eletvar 0:::Enil))
-  | addf_default e1 e2 =>
-      Eop Oaddf (e1:::e2:::Enil)
-  end.
+  if use_fused_mul tt then
+    match addf_match e1 e2 with
+    | addf_case1 t1 t2 t3 =>
+        Eop Omuladdf (t1:::t2:::t3:::Enil)
+    | addf_case2 t1 t2 t3 =>
+        Eop Omuladdf (t2:::t3:::t1:::Enil)
+    | addf_default e1 e2 =>
+        Eop Oaddf (e1:::e2:::Enil)
+    end
+  else Eop Oaddf (e1:::e2:::Enil).
 
 (*
 Definition subf (e1: expr) (e2: expr) :=
@@ -783,12 +787,14 @@ Definition subf_match (e1: expr) (e2: expr) :=
   end.
 
 Definition subf (e1: expr) (e2: expr) :=
-  match subf_match e1 e2 with
-  | subf_case1 t1 t2 t3 =>
-      Eop Omulsubf (t1:::t2:::t3:::Enil)
-  | subf_default e1 e2 =>
-      Eop Osubf (e1:::e2:::Enil)
-  end.
+  if use_fused_mul tt then
+    match subf_match e1 e2 with
+    | subf_case1 t1 t2 t3 =>
+        Eop Omulsubf (t1:::t2:::t3:::Enil)
+    | subf_default e1 e2 =>
+        Eop Osubf (e1:::e2:::Enil)
+    end
+  else Eop Osubf (e1:::e2:::Enil).
 
 (** ** Truncations and sign extensions *)
 
