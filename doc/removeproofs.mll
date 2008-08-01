@@ -3,12 +3,14 @@ rule process inproof oc = parse
       { process true oc lexbuf }
   | "<span class=\"keyword\">" ("Qed" | "Defined") "</span>" ' '* '.'
       { process false oc lexbuf }
+(*
   | "<a class=\"idref\" href=\"" 
     [^ '"'] + '#' '"' [^ '\n' '>']* '"' '"' '>'
     ([^ '<' '\n']+ as ident)
     "</a>"
       { if not inproof then output_string oc ident;
         process inproof oc lexbuf }
+*)
   | _
       { if not inproof then output_char oc (Lexing.lexeme_char lexbuf 0);
         process inproof oc lexbuf }
