@@ -1,0 +1,20 @@
+arrays.o: arrays.c config.h arrays.h
+eval.o: eval.c config.h arrays.h gml.h point.h vector.h eval.h object.h \
+  light.h render.h
+gmllexer.o: gmllexer.c config.h gmllexer.h gml.h
+gmlparser.o: gmlparser.c config.h arrays.h gml.h gmllexer.h gmlparser.h
+intersect.o: intersect.c config.h arrays.h point.h vector.h eval.h \
+  object.h matrix.h intersect.h
+light.o: light.c config.h point.h vector.h eval.h object.h intersect.h \
+  light.h
+main.o: main.c config.h arrays.h gmllexer.h gmlparser.h eval.h
+matrix.o: matrix.c config.h point.h vector.h matrix.h
+memory.o: memory.c config.h
+object.o: object.c config.h arrays.h point.h vector.h eval.h object.h \
+  matrix.h
+render.o: render.c config.h point.h vector.h matrix.h eval.h object.h \
+  light.h intersect.h surface.h simplify.h render.h
+simplify.o: simplify.c config.h point.h vector.h arrays.h matrix.h eval.h \
+  object.h simplify.h
+surface.o: surface.c config.h point.h vector.h eval.h object.h surface.h
+vector.o: vector.c config.h point.h vector.h
