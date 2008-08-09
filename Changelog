@@ -1,0 +1,42 @@
+Release 1.3, 2008-08-11
+=======================
+
+- Added "goto" and labeled statements to Cminor.  Extended RTLgen and
+    its proof accordingly.
+
+- Introduced small-step transition semantics for Cminor; used it in
+    proof of RTLgen pass; proved consistency of Cminor big-step semantics
+    w.r.t. transition semantics.
+
+- Revised division of labor between the Allocation pass and the Reload pass.
+    The semantics of LTL and LTLin no longer need to anticipate the passing
+    of arguments through the conventional locations.
+
+- Cleaned up Stacking pass: the positions of the back link and of
+    the return address in the stack frame are no longer hard-wired
+    in the Mach semantics.
+
+- Added operator to convert from float to unsigned int; used it in C front-end
+
+- Added flag -fmadd to control recognition of fused multiply-add and -sub
+
+- Semantics of pointer-pointer comparison in Clight was incomplete:
+    pointers within different blocks can now be compared using == or !=
+
+- Addition integer + pointer is now supported in Clight.
+
+- Improved instruction selection for complex conditions involving || and &&.
+
+- Improved translation of Cminor "switch" statements to RTL decision trees.
+
+- Fixed error in C parser and simplifier related to "for" loops with
+    complex expressions as condition.
+
+- More benchmark programs in test/
+
+
+
+Release 1.2, 2008-04-03, SVN version 550
+========================================
+
+- First public release
