@@ -197,9 +197,7 @@ Proof.
   intros. inversion H; subst; clear H; simpl in H0.
   left; exists id; auto.
   left; exists id; auto.
-  monadInv H0. right. exists x; split; auto. 
-  simpl. monadInv H0. right. exists x1; split; auto. 
-  simpl. rewrite EQ; rewrite EQ1. simpl. auto.
+  monadInv H0. right. exists x; split; auto.
   rewrite H4 in H0. monadInv H0. right.  
   exists (Ebinop Oadd x (make_intconst (Int.repr x0))). split; auto.
   simpl. rewrite H4. rewrite EQ. rewrite EQ1. auto.

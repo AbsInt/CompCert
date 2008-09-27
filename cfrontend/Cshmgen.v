@@ -383,11 +383,11 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
   | Expr (Csyntax.Ecast ty b) _ =>
       do tb <- transl_expr b;
       OK (make_cast (typeof b) ty tb)
-  | Expr (Csyntax.Eindex b c) ty =>
+  | Expr (Csyntax.Econdition b c d) _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
-      do ts <- make_add tb (typeof b) tc (typeof c);
-      make_load ts ty
+      do td <- transl_expr d;
+      OK(Econdition (make_boolean tb (typeof b)) tc td)
   | Expr (Csyntax.Eandbool b c) _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
@@ -425,10 +425,6 @@ with transl_lvalue (a: Csyntax.expr) {struct a} : res expr :=
       OK (Eaddrof id)
   | Expr (Csyntax.Ederef b) _ =>
       transl_expr b
-  | Expr (Csyntax.Eindex b c) _ =>
-      do tb <- transl_expr b;
-      do tc <- transl_expr c;
-      make_add tb (typeof b) tc (typeof c)
   | Expr (Csyntax.Efield b i) ty => 
       match typeof b with
       | Tstruct _ fld =>

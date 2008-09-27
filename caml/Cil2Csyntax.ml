@@ -391,10 +391,6 @@ and convertExp = function
 	    let e = convertLval lv in
 	      (* array A of type T replaced by (T* )A *)
 	      Expr (Ecast (tPtr, e), tPtr)
-(*
-	      (* array A replaced by &(A[0]) *)
-	      Expr (Eaddrof (Expr (Eindex (e, const0), t')), tPtr)
-*)		
 	| _ -> internal_error "convertExp: StartOf applied to a \
                                          lvalue whose type is not an array"
 
@@ -427,8 +423,9 @@ and convertLval lv =
 	end
     | Index (e', ofs) ->
 	match t with
-	  | Tarray (t', _) -> let e'' = Eindex (e, convertExp e') in
-                                processOffset (Expr (e'', t')) ofs
+	  | Tarray (t', _) -> 
+              let e'' = Ederef(Expr (Ebinop(Oadd, e, convertExp e'), t)) in
+              processOffset (Expr (e'', t')) ofs
 	  | _ -> internal_error "processOffset: Index on a non-array"
   in
     (* convert the lvalue *)

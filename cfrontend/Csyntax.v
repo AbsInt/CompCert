@@ -150,7 +150,7 @@ with expr_descr : Set :=
   | Eunop: unary_operation -> expr -> expr_descr  (**r unary operation *)
   | Ebinop: binary_operation -> expr -> expr -> expr_descr (**r binary operation *)
   | Ecast: type -> expr -> expr_descr   (**r type cast ([(ty) e]) *)
-  | Eindex: expr -> expr -> expr_descr  (**r array indexing ([e1[e2]]) *)
+  | Econdition: expr -> expr -> expr -> expr_descr (**r conditional ([e1 ? e2 : e3]) *)
   | Eandbool: expr -> expr -> expr_descr (**r sequential and ([&&]) *)
   | Eorbool: expr -> expr -> expr_descr (**r sequential or ([||]) *)
   | Esizeof: type -> expr_descr         (**r size of a type *)
@@ -331,6 +331,16 @@ Proof.
   generalize (align_le pos (alignof t) (alignof_pos t)). omega.
 Qed.
 
+Lemma sizeof_struct_incr:
+  forall fld pos, pos <= sizeof_struct fld pos.
+Proof.
+  induction fld; intros; simpl. omega. 
+  eapply Zle_trans. 2: apply IHfld.
+  apply Zle_trans with (align pos (alignof t)). 
+  apply align_le. apply alignof_pos. 
+  assert (sizeof t > 0) by apply sizeof_pos. omega.
+Qed.
+
 (** Byte offset for a field in a struct or union.
   Field are laid out consecutively, and padding is inserted
   to align each field to the natural alignment for its type. *)
@@ -349,6 +359,86 @@ Fixpoint field_offset_rec (id: ident) (fld: fieldlist) (pos: Z)
 
 Definition field_offset (id: ident) (fld: fieldlist) : res Z :=
   field_offset_rec id fld 0.
+
+Fixpoint field_type (id: ident) (fld: fieldlist) {struct fld} : res type :=
+  match fld with
+  | Fnil => Error (MSG "Unknown field " :: CTX id :: nil)
+  | Fcons id' t fld' => if ident_eq id id' then OK t else field_type id fld'
+  end.
+
+(** Some sanity checks about field offsets.  First, field offsets are 
+  within the range of acceptable offsets. *)
+
+Remark field_offset_rec_in_range:
+  forall id ofs ty fld pos,
+  field_offset_rec id fld pos = OK ofs -> field_type id fld = OK ty ->
+  pos <= ofs /\ ofs + sizeof ty <= sizeof_struct fld pos.
+Proof.
+  intros until ty. induction fld; simpl.
+  congruence.
+  destruct (ident_eq id i); intros.
+  inv H. inv H0. split. apply align_le. apply alignof_pos. apply sizeof_struct_incr.
+  exploit IHfld; eauto. intros [A B]. split; auto. 
+  eapply Zle_trans; eauto. apply Zle_trans with (align pos (alignof t)).
+  apply align_le. apply alignof_pos. generalize (sizeof_pos t). omega. 
+Qed.
+
+Lemma field_offset_in_range:
+  forall id fld ofs ty,
+  field_offset id fld = OK ofs -> field_type id fld = OK ty ->
+  0 <= ofs /\ ofs + sizeof ty <= sizeof_struct fld 0.
+Proof.
+  intros. eapply field_offset_rec_in_range. unfold field_offset in H; eauto. eauto.
+Qed.
+
+(** Second, two distinct fields do not overlap *)
+
+Lemma field_offset_no_overlap:
+  forall id1 ofs1 ty1 id2 ofs2 ty2 fld,
+  field_offset id1 fld = OK ofs1 -> field_type id1 fld = OK ty1 ->
+  field_offset id2 fld = OK ofs2 -> field_type id2 fld = OK ty2 ->
+  id1 <> id2 ->
+  ofs1 + sizeof ty1 <= ofs2 \/ ofs2 + sizeof ty2 <= ofs1.
+Proof.
+  intros until ty2. intros fld0 A B C D NEQ.
+  assert (forall fld pos,
+  field_offset_rec id1 fld pos = OK ofs1 -> field_type id1 fld = OK ty1 ->
+  field_offset_rec id2 fld pos = OK ofs2 -> field_type id2 fld = OK ty2 ->
+  ofs1 + sizeof ty1 <= ofs2 \/ ofs2 + sizeof ty2 <= ofs1).
+  induction fld; intro pos; simpl. congruence.
+  destruct (ident_eq id1 i); destruct (ident_eq id2 i).
+  congruence. 
+  subst i. intros. inv H; inv H0.
+  exploit field_offset_rec_in_range; eauto. tauto. 
+  subst i. intros. inv H1; inv H2.
+  exploit field_offset_rec_in_range; eauto. tauto. 
+  intros. eapply IHfld; eauto.
+
+  apply H with fld0 0; auto.
+Qed.
+
+(** Third, if a struct is a prefix of another, the offsets of fields
+  in common is the same. *)
+
+Fixpoint fieldlist_app (fld1 fld2: fieldlist) {struct fld1} : fieldlist :=
+  match fld1 with
+  | Fnil => fld2
+  | Fcons id ty fld => Fcons id ty (fieldlist_app fld fld2)
+  end.
+
+Lemma field_offset_prefix:
+  forall id ofs fld2 fld1,
+  field_offset id fld1 = OK ofs ->
+  field_offset id (fieldlist_app fld1 fld2) = OK ofs.
+Proof.
+  intros until fld2.
+  assert (forall fld1 pos, 
+    field_offset_rec id fld1 pos = OK ofs ->
+    field_offset_rec id (fieldlist_app fld1 fld2) pos = OK ofs).
+  induction fld1; intros pos; simpl. congruence.
+  destruct (ident_eq id i); auto.
+  intros. unfold field_offset; auto. 
+Qed.
 
 (** The [access_mode] function describes how a variable of the given
 type must be accessed:

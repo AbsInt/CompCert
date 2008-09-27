@@ -56,9 +56,9 @@ Inductive wt_expr: expr -> Prop :=
   | wt_Ecast: forall e ty ty',
      wt_expr e ->
      wt_expr (Expr (Ecast ty' e) ty)
-  | wt_Eindex: forall e1 e2 ty,
-     wt_expr e1 -> wt_expr e2 ->
-     wt_expr (Expr (Eindex e1 e2) ty)
+  | wt_Econdition: forall e1 e2 e3 ty,
+     wt_expr e1 -> wt_expr e2 -> wt_expr e3 ->
+     wt_expr (Expr (Econdition e1 e2 e3) ty)
   | wt_Eandbool: forall e1 e2 ty,
      wt_expr e1 -> wt_expr e2 ->
      wt_expr (Expr (Eandbool e1 e2) ty)
@@ -296,7 +296,7 @@ with typecheck_exprdescr (a: Csyntax.expr_descr) (ty: type) {struct a} : bool :=
   | Csyntax.Eunop op b => typecheck_expr b
   | Csyntax.Ebinop op b c => typecheck_expr b && typecheck_expr c
   | Csyntax.Ecast ty b => typecheck_expr b
-  | Csyntax.Eindex b c => typecheck_expr b && typecheck_expr c
+  | Csyntax.Econdition b c d => typecheck_expr b && typecheck_expr c && typecheck_expr d
   | Csyntax.Eandbool b c => typecheck_expr b && typecheck_expr c
   | Csyntax.Eorbool b c => typecheck_expr b && typecheck_expr c
   | Csyntax.Esizeof ty => true

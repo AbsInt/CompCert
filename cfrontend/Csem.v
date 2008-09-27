@@ -564,6 +564,16 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr a2 v2 ->
       sem_binary_operation op v1 (typeof a1) v2 (typeof a2) m = Some v ->
       eval_expr (Expr (Ebinop op a1 a2) ty) v
+  | eval_Econdition_true: forall a1 a2 a3 ty v1 v2,
+      eval_expr a1 v1 ->
+      is_true v1 (typeof a1) ->
+      eval_expr a2 v2 ->
+      eval_expr (Expr (Econdition a1 a2 a3) ty) v2
+  | eval_Econdition_false: forall a1 a2 a3 ty v1 v3,
+      eval_expr a1 v1 ->
+      is_false v1 (typeof a1) ->
+      eval_expr a3 v3 ->
+      eval_expr (Expr (Econdition a1 a2 a3) ty) v3
   | eval_Eorbool_1: forall a1 a2 ty v1,
       eval_expr a1 v1 ->
       is_true v1 (typeof a1) ->
@@ -604,11 +614,6 @@ with eval_lvalue: expr -> block -> int -> Prop :=
   | eval_Ederef: forall a ty l ofs,
       eval_expr a (Vptr l ofs) ->
       eval_lvalue (Expr (Ederef a) ty) l ofs
-  | eval_Eindex: forall a1 a2 ty v1 v2 l ofs,
-      eval_expr a1 v1 ->
-      eval_expr a2 v2 ->
-      sem_add v1 (typeof a1) v2 (typeof a2) = Some (Vptr l ofs) ->
-      eval_lvalue (Expr (Eindex a1 a2) ty) l ofs
  | eval_Efield_struct:   forall a i ty l ofs id fList delta,
       eval_lvalue a l ofs ->
       typeof a = Tstruct id fList ->

@@ -482,7 +482,7 @@ Definition eval_exprlist_prop (al: list Csyntax.expr) (vl: list val) : Prop :=
     (TR: transl_exprlist al = OK tal),
   Csharpminor.eval_exprlist tprog te m tal vl.
 
-(* Check (eval_expr_ind2 ge e m eval_expr_prop eval_lvalue_prop).*)
+(* Check (eval_expr_ind2 ge e m eval_expr_prop eval_lvalue_prop). *)
 
 Lemma transl_Econst_int_correct:
   forall (i : int) (ty : type),
@@ -563,6 +563,38 @@ Proof.
   inversion WT; clear WT; subst.
   monadInv TR. 
   eapply transl_binop_correct; eauto. 
+Qed.
+
+Lemma transl_Econdition_true_correct:
+  forall (a1 a2 a3 : Csyntax.expr) (ty : type) (v1 v2 : val),
+  Csem.eval_expr ge e m a1 v1 ->
+  eval_expr_prop a1 v1 ->
+  is_true v1 (typeof a1) ->
+  Csem.eval_expr ge e m a2 v2 ->
+  eval_expr_prop a2 v2 ->
+  eval_expr_prop (Expr (Csyntax.Econdition a1 a2 a3) ty) v2.
+Proof.
+  intros; red; intros. inv WT. monadInv TR. 
+  exploit make_boolean_correct_true. eapply H0; eauto. eauto.
+  intros [vb [EVAL ISTRUE]].
+  eapply eval_Econdition; eauto. apply Val.bool_of_true_val; eauto.
+  simpl. eauto. 
+Qed.
+
+Lemma transl_Econdition_false_correct:
+  forall (a1 a2 a3 : Csyntax.expr) (ty : type) (v1 v3 : val),
+  Csem.eval_expr ge e m a1 v1 ->
+  eval_expr_prop a1 v1 ->
+  is_false v1 (typeof a1) ->
+  Csem.eval_expr ge e m a3 v3 ->
+  eval_expr_prop a3 v3 ->
+  eval_expr_prop (Expr (Csyntax.Econdition a1 a2 a3) ty) v3.
+Proof.
+  intros; red; intros. inv WT. monadInv TR. 
+  exploit make_boolean_correct_false. eapply H0; eauto. eauto.
+  intros [vb [EVAL ISTRUE]].
+  eapply eval_Econdition; eauto. apply Val.bool_of_false_val; eauto.
+  simpl. eauto. 
 Qed.
 
 Lemma transl_Eorbool_1_correct:
@@ -681,20 +713,6 @@ Proof.
   eauto.
 Qed.
 
-Lemma transl_Eindex_correct:
-  forall (a1 a2 : Csyntax.expr) (ty : type) (v1 v2 : val) (l : block)
-         (ofs : int),
-  Csem.eval_expr ge e m a1 v1 ->
-  eval_expr_prop a1 v1 ->
-  Csem.eval_expr ge e m a2 v2 ->
-  eval_expr_prop a2 v2 ->
-  sem_add v1 (typeof a1) v2 (typeof a2) = Some (Vptr l ofs) ->
-  eval_lvalue_prop (Expr (Eindex a1 a2) ty) l ofs.
-Proof.
-  intros; red; intros. inversion WT; clear WT; subst. simpl in TR. monadInv TR.
-  eapply (make_add_correct tprog); eauto. 
-Qed.
-
 Lemma transl_Efield_struct_correct:
   forall (a : Csyntax.expr) (i : ident) (ty : type) (l : block)
          (ofs : int) (id : ident) (fList : fieldlist) (delta : Z),
@@ -736,6 +754,8 @@ Proof
          transl_Esizeof_correct
          transl_Eunop_correct
          transl_Ebinop_correct
+         transl_Econdition_true_correct
+         transl_Econdition_false_correct
          transl_Eorbool_1_correct
          transl_Eorbool_2_correct
          transl_Eandbool_1_correct
@@ -744,7 +764,6 @@ Proof
          transl_Evar_local_correct
          transl_Evar_global_correct
          transl_Ederef_correct
-         transl_Eindex_correct
          transl_Efield_struct_correct
          transl_Efield_union_correct).
 
@@ -761,6 +780,8 @@ Proof
          transl_Esizeof_correct
          transl_Eunop_correct
          transl_Ebinop_correct
+         transl_Econdition_true_correct
+         transl_Econdition_false_correct
          transl_Eorbool_1_correct
          transl_Eorbool_2_correct
          transl_Eandbool_1_correct
@@ -769,7 +790,6 @@ Proof
          transl_Evar_local_correct
          transl_Evar_global_correct
          transl_Ederef_correct
-         transl_Eindex_correct
          transl_Efield_struct_correct
          transl_Efield_union_correct).
 

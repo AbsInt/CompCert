@@ -143,7 +143,7 @@ let parenthesis_level (Expr (e, ty)) =
       | Omul | Odiv | Omod -> 40
       end
   | Ecast _ -> 30
-  | Eindex(_, _) -> 20
+  | Econdition(_, _, _) -> 80
   | Eandbool(_, _) -> 80
   | Eorbool(_, _) -> 80
   | Esizeof _ -> 20
@@ -160,6 +160,12 @@ let rec print_expr p (Expr (eb, ty) as e) =
       fprintf p "%s" (extern_atom id)
   | Eunop(op, e1) ->
       fprintf p "%s%a" (name_unop op) print_expr_prec (level, e1)
+  | Ederef (Expr (Ebinop(Oadd, e1, e2), _)) ->
+      fprintf p "@[<hov 2>%a@,[%a]@]"
+                print_expr_prec (level, e1)
+                print_expr_prec (level, e2)
+  | Ederef (Expr (Efield(e1, id), _)) ->
+      fprintf p "%a->%s" print_expr_prec (level, e1) (extern_atom id)
   | Ederef e ->
       fprintf p "*%a" print_expr_prec (level, e)
   | Eaddrof e ->
@@ -173,10 +179,11 @@ let rec print_expr p (Expr (eb, ty) as e) =
       fprintf p "@[<hov 2>(%s)@,%a@]"
                 (name_type ty)
                 print_expr_prec (level, e1)
-  | Eindex(e1, e2) ->
-      fprintf p "@[<hov 2>%a@,[%a]@]"
+  | Econdition(e1, e2, e3) ->
+      fprintf p "@[<hov 0>%a@ ? %a@ : %a@]"
                 print_expr_prec (level, e1)
                 print_expr_prec (level, e2)
+                print_expr_prec (level, e3)
   | Eandbool(e1, e2) ->
       fprintf p "@[<hov 0>%a@ && %a@]"
                 print_expr_prec (level, e1)
@@ -418,7 +425,7 @@ let rec collect_expr (Expr(ed, ty)) =
   | Eaddrof e -> collect_expr e
   | Ebinop(op, e1, e2) -> collect_expr e1; collect_expr e2
   | Ecast(ty, e1) -> collect_type ty; collect_expr e1
-  | Eindex(e1, e2) -> collect_expr e1; collect_expr e2
+  | Econdition(e1, e2, e3) -> collect_expr e1; collect_expr e2; collect_expr e3
   | Eandbool(e1, e2) -> collect_expr e1; collect_expr e2
   | Eorbool(e1, e2) -> collect_expr e1; collect_expr e2
   | Esizeof ty -> collect_type ty
