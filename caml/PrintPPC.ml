@@ -189,8 +189,8 @@ let print_instruction oc labels = function
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       let lbl3 = new_label() in
-      fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl1;
-      fprintf oc "	lfd	f13, lo16(L%d)(r2)\n" lbl1;
+      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl1;
+      fprintf oc "	lfd	f13, lo16(L%d)(r12)\n" lbl1;
       fprintf oc "	fcmpu	cr7, %a, f13\n" freg r2;
       fprintf oc "	cror	30, 29, 30\n";
       fprintf oc "	beq	cr7, L%d\n" lbl2;
@@ -225,12 +225,12 @@ let print_instruction oc labels = function
       fprintf oc "	fsub	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pictf(r1, r2) ->
       let lbl = new_label() in
-      fprintf oc "	addis	r2, 0, 0x4330\n";
-      fprintf oc "	stw	r2, -8(r1)\n";
-      fprintf oc "	addis	r2, %a, 0x8000\n" ireg r2;
-      fprintf oc "	stw	r2, -4(r1)\n";
-      fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl;
-      fprintf oc "	lfd	f13, lo16(L%d)(r2)\n" lbl;
+      fprintf oc "	addis	r12, 0, 0x4330\n";
+      fprintf oc "	stw	r12, -8(r1)\n";
+      fprintf oc "	addis	r12, %a, 0x8000\n" ireg r2;
+      fprintf oc "	stw	r12, -4(r1)\n";
+      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl;
+      fprintf oc "	lfd	f13, lo16(L%d)(r12)\n" lbl;
       fprintf oc "	lfd	%a, -8(r1)\n" freg r1;
       fprintf oc "	fsub	%a, %a, f13\n" freg r1 freg r1;
       fprintf oc "	.const_data\n";
@@ -238,11 +238,11 @@ let print_instruction oc labels = function
       fprintf oc "	.text\n"
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
-      fprintf oc "	addis	r2, 0, 0x4330\n";
-      fprintf oc "	stw	r2, -8(r1)\n";
+      fprintf oc "	addis	r12, 0, 0x4330\n";
+      fprintf oc "	stw	r12, -8(r1)\n";
       fprintf oc "	stw	%a, -4(r1)\n" ireg r2;
-      fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl;
-      fprintf oc "	lfd	f13, lo16(L%d)(r2)\n" lbl;
+      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl;
+      fprintf oc "	lfd	f13, lo16(L%d)(r12)\n" lbl;
       fprintf oc "	lfd	%a, -8(r1)\n" freg r1;
       fprintf oc "	fsub	%a, %a, f13\n" freg r1 freg r1;
       fprintf oc "	.const_data\n";
@@ -258,8 +258,8 @@ let print_instruction oc labels = function
       fprintf oc "	lfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Plfi(r1, c) ->
       let lbl = new_label() in
-      fprintf oc "	addis	r2, 0, ha16(L%d)\n" lbl;
-      fprintf oc "	lfd	%a, lo16(L%d)(r2)\n" freg r1 lbl;
+      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl;
+      fprintf oc "	lfd	%a, lo16(L%d)(r12)\n" freg r1 lbl;
       fprintf oc "	.const_data\n";
       let n = Int64.bits_of_float c in
       let nlo = Int64.to_int32 n

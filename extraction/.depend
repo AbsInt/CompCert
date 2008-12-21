@@ -46,10 +46,6 @@
     Coqlib.cmi ../caml/Camlcoq.cmo CList.cmi BinPos.cmi 
 ../caml/Linearizeaux.cmx: Maps.cmx Lattice.cmx LTL.cmx Datatypes.cmx \
     Coqlib.cmx ../caml/Camlcoq.cmx CList.cmx BinPos.cmx 
-../caml/PrintCshm.cmo: Integers.cmi Datatypes.cmi Csharpminor.cmi \
-    ../caml/Camlcoq.cmo CList.cmi AST.cmi 
-../caml/PrintCshm.cmx: Integers.cmx Datatypes.cmx Csharpminor.cmx \
-    ../caml/Camlcoq.cmx CList.cmx AST.cmx 
 ../caml/PrintCsyntax.cmo: Datatypes.cmi Csyntax.cmi ../caml/Camlcoq.cmo \
     CList.cmi AST.cmi 
 ../caml/PrintCsyntax.cmx: Datatypes.cmx Csyntax.cmx ../caml/Camlcoq.cmx \

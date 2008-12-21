@@ -392,7 +392,7 @@ Remark loadind_label:
 Proof.
   intros; unfold loadind. 
   case (Int.eq (high_s ofs) Int.zero). apply loadind_aux_label.
-  transitivity (find_label lbl (loadind_aux GPR2 (low_s ofs) ty dst :: k)).
+  transitivity (find_label lbl (loadind_aux GPR12 (low_s ofs) ty dst :: k)).
   reflexivity. apply loadind_aux_label.
 Qed.
 Hint Rewrite loadind_label: labels.
@@ -407,7 +407,7 @@ Remark storeind_label:
 Proof.
   intros; unfold storeind. 
   case (Int.eq (high_s ofs) Int.zero). apply storeind_aux_label.
-  transitivity (find_label lbl (storeind_aux base GPR2 (low_s ofs) ty :: k)).
+  transitivity (find_label lbl (storeind_aux base GPR12 (low_s ofs) ty :: k)).
   reflexivity. apply storeind_aux_label.
 Qed.
 Hint Rewrite storeind_label: labels.
@@ -775,10 +775,10 @@ Lemma exec_Mgetparam_prop:
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
-  set (rs2 := nextinstr (rs#GPR2 <- parent)).
+  set (rs2 := nextinstr (rs#GPR12 <- parent)).
   assert (EX1: exec_straight tge (transl_function f)
                  (transl_code f (Mgetparam ofs ty dst :: c)) rs m
-                 (loadind GPR2 ofs ty dst (transl_code f c)) rs2 m).
+                 (loadind GPR12 ofs ty dst (transl_code f c)) rs2 m).
   simpl. apply exec_straight_one.
   simpl. unfold load1. rewrite gpr_or_zero_not_zero; auto with ppcgen.
   unfold const_low. rewrite <- (sp_val ms sp rs); auto.
@@ -786,9 +786,9 @@ Proof.
   rewrite H0. reflexivity. reflexivity.
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI. inversion WTI.
-  unfold load_stack in H1. change parent with rs2#GPR2 in H1.
-  assert (NOTE: GPR2 <> GPR0). congruence.
-  generalize (loadind_correct tge (transl_function f) GPR2 ofs ty
+  unfold load_stack in H1. change parent with rs2#GPR12 in H1.
+  assert (NOTE: GPR12 <> GPR0). congruence.
+  generalize (loadind_correct tge (transl_function f) GPR12 ofs ty
                 dst (transl_code f c) rs2 m v H1 H3 NOTE).
   intros [rs3 [EX2 [RES OTH]]].
   left; eapply exec_straight_steps; eauto with coqlib.
@@ -986,7 +986,7 @@ Proof.
   destruct ros; simpl in H; simpl in H9.
   (* Indirect call *)
   set (rs2 := nextinstr (rs#CTR <- (ms m0))).
-  set (rs3 := nextinstr (rs2#GPR2 <- (parent_ra s))).
+  set (rs3 := nextinstr (rs2#GPR12 <- (parent_ra s))).
   set (rs4 := nextinstr (rs3#LR <- (parent_ra s))).
   set (rs5 := nextinstr (rs4#GPR1 <- (parent_sp s))).
   set (rs6 := rs5#PC <- (rs5 CTR)).
@@ -1029,7 +1029,7 @@ Proof.
   generalize H. destruct (ms m0); try congruence.
   predSpec Int.eq Int.eq_spec i Int.zero; intros; congruence.
   (* direct call *)
-  set (rs2 := nextinstr (rs#GPR2 <- (parent_ra s))).
+  set (rs2 := nextinstr (rs#GPR12 <- (parent_ra s))).
   set (rs3 := nextinstr (rs2#LR <- (parent_ra s))).
   set (rs4 := nextinstr (rs3#GPR1 <- (parent_sp s))).
   set (rs5 := rs4#PC <- (Vptr f' Int.zero)).
@@ -1194,7 +1194,7 @@ Lemma exec_Mreturn_prop:
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
-  set (rs2 := nextinstr (rs#GPR2 <- (parent_ra s))).
+  set (rs2 := nextinstr (rs#GPR12 <- (parent_ra s))).
   set (rs3 := nextinstr (rs2#LR <- (parent_ra s))).
   set (rs4 := nextinstr (rs3#GPR1 <- (parent_sp s))).
   set (rs5 := rs4#PC <- (parent_ra s)).
@@ -1206,7 +1206,7 @@ Proof.
   unfold load_stack in H1. simpl in H1. 
   rewrite <- (sp_val _ _ _ AG). simpl. rewrite H1.
   reflexivity. discriminate.
-  unfold rs3. change (parent_ra s) with rs2#GPR2. reflexivity.
+  unfold rs3. change (parent_ra s) with rs2#GPR12. reflexivity.
   simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   simpl. 
   unfold load_stack in H0. simpl in H0.
@@ -1256,8 +1256,8 @@ Proof.
     inversion TY; auto.
   exploit functions_transl; eauto. intro TFIND.
   generalize (functions_transl_no_overflow _ _ H); intro NOOV.
-  set (rs2 := nextinstr (rs#GPR1 <- sp #GPR2 <- Vundef)).
-  set (rs3 := nextinstr (rs2#GPR2 <- (parent_ra s))).
+  set (rs2 := nextinstr (rs#GPR1 <- sp #GPR12 <- Vundef)).
+  set (rs3 := nextinstr (rs2#GPR12 <- (parent_ra s))).
   set (rs4 := nextinstr rs3).
   (* Execution of function prologue *)
   assert (EXEC_PROLOGUE:
@@ -1271,7 +1271,7 @@ Proof.
   rewrite <- (sp_val _ _ _ AG). rewrite H1. reflexivity.
   simpl. change (rs2 LR) with (rs LR). rewrite ATLR. reflexivity.
   simpl. unfold store1. rewrite gpr_or_zero_not_zero. 
-  unfold const_low. change (rs3 GPR1) with sp. change (rs3 GPR2) with (parent_ra s).
+  unfold const_low. change (rs3 GPR1) with sp. change (rs3 GPR12) with (parent_ra s).
   unfold store_stack in H2. simpl chunk_of_type in H2. rewrite H2. reflexivity.
   discriminate. reflexivity. reflexivity. reflexivity.
   (* Agreement at end of prologue *)

@@ -19,6 +19,7 @@ Require Import Op.
 Require Import RTL.
 Require Import Locations.
 Require Import LTLin.
+Require LTLtyping.
 Require Import Conventions.
 
 (** The following predicates define a type system for LTLin similar to that
@@ -53,17 +54,15 @@ Inductive wt_instr : instruction -> Prop :=
       wt_instr (Lstore chunk addr args src)
   | wt_Lcall:
       forall sig ros args res,
-      match ros with inl r => Loc.type r = Tint | inr s => True end ->
       List.map Loc.type args = sig.(sig_args) ->
-      Loc.type res = match sig.(sig_res) with None => Tint | Some ty => ty end ->
-      match ros with inl r => loc_acceptable r | inr s => True end ->
+      Loc.type res = proj_sig_res sig ->
+      LTLtyping.call_loc_acceptable sig ros ->
       locs_acceptable args -> loc_acceptable res ->
       wt_instr (Lcall sig ros args res)
   | wt_Ltailcall:
       forall sig ros args,
-      match ros with inl r => Loc.type r = Tint | inr s => True end ->
       List.map Loc.type args = sig.(sig_args) ->
-      match ros with inl r => loc_acceptable r | inr s => True end ->
+      LTLtyping.call_loc_acceptable sig ros ->
       locs_acceptable args -> 
       sig.(sig_res) = funsig.(sig_res) ->
       Conventions.tailcall_possible sig ->

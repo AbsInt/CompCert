@@ -34,7 +34,7 @@ Require Import PPC.
   results when applied to a LTL register of the wrong type.
   The proof in [PPCgenproof] will show that this never happens.
 
-  Note that no LTL register maps to [GPR2] nor [FPR13].
+  Note that no LTL register maps to [GPR12] nor [FPR13].
   These two registers are reserved as temporaries, to be used
   by the generated PPC code.  *)
 
@@ -47,7 +47,7 @@ Definition ireg_of (r: mreg) : ireg :=
   | R21 => GPR21 | R22 => GPR22 | R23 => GPR23 | R24 => GPR24
   | R25 => GPR25 | R26 => GPR26 | R27 => GPR27 | R28 => GPR28
   | R29 => GPR29 | R30 => GPR30 | R31 => GPR31
-  | IT1 => GPR11 | IT2 => GPR12 | IT3 => GPR0
+  | IT1 => GPR11 | IT2 => GPR0
   | _ => GPR0 (* should not happen *)
   end.
 
@@ -108,7 +108,7 @@ Definition addimm_1 (r1 r2: ireg) (n: int) (k: code) :=
     Paddi r1 r1 (Cint (low_s n)) :: k.
 
 Definition addimm_2 (r1 r2: ireg) (n: int) (k: code) :=
-  loadimm GPR2 n (Padd r1 r2 GPR2 :: k).
+  loadimm GPR12 n (Padd r1 r2 GPR12 :: k).
 
 Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
   if ireg_eq r1 GPR0 then
@@ -124,7 +124,7 @@ Definition andimm (r1 r2: ireg) (n: int) (k: code) :=
   else if Int.eq (low_u n) Int.zero then
     Pandis_ r1 r2 (Cint (high_u n)) :: k
   else
-    loadimm GPR2 n (Pand_ r1 r2 GPR2 :: k).
+    loadimm GPR12 n (Pand_ r1 r2 GPR12 :: k).
 
 Definition orimm (r1 r2: ireg) (n: int) (k: code) :=
   if Int.eq (high_u n) Int.zero then
@@ -158,8 +158,8 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   if Int.eq (high_s ofs) Int.zero then
     loadind_aux base ofs ty dst :: k
   else
-    Paddis GPR2 base (Cint (high_s ofs)) ::
-    loadind_aux GPR2 (low_s ofs) ty dst :: k.
+    Paddis GPR12 base (Cint (high_s ofs)) ::
+    loadind_aux GPR12 (low_s ofs) ty dst :: k.
   
 Definition storeind_aux (src: mreg) (base: ireg) (ofs: int) (ty: typ) :=
   match ty with
@@ -171,8 +171,8 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   if Int.eq (high_s ofs) Int.zero then
     storeind_aux src base ofs ty :: k
   else
-    Paddis GPR2 base (Cint (high_s ofs)) ::
-    storeind_aux src GPR2 (low_s ofs) ty :: k.
+    Paddis GPR12 base (Cint (high_s ofs)) ::
+    storeind_aux src GPR12 (low_s ofs) ty :: k.
   
 (** Constructor for a floating-point comparison.  The PowerPC has
   a single [fcmpu] instruction to compare floats, which sets
@@ -206,20 +206,20 @@ Definition transl_cond
       if Int.eq (high_s n) Int.zero then
         Pcmpwi (ireg_of a1) (Cint n) :: k
       else
-        loadimm GPR2 n (Pcmpw (ireg_of a1) GPR2 :: k)
+        loadimm GPR12 n (Pcmpw (ireg_of a1) GPR12 :: k)
   | Ccompuimm c n, a1 :: nil =>
       if Int.eq (high_u n) Int.zero then
         Pcmplwi (ireg_of a1) (Cint n) :: k
       else
-        loadimm GPR2 n (Pcmplw (ireg_of a1) GPR2 :: k)
+        loadimm GPR12 n (Pcmplw (ireg_of a1) GPR12 :: k)
   | Ccompf cmp, a1 :: a2 :: nil =>
       floatcomp cmp (freg_of a1) (freg_of a2) k
   | Cnotcompf cmp, a1 :: a2 :: nil =>
       floatcomp cmp (freg_of a1) (freg_of a2) k
   | Cmaskzero n, a1 :: nil =>
-      andimm GPR2 (ireg_of a1) n k
+      andimm GPR12 (ireg_of a1) n k
   | Cmasknotzero n, a1 :: nil =>
-      andimm GPR2 (ireg_of a1) n k
+      andimm GPR12 (ireg_of a1) n k
   | _, _ =>
      k (**r never happens for well-typed code *)
   end.
@@ -277,8 +277,8 @@ Definition transl_op
   | Ofloatconst f, nil =>
       Plfi (freg_of r) f :: k
   | Oaddrsymbol s ofs, nil =>
-      Paddis GPR2 GPR0 (Csymbol_high s ofs) ::
-      Paddi (ireg_of r) GPR2 (Csymbol_low s ofs) :: k
+      Paddis GPR12 GPR0 (Csymbol_high s ofs) ::
+      Paddi (ireg_of r) GPR12 (Csymbol_low s ofs) :: k
   | Oaddrstack n, nil =>
       addimm (ireg_of r) GPR1 n k
   | Ocast8signed, a1 :: nil =>
@@ -299,14 +299,14 @@ Definition transl_op
       if Int.eq (high_s n) Int.zero then
         Psubfic (ireg_of r) (ireg_of a1) (Cint n) :: k
       else
-        loadimm GPR2 n (Psubfc (ireg_of r) (ireg_of a1) GPR2 :: k)
+        loadimm GPR12 n (Psubfc (ireg_of r) (ireg_of a1) GPR12 :: k)
   | Omul, a1 :: a2 :: nil =>
       Pmullw (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Omulimm n, a1 :: nil =>
       if Int.eq (high_s n) Int.zero then
         Pmulli (ireg_of r) (ireg_of a1) (Cint n) :: k
       else
-        loadimm GPR2 n (Pmullw (ireg_of r) (ireg_of a1) GPR2 :: k)
+        loadimm GPR12 n (Pmullw (ireg_of r) (ireg_of a1) GPR12 :: k)
   | Odiv, a1 :: a2 :: nil =>
       Pdivw (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Odivu, a1 :: a2 :: nil =>
@@ -388,33 +388,33 @@ Definition transl_load_store
   match addr, args with
   | Aindexed ofs, a1 :: nil =>
       if ireg_eq (ireg_of a1) GPR0 then
-        Pmr GPR2 (ireg_of a1) ::
-        Paddis GPR2 GPR2 (Cint (high_s ofs)) ::
-        mk1 (Cint (low_s ofs)) GPR2 :: k
+        Pmr GPR12 (ireg_of a1) ::
+        Paddis GPR12 GPR12 (Cint (high_s ofs)) ::
+        mk1 (Cint (low_s ofs)) GPR12 :: k
       else if Int.eq (high_s ofs) Int.zero then
         mk1 (Cint ofs) (ireg_of a1) :: k
       else
-        Paddis GPR2 (ireg_of a1) (Cint (high_s ofs)) ::
-        mk1 (Cint (low_s ofs)) GPR2 :: k
+        Paddis GPR12 (ireg_of a1) (Cint (high_s ofs)) ::
+        mk1 (Cint (low_s ofs)) GPR12 :: k
   | Aindexed2, a1 :: a2 :: nil =>
       mk2 (ireg_of a1) (ireg_of a2) :: k
   | Aglobal symb ofs, nil =>
-      Paddis GPR2 GPR0 (Csymbol_high symb ofs) ::
-      mk1 (Csymbol_low symb ofs) GPR2 :: k
+      Paddis GPR12 GPR0 (Csymbol_high symb ofs) ::
+      mk1 (Csymbol_low symb ofs) GPR12 :: k
   | Abased symb ofs, a1 :: nil =>
       if ireg_eq (ireg_of a1) GPR0 then
-        Pmr GPR2 (ireg_of a1) ::
-        Paddis GPR2 GPR2 (Csymbol_high symb ofs) ::
-        mk1 (Csymbol_low symb ofs) GPR2 :: k
+        Pmr GPR12 (ireg_of a1) ::
+        Paddis GPR12 GPR12 (Csymbol_high symb ofs) ::
+        mk1 (Csymbol_low symb ofs) GPR12 :: k
       else
-        Paddis GPR2 (ireg_of a1) (Csymbol_high symb ofs) ::
-        mk1 (Csymbol_low symb ofs) GPR2 :: k
+        Paddis GPR12 (ireg_of a1) (Csymbol_high symb ofs) ::
+        mk1 (Csymbol_low symb ofs) GPR12 :: k
   | Ainstack ofs, nil =>
       if Int.eq (high_s ofs) Int.zero then
         mk1 (Cint ofs) GPR1 :: k
       else
-        Paddis GPR2 GPR1 (Cint (high_s ofs)) ::
-        mk1 (Cint (low_s ofs)) GPR2 :: k
+        Paddis GPR12 GPR1 (Cint (high_s ofs)) ::
+        mk1 (Cint (low_s ofs)) GPR12 :: k
   | _, _ =>
       (* should not happen *) k
   end.
@@ -428,7 +428,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
   | Msetstack src ofs ty =>
       storeind src GPR1 ofs ty k
   | Mgetparam ofs ty dst =>
-      Plwz GPR2 (Cint f.(fn_link_ofs)) GPR1 :: loadind GPR2 ofs ty dst k
+      Plwz GPR12 (Cint f.(fn_link_ofs)) GPR1 :: loadind GPR12 ofs ty dst k
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -486,13 +486,13 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pbl symb :: k
   | Mtailcall sig (inl r) =>
       Pmtctr (ireg_of r) :: 
-      Plwz GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
-      Pmtlr GPR2 ::
+      Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+      Pmtlr GPR12 ::
       Pfreeframe f.(fn_link_ofs) :: 
       Pbctr :: k
   | Mtailcall sig (inr symb) =>
-      Plwz GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
-      Pmtlr GPR2 ::
+      Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+      Pmtlr GPR12 ::
       Pfreeframe f.(fn_link_ofs) :: 
       Pbs symb :: k
   | Malloc =>
@@ -506,8 +506,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       transl_cond cond args
         (if (snd p) then Pbt (fst p) lbl :: k else Pbf (fst p) lbl :: k)
   | Mreturn =>
-      Plwz GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
-      Pmtlr GPR2 ::
+      Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+      Pmtlr GPR12 ::
       Pfreeframe f.(fn_link_ofs) ::
       Pblr :: k
   end.
@@ -522,8 +522,8 @@ Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
 
 Definition transl_function (f: Mach.function) :=
   Pallocframe (- f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) ::
-  Pmflr GPR2 ::
-  Pstw GPR2 (Cint f.(fn_retaddr_ofs)) GPR1 ::
+  Pmflr GPR12 ::
+  Pstw GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
   transl_code f f.(fn_code).
 
 Fixpoint code_size (c: code) : Z :=

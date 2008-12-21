@@ -30,10 +30,10 @@ Require Import Values.
 - Integer registers that can be allocated to RTL pseudo-registers ([Rxx]).
 - Floating-point registers that can be allocated to RTL pseudo-registers 
   ([Fxx]).
-- Three integer registers, not allocatable, reserved as temporaries for
-  spilling and reloading ([ITx]).
-- Three float registers, not allocatable, reserved as temporaries for
-  spilling and reloading ([FTx]).
+- Two integer registers, not allocatable, reserved as temporaries for
+  spilling and reloading ([IT1, IT2]).
+- Two float registers, not allocatable, reserved as temporaries for
+  spilling and reloading ([FT1, FT2]).
 
   The type [mreg] does not include special-purpose machine registers
   such as the stack pointer and the condition codes. *)
@@ -56,7 +56,7 @@ Inductive mreg: Set :=
   | F24: mreg | F25: mreg | F26: mreg | F27: mreg
   | F28: mreg | F29: mreg | F30: mreg | F31: mreg
   (** Integer temporaries *)
-  | IT1: mreg (* R11 *) | IT2: mreg (* R12 *) | IT3: mreg (* R0 *)
+  | IT1: mreg (* R11 *) | IT2: mreg (* R0 *)
   (** Float temporaries *)
   | FT1: mreg (* F11 *) | FT2: mreg (* F12 *) | FT3: mreg (* F0 *).
 
@@ -79,7 +79,7 @@ Definition mreg_type (r: mreg): typ :=
   | F20 => Tfloat | F21 => Tfloat | F22 => Tfloat | F23 => Tfloat
   | F24 => Tfloat | F25 => Tfloat | F26 => Tfloat | F27 => Tfloat
   | F28 => Tfloat | F29 => Tfloat | F30 => Tfloat | F31 => Tfloat
-  | IT1 => Tint | IT2 => Tint | IT3 => Tint
+  | IT1 => Tint | IT2 => Tint
   | FT1 => Tfloat | FT2 => Tfloat | FT3 => Tfloat
   end.
 
@@ -104,8 +104,8 @@ Module IndexedMreg <: INDEXED_TYPE.
     | F20 => 44 | F21 => 45 | F22 => 46 | F23 => 47
     | F24 => 48 | F25 => 49 | F26 => 50 | F27 => 51
     | F28 => 52 | F29 => 53 | F30 => 54 | F31 => 55
-    | IT1 => 56 | IT2 => 57 | IT3 => 58
-    | FT1 => 59 | FT2 => 60 | FT3 => 61
+    | IT1 => 56 | IT2 => 57
+    | FT1 => 58 | FT2 => 59 | FT3 => 60
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.

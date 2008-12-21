@@ -649,7 +649,7 @@ Proof.
 
   (* Icall *)
   exploit transl_find_function; eauto.  intros [tf [TFIND TF]].
-  generalize (regalloc_correct_1 f0 env live _ _ _ _ ASG H).  unfold correct_alloc_instr. intros [CORR1 CORR2].
+  generalize (regalloc_correct_1 f0 env live _ _ _ _ ASG H).  unfold correct_alloc_instr. intros [CORR1 [CORR2 CORR3]].
   assert (rs##args = map ls (map assign args)).
     eapply agree_eval_regs; eauto. 
   econstructor; split. 

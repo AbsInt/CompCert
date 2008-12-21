@@ -83,7 +83,7 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Ltailcall:
       forall sig ros,
       tailcall_possible sig ->
-      match ros with inl r => r = IT3 | _ => True end ->
+      match ros with inl r => r = IT1 | _ => True end ->
       wt_instr (Ltailcall sig ros)
   | wt_Lalloc:
       wt_instr Lalloc

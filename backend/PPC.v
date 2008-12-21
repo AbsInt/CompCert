@@ -564,7 +564,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       let sp := Vptr stk (Int.repr lo) in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
       | None => Error
-      | Some m2 => OK (nextinstr (rs#GPR1 <- sp #GPR2 <- Vundef)) m2
+      | Some m2 => OK (nextinstr (rs#GPR1 <- sp #GPR12 <- Vundef)) m2
       end
   | Pand_ rd r1 r2 =>
       let v := Val.and rs#r1 rs#r2 in
@@ -655,9 +655,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfsub rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.subf rs#r1 rs#r2))) m
   | Pictf rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.floatofint rs#r1) #GPR2 <- Vundef #FPR13 <- Vundef)) m
+      OK (nextinstr (rs#rd <- (Val.floatofint rs#r1) #GPR12 <- Vundef #FPR13 <- Vundef)) m
   | Piuctf rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.floatofintu rs#r1) #GPR2 <- Vundef #FPR13 <- Vundef)) m
+      OK (nextinstr (rs#rd <- (Val.floatofintu rs#r1) #GPR12 <- Vundef #FPR13 <- Vundef)) m
   | Plbz rd cst r1 =>
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>
@@ -679,7 +679,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Plhzx rd r1 r2 =>
       load2 Mint16unsigned rd r1 r2 rs m
   | Plfi rd f =>
-      OK (nextinstr (rs#rd <- (Vfloat f) #GPR2 <- Vundef)) m
+      OK (nextinstr (rs#rd <- (Vfloat f) #GPR12 <- Vundef)) m
   | Plwz rd cst r1 =>
       load1 Mint32 rd cst r1 rs m
   | Plwzx rd r1 r2 =>

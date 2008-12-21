@@ -25,6 +25,8 @@ Require Import Conventions.
 Require Import Parallelmove.
 Require Import Linear.
 
+Open Local Scope error_monad_scope.
+
 (** * Spilling and reloading *)
 
 (** Operations in the Linear language, like those of the target processor,
@@ -62,24 +64,60 @@ Definition reg_for (l: loc) : mreg :=
   | S s => match slot_type s with Tint => IT1 | Tfloat => FT1 end
   end.
 
-(** [regs_for ll] is similar, for a list of locations [ll] of length
-    at most 3.  We ensure that distinct temporaries are used for
-    different elements of [ll]. *)
+(** [regs_for ll] is similar, for a list of locations [ll].
+    We ensure that distinct temporaries are used for
+    different elements of [ll].
+    The result is correct only if [enough_temporaries ll = true]
+    (see below). *)
 
 Fixpoint regs_for_rec (locs: list loc) (itmps ftmps: list mreg)
                       {struct locs} : list mreg :=
-  match locs, itmps, ftmps with
-  | l1 :: ls, it1 :: its, ft1 :: fts =>
-      match l1 with
-      | R r => r
-      | S s => match slot_type s with Tint => it1 | Tfloat => ft1 end
+  match locs with
+  | nil => nil
+  | R r :: ls => r :: regs_for_rec ls itmps ftmps
+  | S s :: ls =>
+      match slot_type s with
+      | Tint =>
+          match itmps with
+          | nil => nil
+          | it1 :: its => it1 :: regs_for_rec ls its ftmps
+          end
+      | Tfloat =>
+          match ftmps with
+          | nil => nil
+          | ft1 :: fts => ft1 :: regs_for_rec ls itmps fts
+          end
       end
-      :: regs_for_rec ls its fts
-  | _, _, _ => nil
   end.
 
 Definition regs_for (locs: list loc) :=
-  regs_for_rec locs (IT1 :: IT2 :: IT3 :: nil) (FT1 :: FT2 :: FT3 :: nil).
+  regs_for_rec locs int_temporaries float_temporaries.
+
+(** Detect the situations where not enough temporaries are available
+    for reloading. *)
+
+Fixpoint enough_temporaries_rec (locs: list loc) (itmps ftmps: list mreg)
+                                {struct locs} : bool :=
+  match locs with
+  | nil => true
+  | R r :: ls => enough_temporaries_rec ls itmps ftmps
+  | S s :: ls =>
+      match slot_type s with
+      | Tint =>
+          match itmps with
+          | nil => false
+          | it1 :: its => enough_temporaries_rec ls its ftmps
+          end
+      | Tfloat =>
+          match ftmps with
+          | nil => false
+          | ft1 :: fts => enough_temporaries_rec ls itmps fts
+          end
+      end
+  end.
+
+Definition enough_temporaries (locs: list loc) :=
+  enough_temporaries_rec locs int_temporaries float_temporaries.
 
 (** ** Insertion of Linear reloads, stores and moves *)
 
@@ -160,20 +198,28 @@ Definition transf_instr
       add_reloads args rargs
         (Lload chunk addr rargs rdst :: add_spill rdst dst k)
   | LTLin.Lstore chunk addr args src =>
-      match regs_for (src :: args) with
-      | nil => nil                       (* never happens *)
-      | rsrc :: rargs =>
-          add_reloads (src :: args) (rsrc :: rargs)
-            (Lstore chunk addr rargs rsrc :: k)
-      end
+      if enough_temporaries (src :: args) then
+        match regs_for (src :: args) with
+        | nil => k                       (* never happens *)
+        | rsrc :: rargs =>
+            add_reloads (src :: args) (rsrc :: rargs)
+              (Lstore chunk addr rargs rsrc :: k)
+        end
+      else
+        let rargs := regs_for args in
+        let rsrc := reg_for src in
+        add_reloads args rargs
+          (Lop (op_for_binary_addressing addr) rargs IT2 ::
+           add_reload src rsrc
+             (Lstore chunk (Aindexed Int.zero) (IT2 :: nil) rsrc :: k))
   | LTLin.Lcall sig los args res =>
       let largs := loc_arguments sig in
       let rres  := loc_result sig in
       match los with
       | inl fn =>
-          add_reload fn IT3
-            (parallel_move args largs
-              (Lcall sig (inl _ IT3) :: add_spill rres res k))
+          parallel_move args largs
+            (add_reload fn (reg_for fn)
+              (Lcall sig (inl _ (reg_for fn)) :: add_spill rres res k))
       | inr id =>
           parallel_move args largs
             (Lcall sig (inr _ id) :: add_spill rres res k)
@@ -182,9 +228,9 @@ Definition transf_instr
       let largs := loc_arguments sig in
       match los with
       | inl fn =>
-          add_reload fn IT3
-            (parallel_move args largs
-              (Ltailcall sig (inl _ IT3) :: k))
+          parallel_move args largs
+            (add_reload fn IT1
+              (Ltailcall sig (inl _ IT1) :: k))
       | inr id =>
           parallel_move args largs
             (Ltailcall sig (inr _ id) :: k)

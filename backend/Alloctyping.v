@@ -106,6 +106,7 @@ Ltac WT :=
 Lemma wt_transf_instr:
   forall pc instr,
   RTLtyping.wt_instr env f instr ->
+  f.(RTL.fn_code)!pc = Some instr ->
   wt_instr tf (transf_instr f live alloc pc instr).
 Proof.
   intros. inv H; simpl.
@@ -124,13 +125,19 @@ Proof.
   (* store *)
   WT.
   (* call *)
+  exploit regalloc_correct_1; eauto. unfold correct_alloc_instr. 
+  intros [A1 [A2 A3]]. 
   WT.
-  destruct ros; simpl. autorewrite with allocty; auto. auto.
-  destruct ros; simpl; auto with allocty.
+  destruct ros; simpl; auto. 
+  split. autorewrite with allocty; auto.
+  split. auto with allocty. auto.
   (* tailcall *)
+  exploit regalloc_correct_1; eauto. unfold correct_alloc_instr. 
+  intro A1.
   WT.
-  destruct ros; simpl. autorewrite with allocty; auto. auto.
-  destruct ros; simpl; auto with allocty.
+  destruct ros; simpl; auto. 
+  split. autorewrite with allocty; auto.
+  split. auto with allocty. auto.
   rewrite transf_unroll; auto.
   (* alloc *)
   WT.

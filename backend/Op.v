@@ -254,7 +254,7 @@ Definition eval_addressing
   | Aindexed2, Vptr b1 n1 :: Vint n2 :: nil =>
       Some (Vptr b1 (Int.add n1 n2))
   | Aindexed2, Vint n1 :: Vptr b2 n2 :: nil =>
-      Some (Vptr b2 (Int.add n1 n2))
+      Some (Vptr b2 (Int.add n2 n1))
   | Aglobal s ofs, nil =>
       match Genv.find_symbol genv s with
       | None => None
@@ -759,7 +759,6 @@ Proof.
   intros.
   unfold eval_addressing in H; destruct addr; FuncInv;
   try subst v; simpl; try reflexivity.
-  decEq. apply Int.add_commut.
   unfold find_symbol_offset. 
   destruct (Genv.find_symbol genv i); congruence.
   unfold find_symbol_offset.
@@ -876,3 +875,32 @@ Proof.
 Qed.
 
 End EVAL_LESSDEF.
+
+(** Transformation of addressing modes with two operands or more
+  into an equivalent arithmetic operation.  This is used in the [Reload]
+  pass when a store instruction cannot be reloaded directly because
+  it runs out of temporary registers. *)
+
+(** For the PowerPC, there is only one binary addressing mode: [Aindexed2].
+  The corresponding operation is [Oadd]. *)
+
+Definition op_for_binary_addressing (addr: addressing) : operation := Oadd.
+
+Lemma eval_op_for_binary_addressing:
+  forall (F: Set) (ge: Genv.t F) sp addr args m v,
+  (length args >= 2)%nat ->
+  eval_addressing ge sp addr args = Some v ->
+  eval_operation ge sp (op_for_binary_addressing addr) args m = Some v.
+Proof.
+  intros.
+  unfold eval_addressing in H0; destruct addr; FuncInv; simpl in H; try omegaContradiction;
+  simpl; congruence.
+Qed.
+
+Lemma type_op_for_binary_addressing:
+  forall addr,
+  (length (type_of_addressing addr) >= 2)%nat ->
+  type_of_operation (op_for_binary_addressing addr) = (type_of_addressing addr, Tint).
+Proof.
+  intros. destruct addr; simpl in H; reflexivity || omegaContradiction.
+Qed.

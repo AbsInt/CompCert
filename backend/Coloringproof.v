@@ -133,7 +133,7 @@ Proof.
   rewrite dec_eq_false; auto. rewrite dec_eq_false; auto.
 Qed.
 
-Lemma add_interf_call_incl_aux_1:
+Lemma add_interf_destroyed_incl_aux_1:
   forall mr live g,
   graph_incl g
     (List.fold_left (fun g r => add_interf_mreg r mr g) live g).
@@ -145,22 +145,42 @@ Proof.
   auto.
 Qed.
 
-Lemma add_interf_call_incl_aux_2:
+Lemma add_interf_destroyed_incl_aux_2:
   forall mr live g,
   graph_incl g
     (Regset.fold graph (fun r g => add_interf_mreg r mr g) live g).
 Proof.
-  intros. rewrite Regset.fold_1. apply add_interf_call_incl_aux_1.
+  intros. rewrite Regset.fold_1. apply add_interf_destroyed_incl_aux_1.
 Qed.
 
-Lemma add_interf_call_incl:
+Lemma add_interf_destroyed_incl:
   forall live destroyed g,
-  graph_incl g (add_interf_call live destroyed g).
+  graph_incl g (add_interf_destroyed live destroyed g).
 Proof.
   induction destroyed; simpl; intros.
   apply graph_incl_refl.
   eapply graph_incl_trans; [idtac|apply IHdestroyed].
-  apply add_interf_call_incl_aux_2.
+  apply add_interf_destroyed_incl_aux_2.
+Qed.
+
+Lemma add_interfs_indirect_call_incl:
+  forall rfun locs g,
+  graph_incl g (add_interfs_indirect_call rfun locs g).
+Proof.
+  unfold add_interfs_indirect_call. induction locs; simpl; intros.
+  apply graph_incl_refl.
+  destruct a. eapply graph_incl_trans; [idtac|eauto]. 
+  apply add_interf_mreg_incl.
+  auto.
+Qed.
+
+Lemma add_interfs_call_incl:
+  forall ros locs g,
+  graph_incl g (add_interf_call ros locs g).
+Proof.
+  intros. unfold add_interf_call. destruct ros.
+  apply add_interfs_indirect_call_incl.
+  apply graph_incl_refl.
 Qed.
 
 Lemma interfere_incl:
@@ -181,7 +201,7 @@ Proof.
   unfold graph_incl; intros. elim H; auto.
 Qed.
 
-Lemma add_interf_call_correct_aux_1:
+Lemma add_interf_destroyed_correct_aux_1:
   forall mr r live,
   InA Regset.E.eq r live ->
   forall g,
@@ -190,35 +210,59 @@ Lemma add_interf_call_correct_aux_1:
 Proof.
   induction 1; simpl; intros.
   hnf in H; subst y. eapply interfere_mreg_incl. 
-  apply add_interf_call_incl_aux_1.
+  apply add_interf_destroyed_incl_aux_1.
   apply add_interf_mreg_correct.
   auto.
 Qed.
 
-Lemma add_interf_call_correct_aux_2:
+Lemma add_interf_destroyed_correct_aux_2:
   forall mr live g r,
   Regset.In r live ->
   interfere_mreg r mr
     (Regset.fold graph (fun r g => add_interf_mreg r mr g) live g).
 Proof.
-  intros. rewrite Regset.fold_1. apply add_interf_call_correct_aux_1.
+  intros. rewrite Regset.fold_1. apply add_interf_destroyed_correct_aux_1.
   apply Regset.elements_1. auto.
 Qed.
 
-Lemma add_interf_call_correct:
+Lemma add_interf_destroyed_correct:
   forall live destroyed g r mr,
   Regset.In r live ->
   In mr destroyed ->
-  interfere_mreg r mr (add_interf_call live destroyed g).
+  interfere_mreg r mr (add_interf_destroyed live destroyed g).
 Proof.
   induction destroyed; simpl; intros.
   elim H0.
   elim H0; intros. 
   subst a. eapply interfere_mreg_incl.
-  apply add_interf_call_incl.
-  apply add_interf_call_correct_aux_2; auto.
+  apply add_interf_destroyed_incl.
+  apply add_interf_destroyed_correct_aux_2; auto.
   apply IHdestroyed; auto.
 Qed.
+
+Lemma add_interfs_indirect_call_correct:
+  forall rfun mr locs g,
+  In (R mr) locs ->
+  interfere_mreg rfun mr (add_interfs_indirect_call rfun locs g).
+Proof.
+  unfold add_interfs_indirect_call. induction locs; simpl; intros.
+  elim H.
+  destruct H. subst a.
+  eapply interfere_mreg_incl.
+  apply (add_interfs_indirect_call_incl rfun locs (add_interf_mreg rfun mr g)).
+  apply add_interf_mreg_correct.
+  auto.
+Qed.
+
+Lemma add_interfs_call_correct:
+  forall rfun locs g mr,
+  In (R mr) locs -> 
+  interfere_mreg rfun mr (add_interf_call (inl _ rfun) locs g).
+Proof.
+  intros. unfold add_interf_call.
+  apply add_interfs_indirect_call_correct. auto.
+Qed.
+
 
 Lemma add_prefs_call_incl:
   forall args locs g,
@@ -336,12 +380,14 @@ Proof.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
-  apply add_interf_call_incl.
-  apply add_prefs_call_incl.
+  eapply graph_incl_trans; [idtac|apply add_interfs_call_incl].
+  apply add_interf_destroyed_incl.
+  eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
+  apply add_interfs_call_incl.
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
-  apply add_interf_call_incl.
+  apply add_interf_destroyed_incl.
   destruct o.
   apply add_pref_mreg_incl.
   apply graph_incl_refl.
@@ -379,7 +425,18 @@ Definition correct_interf_instr
         interfere_mreg r mr g)
    /\ (forall r,
         Regset.In r live ->
-        r <> res -> interfere r res g)
+       r <> res -> interfere r res g)
+   /\ (match ros with
+       | inl rfun => forall mr, In (R mr) (loc_arguments sig) -> 
+                                interfere_mreg rfun mr g
+       | inr idfun => True
+       end)
+  | Itailcall sig ros args =>
+      match ros with
+        | inl rfun => forall mr, In (R mr) (loc_arguments sig) -> 
+                                 interfere_mreg rfun mr g
+        | inr idfun => True
+      end
   | Ialloc arg res s =>
       (forall r mr,
         Regset.In r live ->
@@ -405,9 +462,11 @@ Proof.
   intros. eapply interfere_incl; eauto.
   intros. eapply interfere_incl; eauto.
   intros. eapply interfere_incl; eauto.
-  intros [A B]. split.
-  intros. eapply interfere_mreg_incl; eauto.
-  intros. eapply interfere_incl; eauto.
+  intros [A [B C]].
+  split. intros. eapply interfere_mreg_incl; eauto.
+  split. intros. eapply interfere_incl; eauto.
+  destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
+  destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
   intros [A B]. split.
   intros. eapply interfere_mreg_incl; eauto.
   intros. eapply interfere_incl; eauto.
@@ -426,27 +485,46 @@ Proof.
 
   intros. rewrite Regset.mem_1; auto. apply add_interf_op_correct; auto.
 
-  split; intros.
+  (* Icall *)
+  set (largs := loc_arguments s).
+  set (lres := loc_result s).
+  split. intros.
   apply interfere_mreg_incl with
-    (add_interf_call (Regset.remove r live) destroyed_at_call_regs g).
+    (add_interf_destroyed (Regset.remove r live) destroyed_at_call_regs g).
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
-  apply add_interf_op_incl.
-  apply add_interf_call_correct; auto.
-  apply Regset.remove_2; auto. 
+  eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
+  apply add_interfs_call_incl.
+  apply add_interf_destroyed_correct; auto.
+  apply Regset.remove_2; auto.
 
+  split. intros.
   eapply interfere_incl.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   apply add_pref_mreg_incl.
   apply add_interf_op_correct; auto.
 
+  destruct s0; auto; intros.
+  eapply interfere_mreg_incl.
+  eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
+  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
+  apply add_interf_op_incl.
+  apply add_interfs_call_correct. auto.
+
+  (* Itailcall *)
+  destruct s0; auto; intros.
+  eapply interfere_mreg_incl.
+  apply add_prefs_call_incl.
+  apply add_interfs_call_correct. auto.
+
+  (* Ialloc *)
   split; intros.
   apply interfere_mreg_incl with
-    (add_interf_call (Regset.remove r0 live) destroyed_at_call_regs g).
+    (add_interf_destroyed (Regset.remove r0 live) destroyed_at_call_regs g).
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
   apply add_interf_op_incl.
-  apply add_interf_call_correct; auto.
+  apply add_interf_destroyed_correct; auto.
   apply Regset.remove_2; auto.
 
   eapply interfere_incl.
@@ -739,6 +817,15 @@ Definition correct_alloc_instr
    /\ (forall r,
         Regset.In r live!!pc ->
         r <> res -> alloc r <> alloc res)
+   /\ (match ros with
+        | inl rfun => ~(In (alloc rfun) (loc_arguments sig))
+        | inr idfun => True
+        end)
+  | Itailcall sig ros args =>
+      (match ros with
+        | inl rfun => ~(In (alloc rfun) (loc_arguments sig))
+        | inr idfun => True
+        end)
   | Ialloc arg res s =>
       (forall r,
         Regset.In r live!!pc ->
@@ -810,21 +897,37 @@ Lemma correct_interf_alloc_instr:
   forall pc instr,
   (forall r1 r2, interfere r1 r2 g -> alloc r1 <> alloc r2) ->
   (forall r1 mr2, interfere_mreg r1 mr2 g -> alloc r1 <> R mr2) ->
+  (forall r, loc_acceptable (alloc r)) ->
   correct_interf_instr live!!pc instr g ->
   correct_alloc_instr live alloc pc instr.
 Proof.
-  intros pc instr ALL1 ALL2.
+  intros pc instr ALL1 ALL2 ALL3.
   unfold correct_interf_instr, correct_alloc_instr;
   destruct instr; auto.
   destruct (is_move_operation o l); auto.
-  intros [A B]. split. 
-  intros; red; intros. 
+  (* Icall *)
+  intros [A [B C]].
+  split. intros; red; intros. 
   unfold destroyed_at_call in H1.
   generalize (list_in_map_inv R _ _ H1). 
   intros [mr [EQ IN]]. 
   generalize (A r0 mr H IN H0). intro.
   generalize (ALL2 _ _ H2). contradiction.
-  auto.
+  split. auto.
+  destruct s0; auto. red; intros.
+  generalize (ALL3 r0). generalize (Conventions.loc_arguments_acceptable _ _ H).
+  unfold loc_argument_acceptable, loc_acceptable.
+  caseEq (alloc r0). intros.
+  elim (ALL2 r0 m). apply C; auto. congruence. auto. 
+  destruct s0; auto.
+  (* Itailcall *)
+  destruct s0; auto. red; intros.
+  generalize (ALL3 r). generalize (Conventions.loc_arguments_acceptable _ _ H0).
+  unfold loc_argument_acceptable, loc_acceptable.
+  caseEq (alloc r). intros.
+  elim (ALL2 r m). apply H; auto. congruence. auto. 
+  destruct s0; auto.
+  (* Ialloc *)
   intros [A B]. split. 
   intros; red; intros. 
   unfold destroyed_at_call in H1.
@@ -850,6 +953,7 @@ Proof.
   apply alloc_of_coloring_correct_1. auto. rewrite H4 in H3; auto.
   intros. rewrite H2. unfold allregs.
   apply alloc_of_coloring_correct_2. auto. exact H3.
+  intros. eapply regalloc_acceptable; eauto.
   unfold g. apply interf_graph_correct_1. auto. 
 Qed.
 

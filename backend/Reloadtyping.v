@@ -186,37 +186,38 @@ Hint Resolve wt_reg_for: reloadty.
 
 Lemma wt_regs_for_rec:
   forall locs itmps ftmps,
-  (List.length locs <= List.length itmps)%nat ->
-  (List.length locs <= List.length ftmps)%nat ->
+  enough_temporaries_rec locs itmps ftmps = true ->
   (forall r, In r itmps -> mreg_type r = Tint) ->
   (forall r, In r ftmps -> mreg_type r = Tfloat) ->
   List.map mreg_type (regs_for_rec locs itmps ftmps) = List.map Loc.type locs.
 Proof.
   induction locs; intros.
   simpl. auto.
-  destruct itmps; simpl in H. omegaContradiction.
-  destruct ftmps; simpl in H0. omegaContradiction.
-  simpl. apply (f_equal2 (@cons typ)). 
-  destruct a. reflexivity. simpl. case (slot_type s).
-  apply H1; apply in_eq. apply H2; apply in_eq.
-  apply IHlocs. omega. omega. 
-  intros; apply H1; apply in_cons; auto.
-  intros; apply H2; apply in_cons; auto.
+  simpl in H. simpl. 
+  destruct a. 
+  simpl. decEq. eauto. 
+  caseEq (slot_type s); intro SLOTTYPE; rewrite SLOTTYPE in H.
+  destruct itmps. discriminate. simpl. decEq.
+  rewrite SLOTTYPE. auto with coqlib.
+  apply IHlocs; auto with coqlib.
+  destruct ftmps. discriminate. simpl. decEq.
+  rewrite SLOTTYPE. auto with coqlib.
+  apply IHlocs; auto with coqlib.
 Qed.
 
 Lemma wt_regs_for:
   forall locs,
-  (List.length locs <= 3)%nat ->
+  enough_temporaries locs = true ->
   List.map mreg_type (regs_for locs) = List.map Loc.type locs.
 Proof.
   intros. unfold regs_for. apply wt_regs_for_rec.
-  simpl. auto. simpl. auto. 
+  auto.
   simpl; intros; intuition; subst r; reflexivity.
   simpl; intros; intuition; subst r; reflexivity.
 Qed.
 Hint Resolve wt_regs_for: reloadty.
 
-Hint Resolve length_op_args length_addr_args length_cond_args: reloadty.
+Hint Resolve enough_temporaries_op_args enough_temporaries_cond enough_temporaries_addr: reloadty.
 
 Hint Extern 4 (_ = _) => congruence : reloadty.
 
@@ -240,35 +241,55 @@ Proof.
   assert (mreg_type (reg_for dst) = Loc.type dst). eauto with reloadty.
   auto with reloadty.
 
-  caseEq (regs_for (src :: args)); intros.
-  red; simpl; tauto.
+  caseEq (enough_temporaries (src :: args)); intro ENOUGH.
+  caseEq (regs_for (src :: args)); intros. auto.
   assert (map mreg_type (regs_for (src :: args)) = map Loc.type (src :: args)).
-    apply wt_regs_for. simpl. apply le_n_S. eauto with reloadty.
+    apply wt_regs_for. auto. 
   rewrite H in H5. injection H5; intros.
+  auto with reloadty.
+  apply wt_add_reloads; auto with reloadty.
+  symmetry. apply wt_regs_for. eauto with reloadty.
+  assert (op_for_binary_addressing addr <> Omove).
+    unfold op_for_binary_addressing; destruct addr; congruence.
+  assert (type_of_operation (op_for_binary_addressing addr) = (type_of_addressing addr, Tint)).
+    apply type_op_for_binary_addressing. 
+    rewrite <- H1. rewrite list_length_map.
+    eapply not_enough_temporaries_length; eauto. 
+  apply wt_code_cons.
+  constructor; auto. rewrite H5. decEq. rewrite <- H1. eauto with reloadty.
+  apply wt_add_reload; auto with reloadty. 
+  apply wt_code_cons; auto. constructor. reflexivity.
+  rewrite <- H2. eauto with reloadty.
+
+  assert (locs_valid (transf_function f) (loc_arguments sig)).
+    red; intros. generalize (loc_arguments_acceptable sig l H).
+    destruct l; simpl; auto. destruct s; simpl; intuition.
+  assert (locs_writable (loc_arguments sig)).
+    red; intros. generalize (loc_arguments_acceptable sig l H6).
+    destruct l; simpl; auto. destruct s; simpl; intuition.
+  assert (map Loc.type args = map Loc.type (loc_arguments sig)).
+    rewrite loc_arguments_type; auto.
+  assert (Loc.type res = mreg_type (loc_result sig)).
+    rewrite H2. unfold loc_result. unfold proj_sig_res. 
+    destruct (sig_res sig); auto. destruct t; auto.
+  destruct ros.
+  destruct H3 as [A [B C]].
+  apply wt_parallel_move; eauto with reloadty.
+  apply wt_add_reload; eauto with reloadty. 
+  apply wt_code_cons; eauto with reloadty. 
+  constructor. rewrite <- A. auto with reloadty. 
   auto with reloadty.
 
   assert (locs_valid (transf_function f) (loc_arguments sig)).
     red; intros. generalize (loc_arguments_acceptable sig l H).
     destruct l; simpl; auto. destruct s; simpl; intuition.
   assert (locs_writable (loc_arguments sig)).
-    red; intros. generalize (loc_arguments_acceptable sig l H7).
+    red; intros. generalize (loc_arguments_acceptable sig l H6).
     destruct l; simpl; auto. destruct s; simpl; intuition.
   assert (map Loc.type args = map Loc.type (loc_arguments sig)).
     rewrite loc_arguments_type; auto.
-  assert (Loc.type res = mreg_type (loc_result sig)).
-    rewrite H3. unfold loc_result.
-    destruct (sig_res sig); auto. destruct t; auto.
-  destruct ros; auto 10 with reloadty.
-
-  assert (locs_valid (transf_function f) (loc_arguments sig)).
-    red; intros. generalize (loc_arguments_acceptable sig l H).
-    destruct l; simpl; auto. destruct s; simpl; intuition.
-  assert (locs_writable (loc_arguments sig)).
-    red; intros. generalize (loc_arguments_acceptable sig l H7).
-    destruct l; simpl; auto. destruct s; simpl; intuition.
-  assert (map Loc.type args = map Loc.type (loc_arguments sig)).
-    rewrite loc_arguments_type; auto.
-  destruct ros; auto 10 with reloadty.
+  destruct ros. destruct H2 as [A [B C]]. auto 10 with reloadty. 
+  auto 10 with reloadty.
 
   assert (map mreg_type (regs_for args) = map Loc.type args).
     eauto with reloadty.

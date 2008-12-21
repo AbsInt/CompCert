@@ -51,8 +51,12 @@ Definition destroyed_at_call_regs :=
 Definition destroyed_at_call :=
   List.map R destroyed_at_call_regs.
 
+Definition int_temporaries := IT1 :: IT2 :: nil.
+
+Definition float_temporaries := FT1 :: FT2 :: FT3 :: nil.
+  
 Definition temporaries := 
-  R IT1 :: R IT2 :: R IT3 :: R FT1 :: R FT2 :: R FT3 :: nil.
+  R IT1 :: R IT2 :: R FT1 :: R FT2 :: R FT3 :: nil.
 
 (** The [index_int_callee_save] and [index_float_callee_save] associate
   a unique positive integer to callee-save registers.  This integer is

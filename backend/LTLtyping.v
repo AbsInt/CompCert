@@ -35,6 +35,12 @@ Variable funct: function.
 Definition valid_successor (s: node) : Prop :=
   exists i, funct.(fn_code)!s = Some i.
 
+Definition call_loc_acceptable (sig: signature) (los: loc + ident) : Prop :=
+  match los with
+  | inl l => Loc.type l = Tint /\ loc_acceptable l /\ ~In l (loc_arguments sig)
+  | inr s => True
+  end.
+
 Inductive wt_instr : instruction -> Prop :=
   | wt_Lnop:
       forall s,
@@ -68,18 +74,16 @@ Inductive wt_instr : instruction -> Prop :=
       wt_instr (Lstore chunk addr args src s)
   | wt_Lcall:
       forall sig ros args res s,
-      match ros with inl r => Loc.type r = Tint | inr s => True end ->
       List.map Loc.type args = sig.(sig_args) ->
       Loc.type res = proj_sig_res sig ->
-      match ros with inl r => loc_acceptable r | inr s => True end ->
+      call_loc_acceptable sig ros ->
       locs_acceptable args -> loc_acceptable res ->
       valid_successor s ->
       wt_instr (Lcall sig ros args res s)
   | wt_Ltailcall:
       forall sig ros args,
-      match ros with inl r => Loc.type r = Tint | inr s => True end ->
       List.map Loc.type args = sig.(sig_args) ->
-      match ros with inl r => loc_acceptable r | inr s => True end ->
+      call_loc_acceptable sig ros ->
       locs_acceptable args ->
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
       Conventions.tailcall_possible sig ->

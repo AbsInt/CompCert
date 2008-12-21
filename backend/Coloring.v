@@ -110,11 +110,25 @@ Definition add_interf_move
        if Reg.eq r arg then false else true)
     res live g.
 
-Definition add_interf_call
+Definition add_interf_destroyed
     (live: Regset.t) (destroyed: list mreg) (g: graph): graph :=
   List.fold_left
     (fun g mr => Regset.fold graph (fun r g => add_interf_mreg r mr g) live g)
     destroyed g.
+
+Definition add_interfs_indirect_call
+    (rfun: reg) (locs: list loc) (g: graph): graph :=
+  List.fold_left
+    (fun g loc =>
+      match loc with R mr => add_interf_mreg rfun mr g | _ => g end)
+    locs g.
+
+Definition add_interf_call
+    (ros: reg + ident) (locs: list loc) (g: graph): graph :=
+  match ros with
+  | inl rfun => add_interfs_indirect_call rfun locs g
+  | inr idfun => g
+  end.
 
 Fixpoint add_prefs_call
     (args: list reg) (locs: list loc) (g: graph) {struct args} : graph :=
@@ -157,18 +171,23 @@ Definition add_edges_instr
       then add_interf_op dst live g
       else g
   | Icall sig ros args res s =>
-      add_prefs_call args (loc_arguments sig)
-        (add_pref_mreg res (loc_result sig)
+      let largs := loc_arguments sig in
+      let lres := loc_result sig in
+      add_prefs_call args largs
+        (add_pref_mreg res lres
           (add_interf_op res live
-            (add_interf_call
-              (Regset.remove res live) destroyed_at_call_regs g)))
+            (add_interf_call ros largs
+              (add_interf_destroyed
+                (Regset.remove res live) destroyed_at_call_regs g))))
   | Itailcall sig ros args =>
-      add_prefs_call args (loc_arguments sig) g
+      let largs := loc_arguments sig in
+      add_prefs_call args largs
+        (add_interf_call ros largs g)
   | Ialloc arg res s =>
       add_pref_mreg arg loc_alloc_argument
         (add_pref_mreg res loc_alloc_result
           (add_interf_op res live
-            (add_interf_call
+            (add_interf_destroyed
               (Regset.remove res live) destroyed_at_call_regs g)))
   | Ireturn (Some r) =>
       add_pref_mreg r (loc_result sig) g

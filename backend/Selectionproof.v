@@ -1043,7 +1043,7 @@ Proof.
     simpl. congruence.
   exists (Vint i :: Vptr b0 i0 :: nil).
     split. eauto with evalexpr. simpl. 
-    rewrite Int.add_commut. congruence.
+    congruence.
   exists (Vptr b0 i :: Vint i0 :: nil).
     split. eauto with evalexpr. simpl. congruence.
   exists (v :: nil). split. eauto with evalexpr. 

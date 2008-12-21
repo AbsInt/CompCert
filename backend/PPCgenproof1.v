@@ -138,7 +138,7 @@ Qed.
 
 Definition is_data_reg (r: preg) : Prop :=
   match r with
-  | IR GPR2 => False
+  | IR GPR12 => False
   | FR FPR13 => False
   | PC => False    | LR => False    | CTR => False
   | CR0_0 => False | CR0_1 => False | CR0_2 => False | CR0_3 => False
@@ -169,8 +169,8 @@ Lemma ireg_of_not_GPR1:
 Proof.
   intro. case r; discriminate.
 Qed.
-Lemma ireg_of_not_GPR2:
-  forall r, ireg_of r <> GPR2.
+Lemma ireg_of_not_GPR12:
+  forall r, ireg_of r <> GPR12.
 Proof.
   intro. case r; discriminate.
 Qed.
@@ -179,7 +179,7 @@ Lemma freg_of_not_FPR13:
 Proof.
   intro. case r; discriminate.
 Qed.
-Hint Resolve ireg_of_not_GPR1 ireg_of_not_GPR2 freg_of_not_FPR13: ppcgen.
+Hint Resolve ireg_of_not_GPR1 ireg_of_not_GPR12 freg_of_not_FPR13: ppcgen.
 
 Lemma preg_of_not:
   forall r1 r2, ~(is_data_reg r2) -> preg_of r1 <> r2.
@@ -250,7 +250,7 @@ Lemma agree_exten_2:
   forall ms sp rs rs',
   agree ms sp rs ->
   (forall r,
-     r <> IR GPR2 -> r <> FR FPR13 ->
+     r <> IR GPR12 -> r <> FR FPR13 ->
      r <> PC -> r <> LR -> r <> CTR ->
      r <> CR0_0 -> r <> CR0_1 -> r <> CR0_2 -> r <> CR0_3 ->
      r <> CARRY ->
@@ -390,7 +390,7 @@ Lemma agree_set_mireg_exten:
   mreg_type r = Tint ->
   rs'#(ireg_of r) = v ->
   (forall r', 
-     r' <> IR GPR2 -> r' <> FR FPR13 ->
+     r' <> IR GPR12 -> r' <> FR FPR13 ->
      r' <> PC -> r' <> LR -> r' <> CTR ->
      r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 ->
      r' <> CARRY ->
@@ -724,14 +724,14 @@ Qed.
 
 Lemma addimm_2_correct:
   forall r1 r2 n k rs m,
-  r2 <> GPR2 ->
+  r2 <> GPR12 ->
   exists rs',
      exec_straight (addimm_2 r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = Val.add rs#r2 (Vint n)
-  /\ forall r': preg, r' <> r1 -> r' <> GPR2 -> r' <> PC -> rs'#r' = rs#r'.
+  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> r' <> PC -> rs'#r' = rs#r'.
 Proof.
   intros. unfold addimm_2.
-  generalize (loadimm_correct GPR2 n (Padd r1 r2 GPR2 :: k) rs m).
+  generalize (loadimm_correct GPR12 n (Padd r1 r2 GPR12 :: k) rs m).
   intros [rs1 [EX [RES OTHER]]].
   exists (nextinstr (rs1#r1 <- (Val.add rs#r2 (Vint n)))).
   split. eapply exec_straight_trans. eexact EX. 
@@ -744,11 +744,11 @@ Qed.
 
 Lemma addimm_correct:
   forall r1 r2 n k rs m,
-  r2 <> GPR2 ->
+  r2 <> GPR12 ->
   exists rs',
      exec_straight (addimm r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = Val.add rs#r2 (Vint n)
-  /\ forall r': preg, r' <> r1 -> r' <> GPR2 -> r' <> PC -> rs'#r' = rs#r'.
+  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> r' <> PC -> rs'#r' = rs#r'.
 Proof.
   intros. unfold addimm.
   case (ireg_eq r1 GPR0); intro.
@@ -763,14 +763,14 @@ Qed.
 
 Lemma andimm_correct:
   forall r1 r2 n k (rs : regset) m,
-  r2 <> GPR2 ->
+  r2 <> GPR12 ->
   let v := Val.and rs#r2 (Vint n) in
   exists rs',
      exec_straight (andimm r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = v
   /\ rs'#CR0_2 = Val.cmp Ceq v Vzero
   /\ forall r': preg,
-       r' <> r1 -> r' <> GPR2 -> r' <> PC ->
+       r' <> r1 -> r' <> GPR12 -> r' <> PC ->
        r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 ->
        rs'#r' = rs#r'.
 Proof.
@@ -797,7 +797,7 @@ Proof.
   split. auto.
   intros. rewrite D; auto. apply Pregmap.gso; auto.
   (* loadimm + and *)
-  generalize (loadimm_correct GPR2 n (Pand_ r1 r2 GPR2 :: k) rs m).
+  generalize (loadimm_correct GPR12 n (Pand_ r1 r2 GPR12 :: k) rs m).
   intros [rs1 [EX1 [RES1 OTHER1]]].
   exists (nextinstr (compare_sint (rs1#r1 <- v) v Vzero)).
   generalize (compare_sint_spec (rs1#r1 <- v) v Vzero).
@@ -915,7 +915,7 @@ Lemma loadind_correct:
   exists rs',
      exec_straight (loadind base ofs ty dst k) rs m k rs' m
   /\ rs'#(preg_of dst) = v
-  /\ forall r, r <> PC -> r <> GPR2 -> r <> preg_of dst -> rs'#r = rs#r.
+  /\ forall r, r <> PC -> r <> GPR12 -> r <> preg_of dst -> rs'#r = rs#r.
 Proof.
   intros. unfold loadind.
   assert (preg_of dst <> PC).
@@ -928,7 +928,7 @@ Proof.
   split. rewrite nextinstr_inv; auto. apply Pregmap.gss.
   intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
   (* long offset *)
-  pose (rs1 := nextinstr (rs#GPR2 <- (Val.add rs#base (Vint (Int.shl (high_s ofs) (Int.repr 16)))))).
+  pose (rs1 := nextinstr (rs#GPR12 <- (Val.add rs#base (Vint (Int.shl (high_s ofs) (Int.repr 16)))))).
   exists (nextinstr (rs1#(preg_of dst) <- v)).
   split. apply exec_straight_two with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero; auto. 
@@ -966,7 +966,7 @@ Lemma storeind_correct:
   base <> GPR0 ->
   exists rs',
      exec_straight (storeind src base ofs ty k) rs m k rs' m'
-  /\ forall r, r <> PC -> r <> GPR2 -> rs'#r = rs#r.
+  /\ forall r, r <> PC -> r <> GPR12 -> rs'#r = rs#r.
 Proof.
   intros. unfold storeind.
   (* short offset *)
@@ -976,7 +976,7 @@ Proof.
   reflexivity. 
   intros. rewrite nextinstr_inv; auto. 
   (* long offset *)
-  pose (rs1 := nextinstr (rs#GPR2 <- (Val.add rs#base (Vint (Int.shl (high_s ofs) (Int.repr 16)))))).
+  pose (rs1 := nextinstr (rs#GPR12 <- (Val.add rs#base (Vint (Int.shl (high_s ofs) (Int.repr 16)))))).
   exists (nextinstr rs1).
   split. apply exec_straight_two with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero; auto. 
@@ -1097,7 +1097,7 @@ Proof.
   split. 
   case c; simpl; auto; rewrite <- Val.negate_cmp; simpl; auto.
   apply agree_exten_2 with rs; auto.
-  generalize (loadimm_correct GPR2 i (Pcmpw (ireg_of m0) GPR2 :: k) rs m).
+  generalize (loadimm_correct GPR12 i (Pcmpw (ireg_of m0) GPR12 :: k) rs m).
   intros [rs1 [EX1 [RES1 OTH1]]].
   assert (agree ms sp rs1). apply agree_exten_2 with rs; auto.
   generalize (compare_sint_spec rs1 ms#m0 (Vint i)).
@@ -1122,7 +1122,7 @@ Proof.
   split. 
   case c; simpl; auto; rewrite <- Val.negate_cmpu; simpl; auto.
   apply agree_exten_2 with rs; auto.
-  generalize (loadimm_correct GPR2 i (Pcmplw (ireg_of m0) GPR2 :: k) rs m).
+  generalize (loadimm_correct GPR12 i (Pcmplw (ireg_of m0) GPR12 :: k) rs m).
   intros [rs1 [EX1 [RES1 OTH1]]].
   assert (agree ms sp rs1). apply agree_exten_2 with rs; auto.
   generalize (compare_uint_spec rs1 ms#m0 (Vint i)).
@@ -1156,14 +1156,14 @@ Proof.
   apply agree_exten_2 with rs; auto.
   (* Cmaskzero *)
   simpl.
-  generalize (andimm_correct GPR2 (ireg_of m0) i k rs m (ireg_of_not_GPR2 m0)).
+  generalize (andimm_correct GPR12 (ireg_of m0) i k rs m (ireg_of_not_GPR12 m0)).
   intros [rs' [A [B [C D]]]].
   exists rs'. split. assumption. 
   split. rewrite C. rewrite <- (ireg_val ms sp rs); auto.
   apply agree_exten_2 with rs; auto.
   (* Cmasknotzero *)
   simpl.
-  generalize (andimm_correct GPR2 (ireg_of m0) i k rs m (ireg_of_not_GPR2 m0)).
+  generalize (andimm_correct GPR12 (ireg_of m0) i k rs m (ireg_of_not_GPR12 m0)).
   intros [rs' [A [B [C D]]]].
   exists rs'. split. assumption. 
   split. rewrite C. rewrite <- (ireg_val ms sp rs); auto.
@@ -1243,13 +1243,13 @@ Proof.
   exists rs'. split. auto. 
   apply agree_set_mireg_exten with rs; auto. 
   (* Ofloatconst *)
-  exists (nextinstr (rs#(freg_of res) <- (Vfloat f) #GPR2 <- Vundef)).
+  exists (nextinstr (rs#(freg_of res) <- (Vfloat f) #GPR12 <- Vundef)).
   split. apply exec_straight_one. reflexivity. reflexivity.
   auto with ppcgen.
   (* Oaddrsymbol *)
   change (find_symbol_offset ge i i0) with (symbol_offset ge i i0).
   set (v := symbol_offset ge i i0).
-  pose (rs1 := nextinstr (rs#GPR2 <- (high_half v))).
+  pose (rs1 := nextinstr (rs#GPR12 <- (high_half v))).
   exists (nextinstr (rs1#(ireg_of res) <- v)).
   split. apply exec_straight_two with rs1 m.
   unfold exec_instr. rewrite gpr_or_zero_zero.
@@ -1264,7 +1264,7 @@ Proof.
   apply agree_set_mreg. apply agree_nextinstr.
   apply agree_set_other. auto. simpl. tauto.
   (* Oaddrstack *)
-  assert (GPR1 <> GPR2). discriminate.
+  assert (GPR1 <> GPR12). discriminate.
   generalize (addimm_correct (ireg_of res) GPR1 i k rs m H2). 
   intros [rs' [EX [RES OTH]]].
   exists rs'. split. auto. 
@@ -1288,7 +1288,7 @@ Proof.
   rewrite Int.rolm_zero. rewrite Int.cast16unsigned_and. auto.
   (* Oaddimm *)
   generalize (addimm_correct (ireg_of res) (ireg_of m0) i k rs m
-                            (ireg_of_not_GPR2 m0)).
+                            (ireg_of_not_GPR12 m0)).
   intros [rs' [A [B C]]]. 
   exists rs'. split. auto.
   apply agree_set_mireg_exten with rs; auto.
@@ -1302,14 +1302,14 @@ Proof.
   exists (nextinstr (rs#(ireg_of res) <- (Val.sub (Vint i) (ms m0)) #CARRY <- Vundef)).
   split. apply exec_straight_one. rewrite (ireg_val ms sp rs); auto.
   reflexivity. simpl. auto with ppcgen.
-  generalize (loadimm_correct GPR2 i (Psubfc (ireg_of res) (ireg_of m0) GPR2 :: k) rs m).
+  generalize (loadimm_correct GPR12 i (Psubfc (ireg_of res) (ireg_of m0) GPR12 :: k) rs m).
   intros [rs1 [EX [RES OTH]]].
   assert (agree ms sp rs1). apply agree_exten_2 with rs; auto.
   exists (nextinstr (rs1#(ireg_of res) <- (Val.sub (Vint i) (ms m0)) #CARRY <- Vundef)).
   split. eapply exec_straight_trans. eexact EX. 
   apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs); auto).
   simpl. rewrite RES. rewrite OTH. reflexivity. 
-  generalize (ireg_of_not_GPR2 m0); congruence.
+  generalize (ireg_of_not_GPR12 m0); congruence.
   discriminate.
   reflexivity. simpl; auto with ppcgen.
   (* Omulimm *)
@@ -1317,14 +1317,14 @@ Proof.
   exists (nextinstr (rs#(ireg_of res) <- (Val.mul (ms m0) (Vint i)))).
   split. apply exec_straight_one. rewrite (ireg_val ms sp rs); auto.
   reflexivity. auto with ppcgen.
-  generalize (loadimm_correct GPR2 i (Pmullw (ireg_of res) (ireg_of m0) GPR2 :: k) rs m).
+  generalize (loadimm_correct GPR12 i (Pmullw (ireg_of res) (ireg_of m0) GPR12 :: k) rs m).
   intros [rs1 [EX [RES OTH]]].
   assert (agree ms sp rs1). apply agree_exten_2 with rs; auto.
   exists (nextinstr (rs1#(ireg_of res) <- (Val.mul (ms m0) (Vint i)))).
   split. eapply exec_straight_trans. eexact EX. 
   apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs); auto).
   simpl. rewrite RES. rewrite OTH. reflexivity. 
-  generalize (ireg_of_not_GPR2 m0); congruence.
+  generalize (ireg_of_not_GPR12 m0); congruence.
   discriminate.
   reflexivity. simpl; auto with ppcgen.
   (* Oand *)
@@ -1340,7 +1340,7 @@ Proof.
   auto.
   (* Oandimm *)
   generalize (andimm_correct (ireg_of res) (ireg_of m0) i k rs m
-                             (ireg_of_not_GPR2 m0)).
+                             (ireg_of_not_GPR12 m0)).
   intros [rs' [A [B [C D]]]]. 
   exists rs'. split. auto. apply agree_set_mireg_exten with rs; auto.
   rewrite (ireg_val ms sp rs); auto.
@@ -1392,12 +1392,12 @@ Proof.
   repeat (rewrite (freg_val ms sp rs); auto).
   reflexivity. auto with ppcgen.
   (* Ofloatofint *)
-  exists (nextinstr (rs#(freg_of res) <- (Val.floatofint (ms m0)) #GPR2 <- Vundef #FPR13 <- Vundef)).
+  exists (nextinstr (rs#(freg_of res) <- (Val.floatofint (ms m0)) #GPR12 <- Vundef #FPR13 <- Vundef)).
   split. apply exec_straight_one. 
   repeat (rewrite (ireg_val ms sp rs); auto).
   reflexivity. auto 10 with ppcgen.
   (* Ofloatofintu *)
-  exists (nextinstr (rs#(freg_of res) <- (Val.floatofintu (ms m0)) #GPR2 <- Vundef #FPR13 <- Vundef)).
+  exists (nextinstr (rs#(freg_of res) <- (Val.floatofintu (ms m0)) #GPR12 <- Vundef #FPR13 <- Vundef)).
   split. apply exec_straight_one. 
   repeat (rewrite (ireg_val ms sp rs); auto).
   reflexivity. auto 10 with ppcgen.
@@ -1459,22 +1459,22 @@ Proof.
   (* Aindexed *)
   case (ireg_eq (ireg_of t) GPR0); intro.
   (* Aindexed from GPR0 *)
-  set (rs1 := nextinstr (rs#GPR2 <- (ms t))).
-  set (rs2 := nextinstr (rs1#GPR2 <- (Val.add (ms t) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
+  set (rs1 := nextinstr (rs#GPR12 <- (ms t))).
+  set (rs2 := nextinstr (rs1#GPR12 <- (Val.add (ms t) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   assert (ADDR: eval_addressing_total ge sp (Aindexed i) ms##(t :: nil) =
-                Val.add rs2#GPR2 (const_low ge (Cint (low_s i)))).
+                Val.add rs2#GPR12 (const_low ge (Cint (low_s i)))).
     simpl. unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
     rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
     discriminate.
   assert (AG: agree ms sp rs2). unfold rs2, rs1; auto 6 with ppcgen.
-  assert (NOT0: GPR2 <> GPR0). discriminate.
+  assert (NOT0: GPR12 <> GPR0). discriminate.
   generalize (H _ _ _ k ADDR AG NOT0).
   intros [rs' [EX' AG']].
   exists rs'. split.
-  apply exec_straight_trans with (mk1 (Cint (low_s i)) GPR2 :: k) rs2 m.
+  apply exec_straight_trans with (mk1 (Cint (low_s i)) GPR12 :: k) rs2 m.
   apply exec_straight_two with rs1 m.
   unfold rs1. rewrite (ireg_val ms sp rs); auto.
-  unfold rs2. replace (ms t) with (rs1#GPR2). auto.
+  unfold rs2. replace (ms t) with (rs1#GPR12). auto.
   unfold rs1. rewrite nextinstr_inv. apply Pregmap.gss. discriminate.
   reflexivity. reflexivity.  
   assumption. assumption.
@@ -1486,14 +1486,14 @@ Proof.
   generalize (H _ _ _ k ADDR H1 n). intros [rs' [EX' AG']].
   exists rs'. split. auto. auto.
   (* Aindexed long *)
-  set (rs1 := nextinstr (rs#GPR2 <- (Val.add (ms t) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
+  set (rs1 := nextinstr (rs#GPR12 <- (Val.add (ms t) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   assert (ADDR: eval_addressing_total ge sp (Aindexed i) ms##(t :: nil) =
-                Val.add rs1#GPR2 (const_low ge (Cint (low_s i)))).
+                Val.add rs1#GPR12 (const_low ge (Cint (low_s i)))).
     simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
     discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  assert (NOT0: GPR2 <> GPR0). discriminate.
+  assert (NOT0: GPR12 <> GPR0). discriminate.
   generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero; auto. 
@@ -1503,16 +1503,16 @@ Proof.
   apply H0. 
   simpl. repeat (rewrite (ireg_val ms sp rs); auto). auto.
   (* Aglobal *)
-  set (rs1 := nextinstr (rs#GPR2 <- (const_high ge (Csymbol_high i i0)))).
+  set (rs1 := nextinstr (rs#GPR12 <- (const_high ge (Csymbol_high i i0)))).
   assert (ADDR: eval_addressing_total ge sp (Aglobal i i0) ms##nil =
-                Val.add rs1#GPR2 (const_low ge (Csymbol_low i i0))).
+                Val.add rs1#GPR12 (const_low ge (Csymbol_low i i0))).
     simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     unfold const_high, const_low. 
     set (v := symbol_offset ge i i0).
     symmetry. rewrite Val.add_commut. unfold v. apply low_high_half. 
     discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  assert (NOT0: GPR2 <> GPR0). discriminate.
+  assert (NOT0: GPR12 <> GPR0). discriminate.
   generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   unfold exec_instr. rewrite gpr_or_zero_zero. 
@@ -1528,13 +1528,13 @@ Proof.
     agree ms sp rs1 ->
     exists rs',
       exec_straight
-        (Paddis GPR2 r (Csymbol_high i i0)
-         :: mk1 (Csymbol_low i i0) GPR2 :: k) rs1 m k rs' m'
+        (Paddis GPR12 r (Csymbol_high i i0)
+         :: mk1 (Csymbol_low i i0) GPR12 :: k) rs1 m k rs' m'
       /\ agree ms' sp rs').
   intros. 
-  set (rs2 := nextinstr (rs1#GPR2 <- (Val.add (ms t) (const_high ge (Csymbol_high i i0))))).
+  set (rs2 := nextinstr (rs1#GPR12 <- (Val.add (ms t) (const_high ge (Csymbol_high i i0))))).
   assert (ADDR: eval_addressing_total ge sp (Abased i i0) ms##(t::nil) =
-                Val.add rs2#GPR2 (const_low ge (Csymbol_low i i0))).
+                Val.add rs2#GPR12 (const_low ge (Csymbol_low i i0))).
     simpl. unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
     unfold const_high. 
     set (v := symbol_offset ge i i0).
@@ -1543,20 +1543,20 @@ Proof.
     unfold v. rewrite low_high_half. apply Val.add_commut.
     discriminate.
   assert (AG: agree ms sp rs2). unfold rs2; auto with ppcgen.
-  assert (NOT0: GPR2 <> GPR0). discriminate.
+  assert (NOT0: GPR12 <> GPR0). discriminate.
   generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs2 m.
   unfold exec_instr. rewrite gpr_or_zero_not_zero; auto.
   rewrite <- H3. reflexivity. reflexivity. 
   assumption. assumption.
   case (ireg_eq (ireg_of t) GPR0); intro.
-  set (rs1 := nextinstr (rs#GPR2 <- (ms t))).
-  assert (R1: GPR2 <> GPR0). discriminate.
-  assert (R2: ms t = rs1 GPR2). 
+  set (rs1 := nextinstr (rs#GPR12 <- (ms t))).
+  assert (R1: GPR12 <> GPR0). discriminate.
+  assert (R2: ms t = rs1 GPR12). 
     unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss; auto.
     discriminate.
   assert (R3: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  generalize (COMMON rs1 GPR2 R1 R2 R3). intros [rs' [EX' AG']].
+  generalize (COMMON rs1 GPR12 R1 R2 R3). intros [rs' [EX' AG']].
   exists rs'. split.
   apply exec_straight_step with rs1 m.
   unfold rs1. rewrite (ireg_val ms sp rs); auto. reflexivity.
@@ -1566,14 +1566,14 @@ Proof.
   case (Int.eq (high_s i) Int.zero).
   apply H. simpl. rewrite (sp_val ms sp rs); auto. auto.
   discriminate.
-  set (rs1 := nextinstr (rs#GPR2 <- (Val.add sp (Vint (Int.shl (high_s i) (Int.repr 16)))))).
+  set (rs1 := nextinstr (rs#GPR12 <- (Val.add sp (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   assert (ADDR: eval_addressing_total ge sp (Ainstack i) ms##nil =
-                Val.add rs1#GPR2 (const_low ge (Cint (low_s i)))).
+                Val.add rs1#GPR12 (const_low ge (Cint (low_s i)))).
     simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     rewrite Val.add_assoc. decEq. simpl. rewrite low_high_s. auto.
     discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  assert (NOT0: GPR2 <> GPR0). discriminate.
+  assert (NOT0: GPR12 <> GPR0). discriminate.
   generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero. 

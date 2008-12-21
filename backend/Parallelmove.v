@@ -336,7 +336,6 @@ Lemma effect_parmove:
   forall e e',
   effect_seqmove (parmove srcs dsts) e e' ->
   List.map e' dsts = List.map e srcs /\
-  e' (R IT3) = e (R IT3) /\
   forall l, Loc.notin l dsts -> Loc.notin l temporaries -> e' l = e l.
 Proof.
   set (mu := parmove srcs dsts). intros.
@@ -350,15 +349,6 @@ Proof.
   apply H1. apply dests_no_overlap_dests; auto.
   apply NO_DSTS_TEMP; auto; simpl; tauto.
   apply NO_DSTS_TEMP; auto; simpl; tauto.
-  (* e' IT3 = e IT3 *)
-  split. 
-  assert (Loc.notin (R IT3) dsts).
-  apply Loc.disjoint_notin with temporaries. 
-  apply Loc.disjoint_sym; auto. simpl; tauto. 
-  transitivity (exec_seq mu e (R IT3)). 
-  symmetry. apply H1. apply notin_dests_no_overlap_dests. auto.
-  simpl; congruence. simpl; congruence.
-  apply B. apply Loc.notin_not_in; auto. congruence. congruence.
   (* other locations *)
   intros. transitivity (exec_seq mu e l). 
   symmetry. apply H1. apply notin_dests_no_overlap_dests; auto.
