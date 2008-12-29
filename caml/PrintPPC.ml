@@ -354,10 +354,10 @@ let print_instruction oc labels = function
       if Labelset.mem lbl labels then fprintf oc "%a:\n" print_label lbl
 
 let rec labels_of_code = function
-  | Coq_nil -> Labelset.empty
-  | Coq_cons((Pb lbl | Pbf(_, lbl) | Pbt(_, lbl)), c) ->
+  | [] -> Labelset.empty
+  | (Pb lbl | Pbf(_, lbl) | Pbt(_, lbl)) :: c ->
       Labelset.add lbl (labels_of_code c)
-  | Coq_cons(_, c) -> labels_of_code c
+  | _ :: c -> labels_of_code c
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
@@ -365,7 +365,7 @@ let print_function oc name code =
   fprintf oc "	.align 2\n";
   fprintf oc "	.globl %a\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
-  coqlist_iter (print_instruction oc (labels_of_code code)) code
+  List.iter (print_instruction oc (labels_of_code code)) code
 
 (* Generation of stub code for variadic functions, e.g. printf.
    Calling conventions for variadic functions are:
@@ -401,14 +401,14 @@ let variadic_stub oc stub_name fun_name ty_args =
      As an optimization, don't copy parameters that are already in
      integer registers, since these stay in place. *)
   let rec copy gpr fpr src_ofs dst_ofs = function
-    | Coq_nil -> ()
-    | Coq_cons(Tint, rem) ->
+    | [] -> ()
+    | Tint :: rem ->
         if gpr > 10 then begin
           fprintf oc "	lwz	r0, %d(r1)\n" src_ofs;
           fprintf oc "	stw	r0, %d(r1)\n" dst_ofs
         end;
         copy (gpr + 1) fpr (src_ofs + 4) (dst_ofs + 4) rem
-    | Coq_cons(Tfloat, rem) ->
+    | Tfloat :: rem ->
         if fpr <= 10 then begin
           fprintf oc "	stfd	f%d, %d(r1)\n" fpr dst_ofs
         end else begin
@@ -421,10 +421,10 @@ let variadic_stub oc stub_name fun_name ty_args =
      As an optimization, don't load parameters that are already
      in the correct integer registers. *)
   let rec load gpr ofs = function
-    | Coq_nil -> ()
-    | Coq_cons(Tint, rem) ->
+    | [] -> ()
+    | Tint :: rem ->
         load (gpr + 1) (ofs + 4) rem
-    | Coq_cons(Tfloat, rem) ->
+    | Tfloat :: rem ->
         if gpr <= 10 then
           fprintf oc "	lwz	r%d, %d(r1)\n" gpr ofs;
         if gpr + 1 <= 10 then
@@ -503,20 +503,20 @@ let print_init oc = function
 
 let print_init_data oc id =
   init_data_queue := [];
-  coqlist_iter (print_init oc) id;
+  List.iter (print_init oc) id;
   let rec print_remainder () =
     match !init_data_queue with
     | [] -> ()
     | (lbl, id) :: rem ->
         init_data_queue := rem;
         fprintf oc "L%d:\n" lbl;
-        coqlist_iter (print_init oc) id;
+        List.iter (print_init oc) id;
         print_remainder()
   in print_remainder()
 
 let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
-  | Coq_nil -> ()
+  | [] -> ()
   | _  ->
       fprintf oc "	.data\n";
       fprintf oc "	.align	3\n";
@@ -526,7 +526,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
 
 let print_program oc p =
   extfuns := IdentSet.empty;
-  coqlist_iter record_extfun p.prog_funct;
-  coqlist_iter (print_var oc) p.prog_vars;
-  coqlist_iter (print_fundef oc) p.prog_funct
+  List.iter record_extfun p.prog_funct;
+  List.iter (print_var oc) p.prog_vars;
+  List.iter (print_fundef oc) p.prog_funct
 

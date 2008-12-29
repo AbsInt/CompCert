@@ -59,9 +59,9 @@
 ../caml/PrintPPC.cmx: PPC.cmx Datatypes.cmx ../caml/Camlcoq.cmx CList.cmx \
     AST.cmx ../caml/PrintPPC.cmi 
 ../caml/RTLgenaux.cmo: Switch.cmi Integers.cmi Datatypes.cmi CminorSel.cmi \
-    ../caml/Camlcoq.cmo CList.cmi 
+    ../caml/Camlcoq.cmo 
 ../caml/RTLgenaux.cmx: Switch.cmx Integers.cmx Datatypes.cmx CminorSel.cmx \
-    ../caml/Camlcoq.cmx CList.cmx 
+    ../caml/Camlcoq.cmx 
 ../caml/RTLtypingaux.cmo: Registers.cmi RTL.cmi Op.cmi Maps.cmi Datatypes.cmi \
     ../caml/Camlcoq.cmo CList.cmi AST.cmi 
 ../caml/RTLtypingaux.cmx: Registers.cmx RTL.cmx Op.cmx Maps.cmx Datatypes.cmx \

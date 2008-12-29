@@ -37,13 +37,13 @@ type rexpr =
 
 let temp_counter = ref 0
 
-let temporaries = ref Coq_nil
+let temporaries = ref []
 
 let mktemp () =
   incr temp_counter;
   let n = Printf.sprintf "__t%d" !temp_counter in
   let id = intern_string n in
-  temporaries := Coq_cons(id, !temporaries);
+  temporaries := id :: !temporaries;
   id
 
 let convert_accu = ref []
@@ -75,11 +75,11 @@ let rec convert_rexpr = function
       Evar t
 
 and convert_rexpr_list = function
-  | Coq_nil -> Coq_nil
-  | Coq_cons(e1, el) ->
+  | [] -> []
+  | e1 :: el ->
       let c1 = convert_rexpr e1 in
       let cl = convert_rexpr_list el in
-      Coq_cons(c1, cl)
+      c1 :: cl
 
 let rec prepend_seq stmts last =
   match stmts with
@@ -149,9 +149,9 @@ let mkswitch expr (cases, dfl) =
   convert_accu := [];
   let c = convert_rexpr expr in
   let rec mktable = function
-  | [] -> Coq_nil
+  | [] -> []
   | (key, exit) :: rem ->
-      Coq_cons(Coq_pair(coqint_of_camlint key, exitnum exit), mktable rem) in
+      Coq_pair(coqint_of_camlint key, exitnum exit) :: mktable rem in
   prepend_seq !convert_accu (Sswitch(c, mktable cases, exitnum dfl))
 
 (***
@@ -174,10 +174,10 @@ let mkmatch_aux expr cases =
   let ncases = Int32.of_int (List.length cases) in
   let rec mktable n = function
     | [] -> assert false
-    | [key, action] -> Coq_nil
+    | [key, action] -> []
     | (key, action) :: rem ->
-        Coq_cons(Coq_pair(coqint_of_camlint key, nat_of_camlint n),
-                 mktable (Int32.succ n) rem) in
+        Coq_pair(coqint_of_camlint key, nat_of_camlint n)
+        :: mktable (Int32.succ n) rem in
   let sw =
     Sswitch(expr, mktable 0l cases, nat_of_camlint (Int32.pred ncases)) in
   let rec mkblocks body n = function
@@ -329,20 +329,18 @@ prog:
 ;
 
 global_declarations:
-    /* empty */                                 { Coq_nil }
-  | global_declarations global_declaration      { Coq_cons($2, $1) }
+    /* empty */                                 { [] }
+  | global_declarations global_declaration      { $2 :: $1 }
 ;
 
 global_declaration:
     VAR STRINGLIT LBRACKET INTLIT RBRACKET
-      { Coq_pair(Coq_pair($2,
-                          Coq_cons(Init_space (z_of_camlint $4), Coq_nil)),
-                 ()) }
+      { Coq_pair(Coq_pair($2, [ Init_space (z_of_camlint $4) ]), ()) }
 ;
 
 proc_list:
-    /* empty */                                 { Coq_nil }
-  | proc_list proc                              { Coq_cons($2, $1) }
+    /* empty */                                 { [] }
+  | proc_list proc                              { $2 :: $1 }
 ;
 
 /* Procedures */
@@ -355,7 +353,7 @@ proc:
       stmt_list
     RBRACE
       { let tmp = !temporaries in
-        temporaries := Coq_nil;
+        temporaries := [];
         temp_counter := 0;
         Coq_pair($1,
         Internal { fn_sig = $6;
@@ -371,21 +369,21 @@ proc:
 
 signature:
     type_ 
-               { {sig_args = Coq_nil; sig_res = Some $1} }
+               { {sig_args = []; sig_res = Some $1} }
   | VOID
-               { {sig_args = Coq_nil; sig_res = None} }
+               { {sig_args = []; sig_res = None} }
   | type_ MINUSGREATER signature
-               { let s = $3 in {s with sig_args = Coq_cons($1, s.sig_args)} }
+               { let s = $3 in {s with sig_args = $1 :: s.sig_args} }
 ;
 
 parameters:
-    /* empty */                                 { Coq_nil }
+    /* empty */                                 { [] }
   | parameter_list                              { $1 }
 ;
 
 parameter_list:
-    IDENT                                       { Coq_cons($1, Coq_nil) }
-  | parameter_list COMMA IDENT                  { Coq_cons($3, $1) }
+    IDENT                                       { $1 :: [] }
+  | parameter_list COMMA IDENT                  { $3 :: $1 }
 ;
 
 stack_declaration:
@@ -394,7 +392,7 @@ stack_declaration:
 ;
 
 var_declarations:
-    /* empty */                                 { Coq_nil }
+    /* empty */                                 { [] }
   | var_declarations var_declaration            { CList.app $2 $1 }
 ;
 
@@ -514,13 +512,13 @@ expr:
 ;
 
 expr_list:
-    /* empty */                                 { Coq_nil }
+    /* empty */                                 { [] }
   | expr_list_1                                 { $1 }
 ;
 
 expr_list_1:
-    expr                     %prec COMMA        { Coq_cons($1, Coq_nil) }
-  | expr COMMA expr_list_1                      { Coq_cons($1, $3) }
+    expr                     %prec COMMA        { $1 :: [] }
+  | expr COMMA expr_list_1                      { $1 :: $3 }
 ;
 
 memory_chunk:

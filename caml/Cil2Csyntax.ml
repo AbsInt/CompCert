@@ -88,12 +88,6 @@ let rec getFieldType f = function
 
 (** ** Some functions over lists *)
 
-(** Apply [f] to each element of the OCaml list [l]
-    and build a Coq list with the results returned by [f] *)
-let rec map_coqlist f l = match l with
-  | [] -> CList.Coq_nil
-  | a :: b -> CList.Coq_cons (f a, map_coqlist f b)
-  
 (** Keep the elements in a list from [elt] (included) to the end
     (used for the translation of the [switch] statement) *)
 let rec keepFrom elt = function
@@ -110,13 +104,6 @@ let rec keepUntil elt' = function
     (used for the translation of the [switch] statement) *)
 let keepBetween elt elt' l =
   keepUntil elt' (keepFrom elt l)
-
-(** Reverse-append over Coq lists *)
-
-let rec revappend l1 l2 =
-  match l1 with
-  | CList.Coq_nil -> l2
-  | CList.Coq_cons(hd, tl) -> revappend tl (CList.Coq_cons (hd, l2))
 
 (** ** Functions used to handle locations *)
 
@@ -162,18 +149,18 @@ let typeStringLiteral s =
   Tarray(Tint(I8, Unsigned), z_of_camlint(Int32.of_int(String.length s + 1)))
 
 let global_for_string s id =
-  let init = ref CList.Coq_nil in
+  let init = ref [] in
   let add_char c =
-    init := CList.Coq_cons(
-       AST.Init_int8(coqint_of_camlint(Int32.of_int(Char.code c))),
-       !init) in
+    init :=
+       AST.Init_int8(coqint_of_camlint(Int32.of_int(Char.code c)))
+       :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
   Datatypes.Coq_pair(Datatypes.Coq_pair(id, !init), typeStringLiteral s)
 
 let globals_for_strings globs =
   Hashtbl.fold
-    (fun s id l -> CList.Coq_cons(global_for_string s id, l))
+    (fun s id l -> global_for_string s id :: l)
     stringTable globs
 
 (** ** Handling of stubs for variadic functions *)
@@ -206,7 +193,7 @@ let declare_stub_function stub_name stub_type =
   | _ -> assert false
 
 let declare_stub_functions k =
-  Hashtbl.fold (fun n i k -> CList.Coq_cons(declare_stub_function n i, k))
+  Hashtbl.fold (fun n i k -> declare_stub_function n i :: k)
                stub_function_table k
 
 (** ** Generation of temporary variable names *)
@@ -346,13 +333,13 @@ and processCast t e =
 
 (** Convert a [Cil.exp list] into an [CamlCoq.exprlist] *)
 and processParamsE = function
-  | [] -> Coq_nil
+  | [] -> []
   | e :: l ->
       let (Expr (_, t)) as e' = convertExp e in
 	match t with
 	  | Tstruct _ | Tunion _ ->
               unsupported "function parameter of struct or union type"
-	  | _ -> Coq_cons (e', processParamsE l)
+	  | _ -> e' :: processParamsE l
 
 
 (** Convert a [Cil.exp] into a [CabsCoq.expr] *)
@@ -546,8 +533,8 @@ let convertExpFuncall e eList =
             | _ ->
                 unsupported "call to variadic function" in
           let rec typeOfExprList = function
-            | Coq_nil -> Tnil
-            | Coq_cons (Expr (_, ty), rem) -> Tcons (ty, typeOfExprList rem) in
+            | [] -> Tnil
+            | Expr (_, ty) :: rem -> Tcons (ty, typeOfExprList rem) in
           let targs = typeOfExprList params in
           let tres = convertTyp res in
           let (stub_fun_name, stub_fun_typ) =
@@ -742,8 +729,8 @@ let convertGFun fdec =
     | _ -> internal_error "convertGFun: incorrect function type"
   in
   let s = processStmtList fdec.sbody.bstmts in   (* function body -- do it first because of generated temps *)
-  let args = map_coqlist convertVarinfoParam fdec.sformals in   (* parameters*)
-  let varList = map_coqlist convertVarinfo fdec.slocals in   (* local vars *)
+  let args = List.map convertVarinfoParam fdec.sformals in   (* parameters*)
+  let varList = List.map convertVarinfo fdec.slocals in   (* local vars *)
   if v.vname = "main" then begin
     match ret with
     | Tint(_, _) -> ()
@@ -758,8 +745,8 @@ let convertGFun fdec =
 (** Auxiliary for [convertInit] *)
 
 let rec initDataLen accu = function
-  | CList.Coq_nil -> accu
-  | CList.Coq_cons(i1, il) ->
+  | [] -> accu
+  | i1 :: il ->
       let sz = match i1 with
       | Init_int8 _ -> 1l
       | Init_int16 _ -> 2l
@@ -811,19 +798,19 @@ let rec extract_constant e =
   | _ -> ICnone
 
 let init_data_of_string s =
-  let id = ref CList.Coq_nil in
+  let id = ref [] in
   let enter_char c =
     let n = coqint_of_camlint(Int32.of_int(Char.code c)) in
-    id := CList.Coq_cons(Init_int8 n, !id) in
+    id := Init_int8 n :: !id in
   enter_char '\000';
   for i = String.length s - 1 downto 0 do enter_char s.[i] done;
   !id
 
 let convertInit init =
-  let k = ref Coq_nil
+  let k = ref []
   and pos = ref 0 in
   let emit size datum =
-    k := Coq_cons(datum, !k);
+    k := datum :: !k;
     pos := !pos + size in
   let emit_space size =
     emit size (Init_space (z_of_camlint (Int32.of_int size))) in
@@ -886,7 +873,7 @@ let convertInit init =
 let convertInitInfo ty info =
   match info.init with
   | None -> 
-      CList.Coq_cons(Init_space(Csyntax.sizeof (convertTyp ty)), CList.Coq_nil)
+      [ Init_space(Csyntax.sizeof (convertTyp ty)) ]
   | Some init ->
       convertInit init
 
@@ -904,7 +891,7 @@ let convertGVar v i =
 let convertExtVar v =
   updateLoc(v.vdecl);
   let id = intern_string v.vname in
-  Datatypes.Coq_pair (Datatypes.Coq_pair(id, CList.Coq_nil),
+  Datatypes.Coq_pair (Datatypes.Coq_pair(id, []),
                       convertTyp v.vtype)
 
 (** Convert a [Cil.GVarDecl] into an external function declaration *)
@@ -923,7 +910,7 @@ let convertExtFun v =
     functions and the second component, of type [(ident * coq_type) coqlist],
     the definitions of the global variables of the program *)
 let rec processGlobals = function
-  | [] -> (CList.Coq_nil, CList.Coq_nil)
+  | [] -> ([], [])
   | g :: l ->
 	match g with
 	  | GType _ -> processGlobals l (* typedefs are unrolled... *)
@@ -940,24 +927,24 @@ let rec processGlobals = function
               | TFun (tres, Some targs, false, _) ->
                   let fn = convertExtFun v in
                   let (fList, vList) = processGlobals l in
-                  (CList.Coq_cons (fn, fList), vList)
+                  (fn :: fList, vList)
               | TFun (tres, _, _, _) ->
                   processGlobals l
               | _ ->
                   let var = convertExtVar v in
                   let (fList, vList) = processGlobals l in
-                  (fList, CList.Coq_cons (var, vList))
+                  (fList, var :: vList)
               end
 	  | GVar (v, init, loc) ->
 	      updateLoc(loc);
               let var = convertGVar v init in
               let (fList, vList) = processGlobals l in
-              (fList, CList.Coq_cons (var, vList))
+              (fList, var :: vList)
 	  | GFun (fdec, loc) ->
 	      updateLoc(loc);
               let fn = convertGFun fdec in
               let (fList, vList) = processGlobals l in
-              (CList.Coq_cons (fn, fList), vList)
+              (fn :: fList, vList)
 	  | GAsm (_, loc) ->
 	      updateLoc(loc);
               unsupported "inline assembly"
@@ -992,7 +979,7 @@ let convertFile f =
   let (funList, defList) = processGlobals (cleanupGlobals f.globals) in
   let funList' = declare_stub_functions funList in
   let funList'' = match f.globinit with
-    | Some fdec -> CList.Coq_cons (convertGFun fdec, funList')
+    | Some fdec -> convertGFun fdec :: funList'
     | None -> funList' in
   let defList' = globals_for_strings defList in
   { AST.prog_funct = funList'';

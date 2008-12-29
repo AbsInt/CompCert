@@ -77,25 +77,6 @@ let extern_atom a =
   with Not_found ->
     Printf.sprintf "<unknown atom %ld>" (camlint_of_positive a)
 
-(* Lists *)
-
-let rec coqlist_iter f = function
-    Coq_nil -> ()
-  | Coq_cons(a,l) -> f a; coqlist_iter f l
-
-let rec length_coqlist = function
-  | Coq_nil -> 0
-  | Coq_cons (x, l) -> 1 + length_coqlist l
-
-let array_of_coqlist = function
-  | Coq_nil -> [||]
-  | Coq_cons(hd, tl) as l ->
-      let a = Array.create (length_coqlist l) hd in
-      let rec fill i = function
-        | Coq_nil -> a
-        | Coq_cons(hd, tl) -> a.(i) <- hd; fill (i + 1) tl in
-      fill 1 tl
-
 (* Strings *)
 
 let char_of_ascii (Ascii.Ascii(a0, a1, a2, a3, a4, a5, a6, a7)) =

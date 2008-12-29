@@ -51,14 +51,14 @@ let rec pos_of_int n =
 module IntSet = Set.Make(struct type t = int let compare = compare end)
 
 let enumerate_aux f reach =
-  let enum = ref Coq_nil in
+  let enum = ref [] in
   let emitted = Array.make (int_of_pos f.fn_nextpc) false in
   let rec emit_block pending pc =
     let npc = int_of_pos pc in
     if emitted.(npc)
     then emit_restart pending
     else begin
-      enum := Coq_cons(pc, !enum);
+      enum := pc :: !enum;
       emitted.(npc) <- true;
       match PTree.get pc f.fn_code with
       | None -> assert false

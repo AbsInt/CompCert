@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+Require List.
 Require Iteration.
 Require Floats.
 Require RTLgen.
@@ -21,6 +22,7 @@ Require Main.
 Extract Inductive unit => "unit" [ "()" ].
 Extract Inductive bool => "bool" [ "true" "false" ].
 Extract Inductive sumbool => "bool" [ "true" "false" ].
+Extract Inductive List.list => "list" [ "[]" "(::)" ].
 
 (* Float *)
 Extract Inlined Constant Floats.float => "float".

@@ -32,8 +32,8 @@ let set_type r ty =
 
 let rec set_types rl tyl =
   match rl, tyl with
-  | Coq_nil, Coq_nil -> ()
-  | Coq_cons(r1, rs), Coq_cons(ty1, tys) -> set_type r1 ty1; set_types rs tys
+  | [], [] -> ()
+  | r1 :: rs, ty1 :: tys -> set_type r1 ty1; set_types rs tys
   | _, _ -> raise (Type_error "arity mismatch")
 
 (* First pass: process constraints of the form typeof(r) = ty *)
@@ -98,16 +98,16 @@ let type_instr retty (Coq_pair(pc, i)) =
       end
 
 let type_pass1 retty instrs = 
-  coqlist_iter (type_instr retty) instrs
+  List.iter (type_instr retty) instrs
 
 (* Second pass: extract move constraints typeof(r1) = typeof(r2)
    and solve them iteratively *)
 
 let rec extract_moves = function
-  | Coq_nil -> []
-  | Coq_cons(Coq_pair(pc, i), rem) ->
+  | [] -> []
+  | Coq_pair(pc, i) :: rem ->
       match i with
-      | Iop(Omove, Coq_cons(r1, Coq_nil), r2, _) ->
+      | Iop(Omove, [r1], r2, _) ->
           (r1, r2) :: extract_moves rem
       | Iop(Omove, _, _, _) ->
           raise (Type_error "wrong Omove")

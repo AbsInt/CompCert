@@ -28,8 +28,8 @@ module IntSet = Set.Make(IntOrd)
 
 let normalize_table tbl =
   let rec norm seen = function
-  | CList.Coq_nil -> []
-  | CList.Coq_cons(Datatypes.Coq_pair(key, act), rem) ->
+  | [] -> []
+  | Datatypes.Coq_pair(key, act) :: rem ->
       if IntSet.mem key seen
       then norm seen rem
       else (key, act) :: norm (IntSet.add key seen) rem

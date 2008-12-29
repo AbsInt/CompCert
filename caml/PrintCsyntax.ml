@@ -205,8 +205,8 @@ and print_expr_prec p (context_prec, e) =
 
 let rec print_expr_list p (first, el) =
   match el with
-  | Coq_nil -> ()
-  | Coq_cons(e1, et) ->
+  | [] -> ()
+  | e1 :: et ->
       if not first then fprintf p ",@ ";
       print_expr p e1;
       print_expr_list p (false, et)
@@ -305,12 +305,12 @@ let name_function_parameters fun_name params =
   Buffer.add_string b fun_name;
   Buffer.add_char b '(';
   begin match params with
-  | Coq_nil ->
+  | [] ->
       Buffer.add_string b "void"
   | _ ->
       let rec add_params first = function
-      | Coq_nil -> ()
-      | Coq_cons(Coq_pair(id, ty), rem) ->
+      | [] -> ()
+      | Coq_pair(id, ty) :: rem ->
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl (extern_atom id) ty);
           add_params false rem in
@@ -325,7 +325,7 @@ let print_function p id f =
                                                   f.fn_params)
                         f.fn_return);
   fprintf p "@[<v 2>{@ ";
-  coqlist_iter
+  List.iter
     (fun (Coq_pair(id, ty)) ->
       fprintf p "%s;@ " (name_cdecl (extern_atom id) ty))
     f.fn_vars;
@@ -342,9 +342,9 @@ let print_fundef p (Coq_pair(id, fd)) =
 
 let string_of_init id =
   try
-    let s = String.create (length_coqlist id) in
+    let s = String.create (List.length id) in
     let i = ref 0 in
-    coqlist_iter
+    List.iter
       (function
         | Init_int8 n ->
             s.[!i] <- Char.chr(Int32.to_int(camlint_of_coqint n));
@@ -382,16 +382,16 @@ let print_init p = function
 
 let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
   match init with
-  | Coq_nil ->
+  | [] ->
       fprintf p "extern %s;@ @ "
               (name_cdecl (extern_atom id) ty)
-  | Coq_cons(Init_space _, Coq_nil) ->
+  | [Init_space _] ->
       fprintf p "%s;@ @ "
               (name_cdecl (extern_atom id) ty)
   | _ ->
       fprintf p "@[<hov 2>%s = {@ "
               (name_cdecl (extern_atom id) ty);
-      coqlist_iter (print_init p) init;
+      List.iter (print_init p) init;
       fprintf p "};@]@ @ "
 
 (* Collect struct and union types *)
@@ -432,8 +432,8 @@ let rec collect_expr (Expr(ed, ty)) =
   | Efield(e1, id) -> collect_expr e1
 
 let rec collect_expr_list = function
-  | Coq_nil -> ()
-  | Coq_cons(hd, tl) -> collect_expr hd; collect_expr_list tl
+  | [] -> ()
+  | hd :: tl -> collect_expr hd; collect_expr_list tl
 
 let rec collect_stmt = function
   | Sskip -> ()
@@ -459,8 +459,8 @@ and collect_cases = function
 
 let collect_function f =
   collect_type f.fn_return;
-  coqlist_iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_params;
-  coqlist_iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_vars;
+  List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_params;
+  List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_vars;
   collect_stmt f.fn_body
 
 let collect_fundef (Coq_pair(id, fd)) =
@@ -472,8 +472,8 @@ let collect_globvar (Coq_pair(Coq_pair(id, init), ty)) =
   collect_type ty
 
 let collect_program p =
-  coqlist_iter collect_globvar p.prog_vars;
-  coqlist_iter collect_fundef p.prog_funct
+  List.iter collect_globvar p.prog_vars;
+  List.iter collect_fundef p.prog_funct
 
 let declare_struct_or_union p (name, fld) =
   fprintf p "%s;@ @ " name
@@ -494,8 +494,8 @@ let print_program p prog =
   fprintf p "@[<v 0>";
   StructUnionSet.iter (declare_struct_or_union p) !struct_unions;
   StructUnionSet.iter (print_struct_or_union p) !struct_unions;
-  coqlist_iter (print_globvar p) prog.prog_vars;
-  coqlist_iter (print_fundef p) prog.prog_funct;
+  List.iter (print_globvar p) prog.prog_vars;
+  List.iter (print_fundef p) prog.prog_funct;
   fprintf p "@]@."
 
 

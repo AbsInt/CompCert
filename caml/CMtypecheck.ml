@@ -35,9 +35,7 @@ let tfloat = Base Tfloat
 
 let ty_of_typ = function Tint -> tint | Tfloat -> tfloat
 
-let rec ty_of_sig_args = function
-  | Coq_nil -> []
-  | Coq_cons(t, l) -> ty_of_typ t :: ty_of_sig_args l
+let ty_of_sig_args tyl = List.map ty_of_typ tyl
 
 let rec repr t =
   match t with
@@ -244,8 +242,8 @@ let rec type_expr env lenv e =
 
 and type_exprlist env lenv el =
   match el with
-  | Coq_nil -> []
-  | Coq_cons (e1, et) ->
+  | [] -> []
+  | e1 :: et ->
       let te1 = type_expr env lenv e1 in
       let tet = type_exprlist env lenv et in
       (te1 :: tet)
@@ -352,8 +350,8 @@ let rec type_stmt env blk ret s =
 
 let rec env_of_vars idl =
   match idl with
-  | Coq_nil -> []
-  | Coq_cons(id1, idt) -> (id1, newvar()) :: env_of_vars idt
+  | [] -> []
+  | id1 :: idt -> (id1, newvar()) :: env_of_vars idt
 
 let type_function id f =
   try
@@ -369,4 +367,4 @@ let type_fundef (Coq_pair (id, fd)) =
   | External ef -> ()
 
 let type_program p =
-  coqlist_iter type_fundef p.prog_funct; p
+  List.iter type_fundef p.prog_funct; p
