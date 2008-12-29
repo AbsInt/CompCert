@@ -46,6 +46,10 @@
     Coqlib.cmi ../caml/Camlcoq.cmo CList.cmi BinPos.cmi 
 ../caml/Linearizeaux.cmx: Maps.cmx Lattice.cmx LTL.cmx Datatypes.cmx \
     Coqlib.cmx ../caml/Camlcoq.cmx CList.cmx BinPos.cmx 
+../caml/PrintCshm.cmo: Integers.cmi Datatypes.cmi Csharpminor.cmi \
+    ../caml/Camlcoq.cmo CList.cmi AST.cmi 
+../caml/PrintCshm.cmx: Integers.cmx Datatypes.cmx Csharpminor.cmx \
+    ../caml/Camlcoq.cmx CList.cmx AST.cmx 
 ../caml/PrintCsyntax.cmo: Datatypes.cmi Csyntax.cmi ../caml/Camlcoq.cmo \
     CList.cmi AST.cmi 
 ../caml/PrintCsyntax.cmx: Datatypes.cmx Csyntax.cmx ../caml/Camlcoq.cmx \
@@ -170,7 +174,7 @@ PPC.cmi: Values.cmi Specif.cmi Mem.cmi Integers.cmi Globalenvs.cmi Floats.cmi \
 Registers.cmi: Specif.cmi OrderedType.cmi Ordered.cmi Maps.cmi Datatypes.cmi \
     Coqlib.cmi CList.cmi CInt.cmi BinPos.cmi BinInt.cmi AST.cmi 
 Reload.cmi: Specif.cmi Parallelmove.cmi Op.cmi Locations.cmi Linear.cmi \
-    LTLin.cmi Datatypes.cmi Conventions.cmi CList.cmi AST.cmi 
+    LTLin.cmi Integers.cmi Datatypes.cmi Conventions.cmi CList.cmi AST.cmi 
 RTLgen.cmi: Switch.cmi Specif.cmi Registers.cmi RTL.cmi Op.cmi Maps.cmi \
     Integers.cmi Errors.cmi Datatypes.cmi Coqlib.cmi CminorSel.cmi Cminor.cmi \
     CString.cmi CList.cmi BinPos.cmi Ascii.cmi AST.cmi 
@@ -446,9 +450,11 @@ Registers.cmx: Specif.cmx OrderedType.cmx Ordered.cmx Maps.cmx FSetAVL.cmx \
     Datatypes.cmx Coqlib.cmx CList.cmx BinPos.cmx BinInt.cmx AST.cmx \
     Registers.cmi 
 Reload.cmo: Specif.cmi Parallelmove.cmi Op.cmi Locations.cmi Linear.cmi \
-    LTLin.cmi Datatypes.cmi Conventions.cmi CList.cmi AST.cmi Reload.cmi 
+    LTLin.cmi Integers.cmi Datatypes.cmi Conventions.cmi CList.cmi AST.cmi \
+    Reload.cmi 
 Reload.cmx: Specif.cmx Parallelmove.cmx Op.cmx Locations.cmx Linear.cmx \
-    LTLin.cmx Datatypes.cmx Conventions.cmx CList.cmx AST.cmx Reload.cmi 
+    LTLin.cmx Integers.cmx Datatypes.cmx Conventions.cmx CList.cmx AST.cmx \
+    Reload.cmi 
 RTLgen.cmo: Switch.cmi Specif.cmi Registers.cmi ../caml/RTLgenaux.cmo RTL.cmi \
     Op.cmi Maps.cmi Integers.cmi Errors.cmi Datatypes.cmi Coqlib.cmi \
     CminorSel.cmi Cminor.cmi CString.cmi CList.cmi BinPos.cmi Ascii.cmi \

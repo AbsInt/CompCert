@@ -616,9 +616,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Peqv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.notint (Val.xor rs#r1 rs#r2)))) m
   | Pextsb rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.cast8signed rs#r1))) m
+      OK (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) m
   | Pextsh rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.cast16signed rs#r1))) m
+      OK (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
   | Pfreeframe ofs =>
       match Mem.loadv Mint32 m (Val.add rs#GPR1 (Vint ofs)) with
       | None => Error

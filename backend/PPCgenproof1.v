@@ -95,7 +95,8 @@ Proof.
   rewrite Zmult_assoc. rewrite Zplus_comm. rewrite Z_mod_plus. auto.
   omega.
   eapply H0. apply Int.eqm_sym. apply Int.eqm_unsigned_repr. 
-  unfold low_s. unfold Int.cast16signed. 
+  unfold low_s. unfold Int.sign_ext. 
+  change (two_p 16) with 65536. change (two_p (16-1)) with 32768. 
   set (N := Int.unsigned n).
   case (zlt (N mod 65536) 32768); intro.
   apply H0 with (N - N mod 65536). auto with ints.
@@ -1273,19 +1274,19 @@ Proof.
   (* Ocast8unsigned *)
   exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (ms m0) Int.zero (Int.repr 255)))).
   split. apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs)); auto. reflexivity.
-  replace (Val.cast8unsigned (ms m0))
+  replace (Val.zero_ext 8 (ms m0))
       with (Val.rolm (ms m0) Int.zero (Int.repr 255)).
   auto with ppcgen. 
-  unfold Val.rolm, Val.cast8unsigned. destruct (ms m0); auto. 
-  rewrite Int.rolm_zero. rewrite Int.cast8unsigned_and. auto.
+  unfold Val.rolm, Val.zero_ext. destruct (ms m0); auto. 
+  rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
   (* Ocast16unsigned *)
   exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (ms m0) Int.zero (Int.repr 65535)))).
   split. apply exec_straight_one. repeat (rewrite (ireg_val ms sp rs)); auto. reflexivity.
-  replace (Val.cast16unsigned (ms m0))
+  replace (Val.zero_ext 16 (ms m0))
       with (Val.rolm (ms m0) Int.zero (Int.repr 65535)).
   auto with ppcgen. 
-  unfold Val.rolm, Val.cast16unsigned. destruct (ms m0); auto. 
-  rewrite Int.rolm_zero. rewrite Int.cast16unsigned_and. auto.
+  unfold Val.rolm, Val.zero_ext. destruct (ms m0); auto. 
+  rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
   (* Oaddimm *)
   generalize (addimm_correct (ireg_of res) (ireg_of m0) i k rs m
                             (ireg_of_not_GPR12 m0)).

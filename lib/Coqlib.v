@@ -356,6 +356,25 @@ Proof.
   rewrite two_power_nat_S. omega.
 Qed.
 
+Lemma two_p_monotone:
+  forall x y, 0 <= x <= y -> two_p x <= two_p y.
+Proof.
+  intros.
+  replace (two_p x) with (two_p x * 1) by omega. 
+  replace y with (x + (y - x)) by omega.
+  rewrite two_p_is_exp; try omega.
+  apply Zmult_le_compat_l.
+  assert (two_p (y - x) > 0). apply two_p_gt_ZERO. omega. omega.
+  assert (two_p x > 0). apply two_p_gt_ZERO. omega. omega.
+Qed.
+
+Lemma two_power_nat_two_p:
+  forall x, two_power_nat x = two_p (Z_of_nat x).
+Proof.
+  induction x. auto. 
+  rewrite two_power_nat_S. rewrite inj_S. rewrite two_p_S. omega. omega.
+Qed.
+
 (** Properties of [Zmin] and [Zmax] *)
 
 Lemma Zmin_spec:
@@ -438,6 +457,73 @@ Lemma Zdiv_unique:
 Proof.
   intros. subst x. rewrite Zplus_comm.
   rewrite Z_div_plus. rewrite (Zdiv_small b y H0). omega. omega.
+Qed.
+
+Lemma Zdiv_Zdiv:
+  forall a b c,
+  b > 0 -> c > 0 -> (a / b) / c = a / (b * c).
+Proof.
+  intros.
+  generalize (Z_div_mod_eq a b H). generalize (Z_mod_lt a b H). intros.
+  generalize (Z_div_mod_eq (a/b) c H0). generalize (Z_mod_lt (a/b) c H0). intros.
+  set (q1 := a / b) in *. set (r1 := a mod b) in *.
+  set (q2 := q1 / c) in *. set (r2 := q1 mod c) in *.
+  symmetry. apply Zdiv_unique with (r2 * b + r1). 
+  rewrite H2. rewrite H4. ring.
+  split. 
+  assert (0 <= r2 * b). apply Zmult_le_0_compat. omega. omega. omega.
+  assert ((r2 + 1) * b <= c * b).
+  apply Zmult_le_compat_r. omega. omega. 
+  replace ((r2 + 1) * b) with (r2 * b + b) in H5 by ring.
+  replace (c * b) with (b * c) in H5 by ring.
+  omega.
+Qed.
+
+Lemma Zmult_le_compat_l_neg :
+  forall n m p:Z, n >= m -> p <= 0 -> p * n <= p * m.
+Proof.
+  intros.
+  assert ((-p) * n >= (-p) * m). apply Zmult_ge_compat_l. auto. omega.
+  replace (p * n) with (- ((-p) * n)) by ring.
+  replace (p * m) with (- ((-p) * m)) by ring.
+  omega.
+Qed.
+
+Lemma Zdiv_interval_1:
+  forall lo hi a b,
+  lo <= 0 -> hi > 0 -> b > 0 ->
+  lo * b <= a < hi * b ->
+  lo <= a/b < hi.
+Proof.
+  intros. 
+  generalize (Z_div_mod_eq a b H1). generalize (Z_mod_lt a b H1). intros.
+  set (q := a/b) in *. set (r := a mod b) in *.
+  split.
+  assert (lo < (q + 1)).
+  apply Zmult_lt_reg_r with b. omega.  
+  apply Zle_lt_trans with a. omega. 
+  replace ((q + 1) * b) with (b * q + b) by ring.
+  omega.
+  omega.
+  apply Zmult_lt_reg_r with b. omega. 
+  replace (q * b) with (b * q) by ring.
+  omega.
+Qed.
+
+Lemma Zdiv_interval_2:
+  forall lo hi a b,
+  lo <= a <= hi -> lo <= 0 -> hi > 0 -> b > 0 ->
+  lo <= a/b <= hi.
+Proof.
+  intros.
+  assert (lo <= a / b < hi+1).
+  apply Zdiv_interval_1. omega. omega. auto.
+  assert (lo * b <= lo * 1). apply Zmult_le_compat_l_neg. omega. omega. 
+  replace (lo * 1) with lo in H3 by ring.
+  assert ((hi + 1) * 1 <= (hi + 1) * b). apply Zmult_le_compat_l. omega. omega.
+  replace ((hi + 1) * 1) with (hi + 1) in H4 by ring.
+  omega.
+  omega.
 Qed.
 
 (** Alignment: [align n amount] returns the smallest multiple of [amount]

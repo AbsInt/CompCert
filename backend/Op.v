@@ -175,10 +175,10 @@ Definition eval_operation
       | Some b => Some (Vptr b ofs)
       end
   | Oaddrstack ofs, nil => offset_sp sp ofs
-  | Ocast8signed, v1 :: nil => Some (Val.cast8signed v1)
-  | Ocast8unsigned, v1 :: nil => Some (Val.cast8unsigned v1)
-  | Ocast16signed, v1 :: nil => Some (Val.cast16signed v1)
-  | Ocast16unsigned, v1 :: nil => Some (Val.cast16unsigned v1)
+  | Ocast8signed, v1 :: nil => Some (Val.sign_ext 8 v1)
+  | Ocast8unsigned, v1 :: nil => Some (Val.zero_ext 8 v1)
+  | Ocast16signed, v1 :: nil => Some (Val.sign_ext 16 v1)
+  | Ocast16unsigned, v1 :: nil => Some (Val.zero_ext 16 v1)
   | Oadd, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.add n1 n2))
   | Oadd, Vint n1 :: Vptr b2 n2 :: nil => Some (Vptr b2 (Int.add n2 n1))
   | Oadd, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.add n1 n2))
@@ -632,10 +632,10 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Ofloatconst n, nil => Vfloat n
   | Oaddrsymbol s ofs, nil => find_symbol_offset s ofs
   | Oaddrstack ofs, nil => Val.add sp (Vint ofs)
-  | Ocast8signed, v1::nil => Val.cast8signed v1
-  | Ocast8unsigned, v1::nil => Val.cast8unsigned v1
-  | Ocast16signed, v1::nil => Val.cast16signed v1
-  | Ocast16unsigned, v1::nil => Val.cast16unsigned v1
+  | Ocast8signed, v1::nil => Val.sign_ext 8 v1
+  | Ocast8unsigned, v1::nil => Val.zero_ext 8 v1
+  | Ocast16signed, v1::nil => Val.sign_ext 16 v1
+  | Ocast16unsigned, v1::nil => Val.zero_ext 16 v1
   | Oadd, v1::v2::nil => Val.add v1 v2
   | Oaddimm n, v1::nil => Val.add v1 (Vint n)
   | Osub, v1::v2::nil => Val.sub v1 v2
@@ -843,10 +843,10 @@ Proof.
   exists v2; auto.
   destruct (Genv.find_symbol genv i); inv H0. TrivialExists.
   exists v1; auto.
-  exists (Val.cast8signed v2); split. auto. apply Val.cast8signed_lessdef; auto.
-  exists (Val.cast8unsigned v2); split. auto. apply Val.cast8unsigned_lessdef; auto.
-  exists (Val.cast16signed v2); split. auto. apply Val.cast16signed_lessdef; auto.
-  exists (Val.cast16unsigned v2); split. auto. apply Val.cast16unsigned_lessdef; auto.
+  exists (Val.sign_ext 8 v2); split. auto. apply Val.sign_ext_lessdef; auto.
+  exists (Val.zero_ext 8 v2); split. auto. apply Val.zero_ext_lessdef; auto.
+  exists (Val.sign_ext 16 v2); split. auto. apply Val.sign_ext_lessdef; auto.
+  exists (Val.zero_ext 16 v2); split. auto. apply Val.zero_ext_lessdef; auto.
   destruct (eq_block b b0); inv H0. TrivialExists.
   destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
   destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.

@@ -567,14 +567,14 @@ Qed.
 Lemma loadv_8_signed_unsigned:
   forall m a,
   Mem.loadv Mint8signed m a = 
-    option_map Val.cast8signed (Mem.loadv Mint8unsigned m a).
+    option_map (Val.sign_ext 8) (Mem.loadv Mint8unsigned m a).
 Proof.
   intros. unfold Mem.loadv. destruct a; try reflexivity.
   unfold load. rewrite (in_bounds_equiv Mint8signed Mint8unsigned).
   destruct (in_bounds m Mint8unsigned b (Int.signed i)); auto.
   simpl.
   destruct (getN 0 (Int.signed i) (contents (blocks m b))); auto.
-  simpl. rewrite Int.cast8_signed_unsigned. auto.
+  simpl. rewrite Int.sign_ext_zero_ext. auto. compute; auto. 
   auto.
 Qed.
 

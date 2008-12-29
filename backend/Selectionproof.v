@@ -748,40 +748,44 @@ Qed.
 Theorem eval_cast8signed:
   forall le a v,
   eval_expr ge sp e m le a v ->
-  eval_expr ge sp e m le (cast8signed a) (Val.cast8signed v).
+  eval_expr ge sp e m le (cast8signed a) (Val.sign_ext 8 v).
 Proof. 
   intros until v; unfold cast8signed; case (cast8signed_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Int.cast8_signed_idem. reflexivity.
+  EvalOp. simpl. subst v. destruct v1; simpl; auto.
+  rewrite Int.sign_ext_idem. reflexivity. compute; auto.
   EvalOp.
 Qed.
 
 Theorem eval_cast8unsigned:
   forall le a v,
   eval_expr ge sp e m le a v ->
-  eval_expr ge sp e m le (cast8unsigned a) (Val.cast8unsigned v).
+  eval_expr ge sp e m le (cast8unsigned a) (Val.zero_ext 8 v).
 Proof. 
   intros until v; unfold cast8unsigned; case (cast8unsigned_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Int.cast8_unsigned_idem. reflexivity.
+  EvalOp. simpl. subst v. destruct v1; simpl; auto.
+  rewrite Int.zero_ext_idem. reflexivity. compute; auto.
   EvalOp.
 Qed.
 
 Theorem eval_cast16signed:
   forall le a v,
   eval_expr ge sp e m le a v ->
-  eval_expr ge sp e m le (cast16signed a) (Val.cast16signed v).
+  eval_expr ge sp e m le (cast16signed a) (Val.sign_ext 16 v).
 Proof. 
   intros until v; unfold cast16signed; case (cast16signed_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Int.cast16_signed_idem. reflexivity.
+  EvalOp. simpl. subst v. destruct v1; simpl; auto.
+  rewrite Int.sign_ext_idem. reflexivity. compute; auto.
   EvalOp.
 Qed.
 
 Theorem eval_cast16unsigned:
   forall le a v,
   eval_expr ge sp e m le a v ->
-  eval_expr ge sp e m le (cast16unsigned a) (Val.cast16unsigned v).
+  eval_expr ge sp e m le (cast16unsigned a) (Val.zero_ext 16 v).
 Proof. 
   intros until v; unfold cast16unsigned; case (cast16unsigned_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Int.cast16_unsigned_idem. reflexivity.
+  EvalOp. simpl. subst v. destruct v1; simpl; auto.
+  rewrite Int.zero_ext_idem. reflexivity. compute; auto.
   EvalOp.
 Qed.
 

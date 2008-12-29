@@ -230,10 +230,10 @@ Definition eval_constant (sp: val) (cst: constant) : option val :=
 
 Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   match op, arg with
-  | Ocast8unsigned, _ => Some (Val.cast8unsigned arg)
-  | Ocast8signed, _ => Some (Val.cast8signed arg)
-  | Ocast16unsigned, _ => Some (Val.cast16unsigned arg)
-  | Ocast16signed, _ => Some (Val.cast16signed arg)
+  | Ocast8unsigned, _ => Some (Val.zero_ext 8 arg)
+  | Ocast8signed, _ => Some (Val.sign_ext 8 arg)
+  | Ocast16unsigned, _ => Some (Val.zero_ext 16 arg)
+  | Ocast16signed, _ => Some (Val.sign_ext 16 arg)
   | Onegint, Vint n1 => Some (Vint (Int.neg n1))
   | Onotbool, Vint n1 => Some (Val.of_bool (Int.eq n1 Int.zero))
   | Onotbool, Vptr b1 n1 => Some Vfalse

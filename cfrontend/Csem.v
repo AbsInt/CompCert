@@ -351,10 +351,10 @@ Definition sem_binary_operation
 
 Definition cast_int_int (sz: intsize) (sg: signedness) (i: int) : int :=
   match sz, sg with
-  | I8, Signed => Int.cast8signed i
-  | I8, Unsigned => Int.cast8unsigned i
-  | I16, Signed => Int.cast16signed i
-  | I16, Unsigned => Int.cast16unsigned i 
+  | I8, Signed => Int.sign_ext 8 i
+  | I8, Unsigned => Int.zero_ext 8 i
+  | I16, Signed => Int.sign_ext 16 i
+  | I16, Unsigned => Int.zero_ext 16 i 
   | I32 , _ => i
   end.
 

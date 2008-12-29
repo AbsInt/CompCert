@@ -80,7 +80,7 @@ Definition freg_of (r: mreg) : freg :=
 
 Definition low_u (n: int) := Int.and n (Int.repr 65535).
 Definition high_u (n: int) := Int.shru n (Int.repr 16).
-Definition low_s (n: int) := Int.cast16signed n.
+Definition low_s (n: int) := Int.sign_ext 16 n.
 Definition high_s (n: int) := Int.shru (Int.sub n (low_s n)) (Int.repr 16).
 
 (** Smart constructors for arithmetic operations involving

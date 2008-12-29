@@ -1932,12 +1932,12 @@ Inductive val_content_inject (f: meminj): memory_chunk -> val -> val -> Prop :=
   | val_content_inject_8:
       forall chunk n1 n2,
       chunk = Mint8unsigned \/ chunk = Mint8signed ->
-      Int.cast8unsigned n1 = Int.cast8unsigned n2 ->
+      Int.zero_ext 8 n1 = Int.zero_ext 8 n2 ->
       val_content_inject f chunk (Vint n1) (Vint n2)
   | val_content_inject_16:
       forall chunk n1 n2,
       chunk = Mint16unsigned \/ chunk = Mint16signed ->
-      Int.cast16unsigned n1 = Int.cast16unsigned n2 ->
+      Int.zero_ext 16 n1 = Int.zero_ext 16 n2 ->
       val_content_inject f chunk (Vint n1) (Vint n2)
   | val_content_inject_32:
       forall f1 f2,
@@ -1957,20 +1957,20 @@ Proof.
 
   elim H1; intro; subst chunk;
   destruct chunk'; simpl in H0; try discriminate; simpl.
-  replace (Int.cast8signed n1) with (Int.cast8signed n2).
-  constructor. apply Int.cast8_signed_equal_if_unsigned_equal; auto.
+  replace (Int.sign_ext 8 n1) with (Int.sign_ext 8 n2).
+  constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
   rewrite H2. constructor.
-  replace (Int.cast8signed n1) with (Int.cast8signed n2).
-  constructor. apply Int.cast8_signed_equal_if_unsigned_equal; auto.
+  replace (Int.sign_ext 8 n1) with (Int.sign_ext 8 n2).
+  constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
   rewrite H2. constructor.
 
   elim H1; intro; subst chunk;
   destruct chunk'; simpl in H0; try discriminate; simpl.
-  replace (Int.cast16signed n1) with (Int.cast16signed n2).
-  constructor. apply Int.cast16_signed_equal_if_unsigned_equal; auto.
+  replace (Int.sign_ext 16 n1) with (Int.sign_ext 16 n2).
+  constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
   rewrite H2. constructor.
-  replace (Int.cast16signed n1) with (Int.cast16signed n2).
-  constructor. apply Int.cast16_signed_equal_if_unsigned_equal; auto.
+  replace (Int.sign_ext 16 n1) with (Int.sign_ext 16 n2).
+  constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
   rewrite H2. constructor.
 
   destruct chunk'; simpl in H0; try discriminate; simpl.

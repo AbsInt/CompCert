@@ -219,10 +219,10 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | Ointconst n, nil => I n
   | Ofloatconst n, nil => F n
   | Oaddrsymbol s n, nil => S s n
-  | Ocast8signed, I n1 :: nil => I(Int.cast8signed n)
-  | Ocast8unsigned, I n1 :: nil => I(Int.cast8unsigned n)
-  | Ocast16signed, I n1 :: nil => I(Int.cast16signed n)
-  | Ocast16unsigned, I n1 :: nil => I(Int.cast16unsigned n)
+  | Ocast8signed, I n1 :: nil => I(Int.sign_ext 8 n)
+  | Ocast8unsigned, I n1 :: nil => I(Int.zero_ext 8 n)
+  | Ocast16signed, I n1 :: nil => I(Int.sign_ext 16 n)
+  | Ocast16unsigned, I n1 :: nil => I(Int.zero_ext 16 n)
   | Oadd, I n1 :: I n2 :: nil => I(Int.add n1 n2)
   | Oadd, S s1 n1 :: I n2 :: nil => S s1 (Int.add n1 n2)
   | Oaddimm n, I n1 :: nil => I (Int.add n1 n)
@@ -533,9 +533,9 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | eval_static_operation_case4 s n =>
       S s n
   | eval_static_operation_case6 n1 =>
-      I(Int.cast8signed n1)
+      I(Int.sign_ext 8 n1)
   | eval_static_operation_case7 n1 =>
-      I(Int.cast16signed n1)
+      I(Int.sign_ext 16 n1)
   | eval_static_operation_case8 n1 n2 =>
       I(Int.add n1 n2)
   | eval_static_operation_case9 s1 n1 n2 =>
@@ -618,9 +618,9 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
       | Some b => I(if b then Int.one else Int.zero)
       end
   | eval_static_operation_case48 n1 =>
-      I(Int.cast8unsigned n1)
+      I(Int.zero_ext 8 n1)
   | eval_static_operation_case49 n1 =>
-      I(Int.cast16unsigned n1)
+      I(Int.zero_ext 16 n1)
   | eval_static_operation_case50 n1 =>
       I(Float.intuoffloat n1)
   | eval_static_operation_default op vl =>

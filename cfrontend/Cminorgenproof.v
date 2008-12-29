@@ -962,16 +962,16 @@ Lemma make_cast_correct:
 Proof.
   intros. destruct chunk; simpl make_cast.
 
-  exists (Val.cast8signed tv). 
+  exists (Val.sign_ext 8 tv). 
   split. eauto with evalexpr. inversion H0; simpl; constructor.
 
-  exists (Val.cast8unsigned tv). 
+  exists (Val.zero_ext 8 tv). 
   split. eauto with evalexpr. inversion H0; simpl; constructor.
 
-  exists (Val.cast16signed tv). 
+  exists (Val.sign_ext 16 tv). 
   split. eauto with evalexpr. inversion H0; simpl; constructor.
 
-  exists (Val.cast16unsigned tv). 
+  exists (Val.zero_ext 16 tv). 
   split. eauto with evalexpr. inversion H0; simpl; constructor.
 
   exists tv.
@@ -1025,10 +1025,10 @@ Proof.
   inv H; simpl in H6; inv H6;
   econstructor; (split; [eauto|idtac]);
   destruct v1; simpl in H0; inv H0; try (constructor; constructor).
-  apply val_content_inject_8. auto. apply Int.cast8_unsigned_idem.
-  apply val_content_inject_8; auto. apply Int.cast8_unsigned_signed. 
-  apply val_content_inject_16; auto. apply Int.cast16_unsigned_idem. 
-  apply val_content_inject_16; auto. apply Int.cast16_unsigned_signed. 
+  apply val_content_inject_8. auto. apply Int.zero_ext_idem. compute; auto.
+  apply val_content_inject_8; auto. apply Int.zero_ext_sign_ext. compute; auto.
+  apply val_content_inject_16; auto. apply Int.zero_ext_idem. compute; auto.
+  apply val_content_inject_16; auto. apply Int.zero_ext_sign_ext. compute; auto.
   apply val_content_inject_32. apply Float.singleoffloat_idem. 
 Qed.
 

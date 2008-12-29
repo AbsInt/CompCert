@@ -150,27 +150,15 @@ Definition notbool (v: val) : val :=
   | _ => Vundef
   end.
 
-Definition cast8signed (v: val) : val :=
+Definition zero_ext (nbits: Z) (v: val) : val :=
   match v with
-  | Vint n => Vint(Int.cast8signed n)
+  | Vint n => Vint(Int.zero_ext nbits n)
   | _ => Vundef
   end.
 
-Definition cast8unsigned (v: val) : val :=
+Definition sign_ext (nbits: Z) (v: val) : val :=
   match v with
-  | Vint n => Vint(Int.cast8unsigned n)
-  | _ => Vundef
-  end.
-
-Definition cast16signed (v: val) : val :=
-  match v with
-  | Vint n => Vint(Int.cast16signed n)
-  | _ => Vundef
-  end.
-
-Definition cast16unsigned (v: val) : val :=
-  match v with
-  | Vint n => Vint(Int.cast16unsigned n)
+  | Vint n => Vint(Int.sign_ext nbits n)
   | _ => Vundef
   end.
 
@@ -300,6 +288,15 @@ Definition rolm (v: val) (amount mask: int): val :=
   | _ => Vundef
   end.
 
+Definition ror (v1 v2: val): val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 =>
+     if Int.ltu n2 (Int.repr 32)
+     then Vint(Int.ror n1 n2)
+     else Vundef
+  | _, _ => Vundef
+  end.
+
 Definition addf (v1 v2: val): val :=
   match v1, v2 with
   | Vfloat f1, Vfloat f2 => Vfloat(Float.add f1 f2)
@@ -377,10 +374,10 @@ Definition cmpf (c: comparison) (v1 v2: val): val :=
 
 Definition load_result (chunk: memory_chunk) (v: val) :=
   match chunk, v with
-  | Mint8signed, Vint n => Vint (Int.cast8signed n)
-  | Mint8unsigned, Vint n => Vint (Int.cast8unsigned n)
-  | Mint16signed, Vint n => Vint (Int.cast16signed n)
-  | Mint16unsigned, Vint n => Vint (Int.cast16unsigned n)
+  | Mint8signed, Vint n => Vint (Int.sign_ext 8 n)
+  | Mint8unsigned, Vint n => Vint (Int.zero_ext 8 n)
+  | Mint16signed, Vint n => Vint (Int.sign_ext 16 n)
+  | Mint16unsigned, Vint n => Vint (Int.zero_ext 16 n)
   | Mint32, Vint n => Vint n
   | Mint32, Vptr b ofs => Vptr b ofs
   | Mfloat32, Vfloat f => Vfloat(Float.singleoffloat f)
@@ -391,15 +388,17 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
 (** Theorems on arithmetic operations. *)
 
 Theorem cast8unsigned_and:
-  forall x, cast8unsigned x = and x (Vint(Int.repr 255)).
+  forall x, zero_ext 8 x = and x (Vint(Int.repr 255)).
 Proof.
-  destruct x; simpl; auto. decEq. apply Int.cast8unsigned_and.
+  destruct x; simpl; auto. decEq. 
+  change 255 with (two_p 8 - 1). apply Int.zero_ext_and. vm_compute; auto.
 Qed.
 
 Theorem cast16unsigned_and:
-  forall x, cast16unsigned x = and x (Vint(Int.repr 65535)).
+  forall x, zero_ext 16 x = and x (Vint(Int.repr 65535)).
 Proof.
-  destruct x; simpl; auto. decEq. apply Int.cast16unsigned_and.
+  destruct x; simpl; auto. decEq. 
+  change 65535 with (two_p 16 - 1). apply Int.zero_ext_and. vm_compute; auto.
 Qed.
 
 Theorem istrue_not_isfalse:
@@ -530,6 +529,12 @@ Qed.
 Theorem sub_add_opp: forall x y, sub x (Vint y) = add x (Vint (Int.neg y)).
 Proof.
   destruct x; intro y; simpl; auto; rewrite Int.sub_add_opp; auto.
+Qed.
+
+Theorem sub_opp_add: forall x y, sub x (Vint (Int.neg y)) = add x (Vint y).
+Proof.
+  intros. unfold sub, add.
+  destruct x; auto; rewrite Int.sub_add_opp; rewrite Int.neg_involutive; auto.
 Qed.
 
 Theorem sub_add_l:
@@ -823,6 +828,13 @@ Proof.
   apply notbool_idem2.
 Qed.
 
+Theorem negate_cmpf_ne:
+  forall v1 v2, notbool (cmpf Ceq v1 v2) = cmpf Cne v1 v2.
+Proof.
+  destruct v1; destruct v2; simpl; auto.
+  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1. auto. 
+Qed.
+
 Lemma or_of_bool:
   forall b1 b2, or (of_bool b1) (of_bool b2) = of_bool (b1 || b2).
 Proof.
@@ -940,26 +952,14 @@ Proof.
   intros. inv H. auto. destruct chunk; simpl; auto.
 Qed.
 
-Lemma cast8signed_lessdef:
-  forall v1 v2, lessdef v1 v2 -> lessdef (cast8signed v1) (cast8signed v2).
+Lemma zero_ext_lessdef:
+  forall n v1 v2, lessdef v1 v2 -> lessdef (zero_ext n v1) (zero_ext n v2).
 Proof.
   intros; inv H; simpl; auto.
 Qed.
 
-Lemma cast8unsigned_lessdef:
-  forall v1 v2, lessdef v1 v2 -> lessdef (cast8unsigned v1) (cast8unsigned v2).
-Proof.
-  intros; inv H; simpl; auto.
-Qed.
-
-Lemma cast16signed_lessdef:
-  forall v1 v2, lessdef v1 v2 -> lessdef (cast16signed v1) (cast16signed v2).
-Proof.
-  intros; inv H; simpl; auto.
-Qed.
-
-Lemma cast16unsigned_lessdef:
-  forall v1 v2, lessdef v1 v2 -> lessdef (cast16unsigned v1) (cast16unsigned v2).
+Lemma sign_ext_lessdef:
+  forall n v1 v2, lessdef v1 v2 -> lessdef (sign_ext n v1) (sign_ext n v2).
 Proof.
   intros; inv H; simpl; auto.
 Qed.
