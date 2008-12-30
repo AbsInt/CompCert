@@ -38,6 +38,7 @@ Require Import Mach.
 Require Import Machabstr.
 Require Import Bounds.
 Require Import Conventions.
+Require Import Stacklayout.
 Require Import Stacking.
 
 (** * Properties of frames and frame accesses *)
@@ -49,92 +50,6 @@ Lemma typesize_typesize:
 Proof.
   destruct ty; auto.
 Qed.
-
-(*
-Lemma get_slot_ok:
-  forall fr ty ofs,
-  24 <= ofs -> fr.(fr_low) + ofs + 4 * typesize ty <= 0 ->
-  exists v, get_slot fr ty ofs v.
-Proof.
-  intros. rewrite <- typesize_typesize in H0.
-  exists (fr.(fr_contents) ty (fr.(fr_low) + ofs)). constructor; auto. 
-Qed.
-
-Lemma set_slot_ok:
-  forall fr ty ofs v,
-  24 <= ofs -> fr.(fr_low) + ofs + 4 * typesize ty <= 0 ->
-  exists fr', set_slot fr ty ofs v fr'.
-Proof.
-  intros. rewrite <- typesize_typesize in H0.
-  econstructor. constructor; eauto.
-Qed.
-
-Lemma slot_gss: 
-  forall fr1 ty ofs v fr2,
-  set_slot fr1 ty ofs v fr2 ->
-  get_slot fr2 ty ofs v.
-Proof.
-  intros. inv H. constructor; auto.
-  simpl. destruct (typ_eq ty ty); try congruence.
-  rewrite zeq_true. auto.
-Qed.
-
-Remark frame_update_gso:
-  forall fr ty ofs v ty' ofs',
-  ofs' + 4 * typesize ty' <= ofs \/ ofs + 4 * typesize ty <= ofs' ->
-  fr_contents (update ty ofs v fr) ty' ofs' = fr_contents fr ty' ofs'.
-Proof.
-  intros.
-  generalize (typesize_pos ty); intro.
-  generalize (typesize_pos ty'); intro.
-  simpl. rewrite zeq_false. 2: omega.
-  repeat rewrite <- typesize_typesize in H.
-  destruct (zle (ofs' + AST.typesize ty') ofs). auto.
-  destruct (zle (ofs + AST.typesize ty) ofs'). auto.
-  omegaContradiction.
-Qed.
-
-Remark frame_update_overlap:
-  forall fr ty ofs v ty' ofs',
-  ofs <> ofs' ->
-  ofs' + 4 * typesize ty' > ofs -> ofs + 4 * typesize ty > ofs' ->
-  fr_contents (update ty ofs v fr) ty' ofs' = Vundef.
-Proof.
-  intros. simpl. rewrite zeq_false; auto.
-  rewrite <- typesize_typesize in H0. 
-  rewrite <- typesize_typesize in H1.
-  repeat rewrite zle_false; auto.
-Qed.
-
-Remark frame_update_mismatch:
-  forall fr ty ofs v ty',
-  ty <> ty' ->
-  fr_contents (update ty ofs v fr) ty' ofs = Vundef.
-Proof.
-  intros. simpl. rewrite zeq_true. 
-  destruct (typ_eq ty ty'); congruence.
-Qed.
-
-Lemma slot_gso:
-  forall fr1 ty ofs v fr2 ty' ofs' v',
-  set_slot fr1 ty ofs v fr2 ->
-  get_slot fr1 ty' ofs' v' ->
-  ofs' + 4 * typesize ty' <= ofs \/ ofs + 4 * typesize ty <= ofs' ->
-  get_slot fr2 ty' ofs' v'.
-Proof.
-  intros. inv H. inv H0.
-  constructor; auto.
-  symmetry. simpl fr_low. apply frame_update_gso. omega.
-Qed.
-
-Lemma slot_gi:
-  forall f ofs ty,
-  24 <= ofs -> fr_low (init_frame f) + ofs + 4 * typesize ty <= 0 ->
-  get_slot (init_frame f) ty ofs Vundef.
-Proof.
-  intros. rewrite <- typesize_typesize in H0. constructor; auto.
-Qed.
-*)
 
 Section PRESERVATION.
 
@@ -219,20 +134,13 @@ Definition index_diff (idx1 idx2: frame_index) : Prop :=
   | _, _ => True
   end.
 
-Remark align_float_part:
-  24 + 4 * bound_outgoing b + 4 * bound_int_local b + 4 * bound_int_callee_save b <=
-  align (24 + 4 * bound_outgoing b + 4 * bound_int_local b + 4 * bound_int_callee_save b) 8.
-Proof.
-  apply align_le. omega.
-Qed.
-
 Ltac AddPosProps :=
   generalize (bound_int_local_pos b); intro;
   generalize (bound_float_local_pos b); intro;
   generalize (bound_int_callee_save_pos b); intro;
   generalize (bound_float_callee_save_pos b); intro;
   generalize (bound_outgoing_pos b); intro;
-  generalize align_float_part; intro.
+  generalize (align_float_part b); intro.
 
 Lemma size_pos: fe.(fe_size) >= 0.
 Proof.
@@ -1383,10 +1291,9 @@ Lemma shift_eval_addressing:
                  (transl_addr (make_env (function_bounds f)) addr) args =
   Some v.
 Proof.
-  intros. destruct addr; auto.
-  simpl. rewrite symbols_preserved. auto.
-  simpl. rewrite symbols_preserved. auto.
-  unfold transl_addr, eval_addressing in *.
+  intros.
+  unfold transl_addr, eval_addressing in *;
+  destruct addr; try (rewrite symbols_preserved); auto.
   destruct args; try discriminate.
   apply shift_offset_sp; auto.
 Qed.

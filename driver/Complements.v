@@ -22,13 +22,13 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Csyntax.
 Require Import Csem.
-Require Import PPC.
-Require Import Main.
+Require Import Asm.
+Require Import Compiler.
 Require Import Errors.
 
-(** * Determinism of PPC semantics *)
+(** * Determinism of Asm semantics *)
 
-(** In this section, we show that the semantics for the PPC language
+(** In this section, we show that the semantics for the Asm language
   are deterministic, in a sense to be made precise later.
   There are two sources of apparent non-determinism:
 - The semantics leaves unspecified the results of calls to external 
@@ -181,7 +181,7 @@ Proof.
   rewrite <- (eventval_match_deterministic _ _ _ _ _ H4 H5). auto.
 Qed.
 
-(** ** Determinism of PPC transitions. *)
+(** ** Determinism of Asm transitions. *)
 
 Remark extcall_arguments_deterministic:
   forall rs m sg args args',
@@ -189,16 +189,13 @@ Remark extcall_arguments_deterministic:
   extcall_arguments rs m sg args' -> args = args'.
 Proof.
   assert (
-    forall rs m tyl iregl fregl ofs args,
-    extcall_args rs m tyl iregl fregl ofs args ->
-    forall args', extcall_args rs m tyl iregl fregl ofs args' -> args = args').
+    forall rs m ll args,
+    extcall_args rs m ll args ->
+    forall args', extcall_args rs m ll args' -> args = args').
   induction 1; intros.
   inv H. auto.
-  inv H1. decEq; eauto.  
-  inv H1. decEq. congruence. eauto.
-  inv H1. decEq; eauto.  
-  inv H1. decEq. congruence. eauto.
-
+  inv H1. decEq; eauto.
+  inv H; inv H4; congruence.
   unfold extcall_arguments; intros; eauto.
 Qed.
 
@@ -573,11 +570,11 @@ Qed.
 (** * Additional semantic preservation property *)
 
 (** Combining the semantic preservation theorem from module [Main]
-  with the determinism of PPC executions, we easily obtain
+  with the determinism of Asm executions, we easily obtain
   additional, stronger semantic preservation properties.
   The first property states that, when compiling a Clight
   program that has well-defined semantics, all possible executions
-  of the resulting PPC code correspond to an execution of
+  of the resulting Asm code correspond to an execution of
   the source Clight program, in the sense of the [matching_behaviors]
   predicate. *)
 
@@ -591,7 +588,7 @@ Theorem transf_c_program_correct_strong:
    exists b0, Csem.exec_program p b0 /\ matching_behaviors b0 b').
 Proof.
   intros.
-  assert (PPC.exec_program tp b).
+  assert (Asm.exec_program tp b).
     eapply transf_c_program_correct; eauto.
   exploit exec_program_program'; eauto. 
   intros [b' [A B]].
@@ -606,7 +603,7 @@ Section SPECS_PRESERVED.
 (** The second additional results shows that if one execution
   of the source Clight program satisfies a given specification
   (a predicate on the observable behavior of the program),
-  then all executions of the produced PPC program satisfy
+  then all executions of the produced Asm program satisfy
   this specification as well.  *) 
 
 Variable spec: program_behavior -> Prop.
@@ -633,7 +630,7 @@ Theorem transf_c_program_preserves_spec:
 /\(forall b', exec_program' tp w b' -> spec b').
 Proof.
   intros.
-  assert (PPC.exec_program tp b).
+  assert (Asm.exec_program tp b).
     eapply transf_c_program_correct; eauto.
   exploit exec_program_program'; eauto. 
   intros [b' [A B]].

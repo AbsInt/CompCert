@@ -10,4 +10,4 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val print_program: out_channel -> PPC.program -> unit
+val print_program: out_channel -> Asm.program -> unit

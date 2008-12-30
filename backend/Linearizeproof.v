@@ -546,8 +546,9 @@ Proof.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   econstructor; split.
   eapply plus_left'.
-  eapply exec_Lload; eauto.
+  apply exec_Lload with a.
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   eapply add_branch_correct; eauto.
   eapply is_tail_add_branch. eapply is_tail_cons_left. 
   eapply is_tail_find_label. eauto.
@@ -562,8 +563,9 @@ Proof.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   econstructor; split.
   eapply plus_left'.
-  eapply exec_Lstore; eauto.
+  apply exec_Lstore with a. 
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   eapply add_branch_correct; eauto.
   eapply is_tail_add_branch. eapply is_tail_cons_left. 
   eapply is_tail_find_label. eauto.

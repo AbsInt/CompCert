@@ -27,7 +27,7 @@ Require Import Mach.
 Require Import Machtyping.
 Require Import Machabstr.
 Require Import Machconcr.
-Require Import PPCgenretaddr.
+Require Import Asmgenretaddr.
 
 (** Two semantics were defined for the Mach intermediate language:
 - The concrete semantics (file [Mach]), where the whole activation
@@ -43,7 +43,7 @@ Require Import PPCgenretaddr.
   abstract semantics, it also executes with the same behaviour in
   the concrete semantics.  This result bridges the correctness proof
   in file [Stackingproof] (which uses the abstract Mach semantics
-  as output) and that in file [PPCgenproof] (which uses the concrete
+  as output) and that in file [Asmgenproof] (which uses the concrete
   Mach semantics as input).
 *)
 

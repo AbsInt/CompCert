@@ -1017,7 +1017,7 @@ Proof.
   intros [ls2 [A [B C]]].
   assert (exists ta, eval_addressing tge sp addr (reglist ls2 (regs_for args)) = Some ta
                      /\ Val.lessdef a ta).
-    apply eval_addressing_lessdef with (map rs args); auto.
+    apply eval_addressing_lessdef with (map rs args).
     rewrite B. eapply agree_locs; eauto. 
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   destruct H1 as [ta [P Q]].
@@ -1047,7 +1047,7 @@ Proof.
   simpl in B.
   assert (exists ta, eval_addressing tge sp addr (reglist ls2 rargs) = Some ta
                      /\ Val.lessdef a ta).
-    apply eval_addressing_lessdef with (map rs args); auto.
+    apply eval_addressing_lessdef with (map rs args).
     rewrite D. eapply agree_locs; eauto. 
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   destruct H1 as [ta [P Q]].
@@ -1072,7 +1072,7 @@ Proof.
     apply locs_acceptable_disj_temporaries; auto.
   assert (exists ta, eval_addressing tge sp addr (reglist ls2 (regs_for args)) = Some ta
                      /\ Val.lessdef a ta).
-    apply eval_addressing_lessdef with (map rs args); auto.
+    apply eval_addressing_lessdef with (map rs args).
     rewrite B. eapply agree_locs; eauto. 
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   destruct H1 as [ta [P Q]].

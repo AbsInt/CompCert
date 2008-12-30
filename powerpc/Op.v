@@ -111,6 +111,25 @@ Inductive addressing: Set :=
   | Abased: ident -> int -> addressing (**r Address is [symbol + offset + r1] *)
   | Ainstack: int -> addressing.        (**r Address is [stack_pointer + offset] *)
 
+(** Comparison functions (used in module [CSE]). *)
+
+Definition eq_operation (x y: operation): {x=y} + {x<>y}.
+Proof.
+  generalize Int.eq_dec; intro.
+  generalize Float.eq_dec; intro.
+  assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
+  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
+  decide equality.
+Qed.
+
+Definition eq_addressing (x y: addressing) : {x=y} + {x<>y}.
+Proof.
+  generalize Int.eq_dec; intro.
+  assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
+  decide equality.
+Qed.
+
 (** Evaluation of conditions, operators and addressing modes applied
   to lists of values.  Return [None] when the computation is undefined:
   wrong number of arguments, arguments of the wrong types, undefined 

@@ -25,8 +25,8 @@ Require Import Locations.
 Require Import Mach.
 Require Import Machconcr.
 Require Import Machtyping.
-Require Import PPC.
-Require Import PPCgen.
+Require Import Asm.
+Require Import Asmgen.
 Require Conventions.
 
 (** * Properties of low half/high half decomposition *)
@@ -123,12 +123,6 @@ Hint Extern 2 (_ <> _) => discriminate: ppcgen.
 
 (** Mapping from Mach registers to PPC registers. *)
 
-Definition preg_of (r: mreg) :=
-  match mreg_type r with
-  | Tint => IR (ireg_of r)
-  | Tfloat => FR (freg_of r)
-  end.
-
 Lemma preg_of_injective:
   forall r1 r2, preg_of r1 = preg_of r2 -> r1 = r2.
 Proof.
@@ -198,7 +192,7 @@ Hint Resolve preg_of_not_GPR1: ppcgen.
 
 (** Agreement between Mach register sets and PPC register sets. *)
 
-Definition agree (ms: Mach.regset) (sp: val) (rs: PPC.regset) :=
+Definition agree (ms: Mach.regset) (sp: val) (rs: Asm.regset) :=
   rs#GPR1 = sp /\ forall r: mreg, ms r = rs#(preg_of r).
 
 Lemma preg_val:
@@ -434,88 +428,40 @@ Proof.
 Qed.
 Hint Resolve gpr_or_zero_not_zero gpr_or_zero_zero: ppcgen.
 
-(** Connection between Mach and PPC calling conventions for external
+(** Connection between Mach and Asm calling conventions for external
     functions. *)
 
-Lemma loc_external_result_match:
-  forall sg,
-  PPC.loc_external_result sg = preg_of (Conventions.loc_result sg).
+Lemma extcall_arg_match:
+  forall ms sp rs m l v,
+  agree ms sp rs ->
+  Machconcr.extcall_arg ms m sp l v ->
+  Asm.extcall_arg rs m l v.
 Proof.
-  intros. destruct sg as [sargs sres]. 
-  destruct sres. destruct t; reflexivity. reflexivity.
+  intros. inv H0. 
+  rewrite (preg_val _ _ _ r H). constructor.
+  rewrite (sp_val _ _ _ H) in H1.
+  destruct ty; unfold load_stack in H1.
+  econstructor. reflexivity. assumption.
+  econstructor. reflexivity. assumption.
 Qed.
 
 Lemma extcall_args_match:
-  forall ms m sp rs,
-  agree ms sp rs ->
-  forall tyl iregl fregl ofs args,
-  (forall r, In r iregl -> mreg_type r = Tint) ->
-  (forall r, In r fregl -> mreg_type r = Tfloat) ->
-  Machconcr.extcall_args ms m sp (Conventions.loc_arguments_rec tyl iregl fregl ofs) args ->
-  PPC.extcall_args rs m tyl (List.map ireg_of iregl) (List.map freg_of fregl) (Stacking.fe_ofs_arg + 4 * ofs) args.
+  forall ms sp rs m, agree ms sp rs ->
+  forall ll vl,
+  Machconcr.extcall_args ms m sp ll vl ->
+  Asm.extcall_args rs m ll vl.
 Proof.
-  induction tyl; intros.
-  inversion H2; constructor.
-  destruct a. 
-  (* integer case *)
-  destruct iregl as [ | ir1 irl]. 
-  (* stack *)
-  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
-  constructor. replace (rs GPR1) with sp. assumption. 
-  eapply sp_val; eauto. 
-  change (@nil ireg) with (ireg_of ## nil). 
-  replace (Stacking.fe_ofs_arg + 4 * ofs + 4) with (Stacking.fe_ofs_arg + 4 * (ofs + 1)) by omega. 
-  apply IHtyl; auto. 
-  (* register *)
-  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
-  simpl map. econstructor. eapply ireg_val; eauto.
-  apply H0; simpl; auto. 
-  replace (4 * ofs + 4) with (4 * (ofs + 1)) by omega. 
-  apply IHtyl; auto. 
-  intros; apply H0; simpl; auto.
-  (* float case *)
-  destruct fregl as [ | fr1 frl]. 
-  (* stack *)
-  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
-  constructor. replace (rs GPR1) with sp. assumption. 
-  eapply sp_val; eauto. 
-  change (@nil freg) with (freg_of ## nil). 
-  replace (Stacking.fe_ofs_arg + 4 * ofs + 8) with (Stacking.fe_ofs_arg + 4 * (ofs + 2)) by omega. 
-  apply IHtyl; auto. 
-  (* register *)
-  inversion H2; subst; clear H2. inversion H8; subst; clear H8.
-  simpl map. econstructor. eapply freg_val; eauto.
-  apply H1; simpl; auto. 
-  rewrite list_map_drop2.
-  apply IHtyl; auto. 
-  intros; apply H0. apply list_drop2_incl. auto.
-  intros; apply H1; simpl; auto.
+  induction 2; constructor; auto. eapply extcall_arg_match; eauto.
 Qed.
-
-Ltac ElimOrEq :=
-  match goal with
-  |  |- (?x = ?y) \/ _ -> _ =>
-       let H := fresh in
-       (intro H; elim H; clear H;
-        [intro H; rewrite <- H; clear H | ElimOrEq])
-  |  |- False -> _ =>
-       let H := fresh in (intro H; contradiction)
-  end.
 
 Lemma extcall_arguments_match:
   forall ms m sp rs sg args,
   agree ms sp rs ->
   Machconcr.extcall_arguments ms m sp sg args ->
-  PPC.extcall_arguments rs m sg args.
+  Asm.extcall_arguments rs m sg args.
 Proof.
-  unfold Machconcr.extcall_arguments, PPC.extcall_arguments; intros.
-  change (extcall_args rs m sg.(sig_args)
-    (List.map ireg_of Conventions.int_param_regs)
-    (List.map freg_of Conventions.float_param_regs)
-    (Stacking.fe_ofs_arg + 4 * 8) args).
-  eapply extcall_args_match; eauto. 
-  intro; simpl; ElimOrEq; reflexivity.  
-  intro; simpl; ElimOrEq; reflexivity.  
+  unfold Machconcr.extcall_arguments, Asm.extcall_arguments; intros.
+  eapply extcall_args_match; eauto.
 Qed.
 
 (** * Execution of straight-line code *)

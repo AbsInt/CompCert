@@ -30,7 +30,7 @@ Require LTL.
 Require LTLin.
 Require Linear.
 Require Mach.
-Require PPC.
+Require Asm.
 (** Translation passes. *)
 Require Cshmgen.
 Require Cminorgen.
@@ -43,7 +43,7 @@ Require Tunneling.
 Require Linearize.
 Require Reload.
 Require Stacking.
-Require PPCgen.
+Require Asmgen.
 (** Type systems. *)
 Require Ctyping.
 Require RTLtyping.
@@ -69,7 +69,7 @@ Require Reloadtyping.
 Require Stackingproof.
 Require Stackingtyping.
 Require Machabstr2concr.
-Require PPCgenproof.
+Require Asmgenproof.
 
 Open Local Scope string_scope.
 
@@ -92,21 +92,21 @@ Notation "a @@ b" :=
 
 (** We define three translation functions for whole programs: one
   starting with a C program, one with a Cminor program, one with an
-  RTL program.  The three translations produce PPC programs ready for
+  RTL program.  The three translations produce Asm programs ready for
   pretty-printing and assembling.
 
   There are two ways to compose the compiler passes.  The first
   translates every function from the Cminor program from Cminor to
-  RTL, then to LTL, etc, all the way to PPC, and iterates this
+  RTL, then to LTL, etc, all the way to Asm, and iterates this
   transformation for every function.  The second translates the whole
   Cminor program to a RTL program, then to an LTL program, etc. 
-  Between Cminor and PPC, we follow the first approach because it has
-  lower memory requirements.  The translation from Clight to PPC
+  Between Cminor and Asm, we follow the first approach because it has
+  lower memory requirements.  The translation from Clight to Asm
   follows the second approach.
   
-  The translation of an RTL function to a PPC function is as follows. *)
+  The translation of an RTL function to an Asm function is as follows. *)
 
-Definition transf_rtl_fundef (f: RTL.fundef) : res PPC.fundef :=
+Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    OK f
    @@ Constprop.transf_fundef
    @@ CSE.transf_fundef
@@ -115,11 +115,11 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res PPC.fundef :=
   @@@ Linearize.transf_fundef
    @@ Reload.transf_fundef
   @@@ Stacking.transf_fundef
-  @@@ PPCgen.transf_fundef.
+  @@@ Asmgen.transf_fundef.
 
-(* Here is the translation of a Cminor function to a PPC function. *)
+(* Here is the translation of a Cminor function to an Asm function. *)
 
-Definition transf_cminor_fundef (f: Cminor.fundef) : res PPC.fundef :=
+Definition transf_cminor_fundef (f: Cminor.fundef) : res Asm.fundef :=
   OK f
    @@ Selection.sel_fundef
   @@@ RTLgen.transl_fundef
@@ -127,13 +127,13 @@ Definition transf_cminor_fundef (f: Cminor.fundef) : res PPC.fundef :=
 
 (** The corresponding translations for whole program follow. *)
 
-Definition transf_rtl_program (p: RTL.program) : res PPC.program :=
+Definition transf_rtl_program (p: RTL.program) : res Asm.program :=
   transform_partial_program transf_rtl_fundef p.
 
-Definition transf_cminor_program (p: Cminor.program) : res PPC.program :=
+Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
   transform_partial_program transf_cminor_fundef p.
 
-Definition transf_c_program (p: Csyntax.program) : res PPC.program :=
+Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   match Ctyping.typecheck_program p with
   | false =>
       Error (msg "Ctyping: type error")
@@ -226,7 +226,7 @@ Theorem transf_rtl_program_correct:
   forall p tp beh,
   transf_rtl_program p = OK tp ->
   RTL.exec_program p beh ->
-  PPC.exec_program tp beh.
+  Asm.exec_program tp beh.
 Proof.
   intros. unfold transf_rtl_program, transf_rtl_fundef in H.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p7 [H7 P7]].
@@ -258,7 +258,7 @@ Proof.
   assert (WT7: Machtyping.wt_program p7).
     apply Stackingtyping.program_typing_preserved with p6. auto. auto.
 
-  apply PPCgenproof.transf_program_correct with p7; auto.
+  apply Asmgenproof.transf_program_correct with p7; auto.
   apply Machabstr2concr.exec_program_equiv; auto.
   apply Stackingproof.transf_program_correct with p6; auto.
   subst p6; apply Reloadproof.transf_program_correct; auto.
@@ -273,7 +273,7 @@ Theorem transf_cminor_program_correct:
   forall p tp beh,
   transf_cminor_program p = OK tp ->
   Cminor.exec_program p beh ->
-  PPC.exec_program tp beh.
+  Asm.exec_program tp beh.
 Proof.
   intros. unfold transf_cminor_program, transf_cminor_fundef in H.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [H3 P3]].
@@ -291,7 +291,7 @@ Theorem transf_c_program_correct:
   forall p tp beh,
   transf_c_program p = OK tp ->
   Csem.exec_program p beh ->
-  PPC.exec_program tp beh.
+  Asm.exec_program tp beh.
 Proof.
   intros until beh; unfold transf_c_program; simpl.
   caseEq (Ctyping.typecheck_program p); try congruence; intro.

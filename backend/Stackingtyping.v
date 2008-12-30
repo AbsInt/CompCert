@@ -25,6 +25,7 @@ Require Import Lineartyping.
 Require Import Mach.
 Require Import Machtyping.
 Require Import Bounds.
+Require Import Stacklayout.
 Require Import Stacking.
 Require Import Stackingproof.
 

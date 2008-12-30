@@ -17,7 +17,7 @@ open Datatypes
 open CList
 open Camlcoq
 open AST
-open PPC
+open Asm
 
 (* On-the-fly label renaming *)
 

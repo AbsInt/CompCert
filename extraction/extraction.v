@@ -16,7 +16,7 @@ Require Floats.
 Require RTLgen.
 Require Coloring.
 Require Allocation.
-Require Main.
+Require Compiler.
 
 (* Standard lib *)
 Extract Inductive unit => "unit" [ "()" ].
@@ -68,16 +68,18 @@ Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
-(* PPC *)
-Extract Constant PPC.low_half => "fun _ -> assert false".
-Extract Constant PPC.high_half => "fun _ -> assert false".
+(* Asm *)
+Extract Constant Asm.low_half => "fun _ -> assert false".
+Extract Constant Asm.high_half => "fun _ -> assert false".
 
 (* Suppression of stupidly big equality functions *)
-Extract Constant CSE.eq_rhs => "fun (x: rhs) (y: rhs) -> x = y".
-Extract Constant Locations.mreg_eq => "fun (x: mreg) (y: mreg) -> x = y".
-Extract Constant PPC.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
-Extract Constant PPC.freg_eq => "fun (x: freg) (y: freg) -> x = y".
-Extract Constant PPC.preg_eq => "fun (x: preg) (y: preg) -> x = y".
+Extract Constant Op.eq_operation => "fun (x: operation) (y: operation) -> x = y".
+Extract Constant Op.eq_addressing => "fun (x: addressing) (y: addressing) -> x = y".
+(*Extract Constant CSE.eq_rhs => "fun (x: rhs) (y: rhs) -> x = y".*)
+Extract Constant Machregs.mreg_eq => "fun (x: mreg) (y: mreg) -> x = y".
+Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
+Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
+Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 
 (* Go! *)
-Recursive Extraction Library Main.
+Recursive Extraction Library Compiler.

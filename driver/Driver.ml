@@ -134,16 +134,16 @@ let compile_c_file sourcename ifile ofile =
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
-  (* Convert to PPC *)
+  (* Convert to Asm *)
   let ppc =
-    match Main.transf_c_program csyntax with
+    match Compiler.transf_c_program csyntax with
     | Errors.OK x -> x
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
-  (* Save PPC asm *)
+  (* Save asm *)
   let oc = open_out ofile in
-  PrintPPC.print_program oc ppc;
+  PrintAsm.print_program oc ppc;
   close_out oc
 
 (* From Cminor to asm *)
@@ -152,7 +152,7 @@ let compile_cminor_file ifile ofile =
   let ic = open_in ifile in
   let lb = Lexing.from_channel ic in
   try
-    match Main.transf_cminor_program
+    match Compiler.transf_cminor_program
             (CMtypecheck.type_program
               (CMparser.prog CMlexer.token lb)) with
     | Errors.Error msg ->
@@ -160,7 +160,7 @@ let compile_cminor_file ifile ofile =
         exit 2
     | Errors.OK p ->
         let oc = open_out ofile in
-        PrintPPC.print_program oc p;
+        PrintAsm.print_program oc p;
         close_out oc
   with Parsing.Parse_error ->
          eprintf "File %s, character %d: Syntax error\n"

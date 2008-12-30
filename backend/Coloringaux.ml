@@ -17,6 +17,7 @@ open BinInt
 open AST
 open Maps
 open Registers
+open Machregs
 open Locations
 open RTL
 open RTLtyping

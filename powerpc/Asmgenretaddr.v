@@ -27,8 +27,8 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
-Require Import PPC.
-Require Import PPCgen.
+Require Import Asm.
+Require Import Asmgen.
 
 (** The ``code tail'' of an instruction list [c] is the list of instructions
   starting at PC [pos]. *)

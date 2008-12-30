@@ -337,7 +337,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs (R R3) = Vint r ->
+      rs (R (Conventions.loc_result (mksignature nil (Some Tint)))) = Vint r ->
       final_state (Returnstate nil rs m) r.
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=

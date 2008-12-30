@@ -26,7 +26,7 @@ Require Import Op.
 Require Import Locations.
 Require Conventions.
 Require Import Mach.
-Require Stacking.
+Require Stacklayout.
 
 (** This file defines the "abstract" semantics for the Mach
   intermediate language, as opposed to the more concrete
@@ -134,7 +134,7 @@ Inductive extcall_arg: regset -> frame -> loc -> val -> Prop :=
   | extcall_arg_reg: forall rs fr r,
       extcall_arg rs fr (R r) (rs r)
   | extcall_arg_stack: forall rs fr ofs ty v,
-      get_slot fr ty (Int.signed (Int.repr (Stacking.fe_ofs_arg + 4 * ofs))) v ->
+      get_slot fr ty (Int.signed (Int.repr (Stacklayout.fe_ofs_arg + 4 * ofs))) v ->
       extcall_arg rs fr (S (Outgoing ofs ty)) v.
 
 Inductive extcall_args: regset -> frame -> list loc -> list val -> Prop :=
@@ -323,7 +323,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs R3 = Vint r ->
+      rs (Conventions.loc_result (mksignature nil (Some Tint))) = Vint r ->
       final_state (Returnstate nil rs m) r.
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=

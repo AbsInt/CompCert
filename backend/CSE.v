@@ -72,12 +72,9 @@ Definition eq_rhs (x y: rhs) : {x=y}+{x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   generalize Float.eq_dec; intro.
-  assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
-  assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
-  assert (forall (x y: operation), {x=y}+{x<>y}). decide equality.
+  generalize eq_operation; intro.
+  generalize eq_addressing; intro.
   assert (forall (x y: memory_chunk), {x=y}+{x<>y}). decide equality.
-  assert (forall (x y: addressing), {x=y}+{x<>y}). decide equality.
   generalize eq_valnum; intro.
   generalize eq_list_valnum; intro.
   decide equality.

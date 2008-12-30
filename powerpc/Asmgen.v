@@ -24,47 +24,9 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
-Require Import PPC.
+Require Import Asm.
 
-(** Translation of the LTL/Linear/Mach view of machine registers
-  to the PPC view.  PPC has two different types for registers
-  (integer and float) while LTL et al have only one.  The
-  [ireg_of] and [freg_of] are therefore partial in principle.
-  To keep things simpler, we make them return nonsensical
-  results when applied to a LTL register of the wrong type.
-  The proof in [PPCgenproof] will show that this never happens.
-
-  Note that no LTL register maps to [GPR12] nor [FPR13].
-  These two registers are reserved as temporaries, to be used
-  by the generated PPC code.  *)
-
-Definition ireg_of (r: mreg) : ireg :=
-  match r with
-  | R3 => GPR3  | R4 => GPR4  | R5 => GPR5  | R6 => GPR6
-  | R7 => GPR7  | R8 => GPR8  | R9 => GPR9  | R10 => GPR10
-  | R13 => GPR13 | R14 => GPR14 | R15 => GPR15 | R16 => GPR16
-  | R17 => GPR17 | R18 => GPR18 | R19 => GPR19 | R20 => GPR20
-  | R21 => GPR21 | R22 => GPR22 | R23 => GPR23 | R24 => GPR24
-  | R25 => GPR25 | R26 => GPR26 | R27 => GPR27 | R28 => GPR28
-  | R29 => GPR29 | R30 => GPR30 | R31 => GPR31
-  | IT1 => GPR11 | IT2 => GPR0
-  | _ => GPR0 (* should not happen *)
-  end.
-
-Definition freg_of (r: mreg) : freg :=
-  match r with
-  | F1 => FPR1  | F2 => FPR2  | F3 => FPR3  | F4 => FPR4
-  | F5 => FPR5  | F6 => FPR6  | F7 => FPR7  | F8 => FPR8
-  | F9 => FPR9  | F10 => FPR10 | F14 => FPR14 | F15 => FPR15
-  | F16 => FPR16 | F17 => FPR17 | F18 => FPR18 | F19 => FPR19
-  | F20 => FPR20 | F21 => FPR21 | F22 => FPR22 | F23 => FPR23
-  | F24 => FPR24 | F25 => FPR25 | F26 => FPR26 | F27 => FPR27
-  | F28 => FPR28 | F29 => FPR29 | F30 => FPR30 | F31 => FPR31
-  | FT1 => FPR0 | FT2 => FPR11 | FT3 => FPR12
-  | _ => FPR0 (* should not happen *)
-  end.
-
-(** Decomposition of integer constants.  As noted in file [PPC],
+(** Decomposition of integer constants.  As noted in file [Asm],
   immediate arguments to PowerPC instructions must fit into 16 bits,
   and are interpreted after zero extension, sign extension, or
   left shift by 16 bits, depending on the instruction.  Integer
@@ -534,15 +496,15 @@ Fixpoint code_size (c: code) : Z :=
 
 Open Local Scope string_scope.
 
-Definition transf_function (f: Mach.function) : res PPC.code :=
+Definition transf_function (f: Mach.function) : res Asm.code :=
   let c := transl_function f in
   if zlt Int.max_unsigned (code_size c)
   then Errors.Error (msg "code size exceeded")
   else Errors.OK c.
 
-Definition transf_fundef (f: Mach.fundef) : res PPC.fundef :=
+Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
   transf_partial_fundef transf_function f.
 
-Definition transf_program (p: Mach.program) : res PPC.program :=
+Definition transf_program (p: Mach.program) : res Asm.program :=
   transform_partial_program transf_fundef p.
 
