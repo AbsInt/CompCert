@@ -19,6 +19,16 @@ open Camlcoq
 open AST
 open Asm
 
+(* Recognition of target ABI and asm syntax *)
+
+type target = MacOS | EABI
+
+let target = 
+  match Configuration.variant with
+  | "macosx" -> MacOS
+  | "eabi"   -> EABI
+  |  _       -> assert false
+
 (* On-the-fly label renaming *)
 
 let next_label = ref 100
@@ -28,7 +38,7 @@ let new_label() =
 
 let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
 
-let label_for_label lbl =
+let transl_label lbl =
   try
     Hashtbl.find current_function_labels lbl
   with Not_found ->
@@ -36,38 +46,66 @@ let label_for_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
-(* Record identifiers of external functions *)
+(* Record identifiers of functions that need a special stub *)
 
 module IdentSet = Set.Make(struct type t = ident let compare = compare end)
 
-let extfuns = ref IdentSet.empty
-
-let record_extfun (Coq_pair(name, defn)) =
-  match defn with
-  | Internal _ -> ()
-  | External _ -> extfuns := IdentSet.add name !extfuns
+let stubbed_functions = ref IdentSet.empty
 
 (* Basic printing functions *)
 
-let print_symb oc symb =
-  if IdentSet.mem symb !extfuns
-  then fprintf oc "L%s$stub" (extern_atom symb)
-  else fprintf oc "_%s" (extern_atom symb)
+let coqint oc n =
+  fprintf oc "%ld" (camlint_of_coqint n)
 
-let print_label oc lbl =
-  fprintf oc "L%d" (label_for_label lbl)
+let raw_symbol oc s =
+  match target with
+  | MacOS -> fprintf oc "_%s" s
+  | EABI  -> fprintf oc "%s" s
 
-let print_symb_ofs oc (symb, ofs) =
-  print_symb oc symb;
+let symbol oc symb =
+  match target with
+  | MacOS ->
+      if IdentSet.mem symb !stubbed_functions
+      then fprintf oc "L%s$stub" (extern_atom symb)
+      else fprintf oc "_%s" (extern_atom symb)
+  | EABI ->
+      if IdentSet.mem symb !stubbed_functions
+      then fprintf oc ".L%s$stub" (extern_atom symb)
+      else fprintf oc "%s" (extern_atom symb)
+
+let symbol_offset oc (symb, ofs) =
+  symbol oc symb;
   if ofs <> 0l then fprintf oc " + %ld" ofs
 
-let print_constant oc = function
+let label oc lbl =
+  match target with
+  | MacOS -> fprintf oc "L%d" lbl
+  | EABI  -> fprintf oc ".L%d" lbl
+
+let label_low oc lbl =
+  match target with
+  | MacOS -> fprintf oc "lo16(L%d)" lbl
+  | EABI  -> fprintf oc ".L%d@l" lbl
+
+let label_high oc lbl =
+  match target with
+  | MacOS -> fprintf oc "ha16(L%d)" lbl
+  | EABI  -> fprintf oc ".L%d@ha" lbl
+
+let constant oc cst =
+  match cst with
   | Cint n ->
       fprintf oc "%ld" (camlint_of_coqint n)
   | Csymbol_low(s, n) ->
-      fprintf oc "lo16(%a)" print_symb_ofs (s, camlint_of_coqint n)
+      begin match target with
+      | MacOS -> fprintf oc "lo16(%a)" symbol_offset (s, camlint_of_coqint n)
+      | EABI  -> fprintf oc "%a@l" symbol_offset (s, camlint_of_coqint n)
+      end
   | Csymbol_high(s, n) ->
-      fprintf oc "ha16(%a)" print_symb_ofs (s, camlint_of_coqint n)
+      begin match target with
+      | MacOS -> fprintf oc "ha16(%a)" symbol_offset (s, camlint_of_coqint n)
+      | EABI  -> fprintf oc "%a@ha" symbol_offset (s, camlint_of_coqint n)
+      end
 
 let num_crbit = function
   | CRbit_0 -> 0
@@ -75,51 +113,180 @@ let num_crbit = function
   | CRbit_2 -> 2
   | CRbit_3 -> 3
 
-let print_crbit oc bit =
+let crbit oc bit =
   fprintf oc "%d" (num_crbit bit)
 
-let print_coqint oc n =
-  fprintf oc "%ld" (camlint_of_coqint n)
-
 let int_reg_name = function
-  | GPR0 -> "r0"  | GPR1 -> "r1"  | GPR2 -> "r2"  | GPR3 -> "r3"
-  | GPR4 -> "r4"  | GPR5 -> "r5"  | GPR6 -> "r6"  | GPR7 -> "r7"
-  | GPR8 -> "r8"  | GPR9 -> "r9"  | GPR10 -> "r10" | GPR11 -> "r11"
-  | GPR12 -> "r12" | GPR13 -> "r13" | GPR14 -> "r14" | GPR15 -> "r15"
-  | GPR16 -> "r16" | GPR17 -> "r17" | GPR18 -> "r18" | GPR19 -> "r19"
-  | GPR20 -> "r20" | GPR21 -> "r21" | GPR22 -> "r22" | GPR23 -> "r23"
-  | GPR24 -> "r24" | GPR25 -> "r25" | GPR26 -> "r26" | GPR27 -> "r27"
-  | GPR28 -> "r28" | GPR29 -> "r29" | GPR30 -> "r30" | GPR31 -> "r31"
+  | GPR0 -> "0"  | GPR1 -> "1"  | GPR2 -> "2"  | GPR3 -> "3"
+  | GPR4 -> "4"  | GPR5 -> "5"  | GPR6 -> "6"  | GPR7 -> "7"
+  | GPR8 -> "8"  | GPR9 -> "9"  | GPR10 -> "10" | GPR11 -> "11"
+  | GPR12 -> "12" | GPR13 -> "13" | GPR14 -> "14" | GPR15 -> "15"
+  | GPR16 -> "16" | GPR17 -> "17" | GPR18 -> "18" | GPR19 -> "19"
+  | GPR20 -> "20" | GPR21 -> "21" | GPR22 -> "22" | GPR23 -> "23"
+  | GPR24 -> "24" | GPR25 -> "25" | GPR26 -> "26" | GPR27 -> "27"
+  | GPR28 -> "28" | GPR29 -> "29" | GPR30 -> "30" | GPR31 -> "31"
 
 let float_reg_name = function
-  | FPR0 -> "f0"  | FPR1 -> "f1"  | FPR2 -> "f2"  | FPR3 -> "f3"
-  | FPR4 -> "f4"  | FPR5 -> "f5"  | FPR6 -> "f6"  | FPR7 -> "f7"
-  | FPR8 -> "f8"  | FPR9 -> "f9"  | FPR10 -> "f10" | FPR11 -> "f11"
-  | FPR12 -> "f12" | FPR13 -> "f13" | FPR14 -> "f14" | FPR15 -> "f15"
-  | FPR16 -> "f16" | FPR17 -> "f17" | FPR18 -> "f18" | FPR19 -> "f19"
-  | FPR20 -> "f20" | FPR21 -> "f21" | FPR22 -> "f22" | FPR23 -> "f23"
-  | FPR24 -> "f24" | FPR25 -> "f25" | FPR26 -> "f26" | FPR27 -> "f27"
-  | FPR28 -> "f28" | FPR29 -> "f29" | FPR30 -> "f30" | FPR31 -> "f31"
+  | FPR0 -> "0"  | FPR1 -> "1"  | FPR2 -> "2"  | FPR3 -> "3"
+  | FPR4 -> "4"  | FPR5 -> "5"  | FPR6 -> "6"  | FPR7 -> "7"
+  | FPR8 -> "8"  | FPR9 -> "9"  | FPR10 -> "10" | FPR11 -> "11"
+  | FPR12 -> "12" | FPR13 -> "13" | FPR14 -> "14" | FPR15 -> "15"
+  | FPR16 -> "16" | FPR17 -> "17" | FPR18 -> "18" | FPR19 -> "19"
+  | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
+  | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
+  | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
 
-let ireg oc r = output_string oc (int_reg_name r)
-let ireg_or_zero oc r = if r = GPR0 then output_string oc "0" else ireg oc r
-let freg oc r = output_string oc (float_reg_name r)
+let ireg oc r =
+  begin match target with
+  | MacOS -> output_char oc 'r'
+  | EABI  -> ()
+  end;
+  output_string oc (int_reg_name r)
+
+let ireg_or_zero oc r =
+  if r = GPR0 then output_string oc "0" else ireg oc r
+
+let freg oc r =
+  begin match target with
+  | MacOS -> output_char oc 'f'
+  | EABI  -> ()
+  end;
+  output_string oc (float_reg_name r)
+
+let creg oc r =
+  match target with
+  | MacOS -> fprintf oc "cr%d" r
+  | EABI  -> fprintf oc "%d" r
+
+let text oc =
+  fprintf oc "	.text\n"
+let data oc =
+  fprintf oc "	.data\n"
+let const oc =
+  match target with
+  | MacOS -> fprintf oc "	.const_data\n"
+  | EABI  -> fprintf oc "	.section	.rodata.cst8,\"aM\",@progbits,8\n"
 
 (* Printing of instructions *)
 
 module Labelset = Set.Make(struct type t = label let compare = compare end)
 
+(*
+let _add oc r1 r2 r3 =         fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+let _addi oc r1 r2 c =         fprintf oc "	addi	%a, %a, %s\n" ireg r1 ireg r2 c
+let _addis oc r1 r2 c =        fprintf oc "	addis	%a, %a, %s\n" ireg r1 ireg r2 c
+let _addze oc r1 r2 =          fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
+let _and_ oc r1 r2 r3 =        fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+let _andc oc r1 r2 r3 =        fprintf oc "	andc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+let _andi_ oc r1 r2 c =        fprintf oc "	andi.	%a, %a, %s\n" ireg r1 ireg r2 c
+let _andis_ oc r1 r2 c =       fprintf oc "	andis.	%a, %a, %s\n" ireg r1 ireg r2 c
+let _b oc l =                  fprintf oc "	b	%s\n" l
+let _bctr oc =                 fprintf oc "	bctr\n"
+let _bctrl oc =                fprintf oc "	bctrl\n"
+let _beq oc l =                fprintf oc "	beq	%s\n" l
+let _bf oc b l =               fprintf oc "	bf	%d, %s\n" b l
+let _bl oc l =                 fprintf oc "	bl	%s\n" l
+let _blr oc l =                fprintf oc "	blr	%s\n" l
+let _bt oc b l =               fprintf oc "	bt	%d, %s\n" b l
+let _cmplw oc cr r1 r2 =       fprintf oc "	cmplw	%a, %a, %a\n" creg cr ireg r1 ireg r2
+let _cmplwi oc cr r1 c =       fprintf oc "	cmplwi	%a, %a, %s\n" creg cr ireg r1 c
+let _cmpw oc cr r1 r2 =        fprintf oc "	cmpw	%a, %a, %a\n" creg cr ireg r1 ireg r2
+let _cmpwi oc cr r1 c =        fprintf oc "	cmpwi	%a, %a, %s\n" creg cr ireg r1 c
+let _cror oc r1 r2 r3 =        fprintf oc "	cror	%d, %d, %d\n" r1 r2 r3
+
+
+let _divw
+let _divwu
+let _eqv
+let _extsb
+let _extsh
+let _fabs
+let _fadd
+let _fcmp
+let _fcmpu
+let _fctiwz
+let _fdiv
+let _fmadd
+let _fmr
+let _fmsub
+let _fmul
+let _fneg
+let _fsrp
+let _fsub
+let _lbz
+let _lbzx
+let _lfd
+let _lfd
+let _lfdx
+let _lfs
+let _lfsx
+let _lha
+let _lhax
+let _lhz
+let _long
+let _lwz
+let _lwzx
+let _mfcr
+let _mflr
+let _mr
+let _mtctr
+let _mtlr
+let _mulli
+let _mullw
+let _nand
+let _nor
+let _or
+let _orc
+let _ori
+let _oris
+let _rlwinm
+let _slw
+let _sraw
+let _srawi
+let _srw
+let _stb
+let _stbx
+let _stfd
+let _stfdu
+let _stfdx
+let _stfs
+let _stfsx
+let _sth
+let _sthx
+let _stw
+let _stwu
+let _stwx
+let _subfc
+let _subfic
+let _xor
+let _xori
+let _xoris
+
+let _byte
+let _quad
+let _short
+let _space
+
+let _text
+let _const
+let _data
+let _deflabel
+let _startfun
+let _endfun
+let _globvar
+*)
+
 let print_instruction oc labels = function
   | Padd(r1, r2, r3) ->
       fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Paddi(r1, r2, c) ->
-      fprintf oc "	addi	%a, %a, %a\n" ireg r1 ireg_or_zero r2 print_constant c
+      fprintf oc "	addi	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
   | Paddis(r1, r2, c) ->
-      fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 print_constant c
+      fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
   | Paddze(r1, r2) ->
       fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
   | Pallocblock ->
-      fprintf oc "	bl	_compcert_alloc\n"
+      fprintf oc "	bl	%a\n" raw_symbol "compcert_alloc"
   | Pallocframe(lo, hi, ofs) ->
       let lo = camlint_of_coqint lo
       and hi = camlint_of_coqint hi
@@ -128,41 +295,41 @@ let print_instruction oc labels = function
       (* Keep stack 16-aligned *)
       let sz16 = Int32.logand (Int32.add sz 15l) 0xFFFF_FFF0l in
       assert (ofs = 0l);
-      fprintf oc "	stwu	r1, %ld(r1)\n" (Int32.neg sz16)
+      fprintf oc "	stwu	%a, %ld(%a)\n" ireg GPR1 (Int32.neg sz16) ireg GPR1
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandc(r1, r2, r3) ->
       fprintf oc "	andc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandi_(r1, r2, c) ->
-      fprintf oc "	andi.	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	andi.	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pandis_(r1, r2, c) ->
-      fprintf oc "	andis.	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	andis.	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pb lbl ->
-      fprintf oc "	b	%a\n" print_label lbl
+      fprintf oc "	b	%a\n" label (transl_label lbl)
   | Pbctr ->
       fprintf oc "	bctr\n"
   | Pbctrl ->
       fprintf oc "	bctrl\n"
   | Pbf(bit, lbl) ->
-      fprintf oc "	bf	%a, %a\n" print_crbit bit print_label lbl
+      fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
   | Pbl s ->
-      fprintf oc "	bl	%a\n" print_symb s
+      fprintf oc "	bl	%a\n" symbol s
   | Pbs s ->
-      fprintf oc "	b	%a\n" print_symb s
+      fprintf oc "	b	%a\n" symbol s
   | Pblr ->
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
-      fprintf oc "	bt	%a, %a\n" print_crbit bit print_label lbl
+      fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
   | Pcmplw(r1, r2) ->
-      fprintf oc "	cmplw	cr0, %a, %a\n" ireg r1 ireg r2
+      fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
   | Pcmplwi(r1, c) ->
-      fprintf oc "	cmplwi	cr0, %a, %a\n" ireg r1 print_constant c
+      fprintf oc "	cmplwi	%a, %a, %a\n" creg 0 ireg r1 constant c
   | Pcmpw(r1, r2) ->
-      fprintf oc "	cmpw	cr0, %a, %a\n" ireg r1 ireg r2
+      fprintf oc "	cmpw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
   | Pcmpwi(r1, c) ->
-      fprintf oc "	cmpwi	cr0, %a, %a\n" ireg r1 print_constant c
+      fprintf oc "	cmpwi	%a, %a, %a\n" creg 0 ireg r1 constant c
   | Pcror(c1, c2, c3) ->
-      fprintf oc "	cror	%a, %a, %a\n" print_crbit c1 print_crbit c2 print_crbit c3
+      fprintf oc "	cror	%a, %a, %a\n" crbit c1 crbit c2 crbit c3
   | Pdivw(r1, r2, r3) ->
       fprintf oc "	divw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pdivwu(r1, r2, r3) ->
@@ -174,39 +341,40 @@ let print_instruction oc labels = function
   | Pextsh(r1, r2) ->
       fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
   | Pfreeframe ofs ->
-      fprintf oc "	lwz	r1, %ld(r1)\n" (camlint_of_coqint ofs)
+      fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1  (camlint_of_coqint ofs)  ireg GPR1
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
   | Pfadd(r1, r2, r3) ->
       fprintf oc "	fadd	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfcmpu(r1, r2) ->
-      fprintf oc "	fcmpu	cr0, %a, %a\n" freg r1 freg r2
+      fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
   | Pfcti(r1, r2) ->
-      fprintf oc "	fctiwz	f13, %a\n" freg r2;
-      fprintf oc "	stfd	f13, -8(r1)\n";
-      fprintf oc "	lwz	%a, -4(r1)\n" ireg r1
+      fprintf oc "	fctiwz	%a, %a\n" freg FPR13 freg r2;
+      fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
+      fprintf oc "	lwz	%a, 4(%a)\n" ireg r1 ireg GPR1;
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
   | Pfctiu(r1, r2) ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       let lbl3 = new_label() in
-      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl1;
-      fprintf oc "	lfd	f13, lo16(L%d)(r12)\n" lbl1;
-      fprintf oc "	fcmpu	cr7, %a, f13\n" freg r2;
+      fprintf oc "	addis	%a, 0, %a\n" ireg GPR12  label_high lbl1;
+      fprintf oc "	lfd	%a, %a(%a)\n" freg FPR13  label_low lbl1  ireg GPR12;
+      fprintf oc "	fcmpu	%a, %a, %a\n" creg 7  freg r2  freg FPR13;
       fprintf oc "	cror	30, 29, 30\n";
-      fprintf oc "	beq	cr7, L%d\n" lbl2;
-      fprintf oc "	fctiwz	f13, %a\n" freg r2;
-      fprintf oc "	stfdu	f13, -8(r1)\n";
-      fprintf oc "	lwz	%a, 4(r1)\n" ireg r1;
-      fprintf oc "	b	L%d\n" lbl3;
-      fprintf oc "L%d:	fsub	f13, %a, f13\n" lbl2 freg r2;
-      fprintf oc "	fctiwz	f13, f13\n";
-      fprintf oc "	stfdu	f13, -8(r1)\n";
-      fprintf oc "	lwz	%a, 4(r1)\n" ireg r1;
+      fprintf oc "	beq	%a, %a\n" creg 7  label lbl2;
+      fprintf oc "	fctiwz	%a, %a\n" freg FPR13  freg r2;
+      fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13  ireg GPR1;
+      fprintf oc "	lwz	%a, 4(%a)\n" ireg r1  ireg GPR1;
+      fprintf oc "	b	%a\n" label lbl3;
+      fprintf oc "%a:	fsub	%a, %a, %a\n" label lbl2  freg FPR13  freg r2  freg FPR13;
+      fprintf oc "	fctiwz	%a, %a\n" freg FPR13  freg FPR13;
+      fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13  ireg GPR1;
+      fprintf oc "	lwz	%a, 4(%a)\n" ireg r1  ireg GPR1;
       fprintf oc "	addis	%a, %a, 0x8000\n" ireg r1 ireg r1;
-      fprintf oc "L%d:	addi	r1, r1, 8\n" lbl3;
-      fprintf oc "	.const_data\n";
-      fprintf oc "L%d:	.long	0x41e00000, 0x00000000\n" lbl1;
-      fprintf oc "	.text\n"
+      fprintf oc "%a:	addi	%a, %a, 8\n" label lbl3  ireg GPR1  ireg GPR1;
+      const oc;
+      fprintf oc "%a:	.long	0x41e00000, 0x00000000\n" label lbl1;
+      text oc
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfmadd(r1, r2, r3, r4) ->
@@ -225,66 +393,68 @@ let print_instruction oc labels = function
       fprintf oc "	fsub	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pictf(r1, r2) ->
       let lbl = new_label() in
-      fprintf oc "	addis	r12, 0, 0x4330\n";
-      fprintf oc "	stw	r12, -8(r1)\n";
-      fprintf oc "	addis	r12, %a, 0x8000\n" ireg r2;
-      fprintf oc "	stw	r12, -4(r1)\n";
-      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl;
-      fprintf oc "	lfd	f13, lo16(L%d)(r12)\n" lbl;
-      fprintf oc "	lfd	%a, -8(r1)\n" freg r1;
-      fprintf oc "	fsub	%a, %a, f13\n" freg r1 freg r1;
-      fprintf oc "	.const_data\n";
-      fprintf oc "L%d:	.long	0x43300000, 0x80000000\n" lbl;
-      fprintf oc "	.text\n"
+      fprintf oc "	addis	%a, 0, 0x4330\n" ireg GPR12;
+      fprintf oc "	stwu	%a, -8(%a)\n" ireg GPR12  ireg GPR1;
+      fprintf oc "	addis	%a, %a, 0x8000\n" ireg GPR12  ireg r2;
+      fprintf oc "	stw	%a, 4(%a)\n" ireg GPR12  ireg GPR1;
+      fprintf oc "	addis	%a, 0, %a\n" ireg GPR12  label_high lbl;
+      fprintf oc "	lfd	%a, %a(%a)\n" freg FPR13  label_low lbl  ireg GPR12;
+      fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
+      fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
+      const oc;
+      fprintf oc "%a:	.long	0x43300000, 0x80000000\n" label lbl;
+      text oc
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
-      fprintf oc "	addis	r12, 0, 0x4330\n";
-      fprintf oc "	stw	r12, -8(r1)\n";
-      fprintf oc "	stw	%a, -4(r1)\n" ireg r2;
-      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl;
-      fprintf oc "	lfd	f13, lo16(L%d)(r12)\n" lbl;
-      fprintf oc "	lfd	%a, -8(r1)\n" freg r1;
-      fprintf oc "	fsub	%a, %a, f13\n" freg r1 freg r1;
-      fprintf oc "	.const_data\n";
-      fprintf oc "L%d:	.long	0x43300000, 0x00000000\n" lbl;
-      fprintf oc "	.text\n"
+      fprintf oc "	addis	%a, 0, 0x4330\n" ireg GPR12;
+      fprintf oc "	stwu	%a, -8(%a)\n" ireg GPR12  ireg GPR1;
+      fprintf oc "	stw	%a, 4(%a)\n" ireg r2  ireg GPR1;
+      fprintf oc "	addis	%a, 0, %a\n" ireg GPR12  label_high lbl;
+      fprintf oc "	lfd	%a, %a(%a)\n" freg FPR13  label_low lbl  ireg GPR12;
+      fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
+      fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
+      const oc;
+      fprintf oc "%a:	.long	0x43300000, 0x00000000\n" label lbl;
+      text oc
   | Plbz(r1, c, r2) ->
-      fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plbzx(r1, r2, r3) ->
       fprintf oc "	lbzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plfd(r1, c, r2) ->
-      fprintf oc "	lfd	%a, %a(%a)\n" freg r1 print_constant c ireg r2
+      fprintf oc "	lfd	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Plfdx(r1, r2, r3) ->
       fprintf oc "	lfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Plfi(r1, c) ->
       let lbl = new_label() in
-      fprintf oc "	addis	r12, 0, ha16(L%d)\n" lbl;
-      fprintf oc "	lfd	%a, lo16(L%d)(r12)\n" freg r1 lbl;
-      fprintf oc "	.const_data\n";
+      fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
+      fprintf oc "	lfd	%a, %a(%a)\n" freg r1 label_low lbl ireg GPR12;
+      const oc;
       let n = Int64.bits_of_float c in
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
-      fprintf oc "L%d:	.long	0x%lx, 0x%lx   ; %f\n" lbl nhi nlo c;
-      fprintf oc "	.text\n"
+      fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo;
+      text oc
   | Plfs(r1, c, r2) ->
-      fprintf oc "	lfs	%a, %a(%a)\n" freg r1 print_constant c ireg r2
+      fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Plfsx(r1, r2, r3) ->
       fprintf oc "	lfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Plha(r1, c, r2) ->
-      fprintf oc "	lha	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	lha	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plhax(r1, r2, r3) ->
       fprintf oc "	lhax	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plhz(r1, c, r2) ->
-      fprintf oc "	lhz	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	lhz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plhzx(r1, r2, r3) ->
       fprintf oc "	lhzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plwz(r1, c, r2) ->
-      fprintf oc "	lwz	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	lwz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plwzx(r1, r2, r3) ->
       fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pmfcrbit(r1, bit) ->
-      fprintf oc "	mfcr	r2\n";
-      fprintf oc "	rlwinm	%a, r2, %d, 1\n" ireg r1 (1 + num_crbit bit)
+      fprintf oc "	mfcr	%a\n" ireg GPR12;
+      fprintf oc "	rlwinm	%a, %a, %d, 1\n" ireg r1  ireg GPR12  (1 + num_crbit bit)
   | Pmflr(r1) ->
       fprintf oc "	mflr	%a\n" ireg r1
   | Pmr(r1, r2) ->
@@ -294,7 +464,7 @@ let print_instruction oc labels = function
   | Pmtlr(r1) ->
       fprintf oc "	mtlr	%a\n" ireg r1
   | Pmulli(r1, r2, c) ->
-      fprintf oc "	mulli	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	mulli	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pmullw(r1, r2, r3) ->
       fprintf oc "	mullw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pnand(r1, r2, r3) ->
@@ -306,9 +476,9 @@ let print_instruction oc labels = function
   | Porc(r1, r2, r3) ->
       fprintf oc "	orc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pori(r1, r2, c) ->
-      fprintf oc "	ori	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	ori	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Poris(r1, r2, c) ->
-      fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Prlwinm(r1, r2, c1, c2) ->
       fprintf oc "	rlwinm	%a, %a, %ld, 0x%lx\n"
                 ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
@@ -321,37 +491,38 @@ let print_instruction oc labels = function
   | Psrw(r1, r2, r3) ->
       fprintf oc "	srw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstb(r1, c, r2) ->
-      fprintf oc "	stb	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	stb	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Pstbx(r1, r2, r3) ->
       fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstfd(r1, c, r2) ->
-      fprintf oc "	stfd	%a, %a(%a)\n" freg r1 print_constant c ireg r2
+      fprintf oc "	stfd	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Pstfdx(r1, r2, r3) ->
       fprintf oc "	stfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Pstfs(r1, c, r2) ->
-      fprintf oc "	stfs	%a, %a(%a)\n" freg r1 print_constant c ireg r2
+      fprintf oc "	stfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Pstfsx(r1, r2, r3) ->
       fprintf oc "	stfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Psth(r1, c, r2) ->
-      fprintf oc "	sth	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	sth	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Psthx(r1, r2, r3) ->
       fprintf oc "	sthx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstw(r1, c, r2) ->
-      fprintf oc "	stw	%a, %a(%a)\n" ireg r1 print_constant c ireg r2
+      fprintf oc "	stw	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Pstwx(r1, r2, r3) ->
       fprintf oc "	stwx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfc(r1, r2, r3) ->
       fprintf oc "	subfc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfic(r1, r2, c) ->
-      fprintf oc "	subfic	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	subfic	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pxor(r1, r2, r3) ->
       fprintf oc "	xor	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pxori(r1, r2, c) ->
-      fprintf oc "	xori	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	xori	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pxoris(r1, r2, c) ->
-      fprintf oc "	xoris	%a, %a, %a\n" ireg r1 ireg r2 print_constant c
+      fprintf oc "	xoris	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Plabel lbl ->
-      if Labelset.mem lbl labels then fprintf oc "%a:\n" print_label lbl
+      if Labelset.mem lbl labels then
+        fprintf oc "%a:\n" label (transl_label lbl)
 
 let rec labels_of_code = function
   | [] -> Labelset.empty
@@ -363,9 +534,17 @@ let print_function oc name code =
   Hashtbl.clear current_function_labels;
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
-  fprintf oc "	.globl %a\n" print_symb name;
-  fprintf oc "%a:\n" print_symb name;
+  fprintf oc "	.globl %a\n" symbol name;
+  fprintf oc "%a:\n" symbol name;
   List.iter (print_instruction oc (labels_of_code code)) code
+
+(* Generation of stub functions *)
+
+let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
+
+(* Stubs for MacOS X *)
+
+module Stubs_MacOS = struct
 
 (* Generation of stub code for variadic functions, e.g. printf.
    Calling conventions for variadic functions are:
@@ -459,9 +638,7 @@ let non_variadic_stub oc name =
   fprintf oc "	.indirect_symbol _%s\n" name;
   fprintf oc "	.long	0\n"
 
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
-
-let print_external_function oc name ef =
+let stub_function oc name ef =
   let name = extern_atom name in
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
@@ -470,10 +647,56 @@ let print_external_function oc name ef =
   then variadic_stub oc name (Str.matched_group 1 name) ef.ef_sig.sig_args
   else non_variadic_stub oc name
 
+let function_needs_stub name = true
+
+end
+
+(* Stubs for EABI *)
+
+module Stubs_EABI = struct
+
+let variadic_stub oc stub_name fun_name args =
+  fprintf oc "	.text\n";
+  fprintf oc "	.align 2\n";
+  fprintf oc ".L%s$stub:\n" stub_name;
+  (* bit 6 must be set if at least one argument is a float; clear otherwise *)
+  if List.mem Tfloat args
+  then fprintf oc "	creqv	6, 6, 6\n"
+  else fprintf oc "	crxor	6, 6, 6\n";
+  fprintf oc "	b	%s\n" fun_name
+
+let stub_function oc name ef =
+  let name = extern_atom name in
+  (* Only variadic functions need a stub *)
+  if Str.string_match re_variadic_stub name 0
+  then variadic_stub oc name (Str.matched_group 1 name) ef.ef_sig.sig_args
+
+let function_needs_stub name =
+  Str.string_match re_variadic_stub (extern_atom name) 0
+
+end
+
+let function_needs_stub =
+  match target with
+  | MacOS -> Stubs_MacOS.function_needs_stub
+  | EABI  -> Stubs_EABI.function_needs_stub
+
+let stub_function =
+  match target with
+  | MacOS -> Stubs_MacOS.stub_function
+  | EABI  -> Stubs_EABI.stub_function
+
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code -> print_function oc name code
-  | External ef -> print_external_function oc name ef
+  | External ef -> stub_function oc name ef
+
+let record_extfun (Coq_pair(name, defn)) =
+  match defn with
+  | Internal _ -> ()
+  | External _ -> 
+      if function_needs_stub name then
+        stubbed_functions := IdentSet.add name !stubbed_functions
 
 let init_data_queue = ref []
 
@@ -485,20 +708,19 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.long	%ld ; %g \n" (Int32.bits_of_float n) n
+      fprintf oc "	.long	%ld\n" (Int32.bits_of_float n)
   | Init_float64 n ->
       (* .quad not working on all versions of the MacOSX assembler *)
       let b = Int64.bits_of_float n in
-      fprintf oc "	.long	%Ld, %Ld ; %g \n"
+      fprintf oc "	.long	%Ld, %Ld\n"
                  (Int64.shift_right_logical b 32)
                  (Int64.logand b 0xFFFFFFFFL)
-                 n
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
   | Init_pointer id ->
       let lbl = new_label() in
-      fprintf oc "	.long	L%d\n" lbl;
+      fprintf oc "	.long	%a\n" label lbl;
       init_data_queue := (lbl, id) :: !init_data_queue
 
 let print_init_data oc id =
@@ -509,7 +731,7 @@ let print_init_data oc id =
     | [] -> ()
     | (lbl, id) :: rem ->
         init_data_queue := rem;
-        fprintf oc "L%d:\n" lbl;
+        fprintf oc "%a:\n" label lbl;
         List.iter (print_init oc) id;
         print_remainder()
   in print_remainder()
@@ -520,12 +742,12 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   | _  ->
       fprintf oc "	.data\n";
       fprintf oc "	.align	3\n";
-      fprintf oc "	.globl	%a\n" print_symb name;
-      fprintf oc "%a:\n" print_symb name;
+      fprintf oc "	.globl	%a\n" symbol name;
+      fprintf oc "%a:\n" symbol name;
       print_init_data oc init_data
 
 let print_program oc p =
-  extfuns := IdentSet.empty;
+  stubbed_functions := IdentSet.empty;
   List.iter record_extfun p.prog_funct;
   List.iter (print_var oc) p.prog_vars;
   List.iter (print_fundef oc) p.prog_funct

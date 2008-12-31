@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(__ppc__)
+#if defined(__ppc__) || defined(__PPC__)
 #define ARCH_BIG_ENDIAN
 #elif defined(__i386__) || defined(__x86_64__)
 #undef ARCH_BIG_ENDIAN
