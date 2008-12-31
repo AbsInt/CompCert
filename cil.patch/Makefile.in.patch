@@ -1,5 +1,14 @@
---- ../cil/Makefile.in.orig	2006-05-21 06:14:15.000000000 +0200
-+++ ../cil/Makefile.in	2008-03-04 14:04:21.000000000 +0100
+--- ../cil/Makefile.in.orig	2008-12-31 19:08:43.000000000 +0100
++++ ../cil/Makefile.in	2008-12-31 19:09:00.000000000 +0100
+@@ -212,7 +212,7 @@
+ # build two libraries
+ .PHONY: cillib libcil
+ ifeq ($(NATIVECAML),1)
+-cillib: $(OBJDIR)/cil.$(CMXA) $(OBJDIR)/libcil.a
++cillib: $(OBJDIR)/cil.$(CMXA) # $(OBJDIR)/libcil.a
+ else
+ cillib: $(OBJDIR)/cil.$(CMXA) 
+ endif
 @@ -243,9 +243,9 @@
  	echo "   Zrapp.feature;" >> $@  
  endif
