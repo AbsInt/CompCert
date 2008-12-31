@@ -160,8 +160,3 @@ int compcert_ungetc(int c, compcert_FILE * f)
 {
   return ungetc(c, (FILE *)(f->fstr));
 }
-
-int compcert_vfprintf(compcert_FILE * f, const char * s, va_list va)
-{
-  return vfprintf((FILE *)(f->fstr), s, va);
-}

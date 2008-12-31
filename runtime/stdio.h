@@ -45,7 +45,6 @@ extern int	 compcert_getc(compcert_FILE *);
 extern int	 compcert_putc(int, compcert_FILE *);
 extern void	 compcert_rewind(compcert_FILE *);
 extern int	 compcert_ungetc(int, compcert_FILE *);
-extern int	 compcert_vfprintf(compcert_FILE *, const char *, va_list);
 
 #ifndef _INSIDE_COMPCERT_COMPATIBILITY_LIBRARY
 #define FILE compcert_FILE
