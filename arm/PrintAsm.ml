@@ -1,0 +1,507 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(* Printing ARM assembly code in asm syntax *)
+
+open Printf
+open Datatypes
+open CList
+open Camlcoq
+open AST
+open Asm
+
+(* On-the-fly label renaming *)
+
+let next_label = ref 100
+
+let new_label() =
+  let lbl = !next_label in incr next_label; lbl
+
+let current_function_labels = (Hashtbl.create 39 : (label, int) Hashtbl.t)
+
+let label_for_label lbl =
+  try
+    Hashtbl.find current_function_labels lbl
+  with Not_found ->
+    let lbl' = new_label() in
+    Hashtbl.add current_function_labels lbl lbl';
+    lbl'
+
+(* Record identifiers of external functions *)
+
+module IdentSet = Set.Make(struct type t = ident let compare = compare end)
+
+let extfuns = (ref IdentSet.empty)
+
+let record_extfun (Coq_pair(name, defn)) =
+  match defn with
+  | Internal _ -> ()
+  | External _ -> extfuns := IdentSet.add name !extfuns
+
+(* Basic printing functions *)
+
+let print_symb oc symb =
+  if IdentSet.mem symb !extfuns
+  then fprintf oc ".L%s$stub" (extern_atom symb)
+  else fprintf oc "%s" (extern_atom symb)
+
+let print_label oc lbl =
+  fprintf oc ".L%d" (label_for_label lbl)
+
+let coqint oc n =
+  fprintf oc "%ld" (camlint_of_coqint n)
+
+let print_symb_ofs oc (symb, ofs) =
+  print_symb oc symb;
+  let ofs = camlint_of_coqint ofs in
+  if ofs <> 0l then fprintf oc " + %ld" ofs
+
+let int_reg_name = function
+  | IR0 -> "r0" | IR1 -> "r1" | IR2 -> "r2" | IR3 -> "r3"
+  | IR4 -> "r4" | IR5 -> "r5" | IR6 -> "r6" | IR7 -> "r7"
+  | IR8 -> "r8" | IR9 -> "r9" | IR10 -> "r10" | IR11 -> "r11"
+  | IR12 -> "r12" | IR13 -> "sp" | IR14 -> "lr"
+
+let float_reg_name = function
+  | FR0 -> "f0"  | FR1 -> "f1"  | FR2 -> "f2"  | FR3 -> "f3"
+  | FR4 -> "f4"  | FR5 -> "f5"  | FR6 -> "f6"  | FR7 -> "f7"
+
+let ireg oc r = output_string oc (int_reg_name r)
+let freg oc r = output_string oc (float_reg_name r)
+
+let condition_name = function
+  | CReq -> "eq"
+  | CRne -> "ne"
+  | CRhs -> "hs"
+  | CRlo -> "lo"
+  | CRmi -> "mi"
+  | CRpl -> "pl"
+  | CRhi -> "hi"
+  | CRls -> "ls"
+  | CRge -> "ge"
+  | CRlt -> "lt"
+  | CRgt -> "gt"
+  | CRle -> "le"
+
+(* Record current code position and latest position at which to
+   emit float and symbol constants. *)
+
+let currpos = ref 0
+let size_constants = ref 0
+let max_pos_constants = ref max_int
+
+let distance_to_emit_constants () =
+  !max_pos_constants - (!currpos + !size_constants)
+
+(* Associate labels to floating-point constants and to symbols *)
+
+let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
+
+let label_float f =
+  let bf = Int64.bits_of_float f in
+  try
+    Hashtbl.find float_labels bf
+  with Not_found ->
+    let lbl' = new_label() in
+    Hashtbl.add float_labels bf lbl';
+    size_constants := !size_constants + 8;
+    max_pos_constants := min !max_pos_constants (!currpos + 1024);
+    lbl'
+
+let symbol_labels = (Hashtbl.create 39 : (ident * Integers.int, int) Hashtbl.t)
+
+let label_symbol id ofs =
+  try
+    Hashtbl.find symbol_labels (id, ofs)
+  with Not_found ->
+    let lbl' = new_label() in
+    Hashtbl.add symbol_labels (id, ofs) lbl';
+    size_constants := !size_constants + 4;
+    max_pos_constants := min !max_pos_constants (!currpos + 4096);
+    lbl'
+
+let reset_constants () =
+  Hashtbl.clear float_labels;
+  Hashtbl.clear symbol_labels;
+  size_constants := 0;
+  max_pos_constants := max_int
+
+let emit_constants oc =
+  Hashtbl.iter
+    (fun bf lbl ->
+      (* Floats are mixed-endian on this flavor of ARM *)
+      let bfhi = Int64.shift_right_logical bf 32
+      and bflo = Int64.logand bf 0xFFFF_FFFFL in
+      fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n"
+          lbl bfhi bflo)
+    float_labels;
+  Hashtbl.iter
+    (fun (id, ofs) lbl ->
+      fprintf oc ".L%d:	.word	%a\n"
+          lbl print_symb_ofs (id, ofs))
+    symbol_labels;
+  reset_constants ()
+
+(* Simulate instructions by calling helper functions *)
+
+let print_list_ireg oc l =
+  match l with
+  | [] -> assert false
+  | r1 :: rs -> ireg oc r1; List.iter (fun r -> fprintf oc ", %a" ireg r) rs
+
+let rec remove l r =
+  match l with
+  | [] -> []
+  | hd :: tl -> if hd = r then remove tl r else hd :: remove tl r
+
+let call_helper oc fn dst arg1 arg2 =
+  (* Preserve caller-save registers r0...r3 except dst *)
+  let tosave = remove [IR0; IR1; IR2; IR3] dst in
+  fprintf oc "	stmfd	sp!, {%a}\n" print_list_ireg tosave;
+  (* Copy arg1 to R0 and arg2 to R1 *)
+  let moves =
+    Parmov.parmove2 (=) (fun _ -> IR14) [arg1; arg2] [IR0; IR1] in
+  List.iter
+    (fun (Coq_pair(s, d)) ->
+      fprintf oc "	mov	%a, %a\n" ireg d ireg s)
+    moves;
+  (* Call the helper function *)
+  fprintf oc "	bl	%s\n" fn;
+  (* Move result to dst *)
+  begin match dst with
+  | IR0 -> ()
+  | _   -> 
+      fprintf oc "	mov	%a, r0\n" ireg dst
+  end;
+  (* Restore the other caller-save registers *)
+  fprintf oc "	ldmfd	sp!, {%a}\n" print_list_ireg tosave;
+  (* ... for a total of at most 7 instructions *)
+  7
+
+(* Printing of instructions *)
+
+let shift_op oc = function
+  | SOimm n -> fprintf oc "#%a" coqint n
+  | SOreg r -> ireg oc r
+  | SOlslimm(r, n) -> fprintf oc "%a, lsl #%a" ireg r coqint n
+  | SOlslreg(r, r') -> fprintf oc "%a, lsl %a" ireg r ireg r'
+  | SOlsrimm(r, n) -> fprintf oc "%a, lsr #%a" ireg r coqint n
+  | SOlsrreg(r, r') -> fprintf oc "%a, lsr %a" ireg r ireg r'
+  | SOasrimm(r, n) -> fprintf oc "%a, asr #%a" ireg r coqint n
+  | SOasrreg(r, r') -> fprintf oc "%a, asr %a" ireg r ireg r'
+  | SOrorimm(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
+  | SOrorreg(r, r') -> fprintf oc "%a, ror %a" ireg r ireg r'
+
+let shift_addr oc = function
+  | SAimm n -> fprintf oc "#%a" coqint n
+  | SAreg r -> ireg oc r
+  | SAlsl(r, n) -> fprintf oc "%a, lsl #%a" ireg r coqint n
+  | SAlsr(r, n) -> fprintf oc "%a, lsr #%a" ireg r coqint n
+  | SAasr(r, n) -> fprintf oc "%a, asr #%a" ireg r coqint n
+  | SAror(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
+
+module Labelset = Set.Make(struct type t = label let compare = compare end)
+
+let print_instruction oc labels = function
+  (* Core instructions *)
+  | Padd(r1, r2, so) ->
+      fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Pand(r1, r2, so) ->
+      fprintf oc "	and	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Pb lbl ->
+      fprintf oc "	b	%a\n" print_label lbl; 1
+  | Pbc(bit, lbl) ->
+      fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
+  | Pbsymb id ->
+      fprintf oc "	b	%a\n" print_symb id; 1
+  | Pbreg r ->
+      fprintf oc "	mov	pc, %a\n" ireg r; 1
+  | Pblsymb id ->
+      fprintf oc "	bl	%a\n" print_symb id; 1
+  | Pblreg r ->
+      fprintf oc "	mov	lr, pc\n";
+      fprintf oc "	mov	pc, %a\n" ireg r; 2
+  | Pbic(r1, r2, so) ->
+      fprintf oc "	bic	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Pcmp(r1, so) ->
+      fprintf oc "	cmp	%a, %a\n" ireg r1 shift_op so; 1
+  | Peor(r1, r2, so) ->
+      fprintf oc "	eor	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Pldr(r1, r2, sa) ->
+      fprintf oc "	ldr	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pldrb(r1, r2, sa) ->
+      fprintf oc "	ldrb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pldrh(r1, r2, sa) ->
+      fprintf oc "	ldrh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pldrsb(r1, r2, sa) ->
+      fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pldrsh(r1, r2, sa) ->
+      fprintf oc "	ldrsh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pmov(r1, so) ->
+      fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so; 1
+  | Pmovc(bit, r1, so) ->
+      fprintf oc "	mov%s	%a, %a\n" (condition_name bit) ireg r1 shift_op so; 1
+  | Pmul(r1, r2, r3) ->
+      fprintf oc "	mul	%a, %a, %a\n" ireg r1 ireg r2 ireg r3; 1
+  | Pmvn(r1, so) ->
+      fprintf oc "	mvn	%a, %a\n" ireg r1 shift_op so; 1
+  | Porr(r1, r2, so) ->
+      fprintf oc "	orr	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Prsb(r1, r2, so) ->
+      fprintf oc "	rsb	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Pstr(r1, r2, sa) ->
+      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pstrb(r1, r2, sa) ->
+      fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pstrh(r1, r2, sa) ->
+      fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Psdiv(r1, r2, r3) ->
+      call_helper oc "__divsi3" r1 r2 r3
+  | Psub(r1, r2, so) ->
+      fprintf oc "	sub	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
+  | Pudiv(r1, r2, r3) ->
+      call_helper oc "__udivsi3" r1 r2 r3
+  (* Floating-point coprocessor instructions *)
+  | Pabsd(r1, r2) ->
+      fprintf oc "	absd	%a, %a\n" freg r1 freg r2; 1
+  | Padfd(r1, r2, r3) ->
+      fprintf oc "	adfd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pcmf(r1, r2) ->
+      fprintf oc "	cmf	%a, %a\n" freg r1 freg r2; 1
+  | Pdvfd(r1, r2, r3) ->
+      fprintf oc "	dvfd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pfixz(r1, r2) ->
+      fprintf oc "	fixz	%a, %a\n" ireg r1 freg r2; 1
+  | Pfixzu(r1, r2) ->
+      (* F3 = second float temporary is unused at this point,
+         but this should be reflected in the proof *)
+      let lbl = label_float 2147483648.0 in
+      let lbl2 = new_label() in
+      fprintf oc "	ldfd	f3, .L%d\n" lbl;
+      fprintf oc "	cmfe	%a, f3\n" freg r2;
+      fprintf oc "	fixltz	%a, %a\n" ireg r1 freg r2;
+      fprintf oc "	blt	.L%d\n" lbl2;
+      fprintf oc "	sufd	f3, %a, f3\n" freg r2;
+      fprintf oc "	fixz	%a, f3\n" ireg r1;
+      fprintf oc "	eor	%a, %a, #-2147483648\n" ireg r1 ireg r1;
+      fprintf oc ".L%d\n" lbl2;
+      7
+  | Pfltd(r1, r2) ->
+      fprintf oc "	fltd	%a, %a\n" freg r1 ireg r2; 1
+  | Pfltud(r1, r2) ->
+      fprintf oc "	fltd	%a, %a\n" freg r1 ireg r2;
+      fprintf oc "	cmp	%a, #0\n" ireg r2;
+      (* F3 = second float temporary is unused at this point,
+         but this should be reflected in the proof *)
+      let lbl = label_float 4294967296.0 in
+      fprintf oc "	ldfltd	f3, .L%d\n" lbl;
+      fprintf oc "	adfltd  %a, %a, f3\n" freg r1 freg r1; 4
+  | Pldfd(r1, r2, n) ->
+      fprintf oc "	ldfd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+  | Pldfs(r1, r2, n) ->
+      fprintf oc "	ldfs	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n;
+      fprintf oc "	mvfd	%a, %a\n" freg r1 freg r1; 2
+  | Plifd(r1, f) ->
+      if Int64.bits_of_float f = 0L (* +0.0 *) then begin
+        fprintf oc "	mvfd	%a, #0.0\n" freg r1; 1
+      end else begin
+        let lbl = label_float f in
+        fprintf oc "	ldfd	%a, .L%d @ %.12g\n" freg r1 lbl f; 1
+      end
+  | Pmnfd(r1, r2) ->
+      fprintf oc "	mnfd	%a, %a\n" freg r1 freg r2; 1
+  | Pmvfd(r1, r2) ->
+      fprintf oc "	mvfd	%a, %a\n" freg r1 freg r2; 1
+  | Pmvfs(r1, r2) ->
+      fprintf oc "	mvfs	%a, %a\n" freg r1 freg r2;
+      fprintf oc "	mvfd	%a, %a\n" freg r2 freg r2; 2
+  | Pmufd(r1, r2, r3) ->
+      fprintf oc "	mufd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pstfd(r1, r2, n) ->
+      fprintf oc "	stfd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+  | Pstfs(r1, r2, n) ->
+      (* F3 = second float temporary is unused at this point,
+         but this should be reflected in the proof *)
+      fprintf oc "	mvfs	f3, %a\n" freg r1;
+      fprintf oc "	stfs	f3, [%a, #%a]\n" ireg r2 coqint n; 2
+  | Psufd(r1, r2, r3) ->
+      fprintf oc "	sufd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  (* Pseudo-instructions *)
+  | Pallocblock ->
+      fprintf oc "	bl	compcert_alloc\n"; 1
+  | Pallocframe(lo, hi, ofs) ->
+      let lo = camlint_of_coqint lo
+      and hi = camlint_of_coqint hi
+      and ofs = camlint_of_coqint ofs in
+      let sz = Int32.sub hi lo in
+      (* Keep stack 4-aligned *)
+      let sz4 = Int32.logand (Int32.add sz 3l) 0xFFFF_FFFCl in
+      (* FIXME: consider a store multiple? *)
+      (* R12 = first int temporary is unused at this point,
+         but this should be reflected in the proof *)
+      fprintf oc "	mov	r12, sp\n";
+      fprintf oc "	sub	sp, sp, #%ld\n" sz4;
+      fprintf oc "	str	r12, [sp, #%ld]\n" ofs; 3
+  | Pfreeframe ofs ->
+      fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1
+  | Plabel lbl ->
+      if Labelset.mem lbl labels then
+        fprintf oc "%a:\n" print_label lbl; 0
+  | Ploadsymbol(r1, id, ofs) ->
+      let lbl = label_symbol id ofs in
+      fprintf oc "	ldr	%a, .L%d @ %a\n" 
+         ireg r1 lbl print_symb_ofs (id, ofs); 1
+
+let no_fallthrough = function
+  | Pb _ -> true
+  | Pbsymb _ -> true
+  | Pbreg _ -> true
+  | _ -> false
+
+let rec print_instructions oc labels instrs =
+  match instrs with
+  | [] -> ()
+  | i :: il ->
+      let n = print_instruction oc labels i in
+      currpos := !currpos + n * 4;
+      let d = distance_to_emit_constants() in
+      if d < 256 && no_fallthrough i then
+        emit_constants oc
+      else if d < 16 then begin
+        let lbl = new_label() in
+        fprintf oc "	b	.L%d\n" lbl;
+        emit_constants oc;
+        fprintf oc ".L%d:\n" lbl
+      end;
+      print_instructions oc labels il
+
+let rec labels_of_code = function
+  | [] -> Labelset.empty
+  | (Pb lbl | Pbc(_, lbl)) :: c -> Labelset.add lbl (labels_of_code c)
+  | _ :: c -> labels_of_code c
+
+let print_function oc name code =
+  Hashtbl.clear current_function_labels;
+  reset_constants();
+  currpos := 0;
+  fprintf oc "	.text\n";
+  fprintf oc "	.align 2\n";
+  fprintf oc "	.global	%a\n" print_symb name;
+  fprintf oc "	.type	%a, %%function\n" print_symb name;
+  fprintf oc "%a:\n" print_symb name;
+  print_instructions oc (labels_of_code code) code;
+  emit_constants oc
+
+(* Generation of stub code for external functions.
+   Compcert passes the first two float arguments in F0 and F1,
+   while gcc passes them in pairs of integer registers. *)
+
+let print_external_function oc name sg =
+  let name = extern_atom name in
+  let rec move_args ty_args int_regs float_regs =
+    match ty_args with
+    | [] -> ()
+    | Tint :: tys ->
+        begin match int_regs with
+        | [] -> move_args tys [] float_regs
+        | ir :: irs -> move_args tys irs float_regs
+        end
+    | Tfloat :: tys ->
+        begin match float_regs, int_regs with
+        | fr :: frs, ir1 :: ir2 :: irs ->
+            (* transfer fr to the pair (ir1, ir2) *)
+            fprintf oc "	stfd	%a, [sp, #-8]!\n" freg fr;
+            fprintf oc "	ldmfd	sp!, {%a, %a}\n" ireg ir1 ireg ir2;
+            move_args tys irs frs
+        | fr :: frs, ir1 :: [] ->
+            (* transfer fr to ir1 and the bottom stack word *)
+            fprintf oc "	stfd	%a, [sp, #-4]!\n" freg fr;
+            fprintf oc "	ldmfd	sp!, {%a}\n" ireg ir1;
+            move_args tys [] frs
+        | _, _ ->
+            (* no more float regs, or no more int regs:
+               float arg is already on stack, where it should be *)
+            move_args tys int_regs float_regs
+        end
+  in
+  fprintf oc "	.text\n";
+  fprintf oc "	.align 2\n";
+  fprintf oc ".L%s$stub:\n" name;
+  move_args sg.sig_args [IR0;IR1;IR2;IR3] [FR0;FR1];
+  (* Remove variadic prefix $iiff if any *)
+  let real_name =
+    try String.sub name 0 (String.index name '$')
+    with Not_found -> name in
+  fprintf oc "	b	%s\n" real_name
+
+let print_fundef oc (Coq_pair(name, defn)) =
+  match defn with
+  | Internal code -> print_function oc name code
+  | External ef -> print_external_function oc name ef.ef_sig
+
+(* Data *)
+
+let init_data_queue = ref []
+
+let print_init oc = function
+  | Init_int8 n ->
+      fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
+  | Init_int16 n ->
+      fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
+  | Init_int32 n ->
+      fprintf oc "	.word	%ld\n" (camlint_of_coqint n)
+  | Init_float32 n ->
+      fprintf oc "	.word	0x%lx @ %.15g \n" (Int32.bits_of_float n) n
+  | Init_float64 n ->
+      (* Floats are mixed-endian on this flavor of ARM *)
+      let bf = Int64.bits_of_float n in
+      let bfhi = Int64.shift_right_logical bf 32
+      and bflo = Int64.logand bf 0xFFFF_FFFFL in
+      fprintf oc "	.word	0x%Lx, 0x%Lx @ %.15g\n" bfhi bflo n
+  | Init_space n ->
+      let n = camlint_of_z n in
+      if n > 0l then fprintf oc "	.space	%ld\n" n
+  | Init_pointer id ->
+      let lbl = new_label() in
+      fprintf oc "	.word	.L%d\n" lbl;
+      init_data_queue := (lbl, id) :: !init_data_queue
+
+let print_init_data oc id =
+  init_data_queue := [];
+  List.iter (print_init oc) id;
+  let rec print_remainder () =
+    match !init_data_queue with
+    | [] -> ()
+    | (lbl, id) :: rem ->
+        init_data_queue := rem;
+        fprintf oc ".L%d:\n" lbl;
+        List.iter (print_init oc) id;
+        print_remainder()
+  in print_remainder()
+
+let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
+  match init_data with
+  | [] -> ()
+  | _  ->
+      fprintf oc "	.data\n";
+      fprintf oc "	.align	2\n";
+      fprintf oc "	.global	%a\n" print_symb name;
+      fprintf oc "	.type	%a, %%object\n" print_symb name;
+      fprintf oc "%a:\n" print_symb name;
+      print_init_data oc init_data
+
+let print_program oc p =
+  extfuns := IdentSet.empty;
+  List.iter record_extfun p.prog_funct;
+  List.iter (print_var oc) p.prog_vars;
+  List.iter (print_fundef oc) p.prog_funct
+

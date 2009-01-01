@@ -79,16 +79,24 @@ FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER)
 
 proof: $(FILES:.v=.vo)
 
-exec:
+extraction:
+	$(MAKE) -C extraction
+
+cil:
+	$(MAKE) -C cil
+
+ccomp:
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native && mv Driver.native ccomp
 
-all:
-	$(MAKE) proof
-	$(MAKE) -C cil
-	$(MAKE) -C extraction
-	$(MAKE) exec
-	$(MAKE) -C extraction
+runtime:
 	$(MAKE) -C runtime
+
+.PHONY: proof extraction cil ccomp runtime
+
+extraction: proof
+ccomp: cil extraction 
+
+all: proof cil extraction ccomp runtime
 
 documentation: doc/removeproofs
 	@ln -f $(FILES) doc/
@@ -143,3 +151,4 @@ distclean:
 
 include .depend
 
+FORCE:

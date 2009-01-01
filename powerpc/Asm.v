@@ -394,7 +394,7 @@ Definition symbol_offset (id: ident) (ofs: int) : val :=
   | None => Vundef
   end.
 
-(** The four functions below axiomatize how the linker processes
+(** The two functions below axiomatize how the linker processes
   symbolic references [symbol + offset] and splits their
   actual values into two 16-bit halves. *)
 

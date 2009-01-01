@@ -26,35 +26,6 @@ Require Import Locations.
 Require Import Mach.
 Require Import Asm.
 
-(** Translation of the LTL/Linear/Mach view of machine registers
-  to the ARM view.  ARM has two different types for registers
-  (integer and float) while LTL et al have only one.  The
-  [ireg_of] and [freg_of] are therefore partial in principle.
-  To keep things simpler, we make them return nonsensical
-  results when applied to a LTL register of the wrong type.
-  The proof in [ARMgenproof] will show that this never happens.
-
-  Note that no LTL register maps to [IR14].
-  This register is reserved as temporary, to be used
-  by the generated ARM code.  *)
-
-Definition ireg_of (r: mreg) : ireg :=
-  match r with
-  | R0 => IR0 | R1 => IR1 | R2 => IR2 | R3 => IR3
-  | R4 => IR4 | R5 => IR5 | R6 => IR6 | R7 => IR7
-  | R8 => IR8 | R9 => IR9 | R11 => IR11
-  | IT1 => IR10 | IT2 => IR12
-  | _ => IR0  (* should not happen *)
-  end.
-
-Definition freg_of (r: mreg) : freg :=
-  match r with
-  | F0 => FR0 | F1 => FR1
-  | F4 => FR4 | F5 => FR5 | F6 => FR6 | F7 => FR7
-  | FT1 => FR2 | FT2 => FR3
-  | _ => FR0  (* should not happen *)
-  end.
-
 (** Recognition of integer immediate arguments.
 - For arithmetic operations, immediates are
   8-bit quantities zero-extended and rotated right by 0, 2, 4, ... 30 bits.

@@ -1390,5 +1390,6 @@ Definition sel_fundef (f: Cminor.fundef) : fundef :=
 Definition sel_program (p: Cminor.program) : program :=
   transform_program sel_fundef p.
 
+(** For compatibility with PowerPC *)
 
-
+Parameter use_fused_mul: unit -> bool.
