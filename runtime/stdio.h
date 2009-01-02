@@ -16,7 +16,11 @@
 #ifndef _COMPCERT_STDIO_H
 #define _COMPCERT_STDIO_H
 
+#ifdef __GNUC__
+#include_next "stdio.h"
+#else
 #include "/usr/include/stdio.h"
+#endif
 
 typedef struct compcert_FILE_ { void * fstr; } compcert_FILE;
 
@@ -71,11 +75,16 @@ extern int	 compcert_ungetc(int, compcert_FILE *);
 #define fseek compcert_fseek
 #define ftell compcert_ftell
 #define fwrite compcert_fwrite
+#undef getc
 #define getc compcert_getc
+#undef getchar
+#define getchar() compcert_getc(compcert_stdin)
+#undef putc
 #define putc compcert_putc
+#undef putchar
+#define putchar(c) compcert_putc(c, compcert_stdout)
 #define rewind compcert_rewind
 #define ungetc compcert_ungetc
-#define vfprintf compcert_vfprintf
 #endif
 
 #endif
