@@ -93,10 +93,12 @@ runtime:
 
 .PHONY: proof extraction cil ccomp runtime
 
-extraction: proof
-ccomp: cil extraction 
-
-all: proof cil extraction ccomp runtime
+all:
+	$(MAKE) proof
+	$(MAKE) cil
+	$(MAKE) extraction
+	$(MAKE) ccomp
+	$(MAKE) runtime
 
 documentation: doc/removeproofs
 	@ln -f $(FILES) doc/
