@@ -333,11 +333,9 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f (Sexit (switch_target n default cases)) k sp e m)
 
   | step_return_0: forall f k sp e m,
-      f.(fn_sig).(sig_res) = None ->
       step (State f (Sreturn None) k (Vptr sp Int.zero) e m)
         E0 (Returnstate Vundef (call_cont k) (Mem.free m sp))
   | step_return_1: forall f a k sp e m v,
-      f.(fn_sig).(sig_res) <> None ->
       eval_expr (Vptr sp Int.zero) e m nil a v ->
       step (State f (Sreturn (Some a)) k (Vptr sp Int.zero) e m)
         E0 (Returnstate v (call_cont k) (Mem.free m sp))

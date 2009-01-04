@@ -1427,11 +1427,11 @@ Proof.
   constructor; auto. destruct b; auto.
   (* Sreturn None *)
   econstructor; split. 
-  econstructor. rewrite <- H; reflexivity.
+  econstructor. 
   constructor; auto. apply call_cont_commut.
   (* Sreturn Some *)
   econstructor; split. 
-  econstructor. simpl. auto. eauto with evalexpr. 
+  econstructor. simpl. eauto with evalexpr. 
   constructor; auto. apply call_cont_commut.
   (* Sgoto *)
   econstructor; split.
