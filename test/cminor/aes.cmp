@@ -1,7 +1,19 @@
 /* AES cipher.  To be preprocessed with cpp -P. */
 
+#if defined(__ppc__) || defined(__PPC__)
+#define ARCH_BIG_ENDIAN
+#elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
+#undef ARCH_BIG_ENDIAN
+#else
+#error "unknown endianness"
+#endif
+
+#ifdef ARCH_BIG_ENDIAN
 #define GETU32(pt) int32[pt]
 #define PUTU32(ct,st) int32[ct] = st
+#else
+#error "this test is not available yet in little-endian"
+#endif
 
 #define rk(n) int32[rk_ + (n) * 4]
 #define Te0(n) int32["Te0" + (n) * 4]
