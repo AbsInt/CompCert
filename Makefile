@@ -18,6 +18,7 @@ COQDOC=coqdoc
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
   -no-hygiene \
+  -no-links \
   -I extraction $(INCLUDES) \
   -cflags -I,`pwd`/cil/obj/$(ARCHOS) \
   -lflags -I,`pwd`/cil/obj/$(ARCHOS) \
@@ -83,10 +84,15 @@ extraction:
 	$(MAKE) -C extraction
 
 cil:
-	$(MAKE) -C cil
+	$(MAKE) -j1 -C cil
 
 ccomp:
-	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native && mv Driver.native ccomp
+	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
+        && rm -f ccomp && ln -s _build/driver/Driver.native ccomp
+
+ccomp.byte:
+	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.byte \
+        && rm -f ccomp.byte && ln -s _build/driver/Driver.byte ccomp.byte
 
 runtime:
 	$(MAKE) -C runtime
@@ -138,6 +144,7 @@ install:
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
+	rm -f ccomp ccomp.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
 	rm -f doc/removeproofs.ml doc/removeproofs
