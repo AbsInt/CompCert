@@ -454,7 +454,7 @@ expr:
   | FLOATLIT                                    { Rconst(Ofloatconst $1) }
   | STRINGLIT                                   { Rconst(Oaddrsymbol($1, Int.zero)) }
   | AMPERSAND INTLIT                            { Rconst(Oaddrstack(coqint_of_camlint $2)) }
-  | MINUS expr    %prec p_uminus                { Rbinop(Osub, intconst 0l, $2) } /***FIXME***/
+  | MINUS expr    %prec p_uminus                { Runop(Onegint, $2) }
   | MINUSF expr   %prec p_uminus                { Runop(Onegf, $2) }
   | ABSF expr                                   { Runop(Oabsf, $2) }
   | INTOFFLOAT expr                             { Runop(Ointoffloat, $2) }
