@@ -9,7 +9,7 @@ ASFLAGS=
 VPATH=../harness ../lib
 
 PROGS=fib integr qsort fft sha1 aes almabench manyargs lists \
-  stopcopy marksweep
+  stopcopy marksweep switchtbl conversions
 
 all_s: $(PROGS:%=%.s)
 
@@ -76,6 +76,11 @@ switchtbl: switchtbl.o mainswitchtbl.o
 	$(CC) $(CFLAGS) -o switchtbl switchtbl.o mainswitchtbl.o
 clean::
 	rm -f switchtbl
+
+conversions: conversions.o mainconversions.o
+	$(CC) $(CFLAGS) -o conversions conversions.o mainconversions.o
+clean::
+	rm -f conversions
 
 .SUFFIXES:
 
