@@ -86,8 +86,6 @@ let type_instr retty (Coq_pair(pc, i)) =
         raise(Type_error (Printf.sprintf "type mismatch in Itailcall(%s): %s"
                                          name msg))
       end
-  | Ialloc(arg, res, _) ->
-      set_type arg Tint; set_type res Tint
   | Icond(cond, args, _, _) ->
       set_types args (type_of_condition cond)
   | Ireturn(optres) ->

@@ -33,7 +33,6 @@ type rexpr =
   | Rload of memory_chunk * rexpr
   | Rcondition of rexpr * rexpr * rexpr
   | Rcall of signature * rexpr * rexpr list
-  | Ralloc of rexpr
 
 let temp_counter = ref 0
 
@@ -68,11 +67,6 @@ let rec convert_rexpr = function
       let t = mktemp() in
       convert_accu := Scall(Some t, sg, c1, cl) :: !convert_accu;
       Evar t
-  | Ralloc e1 ->
-      let c1 = convert_rexpr e1 in
-      let t = mktemp() in
-      convert_accu := Salloc(t, c1) :: !convert_accu;
-      Evar t
 
 and convert_rexpr_list = function
   | [] -> []
@@ -104,9 +98,6 @@ let mkassign id e =
       let c1 = convert_rexpr e1 in
       let cl = convert_rexpr_list el in
       prepend_seq !convert_accu (Scall(Some id, sg, c1, cl))
-  | Ralloc(e1) ->
-      let c1 = convert_rexpr e1 in
-      prepend_seq !convert_accu (Salloc(id, c1))
   | _ ->
       let c = convert_rexpr e in
       prepend_seq !convert_accu (Sassign(id, c))
@@ -206,7 +197,6 @@ let mkmatch expr cases =
 %token ABSF
 %token AMPERSAND
 %token AMPERSANDAMPERSAND
-%token ALLOC
 %token BANG
 %token BANGEQUAL
 %token BANGEQUALF
@@ -508,7 +498,6 @@ expr:
   | expr BARBAR expr                            { orbool $1 $3 }
   | expr QUESTION expr COLON expr               { Rcondition($1, $3, $5) }
   | expr LPAREN expr_list RPAREN COLON signature{ Rcall($6, $1, $3) }
-  | ALLOC expr                                  { Ralloc $2 }
 ;
 
 expr_list:

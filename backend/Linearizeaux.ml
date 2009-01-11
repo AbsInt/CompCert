@@ -70,7 +70,6 @@ let enumerate_aux f reach =
            | Lstore (chunk, addr, args, src, s) -> emit_block pending s
            | Lcall (sig0, ros, args, res, s) -> emit_block pending s
            | Ltailcall (sig0, ros, args) -> emit_restart pending
-           | Lalloc (arg, res, s) -> emit_block pending s
            | Lcond (cond, args, ifso, ifnot) ->
                emit_restart (IntSet.add (int_of_pos ifso)
                              (IntSet.add (int_of_pos ifnot) pending))

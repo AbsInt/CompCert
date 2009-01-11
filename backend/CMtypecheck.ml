@@ -294,15 +294,6 @@ let rec type_stmt env blk ret s =
       with Error s ->
         raise (Error (sprintf "In call:\n%s" s))
       end
-  | Salloc(id, e) ->
-      let tid = type_var env id in
-      let te = type_expr env [] e in
-      begin try
-        unify tint te;
-        unify tint tid
-      with Error s ->
-        raise (Error (sprintf "In alloc:\n%s" s))
-      end
   | Sseq(s1, s2) ->
       type_stmt env blk ret s1;
       type_stmt env blk ret s2

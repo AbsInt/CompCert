@@ -180,8 +180,6 @@ let print_instruction oc labels = function
       fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
   | Paddze(r1, r2) ->
       fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
-  | Pallocblock ->
-      fprintf oc "	bl	%a\n" raw_symbol "compcert_alloc"
   | Pallocframe(lo, hi, ofs) ->
       let lo = camlint_of_coqint lo
       and hi = camlint_of_coqint hi

@@ -33,7 +33,6 @@ rule token = parse
   | blank +      { token lexbuf }
   | "/*"         { comment lexbuf; token lexbuf }
   | "absf" { ABSF }
-  | "alloc" { ALLOC }
   | "&" { AMPERSAND }
   | "&&" { AMPERSANDAMPERSAND }
   | "!"    { BANG }

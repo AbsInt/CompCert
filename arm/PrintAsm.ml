@@ -336,8 +336,6 @@ let print_instruction oc labels = function
   | Psufd(r1, r2, r3) ->
       fprintf oc "	sufd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
   (* Pseudo-instructions *)
-  | Pallocblock ->
-      fprintf oc "	bl	compcert_alloc\n"; 1
   | Pallocframe(lo, hi, ofs) ->
       let lo = camlint_of_coqint lo
       and hi = camlint_of_coqint hi
