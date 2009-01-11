@@ -232,7 +232,7 @@ Proof.
   apply wf_kill_loads; auto.
   apply wf_empty_numbering.
   apply wf_empty_numbering.
-  apply wf_add_unknown; auto.
+(*  apply wf_add_unknown; auto. *)
 Qed.
 
 (** As a consequence, the numberings computed by the static analysis
@@ -401,7 +401,7 @@ Definition rhs_evals_to
     (valu: valnum -> val) (rh: rhs) (v: val) : Prop :=
   match rh with
   | Op op vl => 
-      eval_operation ge sp op (List.map valu vl) m = Some v
+      eval_operation ge sp op (List.map valu vl) = Some v
   | Load chunk addr vl =>
       exists a,
       eval_addressing ge sp addr (List.map valu vl) = Some a /\
@@ -482,7 +482,7 @@ Lemma add_op_satisfiable:
   forall n rs op args dst v,
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
-  eval_operation ge sp op rs##args m = Some v ->
+  eval_operation ge sp op rs##args = Some v ->
   numbering_satisfiable ge sp (rs#dst <- v) m (add_op n dst op args).
 Proof.
   intros. inversion H0.
@@ -559,7 +559,7 @@ Proof.
   intros. destruct H0 as [valu [A B]].
   exists valu; split; intros.
   generalize (A _ _ H0). destruct rh; simpl.
-  intro. eapply eval_operation_alloc; eauto. 
+  auto.
   intros [addr [C D]]. exists addr; split. auto.
   destruct addr; simpl in *; try discriminate. 
   eapply Mem.load_alloc_other; eauto. 
@@ -595,7 +595,7 @@ Proof.
   generalize (kill_load_eqs_ops _ _ _ H5).
   destruct rh; simpl.
   intros. destruct addr; simpl in H; try discriminate. 
-  eapply eval_operation_store; eauto.
+  auto.
   tauto.
   apply H3. assumption.
 Qed.
@@ -651,7 +651,7 @@ Lemma find_op_correct:
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
   find_op n op args = Some r ->
-  eval_operation ge sp op rs##args m = Some rs#r.
+  eval_operation ge sp op rs##args = Some rs#r.
 Proof.
   intros until r. intros WF [valu NH].
   unfold find_op. caseEq (valnum_regs n args). intros n' vl VR FIND.
@@ -841,14 +841,14 @@ Proof.
 
   (* Iop *)
   exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- v) m); split.
-  assert (eval_operation tge sp op rs##args m = Some v).
+  assert (eval_operation tge sp op rs##args = Some v).
     rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
   generalize C; clear C.
   case (is_trivial_op op).
   intro. eapply exec_Iop'; eauto. 
   caseEq (find_op (analyze f)!!pc op args). intros r FIND CODE.
   eapply exec_Iop'; eauto. simpl. 
-  assert (eval_operation ge sp op rs##args m = Some rs#r).
+  assert (eval_operation ge sp op rs##args = Some rs#r).
     eapply find_op_correct; eauto.
     eapply wf_analyze; eauto.
   congruence.
@@ -909,16 +909,6 @@ Proof.
   eapply exec_Itailcall with (f := transf_fundef f); eauto.
   apply sig_preserved. 
   econstructor; eauto. 
-
-  (* Ialloc *)
-  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- (Vptr b Int.zero)) m'); split.
-  eapply exec_Ialloc; eauto.
-  econstructor; eauto.
-  apply analysis_correct_1 with pc. 
-  unfold successors; rewrite H; auto with coqlib.
-  unfold transfer; rewrite H. 
-  apply add_unknown_satisfiable. apply wf_analyze; auto.
-  eapply alloc_satisfiable; eauto.
 
   (* Icond true *)
   econstructor; split.

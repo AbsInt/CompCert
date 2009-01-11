@@ -26,8 +26,7 @@ Require Import Conventions.
 (** The [bounds] record capture how many local and outgoing stack slots
   and callee-save registers are used by a function. *)
 
-(** We demand that all bounds are positive or null,
-  and moreover [bound_outgoing] is greater or equal to 6.
+(** We demand that all bounds are positive or null.
   These properties are used later to reason about the layout of
   the activation record. *)
 
@@ -104,7 +103,6 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lstore chunk addr args src => nil
   | Lcall sig ros => nil
   | Ltailcall sig ros => nil
-  | Lalloc => nil
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => nil

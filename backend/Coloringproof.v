@@ -384,10 +384,6 @@ Proof.
   apply add_interf_destroyed_incl.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   apply add_interfs_call_incl.
-  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
-  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
-  eapply graph_incl_trans; [idtac|apply add_interf_op_incl].
-  apply add_interf_destroyed_incl.
   destruct o.
   apply add_pref_mreg_incl.
   apply graph_incl_refl.
@@ -437,15 +433,6 @@ Definition correct_interf_instr
                                  interfere_mreg rfun mr g
         | inr idfun => True
       end
-  | Ialloc arg res s =>
-      (forall r mr,
-        Regset.In r live ->
-        In mr destroyed_at_call_regs ->
-        r <> res ->
-        interfere_mreg r mr g)
-   /\ (forall r,
-        Regset.In r live ->
-        r <> res -> interfere r res g)
   | _ =>
       True
   end.
@@ -467,9 +454,6 @@ Proof.
   split. intros. eapply interfere_incl; eauto.
   destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
   destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
-  intros [A B]. split.
-  intros. eapply interfere_mreg_incl; eauto.
-  intros. eapply interfere_incl; eauto.
 Qed.
 
 Lemma add_edges_instr_correct:
@@ -516,20 +500,6 @@ Proof.
   eapply interfere_mreg_incl.
   apply add_prefs_call_incl.
   apply add_interfs_call_correct. auto.
-
-  (* Ialloc *)
-  split; intros.
-  apply interfere_mreg_incl with
-    (add_interf_destroyed (Regset.remove r0 live) destroyed_at_call_regs g).
-  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
-  eapply graph_incl_trans; [idtac|apply add_pref_mreg_incl].
-  apply add_interf_op_incl.
-  apply add_interf_destroyed_correct; auto.
-  apply Regset.remove_2; auto.
-
-  eapply interfere_incl.
-  eapply graph_incl_trans; apply add_pref_mreg_incl.
-  apply add_interf_op_correct; auto.
 Qed.
 
 Lemma add_edges_instrs_incl_aux:
@@ -826,14 +796,6 @@ Definition correct_alloc_instr
         | inl rfun => ~(In (alloc rfun) (loc_arguments sig))
         | inr idfun => True
         end)
-  | Ialloc arg res s =>
-      (forall r,
-        Regset.In r live!!pc ->
-        r <> res ->
-        ~(In (alloc r) Conventions.destroyed_at_call))
-   /\ (forall r,
-        Regset.In r live!!pc ->
-        r <> res -> alloc r <> alloc res)
   | _ =>
       True
   end.
@@ -927,15 +889,6 @@ Proof.
   caseEq (alloc r). intros.
   elim (ALL2 r m). apply H; auto. congruence. auto. 
   destruct s0; auto.
-  (* Ialloc *)
-  intros [A B]. split. 
-  intros; red; intros. 
-  unfold destroyed_at_call in H1.
-  generalize (list_in_map_inv R _ _ H1). 
-  intros [mr [EQ IN]]. 
-  generalize (A r1 mr H IN H0). intro.
-  generalize (ALL2 _ _ H2). contradiction.
-  auto.
 Qed.
   
 Lemma regalloc_correct_1:

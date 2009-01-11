@@ -84,7 +84,7 @@ Inductive frame_match (fr: frame)
     high_bound ms sp >= 0 ->
     base = Int.repr (-f.(fn_framesize)) ->
     (forall ty ofs,
-       -f.(fn_framesize) <= ofs -> ofs + AST.typesize ty <= 0 ->
+       -f.(fn_framesize) <= ofs -> ofs + AST.typesize ty <= 0 -> (4 | ofs) ->
        load (chunk_of_type ty) ms sp ofs = Some(fr ty ofs)) ->
     frame_match fr sp base mm ms.
 
@@ -126,15 +126,16 @@ Lemma frame_match_load_stack:
   forall fr sp base mm ms ty ofs,
   frame_match fr sp base mm ms ->
   0 <= Int.signed ofs /\ Int.signed ofs + AST.typesize ty <= f.(fn_framesize) ->
+  (4 | Int.signed ofs) ->
   load_stack ms (Vptr sp base) ty ofs = 
   Some (fr ty (Int.signed ofs - f.(fn_framesize))).
 Proof.
-  intros. inv H.
+  intros. inv H. inv wt_f.
   unfold load_stack, Val.add, loadv.
   replace (Int.signed (Int.add (Int.repr (- fn_framesize f)) ofs))
      with (Int.signed ofs - fn_framesize f).
-  apply H6. omega. omega.
-  inv wt_f.
+  apply H7. omega. omega.
+  apply Zdivide_minus_l; auto. 
   assert (Int.signed (Int.repr (-fn_framesize f)) = -fn_framesize f).
     apply Int.signed_repr.
     assert (0 <= Int.max_signed). compute; congruence. omega.
@@ -150,8 +151,7 @@ Lemma frame_match_get_slot:
   get_slot f fr ty (Int.signed ofs) v ->
   load_stack ms (Vptr sp base) ty ofs = Some v.
 Proof.
-  intros. inversion H. inv H0. eapply frame_match_load_stack; eauto.
-  inv H7. auto.
+  intros. inversion H. inv H0. inv H7. eapply frame_match_load_stack; eauto.
 Qed.
 
 (** Assigning a value to a frame slot (in the abstract semantics)
@@ -163,6 +163,7 @@ Lemma frame_match_store_stack:
   forall fr sp base mm ms ty ofs v,
   frame_match fr sp base mm ms ->
   0 <= Int.signed ofs /\ Int.signed ofs + AST.typesize ty <= f.(fn_framesize) ->
+  (4 | Int.signed ofs) ->
   Val.has_type v ty ->
   Mem.extends mm ms ->
   exists ms',
@@ -186,7 +187,10 @@ Proof.
     apply valid_access_store. 
     constructor. auto. omega.
     rewrite size_type_chunk. omega.
-  destruct H7 as [ms' STORE]. 
+    replace (align_chunk (chunk_of_type ty)) with 4.
+    apply Zdivide_minus_l; auto.
+    destruct ty; auto.
+  destruct H8 as [ms' STORE]. 
   generalize (low_bound_store _ _ _ _ _ _ STORE sp). intro LB.
   generalize (high_bound_store _ _ _ _ _ _ STORE sp). intro HB.
   exists ms'. 
@@ -205,10 +209,10 @@ Proof.
     destruct ty; destruct ty0; simpl; congruence.
     destruct (zle (ofs0 + AST.typesize ty0) (Int.signed ofs - fn_framesize f)).
     (* disjoint *)
-    rewrite <- H8; auto. eapply load_store_other; eauto.
+    rewrite <- H9; auto. eapply load_store_other; eauto.
     right; left. rewrite size_type_chunk; auto.
     destruct (zle (Int.signed ofs - fn_framesize f + AST.typesize ty)).
-    rewrite <- H8; auto. eapply load_store_other; eauto.
+    rewrite <- H9; auto. eapply load_store_other; eauto.
     right; right. rewrite size_type_chunk; auto.
     (* overlap *)
     eapply load_store_overlap'; eauto with mem.
@@ -230,8 +234,7 @@ Lemma frame_match_set_slot:
     frame_match fr' sp base mm ms' /\
     Mem.extends mm ms'.
 Proof.
-  intros. inv H0. eapply frame_match_store_stack; eauto. 
-  inv H3. auto.
+  intros. inv H0. inv H3. eapply frame_match_store_stack; eauto. 
 Qed.
 
 (** Agreement is preserved by stores within blocks other than the
@@ -277,7 +280,7 @@ Proof.
   destruct (zeq sp b). subst b. right. 
   rewrite size_type_chunk. 
   assert (valid_access mm chunk sp ofs) by eauto with mem.
-  inv H8. left. omega.
+  inv H9. left. omega.
   auto.
 Qed.
 
@@ -310,6 +313,7 @@ Proof.
   intros.
   eapply load_alloc_same'; eauto.  
   rewrite size_type_chunk. omega.
+  replace (align_chunk (chunk_of_type ty)) with 4; auto. destruct ty; auto.
 Qed.
 
 Lemma frame_match_alloc:
@@ -435,6 +439,7 @@ Proof.
   replace (parent_sp cs) with
    (extend_frame fr Tint (Int.signed f.(fn_link_ofs) - f.(fn_framesize))).
   eapply frame_match_load_stack; eauto.
+  
   unfold extend_frame. rewrite update_other. apply update_same. simpl. omega. 
 Qed.
 
@@ -470,10 +475,10 @@ Proof.
   exploit frame_match_new. eauto. inv H. eexact H4. eauto. eauto. eauto.
   fold base. intros [C FM0].
   destruct (frame_match_store_stack _ wt_f _ _ _ _ _ Tint _ _
-              FM0 wt_function_link H2 EXT0)
+              FM0 wt_function_link wt_function_link_aligned H2 EXT0)
   as [ms2 [STORE1 [FM1 EXT1]]].
   destruct (frame_match_store_stack _ wt_f _ _ _ _ _ Tint _ _
-              FM1 wt_function_retaddr H3 EXT1)
+              FM1 wt_function_retaddr wt_function_retaddr_aligned H3 EXT1)
   as [ms3 [STORE2 [FM3 EXT3]]].
   exists ms2; exists ms3; auto.
 Qed.
@@ -783,8 +788,6 @@ Proof.
   (* Mop *)
   exists (State ts fb (Vptr sp0 base) c (rs#res <- v) ms); split.
   apply exec_Mop; auto.
-  eapply eval_operation_change_mem with (m := m); eauto.
-  intros. eapply Mem.valid_pointer_extends; eauto.
   econstructor; eauto with coqlib.
 
   (* Mload *)
@@ -826,15 +829,6 @@ Proof.
   econstructor; eauto. eapply match_stacks_free; auto.
   apply free_extends; auto.
 
-  (* Malloc *)
-  caseEq (alloc ms 0 (Int.signed sz)). intros ms' blk' ALLOC.
-  exploit alloc_extends; eauto. omega. omega. intros [EQ MEXT']. subst blk'.
-  exists (State ts fb (Vptr sp0 base) c (rs#Conventions.loc_alloc_result <- (Vptr blk Int.zero)) ms'); split.
-  eapply exec_Malloc; eauto.
-  econstructor; eauto.
-  eapply match_stacks_alloc; eauto. inv MEXT; auto. 
-  eapply frame_match_alloc with (mm := m) (ms := ms); eauto. inv MEXT; auto.
-
   (* Mgoto *)
   econstructor; split.
   eapply exec_Mgoto; eauto.
@@ -843,13 +837,9 @@ Proof.
   (* Mcond *)
   econstructor; split.
   eapply exec_Mcond_true; eauto.
-  eapply eval_condition_change_mem with (m := m); eauto.
-  intros. eapply Mem.valid_pointer_extends; eauto.
   econstructor; eauto.
   econstructor; split.
   eapply exec_Mcond_false; eauto.
-  eapply eval_condition_change_mem with (m := m); eauto.
-  intros. eapply Mem.valid_pointer_extends; eauto.
   econstructor; eauto.
 
   (* Mreturn *)

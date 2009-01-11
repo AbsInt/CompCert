@@ -1122,7 +1122,7 @@ Lemma transl_cond_correct:
   forall cond args k ms sp rs m b,
   map mreg_type args = type_of_condition cond ->
   agree ms sp rs ->
-  eval_condition cond (map ms args) m = Some b ->
+  eval_condition cond (map ms args) = Some b ->
   exists rs',
      exec_straight (transl_cond cond args k) rs m k rs' m
   /\ rs'#(reg_of_crbit (fst (crbit_for_cond cond))) = 
@@ -1131,7 +1131,7 @@ Lemma transl_cond_correct:
         else Val.notbool (Val.of_bool b))
   /\ agree ms sp rs'.
 Proof.
-  intros. rewrite <- (eval_condition_weaken _ _ _ H1). 
+  intros. rewrite <- (eval_condition_weaken _ _ H1). 
   apply transl_cond_correct_aux; auto.
 Qed.
 
@@ -1161,12 +1161,12 @@ Lemma transl_op_correct:
   forall op args res k ms sp rs m v,
   wt_instr (Mop op args res) ->
   agree ms sp rs ->
-  eval_operation ge sp op (map ms args) m = Some v ->
+  eval_operation ge sp op (map ms args) = Some v ->
   exists rs',
      exec_straight (transl_op op args res k) rs m k rs' m
   /\ agree (Regmap.set res v ms) sp rs'.
 Proof.
-  intros. rewrite <- (eval_operation_weaken _ _ _ _ _ H1). clear H1; clear v.
+  intros. rewrite <- (eval_operation_weaken _ _ _ _ H1). clear H1; clear v.
   inversion H.
   (* Omove *)
   simpl. exists (nextinstr (rs#(preg_of res) <- (ms r1))).
@@ -1602,31 +1602,6 @@ Proof.
   auto. auto.
 Qed.
 
-(** Translation of allocations *)
-
-Lemma transl_alloc_correct:
-  forall ms sp rs sz m m' blk k,
-  agree ms sp rs ->
-  ms Conventions.loc_alloc_argument = Vint sz ->
-  Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
-  let ms' := Regmap.set Conventions.loc_alloc_result (Vptr blk Int.zero) ms in
-  exists rs',
-    exec_straight (Pallocblock :: k) rs m k rs' m'
-  /\ agree ms' sp rs'.
-Proof.
-  intros. 
-  pose (rs' := nextinstr (rs#GPR3 <- (Vptr blk Int.zero) #LR <- (Val.add rs#PC Vone))).
-  exists rs'; split.
-  apply exec_straight_one. unfold exec_instr. 
-  generalize (preg_val _ _ _ Conventions.loc_alloc_argument H).
-  unfold preg_of; intro. simpl in H2. rewrite <- H2. rewrite H0.
-  rewrite H1. reflexivity.
-  reflexivity. 
-  unfold ms', rs'. apply agree_nextinstr. apply agree_set_other. 
-  change (IR GPR3) with (preg_of Conventions.loc_alloc_result).
-  apply agree_set_mreg. auto.
-  simpl. tauto.
-Qed.
 
 End STRAIGHTLINE.
 

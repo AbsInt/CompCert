@@ -155,7 +155,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s fb sp c (rs#dst <- v) m)
   | exec_Mop:
       forall s f sp op args res c rs m v,
-      eval_operation ge sp op rs##args m = Some v ->
+      eval_operation ge sp op rs##args = Some v ->
       step (State s f sp (Mop op args res :: c) rs m)
         E0 (State s f sp c (rs#res <- v) m)
   | exec_Mload:
@@ -186,14 +186,6 @@ Inductive step: state -> trace -> state -> Prop :=
       load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
         E0 (Callstate s f' rs (Mem.free m stk))
-  | exec_Malloc:
-      forall s f sp c rs m sz m' blk,
-      rs (Conventions.loc_alloc_argument) = Vint sz ->
-      Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
-      step (State s f sp (Malloc :: c) rs m)
-        E0 (State s f sp c
-                  (rs#Conventions.loc_alloc_result <- (Vptr blk Int.zero))
-                   m')
   | exec_Mgoto:
       forall s fb f sp lbl c rs m c',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
@@ -202,14 +194,14 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s fb sp c' rs m)
   | exec_Mcond_true:
       forall s fb f sp cond args lbl c rs m c',
-      eval_condition cond rs##args m = Some true ->
+      eval_condition cond rs##args = Some true ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       find_label lbl f.(fn_code) = Some c' ->
       step (State s fb sp (Mcond cond args lbl :: c) rs m)
         E0 (State s fb sp c' rs m)
   | exec_Mcond_false:
       forall s f sp cond args lbl c rs m,
-      eval_condition cond rs##args m = Some false ->
+      eval_condition cond rs##args = Some false ->
       step (State s f sp (Mcond cond args lbl :: c) rs m)
         E0 (State s f sp c rs m)
   | exec_Mreturn:

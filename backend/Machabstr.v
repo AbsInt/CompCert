@@ -94,8 +94,9 @@ Section FRAME_ACCESSES.
 Variable f: function.
 
 (** A slot [(ty, ofs)] within a frame is valid in function [f] if it lies
-  within the bounds of [f]'s frame, and it does not overlap with
-  the slots reserved for the return address and the back link. *)
+  within the bounds of [f]'s frame, it does not overlap with
+  the slots reserved for the return address and the back link,
+  and it is aligned on a 4-byte boundary. *)
 
 Inductive slot_valid: typ -> Z -> Prop :=
   slot_valid_intro:
@@ -106,6 +107,7 @@ Inductive slot_valid: typ -> Z -> Prop :=
        \/ Int.signed f.(fn_link_ofs) + 4 <= ofs) ->
     (ofs + AST.typesize ty <= Int.signed f.(fn_retaddr_ofs)
        \/ Int.signed f.(fn_retaddr_ofs) + 4 <= ofs) ->
+    (4 | ofs) ->
     slot_valid ty ofs.
 
 (** [get_slot f fr ty ofs v] holds if the frame [fr] contains value [v]
@@ -239,7 +241,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp c (rs#dst <- v) fr m)
   | exec_Mop:
       forall s f sp op args res c rs fr m v,
-      eval_operation ge sp op rs##args m = Some v ->
+      eval_operation ge sp op rs##args = Some v ->
       step (State s f sp (Mop op args res :: c) rs fr m)
         E0 (State s f sp c (rs#res <- v) fr m)
   | exec_Mload:
@@ -264,15 +266,6 @@ Inductive step: state -> trace -> state -> Prop :=
       find_function ros rs = Some f' ->
       step (State s f (Vptr stk soff) (Mtailcall sig ros :: c) rs fr m)
         E0 (Callstate s f' rs (Mem.free m stk))
-
-  | exec_Malloc:
-      forall s f sp c rs fr m sz m' blk,
-      rs (Conventions.loc_alloc_argument) = Vint sz ->
-      Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
-      step (State s f sp (Malloc :: c) rs fr m)
-        E0 (State s f sp c
-                   (rs#Conventions.loc_alloc_result <- (Vptr blk Int.zero))
-                    fr m')
   | exec_Mgoto:
       forall s f sp lbl c rs fr m c',
       find_label lbl f.(fn_code) = Some c' ->
@@ -280,13 +273,13 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp c' rs fr m)
   | exec_Mcond_true:
       forall s f sp cond args lbl c rs fr m c',
-      eval_condition cond rs##args m = Some true ->
+      eval_condition cond rs##args = Some true ->
       find_label lbl f.(fn_code) = Some c' ->
       step (State s f sp (Mcond cond args lbl :: c) rs fr m)
         E0 (State s f sp c' rs fr m)
   | exec_Mcond_false:
       forall s f sp cond args lbl c rs fr m,
-      eval_condition cond rs##args m = Some false ->
+      eval_condition cond rs##args = Some false ->
       step (State s f sp (Mcond cond args lbl :: c) rs fr m)
         E0 (State s f sp c rs fr m)
   | exec_Mreturn:

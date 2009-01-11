@@ -141,21 +141,6 @@ Proof.
 Qed.
 Hint Resolve instr_at_incr: rtlg.
 
-(*
-(** A useful tactic to reason over transitivity and reflexivity of [state_incr]. *)
-
-Ltac Show_state_incr :=
-  eauto;
-  match goal with
-  | |- (state_incr ?c ?c) => 
-         apply state_incr_refl
-  | |- (state_incr ?c1 ?c2) =>
-         eapply state_incr_trans; [eauto; fail | idtac]; Show_state_incr
-  end.
-
-Hint Extern 2 (state_incr _ _) => Show_state_incr : rtlg.
-*)
-
 Hint Resolve state_incr_refl state_incr_trans: rtlg.
 
 (** * Validity and freshness of registers *)
@@ -779,12 +764,6 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
      tr_stmt c map (Stailcall sig b cl) ns nd nexits ngoto nret rret
-  | tr_Salloc: forall id a ns nd nexits ngoto nret rret rd n1 n2 r,
-     tr_expr c map nil a ns n1 r ->
-     c!n1 = Some (Ialloc r rd n2) ->
-     tr_store_var c map rd id n2 nd ->
-     ~reg_in_map map rd ->
-     tr_stmt c map (Salloc id a) ns nd nexits ngoto nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
      tr_stmt c map s1 ns n nexits ngoto nret rret ->
@@ -1197,11 +1176,6 @@ Proof.
   eapply A; eauto with rtlg.
   apply tr_exprlist_incr with s4; auto.
   eapply C; eauto with rtlg.
-  (* Salloc *)
-  econstructor; eauto with rtlg.
-  eapply transl_expr_charact; eauto with rtlg.
-  apply tr_store_var_incr with s2; eauto with rtlg.
-  eapply store_var_charact; eauto with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

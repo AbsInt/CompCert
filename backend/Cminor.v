@@ -103,7 +103,6 @@ Inductive stmt : Set :=
   | Sstore : memory_chunk -> expr -> expr -> stmt
   | Scall : option ident -> signature -> expr -> list expr -> stmt
   | Stailcall: signature -> expr -> list expr -> stmt
-  | Salloc : ident -> expr -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: expr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -251,8 +250,11 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
 Definition eval_compare_mismatch (c: comparison) : option val :=
   match c with Ceq => Some Vfalse | Cne => Some Vtrue | _ => None end.
 
+Definition eval_compare_null (c: comparison) (n: int) : option val :=
+  if Int.eq n Int.zero then eval_compare_mismatch c else None.
+
 Definition eval_binop
-            (op: binary_operation) (arg1 arg2: val) (m: mem): option val :=
+            (op: binary_operation) (arg1 arg2: val): option val :=
   match op, arg1, arg2 with
   | Oadd, Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
   | Oadd, Vint n1, Vptr b2 n2 => Some (Vptr b2 (Int.add n2 n1))
@@ -286,17 +288,13 @@ Definition eval_binop
   | Ocmp c, Vint n1, Vint n2 =>
       Some (Val.of_bool(Int.cmp c n1 n2))
   | Ocmp c, Vptr b1 n1, Vptr b2 n2 =>
-      if valid_pointer m b1 (Int.signed n1)
-      && valid_pointer m b2 (Int.signed n2) then
-        if eq_block b1 b2
-        then Some(Val.of_bool(Int.cmp c n1 n2))
-        else eval_compare_mismatch c
-      else
-        None
+      if eq_block b1 b2
+      then Some(Val.of_bool(Int.cmp c n1 n2))
+      else eval_compare_mismatch c
   | Ocmp c, Vptr b1 n1, Vint n2 =>
-      if Int.eq n2 Int.zero then eval_compare_mismatch c else None
+      eval_compare_null c n2
   | Ocmp c, Vint n1, Vptr b2 n2 =>
-      if Int.eq n1 Int.zero then eval_compare_mismatch c else None
+      eval_compare_null c n1
   | Ocmpu c, Vint n1, Vint n2 =>
       Some (Val.of_bool(Int.cmpu c n1 n2))
   | Ocmpf c, Vfloat f1, Vfloat f2 =>
@@ -332,7 +330,7 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Ebinop: forall op a1 a2 v1 v2 v,
       eval_expr a1 v1 ->
       eval_expr a2 v2 ->
-      eval_binop op v1 v2 m = Some v ->
+      eval_binop op v1 v2 = Some v ->
       eval_expr (Ebinop op a1 a2) v
   | eval_Eload: forall chunk addr vaddr v,
       eval_expr addr vaddr ->
@@ -437,12 +435,6 @@ Inductive step: state -> trace -> state -> Prop :=
       funsig fd = sig ->
       step (State f (Stailcall sig a bl) k (Vptr sp Int.zero) e m)
         E0 (Callstate fd vargs (call_cont k) (Mem.free m sp))
-
-  | step_alloc: forall f id a k sp e m n m' b,
-      eval_expr sp e m a (Vint n) ->
-      Mem.alloc m 0 (Int.signed n) = (m', b) ->
-      step (State f (Salloc id a) k sp e m)
-        E0 (State f Sskip k sp (PTree.set id (Vptr b Int.zero) e) m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)
@@ -633,12 +625,6 @@ with exec_stmt:
       eval_funcall m f vargs t m' vres ->
       e' = set_optvar optid vres e ->
       exec_stmt sp e m (Scall optid sig a bl) t e' m' Out_normal
-  | exec_Salloc:
-      forall sp e m id a n m' b,
-      eval_expr ge sp e m a (Vint n) ->
-      Mem.alloc m 0 (Int.signed n) = (m', b) ->
-      exec_stmt sp e m (Salloc id a) 
-                E0 (PTree.set id (Vptr b Int.zero) e) m' Out_normal
   | exec_Sifthenelse:
       forall sp e m a s1 s2 v b t e' m' out,
       eval_expr ge sp e m a v ->
@@ -805,10 +791,10 @@ Definition eval_funcall_exec_stmt_ind2
   (P1: mem -> fundef -> list val -> trace -> mem -> val -> Prop)
   (P2: val -> env -> mem -> stmt -> trace ->
               env -> mem -> outcome -> Prop) :=
-  fun a b c d e f g h i j k l m n o p q r =>
+  fun a b c d e f g h i j k l m n o p q =>
   conj
-    (eval_funcall_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q r)
-    (exec_stmt_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q r ).
+    (eval_funcall_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q)
+    (exec_stmt_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q).
 
 Inductive outcome_state_match
         (sp: val) (e: env) (m: mem) (f: function) (k: cont):
@@ -917,11 +903,6 @@ Proof.
   eapply star_right. apply H4. red; auto. 
   constructor. reflexivity. traceEq.
   subst e'. constructor.
-
-(* alloc *)
-  exists (State f Sskip k sp (PTree.set id (Vptr b Int.zero) e) m'); split.
-  apply star_one. econstructor; eauto.
-  constructor.
 
 (* ifthenelse *)
   destruct (H2 f k) as [S [A B]].

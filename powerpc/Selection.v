@@ -1161,7 +1161,6 @@ Fixpoint sel_stmt (s: Cminor.stmt) : stmt :=
       Scall optid sg (sel_expr fn) (sel_exprlist args)
   | Cminor.Stailcall sg fn args => 
       Stailcall sg (sel_expr fn) (sel_exprlist args)
-  | Cminor.Salloc id b => Salloc id (sel_expr b)
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt s1) (sel_stmt s2)
   | Cminor.Sifthenelse e ifso ifnot =>
       Sifthenelse (condexpr_of_expr (sel_expr e))

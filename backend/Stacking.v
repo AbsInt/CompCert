@@ -179,8 +179,6 @@ Definition transl_instr
   | Ltailcall sig ros =>
       restore_callee_save fe
         (Mtailcall sig ros :: k)
-  | Lalloc =>
-      Malloc :: k
   | Llabel lbl =>
       Mlabel lbl :: k
   | Lgoto lbl =>

@@ -2252,59 +2252,6 @@ Proof.
   rewrite <- two_p_is_exp. unfold modulus. rewrite two_power_nat_two_p.
   decEq. omega. omega. omega.
 Qed.
-(*
-Lemma zero_ext_charact:
-  forall x y,
-  zero_ext n x = y <->
-  0 <= unsigned y < two_p n /\ eqmod (two_p n) (unsigned x) (unsigned y).
-Proof.
-  intros. unfold zero_ext. set (x' := unsigned x). split; intros.
-  subst y.
-  assert (0 <= x' mod two_p n < two_p n). apply Z_mod_lt. apply two_p_n_pos.
-  rewrite unsigned_repr. split. auto. 
-  apply eqmod_mod. apply two_p_n_pos.
-  generalize two_p_n_range. omega.
-  destruct H. destruct H0 as [k EQ].  
-  assert (x' mod two_p n = unsigned y).
-  apply Zmod_unique with k; auto.
-  rewrite H0. apply repr_unsigned.
-Qed.
-
-Lemma sign_ext_charact:
-  forall x y,
-  sign_ext n x = y <->
-  -(two_p (n-1)) <= signed y < two_p (n-1)
-  /\ eqmod (two_p n) (unsigned x) (signed y).
-Proof.
-  intros. unfold sign_ext. set (x' := unsigned x). split; intros.
-  assert (0 <= x' mod two_p n < two_p n). apply Z_mod_lt. apply two_p_n_pos.
-  destruct (zlt (x' mod two_p n) (two_p (n - 1))); subst y.
-  rewrite signed_repr. split. omega. 
-  apply eqmod_mod. apply two_p_n_pos.
-  assert (min_signed < 0). vm_compute; auto. 
-  generalize two_p_n_range'. omega.
-  rewrite signed_repr. split. 
-  assert (two_p n = 2 * two_p (n-1)). rewrite <- two_p_S. decEq. omega. omega. 
-  omega. 
-  apply eqmod_trans with (x' - 0). apply eqmod_refl2. omega.
-  apply eqmod_sub. apply eqmod_mod. apply two_p_n_pos. 
-  exists (-1). ring. 
-  split. generalize two_p_n_range'. 
-  change (max_signed + 1) with (- min_signed). omega. 
-  generalize two_p_n_range'. omega.
-
-  destruct H. destruct H0 as [k EQ].
-  assert (two_p n = 2 * two_p (n - 1)). rewrite <- two_p_S. decEq. omega. omega.
-  assert (signed y >= 0 \/ signed y < 0) by omega. destruct H1.
-  assert (x' mod two_p n = signed y).
-  apply Zmod_unique with k; auto. omega.
-  rewrite zlt_true. rewrite H2. apply repr_signed. omega.
-  assert (x' mod two_p n = signed y + two_p n).
-  apply Zmod_unique with (k-1). rewrite EQ. ring. omega. 
-  rewrite zlt_false. replace (x' mod two_p n - two_p n) with (signed y) by omega. apply repr_signed.
-  omega.
-Qed.
-*)
 
 Lemma sign_ext_charact:
   forall x y,

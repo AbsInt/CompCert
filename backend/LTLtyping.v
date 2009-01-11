@@ -88,12 +88,6 @@ Inductive wt_instr : instruction -> Prop :=
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
       Conventions.tailcall_possible sig ->
       wt_instr (Ltailcall sig ros args)
-  | wt_Lalloc:
-      forall arg res s,
-      Loc.type arg = Tint -> Loc.type res = Tint ->
-      loc_acceptable arg -> loc_acceptable res ->
-      valid_successor s ->
-      wt_instr (Lalloc arg res s)
   | wt_Lcond:
       forall cond args s1 s2,
       List.map Loc.type args = type_of_condition cond ->

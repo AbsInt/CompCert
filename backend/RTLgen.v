@@ -530,12 +530,6 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do n1 <- add_instr (Itailcall sig (inl _ rf) rargs);
       do n2 <- transl_exprlist map cl rargs n1;
          transl_expr map b rf n2
-  | Salloc id a =>
-      do ra <- alloc_reg map a;
-      do rr <- new_reg;
-      do n1 <- store_var map rr id nd;
-      do n2 <- add_instr (Ialloc ra rr n1);
-         transl_expr map a ra n2
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
       transl_stmt map s1 ns nexits ngoto nret rret

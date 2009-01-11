@@ -686,8 +686,6 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
           D.set res Unknown before
       | Itailcall sig ros args =>
           before
-      | Ialloc arg res s =>
-          D.set res Unknown before
       | Icond cond args ifso ifnot =>
           before
       | Ireturn optarg =>
@@ -1206,8 +1204,6 @@ Definition transf_instr (approx: D.t) (instr: instruction) :=
       Icall sig (transf_ros approx ros) args res s
   | Itailcall sig ros args =>
       Itailcall sig (transf_ros approx ros) args
-  | Ialloc arg res s =>
-      Ialloc arg res s
   | Icond cond args s1 s2 =>
       match eval_static_condition cond (approx_regs args approx) with
       | Some b =>

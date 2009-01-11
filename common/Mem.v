@@ -122,6 +122,51 @@ Proof.
   destruct chunk; auto.
 Qed.
 
+Lemma size_chunk_pos:
+  forall chunk, size_chunk chunk > 0.
+Proof.
+  intros. rewrite size_chunk_pred. omega.
+Qed.
+
+(** Memory reads and writes must respect alignment constraints:
+  the byte offset of the location being addressed should be an exact
+  multiple of the natural alignment for the chunk being addressed.
+  This natural alignment is defined by the following 
+  [align_chunk] function.  Some target architectures
+  (e.g. the PowerPC) have no alignment constraints, which we could
+  reflect by taking [align_chunk chunk = 1].  However, other architectures
+  have stronger alignment requirements.  The following definition is
+  appropriate for PowerPC and ARM. *)
+
+Definition align_chunk (chunk: memory_chunk) : Z := 
+  match chunk with
+  | Mint8signed => 1
+  | Mint8unsigned => 1
+  | Mint16signed => 2
+  | Mint16unsigned => 2
+  | _ => 4
+  end.
+
+Lemma align_chunk_pos:
+  forall chunk, align_chunk chunk > 0.
+Proof.
+  intro. destruct chunk; simpl; omega.
+Qed.
+
+Lemma align_size_chunk_divides:
+  forall chunk, (align_chunk chunk | size_chunk chunk).
+Proof.
+  intros. destruct chunk; simpl; try apply Zdivide_refl. exists 2; auto. 
+Qed.
+
+Lemma align_chunk_compat:
+  forall chunk1 chunk2,
+  size_chunk chunk1 = size_chunk chunk2 -> align_chunk chunk1 = align_chunk chunk2.
+Proof.
+  intros chunk1 chunk2. 
+  destruct chunk1; destruct chunk2; simpl; congruence.
+Qed.
+
 (** The initial store. *)
 
 Remark one_pos: 1 > 0.
@@ -376,13 +421,19 @@ Proof.
 Qed.
 
 (** [valid_access m chunk b ofs] holds if a memory access (load or store)
-    of the given chunk is possible in [m] at address [b, ofs]. *)
+    of the given chunk is possible in [m] at address [b, ofs].
+    This means:
+- The block [b] is valid.
+- The range of bytes accessed is within the bounds of [b].
+- The offset [ofs] is aligned.
+*)
 
 Inductive valid_access (m: mem) (chunk: memory_chunk) (b: block) (ofs: Z) : Prop :=
   | valid_access_intro:
       valid_block m b ->
       low_bound m b <= ofs ->
       ofs + size_chunk chunk <= high_bound m b ->
+      (align_chunk chunk | ofs) ->
       valid_access m chunk b ofs.
 
 (** The following function checks whether accessing the given memory chunk
@@ -395,7 +446,9 @@ Proof.
   destruct (zlt b m.(nextblock)).
   destruct (zle (low_bound m b) ofs).
   destruct (zle (ofs + size_chunk chunk) (high_bound m b)).
+  destruct (Zdivide_dec (align_chunk chunk) ofs (align_chunk_pos chunk)).
   left; constructor; auto.
+  right; red; intro V; inv V; contradiction.
   right; red; intro V; inv V; omega.
   right; red; intro V; inv V; omega.
   right; red; intro V; inv V; contradiction.
@@ -577,7 +630,24 @@ Proof.
   intros. inv H; auto.
 Qed.
 
-Hint Resolve valid_not_valid_diff valid_access_valid_block: mem.
+Lemma valid_access_aligned:
+  forall m chunk b ofs,
+  valid_access m chunk b ofs -> (align_chunk chunk | ofs).
+Proof.
+  intros. inv H; auto.
+Qed.
+
+Lemma valid_access_compat:
+  forall m chunk1 chunk2 b ofs,
+  size_chunk chunk1 = size_chunk chunk2 ->
+  valid_access m chunk1 b ofs ->
+  valid_access m chunk2 b ofs.
+Proof.
+  intros. inv H0. rewrite H in H3. constructor; auto.
+  rewrite <- (align_chunk_compat _ _ H). auto.
+Qed.
+
+Hint Resolve valid_not_valid_diff valid_access_valid_block valid_access_aligned: mem.
 
 (** ** Properties related to [load] *)
 
@@ -661,7 +731,7 @@ Lemma store_valid_access_1:
   forall chunk' b' ofs',
   valid_access m1 chunk' b' ofs' -> valid_access m2 chunk' b' ofs'.
 Proof.
-  intros. inv H. constructor. auto with mem. 
+  intros. inv H. constructor; auto with mem. 
   rewrite low_bound_store; auto.
   rewrite high_bound_store; auto.
 Qed.
@@ -670,7 +740,7 @@ Lemma store_valid_access_2:
   forall chunk' b' ofs',
   valid_access m2 chunk' b' ofs' -> valid_access m1 chunk' b' ofs'.
 Proof.
-  intros. inv H. constructor. auto with mem. 
+  intros. inv H. constructor; auto with mem. 
   rewrite low_bound_store in H1; auto.
   rewrite high_bound_store in H2; auto.
 Qed.
@@ -698,6 +768,7 @@ Proof.
   repeat rewrite size_chunk_pred in H. omega.
   apply store_valid_access_1.
   inv H0. constructor; auto. congruence.
+  rewrite (align_chunk_compat _ _ H). auto.
 Qed.
 
 Theorem load_store_same:
@@ -800,12 +871,6 @@ Inductive load_store_cases
   | lsc_mismatch:
       b1 = b2 -> ofs1 = ofs2 -> size_chunk chunk1 <> size_chunk chunk2 ->
       load_store_cases chunk1 b1 ofs1 chunk2 b2 ofs2.
-
-Remark size_chunk_pos:
-  forall chunk1, size_chunk chunk1 > 0.
-Proof.
-  destruct chunk1; simpl; omega.
-Qed.
 
 Definition load_store_classification:
   forall (chunk1: memory_chunk) (b1: block) (ofs1: Z)
@@ -949,17 +1014,17 @@ Lemma valid_access_alloc_other:
   valid_access m1 chunk b' ofs ->
   valid_access m2 chunk b' ofs.
 Proof.
-  intros. inv H. constructor. auto with mem. 
+  intros. inv H. constructor; auto with mem. 
   rewrite low_bound_alloc_other; auto. 
   rewrite high_bound_alloc_other; auto.
 Qed.
 
 Lemma valid_access_alloc_same:
   forall chunk ofs,
-  lo <= ofs -> ofs + size_chunk chunk <= hi ->
+  lo <= ofs -> ofs + size_chunk chunk <= hi -> (align_chunk chunk | ofs) ->
   valid_access m2 chunk b ofs.
 Proof.
-  intros. constructor. auto with mem.
+  intros. constructor; auto with mem.
   rewrite low_bound_alloc_same; auto.
   rewrite high_bound_alloc_same; auto.
 Qed.
@@ -970,14 +1035,14 @@ Lemma valid_access_alloc_inv:
   forall chunk b' ofs,
   valid_access m2 chunk b' ofs ->
   valid_access m1 chunk b' ofs \/
-  (b' = b /\ lo <= ofs /\ ofs + size_chunk chunk <= hi).
+  (b' = b /\ lo <= ofs /\ ofs + size_chunk chunk <= hi /\ (align_chunk chunk | ofs)).
 Proof.
   intros. inv H. 
   elim (valid_block_alloc_inv _ H0); intro.
   subst b'. rewrite low_bound_alloc_same in H1.
   rewrite high_bound_alloc_same in H2. 
   right. tauto.
-  left. constructor. auto. 
+  left. constructor; auto. 
   rewrite low_bound_alloc_other in H1; auto.
   rewrite high_bound_alloc_other in H2; auto.
 Qed.
@@ -1020,14 +1085,14 @@ Qed.
 
 Theorem load_alloc_same':
   forall chunk ofs,
-  lo <= ofs -> ofs + size_chunk chunk <= hi ->
+  lo <= ofs -> ofs + size_chunk chunk <= hi -> (align_chunk chunk | ofs) ->
   load chunk m2 b ofs = Some Vundef.
 Proof.
   intros. assert (exists v, load chunk m2 b ofs = Some v).
     apply valid_access_load. constructor; eauto with mem.
     rewrite low_bound_alloc_same. auto.
     rewrite high_bound_alloc_same. auto.
-  destruct H1 as [v LOAD]. rewrite LOAD. decEq.
+  destruct H2 as [v LOAD]. rewrite LOAD. decEq.
   eapply load_alloc_same; eauto.
 Qed.
 
@@ -1089,7 +1154,7 @@ Lemma valid_access_free_1:
   valid_access m chunk b ofs -> b <> bf ->
   valid_access (free m bf) chunk b ofs.
 Proof.
-  intros. inv H. constructor. auto with mem. 
+  intros. inv H. constructor; auto with mem. 
   rewrite low_bound_free; auto. rewrite high_bound_free; auto.
 Qed.
 
@@ -1180,6 +1245,7 @@ Proof.
   eapply proj_sumbool_true; eauto.
   change (size_chunk Mint8unsigned) with 1. 
   generalize (proj_sumbool_true _ H1). omega.
+  simpl. apply Zone_divide. 
   inv H. unfold proj_sumbool. 
   rewrite zlt_true; auto. rewrite zle_true; auto.
   change (size_chunk Mint8unsigned) with 1 in H2. 
@@ -1214,13 +1280,6 @@ Section GENERIC_INJECT.
 Definition meminj : Set := block -> option (block * Z).
 
 Variable val_inj: meminj -> val -> val -> Prop.
-
-(*
-Hypothesis val_inj_ptr:
-  forall mi b1 ofs1 b2 ofs2,
-  val_inj mi (Vptr b1 ofs1) (Vptr b2 ofs2) <->
-  exists delta, mi b1 = Some(b2, delta) /\ ofs2 = Int.repr (Int.signed ofs1 + delta).
-*)
 
 Hypothesis val_inj_undef:
   forall mi, val_inj mi Vundef Vundef.
@@ -1350,6 +1409,9 @@ Proof.
   replace v with Vundef by congruence. subst v2'. apply val_inj_undef.
 Qed.
 
+Definition inj_offset_aligned (delta: Z) (size: Z) : Prop :=
+  forall chunk, size_chunk chunk <= size -> (align_chunk chunk | delta).
+
 Lemma alloc_parallel_inj:
   forall mi m1 m2 lo1 hi1 m1' b1 lo2 hi2 m2' b2 delta,
   mem_inj mi m1 m2 ->
@@ -1357,24 +1419,26 @@ Lemma alloc_parallel_inj:
   alloc m2 lo2 hi2 = (m2', b2) ->
   mi b1 = Some(b2, delta) ->
   lo2 <= lo1 + delta -> hi1 + delta <= hi2 ->
+  inj_offset_aligned delta (hi1 - lo1) ->
   mem_inj mi m1' m2'.
 Proof.
   intros; red; intros.
   exploit (valid_access_alloc_inv m1); eauto with mem.
-  intros [A | [A [B C]]].
+  intros [A | [A [B [C D]]]].
   assert (load chunk m1 b0 ofs = Some v1).
-    rewrite <- H6. symmetry. eapply load_alloc_unchanged; eauto with mem.
+    rewrite <- H7. symmetry. eapply load_alloc_unchanged; eauto with mem.
   exploit H; eauto. intros [v2 [LOAD2 VINJ]]. 
   exists v2; split.
     rewrite <- LOAD2. eapply load_alloc_unchanged; eauto with mem.
   auto.
-  subst b0. rewrite H2 in H5. inversion H5. subst b3 delta0.
+  subst b0. rewrite H2 in H6. inversion H6. subst b3 delta0.
   assert (v1 = Vundef). eapply load_alloc_same with (m1 := m1); eauto.
   subst v1.
   assert (exists v2, load chunk m2' b2 (ofs + delta) = Some v2).
     apply valid_access_load.
-    eapply valid_access_alloc_same; eauto. omega. omega. 
-  destruct H7 as [v2 LOAD2]. 
+    eapply valid_access_alloc_same; eauto. omega. omega.
+    apply Zdivide_plus_r; auto. apply H5. omega.  
+  destruct H8 as [v2 LOAD2]. 
   assert (v2 = Vundef). eapply load_alloc_same with (m1 := m2); eauto.
   subst v2.
   exists Vundef; split. auto. apply val_inj_undef.
@@ -1420,19 +1484,21 @@ Lemma alloc_left_mapped_inj:
   mi b1 = Some(b2, delta) ->
   valid_block m2 b2 ->
   low_bound m2 b2 <= lo + delta -> hi + delta <= high_bound m2 b2 ->
+  inj_offset_aligned delta (hi - lo) ->
   mem_inj mi m1' m2.
 Proof.
   intros; red; intros.
   exploit (valid_access_alloc_inv m1); eauto with mem.
-  intros [A | [A [B C]]].
+  intros [A | [A [B [C D]]]].
   eapply H; eauto. 
-  rewrite <- H6. symmetry. eapply load_alloc_unchanged; eauto with mem.
-  subst b0. rewrite H1 in H5. inversion H5. subst b3 delta0.
+  rewrite <- H7. symmetry. eapply load_alloc_unchanged; eauto with mem.
+  subst b0. rewrite H1 in H6. inversion H6. subst b3 delta0.
   assert (v1 = Vundef). eapply load_alloc_same with (m1 := m1); eauto.
   subst v1.
   assert (exists v2, load chunk m2 b2 (ofs + delta) = Some v2).
     apply valid_access_load. constructor. auto. omega. omega.
-  destruct H7 as [v2 LOAD2]. exists v2; split. auto.
+    apply Zdivide_plus_r; auto. apply H5. omega.  
+  destruct H8 as [v2 LOAD2]. exists v2; split. auto.
   apply val_inj_undef_any.
 Qed.
 
@@ -1547,6 +1613,7 @@ Proof.
     unfold val_inj_id; auto.
     unfold inject_id; eauto.
     omega. omega.
+    red; intros. apply Zdivide_0.
 Qed.
 
 Theorem free_extends:
@@ -1716,6 +1783,7 @@ Proof.
     unfold val_inj_lessdef; auto.
     unfold inject_id; eauto.
     omega. omega.
+    red; intros. apply Zdivide_0.
 Qed.
 
 Lemma free_lessdef:
@@ -1887,7 +1955,7 @@ Proof.
   rewrite valid_pointer_valid_access in H2. 
   rewrite (address_inject _ _ _ _ _ _ _ _ H H1 H3). 
   rewrite (address_inject _ _ _ _ _ _ _ _ H H2 H4). 
-  inv H1. simpl in H7. inv H2. simpl in H9.
+  inv H1. simpl in H7. inv H2. simpl in H10.
   exploit (mi_no_overlap _ _ _ H); eauto.
   intros [A | [A | [A | [A | A]]]].
   auto. omegaContradiction. omegaContradiction. 
@@ -2256,6 +2324,7 @@ Lemma alloc_mapped_inject:
   high_bound m2 b' <= Int.max_signed ->
   low_bound m2 b' <= lo + ofs ->
   hi + ofs <= high_bound m2 b' ->
+  inj_offset_aligned ofs (hi-lo) ->
   (forall b0 ofs0, 
    f b0 = Some (b', ofs0) -> 
    high_bound m1 b0 + ofs0 <= lo + ofs \/
@@ -2270,34 +2339,34 @@ Proof.
   constructor. 
   (* inj *)
   eapply alloc_left_mapped_inj; eauto.
-  red; intros. unfold extend_inject in H9.
-  rewrite zeq_false in H9.
+  red; intros. unfold extend_inject in H10.
+  rewrite zeq_false in H10.
   exploit mi_inj0; eauto. intros [v2 [LOAD VINJ]].
   exists v2; split. auto. eapply val_inject_incr; eauto.
   eauto with mem. 
   unfold extend_inject. apply zeq_true.
   (* freeblocks *)
   intros. unfold extend_inject. rewrite zeq_false.
-  apply mi_freeblocks0. red; intro. elim H9; eauto with mem.
+  apply mi_freeblocks0. red; intro. elim H10; eauto with mem.
   apply sym_not_equal; eauto with mem.
   (* mappedblocks *)
   unfold extend_inject; intros.
-  destruct (zeq b0 b). inv H9. auto. eauto.
+  destruct (zeq b0 b). inv H10. auto. eauto.
   (* overlap *)
   red; unfold extend_inject, update; intros.
   repeat rewrite (low_bound_alloc _ _ _ _ _ H0).
   repeat rewrite (high_bound_alloc _ _ _ _ _ H0).
-  destruct (zeq b1 b); [inv H10|idtac];
-  (destruct (zeq b2 b); [inv H11|idtac]).
+  destruct (zeq b1 b); [inv H11|idtac];
+  (destruct (zeq b2 b); [inv H12|idtac]).
   congruence. 
-  destruct (zeq b1' b2'). subst b2'. generalize (H7 _ _ H11). tauto. auto.
-  destruct (zeq b1' b2'). subst b2'. generalize (H7 _ _ H10). tauto. auto.
+  destruct (zeq b1' b2'). subst b2'. generalize (H8 _ _ H12). tauto. auto.
+  destruct (zeq b1' b2'). subst b2'. generalize (H8 _ _ H11). tauto. auto.
   eauto.
   (* range *)
   unfold extend_inject; intros. 
-  destruct (zeq b0 b). inv H9. auto. eauto.
+  destruct (zeq b0 b). inv H10. auto. eauto.
   unfold extend_inject; intros. 
-  destruct (zeq b0 b). inv H9. auto. eauto.
+  destruct (zeq b0 b). inv H10. auto. eauto.
 Qed.
 
 Lemma alloc_parallel_inject:
@@ -2318,6 +2387,7 @@ Proof.
   rewrite (high_bound_alloc_same _ _ _ _ _ H1). auto.
   rewrite (low_bound_alloc_same _ _ _ _ _ H1). omega.
   rewrite (high_bound_alloc_same _ _ _ _ _ H1). omega.
+  red; intros. apply Zdivide_0.
   intros. elimtype False. inv H. 
   exploit mi_mappedblocks0; eauto.
   change (~ valid_block m2 b2). eauto with mem.
@@ -2406,6 +2476,7 @@ Proof.
   unfold low_bound; rewrite <- B; simpl; rewrite A. rewrite update_o; auto.
   replace (high_bound m b0) with (high_bound m' b0). auto.
   unfold high_bound; rewrite <- B; simpl; rewrite A. rewrite update_o; auto.
+  auto.
 Qed.
 
 (** ** Memory shifting *)
@@ -2414,21 +2485,6 @@ Qed.
   each source block injects in a distinct target block. *)
 
 Definition memshift := block -> option Z.
-
-(*
-Inductive val_shift (mi: memshift): val -> val -> Prop :=
-  | val_shift_int:
-      forall i, val_shift mi (Vint i) (Vint i)
-  | val_shift_float:
-      forall f, val_shift mi (Vfloat f) (Vfloat f)
-  | val_shift_ptr:
-      forall b ofs1 ofs2 x,
-      mi b = Some x ->
-      ofs2 = Int.add ofs1 (Int.repr x) ->
-      val_shift mi (Vptr b ofs1) (Vptr b ofs2)
-  | val_shift_undef: 
-      val_shift mi Vundef Vundef.
-*)
 
 Definition meminj_of_shift (mi: memshift) : meminj :=
   fun b => match mi b with None => None | Some x => Some (b, x) end.
@@ -2688,6 +2744,7 @@ Lemma alloc_shift:
   lo2 <= lo1 + delta -> hi1 + delta <= hi2 ->
   Int.min_signed <= delta <= Int.max_signed ->
   Int.min_signed <= lo2 -> hi2 <= Int.max_signed ->
+  inj_offset_aligned delta (hi1-lo1) ->
   exists f', exists m2',
      alloc m2 lo2 hi2 = (m2', b)
   /\ mem_shift f' m1' m2'
@@ -2719,7 +2776,7 @@ Proof.
   assert (mem_inj val_inject (meminj_of_shift f') m1 m2).
     red; intros.
     assert (meminj_of_shift f b1 = Some (b2, delta0)).
-      rewrite <- H7. unfold meminj_of_shift, f'.
+      rewrite <- H8. unfold meminj_of_shift, f'.
       destruct (zeq b1 b); auto.
       subst b1.
       assert (valid_block m1 b) by eauto with mem. 
@@ -2751,5 +2808,60 @@ Proof.
   split. auto.
   (* f' b = delta *)
   unfold f'. apply zeq_true. 
+Qed.
+
+(** ** Relation between signed and unsigned loads and stores *)
+
+(** Target processors do not distinguish between signed and unsigned
+  stores of 8- and 16-bit quantities.  We show these are equivalent. *)
+
+(** Signed 8- and 16-bit stores can be performed like unsigned stores. *)
+
+Remark in_bounds_equiv:
+  forall chunk1 chunk2 m b ofs (A: Set) (a1 a2: A),
+  size_chunk chunk1 = size_chunk chunk2 ->
+  (if in_bounds m chunk1 b ofs then a1 else a2) =
+  (if in_bounds m chunk2 b ofs then a1 else a2).
+Proof.
+  intros. destruct (in_bounds m chunk1 b ofs).
+  rewrite in_bounds_true. auto. eapply valid_access_compat; eauto.
+  destruct (in_bounds m chunk2 b ofs); auto.
+  elim n. eapply valid_access_compat with (chunk1 := chunk2); eauto.
+Qed.
+
+Lemma storev_8_signed_unsigned:
+  forall m a v,
+  storev Mint8signed m a v = storev Mint8unsigned m a v.
+Proof.
+  intros. unfold storev. destruct a; auto.
+  unfold store. rewrite (in_bounds_equiv Mint8signed Mint8unsigned).
+  auto. auto.
+Qed.
+
+Lemma storev_16_signed_unsigned:
+  forall m a v,
+  storev Mint16signed m a v = storev Mint16unsigned m a v.
+Proof.
+  intros. unfold storev. destruct a; auto.
+  unfold store. rewrite (in_bounds_equiv Mint16signed Mint16unsigned).
+  auto. auto.
+Qed.
+
+(** Likewise, some target processors (e.g. the PowerPC) do not have
+  a ``load 8-bit signed integer'' instruction.  
+  We show that it can be synthesized as a ``load 8-bit unsigned integer''
+  followed by a sign extension. *)
+
+Lemma loadv_8_signed_unsigned:
+  forall m a,
+  loadv Mint8signed m a = option_map (Val.sign_ext 8) (loadv Mint8unsigned m a).
+Proof.
+  intros. unfold Mem.loadv. destruct a; try reflexivity.
+  unfold load. rewrite (in_bounds_equiv Mint8signed Mint8unsigned).
+  destruct (in_bounds m Mint8unsigned b (Int.signed i)); auto.
+  simpl.
+  destruct (getN 0 (Int.signed i) (contents (blocks m b))); auto.
+  simpl. rewrite Int.sign_ext_zero_ext. auto. compute; auto. 
+  auto.
 Qed.
 

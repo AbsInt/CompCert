@@ -55,7 +55,6 @@ Proof.
   apply wt_add_instr. constructor; auto. apply wt_add_branch; auto.
   apply wt_add_instr. constructor; auto. apply wt_add_branch; auto.
   apply wt_add_instr. constructor; auto. auto.
-  apply wt_add_instr. constructor; auto. apply wt_add_branch; auto.
   destruct (starts_with s1 k); apply wt_add_instr.
   constructor; auto. rewrite H. destruct cond; auto. 
   apply wt_add_branch; auto.

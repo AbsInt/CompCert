@@ -41,7 +41,6 @@ Inductive instruction: Set :=
   | Lstore: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
   | Lcall: signature -> loc + ident -> list loc -> loc -> node -> instruction
   | Ltailcall: signature -> loc + ident -> list loc -> instruction
-  | Lalloc: loc -> loc -> node -> instruction
   | Lcond: condition -> list loc -> node -> node -> instruction
   | Lreturn: option loc -> instruction.
 
@@ -165,7 +164,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Lop:
       forall s f sp pc rs m op args res pc' v,
       (fn_code f)!pc = Some(Lop op args res pc') ->
-      eval_operation ge sp op (map rs args) m = Some v ->
+      eval_operation ge sp op (map rs args) = Some v ->
       step (State s f sp pc rs m)
         E0 (State s f sp pc' (Locmap.set res v rs) m)
   | exec_Lload:
@@ -197,23 +196,16 @@ Inductive step: state -> trace -> state -> Prop :=
       funsig f' = sig ->
       step (State s f (Vptr stk Int.zero) pc rs m)
         E0 (Callstate s f' (List.map rs args) (Mem.free m stk))
-  | exec_Lalloc:
-      forall s f sp pc rs m pc' arg res sz m' b,
-      (fn_code f)!pc = Some(Lalloc arg res pc') ->
-      rs arg = Vint sz ->
-      Mem.alloc m 0 (Int.signed sz) = (m', b) ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp pc' (Locmap.set res (Vptr b Int.zero) (postcall_locs rs)) m')
   | exec_Lcond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) m = Some true ->
+      eval_condition cond (map rs args) = Some true ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifso rs m)
   | exec_Lcond_false:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) m = Some false ->
+      eval_condition cond (map rs args) = Some false ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifnot rs m)
   | exec_Lreturn:
@@ -275,7 +267,6 @@ Definition successors (f: function) (pc: node) : list node :=
       | Lstore chunk addr args src s => s :: nil
       | Lcall sig ros args res s => s :: nil
       | Ltailcall sig ros args => nil
-      | Lalloc arg res s => s :: nil
       | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
       | Lreturn optarg => nil
       end

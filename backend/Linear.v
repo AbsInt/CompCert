@@ -43,7 +43,6 @@ Inductive instruction: Set :=
   | Lstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Lcall: signature -> mreg + ident -> instruction
   | Ltailcall: signature -> mreg + ident -> instruction
-  | Lalloc: instruction
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
   | Lcond: condition -> list mreg -> label -> instruction
@@ -247,7 +246,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp b (Locmap.set (S sl) (rs (R r)) rs) m)
   | exec_Lop:
       forall s f sp op args res b rs m v,
-      eval_operation ge sp op (reglist rs args) m = Some v ->
+      eval_operation ge sp op (reglist rs args) = Some v ->
       step (State s f sp (Lop op args res :: b) rs m)
         E0 (State s f sp b (Locmap.set (R res) v rs) m)
   | exec_Lload:
@@ -274,15 +273,6 @@ Inductive step: state -> trace -> state -> Prop :=
       sig = funsig f' ->
       step (State s f (Vptr stk Int.zero) (Ltailcall sig ros :: b) rs m)
         E0 (Callstate s f' (return_regs (parent_locset s) rs) (Mem.free m stk))
-  | exec_Lalloc:
-      forall s f sp b rs m sz m' blk,
-      rs (R Conventions.loc_alloc_argument) = Vint sz ->
-      Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
-      step (State s f sp (Lalloc :: b) rs m)
-        E0 (State s f sp b
-                    (Locmap.set (R Conventions.loc_alloc_result)
-                                (Vptr blk Int.zero) rs)
-                    m')
   | exec_Llabel:
       forall s f sp lbl b rs m,
       step (State s f sp (Llabel lbl :: b) rs m)
@@ -294,13 +284,13 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp b' rs m)
   | exec_Lcond_true:
       forall s f sp cond args lbl b rs m b',
-      eval_condition cond (reglist rs args) m = Some true ->
+      eval_condition cond (reglist rs args) = Some true ->
       find_label lbl f.(fn_code) = Some b' ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
         E0 (State s f sp b' rs m)
   | exec_Lcond_false:
       forall s f sp cond args lbl b rs m,
-      eval_condition cond (reglist rs args) m = Some false ->
+      eval_condition cond (reglist rs args) = Some false ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
         E0 (State s f sp b rs m)
   | exec_Lreturn:

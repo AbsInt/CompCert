@@ -287,8 +287,13 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
 (** Layout of the Cminor stack data block and construction of the 
   compilation environment.  Csharpminor local variables that are
   arrays or whose address is taken are allocated a slot in the Cminor
-  stack data.  While this is not important for correctness, sufficient
-  padding is inserted to ensure adequate alignment of addresses. *)
+  stack data.  Sufficient padding is inserted to ensure adequate alignment
+  of addresses. *)
+
+Definition array_alignment (sz: Z) : Z :=
+  if zlt sz 2 then 1
+  else if zlt sz 4 then 2
+  else if zlt sz 8 then 4 else 8.
 
 Definition assign_variable
     (atk: Identset.t)
@@ -297,7 +302,7 @@ Definition assign_variable
   let (cenv, stacksize) := cenv_stacksize in
   match id_lv with
   | (id, Varray sz) =>
-      let ofs := align stacksize 8 in
+      let ofs := align stacksize (array_alignment sz) in
       (PMap.set id (Var_stack_array ofs) cenv, ofs + Zmax 0 sz)
   | (id, Vscalar chunk) =>
       if Identset.mem id atk then

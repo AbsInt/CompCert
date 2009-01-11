@@ -58,7 +58,6 @@ Inductive instruction: Set :=
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mcall: signature -> mreg + ident -> instruction
   | Mtailcall: signature -> mreg + ident -> instruction
-  | Malloc: instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction

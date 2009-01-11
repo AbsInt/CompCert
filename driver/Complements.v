@@ -240,26 +240,6 @@ Qed.
 
 (** ** Determinism for terminating executions. *)
 
-(*
-Lemma star_star_inv:
-  forall ge s t1 s1, star step ge s t1 s1 ->
-  forall t2 s2 w w1 w2, star step ge s t2 s2 ->
-  possible_trace w t1 w1 -> possible_trace w t2 w2 ->
-  exists t, (star step ge s1 t s2 /\ t2 = t1 ** t)
-        \/  (star step ge s2 t s1 /\ t1 = t2 ** t).
-Proof.
-  induction 1; intros.
-  exists t2; left; split; auto.
-  inv H2. exists (t1 ** t2); right; split. econstructor; eauto. auto.
-  possibleTraceInv. 
-  exploit step_deterministic. eexact H. eexact H5. eauto. eauto. 
-  intros [U [V W]]. subst s5 t3 w3. 
-  exploit IHstar; eauto. intros [t [ [Q R] | [Q R] ]].
-  subst t4. exists t; left; split. auto. traceEq.
-  subst t2. exists t; right; split. auto. traceEq.
-Qed.
-*)
-
 Lemma steps_deterministic:
   forall ge s0 t1 s1, star step ge s0 t1 s1 -> 
   forall r1 r2 t2 s2 w0 w1 w2, star step ge s0 t2 s2 -> 

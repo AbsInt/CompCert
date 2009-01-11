@@ -172,6 +172,45 @@ Proof.
   assert (z <> z0). intuition auto. omega.
 Qed.
 
+Remark aligned_4_4x: forall x, (4 | 4 * x).
+Proof. intro. exists x; ring. Qed.
+
+Remark aligned_4_8x: forall x, (4 | 8 * x).
+Proof. intro. exists (x * 2); ring. Qed.
+
+Remark aligned_4_align8: forall x, (4 | align x 8).
+Proof. 
+  intro. apply Zdivides_trans with 8. exists 2; auto. apply align_divides. omega.
+Qed.
+
+Hint Resolve Zdivide_0 Zdivide_refl Zdivide_plus_r
+             aligned_4_4x aligned_4_8x aligned_4_align8: align_4.
+
+Hint Extern 4 (?X | ?Y) => (exists (Y/X); reflexivity) : align_4.
+
+Lemma offset_of_index_aligned:
+  forall idx, (4 | offset_of_index fe idx).
+Proof.
+  intros.
+  destruct idx;
+  unfold offset_of_index, fe, make_env,
+    fe_size, fe_ofs_int_local, fe_ofs_int_callee_save,
+    fe_ofs_float_local, fe_ofs_float_callee_save,
+    fe_ofs_link, fe_ofs_retaddr, fe_ofs_arg;
+  auto with align_4.
+  destruct t; auto with align_4.
+Qed.
+
+Lemma frame_size_aligned:
+  (4 | fe_size fe).
+Proof.
+  unfold offset_of_index, fe, make_env,
+    fe_size, fe_ofs_int_local, fe_ofs_int_callee_save,
+    fe_ofs_float_local, fe_ofs_float_callee_save,
+    fe_ofs_link, fe_ofs_retaddr, fe_ofs_arg;
+  auto with align_4.
+Qed.
+
 (** The following lemmas give sufficient conditions for indices
   of various kinds to be valid. *)
 
@@ -232,7 +271,7 @@ Proof.
     fe_ofs_float_local, fe_ofs_float_callee_save,
     fe_ofs_link, fe_ofs_retaddr, fe_ofs_arg,
     type_of_index, typesize;
-  simpl in H5;
+  unfold index_valid in H5; simpl typesize in H5;
   omega.
 Qed. 
 
@@ -287,6 +326,7 @@ Proof.
     auto. exact I. red. destruct idx; auto || congruence.
   intro. rewrite typesize_typesize. assumption.
   exact I.
+  apply offset_of_index_aligned.
 Qed.
 
 Lemma get_slot_index:
@@ -534,96 +574,6 @@ Proof.
   (* saved floats *)
   intros. rewrite get_set_index_val_other; eauto with stacking. red; auto.
 Qed.
-
-(*
-Lemma agree_set_int_callee_save:
-  forall ls ls0 rs fr r v,
-  agree ls ls0 rs fr ->
-  In r int_callee_save_regs ->
-  index_int_callee_save r < fe.(fe_num_int_callee_save) ->
-  exists fr',
-    set_slot tf fr Tint 
-             (Int.signed (Int.repr
-               (offset_of_index fe (FI_saved_int (index_int_callee_save r)))))
-             v fr' /\
-    agree ls (Locmap.set (R r) v ls0) rs fr'.
-Proof.
-  intros.
-  set (idx := FI_saved_int (index_int_callee_save r)).
-  exists (set_index_val idx v fr); split.
-  change Tint with (type_of_index idx).
-  apply set_slot_index; unfold idx. auto with stacking. congruence. congruence.
-  constructor; eauto with stacking.
-  (* agree_unused_reg *)
-  intros. rewrite Locmap.gso. eauto with stacking.
-  red; red; intro. subst r0. elim H2. red. 
-  rewrite (int_callee_save_type r H0). auto.
-  (* agree_local *)
-  intros. unfold idx; rewrite get_set_index_val_other; eauto with stacking.
-  red; auto.
-  (* agree_outgoing *)
-  intros. unfold idx; rewrite get_set_index_val_other; eauto with stacking.
-  red; auto.
-  (* agree_incoming *)
-  intros. rewrite Locmap.gso. eauto with stacking. red. auto.
-  (* saved ints *)
-  intros. destruct (mreg_eq r r0). 
-  subst r0. rewrite Locmap.gss. unfold idx. apply get_set_index_val_same. 
-  rewrite Locmap.gso. rewrite get_set_index_val_other. eauto with stacking.
-  unfold idx. auto with stacking. auto with stacking.
-  unfold idx; red. apply index_int_callee_save_inj; auto.
-  red; auto.
-  (* saved floats *)
-  intros. rewrite Locmap.gso. rewrite get_set_index_val_other; eauto with stacking.
-  unfold idx. auto with stacking. 
-  unfold idx; red; auto.
-  red. apply int_float_callee_save_disjoint; auto.
-Qed.
-
-Lemma agree_set_float_callee_save:
-  forall ls ls0 rs fr r v,
-  agree ls ls0 rs fr ->
-  In r float_callee_save_regs ->
-  index_float_callee_save r < fe.(fe_num_float_callee_save) ->
-  exists fr',
-    set_slot tf fr Tfloat
-             (Int.signed (Int.repr
-               (offset_of_index fe (FI_saved_float (index_float_callee_save r)))))
-             v fr' /\
-    agree ls (Locmap.set (R r) v ls0) rs fr'.
-Proof.
-  intros.
-  set (idx := FI_saved_float (index_float_callee_save r)).
-  exists (set_index_val idx v fr); split.
-  change Tfloat with (type_of_index idx).
-  apply set_slot_index; unfold idx. auto with stacking. congruence. congruence.
-  constructor; eauto with stacking.
-  (* agree_unused_reg *)
-  intros. rewrite Locmap.gso. eauto with stacking.
-  red; red; intro. subst r0. elim H2. red. 
-  rewrite (float_callee_save_type r H0). auto.
-  (* agree_local *)
-  intros. unfold idx; rewrite get_set_index_val_other; eauto with stacking.
-  red; auto.
-  (* agree_outgoing *)
-  intros. unfold idx; rewrite get_set_index_val_other; eauto with stacking.
-  red; auto.
-  (* agree_incoming *)
-  intros. rewrite Locmap.gso. eauto with stacking. red. auto.
-  (* saved ints *)
-  intros. rewrite Locmap.gso. rewrite get_set_index_val_other; eauto with stacking.
-  unfold idx. auto with stacking. 
-  unfold idx; red; auto.
-  red. apply sym_not_equal. apply int_float_callee_save_disjoint; auto.
-  (* saved floats *)
-  intros. destruct (mreg_eq r r0). 
-  subst r0. rewrite Locmap.gss. unfold idx. apply get_set_index_val_same. 
-  rewrite Locmap.gso. rewrite get_set_index_val_other. eauto with stacking.
-  unfold idx. auto with stacking. auto with stacking.
-  unfold idx; red. apply index_float_callee_save_inj; auto.
-  red; auto.
-Qed.
-*)
 
 Lemma agree_return_regs:
   forall ls ls0 rs fr cs rs',
@@ -1270,12 +1220,11 @@ Proof.
 Qed.
 
 Lemma shift_eval_operation:
-  forall f tf sp op args m v,
+  forall f tf sp op args v,
   transf_function f = OK tf ->
-  eval_operation ge sp op args m = Some v ->
+  eval_operation ge sp op args = Some v ->
   eval_operation tge (shift_sp tf sp) 
-                 (transl_op (make_env (function_bounds f)) op) args m =
-  Some v.
+                 (transl_op (make_env (function_bounds f)) op) args = Some v.
 Proof.
   intros until v. destruct op; intros; auto.
   simpl in *. rewrite symbols_preserved. auto.
@@ -1535,15 +1484,6 @@ Proof.
   intros. inv WTI. generalize (H3 _ H0). tauto.
   apply agree_callee_save_return_regs. 
  
-  (* Lalloc *)
-  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
-                          (rs0#loc_alloc_result <- (Vptr blk Int.zero)) fr m'); split.
-  apply plus_one; eapply exec_Malloc; eauto.
-  rewrite (agree_eval_reg _ _ _ _ _ _ _ loc_alloc_argument AG). auto.
-  econstructor; eauto with coqlib.
-  apply agree_set_reg; auto.
-  red. simpl. generalize (max_over_regs_of_funct_pos f int_callee_save). omega.
-
   (* Llabel *)
   econstructor; split.
   apply plus_one; apply exec_Mlabel.

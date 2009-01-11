@@ -523,50 +523,6 @@ Proof.
   intros. apply Pregmap.gso; auto.
 Qed.
 
-(** * Memory properties *)
-
-(** We show that signed 8- and 16-bit stores can be performed
-  like unsigned stores. *)
-
-Remark valid_access_equiv:
-  forall chunk1 chunk2 m b ofs,
-  size_chunk chunk1 = size_chunk chunk2 ->
-  valid_access m chunk1 b ofs ->
-  valid_access m chunk2 b ofs.
-Proof.
-  intros. inv H0. rewrite H in H3. constructor; auto.
-Qed.
-
-Remark in_bounds_equiv:
-  forall chunk1 chunk2 m b ofs (A: Set) (a1 a2: A),
-  size_chunk chunk1 = size_chunk chunk2 ->
-  (if in_bounds m chunk1 b ofs then a1 else a2) =
-  (if in_bounds m chunk2 b ofs then a1 else a2).
-Proof.
-  intros. destruct (in_bounds m chunk1 b ofs).
-  rewrite in_bounds_true. auto. eapply valid_access_equiv; eauto.
-  destruct (in_bounds m chunk2 b ofs); auto.
-  elim n. eapply valid_access_equiv with (chunk1 := chunk2); eauto.
-Qed.
-
-Lemma storev_8_signed_unsigned:
-  forall m a v,
-  Mem.storev Mint8signed m a v = Mem.storev Mint8unsigned m a v.
-Proof.
-  intros. unfold storev. destruct a; auto.
-  unfold store. rewrite (in_bounds_equiv Mint8signed Mint8unsigned).
-  auto. auto.
-Qed.
-
-Lemma storev_16_signed_unsigned:
-  forall m a v,
-  Mem.storev Mint16signed m a v = Mem.storev Mint16unsigned m a v.
-Proof.
-  intros. unfold storev. destruct a; auto.
-  unfold store. rewrite (in_bounds_equiv Mint16signed Mint16unsigned).
-  auto. auto.
-Qed.
-
 (** * Proof of semantic preservation *)
 
 (** Semantic preservation is proved using simulation diagrams
@@ -767,7 +723,7 @@ Lemma exec_Mop_prop:
   forall (s : list stackframe) (fb : block) (sp : val) (op : operation)
          (args : list mreg) (res : mreg) (c : list Mach.instruction)
          (ms : mreg -> val) (m : mem) (v : val),
-  eval_operation ge sp op ms ## args m = Some v ->
+  eval_operation ge sp op ms ## args = Some v ->
   exec_instr_prop (Machconcr.State s fb sp (Mop op args res :: c) ms m) E0
                   (Machconcr.State s fb sp c (Regmap.set res v ms) m).
 Proof.
@@ -940,21 +896,6 @@ Proof.
   intros. rewrite Pregmap.gso; auto.
 Qed.
 
-Lemma exec_Malloc_prop:
-  forall (s : list stackframe) (fb : block) (sp : val)
-         (c : list Mach.instruction) (ms : mreg -> val) (m : mem) (sz : int)
-         (m' : mem) (blk : block),
-  ms Conventions.loc_alloc_argument = Vint sz ->
-  alloc m 0 (Int.signed sz) = (m', blk) ->
-  exec_instr_prop (Machconcr.State s fb sp (Malloc :: c) ms m) E0
-         (Machconcr.State s fb sp c
-             (Regmap.set (Conventions.loc_alloc_result) (Vptr blk Int.zero) ms) m').
-Proof.
-  intros; red; intros; inv MS.
-  left; eapply exec_straight_steps; eauto with coqlib.
-  simpl. eapply transl_alloc_correct; eauto. 
-Qed.
-
 Lemma exec_Mgoto_prop:
   forall (s : list stackframe) (fb : block) (f : function) (sp : val)
          (lbl : Mach.label) (c : list Mach.instruction) (ms : Mach.regset)
@@ -984,7 +925,7 @@ Lemma exec_Mcond_true_prop:
          (cond : condition) (args : list mreg) (lbl : Mach.label)
          (c : list Mach.instruction) (ms : mreg -> val) (m : mem)
          (c' : Mach.code),
-  eval_condition cond ms ## args m = Some true ->
+  eval_condition cond ms ## args = Some true ->
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl (fn_code f) = Some c' ->
   exec_instr_prop (Machconcr.State s fb sp (Mcond cond args lbl :: c) ms m) E0
@@ -1020,7 +961,7 @@ Lemma exec_Mcond_false_prop:
   forall (s : list stackframe) (fb : block) (sp : val)
          (cond : condition) (args : list mreg) (lbl : Mach.label)
          (c : list Mach.instruction) (ms : mreg -> val) (m : mem),
-  eval_condition cond ms ## args m = Some false ->
+  eval_condition cond ms ## args = Some false ->
   exec_instr_prop (Machconcr.State s fb sp (Mcond cond args lbl :: c) ms m) E0
                   (Machconcr.State s fb sp c ms m).
 Proof.
@@ -1197,7 +1138,6 @@ Proof
            exec_Mstore_prop
            exec_Mcall_prop
            exec_Mtailcall_prop
-           exec_Malloc_prop
            exec_Mgoto_prop
            exec_Mcond_true_prop
            exec_Mcond_false_prop

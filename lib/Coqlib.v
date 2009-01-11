@@ -18,6 +18,7 @@
     library. *)
 
 Require Export ZArith.
+Require Export Znumtheory.
 Require Export List.
 Require Export Bool.
 Require Import Wf_nat.
@@ -526,6 +527,25 @@ Proof.
   omega.
 Qed.
 
+(** Properties of divisibility. *)
+
+Lemma Zdivides_trans:
+  forall x y z, (x | y) -> (y | z) -> (x | z).
+Proof.
+  intros. inv H. inv H0. exists (q0 * q). ring.
+Qed.
+
+Definition Zdivide_dec:
+  forall (p q: Z), p > 0 -> { (p|q) } + { ~(p|q) }.
+Proof.
+  intros. destruct (zeq (Zmod q p) 0).
+  left. exists (q / p). 
+  transitivity (p * (q / p) + (q mod p)). apply Z_div_mod_eq; auto.
+  transitivity (p * (q / p)). omega. ring.
+  right; red; intros. elim n. apply Z_div_exact_1; auto. 
+  inv H0. rewrite Z_div_mult; auto. ring.
+Qed.
+
 (** Alignment: [align n amount] returns the smallest multiple of [amount]
   greater than or equal to [n]. *)
 
@@ -540,6 +560,11 @@ Proof.
      with ((x + y - 1) - (x + y - 1) mod y).
   generalize (Z_mod_lt (x + y - 1) y H). omega.
   rewrite Zmult_comm. omega.
+Qed.
+
+Lemma align_divides: forall x y, y > 0 -> (y | align x y).
+Proof.
+  intros. unfold align. apply Zdivide_factor_l. 
 Qed.
 
 (** * Definitions and theorems on the data types [option], [sum] and [list] *)

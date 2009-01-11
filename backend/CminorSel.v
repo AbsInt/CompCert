@@ -68,7 +68,6 @@ Inductive stmt : Set :=
   | Sstore : memory_chunk -> addressing -> exprlist -> expr -> stmt
   | Scall : option ident -> signature -> expr -> exprlist -> stmt
   | Stailcall: signature -> expr -> exprlist -> stmt
-  | Salloc : ident -> expr -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: condexpr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -162,7 +161,7 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
       eval_expr le (Evar id) v
   | eval_Eop: forall le op al vl v,
       eval_exprlist le al vl ->
-      eval_operation ge sp op vl m = Some v ->
+      eval_operation ge sp op vl = Some v ->
       eval_expr le (Eop op al) v
   | eval_Eload: forall le chunk addr al vl vaddr v,
       eval_exprlist le al vl ->
@@ -188,7 +187,7 @@ with eval_condexpr: letenv -> condexpr -> bool -> Prop :=
       eval_condexpr le CEfalse false
   | eval_CEcond: forall le cond al vl b,
       eval_exprlist le al vl ->
-      eval_condition cond vl m = Some b ->
+      eval_condition cond vl = Some b ->
       eval_condexpr le (CEcond cond al) b
   | eval_CEcondition: forall le a b c vb1 vb2,
       eval_condexpr le a vb1 ->
@@ -293,12 +292,6 @@ Inductive step: state -> trace -> state -> Prop :=
       funsig fd = sig ->
       step (State f (Stailcall sig a bl) k (Vptr sp Int.zero) e m)
         E0 (Callstate fd vargs (call_cont k) (Mem.free m sp))
-
-  | step_alloc: forall f id a k sp e m n m' b,
-      eval_expr sp e m nil a (Vint n) ->
-      Mem.alloc m 0 (Int.signed n) = (m', b) ->
-      step (State f (Salloc id a) k sp e m)
-        E0 (State f Sskip k sp (PTree.set id (Vptr b Int.zero) e) m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)

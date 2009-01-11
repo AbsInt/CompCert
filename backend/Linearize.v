@@ -186,8 +186,6 @@ Definition linearize_instr (b: LTL.instruction) (k: code) : code :=
       Lcall sig ros args res :: add_branch s k
   | LTL.Ltailcall sig ros args =>
       Ltailcall sig ros args :: k
-  | LTL.Lalloc arg res s =>
-      Lalloc arg res :: add_branch s k
   | LTL.Lcond cond args s1 s2 =>
       if starts_with s1 k then
         Lcond (negate_condition cond) args s2 :: add_branch s1 k

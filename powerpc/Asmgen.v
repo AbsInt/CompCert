@@ -457,8 +457,6 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pmtlr GPR12 ::
       Pfreeframe f.(fn_link_ofs) :: 
       Pbs symb :: k
-  | Malloc =>
-      Pallocblock :: k
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>

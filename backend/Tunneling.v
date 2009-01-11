@@ -112,8 +112,6 @@ Definition tunnel_instr (f: LTL.function) (b: instruction) : instruction :=
       Lcall sig ros args res (branch_target f s)
   | Ltailcall sig ros args =>
       Ltailcall sig ros args
-  | Lalloc arg res s =>
-      Lalloc arg res (branch_target f s)
   | Lcond cond args s1 s2 =>
       Lcond cond args (branch_target f s1) (branch_target f s2)
   | Lreturn or =>

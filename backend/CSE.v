@@ -260,7 +260,7 @@ Definition equation_holds
      (vres: valnum) (rh: rhs) : Prop :=
   match rh with
   | Op op vl =>
-      eval_operation ge sp op (List.map valuation vl) m =
+      eval_operation ge sp op (List.map valuation vl) =
       Some (valuation vres)
   | Load chunk addr vl =>
       exists a,
@@ -348,8 +348,6 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           empty_numbering
       | Itailcall sig ros args =>
           empty_numbering
-      | Ialloc arg res s =>
-          add_unknown before res
       | Icond cond args ifso ifnot =>
           before
       | Ireturn optarg =>

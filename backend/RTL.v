@@ -68,10 +68,8 @@ Inductive instruction: Set :=
           as arguments.  It stores the return value in [dest] and branches
           to [succ]. *)
   | Itailcall: signature -> reg + ident -> list reg -> instruction
-  | Ialloc: reg -> reg -> node -> instruction
-      (** [Ialloc arg dest succ] allocates a fresh block of size
-          the contents of register [arg], stores a pointer to this
-          block in [dest], and branches to [succ]. *)
+      (** [Itailcall sig fn args] performs a function invocation
+          in tail-call position.  *)
   | Icond: condition -> list reg -> node -> node -> instruction
       (** [Icond cond args ifso ifnot] evaluates the boolean condition
           [cond] over the values of registers [args].  If the condition
@@ -213,7 +211,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Iop:
       forall s c sp pc rs m op args res pc' v,
       c!pc = Some(Iop op args res pc') ->
-      eval_operation ge sp op rs##args m = Some v ->
+      eval_operation ge sp op rs##args = Some v ->
       step (State s c sp pc rs m)
         E0 (State s c sp pc' (rs#res <- v) m)
   | exec_Iload:
@@ -244,23 +242,16 @@ Inductive step: state -> trace -> state -> Prop :=
       funsig f = sig ->
       step (State s c (Vptr stk Int.zero) pc rs m)
         E0 (Callstate s f rs##args (Mem.free m stk))
-  | exec_Ialloc:
-      forall s c sp pc rs m pc' arg res sz m' b,
-      c!pc = Some(Ialloc arg res pc') ->
-      rs#arg = Vint sz ->
-      Mem.alloc m 0 (Int.signed sz) = (m', b) ->
-      step (State s c sp pc rs m)
-        E0 (State s c sp pc' (rs#res <- (Vptr b Int.zero)) m')
   | exec_Icond_true:
       forall s c sp pc rs m cond args ifso ifnot,
       c!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args m = Some true ->
+      eval_condition cond rs##args = Some true ->
       step (State s c sp pc rs m)
         E0 (State s c sp ifso rs m)
   | exec_Icond_false:
       forall s c sp pc rs m cond args ifso ifnot,
       c!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args m = Some false ->
+      eval_condition cond rs##args = Some false ->
       step (State s c sp pc rs m)
         E0 (State s c sp ifnot rs m)
   | exec_Ireturn:
@@ -291,7 +282,7 @@ Inductive step: state -> trace -> state -> Prop :=
 Lemma exec_Iop':
   forall s c sp pc rs m op args res pc' rs' v,
   c!pc = Some(Iop op args res pc') ->
-  eval_operation ge sp op rs##args m = Some v ->
+  eval_operation ge sp op rs##args = Some v ->
   rs' = (rs#res <- v) ->
   step (State s c sp pc rs m)
     E0 (State s c sp pc' rs' m).
@@ -352,7 +343,6 @@ Definition successors (f: function) (pc: node) : list node :=
       | Istore chunk addr args src s => s :: nil
       | Icall sig ros args res s => s :: nil
       | Itailcall sig ros args => nil
-      | Ialloc arg res s => s :: nil
       | Icond cond args ifso ifnot => ifso :: ifnot :: nil
       | Ireturn optarg => nil
       end

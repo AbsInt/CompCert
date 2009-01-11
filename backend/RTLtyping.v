@@ -100,11 +100,6 @@ Inductive wt_instr : instruction -> Prop :=
       List.map env args = sig.(sig_args) ->
       Conventions.tailcall_possible sig ->
       wt_instr (Itailcall sig ros args)
-  | wt_Ialloc:
-      forall arg res s,
-      env arg = Tint -> env res = Tint ->
-      valid_successor s ->
-      wt_instr (Ialloc arg res s)
   | wt_Icond:
       forall cond args s1 s2,
       List.map env args = type_of_condition cond ->
@@ -225,10 +220,6 @@ Definition check_instr (i: instruction) : bool :=
       && check_regs args sig.(sig_args)
       && opt_typ_eq sig.(sig_res) funct.(fn_sig).(sig_res)
       && Conventions.tailcall_is_possible sig
-  | Ialloc arg res s =>
-      check_reg arg Tint 
-      && check_reg res Tint
-      && check_successor s
   | Icond cond args s1 s2 =>
       check_regs args (type_of_condition cond)
       && check_successor s1
@@ -331,11 +322,6 @@ Proof.
   eapply proj_sumbool_true; eauto.
   apply check_regs_correct; auto.
   apply Conventions.tailcall_is_possible_correct; auto.
-  (* alloc *)
-  constructor. 
-  apply check_reg_correct; auto.
-  apply check_reg_correct; auto.
-  apply check_successor_correct; auto.
   (* cond *)
   constructor. apply check_regs_correct; auto.
   apply check_successor_correct; auto.
@@ -524,7 +510,7 @@ Proof.
   econstructor; eauto.
   apply wt_regset_assign. auto.
   replace (env res) with (snd (type_of_operation op)).
-  apply type_of_operation_sound with fundef ge rs##args sp m; auto.
+  apply type_of_operation_sound with fundef ge rs##args sp; auto.
   rewrite <- H6. reflexivity.
   (* Iload *)
   econstructor; eauto.
@@ -556,9 +542,6 @@ Proof.
   econstructor; eauto.
   rewrite H5; auto.
   rewrite <- H6. apply wt_regset_list. auto.
-  (* Ialloc *)  
-  econstructor; eauto.
-  apply wt_regset_assign. auto. rewrite H6; exact I.
   (* Icond *)
   econstructor; eauto.
   econstructor; eauto.

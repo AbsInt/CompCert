@@ -143,10 +143,10 @@ Ltac InvVLMA :=
   approximations returned by [eval_static_operation]. *)
 
 Lemma eval_static_condition_correct:
-  forall cond al vl m b,
+  forall cond al vl b,
   val_list_match_approx al vl ->
   eval_static_condition cond al = Some b ->
-  eval_condition cond vl m = Some b.
+  eval_condition cond vl = Some b.
 Proof.
   intros until b.
   unfold eval_static_condition. 
@@ -155,9 +155,9 @@ Proof.
 Qed.
 
 Lemma eval_static_operation_correct:
-  forall op sp al vl m v,
+  forall op sp al vl v,
   val_list_match_approx al vl ->
-  eval_operation ge sp op vl m = Some v ->
+  eval_operation ge sp op vl = Some v ->
   val_match_approx (eval_static_operation op al) v.
 Proof.
   intros until v.
@@ -197,7 +197,7 @@ Proof.
   rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
 
   caseEq (eval_static_condition c vl0).
-  intros. generalize (eval_static_condition_correct _ _ _ m _ H H1).
+  intros. generalize (eval_static_condition_correct _ _ _ _ H H1).
   intro. rewrite H2 in H0. 
   destruct b; injection H0; intro; subst v; simpl; auto.
   intros; simpl; auto.
@@ -270,9 +270,9 @@ Proof.
 Qed.
 
 Lemma cond_strength_reduction_correct:
-  forall cond args m,
+  forall cond args,
   let (cond', args') := cond_strength_reduction approx cond args in
-  eval_condition cond' rs##args' m = eval_condition cond rs##args m.
+  eval_condition cond' rs##args' = eval_condition cond rs##args.
 Proof.
   intros. unfold cond_strength_reduction.
   case (cond_strength_reduction_match cond args); intros.
@@ -304,10 +304,10 @@ Proof.
 Qed.
 
 Lemma make_addimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_addimm n r in
-  eval_operation ge sp Oadd (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oadd (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_addimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -317,10 +317,10 @@ Proof.
 Qed.
   
 Lemma make_shlimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_shlimm n r in
-  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_shlimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -331,10 +331,10 @@ Proof.
 Qed.
 
 Lemma make_shrimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_shrimm n r in
-  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_shrimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -345,10 +345,10 @@ Proof.
 Qed.
 
 Lemma make_shruimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_shruimm n r in
-  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_shruimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -359,11 +359,11 @@ Proof.
 Qed.
 
 Lemma make_mulimm_correct:
-  forall n r r' m v,
+  forall n r r' v,
   rs#r' = Vint n ->
   let (op, args) := make_mulimm n r r' in
-  eval_operation ge sp Omul (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Omul (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_mulimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -371,8 +371,8 @@ Proof.
   generalize (Int.eq_spec n Int.one); case (Int.eq n Int.one); intros.
   subst n. simpl in H2. simpl. FuncInv. rewrite Int.mul_one in H1. congruence.
   caseEq (Int.is_power2 n); intros.
-  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil) m)
-     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil) m).
+  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil))
+     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil)).
   apply make_shlimm_correct. 
   simpl. generalize (Int.is_power2_range _ _ H2). 
   change (Z_of_nat wordsize) with 32. intro. rewrite H3.
@@ -381,10 +381,10 @@ Proof.
 Qed.
 
 Lemma make_andimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_andimm n r in
-  eval_operation ge sp Oand (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oand (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_andimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -395,10 +395,10 @@ Proof.
 Qed.
 
 Lemma make_orimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_orimm n r in
-  eval_operation ge sp Oor (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oor (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_orimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -409,10 +409,10 @@ Proof.
 Qed.
 
 Lemma make_xorimm_correct:
-  forall n r m v,
+  forall n r v,
   let (op, args) := make_xorimm n r in
-  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) = Some v ->
+  eval_operation ge sp op rs##args = Some v.
 Proof.
   intros; unfold make_xorimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -423,18 +423,18 @@ Proof.
 Qed.
 
 Lemma op_strength_reduction_correct:
-  forall op args m v,
+  forall op args v,
   let (op', args') := op_strength_reduction approx op args in
-  eval_operation ge sp op rs##args m = Some v ->
-  eval_operation ge sp op' rs##args' m = Some v.
+  eval_operation ge sp op rs##args = Some v ->
+  eval_operation ge sp op' rs##args' = Some v.
 Proof.
   intros; unfold op_strength_reduction;
   case (op_strength_reduction_match op args); intros; simpl List.map.
   (* Oadd *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oadd (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oadd (rs # r2 :: Vint i :: nil) m).
+  replace (eval_operation ge sp Oadd (Vint i :: rs # r2 :: nil))
+     with (eval_operation ge sp Oadd (rs # r2 :: Vint i :: nil)).
   apply make_addimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.add_commut; auto.
   caseEq (intval approx r2); intros.
@@ -443,8 +443,8 @@ Proof.
   (* Oaddshift *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp (Oaddshift s) (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oadd (rs # r1 :: Vint (eval_shift s i) :: nil) m).
+  replace (eval_operation ge sp (Oaddshift s) (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oadd (rs # r1 :: Vint (eval_shift s i) :: nil)).
   apply make_addimm_correct. 
   simpl. destruct rs#r1; auto.
   assumption.
@@ -454,16 +454,16 @@ Proof.
   simpl in *. destruct rs#r2; auto. 
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H0).
-  replace (eval_operation ge sp Osub (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg i) :: nil) m).
+  replace (eval_operation ge sp Osub (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg i) :: nil)).
   apply make_addimm_correct.
   simpl. destruct rs#r1; auto; rewrite Int.sub_add_opp; auto.
   assumption.
   (* Osubshift *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp (Osubshift s) (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg (eval_shift s i)) :: nil) m).
+  replace (eval_operation ge sp (Osubshift s) (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg (eval_shift s i)) :: nil)).
   apply make_addimm_correct. 
   simpl. destruct rs#r1; auto; rewrite Int.sub_add_opp; auto.
   assumption.
@@ -475,8 +475,8 @@ Proof.
   (* Omul *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Omul (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Omul (rs # r2 :: Vint i :: nil) m).
+  replace (eval_operation ge sp Omul (Vint i :: rs # r2 :: nil))
+     with (eval_operation ge sp Omul (rs # r2 :: Vint i :: nil)).
   apply make_mulimm_correct. apply intval_correct; auto. 
   simpl. destruct rs#r2; auto. rewrite Int.mul_commut; auto.
   caseEq (intval approx r2); intros.
@@ -487,8 +487,8 @@ Proof.
   caseEq (intval approx r2); intros.
   caseEq (Int.is_power2 i); intros.
   rewrite (intval_correct _ _ H).
-  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil) m).
+  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil)).
   apply make_shruimm_correct. 
   simpl. destruct rs#r1; auto. 
   change 32 with (Z_of_nat wordsize). 
@@ -501,8 +501,8 @@ Proof.
   (* Oand *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oand (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oand (rs # r2 :: Vint i :: nil) m).
+  replace (eval_operation ge sp Oand (Vint i :: rs # r2 :: nil))
+     with (eval_operation ge sp Oand (rs # r2 :: Vint i :: nil)).
   apply make_andimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.and_commut; auto.
   caseEq (intval approx r2); intros.
@@ -511,15 +511,15 @@ Proof.
   (* Oandshift *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp (Oandshift s) (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oand (rs # r1 :: Vint (eval_shift s i) :: nil) m).
+  replace (eval_operation ge sp (Oandshift s) (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oand (rs # r1 :: Vint (eval_shift s i) :: nil)).
   apply make_andimm_correct. reflexivity.
   assumption.
   (* Oor *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oor (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oor (rs # r2 :: Vint i :: nil) m).
+  replace (eval_operation ge sp Oor (Vint i :: rs # r2 :: nil))
+     with (eval_operation ge sp Oor (rs # r2 :: Vint i :: nil)).
   apply make_orimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.or_commut; auto.
   caseEq (intval approx r2); intros.
@@ -528,15 +528,15 @@ Proof.
   (* Oorshift *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp (Oorshift s) (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oor (rs # r1 :: Vint (eval_shift s i) :: nil) m).
+  replace (eval_operation ge sp (Oorshift s) (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oor (rs # r1 :: Vint (eval_shift s i) :: nil)).
   apply make_orimm_correct. reflexivity.
   assumption.
   (* Oxor *)
   caseEq (intval approx r1); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oxor (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oxor (rs # r2 :: Vint i :: nil) m).
+  replace (eval_operation ge sp Oxor (Vint i :: rs # r2 :: nil))
+     with (eval_operation ge sp Oxor (rs # r2 :: Vint i :: nil)).
   apply make_xorimm_correct. 
   simpl. destruct rs#r2; auto. rewrite Int.xor_commut; auto.
   caseEq (intval approx r2); intros.
@@ -545,22 +545,22 @@ Proof.
   (* Oxorshift *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp (Oxorshift s) (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oxor (rs # r1 :: Vint (eval_shift s i) :: nil) m).
+  replace (eval_operation ge sp (Oxorshift s) (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oxor (rs # r1 :: Vint (eval_shift s i) :: nil)).
   apply make_xorimm_correct. reflexivity.
   assumption.
   (* Obic *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Obic (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oand (rs # r1 :: Vint (Int.not i) :: nil) m).
+  replace (eval_operation ge sp Obic (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oand (rs # r1 :: Vint (Int.not i) :: nil)).
   apply make_andimm_correct. reflexivity.
   assumption.
   (* Obicshift *)
   caseEq (intval approx r2); intros.
   rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp (Obicshift s) (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oand (rs # r1 :: Vint (Int.not (eval_shift s i)) :: nil) m).
+  replace (eval_operation ge sp (Obicshift s) (rs # r1 :: Vint i :: nil))
+     with (eval_operation ge sp Oand (rs # r1 :: Vint (Int.not (eval_shift s i)) :: nil)).
   apply make_andimm_correct. reflexivity.
   assumption.
   (* Oshl *)
@@ -779,13 +779,13 @@ Proof.
   exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- v) m); split.
   TransfInstr. caseEq (op_strength_reduction (analyze f)!!pc op args);
   intros op' args' OSR.
-  assert (eval_operation tge sp op' rs##args' m = Some v).
+  assert (eval_operation tge sp op' rs##args' = Some v).
     rewrite (eval_operation_preserved symbols_preserved). 
     generalize (op_strength_reduction_correct ge (analyze f)!!pc sp rs
-                  MATCH op args m v).
+                  MATCH op args v).
     rewrite OSR; simpl. auto.
   generalize (eval_static_operation_correct ge op sp
-               (approx_regs args (analyze f)!!pc) rs##args m v
+               (approx_regs args (analyze f)!!pc) rs##args v
                (approx_regs_val_list _ _ _ args MATCH) H0).
   case (eval_static_operation op (approx_regs args (analyze f)!!pc)); intros;
   simpl in H2;
@@ -852,30 +852,20 @@ Proof.
   TransfInstr; intro.
   econstructor; split.
   eapply exec_Itailcall; eauto. apply sig_function_translated; auto.
-  constructor; auto. 
-
-  (* Ialloc *)
-  TransfInstr; intro.
-  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- (Vptr b Int.zero)) m'); split.
-  eapply exec_Ialloc; eauto.
-  econstructor; eauto.
-  apply analyze_correct_1 with pc; auto. 
-  unfold successors; rewrite H; auto with coqlib.
-  unfold transfer; rewrite H. 
-  apply regs_match_approx_update; auto. simpl; auto.
+  constructor; auto.
 
   (* Icond, true *)
   exists (State s' (transf_code (analyze f) (fn_code f)) sp ifso rs m); split. 
   caseEq (cond_strength_reduction (analyze f)!!pc cond args);
   intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' m = Some true).
+  assert (eval_condition cond' rs##args' = Some true).
     generalize (cond_strength_reduction_correct
-                  ge (analyze f)!!pc rs MATCH cond args m).
+                  ge (analyze f)!!pc rs MATCH cond args).
     rewrite CSR.  intro. congruence.
   TransfInstr. rewrite CSR. 
   caseEq (eval_static_condition cond (approx_regs args (analyze f)!!pc)).
   intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ m _
+  generalize (eval_static_condition_correct ge cond _ _ _
                (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
   replace b with true. intro; eapply exec_Inop; eauto. congruence.
   intros. eapply exec_Icond_true; eauto.
@@ -888,14 +878,14 @@ Proof.
   exists (State s' (transf_code (analyze f) (fn_code f)) sp ifnot rs m); split. 
   caseEq (cond_strength_reduction (analyze f)!!pc cond args);
   intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' m = Some false).
+  assert (eval_condition cond' rs##args' = Some false).
     generalize (cond_strength_reduction_correct
-                  ge (analyze f)!!pc rs MATCH cond args m).
+                  ge (analyze f)!!pc rs MATCH cond args).
     rewrite CSR.  intro. congruence.
   TransfInstr. rewrite CSR. 
   caseEq (eval_static_condition cond (approx_regs args (analyze f)!!pc)).
   intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ m _
+  generalize (eval_static_condition_correct ge cond _ _ _
                (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
   replace b with false. intro; eapply exec_Inop; eauto. congruence.
   intros. eapply exec_Icond_false; eauto.

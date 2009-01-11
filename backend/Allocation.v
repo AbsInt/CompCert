@@ -101,8 +101,6 @@ Definition transfer
            (reg_sum_live ros (reg_dead res after))
       | Itailcall sig ros args =>
 	  reg_list_live args (reg_sum_live ros Regset.empty)
-      | Ialloc arg res s =>
-          reg_live arg (reg_dead res after)
       | Icond cond args ifso ifnot =>
           reg_list_live args after
       | Ireturn optarg =>
@@ -167,8 +165,6 @@ Definition transf_instr
                 (assign res) s
   | Itailcall sig ros args =>
       Ltailcall sig (sum_left_map assign ros) (List.map assign args)
-  | Ialloc arg res s =>
-      Lalloc (assign arg) (assign res) s
   | Icond cond args ifso ifnot =>
       Lcond cond (List.map assign args) ifso ifnot
   | Ireturn optarg =>

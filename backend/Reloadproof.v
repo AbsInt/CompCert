@@ -178,10 +178,10 @@ Proof.
 Qed.
 
 Lemma not_enough_temporaries_addr:
-  forall (ge: genv) sp addr src args ls m v,
+  forall (ge: genv) sp addr src args ls v,
   enough_temporaries (src :: args) = false ->
   eval_addressing ge sp addr (List.map ls args) = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) (List.map ls args) m = Some v.
+  eval_operation ge sp (op_for_binary_addressing addr) (List.map ls args) = Some v.
 Proof.
   intros.
   apply eval_op_for_binary_addressing; auto.
@@ -631,21 +631,6 @@ Proof.
   apply temporaries_not_acceptable; auto.
 Qed.
 
-Lemma agree_postcall_alloc:
-  forall rs ls ls2 v,
-  agree rs ls ->
-  (forall l, Loc.diff (R loc_alloc_argument) l -> ls2 l = ls l) ->
-  agree (LTL.postcall_locs rs) (Locmap.set (R loc_alloc_result) v ls2).
-Proof.
-  intros. apply agree_postcall_2 with ls. apply agree_postcall_1; auto.
-  intros. destruct (Loc.eq l (R loc_alloc_result)).
-  subst l. elim H2. simpl. tauto. 
-  rewrite Locmap.gso. apply H0.
-  red. destruct l; auto. red; intro. subst m. elim H2.
-  simpl. tauto.
-  apply Loc.diff_sym. apply loc_acceptable_noteq_diff; auto. 
-Qed.
-
 Lemma agree_init_locs:
   forall ls dsts vl,
   locs_acceptable dsts ->
@@ -991,9 +976,9 @@ Proof.
     eapply enough_temporaries_op_args; eauto.
     apply locs_acceptable_disj_temporaries; auto.
   intros [ls2 [A [B C]]]. instantiate (1 := ls) in B. 
-  assert (exists tv, eval_operation tge sp op (reglist ls2 (regs_for args)) tm = Some tv
+  assert (exists tv, eval_operation tge sp op (reglist ls2 (regs_for args)) = Some tv
                      /\ Val.lessdef v tv).
-    apply eval_operation_lessdef with m (map rs args); auto.
+    apply eval_operation_lessdef with (map rs args); auto.
     rewrite B. eapply agree_locs; eauto. 
     rewrite <- H. apply eval_operation_preserved. exact symbols_preserved.
   destruct H1 as [tv [P Q]].
@@ -1231,28 +1216,6 @@ Proof.
   exact (return_regs_preserve (parent_locset s') ls3).
   apply Mem.free_lessdef; auto. 
 
-  (* Lalloc *)
-  ExploitWT; inv WTI.
-  caseEq (alloc tm 0 (Int.signed sz)). intros tm' blk' TALLOC.
-  assert (blk = blk' /\ Mem.lessdef m' tm'). 
-    eapply Mem.alloc_lessdef; eauto.
-  exploit add_reload_correct. intros [ls2 [A [B C]]]. 
-  exploit add_spill_correct. intros [ls3 [D [E F]]].
-  destruct H1 as [P Q]. subst blk'. 
-  assert (ls arg = Vint sz).
-    assert (Val.lessdef (rs arg) (ls arg)). eapply agree_loc; eauto. 
-    rewrite H in H1; inversion H1; auto.
-  left; econstructor; split.
-  eapply star_plus_trans. eauto. 
-  eapply plus_left. eapply exec_Lalloc; eauto.
-    rewrite B. eauto. 
-  eauto. eauto. traceEq.
-  econstructor; eauto with coqlib.
-  apply agree_set with (Locmap.set (R loc_alloc_result) (Vptr blk Int.zero) ls2).
-  auto. rewrite E. rewrite Locmap.gss. constructor. 
-  auto. 
-  apply agree_postcall_alloc with ls; auto. 
-
   (* Llabel *)
   left; econstructor; split.
   apply plus_one. apply exec_Llabel.
@@ -1272,7 +1235,7 @@ Proof.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lcond_true; eauto.
-  rewrite B. apply eval_condition_lessdef with m (map rs args); auto.
+  rewrite B. apply eval_condition_lessdef with (map rs args); auto.
   eapply agree_locs; eauto. 
   apply find_label_transf_function; eauto.
   traceEq.
@@ -1288,7 +1251,7 @@ Proof.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lcond_false; eauto.
-  rewrite B. apply eval_condition_lessdef with m (map rs args); auto.
+  rewrite B. apply eval_condition_lessdef with (map rs args); auto.
   eapply agree_locs; eauto. 
   traceEq.
   econstructor; eauto with coqlib.

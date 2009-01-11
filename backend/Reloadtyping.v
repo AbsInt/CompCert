@@ -34,7 +34,7 @@ Require Import Reloadproof.
   given sufficient typing and well-formedness hypotheses over the locations involved. *)
 
 Hint Resolve wt_Lgetstack wt_Lsetstack wt_Lopmove
-             wt_Lop wt_Lload wt_Lstore wt_Lcall wt_Ltailcall wt_Lalloc
+             wt_Lop wt_Lload wt_Lstore wt_Lcall wt_Ltailcall
              wt_Llabel wt_Lgoto wt_Lcond wt_Lreturn: reloadty.
 
 Remark wt_code_cons:

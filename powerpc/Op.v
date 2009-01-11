@@ -139,28 +139,28 @@ Qed.
 Definition eval_compare_mismatch (c: comparison) : option bool :=
   match c with Ceq => Some false | Cne => Some true | _ => None end.
 
-Definition eval_condition (cond: condition) (vl: list val) (m: mem):
+Definition eval_compare_null (c: comparison) (n: int) : option bool :=
+  if Int.eq n Int.zero then eval_compare_mismatch c else None.
+
+Definition eval_condition (cond: condition) (vl: list val):
                option bool :=
   match cond, vl with
   | Ccomp c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmp c n1 n2)
   | Ccomp c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if valid_pointer m b1 (Int.signed n1)
-      && valid_pointer m b2 (Int.signed n2) then
-        if eq_block b1 b2
-        then Some (Int.cmp c n1 n2)
-        else eval_compare_mismatch c
-      else None
+      if eq_block b1 b2
+      then Some (Int.cmp c n1 n2)
+      else eval_compare_mismatch c
   | Ccomp c, Vptr b1 n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then eval_compare_mismatch c else None
+      eval_compare_null c n2
   | Ccomp c, Vint n1 :: Vptr b2 n2 :: nil =>
-      if Int.eq n1 Int.zero then eval_compare_mismatch c else None
+      eval_compare_null c n1
   | Ccompu c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmpu c n1 n2)
   | Ccompimm c n, Vint n1 :: nil =>
       Some (Int.cmp c n1 n)
   | Ccompimm c n, Vptr b1 n1 :: nil =>
-      if Int.eq n Int.zero then eval_compare_mismatch c else None
+      eval_compare_null c n
   | Ccompuimm c n, Vint n1 :: nil =>
       Some (Int.cmpu c n1 n)
   | Ccompf c, Vfloat f1 :: Vfloat f2 :: nil =>
@@ -183,7 +183,7 @@ Definition offset_sp (sp: val) (delta: int) : option val :=
 
 Definition eval_operation
     (F: Set) (genv: Genv.t F) (sp: val)
-    (op: operation) (vl: list val) (m: mem): option val :=
+    (op: operation) (vl: list val): option val :=
   match op, vl with
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
@@ -256,7 +256,7 @@ Definition eval_operation
   | Ofloatofintu, Vint n1 :: nil => 
       Some (Vfloat (Float.floatofintu n1))
   | Ocmp c, _ =>
-      match eval_condition c vl m with
+      match eval_condition c vl with
       | None => None
       | Some false => Some Vfalse
       | Some true => Some Vtrue
@@ -322,24 +322,30 @@ Proof.
   destruct c; intro EQ; inv EQ; auto. 
 Qed.
 
+Remark eval_negate_compare_null:
+  forall c i b,
+  eval_compare_null c i = Some b ->
+  eval_compare_null (negate_comparison c) i = Some (negb b).
+Proof.
+  unfold eval_compare_null; intros.
+  destruct (Int.eq i Int.zero). apply eval_negate_compare_mismatch; auto. congruence.
+Qed.
+
 Lemma eval_negate_condition:
-  forall (cond: condition) (vl: list val) (b: bool) (m: mem),
-  eval_condition cond vl m = Some b ->
-  eval_condition (negate_condition cond) vl m = Some (negb b).
+  forall (cond: condition) (vl: list val) (b: bool),
+  eval_condition cond vl = Some b ->
+  eval_condition (negate_condition cond) vl = Some (negb b).
 Proof.
   intros. 
   destruct cond; simpl in H; FuncInv; try subst b; simpl.
   rewrite Int.negate_cmp. auto.
-  destruct (Int.eq i Int.zero). apply eval_negate_compare_mismatch; auto. discriminate.
-  destruct (Int.eq i0 Int.zero). apply eval_negate_compare_mismatch; auto. discriminate.
-  destruct (valid_pointer m b0 (Int.signed i) &&
-            valid_pointer m b1 (Int.signed i0)).
+  apply eval_negate_compare_null; auto.
+  apply eval_negate_compare_null; auto.
   destruct (eq_block b0 b1). rewrite Int.negate_cmp. congruence.
   apply eval_negate_compare_mismatch; auto. 
-  discriminate.
   rewrite Int.negate_cmpu. auto.
   rewrite Int.negate_cmp. auto.
-  destruct (Int.eq i Int.zero). apply eval_negate_compare_mismatch; auto. discriminate.
+  apply eval_negate_compare_null; auto.
   rewrite Int.negate_cmpu. auto.
   auto.
   rewrite negb_elim. auto.
@@ -361,8 +367,8 @@ Hypothesis agree_on_symbols:
   forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
 
 Lemma eval_operation_preserved:
-  forall sp op vl m,
-  eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
+  forall sp op vl,
+  eval_operation ge2 sp op vl = eval_operation ge1 sp op vl.
 Proof.
   intros.
   unfold eval_operation; destruct op; try rewrite agree_on_symbols;
@@ -379,74 +385,6 @@ Proof.
 Qed.
 
 End GENV_TRANSF.
-
-(** [eval_condition] and [eval_operation] depend on a memory store
-    (to check pointer validity in pointer comparisons).
-    We show that their results are preserved by a change of
-    memory if this change preserves pointer validity.
-    In particular, this holds in case of a memory allocation
-    or a memory store. *)
-
-Lemma eval_condition_change_mem:
-  forall m m' c args b,
-  (forall b ofs, valid_pointer m b ofs = true -> valid_pointer m' b ofs = true) ->
-  eval_condition c args m = Some b -> eval_condition c args m' = Some b.
-Proof.
-  intros until b. intro INV. destruct c; simpl; auto.
-  destruct args; auto. destruct v; auto. destruct args; auto.
-  destruct v; auto. destruct args; auto. 
-  caseEq (valid_pointer m b0 (Int.signed i)); intro.
-  caseEq (valid_pointer m b1 (Int.signed i0)); intro.
-  simpl. rewrite (INV _ _ H). rewrite (INV _ _ H0). auto.
-  simpl; congruence. simpl; congruence.
-Qed.
-
-Lemma eval_operation_change_mem:
-  forall (F: Set) m m' (ge: Genv.t F) sp op args v,
-  (forall b ofs, valid_pointer m b ofs = true -> valid_pointer m' b ofs = true) ->
-  eval_operation ge sp op args m = Some v -> eval_operation ge sp op args m' = Some v.
-Proof.
-  intros until v; intro INV. destruct op; simpl; auto.
-  caseEq (eval_condition c args m); intros.
-  rewrite (eval_condition_change_mem _ _ _ _ INV H). auto.
-  discriminate.
-Qed.
-
-Lemma eval_condition_alloc:
-  forall m lo hi m' b c args v,
-  Mem.alloc m lo hi = (m', b) ->
-  eval_condition c args m = Some v -> eval_condition c args m' = Some v.
-Proof.
-  intros. apply eval_condition_change_mem with m; auto.
-  intros. eapply valid_pointer_alloc; eauto.
-Qed.
-
-Lemma eval_operation_alloc:
-  forall (F: Set) m lo hi m' b (ge: Genv.t F) sp op args v,
-  Mem.alloc m lo hi = (m', b) ->
-  eval_operation ge sp op args m = Some v -> eval_operation ge sp op args m' = Some v.
-Proof.
-  intros. apply eval_operation_change_mem with m; auto.
-  intros. eapply valid_pointer_alloc; eauto.
-Qed.
-
-Lemma eval_condition_store:
-  forall chunk m b ofs v' m' c args v,
-  Mem.store chunk m b ofs v' = Some m' ->
-  eval_condition c args m = Some v -> eval_condition c args m' = Some v.
-Proof.
-  intros. apply eval_condition_change_mem with m; auto.
-  intros. eapply valid_pointer_store; eauto.
-Qed.
-
-Lemma eval_operation_store:
-  forall (F: Set) chunk m b ofs v' m' (ge: Genv.t F) sp op args v,
-  Mem.store chunk m b ofs v' = Some m' ->
-  eval_operation ge sp op args m = Some v -> eval_operation ge sp op args m' = Some v.
-Proof.
-  intros. apply eval_operation_change_mem with m; auto.
-  intros. eapply valid_pointer_store; eauto.
-Qed.
 
 (** Recognition of move operations. *)
 
@@ -563,9 +501,9 @@ Variable A: Set.
 Variable genv: Genv.t A.
 
 Lemma type_of_operation_sound:
-  forall op vl sp v m,
+  forall op vl sp v,
   op <> Omove ->
-  eval_operation genv sp op vl m = Some v ->
+  eval_operation genv sp op vl = Some v ->
   Val.has_type v (snd (type_of_operation op)).
 Proof.
   intros.
@@ -716,35 +654,33 @@ Qed.
 
 Lemma eval_compare_null_weaken:
   forall n c b,
-  (if Int.eq n Int.zero then eval_compare_mismatch c else None) = Some b ->
+  eval_compare_null c n = Some b ->
   (if Int.eq n Int.zero then Val.cmp_mismatch c else Vundef) = Val.of_bool b.
 Proof.
+  unfold eval_compare_null.
   intros. destruct (Int.eq n Int.zero). apply eval_compare_mismatch_weaken. auto.
   discriminate.
 Qed.
 
 Lemma eval_condition_weaken:
-  forall c vl m b,
-  eval_condition c vl m = Some b ->
+  forall c vl b,
+  eval_condition c vl = Some b ->
   eval_condition_total c vl = Val.of_bool b.
 Proof.
   intros. 
   unfold eval_condition in H; destruct c; FuncInv;
   try subst b; try reflexivity; simpl;
   try (apply eval_compare_null_weaken; auto).
-  destruct (valid_pointer m b0 (Int.signed i) &&
-            valid_pointer m b1 (Int.signed i0)).
   unfold eq_block in H. destruct (zeq b0 b1).
   congruence.
   apply eval_compare_mismatch_weaken; auto.
-  discriminate.
   symmetry. apply Val.notbool_negb_1. 
   symmetry. apply Val.notbool_negb_1. 
 Qed.
 
 Lemma eval_operation_weaken:
-  forall sp op vl m v,
-  eval_operation genv sp op vl m = Some v ->
+  forall sp op vl v,
+  eval_operation genv sp op vl = Some v ->
   eval_operation_total sp op vl = v.
 Proof.
   intros.
@@ -763,7 +699,7 @@ Proof.
   destruct (Int.ltu i (Int.repr 32)); congruence.
   destruct (Int.ltu i (Int.repr 32)); congruence.
   destruct (Int.ltu i0 (Int.repr 32)); congruence.
-  caseEq (eval_condition c vl m); intros; rewrite H0 in H.
+  caseEq (eval_condition c vl); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
   eapply eval_condition_weaken; eauto.
   destruct b; simpl; congruence.
@@ -806,14 +742,12 @@ Qed.
 End EVAL_OP_TOTAL.
 
 (** Compatibility of the evaluation functions with the
-    ``is less defined'' relation over values and memory states. *)
+    ``is less defined'' relation over values. *)
 
 Section EVAL_LESSDEF.
 
 Variable F: Set.
 Variable genv: Genv.t F.
-Variables m1 m2: mem.
-Hypothesis MEM: Mem.lessdef m1 m2.
 
 Ltac InvLessdef :=
   match goal with
@@ -833,16 +767,10 @@ Ltac InvLessdef :=
 Lemma eval_condition_lessdef:
   forall cond vl1 vl2 b,
   Val.lessdef_list vl1 vl2 ->
-  eval_condition cond vl1 m1 = Some b ->
-  eval_condition cond vl2 m2 = Some b.
+  eval_condition cond vl1 = Some b ->
+  eval_condition cond vl2 = Some b.
 Proof.
   intros. destruct cond; simpl in *; FuncInv; InvLessdef; auto.
-  generalize H0.
-  caseEq (valid_pointer m1 b0 (Int.signed i)); intro; simpl; try congruence.
-  caseEq (valid_pointer m1 b1 (Int.signed i0)); intro; simpl; try congruence.
-  rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H1).
-  rewrite (Mem.valid_pointer_lessdef _ _ _ _ MEM H). simpl.
-  auto.
 Qed.
 
 Ltac TrivialExists :=
@@ -855,8 +783,8 @@ Ltac TrivialExists :=
 Lemma eval_operation_lessdef:
   forall sp op vl1 vl2 v1,
   Val.lessdef_list vl1 vl2 ->
-  eval_operation genv sp op vl1 m1 = Some v1 ->
-  exists v2, eval_operation genv sp op vl2 m2 = Some v2 /\ Val.lessdef v1 v2.
+  eval_operation genv sp op vl1 = Some v1 ->
+  exists v2, eval_operation genv sp op vl2 = Some v2 /\ Val.lessdef v1 v2.
 Proof.
   intros. destruct op; simpl in *; FuncInv; InvLessdef; TrivialExists.
   exists v2; auto.
@@ -875,7 +803,7 @@ Proof.
   destruct (Int.ltu i (Int.repr 32)); inv H0; TrivialExists.
   destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
-  caseEq (eval_condition c vl1 m1); intros. rewrite H1 in H0. 
+  caseEq (eval_condition c vl1); intros. rewrite H1 in H0. 
   rewrite (eval_condition_lessdef c H H1).
   destruct b; inv H0; TrivialExists.
   rewrite H1 in H0. discriminate.
@@ -906,10 +834,10 @@ End EVAL_LESSDEF.
 Definition op_for_binary_addressing (addr: addressing) : operation := Oadd.
 
 Lemma eval_op_for_binary_addressing:
-  forall (F: Set) (ge: Genv.t F) sp addr args m v,
+  forall (F: Set) (ge: Genv.t F) sp addr args v,
   (length args >= 2)%nat ->
   eval_addressing ge sp addr args = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) args m = Some v.
+  eval_operation ge sp (op_for_binary_addressing addr) args = Some v.
 Proof.
   intros.
   unfold eval_addressing in H0; destruct addr; FuncInv; simpl in H; try omegaContradiction;

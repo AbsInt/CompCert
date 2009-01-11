@@ -477,8 +477,6 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
   | Mtailcall sig (inr symb) =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
         (Pfreeframe f.(fn_link_ofs) :: Pbsymb symb :: k)
-  | Malloc =>
-      Pallocblock :: k
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>

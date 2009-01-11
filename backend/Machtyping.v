@@ -72,8 +72,6 @@ Inductive wt_instr : instruction -> Prop :=
       Conventions.tailcall_possible sig ->
       match ros with inl r => mreg_type r = Tint | inr s => True end ->
       wt_instr (Mtailcall sig ros)
-  | wt_Malloc:
-      wt_instr Malloc
   | wt_Mgoto:
       forall lbl,
       wt_instr (Mgoto lbl)
@@ -91,12 +89,18 @@ Record wt_function (f: function) : Prop := mk_wt_function {
     f.(fn_stacksize) >= 0;
   wt_function_framesize:
     0 <= f.(fn_framesize) <= -Int.min_signed;
+  wt_function_framesize_aligned:
+    (4 | f.(fn_framesize));
   wt_function_link:
     0 <= Int.signed f.(fn_link_ofs)
     /\ Int.signed f.(fn_link_ofs) + 4 <= f.(fn_framesize);
+  wt_function_link_aligned:
+    (4 | Int.signed f.(fn_link_ofs));
   wt_function_retaddr:
     0 <= Int.signed f.(fn_retaddr_ofs)
     /\ Int.signed f.(fn_retaddr_ofs) + 4 <= f.(fn_framesize);
+  wt_function_retaddr_aligned:
+    (4 | Int.signed f.(fn_retaddr_ofs));
   wt_function_link_retaddr:
     Int.signed f.(fn_retaddr_ofs) + 4 <= Int.signed f.(fn_link_ofs)
     \/ Int.signed f.(fn_link_ofs) + 4 <= Int.signed f.(fn_retaddr_ofs)
@@ -250,7 +254,7 @@ Proof.
     simpl in H. 
     rewrite <- H2. replace v with (rs r1). apply WTRS. congruence.
     replace (mreg_type res) with (snd (type_of_operation op)).
-    apply type_of_operation_sound with fundef ge rs##args sp m; auto.
+    apply type_of_operation_sound with fundef ge rs##args sp; auto.
     rewrite <- H5; reflexivity.
 
   apply wt_setreg; auto. inversion H1. rewrite H7.
@@ -272,7 +276,7 @@ Proof.
     apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
   econstructor; eauto.
 
-  apply wt_setreg; auto. exact I. 
+(*  apply wt_setreg; auto. exact I.  *)
 
   apply is_tail_find_label with lbl; congruence.
   apply is_tail_find_label with lbl; congruence. 
@@ -293,17 +297,6 @@ Proof.
   econstructor; eauto. 
   eauto with coqlib.
 Qed.
-(*
-Lemma subject_reduction_2:
-  forall s1 t s2, step ge s1 t s2 ->
-  forall (WTS: wt_state s1), wt_state s2.
-Proof.
-  induction 1; intros.
-  auto.
-  eapply subject_reduction; eauto.
-  auto.
-Qed.
-*)
 
 End SUBJECT_REDUCTION.
 

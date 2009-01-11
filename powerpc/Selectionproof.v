@@ -149,13 +149,13 @@ Ltac InvEval1 :=
 
 Ltac InvEval2 :=
   match goal with
-  | [ H: (eval_operation _ _ _ nil _ = Some _) |- _ ] =>
+  | [ H: (eval_operation _ _ _ nil = Some _) |- _ ] =>
       simpl in H; inv H
-  | [ H: (eval_operation _ _ _ (_ :: nil) _ = Some _) |- _ ] =>
+  | [ H: (eval_operation _ _ _ (_ :: nil) = Some _) |- _ ] =>
       simpl in H; FuncInv
-  | [ H: (eval_operation _ _ _ (_ :: _ :: nil) _ = Some _) |- _ ] =>
+  | [ H: (eval_operation _ _ _ (_ :: _ :: nil) = Some _) |- _ ] =>
       simpl in H; FuncInv
-  | [ H: (eval_operation _ _ _ (_ :: _ :: _ :: nil) _ = Some _) |- _ ] =>
+  | [ H: (eval_operation _ _ _ (_ :: _ :: _ :: nil) = Some _) |- _ ] =>
       simpl in H; FuncInv
   | _ =>
       idtac
@@ -234,12 +234,12 @@ Proof.
   eapply eval_notbool_base; eauto.
 
   inv H. eapply eval_Eop; eauto.
-  simpl. assert (eval_condition c vl m = Some b).
+  simpl. assert (eval_condition c vl = Some b).
   generalize H6. simpl. 
-  case (eval_condition c vl m); intros.
+  case (eval_condition c vl); intros.
   destruct b0; inv H1; inversion H0; auto; congruence.
   congruence.
-  rewrite (Op.eval_negate_condition _ _ _ H). 
+  rewrite (Op.eval_negate_condition _ _ H). 
   destruct b; reflexivity.
 
   inv H. eapply eval_Econdition; eauto. 
@@ -545,9 +545,9 @@ Qed.
 
 Lemma eval_mod_aux:
   forall divop semdivop,
-  (forall sp x y m,
+  (forall sp x y,
    y <> Int.zero ->
-   eval_operation ge sp divop (Vint x :: Vint y :: nil) m =
+   eval_operation ge sp divop (Vint x :: Vint y :: nil) =
    Some (Vint (semdivop x y))) ->
   forall le a b x y,
   eval_expr ge sp e m le a (Vint x) ->
@@ -812,52 +812,66 @@ Proof.
   EvalOp. simpl. destruct (Int.cmp c x y); reflexivity.
 Qed.
 
+Remark eval_compare_null_transf:
+  forall c x v,
+  Cminor.eval_compare_null c x = Some v ->
+  match eval_compare_null c x with
+  | Some true => Some Vtrue
+  | Some false => Some Vfalse
+  | None => None (A:=val)
+  end = Some v.
+Proof.
+  unfold Cminor.eval_compare_null, eval_compare_null; intros.
+  destruct (Int.eq x Int.zero); try discriminate. 
+  destruct c; try discriminate; auto.
+Qed.
+
 Theorem eval_comp_ptr_int:
   forall le c a x1 x2 b y v,
   eval_expr ge sp e m le a (Vptr x1 x2) ->
   eval_expr ge sp e m le b (Vint y) ->
-  (if Int.eq y Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
+  Cminor.eval_compare_null c y = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until v.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. destruct (Int.eq y Int.zero); try discriminate.
-  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
-  destruct c; try discriminate; auto.
-  EvalOp. simpl. destruct (Int.eq y Int.zero); try discriminate.
-  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
-  destruct c; try discriminate; auto.
+  EvalOp. simpl. apply eval_compare_null_transf; auto.
+  EvalOp. simpl. apply eval_compare_null_transf; auto.
+Qed.
+
+Remark eval_compare_null_swap:
+  forall c x,
+  Cminor.eval_compare_null (swap_comparison c) x = 
+  Cminor.eval_compare_null c x.
+Proof.
+  intros. unfold Cminor.eval_compare_null. 
+  destruct (Int.eq x Int.zero). destruct c; auto. auto.
 Qed.
 
 Theorem eval_comp_int_ptr:
   forall le c a x b y1 y2 v,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vptr y1 y2) ->
-  (if Int.eq x Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
+  Cminor.eval_compare_null c x = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until v.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. destruct (Int.eq x Int.zero); try discriminate.
-  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
-  destruct c; try discriminate; auto.
-  EvalOp. simpl. destruct (Int.eq x Int.zero); try discriminate.
-  unfold Cminor.eval_compare_mismatch in H1. unfold eval_compare_mismatch.
-  destruct c; try discriminate; auto.
+  EvalOp. simpl. apply eval_compare_null_transf. 
+  rewrite eval_compare_null_swap; auto.
+  EvalOp. simpl. apply eval_compare_null_transf. auto.
 Qed.
 
 Theorem eval_comp_ptr_ptr:
   forall le c a x1 x2 b y1 y2,
   eval_expr ge sp e m le a (Vptr x1 x2) ->
   eval_expr ge sp e m le b (Vptr y1 y2) ->
-  valid_pointer m x1 (Int.signed x2) &&
-  valid_pointer m y1 (Int.signed y2) = true ->
   x1 = y1 ->
   eval_expr ge sp e m le (comp c a b) (Val.of_bool(Int.cmp c x2 y2)).
 Proof.
   intros until y2.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. rewrite H1. subst y1. rewrite dec_eq_true. 
+  EvalOp. simpl. subst y1. rewrite dec_eq_true. 
   destruct (Int.cmp c x2 y2); reflexivity.
 Qed.
 
@@ -865,16 +879,14 @@ Theorem eval_comp_ptr_ptr_2:
   forall le c a x1 x2 b y1 y2 v,
   eval_expr ge sp e m le a (Vptr x1 x2) ->
   eval_expr ge sp e m le b (Vptr y1 y2) ->
-  valid_pointer m x1 (Int.signed x2) &&
-  valid_pointer m y1 (Int.signed y2) = true ->
   x1 <> y1 ->
   Cminor.eval_compare_mismatch c = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until y2.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. rewrite H1. rewrite dec_eq_false; auto.
-  destruct c; simpl in H3; inv H3; auto.
+  EvalOp. simpl. rewrite dec_eq_false; auto.
+  destruct c; simpl in H2; inv H2; auto.
 Qed.
 
 Theorem eval_compu:
@@ -955,7 +967,7 @@ Qed.
 Lemma is_compare_neq_zero_correct:
   forall c v b,
   is_compare_neq_zero c = true ->
-  eval_condition c (v :: nil) m = Some b ->
+  eval_condition c (v :: nil) = Some b ->
   Val.bool_of_val v b.
 Proof.
   intros.
@@ -975,7 +987,7 @@ Qed.
 Lemma is_compare_eq_zero_correct:
   forall c v b,
   is_compare_eq_zero c = true ->
-  eval_condition c (v :: nil) m = Some b ->
+  eval_condition c (v :: nil) = Some b ->
   Val.bool_of_val v (negb b).
 Proof.
   intros. apply is_compare_neq_zero_correct with (negate_condition c).
@@ -1003,8 +1015,8 @@ Proof.
   eapply eval_base_condition_of_expr; eauto.
 
   inv H0. simpl in H7.
-  assert (eval_condition c vl m = Some b).
-    destruct (eval_condition c vl m); try discriminate.
+  assert (eval_condition c vl = Some b).
+    destruct (eval_condition c vl); try discriminate.
     destruct b0; inv H7; inversion H1; congruence.
   assert (eval_condexpr ge sp e m le (CEcond c e0) b).
     eapply eval_CEcond; eauto.
@@ -1119,7 +1131,7 @@ Lemma eval_sel_binop:
   forall le op a1 a2 v1 v2 v,
   eval_expr ge sp e m le a1 v1 ->
   eval_expr ge sp e m le a2 v2 ->
-  eval_binop op v1 v2 m = Some v ->
+  eval_binop op v1 v2 = Some v ->
   eval_expr ge sp e m le (sel_binop op a1 a2) v.
 Proof.
   destruct op; simpl; intros; FuncInv; try subst v.
@@ -1154,12 +1166,9 @@ Proof.
   apply eval_comp_int; auto.
   eapply eval_comp_int_ptr; eauto.
   eapply eval_comp_ptr_int; eauto.
-  generalize H1; clear H1.
-  case_eq (valid_pointer m b (Int.signed i) && valid_pointer m b0 (Int.signed i0)); intros.
-  destruct (eq_block b b0); inv H2.
+  destruct (eq_block b b0); inv H1.
   eapply eval_comp_ptr_ptr; eauto.
   eapply eval_comp_ptr_ptr_2; eauto.
-  discriminate.
   eapply eval_compu; eauto.
   eapply eval_compf; eauto.
 Qed.
@@ -1340,10 +1349,6 @@ Proof.
   apply functions_translated; eauto. 
   apply sig_function_translated.
   constructor; auto. apply call_cont_commut.
-  (* Salloc *)
-  exists (State (sel_function f) Sskip (sel_cont k) sp (PTree.set id (Vptr b Int.zero) e) m'); split.
-  econstructor; eauto with evalexpr.
-  constructor; auto.
   (* Sifthenelse *)
   exists (State (sel_function f) (if b then sel_stmt s1 else sel_stmt s2) (sel_cont k) sp e m); split.
   constructor. eapply eval_condition_of_expr; eauto with evalexpr.

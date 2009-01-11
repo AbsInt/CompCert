@@ -145,7 +145,6 @@ Inductive instruction : Set :=
   | Psufd: freg -> freg -> freg -> instruction     (**r float subtraction *)
 
   (* Pseudo-instructions *)
-  | Pallocblock: instruction                       (**r dynamic allocation *)
   | Pallocframe: Z -> Z -> int -> instruction      (**r allocate new stack frame *)
   | Pfreeframe: int -> instruction                 (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
@@ -232,11 +231,6 @@ lbl:    .long   0x43300000, 0x00000000
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
-- [Pallocheap]: in the formal semantics, this pseudo-instruction
-  allocates a heap block of size the contents of [GPR3], and leaves
-  a pointer to this block in [GPR3].  In the generated assembly code,
-  it is turned into a call to the allocation function of the run-time
-  system.
 *)
 
 Definition code := list instruction.
@@ -538,14 +532,6 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Psufd r1 r2 r3 =>     
       OK (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
   (* Pseudo-instructions *)
-  | Pallocblock =>
-      match rs#IR0 with
-      | Vint n =>
-          let (m', b) := Mem.alloc m 0 (Int.signed n) in
-          OK (nextinstr (rs#IR0 <- (Vptr b Int.zero)
-                           #IR14 <- (Val.add rs#PC Vone))) m'
-      | _ => Error
-      end
   | Pallocframe lo hi pos =>             
       let (m1, stk) := Mem.alloc m lo hi in
       let sp := (Vptr stk (Int.repr lo)) in

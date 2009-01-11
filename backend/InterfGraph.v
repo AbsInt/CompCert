@@ -52,12 +52,6 @@ Module OrderedRegReg := OrderedPair(OrderedReg)(OrderedReg).
 Module OrderedMreg := OrderedIndexed(IndexedMreg).
 Module OrderedRegMreg := OrderedPair(OrderedReg)(OrderedMreg).
 
-(*
-Module SetDepRegReg := FSetAVL.Make(OrderedRegReg).
-Module SetRegReg := NodepOfDep(SetDepRegReg).
-Module SetDepRegMreg := FSetAVL.Make(OrderedRegMreg).
-Module SetRegMreg := NodepOfDep(SetDepRegMreg).
-*)
 Module SetRegReg := FSetAVL.Make(OrderedRegReg).
 Module SetRegMreg := FSetAVL.Make(OrderedRegMreg).
 
@@ -226,16 +220,6 @@ Definition all_interf_regs (g: graph) : Regset.t :=
       g.(interf_reg_mreg)
       Regset.empty).
 
-(*
-Lemma mem_add_tail:
-  forall r r' u,
-  Regset.mem r u = true -> Regset.mem r (Regset.add r' u) = true.
-Proof.
-  intros. case (Reg.eq r r'); intro.
-  subst r'. apply Regset.mem_add_same.
-  rewrite Regset.mem_add_other; auto.
-Qed.
-*)
 Lemma in_setregreg_fold:
   forall g r1 r2 u,
   SetRegReg.In (r1, r2) g \/ Regset.In r1 u /\ Regset.In r2 u ->

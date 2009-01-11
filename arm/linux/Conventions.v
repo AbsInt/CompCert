@@ -852,7 +852,3 @@ Proof.
   intros; simpl. tauto.
 Qed.
 
-(** ** Location of argument and result for dynamic memory allocation *)
-
-Definition loc_alloc_argument := R0.
-Definition loc_alloc_result := R0.

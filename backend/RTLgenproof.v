@@ -568,7 +568,7 @@ Lemma transl_expr_Eop_correct:
          (vargs : list val) (v : val),
   eval_exprlist ge sp e m le args vargs ->
   transl_exprlist_prop le args vargs ->
-  eval_operation ge sp op vargs m = Some v ->
+  eval_operation ge sp op vargs = Some v ->
   transl_expr_prop le (Eop op args) v.
 Proof.
   intros; red; intros. inv TE. 
@@ -711,7 +711,7 @@ Lemma transl_condition_CEcond_correct:
          (vargs : list val) (b : bool),
   eval_exprlist ge sp e m le args vargs ->
   transl_exprlist_prop le args vargs ->
-  eval_condition cond vargs m = Some b ->
+  eval_condition cond vargs = Some b ->
   transl_condition_prop le (CEcond cond args) b.
 Proof.
   intros; red; intros; inv TE.
@@ -1154,22 +1154,6 @@ Proof.
   apply sig_transl_function; auto.
   traceEq.
   rewrite G. constructor; auto.
-
-  (* alloc *)
-  inv TS. 
-  exploit transl_expr_correct; eauto. 
-  intros [rs1 [A [B [C D]]]].
-  set (rs2 := rs1#rd <- (Vptr b Int.zero)).
-  assert (match_env map e nil rs2). unfold rs2; eauto with rtlg. 
-  exploit tr_store_var_correct. eauto. auto. eexact H1. 
-  intros [rs3 [E F]].
-  unfold rs2 in F. rewrite Regmap.gss in F.
-  econstructor; split.
-  left. apply plus_star_trans with E0 (State cs c sp n2 rs2 m') E0.
-  eapply plus_right. eexact A. unfold rs2. eapply exec_Ialloc; eauto. traceEq.
-  eexact E. traceEq.
-  econstructor; eauto. constructor.
-
   (* seq *)
   inv TS. 
   econstructor; split.

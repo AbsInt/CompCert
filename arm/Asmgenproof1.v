@@ -431,60 +431,6 @@ Qed.
 
 (** * Correctness of ARM constructor functions *)
 
-(** Properties of comparisons. *)
-(*
-Lemma compare_float_spec:
-  forall rs v1 v2,
-  let rs1 := nextinstr (compare_float rs v1 v2) in
-     rs1#CR0_0 = Val.cmpf Clt v1 v2
-  /\ rs1#CR0_1 = Val.cmpf Cgt v1 v2
-  /\ rs1#CR0_2 = Val.cmpf Ceq v1 v2
-  /\ forall r', r' <> PC -> r' <> CR0_0 -> r' <> CR0_1 ->
-       r' <> CR0_2 -> r' <> CR0_3 -> rs1#r' = rs#r'.
-Proof.
-  intros. unfold rs1.
-  split. reflexivity.
-  split. reflexivity.
-  split. reflexivity.
-  intros. rewrite nextinstr_inv; auto.
-  unfold compare_float. repeat (rewrite Pregmap.gso; auto).
-Qed.
-
-Lemma compare_sint_spec:
-  forall rs v1 v2,
-  let rs1 := nextinstr (compare_sint rs v1 v2) in
-     rs1#CR0_0 = Val.cmp Clt v1 v2
-  /\ rs1#CR0_1 = Val.cmp Cgt v1 v2
-  /\ rs1#CR0_2 = Val.cmp Ceq v1 v2
-  /\ forall r', r' <> PC -> r' <> CR0_0 -> r' <> CR0_1 ->
-       r' <> CR0_2 -> r' <> CR0_3 -> rs1#r' = rs#r'.
-Proof.
-  intros. unfold rs1.
-  split. reflexivity.
-  split. reflexivity.
-  split. reflexivity.
-  intros. rewrite nextinstr_inv; auto.
-  unfold compare_sint. repeat (rewrite Pregmap.gso; auto).
-Qed.
-
-Lemma compare_uint_spec:
-  forall rs v1 v2,
-  let rs1 := nextinstr (compare_uint rs v1 v2) in
-     rs1#CR0_0 = Val.cmpu Clt v1 v2
-  /\ rs1#CR0_1 = Val.cmpu Cgt v1 v2
-  /\ rs1#CR0_2 = Val.cmpu Ceq v1 v2
-  /\ forall r', r' <> PC -> r' <> CR0_0 -> r' <> CR0_1 ->
-       r' <> CR0_2 -> r' <> CR0_3 -> rs1#r' = rs#r'.
-Proof.
-  intros. unfold rs1.
-  split. reflexivity.
-  split. reflexivity.
-  split. reflexivity.
-  intros. rewrite nextinstr_inv; auto.
-  unfold compare_uint. repeat (rewrite Pregmap.gso; auto).
-Qed.
-*)
-
 (** Loading a constant. *)
 
 Lemma loadimm_correct:
@@ -868,14 +814,14 @@ Lemma transl_cond_correct:
   forall cond args k ms sp rs m b,
   map mreg_type args = type_of_condition cond ->
   agree ms sp rs ->
-  eval_condition cond (map ms args) m = Some b ->
+  eval_condition cond (map ms args) = Some b ->
   exists rs',
      exec_straight (transl_cond cond args k) rs m k rs' m
   /\ rs'#(CR (crbit_for_cond cond)) = Val.of_bool b
   /\ agree ms sp rs'.
 Proof.
   intros.
-  rewrite <- (eval_condition_weaken _ _ _ H1). clear H1. 
+  rewrite <- (eval_condition_weaken _ _ H1). clear H1. 
   destruct cond; simpl in H; TypeInv; simpl.
   (* Ccomp *)
   generalize (compare_int_spec rs ms#m0 ms#m1).
@@ -1008,12 +954,12 @@ Lemma transl_op_correct:
   forall op args res k ms sp rs m v,
   wt_instr (Mop op args res) ->
   agree ms sp rs ->
-  eval_operation ge sp op (map ms args) m = Some v ->
+  eval_operation ge sp op (map ms args) = Some v ->
   exists rs',
      exec_straight (transl_op op args res k) rs m k rs' m
   /\ agree (Regmap.set res v ms) sp rs'.
 Proof.
-  intros. rewrite <- (eval_operation_weaken _ _ _ _ _ H1). (*clear H1; clear v.*)
+  intros. rewrite <- (eval_operation_weaken _ _ _ _ H1). (*clear H1; clear v.*)
   inversion H.
   (* Omove *)
   simpl. exists (nextinstr (rs#(preg_of res) <- (ms r1))).
@@ -1036,29 +982,6 @@ Proof.
   intros [rs' [A [B C]]]. 
   exists rs'. split. auto. 
   apply agree_set_mireg_exten with rs; auto. 
-(*
-  (* Ofloatconst *)
-  exists (nextinstr (rs#(freg_of res) <- (Vfloat f))).
-  split. apply exec_straight_one. reflexivity. reflexivity.
-  auto with ppcgen.
-  (* Oaddrsymbol *)
-  change (find_symbol_offset ge i i0) with (symbol_offset ge i i0).
-  set (v := symbol_offset ge i i0).
-  pose (rs1 := nextinstr (rs#GPR2 <- (high_half v))).
-  exists (nextinstr (rs1#(ireg_of res) <- v)).
-  split. apply exec_straight_two with rs1 m.
-  unfold exec_instr. rewrite gpr_or_zero_zero.
-  unfold const_high. rewrite Val.add_commut. 
-  rewrite high_half_zero. reflexivity. 
-  simpl. rewrite gpr_or_zero_not_zero. 2: congruence. 
-  unfold rs1 at 1. rewrite nextinstr_inv; auto with ppcgen.
-  rewrite Pregmap.gss. 
-  fold v. rewrite Val.add_commut. unfold v. rewrite low_high_half.
-  reflexivity. reflexivity. reflexivity. 
-  unfold rs1. apply agree_nextinstr. apply agree_set_mireg; auto.
-  apply agree_set_mreg. apply agree_nextinstr.
-  apply agree_set_other. auto. simpl. tauto.
-*)
   (* Oaddrstack *)
   generalize (addimm_correct (ireg_of res) IR13 i k rs m). 
   intros [rs' [EX [RES OTH]]].
@@ -1239,13 +1162,13 @@ Proof.
   repeat (rewrite (ireg_val ms sp rs); auto).
   reflexivity. auto 10 with ppcgen.
   (* Ocmp *)
-  assert (exists b, eval_condition c ms##args m = Some b /\ v = Val.of_bool b).
-    simpl in H1. destruct (eval_condition c ms##args m). 
+  assert (exists b, eval_condition c ms##args = Some b /\ v = Val.of_bool b).
+    simpl in H1. destruct (eval_condition c ms##args). 
     destruct b; inv H1. exists true; auto. exists false; auto.
     discriminate.
   destruct H5 as [b [EVC EQ]].
   exploit transl_cond_correct; eauto. intros [rs' [A [B C]]].
-  rewrite (eval_condition_weaken _ _ _ EVC).
+  rewrite (eval_condition_weaken _ _ EVC).
   set (rs1 := nextinstr (rs'#(ireg_of res) <- (Vint Int.zero))).
   set (rs2 := nextinstr (if b then (rs1#(ireg_of res) <- Vtrue) else rs1)).
   exists rs2; split.
@@ -1475,32 +1398,6 @@ Proof.
   unfold exec_store. rewrite <- (freg_val ms sp rs1); auto.
   rewrite H4. auto. auto.
   auto with ppcgen.
-Qed.
-
-(** Translation of allocations *)
-
-Lemma transl_alloc_correct:
-  forall ms sp rs sz m m' blk k,
-  agree ms sp rs ->
-  ms Conventions.loc_alloc_argument = Vint sz ->
-  Mem.alloc m 0 (Int.signed sz) = (m', blk) ->
-  let ms' := Regmap.set Conventions.loc_alloc_result (Vptr blk Int.zero) ms in
-  exists rs',
-    exec_straight (Pallocblock :: k) rs m k rs' m'
-  /\ agree ms' sp rs'.
-Proof.
-  intros. 
-  pose (rs' := nextinstr (rs#IR0 <- (Vptr blk Int.zero) #IR14 <- (Val.add rs#PC Vone))).
-  exists rs'; split.
-  apply exec_straight_one. unfold exec_instr. 
-  generalize (preg_val _ _ _ Conventions.loc_alloc_argument H).
-  unfold preg_of; intro. simpl in H2. rewrite <- H2. rewrite H0.
-  rewrite H1. reflexivity.
-  reflexivity. 
-  unfold ms', rs'. apply agree_nextinstr. apply agree_set_other. 
-  change (IR IR0) with (preg_of Conventions.loc_alloc_result).
-  apply agree_set_mreg. auto.
-  simpl. tauto.
 Qed.
 
 End STRAIGHTLINE.

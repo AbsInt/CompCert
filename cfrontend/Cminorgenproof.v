@@ -484,7 +484,7 @@ Proof.
   intros.
   assert (exists v, load chunk m2 b 0 = Some v).
     apply valid_access_load.
-    eapply valid_access_alloc_same; eauto; omega.
+    eapply valid_access_alloc_same; eauto. omega. omega. apply Zdivide_0.
   destruct H0 as [v LOAD]. rewrite LOAD. decEq. 
   eapply load_alloc_same; eauto.
 Qed.
@@ -802,10 +802,10 @@ Qed.
 
 Remark val_inject_eval_compare_null:
   forall f i c v,  
-  (if Int.eq i Int.zero then eval_compare_mismatch c else None) = Some v ->
+  eval_compare_null c i = Some v ->
   val_inject f v v.
 Proof.
-  intros. destruct (Int.eq i Int.zero). 
+  unfold eval_compare_null. intros. destruct (Int.eq i Int.zero). 
   eapply val_inject_eval_compare_mismatch; eauto. 
   discriminate.
 Qed.
@@ -871,12 +871,12 @@ Qed.
 
 Lemma eval_binop_compat:
   forall f op v1 tv1 v2 tv2 v m tm,
-  eval_binop op v1 v2 m = Some v ->
+  Csharpminor.eval_binop op v1 v2 m = Some v ->
   val_inject f v1 tv1 ->
   val_inject f v2 tv2 ->
   mem_inject f m tm ->
   exists tv,
-     eval_binop op tv1 tv2 tm = Some tv
+     Cminor.eval_binop op tv1 tv2 = Some tv
   /\ val_inject f v tv.
 Proof.
   destruct op; simpl; intros.
@@ -919,10 +919,6 @@ Proof.
   caseEq (valid_pointer m b1 (Int.signed ofs1) && valid_pointer m b0 (Int.signed ofs0)); 
   intro EQ; rewrite EQ in H4; try discriminate.
   elim (andb_prop _ _ EQ); intros.
-  exploit (Mem.valid_pointer_inject f m tm b0 ofs0); eauto. 
-  intro VP; rewrite VP; clear VP.
-  exploit (Mem.valid_pointer_inject f m tm b1 ofs1); eauto. 
-  intro VP; rewrite VP; clear VP.
   destruct (eq_block b1 b0); inv H4.
   (* same blocks in source *)
   assert (b3 = b2) by congruence. subst b3.
@@ -1318,6 +1314,15 @@ Qed.
   local variables, either as Cminor local variables or as sub-blocks
   of the Cminor stack data.  This is the most difficult part of the proof. *)
 
+Remark array_alignment_pos:
+  forall sz, array_alignment sz > 0.
+Proof.
+  unfold array_alignment; intros. 
+  destruct (zlt sz 2). omega. 
+  destruct (zlt sz 4). omega.
+  destruct (zlt sz 8); omega.
+Qed.
+
 Remark assign_variables_incr:
   forall atk vars cenv sz cenv' sz',
   assign_variables atk vars (cenv, sz) = (cenv', sz') -> sz <= sz'.
@@ -1329,10 +1334,54 @@ Proof.
   generalize (size_chunk_pos m). intro.
   generalize (align_le sz (size_chunk m) H0). omega.
   eauto.
-  intro. generalize (IHvars _ _ _ _ H). 
-  assert (8 > 0). omega. generalize (align_le sz 8 H0).
+  intro. generalize (IHvars _ _ _ _ H).
+  generalize (align_le sz (array_alignment z) (array_alignment_pos z)).
   assert (0 <= Zmax 0 z). apply Zmax_bound_l. omega.
   omega.
+Qed.
+
+Remark inj_offset_aligned_array:
+  forall stacksize sz,
+  inj_offset_aligned (align stacksize (array_alignment sz)) sz.
+Proof.
+  intros; red; intros.
+  apply Zdivides_trans with (array_alignment sz).
+  unfold align_chunk.  unfold array_alignment.
+  generalize Zone_divide; intro.
+  generalize Zdivide_refl; intro.
+  assert (2 | 4). exists 2; auto.
+  assert (2 | 8). exists 4; auto.
+  assert (4 | 8). exists 2; auto.
+  destruct (zlt sz 2).
+  destruct chunk; simpl in *; auto; omegaContradiction.
+  destruct (zlt sz 4).
+  destruct chunk; simpl in *; auto; omegaContradiction.
+  destruct (zlt sz 8).
+  destruct chunk; simpl in *; auto; omegaContradiction.
+  destruct chunk; simpl; auto.
+  apply align_divides. apply array_alignment_pos.
+Qed.
+
+Remark inj_offset_aligned_array':
+  forall stacksize sz,
+  inj_offset_aligned (align stacksize (array_alignment sz)) (Zmax 0 sz).
+Proof.
+  intros. 
+  replace (array_alignment sz) with (array_alignment (Zmax 0 sz)).
+  apply inj_offset_aligned_array. 
+  rewrite Zmax_spec. destruct (zlt sz 0); auto.
+  transitivity 1. reflexivity. unfold array_alignment. rewrite zlt_true. auto. omega.
+Qed.
+
+Remark inj_offset_aligned_var:
+  forall stacksize chunk,
+  inj_offset_aligned (align stacksize (size_chunk chunk)) (size_chunk chunk).
+Proof.
+  intros.
+  replace (align stacksize (size_chunk chunk))
+     with (align stacksize (array_alignment (size_chunk chunk))).
+  apply inj_offset_aligned_array.
+  decEq. destruct chunk; reflexivity.
 Qed.
 
 Lemma match_callstack_alloc_variables_rec:
@@ -1388,7 +1437,9 @@ Proof.
       assert (Int.min_signed < 0). compute; auto.
       generalize (assign_variables_incr _ _ _ _ _ _ ASVS). intro.
       unfold f1; eapply alloc_mapped_inject; eauto.
-      omega. omega. omega. omega. unfold sizeof; rewrite LV. omega. 
+      omega. omega. omega. omega. unfold sizeof; rewrite LV. omega.
+      rewrite Zminus_0_r. unfold ofs. rewrite LV. simpl. 
+      apply inj_offset_aligned_var. 
       intros. left. generalize (BOUND _ _ H5). omega. 
     elim H3; intros MINJ1 INCR1; clear H3.
     exploit IHalloc_variables; eauto.
@@ -1416,25 +1467,26 @@ Proof.
   (* 2. lv = LVarray dim, info = Var_stack_array *)
   intros dim LV EQ. injection EQ; clear EQ; intros.
   assert (0 <= Zmax 0 dim). apply Zmax1. 
-  assert (8 > 0). omega.
-  generalize (align_le sz 8 H4). intro.
-  set (ofs := align sz 8) in *.
+  generalize (align_le sz (array_alignment dim) (array_alignment_pos dim)). intro.
+  set (ofs := align sz (array_alignment dim)) in *.
   set (f1 := extend_inject b1 (Some (sp, ofs)) f).
   assert (mem_inject f1 m1 tm /\ inject_incr f f1).
     assert (Int.min_signed < 0). compute; auto.
     generalize (assign_variables_incr _ _ _ _ _ _ ASVS). intro.
     unfold f1; eapply alloc_mapped_inject; eauto.
-    omega. omega. omega. omega. unfold sizeof; rewrite LV. omega. 
-    intros. left. generalize (BOUND _ _ H8). omega. 
-  destruct H6 as [MINJ1 INCR1].
+    omega. omega. omega. omega. unfold sizeof; rewrite LV. omega.
+    rewrite Zminus_0_r. unfold ofs. rewrite LV. simpl.
+    apply inj_offset_aligned_array'.
+    intros. left. generalize (BOUND _ _ H7). omega. 
+  destruct H5 as [MINJ1 INCR1].
   exploit IHalloc_variables; eauto.  
     unfold f1; rewrite <- H2; eapply match_callstack_alloc_left; eauto.
     rewrite <- H1. omega.
     intros until delta; unfold f1, extend_inject, eq_block.
     rewrite (high_bound_alloc _ _ _ _ _ H b).
     case (zeq b b1); intros. 
-    inversion H6. unfold sizeof; rewrite LV. omega.
-    generalize (BOUND _ _ H6). omega. 
+    inversion H5. unfold sizeof; rewrite LV. omega.
+    generalize (BOUND _ _ H5). omega. 
     intros [f' [INCR2 [MINJ2 MATCH2]]].
     exists f'; intuition. eapply inject_incr_trans; eauto. 
 Qed.

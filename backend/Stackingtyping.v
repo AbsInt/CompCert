@@ -176,8 +176,6 @@ Proof.
   apply wt_restore_callee_save. apply wt_instrs_cons; auto.
   constructor; auto.
   destruct s0; auto. rewrite H5; auto.
-  (* alloc *)
-  apply wt_instrs_cons; auto. constructor. 
   (* label *)
   apply wt_instrs_cons; auto.
   constructor.
@@ -227,10 +225,13 @@ Proof.
   red; intros. elim H5.
   subst tf; simpl; auto.
   rewrite H2. generalize (size_pos f). fold b; fold fe; omega.
+  rewrite H1. change (4 | fe_size fe). unfold fe, b. apply frame_size_aligned.   
   rewrite H3; rewrite H2. change 4 with (4 * typesize (type_of_index FI_link)).
   unfold fe, b; apply offset_of_index_valid. red; auto.
+  rewrite H3. unfold fe,b; apply offset_of_index_aligned.
   rewrite H4; rewrite H2. change 4 with (4 * typesize (type_of_index FI_retaddr)).
   unfold fe, b; apply offset_of_index_valid. red; auto.
+  rewrite H4. unfold fe,b; apply offset_of_index_aligned.
   rewrite H3; rewrite H4.
   apply (offset_of_index_disj f FI_retaddr FI_link); red; auto.
 Qed.

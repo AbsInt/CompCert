@@ -100,7 +100,6 @@ Inductive instruction : Set :=
   | Paddi: ireg -> ireg -> constant -> instruction            (**r add immediate *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
   | Paddze: ireg -> ireg -> instruction                       (**r add Carry bit *)
-  | Pallocblock: instruction                                  (**r allocate new heap block *)
   | Pallocframe: Z -> Z -> int -> instruction                 (**r allocate new stack frame *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
@@ -293,11 +292,6 @@ lbl:    .long   0x43300000, 0x00000000
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
-- [Pallocheap]: in the formal semantics, this pseudo-instruction
-  allocates a heap block of size the contents of [GPR3], and leaves
-  a pointer to this block in [GPR3].  In the generated assembly code,
-  it is turned into a call to the allocation function of the run-time
-  system.
 *)
 
 Definition code := list instruction.
@@ -554,14 +548,6 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
   | Paddze rd r1 =>
       OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY))) m
-  | Pallocblock =>
-      match rs#GPR3 with
-      | Vint n =>
-          let (m', b) := Mem.alloc m 0 (Int.signed n) in
-          OK (nextinstr (rs#GPR3 <- (Vptr b Int.zero)
-                           #LR <- (Val.add rs#PC Vone))) m'
-      | _ => Error
-      end
   | Pallocframe lo hi ofs =>
       let (m1, stk) := Mem.alloc m lo hi in
       let sp := Vptr stk (Int.repr lo) in

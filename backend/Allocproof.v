@@ -601,7 +601,7 @@ Proof.
   rewrite <- H1. eapply agree_move_live; eauto.
   (* Not a move *)
   intros INMO CORR CODE.
-  assert (eval_operation tge sp op (map ls (map assign args)) m = Some v).
+  assert (eval_operation tge sp op (map ls (map assign args)) = Some v).
     replace (map ls (map assign args)) with (rs##args).
     rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved. 
     eapply agree_eval_regs; eauto.
@@ -671,25 +671,15 @@ Proof.
   rewrite (sig_function_translated _ _ TF). eauto.
   rewrite H1. econstructor; eauto.
 
-  (* Ialloc *)
-  assert (ls (assign arg) = Vint sz).
-    rewrite <- H0. symmetry. eapply agree_eval_reg; eauto.
-  econstructor; split.
-  eapply exec_Lalloc; eauto. TranslInstr.
-  generalize (regalloc_correct_1 f env live _ _ _ _ ASG H). 
-  unfold correct_alloc_instr.  intros [CORR1 CORR2].
-  MatchStates.
-  eapply agree_postcall with (args := arg :: nil) (ros := inr reg 1%positive); eauto.
-
   (* Icond, true *)
-  assert (COND: eval_condition cond (map ls (map assign args)) m = Some true).
+  assert (COND: eval_condition cond (map ls (map assign args)) = Some true).
     replace (map ls (map assign args)) with (rs##args). auto.
     eapply agree_eval_regs; eauto.
   econstructor; split.
   eapply exec_Lcond_true; eauto. TranslInstr.
   MatchStates. eapply agree_reg_list_live. eauto.
   (* Icond, false *)
-  assert (COND: eval_condition cond (map ls (map assign args)) m = Some false).
+  assert (COND: eval_condition cond (map ls (map assign args)) = Some false).
     replace (map ls (map assign args)) with (rs##args). auto.
     eapply agree_eval_regs; eauto.
   econstructor; split.

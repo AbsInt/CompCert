@@ -235,9 +235,6 @@ Definition transf_instr
           parallel_move args largs
             (Ltailcall sig (inr _ id) :: k)
       end
-  | LTLin.Lalloc arg res =>
-      add_reload arg loc_alloc_argument
-        (Lalloc :: add_spill loc_alloc_result res k)
   | LTLin.Llabel lbl =>
       Llabel lbl :: k
   | LTLin.Lgoto lbl =>
