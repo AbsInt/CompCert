@@ -23,13 +23,13 @@ extraction:
 	rm -f [:lower:]*.mli [:lower:]*.ml
 	$(COQEXEC) extraction.v
 	@echo "Fixing file names..."
-	@mv list.ml CList.ml
-	@mv list.mli CList.mli
-	@mv string.ml CString.ml
-	@mv string.mli CString.mli
-	@mv int.ml CInt.ml
-	@mv int.mli CInt.mli
-	@echo "Conversion List -> CList, String -> CString, Int -> CInt..."
+	@mv list.ml CoqList.ml
+	@mv list.mli CoqList.mli
+	@mv string.ml CoqString.ml
+	@mv string.mli CoqString.mli
+	@mv int.ml CoqInt.ml
+	@mv int.mli CoqInt.mli
+	@echo "Conversion List -> CoqList, String -> CoqString, Int -> CoqInt..."
 	@./convert *.mli *.ml
 	@echo "Patching files..."
 	@for i in *.patch; do patch < $$i; done

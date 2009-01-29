@@ -15,7 +15,6 @@ open Coqlib
 open Datatypes
 open LTL
 open Lattice
-open CList
 open Maps
 open Camlcoq
 
@@ -81,4 +80,4 @@ let enumerate_aux f reach =
       emit_block (IntSet.remove npc pending) (pos_of_int npc)
     end in
   emit_block IntSet.empty f.fn_entrypoint;
-  CList.rev !enum
+  List.rev !enum

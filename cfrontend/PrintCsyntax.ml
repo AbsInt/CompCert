@@ -17,7 +17,6 @@
 
 open Format
 open Camlcoq
-open CList
 open Datatypes
 open AST
 open Csyntax

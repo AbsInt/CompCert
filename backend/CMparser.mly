@@ -15,7 +15,6 @@
 
 %{
 open Datatypes
-open CList
 open Camlcoq
 open BinPos
 open BinInt
@@ -313,9 +312,9 @@ let mkmatch expr cases =
 
 prog:
     global_declarations proc_list EOF
-      { { prog_funct = CList.rev $2;
+      { { prog_funct = List.rev $2;
           prog_main = intern_string "main";
-          prog_vars = CList.rev $1; } }
+          prog_vars = List.rev $1; } }
 ;
 
 global_declarations:
@@ -347,8 +346,8 @@ proc:
         temp_counter := 0;
         Coq_pair($1,
         Internal { fn_sig = $6;
-                   fn_params = CList.rev $3;
-                   fn_vars = CList.rev (CList.app tmp $9);
+                   fn_params = List.rev $3;
+                   fn_vars = List.rev (tmp @ $9);
                    fn_stackspace = $8;
                    fn_body = $10 }) }
   | EXTERN STRINGLIT COLON signature 
@@ -383,7 +382,7 @@ stack_declaration:
 
 var_declarations:
     /* empty */                                 { [] }
-  | var_declarations var_declaration            { CList.app $2 $1 }
+  | var_declarations var_declaration            { $2 @ $1 }
 ;
 
 var_declaration:

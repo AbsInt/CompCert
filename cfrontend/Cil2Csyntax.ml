@@ -19,7 +19,6 @@ CIL -> CabsCoq translator
 **************************************************************************)
 
 open Cil
-open CList
 open Camlcoq
 open AST
 open Csyntax
@@ -866,7 +865,7 @@ let convertInit init =
     align al;
     cvtInit init
 
-  in cvtInit init; CList.rev !k
+  in cvtInit init; List.rev !k
 
 (** Convert a [Cil.initinfo] into a list of [AST.init_data] *)
 

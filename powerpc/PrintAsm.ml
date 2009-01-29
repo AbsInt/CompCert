@@ -14,7 +14,6 @@
 
 open Printf
 open Datatypes
-open CList
 open Camlcoq
 open AST
 open Asm
@@ -461,9 +460,9 @@ module Stubs_MacOS = struct
 let variadic_stub oc stub_name fun_name ty_args =
   (* Compute total size of arguments *)
   let arg_size =
-    CList.fold_left
+    List.fold_left
      (fun sz ty -> match ty with Tint -> sz + 4 | Tfloat -> sz + 8)
-     ty_args 0 in
+     0 ty_args in
   (* Stack size is linkage area + argument size, with a minimum of 56 bytes *)
   let frame_size = max 56 (24 + arg_size) in
   fprintf oc "	mflr	r0\n";

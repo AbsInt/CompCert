@@ -13,7 +13,6 @@
 (* Type inference for RTL *)
 
 open Datatypes
-open CList
 open Camlcoq
 open Maps
 open AST

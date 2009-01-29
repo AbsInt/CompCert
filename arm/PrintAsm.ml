@@ -14,7 +14,6 @@
 
 open Printf
 open Datatypes
-open CList
 open Camlcoq
 open AST
 open Asm

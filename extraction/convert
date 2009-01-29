@@ -1,9 +1,9 @@
 #!/usr/bin/perl -pi
 
-s/\bList\b/CList/g;
-s/\bString\b/CString/g;
-s/\bInt\.Z_as_Int\b/CInt.Z_as_Int/g;
-s/\bInt\.Int\b/CInt.Int/g;
-s/\bInt\.MoreInt\b/CInt.MoreInt/g;
+s/\bList\b/CoqList/g;
+s/\bString\b/CoqString/g;
+s/\bInt\.Z_as_Int\b/CoqInt.Z_as_Int/g;
+s/\bInt\.Int\b/CoqInt.Int/g;
+s/\bInt\.MoreInt\b/CoqInt.MoreInt/g;
 s/^open Int$//;
 

@@ -13,7 +13,6 @@
 (* Library of useful Caml <-> Coq conversions *)
 
 open Datatypes
-open CList
 open BinPos
 open BinInt
 
@@ -91,15 +90,15 @@ let char_of_ascii (Ascii.Ascii(a0, a1, a2, a3, a4, a5, a6, a7)) =
 
 let coqstring_length s =
   let rec len accu = function
-  | CString.EmptyString -> accu
-  | CString.CString(_, s) -> len (accu + 1) s
+  | CoqString.EmptyString -> accu
+  | CoqString.CoqString(_, s) -> len (accu + 1) s
   in len 0 s
 
 let camlstring_of_coqstring s =
   let r = String.create (coqstring_length s) in
   let rec fill pos = function
-  | CString.EmptyString -> r
-  | CString.CString(c, s) -> r.[pos] <- char_of_ascii c; fill (pos + 1) s
+  | CoqString.EmptyString -> r
+  | CoqString.CoqString(c, s) -> r.[pos] <- char_of_ascii c; fill (pos + 1) s
   in fill 0 s
 
 (* Timing facility *)
