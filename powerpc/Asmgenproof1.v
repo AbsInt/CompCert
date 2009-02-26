@@ -1349,14 +1349,38 @@ Proof.
   repeat (rewrite (ireg_val ms sp rs); auto).
   reflexivity. auto 10 with ppcgen.
   (* Ocmp *)
-  set (bit := fst (crbit_for_cond c)).
-  set (isset := snd (crbit_for_cond c)).
+  generalize H2; case (classify_condition c args); intros.
+  (* Optimization: compimm Cge 0 *)
+  subst n. simpl in H4. simpl. 
+  set (rs1 := nextinstr (rs#(ireg_of res) <- (Val.rolm (ms r) Int.one Int.one))).
+  set (rs2 := nextinstr (rs1#(ireg_of res) <- (Val.xor (rs1#(ireg_of res)) (Vint Int.one)))).
+  exists rs2.
+  split. apply exec_straight_two with rs1 m. 
+  simpl. unfold rs1. rewrite (ireg_val ms sp rs); auto. congruence.
+  auto. auto. auto.
+  rewrite <- Val.rolm_ge_zero. 
+  unfold rs2. apply agree_nextinstr.
+  unfold rs1. apply agree_nextinstr_commut. fold rs1.
+  replace (rs1 (ireg_of res)) with (Val.rolm (ms r) Int.one Int.one).
+  apply agree_set_mireg_twice; auto.
+  unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss. auto. 
+  auto with ppcgen. auto with ppcgen. 
+  (* Optimization: compimm Clt 0 *)
+  subst n. simpl in H4. simpl. 
+  exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (ms r) Int.one Int.one))).
+  split. apply exec_straight_one. simpl. rewrite (ireg_val ms sp rs); auto. congruence.
+  auto. 
+  apply agree_nextinstr. apply agree_set_mireg.
+  rewrite Val.rolm_lt_zero. apply agree_set_mreg. auto. congruence. 
+  (* General case *)
+  set (bit := fst (crbit_for_cond c0)).
+  set (isset := snd (crbit_for_cond c0)).
   set (k1 :=
         Pmfcrbit (ireg_of res) bit ::
         (if isset
          then k
          else Pxori (ireg_of res) (ireg_of res) (Cint Int.one) :: k)).
-  generalize (transl_cond_correct_aux c args k1 ms sp rs m H2 H0).
+  generalize (transl_cond_correct_aux c0 rl k1 ms sp rs m H4 H0).
   fold bit; fold isset. 
   intros [rs1 [EX1 [RES1 AG1]]].
   set (rs2 := nextinstr (rs1#(ireg_of res) <- (rs1#(reg_of_crbit bit)))).
@@ -1366,12 +1390,12 @@ Proof.
   unfold k1. apply exec_straight_one. 
   reflexivity. reflexivity. 
   unfold rs2. rewrite RES1. auto with ppcgen. 
-  exists (nextinstr (rs2#(ireg_of res) <- (eval_condition_total c ms##args))).
+  exists (nextinstr (rs2#(ireg_of res) <- (eval_condition_total c0 ms##rl))).
   split. apply exec_straight_trans with k1 rs1 m. assumption.
   unfold k1. apply exec_straight_two with rs2 m.
   reflexivity. simpl. 
   replace (Val.xor (rs2 (ireg_of res)) (Vint Int.one))
-     with (eval_condition_total c ms##args).
+     with (eval_condition_total c0 ms##rl).
   reflexivity.
   unfold rs2. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gss. 
   rewrite RES1. apply Val.notbool_xor. apply eval_condition_total_is_bool.

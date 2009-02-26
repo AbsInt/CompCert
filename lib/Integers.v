@@ -2545,4 +2545,24 @@ Proof.
   contradiction. auto.
 Qed.
 
+Theorem shru_lt_zero:
+  forall x,
+  shru x (repr (Z_of_nat wordsize - 1)) = if lt x zero then one else zero.
+Proof.
+  intros. rewrite shru_div_two_p. 
+  change (two_p (unsigned (repr (Z_of_nat wordsize - 1))))
+    with half_modulus.
+  generalize (unsigned_range x); intro. 
+  unfold lt. change (signed zero) with 0. unfold signed. 
+  destruct (zlt (unsigned x) half_modulus).
+  rewrite zlt_false.
+  replace (unsigned x / half_modulus) with 0. reflexivity. 
+  symmetry. apply Zdiv_unique with (unsigned x). ring. omega. omega.
+  rewrite zlt_true. 
+  replace (unsigned x / half_modulus) with 1. reflexivity.
+  symmetry. apply Zdiv_unique with (unsigned x - half_modulus). ring. 
+  replace modulus with (2 * half_modulus) in H. omega. reflexivity. 
+  omega. 
+Qed.
+
 End Int.

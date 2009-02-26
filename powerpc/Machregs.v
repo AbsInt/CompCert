@@ -26,14 +26,14 @@ Require Import AST.
 - Two float registers, not allocatable, reserved as temporaries for
   spilling and reloading ([FT1, FT2]).
 
-  The type [mreg] does not include special-purpose machine registers
-  such as the stack pointer and the condition codes. *)
+  The type [mreg] does not include special-purpose or reserved
+  machine registers such as the stack pointer and the condition codes. *)
 
 Inductive mreg: Set :=
   (** Allocatable integer regs *)
   | R3: mreg  | R4: mreg  | R5: mreg  | R6: mreg
   | R7: mreg  | R8: mreg  | R9: mreg  | R10: mreg
-  | R13: mreg | R14: mreg | R15: mreg | R16: mreg
+  | R14: mreg | R15: mreg | R16: mreg
   | R17: mreg | R18: mreg | R19: mreg | R20: mreg
   | R21: mreg | R22: mreg | R23: mreg | R24: mreg
   | R25: mreg | R26: mreg | R27: mreg | R28: mreg
@@ -58,7 +58,7 @@ Definition mreg_type (r: mreg): typ :=
   match r with
   | R3 => Tint  | R4 => Tint  | R5 => Tint  | R6 => Tint
   | R7 => Tint  | R8 => Tint  | R9 => Tint  | R10 => Tint
-  | R13 => Tint | R14 => Tint | R15 => Tint | R16 => Tint
+  | R14 => Tint | R15 => Tint | R16 => Tint
   | R17 => Tint | R18 => Tint | R19 => Tint | R20 => Tint
   | R21 => Tint | R22 => Tint | R23 => Tint | R24 => Tint
   | R25 => Tint | R26 => Tint | R27 => Tint | R28 => Tint
@@ -83,11 +83,11 @@ Module IndexedMreg <: INDEXED_TYPE.
     match r with
     | R3 => 1  | R4 => 2  | R5 => 3  | R6 => 4
     | R7 => 5  | R8 => 6  | R9 => 7  | R10 => 8
-    | R13 => 9 | R14 => 10 | R15 => 11 | R16 => 12
-    | R17 => 13 | R18 => 14 | R19 => 15 | R20 => 16
-    | R21 => 17 | R22 => 18 | R23 => 19 | R24 => 20
-    | R25 => 21 | R26 => 22 | R27 => 23 | R28 => 24
-    | R29 => 25 | R30 => 26 | R31 => 27
+    | R14 => 9 | R15 => 10 | R16 => 11
+    | R17 => 12 | R18 => 13 | R19 => 14 | R20 => 15
+    | R21 => 16 | R22 => 17 | R23 => 18 | R24 => 19
+    | R25 => 20 | R26 => 21 | R27 => 22 | R28 => 23
+    | R29 => 24 | R30 => 25 | R31 => 26
     | F1 => 28  | F2 => 29  | F3 => 30  | F4 => 31
     | F5 => 32  | F6 => 33  | F7 => 34  | F8 => 35
     | F9 => 36  | F10 => 37 | F14 => 38 | F15 => 39

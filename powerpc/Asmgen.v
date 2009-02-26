@@ -223,6 +223,32 @@ Definition crbit_for_cond (cond: condition) :=
   | Cmasknotzero n => (CRbit_2, false)
   end.
 
+(** Recognition of comparisons [>= 0] and [< 0]. *)
+
+Inductive condition_class: condition -> list mreg -> Set :=
+  | condition_ge0:
+      forall n r, n = Int.zero -> condition_class (Ccompimm Cge n) (r :: nil)
+  | condition_lt0:
+      forall n r, n = Int.zero -> condition_class (Ccompimm Clt n) (r :: nil)
+  | condition_default:
+      forall c rl, condition_class c rl.
+
+Definition classify_condition (c: condition) (args: list mreg): condition_class c args :=
+  match c as z1, args as z2 return condition_class z1 z2 with
+  | Ccompimm Cge n, r :: nil =>
+      match Int.eq_dec n Int.zero with
+      | left EQ => condition_ge0 n r EQ
+      | right _ => condition_default (Ccompimm Cge n) (r :: nil)
+      end
+  | Ccompimm Clt n, r :: nil =>
+      match Int.eq_dec n Int.zero with
+      | left EQ => condition_lt0 n r EQ
+      | right _ => condition_default (Ccompimm Clt n) (r :: nil)
+      end
+  | x, y =>
+      condition_default x y
+  end.
+
 (** Translation of the arithmetic operation [r <- op(args)].
   The corresponding instructions are prepended to [k]. *)
 
@@ -331,12 +357,20 @@ Definition transl_op
   | Ofloatofintu, a1 :: nil =>
       Piuctf (freg_of r) (ireg_of a1) :: k
   | Ocmp cmp, _ =>
-      let p := crbit_for_cond cmp in
-      transl_cond cmp args
-        (Pmfcrbit (ireg_of r) (fst p) ::
-         if snd p
-         then k
-         else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k)
+      match classify_condition cmp args with
+      | condition_ge0 _ a _ =>
+          Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one ::
+          Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k
+      | condition_lt0 _ a _ =>
+          Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one :: k
+      | condition_default _ _ =>
+          let p := crbit_for_cond cmp in
+          transl_cond cmp args
+            (Pmfcrbit (ireg_of r) (fst p) ::
+             if snd p
+             then k
+             else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k)
+      end
   | _, _ =>
       k (**r never happens for well-typed code *)
   end.

@@ -38,7 +38,7 @@ Definition float_caller_save_regs :=
   F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
 
 Definition int_callee_save_regs :=
-  R13 :: R14 :: R15 :: R16 :: R17 :: R18 :: R19 :: R20 :: R21 :: R22 :: 
+  R14 :: R15 :: R16 :: R17 :: R18 :: R19 :: R20 :: R21 :: R22 :: 
   R23 :: R24 :: R25 :: R26 :: R27 :: R28 :: R29 :: R30 :: R31 :: nil.
 
 Definition float_callee_save_regs :=
@@ -65,11 +65,11 @@ Definition temporaries :=
 
 Definition index_int_callee_save (r: mreg) :=
   match r with
-  | R13 => 0  | R14 => 1  | R15 => 2  | R16 => 3
-  | R17 => 4  | R18 => 5  | R19 => 6  | R20 => 7
-  | R21 => 8  | R22 => 9  | R23 => 10 | R24 => 11
-  | R25 => 12 | R26 => 13 | R27 => 14 | R28 => 15
-  | R29 => 16 | R30 => 17 | R31 => 18 | _ => -1
+  | R14 => 0  | R15 => 1  | R16 => 2  | R17 => 3
+  | R18 => 4  | R19 => 5  | R20 => 6  | R21 => 7
+  | R22 => 8  | R23 => 9  | R24 => 10 | R25 => 11
+  | R26 => 12 | R27 => 13 | R28 => 14 | R29 => 15
+  | R30 => 16 | R31 => 17 | _ => -1
   end.
 
 Definition index_float_callee_save (r: mreg) :=

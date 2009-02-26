@@ -432,6 +432,30 @@ Proof.
   apply andimm_label. apply andimm_label.
 Qed.
 Hint Rewrite transl_cond_label: labels.
+
+Remark transl_op_cmp_label:
+  forall c args r k,
+  find_label lbl
+    (match classify_condition c args with
+     | condition_ge0 _ a _ =>
+        Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one
+        :: Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k
+     | condition_lt0 _ a _ =>
+        Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one :: k
+     | condition_default _ _ =>
+        transl_cond c args
+          (Pmfcrbit (ireg_of r) (fst (crbit_for_cond c))
+           :: (if snd (crbit_for_cond c)
+               then k
+               else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k))
+    end) = find_label lbl k.
+Proof.
+  intros. destruct (classify_condition c args); auto. 
+  autorewrite with labels. 
+  case (snd (crbit_for_cond c)); auto.
+Qed.
+Hint Rewrite transl_op_cmp_label: labels.
+
 Remark transl_op_label:
   forall op args r k, find_label lbl (transl_op op args r k) = find_label lbl k.
 Proof.
@@ -441,11 +465,6 @@ Proof.
   case (mreg_type m); reflexivity.
   case (Int.eq (high_s i) Int.zero); autorewrite with labels; reflexivity.
   case (Int.eq (high_s i) Int.zero); autorewrite with labels; reflexivity.
-  case (snd (crbit_for_cond c)); reflexivity.
-  case (snd (crbit_for_cond c)); reflexivity.
-  case (snd (crbit_for_cond c)); reflexivity.
-  case (snd (crbit_for_cond c)); reflexivity.
-  case (snd (crbit_for_cond c)); reflexivity.
 Qed.
 Hint Rewrite transl_op_label: labels.
 

@@ -918,6 +918,23 @@ Proof.
   elim H0; intro; subst v; reflexivity.
 Qed.
 
+Lemma rolm_lt_zero:
+  forall v, rolm v Int.one Int.one = cmp Clt v (Vint Int.zero).
+Proof.
+  intros. destruct v; simpl; auto.
+  transitivity (Vint (Int.shru i (Int.repr (Z_of_nat wordsize - 1)))).
+  decEq. symmetry. rewrite Int.shru_rolm. auto. auto. 
+  rewrite Int.shru_lt_zero. destruct (Int.lt i Int.zero); auto. 
+Qed.
+
+Lemma rolm_ge_zero:
+  forall v,
+  xor (rolm v Int.one Int.one) (Vint Int.one) = cmp Cge v (Vint Int.zero).
+Proof.
+  intros. rewrite rolm_lt_zero. destruct v; simpl; auto.
+  destruct (Int.lt i Int.zero); auto.
+Qed.
+
 (** The ``is less defined'' relation between values. 
     A value is less defined than itself, and [Vundef] is
     less defined than any value. *)
