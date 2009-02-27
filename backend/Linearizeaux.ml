@@ -45,39 +45,79 @@ let rec pos_of_int n =
   then Coq_xO (pos_of_int (n lsr 1))
   else Coq_xI (pos_of_int (n lsr 1))
 
-(* Build the enumeration *)
-
 module IntSet = Set.Make(struct type t = int let compare = compare end)
 
-let enumerate_aux f reach =
-  let enum = ref [] in
-  let emitted = Array.make (int_of_pos f.fn_nextpc) false in
-  let rec emit_block pending pc =
+(* Determine join points: reachable nodes that have > 1 predecessor *)
+
+let join_points f =
+  let reached = ref IntSet.empty in
+  let reached_twice = ref IntSet.empty in
+  let rec traverse pc =
     let npc = int_of_pos pc in
-    if emitted.(npc)
-    then emit_restart pending
-    else begin
-      enum := pc :: !enum;
-      emitted.(npc) <- true;
-      match PTree.get pc f.fn_code with
-      | None -> assert false
-      | Some i ->
-         match i with
-           | Lnop s -> emit_block pending s
-           | Lop (op, args, res, s) -> emit_block pending s
-           | Lload (chunk, addr, args, dst, s) -> emit_block pending s
-           | Lstore (chunk, addr, args, src, s) -> emit_block pending s
-           | Lcall (sig0, ros, args, res, s) -> emit_block pending s
-           | Ltailcall (sig0, ros, args) -> emit_restart pending
-           | Lcond (cond, args, ifso, ifnot) ->
-               emit_restart (IntSet.add (int_of_pos ifso)
-                             (IntSet.add (int_of_pos ifnot) pending))
-           | Lreturn optarg -> emit_restart pending
+    if IntSet.mem npc !reached then begin
+      if not (IntSet.mem npc !reached_twice) then
+        reached_twice := IntSet.add npc !reached_twice
+    end else begin
+      reached := IntSet.add npc !reached;
+      List.iter traverse (LTL.successors f pc)
     end
-  and emit_restart pending =
-    if not (IntSet.is_empty pending) then begin
-      let npc = IntSet.max_elt pending in
-      emit_block (IntSet.remove npc pending) (pos_of_int npc)
-    end in
-  emit_block IntSet.empty f.fn_entrypoint;
-  List.rev !enum
+  in traverse f.fn_entrypoint; !reached_twice
+
+(* Cut into reachable basic blocks, annotated with the min value of the PC *)
+
+let basic_blocks f joins =
+  let blocks = ref [] in
+  let visited = ref IntSet.empty in
+  (* start_block:
+       pc is the function entry point
+          or a join point
+          or the successor of a conditional test *)
+  let rec start_block pc =
+    let npc = int_of_pos pc in
+    if not (IntSet.mem npc !visited) then begin
+      visited := IntSet.add npc !visited;
+      in_block [] max_int pc
+    end
+  (* in_block: add pc to block and check successors *)
+  and in_block blk minpc pc =
+    let npc = int_of_pos pc in
+    let blk = pc :: blk in
+    let minpc = min npc minpc in
+    match PTree.get pc f.fn_code with
+    | None -> assert false
+    | Some i ->
+       match i with
+         | Lnop s -> next_in_block blk minpc s
+         | Lop (op, args, res, s) -> next_in_block blk minpc s
+         | Lload (chunk, addr, args, dst, s) -> next_in_block blk minpc s
+         | Lstore (chunk, addr, args, src, s) -> next_in_block blk minpc s
+         | Lcall (sig0, ros, args, res, s) -> next_in_block blk minpc s
+         | Ltailcall (sig0, ros, args) -> end_block blk minpc
+         | Lcond (cond, args, ifso, ifnot) ->
+             end_block blk minpc; start_block ifso; start_block ifnot
+         | Lreturn optarg -> end_block blk minpc
+  (* next_in_block: check if join point and either extend block
+     or start block *)
+  and next_in_block blk minpc pc =
+    let npc = int_of_pos pc in
+    if IntSet.mem npc joins
+    then (end_block blk minpc; start_block pc)
+    else in_block blk minpc pc
+  (* end_block: record block that we just discovered *)
+  and end_block blk minpc =
+    blocks := (minpc, List.rev blk) :: !blocks
+  in 
+    start_block f.fn_entrypoint; !blocks
+
+(* Flatten basic blocks in decreasing order of minpc *)
+
+let flatten_blocks blks =
+  let cmp_minpc (mpc1, _) (mpc2, _) =
+    if mpc1 = mpc2 then 0 else if mpc1 > mpc2 then -1 else 1
+  in
+    List.flatten (List.map Pervasives.snd (List.sort cmp_minpc blks))
+
+(* Build the enumeration *)
+
+let enumerate_aux f reach =
+  flatten_blocks (basic_blocks f (join_points f))
