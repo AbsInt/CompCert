@@ -14,6 +14,7 @@ include Makefile.config
 
 COQC=coqc $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
+#COQC=/Users/sandrineblazy/SWtrunkcoq/bin/coqc $(INCLUDES)
 COQDOC=coqdoc
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
@@ -139,7 +140,7 @@ depend:
 
 install:
 	install -d $(BINDIR)
-	install ../ccomp $(BINDIR)
+	install ./ccomp $(BINDIR)
 	$(MAKE) -C runtime install
 
 clean:
