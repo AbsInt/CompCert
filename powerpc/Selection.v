@@ -802,6 +802,9 @@ Inductive cast8signed_cases: forall (e1: expr), Set :=
   | cast8signed_case1:
       forall (e2: expr),
       cast8signed_cases (Eop Ocast8signed (e2 ::: Enil))
+  | cast8signed_case2:
+      forall mode args,
+      cast8signed_cases (Eload Mint8signed mode args)
   | cast8signed_default:
       forall (e1: expr),
       cast8signed_cases e1.
@@ -810,6 +813,8 @@ Definition cast8signed_match (e1: expr) :=
   match e1 as z1 return cast8signed_cases z1 with
   | Eop Ocast8signed (e2 ::: Enil) =>
       cast8signed_case1 e2
+  | Eload Mint8signed mode args =>
+      cast8signed_case2 mode args
   | e1 =>
       cast8signed_default e1
   end.
@@ -817,6 +822,7 @@ Definition cast8signed_match (e1: expr) :=
 Definition cast8signed (e: expr) := 
   match cast8signed_match e with
   | cast8signed_case1 e1 => e
+  | cast8signed_case2 mode args => e
   | cast8signed_default e1 => Eop Ocast8signed (e1 ::: Enil)
   end.
 
@@ -824,6 +830,9 @@ Inductive cast8unsigned_cases: forall (e1: expr), Set :=
   | cast8unsigned_case1:
       forall (e2: expr),
       cast8unsigned_cases (Eop Ocast8unsigned (e2 ::: Enil))
+  | cast8unsigned_case2:
+      forall mode args,
+      cast8unsigned_cases (Eload Mint8unsigned mode args)
   | cast8unsigned_default:
       forall (e1: expr),
       cast8unsigned_cases e1.
@@ -832,6 +841,8 @@ Definition cast8unsigned_match (e1: expr) :=
   match e1 as z1 return cast8unsigned_cases z1 with
   | Eop Ocast8unsigned (e2 ::: Enil) =>
       cast8unsigned_case1 e2
+  | Eload Mint8unsigned mode args =>
+      cast8unsigned_case2 mode args
   | e1 =>
       cast8unsigned_default e1
   end.
@@ -839,6 +850,7 @@ Definition cast8unsigned_match (e1: expr) :=
 Definition cast8unsigned (e: expr) := 
   match cast8unsigned_match e with
   | cast8unsigned_case1 e1 => e
+  | cast8unsigned_case2 mode args => e
   | cast8unsigned_default e1 => Eop Ocast8unsigned (e1 ::: Enil)
   end.
 
@@ -846,6 +858,9 @@ Inductive cast16signed_cases: forall (e1: expr), Set :=
   | cast16signed_case1:
       forall (e2: expr),
       cast16signed_cases (Eop Ocast16signed (e2 ::: Enil))
+  | cast16signed_case2:
+      forall mode args,
+      cast16signed_cases (Eload Mint16signed mode args)
   | cast16signed_default:
       forall (e1: expr),
       cast16signed_cases e1.
@@ -854,6 +869,8 @@ Definition cast16signed_match (e1: expr) :=
   match e1 as z1 return cast16signed_cases z1 with
   | Eop Ocast16signed (e2 ::: Enil) =>
       cast16signed_case1 e2
+  | Eload Mint16signed mode args =>
+      cast16signed_case2 mode args
   | e1 =>
       cast16signed_default e1
   end.
@@ -861,6 +878,7 @@ Definition cast16signed_match (e1: expr) :=
 Definition cast16signed (e: expr) := 
   match cast16signed_match e with
   | cast16signed_case1 e1 => e
+  | cast16signed_case2 mode args => e
   | cast16signed_default e1 => Eop Ocast16signed (e1 ::: Enil)
   end.
 
@@ -868,6 +886,9 @@ Inductive cast16unsigned_cases: forall (e1: expr), Set :=
   | cast16unsigned_case1:
       forall (e2: expr),
       cast16unsigned_cases (Eop Ocast16unsigned (e2 ::: Enil))
+  | cast16unsigned_case2:
+      forall mode args,
+      cast16unsigned_cases (Eload Mint16unsigned mode args)
   | cast16unsigned_default:
       forall (e1: expr),
       cast16unsigned_cases e1.
@@ -876,6 +897,8 @@ Definition cast16unsigned_match (e1: expr) :=
   match e1 as z1 return cast16unsigned_cases z1 with
   | Eop Ocast16unsigned (e2 ::: Enil) =>
       cast16unsigned_case1 e2
+  | Eload Mint16unsigned mode args =>
+      cast16unsigned_case2 mode args
   | e1 =>
       cast16unsigned_default e1
   end.
@@ -883,6 +906,7 @@ Definition cast16unsigned_match (e1: expr) :=
 Definition cast16unsigned (e: expr) := 
   match cast16unsigned_match e with
   | cast16unsigned_case1 e1 => e
+  | cast16unsigned_case2 mode args => e
   | cast16unsigned_default e1 => Eop Ocast16unsigned (e1 ::: Enil)
   end.
 
@@ -890,6 +914,9 @@ Inductive singleoffloat_cases: forall (e1: expr), Set :=
   | singleoffloat_case1:
       forall (e2: expr),
       singleoffloat_cases (Eop Osingleoffloat (e2 ::: Enil))
+  | singleoffloat_case2:
+      forall mode args,
+      singleoffloat_cases (Eload Mfloat32 mode args)
   | singleoffloat_default:
       forall (e1: expr),
       singleoffloat_cases e1.
@@ -898,6 +925,8 @@ Definition singleoffloat_match (e1: expr) :=
   match e1 as z1 return singleoffloat_cases z1 with
   | Eop Osingleoffloat (e2 ::: Enil) =>
       singleoffloat_case1 e2
+  | Eload Mfloat32 mode args =>
+      singleoffloat_case2 mode args
   | e1 =>
       singleoffloat_default e1
   end.
@@ -905,6 +934,7 @@ Definition singleoffloat_match (e1: expr) :=
 Definition singleoffloat (e: expr) := 
   match singleoffloat_match e with
   | singleoffloat_case1 e1 => e
+  | singleoffloat_case2 mode args => e
   | singleoffloat_default e1 => Eop Osingleoffloat (e1 ::: Enil)
   end.
 

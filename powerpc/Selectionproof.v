@@ -745,6 +745,29 @@ Proof.
   intros. EvalOp.
 Qed.
 
+Lemma loadv_cast:
+  forall chunk addr v,
+  loadv chunk m addr = Some v ->
+  match chunk with
+  | Mint8signed => loadv chunk m addr = Some(Val.sign_ext 8 v)
+  | Mint8unsigned => loadv chunk m addr = Some(Val.zero_ext 8 v)
+  | Mint16signed => loadv chunk m addr = Some(Val.sign_ext 16 v)
+  | Mint16unsigned => loadv chunk m addr = Some(Val.zero_ext 16 v)
+  | Mfloat32 => loadv chunk m addr = Some(Val.singleoffloat v)
+  | _ => True
+  end.
+Proof.
+  intros. rewrite H. destruct addr; simpl in H; try discriminate.
+  exploit Mem.load_inv; eauto. 
+  set (v' := (getN (pred_size_chunk chunk) (Int.signed i) (contents (blocks m b)))).
+  intros [A B]. subst v. destruct chunk; auto; destruct v'; simpl; auto.
+  rewrite Int.sign_ext_idem; auto. compute; auto.
+  rewrite Int.zero_ext_idem; auto. compute; auto.
+  rewrite Int.sign_ext_idem; auto. compute; auto.
+  rewrite Int.zero_ext_idem; auto. compute; auto.
+  rewrite Float.singleoffloat_idem; auto.
+Qed.
+
 Theorem eval_cast8signed:
   forall le a v,
   eval_expr ge sp e m le a v ->
@@ -753,6 +776,7 @@ Proof.
   intros until v; unfold cast8signed; case (cast8signed_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
   rewrite Int.sign_ext_idem. reflexivity. compute; auto.
+  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
   EvalOp.
 Qed.
 
@@ -764,6 +788,7 @@ Proof.
   intros until v; unfold cast8unsigned; case (cast8unsigned_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
   rewrite Int.zero_ext_idem. reflexivity. compute; auto.
+  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
   EvalOp.
 Qed.
 
@@ -775,6 +800,7 @@ Proof.
   intros until v; unfold cast16signed; case (cast16signed_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
   rewrite Int.sign_ext_idem. reflexivity. compute; auto.
+  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
   EvalOp.
 Qed.
 
@@ -786,6 +812,7 @@ Proof.
   intros until v; unfold cast16unsigned; case (cast16unsigned_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
   rewrite Int.zero_ext_idem. reflexivity. compute; auto.
+  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
   EvalOp.
 Qed.
 
@@ -796,6 +823,7 @@ Theorem eval_singleoffloat:
 Proof. 
   intros until v; unfold singleoffloat; case (singleoffloat_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Float.singleoffloat_idem. reflexivity.
+  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
   EvalOp.
 Qed.
 
