@@ -167,12 +167,6 @@ Section TYPECHECKING.
 Variable funct: function.
 Variable env: regenv.
 
-Lemma typ_eq: forall (t1 t2: typ), {t1=t2} + {t1<>t2}.
-Proof. decide equality. Qed.
-
-Lemma opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}.
-Proof. decide equality. apply typ_eq. Qed.
-
 Definition check_reg (r: reg) (ty: typ): bool :=
   if typ_eq (env r) ty then true else false.
 

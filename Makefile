@@ -48,6 +48,7 @@ BACKEND=\
   Selection.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
+  Tailcall.v Tailcallproof.v \
   RTLtyping.v \
   Kildall.v \
   Constprop.v Constpropproof.v \

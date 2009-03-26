@@ -1796,6 +1796,26 @@ Proof.
   unfold inject_id; intros. congruence.
 Qed.
 
+Lemma free_left_lessdef:
+  forall m1 m2 b,
+  lessdef m1 m2 -> lessdef (free m1 b) m2.
+Proof.
+  intros. destruct H. split. 
+  rewrite <- H. auto. 
+  apply free_left_inj; auto. 
+Qed.
+
+Lemma free_right_lessdef:
+  forall m1 m2 b,
+  lessdef m1 m2 -> low_bound m1 b >= high_bound m1 b ->
+  lessdef m1 (free m2 b).
+Proof.
+  intros. destruct H. unfold lessdef. split.
+  rewrite H. auto. 
+  apply free_right_inj; auto. intros. unfold inject_id in H2. inv H2. 
+  red; intro. inv H2. generalize (size_chunk_pos chunk); intro. omega. 
+Qed. 
+
 Lemma valid_block_lessdef:
   forall m1 m2 b, lessdef m1 m2 -> valid_block m1 b -> valid_block m2 b.
 Proof.

@@ -36,6 +36,7 @@ Require Cshmgen.
 Require Cminorgen.
 Require Selection.
 Require RTLgen.
+Require Tailcall.
 Require Constprop.
 Require CSE.
 Require Allocation.
@@ -56,6 +57,7 @@ Require Cshmgenproof3.
 Require Cminorgenproof.
 Require Selectionproof.
 Require RTLgenproof.
+Require Tailcallproof.
 Require Constpropproof.
 Require CSEproof.
 Require Allocproof.
@@ -108,6 +110,7 @@ Notation "a @@ b" :=
 
 Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    OK f
+   @@ Tailcall.transf_fundef
    @@ Constprop.transf_fundef
    @@ CSE.transf_fundef
   @@@ Allocation.transf_fundef
@@ -245,7 +248,9 @@ Proof.
   clear H2.
   destruct (transform_program_compose _ _ _ _ _ _ _ _ H1) as [p0 [H00 P0]].
   clear H1.
-  generalize (transform_partial_program_identity _ _ _ _ H00). clear H00. intro. subst p0.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ H00) as [p00 [H000 P00]].
+  clear H00.
+  generalize (transform_partial_program_identity _ _ _ _ H000). clear H000. intro. subst p00.
 
   assert (WT3 : LTLtyping.wt_program p3).
     apply Alloctyping.program_typing_preserved with p2. auto.
@@ -266,7 +271,9 @@ Proof.
   subst p4; apply Tunnelingproof.transf_program_correct. 
   apply Allocproof.transf_program_correct with p2; auto.
   subst p2; apply CSEproof.transf_program_correct.
-  subst p1; apply Constpropproof.transf_program_correct. auto.
+  subst p1; apply Constpropproof.transf_program_correct.
+  subst p0; apply Tailcallproof.transf_program_correct.
+  auto.
 Qed.
 
 Theorem transf_cminor_program_correct:
