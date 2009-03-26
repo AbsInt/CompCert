@@ -1,4 +1,29 @@
+Release 1.4,
+========================
+
+- Modularized the processor dependencies in the back-end.
+
+- Three target architectures are now supported:
+       PowerPC / MacOS X       (most mature)
+       PowerPC / EABI & Linux  (getting stable)
+       ARM / Linux EABI        (still experimental)
+
+- Added alignment constraints to the memory model.
+
+- Clight: added support for conditional expressions (a ? b : c);
+  removed support for array accesses a[i], now a derived form.
+
 - New optimization over RTL: turning calls into tail calls when possible.
+
+- Instruction selection pass: elimination of redundant casts following
+  a memory load of a "small" memory quantity.
+
+- Linearization pass: improved the linearization heuristic.
+
+- Reloading pass: more economical use of temporaries.
+
+- Back-end: removed "alloc heap" instruction; removed pointer validity
+  checks in pointer comparisons.
 
 
 Release 1.3, 2008-08-11
