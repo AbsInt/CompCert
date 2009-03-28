@@ -98,12 +98,12 @@ let constant oc cst =
   | Csymbol_low(s, n) ->
       begin match target with
       | MacOS -> fprintf oc "lo16(%a)" symbol_offset (s, camlint_of_coqint n)
-      | EABI  -> fprintf oc "%a@l" symbol_offset (s, camlint_of_coqint n)
+      | EABI  -> fprintf oc "(%a)@l" symbol_offset (s, camlint_of_coqint n)
       end
   | Csymbol_high(s, n) ->
       begin match target with
       | MacOS -> fprintf oc "ha16(%a)" symbol_offset (s, camlint_of_coqint n)
-      | EABI  -> fprintf oc "%a@ha" symbol_offset (s, camlint_of_coqint n)
+      | EABI  -> fprintf oc "(%a)@ha" symbol_offset (s, camlint_of_coqint n)
       end
 
 let num_crbit = function
@@ -157,14 +157,42 @@ let creg oc r =
   | MacOS -> fprintf oc "cr%d" r
   | EABI  -> fprintf oc "%d" r
 
-let text oc =
-  fprintf oc "	.text\n"
-let data oc =
-  fprintf oc "	.data\n"
-let const oc =
+let section oc name =
+  fprintf oc "	%s\n" name
+
+(* Names of sections *)
+
+let (text, data, const_data, float_literal) =
   match target with
-  | MacOS -> fprintf oc "	.const_data\n"
-  | EABI  -> fprintf oc "	.section	.rodata.cst8,\"aM\",@progbits,8\n"
+  | MacOS ->
+      (".text",
+       ".data",
+       ".const",
+       ".const_data")
+  | EABI ->
+      (".text",
+       ".data",
+       ".rodata",
+       ".section	.rodata.cst8,\"aM\",@progbits,8")
+
+(* Encoding masks for rlwinm instructions *)
+
+let rolm_mask n =
+  let mb = ref 0       (* location of last 0->1 transition *)
+  and me = ref 32      (* location of last 1->0 transition *)
+  and last = ref ((Int32.logand n 1l) <> 0l)  (* last bit seen *)
+  and count = ref 0    (* number of transitions *)
+  and mask = ref 0x8000_0000l in
+  for mx = 0 to 31 do
+    if Int32.logand n !mask <> 0l then
+      if !last then () else (incr count; mb := mx; last := true)
+    else
+      if !last then (incr count; me := mx; last := false) else ();
+    mask := Int32.shift_right_logical !mask 1
+  done;
+  if !me = 0 then me := 32;
+  assert (!count = 2 || (!count = 0 && !last));
+  (!mb, !me-1)
 
 (* Printing of instructions *)
 
@@ -264,9 +292,9 @@ let print_instruction oc labels = function
       fprintf oc "	lwz	%a, 4(%a)\n" ireg r1  ireg GPR1;
       fprintf oc "	addis	%a, %a, 0x8000\n" ireg r1 ireg r1;
       fprintf oc "%a:	addi	%a, %a, 8\n" label lbl3  ireg GPR1  ireg GPR1;
-      const oc;
+      section oc float_literal;
       fprintf oc "%a:	.long	0x41e00000, 0x00000000\n" label lbl1;
-      text oc
+      section oc text
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfmadd(r1, r2, r3, r4) ->
@@ -294,9 +322,9 @@ let print_instruction oc labels = function
       fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
-      const oc;
+      section oc float_literal;
       fprintf oc "%a:	.long	0x43300000, 0x80000000\n" label lbl;
-      text oc
+      section oc text
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, 0x4330\n" ireg GPR12;
@@ -307,9 +335,9 @@ let print_instruction oc labels = function
       fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
-      const oc;
+      section oc float_literal;
       fprintf oc "%a:	.long	0x43300000, 0x00000000\n" label lbl;
-      text oc
+      section oc text
   | Plbz(r1, c, r2) ->
       fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plbzx(r1, r2, r3) ->
@@ -322,12 +350,12 @@ let print_instruction oc labels = function
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
       fprintf oc "	lfd	%a, %a(%a)\n" freg r1 label_low lbl ireg GPR12;
-      const oc;
+      section oc float_literal;
       let n = Int64.bits_of_float c in
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo;
-      text oc
+      section oc text
   | Plfs(r1, c, r2) ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Plfsx(r1, r2, r3) ->
@@ -346,7 +374,7 @@ let print_instruction oc labels = function
       fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pmfcrbit(r1, bit) ->
       fprintf oc "	mfcr	%a\n" ireg GPR12;
-      fprintf oc "	rlwinm	%a, %a, %d, 1\n" ireg r1  ireg GPR12  (1 + num_crbit bit)
+      fprintf oc "	rlwinm	%a, %a, %d, 31, 31\n" ireg r1  ireg GPR12  (1 + num_crbit bit)
   | Pmflr(r1) ->
       fprintf oc "	mflr	%a\n" ireg r1
   | Pmr(r1, r2) ->
@@ -372,8 +400,13 @@ let print_instruction oc labels = function
   | Poris(r1, r2, c) ->
       fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Prlwinm(r1, r2, c1, c2) ->
+      let (mb, me) = rolm_mask (camlint_of_coqint c2) in
+      fprintf oc "	rlwinm	%a, %a, %ld, %d, %d\n"
+                ireg r1 ireg r2 (camlint_of_coqint c1) mb me
+(*
       fprintf oc "	rlwinm	%a, %a, %ld, 0x%lx\n"
                 ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
+*)
   | Pslw(r1, r2, r3) ->
       fprintf oc "	slw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psraw(r1, r2, r3) ->
@@ -424,9 +457,10 @@ let rec labels_of_code = function
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
-  fprintf oc "	.text\n";
+  section oc text;
   fprintf oc "	.align 2\n";
-  fprintf oc "	.globl %a\n" symbol name;
+  if not (Cil2Csyntax.atom_is_static name) then
+    fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
   List.iter (print_instruction oc (labels_of_code code)) code
 
@@ -632,9 +666,11 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
   | [] -> ()
   | _  ->
-      fprintf oc "	.data\n";
+      section oc 
+        (if Cil2Csyntax.atom_is_readonly name then const_data else data);
       fprintf oc "	.align	3\n";
-      fprintf oc "	.globl	%a\n" symbol name;
+      if not (Cil2Csyntax.atom_is_static name) then
+        fprintf oc "	.globl	%a\n" symbol name;
       fprintf oc "%a:\n" symbol name;
       print_init_data oc init_data
 

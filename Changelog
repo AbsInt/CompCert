@@ -13,6 +13,8 @@ Release 1.4,
 - Clight: added support for conditional expressions (a ? b : c);
   removed support for array accesses a[i], now a derived form.
 
+- C front-end: honor "static" modifiers on globals.
+
 - New optimization over RTL: turning calls into tail calls when possible.
 
 - Instruction selection pass: elimination of redundant casts following

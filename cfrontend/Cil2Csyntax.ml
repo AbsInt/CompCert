@@ -23,6 +23,10 @@ open Camlcoq
 open AST
 open Csyntax
 
+(* To associate CIL varinfo to the atoms representing global variables *)
+
+let varinfo_atom : (BinPos.positive, Cil.varinfo) Hashtbl.t =
+  Hashtbl.create 103
 
 
 
@@ -48,7 +52,6 @@ let const0 = Expr (Econst_int (coqint_of_camlint Int32.zero), constInt32)
 
 (** Global variables *)
 let currentLocation = ref Cil.locUnknown
-let currentGlobalPrefix = ref ""
 let stringNum = ref 0   (* number of next global for string literals *)
 let stringTable = Hashtbl.create 47
 
@@ -132,17 +135,21 @@ let warning msg =
   prerr_endline msg
 
 (** ** Functions used to handle string literals *)
+
 let name_for_string_literal s =
   try
     Hashtbl.find stringTable s
   with Not_found ->
     incr stringNum;
-    let symbol_name =
-      Printf.sprintf "_%s__stringlit_%d"
-                     !currentGlobalPrefix !stringNum in
-    let symbol_ident = intern_string symbol_name in
-    Hashtbl.add stringTable s symbol_ident;
-    symbol_ident
+    let name = Printf.sprintf "__stringlit_%d" !stringNum in
+    let id = intern_string name in
+    let v =
+      makeVarinfo true s (typeAddAttributes [Attr("const",[])] charPtrType) in
+    v.vstorage <- Static;
+    v.vreferenced <- true;
+    Hashtbl.add varinfo_atom id v;
+    Hashtbl.add stringTable s id;
+    id
 
 let typeStringLiteral s =
   Tarray(Tint(I8, Unsigned), z_of_camlint(Int32.of_int(String.length s + 1)))
@@ -737,8 +744,10 @@ let convertGFun fdec =
            unsupported "the return type of main() must be an integer type"
   end;
   current_function := None;
+  let id = intern_string v.vname in
+  Hashtbl.add varinfo_atom id v;
   Datatypes.Coq_pair
-    (intern_string v.vname,
+    (id,
      Internal { fn_return=ret; fn_params=args; fn_vars=varList; fn_body=s })
 
 (** Auxiliary for [convertInit] *)
@@ -881,6 +890,7 @@ let convertInitInfo ty info =
 let convertGVar v i =
   updateLoc(v.vdecl);
   let id = intern_string v.vname in
+  Hashtbl.add varinfo_atom id v;
   Datatypes.Coq_pair (Datatypes.Coq_pair(id, convertInitInfo v.vtype i),
                       convertTyp v.vtype)
 
@@ -890,6 +900,7 @@ let convertGVar v i =
 let convertExtVar v =
   updateLoc(v.vdecl);
   let id = intern_string v.vname in
+  Hashtbl.add varinfo_atom id v;
   Datatypes.Coq_pair (Datatypes.Coq_pair(id, []),
                       convertTyp v.vtype)
 
@@ -900,6 +911,7 @@ let convertExtFun v =
   match convertTyp v.vtype with
   | Tfunction(args, res) ->
       let id = intern_string v.vname in
+      Hashtbl.add varinfo_atom id v;
       Datatypes.Coq_pair (id, External(id, args, res))
   | _ ->
       assert false
@@ -970,9 +982,8 @@ let cleanupGlobals globs =
 
 (** Convert a [Cil.file] into a [CabsCoq.program] *)
 let convertFile f =
-  currentGlobalPrefix :=
-    Filename.chop_extension (Filename.basename f.fileName);
   stringNum := 0;
+  Hashtbl.clear varinfo_atom;
   Hashtbl.clear stringTable;
   Hashtbl.clear stub_function_table;
   let (funList, defList) = processGlobals (cleanupGlobals f.globals) in
@@ -988,4 +999,27 @@ let convertFile f =
 
 (*-----------------------------------------------------------------------*)
 end
+
+(* Extracting information about global variables from their atom *)
+
+let atom_is_static a =
+  try
+    let v = Hashtbl.find varinfo_atom a in
+    v.vstorage = Static
+  with Not_found ->
+    false
+
+let atom_is_readonly a =
+  try
+    let v = Hashtbl.find varinfo_atom a in
+    let a = typeAttrs v.vtype in
+    if hasAttribute "volatile" a then false else
+    if hasAttribute "const" a then true else
+    match Cil.unrollType v.vtype with
+    | TArray(ty, _, _) ->
+        let a' = typeAttrs ty in
+        hasAttribute "const" a' && not (hasAttribute "volatile" a')
+    | _ -> false
+  with Not_found ->
+    false
 
