@@ -40,7 +40,8 @@ Configuration.ml: ../Makefile.config
          echo 'let asm = "$(CASM)"'; \
          echo 'let linker = "$(CLINKER)"'; \
          echo 'let arch = "$(ARCH)"'; \
-         echo 'let variant = "$(VARIANT)"') \
+         echo 'let variant = "$(VARIANT)"'; \
+         echo 'let system = "$(SYSTEM)"') \
         > Configuration.ml
 
 clean:
