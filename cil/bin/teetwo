@@ -1,0 +1,36 @@
+#!/bin/bash
+# run a command, sending stdout to one file and stderr to another,
+# but also sending both to this process' stdout/stderr, respectively
+
+if [ "$3" = "" ]; then
+  echo "usage: $0 stdout-file stderr-file cmd [args..]"
+  exit 0
+fi
+
+stdoutFile="$1"
+stderrFile="$2"
+command="$3"
+shift
+shift
+shift
+
+result=0
+handler() {
+  # this signal means the underlying command exit erroneously,
+  # though we don't know the code
+  echo "The command failed!"
+  result=2
+}
+trap handler SIGUSR1
+
+# dup my stdout/err on fd 3,4
+exec 3>&1
+exec 4>&2
+
+
+# run the command with tees to duplicate the data
+mypid=$$
+# echo "mypid = $mypid, command=$command, args=$@, stdout=$stdoutFile, stderr=$stderrFile"
+(("$command" "$@" || kill -s USR1 $mypid) | tee "$stdoutFile" >&3) 2>&1 | tee "$stderrFile" >&4
+
+exit $result

@@ -1,0 +1,350 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Compiling C to CIL
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil003.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cilly.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc4">4</A>&nbsp;&nbsp;Compiling C to CIL</H2><A NAME="sec-cabs2cil"></A>
+In this section we try to describe a few of the many transformations that are
+applied to a C program to convert it to CIL. The module that implements this
+conversion is about 5000 lines of OCaml code. In contrast a simple program
+transformation that instruments all functions to keep a shadow stack of the
+true return address (thus preventing stack smashing) is only 70 lines of code.
+This example shows that the analysis is so much simpler because it has to
+handle only a few simple C constructs and also because it can leverage on CIL
+infrastructure such as visitors and pretty-printers.<BR>
+<BR>
+In no particular order these are a few of the most significant ways in which
+C programs are compiled into CIL:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+CIL will eliminate all declarations for unused entities. This means that
+just because your hello world program includes <TT>stdio.h</TT> it does not mean
+that your analysis has to handle all the ugly stuff from <TT>stdio.h</TT>.<BR>
+<BR>
+<LI CLASS="li-enumerate">Type specifiers are interpreted and normalized:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int long signed x;
+signed long extern x;
+long static int long y;
+
+// Some code that uses these declaration, so that CIL does not remove them
+int main() { return x + y; }
+</FONT></PRE>
+See the <A HREF="examples/ex1.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Anonymous structure and union declarations are given a name. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ struct { int x; } s;
+</FONT></PRE>
+See the <A HREF="examples/ex2.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Nested structure tag definitions are pulled apart. This means that all
+structure tag definitions can be found by a simple scan of the globals.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct foo {
+   struct bar {
+      union baz { 
+          int x1; 
+          double x2;
+      } u1;
+      int y;
+   } s1;
+   int z;
+} f;
+</FONT></PRE>
+See the <A HREF="examples/ex3.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">All structure, union, enumeration definitions and the type definitions
+from inners scopes are moved to global scope (with appropriate renaming). This
+facilitates moving around of the references to these entities.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int main() {
+  struct foo { 
+        int x; } foo; 
+  {
+     struct foo { 
+        double d;
+     };
+     return foo.x;
+  }      
+}
+</FONT></PRE>
+See the <A HREF="examples/ex4.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Prototypes are added for those functions that are called before being
+defined. Furthermore, if a prototype exists but does not specify the type of
+parameters that is fixed. But CIL will not be able to add prototypes for those
+functions that are neither declared nor defined (but are used!).
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int f();  // Prototype without arguments
+  int f(double x) {
+      return g(x);
+  }
+  int g(double x) {
+     return x;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex5.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Array lengths are computed based on the initializers or by constant
+folding.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int a1[] = {1,2,3};
+  int a2[sizeof(int) &gt;= 4 ? 8 : 16];
+</FONT></PRE>
+See the <A HREF="examples/ex6.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Enumeration tags are computed using constant folding:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int main() {
+  enum { 
+     FIVE = 5, 
+     SIX, SEVEN, 
+     FOUR = FIVE - 1, 
+     EIGHT = sizeof(double)
+  } x = FIVE;
+ return x;
+}
+
+</FONT></PRE>
+See the <A HREF="examples/ex7.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializers are normalized to include specific initialization for the
+missing elements:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int a1[5] = {1,2,3};
+  struct foo { int x, y; } s1 = { 4 };
+</FONT></PRE>
+See the <A HREF="examples/ex8.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializer designators are interpreted and eliminated. Subobjects are
+properly marked with braces. CIL implements
+the whole ISO C99 specification for initializer (neither GCC nor MSVC do) and
+a few GCC extensions. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  struct foo { 
+     int x, y; 
+     int a[5];
+     struct inner {
+        int z;
+     } inner;
+  } s = { 0, .inner.z = 3, .a[1 ... 2] = 5, 4, y : 8 };
+</FONT></PRE>
+See the <A HREF="examples/ex9.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">String initializers for arrays of characters are processed
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+char foo[] = "foo plus bar";
+</FONT></PRE>
+See the <A HREF="examples/ex10.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">String constants are concatenated
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+char *foo = "foo " " plus " " bar ";
+</FONT></PRE>
+See the <A HREF="examples/ex11.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializers for local variables are turned into assignments. This is in
+order to separate completely the declarative part of a function body from the
+statements. This has the unfortunate effect that we have to drop the <TT>const</TT>
+qualifier from local variables !
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x = 5; 
+  struct foo { int f1, f2; } a [] = {1, 2, 3, 4, 5 };
+</FONT></PRE>
+See the <A HREF="examples/ex12.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Local variables in inner scopes are pulled to function scope (with
+appropriate renaming). Local scopes thus disappear. This makes it easy to find
+and operate on all local variables in a function.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x = 5; 
+  int main() {
+    int x = 6;
+    { 
+      int x = 7;
+      return x;
+    }
+    return x;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex13.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Global declarations in local scopes are moved to global scope:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x = 5; 
+  int main() {
+    int x = 6;
+    { 
+      static int x = 7;
+      return x;
+    }
+    return x;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex14.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Return statements are added for functions that are missing them. If the
+return type is not a base type then a <TT>return</TT> without a value is added.
+The guaranteed presence of return statements makes it easy to implement a
+transformation that inserts some code to be executed immediately before
+returning from a function.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo() {
+    int x = 5;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex15.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">One of the most significant transformations is that expressions that
+contain side-effects are separated into statements. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x, f(int);
+   return (x ++ + f(x));
+</FONT></PRE>
+See the <A HREF="examples/ex16.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+Internally, the <TT>x ++</TT> statement is turned into an assignment which the
+pretty-printer prints like the original. CIL has only three forms of basic
+statements: assignments, function calls and inline assembly.<BR>
+<BR>
+<LI CLASS="li-enumerate">Shortcut evaluation of boolean expressions and the <TT>?:</TT> operator are
+compiled into explicit conditionals:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x;
+  int y = x ? 2 : 4;
+  int z = x || y;
+  // Here we duplicate the return statement
+  if(x &amp;&amp; y) { return 0; } else { return 1; }
+  // To avoid excessive duplication, CIL uses goto's for 
+  // statement that have more than 5 instructions
+  if(x &amp;&amp; y || z) { x ++; y ++; z ++; x ++; y ++; return z; }
+</FONT></PRE>
+See the <A HREF="examples/ex17.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC's conditional expression with missing operands are also compiled
+into conditionals:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int f();;
+  return f() ? : 4;
+</FONT></PRE>
+See the <A HREF="examples/ex18.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">All forms of loops (<TT>while</TT>, <TT>for</TT> and <TT>do</TT>) are compiled
+internally as a single <TT>while(1)</TT> looping construct with explicit <TT>break</TT>
+statement for termination. For simple <TT>while</TT> loops the pretty printer is
+able to print back the original:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x, y;
+   for(int i = 0; i&lt;5; i++) {
+      if(i == 5) continue;
+      if(i == 4) break;
+      i += 2;
+   } 
+   while(x &lt; 5) {
+     if(x == 3) continue;
+     x ++;
+   }
+</FONT></PRE>
+See the <A HREF="examples/ex19.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC's block expressions are compiled away. (That's right there is an
+infinite loop in this code.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x = 5, y = x;
+   int z = ({ x++; L: y -= x; y;});
+   return ({ goto L; 0; });
+</FONT></PRE>
+See the <A HREF="examples/ex20.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL contains support for both MSVC and GCC inline assembly (both in one
+internal construct)<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL compiles away the GCC extension that allows many kinds of constructs
+to be used as lvalues:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x, y, z;
+   return &amp;(x ? y : z) - &amp; (x ++, x);
+</FONT></PRE>
+See the <A HREF="examples/ex21.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">All types are computed and explicit casts are inserted for all
+promotions and conversions that a compiler must insert:<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL will turn old-style function definition (without prototype) into
+new-style definitions. This will make the compiler less forgiving when
+checking function calls, and will catch for example cases when a function is
+called with too few arguments. This happens in old-style code for the purpose
+of implementing variable argument functions.<BR>
+<BR>
+<LI CLASS="li-enumerate">Since CIL sees the source after preprocessing the code after CIL does
+not contain the comments and the preprocessing directives.<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL will remove from the source file those type declarations, local
+variables and inline functions that are not used in the file. This means that
+your analysis does not have to see all the ugly stuff that comes from the
+header files: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+#include &lt;stdio.h&gt;
+
+typedef int unused_type;
+
+static char unused_static (void) { return 0; }
+
+int main() {
+  int unused_local;
+  printf("Hello world\n"); // Only printf will be kept from stdio.h     
+}
+</FONT></PRE>
+See the <A HREF="examples/ex22.txt">CIL output</A> for this
+code fragment</OL>
+<HR>
+<A HREF="cil003.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cilly.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

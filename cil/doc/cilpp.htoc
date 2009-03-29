@@ -1,0 +1,65 @@
+\begin{tocenv}
+\tocitem \@locref{htoc1}{\begin{@norefs}\@print{1}\quad{}Introduction\end{@norefs}}
+\tocitem \@locref{htoc2}{\begin{@norefs}\@print{2}\quad{}Installation\end{@norefs}}
+\tocitem \@locref{htoc3}{\begin{@norefs}\@print{3}\quad{}Distribution Contents\end{@norefs}}
+\tocitem \@locref{htoc4}{\begin{@norefs}\@print{4}\quad{}Compiling C to CIL\end{@norefs}}
+\tocitem \@locref{htoc5}{\begin{@norefs}\@print{5}\quad{}How to Use CIL\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc6}{\begin{@norefs}\@print{5.1}\quad{}Using \t{cilly}, the CIL driver\end{@norefs}}
+\tocitem \@locref{htoc7}{\begin{@norefs}\@print{5.2}\quad{}Using CIL as a library\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc8}{\begin{@norefs}\@print{6}\quad{}CIL API Documentation\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc9}{\begin{@norefs}\@print{6.1}\quad{}Using the visitor\end{@norefs}}
+\tocitem \@locref{htoc10}{\begin{@norefs}\@print{6.2}\quad{}Interpreted Constructors and Deconstructors\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc11}{\begin{@norefs}\@print{6.2.1}\quad{}Performance considerations for interpreted constructors\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc12}{\begin{@norefs}\@print{6.3}\quad{}Printing and Debugging support\end{@norefs}}
+\tocitem \@locref{htoc13}{\begin{@norefs}\@print{6.4}\quad{}Attributes\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc14}{\begin{@norefs}\@print{7}\quad{}The CIL Driver\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc15}{\begin{@norefs}\@print{7.1}\quad{}\t{cilly} Options\end{@norefs}}
+\tocitem \@locref{htoc16}{\begin{@norefs}\@print{7.2}\quad{}\t{cilly.asm} Options\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc17}{\begin{@norefs}\@print{8}\quad{}Library of CIL Modules\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc18}{\begin{@norefs}\@print{8.1}\quad{}Control-Flow Graphs\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc19}{\begin{@norefs}\@print{8.1.1}\quad{}The CFG module (new in CIL 1.3.5)\end{@norefs}}
+\tocitem \@locref{htoc20}{\begin{@norefs}\@print{8.1.2}\quad{}Simplified control flow\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc21}{\begin{@norefs}\@print{8.2}\quad{}Data flow analysis framework\end{@norefs}}
+\tocitem \@locref{htoc22}{\begin{@norefs}\@print{8.3}\quad{}Dominators\end{@norefs}}
+\tocitem \@locref{htoc23}{\begin{@norefs}\@print{8.4}\quad{}Points-to Analysis\end{@norefs}}
+\tocitem \@locref{htoc24}{\begin{@norefs}\@print{8.5}\quad{}StackGuard\end{@norefs}}
+\tocitem \@locref{htoc25}{\begin{@norefs}\@print{8.6}\quad{}Heapify\end{@norefs}}
+\tocitem \@locref{htoc26}{\begin{@norefs}\@print{8.7}\quad{}One Return\end{@norefs}}
+\tocitem \@locref{htoc27}{\begin{@norefs}\@print{8.8}\quad{}Partial Evaluation and Constant Folding\end{@norefs}}
+\tocitem \@locref{htoc28}{\begin{@norefs}\@print{8.9}\quad{}Reaching Definitions\end{@norefs}}
+\tocitem \@locref{htoc29}{\begin{@norefs}\@print{8.10}\quad{}Available Expressions\end{@norefs}}
+\tocitem \@locref{htoc30}{\begin{@norefs}\@print{8.11}\quad{}Liveness Analysis\end{@norefs}}
+\tocitem \@locref{htoc31}{\begin{@norefs}\@print{8.12}\quad{}Dead Code Elimination\end{@norefs}}
+\tocitem \@locref{htoc32}{\begin{@norefs}\@print{8.13}\quad{}Simple Memory Operations\end{@norefs}}
+\tocitem \@locref{htoc33}{\begin{@norefs}\@print{8.14}\quad{}Simple Three-Address Code\end{@norefs}}
+\tocitem \@locref{htoc34}{\begin{@norefs}\@print{8.15}\quad{}Converting C to C++\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc35}{\begin{@norefs}\@print{9}\quad{}Controlling CIL\end{@norefs}}
+\tocitem \@locref{htoc36}{\begin{@norefs}\@print{10}\quad{}GCC Extensions\end{@norefs}}
+\tocitem \@locref{htoc37}{\begin{@norefs}\@print{11}\quad{}CIL Limitations\end{@norefs}}
+\tocitem \@locref{htoc38}{\begin{@norefs}\@print{12}\quad{}Known Bugs and Limitations\end{@norefs}}
+\tocitem \@locref{htoc39}{\begin{@norefs}\@print{13}\quad{}Using the merger\end{@norefs}}
+\tocitem \@locref{htoc40}{\begin{@norefs}\@print{14}\quad{}Using the patcher\end{@norefs}}
+\tocitem \@locref{htoc41}{\begin{@norefs}\@print{15}\quad{}Debugging support\end{@norefs}}
+\tocitem \@locref{htoc42}{\begin{@norefs}\@print{16}\quad{}Who Says C is Simple?\end{@norefs}}
+\begin{tocenv}
+\tocitem \@locref{htoc43}{\begin{@norefs}\@print{16.1}\quad{}Standard C\end{@norefs}}
+\tocitem \@locref{htoc44}{\begin{@norefs}\@print{16.2}\quad{}GCC ugliness\end{@norefs}}
+\tocitem \@locref{htoc45}{\begin{@norefs}\@print{16.3}\quad{}Microsoft VC ugliness\end{@norefs}}
+\end{tocenv}
+\tocitem \@locref{htoc46}{\begin{@norefs}\@print{17}\quad{}Authors\end{@norefs}}
+\tocitem \@locref{htoc47}{\begin{@norefs}\@print{18}\quad{}License\end{@norefs}}
+\tocitem \@locref{htoc48}{\begin{@norefs}\@print{19}\quad{}Bug reports\end{@norefs}}
+\tocitem \@locref{htoc49}{\begin{@norefs}\@print{20}\quad{}Changes\end{@norefs}}
+\end{tocenv}

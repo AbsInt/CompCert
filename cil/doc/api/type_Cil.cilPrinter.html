@@ -1,0 +1,48 @@
+<html><head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="Start" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of class methods" rel=Appendix href="index_methods.html">
+<link title="Index of classes" rel=Appendix href="index_classes.html">
+<link title="Index of class types" rel=Appendix href="index_class_types.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Pretty" rel="Chapter" href="Pretty.html">
+<link title="Errormsg" rel="Chapter" href="Errormsg.html">
+<link title="Clist" rel="Chapter" href="Clist.html">
+<link title="Stats" rel="Chapter" href="Stats.html">
+<link title="Cil" rel="Chapter" href="Cil.html">
+<link title="Formatcil" rel="Chapter" href="Formatcil.html">
+<link title="Alpha" rel="Chapter" href="Alpha.html">
+<link title="Cillower" rel="Chapter" href="Cillower.html">
+<link title="Cfg" rel="Chapter" href="Cfg.html">
+<link title="Dataflow" rel="Chapter" href="Dataflow.html">
+<link title="Dominators" rel="Chapter" href="Dominators.html"><title>CIL API Documentation (version 1.3.5) : Cil.cilPrinter</title>
+</head>
+<body>
+<code class="code"><span class="keyword">object</span><br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;dBlock&nbsp;:&nbsp;<span class="constructor">Pervasives</span>.out_channel&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.block&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;dGlobal&nbsp;:&nbsp;<span class="constructor">Pervasives</span>.out_channel&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.global&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;dInit&nbsp;:&nbsp;<span class="constructor">Pervasives</span>.out_channel&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.init&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;dStmt&nbsp;:&nbsp;<span class="constructor">Pervasives</span>.out_channel&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.stmt&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pAttr&nbsp;:&nbsp;<span class="constructor">Cil</span>.attribute&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc&nbsp;*&nbsp;bool<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pAttrParam&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.attrparam&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pAttrs&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.attributes&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pBlock&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.block&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pExp&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.exp&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pFieldDecl&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.fieldinfo&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pGlobal&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.global&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pInit&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.init&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pInstr&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.instr&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pLabel&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.label&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pLineDirective&nbsp;:&nbsp;?forcefile:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.location&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pLval&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.lval&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pOffset&nbsp;:&nbsp;<span class="constructor">Pretty</span>.doc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.offset&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pStmt&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.stmt&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pStmtKind&nbsp;:&nbsp;<span class="constructor">Cil</span>.stmt&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.stmtkind&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pType&nbsp;:&nbsp;<span class="constructor">Pretty</span>.doc&nbsp;option&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.typ&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pVDecl&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cil</span>.varinfo&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+&nbsp;&nbsp;<span class="keyword">method</span>&nbsp;pVar&nbsp;:&nbsp;<span class="constructor">Cil</span>.varinfo&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pretty</span>.doc<br>
+<span class="keyword">end</span></code></body></html>

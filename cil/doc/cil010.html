@@ -1,0 +1,100 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+GCC Extensions
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil009.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil011.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc36">10</A>&nbsp;&nbsp;GCC Extensions</H2>
+The CIL parser handles most of the <TT>gcc</TT>
+<A HREF="javascript:loadTop('http://gcc.gnu.org/onlinedocs/gcc-3.0.2/gcc_5.html#SEC67')">extensions</A>
+and compiles them to CIL. The following extensions are not handled (note that
+we are able to compile a large number of programs, including the Linux kernel,
+without encountering these):
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Nested function definitions.
+<LI CLASS="li-enumerate">Constructing function calls.
+<LI CLASS="li-enumerate">Naming an expression's type.
+<LI CLASS="li-enumerate">Complex numbers
+<LI CLASS="li-enumerate">Hex floats
+<LI CLASS="li-enumerate">Subscripts on non-lvalue arrays.
+<LI CLASS="li-enumerate">Forward function parameter declarations
+</OL>
+The following extensions are handled, typically by compiling them away:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Attributes for functions, variables and types. In fact, we have a clear
+specification (see Section&nbsp;<A HREF="cil006.html#sec-attrib">6.4</A>) of how attributes are interpreted. The
+specification extends that of <TT>gcc</TT>.
+<LI CLASS="li-enumerate">Old-style function definitions and prototypes. These are translated to
+new-style. 
+<LI CLASS="li-enumerate">Locally-declared labels. As part of the translation to CIL, we generate
+new labels as needed. 
+<LI CLASS="li-enumerate">Labels as values and computed goto. This allows a program to take the
+address of a label and to manipulate it as any value and also to perform a
+computed goto. We compile this by assigning each label whose address is taken
+a small integer that acts as its address. Every computed <TT>goto</TT> in the body
+of the function is replaced with a <TT>switch</TT> statement. If you want to invoke
+the label from another function, you are on your own (the <TT>gcc</TT>
+documentation says the same.)
+<LI CLASS="li-enumerate">Generalized lvalues. You can write code like <TT>(a, b) += 5</TT> and it gets
+translated to CIL. 
+<LI CLASS="li-enumerate">Conditionals with omitted operands. Things like <TT>x ? : y</TT> are
+translated to CIL.
+<LI CLASS="li-enumerate">Double word integers. The type <TT>long long</TT> and the <TT>LL</TT> suffix on
+constants is understood. This is currently interpreted as 64-bit integers.
+<LI CLASS="li-enumerate">Local arrays of variable length. These are converted to uses of
+<TT>alloca</TT>, the array variable is replaced with a pointer to the allocated
+array and the instances of <TT>sizeof(a)</TT> are adjusted to return the size of
+the array and not the size of the pointer. 
+<LI CLASS="li-enumerate">Non-constant local initializers. Like all local initializers these are
+compiled into assignments. 
+<LI CLASS="li-enumerate">Compound literals. These are also turned into assignments.
+<LI CLASS="li-enumerate">Designated initializers. The CIL parser actually supports the full ISO
+syntax for initializers, which is more than both <TT>gcc</TT> and <TT>MSVC</TT>. I
+(George) think that this is the most complicated part of the C language and
+whoever designed it should be banned from ever designing languages again.
+<LI CLASS="li-enumerate">Case ranges. These are compiled into separate cases. There is no code
+duplication, just a larger number of <TT>case</TT> statements.
+<LI CLASS="li-enumerate">Transparent unions. This is a strange feature that allows you to define
+a function whose formal argument has a (tranparent) union type, but the
+argument is called as if it were the first element of the union. This is
+compiled away by saying that the type of the formal argument is that of the
+first field, and the first thing in the function body we copy the formal into
+a union. <BR>
+<BR>
+<LI CLASS="li-enumerate">Inline assembly-language. The full syntax is supported and it is carried
+as such in CIL.<BR>
+<BR>
+<LI CLASS="li-enumerate">Function names as strings. The identifiers <TT>__FUNCTION__</TT> and
+<TT>__PRETTY_FUNCTION__</TT> are replaced with string literals. <BR>
+<BR>
+<LI CLASS="li-enumerate">Keywords <TT>typeof</TT>, <TT>alignof</TT>, <TT>inline</TT> are supported. 
+</OL>
+<HR>
+<A HREF="cil009.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil011.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

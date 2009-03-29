@@ -1,0 +1,202 @@
+#!/bin/sh
+# run a regression test containing one or more intentional failures
+#
+# To create a source file to be processed by this script do the following:
+# - the file should be a standalone program with main without any arguments
+#   You can add other files as part of the CFLAGS variable
+# - add a comment
+#    // NUMERRORS n
+#   where n is the number of errors to be tested by this file
+#
+#   This file is processed n+1 times. The first time, it should succeed (main returns or 
+#   exits with code 0) and the other n times it should fail. 
+#   For each run the preprocessor variable ERROR is defined to be
+#   be k (0 <= k <= n). 
+#   You can mark certain lines in your program so that they are used ONLY in a certain run: put the 
+#   following comment after a line to make it appear only in the run with ERROR == 3
+#   
+#    some_code; // ERROR(3)
+#
+#
+#   Furthermore, for each run that is intended to fail you can specify a string that 
+#   must appear in the output.
+#
+#    some_code; // ERROR(3):this string must appear in output
+#
+#   Do not put any spaces around the : 
+#
+#   Simple example:
+#
+#   #define E(n) {printf("Error %d\n", n); exit(n); }
+#   #define SUCCESS {printf("Success\n"); exit(0); }
+#
+#   // NUMERRORS 3
+#   int main() {
+#
+#     char char x; // ERROR(1):invalid type specifier
+#     int  y;
+#     int  z = ++y;
+#     // This conditional should be true
+#     if(z == y) E(2); // ERROR(2):Error 2
+#
+#     #if ERROR == 3
+#        z = (++y, y--);
+#        if(z == y + 1) E(3); // ERROR(3):Error 3
+#     #endif
+#
+#     SUCCESS;
+#   }
+#
+#
+# set RUNONLY=n to run only the test case n
+#
+
+if [ "$1" = "" ]; then
+  # most parameters are passed by name, instead of as positional
+  # arguments, for better impedance match with Makefile; but it's
+  # good to have at least 1 positional arg so when it's missing I
+  # can easily tell, and print this message
+  echo "usage: CILHOME=... CILLY=... CFLAGS=... $0 source-file.c"
+  echo "You can also set RUNONLY=n to run only the nth iteration"
+  exit 0
+fi
+echo "CILLY=$CILLY"
+echo "CFLAGS=$CFLAGS"
+srcfile="$1"
+# Construct the name of the temporary file to use
+srcfilenoext=`echo $srcfile | sed s/.c\$//`
+tmpname="$srcfilenoext-tmp"
+
+# for GCC, use "# xx foo.c".  For MSVC, use "#line xx foo.c"
+if [ "$_MSVC" != "" ]; then 
+  LINEOPT="line"
+  OUTFLAG="/Fe"
+  OUTEXT=".exe"
+else
+  LINEOPT=""
+  OUTFLAG="-o "
+  OUTEXT=".exe" # So that I can delete the executables
+fi
+
+# Start it in the right directory
+# cd "$CILLYHOME/test/small2" || exit
+
+# read how many failure cases are in the file; expect line of form
+# "// NUMERRORS n"
+numcases=`grep NUMERRORS "$srcfile" | perl -e '$_ = <>; m|(\d+)|; print $1;'`
+if [ -z "$numcases" ]; then
+  echo "didn't find a string of form NUMERRORS <n> in the file"
+  exit 2
+fi
+echo "there are $numcases failure cases in this file"
+
+
+# iterate through the cases; first case (0) is where no errors are present
+i=0
+if [ "$RUNONLY" != "" ] ;then
+   i=$RUNONLY
+fi
+while [ $i -le $numcases ]; do
+  echo
+  echo
+  echo "********************** Iteration $i"
+  echo
+  echo
+  # generate a temporary file; first hide the ERROR tags which identify
+  # the current test, then remove all remaining ERROR lines
+  # (syntax for errors has parentheses so if I have >=10 cases I don't
+  # run into problems where e.g. ERROR1 is a substring of ERROR10)
+  # use the little perl script to put line number directives where we remove 
+  # lines 
+  echo "generating test $i"
+  rm -f $tmpname.c 2>/dev/null
+  ( echo "#define ERROR $i"; echo "#$LINEOPT 1 \"$srcfile\"";cat "$srcfile") |\
+       sed "s|ERROR($i)|(selected: $i)|" | \
+       perl -e 'my $ln = 0; while(<>) { if($_ =~ m|ERROR\(|) { print "#'$LINEOPT' $ln\n"; } else { print $_; }; $ln ++}' \
+         > "$tmpname.c"
+  chmod a-w "$tmpname.c"
+
+  # Grab the errorline for this test case
+  themsg=`cat "$srcfile" | grep "ERROR($i).*:" | sed "s/^.*ERROR.*://" `
+  if [ "x$themsg" != "x" ] ;then 
+     echo "Expecting error message:$themsg"
+  fi
+
+  # compile this with our tool
+  rm -f test-bad.out test-bad.err ${tmpname}$OUTEXT
+  echo $CILLY $CFLAGS $tmpname.c ${OUTFLAG}${tmpname}$OUTEXT
+  $CILHOME/bin/teetwo test-bad.out test-bad.err \
+              $CILLY $CFLAGS -DERROR=$i $tmpname.c ${OUTFLAG}${tmpname}$OUTEXT
+  # cat test-bad.out test-bad.err
+  status=$?
+  runit=1
+  if [ $status != 0 ]; then
+    if [ $i = 0 ] ;then
+      echo "The 0th iteration failed to CURE! It is supposed to succeed."
+      exit $status
+    else
+      if [ "x$themsg" != "x" ] ;then
+         echo "grep \"$themsg\" test-bad.out test-bad.err"
+         if ! grep "$themsg" test-bad.out test-bad.err  ;then
+            echo "The ${i}th iteration failed to CURE but cannot find: $themsg"
+            exit 3
+         else
+           echo "The ${i}th iteration failed to CURE, as expected!"
+         fi
+      else
+         echo "The ${i}th iteration failed to CURE. We expected some failure!"
+      fi
+      runit=0
+    fi
+  fi
+
+  # run it
+  if [ $runit != 0 ]; then 
+    echo "./$tmpname$OUTEXT"
+    rm -f test-bad.out test-bad.err
+    if $CILHOME/bin/teetwo test-bad.out test-bad.err ./$tmpname$OUTEXT ; then
+      # cat test-bad.out test-bad.err
+      if [ $i = 0 ]; then
+        # expected success on 0th iteration
+        echo "(succeeded as expected)"
+      else
+        # unexpected success on >0th iteration
+        echo "The ${i}th iteration did not fail!  It is supposed to fail."
+        exit 2
+      fi
+    else
+      # cat test-bad.out test-bad.err
+      if [ $i = 0 ]; then
+        # unexpected failure on 0th iteration
+        echo "The 0th iteration failed! It is supposed to succeed."
+        #cat $tmpname.c
+        exit 2
+      else
+        # expected failure on >0th iteration
+        if [ "x$themsg" != "x" ] ;then
+           echo "grep \"$themsg\" test-bad.out test-bad.err"
+           if ! grep "$themsg" test-bad.out test-bad.err ;then
+              echo "The ${i}th iteration failed but cannot find:$themsg"
+              exit 3
+           fi
+        fi
+        echo "(failed as expected)"
+      fi
+    fi
+  fi
+
+  # possibly bail after 0th
+  if [ "$TESTBADONCE" != "" ]; then
+    echo "bailing after 0th iteration because TESTBADONCE is set"
+    exit 0
+  fi
+  if [ "$RUNONLY" != "" ]; then
+    echo "bailing after ${RUNONLY}th iteration because RUNONLY is set"
+    exit 0
+  fi
+
+  i=`expr $i + 1`
+done
+
+echo "all $numcases cases in $srcfile failed as expected"
+

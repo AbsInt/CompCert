@@ -1,0 +1,42 @@
+#
+# Makefile for CCured. The Microsoft Visual C part
+#
+COMPILERNAME=MSVC
+
+CC:=cl /nologo
+ifdef RELEASELIB
+#matth:  we need the frame pointer for CHECK_GETFRAME, so
+# use /Oy- to prevent that optimization.
+  CFLAGS:=/DRELEASE /D_MSVC /Ox /Ob2 /G6 /Oy-
+else
+  CFLAGS:=/D_DEBUG /D_MSVC /Zi /MLd
+endif
+CONLY:=/c
+
+OPT_O2:= /Ox /Ob2 /G6
+
+OBJOUT:=/Fo
+OBJEXT:=obj
+
+EXEOUT:=/Fe
+LIBEXT:=lib
+LDEXT:=.exe
+
+DEF:=/D
+ASMONLY:=/Fa
+INC:=/I
+
+CPPSTART:=cl /Dx86_WIN32 /D_MSVC /E /TC /I./lib /DCCURED
+CPPOUT:=  >%o
+CPP:=$(CPPSTART) /FI fixup.h %i $(CPPOUT)
+
+PATCHECHO:=echo
+
+AR:=lib 
+LIBOUT:=/OUT:
+
+# The system include files to be patched
+PATCH_SYSINCLUDES:=stdio.h ctype.h string.h io.h stdarg.h crtdbg.h \
+                   varargs.h stdlib.h time.h malloc.h
+
+

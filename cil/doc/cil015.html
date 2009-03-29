@@ -1,0 +1,60 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Debugging support
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="patcher.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil016.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc41">15</A>&nbsp;&nbsp;Debugging support</H2><A NAME="sec-debugger"></A>
+Most of the time we debug our code using the Errormsg module along with the
+pretty printer. But if you want to use the Ocaml debugger here is an easy way
+to do it. Say that you want to debug the invocation of cilly that arises out
+of the following command:
+<PRE CLASS="verbatim">
+cilly -c hello.c 
+</PRE>
+ You must follow the installation <A HREF="../ccured/setup.html">instructions</A>
+to install the Elist support files for ocaml and to extend your .emacs
+appropriately. Then from within Emacs you do
+<PRE CLASS="verbatim">
+ALT-X my-camldebug
+</PRE>
+ This will ask you for the command to use for running the Ocaml debugger
+(initially the default will be &#8220;ocamldebug&#8221; or the last command you
+introduced). You use the following command:
+<PRE CLASS="verbatim">
+cilly --ocamldebug -c hello.c 
+</PRE>
+ This will run <TT>cilly</TT> as usual and invoke the Ocaml debugger when the cilly
+engine starts. The advantage of this way of invoking the debugger is that the
+directory search paths are set automatically and the right set or arguments is
+passed to the debugger. <BR>
+<BR>
+<HR>
+<A HREF="patcher.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil016.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

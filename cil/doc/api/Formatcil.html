@@ -1,0 +1,84 @@
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Cil.html">
+<link rel="next" href="Alpha.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of class methods" rel=Appendix href="index_methods.html">
+<link title="Index of classes" rel=Appendix href="index_classes.html">
+<link title="Index of class types" rel=Appendix href="index_class_types.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Pretty" rel="Chapter" href="Pretty.html">
+<link title="Errormsg" rel="Chapter" href="Errormsg.html">
+<link title="Clist" rel="Chapter" href="Clist.html">
+<link title="Stats" rel="Chapter" href="Stats.html">
+<link title="Cil" rel="Chapter" href="Cil.html">
+<link title="Formatcil" rel="Chapter" href="Formatcil.html">
+<link title="Alpha" rel="Chapter" href="Alpha.html">
+<link title="Cillower" rel="Chapter" href="Cillower.html">
+<link title="Cfg" rel="Chapter" href="Cfg.html">
+<link title="Dataflow" rel="Chapter" href="Dataflow.html">
+<link title="Dominators" rel="Chapter" href="Dominators.html"><title>CIL API Documentation (version 1.3.5) : Formatcil</title>
+</head>
+<body>
+<div class="navbar"><a href="Cil.html">Previous</a>
+&nbsp;<a href="index.html">Up</a>
+&nbsp;<a href="Alpha.html">Next</a>
+</div>
+<center><h1>Module <a href="type_Formatcil.html">Formatcil</a></h1></center>
+<br>
+<pre><span class="keyword">module</span> Formatcil: <code class="code">sig</code> <a href="Formatcil.html">..</a> <code class="code">end</code></pre><b>An Interpreter for constructing CIL constructs</b><br>
+<hr width="100%">
+<pre><span class="keyword">val</span> <a name="VALcExp"></a>cExp : <code class="type">string -> (string * <a href="Cil.html#TYPEformatArg">Cil.formatArg</a>) list -> <a href="Cil.html#TYPEexp">Cil.exp</a></code></pre><div class="info">
+Constructs an expression based on the program and the list of arguments. 
+ Each argument consists of a name followed by the actual data. This 
+ argument will be placed instead of occurrences of "%v:name" in the pattern 
+ (where the "v" is dependent on the type of the data). The parsing of the 
+ string is memoized. * Only the first expression is parsed.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcLval"></a>cLval : <code class="type">string -> (string * <a href="Cil.html#TYPEformatArg">Cil.formatArg</a>) list -> <a href="Cil.html#TYPElval">Cil.lval</a></code></pre><div class="info">
+Constructs an lval based on the program and the list of arguments. 
+ Only the first lvalue is parsed. 
+ The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcType"></a>cType : <code class="type">string -> (string * <a href="Cil.html#TYPEformatArg">Cil.formatArg</a>) list -> <a href="Cil.html#TYPEtyp">Cil.typ</a></code></pre><div class="info">
+Constructs a type based on the program and the list of arguments. 
+ Only the first type is parsed. 
+ The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcInstr"></a>cInstr : <code class="type">string -> <a href="Cil.html#TYPElocation">Cil.location</a> -> (string * <a href="Cil.html#TYPEformatArg">Cil.formatArg</a>) list -> <a href="Cil.html#TYPEinstr">Cil.instr</a></code></pre><div class="info">
+Constructs an instruction based on the program and the list of arguments. 
+ Only the first instruction is parsed. 
+ The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcStmt"></a>cStmt : <code class="type">string -><br>       (string -> <a href="Cil.html#TYPEtyp">Cil.typ</a> -> <a href="Cil.html#TYPEvarinfo">Cil.varinfo</a>) -><br>       <a href="Cil.html#TYPElocation">Cil.location</a> -> (string * <a href="Cil.html#TYPEformatArg">Cil.formatArg</a>) list -> <a href="Cil.html#TYPEstmt">Cil.stmt</a></code></pre><pre><span class="keyword">val</span> <a name="VALcStmts"></a>cStmts : <code class="type">string -><br>       (string -> <a href="Cil.html#TYPEtyp">Cil.typ</a> -> <a href="Cil.html#TYPEvarinfo">Cil.varinfo</a>) -><br>       <a href="Cil.html#TYPElocation">Cil.location</a> -> (string * <a href="Cil.html#TYPEformatArg">Cil.formatArg</a>) list -> <a href="Cil.html#TYPEstmt">Cil.stmt</a> list</code></pre><div class="info">
+Constructs a list of statements<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdExp"></a>dExp : <code class="type">string -> <a href="Cil.html#TYPEexp">Cil.exp</a> -> <a href="Cil.html#TYPEformatArg">Cil.formatArg</a> list option</code></pre><div class="info">
+Deconstructs an expression based on the program. Produces an optional 
+ list of format arguments. The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdLval"></a>dLval : <code class="type">string -> <a href="Cil.html#TYPElval">Cil.lval</a> -> <a href="Cil.html#TYPEformatArg">Cil.formatArg</a> list option</code></pre><div class="info">
+Deconstructs an lval based on the program. Produces an optional 
+ list of format arguments. The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdType"></a>dType : <code class="type">string -> <a href="Cil.html#TYPEtyp">Cil.typ</a> -> <a href="Cil.html#TYPEformatArg">Cil.formatArg</a> list option</code></pre><div class="info">
+Deconstructs a type based on the program. Produces an optional list of 
+ format arguments. The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdInstr"></a>dInstr : <code class="type">string -> <a href="Cil.html#TYPEinstr">Cil.instr</a> -> <a href="Cil.html#TYPEformatArg">Cil.formatArg</a> list option</code></pre><div class="info">
+Deconstructs an instruction based on the program. Produces an optional 
+ list of format arguments. The parsing of the string is memoized.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALnoMemoize"></a>noMemoize : <code class="type">bool Pervasives.ref</code></pre><div class="info">
+If set then will not memoize the parsed patterns<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALtest"></a>test : <code class="type">unit -> unit</code></pre><div class="info">
+Just a testing function<br>
+</div>
+</body></html>

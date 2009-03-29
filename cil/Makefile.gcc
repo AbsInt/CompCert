@@ -1,0 +1,75 @@
+# -*-makefile-*-
+# Makefile for CCured. The gcc part
+
+
+COMPILERNAME := GNUCC
+
+CC := gcc
+ifdef RELEASELIB
+  # sm: I will leave this here, but only use it for compiling our runtime lib
+  CFLAGS := -D_GNUCC -Wall -O3
+else
+  CFLAGS := -D_GNUCC -Wall -g -ggdb -D_DEBUG
+endif
+
+# dsw: added optional -pg flag
+ifdef USE_PG
+  CFLAGS += -pg
+endif
+
+ifdef NO_OPTIMIZATION
+  OPT_O2 :=
+else
+  OPT_O2 := -O2
+endif
+CONLY := -c
+OBJOUT := -o
+OBJEXT := o
+LIBEXT := a
+EXEOUT := -o
+LDEXT := 
+DEF := -D
+ASMONLY := -S -o 
+WARNALL := -Wall
+# sm: shuffled around a couple things so I could use CPPSTART for patch2
+CPPSTART := gcc -E -x c -Dx86_LINUX -D_GNUCC  -I/usr/include/sys
+CPPOUT := -o %o
+CPP := $(CPPSTART) -include fixup.h %i $(CPPOUT)
+INC := -I
+
+# sm: disable patching for now ('true' has no output)
+# (set it to 'echo' to re-enable)
+ifndef PATCHECHO
+  PATCHECHO := echo
+endif
+
+AR := ar 
+LIBOUT := -rs 
+
+# The system include files to be patched
+PATCH_SYSINCLUDES := crypt.h ctype.h fcntl.h glob.h grp.h malloc.h netdb.h \
+                     pthread.h pwd.h signal.h stdarg.h stdio.h stdlib.h \
+                     string.h time.h unistd.h varargs.h arpa/inet.h \
+		     sys/cdefs.h sys/fcntl.h sys/ioctl.h sys/socket.h \
+                     sys/stat.h sys/types.h sys/uio.h malloc.h setjmp.h
+
+ifneq ($(ARCHOS), x86_WIN32)
+PATCH_SYSINCLUDES += sys/shm.h
+endif
+
+# dsw & sm: DON'T DO THIS.  See comment in ccured_GNUCC.patch, search for 'sys/io.h'.
+# PATCH_SYSINCLUDES += sys/io.h
+
+# matth: reent.h is only in Cygwin, and Cygwin defines struct sigaction 
+# in sys/signal.h:
+ifeq ($(ARCHOS), x86_WIN32)
+PATCH_SYSINCLUDES += sys/reent.h sys/signal.h
+endif
+
+# matth: these files are not in Cygwin
+ifeq ($(ARCHOS), x86_LINUX)
+PATCH_SYSINCLUDES +=  nl_types.h bits/sigaction.h bits/select.h sys/prctl.h \
+	libgen.h shadow.h
+endif
+
+

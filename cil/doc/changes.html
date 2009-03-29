@@ -1,0 +1,486 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Changes
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil019.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc49">20</A>&nbsp;&nbsp;Changes</H2><A NAME="sec-changes"></A>
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<B>May 20, 2006</B>: <B>Released version 1.3.5</B>
+<LI CLASS="li-itemize"><B>May 19, 2006</B>: <TT>Makefile.cil.in</TT>/<TT>Makefile.cil</TT> have
+ been renamed <TT>Makefile.in</TT>/<TT>Makefile</TT>. And <TT>maincil.ml</TT> has
+ been renamed <TT>main.ml</TT>.
+<LI CLASS="li-itemize"><B>May 18, 2006</B>: Added a new module <A HREF="api/Cfg.html">Cfg</A> to compute the
+ control-flow graph. Unlike the older <A HREF="api/Cil.html#VALcomputeCFGInfo">Cil.computeCFGInfo</A>,
+ the new version does not modify the code. 
+<LI CLASS="li-itemize"><B>May 18, 2006</B>: Added several new analyses: reaching
+ definitions, available expressions, liveness analysis, and dead code
+ elimination. See Section&nbsp;<A HREF="ext.html#sec-Extension">8</A>.
+<LI CLASS="li-itemize"><B>May 2, 2006</B>: Added a flag <TT>--noInsertImplicitCasts</TT>.
+ When this flag is used, CIL code will only include casts inserted by
+ the programmer. Implicit coercions are not changed to explicit casts.
+<LI CLASS="li-itemize"><B>April 16, 2006</B>: Minor improvements to the <TT>--stats</TT>
+ flag (Section&nbsp;<A HREF="cil007.html#sec-cilly-asm-options">7.2</A>). We now use Pentium performance
+ counters by default, if your processor supports them.
+<LI CLASS="li-itemize"><B>April 10, 2006</B>: Extended <TT>machdep.c</TT> to support
+ microcontroller compilers where the struct alignment of integer
+ types does not match the size of the type. Thanks to Nathan
+ Cooprider for the patch.
+<LI CLASS="li-itemize"><B>April 6, 2006</B>: Fix for global initializers of unions when
+ the union field being initialized is not the first one, and for
+ missing initializers of unions when the first field is not the
+ largest field.
+<LI CLASS="li-itemize"><B>April 6, 2006</B>: Fix for bitfields in the SFI module.
+<LI CLASS="li-itemize"><B>April 6, 2006</B>: Various fixes for gcc attributes.
+ <TT>packed</TT>, <TT>section</TT>, and <TT>always_inline</TT> attributes are now
+ parsed correctly. Also fixed printing of attributes on enum types.
+<LI CLASS="li-itemize"><B>March 30, 2006</B>: Fix for <TT>rmtemps.ml</TT>, which deletes
+ unused inline functions. When in <TT>gcc</TT> mode CIL now leaves all
+ inline functions in place, since <TT>gcc</TT> treats these as externally
+ visible. 
+<LI CLASS="li-itemize"><B>March 15, 2006</B>: Fix for <TT>typeof(<I>e</I>)</TT> when <I>e</I> has type
+ <TT>void</TT>.
+<LI CLASS="li-itemize"><B>March 3, 2006</B>: Assume inline assembly instructions can
+ fall through for the purposes of adding return statements. Thanks to
+ Nathan Cooprider for the patch.
+<LI CLASS="li-itemize"><B>February 27, 2006</B>: Fix for extern inline functions when
+ the output of CIL is fed back into CIL.
+<LI CLASS="li-itemize"><B>January 30, 2006</B>: Fix parsing of <TT>switch</TT> without braces.
+<LI CLASS="li-itemize"><B>January 30, 2006</B>: Allow `$' to appear in identifiers.
+<LI CLASS="li-itemize"><B>January 13, 2006</B>: Added support for gcc's alias attribute
+ on functions. See Section&nbsp;<A HREF="cil016.html#sec-ugly-gcc">16.2</A>, item 8. 
+<LI CLASS="li-itemize"><B>December 9, 2005</B>: Christoph Spiel fixed the Golf and
+ Olf modules so that Golf can be used with the points-to analysis.
+ He also added performance fixes and cleaned up the documentation.
+<LI CLASS="li-itemize"><B>December 1, 2005</B>: Major rewrite of the ext/callgraph module. 
+<LI CLASS="li-itemize"><B>December 1, 2005</B>: Preserve enumeration constants in CIL. Default
+is the old behavior to replace them with integers.
+<LI CLASS="li-itemize"><B>November 30, 2005</B>: Added support for many GCC <TT>__builtin</TT>
+ functions. 
+<LI CLASS="li-itemize"><B>November 30, 2005</B>: Added the EXTRAFEATURES configure
+ option, making it easier to add Features to the build process.
+<LI CLASS="li-itemize"><B>November 23, 2005</B>: In MSVC mode do not remove any locals whose name
+ appears as a substring in an inline assembly. 
+<LI CLASS="li-itemize"><B>November 23, 2005</B>: Do not add a return to functions that have the
+ noreturn attribute. 
+<LI CLASS="li-itemize"><B>November 22, 2005</B>: <B>Released version 1.3.4</B>
+<LI CLASS="li-itemize"><B>November 21, 2005</B>: Performance and correctness fixes for
+ the Points-to Analysis module. Thanks to Christoph Spiel for the
+ patches.
+<LI CLASS="li-itemize"><B>October 5, 2005</B>: CIL now builds on SPARC/Solaris. Thanks
+ to Nick Petroni and Remco van Engelen for the patches.
+<LI CLASS="li-itemize"><B>September 26, 2005</B>: CIL no longer uses the `<TT>-I-</TT>' flag
+ by default when preprocessing with gcc.
+<LI CLASS="li-itemize"><B>August 24, 2005</B>: Added a command-line option
+ &#8220;--forceRLArgEval&#8221; that forces function arguments to be evaluated
+ right-to-left. This is the default behavior in unoptimized gcc and
+ MSVC, but the order of evaluation is undefined when using
+ optimizations, unless you apply this CIL transformation. This flag
+ does not affect the order of evaluation of e.g. binary operators,
+ which remains undefined. Thanks to Nathan Cooprider for the patch.
+<LI CLASS="li-itemize"><B>August 9, 2005</B>: Fixed merging when there are more than 20
+ input files.
+<LI CLASS="li-itemize"><B>August 3, 2005</B>: When merging, it is now an error to
+ declare the same global variable twice with different initializers.
+<LI CLASS="li-itemize"><B>July 27, 2005</B>: Fixed bug in transparent unions.
+<LI CLASS="li-itemize"><B>July 27, 2005</B>: Fixed bug in collectInitializer. Thanks to
+ Benjamin Monate for the patch.
+<LI CLASS="li-itemize"><B>July 26, 2005</B>: Better support for extended inline assembly
+ in gcc.
+<LI CLASS="li-itemize"><B>July 26, 2005</B>: Added many more gcc __builtin* functions
+ to CIL. Most are treated as Call instructions, but a few are
+ translated into expressions so that they can be used in global
+ initializers. For example, &#8220;<TT>__builtin_offsetof(t, field)</TT>&#8221; is
+ rewritten as &#8220;<TT>&amp;((t*)0)-&gt;field</TT>&#8221;, the traditional way of calculating
+ an offset.
+<LI CLASS="li-itemize"><B>July 18, 2005</B>: Fixed bug in the constant folding of shifts
+ when the second argument was negative or too large.
+<LI CLASS="li-itemize"><B>July 18, 2005</B>: Fixed bug where casts were not always
+ inserted in function calls.
+<LI CLASS="li-itemize"><B>June 10, 2005</B>: Fixed bug in the code that makes implicit
+ returns explicit. We weren't handling switch blocks correctly.
+<LI CLASS="li-itemize"><B>June 1, 2005</B>: <B>Released version 1.3.3</B>
+<LI CLASS="li-itemize"><B>May 31, 2005</B>: Fixed handling of noreturn attribute for function
+ pointers. 
+<LI CLASS="li-itemize"><B>May 30, 2005</B>: Fixed bugs in the handling of constructors in gcc.
+<LI CLASS="li-itemize"><B>May 30, 2005</B>: Fixed bugs in the generation of global variable IDs.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Reimplemented the translation of function calls so
+ that we can intercept some builtins. This is important for the uses of
+ __builtin_constant_p in constants. 
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Export the plainCilPrinter, for debugging.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Fixed bug with printing of const attribute for
+ arrays. 
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Fixed bug in generation of type signatures. Now they
+ should not contain expressions anymore, so you can use structural equality.
+ This used to lead to Out_of_Memory exceptions.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Fixed bug in type comparisons using
+ TBuiltin_va_list.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Improved the constant folding in array lengths and
+ case expressions. 
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Added the <TT>__builtin_frame_address</TT> to the set
+ of gcc builtins.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Added the CIL project to SourceForge.
+<LI CLASS="li-itemize"><B>April 23, 2005</B>: The cattr field was not visited.
+<LI CLASS="li-itemize"><B>March 6, 2005</B>: Debian packaging support
+<LI CLASS="li-itemize"><B>February 16, 2005</B>: Merger fixes.
+<LI CLASS="li-itemize"><B>February 11, 2005</B>: Fixed a bug in <TT>--dopartial</TT>. Thanks to
+Nathan Cooprider for this fix. 
+<LI CLASS="li-itemize"><B>January 31, 2005</B>: Make sure the input file is closed even if a
+ parsing error is encountered. 
+<LI CLASS="li-itemize"><B>January 11, 2005</B>: <B>Released version 1.3.2</B>
+<LI CLASS="li-itemize"><B>January 11, 2005</B>: Fixed printing of integer constants whose
+ integer kind is shorter than an int. 
+<LI CLASS="li-itemize"><B>January 11, 2005</B>: Added checks for negative size arrays and arrays
+ too big. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Added support for GCC attribute &#8220;volatile&#8221; for
+ tunctions (as a synonim for noreturn). 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Improved the comparison of array sizes when
+ comparing array types. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed handling of shell metacharacters in the
+ cilly command lione.
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed dropping of cast in initialization of
+ local variable with the result of a function call.
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed some structural comparisons that were
+ broken in the Ocaml 3.08.
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed the <TT>unrollType</TT> function to not forget
+ attributes. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Better keeping track of locations of function
+ prototypes and definitions. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed bug with the expansion of enumeration
+ constants in attributes.
+<LI CLASS="li-itemize"><B>October 18, 2004</B>: Fixed a bug in cabsvisit.ml. CIl would wrap a
+ BLOCK around a single atom unnecessarily. 
+<LI CLASS="li-itemize"><B>August 7, 2004</B>: <B>Released version 1.3.1</B>
+<LI CLASS="li-itemize"><B>August 4, 2004</B>: Fixed a bug in splitting of structs using 
+ <TT>--dosimplify</TT>
+<LI CLASS="li-itemize"><B>July 29, 2004</B>: Minor changes to the type typeSig (type signatures)
+ to ensure that they do not contain types, so that you can do structural
+ comparison without danger of nontermination. 
+<LI CLASS="li-itemize"><B>July 28, 2004</B>: Ocaml version 3.08 is required. Numerous small 
+ changes while porting to Ocaml 3.08. 
+<LI CLASS="li-itemize"><B>July 7, 2004</B>: <B>Released version 1.2.6</B>
+<LI CLASS="li-itemize"><B>July 2, 2004</B>: Character constants such as <TT>'c'</TT> should
+ have type <TT>int</TT>, not <TT>char</TT>. Added a utility function
+ <TT>Cil.charConstToInt</TT> that sign-extends chars greater than 128, if needed.
+<LI CLASS="li-itemize"><B>July 2, 2004</B>: Fixed a bug that was casting values to int
+ before applying the logical negation operator !. This caused
+ problems for floats, and for integer types bigger than <TT>int</TT>.
+<LI CLASS="li-itemize"><B>June 13, 2004</B>: Added the field <TT>sallstmts</TT> to a function
+ description, to hold all statements in the function.
+<LI CLASS="li-itemize"><B>June 13, 2004</B>: Added new extensions for data flow analyses, and
+ for computing dominators.
+<LI CLASS="li-itemize"><B>June 10, 2004</B>: Force initialization of CIL at the start of
+Cabs2cil. 
+<LI CLASS="li-itemize"><B>June 9, 2004</B>: Added support for GCC <TT>__attribute_used__</TT>
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: <B>Released version 1.2.5</B>
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Allow now to run ./configure CC=cl and set the MSVC
+compiler to be the default. The MSVC driver will now select the default name
+of the .exe file like the CL compiler. 
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Fixed a bug in the driver. The temporary files are
+deleted by the Perl script before the CL compiler gets to them?
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Added the - form of arguments to the MSVC driver.
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Added a few more GCC-specific string escapes, (, [,
+{, %, E. 
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Fixed bug with continuation lines in MSVC.
+<LI CLASS="li-itemize"><B>April 6, 2004</B>: Fixed embarassing bug in the parser: the precedence
+ of casts and unary operators was switched. 
+<LI CLASS="li-itemize"><B>April 5, 2004</B>: Fixed a bug involving statements mixed between
+declarations containing initializers. Now we make sure that the initializers
+are run in the proper order with respect to the statements.
+<LI CLASS="li-itemize"><B>April 5, 2004</B>: Fixed a bug in the merger. The merger was keeping
+separate alpha renaming talbes (namespaces) for variables and types. This
+means that it might end up with a type and a variable named the same way, if
+they come from different files, which breaks an important CIL invariant.
+<LI CLASS="li-itemize"><B>March 11, 2004</B> : Fixed a bug in the Cil.copyFunction function. The
+new local variables were not getting fresh IDs. 
+<LI CLASS="li-itemize"><B>March 5, 2004</B>: Fixed a bug in the handling of static function
+ prototypes in a block scope. They used to be renamed. Now we just consider
+ them global. 
+<LI CLASS="li-itemize"><B>February 20, 2004</B>: <B>Released version 1.2.4</B>
+<LI CLASS="li-itemize"><B>February 15, 2004</B>: Changed the parser to allow extra semicolons
+ after field declarations.
+<LI CLASS="li-itemize"><B>February 14, 2004</B>: Changed the Errormsg functions: error, unimp,
+bug to not raise an exception. Instead they just set Errormsg.hadErrors. 
+<LI CLASS="li-itemize"><B>February 13, 2004</B>: Change the parsing of attributes to recognize
+ enumeration constants.
+<LI CLASS="li-itemize"><B>February 10, 2004</B>: In some versions of <TT>gcc</TT> the identifier
+ _{thread is an identifier and in others it is a keyword. Added code
+ during configuration to detect which is the case. 
+<LI CLASS="li-itemize"><B>January 7, 2004</B>: <B>Released version 1.2.3</B>
+<LI CLASS="li-itemize"><B>January 7, 2004</B>: Changed the alpha renamer to be less
+conservative. It will remember all versions of a name that were seen and will
+only create a new name if we have not seen one. 
+<LI CLASS="li-itemize"><B>December 30, 2003</B> : Extended the <TT>cilly</TT> command to understand
+ better linker command options <TT>-lfoo</TT>. 
+<LI CLASS="li-itemize"><B>December 5, 2003</B>: Added markup commands to the pretty-printer
+module. Also, changed the &#8220;@&lt;&#8221; left-flush command into &#8220;@''.
+<LI CLASS="li-itemize"><B>December 4, 2003</B>: Wide string literals are now handled
+directly by Cil (rather than being exploded into arrays). This is
+apparently handy for Microsoft Device Driver APIs that use intrinsic
+functions that require literal constant wide-string arguments. 
+<LI CLASS="li-itemize"><B>December 3, 2003</B>: Added support for structured exception handling
+ extensions for the Microsoft compilers.
+<LI CLASS="li-itemize"><B>December 1, 2003</B>: Fixed a Makefile bug in the generation of the 
+Cil library (e.g., <TT>cil.cma</TT>) that was causing it to be unusable. Thanks
+to KEvin Millikin for pointing out this bug. 
+<LI CLASS="li-itemize"><B>November 26, 2003</B>: Added support for linkage specifications
+ (extern &#8220;C&#8221;). 
+<LI CLASS="li-itemize"><B>November 26, 2003</B>: Added the ocamlutil directory to contain some
+utilities shared with other projects. 
+<LI CLASS="li-itemize"><B>November 25, 2003</B>: <B>Released version 1.2.2</B>
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Fixed a bug that allowed a static local to
+ conflict with a global with the same name that is declared later in the
+ file. 
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Removed the <TT>--keep</TT> option of the <TT>cilly</TT>
+ driver and replaced it with <TT>--save-temps</TT>.
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Added printing of what CIL features are being
+ run.
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Fixed a bug that resulted in attributes being
+ dropped for integer types. 
+<LI CLASS="li-itemize"><B>November 11, 2003</B>: Fixed a bug in the visitor for enumeration
+ definitions. 
+<LI CLASS="li-itemize"><B>October 24, 2003</B>: Fixed a problem in the configuration script. It
+ was not recognizing the Ocaml version number for beta versions. 
+<LI CLASS="li-itemize"><B>October 15, 2003</B>: Fixed a problem in version 1.2.1 that was
+ preventing compilation on OCaml 3.04.
+<LI CLASS="li-itemize"><B>September 17, 2003: Released version 1.2.1.</B>
+<LI CLASS="li-itemize"><B>September 7, 2003</B>: Redesigned the interface for choosing
+ <TT>#line</TT> directive printing styles. Cil.printLn and
+ Cil.printLnComment have been merged into Cil.lineDirectiveStyle.
+<LI CLASS="li-itemize"><B>August 8, 2003</B>: Do not silently pad out functions calls with
+arguments to match the prototype. 
+<LI CLASS="li-itemize"><B>August 1, 2003</B>: A variety of fixes suggested by Steve Chamberlain:
+initializers for externs, prohibit float literals in enum, initializers for
+unsized arrays were not working always, an overflow problem in Ocaml, changed
+the processing of attributes before struct specifiers<BR>
+<BR>
+<LI CLASS="li-itemize"><B>July 14, 2003</B>: Add basic support for GCC's "__thread" storage
+qualifier. If given, it will appear as a "thread" attribute at the top of the
+type of the declared object. Treatment is very similar to "__declspec(...)"
+in MSVC<BR>
+<BR>
+<LI CLASS="li-itemize"><B>July 8, 2003</B>: Fixed some of the __alignof computations. Fixed
+ bug in the designated initializers for arrays (Array.get error).
+<LI CLASS="li-itemize"><B>July 8, 2003</B>: Fixed infinite loop bug (Stack Overflow) in the
+ visitor for __alignof.
+<LI CLASS="li-itemize"><B>July 8, 2003</B>: Fixed bug in the conversion to CIL. A function or
+ array argument of
+ the GCC __typeof() was being converted to pointer type. Instead, it should
+ be left alone, just like for sizeof. 
+<LI CLASS="li-itemize"><B>July 7, 2003</B>: New Escape module provides utility functions
+ for escaping characters and strings in accordance with C lexical
+ rules.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>July 2, 2003</B>: Relax CIL's rules for when two enumeration types are
+considered compatible. Previously CIL considered two enums to be compatible if
+they were the same enum. Now we follow the C99 standard.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 28, 2003</B>: In the Formatparse module, Eric Haugh found and
+ fixed a bug in the handling of lvalues of the form &#8220;lv-&gt;field.more&#8221;.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 28, 2003</B>: Extended the handling of gcc command lines
+arguments in the Perl scripts. <BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 23, 2003</B>: In Rmtmps module, simplified the API for
+ customizing the root set. Clients may supply a predicate that
+ returns true for each root global. Modifying various
+ &#8220;<TT>referenced</TT>&#8221; fields directly is no longer supported.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 17, 2003</B>: Reimplement internal utility routine
+ <TT>Cil.escape_char</TT>. Faster and better. <BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 14, 2003</B>: Implemented support for <TT>__attribute__s</TT>
+appearing between "struct" and the struct tag name (also for unions and
+enums), since gcc supports this as documented in section 4.30 of the gcc
+(2.95.3) manual<BR>
+<BR>
+<LI CLASS="li-itemize"><B>May 30, 2003</B>: Released the regression tests. 
+<LI CLASS="li-itemize"><B>May 28, 2003</B>: <B>Released version 1.1.2</B>
+<LI CLASS="li-itemize"><B>May 26, 2003</B>: Add the <TT>simplify</TT> module that compiles CIL
+expressions into simpler expressions, similar to those that appear in a
+3-address intermediate language.
+<LI CLASS="li-itemize"><B>May 26, 2003</B>: Various fixes and improvements to the pointer
+analysis modules. 
+<LI CLASS="li-itemize"><B>May 26, 2003</B>: Added optional consistency checking for
+transformations.
+<LI CLASS="li-itemize"><B>May 25, 2003</B>: Added configuration support for big endian machines.
+Now <A HREF="api/Cil.html#VALlittle_endian">Cil.little_endian</A> can be used to test whether the machine is
+little endian or not. 
+<LI CLASS="li-itemize"><B>May 22, 2003</B>: Fixed a bug in the handling of inline functions. The
+CIL merger used to turn these functions into &#8220;static&#8221;, which is incorrect. 
+<LI CLASS="li-itemize"><B>May 22, 2003</B>: Expanded the CIL consistency checker to verify
+undesired sharing relationships between data structures. 
+<LI CLASS="li-itemize"><B>May 22, 2003</B>: Fixed bug in the <TT>oneret</TT> CIL module: it was
+mishandling certain labeled return statements. 
+<LI CLASS="li-itemize"><B>May 5, 2003</B>: <B>Released version 1.0.11</B>
+<LI CLASS="li-itemize"><B>May 5, 2003</B>: OS X (powerpc/darwin) support for CIL. Special 
+thanks to Jeff Foster, Andy Begel and Tim Leek. 
+<LI CLASS="li-itemize"><B>April 30, 2003</B>: Better description of how to use CIL for your
+analysis. 
+<LI CLASS="li-itemize"><B>April 28, 2003</B>: Fixed a bug with <TT>--dooneRet</TT> and
+<TT>--doheapify</TT>. Thanks, Manos Renieris.
+<LI CLASS="li-itemize"><B>April 16, 2003</B>: Reworked management of
+ temporary/intermediate output files in Perl driver scripts. Default
+ behavior is now to remove all such files. To keep intermediate
+ files, use one of the following existing flags:
+ <UL CLASS="itemize"><LI CLASS="li-itemize">
+ <TT>--keepmerged</TT> for the single-file merge of all sources
+ <LI CLASS="li-itemize"><TT>--keep=&lt;<I>dir</I></TT><TT>&gt;</TT> for various other CIL and
+ CCured output files
+ <LI CLASS="li-itemize"><TT>--save-temps</TT> for various gcc intermediate files; MSVC
+ has no equivalent option
+ </UL>
+ As part of this change, some intermediate files have changed their
+ names slightly so that new suffixes are always preceded by a
+ period. For example, CCured output that used to appear in
+ &#8220;<TT>foocured.c</TT>&#8221; now appears in &#8220;<TT>foo.cured.c</TT>&#8221;.
+<LI CLASS="li-itemize"><B>April 7, 2003</B>: Changed the representation of the <A HREF="api/Cil.html#VALGVar">Cil.GVar</A>
+global constructor. Now it is possible to update the initializer without
+reconstructing the global (which in turn it would require reconstructing the
+list of globals that make up a program). We did this because it is often
+tempting to use <A HREF="api/Cil.html#VALvisitCilFileSameGlobals">Cil.visitCilFileSameGlobals</A> and the <A HREF="api/Cil.html#VALGVar">Cil.GVar</A>
+was the only global that could not be updated in place. 
+<LI CLASS="li-itemize"><B>April 6, 2003</B>: Reimplemented parts of the cilly.pl script to make
+it more robust in the presence of complex compiler arguments. 
+<LI CLASS="li-itemize"><B>March 10, 2003</B>: <B>Released version 1.0.9</B>
+<LI CLASS="li-itemize"><B>March 10, 2003</B>: Unified and documented a large number of CIL
+Library Modules: oneret, simplemem, makecfg, heapify, stackguard, partial.
+Also documented the main client interface for the pointer analysis. 
+<LI CLASS="li-itemize"><B>February 18, 2003</B>: Fixed a bug in logwrites that was causing it
+to produce invalid C code on writes to bitfields. Thanks, David Park. 
+<LI CLASS="li-itemize"><B>February 15, 2003</B>: <B>Released version 1.0.8</B>
+<LI CLASS="li-itemize"><B>February 15, 2003</B>: PDF versions of the manual and API are
+available for those who would like to print them out. 
+<LI CLASS="li-itemize"><B>February 14, 2003</B>: CIL now comes bundled with alias analyses. 
+<LI CLASS="li-itemize"><B>February 11, 2003</B>: Added support for adding/removing options from
+ <TT>./configure</TT>. 
+<LI CLASS="li-itemize"><B>February 3, 2003</B>: <B>Released version 1.0.7</B>
+<LI CLASS="li-itemize"><B>February 1, 2003</B>: Some bug fixes in the handling of variable
+argument functions in new versions of <TT>gcc</TT> And <TT>glibc</TT>. 
+<LI CLASS="li-itemize"><B>January 29, 2003</B>: Added the logical AND and OR operators.
+Exapanded the translation to CIL to handle more complicated initializers
+(including those that contain logical operators).
+<LI CLASS="li-itemize"><B>January 28, 2003</B>: <B>Released version 1.0.6</B>
+<LI CLASS="li-itemize"><B>January 28, 2003</B>: Added support for the new handling of
+variable-argument functions in new versions of <TT>glibc</TT>. 
+<LI CLASS="li-itemize"><B>January 19, 2003</B>: Added support for declarations in interpreted
+ constructors. Relaxed the semantics of the patterns for variables. 
+<LI CLASS="li-itemize"><B>January 17, 2003</B>: Added built-in prototypes for the gcc built-in
+ functions. Changed the <TT>pGlobal</TT> method in the printers to print the
+ carriage return as well.
+<LI CLASS="li-itemize"><B>January 9, 2003</B>: Reworked lexer and parser's strategy for
+ tracking source file names and line numbers to more closely match
+ typical native compiler behavior. The visible CIL interface is
+ unchanged.
+<LI CLASS="li-itemize"><B>January 9, 2003</B>: Changed the interface to the alpha convertor. Now
+you can pass a list where it will record undo information that you can use to
+revert the changes that it makes to the scope tables.
+<LI CLASS="li-itemize"><B>January 6, 2003</B>: <B>Released version 1.0.5</B>
+<LI CLASS="li-itemize"><B>January 4, 2003</B>: Changed the interface for the Formatcil module.
+ Now the placeholders in the pattern have names. Also expanded the
+ documentation of the Formatcil module.
+ Now the placeholders in the pattern have names.
+<LI CLASS="li-itemize"><B>January 3, 2003</B>: Extended the <TT>rmtmps</TT> module to also remove
+ unused labels that are generated in the conversion to CIL. This reduces the
+ number of warnings that you get from <TT>cgcc</TT> afterwards.
+<LI CLASS="li-itemize"><B>December 17, 2002</B>: Fixed a few bugs in CIL related to the
+ representation of string literals. The standard says that a string literal
+ is an array. In CIL, a string literal has type pointer to character. This is
+ Ok, except as an argument of sizeof. To support this exception, we have
+ added to CIL the expression constructor SizeOfStr. This allowed us to fix
+ bugs with computing <TT>sizeof("foo bar")</TT> and <TT>sizeof((char*)"foo bar")</TT>
+ (the former is 8 and the latter is 4).<BR>
+<BR>
+<LI CLASS="li-itemize"><B>December 8, 2002</B>: Fixed a few bugs in the lexer and parser
+ relating to hex and octal escapes in string literals. Also fixed
+ the dependencies between the lexer and parser.
+<LI CLASS="li-itemize"><B>December 5, 2002</B>: Fixed visitor bugs that were causing
+ some attributes not to be visited and some queued instructions to be
+ dropped.
+<LI CLASS="li-itemize"><B>December 3, 2002</B>: Added a transformation to catch stack
+ overflows. Fixed the heapify transformation.
+<LI CLASS="li-itemize"><B>October 14, 2002</B>: CIL is now available under the BSD license
+(see the License section or the file LICENSE). <B>Released version 1.0.4</B>
+<LI CLASS="li-itemize"><B>October 9, 2002</B>: More FreeBSD configuration changes, support
+for the GCC-ims <TT>__signed</TT> and <TT>__volatile</TT>. Thanks to Axel
+Simon for pointing out these problems. <B>Released version 1.0.3</B>
+<LI CLASS="li-itemize"><B>October 8, 2002</B>: FreeBSD configuration and porting fixes.
+Thanks to Axel Simon for pointing out these problems. 
+<LI CLASS="li-itemize"><B>September 10, 2002</B>: Fixed bug in conversion to CIL. Now we drop
+all &#8220;const&#8221; qualifiers from the types of locals, even from the fields of
+local structures or elements of arrays.
+<LI CLASS="li-itemize"><B>September 7, 2002</B>: Extended visitor interface to distinguish visitng
+ offsets inside lvalues from offsets inside initializer lists.
+<LI CLASS="li-itemize"><B>September 7, 2002</B>: <B>Released version 1.0.1</B>
+<LI CLASS="li-itemize"><B>September 6, 2002</B>: Extended the patcher with the <TT>ateof</TT> flag.
+<LI CLASS="li-itemize"><B>September 4, 2002</B>: Fixed bug in the elaboration to CIL. In some
+cases constant folding of <TT>||</TT> and <TT>&amp;&amp;</TT> was computed wrong.
+<LI CLASS="li-itemize"><B>September 3, 2002</B>: Fixed the merger documentation. 
+<LI CLASS="li-itemize"><B>August 29, 2002</B>: <B>Released version 1.0.0.</B>
+<LI CLASS="li-itemize"><B>August 29, 2002</B>: Started numbering versions with a major nubmer,
+minor and revisions. Released version 1.0.0.
+<LI CLASS="li-itemize"><B>August 25, 2002</B>: Fixed the implementation of the unique
+identifiers for global variables and composites. Now those identifiers are
+globally unique.
+<LI CLASS="li-itemize"><B>August 24, 2002</B>: Added to the machine-dependent configuration the
+<TT>sizeofvoid</TT>. It is 1 on gcc and 0 on MSVC. Extended the implementation of
+<TT>Cil.bitsSizeOf</TT> to handle this (it was previously returning an error when
+trying to compute the size of <TT>void</TT>).
+<LI CLASS="li-itemize"><B>August 24, 2002</B>: Changed the representation of structure and
+unions to distinguish between undefined structures and those that are defined
+to be empty (allowed on gcc). The sizeof operator is undefined for the former
+and returns 0 for the latter.
+<LI CLASS="li-itemize"><B>August 22, 2002</B>: Apply a patch from Richard H. Y. to support
+FreeBSD installations. Thanks, Richard!
+<LI CLASS="li-itemize"><B>August 12, 2002</B>: Fixed a bug in the translation of wide-character
+strings. Now this translation matches that of the underlying compiler. Changed
+the implementation of the compiler dependencies.
+<LI CLASS="li-itemize"><B>May 25, 2002</B>: Added interpreted constructors and destructors.
+<LI CLASS="li-itemize"><B>May 17, 2002</B>: Changed the representation of functions to move the
+&#8220;inline&#8221; information to the varinfo. This way we can print the &#8220;inline&#8221;
+even in declarations which is what gcc does. 
+<LI CLASS="li-itemize"><B>May 15, 2002</B>: Changed the visitor for initializers to make two
+tail-recursive passes (the second is a <TT>List.rev</TT> and only done if one of
+the initializers change). This prevents <TT>Stack_Overflow</TT> for large
+initializers. Also improved the processing of initializers when converting to
+CIL. 
+<LI CLASS="li-itemize"><B>May 15, 2002</B>: Changed the front-end to allow the use of <TT>MSVC</TT>
+mode even on machines that do not have MSVC. The machine-dependent parameters
+for GCC will be used in that case. 
+<LI CLASS="li-itemize"><B>May 11, 2002</B>: Changed the representation of formals in function
+types. Now the function type is purely functional. 
+<LI CLASS="li-itemize"><B>May 4, 2002</B>: Added the function
+<A HREF="api/Cil.html#VALvisitCilFileSameGlobals">Cil.visitCilFileSameGlobals</A> and changed <A HREF="api/Cil.html#VALvisitCilFile">Cil.visitCilFile</A> to be
+tail recursive. This prevents stack overflow on huge files.
+<LI CLASS="li-itemize"><B>February 28, 2002</B>: Changed the significance of the
+<TT>CompoundInit</TT> in <A HREF="api/Cil.html#TYPEinit">Cil.init</A> to allow for missing initializers at the
+end of an array initializer. Added the API function
+<A HREF="api/Cil.html#VALfoldLeftCompoundAll">Cil.foldLeftCompoundAll</A>.
+</UL>
+<HR>
+<A HREF="cil019.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+</BODY>
+</HTML>

@@ -1,0 +1,342 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Who Says C is Simple?
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil015.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil017.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc42">16</A>&nbsp;&nbsp;Who Says C is Simple?</H2><A NAME="sec-simplec"></A>
+When I (George) started to write CIL I thought it was going to take two weeks.
+Exactly a year has passed since then and I am still fixing bugs in it. This
+gross underestimate was due to the fact that I thought parsing and making
+sense of C is simple. You probably think the same. What I did not expect was
+how many dark corners this language has, especially if you want to parse
+real-world programs such as those written for GCC or if you are more ambitious
+and you want to parse the Linux or Windows NT sources (both of these were
+written without any respect for the standard and with the expectation that
+compilers will be changed to accommodate the program). <BR>
+<BR>
+The following examples were actually encountered either in real programs or
+are taken from the ISO C99 standard or from the GCC's testcases. My first
+reaction when I saw these was: <EM>Is this C?</EM>. The second one was : <EM>What the hell does it mean?</EM>. <BR>
+<BR>
+If you are contemplating doing program analysis for C on abstract-syntax
+trees then your analysis ought to be able to handle these things. Or, you can
+use CIL and let CIL translate them into clean C code. <BR>
+<BR>
+<A NAME="toc24"></A>
+<H3 CLASS="subsection"><A NAME="htoc43">16.1</A>&nbsp;&nbsp;Standard C</H3>
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">Why does the following code return 0 for most values of <TT>x</TT>? (This
+should be easy.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x;
+  return x == (1 &amp;&amp; x);
+</FONT></PRE>
+See the <A HREF="examples/ex30.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Why does the following code return 0 and not -1? (Answer: because
+<TT>sizeof</TT> is unsigned, thus the result of the subtraction is unsigned, thus
+the shift is logical.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return ((1 - sizeof(int)) &gt;&gt; 32);
+</FONT></PRE>
+See the <A HREF="examples/ex31.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Scoping rules can be tricky. This function returns 5.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int x = 5;
+int f() {
+  int x = 3;
+  {
+    extern int x;
+    return x;
+  }
+}
+</FONT></PRE>
+See the <A HREF="examples/ex32.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Functions and function pointers are implicitly converted to each other. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int (*pf)(void);
+int f(void) {
+
+   pf = &amp;f; // This looks ok
+   pf = ***f; // Dereference a function?
+   pf(); // Invoke a function pointer?     
+   (****pf)();  // Looks strange but Ok
+   (***************f)(); // Also Ok             
+}
+</FONT></PRE>
+See the <A HREF="examples/ex33.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializer with designators are one of the hardest parts about ISO C.
+Neither MSVC or GCC implement them fully. GCC comes close though. What is the
+final value of <TT>i.nested.y</TT> and <TT>i.nested.z</TT>? (Answer: 2 and respectively
+6). 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct { 
+   int x; 
+   struct { 
+       int y, z; 
+   } nested;
+} i = { .nested.y = 5, 6, .x = 1, 2 };               
+</FONT></PRE>
+See the <A HREF="examples/ex34.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">This is from c-torture. This function returns 1.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+typedef struct
+{
+  char *key;
+  char *value;
+} T1;
+
+typedef struct
+{
+  long type;
+  char *value;
+} T3;
+
+T1 a[] =
+{
+  {
+    "",
+    ((char *)&amp;((T3) {1, (char *) 1}))
+  }
+};
+int main() {
+   T3 *pt3 = (T3*)a[0].value;
+   return pt3-&gt;value;
+}
+</FONT></PRE>
+See the <A HREF="examples/ex35.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Another one with constructed literals. This one is legal according to
+the GCC documentation but somehow GCC chokes on (it works in CIL though). This
+code returns 2.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return ((int []){1,2,3,4})[1];
+</FONT></PRE>
+See the <A HREF="examples/ex36.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">In the example below there is one copy of &#8220;bar&#8221; and two copies of
+ &#8220;pbar&#8221; (static prototypes at block scope have file scope, while for all
+ other types they have block scope). 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo() {
+     static bar();
+     static (*pbar)() = bar;
+
+  }
+
+  static bar() { 
+    return 1;
+  }
+
+  static (*pbar)() = 0;
+</FONT></PRE>
+See the <A HREF="examples/ex37.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Two years after heavy use of CIL, by us and others, I discovered a bug
+ in the parser. The return value of the following function depends on what
+ precedence you give to casts and unary minus:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  unsigned long foo() {
+    return (unsigned long) - 1 / 8;
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex38.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+The correct interpretation is <TT>((unsigned long) - 1) / 8</TT>, which is a
+ relatively large number, as opposed to <TT>(unsigned long) (- 1 / 8)</TT>, which
+ is 0. </OL>
+<A NAME="toc25"></A>
+<H3 CLASS="subsection"><A NAME="htoc44">16.2</A>&nbsp;&nbsp;GCC ugliness</H3><A NAME="sec-ugly-gcc"></A>
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">GCC has generalized lvalues. You can take the address of a lot of
+strange things:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x, y, z;
+  return &amp;(x ? y : z) - &amp; (x++, x);
+</FONT></PRE>
+See the <A HREF="examples/ex39.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC lets you omit the second component of a conditional expression.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  extern int f();
+  return f() ? : -1; // Returns the result of f unless it is 0
+</FONT></PRE>
+See the <A HREF="examples/ex40.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Computed jumps can be tricky. CIL compiles them away in a fairly clean
+way but you are on your own if you try to jump into another function this way.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+static void *jtab[2]; // A jump table
+static int doit(int x){
+ 
+  static int jtab_init = 0;
+  if(!jtab_init) { // Initialize the jump table
+    jtab[0] = &amp;&amp;lbl1;
+    jtab[1] = &amp;&amp;lbl2;
+    jtab_init = 1;
+  }
+  goto *jtab[x]; // Jump through the table
+lbl1:
+  return 0;
+lbl2:
+  return 1;
+}
+ 
+int main(void){
+  if (doit(0) != 0) exit(1);
+  if (doit(1) != 1) exit(1);
+  exit(0);
+}
+</FONT></PRE>
+See the <A HREF="examples/ex41.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">A cute little example that we made up. What is the returned value?
+(Answer: 1); 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return ({goto L; 0;}) &amp;&amp; ({L: 5;});
+</FONT></PRE>
+See the <A HREF="examples/ex42.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate"><TT>extern inline</TT> is a strange feature of GNU C. Can you guess what the
+following code computes?
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+extern inline foo(void) { return 1; }
+int firstuse(void) { return foo(); }
+
+// A second, incompatible definition of foo
+int foo(void) { return 2; }
+
+int main() {
+    return foo() + firstuse();
+}
+</FONT></PRE>
+See the <A HREF="examples/ex43.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+The answer depends on whether the optimizations are turned on. If they are
+then the answer is 3 (the first definition is inlined at all occurrences until
+the second definition). If the optimizations are off, then the first
+definition is ignore (treated like a prototype) and the answer is 4. <BR>
+<BR>
+CIL will misbehave on this example, if the optimizations are turned off (it
+ always returns 3).<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC allows you to cast an object of a type T into a union as long as the
+union has a field of that type:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+union u { 
+   int i; 
+   struct s { 
+      int i1, i2;
+   } s;
+};
+
+union u x = (union u)6;
+
+int main() {
+  struct s y = {1, 2};
+  union u  z = (union u)y;
+}
+</FONT></PRE>
+See the <A HREF="examples/ex44.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC allows you to use the <TT>__mode__</TT> attribute to specify the size
+of the integer instead of the standard <TT>char</TT>, <TT>short</TT> and so on:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int __attribute__ ((__mode__ (  __QI__ ))) i8;
+int __attribute__ ((__mode__ (  __HI__ ))) i16;
+int __attribute__ ((__mode__ (  __SI__ ))) i32;
+int __attribute__ ((__mode__ (  __DI__ ))) i64;
+</FONT></PRE>
+See the <A HREF="examples/ex45.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">The &#8220;alias&#8221; attribute on a function declaration tells the
+ linker to treat this declaration as another name for the specified
+ function. CIL will replace the declaration with a trampoline
+ function pointing to the specified target.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+    static int bar(int x, char y) {
+      return x + y;
+    }
+
+    //foo is considered another name for bar.
+    int foo(int x, char y) __attribute__((alias("bar")));
+</FONT></PRE>
+See the <A HREF="examples/ex46.txt">CIL output</A> for this
+code fragment</OL>
+<A NAME="toc26"></A>
+<H3 CLASS="subsection"><A NAME="htoc45">16.3</A>&nbsp;&nbsp;Microsoft VC ugliness</H3>
+This compiler has few extensions, so there is not much to say here.
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Why does the following code return 0 and not -1? (Answer: because of a
+bug in Microsoft Visual C. It thinks that the shift is unsigned just because
+the second operator is unsigned. CIL reproduces this bug when in MSVC mode.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return -3 &gt;&gt; (8 * sizeof(int));
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-enumerate">Unnamed fields in a structure seem really strange at first. It seems
+that Microsoft Visual C introduced this extension, then GCC picked it up (but
+in the process implemented it wrongly: in GCC the field <TT>y</TT> overlaps with
+<TT>x</TT>!).
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct {
+  int x;
+  struct {
+     int y, z;
+     struct {
+       int u, v;
+     };
+ };
+} a;
+return a.x + a.y + a.z + a.u + a.v;
+</FONT></PRE>
+See the <A HREF="examples/ex47.txt">CIL output</A> for this
+code fragment</OL>
+<HR>
+<A HREF="cil015.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil017.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

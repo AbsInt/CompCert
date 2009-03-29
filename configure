@@ -12,20 +12,28 @@
 #                                                                     #
 #######################################################################
 
-cildistrib=cil-1.3.5.tar.gz
 prefix=/usr/local
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
 target=''
 
-usage='Usage: ./configure [options] <target>
+prompt() {
+    echo "$1 [$x] ? " | tr -d '\n'
+    read y
+    case "$y" in
+        "") ;;
+      none) x="";;
+         *) x="$y";;
+    esac
+}
+
+usage='Usage: ./configure [options] target
 
 Supported targets:
-  macosx           (PowerPC, MacOS X)
+  ppc-macosx       (PowerPC, MacOS X)
   ppc-linux        (PowerPC, Linux)
-  ppc-linux-cross  (PowerPC, Linux, cross-compilation)
   arm-linux        (ARM, Linux)
-  arm-linux-cross  (ARM, Linux, cross-compilation)
+  manual           (edit configuration file by hand)
 
 Options:
   -prefix <dir>    Install in <dir>/bin and <dir>/lib/compcert
@@ -51,14 +59,13 @@ while : ; do
   shift
 done
 
-if test -z "$target"; then echo "$usage" 1>&2; exit 2; fi
-
 # Per-target configuration
 
 case "$target" in
-  macosx)
+  ppc-macosx)
     arch="powerpc"
     variant="macosx"
+    system="macosx"
     cc="gcc -arch ppc"
     cprepro="gcc -arch ppc -U__GNUC__ -E"
     casm="gcc -arch ppc -c"
@@ -67,37 +74,29 @@ case "$target" in
   ppc-linux)
     arch="powerpc"
     variant="eabi"
+    system="linux"
     cc="gcc"
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
     clinker="gcc"
-    libmath="-lm";;
-  ppc-linux-cross)
-    arch="powerpc"
-    variant="eabi"
-    cc="ppc-linux-gcc"
-    cprepro="ppc-linux-gcc -U__GNUC__ -E"
-    casm="ppc-linux-gcc -c"
-    clinker="ppc-linux-gcc"
     libmath="-lm";;
   arm-linux)
     arch="arm"
     variant="linux"
+    system="linux"
     cc="gcc"
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
     clinker="gcc"
     libmath="-lm";;
-  arm-linux-cross)
-    arch="arm"
-    variant="linux"
-    cc="arm-linux-gcc"
-    cprepro="arm-linux-gcc -U__GNUC__ -E"
-    casm="arm-linux-gcc -c"
-    clinker="arm-linux-gcc"
-    libmath="-lm";;
+  manual)
+    ;;
+  "")
+    echo "No target specified." 1>&2
+    echo "$usage" 1>&2
+    exit 2;;
   *)
-    echo "Unsupported configuration '$target'" 1>&2
+    echo "Unknown target '$target'." 1>&2
     echo "$usage" 1>&2
     exit 2;;
 esac
@@ -109,20 +108,58 @@ cat > Makefile.config <<EOF
 PREFIX=$prefix
 BINDIR=$bindir
 LIBDIR=$libdir
+EOF
+
+if test "$target" != "manual"; then
+cat >> Makefile.config <<EOF
 ARCH=$arch
 VARIANT=$variant
+SYSTEM=$system
 CC=$cc
 CPREPRO=$cprepro
 CASM=$casm
 CLINKER=$clinker
 LIBMATH=$libmath
 EOF
+else
+cat >> Makefile.config <<'EOF'
+
+# Target architecture
+# ARCH=powerpc
+# ARCH=arm
+ARCH=
+
+# Target ABI
+# VARIANT=macosx   # for PowerPC / MacOS X
+# VARIANT=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
+# VARIANT=linux    # for ARM
+VARIANT=
+
+# Target operating system and development environment
+# See $(ARCH)/PrintAsm.ml for possible choices
+SYSTEM=
+
+# C compiler for compiling library files
+CC=gcc
+
+# Preprocessor for .c files
+CPREPRO=gcc -U__GNUC__ -E
+
+# Assembler for assembling .s files
+CASM=gcc -c
+
+# Linker
+CLINKER=gcc
+
+# Math library
+LIBMATH=-lm
+
+# CIL configuration target -- do not change
+EOF
+fi
 
 # Extract and configure Cil
 
-set -e
-tar xzf $cildistrib
-for i in cil.patch/*; do patch -p1 < $i; done
 (cd cil && ./configure)
 
 # Extract 'ARCHOS' info from Cil configuration
@@ -131,14 +168,31 @@ grep '^ARCHOS=' cil/config.log >> Makefile.config
 
 # Summarize configuration
 
+if test "$target" = "manual"; then
+cat <<EOF
+
+Please finish the configuration by editing file ./Makefile.config
+
+EOF
+
+else
+
+bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+
 cat <<EOF
 
 CompCert configuration:
     Target architecture........... $arch ($variant)
+    OS and development env........ $system
     C compiler.................... $cc
     C preprocessor................ $cprepro
     Assembler..................... $casm
     Linker........................ $clinker
     Math library.................. $libmath
+    Binaries installed in......... $bindirexp
+    Library files installed in.... $libdirexp
 
 EOF
+
+fi

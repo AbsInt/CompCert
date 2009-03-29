@@ -1,0 +1,279 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+The CIL Driver
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil006.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="ext.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc14">7</A>&nbsp;&nbsp;The CIL Driver</H2><A NAME="sec-driver"></A>
+We have packaged CIL as an application <TT>cilly</TT> that contains certain
+example modules, such as <TT>logwrites.ml</TT> (a module
+that instruments code to print the addresses of memory locations being
+written). Normally, you write another module like that, add command-line
+options and an invocation of your module in <TT>src/main.ml</TT>. Once you compile
+CIL you will obtain the file <TT>obj/cilly.asm.exe</TT>. <BR>
+<BR>
+We wrote a driver for this executable that makes it easy to invoke your
+analysis on existing C code with very little manual intervention. This driver
+is <TT>bin/cilly</TT> and is quite powerful. Note that the <TT>cilly</TT> script
+is configured during installation with the path where CIL resides. This means
+that you can move it to any place you want. <BR>
+<BR>
+A simple use of the driver is:
+<PRE CLASS="verbatim">
+bin/cilly --save-temps -D HAPPY_MOOD -I myincludes hello.c -o hello
+</PRE>
+<FONT COLOR=blue>--save-temps</FONT> tells CIL to save the resulting output files in the
+current directory. Otherwise, they'll be put in <TT>/tmp</TT> and deleted
+automatically. Not that this is the only CIL-specific flag in the
+list &ndash; the other flags use <TT>gcc</TT>'s syntax.<BR>
+<BR>
+This performs the following actions: 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+preprocessing using the -D and -I arguments with the resulting 
+ file left in <TT>hello.i</TT>, 
+<LI CLASS="li-itemize">the invocation of the <TT>cilly.asm</TT> application which parses <TT>hello.i</TT>
+ converts it to CIL and the pretty-prints it to <TT>hello.cil.c</TT>
+<LI CLASS="li-itemize">another round of preprocessing with the result placed in <TT>hello.cil.i</TT>
+<LI CLASS="li-itemize">the true compilation with the result in <TT>hello.cil.o</TT>
+<LI CLASS="li-itemize">a linking phase with the result in <TT>hello</TT>
+</UL>
+Note that <TT>cilly</TT> behaves like the <TT>gcc</TT> compiler. This makes it
+easy to use it with existing <TT>Makefiles</TT>:
+<PRE CLASS="verbatim">
+make CC="bin/cilly" LD="bin/cilly"
+</PRE>
+ <TT>cilly</TT> can also behave as the Microsoft Visual C compiler, if the first
+ argument is <TT>--mode=MSVC</TT>:
+<PRE CLASS="verbatim">
+bin/cilly --mode=MSVC /D HAPPY_MOOD /I myincludes hello.c /Fe hello.exe
+</PRE>
+ (This in turn will pass a <TT>--MSVC</TT> flag to the underlying <TT>cilly.asm</TT>
+ process which will make it understand the Microsoft Visual C extensions)<BR>
+<BR>
+<TT>cilly</TT> can also behave as the archiver <TT>ar</TT>, if it is passed an
+argument <TT>--mode=AR</TT>. Note that only the <TT>cr</TT> mode is supported (create a
+new archive and replace all files in there). Therefore the previous version of
+the archive is lost. <BR>
+<BR>
+Furthermore, <TT>cilly</TT> allows you to pass some arguments on to the
+underlying <TT>cilly.asm</TT> process. As a general rule all arguments that start
+with <TT>--</TT> and that <TT>cilly</TT> itself does not process, are passed on. For
+example, 
+<PRE CLASS="verbatim">
+bin/cilly --dologwrites -D HAPPY_MOOD -I myincludes hello.c -o hello.exe
+</PRE>
+ will produce a file <TT>hello.cil.c</TT> that prints all the memory addresses
+written by the application. <BR>
+<BR>
+The most powerful feature of <TT>cilly</TT> is that it can collect all the
+sources in your project, merge them into one file and then apply CIL. This
+makes it a breeze to do whole-program analysis and transformation. All you
+have to do is to pass the <TT>--merge</TT> flag to <TT>cilly</TT>:
+<PRE CLASS="verbatim">
+make CC="bin/cilly --save-temps --dologwrites --merge"
+</PRE>
+ You can even leave some files untouched:
+<PRE CLASS="verbatim">
+make CC="bin/cilly --save-temps --dologwrites --merge --leavealone=foo --leavealone=bar"
+</PRE>
+ This will merge all the files except those with the basename <TT>foo</TT> and
+<TT>bar</TT>. Those files will be compiled as usual and then linked in at the very
+end. <BR>
+<BR>
+The sequence of actions performed by <TT>cilly</TT> depends on whether merging
+is turned on or not:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+If merging is off
+ <OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+ For every file <TT>file.c</TT> to compile
+ <OL CLASS="enumerate" type=a><LI CLASS="li-enumerate">
+ Preprocess the file with the given arguments to 
+ produce <TT>file.i</TT>
+ <LI CLASS="li-enumerate">Invoke <TT>cilly.asm</TT> to produce a <TT>file.cil.c</TT>
+ <LI CLASS="li-enumerate">Preprocess to <TT>file.cil.i</TT>
+ <LI CLASS="li-enumerate">Invoke the underlying compiler to produce <TT>file.cil.o</TT>
+ </OL>
+ <LI CLASS="li-enumerate">Link the resulting objects
+ </OL>
+<LI CLASS="li-itemize">If merging is on
+ <OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+ For every file <TT>file.c</TT> to compile
+ <OL CLASS="enumerate" type=a><LI CLASS="li-enumerate">
+ Preprocess the file with the given arguments to 
+ produce <TT>file.i</TT>
+ <LI CLASS="li-enumerate">Save the preprocessed source as <TT>file.o</TT>
+ </OL>
+ <LI CLASS="li-enumerate">When linking executable <TT>hello.exe</TT>, look at every object 
+ file that must be linked and see if it actually 
+ contains preprocessed source. Pass all those files to a 
+ special merging application (described in
+ Section&nbsp;<A HREF="merger.html#sec-merger">13</A>) to produce <TT>hello.exe_comb.c</TT>
+ <LI CLASS="li-enumerate">Invoke <TT>cilly.asm</TT> to produce a <TT>hello.exe_comb.cil.c</TT>
+ <LI CLASS="li-enumerate">Preprocess to <TT>hello.exe_comb.cil.i</TT>
+ <LI CLASS="li-enumerate">Invoke the underlying compiler to produce <TT>hello.exe_comb.cil.o</TT>
+ <LI CLASS="li-enumerate">Invoke the actual linker to produce <TT>hello.exe</TT>
+ </OL>
+</UL>
+Note that files that you specify with <TT>--leavealone</TT> are not merged and
+never presented to CIL. They are compiled as usual and then are linked in at
+the end. <BR>
+<BR>
+And a final feature of <TT>cilly</TT> is that it can substitute copies of the
+system's include files:
+<PRE CLASS="verbatim">
+make CC="bin/cilly --includedir=myinclude"
+</PRE>
+ This will force the preprocessor to use the file <TT>myinclude/xxx/stdio.h</TT>
+(if it exists) whenever it encounters <TT>#include &lt;stdio.h&gt;</TT>. The <TT>xxx</TT> is
+a string that identifies the compiler version you are using. This modified
+include files should be produced with the patcher script (see
+Section&nbsp;<A HREF="patcher.html#sec-patcher">14</A>).<BR>
+<BR>
+<A NAME="toc7"></A>
+<H3 CLASS="subsection"><A NAME="htoc15">7.1</A>&nbsp;&nbsp;<TT>cilly</TT> Options</H3>
+Among the options for the <TT>cilly</TT> you can put anything that can normally
+go in the command line of the compiler that <TT>cilly</TT> is impersonating.
+<TT>cilly</TT> will do its best to pass those options along to the appropriate
+subprocess. In addition, the following options are supported (a complete and
+up-to-date list can always be obtained by running <TT>cilly --help</TT>):
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>--mode=mode</TT> This must be the first argument if present. It makes
+<TT>cilly</TT> behave as a given compiled. The following modes are recognized: 
+ <UL CLASS="itemize"><LI CLASS="li-itemize">
+ GNUCC - the GNU C Compiler. This is the default.
+ <LI CLASS="li-itemize">MSVC - the Microsoft Visual C compiler. Of course, you should
+ pass only MSVC valid options in this case. 
+ <LI CLASS="li-itemize">AR - the archiver <TT>ar</TT>. Only the mode <TT>cr</TT> is supported and
+ the original version of the archive is lost. 
+ </UL>
+<LI CLASS="li-itemize"><TT>--help</TT> Prints a list of the options supported.
+<LI CLASS="li-itemize"><TT>--verbose</TT> Prints lots of messages about what is going on.
+<LI CLASS="li-itemize"><TT>--stages</TT> Less than <TT>--verbose</TT> but lets you see what <TT>cilly</TT>
+ is doing. 
+<LI CLASS="li-itemize"><TT>--merge</TT> This tells <TT>cilly</TT> to first attempt to collect into one
+source file all of the sources that make your application, and then to apply
+<TT>cilly.asm</TT> on the resulting source. The sequence of actions in this case is
+described above and the merger itself is described in Section&nbsp;<A HREF="merger.html#sec-merger">13</A>.<BR>
+<BR>
+<LI CLASS="li-itemize"><TT>--leavealone=xxx</TT>. Do not merge and do not present to CIL the files
+whose basename is "xxx". These files are compiled as usual and linked in at
+the end. 
+<LI CLASS="li-itemize"><TT>--includedir=xxx</TT>. Override the include files with those in the given
+directory. The given directory is the same name that was given an an argument
+to the patcher (see Section&nbsp;<A HREF="patcher.html#sec-patcher">14</A>). In particular this means that
+that directory contains subdirectories named based on the current compiler
+version. The patcher creates those directories. 
+<LI CLASS="li-itemize"><TT>--usecabs</TT>. Do not CIL, but instead just parse the source and print
+its AST out. This should looked like the preprocessed file. This is useful
+when you suspect that the conversion to CIL phase changes the meaning of the
+program. 
+<LI CLASS="li-itemize"><TT>--save-temps=xxx</TT>. Temporary files are preserved in the xxx
+ directory. For example, the output of CIL will be put in a file
+ named <TT>*.cil.c</TT>.
+<LI CLASS="li-itemize"><TT>--save-temps</TT>. Temporay files are preserved in the current directory.
+</UL>
+<A NAME="toc8"></A>
+<H3 CLASS="subsection"><A NAME="htoc16">7.2</A>&nbsp;&nbsp;<TT>cilly.asm</TT> Options</H3>
+ <A NAME="sec-cilly-asm-options"></A>
+All of the options that start with <TT>--</TT> and are not understood by
+<TT>cilly</TT> are passed on to <TT>cilly.asm</TT>. <TT>cilly</TT> also passes along to
+<TT>cilly.asm</TT> flags such as <TT>--MSVC</TT> that both need to know
+about. The following options are supported:<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <B>General Options:</B>
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+ <TT>--version</TT> output version information and exit
+ <LI CLASS="li-itemize"><TT>--verbose</TT> Print lots of random stuff. This is passed on from cilly
+ <LI CLASS="li-itemize"><TT>--warnall</TT> Show all warnings.
+ <LI CLASS="li-itemize"><TT>--debug=xxx</TT> turns on debugging flag xxx
+ <LI CLASS="li-itemize"><TT>--nodebug=xxx</TT> turns off debugging flag xxx
+ <LI CLASS="li-itemize"><TT>--flush</TT> Flush the output streams often (aids debugging).
+ <LI CLASS="li-itemize"><TT>--check</TT> Run a consistency check over the CIL after every operation.
+ <LI CLASS="li-itemize"><TT>--nocheck</TT> turns off consistency checking of CIL.
+ <LI CLASS="li-itemize"><TT>--noPrintLn</TT> Don't output #line directives in the output.
+ <LI CLASS="li-itemize"><TT>--commPrintLn</TT> Print #line directives in the output, but
+ put them in comments.
+ <LI CLASS="li-itemize"><TT>--log=xxx</TT> Set the name of the log file. By default stderr is used
+ <LI CLASS="li-itemize"><TT>--MSVC</TT> Enable MSVC compatibility. Default is GNU.
+ <LI CLASS="li-itemize"><TT>--ignore-merge-conflicts</TT> ignore merging conflicts.
+ <LI CLASS="li-itemize"><TT>--extrafiles=filename</TT>: the name of a file that contains
+ a list of additional files to process, separated by whitespace.
+ <LI CLASS="li-itemize"><TT>--stats</TT> Print statistics about the running time of the
+ parser, conversion to CIL, etc. Also prints memory-usage
+ statistics. You can time parts of your own code as well. Calling
+ (<TT>Stats.time &#8220;label&#8221; func arg</TT>) will evaluate <TT>(func arg)</TT>
+ and remember how long this takes. If you call <TT>Stats.time</TT>
+ repeatedly with the same label, CIL will report the aggregate
+ time.<BR>
+<BR>
+If available, CIL uses the x86 performance counters for these
+ stats. This is very precise, but results in &#8220;wall-clock time.&#8221;
+ To report only user-mode time, find the call to <TT>Stats.reset</TT> in
+ <TT>main.ml</TT>, and change it to <TT>Stats.reset false</TT>.<BR>
+<BR>
+<B>Lowering Options</B>
+ <LI CLASS="li-itemize"><TT>--noLowerConstants</TT> do not lower constant expressions.
+ <LI CLASS="li-itemize"><TT>--noInsertImplicitCasts</TT> do not insert implicit casts.
+ <LI CLASS="li-itemize"><TT>--forceRLArgEval</TT> Forces right to left evaluation of function arguments.
+ <LI CLASS="li-itemize"><TT>--disallowDuplication</TT> Prevent small chunks of code from being duplicated.
+ <LI CLASS="li-itemize"><TT>--keepunused</TT> Do not remove the unused variables and types.
+ <LI CLASS="li-itemize"><TT>--rmUnusedInlines</TT> Delete any unused inline functions. This is the default in MSVC mode.<BR>
+<BR>
+<B>Output Options:</B>
+ <LI CLASS="li-itemize"><TT>--printCilAsIs</TT> Do not try to simplify the CIL when
+ printing. Without this flag, CIL will attempt to produce prettier
+ output by e.g. changing <TT>while(1)</TT> into more meaningful loops.
+ <LI CLASS="li-itemize"><TT>--noWrap</TT> do not wrap long lines when printing
+ <LI CLASS="li-itemize"><TT>--out=xxx</TT> the name of the output CIL file. <TT>cilly</TT>
+ sets this for you.
+ <LI CLASS="li-itemize"><TT>--mergedout=xxx</TT> specify the name of the merged file
+ <LI CLASS="li-itemize"><TT>--cabsonly=xxx</TT> CABS output file name
+<BR>
+<BR>
+ <B>Selected features.</B> See Section&nbsp;<A HREF="ext.html#sec-Extension">8</A> for more information.
+<LI CLASS="li-itemize"><TT>--dologcalls</TT>. Insert code in the processed source to print the name of
+functions as are called. Implemented in <TT>src/ext/logcalls.ml</TT>.
+<LI CLASS="li-itemize"><TT>--dologwrites</TT>. Insert code in the processed source to print the
+address of all memory writes. Implemented in <TT>src/ext/logwrites.ml</TT>.
+<LI CLASS="li-itemize"><TT>--dooneRet</TT>. Make each function have at most one 'return'.
+Implemented in <TT>src/ext/oneret.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--dostackGuard</TT>. Instrument function calls and returns to
+maintain a separate stack for return addresses. Implemeted in
+<TT>src/ext/heapify.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--domakeCFG</TT>. Make the program look more like a CFG. Implemented
+in <TT>src/cil.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--dopartial</TT>. Do interprocedural partial evaluation and
+constant folding. Implemented in <TT>src/ext/partial.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--dosimpleMem</TT>. Simplify all memory expressions. Implemented in
+<TT>src/ext/simplemem.ml</TT>. <BR>
+<BR>
+For an up-to-date list of available options, run <TT>cilly.asm --help</TT>. </UL>
+<HR>
+<A HREF="cil006.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="ext.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

@@ -1,0 +1,53 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+CIL Limitations
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil010.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil012.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc37">11</A>&nbsp;&nbsp;CIL Limitations</H2>
+There are several implementation details of CIL that might make it unusable
+ or less than ideal for certain tasks:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+CIL operates after preprocessing. If you need to see comments, for
+example, you cannot use CIL. But you can use attributes and pragmas instead.
+And there is some support to help you patch the include files before they are
+seen by the preprocessor. For example, this is how we turn some
+<TT>#define</TT>s that we don't like into function calls. <BR>
+<BR>
+<LI CLASS="li-itemize">CIL does transform the code in a non-trivial way. This is done in order
+to make most analyses easier. But if you want to see the code <TT>e1, e2++</TT>
+exactly as it appears in the code, then you should not use CIL. <BR>
+<BR>
+<LI CLASS="li-itemize">CIL removes all local scopes and moves all variables to function
+scope. It also separates a declaration with an initializer into a declaration
+plus an assignment. The unfortunate effect of this transformation is that
+local variables cannot have the <TT>const</TT> qualifier.</UL>
+<HR>
+<A HREF="cil010.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil012.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

@@ -1,0 +1,1 @@
+perl @CILHOME@/bin/cilly %*

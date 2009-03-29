@@ -1,0 +1,3532 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+
+<HEAD>
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+<STYLE type="text/css">
+.toc{list-style:none;}
+.title{margin:auto;text-align:center}
+.center{text-align:center;margin-left:auto;margin-right:auto;}
+.flushleft{text-align:left;margin-left:0ex;margin-right:auto;}
+.flushright{text-align:right;margin-left:auto;margin-right:0ex;}
+DIV TABLE{margin-left:inherit;margin-right:inherit;}
+PRE{text-align:left;margin-left:0ex;margin-right:auto;}
+BLOCKQUOTE{margin-left:4ex;margin-right:4ex;text-align:left;}
+.part{margin:auto;text-align:center}
+</STYLE>
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+</HEAD>
+
+<BODY >
+<!--HEVEA command line is: /usr/bin/hevea -exec xxdate.exe ../../cilpp -->
+<!--HTMLHEAD-->
+<!--ENDHTML-->
+<!--PREFIX <ARG ></ARG>-->
+<!--CUT DEF section 1 -->
+
+
+
+<TABLE CLASS="title">
+<TR><TD></TD>
+</TR></TABLE><BR>
+<!--TOC section Introduction-->
+
+<H2 CLASS="section"><A NAME="htoc1">1</A>&nbsp;&nbsp;Introduction</H2><!--SEC END -->
+
+New: CIL now has a Source Forge page: 
+ <A HREF="javascript:loadTop('http://sourceforge.net/projects/cil')">http://sourceforge.net/projects/cil</A>. <BR>
+<BR>
+CIL (<B>C</B> <B>I</B>ntermediate <B>L</B>anguage) is a high-level representation
+along with a set of tools that permit easy analysis and source-to-source
+transformation of C programs.<BR>
+<BR>
+CIL is both lower-level than abstract-syntax trees, by clarifying ambiguous
+constructs and removing redundant ones, and also higher-level than typical
+intermediate languages designed for compilation, by maintaining types and a
+close relationship with the source program. The main advantage of CIL is that
+it compiles all valid C programs into a few core constructs with a very clean
+semantics. Also CIL has a syntax-directed type system that makes it easy to
+analyze and manipulate C programs. Furthermore, the CIL front-end is able to
+process not only ANSI-C programs but also those using Microsoft C or GNU C
+extensions. If you do not use CIL and want instead to use just a C parser and
+analyze programs expressed as abstract-syntax trees then your analysis will
+have to handle a lot of ugly corners of the language (let alone the fact that
+parsing C itself is not a trivial task). See Section&nbsp;<A HREF="#sec-simplec">16</A> for some
+examples of such extreme programs that CIL simplifies for you.<BR>
+<BR>
+In essence, CIL is a highly-structured, &#8220;clean&#8221; subset of C. CIL features a
+reduced number of syntactic and conceptual forms. For example, all looping
+constructs are reduced to a single form, all function bodies are given
+explicit <TT>return</TT> statements, syntactic sugar like <TT>"-&gt;"</TT> is
+eliminated and function arguments with array types become pointers. (For an
+extensive list of how CIL simplifies C programs, see Section&nbsp;<A HREF="#sec-cabs2cil">4</A>.)
+This reduces the number of cases that must be considered when manipulating a C
+program. CIL also separates type declarations from code and flattens scopes
+within function bodies. This structures the program in a manner more amenable
+to rapid analysis and transformation. CIL computes the types of all program
+expressions, and makes all type promotions and casts explicit. CIL supports
+all GCC and MSVC extensions except for nested functions and complex numbers.
+Finally, CIL organizes C's imperative features into expressions, instructions
+and statements based on the presence and absence of side-effects and
+control-flow. Every statement can be annotated with successor and predecessor
+information. Thus CIL provides an integrated program representation that can
+be used with routines that require an AST (e.g. type-based analyses and
+pretty-printers), as well as with routines that require a CFG (e.g., dataflow
+analyses). CIL also supports even lower-level representations (e.g.,
+three-address code), see Section&nbsp;<A HREF="#sec-Extension">8</A>. <BR>
+<BR>
+CIL comes accompanied by a number of Perl scripts that perform generally
+useful operations on code:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+A <A HREF="#sec-driver">driver</A> which behaves as either the <TT>gcc</TT> or
+Microsoft VC compiler and can invoke the preprocessor followed by the CIL
+application. The advantage of this script is that you can easily use CIL and
+the analyses written for CIL with existing make files.
+<LI CLASS="li-itemize">A <A HREF="#sec-merger">whole-program merger</A> that you can use as a
+replacement for your compiler and it learns all the files you compile when you
+make a project and merges all of the preprocessed source files into a single
+one. This makes it easy to do whole-program analysis.
+<LI CLASS="li-itemize">A <A HREF="#sec-patcher">patcher</A> makes it easy to create modified
+copies of the system include files. The CIL driver can then be told to use
+these patched copies instead of the standard ones.
+</UL>
+CIL has been tested very extensively. It is able to process the SPECINT95
+benchmarks, the Linux kernel, GIMP and other open-source projects. All of
+these programs are compiled to the simple CIL and then passed to <TT>gcc</TT> and
+they still run! We consider the compilation of Linux a major feat especially
+since Linux contains many of the ugly GCC extensions (see Section&nbsp;<A HREF="#sec-ugly-gcc">16.2</A>).
+This adds to about 1,000,000 lines of code that we tested it on. It is also
+able to process the few Microsoft NT device drivers that we have had access
+to. CIL was tested against GCC's c-torture testsuite and (except for the tests
+involving complex numbers and inner functions, which CIL does not currently
+implement) CIL passes most of the tests. Specifically CIL fails 23 tests out
+of the 904 c-torture tests that it should pass. GCC itself fails 19 tests. A
+total of 1400 regression test cases are run automatically on each change to
+the CIL sources.<BR>
+<BR>
+CIL is relatively independent on the underlying machine and compiler. When
+you build it CIL will configure itself according to the underlying compiler.
+However, CIL has only been tested on Intel x86 using the gcc compiler on Linux
+and cygwin and using the MS Visual C compiler. (See below for specific
+versions of these compilers that we have used CIL for.)<BR>
+<BR>
+The largest application we have used CIL for is
+<A HREF="javascript:loadTop('../ccured/index.html')">CCured</A>, a compiler that compiles C code into
+type-safe code by analyzing your pointer usage and inserting runtime checks in
+the places that cannot be guaranteed statically to be type safe. <BR>
+<BR>
+You can also use CIL to &#8220;compile&#8221; code that uses GCC extensions (e.g. the
+Linux kernel) into standard C code.<BR>
+<BR>
+CIL also comes accompanies by a growing library of extensions (see
+Section&nbsp;<A HREF="#sec-Extension">8</A>). You can use these for your projects or as examples of
+using CIL. <BR>
+<BR>
+<TT>PDF</TT> versions of <A HREF="CIL.pdf">this manual</A> and the
+<A HREF="CIL-API.pdf">CIL API</A> are available. However, we recommend the
+<TT>HTML</TT> versions because the postprocessed code examples are easier to
+view. <BR>
+<BR>
+If you use CIL in your project, we would appreciate letting us know. If you
+want to cite CIL in your research writings, please refer to the paper &#8220;CIL:
+Intermediate Language and Tools for Analysis and Transformation of C
+Programs&#8221; by George C. Necula, Scott McPeak, S.P. Rahul and Westley Weimer,
+in &#8220;Proceedings of Conference on Compilier Construction&#8221;, 2002.<BR>
+<BR>
+<!--TOC section Installation-->
+
+<H2 CLASS="section"><A NAME="htoc2">2</A>&nbsp;&nbsp;Installation</H2><!--SEC END -->
+
+You will need OCaml release 3.08 or higher to build CIL. CIL has been tested
+on Linux and on Windows (where it can behave at either Microsoft Visual C or
+gcc).<BR>
+<BR>
+If you want to use CIL on Windows then you must get a complete installation
+of <TT>cygwin</TT> and the source-code OCaml distribution and compile it yourself
+using the cygwin tools (as opposed to getting the Win32 native-code version of
+OCaml). If you have not done this before then take a look
+<A HREF="../ccured/setup.html">here</A>. (Don't need to worry about <TT>cvs</TT> and
+<TT>ssh</TT> unless you will need to use the master CVS repository for CIL.)
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Download the CIL <A HREF="distrib">distribution</A> (latest version is
+<A HREF="distrib/cil-1.3.5.tar.gz"><TT>distrib/cil-1.3.5.tar.gz</TT></A>). See the Section&nbsp;<A HREF="#sec-changes">20</A> for recent changes to the CIL distribution.
+<LI CLASS="li-enumerate">Unzip and untar the source distribution. This will create a directory
+ called <TT>cil</TT> whose structure is explained below.<BR>
+<TT>tar xvfz cil-1.3.5.tar.gz</TT>
+<LI CLASS="li-enumerate">Enter the <TT>cil</TT> directory and run the <TT>configure</TT> script and then 
+ GNU make to build the distribution. If you are on Windows, at least the
+ <TT>configure</TT> step must be run from within <TT>bash</TT>.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<CODE>cd cil</CODE><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<CODE>./configure</CODE><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<CODE>make</CODE><BR>
+&nbsp;&nbsp;&nbsp;&nbsp;<CODE>make quicktest</CODE><BR>
+<LI CLASS="li-enumerate">You should now find <TT>cilly.asm.exe</TT> in a
+subdirectory of <TT>obj</TT>. The name of the subdirectory is either <TT>x86_WIN32</TT>
+if you are using <TT>cygwin</TT> on Windows or <TT>x86_LINUX</TT> if you are using
+Linux (although you should be using instead the Perl wrapper <TT>bin/cilly</TT>).
+Note that we do not have an <TT>install</TT> make target and you should use Cil
+from the development directory. 
+<LI CLASS="li-enumerate">If you decide to use CIL, <B>please</B>
+<A HREF="mailto:necula@cs.berkeley.edu">send us a note</A>. This will help recharge
+our batteries after more than a year of development. And of course, do send us
+your bug reports as well.</OL>
+The <TT>configure</TT> script tries to find appropriate defaults for your system.
+You can control its actions by passing the following arguments:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>CC=foo</TT> Specifies the path for the <TT>gcc</TT> executable. By default
+whichever version is in the PATH is used. If <TT>CC</TT> specifies the Microsoft
+<TT>cl</TT> compiler, then that compiler will be set as the default one. Otherwise,
+the <TT>gcc</TT> compiler will be the default.
+</UL>
+CIL requires an underlying C compiler and preprocessor. CIL depends on the
+underlying compiler and machine for the sizes and alignment of types.The
+installation procedure for CIL queries the underlying compiler for
+architecture and compiler dependent configuration parameters, such as the size
+of a pointer or the particular alignment rules for structure fields. (This
+means, of course, that you should re-run <TT>./configure</TT> when you move CIL to
+another machine.)<BR>
+<BR>
+We have tested CIL on the following compilers:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+On Windows, <TT>cl</TT> compiler version 12.00.8168 (MSVC 6),
+ 13.00.9466 (MSVC .Net), and 13.10.3077 (MSVC .Net 2003). Run <TT>cl</TT>
+ with no arguments to get the compiler version. 
+<LI CLASS="li-itemize">On Windows, using <TT>cygwin</TT> and <TT>gcc</TT> version 2.95.3, 3.0,
+ 3.2, 3.3, and 3.4.
+<LI CLASS="li-itemize">On Linux, using <TT>gcc</TT> version 2.95.3, 3.0, 3.2, 3.3, and 4.0.
+</UL>
+Others have successfully used CIL with Mac OS X (on both PowerPC and
+x86), Solaris, and *BSD. If you make any changes to the build
+system in order to run CIL on your platform, please send us a patch.<BR>
+<BR>
+ <!--TOC section Distribution Contents-->
+
+<H2 CLASS="section"><A NAME="htoc3">3</A>&nbsp;&nbsp;Distribution Contents</H2><!--SEC END -->
+
+The file <A HREF="distrib/cil-1.3.5.tar.gz"><TT>distrib/cil-1.3.5.tar.gz</TT></A> 
+contains the complete source CIL distribution, 
+consisting of the following files:<BR>
+<TABLE CELLSPACING=2 CELLPADDING=0>
+<TR><TD ALIGN=left NOWRAP>Filename</TD>
+<TD ALIGN=left NOWRAP>Description</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>Makefile.in</TT></TD>
+<TD ALIGN=left NOWRAP><TT>configure</TT> source for the 
+ Makefile that builds CIL</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>configure</TT></TD>
+<TD ALIGN=left NOWRAP>The configure script</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>configure.in</TT></TD>
+<TD ALIGN=left NOWRAP>The <TT>autoconf</TT> source for <TT>configure</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>config.guess</TT>, <TT>config.sub</TT>, <TT>install-sh</TT></TD>
+<TD ALIGN=left NOWRAP>stuff required by
+ <TT>configure</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>doc/</TT></TD>
+<TD ALIGN=left NOWRAP>HTML documentation of the CIL API</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>obj/</TT></TD>
+<TD ALIGN=left NOWRAP>Directory that will contain the compiled
+ CIL modules and executables</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>bin/cilly.in</TT></TD>
+<TD ALIGN=left NOWRAP>The <TT>configure</TT> source for a Perl script 
+ that can be invoked with the 
+ same arguments as either <TT>gcc</TT> or
+ Microsoft Visual C and will convert the
+ program to CIL, perform some simple
+ transformations, emit it and compile it as
+ usual.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>lib/CompilerStub.pm</TT></TD>
+<TD ALIGN=left NOWRAP>A Perl class that can be used to write code
+ that impersonates a compiler. <TT>cilly</TT>
+ uses it.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>lib/Merger.pm</TT></TD>
+<TD ALIGN=left NOWRAP>A subclass of <TT>CompilerStub.pm</TT> that can
+ be used to merge source files into a single
+ source file.<TT>cilly</TT>
+ uses it.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>bin/patcher.in</TT></TD>
+<TD ALIGN=left NOWRAP>A Perl script that applies specified patches
+ to standard include files.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/check.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Checks the well-formedness of a CIL file</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/cil.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Definition of CIL abstract syntax and
+ utilities for manipulating it</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/clist.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for efficiently managing lists
+ that need to be concatenated often</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/errormsg.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for error reporting</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/ext/heapify.ml</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL transformation that moves array local
+ variables from the stack to the heap</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/ext/logcalls.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL transformation that logs every
+ function call</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/ext/sfi.ml</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL transformation that can log every
+ memory read and write</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/clexer.mll</TT></TD>
+<TD ALIGN=left NOWRAP>The lexer</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cparser.mly</TT></TD>
+<TD ALIGN=left NOWRAP>The parser</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cabs.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The abstract syntax</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cprint.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The pretty printer for CABS</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cabs2cil.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The elaborator to CIL</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/main.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The <TT>cilly</TT> application</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/pretty.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for pretty printing</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/rmtmps.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL tranformation that removes unused
+ types, variables and inlined functions</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/stats.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for maintaining timing statistics</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/testcil.ml</TT></TD>
+<TD ALIGN=left NOWRAP>A random test of CIL (against the resident 
+ C compiler)</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/trace.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities useful for printing debugging
+ information</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/</TT></TD>
+<TD ALIGN=left NOWRAP>Miscellaneous libraries that are not
+ specific to CIL.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/Makefile.ocaml</TT></TD>
+<TD ALIGN=left NOWRAP>A file that is included by <TT>Makefile</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/Makefile.ocaml.build</TT></TD>
+<TD ALIGN=left NOWRAP>A file that is included by <TT>Makefile</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/perfcount.c</TT></TD>
+<TD ALIGN=left NOWRAP>C code that links with src/stats.ml
+ and reads Intel performance
+ counters.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>obj/@ARCHOS@/feature_config.ml</TT></TD>
+<TD ALIGN=left NOWRAP>File generated by the Makefile
+ describing which extra &#8220;features&#8221;
+ to compile. See Section&nbsp;<A HREF="#sec-cil">5</A></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>obj/@ARCHOS@/machdep.ml</TT></TD>
+<TD ALIGN=left NOWRAP>File generated by the Makefile containing
+ information about your architecture,
+ such as the size of a pointer</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/machdep.c</TT></TD>
+<TD ALIGN=left NOWRAP>C program that generates
+ <TT>machdep.ml</TT> files</TD>
+</TR></TABLE><BR>
+<!--TOC section Compiling C to CIL-->
+
+<H2 CLASS="section"><A NAME="htoc4">4</A>&nbsp;&nbsp;Compiling C to CIL</H2><!--SEC END -->
+<A NAME="sec-cabs2cil"></A>
+In this section we try to describe a few of the many transformations that are
+applied to a C program to convert it to CIL. The module that implements this
+conversion is about 5000 lines of OCaml code. In contrast a simple program
+transformation that instruments all functions to keep a shadow stack of the
+true return address (thus preventing stack smashing) is only 70 lines of code.
+This example shows that the analysis is so much simpler because it has to
+handle only a few simple C constructs and also because it can leverage on CIL
+infrastructure such as visitors and pretty-printers.<BR>
+<BR>
+In no particular order these are a few of the most significant ways in which
+C programs are compiled into CIL:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+CIL will eliminate all declarations for unused entities. This means that
+just because your hello world program includes <TT>stdio.h</TT> it does not mean
+that your analysis has to handle all the ugly stuff from <TT>stdio.h</TT>.<BR>
+<BR>
+<LI CLASS="li-enumerate">Type specifiers are interpreted and normalized:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int long signed x;
+signed long extern x;
+long static int long y;
+
+// Some code that uses these declaration, so that CIL does not remove them
+int main() { return x + y; }
+</FONT></PRE>
+See the <A HREF="examples/ex1.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Anonymous structure and union declarations are given a name. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ struct { int x; } s;
+</FONT></PRE>
+See the <A HREF="examples/ex2.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Nested structure tag definitions are pulled apart. This means that all
+structure tag definitions can be found by a simple scan of the globals.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct foo {
+   struct bar {
+      union baz { 
+          int x1; 
+          double x2;
+      } u1;
+      int y;
+   } s1;
+   int z;
+} f;
+</FONT></PRE>
+See the <A HREF="examples/ex3.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">All structure, union, enumeration definitions and the type definitions
+from inners scopes are moved to global scope (with appropriate renaming). This
+facilitates moving around of the references to these entities.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int main() {
+  struct foo { 
+        int x; } foo; 
+  {
+     struct foo { 
+        double d;
+     };
+     return foo.x;
+  }      
+}
+</FONT></PRE>
+See the <A HREF="examples/ex4.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Prototypes are added for those functions that are called before being
+defined. Furthermore, if a prototype exists but does not specify the type of
+parameters that is fixed. But CIL will not be able to add prototypes for those
+functions that are neither declared nor defined (but are used!).
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int f();  // Prototype without arguments
+  int f(double x) {
+      return g(x);
+  }
+  int g(double x) {
+     return x;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex5.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Array lengths are computed based on the initializers or by constant
+folding.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int a1[] = {1,2,3};
+  int a2[sizeof(int) &gt;= 4 ? 8 : 16];
+</FONT></PRE>
+See the <A HREF="examples/ex6.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Enumeration tags are computed using constant folding:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int main() {
+  enum { 
+     FIVE = 5, 
+     SIX, SEVEN, 
+     FOUR = FIVE - 1, 
+     EIGHT = sizeof(double)
+  } x = FIVE;
+ return x;
+}
+
+</FONT></PRE>
+See the <A HREF="examples/ex7.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializers are normalized to include specific initialization for the
+missing elements:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int a1[5] = {1,2,3};
+  struct foo { int x, y; } s1 = { 4 };
+</FONT></PRE>
+See the <A HREF="examples/ex8.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializer designators are interpreted and eliminated. Subobjects are
+properly marked with braces. CIL implements
+the whole ISO C99 specification for initializer (neither GCC nor MSVC do) and
+a few GCC extensions. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  struct foo { 
+     int x, y; 
+     int a[5];
+     struct inner {
+        int z;
+     } inner;
+  } s = { 0, .inner.z = 3, .a[1 ... 2] = 5, 4, y : 8 };
+</FONT></PRE>
+See the <A HREF="examples/ex9.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">String initializers for arrays of characters are processed
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+char foo[] = "foo plus bar";
+</FONT></PRE>
+See the <A HREF="examples/ex10.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">String constants are concatenated
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+char *foo = "foo " " plus " " bar ";
+</FONT></PRE>
+See the <A HREF="examples/ex11.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializers for local variables are turned into assignments. This is in
+order to separate completely the declarative part of a function body from the
+statements. This has the unfortunate effect that we have to drop the <TT>const</TT>
+qualifier from local variables !
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x = 5; 
+  struct foo { int f1, f2; } a [] = {1, 2, 3, 4, 5 };
+</FONT></PRE>
+See the <A HREF="examples/ex12.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Local variables in inner scopes are pulled to function scope (with
+appropriate renaming). Local scopes thus disappear. This makes it easy to find
+and operate on all local variables in a function.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x = 5; 
+  int main() {
+    int x = 6;
+    { 
+      int x = 7;
+      return x;
+    }
+    return x;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex13.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Global declarations in local scopes are moved to global scope:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x = 5; 
+  int main() {
+    int x = 6;
+    { 
+      static int x = 7;
+      return x;
+    }
+    return x;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex14.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Return statements are added for functions that are missing them. If the
+return type is not a base type then a <TT>return</TT> without a value is added.
+The guaranteed presence of return statements makes it easy to implement a
+transformation that inserts some code to be executed immediately before
+returning from a function.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo() {
+    int x = 5;
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex15.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">One of the most significant transformations is that expressions that
+contain side-effects are separated into statements. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x, f(int);
+   return (x ++ + f(x));
+</FONT></PRE>
+See the <A HREF="examples/ex16.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+Internally, the <TT>x ++</TT> statement is turned into an assignment which the
+pretty-printer prints like the original. CIL has only three forms of basic
+statements: assignments, function calls and inline assembly.<BR>
+<BR>
+<LI CLASS="li-enumerate">Shortcut evaluation of boolean expressions and the <TT>?:</TT> operator are
+compiled into explicit conditionals:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x;
+  int y = x ? 2 : 4;
+  int z = x || y;
+  // Here we duplicate the return statement
+  if(x &amp;&amp; y) { return 0; } else { return 1; }
+  // To avoid excessive duplication, CIL uses goto's for 
+  // statement that have more than 5 instructions
+  if(x &amp;&amp; y || z) { x ++; y ++; z ++; x ++; y ++; return z; }
+</FONT></PRE>
+See the <A HREF="examples/ex17.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC's conditional expression with missing operands are also compiled
+into conditionals:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int f();;
+  return f() ? : 4;
+</FONT></PRE>
+See the <A HREF="examples/ex18.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">All forms of loops (<TT>while</TT>, <TT>for</TT> and <TT>do</TT>) are compiled
+internally as a single <TT>while(1)</TT> looping construct with explicit <TT>break</TT>
+statement for termination. For simple <TT>while</TT> loops the pretty printer is
+able to print back the original:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x, y;
+   for(int i = 0; i&lt;5; i++) {
+      if(i == 5) continue;
+      if(i == 4) break;
+      i += 2;
+   } 
+   while(x &lt; 5) {
+     if(x == 3) continue;
+     x ++;
+   }
+</FONT></PRE>
+See the <A HREF="examples/ex19.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC's block expressions are compiled away. (That's right there is an
+infinite loop in this code.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x = 5, y = x;
+   int z = ({ x++; L: y -= x; y;});
+   return ({ goto L; 0; });
+</FONT></PRE>
+See the <A HREF="examples/ex20.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL contains support for both MSVC and GCC inline assembly (both in one
+internal construct)<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL compiles away the GCC extension that allows many kinds of constructs
+to be used as lvalues:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   int x, y, z;
+   return &amp;(x ? y : z) - &amp; (x ++, x);
+</FONT></PRE>
+See the <A HREF="examples/ex21.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">All types are computed and explicit casts are inserted for all
+promotions and conversions that a compiler must insert:<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL will turn old-style function definition (without prototype) into
+new-style definitions. This will make the compiler less forgiving when
+checking function calls, and will catch for example cases when a function is
+called with too few arguments. This happens in old-style code for the purpose
+of implementing variable argument functions.<BR>
+<BR>
+<LI CLASS="li-enumerate">Since CIL sees the source after preprocessing the code after CIL does
+not contain the comments and the preprocessing directives.<BR>
+<BR>
+<LI CLASS="li-enumerate">CIL will remove from the source file those type declarations, local
+variables and inline functions that are not used in the file. This means that
+your analysis does not have to see all the ugly stuff that comes from the
+header files: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+#include &lt;stdio.h&gt;
+
+typedef int unused_type;
+
+static char unused_static (void) { return 0; }
+
+int main() {
+  int unused_local;
+  printf("Hello world\n"); // Only printf will be kept from stdio.h     
+}
+</FONT></PRE>
+See the <A HREF="examples/ex22.txt">CIL output</A> for this
+code fragment</OL>
+<!--TOC section How to Use CIL-->
+
+<H2 CLASS="section"><A NAME="htoc5">5</A>&nbsp;&nbsp;How to Use CIL</H2><!--SEC END -->
+<A NAME="sec-cil"></A><!--NAME cilly.html-->
+<BR>
+<BR>
+There are two predominant ways to use CIL to write a program analysis or
+transformation. The first is to phrase your analysis as a module that is
+called by our existing driver. The second is to use CIL as a stand-alone
+library. We highly recommend that you use <TT>cilly</TT>, our driver. <BR>
+<BR>
+<!--TOC subsection Using <TT>cilly</TT>, the CIL driver-->
+
+<H3 CLASS="subsection"><A NAME="htoc6">5.1</A>&nbsp;&nbsp;Using <TT>cilly</TT>, the CIL driver</H3><!--SEC END -->
+
+The most common way to use CIL is to write an Ocaml module containing your
+analysis and transformation, which you then link into our boilerplate
+driver application called <TT>cilly</TT>. <TT>cilly</TT> is a Perl script that
+processes and mimics <TT>GCC</TT> and <TT>MSVC</TT> command-line arguments and then
+calls <TT>cilly.byte.exe</TT> or <TT>cilly.asm.exe</TT> (CIL's Ocaml executable). <BR>
+<BR>
+An example of such module is <TT>logwrites.ml</TT>, a transformation that is
+distributed with CIL and whose purpose is to instrument code to print the
+addresses of memory locations being written. (We plan to release a
+C-language interface to CIL so that you can write your analyses in C
+instead of Ocaml.) See Section&nbsp;<A HREF="#sec-Extension">8</A> for a survey of other example
+modules. <BR>
+<BR>
+Assuming that you have written <TT>/home/necula/logwrites.ml</TT>, 
+here is how you use it: 
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">Modify <TT>logwrites.ml</TT> so that it includes a CIL &#8220;feature
+ descriptor&#8221; like this: 
+<PRE CLASS="verbatim">
+let feature : featureDescr = 
+  { fd_name = "logwrites";              
+    fd_enabled = ref false;
+    fd_description = "generation of code to log memory writes";
+    fd_extraopt = [];
+    fd_doit = 
+    (function (f: file) -&gt; 
+      let lwVisitor = new logWriteVisitor in
+      visitCilFileSameGlobals lwVisitor f)
+  } 
+</PRE>The <TT>fd_name</TT> field names the feature and its associated
+ command-line arguments. The <TT>fd_enabled</TT> field is a <TT>bool ref</TT>.
+ &#8220;<TT>fd_doit</TT>&#8221; will be invoked if <TT>!fd_enabled</TT> is true after
+ argument parsing, so initialize the ref cell to true if you want
+ this feature to be enabled by default.<BR>
+<BR>
+When the user passes the <TT>--dologwrites</TT>
+ command-line option to <TT>cilly</TT>, the variable associated with the
+ <TT>fd_enabled</TT> flag is set and the <TT>fd_doit</TT> function is called
+ on the <TT>Cil.file</TT> that represents the merger (see Section&nbsp;<A HREF="#sec-merger">13</A>) of
+ all C files listed as arguments. <BR>
+<BR>
+<LI CLASS="li-enumerate">Invoke <TT>configure</TT> with the arguments
+<PRE CLASS="verbatim">
+./configure EXTRASRCDIRS=/home/necula EXTRAFEATURES=logwrites
+</PRE>
+ This step works if each feature is packaged into its own ML file, and the
+name of the entry point in the file is <TT>feature</TT>.<BR>
+<BR>
+An alternative way to specify the new features is to change the build files
+yourself, as explained below. You'll need to use this method if a single
+feature is split across multiple files.
+<OL CLASS="enumerate" type=a><LI CLASS="li-enumerate">
+ Put <TT>logwrites.ml</TT> in the <TT>src</TT> or <TT>src/ext</TT> directory. This
+ will make sure that <TT>make</TT> can find it. If you want to put it in some
+ other directory, modify <TT>Makefile.in</TT> and add to <TT>SOURCEDIRS</TT> your
+ directory. Alternately, you can create a symlink from <TT>src</TT> or
+ <TT>src/ext</TT> to your file.<BR>
+<BR>
+<LI CLASS="li-enumerate">Modify the <TT>Makefile.in</TT> and add your module to the 
+ <TT>CILLY_MODULES</TT> or
+ <TT>CILLY_LIBRARY_MODULES</TT> variables. The order of the modules matters. Add
+ your modules somewhere after <TT>cil</TT> and before <TT>main</TT>.<BR>
+<BR>
+<LI CLASS="li-enumerate">If you have any helper files for your module, add those to
+ the makefile in the same way. e.g.:
+<PRE CLASS="verbatim">
+CILLY_MODULES = $(CILLY_LIBRARY_MODULES) \
+                myutilities1 myutilities2 logwrites \
+                main
+</PRE>
+ Again, order is important: <TT>myutilities2.ml</TT> will be able to refer
+ to Myutilities1 but not Logwrites. If you have any ocamllex or ocamlyacc
+ files, add them to both <TT>CILLY_MODULES</TT> and either <TT>MLLS</TT> or
+ <TT>MLYS</TT>.<BR>
+<BR>
+<LI CLASS="li-enumerate">Modify <TT>main.ml</TT> so that your new feature descriptor appears in
+ the global list of CIL features. 
+<PRE CLASS="verbatim">
+let features : C.featureDescr list = 
+  [ Logcalls.feature;
+    Oneret.feature;    
+    Heapify.feature1;  
+    Heapify.feature2;
+    makeCFGFeature; 
+    Partial.feature;
+    Simplemem.feature;
+    Logwrites.feature;  (* add this line to include the logwrites feature! *)
+  ] 
+  @ Feature_config.features 
+</PRE>
+ Features are processed in the order they appear on this list. Put
+ your feature last on the list if you plan to run any of CIL's
+ built-in features (such as makeCFGfeature) before your own.</OL><BR>
+Standard code in <TT>cilly</TT> takes care of adding command-line arguments,
+ printing the description, and calling your function automatically. 
+ Note: do not worry about introducing new bugs into CIL by adding a single
+ line to the feature list. <BR>
+<BR>
+<LI CLASS="li-enumerate">Now you can invoke the <TT>cilly</TT> application on a preprocessed file, or
+ instead use the <TT>cilly</TT> driver which provides a convenient compiler-like
+ interface to <TT>cilly</TT>. See Section&nbsp;<A HREF="#sec-driver">7</A> for details using <TT>cilly</TT>.
+ Remember to enable your analysis by passing the right argument (e.g.,
+ <TT>--dologwrites</TT>). </OL>
+<!--TOC subsection Using CIL as a library-->
+
+<H3 CLASS="subsection"><A NAME="htoc7">5.2</A>&nbsp;&nbsp;Using CIL as a library</H3><!--SEC END -->
+
+CIL can also be built as a library that is called from your stand-alone
+application. Add <TT>cil/src</TT>, <TT>cil/src/frontc</TT>, <TT>cil/obj/x86_LINUX</TT>
+(or <TT>cil/obj/x86_WIN32</TT>) to your Ocaml project <TT>-I</TT> include paths.
+Building CIL will also build the library <TT>cil/obj/*/cil.cma</TT> (or
+<TT>cil/obj/*/cil.cmxa</TT>). You can then link your application against that
+library. <BR>
+<BR>
+You can call the <TT>Frontc.parse: string -&gt; unit -&gt; Cil.file</TT> function with
+the name of a file containing the output of the C preprocessor.
+The <TT>Mergecil.merge: Cil.file list -&gt; string -&gt; Cil.file</TT> function merges
+multiple files. You can then invoke your analysis function on the resulting
+<TT>Cil.file</TT> data structure. You might want to call
+<TT>Rmtmps.removeUnusedTemps</TT> first to clean up the prototypes and variables
+that are not used. Then you can call the function <TT>Cil.dumpFile:
+cilPrinter -&gt; out_channel -&gt; Cil.file -&gt; unit</TT> to print the file to a
+given output channel. A good <TT>cilPrinter</TT> to use is
+<TT>defaultCilPrinter</TT>. <BR>
+<BR>
+Check out <TT>src/main.ml</TT> and <TT>bin/cilly</TT> for other good ideas
+about high-level file processing. Again, we highly recommend that you just
+our <TT>cilly</TT> driver so that you can avoid spending time re-inventing the
+wheel to provide drop-in support for standard <TT>makefile</TT>s. <BR>
+<BR>
+Here is a concrete example of compiling and linking your project against
+CIL. Imagine that your program analysis or transformation is contained in
+the single file <TT>main.ml</TT>. 
+<PRE CLASS="verbatim">
+$ ocamlopt -c -I $(CIL)/obj/x86_LINUX/ main.ml
+$ ocamlopt -ccopt -L$(CIL)/obj/x86_LINUX/ -o main unix.cmxa str.cmxa \ 
+        $(CIL)/obj/x86_LINUX/cil.cmxa main.cmx
+</PRE>
+The first line compiles your analysis, the second line links it against CIL
+(as a library) and the Ocaml Unix library. For more information about
+compiling and linking Ocaml programs, see the Ocaml home page
+at <A HREF="javascript:loadTop('http://caml.inria.fr/ocaml/')">http://caml.inria.fr/ocaml/</A>. <BR>
+<BR>
+In the next section we give an overview of the API that you can use
+to write your analysis and transformation. <BR>
+<BR>
+<!--TOC section CIL API Documentation-->
+
+<H2 CLASS="section"><A NAME="htoc8">6</A>&nbsp;&nbsp;CIL API Documentation</H2><!--SEC END -->
+<A NAME="sec-api"></A> 
+The CIL API is documented in the file <TT>src/cil.mli</TT>. We also have an
+<A HREF="api/index.html">online documentation</A> extracted from <TT>cil.mli</TT>. We
+index below the main types that are used to represent C programs in CIL: 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<A HREF="api/index_types.html">An index of all types</A>
+<LI CLASS="li-itemize"><A HREF="api/index_values.html">An index of all values</A>
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEfile">Cil.file</A> is the representation of a file.
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEglobal">Cil.global</A> is the representation of a global declaration or
+definitions. Values for <A HREF="api/Cil.html#VALemptyFunction">operating on globals</A>.
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEtyp">Cil.typ</A> is the representation of a type. 
+Values for <A HREF="api/Cil.html#VALvoidType">operating on types</A>.
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEcompinfo">Cil.compinfo</A> is the representation of a structure or a union
+type
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEfieldinfo">Cil.fieldinfo</A> is the representation of a field in a structure
+or a union
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEenuminfo">Cil.enuminfo</A> is the representation of an enumeration type. 
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEvarinfo">Cil.varinfo</A> is the representation of a variable 
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEfundec">Cil.fundec</A> is the representation of a function
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPElval">Cil.lval</A> is the representation of an lvalue.
+Values for <A HREF="api/Cil.html#VALmakeVarInfo">operating on lvalues</A>.
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEexp">Cil.exp</A> is the representation of an expression without
+side-effects. 
+Values for <A HREF="api/Cil.html#VALzero">operating on expressions</A>.
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEinstr">Cil.instr</A> is the representation of an instruction (with
+side-effects but without control-flow)
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEstmt">Cil.stmt</A> is the representation of a control-flow statements. 
+Values for <A HREF="api/Cil.html#VALmkStmt">operating on statements</A>.
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#TYPEattribute">Cil.attribute</A> is the representation of attributes. 
+Values for <A HREF="api/Cil.html#TYPEattributeClass">operating on attributes</A>.
+</UL>
+<!--TOC subsection Using the visitor-->
+
+<H3 CLASS="subsection"><A NAME="htoc9">6.1</A>&nbsp;&nbsp;Using the visitor</H3><!--SEC END -->
+<A NAME="sec-visitor"></A>
+One of the most useful tools exported by the CIL API is an implementation of
+the visitor pattern for CIL programs. The visiting engine scans depth-first
+the structure of a CIL program and at each node is queries a user-provided
+visitor structure whether it should do one of the following operations: 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+Ignore this node and all its descendants
+<LI CLASS="li-itemize">Descend into all of the children and when done rebuild the node if any
+of the children have changed. 
+<LI CLASS="li-itemize">Replace the subtree rooted at the node with another tree.
+<LI CLASS="li-itemize">Replace the subtree with another tree, then descend into the children
+and rebuild the node if necessary and then invoke a user-specified function. 
+<LI CLASS="li-itemize">In addition to all of the above actions then visitor can specify that
+some instructions should be queued to be inserted before the current
+instruction or statement being visited. 
+</UL>
+By writing visitors you can customize the program traversal and
+transformation. One major limitation of the visiting engine is that it does
+not propagate information from one node to another. Each visitor must use its
+own private data to achieve this effect if necessary. <BR>
+<BR>
+Each visitor is an object that is an instance of a class of type <A HREF="api/Cil.cilVisitor.html#.">Cil.cilVisitor..</A>
+The most convenient way to obtain such classes is to specialize the
+<A HREF="api/Cil.nopCilVisitor.html#c">Cil.nopCilVisitor.c</A>lass (which just traverses the tree doing
+nothing). Any given specialization typically overrides only a few of the
+methods. Take a look for example at the visitor defined in the module
+<TT>logwrites.ml</TT>. Another, more elaborate example of a visitor is the
+[copyFunctionVisitor] defined in <TT>cil.ml</TT>.<BR>
+<BR>
+Once you have defined a visitor you can invoke it with one of the functions:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<A HREF="api/Cil.html#VALvisitCilFile">Cil.visitCilFile</A> or <A HREF="api/Cil.html#VALvisitCilFileSameGlobals">Cil.visitCilFileSameGlobals</A> - visit a file
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilGlobal">Cil.visitCilGlobal</A> - visit a global
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilFunction">Cil.visitCilFunction</A> - visit a function definition
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilExp">Cil.visitCilExp</A> - visit an expression
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilLval">Cil.visitCilLval</A> - visit an lvalue
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilInstr">Cil.visitCilInstr</A> - visit an instruction
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilStmt">Cil.visitCilStmt</A> - visit a statement
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALvisitCilType">Cil.visitCilType</A> - visit a type. Note that this does not visit
+the files of a composite type. use visitGlobal to visit the [GCompTag] that
+defines the fields.
+</UL>
+Some transformations may want to use visitors to insert additional
+instructions before statements and instructions. To do so, pass a list of
+instructions to the <A HREF="api/Cil.html#VALqueueInstr">Cil.queueInstr</A> method of the specialized
+object. The instructions will automatically be inserted before that
+instruction in the transformed code. The <A HREF="api/Cil.html#VALunqueueInstr">Cil.unqueueInstr</A> method
+should not normally be called by the user. <BR>
+<BR>
+<!--TOC subsection Interpreted Constructors and Deconstructors-->
+
+<H3 CLASS="subsection"><A NAME="htoc10">6.2</A>&nbsp;&nbsp;Interpreted Constructors and Deconstructors</H3><!--SEC END -->
+
+Interpreted constructors and deconstructors are a facility for constructing
+and deconstructing CIL constructs using a pattern with holes that can be
+filled with a variety of kinds of elements. The pattern is a string that uses
+the C syntax to represent C language elements. For example, the following
+code:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+Formatcil.cType "void * const (*)(int x)"
+</FONT></PRE>
+is an alternative way to construct the internal representation of the type of pointer to function
+with an integer argument and a void * const as result: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+TPtr(TFun(TVoid [Attr("const", [])],
+          [ ("x", TInt(IInt, []), []) ], false, []), [])
+</FONT></PRE>
+The advantage of the interpreted constructors is that you can use familiar C
+syntax to construct CIL abstract-syntax trees. <BR>
+<BR>
+You can construct this way types, lvalues, expressions, instructions and
+statements. The pattern string can also contain a number of placeholders that
+are replaced during construction with CIL items passed as additional argument
+to the construction function. For example, the <TT>%e:id</TT> placeholder means
+that the argument labeled &#8220;id&#8221; (expected to be of form <TT>Fe exp</TT>) will
+supply the expression to replace the placeholder. For example, the following
+code constructs an increment instruction at location <TT>loc</TT>:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+Formatcil.cInstr "%v:x = %v:x + %e:something"
+        loc
+        [ ("something", Fe some_exp);
+          ("x", Fv some_varinfo) ]
+</FONT></PRE>
+An alternative way to construct the same CIL instruction is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+Set((Var some_varinfo, NoOffset),
+    BinOp(PlusA, Lval (Var some_varinfo, NoOffset),
+          some_exp, intType), 
+    loc)
+</FONT></PRE>
+See <A HREF="api/Cil.html#TYPEformatArg">Cil.formatArg</A> for a definition of the placeholders that are
+understood.<BR>
+<BR>
+A dual feature is the interpreted deconstructors. This can be used to test
+whether a CIL construct has a certain form:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+Formatcil.dType "void * const (*)(int x)" t
+</FONT></PRE>
+will test whether the actual argument <TT>t</TT> is indeed a function pointer of
+the required type. If it is then the result is <TT>Some []</TT> otherwise it is
+<TT>None</TT>. Furthermore, for the purpose of the interpreted deconstructors
+placeholders in patterns match anything of the right type. For example, 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+Formatcil.dType "void * (*)(%F:t)" t
+</FONT></PRE>
+will match any function pointer type, independent of the type and number of
+the formals. If the match succeeds the result is <TT>Some [ FF forms ]</TT> where
+<TT>forms</TT> is a list of names and types of the formals. Note that each member
+in the resulting list corresponds positionally to a placeholder in the
+pattern.<BR>
+<BR>
+The interpreted constructors and deconstructors do not support the complete C
+syntax, but only a substantial fragment chosen to simplify the parsing. The
+following is the syntax that is supported:
+<PRE CLASS="verbatim">
+Expressions:
+  E ::= %e:ID | %d:ID | %g:ID | n | L | ( E ) | Unop E | E Binop E 
+        | sizeof E | sizeof ( T ) | alignof E  | alignof ( T ) 
+        | &amp; L | ( T ) E 
+
+Unary operators:
+  Unop ::= + | - | ~ | %u:ID
+
+Binary operators:
+  Binop ::= + | - | * | / | &lt;&lt; | &gt;&gt; | &amp; | ``|'' | ^ 
+          | == | != | &lt; | &gt; | &lt;= | &gt;= | %b:ID
+
+Lvalues:
+  L ::= %l:ID | %v:ID Offset | * E | (* E) Offset | E -&gt; ident Offset 
+
+Offsets:
+  Offset ::= empty | %o:ID | . ident Offset | [ E ] Offset
+
+Types:
+  T ::= Type_spec Attrs Decl
+
+Type specifiers:
+  Type_spec ::= void | char | unsigned char | short | unsigned short
+            | int | unsigned int | long | unsigned long | %k:ID | float 
+            | double | struct %c:ID | union %c:ID 
+
+
+Declarators:
+  Decl ::= * Attrs Decl | Direct_decl
+
+
+Direct declarators:
+  Direct_decl ::= empty | ident | ( Attrs Decl ) 
+                 | Direct_decl [ Exp_opt ]
+                 | ( Attrs Decl )( Parameters )
+
+Optional expressions
+  Exp_opt ::= empty | E | %eo:ID
+
+Formal parameters
+  Parameters ::= empty | ... | %va:ID | %f:ID | T | T , Parameters
+
+List of attributes
+  Attrs ::= empty | %A:ID | Attrib Attrs
+
+Attributes
+  Attrib ::= const | restrict | volatile | __attribute__ ( ( GAttr ) )
+
+GCC Attributes
+  GAttr ::= ident | ident ( AttrArg_List )
+
+Lists of GCC Attribute arguments:
+  AttrArg_List ::= AttrArg | %P:ID | AttrArg , AttrArg_List
+
+GCC Attribute arguments  
+  AttrArg ::= %p:ID | ident | ident ( AttrArg_List )
+
+Instructions
+  Instr ::= %i:ID ; | L = E ; | L Binop= E | Callres L ( Args )
+
+Actual arguments
+   Args ::= empty | %E:ID | E | E , Args
+
+Call destination
+   Callres ::= empty | L = | %lo:ID
+
+Statements
+  Stmt ::= %s:ID | if ( E ) then Stmt ; | if ( E ) then Stmt else Stmt ;
+       | return Exp_opt | break ; | continue ; | { Stmt_list } 
+       | while (E ) Stmt | Instr_list 
+
+Lists of statements
+   Stmt_list ::= empty | %S:ID | Stmt Stmt_list  
+                | Type_spec Attrs Decl ; Stmt_list
+                | Type_spec Attrs Decl = E ; Stmt_list
+                | Type_spec Attrs Decl = L (Args) ; Stmt_list
+
+List of instructions
+   Instr_list ::= Instr | %I:ID | Instr Instr_list
+</PRE>
+Notes regarding the syntax:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+In the grammar description above non-terminals are written with
+uppercase initial<BR>
+<BR>
+<LI CLASS="li-itemize">All of the patterns consist of the <TT>%</TT> character followed by one or
+two letters, followed by &#8220;:&#8221; and an indentifier. For each such
+pattern there is a corresponding constructor of the <A HREF="api/Cil.html#TYPEformatArg">Cil.formatArg</A>
+type, whose name is the letter 'F' followed by the same one or two letters as
+in the pattern. That constructor is used by the user code to pass a
+<A HREF="api/Cil.html#TYPEformatArg">Cil.formatArg</A> actual argument to the interpreted constructor and by
+the interpreted deconstructor to return what was matched for a pattern.<BR>
+<BR>
+<LI CLASS="li-itemize">If the pattern name is uppercase, it designates a list of the elements
+designated by the corresponding lowercase pattern. E.g. %E designated lists
+of expressions (as in the actual arguments of a call).<BR>
+<BR>
+<LI CLASS="li-itemize">The two-letter patterns whose second letter is &#8220;o&#8221; designate an
+optional element. E.g. %eo designates an optional expression (as in the
+length of an array). <BR>
+<BR>
+<LI CLASS="li-itemize">Unlike in calls to <TT>printf</TT>, the pattern %g is used for strings. <BR>
+<BR>
+<LI CLASS="li-itemize">The usual precedence and associativity rules as in C apply <BR>
+<BR>
+<LI CLASS="li-itemize">The pattern string can contain newlines and comments, using both the
+<TT>/* ... */</TT> style as well as the <TT>//</TT> one. <BR>
+<BR>
+<LI CLASS="li-itemize">When matching a &#8220;cast&#8221; pattern of the form <TT>( T ) E</TT>, the
+deconstructor will match even expressions that do not have the actual cast but
+in that case the type is matched against the type of the expression. E.g. the
+patters <TT>"(int)%e"</TT> will match any expression of type <TT>int</TT> whether it
+has an explicit cast or not. <BR>
+<BR>
+<LI CLASS="li-itemize">The %k pattern is used to construct and deconstruct an integer type of
+any kind. <BR>
+<BR>
+<LI CLASS="li-itemize">Notice that the syntax of types and declaration are the same (in order
+to simplify the parser). This means that technically you can write a whole
+declaration instead of a type in the cast. In this case the name that you
+declare is ignored.<BR>
+<BR>
+<LI CLASS="li-itemize">In lists of formal parameters and lists of attributes, an empty list in
+the pattern matches any formal parameters or attributes. <BR>
+<BR>
+<LI CLASS="li-itemize">When matching types, uses of named types are unrolled to expose a real
+type before matching. <BR>
+<BR>
+<LI CLASS="li-itemize">The order of the attributes is ignored during matching. The the pattern
+for a list of attributes contains %A then the resulting <TT>formatArg</TT> will be
+bound to <B>all</B> attributes in the list. For example, the pattern <TT>"const
+%A"</TT> matches any list of attributes that contains <TT>const</TT> and binds the
+corresponding placeholder to the entire list of attributes, including
+<TT>const</TT>. <BR>
+<BR>
+<LI CLASS="li-itemize">All instruction-patterns must be terminated by semicolon<BR>
+<BR>
+<LI CLASS="li-itemize">The autoincrement and autodecrement instructions are not supported. Also
+not supported are complex expressions, the <TT>&amp;&amp;</TT> and <TT>||</TT> shortcut
+operators, and a number of other more complex instructions or statements. In
+general, the patterns support only constructs that can be represented directly
+in CIL.<BR>
+<BR>
+<LI CLASS="li-itemize">The pattern argument identifiers are not used during deconstruction.
+Instead, the result contains a sequence of values in the same order as the
+appearance of pattern arguments in the pattern.<BR>
+<BR>
+<LI CLASS="li-itemize">You can mix statements with declarations. For each declaration a new
+ temporary will be constructed (using a function you provive). You can then
+ refer to that temporary by name in the rest of the pattern.<BR>
+<BR>
+<LI CLASS="li-itemize">The <TT>%v:</TT> pattern specifier is optional.
+</UL>
+The following function are defined in the <TT>Formatcil</TT> module for
+constructing and deconstructing:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<A HREF="api/Formatcil.html#VALcExp">Formatcil.cExp</A> constructs <A HREF="api/Cil.html#TYPEexp">Cil.exp</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALcType">Formatcil.cType</A> constructs <A HREF="api/Cil.html#TYPEtyp">Cil.typ</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALcLval">Formatcil.cLval</A> constructs <A HREF="api/Cil.html#TYPElval">Cil.lval</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALcInstr">Formatcil.cInstr</A> constructs <A HREF="api/Cil.html#TYPEinstr">Cil.instr</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALcStmt">Formatcil.cStmt</A> and <A HREF="api/Formatcil.html#VALcStmts">Formatcil.cStmts</A> construct <A HREF="api/Cil.html#TYPEstmt">Cil.stmt</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALdExp">Formatcil.dExp</A> deconstructs <A HREF="api/Cil.html#TYPEexp">Cil.exp</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALdType">Formatcil.dType</A> deconstructs <A HREF="api/Cil.html#TYPEtyp">Cil.typ</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALdLval">Formatcil.dLval</A> deconstructs <A HREF="api/Cil.html#TYPElval">Cil.lval</A>.
+<LI CLASS="li-itemize"><A HREF="api/Formatcil.html#VALdInstr">Formatcil.dInstr</A> deconstructs <A HREF="api/Cil.html#TYPElval">Cil.lval</A>.
+</UL>
+Below is an example using interpreted constructors. This example generates
+the CIL representation of code that scans an array backwards and initializes
+every even-index element with an expression:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+Formatcil.cStmts
+  loc
+  "int idx = sizeof(array) / sizeof(array[0]) - 1;
+   while(idx &gt;= 0) {
+     // Some statements to be run for all the elements of the array
+     %S:init
+     if(! (idx &amp; 1)) 
+       array[idx] = %e:init_even;
+     /* Do not forget to decrement the index variable */
+     idx = idx - 1;
+   }"
+  (fun n t -&gt; makeTempVar myfunc ~name:n t)
+  [ ("array", Fv myarray); 
+    ("init", FS [stmt1; stmt2; stmt3]);
+    ("init_even", Fe init_expr_for_even_elements) ]
+</FONT></PRE>
+To write the same CIL statement directly in CIL would take much more effort.
+Note that the pattern is parsed only once and the result (a function that
+takes the arguments and constructs the statement) is memoized. <BR>
+<BR>
+<!--TOC subsubsection Performance considerations for interpreted constructors-->
+
+<H4 CLASS="subsubsection"><A NAME="htoc11">6.2.1</A>&nbsp;&nbsp;Performance considerations for interpreted constructors</H4><!--SEC END -->
+
+Parsing the patterns is done with a LALR parser and it takes some time. To
+improve performance the constructors and deconstructors memoize the parsed
+patterns and will only compile a pattern once. Also all construction and
+deconstruction functions can be applied partially to the pattern string to
+produce a function that can be later used directly to construct or
+deconstruct. This function appears to be about two times slower than if the
+construction is done using the CIL constructors (without memoization the
+process would be one order of magnitude slower.) However, the convenience of
+interpreted constructor might make them a viable choice in many situations
+when performance is not paramount (e.g. prototyping).<BR>
+<BR>
+<!--TOC subsection Printing and Debugging support-->
+
+<H3 CLASS="subsection"><A NAME="htoc12">6.3</A>&nbsp;&nbsp;Printing and Debugging support</H3><!--SEC END -->
+
+The Modules <A HREF="api/Pretty.html">Pretty</A> and <A HREF="api/Errormsg.html">Errormsg</A> contain respectively
+utilities for pretty printing and reporting errors and provide a convenient
+<TT>printf</TT>-like interface. <BR>
+<BR>
+Additionally, CIL defines for each major type a pretty-printing function that
+you can use in conjunction with the <A HREF="api/Pretty.html">Pretty</A> interface. The
+following are some of the pretty-printing functions:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<A HREF="api/Cil.html#VALd_exp">Cil.d_exp</A> - print an expression
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_type">Cil.d_type</A> - print a type
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_lval">Cil.d_lval</A> - print an lvalue
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_global">Cil.d_global</A> - print a global
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_stmt">Cil.d_stmt</A> - print a statment
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_instr">Cil.d_instr</A> - print an instruction
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_init">Cil.d_init</A> - print an initializer
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_attr">Cil.d_attr</A> - print an attribute
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_attrlist">Cil.d_attrlist</A> - print a set of attributes
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_loc">Cil.d_loc</A> - print a location
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_ikind">Cil.d_ikind</A> - print an integer kind
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_fkind">Cil.d_fkind</A> - print a floating point kind
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_const">Cil.d_const</A> - print a constant
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALd_storage">Cil.d_storage</A> - print a storage specifier
+</UL>
+You can even customize the pretty-printer by creating instances of
+<A HREF="api/Cil.cilPrinter.html#.">Cil.cilPrinter..</A> Typically such an instance extends
+<A HREF="api/Cil.html#VALdefaultCilPrinter">Cil.defaultCilPrinter</A>. Once you have a customized pretty-printer you
+can use the following printing functions:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<A HREF="api/Cil.html#VALprintExp">Cil.printExp</A> - print an expression
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintType">Cil.printType</A> - print a type
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintLval">Cil.printLval</A> - print an lvalue
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintGlobal">Cil.printGlobal</A> - print a global
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintStmt">Cil.printStmt</A> - print a statment
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintInstr">Cil.printInstr</A> - print an instruction
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintInit">Cil.printInit</A> - print an initializer
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintAttr">Cil.printAttr</A> - print an attribute
+<LI CLASS="li-itemize"><A HREF="api/Cil.html#VALprintAttrs">Cil.printAttrs</A> - print a set of attributes
+</UL>
+CIL has certain internal consistency invariants. For example, all references
+to a global variable must point to the same <TT>varinfo</TT> structure. This
+ensures that one can rename the variable by changing the name in the
+<TT>varinfo</TT>. These constraints are mentioned in the API documentation. There
+is also a consistency checker in file <TT>src/check.ml</TT>. If you suspect that
+your transformation is breaking these constraints then you can pass the
+<TT>--check</TT> option to cilly and this will ensure that the consistency checker
+is run after each transformation. <BR>
+<BR>
+<!--TOC subsection Attributes-->
+
+<H3 CLASS="subsection"><A NAME="htoc13">6.4</A>&nbsp;&nbsp;Attributes</H3><!--SEC END -->
+<A NAME="sec-attrib"></A>
+In CIL you can attach attributes to types and to names (variables, functions
+and fields). Attributes are represented using the type <A HREF="api/Cil.html#TYPEattribute">Cil.attribute</A>.
+An attribute consists of a name and a number of arguments (represented using
+the type <A HREF="api/Cil.html#TYPEattrparam">Cil.attrparam</A>). Almost any expression can be used as an
+attribute argument. Attributes are stored in lists sorted by the name of the
+attribute. To maintain list ordering, use the functions
+<A HREF="api/Cil.html#VALtypeAttrs">Cil.typeAttrs</A> to retrieve the attributes of a type and the functions
+<A HREF="api/Cil.html#VALaddAttribute">Cil.addAttribute</A> and <A HREF="api/Cil.html#VALaddAttributes">Cil.addAttributes</A> to add attributes.
+Alternatively you can use <A HREF="api/Cil.html#VALtypeAddAttributes">Cil.typeAddAttributes</A> to add an attribute to
+a type (and return the new type).<BR>
+<BR>
+GCC already has extensive support for attributes, and CIL extends this
+support to user-defined attributes. A GCC attribute has the syntax:
+<PRE CLASS="verbatim">
+ gccattribute ::= __attribute__((attribute))    (Note the double parentheses)
+</PRE>
+ Since GCC and MSVC both support various flavors of each attribute (with or
+without leading or trailing _) we first strip ALL leading and trailing _
+from the attribute name (but not the identified in [ACons] parameters in
+<A HREF="api/Cil.html#TYPEattrparam">Cil.attrparam</A>). When we print attributes, for GCC we add two leading
+and two trailing _; for MSVC we add just two leading _.<BR>
+<BR>
+There is support in CIL so that you can control the printing of attributes
+(see <A HREF="api/Cil.html#VALsetCustomPrintAttribute">Cil.setCustomPrintAttribute</A> and
+<A HREF="api/Cil.html#VALsetCustomPrintAttributeScope">Cil.setCustomPrintAttributeScope</A>). This custom-printing support is now
+used to print the "const" qualifier as "<TT>const</TT>" and not as
+"<TT>__attribute__((const))</TT>".<BR>
+<BR>
+The attributes are specified in declarations. This is unfortunate since the C
+syntax for declarations is already quite complicated and after writing the
+parser and elaborator for declarations I am convinced that few C programmers
+understand it completely. Anyway, this seems to be the easiest way to support
+attributes. <BR>
+<BR>
+Name attributes must be specified at the very end of the declaration, just
+before the <TT>=</TT> for the initializer or before the <TT>,</TT> the separates a
+declaration in a group of declarations or just before the <TT>;</TT> that
+terminates the declaration. A name attribute for a function being defined can
+be specified just before the brace that starts the function body.<BR>
+<BR>
+For example (in the following examples <TT>A1</TT>,...,<TT>An</TT> are type attributes
+and <TT>N</TT> is a name attribute (each of these uses the <TT>__attribute__</TT> syntax):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ int x N;
+ int x N, * y N = 0, z[] N;
+ extern void exit() N;
+ int fact(int x) N { ... }
+</FONT></PRE>
+Type attributes can be specified along with the type using the following
+ rules: 
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+ The type attributes for a base type (int, float, named type, reference
+ to struct or union or enum) must be specified immediately following the
+ type (actually it is Ok to mix attributes with the specification of the
+ type, in between unsigned and int for example).<BR>
+<BR>
+For example:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int A1 x N;  /* A1 applies to the type int. An example is an attribute
+                   "even" restricting the type int to even values. */
+  struct foo A1 A2 x; // Both A1 and A2 apply to the struct foo type
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-enumerate">The type attributes for a pointer type must be specified immediately
+ after the * symbol.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ /* A pointer (A1) to an int (A2) */
+ int A2 * A1 x;
+ /* A pointer (A1) to a pointer (A2) to a float (A3) */
+ float A3 * A2 * A1 x;
+</FONT></PRE>
+Note: The attributes for base types and for pointer types are a strict
+ extension of the ANSI C type qualifiers (const, volatile and restrict). In
+ fact CIL treats these qualifiers as attributes. <BR>
+<BR>
+<LI CLASS="li-enumerate">The attributes for a function type or for an array type can be
+ specified using parenthesized declarators.<BR>
+<BR>
+For example:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+   /* A function (A1) from int (A2) to float (A3) */
+   float A3 (A1 f)(int A2);
+
+   /* A pointer (A1) to a function (A2) that returns an int (A3) */
+   int A3 (A2 * A1 pfun)(void);
+
+   /* An array (A1) of int (A2) */
+   int A2 (A1 x0)[]
+
+   /* Array (A1) of pointers (A2) to functions (A3) that take an int (A4) and 
+    * return a pointer (A5) to int (A6)  */
+   int A6 * A5 (A3 * A2 (A1 x1)[5])(int A4);
+
+
+   /* A function (A4) that takes a float (A5) and returns a pointer (A6) to an 
+    * int (A7) */
+   extern int A7 * A6 (A4 x2)(float A5 x);
+
+   /* A function (A1) that takes a int (A2) and that returns a pointer (A3) to 
+    * a function (A4) that takes a float (A5) and returns a pointer (A6) to an 
+    * int (A7) */
+   int A7 * A6 (A4 * A3 (A1 x3)(int A2 x))(float A5) {
+      return &amp; x2;
+   }
+</FONT></PRE></OL>
+Note: ANSI C does not allow the specification of type qualifiers for function
+and array types, although it allows for the parenthesized declarator. With
+just a bit of thought (looking at the first few examples above) I hope that
+the placement of attributes for function and array types will seem intuitive.<BR>
+<BR>
+This extension is not without problems however. If you want to refer just to
+a type (in a cast for example) then you leave the name out. But this leads to
+strange conflicts due to the parentheses that we introduce to scope the
+attributes. Take for example the type of x0 from above. It should be written
+as: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+        int A2 (A1 )[]
+</FONT></PRE>
+But this will lead most C parsers into deep confusion because the parentheses
+around A1 will be confused for parentheses of a function designator. To push
+this problem around (I don't know a solution) whenever we are about to print a
+parenthesized declarator with no name but with attributes, we comment out the
+attributes so you can see them (for whatever is worth) without confusing the
+compiler. For example, here is how we would print the above type:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+        int A2 /*(A1 )*/[]
+</FONT></PRE>
+<!--TOC paragraph Handling of predefined GCC attributes-->
+
+<H5 CLASS="paragraph">Handling of predefined GCC attributes</H5><!--SEC END -->
+
+GCC already supports attributes in a lot of places in declarations. The only
+place where we support attributes and GCC does not is right before the { that
+starts a function body. <BR>
+<BR>
+GCC classifies its attributes in attributes for functions, for variables and
+for types, although the latter category is only usable in definition of struct
+or union types and is not nearly as powerful as the CIL type attributes. We
+have made an effort to reclassify GCC attributes as name and type attributes
+(they only apply for function types). Here is what we came up with:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+ GCC name attributes:<BR>
+<BR>
+section, constructor, destructor, unused, weak, no_instrument_function,
+ noreturn, alias, no_check_memory_usage, dllinport, dllexport, exception,
+ model<BR>
+<BR>
+Note: the "noreturn" attribute would be more appropriately qualified as a
+ function type attribute. But we classify it as a name attribute to make
+ it easier to support a similarly named MSVC attribute. <BR>
+<BR>
+<LI CLASS="li-itemize">GCC function type attributes:<BR>
+<BR>
+fconst (printed as "const"), format, regparm, stdcall,
+ cdecl, longcall<BR>
+<BR>
+I was not able to completely decipher the position in which these attributes
+ must go. So, the CIL elaborator knows these names and applies the following
+ rules: 
+ <UL CLASS="itemize"><LI CLASS="li-itemize">
+ All of the name attributes that appear in the specifier part (i.e. at
+ the beginning) of a declaration are associated with all declared names. <BR>
+<BR>
+<LI CLASS="li-itemize">All of the name attributes that appear at the end of a declarator are
+ associated with the particular name being declared.<BR>
+<BR>
+<LI CLASS="li-itemize">More complicated is the handling of the function type attributes, since
+ there can be more than one function in a single declaration (a function
+ returning a pointer to a function). Lacking any real understanding of how
+ GCC handles this, I attach the function type attribute to the "nearest"
+ function. This means that if a pointer to a function is "nearby" the
+ attribute will be correctly associated with the function. In truth I pray
+ that nobody uses declarations as that of x3 above. 
+ </UL>
+</UL>
+<!--TOC paragraph Handling of predefined MSVC attributes-->
+
+<H5 CLASS="paragraph">Handling of predefined MSVC attributes</H5><!--SEC END -->
+
+MSVC has two kinds of attributes, declaration modifiers to be printed before
+ the storage specifier using the notation "<TT>__declspec(...)</TT>" and a few
+ function type attributes, printed almost as our CIL function type
+ attributes. <BR>
+<BR>
+The following are the name attributes that are printed using
+ <TT>__declspec</TT> right before the storage designator of the declaration:
+ thread, naked, dllimport, dllexport, noreturn<BR>
+<BR>
+The following are the function type attributes supported by MSVC: 
+ fastcall, cdecl, stdcall<BR>
+<BR>
+It is not worth going into the obscure details of where MSVC accepts these
+ type attributes. The parser thinks it knows these details and it pulls
+ these attributes from wherever they might be placed. The important thing
+ is that MSVC will accept if we print them according to the rules of the CIL
+ attributes ! <BR>
+<BR>
+<!--TOC section The CIL Driver-->
+
+<H2 CLASS="section"><A NAME="htoc14">7</A>&nbsp;&nbsp;The CIL Driver</H2><!--SEC END -->
+<A NAME="sec-driver"></A>
+We have packaged CIL as an application <TT>cilly</TT> that contains certain
+example modules, such as <TT>logwrites.ml</TT> (a module
+that instruments code to print the addresses of memory locations being
+written). Normally, you write another module like that, add command-line
+options and an invocation of your module in <TT>src/main.ml</TT>. Once you compile
+CIL you will obtain the file <TT>obj/cilly.asm.exe</TT>. <BR>
+<BR>
+We wrote a driver for this executable that makes it easy to invoke your
+analysis on existing C code with very little manual intervention. This driver
+is <TT>bin/cilly</TT> and is quite powerful. Note that the <TT>cilly</TT> script
+is configured during installation with the path where CIL resides. This means
+that you can move it to any place you want. <BR>
+<BR>
+A simple use of the driver is:
+<PRE CLASS="verbatim">
+bin/cilly --save-temps -D HAPPY_MOOD -I myincludes hello.c -o hello
+</PRE>
+<FONT COLOR=blue>--save-temps</FONT> tells CIL to save the resulting output files in the
+current directory. Otherwise, they'll be put in <TT>/tmp</TT> and deleted
+automatically. Not that this is the only CIL-specific flag in the
+list &ndash; the other flags use <TT>gcc</TT>'s syntax.<BR>
+<BR>
+This performs the following actions: 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+preprocessing using the -D and -I arguments with the resulting 
+ file left in <TT>hello.i</TT>, 
+<LI CLASS="li-itemize">the invocation of the <TT>cilly.asm</TT> application which parses <TT>hello.i</TT>
+ converts it to CIL and the pretty-prints it to <TT>hello.cil.c</TT>
+<LI CLASS="li-itemize">another round of preprocessing with the result placed in <TT>hello.cil.i</TT>
+<LI CLASS="li-itemize">the true compilation with the result in <TT>hello.cil.o</TT>
+<LI CLASS="li-itemize">a linking phase with the result in <TT>hello</TT>
+</UL>
+Note that <TT>cilly</TT> behaves like the <TT>gcc</TT> compiler. This makes it
+easy to use it with existing <TT>Makefiles</TT>:
+<PRE CLASS="verbatim">
+make CC="bin/cilly" LD="bin/cilly"
+</PRE>
+ <TT>cilly</TT> can also behave as the Microsoft Visual C compiler, if the first
+ argument is <TT>--mode=MSVC</TT>:
+<PRE CLASS="verbatim">
+bin/cilly --mode=MSVC /D HAPPY_MOOD /I myincludes hello.c /Fe hello.exe
+</PRE>
+ (This in turn will pass a <TT>--MSVC</TT> flag to the underlying <TT>cilly.asm</TT>
+ process which will make it understand the Microsoft Visual C extensions)<BR>
+<BR>
+<TT>cilly</TT> can also behave as the archiver <TT>ar</TT>, if it is passed an
+argument <TT>--mode=AR</TT>. Note that only the <TT>cr</TT> mode is supported (create a
+new archive and replace all files in there). Therefore the previous version of
+the archive is lost. <BR>
+<BR>
+Furthermore, <TT>cilly</TT> allows you to pass some arguments on to the
+underlying <TT>cilly.asm</TT> process. As a general rule all arguments that start
+with <TT>--</TT> and that <TT>cilly</TT> itself does not process, are passed on. For
+example, 
+<PRE CLASS="verbatim">
+bin/cilly --dologwrites -D HAPPY_MOOD -I myincludes hello.c -o hello.exe
+</PRE>
+ will produce a file <TT>hello.cil.c</TT> that prints all the memory addresses
+written by the application. <BR>
+<BR>
+The most powerful feature of <TT>cilly</TT> is that it can collect all the
+sources in your project, merge them into one file and then apply CIL. This
+makes it a breeze to do whole-program analysis and transformation. All you
+have to do is to pass the <TT>--merge</TT> flag to <TT>cilly</TT>:
+<PRE CLASS="verbatim">
+make CC="bin/cilly --save-temps --dologwrites --merge"
+</PRE>
+ You can even leave some files untouched:
+<PRE CLASS="verbatim">
+make CC="bin/cilly --save-temps --dologwrites --merge --leavealone=foo --leavealone=bar"
+</PRE>
+ This will merge all the files except those with the basename <TT>foo</TT> and
+<TT>bar</TT>. Those files will be compiled as usual and then linked in at the very
+end. <BR>
+<BR>
+The sequence of actions performed by <TT>cilly</TT> depends on whether merging
+is turned on or not:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+If merging is off
+ <OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+ For every file <TT>file.c</TT> to compile
+ <OL CLASS="enumerate" type=a><LI CLASS="li-enumerate">
+ Preprocess the file with the given arguments to 
+ produce <TT>file.i</TT>
+ <LI CLASS="li-enumerate">Invoke <TT>cilly.asm</TT> to produce a <TT>file.cil.c</TT>
+ <LI CLASS="li-enumerate">Preprocess to <TT>file.cil.i</TT>
+ <LI CLASS="li-enumerate">Invoke the underlying compiler to produce <TT>file.cil.o</TT>
+ </OL>
+ <LI CLASS="li-enumerate">Link the resulting objects
+ </OL>
+<LI CLASS="li-itemize">If merging is on
+ <OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+ For every file <TT>file.c</TT> to compile
+ <OL CLASS="enumerate" type=a><LI CLASS="li-enumerate">
+ Preprocess the file with the given arguments to 
+ produce <TT>file.i</TT>
+ <LI CLASS="li-enumerate">Save the preprocessed source as <TT>file.o</TT>
+ </OL>
+ <LI CLASS="li-enumerate">When linking executable <TT>hello.exe</TT>, look at every object 
+ file that must be linked and see if it actually 
+ contains preprocessed source. Pass all those files to a 
+ special merging application (described in
+ Section&nbsp;<A HREF="#sec-merger">13</A>) to produce <TT>hello.exe_comb.c</TT>
+ <LI CLASS="li-enumerate">Invoke <TT>cilly.asm</TT> to produce a <TT>hello.exe_comb.cil.c</TT>
+ <LI CLASS="li-enumerate">Preprocess to <TT>hello.exe_comb.cil.i</TT>
+ <LI CLASS="li-enumerate">Invoke the underlying compiler to produce <TT>hello.exe_comb.cil.o</TT>
+ <LI CLASS="li-enumerate">Invoke the actual linker to produce <TT>hello.exe</TT>
+ </OL>
+</UL>
+Note that files that you specify with <TT>--leavealone</TT> are not merged and
+never presented to CIL. They are compiled as usual and then are linked in at
+the end. <BR>
+<BR>
+And a final feature of <TT>cilly</TT> is that it can substitute copies of the
+system's include files:
+<PRE CLASS="verbatim">
+make CC="bin/cilly --includedir=myinclude"
+</PRE>
+ This will force the preprocessor to use the file <TT>myinclude/xxx/stdio.h</TT>
+(if it exists) whenever it encounters <TT>#include &lt;stdio.h&gt;</TT>. The <TT>xxx</TT> is
+a string that identifies the compiler version you are using. This modified
+include files should be produced with the patcher script (see
+Section&nbsp;<A HREF="#sec-patcher">14</A>).<BR>
+<BR>
+<!--TOC subsection <TT>cilly</TT> Options-->
+
+<H3 CLASS="subsection"><A NAME="htoc15">7.1</A>&nbsp;&nbsp;<TT>cilly</TT> Options</H3><!--SEC END -->
+
+Among the options for the <TT>cilly</TT> you can put anything that can normally
+go in the command line of the compiler that <TT>cilly</TT> is impersonating.
+<TT>cilly</TT> will do its best to pass those options along to the appropriate
+subprocess. In addition, the following options are supported (a complete and
+up-to-date list can always be obtained by running <TT>cilly --help</TT>):
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>--mode=mode</TT> This must be the first argument if present. It makes
+<TT>cilly</TT> behave as a given compiled. The following modes are recognized: 
+ <UL CLASS="itemize"><LI CLASS="li-itemize">
+ GNUCC - the GNU C Compiler. This is the default.
+ <LI CLASS="li-itemize">MSVC - the Microsoft Visual C compiler. Of course, you should
+ pass only MSVC valid options in this case. 
+ <LI CLASS="li-itemize">AR - the archiver <TT>ar</TT>. Only the mode <TT>cr</TT> is supported and
+ the original version of the archive is lost. 
+ </UL>
+<LI CLASS="li-itemize"><TT>--help</TT> Prints a list of the options supported.
+<LI CLASS="li-itemize"><TT>--verbose</TT> Prints lots of messages about what is going on.
+<LI CLASS="li-itemize"><TT>--stages</TT> Less than <TT>--verbose</TT> but lets you see what <TT>cilly</TT>
+ is doing. 
+<LI CLASS="li-itemize"><TT>--merge</TT> This tells <TT>cilly</TT> to first attempt to collect into one
+source file all of the sources that make your application, and then to apply
+<TT>cilly.asm</TT> on the resulting source. The sequence of actions in this case is
+described above and the merger itself is described in Section&nbsp;<A HREF="#sec-merger">13</A>.<BR>
+<BR>
+<LI CLASS="li-itemize"><TT>--leavealone=xxx</TT>. Do not merge and do not present to CIL the files
+whose basename is "xxx". These files are compiled as usual and linked in at
+the end. 
+<LI CLASS="li-itemize"><TT>--includedir=xxx</TT>. Override the include files with those in the given
+directory. The given directory is the same name that was given an an argument
+to the patcher (see Section&nbsp;<A HREF="#sec-patcher">14</A>). In particular this means that
+that directory contains subdirectories named based on the current compiler
+version. The patcher creates those directories. 
+<LI CLASS="li-itemize"><TT>--usecabs</TT>. Do not CIL, but instead just parse the source and print
+its AST out. This should looked like the preprocessed file. This is useful
+when you suspect that the conversion to CIL phase changes the meaning of the
+program. 
+<LI CLASS="li-itemize"><TT>--save-temps=xxx</TT>. Temporary files are preserved in the xxx
+ directory. For example, the output of CIL will be put in a file
+ named <TT>*.cil.c</TT>.
+<LI CLASS="li-itemize"><TT>--save-temps</TT>. Temporay files are preserved in the current directory.
+</UL>
+<!--TOC subsection <TT>cilly.asm</TT> Options-->
+
+<H3 CLASS="subsection"><A NAME="htoc16">7.2</A>&nbsp;&nbsp;<TT>cilly.asm</TT> Options</H3><!--SEC END -->
+
+ <A NAME="sec-cilly-asm-options"></A>
+All of the options that start with <TT>--</TT> and are not understood by
+<TT>cilly</TT> are passed on to <TT>cilly.asm</TT>. <TT>cilly</TT> also passes along to
+<TT>cilly.asm</TT> flags such as <TT>--MSVC</TT> that both need to know
+about. The following options are supported:<BR>
+<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <B>General Options:</B>
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+ <TT>--version</TT> output version information and exit
+ <LI CLASS="li-itemize"><TT>--verbose</TT> Print lots of random stuff. This is passed on from cilly
+ <LI CLASS="li-itemize"><TT>--warnall</TT> Show all warnings.
+ <LI CLASS="li-itemize"><TT>--debug=xxx</TT> turns on debugging flag xxx
+ <LI CLASS="li-itemize"><TT>--nodebug=xxx</TT> turns off debugging flag xxx
+ <LI CLASS="li-itemize"><TT>--flush</TT> Flush the output streams often (aids debugging).
+ <LI CLASS="li-itemize"><TT>--check</TT> Run a consistency check over the CIL after every operation.
+ <LI CLASS="li-itemize"><TT>--nocheck</TT> turns off consistency checking of CIL.
+ <LI CLASS="li-itemize"><TT>--noPrintLn</TT> Don't output #line directives in the output.
+ <LI CLASS="li-itemize"><TT>--commPrintLn</TT> Print #line directives in the output, but
+ put them in comments.
+ <LI CLASS="li-itemize"><TT>--log=xxx</TT> Set the name of the log file. By default stderr is used
+ <LI CLASS="li-itemize"><TT>--MSVC</TT> Enable MSVC compatibility. Default is GNU.
+ <LI CLASS="li-itemize"><TT>--ignore-merge-conflicts</TT> ignore merging conflicts.
+ <LI CLASS="li-itemize"><TT>--extrafiles=filename</TT>: the name of a file that contains
+ a list of additional files to process, separated by whitespace.
+ <LI CLASS="li-itemize"><TT>--stats</TT> Print statistics about the running time of the
+ parser, conversion to CIL, etc. Also prints memory-usage
+ statistics. You can time parts of your own code as well. Calling
+ (<TT>Stats.time &#8220;label&#8221; func arg</TT>) will evaluate <TT>(func arg)</TT>
+ and remember how long this takes. If you call <TT>Stats.time</TT>
+ repeatedly with the same label, CIL will report the aggregate
+ time.<BR>
+<BR>
+If available, CIL uses the x86 performance counters for these
+ stats. This is very precise, but results in &#8220;wall-clock time.&#8221;
+ To report only user-mode time, find the call to <TT>Stats.reset</TT> in
+ <TT>main.ml</TT>, and change it to <TT>Stats.reset false</TT>.<BR>
+<BR>
+<B>Lowering Options</B>
+ <LI CLASS="li-itemize"><TT>--noLowerConstants</TT> do not lower constant expressions.
+ <LI CLASS="li-itemize"><TT>--noInsertImplicitCasts</TT> do not insert implicit casts.
+ <LI CLASS="li-itemize"><TT>--forceRLArgEval</TT> Forces right to left evaluation of function arguments.
+ <LI CLASS="li-itemize"><TT>--disallowDuplication</TT> Prevent small chunks of code from being duplicated.
+ <LI CLASS="li-itemize"><TT>--keepunused</TT> Do not remove the unused variables and types.
+ <LI CLASS="li-itemize"><TT>--rmUnusedInlines</TT> Delete any unused inline functions. This is the default in MSVC mode.<BR>
+<BR>
+<B>Output Options:</B>
+ <LI CLASS="li-itemize"><TT>--printCilAsIs</TT> Do not try to simplify the CIL when
+ printing. Without this flag, CIL will attempt to produce prettier
+ output by e.g. changing <TT>while(1)</TT> into more meaningful loops.
+ <LI CLASS="li-itemize"><TT>--noWrap</TT> do not wrap long lines when printing
+ <LI CLASS="li-itemize"><TT>--out=xxx</TT> the name of the output CIL file. <TT>cilly</TT>
+ sets this for you.
+ <LI CLASS="li-itemize"><TT>--mergedout=xxx</TT> specify the name of the merged file
+ <LI CLASS="li-itemize"><TT>--cabsonly=xxx</TT> CABS output file name
+<BR>
+<BR>
+ <B>Selected features.</B> See Section&nbsp;<A HREF="#sec-Extension">8</A> for more information.
+<LI CLASS="li-itemize"><TT>--dologcalls</TT>. Insert code in the processed source to print the name of
+functions as are called. Implemented in <TT>src/ext/logcalls.ml</TT>.
+<LI CLASS="li-itemize"><TT>--dologwrites</TT>. Insert code in the processed source to print the
+address of all memory writes. Implemented in <TT>src/ext/logwrites.ml</TT>.
+<LI CLASS="li-itemize"><TT>--dooneRet</TT>. Make each function have at most one 'return'.
+Implemented in <TT>src/ext/oneret.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--dostackGuard</TT>. Instrument function calls and returns to
+maintain a separate stack for return addresses. Implemeted in
+<TT>src/ext/heapify.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--domakeCFG</TT>. Make the program look more like a CFG. Implemented
+in <TT>src/cil.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--dopartial</TT>. Do interprocedural partial evaluation and
+constant folding. Implemented in <TT>src/ext/partial.ml</TT>. 
+<LI CLASS="li-itemize"><TT>--dosimpleMem</TT>. Simplify all memory expressions. Implemented in
+<TT>src/ext/simplemem.ml</TT>. <BR>
+<BR>
+For an up-to-date list of available options, run <TT>cilly.asm --help</TT>. </UL>
+<!--TOC section Library of CIL Modules-->
+
+<H2 CLASS="section"><A NAME="htoc17">8</A>&nbsp;&nbsp;Library of CIL Modules</H2><!--SEC END -->
+ <A NAME="sec-Extension"></A><!--NAME ext.html-->
+<BR>
+<BR>
+We are developing a suite of modules that use CIL for program analyses and
+transformations that we have found useful. You can use these modules directly
+on your code, or generally as inspiration for writing similar modules. A
+particularly big and complex application written on top of CIL is CCured
+(<A HREF="../ccured/index.html"><TT>../ccured/index.html</TT></A>).<BR>
+<BR>
+<!--TOC subsection Control-Flow Graphs-->
+
+<H3 CLASS="subsection"><A NAME="htoc18">8.1</A>&nbsp;&nbsp;Control-Flow Graphs</H3><!--SEC END -->
+ <A NAME="sec-cfg"></A>
+The <A HREF="api/Cil.html#TYPEstmt">Cil.stmt</A> datatype includes fields for intraprocedural
+control-flow information: the predecessor and successor statements of
+the current statement. This information is not computed by default.
+If you want to use the control-flow graph, or any of the extensions in
+this section that require it, you have to explicitly ask CIL to
+compute the CFG.<BR>
+<BR>
+<!--TOC subsubsection The CFG module (new in CIL 1.3.5)-->
+
+<H4 CLASS="subsubsection"><A NAME="htoc19">8.1.1</A>&nbsp;&nbsp;The CFG module (new in CIL 1.3.5)</H4><!--SEC END -->
+
+The best way to compute the CFG is with the CFG module. Just invoke
+<A HREF="api/Cfg.html#VALcomputeFileCFG">Cfg.computeFileCFG</A> on your file. The <A HREF="api/Cfg.html">Cfg</A> API
+describes the rest of actions you can take with this module, including
+computing the CFG for one function at a time, or printing the CFG in
+<TT>dot</TT> form.<BR>
+<BR>
+<!--TOC subsubsection Simplified control flow-->
+
+<H4 CLASS="subsubsection"><A NAME="htoc20">8.1.2</A>&nbsp;&nbsp;Simplified control flow</H4><!--SEC END -->
+
+CIL can reduce high-level C control-flow constructs like <TT>switch</TT> and
+<TT>continue</TT> to lower-level <TT>goto</TT>s. This completely eliminates some
+possible classes of statements from the program and may make the result
+easier to analyze (e.g., it simplifies data-flow analysis).<BR>
+<BR>
+You can invoke this transformation on the command line with
+<TT>--domakeCFG</TT> or programatically with <A HREF="api/Cil.html#VALprepareCFG">Cil.prepareCFG</A>.
+After calling Cil.prepareCFG, you can use <A HREF="api/Cil.html#VALcomputeCFGInfo">Cil.computeCFGInfo</A>
+to compute the CFG information and find the successor and predecessor
+of each statement.<BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --domakeCFG</TT>
+transforms the following code (note the fall-through in case 1): 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo (int predicate) {
+    int x = 0;
+    switch (predicate) {
+      case 0: return 111;
+      case 1: x = x + 1;
+      case 2: return (x+3);
+      case 3: break;
+      default: return 222;
+    }
+    return 333;
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex23.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection Data flow analysis framework-->
+
+<H3 CLASS="subsection"><A NAME="htoc21">8.2</A>&nbsp;&nbsp;Data flow analysis framework</H3><!--SEC END -->
+
+The <A HREF="api/Dataflow.html">Dataflow</A> module (click for the ocamldoc) contains a
+parameterized framework for forward and backward data flow
+analyses. You provide the transfer functions and this module does the
+analysis. You must compute control-flow information (Section&nbsp;<A HREF="#sec-cfg">8.1</A>)
+before invoking the Dataflow module.<BR>
+<BR>
+<!--TOC subsection Dominators-->
+
+<H3 CLASS="subsection"><A NAME="htoc22">8.3</A>&nbsp;&nbsp;Dominators</H3><!--SEC END -->
+ 
+The module <A HREF="api/Dominators.html">Dominators</A> contains the computation of immediate
+ dominators. It uses the <A HREF="api/Dataflow.html">Dataflow</A> module. <BR>
+<BR>
+<!--TOC subsection Points-to Analysis-->
+
+<H3 CLASS="subsection"><A NAME="htoc23">8.4</A>&nbsp;&nbsp;Points-to Analysis</H3><!--SEC END -->
+
+The module <TT>ptranal.ml</TT> contains two interprocedural points-to
+analyses for CIL: <TT>Olf</TT> and <TT>Golf</TT>. <TT>Olf</TT> is the default.
+(Switching from <TT>olf.ml</TT> to <TT>golf.ml</TT> requires a change in
+<TT>Ptranal</TT> and a recompiling <TT>cilly</TT>.)<BR>
+<BR>
+The analyses have the following characteristics:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+Not based on C types (inferred pointer relationships are sound
+ despite most kinds of C casts)
+<LI CLASS="li-itemize">One level of subtyping 
+<LI CLASS="li-itemize">One level of context sensitivity (Golf only)
+<LI CLASS="li-itemize">Monomorphic type structures
+<LI CLASS="li-itemize">Field insensitive (fields of structs are conflated)
+<LI CLASS="li-itemize">Demand-driven (points-to queries are solved on demand)
+<LI CLASS="li-itemize">Handle function pointers
+</UL>
+The analysis itself is factored into two components: <TT>Ptranal</TT>,
+which walks over the CIL file and generates constraints, and <TT>Olf</TT>
+or <TT>Golf</TT>, which solve the constraints. The analysis is invoked
+with the function <TT>Ptranal.analyze_file: Cil.file -&gt;
+ unit</TT>. This function builds the points-to graph for the CIL file
+and stores it internally. There is currently no facility for clearing
+internal state, so <TT>Ptranal.analyze_file</TT> should only be called
+once.<BR>
+<BR>
+The constructed points-to graph supports several kinds of queries,
+including alias queries (may two expressions be aliased?) and
+points-to queries (to what set of locations may an expression point?).<BR>
+<BR>
+The main interface with the alias analysis is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>Ptranal.may_alias: Cil.exp -&gt; Cil.exp -&gt; bool</TT>. If
+ <TT>true</TT>, the two expressions may have the same value.
+<LI CLASS="li-itemize"><TT>Ptranal.resolve_lval: Cil.lval -&gt; (Cil.varinfo
+ list)</TT>. Returns the list of variables to which the given
+ left-hand value may point.
+<LI CLASS="li-itemize"><TT>Ptranal.resolve_exp: Cil.exp -&gt; (Cil.varinfo list)</TT>.
+ Returns the list of variables to which the given expression may
+ point.
+<LI CLASS="li-itemize"><TT>Ptranal.resolve_funptr: Cil.exp -&gt; (Cil.fundec
+ list)</TT>. Returns the list of functions to which the given
+ expression may point.
+</UL>
+The precision of the analysis can be customized by changing the values
+of several flags:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>Ptranal.no_sub: bool ref</TT>.
+ If <TT>true</TT>, subtyping is disabled. Associated commandline option:
+ <B>--ptr_unify</B>.
+<LI CLASS="li-itemize"><TT>Ptranal.analyze_mono: bool ref</TT>.
+ (Golf only) If <TT>true</TT>, context sensitivity is disabled and the
+ analysis is effectively monomorphic. Commandline option:
+ <B>--ptr_mono</B>.
+<LI CLASS="li-itemize"><TT>Ptranal.smart_aliases: bool ref</TT>.
+ (Golf only) If <TT>true</TT>, &#8220;smart&#8221; disambiguation of aliases is
+ enabled. Otherwise, aliases are computed by intersecting points-to
+ sets. This is an experimental feature.
+<LI CLASS="li-itemize"><TT>Ptranal.model_strings: bool ref</TT>.
+ Make the alias analysis model string constants by treating them as
+ pointers to chars. Commandline option: <B>--ptr_model_strings</B>
+<LI CLASS="li-itemize"><TT>Ptranal.conservative_undefineds: bool ref</TT>.
+ Make the most pessimistic assumptions about globals if an undefined
+ function is present. Such a function can write to every global
+ variable. Commandline option: <B>--ptr_conservative</B>
+</UL>
+In practice, the best precision/efficiency tradeoff is achieved by
+setting <TT>Ptranal.no_sub</TT> to <TT>false</TT>, <TT>Ptranal.analyze_mono</TT> to
+<TT>true</TT>, and <TT>Ptranal.smart_aliases</TT> to <TT>false</TT>. These are the
+default values of the flags.<BR>
+<BR>
+There are also a few flags that can be used to inspect or serialize
+the results of the analysis.
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>Ptranal.debug_may_aliases</TT>.
+ Print the may-alias relationship of each pair of expressions in the
+ program. Commandline option: <B>--ptr_may_aliases</B>.
+<LI CLASS="li-itemize"><TT>Ptranal.print_constraints: bool ref</TT>.
+ If <TT>true</TT>, the analysis will print each constraint as it is
+ generated.
+<LI CLASS="li-itemize"><TT>Ptranal.print_types: bool ref</TT>.
+ If <TT>true</TT>, the analysis will print the inferred type of each
+ variable in the program.<BR>
+<BR>
+If <TT>Ptranal.analyze_mono</TT> and <TT>Ptranal.no_sub</TT> are both
+ <TT>true</TT>, this output is sufficient to reconstruct the points-to
+ graph. One nice feature is that there is a pretty printer for
+ recursive types, so the print routine does not loop.
+<LI CLASS="li-itemize"><TT>Ptranal.compute_results: bool ref</TT>.
+ If <TT>true</TT>, the analysis will print out the points-to set of each
+ variable in the program. This will essentially serialize the
+ points-to graph.
+</UL>
+<!--TOC subsection StackGuard-->
+
+<H3 CLASS="subsection"><A NAME="htoc24">8.5</A>&nbsp;&nbsp;StackGuard</H3><!--SEC END -->
+
+The module <TT>heapify.ml</TT> contains a transformation similar to the one
+described in &#8220;StackGuard: Automatic Adaptive Detection and Prevention of
+Buffer-Overflow Attacks&#8221;, <EM>Proceedings of the 7th USENIX Security
+Conference</EM>. In essence it modifies the program to maintain a separate
+stack for return addresses. Even if a buffer overrun attack occurs the
+actual correct return address will be taken from the special stack. <BR>
+<BR>
+Although it does work, this CIL module is provided mainly as an example of
+how to perform a simple source-to-source program analysis and
+transformation. As an optimization only functions that contain a dangerous
+local array make use of the special return address stack. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dostackGuard</TT>
+transforms the following dangerous code: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int dangerous() {
+    char array[10];
+    scanf("%s",array); // possible buffer overrun!
+  }
+
+  int main () {
+    return dangerous();
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex24.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection Heapify-->
+
+<H3 CLASS="subsection"><A NAME="htoc25">8.6</A>&nbsp;&nbsp;Heapify</H3><!--SEC END -->
+
+The module <TT>heapify.ml</TT> also contains a transformation that moves all
+dangerous local arrays to the heap. This also prevents a number of buffer
+overruns. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --doheapify</TT>
+transforms the following dangerous code: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int dangerous() {
+    char array[10];
+    scanf("%s",array); // possible buffer overrun!
+  }
+
+  int main () {
+    return dangerous();
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex25.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection One Return-->
+
+<H3 CLASS="subsection"><A NAME="htoc26">8.7</A>&nbsp;&nbsp;One Return</H3><!--SEC END -->
+
+The module <TT>oneret.ml</TT> contains a transformation the ensures that all
+function bodies have at most one return statement. This simplifies a number
+of analyses by providing a canonical exit-point. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dooneRet</TT>
+transforms the following code: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo (int predicate) {
+    if (predicate &lt;= 0) {
+      return 1;
+    } else {
+      if (predicate &gt; 5)
+        return 2;
+      return 3;
+    }
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex26.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection Partial Evaluation and Constant Folding-->
+
+<H3 CLASS="subsection"><A NAME="htoc27">8.8</A>&nbsp;&nbsp;Partial Evaluation and Constant Folding</H3><!--SEC END -->
+ 
+The <TT>partial.ml</TT> module provides a simple interprocedural partial
+evaluation and constant folding data-flow analysis and transformation. This
+transformation requires the <TT>--domakeCFG</TT> option. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --domakeCFG --dopartial</TT>
+transforms the following code (note the eliminated <TT>if</TT> branch and the
+partial optimization of <TT>foo</TT>): 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo(int x, int y) {
+    int unknown;
+    if (unknown)
+      return y+2;     
+    return x+3;      
+  }
+
+  int main () {
+    int a,b,c;
+    a = foo(5,7) + foo(6,7);
+    b = 4;
+    c = b * b;      
+    if (b &gt; c)     
+      return b-c;
+    else
+      return b+c; 
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex27.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection Reaching Definitions-->
+
+<H3 CLASS="subsection"><A NAME="htoc28">8.9</A>&nbsp;&nbsp;Reaching Definitions</H3><!--SEC END -->
+
+The <TT>reachingdefs.ml</TT> module uses the dataflow framework and CFG
+information to calculate the definitions that reach each
+statement. After computing the CFG (Section&nbsp;<A HREF="#sec-cfg">8.1</A>) and calling
+<TT>computeRDs</TT> on a 
+function declaration, <TT>ReachingDef.stmtStartData</TT> will contain a
+mapping from statement IDs to data about which definitions reach each
+statement. In particular, it is a mapping from statement IDs to a
+triple the first two members of which are used internally. The third
+member is a mapping from variable IDs to Sets of integer options. If
+the set contains <TT>Some(i)</TT>, then the definition of that variable
+with ID <TT>i</TT> reaches that statement. If the set contains <TT>None</TT>,
+then there is a path to that statement on which there is no definition
+of that variable. Also, if the variable ID is unmapped at a
+statement, then no definition of that variable reaches that statement.<BR>
+<BR>
+To summarize, reachingdefs.ml has the following interface:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>computeRDs</TT> &ndash; Computes reaching definitions. Requires that
+CFG information has already been computed for each statement.
+<LI CLASS="li-itemize"><TT>ReachingDef.stmtStartData</TT> &ndash; contains reaching
+definition data after <TT>computeRDs</TT> is called.
+<LI CLASS="li-itemize"><TT>ReachingDef.defIdStmtHash</TT> &ndash; Contains a mapping
+from definition IDs to the ID of the statement in which
+the definition occurs.
+<LI CLASS="li-itemize"><TT>getRDs</TT> &ndash; Takes a statement ID and returns
+reaching definition data for that statement.
+<LI CLASS="li-itemize"><TT>instrRDs</TT> &ndash; Takes a list of instructions and the
+definitions that reach the first instruction, and for
+each instruction calculates the definitions that reach
+either into or out of that instruction.
+<LI CLASS="li-itemize"><TT>rdVisitorClass</TT> &ndash; A subclass of nopCilVisitor that
+can be extended such that the current reaching definition
+data is available when expressions are visited through
+the <TT>get_cur_iosh</TT> method of the class.
+</UL>
+<!--TOC subsection Available Expressions-->
+
+<H3 CLASS="subsection"><A NAME="htoc29">8.10</A>&nbsp;&nbsp;Available Expressions</H3><!--SEC END -->
+
+The <TT>availexps.ml</TT> module uses the dataflow framework and CFG
+information to calculate something similar to a traditional available
+expressions analysis. After <TT>computeAEs</TT> is called following a CFG
+calculation (Section&nbsp;<A HREF="#sec-cfg">8.1</A>), <TT>AvailableExps.stmtStartData</TT> will
+contain a mapping
+from statement IDs to data about what expressions are available at
+that statement. The data for each statement is a mapping for each
+variable ID to the whole expression available at that point(in the
+traditional sense) which the variable was last defined to be. So,
+this differs from a traditional available expressions analysis in that
+only whole expressions from a variable definition are considered rather
+than all expressions.<BR>
+<BR>
+The interface is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>computeAEs</TT> &ndash; Computes available expressions. Requires
+that CFG information has already been comptued for each statement.
+<LI CLASS="li-itemize"><TT>AvailableExps.stmtStartData</TT> &ndash; Contains available
+expressions data for each statement after <TT>computeAEs</TT> has been
+called.
+<LI CLASS="li-itemize"><TT>getAEs</TT> &ndash; Takes a statement ID and returns
+available expression data for that statement.
+<LI CLASS="li-itemize"><TT>instrAEs</TT> &ndash; Takes a list of instructions and
+the availalbe expressions at the first instruction, and
+for each instruction calculates the expressions available
+on entering or exiting each instruction.
+<LI CLASS="li-itemize"><TT>aeVisitorClass</TT> &ndash; A subclass of nopCilVisitor that
+can be extended such that the current available expressions
+data is available when expressions are visited through the
+<TT>get_cur_eh</TT> method of the class.
+</UL>
+<!--TOC subsection Liveness Analysis-->
+
+<H3 CLASS="subsection"><A NAME="htoc30">8.11</A>&nbsp;&nbsp;Liveness Analysis</H3><!--SEC END -->
+
+The <TT>liveness.ml</TT> module uses the dataflow framework and
+CFG information to calculate which variables are live at
+each program point. After <TT>computeLiveness</TT> is called
+following a CFG calculation (Section&nbsp;<A HREF="#sec-cfg">8.1</A>), <TT>LiveFlow.stmtStartData</TT> will
+contain a mapping for each statement ID to a set of <TT>varinfo</TT>s
+for varialbes live at that program point.<BR>
+<BR>
+The interface is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>computeLiveness</TT> &ndash; Computes live variables. Requires
+that CFG information has already been computed for each statement.
+<LI CLASS="li-itemize"><TT>LiveFlow.stmtStartData</TT> &ndash; Contains live variable data
+for each statement after <TT>computeLiveness</TT> has been called.
+</UL>
+Also included in this module is a command line interface that
+will cause liveness data to be printed to standard out for
+a particular function or label.
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>&ndash;doliveness</TT> &ndash; Instructs cilly to comptue liveness
+information and to print on standard out the variables live
+at the points specified by <TT>&ndash;live_func</TT> and <TT>live_label</TT>.
+If both are ommitted, then nothing is printed.
+<LI CLASS="li-itemize"><TT>&ndash;live_func</TT> &ndash; The name of the function whose
+liveness data is of interest. If <TT>&ndash;live_label</TT> is ommitted,
+then data for each statement is printed.
+<LI CLASS="li-itemize"><TT>&ndash;live_label</TT> &ndash; The name of the label at which
+the liveness data will be printed.
+</UL>
+<!--TOC subsection Dead Code Elimination-->
+
+<H3 CLASS="subsection"><A NAME="htoc31">8.12</A>&nbsp;&nbsp;Dead Code Elimination</H3><!--SEC END -->
+
+The module <TT>deadcodeelim.ml</TT> uses the reaching definitions
+analysis to eliminate assignment instructions whose results
+are not used. The interface is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>elim_dead_code</TT> &ndash; Performs dead code elimination
+on a function. Requires that CFG information has already
+been computed (Section&nbsp;<A HREF="#sec-cfg">8.1</A>).
+<LI CLASS="li-itemize"><TT>dce</TT> &ndash; Performs dead code elimination on an
+entire file. Requires that CFG information has already
+been computed.
+</UL>
+<!--TOC subsection Simple Memory Operations-->
+
+<H3 CLASS="subsection"><A NAME="htoc32">8.13</A>&nbsp;&nbsp;Simple Memory Operations</H3><!--SEC END -->
+ 
+The <TT>simplemem.ml</TT> module allows CIL lvalues that contain memory
+accesses to be even futher simplified via the introduction of
+well-typed temporaries. After this transformation all lvalues involve
+at most one memory reference.<BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dosimpleMem</TT> 
+transforms the following code:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int main () {
+    int ***three;
+    int **two;
+    ***three = **two; 
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex28.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection Simple Three-Address Code-->
+
+<H3 CLASS="subsection"><A NAME="htoc33">8.14</A>&nbsp;&nbsp;Simple Three-Address Code</H3><!--SEC END -->
+ 
+The <TT>simplify.ml</TT> module further reduces the complexity of program
+expressions and gives you a form of three-address code. After this
+transformation all expressions will adhere to the following grammar: 
+<PRE CLASS="verbatim">
+ basic::=
+    Const _ 
+    Addrof(Var v, NoOffset)
+    StartOf(Var v, NoOffset)
+    Lval(Var v, off), where v is a variable whose address is not taken
+                      and off contains only "basic"
+
+ exp::=
+    basic
+    Lval(Mem basic, NoOffset)
+    BinOp(bop, basic, basic)
+    UnOp(uop, basic)
+    CastE(t, basic)
+   
+ lval ::= 
+    Mem basic, NoOffset
+    Var v, off, where v is a variable whose address is not taken and off
+                contains only "basic"
+</PRE>In addition, all <TT>sizeof</TT> and <TT>alignof</TT> forms are turned into
+constants. Accesses to arrays and variables whose address is taken are
+turned into "Mem" accesses. All field and index computations are turned
+into address arithmetic.<BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dosimplify</TT> 
+transforms the following code:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int main() {
+    struct mystruct {
+      int a;
+      int b;
+    } m;
+    int local;
+    int arr[3];
+    int *ptr;
+
+    ptr = &amp;local;
+    m.a = local + sizeof(m) + arr[2];
+    return m.a; 
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex29.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<!--TOC subsection Converting C to C++-->
+
+<H3 CLASS="subsection"><A NAME="htoc34">8.15</A>&nbsp;&nbsp;Converting C to C++</H3><!--SEC END -->
+
+The module canonicalize.ml performs several transformations to correct
+differences between C and C++, so that the output is (hopefully) valid
+C++ code. This may be incomplete &mdash; certain fixes which are necessary
+for some programs are not yet implemented.<BR>
+<BR>
+Using the <TT>--doCanonicalize</TT> option with CIL will perform the
+following changes to your program:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Any variables that use C++ keywords as identifiers are renamed.
+<LI CLASS="li-enumerate">C allows global variables to have multiple declarations and
+ multiple (equivalent) definitions. This transformation removes
+ all but one declaration and all but one definition.
+<LI CLASS="li-enumerate"><TT>__inline</TT> is #defined to <TT>inline</TT>, and <TT>__restrict</TT> 
+ is #defined to nothing.
+<LI CLASS="li-enumerate">C allows function pointers with no specified arguments to be used on
+ any argument list. To make C++ accept this code, we insert a cast
+ from the function pointer to a type that matches the arguments. Of
+ course, this does nothing to guarantee that the pointer actually has
+ that type.
+<LI CLASS="li-enumerate">Makes casts from int to enum types explicit. (CIL changes enum
+ constants to int constants, but doesn't use a cast.)
+</OL>
+<!--TOC section Controlling CIL-->
+
+<H2 CLASS="section"><A NAME="htoc35">9</A>&nbsp;&nbsp;Controlling CIL</H2><!--SEC END -->
+
+In the process of converting a C file to CIL we drop the unused prototypes
+and even inline function definitions. This results in much smaller files. If
+you do not want this behavior then you must pass the <TT>--keepunused</TT> argument
+to the CIL application. <BR>
+<BR>
+Alternatively you can put the following pragma in the code (instructing CIL
+to specifically keep the declarations and definitions of the function
+<TT>func1</TT> and variable <TT>var2</TT>, the definition of type <TT>foo</TT> and of
+structure <TT>bar</TT>):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+#pragma cilnoremove("func1", "var2", "type foo", "struct bar")
+</FONT></PRE>
+<!--TOC section GCC Extensions-->
+
+<H2 CLASS="section"><A NAME="htoc36">10</A>&nbsp;&nbsp;GCC Extensions</H2><!--SEC END -->
+
+The CIL parser handles most of the <TT>gcc</TT>
+<A HREF="javascript:loadTop('http://gcc.gnu.org/onlinedocs/gcc-3.0.2/gcc_5.html#SEC67')">extensions</A>
+and compiles them to CIL. The following extensions are not handled (note that
+we are able to compile a large number of programs, including the Linux kernel,
+without encountering these):
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Nested function definitions.
+<LI CLASS="li-enumerate">Constructing function calls.
+<LI CLASS="li-enumerate">Naming an expression's type.
+<LI CLASS="li-enumerate">Complex numbers
+<LI CLASS="li-enumerate">Hex floats
+<LI CLASS="li-enumerate">Subscripts on non-lvalue arrays.
+<LI CLASS="li-enumerate">Forward function parameter declarations
+</OL>
+The following extensions are handled, typically by compiling them away:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Attributes for functions, variables and types. In fact, we have a clear
+specification (see Section&nbsp;<A HREF="#sec-attrib">6.4</A>) of how attributes are interpreted. The
+specification extends that of <TT>gcc</TT>.
+<LI CLASS="li-enumerate">Old-style function definitions and prototypes. These are translated to
+new-style. 
+<LI CLASS="li-enumerate">Locally-declared labels. As part of the translation to CIL, we generate
+new labels as needed. 
+<LI CLASS="li-enumerate">Labels as values and computed goto. This allows a program to take the
+address of a label and to manipulate it as any value and also to perform a
+computed goto. We compile this by assigning each label whose address is taken
+a small integer that acts as its address. Every computed <TT>goto</TT> in the body
+of the function is replaced with a <TT>switch</TT> statement. If you want to invoke
+the label from another function, you are on your own (the <TT>gcc</TT>
+documentation says the same.)
+<LI CLASS="li-enumerate">Generalized lvalues. You can write code like <TT>(a, b) += 5</TT> and it gets
+translated to CIL. 
+<LI CLASS="li-enumerate">Conditionals with omitted operands. Things like <TT>x ? : y</TT> are
+translated to CIL.
+<LI CLASS="li-enumerate">Double word integers. The type <TT>long long</TT> and the <TT>LL</TT> suffix on
+constants is understood. This is currently interpreted as 64-bit integers.
+<LI CLASS="li-enumerate">Local arrays of variable length. These are converted to uses of
+<TT>alloca</TT>, the array variable is replaced with a pointer to the allocated
+array and the instances of <TT>sizeof(a)</TT> are adjusted to return the size of
+the array and not the size of the pointer. 
+<LI CLASS="li-enumerate">Non-constant local initializers. Like all local initializers these are
+compiled into assignments. 
+<LI CLASS="li-enumerate">Compound literals. These are also turned into assignments.
+<LI CLASS="li-enumerate">Designated initializers. The CIL parser actually supports the full ISO
+syntax for initializers, which is more than both <TT>gcc</TT> and <TT>MSVC</TT>. I
+(George) think that this is the most complicated part of the C language and
+whoever designed it should be banned from ever designing languages again.
+<LI CLASS="li-enumerate">Case ranges. These are compiled into separate cases. There is no code
+duplication, just a larger number of <TT>case</TT> statements.
+<LI CLASS="li-enumerate">Transparent unions. This is a strange feature that allows you to define
+a function whose formal argument has a (tranparent) union type, but the
+argument is called as if it were the first element of the union. This is
+compiled away by saying that the type of the formal argument is that of the
+first field, and the first thing in the function body we copy the formal into
+a union. <BR>
+<BR>
+<LI CLASS="li-enumerate">Inline assembly-language. The full syntax is supported and it is carried
+as such in CIL.<BR>
+<BR>
+<LI CLASS="li-enumerate">Function names as strings. The identifiers <TT>__FUNCTION__</TT> and
+<TT>__PRETTY_FUNCTION__</TT> are replaced with string literals. <BR>
+<BR>
+<LI CLASS="li-enumerate">Keywords <TT>typeof</TT>, <TT>alignof</TT>, <TT>inline</TT> are supported. 
+</OL>
+<!--TOC section CIL Limitations-->
+
+<H2 CLASS="section"><A NAME="htoc37">11</A>&nbsp;&nbsp;CIL Limitations</H2><!--SEC END -->
+
+There are several implementation details of CIL that might make it unusable
+ or less than ideal for certain tasks:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+CIL operates after preprocessing. If you need to see comments, for
+example, you cannot use CIL. But you can use attributes and pragmas instead.
+And there is some support to help you patch the include files before they are
+seen by the preprocessor. For example, this is how we turn some
+<TT>#define</TT>s that we don't like into function calls. <BR>
+<BR>
+<LI CLASS="li-itemize">CIL does transform the code in a non-trivial way. This is done in order
+to make most analyses easier. But if you want to see the code <TT>e1, e2++</TT>
+exactly as it appears in the code, then you should not use CIL. <BR>
+<BR>
+<LI CLASS="li-itemize">CIL removes all local scopes and moves all variables to function
+scope. It also separates a declaration with an initializer into a declaration
+plus an assignment. The unfortunate effect of this transformation is that
+local variables cannot have the <TT>const</TT> qualifier.</UL>
+<!--TOC section Known Bugs and Limitations-->
+
+<H2 CLASS="section"><A NAME="htoc38">12</A>&nbsp;&nbsp;Known Bugs and Limitations</H2><!--SEC END -->
+
+<UL CLASS="itemize"><LI CLASS="li-itemize">In the new versions of <TT>glibc</TT> there is a function
+ <TT>__builtin_va_arg</TT> that takes a type as its second argument. CIL
+ handles that through a slight trick. As it parses the function it changes a
+ call like:
+<PRE CLASS="verbatim">
+  mytype x = __builtin_va_arg(marker, mytype)
+</PRE>into 
+<PRE CLASS="verbatim">
+ mytype x;
+ __builtin_va_arg(marker, sizeof(mytype), &amp;x);
+</PRE>
+ The latter form is used internally in CIL. However, the CIL pretty printer
+ will try to emit the original code. <BR>
+<BR>
+Similarly, <TT>__builtin_types_compatible_p(t1, t2)</TT>, which takes
+ types as arguments, is represented internally as
+ <TT>__builtin_types_compatible_p(sizeof t1, sizeof t2)</TT>, but the
+ sizeofs are removed when printing.<BR>
+<BR>
+<LI CLASS="li-itemize">The implementation of <TT>bitsSizeOf</TT> does not take into account the
+packing pragmas. However it was tested to be accurate on cygwin/gcc-2.95.3,
+Linux/gcc-2.95.3 and on Windows/MSVC.<BR>
+<BR>
+<LI CLASS="li-itemize">We do not support tri-graph sequences (ISO 5.2.1.1).<BR>
+<BR>
+<LI CLASS="li-itemize">GCC has a strange feature called &#8220;extern inline&#8221;. Such a function can
+be defined twice: first with the &#8220;extern inline&#8221; specifier and the second
+time without it. If optimizations are turned off then the &#8220;extern inline&#8221;
+definition is considered a prototype (its body is ignored). If optimizations
+are turned on then the extern inline function is inlined at all of its
+occurrences from the point of its definition all the way to the point where the
+(optional) second definition appears. No body is generated for an extern
+inline function. A body is generated for the real definition and that one is
+used in the rest of the file. <BR>
+<BR>
+CIL will rename your extern inline function (and its uses) with the suffix
+ <TT>__extinline</TT>. This means that if you have two such definition, that do
+ different things and the optimizations are not on, then the CIL version might
+ compute a different answer !<BR>
+<BR>
+Also, if you have multiple extern inline declarations then CIL will ignore
+but the first one. This is not so bad because GCC itself would not like it. <BR>
+<BR>
+<LI CLASS="li-itemize">There are still a number of bugs in handling some obscure features of
+GCC. For example, when you use variable-length arrays, CIL turns them into
+calls to <TT>alloca</TT>. This means that they are deallocated when the function
+returns and not when the local scope ends. <BR>
+<BR>
+Variable-length arrays are not supported as fields of a struct or union.<BR>
+<BR>
+<LI CLASS="li-itemize">CIL cannot parse arbitrary <TT>#pragma</TT> directives. Their
+ syntax must follow gcc's attribute syntax to be understood. If you
+ need a pragma that does not follow gcc syntax, add that pragma's name
+ to <TT>no_parse_pragma</TT> in <TT>src/frontc/clexer.mll</TT> to indicate that
+ CIL should treat that pragma as a monolithic string rather than try
+ to parse its arguments.<BR>
+<BR>
+CIL cannot parse a line containing an empty <TT>#pragma</TT>.<BR>
+<BR>
+<LI CLASS="li-itemize">CIL only parses <TT>#pragma</TT> directives at the "top level", this is,
+ outside of any enum, structure, union, or function definitions.<BR>
+<BR>
+If your compiler uses pragmas in places other than the top-level,
+ you may have to preprocess the sources in a special way (sed, perl,
+ etc.) to remove pragmas from these locations.<BR>
+<BR>
+<LI CLASS="li-itemize">CIL cannot parse the following code (fixing this problem would require
+extensive hacking of the LALR grammar):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int bar(int ()); // This prototype cannot be parsed
+int bar(int x()); // If you add a name to the function, it works
+int bar(int (*)()); // This also works (and it is more appropriate)
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-itemize">CIL also cannot parse certain K&amp;R old-style prototypes with missing
+return type:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+g(); // This cannot be parsed
+int g(); // This is Ok
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-itemize">CIL does not understand some obscure combinations of type specifiers
+(&#8220;signed&#8221; and &#8220;unsigned&#8221; applied to typedefs that themselves contain a
+sign specification; you could argue that this should not be allowed anyway):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+typedef signed char __s8;
+__s8 unsigned uchartest; // This is unsigned char for gcc
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-itemize">The statement <TT>x = 3 + x ++</TT> will perform the increment of <TT>x</TT>
+ before the assignment, while <TT>gcc</TT> delays the increment after the
+ assignment. It turned out that this behavior is much easier to implement
+ than gcc's one, and either way is correct (since the behavior is unspecified
+ in this case). Similarly, if you write <TT>x = x ++;</TT> then CIL will perform
+ the increment before the assignment, whereas GCC and MSVC will perform it
+ after the assignment. 
+</UL>
+<!--TOC section Using the merger-->
+
+<H2 CLASS="section"><A NAME="htoc39">13</A>&nbsp;&nbsp;Using the merger</H2><!--SEC END -->
+<A NAME="sec-merger"></A><!--NAME merger.html-->
+<BR>
+<BR>
+There are many program analyses that are more effective when
+done on the whole program.<BR>
+<BR>
+The merger is a tool that combines all of the C source files in a project
+into a single C file. There are two tasks that a merger must perform:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Detect what are all the sources that make a project and with what
+compiler arguments they are compiled.<BR>
+<BR>
+<LI CLASS="li-enumerate">Merge all of the source files into a single file. 
+</OL>
+For the first task the merger impersonates a compiler and a linker (both a
+GCC and a Microsoft Visual C mode are supported) and it expects to be invoked
+(from a build script or a Makefile) on all sources of the project. When
+invoked to compile a source the merger just preprocesses the source and saves
+the result using the name of the requested object file. By preprocessing at
+this time the merger is able to take into account variations in the command
+line arguments that affect preprocessing of different source files.<BR>
+<BR>
+When the merger is invoked to link a number of object files it collects the
+preprocessed sources that were stored with the names of the object files, and
+invokes the merger proper. Note that arguments that affect the compilation or
+linking must be the same for all source files.<BR>
+<BR>
+For the second task, the merger essentially concatenates the preprocessed
+sources with care to rename conflicting file-local declarations (we call this
+process alpha-conversion of a file). The merger also attempts to remove
+duplicate global declarations and definitions. Specifically the following
+actions are taken: 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+File-scope names (<TT>static</TT> globals, names of types defined with
+<TT>typedef</TT>, and structure/union/enumeration tags) are given new names if they
+conflict with declarations from previously processed sources. The new name is
+formed by appending the suffix <TT>___n</TT>, where <TT>n</TT> is a unique integer
+identifier. Then the new names are applied to their occurrences in the file. <BR>
+<BR>
+<LI CLASS="li-itemize">Non-static declarations and definitions of globals are never renamed.
+But we try to remove duplicate ones. Equality of globals is detected by
+comparing the printed form of the global (ignoring the line number directives)
+after the body has been alpha-converted. This process is intended to remove
+those declarations (e.g. function prototypes) that originate from the same
+include file. Similarly, we try to eliminate duplicate definitions of
+<TT>inline</TT> functions, since these occasionally appear in include files.<BR>
+<BR>
+<LI CLASS="li-itemize">The types of all global declarations with the same name from all files
+are compared for type isomorphism. During this process, the merger detects all
+those isomorphisms between structures and type definitions that are <B>required</B> for the merged program to be legal. Such structure tags and
+typenames are coalesced and given the same name. <BR>
+<BR>
+<LI CLASS="li-itemize">Besides the structure tags and type names that are required to be
+isomorphic, the merger also tries to coalesce definitions of structures and
+types with the same name from different file. However, in this case the merger
+will not give an error if such definitions are not isomorphic; it will just
+use different names for them. <BR>
+<BR>
+<LI CLASS="li-itemize">In rare situations, it can happen that a file-local global in
+encountered first and it is not renamed, only to discover later when
+processing another file that there is an external symbol with the same name.
+In this case, a second pass is made over the merged file to rename the
+file-local symbol. 
+</UL>
+Here is an example of using the merger:<BR>
+<BR>
+The contents of <TT>file1.c</TT> is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct foo; // Forward declaration
+extern struct foo *global;
+</FONT></PRE>
+The contents of <TT>file2.c</TT> is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct bar {
+ int x;
+ struct bar *next;
+};
+extern struct bar *global;
+struct foo {
+ int y;
+};
+extern struct foo another;
+void main() {
+}
+</FONT></PRE>
+There are several ways in which one might create an executable from these
+files:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<PRE CLASS="verbatim">
+gcc file1.c file2.c -o a.out
+</PRE><BR>
+<BR>
+<LI CLASS="li-itemize"><PRE CLASS="verbatim">
+gcc -c file1.c -o file1.o
+gcc -c file2.c -o file2.o
+ld file1.o file2.o -o a.out
+</PRE><BR>
+<BR>
+<LI CLASS="li-itemize"><PRE CLASS="verbatim">
+gcc -c file1.c -o file1.o
+gcc -c file2.c -o file2.o
+ar r libfile2.a file2.o
+gcc file1.o libfile2.a -o a.out
+</PRE><BR>
+<BR>
+<LI CLASS="li-itemize"><PRE CLASS="verbatim">
+gcc -c file1.c -o file1.o
+gcc -c file2.c -o file2.o
+ar r libfile2.a file2.o
+gcc file1.o -lfile2 -o a.out
+</PRE></UL>
+In each of the cases above you must replace all occurrences of <TT>gcc</TT> and
+<TT>ld</TT> with <TT>cilly --merge</TT>, and all occurrences of <TT>ar</TT> with <TT>cilly
+--merge --mode=AR</TT>. It is very important that the <TT>--merge</TT> flag be used
+throughout the build process. If you want to see the merged source file you
+must also pass the <TT>--keepmerged</TT> flag to the linking phase. <BR>
+<BR>
+The result of merging file1.c and file2.c is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+// from file1.c
+struct foo; // Forward declaration
+extern struct foo *global;
+
+// from file2.c
+struct foo {
+ int x;
+ struct foo *next;
+};
+struct foo___1 {
+ int y;
+};
+extern struct foo___1 another;
+</FONT></PRE>
+<!--TOC section Using the patcher-->
+
+<H2 CLASS="section"><A NAME="htoc40">14</A>&nbsp;&nbsp;Using the patcher</H2><!--SEC END -->
+<A NAME="sec-patcher"></A><!--NAME patcher.html-->
+<BR>
+<BR>
+Occasionally we have needed to modify slightly the standard include files.
+So, we developed a simple mechanism that allows us to create modified copies
+of the include files and use them instead of the standard ones. For this
+purpose we specify a patch file and we run a program caller Patcher which
+makes modified copies of include files and applies the patch.<BR>
+<BR>
+The patcher is invoked as follows: 
+<PRE CLASS="verbatim">
+bin/patcher [options]
+
+Options:
+  --help       Prints this help message
+  --verbose    Prints a lot of information about what is being done
+  --mode=xxx   What tool to emulate: 
+                GNUCC     - GNU CC
+                MSVC      - MS VC cl compiler
+
+  --dest=xxx   The destination directory. Will make one if it does not exist
+  --patch=xxx  Patch file (can be specified multiple times)
+  --ppargs=xxx An argument to be passed to the preprocessor (can be specified
+               multiple times)
+
+  --ufile=xxx  A user-include file to be patched (treated as \#include "xxx")
+  --sfile=xxx  A system-include file to be patched (treated as \#include &lt;xxx&gt;)
+ 
+  --clean       Remove all files in the destination directory
+  --dumpversion Print the version name used for the current compiler
+
+ All of the other arguments are passed to the preprocessor. You should pass
+ enough arguments (e.g., include directories) so that the patcher can find the
+ right include files to be patched.
+</PRE>
+ Based on the given <TT>mode</TT> and the current version of the compiler (which
+the patcher can print when given the <TT>dumpversion</TT> argument) the patcher
+will create a subdirectory of the <TT>dest</TT> directory (say <TT>/usr/home/necula/cil/include</TT>), such as:
+<PRE CLASS="verbatim">
+/usr/home/necula/cil/include/gcc_2.95.3-5
+</PRE>
+ In that file the patcher will copy the modified versions of the include files
+specified with the <TT>ufile</TT> and <TT>sfile</TT> options. Each of these options can
+be specified multiple times. <BR>
+<BR>
+The patch file (specified with the <TT>patch</TT> option) has a format inspired by
+the Unix <TT>patch</TT> tool. The file has the following grammar:
+<PRE CLASS="verbatim">
+&lt;&lt;&lt; flags
+patterns
+===
+replacement
+&gt;&gt;&gt;
+</PRE>
+ The flags are a comma separated, case-sensitive, sequence of keywords or
+keyword = value. The following flags are supported:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>file=foo.h</TT> - will only apply the patch on files whose name is
+ <TT>foo.h</TT>. 
+<LI CLASS="li-itemize"><TT>optional</TT> - this means that it is Ok if the current patch does not
+match any of the processed files. 
+<LI CLASS="li-itemize"><TT>group=foo</TT> - will add this patch to the named group. If this is not
+specified then a unique group is created to contain just the current patch.
+When all files specified in the command line have been patched, an error
+message is generated for all groups for whom no member patch was used. We use
+this mechanism to receive notice when the patch triggers are out-dated with
+respect to the new include files. 
+<LI CLASS="li-itemize"><TT>system=sysname</TT> - will only consider this pattern on a given
+operating system. The &#8220;sysname&#8221; is reported by the &#8220;$Ô&#8221; variable in
+Perl, except that Windows is always considered to have sysname
+&#8220;cygwin.&#8221; For Linux use &#8220;linux&#8221; (capitalization matters).
+<LI CLASS="li-itemize"><TT>ateof</TT> - In this case the patterns are ignored and the replacement
+text is placed at the end of the patched file. Use the <TT>file</TT> flag if you
+want to restrict the files in which this replacement is performed. 
+<LI CLASS="li-itemize"><TT>atsof</TT> - The patterns are ignored and the replacement text is placed
+at the start of the patched file. Uf the <TT>file</TT> flag to restrict the
+application of this patch to a certain file. 
+<LI CLASS="li-itemize"><TT>disabled</TT> - Use this flag if you want to disable the pattern.
+</UL>
+The patterns can consist of several groups of lines separated by the <TT>|||</TT>
+marker. Each of these group of lines is a multi-line pattern that if found in
+the file will be replaced with the text given at the end of the block. <BR>
+<BR>
+The matching is space-insensitive.<BR>
+<BR>
+All of the markers <TT>&lt;&lt;&lt;</TT>, <TT>|||</TT>, <TT>===</TT> and <TT>&gt;&gt;&gt;</TT> must appear at the
+beginning of a line but they can be followed by arbitrary text (which is
+ignored).<BR>
+<BR>
+The replacement text can contain the special keyword <TT>@__pattern__@</TT>,
+which is substituted with the pattern that matched. <BR>
+<BR>
+<!--TOC section Debugging support-->
+
+<H2 CLASS="section"><A NAME="htoc41">15</A>&nbsp;&nbsp;Debugging support</H2><!--SEC END -->
+<A NAME="sec-debugger"></A>
+Most of the time we debug our code using the Errormsg module along with the
+pretty printer. But if you want to use the Ocaml debugger here is an easy way
+to do it. Say that you want to debug the invocation of cilly that arises out
+of the following command:
+<PRE CLASS="verbatim">
+cilly -c hello.c 
+</PRE>
+ You must follow the installation <A HREF="../ccured/setup.html">instructions</A>
+to install the Elist support files for ocaml and to extend your .emacs
+appropriately. Then from within Emacs you do
+<PRE CLASS="verbatim">
+ALT-X my-camldebug
+</PRE>
+ This will ask you for the command to use for running the Ocaml debugger
+(initially the default will be &#8220;ocamldebug&#8221; or the last command you
+introduced). You use the following command:
+<PRE CLASS="verbatim">
+cilly --ocamldebug -c hello.c 
+</PRE>
+ This will run <TT>cilly</TT> as usual and invoke the Ocaml debugger when the cilly
+engine starts. The advantage of this way of invoking the debugger is that the
+directory search paths are set automatically and the right set or arguments is
+passed to the debugger. <BR>
+<BR>
+<!--TOC section Who Says C is Simple?-->
+
+<H2 CLASS="section"><A NAME="htoc42">16</A>&nbsp;&nbsp;Who Says C is Simple?</H2><!--SEC END -->
+<A NAME="sec-simplec"></A>
+When I (George) started to write CIL I thought it was going to take two weeks.
+Exactly a year has passed since then and I am still fixing bugs in it. This
+gross underestimate was due to the fact that I thought parsing and making
+sense of C is simple. You probably think the same. What I did not expect was
+how many dark corners this language has, especially if you want to parse
+real-world programs such as those written for GCC or if you are more ambitious
+and you want to parse the Linux or Windows NT sources (both of these were
+written without any respect for the standard and with the expectation that
+compilers will be changed to accommodate the program). <BR>
+<BR>
+The following examples were actually encountered either in real programs or
+are taken from the ISO C99 standard or from the GCC's testcases. My first
+reaction when I saw these was: <EM>Is this C?</EM>. The second one was : <EM>What the hell does it mean?</EM>. <BR>
+<BR>
+If you are contemplating doing program analysis for C on abstract-syntax
+trees then your analysis ought to be able to handle these things. Or, you can
+use CIL and let CIL translate them into clean C code. <BR>
+<BR>
+<!--TOC subsection Standard C-->
+
+<H3 CLASS="subsection"><A NAME="htoc43">16.1</A>&nbsp;&nbsp;Standard C</H3><!--SEC END -->
+
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">Why does the following code return 0 for most values of <TT>x</TT>? (This
+should be easy.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x;
+  return x == (1 &amp;&amp; x);
+</FONT></PRE>
+See the <A HREF="examples/ex30.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Why does the following code return 0 and not -1? (Answer: because
+<TT>sizeof</TT> is unsigned, thus the result of the subtraction is unsigned, thus
+the shift is logical.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return ((1 - sizeof(int)) &gt;&gt; 32);
+</FONT></PRE>
+See the <A HREF="examples/ex31.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Scoping rules can be tricky. This function returns 5.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int x = 5;
+int f() {
+  int x = 3;
+  {
+    extern int x;
+    return x;
+  }
+}
+</FONT></PRE>
+See the <A HREF="examples/ex32.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Functions and function pointers are implicitly converted to each other. 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int (*pf)(void);
+int f(void) {
+
+   pf = &amp;f; // This looks ok
+   pf = ***f; // Dereference a function?
+   pf(); // Invoke a function pointer?     
+   (****pf)();  // Looks strange but Ok
+   (***************f)(); // Also Ok             
+}
+</FONT></PRE>
+See the <A HREF="examples/ex33.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Initializer with designators are one of the hardest parts about ISO C.
+Neither MSVC or GCC implement them fully. GCC comes close though. What is the
+final value of <TT>i.nested.y</TT> and <TT>i.nested.z</TT>? (Answer: 2 and respectively
+6). 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct { 
+   int x; 
+   struct { 
+       int y, z; 
+   } nested;
+} i = { .nested.y = 5, 6, .x = 1, 2 };               
+</FONT></PRE>
+See the <A HREF="examples/ex34.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">This is from c-torture. This function returns 1.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+typedef struct
+{
+  char *key;
+  char *value;
+} T1;
+
+typedef struct
+{
+  long type;
+  char *value;
+} T3;
+
+T1 a[] =
+{
+  {
+    "",
+    ((char *)&amp;((T3) {1, (char *) 1}))
+  }
+};
+int main() {
+   T3 *pt3 = (T3*)a[0].value;
+   return pt3-&gt;value;
+}
+</FONT></PRE>
+See the <A HREF="examples/ex35.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Another one with constructed literals. This one is legal according to
+the GCC documentation but somehow GCC chokes on (it works in CIL though). This
+code returns 2.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return ((int []){1,2,3,4})[1];
+</FONT></PRE>
+See the <A HREF="examples/ex36.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">In the example below there is one copy of &#8220;bar&#8221; and two copies of
+ &#8220;pbar&#8221; (static prototypes at block scope have file scope, while for all
+ other types they have block scope). 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo() {
+     static bar();
+     static (*pbar)() = bar;
+
+  }
+
+  static bar() { 
+    return 1;
+  }
+
+  static (*pbar)() = 0;
+</FONT></PRE>
+See the <A HREF="examples/ex37.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Two years after heavy use of CIL, by us and others, I discovered a bug
+ in the parser. The return value of the following function depends on what
+ precedence you give to casts and unary minus:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  unsigned long foo() {
+    return (unsigned long) - 1 / 8;
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex38.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+The correct interpretation is <TT>((unsigned long) - 1) / 8</TT>, which is a
+ relatively large number, as opposed to <TT>(unsigned long) (- 1 / 8)</TT>, which
+ is 0. </OL>
+<!--TOC subsection GCC ugliness-->
+
+<H3 CLASS="subsection"><A NAME="htoc44">16.2</A>&nbsp;&nbsp;GCC ugliness</H3><!--SEC END -->
+<A NAME="sec-ugly-gcc"></A>
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">GCC has generalized lvalues. You can take the address of a lot of
+strange things:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int x, y, z;
+  return &amp;(x ? y : z) - &amp; (x++, x);
+</FONT></PRE>
+See the <A HREF="examples/ex39.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC lets you omit the second component of a conditional expression.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  extern int f();
+  return f() ? : -1; // Returns the result of f unless it is 0
+</FONT></PRE>
+See the <A HREF="examples/ex40.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">Computed jumps can be tricky. CIL compiles them away in a fairly clean
+way but you are on your own if you try to jump into another function this way.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+static void *jtab[2]; // A jump table
+static int doit(int x){
+ 
+  static int jtab_init = 0;
+  if(!jtab_init) { // Initialize the jump table
+    jtab[0] = &amp;&amp;lbl1;
+    jtab[1] = &amp;&amp;lbl2;
+    jtab_init = 1;
+  }
+  goto *jtab[x]; // Jump through the table
+lbl1:
+  return 0;
+lbl2:
+  return 1;
+}
+ 
+int main(void){
+  if (doit(0) != 0) exit(1);
+  if (doit(1) != 1) exit(1);
+  exit(0);
+}
+</FONT></PRE>
+See the <A HREF="examples/ex41.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">A cute little example that we made up. What is the returned value?
+(Answer: 1); 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return ({goto L; 0;}) &amp;&amp; ({L: 5;});
+</FONT></PRE>
+See the <A HREF="examples/ex42.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate"><TT>extern inline</TT> is a strange feature of GNU C. Can you guess what the
+following code computes?
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+extern inline foo(void) { return 1; }
+int firstuse(void) { return foo(); }
+
+// A second, incompatible definition of foo
+int foo(void) { return 2; }
+
+int main() {
+    return foo() + firstuse();
+}
+</FONT></PRE>
+See the <A HREF="examples/ex43.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+The answer depends on whether the optimizations are turned on. If they are
+then the answer is 3 (the first definition is inlined at all occurrences until
+the second definition). If the optimizations are off, then the first
+definition is ignore (treated like a prototype) and the answer is 4. <BR>
+<BR>
+CIL will misbehave on this example, if the optimizations are turned off (it
+ always returns 3).<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC allows you to cast an object of a type T into a union as long as the
+union has a field of that type:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+union u { 
+   int i; 
+   struct s { 
+      int i1, i2;
+   } s;
+};
+
+union u x = (union u)6;
+
+int main() {
+  struct s y = {1, 2};
+  union u  z = (union u)y;
+}
+</FONT></PRE>
+See the <A HREF="examples/ex44.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">GCC allows you to use the <TT>__mode__</TT> attribute to specify the size
+of the integer instead of the standard <TT>char</TT>, <TT>short</TT> and so on:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int __attribute__ ((__mode__ (  __QI__ ))) i8;
+int __attribute__ ((__mode__ (  __HI__ ))) i16;
+int __attribute__ ((__mode__ (  __SI__ ))) i32;
+int __attribute__ ((__mode__ (  __DI__ ))) i64;
+</FONT></PRE>
+See the <A HREF="examples/ex45.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<LI CLASS="li-enumerate">The &#8220;alias&#8221; attribute on a function declaration tells the
+ linker to treat this declaration as another name for the specified
+ function. CIL will replace the declaration with a trampoline
+ function pointing to the specified target.
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+    static int bar(int x, char y) {
+      return x + y;
+    }
+
+    //foo is considered another name for bar.
+    int foo(int x, char y) __attribute__((alias("bar")));
+</FONT></PRE>
+See the <A HREF="examples/ex46.txt">CIL output</A> for this
+code fragment</OL>
+<!--TOC subsection Microsoft VC ugliness-->
+
+<H3 CLASS="subsection"><A NAME="htoc45">16.3</A>&nbsp;&nbsp;Microsoft VC ugliness</H3><!--SEC END -->
+
+This compiler has few extensions, so there is not much to say here.
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Why does the following code return 0 and not -1? (Answer: because of a
+bug in Microsoft Visual C. It thinks that the shift is unsigned just because
+the second operator is unsigned. CIL reproduces this bug when in MSVC mode.)
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+ return -3 &gt;&gt; (8 * sizeof(int));
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-enumerate">Unnamed fields in a structure seem really strange at first. It seems
+that Microsoft Visual C introduced this extension, then GCC picked it up (but
+in the process implemented it wrongly: in GCC the field <TT>y</TT> overlaps with
+<TT>x</TT>!).
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct {
+  int x;
+  struct {
+     int y, z;
+     struct {
+       int u, v;
+     };
+ };
+} a;
+return a.x + a.y + a.z + a.u + a.v;
+</FONT></PRE>
+See the <A HREF="examples/ex47.txt">CIL output</A> for this
+code fragment</OL>
+<!--TOC section Authors-->
+
+<H2 CLASS="section"><A NAME="htoc46">17</A>&nbsp;&nbsp;Authors</H2><!--SEC END -->
+
+The CIL parser was developed starting from Hugues Casse's <TT>frontc</TT>
+front-end for C although all the files from the <TT>frontc</TT> distribution have
+been changed very extensively. The intermediate language and the elaboration
+stage are all written from scratch. The main author is
+<A HREF="mailto:necula@cs.berkeley.edu">George Necula</A>, with significant
+contributions from <A HREF="mailto:smcpeak@cs.berkeley.edu">Scott McPeak</A>,
+<A HREF="mailto:weimer@cs.berkeley.edu">Westley Weimer</A>,
+<A HREF="mailto:liblit@cs.wisc.edu">Ben Liblit</A>,
+<A HREF="javascript:loadTop('http://www.cs.berkeley.edu/~matth/')">Matt Harren</A>, 
+Raymond To and Aman Bhargava.<BR>
+<BR>
+This work is based upon work supported in part by the National Science
+Foundation under Grants No. 9875171, 0085949 and 0081588, and gifts from
+Microsoft Research. Any opinions, findings, and conclusions or recommendations
+expressed in this material are those of the author(s) and do not necessarily
+reflect the views of the National Science Foundation or the other sponsors.<BR>
+<BR>
+<!--TOC section License-->
+
+<H2 CLASS="section"><A NAME="htoc47">18</A>&nbsp;&nbsp;License</H2><!--SEC END -->
+
+Copyright (c) 2001-2005, 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+George C. Necula &lt;necula@cs.berkeley.edu&gt;
+<LI CLASS="li-itemize">Scott McPeak &lt;smcpeak@cs.berkeley.edu&gt;
+<LI CLASS="li-itemize">Wes Weimer &lt;weimer@cs.berkeley.edu&gt;
+<LI CLASS="li-itemize">Ben Liblit &lt;liblit@cs.wisc.edu&gt;
+</UL>
+All rights reserved.<BR>
+<BR>
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:<BR>
+<BR>
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.<BR>
+<BR>
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.<BR>
+<BR>
+3. The names of the contributors may not be used to endorse or promote
+products derived from this software without specific prior written
+permission.<BR>
+<BR>
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.<BR>
+<BR>
+<!--TOC section Bug reports-->
+
+<H2 CLASS="section"><A NAME="htoc48">19</A>&nbsp;&nbsp;Bug reports</H2><!--SEC END -->
+
+We are certain that there are still some remaining bugs in CIL. If you find
+one please file a bug report in our Source Forge space 
+<A HREF="javascript:loadTop('http://sourceforge.net/projects/cil')">http://sourceforge.net/projects/cil</A>. <BR>
+<BR>
+You can find there the latest announcements, a source distribution,
+bug report submission instructions and a mailing list: cil-users[at
+sign]lists.sourceforge.net. Please use this list to ask questions about CIL,
+as it will ensure your message is viewed by a broad audience. <BR>
+<BR>
+<!--TOC section Changes-->
+
+<H2 CLASS="section"><A NAME="htoc49">20</A>&nbsp;&nbsp;Changes</H2><!--SEC END -->
+<A NAME="sec-changes"></A><!--NAME changes.html-->
+
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<B>May 20, 2006</B>: <B>Released version 1.3.5</B>
+<LI CLASS="li-itemize"><B>May 19, 2006</B>: <TT>Makefile.cil.in</TT>/<TT>Makefile.cil</TT> have
+ been renamed <TT>Makefile.in</TT>/<TT>Makefile</TT>. And <TT>maincil.ml</TT> has
+ been renamed <TT>main.ml</TT>.
+<LI CLASS="li-itemize"><B>May 18, 2006</B>: Added a new module <A HREF="api/Cfg.html">Cfg</A> to compute the
+ control-flow graph. Unlike the older <A HREF="api/Cil.html#VALcomputeCFGInfo">Cil.computeCFGInfo</A>,
+ the new version does not modify the code. 
+<LI CLASS="li-itemize"><B>May 18, 2006</B>: Added several new analyses: reaching
+ definitions, available expressions, liveness analysis, and dead code
+ elimination. See Section&nbsp;<A HREF="#sec-Extension">8</A>.
+<LI CLASS="li-itemize"><B>May 2, 2006</B>: Added a flag <TT>--noInsertImplicitCasts</TT>.
+ When this flag is used, CIL code will only include casts inserted by
+ the programmer. Implicit coercions are not changed to explicit casts.
+<LI CLASS="li-itemize"><B>April 16, 2006</B>: Minor improvements to the <TT>--stats</TT>
+ flag (Section&nbsp;<A HREF="#sec-cilly-asm-options">7.2</A>). We now use Pentium performance
+ counters by default, if your processor supports them.
+<LI CLASS="li-itemize"><B>April 10, 2006</B>: Extended <TT>machdep.c</TT> to support
+ microcontroller compilers where the struct alignment of integer
+ types does not match the size of the type. Thanks to Nathan
+ Cooprider for the patch.
+<LI CLASS="li-itemize"><B>April 6, 2006</B>: Fix for global initializers of unions when
+ the union field being initialized is not the first one, and for
+ missing initializers of unions when the first field is not the
+ largest field.
+<LI CLASS="li-itemize"><B>April 6, 2006</B>: Fix for bitfields in the SFI module.
+<LI CLASS="li-itemize"><B>April 6, 2006</B>: Various fixes for gcc attributes.
+ <TT>packed</TT>, <TT>section</TT>, and <TT>always_inline</TT> attributes are now
+ parsed correctly. Also fixed printing of attributes on enum types.
+<LI CLASS="li-itemize"><B>March 30, 2006</B>: Fix for <TT>rmtemps.ml</TT>, which deletes
+ unused inline functions. When in <TT>gcc</TT> mode CIL now leaves all
+ inline functions in place, since <TT>gcc</TT> treats these as externally
+ visible. 
+<LI CLASS="li-itemize"><B>March 15, 2006</B>: Fix for <TT>typeof(<I>e</I>)</TT> when <I>e</I> has type
+ <TT>void</TT>.
+<LI CLASS="li-itemize"><B>March 3, 2006</B>: Assume inline assembly instructions can
+ fall through for the purposes of adding return statements. Thanks to
+ Nathan Cooprider for the patch.
+<LI CLASS="li-itemize"><B>February 27, 2006</B>: Fix for extern inline functions when
+ the output of CIL is fed back into CIL.
+<LI CLASS="li-itemize"><B>January 30, 2006</B>: Fix parsing of <TT>switch</TT> without braces.
+<LI CLASS="li-itemize"><B>January 30, 2006</B>: Allow `$' to appear in identifiers.
+<LI CLASS="li-itemize"><B>January 13, 2006</B>: Added support for gcc's alias attribute
+ on functions. See Section&nbsp;<A HREF="#sec-ugly-gcc">16.2</A>, item 8. 
+<LI CLASS="li-itemize"><B>December 9, 2005</B>: Christoph Spiel fixed the Golf and
+ Olf modules so that Golf can be used with the points-to analysis.
+ He also added performance fixes and cleaned up the documentation.
+<LI CLASS="li-itemize"><B>December 1, 2005</B>: Major rewrite of the ext/callgraph module. 
+<LI CLASS="li-itemize"><B>December 1, 2005</B>: Preserve enumeration constants in CIL. Default
+is the old behavior to replace them with integers.
+<LI CLASS="li-itemize"><B>November 30, 2005</B>: Added support for many GCC <TT>__builtin</TT>
+ functions. 
+<LI CLASS="li-itemize"><B>November 30, 2005</B>: Added the EXTRAFEATURES configure
+ option, making it easier to add Features to the build process.
+<LI CLASS="li-itemize"><B>November 23, 2005</B>: In MSVC mode do not remove any locals whose name
+ appears as a substring in an inline assembly. 
+<LI CLASS="li-itemize"><B>November 23, 2005</B>: Do not add a return to functions that have the
+ noreturn attribute. 
+<LI CLASS="li-itemize"><B>November 22, 2005</B>: <B>Released version 1.3.4</B>
+<LI CLASS="li-itemize"><B>November 21, 2005</B>: Performance and correctness fixes for
+ the Points-to Analysis module. Thanks to Christoph Spiel for the
+ patches.
+<LI CLASS="li-itemize"><B>October 5, 2005</B>: CIL now builds on SPARC/Solaris. Thanks
+ to Nick Petroni and Remco van Engelen for the patches.
+<LI CLASS="li-itemize"><B>September 26, 2005</B>: CIL no longer uses the `<TT>-I-</TT>' flag
+ by default when preprocessing with gcc.
+<LI CLASS="li-itemize"><B>August 24, 2005</B>: Added a command-line option
+ &#8220;--forceRLArgEval&#8221; that forces function arguments to be evaluated
+ right-to-left. This is the default behavior in unoptimized gcc and
+ MSVC, but the order of evaluation is undefined when using
+ optimizations, unless you apply this CIL transformation. This flag
+ does not affect the order of evaluation of e.g. binary operators,
+ which remains undefined. Thanks to Nathan Cooprider for the patch.
+<LI CLASS="li-itemize"><B>August 9, 2005</B>: Fixed merging when there are more than 20
+ input files.
+<LI CLASS="li-itemize"><B>August 3, 2005</B>: When merging, it is now an error to
+ declare the same global variable twice with different initializers.
+<LI CLASS="li-itemize"><B>July 27, 2005</B>: Fixed bug in transparent unions.
+<LI CLASS="li-itemize"><B>July 27, 2005</B>: Fixed bug in collectInitializer. Thanks to
+ Benjamin Monate for the patch.
+<LI CLASS="li-itemize"><B>July 26, 2005</B>: Better support for extended inline assembly
+ in gcc.
+<LI CLASS="li-itemize"><B>July 26, 2005</B>: Added many more gcc __builtin* functions
+ to CIL. Most are treated as Call instructions, but a few are
+ translated into expressions so that they can be used in global
+ initializers. For example, &#8220;<TT>__builtin_offsetof(t, field)</TT>&#8221; is
+ rewritten as &#8220;<TT>&amp;((t*)0)-&gt;field</TT>&#8221;, the traditional way of calculating
+ an offset.
+<LI CLASS="li-itemize"><B>July 18, 2005</B>: Fixed bug in the constant folding of shifts
+ when the second argument was negative or too large.
+<LI CLASS="li-itemize"><B>July 18, 2005</B>: Fixed bug where casts were not always
+ inserted in function calls.
+<LI CLASS="li-itemize"><B>June 10, 2005</B>: Fixed bug in the code that makes implicit
+ returns explicit. We weren't handling switch blocks correctly.
+<LI CLASS="li-itemize"><B>June 1, 2005</B>: <B>Released version 1.3.3</B>
+<LI CLASS="li-itemize"><B>May 31, 2005</B>: Fixed handling of noreturn attribute for function
+ pointers. 
+<LI CLASS="li-itemize"><B>May 30, 2005</B>: Fixed bugs in the handling of constructors in gcc.
+<LI CLASS="li-itemize"><B>May 30, 2005</B>: Fixed bugs in the generation of global variable IDs.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Reimplemented the translation of function calls so
+ that we can intercept some builtins. This is important for the uses of
+ __builtin_constant_p in constants. 
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Export the plainCilPrinter, for debugging.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Fixed bug with printing of const attribute for
+ arrays. 
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Fixed bug in generation of type signatures. Now they
+ should not contain expressions anymore, so you can use structural equality.
+ This used to lead to Out_of_Memory exceptions.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Fixed bug in type comparisons using
+ TBuiltin_va_list.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Improved the constant folding in array lengths and
+ case expressions. 
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Added the <TT>__builtin_frame_address</TT> to the set
+ of gcc builtins.
+<LI CLASS="li-itemize"><B>May 27, 2005</B>: Added the CIL project to SourceForge.
+<LI CLASS="li-itemize"><B>April 23, 2005</B>: The cattr field was not visited.
+<LI CLASS="li-itemize"><B>March 6, 2005</B>: Debian packaging support
+<LI CLASS="li-itemize"><B>February 16, 2005</B>: Merger fixes.
+<LI CLASS="li-itemize"><B>February 11, 2005</B>: Fixed a bug in <TT>--dopartial</TT>. Thanks to
+Nathan Cooprider for this fix. 
+<LI CLASS="li-itemize"><B>January 31, 2005</B>: Make sure the input file is closed even if a
+ parsing error is encountered. 
+<LI CLASS="li-itemize"><B>January 11, 2005</B>: <B>Released version 1.3.2</B>
+<LI CLASS="li-itemize"><B>January 11, 2005</B>: Fixed printing of integer constants whose
+ integer kind is shorter than an int. 
+<LI CLASS="li-itemize"><B>January 11, 2005</B>: Added checks for negative size arrays and arrays
+ too big. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Added support for GCC attribute &#8220;volatile&#8221; for
+ tunctions (as a synonim for noreturn). 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Improved the comparison of array sizes when
+ comparing array types. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed handling of shell metacharacters in the
+ cilly command lione.
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed dropping of cast in initialization of
+ local variable with the result of a function call.
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed some structural comparisons that were
+ broken in the Ocaml 3.08.
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed the <TT>unrollType</TT> function to not forget
+ attributes. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Better keeping track of locations of function
+ prototypes and definitions. 
+<LI CLASS="li-itemize"><B>January 10, 2005</B>: Fixed bug with the expansion of enumeration
+ constants in attributes.
+<LI CLASS="li-itemize"><B>October 18, 2004</B>: Fixed a bug in cabsvisit.ml. CIl would wrap a
+ BLOCK around a single atom unnecessarily. 
+<LI CLASS="li-itemize"><B>August 7, 2004</B>: <B>Released version 1.3.1</B>
+<LI CLASS="li-itemize"><B>August 4, 2004</B>: Fixed a bug in splitting of structs using 
+ <TT>--dosimplify</TT>
+<LI CLASS="li-itemize"><B>July 29, 2004</B>: Minor changes to the type typeSig (type signatures)
+ to ensure that they do not contain types, so that you can do structural
+ comparison without danger of nontermination. 
+<LI CLASS="li-itemize"><B>July 28, 2004</B>: Ocaml version 3.08 is required. Numerous small 
+ changes while porting to Ocaml 3.08. 
+<LI CLASS="li-itemize"><B>July 7, 2004</B>: <B>Released version 1.2.6</B>
+<LI CLASS="li-itemize"><B>July 2, 2004</B>: Character constants such as <TT>'c'</TT> should
+ have type <TT>int</TT>, not <TT>char</TT>. Added a utility function
+ <TT>Cil.charConstToInt</TT> that sign-extends chars greater than 128, if needed.
+<LI CLASS="li-itemize"><B>July 2, 2004</B>: Fixed a bug that was casting values to int
+ before applying the logical negation operator !. This caused
+ problems for floats, and for integer types bigger than <TT>int</TT>.
+<LI CLASS="li-itemize"><B>June 13, 2004</B>: Added the field <TT>sallstmts</TT> to a function
+ description, to hold all statements in the function.
+<LI CLASS="li-itemize"><B>June 13, 2004</B>: Added new extensions for data flow analyses, and
+ for computing dominators.
+<LI CLASS="li-itemize"><B>June 10, 2004</B>: Force initialization of CIL at the start of
+Cabs2cil. 
+<LI CLASS="li-itemize"><B>June 9, 2004</B>: Added support for GCC <TT>__attribute_used__</TT>
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: <B>Released version 1.2.5</B>
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Allow now to run ./configure CC=cl and set the MSVC
+compiler to be the default. The MSVC driver will now select the default name
+of the .exe file like the CL compiler. 
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Fixed a bug in the driver. The temporary files are
+deleted by the Perl script before the CL compiler gets to them?
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Added the - form of arguments to the MSVC driver.
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Added a few more GCC-specific string escapes, (, [,
+{, %, E. 
+<LI CLASS="li-itemize"><B>April 7, 2004</B>: Fixed bug with continuation lines in MSVC.
+<LI CLASS="li-itemize"><B>April 6, 2004</B>: Fixed embarassing bug in the parser: the precedence
+ of casts and unary operators was switched. 
+<LI CLASS="li-itemize"><B>April 5, 2004</B>: Fixed a bug involving statements mixed between
+declarations containing initializers. Now we make sure that the initializers
+are run in the proper order with respect to the statements.
+<LI CLASS="li-itemize"><B>April 5, 2004</B>: Fixed a bug in the merger. The merger was keeping
+separate alpha renaming talbes (namespaces) for variables and types. This
+means that it might end up with a type and a variable named the same way, if
+they come from different files, which breaks an important CIL invariant.
+<LI CLASS="li-itemize"><B>March 11, 2004</B> : Fixed a bug in the Cil.copyFunction function. The
+new local variables were not getting fresh IDs. 
+<LI CLASS="li-itemize"><B>March 5, 2004</B>: Fixed a bug in the handling of static function
+ prototypes in a block scope. They used to be renamed. Now we just consider
+ them global. 
+<LI CLASS="li-itemize"><B>February 20, 2004</B>: <B>Released version 1.2.4</B>
+<LI CLASS="li-itemize"><B>February 15, 2004</B>: Changed the parser to allow extra semicolons
+ after field declarations.
+<LI CLASS="li-itemize"><B>February 14, 2004</B>: Changed the Errormsg functions: error, unimp,
+bug to not raise an exception. Instead they just set Errormsg.hadErrors. 
+<LI CLASS="li-itemize"><B>February 13, 2004</B>: Change the parsing of attributes to recognize
+ enumeration constants.
+<LI CLASS="li-itemize"><B>February 10, 2004</B>: In some versions of <TT>gcc</TT> the identifier
+ _{thread is an identifier and in others it is a keyword. Added code
+ during configuration to detect which is the case. 
+<LI CLASS="li-itemize"><B>January 7, 2004</B>: <B>Released version 1.2.3</B>
+<LI CLASS="li-itemize"><B>January 7, 2004</B>: Changed the alpha renamer to be less
+conservative. It will remember all versions of a name that were seen and will
+only create a new name if we have not seen one. 
+<LI CLASS="li-itemize"><B>December 30, 2003</B> : Extended the <TT>cilly</TT> command to understand
+ better linker command options <TT>-lfoo</TT>. 
+<LI CLASS="li-itemize"><B>December 5, 2003</B>: Added markup commands to the pretty-printer
+module. Also, changed the &#8220;@&lt;&#8221; left-flush command into &#8220;@''.
+<LI CLASS="li-itemize"><B>December 4, 2003</B>: Wide string literals are now handled
+directly by Cil (rather than being exploded into arrays). This is
+apparently handy for Microsoft Device Driver APIs that use intrinsic
+functions that require literal constant wide-string arguments. 
+<LI CLASS="li-itemize"><B>December 3, 2003</B>: Added support for structured exception handling
+ extensions for the Microsoft compilers.
+<LI CLASS="li-itemize"><B>December 1, 2003</B>: Fixed a Makefile bug in the generation of the 
+Cil library (e.g., <TT>cil.cma</TT>) that was causing it to be unusable. Thanks
+to KEvin Millikin for pointing out this bug. 
+<LI CLASS="li-itemize"><B>November 26, 2003</B>: Added support for linkage specifications
+ (extern &#8220;C&#8221;). 
+<LI CLASS="li-itemize"><B>November 26, 2003</B>: Added the ocamlutil directory to contain some
+utilities shared with other projects. 
+<LI CLASS="li-itemize"><B>November 25, 2003</B>: <B>Released version 1.2.2</B>
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Fixed a bug that allowed a static local to
+ conflict with a global with the same name that is declared later in the
+ file. 
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Removed the <TT>--keep</TT> option of the <TT>cilly</TT>
+ driver and replaced it with <TT>--save-temps</TT>.
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Added printing of what CIL features are being
+ run.
+<LI CLASS="li-itemize"><B>November 24, 2003</B>: Fixed a bug that resulted in attributes being
+ dropped for integer types. 
+<LI CLASS="li-itemize"><B>November 11, 2003</B>: Fixed a bug in the visitor for enumeration
+ definitions. 
+<LI CLASS="li-itemize"><B>October 24, 2003</B>: Fixed a problem in the configuration script. It
+ was not recognizing the Ocaml version number for beta versions. 
+<LI CLASS="li-itemize"><B>October 15, 2003</B>: Fixed a problem in version 1.2.1 that was
+ preventing compilation on OCaml 3.04.
+<LI CLASS="li-itemize"><B>September 17, 2003: Released version 1.2.1.</B>
+<LI CLASS="li-itemize"><B>September 7, 2003</B>: Redesigned the interface for choosing
+ <TT>#line</TT> directive printing styles. Cil.printLn and
+ Cil.printLnComment have been merged into Cil.lineDirectiveStyle.
+<LI CLASS="li-itemize"><B>August 8, 2003</B>: Do not silently pad out functions calls with
+arguments to match the prototype. 
+<LI CLASS="li-itemize"><B>August 1, 2003</B>: A variety of fixes suggested by Steve Chamberlain:
+initializers for externs, prohibit float literals in enum, initializers for
+unsized arrays were not working always, an overflow problem in Ocaml, changed
+the processing of attributes before struct specifiers<BR>
+<BR>
+<LI CLASS="li-itemize"><B>July 14, 2003</B>: Add basic support for GCC's "__thread" storage
+qualifier. If given, it will appear as a "thread" attribute at the top of the
+type of the declared object. Treatment is very similar to "__declspec(...)"
+in MSVC<BR>
+<BR>
+<LI CLASS="li-itemize"><B>July 8, 2003</B>: Fixed some of the __alignof computations. Fixed
+ bug in the designated initializers for arrays (Array.get error).
+<LI CLASS="li-itemize"><B>July 8, 2003</B>: Fixed infinite loop bug (Stack Overflow) in the
+ visitor for __alignof.
+<LI CLASS="li-itemize"><B>July 8, 2003</B>: Fixed bug in the conversion to CIL. A function or
+ array argument of
+ the GCC __typeof() was being converted to pointer type. Instead, it should
+ be left alone, just like for sizeof. 
+<LI CLASS="li-itemize"><B>July 7, 2003</B>: New Escape module provides utility functions
+ for escaping characters and strings in accordance with C lexical
+ rules.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>July 2, 2003</B>: Relax CIL's rules for when two enumeration types are
+considered compatible. Previously CIL considered two enums to be compatible if
+they were the same enum. Now we follow the C99 standard.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 28, 2003</B>: In the Formatparse module, Eric Haugh found and
+ fixed a bug in the handling of lvalues of the form &#8220;lv-&gt;field.more&#8221;.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 28, 2003</B>: Extended the handling of gcc command lines
+arguments in the Perl scripts. <BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 23, 2003</B>: In Rmtmps module, simplified the API for
+ customizing the root set. Clients may supply a predicate that
+ returns true for each root global. Modifying various
+ &#8220;<TT>referenced</TT>&#8221; fields directly is no longer supported.<BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 17, 2003</B>: Reimplement internal utility routine
+ <TT>Cil.escape_char</TT>. Faster and better. <BR>
+<BR>
+<LI CLASS="li-itemize"><B>June 14, 2003</B>: Implemented support for <TT>__attribute__s</TT>
+appearing between "struct" and the struct tag name (also for unions and
+enums), since gcc supports this as documented in section 4.30 of the gcc
+(2.95.3) manual<BR>
+<BR>
+<LI CLASS="li-itemize"><B>May 30, 2003</B>: Released the regression tests. 
+<LI CLASS="li-itemize"><B>May 28, 2003</B>: <B>Released version 1.1.2</B>
+<LI CLASS="li-itemize"><B>May 26, 2003</B>: Add the <TT>simplify</TT> module that compiles CIL
+expressions into simpler expressions, similar to those that appear in a
+3-address intermediate language.
+<LI CLASS="li-itemize"><B>May 26, 2003</B>: Various fixes and improvements to the pointer
+analysis modules. 
+<LI CLASS="li-itemize"><B>May 26, 2003</B>: Added optional consistency checking for
+transformations.
+<LI CLASS="li-itemize"><B>May 25, 2003</B>: Added configuration support for big endian machines.
+Now <A HREF="api/Cil.html#VALlittle_endian">Cil.little_endian</A> can be used to test whether the machine is
+little endian or not. 
+<LI CLASS="li-itemize"><B>May 22, 2003</B>: Fixed a bug in the handling of inline functions. The
+CIL merger used to turn these functions into &#8220;static&#8221;, which is incorrect. 
+<LI CLASS="li-itemize"><B>May 22, 2003</B>: Expanded the CIL consistency checker to verify
+undesired sharing relationships between data structures. 
+<LI CLASS="li-itemize"><B>May 22, 2003</B>: Fixed bug in the <TT>oneret</TT> CIL module: it was
+mishandling certain labeled return statements. 
+<LI CLASS="li-itemize"><B>May 5, 2003</B>: <B>Released version 1.0.11</B>
+<LI CLASS="li-itemize"><B>May 5, 2003</B>: OS X (powerpc/darwin) support for CIL. Special 
+thanks to Jeff Foster, Andy Begel and Tim Leek. 
+<LI CLASS="li-itemize"><B>April 30, 2003</B>: Better description of how to use CIL for your
+analysis. 
+<LI CLASS="li-itemize"><B>April 28, 2003</B>: Fixed a bug with <TT>--dooneRet</TT> and
+<TT>--doheapify</TT>. Thanks, Manos Renieris.
+<LI CLASS="li-itemize"><B>April 16, 2003</B>: Reworked management of
+ temporary/intermediate output files in Perl driver scripts. Default
+ behavior is now to remove all such files. To keep intermediate
+ files, use one of the following existing flags:
+ <UL CLASS="itemize"><LI CLASS="li-itemize">
+ <TT>--keepmerged</TT> for the single-file merge of all sources
+ <LI CLASS="li-itemize"><TT>--keep=&lt;<I>dir</I></TT><TT>&gt;</TT> for various other CIL and
+ CCured output files
+ <LI CLASS="li-itemize"><TT>--save-temps</TT> for various gcc intermediate files; MSVC
+ has no equivalent option
+ </UL>
+ As part of this change, some intermediate files have changed their
+ names slightly so that new suffixes are always preceded by a
+ period. For example, CCured output that used to appear in
+ &#8220;<TT>foocured.c</TT>&#8221; now appears in &#8220;<TT>foo.cured.c</TT>&#8221;.
+<LI CLASS="li-itemize"><B>April 7, 2003</B>: Changed the representation of the <A HREF="api/Cil.html#VALGVar">Cil.GVar</A>
+global constructor. Now it is possible to update the initializer without
+reconstructing the global (which in turn it would require reconstructing the
+list of globals that make up a program). We did this because it is often
+tempting to use <A HREF="api/Cil.html#VALvisitCilFileSameGlobals">Cil.visitCilFileSameGlobals</A> and the <A HREF="api/Cil.html#VALGVar">Cil.GVar</A>
+was the only global that could not be updated in place. 
+<LI CLASS="li-itemize"><B>April 6, 2003</B>: Reimplemented parts of the cilly.pl script to make
+it more robust in the presence of complex compiler arguments. 
+<LI CLASS="li-itemize"><B>March 10, 2003</B>: <B>Released version 1.0.9</B>
+<LI CLASS="li-itemize"><B>March 10, 2003</B>: Unified and documented a large number of CIL
+Library Modules: oneret, simplemem, makecfg, heapify, stackguard, partial.
+Also documented the main client interface for the pointer analysis. 
+<LI CLASS="li-itemize"><B>February 18, 2003</B>: Fixed a bug in logwrites that was causing it
+to produce invalid C code on writes to bitfields. Thanks, David Park. 
+<LI CLASS="li-itemize"><B>February 15, 2003</B>: <B>Released version 1.0.8</B>
+<LI CLASS="li-itemize"><B>February 15, 2003</B>: PDF versions of the manual and API are
+available for those who would like to print them out. 
+<LI CLASS="li-itemize"><B>February 14, 2003</B>: CIL now comes bundled with alias analyses. 
+<LI CLASS="li-itemize"><B>February 11, 2003</B>: Added support for adding/removing options from
+ <TT>./configure</TT>. 
+<LI CLASS="li-itemize"><B>February 3, 2003</B>: <B>Released version 1.0.7</B>
+<LI CLASS="li-itemize"><B>February 1, 2003</B>: Some bug fixes in the handling of variable
+argument functions in new versions of <TT>gcc</TT> And <TT>glibc</TT>. 
+<LI CLASS="li-itemize"><B>January 29, 2003</B>: Added the logical AND and OR operators.
+Exapanded the translation to CIL to handle more complicated initializers
+(including those that contain logical operators).
+<LI CLASS="li-itemize"><B>January 28, 2003</B>: <B>Released version 1.0.6</B>
+<LI CLASS="li-itemize"><B>January 28, 2003</B>: Added support for the new handling of
+variable-argument functions in new versions of <TT>glibc</TT>. 
+<LI CLASS="li-itemize"><B>January 19, 2003</B>: Added support for declarations in interpreted
+ constructors. Relaxed the semantics of the patterns for variables. 
+<LI CLASS="li-itemize"><B>January 17, 2003</B>: Added built-in prototypes for the gcc built-in
+ functions. Changed the <TT>pGlobal</TT> method in the printers to print the
+ carriage return as well.
+<LI CLASS="li-itemize"><B>January 9, 2003</B>: Reworked lexer and parser's strategy for
+ tracking source file names and line numbers to more closely match
+ typical native compiler behavior. The visible CIL interface is
+ unchanged.
+<LI CLASS="li-itemize"><B>January 9, 2003</B>: Changed the interface to the alpha convertor. Now
+you can pass a list where it will record undo information that you can use to
+revert the changes that it makes to the scope tables.
+<LI CLASS="li-itemize"><B>January 6, 2003</B>: <B>Released version 1.0.5</B>
+<LI CLASS="li-itemize"><B>January 4, 2003</B>: Changed the interface for the Formatcil module.
+ Now the placeholders in the pattern have names. Also expanded the
+ documentation of the Formatcil module.
+ Now the placeholders in the pattern have names.
+<LI CLASS="li-itemize"><B>January 3, 2003</B>: Extended the <TT>rmtmps</TT> module to also remove
+ unused labels that are generated in the conversion to CIL. This reduces the
+ number of warnings that you get from <TT>cgcc</TT> afterwards.
+<LI CLASS="li-itemize"><B>December 17, 2002</B>: Fixed a few bugs in CIL related to the
+ representation of string literals. The standard says that a string literal
+ is an array. In CIL, a string literal has type pointer to character. This is
+ Ok, except as an argument of sizeof. To support this exception, we have
+ added to CIL the expression constructor SizeOfStr. This allowed us to fix
+ bugs with computing <TT>sizeof("foo bar")</TT> and <TT>sizeof((char*)"foo bar")</TT>
+ (the former is 8 and the latter is 4).<BR>
+<BR>
+<LI CLASS="li-itemize"><B>December 8, 2002</B>: Fixed a few bugs in the lexer and parser
+ relating to hex and octal escapes in string literals. Also fixed
+ the dependencies between the lexer and parser.
+<LI CLASS="li-itemize"><B>December 5, 2002</B>: Fixed visitor bugs that were causing
+ some attributes not to be visited and some queued instructions to be
+ dropped.
+<LI CLASS="li-itemize"><B>December 3, 2002</B>: Added a transformation to catch stack
+ overflows. Fixed the heapify transformation.
+<LI CLASS="li-itemize"><B>October 14, 2002</B>: CIL is now available under the BSD license
+(see the License section or the file LICENSE). <B>Released version 1.0.4</B>
+<LI CLASS="li-itemize"><B>October 9, 2002</B>: More FreeBSD configuration changes, support
+for the GCC-ims <TT>__signed</TT> and <TT>__volatile</TT>. Thanks to Axel
+Simon for pointing out these problems. <B>Released version 1.0.3</B>
+<LI CLASS="li-itemize"><B>October 8, 2002</B>: FreeBSD configuration and porting fixes.
+Thanks to Axel Simon for pointing out these problems. 
+<LI CLASS="li-itemize"><B>September 10, 2002</B>: Fixed bug in conversion to CIL. Now we drop
+all &#8220;const&#8221; qualifiers from the types of locals, even from the fields of
+local structures or elements of arrays.
+<LI CLASS="li-itemize"><B>September 7, 2002</B>: Extended visitor interface to distinguish visitng
+ offsets inside lvalues from offsets inside initializer lists.
+<LI CLASS="li-itemize"><B>September 7, 2002</B>: <B>Released version 1.0.1</B>
+<LI CLASS="li-itemize"><B>September 6, 2002</B>: Extended the patcher with the <TT>ateof</TT> flag.
+<LI CLASS="li-itemize"><B>September 4, 2002</B>: Fixed bug in the elaboration to CIL. In some
+cases constant folding of <TT>||</TT> and <TT>&amp;&amp;</TT> was computed wrong.
+<LI CLASS="li-itemize"><B>September 3, 2002</B>: Fixed the merger documentation. 
+<LI CLASS="li-itemize"><B>August 29, 2002</B>: <B>Released version 1.0.0.</B>
+<LI CLASS="li-itemize"><B>August 29, 2002</B>: Started numbering versions with a major nubmer,
+minor and revisions. Released version 1.0.0.
+<LI CLASS="li-itemize"><B>August 25, 2002</B>: Fixed the implementation of the unique
+identifiers for global variables and composites. Now those identifiers are
+globally unique.
+<LI CLASS="li-itemize"><B>August 24, 2002</B>: Added to the machine-dependent configuration the
+<TT>sizeofvoid</TT>. It is 1 on gcc and 0 on MSVC. Extended the implementation of
+<TT>Cil.bitsSizeOf</TT> to handle this (it was previously returning an error when
+trying to compute the size of <TT>void</TT>).
+<LI CLASS="li-itemize"><B>August 24, 2002</B>: Changed the representation of structure and
+unions to distinguish between undefined structures and those that are defined
+to be empty (allowed on gcc). The sizeof operator is undefined for the former
+and returns 0 for the latter.
+<LI CLASS="li-itemize"><B>August 22, 2002</B>: Apply a patch from Richard H. Y. to support
+FreeBSD installations. Thanks, Richard!
+<LI CLASS="li-itemize"><B>August 12, 2002</B>: Fixed a bug in the translation of wide-character
+strings. Now this translation matches that of the underlying compiler. Changed
+the implementation of the compiler dependencies.
+<LI CLASS="li-itemize"><B>May 25, 2002</B>: Added interpreted constructors and destructors.
+<LI CLASS="li-itemize"><B>May 17, 2002</B>: Changed the representation of functions to move the
+&#8220;inline&#8221; information to the varinfo. This way we can print the &#8220;inline&#8221;
+even in declarations which is what gcc does. 
+<LI CLASS="li-itemize"><B>May 15, 2002</B>: Changed the visitor for initializers to make two
+tail-recursive passes (the second is a <TT>List.rev</TT> and only done if one of
+the initializers change). This prevents <TT>Stack_Overflow</TT> for large
+initializers. Also improved the processing of initializers when converting to
+CIL. 
+<LI CLASS="li-itemize"><B>May 15, 2002</B>: Changed the front-end to allow the use of <TT>MSVC</TT>
+mode even on machines that do not have MSVC. The machine-dependent parameters
+for GCC will be used in that case. 
+<LI CLASS="li-itemize"><B>May 11, 2002</B>: Changed the representation of formals in function
+types. Now the function type is purely functional. 
+<LI CLASS="li-itemize"><B>May 4, 2002</B>: Added the function
+<A HREF="api/Cil.html#VALvisitCilFileSameGlobals">Cil.visitCilFileSameGlobals</A> and changed <A HREF="api/Cil.html#VALvisitCilFile">Cil.visitCilFile</A> to be
+tail recursive. This prevents stack overflow on huge files.
+<LI CLASS="li-itemize"><B>February 28, 2002</B>: Changed the significance of the
+<TT>CompoundInit</TT> in <A HREF="api/Cil.html#TYPEinit">Cil.init</A> to allow for missing initializers at the
+end of an array initializer. Added the API function
+<A HREF="api/Cil.html#VALfoldLeftCompoundAll">Cil.foldLeftCompoundAll</A>.
+</UL>
+<!--HTMLFOOT-->
+<!--ENDHTML-->
+<!--FOOTER-->
+<HR SIZE=2><BLOCKQUOTE CLASS="quote"><EM>This document was translated from L<sup>A</sup>T<sub>E</sub>X by
+</EM><A HREF="http://pauillac.inria.fr/~maranget/hevea/index.html"><EM>H<FONT SIZE=2><sup>E</sup></FONT>V<FONT SIZE=2><sup>E</sup></FONT>A</EM></A><EM>.</EM></BLOCKQUOTE></BODY>
+</HTML>

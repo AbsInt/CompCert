@@ -1,0 +1,83 @@
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Dataflow.ForwardsTransfer.html">
+<link rel="Up" href="Dataflow.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of class methods" rel=Appendix href="index_methods.html">
+<link title="Index of classes" rel=Appendix href="index_classes.html">
+<link title="Index of class types" rel=Appendix href="index_class_types.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Pretty" rel="Chapter" href="Pretty.html">
+<link title="Errormsg" rel="Chapter" href="Errormsg.html">
+<link title="Clist" rel="Chapter" href="Clist.html">
+<link title="Stats" rel="Chapter" href="Stats.html">
+<link title="Cil" rel="Chapter" href="Cil.html">
+<link title="Formatcil" rel="Chapter" href="Formatcil.html">
+<link title="Alpha" rel="Chapter" href="Alpha.html">
+<link title="Cillower" rel="Chapter" href="Cillower.html">
+<link title="Cfg" rel="Chapter" href="Cfg.html">
+<link title="Dataflow" rel="Chapter" href="Dataflow.html">
+<link title="Dominators" rel="Chapter" href="Dominators.html"><title>CIL API Documentation (version 1.3.5) : Dataflow.BackwardsTransfer</title>
+</head>
+<body>
+<div class="navbar"><a href="Dataflow.ForwardsTransfer.html">Previous</a>
+&nbsp;<a href="Dataflow.html">Up</a>
+&nbsp;</div>
+<center><h1>Module type <a href="type_Dataflow.BackwardsTransfer.html">Dataflow.BackwardsTransfer</a></h1></center>
+<br>
+<pre><span class="keyword">module type</span> BackwardsTransfer = <code class="code">sig</code> <a href="Dataflow.BackwardsTransfer.html">..</a> <code class="code">end</code></pre><hr width="100%">
+<pre><span class="keyword">val</span> <a name="VALname"></a>name : <code class="type">string</code></pre><div class="info">
+For debugging purposes, the name of the analysis<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdebug"></a>debug : <code class="type">bool Pervasives.ref</code></pre><div class="info">
+Whether to turn on debugging<br>
+</div>
+<pre><span class="keyword">type</span> <a name="TYPEt"></a><code class="type"></code>t </pre>
+<div class="info">
+The type of the data we compute for each block start. In many 
+ presentations of backwards data flow analysis we maintain the 
+ data at the block end. This is not easy to do with JVML because 
+ a block has many exceptional ends. So we maintain the data for 
+ the statement start.<br>
+</div>
+
+<pre><span class="keyword">val</span> <a name="VALpretty"></a>pretty : <code class="type">unit -> <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> -> <a href="Pretty.html#TYPEdoc">Pretty.doc</a></code></pre><div class="info">
+Pretty-print the state<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALstmtStartData"></a>stmtStartData : <code class="type"><a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> Inthash.t</code></pre><div class="info">
+For each block id, the data at the start. This data structure must be 
+ initialized with the initial data for each block<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcombineStmtStartData"></a>combineStmtStartData : <code class="type"><a href="Cil.html#TYPEstmt">Cil.stmt</a> -><br>       old:<a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> -><br>       <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> -> <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> option</code></pre><div class="info">
+When the analysis reaches the start of a block, combine the old data 
+ with the one we have just computed. Return None if the combination is 
+ the same as the old data, otherwise return the combination. In the 
+ latter case, the predecessors of the statement are put on the working 
+ list.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcombineSuccessors"></a>combineSuccessors : <code class="type"><a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> -><br>       <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> -> <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a></code></pre><div class="info">
+Take the data from two successors and combine it<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdoStmt"></a>doStmt : <code class="type"><a href="Cil.html#TYPEstmt">Cil.stmt</a> -> <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> <a href="Dataflow.html#TYPEaction">Dataflow.action</a></code></pre><div class="info">
+The (backwards) transfer function for a branch. The <a href="Cil.html#VALcurrentLoc"><code class="code">Cil.currentLoc</code></a> is 
+ set before calling this. If it returns None, then we have some default 
+ handling. Otherwise, the returned data is the data before the branch 
+ (not considering the exception handlers)<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdoInstr"></a>doInstr : <code class="type"><a href="Cil.html#TYPEinstr">Cil.instr</a> -><br>       <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> -> <a href="Dataflow.BackwardsTransfer.html#TYPEt">t</a> <a href="Dataflow.html#TYPEaction">Dataflow.action</a></code></pre><div class="info">
+The (backwards) transfer function for an instruction. The 
+ <a href="Cil.html#VALcurrentLoc"><code class="code">Cil.currentLoc</code></a> is set before calling this. If it returns None, then we 
+ have some default handling. Otherwise, the returned data is the data 
+ before the branch (not considering the exception handlers)<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALfilterStmt"></a>filterStmt : <code class="type"><a href="Cil.html#TYPEstmt">Cil.stmt</a> -> <a href="Cil.html#TYPEstmt">Cil.stmt</a> -> bool</code></pre><div class="info">
+Whether to put this predecessor block in the worklist. We give the 
+ predecessor and the block whose predecessor we are (and whose data has 
+ changed)<br>
+</div>
+</body></html>

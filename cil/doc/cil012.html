@@ -1,0 +1,133 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Known Bugs and Limitations
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil011.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="merger.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc38">12</A>&nbsp;&nbsp;Known Bugs and Limitations</H2>
+<UL CLASS="itemize"><LI CLASS="li-itemize">In the new versions of <TT>glibc</TT> there is a function
+ <TT>__builtin_va_arg</TT> that takes a type as its second argument. CIL
+ handles that through a slight trick. As it parses the function it changes a
+ call like:
+<PRE CLASS="verbatim">
+  mytype x = __builtin_va_arg(marker, mytype)
+</PRE>into 
+<PRE CLASS="verbatim">
+ mytype x;
+ __builtin_va_arg(marker, sizeof(mytype), &amp;x);
+</PRE>
+ The latter form is used internally in CIL. However, the CIL pretty printer
+ will try to emit the original code. <BR>
+<BR>
+Similarly, <TT>__builtin_types_compatible_p(t1, t2)</TT>, which takes
+ types as arguments, is represented internally as
+ <TT>__builtin_types_compatible_p(sizeof t1, sizeof t2)</TT>, but the
+ sizeofs are removed when printing.<BR>
+<BR>
+<LI CLASS="li-itemize">The implementation of <TT>bitsSizeOf</TT> does not take into account the
+packing pragmas. However it was tested to be accurate on cygwin/gcc-2.95.3,
+Linux/gcc-2.95.3 and on Windows/MSVC.<BR>
+<BR>
+<LI CLASS="li-itemize">We do not support tri-graph sequences (ISO 5.2.1.1).<BR>
+<BR>
+<LI CLASS="li-itemize">GCC has a strange feature called &#8220;extern inline&#8221;. Such a function can
+be defined twice: first with the &#8220;extern inline&#8221; specifier and the second
+time without it. If optimizations are turned off then the &#8220;extern inline&#8221;
+definition is considered a prototype (its body is ignored). If optimizations
+are turned on then the extern inline function is inlined at all of its
+occurrences from the point of its definition all the way to the point where the
+(optional) second definition appears. No body is generated for an extern
+inline function. A body is generated for the real definition and that one is
+used in the rest of the file. <BR>
+<BR>
+CIL will rename your extern inline function (and its uses) with the suffix
+ <TT>__extinline</TT>. This means that if you have two such definition, that do
+ different things and the optimizations are not on, then the CIL version might
+ compute a different answer !<BR>
+<BR>
+Also, if you have multiple extern inline declarations then CIL will ignore
+but the first one. This is not so bad because GCC itself would not like it. <BR>
+<BR>
+<LI CLASS="li-itemize">There are still a number of bugs in handling some obscure features of
+GCC. For example, when you use variable-length arrays, CIL turns them into
+calls to <TT>alloca</TT>. This means that they are deallocated when the function
+returns and not when the local scope ends. <BR>
+<BR>
+Variable-length arrays are not supported as fields of a struct or union.<BR>
+<BR>
+<LI CLASS="li-itemize">CIL cannot parse arbitrary <TT>#pragma</TT> directives. Their
+ syntax must follow gcc's attribute syntax to be understood. If you
+ need a pragma that does not follow gcc syntax, add that pragma's name
+ to <TT>no_parse_pragma</TT> in <TT>src/frontc/clexer.mll</TT> to indicate that
+ CIL should treat that pragma as a monolithic string rather than try
+ to parse its arguments.<BR>
+<BR>
+CIL cannot parse a line containing an empty <TT>#pragma</TT>.<BR>
+<BR>
+<LI CLASS="li-itemize">CIL only parses <TT>#pragma</TT> directives at the "top level", this is,
+ outside of any enum, structure, union, or function definitions.<BR>
+<BR>
+If your compiler uses pragmas in places other than the top-level,
+ you may have to preprocess the sources in a special way (sed, perl,
+ etc.) to remove pragmas from these locations.<BR>
+<BR>
+<LI CLASS="li-itemize">CIL cannot parse the following code (fixing this problem would require
+extensive hacking of the LALR grammar):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+int bar(int ()); // This prototype cannot be parsed
+int bar(int x()); // If you add a name to the function, it works
+int bar(int (*)()); // This also works (and it is more appropriate)
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-itemize">CIL also cannot parse certain K&amp;R old-style prototypes with missing
+return type:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+g(); // This cannot be parsed
+int g(); // This is Ok
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-itemize">CIL does not understand some obscure combinations of type specifiers
+(&#8220;signed&#8221; and &#8220;unsigned&#8221; applied to typedefs that themselves contain a
+sign specification; you could argue that this should not be allowed anyway):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+typedef signed char __s8;
+__s8 unsigned uchartest; // This is unsigned char for gcc
+</FONT></PRE><BR>
+<BR>
+<LI CLASS="li-itemize">The statement <TT>x = 3 + x ++</TT> will perform the increment of <TT>x</TT>
+ before the assignment, while <TT>gcc</TT> delays the increment after the
+ assignment. It turned out that this behavior is much easier to implement
+ than gcc's one, and either way is correct (since the behavior is unspecified
+ in this case). Similarly, if you write <TT>x = x ++;</TT> then CIL will perform
+ the increment before the assignment, whereas GCC and MSVC will perform it
+ after the assignment. 
+</UL>
+<HR>
+<A HREF="cil011.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="merger.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

@@ -1,0 +1,54 @@
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Dataflow.ForwardsDataFlow.html">
+<link rel="Up" href="Dataflow.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of class methods" rel=Appendix href="index_methods.html">
+<link title="Index of classes" rel=Appendix href="index_classes.html">
+<link title="Index of class types" rel=Appendix href="index_class_types.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Pretty" rel="Chapter" href="Pretty.html">
+<link title="Errormsg" rel="Chapter" href="Errormsg.html">
+<link title="Clist" rel="Chapter" href="Clist.html">
+<link title="Stats" rel="Chapter" href="Stats.html">
+<link title="Cil" rel="Chapter" href="Cil.html">
+<link title="Formatcil" rel="Chapter" href="Formatcil.html">
+<link title="Alpha" rel="Chapter" href="Alpha.html">
+<link title="Cillower" rel="Chapter" href="Cillower.html">
+<link title="Cfg" rel="Chapter" href="Cfg.html">
+<link title="Dataflow" rel="Chapter" href="Dataflow.html">
+<link title="Dominators" rel="Chapter" href="Dominators.html"><title>CIL API Documentation (version 1.3.5) : Dataflow.BackwardsDataFlow</title>
+</head>
+<body>
+<div class="navbar"><a href="Dataflow.ForwardsDataFlow.html">Previous</a>
+&nbsp;<a href="Dataflow.html">Up</a>
+&nbsp;</div>
+<center><h1>Functor <a href="type_Dataflow.BackwardsDataFlow.html">Dataflow.BackwardsDataFlow</a></h1></center>
+<br>
+<pre><span class="keyword">module</span> BackwardsDataFlow: <div class="sig_block"><code class="code">functor (</code><code class="code">T</code><code class="code"> : </code><code class="type"><a href="Dataflow.BackwardsTransfer.html">BackwardsTransfer</a></code><code class="code">) -&gt; </code><code class="code">sig</code> <a href="Dataflow.BackwardsDataFlow.html">..</a> <code class="code">end</code></div></pre><table border="0" cellpadding="3" width="100%">
+<tr>
+<td align="left" valign="top" width="1%%"><b>Parameters: </b></td>
+<td>
+<table class="paramstable">
+<tr>
+<td align="center" valign="top" width="15%">
+<code>T</code></td>
+<td align="center" valign="top">:</td>
+<td><code class="type"><a href="Dataflow.BackwardsTransfer.html">BackwardsTransfer</a></code>
+</table>
+</td>
+</tr>
+</table>
+<hr width="100%">
+<pre><span class="keyword">val</span> <a name="VALcompute"></a>compute : <code class="type"><a href="Cil.html#TYPEstmt">Cil.stmt</a> list -> unit</code></pre><div class="info">
+Fill in the T.stmtStartData, given a number of initial statements to 
+ start from (the sinks for the backwards data flow). All of the statements
+ (not just the initial ones!) must have some entry in T.stmtStartData 
+ (i.e., the initial data should not be bottom)<br>
+</div>
+</body></html>

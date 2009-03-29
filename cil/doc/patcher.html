@@ -1,0 +1,126 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Using the patcher
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="merger.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil015.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc40">14</A>&nbsp;&nbsp;Using the patcher</H2><A NAME="sec-patcher"></A><BR>
+<BR>
+Occasionally we have needed to modify slightly the standard include files.
+So, we developed a simple mechanism that allows us to create modified copies
+of the include files and use them instead of the standard ones. For this
+purpose we specify a patch file and we run a program caller Patcher which
+makes modified copies of include files and applies the patch.<BR>
+<BR>
+The patcher is invoked as follows: 
+<PRE CLASS="verbatim">
+bin/patcher [options]
+
+Options:
+  --help       Prints this help message
+  --verbose    Prints a lot of information about what is being done
+  --mode=xxx   What tool to emulate: 
+                GNUCC     - GNU CC
+                MSVC      - MS VC cl compiler
+
+  --dest=xxx   The destination directory. Will make one if it does not exist
+  --patch=xxx  Patch file (can be specified multiple times)
+  --ppargs=xxx An argument to be passed to the preprocessor (can be specified
+               multiple times)
+
+  --ufile=xxx  A user-include file to be patched (treated as \#include "xxx")
+  --sfile=xxx  A system-include file to be patched (treated as \#include &lt;xxx&gt;)
+ 
+  --clean       Remove all files in the destination directory
+  --dumpversion Print the version name used for the current compiler
+
+ All of the other arguments are passed to the preprocessor. You should pass
+ enough arguments (e.g., include directories) so that the patcher can find the
+ right include files to be patched.
+</PRE>
+ Based on the given <TT>mode</TT> and the current version of the compiler (which
+the patcher can print when given the <TT>dumpversion</TT> argument) the patcher
+will create a subdirectory of the <TT>dest</TT> directory (say <TT>/usr/home/necula/cil/include</TT>), such as:
+<PRE CLASS="verbatim">
+/usr/home/necula/cil/include/gcc_2.95.3-5
+</PRE>
+ In that file the patcher will copy the modified versions of the include files
+specified with the <TT>ufile</TT> and <TT>sfile</TT> options. Each of these options can
+be specified multiple times. <BR>
+<BR>
+The patch file (specified with the <TT>patch</TT> option) has a format inspired by
+the Unix <TT>patch</TT> tool. The file has the following grammar:
+<PRE CLASS="verbatim">
+&lt;&lt;&lt; flags
+patterns
+===
+replacement
+&gt;&gt;&gt;
+</PRE>
+ The flags are a comma separated, case-sensitive, sequence of keywords or
+keyword = value. The following flags are supported:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>file=foo.h</TT> - will only apply the patch on files whose name is
+ <TT>foo.h</TT>. 
+<LI CLASS="li-itemize"><TT>optional</TT> - this means that it is Ok if the current patch does not
+match any of the processed files. 
+<LI CLASS="li-itemize"><TT>group=foo</TT> - will add this patch to the named group. If this is not
+specified then a unique group is created to contain just the current patch.
+When all files specified in the command line have been patched, an error
+message is generated for all groups for whom no member patch was used. We use
+this mechanism to receive notice when the patch triggers are out-dated with
+respect to the new include files. 
+<LI CLASS="li-itemize"><TT>system=sysname</TT> - will only consider this pattern on a given
+operating system. The &#8220;sysname&#8221; is reported by the &#8220;$Ô&#8221; variable in
+Perl, except that Windows is always considered to have sysname
+&#8220;cygwin.&#8221; For Linux use &#8220;linux&#8221; (capitalization matters).
+<LI CLASS="li-itemize"><TT>ateof</TT> - In this case the patterns are ignored and the replacement
+text is placed at the end of the patched file. Use the <TT>file</TT> flag if you
+want to restrict the files in which this replacement is performed. 
+<LI CLASS="li-itemize"><TT>atsof</TT> - The patterns are ignored and the replacement text is placed
+at the start of the patched file. Uf the <TT>file</TT> flag to restrict the
+application of this patch to a certain file. 
+<LI CLASS="li-itemize"><TT>disabled</TT> - Use this flag if you want to disable the pattern.
+</UL>
+The patterns can consist of several groups of lines separated by the <TT>|||</TT>
+marker. Each of these group of lines is a multi-line pattern that if found in
+the file will be replaced with the text given at the end of the block. <BR>
+<BR>
+The matching is space-insensitive.<BR>
+<BR>
+All of the markers <TT>&lt;&lt;&lt;</TT>, <TT>|||</TT>, <TT>===</TT> and <TT>&gt;&gt;&gt;</TT> must appear at the
+beginning of a line but they can be followed by arbitrary text (which is
+ignored).<BR>
+<BR>
+The replacement text can contain the special keyword <TT>@__pattern__@</TT>,
+which is substituted with the pattern that matched. <BR>
+<BR>
+<HR>
+<A HREF="merger.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil015.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

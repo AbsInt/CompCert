@@ -1,0 +1,506 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Library of CIL Modules
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil007.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil009.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc17">8</A>&nbsp;&nbsp;Library of CIL Modules</H2> <A NAME="sec-Extension"></A><BR>
+<BR>
+We are developing a suite of modules that use CIL for program analyses and
+transformations that we have found useful. You can use these modules directly
+on your code, or generally as inspiration for writing similar modules. A
+particularly big and complex application written on top of CIL is CCured
+(<A HREF="../ccured/index.html"><TT>../ccured/index.html</TT></A>).<BR>
+<BR>
+<A NAME="toc9"></A>
+<H3 CLASS="subsection"><A NAME="htoc18">8.1</A>&nbsp;&nbsp;Control-Flow Graphs</H3> <A NAME="sec-cfg"></A>
+The <A HREF="api/Cil.html#TYPEstmt">Cil.stmt</A> datatype includes fields for intraprocedural
+control-flow information: the predecessor and successor statements of
+the current statement. This information is not computed by default.
+If you want to use the control-flow graph, or any of the extensions in
+this section that require it, you have to explicitly ask CIL to
+compute the CFG.<BR>
+<BR>
+
+<H4 CLASS="subsubsection"><A NAME="htoc19">8.1.1</A>&nbsp;&nbsp;The CFG module (new in CIL 1.3.5)</H4>
+The best way to compute the CFG is with the CFG module. Just invoke
+<A HREF="api/Cfg.html#VALcomputeFileCFG">Cfg.computeFileCFG</A> on your file. The <A HREF="api/Cfg.html">Cfg</A> API
+describes the rest of actions you can take with this module, including
+computing the CFG for one function at a time, or printing the CFG in
+<TT>dot</TT> form.<BR>
+<BR>
+
+<H4 CLASS="subsubsection"><A NAME="htoc20">8.1.2</A>&nbsp;&nbsp;Simplified control flow</H4>
+CIL can reduce high-level C control-flow constructs like <TT>switch</TT> and
+<TT>continue</TT> to lower-level <TT>goto</TT>s. This completely eliminates some
+possible classes of statements from the program and may make the result
+easier to analyze (e.g., it simplifies data-flow analysis).<BR>
+<BR>
+You can invoke this transformation on the command line with
+<TT>--domakeCFG</TT> or programatically with <A HREF="api/Cil.html#VALprepareCFG">Cil.prepareCFG</A>.
+After calling Cil.prepareCFG, you can use <A HREF="api/Cil.html#VALcomputeCFGInfo">Cil.computeCFGInfo</A>
+to compute the CFG information and find the successor and predecessor
+of each statement.<BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --domakeCFG</TT>
+transforms the following code (note the fall-through in case 1): 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo (int predicate) {
+    int x = 0;
+    switch (predicate) {
+      case 0: return 111;
+      case 1: x = x + 1;
+      case 2: return (x+3);
+      case 3: break;
+      default: return 222;
+    }
+    return 333;
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex23.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc10"></A>
+<H3 CLASS="subsection"><A NAME="htoc21">8.2</A>&nbsp;&nbsp;Data flow analysis framework</H3>
+The <A HREF="api/Dataflow.html">Dataflow</A> module (click for the ocamldoc) contains a
+parameterized framework for forward and backward data flow
+analyses. You provide the transfer functions and this module does the
+analysis. You must compute control-flow information (Section&nbsp;<A HREF="#sec-cfg">8.1</A>)
+before invoking the Dataflow module.<BR>
+<BR>
+<A NAME="toc11"></A>
+<H3 CLASS="subsection"><A NAME="htoc22">8.3</A>&nbsp;&nbsp;Dominators</H3> 
+The module <A HREF="api/Dominators.html">Dominators</A> contains the computation of immediate
+ dominators. It uses the <A HREF="api/Dataflow.html">Dataflow</A> module. <BR>
+<BR>
+<A NAME="toc12"></A>
+<H3 CLASS="subsection"><A NAME="htoc23">8.4</A>&nbsp;&nbsp;Points-to Analysis</H3>
+The module <TT>ptranal.ml</TT> contains two interprocedural points-to
+analyses for CIL: <TT>Olf</TT> and <TT>Golf</TT>. <TT>Olf</TT> is the default.
+(Switching from <TT>olf.ml</TT> to <TT>golf.ml</TT> requires a change in
+<TT>Ptranal</TT> and a recompiling <TT>cilly</TT>.)<BR>
+<BR>
+The analyses have the following characteristics:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+Not based on C types (inferred pointer relationships are sound
+ despite most kinds of C casts)
+<LI CLASS="li-itemize">One level of subtyping 
+<LI CLASS="li-itemize">One level of context sensitivity (Golf only)
+<LI CLASS="li-itemize">Monomorphic type structures
+<LI CLASS="li-itemize">Field insensitive (fields of structs are conflated)
+<LI CLASS="li-itemize">Demand-driven (points-to queries are solved on demand)
+<LI CLASS="li-itemize">Handle function pointers
+</UL>
+The analysis itself is factored into two components: <TT>Ptranal</TT>,
+which walks over the CIL file and generates constraints, and <TT>Olf</TT>
+or <TT>Golf</TT>, which solve the constraints. The analysis is invoked
+with the function <TT>Ptranal.analyze_file: Cil.file -&gt;
+ unit</TT>. This function builds the points-to graph for the CIL file
+and stores it internally. There is currently no facility for clearing
+internal state, so <TT>Ptranal.analyze_file</TT> should only be called
+once.<BR>
+<BR>
+The constructed points-to graph supports several kinds of queries,
+including alias queries (may two expressions be aliased?) and
+points-to queries (to what set of locations may an expression point?).<BR>
+<BR>
+The main interface with the alias analysis is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>Ptranal.may_alias: Cil.exp -&gt; Cil.exp -&gt; bool</TT>. If
+ <TT>true</TT>, the two expressions may have the same value.
+<LI CLASS="li-itemize"><TT>Ptranal.resolve_lval: Cil.lval -&gt; (Cil.varinfo
+ list)</TT>. Returns the list of variables to which the given
+ left-hand value may point.
+<LI CLASS="li-itemize"><TT>Ptranal.resolve_exp: Cil.exp -&gt; (Cil.varinfo list)</TT>.
+ Returns the list of variables to which the given expression may
+ point.
+<LI CLASS="li-itemize"><TT>Ptranal.resolve_funptr: Cil.exp -&gt; (Cil.fundec
+ list)</TT>. Returns the list of functions to which the given
+ expression may point.
+</UL>
+The precision of the analysis can be customized by changing the values
+of several flags:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>Ptranal.no_sub: bool ref</TT>.
+ If <TT>true</TT>, subtyping is disabled. Associated commandline option:
+ <B>--ptr_unify</B>.
+<LI CLASS="li-itemize"><TT>Ptranal.analyze_mono: bool ref</TT>.
+ (Golf only) If <TT>true</TT>, context sensitivity is disabled and the
+ analysis is effectively monomorphic. Commandline option:
+ <B>--ptr_mono</B>.
+<LI CLASS="li-itemize"><TT>Ptranal.smart_aliases: bool ref</TT>.
+ (Golf only) If <TT>true</TT>, &#8220;smart&#8221; disambiguation of aliases is
+ enabled. Otherwise, aliases are computed by intersecting points-to
+ sets. This is an experimental feature.
+<LI CLASS="li-itemize"><TT>Ptranal.model_strings: bool ref</TT>.
+ Make the alias analysis model string constants by treating them as
+ pointers to chars. Commandline option: <B>--ptr_model_strings</B>
+<LI CLASS="li-itemize"><TT>Ptranal.conservative_undefineds: bool ref</TT>.
+ Make the most pessimistic assumptions about globals if an undefined
+ function is present. Such a function can write to every global
+ variable. Commandline option: <B>--ptr_conservative</B>
+</UL>
+In practice, the best precision/efficiency tradeoff is achieved by
+setting <TT>Ptranal.no_sub</TT> to <TT>false</TT>, <TT>Ptranal.analyze_mono</TT> to
+<TT>true</TT>, and <TT>Ptranal.smart_aliases</TT> to <TT>false</TT>. These are the
+default values of the flags.<BR>
+<BR>
+There are also a few flags that can be used to inspect or serialize
+the results of the analysis.
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>Ptranal.debug_may_aliases</TT>.
+ Print the may-alias relationship of each pair of expressions in the
+ program. Commandline option: <B>--ptr_may_aliases</B>.
+<LI CLASS="li-itemize"><TT>Ptranal.print_constraints: bool ref</TT>.
+ If <TT>true</TT>, the analysis will print each constraint as it is
+ generated.
+<LI CLASS="li-itemize"><TT>Ptranal.print_types: bool ref</TT>.
+ If <TT>true</TT>, the analysis will print the inferred type of each
+ variable in the program.<BR>
+<BR>
+If <TT>Ptranal.analyze_mono</TT> and <TT>Ptranal.no_sub</TT> are both
+ <TT>true</TT>, this output is sufficient to reconstruct the points-to
+ graph. One nice feature is that there is a pretty printer for
+ recursive types, so the print routine does not loop.
+<LI CLASS="li-itemize"><TT>Ptranal.compute_results: bool ref</TT>.
+ If <TT>true</TT>, the analysis will print out the points-to set of each
+ variable in the program. This will essentially serialize the
+ points-to graph.
+</UL>
+<A NAME="toc13"></A>
+<H3 CLASS="subsection"><A NAME="htoc24">8.5</A>&nbsp;&nbsp;StackGuard</H3>
+The module <TT>heapify.ml</TT> contains a transformation similar to the one
+described in &#8220;StackGuard: Automatic Adaptive Detection and Prevention of
+Buffer-Overflow Attacks&#8221;, <EM>Proceedings of the 7th USENIX Security
+Conference</EM>. In essence it modifies the program to maintain a separate
+stack for return addresses. Even if a buffer overrun attack occurs the
+actual correct return address will be taken from the special stack. <BR>
+<BR>
+Although it does work, this CIL module is provided mainly as an example of
+how to perform a simple source-to-source program analysis and
+transformation. As an optimization only functions that contain a dangerous
+local array make use of the special return address stack. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dostackGuard</TT>
+transforms the following dangerous code: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int dangerous() {
+    char array[10];
+    scanf("%s",array); // possible buffer overrun!
+  }
+
+  int main () {
+    return dangerous();
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex24.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc14"></A>
+<H3 CLASS="subsection"><A NAME="htoc25">8.6</A>&nbsp;&nbsp;Heapify</H3>
+The module <TT>heapify.ml</TT> also contains a transformation that moves all
+dangerous local arrays to the heap. This also prevents a number of buffer
+overruns. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --doheapify</TT>
+transforms the following dangerous code: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int dangerous() {
+    char array[10];
+    scanf("%s",array); // possible buffer overrun!
+  }
+
+  int main () {
+    return dangerous();
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex25.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc15"></A>
+<H3 CLASS="subsection"><A NAME="htoc26">8.7</A>&nbsp;&nbsp;One Return</H3>
+The module <TT>oneret.ml</TT> contains a transformation the ensures that all
+function bodies have at most one return statement. This simplifies a number
+of analyses by providing a canonical exit-point. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dooneRet</TT>
+transforms the following code: 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo (int predicate) {
+    if (predicate &lt;= 0) {
+      return 1;
+    } else {
+      if (predicate &gt; 5)
+        return 2;
+      return 3;
+    }
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex26.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc16"></A>
+<H3 CLASS="subsection"><A NAME="htoc27">8.8</A>&nbsp;&nbsp;Partial Evaluation and Constant Folding</H3> 
+The <TT>partial.ml</TT> module provides a simple interprocedural partial
+evaluation and constant folding data-flow analysis and transformation. This
+transformation requires the <TT>--domakeCFG</TT> option. <BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --domakeCFG --dopartial</TT>
+transforms the following code (note the eliminated <TT>if</TT> branch and the
+partial optimization of <TT>foo</TT>): 
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int foo(int x, int y) {
+    int unknown;
+    if (unknown)
+      return y+2;     
+    return x+3;      
+  }
+
+  int main () {
+    int a,b,c;
+    a = foo(5,7) + foo(6,7);
+    b = 4;
+    c = b * b;      
+    if (b &gt; c)     
+      return b-c;
+    else
+      return b+c; 
+  }
+</FONT></PRE>
+See the <A HREF="examples/ex27.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc17"></A>
+<H3 CLASS="subsection"><A NAME="htoc28">8.9</A>&nbsp;&nbsp;Reaching Definitions</H3>
+The <TT>reachingdefs.ml</TT> module uses the dataflow framework and CFG
+information to calculate the definitions that reach each
+statement. After computing the CFG (Section&nbsp;<A HREF="#sec-cfg">8.1</A>) and calling
+<TT>computeRDs</TT> on a 
+function declaration, <TT>ReachingDef.stmtStartData</TT> will contain a
+mapping from statement IDs to data about which definitions reach each
+statement. In particular, it is a mapping from statement IDs to a
+triple the first two members of which are used internally. The third
+member is a mapping from variable IDs to Sets of integer options. If
+the set contains <TT>Some(i)</TT>, then the definition of that variable
+with ID <TT>i</TT> reaches that statement. If the set contains <TT>None</TT>,
+then there is a path to that statement on which there is no definition
+of that variable. Also, if the variable ID is unmapped at a
+statement, then no definition of that variable reaches that statement.<BR>
+<BR>
+To summarize, reachingdefs.ml has the following interface:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>computeRDs</TT> &ndash; Computes reaching definitions. Requires that
+CFG information has already been computed for each statement.
+<LI CLASS="li-itemize"><TT>ReachingDef.stmtStartData</TT> &ndash; contains reaching
+definition data after <TT>computeRDs</TT> is called.
+<LI CLASS="li-itemize"><TT>ReachingDef.defIdStmtHash</TT> &ndash; Contains a mapping
+from definition IDs to the ID of the statement in which
+the definition occurs.
+<LI CLASS="li-itemize"><TT>getRDs</TT> &ndash; Takes a statement ID and returns
+reaching definition data for that statement.
+<LI CLASS="li-itemize"><TT>instrRDs</TT> &ndash; Takes a list of instructions and the
+definitions that reach the first instruction, and for
+each instruction calculates the definitions that reach
+either into or out of that instruction.
+<LI CLASS="li-itemize"><TT>rdVisitorClass</TT> &ndash; A subclass of nopCilVisitor that
+can be extended such that the current reaching definition
+data is available when expressions are visited through
+the <TT>get_cur_iosh</TT> method of the class.
+</UL>
+<A NAME="toc18"></A>
+<H3 CLASS="subsection"><A NAME="htoc29">8.10</A>&nbsp;&nbsp;Available Expressions</H3>
+The <TT>availexps.ml</TT> module uses the dataflow framework and CFG
+information to calculate something similar to a traditional available
+expressions analysis. After <TT>computeAEs</TT> is called following a CFG
+calculation (Section&nbsp;<A HREF="#sec-cfg">8.1</A>), <TT>AvailableExps.stmtStartData</TT> will
+contain a mapping
+from statement IDs to data about what expressions are available at
+that statement. The data for each statement is a mapping for each
+variable ID to the whole expression available at that point(in the
+traditional sense) which the variable was last defined to be. So,
+this differs from a traditional available expressions analysis in that
+only whole expressions from a variable definition are considered rather
+than all expressions.<BR>
+<BR>
+The interface is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>computeAEs</TT> &ndash; Computes available expressions. Requires
+that CFG information has already been comptued for each statement.
+<LI CLASS="li-itemize"><TT>AvailableExps.stmtStartData</TT> &ndash; Contains available
+expressions data for each statement after <TT>computeAEs</TT> has been
+called.
+<LI CLASS="li-itemize"><TT>getAEs</TT> &ndash; Takes a statement ID and returns
+available expression data for that statement.
+<LI CLASS="li-itemize"><TT>instrAEs</TT> &ndash; Takes a list of instructions and
+the availalbe expressions at the first instruction, and
+for each instruction calculates the expressions available
+on entering or exiting each instruction.
+<LI CLASS="li-itemize"><TT>aeVisitorClass</TT> &ndash; A subclass of nopCilVisitor that
+can be extended such that the current available expressions
+data is available when expressions are visited through the
+<TT>get_cur_eh</TT> method of the class.
+</UL>
+<A NAME="toc19"></A>
+<H3 CLASS="subsection"><A NAME="htoc30">8.11</A>&nbsp;&nbsp;Liveness Analysis</H3>
+The <TT>liveness.ml</TT> module uses the dataflow framework and
+CFG information to calculate which variables are live at
+each program point. After <TT>computeLiveness</TT> is called
+following a CFG calculation (Section&nbsp;<A HREF="#sec-cfg">8.1</A>), <TT>LiveFlow.stmtStartData</TT> will
+contain a mapping for each statement ID to a set of <TT>varinfo</TT>s
+for varialbes live at that program point.<BR>
+<BR>
+The interface is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>computeLiveness</TT> &ndash; Computes live variables. Requires
+that CFG information has already been computed for each statement.
+<LI CLASS="li-itemize"><TT>LiveFlow.stmtStartData</TT> &ndash; Contains live variable data
+for each statement after <TT>computeLiveness</TT> has been called.
+</UL>
+Also included in this module is a command line interface that
+will cause liveness data to be printed to standard out for
+a particular function or label.
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>&ndash;doliveness</TT> &ndash; Instructs cilly to comptue liveness
+information and to print on standard out the variables live
+at the points specified by <TT>&ndash;live_func</TT> and <TT>live_label</TT>.
+If both are ommitted, then nothing is printed.
+<LI CLASS="li-itemize"><TT>&ndash;live_func</TT> &ndash; The name of the function whose
+liveness data is of interest. If <TT>&ndash;live_label</TT> is ommitted,
+then data for each statement is printed.
+<LI CLASS="li-itemize"><TT>&ndash;live_label</TT> &ndash; The name of the label at which
+the liveness data will be printed.
+</UL>
+<A NAME="toc20"></A>
+<H3 CLASS="subsection"><A NAME="htoc31">8.12</A>&nbsp;&nbsp;Dead Code Elimination</H3>
+The module <TT>deadcodeelim.ml</TT> uses the reaching definitions
+analysis to eliminate assignment instructions whose results
+are not used. The interface is as follows:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<TT>elim_dead_code</TT> &ndash; Performs dead code elimination
+on a function. Requires that CFG information has already
+been computed (Section&nbsp;<A HREF="#sec-cfg">8.1</A>).
+<LI CLASS="li-itemize"><TT>dce</TT> &ndash; Performs dead code elimination on an
+entire file. Requires that CFG information has already
+been computed.
+</UL>
+<A NAME="toc21"></A>
+<H3 CLASS="subsection"><A NAME="htoc32">8.13</A>&nbsp;&nbsp;Simple Memory Operations</H3> 
+The <TT>simplemem.ml</TT> module allows CIL lvalues that contain memory
+accesses to be even futher simplified via the introduction of
+well-typed temporaries. After this transformation all lvalues involve
+at most one memory reference.<BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dosimpleMem</TT> 
+transforms the following code:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int main () {
+    int ***three;
+    int **two;
+    ***three = **two; 
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex28.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc22"></A>
+<H3 CLASS="subsection"><A NAME="htoc33">8.14</A>&nbsp;&nbsp;Simple Three-Address Code</H3> 
+The <TT>simplify.ml</TT> module further reduces the complexity of program
+expressions and gives you a form of three-address code. After this
+transformation all expressions will adhere to the following grammar: 
+<PRE CLASS="verbatim">
+ basic::=
+    Const _ 
+    Addrof(Var v, NoOffset)
+    StartOf(Var v, NoOffset)
+    Lval(Var v, off), where v is a variable whose address is not taken
+                      and off contains only "basic"
+
+ exp::=
+    basic
+    Lval(Mem basic, NoOffset)
+    BinOp(bop, basic, basic)
+    UnOp(uop, basic)
+    CastE(t, basic)
+   
+ lval ::= 
+    Mem basic, NoOffset
+    Var v, off, where v is a variable whose address is not taken and off
+                contains only "basic"
+</PRE>In addition, all <TT>sizeof</TT> and <TT>alignof</TT> forms are turned into
+constants. Accesses to arrays and variables whose address is taken are
+turned into "Mem" accesses. All field and index computations are turned
+into address arithmetic.<BR>
+<BR>
+For a concrete example, you can see how <TT>cilly --dosimplify</TT> 
+transforms the following code:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+  int main() {
+    struct mystruct {
+      int a;
+      int b;
+    } m;
+    int local;
+    int arr[3];
+    int *ptr;
+
+    ptr = &amp;local;
+    m.a = local + sizeof(m) + arr[2];
+    return m.a; 
+  } 
+</FONT></PRE>
+See the <A HREF="examples/ex29.txt">CIL output</A> for this
+code fragment<BR>
+<BR>
+<A NAME="toc23"></A>
+<H3 CLASS="subsection"><A NAME="htoc34">8.15</A>&nbsp;&nbsp;Converting C to C++</H3>
+The module canonicalize.ml performs several transformations to correct
+differences between C and C++, so that the output is (hopefully) valid
+C++ code. This may be incomplete &mdash; certain fixes which are necessary
+for some programs are not yet implemented.<BR>
+<BR>
+Using the <TT>--doCanonicalize</TT> option with CIL will perform the
+following changes to your program:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Any variables that use C++ keywords as identifiers are renamed.
+<LI CLASS="li-enumerate">C allows global variables to have multiple declarations and
+ multiple (equivalent) definitions. This transformation removes
+ all but one declaration and all but one definition.
+<LI CLASS="li-enumerate"><TT>__inline</TT> is #defined to <TT>inline</TT>, and <TT>__restrict</TT> 
+ is #defined to nothing.
+<LI CLASS="li-enumerate">C allows function pointers with no specified arguments to be used on
+ any argument list. To make C++ accept this code, we insert a cast
+ from the function pointer to a type that matches the arguments. Of
+ course, this does nothing to guarantee that the pointer actually has
+ that type.
+<LI CLASS="li-enumerate">Makes casts from int to enum types explicit. (CIL changes enum
+ constants to int constants, but doesn't use a cast.)
+</OL>
+<HR>
+<A HREF="cil007.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil009.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

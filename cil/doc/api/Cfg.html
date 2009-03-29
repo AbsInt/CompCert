@@ -1,0 +1,69 @@
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Cillower.html">
+<link rel="next" href="Dataflow.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of class methods" rel=Appendix href="index_methods.html">
+<link title="Index of classes" rel=Appendix href="index_classes.html">
+<link title="Index of class types" rel=Appendix href="index_class_types.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Pretty" rel="Chapter" href="Pretty.html">
+<link title="Errormsg" rel="Chapter" href="Errormsg.html">
+<link title="Clist" rel="Chapter" href="Clist.html">
+<link title="Stats" rel="Chapter" href="Stats.html">
+<link title="Cil" rel="Chapter" href="Cil.html">
+<link title="Formatcil" rel="Chapter" href="Formatcil.html">
+<link title="Alpha" rel="Chapter" href="Alpha.html">
+<link title="Cillower" rel="Chapter" href="Cillower.html">
+<link title="Cfg" rel="Chapter" href="Cfg.html">
+<link title="Dataflow" rel="Chapter" href="Dataflow.html">
+<link title="Dominators" rel="Chapter" href="Dominators.html"><title>CIL API Documentation (version 1.3.5) : Cfg</title>
+</head>
+<body>
+<div class="navbar"><a href="Cillower.html">Previous</a>
+&nbsp;<a href="index.html">Up</a>
+&nbsp;<a href="Dataflow.html">Next</a>
+</div>
+<center><h1>Module <a href="type_Cfg.html">Cfg</a></h1></center>
+<br>
+<pre><span class="keyword">module</span> Cfg: <code class="code">sig</code> <a href="Cfg.html">..</a> <code class="code">end</code></pre>Code to compute the control-flow graph of a function or file.  
+  This will fill in the <code class="code">preds</code> and <code class="code">succs</code> fields of <a href="Cil.html#TYPEstmt"><code class="code">Cil.stmt</code></a>
+<p>
+
+  This is required for several other extensions, such as <a href="Dataflow.html"><code class="code">Dataflow</code></a>.<br>
+<hr width="100%">
+<pre><span class="keyword">val</span> <a name="VALcomputeFileCFG"></a>computeFileCFG : <code class="type"><a href="Cil.html#TYPEfile">Cil.file</a> -> unit</code></pre><div class="info">
+Compute the CFG for an entire file, by calling cfgFun on each function.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALclearFileCFG"></a>clearFileCFG : <code class="type"><a href="Cil.html#TYPEfile">Cil.file</a> -> unit</code></pre><div class="info">
+clear the sid, succs, and preds fields of each statement.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcfgFun"></a>cfgFun : <code class="type"><a href="Cil.html#TYPEfundec">Cil.fundec</a> -> int</code></pre><div class="info">
+Compute a control flow graph for fd.  Stmts in fd have preds and succs
+  filled in<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALclearCFGinfo"></a>clearCFGinfo : <code class="type"><a href="Cil.html#TYPEfundec">Cil.fundec</a> -> unit</code></pre><div class="info">
+clear the sid, succs, and preds fields of each statment in a function<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALprintCfgChannel"></a>printCfgChannel : <code class="type">Pervasives.out_channel -> <a href="Cil.html#TYPEfundec">Cil.fundec</a> -> unit</code></pre><div class="info">
+print control flow graph (in dot form) for fundec to channel<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALprintCfgFilename"></a>printCfgFilename : <code class="type">string -> <a href="Cil.html#TYPEfundec">Cil.fundec</a> -> unit</code></pre><div class="info">
+Print control flow graph (in dot form) for fundec to file<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALstart_id"></a>start_id : <code class="type">int Pervasives.ref</code></pre><div class="info">
+Next statement id that will be assigned.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALnodeList"></a>nodeList : <code class="type"><a href="Cil.html#TYPEstmt">Cil.stmt</a> list Pervasives.ref</code></pre><div class="info">
+All of the nodes in a file.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALnumNodes"></a>numNodes : <code class="type">int Pervasives.ref</code></pre><div class="info">
+number of nodes in the CFG<br>
+</div>
+</body></html>

@@ -1,0 +1,48 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Controlling CIL
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="ext.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil010.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc35">9</A>&nbsp;&nbsp;Controlling CIL</H2>
+In the process of converting a C file to CIL we drop the unused prototypes
+and even inline function definitions. This results in much smaller files. If
+you do not want this behavior then you must pass the <TT>--keepunused</TT> argument
+to the CIL application. <BR>
+<BR>
+Alternatively you can put the following pragma in the code (instructing CIL
+to specifically keep the declarations and definitions of the function
+<TT>func1</TT> and variable <TT>var2</TT>, the definition of type <TT>foo</TT> and of
+structure <TT>bar</TT>):
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+#pragma cilnoremove("func1", "var2", "type foo", "struct bar")
+</FONT></PRE>
+<HR>
+<A HREF="ext.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil010.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

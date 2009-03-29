@@ -1,0 +1,268 @@
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="Start" href="index.html">
+<link rel="next" href="Errormsg.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of class methods" rel=Appendix href="index_methods.html">
+<link title="Index of classes" rel=Appendix href="index_classes.html">
+<link title="Index of class types" rel=Appendix href="index_class_types.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Pretty" rel="Chapter" href="Pretty.html">
+<link title="Errormsg" rel="Chapter" href="Errormsg.html">
+<link title="Clist" rel="Chapter" href="Clist.html">
+<link title="Stats" rel="Chapter" href="Stats.html">
+<link title="Cil" rel="Chapter" href="Cil.html">
+<link title="Formatcil" rel="Chapter" href="Formatcil.html">
+<link title="Alpha" rel="Chapter" href="Alpha.html">
+<link title="Cillower" rel="Chapter" href="Cillower.html">
+<link title="Cfg" rel="Chapter" href="Cfg.html">
+<link title="Dataflow" rel="Chapter" href="Dataflow.html">
+<link title="Dominators" rel="Chapter" href="Dominators.html"><title>CIL API Documentation (version 1.3.5) : Pretty</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a href="index.html">Up</a>
+&nbsp;<a href="Errormsg.html">Next</a>
+</div>
+<center><h1>Module <a href="type_Pretty.html">Pretty</a></h1></center>
+<br>
+<pre><span class="keyword">module</span> Pretty: <code class="code">sig</code> <a href="Pretty.html">..</a> <code class="code">end</code></pre>Utility functions for pretty-printing. The major features provided by 
+    this module are <ul>
+<li>An <code class="code">fprintf</code>-style interface with support for user-defined printers</li>
+<li>The printout is fit to a width by selecting some of the optional newlines</li>
+<li>Constructs for alignment and indentation</li>
+<li>Print ellipsis starting at a certain nesting depth</li>
+<li>Constructs for printing lists and arrays</li>
+</ul>
+
+ Pretty-printing occurs in two stages:<ul>
+<li>Construct a <a href="Pretty.html#TYPEdoc"><code class="code">Pretty.doc</code></a> object that encodes all of the elements to be 
+  printed 
+  along with alignment specifiers and optional and mandatory newlines</li>
+<li>Format the <a href="Pretty.html#TYPEdoc"><code class="code">Pretty.doc</code></a> to a certain width and emit it as a string, to an 
+  output stream or pass it to a user-defined function</li>
+</ul>
+
+ The formatting algorithm is not optimal but it does a pretty good job while 
+ still operating in linear time. The original version was based on a pretty 
+ printer by Philip Wadler which turned out to not scale to large jobs.<br>
+<hr width="100%">
+<br>
+API<br>
+<pre><span class="keyword">type</span> <a name="TYPEdoc"></a><code class="type"></code>doc </pre>
+<div class="info">
+The type of unformated documents. Elements of this type can be 
+ constructed in two ways. Either with a number of constructor shown below, 
+ or using the <a href="Pretty.html#VALdprintf"><code class="code">Pretty.dprintf</code></a> function with a <code class="code">printf</code>-like interface. 
+ The <a href="Pretty.html#VALdprintf"><code class="code">Pretty.dprintf</code></a> method is slightly slower so we do not use it for 
+ large jobs such as the output routines for a compiler. But we use it for 
+ small jobs such as logging and error messages.<br>
+</div>
+
+<br>
+Constructors for the doc type.<br>
+<pre><span class="keyword">val</span> <a name="VALnil"></a>nil : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Constructs an empty document<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VAL(++)"></a>(++) : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Concatenates two documents. This is an infix operator that associates to 
+    the left.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALconcat"></a>concat : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><pre><span class="keyword">val</span> <a name="VALtext"></a>text : <code class="type">string -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A document that prints the given string<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALnum"></a>num : <code class="type">int -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A document that prints an integer in decimal form<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALreal"></a>real : <code class="type">float -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A document that prints a real number<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALchr"></a>chr : <code class="type">char -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A document that prints a character. This is just like <a href="Pretty.html#VALtext"><code class="code">Pretty.text</code></a>
+    with a one-character string.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALline"></a>line : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A document that consists of a mandatory newline. This is just like <code class="code">(text
+    "\n")</code>. The new line will be indented to the current indentation level,
+    unless you use <a href="Pretty.html#VALleftflush"><code class="code">Pretty.leftflush</code></a> right after this.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALleftflush"></a>leftflush : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Use after a <a href="Pretty.html#VALline"><code class="code">Pretty.line</code></a> to prevent the indentation. Whatever follows 
+ next will be flushed left. Indentation resumes on the next line.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALbreak"></a>break : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A document that consists of either a space or a line break. Also called
+    an optional line break. Such a break will be
+    taken only if necessary to fit the document in a given width. If the break
+    is not taken a space is printed instead.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALalign"></a>align : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Mark the current column as the current indentation level. Does not print
+    anything. All taken line breaks will align to this column. The previous
+    alignment level is saved on a stack.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALunalign"></a>unalign : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Reverts to the last saved indentation level.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALmark"></a>mark : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Mark the beginning of a markup section. The width of a markup section is 
+ considered 0 for the purpose of computing identation<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALunmark"></a>unmark : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+The end of a markup section<br>
+</div>
+<br>
+Syntactic sugar<br>
+<pre><span class="keyword">val</span> <a name="VALindent"></a>indent : <code class="type">int -> <a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Indents the document. Same as <code class="code">((text "  ") ++ align ++ doc ++ unalign)</code>,
+    with the specified number of spaces.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALmarkup"></a>markup : <code class="type"><a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Prints a document as markup. The marked document cannot contain line 
+ breaks or alignment constructs.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALseq"></a>seq : <code class="type">sep:<a href="Pretty.html#TYPEdoc">doc</a> -> doit:('a -> <a href="Pretty.html#TYPEdoc">doc</a>) -> elements:'a list -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Formats a sequence. <code class="code">sep</code> is a separator, <code class="code">doit</code> is a function that 
+ converts an element to a document.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdocList"></a>docList : <code class="type">?sep:<a href="Pretty.html#TYPEdoc">doc</a> -> ('a -> <a href="Pretty.html#TYPEdoc">doc</a>) -> unit -> 'a list -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+An alternative function for printing a list. The <code class="code">unit</code> argument is there 
+ to make this function more easily usable with the <a href="Pretty.html#VALdprintf"><code class="code">Pretty.dprintf</code></a> 
+ interface. The first argument is a separator, by default a comma.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALd_list"></a>d_list : <code class="type">string -> (unit -> 'a -> <a href="Pretty.html#TYPEdoc">doc</a>) -> unit -> 'a list -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+sm: Yet another list printer.  This one accepts the same kind of
+ printing function that <a href="Pretty.html#VALdprintf"><code class="code">Pretty.dprintf</code></a> does, and itself works 
+ in the dprintf context.  Also accepts
+ a string as the separator since that's by far the most common.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdocArray"></a>docArray : <code class="type">?sep:<a href="Pretty.html#TYPEdoc">doc</a> -><br>       (int -> 'a -> <a href="Pretty.html#TYPEdoc">doc</a>) -> unit -> 'a array -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Formats an array. A separator and a function that prints an array
+    element. The default separator is a comma.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdocOpt"></a>docOpt : <code class="type">('a -> <a href="Pretty.html#TYPEdoc">doc</a>) -> unit -> 'a option -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Prints an <code class="code">'a option</code> with <code class="code">None</code> or <code class="code">Some</code><br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALd_int32"></a>d_int32 : <code class="type">int32 -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+Print an int32<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALf_int32"></a>f_int32 : <code class="type">unit -> int32 -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><pre><span class="keyword">val</span> <a name="VALd_int64"></a>d_int64 : <code class="type">int64 -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><pre><span class="keyword">val</span> <a name="VALf_int64"></a>f_int64 : <code class="type">unit -> int64 -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><pre><span class="keyword">module</span> <a href="Pretty.MakeMapPrinter.html">MakeMapPrinter</a>: <div class="sig_block"><code class="code">functor (</code><code class="code">Map</code><code class="code"> : </code><code class="code">sig</code><div class="sig_block"><pre><span class="keyword">type</span> <a name="TYPEkey"></a><code class="type"></code>key </pre>
+
+<pre><span class="keyword">type</span> <a name="TYPEt"></a><code class="type">'a</code> t </pre>
+
+<pre><span class="keyword">val</span> <a name="VALfold"></a>fold : <code class="type">(key -> 'a -> 'b -> 'b) -><br>       'a t -> 'b -> 'b</code></pre></div><code class="code">end</code><code class="code">) -&gt; </code><code class="code">sig</code> <a href="Pretty.MakeMapPrinter.html">..</a> <code class="code">end</code></div></pre><div class="info">
+Format maps.
+</div>
+<pre><span class="keyword">module</span> <a href="Pretty.MakeSetPrinter.html">MakeSetPrinter</a>: <div class="sig_block"><code class="code">functor (</code><code class="code">Set</code><code class="code"> : </code><code class="code">sig</code><div class="sig_block"><pre><span class="keyword">type</span> <a name="TYPEelt"></a><code class="type"></code>elt </pre>
+
+<pre><span class="keyword">type</span> <a name="TYPEt"></a><code class="type"></code>t </pre>
+
+<pre><span class="keyword">val</span> <a name="VALfold"></a>fold : <code class="type">(elt -> 'a -> 'a) -><br>       t -> 'a -> 'a</code></pre></div><code class="code">end</code><code class="code">) -&gt; </code><code class="code">sig</code> <a href="Pretty.MakeSetPrinter.html">..</a> <code class="code">end</code></div></pre><div class="info">
+Format sets.
+</div>
+<pre><span class="keyword">val</span> <a name="VALinsert"></a>insert : <code class="type">unit -> <a href="Pretty.html#TYPEdoc">doc</a> -> <a href="Pretty.html#TYPEdoc">doc</a></code></pre><div class="info">
+A function that is useful with the <code class="code">printf</code>-like interface<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALdprintf"></a>dprintf : <code class="type">('a, unit, <a href="Pretty.html#TYPEdoc">doc</a>, <a href="Pretty.html#TYPEdoc">doc</a>) format4 -> 'a</code></pre><div class="info">
+This function provides an alternative method for constructing 
+    <code class="code">doc</code> objects. The first argument for this function is a format string 
+    argument (of type <code class="code">('a, unit, doc) format</code>; if you insist on 
+    understanding what that means see the module <code class="code">Printf</code>). The format string 
+    is like that for the <code class="code">printf</code> function in C, except that it understands a 
+    few more formatting controls, all starting with the @ character. 
+<p>
+
+    See the gprintf function if you want to pipe the result of dprintf into 
+    some other functions.
+<p>
+
+ The following special formatting characters are understood (these do not 
+ correspond to arguments of the function):<ul>
+<li> @[ Inserts an <a href="Pretty.html#VALalign"><code class="code">Pretty.align</code></a>. Every format string must have matching 
+        <a href="Pretty.html#VALalign"><code class="code">Pretty.align</code></a> and <a href="Pretty.html#VALunalign"><code class="code">Pretty.unalign</code></a>. </li>
+<li> @] Inserts an <a href="Pretty.html#VALunalign"><code class="code">Pretty.unalign</code></a>.</li>
+<li> @!  Inserts a <a href="Pretty.html#VALline"><code class="code">Pretty.line</code></a>. Just like "\n"</li>
+<li> @?  Inserts a <a href="Pretty.html#VALbreak"><code class="code">Pretty.break</code></a>.</li>
+<li> @&lt;  Inserts a <a href="Pretty.html#VALmark"><code class="code">Pretty.mark</code></a>. </li>
+<li> @&gt;  Inserts a <a href="Pretty.html#VALunmark"><code class="code">Pretty.unmark</code></a>.</li>
+<li> @^  Inserts a <a href="Pretty.html#VALleftflush"><code class="code">Pretty.leftflush</code></a>
+       Should be used immediately after @! or "\n".</li>
+<li> @@ : inserts a @ character</li>
+</ul>
+
+ In addition to the usual <code class="code">printf</code> % formatting characters the following two 
+ new characters are supported:<ul>
+<li>%t Corresponds to an argument of type <code class="code">unit -&gt; doc</code>. This argument is 
+     invoked to produce a document</li>
+<li>%a Corresponds to <b>two</b> arguments. The first of type <code class="code">unit -&gt; 'a -&gt; doc</code> 
+     and the second of type <code class="code">'a</code>. (The extra <code class="code">unit</code> is do to the 
+     peculiarities of the built-in support for format strings in Ocaml. It 
+     turns out that it is not a major problem.) Here is an example of how 
+     you use this:</li>
+</ul>
+
+<pre>dprintf "Name=%s, SSN=%7d, Children=@[%a@]\n"
+             pers.name pers.ssn (docList (chr ',' ++ break) text)
+             pers.children</pre>
+<p>
+
+ The result of <code class="code">dprintf</code> is a <a href="Pretty.html#TYPEdoc"><code class="code">Pretty.doc</code></a>. You can format the document and 
+ emit it using the functions <a href="Pretty.html#VALfprint"><code class="code">Pretty.fprint</code></a> and <a href="Pretty.html#VALsprint"><code class="code">Pretty.sprint</code></a>.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALgprintf"></a>gprintf : <code class="type">(<a href="Pretty.html#TYPEdoc">doc</a> -> 'a) -> ('b, unit, <a href="Pretty.html#TYPEdoc">doc</a>, 'a) format4 -> 'b</code></pre><div class="info">
+Like <a href="Pretty.html#VALdprintf"><code class="code">Pretty.dprintf</code></a> but more general. It also takes a function that is 
+ invoked on the constructed document but before any formatting is done. The 
+ type of the format argument means that 'a is the type of the parameters of 
+ this function, unit is the type of the first argument to %a and %t 
+ formats, doc is the type of the intermediate result, and 'b is the type of 
+ the result of gprintf.<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALfprint"></a>fprint : <code class="type">Pervasives.out_channel -> width:int -> <a href="Pretty.html#TYPEdoc">doc</a> -> unit</code></pre><div class="info">
+Format the document to the given width and emit it to the given channel<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALsprint"></a>sprint : <code class="type">width:int -> <a href="Pretty.html#TYPEdoc">doc</a> -> string</code></pre><div class="info">
+Format the document to the given width and emit it as a string<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALfprintf"></a>fprintf : <code class="type">Pervasives.out_channel -> ('a, unit, <a href="Pretty.html#TYPEdoc">doc</a>) Pervasives.format -> 'a</code></pre><div class="info">
+Like <a href="Pretty.html#VALdprintf"><code class="code">Pretty.dprintf</code></a> followed by <a href="Pretty.html#VALfprint"><code class="code">Pretty.fprint</code></a><br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALprintf"></a>printf : <code class="type">('a, unit, <a href="Pretty.html#TYPEdoc">doc</a>) Pervasives.format -> 'a</code></pre><div class="info">
+Like <a href="Pretty.html#VALfprintf"><code class="code">Pretty.fprintf</code></a> applied to <code class="code">stdout</code><br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALeprintf"></a>eprintf : <code class="type">('a, unit, <a href="Pretty.html#TYPEdoc">doc</a>) Pervasives.format -> 'a</code></pre><div class="info">
+Like <a href="Pretty.html#VALfprintf"><code class="code">Pretty.fprintf</code></a> applied to <code class="code">stderr</code><br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALwithPrintDepth"></a>withPrintDepth : <code class="type">int -> (unit -> unit) -> unit</code></pre><div class="info">
+Invokes a thunk, with printDepth temporarily set to the specified value<br>
+</div>
+<br>
+The following variables can be used to control the operation of the printer<br>
+<pre><span class="keyword">val</span> <a name="VALprintDepth"></a>printDepth : <code class="type">int Pervasives.ref</code></pre><div class="info">
+Specifies the nesting depth of the <code class="code">align</code>/<code class="code">unalign</code> pairs at which 
+    everything is replaced with ellipsis<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALprintIndent"></a>printIndent : <code class="type">bool Pervasives.ref</code></pre><div class="info">
+If false then does not indent<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALfastMode"></a>fastMode : <code class="type">bool Pervasives.ref</code></pre><div class="info">
+If set to <code class="code">true</code> then optional breaks are taken only when the document 
+    has exceeded the given width. This means that the printout will looked 
+    more ragged but it will be faster<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALflushOften"></a>flushOften : <code class="type">bool Pervasives.ref</code></pre><div class="info">
+If true the it flushes after every print<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALcountNewLines"></a>countNewLines : <code class="type">int Pervasives.ref</code></pre><div class="info">
+Keep a running count of the taken newlines. You can read and write this 
+ from the client code if you want<br>
+</div>
+<pre><span class="keyword">val</span> <a name="VALauto_printer"></a>auto_printer : <code class="type">string -> 'a</code></pre><div class="info">
+A function that when used at top-level in a module will direct 
+ the pa_prtype module generate automatically the printing functions for a 
+ type<br>
+</div>
+</body></html>

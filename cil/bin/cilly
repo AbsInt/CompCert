@@ -1,0 +1,152 @@
+#!/usr/bin/perl
+# A simple use of the Cilly module
+#
+#
+#
+# Copyright (c) 2001-2002, 
+#  George C. Necula    <necula@cs.berkeley.edu>
+#  Scott McPeak        <smcpeak@cs.berkeley.edu>
+#  Wes Weimer          <weimer@cs.berkeley.edu>
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+# 1. Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+#
+# 3. The names of the contributors may not be used to endorse or promote
+# products derived from this software without specific prior written
+# permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+# IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+# OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+use strict;
+use Data::Dumper;
+use FindBin;
+use lib "$FindBin::Bin";
+use lib "$FindBin::Bin/../lib"; # The libraries are in the lib directory
+# Read the configuration script
+use CilConfig;
+
+use Cilly;
+
+$::default_is_merge = 0;
+my $stub = CilCompiler->new(@ARGV);
+
+$stub->setVersion ();
+
+# print Dumper($stub);
+$stub->doit();
+
+
+# Define here your favorite compiler by overriding Merger methods
+package CilCompiler;
+use File::Basename;
+use strict;
+BEGIN {
+    @CilCompiler::ISA = qw(Cilly);
+    $CilCompiler::base = "$::cilhome/obj/$::archos/cilly";
+    # Use the most recent version of cilly
+    $CilCompiler::mtime_asm = int((stat("$CilCompiler::base.asm.exe"))[9]);
+    $CilCompiler::mtime_byte = int((stat("$CilCompiler::base.byte.exe"))[9]);
+    $CilCompiler::use_debug = 
+         grep(/--bytecode/, @ARGV) ||
+         grep(/--ocamldebug/, @ARGV) ||
+        ($CilCompiler::mtime_asm < $CilCompiler::mtime_byte);
+    $CilCompiler::compiler = 
+        $CilCompiler::base . 
+            ($CilCompiler::use_debug ? ".byte" : ".asm") . ".exe";
+    if($CilCompiler::use_debug) { 
+        $ENV{"OCAMLRUNPARAM"} = "b" . $ENV{"OCAMLRUNPARAM"};
+    } 
+}
+
+# We need to customize the collection of arguments
+sub collectOneArgument {
+    my($self, $arg, $pargs) = @_;
+    if($arg =~ m|--transval=(.+)$|)  {
+        $self->{TRANSVAL} = $1; return 1;
+    }
+    if($arg eq '--ocamldebug')  {
+        $self->{OCAMLDEBUG} = 1; return 1;
+    }
+    if($arg eq '--cabsonly') {
+        $self->{CABSONLY} = 1; return 1;
+    }
+    # See if the super class understands this
+    return $self->SUPER::collectOneArgument($arg, $pargs);
+}
+
+sub usage {
+    print "Usage: cilly [options] [gcc_or_mscl arguments]\n";
+}
+
+sub helpMessage {
+    my($self) = @_;
+    # Print first the original
+    $self->SUPER::helpMessage();
+    print <<EOF;
+
+  All other arguments starting with -- are passed to the Cilly process.
+
+The following are the arguments of the Cilly process
+EOF
+   my @cmd = ($CilCompiler::compiler, '-help');
+   $self->runShell(@cmd); 
+}
+
+
+sub CillyCommand {
+    my ($self, $ppsrc, $dest) = @_;
+
+    my $aftercil;
+    my @cmd = ($CilCompiler::compiler);
+
+    if(defined $ENV{OCAMLDEBUG} || $self->{OCAMLDEBUG}) {
+        print "OCAMLDEBUG is on\n";
+        my @idirs = ("src", "src/frontc", "src/ccured", "src/ext",
+                     "ocamlutil", 
+                     "obj/$::archos");
+	my @iflags = map { ('-I', "$::cilhome/$_") } @idirs;
+        unshift @cmd, 'ocamldebug', '-emacs', @iflags;
+    }
+    if($::docxx) {
+        push @cmd, '--cxx';
+    }
+    if($self->{CABSONLY}) {
+        $aftercil = $self->cilOutputFile($dest, 'cabs.c');
+        push @cmd, '--cabsonly', $aftercil;
+    } else {
+        if(defined $self->{CILLY_OUT}) {
+            $aftercil = new OutputFile($dest, $self->{CILLY_OUT});
+            return ($aftercil, @cmd);
+        }
+	$aftercil = $self->cilOutputFile($dest, 'cil.c');
+    }
+    return ($aftercil, @cmd, '--out', $aftercil);
+}
+
+sub MergeCommand {
+    my ($self, $ppsrc, $dir, $base) = @_;
+
+    return ('', $CilCompiler::compiler);
+}
+
+
+1;

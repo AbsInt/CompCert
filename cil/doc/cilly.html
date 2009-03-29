@@ -1,0 +1,187 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+How to Use CIL
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil004.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil006.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc5">5</A>&nbsp;&nbsp;How to Use CIL</H2><A NAME="sec-cil"></A><BR>
+<BR>
+There are two predominant ways to use CIL to write a program analysis or
+transformation. The first is to phrase your analysis as a module that is
+called by our existing driver. The second is to use CIL as a stand-alone
+library. We highly recommend that you use <TT>cilly</TT>, our driver. <BR>
+<BR>
+<A NAME="toc1"></A>
+<H3 CLASS="subsection"><A NAME="htoc6">5.1</A>&nbsp;&nbsp;Using <TT>cilly</TT>, the CIL driver</H3>
+The most common way to use CIL is to write an Ocaml module containing your
+analysis and transformation, which you then link into our boilerplate
+driver application called <TT>cilly</TT>. <TT>cilly</TT> is a Perl script that
+processes and mimics <TT>GCC</TT> and <TT>MSVC</TT> command-line arguments and then
+calls <TT>cilly.byte.exe</TT> or <TT>cilly.asm.exe</TT> (CIL's Ocaml executable). <BR>
+<BR>
+An example of such module is <TT>logwrites.ml</TT>, a transformation that is
+distributed with CIL and whose purpose is to instrument code to print the
+addresses of memory locations being written. (We plan to release a
+C-language interface to CIL so that you can write your analyses in C
+instead of Ocaml.) See Section&nbsp;<A HREF="ext.html#sec-Extension">8</A> for a survey of other example
+modules. <BR>
+<BR>
+Assuming that you have written <TT>/home/necula/logwrites.ml</TT>, 
+here is how you use it: 
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">Modify <TT>logwrites.ml</TT> so that it includes a CIL &#8220;feature
+ descriptor&#8221; like this: 
+<PRE CLASS="verbatim">
+let feature : featureDescr = 
+  { fd_name = "logwrites";              
+    fd_enabled = ref false;
+    fd_description = "generation of code to log memory writes";
+    fd_extraopt = [];
+    fd_doit = 
+    (function (f: file) -&gt; 
+      let lwVisitor = new logWriteVisitor in
+      visitCilFileSameGlobals lwVisitor f)
+  } 
+</PRE>The <TT>fd_name</TT> field names the feature and its associated
+ command-line arguments. The <TT>fd_enabled</TT> field is a <TT>bool ref</TT>.
+ &#8220;<TT>fd_doit</TT>&#8221; will be invoked if <TT>!fd_enabled</TT> is true after
+ argument parsing, so initialize the ref cell to true if you want
+ this feature to be enabled by default.<BR>
+<BR>
+When the user passes the <TT>--dologwrites</TT>
+ command-line option to <TT>cilly</TT>, the variable associated with the
+ <TT>fd_enabled</TT> flag is set and the <TT>fd_doit</TT> function is called
+ on the <TT>Cil.file</TT> that represents the merger (see Section&nbsp;<A HREF="merger.html#sec-merger">13</A>) of
+ all C files listed as arguments. <BR>
+<BR>
+<LI CLASS="li-enumerate">Invoke <TT>configure</TT> with the arguments
+<PRE CLASS="verbatim">
+./configure EXTRASRCDIRS=/home/necula EXTRAFEATURES=logwrites
+</PRE>
+ This step works if each feature is packaged into its own ML file, and the
+name of the entry point in the file is <TT>feature</TT>.<BR>
+<BR>
+An alternative way to specify the new features is to change the build files
+yourself, as explained below. You'll need to use this method if a single
+feature is split across multiple files.
+<OL CLASS="enumerate" type=a><LI CLASS="li-enumerate">
+ Put <TT>logwrites.ml</TT> in the <TT>src</TT> or <TT>src/ext</TT> directory. This
+ will make sure that <TT>make</TT> can find it. If you want to put it in some
+ other directory, modify <TT>Makefile.in</TT> and add to <TT>SOURCEDIRS</TT> your
+ directory. Alternately, you can create a symlink from <TT>src</TT> or
+ <TT>src/ext</TT> to your file.<BR>
+<BR>
+<LI CLASS="li-enumerate">Modify the <TT>Makefile.in</TT> and add your module to the 
+ <TT>CILLY_MODULES</TT> or
+ <TT>CILLY_LIBRARY_MODULES</TT> variables. The order of the modules matters. Add
+ your modules somewhere after <TT>cil</TT> and before <TT>main</TT>.<BR>
+<BR>
+<LI CLASS="li-enumerate">If you have any helper files for your module, add those to
+ the makefile in the same way. e.g.:
+<PRE CLASS="verbatim">
+CILLY_MODULES = $(CILLY_LIBRARY_MODULES) \
+                myutilities1 myutilities2 logwrites \
+                main
+</PRE>
+ Again, order is important: <TT>myutilities2.ml</TT> will be able to refer
+ to Myutilities1 but not Logwrites. If you have any ocamllex or ocamlyacc
+ files, add them to both <TT>CILLY_MODULES</TT> and either <TT>MLLS</TT> or
+ <TT>MLYS</TT>.<BR>
+<BR>
+<LI CLASS="li-enumerate">Modify <TT>main.ml</TT> so that your new feature descriptor appears in
+ the global list of CIL features. 
+<PRE CLASS="verbatim">
+let features : C.featureDescr list = 
+  [ Logcalls.feature;
+    Oneret.feature;    
+    Heapify.feature1;  
+    Heapify.feature2;
+    makeCFGFeature; 
+    Partial.feature;
+    Simplemem.feature;
+    Logwrites.feature;  (* add this line to include the logwrites feature! *)
+  ] 
+  @ Feature_config.features 
+</PRE>
+ Features are processed in the order they appear on this list. Put
+ your feature last on the list if you plan to run any of CIL's
+ built-in features (such as makeCFGfeature) before your own.</OL><BR>
+Standard code in <TT>cilly</TT> takes care of adding command-line arguments,
+ printing the description, and calling your function automatically. 
+ Note: do not worry about introducing new bugs into CIL by adding a single
+ line to the feature list. <BR>
+<BR>
+<LI CLASS="li-enumerate">Now you can invoke the <TT>cilly</TT> application on a preprocessed file, or
+ instead use the <TT>cilly</TT> driver which provides a convenient compiler-like
+ interface to <TT>cilly</TT>. See Section&nbsp;<A HREF="cil007.html#sec-driver">7</A> for details using <TT>cilly</TT>.
+ Remember to enable your analysis by passing the right argument (e.g.,
+ <TT>--dologwrites</TT>). </OL>
+<A NAME="toc2"></A>
+<H3 CLASS="subsection"><A NAME="htoc7">5.2</A>&nbsp;&nbsp;Using CIL as a library</H3>
+CIL can also be built as a library that is called from your stand-alone
+application. Add <TT>cil/src</TT>, <TT>cil/src/frontc</TT>, <TT>cil/obj/x86_LINUX</TT>
+(or <TT>cil/obj/x86_WIN32</TT>) to your Ocaml project <TT>-I</TT> include paths.
+Building CIL will also build the library <TT>cil/obj/*/cil.cma</TT> (or
+<TT>cil/obj/*/cil.cmxa</TT>). You can then link your application against that
+library. <BR>
+<BR>
+You can call the <TT>Frontc.parse: string -&gt; unit -&gt; Cil.file</TT> function with
+the name of a file containing the output of the C preprocessor.
+The <TT>Mergecil.merge: Cil.file list -&gt; string -&gt; Cil.file</TT> function merges
+multiple files. You can then invoke your analysis function on the resulting
+<TT>Cil.file</TT> data structure. You might want to call
+<TT>Rmtmps.removeUnusedTemps</TT> first to clean up the prototypes and variables
+that are not used. Then you can call the function <TT>Cil.dumpFile:
+cilPrinter -&gt; out_channel -&gt; Cil.file -&gt; unit</TT> to print the file to a
+given output channel. A good <TT>cilPrinter</TT> to use is
+<TT>defaultCilPrinter</TT>. <BR>
+<BR>
+Check out <TT>src/main.ml</TT> and <TT>bin/cilly</TT> for other good ideas
+about high-level file processing. Again, we highly recommend that you just
+our <TT>cilly</TT> driver so that you can avoid spending time re-inventing the
+wheel to provide drop-in support for standard <TT>makefile</TT>s. <BR>
+<BR>
+Here is a concrete example of compiling and linking your project against
+CIL. Imagine that your program analysis or transformation is contained in
+the single file <TT>main.ml</TT>. 
+<PRE CLASS="verbatim">
+$ ocamlopt -c -I $(CIL)/obj/x86_LINUX/ main.ml
+$ ocamlopt -ccopt -L$(CIL)/obj/x86_LINUX/ -o main unix.cmxa str.cmxa \ 
+        $(CIL)/obj/x86_LINUX/cil.cmxa main.cmx
+</PRE>
+The first line compiles your analysis, the second line links it against CIL
+(as a library) and the Ocaml Unix library. For more information about
+compiling and linking Ocaml programs, see the Ocaml home page
+at <A HREF="javascript:loadTop('http://caml.inria.fr/ocaml/')">http://caml.inria.fr/ocaml/</A>. <BR>
+<BR>
+In the next section we give an overview of the API that you can use
+to write your analysis and transformation. <BR>
+<BR>
+<HR>
+<A HREF="cil004.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil006.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

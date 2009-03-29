@@ -1,0 +1,64 @@
+\@addtocsec{htoc}{1}{0}{\@print{1}\quad{}Introduction}
+\@addtocsec{htoc}{2}{0}{\@print{2}\quad{}Installation}
+\@addtocsec{htoc}{3}{0}{\@print{3}\quad{}Distribution Contents}
+\@addtocsec{htoc}{4}{0}{\@print{4}\quad{}Compiling C to CIL}
+\newlabel{sec-cabs2cil}{{4}{X}}
+\@addtocsec{htoc}{5}{0}{\@print{5}\quad{}How to Use CIL}
+\newlabel{sec-cil}{{5}{X}}
+\@addtocsec{htoc}{6}{1}{\@print{5.1}\quad{}Using \t{cilly}, the CIL driver}
+\@addtocsec{htoc}{7}{1}{\@print{5.2}\quad{}Using CIL as a library}
+\@addtocsec{htoc}{8}{0}{\@print{6}\quad{}CIL API Documentation}
+\newlabel{sec-api}{{6}{X}}
+\@addtocsec{htoc}{9}{1}{\@print{6.1}\quad{}Using the visitor}
+\newlabel{sec-visitor}{{6.1}{X}}
+\@addtocsec{htoc}{10}{1}{\@print{6.2}\quad{}Interpreted Constructors and Deconstructors}
+\@addtocsec{htoc}{11}{2}{\@print{6.2.1}\quad{}Performance considerations for interpreted constructors}
+\@addtocsec{htoc}{12}{1}{\@print{6.3}\quad{}Printing and Debugging support}
+\@addtocsec{htoc}{13}{1}{\@print{6.4}\quad{}Attributes}
+\newlabel{sec-attrib}{{6.4}{X}}
+\@addtocsec{htoc}{14}{0}{\@print{7}\quad{}The CIL Driver}
+\newlabel{sec-driver}{{7}{X}}
+\@addtocsec{htoc}{15}{1}{\@print{7.1}\quad{}\t{cilly} Options}
+\@addtocsec{htoc}{16}{1}{\@print{7.2}\quad{}\t{cilly.asm} Options}
+\newlabel{sec-cilly-asm-options}{{7.2}{X}}
+\@addtocsec{htoc}{17}{0}{\@print{8}\quad{}Library of CIL Modules}
+\newlabel{sec-Extension}{{8}{X}}
+\@addtocsec{htoc}{18}{1}{\@print{8.1}\quad{}Control-Flow Graphs}
+\newlabel{sec-cfg}{{8.1}{X}}
+\@addtocsec{htoc}{19}{2}{\@print{8.1.1}\quad{}The CFG module (new in CIL 1.3.5)}
+\@addtocsec{htoc}{20}{2}{\@print{8.1.2}\quad{}Simplified control flow}
+\@addtocsec{htoc}{21}{1}{\@print{8.2}\quad{}Data flow analysis framework}
+\@addtocsec{htoc}{22}{1}{\@print{8.3}\quad{}Dominators}
+\@addtocsec{htoc}{23}{1}{\@print{8.4}\quad{}Points-to Analysis}
+\@addtocsec{htoc}{24}{1}{\@print{8.5}\quad{}StackGuard}
+\@addtocsec{htoc}{25}{1}{\@print{8.6}\quad{}Heapify}
+\@addtocsec{htoc}{26}{1}{\@print{8.7}\quad{}One Return}
+\@addtocsec{htoc}{27}{1}{\@print{8.8}\quad{}Partial Evaluation and Constant Folding}
+\@addtocsec{htoc}{28}{1}{\@print{8.9}\quad{}Reaching Definitions}
+\@addtocsec{htoc}{29}{1}{\@print{8.10}\quad{}Available Expressions}
+\@addtocsec{htoc}{30}{1}{\@print{8.11}\quad{}Liveness Analysis}
+\@addtocsec{htoc}{31}{1}{\@print{8.12}\quad{}Dead Code Elimination}
+\@addtocsec{htoc}{32}{1}{\@print{8.13}\quad{}Simple Memory Operations}
+\@addtocsec{htoc}{33}{1}{\@print{8.14}\quad{}Simple Three-Address Code}
+\@addtocsec{htoc}{34}{1}{\@print{8.15}\quad{}Converting C to C++}
+\@addtocsec{htoc}{35}{0}{\@print{9}\quad{}Controlling CIL}
+\@addtocsec{htoc}{36}{0}{\@print{10}\quad{}GCC Extensions}
+\@addtocsec{htoc}{37}{0}{\@print{11}\quad{}CIL Limitations}
+\@addtocsec{htoc}{38}{0}{\@print{12}\quad{}Known Bugs and Limitations}
+\@addtocsec{htoc}{39}{0}{\@print{13}\quad{}Using the merger}
+\newlabel{sec-merger}{{13}{X}}
+\@addtocsec{htoc}{40}{0}{\@print{14}\quad{}Using the patcher}
+\newlabel{sec-patcher}{{14}{X}}
+\@addtocsec{htoc}{41}{0}{\@print{15}\quad{}Debugging support}
+\newlabel{sec-debugger}{{15}{X}}
+\@addtocsec{htoc}{42}{0}{\@print{16}\quad{}Who Says C is Simple?}
+\newlabel{sec-simplec}{{16}{X}}
+\@addtocsec{htoc}{43}{1}{\@print{16.1}\quad{}Standard C}
+\@addtocsec{htoc}{44}{1}{\@print{16.2}\quad{}GCC ugliness}
+\newlabel{sec-ugly-gcc}{{16.2}{X}}
+\@addtocsec{htoc}{45}{1}{\@print{16.3}\quad{}Microsoft VC ugliness}
+\@addtocsec{htoc}{46}{0}{\@print{17}\quad{}Authors}
+\@addtocsec{htoc}{47}{0}{\@print{18}\quad{}License}
+\@addtocsec{htoc}{48}{0}{\@print{19}\quad{}Bug reports}
+\@addtocsec{htoc}{49}{0}{\@print{20}\quad{}Changes}
+\newlabel{sec-changes}{{20}{X}}

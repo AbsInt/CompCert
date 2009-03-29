@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Using the merger
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil012.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="patcher.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc39">13</A>&nbsp;&nbsp;Using the merger</H2><A NAME="sec-merger"></A><BR>
+<BR>
+There are many program analyses that are more effective when
+done on the whole program.<BR>
+<BR>
+The merger is a tool that combines all of the C source files in a project
+into a single C file. There are two tasks that a merger must perform:
+<OL CLASS="enumerate" type=1><LI CLASS="li-enumerate">
+Detect what are all the sources that make a project and with what
+compiler arguments they are compiled.<BR>
+<BR>
+<LI CLASS="li-enumerate">Merge all of the source files into a single file. 
+</OL>
+For the first task the merger impersonates a compiler and a linker (both a
+GCC and a Microsoft Visual C mode are supported) and it expects to be invoked
+(from a build script or a Makefile) on all sources of the project. When
+invoked to compile a source the merger just preprocesses the source and saves
+the result using the name of the requested object file. By preprocessing at
+this time the merger is able to take into account variations in the command
+line arguments that affect preprocessing of different source files.<BR>
+<BR>
+When the merger is invoked to link a number of object files it collects the
+preprocessed sources that were stored with the names of the object files, and
+invokes the merger proper. Note that arguments that affect the compilation or
+linking must be the same for all source files.<BR>
+<BR>
+For the second task, the merger essentially concatenates the preprocessed
+sources with care to rename conflicting file-local declarations (we call this
+process alpha-conversion of a file). The merger also attempts to remove
+duplicate global declarations and definitions. Specifically the following
+actions are taken: 
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+File-scope names (<TT>static</TT> globals, names of types defined with
+<TT>typedef</TT>, and structure/union/enumeration tags) are given new names if they
+conflict with declarations from previously processed sources. The new name is
+formed by appending the suffix <TT>___n</TT>, where <TT>n</TT> is a unique integer
+identifier. Then the new names are applied to their occurrences in the file. <BR>
+<BR>
+<LI CLASS="li-itemize">Non-static declarations and definitions of globals are never renamed.
+But we try to remove duplicate ones. Equality of globals is detected by
+comparing the printed form of the global (ignoring the line number directives)
+after the body has been alpha-converted. This process is intended to remove
+those declarations (e.g. function prototypes) that originate from the same
+include file. Similarly, we try to eliminate duplicate definitions of
+<TT>inline</TT> functions, since these occasionally appear in include files.<BR>
+<BR>
+<LI CLASS="li-itemize">The types of all global declarations with the same name from all files
+are compared for type isomorphism. During this process, the merger detects all
+those isomorphisms between structures and type definitions that are <B>required</B> for the merged program to be legal. Such structure tags and
+typenames are coalesced and given the same name. <BR>
+<BR>
+<LI CLASS="li-itemize">Besides the structure tags and type names that are required to be
+isomorphic, the merger also tries to coalesce definitions of structures and
+types with the same name from different file. However, in this case the merger
+will not give an error if such definitions are not isomorphic; it will just
+use different names for them. <BR>
+<BR>
+<LI CLASS="li-itemize">In rare situations, it can happen that a file-local global in
+encountered first and it is not renamed, only to discover later when
+processing another file that there is an external symbol with the same name.
+In this case, a second pass is made over the merged file to rename the
+file-local symbol. 
+</UL>
+Here is an example of using the merger:<BR>
+<BR>
+The contents of <TT>file1.c</TT> is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct foo; // Forward declaration
+extern struct foo *global;
+</FONT></PRE>
+The contents of <TT>file2.c</TT> is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+struct bar {
+ int x;
+ struct bar *next;
+};
+extern struct bar *global;
+struct foo {
+ int y;
+};
+extern struct foo another;
+void main() {
+}
+</FONT></PRE>
+There are several ways in which one might create an executable from these
+files:
+<UL CLASS="itemize"><LI CLASS="li-itemize">
+<PRE CLASS="verbatim">
+gcc file1.c file2.c -o a.out
+</PRE><BR>
+<BR>
+<LI CLASS="li-itemize"><PRE CLASS="verbatim">
+gcc -c file1.c -o file1.o
+gcc -c file2.c -o file2.o
+ld file1.o file2.o -o a.out
+</PRE><BR>
+<BR>
+<LI CLASS="li-itemize"><PRE CLASS="verbatim">
+gcc -c file1.c -o file1.o
+gcc -c file2.c -o file2.o
+ar r libfile2.a file2.o
+gcc file1.o libfile2.a -o a.out
+</PRE><BR>
+<BR>
+<LI CLASS="li-itemize"><PRE CLASS="verbatim">
+gcc -c file1.c -o file1.o
+gcc -c file2.c -o file2.o
+ar r libfile2.a file2.o
+gcc file1.o -lfile2 -o a.out
+</PRE></UL>
+In each of the cases above you must replace all occurrences of <TT>gcc</TT> and
+<TT>ld</TT> with <TT>cilly --merge</TT>, and all occurrences of <TT>ar</TT> with <TT>cilly
+--merge --mode=AR</TT>. It is very important that the <TT>--merge</TT> flag be used
+throughout the build process. If you want to see the merged source file you
+must also pass the <TT>--keepmerged</TT> flag to the linking phase. <BR>
+<BR>
+The result of merging file1.c and file2.c is:
+<PRE CLASS="verbatim"><FONT COLOR=blue>
+// from file1.c
+struct foo; // Forward declaration
+extern struct foo *global;
+
+// from file2.c
+struct foo {
+ int x;
+ struct foo *next;
+};
+struct foo___1 {
+ int y;
+};
+extern struct foo___1 another;
+</FONT></PRE>
+<HR>
+<A HREF="cil012.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="patcher.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>

@@ -1,0 +1,6 @@
+
+$::archos    = "@ARCHOS@";
+$::cc        = "@CC@";
+$::cilhome   = "@CILHOME@";
+$::default_mode = "@DEFAULT_CIL_MODE@";
+

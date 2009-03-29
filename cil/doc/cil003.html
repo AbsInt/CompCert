@@ -1,0 +1,187 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"
+            "http://www.w3.org/TR/REC-html40/loose.dtd">
+<HTML>
+<HEAD>
+
+
+
+<META http-equiv="Content-Type" content="text/html; charset=ANSI_X3.4-1968">
+<META name="GENERATOR" content="hevea 1.08">
+
+<base target="main">
+<script language="JavaScript">
+<!-- Begin
+function loadTop(url) {
+  parent.location.href= url;
+}
+// -->
+</script>
+<LINK rel="stylesheet" type="text/css" href="cil.css">
+<TITLE>
+Distribution Contents
+</TITLE>
+</HEAD>
+<BODY >
+<A HREF="cil002.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil004.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+<HR>
+
+<H2 CLASS="section"><A NAME="htoc3">3</A>&nbsp;&nbsp;Distribution Contents</H2>
+The file <A HREF="distrib/cil-1.3.5.tar.gz"><TT>distrib/cil-1.3.5.tar.gz</TT></A> 
+contains the complete source CIL distribution, 
+consisting of the following files:<BR>
+<TABLE CELLSPACING=2 CELLPADDING=0>
+<TR><TD ALIGN=left NOWRAP>Filename</TD>
+<TD ALIGN=left NOWRAP>Description</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>Makefile.in</TT></TD>
+<TD ALIGN=left NOWRAP><TT>configure</TT> source for the 
+ Makefile that builds CIL</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>configure</TT></TD>
+<TD ALIGN=left NOWRAP>The configure script</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>configure.in</TT></TD>
+<TD ALIGN=left NOWRAP>The <TT>autoconf</TT> source for <TT>configure</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>config.guess</TT>, <TT>config.sub</TT>, <TT>install-sh</TT></TD>
+<TD ALIGN=left NOWRAP>stuff required by
+ <TT>configure</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>doc/</TT></TD>
+<TD ALIGN=left NOWRAP>HTML documentation of the CIL API</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>obj/</TT></TD>
+<TD ALIGN=left NOWRAP>Directory that will contain the compiled
+ CIL modules and executables</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>bin/cilly.in</TT></TD>
+<TD ALIGN=left NOWRAP>The <TT>configure</TT> source for a Perl script 
+ that can be invoked with the 
+ same arguments as either <TT>gcc</TT> or
+ Microsoft Visual C and will convert the
+ program to CIL, perform some simple
+ transformations, emit it and compile it as
+ usual.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>lib/CompilerStub.pm</TT></TD>
+<TD ALIGN=left NOWRAP>A Perl class that can be used to write code
+ that impersonates a compiler. <TT>cilly</TT>
+ uses it.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>lib/Merger.pm</TT></TD>
+<TD ALIGN=left NOWRAP>A subclass of <TT>CompilerStub.pm</TT> that can
+ be used to merge source files into a single
+ source file.<TT>cilly</TT>
+ uses it.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>bin/patcher.in</TT></TD>
+<TD ALIGN=left NOWRAP>A Perl script that applies specified patches
+ to standard include files.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/check.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Checks the well-formedness of a CIL file</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/cil.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Definition of CIL abstract syntax and
+ utilities for manipulating it</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/clist.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for efficiently managing lists
+ that need to be concatenated often</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/errormsg.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for error reporting</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/ext/heapify.ml</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL transformation that moves array local
+ variables from the stack to the heap</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/ext/logcalls.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL transformation that logs every
+ function call</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/ext/sfi.ml</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL transformation that can log every
+ memory read and write</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/clexer.mll</TT></TD>
+<TD ALIGN=left NOWRAP>The lexer</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cparser.mly</TT></TD>
+<TD ALIGN=left NOWRAP>The parser</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cabs.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The abstract syntax</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cprint.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The pretty printer for CABS</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/frontc/cabs2cil.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The elaborator to CIL</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/main.ml</TT></TD>
+<TD ALIGN=left NOWRAP>The <TT>cilly</TT> application</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/pretty.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for pretty printing</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/rmtmps.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>A CIL tranformation that removes unused
+ types, variables and inlined functions</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/stats.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities for maintaining timing statistics</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/testcil.ml</TT></TD>
+<TD ALIGN=left NOWRAP>A random test of CIL (against the resident 
+ C compiler)</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/trace.ml,mli</TT></TD>
+<TD ALIGN=left NOWRAP>Utilities useful for printing debugging
+ information</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/</TT></TD>
+<TD ALIGN=left NOWRAP>Miscellaneous libraries that are not
+ specific to CIL.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/Makefile.ocaml</TT></TD>
+<TD ALIGN=left NOWRAP>A file that is included by <TT>Makefile</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/Makefile.ocaml.build</TT></TD>
+<TD ALIGN=left NOWRAP>A file that is included by <TT>Makefile</TT></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>ocamlutil/perfcount.c</TT></TD>
+<TD ALIGN=left NOWRAP>C code that links with src/stats.ml
+ and reads Intel performance
+ counters.</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP>&nbsp;</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>obj/@ARCHOS@/feature_config.ml</TT></TD>
+<TD ALIGN=left NOWRAP>File generated by the Makefile
+ describing which extra &#8220;features&#8221;
+ to compile. See Section&nbsp;<A HREF="cilly.html#sec-cil">5</A></TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>obj/@ARCHOS@/machdep.ml</TT></TD>
+<TD ALIGN=left NOWRAP>File generated by the Makefile containing
+ information about your architecture,
+ such as the size of a pointer</TD>
+</TR>
+<TR><TD ALIGN=left NOWRAP><TT>src/machdep.c</TT></TD>
+<TD ALIGN=left NOWRAP>C program that generates
+ <TT>machdep.ml</TT> files</TD>
+</TR></TABLE><BR>
+<HR>
+<A HREF="cil002.html"><IMG SRC ="previous_motif.gif" ALT="Previous"></A>
+<A HREF="ciltoc.html"><IMG SRC ="contents_motif.gif" ALT="Up"></A>
+<A HREF="cil004.html"><IMG SRC ="next_motif.gif" ALT="Next"></A>
+</BODY>
+</HTML>
