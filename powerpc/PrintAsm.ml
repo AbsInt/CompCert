@@ -20,13 +20,14 @@ open Asm
 
 (* Recognition of target ABI and asm syntax *)
 
-type target = MacOS | EABI
+type target = MacOS | Linux | Diab
 
 let target = 
-  match Configuration.variant with
+  match Configuration.system with
   | "macosx" -> MacOS
-  | "eabi"   -> EABI
-  |  _       -> assert false
+  | "linux"  -> Linux
+  | "diab"   -> Diab
+  | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")
 
 (* On-the-fly label renaming *)
 
@@ -58,8 +59,8 @@ let coqint oc n =
 
 let raw_symbol oc s =
   match target with
-  | MacOS -> fprintf oc "_%s" s
-  | EABI  -> fprintf oc "%s" s
+  | MacOS      -> fprintf oc "_%s" s
+  | Linux|Diab -> fprintf oc "%s" s
 
 let symbol oc symb =
   match target with
@@ -67,7 +68,7 @@ let symbol oc symb =
       if IdentSet.mem symb !stubbed_functions
       then fprintf oc "L%s$stub" (extern_atom symb)
       else fprintf oc "_%s" (extern_atom symb)
-  | EABI ->
+  | Linux | Diab ->
       if IdentSet.mem symb !stubbed_functions
       then fprintf oc ".L%s$stub" (extern_atom symb)
       else fprintf oc "%s" (extern_atom symb)
@@ -78,18 +79,18 @@ let symbol_offset oc (symb, ofs) =
 
 let label oc lbl =
   match target with
-  | MacOS -> fprintf oc "L%d" lbl
-  | EABI  -> fprintf oc ".L%d" lbl
+  | MacOS      -> fprintf oc "L%d" lbl
+  | Linux|Diab -> fprintf oc ".L%d" lbl
 
 let label_low oc lbl =
   match target with
-  | MacOS -> fprintf oc "lo16(L%d)" lbl
-  | EABI  -> fprintf oc ".L%d@l" lbl
+  | MacOS      -> fprintf oc "lo16(L%d)" lbl
+  | Linux|Diab -> fprintf oc ".L%d@l" lbl
 
 let label_high oc lbl =
   match target with
-  | MacOS -> fprintf oc "ha16(L%d)" lbl
-  | EABI  -> fprintf oc ".L%d@ha" lbl
+  | MacOS      -> fprintf oc "ha16(L%d)" lbl
+  | Linux|Diab -> fprintf oc ".L%d@ha" lbl
 
 let constant oc cst =
   match cst with
@@ -97,13 +98,17 @@ let constant oc cst =
       fprintf oc "%ld" (camlint_of_coqint n)
   | Csymbol_low(s, n) ->
       begin match target with
-      | MacOS -> fprintf oc "lo16(%a)" symbol_offset (s, camlint_of_coqint n)
-      | EABI  -> fprintf oc "(%a)@l" symbol_offset (s, camlint_of_coqint n)
+      | MacOS -> 
+          fprintf oc "lo16(%a)" symbol_offset (s, camlint_of_coqint n)
+      | Linux|Diab ->
+          fprintf oc "(%a)@l" symbol_offset (s, camlint_of_coqint n)
       end
   | Csymbol_high(s, n) ->
       begin match target with
-      | MacOS -> fprintf oc "ha16(%a)" symbol_offset (s, camlint_of_coqint n)
-      | EABI  -> fprintf oc "(%a)@ha" symbol_offset (s, camlint_of_coqint n)
+      | MacOS ->
+          fprintf oc "ha16(%a)" symbol_offset (s, camlint_of_coqint n)
+      | Linux|Diab ->
+          fprintf oc "(%a)@ha" symbol_offset (s, camlint_of_coqint n)
       end
 
 let num_crbit = function
@@ -137,8 +142,8 @@ let float_reg_name = function
 
 let ireg oc r =
   begin match target with
-  | MacOS -> output_char oc 'r'
-  | EABI  -> ()
+  | MacOS|Diab -> output_char oc 'r'
+  | Linux      -> ()
   end;
   output_string oc (int_reg_name r)
 
@@ -147,15 +152,15 @@ let ireg_or_zero oc r =
 
 let freg oc r =
   begin match target with
-  | MacOS -> output_char oc 'f'
-  | EABI  -> ()
+  | MacOS|Diab -> output_char oc 'f'
+  | Linux      -> ()
   end;
   output_string oc (float_reg_name r)
 
 let creg oc r =
   match target with
-  | MacOS -> fprintf oc "cr%d" r
-  | EABI  -> fprintf oc "%d" r
+  | MacOS|Diab -> fprintf oc "cr%d" r
+  | Linux      -> fprintf oc "%d" r
 
 let section oc name =
   fprintf oc "	%s\n" name
@@ -169,11 +174,16 @@ let (text, data, const_data, float_literal) =
        ".data",
        ".const",
        ".const_data")
-  | EABI ->
+  | Linux ->
       (".text",
        ".data",
        ".rodata",
        ".section	.rodata.cst8,\"aM\",@progbits,8")
+  | Diab ->
+      (".text",
+       ".data",
+       ".const",  (* to check *)
+       ".const")  (* to check *)
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -604,13 +614,13 @@ end
 
 let function_needs_stub =
   match target with
-  | MacOS -> Stubs_MacOS.function_needs_stub
-  | EABI  -> Stubs_EABI.function_needs_stub
+  | MacOS      -> Stubs_MacOS.function_needs_stub
+  | Linux|Diab -> Stubs_EABI.function_needs_stub
 
 let stub_function =
   match target with
-  | MacOS -> Stubs_MacOS.stub_function
-  | EABI  -> Stubs_EABI.stub_function
+  | MacOS       -> Stubs_MacOS.stub_function
+  | Linux|Diab  -> Stubs_EABI.stub_function
 
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
