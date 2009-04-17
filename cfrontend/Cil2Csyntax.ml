@@ -557,11 +557,11 @@ let makeFuncall1 tyfun (Expr(_, tlhs) as elhs) efun eargs =
   | TFun (t, _, _, _) ->
       let tres = convertTyp t in
       if tlhs = tres then
-        Scall(Datatypes.Some elhs, efun, eargs)
+        Scall(Some elhs, efun, eargs)
       else begin
         let tmp = make_temp t in
         let elhs' = Expr(Evar tmp, tres) in
-        Ssequence(Scall(Datatypes.Some elhs', efun, eargs),
+        Ssequence(Scall(Some elhs', efun, eargs),
                   Sassign(elhs, Expr(Ecast(tlhs, elhs'), tlhs)))
       end
   | _ -> internal_error "wrong type for function in call"
@@ -590,7 +590,7 @@ let rec processInstrList l =
     | Call (None, e, eList, loc) ->
 	updateLoc(loc);
         let (efun, params) = convertExpFuncall e eList in
-        Scall(Datatypes.None, efun, params)
+        Scall(None, efun, params)
     | Call (Some lv, e, eList, loc) ->
 	updateLoc(loc);
         let (efun, params) = convertExpFuncall e eList in
@@ -679,8 +679,8 @@ and convertStmt s =
     | Return (eOpt, loc) ->
 	updateLoc(loc);
         let eOpt' = match eOpt with
-	  | None -> Datatypes.None
-	  | Some e -> Datatypes.Some (convertExp e)
+	  | None -> None
+	  | Some e -> Some (convertExp e)
 	in 
           Sreturn eOpt'
     | Goto (_, loc) ->

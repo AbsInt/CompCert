@@ -178,8 +178,7 @@ let call_helper oc fn dst arg1 arg2 =
   (* Move result to dst *)
   begin match dst with
   | IR0 -> ()
-  | _   -> 
-      fprintf oc "	mov	%a, r0\n" ireg dst
+  | _   -> fprintf oc "	mov	%a, r0\n" ireg dst
   end;
   (* Restore the other caller-save registers *)
   fprintf oc "	ldmfd	sp!, {%a}\n" print_list_ireg tosave;

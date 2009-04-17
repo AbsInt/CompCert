@@ -22,6 +22,7 @@ Require Compiler.
 Extract Inductive unit => "unit" [ "()" ].
 Extract Inductive bool => "bool" [ "true" "false" ].
 Extract Inductive sumbool => "bool" [ "true" "false" ].
+Extract Inductive option => "option" [ "Some" "None" ].
 Extract Inductive List.list => "list" [ "[]" "(::)" ].
 
 (* Float *)
@@ -82,4 +83,5 @@ Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
 Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 
 (* Go! *)
+Cd "extraction".
 Recursive Extraction Library Compiler.

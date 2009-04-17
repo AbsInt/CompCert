@@ -12,10 +12,15 @@
 
 include Makefile.config
 
+DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver
+
+INCLUDES=$(patsubst %,-I %, $(DIRS))
+
 COQC=coqc $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
-#COQC=/Users/sandrineblazy/SWtrunkcoq/bin/coqc $(INCLUDES)
 COQDOC=coqdoc
+COQEXEC=coqtop $(INCLUDES) -batch -load-vernac-source
+
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
   -no-hygiene \
@@ -25,11 +30,8 @@ OCB_OPTIONS=\
   -lflags -I,`pwd`/cil/obj/$(ARCHOS) \
   -libs unix,str,cil
 
-DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver
-
 VPATH=$(DIRS)
 GPATH=$(DIRS)
-INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # General-purpose libraries (in lib/)
 
@@ -83,16 +85,18 @@ FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER)
 proof: $(FILES:.v=.vo)
 
 extraction:
-	$(MAKE) -C extraction
+	rm -f extraction/*.ml extraction/*.mli
+	$(COQEXEC) extraction/extraction.v
+	cd extraction && ./fixextract
 
 cil:
 	$(MAKE) -j1 -C cil
 
-ccomp:
+ccomp: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
         && rm -f ccomp && ln -s _build/driver/Driver.native ccomp
 
-ccomp.byte:
+ccomp.byte: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.byte \
         && rm -f ccomp.byte && ln -s _build/driver/Driver.byte ccomp.byte
 
@@ -108,14 +112,16 @@ all:
 	$(MAKE) ccomp
 	$(MAKE) runtime
 
-documentation: doc/removeproofs
-	@ln -f $(FILES) doc/
+documentation: doc/removeproofs documentation-link
 	@mkdir -p doc/html
 	cd doc; $(COQDOC) --html -d html \
           $(FILES:%.v=--glob-from %.glob) $(FILES)
 	@cd doc; rm -f $(FILES)
 	cp doc/coqdoc.css doc/html/coqdoc.css
 	doc/removeproofs doc/html/*.html
+
+documentation-link: $(FILES)
+	@ln -f $^ doc/
 
 doc/removeproofs: doc/removeproofs.ml
 	ocamlopt -o doc/removeproofs doc/removeproofs.ml
@@ -132,6 +138,16 @@ latexdoc:
 	@rm -f doc/glob/$(*F).glob
 	@echo "COQC $*.v"
 	@$(COQC) -dump-glob doc/$(*F).glob $*.v
+
+driver/Configuration.ml: Makefile.config
+	(echo 'let stdlib_path = "$(LIBDIR)"'; \
+         echo 'let prepro = "$(CPREPRO)"'; \
+         echo 'let asm = "$(CASM)"'; \
+         echo 'let linker = "$(CLINKER)"'; \
+         echo 'let arch = "$(ARCH)"'; \
+         echo 'let variant = "$(VARIANT)"'; \
+         echo 'let system = "$(SYSTEM)"') \
+        > driver/Configuration.ml
 
 depend:
 	$(COQDEP) $(patsubst %, %/*.v, $(DIRS)) \
@@ -150,7 +166,8 @@ clean:
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
 	rm -f doc/removeproofs.ml doc/removeproofs
-	$(MAKE) -C extraction clean
+	rm -f driver/Configuration.ml
+	rm -f extraction/*.ml extraction/*.mli
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test/cminor clean
 	$(MAKE) -C test/c clean
