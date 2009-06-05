@@ -61,7 +61,7 @@ INSTALLATION:
 
 where <target> is one of:
 
-            macosx           (PowerPC, MacOS X)
+            ppc-macosx       (PowerPC, MacOS X)
             ppc-linux        (PowerPC, Linux)
             arm-linux        (ARM, Linux)
 
