@@ -34,7 +34,7 @@ Require Import Conventions.
 
 Definition node := positive.
 
-Inductive instruction: Set :=
+Inductive instruction: Type :=
   | Lnop: node -> instruction
   | Lop: operation -> list loc -> loc -> node -> instruction
   | Lload: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
@@ -44,9 +44,9 @@ Inductive instruction: Set :=
   | Lcond: condition -> list loc -> node -> node -> instruction
   | Lreturn: option loc -> instruction.
 
-Definition code: Set := PTree.t instruction.
+Definition code: Type := PTree.t instruction.
 
-Record function: Set := mkfunction {
+Record function: Type := mkfunction {
   fn_sig: signature;
   fn_params: list loc;
   fn_stacksize: Z;
@@ -103,7 +103,7 @@ Definition postcall_locs (ls: locset) : locset :=
 
 (** LTL execution states. *)
 
-Inductive stackframe : Set :=
+Inductive stackframe : Type :=
   | Stackframe:
       forall (res: loc)         (**r where to store the result *)
              (f: function)      (**r calling function *)
@@ -112,7 +112,7 @@ Inductive stackframe : Set :=
              (pc: node),        (**r program point in calling function *)
       stackframe.
 
-Inductive state : Set :=
+Inductive state : Type :=
   | State:
       forall (stack: list stackframe) (**r call stack *)
              (f: function)            (**r function currently executing *)

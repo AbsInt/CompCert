@@ -30,13 +30,13 @@ Require Conventions.
 
 (** Integer registers, floating-point registers. *)
 
-Inductive ireg: Set :=
+Inductive ireg: Type :=
   | IR0: ireg  | IR1: ireg  | IR2: ireg  | IR3: ireg
   | IR4: ireg  | IR5: ireg  | IR6: ireg  | IR7: ireg
   | IR8: ireg  | IR9: ireg  | IR10: ireg | IR11: ireg
   | IR12: ireg | IR13: ireg | IR14: ireg.
 
-Inductive freg: Set :=
+Inductive freg: Type :=
   | FR0: freg  | FR1: freg  | FR2: freg  | FR3: freg
   | FR4: freg  | FR5: freg  | FR6: freg  | FR7: freg.
 
@@ -48,7 +48,7 @@ Proof. decide equality. Defined.
 
 (** Bits in the condition register. *)
 
-Inductive crbit: Set :=
+Inductive crbit: Type :=
   | CReq: crbit    (**r equal *)
   | CRne: crbit    (**r not equal *)
   | CRhs: crbit    (**r unsigned higher or same *)
@@ -74,7 +74,7 @@ Proof. decide equality. Defined.
 
 Definition label := positive.
 
-Inductive shift_op : Set :=
+Inductive shift_op : Type :=
   | SOimm: int -> shift_op
   | SOreg: ireg -> shift_op
   | SOlslimm: ireg -> int -> shift_op
@@ -86,7 +86,7 @@ Inductive shift_op : Set :=
   | SOrorimm: ireg -> int -> shift_op
   | SOrorreg: ireg -> ireg -> shift_op.
 
-Inductive shift_addr : Set :=
+Inductive shift_addr : Type :=
   | SAimm: int -> shift_addr
   | SAreg: ireg -> shift_addr
   | SAlsl: ireg -> int -> shift_addr
@@ -94,7 +94,7 @@ Inductive shift_addr : Set :=
   | SAasr: ireg -> int -> shift_addr
   | SAror: ireg -> int -> shift_addr.
 
-Inductive instruction : Set :=
+Inductive instruction : Type :=
   (* Core instructions *)
   | Padd: ireg -> ireg -> shift_op -> instruction (**r integer addition *)
   | Pand: ireg -> ireg -> shift_op -> instruction (**r bitwise and *)
@@ -242,7 +242,7 @@ Definition program := AST.program fundef unit.
 (** The PowerPC has a great many registers, some general-purpose, some very
   specific.  We model only the following registers: *)
 
-Inductive preg: Set :=
+Inductive preg: Type :=
   | IR: ireg -> preg                    (**r integer registers *)
   | FR: freg -> preg                    (**r float registers *)
   | CR: crbit -> preg                   (**r bits in the condition register *)
@@ -315,7 +315,7 @@ Variable ge: genv.
   set and memory state after execution of the instruction at [rs#PC],
   or [Error] if the processor is stuck. *)
 
-Inductive outcome: Set :=
+Inductive outcome: Type :=
   | OK: regset -> mem -> outcome
   | Error: outcome.
 
@@ -621,7 +621,7 @@ Definition loc_external_result (sg: signature) : preg :=
 
 (** Execution of the instruction at [rs#PC]. *)
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State: regset -> mem -> state.
 
 Inductive step: state -> trace -> state -> Prop :=

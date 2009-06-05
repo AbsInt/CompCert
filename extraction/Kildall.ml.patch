@@ -1,38 +1,37 @@
-*** kildall.ml.orig	2006-09-11 13:50:56.266682206 +0200
---- kildall.ml	2006-09-11 14:29:50.392200227 +0200
+*** kildall.ml.orig	2009-06-03 11:32:52.297641897 +0200
+--- kildall.ml	2009-06-03 11:34:48.481516509 +0200
 ***************
-*** 163,171 ****
-                       Maps.PMap.t option **)
+*** 151,158 ****
+        -> (positive, LAT.t) prod list -> LAT.t PMap.t option **)
     
     let fixpoint successors topnode transf entrypoints =
-!     DS.fixpoint (fun s ->
-!       Maps.PMap.get s (make_predecessors successors topnode)) topnode transf
-!       entrypoints
+!     DS.fixpoint (fun s -> PMap.get s (make_predecessors successors topnode))
+!       topnode transf entrypoints
    end
   
   module type ORDERED_TYPE_WITH_TOP = 
---- 163,170 ----
-                       Maps.PMap.t option **)
+--- 151,158 ----
+        -> (positive, LAT.t) prod list -> LAT.t PMap.t option **)
     
     let fixpoint successors topnode transf entrypoints =
 !     let pred = make_predecessors successors topnode in
-!     DS.fixpoint (fun s -> Maps.PMap.get s pred) topnode transf entrypoints
+!     DS.fixpoint (fun s -> PMap.get s pred) topnode transf entrypoints
    end
   
   module type ORDERED_TYPE_WITH_TOP = 
 ***************
-*** 264,271 ****
-    (** val basic_block_map : (positive -> positive list) -> positive ->
-                              positive -> bbmap **)
+*** 248,255 ****
+    (** val basic_block_map :
+        (positive -> positive list) -> positive -> positive -> bbmap **)
     
 !   let basic_block_map successors topnode entrypoint x =
 !     is_basic_block_head entrypoint (make_predecessors successors topnode) x
     
     (** val basic_block_list : positive -> bbmap -> positive list **)
     
---- 263,270 ----
-    (** val basic_block_map : (positive -> positive list) -> positive ->
-                              positive -> bbmap **)
+--- 248,255 ----
+    (** val basic_block_map :
+        (positive -> positive list) -> positive -> positive -> bbmap **)
     
 !   let basic_block_map successors topnode entrypoint =
 !     is_basic_block_head entrypoint (make_predecessors successors topnode)

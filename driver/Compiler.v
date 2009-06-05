@@ -80,10 +80,10 @@ Open Local Scope string_scope.
 (** We first define useful monadic composition operators,
     along with funny (but convenient) notations. *)
 
-Definition apply_total (A B: Set) (x: res A) (f: A -> B) : res B :=
+Definition apply_total (A B: Type) (x: res A) (f: A -> B) : res B :=
   match x with Error msg => Error msg | OK x1 => OK (f x1) end.
 
-Definition apply_partial (A B: Set)
+Definition apply_partial (A B: Type)
                          (x: res A) (f: A -> res B) : res B :=
   match x with Error msg => Error msg | OK x1 => f x1 end.
 
@@ -150,7 +150,7 @@ Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
 (** The following lemmas help reason over compositions of passes. *)
 
 Lemma map_partial_compose:
-  forall (X A B C: Set)
+  forall (X A B C: Type)
          (ctx: X -> errmsg)
          (f1: A -> res B) (f2: B -> res C)
          (pa: list (X * A)) (pc: list (X * C)),
@@ -168,7 +168,7 @@ Proof.
 Qed.
 
 Lemma transform_partial_program_compose:
-  forall (A B C V: Set)
+  forall (A B C V: Type)
          (f1: A -> res B) (f2: B -> res C)
          (pa: program A V) (pc: program C V),
   transform_partial_program (fun f => f1 f @@@ f2) pa = OK pc ->
@@ -183,7 +183,7 @@ Proof.
 Qed.
 
 Lemma transform_program_partial_program:
-  forall (A B V: Set) (f: A -> B) (p: program A V) (tp: program B V),
+  forall (A B V: Type) (f: A -> B) (p: program A V) (tp: program B V),
   transform_partial_program (fun x => OK (f x)) p = OK tp ->
   transform_program f p = tp.
 Proof.
@@ -192,7 +192,7 @@ Proof.
 Qed.
 
 Lemma transform_program_compose:
-  forall (A B C V: Set)
+  forall (A B C V: Type)
          (f1: A -> res B) (f2: B -> C)
          (pa: program A V) (pc: program C V),
   transform_partial_program (fun f => f1 f @@ f2) pa = OK pc ->
@@ -209,7 +209,7 @@ Proof.
 Qed.
 
 Lemma transform_partial_program_identity:
-  forall (A V: Set) (pa pb: program A V),
+  forall (A V: Type) (pa pb: program A V),
   transform_partial_program (@OK A) pa = OK pb ->
   pa = pb.
 Proof.

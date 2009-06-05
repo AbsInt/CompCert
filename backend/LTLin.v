@@ -41,7 +41,7 @@ Definition label := positive.
   transfer control to the given code label.  Labels are explicitly
   inserted in the instruction list as pseudo-instructions [Llabel]. *)
 
-Inductive instruction: Set :=
+Inductive instruction: Type :=
   | Lop: operation -> list loc -> loc -> instruction
   | Lload: memory_chunk -> addressing -> list loc -> loc -> instruction
   | Lstore: memory_chunk -> addressing -> list loc -> loc -> instruction
@@ -52,9 +52,9 @@ Inductive instruction: Set :=
   | Lcond: condition -> list loc -> label -> instruction
   | Lreturn: option loc -> instruction.
 
-Definition code: Set := list instruction.
+Definition code: Type := list instruction.
 
-Record function: Set := mkfunction {
+Record function: Type := mkfunction {
   fn_sig: signature;
   fn_params: list loc;
   fn_stacksize: Z;
@@ -109,7 +109,7 @@ Fixpoint find_label (lbl: label) (c: code) {struct c} : option code :=
   code sequences [c] (suffixes of the code of the current function).
 *)
 
-Inductive stackframe : Set :=
+Inductive stackframe : Type :=
   | Stackframe:
       forall (res: loc)       (**r where to store the result *)
              (f: function)    (**r calling function *)
@@ -118,7 +118,7 @@ Inductive stackframe : Set :=
              (c: code),       (**r program point in calling function *)
       stackframe.
 
-Inductive state : Set :=
+Inductive state : Type :=
   | State:
       forall (stack: list stackframe) (**r call stack *)
              (f: function)            (**r function currently executing *)

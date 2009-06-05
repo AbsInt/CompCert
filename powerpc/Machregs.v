@@ -29,7 +29,7 @@ Require Import AST.
   The type [mreg] does not include special-purpose or reserved
   machine registers such as the stack pointer and the condition codes. *)
 
-Inductive mreg: Set :=
+Inductive mreg: Type :=
   (** Allocatable integer regs *)
   | R3: mreg  | R4: mreg  | R5: mreg  | R6: mreg
   | R7: mreg  | R8: mreg  | R9: mreg  | R10: mreg

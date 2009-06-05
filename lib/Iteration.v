@@ -18,9 +18,9 @@ Require Import Max.
 
 Module Type ITER.
 Variable iterate
-     : forall A B : Set, (A -> B + A) -> A -> option B.
+     : forall A B : Type, (A -> B + A) -> A -> option B.
 Hypothesis iterate_prop
-     : forall (A B : Set) (step : A -> B + A) (P : A -> Prop) (Q : B -> Prop),
+     : forall (A B : Type) (step : A -> B + A) (P : A -> Prop) (Q : B -> Prop),
        (forall a : A, P a ->
            match step a with inl b => Q b | inr a' => P a' end) ->
        forall (a : A) (b : B), iterate A B step a = Some b -> P a -> Q b.
@@ -39,7 +39,7 @@ Module PrimIter: ITER.
 
 Section ITERATION.
 
-Variables A B: Set.
+Variables A B: Type.
 Variable step: A -> B + A.
 
 (** The [step] parameter represents one step of the iteration.  From a 
@@ -174,7 +174,7 @@ Module GenIter: ITER.
 
 Section ITERATION.
 
-Variables A B: Set.
+Variables A B: Type.
 Variable step: A -> B + A.
 
 Definition B_le (x y: option B) : Prop := x = None \/ y = x.

@@ -35,7 +35,7 @@ Require Import Conventions.
 
 Definition label := positive.
 
-Inductive instruction: Set :=
+Inductive instruction: Type :=
   | Lgetstack: slot -> mreg -> instruction
   | Lsetstack: mreg -> slot -> instruction
   | Lop: operation -> list mreg -> mreg -> instruction
@@ -48,9 +48,9 @@ Inductive instruction: Set :=
   | Lcond: condition -> list mreg -> label -> instruction
   | Lreturn: instruction.
 
-Definition code: Set := list instruction.
+Definition code: Type := list instruction.
 
-Record function: Set := mkfunction {
+Record function: Type := mkfunction {
   fn_sig: signature;
   fn_stacksize: Z;
   fn_code: code
@@ -163,7 +163,7 @@ Definition return_regs (caller callee: locset) : locset :=
 
 (** Linear execution states. *)
 
-Inductive stackframe: Set :=
+Inductive stackframe: Type :=
   | Stackframe:
       forall (f: function)         (**r calling function *)
              (sp: val)             (**r stack pointer in calling function *)
@@ -171,7 +171,7 @@ Inductive stackframe: Set :=
              (c: code),            (**r program point in calling function *)
       stackframe.
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State:
       forall (stack: list stackframe) (**r call stack *)
              (f: function)            (**r function currently executing *)

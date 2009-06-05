@@ -36,7 +36,7 @@ Set Implicit Arguments.
 
 (** Conditions (boolean-valued operators). *)
 
-Inductive condition : Set :=
+Inductive condition : Type :=
   | Ccomp: comparison -> condition      (**r signed integer comparison *)
   | Ccompu: comparison -> condition     (**r unsigned integer comparison *)
   | Ccompimm: comparison -> int -> condition (**r signed integer comparison with a constant *)
@@ -49,7 +49,7 @@ Inductive condition : Set :=
 (** Arithmetic and logical operations.  In the descriptions, [rd] is the
   result of the operation and [r1], [r2], etc, are the arguments. *)
 
-Inductive operation : Set :=
+Inductive operation : Type :=
   | Omove: operation                    (**r [rd = r1] *)
   | Ointconst: int -> operation         (**r [rd] is set to the given integer constant *)
   | Ofloatconst: float -> operation     (**r [rd] is set to the given float constant *)
@@ -104,7 +104,7 @@ Inductive operation : Set :=
 (** Addressing modes.  [r1], [r2], etc, are the arguments to the 
   addressing. *)
 
-Inductive addressing: Set :=
+Inductive addressing: Type :=
   | Aindexed: int -> addressing         (**r Address is [r1 + offset] *)
   | Aindexed2: addressing               (**r Address is [r1 + r2] *)
   | Aglobal: ident -> int -> addressing (**r Address is [symbol + offset] *)
@@ -182,7 +182,7 @@ Definition offset_sp (sp: val) (delta: int) : option val :=
   end.
 
 Definition eval_operation
-    (F: Set) (genv: Genv.t F) (sp: val)
+    (F: Type) (genv: Genv.t F) (sp: val)
     (op: operation) (vl: list val): option val :=
   match op, vl with
   | Omove, v1::nil => Some v1
@@ -265,7 +265,7 @@ Definition eval_operation
   end.
 
 Definition eval_addressing
-    (F: Set) (genv: Genv.t F) (sp: val)
+    (F: Type) (genv: Genv.t F) (sp: val)
     (addr: addressing) (vl: list val) : option val :=
   match addr, vl with
   | Aindexed n, Vptr b1 n1 :: nil =>
@@ -360,7 +360,7 @@ Qed.
 
 Section GENV_TRANSF.
 
-Variable F1 F2: Set.
+Variable F1 F2: Type.
 Variable ge1: Genv.t F1.
 Variable ge2: Genv.t F2.
 Hypothesis agree_on_symbols:
@@ -389,14 +389,14 @@ End GENV_TRANSF.
 (** Recognition of move operations. *)
 
 Definition is_move_operation
-    (A: Set) (op: operation) (args: list A) : option A :=
+    (A: Type) (op: operation) (args: list A) : option A :=
   match op, args with
   | Omove, arg :: nil => Some arg
   | _, _ => None
   end.
 
 Lemma is_move_operation_correct:
-  forall (A: Set) (op: operation) (args: list A) (a: A),
+  forall (A: Type) (op: operation) (args: list A) (a: A),
   is_move_operation op args = Some a ->
   op = Omove /\ args = a :: nil.
 Proof.
@@ -497,7 +497,7 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
 
 Section SOUNDNESS.
 
-Variable A: Set.
+Variable A: Type.
 Variable genv: Genv.t A.
 
 Lemma type_of_operation_sound:
@@ -560,7 +560,7 @@ End SOUNDNESS.
 
 Section EVAL_OP_TOTAL.
 
-Variable F: Set.
+Variable F: Type.
 Variable genv: Genv.t F.
 
 Definition find_symbol_offset (id: ident) (ofs: int) : val :=
@@ -746,7 +746,7 @@ End EVAL_OP_TOTAL.
 
 Section EVAL_LESSDEF.
 
-Variable F: Set.
+Variable F: Type.
 Variable genv: Genv.t F.
 
 Ltac InvLessdef :=
@@ -834,7 +834,7 @@ End EVAL_LESSDEF.
 Definition op_for_binary_addressing (addr: addressing) : operation := Oadd.
 
 Lemma eval_op_for_binary_addressing:
-  forall (F: Set) (ge: Genv.t F) sp addr args v,
+  forall (F: Type) (ge: Genv.t F) sp addr args v,
   (length args >= 2)%nat ->
   eval_addressing ge sp addr args = Some v ->
   eval_operation ge sp (op_for_binary_addressing addr) args = Some v.

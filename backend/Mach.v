@@ -49,7 +49,7 @@ Require Import Locations.
 
 Definition label := positive.
 
-Inductive instruction: Set :=
+Inductive instruction: Type :=
   | Mgetstack: int -> typ -> mreg -> instruction
   | Msetstack: mreg -> int -> typ -> instruction
   | Mgetparam: int -> typ -> mreg -> instruction
@@ -65,7 +65,7 @@ Inductive instruction: Set :=
 
 Definition code := list instruction.
 
-Record function: Set := mkfunction
+Record function: Type := mkfunction
   { fn_sig: signature;
     fn_code: code;
     fn_stacksize: Z;

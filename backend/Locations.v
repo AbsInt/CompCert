@@ -42,7 +42,7 @@ Require Export Machregs.
   cannot reside in hardware registers, as determined by the 
   calling conventions. *)
 
-Inductive slot: Set :=
+Inductive slot: Type :=
   | Local: Z -> typ -> slot
   | Incoming: Z -> typ -> slot
   | Outgoing: Z -> typ -> slot.
@@ -108,7 +108,7 @@ Qed.
 (** Locations are just the disjoint union of machine registers and
   activation record slots. *)
 
-Inductive loc : Set :=
+Inductive loc : Type :=
   | R: mreg -> loc
   | S: slot -> loc.
 

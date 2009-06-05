@@ -32,11 +32,11 @@ Require Import Values.
   allow pointers to be exchanged between the program and the outside
   world. *)
 
-Inductive eventval: Set :=
+Inductive eventval: Type :=
   | EVint: int -> eventval
   | EVfloat: float -> eventval.
 
-Record event : Set := mkevent {
+Record event : Type := mkevent {
   ev_name: ident;
   ev_args: list eventval;
   ev_res: eventval
@@ -56,7 +56,7 @@ Definition Eextcall
 
 Definition Eapp (t1 t2: trace) : trace := t1 ++ t2.
 
-CoInductive traceinf : Set :=
+CoInductive traceinf : Type :=
   | Enilinf: traceinf
   | Econsinf: event -> traceinf -> traceinf.
 

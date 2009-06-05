@@ -63,7 +63,7 @@ Section PARMOV.
 (** The development is parameterized by the type of registers, 
     equipped with a decidable equality. *)
 
-Variable reg: Set.
+Variable reg: Type.
 Variable reg_eq : forall (r1 r2: reg), {r1=r2} + {r1<>r2}.
 
 (** The [temp] function maps every register [r] to the register that
@@ -93,7 +93,7 @@ Definition dests (m: moves) := List.map (@snd reg reg) m.
 (** The dynamic  semantics of moves is given in terms of environments.
     An environment is a mapping of registers to their current values. *)
 
-Variable val: Set.
+Variable val: Type.
 Definition env := reg -> val.
 
 Lemma env_ext:
@@ -186,7 +186,7 @@ Fixpoint exec_seq_rev (m: moves) (e: env) {struct m}: env :=
    as an inductive predicate [transition] relating triples of moves,
    and its reflexive transitive closure [transitions]. *)
 
-Inductive state: Set :=
+Inductive state: Type :=
   State (mu: moves) (sigma: moves) (tau: moves) : state.
 
 Definition no_read (mu: moves) (d: reg) : Prop :=
@@ -1331,7 +1331,7 @@ Qed.
 
 Section REGISTER_CLASSES.
 
-Variable class: Set.
+Variable class: Type.
 Variable regclass: reg -> class.
 Hypothesis temp_preserves_class: forall r, regclass (temp r) = regclass r.
 

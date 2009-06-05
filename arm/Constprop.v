@@ -32,7 +32,7 @@ Require Import Kildall.
 (** To each pseudo-register at each program point, the static analysis 
   associates a compile-time approximation taken from the following set. *)
 
-Inductive approx : Set :=
+Inductive approx : Type :=
   | Novalue: approx      (** No value possible, code is unreachable. *)
   | Unknown: approx      (** All values are possible,
                              no compile-time information is available. *)
@@ -139,7 +139,7 @@ Definition eval_static_condition (cond: condition) (vl: list approx) :=
   end.
 *)
 
-Inductive eval_static_condition_cases: forall (cond: condition) (vl: list approx), Set :=
+Inductive eval_static_condition_cases: forall (cond: condition) (vl: list approx), Type :=
   | eval_static_condition_case1:
       forall c n1 n2,
       eval_static_condition_cases (Ccomp c) (I n1 :: I n2 :: nil)
@@ -274,7 +274,7 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   end.
 *)
 
-Inductive eval_static_operation_cases: forall (op: operation) (vl: list approx), Set :=
+Inductive eval_static_operation_cases: forall (op: operation) (vl: list approx), Type :=
   | eval_static_operation_case1:
       forall v1,
       eval_static_operation_cases (Omove) (v1::nil)
@@ -735,7 +735,7 @@ Definition cond_strength_reduction (cond: condition) (args: list reg) :=
   end.
 *)
 
-Inductive cond_strength_reduction_cases: forall (cond: condition) (args: list reg), Set :=
+Inductive cond_strength_reduction_cases: forall (cond: condition) (args: list reg), Type :=
   | cond_strength_reduction_case1:
       forall c r1 r2,
       cond_strength_reduction_cases (Ccomp c) (r1 :: r2 :: nil)
@@ -886,7 +886,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   end.
 *)
 
-Inductive op_strength_reduction_cases: forall (op: operation) (args: list reg), Set :=
+Inductive op_strength_reduction_cases: forall (op: operation) (args: list reg), Type :=
   | op_strength_reduction_case1:
       forall r1 r2,
       op_strength_reduction_cases (Oadd) (r1 :: r2 :: nil)
@@ -1120,7 +1120,7 @@ Definition addr_strength_reduction (addr: addressing) (args: list reg) :=
   end.
 *)
 
-Inductive addr_strength_reduction_cases: forall (addr: addressing) (args: list reg), Set :=
+Inductive addr_strength_reduction_cases: forall (addr: addressing) (args: list reg), Type :=
   | addr_strength_reduction_case1:
       forall r1 r2,
       addr_strength_reduction_cases (Aindexed2) (r1 :: r2 :: nil)

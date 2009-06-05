@@ -23,7 +23,7 @@ Definition half_modulus : Z := modulus / 2.
 
 (** * Comparisons *)
 
-Inductive comparison : Set :=
+Inductive comparison : Type :=
   | Ceq : comparison               (**r same *)
   | Cne : comparison               (**r different *)
   | Clt : comparison               (**r less than *)
@@ -57,7 +57,7 @@ Definition swap_comparison (c: comparison): comparison :=
   integer (type [Z]) plus a proof that it is in the range 0 (included) to
   [modulus] (excluded. *)
 
-Record int: Set := mkint { intval: Z; intrange: 0 <= intval < modulus }.
+Record int: Type := mkint { intval: Z; intrange: 0 <= intval < modulus }.
 
 Module Int.
 
@@ -289,7 +289,7 @@ Definition is_power2 (x: int) : option int :=
 >>
 *)
 
-Inductive rlw_state: Set :=
+Inductive rlw_state: Type :=
   | RLW_S0 : rlw_state
   | RLW_S1 : rlw_state
   | RLW_S2 : rlw_state

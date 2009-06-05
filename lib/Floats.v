@@ -23,7 +23,7 @@
 Require Import Coqlib.
 Require Import Integers.
 
-Parameter float: Set.
+Parameter float: Type.
 
 Module Float.
 

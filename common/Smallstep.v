@@ -33,8 +33,8 @@ Set Implicit Arguments.
 
 Section CLOSURES.
 
-Variable genv: Set.
-Variable state: Set.
+Variable genv: Type.
+Variable state: Type.
 
 (** A one-step transition relation has the following signature.
   It is parameterized by a global environment, which does not
@@ -197,7 +197,7 @@ Qed.
 (** An alternate, equivalent definition of [forever] that is useful
     for coinductive reasoning. *)
 
-Variable A: Set.
+Variable A: Type.
 Variable order: A -> A -> Prop.
 
 CoInductive forever_N (ge: genv) : A -> state -> traceinf -> Prop :=
@@ -290,7 +290,7 @@ Qed.
    finite prefix of this trace, or the whole trace.)
 *)
 
-Inductive program_behavior: Set :=
+Inductive program_behavior: Type :=
   | Terminates: trace -> int -> program_behavior
   | Diverges: traceinf -> program_behavior.
 
@@ -326,8 +326,8 @@ Section SIMULATION.
 
 (** The first small-step semantics is axiomatized as follows. *)
 
-Variable genv1: Set.
-Variable state1: Set.
+Variable genv1: Type.
+Variable state1: Type.
 Variable step1: genv1 -> state1 -> trace -> state1 -> Prop.
 Variable initial_state1: state1 -> Prop.
 Variable final_state1: state1 -> int -> Prop.
@@ -335,8 +335,8 @@ Variable ge1: genv1.
 
 (** The second small-step semantics is also axiomatized. *)
 
-Variable genv2: Set.
-Variable state2: Set.
+Variable genv2: Type.
+Variable state2: Type.
 Variable step2: genv2 -> state2 -> trace -> state2 -> Prop.
 Variable initial_state2: state2 -> Prop.
 Variable final_state2: state2 -> int -> Prop.

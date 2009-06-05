@@ -30,7 +30,7 @@ Require Import Conventions.
   These properties are used later to reason about the layout of
   the activation record. *)
 
-Record bounds : Set := mkbounds {
+Record bounds : Type := mkbounds {
   bound_int_local: Z;
   bound_float_local: Z;
   bound_int_callee_save: Z;
@@ -116,7 +116,7 @@ Definition slots_of_instr (i: instruction) : list slot :=
   | _ => nil
   end.
 
-Definition max_over_list (A: Set) (valu: A -> Z) (l: list A) : Z :=
+Definition max_over_list (A: Type) (valu: A -> Z) (l: list A) : Z :=
   List.fold_left (fun m l => Zmax m (valu l)) l 0.
 
 Definition max_over_instrs (valu: instruction -> Z) : Z :=
@@ -151,7 +151,7 @@ Definition outgoing_space (i: instruction) :=
   match i with Lcall sig _ => size_arguments sig | _ => 0 end.
 
 Lemma max_over_list_pos:
-  forall (A: Set) (valu: A -> Z) (l: list A),
+  forall (A: Type) (valu: A -> Z) (l: list A),
   max_over_list A valu l >= 0.
 Proof.
   intros until valu. unfold max_over_list.
@@ -196,7 +196,7 @@ Qed.
 (** We now show the correctness of the inferred bounds. *)
 
 Lemma max_over_list_bound:
-  forall (A: Set) (valu: A -> Z) (l: list A) (x: A),
+  forall (A: Type) (valu: A -> Z) (l: list A) (x: A),
   In x l -> valu x <= max_over_list A valu l.
 Proof.
   intros until x. unfold max_over_list.

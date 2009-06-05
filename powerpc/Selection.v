@@ -118,7 +118,7 @@ Definition notint (e: expr) :=
   characterizes the expressions that match each of the 4 cases of interest.
 *)
 
-Inductive notint_cases: forall (e: expr), Set :=
+Inductive notint_cases: forall (e: expr), Type :=
   | notint_case1:
       forall (t1: expr) (t2: expr),
       notint_cases (Eop Oand (t1:::t2:::Enil))
@@ -208,7 +208,7 @@ Definition addimm (n: int) (e: expr) :=
 
 (** Addition of an integer constant. *)
 
-Inductive addimm_cases: forall (e: expr), Set :=
+Inductive addimm_cases: forall (e: expr), Type :=
   | addimm_case1:
       forall (m: int),
       addimm_cases (Eop (Ointconst m) Enil)
@@ -268,7 +268,7 @@ Definition add (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive add_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive add_cases: forall (e1: expr) (e2: expr), Type :=
   | add_case1:
       forall (n1: int) (t2: expr),
       add_cases (Eop (Ointconst n1) Enil) (t2)
@@ -342,7 +342,7 @@ l))
   end.
 *)
 
-Inductive sub_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive sub_cases: forall (e1: expr) (e2: expr), Type :=
   | sub_case1:
       forall (t1: expr) (n2: int),
       sub_cases (t1) (Eop (Ointconst n2) Enil)
@@ -410,7 +410,7 @@ Definition rolm (e1: expr) :=
   end
 *)
 
-Inductive rolm_cases: forall (e1: expr), Set :=
+Inductive rolm_cases: forall (e1: expr), Type :=
   | rolm_case1:
       forall (n1: int),
       rolm_cases (Eop (Ointconst n1) Enil)
@@ -488,7 +488,7 @@ Definition mulimm (n1: int) (e2: expr) :=
   end.
 *)
 
-Inductive mulimm_cases: forall (e2: expr), Set :=
+Inductive mulimm_cases: forall (e2: expr), Type :=
   | mulimm_case1:
       forall (n2: int),
       mulimm_cases (Eop (Ointconst n2) Enil)
@@ -532,7 +532,7 @@ Definition mul (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive mul_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive mul_cases: forall (e1: expr) (e2: expr), Type :=
   | mul_case1:
       forall (n1: int) (t2: expr),
       mul_cases (Eop (Ointconst n1) Enil) (t2)
@@ -584,7 +584,7 @@ Definition mod_aux (divop: operation) (e1 e2: expr) :=
 
 Definition mods := mod_aux Odiv.
 
-Inductive divu_cases: forall (e2: expr), Set :=
+Inductive divu_cases: forall (e2: expr), Type :=
   | divu_case1:
       forall (n2: int),
       divu_cases (Eop (Ointconst n2) Enil)
@@ -645,7 +645,7 @@ Definition same_expr_pure (e1 e2: expr) :=
   | _, _ => false
   end.
 
-Inductive or_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive or_cases: forall (e1: expr) (e2: expr), Type :=
   | or_case1:
       forall (amount1: int) (mask1: int) (t1: expr)
              (amount2: int) (mask2: int) (t2: expr),
@@ -678,7 +678,7 @@ Definition or (e1: expr) (e2: expr) :=
 
 (** ** General shifts *)
 
-Inductive shift_cases: forall (e1: expr), Set :=
+Inductive shift_cases: forall (e1: expr), Type :=
   | shift_case1:
       forall (n2: int),
       shift_cases (Eop (Ointconst n2) Enil)
@@ -723,7 +723,7 @@ Definition addf (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive addf_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive addf_cases: forall (e1: expr) (e2: expr), Type :=
   | addf_case1:
       forall (t1: expr) (t2: expr) (t3: expr),
       addf_cases (Eop Omulf (t1:::t2:::Enil)) (t3)
@@ -770,7 +770,7 @@ Definition subf (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive subf_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive subf_cases: forall (e1: expr) (e2: expr), Type :=
   | subf_case1:
       forall (t1: expr) (t2: expr) (t3: expr),
       subf_cases (Eop Omulf (t1:::t2:::Enil)) (t3)
@@ -798,7 +798,7 @@ Definition subf (e1: expr) (e2: expr) :=
 
 (** ** Truncations and sign extensions *)
 
-Inductive cast8signed_cases: forall (e1: expr), Set :=
+Inductive cast8signed_cases: forall (e1: expr), Type :=
   | cast8signed_case1:
       forall (e2: expr),
       cast8signed_cases (Eop Ocast8signed (e2 ::: Enil))
@@ -826,7 +826,7 @@ Definition cast8signed (e: expr) :=
   | cast8signed_default e1 => Eop Ocast8signed (e1 ::: Enil)
   end.
 
-Inductive cast8unsigned_cases: forall (e1: expr), Set :=
+Inductive cast8unsigned_cases: forall (e1: expr), Type :=
   | cast8unsigned_case1:
       forall (e2: expr),
       cast8unsigned_cases (Eop Ocast8unsigned (e2 ::: Enil))
@@ -854,7 +854,7 @@ Definition cast8unsigned (e: expr) :=
   | cast8unsigned_default e1 => Eop Ocast8unsigned (e1 ::: Enil)
   end.
 
-Inductive cast16signed_cases: forall (e1: expr), Set :=
+Inductive cast16signed_cases: forall (e1: expr), Type :=
   | cast16signed_case1:
       forall (e2: expr),
       cast16signed_cases (Eop Ocast16signed (e2 ::: Enil))
@@ -882,7 +882,7 @@ Definition cast16signed (e: expr) :=
   | cast16signed_default e1 => Eop Ocast16signed (e1 ::: Enil)
   end.
 
-Inductive cast16unsigned_cases: forall (e1: expr), Set :=
+Inductive cast16unsigned_cases: forall (e1: expr), Type :=
   | cast16unsigned_case1:
       forall (e2: expr),
       cast16unsigned_cases (Eop Ocast16unsigned (e2 ::: Enil))
@@ -910,7 +910,7 @@ Definition cast16unsigned (e: expr) :=
   | cast16unsigned_default e1 => Eop Ocast16unsigned (e1 ::: Enil)
   end.
 
-Inductive singleoffloat_cases: forall (e1: expr), Set :=
+Inductive singleoffloat_cases: forall (e1: expr), Type :=
   | singleoffloat_case1:
       forall (e2: expr),
       singleoffloat_cases (Eop Osingleoffloat (e2 ::: Enil))
@@ -940,7 +940,7 @@ Definition singleoffloat (e: expr) :=
 
 (** ** Comparisons *)
 
-Inductive comp_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive comp_cases: forall (e1: expr) (e2: expr), Type :=
   | comp_case1:
       forall n1 t2,
       comp_cases (Eop (Ointconst n1) Enil) (t2)
@@ -1043,7 +1043,7 @@ Definition addressing (e: expr) :=
   end.
 *)
 
-Inductive addressing_cases: forall (e: expr), Set :=
+Inductive addressing_cases: forall (e: expr), Type :=
   | addressing_case1:
       forall (s: ident) (n: int),
       addressing_cases (Eop (Oaddrsymbol s n) Enil)

@@ -31,20 +31,20 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 
-Definition update (A: Set) (x: Z) (v: A) (f: Z -> A) : Z -> A :=
+Definition update (A: Type) (x: Z) (v: A) (f: Z -> A) : Z -> A :=
   fun y => if zeq y x then v else f y.
 
 Implicit Arguments update [A].
 
 Lemma update_s:
-  forall (A: Set) (x: Z) (v: A) (f: Z -> A),
+  forall (A: Type) (x: Z) (v: A) (f: Z -> A),
   update x v f x = v.
 Proof.
   intros; unfold update. apply zeq_true.
 Qed.
 
 Lemma update_o:
-  forall (A: Set) (x: Z) (v: A) (f: Z -> A) (y: Z),
+  forall (A: Type) (x: Z) (v: A) (f: Z -> A) (y: Z),
   x <> y -> update x v f y = f y.
 Proof.
   intros; unfold update. apply zeq_false; auto.
@@ -62,17 +62,17 @@ Qed.
   [d+2] and [d+3].  The [Cont] contents enable detecting future writes
   that would partially overlap the 4-byte value. *)
 
-Inductive content : Set :=
+Inductive content : Type :=
   | Undef: content                 (**r undefined contents *)
   | Datum: nat -> val -> content   (**r first byte of a value *)
   | Cont: content.          (**r continuation bytes for a multi-byte value *)
 
-Definition contentmap : Set := Z -> content.
+Definition contentmap : Type := Z -> content.
 
 (** A memory block comprises the dimensions of the block (low and high bounds)
   plus a mapping from byte offsets to contents.  *)
 
-Record block_contents : Set := mkblock {
+Record block_contents : Type := mkblock {
   low: Z;
   high: Z;
   contents: contentmap
@@ -82,7 +82,7 @@ Record block_contents : Set := mkblock {
   integers) to blocks.  We also maintain the address of the next 
   unallocated block, and a proof that this address is positive. *)
 
-Record mem : Set := mkmem {
+Record mem : Type := mkmem {
   blocks: Z -> block_contents;
   nextblock: block;
   nextblock_pos: nextblock > 0
@@ -455,7 +455,7 @@ Proof.
 Defined.
 
 Lemma in_bounds_true:
-  forall m chunk b ofs (A: Set) (a1 a2: A),
+  forall m chunk b ofs (A: Type) (a1 a2: A),
   valid_access m chunk b ofs ->
   (if in_bounds m chunk b ofs then a1 else a2) = a1.
 Proof.
@@ -858,7 +858,7 @@ Qed.
 
 Inductive load_store_cases 
       (chunk1: memory_chunk) (b1: block) (ofs1: Z)
-      (chunk2: memory_chunk) (b2: block) (ofs2: Z) : Set :=
+      (chunk2: memory_chunk) (b2: block) (ofs2: Z) : Type :=
   | lsc_similar:
       b1 = b2 -> ofs1 = ofs2 -> size_chunk chunk1 = size_chunk chunk2 ->
       load_store_cases chunk1 b1 ofs1 chunk2 b2 ofs2
@@ -1277,7 +1277,7 @@ Qed.
 
 Section GENERIC_INJECT.
 
-Definition meminj : Set := block -> option (block * Z).
+Definition meminj : Type := block -> option (block * Z).
 
 Variable val_inj: meminj -> val -> val -> Prop.
 
@@ -2838,7 +2838,7 @@ Qed.
 (** Signed 8- and 16-bit stores can be performed like unsigned stores. *)
 
 Remark in_bounds_equiv:
-  forall chunk1 chunk2 m b ofs (A: Set) (a1 a2: A),
+  forall chunk1 chunk2 m b ofs (A: Type) (a1 a2: A),
   size_chunk chunk1 = size_chunk chunk2 ->
   (if in_bounds m chunk1 b ofs then a1 else a2) =
   (if in_bounds m chunk2 b ofs then a1 else a2).

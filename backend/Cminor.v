@@ -33,13 +33,13 @@ Require Import Switch.
   statements, functions and programs.  We first define the constants
   and operators that occur within expressions. *)
 
-Inductive constant : Set :=
+Inductive constant : Type :=
   | Ointconst: int -> constant     (**r integer constant *)
   | Ofloatconst: float -> constant (**r floating-point constant *)
   | Oaddrsymbol: ident -> int -> constant (**r address of the symbol plus the offset *)
   | Oaddrstack: int -> constant.   (**r stack pointer plus the given offset *)
 
-Inductive unary_operation : Set :=
+Inductive unary_operation : Type :=
   | Ocast8unsigned: unary_operation        (**r 8-bit zero extension  *)
   | Ocast8signed: unary_operation          (**r 8-bit sign extension  *)
   | Ocast16unsigned: unary_operation       (**r 16-bit zero extension  *)
@@ -55,7 +55,7 @@ Inductive unary_operation : Set :=
   | Ofloatofint: unary_operation           (**r float to signed integer *)
   | Ofloatofintu: unary_operation.         (**r float to unsigned integer *)
 
-Inductive binary_operation : Set :=
+Inductive binary_operation : Type :=
   | Oadd: binary_operation                 (**r integer addition *)
   | Osub: binary_operation                 (**r integer subtraction *)
   | Omul: binary_operation                 (**r integer multiplication *)
@@ -81,7 +81,7 @@ Inductive binary_operation : Set :=
   arithmetic operations, reading store locations, and conditional
   expressions (similar to [e1 ? e2 : e3] in C). *)
 
-Inductive expr : Set :=
+Inductive expr : Type :=
   | Evar : ident -> expr
   | Econst : constant -> expr
   | Eunop : unary_operation -> expr -> expr
@@ -97,7 +97,7 @@ Inductive expr : Set :=
 
 Definition label := ident.
 
-Inductive stmt : Set :=
+Inductive stmt : Type :=
   | Sskip: stmt
   | Sassign : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
@@ -120,7 +120,7 @@ Inductive stmt : Set :=
   automatically before the function returns.  Pointers into this block
   can be taken with the [Oaddrstack] operator. *)
 
-Record function : Set := mkfunction {
+Record function : Type := mkfunction {
   fn_sig: signature;
   fn_params: list ident;
   fn_vars: list ident;
@@ -172,7 +172,7 @@ Definition set_optvar (optid: option ident) (v: val) (e: env) : env :=
 
 (** Continuations *)
 
-Inductive cont: Set :=
+Inductive cont: Type :=
   | Kstop: cont                         (**r stop program execution *)
   | Kseq: stmt -> cont -> cont          (**r execute stmt, then cont *)
   | Kblock: cont -> cont                (**r exit a block, then do cont *)
@@ -181,7 +181,7 @@ Inductive cont: Set :=
 
 (** States *)
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State:                      (**r Execution within a function *)
       forall (f: function)              (**r currently executing function  *)
              (s: stmt)                  (**r statement under consideration *)
@@ -536,7 +536,7 @@ Definition exec_program (p: program) (beh: program_behavior) : Prop :=
     statements evaluate to``outcomes'' indicating how execution should
     proceed afterwards. *)
 
-Inductive outcome: Set :=
+Inductive outcome: Type :=
   | Out_normal: outcome                (**r continue in sequence *)
   | Out_exit: nat -> outcome           (**r terminate [n+1] enclosing blocks *)
   | Out_return: option val -> outcome  (**r return immediately to caller *)

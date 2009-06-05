@@ -225,7 +225,7 @@ Definition crbit_for_cond (cond: condition) :=
 
 (** Recognition of comparisons [>= 0] and [< 0]. *)
 
-Inductive condition_class: condition -> list mreg -> Set :=
+Inductive condition_class: condition -> list mreg -> Type :=
   | condition_ge0:
       forall n r, n = Int.zero -> condition_class (Ccompimm Cge n) (r :: nil)
   | condition_lt0:

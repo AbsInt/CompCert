@@ -167,7 +167,7 @@ Proof.
   eapply DS.fixpoint_solution. unfold analyze in H; eauto.
   auto. auto. auto. auto.
   unfold transfer. rewrite H3.
-  red; intros. elim (Regset.empty_1 _ H4).
+  red; intros. elim (Regset.empty_1 H4).
   unfold RTL.successors in H0; rewrite H2 in H0; elim H0.
 Qed.
 
@@ -581,7 +581,7 @@ Proof.
   rewrite H. simpl. 
   caseEq (Regset.mem res live!!pc); intro LV;
   rewrite LV in AG.
-  generalize (Regset.mem_2 _ _ LV). intro LV'.
+  generalize (Regset.mem_2 LV). intro LV'.
   generalize (regalloc_correct_1 f env live _ _ _ _ ASG H).
   unfold correct_alloc_instr, is_redundant_move.
   caseEq (is_move_operation op args).

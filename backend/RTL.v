@@ -44,7 +44,7 @@ Require Import Registers.
 
 Definition node := positive.
 
-Inductive instruction: Set :=
+Inductive instruction: Type :=
   | Inop: node -> instruction
       (** No operation -- just branch to the successor. *)
   | Iop: operation -> list reg -> reg -> node -> instruction
@@ -80,9 +80,9 @@ Inductive instruction: Set :=
           (it has no successor).  It returns the value of the given
           register, or [Vundef] if none is given. *)
 
-Definition code: Set := PTree.t instruction.
+Definition code: Type := PTree.t instruction.
 
-Record function: Set := mkfunction {
+Record function: Type := mkfunction {
   fn_sig: signature;
   fn_params: list reg;
   fn_stacksize: Z;
@@ -152,7 +152,7 @@ a function call in progress.
 [rs] is the state of registers in the calling function.
 *)
 
-Inductive stackframe : Set :=
+Inductive stackframe : Type :=
   | Stackframe:
       forall (res: reg)            (**r where to store the result *)
              (c: code)             (**r code of calling function *)
@@ -161,7 +161,7 @@ Inductive stackframe : Set :=
              (rs: regset),         (**r register state in calling function *)
       stackframe.
 
-Inductive state : Set :=
+Inductive state : Type :=
   | State:
       forall (stack: list stackframe) (**r call stack *)
              (c: code)                (**r current code *)

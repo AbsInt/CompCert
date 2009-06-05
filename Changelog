@@ -1,3 +1,8 @@
+Release 1.4.1, 2009-06-05
+=========================
+
+- Adapted to Coq 8.2-1.  No changes in functionality.
+
 Release 1.4, 2009-04-20
 =======================
 

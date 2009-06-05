@@ -55,7 +55,7 @@ Module OrderedRegMreg := OrderedPair(OrderedReg)(OrderedMreg).
 Module SetRegReg := FSetAVL.Make(OrderedRegReg).
 Module SetRegMreg := FSetAVL.Make(OrderedRegMreg).
 
-Record graph: Set := mkgraph {
+Record graph: Type := mkgraph {
   interf_reg_reg: SetRegReg.t;
   interf_reg_mreg: SetRegMreg.t;
   pref_reg_reg: SetRegReg.t;
@@ -160,7 +160,7 @@ Lemma add_interf_correct:
   interfere x y (add_interf x y g).
 Proof.
   intros. unfold interfere, add_interf; simpl.
-  apply SetRegReg.add_1. red. apply OrderedRegReg.eq_refl.
+  apply SetRegReg.add_1. auto. 
 Qed.
 
 Lemma add_interf_incl:
@@ -177,7 +177,7 @@ Lemma add_interf_mreg_correct:
   interfere_mreg x y (add_interf_mreg x y g).
 Proof.
   intros. unfold interfere_mreg, add_interf_mreg; simpl.
-  apply SetRegMreg.add_1. red. apply OrderedRegMreg.eq_refl.
+  apply SetRegMreg.add_1. auto. 
 Qed.
 
 Lemma add_interf_mreg_incl:
@@ -214,17 +214,17 @@ Definition add_intf1 (r1m2: reg * mreg) (u: Regset.t) : Regset.t :=
   Regset.add (fst r1m2) u.
 
 Definition all_interf_regs (g: graph) : Regset.t :=
-  SetRegReg.fold _ add_intf2
+  SetRegReg.fold add_intf2
     g.(interf_reg_reg)
-    (SetRegMreg.fold _ add_intf1
+    (SetRegMreg.fold add_intf1
       g.(interf_reg_mreg)
       Regset.empty).
 
 Lemma in_setregreg_fold:
   forall g r1 r2 u,
   SetRegReg.In (r1, r2) g \/ Regset.In r1 u /\ Regset.In r2 u ->
-  Regset.In r1 (SetRegReg.fold _ add_intf2 g u) /\
-  Regset.In r2 (SetRegReg.fold _ add_intf2 g u).
+  Regset.In r1 (SetRegReg.fold add_intf2 g u) /\
+  Regset.In r2 (SetRegReg.fold add_intf2 g u).
 Proof.
   set (add_intf2' := fun u r1r2 => add_intf2 r1r2 u).
   assert (forall l r1 r2 u,
@@ -235,7 +235,7 @@ Proof.
   elim H; intro. inversion H0. auto.
   apply IHl. destruct a as [a1 a2].
   elim H; intro. inversion H0; subst. 
-  red in H2. simpl in H2. destruct H2. red in H1. red in H2. subst r1 r2.
+  red in H2. simpl in H2. destruct H2. subst r1 r2.
   right; unfold add_intf2', add_intf2; simpl; split.
   apply Regset.add_1. auto. 
   apply Regset.add_2. apply Regset.add_1. auto. 
@@ -250,7 +250,7 @@ Qed.
 Lemma in_setregreg_fold':
   forall g r u,
   Regset.In r u ->
-  Regset.In r (SetRegReg.fold _ add_intf2 g u).
+  Regset.In r (SetRegReg.fold add_intf2 g u).
 Proof.
   intros. exploit in_setregreg_fold. eauto. 
   intros [A B]. eauto.
@@ -259,7 +259,7 @@ Qed.
 Lemma in_setregmreg_fold:
   forall g r1 mr2 u,
   SetRegMreg.In (r1, mr2) g \/ Regset.In r1 u ->
-  Regset.In r1 (SetRegMreg.fold _ add_intf1 g u).
+  Regset.In r1 (SetRegMreg.fold add_intf1 g u).
 Proof.
   set (add_intf1' := fun u r1mr2 => add_intf1 r1mr2 u).
   assert (forall l r1 mr2 u,
@@ -269,7 +269,7 @@ Proof.
   elim H; intro. inversion H0. auto.
   apply IHl with mr2. destruct a as [a1 a2].
   elim H; intro. inversion H0; subst. 
-  red in H2. simpl in H2. destruct H2. red in H1. red in H2. subst r1 mr2.
+  red in H2. simpl in H2. destruct H2. subst r1 mr2.
   right; unfold add_intf1', add_intf1; simpl.
   apply Regset.add_1; auto.
   tauto.

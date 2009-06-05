@@ -36,7 +36,7 @@ Definition ident_eq := peq.
   [Tint] for integers and pointers, and [Tfloat] for floating-point
   numbers. *)
 
-Inductive typ : Set :=
+Inductive typ : Type :=
   | Tint : typ
   | Tfloat : typ.
 
@@ -58,7 +58,7 @@ Proof. decide equality. apply typ_eq. Qed.
   are used in particular to determine appropriate calling conventions
   for the function. *)
 
-Record signature : Set := mksignature {
+Record signature : Type := mksignature {
   sig_args: list typ;
   sig_res: option typ
 }.
@@ -73,7 +73,7 @@ Definition proj_sig_res (s: signature) : typ :=
   a ``memory chunk'' indicating the type, size and signedness of the
   chunk of memory being accessed. *)
 
-Inductive memory_chunk : Set :=
+Inductive memory_chunk : Type :=
   | Mint8signed : memory_chunk     (**r 8-bit signed integer *)
   | Mint8unsigned : memory_chunk   (**r 8-bit unsigned integer *)
   | Mint16signed : memory_chunk    (**r 16-bit signed integer *)
@@ -84,7 +84,7 @@ Inductive memory_chunk : Set :=
 
 (** Initialization data for global variables. *)
 
-Inductive init_data: Set :=
+Inductive init_data: Type :=
   | Init_int8: int -> init_data
   | Init_int16: int -> init_data
   | Init_int32: int -> init_data
@@ -104,16 +104,16 @@ for variables vary among the various intermediate languages and are
 taken as parameters to the [program] type.  The other parts of whole
 programs are common to all languages. *)
 
-Record program (F V: Set) : Set := mkprogram {
+Record program (F V: Type) : Type := mkprogram {
   prog_funct: list (ident * F);
   prog_main: ident;
   prog_vars: list (ident * list init_data * V)
 }.
 
-Definition prog_funct_names (F V: Set) (p: program F V) : list ident :=
+Definition prog_funct_names (F V: Type) (p: program F V) : list ident :=
   map (@fst ident F) p.(prog_funct).
 
-Definition prog_var_names (F V: Set) (p: program F V) : list ident :=
+Definition prog_var_names (F V: Type) (p: program F V) : list ident :=
   map (fun x: ident * list init_data * V => fst(fst x)) p.(prog_vars).
 
 (** * Generic transformations over programs *)
@@ -124,7 +124,7 @@ Definition prog_var_names (F V: Set) (p: program F V) : list ident :=
 
 Section TRANSF_PROGRAM.
 
-Variable A B V: Set.
+Variable A B V: Type.
 Variable transf: A -> B.
 
 Definition transf_program (l: list (ident * A)) : list (ident * B) :=
@@ -158,7 +158,7 @@ Open Local Scope string_scope.
 
 Section MAP_PARTIAL.
 
-Variable A B C: Set.
+Variable A B C: Type.
 Variable prefix_errmsg: A -> errmsg.
 Variable f: B -> res C.
 
@@ -207,7 +207,7 @@ Qed.
 End MAP_PARTIAL.
 
 Remark map_partial_total:
-  forall (A B C: Set) (prefix: A -> errmsg) (f: B -> C) (l: list (A * B)),
+  forall (A B C: Type) (prefix: A -> errmsg) (f: B -> C) (l: list (A * B)),
   map_partial prefix (fun b => OK (f b)) l =
   OK (List.map (fun a_b => (fst a_b, f (snd a_b))) l).
 Proof.
@@ -217,7 +217,7 @@ Proof.
 Qed.
 
 Remark map_partial_identity:
-  forall (A B: Set) (prefix: A -> errmsg) (l: list (A * B)),
+  forall (A B: Type) (prefix: A -> errmsg) (l: list (A * B)),
   map_partial prefix (fun b => OK b) l = OK l.
 Proof.
   induction l; simpl.
@@ -227,7 +227,7 @@ Qed.
 
 Section TRANSF_PARTIAL_PROGRAM.
 
-Variable A B V: Set.
+Variable A B V: Type.
 Variable transf_partial: A -> res B.
 
 Definition prefix_funct_name (id: ident) : errmsg :=
@@ -271,7 +271,7 @@ End TRANSF_PARTIAL_PROGRAM.
 
 Section TRANSF_PARTIAL_PROGRAM2.
 
-Variable A B V W: Set.
+Variable A B V W: Type.
 Variable transf_partial_function: A -> res B.
 Variable transf_partial_variable: V -> res W.
 
@@ -322,7 +322,7 @@ End TRANSF_PARTIAL_PROGRAM2.
 
 Section MATCH_PROGRAM.
 
-Variable A B V W: Set.
+Variable A B V W: Type.
 Variable match_fundef: A -> B -> Prop.
 Variable match_varinfo: V -> W -> Prop.
 
@@ -344,7 +344,7 @@ Definition match_program (p1: program A V) (p2: program B W) : Prop :=
 End MATCH_PROGRAM.
 
 Remark transform_partial_program2_match:
-  forall (A B V W: Set)
+  forall (A B V W: Type)
          (transf_partial_function: A -> res B)
          (transf_partial_variable: V -> res W)
          (p: program A V) (tp: program B W),
@@ -375,12 +375,12 @@ Qed.
   (a.k.a. system calls) that emit an event when applied.  We define
   a type for such functions and some generic transformation functions. *)
 
-Record external_function : Set := mkextfun {
+Record external_function : Type := mkextfun {
   ef_id: ident;
   ef_sig: signature
 }.
 
-Inductive fundef (F: Set): Set :=
+Inductive fundef (F: Type): Type :=
   | Internal: F -> fundef F
   | External: external_function -> fundef F.
 
@@ -388,7 +388,7 @@ Implicit Arguments External [F].
 
 Section TRANSF_FUNDEF.
 
-Variable A B: Set.
+Variable A B: Type.
 Variable transf: A -> B.
 
 Definition transf_fundef (fd: fundef A): fundef B :=
@@ -401,7 +401,7 @@ End TRANSF_FUNDEF.
 
 Section TRANSF_PARTIAL_FUNDEF.
 
-Variable A B: Set.
+Variable A B: Type.
 Variable transf_partial: A -> res B.
 
 Definition transf_partial_fundef (fd: fundef A): res (fundef B) :=

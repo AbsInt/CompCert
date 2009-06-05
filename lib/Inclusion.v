@@ -51,7 +51,7 @@ Ltac all_app e :=
 (** This data type, [flatten], [insert_bin], [sort_bin] and a few theorem
   are taken from the CoqArt book, chapt. 16. *)
 
-Inductive bin : Set := node : bin->bin->bin | leaf : nat->bin.
+Inductive bin : Type := node : bin->bin->bin | leaf : nat->bin.
 
 Fixpoint flatten_aux (t fin:bin){struct t} : bin :=
   match t with
@@ -91,7 +91,7 @@ Fixpoint sort_bin (t:bin) : bin :=
   end.
 
 Section assoc_eq.
- Variables (A : Set)(f : A->A->A).
+ Variables (A : Type)(f : A->A->A).
  Hypothesis assoc : forall x y z:A, f x (f y z) = f (f x y) z.
 
  Fixpoint bin_A (l:list A)(def:A)(t:bin){struct t} : A :=
@@ -147,7 +147,7 @@ Ltac model_aux_app l v :=
   end.
 
 Theorem In_permute_app_head :
-  forall A:Set, forall r:A, forall x y l:list A,
+  forall A:Type, forall r:A, forall x y l:list A,
    In r (x++y++l) -> In r (y++x++l).
 intros A r x y l; generalize r; change (incl (x++y++l)(y++x++l)).
 repeat rewrite ass_app; auto with datatypes.
@@ -155,7 +155,7 @@ Qed.
 
 Theorem insert_bin_included : 
   forall x:nat, forall t2:bin,
-  forall (A:Set) (r:A) (l:list (list A))(def:list A), 
+  forall (A:Type) (r:A) (l:list (list A))(def:list A), 
      In r (bin_A (list A) (app (A:=A)) l def (insert_bin x t2)) ->
      In r (bin_A (list A) (app (A:=A)) l def (node (leaf x) t2)).
 intros x t2; induction t2.
@@ -181,7 +181,7 @@ apply In_permute_app_head; assumption.
 Qed.
 
 Theorem in_or_insert_bin :
-  forall (n:nat) (t2:bin) (A:Set)(r:A)(l:list (list A)) (def:list A),
+  forall (n:nat) (t2:bin) (A:Type)(r:A)(l:list (list A)) (def:list A),
   In r (nth n l def) \/ In r (bin_A (list A)(app (A:=A)) l def t2) ->
   In r (bin_A (list A)(app (A:=A)) l def (insert_bin n t2)).
 intros n t2 A r l def; induction t2.
@@ -198,7 +198,7 @@ simpl; intros [H|H]; case (nat_le_bool n n0); simpl; apply in_or_app; auto.
 Qed.
 
 Theorem sort_included :
-  forall t:bin, forall (A:Set)(r:A)(l:list(list A))(def:list A),
+  forall t:bin, forall (A:Type)(r:A)(l:list(list A))(def:list A),
     In r (bin_A (list A) (app (A:=A)) l def (sort_bin t)) ->
     In r (bin_A (list A) (app (A:=A)) l def t).
 induction t.
@@ -213,7 +213,7 @@ simpl;intros;assumption.
 Qed.
 
 Theorem sort_included2 :
-  forall t:bin, forall (A:Set)(r:A)(l:list(list A))(def:list A),
+  forall t:bin, forall (A:Type)(r:A)(l:list(list A))(def:list A),
     In r (bin_A (list A) (app (A:=A)) l def t) ->
     In r (bin_A (list A) (app (A:=A)) l def (sort_bin t)).
 induction t.
@@ -226,7 +226,7 @@ simpl; auto.
 Qed.
 
 Theorem in_remove_head :
-  forall (A:Set)(x:A)(l1 l2 l3:list A),
+  forall (A:Type)(x:A)(l1 l2 l3:list A),
   In x (l1++l2) -> (In x l2 -> In x l3) -> In x (l1++l3).
 intros A x l1 l2 l3 H H1.
 elim in_app_or with (1:= H);clear H; intros H; apply in_or_app; auto.
@@ -257,7 +257,7 @@ Fixpoint test_inclusion (t1 t2:bin) {struct t1} : bool :=
 Theorem check_all_leaves_sound :
   forall x t2,
     check_all_leaves x t2 = true ->
-    forall (A:Set)(r:A)(l:list(list A))(def:list A),
+    forall (A:Type)(r:A)(l:list(list A))(def:list A),
     In r (bin_A (list A) (app (A:=A)) l def t2) ->
     In r (nth x l def).
 intros x t2; induction t2; simpl.
@@ -270,7 +270,7 @@ Qed.
 
 Theorem remove_all_leaves_sound :
   forall x t2,
-  forall (A:Set)(r:A)(l:list(list A))(def:list A),
+  forall (A:Type)(r:A)(l:list(list A))(def:list A),
   In r (bin_A (list A) (app(A:=A)) l def t2) ->
   In r (bin_A (list A) (app(A:=A)) l def (remove_all_leaves x t2)) \/
   In r (nth x l def).
@@ -293,7 +293,7 @@ Qed.
 Theorem test_inclusion_sound :
   forall t1 t2:bin,
   test_inclusion t1 t2 = true ->
-  forall (A:Set)(r:A)(l:list(list A))(def:list A),
+  forall (A:Type)(r:A)(l:list(list A))(def:list A),
   In r (bin_A (list A)(app(A:=A)) l def t2) ->
   In r (bin_A (list A)(app(A:=A)) l def t1).
 intros t1; induction t1.
@@ -317,7 +317,7 @@ Qed.
 Theorem inclusion_theorem :
   forall t1 t2 : bin,
     test_inclusion (sort_bin (flatten t1)) (sort_bin (flatten t2)) = true ->
-    forall (A:Set)(r:A)(l:list(list A))(def:list A),
+    forall (A:Type)(r:A)(l:list(list A))(def:list A),
     In r (bin_A (list A) (app(A:=A)) l def t2) ->
     In r (bin_A (list A) (app(A:=A)) l def t1).
 intros t1 t2 Heq A r l def H.

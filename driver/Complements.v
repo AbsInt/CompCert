@@ -51,7 +51,7 @@ Require Import Errors.
   that this external call succeeds, has result [r], and changes
   the world to [w]. *)
 
-Inductive world: Set :=
+Inductive world: Type :=
   World: (ident -> list eventval -> option (eventval * world)) -> world.
 
 Definition nextworld (w: world) (evname: ident) (evargs: list eventval) :

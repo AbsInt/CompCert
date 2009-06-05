@@ -47,43 +47,43 @@ Module Type GENV.
 
 (** ** Types and operations *)
 
-  Variable t: Set -> Set.
+  Variable t: Type -> Type.
    (** The type of global environments.  The parameter [F] is the type
        of function descriptions. *)
 
-  Variable globalenv: forall (F V: Set), program F V -> t F.
+  Variable globalenv: forall (F V: Type), program F V -> t F.
    (** Return the global environment for the given program. *)
 
-  Variable init_mem: forall (F V: Set), program F V -> mem.
+  Variable init_mem: forall (F V: Type), program F V -> mem.
    (** Return the initial memory state for the given program. *)
 
-  Variable find_funct_ptr: forall (F: Set), t F -> block -> option F.
+  Variable find_funct_ptr: forall (F: Type), t F -> block -> option F.
    (** Return the function description associated with the given address,
        if any. *)
 
-  Variable find_funct: forall (F: Set), t F -> val -> option F.
+  Variable find_funct: forall (F: Type), t F -> val -> option F.
    (** Same as [find_funct_ptr] but the function address is given as
        a value, which must be a pointer with offset 0. *)
 
-  Variable find_symbol: forall (F: Set), t F -> ident -> option block.
+  Variable find_symbol: forall (F: Type), t F -> ident -> option block.
    (** Return the address of the given global symbol, if any. *)
 
 (** ** Properties of the operations. *)
 
   Hypothesis find_funct_inv:
-    forall (F: Set) (ge: t F) (v: val) (f: F),
+    forall (F: Type) (ge: t F) (v: val) (f: F),
     find_funct ge v = Some f -> exists b, v = Vptr b Int.zero.
   Hypothesis find_funct_find_funct_ptr:
-    forall (F: Set) (ge: t F) (b: block),
+    forall (F: Type) (ge: t F) (b: block),
     find_funct ge (Vptr b Int.zero) = find_funct_ptr ge b.    
 
   Hypothesis find_symbol_exists:
-    forall (F V: Set) (p: program F V)
+    forall (F V: Type) (p: program F V)
            (id: ident) (init: list init_data) (v: V),
     In (id, init, v) (prog_vars p) ->
     exists b, find_symbol (globalenv p) id = Some b.
   Hypothesis find_funct_ptr_exists:
-    forall (F V: Set) (p: program F V) (id: ident) (f: F),
+    forall (F V: Type) (p: program F V) (id: ident) (f: F),
     list_norepet (prog_funct_names p) ->
     list_disjoint (prog_funct_names p) (prog_var_names p) ->
     In (id, f) (prog_funct p) ->
@@ -91,49 +91,49 @@ Module Type GENV.
            /\ find_funct_ptr (globalenv p) b = Some f.
 
   Hypothesis find_funct_ptr_inversion:
-    forall (F V: Set) (P: F -> Prop) (p: program F V) (b: block) (f: F),
+    forall (F V: Type) (P: F -> Prop) (p: program F V) (b: block) (f: F),
     find_funct_ptr (globalenv p) b = Some f ->
     exists id, In (id, f) (prog_funct p).
   Hypothesis find_funct_inversion:
-    forall (F V: Set) (P: F -> Prop) (p: program F V) (v: val) (f: F),
+    forall (F V: Type) (P: F -> Prop) (p: program F V) (v: val) (f: F),
     find_funct (globalenv p) v = Some f ->
     exists id, In (id, f) (prog_funct p).
   Hypothesis find_funct_ptr_symbol_inversion:
-    forall (F V: Set) (p: program F V) (id: ident) (b: block) (f: F),
+    forall (F V: Type) (p: program F V) (id: ident) (b: block) (f: F),
     find_symbol (globalenv p) id = Some b ->
     find_funct_ptr (globalenv p) b = Some f ->
     In (id, f) p.(prog_funct).
 
   Hypothesis find_funct_ptr_prop:
-    forall (F V: Set) (P: F -> Prop) (p: program F V) (b: block) (f: F),
+    forall (F V: Type) (P: F -> Prop) (p: program F V) (b: block) (f: F),
     (forall id f, In (id, f) (prog_funct p) -> P f) ->
     find_funct_ptr (globalenv p) b = Some f ->
     P f.
   Hypothesis find_funct_prop:
-    forall (F V: Set) (P: F -> Prop) (p: program F V) (v: val) (f: F),
+    forall (F V: Type) (P: F -> Prop) (p: program F V) (v: val) (f: F),
     (forall id f, In (id, f) (prog_funct p) -> P f) ->
     find_funct (globalenv p) v = Some f ->
     P f.
 
   Hypothesis initmem_nullptr:
-    forall (F V: Set) (p: program F V),
+    forall (F V: Type) (p: program F V),
     let m := init_mem p in
     valid_block m nullptr /\
     m.(blocks) nullptr = empty_block 0 0.
   Hypothesis initmem_inject_neutral:
-    forall (F V: Set) (p: program F V),
+    forall (F V: Type) (p: program F V),
     mem_inject_neutral (init_mem p).
   Hypothesis find_funct_ptr_negative:
-    forall (F V: Set) (p: program F V) (b: block) (f: F),
+    forall (F V: Type) (p: program F V) (b: block) (f: F),
     find_funct_ptr (globalenv p) b = Some f -> b < 0.
   Hypothesis find_symbol_not_fresh:
-    forall (F V: Set) (p: program F V) (id: ident) (b: block),
+    forall (F V: Type) (p: program F V) (id: ident) (b: block),
     find_symbol (globalenv p) id = Some b -> b < nextblock (init_mem p).
   Hypothesis find_symbol_not_nullptr:
-    forall (F V: Set) (p: program F V) (id: ident) (b: block),
+    forall (F V: Type) (p: program F V) (id: ident) (b: block),
     find_symbol (globalenv p) id = Some b -> b <> nullptr.
   Hypothesis global_addresses_distinct:
-    forall (F V: Set) (p: program F V) id1 id2 b1 b2,
+    forall (F V: Type) (p: program F V) id1 id2 b1 b2,
     id1<>id2 ->
     find_symbol (globalenv p) id1 = Some b1 ->
     find_symbol (globalenv p) id2 = Some b2 ->
@@ -143,30 +143,30 @@ Module Type GENV.
   and operations over global environments. *)
 
   Hypothesis find_funct_ptr_transf:
-    forall (A B V: Set) (transf: A -> B) (p: program A V),
+    forall (A B V: Type) (transf: A -> B) (p: program A V),
     forall (b: block) (f: A),
     find_funct_ptr (globalenv p) b = Some f ->
     find_funct_ptr (globalenv (transform_program transf p)) b = Some (transf f).
   Hypothesis find_funct_transf:
-    forall (A B V: Set) (transf: A -> B) (p: program A V),
+    forall (A B V: Type) (transf: A -> B) (p: program A V),
     forall (v: val) (f: A),
     find_funct (globalenv p) v = Some f ->
     find_funct (globalenv (transform_program transf p)) v = Some (transf f).
   Hypothesis find_symbol_transf:
-    forall (A B V: Set) (transf: A -> B) (p: program A V),
+    forall (A B V: Type) (transf: A -> B) (p: program A V),
     forall (s: ident),
     find_symbol (globalenv (transform_program transf p)) s =
     find_symbol (globalenv p) s.
   Hypothesis init_mem_transf:
-    forall (A B V: Set) (transf: A -> B) (p: program A V),
+    forall (A B V: Type) (transf: A -> B) (p: program A V),
     init_mem (transform_program transf p) = init_mem p.
   Hypothesis find_funct_ptr_rev_transf:
-    forall (A B V: Set) (transf: A -> B) (p: program A V),
+    forall (A B V: Type) (transf: A -> B) (p: program A V),
     forall (b : block) (tf : B),
     find_funct_ptr (globalenv (transform_program transf p)) b = Some tf ->
     exists f : A, find_funct_ptr (globalenv p) b = Some f /\ transf f = tf.
   Hypothesis find_funct_rev_transf:
-    forall (A B V: Set) (transf: A -> B) (p: program A V),
+    forall (A B V: Type) (transf: A -> B) (p: program A V),
     forall (v : val) (tf : B),
     find_funct (globalenv (transform_program transf p)) v = Some tf ->
     exists f : A, find_funct (globalenv p) v = Some f /\ transf f = tf.
@@ -175,37 +175,37 @@ Module Type GENV.
   and operations over global environments. *)
 
   Hypothesis find_funct_ptr_transf_partial:
-    forall (A B V: Set) (transf: A -> res B) (p: program A V) (p': program B V),
+    forall (A B V: Type) (transf: A -> res B) (p: program A V) (p': program B V),
     transform_partial_program transf p = OK p' ->
     forall (b: block) (f: A),
     find_funct_ptr (globalenv p) b = Some f ->
     exists f',
     find_funct_ptr (globalenv p') b = Some f' /\ transf f = OK f'.
   Hypothesis find_funct_transf_partial:
-    forall (A B V: Set) (transf: A -> res B) (p: program A V) (p': program B V),
+    forall (A B V: Type) (transf: A -> res B) (p: program A V) (p': program B V),
     transform_partial_program transf p = OK p' ->
     forall (v: val) (f: A),
     find_funct (globalenv p) v = Some f ->
     exists f',
     find_funct (globalenv p') v = Some f' /\ transf f = OK f'.
   Hypothesis find_symbol_transf_partial:
-    forall (A B V: Set) (transf: A -> res B) (p: program A V) (p': program B V),
+    forall (A B V: Type) (transf: A -> res B) (p: program A V) (p': program B V),
     transform_partial_program transf p = OK p' ->
     forall (s: ident),
     find_symbol (globalenv p') s = find_symbol (globalenv p) s.
   Hypothesis init_mem_transf_partial:
-    forall (A B V: Set) (transf: A -> res B) (p: program A V) (p': program B V),
+    forall (A B V: Type) (transf: A -> res B) (p: program A V) (p': program B V),
     transform_partial_program transf p = OK p' ->
     init_mem p' = init_mem p.
   Hypothesis find_funct_ptr_rev_transf_partial:
-    forall (A B V: Set) (transf: A -> res B) (p: program A V) (p': program B V),
+    forall (A B V: Type) (transf: A -> res B) (p: program A V) (p': program B V),
     transform_partial_program transf p = OK p' ->
     forall (b : block) (tf : B),
     find_funct_ptr (globalenv p') b = Some tf ->
     exists f : A,
       find_funct_ptr (globalenv p) b = Some f /\ transf f = OK tf.
   Hypothesis find_funct_rev_transf_partial:
-    forall (A B V: Set) (transf: A -> res B) (p: program A V) (p': program B V),
+    forall (A B V: Type) (transf: A -> res B) (p: program A V) (p': program B V),
     transform_partial_program transf p = OK p' ->
     forall (v : val) (tf : B),
     find_funct (globalenv p') v = Some tf ->
@@ -213,7 +213,7 @@ Module Type GENV.
       find_funct (globalenv p) v = Some f /\ transf f = OK tf.
 
   Hypothesis find_funct_ptr_transf_partial2:
-    forall (A B V W: Set) (transf_fun: A -> res B) (transf_var: V -> res W)
+    forall (A B V W: Type) (transf_fun: A -> res B) (transf_var: V -> res W)
            (p: program A V) (p': program B W),
     transform_partial_program2 transf_fun transf_var p = OK p' ->
     forall (b: block) (f: A),
@@ -221,7 +221,7 @@ Module Type GENV.
     exists f',
     find_funct_ptr (globalenv p') b = Some f' /\ transf_fun f = OK f'.
   Hypothesis find_funct_transf_partial2:
-    forall (A B V W: Set) (transf_fun: A -> res B) (transf_var: V -> res W)
+    forall (A B V W: Type) (transf_fun: A -> res B) (transf_var: V -> res W)
            (p: program A V) (p': program B W),
     transform_partial_program2 transf_fun transf_var p = OK p' ->
     forall (v: val) (f: A),
@@ -229,18 +229,18 @@ Module Type GENV.
     exists f',
     find_funct (globalenv p') v = Some f' /\ transf_fun f = OK f'.
   Hypothesis find_symbol_transf_partial2:
-    forall (A B V W: Set) (transf_fun: A -> res B) (transf_var: V -> res W)
+    forall (A B V W: Type) (transf_fun: A -> res B) (transf_var: V -> res W)
            (p: program A V) (p': program B W),
     transform_partial_program2 transf_fun transf_var p = OK p' ->
     forall (s: ident),
     find_symbol (globalenv p') s = find_symbol (globalenv p) s.
   Hypothesis init_mem_transf_partial2:
-    forall (A B V W: Set) (transf_fun: A -> res B) (transf_var: V -> res W)
+    forall (A B V W: Type) (transf_fun: A -> res B) (transf_var: V -> res W)
            (p: program A V) (p': program B W),
     transform_partial_program2 transf_fun transf_var p = OK p' ->
     init_mem p' = init_mem p.
   Hypothesis find_funct_ptr_rev_transf_partial2:
-    forall (A B V W: Set) (transf_fun: A -> res B) (transf_var: V -> res W)
+    forall (A B V W: Type) (transf_fun: A -> res B) (transf_var: V -> res W)
            (p: program A V) (p': program B W),
     transform_partial_program2 transf_fun transf_var p = OK p' ->
     forall (b : block) (tf : B),
@@ -248,7 +248,7 @@ Module Type GENV.
     exists f : A,
       find_funct_ptr (globalenv p) b = Some f /\ transf_fun f = OK tf.
   Hypothesis find_funct_rev_transf_partial2:
-    forall (A B V W: Set) (transf_fun: A -> res B) (transf_var: V -> res W)
+    forall (A B V W: Type) (transf_fun: A -> res B) (transf_var: V -> res W)
            (p: program A V) (p': program B W),
     transform_partial_program2 transf_fun transf_var p = OK p' ->
     forall (v : val) (tf : B),
@@ -260,7 +260,7 @@ Module Type GENV.
   and operations over global environments. *)
 
   Hypothesis find_funct_ptr_match:
-    forall (A B V W: Set) (match_fun: A -> B -> Prop)
+    forall (A B V W: Type) (match_fun: A -> B -> Prop)
            (match_var: V -> W -> Prop) (p: program A V) (p': program B W),
     match_program match_fun match_var p p' ->
     forall (b : block) (f : A),
@@ -268,7 +268,7 @@ Module Type GENV.
     exists tf : B,
     find_funct_ptr (globalenv p') b = Some tf /\ match_fun f tf.
   Hypothesis find_funct_ptr_rev_match:
-    forall (A B V W: Set) (match_fun: A -> B -> Prop)
+    forall (A B V W: Type) (match_fun: A -> B -> Prop)
            (match_var: V -> W -> Prop) (p: program A V) (p': program B W),
     match_program match_fun match_var p p' ->
     forall (b : block) (tf : B),
@@ -276,27 +276,27 @@ Module Type GENV.
     exists f : A,
     find_funct_ptr (globalenv p) b = Some f /\ match_fun f tf.
   Hypothesis find_funct_match:
-    forall (A B V W: Set) (match_fun: A -> B -> Prop)
+    forall (A B V W: Type) (match_fun: A -> B -> Prop)
            (match_var: V -> W -> Prop) (p: program A V) (p': program B W),
     match_program match_fun match_var p p' ->
     forall (v : val) (f : A),
     find_funct (globalenv p) v = Some f ->
     exists tf : B, find_funct (globalenv p') v = Some tf /\ match_fun f tf.
   Hypothesis find_funct_rev_match:
-    forall (A B V W: Set) (match_fun: A -> B -> Prop)
+    forall (A B V W: Type) (match_fun: A -> B -> Prop)
            (match_var: V -> W -> Prop) (p: program A V) (p': program B W),
     match_program match_fun match_var p p' ->
     forall (v : val) (tf : B),
     find_funct (globalenv p') v = Some tf ->
     exists f : A, find_funct (globalenv p) v = Some f /\ match_fun f tf.
   Hypothesis find_symbol_match:
-    forall (A B V W: Set) (match_fun: A -> B -> Prop)
+    forall (A B V W: Type) (match_fun: A -> B -> Prop)
            (match_var: V -> W -> Prop) (p: program A V) (p': program B W),
     match_program match_fun match_var p p' ->
     forall (s : ident),
     find_symbol (globalenv p') s = find_symbol (globalenv p) s.
   Hypothesis init_mem_match:
-    forall (A B V W: Set) (match_fun: A -> B -> Prop)
+    forall (A B V W: Type) (match_fun: A -> B -> Prop)
            (match_var: V -> W -> Prop) (p: program A V) (p': program B W),
     match_program match_fun match_var p p' ->
     init_mem p' = init_mem p.
@@ -310,10 +310,10 @@ Module Genv: GENV.
 
 Section GENV.
 
-Variable F: Set.                    (* The type of functions *)
-Variable V: Set.                    (* The type of information over variables *)
+Variable F: Type.                    (* The type of functions *)
+Variable V: Type.                    (* The type of information over variables *)
 
-Record genv : Set := mkgenv {
+Record genv : Type := mkgenv {
   functions: ZMap.t (option F);     (* mapping function ptr -> function *)
   nextfunction: Z;
   symbols: PTree.t block                (* mapping symbol -> block *)
@@ -588,7 +588,7 @@ Proof.
   generalize (find_symbol_above_nextfunction _ _ X).
   unfold block; unfold ZIndexed.t; intro; omega.
 
-  intros. exploit H; eauto. assumption. intros [b [X Y]].
+  intros. exploit H; eauto. intros [b [X Y]].
   exists b; split.
   unfold globalenv, globalenv_initmem. rewrite find_symbol_add_globals. 
   assumption. apply list_disjoint_notin with (prog_funct_names p). assumption. 
@@ -770,7 +770,7 @@ End GENV.
 
 Section MATCH_PROGRAM.
 
-Variable A B V W: Set.
+Variable A B V W: Type.
 Variable match_fun: A -> B -> Prop.
 Variable match_var: V -> W -> Prop.
 Variable p: program A V.
@@ -950,7 +950,7 @@ End MATCH_PROGRAM.
 
 Section TRANSF_PROGRAM_PARTIAL2.
 
-Variable A B V W: Set.
+Variable A B V W: Type.
 Variable transf_fun: A -> res B.
 Variable transf_var: V -> res W.
 Variable p: program A V.
@@ -1024,7 +1024,7 @@ End TRANSF_PROGRAM_PARTIAL2.
 
 Section TRANSF_PROGRAM_PARTIAL.
 
-Variable A B V: Set.
+Variable A B V: Type.
 Variable transf: A -> res B.
 Variable p: program A V.
 Variable p': program B V.
@@ -1089,7 +1089,7 @@ End TRANSF_PROGRAM_PARTIAL.
 
 Section TRANSF_PROGRAM.
 
-Variable A B V: Set.
+Variable A B V: Type.
 Variable transf: A -> B.
 Variable p: program A V.
 Let tp := transform_program transf p.

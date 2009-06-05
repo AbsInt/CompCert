@@ -30,7 +30,7 @@ Require Conventions.
 
 (** Integer registers, floating-point registers. *)
 
-Inductive ireg: Set :=
+Inductive ireg: Type :=
   | GPR0: ireg  | GPR1: ireg  | GPR2: ireg  | GPR3: ireg
   | GPR4: ireg  | GPR5: ireg  | GPR6: ireg  | GPR7: ireg
   | GPR8: ireg  | GPR9: ireg  | GPR10: ireg | GPR11: ireg
@@ -40,7 +40,7 @@ Inductive ireg: Set :=
   | GPR24: ireg | GPR25: ireg | GPR26: ireg | GPR27: ireg
   | GPR28: ireg | GPR29: ireg | GPR30: ireg | GPR31: ireg.
 
-Inductive freg: Set :=
+Inductive freg: Type :=
   | FPR0: freg  | FPR1: freg  | FPR2: freg  | FPR3: freg
   | FPR4: freg  | FPR5: freg  | FPR6: freg  | FPR7: freg
   | FPR8: freg  | FPR9: freg  | FPR10: freg | FPR11: freg
@@ -63,7 +63,7 @@ Proof. decide equality. Defined.
   resolved later by the linker.
 *)
 
-Inductive constant: Set :=
+Inductive constant: Type :=
   | Cint: int -> constant
   | Csymbol_low: ident -> int -> constant
   | Csymbol_high: ident -> int -> constant.
@@ -80,7 +80,7 @@ Inductive constant: Set :=
 (** Bits in the condition register.  We are only interested in the
   first 4 bits. *)
 
-Inductive crbit: Set :=
+Inductive crbit: Type :=
   | CRbit_0: crbit
   | CRbit_1: crbit
   | CRbit_2: crbit
@@ -95,7 +95,7 @@ Inductive crbit: Set :=
 
 Definition label := positive.
 
-Inductive instruction : Set :=
+Inductive instruction : Type :=
   | Padd: ireg -> ireg -> ireg -> instruction                 (**r integer addition *)
   | Paddi: ireg -> ireg -> constant -> instruction            (**r add immediate *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
@@ -303,7 +303,7 @@ Definition program := AST.program fundef unit.
 (** The PowerPC has a great many registers, some general-purpose, some very
   specific.  We model only the following registers: *)
 
-Inductive preg: Set :=
+Inductive preg: Type :=
   | IR: ireg -> preg                    (**r integer registers *)
   | FR: freg -> preg                    (**r float registers *)
   | PC: preg                            (**r program counter *)
@@ -441,7 +441,7 @@ Definition const_high (c: constant) :=
   set and memory state after execution of the instruction at [rs#PC],
   or [Error] if the processor is stuck. *)
 
-Inductive outcome: Set :=
+Inductive outcome: Type :=
   | OK: regset -> mem -> outcome
   | Error: outcome.
 
@@ -819,7 +819,7 @@ Definition loc_external_result (sg: signature) : preg :=
 
 (** Execution of the instruction at [rs#PC]. *)
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State: regset -> mem -> state.
 
 Inductive step: state -> trace -> state -> Prop :=

@@ -28,11 +28,11 @@ Set Implicit Arguments.
   as a list of either substrings or positive numbers encoding
   a source-level identifier (see module AST). *)
 
-Inductive errcode: Set :=
+Inductive errcode: Type :=
   | MSG: string -> errcode
   | CTX: positive -> errcode.
 
-Definition errmsg: Set := list errcode.
+Definition errmsg: Type := list errcode.
 
 Definition msg (s: string) : errmsg := MSG s :: nil.
 
@@ -42,7 +42,7 @@ Definition msg (s: string) : errmsg := MSG s :: nil.
   The return value is either [OK res] to indicate success,
   or [Error msg] to indicate failure. *)
 
-Inductive res (A: Set) : Set :=
+Inductive res (A: Type) : Type :=
 | OK: A -> res A
 | Error: errmsg -> res A.
 
@@ -51,13 +51,13 @@ Implicit Arguments Error [A].
 (** To automate the propagation of errors, we use a monadic style
   with the following [bind] operation. *)
 
-Definition bind (A B: Set) (f: res A) (g: A -> res B) : res B :=
+Definition bind (A B: Type) (f: res A) (g: A -> res B) : res B :=
   match f with
   | OK x => g x
   | Error msg => Error msg
   end.
 
-Definition bind2 (A B C: Set) (f: res (A * B)) (g: A -> B -> res C) : res C :=
+Definition bind2 (A B C: Type) (f: res (A * B)) (g: A -> B -> res C) : res C :=
   match f with
   | OK (x, y) => g x y
   | Error msg => Error msg
@@ -74,7 +74,7 @@ Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
  : error_monad_scope.
 
 Remark bind_inversion:
-  forall (A B: Set) (f: res A) (g: A -> res B) (y: B),
+  forall (A B: Type) (f: res A) (g: A -> res B) (y: B),
   bind f g = OK y ->
   exists x, f = OK x /\ g x = OK y.
 Proof.
@@ -84,7 +84,7 @@ Proof.
 Qed.
 
 Remark bind2_inversion:
-  forall (A B C: Set) (f: res (A*B)) (g: A -> B -> res C) (z: C),
+  forall (A B C: Type) (f: res (A*B)) (g: A -> B -> res C) (z: C),
   bind2 f g = OK z ->
   exists x, exists y, f = OK (x, y) /\ g x y = OK z.
 Proof.
@@ -97,14 +97,14 @@ Open Local Scope error_monad_scope.
 
 (** This is the familiar monadic map iterator. *)
 
-Fixpoint mmap (A B: Set) (f: A -> res B) (l: list A) {struct l} : res (list B) :=
+Fixpoint mmap (A B: Type) (f: A -> res B) (l: list A) {struct l} : res (list B) :=
   match l with
   | nil => OK nil
   | hd :: tl => do hd' <- f hd; do tl' <- mmap f tl; OK (hd' :: tl')
   end.
 
 Remark mmap_inversion:
-  forall (A B: Set) (f: A -> res B) (l: list A) (l': list B),
+  forall (A B: Type) (f: A -> res B) (l: list A) (l': list B),
   mmap f l = OK l' ->
   list_forall2 (fun x y => f x = OK y) l l'.
 Proof.

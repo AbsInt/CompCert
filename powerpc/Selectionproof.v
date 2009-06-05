@@ -1357,10 +1357,12 @@ Proof.
   econstructor. destruct k; simpl in H; simpl; auto. 
   rewrite <- H0; reflexivity.
   constructor; auto.
+(*
   (* assign *)
   exists (State (sel_function f) Sskip (sel_cont k) sp (PTree.set id v e) m); split.
   constructor. auto with evalexpr.
   constructor; auto.
+*)
   (* store *)
   econstructor; split.
   eapply eval_store; eauto with evalexpr.

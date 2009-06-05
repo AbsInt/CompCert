@@ -23,7 +23,7 @@ Require Import Integers.
 (** A multi-way branch is composed of a list of (key, action) pairs,
   plus a default action.  *)
 
-Definition table : Set := list (int * nat).
+Definition table : Type := list (int * nat).
 
 Fixpoint switch_target (n: int) (dfl: nat) (cases: table)
                        {struct cases} : nat :=
@@ -37,7 +37,7 @@ Fixpoint switch_target (n: int) (dfl: nat) (cases: table)
     Each node of the tree performs an equality test or a less-than
     test against one of the keys. *)
 
-Inductive comptree : Set :=
+Inductive comptree : Type :=
   | CTaction: nat -> comptree
   | CTifeq: int -> nat -> comptree -> comptree
   | CTiflt: int -> comptree -> comptree -> comptree.

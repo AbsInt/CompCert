@@ -31,11 +31,11 @@ Require Import AST.
   bit size of the type.  An integer type is a pair of a signed/unsigned
   flag and a bit size: 8, 16 or 32 bits. *)
 
-Inductive signedness : Set :=
+Inductive signedness : Type :=
   | Signed: signedness
   | Unsigned: signedness.
 
-Inductive intsize : Set :=
+Inductive intsize : Type :=
   | I8: intsize
   | I16: intsize
   | I32: intsize.
@@ -43,7 +43,7 @@ Inductive intsize : Set :=
 (** Float types come in two sizes: 32 bits (single precision)
   and 64-bit (double precision). *)
 
-Inductive floatsize : Set :=
+Inductive floatsize : Type :=
   | F32: floatsize
   | F64: floatsize.
 
@@ -82,7 +82,7 @@ Inductive floatsize : Set :=
   structure or union, but not to the structure or union directly.
 *)
 
-Inductive type : Set :=
+Inductive type : Type :=
   | Tvoid: type                            (**r the [void] type *)
   | Tint: intsize -> signedness -> type    (**r integer types *)
   | Tfloat: floatsize -> type              (**r floating-point types *)
@@ -93,11 +93,11 @@ Inductive type : Set :=
   | Tunion: ident -> fieldlist -> type     (**r union types *)
   | Tcomp_ptr: ident -> type               (**r pointer to named struct or union *)
 
-with typelist : Set :=
+with typelist : Type :=
   | Tnil: typelist
   | Tcons: type -> typelist -> typelist
 
-with fieldlist : Set :=
+with fieldlist : Type :=
   | Fnil: fieldlist
   | Fcons: ident -> type -> fieldlist -> fieldlist.
 
@@ -105,12 +105,12 @@ with fieldlist : Set :=
 
 (** Arithmetic and logical operators. *)
 
-Inductive unary_operation : Set :=
+Inductive unary_operation : Type :=
   | Onotbool : unary_operation          (**r boolean negation ([!] in C) *)
   | Onotint : unary_operation           (**r integer complement ([~] in C) *)
   | Oneg : unary_operation.             (**r opposite (unary [-]) *)
 
-Inductive binary_operation : Set :=
+Inductive binary_operation : Type :=
   | Oadd : binary_operation             (**r addition (binary [+]) *)
   | Osub : binary_operation             (**r subtraction (binary [-]) *)
   | Omul : binary_operation             (**r multiplication (binary [*]) *)
@@ -138,10 +138,10 @@ Inductive binary_operation : Set :=
   description (type [expr_descr]).
 *)
 
-Inductive expr : Set :=
+Inductive expr : Type :=
   | Expr: expr_descr -> type -> expr
 
-with expr_descr : Set :=
+with expr_descr : Type :=
   | Econst_int: int -> expr_descr       (**r integer literal *)
   | Econst_float: float -> expr_descr   (**r float literal *)
   | Evar: ident -> expr_descr           (**r variable *)
@@ -168,7 +168,7 @@ Definition typeof (e: expr) : type :=
   the [default] case must occur last.  Blocks and block-scoped declarations
   are not supported. *)
 
-Inductive statement : Set :=
+Inductive statement : Type :=
   | Sskip : statement                   (**r do nothing *)
   | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
   | Scall: option expr -> expr -> list expr -> statement (**r function call *)
@@ -182,7 +182,7 @@ Inductive statement : Set :=
   | Sreturn : option expr -> statement      (**r [return] statement *)
   | Sswitch : expr -> labeled_statements -> statement  (**r [switch] statement *)
 
-with labeled_statements : Set :=            (**r cases of a [switch] *)
+with labeled_statements : Type :=            (**r cases of a [switch] *)
   | LSdefault: statement -> labeled_statements
   | LScase: int -> statement -> labeled_statements -> labeled_statements.
 
@@ -193,7 +193,7 @@ with labeled_statements : Set :=            (**r cases of a [switch] *)
   and types of its local variables ([fn_vars]), and the body of the
   function (a statement, [fn_body]). *)
 
-Record function : Set := mkfunction {
+Record function : Type := mkfunction {
   fn_return: type;
   fn_params: list (ident * type);
   fn_vars: list (ident * type);
@@ -203,7 +203,7 @@ Record function : Set := mkfunction {
 (** Functions can either be defined ([Internal]) or declared as
   external functions ([External]). *)
 
-Inductive fundef : Set :=
+Inductive fundef : Type :=
   | Internal: function -> fundef
   | External: ident -> typelist -> type -> fundef.
 
@@ -213,7 +213,7 @@ Inductive fundef : Set :=
   of named global variables, carrying their types and optional initialization 
   data.  See module [AST] for more details. *)
 
-Definition program : Set := AST.program fundef type.
+Definition program : Type := AST.program fundef type.
 
 (** * Operations over types *)
 
@@ -409,9 +409,9 @@ Proof.
   destruct (ident_eq id1 i); destruct (ident_eq id2 i).
   congruence. 
   subst i. intros. inv H; inv H0.
-  exploit field_offset_rec_in_range; eauto. tauto. 
+  exploit field_offset_rec_in_range. eexact H1. eauto. tauto.  
   subst i. intros. inv H1; inv H2.
-  exploit field_offset_rec_in_range; eauto. tauto. 
+  exploit field_offset_rec_in_range. eexact H. eauto. tauto. 
   intros. eapply IHfld; eauto.
 
   apply H with fld0 0; auto.
@@ -449,7 +449,7 @@ type must be accessed:
 - [By_nothing]: no access is possible, e.g. for the [void] type.
 *)
 
-Inductive mode: Set :=
+Inductive mode: Type :=
   | By_value: memory_chunk -> mode
   | By_reference: mode
   | By_nothing: mode.
@@ -482,7 +482,7 @@ end.
   compiler (module [Cshmgen]).
 *)
 
-Inductive classify_add_cases : Set :=
+Inductive classify_add_cases : Type :=
   | add_case_ii: classify_add_cases         (**r int , int *)
   | add_case_ff: classify_add_cases         (**r float , float *)
   | add_case_pi: type -> classify_add_cases (**r ptr or array, int *)
@@ -500,7 +500,7 @@ Definition classify_add (ty1: type) (ty2: type) :=
   | _, _ => add_default
   end.
 
-Inductive classify_sub_cases : Set :=
+Inductive classify_sub_cases : Type :=
   | sub_case_ii: classify_sub_cases          (**r int , int *)
   | sub_case_ff: classify_sub_cases          (**r float , float *)
   | sub_case_pi: type -> classify_sub_cases  (**r ptr or array , int *)
@@ -520,7 +520,7 @@ Definition classify_sub (ty1: type) (ty2: type) :=
   | _ ,_ => sub_default
   end.
 
-Inductive classify_mul_cases : Set:=
+Inductive classify_mul_cases : Type:=
   | mul_case_ii: classify_mul_cases (**r int , int *)
   | mul_case_ff: classify_mul_cases (**r float , float *)
   | mul_default: classify_mul_cases . (**r other *)
@@ -532,7 +532,7 @@ Definition classify_mul (ty1: type) (ty2: type) :=
   | _,_  => mul_default
 end.
 
-Inductive classify_div_cases : Set:=
+Inductive classify_div_cases : Type:=
   | div_case_I32unsi: classify_div_cases (**r unsigned int32 , int *)
   | div_case_ii: classify_div_cases    (**r int , int *) 
   | div_case_ff: classify_div_cases    (**r float , float *)
@@ -547,7 +547,7 @@ Definition classify_div (ty1: type) (ty2: type) :=
   | _ ,_ => div_default 
 end.
 
-Inductive classify_mod_cases : Set:=
+Inductive classify_mod_cases : Type:=
   | mod_case_I32unsi: classify_mod_cases  (**r unsigned I32 , int *)
   | mod_case_ii: classify_mod_cases  (**r int , int *)
   | mod_default: classify_mod_cases . (**r other *)
@@ -560,7 +560,7 @@ Definition classify_mod (ty1: type) (ty2: type) :=
   | _ , _ => mod_default 
 end .
 
-Inductive classify_shr_cases :Set:=
+Inductive classify_shr_cases :Type:=
   | shr_case_I32unsi:  classify_shr_cases (**r unsigned I32 , int *)
   | shr_case_ii :classify_shr_cases (**r int , int *)
   | shr_default : classify_shr_cases . (**r other *)
@@ -572,7 +572,7 @@ Definition classify_shr (ty1: type) (ty2: type) :=
   | _ , _ => shr_default 
   end.
 
-Inductive classify_cmp_cases : Set:=
+Inductive classify_cmp_cases : Type:=
   | cmp_case_I32unsi: classify_cmp_cases (**r unsigned I32 , int *)
   | cmp_case_ipip: classify_cmp_cases  (**r int|ptr|array , int|ptr|array*)
   | cmp_case_ff: classify_cmp_cases  (**r float , float *)
@@ -593,7 +593,7 @@ Definition classify_cmp (ty1: type) (ty2: type) :=
   | _ , _ => cmp_default
   end.
 
-Inductive classify_fun_cases : Set:=
+Inductive classify_fun_cases : Type:=
   | fun_case_f: typelist -> type -> classify_fun_cases   (**r (pointer to) function *)
   | fun_default: classify_fun_cases . (**r other *)
 

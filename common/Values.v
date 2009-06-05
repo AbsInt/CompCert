@@ -21,7 +21,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 
-Definition block : Set := Z.
+Definition block : Type := Z.
 Definition eq_block := zeq.
 
 (** A value is either:
@@ -33,7 +33,7 @@ Definition eq_block := zeq.
   value of an uninitialized variable.
 *)
 
-Inductive val: Set :=
+Inductive val: Type :=
   | Vundef: val
   | Vint: int -> val
   | Vfloat: float -> val

@@ -45,6 +45,8 @@ Proof.
   assert (Zpos x <> Zpos y). congruence. omega.
 Qed.
 
+Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := peq.
+
 End OrderedPositive.
 
 (** Indexed types (those that inject into [positive]) are ordered. *)
@@ -79,6 +81,13 @@ Proof.
   apply LT. exact l. 
   apply EQ. red; red in e. apply A.index_inj; auto.
   apply GT. exact l.
+Qed.
+
+Lemma eq_dec : forall x y, { eq x y } + { ~ eq x y }.
+Proof.
+  intros. case (peq (A.index x) (A.index y)); intros.
+  left. apply A.index_inj; auto.
+  right; red; unfold eq; intros; subst. congruence. 
 Qed.
 
 End OrderedIndexed.
@@ -162,6 +171,16 @@ Proof.
   apply EQ. red. tauto.
   apply GT. red. right. split. apply A.eq_sym. auto. auto.
   apply GT. red. left. auto.
+Qed.
+
+Lemma eq_dec : forall x y, { eq x y } + { ~ eq x y }.
+Proof.
+  unfold eq; intros.
+  case (A.eq_dec (fst x) (fst y)); intros.
+  case (B.eq_dec (snd x) (snd y)); intros.
+  left; auto.
+  right; intuition.
+  right; intuition.
 Qed.
 
 End OrderedPair.

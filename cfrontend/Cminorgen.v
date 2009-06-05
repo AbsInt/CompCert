@@ -108,7 +108,7 @@ Definition make_globaladdr (id: ident): expr :=
   data block.  [Var_global_scalar] and [Var_global_array] denote
   global variables, stored in the global symbols with the same names. *)
 
-Inductive var_info: Set :=
+Inductive var_info: Type :=
   | Var_local: memory_chunk -> var_info
   | Var_stack_scalar: memory_chunk -> Z -> var_info
   | Var_stack_array: Z -> var_info

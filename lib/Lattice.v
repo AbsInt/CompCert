@@ -25,7 +25,7 @@ Require Import FSets.
 
 Module Type SEMILATTICE.
 
-  Variable t: Set.
+  Variable t: Type.
   Variable eq: t -> t -> Prop.
   Hypothesis eq_refl: forall x, eq x x.
   Hypothesis eq_sym: forall x y, eq x y -> eq y x.
@@ -49,24 +49,9 @@ End SEMILATTICE.
 
 Module Type SEMILATTICE_WITH_TOP.
 
-  Variable t: Set.
-  Variable eq: t -> t -> Prop.
-  Hypothesis eq_refl: forall x, eq x x.
-  Hypothesis eq_sym: forall x y, eq x y -> eq y x.
-  Hypothesis eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
-  Variable beq: t -> t -> bool.
-  Hypothesis beq_correct: forall x y, beq x y = true -> eq x y.
-  Variable ge: t -> t -> Prop.
-  Hypothesis ge_refl: forall x y, eq x y -> ge x y.
-  Hypothesis ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
-  Hypothesis ge_compat: forall x x' y y', eq x x' -> eq y y' -> ge x y -> ge x' y'.
-  Variable bot: t.
-  Hypothesis ge_bot: forall x, ge x bot.
+  Include Type SEMILATTICE.
   Variable top: t.
   Hypothesis ge_top: forall x, ge top x.
-  Variable lub: t -> t -> t.
-  Hypothesis lub_commut: forall x y, eq (lub x y) (lub y x).
-  Hypothesis ge_lub_left: forall x y, ge (lub x y) x.
 
 End SEMILATTICE_WITH_TOP.
 
@@ -78,11 +63,11 @@ End SEMILATTICE_WITH_TOP.
 
 Module LPMap(L: SEMILATTICE_WITH_TOP) <: SEMILATTICE_WITH_TOP.
 
-Inductive t_ : Set :=
+Inductive t_ : Type :=
   | Bot_except: PTree.t L.t -> t_
   | Top_except: PTree.t L.t -> t_.
 
-Definition t: Set := t_.
+Definition t: Type := t_.
 
 Definition get (p: positive) (x: t) : L.t :=
   match x with
@@ -333,12 +318,12 @@ End LFSet.
 
 Module LFlat(X: EQUALITY_TYPE) <: SEMILATTICE_WITH_TOP.
 
-Inductive t_ : Set :=
+Inductive t_ : Type :=
   | Bot: t_
   | Inj: X.t -> t_
   | Top: t_.
 
-Definition t : Set := t_.
+Definition t : Type := t_.
 
 Definition eq (x y: t) := (x = y).
 Definition eq_refl: forall x, eq x x := (@refl_equal t).

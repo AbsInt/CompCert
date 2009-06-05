@@ -108,7 +108,7 @@ End DATAFLOW_SOLVER.
 
 Module Type NODE_SET.
 
-  Variable t: Set.
+  Variable t: Type.
   Variable add: positive -> t -> t.
   Variable pick: t -> option (positive * t).
   Variable initial: positive -> t.
@@ -147,7 +147,7 @@ Variable entrypoints: list (positive * L.t).
 - A worklist of program points that remain to be considered.
 *)
 
-Record state : Set :=
+Record state : Type :=
   mkstate { st_in: PMap.t L.t; st_wrk: NS.t }.
 
 (** Kildall's algorithm, in pseudo-code, is as follows:
@@ -663,7 +663,7 @@ End Backward_Dataflow_Solver.
 
 Module Type ORDERED_TYPE_WITH_TOP.
 
-  Variable t: Set.
+  Variable t: Type.
   Variable ge: t -> t -> Prop.
   Variable top: t.
   Hypothesis top_ge: forall x, ge top x.
@@ -736,7 +736,7 @@ Definition result := PMap.t L.t.
 - A worklist of program points that remain to be considered.
 *)
 
-Record state : Set := mkstate
+Record state : Type := mkstate
   { st_in: result; st_wrk: list positive }.
 
 (** The ``extended basic block'' algorithm, in pseudo-code, is as follows:
@@ -1167,7 +1167,7 @@ Module NodeSetForward <: NODE_SET.
     rewrite positive_rec_succ. rewrite PositiveSetFacts.add_iff. 
     elim (Plt_succ_inv _ _ H0); intro.
     right. apply H. auto.
-    left. red. red. auto.
+    left. auto.
   Qed.
 End NodeSetForward.
 

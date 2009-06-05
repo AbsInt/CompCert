@@ -225,7 +225,7 @@ Record match_globalenvs (f: meminj) : Prop :=
   collecting information on the current execution state of a Csharpminor
   function and its Cminor translation. *)
 
-Record frame : Set :=
+Record frame : Type :=
   mkframe {
     fr_cenv: compilenv;
     fr_e: Csharpminor.env;
@@ -235,7 +235,7 @@ Record frame : Set :=
     fr_high: Z
   }.
 
-Definition callstack : Set := list frame.
+Definition callstack : Type := list frame.
 
 (** Matching of call stacks imply matching of environments for each of
   the frames, plus matching of the global environments, plus disjointness

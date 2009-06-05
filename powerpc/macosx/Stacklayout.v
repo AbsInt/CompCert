@@ -42,7 +42,7 @@ the boundaries between areas in the frame part.
 
 Definition fe_ofs_arg := 24.
 
-Record frame_env : Set := mk_frame_env {
+Record frame_env : Type := mk_frame_env {
   fe_size: Z;
   fe_ofs_link: Z;
   fe_ofs_retaddr: Z;

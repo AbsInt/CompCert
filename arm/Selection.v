@@ -118,7 +118,7 @@ Definition notint (e: expr) :=
   characterizes the expressions that match each of the 4 cases of interest.
 *)
 
-Inductive notint_cases: forall (e: expr), Set :=
+Inductive notint_cases: forall (e: expr), Type :=
   | notint_case1:
       forall s t1,
       notint_cases (Eop (Oshift s) (t1:::Enil))
@@ -208,7 +208,7 @@ Definition addimm (n: int) (e: expr) :=
   end.
 *)
 
-Inductive addimm_cases: forall (e: expr), Set :=
+Inductive addimm_cases: forall (e: expr), Type :=
   | addimm_case1:
       forall m,
       addimm_cases (Eop (Ointconst m) Enil)
@@ -270,7 +270,7 @@ Definition add (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive add_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive add_cases: forall (e1: expr) (e2: expr), Type :=
   | add_case1:
       forall n1 t2,
       add_cases (Eop (Ointconst n1) Enil) (t2)
@@ -352,7 +352,7 @@ Definition sub (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive sub_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive sub_cases: forall (e1: expr) (e2: expr), Type :=
   | sub_case1:
       forall t1 n2,
       sub_cases (t1) (Eop (Ointconst n2) Enil)
@@ -430,7 +430,7 @@ Definition shlimm (e1: expr) :=
   end.
 *)
 
-Inductive shlimm_cases: forall (e1: expr), Set :=
+Inductive shlimm_cases: forall (e1: expr), Type :=
   | shlimm_case1:
       forall n1,
       shlimm_cases (Eop (Ointconst n1) Enil)
@@ -481,7 +481,7 @@ Definition shruimm (e1: expr) :=
   end.
 *)
 
-Inductive shruimm_cases: forall (e1: expr), Set :=
+Inductive shruimm_cases: forall (e1: expr), Type :=
   | shruimm_case1:
       forall n1,
       shruimm_cases (Eop (Ointconst n1) Enil)
@@ -531,7 +531,7 @@ Definition shrimm (e1: expr) :=
   end.
 *)
 
-Inductive shrimm_cases: forall (e1: expr), Set :=
+Inductive shrimm_cases: forall (e1: expr), Type :=
   | shrimm_case1:
       forall n1,
       shrimm_cases (Eop (Ointconst n1) Enil)
@@ -598,7 +598,7 @@ Definition mulimm (n1: int) (e2: expr) :=
   end.
 *)
 
-Inductive mulimm_cases: forall (e2: expr), Set :=
+Inductive mulimm_cases: forall (e2: expr), Type :=
   | mulimm_case1:
       forall (n2: int),
       mulimm_cases (Eop (Ointconst n2) Enil)
@@ -642,7 +642,7 @@ Definition mul (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive mul_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive mul_cases: forall (e1: expr) (e2: expr), Type :=
   | mul_case1:
       forall (n1: int) (t2: expr),
       mul_cases (Eop (Ointconst n1) Enil) (t2)
@@ -690,7 +690,7 @@ Definition mod_aux (divop: operation) (e1 e2: expr) :=
                            Enil) :::
                  Enil))).
 
-Inductive divu_cases: forall (e2: expr), Set :=
+Inductive divu_cases: forall (e2: expr), Type :=
   | divu_case1:
       forall (n2: int),
       divu_cases (Eop (Ointconst n2) Enil)
@@ -759,7 +759,7 @@ Definition and (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive and_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive and_cases: forall (e1: expr) (e2: expr), Type :=
   | and_case1:
       forall s t1 t2,
       and_cases (Eop (Oshift s) (t1:::Enil)) (t2)
@@ -836,7 +836,7 @@ Definition or (e1: expr) (e2: expr) :=
 
 (* TODO: symmetric of first case *)
 
-Inductive or_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive or_cases: forall (e1: expr) (e2: expr), Type :=
   | or_case1:
       forall n1 t1 n2 t2,
       or_cases (Eop (Oshift (Slsl n1)) (t1:::Enil)) (Eop (Oshift (Slsr n2)) (t2:::Enil))
@@ -886,7 +886,7 @@ Definition xor (e1: expr) (e2: expr) :=
   end.
 *)
 
-Inductive xor_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive xor_cases: forall (e1: expr) (e2: expr), Type :=
   | xor_case1:
       forall s t1 t2,
       xor_cases (Eop (Oshift s) (t1:::Enil)) (t2)
@@ -919,7 +919,7 @@ Definition xor (e1: expr) (e2: expr) :=
 
 (** ** General shifts *)
 
-Inductive shift_cases: forall (e1: expr), Set :=
+Inductive shift_cases: forall (e1: expr), Type :=
   | shift_case1:
       forall (n2: int),
       shift_cases (Eop (Ointconst n2) Enil)
@@ -961,7 +961,7 @@ Definition shr (e1: expr) (e2: expr) :=
 
 (** ** Truncations and sign extensions *)
 
-Inductive cast8signed_cases: forall (e1: expr), Set :=
+Inductive cast8signed_cases: forall (e1: expr), Type :=
   | cast8signed_case1:
       forall (e2: expr),
       cast8signed_cases (Eop Ocast8signed (e2 ::: Enil))
@@ -983,7 +983,7 @@ Definition cast8signed (e: expr) :=
   | cast8signed_default e1 => Eop Ocast8signed (e1 ::: Enil)
   end.
 
-Inductive cast8unsigned_cases: forall (e1: expr), Set :=
+Inductive cast8unsigned_cases: forall (e1: expr), Type :=
   | cast8unsigned_case1:
       forall (e2: expr),
       cast8unsigned_cases (Eop Ocast8unsigned (e2 ::: Enil))
@@ -1005,7 +1005,7 @@ Definition cast8unsigned (e: expr) :=
   | cast8unsigned_default e1 => Eop Ocast8unsigned (e1 ::: Enil)
   end.
 
-Inductive cast16signed_cases: forall (e1: expr), Set :=
+Inductive cast16signed_cases: forall (e1: expr), Type :=
   | cast16signed_case1:
       forall (e2: expr),
       cast16signed_cases (Eop Ocast16signed (e2 ::: Enil))
@@ -1027,7 +1027,7 @@ Definition cast16signed (e: expr) :=
   | cast16signed_default e1 => Eop Ocast16signed (e1 ::: Enil)
   end.
 
-Inductive cast16unsigned_cases: forall (e1: expr), Set :=
+Inductive cast16unsigned_cases: forall (e1: expr), Type :=
   | cast16unsigned_case1:
       forall (e2: expr),
       cast16unsigned_cases (Eop Ocast16unsigned (e2 ::: Enil))
@@ -1049,7 +1049,7 @@ Definition cast16unsigned (e: expr) :=
   | cast16unsigned_default e1 => Eop Ocast16unsigned (e1 ::: Enil)
   end.
 
-Inductive singleoffloat_cases: forall (e1: expr), Set :=
+Inductive singleoffloat_cases: forall (e1: expr), Type :=
   | singleoffloat_case1:
       forall (e2: expr),
       singleoffloat_cases (Eop Osingleoffloat (e2 ::: Enil))
@@ -1084,7 +1084,7 @@ Definition comp (e1: expr) (e2: expr) :=
   end.
 *)
   
-Inductive comp_cases: forall (e1: expr) (e2: expr), Set :=
+Inductive comp_cases: forall (e1: expr) (e2: expr), Type :=
   | comp_case1:
       forall n1 t2,
       comp_cases (Eop (Ointconst n1) Enil) (t2)
@@ -1204,7 +1204,7 @@ Definition addressing (e: expr) :=
   end.
 *)
 
-Inductive addressing_cases: forall (e: expr), Set :=
+Inductive addressing_cases: forall (e: expr), Type :=
   | addressing_case2:
       forall n,
       addressing_cases (Eop (Oaddrstack n) Enil)

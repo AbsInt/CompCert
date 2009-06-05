@@ -51,7 +51,7 @@ Require Stacklayout.
     values.  Like location sets (see module [Locations]), overlap
     can occur. *)
 
-Definition frame : Set := typ -> Z -> val.
+Definition frame : Type := typ -> Z -> val.
 
 Definition typ_eq: forall (ty1 ty2: typ), {ty1=ty2} + {ty1<>ty2}.
 Proof. decide equality. Defined.
@@ -154,7 +154,7 @@ End FRAME_ACCESSES.
 
 (** Mach execution states. *)
 
-Inductive stackframe: Set :=
+Inductive stackframe: Type :=
   | Stackframe:
       forall (f: function)      (**r calling function *)
              (sp: val)          (**r stack pointer in calling function *)
@@ -162,7 +162,7 @@ Inductive stackframe: Set :=
              (fr: frame),       (**r frame state in calling function *)
       stackframe.
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State:
       forall (stack: list stackframe) (**r call stack *)
              (f: function)            (**r function currently executing *)

@@ -47,7 +47,7 @@ Require Import RTLgen.
 *)
 
 Remark bind_inversion:
-  forall (A B: Set) (f: mon A) (g: A -> mon B) 
+  forall (A B: Type) (f: mon A) (g: A -> mon B) 
          (y: B) (s1 s3: state) (i: state_incr s1 s3),
   bind f g s1 = OK y s3 i ->
   exists x, exists s2, exists i1, exists i2,
@@ -61,7 +61,7 @@ Proof.
 Qed.
 
 Remark bind2_inversion:
-  forall (A B C: Set) (f: mon (A*B)) (g: A -> B -> mon C)
+  forall (A B C: Type) (f: mon (A*B)) (g: A -> B -> mon C)
          (z: C) (s1 s3: state) (i: state_incr s1 s3),
   bind2 f g s1 = OK z s3 i ->
   exists x, exists y, exists s2, exists i1, exists i2,
@@ -827,20 +827,6 @@ Inductive tr_function: CminorSel.function -> RTL.function -> Prop :=
 (** We now show that the translation functions in module [RTLgen]
   satisfy the specifications given above as inductive predicates. *)
 
-Scheme tr_expr_ind3 := Minimality for tr_expr Sort Prop
-  with tr_condition_ind3 := Minimality for tr_condition Sort Prop
-  with tr_exprlist_ind3 := Minimality for tr_exprlist Sort Prop.
-
-Definition tr_expr_condition_exprlist_ind3
-  (c: code)
-  (P : mapping -> list reg -> expr -> node -> node -> reg -> Prop)
-  (P0 : mapping -> list reg -> condexpr -> node -> node -> node -> Prop)
-  (P1 : mapping -> list reg -> exprlist -> node -> node -> list reg -> Prop) :=
-  fun a b c' d e f g h i j k l =>
-  conj (tr_expr_ind3 c P P0 P1 a b c' d e f g h i j k l)
-       (conj (tr_condition_ind3 c P P0 P1 a b c' d e f g h i j k l)
-             (tr_exprlist_ind3 c P P0 P1 a b c' d e f g h i j k l)).
-
 Lemma tr_move_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall ns rs nd rd,
@@ -850,68 +836,34 @@ Proof.
   induction 2; econstructor; eauto with rtlg.
 Qed.
 
-Lemma tr_expr_condition_exprlist_incr:
-  forall s1 s2, state_incr s1 s2 ->
-  (forall map pr a ns nd rd,
-   tr_expr s1.(st_code) map pr a ns nd rd ->
-   tr_expr s2.(st_code) map pr a ns nd rd)
-/\(forall map pr a ns ntrue nfalse,
-   tr_condition s1.(st_code) map pr a ns ntrue nfalse ->
-   tr_condition s2.(st_code) map pr a ns ntrue nfalse)
-/\(forall map pr al ns nd rl,
-   tr_exprlist s1.(st_code) map pr al ns nd rl ->
-   tr_exprlist s2.(st_code) map pr al ns nd rl).
-Proof.
-  intros s1 s2 EXT. 
-  pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
-  apply tr_expr_condition_exprlist_ind3; intros; econstructor; eauto.
-  eapply tr_move_incr; eauto.
-  eapply tr_move_incr; eauto.
-Qed.
-
 Lemma tr_expr_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall map pr a ns nd rd,
   tr_expr s1.(st_code) map pr a ns nd rd ->
-  tr_expr s2.(st_code) map pr a ns nd rd.
-Proof.
-  intros.
-  exploit tr_expr_condition_exprlist_incr; eauto.
-  intros [A [B C]]. eauto.
-Qed.
-
-Lemma tr_condition_incr:
+  tr_expr s2.(st_code) map pr a ns nd rd
+with tr_condition_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall map pr a ns ntrue nfalse,
   tr_condition s1.(st_code) map pr a ns ntrue nfalse ->
-  tr_condition s2.(st_code) map pr a ns ntrue nfalse.
-Proof.
-  intros.
-  exploit tr_expr_condition_exprlist_incr; eauto. 
-  intros [A [B C]]. eauto.
-Qed.
-
-Lemma tr_exprlist_incr:
+  tr_condition s2.(st_code) map pr a ns ntrue nfalse
+with tr_exprlist_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall map pr al ns nd rl,
   tr_exprlist s1.(st_code) map pr al ns nd rl ->
   tr_exprlist s2.(st_code) map pr al ns nd rl.
 Proof.
-  intros.
-  exploit tr_expr_condition_exprlist_incr; eauto.
-  intros [A [B C]]. eauto.
+  intros s1 s2 EXT. 
+  pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
+  induction 1; econstructor; eauto.
+  eapply tr_move_incr; eauto.
+  eapply tr_move_incr; eauto.
+  intros s1 s2 EXT. 
+  pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
+  induction 1; econstructor; eauto.
+  intros s1 s2 EXT. 
+  pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
+  induction 1; econstructor; eauto.
 Qed.
-
-Scheme expr_ind3 := Induction for expr Sort Prop
-  with condexpr_ind3 := Induction for condexpr Sort Prop
-  with exprlist_ind3 := Induction for exprlist Sort Prop.
-
-Definition expr_condexpr_exprlist_ind 
-    (P1: expr -> Prop) (P2: condexpr -> Prop) (P3: exprlist -> Prop) :=
-  fun a b c d e f g h i j k l =>
-  conj (expr_ind3 P1 P2 P3 a b c d e f g h i j k l)
-    (conj (condexpr_ind3 P1 P2 P3 a b c d e f g h i j k l)
-          (exprlist_ind3 P1 P2 P3 a b c d e f g h i j k l)).
 
 Lemma add_move_charact:
   forall s ns rs nd rd s' i,
@@ -923,30 +875,33 @@ Proof.
   constructor. eauto with rtlg.
 Qed.
 
-Lemma transl_expr_condexpr_list_charact:
-  (forall a map rd nd s ns s' pr INCR
+Lemma transl_expr_charact:
+  forall a map rd nd s ns s' pr INCR
      (TR: transl_expr map a rd nd s = OK ns s' INCR)
      (WF: map_valid map s)
      (OK: target_reg_ok map pr a rd)
      (VALID: regs_valid pr s)
      (VALID2: reg_valid rd s),
-   tr_expr s'.(st_code) map pr a ns nd rd)
-/\
-  (forall a map ntrue nfalse s ns s' pr INCR
+   tr_expr s'.(st_code) map pr a ns nd rd
+
+with transl_condexpr_charact:
+  forall a map ntrue nfalse s ns s' pr INCR
      (TR: transl_condition map a ntrue nfalse s = OK ns s' INCR)
-     (WF: map_valid map s)
-     (VALID: regs_valid pr s),
-   tr_condition s'.(st_code) map pr a ns ntrue nfalse)
-/\
-  (forall al map rl nd s ns s' pr INCR
+     (VALID: regs_valid pr s)
+     (WF: map_valid map s),
+   tr_condition s'.(st_code) map pr a ns ntrue nfalse
+
+with transl_exprlist_charact:
+  forall al map rl nd s ns s' pr INCR
      (TR: transl_exprlist map al rl nd s = OK ns s' INCR)
      (WF: map_valid map s)
      (OK: target_regs_ok map pr al rl)
      (VALID1: regs_valid pr s)
      (VALID2: regs_valid rl s),
-   tr_exprlist s'.(st_code) map pr al ns nd rl).
+   tr_exprlist s'.(st_code) map pr al ns nd rl.
+
 Proof.
-  apply expr_condexpr_exprlist_ind; intros; try (monadInv TR).
+  induction a; intros; try (monadInv TR).
   (* Evar *)
   generalize EQ; unfold find_var. caseEq (map_vars map)!i; intros; inv EQ1.
   econstructor; eauto.
@@ -955,31 +910,31 @@ Proof.
   (* Eop *)
   inv OK.
   econstructor; eauto with rtlg.
-  eapply H; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg.
   (* Eload *)
   inv OK.
   econstructor; eauto with rtlg.
-  eapply H; eauto with rtlg. 
+  eapply transl_exprlist_charact; eauto with rtlg. 
   (* Econdition *)
   inv OK.
   econstructor; eauto with rtlg.
-  eapply H; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
   apply tr_expr_incr with s1; auto. 
-  eapply H0; eauto with rtlg. constructor; auto. 
+  eapply transl_expr_charact; eauto with rtlg. constructor; auto.
   apply tr_expr_incr with s0; auto. 
-  eapply H1; eauto with rtlg. constructor; auto.
+  eapply transl_expr_charact; eauto with rtlg. constructor; auto.
   (* Elet *)
   inv OK.
   econstructor. eapply new_reg_not_in_map; eauto with rtlg.  
-  eapply H; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
   apply tr_expr_incr with s1; auto.
-  eapply H0. eauto. 
+  eapply transl_expr_charact. eauto. 
   apply add_letvar_valid; eauto with rtlg. 
   constructor; auto. 
   red; unfold reg_in_map. simpl. intros [[id A] | [B | C]].
-  elim H1. left; exists id; auto.
+  elim H. left; exists id; auto.
   subst x. apply valid_fresh_absurd with rd s. auto. eauto with rtlg.
-  elim H1. right; auto.
+  elim H. right; auto.
   eauto with rtlg. eauto with rtlg.
   (* Eletvar *)
   generalize EQ; unfold find_letvar. caseEq (nth_error (map_letvars map) n); intros; inv EQ0.
@@ -989,54 +944,39 @@ Proof.
   eapply add_move_charact; eauto.
   monadInv EQ1.
 
+(* Conditions *)
+  induction a; intros; try (monadInv TR).
+
   (* CEtrue *)
   constructor.
   (* CEfalse *)
   constructor.
   (* CEcond *)
   econstructor; eauto with rtlg.
-  eapply H; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg.
   (* CEcondition *)
   econstructor.
-  eapply H; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
   apply tr_condition_incr with s1; auto.
-  eapply H0; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
   apply tr_condition_incr with s0; auto.
-  eapply H1; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
+
+(* Lists *)
+
+  induction al; intros; try (monadInv TR).
 
   (* Enil *)
   destruct rl; inv TR. constructor.
   (* Econs *)
   destruct rl; simpl in TR; monadInv TR. inv OK.
   econstructor.
-  eapply H; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
   generalize (VALID2 r (in_eq _ _)). eauto with rtlg.
   apply tr_exprlist_incr with s0; auto.
-  eapply H0; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg.
   apply regs_valid_cons. apply VALID2. auto with coqlib. auto. 
   red; intros; apply VALID2; auto with coqlib.
-Qed.
-
-Lemma transl_expr_charact:
-  forall a map rd nd s ns s' INCR
-     (TR: transl_expr map a rd nd s = OK ns s' INCR)
-     (WF: map_valid map s)
-     (OK: target_reg_ok map nil a rd)
-     (VALID2: reg_valid rd s),
-   tr_expr s'.(st_code) map nil a ns nd rd.
-Proof.
-  destruct transl_expr_condexpr_list_charact as [A [B C]].
-  intros. eapply A; eauto with rtlg.
-Qed.
-
-Lemma transl_condexpr_charact:
-  forall a map ntrue nfalse s ns s' INCR
-     (TR: transl_condition map a ntrue nfalse s = OK ns s' INCR)
-     (WF: map_valid map s),
-   tr_condition s'.(st_code) map nil a ns ntrue nfalse.
-Proof.
-  destruct transl_expr_condexpr_list_charact as [A [B C]].
-  intros. eapply B; eauto with rtlg.
 Qed.
 
 Lemma tr_store_var_incr:
@@ -1076,7 +1016,7 @@ Lemma tr_stmt_incr:
   tr_stmt s2.(st_code) map s ns nd nexits ngoto nret rret.
 Proof.
   intros s1 s2 EXT.
-  destruct (tr_expr_condition_exprlist_incr s1 s2 EXT) as [A [B C]].
+  generalize tr_expr_incr tr_condition_incr tr_exprlist_incr; intros I1 I2 I3.
   pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
   pose (STV := tr_store_var_incr s1 s2 EXT).
   pose (STOV := tr_store_optvar_incr s1 s2 EXT).
@@ -1148,19 +1088,17 @@ Proof.
   apply tr_store_var_incr with s1; auto with rtlg.
   eapply store_var_charact; eauto.
   (* Sstore *)
-  destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
   econstructor; eauto with rtlg.
-  eapply P3; eauto with rtlg. 
+  eapply transl_exprlist_charact; eauto with rtlg.
   apply tr_expr_incr with s3; eauto with rtlg.
-  eapply P1; eauto with rtlg. 
+  eapply transl_expr_charact; eauto with rtlg. 
   (* Scall *)
-  destruct transl_expr_condexpr_list_charact as [P1 [P2 P3]].
   assert (state_incr s0 s3) by eauto with rtlg.
   assert (state_incr s3 s6) by eauto with rtlg.
   econstructor; eauto with rtlg.
-  eapply P1; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
   apply tr_exprlist_incr with s6. auto. 
-  eapply P3; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg.
   eapply alloc_regs_target_ok with (s1 := s1); eauto with rtlg.
   apply regs_valid_cons; eauto with rtlg.
   apply regs_valid_incr with s1; eauto with rtlg.
@@ -1169,13 +1107,12 @@ Proof.
   apply tr_store_optvar_incr with s4; eauto with rtlg.
   eapply store_optvar_charact; eauto with rtlg.
   (* Stailcall *)
-  destruct transl_expr_condexpr_list_charact as [A [B C]].
   assert (RV: regs_valid (x :: nil) s1).
     apply regs_valid_cons; eauto with rtlg. 
   econstructor; eauto with rtlg.
-  eapply A; eauto with rtlg.
+  eapply transl_expr_charact; eauto with rtlg.
   apply tr_exprlist_incr with s4; auto.
-  eapply C; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

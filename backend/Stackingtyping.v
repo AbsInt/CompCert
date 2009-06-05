@@ -51,7 +51,7 @@ Variable tf: Mach.function.
 Hypothesis TRANSF_F: transf_function f = OK tf.
 
 Lemma wt_fold_right:
-  forall (A: Set) (f: A -> code -> code) (k: code) (l: list A),
+  forall (A: Type) (f: A -> code -> code) (k: code) (l: list A),
   (forall x k', In x l -> wt_instrs k' -> wt_instrs (f x k')) ->
   wt_instrs k ->
   wt_instrs (List.fold_right f k l).

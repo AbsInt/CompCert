@@ -193,7 +193,7 @@ Proof.
   generalize EQ0; clear EQ0. caseEq (check_reachable f reach x); intros; inv EQ0.
   exploit check_reachable_correct; eauto. intro.
   exploit nodeset_of_list_correct; eauto. intros [A [B C]].
-  rewrite B in H2. destruct H2. elim (Nodeset.empty_1 pc H2). auto.
+  rewrite B in H2. destruct H2. elim (Nodeset.empty_1 H2). auto.
 Qed.
 
 Lemma enumerate_norepet:

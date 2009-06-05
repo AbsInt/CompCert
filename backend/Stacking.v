@@ -34,7 +34,7 @@ Require Import Stacklayout.
 (** Computation the frame offset for the given component of the frame.
   The component is expressed by the following [frame_index] sum type. *)
 
-Inductive frame_index: Set :=
+Inductive frame_index: Type :=
   | FI_link: frame_index
   | FI_retaddr: frame_index
   | FI_local: Z -> typ -> frame_index

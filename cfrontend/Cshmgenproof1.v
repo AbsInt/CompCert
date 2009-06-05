@@ -80,7 +80,7 @@ Qed.
 (** * Properties of the translation functions *)
 
 Lemma map_partial_names:
-  forall (A B: Set) (f: A -> res B)
+  forall (A B: Type) (f: A -> res B)
          (l: list (ident * A)) (tl: list (ident * B)),
   map_partial prefix_var_name f l = OK tl ->
   List.map (@fst ident B) tl = List.map (@fst ident A) l.
@@ -93,7 +93,7 @@ Proof.
 Qed.
    
 Lemma map_partial_append:
-  forall (A B: Set) (f: A -> res B)
+  forall (A B: Type) (f: A -> res B)
          (l1 l2: list (ident * A)) (tl1 tl2: list (ident * B)),
   map_partial prefix_var_name f l1 = OK tl1 ->
   map_partial prefix_var_name f l2 = OK tl2 ->

@@ -574,8 +574,8 @@ Proof.
   exploit loadv_lessdef; eauto. 
   intros [v' [LOAD' VLD]].
   left. exists (State s' (fn_code (transf_function f)) (Vptr sp0 Int.zero) pc' (rs'#dst <- v') m'); split.
-  eapply exec_Iload; eauto.  rewrite <- ADDR'.
-  apply eval_addressing_preserved. exact symbols_preserved.
+  eapply exec_Iload with (a := a'). eauto.  rewrite <- ADDR'.
+  apply eval_addressing_preserved. exact symbols_preserved. eauto.
   econstructor; eauto. apply regset_set; auto.
 
 (* store *)
@@ -586,8 +586,8 @@ Proof.
   exploit storev_lessdef. 4: eexact H1. eauto. eauto. apply RLD.  
   intros [m'1 [STORE' MLD']].
   left. exists (State s' (fn_code (transf_function f)) (Vptr sp0 Int.zero) pc' rs' m'1); split.
-  eapply exec_Istore; eauto.  rewrite <- ADDR'.
-  apply eval_addressing_preserved. exact symbols_preserved.
+  eapply exec_Istore with (a := a'). eauto.  rewrite <- ADDR'.
+  apply eval_addressing_preserved. exact symbols_preserved. eauto.
   destruct a; simpl in H1; try discriminate.
   econstructor; eauto.
   eapply match_stacksize_store; eauto. 

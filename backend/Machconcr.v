@@ -86,7 +86,7 @@ Definition extcall_arguments
 
 (** Mach execution states. *)
 
-Inductive stackframe: Set :=
+Inductive stackframe: Type :=
   | Stackframe:
       forall (f: block)       (**r pointer to calling function *)
              (sp: val)        (**r stack pointer in calling function *)
@@ -94,7 +94,7 @@ Inductive stackframe: Set :=
              (c: code),       (**r program point in calling function *)
       stackframe.
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State:
       forall (stack: list stackframe)  (**r call stack *)
              (f: block)                (**r pointer to current function *)

@@ -955,7 +955,7 @@ Proof.
   exists ls'; exists rs'. split. assumption.
   split. intros. elim H2; intros. 
   subst r. apply (agree_unused_reg _ _ _ _ _ D).
-  rewrite <- number_within_bounds. auto. omega. auto.
+  rewrite <- number_within_bounds. auto. auto. auto.
   split. intros. simpl in H2. apply C. tauto.
   assumption.
 Qed.
@@ -1051,7 +1051,7 @@ End FRAME_PROPERTIES.
 Section LABELS.
 
 Remark find_label_fold_right:
-  forall (A: Set) (fn: A -> Mach.code -> Mach.code) lbl,
+  forall (A: Type) (fn: A -> Mach.code -> Mach.code) lbl,
   (forall x k, Mach.find_label lbl (fn x k) = Mach.find_label lbl k) ->  forall (args: list A) k,
   Mach.find_label lbl (List.fold_right fn k args) = Mach.find_label lbl k.
 Proof.

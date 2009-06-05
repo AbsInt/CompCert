@@ -39,46 +39,46 @@ Set Implicit Arguments.
 (** * The abstract signatures of trees *)
 
 Module Type TREE.
-  Variable elt: Set.
+  Variable elt: Type.
   Variable elt_eq: forall (a b: elt), {a = b} + {a <> b}.
-  Variable t: Set -> Set.
-  Variable eq: forall (A: Set), (forall (x y: A), {x=y} + {x<>y}) ->
+  Variable t: Type -> Type.
+  Variable eq: forall (A: Type), (forall (x y: A), {x=y} + {x<>y}) ->
                 forall (a b: t A), {a = b} + {a <> b}.
-  Variable empty: forall (A: Set), t A.
-  Variable get: forall (A: Set), elt -> t A -> option A.
-  Variable set: forall (A: Set), elt -> A -> t A -> t A.
-  Variable remove: forall (A: Set), elt -> t A -> t A.
+  Variable empty: forall (A: Type), t A.
+  Variable get: forall (A: Type), elt -> t A -> option A.
+  Variable set: forall (A: Type), elt -> A -> t A -> t A.
+  Variable remove: forall (A: Type), elt -> t A -> t A.
 
   (** The ``good variables'' properties for trees, expressing
     commutations between [get], [set] and [remove]. *)
   Hypothesis gempty:
-    forall (A: Set) (i: elt), get i (empty A) = None.
+    forall (A: Type) (i: elt), get i (empty A) = None.
   Hypothesis gss:
-    forall (A: Set) (i: elt) (x: A) (m: t A), get i (set i x m) = Some x.
+    forall (A: Type) (i: elt) (x: A) (m: t A), get i (set i x m) = Some x.
   Hypothesis gso:
-    forall (A: Set) (i j: elt) (x: A) (m: t A),
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
   Hypothesis gsspec:
-    forall (A: Set) (i j: elt) (x: A) (m: t A),
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
     get i (set j x m) = if elt_eq i j then Some x else get i m.
   Hypothesis gsident:
-    forall (A: Set) (i: elt) (m: t A) (v: A),
+    forall (A: Type) (i: elt) (m: t A) (v: A),
     get i m = Some v -> set i v m = m.
   (* We could implement the following, but it's not needed for the moment.
     Hypothesis grident:
-      forall (A: Set) (i: elt) (m: t A) (v: A),
+      forall (A: Type) (i: elt) (m: t A) (v: A),
       get i m = None -> remove i m = m.
   *)
   Hypothesis grs:
-    forall (A: Set) (i: elt) (m: t A), get i (remove i m) = None.
+    forall (A: Type) (i: elt) (m: t A), get i (remove i m) = None.
   Hypothesis gro:
-    forall (A: Set) (i j: elt) (m: t A),
+    forall (A: Type) (i j: elt) (m: t A),
     i <> j -> get i (remove j m) = get i m.
 
   (** Extensional equality between trees. *)
-  Variable beq: forall (A: Set), (A -> A -> bool) -> t A -> t A -> bool.
+  Variable beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
   Hypothesis beq_correct:
-    forall (A: Set) (P: A -> A -> Prop) (cmp: A -> A -> bool),
+    forall (A: Type) (P: A -> A -> Prop) (cmp: A -> A -> bool),
     (forall (x y: A), cmp x y = true -> P x y) ->
     forall (t1 t2: t A), beq cmp t1 t2 = true ->
     forall (x: elt),
@@ -90,43 +90,43 @@ Module Type TREE.
 
   (** Applying a function to all data of a tree. *)
   Variable map:
-    forall (A B: Set), (elt -> A -> B) -> t A -> t B.
+    forall (A B: Type), (elt -> A -> B) -> t A -> t B.
   Hypothesis gmap:
-    forall (A B: Set) (f: elt -> A -> B) (i: elt) (m: t A),
+    forall (A B: Type) (f: elt -> A -> B) (i: elt) (m: t A),
     get i (map f m) = option_map (f i) (get i m).
 
   (** Applying a function pairwise to all data of two trees. *)
   Variable combine:
-    forall (A: Set), (option A -> option A -> option A) -> t A -> t A -> t A.
+    forall (A: Type), (option A -> option A -> option A) -> t A -> t A -> t A.
   Hypothesis gcombine:
-    forall (A: Set) (f: option A -> option A -> option A)
+    forall (A: Type) (f: option A -> option A -> option A)
            (m1 m2: t A) (i: elt),
     f None None = None ->
     get i (combine f m1 m2) = f (get i m1) (get i m2).
   Hypothesis combine_commut:
-    forall (A: Set) (f g: option A -> option A -> option A),
+    forall (A: Type) (f g: option A -> option A -> option A),
     (forall (i j: option A), f i j = g j i) ->
     forall (m1 m2: t A),
     combine f m1 m2 = combine g m2 m1.
 
   (** Enumerating the bindings of a tree. *)
   Variable elements:
-    forall (A: Set), t A -> list (elt * A).
+    forall (A: Type), t A -> list (elt * A).
   Hypothesis elements_correct:
-    forall (A: Set) (m: t A) (i: elt) (v: A),
+    forall (A: Type) (m: t A) (i: elt) (v: A),
     get i m = Some v -> In (i, v) (elements m).
   Hypothesis elements_complete:
-    forall (A: Set) (m: t A) (i: elt) (v: A),
+    forall (A: Type) (m: t A) (i: elt) (v: A),
     In (i, v) (elements m) -> get i m = Some v.
   Hypothesis elements_keys_norepet:
-    forall (A: Set) (m: t A), 
+    forall (A: Type) (m: t A), 
     list_norepet (List.map (@fst elt A) (elements m)).
 
   (** Folding a function over all bindings of a tree. *)
   Variable fold:
-    forall (A B: Set), (B -> elt -> A -> B) -> t A -> B -> B.
+    forall (A B: Type), (B -> elt -> A -> B) -> t A -> B -> B.
   Hypothesis fold_spec:
-    forall (A B: Set) (f: B -> elt -> A -> B) (v: B) (m: t A),
+    forall (A B: Type) (f: B -> elt -> A -> B) (v: B) (m: t A),
     fold f m v =
     List.fold_left (fun a p => f a (fst p) (snd p)) (elements m) v.
 End TREE.
@@ -134,27 +134,27 @@ End TREE.
 (** * The abstract signatures of maps *)
 
 Module Type MAP.
-  Variable elt: Set.
+  Variable elt: Type.
   Variable elt_eq: forall (a b: elt), {a = b} + {a <> b}.
-  Variable t: Set -> Set.
-  Variable init: forall (A: Set), A -> t A.
-  Variable get: forall (A: Set), elt -> t A -> A.
-  Variable set: forall (A: Set), elt -> A -> t A -> t A.
+  Variable t: Type -> Type.
+  Variable init: forall (A: Type), A -> t A.
+  Variable get: forall (A: Type), elt -> t A -> A.
+  Variable set: forall (A: Type), elt -> A -> t A -> t A.
   Hypothesis gi:
-    forall (A: Set) (i: elt) (x: A), get i (init x) = x.
+    forall (A: Type) (i: elt) (x: A), get i (init x) = x.
   Hypothesis gss:
-    forall (A: Set) (i: elt) (x: A) (m: t A), get i (set i x m) = x.
+    forall (A: Type) (i: elt) (x: A) (m: t A), get i (set i x m) = x.
   Hypothesis gso:
-    forall (A: Set) (i j: elt) (x: A) (m: t A),
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
   Hypothesis gsspec:
-    forall (A: Set) (i j: elt) (x: A) (m: t A),
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
     get i (set j x m) = if elt_eq i j then x else get i m.
   Hypothesis gsident:
-    forall (A: Set) (i j: elt) (m: t A), get j (set i (get i m) m) = get j m.
-  Variable map: forall (A B: Set), (A -> B) -> t A -> t B.
+    forall (A: Type) (i j: elt) (m: t A), get j (set i (get i m) m) = get j m.
+  Variable map: forall (A B: Type), (A -> B) -> t A -> t B.
   Hypothesis gmap:
-    forall (A B: Set) (f: A -> B) (i: elt) (m: t A),
+    forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map f m) = f(get i m).
 End MAP.
 
@@ -164,7 +164,7 @@ Module PTree <: TREE.
   Definition elt := positive.
   Definition elt_eq := peq.
 
-  Inductive tree (A : Set) : Set :=
+  Inductive tree (A : Type) : Type :=
     | Leaf : tree A
     | Node : tree A -> option A -> tree A -> tree A
   .
@@ -173,7 +173,7 @@ Module PTree <: TREE.
 
   Definition t := tree.
 
-  Theorem eq : forall (A : Set),
+  Theorem eq : forall (A : Type),
     (forall (x y: A), {x=y} + {x<>y}) ->
     forall (a b : t A), {a = b} + {a <> b}.
   Proof.
@@ -182,9 +182,9 @@ Module PTree <: TREE.
     generalize o o0; decide equality.
   Qed.
 
-  Definition empty (A : Set) := (Leaf : t A).
+  Definition empty (A : Type) := (Leaf : t A).
 
-  Fixpoint get (A : Set) (i : positive) (m : t A) {struct i} : option A :=
+  Fixpoint get (A : Type) (i : positive) (m : t A) {struct i} : option A :=
     match m with
     | Leaf => None
     | Node l o r =>
@@ -195,7 +195,7 @@ Module PTree <: TREE.
         end
     end.
 
-  Fixpoint set (A : Set) (i : positive) (v : A) (m : t A) {struct i} : t A :=
+  Fixpoint set (A : Type) (i : positive) (v : A) (m : t A) {struct i} : t A :=
     match m with
     | Leaf =>
         match i with
@@ -211,7 +211,7 @@ Module PTree <: TREE.
         end
     end.
 
-  Fixpoint remove (A : Set) (i : positive) (m : t A) {struct i} : t A :=
+  Fixpoint remove (A : Type) (i : positive) (m : t A) {struct i} : t A :=
     match i with
     | xH =>
         match m with
@@ -242,22 +242,22 @@ Module PTree <: TREE.
     end.
 
   Theorem gempty:
-    forall (A: Set) (i: positive), get i (empty A) = None.
+    forall (A: Type) (i: positive), get i (empty A) = None.
   Proof.
     induction i; simpl; auto.
   Qed.
 
   Theorem gss:
-    forall (A: Set) (i: positive) (x: A) (m: t A), get i (set i x m) = Some x.
+    forall (A: Type) (i: positive) (x: A) (m: t A), get i (set i x m) = Some x.
   Proof.
     induction i; destruct m; simpl; auto.
   Qed.
 
-    Lemma gleaf : forall (A : Set) (i : positive), get i (Leaf : t A) = None.
+    Lemma gleaf : forall (A : Type) (i : positive), get i (Leaf : t A) = None.
     Proof. exact gempty. Qed.
 
   Theorem gso:
-    forall (A: Set) (i j: positive) (x: A) (m: t A),
+    forall (A: Type) (i j: positive) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
   Proof.
     induction i; intros; destruct j; destruct m; simpl;
@@ -265,7 +265,7 @@ Module PTree <: TREE.
   Qed.
 
   Theorem gsspec:
-    forall (A: Set) (i j: positive) (x: A) (m: t A),
+    forall (A: Type) (i j: positive) (x: A) (m: t A),
     get i (set j x m) = if peq i j then Some x else get i m.
   Proof.
     intros.
@@ -273,7 +273,7 @@ Module PTree <: TREE.
   Qed.
 
   Theorem gsident:
-    forall (A: Set) (i: positive) (m: t A) (v: A),
+    forall (A: Type) (i: positive) (m: t A) (v: A),
     get i m = Some v -> set i v m = m.
   Proof.
     induction i; intros; destruct m; simpl; simpl in H; try congruence.
@@ -281,11 +281,11 @@ Module PTree <: TREE.
      rewrite (IHi m1 v H); congruence.
   Qed.
 
-    Lemma rleaf : forall (A : Set) (i : positive), remove i (Leaf : t A) = Leaf.
+    Lemma rleaf : forall (A : Type) (i : positive), remove i (Leaf : t A) = Leaf.
     Proof. destruct i; simpl; auto. Qed.
 
   Theorem grs:
-    forall (A: Set) (i: positive) (m: t A), get i (remove i m) = None.
+    forall (A: Type) (i: positive) (m: t A), get i (remove i m) = None.
   Proof.
     induction i; destruct m.
      simpl; auto.
@@ -305,7 +305,7 @@ Module PTree <: TREE.
   Qed.
 
   Theorem gro:
-    forall (A: Set) (i j: positive) (m: t A),
+    forall (A: Type) (i j: positive) (m: t A),
     i <> j -> get i (remove j m) = get i m.
   Proof.
     induction i; intros; destruct j; destruct m;
@@ -335,7 +335,7 @@ Module PTree <: TREE.
 
   Section EXTENSIONAL_EQUALITY.
 
-    Variable A: Set.
+    Variable A: Type.
     Variable eqA: A -> A -> Prop.
     Variable beqA: A -> A -> bool.
     Hypothesis beqA_correct: forall x y, beqA x y = true -> eqA x y.
@@ -439,7 +439,7 @@ Module PTree <: TREE.
       simpl; auto.
     Qed.
 
-    Fixpoint xmap (A B : Set) (f : positive -> A -> B) (m : t A) (i : positive)
+    Fixpoint xmap (A B : Type) (f : positive -> A -> B) (m : t A) (i : positive)
              {struct m} : t B :=
       match m with
       | Leaf => Leaf
@@ -448,10 +448,10 @@ Module PTree <: TREE.
                            (xmap f r (append i (xI xH)))
       end.
 
-  Definition map (A B : Set) (f : positive -> A -> B) m := xmap f m xH.
+  Definition map (A B : Type) (f : positive -> A -> B) m := xmap f m xH.
 
     Lemma xgmap:
-      forall (A B: Set) (f: positive -> A -> B) (i j : positive) (m: t A),
+      forall (A B: Type) (f: positive -> A -> B) (i j : positive) (m: t A),
       get i (xmap f m j) = option_map (f (append j i)) (get i m).
     Proof.
       induction i; intros; destruct m; simpl; auto.
@@ -461,7 +461,7 @@ Module PTree <: TREE.
     Qed.
 
   Theorem gmap:
-    forall (A B: Set) (f: positive -> A -> B) (i: positive) (m: t A),
+    forall (A B: Type) (f: positive -> A -> B) (i: positive) (m: t A),
     get i (map f m) = option_map (f i) (get i m).
   Proof.
     intros.
@@ -471,7 +471,7 @@ Module PTree <: TREE.
     rewrite append_neutral_l; auto.
   Qed.
 
-    Fixpoint xcombine_l (A : Set) (f : option A -> option A -> option A)
+    Fixpoint xcombine_l (A : Type) (f : option A -> option A -> option A)
                        (m : t A) {struct m} : t A :=
       match m with
       | Leaf => Leaf
@@ -479,14 +479,14 @@ Module PTree <: TREE.
       end.
 
     Lemma xgcombine_l :
-          forall (A : Set) (f : option A -> option A -> option A)
+          forall (A : Type) (f : option A -> option A -> option A)
                  (i : positive) (m : t A),
           f None None = None -> get i (xcombine_l f m) = f (get i m) None.
     Proof.
       induction i; intros; destruct m; simpl; auto.
     Qed.
 
-    Fixpoint xcombine_r (A : Set) (f : option A -> option A -> option A)
+    Fixpoint xcombine_r (A : Type) (f : option A -> option A -> option A)
                        (m : t A) {struct m} : t A :=
       match m with
       | Leaf => Leaf
@@ -494,14 +494,14 @@ Module PTree <: TREE.
       end.
 
     Lemma xgcombine_r :
-          forall (A : Set) (f : option A -> option A -> option A)
+          forall (A : Type) (f : option A -> option A -> option A)
                  (i : positive) (m : t A),
           f None None = None -> get i (xcombine_r f m) = f None (get i m).
     Proof.
       induction i; intros; destruct m; simpl; auto.
     Qed.
 
-  Fixpoint combine (A : Set) (f : option A -> option A -> option A)
+  Fixpoint combine (A : Type) (f : option A -> option A -> option A)
                    (m1 m2 : t A) {struct m1} : t A :=
     match m1 with
     | Leaf => xcombine_r f m2
@@ -513,7 +513,7 @@ Module PTree <: TREE.
     end.
 
     Lemma xgcombine:
-      forall (A: Set) (f: option A -> option A -> option A) (i: positive)
+      forall (A: Type) (f: option A -> option A -> option A) (i: positive)
              (m1 m2: t A),
       f None None = None ->
       get i (combine f m1 m2) = f (get i m1) (get i m2).
@@ -523,7 +523,7 @@ Module PTree <: TREE.
     Qed.
 
   Theorem gcombine:
-    forall (A: Set) (f: option A -> option A -> option A)
+    forall (A: Type) (f: option A -> option A -> option A)
            (m1 m2: t A) (i: positive),
     f None None = None ->
     get i (combine f m1 m2) = f (get i m1) (get i m2).
@@ -532,7 +532,7 @@ Module PTree <: TREE.
   Qed.
 
     Lemma xcombine_lr :
-      forall (A : Set) (f g : option A -> option A -> option A) (m : t A),
+      forall (A : Type) (f g : option A -> option A -> option A) (m : t A),
       (forall (i j : option A), f i j = g j i) ->
       xcombine_l f m = xcombine_r g m.
     Proof.
@@ -543,7 +543,7 @@ Module PTree <: TREE.
     Qed.
 
   Theorem combine_commut:
-    forall (A: Set) (f g: option A -> option A -> option A),
+    forall (A: Type) (f g: option A -> option A -> option A),
     (forall (i j: option A), f i j = g j i) ->
     forall (m1 m2: t A),
     combine f m1 m2 = combine g m2 m1.
@@ -561,7 +561,7 @@ Module PTree <: TREE.
      auto. 
   Qed.
 
-    Fixpoint xelements (A : Set) (m : t A) (i : positive) {struct m}
+    Fixpoint xelements (A : Type) (m : t A) (i : positive) {struct m}
              : list (positive * A) :=
       match m with
       | Leaf => nil
@@ -578,7 +578,7 @@ Module PTree <: TREE.
   Definition elements A (m : t A) := xelements m xH.
 
     Lemma xelements_correct:
-      forall (A: Set) (m: t A) (i j : positive) (v: A),
+      forall (A: Type) (m: t A) (i j : positive) (v: A),
       get i m = Some v -> In (append j i, v) (xelements m j).
     Proof.
       induction m; intros.
@@ -595,14 +595,14 @@ Module PTree <: TREE.
     Qed.
 
   Theorem elements_correct:
-    forall (A: Set) (m: t A) (i: positive) (v: A),
+    forall (A: Type) (m: t A) (i: positive) (v: A),
     get i m = Some v -> In (i, v) (elements m).
   Proof.
     intros A m i v H.
     exact (xelements_correct m i xH H).
   Qed.
 
-    Fixpoint xget (A : Set) (i j : positive) (m : t A) {struct j} : option A :=
+    Fixpoint xget (A : Type) (i j : positive) (m : t A) {struct j} : option A :=
       match i, j with
       | _, xH => get i m
       | xO ii, xO jj => xget ii jj m
@@ -611,7 +611,7 @@ Module PTree <: TREE.
       end.
 
     Lemma xget_left :
-      forall (A : Set) (j i : positive) (m1 m2 : t A) (o : option A) (v : A),
+      forall (A : Type) (j i : positive) (m1 m2 : t A) (o : option A) (v : A),
       xget i (append j (xO xH)) m1 = Some v -> xget i j (Node m1 o m2) = Some v.
     Proof.
       induction j; intros; destruct i; simpl; simpl in H; auto; try congruence.
@@ -619,7 +619,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_ii :
-      forall (A: Set) (m: t A) (i j : positive) (v: A),
+      forall (A: Type) (m: t A) (i j : positive) (v: A),
       In (xI i, v) (xelements m (xI j)) -> In (i, v) (xelements m j).
     Proof.
       induction m.
@@ -635,7 +635,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_io :
-      forall (A: Set) (m: t A) (i j : positive) (v: A),
+      forall (A: Type) (m: t A) (i j : positive) (v: A),
       ~In (xI i, v) (xelements m (xO j)).
     Proof.
       induction m.
@@ -650,7 +650,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_oo :
-      forall (A: Set) (m: t A) (i j : positive) (v: A),
+      forall (A: Type) (m: t A) (i j : positive) (v: A),
       In (xO i, v) (xelements m (xO j)) -> In (i, v) (xelements m j).
     Proof.
       induction m.
@@ -666,7 +666,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_oi :
-      forall (A: Set) (m: t A) (i j : positive) (v: A),
+      forall (A: Type) (m: t A) (i j : positive) (v: A),
       ~In (xO i, v) (xelements m (xI j)).
     Proof.
       induction m.
@@ -681,7 +681,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_ih :
-      forall (A: Set) (m1 m2: t A) (o: option A) (i : positive) (v: A),
+      forall (A: Type) (m1 m2: t A) (o: option A) (i : positive) (v: A),
       In (xI i, v) (xelements (Node m1 o m2) xH) -> In (i, v) (xelements m2 xH).
     Proof.
       destruct o; simpl; intros; destruct (in_app_or _ _ _ H).
@@ -694,7 +694,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_oh :
-      forall (A: Set) (m1 m2: t A) (o: option A) (i : positive) (v: A),
+      forall (A: Type) (m1 m2: t A) (o: option A) (i : positive) (v: A),
       In (xO i, v) (xelements (Node m1 o m2) xH) -> In (i, v) (xelements m1 xH).
     Proof.
       destruct o; simpl; intros; destruct (in_app_or _ _ _ H).
@@ -707,7 +707,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_hi :
-      forall (A: Set) (m: t A) (i : positive) (v: A),
+      forall (A: Type) (m: t A) (i : positive) (v: A),
       ~In (xH, v) (xelements m (xI i)).
     Proof.
       induction m; intros.
@@ -722,7 +722,7 @@ Module PTree <: TREE.
     Qed.
 
     Lemma xelements_ho :
-      forall (A: Set) (m: t A) (i : positive) (v: A),
+      forall (A: Type) (m: t A) (i : positive) (v: A),
       ~In (xH, v) (xelements m (xO i)).
     Proof.
       induction m; intros.
@@ -737,13 +737,13 @@ Module PTree <: TREE.
     Qed.
 
     Lemma get_xget_h :
-      forall (A: Set) (m: t A) (i: positive), get i m = xget i xH m.
+      forall (A: Type) (m: t A) (i: positive), get i m = xget i xH m.
     Proof.
       destruct i; simpl; auto.
     Qed.
 
     Lemma xelements_complete:
-      forall (A: Set) (i j : positive) (m: t A) (v: A),
+      forall (A: Type) (i j : positive) (m: t A) (v: A),
       In (i, v) (xelements m j) -> xget i j m = Some v.
     Proof.
       induction i; simpl; intros; destruct j; simpl.
@@ -771,7 +771,7 @@ Module PTree <: TREE.
     Qed.
 
   Theorem elements_complete:
-    forall (A: Set) (m: t A) (i: positive) (v: A),
+    forall (A: Type) (m: t A) (i: positive) (v: A),
     In (i, v) (elements m) -> get i m = Some v.
   Proof.
     intros A m i v H.
@@ -781,7 +781,7 @@ Module PTree <: TREE.
   Qed.
 
   Lemma in_xelements:
-    forall (A: Set) (m: t A) (i k: positive) (v: A),
+    forall (A: Type) (m: t A) (i k: positive) (v: A),
     In (k, v) (xelements m i) ->
     exists j, k = append i j.
   Proof.
@@ -802,11 +802,11 @@ Module PTree <: TREE.
     rewrite <- append_assoc_1. exists (xI k1); auto.
   Qed.
 
-  Definition xkeys (A: Set) (m: t A) (i: positive) :=
+  Definition xkeys (A: Type) (m: t A) (i: positive) :=
     List.map (@fst positive A) (xelements m i).
 
   Lemma in_xkeys:
-    forall (A: Set) (m: t A) (i k: positive),
+    forall (A: Type) (m: t A) (i k: positive),
     In k (xkeys m i) ->
     exists j, k = append i j.
   Proof.
@@ -816,7 +816,7 @@ Module PTree <: TREE.
   Qed.
 
   Remark list_append_cons_norepet:
-    forall (A: Set) (l1 l2: list A) (x: A),
+    forall (A: Type) (l1 l2: list A) (x: A),
     list_norepet l1 -> list_norepet l2 -> list_disjoint l1 l2 ->
     ~In x l1 -> ~In x l2 ->
     list_norepet (l1 ++ x :: l2).
@@ -837,7 +837,7 @@ Module PTree <: TREE.
   Qed.
 
   Lemma xelements_keys_norepet:
-    forall (A: Set) (m: t A) (i: positive),
+    forall (A: Type) (m: t A) (i: positive),
     list_norepet (xkeys m i).
   Proof.
     induction m; unfold xkeys; simpl; fold xkeys; intros.
@@ -871,17 +871,17 @@ Module PTree <: TREE.
   Qed.
 
   Theorem elements_keys_norepet:
-    forall (A: Set) (m: t A), 
+    forall (A: Type) (m: t A), 
     list_norepet (List.map (@fst elt A) (elements m)).
   Proof.
     intros. change (list_norepet (xkeys m 1)). apply xelements_keys_norepet.
   Qed.
 
-  Definition fold (A B : Set) (f: B -> positive -> A -> B) (tr: t A) (v: B) :=
+  Definition fold (A B : Type) (f: B -> positive -> A -> B) (tr: t A) (v: B) :=
      List.fold_left (fun a p => f a (fst p) (snd p)) (elements tr) v.
 
   Theorem fold_spec:
-    forall (A B: Set) (f: B -> positive -> A -> B) (v: B) (m: t A),
+    forall (A B: Type) (f: B -> positive -> A -> B) (v: B) (m: t A),
     fold f m v =
     List.fold_left (fun a p => f a (fst p) (snd p)) (elements m) v.
   Proof.
@@ -896,49 +896,49 @@ Module PMap <: MAP.
   Definition elt := positive.
   Definition elt_eq := peq.
 
-  Definition t (A : Set) : Set := (A * PTree.t A)%type.
+  Definition t (A : Type) : Type := (A * PTree.t A)%type.
 
-  Definition eq: forall (A: Set), (forall (x y: A), {x=y} + {x<>y}) ->
+  Definition eq: forall (A: Type), (forall (x y: A), {x=y} + {x<>y}) ->
                  forall (a b: t A), {a = b} + {a <> b}.
   Proof.
     intros. 
-    generalize (PTree.eq H). intros. 
+    generalize (PTree.eq X). intros. 
     decide equality.
   Qed.
 
-  Definition init (A : Set) (x : A) :=
+  Definition init (A : Type) (x : A) :=
     (x, PTree.empty A).
 
-  Definition get (A : Set) (i : positive) (m : t A) :=
+  Definition get (A : Type) (i : positive) (m : t A) :=
     match PTree.get i (snd m) with
     | Some x => x
     | None => fst m
     end.
 
-  Definition set (A : Set) (i : positive) (x : A) (m : t A) :=
+  Definition set (A : Type) (i : positive) (x : A) (m : t A) :=
     (fst m, PTree.set i x (snd m)).
 
   Theorem gi:
-    forall (A: Set) (i: positive) (x: A), get i (init x) = x.
+    forall (A: Type) (i: positive) (x: A), get i (init x) = x.
   Proof.
     intros. unfold init. unfold get. simpl. rewrite PTree.gempty. auto.
   Qed.
 
   Theorem gss:
-    forall (A: Set) (i: positive) (x: A) (m: t A), get i (set i x m) = x.
+    forall (A: Type) (i: positive) (x: A) (m: t A), get i (set i x m) = x.
   Proof.
     intros. unfold get. unfold set. simpl. rewrite PTree.gss. auto.
   Qed.
 
   Theorem gso:
-    forall (A: Set) (i j: positive) (x: A) (m: t A),
+    forall (A: Type) (i j: positive) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
   Proof.
     intros. unfold get. unfold set. simpl. rewrite PTree.gso; auto.
   Qed.
 
   Theorem gsspec:
-    forall (A: Set) (i j: positive) (x: A) (m: t A),
+    forall (A: Type) (i j: positive) (x: A) (m: t A),
     get i (set j x m) = if peq i j then x else get i m.
   Proof.
     intros. destruct (peq i j).
@@ -947,7 +947,7 @@ Module PMap <: MAP.
   Qed.
 
   Theorem gsident:
-    forall (A: Set) (i j: positive) (m: t A),
+    forall (A: Type) (i j: positive) (m: t A),
     get j (set i (get i m) m) = get j m.
   Proof.
     intros. destruct (peq i j).
@@ -955,11 +955,11 @@ Module PMap <: MAP.
      rewrite gso; auto.
   Qed.
 
-  Definition map (A B : Set) (f : A -> B) (m : t A) : t B :=
+  Definition map (A B : Type) (f : A -> B) (m : t A) : t B :=
     (f (fst m), PTree.map (fun _ => f) (snd m)).
 
   Theorem gmap:
-    forall (A B: Set) (f: A -> B) (i: positive) (m: t A),
+    forall (A B: Type) (f: A -> B) (i: positive) (m: t A),
     get i (map f m) = f(get i m).
   Proof.
     intros. unfold map. unfold get. simpl. rewrite PTree.gmap.
@@ -971,7 +971,7 @@ End PMap.
 (** * An implementation of maps over any type that injects into type [positive] *)
 
 Module Type INDEXED_TYPE.
-  Variable t: Set.
+  Variable t: Type.
   Variable index: t -> positive.
   Hypothesis index_inj: forall (x y: t), index x = index y -> x = y.
   Variable eq: forall (x y: t), {x = y} + {x <> y}.
@@ -981,28 +981,28 @@ Module IMap(X: INDEXED_TYPE).
 
   Definition elt := X.t.
   Definition elt_eq := X.eq.
-  Definition t : Set -> Set := PMap.t.
-  Definition eq: forall (A: Set), (forall (x y: A), {x=y} + {x<>y}) ->
+  Definition t : Type -> Type := PMap.t.
+  Definition eq: forall (A: Type), (forall (x y: A), {x=y} + {x<>y}) ->
                  forall (a b: t A), {a = b} + {a <> b} := PMap.eq.
-  Definition init (A: Set) (x: A) := PMap.init x.
-  Definition get (A: Set) (i: X.t) (m: t A) := PMap.get (X.index i) m.
-  Definition set (A: Set) (i: X.t) (v: A) (m: t A) := PMap.set (X.index i) v m.
-  Definition map (A B: Set) (f: A -> B) (m: t A) : t B := PMap.map f m.
+  Definition init (A: Type) (x: A) := PMap.init x.
+  Definition get (A: Type) (i: X.t) (m: t A) := PMap.get (X.index i) m.
+  Definition set (A: Type) (i: X.t) (v: A) (m: t A) := PMap.set (X.index i) v m.
+  Definition map (A B: Type) (f: A -> B) (m: t A) : t B := PMap.map f m.
 
   Lemma gi:
-    forall (A: Set) (x: A) (i: X.t), get i (init x) = x.
+    forall (A: Type) (x: A) (i: X.t), get i (init x) = x.
   Proof.
     intros. unfold get, init. apply PMap.gi. 
   Qed.
 
   Lemma gss:
-    forall (A: Set) (i: X.t) (x: A) (m: t A), get i (set i x m) = x.
+    forall (A: Type) (i: X.t) (x: A) (m: t A), get i (set i x m) = x.
   Proof.
     intros. unfold get, set. apply PMap.gss.
   Qed.
 
   Lemma gso:
-    forall (A: Set) (i j: X.t) (x: A) (m: t A),
+    forall (A: Type) (i j: X.t) (x: A) (m: t A),
     i <> j -> get i (set j x m) = get i m.
   Proof.
     intros. unfold get, set. apply PMap.gso. 
@@ -1010,7 +1010,7 @@ Module IMap(X: INDEXED_TYPE).
   Qed.
 
   Lemma gsspec:
-    forall (A: Set) (i j: X.t) (x: A) (m: t A),
+    forall (A: Type) (i j: X.t) (x: A) (m: t A),
     get i (set j x m) = if X.eq i j then x else get i m.
   Proof.
     intros. unfold get, set. 
@@ -1022,7 +1022,7 @@ Module IMap(X: INDEXED_TYPE).
   Qed.
 
   Lemma gmap:
-    forall (A B: Set) (f: A -> B) (i: X.t) (m: t A),
+    forall (A B: Type) (f: A -> B) (i: X.t) (m: t A),
     get i (map f m) = f(get i m).
   Proof.
     intros. unfold map, get. apply PMap.gmap. 
@@ -1074,7 +1074,7 @@ Module NMap := IMap(NIndexed).
 (** * An implementation of maps over any type with decidable equality *)
 
 Module Type EQUALITY_TYPE.
-  Variable t: Set.
+  Variable t: Type.
   Variable eq: forall (x y: t), {x = y} + {x <> y}.
 End EQUALITY_TYPE.
 
@@ -1082,45 +1082,45 @@ Module EMap(X: EQUALITY_TYPE) <: MAP.
 
   Definition elt := X.t.
   Definition elt_eq := X.eq.
-  Definition t (A: Set) := X.t -> A.
-  Definition init (A: Set) (v: A) := fun (_: X.t) => v.
-  Definition get (A: Set) (x: X.t) (m: t A) := m x.
-  Definition set (A: Set) (x: X.t) (v: A) (m: t A) :=
+  Definition t (A: Type) := X.t -> A.
+  Definition init (A: Type) (v: A) := fun (_: X.t) => v.
+  Definition get (A: Type) (x: X.t) (m: t A) := m x.
+  Definition set (A: Type) (x: X.t) (v: A) (m: t A) :=
     fun (y: X.t) => if X.eq y x then v else m y.
   Lemma gi:
-    forall (A: Set) (i: elt) (x: A), init x i = x.
+    forall (A: Type) (i: elt) (x: A), init x i = x.
   Proof.
     intros. reflexivity.
   Qed.
   Lemma gss:
-    forall (A: Set) (i: elt) (x: A) (m: t A), (set i x m) i = x.
+    forall (A: Type) (i: elt) (x: A) (m: t A), (set i x m) i = x.
   Proof.
     intros. unfold set. case (X.eq i i); intro.
     reflexivity. tauto.
   Qed.
   Lemma gso:
-    forall (A: Set) (i j: elt) (x: A) (m: t A),
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
     i <> j -> (set j x m) i = m i.
   Proof.
     intros. unfold set. case (X.eq i j); intro.
     congruence. reflexivity.
   Qed.
   Lemma gsspec:
-    forall (A: Set) (i j: elt) (x: A) (m: t A),
+    forall (A: Type) (i j: elt) (x: A) (m: t A),
     get i (set j x m) = if elt_eq i j then x else get i m.
   Proof.
     intros. unfold get, set, elt_eq. reflexivity.
   Qed.
   Lemma gsident:
-    forall (A: Set) (i j: elt) (m: t A), get j (set i (get i m) m) = get j m.
+    forall (A: Type) (i j: elt) (m: t A), get j (set i (get i m) m) = get j m.
   Proof.
     intros. unfold get, set. case (X.eq j i); intro.
     congruence. reflexivity.
   Qed.
-  Definition map (A B: Set) (f: A -> B) (m: t A) :=
+  Definition map (A B: Type) (f: A -> B) (m: t A) :=
     fun (x: X.t) => f(m x).
   Lemma gmap:
-    forall (A B: Set) (f: A -> B) (i: elt) (m: t A),
+    forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map f m) = f(get i m).
   Proof.
     intros. unfold get, map. reflexivity.

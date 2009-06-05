@@ -426,7 +426,7 @@ Definition empty_env: env := (PTree.empty block).
   how the execution terminated: either normally or prematurely
   through the execution of a [break], [continue] or [return] statement. *)
 
-Inductive outcome: Set :=
+Inductive outcome: Type :=
    | Out_break: outcome                 (**r terminated by [break] *)
    | Out_continue: outcome              (**r terminated by [continue] *)
    | Out_normal: outcome                (**r terminated normally *)

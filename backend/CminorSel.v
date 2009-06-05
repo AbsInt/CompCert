@@ -40,7 +40,7 @@ Require Import Smallstep.
   boolean value only and not their exact value.
 *)
 
-Inductive expr : Set :=
+Inductive expr : Type :=
   | Evar : ident -> expr
   | Eop : operation -> exprlist -> expr
   | Eload : memory_chunk -> addressing -> exprlist -> expr
@@ -48,13 +48,13 @@ Inductive expr : Set :=
   | Elet : expr -> expr -> expr
   | Eletvar : nat -> expr
 
-with condexpr : Set :=
+with condexpr : Type :=
   | CEtrue: condexpr
   | CEfalse: condexpr
   | CEcond: condition -> exprlist -> condexpr
   | CEcondition : condexpr -> condexpr -> condexpr -> condexpr
 
-with exprlist : Set :=
+with exprlist : Type :=
   | Enil: exprlist
   | Econs: expr -> exprlist -> exprlist.
 
@@ -62,7 +62,7 @@ with exprlist : Set :=
   if/then/else conditional is a [condexpr], and the [Sstore] construct
   uses a machine-dependent addressing mode. *)
 
-Inductive stmt : Set :=
+Inductive stmt : Type :=
   | Sskip: stmt
   | Sassign : ident -> expr -> stmt
   | Sstore : memory_chunk -> addressing -> exprlist -> expr -> stmt
@@ -78,7 +78,7 @@ Inductive stmt : Set :=
   | Slabel: label -> stmt -> stmt
   | Sgoto: label -> stmt.
 
-Record function : Set := mkfunction {
+Record function : Type := mkfunction {
   fn_sig: signature;
   fn_params: list ident;
   fn_vars: list ident;
@@ -108,7 +108,7 @@ Definition letenv := list val.
 
 (** Continuations *)
 
-Inductive cont: Set :=
+Inductive cont: Type :=
   | Kstop: cont                         (**r stop program execution *)
   | Kseq: stmt -> cont -> cont          (**r execute stmt, then cont *)
   | Kblock: cont -> cont                (**r exit a block, then do cont *)
@@ -117,7 +117,7 @@ Inductive cont: Set :=
 
 (** States *)
 
-Inductive state: Set :=
+Inductive state: Type :=
   | State:                              (**r execution within a function *)
       forall (f: function)              (**r currently executing function  *)
              (s: stmt)                  (**r statement under consideration *)

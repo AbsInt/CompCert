@@ -24,7 +24,7 @@ Require Import Ordered.
 Require Import FSets.
 Require FSetAVL.
 
-Definition reg: Set := positive.
+Definition reg: Type := positive.
 
 Module Reg.
 
@@ -41,14 +41,14 @@ Module Regmap := PMap.
 Set Implicit Arguments.
 
 Definition regmap_optget
-    (A: Set) (or: option reg) (dfl: A) (rs: Regmap.t A) : A :=
+    (A: Type) (or: option reg) (dfl: A) (rs: Regmap.t A) : A :=
   match or with
   | None => dfl
   | Some r => Regmap.get r rs
   end.
 
 Definition regmap_optset
-    (A: Set) (or: option reg) (v: A) (rs: Regmap.t A) : Regmap.t A :=
+    (A: Type) (or: option reg) (v: A) (rs: Regmap.t A) : Regmap.t A :=
   match or with
   | None => rs
   | Some r => Regmap.set r v rs

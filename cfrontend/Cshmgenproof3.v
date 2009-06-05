@@ -865,7 +865,7 @@ Definition eval_funcall_prop
    Csharpminor.eval_funcall tprog m1 tf params t m2 res.
 
 (*
-Set Printing Depth 100.
+Type Printing Depth 100.
 Check (Csem.eval_funcall_ind3 ge exec_stmt_prop exec_lblstmts_prop eval_funcall_prop).
 *)
 
@@ -1592,19 +1592,18 @@ Lemma transl_funcall_divergence_correct:
   Csem.evalinf_funcall ge m1 f params t ->
   wt_fundef (global_typenv prog) f ->
   transl_fundef f = OK tf ->
-  Csharpminor.evalinf_funcall tprog m1 tf params t.
-Proof.
-  cofix FUNCALL.
-  assert (STMT: 
-    forall e m1 s t,
-    Csem.execinf_stmt ge e m1 s t ->
-    forall tyenv nbrk ncnt ts te
-      (WT: wt_stmt tyenv s)
-      (TR: transl_statement nbrk ncnt s = OK ts)   
-      (MENV: match_env tyenv e te),
-    Csharpminor.execinf_stmt tprog te m1 ts t).
-  cofix STMT.
-  assert(LBLSTMT:
+  Csharpminor.evalinf_funcall tprog m1 tf params t
+
+with transl_stmt_divergence_correct:
+  forall e m1 s t,
+  Csem.execinf_stmt ge e m1 s t ->
+  forall tyenv nbrk ncnt ts te
+    (WT: wt_stmt tyenv s)
+    (TR: transl_statement nbrk ncnt s = OK ts)   
+    (MENV: match_env tyenv e te),
+  Csharpminor.execinf_stmt tprog te m1 ts t
+
+with transl_lblstmt_divergence_correct:
   forall s ncnt body ts tyenv e te m0 t0 m1 t1 n,
   transl_lblstmts (lblstmts_length s)
                   (S (lblstmts_length s + ncnt))
@@ -1617,184 +1616,9 @@ Proof.
        /\ execinf_lblstmts ge e m1 (select_switch n s) t1)
    \/ (exec_stmt tprog te m0 body t0 m1 Out_normal
        /\ execinf_lblstmts ge e m1 s t1) ->
-  execinf_stmt_N tprog (lblstmts_length s) te m0 ts (t0 *** t1)).
+  execinf_stmt_N tprog (lblstmts_length s) te m0 ts (t0 *** t1).
 
-  cofix LBLSTMT; intros.
-  destruct s; simpl in *; monadInv H; inv H0.
-  (* 1. LSdefault *)
-  assert (exec_stmt tprog te m0 body t0 m1 Out_normal) by tauto.
-  assert (execinf_lblstmts ge e m1 (LSdefault s) t1) by tauto.
-  clear H2. inv H0.  
-  change (Sblock (Sseq body x))
-    with ((fun z => Sblock z) (Sseq body x)).
-  apply execinf_context. 
-  eapply execinf_Sseq_2. eauto. eapply STMT; eauto. auto.
-  constructor.
-  (* 2. LScase *)
-  elim H2; clear H2.
-  (* 2.1 searching for the case *)
-  rewrite (Int.eq_sym i n). 
-  destruct (Int.eq n i).
-  (* 2.1.1 found it! *)
-  intros [A B]. inv B.
-  (* 2.1.1.1 we diverge because of this case *)
-  destruct (transl_lblstmts_context _ _ _ _ _ EQ0) as [ctx [CTX EQ1]].
-  rewrite EQ1. apply execinf_context; auto. 
-  apply execinf_Sblock. eapply execinf_Sseq_2. eauto. 
-  eapply STMT; eauto. auto.
-  (* 2.1.1.2 we diverge later, after falling through *)
-  simpl. apply execinf_sleep.
-  replace (t0 *** t2 *** t3) with ((t0 ** t2) *** t3). 
-  eapply LBLSTMT with (n := n); eauto. right. split.
-  change Out_normal with (outcome_block Out_normal). 
-  apply exec_Sblock.
-  eapply exec_Sseq_continue. eauto. 
-  change Out_normal with (transl_outcome (S (lblstmts_length s0)) (S (S (lblstmts_length s0 + ncnt))) Csem.Out_normal).
-  eapply (transl_stmt_correct _ _ _ _ _ _ H8); eauto.
-  auto. auto. traceEq.
-  (* 2.1.2 still searching *)
-  rewrite switch_target_table_shift. intros [A B].
-  apply execinf_sleep.
-  eapply LBLSTMT with (n := n); eauto. left. split.
-  fold (outcome_block (Out_exit (switch_target n (lblstmts_length s0) (switch_table s0 0)))).
-  apply exec_Sblock. apply exec_Sseq_stop. eauto. congruence.
-  auto.
-  (* 2.2 found the case already, falling through next cases *)
-  intros [A B]. inv B.
-  (* 2.2.1 we diverge because of this case *)
-  destruct (transl_lblstmts_context _ _ _ _ _ EQ0) as [ctx [CTX EQ1]].
-  rewrite EQ1. apply execinf_context; auto. 
-  apply execinf_Sblock. eapply execinf_Sseq_2. eauto. 
-  eapply STMT; eauto. auto.
-  (* 2.2.2 we diverge later *)
-  simpl. apply execinf_sleep.
-  replace (t0 *** t2 *** t3) with ((t0 ** t2) *** t3). 
-  eapply LBLSTMT with (n := n); eauto. right. split.
-  change Out_normal with (outcome_block Out_normal). 
-  apply exec_Sblock.
-  eapply exec_Sseq_continue. eauto. 
-  change Out_normal with (transl_outcome (S (lblstmts_length s0)) (S (S (lblstmts_length s0 + ncnt))) Csem.Out_normal).
-  eapply (transl_stmt_correct _ _ _ _ _ _ H8); eauto.
-  auto. auto. traceEq.
-
-
-  intros. inv H; inv WT; try (generalize TR; intro TR'; monadInv TR').
-  (* Scall *)
-  simpl in TR.
-  caseEq (classify_fun (typeof a)); intros; rewrite H in TR; monadInv TR.
-  destruct (functions_translated _ _ H2) as [tf [TFIND TFD]].
-  eapply execinf_Scall. 
-  eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
-  eapply (transl_exprlist_correct _ _ _ _ MENV _ _ H1); eauto.
-  eauto. 
-  eapply transl_fundef_sig1; eauto. rewrite H3; auto. 
-  eapply FUNCALL; eauto.
-  eapply functions_well_typed; eauto.
-  (* Sseq 1 *)
-  apply execinf_Sseq_1. eapply STMT; eauto. 
-  (* Sseq 2 *)
-  eapply execinf_Sseq_2. 
-  change Out_normal with (transl_outcome nbrk ncnt Csem.Out_normal).
-  eapply (transl_stmt_correct _ _ _ _ _ _ H0); eauto.
-  eapply STMT; eauto. auto.
-  (* Sifthenelse, true *)
-  assert (eval_expr tprog te m1 x v1).
-    eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
-  destruct (make_boolean_correct_true _ _ _ _ _ _ H H1) as [vb [A B]].
-  eapply execinf_Sifthenelse. eauto. apply Val.bool_of_true_val; eauto.
-  auto. eapply STMT; eauto.
-  (* Sifthenelse, false *)
-  assert (eval_expr tprog te m1 x v1).
-    eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
-  destruct (make_boolean_correct_false _ _ _ _ _ _ H H1) as [vb [A B]].
-  eapply execinf_Sifthenelse. eauto. apply Val.bool_of_false_val; eauto.
-  auto. eapply STMT; eauto.
-  (* Swhile, body *)
-  apply execinf_Sblock. apply execinf_Sloop_body.  
-  eapply execinf_Sseq_2. eapply exit_if_false_true; eauto. 
-  apply execinf_Sblock. eapply STMT; eauto. traceEq.
-  (* Swhile, loop *)
-  apply execinf_Sblock. eapply execinf_Sloop_block.
-  eapply exec_Sseq_continue. eapply exit_if_false_true; eauto.
-  rewrite (transl_out_normal_or_continue out1 H3). 
-  apply exec_Sblock. 
-  eapply (transl_stmt_correct _ _ _ _ _ _ H2); eauto. reflexivity.
-  eapply STMT with (nbrk := 1%nat) (ncnt := 0%nat); eauto.
-  constructor; eauto.
-  traceEq.
-  (* Sdowhile, body *)
-  apply execinf_Sblock. apply execinf_Sloop_body.  
-  apply execinf_Sseq_1. apply execinf_Sblock.
-  eapply STMT; eauto.
-  (* Sdowhile, loop *)
-  apply execinf_Sblock. eapply execinf_Sloop_block.
-  eapply exec_Sseq_continue.
-  rewrite (transl_out_normal_or_continue out1 H1). 
-  apply exec_Sblock. 
-  eapply (transl_stmt_correct _ _ _ _ _ _ H0); eauto. 
-  eapply exit_if_false_true; eauto. reflexivity.
-  eapply STMT with (nbrk := 1%nat) (ncnt := 0%nat); eauto.
-  constructor; auto.
-  traceEq.
-  (* Sfor start 1 *)
-  simpl in TR. destruct (is_Sskip a1). 
-  subst a1. inv H0.
-  monadInv TR. 
-  apply execinf_Sseq_1. eapply STMT; eauto.
-  (* Sfor start 2 *)
-  destruct (transl_stmt_Sfor_start _ _ _ _ _ _ _ TR H0) as [ts1 [ts2 [EQ [TR1 TR2]]]].
-  subst ts. 
-  eapply execinf_Sseq_2. 
-  change Out_normal with (transl_outcome nbrk ncnt Csem.Out_normal).
-  eapply (transl_stmt_correct _ _ _ _ _ _ H1); eauto.
-  eapply STMT; eauto. 
-    constructor; auto. constructor.
-  auto.
-  (* Sfor_body *)
-  rewrite transl_stmt_Sfor_not_start in TR; monadInv TR.
-  apply execinf_Sblock. apply execinf_Sloop_body.
-  eapply execinf_Sseq_2. 
-  eapply exit_if_false_true; eauto.
-  apply execinf_Sseq_1. apply execinf_Sblock. 
-  eapply STMT; eauto.
-  traceEq.
-  (* Sfor next *)
-  rewrite transl_stmt_Sfor_not_start in TR; monadInv TR.
-  apply execinf_Sblock. apply execinf_Sloop_body.
-  eapply execinf_Sseq_2. 
-  eapply exit_if_false_true; eauto.
-  eapply execinf_Sseq_2.
-  rewrite (transl_out_normal_or_continue out1 H3). 
-  apply exec_Sblock. 
-  eapply (transl_stmt_correct _ _ _ _ _ _ H2); eauto.
-  eapply STMT; eauto.
-  reflexivity. traceEq. 
-  (* Sfor loop *)
-  generalize TR. rewrite transl_stmt_Sfor_not_start; intro TR'; monadInv TR'.
-  apply execinf_Sblock. eapply execinf_Sloop_block.
-  eapply exec_Sseq_continue.
-  eapply exit_if_false_true; eauto.
-  eapply exec_Sseq_continue.
-  rewrite (transl_out_normal_or_continue out1 H3). 
-  apply exec_Sblock. 
-  eapply (transl_stmt_correct _ _ _ _ _ _ H2); eauto.
-  change Out_normal with (transl_outcome nbrk ncnt Csem.Out_normal).
-  eapply (transl_stmt_correct _ _ _ _ _ _ H4); eauto.
-  reflexivity. reflexivity. 
-  eapply STMT; eauto. 
-    constructor; auto.
-  traceEq.
-  (* Sswitch *)
-  apply execinf_stutter with (lblstmts_length sl).
-  rewrite length_switch_table in EQ0.
-  replace (ncnt + lblstmts_length sl + 1)%nat
-     with (S (lblstmts_length sl + ncnt))%nat in EQ0 by omega.
-  change t with (E0 *** t).
-  eapply LBLSTMT; eauto.
-  left. split. apply exec_Sblock. constructor. 
-  eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
-  auto. 
-
+Proof.
   (* Functions *)
   intros. inv H. 
   (* Exploitation of typing hypothesis *)
@@ -1813,7 +1637,184 @@ Proof.
   eapply transl_names_norepet; eauto. 
   eexact ALLOCVARS.
   eapply bind_parameters_match; eauto.
-  eapply STMT; eauto. 
+  eapply transl_stmt_divergence_correct; eauto.
+
+(* Statements *)
+
+  intros. inv H; inv WT; try (generalize TR; intro TR'; monadInv TR').
+  (* Scall *)
+  simpl in TR.
+  caseEq (classify_fun (typeof a)); intros; rewrite H in TR; monadInv TR.
+  destruct (functions_translated _ _ H2) as [tf [TFIND TFD]].
+  eapply execinf_Scall. 
+  eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
+  eapply (transl_exprlist_correct _ _ _ _ MENV _ _ H1); eauto.
+  eauto. 
+  eapply transl_fundef_sig1; eauto. rewrite H3; auto. 
+  eapply transl_funcall_divergence_correct; eauto.
+  eapply functions_well_typed; eauto.
+  (* Sseq 1 *)
+  apply execinf_Sseq_1. eapply transl_stmt_divergence_correct; eauto. 
+  (* Sseq 2 *)
+  eapply execinf_Sseq_2. 
+  change Out_normal with (transl_outcome nbrk ncnt Csem.Out_normal).
+  eapply (transl_stmt_correct _ _ _ _ _ _ H0); eauto.
+  eapply transl_stmt_divergence_correct; eauto. auto.
+  (* Sifthenelse, true *)
+  assert (eval_expr tprog te m1 x v1).
+    eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
+  destruct (make_boolean_correct_true _ _ _ _ _ _ H H1) as [vb [A B]].
+  eapply execinf_Sifthenelse. eauto. apply Val.bool_of_true_val; eauto.
+  auto. eapply transl_stmt_divergence_correct; eauto.
+  (* Sifthenelse, false *)
+  assert (eval_expr tprog te m1 x v1).
+    eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
+  destruct (make_boolean_correct_false _ _ _ _ _ _ H H1) as [vb [A B]].
+  eapply execinf_Sifthenelse. eauto. apply Val.bool_of_false_val; eauto.
+  auto. eapply transl_stmt_divergence_correct; eauto.
+  (* Swhile, body *)
+  apply execinf_Sblock. apply execinf_Sloop_body.  
+  eapply execinf_Sseq_2. eapply exit_if_false_true; eauto. 
+  apply execinf_Sblock. eapply transl_stmt_divergence_correct; eauto. traceEq.
+  (* Swhile, loop *)
+  apply execinf_Sblock. eapply execinf_Sloop_block.
+  eapply exec_Sseq_continue. eapply exit_if_false_true; eauto.
+  rewrite (transl_out_normal_or_continue out1 H3). 
+  apply exec_Sblock. 
+  eapply (transl_stmt_correct _ _ _ _ _ _ H2); eauto. reflexivity.
+  eapply transl_stmt_divergence_correct with (nbrk := 1%nat) (ncnt := 0%nat); eauto.
+  constructor; eauto.
+  traceEq.
+  (* Sdowhile, body *)
+  apply execinf_Sblock. apply execinf_Sloop_body.  
+  apply execinf_Sseq_1. apply execinf_Sblock.
+  eapply transl_stmt_divergence_correct; eauto.
+  (* Sdowhile, loop *)
+  apply execinf_Sblock. eapply execinf_Sloop_block.
+  eapply exec_Sseq_continue.
+  rewrite (transl_out_normal_or_continue out1 H1). 
+  apply exec_Sblock. 
+  eapply (transl_stmt_correct _ _ _ _ _ _ H0); eauto. 
+  eapply exit_if_false_true; eauto. reflexivity.
+  eapply transl_stmt_divergence_correct with (nbrk := 1%nat) (ncnt := 0%nat); eauto.
+  constructor; auto.
+  traceEq.
+  (* Sfor start 1 *)
+  simpl in TR. destruct (is_Sskip a1). 
+  subst a1. inv H0.
+  monadInv TR. 
+  apply execinf_Sseq_1. eapply transl_stmt_divergence_correct; eauto.
+  (* Sfor start 2 *)
+  destruct (transl_stmt_Sfor_start _ _ _ _ _ _ _ TR H0) as [ts1 [ts2 [EQ [TR1 TR2]]]].
+  subst ts. 
+  eapply execinf_Sseq_2. 
+  change Out_normal with (transl_outcome nbrk ncnt Csem.Out_normal).
+  eapply (transl_stmt_correct _ _ _ _ _ _ H1); eauto.
+  eapply transl_stmt_divergence_correct; eauto. 
+    constructor; auto. constructor.
+  auto.
+  (* Sfor_body *)
+  rewrite transl_stmt_Sfor_not_start in TR; monadInv TR.
+  apply execinf_Sblock. apply execinf_Sloop_body.
+  eapply execinf_Sseq_2. 
+  eapply exit_if_false_true; eauto.
+  apply execinf_Sseq_1. apply execinf_Sblock. 
+  eapply transl_stmt_divergence_correct; eauto.
+  traceEq.
+  (* Sfor next *)
+  rewrite transl_stmt_Sfor_not_start in TR; monadInv TR.
+  apply execinf_Sblock. apply execinf_Sloop_body.
+  eapply execinf_Sseq_2. 
+  eapply exit_if_false_true; eauto.
+  eapply execinf_Sseq_2.
+  rewrite (transl_out_normal_or_continue out1 H3). 
+  apply exec_Sblock. 
+  eapply (transl_stmt_correct _ _ _ _ _ _ H2); eauto.
+  eapply transl_stmt_divergence_correct; eauto.
+  reflexivity. traceEq. 
+  (* Sfor loop *)
+  generalize TR. rewrite transl_stmt_Sfor_not_start; intro TR'; monadInv TR'.
+  apply execinf_Sblock. eapply execinf_Sloop_block.
+  eapply exec_Sseq_continue.
+  eapply exit_if_false_true; eauto.
+  eapply exec_Sseq_continue.
+  rewrite (transl_out_normal_or_continue out1 H3). 
+  apply exec_Sblock. 
+  eapply (transl_stmt_correct _ _ _ _ _ _ H2); eauto.
+  change Out_normal with (transl_outcome nbrk ncnt Csem.Out_normal).
+  eapply (transl_stmt_correct _ _ _ _ _ _ H4); eauto.
+  reflexivity. reflexivity. 
+  eapply transl_stmt_divergence_correct; eauto. 
+    constructor; auto.
+  traceEq.
+  (* Sswitch *)
+  apply execinf_stutter with (lblstmts_length sl).
+  rewrite length_switch_table in EQ0.
+  replace (ncnt + lblstmts_length sl + 1)%nat
+     with (S (lblstmts_length sl + ncnt))%nat in EQ0 by omega.
+  change t with (E0 *** t).
+  eapply transl_lblstmt_divergence_correct; eauto.
+  left. split. apply exec_Sblock. constructor. 
+  eapply (transl_expr_correct _ _ _ _ MENV _ _ H0); eauto.
+  auto.
+
+(* Labeled statements *)
+  intros. destruct s; simpl in *; monadInv H; inv H0.
+  (* 1. LSdefault *)
+  assert (exec_stmt tprog te m0 body t0 m1 Out_normal) by tauto.
+  assert (execinf_lblstmts ge e m1 (LSdefault s) t1) by tauto.
+  clear H2. inv H0.  
+  change (Sblock (Sseq body x))
+    with ((fun z => Sblock z) (Sseq body x)).
+  apply execinf_context. 
+  eapply execinf_Sseq_2. eauto. eapply transl_stmt_divergence_correct; eauto. auto.
+  constructor.
+  (* 2. LScase *)
+  elim H2; clear H2.
+  (* 2.1 searching for the case *)
+  rewrite (Int.eq_sym i n). 
+  destruct (Int.eq n i).
+  (* 2.1.1 found it! *)
+  intros [A B]. inv B.
+  (* 2.1.1.1 we diverge because of this case *)
+  destruct (transl_lblstmts_context _ _ _ _ _ EQ0) as [ctx [CTX EQ1]].
+  rewrite EQ1. apply execinf_context; auto. 
+  apply execinf_Sblock. eapply execinf_Sseq_2. eauto. 
+  eapply transl_stmt_divergence_correct; eauto. auto.
+  (* 2.1.1.2 we diverge later, after falling through *)
+  simpl. apply execinf_sleep.
+  replace (t0 *** t2 *** t3) with ((t0 ** t2) *** t3). 
+  eapply transl_lblstmt_divergence_correct with (n := n); eauto. right. split.
+  change Out_normal with (outcome_block Out_normal). 
+  apply exec_Sblock.
+  eapply exec_Sseq_continue. eauto. 
+  change Out_normal with (transl_outcome (S (lblstmts_length s0)) (S (S (lblstmts_length s0 + ncnt))) Csem.Out_normal).
+  eapply (transl_stmt_correct _ _ _ _ _ _ H8); eauto.
+  auto. auto. traceEq.
+  (* 2.1.2 still searching *)
+  rewrite switch_target_table_shift. intros [A B].
+  apply execinf_sleep.
+  eapply transl_lblstmt_divergence_correct with (n := n); eauto. left. split.
+  fold (outcome_block (Out_exit (switch_target n (lblstmts_length s0) (switch_table s0 0)))).
+  apply exec_Sblock. apply exec_Sseq_stop. eauto. congruence.
+  auto.
+  (* 2.2 found the case already, falling through next cases *)
+  intros [A B]. inv B.
+  (* 2.2.1 we diverge because of this case *)
+  destruct (transl_lblstmts_context _ _ _ _ _ EQ0) as [ctx [CTX EQ1]].
+  rewrite EQ1. apply execinf_context; auto. 
+  apply execinf_Sblock. eapply execinf_Sseq_2. eauto. 
+  eapply transl_stmt_divergence_correct; eauto. auto.
+  (* 2.2.2 we diverge later *)
+  simpl. apply execinf_sleep.
+  replace (t0 *** t2 *** t3) with ((t0 ** t2) *** t3). 
+  eapply transl_lblstmt_divergence_correct with (n := n); eauto. right. split.
+  change Out_normal with (outcome_block Out_normal). 
+  apply exec_Sblock.
+  eapply exec_Sseq_continue. eauto. 
+  change Out_normal with (transl_outcome (S (lblstmts_length s0)) (S (S (lblstmts_length s0 + ncnt))) Csem.Out_normal).
+  eapply (transl_stmt_correct _ _ _ _ _ _ H8); eauto.
+  auto. auto. traceEq.
 Qed.
 
 End CORRECTNESS.

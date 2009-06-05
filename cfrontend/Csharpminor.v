@@ -37,14 +37,14 @@ Require Import Smallstep.
   be taken using [Eaddrof] expressions.
 *)
 
-Inductive constant : Set :=
+Inductive constant : Type :=
   | Ointconst: int -> constant          (**r integer constant *)
   | Ofloatconst: float -> constant.     (**r floating-point constant *)
 
-Definition unary_operation : Set := Cminor.unary_operation.
-Definition binary_operation : Set := Cminor.binary_operation.
+Definition unary_operation : Type := Cminor.unary_operation.
+Definition binary_operation : Type := Cminor.binary_operation.
 
-Inductive expr : Set :=
+Inductive expr : Type :=
   | Evar : ident -> expr                (**r reading a scalar variable  *)
   | Eaddrof : ident -> expr             (**r taking the address of a variable *)
   | Econst : constant -> expr           (**r constants *)
@@ -59,7 +59,7 @@ Inductive expr : Set :=
   [Sexit n] terminates prematurely the execution of the [n+1] enclosing
   [Sblock] statements. *)
 
-Inductive stmt : Set :=
+Inductive stmt : Type :=
   | Sskip: stmt
   | Sassign : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
@@ -77,7 +77,7 @@ Inductive stmt : Set :=
   or array variables (of the indicated sizes).  The only operation
   permitted on an array variable is taking its address. *)
 
-Inductive var_kind : Set :=
+Inductive var_kind : Type :=
   | Vscalar: memory_chunk -> var_kind
   | Varray: Z -> var_kind.
 
@@ -86,7 +86,7 @@ Inductive var_kind : Set :=
   local variables with associated [var_kind] description, and a
   statement representing the function body.  *)
 
-Record function : Set := mkfunction {
+Record function : Type := mkfunction {
   fn_sig: signature;
   fn_params: list (ident * memory_chunk);
   fn_vars: list (ident * var_kind);
@@ -95,7 +95,7 @@ Record function : Set := mkfunction {
 
 Definition fundef := AST.fundef function.
 
-Definition program : Set := AST.program fundef var_kind.
+Definition program : Type := AST.program fundef var_kind.
 
 Definition funsig (fd: fundef) :=
   match fd with
@@ -109,7 +109,7 @@ Definition funsig (fd: fundef) :=
   style.  Expressions evaluate to values, and statements evaluate to
   ``outcomes'' indicating how execution should proceed afterwards. *)
 
-Inductive outcome: Set :=
+Inductive outcome: Type :=
   | Out_normal: outcome                (**r continue in sequence *)
   | Out_exit: nat -> outcome           (**r terminate [n+1] enclosing blocks *)
   | Out_return: option val -> outcome. (**r return immediately to caller *)

@@ -268,16 +268,18 @@ Proof.
   (* Lload *)
   rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
   left; econstructor; split.
-  eapply exec_Lload; eauto.
+  eapply exec_Lload with (a := a). 
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   econstructor; eauto.
   (* Lstore *)
   rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
   left; econstructor; split.
-  eapply exec_Lstore; eauto.
+  eapply exec_Lstore with (a := a).
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   econstructor; eauto.
   (* Lcall *)
   left; econstructor; split. 

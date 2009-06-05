@@ -36,7 +36,7 @@ Open Local Scope string_scope.
   The mapping for let-bound variables is initially empty and updated
   during translation of expressions, when crossing a [Elet] binding. *)
 
-Record mapping: Set := mkmapping {
+Record mapping: Type := mkmapping {
   map_vars: PTree.t reg;
   map_letvars: list reg
 }.
@@ -45,7 +45,7 @@ Record mapping: Set := mkmapping {
   current state of the control-flow graph for the function being translated,
   as well as sources of fresh RTL registers and fresh CFG nodes. *)
 
-Record state: Set := mkstate {
+Record state: Type := mkstate {
   st_nextreg: positive;
   st_nextnode: positive;
   st_code: code;
@@ -104,25 +104,25 @@ Qed.
   We now define this monadic encoding -- the ``state and error'' monad --
   as well as convenient syntax to express monadic computations. *)
 
-Inductive res (A: Set) (s: state): Set :=
+Inductive res (A: Type) (s: state): Type :=
   | Error: Errors.errmsg -> res A s
   | OK: A -> forall (s': state), state_incr s s' -> res A s.
 
 Implicit Arguments OK [A s].
 Implicit Arguments Error [A s].
 
-Definition mon (A: Set) : Set := forall (s: state), res A s.
+Definition mon (A: Type) : Type := forall (s: state), res A s.
 
-Definition ret (A: Set) (x: A) : mon A :=
+Definition ret (A: Type) (x: A) : mon A :=
   fun (s: state) => OK x s (state_incr_refl s).
 
 Implicit Arguments ret [A].
 
-Definition error (A: Set) (msg: Errors.errmsg) : mon A := fun (s: state) => Error msg.
+Definition error (A: Type) (msg: Errors.errmsg) : mon A := fun (s: state) => Error msg.
 
 Implicit Arguments error [A].
 
-Definition bind (A B: Set) (f: mon A) (g: A -> mon B) : mon B :=
+Definition bind (A B: Type) (f: mon A) (g: A -> mon B) : mon B :=
   fun (s: state) =>
     match f s with
     | Error msg => Error msg
@@ -135,7 +135,7 @@ Definition bind (A B: Set) (f: mon A) (g: A -> mon B) : mon B :=
 
 Implicit Arguments bind [A B].
 
-Definition bind2 (A B C: Set) (f: mon (A * B)) (g: A -> B -> mon C) : mon C :=
+Definition bind2 (A B C: Type) (f: mon (A * B)) (g: A -> B -> mon C) : mon C :=
   bind f (fun xy => g (fst xy) (snd xy)).
 
 Implicit Arguments bind2 [A B C].
@@ -145,7 +145,7 @@ Notation "'do' X <- A ; B" := (bind A (fun X => B))
 Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
    (at level 200, X ident, Y ident, A at level 100, B at level 200).
 
-Definition handle_error (A: Set) (f g: mon A) : mon A :=
+Definition handle_error (A: Type) (f g: mon A) : mon A :=
   fun (s: state) =>
     match f s with
     | OK a s' i => OK a s' i
@@ -498,7 +498,7 @@ Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
   [nlist] if it terminates by an [exit n] construct.  [rret] is the
   register where the return value of the function must be stored, if any. *)
 
-Definition labelmap : Set := PTree.t node.
+Definition labelmap : Type := PTree.t node.
 
 Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
                      (nexits: list node) (ngoto: labelmap) (nret: node) (rret: option reg)

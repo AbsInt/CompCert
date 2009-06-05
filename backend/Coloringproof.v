@@ -148,7 +148,7 @@ Qed.
 Lemma add_interf_destroyed_incl_aux_2:
   forall mr live g,
   graph_incl g
-    (Regset.fold graph (fun r g => add_interf_mreg r mr g) live g).
+    (Regset.fold (fun r g => add_interf_mreg r mr g) live g).
 Proof.
   intros. rewrite Regset.fold_1. apply add_interf_destroyed_incl_aux_1.
 Qed.
@@ -219,7 +219,7 @@ Lemma add_interf_destroyed_correct_aux_2:
   forall mr live g r,
   Regset.In r live ->
   interfere_mreg r mr
-    (Regset.fold graph (fun r g => add_interf_mreg r mr g) live g).
+    (Regset.fold (fun r g => add_interf_mreg r mr g) live g).
 Proof.
   intros. rewrite Regset.fold_1. apply add_interf_destroyed_correct_aux_1.
   apply Regset.elements_1. auto.
@@ -619,12 +619,12 @@ Lemma check_coloring_1_correct:
   coloring r1 <> coloring r2.
 Proof.
   unfold check_coloring_1. intros. 
-  assert (FSetInterface.compat_bool OrderedRegReg.eq
+  assert (compat_bool OrderedRegReg.eq
      (fun r1r2 => if Loc.eq (coloring (fst r1r2)) (coloring (snd r1r2))
                   then false else true)).
   red. unfold OrderedRegReg.eq. unfold OrderedReg.eq.
   intros x y [EQ1 EQ2]. rewrite EQ1; rewrite EQ2; auto.
-  generalize (SetRegReg.for_all_2 _ _ H1 H _ H0). 
+  generalize (SetRegReg.for_all_2 H1 H H0). 
   simpl. case (Loc.eq (coloring r1) (coloring r2)); intro.
   intro; discriminate. auto.
 Qed.
@@ -636,12 +636,12 @@ Lemma check_coloring_2_correct:
   coloring r1 <> R mr2.
 Proof.
   unfold check_coloring_2. intros. 
-  assert (FSetInterface.compat_bool OrderedRegMreg.eq
+  assert (compat_bool OrderedRegMreg.eq
      (fun r1r2 => if Loc.eq (coloring (fst r1r2)) (R (snd r1r2))
                   then false else true)).
   red. unfold OrderedRegMreg.eq. unfold OrderedReg.eq.
   intros x y [EQ1 EQ2]. rewrite EQ1; rewrite EQ2; auto.
-  generalize (SetRegMreg.for_all_2 _ _ H1 H _ H0). 
+  generalize (SetRegMreg.for_all_2 H1 H H0). 
   simpl. case (Loc.eq (coloring r1) (R mr2)); intro.
   intro; discriminate. auto.
 Qed.
@@ -920,12 +920,12 @@ Proof.
   intros. rewrite H2. unfold allregs. 
   elim (ordered_pair_charact x y); intro.
   apply alloc_of_coloring_correct_1. auto. 
-  change OrderedReg.t with reg. rewrite <- H6.
+  change positive with reg. rewrite <- H6.
   change (interfere x y g). unfold g. 
   apply interf_graph_correct_2; auto.
   apply sym_not_equal.
   apply alloc_of_coloring_correct_1. auto. 
-  change OrderedReg.t with reg. rewrite <- H6.
+  change positive with reg. rewrite <- H6.
   change (interfere x y g). unfold g. 
   apply interf_graph_correct_2; auto.
 Qed.
@@ -942,12 +942,12 @@ Proof.
   rewrite H4; unfold allregs.
   elim (ordered_pair_charact r1 r2); intro.
   apply alloc_of_coloring_correct_1. auto. 
-  change OrderedReg.t with reg. rewrite <- H5.
+  change positive with reg. rewrite <- H5.
   change (interfere r1 r2 g). unfold g.
   apply interf_graph_correct_3; auto.
   apply sym_not_equal.
   apply alloc_of_coloring_correct_1. auto. 
-  change OrderedReg.t with reg. rewrite <- H5.
+  change positive with reg. rewrite <- H5.
   change (interfere r1 r2 g). unfold g.
   apply interf_graph_correct_3; auto.
 Qed.

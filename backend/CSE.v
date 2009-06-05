@@ -49,7 +49,7 @@ Require Import Kildall.
 
 Definition valnum := positive.
 
-Inductive rhs : Set :=
+Inductive rhs : Type :=
   | Op: operation -> list valnum -> rhs
   | Load: memory_chunk -> addressing -> list valnum -> rhs.
 
@@ -85,7 +85,7 @@ Qed.
   we maintain the next unused value number, so as to easily generate
   fresh value numbers. *)
 
-Record numbering : Set := mknumbering {
+Record numbering : Type := mknumbering {
   num_next: valnum;
   num_eqs: list (valnum * rhs);
   num_reg: PTree.t valnum
