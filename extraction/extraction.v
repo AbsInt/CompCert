@@ -82,6 +82,9 @@ Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
 Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
 Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
 
+(* Avoid name clashes *)
+Extraction Blacklist List String Int.
+
 (* Go! *)
 Cd "extraction".
 Recursive Extraction Library Compiler.

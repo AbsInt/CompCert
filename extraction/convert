@@ -1,6 +1,0 @@
-#!/usr/bin/perl -pi
-
-s/\bList\b/CoqList/g;
-s/\bString\b/CoqString/g;
-s/^open Int$/open CoqInt/;
-
