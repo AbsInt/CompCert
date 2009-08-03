@@ -163,10 +163,12 @@ Definition typeof (e: expr) : type :=
 
 (** ** Statements *)
 
-(** Clight statements include all C statements except [goto] and labels.
+(** Clight statements include all C statements.
   Only structured forms of [switch] are supported; moreover,
   the [default] case must occur last.  Blocks and block-scoped declarations
   are not supported. *)
+
+Definition label := ident.
 
 Inductive statement : Type :=
   | Sskip : statement                   (**r do nothing *)
@@ -181,6 +183,8 @@ Inductive statement : Type :=
   | Scontinue : statement                   (**r [continue] statement *)
   | Sreturn : option expr -> statement      (**r [return] statement *)
   | Sswitch : expr -> labeled_statements -> statement  (**r [switch] statement *)
+  | Slabel : label -> statement -> statement
+  | Sgoto : label -> statement
 
 with labeled_statements : Type :=            (**r cases of a [switch] *)
   | LSdefault: statement -> labeled_statements
@@ -447,6 +451,9 @@ type must be accessed:
 - [By_reference]: access by reference, i.e. by just returning
   the address of the variable;
 - [By_nothing]: no access is possible, e.g. for the [void] type.
+
+We currently do not support 64-bit integers and 128-bit floats, so these
+have an access mode of [By_nothing].
 *)
 
 Inductive mode: Type :=

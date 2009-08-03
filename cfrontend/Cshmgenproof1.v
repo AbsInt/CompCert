@@ -206,86 +206,60 @@ Proof.
   simpl. rewrite H6. auto.
 Qed.
 
-Lemma transl_stmt_Sfor_start:
-  forall nbrk ncnt s1 e2 s3 s4 ts,
-  transl_statement nbrk ncnt (Sfor s1 e2 s3 s4) = OK ts ->
-  s1 <> Csyntax.Sskip ->
-  exists ts1, exists ts2,
-    ts = Sseq ts1 ts2
-  /\ transl_statement nbrk ncnt s1 = OK ts1
-  /\ transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 s3 s4) = OK ts2.
+Lemma is_Sskip_true:
+  forall (A: Type) (a b: A),
+  (if is_Sskip Csyntax.Sskip then a else b) = a.
 Proof.
-  intros. simpl in H. destruct (is_Sskip s1). contradiction.
-  monadInv H. econstructor; econstructor.
-  split. reflexivity. split. auto. simpl.
-  destruct (is_Sskip Csyntax.Sskip). 2: tauto. 
-  rewrite EQ1; rewrite EQ0; rewrite EQ2; auto.
+  intros. destruct (is_Sskip Csyntax.Sskip); congruence.
 Qed.
 
-Open Local Scope error_monad_scope.
-
-Lemma transl_stmt_Sfor_not_start:
-  forall nbrk ncnt e2 e3 s1,
-  transl_statement nbrk ncnt (Sfor Csyntax.Sskip e2 e3 s1) =
-    (do te2 <- exit_if_false e2;
-     do te3 <- transl_statement nbrk ncnt e3;
-     do ts1 <- transl_statement 1%nat 0%nat s1;
-     OK (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3))))).
+Lemma is_Sskip_false:
+  forall (A: Type) (a b: A) s,
+  s <> Csyntax.Sskip ->
+  (if is_Sskip s then a else b) = b.
 Proof.
-  intros. simpl. destruct (is_Sskip Csyntax.Sskip). auto. congruence.
+  intros. destruct (is_Sskip s); congruence.
 Qed.
 
-(** Properties related to switch constructs *)
+(** Properties of labeled statements *)
 
-Fixpoint lblstmts_length (sl: labeled_statements) : nat :=
-  match sl with
-  | LSdefault _ => 0%nat
-  | LScase _ _ sl' => S (lblstmts_length sl')
-  end.
-
-Lemma switch_target_table_shift:
-  forall n sl base dfl,
-  switch_target n (S dfl) (switch_table sl (S base)) =
-  S(switch_target n dfl (switch_table sl base)).
+Lemma transl_lbl_stmt_1:
+  forall nbrk ncnt n sl tsl,
+  transl_lbl_stmt nbrk ncnt sl = OK tsl ->
+  transl_lbl_stmt nbrk ncnt (Csem.select_switch n sl) = OK (select_switch n tsl).
 Proof.
-  induction sl; intros; simpl.
+  induction sl; intros.
+  monadInv H. simpl. rewrite EQ. auto.
+  generalize H; intro TR. monadInv TR. simpl. 
+  destruct (Int.eq i n). auto. auto. 
+Qed.
+
+Lemma transl_lbl_stmt_2:
+  forall nbrk ncnt sl tsl,
+  transl_lbl_stmt nbrk ncnt sl = OK tsl ->
+  transl_statement nbrk ncnt (seq_of_labeled_statement sl) = OK (seq_of_lbl_stmt tsl).
+Proof.
+  induction sl; intros.
+  monadInv H. simpl. auto.
+  monadInv H. simpl. rewrite EQ; simpl. rewrite (IHsl _ EQ1). simpl. auto.
+Qed.
+
+Lemma wt_select_switch:
+  forall n tyenv sl,
+  wt_lblstmts tyenv sl ->
+  wt_lblstmts tyenv (Csem.select_switch n sl).
+Proof.
+  induction 1; simpl.
+  constructor; auto.
+  destruct (Int.eq n0 n). constructor; auto. auto.
+Qed.
+
+Lemma wt_seq_of_labeled_statement:
+  forall tyenv sl,
+  wt_lblstmts tyenv sl ->
+  wt_stmt tyenv (seq_of_labeled_statement sl).
+Proof.
+  induction 1; simpl.
   auto.
-  case (Int.eq n i). auto. auto. 
+  constructor; auto.
 Qed.
-
-Lemma length_switch_table:
-  forall sl base, List.length (switch_table sl base) = lblstmts_length sl.
-Proof.
-  induction sl; intro; simpl. auto. decEq; auto. 
-Qed.
-
-Lemma block_seq_context_compose:
-  forall ctx2 ctx1,
-  block_seq_context ctx1 ->
-  block_seq_context ctx2 ->
-  block_seq_context (fun x => ctx1 (ctx2 x)).
-Proof.
-  induction 1; intros; constructor; auto.
-Qed.
-
-Lemma transl_lblstmts_context:
-  forall sl nbrk ncnt body s,
-  transl_lblstmts nbrk ncnt sl body = OK s ->
-  exists ctx, block_seq_context ctx /\ s = ctx body.
-Proof.
-  induction sl; simpl; intros.
-  monadInv H. exists (fun y => Sblock (Sseq y x)); split.
-  apply block_seq_context_ctx_1. apply block_seq_context_base_2.
-  auto.
-  monadInv H. exploit IHsl; eauto. intros [ctx [A B]].
-  exists (fun y => ctx (Sblock (Sseq y x))); split.
-  apply block_seq_context_compose with
-    (ctx1 := ctx)
-    (ctx2 := fun y => Sblock (Sseq y x)).
-  auto. apply block_seq_context_ctx_1. apply block_seq_context_base_2. 
-  auto.
-Qed.
-
-
-
-

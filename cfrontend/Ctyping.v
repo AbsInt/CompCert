@@ -120,6 +120,11 @@ Inductive wt_stmt: statement -> Prop :=
   | wt_Sswitch: forall e sl,
      wt_expr e -> wt_lblstmts sl ->
      wt_stmt (Sswitch e sl)
+  | wt_Slabel: forall lbl s,
+     wt_stmt s ->
+     wt_stmt (Slabel lbl s)
+  | wt_Sgoto: forall lbl,
+     wt_stmt (Sgoto lbl)
 
 with wt_lblstmts: labeled_statements -> Prop :=
   | wt_LSdefault: forall s,
@@ -362,6 +367,8 @@ Fixpoint typecheck_stmt (s: Csyntax.statement) {struct s} : bool :=
   | Csyntax.Sreturn (Some e) => typecheck_expr e
   | Csyntax.Sreturn None => true
   | Csyntax.Sswitch e sl => typecheck_expr e && typecheck_lblstmts sl
+  | Csyntax.Slabel lbl s => typecheck_stmt s
+  | Csyntax.Sgoto lbl => true
   end    
 
 with typecheck_lblstmts (sl: labeled_statements) {struct sl}: bool :=

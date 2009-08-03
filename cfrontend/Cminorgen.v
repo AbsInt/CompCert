@@ -38,11 +38,15 @@ Open Local Scope error_monad_scope.
   taken in the Csharpminor code can be mapped to Cminor local
   variable, since the latter do not reside in memory.  
 
-  The other task performed during the translation to Cminor is the
+  Another task performed during the translation to Cminor is the
   insertion of truncation, zero- and sign-extension operations when
   assigning to a Csharpminor local variable of ``small'' type
   (e.g. [Mfloat32] or [Mint8signed]).  This is necessary to preserve
   the ``normalize at assignment-time'' semantics of Clight and Csharpminor.
+
+  Finally, the Clight-like [switch] construct of Csharpminor
+  is transformed into the simpler, lower-level [switch] construct
+  of Cminor.
 *)
 
 (** Translation of constants. *)
@@ -190,9 +194,50 @@ Fixpoint transl_exprlist (cenv: compilenv) (el: list Csharpminor.expr)
       OK (te1 :: te2)
   end.
 
-(** Translation of statements.  Entirely straightforward. *)
+(** To translate [switch] statements, we wrap the statements associated with
+  the various cases in a cascade of nested Cminor blocks.
+  The multi-way branch is performed by a Cminor [switch]
+  statement that exits to the appropriate case.  For instance:
+<<
+switch (e) {        --->    block { block { block {
+  case N1: s1;                switch (e) { N1: exit 0; N2: exit 1; default: exit 2; }
+  case N2: s2;                } ; s1  // with exits shifted by 2
+  default: s;                 } ; s2  // with exits shifted by 1
+}                             } ; s   // with exits unchanged
+>>
+  To shift [exit] statements appropriately, we use a second
+  compile-time environment, of type [exit_env], which
+  records the blocks inserted during the translation.
+  A [true] element means the block was present in the original code;
+  a [false] element, that it was inserted during translation.
+*)
 
-Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
+Definition exit_env := list bool.
+
+Fixpoint shift_exit (e: exit_env) (n: nat) {struct e} : nat :=
+  match e, n with
+  | nil, _ => n
+  | false :: e', _ => S (shift_exit e' n)
+  | true :: e', O => O
+  | true :: e', S m => S (shift_exit e' m)
+  end.
+
+Fixpoint switch_table (ls: lbl_stmt) (k: nat) {struct ls} : list (int * nat) :=
+  match ls with
+  | LSdefault _ => nil
+  | LScase ni _ rem => (ni, k) :: switch_table rem (S k)
+  end.
+
+Fixpoint switch_env (ls: lbl_stmt) (e: exit_env) {struct ls}: exit_env :=
+  match ls with
+  | LSdefault _ => e
+  | LScase _ _ ls' => false :: switch_env ls' e
+  end.
+
+(** Translation of statements.  The only nonobvious part is
+  the translation of [switch] statements, outlined above. *)
+
+Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
                      {struct s}: res stmt :=
   match s with
   | Csharpminor.Sskip =>
@@ -213,28 +258,47 @@ Fixpoint transl_stmt (cenv: compilenv) (s: Csharpminor.stmt)
       do s <- var_set cenv id (Evar id);
       OK (Sseq (Scall (Some id) sig te tel) s)
   | Csharpminor.Sseq s1 s2 =>
-      do ts1 <- transl_stmt cenv s1;
-      do ts2 <- transl_stmt cenv s2;
+      do ts1 <- transl_stmt cenv xenv s1;
+      do ts2 <- transl_stmt cenv xenv s2;
       OK (Sseq ts1 ts2)
   | Csharpminor.Sifthenelse e s1 s2 =>
       do te <- transl_expr cenv e;
-      do ts1 <- transl_stmt cenv s1;
-      do ts2 <- transl_stmt cenv s2;
+      do ts1 <- transl_stmt cenv xenv s1;
+      do ts2 <- transl_stmt cenv xenv s2;
       OK (Sifthenelse te ts1 ts2)
   | Csharpminor.Sloop s =>
-      do ts <- transl_stmt cenv s;
+      do ts <- transl_stmt cenv xenv s;
       OK (Sloop ts)
   | Csharpminor.Sblock s =>
-      do ts <- transl_stmt cenv s;
+      do ts <- transl_stmt cenv (true :: xenv) s;
       OK (Sblock ts)
   | Csharpminor.Sexit n =>
-      OK (Sexit n)
-  | Csharpminor.Sswitch e cases default =>
-      do te <- transl_expr cenv e; OK(Sswitch te cases default)
+      OK (Sexit (shift_exit xenv n))
+  | Csharpminor.Sswitch e ls =>
+      let cases := switch_table ls O in
+      let default := length cases in
+      do te <- transl_expr cenv e;
+      transl_lblstmt cenv (switch_env ls xenv) ls (Sswitch te cases default)
   | Csharpminor.Sreturn None =>
       OK (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>
       do te <- transl_expr cenv e; OK (Sreturn (Some te))
+  | Csharpminor.Slabel lbl s =>
+      do ts <- transl_stmt cenv xenv s; OK (Slabel lbl ts)
+  | Csharpminor.Sgoto lbl =>
+      OK (Sgoto lbl)
+  end
+
+with transl_lblstmt (cenv: compilenv) (xenv: exit_env)
+                    (ls: Csharpminor.lbl_stmt) (body: stmt)
+                    {struct ls}: res stmt :=
+  match ls with
+  | Csharpminor.LSdefault s =>
+      do ts <- transl_stmt cenv xenv s;
+      OK (Sseq (Sblock body) ts)
+  | Csharpminor.LScase _ s ls' =>
+      do ts <- transl_stmt cenv xenv s;
+      transl_lblstmt cenv (List.tail xenv) ls' (Sseq (Sblock body) ts)
   end.
 
 (** Computation of the set of variables whose address is taken in
@@ -279,9 +343,18 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
   | Csharpminor.Sloop s => addr_taken_stmt s
   | Csharpminor.Sblock s => addr_taken_stmt s
   | Csharpminor.Sexit n => Identset.empty
-  | Csharpminor.Sswitch e cases default => addr_taken_expr e
+  | Csharpminor.Sswitch e ls =>
+      Identset.union (addr_taken_expr e) (addr_taken_lblstmt ls)
   | Csharpminor.Sreturn None => Identset.empty
   | Csharpminor.Sreturn (Some e) => addr_taken_expr e
+  | Csharpminor.Slabel lbl s => addr_taken_stmt s
+  | Csharpminor.Sgoto lbl => Identset.empty
+  end
+
+with addr_taken_lblstmt (ls: Csharpminor.lbl_stmt): Identset.t :=
+  match ls with
+  | Csharpminor.LSdefault s => addr_taken_stmt s
+  | Csharpminor.LScase _ s ls' => Identset.union (addr_taken_stmt s) (addr_taken_lblstmt ls')
   end.
 
 (** Layout of the Cminor stack data block and construction of the 
@@ -362,18 +435,22 @@ Fixpoint store_parameters
   otherwise address computations within the stack block could
   overflow machine arithmetic and lead to incorrect code. *)
 
-Definition transl_function
-         (gce: compilenv) (f: Csharpminor.function): res function :=
-  let (cenv, stacksize) := build_compilenv gce f in
-  if zle stacksize Int.max_signed then
-    do tbody <- transl_stmt cenv f.(Csharpminor.fn_body);
+Definition transl_funbody 
+  (cenv: compilenv) (stacksize: Z) (f: Csharpminor.function): res function :=
+    do tbody <- transl_stmt cenv nil f.(Csharpminor.fn_body);
     do sparams <- store_parameters cenv f.(Csharpminor.fn_params);
        OK (mkfunction
               (Csharpminor.fn_sig f)
               (Csharpminor.fn_params_names f)
               (Csharpminor.fn_vars_names f)
               stacksize
-              (Sseq sparams tbody))
+              (Sseq sparams tbody)).
+
+Definition transl_function
+         (gce: compilenv) (f: Csharpminor.function): res function :=
+  let (cenv, stacksize) := build_compilenv gce f in
+  if zle stacksize Int.max_signed
+  then transl_funbody cenv stacksize f
   else Error(msg "Cminorgen: too many local variables, stack size exceeded").
 
 Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): res fundef :=

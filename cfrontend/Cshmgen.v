@@ -509,25 +509,7 @@ for (e1;e2;e3) s;   --->     e1;
                              }
                              // break in s branches here
 >>
-   For [switch] statements, we wrap the statements associated with
-   the various cases in a cascade of nested Csharpminor blocks.
-   The multi-way branch is performed by a Csharpminor [switch]
-   statement that exits to the appropriate case.  For instance:
-<<
-switch (e) {        --->    block { block { block { block {
-  case N1: s1;                switch (e) { N1: exit 0; N2: exit 1; default: exit 2; }
-  case N2: s2;                } ; s1  // with break -> exit 2  and continue -> exit 3
-  default: s;                 } ; s2  // with break -> exit 1  and continue -> exit 2
-}                             } ; s   // with break -> exit 0  and continue -> exit 1
-                              }
->>
 *)
-
-Fixpoint switch_table (sl: labeled_statements) (k: nat) {struct sl} : list (int * nat) :=
-  match sl with
-  | LSdefault _ => nil
-  | LScase ni _ rem => (ni, k) :: switch_table rem (k+1)
-  end.
 
 Definition is_Sskip:
   forall (s: Csyntax.statement), {s = Csyntax.Sskip} + {s <> Csyntax.Sskip}.
@@ -596,22 +578,27 @@ Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : r
       OK (Sreturn (Some te))
   | Csyntax.Sreturn None =>
       OK (Sreturn None)
-  | Csyntax.Sswitch e sl =>
-      let cases := switch_table sl 0 in
-      let ncases := List.length cases in
-      do te <- transl_expr e;
-      transl_lblstmts ncases (ncnt + ncases + 1)%nat sl (Sblock (Sswitch te cases ncases))
+  | Csyntax.Sswitch a sl =>
+      do ta <- transl_expr a;
+      do tsl <- transl_lbl_stmt 0%nat (S ncnt) sl;
+      OK (Sblock (Sswitch ta tsl))
+  | Csyntax.Slabel lbl s =>
+      do ts <- transl_statement nbrk ncnt s;
+      OK (Slabel lbl ts)
+  | Csyntax.Sgoto lbl =>
+      OK (Sgoto lbl)
   end
 
-with transl_lblstmts (nbrk ncnt: nat) (sl: labeled_statements) (body: stmt)
-                     {struct sl}: res stmt :=
+with transl_lbl_stmt (nbrk ncnt: nat) (sl: Csyntax.labeled_statements)
+                     {struct sl}: res lbl_stmt :=
   match sl with
-  | LSdefault s =>
+  | Csyntax.LSdefault s =>
       do ts <- transl_statement nbrk ncnt s;
-      OK (Sblock (Sseq body ts))
-  | LScase _ s rem =>
+      OK (LSdefault ts)
+  | Csyntax.LScase n s sl' =>
       do ts <- transl_statement nbrk ncnt s;
-      transl_lblstmts (pred nbrk) (pred ncnt) rem (Sblock (Sseq body ts))
+      do tsl' <- transl_lbl_stmt nbrk ncnt sl';
+      OK (LScase n ts tsl')
   end.
 
 (*** Translation of functions *)

@@ -32,55 +32,21 @@ Require Import Cshmgenproof1.
 
 Section CONSTRUCTORS.
 
-Variable tprog: Csharpminor.program.
-
-(** * Properties of the translation of [switch] constructs. *)
-
-Lemma transl_lblstmts_exit:
-  forall e m1 t m2 sl body n tsl nbrk ncnt,
-  exec_stmt tprog e m1 body t m2 (Out_exit (lblstmts_length sl + n)) ->
-  transl_lblstmts nbrk ncnt sl body = OK tsl ->
-  exec_stmt tprog e m1 tsl t m2 (outcome_block (Out_exit n)).
-Proof.
-  induction sl; intros.
-  simpl in H; simpl in H0; monadInv H0. 
-  constructor. apply exec_Sseq_stop. auto. congruence.
-  simpl in H; simpl in H0; monadInv H0.
-  eapply IHsl with (body := Sblock (Sseq body x)); eauto.
-  change (Out_exit (lblstmts_length sl + n))
-    with (outcome_block (Out_exit (S (lblstmts_length sl + n)))).
-  constructor. apply exec_Sseq_stop. auto. congruence.
-Qed.
-
-Lemma transl_lblstmts_return:
-  forall e m1 t m2 sl body optv tsl nbrk ncnt,
-  exec_stmt tprog e m1 body t m2 (Out_return optv) ->
-  transl_lblstmts nbrk ncnt sl body = OK tsl ->
-  exec_stmt tprog e m1 tsl t m2 (Out_return optv).
-Proof.
-  induction sl; intros.
-  simpl in H; simpl in H0; monadInv H0. 
-  change (Out_return optv) with (outcome_block (Out_return optv)).
-  constructor. apply exec_Sseq_stop. auto. congruence.
-  simpl in H; simpl in H0; monadInv H0.
-  eapply IHsl with (body := Sblock (Sseq body x)); eauto.
-  change (Out_return optv) with (outcome_block (Out_return optv)).
-  constructor. apply exec_Sseq_stop. auto. congruence.
-Qed.
-
+Variable globenv : genv * gvarenv.
+Let ge := fst globenv.
 
 (** * Correctness of Csharpminor construction functions *)
 
 Lemma make_intconst_correct:
   forall n e m,
-  eval_expr tprog e m (make_intconst n) (Vint n).
+  eval_expr globenv e m (make_intconst n) (Vint n).
 Proof.
   intros. unfold make_intconst. econstructor. reflexivity. 
 Qed.
 
 Lemma make_floatconst_correct:
   forall n e m,
-  eval_expr tprog e m (make_floatconst n) (Vfloat n).
+  eval_expr globenv e m (make_floatconst n) (Vfloat n).
 Proof.
   intros. unfold make_floatconst. econstructor. reflexivity. 
 Qed.
@@ -101,10 +67,10 @@ Qed.
 
 Lemma make_boolean_correct_true:
  forall e m a v ty,
-  eval_expr tprog e m a v ->
+  eval_expr globenv e m a v ->
   is_true v ty ->
   exists vb,
-    eval_expr tprog e m (make_boolean a ty) vb
+    eval_expr globenv e m (make_boolean a ty) vb
     /\ Val.is_true vb.
 Proof.
   intros until ty; intros EXEC VTRUE.
@@ -121,10 +87,10 @@ Qed.
 
 Lemma make_boolean_correct_false:
  forall e m a v ty,
-  eval_expr tprog e m a v ->
+  eval_expr globenv e m a v ->
   is_false v ty ->
   exists vb,
-    eval_expr tprog e m (make_boolean a ty) vb
+    eval_expr globenv e m (make_boolean a ty) vb
     /\ Val.is_false vb.
 Proof.
   intros until ty; intros EXEC VFALSE.
@@ -143,8 +109,8 @@ Lemma make_neg_correct:
   forall a tya c va v e m,
   sem_neg va tya = Some v ->
   make_neg a tya = OK c ->  
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m c v.
 Proof.
   intros until m; intro SEM. unfold make_neg. 
   functional inversion SEM; intros.
@@ -156,8 +122,8 @@ Lemma make_notbool_correct:
   forall a tya c va v e m,
   sem_notbool va tya = Some v ->
   make_notbool a tya = c ->  
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m c v.
 Proof.
   intros until m; intro SEM. unfold make_notbool. 
   functional inversion SEM; intros; inversion H4; simpl;
@@ -168,8 +134,8 @@ Lemma make_notint_correct:
   forall a tya c va v e m,
   sem_notint va = Some v ->
   make_notint a tya = c ->  
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m c v.
 Proof.
   intros until m; intro SEM. unfold make_notint. 
   functional inversion SEM; intros. 
@@ -182,9 +148,9 @@ Definition binary_constructor_correct
   forall a tya b tyb c va vb v e m,
   sem va tya vb tyb = Some v ->
   make a tya b tyb = OK c ->  
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m b vb ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m b vb ->
+  eval_expr globenv e m c v.
 
 Definition binary_constructor_correct'
     (make: expr -> type -> expr -> type -> res expr)
@@ -192,9 +158,9 @@ Definition binary_constructor_correct'
   forall a tya b tyb c va vb v e m,
   sem va vb = Some v ->
   make a tya b tyb = OK c ->  
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m b vb ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m b vb ->
+  eval_expr globenv e m c v.
 
 Lemma make_add_correct: binary_constructor_correct make_add sem_add.
 Proof.
@@ -296,9 +262,9 @@ Lemma make_cmp_correct:
   forall cmp a tya b tyb c va vb v e m,
   sem_cmp cmp va tya vb tyb m = Some v ->
   make_cmp cmp a tya b tyb = OK c ->  
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m b vb ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m b vb ->
+  eval_expr globenv e m c v.
 Proof.
   intros until m. intro SEM. unfold make_cmp.
   functional inversion SEM; rewrite H0; intros.
@@ -325,8 +291,8 @@ Lemma transl_unop_correct:
   forall op a tya c va v e m, 
   transl_unop op a tya = OK c ->
   sem_unary_operation op va tya = Some v ->
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m c v.
 Proof.
   intros. destruct op; simpl in *.
   eapply make_notbool_correct; eauto. congruence.
@@ -338,9 +304,9 @@ Lemma transl_binop_correct:
   forall op a tya b tyb c va vb v e m,
   transl_binop op a tya b tyb = OK c ->  
   sem_binary_operation op va tya vb tyb m = Some v ->
-  eval_expr tprog e m a va ->
-  eval_expr tprog e m b vb ->
-  eval_expr tprog e m c v.
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m b vb ->
+  eval_expr globenv e m c v.
 Proof.
   intros. destruct op; simpl in *.
   eapply make_add_correct; eauto.
@@ -363,9 +329,9 @@ Qed.
 
 Lemma make_cast_correct:
   forall e m a v ty1 ty2 v',
-   eval_expr tprog e m a v ->
+   eval_expr globenv e m a v ->
    cast v ty1 ty2 v' ->
-   eval_expr tprog e m (make_cast ty1 ty2 a) v'.
+   eval_expr globenv e m (make_cast ty1 ty2 a) v'.
 Proof.
   unfold make_cast, make_cast1, make_cast2.
   intros until v'; intros EVAL CAST.
@@ -387,9 +353,9 @@ Qed.
 Lemma make_load_correct:
   forall addr ty code b ofs v e m,
   make_load addr ty = OK code ->
-  eval_expr tprog e m addr (Vptr b ofs) ->
+  eval_expr globenv e m addr (Vptr b ofs) ->
   load_value_of_type ty m b ofs = Some v ->
-  eval_expr tprog e m code v.
+  eval_expr globenv e m code v.
 Proof.
   unfold make_load, load_value_of_type.
   intros until m; intros MKLOAD EVEXP LDVAL.
@@ -401,18 +367,18 @@ Proof.
 Qed.
 
 Lemma make_store_correct:
-  forall addr ty rhs code e m b ofs v m',
+  forall addr ty rhs code e m b ofs v m' f k,
   make_store addr ty rhs = OK code ->
-  eval_expr tprog e m addr (Vptr b ofs) ->
-  eval_expr tprog e m rhs v ->
+  eval_expr globenv e m addr (Vptr b ofs) ->
+  eval_expr globenv e m rhs v ->
   store_value_of_type ty m b ofs v = Some m' ->
-  exec_stmt tprog e m code E0 m' Out_normal.
+  step globenv (State f code k e m) E0 (State f Sskip k e m').
 Proof.
   unfold make_store, store_value_of_type.
-  intros until m'; intros MKSTORE EV1 EV2 STVAL.
+  intros until k; intros MKSTORE EV1 EV2 STVAL.
   destruct (access_mode ty); inversion MKSTORE.
   (* access_mode ty = By_value m *)
-  eapply exec_Sstore; eauto. 
+  eapply step_store; eauto. 
 Qed.
 
 End CONSTRUCTORS.

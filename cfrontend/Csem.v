@@ -355,7 +355,7 @@ Definition cast_int_int (sz: intsize) (sg: signedness) (i: int) : int :=
   | I8, Unsigned => Int.zero_ext 8 i
   | I16, Signed => Int.sign_ext 16 i
   | I16, Unsigned => Int.zero_ext 16 i 
-  | I32 , _ => i
+  | I32, _ => i
   end.
 
 Definition cast_int_float (si : signedness) (i: int) : float :=
@@ -422,49 +422,6 @@ Definition env := PTree.t block. (* map variable -> location *)
 
 Definition empty_env: env := (PTree.empty block).
 
-(** The execution of a statement produces an ``outcome'', indicating
-  how the execution terminated: either normally or prematurely
-  through the execution of a [break], [continue] or [return] statement. *)
-
-Inductive outcome: Type :=
-   | Out_break: outcome                 (**r terminated by [break] *)
-   | Out_continue: outcome              (**r terminated by [continue] *)
-   | Out_normal: outcome                (**r terminated normally *)
-   | Out_return: option val -> outcome. (**r terminated by [return] *)
-
-Inductive out_normal_or_continue : outcome -> Prop :=
-  | Out_normal_or_continue_N: out_normal_or_continue Out_normal
-  | Out_normal_or_continue_C: out_normal_or_continue Out_continue.
-
-Inductive out_break_or_return : outcome -> outcome -> Prop :=
-  | Out_break_or_return_B: out_break_or_return Out_break Out_normal
-  | Out_break_or_return_R: forall ov,
-      out_break_or_return (Out_return ov) (Out_return ov).
-
-Definition outcome_switch (out: outcome) : outcome :=
-  match out with
-  | Out_break => Out_normal
-  | o => o
-  end.
-
-Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
-  match out, t with
-  | Out_normal, Tvoid => v = Vundef
-  | Out_return None, Tvoid => v = Vundef
-  | Out_return (Some v'), ty => ty <> Tvoid /\ v'=v
-  | _, _ => False
-  end. 
-
-(** Selection of the appropriate case of a [switch], given the value [n]
-  of the selector expression. *)
-
-Fixpoint select_switch (n: int) (sl: labeled_statements)
-                       {struct sl}: labeled_statements :=
-  match sl with
-  | LSdefault _ => sl
-  | LScase c s sl' => if Int.eq c n then sl else select_switch n sl'
-  end.
-
 (** [load_value_of_type ty m b ofs] computes the value of a datum
   of type [ty] residing in memory [m] at block [b], offset [ofs].
   If the type [ty] indicates an access by value, the corresponding
@@ -491,24 +448,23 @@ Definition store_value_of_type (ty_dest: type) (m: mem) (loc: block) (ofs: int) 
   end.
 
 (** Allocation of function-local variables.
-  [alloc_variables e1 m1 vars e2 m2 bl] allocates one memory block
+  [alloc_variables e1 m1 vars e2 m2] allocates one memory block
   for each variable declared in [vars], and associates the variable
   name with this block.  [e1] and [m1] are the initial local environment
   and memory state.  [e2] and [m2] are the final local environment
-  and memory state.  The list [bl] collects the references to all
-  the blocks that were allocated. *)
+  and memory state. *)
 
 Inductive alloc_variables: env -> mem ->
                            list (ident * type) ->
-                           env -> mem -> list block -> Prop :=
+                           env -> mem -> Prop :=
   | alloc_variables_nil:
       forall e m,
-      alloc_variables e m nil e m nil
+      alloc_variables e m nil e m
   | alloc_variables_cons:
-      forall e m id ty vars m1 b1 m2 e2 lb,
+      forall e m id ty vars m1 b1 m2 e2,
       Mem.alloc m 0 (sizeof ty) = (m1, b1) ->
-      alloc_variables (PTree.set id b1 e) m1 vars e2 m2 lb ->
-      alloc_variables e m ((id, ty) :: vars) e2 m2 (b1 :: lb).
+      alloc_variables (PTree.set id b1 e) m1 vars e2 m2 ->
+      alloc_variables e m ((id, ty) :: vars) e2 m2.
 
 (** Initialization of local variables that are parameters to a function.
   [bind_parameters e m1 params args m2] stores the values [args]
@@ -528,9 +484,34 @@ Inductive bind_parameters: env ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
 
-Section RELSEM.
+(** Return the list of blocks in the codomain of [e]. *)
+
+Definition blocks_of_env (e: env) : list block :=
+  List.map (@snd ident block) (PTree.elements e).
+
+(** Selection of the appropriate case of a [switch], given the value [n]
+  of the selector expression. *)
+
+Fixpoint select_switch (n: int) (sl: labeled_statements)
+                       {struct sl}: labeled_statements :=
+  match sl with
+  | LSdefault _ => sl
+  | LScase c s sl' => if Int.eq c n then sl else select_switch n sl'
+  end.
+
+(** Turn a labeled statement into a sequence *)
+
+Fixpoint seq_of_labeled_statement (sl: labeled_statements) : statement :=
+  match sl with
+  | LSdefault s => s
+  | LScase c s sl' => Ssequence s (seq_of_labeled_statement sl')
+  end.
+
+Section SEMANTICS.
 
 Variable ge: genv.
+
+(** ** Evaluation of expressions *)
 
 Section EXPR.
 
@@ -639,6 +620,322 @@ Inductive eval_exprlist: list expr -> list val -> Prop :=
       eval_exprlist (a :: bl) (v :: vl).
 
 End EXPR.
+
+(** ** Transition semantics for statements and functions *)
+
+(** Continuations *)
+
+Inductive cont: Type :=
+  | Kstop: cont
+  | Kseq: statement -> cont -> cont
+       (* [Kseq s2 k] = after [s1] in [s1;s2] *)
+  | Kwhile: expr -> statement -> cont -> cont
+       (* [Kwhile e s k] = after [s] in [while (e) s] *)
+  | Kdowhile: expr -> statement -> cont -> cont
+       (* [Kdowhile e s k] = after [s] in [do s while (e)] *)
+  | Kfor2: expr -> statement -> statement -> cont -> cont
+       (* [Kfor2 e2 e3 s k] = after [s] in [for(e1;e2;e3) s] *)
+  | Kfor3: expr -> statement -> statement -> cont -> cont
+       (* [Kfor3 e2 e3 s k] = after [e3] in [for(e1;e2;e3) s] *)
+  | Kswitch: cont -> cont
+       (* catches [break] statements arising out of [switch] *)
+  | Kcall: option (block * int * type) ->   (* where to store result *)
+           function ->                      (* calling function *)
+           env ->                           (* local env of calling function *)
+           cont -> cont.
+
+(** Pop continuation until a call or stop *)
+
+Fixpoint call_cont (k: cont) : cont :=
+  match k with
+  | Kseq s k => call_cont k
+  | Kwhile e s k => call_cont k
+  | Kdowhile e s k => call_cont k
+  | Kfor2 e2 e3 s k => call_cont k
+  | Kfor3 e2 e3 s k => call_cont k
+  | Kswitch k => call_cont k
+  | _ => k
+  end.
+
+Definition is_call_cont (k: cont) : Prop :=
+  match k with
+  | Kstop => True
+  | Kcall _ _ _ _ => True
+  | _ => False
+  end.
+
+(** States *)
+
+Inductive state: Type :=
+  | State
+      (f: function)
+      (s: statement)
+      (k: cont)
+      (e: env)
+      (m: mem) : state
+  | Callstate
+      (fd: fundef)
+      (args: list val)
+      (k: cont)
+      (m: mem) : state
+  | Returnstate
+      (res: val)
+      (k: cont)
+      (m: mem) : state.
+                 
+(** Find the statement and manufacture the continuation 
+  corresponding to a label *)
+
+Fixpoint find_label (lbl: label) (s: statement) (k: cont) 
+                    {struct s}: option (statement * cont) :=
+  match s with
+  | Ssequence s1 s2 =>
+      match find_label lbl s1 (Kseq s2 k) with
+      | Some sk => Some sk
+      | None => find_label lbl s2 k
+      end
+  | Sifthenelse a s1 s2 =>
+      match find_label lbl s1 k with
+      | Some sk => Some sk
+      | None => find_label lbl s2 k
+      end
+  | Swhile a s1 =>
+      find_label lbl s1 (Kwhile a s1 k)
+  | Sdowhile a s1 =>
+      find_label lbl s1 (Kdowhile a s1 k)
+  | Sfor a1 a2 a3 s1 =>
+      match find_label lbl a1 (Kseq (Sfor Sskip a2 a3 s1) k) with
+      | Some sk => Some sk
+      | None =>
+          match find_label lbl s1 (Kfor2 a2 a3 s1 k) with
+          | Some sk => Some sk
+          | None => find_label lbl a3 (Kfor3 a2 a3 s1 k)
+          end
+      end
+  | Sswitch e sl =>
+      find_label_ls lbl sl (Kswitch k)
+  | Slabel lbl' s' =>
+      if ident_eq lbl lbl' then Some(s', k) else find_label lbl s' k
+  | _ => None
+  end
+
+with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont) 
+                    {struct sl}: option (statement * cont) :=
+  match sl with
+  | LSdefault s => find_label lbl s k
+  | LScase _ s sl' =>
+      match find_label lbl s (Kseq (seq_of_labeled_statement sl') k) with
+      | Some sk => Some sk
+      | None => find_label_ls lbl sl' k
+      end
+  end.
+
+(** Transition relation *)
+
+Inductive step: state -> trace -> state -> Prop :=
+
+  | step_assign:   forall f a1 a2 k e m loc ofs v2 m',
+      eval_lvalue e m a1 loc ofs ->
+      eval_expr e m a2 v2 ->
+      store_value_of_type (typeof a1) m loc ofs v2 = Some m' ->
+      step (State f (Sassign a1 a2) k e m)
+        E0 (State f Sskip k e m')
+
+  | step_call_none:   forall f a al k e m vf vargs fd,
+      eval_expr e m a vf ->
+      eval_exprlist e m al vargs ->
+      Genv.find_funct ge vf = Some fd ->
+      type_of_fundef fd = typeof a ->
+      step (State f (Scall None a al) k e m)
+        E0 (Callstate fd vargs (Kcall None f e k) m)
+
+  | step_call_some:   forall f lhs a al k e m loc ofs vf vargs fd,
+      eval_lvalue e m lhs loc ofs ->
+      eval_expr e m a vf ->
+      eval_exprlist e m al vargs ->
+      Genv.find_funct ge vf = Some fd ->
+      type_of_fundef fd = typeof a ->
+      step (State f (Scall (Some lhs) a al) k e m)
+        E0 (Callstate fd vargs (Kcall (Some(loc, ofs, typeof lhs)) f e k) m)
+
+  | step_seq:  forall f s1 s2 k e m,
+      step (State f (Ssequence s1 s2) k e m)
+        E0 (State f s1 (Kseq s2 k) e m)
+  | step_skip_seq: forall f s k e m,
+      step (State f Sskip (Kseq s k) e m)
+        E0 (State f s k e m)
+  | step_continue_seq: forall f s k e m,
+      step (State f Scontinue (Kseq s k) e m)
+        E0 (State f Scontinue k e m)
+  | step_break_seq: forall f s k e m,
+      step (State f Sbreak (Kseq s k) e m)
+        E0 (State f Sbreak k e m)
+
+  | step_ifthenelse_true:  forall f a s1 s2 k e m v1,
+      eval_expr e m a v1 ->
+      is_true v1 (typeof a) ->
+      step (State f (Sifthenelse a s1 s2) k e m)
+        E0 (State f s1 k e m)
+  | step_ifthenelse_false: forall f a s1 s2 k e m v1,
+      eval_expr e m a v1 ->
+      is_false v1 (typeof a) ->
+      step (State f (Sifthenelse a s1 s2) k e m)
+        E0 (State f s2 k e m)
+
+  | step_while_false: forall f a s k e m v,
+      eval_expr e m a v ->
+      is_false v (typeof a) ->
+      step (State f (Swhile a s) k e m)
+        E0 (State f Sskip k e m)
+  | step_while_true: forall f a s k e m v,
+      eval_expr e m a v ->
+      is_true v (typeof a) ->
+      step (State f (Swhile a s) k e m)
+        E0 (State f s (Kwhile a s k) e m)
+  | step_skip_or_continue_while: forall f x a s k e m,
+      x = Sskip \/ x = Scontinue ->
+      step (State f x (Kwhile a s k) e m)
+        E0 (State f (Swhile a s) k e m)
+  | step_break_while: forall f a s k e m,
+      step (State f Sbreak (Kwhile a s k) e m)
+        E0 (State f Sskip k e m)
+
+  | step_dowhile: forall f a s k e m,
+      step (State f (Sdowhile a s) k e m)
+        E0 (State f s (Kdowhile a s k) e m)
+  | step_skip_or_continue_dowhile_false: forall f x a s k e m v,
+      x = Sskip \/ x = Scontinue ->
+      eval_expr e m a v ->
+      is_false v (typeof a) ->
+      step (State f x (Kdowhile a s k) e m)
+        E0 (State f Sskip k e m)
+  | step_skip_or_continue_dowhile_true: forall f x a s k e m v,
+      x = Sskip \/ x = Scontinue ->
+      eval_expr e m a v ->
+      is_true v (typeof a) ->
+      step (State f x (Kdowhile a s k) e m)
+        E0 (State f (Sdowhile a s) k e m)
+  | step_break_dowhile: forall f a s k e m,
+      step (State f Sbreak (Kdowhile a s k) e m)
+        E0 (State f Sskip k e m)
+
+  | step_for_start: forall f a1 a2 a3 s k e m,
+      a1 <> Sskip ->
+      step (State f (Sfor a1 a2 a3 s) k e m)
+        E0 (State f a1 (Kseq (Sfor Sskip a2 a3 s) k) e m)
+  | step_for_false: forall f a2 a3 s k e m v,
+      eval_expr e m a2 v ->
+      is_false v (typeof a2) ->
+      step (State f (Sfor Sskip a2 a3 s) k e m)
+        E0 (State f Sskip k e m)
+  | step_for_true: forall f a2 a3 s k e m v,
+      eval_expr e m a2 v ->
+      is_true v (typeof a2) ->
+      step (State f (Sfor Sskip a2 a3 s) k e m)
+        E0 (State f s (Kfor2 a2 a3 s k) e m)
+  | step_skip_or_continue_for2: forall f x a2 a3 s k e m,
+      x = Sskip \/ x = Scontinue ->
+      step (State f x (Kfor2 a2 a3 s k) e m)
+        E0 (State f a3 (Kfor3 a2 a3 s k) e m)
+  | step_break_for2: forall f a2 a3 s k e m,
+      step (State f Sbreak (Kfor2 a2 a3 s k) e m)
+        E0 (State f Sskip k e m)
+  | step_skip_for3: forall f a2 a3 s k e m,
+      step (State f Sskip (Kfor3 a2 a3 s k) e m)
+        E0 (State f (Sfor Sskip a2 a3 s) k e m)
+
+  | step_return_0: forall f k e m,
+      f.(fn_return) = Tvoid ->
+      step (State f (Sreturn None) k e m)
+        E0 (Returnstate Vundef (call_cont k) (Mem.free_list m (blocks_of_env e)))
+  | step_return_1: forall f a k e m v,
+      f.(fn_return) <> Tvoid ->
+      eval_expr e m a v ->
+      step (State f (Sreturn (Some a)) k e m)
+        E0 (Returnstate v (call_cont k) (Mem.free_list m (blocks_of_env e)))
+  | step_skip_call: forall f k e m,
+      is_call_cont k ->
+      f.(fn_return) = Tvoid ->
+      step (State f Sskip k e m)
+        E0 (Returnstate Vundef k (Mem.free_list m (blocks_of_env e)))
+
+  | step_switch: forall f a sl k e m n,
+      eval_expr e m a (Vint n) ->
+      step (State f (Sswitch a sl) k e m)
+        E0 (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch k) e m)
+  | step_skip_break_switch: forall f x k e m,
+      x = Sskip \/ x = Sbreak ->
+      step (State f x (Kswitch k) e m)
+        E0 (State f Sskip k e m)
+  | step_continue_switch: forall f k e m,
+      step (State f Scontinue (Kswitch k) e m)
+        E0 (State f Scontinue k e m)
+
+  | step_label: forall f lbl s k e m,
+      step (State f (Slabel lbl s) k e m)
+        E0 (State f s k e m)
+
+  | step_goto: forall f lbl k e m s' k',
+      find_label lbl f.(fn_body) (call_cont k) = Some (s', k') ->
+      step (State f (Sgoto lbl) k e m)
+        E0 (State f s' k' e m)
+
+  | step_internal_function: forall f vargs k m e m1 m2,
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      step (Callstate (Internal f) vargs k m)
+        E0 (State f f.(fn_body) k e m2)
+
+  | step_external_function: forall id targs tres vargs k m vres t,
+      event_match (external_function id targs tres) vargs t vres ->
+      step (Callstate (External id targs tres) vargs k m)
+         t (Returnstate vres k m)
+
+  | step_returnstate_0: forall v f e k m,
+      step (Returnstate v (Kcall None f e k) m)
+        E0 (State f Sskip k e m)
+
+  | step_returnstate_1: forall v f e k m m' loc ofs ty,
+      store_value_of_type ty m loc ofs v = Some m' ->
+      step (Returnstate v (Kcall (Some(loc, ofs, ty)) f e k) m)
+        E0 (State f Sskip k e m').
+
+(** * Alternate big-step semantics *)
+
+(** ** Big-step semantics for terminating statements and functions *)
+
+(** The execution of a statement produces an ``outcome'', indicating
+  how the execution terminated: either normally or prematurely
+  through the execution of a [break], [continue] or [return] statement. *)
+
+Inductive outcome: Type :=
+   | Out_break: outcome                 (**r terminated by [break] *)
+   | Out_continue: outcome              (**r terminated by [continue] *)
+   | Out_normal: outcome                (**r terminated normally *)
+   | Out_return: option val -> outcome. (**r terminated by [return] *)
+
+Inductive out_normal_or_continue : outcome -> Prop :=
+  | Out_normal_or_continue_N: out_normal_or_continue Out_normal
+  | Out_normal_or_continue_C: out_normal_or_continue Out_continue.
+
+Inductive out_break_or_return : outcome -> outcome -> Prop :=
+  | Out_break_or_return_B: out_break_or_return Out_break Out_normal
+  | Out_break_or_return_R: forall ov,
+      out_break_or_return (Out_return ov) (Out_return ov).
+
+Definition outcome_switch (out: outcome) : outcome :=
+  match out with
+  | Out_break => Out_normal
+  | o => o
+  end.
+
+Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
+  match out, t with
+  | Out_normal, Tvoid => v = Vundef
+  | Out_return None, Tvoid => v = Vundef
+  | Out_return (Some v'), ty => ty <> Tvoid /\ v'=v
+  | _, _ => False
+  end. 
 
 (** [exec_stmt ge e m1 s t m2 out] describes the execution of 
   the statement [s].  [out] is the outcome for this execution.
@@ -778,44 +1075,29 @@ Inductive exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop 
                 (t1 ** t2 ** t3) m3 out
   | exec_Sswitch:   forall e m a t n sl m1 out,
       eval_expr e m a (Vint n) ->
-      exec_lblstmts e m (select_switch n sl) t m1 out ->
+      exec_stmt e m (seq_of_labeled_statement (select_switch n sl)) t m1 out ->
       exec_stmt e m (Sswitch a sl)
                 t m1 (outcome_switch out)
-
-(** [exec_lblstmts ge e m1 ls t m2 out] is a variant of [exec_stmt]
-  that executes in sequence all statements in the list of labeled
-  statements [ls]. *)
-
-with exec_lblstmts: env -> mem -> labeled_statements -> trace -> mem -> outcome -> Prop :=
-  | exec_LSdefault: forall e m s t m1 out,
-     exec_stmt e m s t m1 out ->
-     exec_lblstmts e m (LSdefault s) t m1 out
-  | exec_LScase_fallthrough: forall e m n s ls t1 m1 t2 m2 out,
-     exec_stmt e m s t1 m1 Out_normal ->
-     exec_lblstmts e m1 ls t2 m2 out ->
-     exec_lblstmts e m (LScase n s ls) (t1 ** t2) m2 out
-  | exec_LScase_stop: forall e m n s ls t m1 out,
-     exec_stmt e m s t m1 out -> out <> Out_normal ->
-     exec_lblstmts e m (LScase n s ls) t m1 out
 
 (** [eval_funcall m1 fd args t m2 res] describes the invocation of
   function [fd] with arguments [args].  [res] is the value returned
   by the call.  *)
 
 with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
-  | eval_funcall_internal: forall m f vargs t e m1 lb m2 m3 out vres,
-      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 lb ->
+  | eval_funcall_internal: forall m f vargs t e m1 m2 m3 out vres,
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       exec_stmt e m2 f.(fn_body) t m3 out ->
       outcome_result_value out f.(fn_return) vres ->
-      eval_funcall m (Internal f) vargs t (Mem.free_list m3 lb) vres
+      eval_funcall m (Internal f) vargs t (Mem.free_list m3 (blocks_of_env e)) vres
   | eval_funcall_external: forall m id targs tres vargs t vres,
       event_match (external_function id targs tres) vargs t vres ->
       eval_funcall m (External id targs tres) vargs t m vres.
 
-Scheme exec_stmt_ind3 := Minimality for exec_stmt Sort Prop
-  with exec_lblstmts_ind3 := Minimality for exec_lblstmts Sort Prop
-  with eval_funcall_ind3 := Minimality for eval_funcall Sort Prop.
+Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop
+  with eval_funcall_ind2 := Minimality for eval_funcall Sort Prop.
+
+(** ** Big-step semantics for diverging statements and functions *)
 
 (** Coinductive semantics for divergence.
   [execinf_stmt ge e m s t] holds if the execution of statement [s]
@@ -823,13 +1105,21 @@ Scheme exec_stmt_ind3 := Minimality for exec_stmt Sort Prop
   trace of observable events performed during the execution. *)
 
 CoInductive execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
-  | execinf_Scall:   forall e m lhs a al vf vargs f t,
+  | execinf_Scall_none:   forall e m a al vf vargs f t,
       eval_expr e m a vf ->
       eval_exprlist e m al vargs ->
       Genv.find_funct ge vf = Some f ->
       type_of_fundef f = typeof a ->
       evalinf_funcall m f vargs t ->
-      execinf_stmt e m (Scall lhs a al) t
+      execinf_stmt e m (Scall None a al) t
+  | execinf_Scall_some:   forall e m lhs a al loc ofs vf vargs f t,
+      eval_lvalue e m lhs loc ofs ->
+      eval_expr e m a vf ->
+      eval_exprlist e m al vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      evalinf_funcall m f vargs t ->
+      execinf_stmt e m (Scall (Some lhs) a al) t
   | execinf_Sseq_1:   forall e m s1 s2 t,
       execinf_stmt e m s1 t ->
       execinf_stmt e m (Ssequence s1 s2) t
@@ -899,51 +1189,538 @@ CoInductive execinf_stmt: env -> mem -> statement -> traceinf -> Prop :=
       execinf_stmt e m (Sfor Sskip a2 a3 s) (t1 *** t2 *** t3)
   | execinf_Sswitch:   forall e m a t n sl,
       eval_expr e m a (Vint n) ->
-      execinf_lblstmts e m (select_switch n sl) t ->
+      execinf_stmt e m (seq_of_labeled_statement (select_switch n sl)) t ->
       execinf_stmt e m (Sswitch a sl) t
-
-with execinf_lblstmts: env -> mem -> labeled_statements -> traceinf -> Prop :=
-  | execinf_LSdefault: forall e m s t,
-     execinf_stmt e m s t ->
-     execinf_lblstmts e m (LSdefault s) t
-  | execinf_LScase_body: forall e m n s ls t,
-     execinf_stmt e m s t ->
-     execinf_lblstmts e m (LScase n s ls) t
-  | execinf_LScase_fallthrough: forall e m n s ls t1 m1 t2,
-     exec_stmt e m s t1 m1 Out_normal ->
-     execinf_lblstmts e m1 ls t2 ->
-     execinf_lblstmts e m (LScase n s ls) (t1 *** t2)
 
 (** [evalinf_funcall ge m fd args t] holds if the invocation of function
     [fd] on arguments [args] diverges, with observable trace [t]. *)
 
 with evalinf_funcall: mem -> fundef -> list val -> traceinf -> Prop :=
-  | evalinf_funcall_internal: forall m f vargs t e m1 lb m2,
-      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 lb ->
+  | evalinf_funcall_internal: forall m f vargs t e m1 m2,
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       execinf_stmt e m2 f.(fn_body) t ->
       evalinf_funcall m (Internal f) vargs t.
 
-End RELSEM.
+End SEMANTICS.
 
-(** Execution of a whole program.  [exec_program p beh] holds
+(** * Whole-program semantics *)
+
+(** Execution of whole programs are described as sequences of transitions
+  from an initial state to a final state.  An initial state is a [Callstate]
+  corresponding to the invocation of the ``main'' function of the program
+  without arguments and with an empty continuation. *)
+
+Inductive initial_state (p: program): state -> Prop :=
+  | initial_state_intro: forall b f,
+      let ge := Genv.globalenv p in
+      let m0 := Genv.init_mem p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      initial_state p (Callstate f nil Kstop m0).
+
+(** A final state is a [Returnstate] with an empty continuation. *)
+
+Inductive final_state: state -> int -> Prop :=
+  | final_state_intro: forall r m,
+      final_state (Returnstate (Vint r) Kstop m) r.
+
+(** Execution of a whole program: [exec_program p beh]
+  holds if the application of [p]'s main function to no arguments
+  in the initial memory state for [p] has [beh] as observable
+  behavior. *)
+
+Definition exec_program (p: program) (beh: program_behavior) : Prop :=
+  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+
+(** Big-step execution of a whole program.  
+  [exec_program_bigstep p beh] holds
   if the application of [p]'s main function to no arguments
   in the initial memory state for [p] executes without errors and produces
   the observable behaviour [beh]. *)
 
-Inductive exec_program (p: program): program_behavior -> Prop :=
+Inductive exec_program_bigstep (p: program): program_behavior -> Prop :=
   | program_terminates: forall b f m1 t r,
       let ge := Genv.globalenv p in 
       let m0 := Genv.init_mem p in
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       eval_funcall ge m0 f nil t m1 (Vint r) ->
-      exec_program p (Terminates t r)
+      exec_program_bigstep p (Terminates t r)
   | program_diverges: forall b f t,
       let ge := Genv.globalenv p in 
       let m0 := Genv.init_mem p in
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       evalinf_funcall ge m0 f nil t ->
-      exec_program p (Diverges t).
+      exec_program_bigstep p (Diverges t).
 
+(** * Implication from big-step semantics to transition semantics *)
+
+Section BIGSTEP_TO_TRANSITIONS.
+
+Variable prog: program.
+Let ge : genv := Genv.globalenv prog.
+
+Definition exec_stmt_eval_funcall_ind
+  (PS: env -> mem -> statement -> trace -> mem -> outcome -> Prop)
+  (PF: mem -> fundef -> list val -> trace -> mem -> val -> Prop) :=
+  fun a b c d e f g h i j k l m n o p q r s t u v w x y =>
+  conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y)
+       (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y).
+
+Inductive outcome_state_match
+       (e: env) (m: mem) (f: function) (k: cont): outcome -> state -> Prop :=
+  | osm_normal:
+      outcome_state_match e m f k Out_normal (State f Sskip k e m)
+  | osm_break:
+      outcome_state_match e m f k Out_break (State f Sbreak k e m)
+  | osm_continue:
+      outcome_state_match e m f k Out_continue (State f Scontinue k e m)
+  | osm_return_none: forall k',
+      call_cont k' = call_cont k ->
+      outcome_state_match e m f k 
+        (Out_return None) (State f (Sreturn None) k' e m)
+  | osm_return_some: forall a v k',
+      call_cont k' = call_cont k ->
+      eval_expr ge e m a v ->
+      outcome_state_match e m f k
+        (Out_return (Some v)) (State f (Sreturn (Some a)) k' e m).
+
+Lemma is_call_cont_call_cont:
+  forall k, is_call_cont k -> call_cont k = k.
+Proof.
+  destruct k; simpl; intros; contradiction || auto.
+Qed.
+
+Lemma exec_stmt_eval_funcall_steps:
+  (forall e m s t m' out,
+   exec_stmt ge e m s t m' out ->
+   forall f k, exists S,
+   star step ge (State f s k e m) t S
+   /\ outcome_state_match e m' f k out S)
+/\
+  (forall m fd args t m' res,
+   eval_funcall ge m fd args t m' res ->
+   forall k,
+   is_call_cont k ->
+   star step ge (Callstate fd args k m) t (Returnstate res k m')).
+Proof.
+  apply exec_stmt_eval_funcall_ind; intros.
+
+(* skip *)
+  econstructor; split. apply star_refl. constructor.
+
+(* assign *)
+  econstructor; split. apply star_one. econstructor; eauto. constructor.
+
+(* call none *)
+  econstructor; split.
+  eapply star_left. econstructor; eauto. 
+  eapply star_right. apply H4. simpl; auto. econstructor. reflexivity. traceEq.
+  constructor.
+
+(* call some *)
+  econstructor; split.
+  eapply star_left. econstructor; eauto. 
+  eapply star_right. apply H5. simpl; auto. econstructor; eauto. reflexivity. traceEq.
+  constructor.
+
+(* sequence 2 *)
+  destruct (H0 f (Kseq s2 k)) as [S1 [A1 B1]]. inv B1.
+  destruct (H2 f k) as [S2 [A2 B2]]. 
+  econstructor; split.
+  eapply star_left. econstructor.
+  eapply star_trans. eexact A1. 
+  eapply star_left. constructor. eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* sequence 1 *)
+  destruct (H0 f (Kseq s2 k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out with
+    | Out_break => State f Sbreak k e m1
+    | Out_continue => State f Scontinue k e m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. econstructor.
+  eapply star_trans. eexact A1.
+  unfold S2; inv B1.
+    congruence.
+    apply star_one. apply step_break_seq.
+    apply star_one. apply step_continue_seq.
+    apply star_refl.
+    apply star_refl.
+  reflexivity. traceEq.
+  unfold S2; inv B1; congruence || econstructor; eauto.
+
+(* ifthenelse true *)
+  destruct (H2 f k) as [S1 [A1 B1]].
+  exists S1; split.
+  eapply star_left. eapply step_ifthenelse_true; eauto. eexact A1. traceEq.
+  auto.
+
+(* ifthenelse false *)
+  destruct (H2 f k) as [S1 [A1 B1]].
+  exists S1; split.
+  eapply star_left. eapply step_ifthenelse_false; eauto. eexact A1. traceEq.
+  auto.
+
+(* return none *)
+  econstructor; split. apply star_refl. constructor. auto.
+
+(* return some *)
+  econstructor; split. apply star_refl. econstructor; eauto.
+
+(* break *)
+  econstructor; split. apply star_refl. constructor.
+
+(* continue *)
+  econstructor; split. apply star_refl. constructor.
+
+(* while false *)
+  econstructor; split.
+  apply star_one. eapply step_while_false; eauto. 
+  constructor.
+
+(* while stop *)
+  destruct (H2 f (Kwhile a s k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out' with
+    | Out_break => State f Sskip k e m'
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. eapply step_while_true; eauto. 
+  eapply star_trans. eexact A1.
+  unfold S2. inversion H3; subst.
+  inv B1. apply star_one. constructor.    
+  apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inversion H3; subst. constructor. inv B1; econstructor; eauto.
+
+(* while loop *)
+  destruct (H2 f (Kwhile a s k)) as [S1 [A1 B1]].
+  destruct (H5 f k) as [S2 [A2 B2]].
+  exists S2; split.
+  eapply star_left. eapply step_while_true; eauto.
+  eapply star_trans. eexact A1.
+  eapply star_left.
+  inv H3; inv B1; apply step_skip_or_continue_while; auto.
+  eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* dowhile false *)
+  destruct (H0 f (Kdowhile a s k)) as [S1 [A1 B1]].
+  exists (State f Sskip k e m1); split.
+  eapply star_left. constructor. 
+  eapply star_right. eexact A1.
+  inv H1; inv B1; eapply step_skip_or_continue_dowhile_false; eauto.
+  reflexivity. traceEq. 
+  constructor.
+
+(* dowhile stop *)
+  destruct (H0 f (Kdowhile a s k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out1 with
+    | Out_break => State f Sskip k e m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. apply step_dowhile. 
+  eapply star_trans. eexact A1.
+  unfold S2. inversion H1; subst.
+  inv B1. apply star_one. constructor.
+  apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inversion H1; subst. constructor. inv B1; econstructor; eauto.
+
+(* dowhile loop *)
+  destruct (H0 f (Kdowhile a s k)) as [S1 [A1 B1]].
+  destruct (H5 f k) as [S2 [A2 B2]].
+  exists S2; split.
+  eapply star_left. apply step_dowhile. 
+  eapply star_trans. eexact A1.
+  eapply star_left.
+  inv H1; inv B1; eapply step_skip_or_continue_dowhile_true; eauto.
+  eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* for start *)
+  destruct (H1 f (Kseq (Sfor Sskip a2 a3 s) k)) as [S1 [A1 B1]]. inv B1.
+  destruct (H3 f k) as [S2 [A2 B2]].
+  exists S2; split.
+  eapply star_left. apply step_for_start; auto.   
+  eapply star_trans. eexact A1.
+  eapply star_left. constructor. eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* for false *)
+  econstructor; split.
+  eapply star_one. eapply step_for_false; eauto. 
+  constructor.
+
+(* for stop *)
+  destruct (H2 f (Kfor2 a2 a3 s k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out1 with
+    | Out_break => State f Sskip k e m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. eapply step_for_true; eauto. 
+  eapply star_trans. eexact A1.
+  unfold S2. inversion H3; subst.
+  inv B1. apply star_one. constructor. 
+  apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inversion H3; subst. constructor. inv B1; econstructor; eauto.
+
+(* for loop *)
+  destruct (H2 f (Kfor2 a2 a3 s k)) as [S1 [A1 B1]].
+  destruct (H5 f (Kfor3 a2 a3 s k)) as [S2 [A2 B2]]. inv B2.
+  destruct (H7 f k) as [S3 [A3 B3]].
+  exists S3; split.
+  eapply star_left. eapply step_for_true; eauto. 
+  eapply star_trans. eexact A1.
+  eapply star_trans with (s2 := State f a3 (Kfor3 a2 a3 s k) e m1).
+  inv H3; inv B1.
+  apply star_one. constructor. auto. 
+  apply star_one. constructor. auto. 
+  eapply star_trans. eexact A2. 
+  eapply star_left. constructor.
+  eexact A3.
+  reflexivity. reflexivity. reflexivity. reflexivity. traceEq.
+  auto.
+
+(* switch *)
+  destruct (H1 f (Kswitch k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out with
+    | Out_normal => State f Sskip k e m1
+    | Out_break => State f Sskip k e m1
+    | Out_continue => State f Scontinue k e m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. eapply step_switch; eauto. 
+  eapply star_trans. eexact A1. 
+  unfold S2; inv B1.
+    apply star_one. constructor. auto. 
+    apply star_one. constructor. auto. 
+    apply star_one. constructor. 
+    apply star_refl.
+    apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inv B1; simpl; econstructor; eauto.
+
+(* call internal *)
+  destruct (H2 f k) as [S1 [A1 B1]].
+  eapply star_left. eapply step_internal_function; eauto.
+  eapply star_right. eexact A1. 
+  inv B1; simpl in H3; try contradiction.
+  (* Out_normal *)
+  assert (fn_return f = Tvoid /\ vres = Vundef).
+    destruct (fn_return f); auto || contradiction.
+  destruct H5. subst vres. apply step_skip_call; auto.
+  (* Out_return None *)
+  assert (fn_return f = Tvoid /\ vres = Vundef).
+    destruct (fn_return f); auto || contradiction.
+  destruct H6. subst vres.
+  rewrite <- (is_call_cont_call_cont k H4). rewrite <- H5.
+  apply step_return_0; auto.
+  (* Out_return Some *)
+  destruct H3. subst vres.
+  rewrite <- (is_call_cont_call_cont k H4). rewrite <- H5.
+  eapply step_return_1; eauto.
+  reflexivity. traceEq.
+
+(* call external *)
+  apply star_one. apply step_external_function; auto. 
+Qed.
+
+Lemma exec_stmt_steps:
+   forall e m s t m' out,
+   exec_stmt ge e m s t m' out ->
+   forall f k, exists S,
+   star step ge (State f s k e m) t S
+   /\ outcome_state_match e m' f k out S.
+Proof (proj1 exec_stmt_eval_funcall_steps).
+
+Lemma eval_funcall_steps:
+   forall m fd args t m' res,
+   eval_funcall ge m fd args t m' res ->
+   forall k,
+   is_call_cont k ->
+   star step ge (Callstate fd args k m) t (Returnstate res k m').
+Proof (proj2 exec_stmt_eval_funcall_steps).
+
+Definition order (x y: unit) := False.
+
+Lemma evalinf_funcall_forever:
+  forall m fd args T k,
+  evalinf_funcall ge m fd args T ->
+  forever_N step order ge tt (Callstate fd args k m) T.
+Proof.
+  cofix CIH_FUN.
+  assert (forall e m s T f k,
+          execinf_stmt ge e m s T ->
+          forever_N step order ge tt (State f s k e m) T).
+  cofix CIH_STMT.
+  intros. inv H.
+
+(* call none *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_call_none; eauto. 
+  apply CIH_FUN. eauto. traceEq.
+(* call some *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_call_some; eauto. 
+  apply CIH_FUN. eauto. traceEq.
+
+(* seq 1 *)
+  eapply forever_N_plus.
+  apply plus_one. econstructor.
+  apply CIH_STMT; eauto. traceEq.
+(* seq 2 *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ H0 f (Kseq s2 k)) as [S1 [A1 B1]].
+  inv B1.
+  eapply forever_N_plus.
+  eapply plus_left. constructor. eapply star_trans. eexact A1. 
+  apply star_one. constructor. reflexivity. reflexivity.
+  apply CIH_STMT; eauto. traceEq.
+
+(* ifthenelse true *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_ifthenelse_true; eauto. 
+  apply CIH_STMT; eauto. traceEq.
+(* ifthenelse false *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_ifthenelse_false; eauto. 
+  apply CIH_STMT; eauto. traceEq.
+
+(* while body *)
+  eapply forever_N_plus.
+  eapply plus_one. eapply step_while_true; eauto.
+  apply CIH_STMT; eauto. traceEq.
+(* while loop *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ H2 f (Kwhile a s0 k)) as [S1 [A1 B1]].
+  eapply forever_N_plus with (s2 := State f (Swhile a s0) k e m1).
+  eapply plus_left. eapply step_while_true; eauto.
+  eapply star_right. eexact A1.
+  inv H3; inv B1; apply step_skip_or_continue_while; auto. 
+  reflexivity. reflexivity.
+  apply CIH_STMT; eauto. traceEq.
+
+(* dowhile body *)
+  eapply forever_N_plus.
+  eapply plus_one. eapply step_dowhile.
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* dowhile loop *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ H0 f (Kdowhile a s0 k)) as [S1 [A1 B1]].
+  eapply forever_N_plus with (s2 := State f (Sdowhile a s0) k e m1).
+  eapply plus_left. eapply step_dowhile. 
+  eapply star_right. eexact A1.
+  inv H1; inv B1; eapply step_skip_or_continue_dowhile_true; eauto. 
+  reflexivity. reflexivity.
+  apply CIH_STMT. eauto. 
+  traceEq.
+
+(* for start 1 *)
+  assert (a1 <> Sskip). red; intros; subst. inv H0.
+  eapply forever_N_plus.
+  eapply plus_one. apply step_for_start; auto. 
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* for start 2 *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ H1 f (Kseq (Sfor Sskip a2 a3 s0) k)) as [S1 [A1 B1]].
+  inv B1.
+  eapply forever_N_plus.
+  eapply plus_left. eapply step_for_start; eauto. 
+  eapply star_right. eexact A1.
+  apply step_skip_seq. 
+  reflexivity. reflexivity.
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* for body *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_for_true; eauto. 
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* for next *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ H2 f (Kfor2 a2 a3 s0 k)) as [S1 [A1 B1]].
+  eapply forever_N_plus.
+  eapply plus_left. eapply step_for_true; eauto.
+  eapply star_trans. eexact A1.
+  apply star_one.
+  inv H3; inv B1; apply step_skip_or_continue_for2; auto.
+  reflexivity. reflexivity. 
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* for body *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ H2 f (Kfor2 a2 a3 s0 k)) as [S1 [A1 B1]].
+  destruct (exec_stmt_steps _ _ _ _ _ _ H4 f (Kfor3 a2 a3 s0 k)) as [S2 [A2 B2]].
+  inv B2.
+  eapply forever_N_plus.
+  eapply plus_left. eapply step_for_true; eauto. 
+  eapply star_trans. eexact A1.
+  eapply star_left. inv H3; inv B1; apply step_skip_or_continue_for2; auto.
+  eapply star_right. eexact A2. 
+  constructor. 
+  reflexivity. reflexivity. reflexivity. reflexivity.  
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* switch *)
+  eapply forever_N_plus.
+  eapply plus_one. eapply step_switch; eauto.
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* call internal *)
+  intros. inv H0.
+  eapply forever_N_plus.
+  eapply plus_one. econstructor; eauto. 
+  apply H; eauto.
+  traceEq.
+Qed.
+
+(*
+Theorem exec_program_bigstep_transition:
+  forall beh,
+  exec_program_bigstep prog beh ->
+  exec_program prog beh.
+Proof.
+  intros. inv H.
+  (* termination *)
+  econstructor.
+  econstructor. eauto. eauto.
+  apply eval_funcall_steps. eauto. red; auto. 
+  econstructor. 
+  (* divergence *)
+  econstructor.
+  econstructor. eauto. eauto. 
+  eapply forever_N_forever with (order := order).
+  red; intros. constructor; intros. red in H. elim H.
+  apply evalinf_funcall_forever. auto.
+Qed.
+*)
+
+End BIGSTEP_TO_TRANSITIONS.
+
+
+
+
+
+  

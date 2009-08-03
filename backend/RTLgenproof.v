@@ -930,32 +930,26 @@ Qed.
 (** ** Semantic preservation for the translation of statements *)   
 
 (** The simulation diagram for the translation of statements
-  is of the following form:
+  and functions is a "star" diagram of the form:
 <<
-                    I /\ P
-       e, m, a ---------------- State cs code sp ns rs m
-         ||                          |
-        t||                         t|*
-         ||                          |
-         \/                          v
-     e', m', out ------------------ st'
-                    I /\ Q
+           I                         I
+     S1 ------- R1             S1 ------- R1
+     |          |              |          |
+   t |        + | t      or  t |        * | t    and |S2| < |S1|
+     v          v              v          |
+     S2 ------- R2             S2 ------- R2
+           I                         I
 >>
-  where [tr_stmt code map a ns ncont nexits nret rret] holds.
-  The left vertical arrow represents an execution of the statement [a].
-  The right vertical arrow represents the execution of
-  zero, one or several instructions in the generated RTL flow graph [code].
+  where [I] is the [match_states] predicate defined below.  It includes:
+- Agreement between the Cminor statement under consideration and
+  the current program point in the RTL control-flow graph,
+  as captured by the [tr_stmt] predicate.
+- Agreement between the Cminor continuation and the RTL control-flow
+  graph and call stack, as captured by the [tr_cont] predicate below.
+- Agreement between Cminor environments and RTL register environments,
+  as captured by [match_envs].
 
-  The invariant [I] is the agreement between Cminor environments and
-  RTL register environment, as captured by [match_envs].
-
-  The precondition [P] is the well-formedness of the compilation
-  environment [mut].
-
-  The postcondition [Q] characterizes the final RTL state [st'].
-  It must have memory state [m'] and register state [rs'] that matches
-  [e'].  Moreover, the program point reached must correspond to the outcome
-  [out].  This is captured by the following [state_for_outcome] predicate. *)
+*)
 
 Inductive tr_funbody (c: code) (map: mapping) (f: CminorSel.function)
                      (ngoto: labelmap) (nret: node) (rret: option reg) : Prop :=
