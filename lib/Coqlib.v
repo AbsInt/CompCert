@@ -781,6 +781,11 @@ Proof.
   right; red; intros. elim n0. eapply list_disjoint_cons_left; eauto.
 Defined.
 
+(** [list_equiv l1 l2] holds iff the lists [l1] and [l2] contain the same elements. *)
+
+Definition list_equiv (A : Type) (l1 l2: list A) : Prop :=
+  forall x, In x l1 <-> In x l2.
+
 (** [list_norepet l] holds iff the list [l] contains no repetitions,
   i.e. no element occurs twice. *)
 

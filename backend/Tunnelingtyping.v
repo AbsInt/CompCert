@@ -14,6 +14,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import UnionFind.
 Require Import AST.
 Require Import Values.
 Require Import Mem.
@@ -27,20 +28,26 @@ Require Import Tunnelingproof.
 
 (** Tunneling preserves typing. *)
 
-Lemma branch_target_rec_valid:
-  forall f, wt_function f ->
-  forall count pc pc',
-  branch_target_rec f pc count = Some pc' ->
+Lemma branch_target_valid_1:
+  forall f pc, wt_function f ->
   valid_successor f pc ->
-  valid_successor f pc'.
+  valid_successor f (branch_target f pc).
 Proof.
-  induction count; simpl.
-  intros; discriminate.
-  intros until pc'. caseEq (is_goto_instr (fn_code f)!pc); intros.
-  generalize (is_goto_instr_correct _ _ H0). intro.
-  eapply IHcount; eauto. 
-  generalize (wt_instrs _ H _ _ H3); intro WTI; inv WTI. auto.
-  inv H1; auto.
+  intros. 
+  assert (forall n p,
+          (count_gotos f p < n)%nat ->
+          valid_successor f p ->
+          valid_successor f (branch_target f p)).
+  induction n; intros.
+  omegaContradiction.
+  elim H2; intros i EQ.
+  generalize (record_gotos_correct f p). rewrite EQ.
+  destruct i; try congruence.
+  intros [A | [B C]]. congruence. 
+  generalize (wt_instrs _ H _ _ EQ); intro WTI; inv WTI.
+  rewrite B. apply IHn. omega. auto. 
+
+  apply H1 with (Datatypes.S (count_gotos f pc)); auto.
 Qed.
 
 Lemma tunnel_valid_successor:
@@ -49,7 +56,7 @@ Lemma tunnel_valid_successor:
 Proof.
   intros. destruct H as [i AT].
   unfold valid_successor; simpl. rewrite PTree.gmap. rewrite AT. 
-  simpl. exists (tunnel_instr f i); auto.
+  simpl. exists (tunnel_instr (record_gotos f) i); auto.
 Qed.
 
 Lemma branch_target_valid:
@@ -58,16 +65,13 @@ Lemma branch_target_valid:
   valid_successor f pc ->
   valid_successor (tunnel_function f) (branch_target f pc).
 Proof.
-  intros. apply tunnel_valid_successor. 
-  unfold branch_target. caseEq (branch_target_rec f pc 10); intros.
-  eapply branch_target_rec_valid; eauto.
-  auto.
+  intros. apply tunnel_valid_successor. apply branch_target_valid_1; auto.
 Qed.
   
 Lemma wt_tunnel_instr:
   forall f i,
   wt_function f ->
-  wt_instr f i -> wt_instr (tunnel_function f) (tunnel_instr f i).
+  wt_instr f i -> wt_instr (tunnel_function f) (tunnel_instr (record_gotos f) i).
 Proof.
   intros; inv H0; simpl; econstructor; eauto;
   eapply branch_target_valid; eauto.

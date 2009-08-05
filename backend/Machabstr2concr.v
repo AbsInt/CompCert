@@ -905,7 +905,7 @@ Proof.
 Qed.
 
 Theorem exec_program_equiv:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   Machabstr.exec_program p beh -> Machconcr.exec_program p beh.
 Proof.
   unfold Machconcr.exec_program, Machabstr.exec_program; intros.
@@ -915,10 +915,10 @@ Proof.
     (match_states := fun st1 st2 => match_states st1 st2 /\ wt_state st1).
   eexact equiv_initial_states.
   eexact equiv_final_states.
-  intros. destruct H1. exploit step_equiv; eauto.
+  intros. destruct H2. exploit step_equiv; eauto.
   intros [st2' [A B]]. exists st2'; split. auto. split. auto.
   eapply Machtyping.subject_reduction; eauto. 
-  auto.
+  auto. auto.
 Qed.
 
 End SIMULATION.

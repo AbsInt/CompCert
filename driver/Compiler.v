@@ -228,29 +228,30 @@ Qed.
 Theorem transf_rtl_program_correct:
   forall p tp beh,
   transf_rtl_program p = OK tp ->
+  not_wrong beh ->
   RTL.exec_program p beh ->
   Asm.exec_program tp beh.
 Proof.
   intros. unfold transf_rtl_program, transf_rtl_fundef in H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p7 [H7 P7]].
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p7 [X7 P7]].
   clear H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H7) as [p6 [H6 P6]].
-  clear H7.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H6) as [p5 [H5 P5]].
-  clear H6. generalize (transform_program_partial_program _ _ _ _ _ _ P5). clear P5. intro P5.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H5) as [p4 [H4 P4]].
-  clear H5.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H4) as [p3 [H3 P3]].
-  clear H4. generalize (transform_program_partial_program _ _ _ _ _ _ P3). clear P3. intro P3.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H3) as [p2 [H2 P2]].
-  clear H3.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ H2) as [p1 [H1 P1]].
-  clear H2.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ H1) as [p0 [H00 P0]].
-  clear H1.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ H00) as [p00 [H000 P00]].
-  clear H00.
-  generalize (transform_partial_program_identity _ _ _ _ H000). clear H000. intro. subst p00.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X7) as [p6 [X6 P6]].
+  clear X7.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X6) as [p5 [X5 P5]].
+  clear X6. generalize (transform_program_partial_program _ _ _ _ _ _ P5). clear P5. intro P5.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X5) as [p4 [X4 P4]].
+  clear X5.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X4) as [p3 [X3 P3]].
+  clear X4. generalize (transform_program_partial_program _ _ _ _ _ _ P3). clear P3. intro P3.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X3) as [p2 [X2 P2]].
+  clear X3.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ X2) as [p1 [X1 P1]].
+  clear X2.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ X1) as [p0 [X0 P0]].
+  clear X1.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ X0) as [p00 [X00 P00]].
+  clear X0.
+  generalize (transform_partial_program_identity _ _ _ _ X00). clear X00. intro. subst p00.
 
   assert (WT3 : LTLtyping.wt_program p3).
     apply Alloctyping.program_typing_preserved with p2. auto.
@@ -268,28 +269,28 @@ Proof.
   apply Stackingproof.transf_program_correct with p6; auto.
   subst p6; apply Reloadproof.transf_program_correct; auto.
   apply Linearizeproof.transf_program_correct with p4; auto.
-  subst p4; apply Tunnelingproof.transf_program_correct. 
+  subst p4; apply Tunnelingproof.transf_program_correct; auto.
   apply Allocproof.transf_program_correct with p2; auto.
-  subst p2; apply CSEproof.transf_program_correct.
-  subst p1; apply Constpropproof.transf_program_correct.
-  subst p0; apply Tailcallproof.transf_program_correct.
-  auto.
+  subst p2; apply CSEproof.transf_program_correct; auto.
+  subst p1; apply Constpropproof.transf_program_correct; auto.
+  subst p0; apply Tailcallproof.transf_program_correct; auto.
 Qed.
 
 Theorem transf_cminor_program_correct:
   forall p tp beh,
   transf_cminor_program p = OK tp ->
+  not_wrong beh ->
   Cminor.exec_program p beh ->
   Asm.exec_program tp beh.
 Proof.
   intros. unfold transf_cminor_program, transf_cminor_fundef in H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [H3 P3]].
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [X3 P3]].
   clear H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H3) as [p2 [H2 P2]].
-  clear H3.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ H2) as [p1 [H1 P1]].
-  generalize (transform_partial_program_identity _ _ _ _ H1). clear H1. intro. subst p1.
-  apply transf_rtl_program_correct with p3. auto.
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X3) as [p2 [X2 P2]].
+  clear X3.
+  destruct (transform_program_compose _ _ _ _ _ _ _ _ X2) as [p1 [X1 P1]].
+  generalize (transform_partial_program_identity _ _ _ _ X1). clear X1. intro. subst p1.
+  apply transf_rtl_program_correct with p3; auto.
   apply RTLgenproof.transf_program_correct with p2; auto.
   rewrite <- P1. apply Selectionproof.transf_program_correct; auto.
 Qed.
@@ -297,6 +298,7 @@ Qed.
 Theorem transf_c_program_correct:
   forall p tp beh,
   transf_c_program p = OK tp ->
+  not_wrong beh ->
   Csem.exec_program p beh ->
   Asm.exec_program tp beh.
 Proof.
@@ -304,7 +306,7 @@ Proof.
   caseEq (Ctyping.typecheck_program p); try congruence; intro.
   caseEq (Cshmgen.transl_program p); simpl; try congruence; intros p1 EQ1.
   caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2. 
-  intros EQ3 SEM.
+  intros EQ3 NOTW SEM.
   eapply transf_cminor_program_correct; eauto.
   eapply Cminorgenproof.transl_program_correct; eauto. 
   eapply Cshmgenproof3.transl_program_correct; eauto.

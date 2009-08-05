@@ -1657,7 +1657,7 @@ Qed.
 
 Theorem transl_program_correct:
   forall (beh: program_behavior),
-  Csem.exec_program prog beh ->
+  not_wrong beh -> Csem.exec_program prog beh ->
   Csharpminor.exec_program tprog beh.
 Proof.
   set (order := fun (S1 S2: Csem.state) => False).
@@ -1669,21 +1669,22 @@ Proof.
       /\ match_states S2 T2).
   intros. exploit transl_step; eauto. intros [T2 [A B]].
   exists T2; split. auto. auto.
-  intros. inv H.
+  intros. inv H0.
   assert (exists t1, exists s1, Csem.step (Genv.globalenv prog) s t1 s1).
-  inv H1. inv H0; inv H2. exists t1; exists s2; auto.
-  destruct H as [t1 [s1 ST]].
+  inv H3. inv H2. inv H1. exists t1; exists s2; auto.
+  destruct H0 as [t1 [s1 ST]].
   exploit transl_initial_states; eauto. intros [R [A B]].
   exploit simulation_star_star; eauto. intros [R' [C D]]. 
   econstructor; eauto. eapply transl_final_states; eauto.
   assert (exists t1, exists s1, Csem.step (Genv.globalenv prog) s t1 s1).
-  inv H1. exists t; exists s2; auto.
-  destruct H as [t1 [s1 ST]].
+  inv H2. exists t; exists s2; auto.
+  destruct H0 as [t1 [s1 ST]].
   exploit transl_initial_states; eauto. intros [R [A B]].
   exploit simulation_star_forever; eauto.
   unfold order; red. intros. constructor; intros. contradiction.
   intro C.
   econstructor; eauto.
+  contradiction.
 Qed.
 
 End CORRECTNESS.

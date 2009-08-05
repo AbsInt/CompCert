@@ -2610,7 +2610,7 @@ Qed.
 
 Theorem transl_program_correct:
   forall (beh: program_behavior),
-  Csharpminor.exec_program prog beh ->
+  not_wrong beh -> Csharpminor.exec_program prog beh ->
   Cminor.exec_program tprog beh.
 Proof.
   unfold Csharpminor.exec_program, Cminor.exec_program; intros.

@@ -14,6 +14,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import UnionFind.
 Require Import AST.
 Require Import Values.
 Require Import Globalenvs.
@@ -41,9 +42,6 @@ Require Import LTL.
   better code, e.g. by revealing that some [goto] instructions are
   dead code (as the "goto L3" in the example above).
 *)
-
-Definition is_goto_instr (b: option instruction) : option node :=
-  match b with Some (Lnop s) => Some s | _ => None end.
 
 (** [branch_target f pc] returns the node of the CFG that is at
   the end of the branch sequence starting at [pc].  If the instruction
@@ -77,50 +75,44 @@ Definition is_goto_instr (b: option instruction) : option node :=
   is simpler if we return the label of the first [goto] in the sequence.
 *)
 
-Fixpoint branch_target_rec (f: LTL.function) (pc: node) (count: nat)
-                           {struct count} : option node :=
-  match count with
-  | Datatypes.O => None
-  | Datatypes.S count' =>
-      match is_goto_instr f.(fn_code)!pc with
-      | Some s => branch_target_rec f s count'
-      | None => Some pc
-      end
+Module U := UnionFind.UF(PTree).
+
+Definition record_goto (uf: U.t) (pc: node) (i: instruction) : U.t :=
+  match i with
+  | Lnop s => U.union uf pc s
+  | _ => uf
   end.
 
-Definition branch_target (f: LTL.function) (pc: node) :=
-  match branch_target_rec f pc 10%nat with
-  | Some pc' => pc'
-  | None => pc
-  end.
+Definition record_gotos (f: LTL.function) : U.t :=
+  PTree.fold record_goto f.(fn_code) U.empty.
 
 (** The tunneling optimization simply rewrites all LTL basic blocks,
   replacing the destinations of the [Bgoto] and [Bcond] instructions
   with their final target, as computed by [branch_target]. *)
 
-Definition tunnel_instr (f: LTL.function) (b: instruction) : instruction :=
+Definition tunnel_instr (uf: U.t) (b: instruction) : instruction :=
   match b with
   | Lnop s =>
-      Lnop (branch_target f s)
+      Lnop (U.repr uf s)
   | Lop op args res s =>
-      Lop op args res (branch_target f s)
+      Lop op args res (U.repr uf s)
   | Lload chunk addr args dst s =>
-      Lload chunk addr args dst (branch_target f s)
+      Lload chunk addr args dst (U.repr uf s)
   | Lstore chunk addr args src s =>
-      Lstore chunk addr args src (branch_target f s)
+      Lstore chunk addr args src (U.repr uf s)
   | Lcall sig ros args res s =>
-      Lcall sig ros args res (branch_target f s)
+      Lcall sig ros args res (U.repr uf s)
   | Ltailcall sig ros args =>
       Ltailcall sig ros args
   | Lcond cond args s1 s2 =>
-      Lcond cond args (branch_target f s1) (branch_target f s2)
+      Lcond cond args (U.repr uf s1) (U.repr uf s2)
   | Lreturn or =>
       Lreturn or
   end.
 
 Lemma wf_tunneled_code:
-  forall (f: LTL.function),
-  let tc := PTree.map (fun pc b => tunnel_instr f b) (fn_code f) in
+  forall (f: LTL.function) (uf: U.t),
+  let tc := PTree.map (fun pc b => tunnel_instr uf b) (fn_code f) in
   forall (pc: node), Plt pc (fn_nextpc f) \/ tc!pc = None.
 Proof.
   intros. elim (fn_code_wf f pc); intro.
@@ -129,14 +121,15 @@ Proof.
 Qed.
 
 Definition tunnel_function (f: LTL.function) : LTL.function :=
+  let uf := record_gotos f in
   mkfunction
     (fn_sig f)
     (fn_params f)
     (fn_stacksize f)
-    (PTree.map (fun pc b => tunnel_instr f b) (fn_code f))
-    (branch_target f (fn_entrypoint f))
+    (PTree.map (fun pc b => tunnel_instr uf b) (fn_code f))
+    (U.repr uf (fn_entrypoint f))
     (fn_nextpc f)
-    (wf_tunneled_code f).
+    (wf_tunneled_code f uf).
 
 Definition tunnel_fundef (f: LTL.fundef) : LTL.fundef :=
   transf_fundef tunnel_function f.

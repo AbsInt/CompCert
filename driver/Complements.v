@@ -224,10 +224,12 @@ Proof.
   intros. inv H; inv H0. reflexivity. 
 Qed.
 
+Definition nostep (ge: genv) (st: state) : Prop := forall t st', ~step ge st t st'.
+
 Lemma final_state_not_step:
-  forall ge st r t st', final_state st r -> step ge st t st' -> False.
+  forall ge st r, final_state st r -> nostep ge st.
 Proof.
-  intros. inv H. inv H0.
+  unfold nostep. intros. red; intros. inv H. inv H0.
   unfold Vzero in H1. congruence.
   unfold Vzero in H1. congruence. 
 Qed.
@@ -242,21 +244,19 @@ Qed.
 
 Lemma steps_deterministic:
   forall ge s0 t1 s1, star step ge s0 t1 s1 -> 
-  forall r1 r2 t2 s2 w0 w1 w2, star step ge s0 t2 s2 -> 
-  final_state s1 r1 -> final_state s2 r2 ->
+  forall t2 s2 w0 w1 w2, star step ge s0 t2 s2 -> 
+  nostep ge s1 -> nostep ge s2 ->
   possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
-  t1 = t2 /\ r1 = r2.
+  t1 = t2 /\ s1 = s2.
 Proof.
   induction 1; intros. 
-  inv H. split. auto. eapply final_state_deterministic; eauto.
-  byContradiction. eapply final_state_not_step with (st := s); eauto.
-  inv H2. byContradiction. eapply final_state_not_step with (st := s0); eauto.
+  inv H. auto. 
+  elim (H0 _ _ H4).
+  inv H2. elim (H4 _ _ H). 
   possibleTraceInv.
   exploit step_deterministic. eexact H. eexact H7. eauto. eauto. 
   intros [A [B C]]. subst s5 t3 w3.
-  exploit IHstar. eexact H8. eauto. eauto. eauto. eauto. 
-  intros [A B]. subst t4 r2. 
-  auto.
+  exploit IHstar; eauto. intros [A B]. split; congruence.
 Qed.
 
 (** ** Determinism for infinite transition sequences. *)
@@ -281,14 +281,14 @@ Proof.
 Qed.
 
 Lemma star_final_not_forever:
-  forall ge s1 t s2 r T w1 w2,
+  forall ge s1 t s2 T w1 w2,
   star step ge s1 t s2 ->
-  final_state s2 r -> forever step ge s1 T ->
+  nostep ge s2 -> forever step ge s1 T ->
   possible_trace w1 t w2 -> possible_traceinf w1 T ->
   False.
 Proof.
   intros. exploit forever_star_inv; eauto. intros [T' [A [B C]]]. 
-  inv A. eapply final_state_not_step; eauto.
+  inv A. elim (H0 _ _ H4). 
 Qed.
 
 (** ** Minimal traces for divergence. *)
@@ -472,7 +472,14 @@ Inductive exec_program' (p: program) (w: world): program_behavior -> Prop :=
       forever step (Genv.globalenv p) s T ->
       possible_traceinf w T ->
       minimal_trace (Genv.globalenv p) s w T ->
-      exec_program' p w (Diverges T).
+      exec_program' p w (Diverges T)
+  | program_goes_wrong': forall s t s' w',
+      initial_state p s ->
+      star step (Genv.globalenv p) s t s' ->
+      possible_trace w t w' -> 
+      nostep (Genv.globalenv p) s' ->
+       (forall r, ~final_state s' r) ->
+      exec_program' p w (Goes_wrong t).
 
 (** We show that any [exec_program] execution corresponds to
   an [exec_program'] execution. *)
@@ -481,6 +488,7 @@ Definition possible_behavior (w: world) (b: program_behavior) : Prop :=
   match b with
   | Terminates t r => exists w', possible_trace w t w'
   | Diverges T => possible_traceinf w T
+  | Goes_wrong t => exists w', possible_trace w t w'
   end.
 
 Inductive matching_behaviors: program_behavior -> program_behavior -> Prop :=
@@ -488,7 +496,9 @@ Inductive matching_behaviors: program_behavior -> program_behavior -> Prop :=
       matching_behaviors (Terminates t r) (Terminates t r)
   | matching_behaviors_diverges: forall T1 T2,
       traceinf_prefix T2 T1 ->
-      matching_behaviors (Diverges T1) (Diverges T2).
+      matching_behaviors (Diverges T1) (Diverges T2)
+  | matching_behaviors_goeswrong: forall t ,
+      matching_behaviors (Goes_wrong t) (Goes_wrong t).
 
 Theorem exec_program_program':
   forall p b w,
@@ -505,6 +515,10 @@ Proof.
   exists (Diverges T0); split.
   econstructor; eauto.
   constructor. apply C; auto.
+  (* going wrong *)
+  destruct H0 as [w' A].
+  exists (Goes_wrong t).
+  split. econstructor; eauto. constructor.
 Qed.
 
 (** Moreover, [exec_program'] is deterministic, in that the behavior
@@ -516,7 +530,9 @@ Inductive same_behaviors: program_behavior -> program_behavior -> Prop :=
       same_behaviors (Terminates t r) (Terminates t r)
   | same_behaviors_diverges: forall T1 T2,
       traceinf_sim T2 T1 ->
-      same_behaviors (Diverges T1) (Diverges T2).
+      same_behaviors (Diverges T1) (Diverges T2)
+  | same_behaviors_goes_wrong: forall t,
+      same_behaviors (Goes_wrong t) (Goes_wrong t).
 
 Theorem exec_program'_deterministic:
   forall p b1 b2 w,
@@ -524,16 +540,35 @@ Theorem exec_program'_deterministic:
   same_behaviors b1 b2.
 Proof.
   intros. inv H; inv H0;
-  assert (s0 = s) by (eapply initial_state_deterministic; eauto); subst s0.
+  try (assert (s0 = s) by (eapply initial_state_deterministic; eauto); subst s0).
   (* terminates, terminates *)
-  exploit steps_deterministic. eexact H2. eexact H5. eauto. eauto. eauto. eauto.
-  intros [A B]. subst. constructor.
+  exploit steps_deterministic. eexact H2. eexact H5.
+  eapply final_state_not_step; eauto. eapply final_state_not_step; eauto. eauto. eauto.
+  intros [A B]. subst. 
+  exploit final_state_deterministic. eexact H4. eexact H7.
+  intro. subst. constructor.
   (* terminates, diverges *)
-  byContradiction. eapply star_final_not_forever; eauto.
+  byContradiction. eapply star_final_not_forever; eauto. eapply final_state_not_step; eauto.
+  (* terminates, goes wrong *)
+  exploit steps_deterministic. eexact H2. eexact H5.
+  eapply final_state_not_step; eauto. auto. eauto. eauto.
+  intros [A B]. subst. elim (H8 _ H4).
   (* diverges, terminates *)
-  byContradiction. eapply star_final_not_forever; eauto.
+  byContradiction. eapply star_final_not_forever; eauto. eapply final_state_not_step; eauto.
   (* diverges, diverges *)
   constructor. apply traceinf_prefix_2_sim; auto.
+  (* diverges, goes wrong *)
+  byContradiction. eapply star_final_not_forever; eauto.
+  (* goes wrong, terminates *)
+  exploit steps_deterministic. eexact H2. eexact H6. eauto. 
+  eapply final_state_not_step; eauto. eauto. eauto.
+  intros [A B]. subst. elim (H5 _ H8).
+  (* goes wrong, diverges *)
+  byContradiction. eapply star_final_not_forever; eauto.
+  (* goes wrong, goes wrong *)
+  exploit steps_deterministic. eexact H2. eexact H6.
+  eauto. eauto. eauto. eauto.
+  intros [A B]. subst. constructor.
 Qed.
 
 Lemma matching_behaviors_same:
@@ -545,6 +580,7 @@ Proof.
   constructor.
   constructor. apply traceinf_prefix_compat with T2 T1.
   auto. apply traceinf_sim_sym; auto. apply traceinf_sim_refl.
+  constructor.
 Qed.
 
 (** * Additional semantic preservation property *)
@@ -559,23 +595,18 @@ Qed.
   predicate. *)
 
 Theorem transf_c_program_correct_strong:
-  forall p tp b w,
+  forall p tp w,
   transf_c_program p = OK tp ->
-  Csem.exec_program p b ->
-  possible_behavior w b ->
-  (exists b', exec_program' tp w b')
-/\(forall b', exec_program' tp w b' ->
-   exists b0, Csem.exec_program p b0 /\ matching_behaviors b0 b').
+  (exists b, Csem.exec_program p b /\ possible_behavior w b /\ not_wrong b) ->
+  (forall b, exec_program' tp w b -> exists b0, Csem.exec_program p b0 /\ matching_behaviors b0 b).
 Proof.
-  intros.
-  assert (Asm.exec_program tp b).
+  intros. destruct H0 as [b0 [A [B C]]]. 
+  assert (Asm.exec_program tp b0).
     eapply transf_c_program_correct; eauto.
   exploit exec_program_program'; eauto. 
-  intros [b' [A B]].
-  split. exists b'; auto.
-  intros. exists b. split. auto.
-  apply matching_behaviors_same with b'. auto.
-  eapply exec_program'_deterministic; eauto.
+  intros [b1 [D E]].
+  assert (same_behaviors b1 b). eapply exec_program'_deterministic; eauto.
+  exists b0. split. auto. eapply matching_behaviors_same; eauto.
 Qed.
 
 Section SPECS_PRESERVED.
@@ -601,28 +632,24 @@ Hypothesis spec_safety:
   forall T T', traceinf_prefix T T' -> spec (Diverges T') -> spec (Diverges T).
 
 Theorem transf_c_program_preserves_spec:
-  forall p tp b w,
+  forall p tp w,
   transf_c_program p = OK tp ->
-  Csem.exec_program p b ->
-  possible_behavior w b ->
-  spec b ->
-  (exists b', exec_program' tp w b')
-/\(forall b', exec_program' tp w b' -> spec b').
+  (exists b, Csem.exec_program p b /\ possible_behavior w b /\ not_wrong b) ->
+  (forall b, Csem.exec_program p b -> possible_behavior w b -> spec b) ->
+  (forall b, exec_program' tp w b -> not_wrong b /\ spec b).
 Proof.
-  intros.
-  assert (Asm.exec_program tp b).
+  intros. destruct H0 as [b1 [A [B C]]].
+  assert (Asm.exec_program tp b1).
     eapply transf_c_program_correct; eauto.
   exploit exec_program_program'; eauto. 
-  intros [b' [A B]].
-  split. exists b'; auto.
-  intros b'' EX.
-  assert (same_behaviors b' b''). eapply exec_program'_deterministic; eauto.
-  inv B; inv H4. 
+  intros [b' [D E]].
+  assert (same_behaviors b b'). eapply exec_program'_deterministic; eauto.
+  inv E; inv H3. 
   auto.
-  apply spec_safety with T1. 
-  eapply traceinf_prefix_compat with T2 T1. 
-  auto. apply traceinf_sim_sym; auto. apply traceinf_sim_refl.
+  split. simpl. auto. apply spec_safety with T1. 
+  eapply traceinf_prefix_compat. eauto. auto. apply traceinf_sim_refl.
   auto.
+  simpl in C. contradiction.
 Qed.
 
 End SPECS_PRESERVED.

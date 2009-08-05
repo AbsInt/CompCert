@@ -74,6 +74,9 @@ Module Type TREE.
   Hypothesis gro:
     forall (A: Type) (i j: elt) (m: t A),
     i <> j -> get i (remove j m) = get i m.
+  Hypothesis grspec:
+    forall (A: Type) (i j: elt) (m: t A),
+    get i (remove j m) = if elt_eq i j then None else get i m.
 
   (** Extensional equality between trees. *)
   Variable beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
@@ -331,6 +334,13 @@ Module PTree <: TREE.
         auto.
      destruct (remove j (Node m1_1 o0 m1_2)); simpl; try rewrite (gleaf A i);
         auto.
+  Qed.
+
+  Theorem grspec:
+    forall (A: Type) (i j: elt) (m: t A),
+    get i (remove j m) = if elt_eq i j then None else get i m.
+  Proof.
+    intros. destruct (elt_eq i j). subst j. apply grs. apply gro; auto.
   Qed.
 
   Section EXTENSIONAL_EQUALITY.
@@ -1126,6 +1136,111 @@ Module EMap(X: EQUALITY_TYPE) <: MAP.
     intros. unfold get, map. reflexivity.
   Qed.
 End EMap.
+
+(** * Additional properties over trees *)
+
+Module Tree_Properties(T: TREE).
+
+(** An induction principle over [fold]. *)
+
+Section TREE_FOLD_IND.
+
+Variables V A: Type.
+Variable f: A -> T.elt -> V -> A.
+Variable P: T.t V -> A -> Prop.
+Variable init: A.
+Variable m_final: T.t V.
+
+Hypothesis P_compat:
+  forall m m' a,
+  (forall x, T.get x m = T.get x m') ->
+  P m a -> P m' a.
+
+Hypothesis H_base: 
+  P (T.empty _) init.
+
+Hypothesis H_rec:
+  forall m a k v,
+  T.get k m = None -> T.get k m_final = Some v -> P m a -> P (T.set k v m) (f a k v).
+
+Definition f' (a: A) (p : T.elt * V) := f a (fst p) (snd p).
+
+Definition P' (l: list (T.elt * V)) (a: A) : Prop :=
+  forall m, list_equiv l (T.elements m) -> P m a.
+
+Remark H_base':
+  P' nil init.
+Proof.
+  red; intros. apply P_compat with (T.empty _); auto.
+  intros. rewrite T.gempty. symmetry. case_eq (T.get x m); intros; auto.
+  assert (In (x, v) nil). rewrite (H (x, v)). apply T.elements_correct. auto.
+  contradiction.
+Qed.
+
+Remark H_rec':
+  forall k v l a,
+  ~In k (List.map (@fst T.elt V) l) ->
+  In (k, v) (T.elements m_final) ->
+  P' l a ->
+  P' (l ++ (k, v) :: nil) (f a k v).
+Proof.
+  unfold P'; intros.  
+  set (m0 := T.remove k m). 
+  apply P_compat with (T.set k v m0).
+    intros. unfold m0. rewrite T.gsspec. destruct (T.elt_eq x k).
+    symmetry. apply T.elements_complete. rewrite <- (H2 (x, v)).
+    apply in_or_app. simpl. intuition congruence.
+    apply T.gro. auto.
+  apply H_rec. unfold m0. apply T.grs. apply T.elements_complete. auto. 
+  apply H1. red. intros [k' v']. 
+  split; intros. 
+  apply T.elements_correct. unfold m0. rewrite T.gro. apply T.elements_complete. 
+  rewrite <- (H2 (k', v')). apply in_or_app. auto. 
+  red; intro; subst k'. elim H. change k with (fst (k, v')). apply in_map. auto.
+  assert (T.get k' m0 = Some v'). apply T.elements_complete. auto.
+  unfold m0 in H4. rewrite T.grspec in H4. destruct (T.elt_eq k' k). congruence.
+  assert (In (k', v') (T.elements m)). apply T.elements_correct; auto.
+  rewrite <- (H2 (k', v')) in H5. destruct (in_app_or _ _ _ H5). auto. 
+  simpl in H6. intuition congruence.
+Qed.
+
+Lemma fold_rec_aux:
+  forall l1 l2 a,
+  list_equiv (l2 ++ l1) (T.elements m_final) ->
+  list_disjoint (List.map (@fst T.elt V) l1) (List.map (@fst T.elt V) l2) ->
+  list_norepet (List.map (@fst T.elt V) l1) ->
+  P' l2 a -> P' (l2 ++ l1) (List.fold_left f' l1 a).
+Proof.
+  induction l1; intros; simpl.
+  rewrite <- List.app_nil_end. auto.
+  destruct a as [k v]; simpl in *. inv H1. 
+  change ((k, v) :: l1) with (((k, v) :: nil) ++ l1). rewrite <- List.app_ass. apply IHl1.
+  rewrite app_ass. auto.
+  red; intros. rewrite map_app in H3. destruct (in_app_or _ _ _ H3). apply H0; auto with coqlib. 
+  simpl in H4. intuition congruence.
+  auto.
+  unfold f'. simpl. apply H_rec'; auto. eapply list_disjoint_notin; eauto with coqlib.
+  rewrite <- (H (k, v)). apply in_or_app. simpl. auto.
+Qed.
+
+Theorem fold_rec:
+  P m_final (T.fold f m_final init).
+Proof.
+  intros. rewrite T.fold_spec. fold f'.
+  assert (P' (nil ++ T.elements m_final) (List.fold_left f' (T.elements m_final) init)).
+    apply fold_rec_aux.
+    simpl. red; intros; tauto.
+    simpl. red; intros. elim H0.
+    apply T.elements_keys_norepet. 
+    apply H_base'. 
+  simpl in H. red in H. apply H. red; intros. tauto.
+Qed.
+
+End TREE_FOLD_IND.
+
+End Tree_Properties.
+
+Module PTree_Properties := Tree_Properties(PTree).
 
 (** * Useful notations *)
 

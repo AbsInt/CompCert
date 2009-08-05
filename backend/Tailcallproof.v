@@ -722,7 +722,7 @@ Qed.
   [Smallstep.simulation_opt_preservation]. *)
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   exec_program prog beh -> exec_program tprog beh.
 Proof.
   unfold exec_program; intros.

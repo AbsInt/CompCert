@@ -750,7 +750,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   RTL.exec_program prog beh -> LTL.exec_program tprog beh.
 Proof.
   unfold RTL.exec_program, LTL.exec_program; intros.

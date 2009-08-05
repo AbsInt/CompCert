@@ -1592,7 +1592,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   Linear.exec_program prog beh -> Machabstr.exec_program tprog beh.
 Proof.
   unfold Linear.exec_program, Machabstr.exec_program; intros.

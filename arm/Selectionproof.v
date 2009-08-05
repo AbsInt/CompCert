@@ -1446,7 +1446,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   Cminor.exec_program prog beh -> CminorSel.exec_program tprog beh.
 Proof.
   unfold CminorSel.exec_program, Cminor.exec_program; intros.

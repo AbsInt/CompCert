@@ -36,7 +36,7 @@ GPATH=$(DIRS)
 # General-purpose libraries (in lib/)
 
 LIB=Coqlib.v Maps.v Lattice.v Ordered.v \
-  Iteration.v Integers.v Floats.v Parmov.v
+  Iteration.v Integers.v Floats.v Parmov.v UnionFind.v
 
 # Parts common to the front-ends and the back-end (in common/)
 

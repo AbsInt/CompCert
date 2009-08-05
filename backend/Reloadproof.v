@@ -1345,7 +1345,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   LTLin.exec_program prog beh -> Linear.exec_program tprog beh.
 Proof.
   unfold LTLin.exec_program, Linear.exec_program; intros.

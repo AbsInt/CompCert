@@ -14,6 +14,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import UnionFind.
 Require Import AST.
 Require Import Values.
 Require Import Mem.
@@ -25,98 +26,112 @@ Require Import Locations.
 Require Import LTL.
 Require Import Tunneling.
 
-(** * Properties of branch target computation *)
+(** * Properties of the branch map computed using union-find. *)
 
-Lemma is_goto_instr_correct:
-  forall b s,
-  is_goto_instr b = Some s -> b = Some (Lnop s).
-Proof.
-  unfold is_goto_instr; intros.
-  destruct b; try discriminate.
-  destruct i; discriminate || congruence. 
-Qed. 
+(** A variant of [record_goto] that also incrementally computes a measure [f: node -> nat]
+  counting the number of [Lnop] instructions starting at a given [pc] that were eliminated. *)
 
-Lemma branch_target_rec_1:
-  forall f pc n,
-  branch_target_rec f pc n = Some pc
-  \/ branch_target_rec f pc n = None
-  \/ exists pc', f.(fn_code)!pc = Some(Lnop pc').
+Definition measure_edge (u: U.t) (pc s: node) (f: node -> nat) : node -> nat :=
+  fun x => if peq (U.repr u s) pc then f x
+           else if peq (U.repr u x) pc then (f x + f s + 1)%nat
+           else f x.
+
+Definition record_goto' (uf: U.t * (node -> nat)) (pc: node) (i: instruction) : U.t * (node -> nat) :=
+  match i with
+  | Lnop s => let (u, f) := uf in (U.union u pc s, measure_edge u pc s f)
+  | _ => uf
+  end.
+
+Definition branch_map_correct (c: code) (uf: U.t * (node -> nat)): Prop :=
+  forall pc,
+  match c!pc with
+  | Some(Lnop s) =>
+      U.repr (fst uf) pc = pc \/ (U.repr (fst uf) pc = U.repr (fst uf) s /\ snd uf s < snd uf pc)%nat
+  | _ =>
+      U.repr (fst uf) pc = pc
+  end.
+
+Lemma record_gotos'_correct:
+  forall c,
+  branch_map_correct c (PTree.fold record_goto' c (U.empty, fun (x: node) => O)).
 Proof.
-  intros. destruct n; simpl.
-  right; left; auto.
-  caseEq (is_goto_instr f.(fn_code)!pc); intros.
-  right; right. exists n0. apply is_goto_instr_correct; auto.
-  left; auto.
+  intros.
+  apply PTree_Properties.fold_rec with (P := fun c uf => branch_map_correct c uf).
+
+(* extensionality *)
+  intros. red; intros. rewrite <- H. apply H0.
+
+(* base case *)
+  red; intros; simpl. rewrite PTree.gempty. apply U.repr_empty.
+
+(* inductive case *)
+  intros m uf pc i; intros. destruct uf as [u f]. 
+  assert (PC: U.repr u pc = pc). 
+    generalize (H1 pc). rewrite H. auto.
+  assert (record_goto' (u, f) pc i = (u, f)
+          \/ exists s, i = Lnop s /\ record_goto' (u, f) pc i = (U.union u pc s, measure_edge u pc s f)).
+    unfold record_goto'; simpl. destruct i; auto. right. exists n; auto.
+  destruct H2 as [B | [s [EQ B]]].
+
+(* u and f are unchanged *)
+  rewrite B.
+  red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'. 
+  destruct i; auto.
+  apply H1. 
+
+(* i is Lnop s, u becomes union u pc s, f becomes measure_edge u pc s f *)
+  rewrite B.
+  red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'. rewrite EQ.
+
+(* The new instruction *)
+  rewrite (U.repr_union_2 u pc s); auto. rewrite U.repr_union_3. 
+  unfold measure_edge. destruct (peq (U.repr u s) pc). auto. right. split. auto.
+  rewrite PC. rewrite peq_true. omega.
+
+(* An old instruction *)
+  assert (U.repr u pc' = pc' -> U.repr (U.union u pc s) pc' = pc').
+    intro. rewrite <- H2 at 2. apply U.repr_union_1. congruence. 
+  generalize (H1 pc'). simpl. destruct (m!pc'); auto. destruct i0; auto.
+  intros [P | [P Q]]. left; auto. right.
+  split. apply U.sameclass_union_2. auto.
+  unfold measure_edge. destruct (peq (U.repr u s) pc). auto.
+  rewrite P. destruct (peq (U.repr u n0) pc). omega. auto. 
 Qed.
 
-Lemma branch_target_rec_2:
-  forall f n pc1 pc2 pc3,
-  f.(fn_code)!pc1 = Some (Lnop pc2) ->
-  branch_target_rec f pc1 n = Some pc3 ->
-  branch_target_rec f pc2 n = Some pc3.
+Definition record_gotos' (f: function) :=
+  PTree.fold record_goto' f.(fn_code) (U.empty, fun (x: node) => O).
+
+Lemma record_gotos_gotos':
+  forall f, fst (record_gotos' f) = record_gotos f.
 Proof.
-  induction n. 
-  simpl. intros; discriminate.
-  intros pc1 pc2 pc3 ATpc1 H. simpl in H. 
-  unfold is_goto_instr in H; rewrite ATpc1 in H.
-  simpl. caseEq (is_goto_instr f.(fn_code)!pc2); intros.
-  apply IHn with pc2. apply is_goto_instr_correct; auto. auto.
-  destruct n; simpl in H. discriminate. rewrite H0 in H. auto.
+  intros. unfold record_gotos', record_gotos. 
+  repeat rewrite PTree.fold_spec.
+  generalize (PTree.elements (fn_code f)) (U.empty) (fun _ : node => O).
+  induction l; intros; simpl.
+  auto.
+  unfold record_goto' at 2. unfold record_goto at 2. 
+  destruct (snd a); apply IHl.
 Qed.
 
-(** Counting the number of consecutive gotos. *)
+Definition branch_target (f: function) (pc: node) : node :=
+  U.repr (record_gotos f) pc.
 
-Fixpoint count_goto_rec (f: LTL.function) (pc: node) (count: nat)
-                        {struct count} : nat :=
-  match count with
-  | Datatypes.O => Datatypes.O
-  | Datatypes.S count' =>
-      match is_goto_instr f.(fn_code)!pc with
-      | Some s => Datatypes.S (count_goto_rec f s count')
-      | None => Datatypes.O
-      end
-    end.
+Definition count_gotos (f: function) (pc: node) : nat :=
+  snd (record_gotos' f) pc.
 
-Definition count_goto (f: LTL.function) (pc: node) : nat :=
-  count_goto_rec f pc 10%nat.
-
-Lemma count_goto_rec_prop:
-  forall f n pc1 pc2 pc3,
-  f.(fn_code)!pc1 = Some (Lnop pc2) ->
-  branch_target_rec f pc1 n = Some pc3 ->
-  (count_goto_rec f pc2 n < count_goto_rec f pc1 n)%nat.
-Proof.
-  induction n.
-  simpl; intros. discriminate.
-  intros pc1 pc2 pc3 ATpc1 H. simpl in H. 
-  unfold is_goto_instr in H; rewrite ATpc1 in H.
-  simpl. unfold is_goto_instr at 2. rewrite ATpc1. 
-  caseEq (is_goto_instr f.(fn_code)!pc2); intros.
-  exploit (IHn pc2); eauto. apply is_goto_instr_correct; eauto. 
-  omega.
-  omega.
-Qed.
-
-(** The following lemma captures the property of [branch_target]
-  on which the proof of semantic preservation relies. *)
-
-Lemma branch_target_characterization:
+Theorem record_gotos_correct:
   forall f pc,
-  branch_target f pc = pc \/
-  (exists pc', f.(fn_code)!pc = Some(Lnop pc')
-            /\ branch_target f pc' = branch_target f pc
-            /\ count_goto f pc' < count_goto f pc)%nat.
+  match f.(fn_code)!pc with
+  | Some(Lnop s) =>
+       branch_target f pc = pc \/
+       (branch_target f pc = branch_target f s /\ count_gotos f s < count_gotos f pc)%nat
+  | _ => branch_target f pc = pc
+  end.
 Proof.
-  intros. unfold branch_target. 
-  generalize (branch_target_rec_1 f pc 10%nat). 
-  intros [A|[A|[pc' AT]]].
-  rewrite A. left; auto.
-  rewrite A. left; auto.
-  caseEq (branch_target_rec f pc 10%nat). intros pcx BT.
-  right. exists pc'. split. auto. 
-  split. rewrite (branch_target_rec_2 _ _ _ _ _ AT BT). auto.
-  unfold count_goto. eapply count_goto_rec_prop; eauto. 
-  intro. left; auto.
+  intros. 
+  generalize (record_gotos'_correct f.(fn_code) pc). simpl.
+  fold (record_gotos' f). unfold branch_map_correct, branch_target, count_gotos.
+  rewrite record_gotos_gotos'. auto.
 Qed.
 
 (** * Preservation of semantics *)
@@ -186,7 +201,7 @@ Qed.
   original and transformed codes. *)
 
 Definition tunneled_code (f: function) :=
-  PTree.map (fun pc b => tunnel_instr f b) (fn_code f).
+  PTree.map (fun pc b => tunnel_instr (record_gotos f) b) (fn_code f).
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   | match_stackframes_intro:
@@ -219,25 +234,15 @@ Inductive match_states: state -> state -> Prop :=
 
 Definition measure (st: state) : nat :=
   match st with
-  | State s f sp pc ls m => count_goto f pc
+  | State s f sp pc ls m => count_gotos f pc
   | Callstate s f ls m => 0%nat
   | Returnstate s ls m => 0%nat
   end.
 
-Lemma branch_target_identity:
-  forall f pc,
-  match f.(fn_code)!pc with Some(Lnop _) => False | _ => True end ->
-  branch_target f pc = pc.
-Proof.
-  intros. 
-  destruct (branch_target_characterization f pc) as [A | [pc' [B C]]].
-  auto. rewrite B in H. contradiction.
-Qed.
-
 Lemma tunnel_function_lookup:
   forall f pc i,
   f.(fn_code)!pc = Some i ->
-  (tunnel_function f).(fn_code)!pc = Some (tunnel_instr f i).
+  (tunnel_function f).(fn_code)!pc = Some (tunnel_instr (record_gotos f) i).
 Proof.
   intros. simpl. rewrite PTree.gmap. rewrite H. auto.
 Qed.
@@ -250,23 +255,23 @@ Lemma tunnel_step_correct:
 Proof.
   induction 1; intros; try inv MS.
   (* Lnop *)
-  destruct (branch_target_characterization f pc) as [A | [pc1 [B [C D]]]].
+  generalize (record_gotos_correct f pc); rewrite H. 
+  intros [A | [B C]].
   left; econstructor; split.
   eapply exec_Lnop. rewrite A. 
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
   econstructor; eauto. 
-  assert (pc1 = pc') by congruence. subst pc1.
   right. split. simpl. auto. split. auto. 
-  rewrite <- C. econstructor; eauto. 
+  rewrite B. econstructor; eauto. 
   (* Lop *)
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
   eapply exec_Lop with (v := v); eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
   rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto.
   (* Lload *)
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
   eapply exec_Lload with (a := a). 
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
@@ -274,7 +279,7 @@ Proof.
   eauto.
   econstructor; eauto.
   (* Lstore *)
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
   eapply exec_Lstore with (a := a).
   rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.  
@@ -282,36 +287,36 @@ Proof.
   eauto.
   econstructor; eauto.
   (* Lcall *)
+  generalize (record_gotos_correct f pc); rewrite H; intro A.
   left; econstructor; split. 
   eapply exec_Lcall with (f' := tunnel_fundef f'); eauto.
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
-  rewrite (tunnel_function_lookup _ _ _ H); simpl.
+  rewrite A. rewrite (tunnel_function_lookup _ _ _ H); simpl.
   rewrite sig_preserved. auto.
   apply find_function_translated; auto.
   econstructor; eauto.
   constructor; auto. 
   constructor; auto.
   (* Ltailcall *)
+  generalize (record_gotos_correct f pc); rewrite H; intro A.
   left; econstructor; split. 
   eapply exec_Ltailcall with (f' := tunnel_fundef f'); eauto.
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
-  rewrite (tunnel_function_lookup _ _ _ H); simpl.
+  rewrite A. rewrite (tunnel_function_lookup _ _ _ H); simpl.
   rewrite sig_preserved. auto.
   apply find_function_translated; auto.
   econstructor; eauto.
   (* cond *)
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
   eapply exec_Lcond_true; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
   econstructor; eauto.
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
   eapply exec_Lcond_false; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
   econstructor; eauto.
   (* return *)
-  rewrite (branch_target_identity f pc); [idtac | rewrite H; auto].
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
   eapply exec_Lreturn; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
@@ -355,7 +360,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior),
+  forall (beh: program_behavior), not_wrong beh ->
   exec_program p beh -> exec_program tp beh.
 Proof.
   unfold exec_program; intros.
