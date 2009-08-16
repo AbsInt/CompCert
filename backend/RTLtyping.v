@@ -18,6 +18,12 @@ Require Import Maps.
 Require Import AST.
 Require Import Op.
 Require Import Registers.
+Require Import Globalenvs.
+Require Import Values.
+Require Import Mem.
+Require Import Integers.
+Require Import Events.
+Require Import Smallstep.
 Require Import RTL.
 Require Conventions.
 
@@ -397,13 +403,6 @@ Qed.
   Even though we do not need it for [RTL], we show preservation for [RTL]
   here, as a warm-up exercise and because some of the lemmas will be
   useful later. *)
-
-Require Import Globalenvs.
-Require Import Values.
-Require Import Mem.
-Require Import Integers.
-Require Import Events.
-Require Import Smallstep.
 
 Definition wt_regset (env: regenv) (rs: regset) : Prop :=
   forall r, Val.has_type (rs#r) (env r).

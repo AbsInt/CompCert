@@ -1661,6 +1661,8 @@ Theorem transl_program_correct:
   Csharpminor.exec_program tprog beh.
 Proof.
   set (order := fun (S1 S2: Csem.state) => False).
+  assert (WF: well_founded order).
+  unfold order; red. intros. constructor; intros. contradiction.
   assert (transl_step':
      forall S1 t S2, Csem.step ge S1 t S2 ->
      forall T1, match_states S1 T1 ->
@@ -1670,21 +1672,30 @@ Proof.
   intros. exploit transl_step; eauto. intros [T2 [A B]].
   exists T2; split. auto. auto.
   intros. inv H0.
+(* Terminates *)
   assert (exists t1, exists s1, Csem.step (Genv.globalenv prog) s t1 s1).
   inv H3. inv H2. inv H1. exists t1; exists s2; auto.
   destruct H0 as [t1 [s1 ST]].
   exploit transl_initial_states; eauto. intros [R [A B]].
   exploit simulation_star_star; eauto. intros [R' [C D]]. 
   econstructor; eauto. eapply transl_final_states; eauto.
+(* Diverges *)
   assert (exists t1, exists s1, Csem.step (Genv.globalenv prog) s t1 s1).
-  inv H2. exists t; exists s2; auto.
+  inv H2. inv H3. exists E0; exists s2; auto. exists t1; exists s2; auto.
   destruct H0 as [t1 [s1 ST]].
   exploit transl_initial_states; eauto. intros [R [A B]].
-  exploit simulation_star_forever; eauto.
-  unfold order; red. intros. constructor; intros. contradiction.
+  exploit simulation_star_star; eauto. intros [R' [C D]]. 
+  econstructor; eauto. eapply simulation_star_forever_silent; eauto.
+(* Reacts *)
+  assert (exists t1, exists s1, Csem.step (Genv.globalenv prog) s t1 s1).
+  inv H2. inv H0. congruence. exists t1; exists s0; auto.
+  destruct H0 as [t1 [s1 ST]].
+  exploit transl_initial_states; eauto. intros [R [A B]].
+  exploit simulation_star_forever_reactive; eauto.
   intro C.
   econstructor; eauto.
-  contradiction.
+(* Goes wrong *)
+  contradiction. contradiction.
 Qed.
 
 End CORRECTNESS.

@@ -755,13 +755,10 @@ with execinf_stmt:
 
 End NATURALSEM.
 
-(** Execution of a whole program: [exec_program p beh]
-  holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] has [beh] as observable
-  behavior. *)
+(** Big-step execution of a whole program *)
 
-Inductive exec_program_bigstep (p: program): program_behavior -> Prop :=
-  | program_terminates:
+Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
+  | bigstep_program_terminates_intro:
       forall b f t m r,
       let ge := Genv.globalenv p in
       let m0 := Genv.init_mem p in
@@ -769,8 +766,10 @@ Inductive exec_program_bigstep (p: program): program_behavior -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
       eval_funcall ge m0 f nil t m (Vint r) ->
-      exec_program_bigstep p (Terminates t r)
-  | program_diverges:
+      bigstep_program_terminates p t r.
+
+Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
+  | bigstep_program_diverges_intro:
       forall b f t,
       let ge := Genv.globalenv p in
       let m0 := Genv.init_mem p in
@@ -778,7 +777,7 @@ Inductive exec_program_bigstep (p: program): program_behavior -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
       evalinf_funcall ge m0 f nil t ->
-      exec_program_bigstep p (Diverges t).
+      bigstep_program_diverges p t.
 
 (** ** Correctness of the big-step semantics with respect to the transition semantics *)
 
@@ -1087,22 +1086,32 @@ Proof.
   traceEq.
 Qed.
 
-Theorem exec_program_bigstep_transition:
-  forall beh,
-  exec_program_bigstep prog beh ->
-  exec_program prog beh.
+Theorem bigstep_program_terminates_exec:
+  forall t r, bigstep_program_terminates prog t r -> exec_program prog (Terminates t r).
 Proof.
   intros. inv H.
-  (* termination *)
   econstructor.
   econstructor. eauto. eauto. auto. 
   apply eval_funcall_steps. eauto. red; auto. 
-  econstructor. 
-  (* divergence *)
   econstructor.
-  econstructor. eauto. eauto. auto. 
-  apply forever_plus_forever. 
-  apply evalinf_funcall_forever. auto.
+Qed.
+
+Theorem bigstep_program_diverges_exec:
+  forall T, bigstep_program_diverges prog T ->
+  exec_program prog (Reacts T) \/
+  exists t, exec_program prog (Diverges t) /\ traceinf_prefix t T.
+Proof.
+  intros. inv H.
+  set (st := Callstate f nil Kstop m0).
+  assert (forever step ge0 st T). 
+    eapply forever_plus_forever.
+    eapply evalinf_funcall_forever; eauto. 
+  destruct (forever_silent_or_reactive _ _ _ _ _ _ H)
+  as [A | [t [s' [T' [B [C D]]]]]]. 
+  left. econstructor. econstructor. eauto. eauto. auto. auto.
+  right. exists t. split.
+  econstructor. econstructor; eauto. eauto. auto.  
+  subst T. rewrite <- (E0_right t) at 1. apply traceinf_prefix_app. constructor.
 Qed.
 
 End BIGSTEP_TO_TRANSITION.

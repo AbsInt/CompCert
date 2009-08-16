@@ -41,7 +41,7 @@ LIB=Coqlib.v Maps.v Lattice.v Ordered.v \
 # Parts common to the front-ends and the back-end (in common/)
 
 COMMON=Errors.v AST.v Events.v Globalenvs.v Mem.v Values.v \
-  Smallstep.v Switch.v
+  Smallstep.v Determinism.v Switch.v
 
 # Back-end modules (in backend/, $(ARCH)/, $(ARCH)/$(VARIANT))
 
