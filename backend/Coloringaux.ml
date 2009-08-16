@@ -39,7 +39,7 @@ type node =
   { ident: reg;                         (*r register identifier *)
     typ: typ;                           (*r its type *)
     regclass: int;                      (*r identifier of register class *)
-    spillcost: float;                   (*r estimated cost of spilling *)
+    mutable spillcost: float;           (*r estimated cost of spilling *)
     mutable adjlist: node list;         (*r all nodes it interferes with *)
     mutable degree: int;                (*r number of adjacent nodes *)
     mutable movelist: move list;        (*r list of moves it is involved in *)
@@ -427,7 +427,7 @@ let canConservativelyCoalesce n1 n2 =
   let consider n =
     if not (Regset.mem n.ident !seen) then begin
       seen := Regset.add n.ident !seen;
-      if n.degree >= k then incr c
+      if n.degree >= k || n.nstate = Colored then incr c
     end in
   iterAdjacent consider n1;
   iterAdjacent consider n2;
@@ -455,6 +455,7 @@ let combine u v =
   else DLinkNode.move v spillWorklist coalescedNodes;
   v.alias <- Some u;
   u.movelist <- u.movelist @ v.movelist;
+  u.spillcost <- u.spillcost +. v.spillcost;
   iterAdjacent (combineEdge u) v;  (*r original code using [decrementDegree] is buggy *)
   enableMoves v;                   (*r added as per Appel's book erratum *)
   if u.degree >= num_available_registers.(u.regclass)
