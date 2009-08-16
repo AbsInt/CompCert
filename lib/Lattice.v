@@ -456,6 +456,3 @@ Lemma ge_lub_left: forall x y, ge (lub x y) x.
 Proof. destruct x; destruct y; compute; tauto. Qed.
 
 End LBoolean.
-
-
-

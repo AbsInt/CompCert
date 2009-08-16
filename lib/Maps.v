@@ -887,15 +887,49 @@ Module PTree <: TREE.
     intros. change (list_norepet (xkeys m 1)). apply xelements_keys_norepet.
   Qed.
 
+(*
   Definition fold (A B : Type) (f: B -> positive -> A -> B) (tr: t A) (v: B) :=
      List.fold_left (fun a p => f a (fst p) (snd p)) (elements tr) v.
+*)
+
+  Fixpoint xfold (A B: Type) (f: B -> positive -> A -> B)
+                 (i: positive) (m: t A) (v: B) {struct m} : B :=
+    match m with
+    | Leaf => v
+    | Node l None r =>
+        let v1 := xfold f (append i (xO xH)) l v in
+        xfold f (append i (xI xH)) r v1
+    | Node l (Some x) r =>
+        let v1 := xfold f (append i (xO xH)) l v in
+        let v2 := f v1 i x in
+        xfold f (append i (xI xH)) r v2
+    end.
+
+  Definition fold (A B : Type) (f: B -> positive -> A -> B) (m: t A) (v: B) :=
+    xfold f xH m v.
+
+  Lemma xfold_xelements:
+    forall (A B: Type) (f: B -> positive -> A -> B) m i v,
+    xfold f i m v =
+    List.fold_left (fun a p => f a (fst p) (snd p))
+                   (xelements m i)
+                   v.
+  Proof.
+    induction m; intros.
+    simpl. auto.
+    simpl. destruct o.
+    rewrite fold_left_app. simpl. 
+    rewrite IHm1. apply IHm2. 
+    rewrite fold_left_app. simpl.
+    rewrite IHm1. apply IHm2.
+  Qed.
 
   Theorem fold_spec:
     forall (A B: Type) (f: B -> positive -> A -> B) (v: B) (m: t A),
     fold f m v =
     List.fold_left (fun a p => f a (fst p) (snd p)) (elements m) v.
   Proof.
-    intros; unfold fold; auto.
+    intros. unfold fold, elements. apply xfold_xelements. 
   Qed.
 
 End PTree.

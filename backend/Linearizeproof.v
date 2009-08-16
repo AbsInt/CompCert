@@ -105,20 +105,20 @@ Qed.
 (** The successors of a reachable instruction are reachable. *)
 
 Lemma reachable_successors:
-  forall f pc pc',
-  In pc' (successors f pc) ->
+  forall f pc pc' i,
+  f.(LTL.fn_code)!pc = Some i -> In pc' (successors_instr i) ->
   (reachable f)!!pc = true ->
   (reachable f)!!pc' = true.
 Proof.
   intro f. unfold reachable.
   caseEq (reachable_aux f).
   unfold reachable_aux. intro reach; intros.
-  elim (LTL.fn_code_wf f pc); intro.
   assert (LBoolean.ge reach!!pc' reach!!pc).
   change (reach!!pc) with ((fun pc r => r) pc (reach!!pc)).
-  eapply DS.fixpoint_solution. eexact H. auto. auto.
+  eapply DS.fixpoint_solution. eexact H.
+  unfold Kildall.successors_list, successors. rewrite PTree.gmap.
+  rewrite H0; auto.
   elim H3; intro. congruence. auto.
-  unfold successors in H0. rewrite H2 in H0. contradiction.
   intros. apply PMap.gi.
 Qed.
 
@@ -514,8 +514,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   econstructor; split.
   eapply add_branch_correct; eauto.
@@ -525,8 +524,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   econstructor; split.
   eapply plus_left'.
@@ -541,8 +539,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   econstructor; split.
   eapply plus_left'.
@@ -558,8 +555,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   econstructor; split.
   eapply plus_left'.
@@ -575,8 +571,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!pc' = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   assert (VALID: valid_successor f pc'). inv WTI; auto.
   exploit find_function_translated; eauto. intros [tf' [A B]].
   econstructor; split.
@@ -608,8 +603,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!ifso = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   destruct (starts_with ifso c').
   econstructor; split.
@@ -629,8 +623,7 @@ Proof.
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
   assert (REACH': (reachable f)!!ifnot = true).
-  eapply reachable_successors; eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
   destruct (starts_with ifso c').
   econstructor; split.

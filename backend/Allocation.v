@@ -116,7 +116,7 @@ Module RegsetLat := LFSet(Regset).
 Module DS := Backward_Dataflow_Solver(RegsetLat)(NodeSetBackward).
 
 Definition analyze (f: RTL.function): option (PMap.t Regset.t) :=
-  DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) nil.
+  DS.fixpoint (successors f)  (transfer f) nil.
 
 (** * Translation from RTL to LTL *)
 
@@ -171,16 +171,6 @@ Definition transf_instr
       Lreturn (option_map assign optarg)
   end.
 
-Lemma transf_body_wf:
-  forall (f: RTL.function) (live: PMap.t Regset.t) (assign: reg -> loc),
-  let tc := PTree.map (transf_instr f live assign) (RTL.fn_code f) in
-  forall (pc: node), Plt pc (RTL.fn_nextpc f) \/ tc!pc = None.
-Proof.
-  intros. elim (RTL.fn_code_wf f pc); intro.
-  left. auto. right. unfold tc. rewrite PTree.gmap.
-  unfold option_map. rewrite H. auto.
-Qed.
-
 Definition transf_fun (f: RTL.function) (live: PMap.t Regset.t)
                       (assign: reg -> loc) : LTL.function :=
   LTL.mkfunction
@@ -188,9 +178,7 @@ Definition transf_fun (f: RTL.function) (live: PMap.t Regset.t)
      (List.map assign (RTL.fn_params f))
      (RTL.fn_stacksize f)
      (PTree.map (transf_instr f live assign) (RTL.fn_code f))
-     (RTL.fn_entrypoint f)
-     (RTL.fn_nextpc f)
-     (transf_body_wf f live assign).
+     (RTL.fn_entrypoint f).
 
 (** The translation of a function performs liveness analysis,
   construction and coloring of the inference graph, and per-instruction

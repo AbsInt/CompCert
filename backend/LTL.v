@@ -51,9 +51,7 @@ Record function: Type := mkfunction {
   fn_params: list loc;
   fn_stacksize: Z;
   fn_code: code;
-  fn_entrypoint: node;
-  fn_nextpc: node;
-  fn_code_wf: forall (pc: node), Plt pc fn_nextpc \/ fn_code!pc = None
+  fn_entrypoint: node
 }.
 
 Definition fundef := AST.fundef function.
@@ -256,18 +254,17 @@ Definition exec_program (p: program) (beh: program_behavior) : Prop :=
 (** Computation of the possible successors of an instruction.
   This is used in particular for dataflow analyses. *)
 
-Definition successors (f: function) (pc: node) : list node :=
-  match f.(fn_code)!pc with
-  | None => nil
-  | Some i =>
-      match i with
-      | Lnop s => s :: nil
-      | Lop op args res s => s :: nil
-      | Lload chunk addr args dst s => s :: nil
-      | Lstore chunk addr args src s => s :: nil
-      | Lcall sig ros args res s => s :: nil
-      | Ltailcall sig ros args => nil
-      | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
-      | Lreturn optarg => nil
-      end
+Definition successors_instr (i: instruction) : list node :=
+  match i with
+  | Lnop s => s :: nil
+  | Lop op args res s => s :: nil
+  | Lload chunk addr args dst s => s :: nil
+  | Lstore chunk addr args src s => s :: nil
+  | Lcall sig ros args res s => s :: nil
+  | Ltailcall sig ros args => nil
+  | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
+  | Lreturn optarg => nil
   end.
+
+Definition successors (f: function): PTree.t (list node) :=
+  PTree.map (fun pc i => successors_instr i) f.(fn_code).

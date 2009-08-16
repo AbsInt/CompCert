@@ -674,7 +674,7 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
 Module DS := Dataflow_Solver(D)(NodeSetForward).
 
 Definition analyze (f: RTL.function): PMap.t D.t :=
-  match DS.fixpoint (successors f) f.(fn_nextpc) (transfer f) 
+  match DS.fixpoint (successors f) (transfer f) 
                     ((f.(fn_entrypoint), D.top) :: nil) with
   | None => PMap.init D.top
   | Some res => res
@@ -1062,19 +1062,6 @@ Definition transf_instr (approx: D.t) (instr: instruction) :=
 Definition transf_code (approxs: PMap.t D.t) (instrs: code) : code :=
   PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
 
-Lemma transf_code_wf:
-  forall f approxs,
-  (forall pc, Plt pc f.(fn_nextpc) \/ f.(fn_code)!pc = None) ->
-  (forall pc, Plt pc f.(fn_nextpc)
-      \/ (transf_code approxs f.(fn_code))!pc = None).
-Proof.
-  intros. 
-  elim (H pc); intro.
-  left; auto.
-  right. unfold transf_code. rewrite PTree.gmap. 
-  unfold option_map; rewrite H0. reflexivity.
-Qed.
-
 Definition transf_function (f: function) : function :=
   let approxs := analyze f in
   mkfunction
@@ -1082,9 +1069,7 @@ Definition transf_function (f: function) : function :=
     f.(fn_params)
     f.(fn_stacksize)
     (transf_code approxs f.(fn_code))
-    f.(fn_entrypoint)
-    f.(fn_nextpc)
-    (transf_code_wf f approxs f.(fn_code_wf)).
+    f.(fn_entrypoint).
 
 Definition transf_fundef (fd: fundef) : fundef :=
   AST.transf_fundef transf_function fd.

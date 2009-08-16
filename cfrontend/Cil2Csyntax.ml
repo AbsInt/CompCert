@@ -213,6 +213,23 @@ let make_temp typ =
       let v = Cil.makeTempVar f typ in 
       intern_string v.vname
 
+let rec constant_address e =
+  match e with
+  | Expr(Evar v, _) -> true
+  | Expr(Efield(e, id), _) -> constant_address e
+  | _ -> false
+
+let cache_address ty e (f: expr -> statement) =
+  if constant_address e then
+    f e
+  else begin
+    let t = make_temp (TPtr(ty, [])) in
+    let ty = typeof e in
+    let typ = Tpointer ty in
+    Ssequence(Sassign(Expr(Evar t, typ), Expr(Eaddrof e, typ)),
+              f (Expr(Ederef(Expr(Evar t, typ)), ty)))
+  end
+
 (** Detect and report GCC's __builtin_ functions *)
 
 let check_builtin s =
@@ -220,6 +237,74 @@ let check_builtin s =
   if String.length s >= String.length b
   && String.sub s 0 (String.length b) = b
   then unsupported ("GCC `" ^ s ^ "' built-in function")
+
+(** ** Helpers for struct assignment *)
+
+let eintconst n =
+  Expr(Econst_int n, Tint(I32, Signed))
+let eindex e1 e2 ty =
+  Expr(Ederef(Expr (Ebinop(Oadd, e1, e2), typeof e1)), ty)
+let eaddrof e =
+  Expr(Eaddrof e, Tpointer(typeof e))
+
+let memcpy_ident = intern_string "memcpy"
+let memcpy_arg_type =
+  Tcons(Tpointer Tvoid, Tcons(Tpointer Tvoid, Tcons(Tint(I32, Unsigned), Tnil)))
+let memcpy_res_type = Tpointer Tvoid
+let memcpy_type = Tfunction(memcpy_arg_type, memcpy_res_type)
+let memcpy_used = ref false
+
+exception Use_memcpy
+
+let max_assignment_num = 8
+
+let compile_assignment ty lhs rhs =
+
+  let num_assign = ref 0 in
+
+  let rec comp_assign l r =
+    match typeof l with
+    | Tstruct(id, flds) -> 
+        let rec comp_field = function
+        | Fnil -> Sskip
+        | Fcons(id, ty, rem) ->
+            let ty = unrollType id (Tstruct(id, flds)) ty in
+            Ssequence(comp_assign (Expr (Efield(l, id), ty))
+                                  (Expr (Efield(r, id), ty)),
+                      comp_field rem)
+        in comp_field flds
+    | Tunion(id, flds) -> raise Use_memcpy
+    | Tarray(ty, sz) -> 
+        let sz = camlint_of_coqint sz in
+        let rec comp_element i =
+          if i >= sz then Sskip else begin
+            let idx = eintconst (coqint_of_camlint i) in
+            Ssequence(comp_assign (eindex l idx ty) (eindex r idx ty),
+                      comp_element (Int32.succ i))
+          end
+        in comp_element 0l
+    | _ ->
+        if !num_assign >= max_assignment_num then raise Use_memcpy;
+        incr num_assign;
+        Sassign(l, r)
+  in
+    try 
+      cache_address ty lhs (fun lhs' ->
+        cache_address ty rhs (fun rhs' ->
+          comp_assign lhs' rhs'))
+    with Use_memcpy ->
+      memcpy_used := true;
+      Scall(None, Expr(Evar memcpy_ident, memcpy_type),
+                  [eaddrof lhs; eaddrof rhs; eintconst (sizeof (typeof lhs))])
+
+let declare_memcpy fundecl =
+  if !memcpy_used
+  && not (List.exists (fun (Datatypes.Coq_pair(id, _)) -> id = memcpy_ident)
+                      fundecl)
+  then Datatypes.Coq_pair(memcpy_ident,
+                          External(memcpy_ident, memcpy_arg_type, memcpy_res_type))
+       :: fundecl
+  else fundecl
 
 (** ** Translation functions *)
 
@@ -576,37 +661,37 @@ let makeFuncall2 tyfun tylhs elhs efun eargs =
       Ssequence(makeFuncall1 tyfun elhs' efun eargs,
                 Sassign(elhs, elhs'))
                 
+(** Convert a [Cil.instr] into a [CabsCoq.statement] *)
+let processInstr = function
+  | Set (lv, rv, loc) ->
+      updateLoc(loc);
+      let lv' = convertLval lv in
+      let rv' = convertExp rv in
+      begin match typeof lv' with
+      | Tstruct _ | Tunion _ -> compile_assignment (typeOfLval lv) lv' rv'
+      | t -> Sassign (lv', rv')
+      end
+  | Call (None, e, eList, loc) ->
+      updateLoc(loc);
+      let (efun, params) = convertExpFuncall e eList in
+      Scall(None, efun, params)
+  | Call (Some lv, e, eList, loc) ->
+      updateLoc(loc);
+      let (efun, params) = convertExpFuncall e eList in
+      makeFuncall2 (Cil.typeOf e) (Cil.typeOfLval lv) (convertLval lv) efun params
+  | Asm (_, _, _, _, _, loc) ->
+      updateLoc(loc);
+      unsupported "inline assembly"
 
 (** Convert a [Cil.instr list] into a [CabsCoq.statement] *)
-let rec processInstrList l =
-  (* convert an instruction *)
-  let convertInstr = function
-    | Set (lv, e, loc) ->
-	updateLoc(loc);
-        begin match convertTyp (Cil.typeOf e) with
-        | Tstruct _ | Tunion _ -> unsupported "struct or union assignment"
-        | t -> Sassign (convertLval lv, convertExp e)
-        end
-    | Call (None, e, eList, loc) ->
-	updateLoc(loc);
-        let (efun, params) = convertExpFuncall e eList in
-        Scall(None, efun, params)
-    | Call (Some lv, e, eList, loc) ->
-	updateLoc(loc);
-        let (efun, params) = convertExpFuncall e eList in
-        makeFuncall2 (Cil.typeOf e) (Cil.typeOfLval lv) (convertLval lv) efun params
-    | Asm (_, _, _, _, _, loc) ->
-	updateLoc(loc);
-        unsupported "inline assembly"
-  in
-    (* convert a list of instructions *)
-    match l with
-      | [] -> Sskip
-      | [s] -> convertInstr s
-      | s :: l -> 
-          let cs = convertInstr s in
-          let cl = processInstrList l in
-          Ssequence (cs, cl)
+
+let rec processInstrList = function
+  | [] -> Sskip
+  | [s] -> processInstr s
+  | s :: l -> 
+      let cs = processInstr s in
+      let cl = processInstrList l in
+      Ssequence (cs, cl)
 
 
 (** Convert a [Cil.stmt list] into a [CabsCoq.statement] *)
@@ -672,53 +757,67 @@ and processLblStmtList switchBody = function
 	end
 
 
-(** Convert a [Cil.stmt] into a [CabsCoq.statement] *)
-and convertStmt s =
-  match s.skind with
-    | Instr iList -> processInstrList iList
+(** Convert a [Cil.stmtkind] into a [CabsCoq.statement] *)
+and convertStmtKind = function
+    | Instr iList ->
+        processInstrList iList
     | Return (eOpt, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         let eOpt' = match eOpt with
-	  | None -> None
-	  | Some e -> Some (convertExp e)
-	in 
+          | None -> None
+          | Some e -> Some (convertExp e)
+        in 
           Sreturn eOpt'
-    | Goto (_, loc) ->
-	updateLoc(loc);
-        unsupported "`goto' statement"
+    | Goto (sref, loc) ->
+        updateLoc(loc);
+        let rec extract_label = function
+        | [] -> internal_error "convertStmtKind: goto without label"
+        | Label(lbl, _, _) :: _ -> lbl
+        | _ :: rem -> extract_label rem
+        in
+          Sgoto (intern_string (extract_label (!sref).labels))
     | Break loc ->
-	updateLoc(loc);
-	Sbreak
+        updateLoc(loc);
+        Sbreak
     | Continue loc ->
-	updateLoc(loc);
-	Scontinue
+        updateLoc(loc);
+        Scontinue
     | If (e, b1, b2, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         let e1 = processStmtList b1.bstmts in
         let e2 = processStmtList b2.bstmts in
-	  Sifthenelse (convertExp e, e1, e2)
+          Sifthenelse (convertExp e, e1, e2)
     | Switch (e, b, l, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         Sswitch (convertExp e, processLblStmtList b.bstmts l)
     | While (e, b, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         Swhile (convertExp e, processStmtList b.bstmts)
     | DoWhile (e, b, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         Sdowhile (convertExp e, processStmtList b.bstmts)
     | For (bInit, e, bIter, b, loc) ->
-	updateLoc(loc);
-	let sInit = processStmtList bInit.bstmts in
-	let e' = convertExp e in
-	let sIter = processStmtList bIter.bstmts in
-	  Sfor (sInit, e', sIter, processStmtList b.bstmts)
+        updateLoc(loc);
+        let sInit = processStmtList bInit.bstmts in
+        let e' = convertExp e in
+        let sIter = processStmtList bIter.bstmts in
+          Sfor (sInit, e', sIter, processStmtList b.bstmts)
     | Block b -> processStmtList b.bstmts
     | TryFinally (_, _, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         unsupported "`try'...`finally' statement"
     | TryExcept (_, _, _, loc) ->
-	updateLoc(loc);
+        updateLoc(loc);
         unsupported "`try'...`except' statement"
+
+(** Convert a [Cil.stmtkind] into a [CabsCoq.statement] *)
+and convertStmt s =
+  let rec add_labels l s =
+    match l with
+    | [] -> s
+    | Label(lbl, _, _) :: rem -> Slabel(intern_string lbl, add_labels rem s)
+    | _ :: rem -> add_labels rem s (* error? *)
+  in add_labels s.labels (convertStmtKind s.skind)
 
 (** Convert a [Cil.GFun] into a pair [(ident * coq_fundecl)] *)
 let convertGFun fdec =
@@ -986,16 +1085,17 @@ let convertFile f =
   Hashtbl.clear varinfo_atom;
   Hashtbl.clear stringTable;
   Hashtbl.clear stub_function_table;
+  memcpy_used := false;
   let (funList, defList) = processGlobals (cleanupGlobals f.globals) in
-  let funList' = declare_stub_functions funList in
-  let funList'' = match f.globinit with
-    | Some fdec -> convertGFun fdec :: funList'
-    | None -> funList' in
-  let defList' = globals_for_strings defList in
-  { AST.prog_funct = funList'';
-    AST.prog_vars = defList';
+  let funList1 = declare_stub_functions funList in
+  let funList2 = match f.globinit with
+    | Some fdec -> convertGFun fdec :: funList1
+    | None -> funList1 in
+  let funList3 = declare_memcpy funList2 in
+  let defList1 = globals_for_strings defList in
+  { AST.prog_funct = funList3;
+    AST.prog_vars = defList1;
     AST.prog_main = intern_string "main" }
-
 
 (*-----------------------------------------------------------------------*)
 end

@@ -87,9 +87,7 @@ Record function: Type := mkfunction {
   fn_params: list reg;
   fn_stacksize: Z;
   fn_code: code;
-  fn_entrypoint: node;
-  fn_nextpc: node;
-  fn_code_wf: forall (pc: node), Plt pc fn_nextpc \/ fn_code!pc = None
+  fn_entrypoint: node
 }.
 
 (** A function description comprises a control-flow graph (CFG) [fn_code]
@@ -332,6 +330,22 @@ Definition exec_program (p: program) (beh: program_behavior) : Prop :=
 (** Computation of the possible successors of an instruction.
   This is used in particular for dataflow analyses. *)
 
+Definition successors_instr (i: instruction) : list node :=
+  match i with
+  | Inop s => s :: nil
+  | Iop op args res s => s :: nil
+  | Iload chunk addr args dst s => s :: nil
+  | Istore chunk addr args src s => s :: nil
+  | Icall sig ros args res s => s :: nil
+  | Itailcall sig ros args => nil
+  | Icond cond args ifso ifnot => ifso :: ifnot :: nil
+  | Ireturn optarg => nil
+  end.
+
+Definition successors (f: function) : PTree.t (list node) :=
+  PTree.map (fun pc i => successors_instr i) f.(fn_code).
+
+(*
 Definition successors (f: function) (pc: node) : list node :=
   match f.(fn_code)!pc with
   | None => nil
@@ -347,6 +361,7 @@ Definition successors (f: function) (pc: node) : list node :=
       | Ireturn optarg => nil
       end
   end.
+*)
 
 (** Transformation of a RTL function instruction by instruction.
   This applies a given transformation function to all instructions
@@ -356,24 +371,12 @@ Section TRANSF.
 
 Variable transf: node -> instruction -> instruction.
 
-Lemma transf_code_wf:
-  forall (c: code) (nextpc: node),
-  (forall (pc: node), Plt pc nextpc \/ c!pc = None) ->
-  (forall (pc: node), Plt pc nextpc \/ (PTree.map transf c)!pc = None).
-Proof.
-  intros. elim (H pc); intro.
-  left; assumption.
-  right. rewrite PTree.gmap. rewrite H0. reflexivity.
-Qed.
-
 Definition transf_function (f: function) : function :=
   mkfunction
     f.(fn_sig)
     f.(fn_params)
     f.(fn_stacksize)
     (PTree.map transf f.(fn_code))
-    f.(fn_entrypoint)
-    f.(fn_nextpc)
-    (transf_code_wf f.(fn_code) f.(fn_nextpc) f.(fn_code_wf)).
+    f.(fn_entrypoint).
 
 End TRANSF.

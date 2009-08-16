@@ -213,19 +213,19 @@ Qed.
   a solution of the forward dataflow inequations. *)
 
 Lemma analyze_correct_1:
-  forall f pc rs pc',
-  In pc' (successors f pc) ->
+  forall f pc rs pc' i,
+  f.(fn_code)!pc = Some i ->
+  In pc' (successors_instr i) ->
   regs_match_approx (transfer f pc (analyze f)!!pc) rs ->
   regs_match_approx (analyze f)!!pc' rs.
 Proof.
-  intros until pc'. unfold analyze. 
-  caseEq (DS.fixpoint (successors f) (fn_nextpc f) (transfer f)
+  intros until i. unfold analyze. 
+  caseEq (DS.fixpoint (successors f) (transfer f)
                       ((fn_entrypoint f, D.top) :: nil)).
   intros approxs; intros.
   apply regs_match_approx_increasing with (transfer f pc approxs!!pc).
   eapply DS.fixpoint_solution; eauto.
-  elim (fn_code_wf f pc); intro. auto. 
-  unfold successors in H0; rewrite H2 in H0; simpl; contradiction.
+  unfold successors_list, successors. rewrite PTree.gmap. rewrite H0. auto.
   auto.
   intros. rewrite PMap.gi. apply regs_match_approx_top. 
 Qed.
@@ -235,7 +235,7 @@ Lemma analyze_correct_3:
   regs_match_approx (analyze f)!!(f.(fn_entrypoint)) rs.
 Proof.
   intros. unfold analyze. 
-  caseEq (DS.fixpoint (successors f) (fn_nextpc f) (transfer f)
+  caseEq (DS.fixpoint (successors f) (transfer f)
                       ((fn_entrypoint f, D.top) :: nil)).
   intros approxs; intros.
   apply regs_match_approx_increasing with D.top.
@@ -772,7 +772,7 @@ Proof.
   TransfInstr; intro. eapply exec_Inop; eauto.
   econstructor; eauto.
   eapply analyze_correct_1 with (pc := pc); eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  simpl; auto.
   unfold transfer; rewrite H. auto.
 
   (* Iop *)
@@ -796,7 +796,7 @@ Proof.
   rewrite A; rewrite B; auto.
   econstructor; eauto. 
   eapply analyze_correct_1 with (pc := pc); eauto.
-  unfold successors; rewrite H; auto with coqlib.
+  simpl; auto.
   unfold transfer; rewrite H. 
   apply regs_match_approx_update; auto. 
   eapply eval_static_operation_correct; eauto.
@@ -814,8 +814,7 @@ Proof.
   exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#dst <- v) m); split.
   eapply exec_Iload; eauto.
   econstructor; eauto. 
-  apply analyze_correct_1 with pc; auto. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analyze_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   apply regs_match_approx_update; auto. simpl; auto.
 
@@ -831,8 +830,7 @@ Proof.
   exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m'); split.
   eapply exec_Istore; eauto.
   econstructor; eauto. 
-  apply analyze_correct_1 with pc; auto. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analyze_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. auto. 
 
   (* Icall *)
@@ -842,8 +840,7 @@ Proof.
   eapply exec_Icall; eauto. apply sig_function_translated; auto.
   constructor; auto. constructor; auto.
   econstructor; eauto. 
-  intros. apply analyze_correct_1 with pc; auto.
-  unfold successors; rewrite H; auto with coqlib.
+  intros. eapply analyze_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H.
   apply regs_match_approx_update; auto. simpl. auto.
 
@@ -852,7 +849,7 @@ Proof.
   TransfInstr; intro.
   econstructor; split.
   eapply exec_Itailcall; eauto. apply sig_function_translated; auto.
-  constructor; auto.
+  constructor; auto. 
 
   (* Icond, true *)
   exists (State s' (transf_code (analyze f) (fn_code f)) sp ifso rs m); split. 
@@ -870,8 +867,8 @@ Proof.
   replace b with true. intro; eapply exec_Inop; eauto. congruence.
   intros. eapply exec_Icond_true; eauto.
   econstructor; eauto.
-  apply analyze_correct_1 with pc; auto. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analyze_correct_1; eauto.
+  simpl; auto.
   unfold transfer; rewrite H; auto.
 
   (* Icond, false *)
@@ -890,8 +887,8 @@ Proof.
   replace b with false. intro; eapply exec_Inop; eauto. congruence.
   intros. eapply exec_Icond_false; eauto.
   econstructor; eauto.
-  apply analyze_correct_1 with pc; auto. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analyze_correct_1; eauto.
+  simpl; auto.
   unfold transfer; rewrite H; auto.
 
   (* Ireturn *)

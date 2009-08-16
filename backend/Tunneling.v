@@ -110,16 +110,6 @@ Definition tunnel_instr (uf: U.t) (b: instruction) : instruction :=
       Lreturn or
   end.
 
-Lemma wf_tunneled_code:
-  forall (f: LTL.function) (uf: U.t),
-  let tc := PTree.map (fun pc b => tunnel_instr uf b) (fn_code f) in
-  forall (pc: node), Plt pc (fn_nextpc f) \/ tc!pc = None.
-Proof.
-  intros. elim (fn_code_wf f pc); intro.
-  left; auto. right; unfold tc.
-  rewrite PTree.gmap; unfold option_map; rewrite H; auto.
-Qed.
-
 Definition tunnel_function (f: LTL.function) : LTL.function :=
   let uf := record_gotos f in
   mkfunction
@@ -127,9 +117,7 @@ Definition tunnel_function (f: LTL.function) : LTL.function :=
     (fn_params f)
     (fn_stacksize f)
     (PTree.map (fun pc b => tunnel_instr uf b) (fn_code f))
-    (U.repr uf (fn_entrypoint f))
-    (fn_nextpc f)
-    (wf_tunneled_code f uf).
+    (U.repr uf (fn_entrypoint f)).
 
 Definition tunnel_fundef (f: LTL.fundef) : LTL.fundef :=
   transf_fundef tunnel_function f.

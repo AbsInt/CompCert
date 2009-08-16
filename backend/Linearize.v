@@ -95,7 +95,6 @@ Module DS := Dataflow_Solver(LBoolean)(NodeSetForward).
 Definition reachable_aux (f: LTL.function) : option (PMap.t bool) :=
   DS.fixpoint
     (successors f)
-    (f.(fn_nextpc))
     (fun pc r => r)
     ((f.(fn_entrypoint), true) :: nil).
 

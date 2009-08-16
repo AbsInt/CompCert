@@ -154,21 +154,19 @@ Proof.
 Qed.
 
 Lemma agree_succ:
-  forall n s rs ls live,
+  forall n s rs ls live i,
   analyze f = Some live ->
-  In s (RTL.successors f n) ->
+  f.(RTL.fn_code)!n = Some i ->
+  In s (RTL.successors_instr i) ->
   agree live!!n rs ls ->
   agree (transfer f s live!!s) rs ls.
 Proof.
   intros.
-  elim (RTL.fn_code_wf f n); intro.
-  elim (RTL.fn_code_wf f s); intro.
   apply agree_increasing with (live!!n).
   eapply DS.fixpoint_solution. unfold analyze in H; eauto.
-  auto. auto. auto. auto.
-  unfold transfer. rewrite H3.
-  red; intros. elim (Regset.empty_1 H4).
-  unfold RTL.successors in H0; rewrite H2 in H0; elim H0.
+  unfold RTL.successors, Kildall.successors_list. 
+  rewrite PTree.gmap. rewrite H0. simpl. auto.
+  auto.
 Qed.
 
 (** Some useful special cases of [agree_increasing]. *)
@@ -543,11 +541,10 @@ Ltac MatchStates :=
       eapply match_states_intro; eauto; MatchStates
   | H: (PTree.get ?pc _ = Some _) |- agree _ _ _ _ =>
       eapply agree_succ with (n := pc); eauto; MatchStates
-  | H: (PTree.get _ _ = Some _) |- In _ (RTL.successors _ _) =>
-      unfold RTL.successors; rewrite H; auto with coqlib
+  | |- In _ (RTL.successors_instr _) =>
+      unfold RTL.successors_instr; auto with coqlib
   | _ => idtac
   end.
-
 
 Lemma transl_find_function:
   forall ros f args lv rs ls alloc,
@@ -659,7 +656,7 @@ Proof.
   econstructor; eauto.
   econstructor; eauto.
   intros. eapply agree_succ with (n := pc); eauto.
-  unfold RTL.successors; rewrite H; auto with coqlib.
+  simpl. auto.
   eapply agree_postcall; eauto.
 
   (* Itailcall *)

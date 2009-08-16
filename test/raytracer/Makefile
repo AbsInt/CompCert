@@ -1,6 +1,7 @@
 CC=../../ccomp 
 CFLAGS=-U__GNUC__ -stdlib ../../runtime -dclight -dasm
 LIBS=
+TIME=xtime -mintime 2.0
 
 OBJS=memory.o gmllexer.o gmlparser.o eval.o \
   arrays.o vector.o matrix.o object.o intersect.o surface.o light.o \
@@ -41,3 +42,8 @@ gcc3:
 	mv render render.gcc3
 	$(MAKE) clean
 
+test:
+	./render < kal.gml
+
+bench:
+	$(TIME) ./render < kal.gml

@@ -364,8 +364,7 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
   and effectively deactivates the CSE optimization. *)
 
 Definition analyze (f: RTL.function): PMap.t numbering :=
-  match Solver.fixpoint (successors f) f.(fn_nextpc) 
-                        (transfer f) f.(fn_entrypoint) with
+  match Solver.fixpoint (successors f) (transfer f) f.(fn_entrypoint) with
   | None => PMap.init empty_numbering
   | Some res => res
   end.
@@ -410,19 +409,6 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
 Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
   PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
 
-Lemma transf_code_wf:
-  forall f approxs,
-  (forall pc, Plt pc f.(fn_nextpc) \/ f.(fn_code)!pc = None) ->
-  (forall pc, Plt pc f.(fn_nextpc)
-      \/ (transf_code approxs f.(fn_code))!pc = None).
-Proof.
-  intros. 
-  elim (H pc); intro.
-  left; auto.
-  right. unfold transf_code. rewrite PTree.gmap. 
-  unfold option_map; rewrite H0. reflexivity.
-Qed.
-
 Definition transf_function (f: function) : function :=
   let approxs := analyze f in
   mkfunction
@@ -430,9 +416,7 @@ Definition transf_function (f: function) : function :=
         f.(fn_params)
         f.(fn_stacksize)
         (transf_code approxs f.(fn_code))
-        f.(fn_entrypoint)
-        f.(fn_nextpc)
-        (transf_code_wf f approxs f.(fn_code_wf)).
+        f.(fn_entrypoint).
 
 Definition transf_fundef (f: fundef) : fundef :=
   AST.transf_fundef transf_function f.

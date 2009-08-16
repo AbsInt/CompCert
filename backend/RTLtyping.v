@@ -393,7 +393,7 @@ Qed.
 
 (** The type system for RTL is not sound in that it does not guarantee
   progress: well-typed instructions such as [Icall] can fail because
-  of run-time type tests (such as the equality between calle and caller's
+  of run-time type tests (such as the equality between callee and caller's
   signatures).  However, the type system guarantees a type preservation
   property: if the execution does not fail because of a failed run-time
   test, the result values and register states match the static

@@ -807,7 +807,7 @@ Inductive tr_stmt (c: code) (map: mapping):
 
 Inductive tr_function: CminorSel.function -> RTL.function -> Prop :=
   | tr_function_intro:
-      forall f code rparams map1 s0 s1 i1 rvars map2 s2 i2 nentry ngoto nret rret orret nextnode wfcode,
+      forall f code rparams map1 s0 s1 i1 rvars map2 s2 i2 nentry ngoto nret rret orret,
       add_vars init_mapping f.(CminorSel.fn_params) s0 = OK (rparams, map1) s1 i1 ->
       add_vars map1 f.(CminorSel.fn_vars) s1 = OK (rvars, map2) s2 i2 ->
       orret = ret_reg f.(CminorSel.fn_sig) rret ->
@@ -818,9 +818,7 @@ Inductive tr_function: CminorSel.function -> RTL.function -> Prop :=
                        rparams
                        f.(CminorSel.fn_stackspace)
                        code
-                       nentry
-                       nextnode
-                       wfcode).
+                       nentry).
 
 (** * Correctness proof of the translation functions *)
 

@@ -242,8 +242,7 @@ Theorem wf_analyze:
   forall f pc, wf_numbering (analyze f)!!pc.
 Proof.
   unfold analyze; intros.
-  caseEq (Solver.fixpoint (successors f) (fn_nextpc f) 
-                          (transfer f) (fn_entrypoint f)).
+  caseEq (Solver.fixpoint (successors f) (transfer f) (fn_entrypoint f)).
   intros approx EQ.
   eapply Solver.fixpoint_invariant with (P := wf_numbering); eauto.
   exact wf_empty_numbering.   
@@ -689,22 +688,21 @@ End SATISFIABILITY.
   satisfiability at [pc']. *)
 
 Theorem analysis_correct_1:
-  forall ge sp rs m f pc pc',
-  In pc' (successors f pc) ->
+  forall ge sp rs m f pc pc' i,
+  f.(fn_code)!pc = Some i -> In pc' (successors_instr i) ->
   numbering_satisfiable ge sp rs m (transfer f pc (analyze f)!!pc) ->
   numbering_satisfiable ge sp rs m (analyze f)!!pc'.
 Proof.
-  intros until pc'.
+  intros until i.
   generalize (wf_analyze f pc).
   unfold analyze.
-  caseEq (Solver.fixpoint (successors f) (fn_nextpc f) 
-                          (transfer f) (fn_entrypoint f)).
-  intros res FIXPOINT WF SUCC NS.
+  caseEq (Solver.fixpoint (successors f) (transfer f) (fn_entrypoint f)).
+  intros res FIXPOINT WF AT SUCC.
   assert (Numbering.ge res!!pc' (transfer f pc res!!pc)).
     eapply Solver.fixpoint_solution; eauto.
-    elim (fn_code_wf f pc); intro. auto.
-    unfold successors in SUCC; rewrite H in SUCC; contradiction.
-  apply H. auto.
+    unfold successors_list, successors. rewrite PTree.gmap.
+    rewrite AT. auto.
+  apply H.
   intros. rewrite PMap.gi. apply empty_numbering_satisfiable.
 Qed.
 
@@ -717,8 +715,7 @@ Proof.
           with empty_numbering.
   apply empty_numbering_satisfiable.
   unfold analyze.
-  caseEq (Solver.fixpoint (successors f) (fn_nextpc f) 
-                          (transfer f) (fn_entrypoint f)).
+  caseEq (Solver.fixpoint (successors f) (transfer f) (fn_entrypoint f)).
   intros res FIXPOINT. 
   symmetry. change empty_numbering with Solver.L.top.
   eapply Solver.fixpoint_entry; eauto.
@@ -835,8 +832,7 @@ Proof.
   exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m); split.
   apply exec_Inop; auto.
   econstructor; eauto. 
-  apply analysis_correct_1 with pc. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H; auto.
 
   (* Iop *)
@@ -854,8 +850,7 @@ Proof.
   congruence.
   intros. eapply exec_Iop'; eauto.
   econstructor; eauto.
-  apply analysis_correct_1 with pc.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H. 
   eapply add_op_satisfiable; eauto. apply wf_analyze.
 
@@ -874,8 +869,7 @@ Proof.
   congruence.
   intros. eapply exec_Iload'; eauto.
   econstructor; eauto.
-  apply analysis_correct_1 with pc.
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   eapply add_load_satisfiable; eauto. apply wf_analyze.
 
@@ -885,8 +879,7 @@ Proof.
     rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
   eapply exec_Istore; eauto.
   econstructor; eauto.
-  apply analysis_correct_1 with pc. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H.
   eapply kill_load_satisfiable; eauto. 
 
@@ -898,8 +891,7 @@ Proof.
   econstructor; eauto. 
   constructor; auto. 
   econstructor; eauto. 
-  intros. apply analysis_correct_1 with pc.
-  unfold successors; rewrite H; auto with coqlib.
+  intros. eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   apply empty_numbering_satisfiable.
 
@@ -914,16 +906,14 @@ Proof.
   econstructor; split.
   eapply exec_Icond_true; eauto. 
   econstructor; eauto.
-  apply analysis_correct_1 with pc. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H; auto.
 
   (* Icond false *)
   econstructor; split.
   eapply exec_Icond_false; eauto. 
   econstructor; eauto.
-  apply analysis_correct_1 with pc. 
-  unfold successors; rewrite H; auto with coqlib.
+  eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H; auto.
 
   (* Ireturn *)

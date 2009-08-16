@@ -1,40 +1,21 @@
-*** kildall.ml.orig	2009-06-03 11:32:52.297641897 +0200
---- kildall.ml	2009-06-03 11:34:48.481516509 +0200
+*** kildall.ml.orig	2009-08-16 15:45:21.000000000 +0200
+--- kildall.ml	2009-08-16 15:45:27.000000000 +0200
 ***************
-*** 151,158 ****
-        -> (positive, LAT.t) prod list -> LAT.t PMap.t option **)
+*** 252,259 ****
     
-    let fixpoint successors topnode transf entrypoints =
-!     DS.fixpoint (fun s -> PMap.get s (make_predecessors successors topnode))
-!       topnode transf entrypoints
-   end
-  
-  module type ORDERED_TYPE_WITH_TOP = 
---- 151,158 ----
-        -> (positive, LAT.t) prod list -> LAT.t PMap.t option **)
+    (** val basic_block_map : positive list PTree.t -> positive -> bbmap **)
     
-    let fixpoint successors topnode transf entrypoints =
-!     let pred = make_predecessors successors topnode in
-!     DS.fixpoint (fun s -> PMap.get s pred) topnode transf entrypoints
-   end
-  
-  module type ORDERED_TYPE_WITH_TOP = 
-***************
-*** 248,255 ****
-    (** val basic_block_map :
-        (positive -> positive list) -> positive -> positive -> bbmap **)
+!   let basic_block_map successors entrypoint x =
+!     is_basic_block_head entrypoint (make_predecessors successors) x
     
-!   let basic_block_map successors topnode entrypoint x =
-!     is_basic_block_head entrypoint (make_predecessors successors topnode) x
+    (** val basic_block_list :
+        positive list PTree.t -> bbmap -> positive list **)
+--- 252,259 ----
     
-    (** val basic_block_list : positive -> bbmap -> positive list **)
+    (** val basic_block_map : positive list PTree.t -> positive -> bbmap **)
     
---- 248,255 ----
-    (** val basic_block_map :
-        (positive -> positive list) -> positive -> positive -> bbmap **)
+!   let basic_block_map successors entrypoint =
+!     is_basic_block_head entrypoint (make_predecessors successors)
     
-!   let basic_block_map successors topnode entrypoint =
-!     is_basic_block_head entrypoint (make_predecessors successors topnode)
-    
-    (** val basic_block_list : positive -> bbmap -> positive list **)
-    
+    (** val basic_block_list :
+        positive list PTree.t -> bbmap -> positive list **)

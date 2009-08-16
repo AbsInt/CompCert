@@ -262,6 +262,10 @@ let rec print_stmt p s =
       fprintf p "return;"
   | Sreturn (Some e) ->
       fprintf p "return %a;" print_expr e
+  | Slabel(lbl, s1) ->
+      fprintf p "%s:@ %a" (extern_atom lbl) print_stmt s1
+  | Sgoto lbl ->
+      fprintf p "goto %s;" (extern_atom lbl)
 
 and print_cases p cases =
   match cases with
@@ -451,6 +455,8 @@ let rec collect_stmt = function
   | Sswitch(e, cases) -> collect_expr e; collect_cases cases
   | Sreturn None -> ()
   | Sreturn (Some e) -> collect_expr e
+  | Slabel(lbl, s) -> collect_stmt s
+  | Sgoto lbl -> ()
 
 and collect_cases = function
   | LSdefault s -> collect_stmt s
