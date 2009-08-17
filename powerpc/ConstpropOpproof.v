@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Correctness proof for constant propagation. *)
+(** Correctness proof for constant propagation (processor-dependent part). *)
 
 Require Import Coqlib.
 Require Import AST.
