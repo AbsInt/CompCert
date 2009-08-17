@@ -53,7 +53,7 @@ BACKEND=\
   Tailcall.v Tailcallproof.v \
   RTLtyping.v \
   Kildall.v \
-  Constprop.v Constpropproof.v \
+  ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSE.v CSEproof.v \
   Machregs.v Locations.v Conventions.v LTL.v LTLtyping.v \
   InterfGraph.v Coloring.v Coloringproof.v \
