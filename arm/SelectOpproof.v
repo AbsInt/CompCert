@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Correctness of instruction selection *)
+(** Correctness of instruction selection for operators *)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -25,9 +25,9 @@ Require Import Smallstep.
 Require Import Cminor.
 Require Import Op.
 Require Import CminorSel.
-Require Import Selection.
+Require Import SelectOp.
 
-Open Local Scope selection_scope.
+Open Local Scope cminorsel_scope.
 
 Section CMCONSTR.
 
@@ -35,91 +35,6 @@ Variable ge: genv.
 Variable sp: val.
 Variable e: env.
 Variable m: mem.
-
-(** * Lifting of let-bound variables *)
-
-Inductive insert_lenv: letenv -> nat -> val -> letenv -> Prop :=
-  | insert_lenv_0:
-      forall le v,
-      insert_lenv le O v (v :: le)
-  | insert_lenv_S:
-      forall le p w le' v,
-      insert_lenv le p w le' ->
-      insert_lenv (v :: le) (S p) w (v :: le').
-
-Lemma insert_lenv_lookup1:
-  forall le p w le',
-  insert_lenv le p w le' ->
-  forall n v,
-  nth_error le n = Some v -> (p > n)%nat ->
-  nth_error le' n = Some v.
-Proof.
-  induction 1; intros.
-  omegaContradiction.
-  destruct n; simpl; simpl in H0. auto. 
-  apply IHinsert_lenv. auto. omega.
-Qed.
-
-Lemma insert_lenv_lookup2:
-  forall le p w le',
-  insert_lenv le p w le' ->
-  forall n v,
-  nth_error le n = Some v -> (p <= n)%nat ->
-  nth_error le' (S n) = Some v.
-Proof.
-  induction 1; intros.
-  simpl. assumption.
-  simpl. destruct n. omegaContradiction. 
-  apply IHinsert_lenv. exact H0. omega.
-Qed.
-
-Hint Resolve eval_Evar eval_Eop eval_Eload eval_Econdition
-             eval_Elet eval_Eletvar 
-             eval_CEtrue eval_CEfalse eval_CEcond
-             eval_CEcondition eval_Enil eval_Econs: evalexpr.
-
-Lemma eval_lift_expr:
-  forall w le a v,
-  eval_expr ge sp e m le a v ->
-  forall p le', insert_lenv le p w le' ->
-  eval_expr ge sp e m le' (lift_expr p a) v.
-Proof.
-  intro w.
-  apply (eval_expr_ind3 ge sp e m
-    (fun le a v =>
-      forall p le', insert_lenv le p w le' ->
-      eval_expr ge sp e m le' (lift_expr p a) v)
-    (fun le a v =>
-      forall p le', insert_lenv le p w le' ->
-      eval_condexpr ge sp e m le' (lift_condexpr p a) v)
-    (fun le al vl =>
-      forall p le', insert_lenv le p w le' ->
-      eval_exprlist ge sp e m le' (lift_exprlist p al) vl));
-  simpl; intros; eauto with evalexpr.
-
-  destruct v1; eapply eval_Econdition;
-  eauto with evalexpr; simpl; eauto with evalexpr.
-
-  eapply eval_Elet. eauto. apply H2. apply insert_lenv_S; auto.
-
-  case (le_gt_dec p n); intro. 
-  apply eval_Eletvar. eapply insert_lenv_lookup2; eauto.
-  apply eval_Eletvar. eapply insert_lenv_lookup1; eauto.
-
-  destruct vb1; eapply eval_CEcondition;
-  eauto with evalexpr; simpl; eauto with evalexpr.
-Qed.
-
-Lemma eval_lift:
-  forall le a v w,
-  eval_expr ge sp e m le a v ->
-  eval_expr ge sp e m (w::le) (lift a) v.
-Proof.
-  intros. unfold lift. eapply eval_lift_expr.
-  eexact H. apply insert_lenv_0. 
-Qed.
-
-Hint Resolve eval_lift: evalexpr.
 
 (** * Useful lemmas and tactics *)
 
@@ -192,14 +107,9 @@ Theorem eval_notint:
 Proof.
   unfold notint; intros until x; case (notint_match a); intros; InvEval.
   EvalOp. simpl. congruence.
-  EvalOp. simpl. congruence.
-  EvalOp. simpl. congruence.
-  eapply eval_Elet. eexact H. 
-  eapply eval_Eop.
-  eapply eval_Econs. apply eval_Eletvar. simpl. reflexivity.
-  eapply eval_Econs. apply eval_Eletvar. simpl. reflexivity.
-  apply eval_Enil.  
-  simpl. rewrite Int.or_idem. auto.
+  subst x. rewrite Int.not_involutive.  auto.
+  EvalOp. simpl. subst x. rewrite Int.not_involutive. auto.
+  EvalOp.
 Qed.
 
 Lemma eval_notbool_base:
@@ -299,6 +209,8 @@ Proof.
   replace (Int.add x y) with (Int.add (Int.add x i) n2).
     apply eval_addimm. EvalOp.
     subst y. rewrite Int.add_assoc. auto.
+  EvalOp. simpl. subst x. rewrite Int.add_commut. auto.
+  EvalOp. simpl. congruence.
   EvalOp.
 Qed.
 
@@ -320,6 +232,7 @@ Proof.
   replace (Int.add x y) with (Int.add (Int.add x i) n2).
     apply eval_addimm_ptr. EvalOp.
     subst y. rewrite Int.add_assoc. auto.
+  EvalOp. simpl. congruence.
   EvalOp.
 Qed.
 
@@ -342,6 +255,7 @@ Proof.
   replace (Int.add y x) with (Int.add (Int.add i x) n2).
     apply eval_addimm_ptr. EvalOp. subst b0; reflexivity.
     subst y. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  EvalOp. simpl. congruence.
   EvalOp.
 Qed.
 
@@ -366,7 +280,10 @@ Proof.
     subst x. rewrite Int.sub_add_l. auto.
   replace (Int.sub x y) with (Int.add (Int.sub x i) (Int.neg n2)).
     apply eval_addimm. EvalOp.
-    subst y. rewrite (Int.add_commut i n2). symmetry. apply Int.sub_add_r. 
+    subst y. rewrite (Int.add_commut i n2). symmetry. apply Int.sub_add_r.
+  EvalOp. 
+  EvalOp. simpl. congruence.
+  EvalOp. simpl. congruence.
   EvalOp.
 Qed.
 
@@ -391,7 +308,8 @@ Proof.
     subst x. rewrite Int.sub_add_l. auto.
   replace (Int.sub x y) with (Int.add (Int.sub x i) (Int.neg n2)).
     apply eval_addimm_ptr. EvalOp.
-    subst y. rewrite (Int.add_commut i n2). symmetry. apply Int.sub_add_r. 
+    subst y. rewrite (Int.add_commut i n2). symmetry. apply Int.sub_add_r.
+  EvalOp. simpl. congruence.  
   EvalOp.
 Qed.
 
@@ -421,37 +339,27 @@ Proof.
   EvalOp. simpl. unfold eq_block. rewrite zeq_true. auto.
 Qed.
 
-Lemma eval_rolm:
-  forall le a amount mask x,
-  eval_expr ge sp e m le a (Vint x) ->
-  eval_expr ge sp e m le (rolm a amount mask) (Vint (Int.rolm x amount mask)).
-Proof.
-  intros until x. unfold rolm; case (rolm_match a); intros; InvEval.
-  eauto with evalexpr. 
-  case (Int.is_rlw_mask (Int.and (Int.rol mask1 amount) mask)).
-  EvalOp. simpl. subst x. 
-  decEq. decEq. 
-  replace (Int.and (Int.add amount1 amount) (Int.repr 31))
-     with (Int.modu (Int.add amount1 amount) (Int.repr 32)).
-  symmetry. apply Int.rolm_rolm. 
-  change (Int.repr 31) with (Int.sub (Int.repr 32) Int.one).
-  apply Int.modu_and with (Int.repr 5). reflexivity.
-  EvalOp. econstructor. EvalOp. simpl. rewrite H. reflexivity. constructor. auto.  
-  EvalOp.
-Qed.
-
 Theorem eval_shlimm:
   forall le a n x,
   eval_expr ge sp e m le a (Vint x) ->
   Int.ltu n (Int.repr 32) = true ->
   eval_expr ge sp e m le (shlimm a n) (Vint (Int.shl x n)).
 Proof.
-  intros.  unfold shlimm.
+  intros until x.  unfold shlimm, is_shift_amount.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intro.
-  subst n. rewrite Int.shl_zero. auto.
-  rewrite H0.
-  replace (Int.shl x n) with (Int.rolm x n (Int.shl Int.mone n)).
-  apply eval_rolm. auto. symmetry. apply Int.shl_rolm. exact H0.
+  intros. subst n. rewrite Int.shl_zero. auto.
+  destruct (is_shift_amount_aux n). simpl. 
+  case (shlimm_match a); intros; InvEval.
+  EvalOp.
+  destruct (is_shift_amount_aux (Int.add n (s_amount n1))).
+  EvalOp. simpl. subst x.
+  decEq. decEq. symmetry. rewrite Int.add_commut. apply Int.shl_shl.
+  apply s_amount_ltu. auto.
+  rewrite Int.add_commut. auto.
+  EvalOp. econstructor. EvalOp. simpl. reflexivity. constructor.
+  simpl. congruence.
+  EvalOp.
+  congruence. 
 Qed.
 
 Theorem eval_shruimm:
@@ -460,12 +368,44 @@ Theorem eval_shruimm:
   Int.ltu n (Int.repr 32) = true ->
   eval_expr ge sp e m le (shruimm a n) (Vint (Int.shru x n)).
 Proof.
-  intros.  unfold shruimm.
+  intros until x.  unfold shruimm, is_shift_amount.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intro.
-  subst n. rewrite Int.shru_zero. auto.
-  rewrite H0.
-  replace (Int.shru x n) with (Int.rolm x (Int.sub (Int.repr 32) n) (Int.shru Int.mone n)).
-  apply eval_rolm. auto. symmetry. apply Int.shru_rolm. exact H0.
+  intros. subst n. rewrite Int.shru_zero. auto.
+  destruct (is_shift_amount_aux n). simpl. 
+  case (shruimm_match a); intros; InvEval.
+  EvalOp.
+  destruct (is_shift_amount_aux (Int.add n (s_amount n1))).
+  EvalOp. simpl. subst x.
+  decEq. decEq. symmetry. rewrite Int.add_commut. apply Int.shru_shru.
+  apply s_amount_ltu. auto.
+  rewrite Int.add_commut. auto.
+  EvalOp. econstructor. EvalOp. simpl. reflexivity. constructor.
+  simpl. congruence.
+  EvalOp.
+  congruence. 
+Qed.
+
+Theorem eval_shrimm:
+  forall le a n x,
+  eval_expr ge sp e m le a (Vint x) ->
+  Int.ltu n (Int.repr 32) = true ->
+  eval_expr ge sp e m le (shrimm a n) (Vint (Int.shr x n)).
+Proof.
+  intros until x.  unfold shrimm, is_shift_amount.
+  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intro.
+  intros. subst n. rewrite Int.shr_zero. auto.
+  destruct (is_shift_amount_aux n). simpl. 
+  case (shrimm_match a); intros; InvEval.
+  EvalOp.
+  destruct (is_shift_amount_aux (Int.add n (s_amount n1))).
+  EvalOp. simpl. subst x.
+  decEq. decEq. symmetry. rewrite Int.add_commut. apply Int.shr_shr.
+  apply s_amount_ltu. auto.
+  rewrite Int.add_commut. auto.
+  EvalOp. econstructor. EvalOp. simpl. reflexivity. constructor.
+  simpl. congruence.
+  EvalOp.
+  congruence. 
 Qed.
 
 Lemma eval_mulimm_base:
@@ -478,7 +418,8 @@ Proof.
   generalize (Int.one_bits_range n).
   change (Z_of_nat wordsize) with 32.
   destruct (Int.one_bits n).
-  intros. EvalOp. 
+  intros. EvalOp. constructor. EvalOp. simpl; reflexivity.
+  constructor. eauto. constructor. simpl. rewrite Int.mul_commut. auto.
   destruct l.
   intros. rewrite H1. simpl. 
   rewrite Int.add_zero. rewrite <- Int.shl_mul.
@@ -489,15 +430,13 @@ Proof.
   rewrite Int.mul_add_distr_r.
   rewrite <- Int.shl_mul.
   rewrite <- Int.shl_mul.
-  EvalOp. eapply eval_Econs. 
+  apply eval_add. 
   apply eval_shlimm. apply eval_Eletvar. simpl. reflexivity. 
   auto with coqlib.
-  eapply eval_Econs.
   apply eval_shlimm. apply eval_Eletvar. simpl. reflexivity.
   auto with coqlib.
-  auto with evalexpr.
-  reflexivity.
-  intros. EvalOp. 
+  intros. EvalOp. constructor. EvalOp. simpl; reflexivity. 
+  constructor. eauto. constructor. simpl. rewrite Int.mul_commut. auto.
 Qed.
 
 Theorem eval_mulimm:
@@ -508,7 +447,7 @@ Proof.
   intros until x; unfold mulimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intro.
   subst n. rewrite Int.mul_zero. 
-  intro. eapply eval_Elet; eauto with evalexpr. 
+  intro. EvalOp. 
   generalize (Int.eq_spec n Int.one); case (Int.eq n Int.one); intro.
   subst n. rewrite Int.mul_one. auto.
   case (mulimm_match a); intros; InvEval.
@@ -532,15 +471,37 @@ Proof.
   EvalOp.
 Qed.
 
-Theorem eval_divs:
+Theorem eval_divs_base:
   forall le a b x y,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  y <> Int.zero ->
+  eval_expr ge sp e m le (Eop Odiv (a ::: b ::: Enil)) (Vint (Int.divs x y)).
+Proof.
+  intros. EvalOp; simpl.
+  predSpec Int.eq Int.eq_spec y Int.zero. contradiction. auto.
+Qed.
+
+Theorem eval_divs:
+  forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
   y <> Int.zero ->
   eval_expr ge sp e m le (divs a b) (Vint (Int.divs x y)).
 Proof.
-  TrivialOp divs. simpl. 
-  predSpec Int.eq Int.eq_spec y Int.zero. contradiction. auto.
+  intros until y.
+  unfold divs; case (divu_match b); intros; InvEval.
+  caseEq (Int.is_power2 y); intros.
+  caseEq (Int.ltu i (Int.repr 31)); intros.
+  EvalOp. simpl. unfold Int.ltu. rewrite zlt_true. 
+  rewrite (Int.divs_pow2 x y i H0). auto.
+  exploit Int.ltu_inv; eauto. 
+  change (Int.unsigned (Int.repr 31)) with 31.
+  change (Int.unsigned (Int.repr 32)) with 32.
+  omega.
+  apply eval_divs_base. auto. EvalOp. auto.
+  apply eval_divs_base. auto. EvalOp. auto.
+  apply eval_divs_base; auto. 
 Qed.
 
 Lemma eval_mod_aux:
@@ -625,7 +586,7 @@ Proof.
   intros until y; unfold modu; case (divu_match b); intros; InvEval.
   caseEq (Int.is_power2 y). 
   intros. rewrite (Int.modu_and x y i H0).
-  rewrite <- Int.rolm_zero. apply eval_rolm. auto.
+  EvalOp. 
   intro. rewrite Int.modu_divu. eapply eval_mod_aux. 
   intros. simpl. predSpec Int.eq Int.eq_spec y0 Int.zero.
   contradiction. auto.
@@ -635,25 +596,19 @@ Proof.
   contradiction. auto. auto. auto. auto. auto.
 Qed.
 
-Theorem eval_andimm:
-  forall le n a x,
-  eval_expr ge sp e m le a (Vint x) ->
-  eval_expr ge sp e m le (andimm n a) (Vint (Int.and x n)).
-Proof.
-  intros.  unfold andimm. case (Int.is_rlw_mask n).
-  rewrite <- Int.rolm_zero. apply eval_rolm; auto.
-  EvalOp. 
-Qed.
-
 Theorem eval_and:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
   eval_expr ge sp e m le (and a b) (Vint (Int.and x y)).
 Proof.
-  intros until y; unfold and; case (mul_match a b); intros; InvEval.
-  rewrite Int.and_commut. apply eval_andimm; auto.
-  apply eval_andimm; auto.
+  intros until y; unfold and; case (and_match a b); intros; InvEval.
+  rewrite Int.and_commut. EvalOp. simpl. congruence.
+  EvalOp. simpl. congruence.
+  rewrite Int.and_commut. EvalOp. simpl. congruence.
+  EvalOp. simpl. congruence.
+  rewrite Int.and_commut. EvalOp. simpl. congruence.
+  EvalOp. simpl. congruence.
   EvalOp.
 Qed.
 
@@ -679,16 +634,31 @@ Lemma eval_or:
   eval_expr ge sp e m le (or a b) (Vint (Int.or x y)).
 Proof.
   intros until y; unfold or; case (or_match a b); intros; InvEval.
-  caseEq (Int.eq amount1 amount2 
-          && Int.is_rlw_mask (Int.or mask1 mask2) 
+  caseEq (Int.eq (Int.add (s_amount n1) (s_amount n2)) (Int.repr 32)
           && same_expr_pure t1 t2); intro.
-  destruct (andb_prop _ _ H1). destruct (andb_prop _ _ H4).
-  generalize (Int.eq_spec amount1 amount2). rewrite H6. intro. subst amount2.
+  destruct (andb_prop _ _ H1).
+  generalize (Int.eq_spec (Int.add (s_amount n1) (s_amount n2)) (Int.repr 32)).
+  rewrite H4. intro. 
   exploit eval_same_expr; eauto. intros [EQ1 EQ2]. inv EQ1. inv EQ2. 
-  simpl. EvalOp. simpl. rewrite Int.or_rolm. auto.
-  simpl. apply eval_Eop with (Vint x :: Vint y :: nil).
-  econstructor. EvalOp. simpl. congruence. 
-  econstructor. EvalOp. simpl. congruence. constructor. auto.
+  simpl. EvalOp. simpl. decEq. decEq. apply Int.or_ror.
+  destruct n1; auto. destruct n2; auto. auto. 
+  EvalOp. econstructor. EvalOp. simpl. reflexivity.
+  econstructor; eauto with evalexpr. 
+  simpl. congruence. 
+  EvalOp. simpl. rewrite Int.or_commut. congruence.
+  EvalOp. simpl. congruence.
+  EvalOp. 
+Qed.
+
+Theorem eval_xor:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  eval_expr ge sp e m le (xor a b) (Vint (Int.xor x y)).
+Proof.
+  intros until y; unfold xor; case (xor_match a b); intros; InvEval.
+  rewrite Int.xor_commut. EvalOp. simpl. congruence.
+  EvalOp. simpl. congruence.
   EvalOp.
 Qed.
 
@@ -716,56 +686,16 @@ Proof.
   EvalOp. simpl. rewrite H1. auto.
 Qed.
 
-Theorem eval_addf:
+Theorem eval_shr:
   forall le a x b y,
-  eval_expr ge sp e m le a (Vfloat x) ->
-  eval_expr ge sp e m le b (Vfloat y) ->
-  eval_expr ge sp e m le (addf a b) (Vfloat (Float.add x y)).
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  Int.ltu y (Int.repr 32) = true ->
+  eval_expr ge sp e m le (shr a b) (Vint (Int.shr x y)).
 Proof.
-  intros until y; unfold addf.
-  destruct (use_fused_mul tt).
-  case (addf_match a b); intros; InvEval.
-  EvalOp. simpl. congruence.
-  EvalOp. simpl. rewrite Float.addf_commut. congruence.
-  EvalOp.
-  intros. EvalOp.
-Qed.
- 
-Theorem eval_subf:
-  forall le a x b y,
-  eval_expr ge sp e m le a (Vfloat x) ->
-  eval_expr ge sp e m le b (Vfloat y) ->
-  eval_expr ge sp e m le (subf a b) (Vfloat (Float.sub x y)).
-Proof.
-  intros until y; unfold subf.
-  destruct (use_fused_mul tt).
-  case (subf_match a b); intros.
-  InvEval. EvalOp. simpl. congruence. 
-  EvalOp.
-  intros. EvalOp.
-Qed.
-
-Lemma loadv_cast:
-  forall chunk addr v,
-  loadv chunk m addr = Some v ->
-  match chunk with
-  | Mint8signed => loadv chunk m addr = Some(Val.sign_ext 8 v)
-  | Mint8unsigned => loadv chunk m addr = Some(Val.zero_ext 8 v)
-  | Mint16signed => loadv chunk m addr = Some(Val.sign_ext 16 v)
-  | Mint16unsigned => loadv chunk m addr = Some(Val.zero_ext 16 v)
-  | Mfloat32 => loadv chunk m addr = Some(Val.singleoffloat v)
-  | _ => True
-  end.
-Proof.
-  intros. rewrite H. destruct addr; simpl in H; try discriminate.
-  exploit Mem.load_inv; eauto. 
-  set (v' := (getN (pred_size_chunk chunk) (Int.signed i) (contents (blocks m b)))).
-  intros [A B]. subst v. destruct chunk; auto; destruct v'; simpl; auto.
-  rewrite Int.sign_ext_idem; auto. compute; auto.
-  rewrite Int.zero_ext_idem; auto. compute; auto.
-  rewrite Int.sign_ext_idem; auto. compute; auto.
-  rewrite Int.zero_ext_idem; auto. compute; auto.
-  rewrite Float.singleoffloat_idem; auto.
+  intros until y; unfold shr; case (shift_match b); intros.
+  InvEval. apply eval_shrimm; auto.
+  EvalOp. simpl. rewrite H1. auto.
 Qed.
 
 Theorem eval_cast8signed:
@@ -775,8 +705,7 @@ Theorem eval_cast8signed:
 Proof. 
   intros until v; unfold cast8signed; case (cast8signed_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.sign_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
+  rewrite Int.sign_ext_idem. reflexivity. vm_compute; auto.
   EvalOp.
 Qed.
 
@@ -787,8 +716,7 @@ Theorem eval_cast8unsigned:
 Proof. 
   intros until v; unfold cast8unsigned; case (cast8unsigned_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.zero_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
+  rewrite Int.zero_ext_idem. reflexivity. vm_compute; auto.
   EvalOp.
 Qed.
 
@@ -799,8 +727,7 @@ Theorem eval_cast16signed:
 Proof. 
   intros until v; unfold cast16signed; case (cast16signed_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.sign_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
+  rewrite Int.sign_ext_idem. reflexivity. vm_compute; auto.
   EvalOp.
 Qed.
 
@@ -811,8 +738,7 @@ Theorem eval_cast16unsigned:
 Proof. 
   intros until v; unfold cast16unsigned; case (cast16unsigned_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.zero_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
+  rewrite Int.zero_ext_idem. reflexivity. vm_compute; auto.
   EvalOp.
 Qed.
 
@@ -823,7 +749,6 @@ Theorem eval_singleoffloat:
 Proof. 
   intros until v; unfold singleoffloat; case (singleoffloat_match a); intros; InvEval.
   EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Float.singleoffloat_idem. reflexivity.
-  inv H. econstructor; eauto. apply (loadv_cast _ _ _ H7). 
   EvalOp.
 Qed.
 
@@ -837,19 +762,21 @@ Proof.
   unfold comp; case (comp_match a b); intros; InvEval.
   EvalOp. simpl. rewrite Int.swap_cmp. destruct (Int.cmp c x y); reflexivity.
   EvalOp. simpl. destruct (Int.cmp c x y); reflexivity.
+  EvalOp. simpl. rewrite Int.swap_cmp. rewrite H. destruct (Int.cmp c x y); reflexivity.
+  EvalOp. simpl. rewrite H0. destruct (Int.cmp c x y); reflexivity.
   EvalOp. simpl. destruct (Int.cmp c x y); reflexivity.
 Qed.
 
-Remark eval_compare_null_transf:
+Remark eval_compare_null_trans:
   forall c x v,
-  Cminor.eval_compare_null c x = Some v ->
+  (if Int.eq x Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
   match eval_compare_null c x with
   | Some true => Some Vtrue
   | Some false => Some Vfalse
   | None => None (A:=val)
   end = Some v.
 Proof.
-  unfold Cminor.eval_compare_null, eval_compare_null; intros.
+  unfold Cminor.eval_compare_mismatch, eval_compare_null; intros.
   destruct (Int.eq x Int.zero); try discriminate. 
   destruct c; try discriminate; auto.
 Qed.
@@ -858,36 +785,42 @@ Theorem eval_comp_ptr_int:
   forall le c a x1 x2 b y v,
   eval_expr ge sp e m le a (Vptr x1 x2) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Cminor.eval_compare_null c y = Some v ->
+  (if Int.eq y Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until v.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. apply eval_compare_null_transf; auto.
-  EvalOp. simpl. apply eval_compare_null_transf; auto.
+  EvalOp. simpl. apply eval_compare_null_trans; auto. 
+  EvalOp. simpl. rewrite H0. apply eval_compare_null_trans; auto. 
+  EvalOp. simpl. apply eval_compare_null_trans; auto.
 Qed.
 
-Remark eval_compare_null_swap:
-  forall c x,
-  Cminor.eval_compare_null (swap_comparison c) x = 
-  Cminor.eval_compare_null c x.
+Remark eval_swap_compare_null_trans:
+  forall c x v,
+  (if Int.eq x Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
+  match eval_compare_null (swap_comparison c) x with
+  | Some true => Some Vtrue
+  | Some false => Some Vfalse
+  | None => None (A:=val)
+  end = Some v.
 Proof.
-  intros. unfold Cminor.eval_compare_null. 
-  destruct (Int.eq x Int.zero). destruct c; auto. auto.
+  unfold Cminor.eval_compare_mismatch, eval_compare_null; intros.
+  destruct (Int.eq x Int.zero); try discriminate. 
+  destruct c; simpl; try discriminate; auto.
 Qed.
 
 Theorem eval_comp_int_ptr:
   forall le c a x b y1 y2 v,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vptr y1 y2) ->
-  Cminor.eval_compare_null c x = Some v ->
+  (if Int.eq x Int.zero then Cminor.eval_compare_mismatch c else None) = Some v ->
   eval_expr ge sp e m le (comp c a b) v.
 Proof.
   intros until v.
   unfold comp; case (comp_match a b); intros; InvEval.
-  EvalOp. simpl. apply eval_compare_null_transf. 
-  rewrite eval_compare_null_swap; auto.
-  EvalOp. simpl. apply eval_compare_null_transf. auto.
+  EvalOp. simpl. apply eval_swap_compare_null_trans; auto. 
+  EvalOp. simpl. rewrite H. apply eval_swap_compare_null_trans; auto. 
+  EvalOp. simpl. apply eval_compare_null_trans; auto.
 Qed.
 
 Theorem eval_comp_ptr_ptr:
@@ -917,6 +850,7 @@ Proof.
   destruct c; simpl in H2; inv H2; auto.
 Qed.
 
+
 Theorem eval_compu:
   forall le c a x b y,
   eval_expr ge sp e m le a (Vint x) ->
@@ -927,6 +861,8 @@ Proof.
   unfold compu; case (comp_match a b); intros; InvEval.
   EvalOp. simpl. rewrite Int.swap_cmpu. destruct (Int.cmpu c x y); reflexivity.
   EvalOp. simpl. destruct (Int.cmpu c x y); reflexivity.
+  EvalOp. simpl. rewrite H. rewrite Int.swap_cmpu. destruct (Int.cmpu c x y); reflexivity.
+  EvalOp. simpl. rewrite H0. destruct (Int.cmpu c x y); reflexivity.
   EvalOp. simpl. destruct (Int.cmpu c x y); reflexivity.
 Qed.
 
@@ -940,138 +876,81 @@ Proof.
   destruct (Float.cmp c x y); reflexivity.
 Qed.
 
-Lemma negate_condexpr_correct:
-  forall le a b,
-  eval_condexpr ge sp e m le a b ->
-  eval_condexpr ge sp e m le (negate_condexpr a) (negb b).
-Proof.
-  induction 1; simpl.
-  constructor.
-  constructor.
-  econstructor. eauto. apply eval_negate_condition. auto.
-  econstructor. eauto. destruct vb1; auto.
-Qed. 
+Theorem eval_negint:
+  forall le a x,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le (negint a) (Vint (Int.neg x)).
+Proof. intros; unfold negint; EvalOp. Qed.
 
-Scheme expr_ind2 := Induction for expr Sort Prop
-  with exprlist_ind2 := Induction for exprlist Sort Prop.
+Theorem eval_negf:
+  forall le a x,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le (negf a) (Vfloat (Float.neg x)).
+Proof. intros; unfold negf; EvalOp. Qed.
 
-Fixpoint forall_exprlist (P: expr -> Prop) (el: exprlist) {struct el}: Prop :=
-  match el with
-  | Enil => True
-  | Econs e el' => P e /\ forall_exprlist P el'
-  end.
+Theorem eval_absf:
+  forall le a x,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le (absf a) (Vfloat (Float.abs x)).
+Proof. intros; unfold absf; EvalOp. Qed.
 
-Lemma expr_induction_principle:
-  forall (P: expr -> Prop),
-  (forall i : ident, P (Evar i)) ->
-  (forall (o : operation) (e : exprlist),
-     forall_exprlist P e -> P (Eop o e)) ->
-  (forall (m : memory_chunk) (a : Op.addressing) (e : exprlist),
-     forall_exprlist P e -> P (Eload m a e)) ->
-  (forall (c : condexpr) (e : expr),
-     P e -> forall e0 : expr, P e0 -> P (Econdition c e e0)) ->
-  (forall e : expr, P e -> forall e0 : expr, P e0 -> P (Elet e e0)) ->
-  (forall n : nat, P (Eletvar n)) ->
-  forall e : expr, P e.
-Proof.
-  intros. apply expr_ind2 with (P := P) (P0 := forall_exprlist P); auto.
-  simpl. auto.
-  intros. simpl. auto.
-Qed.
+Theorem eval_intoffloat:
+  forall le a x,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le (intoffloat a) (Vint (Float.intoffloat x)).
+Proof. intros; unfold intoffloat; EvalOp. Qed.
 
-Lemma eval_base_condition_of_expr:
-  forall le a v b,
-  eval_expr ge sp e m le a v ->
-  Val.bool_of_val v b ->
-  eval_condexpr ge sp e m le 
-                (CEcond (Ccompimm Cne Int.zero) (a ::: Enil))
-                b.
-Proof.
-  intros. 
-  eapply eval_CEcond. eauto with evalexpr. 
-  inversion H0; simpl. rewrite Int.eq_false; auto. auto. auto.
-Qed.
+Theorem eval_intuoffloat:
+  forall le a x,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le (intuoffloat a) (Vint (Float.intuoffloat x)).
+Proof. intros; unfold intuoffloat; EvalOp. Qed.
 
-Lemma is_compare_neq_zero_correct:
-  forall c v b,
-  is_compare_neq_zero c = true ->
-  eval_condition c (v :: nil) = Some b ->
-  Val.bool_of_val v b.
-Proof.
-  intros.
-  destruct c; simpl in H; try discriminate;
-  destruct c; simpl in H; try discriminate;
-  generalize (Int.eq_spec i Int.zero); rewrite H; intro; subst i.
+Theorem eval_floatofint:
+  forall le a x,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le (floatofint a) (Vfloat (Float.floatofint x)).
+Proof. intros; unfold floatofint; EvalOp. Qed.
 
-  simpl in H0. destruct v; inv H0. 
-  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intros; simpl.
-  subst i; constructor. constructor; auto. constructor.
+Theorem eval_floatofintu:
+  forall le a x,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le (floatofintu a) (Vfloat (Float.floatofintu x)).
+Proof. intros; unfold floatofintu; EvalOp. Qed.
 
-  simpl in H0. destruct v; inv H0. 
-  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intros; simpl.
-  subst i; constructor. constructor; auto.
-Qed.
+Theorem eval_addf:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le b (Vfloat y) ->
+  eval_expr ge sp e m le (addf a b) (Vfloat (Float.add x y)).
+Proof. intros; unfold addf; EvalOp. Qed.
 
-Lemma is_compare_eq_zero_correct:
-  forall c v b,
-  is_compare_eq_zero c = true ->
-  eval_condition c (v :: nil) = Some b ->
-  Val.bool_of_val v (negb b).
-Proof.
-  intros. apply is_compare_neq_zero_correct with (negate_condition c).
-  destruct c; simpl in H; simpl; try discriminate;
-  destruct c; simpl; try discriminate; auto.
-  apply eval_negate_condition; auto.
-Qed.
+Theorem eval_subf:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le b (Vfloat y) ->
+  eval_expr ge sp e m le (subf a b) (Vfloat (Float.sub x y)).
+Proof. intros; unfold subf; EvalOp. Qed.
 
-Lemma eval_condition_of_expr:
-  forall a le v b,
-  eval_expr ge sp e m le a v ->
-  Val.bool_of_val v b ->
-  eval_condexpr ge sp e m le (condexpr_of_expr a) b.
-Proof.
-  intro a0; pattern a0.
-  apply expr_induction_principle; simpl; intros;
-    try (eapply eval_base_condition_of_expr; eauto; fail).
-  
-  destruct o; try (eapply eval_base_condition_of_expr; eauto; fail).
+Theorem eval_mulf:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le b (Vfloat y) ->
+  eval_expr ge sp e m le (mulf a b) (Vfloat (Float.mul x y)).
+Proof. intros; unfold mulf; EvalOp. Qed.
 
-  destruct e0. InvEval. 
-  inversion H1. 
-  rewrite Int.eq_false; auto. constructor.
-  subst i; rewrite Int.eq_true. constructor.
-  eapply eval_base_condition_of_expr; eauto.
-
-  inv H0. simpl in H7.
-  assert (eval_condition c vl = Some b).
-    destruct (eval_condition c vl); try discriminate.
-    destruct b0; inv H7; inversion H1; congruence.
-  assert (eval_condexpr ge sp e m le (CEcond c e0) b).
-    eapply eval_CEcond; eauto.
-  destruct e0; auto. destruct e1; auto.
-  simpl in H. destruct H.
-  inv H5. inv H11.
-
-  case_eq (is_compare_neq_zero c); intros.
-  eapply H; eauto.
-  apply is_compare_neq_zero_correct with c; auto.
-
-  case_eq (is_compare_eq_zero c); intros.
-  replace b with (negb (negb b)). apply negate_condexpr_correct.
-  eapply H; eauto.
-  apply is_compare_eq_zero_correct with c; auto.
-  apply negb_involutive.
-
-  auto.
-
-  inv H1. destruct v1; eauto with evalexpr.
-Qed.
+Theorem eval_divf:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vfloat x) ->
+  eval_expr ge sp e m le b (Vfloat y) ->
+  eval_expr ge sp e m le (divf a b) (Vfloat (Float.div x y)).
+Proof. intros; unfold divf; EvalOp. Qed.
 
 Lemma eval_addressing:
-  forall le a v b ofs,
+  forall le chunk a v b ofs,
   eval_expr ge sp e m le a v ->
   v = Vptr b ofs ->
-  match addressing a with (mode, args) =>
+  match addressing chunk a with (mode, args) =>
     exists vl,
     eval_exprlist ge sp e m le args vl /\ 
     eval_addressing ge sp mode vl = Some v
@@ -1079,355 +958,29 @@ Lemma eval_addressing:
 Proof.
   intros until v. unfold addressing; case (addressing_match a); intros; InvEval.
   exists (@nil val). split. eauto with evalexpr. simpl. auto.
-  exists (@nil val). split. eauto with evalexpr. simpl. auto.
-  destruct (Genv.find_symbol ge s); congruence.
-  exists (Vint i0 :: nil). split. eauto with evalexpr. 
-    simpl. destruct (Genv.find_symbol ge s). congruence. discriminate.
   exists (Vptr b0 i :: nil). split. eauto with evalexpr. 
     simpl. congruence.
+  destruct (is_float_addressing chunk).
+  exists (Vptr b0 ofs :: nil).
+    split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
+    simpl. rewrite Int.add_zero. congruence.
+  exists (Vptr b0 i :: Vint i0 :: nil).
+    split. eauto with evalexpr. simpl. congruence.
+  destruct (is_float_addressing chunk).
+  exists (Vptr b0 ofs :: nil).
+    split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
+    simpl. rewrite Int.add_zero. congruence.
   exists (Vint i :: Vptr b0 i0 :: nil).
     split. eauto with evalexpr. simpl. 
-    congruence.
+    rewrite Int.add_commut. congruence.
+  destruct (is_float_addressing chunk).
+  exists (Vptr b0 ofs :: nil).
+    split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
+    simpl. rewrite Int.add_zero. congruence.
   exists (Vptr b0 i :: Vint i0 :: nil).
     split. eauto with evalexpr. simpl. congruence.
   exists (v :: nil). split. eauto with evalexpr. 
     subst v. simpl. rewrite Int.add_zero. auto.
 Qed.
 
-Lemma eval_load:
-  forall le a v chunk v',
-  eval_expr ge sp e m le a v ->
-  Mem.loadv chunk m v = Some v' ->
-  eval_expr ge sp e m le (load chunk a) v'.
-Proof.
-  intros. generalize H0; destruct v; simpl; intro; try discriminate.
-  unfold load. 
-  generalize (eval_addressing _ _ _ _ _ H (refl_equal _)).
-  destruct (addressing a). intros [vl [EV EQ]]. 
-  eapply eval_Eload; eauto. 
-Qed.
-
-Lemma eval_store:
-  forall chunk a1 a2 v1 v2 f k m',
-  eval_expr ge sp e m nil a1 v1 ->
-  eval_expr ge sp e m nil a2 v2 ->
-  Mem.storev chunk m v1 v2 = Some m' ->
-  step ge (State f (store chunk a1 a2) k sp e m)
-       E0 (State f Sskip k sp e m').
-Proof.
-  intros. generalize H1; destruct v1; simpl; intro; try discriminate.
-  unfold store.
-  generalize (eval_addressing _ _ _ _ _ H (refl_equal _)).
-  destruct (addressing a1). intros [vl [EV EQ]]. 
-  eapply step_store; eauto. 
-Qed.
-
-(** * Correctness of instruction selection for operators *)
-
-(** We now prove a semantic preservation result for the [sel_unop]
-  and [sel_binop] selection functions.  The proof exploits
-  the results of the previous section. *)
-
-Lemma eval_sel_unop:
-  forall le op a1 v1 v,
-  eval_expr ge sp e m le a1 v1 ->
-  eval_unop op v1 = Some v ->
-  eval_expr ge sp e m le (sel_unop op a1) v.
-Proof.
-  destruct op; simpl; intros; FuncInv; try subst v.
-  apply eval_cast8unsigned; auto.
-  apply eval_cast8signed; auto.
-  apply eval_cast16unsigned; auto.
-  apply eval_cast16signed; auto.
-  EvalOp. 
-  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intro.
-  change true with (negb false). eapply eval_notbool; eauto. subst i; constructor.
-  change false with (negb true). eapply eval_notbool; eauto. constructor; auto.
-  change Vfalse with (Val.of_bool (negb true)).
-  eapply eval_notbool; eauto. constructor.
-  apply eval_notint; auto.
-  EvalOp.
-  EvalOp.
-  apply eval_singleoffloat; auto.
-  EvalOp.
-  EvalOp.
-  EvalOp.
-  EvalOp.
-Qed.
-
-Lemma eval_sel_binop:
-  forall le op a1 a2 v1 v2 v,
-  eval_expr ge sp e m le a1 v1 ->
-  eval_expr ge sp e m le a2 v2 ->
-  eval_binop op v1 v2 = Some v ->
-  eval_expr ge sp e m le (sel_binop op a1 a2) v.
-Proof.
-  destruct op; simpl; intros; FuncInv; try subst v.
-  apply eval_add; auto.
-  apply eval_add_ptr_2; auto.
-  apply eval_add_ptr; auto.
-  apply eval_sub; auto.
-  apply eval_sub_ptr_int; auto.
-  destruct (eq_block b b0); inv H1. 
-  eapply eval_sub_ptr_ptr; eauto.
-  apply eval_mul; eauto.
-  generalize (Int.eq_spec i0 Int.zero). destruct (Int.eq i0 Int.zero); inv H1.
-  apply eval_divs; eauto.
-  generalize (Int.eq_spec i0 Int.zero). destruct (Int.eq i0 Int.zero); inv H1.
-  apply eval_divu; eauto.
-  generalize (Int.eq_spec i0 Int.zero). destruct (Int.eq i0 Int.zero); inv H1.
-  apply eval_mods; eauto.
-  generalize (Int.eq_spec i0 Int.zero). destruct (Int.eq i0 Int.zero); inv H1.
-  apply eval_modu; eauto.
-  apply eval_and; auto.
-  apply eval_or; auto.
-  EvalOp.
-  caseEq (Int.ltu i0 (Int.repr 32)); intro; rewrite H2 in H1; inv H1.
-  apply eval_shl; auto.
-  EvalOp.
-  caseEq (Int.ltu i0 (Int.repr 32)); intro; rewrite H2 in H1; inv H1.
-  apply eval_shru; auto.
-  apply eval_addf; auto.
-  apply eval_subf; auto.
-  EvalOp.
-  EvalOp.
-  apply eval_comp_int; auto.
-  eapply eval_comp_int_ptr; eauto.
-  eapply eval_comp_ptr_int; eauto.
-  destruct (eq_block b b0); inv H1.
-  eapply eval_comp_ptr_ptr; eauto.
-  eapply eval_comp_ptr_ptr_2; eauto.
-  eapply eval_compu; eauto.
-  eapply eval_compf; eauto.
-Qed.
-
 End CMCONSTR.
-
-(** * Semantic preservation for instruction selection. *)
-
-Section PRESERVATION.
-
-Variable prog: Cminor.program.
-Let tprog := sel_program prog.
-Let ge := Genv.globalenv prog.
-Let tge := Genv.globalenv tprog.
-
-(** Relationship between the global environments for the original
-  CminorSel program and the generated RTL program. *)
-
-Lemma symbols_preserved:
-  forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intros; unfold ge, tge, tprog, sel_program. 
-  apply Genv.find_symbol_transf.
-Qed.
-
-Lemma functions_translated:
-  forall (v: val) (f: Cminor.fundef),
-  Genv.find_funct ge v = Some f ->
-  Genv.find_funct tge v = Some (sel_fundef f).
-Proof.  
-  intros.
-  exact (Genv.find_funct_transf sel_fundef H).
-Qed.
-
-Lemma function_ptr_translated:
-  forall (b: block) (f: Cminor.fundef),
-  Genv.find_funct_ptr ge b = Some f ->
-  Genv.find_funct_ptr tge b = Some (sel_fundef f).
-Proof.  
-  intros. 
-  exact (Genv.find_funct_ptr_transf sel_fundef H).
-Qed.
-
-Lemma sig_function_translated:
-  forall f,
-  funsig (sel_fundef f) = Cminor.funsig f.
-Proof.
-  intros. destruct f; reflexivity.
-Qed.
-
-(** Semantic preservation for expressions. *)
-
-Lemma sel_expr_correct:
-  forall sp e m a v,
-  Cminor.eval_expr ge sp e m a v ->
-  forall le,
-  eval_expr tge sp e m le (sel_expr a) v.
-Proof.
-  induction 1; intros; simpl.
-  (* Evar *)
-  constructor; auto.
-  (* Econst *)
-  destruct cst; simpl; simpl in H; (econstructor; [constructor|simpl;auto]).
-  rewrite symbols_preserved. auto.
-  (* Eunop *)
-  eapply eval_sel_unop; eauto.
-  (* Ebinop *)
-  eapply eval_sel_binop; eauto.
-  (* Eload *)
-  eapply eval_load; eauto.
-  (* Econdition *)
-  econstructor; eauto. eapply eval_condition_of_expr; eauto. 
-  destruct b1; auto.
-Qed.
-
-Hint Resolve sel_expr_correct: evalexpr.
-
-Lemma sel_exprlist_correct:
-  forall sp e m a v,
-  Cminor.eval_exprlist ge sp e m a v ->
-  forall le,
-  eval_exprlist tge sp e m le (sel_exprlist a) v.
-Proof.
-  induction 1; intros; simpl; constructor; auto with evalexpr.
-Qed.
-
-Hint Resolve sel_exprlist_correct: evalexpr.
-
-(** Semantic preservation for terminating function calls and statements. *)
-
-Fixpoint sel_cont (k: Cminor.cont) : CminorSel.cont :=
-  match k with
-  | Cminor.Kstop => Kstop
-  | Cminor.Kseq s1 k1 => Kseq (sel_stmt s1) (sel_cont k1)
-  | Cminor.Kblock k1 => Kblock (sel_cont k1)
-  | Cminor.Kcall id f sp e k1 =>
-      Kcall id (sel_function f) sp e (sel_cont k1)
-  end.
-
-Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
-  | match_state: forall f s k s' k' sp e m,
-      s' = sel_stmt s ->
-      k' = sel_cont k ->
-      match_states
-        (Cminor.State f s k sp e m)
-        (State (sel_function f) s' k' sp e m)
-  | match_callstate: forall f args k k' m,
-      k' = sel_cont k ->
-      match_states
-        (Cminor.Callstate f args k m)
-        (Callstate (sel_fundef f) args k' m)
-  | match_returnstate: forall v k k' m,
-      k' = sel_cont k ->
-      match_states
-        (Cminor.Returnstate v k m)
-        (Returnstate v k' m).
-
-Remark call_cont_commut:
-  forall k, call_cont (sel_cont k) = sel_cont (Cminor.call_cont k).
-Proof.
-  induction k; simpl; auto.
-Qed.
-
-Remark find_label_commut:
-  forall lbl s k,
-  find_label lbl (sel_stmt s) (sel_cont k) =
-  option_map (fun sk => (sel_stmt (fst sk), sel_cont (snd sk)))
-             (Cminor.find_label lbl s k).
-Proof.
-  induction s; intros; simpl; auto.
-  unfold store. destruct (addressing (sel_expr e)); auto.
-  change (Kseq (sel_stmt s2) (sel_cont k))
-    with (sel_cont (Cminor.Kseq s2 k)).
-  rewrite IHs1. rewrite IHs2. 
-  destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)); auto.
-  rewrite IHs1. rewrite IHs2. 
-  destruct (Cminor.find_label lbl s1 k); auto.
-  change (Kseq (Sloop (sel_stmt s)) (sel_cont k))
-    with (sel_cont (Cminor.Kseq (Cminor.Sloop s) k)).
-  auto.
-  change (Kblock (sel_cont k))
-    with (sel_cont (Cminor.Kblock k)).
-  auto.
-  destruct o; auto.
-  destruct (ident_eq lbl l); auto.
-Qed.
-
-Lemma sel_step_correct:
-  forall S1 t S2, Cminor.step ge S1 t S2 ->
-  forall T1, match_states S1 T1 ->
-  exists T2, step tge T1 t T2 /\ match_states S2 T2.
-Proof.
-  induction 1; intros T1 ME; inv ME; simpl;
-  try (econstructor; split; [econstructor; eauto with evalexpr | econstructor; eauto]; fail).
-
-  (* skip call *)
-  econstructor; split. 
-  econstructor. destruct k; simpl in H; simpl; auto. 
-  rewrite <- H0; reflexivity.
-  constructor; auto.
-(*
-  (* assign *)
-  exists (State (sel_function f) Sskip (sel_cont k) sp (PTree.set id v e) m); split.
-  constructor. auto with evalexpr.
-  constructor; auto.
-*)
-  (* store *)
-  econstructor; split.
-  eapply eval_store; eauto with evalexpr.
-  constructor; auto.
-  (* Scall *)
-  econstructor; split.
-  econstructor; eauto with evalexpr.
-  apply functions_translated; eauto. 
-  apply sig_function_translated.
-  constructor; auto.
-  (* Stailcall *)
-  econstructor; split.
-  econstructor; eauto with evalexpr.
-  apply functions_translated; eauto. 
-  apply sig_function_translated.
-  constructor; auto. apply call_cont_commut.
-  (* Sifthenelse *)
-  exists (State (sel_function f) (if b then sel_stmt s1 else sel_stmt s2) (sel_cont k) sp e m); split.
-  constructor. eapply eval_condition_of_expr; eauto with evalexpr.
-  constructor; auto. destruct b; auto.
-  (* Sreturn None *)
-  econstructor; split. 
-  econstructor.
-  constructor; auto. apply call_cont_commut.
-  (* Sreturn Some *)
-  econstructor; split. 
-  econstructor. simpl. eauto with evalexpr. 
-  constructor; auto. apply call_cont_commut.
-  (* Sgoto *)
-  econstructor; split.
-  econstructor. simpl. rewrite call_cont_commut. rewrite find_label_commut.
-  rewrite H. simpl. reflexivity. 
-  constructor; auto.
-Qed.
-
-Lemma sel_initial_states:
-  forall S, Cminor.initial_state prog S ->
-  exists R, initial_state tprog R /\ match_states S R.
-Proof.
-  induction 1.
-  econstructor; split.
-  econstructor.
-  simpl. fold tge. rewrite symbols_preserved. eexact H.
-  apply function_ptr_translated. eauto. 
-  rewrite <- H1. apply sig_function_translated; auto.
-  unfold tprog, sel_program. rewrite Genv.init_mem_transf.
-  constructor; auto.
-Qed.
-
-Lemma sel_final_states:
-  forall S R r,
-  match_states S R -> Cminor.final_state S r -> final_state R r.
-Proof.
-  intros. inv H0. inv H. simpl. constructor.
-Qed.
-
-Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  Cminor.exec_program prog beh -> CminorSel.exec_program tprog beh.
-Proof.
-  unfold CminorSel.exec_program, Cminor.exec_program; intros.
-  eapply simulation_step_preservation; eauto.
-  eexact sel_initial_states.
-  eexact sel_final_states.
-  exact sel_step_correct. 
-Qed.
-
-End PRESERVATION.

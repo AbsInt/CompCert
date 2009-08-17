@@ -58,6 +58,8 @@ with exprlist : Type :=
   | Enil: exprlist
   | Econs: expr -> exprlist -> exprlist.
 
+Infix ":::" := Econs (at level 60, right associativity) : cminorsel_scope.
+
 (** Statements are as in Cminor, except that the condition of an
   if/then/else conditional is a [condexpr], and the [Sstore] construct
   uses a machine-dependent addressing mode. *)
@@ -373,3 +375,123 @@ Inductive final_state: state -> int -> Prop :=
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=
   program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+
+Hint Constructors eval_expr eval_condexpr eval_exprlist: evalexpr.
+
+(** * Lifting of let-bound variables *)
+
+(** Instruction selection sometimes generate [Elet] constructs to
+  share the evaluation of a subexpression.  Owing to the use of de
+  Bruijn indices for let-bound variables, we need to shift de Bruijn
+  indices when an expression [b] is put in a [Elet a b] context. *)
+
+Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
+  match a with
+  | Evar id => Evar id
+  | Eop op bl => Eop op (lift_exprlist p bl)
+  | Eload chunk addr bl => Eload chunk addr (lift_exprlist p bl)
+  | Econdition b c d =>
+      Econdition (lift_condexpr p b) (lift_expr p c) (lift_expr p d)
+  | Elet b c => Elet (lift_expr p b) (lift_expr (S p) c)
+  | Eletvar n =>
+      if le_gt_dec p n then Eletvar (S n) else Eletvar n
+  end
+
+with lift_condexpr (p: nat) (a: condexpr) {struct a}: condexpr :=
+  match a with
+  | CEtrue => CEtrue
+  | CEfalse => CEfalse
+  | CEcond cond bl => CEcond cond (lift_exprlist p bl)
+  | CEcondition b c d =>
+      CEcondition (lift_condexpr p b) (lift_condexpr p c) (lift_condexpr p d)
+  end
+
+with lift_exprlist (p: nat) (a: exprlist) {struct a}: exprlist :=
+  match a with
+  | Enil => Enil
+  | Econs b cl => Econs (lift_expr p b) (lift_exprlist p cl)
+  end.
+
+Definition lift (a: expr): expr := lift_expr O a.
+
+(** We now relate the evaluation of a lifted expression with that
+    of the original expression. *)
+
+Inductive insert_lenv: letenv -> nat -> val -> letenv -> Prop :=
+  | insert_lenv_0:
+      forall le v,
+      insert_lenv le O v (v :: le)
+  | insert_lenv_S:
+      forall le p w le' v,
+      insert_lenv le p w le' ->
+      insert_lenv (v :: le) (S p) w (v :: le').
+
+Lemma insert_lenv_lookup1:
+  forall le p w le',
+  insert_lenv le p w le' ->
+  forall n v,
+  nth_error le n = Some v -> (p > n)%nat ->
+  nth_error le' n = Some v.
+Proof.
+  induction 1; intros.
+  omegaContradiction.
+  destruct n; simpl; simpl in H0. auto. 
+  apply IHinsert_lenv. auto. omega.
+Qed.
+
+Lemma insert_lenv_lookup2:
+  forall le p w le',
+  insert_lenv le p w le' ->
+  forall n v,
+  nth_error le n = Some v -> (p <= n)%nat ->
+  nth_error le' (S n) = Some v.
+Proof.
+  induction 1; intros.
+  simpl. assumption.
+  simpl. destruct n. omegaContradiction. 
+  apply IHinsert_lenv. exact H0. omega.
+Qed.
+
+Lemma eval_lift_expr:
+  forall ge sp e m w le a v,
+  eval_expr ge sp e m le a v ->
+  forall p le', insert_lenv le p w le' ->
+  eval_expr ge sp e m le' (lift_expr p a) v.
+Proof.
+  intros until w.
+  apply (eval_expr_ind3 ge sp e m
+    (fun le a v =>
+      forall p le', insert_lenv le p w le' ->
+      eval_expr ge sp e m le' (lift_expr p a) v)
+    (fun le a v =>
+      forall p le', insert_lenv le p w le' ->
+      eval_condexpr ge sp e m le' (lift_condexpr p a) v)
+    (fun le al vl =>
+      forall p le', insert_lenv le p w le' ->
+      eval_exprlist ge sp e m le' (lift_exprlist p al) vl));
+  simpl; intros; eauto with evalexpr.
+
+  destruct v1; eapply eval_Econdition;
+  eauto with evalexpr; simpl; eauto with evalexpr.
+
+  eapply eval_Elet. eauto. apply H2. apply insert_lenv_S; auto.
+
+  case (le_gt_dec p n); intro. 
+  apply eval_Eletvar. eapply insert_lenv_lookup2; eauto.
+  apply eval_Eletvar. eapply insert_lenv_lookup1; eauto.
+
+  destruct vb1; eapply eval_CEcondition;
+  eauto with evalexpr; simpl; eauto with evalexpr.
+Qed.
+
+Lemma eval_lift:
+  forall ge sp e m le a v w,
+  eval_expr ge sp e m le a v ->
+  eval_expr ge sp e m (w::le) (lift a) v.
+Proof.
+  intros. unfold lift. eapply eval_lift_expr.
+  eexact H. apply insert_lenv_0. 
+Qed.
+
+Hint Resolve eval_lift: evalexpr.
+

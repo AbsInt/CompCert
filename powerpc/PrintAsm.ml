@@ -182,8 +182,8 @@ let (text, data, const_data, float_literal) =
   | Diab ->
       (".text",
        ".data",
-       ".const",  (* to check *)
-       ".const")  (* to check *)
+       ".data",  (* to check *)
+       ".data")  (* to check *)
 
 (* Encoding masks for rlwinm instructions *)
 

@@ -47,7 +47,7 @@ COMMON=Errors.v AST.v Events.v Globalenvs.v Mem.v Values.v \
 
 BACKEND=\
   Cminor.v Op.v CminorSel.v \
-  Selection.v Selectionproof.v \
+  SelectOp.v Selection.v SelectOpproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   Tailcall.v Tailcallproof.v \

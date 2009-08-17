@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Instruction selection *)
+(** Instruction selection for operators *)
 
 (** The instruction selection pass recognizes opportunities for using
   combined arithmetic and logical operations and addressing modes
@@ -19,8 +19,22 @@
   and on the PowerPC, the expression [(x >> 6) & 0xFF] can be turned
   into a "rotate and mask" instruction.
 
-  Instruction selection proceeds by bottom-up rewriting over expressions.
-  The source language is Cminor and the target language is CminorSel. *)
+  This file defines functions for building CminorSel expressions and
+  statements, especially expressions consisting of operator
+  applications.  These functions examine their arguments to choose
+  cheaper forms of operators whenever possible.
+
+  For instance, [add e1 e2] will return a CminorSel expression semantically
+  equivalent to [Eop Oadd (e1 ::: e2 ::: Enil)], but will use a
+  [Oaddimm] operator if one of the arguments is an integer constant,
+  or suppress the addition altogether if one of the arguments is the
+  null integer.  In passing, we perform operator reassociation
+  ([(e + c1) * c2] becomes [(e * c2) + (c1 * c2)]) and a small amount
+  of constant propagation.
+
+  On top of the "smart constructor" functions defined below,
+  module [Selection] implements the actual instruction selection pass.
+*)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -34,61 +48,7 @@ Require Cminor.
 Require Import Op.
 Require Import CminorSel.
 
-Infix ":::" := Econs (at level 60, right associativity) : selection_scope.
-
-Open Local Scope selection_scope.
-
-(** * Lifting of let-bound variables *)
-
-(** Some of the instruction functions generate [Elet] constructs to
-  share the evaluation of a subexpression.  Owing to the use of de
-  Bruijn indices for let-bound variables, we need to shift de Bruijn
-  indices when an expression [b] is put in a [Elet a b] context. *)
-
-Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
-  match a with
-  | Evar id => Evar id
-  | Eop op bl => Eop op (lift_exprlist p bl)
-  | Eload chunk addr bl => Eload chunk addr (lift_exprlist p bl)
-  | Econdition b c d =>
-      Econdition (lift_condexpr p b) (lift_expr p c) (lift_expr p d)
-  | Elet b c => Elet (lift_expr p b) (lift_expr (S p) c)
-  | Eletvar n =>
-      if le_gt_dec p n then Eletvar (S n) else Eletvar n
-  end
-
-with lift_condexpr (p: nat) (a: condexpr) {struct a}: condexpr :=
-  match a with
-  | CEtrue => CEtrue
-  | CEfalse => CEfalse
-  | CEcond cond bl => CEcond cond (lift_exprlist p bl)
-  | CEcondition b c d =>
-      CEcondition (lift_condexpr p b) (lift_condexpr p c) (lift_condexpr p d)
-  end
-
-with lift_exprlist (p: nat) (a: exprlist) {struct a}: exprlist :=
-  match a with
-  | Enil => Enil
-  | Econs b cl => Econs (lift_expr p b) (lift_exprlist p cl)
-  end.
-
-Definition lift (a: expr): expr := lift_expr O a.
-
-(** * Smart constructors for operators *)
-
-(** This section defines functions for building CminorSel expressions
-  and statements, especially expressions consisting of operator
-  applications.  These functions examine their arguments to choose
-  cheaper forms of operators whenever possible.
-
-  For instance, [add e1 e2] will return a CminorSel expression semantically
-  equivalent to [Eop Oadd (e1 ::: e2 ::: Enil)], but will use a
-  [Oaddimm] operator if one of the arguments is an integer constant,
-  or suppress the addition altogether if one of the arguments is the
-  null integer.  In passing, we perform operator reassociation
-  ([(e + c1) * c2] becomes [(e * c2) + (c1 * c2)]) and a small amount
-  of constant propagation.
-*)
+Open Local Scope cminorsel_scope.
 
 (** ** Integer logical negation *)
 
@@ -1146,50 +1106,19 @@ Definition compu (c: comparison) (e1: expr) (e2: expr) :=
 Definition compf (c: comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
 
-(** ** Conditional expressions *)
+(** ** Other operators, not optimized. *)
 
-Fixpoint negate_condexpr (e: condexpr): condexpr :=
-  match e with
-  | CEtrue => CEfalse
-  | CEfalse => CEtrue
-  | CEcond c el => CEcond (negate_condition c) el
-  | CEcondition e1 e2 e3 =>
-      CEcondition e1 (negate_condexpr e2) (negate_condexpr e3)
-  end.
-
-
-Definition is_compare_neq_zero (c: condition) : bool :=
-  match c with
-  | Ccompimm Cne n => Int.eq n Int.zero
-  | Ccompuimm Cne n => Int.eq n Int.zero
-  | _ => false
-  end.
-
-Definition is_compare_eq_zero (c: condition) : bool :=
-  match c with
-  | Ccompimm Ceq n => Int.eq n Int.zero
-  | Ccompuimm Ceq n => Int.eq n Int.zero
-  | _ => false
-  end.
-
-Fixpoint condexpr_of_expr (e: expr) : condexpr :=
-  match e with
-  | Eop (Ointconst n) Enil =>
-      if Int.eq n Int.zero then CEfalse else CEtrue
-  | Eop (Ocmp c) (e1 ::: Enil) =>
-      if is_compare_neq_zero c then
-        condexpr_of_expr e1
-      else if is_compare_eq_zero c then
-        negate_condexpr (condexpr_of_expr e1)
-      else
-        CEcond c (e1 ::: Enil)
-  | Eop (Ocmp c) el =>
-      CEcond c el
-  | Econdition ce e1 e2 =>
-      CEcondition ce (condexpr_of_expr e1) (condexpr_of_expr e2)
-  | _ =>
-      CEcond (Ccompimm Cne Int.zero) (e:::Enil)
-  end.
+Definition negint (e: expr) := Eop (Orsubimm Int.zero) (e ::: Enil).
+Definition negf (e: expr) :=  Eop Onegf (e ::: Enil).
+Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
+Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
+Definition intuoffloat (e: expr) := Eop Ointuoffloat (e ::: Enil).
+Definition floatofint (e: expr) := Eop Ofloatofint (e ::: Enil).
+Definition floatofintu (e: expr) := Eop Ofloatofintu (e ::: Enil).
+Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
+Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
+Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
+Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
 
 (** ** Recognition of addressing modes for load and store operations *)
 
@@ -1264,131 +1193,3 @@ Definition addressing (chunk: memory_chunk) (e: expr) :=
       (Aindexed Int.zero, e:::Enil)
   end.
 
-Definition load (chunk: memory_chunk) (e1: expr) :=
-  match addressing chunk e1 with
-  | (mode, args) => Eload chunk mode args
-  end.
-
-Definition store (chunk: memory_chunk) (e1 e2: expr) :=
-  match addressing chunk e1 with
-  | (mode, args) => Sstore chunk mode args e2
-  end.
-
-(** * Translation from Cminor to CminorSel *)
-
-(** Instruction selection for operator applications *)
-
-Definition sel_constant (cst: Cminor.constant) : expr :=
-  match cst with
-  | Cminor.Ointconst n => Eop (Ointconst n) Enil
-  | Cminor.Ofloatconst f => Eop (Ofloatconst f) Enil
-  | Cminor.Oaddrsymbol id ofs => Eop (Oaddrsymbol id ofs) Enil
-  | Cminor.Oaddrstack ofs => Eop (Oaddrstack ofs) Enil
-  end.
-
-Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
-  match op with
-  | Cminor.Ocast8unsigned => cast8unsigned arg 
-  | Cminor.Ocast8signed => cast8signed arg 
-  | Cminor.Ocast16unsigned => cast16unsigned arg 
-  | Cminor.Ocast16signed => cast16signed arg 
-  | Cminor.Onegint => Eop (Orsubimm Int.zero) (arg ::: Enil)
-  | Cminor.Onotbool => notbool arg
-  | Cminor.Onotint => notint arg
-  | Cminor.Onegf => Eop Onegf (arg ::: Enil)
-  | Cminor.Oabsf => Eop Oabsf (arg ::: Enil)
-  | Cminor.Osingleoffloat => singleoffloat arg
-  | Cminor.Ointoffloat => Eop Ointoffloat (arg ::: Enil)
-  | Cminor.Ointuoffloat => Eop Ointuoffloat (arg ::: Enil)
-  | Cminor.Ofloatofint => Eop Ofloatofint (arg ::: Enil)
-  | Cminor.Ofloatofintu => Eop Ofloatofintu (arg ::: Enil)
-  end.
-
-Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
-  match op with
-  | Cminor.Oadd => add arg1 arg2
-  | Cminor.Osub => sub arg1 arg2
-  | Cminor.Omul => mul arg1 arg2
-  | Cminor.Odiv => divs arg1 arg2
-  | Cminor.Odivu => divu arg1 arg2
-  | Cminor.Omod => mods arg1 arg2
-  | Cminor.Omodu => modu arg1 arg2
-  | Cminor.Oand => and arg1 arg2
-  | Cminor.Oor => or arg1 arg2
-  | Cminor.Oxor => xor arg1 arg2
-  | Cminor.Oshl => shl arg1 arg2
-  | Cminor.Oshr => shr arg1 arg2
-  | Cminor.Oshru => shru arg1 arg2
-  | Cminor.Oaddf => Eop Oaddf (arg1 ::: arg2 ::: Enil)
-  | Cminor.Osubf => Eop Osubf (arg1 ::: arg2 ::: Enil)
-  | Cminor.Omulf => Eop Omulf (arg1 ::: arg2 ::: Enil)
-  | Cminor.Odivf => Eop Odivf (arg1 ::: arg2 ::: Enil)
-  | Cminor.Ocmp c => comp c arg1 arg2
-  | Cminor.Ocmpu c => compu c arg1 arg2
-  | Cminor.Ocmpf c => compf c arg1 arg2
-  end.
-
-(** Conversion from Cminor expression to Cminorsel expressions *)
-
-Fixpoint sel_expr (a: Cminor.expr) : expr :=
-  match a with
-  | Cminor.Evar id => Evar id
-  | Cminor.Econst cst => sel_constant cst
-  | Cminor.Eunop op arg => sel_unop op (sel_expr arg)
-  | Cminor.Ebinop op arg1 arg2 => sel_binop op (sel_expr arg1) (sel_expr arg2)
-  | Cminor.Eload chunk addr => load chunk (sel_expr addr)
-  | Cminor.Econdition cond ifso ifnot =>
-      Econdition (condexpr_of_expr (sel_expr cond))
-                 (sel_expr ifso) (sel_expr ifnot)
-  end.
-
-Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
-  match al with
-  | nil => Enil
-  | a :: bl => Econs (sel_expr a) (sel_exprlist bl)
-  end.
-
-(** Conversion from Cminor statements to Cminorsel statements. *)
-
-Fixpoint sel_stmt (s: Cminor.stmt) : stmt :=
-  match s with
-  | Cminor.Sskip => Sskip
-  | Cminor.Sassign id e => Sassign id (sel_expr e)
-  | Cminor.Sstore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
-  | Cminor.Scall optid sg fn args =>
-      Scall optid sg (sel_expr fn) (sel_exprlist args)
-  | Cminor.Stailcall sg fn args => 
-      Stailcall sg (sel_expr fn) (sel_exprlist args)
-  | Cminor.Sseq s1 s2 => Sseq (sel_stmt s1) (sel_stmt s2)
-  | Cminor.Sifthenelse e ifso ifnot =>
-      Sifthenelse (condexpr_of_expr (sel_expr e))
-                  (sel_stmt ifso) (sel_stmt ifnot)
-  | Cminor.Sloop body => Sloop (sel_stmt body)
-  | Cminor.Sblock body => Sblock (sel_stmt body)
-  | Cminor.Sexit n => Sexit n
-  | Cminor.Sswitch e cases dfl => Sswitch (sel_expr e) cases dfl
-  | Cminor.Sreturn None => Sreturn None
-  | Cminor.Sreturn (Some e) => Sreturn (Some (sel_expr e))
-  | Cminor.Slabel lbl body => Slabel lbl (sel_stmt body)
-  | Cminor.Sgoto lbl => Sgoto lbl
-  end.
-
-(** Conversion of functions and programs. *)
-
-Definition sel_function (f: Cminor.function) : function :=
-  mkfunction
-    f.(Cminor.fn_sig)
-    f.(Cminor.fn_params)
-    f.(Cminor.fn_vars)
-    f.(Cminor.fn_stackspace)
-    (sel_stmt f.(Cminor.fn_body)).
-
-Definition sel_fundef (f: Cminor.fundef) : fundef :=
-  transf_fundef sel_function f.
-
-Definition sel_program (p: Cminor.program) : program :=
-  transform_program sel_fundef p.
-
-(** For compatibility with PowerPC *)
-
-Parameter use_fused_mul: unit -> bool.
