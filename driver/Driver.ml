@@ -39,7 +39,9 @@ let print_error oc msg =
   let print_one_error = function
   | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
   | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
-  in List.iter print_one_error msg
+  in
+    List.iter print_one_error msg;
+    output_char oc '\n'
 
 (* For the CIL -> Csyntax translator:
 

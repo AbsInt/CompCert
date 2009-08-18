@@ -604,7 +604,7 @@ with transl_lbl_stmt (nbrk ncnt: nat) (sl: Csyntax.labeled_statements)
 (*** Translation of functions *)
 
 Definition prefix_var_name (id: ident) : errmsg :=
-  MSG "In local variable " :: CTX id :: MSG ":\n" :: nil.
+  MSG "In local variable " :: CTX id :: MSG ": " :: nil.
 
 Definition transl_params (l: list (ident * type)) :=
    AST.map_partial prefix_var_name chunk_of_type l.

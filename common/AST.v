@@ -231,7 +231,7 @@ Variable A B V: Type.
 Variable transf_partial: A -> res B.
 
 Definition prefix_funct_name (id: ident) : errmsg :=
-  MSG "In function " :: CTX id :: MSG ":\n" :: nil.
+  MSG "In function " :: CTX id :: MSG ": " :: nil.
 
 Definition transform_partial_program (p: program A V) : res (program B V) :=
   do fl <- map_partial prefix_funct_name transf_partial p.(prog_funct);
@@ -276,7 +276,7 @@ Variable transf_partial_function: A -> res B.
 Variable transf_partial_variable: V -> res W.
 
 Definition prefix_var_name (id_init: ident * list init_data) : errmsg :=
-  MSG "In global variable " :: CTX (fst id_init) :: MSG ":\n" :: nil.
+  MSG "In global variable " :: CTX (fst id_init) :: MSG ": " :: nil.
 
 Definition transform_partial_program2 (p: program A V) : res (program B W) :=
   do fl <- map_partial prefix_funct_name transf_partial_function p.(prog_funct);
