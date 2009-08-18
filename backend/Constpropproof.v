@@ -47,6 +47,17 @@ Proof.
   unfold Approx.top, val_match_approx. auto.
 Qed.
 
+Lemma val_match_approx_increasing:
+  forall a1 a2 v,
+  Approx.ge a1 a2 -> val_match_approx ge a2 v -> val_match_approx ge a1 v.
+Proof.
+  intros until v.
+  intros [A|[B|C]].
+  subst a1. simpl. auto.
+  subst a2. simpl. tauto.
+  subst a2. auto.
+Qed.
+
 Lemma regs_match_approx_increasing:
   forall a1 a2 rs,
   D.ge a1 a2 -> regs_match_approx a2 rs -> regs_match_approx a1 rs.

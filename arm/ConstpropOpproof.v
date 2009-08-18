@@ -47,17 +47,6 @@ Definition val_match_approx (a: approx) (v: val) : Prop :=
   | _ => False
   end.
 
-Lemma val_match_approx_increasing:
-  forall a1 a2 v,
-  Approx.ge a1 a2 -> val_match_approx a2 v -> val_match_approx a1 v.
-Proof.
-  intros until v.
-  intros [A|[B|C]].
-  subst a1. simpl. auto.
-  subst a2. simpl. tauto.
-  subst a2. auto.
-Qed.
-
 Inductive val_list_match_approx: list approx -> list val -> Prop :=
   | vlma_nil:
       val_list_match_approx nil nil
