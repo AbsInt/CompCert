@@ -1193,3 +1193,7 @@ Definition addressing (chunk: memory_chunk) (e: expr) :=
       (Aindexed Int.zero, e:::Enil)
   end.
 
+(** For compatibility with PowerPC, but unused. *)
+
+Parameter use_fused_mul : unit -> bool.
+
