@@ -1578,7 +1578,7 @@ Qed.
   of Csharpminor local variables and of the Cminor stack data block. *)
 
 Lemma match_callstack_alloc_variables:
-  forall fn cenv sz m e m' tm tm' sp f cs targs,
+  forall fn cenv sz m e m' tm tm' sp f cs targs body,
   build_compilenv gce fn = (cenv, sz) ->
   sz <= Int.max_signed ->
   list_norepet (fn_params_names fn ++ fn_vars_names fn) ->
@@ -1586,9 +1586,8 @@ Lemma match_callstack_alloc_variables:
   Mem.alloc tm 0 sz = (tm', sp) ->
   match_callstack f cs m.(nextblock) tm.(nextblock) m ->
   mem_inject f m tm ->
-  let tparams := List.map (@fst ident memory_chunk) fn.(Csharpminor.fn_params) in
-  let tvars := List.map (@fst ident var_kind) fn.(Csharpminor.fn_vars) in
-  let te := set_locals tvars (set_params targs tparams) in
+  let tvars := make_vars (fn_params_names fn) (fn_vars_names fn) body in
+  let te := set_locals tvars (set_params targs (fn_params_names fn)) in
   exists f',
      inject_incr f f'
   /\ mem_inject f' m' tm'
@@ -1629,14 +1628,11 @@ Proof.
   intros. exploit mi_mappedblocks; eauto. unfold valid_block; intro.
   unfold block in SP; omegaContradiction.
   (* defined *)
-  intros. unfold te. apply set_locals_params_defined. 
-  unfold tparams, tvars. unfold fn_variables in H5.
-  change Csharpminor.fn_params with Csharpminor.fn_params in H5. 
-  change Csharpminor.fn_vars with Csharpminor.fn_vars in H5. 
+  intros. unfold te. apply set_locals_params_defined.
   elim (in_app_or _ _ _ H6); intros.
   elim (list_in_map_inv _ _ _ H7). intros x [A B].
   apply in_or_app; left. inversion A. apply List.in_map. auto.
-  apply in_or_app; right. 
+  apply in_or_app; right. unfold tvars, make_vars. apply in_or_app; left. 
   change id with (fst (id, lv)). apply List.in_map; auto.
   (* norepet *)
   unfold fn_variables. 
@@ -1745,19 +1741,16 @@ Lemma vars_vals_match_holds:
   List.length params = List.length args ->
   val_list_inject f args targs ->
   forall vars,
-  list_norepet (List.map (@fst ident var_kind) vars
-             ++ List.map (@fst ident memory_chunk) params) ->
+  list_norepet (vars ++ List.map (@fst ident memory_chunk) params) ->
   vars_vals_match f params args
-    (set_locals (List.map (@fst ident var_kind) vars)
-      (set_params targs (List.map (@fst ident memory_chunk) params))).
+    (set_locals vars (set_params targs (List.map (@fst ident memory_chunk) params))).
 Proof.
   induction vars; simpl; intros.
   eapply vars_vals_match_holds_1; eauto.
   inversion H1. subst hd tl.
   eapply vars_vals_match_extensional; eauto.
   intros. apply PTree.gso. red; intro; subst id; elim H4.
-  apply in_or_app. right. change (fst a) with (fst (fst a, lv)).
-  apply List.in_map; auto.
+  apply in_or_app. right. change a with (fst (a, lv)). apply List.in_map; auto.
 Qed.
 
 Lemma bind_parameters_length:
@@ -1768,22 +1761,71 @@ Proof.
   induction 1; simpl; eauto.
 Qed.
 
-(** The final result in this section: the behaviour of function entry
+Remark identset_removelist_charact:
+  forall l s x, Identset.In x (identset_removelist l s) <-> Identset.In x s /\ ~In x l.
+Proof.
+  induction l; simpl; intros. tauto.
+  split; intros.
+  exploit Identset.remove_3; eauto. rewrite IHl. intros [P Q].  
+  split. auto. intuition. elim (Identset.remove_1 H1 H).
+  destruct H as [P Q]. apply Identset.remove_2. tauto. rewrite IHl. tauto.
+Qed.
+
+Remark InA_In:
+  forall (A: Type) (x: A) (l: list A),
+  InA (fun (x y: A) => x = y) x l <-> In x l.
+Proof.
+  intros. rewrite InA_alt. split; intros. destruct H as [y [P Q]]. congruence. exists x; auto. 
+Qed.
+
+Remark NoDupA_norepet:
+  forall (A: Type) (l: list A),
+  NoDupA (fun (x y: A) => x = y) l -> list_norepet l.
+Proof.
+  induction 1. constructor. constructor; auto. red; intros; elim H.
+  rewrite InA_In. auto.
+Qed.
+
+Lemma make_vars_norepet:
+  forall fn body,
+  list_norepet (fn_params_names fn ++ fn_vars_names fn) ->
+  list_norepet (make_vars (fn_params_names fn) (fn_vars_names fn) body
+                ++ fn_params_names fn).
+Proof.
+  intros. rewrite list_norepet_app in H. destruct H as [A [B C]]. 
+  rewrite list_norepet_app. split.
+  unfold make_vars. rewrite list_norepet_app. split. auto. 
+  split. apply NoDupA_norepet. apply Identset.elements_3w.
+  red; intros. red; intros; subst y. rewrite <- InA_In in H0. 
+  exploit Identset.elements_2. eexact H0.
+  rewrite identset_removelist_charact. intros [P Q]. elim Q. 
+  apply in_or_app. auto. 
+  split. auto. 
+  red; intros. unfold make_vars in H. destruct (in_app_or _ _ _ H).
+  apply sym_not_equal. apply C; auto.
+  rewrite <- InA_In in H1. exploit Identset.elements_2. eexact H1. 
+  rewrite identset_removelist_charact. intros [P Q]. 
+  red; intros; elim Q. apply in_or_app. left; congruence. 
+Qed.
+
+(** The main result in this section: the behaviour of function entry
   in the generated Cminor code (allocate stack data block and store
   parameters whose address is taken) simulates what happens at function
   entry in the original Csharpminor (allocate one block per local variable
   and initialize the blocks corresponding to function parameters). *)
 
 Lemma function_entry_ok:
-  forall fn m e m1 vargs m2 f cs tm cenv sz tm1 sp tvargs s fn' k,
+  forall fn m e m1 vargs m2 f cs tm cenv sz tm1 sp tvargs body s fn' k,
   alloc_variables empty_env m (fn_variables fn) e m1 ->
   bind_parameters e m1 fn.(Csharpminor.fn_params) vargs m2 ->
   match_callstack f cs m.(nextblock) tm.(nextblock) m ->
   build_compilenv gce fn = (cenv, sz) ->
   sz <= Int.max_signed ->
   Mem.alloc tm 0 sz = (tm1, sp) ->
+  let vars :=
+    make_vars (fn_params_names fn) (fn_vars_names fn) body in
   let te :=
-    set_locals (fn_vars_names fn) (set_params tvargs (fn_params_names fn)) in
+    set_locals vars (set_params tvargs (fn_params_names fn)) in
   val_list_inject f vargs tvargs ->
   mem_inject f m tm ->
   list_norepet (fn_params_names fn ++ fn_vars_names fn) ->
@@ -1802,14 +1844,13 @@ Proof.
   exploit match_callstack_alloc_variables; eauto.
   intros [f1 [INCR1 [MINJ1 MATCH1]]].
   exploit vars_vals_match_holds.
-    eauto. apply val_list_inject_incr with f. eauto. eauto. 
-    apply list_norepet_append_commut. 
-    unfold fn_vars_names in H7. eexact H7.
+    eauto. apply val_list_inject_incr with f. eauto. eauto.
+    eapply make_vars_norepet. auto. 
   intro VVM.
   exploit store_parameters_correct.
     eauto. eauto. 
     unfold fn_params_names in H7. eapply list_norepet_append_left; eauto.
-    eexact MINJ1. eauto. eauto. 
+    eexact MINJ1. fold (fn_params_names fn). eexact MATCH1. eauto. 
   intros [te2 [tm2 [EXEC [MINJ2 MATCH2]]]].
   exists f1; exists te2; exists tm2.
   split. eauto. auto.

@@ -430,6 +430,40 @@ Fixpoint store_parameters
       OK (Sseq s1 s2)
   end.
 
+(** The local variables of the generated Cminor function
+  must include all local variables of the C#minor function
+  (to help the proof in [Cminorgenproof] go through). 
+  We must also add the destinations [x] of calls [x = f(args)],
+  because some of these [x] can be global variables and therefore
+  not part of the C#minor local variables. *)
+
+Fixpoint call_dest (s: stmt) : Identset.t :=
+  match s with
+  | Sskip => Identset.empty
+  | Sassign x e => Identset.empty
+  | Sstore chunk e1 e2 => Identset.empty
+  | Scall None sg e el => Identset.empty
+  | Scall (Some x) sg e el => Identset.singleton x
+  | Stailcall sg e el => Identset.empty
+  | Sseq s1 s2 => Identset.union (call_dest s1) (call_dest s2)
+  | Sifthenelse e s1 s2 => Identset.union (call_dest s1) (call_dest s2)
+  | Sloop s1 => call_dest s1
+  | Sblock s1 => call_dest s1
+  | Sexit n => Identset.empty
+  | Sswitch e cases dfl => Identset.empty
+  | Sreturn opte => Identset.empty
+  | Slabel lbl s1 => call_dest s1
+  | Sgoto lbl => Identset.empty
+  end.
+
+Definition identset_removelist (l: list ident) (s: Identset.t) : Identset.t :=
+  List.fold_right Identset.remove s l.
+
+Definition make_vars (params: list ident) (vars: list ident)
+                     (body: Cminor.stmt) : list ident :=
+  vars ++ 
+  Identset.elements (identset_removelist (params ++ vars) (call_dest body)).
+
 (** Translation of a Csharpminor function.  We must check that the
   required Cminor stack block is no bigger than [Int.max_signed],
   otherwise address computations within the stack block could
@@ -442,7 +476,9 @@ Definition transl_funbody
        OK (mkfunction
               (Csharpminor.fn_sig f)
               (Csharpminor.fn_params_names f)
-              (Csharpminor.fn_vars_names f)
+              (make_vars (Csharpminor.fn_params_names f)
+                         (Csharpminor.fn_vars_names f)
+                         (Sseq sparams tbody))
               stacksize
               (Sseq sparams tbody)).
 
