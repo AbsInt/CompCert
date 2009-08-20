@@ -97,8 +97,8 @@ ccomp: driver/Configuration.ml
         && rm -f ccomp && ln -s _build/driver/Driver.native ccomp
 
 ccomp.byte: driver/Configuration.ml
-	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.byte \
-        && rm -f ccomp.byte && ln -s _build/driver/Driver.byte ccomp.byte
+	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
+        && rm -f ccomp.byte && ln -s _build/driver/Driver.d.byte ccomp.byte
 
 runtime:
 	$(MAKE) -C runtime
