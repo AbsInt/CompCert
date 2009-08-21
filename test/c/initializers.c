@@ -23,6 +23,11 @@ struct {
   double v;
 } x10 = { { 'v', 7 }, 2.718 };
 
+float x11 = 1 + 1 / 3.14159;
+
+double x12 = 1 / 3.14159 + 1;
+
+
 int main(int argc, char ** argv)
 {
   int i;
@@ -43,6 +48,8 @@ int main(int argc, char ** argv)
   printf("}, %.3f }\n", x9.z);
   printf("x10 = { { '%c', %d }, %.3f }\n",
          x10.u.y, x10.u.z, x10.v);
+  printf("x11 = %.10f\n", x11);
+  printf("x12 = %.10f\n", x12);
   return 0;
 }
 

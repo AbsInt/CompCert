@@ -28,17 +28,153 @@ open Csyntax
 let varinfo_atom : (BinPos.positive, Cil.varinfo) Hashtbl.t =
   Hashtbl.create 103
 
+(* Evaluate compile-time constant expressions.  This is a more
+   aggressive variant of [Cil.constFold], which does not handle
+   floats. *)
 
+exception NotConst
+
+let mkint64 k v =
+  match Cil.kinteger64 k v with Const cst -> cst | _ -> assert false
+let mkint k v =
+  mkint64 k (Int64.of_int v)
+let mkfloat k v =
+  let v' =
+    match k with
+    | FFloat -> Int32.float_of_bits (Int32.bits_of_float v)
+    | _ -> v in
+  CReal(v', k, None)
+
+let bool_val = function 
+  | CInt64(v, _, _) -> v <> 0L
+  | CReal(v, _, _) -> v <> 0.0
+  | CStr s -> true
+  | CWStr s -> true
+  | _ -> assert false (* CChr, CEnum already expanded *)
+
+let rec eval_expr = function
+  | Const cst ->
+      eval_const cst
+  | SizeOf ty -> 
+      (try mkint IUInt (bitsSizeOf ty / 8)
+       with SizeOfError _ -> raise NotConst)
+  | SizeOfE e ->
+      eval_expr (SizeOf (typeOf e))
+  | SizeOfStr s ->
+      mkint IUInt (1 + String.length s)
+  | AlignOf ty ->
+      (try mkint IUInt (alignOf_int ty)
+       with SizeOfError _ -> raise NotConst)
+  | AlignOfE e ->
+      eval_expr (AlignOf (typeOf e))
+  | UnOp(op, e, ty) ->
+      eval_unop op (eval_expr e) ty
+  | BinOp(op, e1, e2, ty) ->
+      eval_binop op (eval_expr e1) (eval_expr e2) ty
+  | CastE(ty, e) ->
+      eval_cast ty (eval_expr e)
+  | Lval lv -> raise NotConst
+  | AddrOf lv -> raise NotConst
+  | StartOf lv -> raise NotConst
+
+and eval_const = function
+  | CChr c -> charConstToInt c
+  | CEnum(e, _, _) -> eval_expr e
+  | cst -> cst
+
+and eval_unop op v ty =
+  match op, Cil.unrollType ty, v with
+  | Neg, TInt(ik, _), CInt64(v, _, _) -> mkint64 ik (Int64.neg v)
+  | Neg, TFloat(fk, _), CReal(v, _, _) -> mkfloat fk (-. v)
+  | BNot, TInt(ik, _), CInt64(v, _, _) -> mkint64 ik (Int64.logxor v (-1L))
+  | LNot, TInt(ik, _), _ -> mkint ik (if bool_val v then 0 else 1)
+  | _, _, _ -> raise NotConst
+
+and eval_binop op v1 v2 ty =
+  match op, Cil.unrollType ty, v1, v2 with
+  | PlusA, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _) -> 
+      mkint64 ik (Int64.add v1 v2)
+  | PlusA, TFloat(fk, _), CReal(v1, _, _), CReal(v2, _, _) -> 
+      mkfloat fk (v1 +. v2)
+  | MinusA, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _) -> 
+      mkint64 ik (Int64.sub v1 v2)
+  | MinusA, TFloat(fk, _), CReal(v1, _, _), CReal(v2, _, _) -> 
+      mkfloat fk (v1 -. v2)
+  | Mult, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _) -> 
+      mkint64 ik (Int64.mul v1 v2)
+  | Mult, TFloat(fk, _), CReal(v1, _, _), CReal(v2, _, _) -> 
+      mkfloat fk (v1 *. v2)
+  | Div, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _)
+    when ik <> IULongLong && v2 != 0L -> 
+      mkint64 ik (Int64.div v1 v2)
+  | Div, TFloat(fk, _), CReal(v1, _, _), CReal(v2, _, _) -> 
+      mkfloat fk (v1 /. v2)
+  | Mod, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _)
+    when ik <> IULongLong && v2 != 0L -> 
+      mkint64 ik (Int64.rem v1 v2)
+  | Shiftlt, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _)
+    when v2 >= 0L && v2 < 64L ->
+      mkint64 ik (Int64.shift_left v1 (Int64.to_int v2))
+  | Shiftrt, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _)
+    when v2 >= 0L && v2 < 64L ->
+      mkint64 ik (if isSigned ik
+                  then Int64.shift_right v1 (Int64.to_int v2)
+                  else Int64.shift_right_logical v1 (Int64.to_int v2))
+  | Lt, _, _, _ -> eval_comparison (<) v1 v2
+  | Gt, _, _, _ -> eval_comparison (>) v1 v2
+  | Le, _, _, _ -> eval_comparison (<=) v1 v2
+  | Ge, _, _, _ -> eval_comparison (>=) v1 v2
+  | Eq, _, _, _ -> eval_comparison (=) v1 v2
+  | Ne, _, _, _ -> eval_comparison (<>) v1 v2
+  | BAnd, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _) ->
+      mkint64 ik (Int64.logand v1 v2)
+  | BXor, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _) ->
+      mkint64 ik (Int64.logxor v1 v2)
+  | BOr, TInt(ik, _), CInt64(v1, _, _), CInt64(v2, _, _) ->
+      mkint64 ik (Int64.logor v1 v2)
+  | LAnd, TInt(ik, _), _, _ ->
+      mkint ik (if bool_val v1 && bool_val v2 then 1 else 0)
+  | LOr, TInt(ik, _), _, _ ->
+      mkint ik (if bool_val v1 || bool_val v2 then 1 else 0)
+  | _, _, _, _ ->
+      raise NotConst
+
+and eval_comparison op v1 v2 =
+  let cmp =
+    match v1, v2 with
+    | CInt64(v1, ik1, _), CInt64(v2, ik2, _) ->
+        let shift v = Int64.sub v 0x8000_0000_0000_0000L in
+        if ik1 = IULongLong || ik2 = IULongLong
+        then compare (shift v1) (shift v2)
+        else compare v1 v2
+    | CReal(v1, _, _), CReal(v2, _, _) ->
+        compare v1 v2
+    | _, _ ->
+        raise NotConst
+  in mkint IInt (if op cmp 0 then 1 else 0)
+
+and eval_cast ty v =
+  match Cil.unrollType ty, v with
+  | TInt(ik, _), CInt64(v, _, _) -> mkint64 ik v
+  | TInt(ik, _), CReal(v, _, _) -> 
+      if ik = IULongLong then raise NotConst else mkint64 ik (Int64.of_float v)
+  | TFloat(fk, _), CReal(v, _, _) -> mkfloat fk v
+  | TFloat(fk, _), CInt64(v, ik, _) ->
+      if ik = IULongLong then raise NotConst else mkfloat fk (Int64.to_float v)
+  | TPtr(_, _), CInt64(_, _, _) -> v  (* tolerance? *)
+  | TPtr(_, _), CStr s -> v  (* tolerance? *)
+  | TPtr(_, _), CWStr s -> v  (* tolerance? *)
+  | _, _ -> raise NotConst
+
+
+(* The parameter to the translation functor: it specifies the
+   translation for integer and float types. *)
 
 module type TypeSpecifierTranslator =
   sig
     val convertIkind: Cil.ikind -> (intsize * signedness) option
     val convertFkind: Cil.fkind -> floatsize option
   end
-
-
-
-
 
 module Make(TS: TypeSpecifierTranslator) = struct
 (*-----------------------------------------------------------------------*)
@@ -545,11 +681,15 @@ and convertTypGen env = function
             warning "array type of unspecified size";
             Tarray (convertTypGen env t, coqint_of_camlint 0l)
 	| Some e ->
-            match Cil.constFold true e with
-            | Const (CInt64 (i64, _, _)) ->
-                Tarray (convertTypGen env t,
-                        coqint_of_camlint (Int64.to_int32 i64))
-            | _ -> unsupported "size of array type not an integer constant"
+            begin try
+              match eval_expr e with
+              | CInt64 (i64, _, _) ->
+                  Tarray (convertTypGen env t,
+                          coqint_of_camlint (Int64.to_int32 i64))
+              | _ -> unsupported "size of array type not an integer constant"
+            with NotConst ->
+              unsupported "size of array type not constant"
+            end
       end
   | TFun (t, argListOpt, vArg, _) ->
       if vArg then unsupported "variadic function type";
@@ -867,42 +1007,20 @@ let rec initDataLen accu = function
 (** Convert a [Cil.init] into a list of [AST.init_data] prepended to
     the given list [k].  Result is in reverse order. *)
 
-(* Cil.constFold does not reduce floating-point operations.
-   We treat here those that appear naturally in initializers. *)
-
 type init_constant =
   | ICint of int64 * intsize
   | ICfloat of float * floatsize
   | ICstring of string
   | ICnone
 
-let rec extract_constant e =
-  match e with
-  | Const (CInt64(n, ikind, _)) ->
-      ICint(n, fst (convertIkind ikind))
-  | Const (CReal(n, fkind, _)) ->
-      ICfloat(n, convertFkind fkind)
-  | Const (CStr s) ->
-      ICstring s
-  | CastE (ty, e1) ->
-      begin match extract_constant e1, convertTyp ty with
-      | ICfloat(n, _), Tfloat sz ->
-          ICfloat(n, sz)
-      | ICint(n, _), Tfloat sz ->
-          ICfloat(Int64.to_float n, sz)
-      | ICint(n, sz), Tpointer _ ->
-          ICint(n, sz)
-      | ICstring s, (Tint _ | Tpointer _) ->
-          ICstring s
-      | _, _ ->
-          ICnone
-      end
-  | UnOp (Neg, e1, _) ->
-      begin match extract_constant e1 with
-      | ICfloat(n, sz) -> ICfloat(-. n, sz)
-      | _ -> ICnone
-      end
-  | _ -> ICnone
+let extract_constant e =
+  try
+    match eval_expr e with
+    | CInt64(n, ikind, _) -> ICint(n, fst (convertIkind ikind))
+    | CReal(n, fkind, _) -> ICfloat(n, convertFkind fkind)
+    | CStr s -> ICstring s
+    | _ -> ICnone
+  with NotConst -> ICnone
 
 let init_data_of_string s =
   let id = ref [] in
