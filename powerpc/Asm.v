@@ -74,7 +74,7 @@ Inductive constant: Type :=
   we do not attempt to capture these restrictions in the 
   abstract syntax nor in the semantics.  The assembler will
   emit an error if immediate operands exceed the representable
-  range.  Of course, our PPC generator (file [PPCgen]) is
+  range.  Of course, our PPC generator (file [Asmgen]) is
   careful to respect this range. *)
 
 (** Bits in the condition register.  We are only interested in the
