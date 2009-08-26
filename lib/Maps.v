@@ -102,9 +102,9 @@ Module Type TREE.
   Variable combine:
     forall (A: Type), (option A -> option A -> option A) -> t A -> t A -> t A.
   Hypothesis gcombine:
-    forall (A: Type) (f: option A -> option A -> option A)
-           (m1 m2: t A) (i: elt),
+    forall (A: Type) (f: option A -> option A -> option A),
     f None None = None ->
+    forall (m1 m2: t A) (i: elt),
     get i (combine f m1 m2) = f (get i m1) (get i m2).
   Hypothesis combine_commut:
     forall (A: Type) (f g: option A -> option A -> option A),
@@ -481,70 +481,84 @@ Module PTree <: TREE.
     rewrite append_neutral_l; auto.
   Qed.
 
-    Fixpoint xcombine_l (A : Type) (f : option A -> option A -> option A)
-                       (m : t A) {struct m} : t A :=
+  Definition Node' (A: Type) (l: t A) (x: option A) (r: t A): t A :=
+    match l, x, r with
+    | Leaf, None, Leaf => Leaf
+    | _, _, _ => Node l x r
+    end.
+
+  Lemma gnode':
+    forall (A: Type) (l r: t A) (x: option A) (i: positive),
+    get i (Node' l x r) = get i (Node l x r).
+  Proof.
+    intros. unfold Node'. 
+    destruct l; destruct x; destruct r; auto.
+    destruct i; simpl; auto; rewrite gleaf; auto.
+  Qed.
+
+  Section COMBINE.
+
+  Variable A: Type.
+  Variable f: option A -> option A -> option A.
+  Hypothesis f_none_none: f None None = None.
+
+  Fixpoint xcombine_l (m : t A) {struct m} : t A :=
       match m with
       | Leaf => Leaf
-      | Node l o r => Node (xcombine_l f l) (f o None) (xcombine_l f r)
+      | Node l o r => Node' (xcombine_l l) (f o None) (xcombine_l r)
       end.
 
-    Lemma xgcombine_l :
-          forall (A : Type) (f : option A -> option A -> option A)
-                 (i : positive) (m : t A),
-          f None None = None -> get i (xcombine_l f m) = f (get i m) None.
+  Lemma xgcombine_l :
+          forall (m: t A) (i : positive),
+          get i (xcombine_l m) = f (get i m) None.
     Proof.
-      induction i; intros; destruct m; simpl; auto.
+      induction m; intros; simpl.
+      repeat rewrite gleaf. auto.
+      rewrite gnode'. destruct i; simpl; auto.
     Qed.
 
-    Fixpoint xcombine_r (A : Type) (f : option A -> option A -> option A)
-                       (m : t A) {struct m} : t A :=
+  Fixpoint xcombine_r (m : t A) {struct m} : t A :=
       match m with
       | Leaf => Leaf
-      | Node l o r => Node (xcombine_r f l) (f None o) (xcombine_r f r)
+      | Node l o r => Node' (xcombine_r l) (f None o) (xcombine_r r)
       end.
 
-    Lemma xgcombine_r :
-          forall (A : Type) (f : option A -> option A -> option A)
-                 (i : positive) (m : t A),
-          f None None = None -> get i (xcombine_r f m) = f None (get i m).
+  Lemma xgcombine_r :
+          forall (m: t A) (i : positive),
+          get i (xcombine_r m) = f None (get i m).
     Proof.
-      induction i; intros; destruct m; simpl; auto.
+      induction m; intros; simpl.
+      repeat rewrite gleaf. auto.
+      rewrite gnode'. destruct i; simpl; auto.
     Qed.
 
-  Fixpoint combine (A : Type) (f : option A -> option A -> option A)
-                   (m1 m2 : t A) {struct m1} : t A :=
+  Fixpoint combine (m1 m2 : t A) {struct m1} : t A :=
     match m1 with
-    | Leaf => xcombine_r f m2
+    | Leaf => xcombine_r m2
     | Node l1 o1 r1 =>
         match m2 with
-        | Leaf => xcombine_l f m1
-        | Node l2 o2 r2 => Node (combine f l1 l2) (f o1 o2) (combine f r1 r2)
+        | Leaf => xcombine_l m1
+        | Node l2 o2 r2 => Node' (combine l1 l2) (f o1 o2) (combine r1 r2)
         end
     end.
 
-    Lemma xgcombine:
-      forall (A: Type) (f: option A -> option A -> option A) (i: positive)
-             (m1 m2: t A),
-      f None None = None ->
-      get i (combine f m1 m2) = f (get i m1) (get i m2).
-    Proof.
-      induction i; intros; destruct m1; destruct m2; simpl; auto;
-      try apply xgcombine_r; try apply xgcombine_l; auto.
-    Qed.
-
   Theorem gcombine:
-    forall (A: Type) (f: option A -> option A -> option A)
-           (m1 m2: t A) (i: positive),
-    f None None = None ->
-    get i (combine f m1 m2) = f (get i m1) (get i m2).
+      forall (m1 m2: t A) (i: positive),
+      get i (combine m1 m2) = f (get i m1) (get i m2).
   Proof.
-    intros A f m1 m2 i H; exact (xgcombine f i m1 m2 H).
+    induction m1; intros; simpl.
+    rewrite gleaf. apply xgcombine_r.
+    destruct m2; simpl.
+    rewrite gleaf. rewrite <- xgcombine_l. auto. 
+    repeat rewrite gnode'. destruct i; simpl; auto.
   Qed.
 
-    Lemma xcombine_lr :
-      forall (A : Type) (f g : option A -> option A -> option A) (m : t A),
-      (forall (i j : option A), f i j = g j i) ->
-      xcombine_l f m = xcombine_r g m.
+  End COMBINE.
+
+  Lemma xcombine_lr :
+    forall (A : Type) (f g : option A -> option A -> option A) (m : t A),
+    (forall (i j : option A), f i j = g j i) ->
+    xcombine_l f m = xcombine_r g m.
     Proof.
       induction m; intros; simpl; auto.
       rewrite IHm1; auto.

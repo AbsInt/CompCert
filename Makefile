@@ -96,6 +96,10 @@ ccomp: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
         && rm -f ccomp && ln -s _build/driver/Driver.native ccomp
 
+ccomp.prof: driver/Configuration.ml
+	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.p.native \
+        && rm -f ccomp.prof && ln -s _build/driver/Driver.p.native ccomp.prof
+
 ccomp.byte: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
         && rm -f ccomp.byte && ln -s _build/driver/Driver.d.byte ccomp.byte
@@ -103,7 +107,7 @@ ccomp.byte: driver/Configuration.ml
 runtime:
 	$(MAKE) -C runtime
 
-.PHONY: proof extraction cil ccomp runtime
+.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte runtime
 
 all:
 	$(MAKE) proof

@@ -36,7 +36,7 @@ open Conventions
    follows. *)
 
 type node =
-  { ident: reg;                         (*r register identifier *)
+  { ident: int;                         (*r unique identifier *)
     typ: typ;                           (*r its type *)
     regclass: int;                      (*r identifier of register class *)
     mutable spillcost: float;           (*r estimated cost of spilling *)
@@ -93,7 +93,7 @@ module DLinkNode = struct
   type t = node
   let make state =
     let rec empty =
-      { ident = Coq_xH; typ = Tint; regclass = 0;
+      { ident = 0; typ = Tint; regclass = 0;
         adjlist = []; degree = 0; spillcost = 0.0;
         movelist = []; alias = None; color = None;
         nstate = state; nprev = empty; nnext = empty }
@@ -149,11 +149,32 @@ module DLinkMove = struct
     in fold dl.mnext accu
 end
 
+(* Auxiliary data structures *)
+
+module IntSet = Set.Make(struct
+  type t = int
+  let compare x y =
+    if x < y then -1 else if x > y then 1 else 0
+end)
+
+module IntPairSet = Set.Make(struct
+  type t = int * int
+  let compare (x1, y1) (x2, y2) =
+    if x1 < x2 then -1 else
+    if x1 > x2 then 1 else
+    if y1 < y2 then -1 else
+    if y1 > y2 then 1 else
+    0
+  end)
+
 (* \subsection{The George-Appel algorithm} *)
 
 (* Below is a straigthforward translation of the pseudo-code at the end
    of the TOPLAS article by George and Appel.  Two bugs were fixed
    and are marked as such.  Please refer to the article for explanations. *)
+
+(* The adjacency set  *)
+let adjSet = ref IntPairSet.empty
 
 (* Low-degree, non-move-related nodes *)
 let simplifyWorklist = DLinkNode.make SimplifyWorklist
@@ -182,9 +203,14 @@ let worklistMoves = DLinkMove.make WorklistMoves
 (* Moves not yet ready for coalescing *)
 let activeMoves = DLinkMove.make ActiveMoves
 
+(* To generate node identifiers *)
+let nextRegIdent = ref 0
+
 (* Initialization of all global data structures *)
 
 let init() =
+  adjSet := IntPairSet.empty;
+  nextRegIdent := 0;
   DLinkNode.clear simplifyWorklist;
   DLinkNode.clear freezeWorklist;
   DLinkNode.clear spillWorklist;
@@ -197,17 +223,25 @@ let init() =
 (* Determine if two nodes interfere *)
 
 let interfere n1 n2 =
-  if n1.degree < n2.degree
-  then List.memq n2 n1.adjlist
-  else List.memq n1 n2.adjlist
+  let i1 = n1.ident and i2 = n2.ident in
+  let p = if i1 < i2 then (i1, i2) else (i2, i1) in
+  IntPairSet.mem p !adjSet
 
 (* Add an edge to the graph.  Assume edge is not in graph already *)
 
 let addEdge n1 n2 =
-  n1.adjlist <- n2 :: n1.adjlist;
-  n1.degree  <- 1 + n1.degree;
-  n2.adjlist <- n1 :: n2.adjlist;
-  n2.degree  <- 1 + n2.degree
+  assert (n1 != n2 && not (interfere n1 n2));
+  let i1 = n1.ident and i2 = n2.ident in
+  let p = if i1 < i2 then (i1, i2) else (i2, i1) in
+  adjSet := IntPairSet.add p !adjSet;
+  if n1.nstate <> Colored then begin
+    n1.adjlist <- n2 :: n1.adjlist;
+    n1.degree  <- 1 + n1.degree
+  end;
+  if n2.nstate <> Colored then begin
+    n2.adjlist <- n1 :: n2.adjlist;
+    n2.degree  <- 1 + n2.degree
+  end
 
 (* Apply the given function to the relevant adjacent nodes of a node *)
 
@@ -234,44 +268,6 @@ let nodeMoves n =
 let moveRelated n =
   List.exists moveIsActiveOrWorklist n.movelist
 
-(*i
-(* Check invariants *)
-
-let degreeInvariant n =
-  let c = ref 0 in
-  iterAdjacent (fun n -> incr c) n;
-  if !c <> n.degree then
-    fatal_error("degree invariant violated by " ^ name_of_node n)
-
-let simplifyWorklistInvariant n =
-  if n.degree < num_available_registers.(n.regclass)
-  && not (moveRelated n)
-  then ()
-  else fatal_error("simplify worklist invariant violated by " ^ name_of_node n)
-
-let freezeWorklistInvariant n =
-  if n.degree < num_available_registers.(n.regclass)
-  && moveRelated n
-  then ()
-  else fatal_error("freeze worklist invariant violated by " ^ name_of_node n)
-
-let spillWorklistInvariant n =
-  if n.degree >= num_available_registers.(n.regclass)
-  then ()
-  else fatal_error("spill worklist invariant violated by " ^ name_of_node n)
-
-let checkInvariants () =
-  DLinkNode.iter
-    (fun n -> degreeInvariant n; simplifyWorklistInvariant n)
-    simplifyWorklist;
-  DLinkNode.iter
-    (fun n -> degreeInvariant n; freezeWorklistInvariant n)
-    freezeWorklist;
-  DLinkNode.iter
-    (fun n -> degreeInvariant n; spillWorklistInvariant n)
-    spillWorklist
-i*)
-
 (* Register classes *)
 
 let class_of_type = function Tint -> 0 | Tfloat -> 1
@@ -294,11 +290,52 @@ let num_available_registers =
      Array.length caller_save_registers.(1)
            + Array.length callee_save_registers.(1) |]
 
+(*i
+(* Check invariants *)
+
+let name_of_node n = string_of_int n.ident
+
+let degreeInvariant n =
+  let c = ref 0 in
+  iterAdjacent (fun n -> incr c) n;
+  if !c <> n.degree then
+    failwith("degree invariant violated by " ^ name_of_node n)
+
+let simplifyWorklistInvariant n =
+  if n.degree < num_available_registers.(n.regclass)
+  && not (moveRelated n)
+  then ()
+  else failwith("simplify worklist invariant violated by " ^ name_of_node n)
+
+let freezeWorklistInvariant n =
+  if n.degree < num_available_registers.(n.regclass)
+  && moveRelated n
+  then ()
+  else failwith("freeze worklist invariant violated by " ^ name_of_node n)
+
+let spillWorklistInvariant n =
+  if n.degree >= num_available_registers.(n.regclass)
+  then ()
+  else failwith("spill worklist invariant violated by " ^ name_of_node n)
+
+let checkInvariants () =
+  DLinkNode.iter
+    (fun n -> degreeInvariant n; simplifyWorklistInvariant n)
+    simplifyWorklist;
+  DLinkNode.iter
+    (fun n -> degreeInvariant n; freezeWorklistInvariant n)
+    freezeWorklist;
+  DLinkNode.iter
+    (fun n -> degreeInvariant n; spillWorklistInvariant n)
+    spillWorklist
+*)
+
 (* Build the internal representation of the graph *)
 
 let nodeOfReg r typenv spillcosts =
   let ty = typenv r in
-  { ident = r; typ = ty; regclass = class_of_type ty;
+  incr nextRegIdent;
+  { ident = !nextRegIdent; typ = ty; regclass = class_of_type ty;
     spillcost = (try float(Hashtbl.find spillcosts r) with Not_found -> 0.0);
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = None;
@@ -307,7 +344,8 @@ let nodeOfReg r typenv spillcosts =
 
 let nodeOfMreg mr =
   let ty = mreg_type mr in
-  { ident = Coq_xH; typ = ty; regclass = class_of_type ty;
+  incr nextRegIdent;
+  { ident = !nextRegIdent; typ = ty; regclass = class_of_type ty;
     spillcost = 0.0;
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = Some (R mr);
@@ -332,7 +370,7 @@ let build g typenv spillcosts =
       let n = nodeOfMreg mr in
       Hashtbl.add mreg_mapping mr n;
       n in
-  (* Fill the adjacency lists and compute the degrees. *)
+  (* Fill the adjacency set and the adjacency lists; compute the degrees. *)
   SetRegReg.fold
     (fun (Coq_pair(r1, r2)) () ->
       addEdge (find_reg_node r1) (find_reg_node r2))
@@ -369,6 +407,7 @@ let build g typenv spillcosts =
       else
         DLinkNode.insert n simplifyWorklist)
     reg_mapping;
+  (* Return mapping from pseudo-registers to nodes *)
   reg_mapping
 
 (* Enable moves that have become low-degree related *)
@@ -389,11 +428,11 @@ let decrementDegree n =
   if d = k then begin
     enableMoves n;
     iterAdjacent enableMoves n;
-    if n.nstate <> Colored then begin
-      if moveRelated n
-      then DLinkNode.move n spillWorklist freezeWorklist
-      else DLinkNode.move n spillWorklist simplifyWorklist
-    end
+(*    if n.nstate <> Colored then begin *)
+    if moveRelated n
+    then DLinkNode.move n spillWorklist freezeWorklist
+    else DLinkNode.move n spillWorklist simplifyWorklist
+(*    end *)
   end
 
 (* Simulate the effect of combining nodes [n1] and [n3] on [n2],
@@ -402,11 +441,22 @@ let decrementDegree n =
 let combineEdge n1 n2 =
   assert (n1 != n2);
   if interfere n1 n2 then begin
+    (* The two edges n2--n3 and n2--n1 become one, so degree of n2 decreases *)
     decrementDegree n2
   end else begin
-    n1.adjlist <- n2 :: n1.adjlist;
-    n2.adjlist <- n1 :: n2.adjlist;
-    n1.degree  <- n1.degree + 1
+    (* Add new edge *)
+    let i1 = n1.ident and i2 = n2.ident in
+    let p = if i1 < i2 then (i1, i2) else (i2, i1) in
+    adjSet := IntPairSet.add p !adjSet;
+    if n1.nstate <> Colored then begin
+      n1.adjlist <- n2 :: n1.adjlist;
+      n1.degree  <- 1 + n1.degree
+    end;
+    if n2.nstate <> Colored then begin
+      n2.adjlist <- n1 :: n2.adjlist;
+      (* n2's degree stays the same because the old edge n2--n3 disappears
+         and becomes the new edge n2--n1 *)
+    end
   end
 
 (* Simplification of a low-degree node *)
@@ -420,18 +470,37 @@ let simplify () =
 
 (* Briggs' conservative coalescing criterion *)
 
-let canConservativelyCoalesce n1 n2 =
-  let seen = ref Regset.empty in
-  let k = num_available_registers.(n1.regclass) in
+let canConservativelyCoalesce u v =
+  let seen = ref IntSet.empty in
+  let k = num_available_registers.(u.regclass) in
   let c = ref 0 in
   let consider n =
-    if not (Regset.mem n.ident !seen) then begin
-      seen := Regset.add n.ident !seen;
-      if n.degree >= k || n.nstate = Colored then incr c
+    if not (IntSet.mem n.ident !seen) then begin
+      seen := IntSet.add n.ident !seen;
+      if n.degree >= k then begin
+        incr c;
+        if !c >= k then raise Exit
+      end
     end in
-  iterAdjacent consider n1;
-  iterAdjacent consider n2;
-  !c < k
+  try
+    iterAdjacent consider u;
+    iterAdjacent consider v;
+    true
+  with Exit ->
+    false
+
+(* The alternate criterion for precolored nodes *)
+
+let canCoalescePrecolored u v =
+  let k = num_available_registers.(u.regclass) in
+  let isOK t =
+    if t.degree < k || t.nstate = Colored || interfere t u
+    then ()
+    else raise Exit in
+  try
+    iterAdjacent isOK v; true
+  with Exit ->
+    false
 
 (* Update worklists after a move was processed *)
 
@@ -475,7 +544,9 @@ let coalesce () =
     DLinkMove.insert m constrainedMoves;
     addWorkList u;
     addWorkList v
-  end else if canConservativelyCoalesce u v then begin
+  end else if (if u.nstate = Colored 
+               then canCoalescePrecolored u v
+               else canConservativelyCoalesce u v) then begin
     DLinkMove.insert m coalescedMoves;
     combine u v;
     addWorkList u
@@ -486,10 +557,10 @@ let coalesce () =
 (* Freeze moves associated with node [u] *)
 
 let freezeMoves u =
-  let au = getAlias u in
+  let u' = getAlias u in
   let freeze m =
     let y = getAlias m.src in
-    let v = if y == au then getAlias m.dst else y in
+    let v = if y == u' then getAlias m.dst else y in
     DLinkMove.move m activeMoves frozenMoves;
     if not (moveRelated v)
     && v.degree < num_available_registers.(v.regclass)
@@ -530,7 +601,7 @@ let selectSpill () =
 (* Produce the order of nodes that we'll use for coloring *)
 
 let rec nodeOrder stack =
-  (*i checkInvariants(); i*)
+  (*i checkInvariants(); *)
   if DLinkNode.notempty simplifyWorklist then
     (let n = simplify() in nodeOrder (n :: stack))
   else if DLinkMove.notempty worklistMoves then
@@ -622,6 +693,7 @@ let graph_coloring (f: coq_function) (g: graph) (env: regenv) (regs: Regset.t)
   Array.fill start_points 0 num_register_classes 0;
   let mapping = build g env (spill_costs f) in
   List.iter assign_color (nodeOrder []);
+  init();
   fun r ->
     try location_of_node (getAlias (Hashtbl.find mapping r))
     with Not_found -> R IT1 (* any location *)

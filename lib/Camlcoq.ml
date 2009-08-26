@@ -127,3 +127,13 @@ let print_timers () =
 
 let _ = at_exit print_timers
 *)
+
+(* Heap profiling facility *)
+
+(*
+let heap_info msg =
+  Gc.full_major();
+  let s = Gc.stat() in
+  Printf.printf "%s: size %d live %d\n " msg s.Gc.heap_words s.Gc.live_words;
+  flush stdout
+*)

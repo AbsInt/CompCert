@@ -80,23 +80,31 @@ Definition get (p: positive) (x: t) : L.t :=
 Definition set (p: positive) (v: L.t) (x: t) : t :=
   match x with
   | Bot_except m =>
-      Bot_except (PTree.set p v m)
+      Bot_except (if L.beq v L.bot then PTree.remove p m else PTree.set p v m)
   | Top_except m =>
-      Top_except (PTree.set p v m)
+      Top_except (if L.beq v L.top then PTree.remove p m else PTree.set p v m)
   end.
 
 Lemma gss:
   forall p v x,
-  get p (set p v x) = v.
+  L.eq (get p (set p v x)) v.
 Proof.
-  intros. destruct x; simpl; rewrite PTree.gss; auto.
+  intros. destruct x; simpl. 
+  case_eq (L.beq v L.bot); intros.
+  rewrite PTree.grs. apply L.eq_sym. apply L.beq_correct; auto. 
+  rewrite PTree.gss. apply L.eq_refl.
+  case_eq (L.beq v L.top); intros.
+  rewrite PTree.grs. apply L.eq_sym. apply L.beq_correct; auto. 
+  rewrite PTree.gss. apply L.eq_refl.
 Qed.
 
 Lemma gso:
   forall p q v x,
   p <> q -> get p (set q v x) = get p x.
 Proof.
-  intros. destruct x; simpl; rewrite PTree.gso; auto.
+  intros. destruct x; simpl.
+  destruct (L.beq v L.bot). rewrite PTree.gro; auto. rewrite PTree.gso; auto.
+  destruct (L.beq v L.top). rewrite PTree.gro; auto. rewrite PTree.gso; auto.
 Qed.
 
 Definition eq (x y: t) : Prop :=
@@ -177,6 +185,10 @@ Proof.
   unfold ge; intros. rewrite get_top. apply L.ge_top.
 Qed.
 
+Definition opt_lub (x y: L.t) : option L.t :=
+  let z := L.lub x y in
+  if L.beq z L.top then None else Some z.
+
 Definition lub (x y: t) : t :=
   match x, y with
   | Bot_except m, Bot_except n =>
@@ -194,7 +206,7 @@ Definition lub (x y: t) : t :=
         (PTree.combine
            (fun a b =>
               match a, b with
-              | Some u, Some v => Some (L.lub u v)
+              | Some u, Some v => opt_lub u v
               | None, _ => b
               | _, None => None
               end)
@@ -204,7 +216,7 @@ Definition lub (x y: t) : t :=
         (PTree.combine
            (fun a b =>
               match a, b with
-              | Some u, Some v => Some (L.lub u v)
+              | Some u, Some v => opt_lub u v
               | None, _ => None
               | _, None => a
               end)
@@ -214,7 +226,7 @@ Definition lub (x y: t) : t :=
         (PTree.combine 
            (fun a b =>
               match a, b with
-              | Some u, Some v => Some (L.lub u v)
+              | Some u, Some v => opt_lub u v
               | _, _ => None
               end)
            m n)
@@ -223,37 +235,65 @@ Definition lub (x y: t) : t :=
 Lemma lub_commut:
   forall x y, eq (lub x y) (lub y x).
 Proof.
-  intros x y p. 
+  intros x y p.
+  assert (forall u v,
+    L.eq (match opt_lub u v with
+          | Some x => x
+          | None => L.top end)
+         (match opt_lub v u with
+         | Some x => x
+         | None => L.top
+         end)).
+  intros. unfold opt_lub. 
+  case_eq (L.beq (L.lub u v) L.top);
+  case_eq (L.beq (L.lub v u) L.top); intros.
+  apply L.eq_refl.
+  eapply L.eq_trans. apply L.eq_sym. apply L.beq_correct; eauto. apply L.lub_commut.
+  eapply L.eq_trans. apply L.lub_commut. apply L.beq_correct; auto.
+  apply L.lub_commut.
   destruct x; destruct y; simpl;
   repeat rewrite PTree.gcombine; auto;
   destruct t0!p; destruct t1!p;
-  try apply L.eq_refl; try apply L.lub_commut.
+  auto; apply L.eq_refl || apply L.lub_commut.
 Qed.
 
 Lemma ge_lub_left:
   forall x y, ge (lub x y) x.
 Proof.
+  assert (forall u v,
+    L.ge (match opt_lub u v with Some x => x | None => L.top end) u).
+  intros; unfold opt_lub. 
+  case_eq (L.beq (L.lub u v) L.top); intros. apply L.ge_top. apply L.ge_lub_left.
+
   unfold ge, get, lub; intros; destruct x; destruct y.
 
-  rewrite PTree.gcombine. 
-  destruct t0!p. destruct t1!p. apply L.ge_lub_left.
+  rewrite PTree.gcombine; auto.
+  destruct t0!p; destruct t1!p.
+  apply L.ge_lub_left.
   apply L.ge_refl. apply L.eq_refl. 
-  destruct t1!p. apply L.ge_bot. apply L.ge_refl. apply L.eq_refl.
-  auto.
+  apply L.ge_bot.
+  apply L.ge_refl. apply L.eq_refl.
 
-  rewrite PTree.gcombine. 
-  destruct t0!p. destruct t1!p. apply L.ge_lub_left.
-  apply L.ge_top. destruct t1!p. apply L.ge_bot. apply L.ge_bot.
+  rewrite PTree.gcombine; auto.
+  destruct t0!p; destruct t1!p.
   auto.
+  apply L.ge_top.
+  apply L.ge_bot.
+  apply L.ge_top.
 
-  rewrite PTree.gcombine. 
-  destruct t0!p. destruct t1!p. apply L.ge_lub_left.
-  apply L.ge_refl. apply L.eq_refl. apply L.ge_refl. apply L.eq_refl. auto.
-
-  rewrite PTree.gcombine. 
-  destruct t0!p. destruct t1!p. apply L.ge_lub_left.
-  apply L.ge_top. apply L.ge_refl. apply L.eq_refl.
+  rewrite PTree.gcombine; auto.
+  destruct t0!p; destruct t1!p.
   auto.
+  apply L.ge_refl. apply L.eq_refl.
+  apply L.ge_top.
+  apply L.ge_top.
+
+  rewrite PTree.gcombine; auto.
+  destruct t0!p; destruct t1!p.
+  auto.
+  apply L.ge_top.
+  apply L.ge_top.
+  apply L.ge_top.
 Qed.
 
 End LPMap.
