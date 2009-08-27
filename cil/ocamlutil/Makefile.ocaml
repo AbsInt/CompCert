@@ -234,8 +234,8 @@ else
    COMPILEFLAGS += -ccopt /Zi -ccopt /Od
    LINKFLAGS    += -ccopt /Zi -ccopt /Od
  else
-   COMPILEFLAGS += -g -ccopt -g
-   LINKFLAGS    += -g -ccopt -g
+   COMPILEFLAGS += -g
+   LINKFLAGS    += -g
  endif
  CAMLC          = $(CAMLDIR)ocamlc -g $(COMPILEFLAGS)
  CAMLLINK       = $(CAMLDIR)ocamlc -custom  $(LINKFLAGS)
