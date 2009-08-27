@@ -46,7 +46,7 @@ PREREQUISITES:
   the search path.  For MacOS X, you can get them by installing the
   XCode development tools, as found on the installation DVDs.
 
-* The Coq proof assistant, version 8.1pl3.
+* The Coq proof assistant, version 8.2-1 or later.
   Coq is free software, available from http://coq.inria.fr/
 
 * The Caml functional language, version 3.10 or later.
@@ -121,7 +121,7 @@ The generated assembly code is left in file src1.s
 The subset of the C language accepted by Compcert is quite large.
 The main features of C that are not supported are:
   - The "long long" and "long double" types.
-  - The "goto" statement, and non-structured forms of the "switch" statement.
+  - Non-structured forms of the "switch" statement (Duff's device).
   - Variable-argument functions.
 The "ccomp" command will issue errors and diagnostics if it encounters
 a C construct that it cannot process.

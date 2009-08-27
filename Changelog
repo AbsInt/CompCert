@@ -1,3 +1,34 @@
+Release 1.5
+=========
+
+- Support for "goto" in the source language Clight.
+
+- Added small-step semantics for Clight.
+
+- Traces for diverging executions are now uniquely defined;
+  tightened semantic preservation results accordingly.
+
+- Fixed spurious compile-time error on Clight statements of the form
+  "x = f(...)" where x is a global variable.
+
+- Fixed spurious compile-time error on Clight initializers where
+  the initial value is the result of a floating-point computation
+  (e.g. "double x = 3.14159 / 2;").
+
+- Simplified the interface of the generic dataflow solver.
+
+- Reduced running time and memory requirements for the constant propagation
+  pass.
+
+- Improved the implementation of George and Appel's graph coloring heuristic:
+  runs faster, produces better results.
+
+- Revised the implementation of branch tunneling.
+
+- Improved modularization between processor-dependent and
+  processor-independent parts.
+
+
 Release 1.4.1, 2009-06-05
 =========================
 
