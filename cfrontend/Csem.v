@@ -628,20 +628,20 @@ End EXPR.
 Inductive cont: Type :=
   | Kstop: cont
   | Kseq: statement -> cont -> cont
-       (* [Kseq s2 k] = after [s1] in [s1;s2] *)
+       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)
   | Kwhile: expr -> statement -> cont -> cont
-       (* [Kwhile e s k] = after [s] in [while (e) s] *)
+       (**r [Kwhile e s k] = after [s] in [while (e) s] *)
   | Kdowhile: expr -> statement -> cont -> cont
-       (* [Kdowhile e s k] = after [s] in [do s while (e)] *)
+       (**r [Kdowhile e s k] = after [s] in [do s while (e)] *)
   | Kfor2: expr -> statement -> statement -> cont -> cont
-       (* [Kfor2 e2 e3 s k] = after [s] in [for(e1;e2;e3) s] *)
+       (**r [Kfor2 e2 e3 s k] = after [s] in [for(e1;e2;e3) s] *)
   | Kfor3: expr -> statement -> statement -> cont -> cont
-       (* [Kfor3 e2 e3 s k] = after [e3] in [for(e1;e2;e3) s] *)
+       (**r [Kfor3 e2 e3 s k] = after [e3] in [for(e1;e2;e3) s] *)
   | Kswitch: cont -> cont
-       (* catches [break] statements arising out of [switch] *)
-  | Kcall: option (block * int * type) ->   (* where to store result *)
-           function ->                      (* calling function *)
-           env ->                           (* local env of calling function *)
+       (**r catches [break] statements arising out of [switch] *)
+  | Kcall: option (block * int * type) ->   (**r where to store result *)
+           function ->                      (**r calling function *)
+           env ->                           (**r local env of calling function *)
            cont -> cont.
 
 (** Pop continuation until a call or stop *)

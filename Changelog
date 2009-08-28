@@ -1,5 +1,5 @@
-Release 1.5
-=========
+Release 1.5, 2009-08-28
+=======================
 
 - Support for "goto" in the source language Clight.
 
@@ -9,7 +9,7 @@ Release 1.5
   tightened semantic preservation results accordingly.
 
 - Fixed spurious compile-time error on Clight statements of the form
-  "x = f(...)" where x is a global variable.
+  "x = f(...);" where x is a global variable.
 
 - Fixed spurious compile-time error on Clight initializers where
   the initial value is the result of a floating-point computation

@@ -24,7 +24,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The Compcert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 1.4, 2009-04-21</H3>
+<H3 align="center">Version 1.5, 2009-08-28</H3>
 
 <H2>Introduction</H2>
 
@@ -83,9 +83,10 @@ semi-lattices.
 <LI> <A HREF="html/Kildall.html">Kildall</A>: resolution of dataflow
 inequations by fixpoint iteration.
 <LI> <A HREF="html/Parmov.html">Parmov</A>: compilation of parallel assignments.
+<LI> <A HREF="html/UnionFind.html">UnionFind</A>: a persistent union-find data structure.
 </UL>
 
-<H3>Definitions and properties used in many parts of the development</H3>
+<H3>Definitions and theorems used in many parts of the development</H3>
 
 <UL>
 <LI> <A HREF="html/Errors.html">Errors</A>: the Error monad.
@@ -96,6 +97,7 @@ common elements of abstract syntaxes.
 <LI> <A HREF="html/Mem.html">Mem</A>: the memory model.
 <LI> <A HREF="html/Globalenvs.html">Globalenvs</A>: global execution environments.
 <LI> <A HREF="html/Smallstep.html">Smallstep</A>: tools for small-step semantics.
+<LI> <A HREF="html/Determinism.html">Determinism</A>: determinism properties of small-step semantics.
 <LI> <A HREF="html/Op.html">Op</A>: operators, addressing modes and their
 semantics.
 </UL>
@@ -151,7 +153,9 @@ code.
       <A HREF="html/Cshmgenproof2.html">Cshmgenproof2</A><br>
       <A HREF="html/Cshmgenproof3.html">Cshmgenproof3</A></TD>
 <TR valign="top">
-  <TD>Stack allocation of local variables<br>whose address is taken</TD>
+  <TD>Stack allocation of local variables<br>
+      whose address is taken;<br>
+      simplification of switch statements</TD>
   <TD>Csharpminor to Cminor</TD>
   <TD><A HREF="html/Cminorgen.html">Cminorgen</A></TD>
   <TD><A HREF="html/Cminorgenproof.html">Cminorgenproof</A></TD>
@@ -160,8 +164,10 @@ code.
 <TR valign="top">
   <TD>Recognition of operators<br>and addressing modes</TD>
   <TD>Cminor to CminorSel</TD>
-  <TD><A HREF="html/Selection.html">Selection</A></TD>
-  <TD><A HREF="html/Selectionproof.html">Selectionproof</A></TD>
+  <TD><A HREF="html/Selection.html">Selection</A><br>
+      <A HREF="html/SelectOp.html">SelectOp</A></TD>
+  <TD><A HREF="html/Selectionproof.html">Selectionproof</A><br>
+      <A HREF="html/SelectOpproof.html">SelectOpproof</A></TD>
 </TR>
 
 <TR valign="top">
@@ -182,8 +188,10 @@ code.
 <TR valign="top">
   <TD>Constant propagation</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Constprop.html">Constprop</A></TD>
-  <TD><A HREF="html/Constpropproof.html">Constpropproof</A></TD>
+  <TD><A HREF="html/Constprop.html">Constprop</A><br>
+      <A HREF="html/ConstpropOp.html">ConstpropOp</A></TD>
+  <TD><A HREF="html/Constpropproof.html">Constpropproof</A><br>
+      <A HREF="html/ConstpropOpproof.html">ConstproppOproof</A></TD>
 </TR>
 
 <TR valign="top">
@@ -276,7 +284,7 @@ Proofs that compiler passes are type-preserving:
 <H3>All together</H3>
 
 <UL>
-<LI> <A HREF="html/Main.html">Main</A>: composing the passes together; the
+<LI> <A HREF="html/Compiler.html">Compiler</A>: composing the passes together; the
 final semantic preservation theorems.
 <LI> <A HREF="html/Complements.html">Complements</A>: interesting consequences of the semantic preservation theorems.
 </UL>
