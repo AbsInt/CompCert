@@ -8,6 +8,9 @@ Release 1.5, 2009-08-28
 - Traces for diverging executions are now uniquely defined;
   tightened semantic preservation results accordingly.
 
+- Emulated assignments between structures 
+  (during the C to Clight initial translation).
+
 - Fixed spurious compile-time error on Clight statements of the form
   "x = f(...);" where x is a global variable.
 
