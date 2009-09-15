@@ -158,6 +158,8 @@ and eval_cast ty v =
   | TInt(ik, _), CInt64(v, _, _) -> mkint64 ik v
   | TInt(ik, _), CReal(v, _, _) -> 
       if ik = IULongLong then raise NotConst else mkint64 ik (Int64.of_float v)
+  | TEnum _, CInt64(v, _, _) -> mkint64 IInt v
+  | TEnum _, CReal(v, _, _) -> mkint64 IInt (Int64.of_float v)
   | TFloat(fk, _), CReal(v, _, _) -> mkfloat fk v
   | TFloat(fk, _), CInt64(v, ik, _) ->
       if ik = IULongLong then raise NotConst else mkfloat fk (Int64.to_float v)

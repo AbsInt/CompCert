@@ -27,6 +27,9 @@ float x11 = 1 + 1 / 3.14159;
 
 double x12 = 1 / 3.14159 + 1;
 
+typedef enum { AAA , BBB } MyEnum;
+
+const MyEnum x13[2] = { AAA, BBB };
 
 int main(int argc, char ** argv)
 {
@@ -50,6 +53,7 @@ int main(int argc, char ** argv)
          x10.u.y, x10.u.z, x10.v);
   printf("x11 = %.10f\n", x11);
   printf("x12 = %.10f\n", x12);
+  printf("x13 = { %d, %d }\n", x13[0], x13[1]);
   return 0;
 }
 
