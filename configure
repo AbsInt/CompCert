@@ -67,7 +67,7 @@ case "$target" in
     variant="macosx"
     system="macosx"
     cc="gcc -arch ppc"
-    cprepro="gcc -arch ppc -U__GNUC__ -E"
+    cprepro="gcc -arch ppc -U__GNUC__ -U__BLOCKS__ -E"
     casm="gcc -arch ppc -c"
     clinker="gcc -arch ppc"
     libmath="";;
