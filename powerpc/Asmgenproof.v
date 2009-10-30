@@ -842,7 +842,9 @@ Proof.
   try (rewrite storev_8_signed_unsigned in H0);
   try (rewrite storev_16_signed_unsigned in H0);
   simpl; eapply transl_store_correct; eauto;
-  intros; unfold preg_of; rewrite H6; reflexivity.
+  intros; (econstructor; split; [unfold preg_of; rewrite H6; reflexivity | auto]).
+  intros. apply Pregmap.gso; auto. 
+  intros. apply Pregmap.gso; auto.
 Qed.
 
 Lemma exec_Mcall_prop:

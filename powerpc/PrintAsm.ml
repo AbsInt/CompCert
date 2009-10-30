@@ -434,9 +434,11 @@ let print_instruction oc labels = function
   | Pstfdx(r1, r2, r3) ->
       fprintf oc "	stfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Pstfs(r1, c, r2) ->
-      fprintf oc "	stfs	%a, %a(%a)\n" freg r1 constant c ireg r2
+      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg r1;
+      fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant c ireg r2
   | Pstfsx(r1, r2, r3) ->
-      fprintf oc "	stfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
+      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg r1;
+      fprintf oc "	stfsx	%a, %a, %a\n" freg FPR13 ireg r2 ireg r3
   | Psth(r1, c, r2) ->
       fprintf oc "	sth	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Psthx(r1, r2, r3) ->

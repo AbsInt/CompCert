@@ -1594,11 +1594,15 @@ Lemma transl_store_correct:
   forall (mk1: constant -> ireg -> instruction) (mk2: ireg -> ireg -> instruction)
     chunk addr args k ms sp rs m src a m',
   (forall cst (r1: ireg) (rs1: regset),
+    exists rs2,
     exec_instr ge fn (mk1 cst r1) rs1 m =
-    store1 ge chunk (preg_of src) cst r1 rs1 m) ->
+    store1 ge chunk (preg_of src) cst r1 rs2 m
+    /\ (forall (r: preg), r <> FPR13 -> rs2 r = rs1 r)) ->
   (forall (r1 r2: ireg) (rs1: regset),
+    exists rs2,
     exec_instr ge fn (mk2 r1 r2) rs1 m =
-    store2 chunk (preg_of src) r1 r2 rs1 m) ->
+    store2 chunk (preg_of src) r1 r2 rs2 m
+    /\ (forall (r: preg), r <> FPR13 -> rs2 r = rs1 r)) ->
   agree ms sp rs ->
   map mreg_type args = type_of_addressing addr ->
   eval_addressing ge sp addr (map ms args) = Some a ->
@@ -1608,21 +1612,32 @@ Lemma transl_store_correct:
                         k rs' m'
   /\ agree ms sp rs'.
 Proof.
-  intros.   apply transl_load_store_correct with ms.
-  intros. exists (nextinstr rs1). 
-  split. apply exec_straight_one. rewrite H. 
-  unfold store1. rewrite gpr_or_zero_not_zero; auto. 
+  intros. apply transl_load_store_correct with ms.
+  intros. destruct (H cst r1 rs1) as [rs2 [A B]].
+  exists (nextinstr rs2). 
+  split. apply exec_straight_one. rewrite A. 
+  unfold store1. rewrite gpr_or_zero_not_zero; auto.
+  repeat rewrite B. 
   rewrite <- (eval_addressing_weaken _ _ _ _ H3) in H4.
   rewrite H5 in H4. elim H6; intros. rewrite H9 in H4.
   rewrite H4. auto.
-  auto with ppcgen. auto with ppcgen. 
-  intros. exists (nextinstr rs1).
-  split. apply exec_straight_one. rewrite H0. 
-  unfold store2. 
+  apply preg_of_not. simpl. tauto.
+  discriminate.
+  rewrite <- B. auto. discriminate.
+  apply agree_nextinstr. eapply agree_exten_2; eauto.
+
+  intros. destruct (H0 r1 r2 rs1) as [rs2 [A B]].
+  exists (nextinstr rs2). 
+  split. apply exec_straight_one. rewrite A. 
+  unfold store2. repeat rewrite B. 
   rewrite <- (eval_addressing_weaken _ _ _ _ H3) in H4.
   rewrite H5 in H4. elim H6; intros. rewrite H8 in H4.
   rewrite H4. auto.
-  auto with ppcgen. auto with ppcgen. 
+  apply preg_of_not. simpl. tauto.
+  discriminate. discriminate.
+  rewrite <- B. auto. discriminate.
+  apply agree_nextinstr. eapply agree_exten_2; eauto.
+
   auto. auto.
 Qed.
 

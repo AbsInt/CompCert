@@ -718,9 +718,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pstfdx rd r1 r2 =>
       store2 Mfloat64 rd r1 r2 rs m
   | Pstfs rd cst r1 =>
-      store1 Mfloat32 rd cst r1 rs m
+      store1 Mfloat32 rd cst r1 (rs#FPR13 <- Vundef) m
   | Pstfsx rd r1 r2 =>
-      store2 Mfloat32 rd r1 r2 rs m
+      store2 Mfloat32 rd r1 r2 (rs#FPR13 <- Vundef) m
   | Psth rd cst r1 =>
       store1 Mint16unsigned rd cst r1 rs m
   | Psthx rd r1 r2 =>
