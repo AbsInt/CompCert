@@ -72,6 +72,9 @@ Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 (* Asm *)
 Extract Constant Asm.low_half => "fun _ -> assert false".
 Extract Constant Asm.high_half => "fun _ -> assert false".
+Extract Constant Asm.symbol_is_small_data => "Cil2Csyntax.atom_is_small_data".
+Extract Constant Asm.small_data_area_base => "fun _ -> assert false".
+Extract Constant Asm.small_data_area_offset => "fun _ _ _ -> assert false".
 
 (* Suppression of stupidly big equality functions *)
 Extract Constant Op.eq_operation => "fun (x: operation) (y: operation) -> x = y".

@@ -264,6 +264,7 @@ Preprocessing options:
 Compilation options:
   -flonglong     Treat 'long long' as 'long' and 'long double' as 'double'
   -fmadd         Use fused multiply-add and multiply-sub instructions
+  -fsda          Use small data area
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
 Linking options:
@@ -301,6 +302,10 @@ let rec parse_cmdline i =
     end else
     if s = "-fmadd" then begin
       option_fmadd := true;
+      parse_cmdline (i + 1)
+    end else
+    if s = "-fsda" then begin
+      option_fsda := true;
       parse_cmdline (i + 1)
     end else
     if s = "-dclight" then begin

@@ -395,8 +395,11 @@ Definition transl_load_store
   | Aindexed2, a1 :: a2 :: nil =>
       mk2 (ireg_of a1) (ireg_of a2) :: k
   | Aglobal symb ofs, nil =>
-      Paddis GPR12 GPR0 (Csymbol_high symb ofs) ::
-      mk1 (Csymbol_low symb ofs) GPR12 :: k
+      if symbol_is_small_data symb ofs then
+        mk1 (Csymbol_sda symb ofs) GPR13 :: k
+      else
+        Paddis GPR12 GPR0 (Csymbol_high symb ofs) ::
+        mk1 (Csymbol_low symb ofs) GPR12 :: k
   | Abased symb ofs, a1 :: nil =>
       if ireg_eq (ireg_of a1) GPR0 then
         Pmr GPR12 (ireg_of a1) ::

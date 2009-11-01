@@ -110,6 +110,8 @@ let constant oc cst =
       | Linux|Diab ->
           fprintf oc "(%a)@ha" symbol_offset (s, camlint_of_coqint n)
       end
+  | Csymbol_sda(s, n) ->
+      assert false  (* treated specially in ireg_with_offset below *)
 
 let num_crbit = function
   | CRbit_0 -> 0
@@ -162,27 +164,44 @@ let creg oc r =
   | MacOS|Diab -> fprintf oc "cr%d" r
   | Linux      -> fprintf oc "%d" r
 
+let ireg_with_offset oc (r, cst) =
+  match cst with
+  | Csymbol_sda(s, n) ->
+      begin match target with
+      | MacOS ->
+          assert false
+      | Linux ->
+          fprintf oc "(%a)@sdarel(%a)" symbol_offset (s, camlint_of_coqint n) ireg r
+      | Diab ->
+          fprintf oc "(%a)@sdarx(r0)" symbol_offset (s, camlint_of_coqint n)
+      end
+  | _ ->
+      fprintf oc "%a(%a)" constant cst ireg r
+
 let section oc name =
   fprintf oc "	%s\n" name
 
 (* Names of sections *)
 
-let (text, data, const_data, float_literal) =
+let (text, data, const_data, sdata, float_literal) =
   match target with
   | MacOS ->
       (".text",
        ".data",
        ".const",
+       ".data",  (* unused *)
        ".const_data")
   | Linux ->
       (".text",
        ".data",
        ".rodata",
+       ".section	.sdata,\"aw\",@progbits",
        ".section	.rodata.cst8,\"aM\",@progbits,8")
   | Diab ->
       (".text",
        ".data",
        ".data",  (* to check *)
+       ".sdata", (* to check *)
        ".data")  (* to check *)
 
 (* Encoding masks for rlwinm instructions *)
@@ -349,11 +368,11 @@ let print_instruction oc labels = function
       fprintf oc "%a:	.long	0x43300000, 0x00000000\n" label lbl;
       section oc text
   | Plbz(r1, c, r2) ->
-      fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	lbz	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Plbzx(r1, r2, r3) ->
       fprintf oc "	lbzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plfd(r1, c, r2) ->
-      fprintf oc "	lfd	%a, %a(%a)\n" freg r1 constant c ireg r2
+      fprintf oc "	lfd	%a, %a\n" freg r1 ireg_with_offset (r2, c)
   | Plfdx(r1, r2, r3) ->
       fprintf oc "	lfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Plfi(r1, c) ->
@@ -367,19 +386,19 @@ let print_instruction oc labels = function
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo;
       section oc text
   | Plfs(r1, c, r2) ->
-      fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
+      fprintf oc "	lfs	%a, %a\n" freg r1 ireg_with_offset (r2, c)
   | Plfsx(r1, r2, r3) ->
       fprintf oc "	lfsx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Plha(r1, c, r2) ->
-      fprintf oc "	lha	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	lha	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Plhax(r1, r2, r3) ->
       fprintf oc "	lhax	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plhz(r1, c, r2) ->
-      fprintf oc "	lhz	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	lhz	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Plhzx(r1, r2, r3) ->
       fprintf oc "	lhzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Plwz(r1, c, r2) ->
-      fprintf oc "	lwz	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	lwz	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Plwzx(r1, r2, r3) ->
       fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pmfcrbit(r1, bit) ->
@@ -426,25 +445,25 @@ let print_instruction oc labels = function
   | Psrw(r1, r2, r3) ->
       fprintf oc "	srw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstb(r1, c, r2) ->
-      fprintf oc "	stb	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	stb	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Pstbx(r1, r2, r3) ->
       fprintf oc "	stbx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstfd(r1, c, r2) ->
-      fprintf oc "	stfd	%a, %a(%a)\n" freg r1 constant c ireg r2
+      fprintf oc "	stfd	%a, %a\n" freg r1 ireg_with_offset (r2, c)
   | Pstfdx(r1, r2, r3) ->
       fprintf oc "	stfdx	%a, %a, %a\n" freg r1 ireg r2 ireg r3
   | Pstfs(r1, c, r2) ->
       fprintf oc "	frsp	%a, %a\n" freg FPR13 freg r1;
-      fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant c ireg r2
+      fprintf oc "	stfs	%a, %a\n" freg FPR13 ireg_with_offset (r2, c)
   | Pstfsx(r1, r2, r3) ->
       fprintf oc "	frsp	%a, %a\n" freg FPR13 freg r1;
       fprintf oc "	stfsx	%a, %a, %a\n" freg FPR13 ireg r2 ireg r3
   | Psth(r1, c, r2) ->
-      fprintf oc "	sth	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	sth	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Psthx(r1, r2, r3) ->
       fprintf oc "	sthx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pstw(r1, c, r2) ->
-      fprintf oc "	stw	%a, %a(%a)\n" ireg r1 constant c ireg r2
+      fprintf oc "	stw	%a, %a\n" ireg r1 ireg_with_offset (r2, c)
   | Pstwx(r1, r2, r3) ->
       fprintf oc "	stwx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfc(r1, r2, r3) ->
@@ -681,8 +700,14 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
   | [] -> ()
   | _  ->
-      section oc 
-        (if Cil2Csyntax.atom_is_readonly name then const_data else data);
+      let sec =
+        if Cil2Csyntax.atom_is_small_data name (coqint_of_camlint 0l) then
+          sdata
+        else if Cil2Csyntax.atom_is_readonly name then
+          const_data
+        else
+          data in
+      section oc sec;
       fprintf oc "	.align	3\n";
       if not (Cil2Csyntax.atom_is_static name) then
         fprintf oc "	.globl	%a\n" symbol name;

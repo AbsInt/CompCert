@@ -57,16 +57,18 @@ Lemma freg_eq: forall (x y: freg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
 (** Symbolic constants.  Immediate operands to an arithmetic instruction
-  or an indexed memory access can be either integer literals
+  or an indexed memory access can be either integer literals,
   or the low or high 16 bits of a symbolic reference (the address
-  of a symbol plus a displacement).  These symbolic references are
+  of a symbol plus a displacement), or a 16-bit offset from the
+  small data area register.  These symbolic references are
   resolved later by the linker.
 *)
 
 Inductive constant: Type :=
   | Cint: int -> constant
   | Csymbol_low: ident -> int -> constant
-  | Csymbol_high: ident -> int -> constant.
+  | Csymbol_high: ident -> int -> constant
+  | Csymbol_sda: ident -> int -> constant.
 
 (** A note on constants: while immediate operands to PowerPC
   instructions must be representable in 16 bits (with
@@ -413,6 +415,19 @@ Axiom low_half_type:
 Axiom high_half_type: 
   forall v, Val.has_type (high_half v) Tint.
  
+(** The function below axiomatizes how the linker builds the
+  small data area. *)
+
+Parameter symbol_is_small_data: ident -> int -> bool.
+Parameter small_data_area_base: genv -> val.
+Parameter small_data_area_offset: genv -> ident -> int -> val.
+
+Axiom small_data_area_addressing:
+  forall id ofs,
+  symbol_is_small_data id ofs = true ->
+  Val.add (small_data_area_base ge) (small_data_area_offset ge id ofs) =
+  symbol_offset id ofs.
+
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.
   Note that for [const_high], integer constants
@@ -426,6 +441,7 @@ Definition const_low (c: constant) :=
   | Cint n => Vint n
   | Csymbol_low id ofs => low_half (symbol_offset id ofs)
   | Csymbol_high id ofs => Vundef
+  | Csymbol_sda id ofs => small_data_area_offset ge id ofs
   end.
 
 Definition const_high (c: constant) :=
@@ -433,6 +449,7 @@ Definition const_high (c: constant) :=
   | Cint n => Vint (Int.shl n (Int.repr 16))
   | Csymbol_low id ofs => Vundef
   | Csymbol_high id ofs => high_half (symbol_offset id ofs)
+  | Csymbol_sda id ofs => Vundef
   end.
 
 (** The semantics is purely small-step and defined as a function
@@ -852,7 +869,8 @@ Inductive initial_state (p: program): state -> Prop :=
         (Pregmap.init Vundef)
         # PC <- (symbol_offset ge p.(prog_main) Int.zero)
         # LR <- Vzero
-        # GPR1 <- (Vptr Mem.nullptr Int.zero) in
+        # GPR1 <- (Vptr Mem.nullptr Int.zero)
+        # GPR13 <- (small_data_area_base ge) in
       initial_state p (State rs0 m0).
 
 Inductive final_state: state -> int -> Prop :=

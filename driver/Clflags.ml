@@ -17,6 +17,7 @@ let linker_options = ref ([]: string list)
 let exe_name = ref "a.out"
 let option_flonglong = ref false
 let option_fmadd = ref false
+let option_fsda = ref false
 let option_dclight = ref false
 let option_dasm = ref false
 let option_E = ref false
