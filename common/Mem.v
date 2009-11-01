@@ -568,6 +568,9 @@ Fixpoint contents_init_data (pos: Z) (id: list init_data) {struct id}: contentma
       setN 7%nat pos (Vfloat f) (contents_init_data (pos + 1) id')
   | Init_space n :: id' =>
       contents_init_data (pos + Zmax n 0) id'
+  | Init_addrof s n :: id' =>
+      (* Not handled properly yet *)
+      contents_init_data (pos + 4) id'
   | Init_pointer x :: id' =>
       (* Not handled properly yet *)
       contents_init_data (pos + 4) id'
@@ -581,6 +584,7 @@ Definition size_init_data (id: init_data) : Z :=
   | Init_float32 _ => 4
   | Init_float64 _ => 8
   | Init_space n => Zmax n 0
+  | Init_addrof _ _ => 4
   | Init_pointer _ => 4
   end.
 

@@ -1003,6 +1003,7 @@ let rec initDataLen accu = function
       | Init_float32 _ -> 4l
       | Init_float64 _ -> 8l
       | Init_space n -> camlint_of_z n
+      | Init_addrof(_, _) -> 4l
       | Init_pointer _ -> 4l in
       initDataLen (Int32.add sz accu) il
 
@@ -1013,16 +1014,21 @@ type init_constant =
   | ICint of int64 * intsize
   | ICfloat of float * floatsize
   | ICstring of string
+  | ICaddrof of string
   | ICnone
 
 let extract_constant e =
-  try
-    match eval_expr e with
-    | CInt64(n, ikind, _) -> ICint(n, fst (convertIkind ikind))
-    | CReal(n, fkind, _) -> ICfloat(n, convertFkind fkind)
-    | CStr s -> ICstring s
-    | _ -> ICnone
-  with NotConst -> ICnone
+  match e with
+  | AddrOf(Var v, NoOffset) -> ICaddrof v.vname
+  | StartOf(Var v, NoOffset) -> ICaddrof v.vname
+  | _ ->
+    try
+      match eval_expr e with
+      | CInt64(n, ikind, _) -> ICint(n, fst (convertIkind ikind))
+      | CReal(n, fkind, _) -> ICfloat(n, convertFkind fkind)
+      | CStr s -> ICstring s
+      | _ -> ICnone
+    with NotConst -> ICnone
 
 let init_data_of_string s =
   let id = ref [] in
@@ -1068,6 +1074,9 @@ let convertInit init =
         | ICfloat(n, F64) ->
             check_align 8;
             emit 8 (Init_float64 n)
+        | ICaddrof id ->
+            check_align 4;
+            emit 4 (Init_addrof(intern_string id, coqint_of_camlint 0l))
         | ICstring s ->
             check_align 4;
             emit 4 (Init_pointer(init_data_of_string s))

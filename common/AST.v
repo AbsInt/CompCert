@@ -91,6 +91,7 @@ Inductive init_data: Type :=
   | Init_float32: float -> init_data
   | Init_float64: float -> init_data
   | Init_space: Z -> init_data
+  | Init_addrof: ident -> int -> init_data   (**r address of symbol + offset *)
   | Init_pointer: list init_data -> init_data.
 
 (** Whole programs consist of:

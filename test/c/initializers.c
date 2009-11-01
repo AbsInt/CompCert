@@ -31,6 +31,10 @@ typedef enum { AAA , BBB } MyEnum;
 
 const MyEnum x13[2] = { AAA, BBB };
 
+int * x14 = &x2;
+
+struct { char * y; int * z; float * u; double * v; } x15 = { x4, x5, &x11, &x12 };
+
 int main(int argc, char ** argv)
 {
   int i;
@@ -54,6 +58,11 @@ int main(int argc, char ** argv)
   printf("x11 = %.10f\n", x11);
   printf("x12 = %.10f\n", x12);
   printf("x13 = { %d, %d }\n", x13[0], x13[1]);
+  if (x14 == &x2) printf("x14 ok\n"); else printf("x14 error\n");
+  if (x15.y == x4 && x15.z == x5 && x15.u == &x11 && x15.v == &x12)
+    printf("x15 ok\n");
+  else
+    printf("x15 error\n");
   return 0;
 }
 

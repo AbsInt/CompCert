@@ -378,6 +378,11 @@ let print_init p = function
   | Init_float32 n -> fprintf p "%F,@ " n
   | Init_float64 n -> fprintf p "%F,@ " n
   | Init_space n -> fprintf p "/* skip %ld, */@ " (camlint_of_coqint n)
+  | Init_addrof(symb, ofs) ->
+      let ofs = camlint_of_coqint ofs in
+      if ofs = 0l
+      then fprintf p "&%s,@ " (extern_atom symb)
+      else fprintf p "(void *)((char *)&%s + %ld),@ " (extern_atom symb) ofs
   | Init_pointer id ->
       match string_of_init id with
       | None -> fprintf p "/* pointer to other init*/,@ "

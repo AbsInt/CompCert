@@ -1,3 +1,12 @@
+- Support Clight initializers of the form "int * x = &y;".
+
+- Fixed spurious compile-time error on Clight initializers of the form
+  "const enum E x[2] = { E_1, E_2 };".
+
+- PowerPC code generator: force conversion to single precision before
+  doing a "store single float" instruction.
+
+
 Release 1.5, 2009-08-28
 =======================
 

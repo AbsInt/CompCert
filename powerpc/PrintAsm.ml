@@ -656,6 +656,9 @@ let print_init oc = function
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
+  | Init_addrof(symb, ofs) ->
+      fprintf oc "	.long	%a\n" 
+                 symbol_offset (symb, camlint_of_coqint ofs)
   | Init_pointer id ->
       let lbl = new_label() in
       fprintf oc "	.long	%a\n" label lbl;

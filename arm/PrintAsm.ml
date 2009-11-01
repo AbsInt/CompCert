@@ -466,6 +466,8 @@ let print_init oc = function
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
+  | Init_addrof(symb, ofs) ->
+      fprintf oc "	.word	%a\n" print_symb_ofs (symb, ofs)
   | Init_pointer id ->
       let lbl = new_label() in
       fprintf oc "	.word	.L%d\n" lbl;
