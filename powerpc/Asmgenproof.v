@@ -593,13 +593,13 @@ Inductive match_states: Machconcr.state -> Asm.state -> Prop :=
         (WTF: wt_function f)
         (INCL: incl c f.(fn_code))
         (AT: transl_code_at_pc (rs PC) fb f c)
-        (AG: agree tge ms sp rs),
+        (AG: agree ms sp rs),
       match_states (Machconcr.State s fb sp c ms m)
                    (Asm.State rs m)
   | match_states_call:
       forall s fb ms m rs
         (STACKS: match_stack s)
-        (AG: agree tge ms (parent_sp s) rs)
+        (AG: agree ms (parent_sp s) rs)
         (ATPC: rs PC = Vptr fb Int.zero)
         (ATLR: rs LR = parent_ra s),
       match_states (Machconcr.Callstate s fb ms m)
@@ -607,7 +607,7 @@ Inductive match_states: Machconcr.state -> Asm.state -> Prop :=
   | match_states_return:
       forall s ms m rs
         (STACKS: match_stack s)
-        (AG: agree tge ms (parent_sp s) rs)
+        (AG: agree ms (parent_sp s) rs)
         (ATPC: rs PC = parent_ra s),
       match_states (Machconcr.Returnstate s ms m)
                    (Asm.State rs m).
@@ -621,7 +621,7 @@ Lemma exec_straight_steps:
   transl_code_at_pc (rs1 PC) fb f c1 ->
   (exists rs2,
      exec_straight tge (transl_function f) (transl_code f c1) rs1 m1 (transl_code f c2) rs2 m2
-     /\ agree tge ms2 sp rs2) ->
+     /\ agree ms2 sp rs2) ->
   exists st',
   plus step tge (State rs1 m1) E0 st' /\
   match_states (Machconcr.State s fb sp c2 ms2 m2) st'.
@@ -683,7 +683,7 @@ Proof.
   unfold load_stack in H. 
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI. inversion WTI.
-  rewrite (sp_val _ _ _ _ AG) in H.
+  rewrite (sp_val _ _ _ AG) in H.
   assert (NOTE: GPR1 <> GPR0). congruence.
   generalize (loadind_correct tge (transl_function f) GPR1 ofs ty
                 dst (transl_code f c) rs m v H H1 NOTE).
@@ -691,7 +691,7 @@ Proof.
   left; eapply exec_straight_steps; eauto with coqlib.
   simpl. exists rs2; split. auto. 
   apply agree_exten_2 with (rs#(preg_of dst) <- v).
-  apply agree_set_mreg. auto. 
+  auto with ppcgen. 
   intros. case (preg_eq r0 (preg_of dst)); intro.
   subst r0. rewrite Pregmap.gss. auto. 
   rewrite Pregmap.gso; auto.
@@ -709,8 +709,8 @@ Proof.
   unfold store_stack in H. 
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI. inversion WTI.
-  rewrite (sp_val _ _ _ _ AG) in H.
-  rewrite (preg_val tge ms sp rs) in H; auto.
+  rewrite (sp_val _ _ _ AG) in H.
+  rewrite (preg_val ms sp rs) in H; auto.
   assert (NOTE: GPR1 <> GPR0). congruence.
   generalize (storeind_correct tge (transl_function f) GPR1 ofs ty
                 src (transl_code f c) rs m m' H H1 NOTE).
@@ -738,7 +738,7 @@ Proof.
                  (loadind GPR12 ofs ty dst (transl_code f c)) rs2 m).
   simpl. apply exec_straight_one.
   simpl. unfold load1. rewrite gpr_or_zero_not_zero; auto with ppcgen.
-  unfold const_low. rewrite <- (sp_val tge ms sp rs); auto.
+  unfold const_low. rewrite <- (sp_val ms sp rs); auto.
   unfold load_stack in H0. simpl chunk_of_type in H0. 
   rewrite H0. reflexivity. reflexivity.
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
@@ -818,7 +818,7 @@ Proof.
   exists (nextinstr (rs2#(ireg_of dst) <- v)).
   split. eapply exec_straight_trans. eexact EX1.
   apply exec_straight_one. simpl. 
-  rewrite <- (ireg_val _ _ _ _ dst AG1);auto. rewrite Regmap.gss. 
+  rewrite <- (ireg_val _ _ _ dst AG1);auto. rewrite Regmap.gss. 
   rewrite EQ1. reflexivity. reflexivity. 
   eauto with ppcgen.
 Qed.
@@ -881,13 +881,13 @@ Proof.
     rewrite RA_EQ.
     change (rs3 LR) with (Val.add (Val.add (rs PC) Vone) Vone).
     rewrite <- H5. reflexivity. 
-  assert (AG3: agree tge ms sp rs3). 
+  assert (AG3: agree ms sp rs3). 
     unfold rs3, rs2; auto 8 with ppcgen.
   left; exists (State rs3 m); split.
   apply plus_left with E0 (State rs2 m) E0. 
     econstructor. eauto. apply functions_transl. eexact H0. 
     eapply find_instr_tail. eauto.
-    simpl. rewrite <- (ireg_val tge ms sp rs); auto. 
+    simpl. rewrite <- (ireg_val ms sp rs); auto. 
   apply star_one. econstructor.
     change (rs2 PC) with (Val.add (rs PC) Vone). rewrite <- H5.
     simpl. auto.
@@ -910,7 +910,7 @@ Proof.
     rewrite RA_EQ.
     change (rs2 LR) with (Val.add (rs PC) Vone).
     rewrite <- H5. reflexivity. 
-  assert (AG2: agree tge ms sp rs2). 
+  assert (AG2: agree ms sp rs2). 
     unfold rs2; auto 8 with ppcgen.
   left; exists (State rs2 m); split.
   apply plus_one. econstructor. 
@@ -953,16 +953,16 @@ Proof.
             (transl_code f (Mtailcall sig (inl ident m0) :: c)) rs m 
             (Pbctr :: transl_code f c) rs5 (free m stk)).
   simpl. apply exec_straight_step with rs2 m. 
-  simpl. rewrite <- (ireg_val _ _ _ _ _ AG H6). reflexivity. reflexivity.
+  simpl. rewrite <- (ireg_val _ _ _ _ AG H6). reflexivity. reflexivity.
   apply exec_straight_step with rs3 m.
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
-  change (rs2 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ _ AG). 
+  change (rs2 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG). 
   simpl. unfold load_stack in H2. simpl in H2. rewrite H2.
   reflexivity. discriminate. reflexivity.
   apply exec_straight_step with rs4 m.
   simpl. reflexivity. reflexivity.
   apply exec_straight_one. 
-  simpl. change (rs4 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ _ AG).
+  simpl. change (rs4 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   unfold load_stack in H1; simpl in H1. 
   simpl. rewrite H1. reflexivity. reflexivity.
   left; exists (State rs6 (free m stk)); split.
@@ -977,12 +977,12 @@ Proof.
   simpl. reflexivity. traceEq.
   (* match states *)
   econstructor; eauto.
-  assert (AG4: agree tge ms (Vptr stk soff) rs4).
+  assert (AG4: agree ms (Vptr stk soff) rs4).
     unfold rs4, rs3, rs2; auto 10 with ppcgen.
-  assert (AG5: agree tge ms (parent_sp s) rs5).
-    unfold rs5. apply agree_nextinstr. destruct AG4 as [X [Y Z]].
-    split. reflexivity. split. rewrite <- Y. reflexivity.
-    intros. rewrite Z. rewrite Pregmap.gso; auto with ppcgen.
+  assert (AG5: agree ms (parent_sp s) rs5).
+    unfold rs5. apply agree_nextinstr.
+    split. reflexivity. intros. inv AG4. rewrite H12. 
+    rewrite Pregmap.gso; auto with ppcgen.
   unfold rs6; auto with ppcgen.
   change (rs6 PC) with (ms m0). 
   generalize H. destruct (ms m0); try congruence.
@@ -997,13 +997,13 @@ Proof.
             (Pbs i :: transl_code f c) rs4 (free m stk)).
   simpl. apply exec_straight_step with rs2 m. 
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
-  rewrite <- (sp_val _ _ _ _ AG). 
+  rewrite <- (sp_val _ _ _ AG). 
   simpl. unfold load_stack in H2. simpl in H2. rewrite H2.
   reflexivity. discriminate. reflexivity.
   apply exec_straight_step with rs3 m.
   simpl. reflexivity. reflexivity.
   apply exec_straight_one. 
-  simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ _ AG).
+  simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   unfold load_stack in H1; simpl in H1.
   simpl. rewrite H1. reflexivity. reflexivity.
   left; exists (State rs5 (free m stk)); split.
@@ -1019,12 +1019,12 @@ Proof.
   reflexivity. traceEq.
   (* match states *)
   econstructor; eauto.
-  assert (AG3: agree tge ms (Vptr stk soff) rs3).
+  assert (AG3: agree ms (Vptr stk soff) rs3).
     unfold rs3, rs2; auto 10 with ppcgen.
-  assert (AG4: agree tge ms (parent_sp s) rs4).
-    unfold rs4. apply agree_nextinstr. destruct AG3 as [X [Y Z]].
-    split. reflexivity. split. rewrite <- Y. reflexivity.
-    intros. rewrite Z. rewrite Pregmap.gso; auto with ppcgen.
+  assert (AG4: agree ms (parent_sp s) rs4).
+    unfold rs4. apply agree_nextinstr.
+    split. reflexivity. intros. inv AG3. rewrite H12. 
+    rewrite Pregmap.gso; auto with ppcgen.
   unfold rs5; auto with ppcgen.
 Qed.
 
@@ -1148,10 +1148,10 @@ Proof.
   simpl. apply exec_straight_three with rs2 m rs3 m.
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
   unfold load_stack in H1. simpl in H1. 
-  rewrite <- (sp_val _ _ _ _ AG). simpl. rewrite H1.
+  rewrite <- (sp_val _ _ _ AG). simpl. rewrite H1.
   reflexivity. discriminate.
   unfold rs3. change (parent_ra s) with rs2#GPR12. reflexivity.
-  simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ _ AG).
+  simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   simpl. 
   unfold load_stack in H0. simpl in H0.
   rewrite H0. reflexivity.
@@ -1172,13 +1172,12 @@ Proof.
   reflexivity. traceEq.
   (* match states *)
   econstructor; eauto. 
-  assert (AG3: agree tge ms (Vptr stk soff) rs3). 
+  assert (AG3: agree ms (Vptr stk soff) rs3). 
     unfold rs3, rs2; auto 10 with ppcgen.
-  assert (AG4: agree tge ms (parent_sp s) rs4).
-    destruct AG3 as [X [Y Z]].
-    split. reflexivity. split. rewrite <- Y; reflexivity.
-    intros. unfold rs4. rewrite nextinstr_inv. rewrite Pregmap.gso. auto. 
-    auto with ppcgen. auto with ppcgen.
+  assert (AG4: agree ms (parent_sp s) rs4).
+    split. reflexivity. intros. unfold rs4. 
+    rewrite nextinstr_inv. rewrite Pregmap.gso.
+    elim AG3; auto. auto with ppcgen. auto with ppcgen.
   unfold rs5; auto with ppcgen.
 Qed.
 
@@ -1213,7 +1212,7 @@ Proof.
   apply exec_straight_three with rs2 m2 rs3 m2.
   unfold exec_instr. rewrite H0. fold sp.
   unfold store_stack in H1. simpl chunk_of_type in H1. 
-  rewrite <- (sp_val _ _ _ _ AG). rewrite H1. reflexivity.
+  rewrite <- (sp_val _ _ _ AG). rewrite H1. reflexivity.
   simpl. change (rs2 LR) with (rs LR). rewrite ATLR. reflexivity.
   simpl. unfold store1. rewrite gpr_or_zero_not_zero. 
   unfold const_low. change (rs3 GPR1) with sp. change (rs3 GPR12) with (parent_ra s).
@@ -1228,13 +1227,12 @@ Proof.
     eapply code_tail_next_int; auto.
     change (Int.unsigned Int.zero) with 0. 
     unfold transl_function. constructor.
-  assert (AG2: agree tge ms sp rs2).
-    destruct AG as [X [Y Z]].
-    split. reflexivity. split. rewrite <- Y; reflexivity. 
+  assert (AG2: agree ms sp rs2).
+    split. reflexivity. 
     intros. unfold rs2. rewrite nextinstr_inv. 
-    repeat (rewrite Pregmap.gso). auto. 
+    repeat (rewrite Pregmap.gso). elim AG; auto.
     auto with ppcgen. auto with ppcgen. auto with ppcgen.
-  assert (AG4: agree tge ms sp rs4).
+  assert (AG4: agree ms sp rs4).
     unfold rs4, rs3; auto with ppcgen.
   left; exists (State rs4 m3); split.
   (* execution *)
@@ -1310,8 +1308,7 @@ Proof.
      with (Vptr fb Int.zero).
   rewrite (Genv.init_mem_transf_partial _ _ TRANSF).
   econstructor; eauto. constructor.
-  split. auto. split. auto. 
-  intros. repeat rewrite Pregmap.gso; auto with ppcgen.
+  split. auto. intros. repeat rewrite Pregmap.gso; auto with ppcgen.
   unfold symbol_offset. 
   rewrite (transform_partial_program_main _ _ TRANSF). 
   rewrite symbols_preserved. unfold ge; rewrite H0. auto.
@@ -1323,7 +1320,7 @@ Lemma transf_final_states:
 Proof.
   intros. inv H0. inv H. constructor. auto. 
   compute in H1. 
-  rewrite (ireg_val _ _ _ _ R3 AG) in H1. auto. auto.
+  rewrite (ireg_val _ _ _ R3 AG) in H1. auto. auto.
 Qed.
 
 Theorem transf_program_correct:

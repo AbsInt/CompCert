@@ -188,30 +188,18 @@ Lemma preg_of_not_GPR1:
 Proof.
   intro. case r; discriminate.
 Qed.
-Lemma preg_of_not_GPR13:
-  forall r, preg_of r <> GPR13.
-Proof.
-  intro. case r; discriminate.
-Qed.
-
-Hint Resolve preg_of_not_GPR1 preg_of_not_GPR13: ppcgen.
+Hint Resolve preg_of_not_GPR1: ppcgen.
 
 (** Agreement between Mach register sets and PPC register sets. *)
 
-Section AGREEMENT.
-
-Variable ge: genv.
-
 Definition agree (ms: Mach.regset) (sp: val) (rs: Asm.regset) :=
-  rs#GPR1 = sp /\
-  rs#GPR13 = small_data_area_base ge /\ 
-  forall r: mreg, ms r = rs#(preg_of r).
+  rs#GPR1 = sp /\ forall r: mreg, ms r = rs#(preg_of r).
 
 Lemma preg_val:
   forall ms sp rs r,
   agree ms sp rs -> ms r = rs#(preg_of r).
 Proof.
-  intros. destruct H as [A [B C]]. auto.
+  intros. elim H. auto.
 Qed.
   
 Lemma ireg_val:
@@ -220,8 +208,8 @@ Lemma ireg_val:
   mreg_type r = Tint ->
   ms r = rs#(ireg_of r).
 Proof.
-  intros. rewrite (preg_val ms sp rs); auto. 
-  unfold preg_of. rewrite H0. auto.
+  intros. elim H; intros.
+  generalize (H2 r). unfold preg_of. rewrite H0. auto.
 Qed.
 
 Lemma freg_val:
@@ -230,8 +218,8 @@ Lemma freg_val:
   mreg_type r = Tfloat ->
   ms r = rs#(freg_of r).
 Proof.
-  intros. rewrite (preg_val ms sp rs); auto. 
-  unfold preg_of. rewrite H0. auto.
+  intros. elim H; intros.
+  generalize (H2 r). unfold preg_of. rewrite H0. auto.
 Qed.
 
 Lemma sp_val:
@@ -239,15 +227,7 @@ Lemma sp_val:
   agree ms sp rs ->
   sp = rs#GPR1.
 Proof.
-  intros. destruct H as [A [B C]]. auto.
-Qed.
-
-Lemma gpr13_val:
-  forall ms sp rs,
-  agree ms sp rs ->
-  small_data_area_base ge = rs#GPR13.
-Proof.
-  intros. destruct H as [A [B C]]. auto.
+  intros. elim H; auto.
 Qed.
 
 Lemma agree_exten_1:
@@ -256,9 +236,8 @@ Lemma agree_exten_1:
   (forall r, is_data_reg r -> rs'#r = rs#r) ->
   agree ms sp rs'.
 Proof.
-  unfold agree; intros. destruct H as [A [B C]]. 
-  split. rewrite H0. auto. exact I.
-  split. rewrite H0. auto. exact I.
+  unfold agree; intros. elim H; intros.
+  split. rewrite H0. auto. exact I. 
   intros. rewrite H0. auto. apply preg_of_is_data_reg.
 Qed.
 
@@ -284,9 +263,8 @@ Lemma agree_set_mreg:
   agree ms sp rs ->
   agree (Regmap.set r v ms) sp (rs#(preg_of r) <- v).
 Proof.
-  unfold agree; intros. destruct H as [A [B C]]. 
+  unfold agree; intros. elim H; intros; clear H.
   split. rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_GPR1.
-  split. rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_GPR13.
   intros. unfold Regmap.set. case (RegEq.eq r0 r); intro.
   subst r0. rewrite Pregmap.gss. auto.
   rewrite Pregmap.gso. auto. red; intro. 
@@ -339,9 +317,15 @@ Lemma agree_set_mireg_twice:
   mreg_type r = Tint ->
   agree (Regmap.set r v ms) sp (rs #(ireg_of r) <- v' #(ireg_of r) <- v).
 Proof.
-  intros. apply agree_exten_1 with (rs#(ireg_of r) <- v).
-  apply agree_set_mireg. apply agree_set_mreg. auto. auto. 
-  intros. unfold Pregmap.set. destruct (PregEq.eq r0 (ireg_of r)); auto.
+  intros. replace (IR (ireg_of r)) with (preg_of r). elim H; intros.
+  split. repeat (rewrite Pregmap.gso; auto with ppcgen).
+  intros. case (mreg_eq r r0); intro.
+  subst r0. rewrite Regmap.gss. rewrite Pregmap.gss. auto.
+  assert (preg_of r <> preg_of r0). 
+    red; intro. elim n. apply preg_of_injective. auto.
+  rewrite Regmap.gso; auto.
+  repeat (rewrite Pregmap.gso; auto).
+  unfold preg_of. rewrite H0. auto.
 Qed.
 Hint Resolve agree_set_mireg_twice: ppcgen.
 
@@ -351,12 +335,10 @@ Lemma agree_set_twice_mireg:
   mreg_type r = Tint ->
   agree (Regmap.set r v ms) sp (rs#(ireg_of r) <- v).
 Proof.
-  intros. destruct H as [A [B C]].
-  split. rewrite Pregmap.gso; auto.
-  generalize (preg_of_not_GPR1 r). unfold preg_of. rewrite H0. congruence.
-  split. rewrite Pregmap.gso; auto.
-  generalize (preg_of_not_GPR13 r). unfold preg_of. rewrite H0. congruence.
-  intros. generalize (C r0). 
+  intros. elim H; intros.
+  split. rewrite Pregmap.gso. auto. 
+  generalize (ireg_of_not_GPR1 r); congruence.
+  intros. generalize (H2 r0). 
   case (mreg_eq r0 r); intro.
   subst r0. repeat rewrite Regmap.gss. unfold preg_of; rewrite H0.
   rewrite Pregmap.gss. auto.
@@ -484,14 +466,17 @@ Qed.
 
 (** * Execution of straight-line code *)
 
+Section STRAIGHTLINE.
+
+Variable ge: genv.
+Variable fn: code.
+
 (** Straight-line code is composed of PPC instructions that execute
   in sequence (no branches, no function calls and returns).
   The following inductive predicate relates the machine states
   before and after executing a straight-line sequence of instructions.
   Instructions are taken from the first list instead of being fetched
   from memory. *)
-
-Variable fn: code.
 
 Inductive exec_straight: code -> regset -> mem -> 
                          code -> regset -> mem -> Prop :=
@@ -1422,9 +1407,9 @@ Lemma transl_load_store_correct:
   forall (mk1: constant -> ireg -> instruction) (mk2: ireg -> ireg -> instruction)
     addr args k ms sp rs m ms' m',
   (forall cst (r1: ireg) (rs1: regset) k,
-    eval_addressing_total ge sp addr (map ms args) = Val.add rs1#r1 (const_low ge cst) ->
+    eval_addressing_total ge sp addr (map ms args) =
+                Val.add (gpr_or_zero rs1 r1) (const_low ge cst) ->
     agree ms sp rs1 ->
-    r1 <> GPR0 ->
     exists rs',
     exec_straight (mk1 cst r1 :: k) rs1 m k rs' m' /\
     agree ms' sp rs') ->
@@ -1448,14 +1433,13 @@ Proof.
   set (rs1 := nextinstr (rs#GPR12 <- (ms t))).
   set (rs2 := nextinstr (rs1#GPR12 <- (Val.add (ms t) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   assert (ADDR: eval_addressing_total ge sp (Aindexed i) ms##(t :: nil) =
-                Val.add rs2#GPR12 (const_low ge (Cint (low_s i)))).
-    simpl. unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
+                Val.add (gpr_or_zero rs2 GPR12) (const_low ge (Cint (low_s i)))).
+    simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen.
+    unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
     rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
     discriminate.
   assert (AG: agree ms sp rs2). unfold rs2, rs1; auto 6 with ppcgen.
-  assert (NOT0: GPR12 <> GPR0). discriminate.
-  generalize (H _ _ _ k ADDR AG NOT0).
-  intros [rs' [EX' AG']].
+  destruct (H _ _ _ k ADDR AG) as [rs' [EX' AG']].
   exists rs'. split.
   apply exec_straight_trans with (mk1 (Cint (low_s i)) GPR12 :: k) rs2 m.
   apply exec_straight_two with rs1 m.
@@ -1467,20 +1451,21 @@ Proof.
   (* Aindexed short *)
   case (Int.eq (high_s i) Int.zero).
   assert (ADDR: eval_addressing_total ge sp (Aindexed i) ms##(t :: nil) =
-                Val.add rs#(ireg_of t) (const_low ge (Cint i))).
-    simpl. rewrite (ireg_val ms sp rs); auto.
-  generalize (H _ _ _ k ADDR H1 n). intros [rs' [EX' AG']].
+                Val.add (gpr_or_zero rs (ireg_of t)) (const_low ge (Cint i))).
+    simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen.
+    rewrite (ireg_val ms sp rs); auto.
+  destruct (H _ _ _ k ADDR H1) as [rs' [EX' AG']].
   exists rs'. split. auto. auto.
   (* Aindexed long *)
   set (rs1 := nextinstr (rs#GPR12 <- (Val.add (ms t) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   assert (ADDR: eval_addressing_total ge sp (Aindexed i) ms##(t :: nil) =
-                Val.add rs1#GPR12 (const_low ge (Cint (low_s i)))).
-    simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
+                Val.add (gpr_or_zero rs1 GPR12) (const_low ge (Cint (low_s i)))).
+    simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen.
+    unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
     discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  assert (NOT0: GPR12 <> GPR0). discriminate.
-  generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
+  destruct (H _ _ _ k ADDR AG) as [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero; auto. 
   rewrite <- (ireg_val ms sp rs); auto. reflexivity.
@@ -1490,21 +1475,24 @@ Proof.
   simpl. repeat (rewrite (ireg_val ms sp rs); auto). auto.
   (* Aglobal *)
   case_eq (symbol_is_small_data i i0); intro SISD.
-  eapply H; eauto.
-  simpl. rewrite <- (gpr13_val _ _ _ H1). 
-  rewrite small_data_area_addressing; auto.
-  discriminate.
+  (* Aglobal from small data *)
+  apply H. rewrite gpr_or_zero_zero. simpl const_low. 
+  rewrite small_data_area_addressing; auto. simpl. 
+  unfold find_symbol_offset, symbol_offset. 
+  destruct (Genv.find_symbol ge i); auto. rewrite Int.add_zero. auto.
+  auto.
+  (* Aglobal general case *)
   set (rs1 := nextinstr (rs#GPR12 <- (const_high ge (Csymbol_high i i0)))).
   assert (ADDR: eval_addressing_total ge sp (Aglobal i i0) ms##nil =
-                Val.add rs1#GPR12 (const_low ge (Csymbol_low i i0))).
-    simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
+                Val.add (gpr_or_zero rs1 GPR12) (const_low ge (Csymbol_low i i0))).
+    simpl. rewrite gpr_or_zero_not_zero; auto. 
+    unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     unfold const_high, const_low. 
     set (v := symbol_offset ge i i0).
     symmetry. rewrite Val.add_commut. unfold v. apply low_high_half. 
-    discriminate.
+    discriminate. discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  assert (NOT0: GPR12 <> GPR0). discriminate.
-  generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
+  destruct (H _ _ _ k ADDR AG) as [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   unfold exec_instr. rewrite gpr_or_zero_zero. 
   rewrite Val.add_commut. unfold const_high. 
@@ -1525,8 +1513,9 @@ Proof.
   intros. 
   set (rs2 := nextinstr (rs1#GPR12 <- (Val.add (ms t) (const_high ge (Csymbol_high i i0))))).
   assert (ADDR: eval_addressing_total ge sp (Abased i i0) ms##(t::nil) =
-                Val.add rs2#GPR12 (const_low ge (Csymbol_low i i0))).
-    simpl. unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
+                Val.add (gpr_or_zero rs2 GPR12) (const_low ge (Csymbol_low i i0))).
+    simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen.
+    unfold rs2. rewrite nextinstr_inv. rewrite Pregmap.gss.
     unfold const_high. 
     set (v := symbol_offset ge i i0).
     rewrite Val.add_assoc. 
@@ -1534,8 +1523,7 @@ Proof.
     unfold v. rewrite low_high_half. apply Val.add_commut.
     discriminate.
   assert (AG: agree ms sp rs2). unfold rs2; auto with ppcgen.
-  assert (NOT0: GPR12 <> GPR0). discriminate.
-  generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
+  destruct (H _ _ _ k ADDR AG) as [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs2 m.
   unfold exec_instr. rewrite gpr_or_zero_not_zero; auto.
   rewrite <- H3. reflexivity. reflexivity. 
@@ -1555,17 +1543,17 @@ Proof.
   apply COMMON; auto. eapply ireg_val; eauto.
   (* Ainstack *)
   case (Int.eq (high_s i) Int.zero).
-  apply H. simpl. rewrite (sp_val ms sp rs); auto. auto.
-  discriminate.
+  apply H. simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen. 
+  rewrite (sp_val ms sp rs); auto. auto.
   set (rs1 := nextinstr (rs#GPR12 <- (Val.add sp (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   assert (ADDR: eval_addressing_total ge sp (Ainstack i) ms##nil =
-                Val.add rs1#GPR12 (const_low ge (Cint (low_s i)))).
-    simpl. unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
+                Val.add (gpr_or_zero rs1 GPR12) (const_low ge (Cint (low_s i)))).
+    simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen.
+    unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
     rewrite Val.add_assoc. decEq. simpl. rewrite low_high_s. auto.
     discriminate.
   assert (AG: agree ms sp rs1). unfold rs1; auto with ppcgen.
-  assert (NOT0: GPR12 <> GPR0). discriminate.
-  generalize (H _ _ _ k ADDR AG NOT0). intros [rs' [EX' AG']].
+  destruct (H _ _ _ k ADDR AG) as [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero. 
   unfold rs1. rewrite (sp_val ms sp rs). reflexivity.
@@ -1595,8 +1583,7 @@ Proof.
   intros. apply transl_load_store_correct with ms.
   intros. exists (nextinstr (rs1#(preg_of dst) <- v)). 
   split. apply exec_straight_one. rewrite H. 
-  unfold load1. rewrite gpr_or_zero_not_zero; auto. 
-  rewrite <- (eval_addressing_weaken _ _ _ _ H3) in H4.
+  unfold load1. rewrite <- (eval_addressing_weaken _ _ _ _ H3) in H4.
   rewrite H5 in H4. rewrite H4. auto.
   auto with ppcgen. auto with ppcgen. 
   intros. exists (nextinstr (rs1#(preg_of dst) <- v)). 
@@ -1636,13 +1623,12 @@ Proof.
   intros. destruct (H cst r1 rs1) as [rs2 [A B]].
   exists (nextinstr rs2). 
   split. apply exec_straight_one. rewrite A. 
-  unfold store1. rewrite gpr_or_zero_not_zero; auto.
-  repeat rewrite B. 
+  unfold store1. rewrite B. replace (gpr_or_zero rs2 r1) with (gpr_or_zero rs1 r1).
   rewrite <- (eval_addressing_weaken _ _ _ _ H3) in H4.
-  rewrite H5 in H4. rewrite (preg_val _ _ _ src H6) in H4. 
+  rewrite H5 in H4. elim H6; intros. rewrite H8 in H4.
   rewrite H4. auto.
+  unfold gpr_or_zero. destruct (ireg_eq r1 GPR0); auto. symmetry. apply B. discriminate.
   apply preg_of_not. simpl. tauto.
-  discriminate.
   rewrite <- B. auto. discriminate.
   apply agree_nextinstr. eapply agree_exten_2; eauto.
 
@@ -1651,7 +1637,7 @@ Proof.
   split. apply exec_straight_one. rewrite A. 
   unfold store2. repeat rewrite B. 
   rewrite <- (eval_addressing_weaken _ _ _ _ H3) in H4.
-  rewrite H5 in H4. rewrite (preg_val _ _ _ src H6) in H4. 
+  rewrite H5 in H4. elim H6; intros. rewrite H8 in H4.
   rewrite H4. auto.
   apply preg_of_not. simpl. tauto.
   discriminate. discriminate.
@@ -1661,18 +1647,6 @@ Proof.
   auto. auto.
 Qed.
 
-End AGREEMENT.
 
-(* Re-export hints. *)
-Hint Resolve agree_set_mreg: ppcgen.
-Hint Resolve agree_set_mireg: ppcgen.
-Hint Resolve agree_set_mfreg: ppcgen.
-Hint Resolve agree_set_other: ppcgen.
-Hint Resolve agree_nextinstr: ppcgen.
-Hint Resolve agree_set_mireg_twice: ppcgen.
-Hint Resolve agree_set_twice_mireg: ppcgen.
-Hint Resolve agree_set_commut: ppcgen.
-Hint Resolve agree_nextinstr_commut: ppcgen.
-Hint Resolve nextinstr_inv: ppcgen.
-Hint Resolve nextinstr_set_preg: ppcgen.
-Hint Resolve gpr_or_zero_not_zero gpr_or_zero_zero: ppcgen.
+End STRAIGHTLINE.
+

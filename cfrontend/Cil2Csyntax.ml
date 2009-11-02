@@ -1254,16 +1254,14 @@ let atom_is_readonly a =
 
 let atom_is_small_data a ofs =
   match Configuration.system with
-  | "linux" ->
-      if !Clflags.option_fsda then begin
-        try
-          let v = Hashtbl.find varinfo_atom a in
-          let sz = Cil.bitsSizeOf v.vtype / 8 in
-          let ofs = camlint_of_coqint ofs in
-          sz <= 8 && ofs >= 0l && ofs < Int32.of_int sz
-        with Not_found ->
-          false
-      end else
+  | "diab" ->
+      begin try
+        let v = Hashtbl.find varinfo_atom a in
+        let sz = Cil.bitsSizeOf v.vtype / 8 in
+        let ofs = camlint_of_coqint ofs in
+        sz <= 8 && ofs >= 0l && ofs < Int32.of_int sz
+      with Not_found ->
         false
+    end
   | _ ->
       false

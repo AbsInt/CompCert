@@ -415,18 +415,21 @@ Axiom low_half_type:
 Axiom high_half_type: 
   forall v, Val.has_type (high_half v) Tint.
  
-(** The function below axiomatizes how the linker builds the
-  small data area. *)
+(** We also axiomatize the small data area.  For simplicity, we
+  claim that small data symbols can be accessed by absolute 16-bit
+  offsets, that is, relative to [GPR0].  In reality, the linker
+  rewrites the object code, transforming [symb@sdarx(r0)] addressings
+  into [offset(rN)] addressings, where [rN] is the reserved
+  register pointing to the base of the small data area containing
+  symbol [symb].  We leave this transformation up to the linker. *)
 
 Parameter symbol_is_small_data: ident -> int -> bool.
-Parameter small_data_area_base: genv -> val.
 Parameter small_data_area_offset: genv -> ident -> int -> val.
 
 Axiom small_data_area_addressing:
   forall id ofs,
   symbol_is_small_data id ofs = true ->
-  Val.add (small_data_area_base ge) (small_data_area_offset ge id ofs) =
-  symbol_offset id ofs.
+  small_data_area_offset ge id ofs = symbol_offset id ofs.
 
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.
@@ -869,8 +872,7 @@ Inductive initial_state (p: program): state -> Prop :=
         (Pregmap.init Vundef)
         # PC <- (symbol_offset ge p.(prog_main) Int.zero)
         # LR <- Vzero
-        # GPR1 <- (Vptr Mem.nullptr Int.zero)
-        # GPR13 <- (small_data_area_base ge) in
+        # GPR1 <- (Vptr Mem.nullptr Int.zero) in
       initial_state p (State rs0 m0).
 
 Inductive final_state: state -> int -> Prop :=

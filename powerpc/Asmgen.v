@@ -396,7 +396,7 @@ Definition transl_load_store
       mk2 (ireg_of a1) (ireg_of a2) :: k
   | Aglobal symb ofs, nil =>
       if symbol_is_small_data symb ofs then
-        mk1 (Csymbol_sda symb ofs) GPR13 :: k
+        mk1 (Csymbol_sda symb ofs) GPR0 :: k
       else
         Paddis GPR12 GPR0 (Csymbol_high symb ofs) ::
         mk1 (Csymbol_low symb ofs) GPR12 :: k
