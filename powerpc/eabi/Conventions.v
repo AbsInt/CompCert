@@ -38,12 +38,12 @@ Definition float_caller_save_regs :=
   F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
 
 Definition int_callee_save_regs :=
-  R14 :: R15 :: R16 :: R17 :: R18 :: R19 :: R20 :: R21 :: R22 :: 
-  R23 :: R24 :: R25 :: R26 :: R27 :: R28 :: R29 :: R30 :: R31 :: nil.
+  R31 :: R30 :: R29 :: R28 :: R27 :: R26 :: R25 :: R24 :: R23 ::
+  R22 :: R21 :: R20 :: R19 :: R18 :: R17 :: R16 :: R15 :: R14 :: nil.
 
 Definition float_callee_save_regs :=
-  F14 :: F15 :: F16 :: F17 :: F18 :: F19 :: F20 :: F21 :: F22 :: 
-  F23 :: F24 :: F25 :: F26 :: F27 :: F28 :: F29 :: F30 :: F31 :: nil.
+  F31 :: F30 :: F29 :: F28 :: F27 :: F26 :: F25 :: F24 :: F23 ::
+  F22 :: F21 :: F20 :: F19 :: F18 :: F17 :: F16 :: F15 :: F14 :: nil.
 
 Definition destroyed_at_call_regs :=
   int_caller_save_regs ++ float_caller_save_regs.
@@ -65,20 +65,20 @@ Definition temporaries :=
 
 Definition index_int_callee_save (r: mreg) :=
   match r with
-  | R14 => 0  | R15 => 1  | R16 => 2  | R17 => 3
-  | R18 => 4  | R19 => 5  | R20 => 6  | R21 => 7
-  | R22 => 8  | R23 => 9  | R24 => 10 | R25 => 11
-  | R26 => 12 | R27 => 13 | R28 => 14 | R29 => 15
-  | R30 => 16 | R31 => 17 | _ => -1
+  | R14 => 17 | R15 => 16 | R16 => 15 | R17 => 14
+  | R18 => 13 | R19 => 12 | R20 => 11 | R21 => 10
+  | R22 => 9  | R23 => 8  | R24 => 7  | R25 => 6 
+  | R26 => 5  | R27 => 4  | R28 => 3  | R29 => 2 
+  | R30 => 1  | R31 => 0  | _ => -1
   end.
 
 Definition index_float_callee_save (r: mreg) :=
   match r with
-  | F14 => 0  | F15 => 1  | F16 => 2  | F17 => 3
-  | F18 => 4  | F19 => 5  | F20 => 6  | F21 => 7
-  | F22 => 8  | F23 => 9  | F24 => 10 | F25 => 11
-  | F26 => 12 | F27 => 13 | F28 => 14 | F29 => 15
-  | F30 => 16 | F31 => 17 | _ => -1
+  | F14 => 17 | F15 => 16 | F16 => 15 | F17 => 14
+  | F18 => 13 | F19 => 12 | F20 => 11 | F21 => 10
+  | F22 => 9  | F23 => 8  | F24 => 7  | F25 => 6 
+  | F26 => 5  | F27 => 4  | F28 => 3  | F29 => 2 
+  | F30 => 1  | F31 => 0  | _ => -1
   end.
 
 Ltac ElimOrEq :=
