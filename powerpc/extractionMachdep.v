@@ -10,17 +10,15 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Command-line flags *)
+(* Additional extraction directives specific to the PowerPC port *)
 
-let prepro_options = ref ([]: string list)
-let linker_options = ref ([]: string list)
-let exe_name = ref "a.out"
-let option_flonglong = ref false
-let option_fmadd = ref false
-let option_dcil = ref false
-let option_dclight = ref false
-let option_dasm = ref false
-let option_E = ref false
-let option_S = ref false
-let option_c = ref false
-let option_v = ref false
+(* Asm *)
+Extract Constant Asm.low_half => "fun _ -> assert false".
+Extract Constant Asm.high_half => "fun _ -> assert false".
+Extract Constant Asm.symbol_is_small_data => "CPragmas.atom_is_small_data".
+Extract Constant Asm.small_data_area_offset => "fun _ _ _ -> assert false".
+
+(* Suppression of stupidly big equality functions *)
+Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
+Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
+Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".

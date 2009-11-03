@@ -118,21 +118,26 @@ let compile_c_file sourcename ifile ofile =
   cil.Cil.fileName <- sourcename;
   (* Cleanup in the CIL.file *)
   Rmtmps.removeUnusedTemps ~isRoot:Rmtmps.isExportedRoot cil;
+  (* Save CIL output if requested *)
+  if !option_dcil then begin
+    let ofile = Filename.chop_suffix sourcename ".c" ^ ".cil.c" in
+    let oc = open_out ofile in
+    Cil.dumpFile Cil.defaultCilPrinter oc ofile cil;
+    close_out oc
+  end;
   (* Conversion to Csyntax *)
   let csyntax =
     try
       Cil2CsyntaxTranslator.convertFile cil
     with
-    | Cil2CsyntaxTranslator.Unsupported msg ->
+    | Cil2Csyntax.Error msg ->
         eprintf "%s\n" msg;
         exit 2
-    | Cil2CsyntaxTranslator.Internal_error msg ->
-        eprintf "%s\nPlease report it.\n" msg;
-        exit 2 in
+  in
   (* Save Csyntax if requested *)
   if !option_dclight then begin
-    let targetname = Filename.chop_suffix sourcename ".c" in
-    let oc = open_out (targetname ^ ".light.c") in
+    let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
+    let oc = open_out ofile in
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
   end;
@@ -264,6 +269,7 @@ Preprocessing options:
 Compilation options:
   -flonglong     Treat 'long long' as 'long' and 'long double' as 'double'
   -fmadd         Use fused multiply-add and multiply-sub instructions
+  -dcil          Save CIL-processed source in <file>.cil.c
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
 Linking options:
@@ -301,6 +307,10 @@ let rec parse_cmdline i =
     end else
     if s = "-fmadd" then begin
       option_fmadd := true;
+      parse_cmdline (i + 1)
+    end else
+    if s = "-dcil" then begin
+      option_dcil := true;
       parse_cmdline (i + 1)
     end else
     if s = "-dclight" then begin
@@ -348,6 +358,8 @@ let rec parse_cmdline i =
   end
 
 let _ =
+  Cil.initCIL();
+  CPragmas.initialize();
   parse_cmdline 1;
   if not (!option_c || !option_S || !option_E) then begin
     linker !exe_name !linker_options

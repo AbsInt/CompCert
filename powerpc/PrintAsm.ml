@@ -192,9 +192,9 @@ let (text, data, const_data, sdata, float_literal) =
   | Diab ->
       (".text",
        ".data",
-       ".data",  (* to check *)
-       ".sdata", (* to check *)
-       ".data")  (* to check *)
+       ".data", (* or: .rodata? *)
+       ".sdata",  (* to check *)
+       ".data")  (* or: .rodata? *)
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -480,7 +480,10 @@ let rec labels_of_code = function
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
-  section oc text;
+  section oc
+    (match CPragmas.section_for_atom name true with
+     | Some s -> ".section\t" ^ s
+     | None -> text);
   fprintf oc "	.align 2\n";
   if not (Cil2Csyntax.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
@@ -692,13 +695,19 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
   | [] -> ()
   | _  ->
+      let init =
+        match init_data with [Init_space _] -> false | _ -> true in
       let sec =
-        if Cil2Csyntax.atom_is_small_data name (coqint_of_camlint 0l) then
-          sdata
-        else if Cil2Csyntax.atom_is_readonly name then
-          const_data
-        else
-          data in
+        match CPragmas.section_for_atom name init with
+        | Some s -> ".section\t" ^ s
+        | None ->
+            if CPragmas.atom_is_small_data name (coqint_of_camlint 0l) then
+              sdata
+            else if Cil2Csyntax.atom_is_readonly name then
+              const_data
+            else
+              data
+      in
       section oc sec;
       fprintf oc "	.align	3\n";
       if not (Cil2Csyntax.atom_is_static name) then

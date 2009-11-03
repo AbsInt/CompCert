@@ -69,20 +69,15 @@ Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
-(* Asm *)
-Extract Constant Asm.low_half => "fun _ -> assert false".
-Extract Constant Asm.high_half => "fun _ -> assert false".
-Extract Constant Asm.symbol_is_small_data => "Cil2Csyntax.atom_is_small_data".
-Extract Constant Asm.small_data_area_offset => "fun _ _ _ -> assert false".
-
 (* Suppression of stupidly big equality functions *)
 Extract Constant Op.eq_operation => "fun (x: operation) (y: operation) -> x = y".
 Extract Constant Op.eq_addressing => "fun (x: addressing) (y: addressing) -> x = y".
 (*Extract Constant CSE.eq_rhs => "fun (x: rhs) (y: rhs) -> x = y".*)
 Extract Constant Machregs.mreg_eq => "fun (x: mreg) (y: mreg) -> x = y".
-Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".
-Extract Constant Asm.freg_eq => "fun (x: freg) (y: freg) -> x = y".
-Extract Constant Asm.preg_eq => "fun (x: preg) (y: preg) -> x = y".
+
+(* Processor-specific extraction directives *)
+
+Load extractionMachdep.
 
 (* Avoid name clashes *)
 Extraction Blacklist List String Int.

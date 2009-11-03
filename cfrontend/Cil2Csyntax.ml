@@ -25,12 +25,45 @@ open Csyntax
 
 (* To associate CIL varinfo to the atoms representing global variables *)
 
-let varinfo_atom : (BinPos.positive, Cil.varinfo) Hashtbl.t =
+let varinfo_atom : (AST.ident, Cil.varinfo) Hashtbl.t =
   Hashtbl.create 103
 
-(* Evaluate compile-time constant expressions.  This is a more
-   aggressive variant of [Cil.constFold], which does not handle
-   floats. *)
+(** Functions used to handle locations *)
+
+let currentLocation = ref Cil.locUnknown
+
+(** Update the current location *)
+let updateLoc loc =
+  currentLocation := loc
+
+(** Convert the current location into a string *)
+let currentLoc() =
+  match !currentLocation with { line=l; file=f } ->
+    f ^ ":" ^ (if l = -1 then "?" else string_of_int l) ^ ": "
+
+(** Exception raised when an error in the C source is encountered,
+    e.g. unsupported C feature *)
+
+exception Error of string
+
+let error msg =
+  raise (Error(currentLoc() ^ msg))
+
+let unsupported msg =
+  error ("Unsupported C feature: " ^ msg)
+
+let internal_error msg =
+  error ("Internal error: " ^ msg ^ "\nPlease report it.")
+
+(** Warning messages *)
+let warning msg =
+  prerr_string (currentLoc());
+  prerr_string "Warning: ";
+  prerr_endline msg
+
+(** Evaluate compile-time constant expressions.  This is a more
+    aggressive variant of [Cil.constFold], which does not handle
+    floats. *)
 
 exception NotConst
 
@@ -168,9 +201,14 @@ and eval_cast ty v =
   | TPtr(_, _), CWStr s -> v  (* tolerance? *)
   | _, _ -> raise NotConst
 
+(** Handler for #pragma directives -- 
+    overriden in machine-dependent CPragmas module *)
 
-(* The parameter to the translation functor: it specifies the
-   translation for integer and float types. *)
+let process_pragma = ref (fun (a: Cil.attribute) -> false)
+
+
+(** The parameter to the translation functor: it specifies the
+    translation for integer and float types. *)
 
 module type TypeSpecifierTranslator =
   sig
@@ -189,7 +227,6 @@ let const0 = Expr (Econst_int (coqint_of_camlint Int32.zero), constInt32)
 
 
 (** Global variables *)
-let currentLocation = ref Cil.locUnknown
 let stringNum = ref 0   (* number of next global for string literals *)
 let stringTable = Hashtbl.create 47
 
@@ -244,33 +281,6 @@ let rec keepUntil elt' = function
     (used for the translation of the [switch] statement) *)
 let keepBetween elt elt' l =
   keepUntil elt' (keepFrom elt l)
-
-(** ** Functions used to handle locations *)
-
-(** Update the current location *)
-let updateLoc loc =
-  currentLocation := loc
-
-(** Convert the current location into a string *)
-let currentLoc() =
-  match !currentLocation with { line=l; file=f } ->
-    f ^ ":" ^ (if l = -1 then "?" else string_of_int l) ^ ": "
-
-(** Exception raised when an unsupported feature is encountered *)
-exception Unsupported of string
-let unsupported msg =
-  raise (Unsupported(currentLoc() ^ "Unsupported C feature: " ^ msg))
-
-(** Exception raised when an internal error is encountered *)
-exception Internal_error of string
-let internal_error msg =
-  raise (Internal_error(currentLoc() ^ "Internal error: " ^ msg))
-
-(** Warning messages *)
-let warning msg =
-  prerr_string (currentLoc());
-  prerr_string "Warning: ";
-  prerr_endline msg
 
 (** ** Functions used to handle string literals *)
 
@@ -1187,9 +1197,10 @@ let rec processGlobals = function
 	  | GAsm (_, loc) ->
 	      updateLoc(loc);
               unsupported "inline assembly"
-	  | GPragma (_, loc) ->
+	  | GPragma (Attr(name, _) as attr, loc) ->
 	      updateLoc(loc);
-              warning "#pragma directive ignored";
+              if not (!process_pragma attr) then
+                warning ("#pragma `" ^ name ^ "' directive ignored");
               processGlobals l
 	  | GText _ -> processGlobals l (* comments are ignored *)
 
@@ -1251,17 +1262,3 @@ let atom_is_readonly a =
     | _ -> false
   with Not_found ->
     false
-
-let atom_is_small_data a ofs =
-  match Configuration.system with
-  | "diab" ->
-      begin try
-        let v = Hashtbl.find varinfo_atom a in
-        let sz = Cil.bitsSizeOf v.vtype / 8 in
-        let ofs = camlint_of_coqint ofs in
-        sz <= 8 && ofs >= 0l && ofs < Int32.of_int sz
-      with Not_found ->
-        false
-    end
-  | _ ->
-      false

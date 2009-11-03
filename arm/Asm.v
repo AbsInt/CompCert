@@ -152,82 +152,38 @@ Inductive instruction : Type :=
 
 (** The pseudo-instructions are the following:
 
-- [Plabel]: define a code label at the current program point
-- [Plfi]: load a floating-point constant in a float register.
-  Expands to a float load [lfd] from an address in the constant data section
-  initialized with the floating-point constant:
+- [Plabel]: define a code label at the current program point.
+- [Ploadsymbol]: load the address of a symbol in an integer register.
+  Expands to a load from an address in the constant data section
+  initialized with the symbol value:
 <<
-        addis   r2, 0, ha16(lbl)
-        lfd     rdst, lo16(lbl)(r2)
+        ldr     rdst, lbl
         .const_data
-lbl:    .double floatcst
+lbl:    .word   symbol
         .text
 >>
   Initialized data in the constant data section are not modeled here,
   which is why we use a pseudo-instruction for this purpose.
-- [Pfcti]: convert a float to an integer.  This requires a transfer
-  via memory of a 32-bit integer from a float register to an int register,
-  which our memory model cannot express.  Expands to:
-<<
-        fctiwz  f13, rsrc
-        stfdu   f13, -8(r1)
-        lwz     rdst, 4(r1)
-        addi    r1, r1, 8
->>
-- [Pictf]: convert a signed integer to a float.  This requires complicated
-  bit-level manipulations of IEEE floats through mixed float and integer 
-  arithmetic over a memory word, which our memory model and axiomatization
-  of floats cannot express.  Expands to:
-<<
-        addis   r2, 0, 0x4330
-        stwu    r2, -8(r1)
-        addis   r2, rsrc, 0x8000
-        stw     r2, 4(r1)
-        addis   r2, 0, ha16(lbl)
-        lfd     f13, lo16(lbl)(r2)
-        lfd     rdst, 0(r1)
-        addi    r1, r1, 8
-        fsub    rdst, rdst, f13
-        .const_data
-lbl:    .long   0x43300000, 0x80000000
-        .text
->>
-  (Don't worry if you do not understand this instruction sequence: intimate
-  knowledge of IEEE float arithmetic is necessary.)
-- [Piuctf]: convert an unsigned integer to a float.  The expansion is close
-  to that [Pictf], and equally obscure.
-<<
-        addis   r2, 0, 0x4330
-        stwu    r2, -8(r1)
-        stw     rsrc, 4(r1)
-        addis   r2, 0, ha16(lbl)
-        lfd     f13, lo16(lbl)(r2)
-        lfd     rdst, 0(r1)
-        addi    r1, r1, 8
-        fsub    rdst, rdst, f13
-        .const_data
-lbl:    .long   0x43300000, 0x00000000
-        .text
->>
-- [Pallocframe lo hi]: in the formal semantics, this pseudo-instruction
+- [Pallocframe lo hi pos]: in the formal semantics, this pseudo-instruction
   allocates a memory block with bounds [lo] and [hi], stores the value
-  of register [r1] (the stack pointer, by convention) at the bottom
-  of this block, and sets [r1] to a pointer to the bottom of this
-  block.  In the printed PowerPC assembly code, this allocation
-  is just a store-decrement of register [r1]:
+  of the stack pointer at offset [pos] in this block, and sets the
+  stack pointer to the address of the bottom of this block.
+  In the printed ASM assembly code, this allocation is:
 <<
-        stwu    r1, (lo - hi)(r1)
+        mov     r12, sp
+        sub     sp, sp, #(hi - lo)
+        str     r12, [sp, #pos]
 >>
   This cannot be expressed in our memory model, which does not reflect
   the fact that stack frames are adjacent and allocated/freed
   following a stack discipline.
-- [Pfreeframe]: in the formal semantics, this pseudo-instruction
-  reads the bottom word of the block pointed by [r1] (the stack pointer),
-  frees this block, and sets [r1] to the value of the bottom word.
-  In the printed PowerPC assembly code, this freeing
-  is just a load of register [r1] relative to [r1] itself:
+- [Pfreeframe pos]: in the formal semantics, this pseudo-instruction
+  reads the word at [pos] of the block pointed by the stack pointer,
+  frees this block, and sets the stack pointer to the value read.
+  In the printed ASM assembly code, this freeing
+  is just a load of register [sp] relative to [sp] itself:
 <<
-        lwz     r1, 0(r1)
+        ldr     sp, [sp, #pos]
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
@@ -239,8 +195,7 @@ Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
 
-(** The PowerPC has a great many registers, some general-purpose, some very
-  specific.  We model only the following registers: *)
+(** We model the following registers of the ARM architecture. *)
 
 Inductive preg: Type :=
   | IR: ireg -> preg                    (**r integer registers *)
@@ -591,7 +546,7 @@ Definition preg_of (r: mreg) :=
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
-    we use PPC registers instead of locations. *)
+    we use ARM registers instead of locations. *)
 
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
@@ -665,9 +620,3 @@ Inductive final_state: state -> int -> Prop :=
       
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=
   program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
-
-
-(** For compatibility with PowerPC *)
-
-Parameter low_half: val -> val.
-Parameter high_half: val -> val.
