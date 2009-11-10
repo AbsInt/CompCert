@@ -648,6 +648,13 @@ Proof.
   rewrite list_length_z_cons. omega.
 Qed.
 
+Lemma list_length_z_map:
+  forall (A B: Type) (f: A -> B) (l: list A),
+  list_length_z (map f l) = list_length_z l.
+Proof.
+  induction l. reflexivity. simpl. repeat rewrite list_length_z_cons. congruence.
+Qed. 
+
 (** Extract the n-th element of a list, as [List.nth_error] does,
     but the index [n] is of type [Z]. *)
 

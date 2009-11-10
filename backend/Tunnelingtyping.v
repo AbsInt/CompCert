@@ -76,7 +76,8 @@ Proof.
   intros; inv H0; simpl; econstructor; eauto;
   try (eapply branch_target_valid; eauto).
   intros. exploit list_in_map_inv; eauto. intros [x [A B]]. subst lbl.
-  eapply branch_target_valid; eauto. 
+  eapply branch_target_valid; eauto.
+  rewrite list_length_z_map. auto.
 Qed.
 
 Lemma wt_tunnel_function:

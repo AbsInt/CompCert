@@ -503,7 +503,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       transl_cond cond args
         (if (snd p) then Pbt (fst p) lbl :: k else Pbf (fst p) lbl :: k)
   | Mjumptable arg tbl =>
-      Pbtbl (ireg_of arg) tbl :: k
+      Prlwinm GPR12 (ireg_of arg) (Int.repr 2) (Int.repr (-4)) ::
+      Pbtbl GPR12 tbl :: k
   | Mreturn =>
       Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR12 ::

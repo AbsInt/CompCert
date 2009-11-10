@@ -263,8 +263,7 @@ let print_instruction oc labels = function
       fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
   | Pbtbl(r, tbl) ->
       let lbl = new_label() in
-      fprintf oc "	rlwinm	%a, %a, 2, 0, 29\n" ireg GPR12 ireg r;
-      fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg GPR12 label_high lbl;
+      fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg r label_high lbl;
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
       fprintf oc "	mtctr	%a\n" ireg GPR12;
       fprintf oc "	bctr\n";

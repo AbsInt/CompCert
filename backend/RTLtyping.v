@@ -116,6 +116,7 @@ Inductive wt_instr : instruction -> Prop :=
       forall arg tbl,
       env arg = Tint ->
       (forall s, In s tbl -> valid_successor s) ->
+      list_length_z tbl * 4 <= Int.max_signed ->
       wt_instr (Ijumptable arg tbl)
   | wt_Ireturn: 
       forall optres,
@@ -232,6 +233,7 @@ Definition check_instr (i: instruction) : bool :=
   | Ijumptable arg tbl =>
       check_reg arg Tint
       && List.forallb check_successor tbl
+      && zle (list_length_z tbl * 4) Int.max_signed
   | Ireturn optres =>
       match optres, funct.(fn_sig).(sig_res) with
       | None, None => true
@@ -336,8 +338,8 @@ Proof.
   apply check_successor_correct; auto.
   (* jumptable *)
   constructor. apply check_reg_correct; auto.
-  rewrite List.forallb_forall in H0. intros. apply check_successor_correct; auto.
-  intros. 
+  rewrite List.forallb_forall in H1. intros. apply check_successor_correct; auto.
+  eapply proj_sumbool_true. eauto.  
   (* return *)
   constructor. 
   destruct o; simpl; destruct funct.(fn_sig).(sig_res); try discriminate.

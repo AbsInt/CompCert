@@ -15,6 +15,7 @@
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
+Require Import Integers.
 Require Import Op.
 Require Import RTL.
 Require Import Locations.
@@ -98,6 +99,7 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Ljumptable:
       forall arg tbl,
       mreg_type arg = Tint ->
+      list_length_z tbl * 4 <= Int.max_signed ->
       wt_instr (Ljumptable arg tbl)
   | wt_Lreturn: 
       wt_instr (Lreturn).

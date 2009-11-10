@@ -1146,21 +1146,47 @@ Proof.
   assert (f0 = f) by congruence. subst f0.
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI. inv WTI.
-  pose (rs1 := rs0 # GPR12 <- Vundef # CTR <- Vundef).
-  inv AT. simpl in H6.
-  assert (rs1 PC = Vptr fb ofs). rewrite H3. reflexivity.
-  generalize (functions_transl _ _ H1); intro FN.
-  generalize (functions_transl_no_overflow _ _ H1); intro NOOV.
-  exploit find_label_goto_label; eauto. intros [rs2 [A [B C]]].
-  left; exists (State rs2 m); split.
-  apply plus_one. econstructor. symmetry; eauto. eauto.
-  eapply find_instr_tail. eauto. 
-  simpl. rewrite (ireg_val _ _ _ _ AG H4) in H. rewrite H. 
-  change label with Mach.label; rewrite H0. eexact A. 
+  exploit list_nth_z_range; eauto. intro RANGE.
+  assert (SHIFT: Int.signed (Int.rolm n (Int.repr 2) (Int.repr (-4))) = Int.signed n * 4).
+    replace (Int.repr (-4)) with (Int.shl Int.mone (Int.repr 2)).
+    rewrite <- Int.shl_rolm. rewrite Int.shl_mul.
+    rewrite Int.mul_signed.
+    apply Int.signed_repr.
+    split. apply Zle_trans with 0. vm_compute; congruence. omega. 
+    omega.
+    vm_compute. reflexivity.
+    vm_compute. apply Int.mkint_eq. auto.
+  inv AT. simpl in H7. 
+  set (k1 := Pbtbl GPR12 tbl :: transl_code f c).
+  set (rs1 := nextinstr (rs0 # GPR12 <- (Vint (Int.rolm n (Int.repr 2) (Int.repr (-4)))))).
+  generalize (functions_transl _ _ H4); intro FN.
+  generalize (functions_transl_no_overflow _ _ H4); intro NOOV.
+  assert (exec_straight tge (transl_function f)
+            (Prlwinm GPR12 (ireg_of arg) (Int.repr 2) (Int.repr (-4)) :: k1) rs0 m
+            k1 rs1 m).
+   apply exec_straight_one. 
+   simpl. rewrite <- (ireg_val _ _ _ _ AG H5). rewrite H. reflexivity. reflexivity. 
+  exploit exec_straight_steps_2; eauto. 
+  intros [ofs' [PC1 CT1]].
+  set (rs2 := rs1 # GPR12 <- Vundef # CTR <- Vundef).
+  assert (PC2: rs2 PC = Vptr fb ofs'). rewrite <- PC1. reflexivity.
+  generalize (find_label_goto_label f lbl rs2 m _ _ _ FIND PC2 H2).
+  intros [rs3 [GOTO [AT3 INV3]]].
+  left; exists (State rs3 m); split.
+  eapply plus_right'. 
+  eapply exec_straight_steps_1; eauto.
+  econstructor; eauto. 
+  eapply find_instr_tail. unfold k1 in CT1. eauto.
+  unfold exec_instr.
+  change (rs1 GPR12) with (Vint (Int.rolm n (Int.repr 2) (Int.repr (-4)))).
+Opaque Zmod.  Opaque Zdiv.
+  simpl. rewrite SHIFT. rewrite Z_mod_mult. rewrite zeq_true. 
+  rewrite Z_div_mult. 
+  change label with Mach.label; rewrite H0. exact GOTO. omega. traceEq.
   econstructor; eauto. 
   eapply Mach.find_label_incl; eauto.
-  apply agree_exten_2 with rs1; auto.
-  unfold rs1. repeat apply agree_set_other; auto with ppcgen.
+  apply agree_exten_2 with rs2; auto. 
+  unfold rs2, rs1. repeat apply agree_set_other; auto with ppcgen.
 Qed.
 
 Lemma exec_Mreturn_prop:

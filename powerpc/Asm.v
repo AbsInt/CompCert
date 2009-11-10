@@ -298,8 +298,7 @@ lbl:    .long   0x43300000, 0x00000000
 - [Pbtbl reg table]: this is a N-way branch, implemented via a jump table
   as follows:
 <<
-        rlwinm  r12, reg, 2, 0, 29
-        addis   r12, r12, ha16(lbl)
+        addis   r12, reg, ha16(lbl)
         lwz     r12, lo16(lbl)(r12)
         mtctr   r12
         bctr    r12
@@ -307,6 +306,7 @@ lbl:    .long   0x43300000, 0x00000000
 lbl:    .long   table[0], table[1], ...
         .text
 >>
+  Note that [reg] contains 4 times the index of the desired table entry.
 *)
 
 Definition code := list instruction.
@@ -624,10 +624,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pbtbl r tbl =>
       match rs#r with
       | Vint n => 
-          match list_nth_z tbl (Int.signed n) with
-          | None => Error
-          | Some lbl => goto_label c lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
-          end
+          let pos := Int.signed n in
+          if zeq (Zmod pos 4) 0 then
+            match list_nth_z tbl (pos / 4) with
+            | None => Error
+            | Some lbl => goto_label c lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
+            end
+          else Error
       | _ => Error
       end
   | Pcmplw r1 r2 =>

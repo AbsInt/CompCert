@@ -82,6 +82,7 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Mjumptable:
       forall arg tbl,
       mreg_type arg = Tint ->
+      list_length_z tbl * 4 <= Int.max_signed ->
       wt_instr (Mjumptable arg tbl)
   | wt_Mreturn: 
       wt_instr Mreturn.

@@ -871,6 +871,13 @@ Proof.
   apply neg_mul_distr_l. 
 Qed.
 
+Theorem mul_signed:
+  forall x y, mul x y = repr (signed x * signed y).
+Proof.
+  intros; unfold mul. apply eqm_samerepr.
+  apply eqm_mult; apply eqm_sym; apply eqm_signed_unsigned.
+Qed.
+
 (** ** Properties of binary decompositions *)
 
 Lemma Z_shift_add_bin_decomp:
