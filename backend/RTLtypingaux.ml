@@ -87,6 +87,8 @@ let type_instr retty (Coq_pair(pc, i)) =
       end
   | Icond(cond, args, _, _) ->
       set_types args (type_of_condition cond)
+  | Ijumptable(arg, _) ->
+      set_type arg Tint
   | Ireturn(optres) ->
       begin match optres, retty with
       | None, None -> ()

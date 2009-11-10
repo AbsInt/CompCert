@@ -639,6 +639,18 @@ Proof.
   traceEq.
   econstructor; eauto.
 
+  (* Ljumptable *)
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
+  simpl in EQ. subst c.
+  assert (REACH': (reachable f)!!pc' = true).
+  eapply reachable_successors; eauto. simpl. eapply list_nth_z_in; eauto.
+  exploit find_label_lin_succ; eauto.
+  inv WTI. apply H6. eapply list_nth_z_in; eauto. 
+  intros [c'' AT'].
+  econstructor; split.
+  apply plus_one. eapply exec_Ljumptable; eauto. 
+  econstructor; eauto.
+
   (* Lreturn *)
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.

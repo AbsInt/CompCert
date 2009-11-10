@@ -242,6 +242,9 @@ Definition transf_instr
   | LTLin.Lcond cond args lbl =>
       let rargs := regs_for args in
       add_reloads args rargs (Lcond cond rargs lbl :: k)
+  | LTLin.Ljumptable arg tbl =>
+      let rarg := reg_for arg in
+      add_reload arg rarg (Ljumptable rarg tbl :: k)
   | LTLin.Lreturn None =>
       Lreturn :: k
   | LTLin.Lreturn (Some loc) =>

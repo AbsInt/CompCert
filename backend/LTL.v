@@ -42,6 +42,7 @@ Inductive instruction: Type :=
   | Lcall: signature -> loc + ident -> list loc -> loc -> node -> instruction
   | Ltailcall: signature -> loc + ident -> list loc -> instruction
   | Lcond: condition -> list loc -> node -> node -> instruction
+  | Ljumptable: loc -> list node -> instruction
   | Lreturn: option loc -> instruction.
 
 Definition code: Type := PTree.t instruction.
@@ -206,6 +207,13 @@ Inductive step: state -> trace -> state -> Prop :=
       eval_condition cond (map rs args) = Some false ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifnot rs m)
+  | exec_Ljumptable:
+      forall s f sp pc rs m arg tbl n pc',
+      (fn_code f)!pc = Some(Ljumptable arg tbl) ->
+      rs arg = Vint n ->
+      list_nth_z tbl (Int.signed n) = Some pc' ->
+      step (State s f sp pc rs m)
+        E0 (State s f sp pc' rs m)
   | exec_Lreturn:
       forall s f stk pc rs m or,
       (fn_code f)!pc = Some(Lreturn or) ->
@@ -263,6 +271,7 @@ Definition successors_instr (i: instruction) : list node :=
   | Lcall sig ros args res s => s :: nil
   | Ltailcall sig ros args => nil
   | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
+  | Ljumptable arg tbl => tbl
   | Lreturn optarg => nil
   end.
 

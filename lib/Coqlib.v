@@ -612,6 +612,80 @@ Proof.
 Qed.
 Hint Resolve nth_error_nil: coqlib.
 
+(** Compute the length of a list, with result in [Z]. *)
+
+Fixpoint list_length_z_aux (A: Type) (l: list A) (acc: Z) {struct l}: Z :=
+  match l with
+  | nil => acc
+  | hd :: tl => list_length_z_aux tl (Zsucc acc)
+  end.
+
+Remark list_length_z_aux_shift:
+  forall (A: Type) (l: list A) n m,
+  list_length_z_aux l n = list_length_z_aux l m + (n - m).
+Proof.
+  induction l; intros; simpl.
+  omega.
+  replace (n - m) with (Zsucc n - Zsucc m) by omega. auto.
+Qed.
+
+Definition list_length_z (A: Type) (l: list A) : Z :=
+  list_length_z_aux l 0.
+
+Lemma list_length_z_cons:
+  forall (A: Type) (hd: A) (tl: list A),
+  list_length_z (hd :: tl) = list_length_z tl + 1.
+Proof.
+  intros. unfold list_length_z. simpl.
+  rewrite (list_length_z_aux_shift tl 1 0). omega. 
+Qed.
+
+Lemma list_length_z_pos:
+  forall (A: Type) (l: list A),
+  list_length_z l >= 0.
+Proof.
+  induction l; simpl. unfold list_length_z; simpl. omega. 
+  rewrite list_length_z_cons. omega.
+Qed.
+
+(** Extract the n-th element of a list, as [List.nth_error] does,
+    but the index [n] is of type [Z]. *)
+
+Fixpoint list_nth_z (A: Type) (l: list A) (n: Z) {struct l}: option A :=
+  match l with
+  | nil => None
+  | hd :: tl => if zeq n 0 then Some hd else list_nth_z tl (Zpred n)
+  end.
+
+Lemma list_nth_z_in:
+  forall (A: Type) (l: list A) n x,
+  list_nth_z l n = Some x -> In x l.
+Proof.
+  induction l; simpl; intros. 
+  congruence.
+  destruct (zeq n 0). left; congruence. right; eauto.
+Qed.
+
+Lemma list_nth_z_map:
+  forall (A B: Type) (f: A -> B) (l: list A) n,
+  list_nth_z (List.map f l) n = option_map f (list_nth_z l n).
+Proof.
+  induction l; simpl; intros.
+  auto.
+  destruct (zeq n 0). auto. eauto.
+Qed.
+
+Lemma list_nth_z_range:
+  forall (A: Type) (l: list A) n x,
+  list_nth_z l n = Some x -> 0 <= n < list_length_z l.
+Proof.
+  induction l; simpl; intros.
+  discriminate.
+  rewrite list_length_z_cons. destruct (zeq n 0).
+  generalize (list_length_z_pos l); omega.
+  exploit IHl; eauto. unfold Zpred. omega. 
+Qed.
+
 (** Properties of [List.incl] (list inclusion). *)
 
 Lemma incl_cons_inv:

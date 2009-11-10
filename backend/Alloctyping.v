@@ -141,6 +141,8 @@ Proof.
   rewrite transf_unroll; auto.
   (* cond *)
   WT.
+  (* jumptable *)
+  WT. 
   (* return *)
   WT.
   rewrite transf_unroll; simpl. 

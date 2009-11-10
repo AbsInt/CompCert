@@ -121,26 +121,14 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
   | None => before
   | Some i =>
       match i with
-      | Inop s =>
-          before
       | Iop op args res s =>
           let a := eval_static_operation op (approx_regs before args) in
           D.set res a before
       | Iload chunk addr args dst s =>
           D.set dst Unknown before
-      | Istore chunk addr args src s =>
-          before
       | Icall sig ros args res s =>
           D.set res Unknown before
-      | Itailcall sig ros args =>
-          before
-(*
-      | Ialloc arg res s =>
-          D.set res Unknown before
-*)
-      | Icond cond args ifso ifnot =>
-          before
-      | Ireturn optarg =>
+      | _ =>
           before
       end
   end.
@@ -211,6 +199,15 @@ Definition transf_instr (app: D.t) (instr: instruction) :=
       | None =>
           let (cond', args') := cond_strength_reduction (approx_reg app) cond args in
           Icond cond' args' s1 s2
+      end
+  | Ijumptable arg tbl =>
+      match intval (approx_reg app) arg with
+      | Some n =>
+          match list_nth_z tbl (Int.signed n) with
+          | Some s => Inop s
+          | None => instr
+          end
+      | None => instr
       end
   | _ =>
       instr

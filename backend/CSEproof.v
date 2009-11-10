@@ -916,6 +916,13 @@ Proof.
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H; auto.
 
+  (* Icond false *)
+  econstructor; split.
+  eapply exec_Ijumptable; eauto. 
+  econstructor; eauto.
+  eapply analysis_correct_1; eauto. simpl. eapply list_nth_z_in; eauto.
+  unfold transfer; rewrite H; auto.
+
   (* Ireturn *)
   econstructor; split.
   eapply exec_Ireturn; eauto.

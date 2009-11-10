@@ -630,6 +630,13 @@ Proof.
   apply eval_condition_lessdef with (rs##args); auto. apply regset_get_list; auto.
   constructor; auto. 
 
+(* jumptable *)
+  TransfInstr. 
+  left. exists (State s' (fn_code (transf_function f)) (Vptr sp0 Int.zero) pc' rs' m'); split.
+  eapply exec_Ijumptable; eauto.
+  generalize (RLD arg). rewrite H0. intro. inv H2. auto.
+  constructor; auto. 
+
 (* return *)
   TransfInstr.
   left. exists (Returnstate s' (regmap_optget or Vundef rs') (free m' stk)); split.

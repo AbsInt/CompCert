@@ -76,6 +76,11 @@ Inductive wt_instr : instruction -> Prop :=
       List.map Loc.type args = type_of_condition cond ->
       locs_acceptable args ->
       wt_instr (Lcond cond args lbl)
+  | wt_Ljumptable:
+      forall arg tbl,
+      Loc.type arg = Tint ->
+      loc_acceptable arg ->
+      wt_instr (Ljumptable arg tbl)
   | wt_Lreturn: 
       forall optres,
       option_map Loc.type optres = funsig.(sig_res) ->

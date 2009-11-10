@@ -185,6 +185,9 @@ Proof.
   (* cond *)
   apply wt_instrs_cons; auto.
   constructor; auto.
+  (* jumptable *)
+  apply wt_instrs_cons; auto.
+  constructor; auto.
   (* return *)
   apply wt_restore_callee_save. apply wt_instrs_cons. constructor. auto.
 Qed.

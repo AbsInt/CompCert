@@ -390,6 +390,18 @@ Proof.
   simpl; auto.
   unfold transfer; rewrite H; auto.
 
+  (* Ijumptable *)
+  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m); split.
+  caseEq (intval (approx_reg (analyze f)!!pc) arg); intros.
+  exploit intval_correct; eauto. eexact MATCH. intro VRS.
+  eapply exec_Inop; eauto. TransfInstr. rewrite H2. 
+  replace i with n by congruence. rewrite H1. auto.
+  eapply exec_Ijumptable; eauto. TransfInstr. rewrite H2. auto.
+  constructor; auto.
+  eapply analyze_correct_1; eauto.
+  simpl. eapply list_nth_z_in; eauto.
+  unfold transfer; rewrite  H; auto.
+
   (* Ireturn *)
   exists (Returnstate s' (regmap_optget or Vundef rs) (free m stk)); split.
   eapply exec_Ireturn; eauto. TransfInstr; auto.

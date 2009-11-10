@@ -13,12 +13,18 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Multi-way branches (``[switch]'') and their compilation
-    to 2-way comparison trees. *)
+(** Multi-way branches (``switch'' statements) and their compilation
+    to comparison trees. *)
 
 Require Import EqNat.
+Require Import FMaps.
+Require FMapAVL.
 Require Import Coqlib.
 Require Import Integers.
+Require Import Ordered.
+
+Module IntMap := FMapAVL.Make(OrderedInt).
+Module IntMapF := FMapFacts.Facts(IntMap).
 
 (** A multi-way branch is composed of a list of (key, action) pairs,
   plus a default action.  *)
@@ -33,22 +39,29 @@ Fixpoint switch_target (n: int) (dfl: nat) (cases: table)
       if Int.eq n key then action else switch_target n dfl rem
   end.
 
-(** Multi-way branches are translated to a 2-way comparison tree.
-    Each node of the tree performs an equality test or a less-than
-    test against one of the keys. *)
+(** Multi-way branches are translated to comparison trees.
+    Each node of the tree performs either
+- an equality against one of the keys;
+- or a "less than" test against one of the keys;
+- or a computed branch (jump table) against a range of key values. *)
 
 Inductive comptree : Type :=
   | CTaction: nat -> comptree
   | CTifeq: int -> nat -> comptree -> comptree
-  | CTiflt: int -> comptree -> comptree -> comptree.
+  | CTiflt: int -> comptree -> comptree -> comptree
+  | CTjumptable: int -> int -> list nat -> comptree -> comptree.
 
-Fixpoint comptree_match (n: int) (t: comptree) {struct t}: nat :=
+Fixpoint comptree_match (n: int) (t: comptree) {struct t}: option nat :=
   match t with
-  | CTaction act => act
+  | CTaction act => Some act
   | CTifeq key act t' =>
-      if Int.eq n key then act else comptree_match n t'
+      if Int.eq n key then Some act else comptree_match n t'
   | CTiflt key t1 t2 =>
       if Int.ltu n key then comptree_match n t1 else comptree_match n t2
+  | CTjumptable ofs sz tbl t' =>
+      if Int.ltu (Int.sub n ofs) sz
+      then list_nth_z tbl (Int.signed (Int.sub n ofs))
+      else comptree_match n t'
   end.
 
 (** The translation from a table to a comparison tree is performed
@@ -80,11 +93,31 @@ Fixpoint split_eq (pivot: int) (cases: table)
       else (same, (key, act) :: others)
   end.
 
+Fixpoint split_between (ofs sz: int) (cases: table)
+                       {struct cases} : IntMap.t nat * table :=
+  match cases with
+  | nil => (IntMap.empty nat, nil)
+  | (key, act) :: rem =>
+      let (inside, outside) := split_between ofs sz rem in
+      if Int.ltu (Int.sub key ofs) sz
+      then (IntMap.add key act inside, outside)
+      else (inside, (key, act) :: outside)
+  end.
+
 Definition refine_low_bound (v lo: Z) :=
   if zeq v lo then lo + 1 else lo.
 
 Definition refine_high_bound (v hi: Z) :=
   if zeq v hi then hi - 1 else hi.
+
+Fixpoint validate_jumptable (cases: IntMap.t nat) (default: nat)
+                            (tbl: list nat) (n: int) {struct tbl} : bool :=
+  match tbl with
+  | nil => true
+  | act :: rem =>
+      beq_nat act (match IntMap.find n cases with Some a => a | None => default end)
+      && validate_jumptable cases default rem (Int.add n Int.one)
+  end.
 
 Fixpoint validate (default: nat) (cases: table) (t: comptree)
                   (lo hi: Z) {struct t} : bool :=
@@ -112,6 +145,15 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
           validate default lcases t1 lo (Int.unsigned pivot - 1)
           && validate default rcases t2 (Int.unsigned pivot) hi
       end
+  | CTjumptable ofs sz tbl t' =>
+      let tbl_len := list_length_z tbl in
+      match split_between ofs sz cases with
+      | (inside, outside) =>
+          zle (Int.unsigned sz) tbl_len
+          && zle tbl_len Int.max_signed
+          && validate_jumptable inside default tbl ofs
+          && validate default outside t' lo hi
+     end
   end.
 
 Definition validate_switch (default: nat) (cases: table) (t: comptree) :=
@@ -163,11 +205,78 @@ Proof.
   auto.
 Qed.
 
+Lemma split_between_prop:
+  forall v default ofs sz cases inside outside,
+  split_between ofs sz cases = (inside, outside) ->
+  switch_target v default cases =
+    (if Int.ltu (Int.sub v ofs) sz
+     then match IntMap.find v inside with Some a => a | None => default end
+     else switch_target v default outside).
+Proof.
+  induction cases; intros until outside; simpl.
+  intros. inv H. simpl. destruct (Int.ltu (Int.sub v ofs) sz); auto.
+  destruct a as [key act]. case_eq (split_between ofs sz cases). intros ins outs SEQ.
+  rewrite (IHcases _ _ SEQ). 
+  case_eq (Int.ltu (Int.sub key ofs) sz); intros; inv H0; simpl.
+  rewrite IntMapF.add_o. 
+  predSpec Int.eq Int.eq_spec v key. 
+  subst v. rewrite H. rewrite dec_eq_true. auto.
+  rewrite dec_eq_false; auto.
+  case_eq (Int.ltu (Int.sub v ofs) sz); intros; auto.
+  predSpec Int.eq Int.eq_spec v key. 
+  subst v. congruence.
+  auto.
+Qed.
+
+Lemma validate_jumptable_correct_rec:
+  forall cases default tbl base v,
+  validate_jumptable cases default tbl base = true ->
+  0 <= Int.signed v < list_length_z tbl -> Int.signed v <= Int.max_signed ->
+  list_nth_z tbl (Int.signed v) =
+  Some(match IntMap.find (Int.add base v) cases with Some a => a | None => default end).
+Proof.
+  induction tbl; intros until v; simpl.
+  unfold list_length_z; simpl. intros. omegaContradiction.
+  rewrite list_length_z_cons. intros. destruct (andb_prop _ _ H). clear H.
+  generalize (beq_nat_eq _ _ (sym_equal H2)). clear H2. intro. subst a.
+  destruct (zeq (Int.signed v) 0).
+  rewrite Int.add_signed. rewrite e. rewrite Zplus_0_r. rewrite Int.repr_signed. auto.
+  assert (Int.signed (Int.sub v Int.one) = Int.signed v - 1).
+    rewrite Int.sub_signed. change (Int.signed Int.one) with 1. 
+    apply Int.signed_repr. split. apply Zle_trans with 0. 
+    vm_compute; congruence. omega. omega.
+    replace (Int.add base v) with (Int.add (Int.add base Int.one) (Int.sub v Int.one)).
+  rewrite <- IHtbl. rewrite H. auto. auto. rewrite H. omega. 
+  rewrite H. omega. 
+  rewrite Int.sub_add_opp. rewrite Int.add_permut. rewrite Int.add_assoc. 
+  replace (Int.add Int.one (Int.neg Int.one)) with Int.zero.
+  rewrite Int.add_zero. apply Int.add_commut.
+  apply Int.mkint_eq. reflexivity.
+Qed.
+
+Lemma validate_jumptable_correct:
+  forall cases default tbl ofs v sz,
+  validate_jumptable cases default tbl ofs = true ->
+  Int.ltu (Int.sub v ofs) sz = true ->
+  Int.unsigned sz <= list_length_z tbl <= Int.max_signed ->
+  list_nth_z tbl (Int.signed (Int.sub v ofs)) =
+  Some(match IntMap.find v cases with Some a => a | None => default end).
+Proof.
+  intros.
+  exploit Int.ltu_range_test; eauto. omega. intros. 
+  rewrite (validate_jumptable_correct_rec cases default tbl ofs).
+  rewrite Int.sub_add_opp. rewrite Int.add_permut. rewrite <- Int.sub_add_opp. 
+  rewrite Int.sub_idem. rewrite Int.add_zero. auto. 
+  auto.
+  omega. 
+  omega.
+Qed.
+
 Lemma validate_correct_rec:
   forall default v t cases lo hi,
   validate default cases t lo hi = true ->
   lo <= Int.unsigned v <= hi ->
-  switch_target v default cases = comptree_match v t.
+  comptree_match v t = Some (switch_target v default cases).
 Proof.
   induction t; simpl; intros until hi.
   (* base case *)
@@ -187,7 +296,7 @@ Proof.
   intros. destruct (andb_prop _ _ H). clear H.
   rewrite (split_eq_prop v default _ _ _ _ EQ).
   predSpec Int.eq Int.eq_spec v i.
-  symmetry. apply beq_nat_eq; auto.
+  f_equal. apply beq_nat_eq; auto.
   eapply IHt. eauto.
   assert (Int.unsigned v <> Int.unsigned i).
     rewrite <- (Int.repr_unsigned v) in H.
@@ -203,11 +312,21 @@ Proof.
   unfold Int.ltu. destruct (zlt (Int.unsigned v) (Int.unsigned i)).
   eapply IHt1. eauto. omega.
   eapply IHt2. eauto. omega.
+  (* jumptable node *)
+  case_eq (split_between i i0 cases). intros ins outs EQ V RANGE.
+  destruct (andb_prop _ _ V). clear V.
+  destruct (andb_prop _ _ H). clear H.
+  destruct (andb_prop _ _ H1). clear H1.
+  rewrite (split_between_prop v _ _ _ _ _ _ EQ).
+  case_eq (Int.ltu (Int.sub v i) i0); intros.
+  eapply validate_jumptable_correct; eauto. 
+  split; eapply proj_sumbool_true; eauto.
+  eapply IHt; eauto. 
 Qed.
 
 Definition table_tree_agree
     (default: nat) (cases: table) (t: comptree) : Prop :=
-  forall v, switch_target v default cases = comptree_match v t.
+  forall v, comptree_match v t = Some(switch_target v default cases).
 
 Theorem validate_switch_correct:
   forall default t cases,

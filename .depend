@@ -5,18 +5,17 @@ lib/Integers.vo: lib/Integers.v lib/Coqlib.vo
 lib/Iteration.vo: lib/Iteration.v lib/Coqlib.vo
 lib/Lattice.vo: lib/Lattice.v lib/Coqlib.vo lib/Maps.vo
 lib/Maps.vo: lib/Maps.v lib/Coqlib.vo
-lib/Ordered.vo: lib/Ordered.v lib/Coqlib.vo lib/Maps.vo
+lib/Ordered.vo: lib/Ordered.v lib/Coqlib.vo lib/Maps.vo lib/Integers.vo
 lib/Parmov.vo: lib/Parmov.v lib/Coqlib.vo
 lib/UnionFind.vo: lib/UnionFind.v lib/Coqlib.vo
 common/AST.vo: common/AST.v lib/Coqlib.vo common/Errors.vo lib/Integers.vo lib/Floats.vo
-common/Determinism2.vo: common/Determinism2.v lib/Coqlib.vo common/AST.vo lib/Integers.vo common/Values.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo
 common/Determinism.vo: common/Determinism.v lib/Coqlib.vo common/AST.vo lib/Integers.vo common/Values.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo
 common/Errors.vo: common/Errors.v lib/Coqlib.vo
 common/Events.vo: common/Events.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo
 common/Globalenvs.vo: common/Globalenvs.v lib/Coqlib.vo common/Errors.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo
 common/Mem.vo: common/Mem.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo
 common/Smallstep.vo: common/Smallstep.v lib/Coqlib.vo common/AST.vo common/Events.vo common/Globalenvs.vo lib/Integers.vo
-common/Switch.vo: common/Switch.v lib/Coqlib.vo lib/Integers.vo
+common/Switch.vo: common/Switch.v lib/Coqlib.vo lib/Integers.vo lib/Ordered.vo
 common/Values.vo: common/Values.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floats.vo
 $(ARCH)/$(VARIANT)/Conventions.vo: $(ARCH)/$(VARIANT)/Conventions.v lib/Coqlib.vo common/AST.vo backend/Locations.vo
 $(ARCH)/$(VARIANT)/Stacklayout.vo: $(ARCH)/$(VARIANT)/Stacklayout.v lib/Coqlib.vo backend/Bounds.vo
@@ -27,6 +26,7 @@ $(ARCH)/Asmgen.vo: $(ARCH)/Asmgen.v lib/Coqlib.vo lib/Maps.vo common/Errors.vo c
 $(ARCH)/Asm.vo: $(ARCH)/Asm.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo backend/Locations.vo $(ARCH)/$(VARIANT)/Stacklayout.vo $(ARCH)/$(VARIANT)/Conventions.vo
 $(ARCH)/ConstpropOpproof.vo: $(ARCH)/ConstpropOpproof.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Globalenvs.vo $(ARCH)/Op.vo backend/Registers.vo backend/RTL.vo $(ARCH)/ConstpropOp.vo backend/Constprop.vo
 $(ARCH)/ConstpropOp.vo: $(ARCH)/ConstpropOp.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo $(ARCH)/Op.vo backend/Registers.vo
+$(ARCH)/extractionMachdep.vo: $(ARCH)/extractionMachdep.v
 $(ARCH)/Machregs.vo: $(ARCH)/Machregs.v lib/Coqlib.vo lib/Maps.vo common/AST.vo
 $(ARCH)/Op.vo: $(ARCH)/Op.v lib/Coqlib.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Globalenvs.vo
 $(ARCH)/SelectOpproof.vo: $(ARCH)/SelectOpproof.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo backend/Cminor.vo $(ARCH)/Op.vo backend/CminorSel.vo $(ARCH)/SelectOp.vo
@@ -56,6 +56,7 @@ backend/LTLin.vo: backend/LTLin.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/In
 backend/LTLtyping.vo: backend/LTLtyping.v lib/Coqlib.vo lib/Maps.vo common/AST.vo $(ARCH)/Op.vo backend/RTL.vo backend/Locations.vo backend/LTL.vo $(ARCH)/$(VARIANT)/Conventions.vo
 backend/LTL.vo: backend/LTL.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Events.vo common/Mem.vo common/Globalenvs.vo common/Smallstep.vo $(ARCH)/Op.vo backend/Locations.vo $(ARCH)/$(VARIANT)/Conventions.vo
 backend/Machabstr2concr.vo: backend/Machabstr2concr.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo $(ARCH)/Op.vo backend/Locations.vo backend/Mach.vo backend/Machtyping.vo backend/Machabstr.vo backend/Machconcr.vo $(ARCH)/Asmgenretaddr.vo
+backend/Machabstrblock.vo: backend/Machabstrblock.v lib/Coqlib.vo lib/Maps.vo common/AST.vo common/Mem.vo lib/Integers.vo common/Values.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo $(ARCH)/Op.vo backend/Locations.vo $(ARCH)/$(VARIANT)/Conventions.vo backend/Mach.vo backend/Machabstr.vo $(ARCH)/$(VARIANT)/Stacklayout.vo
 backend/Machabstr.vo: backend/Machabstr.v lib/Coqlib.vo lib/Maps.vo common/AST.vo common/Mem.vo lib/Integers.vo common/Values.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo $(ARCH)/Op.vo backend/Locations.vo $(ARCH)/$(VARIANT)/Conventions.vo backend/Mach.vo $(ARCH)/$(VARIANT)/Stacklayout.vo
 backend/Machconcr.vo: backend/Machconcr.v lib/Coqlib.vo lib/Maps.vo common/AST.vo lib/Integers.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo $(ARCH)/Op.vo backend/Locations.vo $(ARCH)/$(VARIANT)/Conventions.vo backend/Mach.vo $(ARCH)/$(VARIANT)/Stacklayout.vo $(ARCH)/Asmgenretaddr.vo
 backend/Machtyping.vo: backend/Machtyping.v lib/Coqlib.vo lib/Maps.vo common/AST.vo common/Mem.vo lib/Integers.vo common/Values.vo common/Events.vo common/Globalenvs.vo $(ARCH)/Op.vo backend/Locations.vo $(ARCH)/$(VARIANT)/Conventions.vo backend/Mach.vo backend/Machabstr.vo
@@ -80,6 +81,8 @@ backend/Tailcall.vo: backend/Tailcall.v lib/Coqlib.vo lib/Maps.vo common/AST.vo 
 backend/Tunnelingproof.vo: backend/Tunnelingproof.v lib/Coqlib.vo lib/Maps.vo lib/UnionFind.vo common/AST.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo $(ARCH)/Op.vo backend/Locations.vo backend/LTL.vo backend/Tunneling.vo
 backend/Tunnelingtyping.vo: backend/Tunnelingtyping.v lib/Coqlib.vo lib/Maps.vo lib/UnionFind.vo common/AST.vo common/Values.vo common/Mem.vo common/Globalenvs.vo $(ARCH)/Op.vo backend/Locations.vo backend/LTL.vo backend/LTLtyping.vo backend/Tunneling.vo backend/Tunnelingproof.vo
 backend/Tunneling.vo: backend/Tunneling.v lib/Coqlib.vo lib/Maps.vo lib/UnionFind.vo common/AST.vo common/Values.vo common/Globalenvs.vo $(ARCH)/Op.vo backend/Locations.vo backend/LTL.vo
+cfrontend/Cmedium.saved.vo: cfrontend/Cmedium.saved.v lib/Coqlib.vo common/Errors.vo lib/Maps.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/AST.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo cfrontend/Csyntax.vo cfrontend/Csem.vo
+cfrontend/Cmedium.vo: cfrontend/Cmedium.v lib/Coqlib.vo common/Errors.vo lib/Maps.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/AST.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo cfrontend/Csyntax.vo cfrontend/Csem.vo
 cfrontend/Cminorgenproof.vo: cfrontend/Cminorgenproof.v lib/Coqlib.vo common/Errors.vo lib/Maps.vo common/AST.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/Mem.vo common/Events.vo common/Globalenvs.vo common/Smallstep.vo cfrontend/Csharpminor.vo $(ARCH)/Op.vo backend/Cminor.vo cfrontend/Cminorgen.vo common/Switch.vo
 cfrontend/Cminorgen.vo: cfrontend/Cminorgen.v lib/Coqlib.vo common/Errors.vo lib/Maps.vo lib/Ordered.vo common/AST.vo lib/Integers.vo common/Mem.vo cfrontend/Csharpminor.vo $(ARCH)/Op.vo backend/Cminor.vo
 cfrontend/Csem.vo: cfrontend/Csem.v lib/Coqlib.vo common/Errors.vo lib/Maps.vo lib/Integers.vo lib/Floats.vo common/Values.vo common/AST.vo common/Mem.vo common/Events.vo common/Globalenvs.vo cfrontend/Csyntax.vo common/Smallstep.vo

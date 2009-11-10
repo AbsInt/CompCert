@@ -106,6 +106,8 @@ Definition tunnel_instr (uf: U.t) (b: instruction) : instruction :=
       Ltailcall sig ros args
   | Lcond cond args s1 s2 =>
       Lcond cond args (U.repr uf s1) (U.repr uf s2)
+  | Ljumptable arg tbl =>
+      Ljumptable arg (List.map (U.repr uf) tbl)
   | Lreturn or =>
       Lreturn or
   end.

@@ -713,22 +713,36 @@ Definition tr_store_optvar (c: code) (map: mapping)
 
 (** Auxiliary for the compilation of [switch] statements. *)
 
+Definition tr_jumptable (nexits: list node) (tbl: list nat) (ttbl: list node) : Prop :=
+  forall v act,
+  list_nth_z tbl v = Some act ->
+  exists n, list_nth_z ttbl v = Some n /\ nth_error nexits act = Some n.
+
 Inductive tr_switch
-     (c: code) (r: reg) (nexits: list node):
+     (c: code) (map: mapping) (r: reg) (nexits: list node):
      comptree -> node -> Prop :=
   | tr_switch_action: forall act n,
       nth_error nexits act = Some n ->
-      tr_switch c r nexits (CTaction act) n
+      tr_switch c map r nexits (CTaction act) n
   | tr_switch_ifeq: forall key act t' n ncont nfound,
-      tr_switch c r nexits t' ncont ->
+      tr_switch c map r nexits t' ncont ->
       nth_error nexits act = Some nfound ->
       c!n = Some(Icond (Ccompimm Ceq key) (r :: nil) nfound ncont) ->
-      tr_switch c r nexits (CTifeq key act t') n
+      tr_switch c map r nexits (CTifeq key act t') n
   | tr_switch_iflt: forall key t1 t2 n n1 n2,
-      tr_switch c r nexits t1 n1 ->
-      tr_switch c r nexits t2 n2 ->
+      tr_switch c map r nexits t1 n1 ->
+      tr_switch c map r nexits t2 n2 ->
       c!n = Some(Icond (Ccompuimm Clt key) (r :: nil) n1 n2) ->
-      tr_switch c r nexits (CTiflt key t1 t2) n.
+      tr_switch c map r nexits (CTiflt key t1 t2) n
+  | tr_switch_jumptable: forall ofs sz tbl t n n1 n2 n3 rt ttbl,
+      ~reg_in_map map rt -> rt <> r ->
+      c!n = Some(Iop (if Int.eq ofs Int.zero then Omove else Oaddimm (Int.neg ofs))
+                     (r ::nil) rt n1) ->
+      c!n1 = Some(Icond (Ccompuimm Clt sz) (rt :: nil) n2 n3) ->
+      c!n2 = Some(Ijumptable rt ttbl) ->
+      tr_switch c map r nexits t n3 ->
+      tr_jumptable nexits tbl ttbl ->
+      tr_switch c map r nexits (CTjumptable ofs sz tbl t) n.
 
 (** [tr_stmt c map stmt ns ncont nexits nret rret] holds if the graph [c],
   starting at node [ns], contains instructions that perform the Cminor
@@ -786,7 +800,7 @@ Inductive tr_stmt (c: code) (map: mapping):
   | tr_Sswitch: forall a cases default ns nd nexits ngoto nret rret n r t,
      validate_switch default cases t = true ->
      tr_expr c map nil a ns n r ->
-     tr_switch c r nexits t n ->
+     tr_switch c map r nexits t n ->
      tr_stmt c map (Sswitch a cases default) ns nd nexits ngoto nret rret
   | tr_Sreturn_none: forall nret nd nexits ngoto,
      tr_stmt c map (Sreturn None) nret nd nexits ngoto nret None
@@ -1000,9 +1014,9 @@ Qed.
 
 Lemma tr_switch_incr:
   forall s1 s2, state_incr s1 s2 ->
-  forall r nexits t ns,
-  tr_switch s1.(st_code) r nexits t ns ->
-  tr_switch s2.(st_code) r nexits t ns.
+  forall map r nexits t ns,
+  tr_switch s1.(st_code) map r nexits t ns ->
+  tr_switch s2.(st_code) map r nexits t ns.
 Proof.
   induction 2; econstructor; eauto with rtlg.
 Qed.
@@ -1051,24 +1065,47 @@ Proof.
   destruct (nth_error nexits n); intro; monadInv H. auto.
 Qed.
 
+Lemma transl_jumptable_charact:
+  forall nexits tbl s nl s' incr,
+  transl_jumptable nexits tbl s = OK nl s' incr ->
+  tr_jumptable nexits tbl nl /\ s' = s.
+Proof.
+  induction tbl; intros.
+  monadInv H. split. red. simpl. intros. discriminate. auto.
+  monadInv H. exploit transl_exit_charact; eauto. intros [A B]. 
+  exploit IHtbl; eauto. intros [C D].
+  split. red. simpl. intros. destruct (zeq v 0). inv H. exists x; auto. auto.
+  congruence.
+Qed.
+
 Lemma transl_switch_charact:
-  forall r nexits t s ns s' incr,
+  forall map r nexits t s ns s' incr,
+  map_valid map s -> reg_valid r s ->
   transl_switch r nexits t s = OK ns s' incr ->
-  tr_switch s'.(st_code) r nexits t ns.
+  tr_switch s'.(st_code) map r nexits t ns.
 Proof.
   induction t; simpl; intros.
   exploit transl_exit_charact; eauto. intros [A B].
   econstructor; eauto.
 
-  monadInv H.
+  monadInv H1.
   exploit transl_exit_charact; eauto. intros [A B]. subst s1.
   econstructor; eauto with rtlg. 
   apply tr_switch_incr with s0; eauto with rtlg.
 
-  monadInv H.
+  monadInv H1.
   econstructor; eauto with rtlg. 
   apply tr_switch_incr with s1; eauto with rtlg.
   apply tr_switch_incr with s0; eauto with rtlg.
+
+  monadInv H1.
+  exploit transl_jumptable_charact; eauto. intros [A B]. subst s1.
+  econstructor. eauto with rtlg.
+  apply sym_not_equal. apply valid_fresh_different with s; eauto with rtlg.
+  eauto with rtlg. eauto with rtlg. eauto with rtlg. 
+  apply tr_switch_incr with s3. eauto with rtlg.
+  eapply IHt with (s := s2); eauto with rtlg.
+  auto.
 Qed.
  
 Lemma transl_stmt_charact:
@@ -1091,8 +1128,9 @@ Proof.
   apply tr_expr_incr with s3; eauto with rtlg.
   eapply transl_expr_charact; eauto with rtlg. 
   (* Scall *)
-  assert (state_incr s0 s3) by eauto with rtlg.
-  assert (state_incr s3 s6) by eauto with rtlg.
+  assert (state_incr s0 s2) by eauto with rtlg.
+  assert (state_incr s2 s4) by eauto with rtlg.
+  assert (state_incr s4 s6) by eauto with rtlg.
   econstructor; eauto with rtlg.
   eapply transl_expr_charact; eauto with rtlg.
   apply tr_exprlist_incr with s6. auto. 
@@ -1101,7 +1139,6 @@ Proof.
   apply regs_valid_cons; eauto with rtlg.
   apply regs_valid_incr with s1; eauto with rtlg.
   apply regs_valid_cons; eauto with rtlg.
-  apply regs_valid_incr with s2; eauto with rtlg.
   apply tr_store_optvar_incr with s4; eauto with rtlg.
   eapply store_optvar_charact; eauto with rtlg.
   (* Stailcall *)
@@ -1149,7 +1186,7 @@ Proof.
   econstructor; eauto with rtlg.
   eapply transl_expr_charact; eauto with rtlg.
   apply tr_switch_incr with s1; auto with rtlg.
-  eapply transl_switch_charact; eauto with rtlg.
+  eapply transl_switch_charact with (s := s0); eauto with rtlg.
   monadInv TR. 
   (* Sreturn *)
   destruct o; destruct rret; inv TR.

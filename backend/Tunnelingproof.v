@@ -315,6 +315,13 @@ Proof.
   eapply exec_Lcond_false; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
   econstructor; eauto.
+  (* jumptable *)
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
+  left; econstructor; split.
+  eapply exec_Ljumptable. 
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
+  eauto. rewrite list_nth_z_map. change U.elt with node. rewrite H1. reflexivity. 
+  econstructor; eauto. 
   (* return *)
   generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.

@@ -65,19 +65,19 @@ Proof.
   intros. 
   destruct (functions_translated _ _ H) as [tf [A B]].
   rewrite A. generalize B. unfold transf_fundef, transf_partial_fundef, transf_function.
-  case (zlt Int.max_unsigned (code_size (transl_function f))); simpl; intro.
+  case (zlt Int.max_unsigned (list_length_z (transl_function f))); simpl; intro.
   congruence. intro. inv B0. auto.
 Qed.
 
 Lemma functions_transl_no_overflow:
   forall b f,
   Genv.find_funct_ptr ge b = Some (Internal f) ->
-  code_size (transl_function f) <= Int.max_unsigned.
+  list_length_z (transl_function f) <= Int.max_unsigned.
 Proof.
   intros. 
   destruct (functions_translated _ _ H) as [tf [A B]].
   generalize B. unfold transf_fundef, transf_partial_fundef, transf_function.
-  case (zlt Int.max_unsigned (code_size (transl_function f))); simpl; intro.
+  case (zlt Int.max_unsigned (list_length_z (transl_function f))); simpl; intro.
   congruence. intro; omega.
 Qed.
 
@@ -105,21 +105,23 @@ Proof.
   eauto.
 Qed.
 
+(*
 Remark code_size_pos:
   forall fn, code_size fn >= 0.
 Proof.
   induction fn; simpl; omega.
 Qed.
+*)
 
 Remark code_tail_bounds:
   forall fn ofs i c,
-  code_tail ofs fn (i :: c) -> 0 <= ofs < code_size fn.
+  code_tail ofs fn (i :: c) -> 0 <= ofs < list_length_z fn.
 Proof.
   assert (forall ofs fn c, code_tail ofs fn c ->
-          forall i c', c = i :: c' -> 0 <= ofs < code_size fn).
+          forall i c', c = i :: c' -> 0 <= ofs < list_length_z fn).
   induction 1; intros; simpl. 
-  rewrite H. simpl. generalize (code_size_pos c'). omega.
-  generalize (IHcode_tail _ _ H0). omega.
+  rewrite H. rewrite list_length_z_cons. generalize (list_length_z_pos c'). omega.
+  rewrite list_length_z_cons. generalize (IHcode_tail _ _ H0). omega.
   eauto.
 Qed.
 
@@ -138,7 +140,7 @@ Qed.
 
 Lemma code_tail_next_int:
   forall fn ofs i c,
-  code_size fn <= Int.max_unsigned ->
+  list_length_z fn <= Int.max_unsigned ->
   code_tail (Int.unsigned ofs) fn (i :: c) ->
   code_tail (Int.unsigned (Int.add ofs Int.one)) fn c.
 Proof.
@@ -167,7 +169,7 @@ Inductive transl_code_at_pc: val -> block -> Mach.function -> Mach.code -> Prop 
 Lemma exec_straight_steps_1:
   forall fn c rs m c' rs' m',
   exec_straight tge fn c rs m c' rs' m' ->
-  code_size fn <= Int.max_unsigned ->
+  list_length_z fn <= Int.max_unsigned ->
   forall b ofs,
   rs#PC = Vptr b ofs ->
   Genv.find_funct_ptr tge b = Some (Internal fn) ->
@@ -191,7 +193,7 @@ Qed.
 Lemma exec_straight_steps_2:
   forall fn c rs m c' rs' m',
   exec_straight tge fn c rs m c' rs' m' ->
-  code_size fn <= Int.max_unsigned ->
+  list_length_z fn <= Int.max_unsigned ->
   forall b ofs,
   rs#PC = Vptr b ofs ->
   Genv.find_funct_ptr tge b = Some (Internal fn) ->
@@ -284,7 +286,7 @@ Lemma label_pos_code_tail:
   exists pos',
   label_pos lbl pos c = Some pos' 
   /\ code_tail (pos' - pos) c c'
-  /\ pos < pos' <= pos + code_size c.
+  /\ pos < pos' <= pos + list_length_z c.
 Proof.
   induction c. 
   simpl; intros. discriminate.
@@ -293,12 +295,12 @@ Proof.
   intro EQ; injection EQ; intro; subst c'.
   exists (pos + 1). split. auto. split.
   replace (pos + 1 - pos) with (0 + 1) by omega. constructor. constructor. 
-  generalize (code_size_pos c). omega. 
+  rewrite list_length_z_cons. generalize (list_length_z_pos c). omega. 
   intros. generalize (IHc (pos + 1) c' H). intros [pos' [A [B C]]].
   exists pos'. split. auto. split.
   replace (pos' - pos) with ((pos' - (pos + 1)) + 1) by omega.
   constructor. auto. 
-  omega.
+  rewrite list_length_z_cons. omega.
 Qed.
 
 (** The following lemmas show that the translation from Mach to PPC
@@ -863,7 +865,7 @@ Proof.
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI. inversion WTI.
   inv AT. 
-  assert (NOOV: code_size (transl_function f) <= Int.max_unsigned).
+  assert (NOOV: list_length_z (transl_function f) <= Int.max_unsigned).
     eapply functions_transl_no_overflow; eauto.
   destruct ros; simpl in H; simpl transl_code in H7.
   (* Indirect call *)
@@ -940,7 +942,7 @@ Proof.
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI. inversion WTI.
   inversion AT. subst b f0 c0.
-  assert (NOOV: code_size (transl_function f) <= Int.max_unsigned).
+  assert (NOOV: list_length_z (transl_function f) <= Int.max_unsigned).
     eapply functions_transl_no_overflow; eauto.
   destruct ros; simpl in H; simpl in H9.
   (* Indirect call *)
@@ -1127,6 +1129,40 @@ Proof.
   auto with ppcgen.
 Qed.
 
+Lemma exec_Mjumptable_prop:
+  forall (s : list stackframe) (fb : block) (f : function) (sp : val)
+         (arg : mreg) (tbl : list Mach.label) (c : list Mach.instruction)
+         (rs : mreg -> val) (m : mem) (n : int) (lbl : Mach.label)
+         (c' : Mach.code),
+  rs arg = Vint n ->
+  list_nth_z tbl (Int.signed n) = Some lbl ->
+  Genv.find_funct_ptr ge fb = Some (Internal f) ->
+  Mach.find_label lbl (fn_code f) = Some c' ->
+  exec_instr_prop
+    (Machconcr.State s fb sp (Mjumptable arg tbl :: c) rs m) E0
+    (Machconcr.State s fb sp c' rs m).
+Proof.
+  intros; red; intros; inv MS.
+  assert (f0 = f) by congruence. subst f0.
+  generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
+  intro WTI. inv WTI.
+  pose (rs1 := rs0 # GPR12 <- Vundef # CTR <- Vundef).
+  inv AT. simpl in H6.
+  assert (rs1 PC = Vptr fb ofs). rewrite H3. reflexivity.
+  generalize (functions_transl _ _ H1); intro FN.
+  generalize (functions_transl_no_overflow _ _ H1); intro NOOV.
+  exploit find_label_goto_label; eauto. intros [rs2 [A [B C]]].
+  left; exists (State rs2 m); split.
+  apply plus_one. econstructor. symmetry; eauto. eauto.
+  eapply find_instr_tail. eauto. 
+  simpl. rewrite (ireg_val _ _ _ _ AG H4) in H. rewrite H. 
+  change label with Mach.label; rewrite H0. eexact A. 
+  econstructor; eauto. 
+  eapply Mach.find_label_incl; eauto.
+  apply agree_exten_2 with rs1; auto.
+  unfold rs1. repeat apply agree_set_other; auto with ppcgen.
+Qed.
+
 Lemma exec_Mreturn_prop:
   forall (s : list stackframe) (fb stk : block) (soff : int)
          (c : list Mach.instruction) (ms : Mach.regset) (m : mem) (f: Mach.function),
@@ -1292,6 +1328,7 @@ Proof
            exec_Mgoto_prop
            exec_Mcond_true_prop
            exec_Mcond_false_prop
+           exec_Mjumptable_prop
            exec_Mreturn_prop
            exec_function_internal_prop
            exec_function_external_prop

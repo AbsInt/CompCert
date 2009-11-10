@@ -350,6 +350,8 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           empty_numbering
       | Icond cond args ifso ifnot =>
           before
+      | Ijumptable arg tbl =>
+          before
       | Ireturn optarg =>
           before
       end

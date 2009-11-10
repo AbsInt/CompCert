@@ -1510,6 +1510,15 @@ Proof.
   rewrite <- (agree_eval_regs _ _ _ _ _ _ _ args AG) in H; auto.
   econstructor; eauto with coqlib.
 
+  (* Ljumptable *)
+  econstructor; split.
+  apply plus_one; eapply exec_Mjumptable.
+  rewrite <- (agree_eval_reg _ _ _ _ _ _ _ arg AG) in H; eauto.
+  eauto. 
+  apply transl_find_label; eauto.
+  econstructor; eauto.
+  eapply find_label_incl; eauto.
+
   (* Lreturn *)
   exploit restore_callee_save_correct; eauto.
   intros [ls' [A [B C]]].

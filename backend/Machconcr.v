@@ -204,6 +204,14 @@ Inductive step: state -> trace -> state -> Prop :=
       eval_condition cond rs##args = Some false ->
       step (State s f sp (Mcond cond args lbl :: c) rs m)
         E0 (State s f sp c rs m)
+  | exec_Mjumptable:
+      forall s fb f sp arg tbl c rs m n lbl c',
+      rs arg = Vint n ->
+      list_nth_z tbl (Int.signed n) = Some lbl ->
+      Genv.find_funct_ptr ge fb = Some (Internal f) ->
+      find_label lbl f.(fn_code) = Some c' ->
+      step (State s fb sp (Mjumptable arg tbl :: c) rs m)
+        E0 (State s fb sp c' rs m)
   | exec_Mreturn:
       forall s fb stk soff c rs m f,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->

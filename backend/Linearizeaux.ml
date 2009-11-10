@@ -96,6 +96,8 @@ let basic_blocks f joins =
          | Ltailcall (sig0, ros, args) -> end_block blk minpc
          | Lcond (cond, args, ifso, ifnot) ->
              end_block blk minpc; start_block ifso; start_block ifnot
+         | Ljumptable(arg, tbl) ->
+             end_block blk minpc; List.iter start_block tbl
          | Lreturn optarg -> end_block blk minpc
   (* next_in_block: check if join point and either extend block
      or start block *)

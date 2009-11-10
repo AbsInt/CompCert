@@ -27,16 +27,16 @@ module IntOrd =
 module IntSet = Set.Make(IntOrd)
 
 let normalize_table tbl =
-  let rec norm seen = function
-  | [] -> []
+  let rec norm keys accu = function
+  | [] -> (accu, keys)
   | Datatypes.Coq_pair(key, act) :: rem ->
-      if IntSet.mem key seen
-      then norm seen rem
-      else (key, act) :: norm (IntSet.add key seen) rem
-  in norm IntSet.empty tbl
+      if IntSet.mem key keys
+      then norm keys accu rem
+      else norm (IntSet.add key keys) ((key, act) :: accu) rem
+  in norm IntSet.empty [] tbl
 
-let compile_switch default table =
-  let sw = Array.of_list (normalize_table table) in
+let compile_switch_as_tree default tbl =
+  let sw = Array.of_list tbl in
   Array.stable_sort (fun (n1, _) (n2, _) -> IntOrd.compare n1 n2) sw;
   let rec build lo hi minval maxval =
     match hi - lo with
@@ -70,3 +70,37 @@ let compile_switch default table =
               build lo mid minval (Integers.Int.sub pivot Integers.Int.one),
               build mid hi pivot maxval)
   in build 0 (Array.length sw) Integers.Int.zero Integers.Int.max_unsigned
+
+let uint64_of_coqint n = (* force unsigned interpretation *)
+  Int64.logand (Int64.of_int32 (camlint_of_coqint n)) 0xFFFF_FFFFL
+
+let compile_switch_as_jumptable default cases minkey maxkey =
+  let tblsize = 1 + Int64.to_int (Int64.sub maxkey minkey) in
+  assert (tblsize >= 0 && tblsize <= Sys.max_array_length);
+  let tbl = Array.make tblsize default in
+  List.iter
+    (fun (key, act) ->
+       let pos = Int64.to_int (Int64.sub (uint64_of_coqint key) minkey) in
+       tbl.(pos) <- act)
+    cases;
+  CTjumptable(coqint_of_camlint (Int64.to_int32 minkey), 
+              coqint_of_camlint (Int32.of_int tblsize),
+              Array.to_list tbl,
+              CTaction default)
+
+let dense_enough (numcases: int) (minkey: int64) (maxkey: int64) =
+  let span = Int64.sub maxkey minkey in
+  assert (span >= 0L);
+  let tree_size = Int64.mul 4L (Int64.of_int numcases)
+  and table_size = Int64.add 8L span in
+  numcases >= 7           (* really small jump tables are less efficient *)
+  && span < Int64.of_int Sys.max_array_length
+  && table_size <= tree_size
+
+let compile_switch default table =
+  let (tbl, keys) = normalize_table table in
+  let minkey = uint64_of_coqint (IntSet.min_elt keys)
+  and maxkey = uint64_of_coqint (IntSet.max_elt keys) in
+  if dense_enough (List.length tbl) minkey maxkey
+  then compile_switch_as_jumptable default tbl minkey maxkey
+  else compile_switch_as_tree default tbl

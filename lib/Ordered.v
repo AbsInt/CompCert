@@ -11,11 +11,12 @@
 (* *********************************************************************)
 
 (** Constructions of ordered types, for use with the [FSet] functors
-  for finite sets. *)
+  for finite sets and the [FMap] functors for finite maps. *)
 
 Require Import FSets.
 Require Import Coqlib.
 Require Import Maps.
+Require Import Integers.
 
 (** The ordered type of positive numbers *)
 
@@ -48,6 +49,44 @@ Qed.
 Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := peq.
 
 End OrderedPositive.
+
+(** The ordered type of machine integers *)
+
+Module OrderedInt <: OrderedType.
+
+Definition t := int.
+Definition eq (x y: t) := x = y.
+Definition lt (x y: t) := Int.unsigned x < Int.unsigned y.
+
+Lemma eq_refl : forall x : t, eq x x.
+Proof (@refl_equal t). 
+Lemma eq_sym : forall x y : t, eq x y -> eq y x.
+Proof (@sym_equal t).
+Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
+Proof (@trans_equal t).
+Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+Proof.
+  unfold lt; intros. omega.
+Qed.
+Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+Proof.
+  unfold lt,eq; intros; red; intros. subst. omega.
+Qed.
+Lemma compare : forall x y : t, Compare lt eq x y.
+Proof.
+  intros. destruct (zlt (Int.unsigned x) (Int.unsigned y)).
+  apply LT. auto.
+  destruct (Int.eq_dec x y).
+  apply EQ. auto.
+  apply GT.
+  assert (Int.unsigned x <> Int.unsigned y).
+    red; intros. rewrite <- (Int.repr_unsigned x) in n. rewrite <- (Int.repr_unsigned y) in n. congruence.
+  red. omega.
+Qed.
+
+Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := Int.eq_dec.
+
+End OrderedInt.
 
 (** Indexed types (those that inject into [positive]) are ordered. *)
 

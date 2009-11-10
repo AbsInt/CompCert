@@ -50,6 +50,7 @@ Inductive instruction: Type :=
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
   | Lcond: condition -> list loc -> label -> instruction
+  | Ljumptable: loc -> list label -> instruction
   | Lreturn: option loc -> instruction.
 
 Definition code: Type := list instruction.
@@ -204,6 +205,13 @@ Inductive step: state -> trace -> state -> Prop :=
       eval_condition cond (map rs args) = Some false ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
         E0 (State s f sp b rs m)
+  | exec_Ljumptable:
+      forall s f sp arg tbl b rs m n lbl b',
+      rs arg = Vint n ->
+      list_nth_z tbl (Int.signed n) = Some lbl ->
+      find_label lbl f.(fn_code) = Some b' ->
+      step (State s f sp (Ljumptable arg tbl :: b) rs m)
+        E0 (State s f sp b' rs m)
   | exec_Lreturn:
       forall s f stk rs m or b,
       step (State s f (Vptr stk Int.zero) (Lreturn or :: b) rs m)

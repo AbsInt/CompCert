@@ -115,6 +115,7 @@ Inductive instruction : Type :=
   | Pbs: ident -> instruction                                 (**r branch to symbol *)
   | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
+  | Pbtbl: ireg -> list label -> instruction                  (**r N-way branch through a jump table *)
   | Pcmplw: ireg -> ireg -> instruction                       (**r unsigned integer comparison *)
   | Pcmplwi: ireg -> constant -> instruction                  (**r same, with immediate argument *)
   | Pcmpw: ireg -> ireg -> instruction                        (**r signed integer comparison *)
@@ -196,8 +197,8 @@ Inductive instruction : Type :=
   Expands to a float load [lfd] from an address in the constant data section
   initialized with the floating-point constant:
 <<
-        addis   r2, 0, ha16(lbl)
-        lfd     rdst, lo16(lbl)(r2)
+        addis   r12, 0, ha16(lbl)
+        lfd     rdst, lo16(lbl)(r12)
         .const_data
 lbl:    .double floatcst
         .text
@@ -218,8 +219,8 @@ lbl:    .double floatcst
   constant [2^31], subtract [2^31] if bigger, then convert to a signed
   integer as above, then add back [2^31] if needed.  Expands to:
 <<
-        addis   r2, 0, ha16(lbl1)
-        lfd     f13, lo16(lbl1)(r2)
+        addis   r12, 0, ha16(lbl1)
+        lfd     f13, lo16(lbl1)(r12)
         fcmpu   cr7, rsrc, f13
         cror    30, 29, 30
         beq     cr7, lbl2
@@ -242,12 +243,12 @@ lbl1:   .long   0x41e00000, 0x00000000    # 2^31 in double precision
   arithmetic over a memory word, which our memory model and axiomatization
   of floats cannot express.  Expands to:
 <<
-        addis   r2, 0, 0x4330
-        stwu    r2, -8(r1)
-        addis   r2, rsrc, 0x8000
-        stw     r2, 4(r1)
-        addis   r2, 0, ha16(lbl)
-        lfd     f13, lo16(lbl)(r2)
+        addis   r12, 0, 0x4330
+        stwu    r12, -8(r1)
+        addis   r12, rsrc, 0x8000
+        stw     r12, 4(r1)
+        addis   r12, 0, ha16(lbl)
+        lfd     f13, lo16(lbl)(r12)
         lfd     rdst, 0(r1)
         addi    r1, r1, 8
         fsub    rdst, rdst, f13
@@ -260,11 +261,11 @@ lbl:    .long   0x43300000, 0x80000000
 - [Piuctf]: convert an unsigned integer to a float.  The expansion is close
   to that [Pictf], and equally obscure.
 <<
-        addis   r2, 0, 0x4330
-        stwu    r2, -8(r1)
+        addis   r12, 0, 0x4330
+        stwu    r12, -8(r1)
         stw     rsrc, 4(r1)
-        addis   r2, 0, ha16(lbl)
-        lfd     f13, lo16(lbl)(r2)
+        addis   r12, 0, ha16(lbl)
+        lfd     f13, lo16(lbl)(r12)
         lfd     rdst, 0(r1)
         addi    r1, r1, 8
         fsub    rdst, rdst, f13
@@ -294,6 +295,18 @@ lbl:    .long   0x43300000, 0x00000000
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
+- [Pbtbl reg table]: this is a N-way branch, implemented via a jump table
+  as follows:
+<<
+        rlwinm  r12, reg, 2, 0, 29
+        addis   r12, r12, ha16(lbl)
+        lwz     r12, lo16(lbl)(r12)
+        mtctr   r12
+        bctr    r12
+        .const_data
+lbl:    .long   table[0], table[1], ...
+        .text
+>>
 *)
 
 Definition code := list instruction.
@@ -606,6 +619,15 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pbt bit lbl =>
       match rs#(reg_of_crbit bit) with
       | Vint n => if Int.eq n Int.zero then OK (nextinstr rs) m else goto_label c lbl rs m
+      | _ => Error
+      end
+  | Pbtbl r tbl =>
+      match rs#r with
+      | Vint n => 
+          match list_nth_z tbl (Int.signed n) with
+          | None => Error
+          | Some lbl => goto_label c lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
+          end
       | _ => Error
       end
   | Pcmplw r1 r2 =>

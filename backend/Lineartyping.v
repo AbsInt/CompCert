@@ -95,6 +95,10 @@ Inductive wt_instr : instruction -> Prop :=
       forall cond args lbl,
       List.map mreg_type args = type_of_condition cond ->
       wt_instr (Lcond cond args lbl)
+  | wt_Ljumptable:
+      forall arg tbl,
+      mreg_type arg = Tint ->
+      wt_instr (Ljumptable arg tbl)
   | wt_Lreturn: 
       wt_instr (Lreturn).
 

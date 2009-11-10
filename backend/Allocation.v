@@ -103,6 +103,8 @@ Definition transfer
 	  reg_list_live args (reg_sum_live ros Regset.empty)
       | Icond cond args ifso ifnot =>
           reg_list_live args after
+      | Ijumptable arg tbl =>
+          reg_live arg after
       | Ireturn optarg =>
           reg_option_live optarg Regset.empty
       end
@@ -167,6 +169,8 @@ Definition transf_instr
       Ltailcall sig (sum_left_map assign ros) (List.map assign args)
   | Icond cond args ifso ifnot =>
       Lcond cond (List.map assign args) ifso ifnot
+  | Ijumptable arg tbl =>
+      Ljumptable (assign arg) tbl
   | Ireturn optarg =>
       Lreturn (option_map assign optarg)
   end.

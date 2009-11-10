@@ -60,6 +60,7 @@ Proof.
   apply wt_add_branch; auto.
   constructor; auto. apply wt_add_branch; auto.
   apply wt_add_instr. constructor; auto. auto.
+  apply wt_add_instr. constructor; auto. auto.
 Qed.
 
 Lemma wt_linearize_body:

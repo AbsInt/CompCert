@@ -185,6 +185,8 @@ Definition transl_instr
       Mgoto lbl :: k
   | Lcond cond args lbl =>
       Mcond cond args lbl :: k
+  | Ljumptable arg tbl =>
+      Mjumptable arg tbl :: k
   | Lreturn =>
       restore_callee_save fe
         (Mreturn :: k)

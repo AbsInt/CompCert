@@ -419,37 +419,65 @@ Qed.
 (** Correctness of the translation of [switch] statements *)
 
 Lemma transl_switch_correct:
-  forall cs sp rs m i code r nexits t ns,
-  tr_switch code r nexits t ns ->
+  forall cs sp e m code map r nexits t ns,
+  tr_switch code map r nexits t ns ->
+  forall rs i act,
   rs#r = Vint i ->
-  exists nd,
-  star step tge (State cs code sp ns rs m) E0 (State cs code sp nd rs m) /\
-  nth_error nexits (comptree_match i t) = Some nd.
+  map_wf map ->
+  match_env map e nil rs ->
+  comptree_match i t = Some act ->
+  exists nd, exists rs',
+  star step tge (State cs code sp ns rs m) E0 (State cs code sp nd rs' m) /\
+  nth_error nexits act = Some nd /\
+  match_env map e nil rs'.
 Proof.
-  induction 1; intros; simpl.
-  exists n. split. apply star_refl. auto. 
-
-  caseEq (Int.eq i key); intros.
-  exists nfound; split. 
+  induction 1; simpl; intros.
+(* action *)
+  inv H3. exists n; exists rs; intuition.
+  apply star_refl.
+(* ifeq *)
+  caseEq (Int.eq i key); intro EQ; rewrite EQ in H5.
+  inv H5. exists nfound; exists rs; intuition.
   apply star_one. eapply exec_Icond_true; eauto. 
-  simpl. rewrite H2. congruence. auto.
-  exploit IHtr_switch; eauto. intros [nd [EX MATCH]].
-  exists nd; split.
+  simpl. rewrite H2. congruence.
+  exploit IHtr_switch; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
+  exists nd1; exists rs1; intuition.
   eapply star_step. eapply exec_Icond_false; eauto. 
   simpl. rewrite H2. congruence. eexact EX. traceEq.
-  auto.
-
-  caseEq (Int.ltu i key); intros.
-  exploit IHtr_switch1; eauto. intros [nd [EX MATCH]].
-  exists nd; split. 
+(* iflt *)
+  caseEq (Int.ltu i key); intro EQ; rewrite EQ in H5.
+  exploit IHtr_switch1; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
+  exists nd1; exists rs1; intuition.
   eapply star_step. eapply exec_Icond_true; eauto. 
   simpl. rewrite H2. congruence. eexact EX. traceEq.
-  auto.
-  exploit IHtr_switch2; eauto. intros [nd [EX MATCH]].
-  exists nd; split. 
+  exploit IHtr_switch2; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
+  exists nd1; exists rs1; intuition.
   eapply star_step. eapply exec_Icond_false; eauto. 
   simpl. rewrite H2. congruence. eexact EX. traceEq.
-  auto.
+(* jumptable *)
+  set (rs1 := rs#rt <- (Vint(Int.sub i ofs))).
+  assert (ME1: match_env map e nil rs1).
+    unfold rs1. eauto with rtlg.
+  assert (EX1: step tge (State cs code sp n rs m) E0 (State cs code sp n1 rs1 m)).
+    eapply exec_Iop; eauto. 
+    predSpec Int.eq Int.eq_spec ofs Int.zero; simpl.
+    rewrite H10. rewrite Int.sub_zero_l. congruence.
+    rewrite H6. rewrite <- Int.sub_add_opp. auto. 
+  caseEq (Int.ltu (Int.sub i ofs) sz); intro EQ; rewrite EQ in H9.
+  exploit H5; eauto. intros [nd [A B]].
+  exists nd; exists rs1; intuition. 
+  eapply star_step. eexact EX1.
+  eapply star_step. eapply exec_Icond_true; eauto. 
+  simpl. unfold rs1. rewrite Regmap.gss. congruence. 
+  apply star_one. eapply exec_Ijumptable; eauto. unfold rs1. apply Regmap.gss. 
+  reflexivity. traceEq.
+  exploit (IHtr_switch rs1); eauto. unfold rs1. rewrite Regmap.gso; auto.
+  intros [nd [rs' [EX [NTH ME]]]].
+  exists nd; exists rs'; intuition.
+  eapply star_step. eexact EX1.
+  eapply star_step. eapply exec_Icond_false; eauto. 
+  simpl. unfold rs1. rewrite Regmap.gss. congruence.
+  eexact EX. reflexivity. traceEq.
 Qed.
 
 (** ** Semantic preservation for the translation of expressions *)
@@ -529,8 +557,6 @@ Definition transl_condition_prop
                    (State cs code sp (if vb then ntrue else nfalse) rs' m)
   /\ match_env map e le rs'
   /\ (forall r, reg_in_map map r \/ In r pr -> rs'#r = rs#r).
-
-
 
 (** The correctness of the translation is a huge induction over
   the Cminor evaluation derivation for the source program.  To keep
@@ -1194,15 +1220,16 @@ Proof.
   econstructor; eauto. econstructor; eauto.
 
   (* switch *)
-  inv TS. 
+  inv TS.
+  exploit validate_switch_correct; eauto. intro CTM.
   exploit transl_expr_correct; eauto. 
   intros [rs' [A [B [C D]]]].
   exploit transl_switch_correct; eauto. 
-  intros [nd [E F]].
+  intros [nd [rs'' [E [F G]]]].
   econstructor; split.
   right; split. eapply star_trans. eexact A. eexact E.  traceEq. Lt_state. 
-  econstructor; eauto. 
-  rewrite (validate_switch_correct _ _ _ H3 n). constructor. auto.
+  econstructor; eauto.
+  constructor. auto.
 
   (* return none *)
   inv TS.

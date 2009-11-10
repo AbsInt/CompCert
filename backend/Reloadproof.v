@@ -1257,6 +1257,20 @@ Proof.
   econstructor; eauto with coqlib.
   apply agree_exten with ls; auto.
 
+  (* Ljumptable *)
+  ExploitWT; inv WTI.
+  exploit add_reload_correct_2.
+  intros [ls2 [A [B [C D]]]].
+  left; econstructor; split.
+  eapply plus_right. eauto. eapply exec_Ljumptable; eauto. 
+  assert (Val.lessdef (rs arg) (ls arg)). apply AG. auto.
+  rewrite H in H2. inv H2. congruence.
+  apply find_label_transf_function; eauto.
+  traceEq.
+  econstructor; eauto with coqlib.
+  apply agree_exten with ls; auto.
+  eapply LTLin.find_label_is_tail; eauto.
+
   (* Lreturn *)
   ExploitWT; inv WTI. 
   destruct or; simpl.

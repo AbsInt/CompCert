@@ -842,6 +842,11 @@ Proof.
   eapply exec_Mcond_false; eauto.
   econstructor; eauto.
 
+  (* Mjumptable *)
+  econstructor; split.
+  eapply exec_Mjumptable; eauto. 
+  econstructor; eauto.
+
   (* Mreturn *)
   assert (WTF: wt_function f) by (inv WTS; auto).
   econstructor; split.

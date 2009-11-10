@@ -190,6 +190,8 @@ Definition linearize_instr (b: LTL.instruction) (k: code) : code :=
         Lcond (negate_condition cond) args s2 :: add_branch s1 k
       else
         Lcond cond args s1 :: add_branch s2 k
+  | LTL.Ljumptable arg tbl =>
+      Ljumptable arg tbl :: k
   | LTL.Lreturn or =>
       Lreturn or :: k
   end.

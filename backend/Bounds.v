@@ -106,6 +106,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => nil
+  | Ljumptable arg tbl => nil
   | Lreturn => nil
   end.
 

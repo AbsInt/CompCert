@@ -657,6 +657,13 @@ Proof.
   apply eqm_samerepr. unfold z'; red. exists 1. omega.
 Qed.
 
+Theorem signed_eq_unsigned:
+  forall x, unsigned x <= max_signed -> signed x = unsigned x.
+Proof.
+  intros. unfold signed. destruct (zlt (unsigned x) half_modulus).
+  auto. unfold max_signed in H. omegaContradiction.
+Qed.
+
 (** ** Properties of addition *)
 
 Theorem add_unsigned: forall x y, add x y = repr (unsigned x + unsigned y).
@@ -784,6 +791,13 @@ Proof.
   rewrite <- (add_assoc z). rewrite add_neg_zero.
   rewrite (add_commut zero). rewrite add_zero.
   symmetry. apply sub_add_opp.
+Qed.
+
+Theorem sub_signed:
+  forall x y, sub x y = repr (signed x - signed y).
+Proof.
+  intros. unfold sub. apply eqm_samerepr.
+  apply eqm_sub; apply eqm_sym; apply eqm_signed_unsigned.
 Qed.
 
 (** ** Properties of multiplication *)
@@ -2563,6 +2577,17 @@ Proof.
   symmetry. apply Zdiv_unique with (unsigned x - half_modulus). ring. 
   replace modulus with (2 * half_modulus) in H. omega. reflexivity. 
   omega. 
+Qed.
+
+Theorem ltu_range_test:
+  forall x y,
+  ltu x y = true -> unsigned y <= max_signed ->
+  0 <= signed x < unsigned y.
+Proof.
+  intros.
+  unfold Int.ltu in H. destruct (zlt (unsigned x) (unsigned y)); try discriminate.
+  rewrite signed_eq_unsigned.
+  generalize (unsigned_range x). omega. omega.
 Qed.
 
 End Int.

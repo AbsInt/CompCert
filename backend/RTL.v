@@ -75,6 +75,10 @@ Inductive instruction: Type :=
           [cond] over the values of registers [args].  If the condition
           is true, it transitions to [ifso].  If the condition is false,
           it transitions to [ifnot]. *)
+  | Ijumptable: reg -> list node -> instruction
+      (** [Ijumptable arg tbl] transitions to the node that is the [n]-th
+          element of the list [tbl], where [n] is the signed integer
+          value of register [arg]. *)
   | Ireturn: option reg -> instruction.
       (** [Ireturn] terminates the execution of the current function
           (it has no successor).  It returns the value of the given
@@ -252,6 +256,13 @@ Inductive step: state -> trace -> state -> Prop :=
       eval_condition cond rs##args = Some false ->
       step (State s c sp pc rs m)
         E0 (State s c sp ifnot rs m)
+  | exec_Ijumptable:
+      forall s c sp pc rs m arg tbl n pc',
+      c!pc = Some(Ijumptable arg tbl) ->
+      rs#arg = Vint n ->
+      list_nth_z tbl (Int.signed n) = Some pc' ->
+      step (State s c sp pc rs m)
+        E0 (State s c sp pc' rs m)
   | exec_Ireturn:
       forall s c stk pc rs m or,
       c!pc = Some(Ireturn or) ->
@@ -339,29 +350,12 @@ Definition successors_instr (i: instruction) : list node :=
   | Icall sig ros args res s => s :: nil
   | Itailcall sig ros args => nil
   | Icond cond args ifso ifnot => ifso :: ifnot :: nil
+  | Ijumptable arg tbl => tbl
   | Ireturn optarg => nil
   end.
 
 Definition successors (f: function) : PTree.t (list node) :=
   PTree.map (fun pc i => successors_instr i) f.(fn_code).
-
-(*
-Definition successors (f: function) (pc: node) : list node :=
-  match f.(fn_code)!pc with
-  | None => nil
-  | Some i =>
-      match i with
-      | Inop s => s :: nil
-      | Iop op args res s => s :: nil
-      | Iload chunk addr args dst s => s :: nil
-      | Istore chunk addr args src s => s :: nil
-      | Icall sig ros args res s => s :: nil
-      | Itailcall sig ros args => nil
-      | Icond cond args ifso ifnot => ifso :: ifnot :: nil
-      | Ireturn optarg => nil
-      end
-  end.
-*)
 
 (** Transformation of a RTL function instruction by instruction.
   This applies a given transformation function to all instructions

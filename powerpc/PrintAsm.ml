@@ -261,6 +261,17 @@ let print_instruction oc labels = function
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
       fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
+  | Pbtbl(r, tbl) ->
+      let lbl = new_label() in
+      fprintf oc "	rlwinm	%a, %a, 2, 0, 29\n" ireg GPR12 ireg r;
+      fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg GPR12 label_high lbl;
+      fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
+      fprintf oc "	mtctr	%a\n" ireg GPR12;
+      fprintf oc "	bctr\n";
+      fprintf oc "%a:" label lbl;
+      List.iter
+        (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
+        tbl
   | Pcmplw(r1, r2) ->
       fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
   | Pcmplwi(r1, c) ->
@@ -472,11 +483,15 @@ let print_instruction oc labels = function
       if Labelset.mem lbl labels then
         fprintf oc "%a:\n" label (transl_label lbl)
 
-let rec labels_of_code = function
-  | [] -> Labelset.empty
+let rec labels_of_code accu = function
+  | [] ->
+      accu
   | (Pb lbl | Pbf(_, lbl) | Pbt(_, lbl)) :: c ->
-      Labelset.add lbl (labels_of_code c)
-  | _ :: c -> labels_of_code c
+      labels_of_code (Labelset.add lbl accu) c
+  | Pbtbl(_, tbl) :: c ->
+      labels_of_code (List.fold_right Labelset.add tbl accu) c
+  | _ :: c ->
+      labels_of_code accu c
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
@@ -488,7 +503,7 @@ let print_function oc name code =
   if not (Cil2Csyntax.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
-  List.iter (print_instruction oc (labels_of_code code)) code
+  List.iter (print_instruction oc (labels_of_code Labelset.empty code)) code
 
 (* Generation of stub functions *)
 

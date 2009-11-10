@@ -94,6 +94,12 @@ Inductive wt_instr : instruction -> Prop :=
       locs_acceptable args ->
       valid_successor s1 -> valid_successor s2 ->
       wt_instr (Lcond cond args s1 s2)
+  | wt_Ljumptable:
+      forall arg tbl,
+      Loc.type arg = Tint ->
+      loc_acceptable arg ->
+      (forall lbl, In lbl tbl -> valid_successor lbl) ->
+      wt_instr (Ljumptable arg tbl)
   | wt_Lreturn: 
       forall optres,
       option_map Loc.type optres = funct.(fn_sig).(sig_res) ->

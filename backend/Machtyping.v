@@ -79,6 +79,10 @@ Inductive wt_instr : instruction -> Prop :=
       forall cond args lbl,
       List.map mreg_type args = type_of_condition cond ->
       wt_instr (Mcond cond args lbl)
+  | wt_Mjumptable:
+      forall arg tbl,
+      mreg_type arg = Tint ->
+      wt_instr (Mjumptable arg tbl)
   | wt_Mreturn: 
       wt_instr Mreturn.
 
@@ -279,6 +283,7 @@ Proof.
 (*  apply wt_setreg; auto. exact I.  *)
 
   apply is_tail_find_label with lbl; congruence.
+  apply is_tail_find_label with lbl; congruence. 
   apply is_tail_find_label with lbl; congruence. 
 
   econstructor; eauto.

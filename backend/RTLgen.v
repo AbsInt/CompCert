@@ -474,6 +474,15 @@ Definition transl_exit (nexits: list node) (n: nat) : mon node :=
   | Some ne => ret ne
   end.
 
+Fixpoint transl_jumptable (nexits: list node) (tbl: list nat) : mon (list node) :=
+  match tbl with
+  | nil => ret nil
+  | t1 :: tl =>
+      do n1 <- transl_exit nexits t1;
+      do nl <- transl_jumptable nexits tl;
+      ret (n1 :: nl)
+  end.
+
 Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
                        {struct t} : mon node :=
   match t with
@@ -487,6 +496,14 @@ Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
       do n2 <- transl_switch r nexits t2;
       do n1 <- transl_switch r nexits t1;
       add_instr (Icond (Ccompuimm Clt key) (r :: nil) n1 n2)
+  | CTjumptable ofs sz tbl t' =>
+      do rt <- new_reg;
+      do ttbl <- transl_jumptable nexits tbl;
+      do n1 <- add_instr (Ijumptable rt ttbl);
+      do n2 <- transl_switch r nexits t';
+      do n3 <- add_instr (Icond (Ccompuimm Clt sz) (rt :: nil) n1 n2);
+      let op := if Int.eq ofs Int.zero then Omove else Oaddimm (Int.neg ofs) in
+      add_instr (Iop op (r :: nil) rt n3)
   end.
 
 (** Translation of statements.  [transl_stmt map s nd nexits nret rret]

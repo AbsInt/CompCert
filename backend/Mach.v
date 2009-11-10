@@ -61,6 +61,7 @@ Inductive instruction: Type :=
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction
+  | Mjumptable: mreg -> list label -> instruction
   | Mreturn: instruction.
 
 Definition code := list instruction.

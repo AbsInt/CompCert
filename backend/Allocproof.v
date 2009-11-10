@@ -683,6 +683,12 @@ Proof.
   eapply exec_Lcond_false; eauto. TranslInstr.
   MatchStates. eapply agree_reg_list_live. eauto.
 
+  (* Ijumptable *)
+  assert (rs#arg = ls (assign arg)). apply AG. apply Regset.add_1. auto. 
+  econstructor; split.
+  eapply exec_Ljumptable; eauto. TranslInstr. congruence. 
+  MatchStates. eapply list_nth_z_in; eauto. eapply agree_reg_live; eauto. 
+
   (* Ireturn *)
   econstructor; split.
   eapply exec_Lreturn; eauto. TranslInstr; eauto.

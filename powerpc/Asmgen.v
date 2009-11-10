@@ -502,6 +502,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       let p := crbit_for_cond cond in
       transl_cond cond args
         (if (snd p) then Pbt (fst p) lbl :: k else Pbf (fst p) lbl :: k)
+  | Mjumptable arg tbl =>
+      Pbtbl (ireg_of arg) tbl :: k
   | Mreturn =>
       Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR12 ::
@@ -523,17 +525,11 @@ Definition transl_function (f: Mach.function) :=
   Pstw GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
   transl_code f f.(fn_code).
 
-Fixpoint code_size (c: code) : Z :=
-  match c with
-  | nil => 0
-  | instr :: c' => code_size c' + 1
-  end.
-
 Open Local Scope string_scope.
 
 Definition transf_function (f: Mach.function) : res Asm.code :=
   let c := transl_function f in
-  if zlt Int.max_unsigned (code_size c)
+  if zlt Int.max_unsigned (list_length_z c)
   then Errors.Error (msg "code size exceeded")
   else Errors.OK c.
 

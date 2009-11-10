@@ -74,7 +74,9 @@ Lemma wt_tunnel_instr:
   wt_instr f i -> wt_instr (tunnel_function f) (tunnel_instr (record_gotos f) i).
 Proof.
   intros; inv H0; simpl; econstructor; eauto;
-  eapply branch_target_valid; eauto.
+  try (eapply branch_target_valid; eauto).
+  intros. exploit list_in_map_inv; eauto. intros [x [A B]]. subst lbl.
+  eapply branch_target_valid; eauto. 
 Qed.
 
 Lemma wt_tunnel_function:

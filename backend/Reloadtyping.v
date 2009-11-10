@@ -35,7 +35,7 @@ Require Import Reloadproof.
 
 Hint Resolve wt_Lgetstack wt_Lsetstack wt_Lopmove
              wt_Lop wt_Lload wt_Lstore wt_Lcall wt_Ltailcall
-             wt_Llabel wt_Lgoto wt_Lcond wt_Lreturn: reloadty.
+             wt_Llabel wt_Lgoto wt_Lcond wt_Ljumptable wt_Lreturn: reloadty.
 
 Remark wt_code_cons:
   forall f i c, wt_instr f i -> wt_code f c -> wt_code f (i :: c).
@@ -292,6 +292,10 @@ Proof.
   auto 10 with reloadty.
 
   assert (map mreg_type (regs_for args) = map Loc.type args).
+    eauto with reloadty.
+  auto with reloadty.
+
+  assert (mreg_type (reg_for arg) = Loc.type arg).
     eauto with reloadty.
   auto with reloadty.
 

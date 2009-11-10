@@ -112,6 +112,11 @@ Inductive wt_instr : instruction -> Prop :=
       valid_successor s1 ->
       valid_successor s2 ->
       wt_instr (Icond cond args s1 s2)
+  | wt_Ijumptable:
+      forall arg tbl,
+      env arg = Tint ->
+      (forall s, In s tbl -> valid_successor s) ->
+      wt_instr (Ijumptable arg tbl)
   | wt_Ireturn: 
       forall optres,
       option_map env optres = funct.(fn_sig).(sig_res) ->
@@ -224,6 +229,9 @@ Definition check_instr (i: instruction) : bool :=
       check_regs args (type_of_condition cond)
       && check_successor s1
       && check_successor s2
+  | Ijumptable arg tbl =>
+      check_reg arg Tint
+      && List.forallb check_successor tbl
   | Ireturn optres =>
       match optres, funct.(fn_sig).(sig_res) with
       | None, None => true
@@ -326,6 +334,10 @@ Proof.
   constructor. apply check_regs_correct; auto.
   apply check_successor_correct; auto.
   apply check_successor_correct; auto.
+  (* jumptable *)
+  constructor. apply check_reg_correct; auto.
+  rewrite List.forallb_forall in H0. intros. apply check_successor_correct; auto.
+  intros. 
   (* return *)
   constructor. 
   destruct o; simpl; destruct funct.(fn_sig).(sig_res); try discriminate.
@@ -537,6 +549,8 @@ Proof.
   rewrite <- H6. apply wt_regset_list. auto.
   (* Icond *)
   econstructor; eauto.
+  econstructor; eauto.
+  (* Ijumptable *)
   econstructor; eauto.
   (* Ireturn *)
   econstructor; eauto. 
