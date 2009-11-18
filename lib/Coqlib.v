@@ -376,6 +376,15 @@ Proof.
   rewrite two_power_nat_S. rewrite inj_S. rewrite two_p_S. omega. omega.
 Qed.
 
+Lemma two_p_strict:
+  forall x, x >= 0 -> x < two_p x.
+Proof.
+  intros x0 GT. pattern x0. apply natlike_ind.
+  simpl. omega.
+  intros. rewrite two_p_S; auto. generalize (two_p_gt_ZERO x H). omega. 
+  omega.
+Qed.
+
 (** Properties of [Zmin] and [Zmax] *)
 
 Lemma Zmin_spec:
@@ -1038,49 +1047,34 @@ Proof.
   intros. auto with coqlib.
 Qed.
 
-(** Dropping the first or first two elements of a list. *)
+(** Dropping the first N elements of a list. *)
 
-Definition list_drop1 (A: Type) (x: list A) :=
-  match x with nil => nil | hd :: tl => tl end.
-Definition list_drop2 (A: Type) (x: list A) :=
-  match x with nil => nil | hd :: nil => nil | hd1 :: hd2 :: tl => tl end.
+Fixpoint list_drop (A: Type) (n: nat) (x: list A) {struct n} : list A :=
+  match n with
+  | O => x
+  | S n' => match x with nil => nil | hd :: tl => list_drop n' tl end
+  end.
 
-Lemma list_drop1_incl:
-  forall (A: Type) (x: A) (l: list A), In x (list_drop1 l) -> In x l.
+Lemma list_drop_incl:
+  forall (A: Type) (x: A) n (l: list A), In x (list_drop n l) -> In x l.
 Proof.
-  intros. destruct l. elim H. simpl in H. auto with coqlib.
+  induction n; simpl; intros. auto. 
+  destruct l; auto with coqlib.
 Qed.
 
-Lemma list_drop2_incl:
-  forall (A: Type) (x: A) (l: list A), In x (list_drop2 l) -> In x l.
+Lemma list_drop_norepet:
+  forall (A: Type) n (l: list A), list_norepet l -> list_norepet (list_drop n l).
 Proof.
-  intros. destruct l. elim H. destruct l. elim H.
-  simpl in H. auto with coqlib.
+  induction n; simpl; intros. auto.
+  inv H. constructor. auto.
 Qed.
 
-Lemma list_drop1_norepet:
-  forall (A: Type) (l: list A), list_norepet l -> list_norepet (list_drop1 l).
+Lemma list_map_drop:
+  forall (A B: Type) (f: A -> B) n (l: list A),
+  list_drop n (map f l) = map f (list_drop n l).
 Proof.
-  intros. destruct l; simpl. constructor. inversion H. auto.
-Qed.
-
-Lemma list_drop2_norepet:
-  forall (A: Type) (l: list A), list_norepet l -> list_norepet (list_drop2 l).
-Proof.
-  intros. destruct l; simpl. constructor.
-  destruct l; simpl. constructor. inversion H. inversion H3. auto.
-Qed.
-
-Lemma list_map_drop1:
-  forall (A B: Type) (f: A -> B) (l: list A), list_drop1 (map f l) = map f (list_drop1 l).
-Proof.
-  intros; destruct l; reflexivity.
-Qed.
-
-Lemma list_map_drop2:
-  forall (A B: Type) (f: A -> B) (l: list A), list_drop2 (map f l) = map f (list_drop2 l).
-Proof.
-  intros; destruct l. reflexivity. destruct l; reflexivity.
+  induction n; simpl; intros. auto. 
+  destruct l; simpl; auto.
 Qed.
 
 (** * Definitions and theorems over boolean types *)

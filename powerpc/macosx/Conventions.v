@@ -401,7 +401,7 @@ Fixpoint loc_arguments_rec
       | nil =>
           S (Outgoing ofs Tfloat) :: loc_arguments_rec tys iregl nil (ofs + 2)
       | freg :: fregs =>
-          R freg :: loc_arguments_rec tys (list_drop2 iregl) fregs ofs
+          R freg :: loc_arguments_rec tys (list_drop 2%nat iregl) fregs ofs
       end
   end.
 
@@ -432,7 +432,7 @@ Fixpoint size_arguments_rec
   | Tfloat :: tys =>
       match fregl with
       | nil => size_arguments_rec tys iregl nil (ofs + 2)
-      | freg :: fregs => size_arguments_rec tys (list_drop2 iregl) fregs ofs
+      | freg :: fregs => size_arguments_rec tys (list_drop 2%nat iregl) fregs ofs
       end
   end.
 
@@ -465,6 +465,7 @@ Remark loc_arguments_rec_charact:
   | S _ => False
   end.
 Proof.
+Opaque list_drop.
   induction tyl; simpl loc_arguments_rec; intros.
   elim H.
   destruct a. 
@@ -478,7 +479,7 @@ Proof.
   generalize (IHtyl _ _ _ _ H0). destruct l; auto. destruct s; auto. omega.
   subst l. auto with coqlib.
   generalize (IHtyl _ _ _ _ H0). destruct l; auto.
-  intros [A|B]. left; apply list_drop2_incl; auto. right; auto with coqlib.
+  intros [A|B]. left; eapply list_drop_incl; eauto. right; auto with coqlib.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -511,7 +512,7 @@ Proof.
   destruct fregl; simpl. auto.
   simpl in H0. split. apply sym_not_equal. tauto.
   apply IHtyl. 
-  red; intro. apply H. apply list_drop2_incl. auto.
+  red; intro. apply H. eapply list_drop_incl. eauto.
   tauto.
 Qed.
 
@@ -562,11 +563,11 @@ Proof.
   destruct fregl; constructor.
   apply loc_arguments_rec_notin_outgoing. simpl; omega. auto.
   apply loc_arguments_rec_notin_reg.
-  red; intro. apply (H1 m m). apply list_drop2_incl; auto. 
+  red; intro. apply (H1 m m). eapply list_drop_incl; eauto. 
   auto with coqlib. auto. inv H0; auto.
-  apply IHtyl. apply list_drop2_norepet; auto.
+  apply IHtyl. eapply list_drop_norepet; eauto.
   inv H0; auto. 
-  red; intros. apply H1. apply list_drop2_incl; auto. auto with coqlib.
+  red; intros. apply H1. eapply list_drop_incl; eauto. auto with coqlib.
 
   intro. unfold loc_arguments. apply H.
   unfold int_param_regs. NoRepet.
@@ -687,7 +688,7 @@ Proof.
   auto.
   destruct a; [destruct iregl|destruct fregl]; simpl;
   f_equal; eauto with coqlib.
-  apply IHtyl. intros. apply H. apply list_drop2_incl; auto.
+  apply IHtyl. intros. apply H. eapply list_drop_incl; eauto.
   eauto with coqlib.
 
   intros. unfold loc_arguments. apply H. 
