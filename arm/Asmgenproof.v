@@ -981,6 +981,61 @@ Proof.
   auto with ppcgen.
 Qed.
 
+Lemma exec_Mjumptable_prop:
+  forall (s : list stackframe) (fb : block) (f : function) (sp : val)
+         (arg : mreg) (tbl : list Mach.label) (c : list Mach.instruction)
+         (rs : mreg -> val) (m : mem) (n : int) (lbl : Mach.label)
+         (c' : Mach.code),
+  rs arg = Vint n ->
+  list_nth_z tbl (Int.signed n) = Some lbl ->
+  Genv.find_funct_ptr ge fb = Some (Internal f) ->
+  Mach.find_label lbl (fn_code f) = Some c' ->
+  exec_instr_prop
+    (Machconcr.State s fb sp (Mjumptable arg tbl :: c) rs m) E0
+    (Machconcr.State s fb sp c' rs m).
+Proof.
+  intros; red; intros; inv MS.
+  assert (f0 = f) by congruence. subst f0.
+  generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
+  intro WTI. inv WTI.
+  exploit list_nth_z_range; eauto. intro RANGE.
+  assert (SHIFT: Int.signed (Int.shl n (Int.repr 2)) = Int.signed n * 4).
+    rewrite Int.shl_mul.
+    rewrite Int.mul_signed.
+    apply Int.signed_repr.
+    split. apply Zle_trans with 0. vm_compute; congruence. omega. 
+    omega.
+  inv AT. simpl in H7. 
+  set (k1 := Pbtbl IR14 tbl :: transl_code f c).
+  set (rs1 := nextinstr (rs0 # IR14 <- (Vint (Int.shl n (Int.repr 2))))).
+  generalize (functions_transl _ _ H4); intro FN.
+  generalize (functions_transl_no_overflow _ _ H4); intro NOOV.
+  assert (exec_straight tge (transl_function f)
+            (Pmov IR14 (SOlslimm (ireg_of arg) (Int.repr 2)) :: k1) rs0 m
+            k1 rs1 m).
+   apply exec_straight_one. 
+   simpl. rewrite <- (ireg_val _ _ _ _ AG H5). rewrite H. reflexivity. reflexivity. 
+  exploit exec_straight_steps_2; eauto. 
+  intros [ofs' [PC1 CT1]].
+  generalize (find_label_goto_label f lbl rs1 m _ _ _ FIND PC1 H2).
+  intros [rs3 [GOTO [AT3 INV3]]].
+  left; exists (State rs3 m); split.
+  eapply plus_right'. 
+  eapply exec_straight_steps_1; eauto.
+  econstructor; eauto. 
+  eapply find_instr_tail. unfold k1 in CT1. eauto.
+  unfold exec_instr.
+  change (rs1 IR14) with (Vint (Int.shl n (Int.repr 2))).
+Opaque Zmod.  Opaque Zdiv.
+  simpl. rewrite SHIFT. rewrite Z_mod_mult. rewrite zeq_true. 
+  rewrite Z_div_mult. 
+  change label with Mach.label; rewrite H0. exact GOTO. omega. traceEq.
+  econstructor; eauto. 
+  eapply Mach.find_label_incl; eauto.
+  apply agree_exten_2 with rs1; auto. 
+  unfold rs1. apply agree_nextinstr. apply agree_set_other; auto with ppcgen.
+Qed.
+
 Lemma exec_Mreturn_prop:
   forall (s : list stackframe) (fb stk : block) (soff : int)
          (c : list Mach.instruction) (ms : Mach.regset) (m : mem) (f: function),
@@ -1141,6 +1196,7 @@ Proof
            exec_Mgoto_prop
            exec_Mcond_true_prop
            exec_Mcond_false_prop
+           exec_Mjumptable_prop
            exec_Mreturn_prop
            exec_function_internal_prop
            exec_function_external_prop

@@ -483,6 +483,9 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pb lbl :: k
   | Mcond cond args lbl =>
       transl_cond cond args (Pbc (crbit_for_cond cond) lbl :: k)
+  | Mjumptable arg tbl =>
+      Pmov IR14 (SOlslimm (ireg_of arg) (Int.repr 2)) ::
+      Pbtbl IR14 tbl :: k
   | Mreturn =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
         (Pfreeframe f.(fn_link_ofs) :: Pbreg IR14 :: k)

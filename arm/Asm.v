@@ -148,7 +148,8 @@ Inductive instruction : Type :=
   | Pallocframe: Z -> Z -> int -> instruction      (**r allocate new stack frame *)
   | Pfreeframe: int -> instruction                 (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
-  | Ploadsymbol: ireg -> ident -> int -> instruction. (**r load the address of a symbol *)
+  | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
+  | Pbtbl: ireg -> list label -> instruction.      (**r N-way branch through a jump table *)
 
 (** The pseudo-instructions are the following:
 
@@ -187,6 +188,14 @@ lbl:    .word   symbol
 >>
   Again, our memory model cannot comprehend that this operation
   frees (logically) the current stack frame.
+- [Pbtbl reg table]: this is a N-way branch, implemented via a jump table
+  as follows:
+<<
+        ldr     pc, [pc, reg]
+        mov     r0, r0          (* no-op *)
+        .word   table[0], table[1], ...
+>>
+  Note that [reg] contains 4 times the index of the desired table entry.
 *)
 
 Definition code := list instruction.
@@ -507,6 +516,18 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr rs) m
   | Ploadsymbol r1 lbl ofs =>
       OK (nextinstr (rs#r1 <- (symbol_offset lbl ofs))) m
+  | Pbtbl r tbl =>
+      match rs#r with
+      | Vint n => 
+          let pos := Int.signed n in
+          if zeq (Zmod pos 4) 0 then
+            match list_nth_z tbl (pos / 4) with
+            | None => Error
+            | Some lbl => goto_label c lbl rs m
+            end
+          else Error
+      | _ => Error
+      end
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers

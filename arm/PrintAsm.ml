@@ -356,6 +356,12 @@ let print_instruction oc labels = function
       let lbl = label_symbol id ofs in
       fprintf oc "	ldr	%a, .L%d @ %a\n" 
          ireg r1 lbl print_symb_ofs (id, ofs); 1
+  | Pbtbl(r, tbl) ->
+      fprintf oc "	ldr	pc, [pc, %a]\n" ireg r;
+      fprintf oc "	mov	r0, r0\n"; (* no-op *)
+      List.iter
+        (fun l -> fprintf oc "	.word	%a\n" label (transl_label l));
+      2 + List.length tbl
 
 let no_fallthrough = function
   | Pb _ -> true
