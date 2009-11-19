@@ -378,6 +378,14 @@ let cache_address ty e (f: expr -> statement) =
               f (Expr(Ederef(Expr(Evar t, typ)), ty)))
   end
 
+let current_function_return_type() =
+  match !current_function with
+  | None -> assert false
+  | Some f ->
+      match f.svar.vtype with
+      | TFun(ty_ret, ty_args, _, _) -> ty_ret
+      | _ -> assert false
+
 (** Detect and report GCC's __builtin_ functions *)
 
 let check_builtin s =
@@ -915,9 +923,16 @@ and convertStmtKind = function
         processInstrList iList
     | Return (eOpt, loc) ->
         updateLoc(loc);
+        let ty_ret = current_function_return_type() in
         let eOpt' = match eOpt with
-          | None -> None
-          | Some e -> Some (convertExp e)
+          | None -> 
+              if isVoidType ty_ret
+              then None
+              else unsupported ("`return' without a value in function with non-void return type")
+          | Some e -> 
+              if isVoidType ty_ret
+              then unsupported ("`return' with a value in function returning void")
+              else Some (convertExp e)
         in 
           Sreturn eOpt'
     | Goto (sref, loc) ->
