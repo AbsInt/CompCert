@@ -342,7 +342,7 @@ Qed.
 Theorem eval_shlimm:
   forall le a n x,
   eval_expr ge sp e m le a (Vint x) ->
-  Int.ltu n (Int.repr 32) = true ->
+  Int.ltu n Int.iwordsize = true ->
   eval_expr ge sp e m le (shlimm a n) (Vint (Int.shl x n)).
 Proof.
   intros until x.  unfold shlimm, is_shift_amount.
@@ -365,7 +365,7 @@ Qed.
 Theorem eval_shruimm:
   forall le a n x,
   eval_expr ge sp e m le a (Vint x) ->
-  Int.ltu n (Int.repr 32) = true ->
+  Int.ltu n Int.iwordsize = true ->
   eval_expr ge sp e m le (shruimm a n) (Vint (Int.shru x n)).
 Proof.
   intros until x.  unfold shruimm, is_shift_amount.
@@ -388,7 +388,7 @@ Qed.
 Theorem eval_shrimm:
   forall le a n x,
   eval_expr ge sp e m le a (Vint x) ->
-  Int.ltu n (Int.repr 32) = true ->
+  Int.ltu n Int.iwordsize = true ->
   eval_expr ge sp e m le (shrimm a n) (Vint (Int.shr x n)).
 Proof.
   intros until x.  unfold shrimm, is_shift_amount.
@@ -416,7 +416,7 @@ Proof.
   intros; unfold mulimm_base. 
   generalize (Int.one_bits_decomp n). 
   generalize (Int.one_bits_range n).
-  change (Z_of_nat wordsize) with 32.
+  change (Z_of_nat Int.wordsize) with 32.
   destruct (Int.one_bits n).
   intros. EvalOp. constructor. EvalOp. simpl; reflexivity.
   constructor. eauto. constructor. simpl. rewrite Int.mul_commut. auto.
@@ -497,7 +497,7 @@ Proof.
   rewrite (Int.divs_pow2 x y i H0). auto.
   exploit Int.ltu_inv; eauto. 
   change (Int.unsigned (Int.repr 31)) with 31.
-  change (Int.unsigned (Int.repr 32)) with 32.
+  change (Int.unsigned Int.iwordsize) with 32.
   omega.
   apply eval_divs_base. auto. EvalOp. auto.
   apply eval_divs_base. auto. EvalOp. auto.
@@ -634,10 +634,10 @@ Lemma eval_or:
   eval_expr ge sp e m le (or a b) (Vint (Int.or x y)).
 Proof.
   intros until y; unfold or; case (or_match a b); intros; InvEval.
-  caseEq (Int.eq (Int.add (s_amount n1) (s_amount n2)) (Int.repr 32)
+  caseEq (Int.eq (Int.add (s_amount n1) (s_amount n2)) Int.iwordsize
           && same_expr_pure t1 t2); intro.
   destruct (andb_prop _ _ H1).
-  generalize (Int.eq_spec (Int.add (s_amount n1) (s_amount n2)) (Int.repr 32)).
+  generalize (Int.eq_spec (Int.add (s_amount n1) (s_amount n2)) Int.iwordsize).
   rewrite H4. intro. 
   exploit eval_same_expr; eauto. intros [EQ1 EQ2]. inv EQ1. inv EQ2. 
   simpl. EvalOp. simpl. decEq. decEq. apply Int.or_ror.
@@ -666,7 +666,7 @@ Theorem eval_shl:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Int.ltu y (Int.repr 32) = true ->
+  Int.ltu y Int.iwordsize = true ->
   eval_expr ge sp e m le (shl a b) (Vint (Int.shl x y)).
 Proof.
   intros until y; unfold shl; case (shift_match b); intros.
@@ -678,7 +678,7 @@ Theorem eval_shru:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Int.ltu y (Int.repr 32) = true ->
+  Int.ltu y Int.iwordsize = true ->
   eval_expr ge sp e m le (shru a b) (Vint (Int.shru x y)).
 Proof.
   intros until y; unfold shru; case (shift_match b); intros.
@@ -690,7 +690,7 @@ Theorem eval_shr:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Int.ltu y (Int.repr 32) = true ->
+  Int.ltu y Int.iwordsize = true ->
   eval_expr ge sp e m le (shr a b) (Vint (Int.shr x y)).
 Proof.
   intros until y; unfold shr; case (shift_match b); intros.

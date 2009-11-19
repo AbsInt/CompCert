@@ -174,9 +174,9 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | Obicshift s, I n1 :: I n2 :: nil => I(Int.and n1 (Int.not (eval_shift s n2)))
   | Onot, I n1 :: nil => I(Int.not n1)
   | Onotshift s, I n1 :: nil => I(Int.not (eval_shift s n1))
-  | Oshl, I n1 :: I n2 :: nil => if Int.ltu n2 (Int.repr 32) then I(Int.shl n1 n2) else Unknown
-  | Oshr, I n1 :: I n2 :: nil => if Int.ltu n2 (Int.repr 32) then I(Int.shr n1 n2) else Unknown
-  | Oshru, I n1 :: I n2 :: nil => if Int.ltu n2 (Int.repr 32) then I(Int.shru n1 n2) else Unknown
+  | Oshl, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shl n1 n2) else Unknown
+  | Oshr, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shr n1 n2) else Unknown
+  | Oshru, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shru n1 n2) else Unknown
   | Oshift s, I n1 :: nil => I(eval_shift s n1)
   | Onegf, F n1 :: nil => F(Float.neg n1)
   | Oabsf, F n1 :: nil => F(Float.abs n1)
@@ -543,11 +543,11 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | eval_static_operation_case36 s n1 =>
       I(Int.not (eval_shift s n1))
   | eval_static_operation_case37 n1 n2 =>
-      if Int.ltu n2 (Int.repr 32) then I(Int.shl n1 n2) else Unknown
+      if Int.ltu n2 Int.iwordsize then I(Int.shl n1 n2) else Unknown
   | eval_static_operation_case38 n1 n2 =>
-      if Int.ltu n2 (Int.repr 32) then I(Int.shr n1 n2) else Unknown
+      if Int.ltu n2 Int.iwordsize then I(Int.shr n1 n2) else Unknown
   | eval_static_operation_case39 n1 n2 =>
-      if Int.ltu n2 (Int.repr 32) then I(Int.shru n1 n2) else Unknown
+      if Int.ltu n2 Int.iwordsize then I(Int.shru n1 n2) else Unknown
   | eval_static_operation_case40 s n1 =>
       I(eval_shift s n1)
   | eval_static_operation_case41 n1 =>
@@ -954,7 +954,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   | op_strength_reduction_case16 r1 r2 => (* Oshl *)
       match intval r2 with
       | Some n =>
-          if Int.ltu n (Int.repr 32)
+          if Int.ltu n Int.iwordsize
           then make_shlimm n r1
           else (op, args)
       | _ => (op, args)
@@ -962,7 +962,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   | op_strength_reduction_case17 r1 r2 => (* Oshr *)
       match intval r2 with
       | Some n =>
-          if Int.ltu n (Int.repr 32)
+          if Int.ltu n Int.iwordsize
           then make_shrimm n r1
           else (op, args)
       | _ => (op, args)
@@ -970,7 +970,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   | op_strength_reduction_case18 r1 r2 => (* Oshru *)
       match intval r2 with
       | Some n =>
-          if Int.ltu n (Int.repr 32)
+          if Int.ltu n Int.iwordsize
           then make_shruimm n r1
           else (op, args)
       | _ => (op, args)

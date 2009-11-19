@@ -166,11 +166,11 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | Onand, I n1 :: I n2 :: nil => I(Int.xor (Int.and n1 n2) Int.mone)
   | Onor, I n1 :: I n2 :: nil => I(Int.xor (Int.or n1 n2) Int.mone)
   | Onxor, I n1 :: I n2 :: nil => I(Int.xor (Int.xor n1 n2) Int.mone)
-  | Oshl, I n1 :: I n2 :: nil => if Int.ltu n2 (Int.repr 32) then I(Int.shl n1 n2) else Unknown
-  | Oshr, I n1 :: I n2 :: nil => if Int.ltu n2 (Int.repr 32) then I(Int.shr n1 n2) else Unknown
-  | Oshrimm n, I n1 :: nil => if Int.ltu n (Int.repr 32) then I(Int.shr n1 n) else Unknown
-  | Oshrximm n, I n1 :: nil => if Int.ltu n (Int.repr 32) then I(Int.shrx n1 n) else Unknown
-  | Oshru, I n1 :: I n2 :: nil => if Int.ltu n2 (Int.repr 32) then I(Int.shru n1 n2) else Unknown
+  | Oshl, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shl n1 n2) else Unknown
+  | Oshr, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shr n1 n2) else Unknown
+  | Oshrimm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.shr n1 n) else Unknown
+  | Oshrximm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.shrx n1 n) else Unknown
+  | Oshru, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shru n1 n2) else Unknown
   | Orolm amount mask, I n1 :: nil => I(Int.rolm n1 amount mask)
   | Onegf, F n1 :: nil => F(Float.neg n1)
   | Oabsf, F n1 :: nil => F(Float.abs n1)
@@ -500,15 +500,15 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | eval_static_operation_case28 n1 n2 =>
       I(Int.xor (Int.xor n1 n2) Int.mone)
   | eval_static_operation_case29 n1 n2 =>
-      if Int.ltu n2 (Int.repr 32) then I(Int.shl n1 n2) else Unknown
+      if Int.ltu n2 Int.iwordsize then I(Int.shl n1 n2) else Unknown
   | eval_static_operation_case30 n1 n2 =>
-      if Int.ltu n2 (Int.repr 32) then I(Int.shr n1 n2) else Unknown
+      if Int.ltu n2 Int.iwordsize then I(Int.shr n1 n2) else Unknown
   | eval_static_operation_case31 n n1 =>
-      if Int.ltu n (Int.repr 32) then I(Int.shr n1 n) else Unknown
+      if Int.ltu n Int.iwordsize then I(Int.shr n1 n) else Unknown
   | eval_static_operation_case32 n n1 =>
-      if Int.ltu n (Int.repr 32) then I(Int.shrx n1 n) else Unknown
+      if Int.ltu n Int.iwordsize then I(Int.shrx n1 n) else Unknown
   | eval_static_operation_case33 n1 n2 =>
-      if Int.ltu n2 (Int.repr 32) then I(Int.shru n1 n2) else Unknown
+      if Int.ltu n2 Int.iwordsize then I(Int.shru n1 n2) else Unknown
   | eval_static_operation_case34 amount mask n1 =>
       I(Int.rolm n1 amount mask)
   | eval_static_operation_case35 n1 =>
@@ -628,7 +628,7 @@ Definition make_shrimm (n: int) (r: reg) :=
 Definition make_shruimm (n: int) (r: reg) :=
   if Int.eq n Int.zero
   then (Omove, r :: nil)
-  else (Orolm (Int.sub (Int.repr 32) n) (Int.shru Int.mone n), r :: nil).
+  else (Orolm (Int.sub Int.iwordsize n) (Int.shru Int.mone n), r :: nil).
 
 Definition make_mulimm (n: int) (r: reg) :=
   if Int.eq n Int.zero then
@@ -789,7 +789,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   | op_strength_reduction_case9 r1 r2 => (* Oshl *)
       match intval r2 with
       | Some n =>
-          if Int.ltu n (Int.repr 32)
+          if Int.ltu n Int.iwordsize
           then make_shlimm n r1
           else (op, args)
       | _ => (op, args)
@@ -797,7 +797,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   | op_strength_reduction_case10 r1 r2 => (* Oshr *)
       match intval r2 with
       | Some n =>
-          if Int.ltu n (Int.repr 32)
+          if Int.ltu n Int.iwordsize
           then make_shrimm n r1
           else (op, args)
       | _ => (op, args)
@@ -805,7 +805,7 @@ Definition op_strength_reduction (op: operation) (args: list reg) :=
   | op_strength_reduction_case11 r1 r2 => (* Oshru *)
       match intval r2 with
       | Some n =>
-          if Int.ltu n (Int.repr 32)
+          if Int.ltu n Int.iwordsize
           then make_shruimm n r1
           else (op, args)
       | _ => (op, args)

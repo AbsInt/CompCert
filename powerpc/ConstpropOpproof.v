@@ -130,19 +130,19 @@ Proof.
   subst v. unfold Int.not. congruence.
   subst v. unfold Int.not. congruence.
 
-  replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
+  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
-  replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
+  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
-  destruct (Int.ltu n (Int.repr 32)).
+  destruct (Int.ltu n Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. 
 
-  destruct (Int.ltu n (Int.repr 32)).
+  destruct (Int.ltu n Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. 
 
-  replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
+  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
   rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
@@ -229,7 +229,7 @@ Proof.
   intros; unfold make_shlimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
   subst n. simpl in *. FuncInv. rewrite Int.shl_zero in H. congruence.
-  simpl in *. FuncInv. caseEq (Int.ltu n (Int.repr 32)); intros.
+  simpl in *. FuncInv. caseEq (Int.ltu n Int.iwordsize); intros.
   rewrite H1 in H0. rewrite Int.shl_rolm in H0. auto. exact H1.
   rewrite H1 in H0. discriminate.
 Qed.
@@ -255,7 +255,7 @@ Proof.
   intros; unfold make_shruimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
   subst n. simpl in *. FuncInv. rewrite Int.shru_zero in H. congruence.
-  simpl in *. FuncInv. caseEq (Int.ltu n (Int.repr 32)); intros.
+  simpl in *. FuncInv. caseEq (Int.ltu n Int.iwordsize); intros.
   rewrite H1 in H0. rewrite Int.shru_rolm in H0. auto. exact H1.
   rewrite H1 in H0. discriminate.
 Qed.
@@ -276,7 +276,7 @@ Proof.
      with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil)).
   apply make_shlimm_correct. 
   simpl. generalize (Int.is_power2_range _ _ H1). 
-  change (Z_of_nat wordsize) with 32. intro. rewrite H2.
+  change (Z_of_nat Int.wordsize) with 32. intro. rewrite H2.
   destruct rs#r; auto. rewrite (Int.mul_pow2 i0 _ _ H1). auto.
   exact H2.
 Qed.
@@ -364,7 +364,7 @@ Proof.
   caseEq (Int.is_power2 i); intros.
   rewrite (intval_correct _ _ H) in H1.   
   simpl in *; FuncInv. destruct (Int.eq i Int.zero). congruence.
-  change 32 with (Z_of_nat wordsize). 
+  change 32 with (Z_of_nat Int.wordsize). 
   rewrite (Int.is_power2_range _ _ H0). 
   rewrite (Int.divs_pow2 i1 _ _ H0) in H1. auto.
   assumption.
@@ -377,7 +377,7 @@ Proof.
      with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil)).
   apply make_shruimm_correct. 
   simpl. destruct rs#r1; auto. 
-  change 32 with (Z_of_nat wordsize). 
+  change 32 with (Z_of_nat Int.wordsize). 
   rewrite (Int.is_power2_range _ _ H0). 
   generalize (Int.eq_spec i Int.zero); case (Int.eq i Int.zero); intros.
   subst i. discriminate. 
@@ -416,19 +416,19 @@ Proof.
   assumption.
   (* Oshl *)
   caseEq (intval app r2); intros.
-  caseEq (Int.ltu i (Int.repr 32)); intros.
+  caseEq (Int.ltu i Int.iwordsize); intros.
   rewrite (intval_correct _ _ H). apply make_shlimm_correct.
   assumption.
   assumption.
   (* Oshr *)
   caseEq (intval app r2); intros.
-  caseEq (Int.ltu i (Int.repr 32)); intros.
+  caseEq (Int.ltu i Int.iwordsize); intros.
   rewrite (intval_correct _ _ H). apply make_shrimm_correct.
   assumption.
   assumption.
   (* Oshru *)
   caseEq (intval app r2); intros.
-  caseEq (Int.ltu i (Int.repr 32)); intros.
+  caseEq (Int.ltu i Int.iwordsize); intros.
   rewrite (intval_correct _ _ H). apply make_shruimm_correct.
   assumption.
   assumption.

@@ -37,7 +37,7 @@ Set Implicit Arguments.
 Record shift_amount : Type :=
   mk_shift_amount { 
     s_amount: int;
-    s_amount_ltu: Int.ltu s_amount (Int.repr 32) = true 
+    s_amount_ltu: Int.ltu s_amount Int.iwordsize = true 
   }.
 
 Inductive shift : Type :=
@@ -267,11 +267,11 @@ Definition eval_operation
   | Onot, Vint n1 :: nil => Some (Vint (Int.not n1))
   | Onotshift s, Vint n1 :: nil => Some (Vint (Int.not (eval_shift s n1)))
   | Oshl, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shl n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shl n1 n2)) else None
   | Oshr, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shr n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
   | Oshru, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shru n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
   | Oshift s, Vint n :: nil => Some (Vint (eval_shift s n))
   | Oshrximm n, Vint n1 :: nil =>
       if Int.ltu n (Int.repr 31) then Some (Vint (Int.shrx n1 n)) else None
@@ -548,11 +548,11 @@ Proof.
   injection H0; intro; subst v; exact I.
   destruct (Int.eq i0 Int.zero). discriminate. 
   injection H0; intro; subst v; exact I.
-  destruct (Int.ltu i0 (Int.repr 32)).
+  destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i0 (Int.repr 32)).
+  destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i0 (Int.repr 32)).
+  destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
   destruct (Int.ltu i (Int.repr 31)).
   injection H0; intro; subst v; exact I. discriminate.
@@ -724,12 +724,12 @@ Proof.
   unfold eq_block in H. destruct (zeq b b0); congruence.
   destruct (Int.eq i0 Int.zero); congruence.
   destruct (Int.eq i0 Int.zero); congruence.
-  destruct (Int.ltu i0 (Int.repr 32)); congruence.
-  destruct (Int.ltu i0 (Int.repr 32)); congruence.
-  destruct (Int.ltu i0 (Int.repr 32)); congruence.
+  destruct (Int.ltu i0 Int.iwordsize); congruence.
+  destruct (Int.ltu i0 Int.iwordsize); congruence.
+  destruct (Int.ltu i0 Int.iwordsize); congruence.
   unfold Int.ltu in H. destruct (zlt (Int.unsigned i) (Int.unsigned (Int.repr 31))).
   unfold Int.ltu. rewrite zlt_true. congruence. 
-  assert (Int.unsigned (Int.repr 31) < Int.unsigned (Int.repr 32)). vm_compute; auto.
+  assert (Int.unsigned (Int.repr 31) < Int.unsigned Int.iwordsize). vm_compute; auto.
   omega. discriminate.
   caseEq (eval_condition c vl); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
@@ -825,11 +825,11 @@ Proof.
   destruct (eq_block b b0); inv H0. TrivialExists.
   destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
   destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H1; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H1; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
   destruct (Int.ltu i (Int.repr 31)); inv H0; TrivialExists.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
   caseEq (eval_condition c vl1); intros. rewrite H1 in H0. 
@@ -853,10 +853,10 @@ End EVAL_LESSDEF.
 (** Recognition of integers that are valid shift amounts. *)
 
 Definition is_shift_amount_aux (n: int) :
-  { Int.ltu n (Int.repr 32) = true } +
-  { Int.ltu n (Int.repr 32) = false }.
+  { Int.ltu n Int.iwordsize = true } +
+  { Int.ltu n Int.iwordsize = false }.
 Proof.
-  intro. case (Int.ltu n (Int.repr 32)). left; auto. right; auto.
+  intro. case (Int.ltu n Int.iwordsize). left; auto. right; auto.
 Defined.
 
 Definition is_shift_amount (n: int) : option shift_amount :=
@@ -875,7 +875,7 @@ Proof.
 Qed.
 
 Lemma is_shift_amount_None:
-  forall n, is_shift_amount n = None -> Int.ltu n (Int.repr 32) = true -> False.
+  forall n, is_shift_amount n = None -> Int.ltu n Int.iwordsize = true -> False.
 Proof.
   intro n. unfold is_shift_amount.
   destruct (is_shift_amount_aux n). 

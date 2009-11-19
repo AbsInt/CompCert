@@ -357,6 +357,13 @@ Proof.
   rewrite two_power_nat_S. omega.
 Qed.
 
+Lemma two_power_nat_two_p:
+  forall x, two_power_nat x = two_p (Z_of_nat x).
+Proof.
+  induction x. auto. 
+  rewrite two_power_nat_S. rewrite inj_S. rewrite two_p_S. omega. omega.
+Qed.
+
 Lemma two_p_monotone:
   forall x y, 0 <= x <= y -> two_p x <= two_p y.
 Proof.
@@ -369,11 +376,12 @@ Proof.
   assert (two_p x > 0). apply two_p_gt_ZERO. omega. omega.
 Qed.
 
-Lemma two_power_nat_two_p:
-  forall x, two_power_nat x = two_p (Z_of_nat x).
+Lemma two_p_monotone_strict:
+  forall x y, 0 <= x < y -> two_p x < two_p y.
 Proof.
-  induction x. auto. 
-  rewrite two_power_nat_S. rewrite inj_S. rewrite two_p_S. omega. omega.
+  intros. assert (two_p x <= two_p (y - 1)). apply two_p_monotone; omega.
+  assert (two_p (y - 1) > 0). apply two_p_gt_ZERO. omega.
+  replace y with (Zsucc (y - 1)) by omega. rewrite two_p_S. omega. omega.
 Qed.
 
 Lemma two_p_strict:
@@ -383,6 +391,16 @@ Proof.
   simpl. omega.
   intros. rewrite two_p_S; auto. generalize (two_p_gt_ZERO x H). omega. 
   omega.
+Qed.
+
+Lemma two_p_strict_2:
+  forall x, x >= 0 -> 2 * x - 1 < two_p x.
+Proof.
+  intros. assert (x = 0 \/ x - 1 >= 0) by omega. destruct H0.
+  subst. vm_compute. auto.
+  replace (two_p x) with (2 * two_p (x - 1)).
+  generalize (two_p_strict _ H0). omega. 
+  rewrite <- two_p_S. decEq. omega. omega.
 Qed.
 
 (** Properties of [Zmin] and [Zmax] *)
@@ -522,7 +540,7 @@ Qed.
 
 Lemma Zdiv_interval_2:
   forall lo hi a b,
-  lo <= a <= hi -> lo <= 0 -> hi > 0 -> b > 0 ->
+  lo <= a <= hi -> lo <= 0 -> hi >= 0 -> b > 0 ->
   lo <= a/b <= hi.
 Proof.
   intros.

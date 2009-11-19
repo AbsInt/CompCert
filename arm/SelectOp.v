@@ -385,7 +385,7 @@ Definition shlimm (e1: expr) :=
   if Int.eq n Int.zero then e1 else 
   match e1 with
   | Eop (Ointconst n1) Enil => Eop (Ointconst(Int.shl n1 n))
-  | Eop (Oshift (Olsl n1)) (t1:::Enil) => if Int.ltu (Int.add n n1) (Int.repr 32) then Eop (Oshift (Olsl (Int.add n n1))) (t1:::Enil) else Eop (Oshift (Olsl n)) (e1:::Enil)
+  | Eop (Oshift (Olsl n1)) (t1:::Enil) => if Int.ltu (Int.add n n1) Int.iwordsize then Eop (Oshift (Olsl (Int.add n n1))) (t1:::Enil) else Eop (Oshift (Olsl n)) (e1:::Enil)
   | _ => Eop (Oshift (Olsl n)) (e1:::Enil)
   end.
 *)
@@ -436,7 +436,7 @@ Definition shruimm (e1: expr) :=
   if Int.eq n Int.zero then e1 else
   match e1 with
   | Eop (Ointconst n1) Enil => Eop (Ointconst(Int.shru n1 n))
-  | Eop (Oshift (Olsr n1)) (t1:::Enil) => if Int.ltu (Int.add n n1) (Int.repr 32) then Eop (Oshift (Olsr (Int.add n n1))) (t1:::Enil) else Eop (Oshift (Olsr n)) (e1:::Enil)
+  | Eop (Oshift (Olsr n1)) (t1:::Enil) => if Int.ltu (Int.add n n1) Int.iwordsize then Eop (Oshift (Olsr (Int.add n n1))) (t1:::Enil) else Eop (Oshift (Olsr n)) (e1:::Enil)
   | _ => Eop (Oshift (Olsr n)) (e1:::Enil)
   end.
 *)
@@ -486,7 +486,7 @@ Definition shruimm (e1: expr) (n: int) :=
 Definition shrimm (e1: expr) :=
   match e1 with
   | Eop (Ointconst n1) Enil => Eop (Ointconst(Int.shr n1 n))
-  | Eop (Oshift (Oasr n1)) (t1:::Enil) => if Int.ltu (Int.add n n1) (Int.repr 32) then Eop (Oshift (Oasr (Int.add n n1))) (t1:::Enil) else Eop (Oshift (Oasr n)) (e1:::Enil)
+  | Eop (Oshift (Oasr n1)) (t1:::Enil) => if Int.ltu (Int.add n n1) Int.iwordsize then Eop (Oshift (Oasr (Int.add n n1))) (t1:::Enil) else Eop (Oshift (Oasr n)) (e1:::Enil)
   | _ => Eop (Oshift (Oasr n)) (e1:::Enil)
   end.
 *)
@@ -825,7 +825,7 @@ Definition or_match (e1: expr) (e2: expr) :=
 Definition or (e1: expr) (e2: expr) :=
   match or_match e1 e2 with
   | or_case1 n1 t1 n2 t2 =>
-      if Int.eq (Int.add (s_amount n1) (s_amount n2)) (Int.repr 32)
+      if Int.eq (Int.add (s_amount n1) (s_amount n2)) Int.iwordsize
       && same_expr_pure t1 t2
       then Eop (Oshift (Sror n2)) (t1:::Enil)
       else Eop (Oorshift (Slsr n2)) (e1:::t2:::Enil)

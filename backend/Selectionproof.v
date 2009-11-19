@@ -253,11 +253,11 @@ Proof.
   apply eval_and; auto.
   apply eval_or; auto.
   apply eval_xor; auto.
-  caseEq (Int.ltu i0 (Int.repr 32)); intro; rewrite H2 in H1; inv H1.
+  caseEq (Int.ltu i0 Int.iwordsize); intro; rewrite H2 in H1; inv H1.
   apply eval_shl; auto.
-  caseEq (Int.ltu i0 (Int.repr 32)); intro; rewrite H2 in H1; inv H1.
+  caseEq (Int.ltu i0 Int.iwordsize); intro; rewrite H2 in H1; inv H1.
   apply eval_shr; auto.
-  caseEq (Int.ltu i0 (Int.repr 32)); intro; rewrite H2 in H1; inv H1.
+  caseEq (Int.ltu i0 Int.iwordsize); intro; rewrite H2 in H1; inv H1.
   apply eval_shru; auto.
   apply eval_addf; auto.
   apply eval_subf; auto.

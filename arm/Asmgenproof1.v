@@ -1089,10 +1089,10 @@ Proof.
     simpl in H1. destruct (ms m0); try discriminate.
     exists i0; split; auto. destruct (Int.ltu i (Int.repr 31)); discriminate || auto.
   destruct H3 as [n [ARG1 LTU]].
-  assert (LTU': Int.ltu i (Int.repr 32) = true).
+  assert (LTU': Int.ltu i Int.iwordsize = true).
     exploit Int.ltu_inv. eexact LTU. intro.
     unfold Int.ltu. apply zlt_true.
-    assert (Int.unsigned (Int.repr 31) < Int.unsigned (Int.repr 32)). vm_compute; auto.
+    assert (Int.unsigned (Int.repr 31) < Int.unsigned Int.iwordsize). vm_compute; auto.
     omega.
   assert (RSm0: rs (ireg_of m0) = Vint n).
     rewrite <- ARG1. symmetry. eapply ireg_val; eauto. 

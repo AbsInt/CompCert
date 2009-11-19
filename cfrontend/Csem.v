@@ -252,7 +252,7 @@ Function sem_xor (v1 v2: val): option val :=
 Function sem_shl (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32) then Some (Vint(Int.shl n1 n2)) else None
+     if Int.ltu n2 Int.iwordsize then Some (Vint(Int.shl n1 n2)) else None
   | _, _ => None
   end.
 
@@ -261,13 +261,13 @@ Function sem_shr (v1: val) (t1: type) (v2: val) (t2: type): option val :=
   | shr_case_I32unsi => 
       match v1,v2 with 
       | Vint n1, Vint n2 =>
-          if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shru n1 n2)) else None
+          if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
       | _,_ => None
       end
    | shr_case_ii => 
       match v1,v2 with
       | Vint n1,  Vint n2 =>
-          if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shr n1 n2)) else None
+          if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
       | _,  _ => None
       end
    | shr_default=>

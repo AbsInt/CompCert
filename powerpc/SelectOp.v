@@ -396,7 +396,7 @@ Definition rolm (e1: expr) (amount2 mask2: int) :=
   | rolm_case1 n1 =>
       Eop (Ointconst(Int.and (Int.rol n1 amount2) mask2)) Enil
   | rolm_case2 amount1 mask1 t1 =>
-      let amount := Int.and (Int.add amount1 amount2) (Int.repr 31) in
+      let amount := Int.modu (Int.add amount1 amount2) Int.iwordsize in
       let mask := Int.and (Int.rol mask1 amount2) mask2 in
       if Int.is_rlw_mask mask
       then Eop (Orolm amount mask) (t1:::Enil)
@@ -408,7 +408,7 @@ Definition rolm (e1: expr) (amount2 mask2: int) :=
 Definition shlimm (e1: expr) (n2: int) :=
   if Int.eq n2 Int.zero then
     e1
-  else if Int.ltu n2 (Int.repr 32) then
+  else if Int.ltu n2 Int.iwordsize then
     rolm e1 n2 (Int.shl Int.mone n2)
   else
     Eop Oshl (e1:::Eop (Ointconst n2) Enil:::Enil).
@@ -416,8 +416,8 @@ Definition shlimm (e1: expr) (n2: int) :=
 Definition shruimm (e1: expr) (n2: int) :=
   if Int.eq n2 Int.zero then
     e1
-  else if Int.ltu n2 (Int.repr 32) then
-    rolm e1 (Int.sub (Int.repr 32) n2) (Int.shru Int.mone n2)
+  else if Int.ltu n2 Int.iwordsize then
+    rolm e1 (Int.sub Int.iwordsize n2) (Int.shru Int.mone n2)
   else
     Eop Oshru (e1:::Eop (Ointconst n2) Enil:::Enil).
 

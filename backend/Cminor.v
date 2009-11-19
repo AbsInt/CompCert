@@ -276,11 +276,11 @@ Definition eval_binop
   | Oor, Vint n1, Vint n2 => Some (Vint (Int.or n1 n2))
   | Oxor, Vint n1, Vint n2 => Some (Vint (Int.xor n1 n2))
   | Oshl, Vint n1, Vint n2 =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shl n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shl n1 n2)) else None
   | Oshr, Vint n1, Vint n2 =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shr n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
   | Oshru, Vint n1, Vint n2 =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shru n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
    | Oaddf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.add f1 f2))
   | Osubf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.sub f1 f2))
   | Omulf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.mul f1 f2))

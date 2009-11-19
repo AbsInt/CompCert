@@ -939,11 +939,11 @@ Proof.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.ltu i0 (Int.repr 32)); inv H1. TrivialOp.
+    destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.ltu i0 (Int.repr 32)); inv H1. TrivialOp.
+    destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.ltu i0 (Int.repr 32)); inv H1. TrivialOp.
+    destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.

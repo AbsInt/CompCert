@@ -346,11 +346,7 @@ Proof.
   case (Int.is_rlw_mask (Int.and (Int.rol mask1 amount) mask)).
   EvalOp. simpl. subst x. 
   decEq. decEq. 
-  replace (Int.and (Int.add amount1 amount) (Int.repr 31))
-     with (Int.modu (Int.add amount1 amount) (Int.repr 32)).
-  symmetry. apply Int.rolm_rolm. 
-  change (Int.repr 31) with (Int.sub (Int.repr 32) Int.one).
-  apply Int.modu_and with (Int.repr 5). reflexivity.
+  symmetry. apply Int.rolm_rolm. apply int_wordsize_divides_modulus.
   EvalOp. econstructor. EvalOp. simpl. rewrite H. reflexivity. constructor. auto.  
   EvalOp.
 Qed.
@@ -358,7 +354,7 @@ Qed.
 Theorem eval_shlimm:
   forall le a n x,
   eval_expr ge sp e m le a (Vint x) ->
-  Int.ltu n (Int.repr 32) = true ->
+  Int.ltu n Int.iwordsize = true ->
   eval_expr ge sp e m le (shlimm a n) (Vint (Int.shl x n)).
 Proof.
   intros.  unfold shlimm.
@@ -372,14 +368,14 @@ Qed.
 Theorem eval_shruimm:
   forall le a n x,
   eval_expr ge sp e m le a (Vint x) ->
-  Int.ltu n (Int.repr 32) = true ->
+  Int.ltu n Int.iwordsize = true ->
   eval_expr ge sp e m le (shruimm a n) (Vint (Int.shru x n)).
 Proof.
   intros.  unfold shruimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intro.
   subst n. rewrite Int.shru_zero. auto.
   rewrite H0.
-  replace (Int.shru x n) with (Int.rolm x (Int.sub (Int.repr 32) n) (Int.shru Int.mone n)).
+  replace (Int.shru x n) with (Int.rolm x (Int.sub Int.iwordsize n) (Int.shru Int.mone n)).
   apply eval_rolm. auto. symmetry. apply Int.shru_rolm. exact H0.
 Qed.
 
@@ -391,7 +387,7 @@ Proof.
   intros; unfold mulimm_base. 
   generalize (Int.one_bits_decomp n). 
   generalize (Int.one_bits_range n).
-  change (Z_of_nat wordsize) with 32.
+  change (Z_of_nat Int.wordsize) with 32.
   destruct (Int.one_bits n).
   intros. EvalOp. 
   destruct l.
@@ -611,7 +607,7 @@ Theorem eval_shl:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Int.ltu y (Int.repr 32) = true ->
+  Int.ltu y Int.iwordsize = true ->
   eval_expr ge sp e m le (shl a b) (Vint (Int.shl x y)).
 Proof.
   intros until y; unfold shl; case (shift_match b); intros.
@@ -623,7 +619,7 @@ Theorem eval_shru:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Int.ltu y (Int.repr 32) = true ->
+  Int.ltu y Int.iwordsize = true ->
   eval_expr ge sp e m le (shru a b) (Vint (Int.shru x y)).
 Proof.
   intros until y; unfold shru; case (shift_match b); intros.
@@ -908,7 +904,7 @@ Theorem eval_shr:
   forall le a x b y,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le b (Vint y) ->
-  Int.ltu y (Int.repr 32) = true ->
+  Int.ltu y Int.iwordsize = true ->
   eval_expr ge sp e m le (shr a b) (Vint (Int.shr x y)).
 Proof. intros; unfold shr; EvalOp. simpl. rewrite H1. auto. Qed.
 

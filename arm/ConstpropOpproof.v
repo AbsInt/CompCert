@@ -130,13 +130,13 @@ Proof.
   replace n2 with i0. destruct (Int.eq i0 Int.zero). 
   discriminate. injection H0; intro; subst v. simpl. congruence. congruence.
 
-  replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
+  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
-  replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
+  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
-  replace n2 with i0. destruct (Int.ltu i0 (Int.repr 32)).
+  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
 
   rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
@@ -284,7 +284,7 @@ Proof.
      with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil)).
   apply make_shlimm_correct. 
   simpl. generalize (Int.is_power2_range _ _ H2). 
-  change (Z_of_nat wordsize) with 32. intro. rewrite H3.
+  change (Z_of_nat Int.wordsize) with 32. intro. rewrite H3.
   destruct rs#r; auto. rewrite (Int.mul_pow2 i0 _ _ H2). auto.
   simpl List.map. rewrite H. auto.
 Qed.
@@ -400,7 +400,7 @@ Proof.
      with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil)).
   apply make_shruimm_correct. 
   simpl. destruct rs#r1; auto. 
-  change 32 with (Z_of_nat wordsize). 
+  change 32 with (Z_of_nat Int.wordsize). 
   rewrite (Int.is_power2_range _ _ H0). 
   generalize (Int.eq_spec i Int.zero); case (Int.eq i Int.zero); intros.
   subst i. discriminate. 
@@ -474,19 +474,19 @@ Proof.
   assumption.
   (* Oshl *)
   caseEq (intval app r2); intros.
-  caseEq (Int.ltu i (Int.repr 32)); intros.
+  caseEq (Int.ltu i Int.iwordsize); intros.
   rewrite (intval_correct _ _ H). apply make_shlimm_correct.
   assumption.
   assumption.
   (* Oshr *)
   caseEq (intval app r2); intros.
-  caseEq (Int.ltu i (Int.repr 32)); intros.
+  caseEq (Int.ltu i Int.iwordsize); intros.
   rewrite (intval_correct _ _ H). apply make_shrimm_correct.
   assumption.
   assumption.
   (* Oshru *)
   caseEq (intval app r2); intros.
-  caseEq (Int.ltu i (Int.repr 32)); intros.
+  caseEq (Int.ltu i Int.iwordsize); intros.
   rewrite (intval_correct _ _ H). apply make_shruimm_correct.
   assumption.
   assumption.

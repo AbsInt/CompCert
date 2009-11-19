@@ -302,9 +302,7 @@ lbl:    .long   0x43300000, 0x00000000
         lwz     r12, lo16(lbl)(r12)
         mtctr   r12
         bctr    r12
-        .const_data
 lbl:    .long   table[0], table[1], ...
-        .text
 >>
   Note that [reg] contains 4 times the index of the desired table entry.
 *)

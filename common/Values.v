@@ -240,7 +240,7 @@ Definition xor (v1 v2: val): val :=
 Definition shl (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32)
+     if Int.ltu n2 Int.iwordsize
      then Vint(Int.shl n1 n2)
      else Vundef
   | _, _ => Vundef
@@ -249,7 +249,7 @@ Definition shl (v1 v2: val): val :=
 Definition shr (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32)
+     if Int.ltu n2 Int.iwordsize
      then Vint(Int.shr n1 n2)
      else Vundef
   | _, _ => Vundef
@@ -258,7 +258,7 @@ Definition shr (v1 v2: val): val :=
 Definition shr_carry (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32)
+     if Int.ltu n2 Int.iwordsize
      then Vint(Int.shr_carry n1 n2)
      else Vundef
   | _, _ => Vundef
@@ -267,7 +267,7 @@ Definition shr_carry (v1 v2: val): val :=
 Definition shrx (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32)
+     if Int.ltu n2 Int.iwordsize
      then Vint(Int.shrx n1 n2)
      else Vundef
   | _, _ => Vundef
@@ -276,7 +276,7 @@ Definition shrx (v1 v2: val): val :=
 Definition shru (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32)
+     if Int.ltu n2 Int.iwordsize
      then Vint(Int.shru n1 n2)
      else Vundef
   | _, _ => Vundef
@@ -291,7 +291,7 @@ Definition rolm (v: val) (amount mask: int): val :=
 Definition ror (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 (Int.repr 32)
+     if Int.ltu n2 Int.iwordsize
      then Vint(Int.ror n1 n2)
      else Vundef
   | _, _ => Vundef
@@ -593,7 +593,7 @@ Theorem mul_pow2:
   mul x (Vint n) = shl x (Vint logn).
 Proof.
   intros; destruct x; simpl; auto.
-  change 32 with (Z_of_nat wordsize).
+  change 32 with (Z_of_nat Int.wordsize).
   rewrite (Int.is_power2_range _ _ H). decEq. apply Int.mul_pow2. auto.
 Qed.  
 
@@ -619,7 +619,7 @@ Theorem divs_pow2:
   divs x (Vint n) = shrx x (Vint logn).
 Proof.
   intros; destruct x; simpl; auto.
-  change 32 with (Z_of_nat wordsize).
+  change 32 with (Z_of_nat Int.wordsize).
   rewrite (Int.is_power2_range _ _ H). 
   generalize (Int.eq_spec n Int.zero);
   case (Int.eq n Int.zero); intro.
@@ -633,7 +633,7 @@ Theorem divu_pow2:
   divu x (Vint n) = shru x (Vint logn).
 Proof.
   intros; destruct x; simpl; auto.
-  change 32 with (Z_of_nat wordsize).
+  change 32 with (Z_of_nat Int.wordsize).
   rewrite (Int.is_power2_range _ _ H). 
   generalize (Int.eq_spec n Int.zero);
   case (Int.eq n Int.zero); intro.
@@ -689,13 +689,13 @@ Qed.
 Theorem shl_mul: forall x y, Val.mul x (Val.shl Vone y) = Val.shl x y.
 Proof.
   destruct x; destruct y; simpl; auto. 
-  case (Int.ltu i0 (Int.repr 32)); auto.
+  case (Int.ltu i0 Int.iwordsize); auto.
   decEq. symmetry. apply Int.shl_mul.
 Qed.
 
 Theorem shl_rolm:
   forall x n,
-  Int.ltu n (Int.repr 32) = true ->
+  Int.ltu n Int.iwordsize = true ->
   shl x (Vint n) = rolm x n (Int.shl Int.mone n).
 Proof.
   intros; destruct x; simpl; auto.
@@ -704,8 +704,8 @@ Qed.
 
 Theorem shru_rolm:
   forall x n,
-  Int.ltu n (Int.repr 32) = true ->
-  shru x (Vint n) = rolm x (Int.sub (Int.repr 32) n) (Int.shru Int.mone n).
+  Int.ltu n Int.iwordsize = true ->
+  shru x (Vint n) = rolm x (Int.sub Int.iwordsize n) (Int.shru Int.mone n).
 Proof.
   intros; destruct x; simpl; auto.
   rewrite H. decEq. apply Int.shru_rolm. exact H.
@@ -716,7 +716,7 @@ Theorem shrx_carry:
   add (shr x y) (shr_carry x y) = shrx x y.
 Proof.
   destruct x; destruct y; simpl; auto.
-  case (Int.ltu i0 (Int.repr 32)); auto.
+  case (Int.ltu i0 Int.iwordsize); auto.
   simpl. decEq. apply Int.shrx_carry.
 Qed.
 
@@ -731,16 +731,12 @@ Qed.
 Theorem rolm_rolm:
   forall x n1 m1 n2 m2,
   rolm (rolm x n1 m1) n2 m2 =
-    rolm x (Int.and (Int.add n1 n2) (Int.repr 31))
+    rolm x (Int.modu (Int.add n1 n2) Int.iwordsize)
            (Int.and (Int.rol m1 n2) m2).
 Proof.
   intros; destruct x; simpl; auto.
   decEq. 
-  replace (Int.and (Int.add n1 n2) (Int.repr 31))
-     with (Int.modu (Int.add n1 n2) (Int.repr 32)).
-  apply Int.rolm_rolm.
-  change (Int.repr 31) with (Int.sub (Int.repr 32) Int.one).
-  apply Int.modu_and with (Int.repr 5). reflexivity.
+  apply Int.rolm_rolm. apply int_wordsize_divides_modulus.
 Qed.
 
 Theorem rolm_zero:
@@ -922,7 +918,7 @@ Lemma rolm_lt_zero:
   forall v, rolm v Int.one Int.one = cmp Clt v (Vint Int.zero).
 Proof.
   intros. destruct v; simpl; auto.
-  transitivity (Vint (Int.shru i (Int.repr (Z_of_nat wordsize - 1)))).
+  transitivity (Vint (Int.shru i (Int.repr (Z_of_nat Int.wordsize - 1)))).
   decEq. symmetry. rewrite Int.shru_rolm. auto. auto. 
   rewrite Int.shru_lt_zero. destruct (Int.lt i Int.zero); auto. 
 Qed.

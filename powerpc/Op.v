@@ -224,15 +224,15 @@ Definition eval_operation
   | Onor, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.not (Int.or n1 n2)))
   | Onxor, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.not (Int.xor n1 n2)))
   | Oshl, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shl n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shl n1 n2)) else None
   | Oshr, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shr n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
   | Oshrimm n, Vint n1 :: nil =>
-      if Int.ltu n (Int.repr 32) then Some (Vint (Int.shr n1 n)) else None
+      if Int.ltu n Int.iwordsize then Some (Vint (Int.shr n1 n)) else None
   | Oshrximm n, Vint n1 :: nil =>
-      if Int.ltu n (Int.repr 32) then Some (Vint (Int.shrx n1 n)) else None
+      if Int.ltu n Int.iwordsize then Some (Vint (Int.shrx n1 n)) else None
   | Oshru, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 (Int.repr 32) then Some (Vint (Int.shru n1 n2)) else None
+      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
   | Orolm amount mask, Vint n1 :: nil =>
       Some (Vint (Int.rolm n1 amount mask))
   | Onegf, Vfloat f1 :: nil => Some (Vfloat (Float.neg f1))
@@ -522,15 +522,15 @@ Proof.
   injection H0; intro; subst v; exact I.
   destruct (Int.eq i0 Int.zero). discriminate. 
   injection H0; intro; subst v; exact I.
-  destruct (Int.ltu i0 (Int.repr 32)).
+  destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i0 (Int.repr 32)).
+  destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i (Int.repr 32)).
+  destruct (Int.ltu i Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i (Int.repr 32)).
+  destruct (Int.ltu i Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i0 (Int.repr 32)).
+  destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
   destruct v0; exact I.
   destruct (eval_condition c vl). 
@@ -694,11 +694,11 @@ Proof.
   unfold eq_block in H. destruct (zeq b b0); congruence.
   destruct (Int.eq i0 Int.zero); congruence.
   destruct (Int.eq i0 Int.zero); congruence.
-  destruct (Int.ltu i0 (Int.repr 32)); congruence.
-  destruct (Int.ltu i0 (Int.repr 32)); congruence.
-  destruct (Int.ltu i (Int.repr 32)); congruence.
-  destruct (Int.ltu i (Int.repr 32)); congruence.
-  destruct (Int.ltu i0 (Int.repr 32)); congruence.
+  destruct (Int.ltu i0 Int.iwordsize); congruence.
+  destruct (Int.ltu i0 Int.iwordsize); congruence.
+  destruct (Int.ltu i Int.iwordsize); congruence.
+  destruct (Int.ltu i Int.iwordsize); congruence.
+  destruct (Int.ltu i0 Int.iwordsize); congruence.
   caseEq (eval_condition c vl); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
   eapply eval_condition_weaken; eauto.
@@ -797,11 +797,11 @@ Proof.
   destruct (eq_block b b0); inv H0. TrivialExists.
   destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
   destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i (Int.repr 32)); inv H0; TrivialExists.
-  destruct (Int.ltu i0 (Int.repr 32)); inv H0; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
   caseEq (eval_condition c vl1); intros. rewrite H1 in H0. 
   rewrite (eval_condition_lessdef c H H1).

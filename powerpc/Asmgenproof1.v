@@ -48,13 +48,13 @@ Proof.
   intros. unfold high_u, low_u.
   rewrite Int.shl_rolm. rewrite Int.shru_rolm. 
   rewrite Int.rolm_rolm. 
-  change (Int.modu (Int.add (Int.sub (Int.repr (Z_of_nat wordsize)) (Int.repr 16))
+  change (Int.modu (Int.add (Int.sub (Int.repr (Z_of_nat Int.wordsize)) (Int.repr 16))
                             (Int.repr 16))
-                   (Int.repr (Z_of_nat wordsize)))
+                   (Int.repr (Z_of_nat Int.wordsize)))
     with (Int.zero).
   rewrite Int.rolm_zero. rewrite <- Int.and_or_distrib.
   exact (Int.and_mone n).
-  reflexivity. reflexivity.
+  apply int_wordsize_divides_modulus. reflexivity. reflexivity.
 Qed.
 
 Lemma low_high_u_xor:
@@ -63,13 +63,13 @@ Proof.
   intros. unfold high_u, low_u.
   rewrite Int.shl_rolm. rewrite Int.shru_rolm. 
   rewrite Int.rolm_rolm. 
-  change (Int.modu (Int.add (Int.sub (Int.repr (Z_of_nat wordsize)) (Int.repr 16))
+  change (Int.modu (Int.add (Int.sub (Int.repr (Z_of_nat Int.wordsize)) (Int.repr 16))
                             (Int.repr 16))
-                   (Int.repr (Z_of_nat wordsize)))
+                   (Int.repr (Z_of_nat Int.wordsize)))
     with (Int.zero).
   rewrite Int.rolm_zero. rewrite <- Int.and_xor_distrib.
   exact (Int.and_mone n).
-  reflexivity. reflexivity.
+  apply int_wordsize_divides_modulus. reflexivity. reflexivity.
 Qed.
 
 Lemma low_high_s:
@@ -91,7 +91,7 @@ Proof.
   unfold Int.sub. 
   assert (forall a b, Int.eqm a b -> b mod 65536 = 0 -> a mod 65536 = 0).
   intros a b [k EQ] H1. rewrite EQ. 
-  change modulus with (65536 * 65536). 
+  change Int.modulus with (65536 * 65536). 
   rewrite Zmult_assoc. rewrite Zplus_comm. rewrite Z_mod_plus. auto.
   omega.
   eapply H0. apply Int.eqm_sym. apply Int.eqm_unsigned_repr. 
