@@ -18,7 +18,7 @@ let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) = false
 
 module IntOrd =
   struct
-    type t = Integers.int
+    type t = Integers.Int.int
     let compare x y =
       if Integers.Int.eq x y then 0 else
       if Integers.Int.ltu x y then -1 else 1

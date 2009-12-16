@@ -15,6 +15,7 @@
 open Datatypes
 open BinPos
 open BinInt
+open Integers
 
 (* Integers *)
 
@@ -28,7 +29,7 @@ let camlint_of_z = function
   | Zpos p -> camlint_of_positive p
   | Zneg p -> Int32.neg (camlint_of_positive p)
 
-let camlint_of_coqint : Integers.int -> int32 = camlint_of_z
+let camlint_of_coqint : Int.int -> int32 = camlint_of_z
 
 let rec camlint_of_nat = function
   | O -> 0
@@ -50,7 +51,7 @@ let z_of_camlint n =
   if n > 0l then Zpos (positive_of_camlint n)
   else Zneg (positive_of_camlint (Int32.neg n))
 
-let coqint_of_camlint (n: int32) : Integers.int = 
+let coqint_of_camlint (n: int32) : Int.int = 
   (* Interpret n as unsigned so that resulting Z is in range *)
   if n = 0l then Z0 else Zpos (positive_of_camlint n)
 
