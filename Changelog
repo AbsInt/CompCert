@@ -1,7 +1,21 @@
+Release 1.6, 2009-12-18
+=======================
+
 - Support Clight initializers of the form "int * x = &y;".
 
 - Fixed spurious compile-time error on Clight initializers of the form
   "const enum E x[2] = { E_1, E_2 };".
+
+- Produce informative error message if a 'return' without argument
+  occurs in a non-void function, or if a 'return' with an argument
+  occurs in a void function.
+
+- Preliminary support for '#pragma section' and '#pragma set_section'.
+
+- Preliminary support for small data areas in PowerPC code generator.
+
+- Back-end: added support for jump tables; used them to compile
+  dense 'switch' statements.
 
 - PowerPC code generator: force conversion to single precision before
   doing a "store single float" instruction.
