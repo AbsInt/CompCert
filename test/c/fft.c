@@ -186,6 +186,6 @@ int main(int argc, char ** argv)
   }
   zm = zr;
   if (zr < zi) zm = zi;
-  printf("%d points, error %g\n", np, zm);
+  printf("%d points, %s\n", np, zm < 1e-9 ? "result OK" : "WRONG result");
   return 0;
 }
