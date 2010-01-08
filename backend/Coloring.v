@@ -22,6 +22,8 @@ Require Import RTLtyping.
 Require Import Locations.
 Require Import Conventions.
 Require Import InterfGraph.
+Require Import MyAllocation.
+Require Import InterfGraph_Construction.
 
 (** * Construction of the interference graph *)
 
@@ -90,7 +92,7 @@ Require Import InterfGraph.
 -   between the result of a ``call'' instruction and the location
     of the result as dictated by the calling conventions.
 *)
-
+(*
 Definition add_interf_live
     (filter: reg -> bool) (res: reg) (live: Regset.t) (g: graph): graph :=
   Regset.fold 
@@ -209,10 +211,10 @@ Definition interf_graph (f: function) (live: PMap.t Regset.t) (live0: Regset.t) 
   and the set of all [RTL] pseudo-registers mentioned in the
   interference graph.  It returns the coloring as a function from
   pseudo-registers to locations. *)
-
+(*
 Parameter graph_coloring: 
   function -> graph -> regenv -> Regset.t -> (reg -> loc).
-
+*)
 (** To ensure that the result of [graph_coloring] is a correct coloring,
   we check a posteriori its result using the following Coq functions.
   Let [coloring] be the function [reg -> loc] returned by [graph_coloring].
@@ -266,7 +268,7 @@ Definition check_coloring
   andb (check_coloring_1 g coloring)
        (andb (check_coloring_2 g coloring)
              (check_coloring_3 rs env coloring)).
-
+*)
 (** To preserve decidability of checking, the checks
   (especially the third one) are performed for the pseudo-registers
   mentioned in the interference graph.  To facilitate the proofs,
@@ -290,11 +292,14 @@ Definition alloc_of_coloring (coloring: reg -> loc) (env: regenv) (rs: Regset.t)
   and adjustment of this coloring.  If the coloring candidate is
   incorrect, [None] is returned, causing register allocation to fail. *)
 
+Definition graph_coloring (f : function) g env (rs : Regset.t) :=
+my_graph_coloring g env.
+
 Definition regalloc
     (f: function) (live: PMap.t Regset.t) (live0: Regset.t) (env: regenv) :=
   let g := interf_graph f live live0 in
   let rs := all_interf_regs g in
   let coloring := graph_coloring f g env rs in
-  if check_coloring g env rs coloring
-  then Some (alloc_of_coloring coloring env rs)
-  else None.
+(*  if check_coloring g env rs coloring *)
+(* then *) Some (alloc_of_coloring coloring env rs).
+(*  else None. *)

@@ -19,6 +19,11 @@ Require Import Maps.
 Require Import Ordered.
 Require Import Registers.
 Require Import Locations.
+Require Import AST.
+Require Import Op.
+Require Import RTLtyping.
+Require Import RTL.
+Require Import Conventions.
 
 (** Interference graphs are undirected graphs with two kinds of nodes:
 - RTL pseudo-registers;
@@ -298,4 +303,3 @@ Proof.
   intros. unfold all_interf_regs.
   apply in_setregreg_fold'. eapply in_setregmreg_fold. eauto.
 Qed.
-

@@ -711,7 +711,9 @@ Proof.
   simpl. econstructor; eauto.
   change (transfer f (RTL.fn_entrypoint f) live !! (RTL.fn_entrypoint f))
     with (live0 f live).
-  eapply agree_parameters; eauto. 
+  eapply agree_parameters; eauto.
+  unfold regalloc. eauto.
+  unfold regalloc. congruence.
 
   (* external function *)
   injection H7; intro EQ; inv EQ.
