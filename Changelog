@@ -1,4 +1,4 @@
-Release 1.6, 2009-12-18
+Release 1.6, 2010-01-12
 =======================
 
 - Support Clight initializers of the form "int * x = &y;".
