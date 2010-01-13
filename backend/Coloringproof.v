@@ -24,8 +24,6 @@ Require Import Locations.
 Require Import Conventions.
 Require Import InterfGraph.
 Require Import Coloring.
-Require Import InterfGraph_Construction.
-Require Import MyAllocation.
 
 (** * Correctness of the interference graph *)
 
@@ -448,12 +446,12 @@ Proof.
   intros until g2. intro. 
   unfold correct_interf_instr; destruct instr; auto.
   destruct (is_move_operation o l).
-  intros. apply interfere_incl with (g1 := g1); auto.
-  intros. apply interfere_incl with (g1 := g1); auto.
-  intros. apply interfere_incl with (g1 := g1); auto.
+  intros. eapply interfere_incl; eauto.
+  intros. eapply interfere_incl; eauto.
+  intros. eapply interfere_incl; eauto.
   intros [A [B C]].
-  split. intros. apply interfere_mreg_incl with (g1 := g1); auto.
-  split. intros. apply interfere_incl with (g1 := g1); auto.
+  split. intros. eapply interfere_mreg_incl; eauto.
+  split. intros. eapply interfere_incl; eauto.
   destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
   destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
 Qed.
@@ -814,23 +812,16 @@ Let g := interf_graph f live live0.
 Let allregs := all_interf_regs g.
 Let coloring := graph_coloring f g env allregs.
 
-
 Lemma regalloc_ok:
   regalloc f live live0 env = Some alloc ->
   check_coloring g env allregs coloring = true /\
   alloc = alloc_of_coloring coloring env allregs.
 Proof.
-unfold regalloc. intro.
-inversion H. subst. clear H.
-split. apply allocation_correct.
-auto.
-(*
   unfold regalloc, coloring, allregs, g.
   case (check_coloring (interf_graph f live live0) env).
   intro EQ; injection EQ; intro; clear EQ.
   split. auto. auto.
   intro; discriminate.
-*)
 Qed.
 
 Lemma regalloc_acceptable:

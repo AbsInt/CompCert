@@ -136,7 +136,12 @@ ARCH=
 VARIANT=
 
 # Target operating system and development environment
-# See $(ARCH)/PrintAsm.ml for possible choices
+# Possible choices for PowerPC:
+# SYSTEM=macosx
+# SYSTEM=linux
+# SYSTEM=diab
+# Possible choices for ARM:
+# SYSTEM=linux
 SYSTEM=
 
 # C compiler for compiling library files
