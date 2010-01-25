@@ -52,10 +52,6 @@ Extract Constant Iteration.GenIter.iterate =>
      match f a with Coq_inl b -> Some b | Coq_inr a' -> iter f a'
    in iter".
 
-
-(* Selection *)
-Extract Constant SelectOp.use_fused_mul => "(fun () -> !Clflags.option_fmadd)".
-
 (* RTLgen *)
 Extract Constant RTLgen.compile_switch => "RTLgenaux.compile_switch".
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".

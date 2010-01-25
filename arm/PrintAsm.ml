@@ -14,6 +14,7 @@
 
 open Printf
 open Datatypes
+open Integers
 open Camlcoq
 open AST
 open Asm
@@ -116,7 +117,7 @@ let label_float f =
     max_pos_constants := min !max_pos_constants (!currpos + 1024);
     lbl'
 
-let symbol_labels = (Hashtbl.create 39 : (ident * Integers.int, int) Hashtbl.t)
+let symbol_labels = (Hashtbl.create 39 : (ident * Int.int, int) Hashtbl.t)
 
 let label_symbol id ofs =
   try
@@ -360,7 +361,8 @@ let print_instruction oc labels = function
       fprintf oc "	ldr	pc, [pc, %a]\n" ireg r;
       fprintf oc "	mov	r0, r0\n"; (* no-op *)
       List.iter
-        (fun l -> fprintf oc "	.word	%a\n" label (transl_label l));
+        (fun l -> fprintf oc "	.word	%a\n" print_label l)
+        tbl;
       2 + List.length tbl
 
 let no_fallthrough = function

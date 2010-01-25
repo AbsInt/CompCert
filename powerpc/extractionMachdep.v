@@ -12,6 +12,9 @@
 
 (* Additional extraction directives specific to the PowerPC port *)
 
+(* Selection *)
+Extract Constant SelectOp.use_fused_mul => "(fun () -> !Clflags.option_fmadd)".
+
 (* Asm *)
 Extract Constant Asm.low_half => "fun _ -> assert false".
 Extract Constant Asm.high_half => "fun _ -> assert false".
