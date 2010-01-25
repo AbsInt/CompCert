@@ -388,10 +388,15 @@ let rec print_instructions oc labels instrs =
       end;
       print_instructions oc labels il
 
-let rec labels_of_code = function
-  | [] -> Labelset.empty
-  | (Pb lbl | Pbc(_, lbl)) :: c -> Labelset.add lbl (labels_of_code c)
-  | _ :: c -> labels_of_code c
+let rec labels_of_code accu = function
+  | [] ->
+      accu
+  | (Pb lbl | Pbc(_, lbl)) :: c ->
+      labels_of_code (Labelset.add lbl accu) c
+  | Pbtbl(_, tbl) :: c ->
+      labels_of_code (List.fold_right Labelset.add tbl accu) c
+  | _ :: c ->
+      labels_of_code accu c
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
@@ -402,7 +407,7 @@ let print_function oc name code =
   fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
-  print_instructions oc (labels_of_code code) code;
+  print_instructions oc (labels_of_code Labelset.empty code) code;
   emit_constants oc
 
 (* Generation of stub code for external functions.
