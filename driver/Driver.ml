@@ -247,10 +247,6 @@ let process_cminor_file sourcename =
 
 (* Command-line parsing *)
 
-let starts_with s1 s2 =
-  String.length s1 >= String.length s2 &&
-  String.sub s1 0 (String.length s2) = s2
-
 let usage_string =
 "ccomp [options] <source files>
 Recognized source files:
@@ -269,6 +265,8 @@ Preprocessing options:
 Compilation options:
   -flonglong     Treat 'long long' as 'long' and 'long double' as 'double'
   -fmadd         Use fused multiply-add and multiply-sub instructions
+  -fsmall-data <n>  Set maximal size <n> for allocation in small data area
+  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -dcil          Save CIL-processed source in <file>.cil.c
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
@@ -281,86 +279,88 @@ General options:
   -v             Print external commands before invoking them
 "
 
-let rec parse_cmdline i =
-  if i < Array.length Sys.argv then begin
-    let s = Sys.argv.(i) in
-    if starts_with s "-I" || starts_with s "-D" || starts_with s "-U"
-    then begin
-      prepro_options := s :: !prepro_options;
-      parse_cmdline (i + 1)
-    end else 
-    if starts_with s "-l" || starts_with s "-L" then begin
-      linker_options := s :: !linker_options;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-o" && i + 1 < Array.length Sys.argv then begin
-      exe_name := Sys.argv.(i + 1);
-      parse_cmdline (i + 2)
-    end else
-    if s = "-stdlib" && i + 1 < Array.length Sys.argv then begin
-      stdlib_path := Sys.argv.(i + 1);
-      parse_cmdline (i + 2)
-    end else
-    if s = "-flonglong" then begin
-      option_flonglong := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-fmadd" then begin
-      option_fmadd := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-dcil" then begin
-      option_dcil := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-dclight" then begin
-      option_dclight := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-dasm" then begin
-      option_dasm := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-E" then begin
-      option_E := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-S" then begin
-      option_S := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-c" then begin
-      option_c := true;
-      parse_cmdline (i + 1)
-    end else
-    if s = "-v" then begin
-      option_v := true;
-      parse_cmdline (i + 1)
-    end else
-    if Filename.check_suffix s ".c" then begin
-      let objfile = process_c_file s in
-      linker_options := objfile :: !linker_options;
-      parse_cmdline (i + 1)
-    end else
-    if Filename.check_suffix s ".cm" then begin
-      let objfile = process_cminor_file s in
-      linker_options := objfile :: !linker_options;
-      parse_cmdline (i + 1)
-    end else
-    if Filename.check_suffix s ".o" || Filename.check_suffix s ".a" then begin
-      linker_options := s :: !linker_options;
-      parse_cmdline (i + 1)
-    end else begin
-      eprintf "Unknown argument `%s'\n" s;
-      eprintf "Usage: %s" usage_string;
-      exit 2
+type action =
+  | Set of bool ref
+  | Self of (string -> unit)
+  | String of (string -> unit)
+  | Integer of (int -> unit)
+
+let rec find_action s = function
+  | [] -> None
+  | (re, act) :: rem ->
+      if Str.string_match re s 0 then Some act else find_action s rem
+
+let parse_cmdline spec usage =
+  let acts = List.map (fun (pat, act) -> (Str.regexp pat, act)) spec in
+  let error () =
+    eprintf "Usage: %s" usage;
+    exit 2 in
+  let rec parse i =
+    if i < Array.length Sys.argv then begin
+      let s = Sys.argv.(i) in
+      match find_action s acts with
+      | None ->
+          if s <> "-help" && s <> "--help" 
+          then eprintf "Unknown argument `%s'\n" s;
+          error ()
+      | Some(Set r) ->
+          r := true; parse (i+1)
+      | Some(Self fn) ->
+          fn s; parse (i+1)
+      | Some(String fn) ->
+          if i + 1 < Array.length Sys.argv then begin
+            fn Sys.argv.(i+1); parse (i+2)
+          end else begin
+            eprintf "Option `%s' expects an argument\n" s; error()
+          end
+      | Some(Integer fn) ->
+          if i + 1 < Array.length Sys.argv then begin
+            let n =
+              try
+                int_of_string Sys.argv.(i+1)
+              with Failure _ ->
+                eprintf "Argument to option `%s' must be an integer\n" s;
+                error()
+            in
+            fn n; parse (i+2)
+          end else begin
+            eprintf "Option `%s' expects an argument\n" s; error()
+          end
     end
-  end
+  in parse 1
+
+let cmdline_actions = [
+  "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
+  "-[lL].", Self(fun s -> linker_options := s :: !linker_options);
+  "-o$", String(fun s -> exe_name := s);
+  "-stdlib$", String(fun s -> stdlib_path := s);
+  "-flonglong$", Set option_flonglong;
+  "-fmadd$", Set option_fmadd;
+  "-fsmall-data$", Integer(fun n -> option_small_data := n);
+  "-fsmall-const$", Integer(fun n -> option_small_const := n);
+  "-dcil$", Set option_dcil;
+  "-dclight$", Set option_dclight;
+  "-dasm$", Set option_dasm;
+  "-E$", Set option_E;
+  "-S$", Set option_S;
+  "-c$", Set option_c;
+  "-v$", Set option_v;
+  ".*\\.c$", Self (fun s ->
+      let objfile = process_c_file s in
+      linker_options := objfile :: !linker_options);
+  ".*\\.cm$", Self (fun s ->
+      let objfile = process_cminor_file s in
+      linker_options := objfile :: !linker_options);
+  ".*\\.[oa]$", Self (fun s ->
+      linker_options := s :: !linker_options)
+]
 
 let _ =
   Cil.initCIL();
   CPragmas.initialize();
-  parse_cmdline 1;
-  if not (!option_c || !option_S || !option_E) then begin
+  parse_cmdline cmdline_actions usage_string;
+  if !linker_options <> [] 
+  && not (!option_c || !option_S || !option_E)
+  then begin
     linker !exe_name !linker_options
   end

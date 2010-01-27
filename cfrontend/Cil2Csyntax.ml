@@ -201,11 +201,12 @@ and eval_cast ty v =
   | TPtr(_, _), CWStr s -> v  (* tolerance? *)
   | _, _ -> raise NotConst
 
-(** Handler for #pragma directives -- 
-    overriden in machine-dependent CPragmas module *)
+(** Hooks -- overriden in machine-dependent CPragmas module *)
 
-let process_pragma = ref (fun (a: Cil.attribute) -> false)
-
+let process_pragma_hook = ref (fun (a: Cil.attribute) -> false)
+let define_variable_hook = ref (fun (id: ident) (v: Cil.varinfo) -> ())
+let define_function_hook = ref (fun (id: ident) (v: Cil.varinfo) -> ())
+let define_stringlit_hook = ref (fun (id: ident) (v: Cil.varinfo) -> ())
 
 (** The parameter to the translation functor: it specifies the
     translation for integer and float types. *)
@@ -296,6 +297,7 @@ let name_for_string_literal s =
     v.vstorage <- Static;
     v.vreferenced <- true;
     Hashtbl.add varinfo_atom id v;
+    !define_stringlit_hook id v;
     Hashtbl.add stringTable s id;
     id
 
@@ -1012,6 +1014,7 @@ let convertGFun fdec =
   current_function := None;
   let id = intern_string v.vname in
   Hashtbl.add varinfo_atom id v;
+  !define_function_hook id v;
   Datatypes.Coq_pair
     (id,
      Internal { fn_return=ret; fn_params=args; fn_vars=varList; fn_body=s })
@@ -1144,6 +1147,7 @@ let convertGVar v i =
   updateLoc(v.vdecl);
   let id = intern_string v.vname in
   Hashtbl.add varinfo_atom id v;
+  !define_variable_hook id v;
   Datatypes.Coq_pair (Datatypes.Coq_pair(id, convertInitInfo v.vtype i),
                       convertTyp v.vtype)
 
@@ -1214,7 +1218,7 @@ let rec processGlobals = function
               unsupported "inline assembly"
 	  | GPragma (Attr(name, _) as attr, loc) ->
 	      updateLoc(loc);
-              if not (!process_pragma attr) then
+              if not (!process_pragma_hook attr) then
                 warning ("#pragma `" ^ name ^ "' directive ignored");
               processGlobals l
 	  | GText _ -> processGlobals l (* comments are ignored *)
@@ -1264,16 +1268,16 @@ let atom_is_static a =
   with Not_found ->
     false
 
+let var_is_readonly v =
+  let a = typeAttrs v.vtype in
+  if hasAttribute "volatile" a then false else
+  if hasAttribute "const" a then true else
+  match Cil.unrollType v.vtype with
+  | TArray(ty, _, _) ->
+      let a' = typeAttrs ty in
+      hasAttribute "const" a' && not (hasAttribute "volatile" a')
+  | _ -> false
+
 let atom_is_readonly a =
-  try
-    let v = Hashtbl.find varinfo_atom a in
-    let a = typeAttrs v.vtype in
-    if hasAttribute "volatile" a then false else
-    if hasAttribute "const" a then true else
-    match Cil.unrollType v.vtype with
-    | TArray(ty, _, _) ->
-        let a' = typeAttrs ty in
-        hasAttribute "const" a' && not (hasAttribute "volatile" a')
-    | _ -> false
-  with Not_found ->
-    false
+  try var_is_readonly (Hashtbl.find varinfo_atom a)
+  with Not_found -> false
