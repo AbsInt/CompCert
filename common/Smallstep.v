@@ -21,7 +21,6 @@
 
 Require Import Wf.
 Require Import Wf_nat.
-Require Import Classical.
 Require Import Coqlib.
 Require Import AST.
 Require Import Events.
@@ -680,6 +679,132 @@ End SIMULATION_OPT.
 
 End SIMULATION.
 
+(** * Existence of behaviors *)
+
+Require Import Classical.
+Require Import ClassicalEpsilon.
+
+(** We now show that any program admits at least one behavior.
+  The proof requires classical logic: the axiom of excluded middle
+  and an axiom of description. *)
+
+Section EXISTS_BEHAVIOR.
+
+Variable genv: Type.
+Variable state: Type.
+Variable initial_state: state -> Prop.
+Variable final_state: state -> int -> Prop.
+Variable step: genv -> state -> trace -> state -> Prop.
+
+(** The most difficult part of the proof is to show the existence
+  of an infinite trace in the case of reactive divergence. *)
+
+Section TRACEINF_REACTS.
+
+Variable ge: genv.
+Variable s0: state.
+
+Hypothesis reacts:
+  forall s1 t1, star step ge s0 t1 s1 ->
+  exists s2, exists t2, star step ge s1 t2 s2 /\ t2 <> E0.
+
+Lemma reacts':
+  forall s1 t1, star step ge s0 t1 s1 ->
+  { s2 : state & { t2 : trace | star step ge s1 t2 s2 /\ t2 <> E0 } }.
+Proof.
+  intros. 
+  destruct (constructive_indefinite_description _ (reacts H)) as [s2 A].
+  destruct (constructive_indefinite_description _ A) as [t2 [B C]].
+  exists s2; exists t2; auto.
+Qed.
+
+CoFixpoint build_traceinf' (s1: state) (t1: trace) (ST: star step ge s0 t1 s1) : traceinf' :=
+  match reacts' ST with
+  | existT s2 (exist t2 (conj A B)) =>
+      Econsinf' t2 
+                (build_traceinf' (star_trans ST A (refl_equal _)))
+                B
+  end.
+
+Lemma reacts_forever_reactive_rec:
+  forall s1 t1 (ST: star step ge s0 t1 s1),
+  forever_reactive step ge s1 (traceinf_of_traceinf' (build_traceinf' ST)).
+Proof.
+  cofix COINDHYP; intros.
+  rewrite (unroll_traceinf' (build_traceinf' ST)). simpl. 
+  destruct (reacts' ST) as [s2 [t2 [A B]]]. 
+  rewrite traceinf_traceinf'_app. 
+  econstructor. eexact A. auto. apply COINDHYP. 
+Qed.
+
+Lemma reacts_forever_reactive:
+  exists T, forever_reactive step ge s0 T.
+Proof.
+  exists (traceinf_of_traceinf' (build_traceinf' (star_refl step ge s0))).
+  apply reacts_forever_reactive_rec.
+Qed.
+
+End TRACEINF_REACTS.
+
+Lemma diverges_forever_silent:
+  forall ge s0,
+  (forall s1 t1, star step ge s0 t1 s1 -> exists s2, step ge s1 E0 s2) ->
+  forever_silent step ge s0.
+Proof.
+  cofix COINDHYP; intros. 
+  destruct (H s0 E0) as [s1 ST]. constructor. 
+  econstructor. eexact ST. apply COINDHYP. 
+  intros. eapply H. eapply star_left; eauto.
+Qed.
+
+Theorem program_behaves_exists:
+  forall ge, exists beh, program_behaves step initial_state final_state ge beh.
+Proof.
+  intros.
+  destruct (classic (exists s, initial_state s)) as [[s0 INIT] | NOTINIT].
+(* 1. Initial state is defined. *)
+  destruct (classic (forall s1 t1, star step ge s0 t1 s1 -> exists s2, exists t2, step ge s1 t2 s2)).
+(* 1.1 Divergence (silent or reactive) *)
+  destruct (classic (exists s1, exists t1, star step ge s0 t1 s1 /\
+                       (forall s2 t2, star step ge s1 t2 s2 ->
+                        exists s3, step ge s2 E0 s3))).
+(* 1.1.1 Silent divergence *)
+  destruct H0 as [s1 [t1 [A B]]].
+  exists (Diverges t1); econstructor; eauto. 
+  apply diverges_forever_silent; auto.
+(* 1.1.2 Reactive divergence *)
+  destruct (@reacts_forever_reactive ge s0) as [T FR].
+  intros.
+  generalize (not_ex_all_not _ _ H0 s1). intro A; clear H0.
+  generalize (not_ex_all_not _ _ A t1). intro B; clear A.
+  destruct (not_and_or _ _ B). contradiction. 
+  destruct (not_all_ex_not _ _ H0) as [s2 C]; clear H0. 
+  destruct (not_all_ex_not _ _ C) as [t2 D]; clear C.
+  destruct (imply_to_and _ _ D) as [E F]; clear D.
+  destruct (H s2 (t1 ** t2)) as [s3 [t3 G]]. eapply star_trans; eauto. 
+  exists s3; exists (t2 ** t3); split.
+  eapply star_right; eauto. 
+  red; intros. destruct (app_eq_nil t2 t3 H0). subst. elim F. exists s3; auto.
+  exists (Reacts T); econstructor; eauto.
+(* 1.2 Termination (normal or by going wrong) *)
+  destruct (not_all_ex_not _ _ H) as [s1 A]; clear H.
+  destruct (not_all_ex_not _ _ A) as [t1 B]; clear A.
+  destruct (imply_to_and _ _ B) as [C D]; clear B.
+  destruct (classic (exists r, final_state s1 r)) as [[r FINAL] | NOTFINAL].
+(* 1.2.1 Normal termination *)
+  exists (Terminates t1 r); econstructor; eauto.
+(* 1.2.2 Going wrong *)
+  exists (Goes_wrong t1); econstructor; eauto. red. intros. 
+  generalize (not_ex_all_not _ _ D s'); intros. 
+  generalize (not_ex_all_not _ _ H t); intros. 
+  auto.
+(* 2. Initial state is undefined *)
+  exists (Goes_wrong E0). apply program_goes_initially_wrong. 
+  intros. eapply not_ex_all_not; eauto. 
+Qed.
+
+End EXISTS_BEHAVIOR.
+
 (** * Additional results about infinite reduction sequences *)
 
 (** We now show that any infinite sequence of reductions is either of
@@ -689,7 +814,6 @@ End SIMULATION.
   relate the coinductive big-step semantics for divergence with the
   small-step notions of divergence. *)
 
-Require Import Classical.
 Unset Implicit Arguments.
 
 Section INF_SEQ_DECOMP.

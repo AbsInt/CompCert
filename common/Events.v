@@ -260,19 +260,6 @@ Inductive traceinf_prefix: trace -> traceinf -> Prop :=
       traceinf_prefix t1 T2 ->
       traceinf_prefix (e :: t1) (Econsinf e T2).
 
-(*
-Lemma traceinf_prefix_compat:
-  forall T1 T2 T1' T2',
-  traceinf_prefix T1 T2 -> traceinf_sim T1 T1' -> traceinf_sim T2 T2' ->
-  traceinf_prefix T1' T2'.
-Proof.
-  cofix COINDHYP; intros.
-  inv H; inv H0; inv H1; constructor; eapply COINDHYP; eauto.
-Qed.
-
-Transparent trace E0 Eapp Eappinf.
-*)
-
 Lemma traceinf_prefix_app:
   forall t1 T2 t,
   traceinf_prefix t1 T2 ->
@@ -284,3 +271,53 @@ Proof.
   constructor. auto.
 Qed.
 
+(** An alternate presentation of infinite traces as
+  infinite concatenations of nonempty finite traces. *)
+
+CoInductive traceinf': Type :=
+  | Econsinf': forall (t: trace) (T: traceinf'), t <> E0 -> traceinf'.
+
+Program Definition split_traceinf' (t: trace) (T: traceinf') (NE: t <> E0): event * traceinf' :=
+  match t with
+  | nil => _
+  | e :: nil => (e, T)
+  | e :: t' => (e, Econsinf' t' T _)
+  end.
+Next Obligation.
+  elimtype False. elim NE. auto. 
+Qed.
+Next Obligation.
+  red; intro. elim (H e). rewrite H0. auto. 
+Qed.
+
+CoFixpoint traceinf_of_traceinf' (T': traceinf') : traceinf :=
+  match T' with
+  | Econsinf' t T'' NOTEMPTY =>
+      let (e, tl) := split_traceinf' t T'' NOTEMPTY in
+      Econsinf e (traceinf_of_traceinf' tl)
+  end.
+
+Remark unroll_traceinf':
+  forall T, T = match T with Econsinf' t T' NE => Econsinf' t T' NE end.
+Proof.
+  intros. destruct T; auto.
+Qed.
+
+Remark unroll_traceinf:
+  forall T, T = match T with Econsinf t T' => Econsinf t T' end.
+Proof.
+  intros. destruct T; auto.
+Qed.
+
+Lemma traceinf_traceinf'_app:
+  forall t T NE,
+  traceinf_of_traceinf' (Econsinf' t T NE) = t *** traceinf_of_traceinf' T.
+Proof.
+  induction t.
+  intros. elim NE. auto.
+  intros. simpl.   
+  rewrite (unroll_traceinf (traceinf_of_traceinf' (Econsinf' (a :: t) T NE))).
+  simpl. destruct t. auto.
+Transparent Eappinf.
+  simpl. f_equal. apply IHt. 
+Qed.
