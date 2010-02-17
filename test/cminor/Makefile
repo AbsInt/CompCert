@@ -6,7 +6,6 @@ CPP=cpp -P
 AS=$(CASM)
 CFLAGS=-g
 ASFLAGS=
-VPATH=../harness ../lib
 
 PROGS=fib integr qsort fft sha1 aes almabench manyargs lists \
   stopcopy marksweep switchtbl conversions
