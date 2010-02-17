@@ -10,12 +10,10 @@ LIBS=$(LIBMATH)
 TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
 #TIME=time >/dev/null                    # Otherwise
 
-BENCHS=fib integr qsort fft sha1 aes almabench lists \
+PROGS=fib integr qsort fft sha1 aes almabench lists \
   binarytrees fannkuch knucleotide mandelbrot nbody \
   nsieve nsievebits spectral vmach \
   bisect chomp perlin
-
-PROGS=$(BENCHS) initializers
 
 all_s: $(PROGS:%=%.s)
 
@@ -26,7 +24,7 @@ all_gcc: $(PROGS:%=%.gcc)
 %.compcert: %.c $(CCOMP)
 	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)
 
-%.s: %.c ../../ccomp
+%.s: %.c $(CCOMP)
 	$(CCOMP) $(CCOMPFLAGS) -S $*.c
 
 %.gcc: %.c
