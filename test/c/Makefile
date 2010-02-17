@@ -47,12 +47,12 @@ test_gcc:
          done
 
 time_gcc:
-	@for i in $(BENCHS); do \
+	@for i in $(PROGS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.gcc; \
          done
 
 time_compcert:
-	@for i in $(BENCHS); do \
+	@for i in $(PROGS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
          done
 
