@@ -148,7 +148,7 @@ static int get_number(int firstchar)
   return 0;
 }
 
-static int get_string()
+static int get_string(void)
 {
   int c, pos;
   pos = 0;
