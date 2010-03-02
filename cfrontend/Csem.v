@@ -96,7 +96,7 @@ Function sem_notint (v: val) : option val :=
   end.
 
 Function sem_notbool (v: val) (ty: type) : option val :=
-  match ty with
+  match typeconv ty with
   | Tint _ _ =>
       match v with
       | Vint n => Some (Val.of_bool (Int.eq n Int.zero))

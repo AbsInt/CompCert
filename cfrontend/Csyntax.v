@@ -74,7 +74,7 @@ Inductive floatsize : Type :=
   defined above in C is expressed by
 <<
   Tstruct "s1" (Fcons "n" (Tint I32 Signed)
-               (Fcons "next" (Tcomp_ptr "id")
+               (Fcons "next" (Tcomp_ptr "s1")
                Fnil))
 >>
   Note that the incorrect structure [s2] above cannot be expressed at
@@ -479,6 +479,18 @@ Definition access_mode (ty: type) : mode :=
   | Tcomp_ptr _ => By_value Mint32
 end.
 
+(** The usual unary conversion.  Promotes small integer types to [signed int32]
+  and degrades array types and function types to pointer types. *)
+
+Definition typeconv (ty: type) : type :=
+  match ty with
+  | Tint I32 Unsigned => ty
+  | Tint _ _ => Tint I32 Signed
+  | Tarray t sz => Tpointer t
+  | Tfunction _ _ => Tpointer ty
+  | _ => ty
+  end.
+
 (** Classification of arithmetic operations and comparisons.
   The following [classify_] functions take as arguments the types
   of the arguments of an operation.  They return enough information
@@ -497,13 +509,11 @@ Inductive classify_add_cases : Type :=
   | add_default: classify_add_cases.        (**r other *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
-  match ty1, ty2 with
+  match typeconv ty1, typeconv ty2 with
   | Tint _ _, Tint _ _ => add_case_ii
   | Tfloat _, Tfloat _ => add_case_ff
   | Tpointer ty, Tint _ _ => add_case_pi ty
-  | Tarray ty _, Tint _ _ => add_case_pi ty 
   | Tint _ _, Tpointer ty => add_case_ip ty
-  | Tint _ _, Tarray ty _ => add_case_ip ty 
   | _, _ => add_default
   end.
 
@@ -515,15 +525,11 @@ Inductive classify_sub_cases : Type :=
   | sub_default: classify_sub_cases .        (**r other *)
 
 Definition classify_sub (ty1: type) (ty2: type) :=
-  match ty1, ty2 with
+  match typeconv ty1, typeconv ty2 with
   | Tint _ _ , Tint _ _ => sub_case_ii
   | Tfloat _ , Tfloat _ => sub_case_ff
   | Tpointer ty , Tint _ _ => sub_case_pi ty
-  | Tarray ty _ , Tint _ _ => sub_case_pi ty
   | Tpointer ty , Tpointer _ => sub_case_pp ty
-  | Tpointer ty , Tarray _ _=> sub_case_pp ty
-  | Tarray ty _ , Tpointer _ => sub_case_pp ty
-  | Tarray ty _ , Tarray _ _ => sub_case_pp ty 
   | _ ,_ => sub_default
   end.
 
@@ -533,7 +539,7 @@ Inductive classify_mul_cases : Type:=
   | mul_default: classify_mul_cases . (**r other *)
 
 Definition classify_mul (ty1: type) (ty2: type) :=
-  match ty1,ty2 with
+  match typeconv ty1, typeconv ty2 with
   | Tint _ _, Tint _ _ => mul_case_ii
   | Tfloat _ , Tfloat _ => mul_case_ff
   | _,_  => mul_default
@@ -546,7 +552,7 @@ Inductive classify_div_cases : Type:=
   | div_default: classify_div_cases. (**r other *)
 
 Definition classify_div (ty1: type) (ty2: type) :=
-  match ty1,ty2 with 
+  match typeconv ty1, typeconv ty2 with 
   | Tint I32 Unsigned, Tint _ _ => div_case_I32unsi 
   | Tint _ _ , Tint I32 Unsigned => div_case_I32unsi 
   | Tint _ _ , Tint _ _ => div_case_ii 
@@ -560,7 +566,7 @@ Inductive classify_mod_cases : Type:=
   | mod_default: classify_mod_cases . (**r other *)
 
 Definition classify_mod (ty1: type) (ty2: type) :=
-  match ty1,ty2 with
+  match typeconv ty1, typeconv ty2 with
   | Tint I32 Unsigned , Tint _ _ => mod_case_I32unsi 
   | Tint _ _ , Tint I32 Unsigned => mod_case_I32unsi 
   | Tint _ _ , Tint _ _ => mod_case_ii 
@@ -573,7 +579,7 @@ Inductive classify_shr_cases :Type:=
   | shr_default : classify_shr_cases . (**r other *)
 
 Definition classify_shr (ty1: type) (ty2: type) :=
-  match ty1,ty2 with
+  match typeconv ty1, typeconv ty2 with
   | Tint I32 Unsigned , Tint _ _ => shr_case_I32unsi
   | Tint _ _ , Tint _ _ => shr_case_ii
   | _ , _ => shr_default 
@@ -586,17 +592,14 @@ Inductive classify_cmp_cases : Type:=
   | cmp_default: classify_cmp_cases . (**r other *)
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
-  match ty1,ty2 with 
+  match typeconv ty1, typeconv ty2 with 
   | Tint I32 Unsigned , Tint _ _ => cmp_case_I32unsi 
   | Tint _ _ , Tint I32 Unsigned => cmp_case_I32unsi 
   | Tint _ _ , Tint _ _ => cmp_case_ipip
   | Tfloat _ , Tfloat _ => cmp_case_ff
-  | Tpointer _ , Tint _ _ => cmp_case_ipip
-  | Tarray _ _ , Tint _ _ => cmp_case_ipip
   | Tpointer _ , Tpointer _ => cmp_case_ipip
-  | Tpointer _ , Tarray _ _ => cmp_case_ipip
-  | Tarray _ _ ,Tpointer _ => cmp_case_ipip
-  | Tarray _ _ ,Tarray _ _ => cmp_case_ipip
+  | Tpointer _ , Tint _ _ => cmp_case_ipip
+  | Tint _ _, Tpointer _ => cmp_case_ipip
   | _ , _ => cmp_default
   end.
 

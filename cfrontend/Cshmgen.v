@@ -117,7 +117,7 @@ Definition make_neg (e: expr) (ty: type) :=
   end.
 
 Definition make_notbool (e: expr) (ty: type) :=
-  match ty with
+  match typeconv ty with
   | Tfloat _ => Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero)
   | _ => Eunop Onotbool e
   end.
@@ -197,7 +197,7 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
   | cmp_case_I32unsi => OK (Ebinop (Ocmpu c) e1 e2)
   | cmp_case_ipip => OK (Ebinop (Ocmp c) e1 e2)
   | cmp_case_ff => OK (Ebinop (Ocmpf c) e1 e2)
-  | cmp_default => Error (msg "Cshmgen.make_shr")
+  | cmp_default => Error (msg "Cshmgen.make_cmp")
   end.
 
 Definition make_andbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=

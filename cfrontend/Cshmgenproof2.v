@@ -126,7 +126,7 @@ Lemma make_notbool_correct:
   eval_expr globenv e m c v.
 Proof.
   intros until m; intro SEM. unfold make_notbool. 
-  functional inversion SEM; intros; inversion H4; simpl;
+  functional inversion SEM; intros; rewrite H0 in H4; inversion H4; simpl;
   eauto with cshm.
 Qed.
 
