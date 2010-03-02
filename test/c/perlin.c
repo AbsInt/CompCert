@@ -55,13 +55,13 @@ static double noise(double x, double y, double z) {
                                  grad(p[BB+1], x-1, y-1, z-1 ))));
 }
 
-static void init() { 
+static void init(void) { 
   int i = 0;
   for (i=0; i < 256 ; i++)
     p[256+i] = p[i] = permutation[i];
 }
 
-int main() {
+int main(int argc, char ** argv) {
   init();
   
   double x, y, z, sum = 0.0;
