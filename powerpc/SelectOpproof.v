@@ -443,6 +443,62 @@ Proof.
   EvalOp.
 Qed.
 
+Theorem eval_andimm:
+  forall le n a x,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le (andimm n a) (Vint (Int.and x n)).
+Proof.
+  intros.  unfold andimm. case (Int.is_rlw_mask n).
+  rewrite <- Int.rolm_zero. apply eval_rolm; auto.
+  EvalOp. 
+Qed.
+
+Theorem eval_and:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  eval_expr ge sp e m le (and a b) (Vint (Int.and x y)).
+Proof.
+  intros until y; unfold and; case (mul_match a b); intros; InvEval.
+  rewrite Int.and_commut. apply eval_andimm; auto.
+  apply eval_andimm; auto.
+  EvalOp.
+Qed.
+
+Remark eval_same_expr:
+  forall a1 a2 le v1 v2,
+  same_expr_pure a1 a2 = true ->
+  eval_expr ge sp e m le a1 v1 ->
+  eval_expr ge sp e m le a2 v2 ->
+  a1 = a2 /\ v1 = v2.
+Proof.
+  intros until v2.
+  destruct a1; simpl; try (intros; discriminate). 
+  destruct a2; simpl; try (intros; discriminate).
+  case (ident_eq i i0); intros.
+  subst i0. inversion H0. inversion H1. split. auto. congruence. 
+  discriminate.
+Qed.
+
+Lemma eval_or:
+  forall le a x b y,
+  eval_expr ge sp e m le a (Vint x) ->
+  eval_expr ge sp e m le b (Vint y) ->
+  eval_expr ge sp e m le (or a b) (Vint (Int.or x y)).
+Proof.
+  intros until y; unfold or; case (or_match a b); intros; InvEval.
+  caseEq (Int.eq amount1 amount2 
+          && Int.is_rlw_mask (Int.or mask1 mask2) 
+          && same_expr_pure t1 t2); intro.
+  destruct (andb_prop _ _ H1). destruct (andb_prop _ _ H4).
+  generalize (Int.eq_spec amount1 amount2). rewrite H6. intro. subst amount2.
+  exploit eval_same_expr; eauto. intros [EQ1 EQ2]. inv EQ1. inv EQ2. 
+  simpl. EvalOp. simpl. rewrite Int.or_rolm. auto.
+  simpl. apply eval_Eop with (Vint x :: Vint y :: nil).
+  econstructor. EvalOp. simpl. congruence. 
+  econstructor. EvalOp. simpl. congruence. constructor. auto.
+  EvalOp.
+Qed.
 Theorem eval_divs:
   forall le a b x y,
   eval_expr ge sp e m le a (Vint x) ->
@@ -535,8 +591,7 @@ Theorem eval_modu:
 Proof.
   intros until y; unfold modu; case (divu_match b); intros; InvEval.
   caseEq (Int.is_power2 y). 
-  intros. rewrite (Int.modu_and x y i H0).
-  rewrite <- Int.rolm_zero. apply eval_rolm. auto.
+  intros. rewrite (Int.modu_and x y i H0). apply eval_andimm. auto.
   intro. rewrite Int.modu_divu. eapply eval_mod_aux. 
   intros. simpl. predSpec Int.eq Int.eq_spec y0 Int.zero.
   contradiction. auto.
@@ -546,62 +601,6 @@ Proof.
   contradiction. auto. auto. auto. auto. auto.
 Qed.
 
-Theorem eval_andimm:
-  forall le n a x,
-  eval_expr ge sp e m le a (Vint x) ->
-  eval_expr ge sp e m le (andimm n a) (Vint (Int.and x n)).
-Proof.
-  intros.  unfold andimm. case (Int.is_rlw_mask n).
-  rewrite <- Int.rolm_zero. apply eval_rolm; auto.
-  EvalOp. 
-Qed.
-
-Theorem eval_and:
-  forall le a x b y,
-  eval_expr ge sp e m le a (Vint x) ->
-  eval_expr ge sp e m le b (Vint y) ->
-  eval_expr ge sp e m le (and a b) (Vint (Int.and x y)).
-Proof.
-  intros until y; unfold and; case (mul_match a b); intros; InvEval.
-  rewrite Int.and_commut. apply eval_andimm; auto.
-  apply eval_andimm; auto.
-  EvalOp.
-Qed.
-
-Remark eval_same_expr:
-  forall a1 a2 le v1 v2,
-  same_expr_pure a1 a2 = true ->
-  eval_expr ge sp e m le a1 v1 ->
-  eval_expr ge sp e m le a2 v2 ->
-  a1 = a2 /\ v1 = v2.
-Proof.
-  intros until v2.
-  destruct a1; simpl; try (intros; discriminate). 
-  destruct a2; simpl; try (intros; discriminate).
-  case (ident_eq i i0); intros.
-  subst i0. inversion H0. inversion H1. split. auto. congruence. 
-  discriminate.
-Qed.
-
-Lemma eval_or:
-  forall le a x b y,
-  eval_expr ge sp e m le a (Vint x) ->
-  eval_expr ge sp e m le b (Vint y) ->
-  eval_expr ge sp e m le (or a b) (Vint (Int.or x y)).
-Proof.
-  intros until y; unfold or; case (or_match a b); intros; InvEval.
-  caseEq (Int.eq amount1 amount2 
-          && Int.is_rlw_mask (Int.or mask1 mask2) 
-          && same_expr_pure t1 t2); intro.
-  destruct (andb_prop _ _ H1). destruct (andb_prop _ _ H4).
-  generalize (Int.eq_spec amount1 amount2). rewrite H6. intro. subst amount2.
-  exploit eval_same_expr; eauto. intros [EQ1 EQ2]. inv EQ1. inv EQ2. 
-  simpl. EvalOp. simpl. rewrite Int.or_rolm. auto.
-  simpl. apply eval_Eop with (Vint x :: Vint y :: nil).
-  econstructor. EvalOp. simpl. congruence. 
-  econstructor. EvalOp. simpl. congruence. constructor. auto.
-  EvalOp.
-Qed.
 
 Theorem eval_shl:
   forall le a x b y,

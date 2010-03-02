@@ -529,59 +529,6 @@ Definition mul (e1: expr) (e2: expr) :=
       Eop Omul (e1:::e2:::Enil)
   end.
 
-(** ** Integer division and modulus *)
-
-Definition divs (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
-
-Definition mod_aux (divop: operation) (e1 e2: expr) :=
-  Elet e1
-    (Elet (lift e2)
-      (Eop Osub (Eletvar 1 :::
-                 Eop Omul (Eop divop (Eletvar 1 ::: Eletvar 0 ::: Enil) :::
-                           Eletvar 0 :::
-                           Enil) :::
-                 Enil))).
-
-Definition mods := mod_aux Odiv.
-
-Inductive divu_cases: forall (e2: expr), Type :=
-  | divu_case1:
-      forall (n2: int),
-      divu_cases (Eop (Ointconst n2) Enil)
-  | divu_default:
-      forall (e2: expr),
-      divu_cases e2.
-
-Definition divu_match (e2: expr) :=
-  match e2 as z1 return divu_cases z1 with
-  | Eop (Ointconst n2) Enil =>
-      divu_case1 n2
-  | e2 =>
-      divu_default e2
-  end.
-
-Definition divu (e1: expr) (e2: expr) :=
-  match divu_match e2 with
-  | divu_case1 n2 =>
-      match Int.is_power2 n2 with
-      | Some l2 => shruimm e1 l2
-      | None    => Eop Odivu (e1:::e2:::Enil)
-      end
-  | divu_default e2 =>
-      Eop Odivu (e1:::e2:::Enil)
-  end.
-
-Definition modu (e1: expr) (e2: expr) :=
-  match divu_match e2 with
-  | divu_case1 n2 =>
-      match Int.is_power2 n2 with
-      | Some l2 => rolm e1 Int.zero (Int.sub n2 Int.one)
-      | None    => mod_aux Odivu e1 e2
-      end
-  | divu_default e2 =>
-      mod_aux Odivu e1 e2
-  end.
-
 (** ** Bitwise and, or, xor *)
 
 Definition andimm (n1: int) (e2: expr) :=
@@ -634,6 +581,59 @@ Definition or (e1: expr) (e2: expr) :=
       else Eop Oor (e1:::e2:::Enil)
   | or_default e1 e2 =>
       Eop Oor (e1:::e2:::Enil)
+  end.
+
+(** ** Integer division and modulus *)
+
+Definition divs (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
+
+Definition mod_aux (divop: operation) (e1 e2: expr) :=
+  Elet e1
+    (Elet (lift e2)
+      (Eop Osub (Eletvar 1 :::
+                 Eop Omul (Eop divop (Eletvar 1 ::: Eletvar 0 ::: Enil) :::
+                           Eletvar 0 :::
+                           Enil) :::
+                 Enil))).
+
+Definition mods := mod_aux Odiv.
+
+Inductive divu_cases: forall (e2: expr), Type :=
+  | divu_case1:
+      forall (n2: int),
+      divu_cases (Eop (Ointconst n2) Enil)
+  | divu_default:
+      forall (e2: expr),
+      divu_cases e2.
+
+Definition divu_match (e2: expr) :=
+  match e2 as z1 return divu_cases z1 with
+  | Eop (Ointconst n2) Enil =>
+      divu_case1 n2
+  | e2 =>
+      divu_default e2
+  end.
+
+Definition divu (e1: expr) (e2: expr) :=
+  match divu_match e2 with
+  | divu_case1 n2 =>
+      match Int.is_power2 n2 with
+      | Some l2 => shruimm e1 l2
+      | None    => Eop Odivu (e1:::e2:::Enil)
+      end
+  | divu_default e2 =>
+      Eop Odivu (e1:::e2:::Enil)
+  end.
+
+Definition modu (e1: expr) (e2: expr) :=
+  match divu_match e2 with
+  | divu_case1 n2 =>
+      match Int.is_power2 n2 with
+      | Some l2 => andimm (Int.sub n2 Int.one) e1
+      | None    => mod_aux Odivu e1 e2
+      end
+  | divu_default e2 =>
+      mod_aux Odivu e1 e2
   end.
 
 (** ** General shifts *)
