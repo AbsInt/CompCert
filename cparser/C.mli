@@ -205,6 +205,7 @@ type struct_or_union =
 
 type fundef = {
     fd_storage: storage;
+    fd_inline: bool;
     fd_name: ident;
     fd_ret: typ; (* return type *)
     fd_params: (ident * typ) list; (* formal parameters *)

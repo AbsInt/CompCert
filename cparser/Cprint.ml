@@ -437,7 +437,9 @@ and opt_exp pp s =
       fprintf pp "@[<v 3>({ %a })@]" stmt s
 
 let fundef pp f =
-  fprintf pp "@[<hov 2>%a" storage f.fd_storage;
+  fprintf pp "@[<hov 2>%s%a"
+    (if f.fd_inline then "inline " else "")
+    storage f.fd_storage;
   simple_decl pp (f.fd_name, TFun(f.fd_ret, Some f.fd_params, f.fd_vararg, []));
   fprintf pp "@]@ @[<v 2>{@ ";
   List.iter (fun d -> fprintf pp "%a@ " full_decl d) f.fd_locals;

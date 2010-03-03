@@ -173,6 +173,7 @@ let fundef env f =
   let (params', env1) = mmap param env0 f.fd_params in
   let (locals', env2) = mmap decl env1 f.fd_locals in
   ( { fd_storage = f.fd_storage;
+      fd_inline = f.fd_inline;
       fd_name = name';
       fd_ret = typ env0 f.fd_ret;
       fd_params = params';

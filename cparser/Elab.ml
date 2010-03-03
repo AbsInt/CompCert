@@ -288,8 +288,8 @@ let typespec_rank = function (* Don't change this *)
 
 let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
 
-(* Elaboration of a type specifier.  Returns 3-tuple:
-     (storage class, elaborated type, new env)
+(* Elaboration of a type specifier.  Returns 4-tuple:
+     (storage class, "inline" flag, elaborated type, new env)
    Optional argument "only" is true if this is a standalone
    struct or union declaration, without variable names.
 *)
@@ -300,6 +300,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
        - a set of attributes (const, volatile, restrict)
        - a list of type specifiers *)
   let sto = ref Storage_default
+  and inline = ref false
   and attr = ref []
   and tyspecs = ref [] in
 
@@ -324,12 +325,12 @@ let rec elab_specifier ?(only = false) loc env specifier =
       | EXTERN -> sto := Storage_extern
       | REGISTER -> sto := Storage_register
       end
-  | SpecInline -> ()
+  | SpecInline -> inline := true
   | SpecType tys -> tyspecs := tys :: !tyspecs in
 
   List.iter do_specifier specifier;
 
-  let simple ty = (!sto, add_attributes_type !attr ty, env) in
+  let simple ty = (!sto, !inline, add_attributes_type !attr ty, env) in
 
   (* Now interpret the list of type specifiers.  Much of this code
      is stolen from CIL. *)
@@ -393,19 +394,19 @@ let rec elab_specifier ?(only = false) loc env specifier =
         let (id', env') =
           elab_struct_or_union only Struct loc id optmembers env in
         let attr' = add_attributes !attr (elab_attributes loc a) in
-        (!sto, TStruct(id', attr'), env')
+        (!sto, !inline, TStruct(id', attr'), env')
 
     | [Cabs.Tunion(id, optmembers, a)] ->
         let (id', env') =
           elab_struct_or_union only Union loc id optmembers env in
         let attr' = add_attributes !attr (elab_attributes loc a) in
-        (!sto, TUnion(id', attr'), env')
+        (!sto, !inline, TUnion(id', attr'), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let env' = 
           elab_enum loc id optmembers env in
         let attr' = add_attributes !attr (elab_attributes loc a) in
-        (!sto, TInt(enum_ikind, attr'), env')
+        (!sto, !inline, TInt(enum_ikind, attr'), env')
 
     | [Cabs.TtypeofE _] ->
         fatal_error loc "GCC __typeof__ not supported"
@@ -469,7 +470,7 @@ and elab_parameters env params =
 (* Elaboration of a function parameter *)
 
 and elab_parameter env (spec, name) =
-  let (id, sto, ty, env1) = elab_name env spec name in
+  let (id, sto, inl, ty, env1) = elab_name env spec name in
   if sto <> Storage_default && sto <> Storage_register then
     error (loc_of_name name)
       "'extern' or 'static' storage not supported for function parameter";
@@ -481,15 +482,15 @@ and elab_parameter env (spec, name) =
 (* Elaboration of a (specifier, Cabs "name") pair *)
 
 and elab_name env spec (id, decl, attr, loc) =
-  let (sto, bty, env') = elab_specifier loc env spec in
+  let (sto, inl, bty, env') = elab_specifier loc env spec in
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
   let a = elab_attributes loc attr in
-  (id, sto, add_attributes_type a ty, env'')
+  (id, sto, inl, add_attributes_type a ty, env'')
 
 (* Elaboration of a name group *)
 
 and elab_name_group env (spec, namelist) =
-  let (sto, bty, env') =
+  let (sto, inl, bty, env') =
     elab_specifier (loc_of_namelist namelist) env spec in
   let elab_one_name env (id, decl, attr, loc) =
     let (ty, env1) =
@@ -501,7 +502,7 @@ and elab_name_group env (spec, namelist) =
 (* Elaboration of an init-name group *)
 
 and elab_init_name_group env (spec, namelist) =
-  let (sto, bty, env') =
+  let (sto, inl, bty, env') =
     elab_specifier (loc_of_init_name_list namelist) env spec in
   let elab_one_name env ((id, decl, attr, loc), init) =
     let (ty, env1) =
@@ -663,10 +664,10 @@ and elab_enum loc tag optmembers env =
 (* Elaboration of a naked type, e.g. in a cast *)
 
 let elab_type loc env spec decl =
-  let (sto, bty, env') = elab_specifier loc env spec in
+  let (sto, inl, bty, env') = elab_specifier loc env spec in
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
-  if sto <> Storage_default then
-    error loc "'extern' or 'static' storage not supported in cast";
+  if sto <> Storage_default || inl then
+    error loc "'extern', 'static', 'register' and 'inline' are meaningless in cast";
   ty
 
 
@@ -1481,7 +1482,7 @@ let rec enter_decdefs local loc env = function
       end
 
 let elab_fundef env (spec, name) body loc1 loc2 =
-  let (s, sto, ty, env1) = elab_name env spec name in
+  let (s, sto, inline, ty, env1) = elab_name env spec name in
   if sto = Storage_register then
     error loc1 "a function definition cannot have 'register' storage class";
   (* Fix up the type.  We can have params = None but only for an
@@ -1506,6 +1507,7 @@ let elab_fundef env (spec, name) body loc1 loc2 =
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto;
+      fd_inline = inline;
       fd_name = fun_id;
       fd_ret = ty_ret;
       fd_params = params;
@@ -1537,9 +1539,9 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
 
   (* "struct s { ...};" or "union u;" *)
   | ONLYTYPEDEF(spec, loc) ->
-      let (sto, ty, env') = elab_specifier ~only:true loc env spec in
-      if sto <> Storage_default then
-        error loc "Non-default storage on 'struct' or 'union' declaration";
+      let (sto, inl, ty, env') = elab_specifier ~only:true loc env spec in
+      if sto <> Storage_default || inl then
+        error loc "Non-default storage or 'inline' on 'struct' or 'union' declaration";
       ([], env')
 
   (* global asm statement *)
