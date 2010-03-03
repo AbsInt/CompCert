@@ -459,8 +459,6 @@ let print_fundef oc (Coq_pair(name, defn)) =
 
 (* Data *)
 
-let init_data_queue = ref []
-
 let print_init oc = function
   | Init_int8 n ->
       fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -481,23 +479,9 @@ let print_init oc = function
       if n > 0l then fprintf oc "	.space	%ld\n" n
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.word	%a\n" print_symb_ofs (symb, ofs)
-  | Init_pointer id ->
-      let lbl = new_label() in
-      fprintf oc "	.word	.L%d\n" lbl;
-      init_data_queue := (lbl, id) :: !init_data_queue
 
 let print_init_data oc id =
-  init_data_queue := [];
-  List.iter (print_init oc) id;
-  let rec print_remainder () =
-    match !init_data_queue with
-    | [] -> ()
-    | (lbl, id) :: rem ->
-        init_data_queue := rem;
-        fprintf oc ".L%d:\n" lbl;
-        List.iter (print_init oc) id;
-        print_remainder()
-  in print_remainder()
+  List.iter (print_init oc) id
 
 let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with

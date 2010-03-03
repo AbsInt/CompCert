@@ -661,8 +661,6 @@ let record_extfun (Coq_pair(name, defn)) =
       if function_needs_stub name then
         stubbed_functions := IdentSet.add name !stubbed_functions
 
-let init_data_queue = ref []
-
 let print_init oc = function
   | Init_int8 n ->
       fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -684,23 +682,27 @@ let print_init oc = function
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.long	%a\n" 
                  symbol_offset (symb, camlint_of_coqint ofs)
-  | Init_pointer id ->
-      let lbl = new_label() in
-      fprintf oc "	.long	%a\n" label lbl;
-      init_data_queue := (lbl, id) :: !init_data_queue
 
-let print_init_data oc id =
-  init_data_queue := [];
-  List.iter (print_init oc) id;
-  let rec print_remainder () =
-    match !init_data_queue with
-    | [] -> ()
-    | (lbl, id) :: rem ->
-        init_data_queue := rem;
-        fprintf oc "%a:\n" label lbl;
-        List.iter (print_init oc) id;
-        print_remainder()
-  in print_remainder()
+let print_init_char oc = function
+  | Init_int8 n ->
+      let c = Int32.to_int (camlint_of_coqint n) in
+      if c >= 32 && c <= 126 && c <> Char.code '\"' && c <> Char.code '\\'
+      then output_char oc (Char.chr c)
+      else fprintf oc "\\%03o" c
+  | _ ->
+      assert false
+
+let re_string_literal = Str.regexp "__stringlit_[0-9]+"
+
+let print_init_data oc name id =
+  if Str.string_match re_string_literal (extern_atom name) 0
+  && List.for_all (function Init_int8 _ -> true | _ -> false) id
+  then begin
+    fprintf oc "	.ascii	\"";
+    List.iter (print_init_char oc) id;
+    fprintf oc "\"\n"
+  end else
+    List.iter (print_init oc) id
 
 let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
@@ -721,7 +723,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
       if not (C2Clight.atom_is_static name) then
         fprintf oc "	.globl	%a\n" symbol name;
       fprintf oc "%a:\n" symbol name;
-      print_init_data oc init_data
+      print_init_data oc name init_data
 
 let print_program oc p =
   stubbed_functions := IdentSet.empty;

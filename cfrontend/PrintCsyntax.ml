@@ -383,10 +383,6 @@ let print_init p = function
       if ofs = 0l
       then fprintf p "&%s,@ " (extern_atom symb)
       else fprintf p "(void *)((char *)&%s + %ld),@ " (extern_atom symb) ofs
-  | Init_pointer id ->
-      match string_of_init id with
-      | None -> fprintf p "/* pointer to other init*/,@ "
-      | Some s -> fprintf p "%a,@ " print_escaped_string s
 
 let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
   match init with
