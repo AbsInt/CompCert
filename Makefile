@@ -25,10 +25,7 @@ OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
   -no-hygiene \
   -no-links \
-  -I extraction $(INCLUDES) \
-  -cflags -I,`pwd`/cil/obj/$(ARCHOS) \
-  -lflags -I,`pwd`/cil/obj/$(ARCHOS) \
-  -libs unix,str,cil
+  -I extraction $(INCLUDES)
 
 VPATH=$(DIRS)
 GPATH=$(DIRS)
@@ -89,9 +86,6 @@ extraction:
 	$(COQEXEC) extraction/extraction.v
 	cd extraction && ./fixextract
 
-cil:
-	$(MAKE) -j1 -C cil
-
 ccomp: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
         && rm -f ccomp && ln -s _build/driver/Driver.native ccomp
@@ -111,7 +105,6 @@ runtime:
 
 all:
 	$(MAKE) proof
-	$(MAKE) cil
 	$(MAKE) extraction
 	$(MAKE) ccomp
 	$(MAKE) runtime
@@ -178,7 +171,6 @@ clean:
 
 distclean:
 	$(MAKE) clean
-	rm -rf cil
 	rm -f Makefile.config
 
 include .depend

@@ -99,8 +99,10 @@ let dense_enough (numcases: int) (minkey: int64) (maxkey: int64) =
 
 let compile_switch default table =
   let (tbl, keys) = normalize_table table in
-  let minkey = uint64_of_coqint (IntSet.min_elt keys)
-  and maxkey = uint64_of_coqint (IntSet.max_elt keys) in
-  if dense_enough (List.length tbl) minkey maxkey
-  then compile_switch_as_jumptable default tbl minkey maxkey
-  else compile_switch_as_tree default tbl
+  if IntSet.is_empty keys then CTaction default else begin
+    let minkey = uint64_of_coqint (IntSet.min_elt keys)
+    and maxkey = uint64_of_coqint (IntSet.max_elt keys) in
+    if dense_enough (List.length tbl) minkey maxkey
+    then compile_switch_as_jumptable default tbl minkey maxkey
+    else compile_switch_as_tree default tbl
+  end

@@ -43,47 +43,6 @@ let print_error oc msg =
     List.iter print_one_error msg;
     output_char oc '\n'
 
-(* For the CIL -> Csyntax translator:
-
-  * The meaning of some type specifiers may depend on compiler options:
-      the size of an int or the default signedness of char, for instance.
-
-  * Those type conversions may be parameterized thanks to a functor.
-
-  * Remark: [None] means that the type specifier is not supported
-      (that is, an Unsupported exception will be raised if that type
-      specifier is encountered in the program).
-*)
-
-module TypeSpecifierTranslator = struct
-  
-  open Cil
-  open Csyntax
-    
-  (** Convert a Cil.ikind into an (intsize * signedness) option *)
-  let convertIkind = function
-    | IChar      -> Some (I8, Unsigned)
-    | ISChar     -> Some (I8, Signed)
-    | IUChar     -> Some (I8, Unsigned)
-    | IInt       -> Some (I32, Signed)
-    | IUInt      -> Some (I32, Unsigned)
-    | IShort     -> Some (I16, Signed)
-    | IUShort    -> Some (I16, Unsigned)
-    | ILong      -> Some (I32, Signed)
-    | IULong     -> Some (I32, Unsigned)
-    | ILongLong  -> if !option_flonglong then Some (I32, Signed) else None
-    | IULongLong -> if !option_flonglong then Some (I32, Unsigned) else None
-	
-  (** Convert a Cil.fkind into an floatsize option *)
-  let convertFkind = function
-    | FFloat      -> Some F32
-    | FDouble     -> Some F64
-    | FLongDouble -> if !option_flonglong then Some F64 else None
-	
-end
-
-module Cil2CsyntaxTranslator = Cil2Csyntax.Make(TypeSpecifierTranslator)
-
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
@@ -102,38 +61,31 @@ let preprocess ifile ofile =
 (* From preprocessed C to asm *)
 
 let compile_c_file sourcename ifile ofile =
-  (* Parsing and production of a CIL.file *)
-  let cil =
-    try
-      Frontc.parse ifile ()
-    with
-    | Frontc.ParseError msg ->
-        eprintf "Error during parsing: %s\n" msg;
-        exit 2
-    | Errormsg.Error ->
-        exit 2 in
+  (* Simplification options *)
+  let simplifs =
+    "bec"           (* blocks, impure exprs, implicit casts: mandatory *)
+  ^ (if !option_fstruct_passing then "s" else "")
+  ^ (if !option_fstruct_assign then "S" else "")
+  ^ (if !option_fbitfields then "f" else "") in
+  (* Parsing and production of a simplified C AST *)
+  let ast =
+    match Cparser.Parse.preprocessed_file simplifs sourcename ifile with
+    | None -> exit 2
+    | Some p -> p in
   (* Remove preprocessed file (always a temp file) *)
   safe_remove ifile;
-  (* Restore original source file name *)
-  cil.Cil.fileName <- sourcename;
-  (* Cleanup in the CIL.file *)
-  Rmtmps.removeUnusedTemps ~isRoot:Rmtmps.isExportedRoot cil;
-  (* Save CIL output if requested *)
-  if !option_dcil then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".cil.c" in
+  (* Save C AST if requested *)
+  if !option_dparse then begin
+    let ofile = Filename.chop_suffix sourcename ".c" ^ ".parsed.c" in
     let oc = open_out ofile in
-    Cil.dumpFile Cil.defaultCilPrinter oc ofile cil;
+    Cparser.Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
   end;
   (* Conversion to Csyntax *)
   let csyntax =
-    try
-      Cil2CsyntaxTranslator.convertFile cil
-    with
-    | Cil2Csyntax.Error msg ->
-        eprintf "%s\n" msg;
-        exit 2
-  in
+    match C2Clight.convertProgram ast with
+    | None -> exit 2
+    | Some p -> p in
   (* Save Csyntax if requested *)
   if !option_dclight then begin
     let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
@@ -262,12 +214,20 @@ Preprocessing options:
   -I<dir>        Add <dir> to search path for #include files
   -D<symb>=<val> Define preprocessor symbol
   -U<symb>       Undefine preprocessor symbol
-Compilation options:
-  -flonglong     Treat 'long long' as 'long' and 'long double' as 'double'
+Language support options (use -fno-<opt> to turn off -f<opt>) :
+  -fbitfields    Emulate bit fields in structs [off]
+  -flonglong     Treat 'long long' as 'long' and 'long double' as 'double' [off]
+  -fstruct-passing  Emulate passing structs and unions by value [off]
+  -fstruct-assign   Emulate assignment between structs or unions [off]
+  -fvararg-calls Emulate calls to variable-argument functions [on]
+  -fall-extensions  Activate all of the above
+  -fno-extensions  Deactivate all of the above
+Code generation options:
   -fmadd         Use fused multiply-add and multiply-sub instructions
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
-  -dcil          Save CIL-processed source in <file>.cil.c
+Tracing options:
+  -dparse        Save C file after parsing and elaboration in <file>.parse.c
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
 Linking options:
@@ -281,6 +241,7 @@ General options:
 
 type action =
   | Set of bool ref
+  | Unset of bool ref
   | Self of (string -> unit)
   | String of (string -> unit)
   | Integer of (int -> unit)
@@ -305,6 +266,8 @@ let parse_cmdline spec usage =
           error ()
       | Some(Set r) ->
           r := true; parse (i+1)
+      | Some(Unset r) ->
+          r := false; parse (i+1)
       | Some(Self fn) ->
           fn s; parse (i+1)
       | Some(String fn) ->
@@ -329,16 +292,15 @@ let parse_cmdline spec usage =
     end
   in parse 1
 
-let cmdline_actions = [
+let cmdline_actions =
+  let f_opt name ref =
+    ["-f" ^ name ^ "$", Set ref; "-fno-" ^ name ^ "$", Unset ref] in
+  [
   "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
   "-[lL].", Self(fun s -> linker_options := s :: !linker_options);
   "-o$", String(fun s -> exe_name := s);
   "-stdlib$", String(fun s -> stdlib_path := s);
-  "-flonglong$", Set option_flonglong;
-  "-fmadd$", Set option_fmadd;
-  "-fsmall-data$", Integer(fun n -> option_small_data := n);
-  "-fsmall-const$", Integer(fun n -> option_small_const := n);
-  "-dcil$", Set option_dcil;
+  "-dparse$", Set option_dparse;
   "-dclight$", Set option_dclight;
   "-dasm$", Set option_dasm;
   "-E$", Set option_E;
@@ -352,11 +314,23 @@ let cmdline_actions = [
       let objfile = process_cminor_file s in
       linker_options := objfile :: !linker_options);
   ".*\\.[oa]$", Self (fun s ->
-      linker_options := s :: !linker_options)
-]
+      linker_options := s :: !linker_options);
+  "-fsmall-data$", Integer(fun n -> option_small_data := n);
+  "-fsmall-const$", Integer(fun n -> option_small_const := n);
+  "-fno-extensions", Self (fun s ->
+      List.iter (fun r -> r := false) Clflags.all_extensions);
+  "-fall-extensions", Self (fun s ->
+      List.iter (fun r -> r := true) Clflags.all_extensions)
+  ]
+  @ f_opt "longlong" option_flonglong
+  @ f_opt "struct-passing" option_fstruct_passing
+  @ f_opt "struct-assign" option_fstruct_assign
+  @ f_opt "bitfields" option_fbitfields
+  @ f_opt "vararg-calls" option_fvararg_calls
+  @ f_opt "madd" option_fmadd
 
 let _ =
-  Cil.initCIL();
+  Cparser.Machine.config := Cparser.Machine.ilp32ll64;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
   if !linker_options <> [] 

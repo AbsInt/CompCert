@@ -496,7 +496,7 @@ let print_function oc name code =
      | Some s -> s
      | None -> text);
   fprintf oc "	.align 2\n";
-  if not (Cil2Csyntax.atom_is_static name) then
+  if not (C2Clight.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
   List.iter (print_instruction oc (labels_of_code Labelset.empty code)) code
@@ -712,13 +712,13 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
         match CPragmas.section_for_atom name init with
         | Some s -> s
         | None ->
-            if Cil2Csyntax.atom_is_readonly name
+            if C2Clight.atom_is_readonly name
             then const_data
             else data
       in
       section oc sec;
       fprintf oc "	.align	3\n";
-      if not (Cil2Csyntax.atom_is_static name) then
+      if not (C2Clight.atom_is_static name) then
         fprintf oc "	.globl	%a\n" symbol name;
       fprintf oc "%a:\n" symbol name;
       print_init_data oc init_data

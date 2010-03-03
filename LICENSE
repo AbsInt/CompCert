@@ -25,9 +25,12 @@ option) any later version:
     cfrontend/PrintCsyntax.ml lib/Integers.v       
     cfrontend/Csem.v          lib/Maps.v           
     cfrontend/Csyntax.v       lib/Parmov.v         
-    common/AST.v              runtime/calloc.c     
-    common/Errors.v           runtime/stdio.c      
-    common/Events.v           runtime/stdio.h      
+    common/AST.v              lib/Camlcoq.ml
+    common/Errors.v           
+    common/Events.v           
+    all files in the runtime/ directory
+    all files in the cparser/ directory 
+        (except those listed below which are under a BSD license)
 
 A copy of the GNU General Public License version 2 is included below.
 
@@ -37,12 +40,14 @@ files are free software and can be used both in commercial and
 non-commercial contexts, subject to the terms of the GNU General
 Public License.
 
-This distribution includes a modified copy of the CIL library.
-The CIL library is Copyright 2001-2005 George C. Necula, Scott McPeak,
-Wes Weimer and Ben Liblit.  The modifications are Copyright 2006,
-2007, 2008, 2009 Institut National de Recherche en Informatique et en
-Automatique.  The CIL library and the modifications are distributed
-under the terms of the BSD license, included below.
+Finally, the following files are taken from the CIL library:
+    cparser/Cabs.ml
+    cparser/Lexer.mli
+    cparser/Lexer.mll
+    cparser/Parser.mly
+These files are Copyright 2001-2005 George C. Necula, Scott McPeak,
+Wes Weimer and Ben Liblit, and are distributed under the terms of the
+BSD license, included below.
 
 ----------------------------------------------------------------------
 
