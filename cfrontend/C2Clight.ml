@@ -161,7 +161,9 @@ let convertTyp env t =
     | C.TPtr(ty, a) ->
         Tpointer(convertTyp seen ty)
     | C.TArray(ty, None, a) ->
-        warning "array type of unspecified size";
+        (* Cparser verified that the type ty[] occurs only in
+           contexts that are safe for Clight, so just treat as ty[0]. *)
+        (* warning "array type of unspecified size"; *)
         Tarray(convertTyp seen ty, coqint_of_camlint 0l)
     | C.TArray(ty, Some sz, a) ->
         Tarray(convertTyp seen ty, convertInt sz)
@@ -323,11 +325,11 @@ let convertFuncall env lhs fn args =
       let fun_name =
         match fn with
         | {edesc = C.EVar id} when !Clflags.option_fvararg_calls ->
-            warning "emulating call to variadic function";
+            (*warning "emulating call to variadic function"; *)
             id.name
         | _ ->
             unsupported "call to variadic function";
-            "" in
+            "<error>" in
       let targs = convertTypList env (List.map (fun e -> e.etyp) args) in
       let tres = convertTyp env res in
       let (stub_fun_name, stub_fun_typ) =
@@ -343,6 +345,8 @@ let convertTopExpr env e =
   | C.EBinop(C.Oassign, lhs, {edesc = C.ECall(fn, args)}, _) ->
       convertFuncall env (Some lhs) fn args
   | C.EBinop(C.Oassign, lhs, rhs, _) ->
+      if Cutil.is_composite_type env lhs.etyp then
+        unsupported "assignment between structs or between unions";
       Sassign(convertExpr env lhs, convertExpr env rhs)
   | C.ECall(fn, args) ->
       convertFuncall env None fn args
