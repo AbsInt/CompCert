@@ -163,14 +163,6 @@ LIBMATH=-lm
 EOF
 fi
 
-# Extract and configure Cil
-
-(cd cil && ./configure)
-
-# Extract 'ARCHOS' info from Cil configuration
-
-grep '^ARCHOS=' cil/config.log >> Makefile.config
-
 # Summarize configuration
 
 if test "$target" = "manual"; then
