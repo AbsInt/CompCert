@@ -20,9 +20,6 @@ let option_fstruct_passing = ref false
 let option_fstruct_assign = ref false
 let option_fbitfields = ref false
 let option_fvararg_calls = ref true
-let all_extensions =
-  [option_fstruct_passing; option_fstruct_assign; option_fbitfields;
-   option_fvararg_calls; option_flonglong]
 let option_fmadd = ref false
 let option_dparse = ref false
 let option_dclight = ref false

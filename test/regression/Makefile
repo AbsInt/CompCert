@@ -1,7 +1,8 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fall-extensions
+CCOMPFLAGS=-stdlib ../../runtime -dparse -dclight -dasm \
+  -fstruct-passing -fstruct-assign -fbitfields
 
 LIBS=$(LIBMATH)
 
@@ -30,7 +31,7 @@ clean:
 	rm -f *.compcert
 	rm -f *.parsed.c *.light.c *.s *.o *~ 
 
-test_compcert:
+test:
 	@for i in $(TESTS); do \
 	   if ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \

@@ -220,8 +220,6 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fstruct-passing  Emulate passing structs and unions by value [off]
   -fstruct-assign   Emulate assignment between structs or unions [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
-  -fall-extensions  Activate all of the above
-  -fno-extensions  Deactivate all of the above
 Code generation options:
   -fmadd         Use fused multiply-add and multiply-sub instructions
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
@@ -316,11 +314,7 @@ let cmdline_actions =
   ".*\\.[oa]$", Self (fun s ->
       linker_options := s :: !linker_options);
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
-  "-fsmall-const$", Integer(fun n -> option_small_const := n);
-  "-fno-extensions", Self (fun s ->
-      List.iter (fun r -> r := false) Clflags.all_extensions);
-  "-fall-extensions", Self (fun s ->
-      List.iter (fun r -> r := true) Clflags.all_extensions)
+  "-fsmall-const$", Integer(fun n -> option_small_const := n)
   ]
   @ f_opt "longlong" option_flonglong
   @ f_opt "struct-passing" option_fstruct_passing
