@@ -38,7 +38,7 @@ static int lookup(struct array * env, char * name, /*out*/ struct value * res)
   for (i = env->size - 1; i >= 0; i--) {
     struct binding * b = &get_array(struct binding, env, i);
     if (name == b->name) {
-      ASSIGN(*res, b->val);
+      *res = b->val;
       return 1;
     }
   }
@@ -55,7 +55,7 @@ static void assign(struct array * env, char * name, struct value * newval)
     b = &get_array(struct binding, env, i);
     if (! b->mutable) break;
     if (name == b->name) {
-      ASSIGN(b->val, *newval);
+      b->val = *newval;
       return;
     }
   }
@@ -63,7 +63,7 @@ static void assign(struct array * env, char * name, struct value * newval)
   b = &get_array(struct binding, env, env->size - 1);
   b->name = name;
   b->mutable = 1;
-  ASSIGN(b->val, *newval);
+  b->val = *newval;
 }
 
 /* Take an immutable copy of an environment */
@@ -173,22 +173,11 @@ static void print_value(struct value * s)
 static struct value main_stack[MAIN_STACK_SIZE];
 static struct value surface_stack[SURFACE_STACK_SIZE];
 
-/* Error handling functions */
-#define ERRORFUN(name, msg) \
-  static void name(void) { fprintf(stderr, msg); exit(2); }
-
-ERRORFUN(stack_overflow, "Stack overflow\n")
-ERRORFUN(stack_underflow, "Stack underflow\n")
-ERRORFUN(type_error, "Type error\n")
-ERRORFUN(division_by_zero, "Division by zero\n")
-ERRORFUN(bound_error, "Out-of-bound array access\n")
-ERRORFUN(negative_sqrt, "Square root of negative number\n")
-
 /* Macros for stack checking and type checking */
 
-#define push() if (--sp < bos) stack_overflow()
-#define can_pop(n) if (sp + (n) > tos) stack_underflow()
-#define check(n,ty) if (sp[n].tag != ty) type_error()
+#define push() if (--sp < bos) goto stack_overflow
+#define can_pop(n) if (sp + (n) > tos) goto stack_underflow
+#define check(n,ty) if (sp[n].tag != ty) goto type_error
 
 /* Execute the given token list in the given environment */
 
@@ -238,7 +227,7 @@ static struct value * execute_list(struct array * code,
       struct array * a = new_array(struct value, sz);
       int j;
       a->size = sz;
-      for (j = 0; j < sz; j++) set_array_large(struct value, a, j, sp[-1-j]);
+      for (j = 0; j < sz; j++) set_array(struct value, a, j, sp[-1-j]);
       push();
       sp[0].tag = Arr; sp[0].u.arr = a;
       break;
@@ -287,7 +276,7 @@ static struct value * execute_list(struct array * code,
       can_pop(1);
       check(0, Clos);
       sp[0].tag = Obj;
-      sp[0].u.obj = cone(&sp[0].u.clos);
+      sp[0].u.obj = cone(sp[0].u.clos);
       break;
     case Op_cos:
       can_pop(1);
@@ -298,13 +287,13 @@ static struct value * execute_list(struct array * code,
       can_pop(1);
       check(0, Clos);
       sp[0].tag = Obj;
-      sp[0].u.obj = cube(&sp[0].u.clos);
+      sp[0].u.obj = cube(sp[0].u.clos);
       break;
     case Op_cylinder:
       can_pop(1);
       check(0, Clos);
       sp[0].tag = Obj;
-      sp[0].u.obj = cylinder(&sp[0].u.clos);
+      sp[0].u.obj = cylinder(sp[0].u.clos);
       break;
     case Op_difference:
       can_pop(2);
@@ -317,7 +306,7 @@ static struct value * execute_list(struct array * code,
       can_pop(2);
       check(1, I);
       check(0, I);
-      if (sp[0].u.i == 0) division_by_zero();
+      if (sp[0].u.i == 0) goto division_by_zero;
       sp[1].u.i = sp[1].u.i / sp[0].u.i;
       sp += 1;
       break;
@@ -365,8 +354,8 @@ static struct value * execute_list(struct array * code,
       check(0, I);
       a = sp[1].u.arr;
       idx = sp[0].u.i;
-      if (idx < 0 || idx >= a->size) bound_error();
-      get_array_large(sp[1], struct value, a, idx);
+      if (idx < 0 || idx >= a->size) goto bound_error;
+      sp[1] = get_array(struct value, a, idx);
       sp++;
       break;
     }
@@ -439,7 +428,7 @@ static struct value * execute_list(struct array * code,
       can_pop(2);
       check(1, I);
       check(0, I);
-      if (sp[0].u.i == 0) division_by_zero();
+      if (sp[0].u.i == 0) goto division_by_zero;
       sp[1].u.i = sp[1].u.i % sp[0].u.i;
       sp += 1;
       break;
@@ -471,7 +460,7 @@ static struct value * execute_list(struct array * code,
       can_pop(1);
       check(0, Clos);
       sp[0].tag = Obj;
-      sp[0].u.obj = plane(&sp[0].u.clos);
+      sp[0].u.obj = plane(sp[0].u.clos);
       break;
     case Op_point: {
       struct point * p;
@@ -562,7 +551,7 @@ static struct value * execute_list(struct array * code,
       can_pop(1);
       check(0, Clos);
       sp[0].tag = Obj;
-      sp[0].u.obj = sphere(&sp[0].u.clos);
+      sp[0].u.obj = sphere(sp[0].u.clos);
       break;
     case Op_spotlight:
       can_pop(5);
@@ -579,7 +568,7 @@ static struct value * execute_list(struct array * code,
     case Op_sqrt:
       can_pop(1);
       check(0, R);
-      if (sp[0].u.r < 0) negative_sqrt();
+      if (sp[0].u.r < 0) goto negative_sqrt;
       sp[0].u.r = sqrt(sp[0].u.r);
       break;
     case Op_subi:
@@ -627,11 +616,32 @@ static struct value * execute_list(struct array * code,
     }
   }
   return sp;
+  /* Error handling */
+ stack_overflow:
+  fprintf(stderr, "Stack overflow\n");
+  goto print_context;
+ stack_underflow:
+  fprintf(stderr, "Stack underflow\n");
+  goto print_context;
+ type_error:
+  fprintf(stderr, "Type error\n");
+  goto print_context;
+ division_by_zero:
+  fprintf(stderr, "Division by zero\n");
+  goto print_context;
+ bound_error:
+  fprintf(stderr, "Out-of-bound array access\n");
+  goto print_context;
+ negative_sqrt:
+  fprintf(stderr, "Square root of negative number\n");
+ print_context:
+  fprintf(stderr, "(operation: %s, PC: %d)\n", operator_names[t->tag], i);
+  exit(2);
 }
 
 /* Evaluate a surface function */
 
-void surface_function(struct closure * clos, int face, flt u, flt v,
+void surface_function(struct closure clos, int face, flt u, flt v,
                       /*out*/ struct surface_characteristics * sc)
 {
   struct value * sp;
@@ -643,7 +653,7 @@ void surface_function(struct closure * clos, int face, flt u, flt v,
   sp[0].tag = R;
   sp[0].u.i = v;
   sp =
-    execute_list(clos->code, clos->env, surface_stack,
+    execute_list(clos.code, clos.env, surface_stack,
                  surface_stack + SURFACE_STACK_SIZE, sp);
   if (sp != surface_stack + SURFACE_STACK_SIZE - 4 ||
       sp[0].tag != R ||

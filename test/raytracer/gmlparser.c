@@ -82,7 +82,7 @@ static struct array * parse_tokenlist(void)
   int i = 0;
   while (parse_token(&t)) {
     extend_array(struct tok, a);
-    set_array_large(struct tok, a, i, t);
+    set_array(struct tok, a, i, t);
     i++;
   }
   return a;

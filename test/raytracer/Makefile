@@ -1,5 +1,5 @@
 CC=../../ccomp 
-CFLAGS=-U__GNUC__ -stdlib ../../runtime -dclight -dasm
+CFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fstruct-passing -fstruct-assign
 LIBS=
 TIME=xtime -mintime 2.0
 
@@ -11,7 +11,7 @@ render: $(OBJS)
 	$(CC) $(CFLAGS) -o render $(OBJS) $(LIBS)
 
 clean:
-	rm -f *.o *.light.c *.s *.ppm render
+	rm -f *.o *.parsed.c *.light.c *.s *.ppm render
 
 include .depend
 

@@ -1,13 +1,9 @@
 /* Lexer for GML */
 
 #include "config.h"
+#include <ctype.h>
 #include "gmllexer.h"
 #include "gml.h"
-
-#define isdigit(c) (c >= '0' && c <= '9')
-#define isalpha(c) ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
-#define isalnum(c) (isdigit(c) || isalpha(c))
-#define isprint(c) (c >= ' ' && c <= 126)
 
 struct lexeme current_lexeme;
 
@@ -91,7 +87,7 @@ static void get_binder(void)
   current_lexeme.kind = BINDER;
 }
 
-static int get_number(int firstchar)
+static void get_number(int firstchar)
 {
   int c, pos, is_real;
 
@@ -102,7 +98,7 @@ static int get_number(int firstchar)
   if (c == '-') {
     STORE_BUFFER(pos, c);
     c = getchar();
-    if (! isdigit(c)) return -1;
+    if (! isdigit(c)) goto bad_number;
   }
   /* Decimal number */
   do {
@@ -114,7 +110,7 @@ static int get_number(int firstchar)
     is_real = 1;
     STORE_BUFFER(pos, c);
     c = getchar();
-    if (! isdigit(c)) return -1;
+    if (! isdigit(c)) goto bad_number;
     do {
       STORE_BUFFER(pos, c);
       c = getchar();
@@ -129,7 +125,7 @@ static int get_number(int firstchar)
       STORE_BUFFER(pos, c);
       c = getchar();
     }
-    if (! isdigit(c)) return -1;
+    if (! isdigit(c)) goto bad_number;
     do {
       STORE_BUFFER(pos, c);
       c = getchar();
@@ -145,23 +141,29 @@ static int get_number(int firstchar)
     current_lexeme.kind = INTEGER;
     current_lexeme.u.i = atoi(buffer);
   }
-  return 0;
+  return;
+ bad_number:
+  fprintf(stderr, "Illegal number\n");
+  exit(2);
 }
 
-static int get_string(void)
+static void get_string()
 {
   int c, pos;
   pos = 0;
   while (1) {
     c = getchar();
     if (c == '"') break;
-    if (! isprint(c)) return -1;
+    if (! isprint(c)) goto bad_string;
     STORE_BUFFER(pos, c);
   }
   buffer[pos] = 0;
   current_lexeme.kind = STRING;
   current_lexeme.u.s = strdup(buffer);
-  return 0;
+  return;
+ bad_string:
+  fprintf(stderr, "Illegal string literal\n");
+  exit(2);
 }
 
 void get_lexeme(void)
@@ -169,49 +171,39 @@ void get_lexeme(void)
   int c;
 
   if (current_lexeme.kind != NONE) return;
-  while (1) {
-    c = getchar();
-    switch (c) {
-    case EOF:
-      current_lexeme.kind = END_OF_FILE; break;
-    case ' ': case '\n': case '\t': case '\r': case 11:
-      continue;
-    case '%':
-      do { c = getchar(); } while (c != '\n' && c != EOF);
-      continue;
-    case '/':
-      get_binder(); break;
-    case '-': case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
-      if (get_number(c) == -1) {
-        fprintf(stderr, "Bad number\n");
-        exit(2);
-      }
-      break;
-    case '"':
-      if (get_string() == -1) {
-        fprintf(stderr, "Bad string literal\n");
-        exit(2);
-      }
-      break;
-    case '{':
-      current_lexeme.kind = LBRACE; break;
-    case '}':
-      current_lexeme.kind = RBRACE; break;
-    case '[':
-      current_lexeme.kind = LBRACKET; break;
-    case ']':
-      current_lexeme.kind = RBRACKET; break;
-    default:
-      if (isalpha(c)) {
-        get_ident(c);
-      } else {
-        fprintf(stderr, "Illegal character `%c'\n", c);
-        exit(2);
-      }
-      break;
+ again:
+  c = getchar();
+  switch (c) {
+  case EOF:
+    current_lexeme.kind = END_OF_FILE; break;
+  case ' ': case '\n': case '\t': case '\r': case 11:
+    goto again;
+  case '%':
+    do { c = getchar(); } while (c != '\n' && c != EOF);
+    goto again;
+  case '/':
+    get_binder(); break;
+  case '-': case '0': case '1': case '2': case '3': case '4':
+  case '5': case '6': case '7': case '8': case '9':
+    get_number(c); break;
+  case '"':
+    get_string(); break;
+  case '{':
+    current_lexeme.kind = LBRACE; break;
+  case '}':
+    current_lexeme.kind = RBRACE; break;
+  case '[':
+    current_lexeme.kind = LBRACKET; break;
+  case ']':
+    current_lexeme.kind = RBRACKET; break;
+  default:
+    if (isalpha(c)) {
+      get_ident(c);
+    } else {
+      fprintf(stderr, "Illegal character `%c'\n", c);
+      exit(2);
     }
-    return;
+    break;
   }
 }
 

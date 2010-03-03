@@ -9,7 +9,7 @@
 
 /* Operations on interval lists */
 
-#define POS_INFTY 1e300
+#define POS_INFTY HUGE_VAL
 
 struct intervlist {
   flt beg;

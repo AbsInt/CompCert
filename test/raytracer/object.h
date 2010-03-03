@@ -12,11 +12,11 @@ struct object {
   flt radius;
 };
 
-struct object * cone(struct closure * c);
-struct object * cube(struct closure * c);
-struct object * cylinder(struct closure * c);
-struct object * plane(struct closure * c);
-struct object * sphere(struct closure * c);
+struct object * cone(struct closure c);
+struct object * cube(struct closure c);
+struct object * cylinder(struct closure c);
+struct object * plane(struct closure c);
+struct object * sphere(struct closure c);
 
 struct object * orotatex(struct object * o1, flt a);
 struct object * orotatey(struct object * o1, flt a);

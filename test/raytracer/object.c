@@ -6,30 +6,30 @@
 #include "object.h"
 #include "matrix.h"
 
-static struct object * new_object(int kind, struct closure * c)
+static struct object * new_object(int kind, struct closure c)
 {
   struct object * o = arena_alloc(sizeof(struct object));
   o->kind = kind;
-  ASSIGN(o->surf, *c);
+  o->surf = c;
   o->world2obj = o->obj2world = mid;
   o->max_scale_applied = 1.0;
   o->radius = BS_NOT_COMPUTED;
   return o;
 }
 
-struct object * cone(struct closure * c)
+struct object * cone(struct closure c)
 { return new_object(Cone, c); }
 
-struct object * cube(struct closure * c)
+struct object * cube(struct closure c)
 { return new_object(Cube, c); }
 
-struct object * cylinder(struct closure * c)
+struct object * cylinder(struct closure c)
 { return new_object(Cylinder, c); }
 
-struct object * plane(struct closure * c)
+struct object * plane(struct closure c)
 { return new_object(Plane, c); }
 
-struct object * sphere(struct closure * c)
+struct object * sphere(struct closure c)
 { return new_object(Sphere, c); }
 
 static struct object * transform(struct object * o,
@@ -47,7 +47,7 @@ static struct object * transform(struct object * o,
     no->o2 = transform(o->o2, t, tinv, scale);
     break;
   default:
-    ASSIGN(no->surf, o->surf);
+    no->surf = o->surf;
     no->world2obj = mcompose(o->world2obj, tinv);
     no->obj2world = mcompose(t, o->obj2world);
     no->max_scale_applied = o->max_scale_applied * scale;
@@ -212,3 +212,4 @@ void normal_vector(struct object * obj, struct point * p, int face,
   product(&tang_world1, &tang_world2, n);
   vnormalize(n, n);
 }
+

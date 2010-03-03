@@ -3,12 +3,6 @@
 #include "vector.h"
 #include "matrix.h"
 
-struct matrix matrix_identity = {
-  1.0,  0.0,  0.0,  0.0,
-  0.0,  1.0,  0.0,  0.0,
-  0.0,  0.0,  1.0,  0.0,
-};
-
 void apply_to_point(struct matrix * m, struct point * p,
                                   /*out*/ struct point * r)
 {
@@ -25,7 +19,13 @@ void apply_to_vect(struct matrix * m, struct vector * v,
   r->dz = m->zx * v->dx + m->zy * v->dy + m->zz * v->dz;
 }
 
+static struct matrix matrix_identity = {
+  1.0,  0.0,  0.0,  0.0,
+  0.0,  1.0,  0.0,  0.0,
+  0.0,  0.0,  1.0,  0.0,
+};
 
+struct matrix * mid = &matrix_identity;
 
 struct matrix * mtranslate(flt sx, flt sy, flt sz)
 {

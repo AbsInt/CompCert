@@ -45,7 +45,7 @@ static void render_ray(struct point * amb,
   point_along(p, v, t, &inter_w);
   apply_to_point(bobj->world2obj, &inter_w, &inter_o);
   surface_coords(bobj, &inter_o, &face, &surf_u, &surf_v);
-  surface_function(&bobj->surf, face, surf_u, surf_v, &sc);
+  surface_function(bobj->surf, face, surf_u, surf_v, &sc);
   /* Construct the vectors on figure 4 */
   normal_vector(bobj, &inter_w, face, &n);
   dotprod = dotproduct(v, &n);

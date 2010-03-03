@@ -8,8 +8,7 @@ void apply_to_point(struct matrix * m, struct point * p,
                     /*out*/ struct point * r);
 void apply_to_vect(struct matrix * m, struct vector * v,
                    /*out*/ struct vector * r);
-extern struct matrix matrix_identity;
-#define mid (&matrix_identity)
+extern struct matrix * mid;
 struct matrix * mtranslate(flt sx, flt sy, flt sz);
 struct matrix * mscale(flt sx, flt sy, flt sz);
 struct matrix * mrotatex(flt a);

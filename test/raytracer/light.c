@@ -10,8 +10,8 @@ struct light * dirlight(struct point * dir, struct point * c)
 {
   struct light * l = arena_alloc(sizeof(struct light));
   l->kind = Directional;
-  ASSIGN(l->u.directional.dir, *dir);
-  ASSIGN(l->u.directional.col, *c);
+  l->u.directional.dir = *dir;
+  l->u.directional.col = *c;
   return l;
 }
 
@@ -19,8 +19,8 @@ struct light * pointlight(struct point * orig, struct point * c)
 {
   struct light * l = arena_alloc(sizeof(struct light));
   l->kind = Pointlight;
-  ASSIGN(l->u.point.orig, *orig);
-  ASSIGN(l->u.point.col, *c);
+  l->u.point.orig = *orig;
+  l->u.point.col = *c;
   return l;
 }
 
@@ -30,9 +30,9 @@ struct light * spotlight(struct point * pos, struct point * at,
   struct light * l = arena_alloc(sizeof(struct light));
   struct vector uv;
   l->kind = Spot;
-  ASSIGN(l->u.spot.orig, *pos);
-  ASSIGN(l->u.spot.at, *at);
-  ASSIGN(l->u.spot.col, *c);
+  l->u.spot.orig = *pos;
+  l->u.spot.at = *at;
+  l->u.spot.col = *c;
   l->u.spot.cutoff = cutoff;
   l->u.spot.exponent = exp;
   between(at, pos, &uv);
@@ -81,9 +81,7 @@ static void color_from_light(struct object * scene,
   /* Intensity of light source at object */
   switch (light->kind) {
   case Directional:
-    i.x = light->u.directional.col.x;
-    i.y = light->u.directional.col.y;
-    i.z = light->u.directional.col.z;
+    i = light->u.directional.col;
     break;
   case Pointlight:
     att = 100.0 / (99.0 + dist2(pt, &light->u.point.orig));

@@ -14,5 +14,5 @@ struct surface_characteristics {
 
 void execute_program(struct array * toklist);
 
-void surface_function(struct closure * clos, int face, flt u, flt v,
+void surface_function(struct closure clos, int face, flt u, flt v,
                       /*out*/ struct surface_characteristics * sc);
