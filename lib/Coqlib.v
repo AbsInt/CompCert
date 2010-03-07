@@ -554,6 +554,27 @@ Proof.
   omega.
 Qed.
 
+Lemma Zmod_recombine:
+  forall x a b,
+  a > 0 -> b > 0 ->
+  x mod (a * b) = ((x/b) mod a) * b + (x mod b).
+Proof.
+  intros. 
+  set (xb := x/b). 
+  apply Zmod_unique with (xb/a).
+  generalize (Z_div_mod_eq x b H0); fold xb; intro EQ1.
+  generalize (Z_div_mod_eq xb a H); intro EQ2.
+  rewrite EQ2 in EQ1. 
+  eapply trans_eq. eexact EQ1. ring.
+  generalize (Z_mod_lt x b H0). intro. 
+  generalize (Z_mod_lt xb a H). intro.
+  assert (0 <= xb mod a * b <= a * b - b).
+    split. apply Zmult_le_0_compat; omega.
+    replace (a * b - b) with ((a - 1) * b) by ring.
+    apply Zmult_le_compat; omega. 
+  omega.
+Qed.
+
 (** Properties of divisibility. *)
 
 Lemma Zdivides_trans:
@@ -572,6 +593,45 @@ Proof.
   right; red; intros. elim n. apply Z_div_exact_1; auto. 
   inv H0. rewrite Z_div_mult; auto. ring.
 Qed.
+
+(** Conversion from [Z] to [nat]. *)
+
+Definition nat_of_Z (z: Z) : nat :=
+  match z with
+  | Z0 => O
+  | Zpos p => nat_of_P p
+  | Zneg p => O
+  end.
+
+Lemma nat_of_Z_max:
+  forall z, Z_of_nat (nat_of_Z z) = Zmax z 0.
+Proof.
+  intros. unfold Zmax. destruct z; simpl; auto.
+  symmetry. apply Zpos_eq_Z_of_nat_o_nat_of_P.
+Qed.
+
+Lemma nat_of_Z_eq:
+  forall z, z >= 0 -> Z_of_nat (nat_of_Z z) = z.
+Proof.
+  intros. rewrite nat_of_Z_max. apply Zmax_left. auto.
+Qed.
+
+Lemma nat_of_Z_neg:
+  forall n, n <= 0 -> nat_of_Z n = O.
+Proof.
+  destruct n; unfold Zle; simpl; auto. congruence.
+Qed.
+
+Lemma nat_of_Z_plus:
+  forall p q,
+  p >= 0 -> q >= 0 ->
+  nat_of_Z (p + q) = (nat_of_Z p + nat_of_Z q)%nat.
+Proof.
+  intros. 
+  apply inj_eq_rev. rewrite inj_plus.
+  repeat rewrite nat_of_Z_eq; auto. omega.
+Qed.
+
 
 (** Alignment: [align n amount] returns the smallest multiple of [amount]
   greater than or equal to [n]. *)
@@ -817,6 +877,18 @@ Proof.
   auto. rewrite IHl1. auto.
 Qed.
 
+Lemma list_append_map_inv:
+  forall (A B: Type) (f: A -> B) (m1 m2: list B) (l: list A),
+  List.map f l = m1 ++ m2 ->
+  exists l1, exists l2, List.map f l1 = m1 /\ List.map f l2 = m2 /\ l = l1 ++ l2.
+Proof.
+  induction m1; simpl; intros.
+  exists (@nil A); exists l; auto.
+  destruct l; simpl in H; inv H. 
+  exploit IHm1; eauto. intros [l1 [l2 [P [Q R]]]]. subst l. 
+  exists (a0 :: l1); exists l2; intuition. simpl; congruence.
+Qed.
+
 (** Properties of list membership. *)
 
 Lemma in_cns:
@@ -1050,6 +1122,14 @@ Inductive list_forall2: list A -> list B -> Prop :=
       list_forall2 al bl ->
       list_forall2 (a1 :: al) (b1 :: bl).
 
+Lemma list_forall2_app:
+  forall a2 b2 a1 b1,
+  list_forall2 a1 b1 -> list_forall2 a2 b2 -> 
+  list_forall2 (a1 ++ a2) (b1 ++ b2).
+Proof.
+  induction 1; intros; simpl. auto. constructor; auto. 
+Qed.
+
 End FORALL2.
 
 Lemma list_forall2_imply:
@@ -1095,6 +1175,26 @@ Proof.
   destruct l; simpl; auto.
 Qed.
 
+(** A list of [n] elements, all equal to [x]. *)
+
+Fixpoint list_repeat {A: Type} (n: nat) (x: A) {struct n} :=
+  match n with
+  | O => nil
+  | S m => x :: list_repeat m x
+  end.
+
+Lemma length_list_repeat:
+  forall (A: Type) n (x: A), length (list_repeat n x) = n.
+Proof.
+  induction n; simpl; intros. auto. decEq; auto.
+Qed.
+
+Lemma in_list_repeat:
+  forall (A: Type) n (x: A) y, In y (list_repeat n x) -> y = x.
+Proof.
+  induction n; simpl; intros. elim H. destruct H; auto.
+Qed.
+
 (** * Definitions and theorems over boolean types *)
 
 Definition proj_sumbool (P Q: Prop) (a: {P} + {Q}) : bool :=
@@ -1108,6 +1208,12 @@ Lemma proj_sumbool_true:
   forall (P Q: Prop) (a: {P}+{Q}), proj_sumbool a = true -> P.
 Proof.
   intros P Q a. destruct a; simpl. auto. congruence.
+Qed.
+
+Lemma proj_sumbool_is_true:
+  forall (P: Prop) (a: {P}+{~P}), P -> proj_sumbool a = true.
+Proof.
+  intros. unfold proj_sumbool. destruct a. auto. contradiction. 
 Qed.
 
 Section DECIDABLE_EQUALITY.
@@ -1141,3 +1247,24 @@ Proof.
 Qed.
 
 End DECIDABLE_EQUALITY.
+
+Section DECIDABLE_PREDICATE.
+
+Variable P: Prop.
+Variable dec: {P} + {~P}.
+Variable A: Type.
+
+Lemma pred_dec_true:
+  forall (a b: A), P -> (if dec then a else b) = a.
+Proof.
+  intros. destruct dec. auto. contradiction.
+Qed.
+
+Lemma pred_dec_false:
+  forall (a b: A), ~P -> (if dec then a else b) = b.
+Proof.
+  intros. destruct dec. contradiction. auto.
+Qed.
+
+End DECIDABLE_PREDICATE.
+

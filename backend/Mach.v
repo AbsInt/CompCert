@@ -22,7 +22,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
@@ -84,7 +84,7 @@ Definition funsig (fd: fundef) :=
   | External ef => ef.(ef_sig)
   end.
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 
 (** * Dynamic semantics *)
 

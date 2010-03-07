@@ -19,7 +19,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
@@ -487,12 +487,12 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pmtctr (ireg_of r) :: 
       Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR12 ::
-      Pfreeframe f.(fn_link_ofs) :: 
+      Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) :: 
       Pbctr :: k
   | Mtailcall sig (inr symb) =>
       Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR12 ::
-      Pfreeframe f.(fn_link_ofs) :: 
+      Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) :: 
       Pbs symb :: k
   | Mlabel lbl =>
       Plabel lbl :: k
@@ -508,7 +508,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
   | Mreturn =>
       Plwz GPR12 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR12 ::
-      Pfreeframe f.(fn_link_ofs) ::
+      Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) ::
       Pblr :: k
   end.
 

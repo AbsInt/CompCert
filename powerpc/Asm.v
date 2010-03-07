@@ -18,7 +18,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -126,7 +126,7 @@ Inductive instruction : Type :=
   | Peqv: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-xor *)
   | Pextsb: ireg -> ireg -> instruction                       (**r 8-bit sign extension *)
   | Pextsh: ireg -> ireg -> instruction                       (**r 16-bit sign extension *)
-  | Pfreeframe: int -> instruction                            (**r deallocate stack frame and restore previous frame *)
+  | Pfreeframe: Z -> Z -> int -> instruction                  (**r deallocate stack frame and restore previous frame *)
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
@@ -285,7 +285,7 @@ lbl:    .long   0x43300000, 0x00000000
   This cannot be expressed in our memory model, which does not reflect
   the fact that stack frames are adjacent and allocated/freed
   following a stack discipline.
-- [Pfreeframe ofs]: in the formal semantics, this pseudo-instruction
+- [Pfreeframe lo hi ofs]: in the formal semantics, this pseudo-instruction
   reads the word at offset [ofs] in the block pointed by [r1] (the
   stack pointer), frees this block, and sets [r1] to the value of the
   word at offset [ofs].  In the printed PowerPC assembly code, this
@@ -349,7 +349,7 @@ Module Pregmap := EMap(PregEq).
   [Vzero] or [Vone]. *)
   
 Definition regset := Pregmap.t val.
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 
 Notation "a # b" := (a b) (at level 1, only parsing).
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
@@ -651,12 +651,16 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) m
   | Pextsh rd r1 =>
       OK (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
-  | Pfreeframe ofs =>
+  | Pfreeframe lo hi ofs =>
       match Mem.loadv Mint32 m (Val.add rs#GPR1 (Vint ofs)) with
       | None => Error
       | Some v =>
           match rs#GPR1 with
-          | Vptr stk ofs => OK (nextinstr (rs#GPR1 <- v)) (Mem.free m stk)
+          | Vptr stk ofs =>
+              match Mem.free m stk lo hi with
+              | None => Error
+              | Some m' => OK (nextinstr (rs#GPR1 <- v)) m'
+              end
           | _ => Error
           end
       end
@@ -874,23 +878,23 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr c i rs m = OK rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_external:
-      forall b ef args res rs m t rs',
+      forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
-      event_match ef args t res ->
+      external_call ef args m t res m' ->
       extcall_arguments rs m ef.(ef_sig) args ->
       rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
                #PC <- (rs LR)) ->
-      step (State rs m) t (State rs' m).
+      step (State rs m) t (State rs' m').
 
 End RELSEM.
 
 (** Execution of whole programs. *)
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro:
+  | initial_state_intro: forall m0,
+      Genv.init_mem p = Some m0 ->
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (symbol_offset ge p.(prog_main) Int.zero)

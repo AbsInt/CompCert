@@ -22,7 +22,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import AST.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Csyntax.
@@ -294,8 +294,8 @@ Function sem_cmp (c:comparison)
       match v1,v2 with
       | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmp c n1 n2))
       | Vptr b1 ofs1,  Vptr b2 ofs2  =>
-          if valid_pointer m b1 (Int.signed ofs1)
-          && valid_pointer m b2 (Int.signed ofs2) then
+          if Mem.valid_pointer m b1 (Int.signed ofs1)
+          && Mem.valid_pointer m b2 (Int.signed ofs2) then
             if zeq b1 b2
             then Some (Val.of_bool (Int.cmp c ofs1 ofs2))
             else sem_cmp_mismatch c
@@ -412,15 +412,15 @@ Inductive cast : val -> type -> type -> val -> Prop :=
   maps names of functions and global variables to memory block references,
   and function pointers to their definitions.  (See module [Globalenvs].) *)
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef type.
 
 (** The local environment maps local variables to block references.
   The current value of the variable is stored in the associated memory
   block. *)
 
-Definition env := PTree.t block. (* map variable -> location *)
+Definition env := PTree.t (block * type). (* map variable -> location & type *)
 
-Definition empty_env: env := (PTree.empty block).
+Definition empty_env: env := (PTree.empty (block * type)).
 
 (** [load_value_of_type ty m b ofs] computes the value of a datum
   of type [ty] residing in memory [m] at block [b], offset [ofs].
@@ -463,7 +463,7 @@ Inductive alloc_variables: env -> mem ->
   | alloc_variables_cons:
       forall e m id ty vars m1 b1 m2 e2,
       Mem.alloc m 0 (sizeof ty) = (m1, b1) ->
-      alloc_variables (PTree.set id b1 e) m1 vars e2 m2 ->
+      alloc_variables (PTree.set id (b1, ty) e) m1 vars e2 m2 ->
       alloc_variables e m ((id, ty) :: vars) e2 m2.
 
 (** Initialization of local variables that are parameters to a function.
@@ -479,15 +479,18 @@ Inductive bind_parameters: env ->
       bind_parameters e m nil nil m
   | bind_parameters_cons:
       forall e m id ty params v1 vl b m1 m2,
-      PTree.get id e = Some b ->
+      PTree.get id e = Some(b, ty) ->
       store_value_of_type ty m b Int.zero v1 = Some m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
 
-(** Return the list of blocks in the codomain of [e]. *)
+(** Return the list of blocks in the codomain of [e], with low and high bounds. *)
 
-Definition blocks_of_env (e: env) : list block :=
-  List.map (@snd ident block) (PTree.elements e).
+Definition block_of_binding (id_b_ty: ident * (block * type)) :=
+  match id_b_ty with (id, (b, ty)) => (b, 0, sizeof ty) end.
+
+Definition blocks_of_env (e: env) : list (block * Z * Z) :=
+  List.map block_of_binding (PTree.elements e).
 
 (** Selection of the appropriate case of a [switch], given the value [n]
   of the selector expression. *)
@@ -586,7 +589,7 @@ Inductive eval_expr: expr -> val -> Prop :=
 
 with eval_lvalue: expr -> block -> int -> Prop :=
   | eval_Evar_local:   forall id l ty,
-      e!id = Some l ->
+      e!id = Some(l, ty) ->
       eval_lvalue (Expr (Evar id) ty) l Int.zero
   | eval_Evar_global: forall id l ty,
       e!id = None ->
@@ -844,20 +847,23 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f Sskip (Kfor3 a2 a3 s k) e m)
         E0 (State f (Sfor Sskip a2 a3 s) k e m)
 
-  | step_return_0: forall f k e m,
+  | step_return_0: forall f k e m m',
       f.(fn_return) = Tvoid ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn None) k e m)
-        E0 (Returnstate Vundef (call_cont k) (Mem.free_list m (blocks_of_env e)))
-  | step_return_1: forall f a k e m v,
+        E0 (Returnstate Vundef (call_cont k) m')
+  | step_return_1: forall f a k e m v m',
       f.(fn_return) <> Tvoid ->
       eval_expr e m a v ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e m)
-        E0 (Returnstate v (call_cont k) (Mem.free_list m (blocks_of_env e)))
-  | step_skip_call: forall f k e m,
+        E0 (Returnstate v (call_cont k) m')
+  | step_skip_call: forall f k e m m',
       is_call_cont k ->
       f.(fn_return) = Tvoid ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f Sskip k e m)
-        E0 (Returnstate Vundef k (Mem.free_list m (blocks_of_env e)))
+        E0 (Returnstate Vundef k m')
 
   | step_switch: forall f a sl k e m n,
       eval_expr e m a (Vint n) ->
@@ -886,10 +892,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k e m2)
 
-  | step_external_function: forall id targs tres vargs k m vres t,
-      event_match (external_function id targs tres) vargs t vres ->
+  | step_external_function: forall id targs tres vargs k m vres t m',
+      external_call (external_function id targs tres) vargs m t vres m' ->
       step (Callstate (External id targs tres) vargs k m)
-         t (Returnstate vres k m)
+         t (Returnstate vres k m')
 
   | step_returnstate_0: forall v f e k m,
       step (Returnstate v (Kcall None f e k) m)
@@ -1084,15 +1090,16 @@ Inductive exec_stmt: env -> mem -> statement -> trace -> mem -> outcome -> Prop 
   by the call.  *)
 
 with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
-  | eval_funcall_internal: forall m f vargs t e m1 m2 m3 out vres,
+  | eval_funcall_internal: forall m f vargs t e m1 m2 m3 out vres m4,
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       exec_stmt e m2 f.(fn_body) t m3 out ->
       outcome_result_value out f.(fn_return) vres ->
-      eval_funcall m (Internal f) vargs t (Mem.free_list m3 (blocks_of_env e)) vres
-  | eval_funcall_external: forall m id targs tres vargs t vres,
-      event_match (external_function id targs tres) vargs t vres ->
-      eval_funcall m (External id targs tres) vargs t m vres.
+      Mem.free_list m3 (blocks_of_env e) = Some m4 ->
+      eval_funcall m (Internal f) vargs t m4 vres
+  | eval_funcall_external: forall m id targs tres vargs t vres m',
+      external_call (external_function id targs tres) vargs m t vres m' ->
+      eval_funcall m (External id targs tres) vargs t m' vres.
 
 Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop
   with eval_funcall_ind2 := Minimality for eval_funcall Sort Prop.
@@ -1212,9 +1219,9 @@ End SEMANTICS.
   without arguments and with an empty continuation. *)
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall b f,
+  | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       initial_state p (Callstate f nil Kstop m0).
@@ -1236,18 +1243,18 @@ Definition exec_program (p: program) (beh: program_behavior) : Prop :=
 (** Big-step execution of a whole program.  *)
 
 Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
-  | bigstep_program_terminates_intro: forall b f m1 t r,
+  | bigstep_program_terminates_intro: forall b f m0 m1 t r,
       let ge := Genv.globalenv p in 
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       eval_funcall ge m0 f nil t m1 (Vint r) ->
       bigstep_program_terminates p t r.
 
 Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
-  | bigstep_program_diverges_intro: forall b f t,
+  | bigstep_program_diverges_intro: forall b f m0 t,
       let ge := Genv.globalenv p in 
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       evalinf_funcall ge m0 f nil t ->
@@ -1525,16 +1532,16 @@ Proof.
   (* Out_normal *)
   assert (fn_return f = Tvoid /\ vres = Vundef).
     destruct (fn_return f); auto || contradiction.
-  destruct H5. subst vres. apply step_skip_call; auto.
+  destruct H6. subst vres. apply step_skip_call; auto.
   (* Out_return None *)
   assert (fn_return f = Tvoid /\ vres = Vundef).
     destruct (fn_return f); auto || contradiction.
-  destruct H6. subst vres.
-  rewrite <- (is_call_cont_call_cont k H4). rewrite <- H5.
+  destruct H7. subst vres.
+  rewrite <- (is_call_cont_call_cont k H5). rewrite <- H6.
   apply step_return_0; auto.
   (* Out_return Some *)
   destruct H3. subst vres.
-  rewrite <- (is_call_cont_call_cont k H4). rewrite <- H5.
+  rewrite <- (is_call_cont_call_cont k H5). rewrite <- H6.
   eapply step_return_1; eauto.
   reflexivity. traceEq.
 
@@ -1697,9 +1704,9 @@ Qed.
 Theorem bigstep_program_terminates_exec:
   forall t r, bigstep_program_terminates prog t r -> exec_program prog (Terminates t r).
 Proof.
-  intros. inv H. unfold ge0, m0 in *. 
+  intros. inv H. 
   econstructor.
-  econstructor. eauto. eauto.
+  econstructor. eauto. eauto. eauto.
   apply eval_funcall_steps. eauto. red; auto. 
   econstructor.
 Qed.
@@ -1717,7 +1724,7 @@ Proof.
     eapply evalinf_funcall_forever; eauto. 
   destruct (forever_silent_or_reactive _ _ _ _ _ _ H)
   as [A | [t [s' [T' [B [C D]]]]]]. 
-  left. econstructor. econstructor. eauto. eauto. auto.
+  left. econstructor. econstructor; eauto. eauto.
   right. exists t. split.
   econstructor. econstructor; eauto. eauto. auto. 
   subst T. rewrite <- (E0_right t) at 1. apply traceinf_prefix_app. constructor.

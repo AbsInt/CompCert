@@ -15,10 +15,10 @@
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
-Require Import Mem.
+Require Import Memory.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
@@ -194,14 +194,6 @@ Proof.
   constructor; auto.
 Qed.
 
-Lemma wt_event_match:
-  forall ef args t res,
-  event_match ef args t res ->
-  Val.has_type res (proj_sig_res ef.(ef_sig)).
-Proof.
-  induction 1. inversion H0; exact I.
-Qed.
-
 Section SUBJECT_REDUCTION.
 
 Inductive wt_stackframe: stackframe -> Prop :=
@@ -259,7 +251,7 @@ Proof.
     simpl in H. 
     rewrite <- H2. replace v with (rs r1). apply WTRS. congruence.
     replace (mreg_type res) with (snd (type_of_operation op)).
-    apply type_of_operation_sound with fundef ge rs##args sp; auto.
+    apply type_of_operation_sound with fundef unit ge rs##args sp; auto.
     rewrite <- H5; reflexivity.
 
   apply wt_setreg; auto. inversion H1. rewrite H7.
@@ -267,18 +259,18 @@ Proof.
 
   assert (WTFD: wt_fundef f').
     destruct ros; simpl in H.
-    apply (Genv.find_funct_prop wt_fundef wt_p H).
+    apply (Genv.find_funct_prop wt_fundef _ _ wt_p H).
     destruct (Genv.find_symbol ge i); try discriminate.
-    apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
+    apply (Genv.find_funct_ptr_prop wt_fundef _ _ wt_p H).
   econstructor; eauto.
   intros. elim H0; intro. subst s0. econstructor; eauto with coqlib.
   auto.
 
   assert (WTFD: wt_fundef f').
     destruct ros; simpl in H.
-    apply (Genv.find_funct_prop wt_fundef wt_p H).
+    apply (Genv.find_funct_prop wt_fundef _ _ wt_p H).
     destruct (Genv.find_symbol ge i); try discriminate.
-    apply (Genv.find_funct_ptr_prop wt_fundef wt_p H).
+    apply (Genv.find_funct_ptr_prop wt_fundef _ _ wt_p H).
   econstructor; eauto.
 
 (*  apply wt_setreg; auto. exact I.  *)
@@ -293,7 +285,7 @@ Proof.
   apply wt_empty_frame.
 
   econstructor; eauto. apply wt_setreg; auto.
-  generalize (wt_event_match _ _ _ _ H). 
+  generalize (external_call_well_typed _ _ _ _ _ _ H).  
   unfold proj_sig_res, Conventions.loc_result.
   destruct (sig_res (ef_sig ef)).
   destruct t0; simpl; auto.

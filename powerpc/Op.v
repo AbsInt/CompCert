@@ -29,7 +29,8 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memdata.
+Require Import Memory.
 Require Import Globalenvs.
 
 Set Implicit Arguments.
@@ -182,7 +183,7 @@ Definition offset_sp (sp: val) (delta: int) : option val :=
   end.
 
 Definition eval_operation
-    (F: Type) (genv: Genv.t F) (sp: val)
+    (F V: Type) (genv: Genv.t F V) (sp: val)
     (op: operation) (vl: list val): option val :=
   match op, vl with
   | Omove, v1::nil => Some v1
@@ -265,7 +266,7 @@ Definition eval_operation
   end.
 
 Definition eval_addressing
-    (F: Type) (genv: Genv.t F) (sp: val)
+    (F V: Type) (genv: Genv.t F V) (sp: val)
     (addr: addressing) (vl: list val) : option val :=
   match addr, vl with
   | Aindexed n, Vptr b1 n1 :: nil =>
@@ -360,9 +361,9 @@ Qed.
 
 Section GENV_TRANSF.
 
-Variable F1 F2: Type.
-Variable ge1: Genv.t F1.
-Variable ge2: Genv.t F2.
+Variable F1 F2 V1 V2: Type.
+Variable ge1: Genv.t F1 V1.
+Variable ge2: Genv.t F2 V2.
 Hypothesis agree_on_symbols:
   forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
 
@@ -480,25 +481,14 @@ Definition type_of_addressing (addr: addressing) : list typ :=
   | Ainstack _ => nil
   end.
 
-Definition type_of_chunk (c: memory_chunk) : typ :=
-  match c with
-  | Mint8signed => Tint
-  | Mint8unsigned => Tint
-  | Mint16signed => Tint
-  | Mint16unsigned => Tint
-  | Mint32 => Tint
-  | Mfloat32 => Tfloat
-  | Mfloat64 => Tfloat
-  end.
-
 (** Weak type soundness results for [eval_operation]:
   the result values, when defined, are always of the type predicted
   by [type_of_operation]. *)
 
 Section SOUNDNESS.
 
-Variable A: Type.
-Variable genv: Genv.t A.
+Variable A V: Type.
+Variable genv: Genv.t A V.
 
 Lemma type_of_operation_sound:
   forall op vl sp v,
@@ -548,8 +538,7 @@ Proof.
   destruct v; destruct chunk; exact I.
   intros until v. unfold Mem.loadv. 
   destruct addr; intros; try discriminate.
-  generalize (Mem.load_inv _ _ _ _ _ H0).
-  intros [X Y].  subst v.  apply H.
+  eapply Mem.load_type; eauto.
 Qed.
 
 End SOUNDNESS.
@@ -560,8 +549,8 @@ End SOUNDNESS.
 
 Section EVAL_OP_TOTAL.
 
-Variable F: Type.
-Variable genv: Genv.t F.
+Variable F V: Type.
+Variable genv: Genv.t F V.
 
 Definition find_symbol_offset (id: ident) (ofs: int) : val :=
   match Genv.find_symbol genv id with
@@ -746,8 +735,8 @@ End EVAL_OP_TOTAL.
 
 Section EVAL_LESSDEF.
 
-Variable F: Type.
-Variable genv: Genv.t F.
+Variable F V: Type.
+Variable genv: Genv.t F V.
 
 Ltac InvLessdef :=
   match goal with
@@ -834,7 +823,7 @@ End EVAL_LESSDEF.
 Definition op_for_binary_addressing (addr: addressing) : operation := Oadd.
 
 Lemma eval_op_for_binary_addressing:
-  forall (F: Type) (ge: Genv.t F) sp addr args v,
+  forall (F V: Type) (ge: Genv.t F V) sp addr args v,
   (length args >= 2)%nat ->
   eval_addressing ge sp addr args = Some v ->
   eval_operation ge sp (op_for_binary_addressing addr) args = Some v.

@@ -20,7 +20,7 @@ Require Import Floats.
 Require Import AST.
 Require Import Values.
 Require Import Events.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Csyntax.
 Require Import Csem.

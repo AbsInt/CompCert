@@ -2670,15 +2670,15 @@ Qed.
 
 End Make.
 
-(** * Specialization to 32-bit integers. *)
+(** * Specialization to 32-bit integers and to bytes. *)
 
-Module IntWordsize.
+Module Wordsize_32.
   Definition wordsize := 32%nat.
   Remark wordsize_not_zero: wordsize <> 0%nat.
   Proof. unfold wordsize; congruence. Qed.
-End IntWordsize.
+End Wordsize_32.
 
-Module Int := Make(IntWordsize).
+Module Int := Make(Wordsize_32).
 
 Notation int := Int.int.
 
@@ -2688,5 +2688,12 @@ Proof.
   exists (two_p (32-5)); reflexivity. 
 Qed.
 
+Module Wordsize_8.
+  Definition wordsize := 8%nat.
+  Remark wordsize_not_zero: wordsize <> 0%nat.
+  Proof. unfold wordsize; congruence. Qed.
+End Wordsize_8.
 
+Module Byte := Integers.Make(Wordsize_8).
 
+Notation byte := Byte.int.

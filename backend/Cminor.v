@@ -22,7 +22,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Events.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Switch.
@@ -144,7 +144,7 @@ Definition funsig (fd: fundef) :=
 - [env]: local environments, map local variables to values.
 *)
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 Definition env := PTree.t val.
 
 (** The following functions build the initial local environment at
@@ -402,11 +402,12 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_skip_block: forall f k sp e m,
       step (State f Sskip (Kblock k) sp e m)
         E0 (State f Sskip k sp e m)
-  | step_skip_call: forall f k sp e m,
+  | step_skip_call: forall f k sp e m m',
       is_call_cont k ->
       f.(fn_sig).(sig_res) = None ->
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f Sskip k (Vptr sp Int.zero) e m)
-        E0 (Returnstate Vundef k (Mem.free m sp))
+        E0 (Returnstate Vundef k m')
 
   | step_assign: forall f id a k sp e m v,
       eval_expr sp e m a v ->
@@ -428,13 +429,14 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Scall optid sig a bl) k sp e m)
         E0 (Callstate fd vargs (Kcall optid f sp e k) m)
 
-  | step_tailcall: forall f sig a bl k sp e m vf vargs fd,
+  | step_tailcall: forall f sig a bl k sp e m vf vargs fd m',
       eval_expr (Vptr sp Int.zero) e m a vf ->
       eval_exprlist (Vptr sp Int.zero) e m bl vargs ->
       Genv.find_funct ge vf = Some fd ->
       funsig fd = sig ->
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Stailcall sig a bl) k (Vptr sp Int.zero) e m)
-        E0 (Callstate fd vargs (call_cont k) (Mem.free m sp))
+        E0 (Callstate fd vargs (call_cont k) m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)
@@ -469,13 +471,15 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sswitch a cases default) k sp e m)
         E0 (State f (Sexit (switch_target n default cases)) k sp e m)
 
-  | step_return_0: forall f k sp e m,
+  | step_return_0: forall f k sp e m m',
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Sreturn None) k (Vptr sp Int.zero) e m)
-        E0 (Returnstate Vundef (call_cont k) (Mem.free m sp))
-  | step_return_1: forall f a k sp e m v,
+        E0 (Returnstate Vundef (call_cont k) m')
+  | step_return_1: forall f a k sp e m v m',
       eval_expr (Vptr sp Int.zero) e m a v ->
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Sreturn (Some a)) k (Vptr sp Int.zero) e m)
-        E0 (Returnstate v (call_cont k) (Mem.free m sp))
+        E0 (Returnstate v (call_cont k) m')
 
   | step_label: forall f lbl s k sp e m,
       step (State f (Slabel lbl s) k sp e m)
@@ -491,10 +495,10 @@ Inductive step: state -> trace -> state -> Prop :=
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k (Vptr sp Int.zero) e m')
-  | step_external_function: forall ef vargs k m t vres,
-      event_match ef vargs t vres ->
+  | step_external_function: forall ef vargs k m t vres m',
+      external_call ef vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m)        
+         t (Returnstate vres k m')        
 
   | step_return: forall v optid f sp e k m,
       step (Returnstate v (Kcall optid f sp e k) m)
@@ -508,9 +512,9 @@ End RELSEM.
   without arguments and with an empty continuation. *)
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall b f,
+  | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
@@ -560,11 +564,15 @@ Definition outcome_result_value
   end.
 
 Definition outcome_free_mem
-    (out: outcome) (m: mem) (sp: block) : mem :=
+    (out: outcome) (m: mem) (sp: block) (sz: Z) (m': mem) :=
   match out with
-  | Out_tailcall_return _ => m
-  | _ => Mem.free m sp
+  | Out_tailcall_return _ => m' = m
+  | _ => Mem.free m sp 0 sz = Some m'
   end.
+
+(***** REVISE - PROBLEMS WITH free *)
+
+(******************************
 
 Section NATURALSEM.
 
@@ -580,16 +588,17 @@ Inductive eval_funcall:
         mem -> fundef -> list val -> trace ->
         mem -> val -> Prop :=
   | eval_funcall_internal:
-      forall m f vargs m1 sp e t e2 m2 out vres,
+      forall m f vargs m1 sp e t e2 m2 out vres m3,
       Mem.alloc m 0 f.(fn_stackspace) = (m1, sp) ->
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       exec_stmt (Vptr sp Int.zero) e m1 f.(fn_body) t e2 m2 out ->
       outcome_result_value out f.(fn_sig).(sig_res) vres ->
-      eval_funcall m (Internal f) vargs t (outcome_free_mem out m2 sp) vres
+      outcome_free_mem out m2 sp f.(fn_stackspace) m3 ->
+      eval_funcall m (Internal f) vargs t m3 vres
   | eval_funcall_external:
-      forall ef m args t res,
-      event_match ef args t res ->
-      eval_funcall m (External ef) args t m res
+      forall ef m args t res m',
+      external_call ef args m t res m' ->
+      eval_funcall m (External ef) args t m' res
 
 (** Execution of a statement: [exec_stmt ge sp e m s t e' m' out]
   means that statement [s] executes with outcome [out].
@@ -759,9 +768,9 @@ End NATURALSEM.
 
 Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
   | bigstep_program_terminates_intro:
-      forall b f t m r,
+      forall b f m0 t m r,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
@@ -770,9 +779,9 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
 
 Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
   | bigstep_program_diverges_intro:
-      forall b f t,
+      forall b f m0 t,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
@@ -1116,6 +1125,6 @@ Qed.
 
 End BIGSTEP_TO_TRANSITION.
 
-
+***************************************************)
 
 

@@ -21,7 +21,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Events.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Op.
@@ -67,7 +67,7 @@ Definition funsig (fd: fundef) :=
 
 (** * Operational semantics *)
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
 
 Definition locmap_optget (ol: option loc) (dfl: val) (ls: locset) : val :=
@@ -189,12 +189,13 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Callstate (Stackframe res f sp (postcall_locs rs) pc' :: s)
                       f' (List.map rs args) m)
   | exec_Ltailcall:
-      forall s f stk pc rs m sig ros args f',
+      forall s f stk pc rs m sig ros args f' m',
       (fn_code f)!pc = Some(Ltailcall sig ros args) ->
       find_function ros rs = Some f' ->
       funsig f' = sig ->
+      Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) pc rs m)
-        E0 (Callstate s f' (List.map rs args) (Mem.free m stk))
+        E0 (Callstate s f' (List.map rs args) m')
   | exec_Lcond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
@@ -215,20 +216,21 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp pc rs m)
         E0 (State s f sp pc' rs m)
   | exec_Lreturn:
-      forall s f stk pc rs m or,
+      forall s f stk pc rs m or m',
       (fn_code f)!pc = Some(Lreturn or) ->
+      Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) pc rs m)
-        E0 (Returnstate s (locmap_optget or Vundef rs) (Mem.free m stk))
+        E0 (Returnstate s (locmap_optget or Vundef rs) m')
   | exec_function_internal:
       forall s f args m m' stk,
       Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
       step (Callstate s (Internal f) args m)
         E0 (State s f (Vptr stk Int.zero) f.(fn_entrypoint) (init_locs args f.(fn_params)) m')
   | exec_function_external:
-      forall s ef t args res m,
-      event_match ef args t res ->
+      forall s ef t args res m m',
+      external_call ef args m t res m' ->
       step (Callstate s (External ef) args m)
-         t (Returnstate s res m)
+         t (Returnstate s res m')
   | exec_return:
       forall res f sp rs pc s vres m,
       step (Returnstate (Stackframe res f sp rs pc :: s) vres m)
@@ -242,9 +244,9 @@ End RELSEM.
   by the calling conventions. *)
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall b f,
+  | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->

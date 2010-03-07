@@ -32,8 +32,8 @@ Axiom traceinf_extensionality:
 (** * Deterministic worlds *)
 
 (** One source of possible nondeterminism is that our semantics leave
-  unspecified the results of calls to external 
-  functions.  Different results to e.g. a "read" operation can of
+  unspecified the results of system calls.
+  Different results to e.g. a "read" operation can of
   course lead to different behaviors for the program.
   We address this issue by modeling a notion of deterministic
   external world that uniquely determines the results of external calls. *)
@@ -61,13 +61,21 @@ Definition nextworld (w: world) (evname: ident) (evargs: list eventval) :
   world and [T] the infinite trace of interest.
 *)
 
+Inductive possible_event: world -> event -> world -> Prop :=
+  | possible_event_syscall: forall w1 evname evargs evres w2,
+      nextworld w1 evname evargs = Some (evres, w2) ->
+      possible_event w1 (Event_syscall evname evargs evres) w2
+  | possible_event_load: forall w label,
+      possible_event w (Event_load label) w
+  | possible_event_store: forall w label,
+      possible_event w (Event_store label) w.
+
 Inductive possible_trace: world -> trace -> world -> Prop :=
   | possible_trace_nil: forall w,
       possible_trace w E0 w
-  | possible_trace_cons: forall w0 evname evargs evres w1 t w2,
-      nextworld w0 evname evargs = Some (evres, w1) ->
-      possible_trace w1 t w2 ->
-      possible_trace w0 (mkevent evname evargs evres :: t) w2.
+  | possible_trace_cons: forall w1 ev w2 t w3,
+      possible_event w1 ev w2 -> possible_trace w2 t w3 ->
+      possible_trace w1 (ev :: t) w3.
 
 Lemma possible_trace_app:
   forall t2 w2 w0 t1 w1,
@@ -90,11 +98,28 @@ Proof.
   exists w1; split. econstructor; eauto. auto.
 Qed.
 
+Lemma possible_event_final_world:
+  forall w ev w1 w2,
+  possible_event w ev w1 -> possible_event w ev w2 -> w1 = w2.
+Proof.
+  intros. inv H; inv H0; congruence.
+Qed.
+
+Lemma possible_trace_final_world:
+  forall w0 t w1, possible_trace w0 t w1 ->
+  forall w2, possible_trace w0 t w2 -> w1 = w2.
+Proof.
+  induction 1; intros.
+  inv H. auto.
+  inv H1. assert (w2 = w5) by (eapply possible_event_final_world; eauto). 
+  subst; eauto.
+Qed.
+
 CoInductive possible_traceinf: world -> traceinf -> Prop :=
-  | possible_traceinf_cons: forall w0 evname evargs evres w1 T,
-      nextworld w0 evname evargs = Some (evres, w1) ->
-      possible_traceinf w1 T ->
-      possible_traceinf w0 (Econsinf (mkevent evname evargs evres) T).
+  | possible_traceinf_cons: forall w1 ev w2 T,
+      possible_event w1 ev w2 ->
+      possible_traceinf w2 T ->
+      possible_traceinf w1 (Econsinf ev T).
 
 Lemma possible_traceinf_app:
   forall t2 w0 t1 w1,
@@ -149,34 +174,13 @@ Definition possible_behavior (w: world) (b: program_behavior) : Prop :=
   | Goes_wrong t => exists w', possible_trace w t w'
   end.
 
-(** Determinism properties of [event_match]. *)
-
-Remark eventval_match_deterministic:
-  forall ev1 ev2 ty v1 v2,
-  eventval_match ev1 ty v1 -> eventval_match ev2 ty v2 ->
-  (ev1 = ev2 <-> v1 = v2).
-Proof.
-  intros. inv H; inv H0; intuition congruence.
-Qed.
-
-Remark eventval_list_match_deterministic:
-  forall ev1 ty v, eventval_list_match ev1 ty v ->
-  forall ev2, eventval_list_match ev2 ty v -> ev1 = ev2.
-Proof.
-  induction 1; intros.
-  inv H. auto.
-  inv H1. decEq.
-  rewrite (eventval_match_deterministic _ _ _ _ _ H H6). auto.
-  eauto.
-Qed.
-
 (** * Deterministic semantics *)
 
 Section DETERM_SEM.
 
 (** We assume given a transition semantics that is internally
   deterministic: the only source of non-determinism is the return
-  value of external calls. *)
+  value of system calls. *)
 
 Variable genv: Type.
 Variable state: Type.
@@ -184,17 +188,9 @@ Variable step: genv -> state -> trace -> state -> Prop.
 Variable initial_state: state -> Prop.
 Variable final_state: state -> int -> Prop.
 
-Inductive internal_determinism: trace -> state -> trace -> state -> Prop :=
-  | int_determ_0: forall s,
-      internal_determinism E0 s E0 s
-  | int_determ_1: forall s s' id arg res res',
-      (res = res' -> s = s') ->
-      internal_determinism (mkevent id arg res :: nil) s
-                           (mkevent id arg res' :: nil) s'.
-
 Hypothesis step_internal_deterministic:
   forall ge s t1 s1 t2 s2,
-  step ge s t1 s1 -> step ge s t2 s2 -> internal_determinism t1 s1 t2 s2.
+  step ge s t1 s1 -> step ge s t2 s2 -> matching_traces t1 t2 -> s1 = s2 /\ t1 = t2.
 
 Hypothesis initial_state_determ:
   forall s1 s2, initial_state s1 -> initial_state s2 -> s1 = s2.
@@ -208,18 +204,29 @@ Hypothesis final_state_nostep:
 (** Consequently, the [step] relation is deterministic if restricted
     to traces that are possible in a deterministic world. *)
 
+Remark matching_possible_traces:
+  forall w0 t1 w1, possible_trace w0 t1 w1 ->
+  forall t2 w2, possible_trace w0 t2 w2 ->
+  matching_traces t1 t2.
+Proof.
+  induction 1; intros.
+  destruct t2; simpl; auto.
+  destruct t2; simpl. destruct ev; auto. inv H1.
+  inv H; inv H5; auto; intros.
+  subst. rewrite H in H1; inv H1. split; eauto.
+  eauto.
+  eauto.
+Qed.
+
 Lemma step_deterministic:
   forall ge s0 t1 s1 t2 s2 w0 w1 w2,
   step ge s0 t1 s1 -> step ge s0 t2 s2 ->
   possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
   s1 = s2 /\ t1 = t2 /\ w1 = w2.
 Proof.
-  intros. exploit step_internal_deterministic. eexact H. eexact H0. intro ID.
-  inv ID.
-  inv H1. inv H2. auto.
-  inv H2. inv H11. inv H1. inv H11. 
-  rewrite H10 in H9. inv H9. 
-  intuition.
+  intros. exploit step_internal_deterministic. eexact H. eexact H0.
+  eapply matching_possible_traces; eauto. intuition.
+  subst. eapply possible_trace_final_world; eauto. 
 Qed.
 
 Ltac use_step_deterministic :=
@@ -378,27 +385,44 @@ Lemma forever_reactive_inv2:
   t1 <> E0 -> t2 <> E0 ->
   forever_reactive step ge s1 T1 -> possible_traceinf w1 T1 ->
   forever_reactive step ge s2 T2 -> possible_traceinf w2 T2 ->
-  exists s', exists e, exists T1', exists T2', exists w',
+  exists s', exists t, exists T1', exists T2', exists w',
+  t <> E0 /\
   forever_reactive step ge s' T1' /\ possible_traceinf w' T1' /\
   forever_reactive step ge s' T2' /\ possible_traceinf w' T2' /\
-  t1 *** T1 = Econsinf e T1' /\
-  t2 *** T2 = Econsinf e T2'.
+  t1 *** T1 = t *** T1' /\
+  t2 *** T2 = t *** T2'.
 Proof.
   induction 1; intros.
   congruence.
   inv H3. congruence. possibleTraceInv.
-  assert (ID: internal_determinism t3 s5 t1 s2). eauto. 
-  inv ID.
-  possibleTraceInv. eauto.
-  inv P. inv P1. inv H17. inv H19. rewrite H18 in H16; inv H16.
-  assert (s5 = s2) by auto. subst s5.
-  exists s2; exists (mkevent id arg res');
-  exists (t2 *** T1); exists (t4 *** T2); exists w0.
+  use_step_deterministic. 
+  destruct t3.
+  (* inductive case *)
+  simpl in *. inv P1; inv P. eapply IHstar; eauto. 
+  (* base case *)
+  exists s5; exists (e :: t3);
+  exists (t2 *** T1); exists (t4 *** T2); exists w3.
+  split. unfold E0; congruence.
   split. eapply star_forever_reactive; eauto. 
   split. eapply possible_traceinf_app; eauto. 
   split. eapply star_forever_reactive; eauto. 
   split. eapply possible_traceinf_app; eauto.
-  auto.
+  split; traceEq. 
+Qed.
+
+Lemma forever_reactive_determ':
+  forall ge s T1 T2 w,
+  forever_reactive step ge s T1 -> possible_traceinf w T1 ->
+  forever_reactive step ge s T2 -> possible_traceinf w T2 ->
+  traceinf_sim' T1 T2.
+Proof.
+  cofix COINDHYP; intros.
+  inv H. inv H1. possibleTraceInv.
+  destruct (forever_reactive_inv2 _ _ _ _ H _ _ _ _ _ _ _ P H3 P1 H6 H4
+                                  H7 P0 H5 P2)
+  as [s' [t' [T1' [T2' [w' [A [B [C [D [E [G K]]]]]]]]]]].
+  rewrite G; rewrite K. constructor. auto. 
+  eapply COINDHYP; eauto. 
 Qed.
 
 Lemma forever_reactive_determ:
@@ -407,13 +431,7 @@ Lemma forever_reactive_determ:
   forever_reactive step ge s T2 -> possible_traceinf w T2 ->
   traceinf_sim T1 T2.
 Proof.
-  cofix COINDHYP; intros.
-  inv H. inv H1. possibleTraceInv.
-  destruct (forever_reactive_inv2 _ _ _ _ H _ _ _ _ _ _ _ P H3 P1 H6 H4
-                                  H7 P0 H5 P2)
-  as [s' [e [T1' [T2' [w' [A [B [C [D [E G]]]]]]]]]].
-  rewrite E; rewrite G. constructor.
-  eapply COINDHYP; eauto. 
+  intros. apply traceinf_sim'_sim. eapply forever_reactive_determ'; eauto.
 Qed.
 
 Lemma star_forever_reactive_inv:

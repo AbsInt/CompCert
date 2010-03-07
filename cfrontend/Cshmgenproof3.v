@@ -20,7 +20,7 @@ Require Import Floats.
 Require Import AST.
 Require Import Values.
 Require Import Events.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Csyntax.
@@ -52,13 +52,13 @@ Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   exists tf, Genv.find_funct tge v = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial2 transl_fundef transl_globvar TRANSL).
+Proof (Genv.find_funct_transf_partial2 transl_fundef transl_globvar _ TRANSL).
 
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
   exists tf, Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar TRANSL).
+Proof (Genv.find_funct_ptr_transf_partial2 transl_fundef transl_globvar _ TRANSL).
 
 Lemma functions_well_typed:
   forall v f,
@@ -82,41 +82,24 @@ Proof.
   assumption.
 Qed.
 
-Lemma sig_translated:
-  forall fd tfd targs tres,
-  classify_fun (type_of_fundef fd) = fun_case_f targs tres ->
-  transl_fundef fd = OK tfd ->
-  funsig tfd = signature_of_type targs tres.
-Proof.
-  intros. destruct fd; monadInv H0; inv H. 
-  monadInv EQ. simpl. auto. 
-  simpl. auto.
-Qed.
-
 (** * Matching between environments *)
 
 (** In this section, we define a matching relation between
   a Clight local environment and a Csharpminor local environment,
   parameterized by an assignment of types to the Clight variables. *)
 
-Definition match_var_kind (ty: type) (vk: var_kind) : Prop :=
-  match access_mode ty with
-  | By_value chunk => vk = Vscalar chunk
-  | _ => True
-  end.
-
 Record match_env (tyenv: typenv) (e: Csem.env) (te: Csharpminor.env) : Prop :=
   mk_match_env {
     me_local:
-      forall id b,
-      e!id = Some b ->
-      exists vk, exists ty,
+      forall id b ty,
+      e!id = Some (b, ty) ->
+      exists vk,
         tyenv!id = Some ty
-        /\ match_var_kind ty vk
+        /\ var_kind_of_type ty = OK vk
         /\ te!id = Some (b, vk);
     me_local_inv:
       forall id b vk,
-      te!id = Some (b, vk) -> e!id = Some b;
+      te!id = Some (b, vk) -> exists ty, e!id = Some(b, ty);
     me_global:
       forall id ty,
       e!id = None -> tyenv!id = Some ty ->
@@ -124,64 +107,44 @@ Record match_env (tyenv: typenv) (e: Csem.env) (te: Csharpminor.env) : Prop :=
       (forall chunk, access_mode ty = By_value chunk -> (global_var_env tprog)!id = Some (Vscalar chunk))
   }.
 
-
 Lemma match_env_same_blocks:
   forall tyenv e te,
   match_env tyenv e te ->
-  forall b, In b (Csem.blocks_of_env e) <-> In b (blocks_of_env te).
+  blocks_of_env te = Csem.blocks_of_env e.
 Proof.
-  intros. inv H.
-  unfold Csem.blocks_of_env, blocks_of_env.
-  set (f := (fun id_b_lv : positive * (block * var_kind) =>
-                let (_, y) := id_b_lv in let (b0, _) := y in b0)).
-  split; intros.
-  exploit list_in_map_inv; eauto. intros [[id b'] [A B]]. 
-  simpl in A; subst b'.
-  exploit (me_local0 id b). apply PTree.elements_complete; auto. 
-  intros [vk [ty [C [D E]]]].
-  change b with (f (id, (b, vk))). 
-  apply List.in_map. apply PTree.elements_correct. auto.
-  exploit list_in_map_inv; eauto. intros [[id [b' vk]] [A B]]. 
-  simpl in A; subst b'.
-  exploit (me_local_inv0 id b vk). apply PTree.elements_complete; auto. 
-  intro.
-  change b with (snd (id, b)).
-  apply List.in_map. apply PTree.elements_correct. auto.
-Qed.
+  intros.
+  set (R := fun (x: (block * type)) (y: (block * var_kind)) =>
+         match x, y with
+         | (b1, ty), (b2, vk) => b2 = b1 /\ var_kind_of_type ty = OK vk
+         end).
+  assert (list_forall2 
+            (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+            (PTree.elements e) (PTree.elements te)).
+  apply PTree.elements_canonical_order.
+  intros id [b ty] GET. exploit me_local; eauto. intros [vk [A [B C]]].
+  exists (b, vk); split; auto. red. auto.
+  intros id [b vk] GET. 
+  exploit me_local_inv; eauto. intros [ty A]. 
+  exploit me_local; eauto. intros [vk' [B [C D]]]. 
+  assert (vk' = vk) by congruence. subst vk'.
+  exists (b, ty); split; auto. red. auto.
 
-Remark free_list_charact:
-  forall l m,
-  free_list m l =
-    mkmem (fun b => if In_dec eq_block b l then empty_block 0 0 else m.(blocks) b)
-          m.(nextblock)
-          m.(nextblock_pos).
-Proof.
-  induction l; intros; simpl.
-  destruct m; simpl. decEq. apply extensionality. auto.
-  rewrite IHl. unfold free; simpl. decEq. apply extensionality; intro b.
-  unfold update. destruct (eq_block a b). 
-  subst b. apply zeq_true.
-  rewrite zeq_false; auto. 
-  destruct (In_dec eq_block b l); auto.
-Qed.
-
-Lemma mem_free_list_same:
-  forall m l1 l2,
-  (forall b, In b l1 <-> In b l2) ->
-  free_list m l1 = free_list m l2.
-Proof.
-  intros. repeat rewrite free_list_charact. decEq. apply extensionality; intro b.
-  destruct (In_dec eq_block b l1); destruct (In_dec eq_block b l2); auto.
-  rewrite H in i. contradiction.
-  rewrite <- H in i. contradiction.
+  unfold blocks_of_env, Csem.blocks_of_env.
+  generalize H0. induction 1. auto. 
+  simpl. f_equal; auto.
+  unfold block_of_binding, Csem.block_of_binding. 
+  destruct a1 as [id1 [blk1 ty1]]. destruct b1 as [id2 [blk2 vk2]].
+  simpl in *. destruct H1 as [A [B C]]. subst blk2 id2. f_equal.
+  apply sizeof_var_kind_of_type. auto. 
 Qed.
 
 Lemma match_env_free_blocks:
-  forall tyenv e te m,
+  forall tyenv e te m m',
   match_env tyenv e te ->
-  Mem.free_list m (Csem.blocks_of_env e) = Mem.free_list m (blocks_of_env te).
+  Mem.free_list m (Csem.blocks_of_env e) = Some m' ->
+  Mem.free_list m (blocks_of_env te) = Some m'.
 Proof.
-  intros. apply mem_free_list_same. intros; eapply match_env_same_blocks; eauto.
+  intros. rewrite (match_env_same_blocks _ _ _ H). auto.
 Qed.
 
 Definition match_globalenv (tyenv: typenv) (gv: gvarenv): Prop :=
@@ -201,14 +164,6 @@ Proof.
   intros. split.
   apply PTree.gempty. 
   intros. red in H. eauto.
-Qed.
-
-Lemma match_var_kind_of_type:
-  forall ty vk, var_kind_of_type ty = OK vk -> match_var_kind ty vk.
-Proof.
-  intros; red. 
-  caseEq (access_mode ty); auto.
-  intros chunk AM. generalize (var_kind_by_value _ _ AM). congruence.
 Qed.
 
 (** The following lemmas establish the [match_env] invariant at
@@ -233,17 +188,16 @@ Proof.
   caseEq (transl_vars vars); simpl; [intros tvrs TVARS | congruence].
   intro EQ; inversion EQ; subst tvars; clear EQ.
   set (te2 := PTree.set id (b1, vk) te1).
-  assert (match_env (add_var tyenv (id, ty)) (PTree.set id b1 e) te2).
+  assert (match_env (add_var tyenv (id, ty)) (PTree.set id (b1, ty) e) te2).
     inversion H1. unfold te2, add_var. constructor.
     (* me_local *)
-    intros until b. simpl. repeat rewrite PTree.gsspec.
+    intros until ty0. simpl. repeat rewrite PTree.gsspec.
     destruct (peq id0 id); intros.
-    inv H3. exists vk; exists ty; intuition.
-    apply match_var_kind_of_type. congruence.
+    inv H3. exists vk; intuition.
     auto.
     (* me_local_inv *)
     intros until vk0. repeat rewrite PTree.gsspec. 
-    destruct (peq id0 id); intros. congruence. eauto. 
+    destruct (peq id0 id); intros. exists ty; congruence. eauto. 
     (* me_global *)
     intros until ty0. repeat rewrite PTree.gsspec. simpl. destruct (peq id0 id); intros.
     discriminate.
@@ -276,9 +230,8 @@ Proof.
   unfold store_value_of_type in H0. rewrite H4 in H0.
   apply bind_parameters_cons with b m1. 
   assert (tyenv!id = Some ty). apply H2. apply in_eq.
-  destruct (me_local _ _ _ H3 _ _ H) as [vk [ty' [A [B C]]]]. 
-  assert (ty' = ty) by congruence. subst ty'.
-  red in B; rewrite H4 in B. congruence.
+  destruct (me_local _ _ _ H3 _ _ _ H)  as [vk [A [B C]]].
+  exploit var_kind_by_value; eauto. congruence.
   assumption.
   apply IHbind_parameters with tyenv; auto.
   intros. apply H2. apply in_cons; auto.
@@ -422,9 +375,9 @@ Proof.
   inversion H2; clear H2; subst.
   inversion H; subst; clear H.
     (* local variable *)
-    exploit me_local; eauto. intros [vk [ty' [A [B C]]]].
-    assert (ty' = ty) by congruence. subst ty'.
-    red in B; rewrite ACC in B.
+    exploit me_local; eauto. intros [vk [A [B C]]].
+    assert (vk = Vscalar chunk).
+    exploit var_kind_by_value; eauto. congruence.
     subst vk.
     eapply eval_Evar. 
     eapply eval_var_ref_local. eauto. assumption. 
@@ -440,7 +393,7 @@ Proof.
   inversion H2; clear H2; subst.
   inversion H; subst; clear H.
     (* local variable *)
-    exploit me_local; eauto. intros [vk [ty' [A [B C]]]].
+    exploit me_local; eauto. intros [vk [A [B C]]].
     eapply eval_Eaddrof.
     eapply eval_var_addr_local. eauto. 
     (* global variable *)
@@ -473,9 +426,10 @@ Proof.
   inversion H2; clear H2; subst.
   inversion H; subst; clear H. 
     (* local variable *)
-    exploit me_local; eauto. intros [vk [ty' [A [B C]]]].
-    assert (ty' = ty) by congruence. subst ty'.
-    red in B; rewrite ACC in B; subst vk.
+    exploit me_local; eauto. intros [vk [A [B C]]].
+    assert (vk = Vscalar chunk).
+      exploit var_kind_by_value; eauto. congruence.
+    subst vk.
     eapply step_assign. eauto.
     econstructor. eapply eval_var_ref_local. eauto. assumption. 
     (* global variable *)
@@ -514,10 +468,11 @@ Proof.
 (* local variable *)
   split. auto. 
   subst id0 ty l ofs. exploit me_local; eauto. 
-  intros [vk [ty [A [B C]]]].
-  assert (ty = typeof lhs) by congruence. rewrite <- H3. 
-  generalize B; unfold match_var_kind. destruct (access_mode ty); auto. 
-  intros. subst vk. apply eval_var_ref_local; auto.
+  intros [vk [A [B C]]].
+  case_eq (access_mode (typeof lhs)); intros; auto.
+  assert (vk = Vscalar m0).
+    exploit var_kind_by_value; eauto. congruence.
+  subst vk. apply eval_var_ref_local; auto.
 (* global variable *)
   split. auto.
   subst id0 ty l ofs. exploit me_global; eauto. intros [A B].
@@ -541,7 +496,6 @@ Proof.
   rewrite H3 in H0. 
   constructor. econstructor. eauto. auto.
 Qed.
-
 
 (** * Proof of semantic preservation *)
 
@@ -794,12 +748,12 @@ Qed.
 
 Lemma transl_Evar_local_correct:
   forall (id : ident) (l : block) (ty : type),
-  e ! id = Some l ->
+  e ! id = Some(l, ty) ->
   eval_lvalue_prop (Expr (Csyntax.Evar id) ty) l Int.zero.
 Proof.
   intros; red; intros. inversion WT; clear WT; subst. monadInv TR.
   exploit (me_local _ _ _ MENV); eauto.
-  intros [vk [ty' [A [B C]]]].
+  intros [vk [A [B C]]].
   econstructor. eapply eval_var_addr_local. eauto. 
 Qed.
 
@@ -1296,7 +1250,7 @@ Proof.
   apply plus_one. econstructor; eauto. 
   exploit transl_expr_correct; eauto.
   exploit transl_exprlist_correct; eauto.
-  eapply sig_translated; eauto. congruence.
+  eapply transl_fundef_sig1; eauto. congruence.
   econstructor; eauto. eapply functions_well_typed; eauto. 
   econstructor; eauto. simpl. auto. 
 
@@ -1310,7 +1264,7 @@ Proof.
   apply plus_one. econstructor; eauto. 
   exploit transl_expr_correct; eauto.
   exploit transl_exprlist_correct; eauto.
-  eapply sig_translated; eauto. congruence.
+  eapply transl_fundef_sig1; eauto. congruence.
   econstructor; eauto. eapply functions_well_typed; eauto.
   econstructor; eauto. simpl; auto. 
 
@@ -1521,16 +1475,18 @@ Proof.
   monadInv TR. inv MTR. 
   econstructor; split.
   apply plus_one. constructor. monadInv TRF. simpl. rewrite H. auto.
-  rewrite (match_env_free_blocks _ _ _ m MENV). econstructor; eauto.
+  eapply match_env_free_blocks; eauto. 
+  econstructor; eauto.
   eapply match_cont_call_cont. eauto. 
 
 (* return some *)
-  monadInv TR. inv MTR. inv WT. inv H2. 
+  monadInv TR. inv MTR. inv WT. inv H3. 
   econstructor; split.
   apply plus_one. constructor. monadInv TRF. simpl.
-  unfold opttyp_of_type. destruct (fn_return f); congruence.
-  exploit transl_expr_correct; eauto. 
-  rewrite (match_env_free_blocks _ _ _ m MENV). econstructor; eauto.
+  unfold opttyp_of_type. destruct (Csyntax.fn_return f); congruence.
+  exploit transl_expr_correct; eauto.
+  eapply match_env_free_blocks; eauto.
+  econstructor; eauto.
   eapply match_cont_call_cont. eauto. 
 
 (* skip call *)
@@ -1539,7 +1495,8 @@ Proof.
   econstructor; split.
   apply plus_one. apply step_skip_call. auto.
   monadInv TRF. simpl. rewrite H0. auto.
-  rewrite (match_env_free_blocks _ _ _ m MENV). constructor. eauto.
+  eapply match_env_free_blocks; eauto.
+  constructor. eauto.
 
 (* switch *)
   monadInv TR. inv WT.
@@ -1627,7 +1584,7 @@ Proof.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   assert (C: Genv.find_symbol tge (prog_main tprog) = Some b).
     rewrite symbols_preserved. replace (prog_main tprog) with (prog_main prog).
-    exact H1. symmetry. unfold transl_program in TRANSL. 
+    exact H2. symmetry. unfold transl_program in TRANSL. 
     eapply transform_partial_program2_main; eauto.
   exploit function_ptr_well_typed. eauto. intro WTF.
   assert (exists targs, type_of_fundef f = Tfunction targs (Tint I32 Signed)).
@@ -1635,16 +1592,15 @@ Proof.
     eapply Genv.find_funct_ptr_symbol_inversion; eauto.
   destruct H as [targs D].
   assert (targs = Tnil). 
-    inv H0. inv H9. simpl in D. unfold type_of_function in D. rewrite <- H4 in D. 
+    inv H0. inv H10. simpl in D. unfold type_of_function in D. rewrite <- H5 in D. 
     simpl in D. congruence.
-    simpl in D. inv D. inv H8. inv H. 
-    destruct targs; simpl in H5; congruence.
+    simpl in D. inv D.
+    exploit external_call_arity; eauto. destruct targs; simpl; congruence.
   subst targs. 
   assert (funsig tf = signature_of_type Tnil (Tint I32 Signed)).
-    eapply sig_translated; eauto. rewrite D; auto. 
+    eapply transl_fundef_sig2; eauto. 
   econstructor; split.
-  econstructor; eauto.
-  rewrite (@Genv.init_mem_transf_partial2 _ _ _ _ transl_fundef transl_globvar prog tprog TRANSL).
+  econstructor; eauto. eapply Genv.init_mem_transf_partial2; eauto. 
   constructor; auto. constructor. exact I.
 Qed.
 

@@ -18,7 +18,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -300,7 +300,7 @@ Lemma functions_translated:
   Genv.find_funct tge v = Some (sel_fundef f).
 Proof.  
   intros.
-  exact (Genv.find_funct_transf sel_fundef H).
+  exact (Genv.find_funct_transf sel_fundef _ _ H).
 Qed.
 
 Lemma function_ptr_translated:
@@ -309,7 +309,7 @@ Lemma function_ptr_translated:
   Genv.find_funct_ptr tge b = Some (sel_fundef f).
 Proof.  
   intros. 
-  exact (Genv.find_funct_ptr_transf sel_fundef H).
+  exact (Genv.find_funct_ptr_transf sel_fundef _ _ H).
 Qed.
 
 Lemma sig_function_translated:
@@ -428,6 +428,7 @@ Proof.
   econstructor; split. 
   econstructor. destruct k; simpl in H; simpl; auto. 
   rewrite <- H0; reflexivity.
+  simpl. eauto. 
   constructor; auto.
 (*
   (* assign *)
@@ -457,11 +458,11 @@ Proof.
   constructor; auto. destruct b; auto.
   (* Sreturn None *)
   econstructor; split. 
-  econstructor.
+  econstructor. simpl; eauto. 
   constructor; auto. apply call_cont_commut.
   (* Sreturn Some *)
   econstructor; split. 
-  econstructor. simpl. eauto with evalexpr. 
+  econstructor. simpl. eauto with evalexpr. simpl; eauto.
   constructor; auto. apply call_cont_commut.
   (* Sgoto *)
   econstructor; split.
@@ -477,10 +478,10 @@ Proof.
   induction 1.
   econstructor; split.
   econstructor.
-  simpl. fold tge. rewrite symbols_preserved. eexact H.
+  apply Genv.init_mem_transf; eauto.
+  simpl. fold tge. rewrite symbols_preserved. eexact H0.
   apply function_ptr_translated. eauto. 
-  rewrite <- H1. apply sig_function_translated; auto.
-  unfold tprog, sel_program. rewrite Genv.init_mem_transf.
+  rewrite <- H2. apply sig_function_translated; auto.
   constructor; auto.
 Qed.
 

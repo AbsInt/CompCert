@@ -51,31 +51,29 @@ Qed.
 
 Lemma step_internal_deterministic:
   forall ge s t1 s1 t2 s2,
-  Asm.step ge s t1 s1 -> Asm.step ge s t2 s2 -> internal_determinism _ t1 s1 t2 s2.
+  Asm.step ge s t1 s1 -> Asm.step ge s t2 s2 -> matching_traces t1 t2 ->
+  s1 = s2 /\ t1 = t2.
 Proof.
   intros. inv H; inv H0.
   assert (c0 = c) by congruence.
   assert (i0 = i) by congruence.
   assert (rs'0 = rs') by congruence.
   assert (m'0 = m') by congruence.
-  subst. constructor.
+  subst. auto. 
   congruence.
   congruence.
   assert (ef0 = ef) by congruence. subst ef0.
   assert (args0 = args). eapply extcall_arguments_deterministic; eauto. subst args0.
-  inv H3; inv H8.
-  assert (eargs0 = eargs). eapply eventval_list_match_deterministic; eauto. subst eargs0.
-  constructor. intros.
-  exploit eventval_match_deterministic. eexact H0. eexact H5. intros. 
-  assert (res = res0). tauto. 
-  congruence.
+  exploit external_call_determ. eexact H4. eexact H9. auto. 
+  intros [A [B C]]. subst. 
+  intuition congruence.
 Qed.
 
 Lemma initial_state_deterministic:
   forall p s1 s2,
   initial_state p s1 -> initial_state p s2 -> s1 = s2.
 Proof.
-  intros. inv H; inv H0. reflexivity. 
+  intros. inv H; inv H0. f_equal. congruence.
 Qed.
 
 Lemma final_state_not_step:

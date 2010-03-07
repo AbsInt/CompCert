@@ -20,7 +20,7 @@ Require Import Floats.
 Require Import AST.
 Require Import Values.
 Require Import Events.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Csyntax.
 Require Import Csem.
@@ -31,6 +31,29 @@ Require Import Cshmgen.
 
 (** * Properties of operations over types *)
 
+Remark type_of_chunk_of_type:
+  forall ty chunk,
+  chunk_of_type ty = OK chunk ->
+  type_of_chunk chunk = typ_of_type ty.
+Proof.
+  intros. unfold chunk_of_type in H. destruct ty; simpl in H; try monadInv H.
+  destruct i; destruct s; monadInv H; reflexivity.
+  destruct f; monadInv H; reflexivity.
+  reflexivity. reflexivity. 
+Qed.
+
+Remark transl_params_types:
+  forall p tp,
+  transl_params p = OK tp ->
+  map type_of_chunk (map param_chunk tp) = typlist_of_typelist (type_of_params p).
+Proof.
+  induction p; simpl; intros. 
+  inv H. auto.
+  destruct a as [id ty]. generalize H; clear H. case_eq (chunk_of_type ty); intros.
+  monadInv H0. simpl. f_equal; auto. apply type_of_chunk_of_type; auto.
+  inv H0.
+Qed.
+
 Lemma transl_fundef_sig1:
   forall f tf args res,
   transl_fundef f = OK tf ->
@@ -39,9 +62,10 @@ Lemma transl_fundef_sig1:
 Proof.
   intros. destruct f; monadInv H. 
   monadInv EQ. simpl.  
-  simpl in H0. inversion H0. reflexivity. 
-  simpl. 
-  simpl in H0. congruence.
+  simpl in H0. inversion H0.
+  unfold fn_sig; simpl. unfold signature_of_type. f_equal. 
+  apply transl_params_types; auto.
+  simpl. simpl in H0. congruence.
 Qed.
 
 Lemma transl_fundef_sig2:
@@ -109,7 +133,7 @@ Qed.
 Lemma transl_params_names:
   forall vars tvars,
   transl_params vars = OK tvars ->
-  List.map (@fst ident memory_chunk) tvars = Ctyping.var_names vars.
+  List.map param_name tvars = Ctyping.var_names vars.
 Proof.
   exact (map_partial_names _ _ chunk_of_type).
 Qed.
@@ -117,7 +141,7 @@ Qed.
 Lemma transl_vars_names:
   forall vars tvars,
   transl_vars vars = OK tvars ->
-  List.map (@fst ident var_kind) tvars = Ctyping.var_names vars.
+  List.map variable_name tvars = Ctyping.var_names vars.
 Proof.
   exact (map_partial_names _ _ var_kind_of_type).
 Qed.

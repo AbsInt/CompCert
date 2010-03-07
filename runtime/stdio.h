@@ -58,22 +58,39 @@ extern int	 compcert_ungetc(int, compcert_FILE *);
 #define stdout compcert_stdout
 #undef stderr
 #define stderr compcert_stderr
+#undef clearerr
 #define clearerr compcert_clearerr
+#undef fclose
 #define fclose compcert_fclose
+#undef feof
 #define feof compcert_feof
+#undef ferror
 #define ferror compcert_ferror
+#undef fflush
 #define fflush compcert_fflush
+#undef fgetc
 #define fgetc compcert_fgetc
+#undef fgets
 #define fgets compcert_fgets
+#undef fopen
 #define fopen compcert_fopen
+#undef fprintf
 #define fprintf compcert_fprintf
+#undef fputc
 #define fputc compcert_fputc
+#undef fputs
 #define fputs compcert_fputs
+#undef fread
 #define fread compcert_fread
+#undef freopen
 #define freopen compcert_freopen
+#undef fscanf
 #define fscanf compcert_fscanf
+#undef fseek
 #define fseek compcert_fseek
+#undef ftell
 #define ftell compcert_ftell
+#undef fwrite
 #define fwrite compcert_fwrite
 #undef getc
 #define getc compcert_getc
@@ -83,7 +100,9 @@ extern int	 compcert_ungetc(int, compcert_FILE *);
 #define putc compcert_putc
 #undef putchar
 #define putchar(c) compcert_putc(c, compcert_stdout)
+#undef rewind
 #define rewind compcert_rewind
+#undef ungetc
 #define ungetc compcert_ungetc
 #endif
 

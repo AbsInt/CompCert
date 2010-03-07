@@ -27,7 +27,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Events.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Switch.
 Require Import Op.

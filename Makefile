@@ -33,12 +33,12 @@ GPATH=$(DIRS)
 
 # General-purpose libraries (in lib/)
 
-LIB=Coqlib.v Maps.v Lattice.v Ordered.v \
+LIB=Coqlib.v Intv.v Maps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Floats.v Parmov.v UnionFind.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
-COMMON=Errors.v AST.v Events.v Globalenvs.v Mem.v Values.v \
+COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v Values.v \
   Smallstep.v Determinism.v Switch.v
 
 # Back-end modules (in backend/, $(ARCH)/, $(ARCH)/$(VARIANT))

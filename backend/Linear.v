@@ -22,7 +22,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -67,7 +67,7 @@ Definition funsig (fd: fundef) :=
   | External ef => ef.(ef_sig)
   end.
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
 
 (** * Operational semantics *)
@@ -253,13 +253,13 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Lload:
       forall s f sp chunk addr args dst b rs m a v,
       eval_addressing ge sp addr (reglist rs args) = Some a ->
-      loadv chunk m a = Some v ->
+      Mem.loadv chunk m a = Some v ->
       step (State s f sp (Lload chunk addr args dst :: b) rs m)
         E0 (State s f sp b (Locmap.set (R dst) v rs) m)
   | exec_Lstore:
       forall s f sp chunk addr args src b rs m m' a,
       eval_addressing ge sp addr (reglist rs args) = Some a ->
-      storev chunk m a (rs (R src)) = Some m' ->
+      Mem.storev chunk m a (rs (R src)) = Some m' ->
       step (State s f sp (Lstore chunk addr args src :: b) rs m)
         E0 (State s f sp b rs m')
   | exec_Lcall:
@@ -269,11 +269,12 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Lcall sig ros :: b) rs m)
         E0 (Callstate (Stackframe f sp rs b:: s) f' rs m)
   | exec_Ltailcall:
-      forall s f stk sig ros b rs m f',
+      forall s f stk sig ros b rs m f' m',
       find_function ros rs = Some f' ->
       sig = funsig f' ->
+      Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) (Ltailcall sig ros :: b) rs m)
-        E0 (Callstate s f' (return_regs (parent_locset s) rs) (Mem.free m stk))
+        E0 (Callstate s f' (return_regs (parent_locset s) rs) m')
   | exec_Llabel:
       forall s f sp lbl b rs m,
       step (State s f sp (Llabel lbl :: b) rs m)
@@ -302,21 +303,22 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Ljumptable arg tbl :: b) rs m)
         E0 (State s f sp b' rs m)
   | exec_Lreturn:
-      forall s f stk b rs m,
+      forall s f stk b rs m m',
+      Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) (Lreturn :: b) rs m)
-        E0 (Returnstate s (return_regs (parent_locset s) rs) (Mem.free m stk))
+        E0 (Returnstate s (return_regs (parent_locset s) rs) m')
   | exec_function_internal:
       forall s f rs m m' stk,
-      alloc m 0 f.(fn_stacksize) = (m', stk) ->
+      Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
       step (Callstate s (Internal f) rs m)
         E0 (State s f (Vptr stk Int.zero) f.(fn_code) (call_regs rs) m')
   | exec_function_external:
-      forall s ef args res rs1 rs2 m t,
-      event_match ef args t res ->
+      forall s ef args res rs1 rs2 m t m',
+      external_call ef args m t res m' ->
       args = List.map rs1 (Conventions.loc_arguments ef.(ef_sig)) ->
       rs2 = Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs1 ->
       step (Callstate s (External ef) rs1 m)
-         t (Returnstate s rs2 m)
+         t (Returnstate s rs2 m')
   | exec_return:
       forall s f sp rs0 c rs m,
       step (Returnstate (Stackframe f sp rs0 c :: s) rs m)
@@ -325,9 +327,9 @@ Inductive step: state -> trace -> state -> Prop :=
 End RELSEM.
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall b f,
+  | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->

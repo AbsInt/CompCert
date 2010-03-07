@@ -17,7 +17,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -875,7 +875,7 @@ Inductive match_states: LTLin.state -> Linear.state -> Prop :=
         (AG: agree rs ls)
         (WT: wt_function f)
         (TL: is_tail c (LTLin.fn_code f))
-        (MMD: Mem.lessdef m tm),
+        (MMD: Mem.extends m tm),
       match_states (LTLin.State s f sp c rs m)
                    (Linear.State s' (transf_function f) sp (transf_code f c) ls tm)
   | match_states_call:
@@ -885,7 +885,7 @@ Inductive match_states: LTLin.state -> Linear.state -> Prop :=
         (PRES: forall l, ~In l temporaries -> ~In l destroyed_at_call ->
                  ls l = parent_locset s' l)
         (WT: wt_fundef f)
-        (MMD: Mem.lessdef m tm),
+        (MMD: Mem.extends m tm),
       match_states (LTLin.Callstate s f args m)
                    (Linear.Callstate s' (transf_fundef f) ls tm)
   | match_states_return:
@@ -894,7 +894,7 @@ Inductive match_states: LTLin.state -> Linear.state -> Prop :=
         (AG: Val.lessdef res (ls (R (Conventions.loc_result sig))))
         (PRES: forall l, ~In l temporaries -> ~In l destroyed_at_call ->
                  ls l = parent_locset s' l)
-        (MMD: Mem.lessdef m tm),
+        (MMD: Mem.extends m tm),
       match_states (LTLin.Returnstate s res m)
                    (Linear.Returnstate s' ls tm).
 
@@ -1006,8 +1006,7 @@ Proof.
     rewrite B. eapply agree_locs; eauto. 
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   destruct H1 as [ta [P Q]].
-  exploit Mem.loadv_lessdef; eauto. 
-  intros [tv [R S]].
+  exploit Mem.loadv_extends; eauto. intros [tv [R S]].
   exploit add_spill_correct.
   intros [ls3 [D [E F]]].
   left; econstructor; split.
@@ -1038,7 +1037,7 @@ Proof.
   destruct H1 as [ta [P Q]].
   assert (X: Val.lessdef (rs src) (ls2 (R rsrc))).
     rewrite E. eapply agree_loc; eauto.
-  exploit Mem.storev_lessdef. eexact MMD. eexact Q. eexact X. eauto. 
+  exploit Mem.storev_extends. eexact MMD. eauto. eexact Q. eexact X. 
   intros [tm2 [Y Z]].
   left; econstructor; split. 
   eapply plus_right. eauto. 
@@ -1072,7 +1071,7 @@ Proof.
     eapply agree_exten; eauto. 
     apply Loc.diff_sym. apply loc_acceptable_noteq_diff. auto. 
     red; intros; subst src. simpl in H8. intuition congruence.
-  exploit Mem.storev_lessdef. eexact MMD. eexact Q. eexact X. eauto. 
+  exploit Mem.storev_extends. eexact MMD. eauto. eexact Q. eexact X.
   intros [tm2 [Y Z]].
   left; econstructor; split.
   eapply star_plus_trans. eauto. 
@@ -1157,15 +1156,16 @@ Proof.
   ExploitWT. inversion WTI. subst ros0 args0.
   assert (WTF': wt_fundef f'). eapply find_function_wt; eauto.
   rewrite <- H0.
+  exploit Mem.free_parallel_extends; eauto. intros [tm' [FREE MMD']].
   destruct ros as [fn | id].
   (* indirect call *)
-  red in H4. destruct H4 as [OK1 [OK2 OK3]].
-  rewrite <- H0 in H3. rewrite <- H0 in OK3.
+  red in H5. destruct H5 as [OK1 [OK2 OK3]].
+  rewrite <- H0 in H4. rewrite <- H0 in OK3.
   destruct (parallel_move_arguments_correct tge s' (transf_function f) (Vptr stk Int.zero)
               args sig
               (add_reload fn IT1
                 (Ltailcall sig (inl ident IT1) :: transf_code f b))
-              ls tm H3 H5)
+              ls tm H4 H6)
   as [ls2 [A [B C]]].
   destruct (add_reload_correct tge s' (transf_function f) (Vptr stk Int.zero) fn IT1
              (Ltailcall sig (inl ident IT1) :: transf_code f b)
@@ -1191,13 +1191,12 @@ Proof.
   eapply match_stackframes_change_sig; eauto.
   rewrite return_regs_arguments; auto. congruence.
   exact (return_regs_preserve (parent_locset s') ls3).
-  apply Mem.free_lessdef; auto. 
   (* direct call *)
-  rewrite <- H0 in H3.
+  rewrite <- H0 in H4.
   destruct (parallel_move_arguments_correct tge s' (transf_function f) (Vptr stk Int.zero)
               args sig
               (Ltailcall sig (inr mreg id) :: transf_code f b)
-              ls tm H3 H5)
+              ls tm H4 H6)
   as [ls3 [D [E F]]].
   assert (ARGS: Val.lessdef_list (map rs args) 
                                  (map ls3 (loc_arguments sig))).
@@ -1214,7 +1213,6 @@ Proof.
   eapply match_stackframes_change_sig; eauto.
   rewrite return_regs_arguments; auto. congruence.
   exact (return_regs_preserve (parent_locset s') ls3).
-  apply Mem.free_lessdef; auto. 
 
   (* Llabel *)
   left; econstructor; split.
@@ -1272,29 +1270,29 @@ Proof.
   eapply LTLin.find_label_is_tail; eauto.
 
   (* Lreturn *)
-  ExploitWT; inv WTI. 
+  ExploitWT; inv WTI.
+  exploit Mem.free_parallel_extends; eauto. intros [tm' [FREE MMD']]. 
   destruct or; simpl.
   (* with an argument *)
   exploit add_reload_correct.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
-  eapply plus_right. eauto. eapply exec_Lreturn; eauto. 
+  eapply plus_right. eauto. eapply exec_Lreturn; eauto.
   traceEq.
   econstructor; eauto.
   rewrite return_regs_result. rewrite B. apply agree_loc; auto.
   apply return_regs_preserve.
-  apply Mem.free_lessdef; auto.
   (* without an argument *)
   left; econstructor; split.
   apply plus_one. eapply exec_Lreturn; eauto.  
   econstructor; eauto.
   apply return_regs_preserve.
-  apply Mem.free_lessdef; auto.
 
   (* internal function *)
   simpl in WT. inversion_clear WT. inversion H0. simpl in AG.
-  caseEq (alloc tm 0 (LTLin.fn_stacksize f)). intros tm' tstk TALLOC.
-  exploit Mem.alloc_lessdef; eauto. intros [P Q]. subst tstk.
+  exploit Mem.alloc_extends. eauto. eauto. 
+  instantiate (1 := 0); omega. instantiate (1 := LTLin.fn_stacksize f); omega.
+  intros [tm' [ALLOC MMD']].
   destruct (parallel_move_parameters_correct tge s' (transf_function f)
                (Vptr stk Int.zero) (LTLin.fn_params f) (LTLin.fn_sig f)
                (transf_code f (LTLin.fn_code f)) (call_regs ls) tm'
@@ -1310,8 +1308,8 @@ Proof.
   econstructor; eauto with coqlib.
 
   (* external function *)
-  exploit event_match_lessdef; eauto. 
-  intros [res' [A B]]. 
+  exploit external_call_mem_extends; eauto.
+  intros [res' [tm' [A [B [C D]]]]]. 
   left; econstructor; split.
   apply plus_one. eapply exec_function_external; eauto. 
   econstructor; eauto.
@@ -1338,16 +1336,15 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   econstructor; split.
-  econstructor. 
-  change (prog_main tprog) with (prog_main prog). 
+  econstructor.
+  apply Genv.init_mem_transf; eauto.
   rewrite symbols_preserved. eauto.
   apply function_ptr_translated; eauto. 
   rewrite sig_preserved. auto.
-  replace (Genv.init_mem tprog) with (Genv.init_mem prog).  
-  econstructor; eauto. constructor. rewrite H2; auto.
-  rewrite H2. simpl. constructor.
+  econstructor; eauto. constructor. rewrite H3; auto.
+  rewrite H3. simpl. constructor.
   eapply Genv.find_funct_ptr_prop; eauto.
-  apply Mem.lessdef_refl. symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf; auto.
+  apply Mem.extends_refl.
 Qed.
 
 Lemma transf_final_states:

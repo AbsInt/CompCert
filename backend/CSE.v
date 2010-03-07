@@ -19,7 +19,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Registers.
@@ -265,7 +265,7 @@ Definition equation_holds
   | Load chunk addr vl =>
       exists a,
       eval_addressing ge sp addr (List.map valuation vl) = Some a /\
-      loadv chunk m a = Some (valuation vres)
+      Mem.loadv chunk m a = Some (valuation vres)
   end.
 
 Definition numbering_holds

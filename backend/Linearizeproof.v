@@ -19,7 +19,7 @@ Require Import FSets.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Errors.
@@ -49,14 +49,14 @@ Lemma functions_translated:
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial transf_fundef TRANSF).
+Proof (Genv.find_funct_transf_partial transf_fundef _ TRANSF).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   exists tf,
   Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF).
+Proof (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
 
 Lemma symbols_preserved:
   forall id,
@@ -71,6 +71,14 @@ Proof.
   unfold transf_fundef, transf_partial_fundef; intros.
   destruct f. monadInv H. monadInv EQ. reflexivity.
   inv H. reflexivity.
+Qed.
+
+Lemma stacksize_preserved:
+  forall f tf,
+  transf_function f = OK tf ->
+  LTLin.fn_stacksize tf = LTL.fn_stacksize f.
+Proof.
+  intros. monadInv H. auto.
 Qed.
 
 Lemma find_function_translated:
@@ -593,6 +601,7 @@ Proof.
   econstructor; split.
   apply plus_one. eapply exec_Ltailcall with (f' := tf'); eauto.
   symmetry; apply sig_preserved; auto.
+  rewrite (stacksize_preserved _ _ TRF). eauto.
   econstructor; eauto.
   destruct ros; simpl in H0.
   eapply Genv.find_funct_prop; eauto.
@@ -656,6 +665,7 @@ Proof.
   simpl in EQ. subst c.
   econstructor; split.
   apply plus_one. eapply exec_Lreturn; eauto.
+  rewrite (stacksize_preserved _ _ TRF). eauto.
   econstructor; eauto.
  
   (* internal function *)
@@ -692,16 +702,14 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].  
-  exists (Callstate nil tf nil (Genv.init_mem tprog)); split.
-  econstructor; eauto.
+  exists (Callstate nil tf nil m0); split.
+  econstructor; eauto. eapply Genv.init_mem_transf_partial; eauto. 
   replace (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
   symmetry. apply (transform_partial_program_main transf_fundef _ TRANSF). 
-  rewrite <- H2. apply sig_preserved. auto.
-  replace (Genv.init_mem tprog) with (Genv.init_mem prog).
+  rewrite <- H3. apply sig_preserved. auto.
   constructor. constructor. auto.
   eapply Genv.find_funct_ptr_prop; eauto.
-  symmetry. apply Genv.init_mem_transf_partial with transf_fundef. auto.
 Qed.
 
 Lemma transf_final_states:

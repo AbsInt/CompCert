@@ -27,7 +27,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Op.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -1145,7 +1145,7 @@ Lemma functions_translated:
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
 Proof
-  (Genv.find_funct_transf_partial transf_fundef TRANSF).
+  (Genv.find_funct_transf_partial transf_fundef _ TRANSF).
 
 Lemma function_ptr_translated:
   forall v f,
@@ -1153,7 +1153,7 @@ Lemma function_ptr_translated:
   exists tf,
   Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
 Proof
-  (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF).
+  (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
 
 Lemma sig_preserved:
   forall f tf, transf_fundef f = OK tf -> Mach.funsig tf = Linear.funsig f.
@@ -1164,6 +1164,15 @@ Proof.
   destruct (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))). simpl; congruence.
   unfold bind. intros. inversion H; reflexivity. 
   intro. inversion H. reflexivity.
+Qed.
+
+Lemma stacksize_preserved:
+  forall f tf, transf_function f = OK tf -> Mach.fn_stacksize tf = Linear.fn_stacksize f.
+Proof.
+  intros until tf; unfold transf_function. 
+  destruct (zlt (Linear.fn_stacksize f) 0). simpl; congruence.
+  destruct (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))). simpl; congruence.
+  intros. inversion H; reflexivity. 
 Qed.
 
 Lemma find_function_translated:
@@ -1478,10 +1487,12 @@ Proof.
     simpl. intuition congruence. simpl. intuition congruence. 
   econstructor; split.
   eapply plus_right. eexact A. 
-  simpl shift_sp. eapply exec_Mtailcall; eauto. traceEq.
+  simpl shift_sp. eapply exec_Mtailcall; eauto.
+  rewrite (stacksize_preserved _ _ TRANSL); eauto.
+  traceEq.
   econstructor; eauto. 
   intros; symmetry; eapply agree_return_regs; eauto.
-  intros. inv WTI. generalize (H3 _ H0). tauto.
+  intros. inv WTI. generalize (H4 _ H0). tauto.
   apply agree_callee_save_return_regs. 
  
   (* Llabel *)
@@ -1524,7 +1535,9 @@ Proof.
   intros [ls' [A [B C]]].
   econstructor; split.
   eapply plus_right. eauto. 
-  simpl shift_sp. econstructor; eauto. traceEq.
+  simpl shift_sp. econstructor; eauto.
+  rewrite (stacksize_preserved _ _ TRANSL); eauto.
+  traceEq.
   econstructor; eauto. 
   intros. symmetry. eapply agree_return_regs; eauto.
   apply agree_callee_save_return_regs.  
@@ -1583,13 +1596,13 @@ Proof.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   econstructor. 
+  eapply Genv.init_mem_transf_partial; eauto.
   rewrite (transform_partial_program_main _ _ TRANSF). 
   rewrite symbols_preserved. eauto.
   eauto. 
-  rewrite (Genv.init_mem_transf_partial _ _ TRANSF).
   econstructor; eauto. constructor. 
   eapply Genv.find_funct_ptr_prop; eauto.
-  intros. rewrite H2 in H4. simpl in H4. contradiction.
+  intros. rewrite H3 in H5. simpl in H5. contradiction.
   simpl; red; auto.
 Qed.
 

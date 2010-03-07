@@ -17,7 +17,7 @@ Require Import Maps.
 Require Import UnionFind.
 Require Import AST.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -348,15 +348,14 @@ Lemma transf_initial_states:
   exists st2, initial_state tp st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H. 
-  exists (Callstate nil (tunnel_fundef f) nil (Genv.init_mem tp)); split.
+  exists (Callstate nil (tunnel_fundef f) nil m0); split.
   econstructor; eauto.
+  apply Genv.init_mem_transf; auto.
   change (prog_main tp) with (prog_main p).
   rewrite symbols_preserved. eauto.
   apply function_ptr_translated; auto.
-  rewrite <- H2. apply sig_preserved. 
-  replace (Genv.init_mem tp) with (Genv.init_mem p).
-  constructor. constructor. auto.
-  symmetry. unfold tp, tunnel_program. apply Genv.init_mem_transf.
+  rewrite <- H3. apply sig_preserved. 
+  constructor. constructor.
 Qed.
 
 Lemma transf_final_states:

@@ -288,7 +288,8 @@ let print_instruction oc labels = function
       fprintf oc "	extsb	%a, %a\n" ireg r1 ireg r2
   | Pextsh(r1, r2) ->
       fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
-  | Pfreeframe ofs ->
+  | Pfreeframe(lo, hi, ofs) ->
+      (* Note: could also do an add on GPR1 using lo and hi *)
       fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1  (camlint_of_coqint ofs)  ireg GPR1
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2

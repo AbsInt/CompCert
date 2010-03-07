@@ -21,7 +21,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Smallstep.
 Require Import Globalenvs.
@@ -423,14 +423,14 @@ Lemma functions_translated:
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial transf_fundef TRANSF).
+Proof (Genv.find_funct_transf_partial transf_fundef _ TRANSF).
 
 Lemma function_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF).
+Proof (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
 
 Lemma sig_function_translated:
   forall f tf,
@@ -482,7 +482,7 @@ Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> Prop 
               (rs#res <- rv)
               (Locmap.set (assign res) rv ls)) ->
       match_stackframes
-        (RTL.Stackframe res (RTL.fn_code f) sp pc rs :: s)
+        (RTL.Stackframe res f sp pc rs :: s)
         (LTL.Stackframe (assign res) (transf_fun f live assign) sp ls pc :: ts).
 
 Inductive match_states: RTL.state -> LTL.state -> Prop :=
@@ -493,7 +493,7 @@ Inductive match_states: RTL.state -> LTL.state -> Prop :=
       (ANL: analyze f = Some live)
       (ASG: regalloc f live (live0 f live) env = Some assign)
       (AG: agree assign (transfer f pc live!!pc) rs ls),
-      match_states (RTL.State s (RTL.fn_code f) sp pc rs m)
+      match_states (RTL.State s f sp pc rs m)
                    (LTL.State ts (transf_fun f live assign) sp pc ls m)
   | match_states_call:
       forall s f args m ts tf,
@@ -532,7 +532,7 @@ Ltac WellTypedHyp :=
 Ltac TranslInstr :=
   match goal with
   | H: (PTree.get _ _ = Some _) |- _ =>
-      simpl; rewrite PTree.gmap; rewrite H; simpl; auto
+      simpl in H; simpl; rewrite PTree.gmap; rewrite H; simpl; auto
   end.
 
 Ltac MatchStates :=
@@ -646,7 +646,7 @@ Proof.
 
   (* Icall *)
   exploit transl_find_function; eauto.  intros [tf [TFIND TF]].
-  generalize (regalloc_correct_1 f0 env live _ _ _ _ ASG H).  unfold correct_alloc_instr. intros [CORR1 [CORR2 CORR3]].
+  generalize (regalloc_correct_1 f env live _ _ _ _ ASG H).  unfold correct_alloc_instr. intros [CORR1 [CORR2 CORR3]].
   assert (rs##args = map ls (map assign args)).
     eapply agree_eval_regs; eauto. 
   econstructor; split. 
@@ -735,14 +735,13 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
-  assert (MEM: (Genv.init_mem tprog) = (Genv.init_mem prog)).
-    exact (Genv.init_mem_transf_partial _ _ TRANSF).
-  exists (LTL.Callstate nil tf nil (Genv.init_mem tprog)); split.
+  exists (LTL.Callstate nil tf nil m0); split.
   econstructor; eauto.
+  eapply Genv.init_mem_transf_partial; eauto. 
   rewrite symbols_preserved. 
   rewrite (transform_partial_program_main _ _ TRANSF).  auto.
-  rewrite <- H2. apply sig_function_translated; auto. 
-  rewrite MEM. constructor; auto. constructor.
+  rewrite <- H3. apply sig_function_translated; auto. 
+  constructor; auto. constructor.
 Qed.
 
 Lemma transf_final_states:

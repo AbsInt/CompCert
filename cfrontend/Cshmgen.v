@@ -34,11 +34,6 @@ Open Local Scope error_monad_scope.
 
 (** * Operations on C types *)
 
-Definition signature_of_function (f: Csyntax.function) : signature :=
-  mksignature 
-   (typlist_of_typelist (type_of_params (Csyntax.fn_params f)))
-   (opttyp_of_type (Csyntax.fn_return f)).
-
 Definition chunk_of_type (ty: type): res memory_chunk :=
   match access_mode ty with
   | By_value chunk => OK chunk
@@ -615,7 +610,7 @@ Definition transl_function (f: Csyntax.function) : res function :=
   do tparams <- transl_params (Csyntax.fn_params f);
   do tvars <- transl_vars (Csyntax.fn_vars f);
   do tbody <- transl_statement 1%nat 0%nat (Csyntax.fn_body f);
-  OK (mkfunction (signature_of_function f) tparams tvars tbody).
+  OK (mkfunction (opttyp_of_type (Csyntax.fn_return f)) tparams tvars tbody).
 
 Definition transl_fundef (f: Csyntax.fundef) : res fundef :=
   match f with

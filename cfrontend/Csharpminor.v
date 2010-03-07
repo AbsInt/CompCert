@@ -18,7 +18,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Cminor.
@@ -89,13 +89,24 @@ Inductive var_kind : Type :=
   | Vscalar: memory_chunk -> var_kind
   | Varray: Z -> var_kind.
 
-(** Functions are composed of a signature, a list of parameter names
+Definition sizeof (lv: var_kind) : Z :=
+  match lv with
+  | Vscalar chunk => size_chunk chunk
+  | Varray sz => Zmax 0 sz
+  end.
+
+(** Functions are composed of a return type, a list of parameter names
   with associated memory chunks (parameters must be scalar), a list of
   local variables with associated [var_kind] description, and a
   statement representing the function body.  *)
 
+Definition param_name (p: ident * memory_chunk) := fst p.
+Definition param_chunk (p: ident * memory_chunk) := snd p.
+Definition variable_name (v: ident * var_kind) := fst v.
+Definition variable_kind (v: ident * var_kind) := snd v.
+
 Record function : Type := mkfunction {
-  fn_sig: signature;
+  fn_return: option typ;
   fn_params: list (ident * memory_chunk);
   fn_vars: list (ident * var_kind);
   fn_body: stmt
@@ -105,11 +116,24 @@ Definition fundef := AST.fundef function.
 
 Definition program : Type := AST.program fundef var_kind.
 
+Definition fn_sig (f: function) :=
+  mksignature (List.map type_of_chunk (List.map param_chunk f.(fn_params)))
+              f.(fn_return).
+
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
+
+Definition var_of_param (p: ident * memory_chunk) : ident * var_kind :=
+  (fst p, Vscalar (snd p)).
+
+Definition fn_variables (f: function) :=
+  List.map var_of_param f.(fn_params) ++ f.(fn_vars).
+
+Definition fn_params_names (f: function) := List.map param_name f.(fn_params).
+Definition fn_vars_names (f: function) := List.map variable_name f.(fn_vars).
 
 (** * Operational semantics *)
 
@@ -120,27 +144,10 @@ Definition funsig (fd: fundef) :=
     to memory blocks and variable informations.
 *)
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef var_kind.
 Definition gvarenv := PTree.t var_kind.
 Definition env := PTree.t (block * var_kind).
 Definition empty_env : env := PTree.empty (block * var_kind).
-
-Definition sizeof (lv: var_kind) : Z :=
-  match lv with
-  | Vscalar chunk => size_chunk chunk
-  | Varray sz => Zmax 0 sz
-  end.
-
-Definition fn_variables (f: function) :=
-  List.map
-    (fun id_chunk => (fst id_chunk, Vscalar (snd id_chunk))) f.(fn_params)
-  ++ f.(fn_vars).
-
-Definition fn_params_names (f: function) :=
-  List.map (@fst ident memory_chunk) f.(fn_params).
-
-Definition fn_vars_names (f: function) :=
-  List.map (@fst ident var_kind) f.(fn_vars).
 
 (** Continuations *)
 
@@ -256,8 +263,8 @@ Definition eval_binop (op: binary_operation)
                       (arg1 arg2: val) (m: mem): option val :=
   match op, arg1, arg2 with
   | Cminor.Ocmp c, Vptr b1 n1, Vptr b2 n2 =>
-      if valid_pointer m b1 (Int.signed n1)
-      && valid_pointer m b2 (Int.signed n2)
+      if Mem.valid_pointer m b1 (Int.signed n1)
+      && Mem.valid_pointer m b2 (Int.signed n2)
       then Cminor.eval_binop op arg1 arg2
       else None
   | _, _, _ =>
@@ -279,11 +286,13 @@ Inductive alloc_variables: env -> mem ->
       alloc_variables (PTree.set id (b1, lv) e) m1 vars e2 m2 ->
       alloc_variables e m ((id, lv) :: vars) e2 m2.
 
-(** List of blocks mentioned in an environment *)
+(** List of blocks mentioned in an environment, with low and high bounds *)
 
-Definition blocks_of_env (e: env) : list block :=
-  List.map (fun id_b_lv => match id_b_lv with (id, (b, lv)) => b end)
-           (PTree.elements e).
+Definition block_of_binding (id_b_lv: ident * (block * var_kind)) :=
+  match id_b_lv with (id, (b, lv)) => (b, 0, sizeof lv) end.
+
+Definition blocks_of_env (e: env) : list (block * Z * Z) :=
+  List.map block_of_binding (PTree.elements e).
 
 (** Initialization of local variables that are parameters.  The value
   of the corresponding argument is stored into the memory block
@@ -418,11 +427,12 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_skip_block: forall f k e m,
       step (State f Sskip (Kblock k) e m)
         E0 (State f Sskip k e m)
-  | step_skip_call: forall f k e m,
+  | step_skip_call: forall f k e m m',
       is_call_cont k ->
-      f.(fn_sig).(sig_res) = None ->
+      f.(fn_return) = None ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f Sskip k e m)
-        E0 (Returnstate Vundef k (Mem.free_list m (blocks_of_env e)))
+        E0 (Returnstate Vundef k m')
 
   | step_assign: forall f id a k e m m' v,
       eval_expr e m a v ->
@@ -478,18 +488,17 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sswitch a cases) k e m)
         E0 (State f (seq_of_lbl_stmt (select_switch n cases)) k e m)
 
-  | step_return_0: forall f k e m,
-      f.(fn_sig).(sig_res) = None ->
+  | step_return_0: forall f k e m m',
+      f.(fn_return) = None ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn None) k e m)
-        E0 (Returnstate Vundef (call_cont k)
-                               (Mem.free_list m (blocks_of_env e)))
-  | step_return_1: forall f a k e m v,
-      f.(fn_sig).(sig_res) <> None ->
+        E0 (Returnstate Vundef (call_cont k) m')
+  | step_return_1: forall f a k e m v m',
+      f.(fn_return) <> None ->
       eval_expr e m a v ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e m)
-        E0 (Returnstate v (call_cont k)
-                          (Mem.free_list m (blocks_of_env e)))
-
+        E0 (Returnstate v (call_cont k) m')
   | step_label: forall f lbl s k e m,
       step (State f (Slabel lbl s) k e m)
         E0 (State f s k e m)
@@ -506,10 +515,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k e m2)
 
-  | step_external_function: forall ef vargs k m t vres,
-      event_match ef vargs t vres ->
+  | step_external_function: forall ef vargs k m t vres m',
+      external_call ef vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m)        
+         t (Returnstate vres k m')        
 
   | step_return: forall v optid f e k m m',
       exec_opt_assign e m optid v m' ->
@@ -524,9 +533,9 @@ End RELSEM.
   without arguments and with an empty continuation. *)
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall b f,
+  | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->

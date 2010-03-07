@@ -124,6 +124,17 @@ Module Type TREE.
   Hypothesis elements_keys_norepet:
     forall (A: Type) (m: t A), 
     list_norepet (List.map (@fst elt A) (elements m)).
+  Hypothesis elements_canonical_order:
+    forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
+    (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
+    (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
+    list_forall2
+      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+      (elements m) (elements n).
+  Hypothesis elements_extensional:
+    forall (A: Type) (m n: t A),
+    (forall i, get i m = get i n) ->
+    elements m = elements n.
 
   (** Folding a function over all bindings of a tree. *)
   Variable fold:
@@ -899,6 +910,72 @@ Module PTree <: TREE.
     list_norepet (List.map (@fst elt A) (elements m)).
   Proof.
     intros. change (list_norepet (xkeys m 1)). apply xelements_keys_norepet.
+  Qed.
+
+  Theorem elements_canonical_order:
+    forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
+    (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
+    (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
+    list_forall2
+      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+      (elements m) (elements n).
+  Proof.
+    intros until R.
+    assert (forall m n j,
+    (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
+    (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
+    list_forall2
+      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
+      (xelements m j) (xelements n j)).
+    induction m; induction n; intros; simpl.
+    constructor.
+    destruct o. exploit (H0 xH). simpl. reflexivity. simpl. intros [x [P Q]]. congruence.
+    change (@nil (positive*A)) with ((@nil (positive * A))++nil).
+    apply list_forall2_app.
+    apply IHn1.
+    intros. rewrite gleaf in H1. congruence.
+    intros. exploit (H0 (xO i)). simpl; eauto. rewrite gleaf. intros [x [P Q]]. congruence.
+    apply IHn2.
+    intros. rewrite gleaf in H1. congruence.
+    intros. exploit (H0 (xI i)). simpl; eauto. rewrite gleaf. intros [x [P Q]]. congruence.
+    destruct o. exploit (H xH). simpl. reflexivity. simpl. intros [x [P Q]]. congruence.
+    change (@nil (positive*B)) with (xelements (@Leaf B) (append j 2) ++ (xelements (@Leaf B) (append j 3))).
+    apply list_forall2_app.
+    apply IHm1.
+    intros. exploit (H (xO i)). simpl; eauto. rewrite gleaf. intros [y [P Q]]. congruence.
+    intros. rewrite gleaf in H1. congruence.
+    apply IHm2.
+    intros. exploit (H (xI i)). simpl; eauto. rewrite gleaf. intros [y [P Q]]. congruence.
+    intros. rewrite gleaf in H1. congruence.
+    exploit (IHm1 n1 (append j 2)). 
+    intros. exploit (H (xO i)). simpl; eauto. simpl. auto.
+    intros. exploit (H0 (xO i)). simpl; eauto. simpl; auto.
+    intro REC1.
+    exploit (IHm2 n2 (append j 3)). 
+    intros. exploit (H (xI i)). simpl; eauto. simpl. auto.
+    intros. exploit (H0 (xI i)). simpl; eauto. simpl; auto.
+    intro REC2.
+    destruct o; destruct o0.
+    apply list_forall2_app; auto. constructor; auto. 
+    simpl; split; auto. exploit (H xH). simpl; eauto. simpl. intros [y [P Q]]. congruence.
+    exploit (H xH). simpl; eauto. simpl. intros [y [P Q]]; congruence.
+    exploit (H0 xH). simpl; eauto. simpl. intros [x [P Q]]; congruence.
+    apply list_forall2_app; auto.
+
+    unfold elements; auto.
+  Qed.
+
+  Theorem elements_extensional:
+    forall (A: Type) (m n: t A),
+    (forall i, get i m = get i n) ->
+    elements m = elements n.
+  Proof.
+    intros. 
+    exploit (elements_canonical_order (fun (x y: A) => x = y) m n). 
+    intros. rewrite H in H0. exists x; auto.
+    intros. rewrite <- H in H0. exists y; auto.
+    induction 1. auto. destruct a1 as [a2 a3]; destruct b1 as [b2 b3]; simpl in *.
+    destruct H0. congruence.
   Qed.
 
 (*

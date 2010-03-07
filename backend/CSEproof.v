@@ -18,7 +18,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -404,7 +404,7 @@ Definition rhs_evals_to
   | Load chunk addr vl =>
       exists a,
       eval_addressing ge sp addr (List.map valu vl) = Some a /\
-      loadv chunk m a = Some v
+      Mem.loadv chunk m a = Some v
   end.
 
 Lemma equation_evals_to_holds_1:
@@ -510,7 +510,7 @@ Lemma add_load_satisfiable:
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
   eval_addressing ge sp addr rs##args = Some a ->
-  loadv chunk m a = Some v ->
+  Mem.loadv chunk m a = Some v ->
   numbering_satisfiable ge sp 
      (rs#dst <- v)
      m (add_load n dst chunk addr args).
@@ -668,7 +668,7 @@ Lemma find_load_correct:
   find_load n chunk addr args = Some r ->
   exists a,
   eval_addressing ge sp addr rs##args = Some a /\
-  loadv chunk m a = Some rs#r.
+  Mem.loadv chunk m a = Some rs#r.
 Proof.
   intros until r. intros WF [valu NH].
   unfold find_load. caseEq (valnum_regs n args). intros n' vl VR FIND.
@@ -783,21 +783,19 @@ Qed.
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   match_stackframes_intro:
-    forall res c sp pc rs f,
-    c = f.(RTL.fn_code) ->
+    forall res sp pc rs f,
     (forall v m, numbering_satisfiable ge sp (rs#res <- v) m (analyze f)!!pc) ->
     match_stackframes
-      (Stackframe res c sp pc rs)
-      (Stackframe res (transf_code (analyze f) c) sp pc rs).
+      (Stackframe res f sp pc rs)
+      (Stackframe res (transf_function f) sp pc rs).
 
 Inductive match_states: state -> state -> Prop :=
   | match_states_intro:
-      forall s c sp pc rs m s' f
-             (CF: c = f.(RTL.fn_code))
+      forall s sp pc rs m s' f
              (SAT: numbering_satisfiable ge sp rs m (analyze f)!!pc)
              (STACKS: list_forall2 match_stackframes s s'),
-      match_states (State s c sp pc rs m)
-                   (State s' (transf_code (analyze f) c) sp pc rs m)
+      match_states (State s f sp pc rs m)
+                   (State s' (transf_function f) sp pc rs m)
   | match_states_call:
       forall s f args m s',
       list_forall2 match_stackframes s s' ->
@@ -812,9 +810,9 @@ Inductive match_states: state -> state -> Prop :=
 Ltac TransfInstr :=
   match goal with
   | H1: (PTree.get ?pc ?c = Some ?instr), f: function |- _ =>
-      cut ((transf_code (analyze f) c)!pc = Some(transf_instr (analyze f)!!pc instr));
-      [ simpl
-      | unfold transf_code; rewrite PTree.gmap; 
+      cut ((transf_function f).(fn_code)!pc = Some(transf_instr (analyze f)!!pc instr));
+      [ simpl transf_instr
+      | unfold transf_function, transf_code; simpl; rewrite PTree.gmap; 
         unfold option_map; rewrite H1; reflexivity ]
   end.
 
@@ -829,14 +827,14 @@ Proof.
   induction 1; intros; inv MS; try (TransfInstr; intro C).
 
   (* Inop *)
-  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m); split.
+  exists (State s' (transf_function f) sp pc' rs m); split.
   apply exec_Inop; auto.
   econstructor; eauto. 
   eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H; auto.
 
   (* Iop *)
-  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#res <- v) m); split.
+  exists (State s' (transf_function f) sp pc' (rs#res <- v) m); split.
   assert (eval_operation tge sp op rs##args = Some v).
     rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
   generalize C; clear C.
@@ -855,14 +853,14 @@ Proof.
   eapply add_op_satisfiable; eauto. apply wf_analyze.
 
   (* Iload *)
-  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' (rs#dst <- v) m); split.
+  exists (State s' (transf_function f) sp pc' (rs#dst <- v) m); split.
   assert (eval_addressing tge sp addr rs##args = Some a).
     rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
   generalize C; clear C.
   caseEq (find_load (analyze f)!!pc chunk addr args). intros r FIND CODE.
   eapply exec_Iop'; eauto. simpl. 
   assert (exists a, eval_addressing ge sp addr rs##args = Some a
-                 /\ loadv chunk m a = Some rs#r).
+                 /\ Mem.loadv chunk m a = Some rs#r).
     eapply find_load_correct; eauto.
     eapply wf_analyze; eauto.
   elim H3; intros a' [A B].
@@ -874,7 +872,7 @@ Proof.
   eapply add_load_satisfiable; eauto. apply wf_analyze.
 
   (* Istore *)
-  exists (State s' (transf_code (analyze f) (fn_code f)) sp pc' rs m'); split.
+  exists (State s' (transf_function f) sp pc' rs m'); split.
   assert (eval_addressing tge sp addr rs##args = Some a).
     rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
   eapply exec_Istore; eauto.
@@ -886,7 +884,7 @@ Proof.
   (* Icall *)
   exploit find_function_translated; eauto. intro FIND'.
   econstructor; split.
-  eapply exec_Icall with (f := transf_fundef f); eauto.
+  eapply exec_Icall; eauto.
   apply sig_preserved. 
   econstructor; eauto. 
   constructor; auto. 
@@ -898,7 +896,7 @@ Proof.
   (* Itailcall *)
   exploit find_function_translated; eauto. intro FIND'.
   econstructor; split.
-  eapply exec_Itailcall with (f := transf_fundef f); eauto.
+  eapply exec_Itailcall; eauto.
   apply sig_preserved. 
   econstructor; eauto. 
 
@@ -951,15 +949,14 @@ Lemma transf_initial_states:
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H. 
-  exists (Callstate nil (transf_fundef f) nil (Genv.init_mem tprog)); split.
+  exists (Callstate nil (transf_fundef f) nil m0); split.
   econstructor; eauto.
+  apply Genv.init_mem_transf; auto.
   change (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
   apply funct_ptr_translated; auto.
-  rewrite <- H2. apply sig_preserved. 
-  replace (Genv.init_mem tprog) with (Genv.init_mem prog).
-  constructor. constructor. auto.
-  symmetry. unfold tprog, transf_program. apply Genv.init_mem_transf.
+  rewrite <- H3. apply sig_preserved. 
+  constructor. constructor.
 Qed.
 
 Lemma transf_final_states:

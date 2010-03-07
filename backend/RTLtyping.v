@@ -20,7 +20,7 @@ Require Import Op.
 Require Import Registers.
 Require Import Globalenvs.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Integers.
 Require Import Events.
 Require Import Smallstep.
@@ -454,14 +454,6 @@ Proof.
   apply wt_regset_assign; auto.
 Qed.
 
-Lemma wt_event_match:
-  forall ef args t res,
-  event_match ef args t res ->
-  Val.has_type res (proj_sig_res ef.(ef_sig)).
-Proof.
-  induction 1. inversion H0; exact I.
-Qed.
-
 Inductive wt_stackframes: list stackframe -> option typ -> Prop :=
   | wt_stackframes_nil:
       wt_stackframes nil (Some Tint)
@@ -471,7 +463,7 @@ Inductive wt_stackframes: list stackframe -> option typ -> Prop :=
       wt_regset env rs ->
       env res = match tyres with None => Tint | Some t => t end ->
       wt_stackframes s (sig_res (fn_sig f)) ->
-      wt_stackframes (Stackframe res (fn_code f) sp pc rs :: s) tyres.
+      wt_stackframes (Stackframe res f sp pc rs :: s) tyres.
 
 Inductive wt_state: state -> Prop :=
   | wt_state_intro:
@@ -479,7 +471,7 @@ Inductive wt_state: state -> Prop :=
         (WT_STK: wt_stackframes s (sig_res (fn_sig f)))
         (WT_FN: wt_function f env)
         (WT_RS: wt_regset env rs),
-      wt_state (State s (fn_code f) sp pc rs m)
+      wt_state (State s f sp pc rs m)
   | wt_state_call:
       forall s f args m,
       wt_stackframes s (sig_res (funsig f)) ->
@@ -517,7 +509,7 @@ Proof.
   econstructor; eauto.
   apply wt_regset_assign. auto.
   replace (env res) with (snd (type_of_operation op)).
-  apply type_of_operation_sound with fundef ge rs##args sp; auto.
+  apply type_of_operation_sound with fundef unit ge rs##args sp; auto.
   rewrite <- H6. reflexivity.
   (* Iload *)
   econstructor; eauto.
@@ -526,29 +518,29 @@ Proof.
   (* Istore *)
   econstructor; eauto.
   (* Icall *)
-  assert (wt_fundef f).
+  assert (wt_fundef fd).
     destruct ros; simpl in H0.
-    pattern f. apply Genv.find_funct_prop with fundef unit p (rs#r).
+    pattern fd. apply Genv.find_funct_prop with fundef unit p (rs#r).
     exact wt_p. exact H0. 
     caseEq (Genv.find_symbol ge i); intros; rewrite H1 in H0.
-    pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
+    pattern fd. apply Genv.find_funct_ptr_prop with fundef unit p b.
     exact wt_p. exact H0.
     discriminate.
   econstructor; eauto.
   econstructor; eauto.
   rewrite <- H7. apply wt_regset_list. auto.
   (* Itailcall *)
-  assert (wt_fundef f).
+  assert (wt_fundef fd).
     destruct ros; simpl in H0.
-    pattern f. apply Genv.find_funct_prop with fundef unit p (rs#r).
+    pattern fd. apply Genv.find_funct_prop with fundef unit p (rs#r).
     exact wt_p. exact H0. 
     caseEq (Genv.find_symbol ge i); intros; rewrite H1 in H0.
-    pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
+    pattern fd. apply Genv.find_funct_ptr_prop with fundef unit p b.
     exact wt_p. exact H0.
     discriminate.
   econstructor; eauto.
-  rewrite H5; auto.
-  rewrite <- H6. apply wt_regset_list. auto.
+  rewrite H6; auto.
+  rewrite <- H7. apply wt_regset_list. auto.
   (* Icond *)
   econstructor; eauto.
   econstructor; eauto.
@@ -557,7 +549,7 @@ Proof.
   (* Ireturn *)
   econstructor; eauto. 
   destruct or; simpl in *.
-  rewrite <- H1. apply WT_RS. exact I.
+  rewrite <- H2. apply WT_RS. exact I.
   (* internal function *)
   simpl in *. inv H5. inversion H1; subst.  
   econstructor; eauto.
@@ -566,7 +558,7 @@ Proof.
   simpl in *. inv H5. 
   econstructor; eauto. 
   change (Val.has_type res (proj_sig_res (ef_sig ef))).
-  eapply wt_event_match; eauto.
+  eapply external_call_well_typed; eauto.
   (* return *)
   inv H1. econstructor; eauto. 
   apply wt_regset_assign; auto. congruence. 

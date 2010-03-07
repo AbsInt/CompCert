@@ -43,6 +43,14 @@ Extract Constant Floats.Float.div => "( /. )".
 Extract Constant Floats.Float.cmp => "Floataux.cmp".
 Extract Constant Floats.Float.eq_dec => "fun (x: float) (y: float) -> x = y".
 
+(* Memdata *)
+Extract Constant Memdata.big_endian => "Memdataaux.big_endian".
+Extract Constant Memdata.encode_float => "Memdataaux.encode_float".
+Extract Constant Memdata.decode_float => "Memdataaux.decode_float".
+
+(* Memory - work around an extraction bug. *)
+Extraction NoInline Memory.Mem.valid_pointer.
+
 (* Iteration *)
 Extract Constant Iteration.dependent_description' =>
   "fun x -> assert false".

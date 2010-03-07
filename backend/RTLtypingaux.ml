@@ -16,6 +16,7 @@ open Datatypes
 open Camlcoq
 open Maps
 open AST
+open Memdata
 open Op
 open Registers
 open RTL

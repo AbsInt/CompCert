@@ -19,7 +19,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -55,7 +55,7 @@ Lemma functions_translated:
   Genv.find_funct_ptr ge b = Some f ->
   exists tf, Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = Errors.OK tf.
 Proof
-  (Genv.find_funct_ptr_transf_partial transf_fundef TRANSF).
+  (Genv.find_funct_ptr_transf_partial transf_fundef _ TRANSF).
 
 Lemma functions_transl:
   forall f b,
@@ -776,13 +776,25 @@ Proof.
   rewrite <- H. apply eval_operation_preserved. exact symbols_preserved.
 Qed.
 
+Remark loadv_8_signed_unsigned:
+  forall m a v,
+  Mem.loadv Mint8signed m a = Some v ->
+  exists v', Mem.loadv Mint8unsigned m a = Some v' /\ v = Val.sign_ext 8 v'.
+Proof.
+  unfold Mem.loadv; intros. destruct a; try congruence.
+  generalize (Mem.load_int8_signed_unsigned m b (Int.signed i)).
+  rewrite H. destruct (Mem.load Mint8unsigned m b (Int.signed i)).
+  simpl; intros. exists v0; split; congruence.
+  simpl; congruence.
+Qed.
+
 Lemma exec_Mload_prop:
   forall (s : list stackframe) (fb : block) (sp : val)
          (chunk : memory_chunk) (addr : addressing) (args : list mreg)
          (dst : mreg) (c : list Mach.instruction) (ms : mreg -> val)
          (m : mem) (a v : val),
   eval_addressing ge sp addr ms ## args = Some a ->
-  loadv chunk m a = Some v ->
+  Mem.loadv chunk m a = Some v ->
   exec_instr_prop (Machconcr.State s fb sp (Mload chunk addr args dst :: c) ms m)
                E0 (Machconcr.State s fb sp c (Regmap.set dst v ms) m).
 Proof.
@@ -797,11 +809,7 @@ Proof.
   try (eapply transl_load_correct; eauto;
        intros; simpl; unfold preg_of; rewrite H6; auto).
   (* Mint8signed *)
-  generalize (loadv_8_signed_unsigned m a).
-  rewrite H0. 
-  caseEq (loadv Mint8unsigned m a);
-  [idtac | simpl;intros;discriminate].
-  intros v' LOAD' EQ. simpl in EQ. injection EQ. intro EQ1. clear EQ.
+  exploit loadv_8_signed_unsigned; eauto. intros [v' [LOAD EQ]].
   assert (X1: forall (cst : constant) (r1 : ireg) (rs1 : regset),
     exec_instr tge (transl_function f) (Plbz (ireg_of dst) cst r1) rs1 m =
     load1 tge Mint8unsigned (preg_of dst) cst r1 rs1 m).
@@ -815,14 +823,30 @@ Proof.
                 Mint8unsigned addr args 
                 (Pextsb (ireg_of dst) (ireg_of dst) :: transl_code f c) 
                 ms sp rs m dst a v'
-                X1 X2 AG H3 H7 LOAD').
+                X1 X2 AG H3 H7 LOAD).
   intros [rs2 [EX1 AG1]].
   exists (nextinstr (rs2#(ireg_of dst) <- v)).
   split. eapply exec_straight_trans. eexact EX1.
   apply exec_straight_one. simpl. 
   rewrite <- (ireg_val _ _ _ dst AG1);auto. rewrite Regmap.gss. 
-  rewrite EQ1. reflexivity. reflexivity. 
+  rewrite EQ. reflexivity. reflexivity. 
   eauto with ppcgen.
+Qed.
+
+Lemma storev_8_signed_unsigned:
+  forall m a v,
+  Mem.storev Mint8signed m a v = Mem.storev Mint8unsigned m a v.
+Proof.
+  intros. unfold Mem.storev. destruct a; auto.
+  apply Mem.store_signed_unsigned_8.
+Qed.
+
+Lemma storev_16_signed_unsigned:
+  forall m a v,
+  Mem.storev Mint16signed m a v = Mem.storev Mint16unsigned m a v.
+Proof.
+  intros. unfold Mem.storev. destruct a; auto.
+  apply Mem.store_signed_unsigned_16.
 Qed.
 
 Lemma exec_Mstore_prop:
@@ -831,14 +855,14 @@ Lemma exec_Mstore_prop:
          (src : mreg) (c : list Mach.instruction) (ms : mreg -> val)
          (m m' : mem) (a : val),
   eval_addressing ge sp addr ms ## args = Some a ->
-  storev chunk m a (ms src) = Some m' ->
+  Mem.storev chunk m a (ms src) = Some m' ->
   exec_instr_prop (Machconcr.State s fb sp (Mstore chunk addr args src :: c) ms m) E0
                   (Machconcr.State s fb sp c ms m').
 Proof.
   intros; red; intros; inv MS.
   generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
   intro WTI; inversion WTI.
-  rewrite <- (eval_addressing_preserved symbols_preserved) in H.
+  rewrite <- (eval_addressing_preserved _ _ symbols_preserved) in H.
   left; eapply exec_straight_steps; eauto with coqlib. 
   destruct chunk; simpl; simpl in H6;
   try (rewrite storev_8_signed_unsigned in H0);
@@ -928,14 +952,15 @@ Qed.
 Lemma exec_Mtailcall_prop:
   forall (s : list stackframe) (fb stk : block) (soff : int)
          (sig : signature) (ros : mreg + ident) (c : list Mach.instruction)
-         (ms : Mach.regset) (m : mem) (f: Mach.function) (f' : block),
+         (ms : Mach.regset) (m : mem) (f: Mach.function) (f' : block) m',
   find_function_ptr ge ros ms = Some f' ->
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
   load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+  Mem.free m stk (- f.(fn_framesize)) f.(fn_stacksize) = Some m' ->
   exec_instr_prop
           (Machconcr.State s fb (Vptr stk soff) (Mtailcall sig ros :: c) ms m) E0
-          (Callstate s f' ms (free m stk)).
+          (Callstate s f' ms m').
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
@@ -953,9 +978,9 @@ Proof.
   set (rs6 := rs5#PC <- (rs5 CTR)).
   assert (exec_straight tge (transl_function f)
             (transl_code f (Mtailcall sig (inl ident m0) :: c)) rs m 
-            (Pbctr :: transl_code f c) rs5 (free m stk)).
+            (Pbctr :: transl_code f c) rs5 m').
   simpl. apply exec_straight_step with rs2 m. 
-  simpl. rewrite <- (ireg_val _ _ _ _ AG H6). reflexivity. reflexivity.
+  simpl. rewrite <- (ireg_val _ _ _ _ AG H7). reflexivity. reflexivity.
   apply exec_straight_step with rs3 m.
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
   change (rs2 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG). 
@@ -966,13 +991,13 @@ Proof.
   apply exec_straight_one. 
   simpl. change (rs4 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   unfold load_stack in H1; simpl in H1. 
-  simpl. rewrite H1. reflexivity. reflexivity.
-  left; exists (State rs6 (free m stk)); split.
+  simpl. rewrite H1. rewrite H3. reflexivity. reflexivity.
+  left; exists (State rs6 m'); split.
   (* execution *)
   eapply plus_right'. eapply exec_straight_exec; eauto.
   econstructor.
   change (rs5 PC) with (Val.add (Val.add (Val.add (Val.add (rs PC) Vone) Vone) Vone) Vone).
-  rewrite <- H7; simpl. eauto.
+  rewrite <- H8; simpl. eauto.
   eapply functions_transl; eauto. 
   eapply find_instr_tail.
   repeat (eapply code_tail_next_int; auto). eauto. 
@@ -983,7 +1008,7 @@ Proof.
     unfold rs4, rs3, rs2; auto 10 with ppcgen.
   assert (AG5: agree ms (parent_sp s) rs5).
     unfold rs5. apply agree_nextinstr.
-    split. reflexivity. intros. inv AG4. rewrite H12. 
+    split. reflexivity. intros. inv AG4. rewrite H13. 
     rewrite Pregmap.gso; auto with ppcgen.
   unfold rs6; auto with ppcgen.
   change (rs6 PC) with (ms m0). 
@@ -996,7 +1021,7 @@ Proof.
   set (rs5 := rs4#PC <- (Vptr f' Int.zero)).
   assert (exec_straight tge (transl_function f)
             (transl_code f (Mtailcall sig (inr mreg i) :: c)) rs m 
-            (Pbs i :: transl_code f c) rs4 (free m stk)).
+            (Pbs i :: transl_code f c) rs4 m').
   simpl. apply exec_straight_step with rs2 m. 
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
   rewrite <- (sp_val _ _ _ AG). 
@@ -1007,13 +1032,13 @@ Proof.
   apply exec_straight_one. 
   simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   unfold load_stack in H1; simpl in H1.
-  simpl. rewrite H1. reflexivity. reflexivity.
-  left; exists (State rs5 (free m stk)); split.
+  simpl. rewrite H1. rewrite H3. reflexivity. reflexivity.
+  left; exists (State rs5 m'); split.
   (* execution *)
   eapply plus_right'. eapply exec_straight_exec; eauto.
   econstructor.
   change (rs4 PC) with (Val.add (Val.add (Val.add (rs PC) Vone) Vone) Vone).
-  rewrite <- H7; simpl. eauto.
+  rewrite <- H8; simpl. eauto.
   eapply functions_transl; eauto. 
   eapply find_instr_tail.
   repeat (eapply code_tail_next_int; auto). eauto. 
@@ -1025,7 +1050,7 @@ Proof.
     unfold rs3, rs2; auto 10 with ppcgen.
   assert (AG4: agree ms (parent_sp s) rs4).
     unfold rs4. apply agree_nextinstr.
-    split. reflexivity. intros. inv AG3. rewrite H12. 
+    split. reflexivity. intros. inv AG3. rewrite H13. 
     rewrite Pregmap.gso; auto with ppcgen.
   unfold rs5; auto with ppcgen.
 Qed.
@@ -1191,12 +1216,13 @@ Qed.
 
 Lemma exec_Mreturn_prop:
   forall (s : list stackframe) (fb stk : block) (soff : int)
-         (c : list Mach.instruction) (ms : Mach.regset) (m : mem) (f: Mach.function),
+         (c : list Mach.instruction) (ms : Mach.regset) (m : mem) (f: Mach.function) m',
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
   load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+  Mem.free m stk (- f.(fn_framesize)) f.(fn_stacksize) = Some m' ->
   exec_instr_prop (Machconcr.State s fb (Vptr stk soff) (Mreturn :: c) ms m) E0
-                  (Returnstate s ms (free m stk)).
+                  (Returnstate s ms m').
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
@@ -1206,7 +1232,7 @@ Proof.
   set (rs5 := rs4#PC <- (parent_ra s)).
   assert (exec_straight tge (transl_function f)
             (transl_code f (Mreturn :: c)) rs m 
-            (Pblr :: transl_code f c) rs4 (free m stk)).
+            (Pblr :: transl_code f c) rs4 m').
   simpl. apply exec_straight_three with rs2 m rs3 m.
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
   unfold load_stack in H1. simpl in H1. 
@@ -1216,18 +1242,18 @@ Proof.
   simpl. change (rs3 GPR1) with (rs GPR1). rewrite <- (sp_val _ _ _ AG).
   simpl. 
   unfold load_stack in H0. simpl in H0.
-  rewrite H0. reflexivity.
+  rewrite H0. rewrite H2. reflexivity.
   reflexivity. reflexivity. reflexivity.
-  left; exists (State rs5 (free m stk)); split.
+  left; exists (State rs5 m'); split.
   (* execution *)
-  apply plus_right' with E0 (State rs4 (free m stk)) E0.
+  apply plus_right' with E0 (State rs4 m') E0.
   eapply exec_straight_exec; eauto.
   inv AT. econstructor.
   change (rs4 PC) with (Val.add (Val.add (Val.add (rs PC) Vone) Vone) Vone). 
-  rewrite <- H3. simpl. eauto.
+  rewrite <- H4. simpl. eauto.
   apply functions_transl; eauto.
-  generalize (functions_transl_no_overflow _ _ H4); intro NOOV.
-  simpl in H5. eapply find_instr_tail. 
+  generalize (functions_transl_no_overflow _ _ H5); intro NOOV.
+  simpl in H6. eapply find_instr_tail. 
   eapply code_tail_next_int; auto.
   eapply code_tail_next_int; auto.
   eapply code_tail_next_int; eauto.
@@ -1249,7 +1275,7 @@ Lemma exec_function_internal_prop:
   forall (s : list stackframe) (fb : block) (ms : Mach.regset)
          (m : mem) (f : function) (m1 m2 m3 : mem) (stk : block),
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
-  alloc m (- fn_framesize f) (fn_stacksize f) = (m1, stk) ->
+  Mem.alloc m (- fn_framesize f) (fn_stacksize f) = (m1, stk) ->
   let sp := Vptr stk (Int.repr (- fn_framesize f)) in
   store_stack m1 sp Tint f.(fn_link_ofs) (parent_sp s) = Some m2 ->
   store_stack m2 sp Tint f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
@@ -1258,7 +1284,7 @@ Lemma exec_function_internal_prop:
 Proof.
   intros; red; intros; inv MS.
   assert (WTF: wt_function f).
-    generalize (Genv.find_funct_ptr_prop wt_fundef wt_prog H); intro TY.
+    generalize (Genv.find_funct_ptr_prop wt_fundef _ _ wt_prog H); intro TY.
     inversion TY; auto.
   exploit functions_transl; eauto. intro TFIND.
   generalize (functions_transl_no_overflow _ _ H); intro NOOV.
@@ -1307,19 +1333,19 @@ Qed.
 Lemma exec_function_external_prop:
   forall (s : list stackframe) (fb : block) (ms : Mach.regset)
          (m : mem) (t0 : trace) (ms' : RegEq.t -> val)
-         (ef : external_function) (args : list val) (res : val),
+         (ef : external_function) (args : list val) (res : val) (m': mem),
   Genv.find_funct_ptr ge fb = Some (External ef) ->
-  event_match ef args t0 res ->
+  external_call ef args m t0 res m' ->
   Machconcr.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->
   ms' = Regmap.set (Conventions.loc_result (ef_sig ef)) res ms ->
   exec_instr_prop (Machconcr.Callstate s fb ms m)
-               t0 (Machconcr.Returnstate s ms' m).
+               t0 (Machconcr.Returnstate s ms' m').
 Proof.
   intros; red; intros; inv MS.
   exploit functions_translated; eauto.
   intros [tf [A B]]. simpl in B. inv B. 
   left; exists (State (rs#(loc_external_result (ef_sig ef)) <- res #PC <- (rs LR))
-                m); split.
+                m'); split.
   apply plus_one. eapply exec_step_external; eauto. 
   eapply extcall_arguments_match; eauto. 
   econstructor; eauto.
@@ -1367,14 +1393,14 @@ Proof.
   intros. inversion H. unfold ge0 in *.
   econstructor; split.
   econstructor.
+  eapply Genv.init_mem_transf_partial; eauto.
   replace (symbol_offset (Genv.globalenv tprog) (prog_main tprog) Int.zero)
      with (Vptr fb Int.zero).
-  rewrite (Genv.init_mem_transf_partial _ _ TRANSF).
   econstructor; eauto. constructor.
   split. auto. intros. repeat rewrite Pregmap.gso; auto with ppcgen.
   unfold symbol_offset. 
   rewrite (transform_partial_program_main _ _ TRANSF). 
-  rewrite symbols_preserved. unfold ge; rewrite H0. auto.
+  rewrite symbols_preserved. unfold ge; rewrite H1. auto.
 Qed.
 
 Lemma transf_final_states:

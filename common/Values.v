@@ -46,6 +46,8 @@ Definition Vmone: val := Vint Int.mone.
 Definition Vtrue: val := Vint Int.one.
 Definition Vfalse: val := Vint Int.zero.
 
+(** * Operations over values *)
+
 (** The module [Val] defines a number of arithmetic and logical operations
   over type [val].  Most of these operations are straightforward extensions
   of the corresponding integer or floating-point operations. *)
@@ -984,3 +986,82 @@ Proof.
 Qed.
 
 End Val.
+
+(** * Values and memory injections *)
+
+(** A memory injection [f] is a function from addresses to either [None]
+  or [Some] of an address and an offset.  It defines a correspondence
+  between the blocks of two memory states [m1] and [m2]:
+- if [f b = None], the block [b] of [m1] has no equivalent in [m2];
+- if [f b = Some(b', ofs)], the block [b] of [m2] corresponds to
+  a sub-block at offset [ofs] of the block [b'] in [m2].
+*)
+
+Definition meminj : Type := block -> option (block * Z).
+
+(** A memory injection defines a relation between values that is the
+  identity relation, except for pointer values which are shifted
+  as prescribed by the memory injection.  Moreover, [Vundef] values
+  inject into any other value. *)
+
+Inductive val_inject (mi: meminj): val -> val -> Prop :=
+  | val_inject_int:
+      forall i, val_inject mi (Vint i) (Vint i)
+  | val_inject_float:
+      forall f, val_inject mi (Vfloat f) (Vfloat f)
+  | val_inject_ptr:
+      forall b1 ofs1 b2 ofs2 delta,
+      mi b1 = Some (b2, delta) ->
+      ofs2 = Int.add ofs1 (Int.repr delta) ->
+      val_inject mi (Vptr b1 ofs1) (Vptr b2 ofs2)
+  | val_inject_undef: forall v,
+      val_inject mi Vundef v.
+
+Hint Resolve val_inject_int val_inject_float val_inject_ptr 
+             val_inject_undef.
+
+Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:= 
+  | val_nil_inject :
+      val_list_inject mi nil nil
+  | val_cons_inject : forall v v' vl vl' , 
+      val_inject mi v v' -> val_list_inject mi vl vl'->
+      val_list_inject mi (v :: vl) (v' :: vl').  
+
+Hint Resolve val_nil_inject val_cons_inject.
+
+(** Monotone evolution of a memory injection. *)
+
+Definition inject_incr (f1 f2: meminj) : Prop :=
+  forall b b' delta, f1 b = Some(b', delta) -> f2 b = Some(b', delta).
+
+Lemma inject_incr_refl :
+   forall f , inject_incr f f .
+Proof. unfold inject_incr. auto. Qed.
+
+Lemma inject_incr_trans :
+  forall f1 f2 f3, 
+  inject_incr f1 f2 -> inject_incr f2 f3 -> inject_incr f1 f3 .
+Proof .
+  unfold inject_incr; intros. eauto. 
+Qed.
+
+Lemma val_inject_incr:
+  forall f1 f2 v v',
+  inject_incr f1 f2 ->
+  val_inject f1 v v' ->
+  val_inject f2 v v'.
+Proof.
+  intros. inv H0; eauto.
+Qed.
+
+Lemma val_list_inject_incr:
+  forall f1 f2 vl vl' ,
+  inject_incr f1 f2 -> val_list_inject f1 vl vl' ->
+  val_list_inject f2 vl vl'.
+Proof.
+  induction vl; intros; inv H0. auto.
+  constructor. eapply val_inject_incr; eauto. auto.
+Qed.
+
+Hint Resolve inject_incr_refl val_inject_incr val_list_inject_incr.
+

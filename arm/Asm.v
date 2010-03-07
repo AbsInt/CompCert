@@ -18,7 +18,7 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -233,7 +233,7 @@ Module Pregmap := EMap(PregEq).
   and condition bits to either [Vzero] or [Vone]. *)
   
 Definition regset := Pregmap.t val.
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 
 Notation "a # b" := (a b) (at level 1, only parsing).
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
@@ -609,28 +609,28 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr c i rs m = OK rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_external:
-      forall b ef args res rs m t rs',
+      forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
-      event_match ef args t res ->
+      external_call ef args m t res m' ->
       extcall_arguments rs m ef.(ef_sig) args ->
       rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
                #PC <- (rs IR14)) ->
-      step (State rs m) t (State rs' m).
+      step (State rs m) t (State rs' m').
 
 End RELSEM.
 
 (** Execution of whole programs. *)
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro:
+  | initial_state_intro: forall m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (symbol_offset ge p.(prog_main) Int.zero)
         # IR14 <- Vzero
         # IR13 <- (Vptr Mem.nullptr Int.zero) in
+      Genv.init_mem p = Some m0 ->
       initial_state p (State rs0 m0).
 
 Inductive final_state: state -> int -> Prop :=

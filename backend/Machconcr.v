@@ -17,7 +17,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
@@ -179,13 +179,14 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Callstate (Stackframe fb sp (Vptr fb ra) c :: s)
                        f' rs m)
   | exec_Mtailcall:
-      forall s fb stk soff sig ros c rs m f f',
+      forall s fb stk soff sig ros c rs m f f' m',
       find_function_ptr ge ros rs = Some f' ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
       load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+      Mem.free m stk (- f.(fn_framesize)) f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
-        E0 (Callstate s f' rs (Mem.free m stk))
+        E0 (Callstate s f' rs m')
   | exec_Mgoto:
       forall s fb f sp lbl c rs m c',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
@@ -213,12 +214,13 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s fb sp (Mjumptable arg tbl :: c) rs m)
         E0 (State s fb sp c' rs m)
   | exec_Mreturn:
-      forall s fb stk soff c rs m f,
+      forall s fb stk soff c rs m f m',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
       load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
+      Mem.free m stk (- f.(fn_framesize)) f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mreturn :: c) rs m)
-        E0 (Returnstate s rs (Mem.free m stk))
+        E0 (Returnstate s rs m')
   | exec_function_internal:
       forall s fb rs m f m1 m2 m3 stk,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
@@ -229,13 +231,13 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate s fb rs m)
         E0 (State s fb sp f.(fn_code) rs m3)
   | exec_function_external:
-      forall s fb rs m t rs' ef args res,
+      forall s fb rs m t rs' ef args res m',
       Genv.find_funct_ptr ge fb = Some (External ef) ->
-      event_match ef args t res ->
+      external_call ef args m t res m' ->
       extcall_arguments rs m (parent_sp s) ef.(ef_sig) args ->
       rs' = (rs#(Conventions.loc_result ef.(ef_sig)) <- res) ->
       step (Callstate s fb rs m)
-         t (Returnstate s rs' m)
+         t (Returnstate s rs' m')
   | exec_return:
       forall s f sp ra c rs m,
       step (Returnstate (Stackframe f sp ra c :: s) rs m)
@@ -244,9 +246,9 @@ Inductive step: state -> trace -> state -> Prop :=
 End RELSEM.
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall fb,
+  | initial_state_intro: forall fb m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some fb ->
       initial_state p (Callstate nil fb (Regmap.init Vundef) m0).
 

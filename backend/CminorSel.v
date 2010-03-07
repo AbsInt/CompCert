@@ -19,7 +19,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Events.
 Require Import Values.
-Require Import Mem.
+Require Import Memory.
 Require Import Cminor.
 Require Import Op.
 Require Import Globalenvs.
@@ -105,7 +105,7 @@ Definition funsig (fd: fundef) :=
 - [lenv]: let environments, map de Bruijn indices to values.
 *)
 
-Definition genv := Genv.t fundef.
+Definition genv := Genv.t fundef unit.
 Definition letenv := list val.
 
 (** Continuations *)
@@ -260,11 +260,12 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_skip_block: forall f k sp e m,
       step (State f Sskip (Kblock k) sp e m)
         E0 (State f Sskip k sp e m)
-  | step_skip_call: forall f k sp e m,
+  | step_skip_call: forall f k sp e m m',
       is_call_cont k ->
       f.(fn_sig).(sig_res) = None ->
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f Sskip k (Vptr sp Int.zero) e m)
-        E0 (Returnstate Vundef k (Mem.free m sp))
+        E0 (Returnstate Vundef k m')
 
   | step_assign: forall f id a k sp e m v,
       eval_expr sp e m nil a v ->
@@ -287,13 +288,14 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Scall optid sig a bl) k sp e m)
         E0 (Callstate fd vargs (Kcall optid f sp e k) m)
 
-  | step_tailcall: forall f sig a bl k sp e m vf vargs fd,
+  | step_tailcall: forall f sig a bl k sp e m vf vargs fd m',
       eval_expr (Vptr sp Int.zero) e m nil a vf ->
       eval_exprlist (Vptr sp Int.zero) e m nil bl vargs ->
       Genv.find_funct ge vf = Some fd ->
       funsig fd = sig ->
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Stailcall sig a bl) k (Vptr sp Int.zero) e m)
-        E0 (Callstate fd vargs (call_cont k) (Mem.free m sp))
+        E0 (Callstate fd vargs (call_cont k) m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)
@@ -327,13 +329,15 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sswitch a cases default) k sp e m)
         E0 (State f (Sexit (switch_target n default cases)) k sp e m)
 
-  | step_return_0: forall f k sp e m,
+  | step_return_0: forall f k sp e m m',
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Sreturn None) k (Vptr sp Int.zero) e m)
-        E0 (Returnstate Vundef (call_cont k) (Mem.free m sp))
-  | step_return_1: forall f a k sp e m v,
+        E0 (Returnstate Vundef (call_cont k) m')
+  | step_return_1: forall f a k sp e m v m',
       eval_expr (Vptr sp Int.zero) e m nil a v ->
+      Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Sreturn (Some a)) k (Vptr sp Int.zero) e m)
-        E0 (Returnstate v (call_cont k) (Mem.free m sp))
+        E0 (Returnstate v (call_cont k) m')
 
   | step_label: forall f lbl s k sp e m,
       step (State f (Slabel lbl s) k sp e m)
@@ -349,10 +353,10 @@ Inductive step: state -> trace -> state -> Prop :=
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k (Vptr sp Int.zero) e m')
-  | step_external_function: forall ef vargs k m t vres,
-      event_match ef vargs t vres ->
+  | step_external_function: forall ef vargs k m t vres m',
+      external_call ef vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
-         t (Returnstate vres k m)        
+         t (Returnstate vres k m')        
 
   | step_return: forall v optid f sp e k m,
       step (Returnstate v (Kcall optid f sp e k) m)
@@ -361,9 +365,9 @@ Inductive step: state -> trace -> state -> Prop :=
 End RELSEM.
 
 Inductive initial_state (p: program): state -> Prop :=
-  | initial_state_intro: forall b f,
+  | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
-      let m0 := Genv.init_mem p in
+      Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
