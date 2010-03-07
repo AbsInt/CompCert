@@ -684,25 +684,12 @@ let print_init oc = function
       fprintf oc "	.long	%a\n" 
                  symbol_offset (symb, camlint_of_coqint ofs)
 
-let print_init_char oc = function
-  | Init_int8 n ->
-      let c = Int32.to_int (camlint_of_coqint n) in
-      if c >= 32 && c <= 126 && c <> Char.code '\"' && c <> Char.code '\\'
-      then output_char oc (Char.chr c)
-      else fprintf oc "\\%03o" c
-  | _ ->
-      assert false
-
-let re_string_literal = Str.regexp "__stringlit_[0-9]+"
-
 let print_init_data oc name id =
-  if Str.string_match re_string_literal (extern_atom name) 0
+  if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
   && List.for_all (function Init_int8 _ -> true | _ -> false) id
-  then begin
-    fprintf oc "	.ascii	\"";
-    List.iter (print_init_char oc) id;
-    fprintf oc "\"\n"
-  end else
+  then
+    fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init id)
+  else
     List.iter (print_init oc) id
 
 let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =

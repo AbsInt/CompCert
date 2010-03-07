@@ -63,7 +63,7 @@ let preprocess ifile ofile =
 let compile_c_file sourcename ifile ofile =
   (* Simplification options *)
   let simplifs =
-    "bec"           (* blocks, impure exprs, implicit casts: mandatory *)
+    "bec" (* blocks, impure exprs, implicit casts: mandatory *)
   ^ (if !option_fstruct_passing then "s" else "")
   ^ (if !option_fstruct_assign then "S" else "")
   ^ (if !option_fbitfields then "f" else "") in
@@ -325,6 +325,7 @@ let cmdline_actions =
 
 let _ =
   Cparser.Machine.config := Cparser.Machine.ilp32ll64;
+  Cparser.Builtins.set C2Clight.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
   if !linker_options <> [] 

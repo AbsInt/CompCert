@@ -344,32 +344,21 @@ let print_fundef p (Coq_pair(id, fd)) =
       print_function p id f
 
 let string_of_init id =
-  try
-    let s = String.create (List.length id) in
-    let i = ref 0 in
-    List.iter
-      (function
-        | Init_int8 n ->
-            s.[!i] <- Char.chr(Int32.to_int(camlint_of_coqint n));
-            incr i
-        | _ -> raise Not_found)
-      id;
-    Some s
-  with Not_found -> None
+  let b = Buffer.create (List.length id) in
+  let add_init = function
+  | Init_int8 n ->
+      let c = Int32.to_int (camlint_of_coqint n) in
+      if c >= 32 && c <= 126 && c <> Char.code '\"' && c <> Char.code '\\'
+      then Buffer.add_char b (Char.chr c)
+      else Buffer.add_string b (Printf.sprintf "\\%03o" c)
+  | _ ->
+      assert false
+  in List.iter add_init id; Buffer.contents b
 
-let print_escaped_string p s =
-  fprintf p "\"";
-  for i = 0 to String.length s - 1 do
-    match s.[i] with
-    | ('\"' | '\\') as c -> fprintf p "\\%c" c
-    | '\n' -> fprintf p "\\n"
-    | '\t' -> fprintf p "\\t"
-    | '\r' -> fprintf p "\\r"
-    | c    -> if c >= ' ' && c <= '~'
-              then fprintf p "%c" c
-              else fprintf p "\\x%02x" (Char.code c)
-  done;
-  fprintf p "\""
+let chop_last_nul id =
+  match List.rev id with
+  | Init_int8 BinInt.Z0 :: tl -> List.rev tl
+  | _ -> id
 
 let print_init p = function
   | Init_int8 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
@@ -384,6 +373,8 @@ let print_init p = function
       then fprintf p "&%s,@ " (extern_atom symb)
       else fprintf p "(void *)((char *)&%s + %ld),@ " (extern_atom symb) ofs
 
+let re_string_literal = Str.regexp "__stringlit_[0-9]+"
+
 let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
   match init with
   | [] ->
@@ -393,10 +384,18 @@ let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
       fprintf p "%s;@ @ "
               (name_cdecl (extern_atom id) ty)
   | _ ->
-      fprintf p "@[<hov 2>%s = {@ "
+      fprintf p "@[<hov 2>%s = "
               (name_cdecl (extern_atom id) ty);
-      List.iter (print_init p) init;
-      fprintf p "};@]@ @ "
+      if Str.string_match re_string_literal (extern_atom id) 0
+      && List.for_all (function Init_int8 _ -> true | _ -> false) init
+      then
+        fprintf p "\"%s\"" (string_of_init (chop_last_nul init))
+      else begin
+        fprintf p "{@ ";
+        List.iter (print_init p) init;
+        fprintf p "}"
+      end;
+      fprintf p ";@]@ @ "
 
 (* Collect struct and union types *)
 

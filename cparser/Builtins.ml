@@ -20,14 +20,17 @@ open Cutil
 
 let env = ref Env.empty
 let idents = ref []
+let decls = ref []
 
 let environment () = !env
 let identifiers () = !idents
+let declarations () = List.rev !decls
 
 let add_typedef (s, ty) =
   let (id, env') = Env.enter_typedef !env s ty in
   env := env';
-  idents := id :: !idents
+  idents := id :: !idents;
+  decls := {gdesc = Gtypedef(id, ty); gloc = no_loc} :: !decls
 
 let add_function (s, (res, args, va)) =
   let ty =
@@ -36,7 +39,8 @@ let add_function (s, (res, args, va)) =
          va, []) in
   let (id, env') = Env.enter_ident !env s Storage_extern ty in
   env := env';
-  idents := id :: !idents
+  idents := id :: !idents;
+  decls := {gdesc = Gdecl(Storage_extern, id, ty, None); gloc = no_loc} :: !decls
 
 type t = {
   typedefs: (string * C.typ) list;

@@ -11,9 +11,9 @@ INTFS=C.mli
 
 SRCS=Errors.ml Cabs.ml Cabshelper.ml Parse_aux.ml Parser.ml Lexer.ml \
   Machine.ml \
-  Env.ml Cprint.ml Cutil.ml Ceval.ml Cleanup.ml \
+  Env.ml Cprint.ml Cutil.ml Ceval.ml \
   Builtins.ml GCC.ml \
-  Elab.ml Rename.ml \
+  Cleanup.ml Elab.ml Rename.ml \
   Transform.ml \
   Unblock.ml SimplExpr.ml AddCasts.ml StructByValue.ml StructAssign.ml \
   Bitfields.ml \

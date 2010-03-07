@@ -704,6 +704,7 @@ let convertProgram p =
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
   Hashtbl.clear stub_function_table;
+  let p = Builtins.declarations() @ p in
   try
     let (funs1, vars1) =
       convertGlobdecls (translEnv Env.empty p) [] [] (cleanupGlobals p) in
@@ -743,3 +744,16 @@ let atom_is_readonly a =
     type_is_readonly env ty
   with Not_found ->
     false
+
+(** ** The builtin environment *)
+
+let builtins = {
+  Builtins.typedefs = [
+    (* keeps GCC-specific headers happy, harmless for others *)
+    "__builtin_va_list", C.TPtr(C.TVoid [], [])
+  ];
+  Builtins.functions = [
+  ]
+}
+
+

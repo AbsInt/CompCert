@@ -15,6 +15,7 @@
 
 val environment: unit -> Env.t
 val identifiers: unit -> C.ident list
+val declarations: unit -> C.globdecl list
 
 type t = {
   typedefs: (string * C.typ) list;
