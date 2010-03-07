@@ -76,6 +76,7 @@ let rec parse_cmdline prepro args i =
   end
 
 let _ =
+  Builtins.set GCC.builtins;
   let args = parse_cmdline [] [] 1 in
   let cmd = "gcc " ^ String.concat " " (List.map Filename.quote args) in
   let rc = Sys.command cmd in

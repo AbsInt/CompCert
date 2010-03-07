@@ -13,5 +13,12 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-val builtin_env : Env.t
-val builtin_idents: C.ident list
+val environment: unit -> Env.t
+val identifiers: unit -> C.ident list
+
+type t = {
+  typedefs: (string * C.typ) list;
+  functions: (string * (C.typ * C.typ list * bool)) list
+}
+
+val set: t -> unit

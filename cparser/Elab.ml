@@ -1755,7 +1755,7 @@ let _ = elab_block_f := elab_block
 let elab_preprocessed_file name ic =
   let lb = Lexer.init name ic in
   reset();
-  ignore (elab_definitions false Builtins.builtin_env
+  ignore (elab_definitions false (Builtins.environment())
                                  (Parser.file Lexer.initial lb));
   Lexer.finish();
   elaborated_program()

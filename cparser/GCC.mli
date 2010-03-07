@@ -13,38 +13,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Compiler built-ins *)
+(* GCC built-ins *)
 
-open C
-open Cutil
-
-let env = ref Env.empty
-let idents = ref []
-
-let environment () = !env
-let identifiers () = !idents
-
-let add_typedef (s, ty) =
-  let (id, env') = Env.enter_typedef !env s ty in
-  env := env';
-  idents := id :: !idents
-
-let add_function (s, (res, args, va)) =
-  let ty =
-    TFun(res,
-         Some (List.map (fun ty -> (Env.fresh_ident "", ty)) args),
-         va, []) in
-  let (id, env') = Env.enter_ident !env s Storage_extern ty in
-  env := env';
-  idents := id :: !idents
-
-type t = {
-  typedefs: (string * C.typ) list;
-  functions: (string * (C.typ * C.typ list * bool)) list
-}
-
-let set blt =
-  env := Env.empty;
-  idents := [];
-  List.iter add_typedef blt.typedefs;
-  List.iter add_function blt.functions
+val builtins: Builtins.t

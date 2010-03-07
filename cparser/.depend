@@ -9,6 +9,7 @@ Cutil.cmi: Env.cmi C.cmi
 Elab.cmi: C.cmi 
 Env.cmi: C.cmi 
 Errors.cmi: 
+GCC.cmi: Builtins.cmi 
 Lexer.cmi: Parser.cmi 
 Machine.cmi: 
 Parse_aux.cmi: 
@@ -48,12 +49,14 @@ Env.cmo: C.cmi Env.cmi
 Env.cmx: C.cmi Env.cmi 
 Errors.cmo: Errors.cmi 
 Errors.cmx: Errors.cmi 
+GCC.cmo: Cutil.cmi C.cmi Builtins.cmi GCC.cmi 
+GCC.cmx: Cutil.cmx C.cmi Builtins.cmx GCC.cmi 
 Lexer.cmo: Parser.cmi Parse_aux.cmi Cabshelper.cmo Lexer.cmi 
 Lexer.cmx: Parser.cmx Parse_aux.cmx Cabshelper.cmx Lexer.cmi 
 Machine.cmo: Machine.cmi 
 Machine.cmx: Machine.cmi 
-Main.cmo: Parse.cmi Cprint.cmi 
-Main.cmx: Parse.cmx Cprint.cmx 
+Main.cmo: Parse.cmi GCC.cmi Cprint.cmi Builtins.cmi 
+Main.cmx: Parse.cmx GCC.cmx Cprint.cmx Builtins.cmx 
 Parse_aux.cmo: Errors.cmi Cabshelper.cmo Parse_aux.cmi 
 Parse_aux.cmx: Errors.cmx Cabshelper.cmx Parse_aux.cmi 
 Parse.cmo: Unblock.cmi StructByValue.cmi StructAssign.cmi SimplExpr.cmi \
@@ -64,12 +67,8 @@ Parser.cmo: Parse_aux.cmi Cabshelper.cmo Cabs.cmo Parser.cmi
 Parser.cmx: Parse_aux.cmx Cabshelper.cmx Cabs.cmx Parser.cmi 
 Rename.cmo: Errors.cmi Cutil.cmi C.cmi Builtins.cmi Rename.cmi 
 Rename.cmx: Errors.cmx Cutil.cmx C.cmi Builtins.cmx Rename.cmi 
-Scoping.cmo: 
-Scoping.cmx: 
-SimplExpr.cmo: Transform.cmi Cutil.cmi C.cmi SimplExpr.cmi 
-SimplExpr.cmx: Transform.cmx Cutil.cmx C.cmi SimplExpr.cmi 
-SimplifyStrict.cmo: Env.cmi Cutil.cmi C.cmi 
-SimplifyStrict.cmx: Env.cmx Cutil.cmx C.cmi 
+SimplExpr.cmo: Transform.cmi Errors.cmi Cutil.cmi C.cmi SimplExpr.cmi 
+SimplExpr.cmx: Transform.cmx Errors.cmx Cutil.cmx C.cmi SimplExpr.cmi 
 StructAssign.cmo: Transform.cmi Errors.cmi Env.cmi Cutil.cmi C.cmi \
     StructAssign.cmi 
 StructAssign.cmx: Transform.cmx Errors.cmx Env.cmx Cutil.cmx C.cmi \

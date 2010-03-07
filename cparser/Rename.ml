@@ -221,7 +221,7 @@ let rec globdecls env accu = function
 (* Reserve names of builtins *)
 
 let reserve_builtins () =
-  List.fold_left enter_global empty_env Builtins.builtin_idents
+  List.fold_left enter_global empty_env (Builtins.identifiers())
 
 (* Reserve global declarations with public visibility *)
 
