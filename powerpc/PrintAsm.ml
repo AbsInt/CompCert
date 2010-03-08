@@ -212,6 +212,100 @@ let rolm_mask n =
   assert (!count = 2 || (!count = 0 && !last));
   (!mb, !me-1)
 
+(* Built-in functions *)
+
+let re_builtin_function = Str.regexp "__builtin_"
+
+let is_builtin_function s =
+  Str.string_match re_builtin_function (extern_atom s) 0
+
+let print_builtin_function oc s =
+  (* int args: GPR3, GPR4     float args: FPR1, FPR2, FPR3
+     int res:  GPR3           float res:  FPR1
+     Watch out for MacOSX/EABI incompatibility: functions that take
+     some floats then some ints.  There are none here. *)
+  match extern_atom s with
+  (* Volatile reads *)
+  | "__builtin_volatile_read_int8unsigned" ->
+      fprintf oc "	lbz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
+  | "__builtin_volatile_read_int8signed" ->
+      fprintf oc "	lbz	%a, 0(%a)\n" ireg GPR3 ireg GPR3;
+      fprintf oc "	extsb	%a, %a\n" ireg GPR3 ireg GPR3
+  | "__builtin_volatile_read_int16unsigned" ->
+      fprintf oc "	lhz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
+  | "__builtin_volatile_read_int16signed" ->
+      fprintf oc "	lha	%a, 0(%a)\n" ireg GPR3 ireg GPR3
+  | "__builtin_volatile_read_int32"
+  | "__builtin_volatile_read_pointer" ->
+      fprintf oc "	lwz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
+  | "__builtin_volatile_read_float32" ->
+      fprintf oc "	lfs	%a, 0(%a)\n" freg FPR1 ireg GPR3
+  | "__builtin_volatile_read_float64" ->
+      fprintf oc "	lfd	%a, 0(%a)\n" freg FPR1 ireg GPR3
+  (* Volatile writes *)
+  | "__builtin_volatile_write_int8unsigned"
+  | "__builtin_volatile_write_int8signed" ->
+      fprintf oc "	stb	%a, 0(%a)\n" ireg GPR4 ireg GPR3
+  | "__builtin_volatile_write_int16unsigned"
+  | "__builtin_volatile_write_int16signed" ->
+      fprintf oc "	sth	%a, 0(%a)\n" ireg GPR4 ireg GPR3
+  | "__builtin_volatile_write_int32"
+  | "__builtin_volatile_write_pointer" ->
+      fprintf oc "	stw	%a, 0(%a)\n" ireg GPR4 ireg GPR3
+  | "__builtin_volatile_write_float32" ->
+      fprintf oc "	frsp	%a, %a\n" freg FPR1 freg FPR1;
+      fprintf oc "	stfs	%a, 0(%a)\n" freg FPR1 ireg GPR3
+  | "__builtin_volatile_write_float64" ->
+      fprintf oc "	stfd	%a, 0(%a)\n" freg FPR1 ireg GPR3
+  (* Integer arithmetic *)
+  | "__builtin_mulhw" ->
+      fprintf oc "	mulhw	%a, %a, %a\n" ireg GPR3 ireg GPR3 ireg GPR4
+  | "__builtin_mulhwu" ->
+      fprintf oc "	mulhwu	%a, %a, %a\n" ireg GPR3 ireg GPR3 ireg GPR4
+  | "__builtin_cntlzw" ->
+      fprintf oc "	cntlzw	%a, %a\n" ireg GPR3 ireg GPR3
+  (* Float arithmetic *)
+  | "__builtin_fmadd" ->
+      fprintf oc "	fmadd	%a, %a, %a, %a\n"
+                 freg FPR1 freg FPR1 freg FPR2 freg FPR3
+  | "__builtin_fmsub" ->
+      fprintf oc "	fmsub	%a, %a, %a, %a\n"
+                 freg FPR1 freg FPR1 freg FPR2 freg FPR3
+  | "__builtin_fabs" ->
+      fprintf oc "	fabs	%a, %a\n" freg FPR1 freg FPR1
+  | "__builtin_fsqrt" ->
+      fprintf oc "	fsqrt	%a, %a\n" freg FPR1 freg FPR1
+  | "__builtin_frsqrte" ->
+      fprintf oc "	frsqrte	%a, %a\n" freg FPR1 freg FPR1
+  | "__builtin_fres" ->
+      fprintf oc "	fres	%a, %a\n" freg FPR1 freg FPR1
+  | "__builtin_fsel" ->
+      fprintf oc "	fsel	%a, %a, %a, %a\n"
+                 freg FPR1 freg FPR1 freg FPR2 freg FPR3
+  (* Memory accesses *)
+  | "__builtin_read_int16_reversed" ->
+      fprintf oc "	lhbrx	%a, %a, %a\n"
+                 ireg GPR3 ireg_or_zero GPR0 ireg GPR3
+  | "__builtin_read_int32_reversed" ->
+      fprintf oc "	lwbrx	%a, %a, %a\n"
+                 ireg GPR3 ireg_or_zero GPR0 ireg GPR3
+  | "__builtin_write_int16_reversed" ->
+      fprintf oc "	sthbrx	%a, %a, %a\n"
+                 ireg GPR4 ireg_or_zero GPR0 ireg GPR3
+  | "__builtin_write_int32_reversed" ->
+      fprintf oc "	stwbrx	%a, %a, %a\n"
+                 ireg GPR4 ireg_or_zero GPR0 ireg GPR3
+  (* Synchronization *)
+  | "__builtin_eieio" ->
+      fprintf oc "	eieio\n"
+  | "__builtin_sync" ->
+      fprintf oc "	sync\n"
+  | "__builtin_isync" ->
+      fprintf oc "	isync\n"
+  (* Catch-all *)
+  | s ->
+      invalid_arg ("unrecognized builtin function " ^ s)
+
 (* Printing of instructions *)
 
 module Labelset = Set.Make(struct type t = label let compare = compare end)
@@ -251,9 +345,17 @@ let print_instruction oc labels = function
   | Pbf(bit, lbl) ->
       fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
   | Pbl s ->
-      fprintf oc "	bl	%a\n" symbol s
+      if not (is_builtin_function s) then
+        fprintf oc "	bl	%a\n" symbol s
+      else
+        print_builtin_function oc s
   | Pbs s ->
-      fprintf oc "	b	%a\n" symbol s
+      if not (is_builtin_function s) then
+        fprintf oc "	b	%a\n" symbol s
+      else begin
+        print_builtin_function oc s;
+        fprintf oc "	blr\n"
+      end
   | Pblr ->
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
@@ -653,13 +755,13 @@ let stub_function =
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code -> print_function oc name code
-  | External ef -> stub_function oc name ef
+  | External ef -> if not(is_builtin_function name) then stub_function oc name ef
 
 let record_extfun (Coq_pair(name, defn)) =
   match defn with
   | Internal _ -> ()
   | External _ -> 
-      if function_needs_stub name then
+      if function_needs_stub name && not (is_builtin_function name) then
         stubbed_functions := IdentSet.add name !stubbed_functions
 
 let print_init oc = function

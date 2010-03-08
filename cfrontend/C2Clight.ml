@@ -310,14 +310,12 @@ let rec projFunType env ty =
   | _ -> None
 
 let convertFuncall env lhs fn args =
-  let lhs' =
-    match lhs with None -> None | Some e -> Some(convertExpr env e) in
   match projFunType env fn.etyp with
   | None ->
       error "wrong type for function part of a call"; Sskip
   | Some(res, false) ->
       (* Non-variadic function *)
-      Scall(lhs', convertExpr env fn, List.map (convertExpr env) args)
+      Scall(lhs, convertExpr env fn, List.map (convertExpr env) args)
   | Some(res, true) ->
       (* Variadic function: generate a call to a stub function with
          the appropriate number and types of arguments.  Works only if
@@ -334,20 +332,66 @@ let convertFuncall env lhs fn args =
       let tres = convertTyp env res in
       let (stub_fun_name, stub_fun_typ) =
         register_stub_function fun_name tres targs in
-      Scall(lhs',
+      Scall(lhs,
             Expr(Evar(intern_string stub_fun_name), stub_fun_typ),
             List.map (convertExpr env) args)
+
+(* Handling of volatile *)
+
+let is_volatile_access env e =
+  List.mem C.AVolatile (Cutil.attributes_of_type env e.etyp)
+  && Cutil.is_lvalue env e
+
+let volatile_fun_suffix_type ty =
+  match ty with
+  | Tint(I8, Unsigned) -> ("int8unsigned", ty)
+  | Tint(I8, Signed) -> ("int8signed", ty)
+  | Tint(I16, Unsigned) -> ("int16unsigned", ty)
+  | Tint(I16, Signed) -> ("int16signed", ty)
+  | Tint(I32, _) -> ("int32", ty)
+  | Tfloat F32 -> ("float32", ty)
+  | Tfloat F64 -> ("float64", ty)
+  | Tpointer _ | Tarray _ | Tfunction _ | Tcomp_ptr _ ->
+      ("pointer", Tpointer Tvoid)
+  | _ ->
+      unsupported "operation on volatile struct or union"; ("", Tvoid)
+
+let volatile_read_fun ty =
+  let (suffix, ty') = volatile_fun_suffix_type ty in
+  Expr(Evar(intern_string ("__builtin_volatile_read_" ^ suffix)),
+       Tfunction(Tcons(Tpointer Tvoid, Tnil), ty'))
+
+let volatile_write_fun ty =
+  let (suffix, ty') = volatile_fun_suffix_type ty in
+  Expr(Evar(intern_string ("__builtin_volatile_write_" ^ suffix)),
+       Tfunction(Tcons(Tpointer Tvoid, Tcons(ty', Tnil)), Tvoid))
 
 (* Toplevel expression, argument of an Sdo *)
 
 let convertTopExpr env e =
   match e.edesc with
   | C.EBinop(C.Oassign, lhs, {edesc = C.ECall(fn, args)}, _) ->
-      convertFuncall env (Some lhs) fn args
+      convertFuncall env (Some (convertExpr env lhs)) fn args
   | C.EBinop(C.Oassign, lhs, rhs, _) ->
       if Cutil.is_composite_type env lhs.etyp then
         unsupported "assignment between structs or between unions";
-      Sassign(convertExpr env lhs, convertExpr env rhs)
+      let lhs' = convertExpr env lhs
+      and rhs' = convertExpr env rhs in
+      begin match (is_volatile_access env lhs, is_volatile_access env rhs) with
+      | true, true ->                   (* should not happen *)
+          unsupported "volatile-to-volatile assignment";
+          Sskip
+      | false, true ->                  (* volatile read *)
+          Scall(Some lhs',
+                volatile_read_fun (typeof rhs'),
+                [ Expr (Eaddrof rhs', Tpointer (typeof rhs')) ])
+      | true, false ->                  (* volatile write *)
+          Scall(None,
+                volatile_write_fun (typeof lhs'),
+                [ Expr(Eaddrof lhs', Tpointer (typeof lhs')); rhs' ])
+      | false, false ->                 (* regular assignment *)
+          Sassign(convertExpr env lhs, convertExpr env rhs)
+      end
   | C.ECall(fn, args) ->
       convertFuncall env None fn args
   | _ ->
@@ -721,15 +765,12 @@ let convertProgram p =
 (** ** Extracting information about global variables from their atom *)
 
 let type_is_readonly env t =
-  let a = Cutil.attributes_of_type env t in
-  if List.mem C.AVolatile a then false else
-  if List.mem C.AConst a then true else
-  match Cutil.unroll env t with
-  | C.TArray(ty, _, _) ->
-      let a' = Cutil.attributes_of_type env ty in
-      List.mem C.AConst a' && not (List.mem C.AVolatile a')
-  | _ ->
-      false
+  let a1 = Cutil.attributes_of_type env t in
+  let a =
+    match Cutil.unroll env t with
+    | C.TArray(ty, _, _) -> a1 @ Cutil.attributes_of_type env ty
+    | _ -> a1 in
+  List.mem C.AConst a && not (List.mem C.AVolatile a)
 
 let atom_is_static a =
   try
@@ -745,15 +786,61 @@ let atom_is_readonly a =
   with Not_found ->
     false
 
+let atom_sizeof a =
+  try
+    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
+    Cutil.sizeof env ty
+  with Not_found ->
+    None
+
 (** ** The builtin environment *)
 
-let builtins = {
-  Builtins.typedefs = [
+open Cparser.Builtins
+
+let builtins_generic = {
+  typedefs = [
     (* keeps GCC-specific headers happy, harmless for others *)
     "__builtin_va_list", C.TPtr(C.TVoid [], [])
   ];
-  Builtins.functions = [
+  functions = [
+    (* The volatile read/volatile write functions *)
+    "__builtin_volatile_read_int8unsigned",
+        (TInt(IUChar, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int8signed",
+        (TInt(ISChar, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int16unsigned",
+        (TInt(IUShort, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int16signed",
+        (TInt(IShort, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int32",
+        (TInt(IInt, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_float32",
+        (TFloat(FFloat, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_float64",
+         (TFloat(FDouble, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_pointer",
+         (TPtr(TVoid [], []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_write_int8unsigned",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IUChar, [])], false);
+    "__builtin_volatile_write_int8signed",
+        (TVoid [], [TPtr(TVoid [], []); TInt(ISChar, [])], false);
+    "__builtin_volatile_write_int16unsigned",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IUShort, [])], false);
+    "__builtin_volatile_write_int16signed",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IShort, [])], false);
+    "__builtin_volatile_write_int32",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IInt, [])], false);
+    "__builtin_volatile_write_float32",
+        (TVoid [], [TPtr(TVoid [], []); TFloat(FFloat, [])], false);
+    "__builtin_volatile_write_float64",
+         (TVoid [], [TPtr(TVoid [], []); TFloat(FDouble, [])], false);
+    "__builtin_volatile_write_pointer",
+         (TVoid [], [TPtr(TVoid [], []); TPtr(TVoid [], [])], false)
   ]
 }
 
+(* Add processor-dependent builtins *)
 
+let builtins =
+  { typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
+    functions = builtins_generic.functions @ CBuiltins.builtins.functions }

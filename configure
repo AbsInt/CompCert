@@ -62,7 +62,7 @@ done
 # Per-target configuration
 
 case "$target" in
-  ppc-macosx)
+  powerpc-macosx|ppc-macosx)
     arch="powerpc"
     variant="macosx"
     system="macosx"
@@ -71,7 +71,7 @@ case "$target" in
     casm="gcc -arch ppc -c"
     clinker="gcc -arch ppc"
     libmath="";;
-  ppc-linux)
+  powerpc-linux|ppc-linux)
     arch="powerpc"
     variant="eabi"
     system="linux"

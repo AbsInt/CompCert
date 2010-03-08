@@ -63,7 +63,7 @@ let preprocess ifile ofile =
 let compile_c_file sourcename ifile ofile =
   (* Simplification options *)
   let simplifs =
-    "bec" (* blocks, impure exprs, implicit casts: mandatory *)
+    "becv" (* blocks, impure exprs, implicit casts, volatiles: mandatory *)
   ^ (if !option_fstruct_passing then "s" else "")
   ^ (if !option_fstruct_assign then "S" else "")
   ^ (if !option_fbitfields then "f" else "") in
