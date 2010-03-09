@@ -110,22 +110,18 @@ all:
 	$(MAKE) ccomp
 	$(MAKE) runtime
 
-documentation: doc/removeproofs documentation-link
-	@mkdir -p doc/html
-	cd doc; $(COQDOC) --html -d html \
-          $(FILES:%.v=--glob-from %.glob) $(FILES)
-	@cd doc; rm -f $(FILES)
-	cp doc/coqdoc.css doc/html/coqdoc.css
-	doc/removeproofs doc/html/*.html
+documentation: doc/coq2html $(FILES)
+	mkdir -p doc/html
+	rm -f doc/html/*.html
+	doc/coq2html -o 'doc/html/%.html' doc/*.glob \
+          $(filter-out doc/coq2html, $^)
+	cp doc/coq2html.css doc/coq2html.js doc/html/
 
-documentation-link: $(FILES)
-	@ln -f $^ doc/
+doc/coq2html: doc/coq2html.ml
+	ocamlopt -o doc/coq2html str.cmxa doc/coq2html.ml
 
-doc/removeproofs: doc/removeproofs.ml
-	ocamlopt -o doc/removeproofs doc/removeproofs.ml
-
-doc/removeproofs.ml: doc/removeproofs.mll
-	ocamllex doc/removeproofs.mll
+doc/coq2html.ml: doc/coq2html.mll
+	ocamllex doc/coq2html.mll
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
@@ -163,7 +159,7 @@ clean:
 	rm -f ccomp ccomp.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
-	rm -f doc/removeproofs.ml doc/removeproofs
+	rm -f doc/coq2html.ml doc/coq2html
 	rm -f driver/Configuration.ml
 	rm -f extraction/*.ml extraction/*.mli
 	$(MAKE) -C runtime clean
