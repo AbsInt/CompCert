@@ -35,11 +35,13 @@ int f(int n)
 /* Redefining some standard sections */
 
 #pragma section SCONST ".myconst" ".myconst" far-absolute R
+#pragma section CONST ".myconst" ".myconst" far-absolute R
 #pragma section DATA ".mysda_i" ".mysda_u" near-data RW
 #pragma section CODE ".mycode" ".mycode" standard RX
 
 const double v = 1.414;
 int w[10];
+const char t[5][5] = { 1, 2, 3 };
 
 double h(int n)
 {

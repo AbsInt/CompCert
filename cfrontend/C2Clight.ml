@@ -764,13 +764,14 @@ let convertProgram p =
 
 (** ** Extracting information about global variables from their atom *)
 
-let type_is_readonly env t =
-  let a1 = Cutil.attributes_of_type env t in
-  let a =
-    match Cutil.unroll env t with
-    | C.TArray(ty, _, _) -> a1 @ Cutil.attributes_of_type env ty
-    | _ -> a1 in
-  List.mem C.AConst a && not (List.mem C.AVolatile a)
+let rec type_is_readonly env t =
+  let a = Cutil.attributes_of_type env t in
+  if List.mem C.AVolatile a then false else
+  if List.mem C.AConst a then true else
+  match Cutil.unroll env t with
+  | C.TArray(t', _, _) -> type_is_readonly env t'
+  | _ -> false
+  end
 
 let atom_is_static a =
   try
