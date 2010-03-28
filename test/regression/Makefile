@@ -7,7 +7,7 @@ CCOMPFLAGS=-stdlib ../../runtime -dparse -dclight -dasm \
 LIBS=$(LIBMATH)
 
 # Can run and have reference output in Results
-TESTS=bitfields1 expr1 initializers
+TESTS=bitfields1 expr1 initializers volatile2
 
 # Other tests: should compile to .s without errors (but expect warnings)
 EXTRAS=commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
