@@ -60,6 +60,8 @@ let print_label oc lbl =
 let coqint oc n =
   fprintf oc "%ld" (camlint_of_coqint n)
 
+let comment = "@"
+
 let print_symb_ofs oc (symb, ofs) =
   print_symb oc symb;
   let ofs = camlint_of_coqint ofs in
@@ -186,6 +188,57 @@ let call_helper oc fn dst arg1 arg2 =
   (* ... for a total of at most 7 instructions *)
   7
 
+(* Built-in functions *)
+
+let re_builtin_function = Str.regexp "__builtin_"
+
+let is_builtin_function s =
+  Str.string_match re_builtin_function (extern_atom s) 0
+
+let print_builtin_function oc s =
+  fprintf oc "%s begin %s\n" comment (extern_atom s);
+  (* int args: IR0-IR3     float args: FR0, FR1
+     int res:  IR0        float res:  FR0 *)
+  let n = match extern_atom s with
+  (* Volatile reads *)
+  | "__builtin_volatile_read_int8unsigned" ->
+      fprintf oc "	ldrb	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
+  | "__builtin_volatile_read_int8signed" ->
+      fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
+  | "__builtin_volatile_read_int16unsigned" ->
+      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
+  | "__builtin_volatile_read_int16signed" ->
+      fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
+  | "__builtin_volatile_read_int32"
+  | "__builtin_volatile_read_pointer" ->
+      fprintf oc "	ldr	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
+  | "__builtin_volatile_read_float32" ->
+      fprintf oc "	ldfs	%a, [%a, #0]\n" freg FR0 ireg IR0;
+      fprintf oc "	mvfd	%a, %a\n" freg FR0 freg FR0; 2
+  | "__builtin_volatile_read_float64" ->
+      fprintf oc "	ldfd	%a, [%a, #0]\n" freg FR0 ireg IR0; 1
+  (* Volatile writes *)
+  | "__builtin_volatile_write_int8unsigned"
+  | "__builtin_volatile_write_int8signed" ->
+      fprintf oc "	strb	%a, [%a, #0]\n" ireg IR1 ireg IR0; 1
+  | "__builtin_volatile_write_int16unsigned"
+  | "__builtin_volatile_write_int16signed" ->
+      fprintf oc "	strh	%a, [%a, #0]\n" ireg IR1 ireg IR0; 1
+  | "__builtin_volatile_write_int32"
+  | "__builtin_volatile_write_pointer" ->
+      fprintf oc "	str	%a, [%a, #0]\n" ireg IR1 ireg IR0; 1
+  | "__builtin_volatile_write_float32" ->
+      fprintf oc "	mvfs	%a, %a\n" freg FR0 freg FR0;
+      fprintf oc "	stfs	%a, [%a, #0]\n" freg FR0 ireg IR0; 2
+  | "__builtin_volatile_write_float64" ->
+      fprintf oc "	stfd	%a, [%a, #0]\n" freg FR0 ireg IR0; 1
+  (* Catch-all *)
+  | s ->
+      invalid_arg ("unrecognized builtin function " ^ s)
+  in
+  fprintf oc "%s end %s\n" comment (extern_atom s);
+  n
+
 (* Printing of instructions *)
 
 let shift_op oc = function
@@ -221,11 +274,21 @@ let print_instruction oc labels = function
   | Pbc(bit, lbl) ->
       fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
   | Pbsymb id ->
-      fprintf oc "	b	%a\n" print_symb id; 1
+      if not (is_builtin_function id) then begin
+        fprintf oc "	b	%a\n" print_symb id; 1
+      end else begin
+        let n = print_builtin_function oc id in
+        fprintf oc "	mov	pc, r14\n";
+        n + 1
+      end
   | Pbreg r ->
       fprintf oc "	mov	pc, %a\n" ireg r; 1
   | Pblsymb id ->
-      fprintf oc "	bl	%a\n" print_symb id; 1
+      if not (is_builtin_function id) then begin
+        fprintf oc "	bl	%a\n" print_symb id; 1
+      end else begin
+        print_builtin_function oc id
+      end
   | Pblreg r ->
       fprintf oc "	mov	lr, pc\n";
       fprintf oc "	mov	pc, %a\n" ireg r; 2
@@ -348,7 +411,7 @@ let print_instruction oc labels = function
       fprintf oc "	mov	r12, sp\n";
       fprintf oc "	sub	sp, sp, #%ld\n" sz4;
       fprintf oc "	str	r12, [sp, #%ld]\n" ofs; 3
-  | Pfreeframe ofs ->
+  | Pfreeframe(lo, hi, ofs) ->
       fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1
   | Plabel lbl ->
       if Labelset.mem lbl labels then
@@ -455,7 +518,7 @@ let print_external_function oc name sg =
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code -> print_function oc name code
-  | External ef -> print_external_function oc name ef.ef_sig
+  | External ef -> if not(is_builtin_function name) then print_external_function oc name ef.ef_sig
 
 (* Data *)
 
