@@ -92,6 +92,11 @@ let label_high oc lbl =
   | MacOS      -> fprintf oc "ha16(L%d)" lbl
   | Linux|Diab -> fprintf oc ".L%d@ha" lbl
 
+let comment =
+  match target with
+  | MacOS|Linux -> ";"
+  | Diab -> "%"
+
 let constant oc cst =
   match cst with
   | Cint n ->
@@ -117,7 +122,6 @@ let constant oc cst =
       | _ ->
           assert false
       end
-
 
 let num_crbit = function
   | CRbit_0 -> 0
@@ -220,11 +224,12 @@ let is_builtin_function s =
   Str.string_match re_builtin_function (extern_atom s) 0
 
 let print_builtin_function oc s =
+  fprintf oc "%s begin %s\n" comment (extern_atom s);
   (* int args: GPR3, GPR4     float args: FPR1, FPR2, FPR3
      int res:  GPR3           float res:  FPR1
      Watch out for MacOSX/EABI incompatibility: functions that take
      some floats then some ints.  There are none here. *)
-  match extern_atom s with
+  begin match extern_atom s with
   (* Volatile reads *)
   | "__builtin_volatile_read_int8unsigned" ->
       fprintf oc "	lbz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
@@ -305,6 +310,8 @@ let print_builtin_function oc s =
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
+  end;
+  fprintf oc "%s end %s\n" comment (extern_atom s)
 
 (* Printing of instructions *)
 
@@ -485,7 +492,8 @@ let print_instruction oc labels = function
       let n = Int64.bits_of_float c in
       let nlo = Int64.to_int32 n
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
-      fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo;
+      fprintf oc "%a:	.long	0x%lx, 0x%lx %s %.18g\n"
+              label lbl nhi nlo comment c;
       section oc text
   | Plfs(r1, c, r2) ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
@@ -532,12 +540,9 @@ let print_instruction oc labels = function
       fprintf oc "	oris	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Prlwinm(r1, r2, c1, c2) ->
       let (mb, me) = rolm_mask (camlint_of_coqint c2) in
-      fprintf oc "	rlwinm	%a, %a, %ld, %d, %d\n"
+      fprintf oc "	rlwinm	%a, %a, %ld, %d, %d %s 0x%lx\n"
                 ireg r1 ireg r2 (camlint_of_coqint c1) mb me
-(*
-      fprintf oc "	rlwinm	%a, %a, %ld, 0x%lx\n"
-                ireg r1 ireg r2 (camlint_of_coqint c1) (camlint_of_coqint c2)
-*)
+                comment (camlint_of_coqint c2)
   | Pslw(r1, r2, r3) ->
       fprintf oc "	slw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psraw(r1, r2, r3) ->
@@ -772,13 +777,14 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.long	%ld\n" (Int32.bits_of_float n)
+      fprintf oc "	.long	%ld %s %.18g\n" (Int32.bits_of_float n) comment n
   | Init_float64 n ->
       (* .quad not working on all versions of the MacOSX assembler *)
       let b = Int64.bits_of_float n in
-      fprintf oc "	.long	%Ld, %Ld\n"
+      fprintf oc "	.long	%Ld, %Ld %s %.18g\n"
                  (Int64.shift_right_logical b 32)
                  (Int64.logand b 0xFFFFFFFFL)
+                 comment n
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
