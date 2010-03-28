@@ -231,7 +231,6 @@ Proof.
     inv H4. 
     assert (Some v1 = Some (Val.load_result (chunk_of_type ty) v')).
       rewrite <- LOAD1. eapply Mem.load_store_same; eauto.
-      replace (type_of_chunk (chunk_of_type ty)) with ty. auto.
       destruct ty; auto.
     inv H4. rewrite load_result_ty; auto. 
     auto.
