@@ -146,7 +146,7 @@ Inductive instruction : Type :=
 
   (* Pseudo-instructions *)
   | Pallocframe: Z -> Z -> int -> instruction      (**r allocate new stack frame *)
-  | Pfreeframe: int -> instruction                 (**r deallocate stack frame and restore previous frame *)
+  | Pfreeframe: Z -> Z -> int -> instruction       (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
   | Pbtbl: ireg -> list label -> instruction.      (**r N-way branch through a jump table *)
@@ -503,12 +503,16 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | None => Error
       | Some m2 => OK (nextinstr (rs#IR13 <- sp)) m2
       end
-  | Pfreeframe pos =>
+  | Pfreeframe lo hi pos =>
       match Mem.loadv Mint32 m (Val.add rs#IR13 (Vint pos)) with
       | None => Error
       | Some v =>
           match rs#IR13 with
-          | Vptr stk ofs => OK (nextinstr (rs#IR13 <- v)) (Mem.free m stk)
+          | Vptr stk ofs =>
+              match Mem.free m stk lo hi with
+              | None => Error
+              | Some m' => OK (nextinstr (rs#IR13 <- v)) m'
+              end
           | _ => Error
           end
       end

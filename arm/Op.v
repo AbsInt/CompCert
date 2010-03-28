@@ -572,8 +572,7 @@ Proof.
   destruct v; destruct chunk; exact I.
   intros until v. unfold Mem.loadv. 
   destruct addr; intros; try discriminate.
-  generalize (Mem.load_inv _ _ _ _ _ H0).
-  intros [X Y].  subst v.  apply H.
+  eapply Mem.load_type; eauto.
 Qed.
 
 End SOUNDNESS.

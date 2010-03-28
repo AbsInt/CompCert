@@ -473,10 +473,12 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pblsymb symb :: k
   | Mtailcall sig (inl r) =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_link_ofs) :: Pbreg (ireg_of r) :: k)
+        (Pfreeframe (-f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs)
+         :: Pbreg (ireg_of r) :: k)
   | Mtailcall sig (inr symb) =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_link_ofs) :: Pbsymb symb :: k)
+        (Pfreeframe (-f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs)
+         :: Pbsymb symb :: k)
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>
@@ -488,7 +490,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pbtbl IR14 tbl :: k
   | Mreturn =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_link_ofs) :: Pbreg IR14 :: k)
+        (Pfreeframe (-f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs)
+         :: Pbreg IR14 :: k)
   end.
 
 Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
