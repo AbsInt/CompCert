@@ -180,7 +180,8 @@ libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 cat <<EOF
 
 CompCert configuration:
-    Target architecture........... $arch ($variant)
+    Target architecture........... $arch
+    Application binary interface.. $variant
     OS and development env........ $system
     C compiler.................... $cc
     C preprocessor................ $cprepro
