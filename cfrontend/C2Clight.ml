@@ -771,7 +771,6 @@ let rec type_is_readonly env t =
   match Cutil.unroll env t with
   | C.TArray(t', _, _) -> type_is_readonly env t'
   | _ -> false
-  end
 
 let atom_is_static a =
   try
