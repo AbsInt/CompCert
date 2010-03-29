@@ -543,8 +543,13 @@ let print_init oc = function
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.word	%a\n" print_symb_ofs (symb, ofs)
 
-let print_init_data oc id =
-  List.iter (print_init oc) id
+let print_init_data oc name id =
+  if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
+  && List.for_all (function Init_int8 _ -> true | _ -> false) id
+  then
+    fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init id)
+  else
+    List.iter (print_init oc) id
 
 let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
@@ -555,7 +560,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
       fprintf oc "	.global	%a\n" print_symb name;
       fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
-      print_init_data oc init_data
+      print_init_data oc name init_data
 
 let print_program oc p =
   extfuns := IdentSet.empty;
