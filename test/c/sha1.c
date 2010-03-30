@@ -5,14 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(__ppc__) || defined(__PPC__)
-#define ARCH_BIG_ENDIAN
-#elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__)
-#undef ARCH_BIG_ENDIAN
-#else
-#error "unknown endianness"
-#endif
-
 typedef unsigned int u32;
 
 struct SHA1Context {
@@ -26,22 +18,24 @@ struct SHA1Context {
 #define rol5(x) (((x) << 5) | ((x) >> 27))
 #define rol30(x) (((x) << 30) | ((x) >> 2))
 
+static int arch_big_endian;
+
 static void SHA1_copy_and_swap(void * src, void * dst, int numwords)
 {
-#ifdef ARCH_BIG_ENDIAN
-  memcpy(dst, src, numwords * sizeof(u32));
-#else
-  unsigned char * s, * d;
-  unsigned char a, b;
-  for (s = src, d = dst; numwords > 0; s += 4, d += 4, numwords--) {
-    a = s[0];
-    b = s[1];
-    d[0] = s[3];
-    d[1] = s[2];
-    d[2] = b;
-    d[3] = a;
+  if (arch_big_endian) {
+    memcpy(dst, src, numwords * sizeof(u32));
+  } else {
+    unsigned char * s, * d;
+    unsigned char a, b;
+    for (s = src, d = dst; numwords > 0; s += 4, d += 4, numwords--) {
+      a = s[0];
+      b = s[1];
+      d[0] = s[3];
+      d[1] = s[2];
+      d[2] = b;
+      d[3] = a;
+    }
   }
-#endif
 }
 
 #define F(x,y,z) ( z ^ (x & (y ^ z) ) )
@@ -225,6 +219,14 @@ static void do_bench(int nblocks)
 
 int main(int argc, char ** argv)
 {
+  /* Determine endianness */
+  union { int i; unsigned char b[4]; } u;
+  u.i = 0x12345678;
+  switch (u.b[0]) {
+  case 0x12: arch_big_endian = 1; break;
+  case 0x78: arch_big_endian = 0; break;
+  default: printf("Cannot determine endianness\n"); return 2;
+  }
   do_test(test_input_1, test_output_1);
   do_test(test_input_2, test_output_2);
   do_bench(1000000);
