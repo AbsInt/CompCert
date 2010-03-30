@@ -1,3 +1,49 @@
+Release 1.7, 2010-03-31
+=======================
+
+- New implementation of the C type-checker, simplifier, and translation to
+  Clight.  Compared with the previous CIL-based solution, the new
+  implementation is more modular and supports more optional simplifications.
+
+- More features of the C language are handled by expansion during
+  translation to Clight:
+    . assignment between structs and unions (option -fstruct-assign)
+    . passing structs and union by value (option -fstruct-passing)
+    . bit-fields in structs (option -fbitfields)
+
+- The "volatile" modifier is now honored.  Volatile accesses are represented
+  in Clight by calls to built-in functions, which are preserved throughout
+  the compilation chain, then turned into processor loads and stores
+  at the end.
+
+- Generic support for C built-in functions.  These predefined external
+  functions give access to special instructions of the processor.  See
+  powerpc/CBuiltins.ml for the list of PowerPC built-in functions.
+
+- The memory model now exposes the bit-level in-memory representation
+  of integers and floats.  This strengthens the semantic preservation
+  theorem: we now prove that C code that directly manipulates these
+  bit-level representations (e.g. via a union between floats and integers)
+  is correctly compiled.
+
+- The memory model now supports fine-grained access control to individual
+  bytes of a memory block.  This feature is currently unused in the 
+  compiler proofs, but will facilitate connections with separation logics
+  later.
+
+- External functions are now allowed to read and modify memory.
+  The semantic preservation proofs were strengthened accordingly.
+  In particular, this enables the malloc() and free() C library functions
+  to be modeled as external functions in a provably correct manner.
+
+- Minor improvements in the handling of global environments and the
+  construction of the initial memory state.
+
+- Bug fixes in the handling of '#pragma section' and '#pragma set_section'.
+
+- The C test suite was enriched and restructured.
+
+	
 Release 1.6, 2010-01-13
 =======================
 
