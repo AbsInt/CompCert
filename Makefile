@@ -143,8 +143,8 @@ driver/Configuration.ml: Makefile.config
          echo 'let system = "$(SYSTEM)"') \
         > driver/Configuration.ml
 
-depend:
-	$(COQDEP) $(patsubst %, %/*.v, $(DIRS)) \
+depend: $(FILES)
+	$(COQDEP) $^ \
         | sed -e 's|$(ARCH)/$(VARIANT)/|$$(ARCH)/$$(VARIANT)/|g' \
               -e 's|$(ARCH)/|$$(ARCH)/|g' \
         > .depend
