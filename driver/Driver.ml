@@ -294,6 +294,9 @@ let cmdline_actions =
   let f_opt name ref =
     ["-f" ^ name ^ "$", Set ref; "-fno-" ^ name ^ "$", Unset ref] in
   [
+  "-I$", String(fun s -> prepro_options := s :: "-I" :: !prepro_options);
+  "-D$", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
+  "-U$", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
   "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
   "-[lL].", Self(fun s -> linker_options := s :: !linker_options);
   "-o$", String(fun s -> exe_name := s);
