@@ -214,11 +214,10 @@ Definition add_intf1 (r1m2: reg * mreg) (u: Regset.t) : Regset.t :=
   Regset.add (fst r1m2) u.
 
 Definition all_interf_regs (g: graph) : Regset.t :=
-  SetRegReg.fold add_intf2
-    g.(interf_reg_reg)
-    (SetRegMreg.fold add_intf1
-      g.(interf_reg_mreg)
-      Regset.empty).
+  let s1 := SetRegMreg.fold add_intf1 g.(interf_reg_mreg) Regset.empty in
+  let s2 := SetRegMreg.fold add_intf1 g.(pref_reg_mreg) s1 in
+  let s3 := SetRegReg.fold add_intf2 g.(interf_reg_reg) s2 in
+  SetRegReg.fold add_intf2 g.(pref_reg_reg) s3.
 
 Lemma in_setregreg_fold:
   forall g r1 r2 u,
@@ -287,6 +286,7 @@ Lemma all_interf_regs_correct_1:
   Regset.In r2 (all_interf_regs g).
 Proof.
   intros. unfold all_interf_regs. 
+  apply in_setregreg_fold. right.
   apply in_setregreg_fold. tauto.
 Qed.
 
@@ -296,6 +296,8 @@ Lemma all_interf_regs_correct_2:
   Regset.In r1 (all_interf_regs g).
 Proof.
   intros. unfold all_interf_regs.
-  apply in_setregreg_fold'. eapply in_setregmreg_fold. eauto.
+  apply in_setregreg_fold'. apply in_setregreg_fold'. 
+  apply in_setregmreg_fold with mr2. right. 
+  apply in_setregmreg_fold with mr2. eauto.
 Qed.
 
