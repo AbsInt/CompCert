@@ -94,7 +94,8 @@ let label_high oc lbl =
 
 let comment =
   match target with
-  | MacOS|Linux -> ";"
+  | MacOS -> ";"
+  | Linux -> "#"
   | Diab -> "%"
 
 let constant oc cst =
@@ -117,10 +118,12 @@ let constant oc cst =
       end
   | Csymbol_sda(s, n) ->
       begin match target with
+      | MacOS ->
+          assert false
+      | Linux ->
+          fprintf oc "(%a)@sda21" symbol_offset (s, camlint_of_coqint n)
       | Diab ->
           fprintf oc "(%a)@sdarx" symbol_offset (s, camlint_of_coqint n)
-      | _ ->
-          assert false
       end
 
 let num_crbit = function
