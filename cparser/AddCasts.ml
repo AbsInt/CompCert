@@ -195,43 +195,43 @@ let add_decl env (sto, id, ty, optinit) =
 
 (* Statements *)
 
-let rec add_stmt env s =
+let rec add_stmt env f s =
   match s.sdesc with
   | Sskip -> s
   | Sdo e -> add_topexpr env s.sloc e
   | Sseq(s1, s2) -> 
-      {sdesc = Sseq(add_stmt env s1, add_stmt env s2); sloc = s.sloc }
+      {sdesc = Sseq(add_stmt env f s1, add_stmt env f s2); sloc = s.sloc }
   | Sif(e, s1, s2) ->
-      {sdesc = Sif(add_expr env e, add_stmt env s1, add_stmt env s2);
+      {sdesc = Sif(add_expr env e, add_stmt env f s1, add_stmt env f s2);
        sloc = s.sloc}
   | Swhile(e, s1) ->
-      {sdesc = Swhile(add_expr env e, add_stmt env s1);
+      {sdesc = Swhile(add_expr env e, add_stmt env f s1);
        sloc = s.sloc}
   | Sdowhile(s1, e) ->
-      {sdesc = Sdowhile(add_stmt env s1, add_expr env e);
+      {sdesc = Sdowhile(add_stmt env f s1, add_expr env e);
        sloc = s.sloc}
   | Sfor(s1, e, s2, s3) ->
-      {sdesc = Sfor(add_stmt env s1, add_expr env e, add_stmt env s2,
-                    add_stmt env s3);
+      {sdesc = Sfor(add_stmt env f s1, add_expr env e, add_stmt env f s2,
+                    add_stmt env f s3);
        sloc = s.sloc}
   | Sbreak -> s
   | Scontinue -> s
   | Sswitch(e, s1) ->
-      {sdesc = Sswitch(add_expr env e, add_stmt env s1); sloc = s.sloc}
+      {sdesc = Sswitch(add_expr env e, add_stmt env f s1); sloc = s.sloc}
   | Slabeled(lbl, s) ->
-      {sdesc = Slabeled(lbl, add_stmt env s); sloc = s.sloc}
+      {sdesc = Slabeled(lbl, add_stmt env f s); sloc = s.sloc}
   | Sgoto lbl -> s
   | Sreturn None -> s
   | Sreturn (Some e) ->
-      {sdesc = Sreturn(Some(add_expr env e)); sloc = s.sloc}
+      {sdesc = Sreturn(Some(cast env (add_expr env e) f.fd_ret)); sloc = s.sloc}
   | Sblock sl ->
-      {sdesc = Sblock(List.map (add_stmt env) sl); sloc = s.sloc}
+      {sdesc = Sblock(List.map (add_stmt env f) sl); sloc = s.sloc}
   | Sdecl d ->
       {sdesc = Sdecl(add_decl env d); sloc = s.sloc}
 
 let add_fundef env f =
   reset_temps();
-  let body' = add_stmt env f.fd_body in
+  let body' = add_stmt env f f.fd_body in
   let temps = get_temps () in
   (* fd_locals have no initializers, so no need to transform them *)
   { f with fd_locals = f.fd_locals @ temps; fd_body = body' }
