@@ -348,7 +348,7 @@ let volatile_fun_suffix_type ty =
   | Tint(I8, Signed) -> ("int8signed", ty)
   | Tint(I16, Unsigned) -> ("int16unsigned", ty)
   | Tint(I16, Signed) -> ("int16signed", ty)
-  | Tint(I32, _) -> ("int32", ty)
+  | Tint(I32, _) -> ("int32", Tint(I32, Signed))
   | Tfloat F32 -> ("float32", ty)
   | Tfloat F64 -> ("float64", ty)
   | Tpointer _ | Tarray _ | Tfunction _ | Tcomp_ptr _ ->
