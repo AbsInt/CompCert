@@ -90,6 +90,10 @@ let simpl_expr loc env e act =
   let new_temp ty =
     Transform.new_temp (erase_attributes_type env ty) in
 
+  let eboolvalof e =
+    { edesc = EBinop(One, e, intconst 0L IInt, TInt(IInt, []));
+      etyp = TInt(IInt, []) } in
+
   let sseq s1 s2 = Cutil.sseq loc s1 s2 in
 
   let sassign e1 e2 =
@@ -265,14 +269,14 @@ let simpl_expr loc env e act =
                   let (s2, e2') = simpl e2 RHS in
                   let tmp = new_temp e.etyp in
                   (sseq s1 (sif e1' 
-                              (sseq s2 (sif e2'
-                                         (sassign tmp (intconst 1L IInt))
-                                         (sassign tmp (intconst 0L IInt))))
-                             (sassign tmp (intconst 0L IInt))),
+                              (sseq s2 (sassign tmp (eboolvalof e2')))
+                              (sassign tmp (intconst 0L IInt))),
                    tmp)
               | Set lv ->
-                  let (s2, _) = simpl e2 (Set lv) in
-                  (sseq s1 (sif e1' s2 (sassign lv (intconst 0L IInt))),
+                  let (s2, e2') = simpl e2 RHS in
+                  (sseq s1 (sif e1' 
+                              (sseq s2 (sassign lv (eboolvalof e2')))
+                              (sassign lv (intconst 0L IInt))),
                    voidconst)
             end             
 
@@ -291,13 +295,13 @@ let simpl_expr loc env e act =
                   let tmp = new_temp e.etyp in
                   (sseq s1 (sif e1' 
                               (sassign tmp (intconst 1L IInt))
-                              (sseq s2 (sif e2'
-                                         (sassign tmp (intconst 1L IInt))
-                                         (sassign tmp (intconst 0L IInt))))),
+                              (sseq s2 (sassign tmp (eboolvalof e2')))),
                    tmp)
               | Set lv ->
-                  let (s2, _) = simpl e2 (Set lv) in
-                  (sseq s1 (sif e1' (sassign lv (intconst 1L IInt)) s2),
+                  let (s2, e2') = simpl e2 RHS in
+                  (sseq s1 (sif e1' 
+                              (sassign lv (intconst 1L IInt))
+                              (sseq s2 (sassign lv (eboolvalof e2')))),
                    voidconst)
             end             
 
