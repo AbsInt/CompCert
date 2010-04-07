@@ -317,7 +317,80 @@ let rec transf_stmt env s =
 let transf_fundef env f =
   { f with fd_body = transf_stmt env f.fd_body }
 
+(* Initializers *)
+
+let bitfield_initializer bf i =
+  match i with
+  | Init_single e ->
+      let m = Int64.pred (Int64.shift_left 1L bf.bf_size) in
+      let e_mask =
+        {edesc = EConst(CInt(m, IUInt, sprintf "0x%LXU" m));
+         etyp = TInt(IUInt, [])} in
+      let e_and =
+        {edesc = EBinop(Oand, e, e_mask, TInt(IUInt,[]));
+         etyp = TInt(IUInt,[])} in
+      {edesc = EBinop(Oshl, e_and, intconst (Int64.of_int bf.bf_pos) IInt,
+                      TInt(IUInt, []));
+       etyp = TInt(IUInt, [])}
+  | _ -> assert false
+
+let rec pack_bitfield_init id carrier fld_init_list =
+  match fld_init_list with
+  | [] -> ([], [])
+  | (fld, i) :: rem ->
+      try
+        let bf = Hashtbl.find bitfield_table (id, fld.fld_name) in
+        if bf.bf_carrier <> carrier then
+          ([], fld_init_list)
+        else begin
+          let (el, rem') = pack_bitfield_init id carrier rem in
+          (bitfield_initializer bf i :: el, rem')
+        end
+      with Not_found ->
+        ([], fld_init_list)
+
+let rec or_expr_list = function
+  | [] -> assert false
+  | [e] -> e
+  | e1 :: el ->
+      {edesc = EBinop(Oor, e1, or_expr_list el, TInt(IUInt,[]));
+       etyp = TInt(IUInt,[])}
+
+let rec transf_struct_init id fld_init_list =
+  match fld_init_list with
+  | [] -> []
+  | (fld, i) :: rem ->
+      try
+        let bf = Hashtbl.find bitfield_table (id, fld.fld_name) in
+        let (el, rem') =
+          pack_bitfield_init id bf.bf_carrier fld_init_list in
+        ({fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
+          fld_bitfield = None},
+         Init_single {edesc = ECast(bf.bf_carrier_typ, or_expr_list el);
+                      etyp = bf.bf_carrier_typ})
+        :: transf_struct_init id rem'
+      with Not_found ->
+        (fld, i) :: transf_struct_init id rem
+
+let rec transf_init env i =
+  match i with
+  | Init_single e -> Init_single (transf_expr env e)
+  | Init_array il -> Init_array (List.map (transf_init env) il)
+  | Init_struct(id, fld_init_list) ->
+      let fld_init_list' =
+        List.map (fun (f, i) -> (f, transf_init env i)) fld_init_list in
+        Init_struct(id, transf_struct_init id fld_init_list')
+  | Init_union(id, fld, i) -> Init_union(id, fld, transf_init env i)
+
+let transf_decl env (sto, id, ty, init_opt) =
+  (sto, id, ty,
+   match init_opt with None -> None | Some i -> Some(transf_init env i))
+
 (* Programs *)
 
 let program p =
-  Transform.program ~composite:transf_composite ~fundef:transf_fundef p
+  Transform.program
+    ~composite:transf_composite
+    ~decl: transf_decl
+    ~fundef:transf_fundef 
+    p
