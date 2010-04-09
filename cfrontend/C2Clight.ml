@@ -701,11 +701,9 @@ let rec translEnv env = function
       let env' =
         match g.gdesc with
         | C.Gcompositedecl(su, id) ->
-            Env.add_composite env id
-              {ci_kind = su; ci_incomplete = true;  ci_members = []}
+            Env.add_composite env id (Cutil.composite_info_decl env su)
         | C.Gcompositedef(su, id, fld) ->
-            Env.add_composite env id
-              {ci_kind = su; ci_incomplete = false;  ci_members = fld}
+            Env.add_composite env id (Cutil.composite_info_def env su fld)
         | C.Gtypedef(id, ty) ->
             Env.add_typedef env id ty
         | _ ->

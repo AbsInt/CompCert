@@ -25,9 +25,10 @@ exception Error of error
 val fresh_ident : string -> C.ident
 
 type composite_info = {
-  ci_kind : C.struct_or_union;
-  ci_incomplete : bool;
-  ci_members : C.field list;
+  ci_kind: C.struct_or_union;
+  ci_members: C.field list;             (* members, in order *)
+  ci_alignof: int option;               (* alignment; None if incomplete *)
+  ci_sizeof: int option;                (* size; None if incomplete *)
 }
 
 type ident_info = II_ident of C.storage * C.typ | II_enum of int64

@@ -64,7 +64,7 @@ let pack_bitfields env id ml =
       | Some n ->
           if n = 0 then
             (pos, accu, ms) (* bit width 0 means end of pack *)
-          else if pos + n >= 8 * !config.sizeof_int then
+          else if pos + n > 8 * !config.sizeof_int then
             (pos, accu, ml) (* doesn't fit in current word *)
           else begin
             let signed =

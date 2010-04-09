@@ -64,6 +64,11 @@ val incomplete_type : Env.t -> typ -> bool
   (* Return true if the given type is incomplete, e.g.
      declared but not defined struct or union, or array type  without a size. *)
 
+(* Computing composite_info records *)
+
+val composite_info_decl: Env.t -> struct_or_union -> Env.composite_info
+val composite_info_def: Env.t -> struct_or_union -> field list -> Env.composite_info
+
 (* Type classification functions *)
 
 val is_void_type : Env.t -> typ -> bool

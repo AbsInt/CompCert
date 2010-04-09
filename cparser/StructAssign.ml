@@ -57,7 +57,7 @@ let transf_assign env loc lhs rhs =
     match unroll env l.etyp with
     | TStruct(id, attr) ->
         let ci = Env.find_struct env id in
-        if ci.ci_incomplete then 
+        if ci.ci_sizeof = None then
           error "%a: Error: incomplete struct '%s'" formatloc loc id.name;
         transf_struct l r ci.ci_members
     | TUnion(id, attr) ->

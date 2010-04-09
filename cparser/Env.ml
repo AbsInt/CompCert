@@ -62,8 +62,9 @@ let fresh_ident s = incr gensym; { name = s; stamp = !gensym }
 
 type composite_info = {
   ci_kind: struct_or_union;
-  ci_incomplete: bool;                  (* incompletely defined? *)
-  ci_members: field list                (* members, in order *)
+  ci_members: field list;               (* members, in order *)
+  ci_alignof: int option;               (* alignment; None if incomplete *)
+  ci_sizeof: int option;                (* size; None if incomplete *)
 }
 
 (* Infos associated with an ordinary identifier *)

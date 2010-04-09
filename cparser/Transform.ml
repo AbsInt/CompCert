@@ -64,12 +64,11 @@ let program
            (Gfundef(fundef env f),
             Env.add_ident env f.fd_name f.fd_storage (fundef_typ f))
         | Gcompositedecl(su, id) ->
-            let ci = {ci_kind = su; ci_incomplete = true; ci_members = []} in
-            (Gcompositedecl(su, id), Env.add_composite env id ci)
+            (Gcompositedecl(su, id),
+             Env.add_composite env id (composite_info_decl env su))
         | Gcompositedef(su, id, fl) ->
-            let ci = {ci_kind = su; ci_incomplete = false; ci_members = fl} in
             (Gcompositedef(su, id, composite env su id fl),
-             Env.add_composite env id ci)
+             Env.add_composite env id (composite_info_def env su fl))
         | Gtypedef(id, ty) ->
             (Gtypedef(id, typedef env id ty), Env.add_typedef env id ty)
         | Genumdef _ as gd -> (gd, env)

@@ -565,8 +565,7 @@ and elab_struct_or_union_info kind loc env members =
         error loc "member '%s' has incomplete type" fld.fld_name;
       check_incomplete rem in
   check_incomplete m;
-  ({ ci_kind = kind; ci_incomplete = false; ci_members = m },
-   env')
+  (composite_info_def env' kind m, env')
 
 (* Elaboration of a struct or union *)
 
@@ -582,7 +581,7 @@ and elab_struct_or_union only kind loc tag optmembers env =
          create a new incomplete composite instead via the case
          "_, None" below. *)
       (tag', env)
-  | Some(tag', ({ci_incomplete = true} as ci)), Some members
+  | Some(tag', ({ci_sizeof = None} as ci)), Some members
     when Env.in_current_scope env tag' ->
       if ci.ci_kind <> kind then
         error loc "struct/union mismatch on tag '%s'" tag;
@@ -593,7 +592,7 @@ and elab_struct_or_union only kind loc tag optmembers env =
                 (Gcompositedef(kind, tag', ci'.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
-  | Some(tag', {ci_incomplete = false}), Some _
+  | Some(tag', {ci_sizeof = Some _}), Some _
     when Env.in_current_scope env tag' ->
       error loc "redefinition of struct or union '%s'" tag;
       (tag', env)
@@ -601,7 +600,7 @@ and elab_struct_or_union only kind loc tag optmembers env =
       (* declaration of an incomplete struct or union *)
       if tag = "" then
         error loc "anonymous, incomplete struct or union";
-      let ci = { ci_kind = kind; ci_incomplete = true; ci_members = [] } in
+      let ci = composite_info_decl env kind in
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
@@ -610,7 +609,7 @@ and elab_struct_or_union only kind loc tag optmembers env =
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
-      let ci1 = { ci_kind = kind; ci_incomplete = true; ci_members = [] } in
+      let ci1 = composite_info_decl env kind in
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)

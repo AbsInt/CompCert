@@ -210,7 +210,7 @@ let pack_bitfields ml =
       | Some n ->
           if n = 0 then
             (nbits, ms) (* bit width 0 means end of pack *)
-          else if nbits + n >= 8 * !config.sizeof_int then
+          else if nbits + n > 8 * !config.sizeof_int then
             (nbits, ml) (* doesn't fit in current word *)
           else
             pack (nbits + n) ms (* add to current word *)
@@ -249,24 +249,13 @@ let rec alignof env t =
   | TFun(_, _, _, _) -> !config.alignof_fun
   | TNamed(_, _) -> alignof env (unroll env t)
   | TStruct(name, _) ->
-      let ci = Env.find_struct env name in
-      if ci.ci_incomplete
-      then None
-      else alignof_struct_union
-             (Env.add_composite env name {ci with ci_incomplete = true})
-             ci.ci_members
+      let ci = Env.find_struct env name in ci.ci_alignof
   | TUnion(name, _) ->
-      let ci = Env.find_union env name in
-      if ci.ci_incomplete
-      then None
-      else alignof_struct_union
-             (Env.add_composite env name {ci with ci_incomplete = true})
-             ci.ci_members
+      let ci = Env.find_union env name in ci.ci_alignof
 
-(* We set ci_incomplete to true before recursing so that we stop and
-   return None on ill-formed structs such as struct a { struct a x; }. *)
+(* Compute the natural alignment of a struct or union. *)
 
-and alignof_struct_union env members =
+let alignof_struct_union env members =
   let rec align_rec al = function
   | [] -> Some al
   | m :: rem as ml ->
@@ -326,27 +315,15 @@ let rec sizeof env t =
   | TFun(_, _, _, _) -> !config.sizeof_fun
   | TNamed(_, _) -> sizeof env (unroll env t)
   | TStruct(name, _) ->
-      let ci = Env.find_struct env name in
-      if ci.ci_incomplete
-      then None
-      else sizeof_struct
-             (Env.add_composite env name {ci with ci_incomplete = true})
-             ci.ci_members
+      let ci = Env.find_struct env name in ci.ci_sizeof
   | TUnion(name, _) ->
-      let ci = Env.find_union env name in
-      if ci.ci_incomplete
-      then None
-      else sizeof_union
-             (Env.add_composite env name {ci with ci_incomplete = true})
-             ci.ci_members
+      let ci = Env.find_union env name in ci.ci_sizeof
 
-(* We set ci_incomplete to true before recursing so that we stop and
-   return None on ill-formed structs such as struct a { struct a x; }. *)
+(* Compute the size of a union.
+   It is the size is the max of the sizes of fields, rounded up to the
+   natural alignment. *)
 
-(* For a union, the size is the max of the sizes of fields,
-   rounded up to the natural alignment. *)
-
-and sizeof_union env members =
+let sizeof_union env members =
   let rec sizeof_rec sz = function
   | [] ->
       begin match alignof_struct_union env members with
@@ -360,10 +337,11 @@ and sizeof_union env members =
       end
   in sizeof_rec 0 members
 
-(* For a struct, we lay out fields consecutively, inserting padding
-   to preserve their natural alignment. *)
+(* Compute the size of a struct.
+   We lay out fields consecutively, inserting padding to preserve
+   their natural alignment. *)
 
-and sizeof_struct env members =
+let sizeof_struct env members =
   let rec sizeof_rec ofs = function
   | [] | [ { fld_typ = TArray(_, None, _) } ] ->
       (* C99: ty[] allowed as last field *)
@@ -386,6 +364,19 @@ and sizeof_struct env members =
 
 let incomplete_type env t =
   match sizeof env t with None -> true | Some _ -> false
+
+(* Computing composite_info records *)
+
+let composite_info_decl env su =
+  { ci_kind = su; ci_members = []; ci_alignof = None; ci_sizeof = None }
+
+let composite_info_def env su m =
+  { ci_kind = su; ci_members = m;
+    ci_alignof = alignof_struct_union env m;
+    ci_sizeof =
+      match su with
+      | Struct -> sizeof_struct env m
+      | Union -> sizeof_union env m }
 
 (* Type of a function definition *)
 
