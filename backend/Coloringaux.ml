@@ -167,6 +167,42 @@ module IntPairSet = Set.Make(struct
     0
   end)
 
+(* Register classes *)
+
+let class_of_type = function Tint -> 0 | Tfloat -> 1
+
+let num_register_classes = 2
+
+let caller_save_registers = Array.make num_register_classes [||]
+
+let callee_save_registers = Array.make num_register_classes [||]
+
+let num_available_registers = Array.make num_register_classes 0
+
+let reserved_registers = ref ([]: mreg list)
+
+let rec remove_reserved = function
+  | [] -> []
+  | hd :: tl ->
+      if List.mem hd !reserved_registers
+      then remove_reserved tl
+      else hd :: remove_reserved tl
+
+let init_regs() =
+  caller_save_registers.(0) <-
+    Array.of_list (remove_reserved Conventions.int_caller_save_regs);
+  caller_save_registers.(1) <-
+    Array.of_list (remove_reserved Conventions.float_caller_save_regs);
+  callee_save_registers.(0) <-
+    Array.of_list (remove_reserved Conventions.int_callee_save_regs);
+  callee_save_registers.(1) <-
+    Array.of_list (remove_reserved Conventions.float_callee_save_regs);
+  for i = 0 to num_register_classes - 1 do
+    num_available_registers.(i) <-
+      Array.length caller_save_registers.(i)
+      + Array.length callee_save_registers.(i)
+  done
+
 (* \subsection{The George-Appel algorithm} *)
 
 (* Below is a straigthforward translation of the pseudo-code at the end
@@ -208,7 +244,7 @@ let nextRegIdent = ref 0
 
 (* Initialization of all global data structures *)
 
-let init() =
+let init_graph() =
   adjSet := IntPairSet.empty;
   nextRegIdent := 0;
   DLinkNode.clear simplifyWorklist;
@@ -267,28 +303,6 @@ let nodeMoves n =
 
 let moveRelated n =
   List.exists moveIsActiveOrWorklist n.movelist
-
-(* Register classes *)
-
-let class_of_type = function Tint -> 0 | Tfloat -> 1
-
-let num_register_classes = 2
-
-let caller_save_registers = [|
-  Array.of_list Conventions.int_caller_save_regs;
-  Array.of_list Conventions.float_caller_save_regs
-|]
-
-let callee_save_registers = [|
-  Array.of_list Conventions.int_callee_save_regs;
-  Array.of_list Conventions.float_callee_save_regs
-|]
-
-let num_available_registers = 
-  [| Array.length caller_save_registers.(0)
-           + Array.length callee_save_registers.(0);
-     Array.length caller_save_registers.(1)
-           + Array.length callee_save_registers.(1) |]
 
 (*i
 (* Check invariants *)
@@ -689,11 +703,12 @@ let spill_costs f = Hashtbl.create 7
 
 let graph_coloring (f: coq_function) (g: graph) (env: regenv) (regs: Regset.t)
                    : (reg -> loc) =
-  init();
+  init_regs();
+  init_graph();
   Array.fill start_points 0 num_register_classes 0;
   let mapping = build g env (spill_costs f) in
   List.iter assign_color (nodeOrder []);
-  init();
+  init_graph();  (* free data structures *)
   fun r ->
     try location_of_node (getAlias (Hashtbl.find mapping r))
     with Not_found -> R IT1 (* any location *)

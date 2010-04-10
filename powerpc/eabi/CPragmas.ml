@@ -68,6 +68,8 @@ let _ =
                sec_near_access = false}
   ]
 
+(* #pragma section *)
+
 let process_section_pragma classname istring ustring addrmode accmode =
   let old_si =
     try Hashtbl.find section_table classname
@@ -85,6 +87,7 @@ let process_section_pragma classname istring ustring addrmode accmode =
         else (addrmode = "near-code") || (addrmode = "near-data") } in
   Hashtbl.add section_table classname si
 
+(* #pragma use_section *)
 
 let use_section_table : (AST.ident, section_info) Hashtbl.t =
   Hashtbl.create 51
@@ -122,6 +125,19 @@ let define_variable id d =
       if is_small !Clflags.option_small_data then "SDATA" else "DATA" in
   default_use_section id sect
 
+(* #pragma reserve_register *)
+
+let process_reserve_register_pragma name =
+  match Machregsaux.register_by_name name with
+  | None ->
+      C2Clight.error "unknown register in `reserve_register' pragma"
+  | Some r ->
+      if Machregsaux.can_reserve_register r then
+        Coloringaux.reserved_registers :=
+          r :: !Coloringaux.reserved_registers
+      else
+        C2Clight.error "cannot reserve this register (not a callee-save)"
+
 (* Parsing of pragmas using regexps *)
 
 let re_start_pragma_section = Str.regexp "section\\b"
@@ -144,6 +160,11 @@ let re_pragma_use_section = Str.regexp
 
 let re_split_idents = Str.regexp "[ \t,]+"
 
+let re_start_pragma_reserve_register = Str.regexp "reserve_register\\b"
+
+let re_pragma_reserve_register = Str.regexp
+  "reserve_register[ \t]+\\([A-Za-z0-9]+\\)"
+
 let process_pragma name =
   if Str.string_match re_pragma_section name 0 then begin
     process_section_pragma
@@ -162,9 +183,13 @@ let process_pragma name =
     if identlist = [] then C2Clight.warning "vacuous `use_section' pragma";
     List.iter (process_use_section_pragma classname) identlist;
     true
-  end else if Str.string_match re_start_pragma_use_section name 0 then
-    (C2Clight.error "ill-formed `use_section' pragma"; true)
-  else
+  end else if Str.string_match re_start_pragma_use_section name 0 then begin
+    C2Clight.error "ill-formed `use_section' pragma"; true
+  end else if Str.string_match re_pragma_reserve_register name 0 then begin
+    process_reserve_register_pragma (Str.matched_group 1 name); true
+  end else if Str.string_match re_start_pragma_reserve_register name 0 then begin
+    C2Clight.error "ill-formed `reserve_register' pragma"; true
+  end else
     false
 
 let initialize () =

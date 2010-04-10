@@ -10,13 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Registers
-open Locations
-open RTL
-open RTLtyping
-open InterfGraph
+(** Auxiliary functions on machine registers *)
 
-val graph_coloring:
-  coq_function -> graph -> regenv -> Regset.t -> (reg -> loc)
-
-val reserved_registers: Machregs.mreg list ref
+val register_by_name: string -> Machregs.mreg option
+val can_reserve_register: Machregs.mreg -> bool
