@@ -791,6 +791,13 @@ let atom_sizeof a =
   with Not_found ->
     None
 
+let atom_alignof a =
+  try
+    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
+    Cutil.alignof env ty
+  with Not_found ->
+    None
+
 (** ** The builtin environment *)
 
 open Cparser.Builtins

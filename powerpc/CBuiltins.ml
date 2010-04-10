@@ -64,6 +64,8 @@ let builtins = {
     "__builtin_sync",
       (TVoid [], [], false);
     "__builtin_isync",
+      (TVoid [], [], false);
+    "__builtin_trap",
       (TVoid [], [], false)
   ]
 }

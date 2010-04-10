@@ -219,6 +219,12 @@ let rolm_mask n =
   assert (!count = 2 || (!count = 0 && !last));
   (!mb, !me-1)
 
+(* Base-2 log of a Caml integer *)
+
+let rec log2 n =
+  assert (n > 0);
+  if n = 1 then 0 else 1 + log2 (n lsr 1)
+
 (* Built-in functions *)
 
 let re_builtin_function = Str.regexp "__builtin_"
@@ -310,6 +316,8 @@ let print_builtin_function oc s =
       fprintf oc "	sync\n"
   | "__builtin_isync" ->
       fprintf oc "	isync\n"
+  | "__builtin_trap" ->
+      fprintf oc "	trap\n"
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
@@ -610,7 +618,11 @@ let print_function oc name code =
   if not (C2Clight.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
-  List.iter (print_instruction oc (labels_of_code Labelset.empty code)) code
+  List.iter (print_instruction oc (labels_of_code Labelset.empty code)) code;
+  if target <> MacOS then begin
+    fprintf oc "	.type	%a, @function\n" symbol name;
+    fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+  end
 
 (* Generation of stub functions *)
 
@@ -816,13 +828,21 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
             if C2Clight.atom_is_readonly name
             then const_data
             else data
+      and align =
+        match C2Clight.atom_alignof name with
+        | Some a -> log2 a
+        | None -> 3 (* 8-alignment is a safe default *)
       in
       section oc sec;
-      fprintf oc "	.align	3\n";
+      fprintf oc "	.align	%d\n" align;
       if not (C2Clight.atom_is_static name) then
         fprintf oc "	.globl	%a\n" symbol name;
       fprintf oc "%a:\n" symbol name;
-      print_init_data oc name init_data
+      print_init_data oc name init_data;
+      if target <> MacOS then begin
+        fprintf oc "	.type	%a, @object\n" symbol name;
+        fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+      end
 
 let print_program oc p =
   stubbed_functions := IdentSet.empty;
