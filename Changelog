@@ -1,3 +1,20 @@
+Release 1.7.1, 2010-04-13
+=========================
+
+Bug fixes in the new C pre-simplifier:
+- Missing cast on return value for some functions
+- Incorrect simplification of some uses of || and &&
+- Nontermination in the presence of a bit field of size exactly 32 bits.
+- Global initializers for structs containing bit fields.
+- Wrong type in volatile reads from variables of type 'unsigned int'.
+
+Small improvements to the PowerPC port:
+- Added __builtin_trap() built-in function.
+- Support for '#pragma reserve_register' (EABI)
+- Less aggressive alignment of global variables.
+- Generate '.type' and '.size' directives (EABI).
+
+
 Release 1.7, 2010-03-31
 =======================
 
