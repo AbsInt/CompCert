@@ -232,6 +232,35 @@ let print_builtin_function oc s =
       fprintf oc "	stfs	%a, [%a, #0]\n" freg FR0 ireg IR0; 2
   | "__builtin_volatile_write_float64" ->
       fprintf oc "	stfd	%a, [%a, #0]\n" freg FR0 ireg IR0; 1
+  (* Block copy *)
+  | "__builtin_memcpy" ->
+      let lbl1 = new_label() in
+      let lbl2 = new_label() in
+      fprintf oc "	cmp	%a, #0\n" ireg IR2;
+      fprintf oc "	beq	%a\n" label lbl1;
+      fprintf oc "%a:	ldrb	%a, [%a], #1\n" label lbl2 ireg IR3 ireg IR1;
+      fprintf oc "	subs	%a, %a, #1\n" ireg IR2 ireg IR2;
+      fprintf oc "	strb	%a, [%a], #1\n" ireg IR3 ireg IR0;
+      fprintf oc "	bne	%a\n" label lbl2;
+      fprintf oc "%a:\n" label lbl1
+(*
+      let lbl = new_label() in
+      fprintf oc "	cmp	%a, #0\n" ireg IR2;
+      fprintf oc "%a:	ldrbne	%a, [%a], #1\n" label lbl ireg IR3 ireg IR1;
+      fprintf oc "	strbne	%a, [%a], #1\n" ireg IR3 ireg IR0;
+      fprintf oc "	subnes	%a, %a, #1\n" ireg IR2 ireg IR2;
+      fprintf oc "	bne	%a\n" label lbl
+*)
+  | "__builtin_memcpy_word" ->
+      let lbl1 = new_label() in
+      let lbl2 = new_label() in
+      fprintf oc "	movs	%a, %a, lsr #2\n" ireg IR2 ireg IR2;
+      fprintf oc "	beq	%a\n" label lbl1;
+      fprintf oc "%a:	ldr	%a, [%a], #4\n" label lbl2 ireg IR3 ireg IR1;
+      fprintf oc "	subs	%a, %a, #1\n" ireg IR2 ireg IR2;
+      fprintf oc "	str	%a, [%a], #4\n" ireg IR3 ireg IR0;
+      fprintf oc "	bne	%a\n" label lbl2;
+      fprintf oc "%a:\n" label lbl1
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)

@@ -19,13 +19,14 @@
    Preserves: simplified code, unblocked code *)
 
 open C
+open Machine
 open Cutil
 open Env
 open Errors
 
 let maxsize = ref 8
 
-let need_memcpy = ref (None: ident option)
+let memcpy_decl = ref (None : ident option)
 
 let memcpy_type =
   TFun(TPtr(TVoid [], []),
@@ -34,14 +35,18 @@ let memcpy_type =
              (Env.fresh_ident "", TInt(size_t_ikind, []))],
        false, [])
 
-let memcpy_ident () =
-  match !need_memcpy with
-  | None ->
-      let id = Env.fresh_ident "memcpy" in
-      need_memcpy := Some id;
-      id
-  | Some id ->
-      id 
+let memcpy_ident env =
+  try fst (Env.lookup_ident env "__builtin_memcpy")
+  with Env.Error _ ->
+  try fst (Env.lookup_ident env "memcpy")
+  with Env.Error _ ->
+  match !memcpy_decl with
+  | Some id -> id
+  | None -> let id = Env.fresh_ident "memcpy" in memcpy_decl := Some id; id
+
+let memcpy_words_ident env =
+  try fst (Env.lookup_ident env "__builtin_memcpy_words")
+  with Env.Error _ -> memcpy_ident env
 
 let transf_assign env loc lhs rhs =
 
@@ -89,7 +94,15 @@ let transf_assign env loc lhs rhs =
   try
     transf lhs rhs
   with Exit ->
-    let memcpy = {edesc = EVar(memcpy_ident()); etyp = memcpy_type} in
+    let by_words =
+      match Cutil.sizeof env lhs.etyp with
+      | Some n -> n mod !config.sizeof_ptr = 0
+      | None -> false in
+    let ident =
+      if by_words
+      then memcpy_word_ident()
+      else memcpy_ident() in
+    let memcpy = {edesc = EVar(ident); etyp = memcpy_type} in
     let e_lhs = {edesc = EUnop(Oaddrof, lhs); etyp = TPtr(lhs.etyp, [])} in
     let e_rhs = {edesc = EUnop(Oaddrof, rhs); etyp = TPtr(rhs.etyp, [])} in
     let e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])} in
@@ -131,27 +144,10 @@ let transf_fundef env fd =
   {fd with fd_body = transf_stmt env fd.fd_body}
 
 let program p =
-  need_memcpy := None;
+  memcpy_decl := None;
   let p' = Transform.program ~fundef:transf_fundef p in
-  match !need_memcpy with
+  match !memcpy_decl with
   | None -> p'
   | Some id ->
       {gdesc = Gdecl(Storage_extern, id, memcpy_type, None); gloc = no_loc}
       :: p'
-
-(* Horrible hack *)
-(***
-  let has_memcpy = ref false in
-  need_memcpy := None;
-  List.iter
-    (function {gdesc = Gdecl(_, ({name = "memcpy"} as id), _, _)} ->
-                   need_memcpy := Some id; has_memcpy := true
-            | _ -> ())
-    p;
-  let p' = Transform.program ~fundef:transf_fundef p in
-  match !need_memcpy with
-  | Some id when not !has_memcpy ->
-      {gdesc = Gdecl(Storage_extern, id, memcpy_type, None); gloc = no_loc}
-      :: p'
-  | _ -> p'
-***)

@@ -124,7 +124,7 @@ let builtins = {
   "__builtin_inf",  (doubleType, [], false);
   "__builtin_inff",  (floatType, [], false);
   "__builtin_infl",  (longDoubleType, [], false);
-  "__builtin_memcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; uintType ], false);
+  "__builtin_memcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType ], false);
   "__builtin_mempcpy",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType ], false);
 
   "__builtin_fmod",  (doubleType, [ doubleType ], false);
