@@ -840,16 +840,16 @@ let builtins_generic = {
     "__builtin_volatile_write_float64",
          (TVoid [], [TPtr(TVoid [], []); TFloat(FDouble, [])], false);
     "__builtin_volatile_write_pointer",
-         (TVoid [], [TPtr(TVoid [], []); TPtr(TVoid [], [])], false)
+         (TVoid [], [TPtr(TVoid [], []); TPtr(TVoid [], [])], false);
     (* Block copy *)
     "__builtin_memcpy",
-         (TPtr(TVoid [], []),
+         (TVoid [],
            [TPtr(TVoid [], []); 
             TPtr(TVoid [AConst], []); 
             TInt(Cutil.size_t_ikind, [])],
           false);
     "__builtin_memcpy_words",
-         (TPtr(TVoid [], []),
+         (TVoid [],
            [TPtr(TVoid [], []); 
             TPtr(TVoid [AConst], []); 
             TInt(Cutil.size_t_ikind, [])],

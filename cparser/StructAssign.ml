@@ -35,17 +35,26 @@ let memcpy_type =
              (Env.fresh_ident "", TInt(size_t_ikind, []))],
        false, [])
 
+let lookup_function env name =
+  match Env.lookup_ident env name with
+  | (id, II_ident(sto, ty)) -> (id, ty)
+  | (id, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
+
 let memcpy_ident env =
-  try fst (Env.lookup_ident env "__builtin_memcpy")
+  try lookup_function env "__builtin_memcpy"
   with Env.Error _ ->
-  try fst (Env.lookup_ident env "memcpy")
+  try lookup_function env "memcpy"
   with Env.Error _ ->
   match !memcpy_decl with
-  | Some id -> id
-  | None -> let id = Env.fresh_ident "memcpy" in memcpy_decl := Some id; id
+  | Some id ->
+      (id, memcpy_type)
+  | None ->
+      let id = Env.fresh_ident "memcpy" in
+      memcpy_decl := Some id;
+      (id, memcpy_type)
 
 let memcpy_words_ident env =
-  try fst (Env.lookup_ident env "__builtin_memcpy_words")
+  try lookup_function env "__builtin_memcpy_words"
   with Env.Error _ -> memcpy_ident env
 
 let transf_assign env loc lhs rhs =
@@ -98,11 +107,11 @@ let transf_assign env loc lhs rhs =
       match Cutil.sizeof env lhs.etyp with
       | Some n -> n mod !config.sizeof_ptr = 0
       | None -> false in
-    let ident =
+    let (ident, ty) =
       if by_words
-      then memcpy_word_ident()
-      else memcpy_ident() in
-    let memcpy = {edesc = EVar(ident); etyp = memcpy_type} in
+      then memcpy_words_ident env
+      else memcpy_ident env in
+    let memcpy = {edesc = EVar(ident); etyp = ty} in
     let e_lhs = {edesc = EUnop(Oaddrof, lhs); etyp = TPtr(lhs.etyp, [])} in
     let e_rhs = {edesc = EUnop(Oaddrof, rhs); etyp = TPtr(rhs.etyp, [])} in
     let e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])} in

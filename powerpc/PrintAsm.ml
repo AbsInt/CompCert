@@ -275,25 +275,25 @@ let print_builtin_function oc s =
   | "__builtin_memcpy" ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
-      fprintf oc "	cmplwi	%a, %a, 0\n" creg CR0 ireg GPR5;
-      fprintf oc "	beq	%a, %a\n" creg CR0 label lbl1;
+      fprintf oc "	cmplwi	%a, %a, 0\n" creg 0 ireg GPR5;
+      fprintf oc "	beq	%a, %a\n" creg 0 label lbl1;
       fprintf oc "	mtctr	%a\n" ireg GPR5;
-      fprintf oc "	addi	%a, %a, -1\n" ireg GPR6 ireg GPR3;
+      fprintf oc "	addi	%a, %a, -1\n" ireg GPR3 ireg GPR3;
       fprintf oc "	addi	%a, %a, -1\n" ireg GPR4 ireg GPR4;
       fprintf oc "%a:	lbzu	%a, 1(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
-      fprintf oc "	stbu	%a, 1(%a)\n" ireg GPR0 ireg GPR6;
+      fprintf oc "	stbu	%a, 1(%a)\n" ireg GPR0 ireg GPR3;
       fprintf oc "	bdnz	%a\n" label lbl2;
       fprintf oc "%a:\n" label lbl1
-  | "__builtin_memcpy_word" ->
+  | "__builtin_memcpy_words" ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       fprintf oc "	rlwinm.	%a, %a, 30, 2, 31\n" ireg GPR5 ireg GPR5;
-      fprintf oc "	beq	%a, %a\n" creg CR0 label lbl1;
+      fprintf oc "	beq	%a, %a\n" creg 0 label lbl1;
       fprintf oc "	mtctr	%a\n" ireg GPR5;
-      fprintf oc "	addi	%a, %a, -4\n" ireg GPR6 ireg GPR3;
+      fprintf oc "	addi	%a, %a, -4\n" ireg GPR3 ireg GPR3;
       fprintf oc "	addi	%a, %a, -4\n" ireg GPR4 ireg GPR4;
       fprintf oc "%a:	lwzu	%a, 4(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
-      fprintf oc "	stwu	%a, 4(%a)\n" ireg GPR0 ireg GPR6;
+      fprintf oc "	stwu	%a, 4(%a)\n" ireg GPR0 ireg GPR3;
       fprintf oc "	bdnz	%a\n" label lbl2;
       fprintf oc "%a:\n" label lbl1
   (* Integer arithmetic *)
