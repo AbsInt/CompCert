@@ -142,6 +142,18 @@ Proof.
   inversion H2; eauto with cshm.
 Qed.
 
+Lemma make_fabs_correct:
+  forall a tya c va v e m,
+  sem_fabs va = Some v ->
+  make_fabs a tya = c ->  
+  eval_expr globenv e m a va ->
+  eval_expr globenv e m c v.
+Proof.
+  intros until m; intro SEM. unfold make_fabs. 
+  functional inversion SEM; intros. 
+  inversion H2; eauto with cshm.
+Qed.
+
 Definition binary_constructor_correct
     (make: expr -> type -> expr -> type -> res expr)
     (sem: val -> type -> val -> type -> option val): Prop :=
@@ -298,6 +310,7 @@ Proof.
   eapply make_notbool_correct; eauto. congruence.
   eapply make_notint_correct with (tya := tya); eauto. congruence.
   eapply make_neg_correct; eauto.
+  eapply make_fabs_correct with (tya := tya); eauto. congruence.
 Qed.
 
 Lemma transl_binop_correct:

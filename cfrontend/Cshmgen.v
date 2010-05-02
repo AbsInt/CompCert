@@ -120,6 +120,9 @@ Definition make_notbool (e: expr) (ty: type) :=
 Definition make_notint (e: expr) (ty: type) :=
   Eunop Onotint e.
 
+Definition make_fabs (e: expr) (ty: type) :=
+  Eunop Oabsf e.
+
 Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
   | add_case_ii => OK (Ebinop Oadd e1 e2)
@@ -317,6 +320,7 @@ Definition transl_unop (op: Csyntax.unary_operation) (a: expr) (ta: type) : res 
   | Csyntax.Onotbool => OK(make_notbool a ta)
   | Csyntax.Onotint => OK(make_notint a ta)
   | Csyntax.Oneg => make_neg a ta
+  | Csyntax.Ofabs => OK(make_fabs a ta)
   end.
 
 Definition transl_binop (op: Csyntax.binary_operation)

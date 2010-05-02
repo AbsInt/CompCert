@@ -371,7 +371,14 @@ let volatile_write_fun ty =
 let convertTopExpr env e =
   match e.edesc with
   | C.EBinop(C.Oassign, lhs, {edesc = C.ECall(fn, args)}, _) ->
-      convertFuncall env (Some (convertExpr env lhs)) fn args
+      (* Recognize __builtin_fabs and turn it into Clight operator *)
+      begin match fn, args with
+      | {edesc = C.EVar {name = "__builtin_fabs"}}, [arg1] ->
+          Sassign(convertExpr env lhs, 
+                  Expr(Eunop(Ofabs, convertExpr env arg1), Tfloat F64))
+      | _ ->
+          convertFuncall env (Some (convertExpr env lhs)) fn args
+      end
   | C.EBinop(C.Oassign, lhs, rhs, _) ->
       if Cutil.is_composite_type env lhs.etyp then
         unsupported "assignment between structs or between unions";
@@ -808,6 +815,9 @@ let builtins_generic = {
     "__builtin_va_list", C.TPtr(C.TVoid [], [])
   ];
   functions = [
+    (* Floating-point absolute value *)
+    "__builtin_fabs",
+      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     (* The volatile read/volatile write functions *)
     "__builtin_volatile_read_int8unsigned",
         (TInt(IUChar, []), [TPtr(TVoid [], [])], false);

@@ -37,8 +37,6 @@ let builtins = {
       (TFloat(FDouble, []), 
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
-    "__builtin_fabs",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     "__builtin_fsqrt",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     "__builtin_frsqrte",

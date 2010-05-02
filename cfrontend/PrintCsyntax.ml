@@ -25,7 +25,7 @@ let name_unop = function
   | Onotbool -> "!"
   | Onotint  -> "~"
   | Oneg     -> "-"
-
+  | Ofabs    -> "__builtin_fabs"
 
 let name_binop = function
   | Oadd -> "+"
@@ -131,6 +131,7 @@ let parenthesis_level (Expr (e, ty)) =
   | Econst_int _ -> 0
   | Econst_float _ -> 0
   | Evar _ -> 0
+  | Eunop(Ofabs, _) -> -10 (* force parentheses around argument *)
   | Eunop(_, _) -> 30
   | Ederef _ -> 20
   | Eaddrof _ -> 30

@@ -117,6 +117,12 @@ Function sem_notbool (v: val) (ty: type) : option val :=
   | _ => None
   end.
 
+Function sem_fabs (v: val) : option val :=
+  match v with
+  | Vfloat f => Some (Vfloat (Float.abs f))
+  | _ => None
+  end.
+
 Function sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_add t1 t2 with 
   | add_case_ii =>                      (**r integer addition *)
@@ -320,6 +326,7 @@ Definition sem_unary_operation
   | Onotbool => sem_notbool v ty
   | Onotint => sem_notint v
   | Oneg => sem_neg v ty
+  | Ofabs => sem_fabs v
   end.
 
 Definition sem_binary_operation

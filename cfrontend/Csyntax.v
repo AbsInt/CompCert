@@ -108,7 +108,8 @@ with fieldlist : Type :=
 Inductive unary_operation : Type :=
   | Onotbool : unary_operation          (**r boolean negation ([!] in C) *)
   | Onotint : unary_operation           (**r integer complement ([~] in C) *)
-  | Oneg : unary_operation.             (**r opposite (unary [-]) *)
+  | Oneg : unary_operation              (**r opposite (unary [-]) *)
+  | Ofabs : unary_operation.            (**r floating-point absolute value *)
 
 Inductive binary_operation : Type :=
   | Oadd : binary_operation             (**r addition (binary [+]) *)
