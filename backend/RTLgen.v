@@ -524,9 +524,8 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Sskip =>
       ret nd
   | Sassign v b =>
-      do rt <- alloc_reg map b;
-      do no <- store_var map rt v nd;
-      transl_expr map b rt no
+      do r <- find_var map v;
+      transl_expr map b r nd
   | Sstore chunk addr al b =>
       do rl <- alloc_regs map al;
       do r <- alloc_reg map b;

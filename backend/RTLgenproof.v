@@ -197,6 +197,30 @@ Proof.
   symmetry. apply PMap.gso. red; intros. subst x. eauto. 
 Qed.
 
+(** A variant of [match_env_update_var] where a variable is optionally
+  assigned to, depending on the [dst] parameter. *)
+
+Definition assign_dest (dst: option ident) (v: val) (e: Cminor.env) : Cminor.env :=
+  match dst with
+  | None => e
+  | Some id => PTree.set id v e
+  end.
+
+Lemma match_env_update_dest:
+  forall map e le rs dst r v,
+  map_wf map ->
+  reg_map_ok map r dst ->
+  match_env map e le rs ->
+  match_env map (assign_dest dst v e) le (rs#r <- v).
+Proof.
+  intros. inv H0; simpl. 
+  eapply match_env_update_temp; eauto. 
+  eapply match_env_update_var; eauto.
+Qed.
+Hint Resolve match_env_update_dest: rtlg.
+
+(** Matching and [let]-bound variables. *)
+
 Lemma match_env_bind_letvar:
   forall map e le rs r v,
   match_env map e le rs ->
@@ -214,6 +238,8 @@ Proof.
   unfold add_letvar; intros. inv H. simpl in *. 
   constructor. auto. congruence.
 Qed.
+
+(** Matching between initial environments. *)
 
 Lemma match_env_empty:
   forall map,
@@ -521,15 +547,15 @@ Variable m: mem.
 
 Definition transl_expr_prop 
      (le: letenv) (a: expr) (v: val) : Prop :=
-  forall cs f map pr ns nd rd rs
+  forall cs f map pr ns nd rd rs dst
     (MWF: map_wf map)
-    (TE: tr_expr f.(fn_code) map pr a ns nd rd)
+    (TE: tr_expr f.(fn_code) map pr a ns nd rd dst)
     (ME: match_env map e le rs),
   exists rs',
      star step tge (State cs f sp ns rs m) E0 (State cs f sp nd rs' m)
-  /\ match_env map e le rs'
+  /\ match_env map (assign_dest dst v e) le rs'
   /\ rs'#rd = v
-  /\ (forall r, reg_in_map map r \/ In r pr -> rs'#r = rs#r).
+  /\ (forall r, In r pr -> rs'#r = rs#r).
 
 (** The simulation properties for lists of expressions and for
   conditional expressions are similar. *)
@@ -544,7 +570,7 @@ Definition transl_exprlist_prop
      star step tge (State cs f sp ns rs m) E0 (State cs f sp nd rs' m)
   /\ match_env map e le rs'
   /\ rs'##rl = vl
-  /\ (forall r, reg_in_map map r \/ In r pr -> rs'#r = rs#r).
+  /\ (forall r, In r pr -> rs'#r = rs#r).
 
 Definition transl_condition_prop 
      (le: letenv) (a: condexpr) (vb: bool) : Prop :=
@@ -556,7 +582,7 @@ Definition transl_condition_prop
      star step tge (State cs f sp ns rs m) E0
                    (State cs f sp (if vb then ntrue else nfalse) rs' m)
   /\ match_env map e le rs'
-  /\ (forall r, reg_in_map map r \/ In r pr -> rs'#r = rs#r).
+  /\ (forall r, In r pr -> rs'#r = rs#r).
 
 (** The correctness of the translation is a huge induction over
   the Cminor evaluation derivation for the source program.  To keep
@@ -572,20 +598,22 @@ Lemma transl_expr_Evar_correct:
   transl_expr_prop le (Evar id) v.
 Proof.
   intros; red; intros. inv TE.
+  exploit match_env_find_var; eauto. intro EQ.
   exploit tr_move_correct; eauto. intros [rs' [A [B C]]]. 
   exists rs'; split. eauto.
-  destruct H2 as [D | [E F]].
+  destruct H2 as [[D E] | [D E]].
   (* optimized case *)
-  subst r.
+  subst r dst. simpl.
   assert (forall r, rs'#r = rs#r).
     intros. destruct (Reg.eq r rd). subst r. auto. auto. 
   split. eapply match_env_invariant; eauto.
-  split. rewrite B. eapply match_env_find_var; eauto.
-  auto.
+  split. congruence. auto.
   (* general case *)
-  split. eapply match_env_invariant; eauto. 
-    intros. apply C. congruence. 
-  split. rewrite B. eapply match_env_find_var; eauto. 
+  split.
+  apply match_env_invariant with (rs#rd <- v).
+  apply match_env_update_dest; auto. 
+  intros. rewrite Regmap.gsspec. destruct (peq r0 rd). congruence. auto. 
+  split. congruence. 
   intros. apply C. intuition congruence.
 Qed.
 
@@ -608,7 +636,7 @@ Proof.
   auto. 
   exact symbols_preserved. traceEq.
 (* Match-env *)
-  split. eauto with rtlg.  
+  split. eauto with rtlg.
 (* Result reg *)
   split. apply Regmap.gss.
 (* Other regs *)
@@ -650,7 +678,7 @@ Lemma transl_expr_Econdition_correct:
 Proof.
   intros; red; intros; inv TE. 
   exploit H0; eauto. intros [rs1 [EX1 [ME1 OTHER1]]].
-  assert (tr_expr f.(fn_code) map pr (if vcond then ifso else ifnot) (if vcond then ntrue else nfalse) nd rd).
+  assert (tr_expr f.(fn_code) map pr (if vcond then ifso else ifnot) (if vcond then ntrue else nfalse) nd rd dst).
     destruct vcond; auto.
   exploit H2; eauto. intros [rs2 [EX2 [ME2 [RES2 OTHER2]]]].
   exists rs2.
@@ -686,11 +714,7 @@ Proof.
 (* Result *)
   split. assumption.
 (* Other regs *)
-  intros. transitivity (rs1#r0). 
-  apply OTHER2. elim H4; intro; auto.
-  unfold reg_in_map, add_letvar; simpl.
-  unfold reg_in_map in H6; tauto.
-  auto.
+  intros. transitivity (rs1#r0); auto.
 Qed.
 
 Lemma transl_expr_Eletvar_correct:
@@ -704,15 +728,21 @@ Proof.
 (* Exec *)
   split. eexact EX1.
 (* Match-env *)
-  split. apply match_env_invariant with rs. auto.
-  intros. destruct H2 as [A | [B C]]. 
-  subst r. destruct (Reg.eq r0 rd). subst r0; auto. auto.
-  apply OTHER1. intuition congruence.
+  split. 
+  destruct H2 as [[A B] | [A B]].
+  subst r dst; simpl. 
+  apply match_env_invariant with rs. auto.
+  intros. destruct (Reg.eq r rd). subst r. auto. auto.
+  apply match_env_invariant with (rs#rd <- v).
+  apply match_env_update_dest; auto. 
+  intros. rewrite Regmap.gsspec. destruct (peq r0 rd); auto. 
+  subst. rewrite RES1. eapply match_env_find_letvar; eauto. 
 (* Result *)
   split. rewrite RES1. eapply match_env_find_letvar; eauto. 
 (* Other regs *)
-  intros. destruct H2 as [A | [B C]]. 
-  subst r. destruct (Reg.eq r0 rd). subst r0; auto. auto.
+  intros. 
+  destruct H2 as [[A B] | [A B]].
+  destruct (Reg.eq r0 rd); subst; auto.
   apply OTHER1. intuition congruence.
 Qed.
 
@@ -1128,11 +1158,8 @@ Proof.
   inv TS. 
   exploit transl_expr_correct; eauto. 
   intros [rs' [A [B [C D]]]].
-  exploit tr_store_var_correct; eauto. 
-  intros [rs'' [E F]].
-  rewrite C in F.
   econstructor; split.
-  right; split. eapply star_trans. eexact A. eexact E. traceEq. Lt_state.
+  right; split. eauto. Lt_state.
   econstructor; eauto. constructor.
 
   (* store *)

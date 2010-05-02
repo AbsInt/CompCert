@@ -132,6 +132,8 @@ Ltac monadInv H :=
 
 (** * Monotonicity properties of the state *)
 
+Hint Resolve state_incr_refl: rtlg.
+
 Lemma instr_at_incr:
   forall s1 s2 n i,
   state_incr s1 s2 -> s1.(st_code)!n = Some i -> s2.(st_code)!n = Some i.
@@ -141,7 +143,23 @@ Proof.
 Qed.
 Hint Resolve instr_at_incr: rtlg.
 
-Hint Resolve state_incr_refl state_incr_trans: rtlg.
+(** The following tactic saturates the hypotheses with
+  [state_incr] properties that follow by transitivity from
+  the known hypotheses. *)
+
+Ltac saturateTrans :=
+  match goal with
+  | H1: state_incr ?x ?y, H2: state_incr ?y ?z |- _ =>
+      match goal with
+      | H: state_incr x z |- _  =>
+         fail 1
+      | _ =>
+         let i := fresh "INCR" in
+         (generalize (state_incr_trans x y z H1 H2); intro i;
+          saturateTrans)
+      end
+  | _ => idtac
+  end.
 
 (** * Validity and freshness of registers *)
 
@@ -619,49 +637,69 @@ Inductive tr_move (c: code):
       c!ns = Some (Iop Omove (rs :: nil) rd nd) ->
       tr_move c ns rs nd rd.
 
-(** [tr_expr c map pr expr ns nd rd] holds if the graph [c],
+(** [reg_map_ok map r optid] characterizes the destination register
+  for an expression: if [optid] is [None], the destination is
+  a fresh register (not associated with any variable);
+  if [optid] is [Some id], the destination is the register
+  associated with local variable [id]. *)
+
+Inductive reg_map_ok: mapping -> reg -> option ident -> Prop :=
+  | reg_map_ok_novar: forall map rd,
+      ~reg_in_map map rd ->
+      reg_map_ok map rd None
+  | reg_map_ok_somevar: forall map rd id,
+      map.(map_vars)!id = Some rd ->
+      reg_map_ok map rd (Some id).
+
+Hint Resolve reg_map_ok_novar: rtlg.
+
+(** [tr_expr c map pr expr ns nd rd optid] holds if the graph [c],
   between nodes [ns] and [nd], contains instructions that compute the
   value of the Cminor expression [expr] and deposit this value in
   register [rd].  [map] is a mapping from Cminor variables to the
   corresponding RTL registers.  [pr] is a list of RTL registers whose
   values must be preserved during this computation.  All registers
   mentioned in [map] must also be preserved during this computation.
-  To ensure this, we demand that the result registers of the instructions
-  appearing on the path from [ns] to [nd] are neither in [pr] nor in [map].
+  (Exception: if [optid = Some id], the register associated with
+  local variable [id] can be assigned, but only at the end of the
+  expression evaluation.)
+  To ensure this property, we demand that the result registers of the
+  instructions appearing on the path from [ns] to [nd] are not in [pr],
+  and moreover that they satisfy the [reg_map_ok] predicate.
 *)
 
 Inductive tr_expr (c: code): 
-       mapping -> list reg -> expr -> node -> node -> reg -> Prop :=
-  | tr_Evar: forall map pr id ns nd r rd,
+       mapping -> list reg -> expr -> node -> node -> reg -> option ident -> Prop :=
+  | tr_Evar: forall map pr id ns nd r rd dst,
       map.(map_vars)!id = Some r ->
-      (rd = r \/ ~reg_in_map map rd /\ ~In rd pr) ->
+      ((rd = r /\ dst = None) \/ (reg_map_ok map rd dst /\ ~In rd pr)) ->
       tr_move c ns r nd rd ->
-      tr_expr c map pr (Evar id) ns nd rd
-  | tr_Eop: forall map pr op al ns nd rd n1 rl,
+      tr_expr c map pr (Evar id) ns nd rd dst
+  | tr_Eop: forall map pr op al ns nd rd n1 rl dst,
       tr_exprlist c map pr al ns n1 rl ->
       c!n1 = Some (Iop op rl rd nd) ->
-      ~reg_in_map map rd -> ~In rd pr ->
-      tr_expr c map pr (Eop op al) ns nd rd
-  | tr_Eload: forall map pr chunk addr al ns nd rd n1 rl,
+      reg_map_ok map rd dst -> ~In rd pr ->
+      tr_expr c map pr (Eop op al) ns nd rd dst
+  | tr_Eload: forall map pr chunk addr al ns nd rd n1 rl dst,
       tr_exprlist c map pr al ns n1 rl ->
       c!n1 = Some (Iload chunk addr rl rd nd) ->
-      ~reg_in_map map rd -> ~In rd pr ->
-      tr_expr c map pr (Eload chunk addr al) ns nd rd
-  | tr_Econdition: forall map pr b ifso ifnot ns nd rd ntrue nfalse,
+      reg_map_ok map rd dst -> ~In rd pr ->
+      tr_expr c map pr (Eload chunk addr al) ns nd rd dst
+  | tr_Econdition: forall map pr b ifso ifnot ns nd rd ntrue nfalse dst,
       tr_condition c map pr b ns ntrue nfalse ->
-      tr_expr c map pr ifso ntrue nd rd ->
-      tr_expr c map pr ifnot nfalse nd rd ->
-      tr_expr c map pr (Econdition b ifso ifnot) ns nd rd
-  | tr_Elet: forall map pr b1 b2 ns nd rd n1 r,
+      tr_expr c map pr ifso ntrue nd rd dst ->
+      tr_expr c map pr ifnot nfalse nd rd dst ->
+      tr_expr c map pr (Econdition b ifso ifnot) ns nd rd dst
+  | tr_Elet: forall map pr b1 b2 ns nd rd n1 r dst,
       ~reg_in_map map r ->
-      tr_expr c map pr b1 ns n1 r ->
-      tr_expr c (add_letvar map r) pr b2 n1 nd rd ->
-      tr_expr c map pr (Elet b1 b2) ns nd rd
-  | tr_Eletvar: forall map pr n ns nd rd r,
+      tr_expr c map pr b1 ns n1 r None ->
+      tr_expr c (add_letvar map r) pr b2 n1 nd rd dst ->
+      tr_expr c map pr (Elet b1 b2) ns nd rd dst
+  | tr_Eletvar: forall map pr n ns nd rd r dst,
       List.nth_error map.(map_letvars) n = Some r ->
-      (rd = r \/ ~reg_in_map map rd /\ ~In rd pr) ->
+      ((rd = r /\ dst = None) \/ (reg_map_ok map rd dst /\ ~In rd pr)) ->
       tr_move c ns r nd rd ->
-      tr_expr c map pr (Eletvar n) ns nd rd
+      tr_expr c map pr (Eletvar n) ns nd rd dst
 
 (** [tr_condition c map pr cond ns ntrue nfalse rd] holds if the graph [c],
   starting at node [ns], contains instructions that compute the truth
@@ -694,7 +732,7 @@ with tr_exprlist (c: code):
   | tr_Enil: forall map pr n,
       tr_exprlist c map pr Enil n n nil
   | tr_Econs: forall map pr a1 al ns nd r1 rl n1,
-      tr_expr c map pr a1 ns n1 r1 ->
+      tr_expr c map pr a1 ns n1 r1 None ->
       tr_exprlist c map (r1 :: pr) al n1 nd rl ->
       tr_exprlist c map pr (Econs a1 al) ns nd (r1 :: rl).
 
@@ -757,24 +795,24 @@ Inductive tr_stmt (c: code) (map: mapping):
      stmt -> node -> node -> list node -> labelmap -> node -> option reg -> Prop :=
   | tr_Sskip: forall ns nexits ngoto nret rret,
      tr_stmt c map Sskip ns ns nexits ngoto nret rret
-  | tr_Sassign: forall id a ns nd nexits ngoto nret rret rt n,
-     tr_expr c map nil a ns n rt ->
-     tr_store_var c map rt id n nd ->
+  | tr_Sassign: forall id a ns nd nexits ngoto nret rret r,
+     map.(map_vars)!id = Some r ->
+     tr_expr c map nil a ns nd r (Some id) ->
      tr_stmt c map (Sassign id a) ns nd nexits ngoto nret rret
   | tr_Sstore: forall chunk addr al b ns nd nexits ngoto nret rret rd n1 rl n2,
      tr_exprlist c map nil al ns n1 rl ->
-     tr_expr c map rl b n1 n2 rd ->
+     tr_expr c map rl b n1 n2 rd None ->
      c!n2 = Some (Istore chunk addr rl rd nd) ->
      tr_stmt c map (Sstore chunk addr al b) ns nd nexits ngoto nret rret
   | tr_Scall: forall optid sig b cl ns nd nexits ngoto nret rret rd n1 rf n2 n3 rargs,
-     tr_expr c map nil b ns n1 rf ->
+     tr_expr c map nil b ns n1 rf None ->
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Icall sig (inl _ rf) rargs rd n3) ->
      tr_store_optvar c map rd optid n3 nd ->
      ~reg_in_map map rd ->
      tr_stmt c map (Scall optid sig b cl) ns nd nexits ngoto nret rret
   | tr_Stailcall: forall sig b cl ns nd nexits ngoto nret rret n1 rf n2 rargs,
-     tr_expr c map nil b ns n1 rf ->
+     tr_expr c map nil b ns n1 rf None ->
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
      tr_stmt c map (Stailcall sig b cl) ns nd nexits ngoto nret rret
@@ -799,13 +837,13 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_stmt c map (Sexit n) ns nd nexits ngoto nret rret
   | tr_Sswitch: forall a cases default ns nd nexits ngoto nret rret n r t,
      validate_switch default cases t = true ->
-     tr_expr c map nil a ns n r ->
+     tr_expr c map nil a ns n r None ->
      tr_switch c map r nexits t n ->
      tr_stmt c map (Sswitch a cases default) ns nd nexits ngoto nret rret
   | tr_Sreturn_none: forall nret nd nexits ngoto,
      tr_stmt c map (Sreturn None) nret nd nexits ngoto nret None
   | tr_Sreturn_some: forall a ns nd nexits ngoto nret rret,
-     tr_expr c map nil a ns nret rret ->
+     tr_expr c map nil a ns nret rret None ->
      tr_stmt c map (Sreturn (Some a)) ns nd nexits ngoto nret (Some rret)
   | tr_Slabel: forall lbl s ns nd nexits ngoto nret rret n,
      ngoto!lbl = Some n ->
@@ -850,9 +888,9 @@ Qed.
 
 Lemma tr_expr_incr:
   forall s1 s2, state_incr s1 s2 ->
-  forall map pr a ns nd rd,
-  tr_expr s1.(st_code) map pr a ns nd rd ->
-  tr_expr s2.(st_code) map pr a ns nd rd
+  forall map pr a ns nd rd dst,
+  tr_expr s1.(st_code) map pr a ns nd rd dst ->
+  tr_expr s2.(st_code) map pr a ns nd rd dst
 with tr_condition_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall map pr a ns ntrue nfalse,
@@ -894,7 +932,7 @@ Lemma transl_expr_charact:
      (OK: target_reg_ok map pr a rd)
      (VALID: regs_valid pr s)
      (VALID2: reg_valid rd s),
-   tr_expr s'.(st_code) map pr a ns nd rd
+   tr_expr s'.(st_code) map pr a ns nd rd None
 
 with transl_condexpr_charact:
   forall a map ntrue nfalse s ns s' pr INCR
@@ -913,11 +951,11 @@ with transl_exprlist_charact:
    tr_exprlist s'.(st_code) map pr al ns nd rl.
 
 Proof.
-  induction a; intros; try (monadInv TR).
+  induction a; intros; try (monadInv TR); saturateTrans.
   (* Evar *)
   generalize EQ; unfold find_var. caseEq (map_vars map)!i; intros; inv EQ1.
   econstructor; eauto.
-  inv OK. left; congruence. right; eauto.
+  inv OK. left; split; congruence. right; eauto with rtlg.
   eapply add_move_charact; eauto.
   (* Eop *)
   inv OK.
@@ -930,15 +968,14 @@ Proof.
   (* Econdition *)
   inv OK.
   econstructor; eauto with rtlg.
-  eapply transl_condexpr_charact; eauto with rtlg.
   apply tr_expr_incr with s1; auto. 
-  eapply transl_expr_charact; eauto with rtlg. constructor; auto.
+  eapply transl_expr_charact; eauto 2 with rtlg. constructor; auto.
   apply tr_expr_incr with s0; auto. 
-  eapply transl_expr_charact; eauto with rtlg. constructor; auto.
+  eapply transl_expr_charact; eauto 2 with rtlg. constructor; auto.
   (* Elet *)
   inv OK.
   econstructor. eapply new_reg_not_in_map; eauto with rtlg.  
-  eapply transl_expr_charact; eauto with rtlg.
+  eapply transl_expr_charact; eauto 3 with rtlg.
   apply tr_expr_incr with s1; auto.
   eapply transl_expr_charact. eauto. 
   apply add_letvar_valid; eauto with rtlg. 
@@ -952,12 +989,12 @@ Proof.
   generalize EQ; unfold find_letvar. caseEq (nth_error (map_letvars map) n); intros; inv EQ0.
   monadInv EQ1.
   econstructor; eauto with rtlg. 
-  inv OK. left; congruence. right; eauto.
+  inv OK. left; split; congruence. right; eauto with rtlg.
   eapply add_move_charact; eauto.
   monadInv EQ1.
 
 (* Conditions *)
-  induction a; intros; try (monadInv TR).
+  induction a; intros; try (monadInv TR); saturateTrans.
 
   (* CEtrue *)
   constructor.
@@ -976,7 +1013,7 @@ Proof.
 
 (* Lists *)
 
-  induction al; intros; try (monadInv TR).
+  induction al; intros; try (monadInv TR); saturateTrans.
 
   (* Enil *)
   destruct rl; inv TR. constructor.
@@ -989,6 +1026,49 @@ Proof.
   eapply transl_exprlist_charact; eauto with rtlg.
   apply regs_valid_cons. apply VALID2. auto with coqlib. auto. 
   red; intros; apply VALID2; auto with coqlib.
+Qed.
+
+(** A variant of [transl_expr_charact], for use when the destination
+  register is the one associated with a variable. *)
+
+Lemma transl_expr_assign_charact:
+  forall id a map rd nd s ns s' INCR
+     (TR: transl_expr map a rd nd s = OK ns s' INCR)
+     (WF: map_valid map s)
+     (OK: reg_map_ok map rd (Some id)),
+   tr_expr s'.(st_code) map nil a ns nd rd (Some id).
+Proof.
+  induction a; intros; monadInv TR; saturateTrans.
+  (* Evar *)
+  generalize EQ; unfold find_var. caseEq (map_vars map)!i; intros; inv EQ1.
+  econstructor; eauto.
+  eapply add_move_charact; eauto.
+  (* Eop *)
+  econstructor; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg.
+  (* Eload *)
+  econstructor; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto with rtlg. 
+  (* Econdition *)
+  econstructor; eauto with rtlg.
+  eapply transl_condexpr_charact; eauto with rtlg.
+  apply tr_expr_incr with s1; auto. 
+  eapply IHa1; eauto 2 with rtlg.
+  apply tr_expr_incr with s0; auto. 
+  eapply IHa2; eauto 2 with rtlg.
+  (* Elet *)
+  econstructor. eapply new_reg_not_in_map; eauto with rtlg.  
+  eapply transl_expr_charact; eauto 3 with rtlg.
+  apply tr_expr_incr with s1; auto.
+  eapply IHa2; eauto.
+  apply add_letvar_valid; eauto with rtlg.
+  inv OK. constructor. auto.
+  (* Eletvar *)
+  generalize EQ; unfold find_letvar. caseEq (nth_error (map_letvars map) n); intros; inv EQ0.
+  monadInv EQ1.
+  econstructor; eauto with rtlg. 
+  eapply add_move_charact; eauto.
+  monadInv EQ1.
 Qed.
 
 Lemma tr_store_var_incr:
@@ -1084,17 +1164,18 @@ Lemma transl_switch_charact:
   transl_switch r nexits t s = OK ns s' incr ->
   tr_switch s'.(st_code) map r nexits t ns.
 Proof.
-  induction t; simpl; intros.
+  induction t; simpl; intros; saturateTrans.
+
   exploit transl_exit_charact; eauto. intros [A B].
   econstructor; eauto.
 
   monadInv H1.
   exploit transl_exit_charact; eauto. intros [A B]. subst s1.
-  econstructor; eauto with rtlg. 
+  econstructor; eauto 2 with rtlg. 
   apply tr_switch_incr with s0; eauto with rtlg.
 
   monadInv H1.
-  econstructor; eauto with rtlg. 
+  econstructor; eauto 2 with rtlg. 
   apply tr_switch_incr with s1; eauto with rtlg.
   apply tr_switch_incr with s0; eauto with rtlg.
 
@@ -1115,39 +1196,38 @@ Lemma transl_stmt_charact:
     (OK: return_reg_ok s map rret),
   tr_stmt s'.(st_code) map stmt ns nd nexits ngoto nret rret.
 Proof.
-  induction stmt; intros; simpl in TR; try (monadInv TR).
+  induction stmt; intros; simpl in TR; try (monadInv TR); saturateTrans.
   (* Sskip *)
   constructor.
   (* Sassign *)
-  econstructor. eapply transl_expr_charact; eauto with rtlg.
-  apply tr_store_var_incr with s1; auto with rtlg.
-  eapply store_var_charact; eauto.
+  revert EQ. unfold find_var. case_eq (map_vars map)!i; intros; monadInv EQ.
+  econstructor. eauto. 
+  eapply transl_expr_assign_charact; eauto with rtlg.
+  constructor. auto.
   (* Sstore *)
   econstructor; eauto with rtlg.
-  eapply transl_exprlist_charact; eauto with rtlg.
-  apply tr_expr_incr with s3; eauto with rtlg.
-  eapply transl_expr_charact; eauto with rtlg. 
+  eapply transl_exprlist_charact; eauto 3 with rtlg.
+  apply tr_expr_incr with s3; auto.
+  eapply transl_expr_charact; eauto 4 with rtlg.
   (* Scall *)
-  assert (state_incr s0 s2) by eauto with rtlg.
-  assert (state_incr s2 s4) by eauto with rtlg.
-  assert (state_incr s4 s6) by eauto with rtlg.
-  econstructor; eauto with rtlg.
-  eapply transl_expr_charact; eauto with rtlg.
+  econstructor; eauto 4 with rtlg.
+  eapply transl_expr_charact; eauto 3 with rtlg.
   apply tr_exprlist_incr with s6. auto. 
-  eapply transl_exprlist_charact; eauto with rtlg.
-  eapply alloc_regs_target_ok with (s1 := s1); eauto with rtlg.
-  apply regs_valid_cons; eauto with rtlg.
-  apply regs_valid_incr with s1; eauto with rtlg.
-  apply regs_valid_cons; eauto with rtlg.
-  apply tr_store_optvar_incr with s4; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto 3 with rtlg.
+  eapply alloc_regs_target_ok with (s1 := s1); eauto 3 with rtlg.
+  apply regs_valid_cons; eauto 3 with rtlg.
+  apply regs_valid_incr with s1; eauto 3 with rtlg.
+  apply regs_valid_cons; eauto 3 with rtlg.
+  apply regs_valid_incr with s2; eauto 3 with rtlg.
+  apply tr_store_optvar_incr with s4; auto.
   eapply store_optvar_charact; eauto with rtlg.
   (* Stailcall *)
   assert (RV: regs_valid (x :: nil) s1).
-    apply regs_valid_cons; eauto with rtlg. 
-  econstructor; eauto with rtlg.
-  eapply transl_expr_charact; eauto with rtlg.
+    apply regs_valid_cons; eauto 3 with rtlg. 
+  econstructor; eauto 3 with rtlg.
+  eapply transl_expr_charact; eauto 3 with rtlg.
   apply tr_exprlist_incr with s4; auto.
-  eapply transl_exprlist_charact; eauto with rtlg.
+  eapply transl_exprlist_charact; eauto 4 with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 
