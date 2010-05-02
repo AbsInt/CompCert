@@ -224,6 +224,8 @@ Definition add (e1: expr) (e2: expr) :=
   | Eop(Oaddimm n1) (t1:::Enil)), t2 => addimm n1 (Eop Oadd (t1:::t2:::Enil))
   | t1, Eop (Ointconst n2) Enil => addimm n2 t1
   | t1, Eop (Oaddimm n2) (t2:::Enil) => addimm n2 (Eop Oadd (t1:::t2:::Enil))
+  | Eop (Oaddrsymbol s n1) Enil, Eop (Oaddimm n2) (t2:::Enil) => Eop Oadd (Eop (Oaddrsymbol s (Int.add n1 n2)) Enil ::: t2 ::: Enil)
+  | Eop (Oaddrstack n1) Enil, Eop (Oaddimm n2) (t2:::Enil) => Eop Oadd (Eop (Oaddstack (Int.add n1 n2)) Enil ::: t2 ::: Enil)
   | _, _ => Eop Oadd (e1:::e2:::Enil)
   end.
 *)
@@ -244,6 +246,12 @@ Inductive add_cases: forall (e1: expr) (e2: expr), Type :=
   | add_case5:
       forall (t1: expr) (n2: int) (t2: expr),
       add_cases (t1) (Eop (Oaddimm n2) (t2:::Enil))
+  | add_case6:
+      forall s n1 n2 t2,
+      add_cases (Eop (Oaddrsymbol s n1) Enil) (Eop (Oaddimm n2) (t2:::Enil))
+  | add_case7:
+      forall n1 n2 t2,
+      add_cases (Eop (Oaddrstack n1) Enil) (Eop (Oaddimm n2) (t2:::Enil))
   | add_default:
       forall (e1: expr) (e2: expr),
       add_cases e1 e2.
@@ -266,6 +274,10 @@ Definition add_match (e1: expr) (e2: expr) :=
       add_case2 n1 t1 n2 t2
   | Eop(Oaddimm n1) (t1:::Enil), t2 =>
       add_case3 n1 t1 t2
+  | Eop (Oaddrsymbol s n1) Enil, Eop (Oaddimm n2) (t2:::Enil) => 
+      add_case6 s n1 n2 t2
+  | Eop (Oaddrstack n1) Enil, Eop (Oaddimm n2) (t2:::Enil) =>
+      add_case7 n1 n2 t2
   | e1, e2 =>
       add_match_aux e1 e2
   end.
@@ -282,6 +294,10 @@ Definition add (e1: expr) (e2: expr) :=
       addimm n2 t1
   | add_case5 t1 n2 t2 =>
       addimm n2 (Eop Oadd (t1:::t2:::Enil))
+  | add_case6 s n1 n2 t2 =>
+      Eop Oadd (Eop (Oaddrsymbol s (Int.add n1 n2)) Enil ::: t2 ::: Enil)
+  | add_case7 n1 n2 t2 =>
+      Eop Oadd (Eop (Oaddrstack (Int.add n1 n2)) Enil ::: t2 ::: Enil)
   | add_default e1 e2 =>
       Eop Oadd (e1:::e2:::Enil)
   end.

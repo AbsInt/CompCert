@@ -214,6 +214,8 @@ Proof.
   replace (Int.add x y) with (Int.add (Int.add x i) n2).
     apply eval_addimm. EvalOp.
     subst y. rewrite Int.add_assoc. auto.
+  destruct (Genv.find_symbol ge s); inv H0.
+  destruct sp; simpl in H0; inv H0.
   EvalOp.
 Qed.
 
@@ -235,6 +237,14 @@ Proof.
   replace (Int.add x y) with (Int.add (Int.add x i) n2).
     apply eval_addimm_ptr. EvalOp.
     subst y. rewrite Int.add_assoc. auto.
+  revert H0. case_eq (Genv.find_symbol ge s); intros; inv H1.
+  EvalOp. constructor. EvalOp. simpl. rewrite H0; eauto. 
+  constructor. eauto. constructor. 
+  simpl. decEq. decEq. rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  destruct sp; simpl in H0; inv H0. 
+  EvalOp. constructor. EvalOp. simpl. eauto. constructor. eauto. constructor.
+  simpl. decEq. decEq. repeat rewrite Int.add_assoc.
+  decEq. decEq. apply Int.add_commut. 
   EvalOp.
 Qed.
 
@@ -257,6 +267,8 @@ Proof.
   replace (Int.add y x) with (Int.add (Int.add i x) n2).
     apply eval_addimm_ptr. EvalOp. subst b0; reflexivity.
     subst y. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  destruct (Genv.find_symbol ge s); inv H0.
+  destruct sp; simpl in H0; inv H0.
   EvalOp.
 Qed.
 
