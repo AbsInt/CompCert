@@ -33,6 +33,12 @@ let register_names = [
   ("F11", FT1); ("F12", FT2); ("F0", FT3)
 ]
 
+let name_of_register r =
+  let rec rev_assoc = function
+  | [] -> None
+  | (a, b) :: rem -> if b = r then Some a else rev_assoc rem
+  in rev_assoc register_names
+
 let register_by_name s =
   try
     Some(List.assoc (String.uppercase s) register_names)
