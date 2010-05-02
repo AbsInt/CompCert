@@ -81,6 +81,18 @@ and movestate =
   | WorklistMoves
   | ActiveMoves
 
+(*i
+let name_of_node n =
+  match n.color with
+  | Some(R r) ->
+      begin match Machregsaux.name_of_register r with
+                | None -> "fixed-reg"
+                | Some s -> s
+      end
+  | Some(S _) -> "fixed-slot"
+  | None -> string_of_int n.ident
+*)
+
 (* The algorithm manipulates partitions of the nodes and of the moves
    according to their states, frequently moving a node or a move from
    a state to another, and frequently enumerating all nodes or all moves
@@ -266,6 +278,7 @@ let interfere n1 n2 =
 (* Add an edge to the graph.  Assume edge is not in graph already *)
 
 let addEdge n1 n2 =
+  (*i  Printf.printf "  %s -- %s;\n" (name_of_node n1) (name_of_node n2); *)
   assert (n1 != n2 && not (interfere n1 n2));
   let i1 = n1.ident and i2 = n2.ident in
   let p = if i1 < i2 then (i1, i2) else (i2, i1) in
@@ -350,7 +363,7 @@ let nodeOfReg r typenv spillcosts =
   let ty = typenv r in
   incr nextRegIdent;
   { ident = !nextRegIdent; typ = ty; regclass = class_of_type ty;
-    spillcost = (try float(Hashtbl.find spillcosts r) with Not_found -> 0.0);
+    spillcost = float(spillcosts r);
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = None;
     nstate = Initial;
@@ -395,6 +408,7 @@ let build g typenv spillcosts =
     g.interf_reg_mreg ();
   (* Process the moves and insert them in worklistMoves *)
   let add_move n1 n2 =
+    (*i Printf.printf "  %s -- %s [color=\"red\"];\n" (name_of_node n1) (name_of_node n2); *)
     let m =
       { src = n1; dst = n2; mstate = WorklistMoves;
         mnext = DLinkMove.dummy; mprev = DLinkMove.dummy } in
@@ -503,6 +517,24 @@ let canConservativelyCoalesce u v =
   with Exit ->
     false
 
+(*i 
+(* Yet another coalescing criterion: all neighbors of a node are also
+   neighbors of the other node, therefore coalescing the two nodes
+   doesn't increase the number of neighbors.  This one is not
+   conservative because it can force both nodes to be spilled while
+   originally only one would be spilled.
+*)
+
+let allNeighbors u =
+  let seen = ref IntSet.empty in
+  iterAdjacent (fun n -> seen := IntSet.add n.ident !seen) u;
+  !seen
+
+let canCoalesceSubset u v =
+  let nu = allNeighbors u and nv = allNeighbors v in
+  IntSet.subset nu nv || IntSet.subset nv nu  
+*)
+
 (* The alternate criterion for precolored nodes *)
 
 let canCoalescePrecolored u v =
@@ -532,7 +564,7 @@ let rec getAlias n =
 (* Combine two nodes *)
 
 let combine u v =
-  (*i Printf.printf "Combining %s and %s\n" (name_of_node u) (name_of_node v); i*)
+  (*i Printf.printf "Combining %s and %s\n" (name_of_node u) (name_of_node v);*)
   if v.nstate = FreezeWorklist
   then DLinkNode.move v freezeWorklist coalescedNodes
   else DLinkNode.move v spillWorklist coalescedNodes;
@@ -551,6 +583,7 @@ let coalesce () =
   let m = DLinkMove.pick worklistMoves in
   let x = getAlias m.src and y = getAlias m.dst in
   let (u, v) = if y.nstate = Colored then (y, x) else (x, y) in
+  (*i Printf.printf "Attempt coalescing %s and %s\n" (name_of_node u) (name_of_node v);*)
   if u == v then begin
     DLinkMove.insert m coalescedMoves;
     addWorkList u
@@ -586,7 +619,7 @@ let freezeMoves u =
 
 let freeze () =
   let u = DLinkNode.pick freezeWorklist in
-  (*i Printf.printf "Freezing %s\n" (name_of_node u); i*)
+  (*i  Printf.printf "Freezing %s\n" (name_of_node u);*)
   DLinkNode.insert u simplifyWorklist;
   freezeMoves u
 
@@ -606,7 +639,7 @@ let selectSpill () =
       spillWorklist (DLinkNode.dummy, infinity) in
   assert (n != DLinkNode.dummy);
   DLinkNode.remove n spillWorklist;
-  (*i Printf.printf "Spilling %s\n" (name_of_node n); i*)
+  (*i Printf.printf "Spilling %s\n" (name_of_node n);*)
   freezeMoves n;
   n.nstate <- SelectStack;
   iterAdjacent decrementDegree n;
@@ -668,6 +701,25 @@ let find_reg conflicts regclass =
       | None ->
           find callee_save 0 (Array.length callee_save)
 
+(* Aggressive coalescing of stack slots.  When assigning a slot,
+   try first the slots assigned to the temporaries for which we
+   have a preference, provided no conflict occurs. *)
+
+let rec reuse_slot conflicts n mvlist =
+  match mvlist with
+  | [] -> None
+  | mv :: rem ->
+      let attempt_reuse n' =
+        match n'.color with
+        | Some(S _ as l) when not (Locset.mem l conflicts) -> Some l
+        | _ -> reuse_slot conflicts n rem in
+      let src = getAlias mv.src and dst = getAlias mv.dst in
+      if n == src then attempt_reuse dst
+      else if n == dst then attempt_reuse src
+      else reuse_slot conflicts n rem (* should not happen? *)
+
+(* If no reuse possible, assign lowest nonconflicting stack slot. *)
+
 let find_slot conflicts typ =
   let rec find curr =
     let l = S(Local(curr, typ)) in
@@ -686,7 +738,11 @@ let assign_color n =
   | Some loc ->
       n.color <- Some loc
   | None ->
-      n.color <- Some (find_slot !conflicts n.typ)
+      match reuse_slot !conflicts n n.movelist with
+      | Some loc ->
+          n.color <- Some loc
+      | None ->
+          n.color <- Some (find_slot !conflicts n.typ)
 
 (* Extract the location of a node *)
 
@@ -695,9 +751,35 @@ let location_of_node n =
   | None -> assert false
   | Some loc -> loc
 
-(* Estimate spilling costs - TODO *)
+(* Estimate spilling costs.  Currently, just count the number of accesses
+   to each pseudoregister.  To do: take loops into account. *)
 
-let spill_costs f = Hashtbl.create 7
+let spill_costs f =
+  let costs = ref (PTree.empty : int PTree.t) in
+  let cost r =
+    match PTree.get r !costs with None -> 0 | Some n -> n in
+  let incr r =
+    costs := PTree.set r (1 + cost r) !costs in
+  let incr_list rl =
+    List.iter incr rl in
+  let incr_ros ros =
+    match ros with Coq_inl r -> incr r | Coq_inr _ -> () in
+  let process_instr () pc i =
+    match i with
+    | Inop _ -> ()
+    | Iop(op, args, res, _) -> incr_list args; incr res
+    | Iload(chunk, addr, args, dst, _) -> incr_list args; incr dst
+    | Istore(chunk, addr, args, src, _) -> incr_list args; incr src
+    | Icall(sg, ros, args, res, _) -> incr_ros ros; incr_list args; incr res
+    | Itailcall(sg, ros, args) -> incr_ros ros; incr_list args
+    | Icond(cond, args, _, _) -> incr_list args
+    | Ijumptable(arg, _) -> incr arg
+    | Ireturn(Some r) -> incr r
+    | Ireturn None -> () in
+  incr_list f.fn_params;
+  PTree.fold process_instr f.fn_code ();
+  (* Result is cost function reg -> integer cost *)
+  cost
 
 (* This is the entry point for graph coloring. *)
 
@@ -706,7 +788,9 @@ let graph_coloring (f: coq_function) (g: graph) (env: regenv) (regs: Regset.t)
   init_regs();
   init_graph();
   Array.fill start_points 0 num_register_classes 0;
+  (*i Printf.printf "graph G {\n"; *)
   let mapping = build g env (spill_costs f) in
+  (*i Printf.printf "}\n"; *)
   List.iter assign_color (nodeOrder []);
   init_graph();  (* free data structures *)
   fun r ->
