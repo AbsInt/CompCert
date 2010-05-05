@@ -2347,6 +2347,59 @@ Proof.
   decEq. omega. omega. omega.
 Qed.
 
+Lemma zero_ext_range:
+  forall x,
+  0 <= unsigned (zero_ext n x) < two_p n.
+Proof.
+  intros. unfold zero_ext.
+  exploit (Z_mod_lt (unsigned x) (two_p n)). apply two_p_gt_ZERO; omega. intro EQ.
+  rewrite unsigned_repr. auto.
+  unfold max_unsigned.
+  assert (two_p n <= modulus). 
+  rewrite modulus_power. apply two_p_monotone. omega. 
+  omega. 
+Qed.
+
+Lemma zero_ext_charact:
+  forall x y,
+  0 <= unsigned y < two_p n ->
+  eqmod (two_p n) (unsigned x) (unsigned y) ->
+  zero_ext n x = y.
+Proof.
+  intros. unfold zero_ext.
+  destruct H0 as [k EQ]. exploit Zmod_unique; eauto.
+  intro. rewrite H0. apply repr_unsigned. 
+Qed.
+
+Lemma sign_ext_range:
+  forall x,
+  -(two_p (n-1)) <= signed (sign_ext n x) < two_p (n-1).
+Proof.
+  intros. unfold sign_ext. set (m := unsigned x mod two_p n).
+  exploit (Z_mod_lt (unsigned x) (two_p n)). apply two_p_gt_ZERO; omega. fold m. intro A.
+  assert (B: two_p (n - 1) <= modulus).
+    rewrite modulus_power. apply two_p_monotone; omega.
+  assert (C: two_p (n - 1) <= half_modulus).
+    rewrite half_modulus_power. apply two_p_monotone; omega.
+  assert (D: two_p n <= modulus).
+    rewrite modulus_power. apply two_p_monotone; omega.
+  destruct (zlt m (two_p (n-1))).
+  unfold signed. rewrite zlt_true. rewrite unsigned_repr. omega.
+  unfold max_unsigned; omega.
+  rewrite unsigned_repr. omega. unfold max_unsigned; omega.
+  unfold signed.
+  set (m' := m - two_p n).
+  assert (unsigned (repr m') = m' + modulus).
+  apply eqm_small_eq. apply eqm_unsigned_repr_l. exists (-1). omega. 
+  apply unsigned_range. unfold m'. omega.
+  assert (two_p (n-1) > 0). apply two_p_gt_ZERO; omega.
+  assert (two_p n = 2 * two_p (n-1)).
+    rewrite <- two_p_S. decEq. omega. omega.  
+  assert (-two_p (n-1) <= m' <= 0). unfold m'. omega. 
+  rewrite H. rewrite zlt_false. omega. 
+  unfold m'. rewrite half_modulus_modulus. omega. 
+Qed.
+
 Lemma sign_ext_charact:
   forall x y,
   -(two_p (n-1)) <= signed y < two_p (n-1) ->
@@ -2512,6 +2565,53 @@ Proof.
 Qed.
 
 End EXTENSIONS.
+
+Theorem zero_ext_widen:
+  forall x n n',
+  0 < n < Z_of_nat wordsize -> n <= n' < Z_of_nat wordsize ->
+  zero_ext n' (zero_ext n x) = zero_ext n x.
+Proof.
+  intros. apply zero_ext_charact.
+  assert (two_p n <= two_p n'). apply two_p_monotone. omega.
+  generalize (zero_ext_range n H x). omega.
+  apply eqmod_refl.
+Qed.
+
+Theorem sign_ext_widen:
+  forall x n n',
+  0 < n < Z_of_nat wordsize -> n <= n' < Z_of_nat wordsize ->
+  sign_ext n' (sign_ext n x) = sign_ext n x.
+Proof.
+  intros. apply sign_ext_charact. omega. 
+  generalize (sign_ext_range n H x). 
+  assert (two_p (n-1) <= two_p (n'-1)). apply two_p_monotone. omega.
+  omega.
+  apply eqmod_divides with modulus. fold eqm. 
+  apply eqm_sym. apply eqm_signed_unsigned.
+  rewrite modulus_power. exists (two_p (Z_of_nat wordsize - n')). 
+  rewrite <- two_p_is_exp. decEq. omega. omega. omega. 
+Qed.
+
+Theorem sign_zero_ext_widen:
+  forall x n n',
+  0 < n < Z_of_nat wordsize -> n < n' < Z_of_nat wordsize ->
+  sign_ext n' (zero_ext n x) = zero_ext n x.
+Proof.
+  intros. apply sign_ext_charact. omega. 
+  generalize (zero_ext_range n H x). intro. 
+  assert (two_p n <= two_p (n' - 1)). apply two_p_monotone. omega. 
+  assert (two_p (n' - 1) > 0). apply two_p_gt_ZERO. omega.
+  replace (signed (zero_ext n x)) with (unsigned (zero_ext n x)).
+  omega.
+  symmetry. unfold signed. apply zlt_true.
+  assert (two_p n <= half_modulus). 
+    rewrite half_modulus_power. apply two_p_monotone. omega. 
+  omega.
+  apply eqmod_divides with modulus. fold eqm. 
+  apply eqm_sym. apply eqm_signed_unsigned.
+  rewrite modulus_power. exists (two_p (Z_of_nat wordsize - n')). 
+  rewrite <- two_p_is_exp. decEq. omega. omega. omega. 
+Qed.
 
 (** ** Properties of [one_bits] (decomposition in sum of powers of two) *)
 
