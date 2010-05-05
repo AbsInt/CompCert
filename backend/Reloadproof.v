@@ -938,8 +938,6 @@ Definition measure (st: LTLin.state) : nat :=
   | LTLin.Returnstate s ls m => 0%nat
   end.
 
-Axiom ADMITTED: forall (P: Prop), P.
-
 Theorem transf_step_correct:
   forall s1 t s2, LTLin.step ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1'),
