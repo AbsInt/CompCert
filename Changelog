@@ -1,3 +1,27 @@
+Release 1.8
+===========
+
+- Added "fabs" (floating-point absolute value) unary operator to Clight;
+  map __builtin_fabs() to this operator.
+
+- Introduced __builtin_memcpy() and __builtin_memcpy_words, use them
+  instead of memcpy() to compile struct and union assignments.
+
+- Better instruction selection for "globvar[expr + cst]" memory accesses.
+
+- Elimination of some useless casts around "&", "|" and "^" bitwise operators.
+
+- Produce fewer "moves" during RTL generation.  This speeds up the
+  rest of compilation and slightly improves the result of register
+  allocation when register pressure is high.
+
+- Implemented a spilling heuristic during register allocation.
+  This heuristic reduces significantly the amount of spill code
+  generated when register pressure is high.
+
+- Implemented aggressive coalescing between pairs of spilled variables.
+
+	
 Release 1.7.1, 2010-04-13
 =========================
 
@@ -188,7 +212,6 @@ Release 1.3, 2008-08-11
     complex expressions as condition.
 
 - More benchmark programs in test/
-
 
 
 Release 1.2, 2008-04-03
