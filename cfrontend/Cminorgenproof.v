@@ -215,13 +215,48 @@ Proof.
   contradiction || reflexivity.
 Qed.
 
+Lemma chunktype_compat_correct:
+  forall src dst v,
+  chunktype_compat src dst = true ->
+  val_normalized v src -> val_normalized v dst.
+Proof.
+  unfold val_normalized; intros. rewrite <- H0.
+  assert (A: 0 < 8 < Z_of_nat Int.wordsize). compute; auto.
+  assert (B: 0 < 16 < Z_of_nat Int.wordsize). compute; auto.
+  assert (C: 8 <= 16 < Z_of_nat Int.wordsize). omega.
+  destruct src; destruct dst; simpl in H; try discriminate; auto;
+  destruct v; simpl; auto.
+  rewrite Int.sign_ext_idem; auto.
+  rewrite Int.sign_ext_widen; auto. 
+  rewrite Int.zero_ext_idem; auto.
+  rewrite Int.sign_zero_ext_widen; auto.
+  rewrite Int.zero_ext_widen; auto.
+  rewrite Int.sign_ext_widen; auto. omega.
+  rewrite Int.zero_ext_idem; auto.
+  rewrite Float.singleoffloat_idem; auto.
+Qed.
+
+Remark int_zero_ext_small:
+  forall x n,
+  0 <= Int.unsigned x < two_p n ->
+  Int.zero_ext n x = x.
+Proof.
+  intros. unfold Int.zero_ext. rewrite Zmod_small; auto. apply Int.repr_unsigned. 
+Qed.
+
 Lemma chunktype_const_correct:
   forall c v,
   Csharpminor.eval_constant c = Some v ->
   val_normalized v (chunktype_const c).
 Proof.
   unfold Csharpminor.eval_constant; intros. 
-  destruct c; inv H; unfold val_normalized; auto.
+  destruct c; inv H; unfold val_normalized; simpl.
+  case_eq (Int.ltu i (Int.repr 256)); intros.
+  simpl. decEq. apply int_zero_ext_small. exact (Int.ltu_inv _ _ H).
+  case_eq (Int.ltu i (Int.repr 65536)); intros.
+  simpl. decEq. apply int_zero_ext_small. exact (Int.ltu_inv _ _ H0). 
+  simpl; auto.
+  auto.
 Qed.
 
 Lemma chunktype_unop_correct:
@@ -246,10 +281,42 @@ Proof.
   destruct v1; inv H; auto.
 Qed.
 
+Lemma chunktype_logical_op_correct:
+  forall (logop: int -> int -> int)
+         (DISTR: forall a b c, logop (Int.and a c) (Int.and b c) =
+                               Int.and (logop a b) c)
+         n1 c1 n2 c2,
+  val_normalized (Vint n1) c1 -> val_normalized (Vint n2) c2 ->
+  val_normalized (Vint (logop n1 n2)) (chunktype_logical_op c1 c2).
+Proof.
+  intros. set (c := chunktype_logical_op c1 c2).
+  assert (val_normalized (Vint n1) c /\ val_normalized (Vint n2) c).
+    unfold c, chunktype_logical_op. 
+    destruct c1; destruct c2; split; try (auto; unfold val_normalized; reflexivity).
+    apply chunktype_compat_correct with Mint8unsigned; auto.
+    apply chunktype_compat_correct with Mint8unsigned; auto.
+  destruct H1. 
+  assert (c = Mint8unsigned \/ c = Mint16unsigned \/ c = Mint32).
+    unfold c. destruct c1; auto; destruct c2; auto.
+  destruct H3 as [A | [A | A]]; rewrite A in *.
+  unfold val_normalized in *. simpl in *.
+  assert (0 < 8 < Z_of_nat Int.wordsize). compute; auto.
+  rewrite Int.zero_ext_and in *; auto.
+  set (m := Int.repr (two_p 8 - 1)) in *.
+  rewrite <- DISTR. congruence.
+  unfold val_normalized in *. simpl in *.
+  assert (0 < 16 < Z_of_nat Int.wordsize). compute; auto.
+  rewrite Int.zero_ext_and in *; auto.
+  set (m := Int.repr (two_p 16 - 1)) in *.
+  rewrite <- DISTR. congruence.
+  red. auto.
+Qed.
+
 Lemma chunktype_binop_correct:
-  forall op v1 v2 m v,
+  forall op v1 v2 c1 c2 m v,
   Csharpminor.eval_binop op v1 v2 m = Some v ->
-  val_normalized v (chunktype_binop op).
+  val_normalized v1 c1 -> val_normalized v2 c2 ->
+  val_normalized v (chunktype_binop op c1 c2).
 Proof.
   intros; destruct op; simpl in *; unfold val_normalized;
   destruct v1; destruct v2; try (inv H; reflexivity).
@@ -258,6 +325,15 @@ Proof.
   destruct (Int.eq i0 Int.zero); inv H; auto.
   destruct (Int.eq i0 Int.zero); inv H; auto.
   destruct (Int.eq i0 Int.zero); inv H; auto.
+  inv H. apply chunktype_logical_op_correct; auto. 
+  intros. repeat rewrite Int.and_assoc. decEq. 
+  rewrite (Int.and_commut b c). rewrite <- Int.and_assoc. rewrite Int.and_idem. auto.
+  inv H. apply chunktype_logical_op_correct; auto. 
+  intros. rewrite (Int.and_commut a c). rewrite (Int.and_commut b c).
+  rewrite <- Int.and_or_distrib. apply Int.and_commut.
+  inv H. apply chunktype_logical_op_correct; auto. 
+  intros. rewrite (Int.and_commut a c). rewrite (Int.and_commut b c).
+  rewrite <- Int.and_xor_distrib. apply Int.and_commut.
   destruct (Int.ltu i0 Int.iwordsize); inv H; auto.
   destruct (Int.ltu i0 Int.iwordsize); inv H; auto.
   destruct (Int.ltu i0 Int.iwordsize); inv H; auto.
@@ -269,20 +345,10 @@ Proof.
   destruct (Mem.valid_pointer m b (Int.signed i) &&
             Mem.valid_pointer m b0 (Int.signed i0)).
   destruct (eq_block b b0); inv H. destruct (Int.cmp c i i0); auto.
-  destruct c; inv H1; auto. inv H.
+  destruct c; inv H3; auto. inv H.
   inv H. destruct (Int.cmpu c i i0); auto.
   inv H. destruct (Float.cmp c f f0); auto.
 Qed.
-
-Lemma chunktype_compat_correct:
-  forall src dst v,
-  chunktype_compat src dst = true ->
-  val_normalized v src -> val_normalized v dst.
-Proof.
-  unfold val_normalized; intros. rewrite <- H0.
-  destruct src; destruct dst; simpl in H; try discriminate; auto;
-  destruct v; simpl; auto.
-Admitted.
 
 Lemma chunktype_merge_correct:
   forall c1 c2 c v,
@@ -300,6 +366,7 @@ Proof.
   apply val_normalized_has_type. auto.
   rewrite e. apply val_normalized_has_type. auto.
 Qed.
+
 
 (** * Correspondence between Csharpminor's and Cminor's environments and memory states *)
 
@@ -1482,6 +1549,14 @@ Proof.
   eapply eval_Econst. simpl. rewrite H. auto.
 Qed.
 
+Lemma unop_is_cast_correct:
+  forall op chunk v,
+  unop_is_cast op = Some chunk ->
+  Csharpminor.eval_unop op v = Some (Val.load_result chunk v).
+Proof.
+  intros. destruct op; simpl in H; inv H; reflexivity.
+Qed.
+
 (** Correctness of [make_store]. *)
 
 Inductive val_content_inject (f: meminj): memory_chunk -> val -> val -> Prop :=
@@ -2394,6 +2469,16 @@ Proof.
   (* Eunop *)
   exploit IHeval_expr; eauto. intros [tv1 [EVAL1 INJ1]].
   exploit eval_unop_compat; eauto. intros [tv [EVAL INJ]].
+  revert EQ0. case_eq (unop_is_cast op); intros; monadInv EQ0.
+  revert EQ2. case_eq (chunktype_compat x0 m0); intros; monadInv EQ2.
+  exploit unop_is_cast_correct; eauto. instantiate (1 := v1); intros.
+  assert (val_normalized v1 m0). 
+    eapply chunktype_compat_correct; eauto. 
+    eapply chunktype_expr_correct; eauto.
+  red in H4.
+  assert (v = v1) by congruence. subst v. 
+  exists tv1; auto.
+  exists tv; split. econstructor; eauto. auto.
   exists tv; split. econstructor; eauto. auto.
   (* Ebinop *)
   exploit IHeval_expr1; eauto. intros [tv1 [EVAL1 INJ1]].

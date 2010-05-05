@@ -70,7 +70,10 @@ Definition compilenv := PMap.t var_info.
 
 Definition chunktype_const (c: Csharpminor.constant) :=
   match c with
-  | Csharpminor.Ointconst n => Mint32
+  | Csharpminor.Ointconst n =>
+      if Int.ltu n (Int.repr 256) then Mint8unsigned 
+      else if Int.ltu n (Int.repr 65536) then Mint16unsigned
+      else Mint32
   | Csharpminor.Ofloatconst n => Mfloat64
   end.
 
@@ -81,7 +84,7 @@ Definition chunktype_unop (op: unary_operation) :=
   | Ocast16unsigned => Mint16unsigned
   | Ocast16signed => Mint16signed
   | Onegint => Mint32
-  | Onotbool => Mint32
+  | Onotbool => Mint8unsigned
   | Onotint => Mint32
   | Onegf => Mfloat64
   | Oabsf => Mfloat64
@@ -92,7 +95,16 @@ Definition chunktype_unop (op: unary_operation) :=
   | Ofloatofintu => Mfloat64
   end.
 
-Definition chunktype_binop (op: binary_operation) :=
+Definition chunktype_logical_op (chunk1 chunk2: memory_chunk) :=
+  match chunk1, chunk2 with
+  | Mint8unsigned, Mint8unsigned => Mint8unsigned
+  | Mint8unsigned, Mint16unsigned => Mint16unsigned
+  | Mint16unsigned, Mint8unsigned => Mint16unsigned
+  | Mint16unsigned, Mint16unsigned => Mint16unsigned
+  | _, _ => Mint32
+  end.
+
+Definition chunktype_binop (op: binary_operation) (chunk1 chunk2: memory_chunk) :=
   match op with
   | Oadd => Mint32
   | Osub => Mint32
@@ -101,9 +113,9 @@ Definition chunktype_binop (op: binary_operation) :=
   | Odivu => Mint32
   | Omod => Mint32
   | Omodu => Mint32
-  | Oand => Mint32
-  | Oor => Mint32
-  | Oxor => Mint32
+  | Oand => chunktype_logical_op chunk1 chunk2
+  | Oor => chunktype_logical_op chunk1 chunk2
+  | Oxor => chunktype_logical_op chunk1 chunk2
   | Oshl => Mint32
   | Oshr => Mint32
   | Oshru => Mint32
@@ -119,7 +131,7 @@ Definition chunktype_binop (op: binary_operation) :=
 Definition chunktype_compat (src dst: memory_chunk) : bool :=
   match src, dst with
   | Mint8unsigned, (Mint8unsigned|Mint16unsigned|Mint16signed|Mint32) => true
-  | Mint8signed, (Mint8signed|Mint16unsigned|Mint16signed|Mint32) => true
+  | Mint8signed, (Mint8signed|Mint16signed|Mint32) => true
   | Mint16unsigned, (Mint16unsigned|Mint32) => true
   | Mint16signed, (Mint16signed|Mint32) => true
   | Mint32, Mint32 => true
@@ -158,7 +170,9 @@ Fixpoint chunktype_expr (cenv: compilenv) (e: Csharpminor.expr)
   | Csharpminor.Eunop op e1 =>
       OK (chunktype_unop op)
   | Csharpminor.Ebinop op e1 e2 =>
-      OK (chunktype_binop op)
+      do chunk1 <- chunktype_expr cenv e1;
+      do chunk2 <- chunktype_expr cenv e2;
+      OK (chunktype_binop op chunk1 chunk2)
   | Csharpminor.Eload chunk e =>
       OK chunk
   | Csharpminor.Econdition e1 e2 e3 =>
@@ -218,6 +232,18 @@ Definition make_stackaddr (ofs: Z): expr :=
 
 Definition make_globaladdr (id: ident): expr :=
   Econst (Oaddrsymbol id Int.zero).
+
+(** Auxiliary to remove useless conversions. *)
+
+Definition unop_is_cast (op: unary_operation) : option memory_chunk :=
+  match op with
+  | Ocast8unsigned => Some Mint8unsigned
+  | Ocast8signed => Some Mint8signed
+  | Ocast16unsigned => Some Mint16unsigned
+  | Ocast16signed => Some Mint16signed
+  | Osingleoffloat => Some Mfloat32
+  | _ => None
+  end.
 
 (** Generation of a Cminor expression for reading a Csharpminor variable. *)
 
@@ -308,7 +334,14 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
       OK (Econst (transl_constant cst))
   | Csharpminor.Eunop op e1 =>
       do te1 <- transl_expr cenv e1;
-      OK (Eunop op te1)
+      match unop_is_cast op with
+      | None => OK (Eunop op te1)
+      | Some chunk =>
+          do chunk1 <- chunktype_expr cenv e1;
+          if chunktype_compat chunk1 chunk
+          then OK te1
+          else OK (Eunop op te1)
+      end
   | Csharpminor.Ebinop op e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
