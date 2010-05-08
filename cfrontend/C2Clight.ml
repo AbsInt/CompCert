@@ -16,9 +16,6 @@ let decl_atom : (AST.ident, Env.t * C.decl) Hashtbl.t = Hashtbl.create 103
 (** Hooks -- overriden in machine-dependent CPragmas module *)
 
 let process_pragma_hook = ref (fun (s: string) -> false)
-let define_variable_hook = ref (fun (id: ident) (d: C.decl) -> ())
-let define_function_hook = ref (fun (id: ident) (d: C.decl) -> ())
-let define_stringlit_hook = ref (fun (id: ident) -> ())
 
 (** ** Error handling *)
 
@@ -57,7 +54,7 @@ let name_for_string_literal env s =
              Env.fresh_ident name,
              C.TPtr(C.TInt(C.IChar,[C.AConst]),[]),
              None));
-    !define_stringlit_hook id;
+    Sections.define_stringlit id;
     Hashtbl.add stringTable s id;
     id
 
@@ -529,7 +526,7 @@ let convertFundef env fd =
   let decl =
     (fd.fd_storage, fd.fd_name, Cutil.fundef_typ fd, None) in
   Hashtbl.add decl_atom id' (env, decl);
-  !define_function_hook id' decl;
+  Sections.define_function id';
   Datatypes.Coq_pair(id',
                      Internal {fn_return = ret; fn_params = params;
                                fn_vars = vars; fn_body = body'})
@@ -649,6 +646,14 @@ let convertInit env ty init =
 
 (** Global variable *)
 
+let rec type_is_readonly env t =
+  let a = Cutil.attributes_of_type env t in
+  if List.mem C.AVolatile a then false else
+  if List.mem C.AConst a then true else
+  match Cutil.unroll env t with
+  | C.TArray(t', _, _) -> type_is_readonly env t'
+  | _ -> false
+
 let convertGlobvar env (sto, id, ty, optinit as decl) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
@@ -659,7 +664,9 @@ let convertGlobvar env (sto, id, ty, optinit as decl) =
     | Some i ->
         convertInit env ty i in
   Hashtbl.add decl_atom id' (env, decl);
-  !define_variable_hook id' decl;
+  Sections.define_variable id'
+    (match Cutil.sizeof env ty with Some sz -> sz | None -> max_int)
+    (type_is_readonly env ty);
   Datatypes.Coq_pair(Datatypes.Coq_pair(id', init'), ty')
 
 (** Convert a list of global declarations.
@@ -768,14 +775,6 @@ let convertProgram p =
     error (Env.error_message msg); None
 
 (** ** Extracting information about global variables from their atom *)
-
-let rec type_is_readonly env t =
-  let a = Cutil.attributes_of_type env t in
-  if List.mem C.AVolatile a then false else
-  if List.mem C.AConst a then true else
-  match Cutil.unroll env t with
-  | C.TArray(t', _, _) -> type_is_readonly env t'
-  | _ -> false
 
 let atom_is_static a =
   try

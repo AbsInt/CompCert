@@ -15,6 +15,7 @@
 open Printf
 open Datatypes
 open Camlcoq
+open Sections
 open AST
 open Asm
 
@@ -177,28 +178,58 @@ let creg oc r =
   | MacOS|Diab -> fprintf oc "cr%d" r
   | Linux      -> fprintf oc "%d" r
 
-let section oc name =
-  fprintf oc "	%s\n" name
-
 (* Names of sections *)
 
-let (text, data, const_data, float_literal) =
+let name_of_section_MacOS = function
+  | Section_text -> ".text"
+  | Section_data _ -> ".data"
+  | Section_small_data _ -> ".data"
+  | Section_const -> ".const"
+  | Section_small_const -> ".const"
+  | Section_string -> ".const"
+  | Section_literal -> ".const_data"
+  | Section_jumptable -> ".text"
+  | Section_user _ -> assert false
+
+let name_of_section_Linux = function
+  | Section_text -> ".text"
+  | Section_data i -> if i then ".data" else ".bss"
+  | Section_small_data i -> if i then ".sdata" else ".sbss"
+  | Section_const -> ".rodata"
+  | Section_small_const -> ".sdata2"
+  | Section_string -> ".rodata"
+  | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
+  | Section_jumptable -> ".text"
+  | Section_user(s, wr, ex) ->
+       sprintf ".section	%s,\"a%s%s\",@progbits"
+               s (if wr then "w" else "") (if ex then "x" else "")
+
+let name_of_section_Diab = function
+  | Section_text -> ".text"
+  | Section_data i -> if i then ".data" else ".bss"
+  | Section_small_data i -> if i then ".sdata" else ".sbss"
+  | Section_const -> ".text"
+  | Section_small_const -> ".sdata2"
+  | Section_string -> ".text"
+  | Section_literal -> ".text"
+  | Section_jumptable -> ".text"
+  | Section_user(s, wr, ex) ->
+       sprintf ".section	%s,,%c"
+               s
+               (match wr, ex with
+                | true, true -> 'm'                 (* text+data *)
+                | true, false -> 'd'                (* data *)
+                | false, true -> 'c'                (* text *)
+                | false, false -> 'r')              (* const *)
+
+let name_of_section =
   match target with
-  | MacOS ->
-      (".text",
-       ".data",
-       ".const",
-       ".const_data")
-  | Linux ->
-      (".text",
-       ".data",
-       ".rodata",
-       ".section	.rodata.cst8,\"aM\",@progbits,8")
-  | Diab ->
-      (".text",
-       ".data",
-       ".text",
-       ".text")
+  | MacOS -> name_of_section_MacOS
+  | Linux -> name_of_section_Linux
+  | Diab  -> name_of_section_Diab
+
+let section oc sec =
+  fprintf oc "	%s\n" (name_of_section sec)
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -353,6 +384,9 @@ let print_builtin_function oc s =
 
 module Labelset = Set.Make(struct type t = label let compare = compare end)
 
+let float_literals : (int * int64) list ref = ref []
+let jumptables : (int * label list) list ref = ref []
+
 let print_instruction oc labels = function
   | Padd(r1, r2, r3) ->
       fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -410,10 +444,7 @@ let print_instruction oc labels = function
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
       fprintf oc "	mtctr	%a\n" ireg GPR12;
       fprintf oc "	bctr\n";
-      fprintf oc "%a:" label lbl;
-      List.iter
-        (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
-        tbl;
+      jumptables := (lbl, tbl) :: !jumptables;
       fprintf oc "%s end pseudoinstr btbl\n" comment
   | Pcmplw(r1, r2) ->
       fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
@@ -471,9 +502,7 @@ let print_instruction oc labels = function
       fprintf oc "	lwz	%a, 4(%a)\n" ireg r1  ireg GPR1;
       fprintf oc "	addis	%a, %a, 0x8000\n" ireg r1 ireg r1;
       fprintf oc "%a:	addi	%a, %a, 8\n" label lbl3  ireg GPR1  ireg GPR1;
-      section oc float_literal;
-      fprintf oc "%a:	.long	0x41e00000, 0x00000000\n" label lbl1;
-      section oc text;
+      float_literals := (lbl1, 0x41e00000_00000000L) :: !float_literals;
       fprintf oc "%s end pseudoinstr fctiu\n" comment
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
@@ -503,9 +532,7 @@ let print_instruction oc labels = function
       fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
-      section oc float_literal;
-      fprintf oc "%a:	.long	0x43300000, 0x80000000\n" label lbl;
-      section oc text;
+      float_literals := (lbl, 0x43300000_80000000L) :: !float_literals;
       fprintf oc "%s end pseudoinstr ictf\n" comment
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
@@ -518,9 +545,7 @@ let print_instruction oc labels = function
       fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
-      section oc float_literal;
-      fprintf oc "%a:	.long	0x43300000, 0x00000000\n" label lbl;
-      section oc text;
+      float_literals := (lbl, 0x43300000_00000000L) :: !float_literals;
       fprintf oc "%s end pseudoinstr ictf\n" comment
   | Plbz(r1, c, r2) ->
       fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
@@ -533,14 +558,8 @@ let print_instruction oc labels = function
   | Plfi(r1, c) ->
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
-      fprintf oc "	lfd	%a, %a(%a)\n" freg r1 label_low lbl ireg GPR12;
-      section oc float_literal;
-      let n = Int64.bits_of_float c in
-      let nlo = Int64.to_int32 n
-      and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
-      fprintf oc "%a:	.long	0x%lx, 0x%lx %s %.18g\n"
-              label lbl nhi nlo comment c;
-      section oc text
+      fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment c;
+      float_literals := (lbl, Int64.bits_of_float c) :: !float_literals;
   | Plfs(r1, c, r2) ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Plfsx(r1, r2, r3) ->
@@ -633,6 +652,17 @@ let print_instruction oc labels = function
       if Labelset.mem lbl labels then
         fprintf oc "%a:\n" label (transl_label lbl)
 
+let print_literal oc (lbl, n) =
+  let nlo = Int64.to_int32 n
+  and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
+  fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
+
+let print_jumptable oc (lbl, tbl) =
+  fprintf oc "%a:" label lbl;
+  List.iter
+    (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
+    tbl
+
 let rec labels_of_code accu = function
   | [] ->
       accu
@@ -645,10 +675,10 @@ let rec labels_of_code accu = function
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
-  section oc
-    (match CPragmas.section_for_atom name true with
-     | Some s -> s
-     | None -> text);
+  float_literals := [];
+  jumptables := [];
+  let (text, lit, jmptbl) = sections_for_function name in
+  section oc text;
   fprintf oc "	.align 2\n";
   if not (C2Clight.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
@@ -657,6 +687,16 @@ let print_function oc name code =
   if target <> MacOS then begin
     fprintf oc "	.type	%a, @function\n" symbol name;
     fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+  end;
+  if !float_literals <> [] then begin
+    section oc lit;
+    List.iter (print_literal oc) !float_literals;
+    float_literals := []
+  end;
+  if !jumptables <> [] then begin
+    section oc jmptbl;
+    List.iter (print_jumptable oc) !jumptables;
+    jumptables := []
   end
 
 (* Generation of stub functions *)
@@ -761,7 +801,7 @@ let non_variadic_stub oc name =
 
 let stub_function oc name ef =
   let name = extern_atom name in
-  fprintf oc "	.text\n";
+  section oc Section_text;
   fprintf oc "	.align 2\n";
   fprintf oc "L%s$stub:\n" name;
   if Str.string_match re_variadic_stub name 0
@@ -777,7 +817,7 @@ end
 module Stubs_EABI = struct
 
 let variadic_stub oc stub_name fun_name args =
-  fprintf oc "	.text\n";
+  section oc Section_text;
   fprintf oc "	.align 2\n";
   fprintf oc ".L%s$stub:\n" stub_name;
   (* bit 6 must be set if at least one argument is a float; clear otherwise *)
@@ -829,7 +869,6 @@ let print_init oc = function
   | Init_float32 n ->
       fprintf oc "	.long	%ld %s %.18g\n" (Int32.bits_of_float n) comment n
   | Init_float64 n ->
-      (* .quad not working on all versions of the MacOSX assembler *)
       let b = Int64.bits_of_float n in
       fprintf oc "	.long	%Ld, %Ld %s %.18g\n"
                  (Int64.shift_right_logical b 32)
@@ -857,12 +896,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
       let init =
         match init_data with [Init_space _] -> false | _ -> true in
       let sec =
-        match CPragmas.section_for_atom name init with
-        | Some s -> s
-        | None ->
-            if C2Clight.atom_is_readonly name
-            then const_data
-            else data
+        Sections.section_for_variable name init
       and align =
         match C2Clight.atom_alignof name with
         | Some a -> log2 a

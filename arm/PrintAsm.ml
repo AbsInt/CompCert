@@ -237,12 +237,13 @@ let print_builtin_function oc s =
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       fprintf oc "	cmp	%a, #0\n" ireg IR2;
-      fprintf oc "	beq	%a\n" label lbl1;
-      fprintf oc "%a:	ldrb	%a, [%a], #1\n" label lbl2 ireg IR3 ireg IR1;
+      fprintf oc "	beq	.L%d\n" lbl1;
+      fprintf oc ".L%d:	ldrb	%a, [%a], #1\n" lbl2 ireg IR3 ireg IR1;
       fprintf oc "	subs	%a, %a, #1\n" ireg IR2 ireg IR2;
       fprintf oc "	strb	%a, [%a], #1\n" ireg IR3 ireg IR0;
-      fprintf oc "	bne	%a\n" label lbl2;
-      fprintf oc "%a:\n" label lbl1
+      fprintf oc "	bne	.L%d\n" lbl2;
+      fprintf oc ".L%d:\n" lbl1;
+      7
 (*
       let lbl = new_label() in
       fprintf oc "	cmp	%a, #0\n" ireg IR2;
@@ -255,12 +256,13 @@ let print_builtin_function oc s =
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       fprintf oc "	movs	%a, %a, lsr #2\n" ireg IR2 ireg IR2;
-      fprintf oc "	beq	%a\n" label lbl1;
-      fprintf oc "%a:	ldr	%a, [%a], #4\n" label lbl2 ireg IR3 ireg IR1;
+      fprintf oc "	beq	.L%d\n" lbl1;
+      fprintf oc ".L%d:	ldr	%a, [%a], #4\n" lbl2 ireg IR3 ireg IR1;
       fprintf oc "	subs	%a, %a, #1\n" ireg IR2 ireg IR2;
       fprintf oc "	str	%a, [%a], #4\n" ireg IR3 ireg IR0;
-      fprintf oc "	bne	%a\n" label lbl2;
-      fprintf oc "%a:\n" label lbl1
+      fprintf oc "	bne	.L%d\n" lbl2;
+      fprintf oc ".L%d:\n" lbl1;
+      7
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
@@ -496,7 +498,8 @@ let print_function oc name code =
   currpos := 0;
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
-  fprintf oc "	.global	%a\n" print_symb name;
+  if not (C2Clight.atom_is_static name) then
+    fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
   print_instructions oc (labels_of_code Labelset.empty code) code;
@@ -584,9 +587,12 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
   match init_data with
   | [] -> ()
   | _  ->
-      fprintf oc "	.data\n";
+      if C2Clight.atom_is_readonly name
+      then fprintf oc "	.const\n"
+      else fprintf oc "	.data\n";
       fprintf oc "	.align	2\n";
-      fprintf oc "	.global	%a\n" print_symb name;
+      if not (C2Clight.atom_is_static name) then
+        fprintf oc "	.global	%a\n" print_symb name;
       fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
       print_init_data oc name init_data

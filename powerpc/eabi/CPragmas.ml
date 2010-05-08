@@ -19,111 +19,23 @@ open Printf
 open Camlcoq
 open Cparser
 
-type section_info = {
-  sec_name_init: string;
-  sec_name_uninit: string;
-  sec_acc_mode: string;
-  sec_near_access: bool
-}
-
-let default_section_info = {
-  sec_name_init = ".data";
-  sec_name_uninit = ".data"; (* COMM? *)
-  sec_acc_mode = "RW";
-  sec_near_access = false
-}
-
-let section_table : (string, section_info) Hashtbl.t =
-  Hashtbl.create 17
-
-(* Built-in sections *)
-
-let _ =
-  let rodata =
-    if Configuration.system = "linux" then ".rodata" else ".text" in
-  List.iter (fun (n, si) -> Hashtbl.add section_table n si) [
-     "CODE",  {sec_name_init = ".text";
-               sec_name_uninit = ".text";
-               sec_acc_mode = "RX";
-               sec_near_access = false};
-     "DATA",  {sec_name_init = ".data";
-               sec_name_uninit = ".data"; (* COMM? *)
-               sec_acc_mode = "RW";
-               sec_near_access = false};
-     "SDATA", {sec_name_init = ".sdata";
-               sec_name_uninit = ".sbss";
-               sec_acc_mode = "RW";
-               sec_near_access = true};
-     "CONST", {sec_name_init = rodata;
-               sec_name_uninit = rodata;
-               sec_acc_mode = "R";
-               sec_near_access = false};
-     "SCONST",{sec_name_init = ".sdata2";
-               sec_name_uninit = ".sdata2";
-               sec_acc_mode = "R";
-               sec_near_access = true};
-     "STRING",{sec_name_init = rodata;
-               sec_name_uninit = rodata;
-               sec_acc_mode = "R";
-               sec_near_access = false}
-  ]
-
 (* #pragma section *)
 
 let process_section_pragma classname istring ustring addrmode accmode =
-  let old_si =
-    try Hashtbl.find section_table classname
-    with Not_found -> default_section_info in
-  let si =
-    { sec_name_init =
-        if istring = "" then old_si.sec_name_init else istring;
-      sec_name_uninit =
-        if ustring = "" then old_si.sec_name_uninit else ustring;
-      sec_acc_mode =
-        if accmode = "" then old_si.sec_acc_mode else accmode;
-      sec_near_access =
-        if addrmode = ""
-        then old_si.sec_near_access
-        else (addrmode = "near-code") || (addrmode = "near-data") } in
-  Hashtbl.add section_table classname si
+  Sections.define_section classname
+    ?iname: (if istring = "" then None else Some istring)
+    ?uname: (if ustring = "" then None else Some ustring)
+    ?writable: (if accmode = "" then None else Some(String.contains accmode 'W'))
+    ?executable: (if accmode = "" then None else Some(String.contains accmode 'X'))
+    ?near: (if addrmode = "" then None
+            else Some(addrmode = "near-code" || addrmode = "near-data"))
+    ()
 
 (* #pragma use_section *)
 
-let use_section_table : (AST.ident, section_info) Hashtbl.t =
-  Hashtbl.create 51
-
 let process_use_section_pragma classname id =
-  try
-    let info = Hashtbl.find section_table classname in
-    Hashtbl.add use_section_table (intern_string id) info
-  with Not_found ->
-    C2Clight.error (sprintf "unknown section name `%s'" classname)
-
-let default_use_section id classname =
-  if not (Hashtbl.mem use_section_table id) then begin
-    let info =
-      try Hashtbl.find section_table classname
-      with Not_found -> assert false in
-    Hashtbl.add use_section_table id info
-  end
-
-let define_function id d =
-  default_use_section id "CODE"
-
-let define_stringlit id =
-  default_use_section id "STRING"
-
-let define_variable id d =
-  let is_small limit =
-    match C2Clight.atom_sizeof id with
-    | None -> false
-    | Some sz -> sz <= limit in
-  let sect =
-    if C2Clight.atom_is_readonly id then
-      if is_small !Clflags.option_small_const then "SCONST" else "CONST"
-    else
-      if is_small !Clflags.option_small_data then "SDATA" else "DATA" in
-  default_use_section id sect
+  if not (Sections.use_section_for (intern_string id) classname)
+  then C2Clight.error (sprintf "unknown section name `%s'" classname)
 
 (* #pragma reserve_register *)
 
@@ -193,48 +105,4 @@ let process_pragma name =
     false
 
 let initialize () =
-  C2Clight.process_pragma_hook := process_pragma;
-  C2Clight.define_variable_hook := define_variable;
-  C2Clight.define_function_hook := define_function;
-  C2Clight.define_stringlit_hook := define_stringlit
-
-(* PowerPC-specific: say if an atom is in a small data area *)
-
-let atom_is_small_data a ofs =
-  match C2Clight.atom_sizeof a with
-  | None -> false
-  | Some sz ->
-      let ofs = camlint_of_coqint ofs in
-      if ofs >= 0l && ofs < Int32.of_int sz then begin
-        try
-          (Hashtbl.find use_section_table a).sec_near_access
-        with Not_found ->
-          if C2Clight.atom_is_readonly a
-          then sz <= !Clflags.option_small_const
-          else sz <= !Clflags.option_small_data
-      end else
-        false
-
-(* PowerPC-specific: determine section to use for a particular symbol *)
-
-let section_for_atom a init =
-  try
-    let sinfo = Hashtbl.find use_section_table a in
-    let sname =
-      if init then sinfo.sec_name_init else sinfo.sec_name_uninit in
-    if not (String.contains sname '\"') then
-      Some sname
-    else begin
-      (* The following is Diab-specific... *)
-      let accmode = sinfo.sec_acc_mode in
-      let is_writable = String.contains accmode 'W'
-      and is_executable = String.contains accmode 'X' in
-      let stype =
-        match is_writable, is_executable with
-        | true, true -> 'm'                 (* text+data *)
-        | true, false -> 'd'                (* data *)
-        | false, true -> 'c'                (* text *)
-        | false, false -> 'r'               (* const *)
-      in Some(sprintf ".section\t%s,,%c" sname stype)
-    end
-  with Not_found -> None
+  C2Clight.process_pragma_hook := process_pragma

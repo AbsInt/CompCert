@@ -61,6 +61,7 @@ let preprocess ifile ofile =
 (* From preprocessed C to asm *)
 
 let compile_c_file sourcename ifile ofile =
+  Sections.initialize();
   (* Simplification options *)
   let simplifs =
     "becv" (* blocks, impure exprs, implicit casts, volatiles: mandatory *)
@@ -108,6 +109,7 @@ let compile_c_file sourcename ifile ofile =
 (* From Cminor to asm *)
 
 let compile_cminor_file ifile ofile =
+  Sections.initialize();
   let ic = open_in ifile in
   let lb = Lexing.from_channel ic in
   try
