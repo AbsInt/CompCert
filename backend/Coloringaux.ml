@@ -496,57 +496,76 @@ let simplify () =
   iterAdjacent decrementDegree n;
   n
 
-(* Briggs' conservative coalescing criterion *)
+(* Briggs's conservative coalescing criterion.  In the terminology of
+   Hailperin, "Comparing Conservative Coalescing Criteria",
+   TOPLAS 27(3) 2005, this is the full Briggs criterion, slightly
+   more powerful than the one in George and Appel's paper. *)
 
-let canConservativelyCoalesce u v =
+let canCoalesceBriggs u v =
   let seen = ref IntSet.empty in
   let k = num_available_registers.(u.regclass) in
   let c = ref 0 in
-  let consider n =
+  let consider other n =
     if not (IntSet.mem n.ident !seen) then begin
       seen := IntSet.add n.ident !seen;
-      if n.degree >= k then begin
+      (* if n interferes with both u and v, its degree will decrease by one
+         after coalescing *)
+      let degree_after_coalescing =
+        if interfere n other then n.degree - 1 else n.degree in
+      if degree_after_coalescing >= k then begin
         incr c;
         if !c >= k then raise Exit
       end
     end in
   try
-    iterAdjacent consider u;
-    iterAdjacent consider v;
+    iterAdjacent (consider v) u;
+    iterAdjacent (consider u) v;
     true
   with Exit ->
     false
 
-(*i 
-(* Yet another coalescing criterion: all neighbors of a node are also
-   neighbors of the other node, therefore coalescing the two nodes
-   doesn't increase the number of neighbors.  This one is not
-   conservative because it can force both nodes to be spilled while
-   originally only one would be spilled.
-*)
+(* George's conservative coalescing criterion: all high-degree neighbors
+   of [v] are neighbors of [u]. *)
 
-let allNeighbors u =
-  let seen = ref IntSet.empty in
-  iterAdjacent (fun n -> seen := IntSet.add n.ident !seen) u;
-  !seen
-
-let canCoalesceSubset u v =
-  let nu = allNeighbors u and nv = allNeighbors v in
-  IntSet.subset nu nv || IntSet.subset nv nu  
-*)
-
-(* The alternate criterion for precolored nodes *)
-
-let canCoalescePrecolored u v =
+let canCoalesceGeorge u v =
   let k = num_available_registers.(u.regclass) in
   let isOK t =
-    if t.degree < k || t.nstate = Colored || interfere t u
-    then ()
-    else raise Exit in
+    if t.nstate = Colored then
+      if u.nstate = Colored || interfere t u then () else raise Exit
+    else
+      if t.degree < k || interfere t u then () else raise Exit
+  in
   try
     iterAdjacent isOK v; true
   with Exit ->
     false
+
+(* The combined coalescing criterion.  [u] can be precolored, but
+   [v] is not.  According to George and Appel's paper:
+-  If [u] is precolored, use George's criterion.
+-  If [u] is not precolored, use Briggs's criterion.
+
+   As noted by Hailperin, for non-precolored nodes, George's criterion 
+   is incomparable with Briggs's: there are cases where G says yes
+   and B says no.  Typically, [u] is a long-lived variable with many 
+   interferences, and [v] is a short-lived temporary copy of [u]
+   that has no more interferences than [u].  Coalescing [u] and [v]
+   is "weakly safe" in Hailperin's terminology: [u] is no harder to color,
+   [u]'s neighbors are no harder to color either, but if we end up
+   spilling [u], we'll spill [v] as well.  However, if [v] has at most
+   one def and one use, CompCert generates equivalent code if
+   both [u] and [v] are spilled and if [u] is spilled but not [v],
+   so George's criterion is safe in this case.  
+*)
+
+let thresholdGeorge = 2.0               (* = 1 def + 1 use *)
+
+let canCoalesce u v =
+  if u.nstate = Colored
+  then canCoalesceGeorge u v
+  else canCoalesceBriggs u v
+       || (v.spillcost <= thresholdGeorge && canCoalesceGeorge u v)
+       || (u.spillcost <= thresholdGeorge && canCoalesceGeorge v u)
 
 (* Update worklists after a move was processed *)
 
@@ -591,9 +610,7 @@ let coalesce () =
     DLinkMove.insert m constrainedMoves;
     addWorkList u;
     addWorkList v
-  end else if (if u.nstate = Colored 
-               then canCoalescePrecolored u v
-               else canConservativelyCoalesce u v) then begin
+  end else if canCoalesce u v then begin
     DLinkMove.insert m coalescedMoves;
     combine u v;
     addWorkList u
