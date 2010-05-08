@@ -233,7 +233,7 @@ let is_builtin_function s =
   Str.string_match re_builtin_function (extern_atom s) 0
 
 let print_builtin_function oc s =
-  fprintf oc "%s begin %s\n" comment (extern_atom s);
+  fprintf oc "%s begin builtin %s\n" comment (extern_atom s);
   (* int args: GPR3, GPR4     float args: FPR1, FPR2, FPR3
      int res:  GPR3           float res:  FPR1
      Watch out for MacOSX/EABI incompatibility: functions that take
@@ -347,7 +347,7 @@ let print_builtin_function oc s =
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
   end;
-  fprintf oc "%s end %s\n" comment (extern_atom s)
+  fprintf oc "%s end builtin %s\n" comment (extern_atom s)
 
 (* Printing of instructions *)
 
@@ -405,6 +405,7 @@ let print_instruction oc labels = function
       fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
   | Pbtbl(r, tbl) ->
       let lbl = new_label() in
+      fprintf oc "%s begin pseudoinstr btbl(%a, %a)\n" comment ireg r label lbl;
       fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg r label_high lbl;
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
       fprintf oc "	mtctr	%a\n" ireg GPR12;
@@ -412,7 +413,8 @@ let print_instruction oc labels = function
       fprintf oc "%a:" label lbl;
       List.iter
         (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
-        tbl
+        tbl;
+      fprintf oc "%s end pseudoinstr btbl\n" comment
   | Pcmplw(r1, r2) ->
       fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
   | Pcmplwi(r1, c) ->
@@ -443,14 +445,17 @@ let print_instruction oc labels = function
   | Pfcmpu(r1, r2) ->
       fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
   | Pfcti(r1, r2) ->
+      fprintf oc "%s begin pseudoinstr %a = fcti(%a)\n" comment ireg r1 freg r2;
       fprintf oc "	fctiwz	%a, %a\n" freg FPR13 freg r2;
       fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
       fprintf oc "	lwz	%a, 4(%a)\n" ireg r1 ireg GPR1;
-      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1;
+      fprintf oc "%s end pseudoinstr fcti\n" comment
   | Pfctiu(r1, r2) ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       let lbl3 = new_label() in
+      fprintf oc "%s begin pseudoinstr %a = fctiu(%a)\n" comment ireg r1 freg r2;
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12  label_high lbl1;
       fprintf oc "	lfd	%a, %a(%a)\n" freg FPR13  label_low lbl1  ireg GPR12;
       fprintf oc "	fcmpu	%a, %a, %a\n" creg 7  freg r2  freg FPR13;
@@ -468,7 +473,8 @@ let print_instruction oc labels = function
       fprintf oc "%a:	addi	%a, %a, 8\n" label lbl3  ireg GPR1  ireg GPR1;
       section oc float_literal;
       fprintf oc "%a:	.long	0x41e00000, 0x00000000\n" label lbl1;
-      section oc text
+      section oc text;
+      fprintf oc "%s end pseudoinstr fctiu\n" comment
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfmadd(r1, r2, r3, r4) ->
@@ -487,6 +493,7 @@ let print_instruction oc labels = function
       fprintf oc "	fsub	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pictf(r1, r2) ->
       let lbl = new_label() in
+      fprintf oc "%s begin pseudoinstr %a = ictf(%a)\n" comment freg r1 ireg r2;
       fprintf oc "	addis	%a, 0, 0x4330\n" ireg GPR12;
       fprintf oc "	stwu	%a, -8(%a)\n" ireg GPR12  ireg GPR1;
       fprintf oc "	addis	%a, %a, 0x8000\n" ireg GPR12  ireg r2;
@@ -498,9 +505,11 @@ let print_instruction oc labels = function
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
       section oc float_literal;
       fprintf oc "%a:	.long	0x43300000, 0x80000000\n" label lbl;
-      section oc text
+      section oc text;
+      fprintf oc "%s end pseudoinstr ictf\n" comment
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
+      fprintf oc "%s begin pseudoinstr %a = iuctf(%a)\n" comment freg r1 ireg r2;
       fprintf oc "	addis	%a, 0, 0x4330\n" ireg GPR12;
       fprintf oc "	stwu	%a, -8(%a)\n" ireg GPR12  ireg GPR1;
       fprintf oc "	stw	%a, 4(%a)\n" ireg r2  ireg GPR1;
@@ -511,7 +520,8 @@ let print_instruction oc labels = function
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
       section oc float_literal;
       fprintf oc "%a:	.long	0x43300000, 0x00000000\n" label lbl;
-      section oc text
+      section oc text;
+      fprintf oc "%s end pseudoinstr ictf\n" comment
   | Plbz(r1, c, r2) ->
       fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2
   | Plbzx(r1, r2, r3) ->
