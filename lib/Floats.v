@@ -70,16 +70,14 @@ Axiom cmp_le_lt_eq:
 Axiom cmp_ge_gt_eq:
   forall f1 f2, cmp Cge f1 f2 = cmp Cgt f1 f2 || cmp Ceq f1 f2.
 
-Axiom bits_of_double_of_bits:
-  forall n, bits_of_double (double_of_bits n) = n.
 Axiom double_of_bits_of_double:
   forall f, double_of_bits (bits_of_double f) = f.
-Axiom bits_of_single_of_bits:
-  forall n, bits_of_single (single_of_bits n) = n.
 Axiom single_of_bits_of_single:
   forall f, single_of_bits (bits_of_single f) = singleoffloat f.
 
 Axiom bits_of_singleoffloat:
   forall f, bits_of_single (singleoffloat f) = bits_of_single f.
+Axiom singleoffloat_of_bits:
+  forall b, singleoffloat (single_of_bits b) = single_of_bits b.
 
 End Float.

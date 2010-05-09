@@ -442,8 +442,7 @@ Lemma decode_float32_cast:
   forall l,
   Float.singleoffloat (decode_float Mfloat32 l) = decode_float Mfloat32 l.
 Proof.
-  intros; unfold decode_float. rewrite <- Float.single_of_bits_of_single.
-  rewrite Float.bits_of_single_of_bits. auto.
+  intros; unfold decode_float. rewrite Float.singleoffloat_of_bits. auto.
 Qed.
 
 (** * Encoding and decoding values *)
