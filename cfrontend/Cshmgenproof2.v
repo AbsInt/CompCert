@@ -78,10 +78,8 @@ Proof.
   try (exists v; intuition; inversion VTRUE; simpl; auto; fail).
   exists Vtrue; split.
   eapply eval_Ebinop; eauto with cshm. 
-  inversion VTRUE; simpl. 
-  replace (Float.cmp Cne f0 Float.zero) with (negb (Float.cmp Ceq f0 Float.zero)).
-  rewrite Float.eq_zero_false. reflexivity. auto.
-  rewrite Float.cmp_ne_eq. auto.
+  inversion VTRUE; simpl.
+  rewrite Float.cmp_ne_eq. rewrite H1. auto.
   apply Vtrue_is_true.
 Qed.
 
@@ -98,10 +96,8 @@ Proof.
   try (exists v; intuition; inversion VFALSE; simpl; auto; fail).
   exists Vfalse; split.
   eapply eval_Ebinop; eauto with cshm. 
-  inversion VFALSE; simpl. 
-  replace (Float.cmp Cne Float.zero Float.zero) with (negb (Float.cmp Ceq Float.zero Float.zero)).
-  rewrite Float.eq_zero_true. reflexivity. 
-  rewrite Float.cmp_ne_eq. auto.
+  inversion VFALSE; simpl.
+  rewrite Float.cmp_ne_eq. rewrite H1. auto.
   apply Vfalse_is_false.
 Qed.
 

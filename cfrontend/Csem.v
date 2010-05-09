@@ -40,8 +40,9 @@ Inductive is_false: val -> type -> Prop :=
       is_false (Vint Int.zero) (Tint sz sg)
   | is_false_pointer: forall t,
       is_false (Vint Int.zero) (Tpointer t)
- | is_false_float: forall sz,
-      is_false (Vfloat Float.zero) (Tfloat sz).
+ | is_false_float: forall sz f,
+      Float.cmp Ceq f Float.zero = true ->
+      is_false (Vfloat f) (Tfloat sz).
 
 Inductive is_true: val -> type -> Prop :=
   | is_true_int_int: forall n sz sg,
@@ -55,7 +56,7 @@ Inductive is_true: val -> type -> Prop :=
   | is_true_pointer_pointer: forall b ofs t,
       is_true (Vptr b ofs) (Tpointer t)
  | is_true_float: forall f sz,
-      f <> Float.zero ->
+      Float.cmp Ceq f Float.zero = false ->
       is_true (Vfloat f) (Tfloat sz).
 
 Inductive bool_of_val : val -> type -> val -> Prop :=

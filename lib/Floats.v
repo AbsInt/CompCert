@@ -70,9 +70,6 @@ Axiom cmp_le_lt_eq:
 Axiom cmp_ge_gt_eq:
   forall f1 f2, cmp Cge f1 f2 = cmp Cgt f1 f2 || cmp Ceq f1 f2.
 
-Axiom eq_zero_true: cmp Ceq zero zero = true.
-Axiom eq_zero_false: forall f, f <> zero -> cmp Ceq f zero = false.
-
 Axiom bits_of_double_of_bits:
   forall n, bits_of_double (double_of_bits n) = n.
 Axiom double_of_bits_of_double:
