@@ -18,7 +18,6 @@
 open Datatypes
 open BinPos
 open BinInt
-open Integers
 
 (* Integers *)
 
@@ -32,7 +31,19 @@ let camlint_of_z = function
   | Zpos p -> camlint_of_positive p
   | Zneg p -> Int32.neg (camlint_of_positive p)
 
-let camlint_of_coqint : Int.int -> int32 = camlint_of_z
+let camlint_of_coqint : Integers.Int.int -> int32 = camlint_of_z
+
+let rec camlint64_of_positive = function
+  | Coq_xI p -> Int64.add (Int64.shift_left (camlint64_of_positive p) 1) 1L
+  | Coq_xO p -> Int64.shift_left (camlint64_of_positive p) 1
+  | Coq_xH -> 1L
+
+let camlint64_of_z = function
+  | Z0 -> 0L
+  | Zpos p -> camlint64_of_positive p
+  | Zneg p -> Int64.neg (camlint64_of_positive p)
+
+let camlint64_of_coqint : Integers.Int64.int -> int64 = camlint64_of_z
 
 let rec camlint_of_nat = function
   | O -> 0
@@ -54,9 +65,25 @@ let z_of_camlint n =
   if n > 0l then Zpos (positive_of_camlint n)
   else Zneg (positive_of_camlint (Int32.neg n))
 
-let coqint_of_camlint (n: int32) : Int.int = 
+let coqint_of_camlint (n: int32) : Integers.Int.int = 
   (* Interpret n as unsigned so that resulting Z is in range *)
   if n = 0l then Z0 else Zpos (positive_of_camlint n)
+
+let rec positive_of_camlint64 n =
+  if n = 0L then assert false else
+  if n = 1L then Coq_xH else
+  if Int64.logand n 1L = 0L
+  then Coq_xO (positive_of_camlint64 (Int64.shift_right_logical n 1))
+  else Coq_xI (positive_of_camlint64 (Int64.shift_right_logical n 1))
+
+let z_of_camlint64 n =
+  if n = 0L then Z0 else
+  if n > 0L then Zpos (positive_of_camlint64 n)
+  else Zneg (positive_of_camlint64 (Int64.neg n))
+
+let coqint_of_camlint64 (n: int64) : Integers.Int64.int = 
+  (* Interpret n as unsigned so that resulting Z is in range *)
+  if n = 0L then Z0 else Zpos (positive_of_camlint64 n)
 
 (* Atoms (positive integers representing strings) *)
 

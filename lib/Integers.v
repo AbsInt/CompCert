@@ -2770,7 +2770,7 @@ Qed.
 
 End Make.
 
-(** * Specialization to 32-bit integers and to bytes. *)
+(** * Specialization to integers of size 8, 32, and 64 bits *)
 
 Module Wordsize_32.
   Definition wordsize := 32%nat.
@@ -2797,3 +2797,15 @@ End Wordsize_8.
 Module Byte := Integers.Make(Wordsize_8).
 
 Notation byte := Byte.int.
+
+Module Wordsize_64.
+  Definition wordsize := 64%nat.
+  Remark wordsize_not_zero: wordsize <> 0%nat.
+  Proof. unfold wordsize; congruence. Qed.
+End Wordsize_64.
+
+Module Int64 := Make(Wordsize_64).
+
+Notation int64 := Int64.int.
+
+

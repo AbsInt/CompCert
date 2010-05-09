@@ -47,6 +47,12 @@ Parameter cmp: comparison -> float -> float -> bool.
 
 Axiom eq_dec: forall (f1 f2: float), {f1 = f2} + {f1 <> f2}.
 
+Parameter bits_of_double: float -> int64.
+Parameter double_of_bits: int64 -> float.
+
+Parameter bits_of_single: float -> int.
+Parameter single_of_bits: int -> float.
+
 (** Below are the only properties of floating-point arithmetic that we
   rely on in the compiler proof. *)
 
@@ -66,5 +72,17 @@ Axiom cmp_ge_gt_eq:
 
 Axiom eq_zero_true: cmp Ceq zero zero = true.
 Axiom eq_zero_false: forall f, f <> zero -> cmp Ceq f zero = false.
+
+Axiom bits_of_double_of_bits:
+  forall n, bits_of_double (double_of_bits n) = n.
+Axiom double_of_bits_of_double:
+  forall f, double_of_bits (bits_of_double f) = f.
+Axiom bits_of_single_of_bits:
+  forall n, bits_of_single (single_of_bits n) = n.
+Axiom single_of_bits_of_single:
+  forall f, single_of_bits (bits_of_single f) = singleoffloat f.
+
+Axiom bits_of_singleoffloat:
+  forall f, bits_of_single (singleoffloat f) = bits_of_single f.
 
 End Float.

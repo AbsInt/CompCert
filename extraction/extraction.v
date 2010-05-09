@@ -42,11 +42,13 @@ Extract Constant Floats.Float.mul => "( *. )".
 Extract Constant Floats.Float.div => "( /. )".
 Extract Constant Floats.Float.cmp => "Floataux.cmp".
 Extract Constant Floats.Float.eq_dec => "fun (x: float) (y: float) -> x = y".
+Extract Constant Floats.Float.bits_of_double => "Floataux.bits_of_double".
+Extract Constant Floats.Float.double_of_bits => "Floataux.double_of_bits".
+Extract Constant Floats.Float.bits_of_single => "Floataux.bits_of_single".
+Extract Constant Floats.Float.single_of_bits => "Floataux.single_of_bits".
 
 (* Memdata *)
 Extract Constant Memdata.big_endian => "Memdataaux.big_endian".
-Extract Constant Memdata.encode_float => "Memdataaux.encode_float".
-Extract Constant Memdata.decode_float => "Memdataaux.decode_float".
 
 (* Memory - work around an extraction bug. *)
 Extraction NoInline Memory.Mem.valid_pointer.

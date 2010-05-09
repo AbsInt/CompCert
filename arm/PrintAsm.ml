@@ -14,7 +14,6 @@
 
 open Printf
 open Datatypes
-open Integers
 open Camlcoq
 open AST
 open Asm
@@ -119,7 +118,8 @@ let label_float f =
     max_pos_constants := min !max_pos_constants (!currpos + 1024);
     lbl'
 
-let symbol_labels = (Hashtbl.create 39 : (ident * Int.int, int) Hashtbl.t)
+let symbol_labels =
+  (Hashtbl.create 39 : (ident * Integers.Int.int, int) Hashtbl.t)
 
 let label_symbol id ofs =
   try

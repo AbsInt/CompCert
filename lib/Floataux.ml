@@ -11,7 +11,6 @@
 (* *********************************************************************)
 
 open Camlcoq
-open Integers
 
 let singleoffloat f =
   Int32.float_of_bits (Int32.bits_of_float f)
@@ -31,9 +30,15 @@ let floatofintu i =
 
 let cmp c (x: float) (y: float) =
   match c with
-  | Ceq -> x = y
-  | Cne -> x <> y
-  | Clt -> x < y
-  | Cle -> x <= y
-  | Cgt -> x > y
-  | Cge -> x >= y
+  | Integers.Ceq -> x = y
+  | Integers.Cne -> x <> y
+  | Integers.Clt -> x < y
+  | Integers.Cle -> x <= y
+  | Integers.Cgt -> x > y
+  | Integers.Cge -> x >= y
+
+let bits_of_single f = coqint_of_camlint (Int32.bits_of_float f)
+let single_of_bits f = Int32.float_of_bits (camlint_of_coqint f)
+
+let bits_of_double f = coqint_of_camlint64 (Int64.bits_of_float f)
+let double_of_bits f = Int64.float_of_bits (camlint64_of_coqint f)
