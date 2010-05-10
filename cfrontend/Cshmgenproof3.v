@@ -1561,6 +1561,7 @@ Proof.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   econstructor; split.
   apply plus_one. constructor. eauto. 
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   econstructor; eauto.
 
 (* returnstate 0 *)

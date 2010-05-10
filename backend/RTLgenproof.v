@@ -1320,6 +1320,7 @@ Proof.
   monadInv TF. 
   econstructor; split.
   left; apply plus_one. eapply exec_function_external; eauto. 
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   constructor; auto.
 
   (* return *)

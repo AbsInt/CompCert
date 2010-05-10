@@ -45,11 +45,21 @@ Axiom traceinf_extensionality:
   the world to [w]. *)
 
 Inductive world: Type :=
-  World: (ident -> list eventval -> option (eventval * world)) -> world.
+  World (io: ident -> list eventval -> option (eventval * world))
+        (vload: memory_chunk -> ident -> int -> option (eventval * world))
+        (vstore: memory_chunk -> ident -> int -> eventval -> option world).
 
-Definition nextworld (w: world) (evname: ident) (evargs: list eventval) :
+Definition nextworld_io (w: world) (evname: ident) (evargs: list eventval) :
                      option (eventval * world) :=
-  match w with World f => f evname evargs end.
+  match w with World io vl vs => io evname evargs end.
+
+Definition nextworld_vload (w: world) (chunk: memory_chunk) (id: ident) (ofs: int) :
+                     option (eventval * world) :=
+  match w with World io vl vs => vl chunk id ofs end.
+
+Definition nextworld_vstore (w: world) (chunk: memory_chunk) (id: ident) (ofs: int) (v: eventval):
+                     option world :=
+  match w with World io vl vs => vs chunk id ofs v end.
 
 (** A trace is possible in a given world if all events correspond
   to non-stuck external calls according to the given world.
@@ -63,12 +73,14 @@ Definition nextworld (w: world) (evname: ident) (evargs: list eventval) :
 
 Inductive possible_event: world -> event -> world -> Prop :=
   | possible_event_syscall: forall w1 evname evargs evres w2,
-      nextworld w1 evname evargs = Some (evres, w2) ->
+      nextworld_io w1 evname evargs = Some (evres, w2) ->
       possible_event w1 (Event_syscall evname evargs evres) w2
-  | possible_event_load: forall w label,
-      possible_event w (Event_load label) w
-  | possible_event_store: forall w label,
-      possible_event w (Event_store label) w.
+  | possible_event_vload: forall w1 chunk id ofs evres w2,
+      nextworld_vload w1 chunk id ofs = Some (evres, w2) ->
+      possible_event w1 (Event_vload chunk id ofs evres) w2
+  | possible_event_vstore: forall w1 chunk id ofs evarg w2,
+      nextworld_vstore w1 chunk id ofs evarg = Some w2 ->
+      possible_event w1 (Event_vstore chunk id ofs evarg) w2.
 
 Inductive possible_trace: world -> trace -> world -> Prop :=
   | possible_trace_nil: forall w,
@@ -213,9 +225,9 @@ Proof.
   destruct t2; simpl; auto.
   destruct t2; simpl. destruct ev; auto. inv H1.
   inv H; inv H5; auto; intros.
-  subst. rewrite H in H1; inv H1. split; eauto.
-  eauto.
-  eauto.
+  destruct H2. subst. rewrite H in H1; inv H1. split; eauto.
+  destruct H2. destruct H3. subst. rewrite H in H1; inv H1. split; eauto.
+  destruct H2. destruct H3. destruct H4. subst. rewrite H in H1; inv H1. eauto.
 Qed.
 
 Lemma step_deterministic:

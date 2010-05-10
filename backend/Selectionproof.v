@@ -469,6 +469,10 @@ Proof.
   econstructor. simpl. rewrite call_cont_commut. rewrite find_label_commut.
   rewrite H. simpl. reflexivity. 
   constructor; auto.
+  (* external call *)
+  econstructor; split.
+  econstructor. eapply external_call_symbols_preserved; eauto. exact symbols_preserved. 
+  constructor; auto.
 Qed.
 
 Lemma sel_initial_states:

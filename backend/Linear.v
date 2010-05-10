@@ -314,7 +314,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f (Vptr stk Int.zero) f.(fn_code) (call_regs rs) m')
   | exec_function_external:
       forall s ef args res rs1 rs2 m t m',
-      external_call ef args m t res m' ->
+      external_call ef (Genv.find_symbol ge) args m t res m' ->
       args = List.map rs1 (Conventions.loc_arguments ef.(ef_sig)) ->
       rs2 = Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs1 ->
       step (Callstate s (External ef) rs1 m)

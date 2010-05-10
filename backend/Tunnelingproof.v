@@ -335,6 +335,7 @@ Proof.
   (* external function *)
   simpl. left; econstructor; split.
   eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   simpl. econstructor; eauto. 
   (* return *)
   inv H3. inv H1.

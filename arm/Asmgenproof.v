@@ -1130,14 +1130,25 @@ Proof.
   econstructor; eauto with coqlib.
 Qed.
 
-Lemma exec_function_external_prop:  forall (s : list stackframe) (fb : block) (ms : Mach.regset)         (m : mem) (t0 : trace) (ms' : RegEq.t -> val)         (ef : external_function) (args : list val) (res : val) (m': mem),  Genv.find_funct_ptr ge fb = Some (External ef) ->  external_call ef args m t0 res m' ->  Machconcr.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->  ms' = Regmap.set (Conventions.loc_result (ef_sig ef)) res ms ->  exec_instr_prop (Machconcr.Callstate s fb ms m)               t0 (Machconcr.Returnstate s ms' m').Proof.
+Lemma exec_function_external_prop:
+  forall (s : list stackframe) (fb : block) (ms : Mach.regset)
+         (m : mem) (t0 : trace) (ms' : RegEq.t -> val)
+         (ef : external_function) (args : list val) (res : val) (m': mem),
+  Genv.find_funct_ptr ge fb = Some (External ef) ->
+  external_call ef (Genv.find_symbol ge) args m t0 res m' ->
+  Machconcr.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->
+  ms' = Regmap.set (Conventions.loc_result (ef_sig ef)) res ms ->
+  exec_instr_prop (Machconcr.Callstate s fb ms m)
+               t0 (Machconcr.Returnstate s ms' m').
+Proof.
   intros; red; intros; inv MS.
   exploit functions_translated; eauto.
   intros [tf [A B]]. simpl in B. inv B. 
   left; exists (State (rs#(loc_external_result (ef_sig ef)) <- res #PC <- (rs IR14))
                 m'); split.
-  apply plus_one. eapply exec_step_external; eauto. 
-  eauto. eapply extcall_arguments_match; eauto. 
+  apply plus_one. eapply exec_step_external; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply extcall_arguments_match; eauto. 
   econstructor; eauto. 
   unfold loc_external_result. auto with ppcgen.
 Qed.

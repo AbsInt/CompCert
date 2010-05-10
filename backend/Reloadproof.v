@@ -1310,6 +1310,7 @@ Proof.
   intros [res' [tm' [A [B [C D]]]]]. 
   left; econstructor; split.
   apply plus_one. eapply exec_function_external; eauto. 
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   econstructor; eauto.
   simpl. rewrite Locmap.gss. auto.
   intros. rewrite Locmap.gso. auto. 

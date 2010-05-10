@@ -496,7 +496,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k (Vptr sp Int.zero) e m')
   | step_external_function: forall ef vargs k m t vres m',
-      external_call ef vargs m t vres m' ->
+      external_call ef (Genv.find_symbol ge) vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
          t (Returnstate vres k m')        
 
@@ -595,7 +595,7 @@ Inductive eval_funcall:
       eval_funcall m (Internal f) vargs t m3 vres
   | eval_funcall_external:
       forall ef m args t res m',
-      external_call ef args m t res m' ->
+      external_call ef (Genv.find_symbol ge) args m t res m' ->
       eval_funcall m (External ef) args t m' res
 
 (** Execution of a statement: [exec_stmt ge f sp e m s t e' m' out]

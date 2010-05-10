@@ -717,6 +717,7 @@ Proof.
   injection H7; intro EQ; inv EQ.
   econstructor; split.
   eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   eapply match_states_return; eauto.
 
   (* return *)

@@ -71,7 +71,9 @@ Record t: Type := mkgenv {
   genv_nextvar_pos: genv_nextvar > 0;
   genv_symb_range: forall id b, PTree.get id genv_symb = Some b -> b <> 0 /\ genv_nextfun < b /\ b < genv_nextvar;
   genv_funs_range: forall b f, ZMap.get b genv_funs = Some f -> genv_nextfun < b < 0;
-  genv_vars_range: forall b v, ZMap.get b genv_vars = Some v -> 0 < b < genv_nextvar
+  genv_vars_range: forall b v, ZMap.get b genv_vars = Some v -> 0 < b < genv_nextvar;
+  genv_vars_inj: forall id1 id2 b, 
+    PTree.get id1 genv_symb = Some b -> PTree.get id2 genv_symb = Some b -> id1 = id2
 }.
 
 (** ** Lookup functions *)
@@ -111,7 +113,7 @@ Program Definition add_function (ge: t) (idf: ident * F) : t :=
     ge.(genv_vars)
     (ge.(genv_nextfun) - 1)
     ge.(genv_nextvar)
-    _ _ _ _ _.
+    _ _ _ _ _ _.
 Next Obligation.
   destruct ge; simpl; omega.
 Qed.
@@ -131,6 +133,15 @@ Qed.
 Next Obligation.
   destruct ge; eauto. 
 Qed.
+Next Obligation.
+  destruct ge; simpl in *. 
+  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0. 
+  destruct (peq id1 i); destruct (peq id2 i).
+  congruence.
+  exploit genv_symb_range0; eauto. intros [A B]. inv H. omegaContradiction.
+  exploit genv_symb_range0; eauto. intros [A B]. inv H0. omegaContradiction.
+  eauto.
+Qed.
 
 Program Definition add_variable (ge: t) (idv: ident * list init_data * V) : t :=
   @mkgenv
@@ -139,7 +150,7 @@ Program Definition add_variable (ge: t) (idv: ident * list init_data * V) : t :=
     (ZMap.set ge.(genv_nextvar) (Some idv#2) ge.(genv_vars))
     ge.(genv_nextfun)
     (ge.(genv_nextvar) + 1)
-    _ _ _ _ _.
+    _ _ _ _ _ _.
 Next Obligation.
   destruct ge; auto.
 Qed.
@@ -159,9 +170,18 @@ Next Obligation.
   destruct (ZIndexed.eq b genv_nextvar0). subst; omega. 
   exploit genv_vars_range0; eauto. omega.
 Qed.
+Next Obligation.
+  destruct ge; simpl in *. 
+  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0. 
+  destruct (peq id1 i); destruct (peq id2 i).
+  congruence.
+  exploit genv_symb_range0; eauto. intros [A B]. inv H. omegaContradiction.
+  exploit genv_symb_range0; eauto. intros [A B]. inv H0. omegaContradiction.
+  eauto.
+Qed.
 
 Program Definition empty_genv : t :=
-  @mkgenv (PTree.empty block) (ZMap.init None) (ZMap.init None) (-1) 1 _ _ _ _ _.
+  @mkgenv (PTree.empty block) (ZMap.init None) (ZMap.init None) (-1) 1 _ _ _ _ _ _.
 Next Obligation.
   omega.
 Qed.
@@ -176,6 +196,9 @@ Next Obligation.
 Qed.
 Next Obligation.
   rewrite ZMap.gi in H. discriminate.
+Qed.
+Next Obligation.
+  rewrite PTree.gempty in H. discriminate.
 Qed.
 
 Definition add_functions (ge: t) (fl: list (ident * F)) : t :=
@@ -435,38 +458,13 @@ Proof.
 Qed.
 
 Theorem global_addresses_distinct:
-  forall p id1 id2 b1 b2,
-  id1<>id2 ->
-  find_symbol (globalenv p) id1 = Some b1 ->
-  find_symbol (globalenv p) id2 = Some b2 ->
-  b1<>b2.
+  forall ge id1 id2 b1 b2,
+  id1 <> id2 ->
+  find_symbol ge id1 = Some b1 ->
+  find_symbol ge id2 = Some b2 ->
+  b1 <> b2.
 Proof.
-  intros until b2; intro DIFF. 
-  
-  set (P := fun ge => find_symbol ge id1 = Some b1 -> find_symbol ge id2 = Some b2 -> b1 <> b2).
-
-  assert (forall fl ge, P ge -> P (add_functions ge fl)).
-  induction fl; intros; simpl. auto. 
-  apply IHfl. red. unfold find_symbol; simpl. 
-  repeat rewrite PTree.gsspec. 
-  fold ident. destruct (peq id1 a#1); destruct (peq id2 a#1).
-  congruence.
-  intros. inversion H0. exploit genv_symb_range; eauto. unfold block; omega.
-  intros. inversion H1. exploit genv_symb_range; eauto. unfold block; omega.
-  auto. 
-
-  assert (forall vl ge, P ge -> P (add_variables ge vl)).
-  induction vl; intros; simpl. auto. 
-  apply IHvl. red. unfold find_symbol; simpl. 
-  repeat rewrite PTree.gsspec. 
-  fold ident. destruct (peq id1 a#1#1); destruct (peq id2 a#1#1).
-  congruence.
-  intros. inversion H1. exploit genv_symb_range; eauto. unfold block; omega.
-  intros. inversion H2. exploit genv_symb_range; eauto. unfold block; omega.
-  auto.
-
-  change (P (globalenv p)). unfold globalenv. apply H0. apply H. 
-  red; unfold find_symbol; simpl; intros. rewrite PTree.gempty in H1. congruence.
+  intros. red; intros; subst. elim H. destruct ge. eauto. 
 Qed.
 
 (** * Construction of the initial memory state *)

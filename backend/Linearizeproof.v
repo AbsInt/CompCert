@@ -684,6 +684,7 @@ Proof.
   (* external function *)
   monadInv H6. econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   econstructor; eauto.
 
   (* return *)

@@ -285,7 +285,7 @@ Proof.
   apply wt_empty_frame.
 
   econstructor; eauto. apply wt_setreg; auto.
-  generalize (external_call_well_typed _ _ _ _ _ _ H).  
+  generalize (external_call_well_typed _ _ _ _ _ _ _ H).  
   unfold proj_sig_res, Conventions.loc_result.
   destruct (sig_res (ef_sig ef)).
   destruct t0; simpl; auto.

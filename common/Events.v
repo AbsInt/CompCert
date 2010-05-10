@@ -29,28 +29,38 @@ Require Import Memory.
   input/output events, which represent the actions of the program
   that the external world can observe.  CompCert leaves much flexibility as to
   the exact content of events: the only requirement is that they
-  do not expose pointer values nor memory states, because these
+  do not expose memory states nor pointer values 
+  (other than pointers to global variables), because these
   are not preserved literally during compilation.  For concreteness,
   we use the following type for events.  Each event represents either:
 
 - A system call (e.g. an input/output operation), recording the
-  name of the system call, its int-or-float parameters,
-  and its int-or-float result.
+  name of the system call, its parameters, and its result.
 
-- A volatile load from a memory location, recording a label
-  associated with the read (e.g. a global variable name or a source code position).
+- A volatile load from a global memory location, recording the chunk
+  and address being read and the value just read. 
 
-- A volatile store to a memory location, also recording a label.
+- A volatile store to a global memory location, recording the chunk
+  and address being written and the value stored there. 
+
+  The values attached to these events are of the following form.
+  As mentioned above, we do not expose pointer values directly.
+  Pointers relative to a global variable are shown with the name
+  of the variable instead of the block identifier.
+  Pointers within a dynamically-allocated block are collapsed
+  to the [EVptr_local] constant.
 *)
 
 Inductive eventval: Type :=
   | EVint: int -> eventval
-  | EVfloat: float -> eventval.
+  | EVfloat: float -> eventval
+  | EVptr_global: ident -> int -> eventval
+  | EVptr_local: eventval.
 
 Inductive event: Type :=
   | Event_syscall: ident -> list eventval -> eventval -> event
-  | Event_load: ident -> event
-  | Event_store: ident -> event.
+  | Event_vload: memory_chunk -> ident -> int -> eventval -> event
+  | Event_vstore: memory_chunk -> ident -> int -> eventval -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -236,6 +246,107 @@ Transparent Eappinf.
   simpl. f_equal. apply IHt. 
 Qed.
 
+(** * Relating values and event values *)
+
+Section EVENTVAL.
+
+(** Parameter to translate between global variable names and their block identifiers. *)
+Variable symb: ident -> option block.
+
+(** Translation from a value to an event value. *)
+
+Inductive eventval_of_val: val -> eventval -> Prop :=
+  | evofv_int: forall i,
+      eventval_of_val (Vint i) (EVint i)
+  | evofv_float: forall f,
+      eventval_of_val (Vfloat f) (EVfloat f)
+  | evofv_ptr_global: forall id b ofs,
+      symb id = Some b ->
+      eventval_of_val (Vptr b ofs) (EVptr_global id ofs)
+  | evofv_ptr_local: forall b ofs,
+      (forall id, symb id <> Some b) ->
+      eventval_of_val (Vptr b ofs) EVptr_local.
+
+(** Translation from an event value to a value.  To preserve determinism,
+  the translation is undefined if the event value is [EVptr_local]. *)
+
+Inductive val_of_eventval: eventval -> typ -> val -> Prop :=
+  | voffv_int: forall i,
+      val_of_eventval (EVint i) Tint (Vint i)
+  | voffv_float: forall f,
+      val_of_eventval (EVfloat f) Tfloat (Vfloat f)
+  | voffv_ptr_global: forall id b ofs,
+      symb id = Some b ->
+      val_of_eventval (EVptr_global id ofs) Tint (Vptr b ofs).
+
+(** Some properties of these translation predicates. *)
+
+Lemma val_of_eventval_type:
+  forall ev ty v,
+  val_of_eventval ev ty v -> Val.has_type v ty.
+Proof.
+  intros. inv H; constructor.
+Qed.
+
+Lemma eventval_of_val_lessdef:
+  forall v1 v2 ev,
+  eventval_of_val v1 ev -> Val.lessdef v1 v2 -> eventval_of_val v2 ev.
+Proof.
+  intros. inv H; inv H0; constructor; auto.
+Qed.
+
+Variable f: block -> option (block * Z).
+
+Definition meminj_preserves_globals : Prop :=
+     (forall id b, symb id = Some b -> f b = Some(b, 0))
+  /\ (forall id b1 b2 delta, symb id = Some b2 -> f b1 = Some(b2, delta) -> b2 = b1).
+
+Lemma eventval_of_val_inject:
+  forall v1 v2 ev,
+  meminj_preserves_globals ->
+  eventval_of_val v1 ev -> val_inject f v1 v2 -> eventval_of_val v2 ev.
+Proof.
+  intros. destruct H. inv H0; inv H1.
+  constructor. constructor. 
+  exploit H; eauto. intro EQ. rewrite H5 in EQ; inv EQ.
+  rewrite Int.add_zero. constructor; auto.
+  constructor. intros; red; intros. 
+  exploit H2; eauto. intro EQ. elim (H3 id). congruence.
+Qed.
+
+Lemma val_of_eventval_inject:
+  forall ev ty v,
+  meminj_preserves_globals ->
+  val_of_eventval ev ty v -> val_inject f v v.
+Proof.
+  intros. destruct H. inv H0. 
+  constructor. constructor.
+  apply val_inject_ptr with 0. eauto. rewrite Int.add_zero; auto.
+Qed.
+
+Definition symbols_injective: Prop :=
+  forall id1 id2 b, symb id1 = Some b -> symb id2 = Some b -> id1 = id2.
+
+Remark eventval_of_val_determ:
+  forall v ev1 ev2,
+  symbols_injective ->
+  eventval_of_val v ev1 -> eventval_of_val v ev2 -> ev1 = ev2.
+Proof.
+  intros. inv H0; inv H1; auto.
+  exploit (H id id0); eauto. congruence.
+  elim (H5 _ H2).
+  elim (H2 _ H5).
+Qed.
+
+Remark val_of_eventval_determ:
+  forall ev ty v1 v2,
+  val_of_eventval ev ty v1 -> val_of_eventval ev ty v2 -> v1 = v2.
+Proof.
+  intros. inv H; inv H0; auto. congruence.
+Qed.
+
+End EVENTVAL.
+
 (** * Semantics of external functions *)
 
 (** Each external function is of one of the following kinds: *)
@@ -245,15 +356,20 @@ Inductive extfun_kind: signature -> Type :=
      (** A system call.  Takes integer-or-float arguments, produces a
          result that is an integer or a float, does not modify
          the memory, and produces an [Event_syscall] event in the trace. *)
-  | EF_load (label: ident) (chunk: memory_chunk): extfun_kind (mksignature (Tint :: nil) (Some (type_of_chunk chunk)))
+  | EF_vload (chunk: memory_chunk): extfun_kind (mksignature (Tint :: nil) (Some (type_of_chunk chunk)))
      (** A volatile read operation.  Reads and returns the given memory
-         chunk from the address given as first argument.
-         Produces an [Event_load] event containing the given label. *)
-  | EF_store (label: ident) (chunk: memory_chunk): extfun_kind (mksignature (Tint :: type_of_chunk chunk :: nil) None)
+         chunk from the address given as first argument.  Since this is
+         a volatile access, the contents of this address may have changed
+         asynchronously since the last write we did at this address.
+         To account for this fact, we first update the given address
+         with a value that is provided by the outside world through
+         the trace of events.
+         Produces an [Event_load] event. *)
+  | EF_vstore (chunk: memory_chunk): extfun_kind (mksignature (Tint :: type_of_chunk chunk :: nil) None)
      (** A volatile store operation.  Store the value given as second
          argument at the address given as first argument, using the
          given memory chunk.  
-         Produces an [Event_store] event containing the given label. *)
+         Produces an [Event_store] event. *)
   | EF_malloc: extfun_kind (mksignature (Tint :: nil) (Some Tint))
      (** Dynamic memory allocation.  Takes the requested size in bytes
          as argument; returns a pointer to a fresh block of the given size.
@@ -268,14 +384,18 @@ Parameter classify_external_function:
   forall (ef: external_function), extfun_kind (ef.(ef_sig)).
 
 (** For each external function, its behavior is defined by a predicate relating:
+- the mapping from global variables to blocks
 - the values of the arguments passed to this function
 - the memory state before the call
 - the result value of the call
 - the memory state after the call
 - the trace generated by the call (can be empty).
-
-We now specify the expected properties of this predicate.
 *)
+
+Definition extcall_sem : Type :=
+  (ident -> option block) -> list val -> mem -> trace -> val -> mem -> Prop.
+
+(** We now specify the expected properties of this predicate. *)
 
 Definition mem_unchanged_on (P: block -> Z -> Prop) (m_before m_after: mem): Prop :=
   (forall b ofs p,
@@ -304,52 +424,52 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
 Fixpoint matching_traces (t1 t2: trace) {struct t1} : Prop :=
   match t1, t2 with
   | Event_syscall name1 args1 res1 :: t1', Event_syscall name2 args2 res2 :: t2' =>
-      name1 = name2 -> args1 = args2 -> res1 = res2 /\ matching_traces t1' t2'
-  | Event_load name1 :: t1', Event_load name2 :: t2' =>
-      name1 = name2 -> matching_traces t1' t2'
-  | Event_store name1 :: t1', Event_store name2 :: t2' =>
-      name1 = name2 -> matching_traces t1' t2'
+      name1 = name2 /\ args1 = args2 -> res1 = res2 /\ matching_traces t1' t2'
+  | Event_vload chunk1 id1 ofs1 res1 :: t1', Event_vload chunk2 id2 ofs2 res2 :: t2' =>
+      chunk1 = chunk2 /\ id1 = id2 /\ ofs1 = ofs2 -> res1 = res2 /\ matching_traces t1' t2'
+  | Event_vstore chunk1 id1 ofs1 arg1 :: t1', Event_vstore chunk2 id2 ofs2 arg2 :: t2' =>
+      chunk1 = chunk2 /\ id1 = id2 /\ ofs1 = ofs2 /\ arg1 = arg2 -> matching_traces t1' t2'
   | _, _ =>
       True
   end.
 
-Record extcall_properties (sem: list val -> mem -> trace -> val -> mem -> Prop)
+Record extcall_properties (sem: extcall_sem)
                           (sg: signature) : Prop := mk_extcall_properties {
 
 (** The return value of an external call must agree with its signature. *)
   ec_well_typed:
-    forall vargs m1 t vres m2,
-    sem vargs m1 t vres m2 ->
+    forall symb vargs m1 t vres m2,
+    sem symb vargs m1 t vres m2 ->
     Val.has_type vres (proj_sig_res sg);
 
 (** The number of arguments of an external call must agree with its signature. *)
   ec_arity:
-    forall vargs m1 t vres m2,
-    sem vargs m1 t vres m2 ->
+    forall symb vargs m1 t vres m2,
+    sem symb vargs m1 t vres m2 ->
     List.length vargs = List.length sg.(sig_args);
 
 (** External calls cannot invalidate memory blocks.  (Remember that
   freeing a block does not invalidate its block identifier.) *)
   ec_valid_block:
-    forall vargs m1 t vres m2 b,
-    sem vargs m1 t vres m2 ->
+    forall symb vargs m1 t vres m2 b,
+    sem symb vargs m1 t vres m2 ->
     Mem.valid_block m1 b -> Mem.valid_block m2 b;
 
 (** External calls preserve the bounds of valid blocks. *)
   ec_bounds:
-    forall vargs m1 t vres m2 b,
-    sem vargs m1 t vres m2 ->
+    forall symb vargs m1 t vres m2 b,
+    sem symb vargs m1 t vres m2 ->
     Mem.valid_block m1 b -> Mem.bounds m2 b = Mem.bounds m1 b;
 
 (** External calls must commute with memory extensions, in the
   following sense. *)
   ec_mem_extends:
-    forall vargs m1 t vres m2 m1' vargs',
-    sem vargs m1 t vres m2 ->
+    forall symb vargs m1 t vres m2 m1' vargs',
+    sem symb vargs m1 t vres m2 ->
     Mem.extends m1 m1' ->
     Val.lessdef_list vargs vargs' ->
     exists vres', exists m2',
-       sem vargs' m1' t vres' m2'
+       sem symb vargs' m1' t vres' m2'
     /\ Val.lessdef vres vres'
     /\ Mem.extends m2 m2'
     /\ mem_unchanged_on (loc_out_of_bounds m1) m1' m2';
@@ -357,12 +477,13 @@ Record extcall_properties (sem: list val -> mem -> trace -> val -> mem -> Prop)
 (** External calls must commute with memory injections,
   in the following sense. *)
   ec_mem_inject:
-    forall vargs m1 t vres m2 f m1' vargs',
-    sem vargs m1 t vres m2 ->
+    forall symb vargs m1 t vres m2 f m1' vargs',
+    meminj_preserves_globals symb f ->
+    sem symb vargs m1 t vres m2 ->
     Mem.inject f m1 m1' ->
     val_list_inject f vargs vargs' ->
     exists f', exists vres', exists m2',
-       sem vargs' m1' t vres' m2'
+       sem symb vargs' m1' t vres' m2'
     /\ val_inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ mem_unchanged_on (loc_unmapped f) m1 m2
@@ -374,64 +495,111 @@ Record extcall_properties (sem: list val -> mem -> trace -> val -> mem -> Prop)
   if the observable traces match, the return states must be
   identical. *)
   ec_determ:
-    forall vargs m t1 vres1 m1 t2 vres2 m2,
-    sem vargs m t1 vres1 m1 -> sem vargs m t2 vres2 m2 ->
+    forall symb vargs m t1 vres1 m1 t2 vres2 m2,
+    symbols_injective symb ->
+    sem symb vargs m t1 vres1 m1 -> sem symb vargs m t2 vres2 m2 ->
     matching_traces t1 t2 -> t1 = t2 /\ vres1 = vres2 /\ m1 = m2
 }.
 
 (** ** Semantics of volatile loads *)
 
-Inductive extcall_load_sem (label: ident) (chunk: memory_chunk):
-      list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_load_sem_intro: forall b ofs m vres,
-      Mem.load chunk m b (Int.signed ofs) = Some vres ->
-      extcall_load_sem label chunk (Vptr b ofs :: nil) m (Event_load label :: nil) vres m.
+Inductive volatile_load_sem (chunk: memory_chunk): extcall_sem :=
+  | volatile_load_sem_intro: forall symb b ofs m id ev v m' res,
+      symb id = Some b ->
+      val_of_eventval symb ev (type_of_chunk chunk) v ->
+      Mem.store chunk m b (Int.signed ofs) v = Some m' ->
+      Mem.load chunk m' b (Int.signed ofs) = Some res ->
+      volatile_load_sem chunk symb
+        (Vptr b ofs :: nil) m
+        (Event_vload chunk id ofs ev :: nil)
+        res m'.
 
-Lemma extcall_load_ok:
-  forall label chunk,
-  extcall_properties (extcall_load_sem label chunk) 
+Lemma volatile_load_ok:
+  forall chunk,
+  extcall_properties (volatile_load_sem chunk) 
                      (mksignature (Tint :: nil) (Some (type_of_chunk chunk))).
 Proof.
   intros; constructor; intros.
 
-  inv H. unfold proj_sig_res. simpl. eapply Mem.load_type; eauto.
+  inv H. unfold proj_sig_res. simpl. eapply Mem.load_type; eauto. 
 
   inv H. simpl. auto.
 
-  inv H. auto.
+  inv H. eauto with mem. 
 
-  inv H. auto.
+  inv H. eapply Mem.bounds_store; eauto. 
 
-  inv H. inv H1. inv H6. inv H4. 
-  exploit Mem.load_extends; eauto. intros [v2 [A B]].
-  exists v2; exists m1'; intuition. 
-  constructor; auto. 
-  red. auto. 
+  inv H. inv H1. inv H7. inv H9.
+  exploit Mem.store_within_extends; eauto. intros [m2' [A B]].
+  exploit Mem.load_extends; eauto. intros [vres' [C D]].
+  exists vres'; exists m2'.
+  split. econstructor; eauto. 
+  split. auto.
+  split. auto.
+  red; split; intros.
+  eapply Mem.perm_store_1; eauto.
+  rewrite <- H1. eapply Mem.load_store_other; eauto.
+  destruct (eq_block b0 b); auto. subst b0; right. 
+  exploit Mem.valid_access_in_bounds. 
+  eapply Mem.store_valid_access_3. eexact H4.
+  intros [P Q].
+  generalize (size_chunk_pos chunk0). intro E.
+  generalize (size_chunk_pos chunk). intro F.
+  apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
+                              (Int.signed ofs, Int.signed ofs + size_chunk chunk)).
+  red; intros. generalize (H x H6). unfold loc_out_of_bounds, Intv.In; simpl. omega.
+  simpl; omega. simpl; omega.
 
-  inv H. inv H1. inv H6.
-  assert (Mem.loadv chunk m2 (Vptr b ofs) = Some vres). auto. 
-  exploit Mem.loadv_inject; eauto. intros [v2 [A B]].
-  inv H4. 
-  exists f; exists v2; exists m1'; intuition.
-  constructor. auto. 
-  red; auto.
-  red; auto.
+  inv H0. inv H2. inv H8. inv H10.
+  exploit val_of_eventval_inject; eauto. intro INJ.
+  exploit Mem.store_mapped_inject; eauto. intros [m2' [A B]].
+  exploit Mem.load_inject; eauto. intros [vres' [C D]].
+  exists f; exists vres'; exists m2'; intuition.
+  destruct H as [P Q].
+  rewrite (P _ _ H3) in H7. inv H7. rewrite Int.add_zero.
+  econstructor; eauto.
+  replace (Int.signed ofs) with (Int.signed ofs + 0) by omega; auto.  
+  replace (Int.signed ofs) with (Int.signed ofs + 0) by omega; auto.  
+  split; intros. eapply Mem.perm_store_1; eauto.
+  rewrite <- H2. eapply Mem.load_store_other; eauto. 
+  left. exploit (H0 ofs0). generalize (size_chunk_pos chunk0). omega. 
+  unfold loc_unmapped. congruence.
+  split; intros. eapply Mem.perm_store_1; eauto.
+  rewrite <- H2. eapply Mem.load_store_other; eauto.
+  destruct (eq_block b0 b2); auto. subst b0; right.
+  exploit Mem.valid_access_in_bounds. 
+  eapply Mem.store_valid_access_3. eexact H5.
+  intros [P Q].
+  generalize (size_chunk_pos chunk0). intro E.
+  generalize (size_chunk_pos chunk). intro F.
+  apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
+                              (Int.signed ofs + delta, Int.signed ofs + delta + size_chunk chunk)).
+  red; intros. exploit (H0 x H8). eauto. unfold Intv.In; simpl. omega.
+  simpl; omega. simpl; omega.
   red; intros. congruence.
 
-  inv H; inv H0. intuition congruence.
+  inv H0. inv H1. simpl in H2.
+  assert (id = id0) by (eapply H; eauto). subst id0.
+  assert (ev = ev0) by intuition. subst ev0.
+  exploit val_of_eventval_determ. eexact H4. eexact H9. intro. 
+  intuition congruence.
 Qed.
 
 (** ** Semantics of volatile stores *)
 
-Inductive extcall_store_sem (label: ident) (chunk: memory_chunk):
-      list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_store_sem_intro: forall b ofs v m m',
+Inductive volatile_store_sem (chunk: memory_chunk): extcall_sem :=
+  | volatile_store_sem_intro: forall symb b ofs v id ev m m',
+      symb id = Some b ->
+      eventval_of_val symb v ev ->
       Mem.store chunk m b (Int.signed ofs) v = Some m' ->
-      extcall_store_sem label chunk (Vptr b ofs :: v :: nil) m (Event_store label :: nil) Vundef m'.
+      volatile_store_sem chunk symb
+        (Vptr b ofs :: v :: nil) m
+        (Event_vstore chunk id ofs ev :: nil)
+         Vundef m'.
 
-Lemma extcall_store_ok:
-  forall label chunk,
-  extcall_properties (extcall_store_sem label chunk) 
+Lemma volatile_store_ok:
+  forall chunk,
+  extcall_properties (volatile_store_sem chunk) 
                      (mksignature (Tint :: type_of_chunk chunk :: nil) None).
 Proof.
   intros; constructor; intros.
@@ -444,63 +612,63 @@ Proof.
 
   inv H. eapply Mem.bounds_store; eauto. 
 
-  inv H. inv H1. inv H6. inv H7. inv H4.
+  inv H. inv H1. inv H6. inv H8. inv H7. 
   exploit Mem.store_within_extends; eauto. intros [m' [A B]].
   exists Vundef; exists m'; intuition.
-  constructor; auto.
+  constructor; auto. eapply eventval_of_val_lessdef; eauto. 
   red; split; intros.
   eapply Mem.perm_store_1; eauto.
   rewrite <- H1. eapply Mem.load_store_other; eauto.
   destruct (eq_block b0 b); auto. subst b0; right. 
   exploit Mem.valid_access_in_bounds. 
-  eapply Mem.store_valid_access_3. eexact H2.
+  eapply Mem.store_valid_access_3. eexact H4.
   intros [C D].
   generalize (size_chunk_pos chunk0). intro E.
   generalize (size_chunk_pos chunk). intro F.
   apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
                               (Int.signed ofs, Int.signed ofs + size_chunk chunk)).
-  red; intros. generalize (H x H4). unfold loc_out_of_bounds, Intv.In; simpl. omega.
+  red; intros. generalize (H x H6). unfold loc_out_of_bounds, Intv.In; simpl. omega.
   simpl; omega. simpl; omega.
 
-  inv H. inv H1. inv H6. inv H7.
-  assert (Mem.storev chunk m1 (Vptr b ofs) v = Some m2). simpl; auto.
-  exploit Mem.storev_mapped_inject; eauto. intros [m2' [A B]].
-  inv H4. 
+  inv H0. inv H2. inv H7. inv H9. inv H10.
+  exploit Mem.store_mapped_inject; eauto. intros [m2' [A B]].
   exists f; exists Vundef; exists m2'; intuition.
-  constructor; auto. 
+  elim H; intros P Q. 
+  rewrite (P _ _ H3) in H6. inv H6. rewrite Int.add_zero. econstructor; eauto.
+  eapply eventval_of_val_inject; eauto. 
+  replace (Int.signed ofs) with (Int.signed ofs + 0) by omega; auto.
   split; intros. eapply Mem.perm_store_1; eauto.
-  rewrite <- H4. eapply Mem.load_store_other; eauto. 
-  left. exploit (H1 ofs0). generalize (size_chunk_pos chunk0). omega. 
+  rewrite <- H2. eapply Mem.load_store_other; eauto. 
+  left. exploit (H0 ofs0). generalize (size_chunk_pos chunk0). omega. 
   unfold loc_unmapped. congruence.
   split; intros. eapply Mem.perm_store_1; eauto.
-  rewrite <- H4. eapply Mem.load_store_other; eauto.
+  rewrite <- H2. eapply Mem.load_store_other; eauto.
   destruct (eq_block b0 b2); auto. subst b0; right.
-  assert (EQ: Int.signed (Int.add ofs (Int.repr delta)) = Int.signed ofs + delta).
-    eapply Mem.address_inject; eauto with mem.
-  simpl in A. rewrite EQ in A. rewrite EQ.
   exploit Mem.valid_access_in_bounds. 
-  eapply Mem.store_valid_access_3. eexact H2.
+  eapply Mem.store_valid_access_3. eexact H5.
   intros [C D].
   generalize (size_chunk_pos chunk0). intro E.
   generalize (size_chunk_pos chunk). intro F.
   apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
                               (Int.signed ofs + delta, Int.signed ofs + delta + size_chunk chunk)).
-  red; intros. exploit (H1 x H5). eauto. unfold Intv.In; simpl. omega.
+  red; intros. exploit (H0 x H8). eauto. unfold Intv.In; simpl. omega.
   simpl; omega. simpl; omega.
 
   red; intros. congruence.
 
-  inv H; inv H0. intuition congruence.
+  inv H0; inv H1.
+  assert (id = id0) by (eapply H; eauto).
+  exploit eventval_of_val_determ. eauto. eexact H4. eexact H14. intros.
+  intuition congruence.
 Qed.
 
 (** ** Semantics of dynamic memory allocation (malloc) *)
 
-Inductive extcall_malloc_sem:
-      list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_malloc_sem_intro: forall n m m' b m'',
+Inductive extcall_malloc_sem: extcall_sem :=
+  | extcall_malloc_sem_intro: forall symb n m m' b m'',
       Mem.alloc m (-4) (Int.signed n) = (m', b) ->
       Mem.store Mint32 m' b (-4) (Vint n) = Some m'' ->
-      extcall_malloc_sem (Vint n :: nil) m E0 (Vptr b Int.zero) m''.
+      extcall_malloc_sem symb (Vint n :: nil) m E0 (Vptr b Int.zero) m''.
 
 Lemma extcall_malloc_ok:
   extcall_properties extcall_malloc_sem 
@@ -541,7 +709,7 @@ Proof.
   econstructor; eauto.
   eapply UNCHANGED; eauto.
 
-  inv H. inv H1. inv H5. inv H7.
+  inv H0. inv H2. inv H6. inv H8.
   exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl. 
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto. 
@@ -553,21 +721,20 @@ Proof.
   eapply UNCHANGED; eauto.
   eapply UNCHANGED; eauto.
   red; intros. destruct (eq_block b1 b). 
-  subst b1. rewrite C in H1. inv H1. eauto with mem. 
-  rewrite D in H1. congruence. auto. 
+  subst b1. rewrite C in H2. inv H2. eauto with mem. 
+  rewrite D in H2. congruence. auto. 
 
-  inv H; inv H0. intuition congruence. 
+  inv H0; inv H1. intuition congruence. 
 Qed.
 
 (** ** Semantics of dynamic memory deallocation (free) *)
 
-Inductive extcall_free_sem:
-      list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_free_sem_intro: forall b lo sz m m',
+Inductive extcall_free_sem: extcall_sem :=
+  | extcall_free_sem_intro: forall symb b lo sz m m',
       Mem.load Mint32 m b (Int.signed lo - 4) = Some (Vint sz) ->
       Int.signed sz > 0 ->
       Mem.free m b (Int.signed lo - 4) (Int.signed lo + Int.signed sz) = Some m' ->
-      extcall_free_sem (Vptr b lo :: nil) m E0 Vundef m'.
+      extcall_free_sem symb (Vptr b lo :: nil) m E0 Vundef m'.
 
 Lemma extcall_free_ok:
   extcall_properties extcall_free_sem 
@@ -592,7 +759,7 @@ Proof.
 
   inv H. unfold proj_sig_res. simpl. auto.
 
-  inv H. auto. 
+  inv H. auto.
 
   inv H. eauto with mem.
 
@@ -609,19 +776,19 @@ Proof.
   exploit Mem.range_perm_in_bounds. 
   eapply Mem.free_range_perm. eexact H4. omega. omega.
 
-  inv H. inv H1. inv H8. inv H6.
+  inv H0. inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B. 
   assert (Mem.range_perm m1 b (Int.signed lo - 4) (Int.signed lo + Int.signed sz) Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto. 
     apply Mem.perm_implies with Freeable; auto with mem.
-    apply H. instantiate (1 := lo). omega. 
+    apply H0. instantiate (1 := lo). omega. 
   intro EQ.
   assert (Mem.range_perm m1' b2 (Int.signed lo + delta - 4) (Int.signed lo + delta + Int.signed sz) Freeable).
     red; intros. 
     replace ofs with ((ofs - delta) + delta) by omega.
-    eapply Mem.perm_inject; eauto. apply H. omega. 
-  destruct (Mem.range_perm_free _ _ _ _ H1) as [m2' FREE].
+    eapply Mem.perm_inject; eauto. apply H0. omega. 
+  destruct (Mem.range_perm_free _ _ _ _ H2) as [m2' FREE].
   exists f; exists Vundef; exists m2'; intuition.
 
   econstructor.
@@ -630,7 +797,7 @@ Proof.
   rewrite EQ. auto.
   
   assert (Mem.free_list m1 ((b, Int.signed lo - 4, Int.signed lo + Int.signed sz) :: nil) = Some m2).
-    simpl. rewrite H4. auto.
+    simpl. rewrite H5. auto.
   eapply Mem.free_inject; eauto. 
   intros. destruct (eq_block b b1).
   subst b. assert (delta0 = delta) by congruence. subst delta0. 
@@ -640,108 +807,30 @@ Proof.
   exploit Mem.inject_no_overlap. eauto. eauto. eauto. eauto. 
   instantiate (1 := ofs + delta0 - delta). 
   apply Mem.perm_implies with Freeable; auto with mem.
-  apply H. omega. eauto with mem.
+  apply H0. omega. eauto with mem.
   unfold block; omega.
 
   eapply UNCHANGED; eauto. omega. intros.  
-  red in H6. left. congruence. 
+  red in H7. left. congruence. 
 
   eapply UNCHANGED; eauto. omega. intros.
   destruct (eq_block b' b2); auto. subst b'. right. 
-  red in H6. generalize (H6 _ _ H5). intros. 
-  exploit Mem.range_perm_in_bounds. eexact H. omega. intros. omega.
+  red in H7. generalize (H7 _ _ H6). intros. 
+  exploit Mem.range_perm_in_bounds. eexact H0. omega. intros. omega.
 
   red; intros. congruence.
 
-  inv H; inv H0. intuition congruence.
+  inv H0; inv H1. intuition congruence.
 Qed.
 
 (** ** Semantics of system calls. *)
 
-Inductive eventval_match: eventval -> typ -> val -> Prop :=
-  | ev_match_int:
-      forall i, eventval_match (EVint i) Tint (Vint i)
-  | ev_match_float:
-      forall f, eventval_match (EVfloat f) Tfloat (Vfloat f).
-
-Inductive eventval_list_match: list eventval -> list typ -> list val -> Prop :=
-  | evl_match_nil:
-      eventval_list_match nil nil nil
-  | evl_match_cons:
-      forall ev1 evl ty1 tyl v1 vl,
-      eventval_match ev1 ty1 v1 ->
-      eventval_list_match evl tyl vl ->
-      eventval_list_match (ev1::evl) (ty1::tyl) (v1::vl).
-
-Inductive extcall_io_sem (name: ident) (sg: signature):
-      list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_io_sem_intro: forall vargs m args res vres,
-      eventval_list_match args (sig_args sg) vargs ->
-      eventval_match res (proj_sig_res sg) vres ->
-      extcall_io_sem name sg vargs m (Event_syscall name args res :: E0) vres m.
-
-Remark eventval_match_lessdef:
-  forall ev ty v1 v2,
-  eventval_match ev ty v1 -> Val.lessdef v1 v2 -> eventval_match ev ty v2.
-Proof.
-  intros. inv H; inv H0; constructor.
-Qed.
-
-Remark eventval_list_match_lessdef:
-  forall evl tyl vl1, eventval_list_match evl tyl vl1 ->
-  forall vl2, Val.lessdef_list vl1 vl2 -> eventval_list_match evl tyl vl2.
-Proof.
-  induction 1; intros. inv H; constructor.
-  inv H1. constructor. eapply eventval_match_lessdef; eauto. eauto.
-Qed.
-
-Remark eventval_match_inject:
-  forall f ev ty v1 v2,
-  eventval_match ev ty v1 -> val_inject f v1 v2 -> eventval_match ev ty v2.
-Proof.
-  intros. inv H; inv H0; constructor.
-Qed.
-
-Remark eventval_match_inject_2:
-  forall f ev ty v,
-  eventval_match ev ty v -> val_inject f v v.
-Proof.
-  induction 1; constructor.
-Qed.
-
-Remark eventval_list_match_inject:
-  forall f evl tyl vl1, eventval_list_match evl tyl vl1 ->
-  forall vl2, val_list_inject f vl1 vl2 -> eventval_list_match evl tyl vl2.
-Proof.
-  induction 1; intros. inv H; constructor.
-  inv H1. constructor. eapply eventval_match_inject; eauto. eauto.
-Qed.
-
-Remark eventval_list_match_length:
-  forall evl tyl vl, eventval_list_match evl tyl vl -> List.length vl = List.length tyl.
-Proof.
-  induction 1; simpl; eauto.
-Qed.
-
-Remark eventval_match_determ_1:
-  forall ev ty v1 v2, eventval_match ev ty v1 -> eventval_match ev ty v2 -> v1 = v2.
-Proof.
-  intros. inv H; inv H0; auto.
-Qed.
-
-Remark eventval_match_determ_2:
-  forall ev1 ev2 ty v, eventval_match ev1 ty v -> eventval_match ev2 ty v -> ev1 = ev2.
-Proof.
-  intros. inv H; inv H0; auto.
-Qed.
-
-Remark eventval_list_match_determ_2:
-  forall evl1 tyl vl, eventval_list_match evl1 tyl vl ->
-  forall evl2, eventval_list_match evl2 tyl vl -> evl1 = evl2.
-Proof.
-  induction 1; intros. inv H. auto. inv H1. f_equal; eauto.
-  eapply eventval_match_determ_2; eauto.
-Qed.
+Inductive extcall_io_sem (name: ident) (sg: signature): extcall_sem :=
+  | extcall_io_sem_intro: forall symb vargs m args res vres,
+      length vargs = length (sig_args sg) ->
+      list_forall2 (eventval_of_val symb) vargs args ->
+      val_of_eventval symb res (proj_sig_res sg) vres ->
+      extcall_io_sem name sg symb vargs m (Event_syscall name args res :: E0) vres m.
 
 Lemma extcall_io_ok:
   forall name sg,
@@ -749,9 +838,9 @@ Lemma extcall_io_ok:
 Proof.
   intros; constructor; intros.
 
-  inv H. inv H1; constructor. 
+  inv H. eapply val_of_eventval_type; eauto.
 
-  inv H. eapply eventval_list_match_length; eauto.
+  inv H. auto.
 
   inv H; auto.
 
@@ -759,21 +848,34 @@ Proof.
 
   inv H.
   exists vres; exists m1'; intuition.
-  econstructor; eauto. eapply eventval_list_match_lessdef; eauto.
+  econstructor; eauto.
+  rewrite <- H2.
+  generalize vargs vargs' H1. induction 1; simpl; congruence.
+  generalize vargs vargs' H1 args H3. induction 1; intros.
+  inv H5. constructor.
+  inv H6. constructor; eauto. eapply eventval_of_val_lessdef; eauto. 
   red; auto.
 
-  inv H.
+  inv H0.
   exists f; exists vres; exists m1'; intuition.
-  econstructor; eauto. eapply eventval_list_match_inject; eauto. 
-  eapply eventval_match_inject_2; eauto. 
+  econstructor; eauto.
+  rewrite <- H3.
+  generalize vargs vargs' H2. induction 1; simpl; congruence.
+  generalize vargs vargs' H2 args H4. induction 1; intros.
+  inv H0. constructor.
+  inv H7. constructor; eauto. eapply eventval_of_val_inject; eauto. 
+  eapply val_of_eventval_inject; eauto.
   red; auto.
   red; auto.
   red; intros; congruence.
 
-  inv H; inv H0. simpl in H1.
-  assert (args = args0) by (eapply eventval_list_match_determ_2; eauto).
-  destruct H1; auto. subst.
-  intuition. eapply eventval_match_determ_1; eauto. 
+  inv H0; inv H1. simpl in H2.
+  assert (args = args0).
+    generalize vargs args H4 args0 H6. induction 1; intros.
+    inv H1; auto.
+    inv H9. decEq; eauto. eapply eventval_of_val_determ; eauto. 
+  destruct H2; auto. subst.
+  intuition. eapply val_of_eventval_determ; eauto. 
 Qed.
 
 (** ** Combined semantics of external calls *)
@@ -789,12 +891,11 @@ Qed.
 
 This predicate is used in the semantics of all CompCert languages. *)
 
-Definition external_call (ef: external_function):
-         list val -> mem -> trace -> val -> mem -> Prop :=
+Definition external_call (ef: external_function): extcall_sem :=
   match classify_external_function ef with
   | EF_syscall sg name   => extcall_io_sem name sg
-  | EF_load label chunk  => extcall_load_sem label chunk
-  | EF_store label chunk => extcall_store_sem label chunk
+  | EF_vload chunk       => volatile_load_sem chunk
+  | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem 
   | EF_free              => extcall_free_sem
   end.
@@ -805,8 +906,8 @@ Theorem external_call_spec:
 Proof.
   intros. unfold external_call. destruct (classify_external_function ef). 
   apply extcall_io_ok.
-  apply extcall_load_ok.
-  apply extcall_store_ok.
+  apply volatile_load_ok.
+  apply volatile_store_ok.
   apply extcall_malloc_ok.
   apply extcall_free_ok.
 Qed.
@@ -818,3 +919,15 @@ Definition external_call_bounds ef := ec_bounds _ _ (external_call_spec ef).
 Definition external_call_mem_extends ef := ec_mem_extends _ _ (external_call_spec ef).
 Definition external_call_mem_inject ef := ec_mem_inject _ _ (external_call_spec ef).
 Definition external_call_determ ef := ec_determ _ _ (external_call_spec ef).
+
+(** The only dependency on the global environment is on the addresses of symbols. *)
+
+Lemma external_call_symbols_preserved:
+  forall ef symb1 symb2 vargs m1 t vres m2,
+  external_call ef symb1 vargs m1 t vres m2 ->
+  (forall id, symb2 id = symb1 id) ->
+  external_call ef symb2 vargs m1 t vres m2.
+Proof.
+  intros. replace symb2 with symb1; auto. 
+  symmetry. apply extensionality. auto.
+Qed.

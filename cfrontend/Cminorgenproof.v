@@ -481,19 +481,6 @@ Record match_env (f: meminj) (cenv: compilenv)
 
 Hint Resolve me_low_high.
 
-(** Global environments match if the memory injection [f] leaves unchanged
-  the references to global symbols and functions. *)
-
-Record match_globalenvs (f: meminj) : Prop := 
-  mk_match_globalenvs {
-    mg_symbols:
-      forall id b,
-      Genv.find_symbol ge id = Some b ->
-      f b = Some (b, 0) /\ Genv.find_symbol tge id = Some b;
-    mg_functions:
-      forall b, b < 0 -> f b = Some(b, 0)
-  }.
-
 (** The remainder of this section is devoted to showing preservation
   of the [match_en] invariant under various assignments and memory
   stores.  First: preservation by memory stores to ``mapped'' blocks
@@ -804,6 +791,16 @@ Inductive frame : Type :=
 
 Definition callstack : Type := list frame.
 
+(** Global environments match if the memory injection [f] leaves unchanged
+  the references to global symbols and functions. *)
+
+Inductive match_globalenvs (f: meminj) (bound: Z): Prop :=
+  | mk_match_globalenvs
+      (POS: bound > 0)
+      (DOMAIN: forall b, b < bound -> f b = Some(b, 0))
+      (IMAGE: forall b1 b2 delta, f b1 = Some(b2, delta) -> b2 < bound -> b1 = b2)
+      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> b < bound).
+
 (** Matching of call stacks imply:
 - matching of environments for each of the frames
 - matching of the global environments
@@ -824,8 +821,9 @@ Definition padding_freeable (f: meminj) (m: mem) (tm: mem) (sp: block) (sz: Z) :
 Inductive match_callstack (f: meminj) (m: mem) (tm: mem):
                           callstack -> Z -> Z -> Prop :=
   | mcs_nil:
-      forall bound tbound,
-      match_globalenvs f ->
+      forall hi bound tbound,
+      match_globalenvs f hi ->
+      hi <= bound -> hi <= tbound ->
       match_callstack f m tm nil bound tbound 
   | mcs_cons:
       forall cenv tf e te sp lo hi cs bound tbound
@@ -841,7 +839,7 @@ Inductive match_callstack (f: meminj) (m: mem) (tm: mem):
 Lemma match_callstack_match_globalenvs:
   forall f m tm cs bound tbound,
   match_callstack f m tm cs bound tbound ->
-  match_globalenvs f.
+  exists hi, match_globalenvs f hi.
 Proof.
   induction 1; eauto.
 Qed.
@@ -878,7 +876,7 @@ Lemma match_callstack_store_mapped:
   match_callstack f m' tm' cs lo hi.
 Proof.
   induction 4.
-  constructor; auto.
+  econstructor; eauto.
   constructor; auto. 
   eapply match_env_store_mapped; eauto. congruence.
   eapply padding_freeable_invariant; eauto. 
@@ -915,7 +913,7 @@ Lemma match_callstack_invariant:
   match_callstack f m' tm' cs bound tbound.
 Proof.
   induction 1; intros.
-  constructor; auto.
+  econstructor; eauto.
   constructor; auto.
   eapply padding_freeable_invariant; eauto. 
   intros. apply H1. omega.
@@ -973,7 +971,9 @@ Lemma match_callstack_incr_bound:
   bound <= bound' -> tbound <= tbound' ->
   match_callstack f m tm cs bound' tbound'.
 Proof.
-  intros. inversion H; constructor; auto. omega. omega.
+  intros. inv H.
+  econstructor; eauto. omega. omega. 
+  constructor; auto. omega. omega.
 Qed.
 
 (** Preservation of [match_callstack] by freeing all blocks allocated
@@ -1075,13 +1075,10 @@ Lemma match_callstack_alloc_below:
   match_callstack f2 m2 tm cs bound tbound.
 Proof.
   induction 4; intros.
-  constructor. 
-  inv H2. constructor. 
-  intros. exploit mg_symbols0; eauto. intros [A B]. auto. 
-  intros. rewrite H1; auto. 
-  exploit Mem.alloc_result; eauto. 
-  generalize (Mem.nextblock_pos m1).
-  unfold block; omega.
+  apply mcs_nil with hi; auto. 
+  inv H2. constructor; auto. 
+  intros. destruct (eq_block b1 b). subst. rewrite H2 in H6. omegaContradiction.
+  rewrite H1 in H2; eauto.
   constructor; auto.
   eapply match_env_alloc_other; eauto. omega. destruct (f2 b); auto. destruct p; omega.
   eapply padding_freeable_invariant; eauto. 
@@ -1223,15 +1220,15 @@ Proof.
   intros until m2'. 
   intros UNMAPPED OUTOFREACH INCR SEPARATED BOUNDS.
   destruct OUTOFREACH as [OUTOFREACH1 OUTOFREACH2].
-  induction 1; intros; constructor.
+  induction 1; intros.
 (* base case *)
-  constructor; intros. 
-  exploit mg_symbols; eauto. intros [A B]. auto.
-  replace (f2 b) with (f1 b). eapply mg_functions; eauto.
-  symmetry. eapply inject_incr_separated_same; eauto. 
-  red. generalize (Mem.nextblock_pos m1); omega.
+  apply mcs_nil with hi; auto.
+  inv H. constructor; auto.
+  intros. case_eq (f1 b1). 
+  intros [b2' delta'] EQ. rewrite (INCR _ _ _ EQ) in H. inv H. eauto. 
+  intro EQ. exploit SEPARATED; eauto. intros [A B]. elim B. red. omega. 
 (* inductive case *)
-  auto. auto. 
+  constructor. auto. auto. 
   eapply match_env_external_call; eauto. omega. omega. 
   (* padding-freeable *)
   red; intros.
@@ -1253,12 +1250,22 @@ Qed.
 
 Remark external_call_nextblock_incr:
   forall ef vargs m1 t vres m2,
-  external_call ef vargs m1 t vres m2 ->
+  external_call ef (Genv.find_symbol ge) vargs m1 t vres m2 ->
   Mem.nextblock m1 <= Mem.nextblock m2.
 Proof.
   intros. 
-  generalize (external_call_valid_block _ _ _ _ _ _ (Mem.nextblock m1 - 1) H).
+  generalize (external_call_valid_block _ _ _ _ _ _ _ (Mem.nextblock m1 - 1) H).
   unfold Mem.valid_block. omega. 
+Qed.
+
+Remark inj_preserves_globals:
+  forall f hi,
+  match_globalenvs f hi ->
+  meminj_preserves_globals (Genv.find_symbol ge) f.
+Proof.
+  intros. inv H. split; intros.
+  apply DOMAIN. eapply SYMBOLS. eauto.
+  symmetry. eapply IMAGE; eauto. 
 Qed.
 
 (** * Soundness of chunk and type inference. *)
@@ -1682,15 +1689,15 @@ Proof.
   auto.
   (* var_global_scalar *)
   simpl in *.
-  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
-  inv H2. exploit mg_symbols0; eauto. intros [A B].
+  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   assert (chunk0 = chunk). congruence. subst chunk0.
   assert (val_inject f (Vptr b Int.zero) (Vptr b Int.zero)).
-    econstructor; eauto.
+    econstructor; eauto. 
   exploit Mem.loadv_inject; eauto. simpl. eauto.   
   intros [tv [LOAD INJ]].
   exists tv; split. 
   eapply eval_Eload; eauto. eapply make_globaladdr_correct; eauto.
+  rewrite symbols_preserved; auto.
   auto.
 Qed.
 
@@ -1714,16 +1721,14 @@ Proof.
   exists (Vptr sp (Int.repr ofs)); split.
   eapply make_stackaddr_correct. congruence.
   (* var_global_scalar *)
-  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
-  inv H1. exploit mg_symbols0; eauto. intros [A B].
+  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   exists (Vptr b Int.zero); split.
-  eapply make_globaladdr_correct. eauto.
+  eapply make_globaladdr_correct; eauto. rewrite symbols_preserved; auto.
   econstructor; eauto. 
   (* var_global_array *)
-  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
-  inv H1. exploit mg_symbols0; eauto. intros [A B].
+  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   exists (Vptr b Int.zero); split.
-  eapply make_globaladdr_correct. eauto.
+  eapply make_globaladdr_correct; eauto. rewrite symbols_preserved; auto.
   econstructor; eauto. 
 Qed.
 
@@ -1791,11 +1796,10 @@ Proof.
   simpl in *.
   assert (chunk0 = chunk) by congruence. subst chunk0.  
   assert (Mem.storev chunk m (Vptr b Int.zero) v = Some m'). assumption.
-  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
-  exploit mg_symbols; eauto. intros [A B].
+  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   exploit make_store_correct.
     eapply make_globaladdr_correct; eauto.
-    eauto. eauto. eauto. eauto. eauto.
+    rewrite symbols_preserved; eauto. eauto. eauto. eauto. eauto. auto.
   intros [tm' [tvrhs' [EVAL' [STORE' TNEXTBLOCK]]]].
   exists te; exists tm'.
   split. eauto. split. auto. 
@@ -1874,11 +1878,10 @@ Proof.
   simpl in *.
   assert (chunk0 = chunk) by congruence. subst chunk0.  
   assert (Mem.storev chunk m (Vptr b Int.zero) v = Some m'). assumption.
-  assert (match_globalenvs f). eapply match_callstack_match_globalenvs; eauto.
-  exploit mg_symbols; eauto. intros [A B].
+  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   exploit make_store_correct.
     eapply make_globaladdr_correct; eauto.
-    eauto. eauto. eauto. eauto. eauto.
+    rewrite symbols_preserved; eauto. eauto. eauto. eauto. eauto. eauto.
   intros [tm' [tvrhs' [EVAL' [STORE' MEMINJ]]]].
   exists te'; exists tm'.
   split. eauto. split. auto. 
@@ -2601,16 +2604,16 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
                    (Returnstate tv tk tm).
 
 Remark val_inject_function_pointer:
-  forall v fd f tv,
+  forall bound v fd f tv,
   Genv.find_funct tge v = Some fd ->
-  match_globalenvs f ->
+  match_globalenvs f bound ->
   val_inject f v tv ->
   tv = v.
 Proof.
   intros. exploit Genv.find_funct_inv; eauto. intros [b EQ]. subst v.
   rewrite Genv.find_funct_find_funct_ptr in H. 
   assert (b < 0). unfold tge in H. eapply Genv.find_funct_ptr_negative; eauto.
-  assert (f b = Some(b, 0)). eapply mg_functions; eauto. 
+  assert (f b = Some(b, 0)). inv H0. apply DOMAIN. omega.  
   inv H1. rewrite H3 in H6; inv H6. reflexivity.
 Qed.
 
@@ -3000,8 +3003,8 @@ Proof.
   exploit transl_expr_correct; eauto.
   intros [tvf [EVAL1 VINJ1]].
   assert (tvf = vf).
+    exploit match_callstack_match_globalenvs; eauto. intros [bnd MG].
     eapply val_inject_function_pointer; eauto.
-    eapply match_callstack_match_globalenvs; eauto.
   subst tvf.
   exploit transl_exprlist_correct; eauto.
   intros [tvargs [EVAL2 VINJ2]].
@@ -3020,8 +3023,8 @@ Proof.
   exploit transl_expr_correct; eauto.
   intros [tvf [EVAL1 VINJ1]].
   assert (tvf = vf).
+    exploit match_callstack_match_globalenvs; eauto. intros [bnd MG].
     eapply val_inject_function_pointer; eauto.
-    eapply match_callstack_match_globalenvs; eauto.
   subst tvf.
   exploit transl_exprlist_correct; eauto.
   intros [tvargs [EVAL2 VINJ2]].
@@ -3167,10 +3170,13 @@ Proof.
 
 (* external call *)
   monadInv TR. 
+  exploit match_callstack_match_globalenvs; eauto. intros [hi MG].
   exploit external_call_mem_inject; eauto. 
+  eapply inj_preserves_globals; eauto.
   intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
   left; econstructor; split.
-  apply plus_one. econstructor; eauto. 
+  apply plus_one. econstructor.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   econstructor; eauto.
   apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_callstack_external_call; eauto.
@@ -3202,15 +3208,14 @@ Qed.
 Lemma match_globalenvs_init:
   forall m,
   Genv.init_mem prog = Some m ->
-  match_globalenvs (Mem.flat_inj (Mem.nextblock m)).
+  match_globalenvs (Mem.flat_inj (Mem.nextblock m)) (Mem.nextblock m).
 Proof.
   intros. constructor.
-  intros. split.
-  unfold Mem.flat_inj. rewrite zlt_true. auto.
-  eapply Genv.find_symbol_not_fresh; eauto.
-  rewrite <- H0. apply symbols_preserved.
-  intros. unfold Mem.flat_inj. rewrite zlt_true. auto.
-  generalize (Mem.nextblock_pos m). omega.
+  apply Mem.nextblock_pos.
+  intros. unfold Mem.flat_inj. apply zlt_true; auto. 
+  intros. unfold Mem.flat_inj in H0. 
+  destruct (zlt b1 (Mem.nextblock m)); congruence.
+  intros. eapply Genv.find_symbol_not_fresh; eauto.
 Qed.
 
 Lemma transl_initial_states:
@@ -3231,7 +3236,7 @@ Proof.
   eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame).
   auto.
   eapply Genv.initmem_inject; eauto.
-  constructor. apply match_globalenvs_init. auto.  
+  apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. omega. omega.
   instantiate (1 := gce). constructor.
   red; auto. constructor. rewrite H2; simpl; auto. 
 Qed.

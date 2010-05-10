@@ -557,6 +557,7 @@ Proof.
   intros [res' [m2' [A [B [C D]]]]].
   left. exists (Returnstate s' res' m2'); split.
   simpl. econstructor; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   constructor; auto. 
 
 (* returnstate *)

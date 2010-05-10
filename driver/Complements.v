@@ -64,7 +64,9 @@ Proof.
   congruence.
   assert (ef0 = ef) by congruence. subst ef0.
   assert (args0 = args). eapply extcall_arguments_deterministic; eauto. subst args0.
-  exploit external_call_determ. eexact H4. eexact H9. auto. 
+  exploit external_call_determ. 
+  instantiate (1 := Genv.find_symbol ge). exact (Genv.genv_vars_inj ge). 
+  eexact H4. eexact H9. auto. 
   intros [A [B C]]. subst. 
   intuition congruence.
 Qed.

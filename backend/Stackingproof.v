@@ -1574,6 +1574,7 @@ Proof.
   exploit transl_external_arguments; eauto. intro EXTARGS.
   econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   econstructor; eauto.
   intros. unfold Regmap.set. case (RegEq.eq r (loc_result (ef_sig ef))); intro.
   rewrite e. rewrite Locmap.gss; auto. rewrite Locmap.gso; auto.

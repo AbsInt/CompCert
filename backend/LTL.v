@@ -228,7 +228,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f (Vptr stk Int.zero) f.(fn_entrypoint) (init_locs args f.(fn_params)) m')
   | exec_function_external:
       forall s ef t args res m m',
-      external_call ef args m t res m' ->
+      external_call ef (Genv.find_symbol ge) args m t res m' ->
       step (Callstate s (External ef) args m)
          t (Returnstate s res m')
   | exec_return:

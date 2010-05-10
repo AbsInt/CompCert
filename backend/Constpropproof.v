@@ -415,6 +415,7 @@ Proof.
   (* external function *)
   simpl. econstructor; split.
   eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
   constructor; auto.
 
   (* return *)
