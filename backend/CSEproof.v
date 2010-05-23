@@ -735,6 +735,10 @@ Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
 Proof (Genv.find_symbol_transf transf_fundef prog).
 
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof (Genv.find_var_info_transf transf_fundef prog).
+
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
@@ -935,7 +939,8 @@ Proof.
   (* external function *)
   simpl. econstructor; split.
   eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
   (* return *)

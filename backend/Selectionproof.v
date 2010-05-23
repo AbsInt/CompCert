@@ -319,6 +319,13 @@ Proof.
   intros. destruct f; reflexivity.
 Qed.
 
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof.
+  intros; unfold ge, tge, tprog, sel_program. 
+  apply Genv.find_var_info_transf.
+Qed.
+
 (** Semantic preservation for expressions. *)
 
 Lemma sel_expr_correct:
@@ -471,7 +478,8 @@ Proof.
   constructor; auto.
   (* external call *)
   econstructor; split.
-  econstructor. eapply external_call_symbols_preserved; eauto. exact symbols_preserved. 
+  econstructor. eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
   constructor; auto.
 Qed.
 

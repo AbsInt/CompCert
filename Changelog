@@ -1,6 +1,13 @@
 Release 1.8
 ===========
 
+- More faithful semantics for volatile accesses: 
+  . volatile reads and writes from a volatile global variable are treated
+    like input and output system calls (respectively), bypassing
+    the memory model entirely;
+  . volatile reads and writes from other locations are treated like
+    regular loads and stores.
+
 - Added "fabs" (floating-point absolute value) unary operator to Clight;
   map __builtin_fabs() to this operator.
 

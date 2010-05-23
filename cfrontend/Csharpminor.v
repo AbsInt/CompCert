@@ -516,7 +516,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f f.(fn_body) k e m2)
 
   | step_external_function: forall ef vargs k m t vres m',
-      external_call ef (Genv.find_symbol ge) vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
          t (Returnstate vres k m')        
 
@@ -554,7 +554,7 @@ Inductive final_state: state -> int -> Prop :=
 
 Definition global_var_env (p: program): gvarenv :=
   List.fold_left
-    (fun gve x => match x with (id, init, k) => PTree.set id k gve end)
+    (fun gve x => match x with (id, v) => PTree.set id (gvar_info v) gve end)
     p.(prog_vars) (PTree.empty var_kind).
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=

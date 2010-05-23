@@ -63,6 +63,10 @@ Lemma symbols_preserved:
   Genv.find_symbol tge id = Genv.find_symbol ge id.
 Proof (Genv.find_symbol_transf_partial transf_fundef _ TRANSF).
 
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof (Genv.find_var_info_transf_partial transf_fundef _ TRANSF).
+
 Lemma sig_preserved:
   forall f tf,
   transf_fundef f = OK tf ->
@@ -684,7 +688,8 @@ Proof.
   (* external function *)
   monadInv H6. econstructor; split.
   apply plus_one. eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto.
 
   (* return *)

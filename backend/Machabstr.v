@@ -303,7 +303,7 @@ Inductive step: state -> trace -> state -> Prop :=
                   f.(fn_code) rs empty_frame m')
   | exec_function_external:
       forall s ef args res rs1 rs2 m t m',
-      external_call ef (Genv.find_symbol ge) args m t res m' ->
+      external_call ef ge args m t res m' ->
       extcall_arguments (parent_function s) rs1 (parent_frame s) ef.(ef_sig) args ->
       rs2 = (rs1#(Conventions.loc_result ef.(ef_sig)) <- res) ->
       step (Callstate s (External ef) rs1 m)

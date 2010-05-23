@@ -407,12 +407,12 @@ Qed.
 (** [frame_match] is preserved by external calls. *)
 
 Lemma frame_match_external_call:
-  forall symb fr sp base mm ms mm' ms' ef vargs vres t vargs' vres',
+  forall (ge: genv) fr sp base mm ms mm' ms' ef vargs vres t vargs' vres',
   frame_match fr sp base mm ms ->
   Mem.extends mm ms ->
-  external_call ef symb vargs mm t vres mm' ->
+  external_call ef ge vargs mm t vres mm' ->
   Mem.extends mm' ms' ->
-  external_call ef symb vargs' ms t vres' ms' ->
+  external_call ef ge vargs' ms t vres' ms' ->
   mem_unchanged_on (loc_out_of_bounds mm) ms ms' ->
   frame_match fr sp base mm' ms'.
 Proof.
@@ -420,7 +420,7 @@ Proof.
   eapply external_call_valid_block; eauto.
   eapply external_call_valid_block; eauto.
   auto.
-  rewrite (external_call_bounds _ _ _ _ _ _ _ _ H1); auto.
+  rewrite (external_call_bounds _ _ _ _ _ _ H1); auto.
   red; intros. apply A; auto. red. omega.
   intros. exploit fm_contents_match0; eauto. intros [v [C D]].
   exists v; split; auto.
@@ -814,9 +814,9 @@ Lemma match_stacks_external_call:
   match_stacks s ts mm ms ->
   forall ef vargs t vres mm' ms' vargs' vres',
   Mem.extends mm ms ->
-  external_call ef (Genv.find_symbol ge) vargs mm t vres mm' ->
+  external_call ef ge vargs mm t vres mm' ->
   Mem.extends mm' ms' ->
-  external_call ef (Genv.find_symbol ge) vargs' ms t vres' ms' ->
+  external_call ef ge vargs' ms t vres' ms' ->
   mem_unchanged_on (loc_out_of_bounds mm) ms ms' ->
   match_stacks s ts mm' ms'.
 Proof.

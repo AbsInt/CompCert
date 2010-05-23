@@ -616,7 +616,7 @@ Inductive step: state -> trace -> state -> Prop :=
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
-      external_call ef (Genv.find_symbol ge) args m t res m' ->
+      external_call ef ge args m t res m' ->
       extcall_arguments rs m ef.(ef_sig) args ->
       rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
                #PC <- (rs IR14)) ->

@@ -1029,6 +1029,14 @@ Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:=
 
 Hint Resolve val_nil_inject val_cons_inject.
 
+Lemma val_load_result_inject:
+  forall f chunk v1 v2,
+  val_inject f v1 v2 ->
+  val_inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
+Proof.
+  intros. inv H; destruct chunk; simpl; econstructor; eauto.
+Qed.
+
 (** Monotone evolution of a memory injection. *)
 
 Definition inject_incr (f1 f2: meminj) : Prop :=

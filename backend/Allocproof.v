@@ -418,6 +418,14 @@ Proof.
   exact TRANSF.
 Qed.
 
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof.
+  intro. unfold ge, tge.
+  apply Genv.find_var_info_transf_partial with transf_fundef.
+  exact TRANSF.
+Qed.
+
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
@@ -717,7 +725,8 @@ Proof.
   injection H7; intro EQ; inv EQ.
   econstructor; split.
   eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
   eapply match_states_return; eauto.
 
   (* return *)

@@ -146,6 +146,13 @@ Proof.
   apply Genv.find_symbol_transf.
 Qed.
 
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof.
+  intros; unfold ge, tge, tprog, transf_program. 
+  apply Genv.find_var_info_transf.
+Qed.
+
 Lemma functions_translated:
   forall (v: val) (f: fundef),
   Genv.find_funct ge v = Some f ->
@@ -415,7 +422,8 @@ Proof.
   (* external function *)
   simpl. econstructor; split.
   eapply exec_function_external; eauto.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
   constructor; auto.
 
   (* return *)

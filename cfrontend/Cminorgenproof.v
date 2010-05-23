@@ -94,9 +94,9 @@ Definition global_compilenv_match (ce: compilenv) (gv: gvarenv) : Prop :=
 Lemma global_compilenv_charact:
   global_compilenv_match gce gvare.
 Proof.
-  set (mkgve := fun gv (vars: list (ident * list init_data * var_kind)) =>
+  set (mkgve := fun gv (vars: list (ident * globvar var_kind)) =>
          List.fold_left
-          (fun gve x => match x with (id, init, k) => PTree.set id k gve end)
+          (fun gve x => match x with (id, v) => PTree.set id v.(gvar_info) gve end)
           vars gv).
   assert (forall vars gv ce,
             global_compilenv_match ce gv ->
@@ -105,7 +105,7 @@ Proof.
   induction vars; simpl; intros.
   auto.
   apply IHvars. intro id1. unfold assign_global_variable.
-  destruct a as [[id2 init2] lv2]. destruct lv2; simpl; rewrite PMap.gsspec; rewrite PTree.gsspec.
+  destruct a as [id2 lv2]. destruct lv2. destruct gvar_info; simpl; rewrite PMap.gsspec; rewrite PTree.gsspec.
   case (peq id1 id2); intro. auto. apply H. 
   case (peq id1 id2); intro. auto. apply H.
 
@@ -799,7 +799,8 @@ Inductive match_globalenvs (f: meminj) (bound: Z): Prop :=
       (POS: bound > 0)
       (DOMAIN: forall b, b < bound -> f b = Some(b, 0))
       (IMAGE: forall b1 b2 delta, f b1 = Some(b2, delta) -> b2 < bound -> b1 = b2)
-      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> b < bound).
+      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> b < bound)
+      (INFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
 
 (** Matching of call stacks imply:
 - matching of environments for each of the frames
@@ -1250,22 +1251,23 @@ Qed.
 
 Remark external_call_nextblock_incr:
   forall ef vargs m1 t vres m2,
-  external_call ef (Genv.find_symbol ge) vargs m1 t vres m2 ->
+  external_call ef ge vargs m1 t vres m2 ->
   Mem.nextblock m1 <= Mem.nextblock m2.
 Proof.
   intros. 
-  generalize (external_call_valid_block _ _ _ _ _ _ _ (Mem.nextblock m1 - 1) H).
+  generalize (@external_call_valid_block _ _ _ _ _ _ _ _ _ (Mem.nextblock m1 - 1) H).
   unfold Mem.valid_block. omega. 
 Qed.
 
 Remark inj_preserves_globals:
   forall f hi,
   match_globalenvs f hi ->
-  meminj_preserves_globals (Genv.find_symbol ge) f.
+  meminj_preserves_globals ge f.
 Proof.
-  intros. inv H. split; intros.
-  apply DOMAIN. eapply SYMBOLS. eauto.
-  symmetry. eapply IMAGE; eauto. 
+  intros. inv H.
+  split. intros. apply DOMAIN. eapply SYMBOLS. eauto.
+  split. intros. apply DOMAIN. eapply INFOS. eauto. 
+  intros. symmetry. eapply IMAGE; eauto. 
 Qed.
 
 (** * Soundness of chunk and type inference. *)
@@ -3176,7 +3178,10 @@ Proof.
   intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
   left; econstructor; split.
   apply plus_one. econstructor.
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved_2; eauto.
+  exact symbols_preserved.
+  eexact (Genv.find_var_info_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
+  eexact (Genv.find_var_info_rev_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
   econstructor; eauto.
   apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_callstack_external_call; eauto.
@@ -3216,6 +3221,7 @@ Proof.
   intros. unfold Mem.flat_inj in H0. 
   destruct (zlt b1 (Mem.nextblock m)); congruence.
   intros. eapply Genv.find_symbol_not_fresh; eauto.
+  intros. eapply Genv.find_var_info_not_fresh; eauto. 
 Qed.
 
 Lemma transl_initial_states:

@@ -64,7 +64,7 @@ Variable V: Type.  (**r The type of information attached to variables *)
 Record t: Type := mkgenv {
   genv_symb: PTree.t block;             (**r mapping symbol -> block *)
   genv_funs: ZMap.t (option F);         (**r mapping function pointer -> definition *)
-  genv_vars: ZMap.t (option V);         (**r mapping variable pointer -> info *)
+  genv_vars: ZMap.t (option (globvar V)); (**r mapping variable pointer -> info *)
   genv_nextfun: block;                  (**r next function pointer *)
   genv_nextvar: block;                  (**r next variable pointer *)
   genv_nextfun_neg: genv_nextfun < 0;
@@ -101,7 +101,7 @@ Definition find_funct (ge: t) (v: val) : option F :=
 (** [find_var_info ge b] returns the information attached to the variable
    at address [b]. *)
 
-Definition find_var_info (ge: t) (b: block) : option V :=
+Definition find_var_info (ge: t) (b: block) : option (globvar V) :=
   ZMap.get b ge.(genv_vars).
 
 (** ** Constructing the global environment *)
@@ -143,9 +143,9 @@ Next Obligation.
   eauto.
 Qed.
 
-Program Definition add_variable (ge: t) (idv: ident * list init_data * V) : t :=
+Program Definition add_variable (ge: t) (idv: ident * globvar V) : t :=
   @mkgenv
-    (PTree.set idv#1#1 ge.(genv_nextvar) ge.(genv_symb))
+    (PTree.set idv#1 ge.(genv_nextvar) ge.(genv_symb))
     ge.(genv_funs)
     (ZMap.set ge.(genv_nextvar) (Some idv#2) ge.(genv_vars))
     ge.(genv_nextfun)
@@ -204,7 +204,7 @@ Qed.
 Definition add_functions (ge: t) (fl: list (ident * F)) : t :=
   List.fold_left add_function fl ge.
 
-Definition add_variables (ge: t) (vl: list (ident * list init_data * V)) : t :=
+Definition add_variables (ge: t) (vl: list (ident * globvar V)) : t :=
   List.fold_left add_variable vl ge.
 
 Definition globalenv (p: program F V) :=
@@ -230,19 +230,19 @@ Proof.
 Qed.
 
 Theorem find_symbol_exists:
-  forall p id init v,
-  In (id, init, v) (prog_vars p) ->
+  forall p id gv,
+  In (id, gv) (prog_vars p) ->
   exists b, find_symbol (globalenv p) id = Some b.
 Proof.
-  intros until v.
+  intros until gv.
   assert (forall vl ge,
           (exists b, find_symbol ge id = Some b) ->
           exists b, find_symbol (add_variables ge vl) id = Some b).
   unfold find_symbol; induction vl; simpl; intros. auto. apply IHvl.
-  simpl. rewrite PTree.gsspec. fold ident. destruct (peq id a#1#1).
+  simpl. rewrite PTree.gsspec. fold ident. destruct (peq id a#1).
   exists (genv_nextvar ge); auto. auto.
 
-  assert (forall vl ge, In (id, init, v) vl ->
+  assert (forall vl ge, In (id, gv) vl ->
           exists b, find_symbol (add_variables ge vl) id = Some b).
   unfold find_symbol; induction vl; simpl; intros. contradiction.
   destruct H0. apply H. subst; unfold find_symbol; simpl.
@@ -274,7 +274,7 @@ Qed.
 
 Remark add_variables_same_symb:
   forall id vl ge, 
-  ~In id (map (fun idv => idv#1#1) vl) ->
+  ~In id (map (@fst ident (globvar V)) vl) ->
   find_symbol (add_variables ge vl) id = find_symbol ge id.
 Proof.
   induction vl; simpl; intros. auto. 
@@ -415,7 +415,7 @@ Remark add_variables_symb_neg:
 Proof.
   induction vl; simpl; intros. auto.
   exploit IHvl; eauto. unfold find_symbol; simpl. rewrite PTree.gsspec. 
-  fold ident. destruct (peq id (a#1#1)); auto. intros. inv H1. 
+  fold ident. destruct (peq id (a#1)); auto. intros. inv H1. 
   generalize (genv_nextvar_pos ge). intros. omegaContradiction.
 Qed.
 
@@ -522,11 +522,12 @@ Fixpoint init_data_list_size (il: list init_data) {struct il} : Z :=
   | i :: il' => init_data_size i + init_data_list_size il'
   end.
 
-Definition alloc_variable (m: mem) (idv: ident * list init_data * V) : option mem :=
-  let (m', b) := Mem.alloc m 0 (init_data_list_size idv#1#2) in
-  store_init_data_list m' b 0 idv#1#2.
+Definition alloc_variable (m: mem) (idv: ident * globvar V) : option mem :=
+  let init := idv#2.(gvar_init) in
+  let (m', b) := Mem.alloc m 0 (init_data_list_size init) in
+  store_init_data_list m' b 0 init.
 
-Fixpoint alloc_variables (m: mem) (vl: list (ident * list init_data * V))
+Fixpoint alloc_variables (m: mem) (vl: list (ident * globvar V))
                          {struct vl} : option mem :=
   match vl with
   | nil => Some m
@@ -560,8 +561,9 @@ Proof.
   simpl; intros. inv H; unfold block; omega.
   simpl length; rewrite inj_S; simpl. intros m m'. 
   unfold alloc_variable. 
-  caseEq (Mem.alloc m 0 (init_data_list_size (a#1)#2)). intros m1 b ALLOC.
-  caseEq (store_init_data_list m1 b 0 a#1#2); try congruence. intros m2 STORE REC.
+  set (init := gvar_init a#2).
+  caseEq (Mem.alloc m 0 (init_data_list_size init)). intros m1 b ALLOC.
+  caseEq (store_init_data_list m1 b 0 init); try congruence. intros m2 STORE REC.
   rewrite (IHvl _ _ REC). 
   rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
   rewrite (Mem.nextblock_alloc _ _ _ _ _ ALLOC).
@@ -590,8 +592,9 @@ Proof.
   induction vl.
   simpl; intros. congruence.
   intros until m'. simpl. unfold alloc_variable. 
-  caseEq (Mem.alloc m 0 (init_data_list_size (a#1)#2)). intros m1 b ALLOC.
-  caseEq (store_init_data_list m1 b 0 a#1#2); try congruence. intros m2 STORE REC PERM.
+  set (init := gvar_init a#2).
+  caseEq (Mem.alloc m 0 (init_data_list_size init)). intros m1 b ALLOC.
+  caseEq (store_init_data_list m1 b 0 init); try congruence. intros m2 STORE REC PERM.
   eapply IHvl; eauto. 
   eapply store_init_data_list_perm; eauto. 
   eauto with mem.
@@ -616,24 +619,6 @@ Proof.
   eapply Mem.load_store_other; eauto; intuition.
 Qed.
 
-(*
-Remark alloc_variables_nextblock:
-  forall vl g m m',
-  alloc_variables m vl = Some m' ->
-  Mem.nextblock m = genv_nextvar g ->
-  Mem.nextblock m' = genv_nextvar (add_variables g vl).
-Proof.
-  induction vl; simpl; intros until m'.
-  intros. congruence.
-  unfold alloc_variable. 
-  caseEq (Mem.alloc m 0 (init_data_list_size (a#1)#2)). intros m1 b ALLOC.
-  caseEq (store_init_data_list m1 b 0 a#1#2); try congruence. intros m2 STORE REC EQ.
-  eapply IHvl; eauto. 
-  rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
-  rewrite (Mem.nextblock_alloc _ _ _ _ _ ALLOC).
-  simpl. unfold block in *; omega.
-Qed.
-*)
 Fixpoint load_store_init_data (m: mem) (b: block) (p: Z) (il: list init_data) {struct il} : Prop :=
   match il with
   | nil => True
@@ -697,8 +682,9 @@ Proof.
   induction vl; simpl; intros until m'.
   congruence.
   unfold alloc_variable. 
-  caseEq (Mem.alloc m 0 (init_data_list_size a#1#2)); intros m1 b1 ALLOC.
-  caseEq (store_init_data_list m1 b1 0 a#1#2); try congruence. intros m2 STO REC VAL.
+  set (init := gvar_init a#2).
+  caseEq (Mem.alloc m 0 (init_data_list_size init)); intros m1 b1 ALLOC.
+  caseEq (store_init_data_list m1 b1 0 init); try congruence. intros m2 STO REC VAL.
   transitivity (Mem.load chunk m2 b p). 
   apply IHvl; auto. red. rewrite (store_init_data_list_nextblock _ _ _ _ STO).
   change (Mem.valid_block m1 b). eauto with mem. 
@@ -720,23 +706,23 @@ Proof.
 Qed.
 
 Lemma alloc_variables_charact:
-  forall id init v vl g m m',
+  forall id gv vl g m m',
   genv_nextvar g = Mem.nextblock m ->
   alloc_variables m vl = Some m' ->
-  list_norepet (map (fun v => v#1#1) vl) ->
-  In (id, init, v) vl ->
+  list_norepet (map (@fst ident (globvar V)) vl) ->
+  In (id, gv) vl ->
   exists b, find_symbol (add_variables g vl) id = Some b 
-         /\ find_var_info (add_variables g vl) b = Some v
-         /\ Mem.range_perm m' b 0 (init_data_list_size init) Writable
-         /\ load_store_init_data m' b 0 init.
+         /\ find_var_info (add_variables g vl) b = Some gv
+         /\ Mem.range_perm m' b 0 (init_data_list_size gv.(gvar_init)) Writable
+         /\ load_store_init_data m' b 0 gv.(gvar_init).
 Proof.
   induction vl; simpl.
   contradiction.
   intros until m'; intro NEXT.
-  unfold alloc_variable. destruct a as [[id' init'] v']. simpl.
-  caseEq (Mem.alloc m 0 (init_data_list_size init')); try congruence.
+  unfold alloc_variable. destruct a as [id' gv']. simpl.
+  caseEq (Mem.alloc m 0 (init_data_list_size (gvar_init gv'))); try congruence.
   intros m1 b ALLOC. 
-  caseEq (store_init_data_list m1 b 0 init'); try congruence.
+  caseEq (store_init_data_list m1 b 0 (gvar_init gv')); try congruence.
   intros m2 STORE REC NOREPET IN. inv NOREPET.
   exploit Mem.alloc_result; eauto. intro BEQ. 
   destruct IN. inv H.
@@ -778,15 +764,28 @@ Proof.
   red. rewrite H1. rewrite <- H3. intuition.
 Qed.
 
+Theorem find_var_info_not_fresh:
+  forall p b gv m,
+  init_mem p = Some m ->
+  find_var_info (globalenv p) b = Some gv -> Mem.valid_block m b.
+Proof.
+  unfold init_mem; intros.
+  exploit alloc_variables_nextblock; eauto. rewrite Mem.nextblock_empty. intro.
+  exploit genv_vars_range; eauto. intros.
+  generalize (add_variables_nextvar (prog_vars p) (add_functions empty_genv (prog_funct p))).
+  rewrite add_functions_nextvar. simpl genv_nextvar. intro.
+  red. rewrite H1. rewrite <- H3. intuition.
+Qed.
+
 Theorem find_var_exists:
-  forall p id init v m,
+  forall p id gv m,
   list_norepet (prog_var_names p) ->
-  In (id, init, v) (prog_vars p) ->
+  In (id, gv) (prog_vars p) ->
   init_mem p = Some m ->
   exists b, find_symbol (globalenv p) id = Some b
-         /\ find_var_info (globalenv p) b = Some v
-         /\ Mem.range_perm m b 0 (init_data_list_size init) Writable
-         /\ load_store_init_data (globalenv p) m b 0 init.
+         /\ find_var_info (globalenv p) b = Some gv
+         /\ Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) Writable
+         /\ load_store_init_data (globalenv p) m b 0 gv.(gvar_init).
 Proof.
   intros. exploit alloc_variables_charact; eauto. 
   instantiate (1 := Mem.empty). rewrite add_functions_nextvar. rewrite Mem.nextblock_empty; auto.
@@ -839,7 +838,7 @@ Lemma alloc_variable_neutral:
   Mem.inject_neutral thr m'.
 Proof.
   intros until m'. unfold alloc_variable. 
-  caseEq (Mem.alloc m 0 (init_data_list_size (id#1)#2)); intros m1 b; intros.
+  caseEq (Mem.alloc m 0 (init_data_list_size (gvar_init id#2))); intros m1 b; intros.
   eapply store_init_data_list_neutral with (b := b).
   eapply Mem.alloc_inject_neutral; eauto.
   rewrite (Mem.alloc_result _ _ _ _ _ H). auto.
@@ -887,7 +886,12 @@ Section MATCH_PROGRAMS.
 
 Variables A B V W: Type.
 Variable match_fun: A -> B -> Prop.
-Variable match_var: V -> W -> Prop.
+Variable match_varinfo: V -> W -> Prop.
+
+Inductive match_globvar: globvar V -> globvar W -> Prop :=
+  | match_globvar_intro: forall info1 info2 init ro vo,
+      match_varinfo info1 info2 ->
+      match_globvar (mkglobvar info1 init ro vo) (mkglobvar info2 init ro vo).
 
 Record match_genvs (ge1: t A V) (ge2: t B W): Prop := {
   mge_nextfun: genv_nextfun ge1 = genv_nextfun ge2;
@@ -901,10 +905,10 @@ Record match_genvs (ge1: t A V) (ge2: t B W): Prop := {
     exists f, ZMap.get b (genv_funs ge1) = Some f /\ match_fun f tf;
   mge_vars:
     forall b v, ZMap.get b (genv_vars ge1) = Some v ->
-    exists tv, ZMap.get b (genv_vars ge2) = Some tv /\ match_var v tv;
+    exists tv, ZMap.get b (genv_vars ge2) = Some tv /\ match_globvar v tv;
   mge_rev_vars:
     forall b tv, ZMap.get b (genv_vars ge2) = Some tv ->
-    exists v, ZMap.get b (genv_vars ge1) = Some v /\ match_var v tv
+    exists v, ZMap.get b (genv_vars ge1) = Some v /\ match_globvar v tv
 }.
 
 Lemma add_function_match:
@@ -939,10 +943,10 @@ Proof.
 Qed.
 
 Lemma add_variable_match:
-  forall ge1 ge2 id idl v1 v2,
+  forall ge1 ge2 id v1 v2,
   match_genvs ge1 ge2 ->
-  match_var v1 v2 ->
-  match_genvs (add_variable ge1 (id, idl, v1)) (add_variable ge2 (id, idl, v2)).
+  match_globvar v1 v2 ->
+  match_genvs (add_variable ge1 (id, v1)) (add_variable ge2 (id, v2)).
 Proof.
   intros. destruct H. constructor; simpl. 
   congruence. congruence. congruence.
@@ -959,19 +963,18 @@ Proof.
 Qed.
 
 Lemma add_variables_match:
-  forall vl1 vl2, list_forall2 (match_var_entry match_var) vl1 vl2 ->
+  forall vl1 vl2, list_forall2 (match_var_entry match_varinfo) vl1 vl2 ->
   forall ge1 ge2, match_genvs ge1 ge2 ->
   match_genvs (add_variables ge1 vl1) (add_variables ge2 vl2).
 Proof.
   induction 1; intros; simpl. 
   auto.
-  destruct a1 as [[id1 init1] f1]; destruct b1 as [[id2 init2] f2].
-  destruct H. destruct H2. subst. apply IHlist_forall2. apply add_variable_match; auto.
+  inv H. apply IHlist_forall2. apply add_variable_match; auto. constructor; auto.
 Qed.
 
 Variable p: program A V.
 Variable p': program B W.
-Hypothesis progmatch: match_program match_fun match_var p p'.
+Hypothesis progmatch: match_program match_fun match_varinfo p p'.
 
 Lemma globalenvs_match:
   match_genvs (globalenv p) (globalenv p').
@@ -1018,17 +1021,17 @@ Proof.
 Qed.
 
 Theorem find_var_info_match:
-  forall (b : block) (v : V),
+  forall (b : block) (v : globvar V),
   find_var_info (globalenv p) b = Some v ->
   exists tv,
-  find_var_info (globalenv p') b = Some tv /\ match_var v tv.
+  find_var_info (globalenv p') b = Some tv /\ match_globvar v tv.
 Proof (mge_vars globalenvs_match).
 
 Theorem find_var_info_rev_match:
-  forall (b : block) (tv : W),
+  forall (b : block) (tv : globvar W),
   find_var_info (globalenv p') b = Some tv ->
   exists v,
-  find_var_info (globalenv p) b = Some v /\ match_var v tv.
+  find_var_info (globalenv p) b = Some v /\ match_globvar v tv.
 Proof (mge_rev_vars globalenvs_match).
 
 Theorem find_symbol_match:
@@ -1052,18 +1055,17 @@ Proof.
 Qed.
 
 Lemma alloc_variables_match:
-  forall vl1 vl2, list_forall2 (match_var_entry match_var) vl1 vl2 ->
+  forall vl1 vl2, list_forall2 (match_var_entry match_varinfo) vl1 vl2 ->
   forall m,
   alloc_variables (globalenv p') m vl2 = alloc_variables (globalenv p) m vl1.
 Proof.
   induction 1; intros; simpl.
   auto.
-  destruct a1 as [[id1 init1] v1]; destruct b1 as [[id2 init2] v2].
-  destruct H. destruct H1. subst.
+  inv H. 
   unfold alloc_variable; simpl. 
-  destruct (Mem.alloc m 0 (init_data_list_size init2)). 
+  destruct (Mem.alloc m 0 (init_data_list_size init)). 
   rewrite store_init_data_list_match. 
-  destruct (store_init_data_list (globalenv p) m0 b 0 init2); auto.
+  destruct (store_init_data_list (globalenv p) m0 b 0 init); auto.
 Qed.
 
 Theorem init_mem_match:
@@ -1135,25 +1137,27 @@ Proof.
 Qed.
 
 Theorem find_var_info_transf_partial2:
-  forall (b: block) (v: V),
+  forall (b: block) (v: globvar V),
   find_var_info (globalenv p) b = Some v ->
   exists v',
-  find_var_info (globalenv p') b = Some v' /\ transf_var v = OK v'.
+  find_var_info (globalenv p') b = Some v' /\ transf_globvar transf_var v = OK v'.
 Proof.
   intros. 
   exploit find_var_info_match. eexact prog_match. eauto. 
-  intros [tv [X Y]]. exists tv; auto.
+  intros [tv [X Y]]. exists tv; split; auto. inv Y. unfold transf_globvar; simpl.
+  rewrite H0; simpl. auto.
 Qed.
 
 Theorem find_var_info_rev_transf_partial2:
-  forall (b: block) (v': W),
+  forall (b: block) (v': globvar W),
   find_var_info (globalenv p') b = Some v' ->
   exists v,
-  find_var_info (globalenv p) b = Some v /\ transf_var v = OK v'.
+  find_var_info (globalenv p) b = Some v /\ transf_globvar transf_var v = OK v'.
 Proof.
   intros. 
   exploit find_var_info_rev_match. eexact prog_match. eauto. 
-  intros [v [X Y]]. exists v; auto.
+  intros [v [X Y]]. exists v; split; auto. inv Y. unfold transf_globvar; simpl.
+  rewrite H0; simpl. auto.
 Qed.
 
 Theorem find_symbol_transf_partial2:
@@ -1182,9 +1186,12 @@ Hypothesis transf_OK: transform_partial_program transf p = OK p'.
 Remark transf2_OK:
   transform_partial_program2 transf (fun x => OK x) p = OK p'.
 Proof.
-  rewrite <- transf_OK. unfold transform_partial_program2, transform_partial_program.
-  destruct (map_partial prefix_funct_name transf (prog_funct p)); auto.
-  rewrite map_partial_identity; auto. 
+  rewrite <- transf_OK. 
+  unfold transform_partial_program2, transform_partial_program.
+  destruct (map_partial prefix_name transf (prog_funct p)); auto.
+  simpl. replace (transf_globvar (fun (x : V) => OK x)) with (fun (v: globvar V) => OK v).
+  rewrite map_partial_identity; auto.
+  apply extensionality; intros. destruct x; auto.
 Qed.
 
 Theorem find_funct_ptr_transf_partial:
@@ -1226,6 +1233,19 @@ Theorem find_symbol_transf_partial:
   find_symbol (globalenv p') s = find_symbol (globalenv p) s.
 Proof.
   exact (@find_symbol_transf_partial2 _ _ _ _ _ _ _ _ transf2_OK).
+Qed.
+
+Theorem find_var_info_transf_partial:
+  forall (b: block),
+  find_var_info (globalenv p') b = find_var_info (globalenv p) b.
+Proof.
+  intros. case_eq (find_var_info (globalenv p) b); intros.
+  exploit find_var_info_transf_partial2. eexact transf2_OK. eauto. 
+  intros [v' [P Q]]. monadInv Q. rewrite P. inv EQ. destruct g; auto. 
+  case_eq (find_var_info (globalenv p') b); intros.
+  exploit find_var_info_rev_transf_partial2. eexact transf2_OK. eauto.
+  intros [v' [P Q]]. monadInv Q. inv EQ. congruence. 
+  auto.
 Qed.
 
 Theorem init_mem_transf_partial:
@@ -1293,6 +1313,13 @@ Theorem find_symbol_transf:
   find_symbol (globalenv tp) s = find_symbol (globalenv p) s.
 Proof.
   exact (@find_symbol_transf_partial _ _ _ _ _ _ transf_OK).
+Qed.
+
+Theorem find_var_info_transf:
+  forall (b: block),
+  find_var_info (globalenv tp) b = find_var_info (globalenv p) b.
+Proof.
+  exact (@find_var_info_transf_partial _ _ _ _ _ _ transf_OK).
 Qed.
 
 Theorem init_mem_transf:

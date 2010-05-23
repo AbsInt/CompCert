@@ -50,6 +50,14 @@ Proof.
   exact TRANSF. 
 Qed.
 
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof.
+  intros. unfold ge, tge. 
+  apply Genv.find_var_info_transf_partial with transf_fundef.
+  exact TRANSF. 
+Qed.
+
 Lemma functions_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
@@ -1335,7 +1343,7 @@ Lemma exec_function_external_prop:
          (m : mem) (t0 : trace) (ms' : RegEq.t -> val)
          (ef : external_function) (args : list val) (res : val) (m': mem),
   Genv.find_funct_ptr ge fb = Some (External ef) ->
-  external_call ef (Genv.find_symbol ge) args m t0 res m' ->
+  external_call ef ge args m t0 res m' ->
   Machconcr.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->
   ms' = Regmap.set (Conventions.loc_result (ef_sig ef)) res ms ->
   exec_instr_prop (Machconcr.Callstate s fb ms m)
@@ -1347,7 +1355,8 @@ Proof.
   left; exists (State (rs#(loc_external_result (ef_sig ef)) <- res #PC <- (rs LR))
                 m'); split.
   apply plus_one. eapply exec_step_external; eauto. 
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
   eapply extcall_arguments_match; eauto. 
   econstructor; eauto.
   unfold loc_external_result. auto with ppcgen.

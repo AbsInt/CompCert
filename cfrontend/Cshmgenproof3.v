@@ -279,9 +279,9 @@ Qed.
 
 Definition globvarenv 
     (gv: gvarenv)
-    (vars: list (ident * list init_data * var_kind)) :=
+    (vars: list (ident * globvar var_kind)) :=
   List.fold_left
-    (fun gve x => match x with (id, init, k) => PTree.set id k gve end)
+    (fun gve x => match x with (id, v) => PTree.set id (gvar_info v) gve end)
     vars gv.
 
 Definition type_not_by_value (ty: type) : Prop :=
@@ -324,21 +324,20 @@ Qed.
 Lemma add_global_var_match_globalenv:
   forall vars tenv gv tvars,
   match_globalenv tenv gv ->
-  map_partial AST.prefix_var_name transl_globvar vars = OK tvars ->
+  map_partial AST.prefix_name (transf_globvar transl_globvar) vars = OK tvars ->
   match_globalenv (add_global_vars tenv vars) (globvarenv gv tvars).
 Proof.
   induction vars; simpl.
   intros. inversion H0. assumption.
-  destruct a as [[id init] ty]. intros until tvars; intro.
-  caseEq (transl_globvar ty); simpl; try congruence. intros vk VK. 
-  caseEq (map_partial AST.prefix_var_name transl_globvar vars); simpl; try congruence. intros tvars' EQ1 EQ2.
+  destruct a as [id v]. intros until tvars; intro.
+  caseEq (transf_globvar transl_globvar v); simpl; try congruence. intros vk VK. 
+  caseEq (map_partial AST.prefix_name (transf_globvar transl_globvar) vars); simpl; try congruence. intros tvars' EQ1 EQ2.
   inversion EQ2; clear EQ2. simpl. 
   apply IHvars; auto.
-  red. intros until chunk. repeat rewrite PTree.gsspec. 
+  red. intros until chunk. unfold add_global_var. repeat rewrite PTree.gsspec. simpl. 
   destruct (peq id0 id); intros.
-  inversion H0; clear H0; subst id0 ty0. 
-  generalize (var_kind_by_value _ _ H2). 
-  unfold transl_globvar in VK. congruence.
+  inv H0. monadInv VK. unfold transl_globvar in EQ.  
+  generalize (var_kind_by_value _ _ H2). simpl. congruence.
   red in H. eauto. 
 Qed.
 
@@ -1561,7 +1560,10 @@ Proof.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   econstructor; split.
   apply plus_one. constructor. eauto. 
-  eapply external_call_symbols_preserved; eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved_2; eauto.
+  exact symbols_preserved.
+  eexact (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+  eexact (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
   econstructor; eauto.
 
 (* returnstate 0 *)

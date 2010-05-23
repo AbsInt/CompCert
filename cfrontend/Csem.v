@@ -901,7 +901,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f f.(fn_body) k e m2)
 
   | step_external_function: forall id targs tres vargs k m vres t m',
-      external_call (external_function id targs tres) (Genv.find_symbol ge) vargs m t vres m' ->
+      external_call (external_function id targs tres) ge vargs m t vres m' ->
       step (Callstate (External id targs tres) vargs k m)
          t (Returnstate vres k m')
 
@@ -1106,7 +1106,7 @@ with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
       Mem.free_list m3 (blocks_of_env e) = Some m4 ->
       eval_funcall m (Internal f) vargs t m4 vres
   | eval_funcall_external: forall m id targs tres vargs t vres m',
-      external_call (external_function id targs tres) (Genv.find_symbol ge) vargs m t vres m' ->
+      external_call (external_function id targs tres) ge vargs m t vres m' ->
       eval_funcall m (External id targs tres) vargs t m' vres.
 
 Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop

@@ -599,10 +599,10 @@ Definition build_compilenv
     (globenv, 0).
 
 Definition assign_global_variable
-     (ce: compilenv) (info: ident * list init_data * var_kind) : compilenv :=
+     (ce: compilenv) (info: ident * globvar var_kind) : compilenv :=
   match info with
-  | (id, _, Vscalar chunk) => PMap.set id (Var_global_scalar chunk) ce
-  | (id, _, Varray _) => PMap.set id Var_global_array ce
+  | (id, mkglobvar (Vscalar chunk) _ _ _ ) => PMap.set id (Var_global_scalar chunk) ce
+  | (id, mkglobvar (Varray _) _ _ _) => PMap.set id Var_global_array ce
   end.
 
 Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
