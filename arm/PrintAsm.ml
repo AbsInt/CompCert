@@ -440,8 +440,17 @@ let print_instruction oc labels = function
       (* R12 = first int temporary is unused at this point,
          but this should be reflected in the proof *)
       fprintf oc "	mov	r12, sp\n";
-      fprintf oc "	sub	sp, sp, #%ld\n" sz4;
-      fprintf oc "	str	r12, [sp, #%ld]\n" ofs; 3
+      let ninstr = ref 0 in
+      List.iter
+        (fun mask ->
+          let b = Int32.logand sz4 mask in
+          if b <> 0l then begin
+            fprintf oc "	sub	sp, sp, #%ld\n" b;
+            incr ninstr
+          end)
+        [0xFF000000l; 0x00FF0000l; 0x0000FF00l; 0x000000FFl];
+      fprintf oc "	str	r12, [sp, #%ld]\n" ofs;
+      2 + !ninstr
   | Pfreeframe(lo, hi, ofs) ->
       fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1
   | Plabel lbl ->
@@ -583,11 +592,11 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
-  match init_data with
+let print_var oc (Coq_pair(name, v)) =
+  match v.gvar_init with
   | [] -> ()
   | _  ->
-      if C2Clight.atom_is_readonly name
+      if v.gvar_readonly
       then fprintf oc "	.const\n"
       else fprintf oc "	.data\n";
       fprintf oc "	.align	2\n";
@@ -595,7 +604,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
         fprintf oc "	.global	%a\n" print_symb name;
       fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
-      print_init_data oc name init_data
+      print_init_data oc name v.gvar_init
 
 let print_program oc p =
   extfuns := IdentSet.empty;

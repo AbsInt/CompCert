@@ -401,10 +401,16 @@ let print_instruction oc labels = function
       and hi = camlint_of_coqint hi
       and ofs = camlint_of_coqint ofs in
       let sz = Int32.sub hi lo in
-      (* Keep stack 16-aligned *)
-      let sz16 = Int32.logand (Int32.add sz 15l) 0xFFFF_FFF0l in
       assert (ofs = 0l);
-      fprintf oc "	stwu	%a, %ld(%a)\n" ireg GPR1 (Int32.neg sz16) ireg GPR1
+      (* Keep stack 16-aligned *)
+      let adj = Int32.neg (Int32.logand (Int32.add sz 15l) 0xFFFF_FFF0l) in
+      if adj >= -0x8000l then
+        fprintf oc "	stwu	%a, %ld(%a)\n" ireg GPR1 adj ireg GPR1
+      else begin
+        fprintf oc "	addis	%a, 0, %ld\n" ireg GPR12 (Int32.shift_right_logical adj 16);
+        fprintf oc "	ori	%a, %a, %ld\n" ireg GPR12 ireg GPR12 (Int32.logand adj 0xFFFFl);
+        fprintf oc "	stwux	%a, %a, %a\n" ireg GPR1 ireg GPR1 ireg GPR12
+      end
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandc(r1, r2, r3) ->
@@ -889,12 +895,12 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
-  match init_data with
+let print_var oc (Coq_pair(name, v)) =
+  match v.gvar_init with
   | [] -> ()
   | _  ->
       let init =
-        match init_data with [Init_space _] -> false | _ -> true in
+        match v.gvar_init with [Init_space _] -> false | _ -> true in
       let sec =
         Sections.section_for_variable name init
       and align =
@@ -907,7 +913,7 @@ let print_var oc (Coq_pair(Coq_pair(name, init_data), _)) =
       if not (C2Clight.atom_is_static name) then
         fprintf oc "	.globl	%a\n" symbol name;
       fprintf oc "%a:\n" symbol name;
-      print_init_data oc name init_data;
+      print_init_data oc name v.gvar_init;
       if target <> MacOS then begin
         fprintf oc "	.type	%a, @object\n" symbol name;
         fprintf oc "	.size	%a, . - %a\n" symbol name symbol name

@@ -376,24 +376,27 @@ let print_init p = function
 
 let re_string_literal = Str.regexp "__stringlit_[0-9]+"
 
-let print_globvar p (Coq_pair(Coq_pair(id, init), ty)) =
-  match init with
+let print_globvar p (Coq_pair(id, v)) =
+  let name1 = extern_atom id in
+  let name2 = if v.gvar_readonly then "const " ^ name1 else name1 in
+  let name3 = if v.gvar_volatile then "volatile " ^ name2 else name2 in
+  match v.gvar_init with
   | [] ->
       fprintf p "extern %s;@ @ "
-              (name_cdecl (extern_atom id) ty)
+              (name_cdecl name3 v.gvar_info)
   | [Init_space _] ->
       fprintf p "%s;@ @ "
-              (name_cdecl (extern_atom id) ty)
+              (name_cdecl name3 v.gvar_info)
   | _ ->
       fprintf p "@[<hov 2>%s = "
-              (name_cdecl (extern_atom id) ty);
+              (name_cdecl name3 v.gvar_info);
       if Str.string_match re_string_literal (extern_atom id) 0
-      && List.for_all (function Init_int8 _ -> true | _ -> false) init
+      && List.for_all (function Init_int8 _ -> true | _ -> false) v.gvar_init
       then
-        fprintf p "\"%s\"" (string_of_init (chop_last_nul init))
+        fprintf p "\"%s\"" (string_of_init (chop_last_nul v.gvar_init))
       else begin
         fprintf p "{@ ";
-        List.iter (print_init p) init;
+        List.iter (print_init p) v.gvar_init;
         fprintf p "}"
       end;
       fprintf p ";@]@ @ "
@@ -474,8 +477,8 @@ let collect_fundef (Coq_pair(id, fd)) =
   | External(_, args, res) -> collect_type_list args; collect_type res
   | Internal f -> collect_function f
 
-let collect_globvar (Coq_pair(Coq_pair(id, init), ty)) =
-  collect_type ty
+let collect_globvar (Coq_pair(id, v)) =
+  collect_type v.gvar_info
 
 let collect_program p =
   List.iter collect_globvar p.prog_vars;

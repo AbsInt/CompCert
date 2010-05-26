@@ -69,7 +69,9 @@ let global_for_string s id =
        :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
-  Datatypes.Coq_pair(Datatypes.Coq_pair(id, !init), typeStringLiteral s)
+  Datatypes.Coq_pair(id,
+                     {gvar_info = typeStringLiteral s; gvar_init = !init;
+                      gvar_readonly = true; gvar_volatile = false})
 
 let globals_for_strings globs =
   Hashtbl.fold
@@ -654,6 +656,13 @@ let rec type_is_readonly env t =
   | C.TArray(t', _, _) -> type_is_readonly env t'
   | _ -> false
 
+let rec type_is_volatile env t =
+  let a = Cutil.attributes_of_type env t in
+  if List.mem C.AConst a then true else
+  match Cutil.unroll env t with
+  | C.TArray(t', _, _) -> type_is_volatile env t'
+  | _ -> false
+
 let convertGlobvar env (sto, id, ty, optinit as decl) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
@@ -667,7 +676,10 @@ let convertGlobvar env (sto, id, ty, optinit as decl) =
   Sections.define_variable id'
     (match Cutil.sizeof env ty with Some sz -> sz | None -> max_int)
     (type_is_readonly env ty);
-  Datatypes.Coq_pair(Datatypes.Coq_pair(id', init'), ty')
+  Datatypes.Coq_pair(id', 
+                     {gvar_info = ty'; gvar_init = init';
+                      gvar_readonly = type_is_readonly env ty;
+                      gvar_volatile = type_is_volatile env ty})
 
 (** Convert a list of global declarations.
   Result is a pair [(funs, vars)] where [funs] are 

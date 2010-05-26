@@ -324,7 +324,8 @@ global_declarations:
 
 global_declaration:
     VAR STRINGLIT LBRACKET INTLIT RBRACKET
-      { Coq_pair(Coq_pair($2, [ Init_space (z_of_camlint $4) ]), ()) }
+      { Coq_pair($2, {gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
+                      gvar_readonly = false; gvar_volatile = false}) }
 ;
 
 proc_list:
