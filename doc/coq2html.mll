@@ -45,31 +45,6 @@ let add_definition curmod pos sp id ty =
   if not (Hashtbl.mem xref_table (curmod, pos))
   then Hashtbl.add xref_table (curmod, pos) (Def(path sp id, ty))
 
-(*
-let read_glob_file f =
-  let ic = open_in f in
-  let curmod = ref "" in
-  try
-    while true do
-      let s = input_line ic in
-      try
-        Scanf.sscanf s "F%s"
-          (fun m -> curmod := m; add_module m)
-      with Scanf.Scan_failure _ ->
-      try
-        Scanf.sscanf s "R%d %s %s %s %s"
-          (fun pos dp sp id ty -> add_reference !curmod pos dp sp id ty)
-      with Scanf.Scan_failure _ ->
-      try
-        Scanf.sscanf s "%s %d %s %s"
-          (fun ty pos sp id -> add_definition !curmod pos sp id ty)
-      with Scanf.Scan_failure _ ->
-        ()
-    done
-  with End_of_file ->
-    close_in ic
-*)
-
 type link = Link of string | Anchor of string | Nolink
 
 let coqlib_url = "http://coq.inria.fr/library/"
