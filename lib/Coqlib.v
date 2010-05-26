@@ -1104,7 +1104,7 @@ Proof.
   induction 1; intros. auto. apply IHis_tail. eapply is_tail_cons_left; eauto.
 Qed.
 
-(** [list_forall2 P [x1 ... xN] [y1 ... yM] holds iff [N = M] and
+(** [list_forall2 P [x1 ... xN] [y1 ... yM]] holds iff [N = M] and
   [P xi yi] holds for all [i]. *)
 
 Section FORALL2.
