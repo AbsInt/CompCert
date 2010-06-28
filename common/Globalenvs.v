@@ -33,6 +33,7 @@
   place during program linking and program loading in a real operating
   system. *)
 
+Require Import Axioms.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.

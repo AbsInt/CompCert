@@ -15,6 +15,7 @@
 
 (** Formalizations of machine integers modulo $2^N$ #2<sup>N</sup>#. *)
 
+Require Import Axioms.
 Require Import Coqlib.
 
 (** * Comparisons *)
@@ -115,7 +116,7 @@ Lemma mkint_eq:
   forall x y Px Py, x = y -> mkint x Px = mkint y Py.
 Proof.
   intros. subst y. 
-  generalize (proof_irrelevance _ Px Py); intro.
+  generalize (proof_irr Px Py); intro.
   subst Py. reflexivity.
 Qed.
 

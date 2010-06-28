@@ -23,6 +23,8 @@ Require Export List.
 Require Export Bool.
 Require Import Wf_nat.
 
+(***
+
 (** * Logical axioms *)
 
 (** We use two logical axioms that are not provable in Coq but consistent
@@ -36,7 +38,8 @@ Axiom extensionality:
 
 Axiom proof_irrelevance:
   forall (P: Prop) (p1 p2: P), p1 = p2.
-
+***)
+  
 (** * Useful tactics *)
 
 Ltac inv H := inversion H; clear H; subst.

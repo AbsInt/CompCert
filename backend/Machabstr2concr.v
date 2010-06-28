@@ -12,6 +12,7 @@
 
 (** Simulation between the two semantics for the Mach language. *)
 
+Require Import Axioms.
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.

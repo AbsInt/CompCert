@@ -450,7 +450,10 @@ let print_instruction oc labels = function
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
       fprintf oc "	mtctr	%a\n" ireg GPR12;
       fprintf oc "	bctr\n";
-      jumptables := (lbl, tbl) :: !jumptables;
+      fprintf oc "%a:" label lbl;
+      List.iter
+        (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
+        tbl;
       fprintf oc "%s end pseudoinstr btbl\n" comment
   | Pcmplw(r1, r2) ->
       fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
@@ -508,7 +511,7 @@ let print_instruction oc labels = function
       fprintf oc "	lwz	%a, 4(%a)\n" ireg r1  ireg GPR1;
       fprintf oc "	addis	%a, %a, 0x8000\n" ireg r1 ireg r1;
       fprintf oc "%a:	addi	%a, %a, 8\n" label lbl3  ireg GPR1  ireg GPR1;
-      float_literals := (lbl1, 0x41e00000_00000000L) :: !float_literals;
+      float_literals := (lbl1, 0x41e0_0000_0000_0000L) :: !float_literals;
       fprintf oc "%s end pseudoinstr fctiu\n" comment
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
@@ -538,7 +541,7 @@ let print_instruction oc labels = function
       fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
-      float_literals := (lbl, 0x43300000_80000000L) :: !float_literals;
+      float_literals := (lbl, 0x4330_0000_8000_0000L) :: !float_literals;
       fprintf oc "%s end pseudoinstr ictf\n" comment
   | Piuctf(r1, r2) ->
       let lbl = new_label() in
@@ -551,7 +554,7 @@ let print_instruction oc labels = function
       fprintf oc "	lfd	%a, 0(%a)\n" freg r1  ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1  ireg GPR1;
       fprintf oc "	fsub	%a, %a, %a\n" freg r1  freg r1  freg FPR13;
-      float_literals := (lbl, 0x43300000_00000000L) :: !float_literals;
+      float_literals := (lbl, 0x4330_0000_0000_0000L) :: !float_literals;
       fprintf oc "%s end pseudoinstr ictf\n" comment
   | Plbz(r1, c, r2) ->
       fprintf oc "	lbz	%a, %a(%a)\n" ireg r1 constant c ireg r2

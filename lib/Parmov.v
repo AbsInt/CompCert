@@ -2,8 +2,8 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*      Laurence Rideau, INRIA Sophia-Antipolis-Méditerranée           *)
-(*      Bernard Paul Serpette, INRIA Sophia-Antipolis-Méditerranée     *)
+(*      Laurence Rideau, INRIA Sophia-Antipolis-M\u00e9diterran\u00e9e           *)
+(*      Bernard Paul Serpette, INRIA Sophia-Antipolis-M\u00e9diterran\u00e9e     *)
 (*      Xavier Leroy, INRIA Paris-Rocquencourt                         *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
@@ -53,6 +53,7 @@
 *)
 
 Require Import Relations.
+Require Import Axioms.
 Require Import Coqlib.
 Require Recdef.
 
@@ -99,7 +100,7 @@ Definition env := reg -> val.
 Lemma env_ext:
   forall (e1 e2: env),
   (forall r, e1 r = e2 r) -> e1 = e2.
-Proof (extensionality reg val).
+Proof (@extensionality reg val).
 
 (** The main operation over environments is update: it assigns 
   a value [v] to a register [r] and preserves the values of other

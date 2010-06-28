@@ -54,11 +54,18 @@ Inductive permission: Type :=
     list.  We reflect this fact by the following order over permissions. *)
 
 Inductive perm_order: permission -> permission -> Prop :=
+  | perm_refl:  forall p, perm_order p p
   | perm_F_any: forall p, perm_order Freeable p
   | perm_W_R:   perm_order Writable Readable
   | perm_any_N: forall p, perm_order p Nonempty.
 
 Hint Constructors perm_order: mem.
+
+Lemma perm_order_trans:
+  forall p1 p2 p3, perm_order p1 p2 -> perm_order p2 p3 -> perm_order p1 p3.
+Proof.
+  intros. inv H; inv H0; constructor.
+Qed.
 
 Module Type MEM.
 
@@ -115,10 +122,9 @@ Definition storev (chunk: memory_chunk) (m: mem) (addr v: val) : option mem :=
 
 (** [loadbytes m b ofs n] reads and returns the byte-level representation of
   the values contained at offsets [ofs] to [ofs + n - 1] within block [b]
-  in memory state [m].  These values must be integers or floats.
-  [None] is returned if the accessed addresses are not readable
-  or contain undefined or pointer values. *)
-Parameter loadbytes: forall (m: mem) (b: block) (ofs n: Z), option (list byte).
+  in memory state [m].
+  [None] is returned if the accessed addresses are not readable. *)
+Parameter loadbytes: forall (m: mem) (b: block) (ofs n: Z), option (list memval).
 
 (** [free_list] frees all the given (block, lo, hi) triples. *)
 Fixpoint free_list (m: mem) (l: list (block * Z * Z)) {struct l}: option mem :=
@@ -293,35 +299,22 @@ Axiom load_int16_signed_unsigned:
 (** ** Properties of [loadbytes]. *)
 
 (** If [loadbytes] succeeds, the corresponding [load] succeeds and
-  returns a [Vint] or [Vfloat] value that is determined by the
+  returns a value that is determined by the
   bytes read by [loadbytes]. *)
 Axiom loadbytes_load:
   forall chunk m b ofs bytes,
   loadbytes m b ofs (size_chunk chunk) = Some bytes ->
   (align_chunk chunk | ofs) ->
-  load chunk m b ofs =
-    Some(match type_of_chunk chunk with
-         | Tint => Vint(decode_int chunk bytes)
-         | Tfloat => Vfloat(decode_float chunk bytes)
-         end).
+  load chunk m b ofs = Some(decode_val chunk bytes).
 
-(** Conversely, if [load] returns an int or a float, the corresponding
+(** Conversely, if [load] returns a value, the corresponding
   [loadbytes] succeeds and returns a list of bytes which decodes into the
   result of [load]. *)
-Axiom load_int_loadbytes:
-  forall chunk m b ofs n,
-  load chunk m b ofs = Some(Vint n) ->
-  type_of_chunk chunk = Tint /\
+Axiom load_loadbytes:
+  forall chunk m b ofs v,
+  load chunk m b ofs = Some v ->
   exists bytes, loadbytes m b ofs (size_chunk chunk) = Some bytes
-             /\ n = decode_int chunk bytes.
-
-Axiom load_float_loadbytes:
-  forall chunk m b ofs f,
-  load chunk m b ofs = Some(Vfloat f) ->
-  type_of_chunk chunk = Tfloat /\
-  exists bytes, loadbytes m b ofs (size_chunk chunk) = Some bytes
-             /\ f = decode_float chunk bytes.
-
+             /\ v = decode_val chunk bytes.
 
 (** [loadbytes] returns a list of length [n] (the number of bytes read). *)
 Axiom loadbytes_length:
@@ -436,13 +429,7 @@ Axiom load_pointer_store:
 
 Axiom loadbytes_store_same:
   forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
-  loadbytes m2 b ofs (size_chunk chunk) =
-  match v with
-  | Vundef => None
-  | Vint n => Some(encode_int chunk n)
-  | Vfloat n => Some(encode_float chunk n)
-  | Vptr _ _ => None
-  end.
+  loadbytes m2 b ofs (size_chunk chunk) = Some(encode_val chunk v).
 Axiom loadbytes_store_other:
   forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall b' ofs' n,

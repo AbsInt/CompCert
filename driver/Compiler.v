@@ -13,6 +13,7 @@
 (** The whole compiler and its proof of semantic preservation *)
 
 (** Libraries. *)
+Require Import Axioms.
 Require Import Coqlib.
 Require Import Maps.
 Require Import Errors.
