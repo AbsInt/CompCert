@@ -24,7 +24,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Locations.
 Require Stacklayout.
-Require Conventions.
+Require Import Conventions.
 
 (** * Abstract syntax *)
 
@@ -64,6 +64,28 @@ Inductive crbit: Type :=
 
 Lemma crbit_eq: forall (x y: crbit), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
+
+(** We model the following registers of the ARM architecture. *)
+
+Inductive preg: Type :=
+  | IR: ireg -> preg                    (**r integer registers *)
+  | FR: freg -> preg                    (**r float registers *)
+  | CR: crbit -> preg                   (**r bits in the condition register *)
+  | PC: preg.                           (**r program counter *)
+
+Coercion IR: ireg >-> preg.
+Coercion FR: freg >-> preg.
+Coercion CR: crbit >-> preg.
+
+Lemma preg_eq: forall (x y: preg), {x=y} + {x<>y}.
+Proof. decide equality. apply ireg_eq. apply freg_eq. apply crbit_eq. Defined.
+
+Module PregEq.
+  Definition t := preg.
+  Definition eq := preg_eq.
+End PregEq.
+
+Module Pregmap := EMap(PregEq).
 
 (** The instruction set.  Most instructions correspond exactly to
   actual instructions of the PowerPC processor. See the PowerPC
@@ -149,7 +171,8 @@ Inductive instruction : Type :=
   | Pfreeframe: Z -> Z -> int -> instruction       (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
-  | Pbtbl: ireg -> list label -> instruction.      (**r N-way branch through a jump table *)
+  | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
+  | Pbuiltin: external_function -> list preg -> preg -> instruction. (**r built-in *)
 
 (** The pseudo-instructions are the following:
 
@@ -203,28 +226,6 @@ Definition fundef := AST.fundef code.
 Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
-
-(** We model the following registers of the ARM architecture. *)
-
-Inductive preg: Type :=
-  | IR: ireg -> preg                    (**r integer registers *)
-  | FR: freg -> preg                    (**r float registers *)
-  | CR: crbit -> preg                   (**r bits in the condition register *)
-  | PC: preg.                           (**r program counter *)
-
-Coercion IR: ireg >-> preg.
-Coercion FR: freg >-> preg.
-Coercion CR: crbit >-> preg.
-
-Lemma preg_eq: forall (x y: preg), {x=y} + {x<>y}.
-Proof. decide equality. apply ireg_eq. apply freg_eq. apply crbit_eq. Defined.
-
-Module PregEq.
-  Definition t := preg.
-  Definition eq := preg_eq.
-End PregEq.
-
-Module Pregmap := EMap(PregEq).
 
 (** The semantics operates over a single mapping from registers
   (type [preg]) to values.  We maintain (but do not enforce)
@@ -532,6 +533,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
           else Error
       | _ => Error
       end
+  | Pbuiltin ef args res => Error    (**r treated specially below *)
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
@@ -594,10 +596,10 @@ Inductive extcall_args (rs: regset) (m: mem): list loc -> list val -> Prop :=
 
 Definition extcall_arguments
     (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
-  extcall_args rs m (Conventions.loc_arguments sg) args.
+  extcall_args rs m (loc_arguments sg) args.
 
 Definition loc_external_result (sg: signature) : preg :=
-  preg_of (Conventions.loc_result sg).
+  preg_of (loc_result sg).
 
 (** Execution of the instruction at [rs#PC]. *)
 
@@ -612,13 +614,20 @@ Inductive step: state -> trace -> state -> Prop :=
       find_instr (Int.unsigned ofs) c = Some i ->
       exec_instr c i rs m = OK rs' m' ->
       step (State rs m) E0 (State rs' m')
+  | exec_step_builtin:
+      forall b ofs c ef args res rs m t v m',
+      rs PC = Vptr b ofs ->
+      Genv.find_funct_ptr ge b = Some (Internal c) ->
+      find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
+      external_call ef ge (map rs args) m t v m' ->
+      step (State rs m) t (State (nextinstr(rs # res <- v)) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
-      extcall_arguments rs m ef.(ef_sig) args ->
-      rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
+      extcall_arguments rs m (ef_sig ef) args ->
+      rs' = (rs#(loc_external_result (ef_sig ef)) <- res
                #PC <- (rs IR14)) ->
       step (State rs m) t (State rs' m').
 

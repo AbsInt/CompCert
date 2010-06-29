@@ -1249,7 +1249,8 @@ Proof.
   apply plus_one. econstructor; eauto. 
   exploit transl_expr_correct; eauto.
   exploit transl_exprlist_correct; eauto.
-  eapply transl_fundef_sig1; eauto. congruence.
+  eapply transl_fundef_sig1; eauto. eapply functions_well_typed; eauto.
+  congruence.
   econstructor; eauto. eapply functions_well_typed; eauto. 
   econstructor; eauto. simpl. auto. 
 
@@ -1263,7 +1264,8 @@ Proof.
   apply plus_one. econstructor; eauto. 
   exploit transl_expr_correct; eauto.
   exploit transl_exprlist_correct; eauto.
-  eapply transl_fundef_sig1; eauto. congruence.
+  eapply transl_fundef_sig1; eauto. eapply functions_well_typed; eauto.
+  congruence.
   econstructor; eauto. eapply functions_well_typed; eauto.
   econstructor; eauto. simpl; auto. 
 
@@ -1595,10 +1597,15 @@ Proof.
     eapply Genv.find_funct_ptr_symbol_inversion; eauto.
   destruct H as [targs D].
   assert (targs = Tnil). 
-    inv H0. inv H10. simpl in D. unfold type_of_function in D. rewrite <- H5 in D. 
+    inv H0.
+    (* internal function *)
+    inv H10. simpl in D. unfold type_of_function in D. rewrite <- H5 in D. 
     simpl in D. congruence.
+    (* external function *)
     simpl in D. inv D.
-    exploit external_call_arity; eauto. destruct targs; simpl; congruence.
+    exploit external_call_arity; eauto. intro ARITY.
+    exploit function_ptr_well_typed; eauto. intro WT. inv WT.
+    rewrite H5 in ARITY. destruct targs; simpl in ARITY; congruence.
   subst targs. 
   assert (funsig tf = signature_of_type Tnil (Tint I32 Signed)).
     eapply transl_fundef_sig2; eauto. 

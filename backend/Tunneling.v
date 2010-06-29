@@ -104,6 +104,8 @@ Definition tunnel_instr (uf: U.t) (b: instruction) : instruction :=
       Lcall sig ros args res (U.repr uf s)
   | Ltailcall sig ros args =>
       Ltailcall sig ros args
+  | Lbuiltin ef args res s =>
+      Lbuiltin ef args res (U.repr uf s)
   | Lcond cond args s1 s2 =>
       Lcond cond args (U.repr uf s1) (U.repr uf s2)
   | Ljumptable arg tbl =>

@@ -133,8 +133,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 (** * Operational semantics (small-step) *)

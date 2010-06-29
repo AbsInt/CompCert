@@ -59,7 +59,14 @@ Proof.
   assert (i0 = i) by congruence.
   assert (rs'0 = rs') by congruence.
   assert (m'0 = m') by congruence.
-  subst. auto. 
+  subst. auto.
+  replace i with (Pbuiltin ef args res) in H5 by congruence. simpl in H5. inv H5.
+  congruence.
+  replace i with (Pbuiltin ef args res) in H12 by congruence. simpl in H12. inv H12.
+  rewrite H2 in H7; inv H7. rewrite H3 in H8; inv H8. rewrite H4 in H9; inv H9. 
+  exploit external_call_determ. eexact H5. eexact H12. auto. 
+  intros [A [B C]]. subst. auto. 
+  congruence.
   congruence.
   congruence.
   assert (ef0 = ef) by congruence. subst ef0.
@@ -82,7 +89,8 @@ Lemma final_state_not_step:
 Proof.
   unfold nostep. intros. red; intros. inv H. inv H0.
   unfold Vzero in H1. congruence.
-  unfold Vzero in H1. congruence. 
+  unfold Vzero in H1. congruence.
+  unfold Vzero in H1. congruence.
 Qed.
 
 Lemma final_state_deterministic:

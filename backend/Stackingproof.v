@@ -650,7 +650,7 @@ Qed.
 Lemma agree_callee_save_set_result:
   forall ls1 ls2 v sg,
   agree_callee_save ls1 ls2 ->
-  agree_callee_save (Locmap.set (R (Conventions.loc_result sg)) v ls1) ls2.
+  agree_callee_save (Locmap.set (R (loc_result sg)) v ls1) ls2.
 Proof.
   intros; red; intros. rewrite H; auto. 
   symmetry; apply Locmap.gso. destruct l; simpl; auto.
@@ -1501,7 +1501,17 @@ Proof.
   econstructor; eauto. 
   intros; symmetry; eapply agree_return_regs; eauto.
   intros. inv WTI. generalize (H4 _ H0). tauto.
-  apply agree_callee_save_return_regs. 
+  apply agree_callee_save_return_regs.
+
+  (* Lbuiltin *)
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) (rs0#res <- v) fr m'); split.
+  apply plus_one. apply exec_Mbuiltin.
+  change mreg with RegEq.t.
+  rewrite (agree_eval_regs _ _ _ _ _ _ _ args AG).
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto with coqlib.
+  apply agree_set_reg; auto.
  
   (* Llabel *)
   econstructor; split.

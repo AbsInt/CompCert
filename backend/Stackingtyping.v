@@ -176,6 +176,9 @@ Proof.
   apply wt_restore_callee_save. apply wt_instrs_cons; auto.
   constructor; auto.
   destruct s0; auto. rewrite H5; auto.
+  (* builtin *)
+  apply wt_instrs_cons; auto.
+  constructor; auto.
   (* label *)
   apply wt_instrs_cons; auto.
   constructor.

@@ -189,7 +189,7 @@ Definition add_load (n: numbering) (rd: reg)
 
 (** [add_unknown n rd] returns a numbering where [rd] is mapped to a
    fresh value number, and no equations are added.  This is useful
-   to model instructions with unpredictable results such as [Ialloc]. *)
+   to model instructions with unpredictable results such as [Ibuiltin]. *)
 
 Definition add_unknown (n: numbering) (rd: reg) :=
   mknumbering (Psucc n.(num_next))
@@ -348,6 +348,8 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           empty_numbering
       | Itailcall sig ros args =>
           empty_numbering
+      | Ibuiltin ef args res s =>
+          add_unknown (kill_loads before) res
       | Icond cond args ifso ifnot =>
           before
       | Ijumptable arg tbl =>

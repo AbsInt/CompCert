@@ -183,6 +183,8 @@ Definition add_edges_instr
       let largs := loc_arguments sig in
       add_prefs_call args largs
         (add_interf_call ros largs g)
+  | Ibuiltin ef args res s =>
+      add_interf_op res live g
   | Ireturn (Some r) =>
       add_pref_mreg r (loc_result sig) g
   | _ => g

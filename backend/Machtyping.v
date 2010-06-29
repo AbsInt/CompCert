@@ -23,7 +23,7 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
-Require Conventions.
+Require Import Conventions.
 Require Import Mach.
 
 (** * Typing rules *)
@@ -69,9 +69,14 @@ Inductive wt_instr : instruction -> Prop :=
       wt_instr (Mcall sig ros)
   | wt_Mtailcall:
       forall sig ros,
-      Conventions.tailcall_possible sig ->
+      tailcall_possible sig ->
       match ros with inl r => mreg_type r = Tint | inr s => True end ->
       wt_instr (Mtailcall sig ros)
+  | wt_Mbuiltin:
+     forall ef args res,
+      List.map mreg_type args = (ef_sig ef).(sig_args) ->
+      mreg_type res = proj_sig_res (ef_sig ef) ->
+      wt_instr (Mbuiltin ef args res)
   | wt_Mgoto:
       forall lbl,
       wt_instr (Mgoto lbl)
@@ -273,7 +278,7 @@ Proof.
     apply (Genv.find_funct_ptr_prop wt_fundef _ _ wt_p H).
   econstructor; eauto.
 
-(*  apply wt_setreg; auto. exact I.  *)
+  inv H0. apply wt_setreg; auto. rewrite H5. eapply external_call_well_typed; eauto.  
 
   apply is_tail_find_label with lbl; congruence.
   apply is_tail_find_label with lbl; congruence. 
@@ -286,7 +291,7 @@ Proof.
 
   econstructor; eauto. apply wt_setreg; auto.
   generalize (external_call_well_typed _ _ _ _ _ _ _ H).  
-  unfold proj_sig_res, Conventions.loc_result.
+  unfold proj_sig_res, loc_result.
   destruct (sig_res (ef_sig ef)).
   destruct t0; simpl; auto.
   simpl; auto.

@@ -178,6 +178,11 @@ let creg oc r =
   | MacOS|Diab -> fprintf oc "cr%d" r
   | Linux      -> fprintf oc "%d" r
 
+let preg oc = function
+  | IR r -> ireg oc r
+  | FR r -> freg oc r
+  | _    -> assert false
+
 (* Names of sections *)
 
 let name_of_section_MacOS = function
@@ -256,7 +261,90 @@ let rec log2 n =
   assert (n > 0);
   if n = 1 then 0 else 1 + log2 (n lsr 1)
 
-(* Built-in functions *)
+(* Built-ins.  They come in two flavors: 
+   - inlined by the compiler: take their arguments in arbitrary
+     registers; preserve all registers except GPR12 and FPR13
+   - inlined while printing asm code; take their arguments in
+     locations dictated by the calling conventions; preserve
+     callee-save regs only. *)
+
+let print_builtin_inlined oc name args res =
+  fprintf oc "%s begin builtin %s\n" comment name;
+  (* Can use as temporaries: GPR12, FPR13 *)
+  begin match name, args, res with
+  (* Volatile reads *)
+  | "__builtin_volatile_read_int8unsigned", [IR addr], IR res ->
+      fprintf oc "	lbz	%a, 0(%a)\n" ireg res ireg addr
+  | "__builtin_volatile_read_int8signed", [IR addr], IR res ->
+      fprintf oc "	lbz	%a, 0(%a)\n" ireg res ireg addr;
+      fprintf oc "	extsb	%a, %a\n" ireg res ireg res
+  | "__builtin_volatile_read_int16unsigned", [IR addr], IR res ->
+      fprintf oc "	lhz	%a, 0(%a)\n" ireg res ireg addr
+  | "__builtin_volatile_read_int16signed", [IR addr], IR res ->
+      fprintf oc "	lha	%a, 0(%a)\n" ireg res ireg addr
+  | ("__builtin_volatile_read_int32"|"__builtin_volatile_read_pointer"), [IR addr], IR res ->
+      fprintf oc "	lwz	%a, 0(%a)\n" ireg res ireg addr
+  | "__builtin_volatile_read_float32", [IR addr], FR res ->
+      fprintf oc "	lfs	%a, 0(%a)\n" freg res ireg addr
+  | "__builtin_volatile_read_float64", [IR addr], FR res ->
+      fprintf oc "	lfd	%a, 0(%a)\n" freg res ireg addr
+  (* Volatile writes *)
+  | ("__builtin_volatile_write_int8unsigned"|"__builtin_volatile_write_int8signed"), [IR addr; IR src], _ ->
+      fprintf oc "	stb	%a, 0(%a)\n" ireg src ireg addr
+  | ("__builtin_volatile_write_int16unsigned"|"__builtin_volatile_write_int16signed"), [IR addr; IR src], _ ->
+      fprintf oc "	sth	%a, 0(%a)\n" ireg src ireg addr
+  | ("__builtin_volatile_write_int32"|"__builtin_volatile_write_pointer"), [IR addr; IR src], _ ->
+      fprintf oc "	stw	%a, 0(%a)\n" ireg src ireg addr
+  | "__builtin_volatile_write_float32", [IR addr; FR src], _ ->
+      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg src;
+      fprintf oc "	stfs	%a, 0(%a)\n" freg FPR13 ireg addr
+  | "__builtin_volatile_write_float64", [IR addr; FR src], _ ->
+      fprintf oc "	stfd	%a, 0(%a)\n" freg src ireg addr
+  (* Integer arithmetic *)
+  | "__builtin_mulhw", [IR a1; IR a2], IR res ->
+      fprintf oc "	mulhw	%a, %a, %a\n" ireg res ireg a1 ireg a2
+  | "__builtin_mulhwu", [IR a1; IR a2], IR res ->
+      fprintf oc "	mulhwu	%a, %a, %a\n" ireg res ireg a1 ireg a2
+  | "__builtin_cntlzw", [IR a1], IR res ->
+      fprintf oc "	cntlzw	%a, %a\n" ireg res ireg a1
+  (* Float arithmetic *)
+  | "__builtin_fmadd", [FR a1; FR a2; FR a3], FR res ->
+      fprintf oc "	fmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
+  | "__builtin_fmsub", [FR a1; FR a2; FR a3], FR res ->
+      fprintf oc "	fmsub	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
+  | "__builtin_fabs", [FR a1], FR res ->
+      fprintf oc "	fabs	%a, %a\n" freg res freg a1
+  | "__builtin_fsqrt", [FR a1], FR res ->
+      fprintf oc "	fsqrt	%a, %a\n" freg res freg a1
+  | "__builtin_frsqrte", [FR a1], FR res ->
+      fprintf oc "	frsqrte	%a, %a\n" freg res freg a1
+  | "__builtin_fres", [FR a1], FR res ->
+      fprintf oc "	fres	%a, %a\n" freg res freg a1
+  | "__builtin_fsel", [FR a1; FR a2; FR a3], FR res ->
+      fprintf oc "	fsel	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
+  (* Memory accesses *)
+  | "__builtin_read_int16_reversed", [IR a1], IR res ->
+      fprintf oc "	lhbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1
+  | "__builtin_read_int32_reversed", [IR a1], IR res ->
+      fprintf oc "	lwbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1
+  | "__builtin_write_int16_reversed", [IR a1; IR a2], _ ->
+      fprintf oc "	sthbrx	%a, %a, %a\n" ireg a2 ireg_or_zero GPR0 ireg a1
+  | "__builtin_write_int32_reversed", [IR a1; IR a2], _ ->
+      fprintf oc "	stwbrx	%a, %a, %a\n" ireg a2 ireg_or_zero GPR0 ireg a1
+  (* Synchronization *)
+  | "__builtin_eieio", [], _ ->
+      fprintf oc "	eieio\n"
+  | "__builtin_sync", [], _ ->
+      fprintf oc "	sync\n"
+  | "__builtin_isync", [], _ ->
+      fprintf oc "	isync\n"
+  | "__builtin_trap", [], _ ->
+      fprintf oc "	trap\n"
+  (* Catch-all *)
+  | _ ->
+      invalid_arg ("unrecognized builtin " ^ name)
+  end;
+  fprintf oc "%s end builtin %s\n" comment name
 
 let re_builtin_function = Str.regexp "__builtin_"
 
@@ -264,121 +352,42 @@ let is_builtin_function s =
   Str.string_match re_builtin_function (extern_atom s) 0
 
 let print_builtin_function oc s =
-  fprintf oc "%s begin builtin %s\n" comment (extern_atom s);
-  (* int args: GPR3, GPR4     float args: FPR1, FPR2, FPR3
-     int res:  GPR3           float res:  FPR1
+  fprintf oc "%s begin builtin function %s\n" comment (extern_atom s);
+  (* int args: GPR3, GPR4, GPR5     float args: FPR1, FPR2, FPR3
+     int res:  GPR3                 float res:  FPR1
      Watch out for MacOSX/EABI incompatibility: functions that take
      some floats then some ints.  There are none here. *)
-  begin match extern_atom s with
-  (* Volatile reads *)
-  | "__builtin_volatile_read_int8unsigned" ->
-      fprintf oc "	lbz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
-  | "__builtin_volatile_read_int8signed" ->
-      fprintf oc "	lbz	%a, 0(%a)\n" ireg GPR3 ireg GPR3;
-      fprintf oc "	extsb	%a, %a\n" ireg GPR3 ireg GPR3
-  | "__builtin_volatile_read_int16unsigned" ->
-      fprintf oc "	lhz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
-  | "__builtin_volatile_read_int16signed" ->
-      fprintf oc "	lha	%a, 0(%a)\n" ireg GPR3 ireg GPR3
-  | "__builtin_volatile_read_int32"
-  | "__builtin_volatile_read_pointer" ->
-      fprintf oc "	lwz	%a, 0(%a)\n" ireg GPR3 ireg GPR3
-  | "__builtin_volatile_read_float32" ->
-      fprintf oc "	lfs	%a, 0(%a)\n" freg FPR1 ireg GPR3
-  | "__builtin_volatile_read_float64" ->
-      fprintf oc "	lfd	%a, 0(%a)\n" freg FPR1 ireg GPR3
-  (* Volatile writes *)
-  | "__builtin_volatile_write_int8unsigned"
-  | "__builtin_volatile_write_int8signed" ->
-      fprintf oc "	stb	%a, 0(%a)\n" ireg GPR4 ireg GPR3
-  | "__builtin_volatile_write_int16unsigned"
-  | "__builtin_volatile_write_int16signed" ->
-      fprintf oc "	sth	%a, 0(%a)\n" ireg GPR4 ireg GPR3
-  | "__builtin_volatile_write_int32"
-  | "__builtin_volatile_write_pointer" ->
-      fprintf oc "	stw	%a, 0(%a)\n" ireg GPR4 ireg GPR3
-  | "__builtin_volatile_write_float32" ->
-      fprintf oc "	frsp	%a, %a\n" freg FPR1 freg FPR1;
-      fprintf oc "	stfs	%a, 0(%a)\n" freg FPR1 ireg GPR3
-  | "__builtin_volatile_write_float64" ->
-      fprintf oc "	stfd	%a, 0(%a)\n" freg FPR1 ireg GPR3
   (* Block copy *)
+  begin match extern_atom s with
   | "__builtin_memcpy" ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
-      fprintf oc "	cmplwi	%a, %a, 0\n" creg 0 ireg GPR5;
-      fprintf oc "	beq	%a, %a\n" creg 0 label lbl1;
-      fprintf oc "	mtctr	%a\n" ireg GPR5;
-      fprintf oc "	addi	%a, %a, -1\n" ireg GPR3 ireg GPR3;
-      fprintf oc "	addi	%a, %a, -1\n" ireg GPR4 ireg GPR4;
-      fprintf oc "%a:	lbzu	%a, 1(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
-      fprintf oc "	stbu	%a, 1(%a)\n" ireg GPR0 ireg GPR3;
-      fprintf oc "	bdnz	%a\n" label lbl2;
+      fprintf oc "      cmplwi  %a, %a, 0\n" creg 0 ireg GPR5;
+      fprintf oc "      beq     %a, %a\n" creg 0 label lbl1;
+      fprintf oc "      mtctr   %a\n" ireg GPR5;
+      fprintf oc "      addi    %a, %a, -1\n" ireg GPR3 ireg GPR3;
+      fprintf oc "      addi    %a, %a, -1\n" ireg GPR4 ireg GPR4;
+      fprintf oc "%a:   lbzu    %a, 1(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
+      fprintf oc "      stbu    %a, 1(%a)\n" ireg GPR0 ireg GPR3;
+      fprintf oc "      bdnz    %a\n" label lbl2;
       fprintf oc "%a:\n" label lbl1
   | "__builtin_memcpy_words" ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
-      fprintf oc "	rlwinm.	%a, %a, 30, 2, 31\n" ireg GPR5 ireg GPR5;
-      fprintf oc "	beq	%a, %a\n" creg 0 label lbl1;
-      fprintf oc "	mtctr	%a\n" ireg GPR5;
-      fprintf oc "	addi	%a, %a, -4\n" ireg GPR3 ireg GPR3;
-      fprintf oc "	addi	%a, %a, -4\n" ireg GPR4 ireg GPR4;
-      fprintf oc "%a:	lwzu	%a, 4(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
-      fprintf oc "	stwu	%a, 4(%a)\n" ireg GPR0 ireg GPR3;
-      fprintf oc "	bdnz	%a\n" label lbl2;
+      fprintf oc "      rlwinm. %a, %a, 30, 2, 31\n" ireg GPR5 ireg GPR5;
+      fprintf oc "      beq     %a, %a\n" creg 0 label lbl1;
+      fprintf oc "      mtctr   %a\n" ireg GPR5;
+      fprintf oc "      addi    %a, %a, -4\n" ireg GPR3 ireg GPR3;
+      fprintf oc "      addi    %a, %a, -4\n" ireg GPR4 ireg GPR4;
+      fprintf oc "%a:   lwzu    %a, 4(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
+      fprintf oc "      stwu    %a, 4(%a)\n" ireg GPR0 ireg GPR3;
+      fprintf oc "      bdnz    %a\n" label lbl2;
       fprintf oc "%a:\n" label lbl1
-  (* Integer arithmetic *)
-  | "__builtin_mulhw" ->
-      fprintf oc "	mulhw	%a, %a, %a\n" ireg GPR3 ireg GPR3 ireg GPR4
-  | "__builtin_mulhwu" ->
-      fprintf oc "	mulhwu	%a, %a, %a\n" ireg GPR3 ireg GPR3 ireg GPR4
-  | "__builtin_cntlzw" ->
-      fprintf oc "	cntlzw	%a, %a\n" ireg GPR3 ireg GPR3
-  (* Float arithmetic *)
-  | "__builtin_fmadd" ->
-      fprintf oc "	fmadd	%a, %a, %a, %a\n"
-                 freg FPR1 freg FPR1 freg FPR2 freg FPR3
-  | "__builtin_fmsub" ->
-      fprintf oc "	fmsub	%a, %a, %a, %a\n"
-                 freg FPR1 freg FPR1 freg FPR2 freg FPR3
-  | "__builtin_fabs" ->
-      fprintf oc "	fabs	%a, %a\n" freg FPR1 freg FPR1
-  | "__builtin_fsqrt" ->
-      fprintf oc "	fsqrt	%a, %a\n" freg FPR1 freg FPR1
-  | "__builtin_frsqrte" ->
-      fprintf oc "	frsqrte	%a, %a\n" freg FPR1 freg FPR1
-  | "__builtin_fres" ->
-      fprintf oc "	fres	%a, %a\n" freg FPR1 freg FPR1
-  | "__builtin_fsel" ->
-      fprintf oc "	fsel	%a, %a, %a, %a\n"
-                 freg FPR1 freg FPR1 freg FPR2 freg FPR3
-  (* Memory accesses *)
-  | "__builtin_read_int16_reversed" ->
-      fprintf oc "	lhbrx	%a, %a, %a\n"
-                 ireg GPR3 ireg_or_zero GPR0 ireg GPR3
-  | "__builtin_read_int32_reversed" ->
-      fprintf oc "	lwbrx	%a, %a, %a\n"
-                 ireg GPR3 ireg_or_zero GPR0 ireg GPR3
-  | "__builtin_write_int16_reversed" ->
-      fprintf oc "	sthbrx	%a, %a, %a\n"
-                 ireg GPR4 ireg_or_zero GPR0 ireg GPR3
-  | "__builtin_write_int32_reversed" ->
-      fprintf oc "	stwbrx	%a, %a, %a\n"
-                 ireg GPR4 ireg_or_zero GPR0 ireg GPR3
-  (* Synchronization *)
-  | "__builtin_eieio" ->
-      fprintf oc "	eieio\n"
-  | "__builtin_sync" ->
-      fprintf oc "	sync\n"
-  | "__builtin_isync" ->
-      fprintf oc "	isync\n"
-  | "__builtin_trap" ->
-      fprintf oc "	trap\n"
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
   end;
-  fprintf oc "%s end builtin %s\n" comment (extern_atom s)
+  fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
 
 (* Printing of instructions *)
 
@@ -450,10 +459,7 @@ let print_instruction oc labels = function
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
       fprintf oc "	mtctr	%a\n" ireg GPR12;
       fprintf oc "	bctr\n";
-      fprintf oc "%a:" label lbl;
-      List.iter
-        (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
-        tbl;
+      jumptables := (lbl, tbl) :: !jumptables;
       fprintf oc "%s end pseudoinstr btbl\n" comment
   | Pcmplw(r1, r2) ->
       fprintf oc "	cmplw	%a, %a, %a\n" creg 0 ireg r1 ireg r2
@@ -660,6 +666,8 @@ let print_instruction oc labels = function
   | Plabel lbl ->
       if Labelset.mem lbl labels then
         fprintf oc "%a:\n" label (transl_label lbl)
+  | Pbuiltin(ef, args, res) ->
+      print_builtin_inlined oc (extern_atom ef.ef_id) args res
 
 let print_literal oc (lbl, n) =
   let nlo = Int64.to_int32 n
@@ -814,7 +822,7 @@ let stub_function oc name ef =
   fprintf oc "	.align 2\n";
   fprintf oc "L%s$stub:\n" name;
   if Str.string_match re_variadic_stub name 0
-  then variadic_stub oc name (Str.matched_group 1 name) ef.ef_sig.sig_args
+  then variadic_stub oc name (Str.matched_group 1 name) (ef_sig ef).sig_args
   else non_variadic_stub oc name
 
 let function_needs_stub name = true
@@ -839,7 +847,7 @@ let stub_function oc name ef =
   let name = extern_atom name in
   (* Only variadic functions need a stub *)
   if Str.string_match re_variadic_stub name 0
-  then variadic_stub oc name (Str.matched_group 1 name) ef.ef_sig.sig_args
+  then variadic_stub oc name (Str.matched_group 1 name) (ef_sig ef).sig_args
 
 let function_needs_stub name =
   Str.string_match re_variadic_stub (extern_atom name) 0
@@ -858,13 +866,15 @@ let stub_function =
 
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
-  | Internal code -> print_function oc name code
-  | External ef -> if not(is_builtin_function name) then stub_function oc name ef
+  | Internal code ->
+      print_function oc name code
+  | External ef ->
+      if not (is_builtin_function name) then stub_function oc name ef
 
 let record_extfun (Coq_pair(name, defn)) =
   match defn with
   | Internal _ -> ()
-  | External _ -> 
+  | External _ ->
       if function_needs_stub name && not (is_builtin_function name) then
         stubbed_functions := IdentSet.add name !stubbed_functions
 

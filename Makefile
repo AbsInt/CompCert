@@ -16,7 +16,7 @@ DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver
 
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
-COQC=coqc $(INCLUDES)
+COQC=coqc -q $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
 COQDOC=coqdoc
 COQEXEC=coqtop $(INCLUDES) -batch -load-vernac-source
@@ -53,7 +53,7 @@ BACKEND=\
   Kildall.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSE.v CSEproof.v \
-  Machregs.v Locations.v Conventions.v LTL.v LTLtyping.v \
+  Machregs.v Locations.v Conventions1.v Conventions.v LTL.v LTLtyping.v \
   InterfGraph.v Coloring.v Coloringproof.v \
   Allocation.v Allocproof.v Alloctyping.v \
   Tunneling.v Tunnelingproof.v Tunnelingtyping.v \

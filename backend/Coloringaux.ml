@@ -22,6 +22,7 @@ open Locations
 open RTL
 open RTLtyping
 open InterfGraph
+open Conventions1
 open Conventions
 
 (* George-Appel graph coloring *)
@@ -202,13 +203,13 @@ let rec remove_reserved = function
 
 let init_regs() =
   caller_save_registers.(0) <-
-    Array.of_list (remove_reserved Conventions.int_caller_save_regs);
+    Array.of_list (remove_reserved int_caller_save_regs);
   caller_save_registers.(1) <-
-    Array.of_list (remove_reserved Conventions.float_caller_save_regs);
+    Array.of_list (remove_reserved float_caller_save_regs);
   callee_save_registers.(0) <-
-    Array.of_list (remove_reserved Conventions.int_callee_save_regs);
+    Array.of_list (remove_reserved int_callee_save_regs);
   callee_save_registers.(1) <-
-    Array.of_list (remove_reserved Conventions.float_callee_save_regs);
+    Array.of_list (remove_reserved float_callee_save_regs);
   for i = 0 to num_register_classes - 1 do
     num_available_registers.(i) <-
       Array.length caller_save_registers.(i)
@@ -789,6 +790,7 @@ let spill_costs f =
     | Istore(chunk, addr, args, src, _) -> incr_list args; incr src
     | Icall(sg, ros, args, res, _) -> incr_ros ros; incr_list args; incr res
     | Itailcall(sg, ros, args) -> incr_ros ros; incr_list args
+    | Ibuiltin(ef, args, res, _) -> incr_list args; incr res
     | Icond(cond, args, _, _) -> incr_list args
     | Ijumptable(arg, _) -> incr arg
     | Ireturn(Some r) -> incr r

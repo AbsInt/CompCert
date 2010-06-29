@@ -816,6 +816,12 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
      tr_stmt c map (Stailcall sig b cl) ns nd nexits ngoto nret rret
+  | tr_Sbuiltin: forall optid ef al ns nd nexits ngoto nret rret rd n1 n2 rargs,
+     tr_exprlist c map nil al ns n1 rargs ->
+     c!n1 = Some (Ibuiltin ef rargs rd n2) ->
+     tr_store_optvar c map rd optid n2 nd ->
+     ~reg_in_map map rd ->
+     tr_stmt c map (Sbuiltin optid ef al) ns nd nexits ngoto nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
      tr_stmt c map s1 ns n nexits ngoto nret rret ->
@@ -1228,6 +1234,11 @@ Proof.
   eapply transl_expr_charact; eauto 3 with rtlg.
   apply tr_exprlist_incr with s4; auto.
   eapply transl_exprlist_charact; eauto 4 with rtlg.
+  (* Sbuiltin *)
+  econstructor; eauto 4 with rtlg.
+  eapply transl_exprlist_charact; eauto 3 with rtlg.
+  apply tr_store_optvar_incr with s2; auto.
+  eapply store_optvar_charact; eauto with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

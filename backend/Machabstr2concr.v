@@ -28,6 +28,7 @@ Require Import Mach.
 Require Import Machtyping.
 Require Import Machabstr.
 Require Import Machconcr.
+Require Import Conventions.
 Require Import Asmgenretaddr.
 
 (** Two semantics were defined for the Mach intermediate language:
@@ -911,7 +912,7 @@ Lemma transl_extcall_arguments:
   /\ Val.lessdef_list args targs.
 Proof.
   unfold Machabstr.extcall_arguments, extcall_arguments; intros.
-  generalize (Conventions.loc_arguments sg) args H.
+  generalize (loc_arguments sg) args H.
   induction l; intros; inv H2.
   exists (@nil val); split; constructor.
   exploit IHl; eauto. intros [targs [A B]].
@@ -1023,6 +1024,16 @@ Proof.
     eapply frame_match_load_retaddr; eauto. eapply match_stacks_parent_ra_pointer; eauto.
   econstructor; eauto. eapply match_stacks_free; eauto.
 
+  (* Mbuiltin *)
+  exploit external_call_mem_extends; eauto. eapply regset_lessdef_list; eauto. 
+  intros [v' [ms' [A [B [C D]]]]].
+  econstructor; split.
+  eapply exec_Mbuiltin. eauto. 
+  econstructor; eauto with coqlib.
+  eapply match_stacks_external_call; eauto. 
+  eapply frame_match_external_call; eauto. 
+  apply regset_lessdef_set; eauto.
+
   (* Mgoto *)
   econstructor; split.
   eapply exec_Mgoto; eauto.
@@ -1104,7 +1115,7 @@ Lemma equiv_final_states:
 Proof.
   intros. inv H0. destruct H. inv H. inv STACKS.
   constructor. 
-  generalize (RLD (Conventions.loc_result (mksignature nil (Some Tint)))).
+  generalize (RLD (loc_result (mksignature nil (Some Tint)))).
   rewrite H1. intro LD. inv LD. auto. 
 Qed.
 

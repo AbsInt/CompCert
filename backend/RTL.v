@@ -70,6 +70,10 @@ Inductive instruction: Type :=
   | Itailcall: signature -> reg + ident -> list reg -> instruction
       (** [Itailcall sig fn args] performs a function invocation
           in tail-call position.  *)
+  | Ibuiltin: external_function -> list reg -> reg -> node -> instruction
+      (** [Ibuiltin ef args dest succ] calls the built-in function
+          identified by [ef], giving it the values of [args] as arguments.
+          It stores the return value in [dest] and branches to [succ]. *)
   | Icond: condition -> list reg -> node -> node -> instruction
       (** [Icond cond args ifso ifnot] evaluates the boolean condition
           [cond] over the values of registers [args].  If the condition
@@ -109,8 +113,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 (** * Operational semantics *)
@@ -245,6 +249,12 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) pc rs m)
         E0 (Callstate s fd rs##args m')
+  | exec_Ibuiltin:
+      forall s f sp pc rs m ef args res pc' t v m',
+      (fn_code f)!pc = Some(Ibuiltin ef args res pc') ->
+      external_call ef ge rs##args m t v m' ->
+      step (State s f sp pc rs m)
+         t (State s f sp pc' (rs#res <- v) m')
   | exec_Icond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
@@ -351,6 +361,7 @@ Definition successors_instr (i: instruction) : list node :=
   | Istore chunk addr args src s => s :: nil
   | Icall sig ros args res s => s :: nil
   | Itailcall sig ros args => nil
+  | Ibuiltin ef args res s => s :: nil
   | Icond cond args ifso ifnot => ifso :: ifnot :: nil
   | Ijumptable arg tbl => tbl
   | Ireturn optarg => nil

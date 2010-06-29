@@ -275,6 +275,36 @@ Qed.
 
 End CMCONSTR.
 
+(** Recognition of calls to built-in functions *)
+
+Lemma expr_is_addrof_ident_correct:
+  forall e id,
+  expr_is_addrof_ident e = Some id ->
+  e = Cminor.Econst (Cminor.Oaddrsymbol id Int.zero).
+Proof.
+  intros e id. unfold expr_is_addrof_ident. 
+  destruct e; try congruence.
+  destruct c; try congruence.
+  predSpec Int.eq Int.eq_spec i0 Int.zero; congruence.
+Qed.
+
+Lemma expr_is_addrof_builtin_correct:
+  forall ge sp e m a v ef fd,
+  expr_is_addrof_builtin ge a = Some ef ->
+  Cminor.eval_expr ge sp e m a v ->
+  Genv.find_funct ge v = Some fd ->
+  fd = External ef.
+Proof.
+  intros until fd; unfold expr_is_addrof_builtin.
+  case_eq (expr_is_addrof_ident a); intros; try congruence.
+  exploit expr_is_addrof_ident_correct; eauto. intro EQ; subst a.
+  inv H1. inv H4. 
+  destruct (Genv.find_symbol ge i); try congruence.
+  inv H3. rewrite Genv.find_funct_find_funct_ptr in H2. rewrite H2 in H0. 
+  destruct fd; try congruence. 
+  destruct (ef_inline e0); congruence.
+Qed.
+
 (** * Semantic preservation for instruction selection. *)
 
 Section PRESERVATION.
@@ -297,24 +327,24 @@ Qed.
 Lemma functions_translated:
   forall (v: val) (f: Cminor.fundef),
   Genv.find_funct ge v = Some f ->
-  Genv.find_funct tge v = Some (sel_fundef f).
+  Genv.find_funct tge v = Some (sel_fundef ge f).
 Proof.  
   intros.
-  exact (Genv.find_funct_transf sel_fundef _ _ H).
+  exact (Genv.find_funct_transf (sel_fundef ge) _ _ H).
 Qed.
 
 Lemma function_ptr_translated:
   forall (b: block) (f: Cminor.fundef),
   Genv.find_funct_ptr ge b = Some f ->
-  Genv.find_funct_ptr tge b = Some (sel_fundef f).
+  Genv.find_funct_ptr tge b = Some (sel_fundef ge f).
 Proof.  
   intros. 
-  exact (Genv.find_funct_ptr_transf sel_fundef _ _ H).
+  exact (Genv.find_funct_ptr_transf (sel_fundef ge) _ _ H).
 Qed.
 
 Lemma sig_function_translated:
   forall f,
-  funsig (sel_fundef f) = Cminor.funsig f.
+  funsig (sel_fundef ge f) = Cminor.funsig f.
 Proof.
   intros. destruct f; reflexivity.
 Qed.
@@ -369,29 +399,40 @@ Hint Resolve sel_exprlist_correct: evalexpr.
 Fixpoint sel_cont (k: Cminor.cont) : CminorSel.cont :=
   match k with
   | Cminor.Kstop => Kstop
-  | Cminor.Kseq s1 k1 => Kseq (sel_stmt s1) (sel_cont k1)
+  | Cminor.Kseq s1 k1 => Kseq (sel_stmt ge s1) (sel_cont k1)
   | Cminor.Kblock k1 => Kblock (sel_cont k1)
   | Cminor.Kcall id f sp e k1 =>
-      Kcall id (sel_function f) sp e (sel_cont k1)
+      Kcall id (sel_function ge f) sp e (sel_cont k1)
   end.
 
 Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
   | match_state: forall f s k s' k' sp e m,
-      s' = sel_stmt s ->
+      s' = sel_stmt ge s ->
       k' = sel_cont k ->
       match_states
         (Cminor.State f s k sp e m)
-        (State (sel_function f) s' k' sp e m)
+        (State (sel_function ge f) s' k' sp e m)
   | match_callstate: forall f args k k' m,
       k' = sel_cont k ->
       match_states
         (Cminor.Callstate f args k m)
-        (Callstate (sel_fundef f) args k' m)
+        (Callstate (sel_fundef ge f) args k' m)
   | match_returnstate: forall v k k' m,
       k' = sel_cont k ->
       match_states
         (Cminor.Returnstate v k m)
-        (Returnstate v k' m).
+        (Returnstate v k' m)
+  | match_builtin_1: forall ef args optid f sp e k m al k',
+      k' = sel_cont k ->
+      eval_exprlist tge sp e m nil al args ->
+      match_states
+        (Cminor.Callstate (External ef) args (Cminor.Kcall optid f sp e k) m)
+        (State (sel_function ge f) (Sbuiltin optid ef al) k' sp e m)
+  | match_builtin_2: forall v optid f sp e k m k',
+      k' = sel_cont k ->
+      match_states
+        (Cminor.Returnstate v (Cminor.Kcall optid f sp e k) m)
+        (State (sel_function ge f) Sskip k' sp (set_optvar optid v e) m).
 
 Remark call_cont_commut:
   forall k, call_cont (sel_cont k) = sel_cont (Cminor.call_cont k).
@@ -401,19 +442,20 @@ Qed.
 
 Remark find_label_commut:
   forall lbl s k,
-  find_label lbl (sel_stmt s) (sel_cont k) =
-  option_map (fun sk => (sel_stmt (fst sk), sel_cont (snd sk)))
+  find_label lbl (sel_stmt ge s) (sel_cont k) =
+  option_map (fun sk => (sel_stmt ge (fst sk), sel_cont (snd sk)))
              (Cminor.find_label lbl s k).
 Proof.
   induction s; intros; simpl; auto.
   unfold store. destruct (addressing m (sel_expr e)); auto.
-  change (Kseq (sel_stmt s2) (sel_cont k))
+  destruct (expr_is_addrof_builtin ge e); auto.
+  change (Kseq (sel_stmt ge s2) (sel_cont k))
     with (sel_cont (Cminor.Kseq s2 k)).
   rewrite IHs1. rewrite IHs2. 
   destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)); auto.
   rewrite IHs1. rewrite IHs2. 
   destruct (Cminor.find_label lbl s1 k); auto.
-  change (Kseq (Sloop (sel_stmt s)) (sel_cont k))
+  change (Kseq (Sloop (sel_stmt ge s)) (sel_cont k))
     with (sel_cont (Cminor.Kseq (Cminor.Sloop s) k)).
   auto.
   change (Kblock (sel_cont k))
@@ -423,64 +465,79 @@ Proof.
   destruct (ident_eq lbl l); auto.
 Qed.
 
+Definition measure (s: Cminor.state) : nat :=
+  match s with
+  | Cminor.Callstate _ _ _ _ => 0%nat
+  | Cminor.State _ _ _ _ _ _ => 1%nat
+  | Cminor.Returnstate _ _ _ => 2%nat
+  end.
+
 Lemma sel_step_correct:
   forall S1 t S2, Cminor.step ge S1 t S2 ->
   forall T1, match_states S1 T1 ->
-  exists T2, step tge T1 t T2 /\ match_states S2 T2.
+  (exists T2, step tge T1 t T2 /\ match_states S2 T2)
+  \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 T1)%nat.
 Proof.
   induction 1; intros T1 ME; inv ME; simpl;
-  try (econstructor; split; [econstructor; eauto with evalexpr | econstructor; eauto]; fail).
+  try (left; econstructor; split; [econstructor; eauto with evalexpr | econstructor; eauto]; fail).
 
   (* skip call *)
-  econstructor; split. 
+  left; econstructor; split. 
   econstructor. destruct k; simpl in H; simpl; auto. 
   rewrite <- H0; reflexivity.
   simpl. eauto. 
   constructor; auto.
-(*
-  (* assign *)
-  exists (State (sel_function f) Sskip (sel_cont k) sp (PTree.set id v e) m); split.
-  constructor. auto with evalexpr.
-  constructor; auto.
-*)
   (* store *)
-  econstructor; split.
+  left; econstructor; split.
   eapply eval_store; eauto with evalexpr.
   constructor; auto.
   (* Scall *)
-  econstructor; split.
+  case_eq (expr_is_addrof_builtin ge a).
+  (* Scall turned into Sbuiltin *)
+  intros ef EQ. exploit expr_is_addrof_builtin_correct; eauto. intro EQ1. subst fd.
+  right; split. omega. split. auto. 
+  econstructor; eauto with evalexpr.
+  (* Scall preserved *)
+  intro EQ. left; econstructor; split.
   econstructor; eauto with evalexpr.
   apply functions_translated; eauto. 
   apply sig_function_translated.
   constructor; auto.
   (* Stailcall *)
-  econstructor; split.
+  left; econstructor; split.
   econstructor; eauto with evalexpr.
   apply functions_translated; eauto. 
   apply sig_function_translated.
   constructor; auto. apply call_cont_commut.
   (* Sifthenelse *)
-  exists (State (sel_function f) (if b then sel_stmt s1 else sel_stmt s2) (sel_cont k) sp e m); split.
+  left; exists (State (sel_function ge f) (if b then sel_stmt ge s1 else sel_stmt ge s2) (sel_cont k) sp e m); split.
   constructor. eapply eval_condition_of_expr; eauto with evalexpr.
   constructor; auto. destruct b; auto.
   (* Sreturn None *)
-  econstructor; split. 
+  left; econstructor; split. 
   econstructor. simpl; eauto. 
   constructor; auto. apply call_cont_commut.
   (* Sreturn Some *)
-  econstructor; split. 
+  left; econstructor; split. 
   econstructor. simpl. eauto with evalexpr. simpl; eauto.
   constructor; auto. apply call_cont_commut.
   (* Sgoto *)
-  econstructor; split.
+  left; econstructor; split.
   econstructor. simpl. rewrite call_cont_commut. rewrite find_label_commut.
   rewrite H. simpl. reflexivity. 
   constructor; auto.
   (* external call *)
-  econstructor; split.
+  left; econstructor; split.
   econstructor. eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   constructor; auto.
+  (* external call turned into a Sbuiltin *)
+  left; econstructor; split.
+  econstructor. eauto. eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  constructor; auto.
+  (* return of an external call turned into a Sbuiltin *)
+  right; split. omega. split. auto. constructor; auto.
 Qed.
 
 Lemma sel_initial_states:
@@ -509,10 +566,10 @@ Theorem transf_program_correct:
   Cminor.exec_program prog beh -> CminorSel.exec_program tprog beh.
 Proof.
   unfold CminorSel.exec_program, Cminor.exec_program; intros.
-  eapply simulation_step_preservation; eauto.
+  eapply simulation_opt_preservation; eauto.
   eexact sel_initial_states.
   eexact sel_final_states.
-  exact sel_step_correct. 
+  eexact sel_step_correct. 
 Qed.
 
 End PRESERVATION.

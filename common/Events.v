@@ -400,7 +400,7 @@ End EVENTVAL_INV.
 (** Each external function is of one of the following kinds: *)
 
 Inductive extfun_kind: signature -> Type :=
-  | EF_syscall (sg: signature) (name: ident): extfun_kind sg
+  | EF_syscall (name: ident) (sg: signature): extfun_kind sg
      (** A system call.  Takes integer-or-float arguments, produces a
          result that is an integer or a float, does not modify
          the memory, and produces an [Event_syscall] event in the trace. *)
@@ -985,7 +985,7 @@ This predicate is used in the semantics of all CompCert languages. *)
 
 Definition external_call (ef: external_function): extcall_sem :=
   match classify_external_function ef with
-  | EF_syscall sg name   => extcall_io_sem name sg
+  | EF_syscall name sg   => extcall_io_sem name sg
   | EF_vload chunk       => volatile_load_sem chunk
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem 
@@ -994,7 +994,7 @@ Definition external_call (ef: external_function): extcall_sem :=
 
 Theorem external_call_spec:
   forall ef, 
-  extcall_properties (external_call ef) (ef.(ef_sig)).
+  extcall_properties (external_call ef) (ef_sig ef).
 Proof.
   intros. unfold external_call. destruct (classify_external_function ef). 
   apply extcall_io_ok.

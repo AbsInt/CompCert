@@ -25,6 +25,7 @@ Require Import Op.
 Require Import Locations.
 Require Import Conventions.
 Require Import Allocproof.
+Require Import RTLtyping.
 Require Import LTLin.
 Require Import LTLintyping.
 Require Import Linear.
@@ -33,33 +34,10 @@ Require Import Reload.
 
 (** * Exploitation of the typing hypothesis *)
 
-(** Reloading is applied to LTLin code that is well-typed in
-  the sense of [LTLintyping]. We exploit this hypothesis to obtain information on
-  the number of temporaries required for reloading the arguments. *)
-
-Fixpoint temporaries_ok_rec (tys: list typ) (itmps ftmps: list mreg)
-                            {struct tys} : bool :=
-  match tys with
-  | nil => true
-  | Tint :: ts =>
-      match itmps with
-      | nil => false
-      | it1 :: its => temporaries_ok_rec ts its ftmps
-      end
-  | Tfloat :: ts =>
-      match ftmps with
-      | nil => false
-      | ft1 :: fts => temporaries_ok_rec ts itmps fts
-      end
-  end.
-
-Definition temporaries_ok (tys: list typ) :=
-  temporaries_ok_rec tys int_temporaries float_temporaries.
-
-Remark temporaries_ok_rec_incr_1:
+Remark arity_ok_rec_incr_1:
   forall tys it itmps ftmps,
-  temporaries_ok_rec tys itmps ftmps = true ->
-  temporaries_ok_rec tys (it :: itmps) ftmps = true.
+  arity_ok_rec tys itmps ftmps = true ->
+  arity_ok_rec tys (it :: itmps) ftmps = true.
 Proof.
   induction tys; intros until ftmps; simpl.
   tauto.
@@ -68,10 +46,10 @@ Proof.
   destruct ftmps. congruence. auto.
 Qed.
 
-Remark temporaries_ok_rec_incr_2:
+Remark arity_ok_rec_incr_2:
   forall tys ft itmps ftmps,
-  temporaries_ok_rec tys itmps ftmps = true ->
-  temporaries_ok_rec tys itmps (ft :: ftmps) = true.
+  arity_ok_rec tys itmps ftmps = true ->
+  arity_ok_rec tys itmps (ft :: ftmps) = true.
 Proof.
   induction tys; intros until ftmps; simpl.
   tauto.
@@ -80,37 +58,37 @@ Proof.
   destruct ftmps. congruence. auto.
 Qed.
 
-Remark temporaries_ok_rec_decr:
+Remark arity_ok_rec_decr:
   forall tys ty itmps ftmps,
-  temporaries_ok_rec (ty :: tys) itmps ftmps = true ->
-  temporaries_ok_rec tys itmps ftmps = true.
+  arity_ok_rec (ty :: tys) itmps ftmps = true ->
+  arity_ok_rec tys itmps ftmps = true.
 Proof.
   intros until ftmps. simpl. destruct ty. 
-  destruct itmps. congruence. intros. apply temporaries_ok_rec_incr_1; auto.
-  destruct ftmps. congruence. intros. apply temporaries_ok_rec_incr_2; auto.
+  destruct itmps. congruence. intros. apply arity_ok_rec_incr_1; auto.
+  destruct ftmps. congruence. intros. apply arity_ok_rec_incr_2; auto.
 Qed.
 
-Lemma temporaries_ok_enough_rec:
+Lemma arity_ok_enough_rec:
   forall locs itmps ftmps,
-  temporaries_ok_rec (List.map Loc.type locs) itmps ftmps = true ->
+  arity_ok_rec (List.map Loc.type locs) itmps ftmps = true ->
   enough_temporaries_rec locs itmps ftmps = true.
 Proof.
   induction locs; intros until ftmps.
   simpl. auto.
   simpl enough_temporaries_rec. simpl map. 
-  destruct a. intros. apply IHlocs. eapply temporaries_ok_rec_decr; eauto. 
+  destruct a. intros. apply IHlocs. eapply arity_ok_rec_decr; eauto. 
   simpl. destruct (slot_type s). 
   destruct itmps; auto.
   destruct ftmps; auto.
 Qed.
 
-Lemma temporaries_ok_enough:
+Lemma arity_ok_enough:
   forall locs,
-  temporaries_ok (List.map Loc.type locs) = true ->
+  arity_ok (List.map Loc.type locs) = true ->
   enough_temporaries locs = true.
 Proof.
-  unfold temporaries_ok, enough_temporaries. intros. 
-  apply temporaries_ok_enough_rec; auto.
+  unfold arity_ok, enough_temporaries. intros. 
+  apply arity_ok_enough_rec; auto.
 Qed.
 
 Lemma enough_temporaries_op_args:
@@ -118,7 +96,7 @@ Lemma enough_temporaries_op_args:
   (List.map Loc.type args, Loc.type res) = type_of_operation op ->
   enough_temporaries args = true.
 Proof.
-  intros. apply temporaries_ok_enough.
+  intros. apply arity_ok_enough.
   replace (map Loc.type args) with (fst (type_of_operation op)).
   destruct op; try (destruct c); compute; reflexivity.
   rewrite <- H. auto.
@@ -129,7 +107,7 @@ Lemma enough_temporaries_cond:
   List.map Loc.type args = type_of_condition cond ->
   enough_temporaries args = true.
 Proof.
-  intros. apply temporaries_ok_enough. rewrite H.
+  intros. apply arity_ok_enough. rewrite H.
   destruct cond; compute; reflexivity.
 Qed.
 
@@ -138,15 +116,15 @@ Lemma enough_temporaries_addr:
   List.map Loc.type args = type_of_addressing addr ->
   enough_temporaries args = true.
 Proof.
-  intros. apply temporaries_ok_enough. rewrite H. 
+  intros. apply arity_ok_enough. rewrite H. 
   destruct addr; compute; reflexivity.
 Qed.
 
-Lemma temporaries_ok_rec_length:
+Lemma arity_ok_rec_length:
   forall tys itmps ftmps,
   (length tys <= length itmps)%nat ->
   (length tys <= length ftmps)%nat ->
-  temporaries_ok_rec tys itmps ftmps = true.
+  arity_ok_rec tys itmps ftmps = true.
 Proof.
   induction tys; intros until ftmps; simpl.
   auto.
@@ -159,8 +137,8 @@ Lemma enough_temporaries_length:
   forall args,
   (length args <= 2)%nat -> enough_temporaries args = true.
 Proof.
-  intros. apply temporaries_ok_enough. unfold temporaries_ok.
-  apply temporaries_ok_rec_length. 
+  intros. apply arity_ok_enough. unfold arity_ok.
+  apply arity_ok_rec_length. 
   rewrite list_length_map. simpl. omega.
   rewrite list_length_map. simpl. omega.
 Qed.
@@ -690,7 +668,7 @@ Proof.
   intros. unfold return_regs. 
   destruct (In_dec Loc.eq (R (loc_result sig)) temporaries). auto.
   destruct (In_dec Loc.eq (R (loc_result sig)) destroyed_at_call). auto.
-  elim n0. apply loc_result_caller_save.
+  generalize (loc_result_caller_save sig). tauto.
 Qed.
 
 (** * Preservation of labels and gotos *)
@@ -885,7 +863,7 @@ Inductive match_states: LTLin.state -> Linear.state -> Prop :=
   | match_states_call:
       forall s f args m s' ls tm
         (STACKS: match_stackframes s s' (LTLin.funsig f))
-        (AG: Val.lessdef_list args (map ls (Conventions.loc_arguments (LTLin.funsig f))))
+        (AG: Val.lessdef_list args (map ls (loc_arguments (LTLin.funsig f))))
         (PRES: forall l, ~In l temporaries -> ~In l destroyed_at_call ->
                  ls l = parent_locset s' l)
         (WT: wt_fundef f)
@@ -895,7 +873,7 @@ Inductive match_states: LTLin.state -> Linear.state -> Prop :=
   | match_states_return:
       forall s res m s' ls tm sig
         (STACKS: match_stackframes s s' sig)
-        (AG: Val.lessdef res (ls (R (Conventions.loc_result sig))))
+        (AG: Val.lessdef res (ls (R (loc_result sig))))
         (PRES: forall l, ~In l temporaries -> ~In l destroyed_at_call ->
                  ls l = parent_locset s' l)
         (MMD: Mem.extends m tm),
@@ -1216,6 +1194,29 @@ Proof.
   rewrite return_regs_arguments; auto. congruence.
   exact (return_regs_preserve (parent_locset s') ls3).
 
+  (* Lbuiltin *)
+  ExploitWT; inv WTI.
+  exploit add_reloads_correct.
+    instantiate (1 := args). apply arity_ok_enough. rewrite H3. auto.
+    apply locs_acceptable_disj_temporaries; auto.
+  intros [ls2 [A [B C]]].
+  exploit external_call_mem_extends; eauto. 
+  apply agree_locs; eauto. 
+  intros [v' [tm' [P [Q [R S]]]]].
+  exploit add_spill_correct.
+  intros [ls3 [D [E F]]].
+  left; econstructor; split.
+  eapply star_plus_trans. eauto. 
+  eapply plus_left. eapply exec_Lbuiltin. rewrite B. 
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  eauto. reflexivity. traceEq. 
+  econstructor; eauto with coqlib.
+  apply agree_set with ls; auto.
+  rewrite E. rewrite Locmap.gss. auto.
+  intros. rewrite F; auto. rewrite Locmap.gso. auto. 
+  apply reg_for_diff; auto.
+
   (* Llabel *)
   left; econstructor; split.
   apply plus_one. apply exec_Llabel.
@@ -1319,7 +1320,8 @@ Proof.
   econstructor; eauto.
   simpl. rewrite Locmap.gss. auto.
   intros. rewrite Locmap.gso. auto. 
-  simpl. destruct l; auto. red; intro. elim H1. subst m0. apply loc_result_caller_save.
+  simpl. destruct l; auto. red; intro. elim H1. subst m0. 
+  generalize (loc_result_caller_save (ef_sig ef)). tauto.
 
   (* return *)
   inv STACKS. 

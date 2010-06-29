@@ -173,6 +173,18 @@ Module Loc.
     destruct s; destruct s0; intuition auto.
   Qed.
 
+  Lemma diff_reg_right:
+    forall l r, l <> R r -> diff (R r) l.
+  Proof.
+    intros. simpl. destruct l. congruence. auto.
+  Qed.
+
+  Lemma diff_reg_left:
+    forall l r, l <> R r -> diff l (R r).
+  Proof.
+    intros. apply diff_sym. apply diff_reg_right. auto.
+  Qed.
+
 (** [Loc.overlap l1 l2] returns [false] if [l1] and [l2] are different and
   non-overlapping, and [true] otherwise: either [l1 = l2] or they partially 
   overlap. *)
@@ -290,6 +302,14 @@ Module Loc.
     auto.
   Qed.
 
+  Lemma reg_notin:
+    forall r ll, ~(In (R r) ll) -> notin (R r) ll.
+  Proof.
+    induction ll; simpl; intros. auto. 
+    split. destruct a; auto. intuition congruence.
+    apply IHll. intuition.
+  Qed.
+
 (** [Loc.disjoint l1 l2] is true if the locations in list [l1]
   are different from all locations in list [l2]. *)
 
@@ -351,6 +371,9 @@ Module Loc.
       norepet nil
   | norepet_cons:
       forall hd tl, notin hd tl -> norepet tl -> norepet (hd :: tl).
+
+(** [Loc.no_overlap l1 l2] holds if elements of [l1] never overlap partially
+  with elements of [l2]. *)
 
   Definition no_overlap (l1 l2 : list loc) :=
    forall r, In r l1 -> forall s, In s l2 ->  r = s \/ Loc.diff r s.

@@ -24,7 +24,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Locations.
 Require Stacklayout.
-Require Conventions.
+Require Import Conventions.
 
 (** * Abstract syntax *)
 
@@ -55,6 +55,34 @@ Proof. decide equality. Defined.
 
 Lemma freg_eq: forall (x y: freg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
+
+(** The PowerPC has a great many registers, some general-purpose, some very
+  specific.  We model only the following registers: *)
+
+Inductive preg: Type :=
+  | IR: ireg -> preg                    (**r integer registers *)
+  | FR: freg -> preg                    (**r float registers *)
+  | PC: preg                            (**r program counter *)
+  | LR: preg                            (**r link register (return address) *)
+  | CTR: preg                           (**r count register, used for some branches *)
+  | CARRY: preg                         (**r carry bit of the status register *)
+  | CR0_0: preg                         (**r bit 0 of the condition register  *)
+  | CR0_1: preg                         (**r bit 1 of the condition register  *)
+  | CR0_2: preg                         (**r bit 2 of the condition register  *)
+  | CR0_3: preg.                        (**r bit 3 of the condition register  *)
+
+Coercion IR: ireg >-> preg.
+Coercion FR: freg >-> preg.
+
+Lemma preg_eq: forall (x y: preg), {x=y} + {x<>y}.
+Proof. decide equality. apply ireg_eq. apply freg_eq. Defined.
+
+Module PregEq.
+  Definition t := preg.
+  Definition eq := preg_eq.
+End PregEq.
+
+Module Pregmap := EMap(PregEq).
 
 (** Symbolic constants.  Immediate operands to an arithmetic instruction
   or an indexed memory access can be either integer literals,
@@ -188,7 +216,8 @@ Inductive instruction : Type :=
   | Pxor: ireg -> ireg -> ireg -> instruction                 (**r bitwise xor *)
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
   | Pxoris: ireg -> ireg -> constant -> instruction           (**r bitwise xor with immediate high *)
-  | Plabel: label -> instruction.                             (**r define a code label *)
+  | Plabel: label -> instruction                              (**r define a code label *)
+  | Pbuiltin: external_function -> list preg -> preg -> instruction. (**r built-in *)
 
 (** The pseudo-instructions are the following:
 
@@ -312,34 +341,6 @@ Definition fundef := AST.fundef code.
 Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
-
-(** The PowerPC has a great many registers, some general-purpose, some very
-  specific.  We model only the following registers: *)
-
-Inductive preg: Type :=
-  | IR: ireg -> preg                    (**r integer registers *)
-  | FR: freg -> preg                    (**r float registers *)
-  | PC: preg                            (**r program counter *)
-  | LR: preg                            (**r link register (return address) *)
-  | CTR: preg                           (**r count register, used for some branches *)
-  | CARRY: preg                         (**r carry bit of the status register *)
-  | CR0_0: preg                         (**r bit 0 of the condition register  *)
-  | CR0_1: preg                         (**r bit 1 of the condition register  *)
-  | CR0_2: preg                         (**r bit 2 of the condition register  *)
-  | CR0_3: preg.                        (**r bit 3 of the condition register  *)
-
-Coercion IR: ireg >-> preg.
-Coercion FR: freg >-> preg.
-
-Lemma preg_eq: forall (x y: preg), {x=y} + {x<>y}.
-Proof. decide equality. apply ireg_eq. apply freg_eq. Defined.
-
-Module PregEq.
-  Definition t := preg.
-  Definition eq := preg_eq.
-End PregEq.
-
-Module Pregmap := EMap(PregEq).
 
 (** The semantics operates over a single mapping from registers
   (type [preg]) to values.  We maintain (but do not enforce)
@@ -788,6 +789,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.xor rs#r1 (const_high cst)))) m
   | Plabel lbl =>
       OK (nextinstr rs) m
+  | Pbuiltin ef args res =>
+      Error    (**r treated specially below *)
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
@@ -859,10 +862,10 @@ Inductive extcall_args (rs: regset) (m: mem): list loc -> list val -> Prop :=
 
 Definition extcall_arguments
     (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
-  extcall_args rs m (Conventions.loc_arguments sg) args.
+  extcall_args rs m (loc_arguments sg) args.
 
 Definition loc_external_result (sg: signature) : preg :=
-  preg_of (Conventions.loc_result sg).
+  preg_of (loc_result sg).
 
 (** Execution of the instruction at [rs#PC]. *)
 
@@ -877,13 +880,20 @@ Inductive step: state -> trace -> state -> Prop :=
       find_instr (Int.unsigned ofs) c = Some i ->
       exec_instr c i rs m = OK rs' m' ->
       step (State rs m) E0 (State rs' m')
+  | exec_step_builtin:
+      forall b ofs c ef args res rs m t v m',
+      rs PC = Vptr b ofs ->
+      Genv.find_funct_ptr ge b = Some (Internal c) ->
+      find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
+      external_call ef ge (map rs args) m t v m' ->
+      step (State rs m) t (State (nextinstr(rs # res <- v)) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
-      extcall_arguments rs m ef.(ef_sig) args ->
-      rs' = (rs#(loc_external_result ef.(ef_sig)) <- res
+      extcall_arguments rs m (ef_sig ef) args ->
+      rs' = (rs#(loc_external_result (ef_sig ef)) <- res
                #PC <- (rs LR)) ->
       step (State rs m) t (State rs' m').
 

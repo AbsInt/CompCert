@@ -47,6 +47,7 @@ Inductive instruction: Type :=
   | Lstore: memory_chunk -> addressing -> list loc -> loc -> instruction
   | Lcall: signature -> loc + ident -> list loc -> loc -> instruction
   | Ltailcall: signature -> loc + ident -> list loc -> instruction
+  | Lbuiltin: external_function -> list loc -> loc -> instruction
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
   | Lcond: condition -> list loc -> label -> instruction
@@ -68,8 +69,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 Definition genv := Genv.t fundef unit.
@@ -186,6 +187,11 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) (Ltailcall sig ros args :: b) rs m)
         E0 (Callstate s f' (List.map rs args) m')
+  | exec_Lbuiltin:
+      forall s f sp rs m ef args res b t v m',
+      external_call ef ge (map rs args) m t v m' ->
+      step (State s f sp (Lbuiltin ef args res :: b) rs m)
+         t (State s f sp b (Locmap.set res v rs) m')
   | exec_Llabel:
       forall s f sp lbl b rs m,
       step (State s f sp (Llabel lbl :: b) rs m)

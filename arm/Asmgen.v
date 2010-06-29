@@ -55,7 +55,7 @@ Definition is_immed_mem_float (x: int) : bool :=
   Int.eq (Int.and x (Int.repr 3)) Int.zero
   && Int.lt x (Int.repr 1024) && Int.lt (Int.repr (-1024)) x.
   
-(** Smart constructor for integer immediate arguments. *)
+(** Smart constructors for integer immediate arguments. *)
 
 Definition loadimm (r: ireg) (n: int) (k: code) :=
   if is_immed_arith n then
@@ -479,6 +479,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
         (Pfreeframe (-f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs)
          :: Pbsymb symb :: k)
+  | Mbuiltin ef args res =>
+      Pbuiltin ef (map preg_of args) (preg_of res) :: k
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>

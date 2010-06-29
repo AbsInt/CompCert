@@ -352,9 +352,7 @@ proc:
                    fn_stackspace = $8;
                    fn_body = $10 }) }
   | EXTERN STRINGLIT COLON signature 
-      { Coq_pair($2,
-        External { ef_id = $2;
-                   ef_sig = $4 }) }
+      { Coq_pair($2, External({ef_id = $2; ef_sig = $4; ef_inline = false})) }
 ;
 
 signature:

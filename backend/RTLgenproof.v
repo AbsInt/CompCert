@@ -1213,6 +1213,22 @@ Proof.
   rewrite H2; eauto.
   traceEq.
   rewrite G. constructor; auto.
+
+  (* builtin *)
+  inv TS. 
+  exploit transl_exprlist_correct; eauto.
+  intros [rs' [E [F [G J]]]].
+  exploit tr_store_optvar_correct. eauto. eauto.
+  apply match_env_update_temp. eexact F. eauto. 
+  intros [rs'' [A B]].
+  econstructor; split.
+  left. eapply star_plus_trans. eexact E. eapply plus_left.
+  eapply exec_Ibuiltin. eauto. rewrite G. 
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  eexact A. reflexivity. traceEq. 
+  econstructor; eauto. constructor. rewrite Regmap.gss in B. auto. 
+
   (* seq *)
   inv TS. 
   econstructor; split.

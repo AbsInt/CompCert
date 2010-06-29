@@ -87,6 +87,12 @@ Inductive wt_instr : instruction -> Prop :=
       tailcall_possible sig ->
       match ros with inl r => r = IT1 | _ => True end ->
       wt_instr (Ltailcall sig ros)
+  | wt_Lbuiltin:
+      forall ef args res,
+      List.map mreg_type args = (ef_sig ef).(sig_args) ->
+      mreg_type res = proj_sig_res (ef_sig ef) ->
+      arity_ok (ef_sig ef).(sig_args) = true ->
+      wt_instr (Lbuiltin ef args res)
   | wt_Llabel:
       forall lbl,
       wt_instr (Llabel lbl)

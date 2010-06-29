@@ -210,7 +210,7 @@ Record function : Type := mkfunction {
 
 Inductive fundef : Type :=
   | Internal: function -> fundef
-  | External: ident -> typelist -> type -> fundef.
+  | External: external_function -> typelist -> type -> fundef.
 
 (** ** Programs *)
 
@@ -639,7 +639,3 @@ Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
 
 Definition signature_of_type (args: typelist) (res: type) : signature :=
   mksignature (typlist_of_typelist args) (opttyp_of_type res).
-
-Definition external_function
-    (id: ident) (targs: typelist) (tres: type) : AST.external_function :=
-  mkextfun id (signature_of_type targs tres).

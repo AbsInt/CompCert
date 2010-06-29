@@ -88,8 +88,16 @@ Inductive wt_instr : instruction -> Prop :=
       call_loc_acceptable sig ros ->
       locs_acceptable args ->
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
-      Conventions.tailcall_possible sig ->
+      tailcall_possible sig ->
       wt_instr (Ltailcall sig ros args)
+  | wt_Lbuiltin:
+      forall ef args res s,
+      List.map Loc.type args = (ef_sig ef).(sig_args) ->
+      Loc.type res = proj_sig_res (ef_sig ef) ->
+      arity_ok (ef_sig ef).(sig_args) = true ->
+      locs_acceptable args -> loc_acceptable res ->
+      valid_successor s ->
+      wt_instr (Lbuiltin ef args res s)
   | wt_Lcond:
       forall cond args s1 s2,
       List.map Loc.type args = type_of_condition cond ->

@@ -139,6 +139,8 @@ Proof.
   split. autorewrite with allocty; auto.
   split. auto with allocty. auto.
   rewrite transf_unroll; auto.
+  (* builtin *)
+  WT.
   (* cond *)
   WT.
   (* jumptable *)

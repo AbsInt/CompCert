@@ -620,8 +620,8 @@ Definition transl_fundef (f: Csyntax.fundef) : res fundef :=
   match f with
   | Csyntax.Internal g => 
       do tg <- transl_function g; OK(AST.Internal tg)
-  | Csyntax.External id args res =>
-      OK(AST.External (external_function id args res))
+  | Csyntax.External ef args res =>
+      OK(AST.External ef)
   end.
 
 (** ** Translation of programs *)

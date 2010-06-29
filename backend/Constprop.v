@@ -128,6 +128,8 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
           D.set dst Unknown before
       | Icall sig ros args res s =>
           D.set res Unknown before
+      | Ibuiltin ef args res s =>
+          D.set res Unknown before
       | _ =>
           before
       end

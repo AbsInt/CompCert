@@ -155,8 +155,10 @@ Inductive wt_fundef: typenv -> fundef -> Prop :=
   | wt_fundef_Internal: forall env f,
       wt_function env f ->
       wt_fundef env (Internal f)
-  | wt_fundef_External: forall env id args res,
-      wt_fundef env (External id args res).
+  | wt_fundef_External: forall env ef args res,
+      (ef_sig ef).(sig_args) = typlist_of_typelist args ->
+      (ef_sig ef).(sig_res) = opttyp_of_type res ->
+      wt_fundef env (External ef args res).
 
 Definition add_global_var
      (env: typenv) (id_v: ident * globvar type) : typenv :=
@@ -410,8 +412,12 @@ Qed.
 Definition typecheck_fundef (main: ident) (env: typenv) (id_fd: ident * fundef) : bool :=
   let (id, fd) := id_fd in
   match fd with
-  | Internal f => typecheck_function env f
-  | External _ _ _ => true
+  | Internal f =>
+      typecheck_function env f
+  | External ef targs tres =>
+      let s := ef_sig ef in
+      list_eq_dec typ_eq s.(sig_args) (typlist_of_typelist targs) 
+      && opt_typ_eq s.(sig_res) (opttyp_of_type tres)
   end &&
   if ident_eq id main
   then match type_of_fundef fd with
@@ -430,8 +436,8 @@ Proof.
   intros. unfold typecheck_fundef in H; TrueInv.
   split. 
     destruct fd.
-    constructor. apply typecheck_function_correct; auto. 
-    constructor.
+    constructor. apply typecheck_function_correct; auto.
+    TrueInv. constructor; eapply proj_sumbool_true; eauto.
   intro. destruct (ident_eq id main). 
   destruct (type_of_fundef fd); try discriminate. 
   exists t; decEq; auto. apply eq_type_correct; auto.

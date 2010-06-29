@@ -72,6 +72,7 @@ Definition instr_within_bounds (i: instruction) :=
   | Lop op args res => mreg_within_bounds res
   | Lload chunk addr args dst => mreg_within_bounds dst
   | Lcall sig ros => size_arguments sig <= bound_outgoing b
+  | Lbuiltin ef args res => mreg_within_bounds res
   | _ => True
   end.
 
@@ -103,6 +104,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lstore chunk addr args src => nil
   | Lcall sig ros => nil
   | Ltailcall sig ros => nil
+  | Lbuiltin ef args res => res :: nil
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => nil

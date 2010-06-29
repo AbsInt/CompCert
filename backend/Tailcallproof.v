@@ -24,7 +24,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Registers.
 Require Import RTL.
-Require Conventions.
+Require Import Conventions.
 Require Import Tailcall.
 
 (** * Syntactic properties of the code transformation *)
@@ -168,7 +168,7 @@ Lemma transf_instr_charact:
   transf_instr_spec f instr (transf_instr f pc instr).
 Proof.
   intros. unfold transf_instr. destruct instr; try constructor.
-  caseEq (is_return niter f n r && Conventions.tailcall_is_possible s &&
+  caseEq (is_return niter f n r && tailcall_is_possible s &&
           opt_typ_eq (sig_res s) (sig_res (fn_sig f))); intros.
   destruct (andb_prop _ _ H0). destruct (andb_prop _ _ H1).
   eapply transf_instr_tailcall; eauto.
@@ -496,6 +496,17 @@ Proof.
   eapply exec_Itailcall; eauto. apply sig_preserved.
   rewrite stacksize_preserved; auto.
   constructor. auto.  apply regset_get_list; auto. auto. 
+
+(* builtin *)
+  TransfInstr.
+  assert (Val.lessdef_list (rs##args) (rs'##args)). apply regset_get_list; auto. 
+  exploit external_call_mem_extends; eauto.
+  intros [v' [m'1 [A [B [C D]]]]].
+  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) pc' (rs'#res <- v') m'1); split.
+  eapply exec_Ibuiltin; eauto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto. apply regset_set; auto.
 
 (* cond true *)
   TransfInstr. 

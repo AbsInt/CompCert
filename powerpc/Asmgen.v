@@ -494,6 +494,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pmtlr GPR12 ::
       Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) :: 
       Pbs symb :: k
+  | Mbuiltin ef args res =>
+      Pbuiltin ef (map preg_of args) (preg_of res) :: k
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>

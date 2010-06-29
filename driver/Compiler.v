@@ -103,7 +103,7 @@ Notation "a @@ b" :=
   RTL, then to LTL, etc, all the way to Asm, and iterates this
   transformation for every function.  The second translates the whole
   Cminor program to a RTL program, then to an LTL program, etc. 
-  Between Cminor and Asm, we follow the first approach because it has
+  Between CminorSel and Asm, we follow the first approach because it has
   lower memory requirements.  The translation from Clight to Asm
   follows the second approach.
   
@@ -121,11 +121,10 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
   @@@ Stacking.transf_fundef
   @@@ Asmgen.transf_fundef.
 
-(* Here is the translation of a Cminor function to an Asm function. *)
+(* Here is the translation of a CminorSel function to an Asm function. *)
 
-Definition transf_cminor_fundef (f: Cminor.fundef) : res Asm.fundef :=
+Definition transf_cminorsel_fundef (f: CminorSel.fundef) : res Asm.fundef :=
   OK f
-   @@ Selection.sel_fundef
   @@@ RTLgen.transl_fundef
   @@@ transf_rtl_fundef.
 
@@ -135,7 +134,9 @@ Definition transf_rtl_program (p: RTL.program) : res Asm.program :=
   transform_partial_program transf_rtl_fundef p.
 
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
-  transform_partial_program transf_cminor_fundef p.
+   OK p
+   @@ Selection.sel_program
+  @@@ transform_partial_program transf_cminorsel_fundef.
 
 Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   match Ctyping.typecheck_program p with
@@ -284,16 +285,15 @@ Theorem transf_cminor_program_correct:
   Cminor.exec_program p beh ->
   Asm.exec_program tp beh.
 Proof.
-  intros. unfold transf_cminor_program, transf_cminor_fundef in H.
+  intros. unfold transf_cminor_program, transf_cminorsel_fundef in H.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [X3 P3]].
   clear H.
   destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X3) as [p2 [X2 P2]].
   clear X3.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ X2) as [p1 [X1 P1]].
-  generalize (transform_partial_program_identity _ _ _ _ X1). clear X1. intro. subst p1.
+  generalize (transform_partial_program_identity _ _ _ _ X2). clear X2. intro. subst p2.
   apply transf_rtl_program_correct with p3; auto.
-  apply RTLgenproof.transf_program_correct with p2; auto.
-  rewrite <- P1. apply Selectionproof.transf_program_correct; auto.
+  apply RTLgenproof.transf_program_correct with (Selection.sel_program p); auto.
+  apply Selectionproof.transf_program_correct; auto.
 Qed.
 
 Theorem transf_c_program_correct:
@@ -306,7 +306,7 @@ Proof.
   intros until beh; unfold transf_c_program; simpl.
   caseEq (Ctyping.typecheck_program p); try congruence; intro.
   caseEq (Cshmgen.transl_program p); simpl; try congruence; intros p1 EQ1.
-  caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2. 
+  caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2.
   intros EQ3 NOTW SEM.
   eapply transf_cminor_program_correct; eauto.
   eapply Cminorgenproof.transl_program_correct; eauto. 

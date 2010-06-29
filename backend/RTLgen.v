@@ -546,6 +546,12 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do n1 <- add_instr (Itailcall sig (inl _ rf) rargs);
       do n2 <- transl_exprlist map cl rargs n1;
          transl_expr map b rf n2
+  | Sbuiltin optid ef al =>
+      do rargs <- alloc_regs map al;
+      do r <- new_reg;
+      do n1 <- store_optvar map r optid nd;
+      do n2 <- add_instr (Ibuiltin ef rargs r n1);
+      transl_exprlist map al rargs n2
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
       transl_stmt map s1 ns nexits ngoto nret rret

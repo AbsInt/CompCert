@@ -308,6 +308,14 @@ Proof.
   rewrite sig_preserved. auto.
   apply find_function_translated; auto.
   econstructor; eauto.
+  (* Lbuiltin *)
+  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
+  left; econstructor; split.
+  eapply exec_Lbuiltin; eauto. 
+  rewrite (tunnel_function_lookup _ _ _ H); simpl; auto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto.
   (* cond *)
   generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.

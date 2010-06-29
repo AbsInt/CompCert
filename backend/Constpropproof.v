@@ -355,6 +355,17 @@ Proof.
   eapply exec_Itailcall; eauto. apply sig_function_translated; auto.
   constructor; auto. 
 
+  (* Ibuiltin *)
+  TransfInstr. intro.
+  exists (State s' (transf_function f) sp pc' (rs#res <- v) m'); split.
+  eapply exec_Ibuiltin; eauto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto. 
+  eapply analyze_correct_1; eauto. simpl; auto. 
+  unfold transfer; rewrite H. 
+  apply regs_match_approx_update; auto. simpl; auto.
+
   (* Icond, true *)
   exists (State s' (transf_function f) sp ifso rs m); split. 
   caseEq (cond_strength_reduction (approx_reg (analyze f)!!pc) cond args);

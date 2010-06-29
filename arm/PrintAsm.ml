@@ -188,7 +188,53 @@ let call_helper oc fn dst arg1 arg2 =
   (* ... for a total of at most 7 instructions *)
   7
 
-(* Built-in functions *)
+(* Built-ins.  They come in two flavors: 
+   - inlined by the compiler: take their arguments in arbitrary
+     registers; preserve all registers except IR14
+   - inlined while printing asm code; take their arguments in
+     locations dictated by the calling conventions; preserve
+     callee-save regs only. *)
+
+let print_builtin_inlined oc name args res =
+  fprintf oc "%s begin %s\n" comment name;
+  let n = match name, args, res with
+  (* Volatile reads *)
+  | "__builtin_volatile_read_int8unsigned", [IR addr], IR res ->
+      fprintf oc "	ldrb	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | "__builtin_volatile_read_int8signed", [IR addr], IR res ->
+      fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | "__builtin_volatile_read_int16unsigned", [IR addr], IR res ->
+      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | "__builtin_volatile_read_int16signed", [IR addr], IR res ->
+      fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | ("__builtin_volatile_read_int32"|"__builtin_volatile_read_pointer"), [IR addr], IR res ->
+      fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | "__builtin_volatile_read_float32", [IR addr], FR res ->
+      fprintf oc "	ldfs	%a, [%a, #0]\n" freg res ireg addr;
+      fprintf oc "	mvfd	%a, %a\n" freg res freg res; 2
+  | "__builtin_volatile_read_float64", [IR addr], FR res ->
+      fprintf oc "	ldfd	%a, [%a, #0]\n" freg res ireg addr; 1
+  (* Volatile writes *)
+  | ("__builtin_volatile_write_int8unsigned"|"__builtin_volatile_write_int8signed"), [IR addr; IR src], _ ->
+      fprintf oc "	strb	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | ("__builtin_volatile_write_int16unsigned"|"__builtin_volatile_write_int16signed"), [IR addr; IR src], _ ->
+      fprintf oc "	strh	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | ("__builtin_volatile_write_int32"|"__builtin_volatile_write_pointer"), [IR addr; IR src], _ ->
+      fprintf oc "	str	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | "__builtin_volatile_write_float32", [IR addr; FR src], _ ->
+      fprintf oc "	mvfs	%a, %a\n" freg FR2 freg src;
+      fprintf oc "	stfs	%a, [%a, #0]\n" freg FR2 ireg addr; 2
+  | "__builtin_volatile_write_float64", [IR addr; FR src], _ ->
+      fprintf oc "	stfd	%a, [%a, #0]\n" freg src ireg addr; 1
+  (* Float arithmetic *)
+  | "__builtin_fabs", [FR a1], FR res ->
+      fprintf oc "	absd	%a, %a\n" freg res freg a1; 1
+  (* Catch-all *)
+  | _ ->
+      invalid_arg ("unrecognized builtin " ^ name)
+  in
+  fprintf oc "%s end %s\n" comment name;
+  n
 
 let re_builtin_function = Str.regexp "__builtin_"
 
@@ -200,38 +246,6 @@ let print_builtin_function oc s =
   (* int args: IR0-IR3     float args: FR0, FR1
      int res:  IR0        float res:  FR0 *)
   let n = match extern_atom s with
-  (* Volatile reads *)
-  | "__builtin_volatile_read_int8unsigned" ->
-      fprintf oc "	ldrb	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
-  | "__builtin_volatile_read_int8signed" ->
-      fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
-  | "__builtin_volatile_read_int16unsigned" ->
-      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
-  | "__builtin_volatile_read_int16signed" ->
-      fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
-  | "__builtin_volatile_read_int32"
-  | "__builtin_volatile_read_pointer" ->
-      fprintf oc "	ldr	%a, [%a, #0]\n" ireg IR0 ireg IR0; 1
-  | "__builtin_volatile_read_float32" ->
-      fprintf oc "	ldfs	%a, [%a, #0]\n" freg FR0 ireg IR0;
-      fprintf oc "	mvfd	%a, %a\n" freg FR0 freg FR0; 2
-  | "__builtin_volatile_read_float64" ->
-      fprintf oc "	ldfd	%a, [%a, #0]\n" freg FR0 ireg IR0; 1
-  (* Volatile writes *)
-  | "__builtin_volatile_write_int8unsigned"
-  | "__builtin_volatile_write_int8signed" ->
-      fprintf oc "	strb	%a, [%a, #0]\n" ireg IR1 ireg IR0; 1
-  | "__builtin_volatile_write_int16unsigned"
-  | "__builtin_volatile_write_int16signed" ->
-      fprintf oc "	strh	%a, [%a, #0]\n" ireg IR1 ireg IR0; 1
-  | "__builtin_volatile_write_int32"
-  | "__builtin_volatile_write_pointer" ->
-      fprintf oc "	str	%a, [%a, #0]\n" ireg IR1 ireg IR0; 1
-  | "__builtin_volatile_write_float32" ->
-      fprintf oc "	mvfs	%a, %a\n" freg FR0 freg FR0;
-      fprintf oc "	stfs	%a, [%a, #0]\n" freg FR0 ireg IR0; 2
-  | "__builtin_volatile_write_float64" ->
-      fprintf oc "	stfd	%a, [%a, #0]\n" freg FR0 ireg IR0; 1
   (* Block copy *)
   | "__builtin_memcpy" ->
       let lbl1 = new_label() in
@@ -252,7 +266,7 @@ let print_builtin_function oc s =
       fprintf oc "	subnes	%a, %a, #1\n" ireg IR2 ireg IR2;
       fprintf oc "	bne	%a\n" label lbl
 *)
-  | "__builtin_memcpy_word" ->
+  | "__builtin_memcpy_words" ->
       let lbl1 = new_label() in
       let lbl2 = new_label() in
       fprintf oc "	movs	%a, %a, lsr #2\n" ireg IR2 ireg IR2;
@@ -467,6 +481,8 @@ let print_instruction oc labels = function
         (fun l -> fprintf oc "	.word	%a\n" print_label l)
         tbl;
       2 + List.length tbl
+  | Pbuiltin(ef, args, res) ->
+      print_builtin_inlined oc (extern_atom ef.ef_id) args res
 
 let no_fallthrough = function
   | Pb _ -> true

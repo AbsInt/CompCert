@@ -232,7 +232,7 @@ Proof.
   apply wf_kill_loads; auto.
   apply wf_empty_numbering.
   apply wf_empty_numbering.
-(*  apply wf_add_unknown; auto. *)
+  apply wf_add_unknown. apply wf_kill_loads; auto.
 Qed.
 
 (** As a consequence, the numberings computed by the static analysis
@@ -582,21 +582,16 @@ Proof.
 Qed.
 
 Lemma kill_load_satisfiable:
-  forall n rs chunk addr v m',
-  Mem.storev chunk m addr v = Some m' ->
+  forall n rs m',
   numbering_satisfiable ge sp rs m n ->
   numbering_satisfiable ge sp rs m' (kill_loads n).
 Proof.
-  intros. inversion H0. inversion H1.
-  generalize (kill_load_eqs_incl n.(num_eqs)). intro.
+  intros. inv H. destruct H0. generalize (kill_load_eqs_incl n.(num_eqs)). intro.
   exists x. split; intros.
-  generalize (H2 _ _ (H4 _ H5)). 
-  generalize (kill_load_eqs_ops _ _ _ H5).
-  destruct rh; simpl.
-  intros. destruct addr; simpl in H; try discriminate. 
-  auto.
-  tauto.
-  apply H3. assumption.
+  generalize (H _ _ (H1 _ H2)). 
+  generalize (kill_load_eqs_ops _ _ _ H2).
+  destruct rh; simpl; tauto.
+  apply H0. auto. 
 Qed.
 
 (** Correctness of [reg_valnum]: if it returns a register [r],
@@ -902,7 +897,18 @@ Proof.
   econstructor; split.
   eapply exec_Itailcall; eauto.
   apply sig_preserved. 
-  econstructor; eauto. 
+  econstructor; eauto.
+
+  (* Ibuiltin *)
+  econstructor; split.
+  eapply exec_Ibuiltin; eauto. 
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto.
+  eapply analysis_correct_1; eauto. simpl; auto.
+  unfold transfer; rewrite H. 
+  apply add_unknown_satisfiable. apply wf_kill_loads. apply wf_analyze.
+  eapply kill_load_satisfiable; eauto. 
 
   (* Icond true *)
   econstructor; split.

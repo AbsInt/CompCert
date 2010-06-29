@@ -80,9 +80,7 @@ Lemma mkmem_ext:
   mkmem cont1 acc1 bound1 next1 a1 b1 c1 d1 =
   mkmem cont2 acc2 bound2 next2 a2 b2 c2 d2.
 Proof.
-intros.
-subst.
-f_equal; apply proof_irr.
+  intros. subst. f_equal; apply proof_irr.
 Qed.
 
 (** * Validity of blocks and accesses *)
@@ -1699,78 +1697,78 @@ Hint Local Resolve valid_block_free_1 valid_block_free_2
 Lemma mem_access_ext:
   forall m1 m2, perm m1 = perm m2 -> mem_access m1 = mem_access m2.
 Proof.
-intros.
-apply extensionality; intro b.
-apply extensionality; intro ofs.
-case_eq (mem_access m1 b ofs); case_eq (mem_access m2 b ofs); intros; auto.
-assert (perm m1 b ofs p <-> perm m2 b ofs p) by (rewrite H; intuition).
-assert (perm m1 b ofs p0 <-> perm m2 b ofs p0) by (rewrite H; intuition).
-unfold perm, perm_order' in H2,H3.
-rewrite H0 in H2,H3; rewrite H1 in H2,H3.
-f_equal.
-assert (perm_order p p0 -> perm_order p0 p -> p0=p) by
-  (clear; intros; inv H; inv H0; auto).
-intuition.
-assert (perm m1 b ofs p <-> perm m2 b ofs p) by (rewrite H; intuition).
-unfold perm, perm_order' in H2; rewrite H0 in H2; rewrite H1 in H2.
-assert (perm_order p p) by auto with mem.
-intuition.
-assert (perm m1 b ofs p <-> perm m2 b ofs p) by (rewrite H; intuition).
-unfold perm, perm_order'  in H2; rewrite H0 in H2; rewrite H1 in H2.
-assert (perm_order p p) by auto with mem.
-intuition.
+  intros.
+  apply extensionality; intro b.
+  apply extensionality; intro ofs.
+  case_eq (mem_access m1 b ofs); case_eq (mem_access m2 b ofs); intros; auto.
+  assert (perm m1 b ofs p <-> perm m2 b ofs p) by (rewrite H; intuition).
+  assert (perm m1 b ofs p0 <-> perm m2 b ofs p0) by (rewrite H; intuition).
+  unfold perm, perm_order' in H2,H3.
+  rewrite H0 in H2,H3; rewrite H1 in H2,H3.
+  f_equal.
+  assert (perm_order p p0 -> perm_order p0 p -> p0=p) by
+    (clear; intros; inv H; inv H0; auto).
+  intuition.
+  assert (perm m1 b ofs p <-> perm m2 b ofs p) by (rewrite H; intuition).
+  unfold perm, perm_order' in H2; rewrite H0 in H2; rewrite H1 in H2.
+  assert (perm_order p p) by auto with mem.
+  intuition.
+  assert (perm m1 b ofs p <-> perm m2 b ofs p) by (rewrite H; intuition).
+  unfold perm, perm_order'  in H2; rewrite H0 in H2; rewrite H1 in H2.
+  assert (perm_order p p) by auto with mem.
+  intuition.
 Qed.
 
 Lemma mem_ext': 
   forall m1 m2, 
-       mem_access m1 = mem_access m2 ->
-       nextblock m1 = nextblock m2 ->
-       (forall b, 0 < b < nextblock m1 -> bounds m1 b = bounds m2 b) ->
-       (forall b ofs, perm_order' (mem_access m1 b ofs) Readable -> 
-                               mem_contents m1 b ofs = mem_contents m2 b ofs) ->
-       m1 = m2.
+  mem_access m1 = mem_access m2 ->
+  nextblock m1 = nextblock m2 ->
+  (forall b, 0 < b < nextblock m1 -> bounds m1 b = bounds m2 b) ->
+  (forall b ofs, perm_order' (mem_access m1 b ofs) Readable -> 
+                          mem_contents m1 b ofs = mem_contents m2 b ofs) ->
+  m1 = m2.
 Proof.
-intros.
-destruct m1; destruct m2; simpl in *.
-destruct H; subst.
-apply mkmem_ext; auto.
-apply extensionality; intro b.
-apply extensionality; intro ofs.
-destruct (perm_order'_dec (mem_access0 b ofs) Readable).
-auto.
-destruct (noread_undef0 b ofs); try contradiction.
-destruct (noread_undef1 b ofs); try contradiction.
-congruence.
-apply extensionality; intro b.
-destruct (nextblock_noaccess0 b); auto.
-destruct (nextblock_noaccess1 b); auto.
-congruence.
+  intros.
+  destruct m1; destruct m2; simpl in *.
+  destruct H; subst.
+  apply mkmem_ext; auto.
+  apply extensionality; intro b.
+  apply extensionality; intro ofs.
+  destruct (perm_order'_dec (mem_access0 b ofs) Readable).
+  auto.
+  destruct (noread_undef0 b ofs); try contradiction.
+  destruct (noread_undef1 b ofs); try contradiction.
+  congruence.
+  apply extensionality; intro b.
+  destruct (nextblock_noaccess0 b); auto.
+  destruct (nextblock_noaccess1 b); auto.
+  congruence.
 Qed.
 
 Theorem mem_ext:
-   forall m1 m2, 
-       perm m1 = perm m2 ->
-       nextblock m1 = nextblock m2 ->
-       (forall b, 0 < b < nextblock m1 -> bounds m1 b = bounds m2 b) ->
-       (forall b ofs, loadbytes m1 b ofs 1 = loadbytes m2 b ofs 1) ->
-       m1 = m2.
+  forall m1 m2, 
+  perm m1 = perm m2 ->
+  nextblock m1 = nextblock m2 ->
+  (forall b, 0 < b < nextblock m1 -> bounds m1 b = bounds m2 b) ->
+  (forall b ofs, loadbytes m1 b ofs 1 = loadbytes m2 b ofs 1) ->
+  m1 = m2.
 Proof.
-intros.
-generalize (mem_access_ext _ _ H); clear H; intro.
-apply mem_ext'; auto.
-intros.
-specialize (H2 b ofs).
-unfold loadbytes in H2; simpl in H2.
-destruct (range_perm_dec m1 b ofs (ofs+1)).
-destruct (range_perm_dec m2 b ofs (ofs+1)).
-inv H2; auto.
-contradict n.
-intros ofs' ?; assert (ofs'=ofs) by omega; subst ofs'.
-unfold perm, perm_order'.
-  rewrite <- H; destruct (mem_access m1 b ofs); try destruct p; intuition.
-contradict n.
-intros ofs' ?; assert (ofs'=ofs) by omega; subst ofs'.
-unfold perm. destruct (mem_access m1 b ofs); try destruct p; intuition.
+  intros.
+  generalize (mem_access_ext _ _ H); clear H; intro.
+  apply mem_ext'; auto.
+  intros.
+  specialize (H2 b ofs).
+  unfold loadbytes in H2; simpl in H2.
+  destruct (range_perm_dec m1 b ofs (ofs+1)).
+  destruct (range_perm_dec m2 b ofs (ofs+1)).
+  inv H2; auto.
+  contradict n.
+  intros ofs' ?; assert (ofs'=ofs) by omega; subst ofs'.
+  unfold perm, perm_order'.
+    rewrite <- H; destruct (mem_access m1 b ofs); try destruct p; intuition.
+  contradict n.
+  intros ofs' ?; assert (ofs'=ofs) by omega; subst ofs'.
+  unfold perm. destruct (mem_access m1 b ofs); try destruct p; intuition.
 Qed.
 
 (** * Generic injections *)

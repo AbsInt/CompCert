@@ -41,6 +41,7 @@ Inductive instruction: Type :=
   | Lstore: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
   | Lcall: signature -> loc + ident -> list loc -> loc -> node -> instruction
   | Ltailcall: signature -> loc + ident -> list loc -> instruction
+  | Lbuiltin: external_function -> list loc -> loc -> node -> instruction
   | Lcond: condition -> list loc -> node -> node -> instruction
   | Ljumptable: loc -> list node -> instruction
   | Lreturn: option loc -> instruction.
@@ -61,8 +62,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 (** * Operational semantics *)
@@ -91,9 +92,9 @@ Definition postcall_locs (ls: locset) : locset :=
   fun (l: loc) =>
     match l with
     | R r =>
-        if In_dec Loc.eq (R r) Conventions.temporaries then
+        if In_dec Loc.eq (R r) temporaries then
           Vundef
-        else if In_dec Loc.eq (R r) Conventions.destroyed_at_call then
+        else if In_dec Loc.eq (R r) destroyed_at_call then
           Vundef
         else
           ls (R r)
@@ -196,6 +197,12 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) pc rs m)
         E0 (Callstate s f' (List.map rs args) m')
+  | exec_Lbuiltin:
+      forall s f sp pc rs m ef args res pc' t v m',
+      (fn_code f)!pc = Some(Lbuiltin ef args res pc') ->
+      external_call ef ge (map rs args) m t v m' ->
+      step (State s f sp pc rs m)
+         t (State s f sp pc' (Locmap.set res v rs) m')
   | exec_Lcond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
@@ -272,6 +279,7 @@ Definition successors_instr (i: instruction) : list node :=
   | Lstore chunk addr args src s => s :: nil
   | Lcall sig ros args res s => s :: nil
   | Ltailcall sig ros args => nil
+  | Lbuiltin ef args res s => s :: nil
   | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
   | Ljumptable arg tbl => tbl
   | Lreturn optarg => nil

@@ -55,27 +55,30 @@ Proof.
 Qed.
 
 Lemma transl_fundef_sig1:
-  forall f tf args res,
+  forall tenv f tf args res,
+  wt_fundef tenv f ->
   transl_fundef f = OK tf ->
   classify_fun (type_of_fundef f) = fun_case_f args res ->
   funsig tf = signature_of_type args res.
 Proof.
-  intros. destruct f; monadInv H. 
+  intros. inv H; monadInv H0.
   monadInv EQ. simpl.  
-  simpl in H0. inversion H0.
+  simpl in H1. inversion H1.
   unfold fn_sig; simpl. unfold signature_of_type. f_equal. 
   apply transl_params_types; auto.
-  simpl. simpl in H0. congruence.
+  simpl. simpl in H1. inv H1. destruct (ef_sig ef); simpl in *. 
+  unfold signature_of_type. congruence.
 Qed.
 
 Lemma transl_fundef_sig2:
-  forall f tf args res,
+  forall tenv f tf args res,
+  wt_fundef tenv f ->
   transl_fundef f = OK tf ->
   type_of_fundef f = Tfunction args res ->
   funsig tf = signature_of_type args res.
 Proof.
   intros. eapply transl_fundef_sig1; eauto.
-  rewrite H0; reflexivity.
+  rewrite H1; reflexivity.
 Qed.
 
 Lemma var_kind_by_value:

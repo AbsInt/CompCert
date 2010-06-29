@@ -330,7 +330,7 @@ Lemma agree_postcall:
   forall live args ros res rs v (ls: locset),
   (forall r,
     Regset.In r live -> r <> res ->
-    ~(In (assign r) Conventions.destroyed_at_call)) ->
+    ~(In (assign r) destroyed_at_call)) ->
   (forall r,
     Regset.In r live -> r <> res -> assign r <> assign res) ->
   agree (reg_list_live args (reg_sum_live ros (reg_dead res live))) rs ls ->
@@ -675,6 +675,19 @@ Proof.
   eapply exec_Ltailcall; eauto. TranslInstr.
   rewrite (sig_function_translated _ _ TF). eauto.
   rewrite H1. econstructor; eauto.
+
+  (* Ibuiltin *)
+  econstructor; split.
+  eapply exec_Lbuiltin; eauto. TranslInstr.
+  replace (map ls (@map reg loc assign args)) with (rs##args).
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  eapply agree_eval_regs; eauto.
+  generalize (regalloc_correct_1 f env live _ _ _ _ ASG H).
+  unfold correct_alloc_instr. intro CORR.
+  MatchStates. 
+  eapply agree_assign_live; eauto.
+  eapply agree_reg_list_live; eauto.
 
   (* Icond, true *)
   assert (COND: eval_condition cond (map ls (map assign args)) = Some true).

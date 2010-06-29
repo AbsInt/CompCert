@@ -612,6 +612,23 @@ Proof.
   destruct (Genv.find_symbol ge i); try discriminate.  
   eapply Genv.find_funct_ptr_prop; eauto.
 
+  (* Lbuiltin *)
+  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
+  simpl in EQ. subst c.
+  assert (REACH': (reachable f)!!pc' = true).
+  eapply reachable_successors; eauto. simpl; auto.
+  exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
+  econstructor; split.
+  eapply plus_left'.
+  eapply exec_Lbuiltin. 
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  eapply add_branch_correct; eauto.
+  eapply is_tail_add_branch. eapply is_tail_cons_left. 
+  eapply is_tail_find_label. eauto.
+  traceEq.
+  econstructor; eauto.
+
   (* Lcond true *)
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.

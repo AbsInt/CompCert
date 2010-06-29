@@ -58,6 +58,7 @@ Inductive instruction: Type :=
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mcall: signature -> mreg + ident -> instruction
   | Mtailcall: signature -> mreg + ident -> instruction
+  | Mbuiltin: external_function -> list mreg -> mreg -> instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction
@@ -80,8 +81,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 Definition genv := Genv.t fundef unit.

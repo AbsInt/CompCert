@@ -24,6 +24,7 @@
   syntax and dynamic semantics of the Cminor language.
 *)
 
+Require Import Axioms.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -132,7 +133,7 @@ Proof.
   generalize Int.eq_dec; intro.
   assert (forall (x y: shift_amount), {x=y}+{x<>y}).
   destruct x as [x Px]. destruct y as [y Py]. destruct (H x y).
-  subst x. rewrite (proof_irrelevance _ Px Py). left; auto.
+  subst x. rewrite (proof_irr Px Py). left; auto.
   right. red; intro. elim n. inversion H0. auto.
   decide equality.
 Qed.

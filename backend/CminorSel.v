@@ -70,6 +70,7 @@ Inductive stmt : Type :=
   | Sstore : memory_chunk -> addressing -> exprlist -> expr -> stmt
   | Scall : option ident -> signature -> expr -> exprlist -> stmt
   | Stailcall: signature -> expr -> exprlist -> stmt
+  | Sbuiltin : option ident -> external_function -> exprlist -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: condexpr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -93,8 +94,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 (** * Operational semantics *)
@@ -296,6 +297,12 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f (Stailcall sig a bl) k (Vptr sp Int.zero) e m)
         E0 (Callstate fd vargs (call_cont k) m')
+
+  | step_builtin: forall f optid ef al k sp e m vl t v m',
+      eval_exprlist sp e m nil al vl ->
+      external_call ef ge vl m t v m' ->
+      step (State f (Sbuiltin optid ef al) k sp e m)
+         t (State f Sskip k sp (set_optvar optid v e) m')
 
   | step_seq: forall f s1 s2 k sp e m,
       step (State f (Sseq s1 s2) k sp e m)

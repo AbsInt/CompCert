@@ -25,6 +25,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
+Require Import Conventions.
 Require Import Mach.
 Require Import Machconcr.
 Require Import Machtyping.
@@ -896,6 +897,37 @@ Lemma exec_Mtailcall_prop:  forall (s : list stackframe) (fb stk : block) (soff
   intros. rewrite Pregmap.gso; auto.
 Qed.
 
+Lemma exec_Mbuiltin_prop:
+  forall (s : list stackframe) (f : block) (sp : val)
+         (ms : Mach.regset) (m : mem) (ef : external_function)
+         (args : list mreg) (res : mreg) (b : list Mach.instruction)
+         (t : trace) (v : val) (m' : mem),
+  external_call ef ge ms ## args m t v m' ->
+  exec_instr_prop (Machconcr.State s f sp (Mbuiltin ef args res :: b) ms m) t
+                  (Machconcr.State s f sp b (Regmap.set res v ms) m').
+Proof.
+  intros; red; intros; inv MS.
+  generalize (wt_function_instrs _ WTF _ (INCL _ (in_eq _ _))).
+  intro WTI. inv WTI.
+  inv AT. simpl in H3.
+  generalize (functions_transl _ _ FIND); intro FN.
+  generalize (functions_transl_no_overflow _ _ FIND); intro NOOV.
+  left. econstructor; split. apply plus_one. 
+  eapply exec_step_builtin. eauto. eauto.
+  eapply find_instr_tail; eauto. 
+  replace (rs##(preg_of##args)) with (ms##args).
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  rewrite list_map_compose. apply list_map_exten. intros. 
+  symmetry. eapply preg_val; eauto. 
+  econstructor; eauto with coqlib.
+  unfold nextinstr. rewrite Pregmap.gss. rewrite Pregmap.gso.
+  rewrite <- H0. simpl. constructor; auto.
+  eapply code_tail_next_int; eauto. 
+  apply sym_not_equal. auto with ppcgen. 
+  auto with ppcgen.
+Qed.
+
 Lemma exec_Mgoto_prop:
   forall (s : list stackframe) (fb : block) (f : function) (sp : val)
          (lbl : Mach.label) (c : list Mach.instruction) (ms : Mach.regset)
@@ -1145,7 +1177,7 @@ Lemma exec_function_external_prop:
   Genv.find_funct_ptr ge fb = Some (External ef) ->
   external_call ef ge args m t0 res m' ->
   Machconcr.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->
-  ms' = Regmap.set (Conventions.loc_result (ef_sig ef)) res ms ->
+  ms' = Regmap.set (loc_result (ef_sig ef)) res ms ->
   exec_instr_prop (Machconcr.Callstate s fb ms m)
                t0 (Machconcr.Returnstate s ms' m').
 Proof.
@@ -1187,6 +1219,7 @@ Proof
            exec_Mstore_prop
            exec_Mcall_prop
            exec_Mtailcall_prop
+           exec_Mbuiltin_prop
            exec_Mgoto_prop
            exec_Mcond_true_prop
            exec_Mcond_false_prop

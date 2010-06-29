@@ -82,6 +82,19 @@ Inductive memory_chunk : Type :=
   | Mfloat32 : memory_chunk        (**r 32-bit single-precision float *)
   | Mfloat64 : memory_chunk.       (**r 64-bit double-precision float *)
 
+(** The type (integer/pointer or float) of a chunk. *)
+
+Definition type_of_chunk (c: memory_chunk) : typ :=
+  match c with
+  | Mint8signed => Tint
+  | Mint8unsigned => Tint
+  | Mint16signed => Tint
+  | Mint16unsigned => Tint
+  | Mint32 => Tint
+  | Mfloat32 => Tfloat
+  | Mfloat64 => Tfloat
+  end.
+
 (** Initialization data for global variables. *)
 
 Inductive init_data: Type :=
@@ -390,8 +403,11 @@ Qed.
 
 Record external_function : Type := mkextfun {
   ef_id: ident;
-  ef_sig: signature
+  ef_sig: signature;
+  ef_inline: bool
 }.
+
+(** Function definitions are the union of internal and external functions. *)
 
 Inductive fundef (F: Type): Type :=
   | Internal: F -> fundef F

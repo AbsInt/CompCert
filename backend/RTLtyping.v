@@ -25,7 +25,7 @@ Require Import Integers.
 Require Import Events.
 Require Import Smallstep.
 Require Import RTL.
-Require Conventions.
+Require Import Conventions.
 
 (** * The type system *)
 
@@ -104,8 +104,15 @@ Inductive wt_instr : instruction -> Prop :=
       match ros with inl r => env r = Tint | inr s => True end ->
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
       List.map env args = sig.(sig_args) ->
-      Conventions.tailcall_possible sig ->
+      tailcall_possible sig ->
       wt_instr (Itailcall sig ros args)
+  | wt_Ibuiltin:
+      forall ef args res s,
+      List.map env args = (ef_sig ef).(sig_args) ->
+      env res = proj_sig_res (ef_sig ef) ->
+      arity_ok (ef_sig ef).(sig_args) = true ->
+      valid_successor s ->
+      wt_instr (Ibuiltin ef args res s)
   | wt_Icond:
       forall cond args s1 s2,
       List.map env args = type_of_condition cond ->
@@ -225,7 +232,12 @@ Definition check_instr (i: instruction) : bool :=
       match ros with inl r => check_reg r Tint | inr s => true end
       && check_regs args sig.(sig_args)
       && opt_typ_eq sig.(sig_res) funct.(fn_sig).(sig_res)
-      && Conventions.tailcall_is_possible sig
+      && tailcall_is_possible sig
+  | Ibuiltin ef args res s =>
+      check_regs args (ef_sig ef).(sig_args)
+      && check_reg res (proj_sig_res (ef_sig ef))
+      && arity_ok (ef_sig ef).(sig_args)
+      && check_successor s
   | Icond cond args s1 s2 =>
       check_regs args (type_of_condition cond)
       && check_successor s1
@@ -331,7 +343,13 @@ Proof.
   destruct s0; auto. apply check_reg_correct; auto.
   eapply proj_sumbool_true; eauto.
   apply check_regs_correct; auto.
-  apply Conventions.tailcall_is_possible_correct; auto.
+  apply tailcall_is_possible_correct; auto.
+  (* builtin *)
+  constructor.
+  apply check_regs_correct; auto.
+  apply check_reg_correct; auto.
+  auto.
+  apply check_successor_correct; auto.
   (* cond *)
   constructor. apply check_regs_correct; auto.
   apply check_successor_correct; auto.
@@ -541,6 +559,10 @@ Proof.
   econstructor; eauto.
   rewrite H6; auto.
   rewrite <- H7. apply wt_regset_list. auto.
+  (* Ibuiltin *)
+  econstructor; eauto.
+  apply wt_regset_assign. auto. 
+  rewrite H6. eapply external_call_well_typed; eauto. 
   (* Icond *)
   econstructor; eauto.
   econstructor; eauto.

@@ -19,7 +19,7 @@ Require Import Globalenvs.
 Require Import Registers.
 Require Import Op.
 Require Import RTL.
-Require Conventions.
+Require Import Conventions.
 
 (** An [Icall] instruction that stores its result in register [rreg]
   can be turned into a tail call if:
@@ -88,7 +88,7 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
   match instr with
   | Icall sig ros args res s =>
       if is_return niter f s res
-      && Conventions.tailcall_is_possible sig
+      && tailcall_is_possible sig
       && opt_typ_eq sig.(sig_res) f.(fn_sig).(sig_res)
       then Itailcall sig ros args
       else instr

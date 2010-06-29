@@ -34,7 +34,7 @@ Require Import Reloadproof.
   given sufficient typing and well-formedness hypotheses over the locations involved. *)
 
 Hint Resolve wt_Lgetstack wt_Lsetstack wt_Lopmove
-             wt_Lop wt_Lload wt_Lstore wt_Lcall wt_Ltailcall
+             wt_Lop wt_Lload wt_Lstore wt_Lcall wt_Ltailcall wt_Lbuiltin
              wt_Llabel wt_Lgoto wt_Lcond wt_Ljumptable wt_Lreturn: reloadty.
 
 Remark wt_code_cons:
@@ -290,6 +290,13 @@ Proof.
     rewrite loc_arguments_type; auto.
   destruct ros. destruct H2 as [A [B C]]. auto 10 with reloadty. 
   auto 10 with reloadty.
+
+  assert (map mreg_type (regs_for args) = map Loc.type args).
+    apply wt_regs_for. apply arity_ok_enough. congruence.
+  assert (mreg_type (reg_for res) = Loc.type res). eauto with reloadty.
+  auto with reloadty.
+
+
 
   assert (map mreg_type (regs_for args) = map Loc.type args).
     eauto with reloadty.

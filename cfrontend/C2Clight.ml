@@ -3,6 +3,7 @@ open Printf
 open Cparser
 open Cparser.C
 open Cparser.Env
+open Cparser.Builtins
 
 open Camlcoq
 open AST
@@ -36,6 +37,72 @@ let unsupported msg =
 let warning msg =
   eprintf "%aWarning: %s\n" Cutil.printloc !currentLocation msg
 
+
+(** ** The builtin environment *)
+
+let builtins_generic = {
+  typedefs = [
+    (* keeps GCC-specific headers happy, harmless for others *)
+    "__builtin_va_list", C.TPtr(C.TVoid [], [])
+  ];
+  functions = [
+    (* Floating-point absolute value *)
+    "__builtin_fabs",
+      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    (* The volatile read/volatile write functions *)
+    "__builtin_volatile_read_int8unsigned",
+        (TInt(IUChar, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int8signed",
+        (TInt(ISChar, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int16unsigned",
+        (TInt(IUShort, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int16signed",
+        (TInt(IShort, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_int32",
+        (TInt(IInt, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_float32",
+        (TFloat(FFloat, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_float64",
+         (TFloat(FDouble, []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_read_pointer",
+         (TPtr(TVoid [], []), [TPtr(TVoid [], [])], false);
+    "__builtin_volatile_write_int8unsigned",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IUChar, [])], false);
+    "__builtin_volatile_write_int8signed",
+        (TVoid [], [TPtr(TVoid [], []); TInt(ISChar, [])], false);
+    "__builtin_volatile_write_int16unsigned",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IUShort, [])], false);
+    "__builtin_volatile_write_int16signed",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IShort, [])], false);
+    "__builtin_volatile_write_int32",
+        (TVoid [], [TPtr(TVoid [], []); TInt(IInt, [])], false);
+    "__builtin_volatile_write_float32",
+        (TVoid [], [TPtr(TVoid [], []); TFloat(FFloat, [])], false);
+    "__builtin_volatile_write_float64",
+         (TVoid [], [TPtr(TVoid [], []); TFloat(FDouble, [])], false);
+    "__builtin_volatile_write_pointer",
+         (TVoid [], [TPtr(TVoid [], []); TPtr(TVoid [], [])], false);
+    (* Block copy *)
+    "__builtin_memcpy",
+         (TVoid [],
+           [TPtr(TVoid [], []); 
+            TPtr(TVoid [AConst], []); 
+            TInt(Cutil.size_t_ikind, [])],
+          false);
+    "__builtin_memcpy_words",
+         (TVoid [],
+           [TPtr(TVoid [], []); 
+            TPtr(TVoid [AConst], []); 
+            TInt(Cutil.size_t_ikind, [])],
+          false)
+  ]
+}
+
+(* Add processor-dependent builtins *)
+
+let builtins =
+  { typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
+    functions = builtins_generic.functions @ CBuiltins.builtins.functions }
 
 (** ** Functions used to handle string literals *)
 
@@ -104,7 +171,10 @@ let declare_stub_function stub_name stub_type =
   match stub_type with
   | Tfunction(targs, tres) ->
       Datatypes.Coq_pair(intern_string stub_name,
-                         External(intern_string stub_name, targs, tres))
+                         External({ ef_id = intern_string stub_name;
+                                    ef_sig = signature_of_type targs tres;
+                                    ef_inline = false },
+                                  targs, tres))
   | _ -> assert false
 
 let declare_stub_functions k =
@@ -370,6 +440,8 @@ let volatile_write_fun ty =
 let convertTopExpr env e =
   match e.edesc with
   | C.EBinop(C.Oassign, lhs, {edesc = C.ECall(fn, args)}, _) ->
+      convertFuncall env (Some (convertExpr env lhs)) fn args
+(****
       (* Recognize __builtin_fabs and turn it into Clight operator *)
       begin match fn, args with
       | {edesc = C.EVar {name = "__builtin_fabs"}}, [arg1] ->
@@ -378,6 +450,7 @@ let convertTopExpr env e =
       | _ ->
           convertFuncall env (Some (convertExpr env lhs)) fn args
       end
+*****)
   | C.EBinop(C.Oassign, lhs, rhs, _) ->
       if Cutil.is_composite_type env lhs.etyp then
         unsupported "assignment between structs or between unions";
@@ -535,13 +608,23 @@ let convertFundef env fd =
 
 (** External function declaration *)
 
+let noninlined_builtin_functions = [
+    "__builtin_memcpy";
+    "__builtin_memcpy_words"
+]
+
 let convertFundecl env (sto, id, ty, optinit) =
-  match convertTyp env ty with
-  | Tfunction(args, res) ->
-      let id' = intern_string id.name in
-      Datatypes.Coq_pair(id', External(id', args, res))
-  | _ ->
-      assert false
+  let (args, res) =
+    match convertTyp env ty with
+    | Tfunction(args, res) -> (args, res)
+    | _ -> assert false in
+  let id' = intern_string id.name in
+  let ef =
+    { ef_id = id';
+      ef_sig = signature_of_type args res;
+      ef_inline = List.mem_assoc id.name builtins.functions
+          && not (List.mem id.name noninlined_builtin_functions) } in
+  Datatypes.Coq_pair(id', External(ef, args, res))
 
 (** Initializers *)
 
@@ -816,70 +899,3 @@ let atom_alignof a =
   with Not_found ->
     None
 
-(** ** The builtin environment *)
-
-open Cparser.Builtins
-
-let builtins_generic = {
-  typedefs = [
-    (* keeps GCC-specific headers happy, harmless for others *)
-    "__builtin_va_list", C.TPtr(C.TVoid [], [])
-  ];
-  functions = [
-    (* Floating-point absolute value *)
-    "__builtin_fabs",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
-    (* The volatile read/volatile write functions *)
-    "__builtin_volatile_read_int8unsigned",
-        (TInt(IUChar, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int8signed",
-        (TInt(ISChar, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int16unsigned",
-        (TInt(IUShort, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int16signed",
-        (TInt(IShort, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int32",
-        (TInt(IInt, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_float32",
-        (TFloat(FFloat, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_float64",
-         (TFloat(FDouble, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_pointer",
-         (TPtr(TVoid [], []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_write_int8unsigned",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IUChar, [])], false);
-    "__builtin_volatile_write_int8signed",
-        (TVoid [], [TPtr(TVoid [], []); TInt(ISChar, [])], false);
-    "__builtin_volatile_write_int16unsigned",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IUShort, [])], false);
-    "__builtin_volatile_write_int16signed",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IShort, [])], false);
-    "__builtin_volatile_write_int32",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IInt, [])], false);
-    "__builtin_volatile_write_float32",
-        (TVoid [], [TPtr(TVoid [], []); TFloat(FFloat, [])], false);
-    "__builtin_volatile_write_float64",
-         (TVoid [], [TPtr(TVoid [], []); TFloat(FDouble, [])], false);
-    "__builtin_volatile_write_pointer",
-         (TVoid [], [TPtr(TVoid [], []); TPtr(TVoid [], [])], false);
-    (* Block copy *)
-    "__builtin_memcpy",
-         (TVoid [],
-           [TPtr(TVoid [], []); 
-            TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, [])],
-          false);
-    "__builtin_memcpy_words",
-         (TVoid [],
-           [TPtr(TVoid [], []); 
-            TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, [])],
-          false)
-  ]
-}
-
-(* Add processor-dependent builtins *)
-
-let builtins =
-  { typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
-    functions = builtins_generic.functions @ CBuiltins.builtins.functions }

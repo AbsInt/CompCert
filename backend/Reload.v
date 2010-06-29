@@ -235,6 +235,11 @@ Definition transf_instr
           parallel_move args largs
             (Ltailcall sig (inr _ id) :: k)
       end
+  | LTLin.Lbuiltin ef args dst =>
+      let rargs := regs_for args in
+      let rdst := reg_for dst in
+      add_reloads args rargs
+        (Lbuiltin ef rargs rdst :: add_spill rdst dst k)
   | LTLin.Llabel lbl =>
       Llabel lbl :: k
   | LTLin.Lgoto lbl =>

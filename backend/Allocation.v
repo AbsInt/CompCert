@@ -101,6 +101,8 @@ Definition transfer
            (reg_sum_live ros (reg_dead res after))
       | Itailcall sig ros args =>
 	  reg_list_live args (reg_sum_live ros Regset.empty)
+      | Ibuiltin ef args res s =>
+          reg_list_live args (reg_dead res after)
       | Icond cond args ifso ifnot =>
           reg_list_live args after
       | Ijumptable arg tbl =>
@@ -167,6 +169,8 @@ Definition transf_instr
                 (assign res) s
   | Itailcall sig ros args =>
       Ltailcall sig (sum_left_map assign ros) (List.map assign args)
+  | Ibuiltin ef args res s =>
+      Lbuiltin ef (List.map assign args) (assign res) s
   | Icond cond args ifso ifnot =>
       Lcond cond (List.map assign args) ifso ifnot
   | Ijumptable arg tbl =>

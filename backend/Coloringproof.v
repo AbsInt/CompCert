@@ -384,6 +384,7 @@ Proof.
   apply add_interf_destroyed_incl.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   apply add_interfs_call_incl.
+  apply add_interf_op_incl.
   destruct o.
   apply add_pref_mreg_incl.
   apply graph_incl_refl.
@@ -433,6 +434,10 @@ Definition correct_interf_instr
                                  interfere_mreg rfun mr g
         | inr idfun => True
       end
+  | Ibuiltin ef args res s =>
+      forall r,
+      Regset.In r live ->
+      r <> res -> interfere r res g
   | _ =>
       True
   end.
@@ -453,7 +458,8 @@ Proof.
   split. intros. eapply interfere_mreg_incl; eauto.
   split. intros. eapply interfere_incl; eauto.
   destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
-  destruct s0; auto. intros. eapply interfere_mreg_incl; eauto. 
+  destruct s0; auto. intros. eapply interfere_mreg_incl; eauto.
+  intros. eapply interfere_incl; eauto. 
 Qed.
 
 Lemma add_edges_instr_correct:
@@ -500,38 +506,9 @@ Proof.
   eapply interfere_mreg_incl.
   apply add_prefs_call_incl.
   apply add_interfs_call_correct. auto.
-Qed.
 
-Lemma add_edges_instrs_incl_aux:
-  forall sig live instrs g,
-  graph_incl g
-    (fold_left
-       (fun (a : graph) (p : positive * instruction) =>
-          add_edges_instr sig (snd p) live !! (fst p) a)
-       instrs g).
-Proof.
-  induction instrs; simpl; intros.
-  apply graph_incl_refl.
-  eapply graph_incl_trans; [idtac|eauto].
-  apply add_edges_instr_incl.
-Qed.
-
-Lemma add_edges_instrs_correct_aux:
-  forall sig live instrs g pc i,
-  In (pc, i) instrs ->
-  correct_interf_instr live!!pc i
-    (fold_left
-       (fun (a : graph) (p : positive * instruction) =>
-          add_edges_instr sig (snd p) live !! (fst p) a)
-       instrs g).
-Proof.
-  induction instrs; simpl; intros.
-  elim H.
-  elim H; intro.
-  subst a; simpl. eapply correct_interf_instr_incl.
-  apply add_edges_instrs_incl_aux.
-  apply add_edges_instr_correct.
-  auto.
+  (* Ibuiltin *)
+  intros. apply add_interf_op_correct; auto. 
 Qed.
 
 Lemma add_edges_instrs_correct:
@@ -539,11 +516,20 @@ Lemma add_edges_instrs_correct:
   f.(fn_code)!pc = Some i ->
   correct_interf_instr live!!pc i (add_edges_instrs f live).
 Proof.
-  intros.
-  unfold add_edges_instrs.
-  rewrite PTree.fold_spec.
-  apply add_edges_instrs_correct_aux.
-  apply PTree.elements_correct. auto.
+  intros f live.
+  set (P := fun (c: code) g =>
+         forall pc i, c!pc = Some i -> correct_interf_instr live#pc i g).
+  set (F := (fun (g : graph) (pc0 : positive) (i0 : instruction) =>
+         add_edges_instr (fn_sig f) i0 live # pc0 g)).
+  change (P f.(fn_code) (PTree.fold F f.(fn_code) empty_graph)).
+  apply PTree_Properties.fold_rec; unfold P; intros.
+  apply H0. rewrite H. auto.
+  rewrite PTree.gempty in H. congruence.
+  rewrite PTree.gsspec in H2. destruct (peq pc k). 
+  inv H2. unfold F. apply add_edges_instr_correct. 
+  apply correct_interf_instr_incl with a. 
+  unfold F; apply add_edges_instr_incl.
+  apply H1; auto.
 Qed.
 
 (** Here are the three correctness properties of the generated
@@ -783,7 +769,7 @@ Definition correct_alloc_instr
       (forall r,
         Regset.In r live!!pc ->
         r <> res ->
-        ~(In (alloc r) Conventions.destroyed_at_call))
+        ~(In (alloc r) destroyed_at_call))
    /\ (forall r,
         Regset.In r live!!pc ->
         r <> res -> alloc r <> alloc res)
@@ -796,6 +782,10 @@ Definition correct_alloc_instr
         | inl rfun => ~(In (alloc rfun) (loc_arguments sig))
         | inr idfun => True
         end)
+  | Ibuiltin ef args res s =>
+      forall r,
+      Regset.In r live!!pc ->
+      r <> res -> alloc r <> alloc res
   | _ =>
       True
   end.
@@ -877,14 +867,14 @@ Proof.
   generalize (ALL2 _ _ H2). contradiction.
   split. auto.
   destruct s0; auto. red; intros.
-  generalize (ALL3 r0). generalize (Conventions.loc_arguments_acceptable _ _ H).
+  generalize (ALL3 r0). generalize (loc_arguments_acceptable _ _ H).
   unfold loc_argument_acceptable, loc_acceptable.
   caseEq (alloc r0). intros.
   elim (ALL2 r0 m). apply C; auto. congruence. auto. 
   destruct s0; auto.
   (* Itailcall *)
   destruct s0; auto. red; intros.
-  generalize (ALL3 r). generalize (Conventions.loc_arguments_acceptable _ _ H0).
+  generalize (ALL3 r). generalize (loc_arguments_acceptable _ _ H0).
   unfold loc_argument_acceptable, loc_acceptable.
   caseEq (alloc r). intros.
   elim (ALL2 r m). apply H; auto. congruence. auto. 

@@ -103,19 +103,6 @@ Proof.
   destruct chunk1; destruct chunk2; simpl; congruence.
 Qed.
 
-(** The type (integer/pointer or float) of a chunk. *)
-
-Definition type_of_chunk (c: memory_chunk) : typ :=
-  match c with
-  | Mint8signed => Tint
-  | Mint8unsigned => Tint
-  | Mint16signed => Tint
-  | Mint16unsigned => Tint
-  | Mint32 => Tint
-  | Mfloat32 => Tfloat
-  | Mfloat64 => Tfloat
-  end.
-
 (** * Memory values *)
 
 (** A ``memory value'' is a byte-sized quantity that describes the current

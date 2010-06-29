@@ -167,46 +167,73 @@ Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
   | a :: bl => Econs (sel_expr a) (sel_exprlist bl)
   end.
 
+(** Recognition of calls to built-in functions that should be inlined *)
+
+Definition expr_is_addrof_ident (e: Cminor.expr) : option ident :=
+  match e with
+  | Cminor.Econst (Cminor.Oaddrsymbol id ofs) =>
+      if Int.eq ofs Int.zero then Some id else None
+  | _ => None
+  end.
+
+Definition expr_is_addrof_builtin (ge: Cminor.genv) (e: Cminor.expr) : option external_function :=
+  match expr_is_addrof_ident e with
+  | None => None
+  | Some id =>
+      match Genv.find_symbol ge id with
+      | None => None
+      | Some b =>
+          match Genv.find_funct_ptr ge b with
+          | Some(External ef) => if ef.(ef_inline) then Some ef else None
+          | _ => None
+          end
+      end
+  end.
+
 (** Conversion from Cminor statements to Cminorsel statements. *)
 
-Fixpoint sel_stmt (s: Cminor.stmt) : stmt :=
+Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : stmt :=
   match s with
   | Cminor.Sskip => Sskip
   | Cminor.Sassign id e => Sassign id (sel_expr e)
   | Cminor.Sstore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
   | Cminor.Scall optid sg fn args =>
-      Scall optid sg (sel_expr fn) (sel_exprlist args)
+      match expr_is_addrof_builtin ge fn with
+      | None => Scall optid sg (sel_expr fn) (sel_exprlist args)
+      | Some ef => Sbuiltin optid ef (sel_exprlist args)
+      end
   | Cminor.Stailcall sg fn args => 
       Stailcall sg (sel_expr fn) (sel_exprlist args)
-  | Cminor.Sseq s1 s2 => Sseq (sel_stmt s1) (sel_stmt s2)
+  | Cminor.Sseq s1 s2 => Sseq (sel_stmt ge s1) (sel_stmt ge s2)
   | Cminor.Sifthenelse e ifso ifnot =>
       Sifthenelse (condexpr_of_expr (sel_expr e))
-                  (sel_stmt ifso) (sel_stmt ifnot)
-  | Cminor.Sloop body => Sloop (sel_stmt body)
-  | Cminor.Sblock body => Sblock (sel_stmt body)
+                  (sel_stmt ge ifso) (sel_stmt ge ifnot)
+  | Cminor.Sloop body => Sloop (sel_stmt ge body)
+  | Cminor.Sblock body => Sblock (sel_stmt ge body)
   | Cminor.Sexit n => Sexit n
   | Cminor.Sswitch e cases dfl => Sswitch (sel_expr e) cases dfl
   | Cminor.Sreturn None => Sreturn None
   | Cminor.Sreturn (Some e) => Sreturn (Some (sel_expr e))
-  | Cminor.Slabel lbl body => Slabel lbl (sel_stmt body)
+  | Cminor.Slabel lbl body => Slabel lbl (sel_stmt ge body)
   | Cminor.Sgoto lbl => Sgoto lbl
   end.
 
 (** Conversion of functions and programs. *)
 
-Definition sel_function (f: Cminor.function) : function :=
+Definition sel_function (ge: Cminor.genv) (f: Cminor.function) : function :=
   mkfunction
     f.(Cminor.fn_sig)
     f.(Cminor.fn_params)
     f.(Cminor.fn_vars)
     f.(Cminor.fn_stackspace)
-    (sel_stmt f.(Cminor.fn_body)).
+    (sel_stmt ge f.(Cminor.fn_body)).
 
-Definition sel_fundef (f: Cminor.fundef) : fundef :=
-  transf_fundef sel_function f.
+Definition sel_fundef (ge: Cminor.genv) (f: Cminor.fundef) : fundef :=
+  transf_fundef (sel_function ge) f.
 
 Definition sel_program (p: Cminor.program) : program :=
-  transform_program sel_fundef p.
+  let ge := Genv.globalenv p in
+  transform_program (sel_fundef ge) p.
 
 
 

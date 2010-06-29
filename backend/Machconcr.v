@@ -23,7 +23,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
-Require Conventions.
+Require Import Conventions.
 Require Import Mach.
 Require Stacklayout.
 Require Asmgenretaddr.
@@ -82,7 +82,7 @@ Inductive extcall_args: regset -> mem -> val -> list loc -> list val -> Prop :=
 
 Definition extcall_arguments
    (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
-  extcall_args rs m sp (Conventions.loc_arguments sg) args.
+  extcall_args rs m sp (loc_arguments sg) args.
 
 (** Mach execution states. *)
 
@@ -187,6 +187,11 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m stk (- f.(fn_framesize)) f.(fn_stacksize) = Some m' ->
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
         E0 (Callstate s f' rs m')
+  | exec_Mbuiltin:
+      forall s f sp rs m ef args res b t v m',
+      external_call ef ge rs##args m t v m' ->
+      step (State s f sp (Mbuiltin ef args res :: b) rs m)
+         t (State s f sp b (rs#res <- v) m')
   | exec_Mgoto:
       forall s fb f sp lbl c rs m c',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
@@ -234,8 +239,8 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s fb rs m t rs' ef args res m',
       Genv.find_funct_ptr ge fb = Some (External ef) ->
       external_call ef ge args m t res m' ->
-      extcall_arguments rs m (parent_sp s) ef.(ef_sig) args ->
-      rs' = (rs#(Conventions.loc_result ef.(ef_sig)) <- res) ->
+      extcall_arguments rs m (parent_sp s) (ef_sig ef) args ->
+      rs' = (rs#(loc_result (ef_sig ef)) <- res) ->
       step (Callstate s fb rs m)
          t (Returnstate s rs' m')
   | exec_return:
@@ -254,7 +259,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs (Conventions.loc_result (mksignature nil (Some Tint))) = Vint r ->
+      rs (loc_result (mksignature nil (Some Tint))) = Vint r ->
       final_state (Returnstate nil rs m) r.
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=

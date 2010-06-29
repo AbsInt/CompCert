@@ -94,6 +94,7 @@ let basic_blocks f joins =
          | Lstore (chunk, addr, args, src, s) -> next_in_block blk minpc s
          | Lcall (sig0, ros, args, res, s) -> next_in_block blk minpc s
          | Ltailcall (sig0, ros, args) -> end_block blk minpc
+         | Lbuiltin (ef, args, res, s) -> next_in_block blk minpc s
          | Lcond (cond, args, ifso, ifnot) ->
              end_block blk minpc; start_block ifso; start_block ifnot
          | Ljumptable(arg, tbl) ->

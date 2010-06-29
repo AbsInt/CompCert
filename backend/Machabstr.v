@@ -24,7 +24,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
-Require Conventions.
+Require Import Conventions.
 Require Import Mach.
 Require Stacklayout.
 
@@ -148,7 +148,7 @@ Inductive extcall_args: regset -> frame -> list loc -> list val -> Prop :=
 
 Definition extcall_arguments
    (rs: regset) (fr: frame) (sg: signature) (args: list val) : Prop :=
-  extcall_args rs fr (Conventions.loc_arguments sg) args.
+  extcall_args rs fr (loc_arguments sg) args.
     
 End FRAME_ACCESSES.
 
@@ -267,6 +267,11 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk soff) (Mtailcall sig ros :: c) rs fr m)
         E0 (Callstate s f' rs m')
+  | exec_Mbuiltin:
+      forall s f sp rs fr m ef args res b t v m',
+      external_call ef ge rs##args m t v m' ->
+      step (State s f sp (Mbuiltin ef args res :: b) rs fr m)
+         t (State s f sp b (rs#res <- v) fr m')
   | exec_Mgoto:
       forall s f sp lbl c rs fr m c',
       find_label lbl f.(fn_code) = Some c' ->
@@ -304,8 +309,8 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_function_external:
       forall s ef args res rs1 rs2 m t m',
       external_call ef ge args m t res m' ->
-      extcall_arguments (parent_function s) rs1 (parent_frame s) ef.(ef_sig) args ->
-      rs2 = (rs1#(Conventions.loc_result ef.(ef_sig)) <- res) ->
+      extcall_arguments (parent_function s) rs1 (parent_frame s) (ef_sig ef) args ->
+      rs2 = (rs1#(loc_result (ef_sig ef)) <- res) ->
       step (Callstate s (External ef) rs1 m)
          t (Returnstate s rs2 m')
   | exec_return:
@@ -325,7 +330,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs (Conventions.loc_result (mksignature nil (Some Tint))) = Vint r ->
+      rs (loc_result (mksignature nil (Some Tint))) = Vint r ->
       final_state (Returnstate nil rs m) r.
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=

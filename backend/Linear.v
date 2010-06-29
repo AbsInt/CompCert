@@ -43,6 +43,7 @@ Inductive instruction: Type :=
   | Lstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Lcall: signature -> mreg + ident -> instruction
   | Ltailcall: signature -> mreg + ident -> instruction
+  | Lbuiltin: external_function -> list mreg -> mreg -> instruction
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
   | Lcond: condition -> list mreg -> label -> instruction
@@ -63,8 +64,8 @@ Definition program := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
-  | Internal f => f.(fn_sig)
-  | External ef => ef.(ef_sig)
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
   end.
 
 Definition genv := Genv.t fundef unit.
@@ -153,9 +154,9 @@ Definition return_regs (caller callee: locset) : locset :=
   fun (l: loc) =>
     match l with
     | R r =>
-        if In_dec Loc.eq (R r) Conventions.temporaries then
+        if In_dec Loc.eq (R r) temporaries then
           callee (R r)
-        else if In_dec Loc.eq (R r) Conventions.destroyed_at_call then
+        else if In_dec Loc.eq (R r) destroyed_at_call then
           callee (R r)
         else
           caller (R r)
@@ -275,6 +276,11 @@ Inductive step: state -> trace -> state -> Prop :=
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) (Ltailcall sig ros :: b) rs m)
         E0 (Callstate s f' (return_regs (parent_locset s) rs) m')
+  | exec_Lbuiltin:
+      forall s f sp rs m ef args res b t v m',
+      external_call ef ge (reglist rs args) m t v m' ->
+      step (State s f sp (Lbuiltin ef args res :: b) rs m)
+         t (State s f sp b (Locmap.set (R res) v rs) m')
   | exec_Llabel:
       forall s f sp lbl b rs m,
       step (State s f sp (Llabel lbl :: b) rs m)
@@ -315,8 +321,8 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_function_external:
       forall s ef args res rs1 rs2 m t m',
       external_call ef ge args m t res m' ->
-      args = List.map rs1 (Conventions.loc_arguments ef.(ef_sig)) ->
-      rs2 = Locmap.set (R (Conventions.loc_result ef.(ef_sig))) res rs1 ->
+      args = List.map rs1 (loc_arguments (ef_sig ef)) ->
+      rs2 = Locmap.set (R (loc_result (ef_sig ef))) res rs1 ->
       step (Callstate s (External ef) rs1 m)
          t (Returnstate s rs2 m')
   | exec_return:
@@ -337,7 +343,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r,
-      rs (R (Conventions.loc_result (mksignature nil (Some Tint)))) = Vint r ->
+      rs (R (loc_result (mksignature nil (Some Tint)))) = Vint r ->
       final_state (Returnstate nil rs m) r.
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=

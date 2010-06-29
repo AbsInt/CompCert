@@ -27,7 +27,7 @@ Require Import Machconcr.
 Require Import Machtyping.
 Require Import Asm.
 Require Import Asmgen.
-Require Conventions.
+Require Import Conventions.
 
 (** * Properties of low half/high half decomposition *)
 
