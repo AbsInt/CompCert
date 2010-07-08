@@ -4,6 +4,8 @@
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
 (*          Sandrine Blazy, ENSIIE and INRIA Paris-Rocquencourt        *)
+(*          with contributions from Andrew Appel, Rob Dockins,         *)
+(*          and Gordon Stewart (Princeton University)                  *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
