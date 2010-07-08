@@ -26,7 +26,8 @@ open Transform
 (* We have the option of materializing all casts or leave "widening"
    casts implicit.  Widening casts are:
 - from a small integer type to a larger integer type,
-- from a small float type to a larger float type,
+  provided both types have the same signedness;
+- from a small float type to a larger float type;
 - from a pointer type to void *. 
 *)
 
@@ -35,8 +36,8 @@ let omit_widening_casts = ref false
 let widening_cast env tfrom tto =
   begin match unroll env tfrom, unroll env tto with
   | TInt(k1, _), TInt(k2, _) ->
-      let r1 = integer_rank k1 and r2 = integer_rank k2 in
-      r1 < r2 || (r1 = r2 && is_signed_ikind k1 = is_signed_ikind k2)
+      integer_rank k1 <= integer_rank k2
+      && is_signed_ikind k1 = is_signed_ikind k2
   | TFloat(k1, _), TFloat(k2, _) ->
       float_rank k1 <= float_rank k2
   | TPtr(ty1, _), TPtr(ty2, _) -> is_void_type env ty2
