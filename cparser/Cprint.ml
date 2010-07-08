@@ -31,10 +31,72 @@ let ident pp i =
   then fprintf pp "%s$%d" i.name i.stamp
   else fprintf pp "%s" i.name
 
+let const pp = function
+  | CInt(v, ik, s) ->
+      if s <> "" then
+        fprintf pp "%s" s
+      else begin
+        fprintf pp "%Ld" v;
+        match ik with
+        | IULongLong -> fprintf pp "ULL"
+        | ILongLong -> fprintf pp "LL"
+        | IULong -> fprintf pp "UL"
+        | ILong -> fprintf pp "L"
+        | IUInt -> fprintf pp "U"
+        | _ -> ()
+      end
+  | CFloat(v, fk, s) ->
+      if s <> "" then
+        fprintf pp "%s" s
+      else begin
+        fprintf pp "%.18g" v;
+        match fk with
+        | FFloat -> fprintf pp "F"
+        | FLongDouble -> fprintf pp "L"
+        | _ -> ()
+      end
+  | CStr s ->
+      fprintf pp "\"";
+      for i = 0 to String.length s - 1 do
+        match s.[i] with
+        | '\009' -> fprintf pp "\\t"
+        | '\010' -> fprintf pp "\\n"
+        | '\013' -> fprintf pp "\\r"
+        | '\"'   -> fprintf pp "\\\""
+        | '\\'   -> fprintf pp "\\\\"
+        | c ->
+            if c >= ' ' && c <= '~'
+            then fprintf pp "%c" c
+            else fprintf pp "\\%03o" (Char.code c)
+      done;
+      fprintf pp "\""
+  | CWStr l ->
+      fprintf pp "L\"";
+      List.iter
+        (fun c ->
+          if c >= 32L && c <= 126L && c <> 34L && c <>92L
+          then fprintf pp "%c" (Char.chr (Int64.to_int c))
+          else fprintf pp "\" \"\\x%02Lx\" \"" c)
+        l;      
+      fprintf pp "\""
+  | CEnum(id, v) ->
+      ident pp id
+
+let attr_arg pp = function
+  | AIdent s -> fprintf pp "%s" s
+  | AInt n -> fprintf pp "%Ld" n
+  | AString s -> const pp (CStr s)
+
 let attribute pp = function
   | AConst -> fprintf pp "const"
   | AVolatile -> fprintf pp "volatile"
   | ARestrict -> fprintf pp "restrict"
+  | Attr(name, []) -> fprintf pp "__attribute__((%s))" name
+  | Attr(name, arg1 :: args) ->
+      fprintf pp "__attribute__((%s(" name;
+      attr_arg pp arg1;
+      List.iter (fun aa -> fprintf pp ", %a" attr_arg aa) args;
+      fprintf pp ")))"
 
 let attributes pp = function
   | [] -> ()
@@ -113,57 +175,6 @@ let rec dcl pp ty n =
 
 let typ pp ty =
   dcl pp ty (fun _ -> ())
-
-let const pp = function
-  | CInt(v, ik, s) ->
-      if s <> "" then
-        fprintf pp "%s" s
-      else begin
-        fprintf pp "%Ld" v;
-        match ik with
-        | IULongLong -> fprintf pp "ULL"
-        | ILongLong -> fprintf pp "LL"
-        | IULong -> fprintf pp "UL"
-        | ILong -> fprintf pp "L"
-        | IUInt -> fprintf pp "U"
-        | _ -> ()
-      end
-  | CFloat(v, fk, s) ->
-      if s <> "" then
-        fprintf pp "%s" s
-      else begin
-        fprintf pp "%.18g" v;
-        match fk with
-        | FFloat -> fprintf pp "F"
-        | FLongDouble -> fprintf pp "L"
-        | _ -> ()
-      end
-  | CStr s ->
-      fprintf pp "\"";
-      for i = 0 to String.length s - 1 do
-        match s.[i] with
-        | '\009' -> fprintf pp "\\t"
-        | '\010' -> fprintf pp "\\n"
-        | '\013' -> fprintf pp "\\r"
-        | '\"'   -> fprintf pp "\\\""
-        | '\\'   -> fprintf pp "\\\\"
-        | c ->
-            if c >= ' ' && c <= '~'
-            then fprintf pp "%c" c
-            else fprintf pp "\\%03o" (Char.code c)
-      done;
-      fprintf pp "\""
-  | CWStr l ->
-      fprintf pp "L\"";
-      List.iter
-        (fun c ->
-          if c >= 32L && c <= 126L && c <> 34L && c <>92L
-          then fprintf pp "%c" (Char.chr (Int64.to_int c))
-          else fprintf pp "\" \"\\x%02Lx\" \"" c)
-        l;      
-      fprintf pp "\""
-  | CEnum(id, v) ->
-      ident pp id
 
 type associativity = LtoR | RtoL | NA
 

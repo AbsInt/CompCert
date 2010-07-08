@@ -49,10 +49,6 @@ let program
     ?(typedef = fun env id ty -> ty)
     p =
 
-(* In all transformations of interest so far, the environment is used only
-   for its type definitions and struct/union definitions,
-   so we do not update it for other definitions. *)
-
   let rec transf_globdecls env accu = function
   | [] -> List.rev accu
   | g :: gl ->

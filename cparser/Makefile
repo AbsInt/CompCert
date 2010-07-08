@@ -31,13 +31,13 @@ install:
 	cp -p Cparser.cmi cparser.cma cparser.cmxa cparser.a libcparser.a dllcparser.so $(LIBDIR)
 
 cparser: $(COBJS) $(NOBJS) Main.cmx
-	$(OCAMLOPT) -o cparser $(COBJS) $(NOBJS) Main.cmx
+	$(OCAMLOPT) -o cparser str.cmxa $(COBJS) $(NOBJS) Main.cmx
 
 clean::
 	rm -f cparser
 
 cparser.byte: $(COBJS) $(BOBJS) Main.cmo
-	$(OCAMLC) -custom -o cparser.byte $(COBJS) $(BOBJS) Main.cmo
+	$(OCAMLC) -custom -o cparser.byte str.cma $(COBJS) $(BOBJS) Main.cmo
 
 clean::
 	rm -f cparser

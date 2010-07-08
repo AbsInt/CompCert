@@ -61,7 +61,16 @@ type constant =
 
 (** Attributes *)
 
-type attribute = AConst | AVolatile | ARestrict
+type attr_arg =
+  | AIdent of string
+  | AInt of int64
+  | AString of string
+
+type attribute = 
+  | AConst
+  | AVolatile
+  | ARestrict
+  | Attr of string * attr_arg list
 
 type attributes = attribute list
 

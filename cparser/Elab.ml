@@ -255,13 +255,25 @@ let elab_constant loc = function
 
 (* Elaboration of attributes *)
 
+exception Wrong_attr_arg
+
+let elab_attr_arg loc = function
+  | VARIABLE v -> AIdent v
+  | CONSTANT(CONST_STRING s) -> AString s
+  | CONSTANT(CONST_INT s) ->
+      let (v, _) = elab_int_constant loc s in AInt v
+  | _ -> raise Wrong_attr_arg
+
 let elab_attribute loc = function
   | ("const", []) -> Some AConst
   | ("restrict", []) -> Some ARestrict
   | ("volatile", []) -> Some AVolatile
   | (name, args) -> 
-      (* warning loc "ignoring '%s' attribute" name; *)
-      None
+      try
+        Some (Attr(name, List.map (elab_attr_arg loc) args))
+      with Wrong_attr_arg ->
+        warning loc "cannot parse '%s' attribute, ignored" name;
+        None
 
 let rec elab_attributes loc = function
   | [] -> []
