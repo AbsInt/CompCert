@@ -254,20 +254,20 @@ let rec expr env e =
   | EConditional(e1, e2, e3) ->
       if boolean_value (expr env e1) then expr env e2 else expr env e3
   | ECast(ty, e1) ->
-      cast env e1.etyp ty (expr env e1)
+      cast env ty e1.etyp (expr env e1)
   | ECall _ ->
       raise Notconst
 
 let integer_expr env e =
   try
-    match cast env e.etyp (TInt(ILongLong, [])) (expr env e) with
+    match cast env (TInt(ILongLong, [])) e.etyp (expr env e) with
     | I n -> Some n
     | _   -> None
   with Notconst -> None
 
 let constant_expr env ty e =
   try
-    match unroll env ty, cast env e.etyp ty (expr env e) with
+    match unroll env ty, cast env ty e.etyp (expr env e) with
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
     | TFloat(fk, _), F n -> Some(CFloat(n, fk, ""))
     | TPtr(_, _), I 0L -> Some(CInt(0L, IInt, ""))
