@@ -175,107 +175,194 @@ let bitfield_assign bf carrier newval =
   {edesc = EBinop(Oor,  oldval_masked, newval_masked,  TInt(IUInt,[]));
    etyp =  TInt(IUInt,[])}
 
+(* Detect invariant l-values *)
+
+let rec invariant_lvalue e =
+  match e.edesc with
+  | EVar _ -> true
+  | EUnop(Oderef, {edesc = EVar _}) -> true   (* to check *)
+  | EUnop(Odot _, e1) -> invariant_lvalue e1
+  | _ -> false
+
+(* Bind a l-value to a temporary variable if it is not invariant. *)
+
+let bind_lvalue e fn =
+  if invariant_lvalue e then
+    fn e
+  else begin
+    let tmp = new_temp (TPtr(e.etyp, [])) in
+    ecomma (eassign tmp (eaddrof e))
+           (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
+  end
+
+(* Transformation of operators *)
+
+let op_for_incr_decr = function
+  | Opreincr -> Oadd
+  | Opredecr -> Osub
+  | Opostincr -> Oadd
+  | Opostdecr -> Osub
+  | _ -> assert false
+
+let op_for_assignop = function
+  | Oadd_assign -> Oadd
+  | Osub_assign -> Osub
+  | Omul_assign -> Omul
+  | Odiv_assign -> Odiv
+  | Omod_assign -> Omod
+  | Oand_assign -> Oand
+  | Oor_assign -> Oor 
+  | Oxor_assign -> Oxor
+  | Oshl_assign -> Oshl
+  | Oshr_assign -> Oshr
+  | _ -> assert false
+
+(* Check whether a field access (e.f or e->f) is a bitfield access.
+   If so, return carrier expression (e and *e, respectively)
+   and bitfield_info *)
+
+let rec is_bitfield_access env e =
+  match e.edesc with
+  | EUnop(Odot fieldname, e1) ->
+      begin match unroll env e1.etyp with
+      | TStruct(id, _) ->
+          (try Some(e1, Hashtbl.find bitfield_table (id, fieldname))
+           with Not_found -> None)
+      | _ ->
+          None
+      end
+  | EUnop(Oarrow fieldname, e1) ->
+      begin match unroll env e1.etyp with
+      | TPtr(ty, _) ->
+          is_bitfield_access env
+            {edesc = EUnop(Odot fieldname,
+                           {edesc = EUnop(Oderef, e1); etyp = ty});
+             etyp = e.etyp}
+      | _ ->
+          None
+      end
+  | _ -> None
+
 (* Expressions *)
 
-let transf_expr env e =
+type context = Val | Effects
 
-  let is_bitfield_access ty fieldname =
-    match unroll env ty with
-    | TStruct(id, _) ->
-        (try Some(Hashtbl.find bitfield_table (id, fieldname))
-         with Not_found -> None)
-    | _ -> None in
+let transf_expr env ctx e =
 
-  let is_bitfield_access_ptr ty fieldname =
-    match unroll env ty with
-    | TPtr(ty', _) -> is_bitfield_access ty' fieldname
-    | _ -> None in 
-
-  let rec texp e =
+  let rec texp ctx e =
     match e.edesc with
     | EConst _ -> e
     | ESizeof _ -> e
     | EVar _ -> e
 
-    | EUnop(Odot fieldname, e1) ->
-        let e1' = texp e1 in
-        begin match is_bitfield_access e1.etyp fieldname with
+    | EUnop(Odot s, e1) ->
+        begin match is_bitfield_access env e with
         | None ->
-            {edesc = EUnop(Odot fieldname, e1'); etyp = e.etyp}
-        | Some bf ->
-            bitfield_extract bf
-              {edesc = EUnop(Odot bf.bf_carrier, e1');
-               etyp = bf.bf_carrier_typ}
+            {edesc = EUnop(Odot s, texp Val e1); etyp = e.etyp}
+        | Some(ex, bf) ->
+            transf_read ex bf
         end
-
-    | EUnop(Oarrow fieldname, e1) ->
-        let e1' = texp e1 in
-        begin match is_bitfield_access_ptr e1.etyp fieldname with
+    | EUnop(Oarrow s, e1) ->
+        begin match is_bitfield_access env e with
         | None ->
-            {edesc = EUnop(Oarrow fieldname, e1'); etyp = e.etyp}
-        | Some bf ->
-            bitfield_extract bf
-              {edesc = EUnop(Oarrow bf.bf_carrier, e1');
-               etyp = bf.bf_carrier_typ}
+            {edesc = EUnop(Oarrow s, texp Val e1); etyp = e.etyp}
+        | Some(ex, bf) ->
+            transf_read ex bf
         end
-
-    | EUnop(op, e1) ->
-        (* Note: simplified expr, so no ++/-- *)
-        {edesc = EUnop(op, texp e1); etyp = e.etyp}
+    | EUnop((Opreincr|Opredecr) as op, e1) ->
+        begin match is_bitfield_access env e1 with
+        | None ->
+            {edesc = EUnop(op, texp Val e1); etyp = e.etyp}
+        | Some(ex, bf) ->
+            transf_pre ctx (op_for_incr_decr op) ex bf e1.etyp
+        end
+    | EUnop((Opostincr|Opostdecr) as op, e1) ->
+        begin match is_bitfield_access env e1 with
+        | None ->
+            {edesc = EUnop(op, texp Val e1); etyp = e.etyp}
+        | Some(ex, bf) ->
+            transf_post ctx (op_for_incr_decr op) ex bf e1.etyp
+        end
+    | EUnop(op, e1) -> 
+        {edesc = EUnop(op, texp Val e1); etyp = e.etyp}
 
     | EBinop(Oassign, e1, e2, ty) ->
-        begin match e1.edesc with
-        | EUnop(Odot fieldname, e11) ->
-            let lhs = texp e11 in let rhs = texp e2 in
-            begin match is_bitfield_access e11.etyp fieldname with
-            | None ->
-                {edesc = EBinop(Oassign,
-                                {edesc = EUnop(Odot fieldname, lhs);
-                                 etyp = e1.etyp},
-                                rhs, ty);
-                 etyp = e.etyp}
-            | Some bf ->
-                let carrier =
-                  {edesc = EUnop(Odot bf.bf_carrier, lhs);
-                   etyp = bf.bf_carrier_typ} in
-                {edesc = EBinop(Oassign, carrier,
-                                bitfield_assign bf carrier rhs,
-                                carrier.etyp);
-                 etyp = carrier.etyp}
-            end
-        | EUnop(Oarrow fieldname, e11) ->
-            let lhs = texp e11 in let rhs = texp e2 in
-            begin match is_bitfield_access_ptr e11.etyp fieldname with
-            | None ->
-                {edesc = EBinop(Oassign,
-                                {edesc = EUnop(Oarrow fieldname, lhs);
-                                 etyp = e1.etyp},
-                                rhs, ty);
-                 etyp = e.etyp}
-            | Some bf ->
-                let carrier =
-                  {edesc = EUnop(Oarrow bf.bf_carrier, lhs);
-                   etyp = bf.bf_carrier_typ} in
-                {edesc = EBinop(Oassign, carrier,
-                                bitfield_assign bf carrier rhs,
-                                carrier.etyp);
-                 etyp = carrier.etyp}
-            end
-        | _ ->
-            {edesc = EBinop(Oassign, texp e1, texp e2, e1.etyp); etyp = e1.etyp}
+        begin match is_bitfield_access env e1 with
+        | None ->
+            {edesc = EBinop(Oassign, texp Val e1, texp Val e2, ty);
+             etyp = e.etyp}
+        | Some(ex, bf) ->
+            transf_assign ctx ex bf e2
         end
-
+    | EBinop((Oadd_assign|Osub_assign|Omul_assign|Odiv_assign
+                         |Omod_assign|Oand_assign|Oor_assign|Oxor_assign
+                         |Oshl_assign|Oshr_assign) as op,
+             e1, e2, ty) ->
+        begin match is_bitfield_access env e1 with
+        | None ->
+            {edesc = EBinop(op, texp Val e1, texp Val e2, ty); etyp = e.etyp}
+        | Some(ex, bf) ->
+            transf_assignop ctx (op_for_assignop op) ex bf e2 ty
+        end
+    | EBinop(Ocomma, e1, e2, ty) ->
+        {edesc = EBinop(Ocomma, texp Effects e1, texp Val e2, ty);
+         etyp = e.etyp}
     | EBinop(op, e1, e2, ty) ->
-        (* Note: simplified expr assumed, so no assign-op *)
-        {edesc = EBinop(op, texp e1, texp e2, ty); etyp = e.etyp}
-    | EConditional(e1, e2, e3) ->
-        {edesc = EConditional(texp e1, texp e2, texp e3); etyp = e.etyp}
-    | ECast(ty, e1) ->
-        {edesc = ECast(ty, texp e1); etyp = e.etyp}
-    | ECall(e1, el) ->
-        {edesc = ECall(texp e1, List.map texp el); etyp = e.etyp}
+        {edesc = EBinop(op, texp Val e1, texp Val e2, ty); etyp = e.etyp}
 
-  in texp e
+    | EConditional(e1, e2, e3) ->
+        {edesc = EConditional(texp Val e1, texp ctx e2, texp ctx e3);
+         etyp = e.etyp}
+    | ECast(ty, e1) ->
+        {edesc = ECast(ty, texp Val e1); etyp = e.etyp}
+    | ECall(e1, el) ->
+        {edesc = ECall(texp Val e1, List.map (texp Val) el); etyp = e.etyp}
+
+  and transf_read e bf =
+    bitfield_extract bf
+      {edesc = EUnop(Odot bf.bf_carrier, texp Val e); etyp = bf.bf_carrier_typ}
+
+  and transf_assign ctx e1 bf e2 =
+    bind_lvalue (texp Val e1) (fun base ->
+      let carrier =
+        {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
+      let asg =
+        eassign carrier (bitfield_assign bf carrier (texp Val e2)) in
+      if ctx = Val then ecomma asg (bitfield_extract bf carrier) else asg)
+
+  and transf_assignop ctx op e1 bf e2 tyres =
+    bind_lvalue (texp Val e1) (fun base ->
+      let carrier =
+        {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
+      let rhs =
+        {edesc = EBinop(op, bitfield_extract bf carrier, texp Val e2, tyres);
+         etyp = tyres} in
+      let asg =
+        eassign carrier (bitfield_assign bf carrier rhs) in
+      if ctx = Val then ecomma asg (bitfield_extract bf carrier) else asg)
+
+  and transf_pre ctx op e1 bf tyfield =
+    transf_assignop ctx op e1 bf (intconst 1L IInt)
+                                 (unary_conversion env tyfield)
+
+  and transf_post ctx op e1 bf tyfield  =
+    if ctx = Effects then
+      transf_pre ctx op e1 bf tyfield
+    else begin
+      bind_lvalue (texp Val e1) (fun base ->
+        let carrier =
+          {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
+        let temp = new_temp tyfield in
+        let tyres = unary_conversion env tyfield in
+        let settemp = eassign temp (bitfield_extract bf carrier) in
+        let rhs =
+          {edesc = EBinop(op, temp, intconst 1L IInt, tyres); etyp = tyres} in
+        let asg =
+          eassign carrier (bitfield_assign bf carrier rhs) in
+        ecomma (ecomma settemp asg) temp)
+    end
+
+  in texp ctx e
 
 (* Statements *)
 
@@ -283,39 +370,43 @@ let rec transf_stmt env s =
   match s.sdesc with
   | Sskip -> s
   | Sdo e ->
-      {sdesc = Sdo(transf_expr env e); sloc = s.sloc}
+      {sdesc = Sdo(transf_expr env Effects e); sloc = s.sloc}
   | Sseq(s1, s2) -> 
       {sdesc = Sseq(transf_stmt env s1, transf_stmt env s2); sloc = s.sloc }
   | Sif(e, s1, s2) ->
-      {sdesc = Sif(transf_expr env e, transf_stmt env s1, transf_stmt env s2);
+      {sdesc = Sif(transf_expr env Val e, transf_stmt env s1, transf_stmt env s2);
        sloc = s.sloc}
   | Swhile(e, s1) ->
-      {sdesc = Swhile(transf_expr env e, transf_stmt env s1);
+      {sdesc = Swhile(transf_expr env Val e, transf_stmt env s1);
        sloc = s.sloc}
   | Sdowhile(s1, e) ->
-      {sdesc = Sdowhile(transf_stmt env s1, transf_expr env e);
+      {sdesc = Sdowhile(transf_stmt env s1, transf_expr env Val e);
        sloc = s.sloc}
   | Sfor(s1, e, s2, s3) ->
-      {sdesc = Sfor(transf_stmt env s1, transf_expr env e, transf_stmt env s2,
-                    transf_stmt env s3);
+      {sdesc = Sfor(transf_stmt env s1, transf_expr env Val e,
+                    transf_stmt env s2, transf_stmt env s3);
        sloc = s.sloc}
   | Sbreak -> s
   | Scontinue -> s
   | Sswitch(e, s1) ->
-      {sdesc = Sswitch(transf_expr env e, transf_stmt env s1); sloc = s.sloc}
+      {sdesc = Sswitch(transf_expr env Val e, transf_stmt env s1);
+       sloc = s.sloc}
   | Slabeled(lbl, s) ->
       {sdesc = Slabeled(lbl, transf_stmt env s); sloc = s.sloc}
   | Sgoto lbl -> s
   | Sreturn None -> s
   | Sreturn (Some e) ->
-      {sdesc = Sreturn(Some(transf_expr env e)); sloc = s.sloc}
+      {sdesc = Sreturn(Some(transf_expr env Val e)); sloc = s.sloc}
   | Sblock _ | Sdecl _ ->
       assert false     (* should not occur in unblocked code *)
 
 (* Functions *)
 
 let transf_fundef env f =
-  { f with fd_body = transf_stmt env f.fd_body }
+  reset_temps();
+  let newbody = transf_stmt env f.fd_body in
+  let temps = get_temps() in  
+  { f with fd_locals = f.fd_locals @ temps; fd_body = newbody }
 
 (* Initializers *)
 
@@ -374,7 +465,7 @@ let rec transf_struct_init id fld_init_list =
 
 let rec transf_init env i =
   match i with
-  | Init_single e -> Init_single (transf_expr env e)
+  | Init_single e -> Init_single (transf_expr env Val e)
   | Init_array il -> Init_array (List.map (transf_init env) il)
   | Init_struct(id, fld_init_list) ->
       let fld_init_list' =

@@ -21,10 +21,10 @@ let transform_program t p =
   let run_pass pass flag p = if CharSet.mem flag t then pass p else p in
   Rename.program
   (run_pass (AddCasts.program ~all:(CharSet.mem 'C' t)) 'c'
+  (run_pass (SimplExpr.program ~volatile:(CharSet.mem 'v' t)) 'e'
   (run_pass StructAssign.program 'S'
   (run_pass StructByValue.program 's'
   (run_pass Bitfields.program 'f'
-  (run_pass (SimplExpr.program ~volatile:(CharSet.mem 'v' t)) 'e'
   (run_pass Unblock.program 'b'
   p))))))
 
@@ -37,9 +37,9 @@ let parse_transformations s =
             | 'c' -> set "ec"
             | 'C' -> set "ecC"
             | 's' -> set "s"
-            | 'S' -> set "esS"
+            | 'S' -> set "bsS"
             | 'v' -> set "ev"
-            | 'f' -> set "bef"
+            | 'f' -> set "bf"
             |  _  -> ())
     s;
   !t

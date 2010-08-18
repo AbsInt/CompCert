@@ -655,6 +655,18 @@ let floatconst v fk =
 let nullconst =
   { edesc = EConst(CInt(0L, ptr_t_ikind, "0")); etyp = TPtr(TVoid [], []) }
 
+(* Construct an address-of expression *)
+
+let eaddrof e = { edesc = EUnop(Oaddrof, e); etyp = TPtr(e.etyp, []) }
+
+(* Construct an assignment expression *)
+
+let eassign e1 e2 = { edesc = EBinop(Oassign, e1, e2, e1.etyp); etyp = e1.etyp }
+
+(* Construct a "," expression *)
+
+let ecomma e1 e2 = { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
+
 (* Construct a sequence *)
 
 let sseq loc s1 s2 =
@@ -667,8 +679,7 @@ let sseq loc s1 s2 =
 (* Construct an assignment statement *)
 
 let sassign loc lv rv =
-  { sdesc = Sdo {edesc = EBinop(Oassign, lv, rv, lv.etyp); etyp = lv.etyp};
-    sloc = loc }
+  { sdesc = Sdo (eassign lv rv); sloc = loc }
 
 (* Empty location *)
 

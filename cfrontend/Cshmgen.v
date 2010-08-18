@@ -26,6 +26,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import AST.
 Require Import Csyntax.
+Require Import Clight.
 Require Import Cminor.
 Require Import Csharpminor.
 
@@ -105,28 +106,28 @@ Definition make_boolean (e: expr) (ty: type) :=
   end.
 
 Definition make_neg (e: expr) (ty: type) :=
-  match ty with
-  | Tint _ _ => OK (Eunop Onegint e)
-  | Tfloat _ => OK (Eunop Onegf e)
+  match classify_neg ty with
+  | neg_case_i _ => OK (Eunop Onegint e)
+  | neg_case_f => OK (Eunop Onegf e)
   | _ => Error (msg "Cshmgen.make_neg")
   end.
 
 Definition make_notbool (e: expr) (ty: type) :=
-  match typeconv ty with
-  | Tfloat _ => Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero)
-  | _ => Eunop Onotbool e
+  match classify_bool ty with
+  | bool_case_ip => OK (Eunop Onotbool e)
+  | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
+  | _ => Error (msg "Cshmgen.make_notbool")
   end.
 
 Definition make_notint (e: expr) (ty: type) :=
   Eunop Onotint e.
 
-Definition make_fabs (e: expr) (ty: type) :=
-  Eunop Oabsf e.
-
 Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
-  | add_case_ii => OK (Ebinop Oadd e1 e2)
+  | add_case_ii _ => OK (Ebinop Oadd e1 e2)
   | add_case_ff => OK (Ebinop Oaddf e1 e2)
+  | add_case_if sg => OK (Ebinop Oaddf (make_floatofint e1 sg) e2)
+  | add_case_fi sg => OK (Ebinop Oaddf e1 (make_floatofint e2 sg))
   | add_case_pi ty =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
@@ -138,8 +139,10 @@ Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 
 Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
-  | sub_case_ii => OK (Ebinop Osub e1 e2)
+  | sub_case_ii _ => OK (Ebinop Osub e1 e2)
   | sub_case_ff => OK (Ebinop Osubf e1 e2)
+  | sub_case_if sg => OK (Ebinop Osubf (make_floatofint e1 sg) e2)
+  | sub_case_fi sg => OK (Ebinop Osubf e1 (make_floatofint e2 sg))
   | sub_case_pi ty =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
@@ -151,23 +154,27 @@ Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 
 Definition make_mul (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_mul ty1 ty2 with
-  | mul_case_ii => OK (Ebinop Omul e1 e2)
+  | mul_case_ii _ => OK (Ebinop Omul e1 e2)
   | mul_case_ff => OK (Ebinop Omulf e1 e2)
+  | mul_case_if sg => OK (Ebinop Omulf (make_floatofint e1 sg) e2)
+  | mul_case_fi sg => OK (Ebinop Omulf e1 (make_floatofint e2 sg))
   | mul_default => Error (msg "Cshmgen.make_mul")
   end.
 
 Definition make_div (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_div ty1 ty2 with
-  | div_case_I32unsi => OK (Ebinop Odivu e1 e2)
-  | div_case_ii => OK (Ebinop Odiv e1 e2)
+  | div_case_ii Unsigned => OK (Ebinop Odivu e1 e2)
+  | div_case_ii Signed => OK (Ebinop Odiv e1 e2)
   | div_case_ff => OK (Ebinop Odivf e1 e2)
+  | div_case_if sg => OK (Ebinop Odivf (make_floatofint e1 sg) e2)
+  | div_case_fi sg => OK (Ebinop Odivf e1 (make_floatofint e2 sg))
   | div_default => Error (msg "Cshmgen.make_div")
   end.
 
 Definition make_mod (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_mod ty1 ty2 with
-  | mod_case_I32unsi => OK (Ebinop Omodu e1 e2)
-  | mod_case_ii=> OK (Ebinop Omod e1 e2)
+  match classify_binint ty1 ty2 with
+  | binint_case_ii Unsigned => OK (Ebinop Omodu e1 e2)
+  | binint_case_ii Signed => OK (Ebinop Omod e1 e2)
   | mod_default => Error (msg "Cshmgen.make_mod")
   end.
 
@@ -184,37 +191,21 @@ Definition make_shl (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   OK(Ebinop Oshl e1 e2).
 
 Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_shr ty1 ty2 with
-  | shr_case_I32unsi => OK (Ebinop Oshru e1 e2)
-  | shr_case_ii=> OK (Ebinop Oshr e1 e2)
+  match classify_shift ty1 ty2 with
+  | shift_case_ii Unsigned => OK (Ebinop Oshru e1 e2)
+  | shift_case_ii Signed => OK (Ebinop Oshr e1 e2)
   | shr_default => Error (msg "Cshmgen.make_shr")
   end.
 
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
-  | cmp_case_I32unsi => OK (Ebinop (Ocmpu c) e1 e2)
+  | cmp_case_iiu => OK (Ebinop (Ocmpu c) e1 e2)
   | cmp_case_ipip => OK (Ebinop (Ocmp c) e1 e2)
   | cmp_case_ff => OK (Ebinop (Ocmpf c) e1 e2)
+  | cmp_case_if sg => OK (Ebinop (Ocmpf c) (make_floatofint e1 sg) e2)
+  | cmp_case_fi sg => OK (Ebinop (Ocmpf c) e1 (make_floatofint e2 sg))
   | cmp_default => Error (msg "Cshmgen.make_cmp")
   end.
-
-Definition make_andbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  Econdition
-    (make_boolean e1 ty1)
-    (Econdition
-       (make_boolean e2 ty2)
-       (make_intconst Int.one)
-       (make_intconst Int.zero))
-    (make_intconst Int.zero).
-
-Definition make_orbool (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  Econdition
-    (make_boolean e1 ty1)
-    (make_intconst Int.one)
-    (Econdition
-       (make_boolean e2 ty2)
-       (make_intconst Int.one)
-       (make_intconst Int.zero)).
 
 (** [make_cast from to e] applies to [e] the numeric conversions needed
    to transform a result of type [from] to a result of type [to].
@@ -271,9 +262,9 @@ Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
 
 (** Determine if a C expression is a variable *)
 
-Definition is_variable (e: Csyntax.expr) : option ident :=
+Definition is_variable (e: Clight.expr) : option ident :=
   match e with
-  | Expr (Csyntax.Evar id) _ => Some id
+  | Clight.Evar id _ => Some id
   | _ => None
   end.
 
@@ -301,26 +292,13 @@ Definition var_set (id: ident) (ty: type) (rhs: expr) :=
   | _ => Error (MSG "Cshmgen.var_set " :: CTX id :: nil)
   end.
 
-(** Auxiliary for translating call statements *)
-
-Definition transl_lhs_call (opta: option Csyntax.expr) : res (option ident) :=
-  match opta with
-  | None => OK None
-  | Some a =>
-      match is_variable a with
-      | None => Error (msg "LHS of function call is not a variable")
-      | Some id => OK (Some id)
-      end
-  end.
-
 (** ** Translation of operators *)
 
 Definition transl_unop (op: Csyntax.unary_operation) (a: expr) (ta: type) : res expr :=
   match op with
-  | Csyntax.Onotbool => OK(make_notbool a ta)
+  | Csyntax.Onotbool => make_notbool a ta
   | Csyntax.Onotint => OK(make_notint a ta)
   | Csyntax.Oneg => make_neg a ta
-  | Csyntax.Ofabs => OK(make_fabs a ta)
   end.
 
 Definition transl_binop (op: Csyntax.binary_operation)
@@ -349,55 +327,41 @@ Definition transl_binop (op: Csyntax.binary_operation)
 
 (** [transl_expr a] returns the Csharpminor code that computes the value
    of expression [a]. The computation is performed in the error monad
-   (see module [Errors]) to enable error reporting.
+   (see module [Errors]) to enable error reporting. *)
 
-   Most cases are self-explanatory.  We outline the non-obvious cases:
-<<
-   a && b    --->    a ? (b ? 1 : 0) : 0
-
-   a || b    --->    a ? 1 : (b ? 1 : 0)
->>
-*)
-
-Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
+Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
   match a with
-  | Expr (Csyntax.Econst_int n) _ =>
+  | Clight.Econst_int n _ =>
       OK(make_intconst n)
-  | Expr (Csyntax.Econst_float n) _ =>
+  | Clight.Econst_float n _ =>
       OK(make_floatconst n)
-  | Expr (Csyntax.Evar id) ty =>
+  | Clight.Evar id ty =>
       var_get id ty
-  | Expr (Csyntax.Ederef b) _ =>
+  | Clight.Etempvar id ty =>
+      OK(Etempvar id)
+  | Clight.Ederef b _ =>
       do tb <- transl_expr b;
       make_load tb (typeof a)
-  | Expr (Csyntax.Eaddrof b) _ =>
+  | Clight.Eaddrof b _ =>
       transl_lvalue b
-  | Expr (Csyntax.Eunop op b) _ =>
+  | Clight.Eunop op b _ =>
       do tb <- transl_expr b;
       transl_unop op tb (typeof b)
-  | Expr (Csyntax.Ebinop op b c) _ =>
+  | Clight.Ebinop op b c _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
       transl_binop op tb (typeof b) tc (typeof c)
-  | Expr (Csyntax.Ecast ty b) _ =>
+  | Clight.Ecast b ty =>
       do tb <- transl_expr b;
       OK (make_cast (typeof b) ty tb)
-  | Expr (Csyntax.Econdition b c d) _ =>
+  | Clight.Econdition b c d _ =>
       do tb <- transl_expr b;
       do tc <- transl_expr c;
       do td <- transl_expr d;
       OK(Econdition (make_boolean tb (typeof b)) tc td)
-  | Expr (Csyntax.Eandbool b c) _ =>
-      do tb <- transl_expr b;
-      do tc <- transl_expr c;
-      OK(make_andbool tb (typeof b) tc (typeof c))
-  | Expr (Csyntax.Eorbool b c) _ =>
-      do tb <- transl_expr b;
-      do tc <- transl_expr c;
-      OK(make_orbool tb (typeof b) tc (typeof c))
-  | Expr (Csyntax.Esizeof ty) _ =>
+  | Clight.Esizeof ty _ =>
       OK(make_intconst (Int.repr (Csyntax.sizeof ty)))
-  | Expr (Csyntax.Efield b i) ty => 
+  | Clight.Efield b i ty => 
       match typeof b with
       | Tstruct _ fld =>
           do tb <- transl_lvalue b;
@@ -418,13 +382,13 @@ Fixpoint transl_expr (a: Csyntax.expr) {struct a} : res expr :=
    where the value of [a] is stored.
 *)
 
-with transl_lvalue (a: Csyntax.expr) {struct a} : res expr :=
+with transl_lvalue (a: Clight.expr) {struct a} : res expr :=
   match a with
-  | Expr (Csyntax.Evar id) _ =>
+  | Clight.Evar id _ =>
       OK (Eaddrof id)
-  | Expr (Csyntax.Ederef b) _ =>
+  | Clight.Ederef b _ =>
       transl_expr b
-  | Expr (Csyntax.Efield b i) ty => 
+  | Clight.Efield b i ty => 
       match typeof b with
       | Tstruct _ fld =>
           do tb <- transl_lvalue b;
@@ -439,17 +403,21 @@ with transl_lvalue (a: Csyntax.expr) {struct a} : res expr :=
       Error(msg "Cshmgen.transl_lvalue")
   end.
 
-(** [transl_exprlist al] returns a list of Csharpminor expressions
-   that compute the values of the list [al] of Csyntax expressions.
+(** [transl_exprlist al tyl] returns a list of Csharpminor expressions
+   that compute the values of the list [al] of Csyntax expressions,
+   casted to the corresponding types in [tyl].
    Used for function applications. *)
 
-Fixpoint transl_exprlist (al: list Csyntax.expr): res (list expr) :=
-  match al with
-  | nil => OK nil
-  | a1 :: a2 =>
+Fixpoint transl_exprlist (al: list Clight.expr) (tyl: typelist)
+                         {struct al}: res (list expr) :=
+  match al, tyl with
+  | nil, Tnil => OK nil
+  | a1 :: a2, Tcons ty1 ty2 =>
       do ta1 <- transl_expr a1;
-      do ta2 <- transl_exprlist a2;
-      OK (ta1 :: ta2)
+      do ta2 <- transl_exprlist a2 ty2;
+      OK (make_cast (typeof a1) ty1 ta1 :: ta2)
+  | _, _ =>
+      Error(msg "Cshmgen.transl_exprlist: arity mismatch")
   end.
 
 (** * Translation of statements *)
@@ -459,7 +427,7 @@ Fixpoint transl_exprlist (al: list Csyntax.expr): res (list expr) :=
    an [exit 0] is performed.  If [e] evaluates to true, the generated
    statement continues in sequence. *)
 
-Definition exit_if_false (e: Csyntax.expr) : res stmt :=
+Definition exit_if_false (e: Clight.expr) : res stmt :=
   do te <- transl_expr e;
   OK(Sifthenelse
         (make_boolean te (typeof e))
@@ -497,8 +465,7 @@ do s; while (e1);   --->     block {
                              }
                              // break in s branches here
 
-for (e1;e2;e3) s;   --->     e1;
-                             block {
+for (;e2;e3) s;   --->       block {
                                loop {
                                  if (!e2) exit 0;
                                  block { s }
@@ -510,93 +477,84 @@ for (e1;e2;e3) s;   --->     e1;
 >>
 *)
 
-Definition is_Sskip:
-  forall (s: Csyntax.statement), {s = Csyntax.Sskip} + {s <> Csyntax.Sskip}.
-Proof.
-  destruct s; ((left; reflexivity) || (right; congruence)).
-Qed.
-
-Fixpoint transl_statement (nbrk ncnt: nat) (s: Csyntax.statement) {struct s} : res stmt :=
+Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
+                          (s: Clight.statement) {struct s} : res stmt :=
   match s with
-  | Csyntax.Sskip =>
+  | Clight.Sskip =>
       OK Sskip
-  | Csyntax.Sassign b c =>
+  | Clight.Sassign b c =>
       match is_variable b with
       | Some id =>
           do tc <- transl_expr c;
-          var_set id (typeof b) tc
+          var_set id (typeof b) (make_cast (typeof c) (typeof b) tc)
       | None =>
           do tb <- transl_lvalue b;
           do tc <- transl_expr c;
-          make_store tb (typeof b) tc
+          make_store tb (typeof b) (make_cast (typeof c) (typeof b) tc)
       end 
-  | Csyntax.Scall opta b cl =>
+  | Clight.Sset x b =>
+      do tb <- transl_expr b;
+      OK(Sset x tb)
+  | Clight.Scall x b cl =>
       match classify_fun (typeof b) with
       | fun_case_f args res =>
-          do optid <- transl_lhs_call opta;
           do tb <- transl_expr b;
-          do tcl <- transl_exprlist cl;
-          OK(Scall optid (signature_of_type args res) tb tcl)
+          do tcl <- transl_exprlist cl args;
+          OK(Scall x (signature_of_type args res) tb tcl)
       | _ => Error(msg "Cshmgen.transl_stmt(call)")
       end
-  | Csyntax.Ssequence s1 s2 =>
-      do ts1 <- transl_statement nbrk ncnt s1;
-      do ts2 <- transl_statement nbrk ncnt s2;
+  | Clight.Ssequence s1 s2 =>
+      do ts1 <- transl_statement tyret nbrk ncnt s1;
+      do ts2 <- transl_statement tyret nbrk ncnt s2;
       OK (Sseq ts1 ts2)
-  | Csyntax.Sifthenelse e s1 s2 =>
+  | Clight.Sifthenelse e s1 s2 =>
       do te <- transl_expr e;
-      do ts1 <- transl_statement nbrk ncnt s1;
-      do ts2 <- transl_statement nbrk ncnt s2;
+      do ts1 <- transl_statement tyret nbrk ncnt s1;
+      do ts2 <- transl_statement tyret nbrk ncnt s2;
       OK (Sifthenelse (make_boolean te (typeof e)) ts1 ts2)
-  | Csyntax.Swhile e s1 =>
+  | Clight.Swhile e s1 =>
       do te <- exit_if_false e;
-      do ts1 <- transl_statement 1%nat 0%nat s1;
+      do ts1 <- transl_statement tyret 1%nat 0%nat s1;
       OK (Sblock (Sloop (Sseq te (Sblock ts1))))
-  | Csyntax.Sdowhile e s1 =>
+  | Clight.Sdowhile e s1 =>
       do te <- exit_if_false e;
-      do ts1 <- transl_statement 1%nat 0%nat s1;
+      do ts1 <- transl_statement tyret 1%nat 0%nat s1;
       OK (Sblock (Sloop (Sseq (Sblock ts1) te)))
-  | Csyntax.Sfor e1 e2 e3 s1 =>
-      if is_Sskip e1 then
-       (do te2 <- exit_if_false e2;
-        do te3 <- transl_statement nbrk ncnt e3;
-        do ts1 <- transl_statement 1%nat 0%nat s1;
-        OK (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3)))))
-      else
-       (do te1 <- transl_statement nbrk ncnt e1;
-        do te2 <- exit_if_false e2;
-        do te3 <- transl_statement nbrk ncnt e3;
-        do ts1 <- transl_statement 1%nat 0%nat s1;
-        OK (Sseq te1 (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3))))))
-  | Csyntax.Sbreak =>
+  | Clight.Sfor' e2 e3 s1 =>
+      do te2 <- exit_if_false e2;
+      do te3 <- transl_statement tyret 0%nat (S ncnt) e3;
+      do ts1 <- transl_statement tyret 1%nat 0%nat s1;
+      OK (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3))))
+  | Clight.Sbreak =>
       OK (Sexit nbrk)
-  | Csyntax.Scontinue =>
+  | Clight.Scontinue =>
       OK (Sexit ncnt)
-  | Csyntax.Sreturn (Some e) =>
+  | Clight.Sreturn (Some e) =>
       do te <- transl_expr e;
-      OK (Sreturn (Some te))
-  | Csyntax.Sreturn None =>
+      OK (Sreturn (Some (make_cast (typeof e) tyret te)))
+  | Clight.Sreturn None =>
       OK (Sreturn None)
-  | Csyntax.Sswitch a sl =>
+  | Clight.Sswitch a sl =>
       do ta <- transl_expr a;
-      do tsl <- transl_lbl_stmt 0%nat (S ncnt) sl;
+      do tsl <- transl_lbl_stmt tyret 0%nat (S ncnt) sl;
       OK (Sblock (Sswitch ta tsl))
-  | Csyntax.Slabel lbl s =>
-      do ts <- transl_statement nbrk ncnt s;
+  | Clight.Slabel lbl s =>
+      do ts <- transl_statement tyret nbrk ncnt s;
       OK (Slabel lbl ts)
-  | Csyntax.Sgoto lbl =>
+  | Clight.Sgoto lbl =>
       OK (Sgoto lbl)
   end
 
-with transl_lbl_stmt (nbrk ncnt: nat) (sl: Csyntax.labeled_statements)
+with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
+                     (sl: Clight.labeled_statements)
                      {struct sl}: res lbl_stmt :=
   match sl with
-  | Csyntax.LSdefault s =>
-      do ts <- transl_statement nbrk ncnt s;
+  | Clight.LSdefault s =>
+      do ts <- transl_statement tyret nbrk ncnt s;
       OK (LSdefault ts)
-  | Csyntax.LScase n s sl' =>
-      do ts <- transl_statement nbrk ncnt s;
-      do tsl' <- transl_lbl_stmt nbrk ncnt sl';
+  | Clight.LScase n s sl' =>
+      do ts <- transl_statement tyret nbrk ncnt s;
+      do tsl' <- transl_lbl_stmt tyret nbrk ncnt sl';
       OK (LScase n ts tsl')
   end.
 
@@ -610,23 +568,37 @@ Definition transl_params (l: list (ident * type)) :=
 Definition transl_vars (l: list (ident * type)) :=
    AST.map_partial prefix_var_name var_kind_of_type l.
 
-Definition transl_function (f: Csyntax.function) : res function :=
-  do tparams <- transl_params (Csyntax.fn_params f);
-  do tvars <- transl_vars (Csyntax.fn_vars f);
-  do tbody <- transl_statement 1%nat 0%nat (Csyntax.fn_body f);
-  OK (mkfunction (opttyp_of_type (Csyntax.fn_return f)) tparams tvars tbody).
+Definition transl_function (f: Clight.function) : res function :=
+  do tparams <- transl_params (Clight.fn_params f);
+  do tvars <- transl_vars (Clight.fn_vars f);
+  do tbody <- transl_statement f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
+  OK (mkfunction 
+       (opttyp_of_type (Clight.fn_return f))
+       tparams
+       tvars
+       (List.map (@fst ident type) f.(Clight.fn_temps))
+       tbody).
 
-Definition transl_fundef (f: Csyntax.fundef) : res fundef :=
+Definition list_typ_eq:
+  forall (l1 l2: list typ), {l1=l2} + {l1<>l2}.
+Proof.
+  generalize typ_eq; intro. decide equality. 
+Qed.
+
+Definition transl_fundef (f: Clight.fundef) : res fundef :=
   match f with
-  | Csyntax.Internal g => 
+  | Clight.Internal g => 
       do tg <- transl_function g; OK(AST.Internal tg)
-  | Csyntax.External ef args res =>
-      OK(AST.External ef)
+  | Clight.External ef args res =>
+      if list_typ_eq ef.(ef_sig).(sig_args) (typlist_of_typelist args)
+      && opt_typ_eq ef.(ef_sig).(sig_res) (opttyp_of_type res)
+      then OK(AST.External ef)
+      else Error(msg "Cshmgen.transl_fundef: wrong external signature")
   end.
 
 (** ** Translation of programs *)
 
 Definition transl_globvar (ty: type) := var_kind_of_type ty.
 
-Definition transl_program (p: Csyntax.program) : res program :=
+Definition transl_program (p: Clight.program) : res program :=
   transform_partial_program2 transl_fundef transl_globvar p.

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Pretty-printers for RTL code *)
+(** Pretty-printer for LTLin code *)
 
 open Format
 open Camlcoq
@@ -18,10 +18,10 @@ open Datatypes
 open Maps
 open AST
 open Integers
-open RTL
+open Locations
+open Machregsaux
+open LTLin
 open PrintOp
-
-(* Printing of RTL code *)
 
 let name_of_chunk = function
   | Mint8signed -> "int8signed"
@@ -32,8 +32,23 @@ let name_of_chunk = function
   | Mfloat32 -> "float32"
   | Mfloat64 -> "float64"
 
-let reg pp r =
-  fprintf pp "x%ld" (camlint_of_positive r)
+let name_of_type = function
+  | Tint -> "int"
+  | Tfloat -> "float"
+
+let reg pp loc =
+  match loc with
+  | R r ->
+      begin match name_of_register r with
+      | Some s -> fprintf pp "%s" s
+      | None -> fprintf pp "<unknown reg>"
+      end
+  | S (Local(ofs, ty)) ->
+      fprintf pp "local(%s,%ld)" (name_of_type ty) (camlint_of_coqint ofs)
+  | S (Incoming(ofs, ty)) ->
+      fprintf pp "incoming(%s,%ld)" (name_of_type ty) (camlint_of_coqint ofs)
+  | S (Outgoing(ofs, ty)) ->
+      fprintf pp "outgoing(%s,%ld)" (name_of_type ty) (camlint_of_coqint ofs)
 
 let rec regs pp = function
   | [] -> ()
@@ -44,71 +59,52 @@ let ros pp = function
   | Coq_inl r -> reg pp r
   | Coq_inr s -> fprintf pp "\"%s\"" (extern_atom s)
 
-let print_succ pp s dfl =
-  let s = camlint_of_positive s in
-  if s <> dfl then fprintf pp "       goto %ld@ " s
-
-let print_instruction pp (pc, i) =
-  fprintf pp "%5ld: " pc;
+let print_instruction pp i =
   match i with
-  | Inop s ->
-      let s = camlint_of_positive s in
-      if s = Int32.pred pc
-      then fprintf pp "nop@ "
-      else fprintf pp "goto %ld@ " s
-  | Iop(op, args, res, s) ->
+  | Lop(op, args, res) ->
       fprintf pp "%a = %a@ "
-         reg res (PrintOp.print_operation reg) (op, args);
-      print_succ pp s (Int32.pred pc)
-  | Iload(chunk, addr, args, dst, s) ->
+         reg res (PrintOp.print_operation reg) (op, args)
+  | Lload(chunk, addr, args, dst) ->
       fprintf pp "%a = %s[%a]@ "
          reg dst (name_of_chunk chunk)
-         (PrintOp.print_addressing reg) (addr, args);
-      print_succ pp s (Int32.pred pc)
-  | Istore(chunk, addr, args, src, s) ->
+         (PrintOp.print_addressing reg) (addr, args)
+  | Lstore(chunk, addr, args, src) ->
       fprintf pp "%s[%a] = %a@ "
          (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
-         reg src;
-      print_succ pp s (Int32.pred pc)
-  | Icall(sg, fn, args, res, s) ->
+         reg src
+  | Lcall(sg, fn, args, res) ->
       fprintf pp "%a = %a(%a)@ "
-        reg res ros fn regs args;
-      print_succ pp s (Int32.pred pc)
-  | Itailcall(sg, fn, args) ->
+        reg res ros fn regs args
+  | Ltailcall(sg, fn, args) ->
       fprintf pp "tailcall %a(%a)@ "
         ros fn regs args
-  | Ibuiltin(ef, args, res, s) ->
+  | Lbuiltin(ef, args, res) ->
       fprintf pp "%a = builtin \"%s\"(%a)@ "
-        reg res (extern_atom ef.ef_id) regs args;
-      print_succ pp s (Int32.pred pc)
-  | Icond(cond, args, s1, s2) ->
-      fprintf pp "if (%a) goto %ld else goto %ld@ "
+        reg res (extern_atom ef.ef_id) regs args
+  | Llabel lbl ->
+      fprintf pp "%5ld: " (camlint_of_positive lbl)
+  | Lgoto lbl ->
+      fprintf pp "goto %ld@ " (camlint_of_positive lbl)
+  | Lcond(cond, args, lbl) ->
+      fprintf pp "if (%a) goto %ld@ "
         (PrintOp.print_condition reg) (cond, args)
-        (camlint_of_positive s1) (camlint_of_positive s2)
-  | Ijumptable(arg, tbl) ->
+        (camlint_of_positive lbl)
+  | Ljumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
       fprintf pp "@[<v 2>jumptable (%a)" reg arg;
       for i = 0 to Array.length tbl - 1 do
         fprintf pp "@ case %d: goto %ld" i (camlint_of_positive tbl.(i))
       done;
       fprintf pp "@]@ "
-  | Ireturn None ->
+  | Lreturn None ->
       fprintf pp "return@ "
-  | Ireturn (Some arg) ->
+  | Lreturn (Some arg) ->
       fprintf pp "return %a@ " reg arg
 
 let print_function pp f =
   fprintf pp "@[<v 2>f(%a) {@ " regs f.fn_params;
-  let instrs =
-    List.sort
-      (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
-      (List.map
-        (fun (Coq_pair(pc, i)) -> (camlint_of_positive pc, i))
-        (PTree.elements f.fn_code)) in
-  print_succ pp f.fn_entrypoint 
-    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1l);
-  List.iter (print_instruction pp) instrs;
+  List.iter (print_instruction pp) f.fn_code;
   fprintf pp "@;<0 -2>}@]@."
 
 let print_fundef pp fd =
@@ -116,8 +112,11 @@ let print_fundef pp fd =
   | Internal f -> print_function pp f
   | External _ -> ()
 
-let print_if optdest currpp fd =
-  match !optdest with
+let destination : string option ref = ref None
+let currpp : formatter option ref = ref None
+
+let print_if fd =
+  match !destination with
   | None -> ()
   | Some f ->
       let pp =
@@ -129,24 +128,3 @@ let print_if optdest currpp fd =
             currpp := Some pp;
             pp
       in print_fundef pp fd
-
-let destination_rtl : string option ref = ref None
-let pp_rtl : formatter option ref = ref None
-let print_rtl = print_if destination_rtl pp_rtl
-
-let destination_tailcall : string option ref = ref None
-let pp_tailcall : formatter option ref = ref None
-let print_tailcall = print_if destination_tailcall pp_tailcall
-
-let destination_castopt : string option ref = ref None
-let pp_castopt : formatter option ref = ref None
-let print_castopt = print_if destination_castopt pp_castopt
-
-let destination_constprop : string option ref = ref None
-let pp_constprop : formatter option ref = ref None
-let print_constprop = print_if destination_constprop pp_constprop
-
-let destination_cse : string option ref = ref None
-let pp_cse : formatter option ref = ref None
-let print_cse = print_if destination_cse pp_cse
-

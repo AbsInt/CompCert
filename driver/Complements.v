@@ -23,15 +23,74 @@ Require Import Smallstep.
 Require Import Determinism.
 Require Import Csyntax.
 Require Import Csem.
+Require Import Cstrategy.
 Require Import Asm.
 Require Import Compiler.
 Require Import Errors.
 
-(** * Determinism of Asm semantics *)
+(** * Integrating a deterministic external world *)
 
-(** In this section, we show that the semantics for the Asm language
-  are deterministic, provided that the program is executed against a
-  deterministic world, as formalized in module [Determinism]. *)
+(** We now integrate a deterministic external world in the semantics
+  of Compcert C and Asm. *)
+
+Section WORLD.
+
+Variable initial_world: world.
+
+Definition exec_C_program (p: Csyntax.program) (beh: program_behavior) : Prop :=
+  wprogram_behaves _ _
+      Csem.step (Csem.initial_state p) Csem.final_state
+      initial_world (Genv.globalenv p) beh.
+
+Definition exec_asm_program (p: Asm.program) (beh: program_behavior) : Prop :=
+  wprogram_behaves _ _
+      Asm.step (Asm.initial_state p) Asm.final_state
+      initial_world (Genv.globalenv p) beh.
+
+(** ** Safety of C programs. *)
+
+(** We show that a C program is safe (in the sense of [Cstrategy.safeprog])
+  if it cannot go wrong in the world-aware semantics. *)
+
+Lemma notwrong_safeprog:
+  forall p,
+  (forall beh, exec_C_program p beh -> not_wrong beh) ->
+  Cstrategy.safeprog p initial_world.
+Proof.
+  intros; red.
+  assert (exists beh1, exec_C_program p beh1).
+    unfold exec_C_program. apply program_behaves_exists. 
+  destruct H0 as [beh1 A].
+  assert (B: not_wrong beh1) by auto.
+  split.
+  inv A; simpl in B.
+  destruct H0. exists (fst s); auto.
+  destruct H0. exists (fst s); auto.
+  destruct H0. exists (fst s); auto.
+  contradiction.
+  contradiction.
+  intros; red; intros.
+  destruct (classic (exists r, Csem.final_state s' r)).
+  (* 1. Final state.  This is immsafe. *)
+  destruct H3 as [r F]. eapply immsafe_final; eauto. 
+  (* 2. Not a final state. *)
+  destruct (classic (nostep (wstep _ _ Csem.step) (Genv.globalenv p) (s', w'))).
+  (* 2.1 No step possible -> going wrong *)
+  elim (H (Goes_wrong t)). 
+  eapply program_goes_wrong.
+  instantiate (1 := (s, initial_world)). split; auto.
+  instantiate (1 := (s', w')). apply Determinism.inject_star; auto. 
+  auto.
+  intros; red; intros. elim H3. exists r; auto. 
+  (* 2.2 One step possible -> this is immsafe *)
+  unfold nostep in H4. 
+  generalize (not_all_ex_not _ _ H4). clear H4. intros [t' P].
+  generalize (not_all_ex_not _ _ P). clear P. intros [s'' Q].
+  generalize (NNPP _ Q). clear Q. intros R. destruct R as [R1 R2]. simpl in *.
+  eapply immsafe_step. eauto. eauto. 
+Qed.
+
+(** ** Determinism of Asm semantics *)
 
 Remark extcall_arguments_deterministic:
   forall rs m sg args args',
@@ -100,17 +159,20 @@ Proof.
 Qed.
 
 Theorem asm_exec_program_deterministic:
-  forall p w beh1 beh2,
-  Asm.exec_program p beh1 -> Asm.exec_program p beh2 ->
-  possible_behavior w beh1 -> possible_behavior w beh2 ->
+  forall p beh1 beh2,
+  exec_asm_program p beh1 -> exec_asm_program p beh2 ->
   beh1 = beh2.
 Proof.
-  intros. 
-  eapply (program_behaves_deterministic _ _ step (initial_state p) final_state); eauto.
-  exact step_internal_deterministic.
-  exact (initial_state_deterministic p).
-  exact final_state_deterministic.
-  exact final_state_not_step.
+  intros. hnf in H; hnf in H0.
+  eapply (program_behaves_deterministic _ _
+             (wstep _ _ step)
+             (winitial_state _ (initial_state p) initial_world)
+             (wfinal_state _ final_state));
+  eauto.
+  apply wstep_deterministic. apply step_internal_deterministic.
+  apply winitial_state_determ. apply initial_state_deterministic.
+  apply wfinal_state_determ. apply final_state_deterministic.
+  apply wfinal_state_nostep. apply final_state_not_step.
 Qed.
 
 (** * Additional semantic preservation property *)
@@ -118,28 +180,34 @@ Qed.
 (** Combining the semantic preservation theorem from module [Compiler]
   with the determinism of Asm executions, we easily obtain
   additional, stronger semantic preservation properties.
-  The first property states that, when compiling a Clight
+  The first property states that, when compiling a Compcert C
   program that has well-defined semantics, all possible executions
   of the resulting Asm code correspond to an execution of
-  the source Clight program. *)
+  the source program. *)
 
 Theorem transf_c_program_is_refinement:
-  forall p tp w,
+  forall p tp,
   transf_c_program p = OK tp ->
-  (exists b, Csem.exec_program p b /\ possible_behavior w b /\ not_wrong b) ->
-  (forall b, Asm.exec_program tp b -> possible_behavior w b -> Csem.exec_program p b).
+  (forall beh, exec_C_program p beh -> not_wrong beh) ->
+  (forall beh, exec_asm_program tp beh -> exec_C_program p beh).
 Proof.
-  intros. destruct H0 as [b0 [A [B C]]]. 
-  assert (Asm.exec_program tp b0).
+  intros. 
+  exploit Cstrategy.strategy_behavior.
+  apply notwrong_safeprog. eauto. 
+  intros [beh1 [A [B [C D]]]].
+  assert (Asm.exec_program tp beh1).
     eapply transf_c_program_correct; eauto.
-  assert (b = b0). eapply asm_exec_program_deterministic; eauto.
-  subst b0. auto.
+  assert (exec_asm_program tp beh1).
+    red. apply inject_behaviors; auto.
+  assert (beh = beh1). eapply asm_exec_program_deterministic; eauto.
+  subst beh.
+  red. apply inject_behaviors; auto.
 Qed.
 
 Section SPECS_PRESERVED.
 
 (** The second additional results shows that if one execution
-  of the source Clight program satisfies a given specification
+  of the source C program satisfies a given specification
   (a predicate on the observable behavior of the program),
   then all executions of the produced Asm program satisfy
   this specification as well.  *) 
@@ -149,16 +217,15 @@ Variable spec: program_behavior -> Prop.
 Hypothesis spec_not_wrong: forall b, spec b -> not_wrong b.
 
 Theorem transf_c_program_preserves_spec:
-  forall p tp w,
+  forall p tp,
   transf_c_program p = OK tp ->
-  (exists b, Csem.exec_program p b /\ possible_behavior w b /\ spec b) ->
-  (forall b, Asm.exec_program tp b -> possible_behavior w b -> spec b).
+  (forall beh, exec_C_program p beh -> spec beh) ->
+  (forall beh, exec_asm_program tp beh -> spec beh).
 Proof.
-  intros. destruct H0 as [b1 [A [B C]]].
-  assert (Asm.exec_program tp b1).
-    eapply transf_c_program_correct; eauto.
-  assert (b1 = b). eapply asm_exec_program_deterministic; eauto. 
-  subst b1. auto.
+  intros. apply H0. apply transf_c_program_is_refinement with tp; auto. 
 Qed.
 
 End SPECS_PRESERVED.
+
+End WORLD.
+

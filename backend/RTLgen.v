@@ -363,6 +363,16 @@ Fixpoint alloc_regs (map: mapping) (al: exprlist)
       ret (r :: rl)
   end.
 
+(** [alloc_optreg] is used for function calls.  If a destination is
+  specified for the call, it is returned.  Otherwise, a fresh
+  register is returned. *)
+
+Definition alloc_optreg (map: mapping) (dest: option ident) : mon reg :=
+  match dest with
+  | Some id => find_var map id
+  | None => new_reg
+  end.
+
 (** * RTL generation **)
 
 (** Insertion of a register-to-register move instruction. *)
@@ -438,20 +448,6 @@ with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
       do no <- transl_exprlist map bs rs nd; transl_expr map b r no
   | _, _ =>
       error (Errors.msg "RTLgen.transl_exprlist")
-  end.
-
-(** Generation of code for variable assignments. *)
-
-Definition store_var
-       (map: mapping) (rs: reg) (id: ident) (nd: node) : mon node :=
-  do rv <- find_var map id;
-  add_move rs rv nd.
-
-Definition store_optvar
-       (map: mapping) (rs: reg) (optid: option ident) (nd: node) : mon node :=
-  match optid with
-  | None => ret nd
-  | Some id => store_var map rs id nd
   end.
 
 (** Auxiliary for branch prediction.  When compiling an if/then/else
@@ -535,11 +531,10 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Scall optid sig b cl =>
       do rf <- alloc_reg map b;
       do rargs <- alloc_regs map cl;
-      do r <- new_reg;
-      do n1 <- store_optvar map r optid nd;
-      do n2 <- add_instr (Icall sig (inl _ rf) rargs r n1);
-      do n3 <- transl_exprlist map cl rargs n2;
-         transl_expr map b rf n3
+      do r <- alloc_optreg map optid;
+      do n1 <- add_instr (Icall sig (inl _ rf) rargs r nd);
+      do n2 <- transl_exprlist map cl rargs n1;
+         transl_expr map b rf n2
   | Stailcall sig b cl =>
       do rf <- alloc_reg map b;
       do rargs <- alloc_regs map cl;
@@ -548,10 +543,9 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
          transl_expr map b rf n2
   | Sbuiltin optid ef al =>
       do rargs <- alloc_regs map al;
-      do r <- new_reg;
-      do n1 <- store_optvar map r optid nd;
-      do n2 <- add_instr (Ibuiltin ef rargs r n1);
-      transl_exprlist map al rargs n2
+      do r <- alloc_optreg map optid;
+      do n1 <- add_instr (Ibuiltin ef rargs r nd);
+         transl_exprlist map al rargs n1
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
       transl_stmt map s1 ns nexits ngoto nret rret

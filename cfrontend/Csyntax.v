@@ -13,19 +13,20 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Abstract syntax for the Clight language *)
+(** Abstract syntax for the Compcert C language *)
 
 Require Import Coqlib.
 Require Import Errors.
 Require Import Integers.
 Require Import Floats.
+Require Import Values.
 Require Import AST.
 
 (** * Abstract syntax *)
 
 (** ** Types *)
 
-(** Clight types are similar to those of C.  They include numeric types,
+(** Compcert C types are similar to those of C.  They include numeric types,
   pointers, arrays, function types, and composite types (struct and 
   union).  Numeric types (integers and floats) fully specify the
   bit size of the type.  An integer type is a pair of a signed/unsigned
@@ -64,7 +65,7 @@ Inductive floatsize : Type :=
 <<
   struct s2 { int n; struct s2 next; };
 >>
-  In Clight, struct and union types [Tstruct id fields] and
+  In Compcert C, struct and union types [Tstruct id fields] and
   [Tunion id fields] are compared by structure: the [fields]
   argument gives the names and types of the members.  The identifier
   [id] is a local name which can be used in conjuction with the
@@ -101,6 +102,18 @@ with fieldlist : Type :=
   | Fnil: fieldlist
   | Fcons: ident -> type -> fieldlist -> fieldlist.
 
+(** The usual unary conversion.  Promotes small integer types to [signed int32]
+  and degrades array types and function types to pointer types. *)
+
+Definition typeconv (ty: type) : type :=
+  match ty with
+  | Tint I32 Unsigned => ty
+  | Tint _ _ => Tint I32 Signed
+  | Tarray t sz => Tpointer t
+  | Tfunction _ _ => Tpointer ty
+  | _ => ty
+  end.
+
 (** ** Expressions *)
 
 (** Arithmetic and logical operators. *)
@@ -108,8 +121,7 @@ with fieldlist : Type :=
 Inductive unary_operation : Type :=
   | Onotbool : unary_operation          (**r boolean negation ([!] in C) *)
   | Onotint : unary_operation           (**r integer complement ([~] in C) *)
-  | Oneg : unary_operation              (**r opposite (unary [-]) *)
-  | Ofabs : unary_operation.            (**r floating-point absolute value *)
+  | Oneg : unary_operation.             (**r opposite (unary [-]) *)
 
 Inductive binary_operation : Type :=
   | Oadd : binary_operation             (**r addition (binary [+]) *)
@@ -129,52 +141,146 @@ Inductive binary_operation : Type :=
   | Ole: binary_operation               (**r comparison ([<=]) *)
   | Oge: binary_operation.              (**r comparison ([>=]) *)
 
-(** Clight expressions are a large subset of those of C.
-  The main omissions are string literals and assignment operators
-  ([=], [+=], [++], etc).  In Clight, assignment is a statement,
-  not an expression.  
+Inductive incr_or_decr : Type := Incr | Decr.
 
-  All expressions are annotated with their types.  An expression
-  (type [expr]) is therefore a pair of a type and an expression
-  description (type [expr_descr]).
-*)
+(** Compcert C expressions are almost identical to those of C.
+  The only omission is string literals.  Some operators are treated
+  as derived forms: array indexing, pre-increment, pre-decrement, and
+  the [&&] and [||] operators.  All expressions are annotated with
+  their types. *)
 
 Inductive expr : Type :=
-  | Expr: expr_descr -> type -> expr
+  | Eval (v: val) (ty: type)                                  (**r constant *)
+  | Evar (x: ident) (ty: type)                                (**r variable *)
+  | Efield (l: expr) (f: ident) (ty: type)
+                               (**r access to a member of a struct or union *)
+  | Evalof (l: expr) (ty: type)              (**r l-value used as a r-value *)
+  | Ederef (r: expr) (ty: type)        (**r pointer dereference (unary [*]) *)
+  | Eaddrof (l: expr) (ty: type)            (**r address-of operators ([&]) *)
+  | Eunop (op: unary_operation) (r: expr) (ty: type)
+                                            (**r unary arithmetic operation *)
+  | Ebinop (op: binary_operation) (r1 r2: expr) (ty: type)
+                                           (**r binary arithmetic operation *)
+  | Ecast (r: expr) (ty: type)                        (**r type cast [(ty)r] *)
+  | Econdition (r1 r2 r3: expr) (ty: type)  (**r conditional [r1 ? r2 : r3] *)
+  | Esizeof (ty': type) (ty: type)                      (**r size of a type *)
+  | Eassign (l: expr) (r: expr) (ty: type)          (**r assignment [l = r] *)
+  | Eassignop (op: binary_operation) (l: expr) (r: expr) (tyres ty: type)
+                                  (**r assignment with arithmetic [l op= r] *)
+  | Epostincr (id: incr_or_decr) (l: expr) (ty: type)
+                         (**r post-increment [l++] and post-decrement [l--] *)
+  | Ecomma (r1 r2: expr) (ty: type)       (**r sequence expression [r1, r2] *)
+  | Ecall (r1: expr) (rargs: exprlist) (ty: type)
+                                             (**r function call [r1(rargs)] *)
+  | Eloc (b: block) (ofs: int) (ty: type)
+                       (**r memory location, result of evaluating a l-value *)
+  | Eparen (r: expr) (ty: type)                   (**r marked subexpression *)
 
-with expr_descr : Type :=
-  | Econst_int: int -> expr_descr       (**r integer literal *)
-  | Econst_float: float -> expr_descr   (**r float literal *)
-  | Evar: ident -> expr_descr           (**r variable *)
-  | Ederef: expr -> expr_descr          (**r pointer dereference (unary [*]) *)
-  | Eaddrof: expr -> expr_descr         (**r address-of operator ([&]) *)
-  | Eunop: unary_operation -> expr -> expr_descr  (**r unary operation *)
-  | Ebinop: binary_operation -> expr -> expr -> expr_descr (**r binary operation *)
-  | Ecast: type -> expr -> expr_descr   (**r type cast ([(ty) e]) *)
-  | Econdition: expr -> expr -> expr -> expr_descr (**r conditional ([e1 ? e2 : e3]) *)
-  | Eandbool: expr -> expr -> expr_descr (**r sequential and ([&&]) *)
-  | Eorbool: expr -> expr -> expr_descr (**r sequential or ([||]) *)
-  | Esizeof: type -> expr_descr         (**r size of a type *)
-  | Efield: expr -> ident -> expr_descr. (**r access to a member of a struct or union *)
+with exprlist : Type :=
+  | Enil
+  | Econs (r1: expr) (rl: exprlist).
 
-(** Extract the type part of a type-annotated Clight expression. *)
+(** Expressions are implicitly classified into l-values and r-values,
+ranged over by [l] and [r], respectively, in the grammar above.
 
-Definition typeof (e: expr) : type :=
-  match e with Expr de te => te end.
+L-values are those expressions that can occur to the left of an assignment.
+They denote memory locations.  (Indeed, the reduction semantics for
+expression reduces them to [Eloc b ofs] expressions.)  L-values are
+variables ([Evar]), pointer dereferences ([Ederef]), field accesses ([Efield]).  
+R-values are all other expressions.  They denote values, and the reduction
+semantics reduces them to [Eval v] expressions.  
+
+A l-value can be used in a r-value context, but this use must be marked
+explicitly with the [Evalof] operator, which is not materialized in the 
+concrete syntax of C but denotes a read from the location corresponding to
+the l-value [l] argument of [Evalof l].
+
+The grammar above contains some forms that cannot appear in source terms
+but appear during reduction.  These forms are:
+- [Eval v] where [v] is a pointer or [Vundef].  ([Eval] of an integer or 
+  float value can occur in a source term and represents a numeric literal.)
+- [Eloc b ofs], which appears during reduction of l-values.
+- [Eparen r], which appears during reduction of conditionals [r1 ? r2 : r3].
+
+Some C expressions are derived forms.  Array access [r1[r2]] is expressed
+as [*(r1 + r2)].
+*)
+
+Definition Eindex (r1 r2: expr) (ty: type) :=
+  Ederef (Ebinop Oadd r1 r2 (Tpointer ty)) ty.
+
+(** Pre-increment [++l] and pre-decrement [--l] are expressed as
+    [l += 1] and [l -= 1], respectively. *)
+
+Definition Epreincr (id: incr_or_decr) (l: expr) (ty: type) :=
+  Eassignop (match id with Incr => Oadd | Decr => Osub end) 
+            l (Eval (Vint Int.one) (Tint I32 Signed)) (typeconv ty) ty.
+
+(** Sequential ``and'' [r1 && r2] is viewed as two conditionals
+    [r1 ? (r2 ? 1 : 0) : 0]. *)
+
+Definition Eseqand (r1 r2: expr) (ty: type) :=
+  Econdition r1 
+    (Econdition r2 (Eval (Vint Int.one) (Tint I32 Signed))
+                   (Eval (Vint Int.zero) (Tint I32 Signed)) ty)
+    (Eval (Vint Int.zero) (Tint I32 Signed))
+    ty.
+                  
+(** Sequential ``or'' [r1 || r2] is viewed as two conditionals
+    [r1 ? 1 : (r2 ? 1 : 0)]. *)
+
+Definition Eseqor (r1 r2: expr) (ty: type) :=
+  Econdition r1 
+    (Eval (Vint Int.one) (Tint I32 Signed))
+    (Econdition r2 (Eval (Vint Int.one) (Tint I32 Signed))
+                   (Eval (Vint Int.zero) (Tint I32 Signed)) ty)
+    ty.
+
+(** Extract the type part of a type-annotated expression. *)
+
+Definition typeof (a: expr) : type :=
+  match a with
+  | Eloc _ _ ty => ty
+  | Evar _ ty => ty
+  | Ederef _ ty => ty
+  | Efield _ _ ty => ty
+  | Eval _ ty => ty
+  | Evalof _ ty => ty
+  | Eaddrof _ ty => ty
+  | Eunop _ _ ty => ty
+  | Ebinop _ _ _ ty => ty
+  | Ecast _ ty => ty
+  | Econdition _ _ _ ty => ty
+  | Esizeof _ ty => ty
+  | Eassign _ _ ty => ty
+  | Eassignop _ _ _ _ ty => ty
+  | Epostincr _ _ ty => ty
+  | Ecomma _ _ ty => ty
+  | Ecall _ _ ty => ty
+  | Eparen _ ty => ty
+  end.
 
 (** ** Statements *)
 
-(** Clight statements include all C statements.
-  Only structured forms of [switch] are supported; moreover,
-  the [default] case must occur last.  Blocks and block-scoped declarations
-  are not supported. *)
+(** Compcert C statements are very much like those of C and include:
+- empty statement [Sskip]
+- evaluation of an expression for its side-effects [Sdo r]
+- conditional [if (...) { ... } else { ... }]
+- the three loops [while(...) { ... }] and [do { ... } while (...)]
+  and [for(..., ..., ...) { ... }]
+- the [switch] construct
+- [break], [continue], [return] (with and without argument)
+- [goto] and labeled statements.
+
+Only structured forms of [switch] are supported; moreover,
+the [default] case must occur last.  Blocks and block-scoped declarations
+are not supported. *)
 
 Definition label := ident.
 
 Inductive statement : Type :=
   | Sskip : statement                   (**r do nothing *)
-  | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
-  | Scall: option expr -> expr -> list expr -> statement (**r function call *)
+  | Sdo : expr -> statement            (**r evaluate expression for side effects *)
   | Ssequence : statement -> statement -> statement  (**r sequence *)
   | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)
   | Swhile : expr -> statement -> statement   (**r [while] loop *)
@@ -182,7 +288,7 @@ Inductive statement : Type :=
   | Sfor: statement -> expr -> statement -> statement -> statement (**r [for] loop *)
   | Sbreak : statement                      (**r [break] statement *)
   | Scontinue : statement                   (**r [continue] statement *)
-  | Sreturn : option expr -> statement      (**r [return] statement *)
+  | Sreturn : option expr -> statement     (**r [return] statement *)
   | Sswitch : expr -> labeled_statements -> statement  (**r [switch] statement *)
   | Slabel : label -> statement -> statement
   | Sgoto : label -> statement
@@ -204,6 +310,9 @@ Record function : Type := mkfunction {
   fn_vars: list (ident * type);
   fn_body: statement
 }.
+
+Definition var_names (vars: list(ident * type)) : list ident :=
+  List.map (@fst ident type) vars.
 
 (** Functions can either be defined ([Internal]) or declared as
   external functions ([External]). *)
@@ -266,23 +375,73 @@ with alignof_fields (f: fieldlist) : Z :=
 Scheme type_ind2 := Induction for type Sort Prop
   with fieldlist_ind2 := Induction for fieldlist Sort Prop.
 
-Lemma alignof_fields_pos:
-  forall f, alignof_fields f > 0.
+Lemma alignof_power_of_2:
+  forall t, exists n, alignof t = two_power_nat n
+with alignof_fields_power_of_2:
+  forall f, exists n, alignof_fields f = two_power_nat n.
 Proof.
+  induction t; simpl.
+  exists 0%nat; auto.
+  destruct i. exists 0%nat; auto. exists 1%nat; auto. exists 2%nat; auto.
+  destruct f. exists 2%nat; auto. exists 3%nat; auto.
+  exists 2%nat; auto.
+  auto.
+  exists 0%nat; auto.
+  apply alignof_fields_power_of_2.
+  apply alignof_fields_power_of_2.
+  exists 2%nat; auto.
   induction f; simpl.
-  omega.
-  generalize (Zmax2 (alignof t) (alignof_fields f)). omega.
+  exists 0%nat; auto.
+  rewrite Zmax_spec. destruct (zlt (alignof_fields f) (alignof t)); auto.
 Qed.
 
 Lemma alignof_pos:
   forall t, alignof t > 0.
 Proof.
-  induction t; simpl; auto; try omega.
-  destruct i; omega.
-  destruct f; omega.
-  apply alignof_fields_pos.
-  apply alignof_fields_pos.
+  intros. destruct (alignof_power_of_2 t) as [p EQ]. rewrite EQ. apply two_power_nat_pos. 
 Qed.
+
+Lemma alignof_fields_pos:
+  forall f, alignof_fields f > 0.
+Proof.
+  intros. destruct (alignof_fields_power_of_2 f) as [p EQ]. rewrite EQ. apply two_power_nat_pos. 
+Qed.
+
+(*
+Fixpoint In_fieldlist (id: ident) (ty: type) (f: fieldlist) : Prop :=
+  match f with
+  | Fnil => False
+  | Fcons id1 ty1 f1 => (id1 = id /\ ty1 = ty) \/ In_fieldlist id ty f1
+  end.
+
+Remark divides_max_pow_two:
+  forall a b,
+  (two_power_nat b | Zmax (two_power_nat a) (two_power_nat b)).
+Proof.
+  intros.
+  rewrite Zmax_spec. destruct (zlt (two_power_nat b) (two_power_nat a)).
+  repeat rewrite two_power_nat_two_p in *. 
+  destruct (zle (Z_of_nat a) (Z_of_nat b)).
+  assert (two_p (Z_of_nat a) <= two_p (Z_of_nat b)). apply two_p_monotone; omega.
+  omegaContradiction.
+  exists (two_p (Z_of_nat a - Z_of_nat b)). 
+  rewrite <- two_p_is_exp. decEq. omega. omega. omega. 
+  apply Zdivide_refl.
+Qed.
+
+Lemma alignof_each_field:
+  forall f id t, In_fieldlist id t f -> (alignof t | alignof_fields f).
+Proof.
+  induction f; simpl; intros.
+  contradiction.
+  destruct (alignof_power_of_2 t) as [k1 EQ1].
+  destruct (alignof_fields_power_of_2 f) as [k2 EQ2].
+  destruct H as [[A B] | A]; subst; rewrite EQ1; rewrite EQ2. 
+  rewrite Zmax_comm. apply divides_max_pow_two.
+  eapply Zdivide_trans. eapply IHf; eauto. 
+  rewrite EQ2. apply divides_max_pow_two.
+Qed.
+*)
 
 (** Size of a type, in bytes. *)
 
@@ -346,6 +505,15 @@ Proof.
   assert (sizeof t > 0) by apply sizeof_pos. omega.
 Qed.
 
+Lemma sizeof_alignof_compat:
+  forall t, (alignof t | sizeof t).
+Proof.
+  induction t; simpl; try (apply Zdivide_refl).
+  apply Zdivide_mult_l. auto.
+  apply align_divides. apply alignof_fields_pos.
+  apply align_divides. apply alignof_fields_pos.
+Qed.
+
 (** Byte offset for a field in a struct or union.
   Field are laid out consecutively, and padding is inserted
   to align each field to the natural alignment for its type. *)
@@ -389,11 +557,13 @@ Proof.
 Qed.
 
 Lemma field_offset_in_range:
-  forall id fld ofs ty,
-  field_offset id fld = OK ofs -> field_type id fld = OK ty ->
-  0 <= ofs /\ ofs + sizeof ty <= sizeof_struct fld 0.
+  forall sid fld fid ofs ty,
+  field_offset fid fld = OK ofs -> field_type fid fld = OK ty ->
+  0 <= ofs /\ ofs + sizeof ty <= sizeof (Tstruct sid fld).
 Proof.
-  intros. eapply field_offset_rec_in_range. unfold field_offset in H; eauto. eauto.
+  intros. exploit field_offset_rec_in_range; eauto. intros [A B].
+  split. auto.  simpl. eapply Zle_trans. eauto.
+  eapply Zle_trans. eapply Zle_max_r. apply align_le. apply alignof_fields_pos.
 Qed.
 
 (** Second, two distinct fields do not overlap *)
@@ -422,8 +592,8 @@ Proof.
   apply H with fld0 0; auto.
 Qed.
 
-(** Third, if a struct is a prefix of another, the offsets of fields
-  in common is the same. *)
+(** Third, if a struct is a prefix of another, the offsets of common fields
+    are the same. *)
 
 Fixpoint fieldlist_app (fld1 fld2: fieldlist) {struct fld1} : fieldlist :=
   match fld1 with
@@ -445,16 +615,31 @@ Proof.
   intros. unfold field_offset; auto. 
 Qed.
 
-(** The [access_mode] function describes how a variable of the given
+(** Fourth, the position of each field respects its alignment. *)
+
+Lemma field_offset_aligned:
+  forall id fld ofs ty,
+  field_offset id fld = OK ofs -> field_type id fld = OK ty ->
+  (alignof ty | ofs).
+Proof.
+  assert (forall id ofs ty fld pos,
+          field_offset_rec id fld pos = OK ofs -> field_type id fld = OK ty ->
+          (alignof ty | ofs)).
+  induction fld; simpl; intros.
+  discriminate.
+  destruct (ident_eq id i). inv H; inv H0. 
+  apply align_divides. apply alignof_pos. 
+  eapply IHfld; eauto.
+  intros. eapply H with (pos := 0); eauto.
+Qed.
+
+(** The [access_mode] function describes how a l-value of the given
 type must be accessed:
 - [By_value ch]: access by value, i.e. by loading from the address
-  of the variable using the memory chunk [ch];
+  of the l-value using the memory chunk [ch];
 - [By_reference]: access by reference, i.e. by just returning
-  the address of the variable;
+  the address of the l-value;
 - [By_nothing]: no access is possible, e.g. for the [void] type.
-
-We currently do not support 64-bit integers and 128-bit floats, so these
-have an access mode of [By_nothing].
 *)
 
 Inductive mode: Type :=
@@ -480,124 +665,182 @@ Definition access_mode (ty: type) : mode :=
   | Tcomp_ptr _ => By_value Mint32
 end.
 
-(** The usual unary conversion.  Promotes small integer types to [signed int32]
-  and degrades array types and function types to pointer types. *)
-
-Definition typeconv (ty: type) : type :=
-  match ty with
-  | Tint I32 Unsigned => ty
-  | Tint _ _ => Tint I32 Signed
-  | Tarray t sz => Tpointer t
-  | Tfunction _ _ => Tpointer ty
-  | _ => ty
-  end.
-
 (** Classification of arithmetic operations and comparisons.
   The following [classify_] functions take as arguments the types
   of the arguments of an operation.  They return enough information
   to resolve overloading for this operator applications, such as
   ``both arguments are floats'', or ``the first is a pointer
   and the second is an integer''.  These functions are used to resolve
-  overloading both in the dynamic semantics (module [Csem]) and in the
-  compiler (module [Cshmgen]).
+  overloading both in the dynamic semantics (module [Csem]), in the
+  type system (module [Ctyping]), and in the compiler (module
+  [Cshmgen]).
 *)
 
+Inductive classify_neg_cases : Type :=
+  | neg_case_i(s: signedness)              (**r int *)
+  | neg_case_f                             (**r float *)
+  | neg_default.
+
+Definition classify_neg (ty: type) : classify_neg_cases :=
+  match ty with
+  | Tint I32 Unsigned => neg_case_i Unsigned
+  | Tint _ _ => neg_case_i Signed
+  | Tfloat _ => neg_case_f
+  | _ => neg_default
+  end.
+
+Inductive classify_notint_cases : Type :=
+  | notint_case_i(s: signedness)              (**r int *)
+  | notint_default.
+
+Definition classify_notint (ty: type) : classify_notint_cases :=
+  match ty with
+  | Tint I32 Unsigned => notint_case_i Unsigned
+  | Tint _ _ => notint_case_i Signed
+  | _ => notint_default
+  end.
+
+(** The following describes types that can be interpreted as a boolean:
+  integers, floats, pointers.  It is used for the semantics of 
+  the [!] and [?] operators, as well as the [if], [while], [for] statements. *)
+
+Inductive classify_bool_cases : Type :=
+  | bool_case_ip                          (**r integer or pointer *)
+  | bool_case_f                           (**r float *)
+  | bool_default.
+
+Definition classify_bool (ty: type) : classify_bool_cases :=
+  match typeconv ty with
+  | Tint _ _ => bool_case_ip
+  | Tpointer _ => bool_case_ip
+  | Tfloat _ => bool_case_f
+  | _ => bool_default
+  end.
+
 Inductive classify_add_cases : Type :=
-  | add_case_ii: classify_add_cases         (**r int , int *)
-  | add_case_ff: classify_add_cases         (**r float , float *)
-  | add_case_pi: type -> classify_add_cases (**r ptr or array, int *)
-  | add_case_ip: type -> classify_add_cases (**r int, ptr or array *)
-  | add_default: classify_add_cases.        (**r other *)
+  | add_case_ii(s: signedness)         (**r int, int *)
+  | add_case_ff                        (**r float, float *)
+  | add_case_if(s: signedness)         (**r int, float *)
+  | add_case_fi(s: signedness)         (**r float, int *)
+  | add_case_pi(ty: type)              (**r pointer, int *)
+  | add_case_ip(ty: type)              (**r int, pointer *)
+  | add_default.
 
 Definition classify_add (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint _ _, Tint _ _ => add_case_ii
+  | Tint I32 Unsigned, Tint _ _ => add_case_ii Unsigned
+  | Tint _ _, Tint I32 Unsigned => add_case_ii Unsigned
+  | Tint _ _, Tint _ _ => add_case_ii Signed
   | Tfloat _, Tfloat _ => add_case_ff
+  | Tint _ sg, Tfloat _ => add_case_if sg
+  | Tfloat _, Tint _ sg => add_case_fi sg
   | Tpointer ty, Tint _ _ => add_case_pi ty
   | Tint _ _, Tpointer ty => add_case_ip ty
   | _, _ => add_default
   end.
 
 Inductive classify_sub_cases : Type :=
-  | sub_case_ii: classify_sub_cases          (**r int , int *)
-  | sub_case_ff: classify_sub_cases          (**r float , float *)
-  | sub_case_pi: type -> classify_sub_cases  (**r ptr or array , int *)
-  | sub_case_pp: type -> classify_sub_cases  (**r ptr or array , ptr or array *)
-  | sub_default: classify_sub_cases .        (**r other *)
+  | sub_case_ii(s: signedness)          (**r int , int *)
+  | sub_case_ff                         (**r float , float *)
+  | sub_case_if(s: signedness)          (**r int, float *)
+  | sub_case_fi(s: signedness)          (**r float, int *)
+  | sub_case_pi(ty: type)               (**r pointer, int *)
+  | sub_case_pp(ty: type)               (**r pointer, pointer *)
+  | sub_default.
 
 Definition classify_sub (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint _ _ , Tint _ _ => sub_case_ii
+  | Tint I32 Unsigned, Tint _ _ => sub_case_ii Unsigned
+  | Tint _ _, Tint I32 Unsigned => sub_case_ii Unsigned
+  | Tint _ _, Tint _ _ => sub_case_ii Signed
   | Tfloat _ , Tfloat _ => sub_case_ff
+  | Tint _ sg, Tfloat _ => sub_case_if sg
+  | Tfloat _, Tint _ sg => sub_case_fi sg
   | Tpointer ty , Tint _ _ => sub_case_pi ty
   | Tpointer ty , Tpointer _ => sub_case_pp ty
   | _ ,_ => sub_default
   end.
 
 Inductive classify_mul_cases : Type:=
-  | mul_case_ii: classify_mul_cases (**r int , int *)
-  | mul_case_ff: classify_mul_cases (**r float , float *)
-  | mul_default: classify_mul_cases . (**r other *)
+  | mul_case_ii(s: signedness) (**r int , int *)
+  | mul_case_ff                (**r float , float *)
+  | mul_case_if(s: signedness) (**r int, float *)
+  | mul_case_fi(s: signedness) (**r float, int *)
+  | mul_default.
 
 Definition classify_mul (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint _ _, Tint _ _ => mul_case_ii
+  | Tint I32 Unsigned, Tint _ _ => mul_case_ii Unsigned
+  | Tint _ _, Tint I32 Unsigned => mul_case_ii Unsigned
+  | Tint _ _, Tint _ _ => mul_case_ii Signed
   | Tfloat _ , Tfloat _ => mul_case_ff
+  | Tint _ sg, Tfloat _ => mul_case_if sg
+  | Tfloat _, Tint _ sg => mul_case_fi sg
   | _,_  => mul_default
 end.
 
 Inductive classify_div_cases : Type:=
-  | div_case_I32unsi: classify_div_cases (**r unsigned int32 , int *)
-  | div_case_ii: classify_div_cases    (**r int , int *) 
-  | div_case_ff: classify_div_cases    (**r float , float *)
-  | div_default: classify_div_cases. (**r other *)
+  | div_case_ii(s: signedness) (**r int , int *)
+  | div_case_ff                (**r float , float *)
+  | div_case_if(s: signedness) (**r int, float *)
+  | div_case_fi(s: signedness) (**r float, int *)
+  | div_default.
 
 Definition classify_div (ty1: type) (ty2: type) :=
-  match typeconv ty1, typeconv ty2 with 
-  | Tint I32 Unsigned, Tint _ _ => div_case_I32unsi 
-  | Tint _ _ , Tint I32 Unsigned => div_case_I32unsi 
-  | Tint _ _ , Tint _ _ => div_case_ii 
-  | Tfloat _ , Tfloat _ => div_case_ff 
-  | _ ,_ => div_default 
+  match typeconv ty1, typeconv ty2 with
+  | Tint I32 Unsigned, Tint _ _ => div_case_ii Unsigned
+  | Tint _ _, Tint I32 Unsigned => div_case_ii Unsigned
+  | Tint _ _, Tint _ _ => div_case_ii Signed
+  | Tfloat _ , Tfloat _ => div_case_ff
+  | Tint _ sg, Tfloat _ => div_case_if sg
+  | Tfloat _, Tint _ sg => div_case_fi sg
+  | _,_  => div_default
 end.
 
-Inductive classify_mod_cases : Type:=
-  | mod_case_I32unsi: classify_mod_cases  (**r unsigned I32 , int *)
-  | mod_case_ii: classify_mod_cases  (**r int , int *)
-  | mod_default: classify_mod_cases . (**r other *)
+(** The following is common to binary integer-only operators:
+  modulus, bitwise "and", "or", and "xor". *)
 
-Definition classify_mod (ty1: type) (ty2: type) :=
+Inductive classify_binint_cases : Type:=
+  | binint_case_ii(s: signedness) (**r int , int *)
+  | binint_default.
+
+Definition classify_binint (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned , Tint _ _ => mod_case_I32unsi 
-  | Tint _ _ , Tint I32 Unsigned => mod_case_I32unsi 
-  | Tint _ _ , Tint _ _ => mod_case_ii 
-  | _ , _ => mod_default 
-end .
+  | Tint I32 Unsigned, Tint _ _ => binint_case_ii Unsigned
+  | Tint _ _, Tint I32 Unsigned => binint_case_ii Unsigned
+  | Tint _ _, Tint _ _ => binint_case_ii Signed
+  | _,_  => binint_default
+end.
 
-Inductive classify_shr_cases :Type:=
-  | shr_case_I32unsi:  classify_shr_cases (**r unsigned I32 , int *)
-  | shr_case_ii :classify_shr_cases (**r int , int *)
-  | shr_default : classify_shr_cases . (**r other *)
+(** The following is common to shift operators [<<] and [>>]. *)
 
-Definition classify_shr (ty1: type) (ty2: type) :=
+Inductive classify_shift_cases : Type:=
+  | shift_case_ii(s: signedness) (**r int , int *)
+  | shift_default.
+
+Definition classify_shift (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned , Tint _ _ => shr_case_I32unsi
-  | Tint _ _ , Tint _ _ => shr_case_ii
-  | _ , _ => shr_default 
-  end.
+  | Tint I32 Unsigned, Tint _ _ => shift_case_ii Unsigned
+  | Tint _ _, Tint _ _ => shift_case_ii Signed
+  | _,_  => shift_default
+end.
 
 Inductive classify_cmp_cases : Type:=
-  | cmp_case_I32unsi: classify_cmp_cases (**r unsigned I32 , int *)
-  | cmp_case_ipip: classify_cmp_cases  (**r int|ptr|array , int|ptr|array*)
-  | cmp_case_ff: classify_cmp_cases  (**r float , float *)
-  | cmp_default: classify_cmp_cases . (**r other *)
+  | cmp_case_iiu               (**r unsigned int, unsigned int *)
+  | cmp_case_ipip              (**r int-or-pointer, int-or-pointer *)
+  | cmp_case_ff                (**r float , float *)
+  | cmp_case_if(s: signedness) (**r int, float *)
+  | cmp_case_fi(s: signedness) (**r float, int *)
+  | cmp_default.
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with 
-  | Tint I32 Unsigned , Tint _ _ => cmp_case_I32unsi 
-  | Tint _ _ , Tint I32 Unsigned => cmp_case_I32unsi 
+  | Tint I32 Unsigned , Tint _ _ => cmp_case_iiu
+  | Tint _ _ , Tint I32 Unsigned => cmp_case_iiu
   | Tint _ _ , Tint _ _ => cmp_case_ipip
   | Tfloat _ , Tfloat _ => cmp_case_ff
+  | Tint _ sg, Tfloat _ => cmp_case_if sg
+  | Tfloat _, Tint _ sg => cmp_case_fi sg
   | Tpointer _ , Tpointer _ => cmp_case_ipip
   | Tpointer _ , Tint _ _ => cmp_case_ipip
   | Tint _ _, Tpointer _ => cmp_case_ipip
@@ -605,8 +848,8 @@ Definition classify_cmp (ty1: type) (ty2: type) :=
   end.
 
 Inductive classify_fun_cases : Type:=
-  | fun_case_f: typelist -> type -> classify_fun_cases   (**r (pointer to) function *)
-  | fun_default: classify_fun_cases . (**r other *)
+  | fun_case_f (targs: typelist) (tres: type) (**r (pointer to) function *)
+  | fun_default.
 
 Definition classify_fun (ty: type) :=
   match ty with 
@@ -615,7 +858,7 @@ Definition classify_fun (ty: type) :=
   | _ => fun_default
   end.
 
-(** Translating Clight types to Cminor types, function signatures,
+(** Translating C types to Cminor types, function signatures,
   and external functions. *)
 
 Definition typ_of_type (t: type) : AST.typ :=

@@ -104,8 +104,11 @@ semantics.
 <H3>Source, intermediate and target languages: syntax and semantics</H3>
 
 <UL>
-<LI> <A HREF="html/Csyntax.html">Clight syntax</A> and its
-<A HREF="html/Csem.html">semantics</A>: the source language.
+<LI> The Cmedium source language:
+<A HREF="html/Csyntax.html">syntax</A> and
+<A HREF="html/Csem.html">semantics</A> and
+<A HREF="html/Cstrategy.html">determinized semantics</A>.
+<LI> <A HREF="html/Clight.html">Clight</A>: a simpler version of Cmedium where expressions contain no side-effects.
 <LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level
  structured language.
 <LI> <A HREF="html/Cminor.html">Cminor</A>: low-level structured
@@ -144,13 +147,20 @@ code.
 </TR>
 
 <TR valign="top">
+  <TD>Pulling side-effects out of expressions;<br>
+      fixing an evaluation order</TD>
+  <TD>Cmedium to Clight</TD>
+  <TD><A HREF="html/SimplExpr.html">SimplExpr</A></TD>
+  <TD><A HREF="html/SimplExprspec.html">SimplExprspec</A><br>
+      <A HREF="html/SimplExprproof.html">SimplExprproof</A></TD>
+</TR>
+<TR valign="top">
   <TD>Simplification of control structures; <br>
       explication of type-dependent computations</TD>
   <TD>Clight to Csharpminor</TD>
   <TD><A HREF="html/Cshmgen.html">Cshmgen</A></TD>
-  <TD><A HREF="html/Cshmgenproof1.html">Cshmgenproof1</A><br>
-      <A HREF="html/Cshmgenproof2.html">Cshmgenproof2</A><br>
-      <A HREF="html/Cshmgenproof3.html">Cshmgenproof3</A></TD>
+  <TD><A HREF="html/Cshmgenproof.html">Cshmgenproof</A></TD>
+</TR>
 <TR valign="top">
   <TD>Stack allocation of local variables<br>
       whose address is taken;<br>
@@ -263,7 +273,6 @@ code.
 Trivial type systems are used to statically capture well-formedness
 conditions on the source and intermediate languages.
 <UL>
-<LI> <A HREF="html/Ctyping.html">Ctyping</A>: partial typing for Clight + type-checking
 <LI> <A HREF="html/RTLtyping.html">RTLtyping</A>: typing for RTL + type
 reconstruction.
 <LI> <A HREF="html/LTLtyping.html">LTLtyping</A>: typing for LTL.
@@ -283,8 +292,8 @@ Proofs that compiler passes are type-preserving:
 <H3>All together</H3>
 
 <UL>
-<LI> <A HREF="html/Compiler.html">Compiler</A>: composing the passes together; the
-final semantic preservation theorems.
+<LI> <A HREF="html/Compiler.html">Compiler</A>: composing the passes together;
+whole-compiler semantic preservation theorems.
 <LI> <A HREF="html/Complements.html">Complements</A>: interesting consequences of the semantic preservation theorems.
 </UL>
 

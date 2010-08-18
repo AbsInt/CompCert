@@ -66,6 +66,31 @@ Proof.
   intros. eapply star_step; eauto. apply star_refl. traceEq. 
 Qed.
 
+Lemma star_two:
+  forall ge s1 t1 s2 t2 s3 t,
+  step ge s1 t1 s2 -> step ge s2 t2 s3 -> t = t1 ** t2 ->
+  star ge s1 t s3.
+Proof.
+  intros. eapply star_step; eauto. apply star_one; auto.  
+Qed.
+
+Lemma star_three:
+  forall ge s1 t1 s2 t2 s3 t3 s4 t,
+  step ge s1 t1 s2 -> step ge s2 t2 s3 -> step ge s3 t3 s4 -> t = t1 ** t2 ** t3 ->
+  star ge s1 t s4.
+Proof.
+  intros. eapply star_step; eauto. eapply star_two; eauto. 
+Qed.
+
+Lemma star_four:
+  forall ge s1 t1 s2 t2 s3 t3 s4 t4 s5 t,
+  step ge s1 t1 s2 -> step ge s2 t2 s3 ->
+  step ge s3 t3 s4 -> step ge s4 t4 s5 -> t = t1 ** t2 ** t3 ** t4 ->
+  star ge s1 t s5.
+Proof.
+  intros. eapply star_step; eauto. eapply star_three; eauto. 
+Qed.
+
 Lemma star_trans:
   forall ge s1 t1 s2, star ge s1 t1 s2 ->
   forall t2 s3 t, star ge s2 t2 s3 -> t = t1 ** t2 -> star ge s1 t s3.
@@ -101,6 +126,31 @@ Lemma plus_one:
   step ge s1 t s2 -> plus ge s1 t s2.
 Proof.
   intros. econstructor; eauto. apply star_refl. traceEq.
+Qed.
+
+Lemma plus_two:
+  forall ge s1 t1 s2 t2 s3 t,
+  step ge s1 t1 s2 -> step ge s2 t2 s3 -> t = t1 ** t2 ->
+  plus ge s1 t s3.
+Proof.
+  intros. eapply plus_left; eauto. apply star_one; auto.  
+Qed.
+
+Lemma plus_three:
+  forall ge s1 t1 s2 t2 s3 t3 s4 t,
+  step ge s1 t1 s2 -> step ge s2 t2 s3 -> step ge s3 t3 s4 -> t = t1 ** t2 ** t3 ->
+  plus ge s1 t s4.
+Proof.
+  intros. eapply plus_left; eauto. eapply star_two; eauto. 
+Qed.
+
+Lemma plus_four:
+  forall ge s1 t1 s2 t2 s3 t3 s4 t4 s5 t,
+  step ge s1 t1 s2 -> step ge s2 t2 s3 ->
+  step ge s3 t3 s4 -> step ge s4 t4 s5 -> t = t1 ** t2 ** t3 ** t4 ->
+  plus ge s1 t s5.
+Proof.
+  intros. eapply plus_left; eauto. eapply star_three; eauto. 
 Qed.
 
 Lemma plus_star:

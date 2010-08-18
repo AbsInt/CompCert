@@ -155,6 +155,12 @@ val floatconst : float -> fkind -> exp
   (* Build expression for given float constant. *)
 val nullconst : exp
   (* Expression for [(void * ) 0] *)
+val eaddrof : exp -> exp
+  (* Expression for [&e] *)
+val eassign : exp -> exp -> exp
+  (* Expression for [e1 = e2] *)
+val ecomma :  exp -> exp -> exp
+  (* Expression for [e1, e2] *)
 val sskip: stmt
   (* The [skip] statement.  No location. *)
 val sseq : location -> stmt -> stmt -> stmt

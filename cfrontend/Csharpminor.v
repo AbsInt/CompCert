@@ -46,6 +46,7 @@ Definition binary_operation : Type := Cminor.binary_operation.
 
 Inductive expr : Type :=
   | Evar : ident -> expr                (**r reading a scalar variable  *)
+  | Etempvar : ident -> expr            (**r reading a temporary variable *)
   | Eaddrof : ident -> expr             (**r taking the address of a variable *)
   | Econst : constant -> expr           (**r constants *)
   | Eunop : unary_operation -> expr -> expr  (**r unary operation *)
@@ -64,6 +65,7 @@ Definition label := ident.
 Inductive stmt : Type :=
   | Sskip: stmt
   | Sassign : ident -> expr -> stmt
+  | Sset : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
   | Scall : option ident -> signature -> expr -> list expr -> stmt
   | Sseq: stmt -> stmt -> stmt
@@ -109,6 +111,7 @@ Record function : Type := mkfunction {
   fn_return: option typ;
   fn_params: list (ident * memory_chunk);
   fn_vars: list (ident * var_kind);
+  fn_temps: list ident;
   fn_body: stmt
 }.
 
@@ -137,17 +140,21 @@ Definition fn_vars_names (f: function) := List.map variable_name f.(fn_vars).
 
 (** * Operational semantics *)
 
-(** Three kinds of evaluation environments are involved:
-- [genv]: global environments, define symbols and functions;
-- [gvarenv]: map global variables to variable informations (type [var_kind]);
+(** Three evaluation environments are involved:
+- [genv]: global environments, map symbols and functions to memory blocks,
+    and maps symbols to variable informations (type [var_kind])
 - [env]: local environments, map local variables 
-    to memory blocks and variable informations.
+    to pairs (memory block, variable information)
+- [temp_env]: local environments, map temporary variables to
+    their current values.
 *)
 
 Definition genv := Genv.t fundef var_kind.
-Definition gvarenv := PTree.t var_kind.
 Definition env := PTree.t (block * var_kind).
+Definition temp_env := PTree.t val.
+
 Definition empty_env : env := PTree.empty (block * var_kind).
+Definition empty_temp_env : temp_env := PTree.empty val.
 
 (** Continuations *)
 
@@ -155,7 +162,7 @@ Inductive cont: Type :=
   | Kstop: cont                         (**r stop program execution *)
   | Kseq: stmt -> cont -> cont          (**r execute stmt, then cont *)
   | Kblock: cont -> cont                (**r exit a block, then do cont *)
-  | Kcall: option ident -> function -> env -> cont -> cont.
+  | Kcall: option ident -> function -> env -> temp_env -> cont -> cont.
                                         (**r return to caller *)
 
 (** States *)
@@ -166,6 +173,7 @@ Inductive state: Type :=
              (s: stmt)                  (**r statement under consideration *)
              (k: cont)                  (**r its continuation -- what to do next *)
              (e: env)                   (**r current local environment *)
+             (le: temp_env)             (**r current temporary environment *)
              (m: mem),                  (**r current memory state *)
       state
   | Callstate:                  (**r Invocation of a function *)
@@ -192,7 +200,7 @@ Fixpoint call_cont (k: cont) : cont :=
 Definition is_call_cont (k: cont) : Prop :=
   match k with
   | Kstop => True
-  | Kcall _ _ _ _ => True
+  | Kcall _ _ _ _ _ => True
   | _ => False
   end.
 
@@ -298,6 +306,9 @@ Definition blocks_of_env (e: env) : list (block * Z * Z) :=
   of the corresponding argument is stored into the memory block
   bound to the parameter. *)
 
+Definition val_normalized (v: val) (chunk: memory_chunk) : Prop :=
+  Val.load_result chunk v = v.
+
 Inductive bind_parameters: env ->
                            mem -> list (ident * memory_chunk) -> list val ->
                            mem -> Prop :=
@@ -307,15 +318,14 @@ Inductive bind_parameters: env ->
   | bind_parameters_cons:
       forall e m id chunk params v1 vl b m1 m2,
       PTree.get id e = Some (b, Vscalar chunk) ->
+      val_normalized v1 chunk ->
       Mem.store chunk m b 0 v1 = Some m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, chunk) :: params) (v1 :: vl) m2.
 
 Section RELSEM.
 
-Variable globenv : genv * gvarenv.
-Let ge := fst globenv.
-Let gvare := snd globenv.
+Variable ge: genv.
 
 (* Evaluation of the address of a variable: 
    [eval_var_addr prg ge e id b] states that variable [id] 
@@ -343,10 +353,11 @@ Inductive eval_var_ref: env -> ident -> block -> memory_chunk -> Prop :=
       PTree.get id e = Some (b, Vscalar chunk) ->
       eval_var_ref e id b chunk
   | eval_var_ref_global:
-      forall e id b chunk,
+      forall e id b gv chunk,
       PTree.get id e = None ->
       Genv.find_symbol ge id = Some b ->
-      PTree.get id gvare = Some (Vscalar chunk) ->
+      Genv.find_var_info ge b = Some gv ->
+      gvar_info gv = Vscalar chunk ->
       eval_var_ref e id b chunk.
 
 (** Evaluation of an expression: [eval_expr prg e m a v] states
@@ -356,6 +367,7 @@ Inductive eval_var_ref: env -> ident -> block -> memory_chunk -> Prop :=
 Section EVAL_EXPR.
 
 Variable e: env.
+Variable le: temp_env.
 Variable m: mem.
 
 Inductive eval_expr: expr -> val -> Prop :=
@@ -363,6 +375,9 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_var_ref e id b chunk ->
       Mem.load chunk m b 0 = Some v ->
       eval_expr (Evar id) v
+  | eval_Etempvar: forall id v,
+      le!id = Some v ->
+      eval_expr (Etempvar id) v
   | eval_Eaddrof: forall id b,
       eval_var_addr e id b ->
       eval_expr (Eaddrof id) (Vptr b Int.zero)
@@ -407,123 +422,130 @@ End EVAL_EXPR.
 Inductive exec_assign: env -> mem -> ident -> val -> mem -> Prop :=
   exec_assign_intro: forall e m id v b chunk m',
     eval_var_ref e id b chunk ->
+    val_normalized v chunk ->
     Mem.store chunk m b 0 v = Some m' ->
     exec_assign e m id v m'.
 
+(*
 Inductive exec_opt_assign: env -> mem -> option ident -> val -> mem -> Prop :=
   | exec_assign_none: forall e m v,
       exec_opt_assign e m None v m
   | exec_assign_some: forall e m id v m',
       exec_assign e m id v m' ->
       exec_opt_assign e m (Some id) v m'.
+*)
 
 (** One step of execution *)
 
 Inductive step: state -> trace -> state -> Prop :=
 
-  | step_skip_seq: forall f s k e m,
-      step (State f Sskip (Kseq s k) e m)
-        E0 (State f s k e m)
-  | step_skip_block: forall f k e m,
-      step (State f Sskip (Kblock k) e m)
-        E0 (State f Sskip k e m)
-  | step_skip_call: forall f k e m m',
+  | step_skip_seq: forall f s k e le m,
+      step (State f Sskip (Kseq s k) e le m)
+        E0 (State f s k e le m)
+  | step_skip_block: forall f k e le m,
+      step (State f Sskip (Kblock k) e le m)
+        E0 (State f Sskip k e le m)
+  | step_skip_call: forall f k e le m m',
       is_call_cont k ->
       f.(fn_return) = None ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
-      step (State f Sskip k e m)
+      step (State f Sskip k e le m)
         E0 (Returnstate Vundef k m')
 
-  | step_assign: forall f id a k e m m' v,
-      eval_expr e m a v ->
+  | step_assign: forall f id a k e le m m' v,
+      eval_expr e le m a v ->
       exec_assign e m id v m' ->
-      step (State f (Sassign id a) k e m)
-        E0 (State f Sskip k e m')
+      step (State f (Sassign id a) k e le m)
+        E0 (State f Sskip k e le m')
 
-  | step_store: forall f chunk addr a k e m vaddr v m',
-      eval_expr e m addr vaddr ->
-      eval_expr e m a v ->
+  | step_set: forall f id a k e le m v,
+      eval_expr e le m a v ->
+      step (State f (Sset id a) k e le m)
+        E0 (State f Sskip k e (PTree.set id v le) m)
+
+  | step_store: forall f chunk addr a k e le m vaddr v m',
+      eval_expr e le m addr vaddr ->
+      eval_expr e le m a v ->
       Mem.storev chunk m vaddr v = Some m' ->
-      step (State f (Sstore chunk addr a) k e m)
-        E0 (State f Sskip k e m')
+      step (State f (Sstore chunk addr a) k e le m)
+        E0 (State f Sskip k e le m')
 
-  | step_call: forall f optid sig a bl k e m vf vargs fd,
-      eval_expr e m a vf ->
-      eval_exprlist e m bl vargs ->
+  | step_call: forall f optid sig a bl k e le m vf vargs fd,
+      eval_expr e le m a vf ->
+      eval_exprlist e le m bl vargs ->
       Genv.find_funct ge vf = Some fd ->
       funsig fd = sig ->
-      step (State f (Scall optid sig a bl) k e m)
-        E0 (Callstate fd vargs (Kcall optid f e k) m)
+      step (State f (Scall optid sig a bl) k e le m)
+        E0 (Callstate fd vargs (Kcall optid f e le k) m)
 
-  | step_seq: forall f s1 s2 k e m,
-      step (State f (Sseq s1 s2) k e m)
-        E0 (State f s1 (Kseq s2 k) e m)
+  | step_seq: forall f s1 s2 k e le m,
+      step (State f (Sseq s1 s2) k e le m)
+        E0 (State f s1 (Kseq s2 k) e le m)
 
-  | step_ifthenelse: forall f a s1 s2 k e m v b,
-      eval_expr e m a v ->
+  | step_ifthenelse: forall f a s1 s2 k e le m v b,
+      eval_expr e le m a v ->
       Val.bool_of_val v b ->
-      step (State f (Sifthenelse a s1 s2) k e m)
-        E0 (State f (if b then s1 else s2) k e m)
+      step (State f (Sifthenelse a s1 s2) k e le m)
+        E0 (State f (if b then s1 else s2) k e le m)
 
-  | step_loop: forall f s k e m,
-      step (State f (Sloop s) k e m)
-        E0 (State f s (Kseq (Sloop s) k) e m)
+  | step_loop: forall f s k e le m,
+      step (State f (Sloop s) k e le m)
+        E0 (State f s (Kseq (Sloop s) k) e le m)
 
-  | step_block: forall f s k e m,
-      step (State f (Sblock s) k e m)
-        E0 (State f s (Kblock k) e m)
+  | step_block: forall f s k e le m,
+      step (State f (Sblock s) k e le m)
+        E0 (State f s (Kblock k) e le m)
 
-  | step_exit_seq: forall f n s k e m,
-      step (State f (Sexit n) (Kseq s k) e m)
-        E0 (State f (Sexit n) k e m)
-  | step_exit_block_0: forall f k e m,
-      step (State f (Sexit O) (Kblock k) e m)
-        E0 (State f Sskip k e m)
-  | step_exit_block_S: forall f n k e m,
-      step (State f (Sexit (S n)) (Kblock k) e m)
-        E0 (State f (Sexit n) k e m)
+  | step_exit_seq: forall f n s k e le m,
+      step (State f (Sexit n) (Kseq s k) e le m)
+        E0 (State f (Sexit n) k e le m)
+  | step_exit_block_0: forall f k e le m,
+      step (State f (Sexit O) (Kblock k) e le m)
+        E0 (State f Sskip k e le m)
+  | step_exit_block_S: forall f n k e le m,
+      step (State f (Sexit (S n)) (Kblock k) e le m)
+        E0 (State f (Sexit n) k e le m)
 
-  | step_switch: forall f a cases k e m n,
-      eval_expr e m a (Vint n) ->
-      step (State f (Sswitch a cases) k e m)
-        E0 (State f (seq_of_lbl_stmt (select_switch n cases)) k e m)
+  | step_switch: forall f a cases k e le m n,
+      eval_expr e le m a (Vint n) ->
+      step (State f (Sswitch a cases) k e le m)
+        E0 (State f (seq_of_lbl_stmt (select_switch n cases)) k e le m)
 
-  | step_return_0: forall f k e m m',
+  | step_return_0: forall f k e le m m',
       f.(fn_return) = None ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
-      step (State f (Sreturn None) k e m)
+      step (State f (Sreturn None) k e le m)
         E0 (Returnstate Vundef (call_cont k) m')
-  | step_return_1: forall f a k e m v m',
+  | step_return_1: forall f a k e le m v m',
       f.(fn_return) <> None ->
-      eval_expr e m a v ->
+      eval_expr e le m a v ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
-      step (State f (Sreturn (Some a)) k e m)
+      step (State f (Sreturn (Some a)) k e le m)
         E0 (Returnstate v (call_cont k) m')
-  | step_label: forall f lbl s k e m,
-      step (State f (Slabel lbl s) k e m)
-        E0 (State f s k e m)
+  | step_label: forall f lbl s k e le m,
+      step (State f (Slabel lbl s) k e le m)
+        E0 (State f s k e le m)
 
-  | step_goto: forall f lbl k e m s' k',
+  | step_goto: forall f lbl k e le m s' k',
       find_label lbl f.(fn_body) (call_cont k) = Some(s', k') ->
-      step (State f (Sgoto lbl) k e m)
-        E0 (State f s' k' e m)
+      step (State f (Sgoto lbl) k e le m)
+        E0 (State f s' k' e le m)
 
   | step_internal_function: forall f vargs k m m1 m2 e,
       list_norepet (fn_params_names f ++ fn_vars_names f) ->
       alloc_variables empty_env m (fn_variables f) e m1 ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       step (Callstate (Internal f) vargs k m)
-        E0 (State f f.(fn_body) k e m2)
+        E0 (State f f.(fn_body) k e empty_temp_env m2)
 
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
          t (Returnstate vres k m')        
 
-  | step_return: forall v optid f e k m m',
-      exec_opt_assign e m optid v m' ->
-      step (Returnstate v (Kcall optid f e k) m)
-        E0 (State f Sskip k e m').
+  | step_return: forall v optid f e le k m,
+      step (Returnstate v (Kcall optid f e le k) m)
+        E0 (State f Sskip k e (Cminor.set_optvar optid v le) m).
 
 End RELSEM.
 
@@ -552,13 +574,8 @@ Inductive final_state: state -> int -> Prop :=
   in the initial memory state for [p] has [beh] as observable
   behavior. *)
 
-Definition global_var_env (p: program): gvarenv :=
-  List.fold_left
-    (fun gve x => match x with (id, v) => PTree.set id (gvar_info v) gve end)
-    p.(prog_vars) (PTree.empty var_kind).
-
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=
   program_behaves step (initial_state p) final_state 
-                  (Genv.globalenv p, global_var_env p) beh.
+                  (Genv.globalenv p) beh.
 
 

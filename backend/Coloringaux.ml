@@ -39,6 +39,7 @@ open Conventions
 type node =
   { ident: int;                         (*r unique identifier *)
     typ: typ;                           (*r its type *)
+    regname: reg option;                (*r the RTL register it comes from *)
     regclass: int;                      (*r identifier of register class *)
     mutable spillcost: float;           (*r estimated cost of spilling *)
     mutable adjlist: node list;         (*r all nodes it interferes with *)
@@ -84,14 +85,15 @@ and movestate =
 
 (*i
 let name_of_node n =
-  match n.color with
-  | Some(R r) ->
+  match n.color, n.regname with
+  | Some(R r), _ ->
       begin match Machregsaux.name_of_register r with
                 | None -> "fixed-reg"
                 | Some s -> s
       end
-  | Some(S _) -> "fixed-slot"
-  | None -> string_of_int n.ident
+  | Some(S _), _ -> "fixed-slot"
+  | None, Some r -> Printf.sprintf "x%ld" (camlint_of_positive r)
+  | None, None   -> "unknown-reg"
 *)
 
 (* The algorithm manipulates partitions of the nodes and of the moves
@@ -106,7 +108,7 @@ module DLinkNode = struct
   type t = node
   let make state =
     let rec empty =
-      { ident = 0; typ = Tint; regclass = 0;
+      { ident = 0; typ = Tint; regname = None; regclass = 0;
         adjlist = []; degree = 0; spillcost = 0.0;
         movelist = []; alias = None; color = None;
         nstate = state; nprev = empty; nnext = empty }
@@ -363,7 +365,8 @@ let checkInvariants () =
 let nodeOfReg r typenv spillcosts =
   let ty = typenv r in
   incr nextRegIdent;
-  { ident = !nextRegIdent; typ = ty; regclass = class_of_type ty;
+  { ident = !nextRegIdent; typ = ty; 
+    regname = Some r; regclass = class_of_type ty;
     spillcost = float(spillcosts r);
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = None;
@@ -373,7 +376,8 @@ let nodeOfReg r typenv spillcosts =
 let nodeOfMreg mr =
   let ty = mreg_type mr in
   incr nextRegIdent;
-  { ident = !nextRegIdent; typ = ty; regclass = class_of_type ty;
+  { ident = !nextRegIdent; typ = ty; 
+    regname = None; regclass = class_of_type ty;
     spillcost = 0.0;
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = Some (R mr);
@@ -521,8 +525,10 @@ let canCoalesceBriggs u v =
   try
     iterAdjacent (consider v) u;
     iterAdjacent (consider u) v;
+    (*i Printf.printf "  Briggs: OK\n"; *)
     true
   with Exit ->
+    (*i Printf.printf "  Briggs: no\n"; *)
     false
 
 (* George's conservative coalescing criterion: all high-degree neighbors
@@ -537,8 +543,11 @@ let canCoalesceGeorge u v =
       if t.degree < k || interfere t u then () else raise Exit
   in
   try
-    iterAdjacent isOK v; true
+    iterAdjacent isOK v;
+    (*i Printf.printf "  George: OK\n"; *)
+    true
   with Exit ->
+    (*i Printf.printf "  George: no\n"; *)
     false
 
 (* The combined coalescing criterion.  [u] can be precolored, but
@@ -603,7 +612,7 @@ let coalesce () =
   let m = DLinkMove.pick worklistMoves in
   let x = getAlias m.src and y = getAlias m.dst in
   let (u, v) = if y.nstate = Colored then (y, x) else (x, y) in
-  (*i Printf.printf "Attempt coalescing %s and %s\n" (name_of_node u) (name_of_node v);*)
+  (*i Printf.printf "Attempt coalescing %s and %s\n" (name_of_node u) (name_of_node v); *)
   if u == v then begin
     DLinkMove.insert m coalescedMoves;
     addWorkList u

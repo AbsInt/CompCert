@@ -48,6 +48,9 @@ Open Local Scope error_monad_scope.
   of Cminor.
 *)
 
+Definition for_var (id: ident) : ident := xO id.
+Definition for_temp (id: ident) : ident := xI id.
+
 (** Compile-time information attached to each Csharpminor
   variable: global variables, local variables, function parameters.
   [Var_local] denotes a scalar local variable whose address is not
@@ -66,128 +69,7 @@ Inductive var_info: Type :=
 
 Definition compilenv := PMap.t var_info.
 
-(** Infer the type or memory chunk of the result of an expression. *)
-
-Definition chunktype_const (c: Csharpminor.constant) :=
-  match c with
-  | Csharpminor.Ointconst n =>
-      if Int.ltu n (Int.repr 256) then Mint8unsigned 
-      else if Int.ltu n (Int.repr 65536) then Mint16unsigned
-      else Mint32
-  | Csharpminor.Ofloatconst n => Mfloat64
-  end.
-
-Definition chunktype_unop (op: unary_operation) :=
-  match op with
-  | Ocast8unsigned => Mint8unsigned
-  | Ocast8signed => Mint8signed
-  | Ocast16unsigned => Mint16unsigned
-  | Ocast16signed => Mint16signed
-  | Onegint => Mint32
-  | Onotbool => Mint8unsigned
-  | Onotint => Mint32
-  | Onegf => Mfloat64
-  | Oabsf => Mfloat64
-  | Osingleoffloat => Mfloat32
-  | Ointoffloat => Mint32
-  | Ointuoffloat => Mint32
-  | Ofloatofint => Mfloat64
-  | Ofloatofintu => Mfloat64
-  end.
-
-Definition chunktype_logical_op (chunk1 chunk2: memory_chunk) :=
-  match chunk1, chunk2 with
-  | Mint8unsigned, Mint8unsigned => Mint8unsigned
-  | Mint8unsigned, Mint16unsigned => Mint16unsigned
-  | Mint16unsigned, Mint8unsigned => Mint16unsigned
-  | Mint16unsigned, Mint16unsigned => Mint16unsigned
-  | _, _ => Mint32
-  end.
-
-Definition chunktype_binop (op: binary_operation) (chunk1 chunk2: memory_chunk) :=
-  match op with
-  | Oadd => Mint32
-  | Osub => Mint32
-  | Omul => Mint32
-  | Odiv => Mint32
-  | Odivu => Mint32
-  | Omod => Mint32
-  | Omodu => Mint32
-  | Oand => chunktype_logical_op chunk1 chunk2
-  | Oor => chunktype_logical_op chunk1 chunk2
-  | Oxor => chunktype_logical_op chunk1 chunk2
-  | Oshl => Mint32
-  | Oshr => Mint32
-  | Oshru => Mint32
-  | Oaddf => Mfloat64
-  | Osubf => Mfloat64
-  | Omulf => Mfloat64
-  | Odivf => Mfloat64
-  | Ocmp c => Mint8unsigned
-  | Ocmpu c => Mint8unsigned
-  | Ocmpf c => Mint8unsigned
-  end.
-
-Definition chunktype_compat (src dst: memory_chunk) : bool :=
-  match src, dst with
-  | Mint8unsigned, (Mint8unsigned|Mint16unsigned|Mint16signed|Mint32) => true
-  | Mint8signed, (Mint8signed|Mint16signed|Mint32) => true
-  | Mint16unsigned, (Mint16unsigned|Mint32) => true
-  | Mint16signed, (Mint16signed|Mint32) => true
-  | Mint32, Mint32 => true
-  | Mfloat32, (Mfloat32|Mfloat64) => true
-  | Mfloat64, Mfloat64 => true
-  | _, _ => false
-  end.
-
-Definition chunk_for_type (ty: typ) : memory_chunk :=
-  match ty with Tint => Mint32 | Tfloat => Mfloat64 end.
-
-Definition chunktype_merge (c1 c2: memory_chunk) : res memory_chunk :=
-  if chunktype_compat c1 c2 then
-    OK c2
-  else if chunktype_compat c2 c1 then
-    OK c1
-  else if typ_eq (type_of_chunk c1) (type_of_chunk c2) then
-    OK (chunk_for_type (type_of_chunk c1))
-  else
-    Error(msg "Cminorgen: chunktype_merge").
-
-Fixpoint chunktype_expr (cenv: compilenv) (e: Csharpminor.expr)
-                        {struct e}: res memory_chunk :=
-  match e with
-  | Csharpminor.Evar id =>
-      match cenv!!id with
-      | Var_local chunk => OK chunk
-      | Var_stack_scalar chunk ofs => OK chunk
-      | Var_global_scalar chunk => OK chunk
-      | _ => Error(msg "Cminorgen.chunktype_expr")
-      end
-  | Csharpminor.Eaddrof id =>
-      OK Mint32
-  | Csharpminor.Econst cst =>
-      OK (chunktype_const cst)
-  | Csharpminor.Eunop op e1 =>
-      OK (chunktype_unop op)
-  | Csharpminor.Ebinop op e1 e2 =>
-      do chunk1 <- chunktype_expr cenv e1;
-      do chunk2 <- chunktype_expr cenv e2;
-      OK (chunktype_binop op chunk1 chunk2)
-  | Csharpminor.Eload chunk e =>
-      OK chunk
-  | Csharpminor.Econdition e1 e2 e3 =>
-      do chunk2 <- chunktype_expr cenv e2;
-      do chunk3 <- chunktype_expr cenv e3;
-      chunktype_merge chunk2 chunk3
-  end.
-
-Definition type_expr  (cenv: compilenv) (e: Csharpminor.expr): res typ :=
-  do c <- chunktype_expr cenv e; OK(type_of_chunk c).
-
-Definition type_exprlist (cenv: compilenv) (el: list Csharpminor.expr):
-                                                       res (list typ) :=
-  mmap (type_expr cenv) el.
-
+(*****
 (** [make_cast chunk e] returns a Cminor expression that normalizes
   the value of Cminor expression [e] as prescribed by the memory chunk
   [chunk].  For instance, 8-bit sign extension is performed if
@@ -203,6 +85,7 @@ Definition make_cast (chunk: memory_chunk) (e: expr): expr :=
   | Mfloat32 => Eunop Osingleoffloat e
   | Mfloat64 => e
   end.
+**********)
 
 (** When the translation of an expression is stored in memory,
   a cast at the toplevel of the expression can be redundant
@@ -233,24 +116,12 @@ Definition make_stackaddr (ofs: Z): expr :=
 Definition make_globaladdr (id: ident): expr :=
   Econst (Oaddrsymbol id Int.zero).
 
-(** Auxiliary to remove useless conversions. *)
-
-Definition unop_is_cast (op: unary_operation) : option memory_chunk :=
-  match op with
-  | Ocast8unsigned => Some Mint8unsigned
-  | Ocast8signed => Some Mint8signed
-  | Ocast16unsigned => Some Mint16unsigned
-  | Ocast16signed => Some Mint16signed
-  | Osingleoffloat => Some Mfloat32
-  | _ => None
-  end.
-
 (** Generation of a Cminor expression for reading a Csharpminor variable. *)
 
 Definition var_get (cenv: compilenv) (id: ident): res expr :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      OK(Evar id)
+      OK(Evar (for_var id))
   | Var_stack_scalar chunk ofs =>
       OK(Eload chunk (make_stackaddr ofs))
   | Var_global_scalar chunk =>
@@ -271,45 +142,33 @@ Definition var_addr (cenv: compilenv) (id: ident): res expr :=
   end.
 
 (** Generation of a Cminor statement performing an assignment to
-  a variable.  [rhs_chunk] is the inferred chunk type for the
-  right-hand side.  If the variable was allocated to a Cminor variable,
-  a cast may need to be inserted to normalize the value of the r.h.s.,
-  as per Csharpminor's semantics. *)
+  a variable.  The value being assigned is normalized according to
+  its chunk type, as guaranteed by C#minor semantics. *)
 
 Definition var_set (cenv: compilenv)
-                   (id: ident) (rhs: expr) (rhs_chunk: memory_chunk): res stmt :=
+                   (id: ident) (rhs: expr): res stmt :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      if chunktype_compat rhs_chunk chunk then
-        OK(Sassign id rhs)
-      else if typ_eq (type_of_chunk chunk) (type_of_chunk rhs_chunk) then
-        OK(Sassign id (make_cast chunk rhs))
-      else
-        Error(msg "Cminorgen.var_set.1")
+      OK(Sassign (for_var id) rhs)
   | Var_stack_scalar chunk ofs =>
       OK(make_store chunk (make_stackaddr ofs) rhs)
   | Var_global_scalar chunk =>
       OK(make_store chunk (make_globaladdr id) rhs)
   | _ =>
-      Error(msg "Cminorgen.var_set.2")
+      Error(msg "Cminorgen.var_set")
   end.
 
-(** A variant of [var_set] used for initializing function parameters
-  and storing the return values of function calls.  The value to
-  be stored already resides in the Cminor variable called [id].
-  Moreover, its chunk type is not known, only its int-or-float type. *)
+(** A variant of [var_set] used for initializing function parameters.
+  The value to be stored already resides in the Cminor variable called [id]. *)
 
-Definition var_set_self (cenv: compilenv) (id: ident) (ty: typ): res stmt :=
+Definition var_set_self (cenv: compilenv) (id: ident) (ty: typ) (k: stmt): res stmt :=
   match PMap.get id cenv with
   | Var_local chunk =>
-      if typ_eq (type_of_chunk chunk) ty then
-        OK(Sassign id (make_cast chunk (Evar id)))
-      else
-        Error(msg "Cminorgen.var_set_self.1")
+      OK k
   | Var_stack_scalar chunk ofs =>
-      OK(make_store chunk (make_stackaddr ofs) (Evar id))
+      OK (Sseq (make_store chunk (make_stackaddr ofs) (Evar (for_var id))) k)
   | Var_global_scalar chunk =>
-      OK(make_store chunk (make_globaladdr id) (Evar id))
+      OK (Sseq (make_store chunk (make_globaladdr id) (Evar (for_var id))) k)
   | _ =>
       Error(msg "Cminorgen.var_set_self.2")
   end.
@@ -329,19 +188,13 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
                      {struct e}: res expr :=
   match e with
   | Csharpminor.Evar id => var_get cenv id
+  | Csharpminor.Etempvar id => OK (Evar (for_temp id))
   | Csharpminor.Eaddrof id => var_addr cenv id
   | Csharpminor.Econst cst =>
       OK (Econst (transl_constant cst))
   | Csharpminor.Eunop op e1 =>
       do te1 <- transl_expr cenv e1;
-      match unop_is_cast op with
-      | None => OK (Eunop op te1)
-      | Some chunk =>
-          do chunk1 <- chunktype_expr cenv e1;
-          if chunktype_compat chunk1 chunk
-          then OK te1
-          else OK (Eunop op te1)
-      end
+      OK (Eunop op te1)
   | Csharpminor.Ebinop op e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
@@ -425,28 +278,19 @@ Fixpoint transl_stmt (ret: option typ) (cenv: compilenv)
   | Csharpminor.Sskip =>
       OK Sskip
   | Csharpminor.Sassign id e =>
-      do chunk <- chunktype_expr cenv e;
       do te <- transl_expr cenv e;
-      var_set cenv id te chunk
+      var_set cenv id te
+  | Csharpminor.Sset id e =>
+      do te <- transl_expr cenv e;
+      OK (Sassign (for_temp id) te)
   | Csharpminor.Sstore chunk e1 e2 =>
       do te1 <- transl_expr cenv e1;
       do te2 <- transl_expr cenv e2;
       OK (make_store chunk te1 te2)
-  | Csharpminor.Scall None sig e el =>
+  | Csharpminor.Scall optid sig e el =>
       do te <- transl_expr cenv e;
       do tel <- transl_exprlist cenv el;
-      do tyl <- type_exprlist cenv el;
-      if list_eq_dec typ_eq tyl sig.(sig_args)
-      then OK (Scall None sig te tel)
-      else Error(msg "Cminorgen.transl_stmt(call0)")
-  | Csharpminor.Scall (Some id) sig e el =>
-      do te <- transl_expr cenv e;
-      do tel <- transl_exprlist cenv el;
-      do tyl <- type_exprlist cenv el;
-      do s <- var_set_self cenv id (proj_sig_res sig);
-      if list_eq_dec typ_eq tyl sig.(sig_args)
-      then OK (Sseq (Scall (Some id) sig te tel) s)
-      else Error(msg "Cminorgen.transl_stmt(call1)")
+      OK (Scall (option_map for_temp optid) sig te tel)
   | Csharpminor.Sseq s1 s2 =>
       do ts1 <- transl_stmt ret cenv xenv s1;
       do ts2 <- transl_stmt ret cenv xenv s2;
@@ -473,10 +317,7 @@ Fixpoint transl_stmt (ret: option typ) (cenv: compilenv)
       OK (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>
       do te <- transl_expr cenv e;
-      do ty <- type_expr cenv e;
-      if typ_eq ty (typ_of_opttyp ret)
-      then OK (Sreturn (Some te))
-      else Error(msg "Cminorgen.transl_stmt(return)")
+      OK (Sreturn (Some te))
   | Csharpminor.Slabel lbl s =>
       do ts <- transl_stmt ret cenv xenv s; OK (Slabel lbl ts)
   | Csharpminor.Sgoto lbl =>
@@ -503,6 +344,7 @@ Module Identset := FSetAVL.Make(OrderedPositive).
 Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   match e with
   | Csharpminor.Evar id => Identset.empty
+  | Csharpminor.Etempvar id => Identset.empty
   | Csharpminor.Eaddrof id => Identset.add id Identset.empty
   | Csharpminor.Econst cst => Identset.empty
   | Csharpminor.Eunop op e1 => addr_taken_expr e1
@@ -525,6 +367,7 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
   match s with
   | Csharpminor.Sskip => Identset.empty
   | Csharpminor.Sassign id e => addr_taken_expr e
+  | Csharpminor.Sset id e => addr_taken_expr e
   | Csharpminor.Sstore chunk e1 e2 =>
       Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Scall optid sig e el =>
@@ -601,8 +444,11 @@ Definition build_compilenv
 Definition assign_global_variable
      (ce: compilenv) (info: ident * globvar var_kind) : compilenv :=
   match info with
-  | (id, mkglobvar (Vscalar chunk) _ _ _ ) => PMap.set id (Var_global_scalar chunk) ce
-  | (id, mkglobvar (Varray _) _ _ _) => PMap.set id Var_global_array ce
+  | (id, mkglobvar vk _ _ _) =>
+      PMap.set id (match vk with Vscalar chunk => Var_global_scalar chunk
+                               | Varray _ => Var_global_array
+                   end)
+               ce
   end.
 
 Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
@@ -619,44 +465,9 @@ Fixpoint store_parameters
   match params with
   | nil => OK Sskip
   | (id, chunk) :: rem =>
-      do s1 <- var_set_self cenv id (type_of_chunk chunk);
-      do s2 <- store_parameters cenv rem;
-      OK (Sseq s1 s2)
+      do s <- store_parameters cenv rem;
+      var_set_self cenv id (type_of_chunk chunk) s
   end.
-
-(** The local variables of the generated Cminor function
-  must include all local variables of the C#minor function
-  (to help the proof in [Cminorgenproof] go through). 
-  We must also add the destinations [x] of calls [x = f(args)],
-  because some of these [x] can be global variables and therefore
-  not part of the C#minor local variables. *)
-
-Fixpoint call_dest (s: stmt) : Identset.t :=
-  match s with
-  | Sskip => Identset.empty
-  | Sassign x e => Identset.empty
-  | Sstore chunk e1 e2 => Identset.empty
-  | Scall None sg e el => Identset.empty
-  | Scall (Some x) sg e el => Identset.singleton x
-  | Stailcall sg e el => Identset.empty
-  | Sseq s1 s2 => Identset.union (call_dest s1) (call_dest s2)
-  | Sifthenelse e s1 s2 => Identset.union (call_dest s1) (call_dest s2)
-  | Sloop s1 => call_dest s1
-  | Sblock s1 => call_dest s1
-  | Sexit n => Identset.empty
-  | Sswitch e cases dfl => Identset.empty
-  | Sreturn opte => Identset.empty
-  | Slabel lbl s1 => call_dest s1
-  | Sgoto lbl => Identset.empty
-  end.
-
-Definition identset_removelist (l: list ident) (s: Identset.t) : Identset.t :=
-  List.fold_right Identset.remove s l.
-
-Definition make_vars (params: list ident) (vars: list ident)
-                     (body: Cminor.stmt) : list ident :=
-  vars ++ 
-  Identset.elements (identset_removelist (params ++ vars) (call_dest body)).
 
 (** Translation of a Csharpminor function.  We must check that the
   required Cminor stack block is no bigger than [Int.max_signed],
@@ -669,10 +480,9 @@ Definition transl_funbody
     do sparams <- store_parameters cenv f.(Csharpminor.fn_params);
        OK (mkfunction
               (Csharpminor.fn_sig f)
-              (Csharpminor.fn_params_names f)
-              (make_vars (Csharpminor.fn_params_names f)
-                         (Csharpminor.fn_vars_names f)
-                         (Sseq sparams tbody))
+              (List.map for_var (Csharpminor.fn_params_names f))
+              (List.map for_var (Csharpminor.fn_vars_names f) ++
+               List.map for_temp (Csharpminor.fn_temps f))
               stacksize
               (Sseq sparams tbody)).
 

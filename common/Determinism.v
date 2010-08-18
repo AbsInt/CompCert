@@ -186,13 +186,25 @@ Definition possible_behavior (w: world) (b: program_behavior) : Prop :=
   | Goes_wrong t => exists w', possible_trace w t w'
   end.
 
-(** * Deterministic semantics *)
+CoInductive possible_traceinf': world -> traceinf -> Prop :=
+  | possible_traceinf'_app: forall w1 t w2 T,
+      possible_trace w1 t w2 -> t <> E0 ->
+      possible_traceinf' w2 T ->
+      possible_traceinf' w1 (t *** T).
+
+Lemma possible_traceinf'_traceinf:
+  forall w T, possible_traceinf' w T -> possible_traceinf w T.
+Proof.
+  cofix COINDHYP; intros. inv H. inv H0. congruence.
+  simpl. econstructor. eauto. apply COINDHYP.
+  inv H3. simpl. auto. econstructor; eauto. econstructor; eauto. unfold E0; congruence.
+Qed.
+
+(** * Properties of deterministic semantics *)
 
 Section DETERM_SEM.
 
-(** We assume given a transition semantics that is internally
-  deterministic: the only source of non-determinism is the return
-  value of system calls. *)
+(** We assume given a semantics that is deterministic, in the following sense. *)
 
 Variable genv: Type.
 Variable state: Type.
@@ -200,9 +212,10 @@ Variable step: genv -> state -> trace -> state -> Prop.
 Variable initial_state: state -> Prop.
 Variable final_state: state -> int -> Prop.
 
-Hypothesis step_internal_deterministic:
-  forall ge s t1 s1 t2 s2,
-  step ge s t1 s1 -> step ge s t2 s2 -> matching_traces t1 t2 -> s1 = s2 /\ t1 = t2.
+Hypothesis step_deterministic:
+  forall ge s0 t1 s1 t2 s2,
+  step ge s0 t1 s1 -> step ge s0 t2 s2 ->
+  s1 = s2 /\ t1 = t2.
 
 Hypothesis initial_state_determ:
   forall s1 s2, initial_state s1 -> initial_state s2 -> s1 = s2.
@@ -213,70 +226,37 @@ Hypothesis final_state_determ:
 Hypothesis final_state_nostep:
   forall ge st r, final_state st r -> nostep step ge st.
 
-(** Consequently, the [step] relation is deterministic if restricted
-    to traces that are possible in a deterministic world. *)
-
-Remark matching_possible_traces:
-  forall w0 t1 w1, possible_trace w0 t1 w1 ->
-  forall t2 w2, possible_trace w0 t2 w2 ->
-  matching_traces t1 t2.
-Proof.
-  induction 1; intros.
-  destruct t2; simpl; auto.
-  destruct t2; simpl. destruct ev; auto. inv H1.
-  inv H; inv H5; auto; intros.
-  destruct H2. subst. rewrite H in H1; inv H1. split; eauto.
-  destruct H2. destruct H3. subst. rewrite H in H1; inv H1. split; eauto.
-  destruct H2. destruct H3. destruct H4. subst. rewrite H in H1; inv H1. eauto.
-Qed.
-
-Lemma step_deterministic:
-  forall ge s0 t1 s1 t2 s2 w0 w1 w2,
-  step ge s0 t1 s1 -> step ge s0 t2 s2 ->
-  possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
-  s1 = s2 /\ t1 = t2 /\ w1 = w2.
-Proof.
-  intros. exploit step_internal_deterministic. eexact H. eexact H0.
-  eapply matching_possible_traces; eauto. intuition.
-  subst. eapply possible_trace_final_world; eauto. 
-Qed.
-
 Ltac use_step_deterministic :=
   match goal with
-  | [ S1: step _ _ ?t1 _, P1: possible_trace _ ?t1 _,
-      S2: step _ _ ?t2 _, P2: possible_trace _ ?t2 _ |- _ ] =>
-    destruct (step_deterministic _ _ _ _ _ _ _ _ _ S1 S2 P1 P2)
-    as [EQ1 [EQ2 EQ3]]; subst
+  | [ S1: step _ _ ?t1 _, S2: step _ _ ?t2 _ |- _ ] =>
+    destruct (step_deterministic _ _ _ _ _ _ S1 S2) as [EQ1 EQ2]; subst
   end.
 
 (** Determinism for finite transition sequences. *)
 
 Lemma star_step_diamond:
   forall ge s0 t1 s1, star step ge s0 t1 s1 -> 
-  forall t2 s2 w0 w1 w2, star step ge s0 t2 s2 -> 
-  possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
+  forall t2 s2, star step ge s0 t2 s2 -> 
   exists t,
-     (star step ge s1 t s2 /\ possible_trace w1 t w2 /\ t2 = t1 ** t)
-  \/ (star step ge s2 t s1 /\ possible_trace w2 t w1 /\ t1 = t2 ** t).
+     (star step ge s1 t s2 /\ t2 = t1 ** t)
+  \/ (star step ge s2 t s1 /\ t1 = t2 ** t).
 Proof.
   induction 1; intros. 
-  inv H0. exists t2; auto. 
-  inv H2. inv H4. exists (t1 ** t2); right. 
+  exists t2; auto. 
+  inv H2. exists (t1 ** t2); right. 
     split. econstructor; eauto. auto.
-  possibleTraceInv. use_step_deterministic.  
-  exploit IHstar. eexact H6. eauto. eauto. 
-  intros [t A]. exists t.
+  use_step_deterministic.  
+  exploit IHstar. eexact H4. intros [t A]. exists t.
   destruct A. left; intuition. traceEq. right; intuition. traceEq. 
 Qed.
 
 Ltac use_star_step_diamond :=
   match goal with
-  | [ S1: star step _ _ ?t1 _, P1: possible_trace _ ?t1 _,
-      S2: star step _ _ ?t2 _, P2: possible_trace _ ?t2 _ |- _ ] =>
-    let t := fresh "t" in let P := fresh "P" in let Q := fresh "Q" in let EQ := fresh "EQ" in
-    destruct (star_step_diamond _ _ _ _ S1 _ _ _ _ _ S2 P1 P2)
-    as [t [ [P [Q EQ]] | [P [Q EQ]] ]]; subst
-  end.
+  | [ S1: star step _ _ ?t1 _, S2: star step _ _ ?t2 _ |- _ ] =>
+    let t := fresh "t" in let P := fresh "P" in let EQ := fresh "EQ" in
+    destruct (star_step_diamond _ _ _ _ S1 _ _ S2)
+    as [t [ [P EQ] | [P EQ] ]]; subst
+ end.
 
 Ltac use_nostep :=
   match goal with
@@ -284,163 +264,149 @@ Ltac use_nostep :=
   end.
 
 Lemma star_step_triangle:
-  forall ge s0 t1 s1 t2 s2 w0 w1 w2,
+  forall ge s0 t1 s1 t2 s2,
   star step ge s0 t1 s1 -> 
   star step ge s0 t2 s2 -> 
-  possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
   nostep step ge s2 ->
   exists t,
-  star step ge s1 t s2 /\ possible_trace w1 t w2 /\ t2 = t1 ** t.
+  star step ge s1 t s2 /\ t2 = t1 ** t.
 Proof.
-  intros. use_star_step_diamond; possibleTraceInv. 
+  intros. use_star_step_diamond.
   exists t; auto.
-  inv P. inv Q. exists E0. split. constructor. split. constructor. traceEq.
+  inv P. exists E0. split. constructor. traceEq.
   use_nostep.
 Qed.
 
 Ltac use_star_step_triangle :=
   match goal with
-  | [ S1: star step _ _ ?t1 _, P1: possible_trace _ ?t1 _,
-      S2: star step _ _ ?t2 ?s2, P2: possible_trace _ ?t2 _,
+  | [ S1: star step _ _ ?t1 _, S2: star step _ _ ?t2 ?s2,
       NO: nostep step _ ?s2 |- _ ] =>
-    let t := fresh "t" in let P := fresh "P" in let Q := fresh "Q" in let EQ := fresh "EQ" in
-    destruct (star_step_triangle _ _ _ _ _ _ _ _ _ S1 S2 P1 P2 NO)
-    as [t [P [Q EQ]]]; subst
+    let t := fresh "t" in let P := fresh "P" in let EQ := fresh "EQ" in
+    destruct (star_step_triangle _ _ _ _ _ _ S1 S2 NO)
+    as [t [P EQ]]; subst
   end.
 
 Lemma steps_deterministic:
-  forall ge s0 t1 s1 t2 s2 w0 w1 w2,
+  forall ge s0 t1 s1 t2 s2,
   star step ge s0 t1 s1 -> star step ge s0 t2 s2 -> 
   nostep step ge s1 -> nostep step ge s2 ->
-  possible_trace w0 t1 w1 -> possible_trace w0 t2 w2 ->
   t1 = t2 /\ s1 = s2.
 Proof.
   intros. use_star_step_triangle. inv P.
-  inv Q. split; auto; traceEq. use_nostep.
+  split; auto; traceEq. use_nostep.
 Qed.
 
 Lemma terminates_not_goes_wrong:
-  forall ge s t1 s1 r w w1 t2 s2 w2,
-  star step ge s t1 s1 -> final_state s1 r -> possible_trace w t1 w1 ->
-  star step ge s t2 s2 -> nostep step ge s2 -> possible_trace w t2 w2 ->
+  forall ge s t1 s1 r t2 s2,
+  star step ge s t1 s1 -> final_state s1 r ->
+  star step ge s t2 s2 -> nostep step ge s2 ->
   (forall r, ~final_state s2 r) -> False.
 Proof.
   intros.
   assert (t1 = t2 /\ s1 = s2). 
     eapply steps_deterministic; eauto. 
-  destruct H6; subst. elim (H5 _ H0).
+  destruct H4; subst. elim (H3 _ H0).
 Qed.
 
 (** Determinism for infinite transition sequences. *)
 
 Lemma star_final_not_forever_silent:
   forall ge s t s', star step ge s t s' ->
-  forall w w', possible_trace w t w' -> nostep step ge s' ->
+  nostep step ge s' ->
   forever_silent step ge s -> False.
 Proof.
   induction 1; intros. 
-  inv H1. use_nostep. 
-  inv H4. possibleTraceInv. assert (possible_trace w E0 w) by constructor. 
-  use_step_deterministic. eauto.
+  inv H0. use_nostep. 
+  inv H3. use_step_deterministic. eauto.
 Qed.
 
 Lemma star2_final_not_forever_silent:
-  forall ge s t1 s1 w w1 t2 s2 w2,
-  star step ge s t1 s1 -> possible_trace w t1 w1 -> nostep step ge s1 ->
-  star step ge s t2 s2 -> possible_trace w t2 w2 -> forever_silent step ge s2 ->
+  forall ge s t1 s1 t2 s2,
+  star step ge s t1 s1 -> nostep step ge s1 ->
+  star step ge s t2 s2 -> forever_silent step ge s2 ->
   False.
 Proof.
-  intros. use_star_step_triangle. possibleTraceInv. 
-  eapply star_final_not_forever_silent. eexact P. eauto. auto. auto.
+  intros. use_star_step_triangle.
+  eapply star_final_not_forever_silent. eexact P. eauto. auto.
 Qed.
 
 Lemma star_final_not_forever_reactive:
   forall ge s t s', star step ge s t s' -> 
-  forall w w' T, possible_trace w t w' -> possible_traceinf w T -> nostep step ge s' ->
-  forever_reactive step ge s T -> False.
+  forall T, nostep step ge s' -> forever_reactive step ge s T -> False.
 Proof.
   induction 1; intros.
-  inv H2. inv H3. congruence. use_nostep. 
-  inv H5. possibleTraceInv. inv H6. congruence. possibleTraceInv.
+  inv H0. inv H1. congruence. use_nostep. 
+  inv H3. inv H4. congruence.
   use_step_deterministic.
   eapply IHstar with (T := t4 *** T0). eauto. 
-  eapply possible_traceinf_app; eauto. auto. 
   eapply star_forever_reactive; eauto.  
 Qed.
 
 Lemma star_forever_silent_inv:
   forall ge s t s', star step ge s t s' ->
-  forall w w', possible_trace w t w' ->
   forever_silent step ge s -> 
   t = E0 /\ forever_silent step ge s'.
 Proof.
   induction 1; intros.
   auto.
-  subst. possibleTraceInv. inv H3. assert (possible_trace w E0 w) by constructor.
-  use_step_deterministic. eauto. 
+  subst. inv H2. use_step_deterministic. eauto. 
 Qed.
 
 Lemma forever_silent_reactive_exclusive:
-  forall ge s w T,
-  forever_silent step ge s -> forever_reactive step ge s T -> 
-  possible_traceinf w T -> False.
+  forall ge s T,
+  forever_silent step ge s -> forever_reactive step ge s T -> False.
 Proof.
-  intros. inv H0. possibleTraceInv. exploit star_forever_silent_inv; eauto. 
+  intros. inv H0. exploit star_forever_silent_inv; eauto. 
   intros [A B]. contradiction.
 Qed.
 
 Lemma forever_reactive_inv2:
   forall ge s t1 s1, star step ge s t1 s1 ->
-  forall t2 s2 T1 T2 w w1 w2,
-  possible_trace w t1 w1 ->
-  star step ge s t2 s2 -> possible_trace w t2 w2 ->
+  forall t2 s2 T1 T2,
+  star step ge s t2 s2 ->
   t1 <> E0 -> t2 <> E0 ->
-  forever_reactive step ge s1 T1 -> possible_traceinf w1 T1 ->
-  forever_reactive step ge s2 T2 -> possible_traceinf w2 T2 ->
-  exists s', exists t, exists T1', exists T2', exists w',
+  forever_reactive step ge s1 T1 ->
+  forever_reactive step ge s2 T2 ->
+  exists s', exists t, exists T1', exists T2',
   t <> E0 /\
-  forever_reactive step ge s' T1' /\ possible_traceinf w' T1' /\
-  forever_reactive step ge s' T2' /\ possible_traceinf w' T2' /\
+  forever_reactive step ge s' T1' /\
+  forever_reactive step ge s' T2' /\
   t1 *** T1 = t *** T1' /\
   t2 *** T2 = t *** T2'.
 Proof.
   induction 1; intros.
   congruence.
-  inv H3. congruence. possibleTraceInv.
-  use_step_deterministic. 
+  inv H2. congruence. use_step_deterministic. 
   destruct t3.
   (* inductive case *)
-  simpl in *. inv P1; inv P. eapply IHstar; eauto. 
+  simpl in *. eapply IHstar; eauto. 
   (* base case *)
   exists s5; exists (e :: t3);
-  exists (t2 *** T1); exists (t4 *** T2); exists w3.
+  exists (t2 *** T1); exists (t4 *** T2).
   split. unfold E0; congruence.
   split. eapply star_forever_reactive; eauto. 
-  split. eapply possible_traceinf_app; eauto. 
   split. eapply star_forever_reactive; eauto. 
-  split. eapply possible_traceinf_app; eauto.
   split; traceEq. 
 Qed.
 
 Lemma forever_reactive_determ':
-  forall ge s T1 T2 w,
-  forever_reactive step ge s T1 -> possible_traceinf w T1 ->
-  forever_reactive step ge s T2 -> possible_traceinf w T2 ->
+  forall ge s T1 T2,
+  forever_reactive step ge s T1 ->
+  forever_reactive step ge s T2 ->
   traceinf_sim' T1 T2.
 Proof.
   cofix COINDHYP; intros.
-  inv H. inv H1. possibleTraceInv.
-  destruct (forever_reactive_inv2 _ _ _ _ H _ _ _ _ _ _ _ P H3 P1 H6 H4
-                                  H7 P0 H5 P2)
-  as [s' [t' [T1' [T2' [w' [A [B [C [D [E [G K]]]]]]]]]]].
-  rewrite G; rewrite K. constructor. auto. 
+  inv H. inv H0.
+  destruct (forever_reactive_inv2 _ _ _ _ H t s2 T0 T)
+  as [s' [t' [T1' [T2' [A [B [C [D E]]]]]]]]; auto.
+  rewrite D; rewrite E. constructor. auto. 
   eapply COINDHYP; eauto. 
 Qed.
 
 Lemma forever_reactive_determ:
-  forall ge s T1 T2 w,
-  forever_reactive step ge s T1 -> possible_traceinf w T1 ->
-  forever_reactive step ge s T2 -> possible_traceinf w T2 ->
+  forall ge s T1 T2,
+  forever_reactive step ge s T1 ->
+  forever_reactive step ge s T2 ->
   traceinf_sim T1 T2.
 Proof.
   intros. apply traceinf_sim'_sim. eapply forever_reactive_determ'; eauto.
@@ -448,27 +414,25 @@ Qed.
 
 Lemma star_forever_reactive_inv:
   forall ge s t s', star step ge s t s' ->
-  forall w w' T, possible_trace w t w' -> forever_reactive step ge s T ->
-  possible_traceinf w T ->
-  exists T', forever_reactive step ge s' T' /\ possible_traceinf w' T' /\ T = t *** T'.
+  forall T, forever_reactive step ge s T ->
+  exists T', forever_reactive step ge s' T' /\ T = t *** T'.
 Proof.
   induction 1; intros. 
-  possibleTraceInv. exists T; auto.
-  inv H3. possibleTraceInv. inv H5. congruence. possibleTraceInv.
+  exists T; auto.
+  inv H2. inv H3. congruence.
   use_step_deterministic. 
-  exploit IHstar. eauto. eapply star_forever_reactive. 2: eauto. eauto.
-  eapply possible_traceinf_app; eauto. 
-  intros [T' [A [B C]]]. exists T'; intuition. traceEq. congruence. 
+  exploit IHstar. eapply star_forever_reactive. 2: eauto. eauto.
+  intros [T' [A B]]. exists T'; intuition. traceEq. congruence. 
 Qed.
 
 Lemma forever_silent_reactive_exclusive2:
-  forall ge s t s' w w' T,
-  star step ge s t s' -> possible_trace w t w' -> forever_silent step ge s' ->
-  forever_reactive step ge s T -> possible_traceinf w T ->
+  forall ge s t s' T,
+  star step ge s t s' -> forever_silent step ge s' ->
+  forever_reactive step ge s T ->
   False.
 Proof.
   intros. exploit star_forever_reactive_inv; eauto. 
-  intros [T' [A [B C]]]. subst T.
+  intros [T' [A B]]. subst T.
   eapply forever_silent_reactive_exclusive; eauto.
 Qed.
 
@@ -484,14 +448,13 @@ Ltac use_init_state :=
   end.
 
 Theorem program_behaves_deterministic:
-  forall ge w beh1 beh2,
-  program_behaves step initial_state final_state ge beh1 -> possible_behavior w beh1 ->
-  program_behaves step initial_state final_state ge beh2 -> possible_behavior w beh2 ->
+  forall ge beh1 beh2,
+  program_behaves step initial_state final_state ge beh1 ->
+  program_behaves step initial_state final_state ge beh2 ->
   beh1 = beh2.
 Proof.
-  intros until beh2; intros BEH1 POS1 BEH2 POS2.
-  inv BEH1; inv BEH2; simpl in POS1; simpl in POS2;
-  possibleTraceInv; use_init_state.
+  intros until beh2; intros BEH1 BEH2.
+  inv BEH1; inv BEH2; use_init_state.
 (* terminates, terminates *)
   assert (t = t0 /\ s' = s'0). eapply steps_deterministic; eauto.
   destruct H2. f_equal; auto. subst. eauto. 
@@ -505,9 +468,9 @@ Proof.
   byContradiction. eapply star2_final_not_forever_silent with (s2 := s') (s1 := s'0); eauto.
 (* diverges, diverges *)
   f_equal. use_star_step_diamond.
-  exploit star_forever_silent_inv. eexact P1. eauto. eauto.
+  exploit star_forever_silent_inv. eexact P. eauto.  
   intros [A B]. subst; traceEq.
-  exploit star_forever_silent_inv. eexact P1. eauto. eauto.
+  exploit star_forever_silent_inv. eexact P. eauto. 
   intros [A B]. subst; traceEq.
 (* diverges, reacts *)
   byContradiction. eapply forever_silent_reactive_exclusive2; eauto.
@@ -536,3 +499,276 @@ Proof.
 Qed.
 
 End DETERM_SEM.
+
+(** * Integrating an external world in a semantics. *)
+
+(** Given a transition semantics, we can build another semantics that
+  integrates an external world in its state and allows only world-possible
+  transitions. *)
+
+Section WORLD_SEM.
+
+Variable genv: Type.
+Variable state: Type.
+Variable step: genv -> state -> trace -> state -> Prop.
+Variable initial_state: state -> Prop.
+Variable final_state: state -> int -> Prop.
+Variable initial_world: world.
+
+Definition wstate : Type := (state * world)%type.
+
+Notation "s #1" := (fst s) (at level 9, format "s '#1'") : pair_scope.
+Notation "s #2" := (snd s) (at level 9, format "s '#2'") : pair_scope.
+Local Open Scope pair_scope.
+
+Definition wstep (ge: genv) (S: wstate) (t: trace) (S': wstate) :=
+  step ge S#1 t S'#1 /\ possible_trace S#2 t S'#2.
+
+Definition winitial_state (S: wstate) :=
+  initial_state S#1 /\ S#2 = initial_world.
+
+Definition wfinal_state (S: wstate) (r: int) :=
+  final_state S#1 r.
+
+Definition wprogram_behaves (ge: genv) (beh: program_behavior) :=
+  program_behaves wstep winitial_state wfinal_state ge beh.
+
+(** We now relate sequences of transitions and behaviors between the two semantics. *)
+
+Section TRANSITIONS.
+
+Variable ge: genv.
+
+Lemma inject_star:
+  forall S t S', star step ge S t S' ->
+  forall w w', possible_trace w t w' ->
+  star wstep ge (S, w) t (S', w').
+Proof.
+  induction 1; intros; subst; possibleTraceInv.
+  constructor.
+  apply star_step with t1 (s2,w0) t2. split; auto. auto. auto.
+Qed.
+ 
+Lemma project_star:
+  forall S t S', star wstep ge S t S' -> star step ge S#1 t S'#1.
+Proof.
+  induction 1. constructor. destruct H. econstructor; eauto.
+Qed.
+
+Lemma project_star_trace:
+  forall S t S', star wstep ge S t S' -> possible_trace S#2 t S'#2.
+Proof.
+  induction 1. constructor. subst t. destruct H. eapply possible_trace_app. eauto. eauto.
+Qed.
+
+Lemma inject_forever_silent:
+  forall S w, forever_silent step ge S -> forever_silent wstep ge (S, w).
+Proof.
+  cofix COINDHYP; intros. inv H.
+  apply forever_silent_intro with (s2,w). 
+  split. auto. constructor. apply COINDHYP; auto.
+Qed.
+
+Lemma project_forever_silent:
+  forall S, forever_silent wstep ge S -> forever_silent step ge S#1.
+Proof.
+  cofix COINDHYP; intros. inv H. destruct H0. 
+  apply forever_silent_intro with (s2#1). auto. apply COINDHYP; auto.
+Qed.
+
+Lemma inject_forever_reactive:
+  forall S T w, forever_reactive step ge S T -> possible_traceinf w T ->
+  forever_reactive wstep ge (S, w) T.
+Proof.
+  cofix COINDHYP; intros. inv H. possibleTraceInv. 
+  apply forever_reactive_intro with (s2,w0).
+  apply inject_star; auto. auto. apply COINDHYP; auto.
+Qed.
+
+Lemma project_forever_reactive:
+  forall S T, forever_reactive wstep ge S T -> forever_reactive step ge S#1 T.
+Proof.
+  cofix COINDHYP; intros. inv H.
+  apply forever_reactive_intro with (s2#1).
+  apply project_star; auto. auto. apply COINDHYP; auto.
+Qed.
+
+Lemma project_forever_reactive_trace:
+  forall S T, forever_reactive wstep ge S T -> possible_traceinf S#2 T.
+Proof.
+  intros. apply possible_traceinf'_traceinf. revert S T H. 
+  cofix COINDHYP; intros. inv H. econstructor.
+  apply project_star_trace. eauto. auto. apply COINDHYP; auto. 
+Qed.
+
+Lemma inject_behaviors:
+  forall beh,
+  program_behaves step initial_state final_state ge beh ->
+  possible_behavior initial_world beh ->
+  wprogram_behaves ge beh.
+Proof.
+  intros. inv H; simpl in H0.
+(* terminates *)
+  destruct H0 as [w' A]. econstructor.
+    instantiate (1 := (s, initial_world)). red; eauto.
+    apply inject_star; eauto. 
+    red; auto.
+(* diverges silently *)
+  destruct H0 as [w' A]. econstructor.
+    instantiate (1 := (s, initial_world)). red; eauto.
+    apply inject_star; eauto. apply inject_forever_silent; auto. 
+(* diverges reactively *)
+  econstructor.
+    instantiate (1 := (s, initial_world)). red; eauto.
+    apply inject_forever_reactive; auto.
+(* goes wrong *)
+  destruct H0 as [w' A]. red in H3.
+  econstructor. 
+    instantiate (1 := (s, initial_world)). red; eauto.
+    apply inject_star; eauto. 
+    red. intros. red; intros [C D]. elim (H3 t0 s'0#1); auto.
+    unfold wfinal_state; simpl. auto. 
+(* goes initially wrong *)
+  apply program_goes_initially_wrong. intros; red; intros. destruct H. 
+  elim (H1 s#1); auto.
+Qed.
+
+Lemma project_behaviors_trace:
+  forall beh,
+  wprogram_behaves ge beh ->
+  possible_behavior initial_world beh.
+Proof.
+  intros. inv H; simpl.
+  destruct H0. rewrite <- H0. exists (s'#2); apply project_star_trace; auto. 
+  destruct H0. rewrite <- H0. exists (s'#2); apply project_star_trace; auto. 
+  destruct H0. rewrite <- H0. apply project_forever_reactive_trace; auto.
+  destruct H0. rewrite <- H0. exists (s'#2); apply project_star_trace; auto. 
+  exists initial_world; constructor.
+Qed.
+
+Lemma project_behaviors:
+  forall beh,
+  wprogram_behaves ge beh ->
+  program_behaves step initial_state final_state ge beh
+  \/ exists S, exists t, exists S', exists w', exists S'', exists t',
+     beh = Goes_wrong t /\     
+     initial_state S /\ star step ge S t S' /\ possible_trace initial_world t w' /\
+     step ge S' t' S'' /\ forall w'', ~(possible_trace w' t' w'').
+Proof.
+  intros. inv H.
+(* terminates *)
+  destruct H0.
+  left. econstructor; eauto. apply project_star; auto. 
+(* diverges silently *)
+  destruct H0.
+  left. econstructor; eauto. apply project_star; eauto. apply project_forever_silent; auto.
+(* diverges reactively *)
+  destruct H0.
+  left. econstructor; eauto. apply project_forever_reactive; auto. 
+(* goes wrong *)
+  destruct H0.
+  red in H2. 
+  destruct (classic (forall t s'', ~step ge s'#1 t s'')). 
+  left. econstructor; eauto. apply project_star; eauto.
+  destruct (not_all_ex_not _ _ H4) as [t' A]. clear H4.
+  destruct (not_all_ex_not _ _ A) as [s'' B]. clear A.
+  assert (C: step ge s'#1 t' s''). apply NNPP; auto. clear B.
+  right. do 6 econstructor. split. eauto. split. eauto. 
+  split. apply project_star; eauto.
+  split. rewrite <- H0. apply project_star_trace; eauto. 
+  split. eauto. 
+  intros; red; intros. elim (H2 t' (s'',w'')). split; auto.
+(* goes initially wrong *)
+  left. apply program_goes_initially_wrong. intros; red; intros. 
+  elim (H0 (s, initial_world)). split; auto.
+Qed.
+
+End TRANSITIONS.
+
+Section INTERNAL_DET_TO_DET.
+
+(** We assume given a transition semantics that is internally
+  deterministic: the only source of non-determinism is the return
+  value of system calls.   Under this assumption, the world-aware semantics
+  is deterministic. *)
+
+Hypothesis step_internal_deterministic:
+  forall ge s t1 s1 t2 s2,
+  step ge s t1 s1 -> step ge s t2 s2 -> matching_traces t1 t2 -> s1 = s2 /\ t1 = t2.
+
+Hypothesis initial_state_determ:
+  forall s1 s2, initial_state s1 -> initial_state s2 -> s1 = s2.
+
+Hypothesis final_state_determ:
+  forall st r1 r2, final_state st r1 -> final_state st r2 -> r1 = r2.
+
+Hypothesis final_state_nostep:
+  forall ge st r, final_state st r -> nostep step ge st.
+
+Remark matching_possible_traces:
+  forall w0 t1 w1, possible_trace w0 t1 w1 ->
+  forall t2 w2, possible_trace w0 t2 w2 ->
+  matching_traces t1 t2.
+Proof.
+  induction 1; intros.
+  destruct t2; simpl; auto.
+  destruct t2; simpl. destruct ev; auto. inv H1.
+  inv H; inv H5; auto; intros.
+  destruct H2. subst. rewrite H in H1; inv H1. split; eauto.
+  destruct H2. destruct H3. subst. rewrite H in H1; inv H1. split; eauto.
+  destruct H2. destruct H3. destruct H4. subst. rewrite H in H1; inv H1. eauto.
+Qed.
+
+Lemma wstep_deterministic:
+  forall ge S0 t1 S1 t2 S2,
+  wstep ge S0 t1 S1 -> wstep ge S0 t2 S2 -> S1 = S2 /\ t1 = t2.
+Proof.
+  intros. destruct H; destruct H0. 
+  exploit step_internal_deterministic. eexact H. eexact H0. 
+  eapply matching_possible_traces; eauto. 
+  intros [A B]. split. apply injective_projections. auto.
+  subst t2. eapply possible_trace_final_world; eauto.
+  auto.
+Qed.
+
+Lemma winitial_state_determ:
+  forall s1 s2, winitial_state s1 -> winitial_state s2 -> s1 = s2.
+Proof.
+  intros. destruct H; destruct H0. apply injective_projections. eauto. congruence.
+Qed. 
+
+Lemma wfinal_state_determ:
+  forall st r1 r2, wfinal_state st r1 -> wfinal_state st r2 -> r1 = r2.
+Proof. 
+  unfold wfinal_state. eauto.
+Qed. 
+
+Lemma wfinal_state_nostep:
+  forall ge st r, wfinal_state st r -> nostep wstep ge st.
+Proof.
+  unfold wfinal_state. intros; red; intros; red; intros [A B]. 
+  eapply final_state_nostep; eauto. 
+Qed.
+
+Theorem program_behaves_world_deterministic:
+  forall ge beh1 beh2,
+  program_behaves step initial_state final_state ge beh1 -> possible_behavior initial_world beh1 ->
+  program_behaves step initial_state final_state ge beh2 -> possible_behavior initial_world beh2 ->
+  beh1 = beh2.
+Proof.
+  intros. 
+  apply program_behaves_deterministic with
+    (step := wstep) (initial_state := winitial_state) (final_state := wfinal_state) (ge := ge).
+  exact wstep_deterministic.
+  exact winitial_state_determ.
+  exact wfinal_state_determ.
+  exact wfinal_state_nostep. 
+  apply inject_behaviors; auto.
+  apply inject_behaviors; auto.
+Qed.
+
+End INTERNAL_DET_TO_DET.
+
+End WORLD_SEM.
+
+

@@ -64,7 +64,7 @@ let compile_c_file sourcename ifile ofile =
   Sections.initialize();
   (* Simplification options *)
   let simplifs =
-    "becv" (* blocks, impure exprs, implicit casts, volatiles: mandatory *)
+    "b" (* blocks: mandatory *)
   ^ (if !option_fstruct_passing then "s" else "")
   ^ (if !option_fstruct_assign then "S" else "")
   ^ (if !option_fbitfields then "f" else "") in
@@ -87,13 +87,20 @@ let compile_c_file sourcename ifile ofile =
     match C2Clight.convertProgram ast with
     | None -> exit 2
     | Some p -> p in
-  (* Save Csyntax if requested *)
-  if !option_dclight then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
-    let oc = open_out ofile in
-    PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
-    close_out oc
-  end;
+  flush stderr;
+  (* Prepare to dump Csyntax, Clight, RTL, etc, if requested *)
+  let set_dest dst opt ext =
+    dst := if !opt then Some (Filename.chop_suffix sourcename ".c" ^ ext)
+                   else None in
+  set_dest PrintCsyntax.destination option_dcmedium ".compcert.c";
+  set_dest PrintClight.destination option_dclight ".light.c";
+  set_dest PrintCminor.destination option_dcminor ".cm";
+  set_dest PrintRTL.destination_rtl option_drtl ".rtl";
+  set_dest PrintRTL.destination_tailcall option_dtailcall ".tailcall.rtl";
+  set_dest PrintRTL.destination_castopt option_dcastopt ".castopt.rtl";
+  set_dest PrintRTL.destination_constprop option_dconstprop ".constprop.rtl";
+  set_dest PrintRTL.destination_cse option_dcse ".cse.rtl";
+  set_dest PrintLTLin.destination option_dalloc ".alloc.ltl";
   (* Convert to Asm *)
   let ppc =
     match Compiler.transf_c_program csyntax with
@@ -228,6 +235,7 @@ Code generation options:
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
+  -dcmedium      Save generated Cmedium in <file>.medium.c
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
 Linking options:
@@ -304,7 +312,15 @@ let cmdline_actions =
   "-o$", String(fun s -> exe_name := s);
   "-stdlib$", String(fun s -> stdlib_path := s);
   "-dparse$", Set option_dparse;
+  "-dcmedium$", Set option_dcmedium;
   "-dclight$", Set option_dclight;
+  "-dcminor", Set option_dcminor;
+  "-drtl$", Set option_drtl;
+  "-dtailcall$", Set option_dtailcall;
+  "-dcastopt$", Set option_dcastopt;
+  "-dconstprop$", Set option_dconstprop;
+  "-dcse$", Set option_dcse;
+  "-dalloc$", Set option_dalloc;
   "-dasm$", Set option_dasm;
   "-E$", Set option_E;
   "-S$", Set option_S;

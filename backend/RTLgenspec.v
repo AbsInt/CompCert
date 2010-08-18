@@ -483,6 +483,27 @@ Proof.
   intros [A|B]. auto. right; eauto with rtlg.
 Qed.
 
+Lemma alloc_optreg_valid:
+  forall dest s1 s2 map r i,
+  map_valid map s1 ->
+  alloc_optreg map dest s1 = OK r s2 i -> reg_valid r s2.
+Proof.
+  intros until r.  unfold alloc_reg.
+  case dest; eauto with rtlg.
+Qed.
+Hint Resolve alloc_optreg_valid: rtlg.
+
+Lemma alloc_optreg_fresh_or_in_map:
+  forall map dest s r s' i,
+  map_valid map s ->
+  alloc_optreg map dest s = OK r s' i ->
+  reg_in_map map r \/ reg_fresh r s.
+Proof.
+  intros until s'. unfold alloc_optreg. destruct dest; intros. 
+  left; eauto with rtlg.
+  right; eauto with rtlg.
+Qed.
+
 (** A register is an adequate target for holding the value of an
   expression if
 - either the register is associated with a Cminor let-bound variable
@@ -736,19 +757,6 @@ with tr_exprlist (c: code):
       tr_exprlist c map (r1 :: pr) al n1 nd rl ->
       tr_exprlist c map pr (Econs a1 al) ns nd (r1 :: rl).
 
-(** Auxiliary for the compilation of variable assignments. *)
-
-Definition tr_store_var (c: code) (map: mapping)
-                        (rs: reg) (id: ident) (ns nd: node): Prop :=
-  exists rv, map.(map_vars)!id = Some rv /\ tr_move c ns rs nd rv.
-
-Definition tr_store_optvar (c: code) (map: mapping)
-                 (rs: reg) (optid: option ident) (ns nd: node): Prop :=
-  match optid with
-  | None => ns = nd
-  | Some id => tr_store_var c map rs id ns nd
-  end.
-
 (** Auxiliary for the compilation of [switch] statements. *)
 
 Definition tr_jumptable (nexits: list node) (tbl: list nat) (ttbl: list node) : Prop :=
@@ -804,23 +812,21 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_expr c map rl b n1 n2 rd None ->
      c!n2 = Some (Istore chunk addr rl rd nd) ->
      tr_stmt c map (Sstore chunk addr al b) ns nd nexits ngoto nret rret
-  | tr_Scall: forall optid sig b cl ns nd nexits ngoto nret rret rd n1 rf n2 n3 rargs,
+  | tr_Scall: forall optid sig b cl ns nd nexits ngoto nret rret rd n1 rf n2 rargs,
      tr_expr c map nil b ns n1 rf None ->
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
-     c!n2 = Some (Icall sig (inl _ rf) rargs rd n3) ->
-     tr_store_optvar c map rd optid n3 nd ->
-     ~reg_in_map map rd ->
+     c!n2 = Some (Icall sig (inl _ rf) rargs rd nd) ->
+     reg_map_ok map rd optid ->
      tr_stmt c map (Scall optid sig b cl) ns nd nexits ngoto nret rret
   | tr_Stailcall: forall sig b cl ns nd nexits ngoto nret rret n1 rf n2 rargs,
      tr_expr c map nil b ns n1 rf None ->
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
      tr_stmt c map (Stailcall sig b cl) ns nd nexits ngoto nret rret
-  | tr_Sbuiltin: forall optid ef al ns nd nexits ngoto nret rret rd n1 n2 rargs,
+  | tr_Sbuiltin: forall optid ef al ns nd nexits ngoto nret rret rd n1 rargs,
      tr_exprlist c map nil al ns n1 rargs ->
-     c!n1 = Some (Ibuiltin ef rargs rd n2) ->
-     tr_store_optvar c map rd optid n2 nd ->
-     ~reg_in_map map rd ->
+     c!n1 = Some (Ibuiltin ef rargs rd nd) ->
+     reg_map_ok map rd optid ->
      tr_stmt c map (Sbuiltin optid ef al) ns nd nexits ngoto nret rret
   | tr_Sseq: forall s1 s2 ns nd nexits ngoto nret rret n,
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
@@ -1077,25 +1083,15 @@ Proof.
   monadInv EQ1.
 Qed.
 
-Lemma tr_store_var_incr:
-  forall s1 s2, state_incr s1 s2 ->
-  forall map rs id ns nd,
-  tr_store_var s1.(st_code) map rs id ns nd ->
-  tr_store_var s2.(st_code) map rs id ns nd.
+Lemma alloc_optreg_map_ok:
+  forall map optid s1 r s2 i,
+  map_valid map s1 ->
+  alloc_optreg map optid s1 = OK r s2 i ->
+  reg_map_ok map r optid.
 Proof.
-  intros. destruct H0 as [rv [A B]]. 
-  econstructor; split. eauto. eapply tr_move_incr; eauto.
-Qed.
- 
-Lemma tr_store_optvar_incr:
-  forall s1 s2, state_incr s1 s2 ->
-  forall map rs optid ns nd,
-  tr_store_optvar s1.(st_code) map rs optid ns nd ->
-  tr_store_optvar s2.(st_code) map rs optid ns nd.
-Proof.
-  intros until nd. destruct optid; simpl. 
-  apply tr_store_var_incr; auto.
-  auto.
+  unfold alloc_optreg; intros. destruct optid.
+  constructor. unfold find_var in H0. destruct (map_vars map)!i0; monadInv H0. auto.
+  constructor. eapply new_reg_not_in_map; eauto.
 Qed.
 
 Lemma tr_switch_incr:
@@ -1116,31 +1112,9 @@ Proof.
   intros s1 s2 EXT.
   generalize tr_expr_incr tr_condition_incr tr_exprlist_incr; intros I1 I2 I3.
   pose (AT := fun pc i => instr_at_incr s1 s2 pc i EXT).
-  pose (STV := tr_store_var_incr s1 s2 EXT).
-  pose (STOV := tr_store_optvar_incr s1 s2 EXT).
   induction 1; econstructor; eauto.
   eapply tr_switch_incr; eauto.
 Qed.
-
-Lemma store_var_charact:
-  forall map rs id nd s ns s' incr,
-  store_var map rs id nd s = OK ns s' incr ->
-  tr_store_var s'.(st_code) map rs id ns nd.
-Proof.
-  intros. monadInv H. generalize EQ. unfold find_var.
-  caseEq ((map_vars map)!id). 2: intros; discriminate. intros. monadInv EQ1.
-  exists x; split. auto. eapply add_move_charact; eauto.
-Qed.
-
-Lemma store_optvar_charact:
-  forall map rs optid nd s ns s' incr,
-  store_optvar map rs optid nd s = OK ns s' incr ->
-  tr_store_optvar s'.(st_code) map rs optid ns nd.
-Proof.
-  intros. destruct optid; simpl in H; simpl.
-  eapply store_var_charact; eauto.
-  monadInv H. auto. 
-Qed. 
 
 Lemma transl_exit_charact:
   forall nexits n s ne s' incr,
@@ -1218,15 +1192,14 @@ Proof.
   (* Scall *)
   econstructor; eauto 4 with rtlg.
   eapply transl_expr_charact; eauto 3 with rtlg.
-  apply tr_exprlist_incr with s6. auto. 
+  apply tr_exprlist_incr with s5. auto. 
   eapply transl_exprlist_charact; eauto 3 with rtlg.
   eapply alloc_regs_target_ok with (s1 := s1); eauto 3 with rtlg.
   apply regs_valid_cons; eauto 3 with rtlg.
   apply regs_valid_incr with s1; eauto 3 with rtlg.
   apply regs_valid_cons; eauto 3 with rtlg.
   apply regs_valid_incr with s2; eauto 3 with rtlg.
-  apply tr_store_optvar_incr with s4; auto.
-  eapply store_optvar_charact; eauto with rtlg.
+  eapply alloc_optreg_map_ok with (s1 := s2); eauto 3 with rtlg.
   (* Stailcall *)
   assert (RV: regs_valid (x :: nil) s1).
     apply regs_valid_cons; eauto 3 with rtlg. 
@@ -1237,8 +1210,7 @@ Proof.
   (* Sbuiltin *)
   econstructor; eauto 4 with rtlg.
   eapply transl_exprlist_charact; eauto 3 with rtlg.
-  apply tr_store_optvar_incr with s2; auto.
-  eapply store_optvar_charact; eauto with rtlg.
+  eapply alloc_optreg_map_ok with (s1 := s0); eauto with rtlg.
   (* Sseq *)
   econstructor. 
   apply tr_stmt_incr with s0; auto. 

@@ -7,6 +7,7 @@ open Cparser.Builtins
 
 open Camlcoq
 open AST
+open Values
 open Csyntax
 
 (** Record the declarations of global variables and associate them
@@ -286,124 +287,11 @@ let rec convertTypList env = function
   | [] -> Tnil
   | t1 :: tl -> Tcons(convertTyp env t1, convertTypList env tl)
 
-(** Expressions *)
-
-let ezero = Expr(Econst_int(coqint_of_camlint 0l), Tint(I32, Signed))
-
-let rec convertExpr env e =
-  let ty = convertTyp env e.etyp in
-  match e.edesc with
-  | C.EConst(C.CInt(i, _, _)) ->
-      Expr(Econst_int(convertInt i), ty)
-  | C.EConst(C.CFloat(f, _, _)) ->
-      Expr(Econst_float f, ty)
-  | C.EConst(C.CStr s) ->
-      Expr(Evar(name_for_string_literal env s), typeStringLiteral s)
-  | C.EConst(C.CWStr s) ->
-      unsupported "wide string literal"; ezero
-  | C.EConst(C.CEnum(id, i)) ->
-      Expr(Econst_int(convertInt i), ty)
-
-  | C.ESizeof ty1 ->
-      Expr(Esizeof(convertTyp env ty1), ty)
-  | C.EVar id ->
-      Expr(Evar(intern_string id.name), ty)
-
-  | C.EUnop(C.Oderef, e1) ->
-      Expr(Ederef(convertExpr env e1), ty)
-  | C.EUnop(C.Oaddrof, e1) ->
-      Expr(Eaddrof(convertExpr env e1), ty)
-  | C.EUnop(C.Odot id, e1) ->
-      Expr(Efield(convertExpr env e1, intern_string id), ty)
-  | C.EUnop(C.Oarrow id, e1) ->
-      let e1' = convertExpr env e1 in
-      let ty1 =
-        match typeof e1' with
-        | Tpointer t -> t
-        | _ -> error ("wrong type for ->" ^ id ^ " access"); Tvoid in
-      Expr(Efield(Expr(Ederef(convertExpr env e1), ty1),
-                  intern_string id), ty)
-  | C.EUnop(C.Oplus, e1) ->
-      convertExpr env e1
-  | C.EUnop(C.Ominus, e1) ->
-      Expr(Eunop(Oneg, convertExpr env e1), ty)
-  | C.EUnop(C.Olognot, e1) ->
-      Expr(Eunop(Onotbool, convertExpr env e1), ty)
-  | C.EUnop(C.Onot, e1) ->
-      Expr(Eunop(Onotint, convertExpr env e1), ty)
-  | C.EUnop(_, _) ->
-      unsupported "pre/post increment/decrement operator"; ezero
-
-  | C.EBinop(C.Oindex, e1, e2, _) ->
-      Expr(Ederef(Expr(Ebinop(Oadd, convertExpr env e1, convertExpr env e2),
-                       Tpointer ty)), ty)
-  | C.EBinop(C.Ologand, e1, e2, _) ->
-      Expr(Eandbool(convertExpr env e1, convertExpr env e2), ty)
-  | C.EBinop(C.Ologor, e1, e2, _) ->
-      Expr(Eorbool(convertExpr env e1, convertExpr env e2), ty)
-  | C.EBinop(op, e1, e2, _) ->
-      let op' =
-        match op with
-        | C.Oadd -> Oadd
-        | C.Osub -> Osub
-        | C.Omul -> Omul
-        | C.Odiv -> Odiv
-        | C.Omod -> Omod
-        | C.Oand -> Oand
-        | C.Oor  -> Oor
-        | C.Oxor -> Oxor
-        | C.Oshl -> Oshl
-        | C.Oshr -> Oshr
-        | C.Oeq  -> Oeq
-        | C.One  -> One
-        | C.Olt  -> Olt
-        | C.Ogt  -> Ogt
-        | C.Ole  -> Ole
-        | C.Oge  -> Oge
-        | C.Ocomma -> unsupported "sequence operator"; Oadd
-        | _ -> unsupported "assignment operator"; Oadd in
-      Expr(Ebinop(op', convertExpr env e1, convertExpr env e2), ty)
-  | C.EConditional(e1, e2, e3) ->
-      Expr(Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3), ty)
-  | C.ECast(ty1, e1) ->
-      Expr(Ecast(convertTyp env ty1, convertExpr env e1), ty)
-  | C.ECall _ ->
-      unsupported "function call within expression"; ezero
-
-(* Function calls *)
-
 let rec projFunType env ty =
   match Cutil.unroll env ty with
   | TFun(res, args, vararg, attr) -> Some(res, vararg)
   | TPtr(ty', attr) -> projFunType env ty'
   | _ -> None
-
-let convertFuncall env lhs fn args =
-  match projFunType env fn.etyp with
-  | None ->
-      error "wrong type for function part of a call"; Sskip
-  | Some(res, false) ->
-      (* Non-variadic function *)
-      Scall(lhs, convertExpr env fn, List.map (convertExpr env) args)
-  | Some(res, true) ->
-      (* Variadic function: generate a call to a stub function with
-         the appropriate number and types of arguments.  Works only if
-         the function expression e is a global variable. *)
-      let fun_name =
-        match fn with
-        | {edesc = C.EVar id} when !Clflags.option_fvararg_calls ->
-            (*warning "emulating call to variadic function"; *)
-            id.name
-        | _ ->
-            unsupported "call to variadic function";
-            "<error>" in
-      let targs = convertTypList env (List.map (fun e -> e.etyp) args) in
-      let tres = convertTyp env res in
-      let (stub_fun_name, stub_fun_typ) =
-        register_stub_function fun_name tres targs in
-      Scall(lhs,
-            Expr(Evar(intern_string stub_fun_name), stub_fun_typ),
-            List.map (convertExpr env) args)
 
 (* Handling of volatile *)
 
@@ -427,54 +315,186 @@ let volatile_fun_suffix_type ty =
 
 let volatile_read_fun ty =
   let (suffix, ty') = volatile_fun_suffix_type ty in
-  Expr(Evar(intern_string ("__builtin_volatile_read_" ^ suffix)),
-       Tfunction(Tcons(Tpointer Tvoid, Tnil), ty'))
+  let funty = Tfunction(Tcons(Tpointer Tvoid, Tnil), ty') in
+  Evalof(Evar(intern_string ("__builtin_volatile_read_" ^ suffix), funty), funty)
 
 let volatile_write_fun ty =
   let (suffix, ty') = volatile_fun_suffix_type ty in
-  Expr(Evar(intern_string ("__builtin_volatile_write_" ^ suffix)),
-       Tfunction(Tcons(Tpointer Tvoid, Tcons(ty', Tnil)), Tvoid))
+  let funty = Tfunction(Tcons(Tpointer Tvoid, Tcons(ty', Tnil)), Tvoid) in
+  Evalof(Evar(intern_string ("__builtin_volatile_write_" ^ suffix), funty), funty)
 
-(* Toplevel expression, argument of an Sdo *)
+(** Expressions *)
 
-let convertTopExpr env e =
+let ezero = Eval(Vint(coqint_of_camlint 0l), Tint(I32, Signed))
+
+let rec convertExpr env e =
+  let ty = convertTyp env e.etyp in
   match e.edesc with
-  | C.EBinop(C.Oassign, lhs, {edesc = C.ECall(fn, args)}, _) ->
-      convertFuncall env (Some (convertExpr env lhs)) fn args
-(****
-      (* Recognize __builtin_fabs and turn it into Clight operator *)
-      begin match fn, args with
-      | {edesc = C.EVar {name = "__builtin_fabs"}}, [arg1] ->
-          Sassign(convertExpr env lhs, 
-                  Expr(Eunop(Ofabs, convertExpr env arg1), Tfloat F64))
-      | _ ->
-          convertFuncall env (Some (convertExpr env lhs)) fn args
-      end
-*****)
-  | C.EBinop(C.Oassign, lhs, rhs, _) ->
-      if Cutil.is_composite_type env lhs.etyp then
+  | C.EVar _
+  | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
+  | C.EBinop(C.Oindex, _, _, _) ->
+      let l = convertLvalue env e in
+      if is_volatile_access env e then
+        Ecall(volatile_read_fun (typeof l),
+              Econs(Eaddrof(l, Tpointer(typeof l)), Enil),
+              ty)
+      else
+        Evalof(l, ty)
+
+  | C.EConst(C.CInt(i, _, _)) ->
+      Eval(Vint(convertInt i), ty)
+  | C.EConst(C.CFloat(f, _, _)) ->
+      Eval(Vfloat(f), ty)
+  | C.EConst(C.CStr s) ->
+      let ty = typeStringLiteral s in
+      Evalof(Evar(name_for_string_literal env s, ty), ty)
+  | C.EConst(C.CWStr s) ->
+      unsupported "wide string literal"; ezero
+  | C.EConst(C.CEnum(id, i)) ->
+      Eval(Vint(convertInt i), ty)
+  | C.ESizeof ty1 ->
+      Esizeof(convertTyp env ty1, ty)
+
+  | C.EUnop(C.Ominus, e1) ->
+      Eunop(Oneg, convertExpr env e1, ty)
+  | C.EUnop(C.Oplus, e1) ->
+      convertExpr env e1
+  | C.EUnop(C.Olognot, e1) ->
+      Eunop(Onotbool, convertExpr env e1, ty)
+  | C.EUnop(C.Onot, e1) ->
+      Eunop(Onotint, convertExpr env e1, ty)
+  | C.EUnop(C.Oaddrof, e1) ->
+      Eaddrof(convertLvalue env e1, ty)
+  | C.EUnop(C.Opreincr, e1) ->
+      coq_Epreincr Incr (convertLvalue env e1) ty
+  | C.EUnop(C.Opredecr, e1) ->
+      coq_Epreincr Decr (convertLvalue env e1) ty
+  | C.EUnop(C.Opostincr, e1) ->
+      Epostincr(Incr, convertLvalue env e1, ty)
+  | C.EUnop(C.Opostdecr, e1) ->
+      Epostincr(Decr, convertLvalue env e1, ty)
+
+  | C.EBinop((C.Oadd|C.Osub|C.Omul|C.Odiv|C.Omod|C.Oand|C.Oor|C.Oxor|
+              C.Oshl|C.Oshr|C.Oeq|C.One|C.Olt|C.Ogt|C.Ole|C.Oge) as op,
+             e1, e2, _) ->
+      let op' =
+        match op with
+        | C.Oadd -> Oadd
+        | C.Osub -> Osub
+        | C.Omul -> Omul
+        | C.Odiv -> Odiv
+        | C.Omod -> Omod
+        | C.Oand -> Oand
+        | C.Oor  -> Oor
+        | C.Oxor -> Oxor
+        | C.Oshl -> Oshl
+        | C.Oshr -> Oshr
+        | C.Oeq  -> Oeq
+        | C.One  -> One
+        | C.Olt  -> Olt
+        | C.Ogt  -> Ogt
+        | C.Ole  -> Ole
+        | C.Oge  -> Oge
+        | _ -> assert false in
+      Ebinop(op', convertExpr env e1, convertExpr env e2, ty)
+  | C.EBinop(C.Oassign, e1, e2, _) ->
+      let e1' = convertLvalue env e1 in
+      let e2' = convertExpr env e2 in
+      if Cutil.is_composite_type env e1.etyp then
         unsupported "assignment between structs or between unions";
-      let lhs' = convertExpr env lhs
-      and rhs' = convertExpr env rhs in
-      begin match (is_volatile_access env lhs, is_volatile_access env rhs) with
-      | true, true ->                   (* should not happen *)
-          unsupported "volatile-to-volatile assignment";
-          Sskip
-      | false, true ->                  (* volatile read *)
-          Scall(Some lhs',
-                volatile_read_fun (typeof rhs'),
-                [ Expr (Eaddrof rhs', Tpointer (typeof rhs')) ])
-      | true, false ->                  (* volatile write *)
-          Scall(None,
-                volatile_write_fun (typeof lhs'),
-                [ Expr(Eaddrof lhs', Tpointer (typeof lhs')); rhs' ])
-      | false, false ->                 (* regular assignment *)
-          Sassign(convertExpr env lhs, convertExpr env rhs)
-      end
+      if is_volatile_access env e1 then
+        Ecall(volatile_write_fun (typeof e1'),
+              Econs(Eaddrof(e1', Tpointer(typeof e1')), Econs(e2', Enil)),
+              Tvoid)   (* typing issue here *)
+      else
+        Eassign(e1', e2', ty)
+  | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
+              C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
+              C.Oshl_assign|C.Oshr_assign) as op,
+             e1, e2, tyres) ->
+      let tyres = convertTyp env tyres in
+      let op' =
+        match op with
+        | C.Oadd_assign -> Oadd
+        | C.Osub_assign -> Osub
+        | C.Omul_assign -> Omul
+        | C.Odiv_assign -> Odiv
+        | C.Omod_assign -> Omod
+        | C.Oand_assign -> Oand
+        | C.Oor_assign  -> Oor
+        | C.Oxor_assign -> Oxor
+        | C.Oshl_assign -> Oshl
+        | C.Oshr_assign -> Oshr
+        | _ -> assert false in
+      let e1' = convertLvalue env e1 in
+      let e2' = convertExpr env e2 in
+      if is_volatile_access env e1 then
+        (error "assign-op to volatile not supported"; ezero)
+      else
+        Eassignop(op', e1', e2', tyres, ty)
+  | C.EBinop(C.Ocomma, e1, e2, _) ->
+      Ecomma(convertExpr env e1, convertExpr env e2, ty)
+  | C.EBinop(C.Ologand, e1, e2, _) ->
+      coq_Eseqand (convertExpr env e1) (convertExpr env e2) ty
+  | C.EBinop(C.Ologor, e1, e2, _) ->
+      coq_Eseqor (convertExpr env e1) (convertExpr env e2) ty
+
+  | C.EConditional(e1, e2, e3) ->
+      Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3, ty)
+  | C.ECast(ty1, e1) ->
+      Ecast(convertExpr env e1, convertTyp env ty1)
   | C.ECall(fn, args) ->
-      convertFuncall env None fn args
+      match projFunType env fn.etyp with
+      | None ->
+          error "wrong type for function part of a call"; ezero
+      | Some(res, false) ->
+          (* Non-variadic function *)
+          Ecall(convertExpr env fn, convertExprList env args, ty)
+      | Some(res, true) ->
+          (* Variadic function: generate a call to a stub function with
+             the appropriate number and types of arguments.  Works only if
+             the function expression e is a global variable. *)
+          let fun_name =
+            match fn with
+            | {edesc = C.EVar id} when !Clflags.option_fvararg_calls ->
+                (*warning "emulating call to variadic function"; *)
+                id.name
+            | _ ->
+                unsupported "call to variadic function";
+                "<error>" in
+          let targs = convertTypList env (List.map (fun e -> e.etyp) args) in
+          let tres = convertTyp env res in
+          let (stub_fun_name, stub_fun_typ) =
+            register_stub_function fun_name tres targs in
+          Ecall(Evalof(Evar(intern_string stub_fun_name, stub_fun_typ),
+                       stub_fun_typ),
+                convertExprList env args, ty)
+
+and convertLvalue env e =
+  let ty = convertTyp env e.etyp in
+  match e.edesc with
+  | C.EVar id ->
+      Evar(intern_string id.name, ty)
+  | C.EUnop(C.Oderef, e1) ->
+      Ederef(convertExpr env e1, ty)
+  | C.EUnop(C.Odot id, e1) ->
+      Efield(convertLvalue env e1, intern_string id, ty)
+  | C.EUnop(C.Oarrow id, e1) ->
+      let e1' = convertExpr env e1 in
+      let ty1 =
+        match typeof e1' with
+        | Tpointer t -> t
+        | _ -> error ("wrong type for ->" ^ id ^ " access"); Tvoid in
+      Efield(Ederef(e1', ty1), intern_string id, ty)
+  | C.EBinop(C.Oindex, e1, e2, _) ->
+      coq_Eindex (convertExpr env e1) (convertExpr env e2) ty
   | _ ->
-      unsupported "illegal toplevel expression"; Sskip
+      error "illegal l-value"; ezero
+
+and convertExprList env el =
+  match el with
+  | [] -> Enil
+  | e1 :: el' -> Econs(convertExpr env e1, convertExprList env el')
 
 (* Separate the cases of a switch statement body *)
 
@@ -514,7 +534,7 @@ let rec convertStmt env s =
   | C.Sskip ->
       Sskip
   | C.Sdo e ->
-      convertTopExpr env e
+      Sdo(convertExpr env e)
   | C.Sseq(s1, s2) ->
       Ssequence(convertStmt env s1, convertStmt env s2)
   | C.Sif(e, s1, s2) ->
@@ -699,6 +719,7 @@ let convertInit env ty init =
       | Some(C.CEnum _) ->
           error "enum tag after constant folding"
       | None ->
+          Format.printf "%a@." Cprint.exp (0, e);
           error "initializer is not a compile-time constant"
       end
   | Init_array il ->

@@ -15,16 +15,22 @@
 
 (* Expand assignments between structs and between unions *)
 
-(* Assumes: simplified code.
-   Preserves: simplified code, unblocked code *)
+(* Assumes: unblocked code.
+   Preserves: unblocked code *)
 
 open C
 open Machine
 open Cutil
 open Env
 open Errors
+open Transform
+
+(* Max number of assignments that can be inlined.  Above this threshold,
+   we call memcpy() instead. *)
 
 let maxsize = ref 8
+
+(* Finding appropriate memcpy functions *)
 
 let memcpy_decl = ref (None : ident option)
 
@@ -57,7 +63,18 @@ let memcpy_words_ident env =
   try lookup_function env "__builtin_memcpy_words"
   with Env.Error _ -> memcpy_ident env
 
-let transf_assign env loc lhs rhs =
+(* Smart constructor for "," expressions *)
+
+let comma e1 e2 =
+  match e1.edesc, e2.edesc with
+  | EConst _, _ -> e2
+  | _, EConst _ -> e1
+  | _, _ ->  ecomma e1 e2
+
+(* Translate an assignment [lhs = rhs] between composite types.
+   [lhs] and [rhs] must be pure, invariant l-values. *)
+
+let transf_assign env lhs rhs =
 
   let num_assign = ref 0 in
 
@@ -65,38 +82,35 @@ let transf_assign env loc lhs rhs =
     incr num_assign;
     if !num_assign > !maxsize 
     then raise Exit
-    else sassign loc l r in
+    else eassign l r in
 
   let rec transf l r =
     match unroll env l.etyp with
     | TStruct(id, attr) ->
         let ci = Env.find_struct env id in
-        if ci.ci_sizeof = None then
-          error "%a: Error: incomplete struct '%s'" formatloc loc id.name;
         transf_struct l r ci.ci_members
     | TUnion(id, attr) ->
         raise Exit
     | TArray(ty_elt, Some sz, attr) ->
         transf_array l r ty_elt 0L sz
     | TArray(ty_elt, None, attr) ->
-        error "%a: Error: array of unknown size" formatloc loc;
-        sskip                           (* will be ignored later *)
+        assert false
     | _ ->
         assign l r
 
   and transf_struct l r = function
-    | [] -> sskip
+    | [] -> nullconst
     | f :: fl ->
-        sseq loc (transf {edesc = EUnop(Odot f.fld_name, l); etyp = f.fld_typ}
-                         {edesc = EUnop(Odot f.fld_name, r); etyp = f.fld_typ})
-                 (transf_struct l r fl)
+        comma (transf {edesc = EUnop(Odot f.fld_name, l); etyp = f.fld_typ}
+                      {edesc = EUnop(Odot f.fld_name, r); etyp = f.fld_typ})
+              (transf_struct l r fl)
 
   and transf_array l r ty idx sz =
-    if idx >= sz then sskip else begin
+    if idx >= sz then nullconst else begin
       let e = intconst idx size_t_ikind in
-      sseq loc (transf {edesc = EBinop(Oindex, l, e, ty); etyp = ty}
-                       {edesc = EBinop(Oindex, r, e, ty); etyp = ty})
-               (transf_array l r ty (Int64.add idx 1L) sz)
+      comma (transf {edesc = EBinop(Oindex, l, e, ty); etyp = ty}
+                    {edesc = EBinop(Oindex, r, e, ty); etyp = ty})
+            (transf_array l r ty (Int64.add idx 1L) sz)
     end
   in
 
@@ -115,42 +129,101 @@ let transf_assign env loc lhs rhs =
     let e_lhs = {edesc = EUnop(Oaddrof, lhs); etyp = TPtr(lhs.etyp, [])} in
     let e_rhs = {edesc = EUnop(Oaddrof, rhs); etyp = TPtr(rhs.etyp, [])} in
     let e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])} in
-    {sdesc = Sdo {edesc = ECall(memcpy, [e_lhs; e_rhs; e_size]);
-                  etyp = TVoid[]};
-     sloc = loc}
+    {edesc = ECall(memcpy, [e_lhs; e_rhs; e_size]); etyp = TVoid[]}
+
+(* Detect invariant l-values *)
+
+let rec invariant_lvalue e =
+  match e.edesc with
+  | EVar _ -> true
+  | EUnop(Oderef, {edesc = EVar _}) -> true   (* to check *)
+  | EUnop(Odot _, e1) -> invariant_lvalue e1
+  | _ -> false
+
+(* Bind a l-value to a temporary variable if it is not invariant. *)
+
+let rec bind_lvalue e fn =
+  match e.edesc with
+  | EBinop(Ocomma, e1, e2, _) ->
+      ecomma e1 (bind_lvalue e2 fn)
+  | _ ->
+      if invariant_lvalue e then
+        fn e
+      else begin
+        let tmp = new_temp (TPtr(e.etyp, [])) in
+        ecomma (eassign tmp (eaddrof e))
+               (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
+      end
+
+(* Transformation of expressions. *)
+
+type context = Val | Effects
+
+let rec transf_expr env ctx e =
+  match e.edesc with
+  | EBinop(Oassign, lhs, rhs, _) when is_composite_type env lhs.etyp ->
+      bind_lvalue (transf_expr env Val lhs) (fun l ->
+      bind_lvalue (transf_expr env Val rhs) (fun r ->
+        let e' = transf_assign env l r in
+        if ctx = Val then ecomma e' l else e'))
+  | EConst c -> e
+  | ESizeof ty -> e
+  | EVar x -> e
+  | EUnop(op, e1) ->
+      {edesc = EUnop(op, transf_expr env Val e1); etyp = e.etyp}
+  | EBinop(Ocomma, e1, e2, ty) ->
+      {edesc = EBinop(Ocomma, transf_expr env Effects e1,
+                              transf_expr env ctx e2, ty);
+       etyp = e.etyp}
+  | EBinop(op, e1, e2, ty) ->
+      {edesc = EBinop(op, transf_expr env Val e1,
+                          transf_expr env Val e2, ty);
+       etyp = e.etyp}
+  | EConditional(e1, e2, e3) ->
+      {edesc = EConditional(transf_expr env Val e1,
+                            transf_expr env ctx e2, transf_expr env ctx e3);
+       etyp = e.etyp}
+  | ECast(ty, e1) ->
+      {edesc = ECast(ty, transf_expr env Val e1); etyp = e.etyp}
+  | ECall(e1, el) ->
+      {edesc = ECall(transf_expr env Val e1,
+                     List.map (transf_expr env Val) el);
+       etyp = e.etyp}
+
+(* Transformation of statements *)
 
 let rec transf_stmt env s =
   match s.sdesc with
   | Sskip -> s
-  | Sdo {edesc = EBinop(Oassign, lhs, rhs, _)}
-    when is_composite_type env lhs.etyp ->
-      transf_assign env s.sloc lhs rhs
-  | Sdo _ -> s
+  | Sdo e -> {s with sdesc = Sdo(transf_expr env Effects e)}
   | Sseq(s1, s2) ->
       {s with sdesc = Sseq(transf_stmt env s1, transf_stmt env s2)}
   | Sif(e, s1, s2) ->
-      {s with sdesc = Sif(e, transf_stmt env s1, transf_stmt env s2)}
+      {s with sdesc = Sif(transf_expr env Val e,
+                          transf_stmt env s1, transf_stmt env s2)}
   | Swhile(e, s1) ->
-      {s with sdesc = Swhile(e, transf_stmt env s1)}
+      {s with sdesc = Swhile(transf_expr env Val e, transf_stmt env s1)}
   | Sdowhile(s1, e) ->
-      {s with sdesc = Sdowhile(transf_stmt env s1, e)}
+      {s with sdesc = Sdowhile(transf_stmt env s1, transf_expr env Val e)}
   | Sfor(s1, e, s2, s3) ->
-      {s with sdesc = Sfor(transf_stmt env s1, e,
+      {s with sdesc = Sfor(transf_stmt env s1, transf_expr env Val e,
                            transf_stmt env s2, transf_stmt env s3)}
   | Sbreak -> s
   | Scontinue -> s
   | Sswitch(e, s1) ->
-      {s with sdesc = Sswitch(e, transf_stmt env s1)}
+      {s with sdesc = Sswitch(transf_expr env Val e, transf_stmt env s1)}
   | Slabeled(lbl, s1) ->
       {s with sdesc = Slabeled(lbl, transf_stmt env s1)}
   | Sgoto lbl -> s
-  | Sreturn _ -> s
-  | Sblock sl ->
-      {s with sdesc = Sblock(List.map (transf_stmt env) sl)}
-  | Sdecl d -> s
+  | Sreturn None -> s
+  | Sreturn (Some e) -> {s with sdesc = Sreturn(Some(transf_expr env Val e))}
+  | Sblock _ | Sdecl _ -> assert false (* not in unblocked code *)
 
-let transf_fundef env fd =
-  {fd with fd_body = transf_stmt env fd.fd_body}
+let transf_fundef env f =
+  reset_temps();
+  let newbody = transf_stmt env f.fd_body in
+  let temps = get_temps() in
+  {f with fd_locals = f.fd_locals @ temps; fd_body = newbody}
 
 let program p =
   memcpy_decl := None;

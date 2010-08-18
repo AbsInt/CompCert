@@ -1,13 +1,14 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=-stdlib ../../runtime -dparse -dclight -dasm \
+CCOMPFLAGS=-stdlib ../../runtime -dparse -dcmedium -dclight -dasm \
   -fstruct-passing -fstruct-assign -fbitfields
 
 LIBS=$(LIBMATH)
 
 # Can run and have reference output in Results
-TESTS=bitfields1 bitfields2 bitfields3 expr1 initializers volatile2 \
+TESTS=bitfields1 bitfields2 bitfields3 bitfields4 \
+  expr1 initializers volatile2 \
   funct3 expr5 struct7 struct8 casts1 casts2
 
 # Other tests: should compile to .s without errors (but expect warnings)

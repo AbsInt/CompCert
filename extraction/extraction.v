@@ -75,6 +75,17 @@ Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
+(* Compiler *)
+Extract Constant Compiler.print_Csyntax => "PrintCsyntax.print_if".
+Extract Constant Compiler.print_Clight => "PrintClight.print_if".
+Extract Constant Compiler.print_Cminor => "PrintCminor.print_if".
+Extract Constant Compiler.print_RTL => "PrintRTL.print_rtl".
+Extract Constant Compiler.print_RTL_tailcall => "PrintRTL.print_tailcall".
+Extract Constant Compiler.print_RTL_castopt => "PrintRTL.print_castopt".
+Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
+Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
+Extract Constant Compiler.print_LTLin => "PrintLTLin.print_if".
+
 (* Suppression of stupidly big equality functions *)
 Extract Constant Op.eq_operation => "fun (x: operation) (y: operation) -> x = y".
 Extract Constant Op.eq_addressing => "fun (x: addressing) (y: addressing) -> x = y".

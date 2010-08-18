@@ -51,6 +51,7 @@ BACKEND=\
   Tailcall.v Tailcallproof.v \
   RTLtyping.v \
   Kildall.v \
+  CastOptim.v CastOptimproof.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSE.v CSEproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v LTLtyping.v \
@@ -68,8 +69,9 @@ BACKEND=\
 
 # C front-end modules (in cfrontend/)
 
-CFRONTEND=Csyntax.v Csem.v Ctyping.v Cshmgen.v \
-  Cshmgenproof1.v Cshmgenproof2.v Cshmgenproof3.v \
+CFRONTEND=Csyntax.v Csem.v Cstrategy.v \
+  SimplExpr.v SimplExprspec.v SimplExprproof.v \
+  Clight.v Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
 
 # Putting everything together (in driver/)

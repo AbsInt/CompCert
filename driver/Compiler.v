@@ -23,6 +23,8 @@ Require Import Smallstep.
 (** Languages (syntax and semantics). *)
 Require Csyntax.
 Require Csem.
+Require Cstrategy.
+Require Clight.
 Require Csharpminor.
 Require Cminor.
 Require CminorSel.
@@ -33,11 +35,13 @@ Require Linear.
 Require Mach.
 Require Asm.
 (** Translation passes. *)
+Require SimplExpr.
 Require Cshmgen.
 Require Cminorgen.
 Require Selection.
 Require RTLgen.
 Require Tailcall.
+Require CastOptim.
 Require Constprop.
 Require CSE.
 Require Allocation.
@@ -47,18 +51,19 @@ Require Reload.
 Require Stacking.
 Require Asmgen.
 (** Type systems. *)
-Require Ctyping.
 Require RTLtyping.
 Require LTLtyping.
 Require LTLintyping.
 Require Lineartyping.
 Require Machtyping.
 (** Proofs of semantic preservation and typing preservation. *)
-Require Cshmgenproof3.
+Require SimplExprproof.
+Require Cshmgenproof.
 Require Cminorgenproof.
 Require Selectionproof.
 Require RTLgenproof.
 Require Tailcallproof.
+Require CastOptimproof.
 Require Constpropproof.
 Require CSEproof.
 Require Allocproof.
@@ -73,6 +78,16 @@ Require Stackingproof.
 Require Stackingtyping.
 Require Machabstr2concr.
 Require Asmgenproof.
+(** Pretty-printers (defined in Caml). *)
+Parameter print_Csyntax: Csyntax.program -> unit.
+Parameter print_Clight: Clight.program -> unit.
+Parameter print_Cminor: Cminor.program -> unit.
+Parameter print_RTL: RTL.fundef -> unit.
+Parameter print_RTL_tailcall: RTL.fundef -> unit.
+Parameter print_RTL_castopt: RTL.fundef -> unit.
+Parameter print_RTL_constprop: RTL.fundef -> unit.
+Parameter print_RTL_cse: RTL.fundef -> unit.
+Parameter print_LTLin: LTLin.fundef -> unit.
 
 Open Local Scope string_scope.
 
@@ -93,6 +108,9 @@ Notation "a @@@ b" :=
 Notation "a @@ b" :=
    (apply_total _ _ a b) (at level 50, left associativity).
 
+Definition print {A: Type} (printer: A -> unit) (prog: A) : A :=
+  match printer prog with tt => prog end.
+
 (** We define three translation functions for whole programs: one
   starting with a C program, one with a Cminor program, one with an
   RTL program.  The three translations produce Asm programs ready for
@@ -111,12 +129,19 @@ Notation "a @@ b" :=
 
 Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    OK f
+   @@ print print_RTL
    @@ Tailcall.transf_fundef
+   @@ print print_RTL_tailcall
+   @@ CastOptim.transf_fundef
+   @@ print print_RTL_castopt
    @@ Constprop.transf_fundef
+   @@ print print_RTL_constprop
    @@ CSE.transf_fundef
+   @@ print print_RTL_cse
   @@@ Allocation.transf_fundef
    @@ Tunneling.tunnel_fundef
   @@@ Linearize.transf_fundef
+   @@ print print_LTLin
    @@ Reload.transf_fundef
   @@@ Stacking.transf_fundef
   @@@ Asmgen.transf_fundef.
@@ -135,21 +160,27 @@ Definition transf_rtl_program (p: RTL.program) : res Asm.program :=
 
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    OK p
+   @@ print print_Cminor
    @@ Selection.sel_program
   @@@ transform_partial_program transf_cminorsel_fundef.
 
 Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
-  match Ctyping.typecheck_program p with
-  | false =>
-      Error (msg "Ctyping: type error")
-  | true =>
-      OK p 
-      @@@ Cshmgen.transl_program
-      @@@ Cminorgen.transl_program
-      @@@ transf_cminor_program
-  end.
+  OK p 
+   @@ print print_Csyntax
+  @@@ SimplExpr.transl_program
+   @@ print print_Clight
+  @@@ Cshmgen.transl_program
+  @@@ Cminorgen.transl_program
+  @@@ transf_cminor_program.
 
 (** The following lemmas help reason over compositions of passes. *)
+
+Lemma print_identity:
+  forall (A: Type) (printer: A -> unit) (prog: A),
+  print printer prog = prog.
+Proof.
+  intros; unfold print. destruct (printer prog); auto. 
+Qed.
 
 Lemma map_partial_compose:
   forall (X A B C: Type)
@@ -221,11 +252,41 @@ Proof.
   apply extensionality; auto. 
 Qed.
 
+Lemma transform_program_print_identity:
+  forall (A V: Type) (p: program A V) (f: A -> unit),
+  transform_program (print f) p = p.
+Proof.
+  intros until f. unfold transform_program, transf_program. 
+  destruct p; simpl; f_equal. 
+  transitivity (map (fun x => x) prog_funct). 
+  apply list_map_exten; intros. destruct x; simpl. rewrite print_identity. auto.
+  apply list_map_identity.
+Qed.
+
+Lemma compose_print_identity:
+  forall (A: Type) (x: res A) (f: A -> unit), 
+  x @@ print f = x.
+Proof.
+  intros. destruct x; simpl. rewrite print_identity. auto. auto. 
+Qed.
+
 (** * Semantic preservation *)
 
 (** We prove that the [transf_program] translations preserve semantics.
   The proof composes the semantic preservation results for each pass.
   This establishes the correctness of the whole compiler! *)
+
+Ltac TransfProgInv :=
+  match goal with
+  | [ H: transform_partial_program (fun f => _ @@@ _) _ = OK _ |- _ ] =>
+      let p := fresh "p" in let X := fresh "X" in let P := fresh "P" in
+      destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p [X P]];
+      clear H
+  | [ H: transform_partial_program (fun f => _ @@ _) _ = OK _ |- _ ] =>
+      let p := fresh "p" in let X := fresh "X" in let P := fresh "P" in
+      destruct (transform_program_compose _ _ _ _ _ _ _ _ H) as [p [X P]];
+      clear H
+  end.
 
 Theorem transf_rtl_program_correct:
   forall p tp beh,
@@ -235,47 +296,25 @@ Theorem transf_rtl_program_correct:
   Asm.exec_program tp beh.
 Proof.
   intros. unfold transf_rtl_program, transf_rtl_fundef in H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p7 [X7 P7]].
-  clear H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X7) as [p6 [X6 P6]].
-  clear X7.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X6) as [p5 [X5 P5]].
-  clear X6. generalize (transform_program_partial_program _ _ _ _ _ _ P5). clear P5. intro P5.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X5) as [p4 [X4 P4]].
-  clear X5.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X4) as [p3 [X3 P3]].
-  clear X4. generalize (transform_program_partial_program _ _ _ _ _ _ P3). clear P3. intro P3.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X3) as [p2 [X2 P2]].
-  clear X3.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ X2) as [p1 [X1 P1]].
-  clear X2.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ X1) as [p0 [X0 P0]].
-  clear X1.
-  destruct (transform_program_compose _ _ _ _ _ _ _ _ X0) as [p00 [X00 P00]].
-  clear X0.
-  generalize (transform_partial_program_identity _ _ _ _ X00). clear X00. intro. subst p00.
+  repeat TransfProgInv. 
+  repeat rewrite transform_program_print_identity in *. subst. 
+  exploit transform_partial_program_identity; eauto. intro EQ. subst.
 
-  assert (WT3 : LTLtyping.wt_program p3).
-    apply Alloctyping.program_typing_preserved with p2. auto.
-  assert (WT4 : LTLtyping.wt_program p4).
-    subst p4. apply Tunnelingtyping.program_typing_preserved. auto.
-  assert (WT5 : LTLintyping.wt_program p5).
-    apply Linearizetyping.program_typing_preserved with p4. auto. auto.
-  assert (WT6 : Lineartyping.wt_program p6).
-    subst p6. apply Reloadtyping.program_typing_preserved. auto.
-  assert (WT7: Machtyping.wt_program p7).
-    apply Stackingtyping.program_typing_preserved with p6. auto. auto.
+  generalize Alloctyping.program_typing_preserved Tunnelingtyping.program_typing_preserved
+             Linearizetyping.program_typing_preserved Reloadtyping.program_typing_preserved
+             Stackingtyping.program_typing_preserved; intros.
 
-  apply Asmgenproof.transf_program_correct with p7; auto.
-  apply Machabstr2concr.exec_program_equiv; auto.
-  apply Stackingproof.transf_program_correct with p6; auto.
-  subst p6; apply Reloadproof.transf_program_correct; auto.
-  apply Linearizeproof.transf_program_correct with p4; auto.
-  subst p4; apply Tunnelingproof.transf_program_correct; auto.
-  apply Allocproof.transf_program_correct with p2; auto.
-  subst p2; apply CSEproof.transf_program_correct; auto.
-  subst p1; apply Constpropproof.transf_program_correct; auto.
-  subst p0; apply Tailcallproof.transf_program_correct; auto.
+  eapply Asmgenproof.transf_program_correct; eauto 6.
+  eapply Machabstr2concr.exec_program_equiv; eauto 6.
+  eapply Stackingproof.transf_program_correct; eauto.
+  eapply Reloadproof.transf_program_correct; eauto.
+  eapply Linearizeproof.transf_program_correct; eauto.
+  eapply Tunnelingproof.transf_program_correct; eauto.
+  eapply Allocproof.transf_program_correct; eauto.
+  eapply CSEproof.transf_program_correct; eauto.
+  eapply Constpropproof.transf_program_correct; eauto.
+  eapply CastOptimproof.transf_program_correct; eauto.
+  eapply Tailcallproof.transf_program_correct; eauto.
 Qed.
 
 Theorem transf_cminor_program_correct:
@@ -286,30 +325,29 @@ Theorem transf_cminor_program_correct:
   Asm.exec_program tp beh.
 Proof.
   intros. unfold transf_cminor_program, transf_cminorsel_fundef in H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p3 [X3 P3]].
-  clear H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ X3) as [p2 [X2 P2]].
-  clear X3.
-  generalize (transform_partial_program_identity _ _ _ _ X2). clear X2. intro. subst p2.
-  apply transf_rtl_program_correct with p3; auto.
-  apply RTLgenproof.transf_program_correct with (Selection.sel_program p); auto.
-  apply Selectionproof.transf_program_correct; auto.
+  simpl in H. repeat TransfProgInv.
+  eapply transf_rtl_program_correct; eauto.
+  eapply RTLgenproof.transf_program_correct; eauto.
+  eapply Selectionproof.transf_program_correct; eauto.
+  rewrite print_identity. auto.
 Qed.
 
 Theorem transf_c_program_correct:
   forall p tp beh,
   transf_c_program p = OK tp ->
   not_wrong beh ->
-  Csem.exec_program p beh ->
+  Cstrategy.exec_program p beh ->
   Asm.exec_program tp beh.
 Proof.
   intros until beh; unfold transf_c_program; simpl.
-  caseEq (Ctyping.typecheck_program p); try congruence; intro.
-  caseEq (Cshmgen.transl_program p); simpl; try congruence; intros p1 EQ1.
+  rewrite print_identity.
+  caseEq (SimplExpr.transl_program p); simpl; try congruence; intros p0 EQ0.
+  rewrite print_identity.
+  caseEq (Cshmgen.transl_program p0); simpl; try congruence; intros p1 EQ1.
   caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2.
   intros EQ3 NOTW SEM.
   eapply transf_cminor_program_correct; eauto.
   eapply Cminorgenproof.transl_program_correct; eauto. 
-  eapply Cshmgenproof3.transl_program_correct; eauto.
-  apply Ctyping.typecheck_program_correct; auto.
+  eapply Cshmgenproof.transl_program_correct; eauto.
+  eapply SimplExprproof.transl_program_correct; eauto.
 Qed.

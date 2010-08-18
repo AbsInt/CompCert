@@ -40,7 +40,7 @@ cparser.byte: $(COBJS) $(BOBJS) Main.cmo
 	$(OCAMLC) -custom -o cparser.byte str.cma $(COBJS) $(BOBJS) Main.cmo
 
 clean::
-	rm -f cparser
+	rm -f cparser.byte
 
 cparser.cma libcparser.a: uint64.o Cparser.cmo 
 	$(OCAMLMKLIB) -o cparser uint64.o Cparser.cmo
@@ -82,7 +82,7 @@ beforedepend:: Lexer.ml
 	$(OCAMLC) -c $*.c
 
 clean::
-	rm -f *.cm? *.o *.so
+	rm -f *.cm? *.cmxa *.o *.so *.a
 
 depend: beforedepend
 	$(OCAMLDEP) *.mli *.ml > .depend

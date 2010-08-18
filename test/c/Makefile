@@ -1,7 +1,7 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=-stdlib ../../runtime -fmadd -dclight -dasm
+CCOMPFLAGS=-stdlib ../../runtime -fmadd -dcmedium -dclight -dasm
 
 CFLAGS=-O1 -Wall
 
@@ -58,4 +58,4 @@ time_compcert:
 
 clean:
 	rm -f *.compcert *.gcc
-	rm -f *.light.c *.s *.o *~ 
+	rm -f *.light.c *.medium.c *.s *.o *~ 

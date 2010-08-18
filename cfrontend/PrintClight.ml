@@ -13,7 +13,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Pretty-printer for Csyntax *)
+(** Pretty-printer for Clight *)
 
 open Format
 open Camlcoq
@@ -21,43 +21,8 @@ open Datatypes
 open Values
 open AST
 open Csyntax
-
-let name_unop = function
-  | Onotbool -> "!"
-  | Onotint  -> "~"
-  | Oneg     -> "-"
-
-let name_binop = function
-  | Oadd -> "+"
-  | Osub -> "-"
-  | Omul -> "*"
-  | Odiv -> "/"
-  | Omod -> "%"
-  | Oand -> "&"
-  | Oor  -> "|"
-  | Oxor -> "^"
-  | Oshl -> "<<"
-  | Oshr -> ">>"
-  | Oeq  -> "=="
-  | One  -> "!="
-  | Olt  -> "<"
-  | Ogt  -> ">"
-  | Ole  -> "<="
-  | Oge  -> ">="
-
-let name_inttype sz sg =
-  match sz, sg with
-  | I8, Signed -> "signed char"
-  | I8, Unsigned -> "unsigned char"
-  | I16, Signed -> "short"
-  | I16, Unsigned -> "unsigned short"
-  | I32, Signed -> "int"
-  | I32, Unsigned -> "unsigned int"
-
-let name_floattype sz =
-  match sz with
-  | F32 -> "float"
-  | F64 -> "double"
+open PrintCsyntax
+open Clight
 
 (* Collecting the names and fields of structs and unions *)
 
@@ -71,73 +36,25 @@ let struct_unions = ref StructUnionSet.empty
 let register_struct_union id fld =
   struct_unions := StructUnionSet.add (extern_atom id, fld) !struct_unions
 
-(* Declarator (identifier + type) *)
+(* Naming temporaries *)
 
-let name_optid id =
-  if id = "" then "" else " " ^ id
+let temp_name (id: ident) =
+  Printf.sprintf "$%ld" (camlint_of_positive id)
 
-let parenthesize_if_pointer id =
-  if String.length id > 0 && id.[0] = '*' then "(" ^ id ^ ")" else id
-
-let rec name_cdecl id ty =
-  match ty with
-  | Tvoid ->
-      "void" ^ name_optid id
-  | Tint(sz, sg) ->
-      name_inttype sz sg ^ name_optid id
-  | Tfloat sz ->
-      name_floattype sz ^ name_optid id
-  | Tpointer t ->
-      name_cdecl ("*" ^ id) t
-  | Tarray(t, n) ->
-      name_cdecl
-        (sprintf "%s[%ld]" (parenthesize_if_pointer id) (camlint_of_coqint n))
-        t
-  | Tfunction(args, res) ->
-      let b = Buffer.create 20 in
-      if id = ""
-      then Buffer.add_string b "(*)"
-      else Buffer.add_string b (parenthesize_if_pointer id);
-      Buffer.add_char b '(';
-      begin match args with
-      | Tnil ->
-          Buffer.add_string b "void"
-      | _ ->
-          let rec add_args first = function
-          | Tnil -> ()
-          | Tcons(t1, tl) ->
-              if not first then Buffer.add_string b ", ";
-              Buffer.add_string b (name_cdecl "" t1);
-              add_args false tl in
-          add_args true args
-      end;
-      Buffer.add_char b ')';
-      name_cdecl (Buffer.contents b) res
-  | Tstruct(name, fld) ->
-      extern_atom name ^ name_optid id
-  | Tunion(name, fld) ->
-      extern_atom name ^ name_optid id
-  | Tcomp_ptr name ->
-      extern_atom name ^ " *" ^ id
-
-(* Type *)
-
-let name_type ty = name_cdecl "" ty
+(* Declarator (identifier + type) -- reuse from PrintCsyntax *)
 
 (* Precedences and associativity (H&S section 7.2) *)
 
 type associativity = LtoR | RtoL | NA
 
 let rec precedence = function
-  | Eloc _ -> assert false
   | Evar _ -> (16, NA)
+  | Etempvar _ -> (16, NA)
   | Ederef _ -> (15, RtoL)
   | Efield _ -> (16, LtoR)
-  | Eval _ -> (16, NA)
-  | Evalof(l, _) -> precedence l
+  | Econst_int _ -> (16, NA)
+  | Econst_float _ -> (16, NA)
   | Esizeof _ -> (15, RtoL)
-  | Ecall _ -> (16, LtoR)
-  | Epostincr _ -> (16, LtoR)
   | Eunop _ -> (15, RtoL)
   | Eaddrof _ -> (15, RtoL)
   | Ecast _ -> (14, RtoL)
@@ -150,10 +67,6 @@ let rec precedence = function
   | Ebinop(Oxor, _, _, _) -> (7, LtoR)
   | Ebinop(Oor, _, _, _) -> (6, LtoR)
   | Econdition _ -> (3, RtoL)
-  | Eassign _ -> (2, RtoL)
-  | Eassignop _ -> (2, RtoL)
-  | Ecomma _ -> (1, LtoR)
-  | Eparen _ -> assert false
 
 (* Expressions *)
 
@@ -167,60 +80,43 @@ let rec expr p (prec, e) =
   then fprintf p "@[<hov 2>("
   else fprintf p "@[<hov 2>";
   begin match e with
-  | Eloc _ ->
-      assert false
   | Evar(id, _) ->
       fprintf p "%s" (extern_atom id)
+  | Etempvar(id, _) ->
+      fprintf p "%s" (temp_name id)
   | Ederef(a1, _) ->
       fprintf p "*%a" expr (prec', a1)
   | Efield(a1, f, _) ->
       fprintf p "%a.%s" expr (prec', a1) (extern_atom f)
-  | Evalof(l, _) ->
-      expr p (prec, l)
-  | Eval(Vint n, _) ->
+  | Econst_int(n, _) ->
       fprintf p "%ld" (camlint_of_coqint n)
-  | Eval(Vfloat f, _) ->
+  | Econst_float(f, _) ->
       fprintf p "%F" f
-  | Eval(_, _) ->
-      assert false
   | Esizeof(ty, _) ->
       fprintf p "sizeof(%s)" (name_type ty)
   | Eunop(op, a1, _) ->
       fprintf p "%s%a" (name_unop op) expr (prec', a1)
   | Eaddrof(a1, _) ->
       fprintf p "&%a" expr (prec', a1)
-  | Epostincr(id, a1, _) ->
-      fprintf p "%a%s" expr (prec', a1)
-                        (match id with Incr -> "++" | Decr -> "--")
   | Ebinop(op, a1, a2, _) ->
       fprintf p "%a@ %s %a"
                  expr (prec1, a1) (name_binop op) expr (prec2, a2)
   | Ecast(a1, ty) ->
       fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
-  | Eassign(a1, a2, _) ->
-      fprintf p "%a =@ %a" expr (prec1, a1) expr (prec2, a2)
-  | Eassignop(op, a1, a2, _, _) ->
-      fprintf p "%a %s=@ %a" expr (prec1, a1) (name_binop op) expr (prec2, a2)
   | Econdition(a1, a2, a3, _) ->
       fprintf p "%a@ ? %a@ : %a" expr (4, a1) expr (4, a2) expr (4, a3)
-  | Ecomma(a1, a2, _) ->
-      fprintf p "%a,@ %a" expr (prec1, a1) expr (prec2, a2)
-  | Ecall(a1, al, _) ->
-      fprintf p "%a@[<hov 1>(%a)@]" expr (prec', a1) exprlist (true, al)
-  | Eparen _ ->
-      assert false
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
-and exprlist p (first, rl) =
+let print_expr p e = expr p (0, e)
+
+let rec print_expr_list p (first, rl) =
   match rl with
-  | Enil -> ()
-  | Econs(r, rl) ->
+  | [] -> ()
+  | r :: rl ->
       if not first then fprintf p ",@ ";
       expr p (2, r);
-      exprlist p (false, rl)
-
-let print_expr p e = expr p (0, e)
+      print_expr_list p (false, rl)
 
 (* Statements *)
 
@@ -228,14 +124,33 @@ let rec print_stmt p s =
   match s with
   | Sskip ->
       fprintf p "/*skip*/;"
-  | Sdo e ->
-      fprintf p "%a;" print_expr e
+  | Sassign(e1, e2) ->
+      fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
+  | Sset(id, e2) ->
+      fprintf p "@[<hv 2>%s =@ %a;@]" (temp_name id) print_expr e2
+  | Scall(None, e1, el) ->
+      fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
+                print_expr e1
+                print_expr_list (true, el)
+  | Scall(Some id, e1, el) ->
+      fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@]);@]"
+                (temp_name id)
+                print_expr e1
+                print_expr_list (true, el)
+  | Ssequence(Sskip, s2) ->
+      print_stmt p s2
+  | Ssequence(s1, Sskip) ->
+      print_stmt p s1
   | Ssequence(s1, s2) ->
       fprintf p "%a@ %a" print_stmt s1 print_stmt s2
   | Sifthenelse(e, s1, Sskip) ->
       fprintf p "@[<v 2>if (%a) {@ %a@;<0 -2>}@]"
               print_expr e
               print_stmt s1
+  | Sifthenelse(e, Sskip, s2) ->
+      fprintf p "@[<v 2>if (! %a) {@ %a@;<0 -2>}@]"
+              expr (15, e)
+              print_stmt s2
   | Sifthenelse(e, s1, s2) ->
       fprintf p "@[<v 2>if (%a) {@ %a@;<0 -2>} else {@ %a@;<0 -2>}@]"
               print_expr e
@@ -249,9 +164,8 @@ let rec print_stmt p s =
       fprintf p "@[<v 2>do {@ %a@;<0 -2>} while(%a);@]"
               print_stmt s
               print_expr e
-  | Sfor(s_init, e, s_iter, s_body) ->
-      fprintf p "@[<v 2>for (@[<hv 0>%a;@ %a;@ %a) {@]@ %a@;<0 -2>}@]"
-              print_stmt_for s_init
+  | Sfor'(e, s_iter, s_body) ->
+      fprintf p "@[<v 2>for (@[<hv 0>;@ %a;@ %a) {@]@ %a@;<0 -2>}@]"
               print_expr e
               print_stmt_for s_iter
               print_stmt s_body
@@ -292,31 +206,23 @@ and print_stmt_for p s =
   match s with
   | Sskip ->
       fprintf p "/*nothing*/"
-  | Sdo e ->
-      print_expr p e
+  | Sassign(e1, e2) ->
+      fprintf p "%a = %a" print_expr e1 print_expr e2
+  | Sset(id, e2) ->
+      fprintf p "%s = %a" (temp_name id) print_expr e2
   | Ssequence(s1, s2) ->
       fprintf p "%a, %a" print_stmt_for s1 print_stmt_for s2
+  | Scall(None, e1, el) ->
+      fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@])@]"
+                print_expr e1
+                print_expr_list (true, el)
+  | Scall(Some id, e1, el) ->
+      fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@])@]"
+                (temp_name id)
+                print_expr e1
+                print_expr_list (true, el)
   | _ ->
       fprintf p "({ %a })" print_stmt s
-
-let name_function_parameters fun_name params =
-  let b = Buffer.create 20 in
-  Buffer.add_string b fun_name;
-  Buffer.add_char b '(';
-  begin match params with
-  | [] ->
-      Buffer.add_string b "void"
-  | _ ->
-      let rec add_params first = function
-      | [] -> ()
-      | Coq_pair(id, ty) :: rem ->
-          if not first then Buffer.add_string b ", ";
-          Buffer.add_string b (name_cdecl (extern_atom id) ty);
-          add_params false rem in
-      add_params true params
-  end;
-  Buffer.add_char b ')';
-  Buffer.contents b
 
 let print_function p id f =
   fprintf p "%s@ "
@@ -328,6 +234,10 @@ let print_function p id f =
     (fun (Coq_pair(id, ty)) ->
       fprintf p "%s;@ " (name_cdecl (extern_atom id) ty))
     f.fn_vars;
+  List.iter
+    (fun (Coq_pair(id, ty)) ->
+      fprintf p "register %s;@ " (name_cdecl (temp_name id) ty))
+    f.fn_temps;
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ @ "
 
@@ -338,63 +248,6 @@ let print_fundef p (Coq_pair(id, fd)) =
                 (name_cdecl (extern_atom id) (Tfunction(args, res)))
   | Internal f ->
       print_function p id f
-
-let string_of_init id =
-  let b = Buffer.create (List.length id) in
-  let add_init = function
-  | Init_int8 n ->
-      let c = Int32.to_int (camlint_of_coqint n) in
-      if c >= 32 && c <= 126 && c <> Char.code '\"' && c <> Char.code '\\'
-      then Buffer.add_char b (Char.chr c)
-      else Buffer.add_string b (Printf.sprintf "\\%03o" c)
-  | _ ->
-      assert false
-  in List.iter add_init id; Buffer.contents b
-
-let chop_last_nul id =
-  match List.rev id with
-  | Init_int8 BinInt.Z0 :: tl -> List.rev tl
-  | _ -> id
-
-let print_init p = function
-  | Init_int8 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
-  | Init_int16 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
-  | Init_int32 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
-  | Init_float32 n -> fprintf p "%F,@ " n
-  | Init_float64 n -> fprintf p "%F,@ " n
-  | Init_space n -> fprintf p "/* skip %ld, */@ " (camlint_of_coqint n)
-  | Init_addrof(symb, ofs) ->
-      let ofs = camlint_of_coqint ofs in
-      if ofs = 0l
-      then fprintf p "&%s,@ " (extern_atom symb)
-      else fprintf p "(void *)((char *)&%s + %ld),@ " (extern_atom symb) ofs
-
-let re_string_literal = Str.regexp "__stringlit_[0-9]+"
-
-let print_globvar p (Coq_pair(id, v)) =
-  let name1 = extern_atom id in
-  let name2 = if v.gvar_readonly then "const " ^ name1 else name1 in
-  let name3 = if v.gvar_volatile then "volatile " ^ name2 else name2 in
-  match v.gvar_init with
-  | [] ->
-      fprintf p "extern %s;@ @ "
-              (name_cdecl name3 v.gvar_info)
-  | [Init_space _] ->
-      fprintf p "%s;@ @ "
-              (name_cdecl name3 v.gvar_info)
-  | _ ->
-      fprintf p "@[<hov 2>%s = "
-              (name_cdecl name3 v.gvar_info);
-      if Str.string_match re_string_literal (extern_atom id) 0
-      && List.for_all (function Init_int8 _ -> true | _ -> false) v.gvar_init
-      then
-        fprintf p "\"%s\"" (string_of_init (chop_last_nul v.gvar_init))
-      else begin
-        fprintf p "{@ ";
-        List.iter (print_init p) v.gvar_init;
-        fprintf p "}"
-      end;
-      fprintf p ";@]@ @ "
 
 (* Collect struct and union types *)
 
@@ -418,12 +271,12 @@ and collect_fields = function
   | Fcons(id, hd, tl) -> collect_type hd; collect_fields tl
 
 let rec collect_expr = function
-  | Eloc _ -> assert false
+  | Econst_int _ -> ()
+  | Econst_float _ -> ()
   | Evar _ -> ()
+  | Etempvar _ -> ()
   | Ederef(r, _) -> collect_expr r
   | Efield(l, _, _) -> collect_expr l
-  | Eval _ -> ()
-  | Evalof(l, _) -> collect_expr l
   | Eaddrof(l, _) -> collect_expr l
   | Eunop(_, r, _) -> collect_expr r
   | Ebinop(_, r1, r2, _) -> collect_expr r1; collect_expr r2
@@ -431,27 +284,22 @@ let rec collect_expr = function
   | Econdition(r1, r2, r3, _) -> 
       collect_expr r1; collect_expr r2; collect_expr r3
   | Esizeof _ -> ()
-  | Eassign(l, r, _) -> collect_expr l; collect_expr r
-  | Eassignop(_, l, r, _, _) -> collect_expr l; collect_expr r
-  | Epostincr(_, l, _) -> collect_expr l
-  | Ecomma(r1, r2, _) -> collect_expr r1; collect_expr r2
-  | Ecall(r1, rl, _) ->  collect_expr r1; collect_exprlist rl
-  | Eparen _ -> assert false
 
-and collect_exprlist = function
-  | Enil -> ()
-  | Econs(r1, rl) ->  collect_expr r1; collect_exprlist rl
+let rec collect_exprlist = function
+  | [] -> ()
+  | r1 :: rl -> collect_expr r1; collect_exprlist rl
 
 let rec collect_stmt = function
   | Sskip -> ()
-  | Sdo e -> collect_expr e
+  | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
+  | Sset(id, e2) -> collect_expr e2
+  | Scall(optid, e1, el) -> collect_expr e1; collect_exprlist el
   | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
   | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2
   | Swhile(e, s) -> collect_expr e; collect_stmt s
   | Sdowhile(e, s) -> collect_stmt s; collect_expr e
-  | Sfor(s_init, e, s_iter, s_body) ->
-      collect_stmt s_init; collect_expr e;
-      collect_stmt s_iter; collect_stmt s_body
+  | Sfor'(e, s_iter, s_body) ->
+      collect_expr e; collect_stmt s_iter; collect_stmt s_body
   | Sbreak -> ()
   | Scontinue -> ()
   | Sswitch(e, cases) -> collect_expr e; collect_cases cases
@@ -468,6 +316,7 @@ let collect_function f =
   collect_type f.fn_return;
   List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_params;
   List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_vars;
+  List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_temps;
   collect_stmt f.fn_body
 
 let collect_fundef (Coq_pair(id, fd)) =
