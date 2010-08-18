@@ -1699,12 +1699,11 @@ Proof.
   econstructor; eauto. constructor; auto. 
 
 (* return none *)
-  inv H8. econstructor; split.
+  inv H7. econstructor; split.
   left. apply plus_one. econstructor; eauto. 
-  rewrite <- H. apply function_return_preserved; auto.
   constructor. apply match_cont_call; auto. 
 (* return some 1 *)
-  inv H7. inv H1. econstructor; split.
+  inv H6. inv H0. econstructor; split.
   left; eapply plus_left. constructor. apply push_seq. traceEq.
   econstructor; eauto. constructor. auto.
 (* return some 2 *)

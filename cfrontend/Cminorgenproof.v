@@ -2965,7 +2965,7 @@ Proof.
   eapply external_call_nextblock_incr; eauto.
   eapply external_call_nextblock_incr; eauto.
 
-(* return none *)
+(* return *)
   inv MK. simpl.
   left; econstructor; split.
   apply plus_one. econstructor; eauto. 

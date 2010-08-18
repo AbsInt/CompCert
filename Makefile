@@ -172,6 +172,9 @@ distclean:
 	$(MAKE) clean
 	rm -f Makefile.config
 
+check-admitted: $(FILES)
+	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
+
 include .depend
 
 FORCE:

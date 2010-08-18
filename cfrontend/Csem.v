@@ -1092,12 +1092,10 @@ Inductive sstep: state -> trace -> state -> Prop :=
         E0 (State f (Sfor Sskip a2 a3 s) k e m)
 
   | step_return_0: forall f k e m m',
-      f.(fn_return) = Tvoid ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       sstep (State f (Sreturn None) k e m)
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f x k e m,
-      f.(fn_return) <> Tvoid ->
       sstep (State f (Sreturn (Some x)) k e m)
         E0 (ExprState f x (Kreturn k) e  m)
   | step_return_2:  forall f v1 ty k e m v2 m',

@@ -1691,7 +1691,7 @@ Proof.
 (* return none *)
   monadInv TR. inv MTR. 
   econstructor; split.
-  apply plus_one. constructor. monadInv TRF. simpl. rewrite H. auto.
+  apply plus_one. constructor.
   eapply match_env_free_blocks; eauto. 
   econstructor; eauto.
   eapply match_cont_call_cont. eauto. 
@@ -1699,9 +1699,11 @@ Proof.
 (* return some *)
   monadInv TR. inv MTR. 
   econstructor; split.
-  apply plus_one. constructor. monadInv TRF. simpl.
+  apply plus_one. constructor.
+(* monadInv TRF. simpl.
   unfold opttyp_of_type. destruct (Clight.fn_return f); try congruence.
   inv H0. inv H3. inv H3. 
+*)
   eapply make_cast_correct. eapply transl_expr_correct; eauto. eauto.
   eapply match_env_free_blocks; eauto.
   econstructor; eauto.

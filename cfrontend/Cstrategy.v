@@ -1971,11 +1971,13 @@ Lemma bigstep_to_steps:
 /\(forall e m s t m' out,
    exec_stmt e m s t m' out ->
    forall f k,
+(*
    match out with
    | Out_return None => fn_return f = Tvoid
    | Out_return (Some(v, ty)) => fn_return f <> Tvoid
    | _ => True
    end ->
+*)
    exists S,
    star step ge (State f s k e m) t S /\ outcome_state_match e m' f k out S)
 /\(forall m fd args t m' res,
@@ -2176,7 +2178,7 @@ Proof.
 
 (* return some *)
   econstructor; split.
-  eapply star_left. right; apply step_return_1. auto.
+  eapply star_left. right; apply step_return_1.
   eapply H0. traceEq.
   econstructor; eauto. 
 
@@ -2194,7 +2196,7 @@ Proof.
   constructor.
 
 (* while stop *)
-  destruct (H3 f (Kwhile2 a s k)) as [S1 [A1 B1]]. inv H4; auto. 
+  destruct (H3 f (Kwhile2 a s k)) as [S1 [A1 B1]].
   set (S2 :=
     match out' with
     | Out_break => State f Sskip k e m2
@@ -2212,7 +2214,7 @@ Proof.
   unfold S2. inversion H4; subst. constructor. inv B1; econstructor; eauto.
 
 (* while loop *)
-  destruct (H3 f (Kwhile2 a s k)) as [S1 [A1 B1]]. inv H4; auto. 
+  destruct (H3 f (Kwhile2 a s k)) as [S1 [A1 B1]].
   destruct (H6 f k) as [S2 [A2 B2]]; auto.
   exists S2; split.
   eapply star_left. right; apply step_while.
@@ -2226,7 +2228,7 @@ Proof.
   auto.
 
 (* dowhile false *)
-  destruct (H0 f (Kdowhile1 a s k)) as [S1 [A1 B1]]. inv H1; auto.
+  destruct (H0 f (Kdowhile1 a s k)) as [S1 [A1 B1]].
   exists (State f Sskip k e m2); split.
   eapply star_left. right; constructor.
   eapply star_trans. eexact A1.
@@ -2238,7 +2240,7 @@ Proof.
   constructor.
 
 (* dowhile stop *)
-  destruct (H0 f (Kdowhile1 a s k)) as [S1 [A1 B1]]. inv H1; auto.
+  destruct (H0 f (Kdowhile1 a s k)) as [S1 [A1 B1]].
   set (S2 :=
     match out1 with
     | Out_break => State f Sskip k e m1
@@ -2254,7 +2256,7 @@ Proof.
   unfold S2. inversion H1; subst. constructor. inv B1; econstructor; eauto.
 
 (* dowhile loop *)
-  destruct (H0 f (Kdowhile1 a s k)) as [S1 [A1 B1]]. inv H1; auto.
+  destruct (H0 f (Kdowhile1 a s k)) as [S1 [A1 B1]].
   destruct (H6 f k) as [S2 [A2 B2]]; auto.
   exists S2; split.
   eapply star_left. right; constructor.
@@ -2269,7 +2271,7 @@ Proof.
 
 (* for start *)
   assert (a1 = Sskip \/ a1 <> Sskip). destruct a1; auto; right; congruence. 
-  destruct H4.
+  destruct H3.
   subst a1. inv H. apply H2; auto.
   destruct (H0 f (Kseq (Sfor Sskip a2 a3 s) k)) as [S1 [A1 B1]]; auto. inv B1.
   destruct (H2 f k) as [S2 [A2 B2]]; auto.
@@ -2288,7 +2290,7 @@ Proof.
   constructor.
 
 (* for stop *)
-  destruct (H3 f (Kfor3 a2 a3 s k)) as [S1 [A1 B1]]. inv H4; auto. 
+  destruct (H3 f (Kfor3 a2 a3 s k)) as [S1 [A1 B1]].
   set (S2 :=
     match out1 with
     | Out_break => State f Sskip k e m2
@@ -2306,7 +2308,7 @@ Proof.
   unfold S2. inversion H4; subst. constructor. inv B1; econstructor; eauto.
 
 (* for loop *)
-  destruct (H3 f (Kfor3 a2 a3 s k)) as [S1 [A1 B1]]. inv H4; auto.
+  destruct (H3 f (Kfor3 a2 a3 s k)) as [S1 [A1 B1]].
   destruct (H6 f (Kfor4 a2 a3 s k)) as [S2 [A2 B2]]; auto. inv B2.
   destruct (H8 f k) as [S3 [A3 B3]]; auto.
   exists S3; split.
@@ -2326,7 +2328,7 @@ Proof.
   auto.
 
 (* switch *)
-  destruct (H2 f (Kswitch2 k)) as [S1 [A1 B1]]. destruct out; auto. 
+  destruct (H2 f (Kswitch2 k)) as [S1 [A1 B1]].
   set (S2 :=
     match out with
     | Out_normal => State f Sskip k e m2
@@ -2350,8 +2352,6 @@ Proof.
 
 (* call internal *)
   destruct (H3 f k) as [S1 [A1 B1]].
-    red in H4. destruct out; auto. destruct o as [[v' ty'] | ].
-    tauto. destruct (fn_return f); tauto.
   eapply star_left. right; eapply step_internal_function; eauto.
   eapply star_right. eexact A1. 
   inv B1; simpl in H4; try contradiction.
@@ -2403,11 +2403,6 @@ Lemma exec_stmt_to_steps:
    forall e m s t m' out,
    exec_stmt e m s t m' out ->
    forall f k,
-   match out with
-   | Out_return None => fn_return f = Tvoid
-   | Out_return (Some(v, ty)) => fn_return f <> Tvoid
-   | _ => True
-   end ->
    exists S,
    star step ge (State f s k e m) t S /\ outcome_state_match e m' f k out S.
 Proof (proj1 (proj2 (proj2 (proj2 bigstep_to_steps)))).
@@ -2464,8 +2459,6 @@ Proof.
   induction 1; intros; simpl; auto with arith. exploit leftcontextlist_size; eauto. auto with arith.
   induction 1; intros; simpl; auto with arith. exploit leftcontext_size; eauto. auto with arith.
 Qed.
-
-Axiom ADMITTED: forall (P: Prop), P.
 
 Lemma evalinf_funcall_steps:
   forall m fd args t k,
@@ -2662,7 +2655,7 @@ Proof.
   reflexivity. reflexivity.
   eapply COS; eauto. traceEq.
 (* return some *)
-  eapply forever_N_plus. apply plus_one; right; constructor. apply ADMITTED.
+  eapply forever_N_plus. apply plus_one; right; constructor.
   eapply COE with (C := fun x => x); eauto. constructor. traceEq.
 (* while test *)
   eapply forever_N_plus. apply plus_one; right; constructor.
@@ -2675,7 +2668,7 @@ Proof.
   reflexivity. reflexivity.
   eapply COS; eauto. traceEq.
 (* while loop *)
-  destruct (exec_stmt_to_steps _ _ _ _ _ _ H2 f (Kwhile2 a s0 k)) as [S1 [A1 B1]]; auto. inv H3; auto. 
+  destruct (exec_stmt_to_steps _ _ _ _ _ _ H2 f (Kwhile2 a s0 k)) as [S1 [A1 B1]]; auto.
   eapply forever_N_plus.
   eapply plus_left. right; constructor. 
   eapply star_trans. eapply eval_expression_to_steps; eauto.
@@ -2688,7 +2681,7 @@ Proof.
   eapply forever_N_plus. apply plus_one; right; constructor.
   eapply COS; eauto. traceEq.
 (* dowhile test *)
-  destruct (exec_stmt_to_steps _ _ _ _ _ _ H0 f (Kdowhile1 a s0 k)) as [S1 [A1 B1]]; auto. inv H1; auto. 
+  destruct (exec_stmt_to_steps _ _ _ _ _ _ H0 f (Kdowhile1 a s0 k)) as [S1 [A1 B1]]; auto.
   eapply forever_N_plus.
   eapply plus_left. right; constructor. 
   eapply star_trans. eexact A1.
@@ -2696,7 +2689,7 @@ Proof.
   reflexivity. reflexivity.
   eapply COE with (C := fun x => x); eauto. constructor. traceEq.
 (* dowhile loop *)
-  destruct (exec_stmt_to_steps _ _ _ _ _ _ H0 f (Kdowhile1 a s0 k)) as [S1 [A1 B1]]; auto. inv H1; auto. 
+  destruct (exec_stmt_to_steps _ _ _ _ _ _ H0 f (Kdowhile1 a s0 k)) as [S1 [A1 B1]]; auto.
   eapply forever_N_plus.
   eapply plus_left. right; constructor. 
   eapply star_trans. eexact A1.
@@ -2728,7 +2721,7 @@ Proof.
   reflexivity. reflexivity.
   eapply COS; eauto. traceEq.
 (* for next *)
-  destruct (exec_stmt_to_steps _ _ _ _ _ _ H2 f (Kfor3 a2 a3 s0 k)) as [S1 [A1 B1]]; auto. inv H3; auto. 
+  destruct (exec_stmt_to_steps _ _ _ _ _ _ H2 f (Kfor3 a2 a3 s0 k)) as [S1 [A1 B1]]; auto.
   eapply forever_N_plus.
   eapply plus_left. right; apply step_for.
   eapply star_trans. eapply eval_expression_to_steps; eauto.
@@ -2738,7 +2731,7 @@ Proof.
   reflexivity. reflexivity. reflexivity. reflexivity.
   eapply COS; eauto. traceEq.
 (* for loop *)
-  destruct (exec_stmt_to_steps _ _ _ _ _ _ H2 f (Kfor3 a2 a3 s0 k)) as [S1 [A1 B1]]; auto. inv H3; auto. 
+  destruct (exec_stmt_to_steps _ _ _ _ _ _ H2 f (Kfor3 a2 a3 s0 k)) as [S1 [A1 B1]]; auto.
   destruct (exec_stmt_to_steps _ _ _ _ _ _ H4 f (Kfor4 a2 a3 s0 k)) as [S2 [A2 B2]]; auto. inv B2.
   eapply forever_N_plus.
   eapply plus_left. right; apply step_for.

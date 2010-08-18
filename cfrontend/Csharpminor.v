@@ -512,12 +512,10 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f (seq_of_lbl_stmt (select_switch n cases)) k e le m)
 
   | step_return_0: forall f k e le m m',
-      f.(fn_return) = None ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn None) k e le m)
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f a k e le m v m',
-      f.(fn_return) <> None ->
       eval_expr e le m a v ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e le m)
