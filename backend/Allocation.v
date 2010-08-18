@@ -100,7 +100,7 @@ Definition transfer
           reg_list_live args
            (reg_sum_live ros (reg_dead res after))
       | Itailcall sig ros args =>
-	  reg_list_live args (reg_sum_live ros Regset.empty)
+          reg_list_live args (reg_sum_live ros Regset.empty)
       | Ibuiltin ef args res s =>
           reg_list_live args (reg_dead res after)
       | Icond cond args ifso ifnot =>

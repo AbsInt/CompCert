@@ -221,7 +221,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       match r with Eval _ _ => False | _ => True end ->
       ty = typeof r ->
       estep (ExprState f r k e m)
-	 E0 (ExprState f (Eval v ty) k e m)
+         E0 (ExprState f (Eval v ty) k e m)
 
   | step_condition_true: forall f C r1 r2 r3 ty k e m v,
       leftcontext RV RV C ->
@@ -229,7 +229,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       is_true v (typeof r1) ->
       typeof r2 = ty ->
       estep (ExprState f (C (Econdition r1 r2 r3 ty)) k e m)
-	 E0 (ExprState f (C (Eparen r2 ty)) k e m)
+         E0 (ExprState f (C (Eparen r2 ty)) k e m)
 
   | step_condition_false: forall f C r1 r2 r3 ty k e m v,
       leftcontext RV RV C ->
@@ -237,7 +237,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       is_false v (typeof r1) ->
       typeof r3 = ty ->
       estep (ExprState f (C (Econdition r1 r2 r3 ty)) k e m)
-	 E0 (ExprState f (C (Eparen r3 ty)) k e m)
+         E0 (ExprState f (C (Eparen r3 ty)) k e m)
 
   | step_assign: forall f C l r ty k e m b ofs v v' m',
       leftcontext RV RV C ->
@@ -247,7 +247,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       store_value_of_type (typeof l) m b ofs v' = Some m' ->
       ty = typeof l ->
       estep (ExprState f (C (Eassign l r ty)) k e m)
-	 E0 (ExprState f (C (Eval v' ty)) k e m')
+         E0 (ExprState f (C (Eval v' ty)) k e m')
 
   | step_assignop: forall f C op l r tyres ty k e m b ofs v1 v2 v3 v4 m',
       leftcontext RV RV C ->
@@ -259,7 +259,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       store_value_of_type (typeof l) m b ofs v4 = Some m' ->
       ty = typeof l ->
       estep (ExprState f (C (Eassignop op l r tyres ty)) k e m)
-	 E0 (ExprState f (C (Eval v4 ty)) k e m')
+         E0 (ExprState f (C (Eval v4 ty)) k e m')
 
   | step_postincr: forall f C id l ty k e m b ofs v1 v2 v3 m',
       leftcontext RV RV C ->
@@ -270,7 +270,7 @@ Inductive estep: state -> trace -> state -> Prop :=
       store_value_of_type ty m b ofs v3 = Some m' ->
       ty = typeof l ->
       estep (ExprState f (C (Epostincr id l ty)) k e m)
-	 E0 (ExprState f (C (Eval v1 ty)) k e m')
+         E0 (ExprState f (C (Eval v1 ty)) k e m')
 
   | step_comma: forall f C r1 r2 ty k e m v,
       leftcontext RV RV C ->

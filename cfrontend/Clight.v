@@ -320,18 +320,12 @@ End EXPR.
 
 Inductive cont: Type :=
   | Kstop: cont
-  | Kseq: statement -> cont -> cont
-       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)
-  | Kwhile: expr -> statement -> cont -> cont
-       (**r [Kwhile e s k] = after [s] in [while (e) s] *)
-  | Kdowhile: expr -> statement -> cont -> cont
-       (**r [Kdowhile e s k] = after [s] in [do s while (e)] *)
-  | Kfor2: expr -> statement -> statement -> cont -> cont
-       (**r [Kfor2 e2 e3 s k] = after [s] in [for'(e2;e3) s] *)
-  | Kfor3: expr -> statement -> statement -> cont -> cont
-       (**r [Kfor3 e2 e3 s k] = after [e3] in [for'(e2;e3) s] *)
-  | Kswitch: cont -> cont
-       (**r catches [break] statements arising out of [switch] *)
+  | Kseq: statement -> cont -> cont       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)
+  | Kwhile: expr -> statement -> cont -> cont       (**r [Kwhile e s k] = after [s] in [while (e) s] *)
+  | Kdowhile: expr -> statement -> cont -> cont       (**r [Kdowhile e s k] = after [s] in [do s while (e)] *)
+  | Kfor2: expr -> statement -> statement -> cont -> cont       (**r [Kfor2 e2 e3 s k] = after [s] in [for'(e2;e3) s] *)
+  | Kfor3: expr -> statement -> statement -> cont -> cont       (**r [Kfor3 e2 e3 s k] = after [e3] in [for'(e2;e3) s] *)
+  | Kswitch: cont -> cont       (**r catches [break] statements arising out of [switch] *)
   | Kcall: option ident ->                  (**r where to store result *)
            function ->                      (**r calling function *)
            env ->                           (**r local env of calling function *)

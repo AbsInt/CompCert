@@ -213,13 +213,13 @@ Function sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   | add_case_pi ty =>                   (**r pointer plus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
-	Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
       | _,  _ => None
       end   
   | add_case_ip ty =>                   (**r integer plus pointer *)
       match v1,v2 with
       | Vint n1, Vptr b2 ofs2 => 
-	Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
+        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
       | _,  _ => None
       end   
   | add_default => None
