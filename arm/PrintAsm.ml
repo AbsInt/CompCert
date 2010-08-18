@@ -523,7 +523,7 @@ let print_function oc name code =
   currpos := 0;
   fprintf oc "	.text\n";
   fprintf oc "	.align 2\n";
-  if not (C2Clight.atom_is_static name) then
+  if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
@@ -616,7 +616,7 @@ let print_var oc (Coq_pair(name, v)) =
       then fprintf oc "	.const\n"
       else fprintf oc "	.data\n";
       fprintf oc "	.align	2\n";
-      if not (C2Clight.atom_is_static name) then
+      if not (C2C.atom_is_static name) then
         fprintf oc "	.global	%a\n" print_symb name;
       fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;

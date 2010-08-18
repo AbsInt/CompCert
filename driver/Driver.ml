@@ -84,7 +84,7 @@ let compile_c_file sourcename ifile ofile =
   end;
   (* Conversion to Csyntax *)
   let csyntax =
-    match C2Clight.convertProgram ast with
+    match C2C.convertProgram ast with
     | None -> exit 2
     | Some p -> p in
   flush stderr;
@@ -346,7 +346,7 @@ let cmdline_actions =
 
 let _ =
   Cparser.Machine.config := Cparser.Machine.ilp32ll64;
-  Cparser.Builtins.set C2Clight.builtins;
+  Cparser.Builtins.set C2C.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
   if !linker_options <> [] 

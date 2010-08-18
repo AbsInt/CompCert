@@ -697,7 +697,7 @@ let print_function oc name code =
   let (text, lit, jmptbl) = sections_for_function name in
   section oc text;
   fprintf oc "	.align 2\n";
-  if not (C2Clight.atom_is_static name) then
+  if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
   List.iter (print_instruction oc (labels_of_code Labelset.empty code)) code;
@@ -917,13 +917,13 @@ let print_var oc (Coq_pair(name, v)) =
       let sec =
         Sections.section_for_variable name init
       and align =
-        match C2Clight.atom_alignof name with
+        match C2C.atom_alignof name with
         | Some a -> log2 a
         | None -> 3 (* 8-alignment is a safe default *)
       in
       section oc sec;
       fprintf oc "	.align	%d\n" align;
-      if not (C2Clight.atom_is_static name) then
+      if not (C2C.atom_is_static name) then
         fprintf oc "	.globl	%a\n" symbol name;
       fprintf oc "%a:\n" symbol name;
       print_init_data oc name v.gvar_init;
