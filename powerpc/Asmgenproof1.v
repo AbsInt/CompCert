@@ -79,41 +79,25 @@ Proof.
   unfold high_s. 
   rewrite <- (Int.divu_pow2 (Int.sub n (low_s n)) (Int.repr 65536) (Int.repr 16)).
   change (two_p (Int.unsigned (Int.repr 16))) with 65536.
-
-  assert (forall x y, y > 0 -> (x - x mod y) mod y = 0).
-  intros. apply Zmod_unique with (x / y). 
-  generalize (Z_div_mod_eq x y H). intro. rewrite Zmult_comm. omega.
-  omega.
-
-  assert (Int.modu (Int.sub n (low_s n)) (Int.repr 65536) = Int.zero).
-  unfold Int.modu, Int.zero. decEq. 
-  change (Int.unsigned (Int.repr 65536)) with 65536.
-  unfold Int.sub. 
-  assert (forall a b, Int.eqm a b -> b mod 65536 = 0 -> a mod 65536 = 0).
-  intros a b [k EQ] H1. rewrite EQ. 
-  change Int.modulus with (65536 * 65536). 
-  rewrite Zmult_assoc. rewrite Zplus_comm. rewrite Z_mod_plus. auto.
-  omega.
-  eapply H0. apply Int.eqm_sym. apply Int.eqm_unsigned_repr. 
-  unfold low_s. unfold Int.sign_ext. 
-  change (two_p 16) with 65536. change (two_p (16-1)) with 32768. 
-  set (N := Int.unsigned n).
-  case (zlt (N mod 65536) 32768); intro.
-  apply H0 with (N - N mod 65536). auto with ints.
-  apply H. omega.
-  apply H0 with (N - (N mod 65536 - 65536)). auto with ints.
-  replace (N - (N mod 65536 - 65536))
-     with ((N - N mod 65536) + 1 * 65536).
-  rewrite Z_mod_plus. apply H. omega. omega. ring. 
-
-  assert (Int.repr 65536 <> Int.zero). compute. congruence. 
-  generalize (Int.modu_divu_Euclid (Int.sub n (low_s n)) (Int.repr 65536) H1).
-  rewrite H0. rewrite Int.add_zero. intro. rewrite <- H2. 
-  rewrite Int.sub_add_opp. rewrite Int.add_assoc. 
-  replace (Int.add (Int.neg (low_s n)) (low_s n)) with Int.zero.
-  apply Int.add_zero. symmetry. rewrite Int.add_commut. 
-  rewrite <- Int.sub_add_opp. apply Int.sub_idem.
-
+  set (x := Int.sub n (low_s n)).
+  assert (x = Int.add (Int.mul (Int.divu x (Int.repr 65536)) (Int.repr 65536))
+                      (Int.modu x (Int.repr 65536))).
+    apply Int.modu_divu_Euclid. compute; congruence.
+  assert (Int.modu x (Int.repr 65536) = Int.zero).
+    unfold Int.modu, Int.zero. decEq.
+    change 0 with (0 mod 65536).
+    change (Int.unsigned (Int.repr 65536)) with 65536.
+    apply Int.eqmod_mod_eq. omega. 
+    unfold x, low_s. eapply Int.eqmod_trans. 
+    eapply Int.eqm_eqmod_two_p with (n := 16). compute; auto.
+    unfold Int.sub. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl. 
+    replace 0 with (Int.unsigned n - Int.unsigned n) by omega.
+    apply Int.eqmod_sub. apply Int.eqmod_refl. apply Int.eqmod_sign_ext'. 
+    compute; auto.
+  rewrite H0 in H. rewrite Int.add_zero in H.
+  rewrite <- H. unfold x. rewrite Int.sub_add_opp. rewrite Int.add_assoc.
+  rewrite (Int.add_commut (Int.neg (low_s n))). rewrite <- Int.sub_add_opp. 
+  rewrite Int.sub_idem. apply Int.add_zero.
   reflexivity.
 Qed.
 

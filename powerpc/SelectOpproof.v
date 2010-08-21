@@ -355,7 +355,7 @@ Lemma eval_rolm:
 Proof.
   intros until x. unfold rolm; case (rolm_match a); intros; InvEval.
   eauto with evalexpr. 
-  case (Int.is_rlw_mask (Int.and (Int.rol mask1 amount) mask)).
+  case (is_rlw_mask (Int.and (Int.rol mask1 amount) mask)).
   EvalOp. simpl. subst x. 
   decEq. decEq. 
   symmetry. apply Int.rolm_rolm. apply int_wordsize_divides_modulus.
@@ -460,7 +460,7 @@ Theorem eval_andimm:
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le (andimm n a) (Vint (Int.and x n)).
 Proof.
-  intros.  unfold andimm. case (Int.is_rlw_mask n).
+  intros.  unfold andimm. case (is_rlw_mask n).
   rewrite <- Int.rolm_zero. apply eval_rolm; auto.
   EvalOp. 
 Qed.
@@ -500,7 +500,7 @@ Lemma eval_or:
 Proof.
   intros until y; unfold or; case (or_match a b); intros; InvEval.
   caseEq (Int.eq amount1 amount2 
-          && Int.is_rlw_mask (Int.or mask1 mask2) 
+          && is_rlw_mask (Int.or mask1 mask2) 
           && same_expr_pure t1 t2); intro.
   destruct (andb_prop _ _ H1). destruct (andb_prop _ _ H4).
   generalize (Int.eq_spec amount1 amount2). rewrite H6. intro. subst amount2.

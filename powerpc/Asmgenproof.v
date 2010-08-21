@@ -1217,10 +1217,10 @@ Proof.
     rewrite <- Int.shl_rolm. rewrite Int.shl_mul.
     rewrite Int.mul_signed.
     apply Int.signed_repr.
-    split. apply Zle_trans with 0. vm_compute; congruence. omega. 
+    split. apply Zle_trans with 0. compute; congruence. omega. 
     omega.
-    vm_compute. reflexivity.
-    vm_compute. apply Int.mkint_eq. auto.
+    compute. reflexivity.
+    apply Int.mkint_eq. compute. reflexivity.
   inv AT. simpl in H7. 
   set (k1 := Pbtbl GPR12 tbl :: transl_code f c).
   set (rs1 := nextinstr (rs0 # GPR12 <- (Vint (Int.rolm n (Int.repr 2) (Int.repr (-4)))))).

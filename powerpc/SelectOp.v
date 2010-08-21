@@ -371,6 +371,80 @@ Definition sub (e1: expr) (e2: expr) :=
 
 (** ** Rotates and immediate shifts *)
 
+(** Recognition of integers that are acceptable as immediate operands
+  to the [rlwim] PowerPC instruction.  These integers are of the form
+  [000011110000] or [111100001111], that is, a run of one bits
+  surrounded by zero bits, or conversely.  We recognize these integers by
+  running the following automaton on the bits.  The accepting states are
+  2, 3, 4, 5, and 6.
+<<
+               0          1          0
+              / \        / \        / \
+              \ /        \ /        \ /
+        -0--> [1] --1--> [2] --0--> [3]
+       /     
+     [0]
+       \
+        -1--> [4] --0--> [5] --1--> [6]
+              / \        / \        / \
+              \ /        \ /        \ /
+               1          0          1
+>>
+*)
+
+Inductive rlw_state: Type :=
+  | RLW_S0 : rlw_state
+  | RLW_S1 : rlw_state
+  | RLW_S2 : rlw_state
+  | RLW_S3 : rlw_state
+  | RLW_S4 : rlw_state
+  | RLW_S5 : rlw_state
+  | RLW_S6 : rlw_state
+  | RLW_Sbad : rlw_state.
+
+Definition rlw_transition (s: rlw_state) (b: bool) : rlw_state :=
+  match s, b with
+  | RLW_S0, false => RLW_S1
+  | RLW_S0, true  => RLW_S4
+  | RLW_S1, false => RLW_S1
+  | RLW_S1, true  => RLW_S2
+  | RLW_S2, false => RLW_S3
+  | RLW_S2, true  => RLW_S2
+  | RLW_S3, false => RLW_S3
+  | RLW_S3, true  => RLW_Sbad
+  | RLW_S4, false => RLW_S5
+  | RLW_S4, true  => RLW_S4
+  | RLW_S5, false => RLW_S5
+  | RLW_S5, true  => RLW_S6
+  | RLW_S6, false => RLW_Sbad
+  | RLW_S6, true  => RLW_S6
+  | RLW_Sbad, _ => RLW_Sbad
+  end.
+
+Definition rlw_accepting (s: rlw_state) : bool :=
+  match s with
+  | RLW_S0 => false
+  | RLW_S1 => false
+  | RLW_S2 => true
+  | RLW_S3 => true
+  | RLW_S4 => true
+  | RLW_S5 => true
+  | RLW_S6 => true
+  | RLW_Sbad => false
+  end.
+
+Fixpoint is_rlw_mask_rec (n: nat) (s: rlw_state) (x: Z) {struct n} : bool :=
+  match n with
+  | O =>
+      rlw_accepting s
+  | S m =>
+      let (b, y) := Int.Z_bin_decomp x in
+      is_rlw_mask_rec m (rlw_transition s b) y
+  end.
+
+Definition is_rlw_mask (x: int) : bool :=
+  is_rlw_mask_rec Int.wordsize RLW_S0 (Int.unsigned x).
+
 (*
 Definition rolm (e1: expr) :=
   match e1 with
@@ -414,7 +488,7 @@ Definition rolm (e1: expr) (amount2 mask2: int) :=
   | rolm_case2 amount1 mask1 t1 =>
       let amount := Int.modu (Int.add amount1 amount2) Int.iwordsize in
       let mask := Int.and (Int.rol mask1 amount2) mask2 in
-      if Int.is_rlw_mask mask
+      if is_rlw_mask mask
       then Eop (Orolm amount mask) (t1:::Enil)
       else Eop (Orolm amount2 mask2) (e1:::Enil)
   | rolm_default e1 =>
@@ -548,7 +622,7 @@ Definition mul (e1: expr) (e2: expr) :=
 (** ** Bitwise and, or, xor *)
 
 Definition andimm (n1: int) (e2: expr) :=
-  if Int.is_rlw_mask n1
+  if is_rlw_mask n1
   then rolm e2 Int.zero n1
   else Eop (Oandimm n1) (e2:::Enil).
 
@@ -591,7 +665,7 @@ Definition or (e1: expr) (e2: expr) :=
   match or_match e1 e2 with
   | or_case1 amount1 mask1 t1 amount2 mask2 t2 =>
       if Int.eq amount1 amount2
-      && Int.is_rlw_mask (Int.or mask1 mask2)
+      && is_rlw_mask (Int.or mask1 mask2)
       && same_expr_pure t1 t2
       then Eop (Orolm amount1 (Int.or mask1 mask2)) (t1:::Enil)
       else Eop Oor (e1:::e2:::Enil)

@@ -148,11 +148,23 @@ Lemma int_of_bytes_of_int:
 Proof.
   induction n; intros.
   simpl. rewrite Zmod_1_r. auto.
+Opaque Byte.wordsize.
   rewrite inj_S. simpl.
   replace (Zsucc (Z_of_nat n) * 8) with (Z_of_nat n * 8 + 8) by omega.
   rewrite two_p_is_exp; try omega. 
   rewrite Zmod_recombine. rewrite IHn. rewrite Zplus_comm. reflexivity. 
   apply two_p_gt_ZERO. omega. apply two_p_gt_ZERO. omega.
+Qed.
+
+Lemma int_of_bytes_of_int_2:
+  forall n x,
+  (n = 1 \/ n = 2)%nat ->
+  Int.repr (int_of_bytes (bytes_of_int n (Int.unsigned x))) = Int.zero_ext (Z_of_nat n * 8) x.
+Proof.
+  intros. rewrite int_of_bytes_of_int. 
+  rewrite <- (Int.repr_unsigned (Int.zero_ext (Z_of_nat n * 8) x)). 
+  decEq. symmetry. apply Int.zero_ext_mod.
+  destruct H; subst n; compute; auto.
 Qed.
 
 Lemma bytes_of_int_mod:
@@ -239,11 +251,16 @@ Lemma decode_encode_int:
   end.
 Proof.
   intros. unfold decode_int, encode_int; destruct c; auto;
-  rewrite rev_if_be_involutive; rewrite int_of_bytes_of_int.
-  apply Int.sign_ext_zero_ext; vm_compute; auto.
-  apply Int.zero_ext_idem; vm_compute; auto.
-  apply Int.sign_ext_zero_ext; vm_compute; auto.
-  apply Int.zero_ext_idem; vm_compute; auto.
+  rewrite rev_if_be_involutive.
+  rewrite int_of_bytes_of_int_2; auto.
+  apply Int.sign_ext_zero_ext. compute; auto.
+  rewrite int_of_bytes_of_int_2; auto.
+  apply Int.zero_ext_idem. compute; auto.
+  rewrite int_of_bytes_of_int_2; auto.
+  apply Int.sign_ext_zero_ext. compute; auto.
+  rewrite int_of_bytes_of_int_2; auto.
+  apply Int.zero_ext_idem. compute; auto.
+  rewrite int_of_bytes_of_int. 
   transitivity (Int.repr (Int.unsigned x)). 
   apply Int.eqm_samerepr. apply Int.eqm_sym. apply Int.eqmod_mod. apply two_p_gt_ZERO. omega. 
   apply Int.repr_unsigned.
@@ -267,8 +284,7 @@ Lemma encode_int8_zero_ext:
   forall x,
   encode_int Mint8unsigned (Int.zero_ext 8 x) = encode_int Mint8unsigned x.
 Proof.
-  intros. apply encode_8_mod. apply Int.eqmod_sym. 
-  apply Int.eqmod_two_p_zero_ext. compute; auto.
+  intros. apply encode_8_mod. apply Int.eqmod_zero_ext. compute; auto.
 Qed.
 
 Lemma encode_int8_sign_ext:
@@ -276,8 +292,10 @@ Lemma encode_int8_sign_ext:
   encode_int Mint8signed (Int.sign_ext 8 x) = encode_int Mint8signed x.
 Proof.
   intros. repeat rewrite encode_int8_signed_unsigned. 
-  apply encode_8_mod. apply Int.eqmod_sym. 
-  apply Int.eqmod_two_p_sign_ext. compute; auto.
+  apply encode_8_mod. eapply Int.eqmod_trans.
+  apply Int.eqm_eqmod_two_p. compute; auto. 
+  apply Int.eqm_sym. apply Int.eqm_signed_unsigned.
+  apply Int.eqmod_sign_ext. compute; auto.
 Qed.
 
 Lemma encode_int16_signed_unsigned: forall n,
@@ -298,8 +316,7 @@ Lemma encode_int16_zero_ext:
   forall x,
   encode_int Mint16unsigned (Int.zero_ext 16 x) = encode_int Mint16unsigned x.
 Proof.
-  intros. apply encode_16_mod. apply Int.eqmod_sym. 
-  apply (Int.eqmod_two_p_zero_ext 16). compute; auto.
+  intros. apply encode_16_mod. apply Int.eqmod_zero_ext. compute; auto.
 Qed.
 
 Lemma encode_int16_sign_ext:
@@ -307,8 +324,10 @@ Lemma encode_int16_sign_ext:
   encode_int Mint16signed (Int.sign_ext 16 x) = encode_int Mint16signed x.
 Proof.
   intros. repeat rewrite encode_int16_signed_unsigned. 
-  apply encode_16_mod. apply Int.eqmod_sym. 
-  apply Int.eqmod_two_p_sign_ext. compute; auto.
+  apply encode_16_mod. eapply Int.eqmod_trans.
+  apply Int.eqm_eqmod_two_p. compute; auto. 
+  apply Int.eqm_sym. apply Int.eqm_signed_unsigned.
+  apply Int.eqmod_sign_ext. compute; auto.
 Qed.
 
 Lemma decode_int8_zero_ext:
@@ -859,43 +878,6 @@ Proof.
   intros. exploit decode_val_pointer_inv; eauto. intros [A B].
   split; auto. subst mvl. apply encode_pointer_shape. 
 Qed.
-
-(*
-Lemma proj_bytes_none:
-  forall mv,
-  match mv with Byte _ => False | _ => True end ->
-  forall mvl,
-  In mv mvl ->
-  proj_bytes mvl = None.
-Proof.
-  induction mvl; simpl; intros.
-  elim H0.
-  destruct a; auto. destruct H0. subst mv. contradiction. 
-  rewrite (IHmvl H0); auto.
-Qed.
-
-Lemma decode_val_undef:
-  forall chunk mv mv1 mvl,
-  match mv with
-  | Pointer b ofs n => n = pred (size_chunk_nat Mint32)
-  | Undef => True
-  | _ => False
-  end ->
-  In mv mvl ->
-  decode_val chunk (mv1 :: mvl) = Vundef.
-Proof.
-  intros. unfold decode_val. 
-  replace (proj_bytes (mv1 :: mvl)) with (@None (list byte)).
-  destruct chunk; auto. unfold proj_pointer. destruct mv1; auto.
-  case_eq (check_pointer (size_chunk_nat Mint32) b i (Pointer b i n :: mvl)); intros.
-  exploit check_pointer_inv; eauto. simpl. intros. inv H2. 
-  simpl in H0. intuition; subst mv; simpl in H; congruence.
-  auto.
-  symmetry. apply proj_bytes_none with mv. 
-  destruct mv; tauto. auto with coqlib.
-Qed.
-
-*)
 
 (** * Compatibility with memory injections *)
 

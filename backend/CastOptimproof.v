@@ -247,7 +247,7 @@ Proof.
   decEq. rewrite Float.singleoffloat_idem; auto.
 (* comparison *)
   simpl in H0. destruct (eval_condition c rs##args); try discriminate.
-  destruct b; inv H0; auto.
+  destruct b; inv H0; compute; auto. 
 Qed.
 
 Lemma approx_of_chunk_correct:
@@ -434,8 +434,9 @@ Proof.
 
   (* Iload *)
   econstructor; split. 
-  TransfInstr; intro. eapply exec_Iload; eauto.
+  TransfInstr; intro. eapply exec_Iload with (a := a). eauto. 
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   econstructor; eauto.
   eapply analyze_correct with (pc := pc); eauto.
   simpl; auto.
@@ -444,8 +445,9 @@ Proof.
 
   (* Istore *)
   econstructor; split. 
-  TransfInstr; intro. eapply exec_Istore; eauto.
+  TransfInstr; intro. eapply exec_Istore with (a := a). eauto.
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   econstructor; eauto.
   eapply analyze_correct with (pc := pc); eauto.
   simpl; auto.
