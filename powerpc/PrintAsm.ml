@@ -389,6 +389,33 @@ let print_builtin_function oc s =
   end;
   fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
 
+let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
+
+let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
+
+let print_annotation oc txt args res =
+  fprintf oc "%s annotation: " comment;
+  let print_fragment = function
+  | Str.Text s ->
+      output_string oc s
+  | Str.Delim "%%" ->
+      output_char oc '%'
+  | Str.Delim s ->
+      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      try
+        preg oc (List.nth args (n-1))
+      with Failure _ ->
+        fprintf oc "<bad parameter %s>" s in
+  List.iter print_fragment (Str.full_split re_annot_param txt);
+  fprintf oc "\n";
+  match args, res with
+  | [], _ -> ()
+  | IR src :: _, IR dst ->
+      if dst <> src then fprintf oc "	mr	%a, %a\n" ireg dst ireg src 
+  | FR src :: _, FR dst ->
+      if dst <> src then fprintf oc "	fmr	%a, %a\n" freg dst freg src 
+  | _, _ -> assert false
+
 (* Printing of instructions *)
 
 module Labelset = Set.Make(struct type t = label let compare = compare end)
@@ -667,7 +694,10 @@ let print_instruction oc labels = function
       if Labelset.mem lbl labels then
         fprintf oc "%a:\n" label (transl_label lbl)
   | Pbuiltin(ef, args, res) ->
-      print_builtin_inlined oc (extern_atom ef.ef_id) args res
+      let name = extern_atom ef.ef_id in
+      if Str.string_match re_builtin_annotation name 0
+      then print_annotation oc (Str.matched_group 1 name) args res
+      else print_builtin_inlined oc name args res
 
 let print_literal oc (lbl, n) =
   let nlo = Int64.to_int32 n

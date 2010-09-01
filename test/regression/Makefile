@@ -13,7 +13,7 @@ TESTS=bitfields1 bitfields2 bitfields3 bitfields4 \
   funct3 expr5 struct7 struct8 casts1 casts2
 
 # Other tests: should compile to .s without errors (but expect warnings)
-EXTRAS=commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
+EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
   init2 init3 init4 pragmas ptrs1 ptrs2 sizeof1 struct1 struct2 struct3 \
   struct4 struct5 struct6 types1 volatile1
 

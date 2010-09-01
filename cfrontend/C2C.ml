@@ -107,6 +107,11 @@ let builtins_generic = {
            [TPtr(TVoid [], []); 
             TPtr(TVoid [AConst], []); 
             TInt(Cutil.size_t_ikind, [])],
+          false);
+    (* Annotations *)
+    "__builtin_annotation",
+        (TVoid [],                      (* overriden during elaboration *)
+          [TPtr(TInt(IChar, [AConst]), [])],
           false)
   ]
 }
@@ -193,6 +198,30 @@ let declare_stub_function stub_name stub_type =
 let declare_stub_functions k =
   Hashtbl.fold (fun n i k -> declare_stub_function n i :: k)
                stub_function_table k
+
+(** ** Handling of annotations *)
+
+let annot_function_list = ref []
+let annot_function_next = ref 0
+
+let register_annotation_function txt targs tres =
+  incr annot_function_next;
+  let fun_name =
+    intern_string
+      (Printf.sprintf "__builtin_annotation_%d" !annot_function_next)
+  and ext_ident =
+    intern_string
+      (Printf.sprintf "__builtin_annotation_\"%s\"" txt) in
+  annot_function_list :=
+      Datatypes.Coq_pair(fun_name,
+        External({ ef_id = ext_ident;
+                   ef_sig = signature_of_type targs tres;
+                   ef_inline = true },
+                 targs, tres)) :: !annot_function_list;
+  Evalof(Evar(fun_name, Tfunction(targs, tres)), Tfunction(targs, tres))
+
+let declare_annotation_functions k =
+  List.rev_append !annot_function_list k
 
 (** ** Translation functions *)
 
@@ -455,6 +484,20 @@ let rec convertExpr env e =
       Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3, ty)
   | C.ECast(ty1, e1) ->
       Ecast(convertExpr env e1, convertTyp env ty1)
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_annotation"}}, args) ->
+      begin match args with
+      | {edesc = C.EConst(CStr txt)} :: args1 ->
+          if List.length args1 > 2 then
+            error "too many arguments to __builtin_annotation";
+          let targs1 = convertTypList env (List.map (fun e -> e.etyp) args1) in
+          let fn' = register_annotation_function txt targs1 ty in
+          Ecall(fn', convertExprList env args1, ty)
+      | _ ->
+          error "ill-formed __builtin_annotation (first argument must be string literal)";
+          ezero
+      end          
+
   | C.ECall(fn, args) ->
       match projFunType env fn.etyp with
       | None ->
@@ -893,10 +936,11 @@ let convertProgram p =
     let (funs1, vars1) =
       convertGlobdecls (translEnv Env.empty p) [] [] (cleanupGlobals p) in
     let funs2 = declare_stub_functions funs1 in
+    let funs3 = declare_annotation_functions funs2 in
     let vars2 = globals_for_strings vars1 in
     if !numErrors > 0
     then None
-    else Some { AST.prog_funct = funs2;
+    else Some { AST.prog_funct = funs3;
                 AST.prog_vars = vars2;
                 AST.prog_main = intern_string "main" }
   with Env.Error msg ->

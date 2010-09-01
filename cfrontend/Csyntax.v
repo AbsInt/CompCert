@@ -665,6 +665,73 @@ Definition access_mode (ty: type) : mode :=
   | Tcomp_ptr _ => By_value Mint32
 end.
 
+(** Unroll the type of a structure or union field, substituting
+    [Tcomp_ptr] by a pointer to the structure. *)
+
+Section UNROLL_COMPOSITE.
+
+Variable cid: ident.
+Variable comp: type.
+
+Fixpoint unroll_composite (ty: type) : type :=
+  match ty with
+  | Tvoid => ty
+  | Tint _ _ => ty
+  | Tfloat _ => ty
+  | Tpointer t1 => Tpointer (unroll_composite t1)
+  | Tarray t1 sz => Tarray (unroll_composite t1) sz
+  | Tfunction t1 t2 => Tfunction (unroll_composite_list t1) (unroll_composite t2)
+  | Tstruct id fld => if ident_eq id cid then ty else Tstruct id (unroll_composite_fields fld)
+  | Tunion id fld => if ident_eq id cid then ty else Tunion id (unroll_composite_fields fld)
+  | Tcomp_ptr id => if ident_eq id cid then Tpointer comp else ty
+  end
+
+with unroll_composite_list (tl: typelist) : typelist :=
+  match tl with
+  | Tnil => Tnil
+  | Tcons t1 tl' => Tcons (unroll_composite t1) (unroll_composite_list tl')
+  end
+
+with unroll_composite_fields (fld: fieldlist) : fieldlist :=
+  match fld with
+  | Fnil => Fnil
+  | Fcons id ty fld' => Fcons id (unroll_composite ty) (unroll_composite_fields fld')
+  end.
+
+Lemma alignof_unroll_composite:
+  forall ty, alignof (unroll_composite ty) = alignof ty.
+Proof.
+  apply (type_ind2 (fun ty => alignof (unroll_composite ty) = alignof ty)
+                   (fun fld => alignof_fields (unroll_composite_fields fld) = alignof_fields fld));
+  simpl; intros; auto.
+  destruct (ident_eq i cid); auto. 
+  destruct (ident_eq i cid); auto. 
+  destruct (ident_eq i cid); auto.
+  decEq; auto.
+Qed.
+
+Lemma sizeof_unroll_composite:
+  forall ty, sizeof (unroll_composite ty) = sizeof ty.
+Proof.
+Opaque alignof.
+  apply (type_ind2 (fun ty => sizeof (unroll_composite ty) = sizeof ty)
+                   (fun fld => 
+                      sizeof_union (unroll_composite_fields fld) = sizeof_union fld
+                   /\ forall pos,
+                      sizeof_struct (unroll_composite_fields fld) pos = sizeof_struct fld pos));
+  simpl; intros; auto.
+  congruence.
+  destruct H. rewrite <- (alignof_unroll_composite (Tstruct i f)).
+  simpl. destruct (ident_eq i cid); simpl. auto. rewrite H0; auto.
+  destruct H. rewrite <- (alignof_unroll_composite (Tunion i f)).
+  simpl. destruct (ident_eq i cid); simpl. auto. rewrite H; auto.
+  destruct (ident_eq i cid); auto.
+  destruct H0. split. congruence.
+  intros. rewrite alignof_unroll_composite. rewrite H1. rewrite H. auto.
+Qed.
+
+End UNROLL_COMPOSITE.
+
 (** Classification of arithmetic operations and comparisons.
   The following [classify_] functions take as arguments the types
   of the arguments of an operation.  They return enough information
