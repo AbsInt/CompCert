@@ -409,6 +409,16 @@ let unsigned_ikind_of = function
   | ILong | IULong -> IULong
   | ILongLong | IULongLong -> IULongLong
 
+(* Conversion to signed ikind *)
+
+let signed_ikind_of = function
+  | IBool -> IBool
+  | IChar | ISChar | IUChar -> ISChar
+  | IInt | IUInt -> IInt
+  | IShort | IUShort -> IShort
+  | ILong | IULong -> ILong
+  | ILongLong | IULongLong -> ILongLong
+
 (* Some classification functions over types *)
 
 let is_void_type env t =
@@ -558,6 +568,22 @@ let pointer_arithmetic_ok env ty =
   match unroll env ty with
   | TVoid _ | TFun _ -> false
   | _ -> not (incomplete_type env ty)
+
+(** The type of [x.fld].  Normally, it's the type of the field [fld],
+  but if it is an unsigned bitfield of size < length of its type,
+  its type is the corresponding signed int. *)
+
+let type_of_member env fld =
+  match fld.fld_bitfield with
+  | None -> fld.fld_typ
+  | Some w ->
+      match unroll env fld.fld_typ with
+      | TInt(ik, attr) ->
+          if w < sizeof_ikind ik * 8
+          then TInt(signed_ikind_of ik, attr)
+          else fld.fld_typ
+      | _ ->
+          assert false
 
 (** Special types *)
 

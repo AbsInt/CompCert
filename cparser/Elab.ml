@@ -547,16 +547,20 @@ and elab_field_group env (spec, fieldlist) =
           match Ceval.integer_expr env' (!elab_expr_f loc env sz) with
           | Some n ->
               if n < 0L then begin
-                error loc "bit size of member (%Ld) is negative" n;
+                error loc "bit size of member %s (%Ld) is negative" id n;
                 None
               end else
               if n > Int64.of_int(sizeof_ikind ik * 8) then begin
-                error loc "bit size of member (%Ld) is too large" n;
+                error loc "bit size of member %s (%Ld) is too large" id n;
+                None
+              end else
+              if n = 0L && id <> "" then begin
+                error loc "member %s has zero size" id;
                 None
               end else
                 Some(Int64.to_int n)
           | None ->
-              error loc "bit size of member is not a compile-time constant";
+              error loc "bit size of member %s is not a compile-time constant" id;
               None in
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' } 
   in
@@ -735,7 +739,7 @@ let elab_expr loc env a =
             error "left-hand side of '.' is not a struct or union" in
       (* A field of a const/volatile struct or union is itself const/volatile *)
       { edesc = EUnop(Odot fieldname, b1);
-        etyp = add_attributes_type attrs fld.fld_typ }
+        etyp = add_attributes_type attrs (type_of_member env fld) }
 
   | MEMBEROFPTR(a1, fieldname) ->
       let b1 = elab a1 in
@@ -753,7 +757,7 @@ let elab_expr loc env a =
         | _ ->
             error "left-hand side of '->' is not a pointer " in
       { edesc = EUnop(Oarrow fieldname, b1);
-        etyp = add_attributes_type attrs fld.fld_typ }
+        etyp = add_attributes_type attrs (type_of_member env fld) }
 
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
@@ -1324,6 +1328,9 @@ let rec elab_init loc env ty ile =
         match fld with
         | [] -> 
             (Init_struct(id, List.rev accu), rem)
+        | {fld_name = ""} :: fld' ->
+            (* anonymous bitfields consume no initializer *)
+            elab_init_fields fld' accu rem
         | fld1 :: fld' ->
             let (i, rem') = elab_init loc env fld1.fld_typ rem in
             elab_init_fields fld' ((fld1, i) :: accu) rem' in

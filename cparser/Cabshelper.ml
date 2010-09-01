@@ -42,7 +42,7 @@ let cabslu = {lineno = -10;
 
 (*********** HELPER FUNCTIONS **********)
 
-let missingFieldDecl = ("___missing_field_name", JUSTBASE, [], cabslu)
+let missingFieldDecl = ("", JUSTBASE, [], cabslu)
 
 let rec isStatic = function
     [] -> false

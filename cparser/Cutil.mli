@@ -93,6 +93,9 @@ val is_signed_ikind : ikind -> bool
 val unsigned_ikind_of : ikind -> ikind
   (* Return the unsigned integer kind corresponding to the given
      integer kind. *)
+val signed_ikind_of : ikind -> ikind
+  (* Return the signed integer kind corresponding to the given
+     integer kind. *)
 val integer_rank : ikind -> int
   (* Order integer kinds from smaller to bigger *)
 val float_rank : fkind -> int
@@ -135,6 +138,10 @@ val ptrdiff_t_ikind : ikind
 
 val type_of_constant : constant -> typ
   (* Return the type of the given constant. *)
+val type_of_member : Env.t -> field -> typ
+  (* Return the type of accessing the given field [fld].
+     Normally it's [fld.fld_type] but there is a special case for
+     small unsigned bitfields. *)
 val is_literal_0 : exp -> bool
   (* Is the given expression the integer literal "0"?  *)
 val is_lvalue : Env.t -> exp -> bool

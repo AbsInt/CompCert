@@ -31,7 +31,9 @@ type bitfield_info =
     bf_carrier_typ: typ; (* type of underlying regular field *)
     bf_pos: int;        (* start bit *)
     bf_size: int;       (* size in bit *)
-    bf_signed: bool }   (* signed or unsigned *)
+    bf_signed: bool;    (* is field signed or unsigned? *)
+    bf_signed_res: bool (* is result of extracting field signed or unsigned? *)
+  }
 
 (* invariants:
      0 <= pos < bitsizeof(int)
@@ -71,7 +73,11 @@ let pack_bitfields env id ml =
               match unroll env m.fld_typ with
               | TInt(ik, _) -> is_signed_ikind ik
               | _ -> assert false (* should never happen, checked in Elab *) in
-            pack ((m.fld_name, pos, n, signed) :: accu) (pos + n) ms
+            let signed2 =
+              match unroll env (type_of_member env m) with
+              | TInt(ik, _) -> is_signed_ikind ik
+              | _ -> assert false (* should never happen, checked in Elab *) in
+            pack ((m.fld_name, pos, n, signed, signed2) :: accu) (pos + n) ms
           end
   in pack [] 0 ml
 
@@ -85,11 +91,13 @@ let rec transf_members env id count = function
         let carrier = sprintf "__bf%d" count in
         let carrier_typ = TInt(unsigned_ikind_for_carrier nbits, []) in
         List.iter
-          (fun (name, pos, sz, signed) ->
-            Hashtbl.add bitfield_table
-              (id, name)
-              {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
-               bf_pos = pos; bf_size = sz; bf_signed = signed})
+          (fun (name, pos, sz, signed, signed2) ->
+            if name <> "" then
+              Hashtbl.add bitfield_table
+                (id, name)
+                {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
+                 bf_pos = pos; bf_size = sz;
+                 bf_signed = signed; bf_signed_res = signed2})
           bitfields;
         { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
         :: transf_members env id (count + 1) ml'
@@ -144,8 +152,13 @@ let bitfield_extract bf carrier =
   let ty = TInt((if bf.bf_signed then IInt else IUInt), []) in
   let e2 =
     {edesc = ECast(ty, e1); etyp = ty} in
-  {edesc = EBinop(Oshr, e2, right_shift_count bf, e2.etyp);
-   etyp = e2.etyp}
+  let e3 =
+    {edesc = EBinop(Oshr, e2, right_shift_count bf, e2.etyp);
+     etyp = ty} in
+  if bf.bf_signed_res = bf.bf_signed then e3 else begin
+    let ty' = TInt((if bf.bf_signed_res then IInt else IUInt), []) in
+    {edesc = ECast(ty', e3); etyp = ty'}
+  end
 
 (* Assign a bitfield within a carrier *)
 
