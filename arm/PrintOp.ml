@@ -38,7 +38,7 @@ let print_condition reg pp = function
       fprintf pp "%a %su %a" reg r1 (comparison_name c) reg r2
   | (Ccompshift(c, s), [r1;r2]) ->
       fprintf pp "%a %ss %a %a" reg r1 (comparison_name c) reg r2 shift s
-  | (Ccompu(c, s), [r1;r2]) ->
+  | (Ccompushift(c, s), [r1;r2]) ->
       fprintf pp "%a %su %a %a" reg r1 (comparison_name c) reg r2 shift s
   | (Ccompimm(c, n), [r1]) ->
       fprintf pp "%a %ss %ld" reg r1 (comparison_name c) (camlint_of_coqint n)
@@ -68,7 +68,7 @@ let print_operation reg pp = function
   | Oaddimm n, [r1] -> fprintf pp "%a + %ld" reg r1 (camlint_of_coqint n)
   | Osub, [r1;r2] -> fprintf pp "%a - %a" reg r1 reg r2
   | Osubshift s, [r1;r2] -> fprintf pp "%a - %a %a" reg r1 reg r2 shift s
-  | Osubrshift s, [r1;r2] -> fprintf pp "%a %a - %a" reg r2 shift s reg r1
+  | Orsubshift s, [r1;r2] -> fprintf pp "%a %a - %a" reg r2 shift s reg r1
   | Orsubimm n, [r1] -> fprintf pp "%ld - %a" (camlint_of_coqint n) reg r1
   | Omul, [r1;r2] -> fprintf pp "%a * %a" reg r1 reg r2
   | Odiv, [r1;r2] -> fprintf pp "%a /s %a" reg r1 reg r2
@@ -99,9 +99,7 @@ let print_operation reg pp = function
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
-  | Ointuoffloat, [r1] -> fprintf pp "intuoffloat(%a)" reg r1
   | Ofloatofint, [r1] -> fprintf pp "floatofint(%a)" reg r1
-  | Ofloatofintu, [r1] -> fprintf pp "floatofintu(%a)" reg r1
   | Ocmp c, args -> print_condition reg pp (c, args)
   | _ -> fprintf pp "<bad operator>"
 
@@ -111,5 +109,3 @@ let print_addressing reg pp = function
   | Aindexed2shift s, [r1; r2] -> fprintf pp "%a + %a %a" reg r1 reg r2 shift s
   | Ainstack ofs, [] -> fprintf pp "stack(%ld)" (camlint_of_coqint ofs)
   | _ -> fprintf pp "<bad addressing>"
-
-

@@ -92,9 +92,7 @@ let print_operation reg pp = function
   | Omulsubf, [r1;r2;r3] -> fprintf pp "%a *f %a -f %a" reg r1 reg r2 reg r3
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
-  | Ointuoffloat, [r1] -> fprintf pp "intuoffloat(%a)" reg r1
-  | Ofloatofint, [r1] -> fprintf pp "floatofint(%a)" reg r1
-  | Ofloatofintu, [r1] -> fprintf pp "floatofintu(%a)" reg r1
+  | Ofloatofwords, [r1;r2] -> fprintf pp "floatofwords(%a,%a)" reg r1 reg r2
   | Ocmp c, args -> print_condition reg pp (c, args)
   | _ -> fprintf pp "<bad operator>"
 
@@ -105,5 +103,3 @@ let print_addressing reg pp = function
   | Abased(id, ofs), [r1] -> fprintf pp "%s + %ld + %a" (extern_atom id) (camlint_of_coqint ofs) reg r1
   | Ainstack ofs, [] -> fprintf pp "stack(%ld)" (camlint_of_coqint ofs)
   | _ -> fprintf pp "<bad addressing>"
-
-

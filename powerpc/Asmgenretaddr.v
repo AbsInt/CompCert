@@ -109,7 +109,7 @@ Hint Resolve loadimm_tail: ppcretaddr.
 
 Lemma addimm_tail:
   forall r1 r2 n k, is_tail k (addimm r1 r2 n k).
-Proof. unfold addimm, addimm_1, addimm_2; intros; IsTail. Qed.
+Proof. unfold addimm; intros; IsTail. Qed.
 Hint Resolve addimm_tail: ppcretaddr.
 
 Lemma andimm_tail:
@@ -129,12 +129,12 @@ Hint Resolve xorimm_tail: ppcretaddr.
 
 Lemma loadind_tail:
   forall base ofs ty dst k, is_tail k (loadind base ofs ty dst k).
-Proof. unfold loadind; intros; IsTail. Qed.
+Proof. unfold loadind; intros. destruct ty; IsTail. Qed.
 Hint Resolve loadind_tail: ppcretaddr.
 
 Lemma storeind_tail:
   forall src base ofs ty k, is_tail k (storeind src base ofs ty k).
-Proof. unfold storeind; intros; IsTail. Qed.
+Proof. unfold storeind; intros. destruct ty; IsTail. Qed.
 Hint Resolve storeind_tail: ppcretaddr.
 
 Lemma floatcomp_tail:
@@ -156,8 +156,8 @@ Qed.
 Hint Resolve transl_op_tail: ppcretaddr.
 
 Lemma transl_load_store_tail:
-  forall mk1 mk2 addr args k,
-  is_tail k (transl_load_store mk1 mk2 addr args k).
+  forall mk1 mk2 addr args temp k,
+  is_tail k (transl_load_store mk1 mk2 addr args temp k).
 Proof. unfold transl_load_store; intros; destruct addr; IsTail. Qed.
 Hint Resolve transl_load_store_tail: ppcretaddr.
 

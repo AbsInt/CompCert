@@ -1,3 +1,5 @@
+include ../../Makefile.config
+
 CC=../../ccomp 
 CFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fstruct-passing -fstruct-assign
 
@@ -13,7 +15,7 @@ SRCS=analyze.c clause.c clock.c closure.c cnf.c component.c                 \
 all: spass
 
 spass: $(SRCS:.c=.o)
-	$(CC) $(CFLAGS) -o spass $(SRCS:.c=.o)
+	$(CC) $(CFLAGS) -o spass $(SRCS:.c=.o) $(LIBMATH)
 
 clean:
 	rm -f spass

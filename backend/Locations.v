@@ -423,4 +423,27 @@ Module Locmap.
     auto.
   Qed.
 
+  Fixpoint undef (ll: list loc) (m: t) {struct ll} : t :=
+    match ll with
+    | nil => m
+    | l1 :: ll' => undef ll' (set l1 Vundef m)
+    end.
+
+  Lemma guo: forall ll l m, Loc.notin l ll -> (undef ll m) l = m l.
+  Proof.
+    induction ll; simpl; intros. auto. 
+    destruct H. rewrite IHll; auto. apply gso. apply Loc.diff_sym; auto. 
+  Qed.
+
+  Lemma gus: forall ll l m, In l ll -> (undef ll m) l = Vundef.
+  Proof.
+    assert (P: forall ll l m, m l = Vundef -> (undef ll m) l = Vundef).
+      induction ll; simpl; intros. auto. apply IHll. 
+      unfold set. destruct (Loc.eq a l); auto. 
+      destruct (Loc.overlap a l); auto.
+    induction ll; simpl; intros. contradiction. 
+    destruct H. apply P. subst a. apply gss. 
+    auto.
+  Qed.
+
 End Locmap.

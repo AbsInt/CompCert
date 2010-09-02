@@ -156,6 +156,30 @@ Proof.
   apply H0.
 Qed.
 
+Lemma wt_undef_temps:
+  forall rs, wt_regset rs -> wt_regset (undef_temps rs).
+Proof.
+  unfold undef_temps. 
+  generalize (int_temporaries ++ float_temporaries).
+  induction l; simpl; intros. auto.
+  apply IHl. red; intros. unfold Regmap.set.
+  destruct (RegEq.eq r a). constructor. auto. 
+Qed.
+
+Lemma wt_undef_op:
+  forall op rs, wt_regset rs -> wt_regset (undef_op op rs).
+Proof.
+  intros. set (W := wt_undef_temps rs H). 
+  destruct op; simpl; auto.
+Qed.
+
+Lemma wt_undef_getparam:
+  forall rs, wt_regset rs -> wt_regset (rs#IT1 <- Vundef).
+Proof.
+  intros; red; intros. unfold Regmap.set. 
+  destruct (RegEq.eq r IT1). constructor. auto.
+Qed.
+
 Lemma wt_get_slot:
   forall f fr ty ofs v,
   get_slot f fr ty ofs v ->
@@ -237,31 +261,41 @@ Lemma subject_reduction:
   forall (WTS: wt_state s1), wt_state s2.
 Proof.
   induction 1; intros; inv WTS;
-  try (generalize (wt_function_instrs _ WTF _ (is_tail_in TAIL)); intro;
+  try (generalize (wt_function_instrs _ WTF _ (is_tail_in TAIL)); intro WTI;
        eapply wt_state_intro; eauto with coqlib).
 
-  apply wt_setreg; auto. 
-  inversion H0. rewrite H2. eapply wt_get_slot; eauto.
+  apply wt_setreg; auto. inv WTI. eapply wt_get_slot; eauto.
 
-  inversion H0. eapply wt_set_slot; eauto. 
-  rewrite <- H2. apply WTRS.
+  eapply wt_set_slot; eauto. inv WTI; auto. 
 
+  assert (mreg_type dst = ty).
+    inv WTI; auto.
   assert (wt_frame (parent_frame s)).
     destruct s; simpl. apply wt_empty_frame. 
     generalize (STK s (in_eq _ _)); intro. inv H1. auto. 
-  inversion H0. apply wt_setreg; auto.
-  rewrite H3. eapply wt_get_slot; eauto.
+  apply wt_setreg; auto.
+  rewrite H0. eapply wt_get_slot; eauto.
+  apply wt_undef_getparam; auto.
 
-  apply wt_setreg; auto. inv H0.
-    simpl in H. 
-    rewrite <- H2. replace v with (rs r1). apply WTRS. congruence.
-    replace (mreg_type res) with (snd (type_of_operation op)).
-    apply type_of_operation_sound with fundef unit ge rs##args sp; auto.
-    rewrite <- H5; reflexivity.
+(* op *)
+  apply wt_setreg; auto.
+  inv WTI.
+  (* move *)
+  simpl in H. inv H. rewrite <- H1. apply WTRS.
+  (* not move *)
+  replace (mreg_type res) with (snd (type_of_operation op)).
+  apply type_of_operation_sound with fundef unit ge rs##args sp; auto.
+  rewrite <- H4; reflexivity.
+  apply wt_undef_op; auto.
 
-  apply wt_setreg; auto. inversion H1. rewrite H7.
-  eapply type_of_chunk_correct; eauto.
+(* load *)
+  apply wt_setreg; auto. inv WTI. rewrite H6. eapply type_of_chunk_correct; eauto.
+  apply wt_undef_temps; auto.
 
+(* store *)
+  apply wt_undef_temps; auto.
+
+(* call *)
   assert (WTFD: wt_fundef f').
     destruct ros; simpl in H.
     apply (Genv.find_funct_prop wt_fundef _ _ wt_p H).
@@ -271,6 +305,7 @@ Proof.
   intros. elim H0; intro. subst s0. econstructor; eauto with coqlib.
   auto.
 
+(* tailcall *)
   assert (WTFD: wt_fundef f').
     destruct ros; simpl in H.
     apply (Genv.find_funct_prop wt_fundef _ _ wt_p H).
@@ -278,17 +313,27 @@ Proof.
     apply (Genv.find_funct_ptr_prop wt_fundef _ _ wt_p H).
   econstructor; eauto.
 
-  inv H0. apply wt_setreg; auto. rewrite H5. eapply external_call_well_typed; eauto.  
+(* extcall *)
+  apply wt_setreg; auto. 
+  inv WTI. rewrite H4. eapply external_call_well_typed; eauto.
+  apply wt_undef_temps; auto.
 
+(* goto *)  
   apply is_tail_find_label with lbl; congruence.
-  apply is_tail_find_label with lbl; congruence. 
-  apply is_tail_find_label with lbl; congruence. 
+(* cond *)
+  apply is_tail_find_label with lbl; congruence. apply wt_undef_temps; auto.
+  apply wt_undef_temps; auto.
+(* jumptable *)
+  apply is_tail_find_label with lbl; congruence. apply wt_undef_temps; auto. 
 
+(* return *)
   econstructor; eauto.
 
+(* internal function *)
   econstructor; eauto with coqlib. inv H5; auto. exact I. 
   apply wt_empty_frame.
 
+(* external function *)
   econstructor; eauto. apply wt_setreg; auto.
   generalize (external_call_well_typed _ _ _ _ _ _ _ H).  
   unfold proj_sig_res, loc_result.
@@ -296,6 +341,7 @@ Proof.
   destruct t0; simpl; auto.
   simpl; auto.
 
+(* returnstate *)
   generalize (H1 _ (in_eq _ _)); intro. inv H.
   econstructor; eauto. 
   eauto with coqlib.

@@ -197,7 +197,8 @@ Proof.
   destruct a. 
   simpl. decEq. eauto. 
   caseEq (slot_type s); intro SLOTTYPE; rewrite SLOTTYPE in H.
-  destruct itmps. discriminate. simpl. decEq.
+  destruct itmps. discriminate.
+  simpl. decEq. 
   rewrite SLOTTYPE. auto with coqlib.
   apply IHlocs; auto with coqlib.
   destruct ftmps. discriminate. simpl. decEq.

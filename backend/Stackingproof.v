@@ -32,6 +32,7 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Locations.
+Require LTL.
 Require Import Linear.
 Require Import Lineartyping.
 Require Import Mach.
@@ -575,6 +576,58 @@ Proof.
   intros. rewrite get_set_index_val_other; eauto with stacking. red; auto.
 Qed.
 
+Lemma agree_undef_regs:
+  forall rl ls ls0 rs fr cs,
+  agree ls ls0 rs fr cs ->
+  (forall r, In r rl -> In (R r) temporaries) ->
+  agree (Locmap.undef (List.map R rl) ls) ls0 (undef_regs rl rs) fr cs.
+Proof.
+  induction rl; intros; simpl.
+  auto.
+  eapply IHrl; eauto. 
+  apply agree_set_reg; auto with coqlib.
+  assert (In (R a) temporaries) by auto with coqlib.
+  red. destruct (mreg_type a).
+  destruct (zlt (index_int_callee_save a) 0). 
+  generalize (bound_int_callee_save_pos b). omega. 
+  elim (int_callee_save_not_destroyed a). auto. apply index_int_callee_save_pos2; auto.
+  destruct (zlt (index_float_callee_save a) 0). 
+  generalize (bound_float_callee_save_pos b). omega. 
+  elim (float_callee_save_not_destroyed a). auto. apply index_float_callee_save_pos2; auto.
+  intros. apply H0. auto with coqlib.
+Qed.
+
+Lemma agree_undef_temps:
+  forall ls ls0 rs fr cs,
+  agree ls ls0 rs fr cs ->
+  agree (LTL.undef_temps ls) ls0 (Mach.undef_temps rs) fr cs.
+Proof.
+  intros. unfold undef_temps, LTL.undef_temps. 
+  change temporaries with (List.map R (int_temporaries ++ float_temporaries)).
+  apply agree_undef_regs; auto.
+  intros. 
+  change temporaries with (List.map R (int_temporaries ++ float_temporaries)).
+  apply List.in_map. auto. 
+Qed.
+
+Lemma agree_undef_op:
+  forall op env ls ls0 rs fr cs,
+  agree ls ls0 rs fr cs ->
+  agree (Linear.undef_op op ls) ls0 (Mach.undef_op (transl_op env op) rs) fr cs.
+Proof.
+  intros. exploit agree_undef_temps; eauto. intro. 
+  destruct op; simpl; auto.
+Qed.
+
+Lemma agree_undef_getparam:
+  forall ls ls0 rs fr cs,
+  agree ls ls0 rs fr cs ->
+  agree (Locmap.set (R IT1) Vundef ls) ls0 (rs#IT1 <- Vundef) fr cs.
+Proof.
+  intros. exploit (agree_undef_regs (IT1 :: nil)); eauto.
+  simpl; intros. intuition congruence. 
+Qed.
+
 Lemma agree_return_regs:
   forall ls ls0 rs fr cs rs',
   agree ls ls0 rs fr cs ->
@@ -831,9 +884,10 @@ Proof.
   intros until idx. destruct idx; simpl; auto. congruence.
   apply incl_refl.
   apply float_callee_save_norepet. eauto.
-  intros [fr' [A [B C]]]. 
-  exists fr'; intuition. unfold save_callee_save_float; eauto. 
-  apply C. auto. intros; subst idx. auto.
+  intros [fr' [A [B C]]].
+  exists fr'. split. unfold save_callee_save_float; eauto.
+  split. auto. 
+  intros. apply C. auto. intros; subst. red; intros; subst idx. contradiction. 
 Qed.
 
 Lemma save_callee_save_correct:
@@ -1216,24 +1270,15 @@ Qed.
 Definition shift_sp (tf: Mach.function) (sp: val) :=
   Val.add sp (Vint (Int.repr (-tf.(fn_framesize)))).
 
-Remark shift_offset_sp:
-  forall f tf sp n v,
+Remark shift_sp_eq:
+  forall f tf sp,
   transf_function f = OK tf ->
-  offset_sp sp n = Some v ->
-  offset_sp (shift_sp tf sp)
-    (Int.add (Int.repr (fe_size (make_env (function_bounds f)))) n) = Some v.
+  shift_sp tf sp = Val.sub sp (Vint (Int.repr (fe_size (make_env (function_bounds f))))).
 Proof.
-  intros. destruct sp; try discriminate.
-  unfold offset_sp in *. 
-  unfold shift_sp. 
-  rewrite (unfold_transf_function _ _ H). unfold fn_framesize.
-  unfold Val.add. rewrite <- Int.neg_repr. 
-  set (p := Int.repr (fe_size (make_env (function_bounds f)))).
-  inversion H0. decEq. decEq. 
-  rewrite Int.add_assoc. decEq. 
-  rewrite <- Int.add_assoc. 
-  rewrite (Int.add_commut (Int.neg p) p). rewrite Int.add_neg_zero. 
-  rewrite Int.add_commut. apply Int.add_zero.
+  intros. unfold shift_sp.
+  replace (fe_size (make_env (function_bounds f))) with (fn_framesize tf).
+  rewrite <- Int.neg_repr. destruct sp; simpl; auto; rewrite Int.sub_add_opp; auto.
+  rewrite (unfold_transf_function _ _ H). auto.
 Qed.
 
 Lemma shift_eval_operation:
@@ -1243,10 +1288,10 @@ Lemma shift_eval_operation:
   eval_operation tge (shift_sp tf sp) 
                  (transl_op (make_env (function_bounds f)) op) args = Some v.
 Proof.
-  intros until v. destruct op; intros; auto.
-  simpl in *. rewrite symbols_preserved. auto.
-  destruct args; auto. unfold eval_operation in *. unfold transl_op.
-  apply shift_offset_sp; auto.
+  intros. rewrite <- H0. rewrite (shift_sp_eq f tf sp H). unfold transl_op.
+  rewrite (eval_operation_preserved ge tge). 
+  apply shift_stack_eval_operation.
+  exact symbols_preserved.
 Qed.
 
 Lemma shift_eval_addressing:
@@ -1257,11 +1302,10 @@ Lemma shift_eval_addressing:
                  (transl_addr (make_env (function_bounds f)) addr) args =
   Some v.
 Proof.
-  intros.
-  unfold transl_addr, eval_addressing in *;
-  destruct addr; try (rewrite symbols_preserved); auto.
-  destruct args; try discriminate.
-  apply shift_offset_sp; auto.
+  intros. rewrite <- H0. rewrite (shift_sp_eq f tf sp H). unfold transl_addr.
+  rewrite (eval_addressing_preserved ge tge). 
+  apply shift_stack_eval_addressing.
+  exact symbols_preserved.
 Qed.
 
 (** Preservation of the arguments to an external call. *)
@@ -1389,23 +1433,29 @@ Proof.
        intro BOUND; simpl in BOUND);
   unfold transl_instr.
   (* Lgetstack *)
-  inv WTI. destruct BOUND.
-  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
-             (rs0#r <- (rs (S sl))) fr m).
-  split. destruct sl. 
+  inv WTI. destruct BOUND. unfold undef_getstack; destruct sl.
   (* Lgetstack, local *)
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
+             (rs0#r <- (rs (S (Local z t)))) fr m); split.
   apply plus_one. apply exec_Mgetstack.
   apply get_slot_index. auto. apply index_local_valid. auto. congruence. congruence. auto.
   eapply agree_locals; eauto.
+  econstructor; eauto with coqlib. 
+  apply agree_set_reg; auto.
   (* Lgetstack, incoming *)
-  apply plus_one; apply exec_Mgetparam.
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
+             (rs0 # IT1 <- Vundef # r <- (rs (S (Incoming z t)))) fr m); split.
+  apply plus_one. apply exec_Mgetparam.
   change (get_parent_slot ts z t (rs (S (Incoming z t)))).
   eapply agree_incoming; eauto.
+  econstructor; eauto with coqlib. 
+  apply agree_set_reg; auto. apply agree_undef_getparam; auto.
   (* Lgetstack, outgoing *)
-  apply plus_one; apply exec_Mgetstack.
-  apply get_slot_index. auto. apply index_arg_valid. auto. congruence. congruence. auto. 
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b)
+             (rs0#r <- (rs (S (Outgoing z t)))) fr m); split.
+  apply plus_one. apply exec_Mgetstack.
+  apply get_slot_index. auto. apply index_arg_valid. auto. congruence. congruence. auto.
   eapply agree_outgoing; eauto.
-  (* Lgetstack, common *)
   econstructor; eauto with coqlib. 
   apply agree_set_reg; auto.
 
@@ -1432,22 +1482,23 @@ Proof.
   symmetry. eapply agree_reg; eauto.
 
   (* Lop *)
-  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) (rs0#res <- v) fr m); split.
+  set (op' := transl_op (make_env (function_bounds f)) op).
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) ((undef_op op' rs0)#res <- v) fr m); split.
   apply plus_one. apply exec_Mop. 
   apply shift_eval_operation. auto. 
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ _ args AG). auto.
   econstructor; eauto with coqlib.
-  apply agree_set_reg; auto.
+  apply agree_set_reg; auto. apply agree_undef_op; auto.
 
   (* Lload *)
-  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) (rs0#dst <- v) fr m); split.
+  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) ((undef_temps rs0)#dst <- v) fr m); split.
   apply plus_one; eapply exec_Mload; eauto.
   apply shift_eval_addressing; auto. 
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ _ args AG). eauto.
   econstructor; eauto with coqlib.
-  apply agree_set_reg; auto.
+  apply agree_set_reg; auto. apply agree_undef_temps; auto.
 
   (* Lstore *)
   econstructor; split.
@@ -1456,7 +1507,7 @@ Proof.
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ _ args AG). eauto.
   rewrite (agree_eval_reg _ _ _ _ _ _ _ src AG). eauto.
-  econstructor; eauto with coqlib.
+  econstructor; eauto with coqlib. apply agree_undef_temps; auto.
 
   (* Lcall *) 
   assert (WTF': wt_fundef f'). eapply find_function_well_typed; eauto.
@@ -1504,14 +1555,14 @@ Proof.
   apply agree_callee_save_return_regs.
 
   (* Lbuiltin *)
-  exists (State ts tf (shift_sp tf sp) (transl_code (make_env (function_bounds f)) b) (rs0#res <- v) fr m'); split.
+  econstructor; split.
   apply plus_one. apply exec_Mbuiltin.
   change mreg with RegEq.t.
   rewrite (agree_eval_regs _ _ _ _ _ _ _ args AG).
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto with coqlib.
-  apply agree_set_reg; auto.
+  apply agree_set_reg; auto. apply agree_undef_temps; auto.
  
   (* Llabel *)
   econstructor; split.
@@ -1530,14 +1581,14 @@ Proof.
   apply plus_one; apply exec_Mcond_true.
   rewrite <- (agree_eval_regs _ _ _ _ _ _ _ args AG) in H; eauto.
   apply transl_find_label; eauto.
-  econstructor; eauto.
+  econstructor; eauto. apply agree_undef_temps; auto.
   eapply find_label_incl; eauto.
 
   (* Lcond, false *)
   econstructor; split.
   apply plus_one; apply exec_Mcond_false.
   rewrite <- (agree_eval_regs _ _ _ _ _ _ _ args AG) in H; auto.
-  econstructor; eauto with coqlib.
+  econstructor; eauto with coqlib. apply agree_undef_temps; auto.
 
   (* Ljumptable *)
   econstructor; split.
@@ -1545,7 +1596,7 @@ Proof.
   rewrite <- (agree_eval_reg _ _ _ _ _ _ _ arg AG) in H; eauto.
   eauto. 
   apply transl_find_label; eauto.
-  econstructor; eauto.
+  econstructor; eauto. apply agree_undef_temps; auto.
   eapply find_label_incl; eauto.
 
   (* Lreturn *)

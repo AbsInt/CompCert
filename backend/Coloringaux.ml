@@ -41,6 +41,7 @@ type node =
     typ: typ;                           (*r its type *)
     regname: reg option;                (*r the RTL register it comes from *)
     regclass: int;                      (*r identifier of register class *)
+    mutable accesses: int;              (*r number of defs and uses *)
     mutable spillcost: float;           (*r estimated cost of spilling *)
     mutable adjlist: node list;         (*r all nodes it interferes with *)
     mutable degree: int;                (*r number of adjacent nodes *)
@@ -109,7 +110,7 @@ module DLinkNode = struct
   let make state =
     let rec empty =
       { ident = 0; typ = Tint; regname = None; regclass = 0;
-        adjlist = []; degree = 0; spillcost = 0.0;
+        adjlist = []; degree = 0; accesses = 0; spillcost = 0.0;
         movelist = []; alias = None; color = None;
         nstate = state; nprev = empty; nnext = empty }
     in empty
@@ -196,6 +197,8 @@ let num_available_registers = Array.make num_register_classes 0
 
 let reserved_registers = ref ([]: mreg list)
 
+let allocatable_registers = ref ([]: mreg list)
+
 let rec remove_reserved = function
   | [] -> []
   | hd :: tl ->
@@ -204,14 +207,17 @@ let rec remove_reserved = function
       else hd :: remove_reserved tl
 
 let init_regs() =
-  caller_save_registers.(0) <-
-    Array.of_list (remove_reserved int_caller_save_regs);
-  caller_save_registers.(1) <-
-    Array.of_list (remove_reserved float_caller_save_regs);
-  callee_save_registers.(0) <-
-    Array.of_list (remove_reserved int_callee_save_regs);
-  callee_save_registers.(1) <-
-    Array.of_list (remove_reserved float_callee_save_regs);
+  let int_caller_save = remove_reserved int_caller_save_regs
+  and float_caller_save = remove_reserved float_caller_save_regs
+  and int_callee_save = remove_reserved int_callee_save_regs
+  and float_callee_save = remove_reserved float_callee_save_regs in
+  allocatable_registers :=
+    List.flatten [int_caller_save; float_caller_save;
+                  int_callee_save; float_callee_save];
+  caller_save_registers.(0) <- Array.of_list int_caller_save;
+  caller_save_registers.(1) <- Array.of_list float_caller_save;
+  callee_save_registers.(0) <- Array.of_list int_callee_save;
+  callee_save_registers.(1) <- Array.of_list float_callee_save;
   for i = 0 to num_register_classes - 1 do
     num_available_registers.(i) <-
       Array.length caller_save_registers.(i)
@@ -365,9 +371,10 @@ let checkInvariants () =
 let nodeOfReg r typenv spillcosts =
   let ty = typenv r in
   incr nextRegIdent;
+  let (acc, cost) = spillcosts r in
   { ident = !nextRegIdent; typ = ty; 
     regname = Some r; regclass = class_of_type ty;
-    spillcost = float(spillcosts r);
+    accesses = acc; spillcost = float cost;
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = None;
     nstate = Initial;
@@ -378,7 +385,7 @@ let nodeOfMreg mr =
   incr nextRegIdent;
   { ident = !nextRegIdent; typ = ty; 
     regname = None; regclass = class_of_type ty;
-    spillcost = 0.0;
+    accesses = 0; spillcost = 0.0;
     adjlist = []; degree = 0; movelist = []; alias = None;
     color = Some (R mr);
     nstate = Colored;
@@ -426,7 +433,9 @@ let build g typenv spillcosts =
     g.pref_reg_reg ();
   SetRegMreg.fold
     (fun (Coq_pair(r1, mr2)) () ->
-      add_move (find_reg_node r1) (find_mreg_node mr2))
+      let r1' = find_reg_node r1 in
+      if List.mem mr2 !allocatable_registers then
+        add_move r1' (find_mreg_node mr2))
     g.pref_reg_mreg ();
   (* Initial partition of nodes into spill / freeze / simplify *)
   Hashtbl.iter
@@ -568,14 +577,14 @@ let canCoalesceGeorge u v =
    so George's criterion is safe in this case.  
 *)
 
-let thresholdGeorge = 2.0               (* = 1 def + 1 use *)
+let thresholdGeorge = 2               (* = 1 def + 1 use *)
 
 let canCoalesce u v =
   if u.nstate = Colored
   then canCoalesceGeorge u v
   else canCoalesceBriggs u v
-       || (v.spillcost <= thresholdGeorge && canCoalesceGeorge u v)
-       || (u.spillcost <= thresholdGeorge && canCoalesceGeorge v u)
+       || (v.accesses <= thresholdGeorge && canCoalesceGeorge u v)
+       || (u.accesses <= thresholdGeorge && canCoalesceGeorge v u)
 
 (* Update worklists after a move was processed *)
 
@@ -652,7 +661,12 @@ let freeze () =
 
 (* Chaitin's cost measure *)
 
-let spillCost n = n.spillcost /. float n.degree
+let spillCost n =
+(*i
+  Printf.printf "spillCost %s: uses = %.0f  degree = %d  cost = %f\n"
+                (name_of_node n) n.spillcost n.degree (n.spillcost /. float n.degree);
+*)
+  n.spillcost /. float n.degree
 
 (* Spill a node *)
 
@@ -778,35 +792,40 @@ let location_of_node n =
   | None -> assert false
   | Some loc -> loc
 
-(* Estimate spilling costs.  Currently, just count the number of accesses
-   to each pseudoregister.  To do: take loops into account. *)
+(* Estimate spilling costs and counts the number of defs and uses.
+   Currently, we charge 10 for each access and 1 for each move.
+   To do: take loops into account. *)
 
 let spill_costs f =
-  let costs = ref (PTree.empty : int PTree.t) in
+  let costs = ref (PMap.init (0,0)) in
   let cost r =
-    match PTree.get r !costs with None -> 0 | Some n -> n in
-  let incr r =
-    costs := PTree.set r (1 + cost r) !costs in
-  let incr_list rl =
-    List.iter incr rl in
-  let incr_ros ros =
-    match ros with Coq_inl r -> incr r | Coq_inr _ -> () in
+    PMap.get r !costs in
+  let charge amount r =
+    let (n, c) = cost r in
+    costs := PMap.set r (n + 1, c + amount) !costs in
+  let charge_list amount rl =
+    List.iter (charge amount) rl in
+  let charge_ros amount ros =
+    match ros with Coq_inl r -> charge amount r | Coq_inr _ -> () in
   let process_instr () pc i =
     match i with
     | Inop _ -> ()
-    | Iop(op, args, res, _) -> incr_list args; incr res
-    | Iload(chunk, addr, args, dst, _) -> incr_list args; incr dst
-    | Istore(chunk, addr, args, src, _) -> incr_list args; incr src
-    | Icall(sg, ros, args, res, _) -> incr_ros ros; incr_list args; incr res
-    | Itailcall(sg, ros, args) -> incr_ros ros; incr_list args
-    | Ibuiltin(ef, args, res, _) -> incr_list args; incr res
-    | Icond(cond, args, _, _) -> incr_list args
-    | Ijumptable(arg, _) -> incr arg
-    | Ireturn(Some r) -> incr r
+    | Iop(Op.Omove, arg::nil, res, _) -> charge 1 arg; charge 1 res
+    | Iop(op, args, res, _) -> charge_list 10 args; charge 10 res
+    | Iload(chunk, addr, args, dst, _) -> charge_list 10 args; charge 10 dst
+    | Istore(chunk, addr, args, src, _) -> charge_list 10 args; charge 10 src
+    | Icall(sg, ros, args, res, _) ->
+        charge_ros 10 ros; charge_list 1 args; charge 1 res
+    | Itailcall(sg, ros, args) ->
+        charge_ros 10 ros; charge_list 1 args
+    | Ibuiltin(ef, args, res, _) -> charge_list 10 args; charge 10 res
+    | Icond(cond, args, _, _) -> charge_list 10 args
+    | Ijumptable(arg, _) -> charge 10 arg
+    | Ireturn(Some r) -> charge 1 r
     | Ireturn None -> () in
-  incr_list f.fn_params;
+  charge_list 1 f.fn_params;
   PTree.fold process_instr f.fn_code ();
-  (* Result is cost function reg -> integer cost *)
+  (* Result is cost function reg -> (num accesses, integer cost *)
   cost
 
 (* This is the entry point for graph coloring. *)

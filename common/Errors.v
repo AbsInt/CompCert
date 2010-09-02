@@ -93,9 +93,36 @@ Proof.
   intros; discriminate.
 Qed.
 
-Open Local Scope error_monad_scope.
+(** Assertions *)
+
+Definition assertion (b: bool) : res unit :=
+  if b then OK tt else Error(msg "Assertion failed").
+
+Remark assertion_inversion:
+  forall b x, assertion b = OK x -> b = true.
+Proof.
+  unfold assertion; intros. destruct b; inv H; auto.
+Qed.
+
+Remark assertion_inversion_1:
+  forall (P Q: Prop) (a: {P}+{Q}) x,
+  assertion (proj_sumbool a) = OK x -> P.
+Proof.
+  intros. exploit assertion_inversion; eauto. 
+  unfold proj_sumbool. destruct a. auto. congruence.
+Qed.
+
+Remark assertion_inversion_2:
+  forall (P Q: Prop) (a: {P}+{Q}) x,
+  assertion (negb(proj_sumbool a)) = OK x -> Q.
+Proof.
+  intros. exploit assertion_inversion; eauto. 
+  unfold proj_sumbool. destruct a; simpl. congruence. auto.
+Qed.
 
 (** This is the familiar monadic map iterator. *)
+
+Open Local Scope error_monad_scope.
 
 Fixpoint mmap (A B: Type) (f: A -> res B) (l: list A) {struct l} : res (list B) :=
   match l with
@@ -152,6 +179,15 @@ Ltac monadInv1 H :=
       destruct (bind2_inversion F G H) as [x1 [x2 [EQ1 EQ2]]];
       clear H;
       try (monadInv1 EQ2)))))
+  | (assertion (negb (proj_sumbool ?a)) = OK ?X) =>
+      let A := fresh "A" in (generalize (assertion_inversion_2 _ H); intro A);
+      clear H
+  | (assertion (proj_sumbool ?a) = OK ?X) =>
+      let A := fresh "A" in (generalize (assertion_inversion_1 _ H); intro A);
+      clear H
+  | (assertion ?b = OK ?X) =>
+      let A := fresh "A" in (generalize (assertion_inversion _ H); intro A);
+      clear H
   | (mmap ?F ?L = OK ?M) =>
       generalize (mmap_inversion F L H); intro
   end.
@@ -162,6 +198,7 @@ Ltac monadInv H :=
   | (Error _ = OK _) => monadInv1 H
   | (bind ?F ?G = OK ?X) => monadInv1 H
   | (bind2 ?F ?G = OK ?X) => monadInv1 H
+  | (assertion _ = OK _) => monadInv1 H
   | (?F _ _ _ _ _ _ _ _ = OK _) => 
       ((progress simpl in H) || unfold F in H); monadInv1 H
   | (?F _ _ _ _ _ _ _ = OK _) => 
@@ -179,4 +216,3 @@ Ltac monadInv H :=
   | (?F _ = OK _) => 
       ((progress simpl in H) || unfold F in H); monadInv1 H
   end.
-

@@ -160,7 +160,7 @@ Proof.
   apply wt_instrs_cons; auto.
   constructor. 
   destruct o; simpl; congruence.
-  rewrite H6. destruct o; reflexivity || congruence.
+  rewrite H6. symmetry. apply type_shift_stack_operation. 
   (* load *)
   apply wt_instrs_cons; auto.
   constructor; auto.

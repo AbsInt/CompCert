@@ -35,7 +35,7 @@ Definition int_caller_save_regs :=
   R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: nil.
 
 Definition float_caller_save_regs :=
-  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
+  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: F11 :: nil.
 
 Definition int_callee_save_regs :=
   R14 :: R15 :: R16 :: R17 :: R18 :: R19 :: R20 :: R21 :: R22 :: 
@@ -57,6 +57,9 @@ Definition float_temporaries := FT1 :: FT2 :: FT3 :: nil.
   
 Definition temporaries := 
   R IT1 :: R IT2 :: R FT1 :: R FT2 :: R FT3 :: nil.
+
+Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
+Definition dummy_float_reg := F1.   (**r Used in [Coloring]. *)
 
 (** The [index_int_callee_save] and [index_float_callee_save] associate
   a unique positive integer to callee-save registers.  This integer is
@@ -291,7 +294,7 @@ Qed.
 (** The PowerPC ABI states the following convention for passing arguments
   to a function:
 - The first 8 integer arguments are passed in registers [R3] to [R10].
-- The first 10 float arguments are passed in registers [F1] to [F10].
+- The first 11 float arguments are passed in registers [F1] to [F11].
 - Each float argument passed in a float register ``consumes'' two
   integer arguments.
 - Extra arguments are passed on the stack, in [Outgoing] slots, consecutively
@@ -327,7 +330,7 @@ Fixpoint loc_arguments_rec
 Definition int_param_regs :=
   R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: nil.
 Definition float_param_regs :=
-  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
+  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: F11 :: nil.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
@@ -589,4 +592,3 @@ Proof.
   intro; simpl. ElimOrEq; reflexivity.
   intro; simpl. ElimOrEq; reflexivity.
 Qed.
-

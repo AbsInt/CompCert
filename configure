@@ -33,6 +33,9 @@ Supported targets:
   ppc-macosx       (PowerPC, MacOS X)
   ppc-linux        (PowerPC, Linux)
   arm-linux        (ARM, Linux)
+  ia32-linux       (x86 32 bits, Linux)
+  ia32-bsd         (x86 32 bits, BSD)
+  ia32-macosx      (x86 32 bits, MacOS X)
   manual           (edit configuration file by hand)
 
 Options:
@@ -89,6 +92,33 @@ case "$target" in
     casm="gcc -c"
     clinker="gcc"
     libmath="-lm";;
+  ia32-linux)
+    arch="ia32"
+    variant="standard"
+    system="linux"
+    cc="gcc -m32"
+    cprepro="gcc -m32 -U__GNUC__ -E"
+    casm="gcc -m32 -c"
+    clinker="gcc -m32"
+    libmath="-lm";;
+  ia32-bsd)
+    arch="ia32"
+    variant="standard"
+    system="bsd"
+    cc="gcc -m32"
+    cprepro="gcc -m32 -U__GNUC__ -E"
+    casm="gcc -m32 -c"
+    clinker="gcc -m32"
+    libmath="-lm";;
+  ia32-macosx)
+    arch="ia32"
+    variant="standard"
+    system="macosx"
+    cc="gcc -arch i386"
+    cprepro="gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
+    casm="gcc -arch i386 -c"
+    clinker="gcc -arch i386"
+    libmath="";;
   manual)
     ;;
   "")

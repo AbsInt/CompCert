@@ -27,6 +27,7 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
+Require Import Conventions.
 
 (** * Abstract syntax *)
 
@@ -100,6 +101,21 @@ Definition regset := Regmap.t val.
 
 Notation "a ## b" := (List.map a b) (at level 1).
 Notation "a # b <- c" := (Regmap.set b c a) (at level 1, b at next level).
+
+Fixpoint undef_regs (rl: list mreg) (rs: regset) {struct rl} : regset :=
+  match rl with
+  | nil => rs
+  | r1 :: rl' => undef_regs rl' (Regmap.set r1 Vundef rs)
+  end.
+
+Definition undef_temps (rs: regset) := 
+  undef_regs (int_temporaries ++ float_temporaries) rs.
+
+Definition undef_op (op: operation) (rs: regset) :=
+  match op with
+  | Omove => rs
+  | _ => undef_temps rs
+  end.
 
 Definition is_label (lbl: label) (instr: instruction) : bool :=
   match instr with

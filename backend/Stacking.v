@@ -127,16 +127,10 @@ Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
   behaviour. *)
 
 Definition transl_op (fe: frame_env) (op: operation) :=
-  match op with
-  | Oaddrstack ofs => Oaddrstack (Int.add (Int.repr fe.(fe_size)) ofs)
-  | _ => op
-  end.
+  shift_stack_operation (Int.repr fe.(fe_size)) op.
 
 Definition transl_addr (fe: frame_env) (addr: addressing) :=
-  match addr with
-  | Ainstack ofs => Ainstack (Int.add (Int.repr fe.(fe_size)) ofs)
-  | _ => addr
-  end.
+  shift_stack_addressing (Int.repr fe.(fe_size)) addr.
 
 (** Translation of a Linear instruction.  Prepends the corresponding
   Mach instructions to the given list of instructions.

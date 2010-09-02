@@ -375,23 +375,14 @@ Definition analyze (f: RTL.function): PMap.t numbering :=
 
 (** * Code transformation *)
 
-(** Some operations are so cheap to compute that it is generally not
-  worth reusing their results.  These operations are detected by the
-  function below. *)
-
-Definition is_trivial_op (op: operation) : bool :=
-  match op with
-  | Omove => true
-  | Ointconst _ => true
-  | Oaddrsymbol _ _ => true
-  | Oaddrstack _ => true
-  | _ => false
-  end.
-
 (** The code transformation is performed instruction by instruction.
   [Iload] instructions and non-trivial [Iop] instructions are turned
   into move instructions if their result is already available in a
-  register, as indicated by the numbering inferred at that program point. *)
+  register, as indicated by the numbering inferred at that program point.
+
+  Some operations are so cheap to compute that it is generally not
+  worth reusing their results.  These operations are detected by the
+  function [is_trivial_op] in module [Op]. *)
 
 Definition transf_instr (n: numbering) (instr: instruction) :=
   match instr with

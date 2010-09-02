@@ -160,19 +160,19 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s f sp op args res b rs m v,
       eval_operation ge sp op (map rs args) = Some v ->
       step (State s f sp (Lop op args res :: b) rs m)
-        E0 (State s f sp b (Locmap.set res v rs) m)
+        E0 (State s f sp b (Locmap.set res v (undef_temps rs)) m)
   | exec_Lload:
       forall s f sp chunk addr args dst b rs m a v,
       eval_addressing ge sp addr (map rs args) = Some a ->
       Mem.loadv chunk m a = Some v ->
       step (State s f sp (Lload chunk addr args dst :: b) rs m)
-        E0 (State s f sp b (Locmap.set dst v rs) m)
+        E0 (State s f sp b (Locmap.set dst v (undef_temps rs)) m)
   | exec_Lstore:
       forall s f sp chunk addr args src b rs m m' a,
       eval_addressing ge sp addr (map rs args) = Some a ->
       Mem.storev chunk m a (rs src) = Some m' ->
       step (State s f sp (Lstore chunk addr args src :: b) rs m)
-        E0 (State s f sp b rs m')
+        E0 (State s f sp b (undef_temps rs) m')
   | exec_Lcall:
       forall s f sp sig ros args res b rs m f',
       find_function ros rs = Some f' ->
@@ -206,19 +206,19 @@ Inductive step: state -> trace -> state -> Prop :=
       eval_condition cond (map rs args) = Some true ->
       find_label lbl f.(fn_code) = Some b' ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
-        E0 (State s f sp b' rs m)
+        E0 (State s f sp b' (undef_temps rs) m)
   | exec_Lcond_false:
       forall s f sp cond args lbl b rs m,
       eval_condition cond (map rs args) = Some false ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
-        E0 (State s f sp b rs m)
+        E0 (State s f sp b (undef_temps rs) m)
   | exec_Ljumptable:
       forall s f sp arg tbl b rs m n lbl b',
       rs arg = Vint n ->
       list_nth_z tbl (Int.signed n) = Some lbl ->
       find_label lbl f.(fn_code) = Some b' ->
       step (State s f sp (Ljumptable arg tbl :: b) rs m)
-        E0 (State s f sp b' rs m)
+        E0 (State s f sp b' (undef_temps rs) m)
   | exec_Lreturn:
       forall s f stk rs m or b m',
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->

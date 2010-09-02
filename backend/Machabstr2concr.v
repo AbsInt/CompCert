@@ -618,6 +618,23 @@ Proof.
   destruct (RegEq.eq r0 r); auto. 
 Qed.
 
+Lemma regset_lessdef_undef_temps:
+  forall rs1 rs2,
+  regset_lessdef rs1 rs2 -> regset_lessdef (undef_temps rs1) (undef_temps rs2).
+Proof.
+  unfold undef_temps. 
+  generalize (int_temporaries ++ float_temporaries).
+  induction l; simpl; intros. auto. apply IHl. apply regset_lessdef_set; auto.
+Qed.
+
+Lemma regset_lessdef_undef_op:
+  forall op rs1 rs2,
+  regset_lessdef rs1 rs2 -> regset_lessdef (undef_op op rs1) (undef_op op rs2).
+Proof.
+  intros. set (D := regset_lessdef_undef_temps _ _ H). 
+  destruct op; simpl; auto.
+Qed.
+
 Lemma regset_lessdef_find_function_ptr:
   forall ge ros rs1 rs2 fb,
   find_function_ptr ge ros rs1 = Some fb ->
@@ -965,40 +982,44 @@ Proof.
   (* Mgetparam *)
   assert (WTF: wt_function f) by (inv WTS; auto).
   exploit match_stacks_get_parent; eauto. intros [v' [A B]].
-  exists (State ts fb (Vptr sp0 base) c (trs#dst <- v') ms); split.
+  exists (State ts fb (Vptr sp0 base) c (trs # IT1 <- Vundef # dst <- v') ms); split.
   eapply exec_Mgetparam; eauto.
     eapply frame_match_load_link; eauto.
     eapply match_stacks_parent_sp_pointer; eauto.
-  econstructor; eauto with coqlib. apply regset_lessdef_set; eauto. 
+  econstructor; eauto with coqlib.
+  apply regset_lessdef_set; eauto. apply regset_lessdef_set; eauto.  
  
   (* Mop *)
   exploit eval_operation_lessdef. 2: eauto.
   eapply regset_lessdef_list; eauto. 
   intros [v' [A B]].
-  exists (State ts fb (Vptr sp0 base) c (trs#res <- v') ms); split.
+  exists (State ts fb (Vptr sp0 base) c ((undef_op op trs)#res <- v') ms); split.
   apply exec_Mop; auto.
   econstructor; eauto with coqlib. apply regset_lessdef_set; eauto.
+  apply regset_lessdef_undef_op; auto.
 
   (* Mload *)
   exploit eval_addressing_lessdef. 2: eauto. eapply regset_lessdef_list; eauto.
   intros [a' [A B]].
   exploit Mem.loadv_extends. eauto. eauto. eexact B. 
   intros [v' [C D]].
-  exists (State ts fb (Vptr sp0 base) c (trs#dst <- v') ms); split.
+  exists (State ts fb (Vptr sp0 base) c ((undef_temps trs)#dst <- v') ms); split.
   eapply exec_Mload; eauto.
   econstructor; eauto with coqlib. apply regset_lessdef_set; eauto.
+  apply regset_lessdef_undef_temps; auto.
 
   (* Mstore *)
   exploit eval_addressing_lessdef. 2: eauto. eapply regset_lessdef_list; eauto.
   intros [a' [A B]].
   exploit Mem.storev_extends. eauto. eauto. eexact B. apply RLD. 
   intros [ms' [C D]].
-  exists (State ts fb (Vptr sp0 base) c trs ms'); split.
+  exists (State ts fb (Vptr sp0 base) c (undef_temps trs) ms'); split.
   eapply exec_Mstore; eauto.
   destruct a; simpl in H0; try congruence. inv B. simpl in C. 
   econstructor; eauto with coqlib.
   eapply match_stacks_store. eauto. eexact H0. eexact C.
   eapply frame_match_store; eauto.
+  apply regset_lessdef_undef_temps; auto.
 
   (* Mcall *)
   exploit find_function_find_function_ptr; eauto. 
@@ -1032,7 +1053,7 @@ Proof.
   econstructor; eauto with coqlib.
   eapply match_stacks_external_call; eauto. 
   eapply frame_match_external_call; eauto. 
-  apply regset_lessdef_set; eauto.
+  apply regset_lessdef_set; eauto. apply regset_lessdef_undef_temps; auto.
 
   (* Mgoto *)
   econstructor; split.
@@ -1043,17 +1064,17 @@ Proof.
   econstructor; split.
   eapply exec_Mcond_true; eauto.
   eapply eval_condition_lessdef; eauto. apply regset_lessdef_list; auto.
-  econstructor; eauto.
+  econstructor; eauto. apply regset_lessdef_undef_temps; auto.
   econstructor; split.
   eapply exec_Mcond_false; eauto.
   eapply eval_condition_lessdef; eauto. apply regset_lessdef_list; auto.
-  econstructor; eauto.
+  econstructor; eauto. apply regset_lessdef_undef_temps; auto.
 
   (* Mjumptable *)
   econstructor; split.
   eapply exec_Mjumptable; eauto.
   generalize (RLD arg); intro LD. rewrite H in LD. inv LD. auto.  
-  econstructor; eauto.
+  econstructor; eauto. apply regset_lessdef_undef_temps; auto.
 
   (* Mreturn *)
   assert (WTF: wt_function f) by (inv WTS; auto).

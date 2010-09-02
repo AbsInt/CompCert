@@ -100,6 +100,24 @@ Ltac InvEval := InvEval1; InvEval2; InvEval2.
   by the smart constructor.
 *)
 
+Theorem eval_addrsymbol:
+  forall le id ofs b,
+  Genv.find_symbol ge id = Some b ->
+  eval_expr ge sp e m le (addrsymbol id ofs) (Vptr b ofs).
+Proof.
+  intros. unfold addrsymbol. econstructor. constructor. 
+  simpl. rewrite H. auto.
+Qed.
+
+Theorem eval_addrstack:
+  forall le ofs b n,
+  sp = Vptr b n ->
+  eval_expr ge sp e m le (addrstack ofs) (Vptr b (Int.add n ofs)).
+Proof.
+  intros. unfold addrstack. econstructor. constructor. 
+  simpl. unfold offset_sp. rewrite H. auto.
+Qed.
+
 Theorem eval_notint:
   forall le a x,
   eval_expr ge sp e m le a (Vint x) ->
@@ -667,80 +685,35 @@ Proof.
   intros. EvalOp.
 Qed.
 
-Lemma loadv_cast:
-  forall chunk addr v,
-  Mem.loadv chunk m addr = Some v ->
-  match chunk with
-  | Mint8signed => v = Val.sign_ext 8 v
-  | Mint8unsigned => v = Val.zero_ext 8 v
-  | Mint16signed => v = Val.sign_ext 16 v
-  | Mint16unsigned => v = Val.zero_ext 16 v
-  | Mfloat32 => v = Val.singleoffloat v
-  | _ => True
-  end.
-Proof.
-  intros. destruct addr; simpl in H; try discriminate.
-  eapply Mem.load_cast. eauto.
-Qed.
-
 Theorem eval_cast8signed:
   forall le a v,
   eval_expr ge sp e m le a v ->
   eval_expr ge sp e m le (cast8signed a) (Val.sign_ext 8 v).
-Proof. 
-  intros until v; unfold cast8signed; case (cast8signed_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.sign_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. rewrite H7. decEq. apply (loadv_cast _ _ _ H7). 
-  EvalOp.
-Qed.
+Proof. TrivialOp cast8signed. Qed.
 
 Theorem eval_cast8unsigned:
   forall le a v,
   eval_expr ge sp e m le a v ->
   eval_expr ge sp e m le (cast8unsigned a) (Val.zero_ext 8 v).
-Proof. 
-  intros until v; unfold cast8unsigned; case (cast8unsigned_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.zero_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. rewrite H7. decEq. apply (loadv_cast _ _ _ H7). 
-  EvalOp.
-Qed.
+Proof. TrivialOp cast8unsigned. Qed.
 
 Theorem eval_cast16signed:
   forall le a v,
   eval_expr ge sp e m le a v ->
   eval_expr ge sp e m le (cast16signed a) (Val.sign_ext 16 v).
-Proof. 
-  intros until v; unfold cast16signed; case (cast16signed_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.sign_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. rewrite H7. decEq. apply (loadv_cast _ _ _ H7). 
-  EvalOp.
-Qed.
+Proof. TrivialOp cast16signed. Qed.
 
 Theorem eval_cast16unsigned:
   forall le a v,
   eval_expr ge sp e m le a v ->
   eval_expr ge sp e m le (cast16unsigned a) (Val.zero_ext 16 v).
-Proof. 
-  intros until v; unfold cast16unsigned; case (cast16unsigned_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto.
-  rewrite Int.zero_ext_idem. reflexivity. compute; auto.
-  inv H. econstructor; eauto. rewrite H7. decEq. apply (loadv_cast _ _ _ H7). 
-  EvalOp.
-Qed.
+Proof. TrivialOp cast16unsigned. Qed.
 
 Theorem eval_singleoffloat:
   forall le a v,
   eval_expr ge sp e m le a v ->
   eval_expr ge sp e m le (singleoffloat a) (Val.singleoffloat v).
-Proof. 
-  intros until v; unfold singleoffloat; case (singleoffloat_match a); intros; InvEval.
-  EvalOp. simpl. subst v. destruct v1; simpl; auto. rewrite Float.singleoffloat_idem. reflexivity.
-  inv H. econstructor; eauto. rewrite H7. decEq. apply (loadv_cast _ _ _ H7). 
-  EvalOp.
-Qed.
+Proof. TrivialOp singleoffloat. Qed.
 
 Theorem eval_comp_int:
   forall le c a x b y,
@@ -883,19 +856,46 @@ Theorem eval_intuoffloat:
   forall le a x,
   eval_expr ge sp e m le a (Vfloat x) ->
   eval_expr ge sp e m le (intuoffloat a) (Vint (Float.intuoffloat x)).
-Proof. intros; unfold intuoffloat; EvalOp. Qed.
+Proof.
+  intros. unfold intuoffloat. 
+  econstructor. eauto. 
+  set (fm := Float.floatofintu Float.ox8000_0000).
+  assert (eval_expr ge sp e m (Vfloat x :: le) (Eletvar O) (Vfloat x)). constructor. auto. 
+  apply eval_Econdition with (v1 := Float.cmp Clt x fm).
+  econstructor. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
+  simpl. auto.
+  caseEq (Float.cmp Clt x fm); intros.
+  rewrite Float.intuoffloat_intoffloat_1; auto.
+  EvalOp.
+  rewrite Float.intuoffloat_intoffloat_2; auto.
+  apply eval_addimm. apply eval_intoffloat. apply eval_subf; auto. EvalOp.
+Qed.
 
 Theorem eval_floatofint:
   forall le a x,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le (floatofint a) (Vfloat (Float.floatofint x)).
-Proof. intros; unfold floatofint; EvalOp. Qed.
+Proof.
+  intros. unfold floatofint. rewrite Float.floatofint_from_words.
+  apply eval_subf.
+  EvalOp. constructor. EvalOp. simpl; eauto.
+  constructor. apply eval_addimm. eauto. constructor.
+  simpl. auto. 
+  EvalOp. 
+Qed.
 
 Theorem eval_floatofintu:
   forall le a x,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le (floatofintu a) (Vfloat (Float.floatofintu x)).
-Proof. intros; unfold floatofintu; EvalOp. Qed.
+Proof.
+  intros. unfold floatofintu. rewrite Float.floatofintu_from_words.
+  apply eval_subf.
+  EvalOp. constructor. EvalOp. simpl; eauto.
+  constructor. eauto. constructor.
+  simpl. auto. 
+  EvalOp. 
+Qed.
 
 Theorem eval_xor:
   forall le a x b y,

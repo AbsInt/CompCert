@@ -1,12 +1,13 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=-stdlib ../../runtime -dparse -dcmedium -dclight -dasm \
+CCOMPFLAGS=-stdlib ../../runtime -dparse -dc -dclight -dasm \
   -fstruct-passing -fstruct-assign -fbitfields
 
 LIBS=$(LIBMATH)
 
 # Can run and have reference output in Results
+
 TESTS=bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 \
   expr1 initializers volatile2 \
@@ -32,7 +33,7 @@ all: $(TESTS:%=%.compcert) $(EXTRAS:%=%.s)
 
 clean:
 	rm -f *.compcert
-	rm -f *.parsed.c *.light.c *.s *.o *~ 
+	rm -f *.parsed.c *.compcert.c *.light.c *.s *.o *~ 
 
 test:
 	@for i in $(TESTS); do \

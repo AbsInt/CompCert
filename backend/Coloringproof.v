@@ -719,7 +719,9 @@ Proof.
   elim (andb_prop _ _ H1); intros.
   caseEq (Regset.mem r allregs); intro.
   generalize (check_coloring_3_correct _ _ _ r H3 H4). tauto.
-  case (env r); simpl; intuition congruence. 
+  case (env r); simpl.
+  unfold dummy_int_reg. intuition congruence.
+  unfold dummy_float_reg. intuition congruence.
 Qed.
 
 Lemma alloc_of_coloring_correct_4:

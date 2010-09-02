@@ -587,7 +587,8 @@ Lemma transl_expr_Eop_correct:
   eval_operation ge sp op vargs = Some v ->
   transl_expr_prop le (Eop op args) v.
 Proof.
-  intros; red; intros. inv TE. 
+  intros; red; intros. inv TE.
+(* normal case *) 
   exploit H0; eauto. intros [rs1 [EX1 [ME1 [RR1 RO1]]]].
   exists (rs1#rd <- v).
 (* Exec *)
@@ -1116,12 +1117,24 @@ Proof.
   constructor; auto.
   
   (* assign *)
-  inv TS. 
+  inv TS.
+  (* optimized translation (not 2 addr) *)
   exploit transl_expr_correct; eauto. 
   intros [rs' [A [B [C D]]]].
   econstructor; split.
   right; split. eauto. Lt_state.
   econstructor; eauto. constructor.
+  (* alternate translation (2 addr) *)
+  exploit transl_expr_correct; eauto. 
+  intros [rs' [A [B [C D]]]].
+  exploit tr_move_correct; eauto. 
+  intros [rs'' [P [Q R]]].
+  econstructor; split.
+  right; split. eapply star_trans. eexact A. eexact P. traceEq. Lt_state.
+  econstructor; eauto. constructor. 
+  simpl in B. apply match_env_invariant with (rs'#r <- v). 
+  apply match_env_update_var; auto. 
+  intros. rewrite Regmap.gsspec. destruct (peq r0 r). congruence. auto. 
 
   (* store *)
   inv TS.

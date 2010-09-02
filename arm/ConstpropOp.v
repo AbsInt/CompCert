@@ -345,9 +345,6 @@ Inductive eval_static_operation_cases: forall (op: operation) (vl: list approx),
   | eval_static_operation_case49:
       forall n1,
       eval_static_operation_cases (Ofloatofint) (I n1 :: nil)
-  | eval_static_operation_case50:
-      forall n1,
-      eval_static_operation_cases (Ofloatofintu) (I n1 :: nil)
   | eval_static_operation_case51:
       forall c vl,
       eval_static_operation_cases (Ocmp c) (vl)
@@ -458,8 +455,6 @@ Definition eval_static_operation_match (op: operation) (vl: list approx) :=
       eval_static_operation_case48 n1
   | Ofloatofint, I n1 :: nil =>
       eval_static_operation_case49 n1
-  | Ofloatofintu, I n1 :: nil =>
-      eval_static_operation_case50 n1
   | Ocmp c, vl =>
       eval_static_operation_case51 c vl
   | Oshrximm n, I n1 :: nil =>
@@ -568,8 +563,6 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
       I(Float.intoffloat n1)
   | eval_static_operation_case49 n1 =>
       F(Float.floatofint n1)
-  | eval_static_operation_case50 n1 =>
-      F(Float.floatofintu n1)
   | eval_static_operation_case51 c vl =>
       match eval_static_condition c vl with
       | None => Unknown

@@ -152,9 +152,7 @@ Inductive instruction : Type :=
   | Pcmf: freg -> freg -> instruction              (**r float comparison *)
   | Pdvfd: freg -> freg -> freg -> instruction     (**r float division *)
   | Pfixz: ireg -> freg -> instruction             (**r float to signed int *)
-  | Pfixzu: ireg -> freg -> instruction            (**r float to unsigned int *)
   | Pfltd: freg -> ireg -> instruction             (**r signed int to float *)
-  | Pfltud: freg -> ireg -> instruction             (**r unsigned int to float *)
   | Pldfd: freg -> ireg -> int -> instruction      (**r float64 load *)
   | Pldfs: freg -> ireg -> int -> instruction      (**r float32 load *)
   | Plifd: freg -> float -> instruction            (**r load float constant *)
@@ -470,12 +468,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#r1 <- (Val.divf rs#r2 rs#r3))) m
   | Pfixz r1 r2 =>
       OK (nextinstr (rs#r1 <- (Val.intoffloat rs#r2))) m
-  | Pfixzu r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.intuoffloat rs#r2))) m
   | Pfltd r1 r2 =>
       OK (nextinstr (rs#r1 <- (Val.floatofint rs#r2))) m
-  | Pfltud r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.floatofintu rs#r2))) m
   | Pldfd r1 r2 n =>
       exec_load Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pldfs r1 r2 n =>
@@ -492,8 +486,11 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#r1 <- (Val.mulf rs#r2 rs#r3))) m
   | Pstfd r1 r2 n =>      
       exec_store Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
-  | Pstfs r1 r2 n =>      
-      exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pstfs r1 r2 n =>
+      match exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m with
+      | OK rs' m' => OK (rs'#FR3 <- Vundef) m'
+      | Error => Error
+      end
   | Psufd r1 r2 r3 =>     
       OK (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
   (* Pseudo-instructions *)

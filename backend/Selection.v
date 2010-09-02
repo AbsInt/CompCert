@@ -101,8 +101,8 @@ Definition sel_constant (cst: Cminor.constant) : expr :=
   match cst with
   | Cminor.Ointconst n => Eop (Ointconst n) Enil
   | Cminor.Ofloatconst f => Eop (Ofloatconst f) Enil
-  | Cminor.Oaddrsymbol id ofs => Eop (Oaddrsymbol id ofs) Enil
-  | Cminor.Oaddrstack ofs => Eop (Oaddrstack ofs) Enil
+  | Cminor.Oaddrsymbol id ofs => addrsymbol id ofs
+  | Cminor.Oaddrstack ofs => addrstack ofs
   end.
 
 Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=

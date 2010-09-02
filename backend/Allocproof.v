@@ -235,6 +235,14 @@ Proof.
   rewrite H0. apply H. auto. eapply regalloc_not_temporary; eauto.
 Qed.
 
+Lemma agree_undef_temps:
+  forall live rs ls,
+  agree live rs ls -> agree live rs (undef_temps ls).
+Proof.
+  intros. apply agree_exten with ls; auto. 
+  intros. apply Locmap.guo; auto. 
+Qed.
+
 (** If a register is dead, assigning it an arbitrary value in [rs]
     and leaving [ls] unchanged preserves agreement.  (This corresponds
     to an operation over a dead register in the original program
@@ -603,7 +611,11 @@ Proof.
   (* sub-case: non-redundant move *)
   econstructor; split. eapply exec_Lop; eauto. simpl. eauto.
   MatchStates.
-  rewrite <- H1. eapply agree_move_live; eauto.
+  rewrite <- H1. set (ls1 := undef_temps ls).
+  replace (ls (assign arg)) with (ls1 (assign arg)).
+  eapply agree_move_live; eauto.
+  unfold ls1. eapply agree_undef_temps; eauto.
+  unfold ls1. simpl. apply Locmap.guo. eapply regalloc_not_temporary; eauto. 
   (* Not a move *)
   intros INMO CORR CODE.
   assert (eval_operation tge sp op (map ls (map assign args)) = Some v).
@@ -612,6 +624,7 @@ Proof.
     eapply agree_eval_regs; eauto.
   econstructor; split. eapply exec_Lop; eauto. MatchStates. 
   apply agree_assign_live with f env live; auto.
+  eapply agree_undef_temps; eauto.
   eapply agree_reg_list_live; eauto.
   (* Result is not live, instruction turned into a nop *)
   intro CODE. econstructor; split. eapply exec_Lnop; eauto.
@@ -633,6 +646,7 @@ Proof.
   unfold correct_alloc_instr. intro CORR.
   MatchStates. 
   eapply agree_assign_live; eauto.
+  eapply agree_undef_temps; eauto.
   eapply agree_reg_list_live; eauto.
   (* dst is dead *)
   econstructor; split.
@@ -650,7 +664,9 @@ Proof.
   econstructor; split.
   eapply exec_Lstore; eauto. TranslInstr.
   rewrite <- ESRC. eauto.
-  MatchStates. eapply agree_reg_live. eapply agree_reg_list_live. eauto.
+  MatchStates.
+  eapply agree_undef_temps; eauto.
+  eapply agree_reg_live. eapply agree_reg_list_live. eauto.
 
   (* Icall *)
   exploit transl_find_function; eauto.  intros [tf [TFIND TF]].
@@ -695,20 +711,26 @@ Proof.
     eapply agree_eval_regs; eauto.
   econstructor; split.
   eapply exec_Lcond_true; eauto. TranslInstr.
-  MatchStates. eapply agree_reg_list_live. eauto.
+  MatchStates.
+  eapply agree_undef_temps; eauto.
+  eapply agree_reg_list_live. eauto.
   (* Icond, false *)
   assert (COND: eval_condition cond (map ls (map assign args)) = Some false).
     replace (map ls (map assign args)) with (rs##args). auto.
     eapply agree_eval_regs; eauto.
   econstructor; split.
   eapply exec_Lcond_false; eauto. TranslInstr.
-  MatchStates. eapply agree_reg_list_live. eauto.
+  MatchStates.
+  eapply agree_undef_temps; eauto.
+  eapply agree_reg_list_live. eauto.
 
   (* Ijumptable *)
   assert (rs#arg = ls (assign arg)). apply AG. apply Regset.add_1. auto. 
   econstructor; split.
   eapply exec_Ljumptable; eauto. TranslInstr. congruence. 
-  MatchStates. eapply list_nth_z_in; eauto. eapply agree_reg_live; eauto. 
+  MatchStates. eapply list_nth_z_in; eauto.
+  eapply agree_undef_temps; eauto.
+  eapply agree_reg_live; eauto. 
 
   (* Ireturn *)
   econstructor; split.

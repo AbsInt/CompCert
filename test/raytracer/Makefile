@@ -1,6 +1,8 @@
+include ../../Makefile.config
+
 CC=../../ccomp 
 CFLAGS=-stdlib ../../runtime -dparse -dclight -dasm -fstruct-passing -fstruct-assign
-LIBS=
+LIBS=$(LIBMATH)
 TIME=xtime -mintime 2.0
 
 OBJS=memory.o gmllexer.o gmlparser.o eval.o \

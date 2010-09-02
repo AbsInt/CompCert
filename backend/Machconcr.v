@@ -152,24 +152,24 @@ Inductive step: state -> trace -> state -> Prop :=
       load_stack m sp Tint f.(fn_link_ofs) = Some parent ->
       load_stack m parent ty ofs = Some v ->
       step (State s fb sp (Mgetparam ofs ty dst :: c) rs m)
-        E0 (State s fb sp c (rs#dst <- v) m)
+        E0 (State s fb sp c (rs # IT1 <- Vundef # dst <- v) m)
   | exec_Mop:
       forall s f sp op args res c rs m v,
       eval_operation ge sp op rs##args = Some v ->
       step (State s f sp (Mop op args res :: c) rs m)
-        E0 (State s f sp c (rs#res <- v) m)
+        E0 (State s f sp c ((undef_op op rs)#res <- v) m)
   | exec_Mload:
       forall s f sp chunk addr args dst c rs m a v,
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.loadv chunk m a = Some v ->
       step (State s f sp (Mload chunk addr args dst :: c) rs m)
-        E0 (State s f sp c (rs#dst <- v) m)
+        E0 (State s f sp c ((undef_temps rs)#dst <- v) m)
   | exec_Mstore:
       forall s f sp chunk addr args src c rs m m' a,
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.storev chunk m a (rs src) = Some m' ->
       step (State s f sp (Mstore chunk addr args src :: c) rs m)
-        E0 (State s f sp c rs m')
+        E0 (State s f sp c (undef_temps rs) m')
   | exec_Mcall:
       forall s fb sp sig ros c rs m f f' ra,
       find_function_ptr ge ros rs = Some f' ->
@@ -191,7 +191,7 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s f sp rs m ef args res b t v m',
       external_call ef ge rs##args m t v m' ->
       step (State s f sp (Mbuiltin ef args res :: b) rs m)
-         t (State s f sp b (rs#res <- v) m')
+         t (State s f sp b ((undef_temps rs)#res <- v) m')
   | exec_Mgoto:
       forall s fb f sp lbl c rs m c',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
@@ -204,12 +204,12 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       find_label lbl f.(fn_code) = Some c' ->
       step (State s fb sp (Mcond cond args lbl :: c) rs m)
-        E0 (State s fb sp c' rs m)
+        E0 (State s fb sp c' (undef_temps rs) m)
   | exec_Mcond_false:
       forall s f sp cond args lbl c rs m,
       eval_condition cond rs##args = Some false ->
       step (State s f sp (Mcond cond args lbl :: c) rs m)
-        E0 (State s f sp c rs m)
+        E0 (State s f sp c (undef_temps rs) m)
   | exec_Mjumptable:
       forall s fb f sp arg tbl c rs m n lbl c',
       rs arg = Vint n ->
@@ -217,7 +217,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       find_label lbl f.(fn_code) = Some c' ->
       step (State s fb sp (Mjumptable arg tbl :: c) rs m)
-        E0 (State s fb sp c' rs m)
+        E0 (State s fb sp c' (undef_temps rs) m)
   | exec_Mreturn:
       forall s fb stk soff c rs m f m',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->

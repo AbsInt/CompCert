@@ -35,7 +35,7 @@ Definition int_caller_save_regs :=
   R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: nil.
 
 Definition float_caller_save_regs :=
-  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: nil.
+  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: F11 :: nil.
 
 Definition int_callee_save_regs :=
   R31 :: R30 :: R29 :: R28 :: R27 :: R26 :: R25 :: R24 :: R23 ::
@@ -57,6 +57,9 @@ Definition float_temporaries := FT1 :: FT2 :: FT3 :: nil.
   
 Definition temporaries := 
   R IT1 :: R IT2 :: R FT1 :: R FT2 :: R FT3 :: nil.
+
+Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
+Definition dummy_float_reg := F1.   (**r Used in [Coloring]. *)
 
 (** The [index_int_callee_save] and [index_float_callee_save] associate
   a unique positive integer to callee-save registers.  This integer is

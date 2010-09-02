@@ -139,6 +139,12 @@ Definition floatofintu (v: val) : val :=
   | _ => Vundef
   end.
 
+Definition floatofwords (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vfloat (Float.from_words n1 n2)
+  | _, _ => Vundef
+  end.
+
 Definition notint (v: val) : val :=
   match v with
   | Vint n => Vint (Int.xor n Int.mone)

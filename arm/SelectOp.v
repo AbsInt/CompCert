@@ -50,6 +50,14 @@ Require Import CminorSel.
 
 Open Local Scope cminorsel_scope.
 
+(** ** Constants **)
+
+Definition addrsymbol (id: ident) (ofs: int) :=
+  Eop (Oaddrsymbol id ofs) Enil.
+
+Definition addrstack (ofs: int) :=
+  Eop (Oaddrstack ofs) Enil.
+
 (** ** Integer logical negation *)
 
 (** The natural way to write smart constructors is by pattern-matching
@@ -788,22 +796,24 @@ Definition same_expr_pure (e1 e2: expr) :=
 Definition or (e1: expr) (e2: expr) :=
   match e1, e2 with
   | Eop (Oshift (Olsl n1) (t1:::Enil), Eop (Oshift (Olsr n2) (t2:::Enil)) => ...
+  | Eop (Oshift (Olsr n1) (t1:::Enil), Eop (Oshift (Olsl n2) (t2:::Enil)) => ...
   | Eop (Oshift s) (t1:::Enil), t2 => Eop (Oorshift s) (t2:::t1:::Enil)
   | t1, Eop (Oshift s) (t2:::Enil) => Eop (Oorshift s) (t1:::t2:::Enil)
   | _, _ => Eop Oor (e1:::e2:::Enil)
   end.
 *)
 
-(* TODO: symmetric of first case *)
-
 Inductive or_cases: forall (e1: expr) (e2: expr), Type :=
   | or_case1:
       forall n1 t1 n2 t2,
       or_cases (Eop (Oshift (Slsl n1)) (t1:::Enil)) (Eop (Oshift (Slsr n2)) (t2:::Enil))
   | or_case2:
+      forall n1 t1 n2 t2,
+      or_cases (Eop (Oshift (Slsr n1)) (t1:::Enil)) (Eop (Oshift (Slsl n2)) (t2:::Enil))
+  | or_case3:
       forall s t1 t2,
       or_cases (Eop (Oshift s) (t1:::Enil)) (t2)
-  | or_case3:
+  | or_case4:
       forall t1 s t2,
       or_cases (t1) (Eop (Oshift s) (t2:::Enil))
   | or_default:
@@ -814,10 +824,12 @@ Definition or_match (e1: expr) (e2: expr) :=
   match e1 as z1, e2 as z2 return or_cases z1 z2 with
   | Eop (Oshift (Slsl n1)) (t1:::Enil), Eop (Oshift (Slsr n2)) (t2:::Enil) =>
       or_case1 n1 t1 n2 t2
+  | Eop (Oshift (Slsr n1)) (t1:::Enil), Eop (Oshift (Slsl n2)) (t2:::Enil) =>
+      or_case2 n1 t1 n2 t2
   | Eop (Oshift s) (t1:::Enil), t2 =>
-      or_case2 s t1 t2
+      or_case3 s t1 t2
   | t1, Eop (Oshift s) (t2:::Enil) =>
-      or_case3 t1 s t2
+      or_case4 t1 s t2
   | e1, e2 =>
       or_default e1 e2
   end.
@@ -829,9 +841,14 @@ Definition or (e1: expr) (e2: expr) :=
       && same_expr_pure t1 t2
       then Eop (Oshift (Sror n2)) (t1:::Enil)
       else Eop (Oorshift (Slsr n2)) (e1:::t2:::Enil)
-  | or_case2 s t1 t2 =>
+  | or_case2 n1 t1 n2 t2 =>
+      if Int.eq (Int.add (s_amount n2) (s_amount n1)) Int.iwordsize
+      && same_expr_pure t1 t2
+      then Eop (Oshift (Sror n1)) (t1:::Enil)
+      else Eop (Oorshift (Slsl n2)) (e1:::t2:::Enil)
+  | or_case3 s t1 t2 =>
       Eop (Oorshift s) (t2:::t1:::Enil)
-  | or_case3 t1 s t2 =>
+  | or_case4 t1 s t2 =>
       Eop (Oorshift s) (t1:::t2:::Enil)
   | or_default e1 e2 =>
       Eop Oor (e1:::e2:::Enil)
@@ -919,118 +936,6 @@ Definition shr (e1: expr) (e2: expr) :=
       Eop Oshr (e1:::e2:::Enil)
   end.
 
-(** ** Truncations and sign extensions *)
-
-Inductive cast8signed_cases: forall (e1: expr), Type :=
-  | cast8signed_case1:
-      forall (e2: expr),
-      cast8signed_cases (Eop Ocast8signed (e2 ::: Enil))
-  | cast8signed_default:
-      forall (e1: expr),
-      cast8signed_cases e1.
-
-Definition cast8signed_match (e1: expr) :=
-  match e1 as z1 return cast8signed_cases z1 with
-  | Eop Ocast8signed (e2 ::: Enil) =>
-      cast8signed_case1 e2
-  | e1 =>
-      cast8signed_default e1
-  end.
-
-Definition cast8signed (e: expr) := 
-  match cast8signed_match e with
-  | cast8signed_case1 e1 => e
-  | cast8signed_default e1 => Eop Ocast8signed (e1 ::: Enil)
-  end.
-
-Inductive cast8unsigned_cases: forall (e1: expr), Type :=
-  | cast8unsigned_case1:
-      forall (e2: expr),
-      cast8unsigned_cases (Eop Ocast8unsigned (e2 ::: Enil))
-  | cast8unsigned_default:
-      forall (e1: expr),
-      cast8unsigned_cases e1.
-
-Definition cast8unsigned_match (e1: expr) :=
-  match e1 as z1 return cast8unsigned_cases z1 with
-  | Eop Ocast8unsigned (e2 ::: Enil) =>
-      cast8unsigned_case1 e2
-  | e1 =>
-      cast8unsigned_default e1
-  end.
-
-Definition cast8unsigned (e: expr) := 
-  match cast8unsigned_match e with
-  | cast8unsigned_case1 e1 => e
-  | cast8unsigned_default e1 => Eop Ocast8unsigned (e1 ::: Enil)
-  end.
-
-Inductive cast16signed_cases: forall (e1: expr), Type :=
-  | cast16signed_case1:
-      forall (e2: expr),
-      cast16signed_cases (Eop Ocast16signed (e2 ::: Enil))
-  | cast16signed_default:
-      forall (e1: expr),
-      cast16signed_cases e1.
-
-Definition cast16signed_match (e1: expr) :=
-  match e1 as z1 return cast16signed_cases z1 with
-  | Eop Ocast16signed (e2 ::: Enil) =>
-      cast16signed_case1 e2
-  | e1 =>
-      cast16signed_default e1
-  end.
-
-Definition cast16signed (e: expr) := 
-  match cast16signed_match e with
-  | cast16signed_case1 e1 => e
-  | cast16signed_default e1 => Eop Ocast16signed (e1 ::: Enil)
-  end.
-
-Inductive cast16unsigned_cases: forall (e1: expr), Type :=
-  | cast16unsigned_case1:
-      forall (e2: expr),
-      cast16unsigned_cases (Eop Ocast16unsigned (e2 ::: Enil))
-  | cast16unsigned_default:
-      forall (e1: expr),
-      cast16unsigned_cases e1.
-
-Definition cast16unsigned_match (e1: expr) :=
-  match e1 as z1 return cast16unsigned_cases z1 with
-  | Eop Ocast16unsigned (e2 ::: Enil) =>
-      cast16unsigned_case1 e2
-  | e1 =>
-      cast16unsigned_default e1
-  end.
-
-Definition cast16unsigned (e: expr) := 
-  match cast16unsigned_match e with
-  | cast16unsigned_case1 e1 => e
-  | cast16unsigned_default e1 => Eop Ocast16unsigned (e1 ::: Enil)
-  end.
-
-Inductive singleoffloat_cases: forall (e1: expr), Type :=
-  | singleoffloat_case1:
-      forall (e2: expr),
-      singleoffloat_cases (Eop Osingleoffloat (e2 ::: Enil))
-  | singleoffloat_default:
-      forall (e1: expr),
-      singleoffloat_cases e1.
-
-Definition singleoffloat_match (e1: expr) :=
-  match e1 as z1 return singleoffloat_cases z1 with
-  | Eop Osingleoffloat (e2 ::: Enil) =>
-      singleoffloat_case1 e2
-  | e1 =>
-      singleoffloat_default e1
-  end.
-
-Definition singleoffloat (e: expr) := 
-  match singleoffloat_match e with
-  | singleoffloat_case1 e1 => e
-  | singleoffloat_default e1 => Eop Osingleoffloat (e1 ::: Enil)
-  end.
-
 (** ** Comparisons *)
 
 (*
@@ -1106,19 +1011,38 @@ Definition compu (c: comparison) (e1: expr) (e2: expr) :=
 Definition compf (c: comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompf c)) (e1 ::: e2 ::: Enil).
 
-(** ** Other operators, not optimized. *)
+(** ** Non-optimized operators. *)
 
+Definition cast8unsigned (e: expr) := Eop Ocast8unsigned (e ::: Enil).
+Definition cast8signed (e: expr) := Eop Ocast8signed (e ::: Enil).
+Definition cast16unsigned (e: expr) := Eop Ocast16unsigned (e ::: Enil).
+Definition cast16signed (e: expr) := Eop Ocast16signed (e ::: Enil).
+Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 Definition negint (e: expr) := Eop (Orsubimm Int.zero) (e ::: Enil).
 Definition negf (e: expr) :=  Eop Onegf (e ::: Enil).
 Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
-Definition intuoffloat (e: expr) := Eop Ointuoffloat (e ::: Enil).
 Definition floatofint (e: expr) := Eop Ofloatofint (e ::: Enil).
-Definition floatofintu (e: expr) := Eop Ofloatofintu (e ::: Enil).
 Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
 Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
+
+(** ** Conversions between unsigned ints and floats *)
+
+Definition intuoffloat (e: expr) :=
+  let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
+  Elet e
+    (Econdition (CEcond (Ccompf Clt) (Eletvar O ::: f ::: Enil))
+      (intoffloat (Eletvar O))
+      (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar O) f)))).
+
+Definition floatofintu (e: expr) :=
+  let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
+  Elet e
+    (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
+      (floatofint (Eletvar O))
+      (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f)).
 
 (** ** Recognition of addressing modes for load and store operations *)
 

@@ -159,17 +159,15 @@ Inductive instruction : Type :=
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion *)
-  | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion *)
   | Pfdiv: freg -> freg -> freg -> instruction                (**r float division *)
   | Pfmadd: freg -> freg -> freg -> freg -> instruction       (**r float multiply-add *)
+  | Pfmake: freg -> ireg -> ireg -> instruction               (**r build a float from 2 ints *)
   | Pfmr: freg -> freg -> instruction                         (**r float move *)
   | Pfmsub: freg -> freg -> freg -> freg -> instruction       (**r float multiply-sub *)
   | Pfmul: freg -> freg -> freg -> instruction                (**r float multiply *)
   | Pfneg: freg -> freg -> instruction                        (**r float negation *)
   | Pfrsp: freg -> freg -> instruction                        (**r float round to single precision *)
   | Pfsub: freg -> freg -> freg -> instruction                (**r float subtraction *)
-  | Pictf: freg -> ireg -> instruction                        (**r int-to-float conversion *)
-  | Piuctf: freg -> ireg -> instruction                       (**r unsigned int-to-float conversion *)
   | Plbz: ireg -> constant -> ireg -> instruction             (**r load 8-bit unsigned int *)
   | Plbzx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
@@ -235,72 +233,21 @@ lbl:    .double floatcst
   Initialized data in the constant data section are not modeled here,
   which is why we use a pseudo-instruction for this purpose.
 - [Pfcti]: convert a float to a signed integer.  This requires a transfer
-  via memory of a 32-bit integer from a float register to an int register,
-  which our memory model cannot express.  Expands to:
+  via memory of a 32-bit integer from a float register to an int register.
+  Expands to:
 <<
         fctiwz  f13, rsrc
         stfdu   f13, -8(r1)
         lwz     rdst, 4(r1)
         addi    r1, r1, 8
 >>
-- [Pfctiu]: convert a float to an unsigned integer.  The PowerPC way
-  to do this is to compare the argument against the floating-point
-  constant [2^31], subtract [2^31] if bigger, then convert to a signed
-  integer as above, then add back [2^31] if needed.  Expands to:
+- [Pfmake]: build a double float from two 32-bit integers.  This also
+  requires a transfer via memory.  Expands to:
 <<
-        addis   r12, 0, ha16(lbl1)
-        lfd     f13, lo16(lbl1)(r12)
-        fcmpu   cr7, rsrc, f13
-        cror    30, 29, 30
-        beq     cr7, lbl2
-        fctiwz  f13, rsrc
-        stfdu   f13, -8(r1)
-        lwz     rdst, 4(r1)
-        b       lbl3
-lbl2:   fsub    f13, rsrc, f13
-        fctiwz  f13, f13
-        stfdu   f13, -8(r1)
-        lwz     rdst, 4(r1)
-        addis   rdst, rdst, 0x8000
-lbl3:   addi    r1, r1, 8
-        .const_data
-lbl1:   .long   0x41e00000, 0x00000000    # 2^31 in double precision
-        .text
->>
-- [Pictf]: convert a signed integer to a float.  This requires complicated
-  bit-level manipulations of IEEE floats through mixed float and integer 
-  arithmetic over a memory word, which our memory model and axiomatization
-  of floats cannot express.  Expands to:
-<<
-        addis   r12, 0, 0x4330
-        stwu    r12, -8(r1)
-        addis   r12, rsrc, 0x8000
-        stw     r12, 4(r1)
-        addis   r12, 0, ha16(lbl)
-        lfd     f13, lo16(lbl)(r12)
+        stwu    rsrc1, -8(r1)
+        stw     rsrc2, 4(r1)
         lfd     rdst, 0(r1)
         addi    r1, r1, 8
-        fsub    rdst, rdst, f13
-        .const_data
-lbl:    .long   0x43300000, 0x80000000
-        .text
->>
-  (Don't worry if you do not understand this instruction sequence: intimate
-  knowledge of IEEE float arithmetic is necessary.)
-- [Piuctf]: convert an unsigned integer to a float.  The expansion is close
-  to that [Pictf], and equally obscure.
-<<
-        addis   r12, 0, 0x4330
-        stwu    r12, -8(r1)
-        stw     rsrc, 4(r1)
-        addis   r12, 0, ha16(lbl)
-        lfd     f13, lo16(lbl)(r12)
-        lfd     rdst, 0(r1)
-        addi    r1, r1, 8
-        fsub    rdst, rdst, f13
-        .const_data
-lbl:    .long   0x43300000, 0x00000000
-        .text
 >>
 - [Pallocframe lo hi ofs]: in the formal semantics, this pseudo-instruction
   allocates a memory block with bounds [lo] and [hi], stores the value
@@ -585,7 +532,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       let sp := Vptr stk (Int.repr lo) in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
       | None => Error
-      | Some m2 => OK (nextinstr (rs#GPR1 <- sp #GPR12 <- Vundef)) m2
+      | Some m2 => OK (nextinstr (rs#GPR1 <- sp #GPR0 <- Vundef)) m2
       end
   | Pand_ rd r1 r2 =>
       let v := Val.and rs#r1 rs#r2 in
@@ -621,7 +568,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | _ => Error
       end
   | Pbtbl r tbl =>
-      match rs#r with
+      match gpr_or_zero rs r with
       | Vint n => 
           let pos := Int.signed n in
           if zeq (Zmod pos 4) 0 then
@@ -672,13 +619,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfcmpu r1 r2 =>
       OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfcti rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.intoffloat rs#r1) #FPR13 <- Vundef)) m
-  | Pfctiu rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.intuoffloat rs#r1) #FPR13 <- Vundef)) m
+      OK (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.intoffloat rs#r1))) m
   | Pfdiv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfmadd rd r1 r2 r3 =>
       OK (nextinstr (rs#rd <- (Val.addf (Val.mulf rs#r1 rs#r2) rs#r3))) m
+  | Pfmake rd r1 r2 =>
+      OK (nextinstr (rs#rd <- (Val.floatofwords rs#r1 rs#r2))) m
   | Pfmr rd r1 =>
       OK (nextinstr (rs#rd <- (rs#r1))) m
   | Pfmsub rd r1 r2 r3 =>
@@ -691,10 +638,6 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) m
   | Pfsub rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.subf rs#r1 rs#r2))) m
-  | Pictf rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.floatofint rs#r1) #GPR12 <- Vundef #FPR13 <- Vundef)) m
-  | Piuctf rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.floatofintu rs#r1) #GPR12 <- Vundef #FPR13 <- Vundef)) m
   | Plbz rd cst r1 =>
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>
@@ -716,7 +659,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Plhzx rd r1 r2 =>
       load2 Mint16unsigned rd r1 r2 rs m
   | Plfi rd f =>
-      OK (nextinstr (rs#rd <- (Vfloat f) #GPR12 <- Vundef)) m
+      OK (nextinstr (rs #GPR12 <- Vundef #rd <- (Vfloat f))) m
   | Plwz rd cst r1 =>
       load1 Mint32 rd cst r1 rs m
   | Plwzx rd r1 r2 =>
@@ -766,9 +709,15 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pstfdx rd r1 r2 =>
       store2 Mfloat64 rd r1 r2 rs m
   | Pstfs rd cst r1 =>
-      store1 Mfloat32 rd cst r1 (rs#FPR13 <- Vundef) m
+      match store1 Mfloat32 rd cst r1 rs m with
+      | OK rs' m' => OK (rs'#FPR13 <- Vundef) m'
+      | Error => Error
+      end
   | Pstfsx rd r1 r2 =>
-      store2 Mfloat32 rd r1 r2 (rs#FPR13 <- Vundef) m
+      match store2 Mfloat32 rd r1 r2 rs m with
+      | OK rs' m' => OK (rs'#FPR13 <- Vundef) m'
+      | Error => Error
+      end
   | Psth rd cst r1 =>
       store1 Mint16unsigned rd cst r1 rs m
   | Psthx rd r1 r2 =>
@@ -801,8 +750,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   results when applied to a LTL register of the wrong type.
   The proof in [Asmgenproof] will show that this never happens.
 
-  Note that no LTL register maps to [GPR12] nor [FPR13].
-  These two registers are reserved as temporaries, to be used
+  Note that no LTL register maps to [GPR0].
+  This register is reserved as a temporary to be used
   by the generated PPC code.  *)
 
 Definition ireg_of (r: mreg) : ireg :=
@@ -814,20 +763,21 @@ Definition ireg_of (r: mreg) : ireg :=
   | R21 => GPR21 | R22 => GPR22 | R23 => GPR23 | R24 => GPR24
   | R25 => GPR25 | R26 => GPR26 | R27 => GPR27 | R28 => GPR28
   | R29 => GPR29 | R30 => GPR30 | R31 => GPR31
-  | IT1 => GPR11 | IT2 => GPR0
-  | _ => GPR0 (* should not happen *)
+  | IT1 => GPR11 | IT2 => GPR12
+  | _ => GPR12 (* should not happen *)
   end.
 
 Definition freg_of (r: mreg) : freg :=
   match r with
   | F1 => FPR1  | F2 => FPR2  | F3 => FPR3  | F4 => FPR4
   | F5 => FPR5  | F6 => FPR6  | F7 => FPR7  | F8 => FPR8
-  | F9 => FPR9  | F10 => FPR10 | F14 => FPR14 | F15 => FPR15
+  | F9 => FPR9  | F10 => FPR10 | F11 => FPR11
+  | F14 => FPR14 | F15 => FPR15
   | F16 => FPR16 | F17 => FPR17 | F18 => FPR18 | F19 => FPR19
   | F20 => FPR20 | F21 => FPR21 | F22 => FPR22 | F23 => FPR23
   | F24 => FPR24 | F25 => FPR25 | F26 => FPR26 | F27 => FPR27
   | F28 => FPR28 | F29 => FPR29 | F30 => FPR30 | F31 => FPR31
-  | FT1 => FPR0 | FT2 => FPR11 | FT3 => FPR12
+  | FT1 => FPR0 | FT2 => FPR12 | FT3 => FPR13
   | _ => FPR0 (* should not happen *)
   end.
 
@@ -886,7 +836,11 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
       external_call ef ge (map rs args) m t v m' ->
-      step (State rs m) t (State (nextinstr(rs # res <- v)) m')
+      step (State rs m) t
+           (State (nextinstr(rs #GPR11 <- Vundef #GPR12 <- Vundef
+                                #FPR12 <- Vundef #FPR13 <- Vundef
+                                #FPR0 <- Vundef #CTR <- Vundef
+                                #res <- v)) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->

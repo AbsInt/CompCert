@@ -300,12 +300,8 @@ Definition transl_op
       Pmvfs (freg_of r) (freg_of a1) :: k
   | Ointoffloat, a1 :: nil =>
       Pfixz (ireg_of r) (freg_of a1) :: k
-  | Ointuoffloat, a1 :: nil =>
-      Pfixzu (ireg_of r) (freg_of a1) :: k
   | Ofloatofint, a1 :: nil =>
       Pfltd (freg_of r) (ireg_of a1) :: k
-  | Ofloatofintu, a1 :: nil =>
-      Pfltud (freg_of r) (ireg_of a1) :: k
   | Ocmp cmp, _ =>
       transl_cond cmp args
         (Pmov (ireg_of r) (SOimm Int.zero) ::

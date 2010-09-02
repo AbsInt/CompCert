@@ -79,6 +79,11 @@ let float_reg_name = function
 let ireg oc r = output_string oc (int_reg_name r)
 let freg oc r = output_string oc (float_reg_name r)
 
+let preg oc = function
+  | IR r -> ireg oc r
+  | FR r -> freg oc r
+  | _    -> assert false
+
 let condition_name = function
   | CReq -> "eq"
   | CRne -> "ne"
@@ -417,30 +422,8 @@ let print_instruction oc labels = function
       fprintf oc "	dvfd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pfixz(r1, r2) ->
       fprintf oc "	fixz	%a, %a\n" ireg r1 freg r2; 1
-  | Pfixzu(r1, r2) ->
-      (* F3 = second float temporary is unused at this point,
-         but this should be reflected in the proof *)
-      let lbl = label_float 2147483648.0 in
-      let lbl2 = new_label() in
-      fprintf oc "	ldfd	f3, .L%d\n" lbl;
-      fprintf oc "	cmfe	%a, f3\n" freg r2;
-      fprintf oc "	fixltz	%a, %a\n" ireg r1 freg r2;
-      fprintf oc "	blt	.L%d\n" lbl2;
-      fprintf oc "	sufd	f3, %a, f3\n" freg r2;
-      fprintf oc "	fixz	%a, f3\n" ireg r1;
-      fprintf oc "	eor	%a, %a, #-2147483648\n" ireg r1 ireg r1;
-      fprintf oc ".L%d\n" lbl2;
-      7
   | Pfltd(r1, r2) ->
       fprintf oc "	fltd	%a, %a\n" freg r1 ireg r2; 1
-  | Pfltud(r1, r2) ->
-      fprintf oc "	fltd	%a, %a\n" freg r1 ireg r2;
-      fprintf oc "	cmp	%a, #0\n" ireg r2;
-      (* F3 = second float temporary is unused at this point,
-         but this should be reflected in the proof *)
-      let lbl = label_float 4294967296.0 in
-      fprintf oc "	ldfltd	f3, .L%d\n" lbl;
-      fprintf oc "	adfltd  %a, %a, f3\n" freg r1 freg r1; 4
   | Pldfd(r1, r2, n) ->
       fprintf oc "	ldfd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
   | Pldfs(r1, r2, n) ->
@@ -465,8 +448,6 @@ let print_instruction oc labels = function
   | Pstfd(r1, r2, n) ->
       fprintf oc "	stfd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
   | Pstfs(r1, r2, n) ->
-      (* F3 = second float temporary is unused at this point,
-         but this should be reflected in the proof *)
       fprintf oc "	mvfs	f3, %a\n" freg r1;
       fprintf oc "	stfs	f3, [%a, #%a]\n" ireg r2 coqint n; 2
   | Psufd(r1, r2, r3) ->

@@ -96,9 +96,7 @@ Inductive operation : Type :=
   | Osingleoffloat: operation           (**r [rd] is [r1] truncated to single-precision float *)
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
-  | Ointuoffloat: operation             (**r [rd = unsigned_int_of_float(r1)] *)
-  | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] *)
-  | Ofloatofintu: operation             (**r [rd = float_of_unsigned_int(r1)] *)
+  | Ofloatofwords: operation            (**r [rd = float_of_words(r1,r2)] *)
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
@@ -250,12 +248,8 @@ Definition eval_operation
       Some (Val.singleoffloat v1)
   | Ointoffloat, Vfloat f1 :: nil => 
       Some (Vint (Float.intoffloat f1))
-  | Ointuoffloat, Vfloat f1 :: nil => 
-      Some (Vint (Float.intuoffloat f1))
-  | Ofloatofint, Vint n1 :: nil => 
-      Some (Vfloat (Float.floatofint n1))
-  | Ofloatofintu, Vint n1 :: nil => 
-      Some (Vfloat (Float.floatofintu n1))
+  | Ofloatofwords, Vint i1 :: Vint i2 :: nil =>
+      Some (Vfloat (Float.from_words i1 i2))
   | Ocmp c, _ =>
       match eval_condition c vl with
       | None => None
@@ -466,9 +460,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Omulsubf => (Tfloat :: Tfloat :: Tfloat :: nil, Tfloat)
   | Osingleoffloat => (Tfloat :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
-  | Ointuoffloat => (Tfloat :: nil, Tint)
-  | Ofloatofint => (Tint :: nil, Tfloat)
-  | Ofloatofintu => (Tint :: nil, Tfloat)
+  | Ofloatofwords => (Tint :: Tint :: nil, Tfloat)
   | Ocmp c => (type_of_condition c, Tint)
   end.
 
@@ -615,9 +607,7 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Omulsubf, v1::v2::v3::nil => Val.subf (Val.mulf v1 v2) v3
   | Osingleoffloat, v1::nil => Val.singleoffloat v1
   | Ointoffloat, v1::nil => Val.intoffloat v1
-  | Ointuoffloat, v1::nil => Val.intuoffloat v1
-  | Ofloatofint, v1::nil => Val.floatofint v1
-  | Ofloatofintu, v1::nil => Val.floatofintu v1
+  | Ofloatofwords, v1::v2::nil => Val.floatofwords v1 v2
   | Ocmp c, _ => eval_condition_total c vl
   | _, _ => Vundef
   end.
@@ -840,3 +830,73 @@ Lemma type_op_for_binary_addressing:
 Proof.
   intros. destruct addr; simpl in H; reflexivity || omegaContradiction.
 Qed.
+
+(** Two-address operations.  There are none in the PowerPC architecture. *)
+
+Definition two_address_op (op: operation) : bool := false.
+
+(** Operations that are so cheap to recompute that CSE should not factor them out. *)
+
+Definition is_trivial_op (op: operation) : bool :=
+  match op with
+  | Omove => true
+  | Ointconst _ => true
+  | Oaddrsymbol _ _ => true
+  | Oaddrstack _ => true
+  | _ => false
+  end.
+
+(** Shifting stack-relative references.  This is used in [Stacking]. *)
+
+Definition shift_stack_addressing (delta: int) (addr: addressing) :=
+  match addr with
+  | Ainstack ofs => Ainstack (Int.add delta ofs)
+  | _ => addr
+  end.
+
+Definition shift_stack_operation (delta: int) (op: operation) :=
+  match op with
+  | Oaddrstack ofs => Oaddrstack (Int.add delta ofs)
+  | _ => op
+  end.
+
+Lemma shift_stack_eval_addressing:
+  forall (F V: Type) (ge: Genv.t F V) sp addr args delta,
+  eval_addressing ge (Val.sub sp (Vint delta)) (shift_stack_addressing delta addr) args =
+  eval_addressing ge sp addr args.
+Proof.
+  intros. destruct addr; simpl; auto. 
+  destruct args; auto. unfold offset_sp. destruct sp; simpl; auto. 
+  decEq. decEq. rewrite <- Int.add_assoc. decEq. 
+  rewrite Int.sub_add_opp. rewrite Int.add_assoc.
+  rewrite (Int.add_commut (Int.neg delta)). rewrite <- Int.sub_add_opp. 
+  rewrite Int.sub_idem. apply Int.add_zero. 
+Qed.
+
+Lemma shift_stack_eval_operation:
+  forall (F V: Type) (ge: Genv.t F V) sp op args delta,
+  eval_operation ge (Val.sub sp (Vint delta)) (shift_stack_operation delta op) args =
+  eval_operation ge sp op args.
+Proof.
+  intros. destruct op; simpl; auto.
+  destruct args; auto. unfold offset_sp. destruct sp; simpl; auto. 
+  decEq. decEq. rewrite <- Int.add_assoc. decEq. 
+  rewrite Int.sub_add_opp. rewrite Int.add_assoc.
+  rewrite (Int.add_commut (Int.neg delta)). rewrite <- Int.sub_add_opp. 
+  rewrite Int.sub_idem. apply Int.add_zero. 
+Qed.
+
+Lemma type_shift_stack_addressing:
+  forall delta addr, type_of_addressing (shift_stack_addressing delta addr) = type_of_addressing addr.
+Proof.
+  intros. destruct addr; auto. 
+Qed.
+
+Lemma type_shift_stack_operation:
+  forall delta op, type_of_operation (shift_stack_operation delta op) = type_of_operation op.
+Proof.
+  intros. destruct op; auto.
+Qed.
+
+
+

@@ -363,6 +363,18 @@ Fixpoint alloc_regs (map: mapping) (al: exprlist)
       ret (r :: rl)
   end.
 
+(** A variant of [alloc_regs] for two-address instructions:
+  reuse the result register as destination for the first argument. *)
+
+Definition alloc_regs_2addr (map: mapping) (al: exprlist) (rd: reg)
+                            : mon (list reg) :=
+  match al with
+  | Enil =>
+      ret nil
+  | Econs a bl =>
+      do rl <- alloc_regs map bl; ret (rd :: rl)
+  end.
+
 (** [alloc_optreg] is used for function calls.  If a destination is
   specified for the call, it is returned.  Otherwise, a fresh
   register is returned. *)
@@ -395,9 +407,11 @@ Fixpoint transl_expr (map: mapping) (a: expr) (rd: reg) (nd: node)
   | Evar v =>
       do r <- find_var map v; add_move r rd nd
   | Eop op al =>
-      do rl <- alloc_regs map al;
+      do rl <- if two_address_op op
+               then alloc_regs_2addr map al rd
+               else alloc_regs map al;
       do no <- add_instr (Iop op rl rd nd);
-         transl_exprlist map al rl no
+      transl_exprlist map al rl no
   | Eload chunk addr al =>
       do rl <- alloc_regs map al;
       do no <- add_instr (Iload chunk addr rl rd nd);
@@ -502,6 +516,16 @@ Fixpoint transl_switch (r: reg) (nexits: list node) (t: comptree)
       add_instr (Iop op (r :: nil) rt n3)
   end.
 
+(** Detect a two-address operator at the top of an expression. *)
+
+Fixpoint expr_is_2addr_op (e: expr) : bool :=
+  match e with
+  | Eop op _ => two_address_op op
+  | Econdition e1 e2 e3 => expr_is_2addr_op e2 || expr_is_2addr_op e3
+  | Elet e1 e2 => expr_is_2addr_op e2
+  | _ => false
+  end.
+
 (** Translation of statements.  [transl_stmt map s nd nexits nret rret]
   enriches the current CFG with the RTL instructions necessary to
   execute the CminorSel statement [s], and returns the node of the first
@@ -521,7 +545,12 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       ret nd
   | Sassign v b =>
       do r <- find_var map v;
-      transl_expr map b r nd
+      if expr_is_2addr_op b then
+        do rd <- new_reg;
+        do n1 <- add_move rd r nd;
+        transl_expr map b rd n1
+      else
+        transl_expr map b r nd
   | Sstore chunk addr al b =>
       do rl <- alloc_regs map al;
       do r <- alloc_reg map b;

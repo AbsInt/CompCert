@@ -41,18 +41,19 @@ Inductive mreg: Type :=
   (** Allocatable float regs *)
   | F1: mreg  | F2: mreg  | F3: mreg  | F4: mreg
   | F5: mreg  | F6: mreg  | F7: mreg  | F8: mreg
-  | F9: mreg  | F10: mreg | F14: mreg | F15: mreg
+  | F9: mreg  | F10: mreg | F11: mreg
+  | F14: mreg | F15: mreg
   | F16: mreg | F17: mreg | F18: mreg | F19: mreg
   | F20: mreg | F21: mreg | F22: mreg | F23: mreg
   | F24: mreg | F25: mreg | F26: mreg | F27: mreg
   | F28: mreg | F29: mreg | F30: mreg | F31: mreg
   (** Integer temporaries *)
-  | IT1: mreg (* R11 *) | IT2: mreg (* R0 *)
+  | IT1: mreg (* R11 *) | IT2: mreg (* R12 *)
   (** Float temporaries *)
-  | FT1: mreg (* F11 *) | FT2: mreg (* F12 *) | FT3: mreg (* F0 *).
+  | FT1: mreg (* F0 *) | FT2: mreg (* F12 *) | FT3: mreg (* F13 *).
 
 Lemma mreg_eq: forall (r1 r2: mreg), {r1 = r2} + {r1 <> r2}.
-Proof. decide equality. Qed.
+Proof. decide equality. Defined.
 
 Definition mreg_type (r: mreg): typ :=
   match r with
@@ -65,7 +66,8 @@ Definition mreg_type (r: mreg): typ :=
   | R29 => Tint | R30 => Tint | R31 => Tint
   | F1 => Tfloat  | F2 => Tfloat  | F3 => Tfloat  | F4 => Tfloat
   | F5 => Tfloat  | F6 => Tfloat  | F7 => Tfloat  | F8 => Tfloat
-  | F9 => Tfloat  | F10 => Tfloat | F14 => Tfloat | F15 => Tfloat
+  | F9 => Tfloat  | F10 => Tfloat | F11 => Tfloat
+  | F14 => Tfloat | F15 => Tfloat
   | F16 => Tfloat | F17 => Tfloat | F18 => Tfloat | F19 => Tfloat
   | F20 => Tfloat | F21 => Tfloat | F22 => Tfloat | F23 => Tfloat
   | F24 => Tfloat | F25 => Tfloat | F26 => Tfloat | F27 => Tfloat
@@ -90,13 +92,14 @@ Module IndexedMreg <: INDEXED_TYPE.
     | R29 => 24 | R30 => 25 | R31 => 26
     | F1 => 28  | F2 => 29  | F3 => 30  | F4 => 31
     | F5 => 32  | F6 => 33  | F7 => 34  | F8 => 35
-    | F9 => 36  | F10 => 37 | F14 => 38 | F15 => 39
-    | F16 => 40 | F17 => 41 | F18 => 42 | F19 => 43
-    | F20 => 44 | F21 => 45 | F22 => 46 | F23 => 47
-    | F24 => 48 | F25 => 49 | F26 => 50 | F27 => 51
-    | F28 => 52 | F29 => 53 | F30 => 54 | F31 => 55
-    | IT1 => 56 | IT2 => 57
-    | FT1 => 58 | FT2 => 59 | FT3 => 60
+    | F9 => 36  | F10 => 37 | F11 => 38
+    | F14 => 39 | F15 => 40
+    | F16 => 41 | F17 => 42 | F18 => 43 | F19 => 44
+    | F20 => 45 | F21 => 46 | F22 => 47 | F23 => 48
+    | F24 => 49 | F25 => 50 | F26 => 51 | F27 => 52
+    | F28 => 53 | F29 => 54 | F30 => 55 | F31 => 56
+    | IT1 => 57 | IT2 => 58
+    | FT1 => 59 | FT2 => 60 | FT3 => 61
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.

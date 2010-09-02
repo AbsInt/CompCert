@@ -28,7 +28,6 @@ Extract Inductive List.list => "list" [ "[]" "(::)" ].
 (* Float *)
 Extract Inlined Constant Floats.float => "float".
 Extract Constant Floats.Float.zero   => "0.".
-Extract Constant Floats.Float.one   => "1.".
 Extract Constant Floats.Float.neg => "( ~-. )".
 Extract Constant Floats.Float.abs => "abs_float".
 Extract Constant Floats.Float.singleoffloat => "Floataux.singleoffloat".

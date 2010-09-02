@@ -45,6 +45,8 @@ let type_instr retty (Coq_pair(pc, i)) =
   | Iop(Omove, _, _, _) -> 
       ()
   | Iop(op, args, res, _) ->
+      if two_address_op op && List.length args >= 1 && List.hd args <> res
+      then raise (Type_error "two-address constraint violation");
       let (Coq_pair(targs, tres)) = type_of_operation op in
       set_types args targs; set_type res tres
   | Iload(chunk, addr, args, dst, _) ->

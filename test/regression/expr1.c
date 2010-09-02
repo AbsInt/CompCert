@@ -12,6 +12,6 @@ int main(int argc, char ** argv)
   struct list l;
   l.tl = &l;
   f(&(l.tl));
-  printf("Result: %p\n", l.tl);
+  printf("Result: %d\n", (int) l.tl);
   return 0;
 }

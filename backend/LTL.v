@@ -101,6 +101,10 @@ Definition postcall_locs (ls: locset) : locset :=
     | S s => ls (S s)
     end.
 
+(** Temporaries destroyed across instructions *)
+
+Definition undef_temps (ls: locset) := Locmap.undef temporaries ls.
+
 (** LTL execution states. *)
 
 Inductive stackframe : Type :=
@@ -166,21 +170,21 @@ Inductive step: state -> trace -> state -> Prop :=
       (fn_code f)!pc = Some(Lop op args res pc') ->
       eval_operation ge sp op (map rs args) = Some v ->
       step (State s f sp pc rs m)
-        E0 (State s f sp pc' (Locmap.set res v rs) m)
+        E0 (State s f sp pc' (Locmap.set res v (undef_temps rs)) m)
   | exec_Lload:
       forall s f sp pc rs m chunk addr args dst pc' a v,
       (fn_code f)!pc = Some(Lload chunk addr args dst pc') ->
       eval_addressing ge sp addr (map rs args) = Some a ->
       Mem.loadv chunk m a = Some v ->
       step (State s f sp pc rs m)
-        E0 (State s f sp pc' (Locmap.set dst v rs) m)
+        E0 (State s f sp pc' (Locmap.set dst v (undef_temps rs)) m)
   | exec_Lstore:
       forall s f sp pc rs m chunk addr args src pc' a m',
       (fn_code f)!pc = Some(Lstore chunk addr args src pc') ->
       eval_addressing ge sp addr (map rs args) = Some a ->
       Mem.storev chunk m a (rs src) = Some m' ->
       step (State s f sp pc rs m)
-        E0 (State s f sp pc' rs m')
+        E0 (State s f sp pc' (undef_temps rs) m')
   | exec_Lcall:
       forall s f sp pc rs m sig ros args res pc' f',
       (fn_code f)!pc = Some(Lcall sig ros args res pc') ->
@@ -208,20 +212,20 @@ Inductive step: state -> trace -> state -> Prop :=
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
       eval_condition cond (map rs args) = Some true ->
       step (State s f sp pc rs m)
-        E0 (State s f sp ifso rs m)
+        E0 (State s f sp ifso (undef_temps rs) m)
   | exec_Lcond_false:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
       eval_condition cond (map rs args) = Some false ->
       step (State s f sp pc rs m)
-        E0 (State s f sp ifnot rs m)
+        E0 (State s f sp ifnot (undef_temps rs) m)
   | exec_Ljumptable:
       forall s f sp pc rs m arg tbl n pc',
       (fn_code f)!pc = Some(Ljumptable arg tbl) ->
       rs arg = Vint n ->
       list_nth_z tbl (Int.signed n) = Some pc' ->
       step (State s f sp pc rs m)
-        E0 (State s f sp pc' rs m)
+        E0 (State s f sp pc' (undef_temps rs) m)
   | exec_Lreturn:
       forall s f stk pc rs m or m',
       (fn_code f)!pc = Some(Lreturn or) ->

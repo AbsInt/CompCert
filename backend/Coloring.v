@@ -282,7 +282,7 @@ Definition alloc_of_coloring (coloring: reg -> loc) (env: regenv) (rs: Regset.t)
   fun r =>
     if Regset.mem r rs
     then coloring r
-    else match env r with Tint => R R3 | Tfloat => R F1 end.
+    else match env r with Tint => R dummy_int_reg | Tfloat => R dummy_float_reg end.
 
 (** * Coloring of the interference graph *)
 

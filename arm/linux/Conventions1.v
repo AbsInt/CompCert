@@ -56,6 +56,9 @@ Definition float_temporaries := FT1 :: FT2 :: nil.
 Definition temporaries := 
   R IT1 :: R IT2 :: R FT1 :: R FT2 :: nil.
 
+Definition dummy_int_reg := R0.     (**r Used in [Coloring]. *)
+Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
+
 (** The [index_int_callee_save] and [index_float_callee_save] associate
   a unique positive integer to callee-save registers.  This integer is
   used in [Stacking] to determine where to save these registers in
@@ -641,4 +644,3 @@ Proof.
   intro; simpl. ElimOrEq; reflexivity.
   intro; simpl. ElimOrEq; reflexivity.
 Qed.
-

@@ -14,4 +14,5 @@ let big_endian =
   match Configuration.arch with
   | "powerpc" -> true
   | "arm" -> false
+  | "ia32" -> false
   | _ -> assert false

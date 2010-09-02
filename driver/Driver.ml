@@ -235,7 +235,7 @@ Code generation options:
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
-  -dcmedium      Save generated Cmedium in <file>.medium.c
+  -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
   -dasm          Save generated assembly in <file>.s
 Linking options:
@@ -312,7 +312,7 @@ let cmdline_actions =
   "-o$", String(fun s -> exe_name := s);
   "-stdlib$", String(fun s -> stdlib_path := s);
   "-dparse$", Set option_dparse;
-  "-dcmedium$", Set option_dcmedium;
+  "-dc$", Set option_dcmedium;
   "-dclight$", Set option_dclight;
   "-dcminor", Set option_dcminor;
   "-drtl$", Set option_drtl;
