@@ -44,6 +44,9 @@ Require Import Globalenvs.
 - A volatile store to a global memory location, recording the chunk
   and address being written and the value stored there. 
 
+- An annotation, recording the text of the annotation and the values
+  of the arguments.
+
   The values attached to these events are of the following form.
   As mentioned above, we do not expose pointer values directly.
   Pointers relative to a global variable are shown with the name
@@ -58,7 +61,8 @@ Inductive eventval: Type :=
 Inductive event: Type :=
   | Event_syscall: ident -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> int -> eventval -> event
-  | Event_vstore: memory_chunk -> ident -> int -> eventval -> event.
+  | Event_vstore: memory_chunk -> ident -> int -> eventval -> event
+  | Event_annot: ident -> list eventval -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -401,9 +405,10 @@ End EVENTVAL_INV.
 
 Inductive extfun_kind: signature -> Type :=
   | EF_syscall (name: ident) (sg: signature): extfun_kind sg
-     (** A system call.  Takes integer-or-float arguments, produces a
-         result that is an integer or a float, does not modify
-         the memory, and produces an [Event_syscall] event in the trace. *)
+     (** A system call.  Takes representable arguments (integers, floats,
+         pointers to globals), produces a representable result,
+         does not modify the memory, and produces an [Event_syscall] event
+         in the trace. *)
   | EF_vload (chunk: memory_chunk): extfun_kind (mksignature (Tint :: nil) (Some (type_of_chunk chunk)))
      (** A volatile read operation.  If the adress given as first argument
          points within a volatile global variable, generate an [Event_vload]
@@ -417,11 +422,16 @@ Inductive extfun_kind: signature -> Type :=
      (** Dynamic memory allocation.  Takes the requested size in bytes
          as argument; returns a pointer to a fresh block of the given size.
          Produces no observable event. *)
-  | EF_free: extfun_kind (mksignature (Tint :: nil) None).
+  | EF_free: extfun_kind (mksignature (Tint :: nil) None)
      (** Dynamic memory deallocation.  Takes a pointer to a block
          allocated by an [EF_malloc] external call and frees the
          corresponding block.
          Produces no observable event. *)
+  | EF_annotation (text: ident) (sg: signature): extfun_kind sg.
+     (** A programmer-supplied annotation.  Takes representable arguments,
+         returns its first argument as result (or [Vundef] if no arguments),
+         does not modify the memory, and produces an [Event_annot]
+         event in the trace. *)
 
 Parameter classify_external_function: 
   forall (ef: external_function), extfun_kind (ef.(ef_sig)).
@@ -472,6 +482,8 @@ Fixpoint matching_traces (t1 t2: trace) {struct t1} : Prop :=
       chunk1 = chunk2 /\ id1 = id2 /\ ofs1 = ofs2 -> res1 = res2 /\ matching_traces t1' t2'
   | Event_vstore chunk1 id1 ofs1 arg1 :: t1', Event_vstore chunk2 id2 ofs2 arg2 :: t2' =>
       chunk1 = chunk2 /\ id1 = id2 /\ ofs1 = ofs2 /\ arg1 = arg2 -> matching_traces t1' t2'
+  | Event_annot txt1 args1 :: t1', Event_annot txt2 args2 :: t2' =>
+      txt1 = txt2 /\ args1 = args2 -> matching_traces t1' t2'
   | _, _ =>
       True
   end.
@@ -970,6 +982,56 @@ Proof.
   intuition. eapply eventval_match_determ_1; eauto.
 Qed.
 
+(** ** Semantics of annotation. *)
+
+Inductive extcall_annot_sem (text: ident) (sg: signature) (F V: Type) (ge: Genv.t F V):
+              list val -> mem -> trace -> val -> mem -> Prop :=
+  | extcall_annot_sem_intro: forall vargs m args vres,
+      eventval_list_match ge args (sig_args sg) vargs ->
+      sig_res sg = match sig_args sg with nil => None | t1 :: _ => Some t1 end ->
+      vres = match vargs with nil => Vundef | v1 :: _ => v1 end ->
+      extcall_annot_sem text sg ge vargs m (Event_annot text args :: E0) vres m.
+
+Lemma extcall_annot_ok:
+  forall text sg,
+  extcall_properties (extcall_annot_sem text sg) sg.
+Proof.
+  intros; constructor; intros.
+
+  inv H. unfold proj_sig_res. rewrite H1. inv H0. 
+  constructor.
+  eapply eventval_match_type; eauto.
+
+  inv H. eapply eventval_list_match_length; eauto.
+
+  inv H1. econstructor; eauto. 
+  eapply eventval_list_match_preserved; eauto.
+
+  inv H; auto.
+
+  inv H; auto.
+
+  inv H.
+  exists (match vargs' with nil => Vundef | v1 :: _ => v1 end); exists m1'; intuition.
+  econstructor; eauto.
+  eapply eventval_list_match_lessdef; eauto.
+  inv H1; auto.
+  red; auto.
+
+  inv H0.
+  exists f; exists (match vargs' with nil => Vundef | v1 :: _ => v1 end); exists m1'; intuition.
+  econstructor; eauto.
+  eapply eventval_list_match_inject; eauto.
+  inv H2; auto.
+  red; auto.
+  red; auto.
+  red; intros; congruence.
+
+  inv H; inv H0. simpl in H1.
+  assert (args = args0). eapply eventval_list_match_determ_2; eauto. subst args0.
+  intuition.
+Qed.
+
 (** ** Combined semantics of external calls *)
 
 (** Combining the semantics given above for the various kinds of external calls,
@@ -990,6 +1052,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem 
   | EF_free              => extcall_free_sem
+  | EF_annotation txt sg => extcall_annot_sem txt sg
   end.
 
 Theorem external_call_spec:
@@ -1002,6 +1065,7 @@ Proof.
   apply volatile_store_ok.
   apply extcall_malloc_ok.
   apply extcall_free_ok.
+  apply extcall_annot_ok.
 Qed.
 
 Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).
