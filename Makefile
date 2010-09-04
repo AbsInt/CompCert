@@ -142,7 +142,8 @@ driver/Configuration.ml: Makefile.config
          echo 'let linker = "$(CLINKER)"'; \
          echo 'let arch = "$(ARCH)"'; \
          echo 'let variant = "$(VARIANT)"'; \
-         echo 'let system = "$(SYSTEM)"') \
+         echo 'let system = "$(SYSTEM)"'; \
+         echo 'let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER)') \
         > driver/Configuration.ml
 
 depend: $(FILES)

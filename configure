@@ -73,7 +73,8 @@ case "$target" in
     cprepro="gcc -arch ppc -U__GNUC__ -U__BLOCKS__ -E"
     casm="gcc -arch ppc -c"
     clinker="gcc -arch ppc"
-    libmath="";;
+    libmath=""
+    need_stdlib_wrapper="true";;
   powerpc-linux|ppc-linux)
     arch="powerpc"
     variant="eabi"
@@ -82,7 +83,8 @@ case "$target" in
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
     clinker="gcc"
-    libmath="-lm";;
+    libmath="-lm"
+    need_stdlib_wrapper="false";;
   arm-linux)
     arch="arm"
     variant="linux"
@@ -91,7 +93,8 @@ case "$target" in
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
     clinker="gcc"
-    libmath="-lm";;
+    libmath="-lm"
+    need_stdlib_wrapper="false";;
   ia32-linux)
     arch="ia32"
     variant="standard"
@@ -100,7 +103,8 @@ case "$target" in
     cprepro="gcc -m32 -U__GNUC__ -E"
     casm="gcc -m32 -c"
     clinker="gcc -m32"
-    libmath="-lm";;
+    libmath="-lm"
+    need_stdlib_wrapper="false";;
   ia32-bsd)
     arch="ia32"
     variant="standard"
@@ -109,7 +113,8 @@ case "$target" in
     cprepro="gcc -m32 -U__GNUC__ -E"
     casm="gcc -m32 -c"
     clinker="gcc -m32"
-    libmath="-lm";;
+    libmath="-lm"
+    need_stdlib_wrapper="false";;
   ia32-macosx)
     arch="ia32"
     variant="standard"
@@ -118,7 +123,8 @@ case "$target" in
     cprepro="gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
     casm="gcc -arch i386 -c"
     clinker="gcc -arch i386"
-    libmath="";;
+    libmath=""
+    need_stdlib_wrapper="true";;
   manual)
     ;;
   "")
@@ -150,6 +156,7 @@ CPREPRO=$cprepro
 CASM=$casm
 CLINKER=$clinker
 LIBMATH=$libmath
+NEED_STDLIB_WRAPPER=$need_stdlib_wrapper
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -157,12 +164,14 @@ cat >> Makefile.config <<'EOF'
 # Target architecture
 # ARCH=powerpc
 # ARCH=arm
+# ARCH=ia32
 ARCH=
 
 # Target ABI
 # VARIANT=macosx   # for PowerPC / MacOS X
 # VARIANT=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
 # VARIANT=linux    # for ARM
+# VARIANT=standard # for IA32
 VARIANT=
 
 # Target operating system and development environment
@@ -172,6 +181,11 @@ VARIANT=
 # SYSTEM=diab
 # Possible choices for ARM:
 # SYSTEM=linux
+# Possible choices for IA32:
+# SYSTEM=linux
+# SYSTEM=bsd
+# SYSTEM=macosx
+# SYSTEM=cygwin
 SYSTEM=
 
 # C compiler for compiling library files
@@ -186,10 +200,14 @@ CASM=gcc -c
 # Linker
 CLINKER=gcc
 
-# Math library
+# Math library.  Set to empty under MacOS X
 LIBMATH=-lm
 
-# CIL configuration target -- do not change
+# Do we need the thin wrapper around standard library and standard includes
+# defined in directory runtime/ ?
+# NEED_STDLIB_WRAPPER=true  # for MacOS X
+# NEED_STDLIB_WRAPPER=false # for other systems
+NEED_STDLIB_WRAPPER=
 EOF
 fi
 
@@ -218,6 +236,7 @@ CompCert configuration:
     Assembler..................... $casm
     Linker........................ $clinker
     Math library.................. $libmath
+    Needs wrapper around stdlib... $need_stdlib_wrapper
     Binaries installed in......... $bindirexp
     Library files installed in.... $libdirexp
 
