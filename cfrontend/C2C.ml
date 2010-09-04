@@ -242,25 +242,29 @@ let convertIkind = function
   | C.IUShort -> (Unsigned, I16)
   | C.ILong -> (Signed, I32)
   | C.IULong -> (Unsigned, I32)
-  | C.ILongLong -> 
-      if not !Clflags.option_flonglong then unsupported "'long long' type";
-      (Signed, I32)
-  | C.IULongLong ->
-      if not !Clflags.option_flonglong then unsupported "'unsigned long long' type";
-      (Unsigned, I32)
+  (* Special-cased in convertTyp below *)
+  | C.ILongLong -> unsupported "'long long' type"; (Signed, I32)
+  | C.IULongLong -> unsupported "'unsigned long long' type"; (Unsigned, I32)
 
 let convertFkind = function
   | C.FFloat -> F32
   | C.FDouble -> F64
-  | C.FLongDouble ->
-      if not !Clflags.option_flonglong then unsupported "'long double' type";
-      F64
+  | C.FLongDouble -> unsupported "'long double' type"; F64
+
+let int64_struct =
+  let ty = Tint(I32,Unsigned) in
+  Tstruct(intern_string "struct __int64",
+    if Memdataaux.big_endian
+    then Fcons(intern_string "hi", ty, Fcons(intern_string "lo", ty, Fnil))
+    else Fcons(intern_string "lo", ty, Fcons(intern_string "hi", ty, Fnil)))
 
 let convertTyp env t =
 
   let rec convertTyp seen t =
     match Cutil.unroll env t with
     | C.TVoid a -> Tvoid
+    | C.TInt((C.ILongLong|C.IULongLong), a) when !Clflags.option_flonglong ->
+        int64_struct
     | C.TInt(ik, a) ->
         let (sg, sz) = convertIkind ik in Tint(sz, sg)
     | C.TFloat(fk, a) ->
@@ -334,6 +338,20 @@ let rec projFunType env ty =
   | TPtr(ty', attr) -> projFunType env ty'
   | _ -> None
 
+let string_of_type ty =
+  let b = Buffer.create 20 in
+  let fb = Format.formatter_of_buffer b in
+  Cprint.typ fb ty;
+  Format.pp_print_flush fb ();
+  Buffer.contents b
+
+let first_class_value env ty =
+  match Cutil.unroll env ty with
+  | C.TInt((C.ILongLong|C.IULongLong), _) -> false
+  | C.TStruct _ -> false
+  | C.TUnion _ -> false
+  | _ -> true
+
 (* Handling of volatile *)
 
 let is_volatile_access env e =
@@ -368,6 +386,12 @@ let volatile_write_fun ty =
 
 let ezero = Eval(Vint(coqint_of_camlint 0l), Tint(I32, Signed))
 
+let check_assignop msg env e =
+  if not (first_class_value env e.etyp) then
+    unsupported (msg ^ " on a l-value of type " ^ string_of_type e.etyp);
+  if is_volatile_access env e then
+    unsupported (msg ^ " on a volatile l-value")
+
 let rec convertExpr env e =
   let ty = convertTyp env e.etyp in
   match e.edesc with
@@ -375,6 +399,8 @@ let rec convertExpr env e =
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
       let l = convertLvalue env e in
+      if not (first_class_value env e.etyp) then
+        unsupported ("r-value of type " ^ string_of_type e.etyp);
       if is_volatile_access env e then
         Ecall(volatile_read_fun (typeof l),
               Econs(Eaddrof(l, Tpointer(typeof l)), Enil),
@@ -407,12 +433,16 @@ let rec convertExpr env e =
   | C.EUnop(C.Oaddrof, e1) ->
       Eaddrof(convertLvalue env e1, ty)
   | C.EUnop(C.Opreincr, e1) ->
+      check_assignop "pre-increment" env e1;
       coq_Epreincr Incr (convertLvalue env e1) ty
   | C.EUnop(C.Opredecr, e1) ->
+      check_assignop "pre-decrement" env e1;
       coq_Epreincr Decr (convertLvalue env e1) ty
   | C.EUnop(C.Opostincr, e1) ->
+      check_assignop "post-increment" env e1;
       Epostincr(Incr, convertLvalue env e1, ty)
   | C.EUnop(C.Opostdecr, e1) ->
+      check_assignop "post-decrement" env e1;
       Epostincr(Decr, convertLvalue env e1, ty)
 
   | C.EBinop((C.Oadd|C.Osub|C.Omul|C.Odiv|C.Omod|C.Oand|C.Oor|C.Oxor|
@@ -441,8 +471,8 @@ let rec convertExpr env e =
   | C.EBinop(C.Oassign, e1, e2, _) ->
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
-      if Cutil.is_composite_type env e1.etyp then
-        unsupported "assignment between structs or between unions";
+      if not (first_class_value env e1.etyp) then      
+        unsupported ("assignment to a l-value of type " ^ string_of_type e1.etyp);
       if is_volatile_access env e1 then
         Ecall(volatile_write_fun (typeof e1'),
               Econs(Eaddrof(e1', Tpointer(typeof e1')), Econs(e2', Enil)),
@@ -469,10 +499,8 @@ let rec convertExpr env e =
         | _ -> assert false in
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
-      if is_volatile_access env e1 then
-        (error "assign-op to volatile not supported"; ezero)
-      else
-        Eassignop(op', e1', e2', tyres, ty)
+      check_assignop "assignment-operation" env e1;
+      Eassignop(op', e1', e2', tyres, ty)
   | C.EBinop(C.Ocomma, e1, e2, _) ->
       Ecomma(convertExpr env e1, convertExpr env e2, ty)
   | C.EBinop(C.Ologand, e1, e2, _) ->
@@ -952,6 +980,13 @@ let atom_is_static a =
   try
     let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
     sto = C.Storage_static
+  with Not_found ->
+    false
+
+let atom_is_extern a =
+  try
+    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
+    sto = C.Storage_extern
   with Not_found ->
     false
 

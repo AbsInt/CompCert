@@ -15,7 +15,7 @@
 let prepro_options = ref ([]: string list)
 let linker_options = ref ([]: string list)
 let exe_name = ref "a.out"
-let option_flonglong = ref false
+let option_flonglong = ref true
 let option_fstruct_passing = ref false
 let option_fstruct_assign = ref false
 let option_fbitfields = ref false
