@@ -241,7 +241,24 @@ let print_builtin_inlined oc name args res =
       fprintf oc "	andpd	%a, %a\n" raw_symbol "__absd_mask" freg res
   | "__builtin_fsqrt", [FR a1], FR res ->
       fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
-  (* Also: fmax, fmin *)
+  | "__builtin_fmax", [FR a1; FR a2], FR res ->
+      if res = a1 then
+        fprintf oc "	maxsd	%a, %a\n" freg a2 freg res
+      else if res = a2 then
+        fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
+      else begin
+        fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
+        fprintf oc "	maxsd	%a, %a\n" freg a2 freg res
+      end
+  | "__builtin_fmin", [FR a1; FR a2], FR res ->
+      if res = a1 then
+        fprintf oc "	minsd	%a, %a\n" freg a2 freg res
+      else if res = a2 then
+        fprintf oc "	minsd	%a, %a\n" freg a1 freg res
+      else begin
+        fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
+        fprintf oc "	minsd	%a, %a\n" freg a2 freg res
+      end
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
   end;

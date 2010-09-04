@@ -24,5 +24,9 @@ let builtins = {
     (* Float arithmetic *)
     "__builtin_fsqrt",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    "__builtin_fmax",
+      (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
+    "__builtin_fmin",
+      (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
   ]
 }
