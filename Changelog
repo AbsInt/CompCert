@@ -1,6 +1,21 @@
 Release 1.8
 ===========
 
+- The input language to the proved part of the compiler is no longer
+  Clight but CompCert C: a larger subset of the C language supporting
+  in particular side-effects within expressions.  The transformation
+  that pulls side effects out of expressions, formerly performed by
+  untrusted Caml code, is now fully proved in Coq.
+
+- New port targeting Intel/AMD x86 processors.  Generates 32-bit x86 code
+  using SSE2 extensions for floating-point arithmetic.  Works under
+  Linux, *BSD, MacOS X, and the Cygwin environment for Windows.
+  CompCert's compilation strategy is not a very good match for the
+  x86 architecture, therefore the performance of the generated code
+  is not as good as for the PowerPC port, but still usable.
+  (About 75% of the performance of gcc -O1 for x86, compared with
+   > 90% for PowerPC.)
+
 - More faithful semantics for volatile accesses: 
   . volatile reads and writes from a volatile global variable are treated
     like input and output system calls (respectively), bypassing
@@ -8,13 +23,11 @@ Release 1.8
   . volatile reads and writes from other locations are treated like
     regular loads and stores.
 
-- Added "fabs" (floating-point absolute value) unary operator to Clight;
-  map __builtin_fabs() to this operator.
-
-- Introduced __builtin_memcpy() and __builtin_memcpy_words, use them
+- Introduced __builtin_memcpy() and __builtin_memcpy_words(), use them
   instead of memcpy() to compile struct and union assignments.
 
-- Better instruction selection for "globvar[expr + cst]" memory accesses.
+- Introduced __builtin_annotation() to transmit assertions from
+  the source program all the way to the generated assembly code.
 
 - Elimination of some useless casts around "&", "|" and "^" bitwise operators.
 
@@ -22,11 +35,14 @@ Release 1.8
   rest of compilation and slightly improves the result of register
   allocation when register pressure is high.
 
-- Implemented a spilling heuristic during register allocation.
-  This heuristic reduces significantly the amount of spill code
-  generated when register pressure is high.
+- Improvements in register allocation:
+  . Implemented a spilling heuristic during register allocation.
+    This heuristic reduces significantly the amount of spill code
+    generated when register pressure is high.
+  . More coalescing between low-pressure and high-pressure variables.
+  . Aggressive coalescing between pairs of spilled variables.
 
-- Implemented aggressive coalescing between pairs of spilled variables.
+- Fixed some bugs in the emulation of bit fields.
 
 	
 Release 1.7.1, 2010-04-13

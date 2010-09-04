@@ -39,6 +39,9 @@ SUPPORTED PLATFORMS:
 - ARM / Linux       [experimental]
    For ARM machines running the Linux operating system.
 
+- IA32 / Linux, BSD, MacOS  [experimental]
+   For Intel/AMD x86 processors with SSE2 extensions
+   (i.e. Pentium 4 and later).  
 
 PREREQUISITES:
 
@@ -46,7 +49,7 @@ PREREQUISITES:
   the search path.  For MacOS X, you can get them by installing the
   XCode development tools, as found on the installation DVDs.
 
-* The Coq proof assistant, version 8.2-1 or later.
+* The Coq proof assistant, version 8.2pl1 or 8.2pl2.
   Coq is free software, available from http://coq.inria.fr/
 
 * The Caml functional language, version 3.10 or later.
@@ -64,6 +67,9 @@ where <target> is one of:
             ppc-macosx       (PowerPC, MacOS X)
             ppc-linux        (PowerPC, Linux)
             arm-linux        (ARM, Linux)
+            ia32-linux       (x86 SSE2 32 bits, Linux)
+            ia32-bsd         (x86 SSE2 32 bits, BSD)
+            ia32-macosx      (x86 SSE2 32 bits, MacOS X)
 
 This generates the Makefile.config file in the top directory.
 
@@ -74,6 +80,7 @@ The "configure" script accepts the following options:
 
 -libdir <dir>                   (default: /usr/local/lib/compcert)
         Directory where the Compcert support library will be installed
+        (needed only under MacOS X)
 
 -prefix <dir>                   (default: /usr/local)
         Set bindir and libdir to
@@ -143,7 +150,7 @@ Preprocessing options:
   -U<symb>       Undefine preprocessor symbol
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
-  -flonglong     Treat 'long long' as 'long' and 'long double' as 'double' [off]
+  -flonglong     Partial emulation of 'long long' types [on]
   -fstruct-passing  Emulate passing structs and unions by value [off]
   -fstruct-assign   Emulate assignment between structs or unions [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
@@ -153,14 +160,22 @@ Code generation options:
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
+  -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
+  -dcminor       Save generated Cminor in <file>.cm
+  -drtl          Save unoptimized generated RTL in <file>.rtl
+  -dtailcall     Save RTL after tail call optimization in <file>.tailcall.rtl
+  -dcastopt      Save RTL after cast optimization in <file>.castopt.rtl
+  -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
+  -dcse          Save RTL after CSE optimization in <file>.cse.rtl
+  -dalloc        Save LTL after register allocation in <file>.alloc.ltl
   -dasm          Save generated assembly in <file>.s
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
   -o <file>      Generate executable in <file> (default: a.out)
 General options:
-  -stdlib <dir>  Set the path of the Compcert run-time library
+  -stdlib <dir>  Set the path of the Compcert stdlib wrappers
   -v             Print external commands before invoking them
 
 
