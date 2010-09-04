@@ -97,6 +97,11 @@ let ireg8 oc r = output_string oc (int8_reg_name r)
 let ireg16 oc r = output_string oc (int16_reg_name r)
 let freg oc r = output_string oc (float_reg_name r)
 
+let preg oc = function
+  | IR r -> ireg oc r
+  | FR r -> freg oc r
+  | _    -> assert false
+
 let addressing oc (Addrmode(base, shift, cst)) =
   begin match cst with
   | Coq_inl n ->
@@ -299,6 +304,33 @@ let print_builtin_function oc s =
       invalid_arg ("unrecognized builtin function " ^ s)
   end;
   fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
+
+let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
+
+let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
+
+let print_annotation oc txt args res =
+  fprintf oc "%s annotation: " comment;
+  let print_fragment = function
+  | Str.Text s ->
+      output_string oc s
+  | Str.Delim "%%" ->
+      output_char oc '%'
+  | Str.Delim s ->
+      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      try
+        preg oc (List.nth args (n-1))
+      with Failure _ ->
+        fprintf oc "<bad parameter %s>" s in
+  List.iter print_fragment (Str.full_split re_annot_param txt);
+  fprintf oc "\n";
+  match args, res with
+  | [], _ -> ()
+  | IR src :: _, IR dst ->
+      if dst <> src then fprintf oc "	movl	%a, %a\n" ireg src ireg dst
+  | FR src :: _, FR dst ->
+      if dst <> src then fprintf oc "	movsd	%a, %a\n" freg src freg dst
+  | _, _ -> assert false
 
 (* Printing of instructions *)
 
@@ -527,7 +559,10 @@ let print_instruction oc labels = function
       let sz = sp_adjustment lo hi in
       fprintf oc "	addl	$%ld, %%esp\n" sz
   | Pbuiltin(ef, args, res) ->
-      print_builtin_inlined oc (extern_atom ef.ef_id) args res
+      let name = extern_atom ef.ef_id in
+      if Str.string_match re_builtin_annotation name 0
+      then print_annotation oc (Str.matched_group 1 name) args res
+      else print_builtin_inlined oc name args res
 
 let print_literal oc (lbl, n) =
   fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
