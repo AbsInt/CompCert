@@ -1021,7 +1021,7 @@ let elab_expr loc env a =
       | TInt _, TPtr(ty2, a2) when is_literal_0 b2 ->
           { edesc = EConditional(b1, nullconst, b3); etyp = TPtr(ty2, a2) }
       | ty1, ty2 ->
-          match combine_types env ty1 ty2 with
+          match combine_types ~noattrs:true env ty1 ty2 with
           | None ->
               error ("the second and third arguments of '? :' have incompatible types")
           | Some tyres ->

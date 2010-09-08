@@ -20,14 +20,14 @@ open Asm
 
 (* Recognition of target ABI and asm syntax *)
 
-type target = ELF | AOUT | MacOS
+type target = ELF | MacOS | Cygwin
 
 let target = 
   match Configuration.system with
   | "macosx" -> MacOS
   | "linux"  -> ELF
   | "bsd"    -> ELF
-  | "cygwin" -> AOUT
+  | "cygwin" -> Cygwin
   | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")
 
 (* On-the-fly label renaming *)
@@ -55,7 +55,7 @@ let coqint oc n =
 let raw_symbol oc s =
   match target with
   | ELF -> fprintf oc "%s" s
-  | MacOS | AOUT -> fprintf oc "_%s" s
+  | MacOS | Cygwin -> fprintf oc "_%s" s
 
 let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
 
@@ -72,7 +72,7 @@ let symbol_offset oc (symb, ofs) =
 let label oc lbl =
   match target with
   | ELF -> fprintf oc ".L%d" lbl
-  | MacOS | AOUT -> fprintf oc "L%d" lbl
+  | MacOS | Cygwin -> fprintf oc "L%d" lbl
 
 let comment = "#"
 
@@ -146,7 +146,7 @@ let (text, data, const_data, float_literal, jumptable_literal) =
        ".const",
        ".const_data",
        ".text")
-  | AOUT ->
+  | Cygwin ->
       (".text",
        ".data",
        ".section	.rdata,\"dr\"",
@@ -157,8 +157,8 @@ let (text, data, const_data, float_literal, jumptable_literal) =
 
 let stack_alignment =
   match target with
-  | ELF | AOUT -> 8               (* minimum is 4, 8 is better for perfs *)
-  | MacOS -> 16                   (* mandatory *)
+  | ELF | Cygwin -> 8               (* minimum is 4, 8 is better for perfs *)
+  | MacOS -> 16                     (* mandatory *)
 
 let int32_align n a =
   if n >= 0l
@@ -184,8 +184,8 @@ let rec log2 n =
 
 let print_align oc n =
   match target with
-  | ELF          -> fprintf oc "	.align	%d\n" n
-  | AOUT | MacOS -> fprintf oc "	.align	%d\n" (log2 n)
+  | ELF | Cygwin -> fprintf oc "	.align	%d\n" n
+  | MacOS        -> fprintf oc "	.align	%d\n" (log2 n)
 
 let need_masks = ref false
 

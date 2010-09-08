@@ -25,7 +25,13 @@ open Csyntax
 (** Record the declarations of global variables and associate them
     with the corresponding atom. *)
 
-let decl_atom : (AST.ident, Env.t * C.decl) Hashtbl.t = Hashtbl.create 103
+type atom_info =
+  { a_storage: C.storage;
+    a_env: Env.t;
+    a_type: C.typ;
+    a_fundef: C.fundef option }
+
+let decl_atom : (AST.ident, atom_info) Hashtbl.t = Hashtbl.create 103
 
 (** Hooks -- overriden in machine-dependent CPragmas module *)
 
@@ -135,10 +141,10 @@ let name_for_string_literal env s =
     let name = Printf.sprintf "__stringlit_%d" !stringNum in
     let id = intern_string name in
     Hashtbl.add decl_atom id
-      (env, (C.Storage_static,
-             Env.fresh_ident name,
-             C.TPtr(C.TInt(C.IChar,[C.AConst]),[]),
-             None));
+      { a_storage = C.Storage_static;
+        a_env = env;
+        a_type = C.TPtr(C.TInt(C.IChar,[C.AConst]),[]);
+        a_fundef = None };
     Sections.define_stringlit id;
     Hashtbl.add stringTable s id;
     id
@@ -701,9 +707,11 @@ let convertFundef env fd =
       fd.fd_locals in
   let body' = convertStmt env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
-  let decl =
-    (fd.fd_storage, fd.fd_name, Cutil.fundef_typ fd, None) in
-  Hashtbl.add decl_atom id' (env, decl);
+  Hashtbl.add decl_atom id'
+    { a_storage = fd.fd_storage;
+      a_env = env;
+      a_type = Cutil.fundef_typ fd;
+      a_fundef = Some fd };
   Sections.define_function id';
   Datatypes.Coq_pair(id',
                      Internal {fn_return = ret; fn_params = params;
@@ -850,7 +858,7 @@ let rec type_is_volatile env t =
   | C.TArray(t', _, _) -> type_is_volatile env t'
   | _ -> false
 
-let convertGlobvar env (sto, id, ty, optinit as decl) =
+let convertGlobvar env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
   let init' =
@@ -859,7 +867,11 @@ let convertGlobvar env (sto, id, ty, optinit as decl) =
         if sto = C.Storage_extern then [] else [Init_space(Csyntax.sizeof ty')]
     | Some i ->
         convertInit env ty i in
-  Hashtbl.add decl_atom id' (env, decl);
+  Hashtbl.add decl_atom id'
+    { a_storage = sto;
+      a_env = env;
+      a_type = ty;
+      a_fundef = None };
   Sections.define_variable id'
     (match Cutil.sizeof env ty with Some sz -> sz | None -> max_int)
     (type_is_readonly env ty);
@@ -978,36 +990,35 @@ let convertProgram p =
 
 let atom_is_static a =
   try
-    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
-    sto = C.Storage_static
+    match Hashtbl.find decl_atom a with
+    | { a_storage = C.Storage_static } -> true
+    (* We do not inline functions, but at least let's not make them globals *)
+    | { a_fundef = Some { fd_inline = true } } -> true 
+    | _ -> false
   with Not_found ->
     false
 
 let atom_is_extern a =
   try
-    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
-    sto = C.Storage_extern
+    let i = Hashtbl.find decl_atom a in i.a_storage = C.Storage_extern
   with Not_found ->
     false
 
 let atom_is_readonly a =
   try
-    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
-    type_is_readonly env ty
+    let i = Hashtbl.find decl_atom a in type_is_readonly i.a_env i.a_type
   with Not_found ->
     false
 
 let atom_sizeof a =
   try
-    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
-    Cutil.sizeof env ty
+    let i = Hashtbl.find decl_atom a in Cutil.sizeof i.a_env i.a_type
   with Not_found ->
     None
 
 let atom_alignof a =
   try
-    let (env, (sto, id, ty, init)) = Hashtbl.find decl_atom a in
-    Cutil.alignof env ty
+    let i = Hashtbl.find decl_atom a in Cutil.alignof i.a_env i.a_type
   with Not_found ->
     None
 

@@ -82,6 +82,14 @@ DRIVER=Compiler.v Complements.v
 
 FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER)
 
+# Symbolic links vs. copy
+
+ifneq (,$(findstring CYGWIN,$(shell uname -s)))
+SLN=cp
+else
+SLN=ln -s
+endif
+
 proof: $(FILES:.v=.vo)
 
 extraction:
@@ -91,15 +99,15 @@ extraction:
 
 ccomp: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
-        && rm -f ccomp && ln -s _build/driver/Driver.native ccomp
+        && rm -f ccomp && $(SLN) _build/driver/Driver.native ccomp
 
 ccomp.prof: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.p.native \
-        && rm -f ccomp.prof && ln -s _build/driver/Driver.p.native ccomp.prof
+        && rm -f ccomp.prof && $(SLN) _build/driver/Driver.p.native ccomp.prof
 
 ccomp.byte: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
-        && rm -f ccomp.byte && ln -s _build/driver/Driver.d.byte ccomp.byte
+        && rm -f ccomp.byte && $(SLN) _build/driver/Driver.d.byte ccomp.byte
 
 runtime:
 	$(MAKE) -C runtime

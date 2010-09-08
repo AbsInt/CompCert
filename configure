@@ -36,6 +36,7 @@ Supported targets:
   ia32-linux       (x86 32 bits, Linux)
   ia32-bsd         (x86 32 bits, BSD)
   ia32-macosx      (x86 32 bits, MacOS X)
+  ia32-cygwin      (x86 32 bits, Cygwin environment under Windows)
   manual           (edit configuration file by hand)
 
 Options:
@@ -125,6 +126,16 @@ case "$target" in
     clinker="gcc -arch i386"
     libmath=""
     need_stdlib_wrapper="true";;
+  ia32-cygwin)
+    arch="ia32"
+    variant="standard"
+    system="cygwin"
+    cc="gcc -m32"
+    cprepro="gcc -m32 -U__GNUC__ -E"
+    casm="gcc -m32 -c"
+    clinker="gcc -m32"
+    libmath="-lm"
+    need_stdlib_wrapper="false";;
   manual)
     ;;
   "")
