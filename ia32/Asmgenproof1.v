@@ -754,6 +754,18 @@ Qed.
 
 (** Smart constructor for small stores *)
 
+Lemma addressing_mentions_correct:
+  forall a r (rs1 rs2: regset),
+  (forall (r': ireg), r' <> r -> rs1 r' = rs2 r') ->
+  addressing_mentions a r = false ->
+  eval_addrmode ge a rs1 = eval_addrmode ge a rs2.
+Proof.
+  intros until rs2; intro AG. unfold addressing_mentions, eval_addrmode.
+  destruct a. intros. destruct (orb_false_elim _ _ H). unfold proj_sumbool in *.
+  decEq. destruct base; auto. apply AG. destruct (ireg_eq r i); congruence.
+  decEq. destruct ofs as [[r' sc] | ]; auto. rewrite AG; auto. destruct (ireg_eq r r'); congruence.
+Qed.
+
 Lemma mk_smallstore_correct:
   forall chunk sto addr r k c rs1 m1 m2,
   mk_smallstore sto addr r k = OK c ->
@@ -765,12 +777,14 @@ Lemma mk_smallstore_correct:
   /\ forall r, nontemp_preg r = true -> rs2#r = rs1#r.
 Proof.
   unfold mk_smallstore; intros. 
-  remember (low_ireg r) as low. destruct low; monadInv H.
+  remember (low_ireg r) as low. destruct low.
 (* low reg *)
-  econstructor; split. apply exec_straight_one. rewrite H1. 
+  monadInv H. econstructor; split. apply exec_straight_one. rewrite H1. 
   unfold exec_store. rewrite H0. eauto. auto. 
   intros. SOther.
 (* high reg *)
+   remember (addressing_mentions addr ECX) as mentions. destruct mentions; monadInv H.
+(* ECX is mentioned. *)
   assert (r <> ECX). red; intros; subst r; discriminate. 
   set (rs2 := nextinstr (rs1#ECX <- (eval_addrmode ge addr rs1))).
   set (rs3 := nextinstr (rs2#EDX <- (rs1 r))).
@@ -788,6 +802,17 @@ Proof.
   simpl. rewrite Int.add_zero; auto. 
   auto. auto. auto. 
   intros. repeat SOther. unfold rs3. repeat SOther. unfold rs2. repeat SOther.
+(* ECX is not mentioned *)
+  set (rs2 := nextinstr (rs1#ECX <- (rs1 r))).
+  econstructor; split.
+  apply exec_straight_two with rs2 m1.
+  simpl. auto.
+  rewrite H1. unfold exec_store. 
+  rewrite (addressing_mentions_correct addr ECX rs2 rs1); auto.
+  change (rs2 ECX) with (rs1 r). rewrite H0. eauto. 
+  intros. unfold rs2. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gso; auto with ppcgen.
+  auto. auto. 
+  intros. repeat SOther. unfold rs2. repeat SOther.
 Qed.
 
 (** Accessing slots in the stack frame *)
@@ -1413,11 +1438,18 @@ Proof.
 (* int8unsigned *)
   eapply mk_smallstore_correct; eauto.
 (* int16signed *)
-  eapply mk_smallstore_correct; eauto.
-  intros. simpl. unfold exec_store.
-  destruct (eval_addrmode ge addr0 rs0); simpl; auto. rewrite Mem.store_signed_unsigned_16; auto.
+  econstructor; split.
+  apply exec_straight_one. simpl. unfold exec_store. 
+  replace (Mem.storev Mint16unsigned m (eval_addrmode ge x rs) (rs x0))
+     with (Mem.storev Mint16signed m (eval_addrmode ge x rs) (rs x0)).
+  rewrite H1. eauto.
+  destruct (eval_addrmode ge x rs); simpl; auto. rewrite Mem.store_signed_unsigned_16; auto.
+  auto.
+  intros. SOther.
 (* int16unsigned *)
-  eapply mk_smallstore_correct; eauto.
+  econstructor; split.
+  apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.
+  intros. SOther.
 (* int32 *)
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.

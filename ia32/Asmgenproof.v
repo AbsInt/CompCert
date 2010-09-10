@@ -376,7 +376,9 @@ Remark mk_smallstore_label:
   (forall r addr, is_label lbl (f r addr) = false) ->
   find_label lbl c = find_label lbl k.
 Proof.
-  unfold mk_smallstore; intros. destruct (low_ireg r); monadInv H; simpl; rewrite H0; auto.
+  unfold mk_smallstore; intros. destruct (low_ireg r).
+  monadInv H; simpl; rewrite H0; auto.
+  destruct (addressing_mentions addr ECX); monadInv H; simpl; rewrite H0; auto.
 Qed.
 
 Remark loadind_label:

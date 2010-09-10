@@ -124,13 +124,21 @@ Definition mk_intconv (mk: ireg -> ireg -> instruction) (rd rs: ireg) (k: code) 
   else
     OK (Pmov_rr EDX rs :: mk rd EDX :: k).
 
+Definition addressing_mentions (addr: addrmode) (r: ireg) : bool :=
+  match addr with Addrmode base displ const =>
+      match base with Some r' => ireg_eq r r' | None => false end
+   || match displ with Some(r', sc) => ireg_eq r r' | None => false end
+  end.
+
 Definition mk_smallstore (sto: addrmode -> ireg ->instruction) 
                          (addr: addrmode) (rs: ireg) (k: code) :=
   if low_ireg rs then
     OK (sto addr rs :: k)
-  else
+  else if addressing_mentions addr ECX then
     OK (Plea ECX addr :: Pmov_rr EDX rs ::
-        sto (Addrmode (Some ECX) None (inl _ Int.zero)) EDX :: k).
+        sto (Addrmode (Some ECX) None (inl _ Int.zero)) EDX :: k)
+  else
+    OK (Pmov_rr ECX rs :: sto addr ECX :: k).
 
 (** Accessing slots in the stack frame.  *)
 
@@ -424,7 +432,7 @@ Definition transl_store (chunk: memory_chunk)
   | Mint8unsigned | Mint8signed =>
       do r <- ireg_of src; mk_smallstore Pmovb_mr am r k
   | Mint16unsigned | Mint16signed =>
-      do r <- ireg_of src; mk_smallstore Pmovw_mr am r k
+      do r <- ireg_of src; OK(Pmovw_mr am r :: k)
   | Mint32 =>
       do r <- ireg_of src; OK(Pmov_mr am r :: k)
   | Mfloat32 =>

@@ -86,7 +86,7 @@ let int8_reg_name = function
 
 let int16_reg_name = function
   | EAX -> "%ax"  | EBX -> "%bx"  | ECX -> "%cx"  | EDX -> "%dx"
-  | _ -> assert false
+  | ESI -> "%si"  | EDI -> "%di"  | EBP -> "%bp"  | ESP -> "%sp"
 
 let float_reg_name = function
   | XMM0 -> "%xmm0"  | XMM1 -> "%xmm1"  | XMM2 -> "%xmm2"  | XMM3 -> "%xmm3"
