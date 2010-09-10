@@ -48,7 +48,8 @@ Proof. decide equality. Defined.
 Lemma freg_eq: forall (x y: freg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
-(** Condition bits *)
+(** Bits of the flags register.  [SOF] is a pseudo-bit representing
+  the "xor" of the [OF] and [SF] bits. *)
 
 Inductive crbit: Type := 
   | ZF | CF | PF | SOF.
@@ -60,7 +61,7 @@ Inductive preg: Type :=
   | IR: ireg -> preg                    (**r integer register *)
   | FR: freg -> preg                    (**r XMM register *)
   | ST0: preg                           (**r top of FP stack *)
-  | CR: crbit -> preg                   (**r bit of the condition register *)
+  | CR: crbit -> preg                   (**r bit of the flags register *)
   | RA: preg.                   (**r pseudo-reg representing return address *)
 
 Coercion IR: ireg >-> preg.
@@ -90,7 +91,8 @@ Inductive testcond: Type :=
 
 (** Instructions.  IA32 instructions accept many combinations of
   registers, memory references and immediate constants as arguments.
-  Here, we list the combinations that we actually use.
+  Here, we list only the combinations that we actually use.
+
   Naming conventions:
 - [r]: integer register operand
 - [f]: XMM register operand
@@ -98,9 +100,9 @@ Inductive testcond: Type :=
 - [i]: immediate integer operand
 - [s]: immediate symbol operand
 - [l]: immediate label operand
-- [st0]: top of floating-point stack
 - [cl]: the [CL] register
-- For two-operand instructions, the first suffix describes the result
+
+  For two-operand instructions, the first suffix describes the result
   (and first argument), the second suffix describes the second argument.
 *)
 
@@ -433,12 +435,12 @@ Definition exec_store (chunk: memory_chunk) (m: mem)
 
 (** Execution of a single instruction [i] in initial state
     [rs] and [m].  Return updated state.  For instructions
-    that correspond to actual PowerPC instructions, the cases are
+    that correspond to actual IA32 instructions, the cases are
     straightforward transliterations of the informal descriptions
-    given in the PowerPC reference manuals.  For pseudo-instructions,
+    given in the IA32 reference manuals.  For pseudo-instructions,
     refer to the informal descriptions given above.  Note that
     we set to [Vundef] the registers used as temporaries by the
-    expansions of the pseudo-instructions, so that the PPC code
+    expansions of the pseudo-instructions, so that the IA32 code
     we generate cannot use those registers to hold values that
     must survive the execution of the pseudo-instruction.
 *)
