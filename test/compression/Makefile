@@ -24,12 +24,13 @@ LZSS_OBJS=$(COMMON_OBJS) lzvars.o lzhash.o lzencode.o lzdecode.o lzssmain.o
 lzss: $(LZSS_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(LZSS_OBJS) $(LIBS)
 
-TESTFILE=/mach_kernel
+TESTFILE:=$(firstword $(wildcard /mach_kernel) $(wildcard /boot/vmlinuz) ./lzss)
 TESTCOMPR=/tmp/testcompr.out
 TESTEXPND=/tmp/testexpnd.out
 
 test:
 	rm -f $(TESTCOMPR) $(TESTEXPND)
+	@echo "Test data: $(TESTFILE)"
 	@for i in $(EXE); do \
           echo "$$i: compression..."; \
           ./$$i -c -i $(TESTFILE) -o $(TESTCOMPR); \

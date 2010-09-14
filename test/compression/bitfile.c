@@ -162,7 +162,7 @@ bit_file_t *BitFileOpen(const char *fileName, const BF_MODES mode)
         {
             /* fopen failed */
             free(bf);
-            bf = NULL;
+            return NULL;
         }
         else
         {
