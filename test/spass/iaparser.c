@@ -732,7 +732,7 @@ yydestruct (yytype, yyvalue)
 #endif
 {
   /* Pacify ``unused variable'' warnings.  */
-  (void) yyvalue;
+  /*(void) yyvalue;*/
 
   switch (yytype)
     {
