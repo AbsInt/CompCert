@@ -1,15 +1,16 @@
-Release 1.8
-===========
+Release 1.8, 2010-09-21
+=======================
 
 - The input language to the proved part of the compiler is no longer
   Clight but CompCert C: a larger subset of the C language supporting
-  in particular side-effects within expressions.  The transformation
-  that pulls side effects out of expressions, formerly performed by
-  untrusted Caml code, is now fully proved in Coq.
+  in particular side-effects within expressions.  The transformations
+  that pull side effects out of expressions and materialize implicit
+  casts, formerly performed by untrusted Caml code, are now fully
+  proved in Coq.
 
 - New port targeting Intel/AMD x86 processors.  Generates 32-bit x86 code
   using SSE2 extensions for floating-point arithmetic.  Works under
-  Linux, *BSD, MacOS X, and the Cygwin environment for Windows.
+  Linux, MacOS X, and the Cygwin environment for Windows.
   CompCert's compilation strategy is not a very good match for the
   x86 architecture, therefore the performance of the generated code
   is not as good as for the PowerPC port, but still usable.

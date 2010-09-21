@@ -24,12 +24,12 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The Compcert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 1.7, 2010-03-31</H3>
+<H3 align="center">Version 1.8, 2010-09-21</H3>
 
 <H2>Introduction</H2>
 
-<P>Compcert is a compiler that generates PowerPC and ARM assembly
-code from Clight, a large subset of the C programming language.
+<P>Compcert is a compiler that generates PowerPC, ARM and x86 assembly
+code from Compcert C, a large subset of the C programming language.
 The particularity of this compiler is that it is written mostly within
 the specification language of the Coq proof assistant, and its
 correctness --- the fact that the generated assembly code is
@@ -104,7 +104,7 @@ semantics.
 <H3>Source, intermediate and target languages: syntax and semantics</H3>
 
 <UL>
-<LI> The Cmedium source language:
+<LI> The Compcert C source language:
 <A HREF="html/Csyntax.html">syntax</A> and
 <A HREF="html/Csem.html">semantics</A> and
 <A HREF="html/Cstrategy.html">determinized semantics</A>.
@@ -149,7 +149,7 @@ code.
 <TR valign="top">
   <TD>Pulling side-effects out of expressions;<br>
       fixing an evaluation order</TD>
-  <TD>Cmedium to Clight</TD>
+  <TD>Compcert C to Clight</TD>
   <TD><A HREF="html/SimplExpr.html">SimplExpr</A></TD>
   <TD><A HREF="html/SimplExprspec.html">SimplExprspec</A><br>
       <A HREF="html/SimplExprproof.html">SimplExprproof</A></TD>
@@ -208,6 +208,13 @@ code.
   <TD>RTL to RTL</TD>
   <TD><A HREF="html/CSE.html">CSE</A></TD>
   <TD><A HREF="html/CSEproof.html">CSEproof</A></TD>
+</TR>
+
+<TR valign="top">
+  <TD>Elimination of redundant casts</TD>
+  <TD>RTL to RTL</TD>
+  <TD><A HREF="html/CastOptim.html">CastOptim</A></TD>
+  <TD><A HREF="html/CastOptimproof.html">CastOptimproof</A></TD>
 </TR>
 
 <TR valign="top">

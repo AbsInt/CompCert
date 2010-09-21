@@ -3,7 +3,7 @@
 OVERVIEW:
 
 The Compcert verified compiler is a compiler for a large subset of the
-C programming language that generates code for the PowerPC and ARM
+C programming language that generates code for the PowerPC, ARM and x86
 processors.
 
 The distinguishing feature of Compcert is that it has been formally
@@ -36,12 +36,14 @@ SUPPORTED PLATFORMS:
 - PowerPC / Linux   [somewhat experimental]
     For PowerPC machines running the Linux operating system.
 
+- IA32 / Linux or MacOS or Windows+Cygwin  [experimental]
+   For Intel/AMD x86 processors with SSE2 extensions
+   (i.e. Pentium 4 and later), running either Linux, MacOS 10.6,
+   or Windows with the Cygwin environment (http://www.cygwin.com/).
+
 - ARM / Linux       [experimental]
    For ARM machines running the Linux operating system.
 
-- IA32 / Linux, BSD, MacOS  [experimental]
-   For Intel/AMD x86 processors with SSE2 extensions
-   (i.e. Pentium 4 and later).  
 
 PREREQUISITES:
 
@@ -54,6 +56,19 @@ PREREQUISITES:
 
 * The Caml functional language, version 3.10 or later.
   Caml is free software, available from http://caml.inria.fr/
+
+* Under MacOS 10.5 and 10.6, some standard C include files in /usr/include/
+  contain gcc-isms that cause errors when compiling with CompCert.
+  Symptoms include:
+    - references to undefined types uint16_t and uint32_t
+    - a type error when using the "assert" macro.
+  These issues have been reported through Apple Developer's Connection.
+  Until Apple fixes them, you can apply the patch available from
+        http://compcert.inria.fr/release/MacOSX-includes.patch
+  Download this file, then do:
+     sudo /bin/bash
+     cd /
+     patch -p0 < ..../MacOSX-includes.patch
 
 
 INSTALLATION:
@@ -68,8 +83,8 @@ where <target> is one of:
             ppc-linux        (PowerPC, Linux)
             arm-linux        (ARM, Linux)
             ia32-linux       (x86 SSE2 32 bits, Linux)
-            ia32-bsd         (x86 SSE2 32 bits, BSD)
             ia32-macosx      (x86 SSE2 32 bits, MacOS X)
+            ia32-cygwin      (x86 SSE2 32 bits, Cygwin environment for Windows)
 
 This generates the Makefile.config file in the top directory.
 
@@ -92,8 +107,9 @@ The "configure" script accepts the following options:
 
 This re-checks all the Coq proofs, then extracts Caml code from the
 Coq specification and combines it with supporting hand-written Caml
-code to generate the executable for Compcert.  This step takes 10 to
-15 minutes on a recent Mac computer; be patient.
+code to generate the executable for Compcert.  This step takes 20
+minutes or so on a recent machine; be patient.
+
 
 3- You can now install Compcert.  This will create the "ccomp" command
 in the binary directory selected during configuration, and install
