@@ -32,11 +32,11 @@ Require Import Kildall.
 Inductive approx : Type :=
   | Unknown               (**r any value *)
   | Int7                  (**r [[0,127]] *)
-  | Int8s                 (**r [[-128,127] *)
+  | Int8s                 (**r [[-128,127]] *)
   | Int8u                 (**r [[0,255]] *)
   | Int15                 (**r [[0,32767]] *)
   | Int16s                (**r [[-32768,32767]] *)
-  | Int16u                (**r [[0,65535] *)
+  | Int16u                (**r [[0,65535]] *)
   | Single                (**r single-precision float *)
   | Novalue.              (**r empty *)
 
