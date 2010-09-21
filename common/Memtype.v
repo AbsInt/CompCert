@@ -137,6 +137,13 @@ Fixpoint free_list (m: mem) (l: list (block * Z * Z)) {struct l}: option mem :=
       end
   end.
 
+(** [drop_perm m b lo hi p] sets the permissions of the byte range
+    [(b, lo) ... (b, hi - 1)] to [p].  These bytes must have permissions
+    at least [p] in the initial memory state [m].
+    Returns updated memory state, or [None] if insufficient permissions. *)
+
+Parameter drop_perm: forall (m: mem) (b: block) (lo hi: Z) (p: permission), option mem.
+
 (** * Permissions, block validity, access validity, and bounds *)
 
 (** The next block of a memory state is the block identifier for the
@@ -647,6 +654,42 @@ Axiom load_free:
   b <> bf \/ lo >= hi \/ ofs + size_chunk chunk <= lo \/ hi <= ofs ->
   load chunk m2 b ofs = load chunk m1 b ofs.
 
+(** ** Properties of [drop_perm]. *)
+
+Axiom nextblock_drop:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  nextblock m' = nextblock m.
+
+Axiom range_perm_drop_1:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  range_perm m b lo hi p.
+Axiom range_perm_drop_2:
+  forall m b lo hi p,
+  range_perm m b lo hi p -> { m' | drop_perm m b lo hi p = Some m' }.
+
+Axiom perm_drop_1:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  forall ofs, lo <= ofs < hi -> perm m' b ofs p.
+Axiom perm_drop_2:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  forall ofs p', lo <= ofs < hi -> perm m' b ofs p' -> perm_order p p'.
+Axiom perm_drop_3:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  forall b' ofs p', b' <> b \/ ofs < lo \/ hi <= ofs -> perm m b' ofs p' -> perm m' b' ofs p'.
+Axiom perm_drop_4:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  forall b' ofs p', perm m' b' ofs p' -> perm m b' ofs p'.
+
+Axiom bounds_drop:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  forall b', bounds m' b' = bounds m b'.
+
+Axiom load_drop:
+  forall m b lo hi p m', drop_perm m b lo hi p = Some m' ->
+  forall chunk b' ofs, 
+  b' <> b \/ ofs + size_chunk chunk <= lo \/ hi <= ofs \/ perm_order p Readable ->
+  load chunk m' b' ofs = load chunk m b' ofs.
+
 (** * Relating two memory states. *)
 
 (** ** Memory extensions *)
@@ -971,6 +1014,13 @@ Axiom store_inject_neutral:
   inject_neutral thr m ->
   b < thr ->
   val_inject (flat_inj thr) v v ->
+  inject_neutral thr m'.
+
+Axiom drop_inject_neutral:
+  forall m b lo hi p m' thr,
+  drop_perm m b lo hi p = Some m' ->
+  inject_neutral thr m ->
+  b < thr ->
   inject_neutral thr m'.
 
 End MEM.

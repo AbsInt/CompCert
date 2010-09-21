@@ -523,10 +523,18 @@ Fixpoint init_data_list_size (il: list init_data) {struct il} : Z :=
   | i :: il' => init_data_size i + init_data_list_size il'
   end.
 
+Definition perm_globvar (gv: globvar V) : permission :=
+  if gv.(gvar_volatile) then Nonempty
+  else if gv.(gvar_readonly) then Readable
+  else Writable.
+
 Definition alloc_variable (m: mem) (idv: ident * globvar V) : option mem :=
   let init := idv#2.(gvar_init) in
   let (m', b) := Mem.alloc m 0 (init_data_list_size init) in
-  store_init_data_list m' b 0 init.
+  match store_init_data_list m' b 0 init with
+  | None => None
+  | Some m'' => Mem.drop_perm m'' b 0 (init_data_list_size init) (perm_globvar idv#2)
+  end.
 
 Fixpoint alloc_variables (m: mem) (vl: list (ident * globvar V))
                          {struct vl} : option mem :=
@@ -564,8 +572,11 @@ Proof.
   unfold alloc_variable. 
   set (init := gvar_init a#2).
   caseEq (Mem.alloc m 0 (init_data_list_size init)). intros m1 b ALLOC.
-  caseEq (store_init_data_list m1 b 0 init); try congruence. intros m2 STORE REC.
-  rewrite (IHvl _ _ REC). 
+  caseEq (store_init_data_list m1 b 0 init); try congruence. intros m2 STORE.
+  caseEq (Mem.drop_perm m2 b 0 (init_data_list_size init) (perm_globvar a#2)); try congruence.
+  intros m3 DROP REC.
+  rewrite (IHvl _ _ REC).
+  rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
   rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
   rewrite (Mem.nextblock_alloc _ _ _ _ _ ALLOC).
   unfold block in *; omega.
@@ -595,8 +606,12 @@ Proof.
   intros until m'. simpl. unfold alloc_variable. 
   set (init := gvar_init a#2).
   caseEq (Mem.alloc m 0 (init_data_list_size init)). intros m1 b ALLOC.
-  caseEq (store_init_data_list m1 b 0 init); try congruence. intros m2 STORE REC PERM.
-  eapply IHvl; eauto. 
+  caseEq (store_init_data_list m1 b 0 init); try congruence. intros m2 STORE.
+  caseEq (Mem.drop_perm m2 b 0 (init_data_list_size init) (perm_globvar a#2)); try congruence.
+  intros m3 DROP REC PERM.
+  assert (b' <> b). apply Mem.valid_not_valid_diff with m; eauto with mem.
+  eapply IHvl; eauto.
+  eapply Mem.perm_drop_3; eauto. 
   eapply store_init_data_list_perm; eauto. 
   eauto with mem.
 Qed.
@@ -685,13 +700,19 @@ Proof.
   unfold alloc_variable. 
   set (init := gvar_init a#2).
   caseEq (Mem.alloc m 0 (init_data_list_size init)); intros m1 b1 ALLOC.
-  caseEq (store_init_data_list m1 b1 0 init); try congruence. intros m2 STO REC VAL.
+  caseEq (store_init_data_list m1 b1 0 init); try congruence. intros m2 STO.
+  caseEq (Mem.drop_perm m2 b1 0 (init_data_list_size init) (perm_globvar a#2)); try congruence.
+  intros m3 DROP RED VALID.
+  assert (b <> b1). apply Mem.valid_not_valid_diff with m; eauto with mem.
+  transitivity (Mem.load chunk m3 b p).
+  apply IHvl; auto. red.
+  rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
+  rewrite (store_init_data_list_nextblock _ _ _ _ STO).
+  change (Mem.valid_block m1 b). eauto with mem.
   transitivity (Mem.load chunk m2 b p). 
-  apply IHvl; auto. red. rewrite (store_init_data_list_nextblock _ _ _ _ STO).
-  change (Mem.valid_block m1 b). eauto with mem. 
+  eapply Mem.load_drop; eauto. 
   transitivity (Mem.load chunk m1 b p).
-  eapply store_init_data_list_outside; eauto. left. 
-  apply Mem.valid_not_valid_diff with m; eauto with mem.
+  eapply store_init_data_list_outside; eauto. 
   eapply Mem.load_alloc_unchanged; eauto.
 Qed. 
 
@@ -714,8 +735,8 @@ Lemma alloc_variables_charact:
   In (id, gv) vl ->
   exists b, find_symbol (add_variables g vl) id = Some b 
          /\ find_var_info (add_variables g vl) b = Some gv
-         /\ Mem.range_perm m' b 0 (init_data_list_size gv.(gvar_init)) Writable
-         /\ load_store_init_data m' b 0 gv.(gvar_init).
+         /\ Mem.range_perm m' b 0 (init_data_list_size gv.(gvar_init)) (perm_globvar gv)
+         /\ (gv.(gvar_volatile) = false -> load_store_init_data m' b 0 gv.(gvar_init)).
 Proof.
   induction vl; simpl.
   contradiction.
@@ -724,7 +745,9 @@ Proof.
   caseEq (Mem.alloc m 0 (init_data_list_size (gvar_init gv'))); try congruence.
   intros m1 b ALLOC. 
   caseEq (store_init_data_list m1 b 0 (gvar_init gv')); try congruence.
-  intros m2 STORE REC NOREPET IN. inv NOREPET.
+  intros m2 STORE.
+  caseEq (Mem.drop_perm m2 b 0 (init_data_list_size (gvar_init gv')) (perm_globvar gv')); try congruence.
+  intros m3 DROP REC NOREPET IN. inv NOREPET.
   exploit Mem.alloc_result; eauto. intro BEQ. 
   destruct IN. inv H.
   exists (Mem.nextblock m); split. 
@@ -733,17 +756,24 @@ Proof.
   split. rewrite add_variables_same_address. unfold find_var_info; simpl.
   rewrite NEXT. apply ZMap.gss.
   simpl. rewrite <- NEXT; omega.
-  split. red; intros. eapply alloc_variables_perm; eauto. 
-  eapply store_init_data_list_perm; eauto.
-  apply Mem.perm_implies with Freeable; eauto with mem.
+  split. red; intros.
+  eapply alloc_variables_perm; eauto.
+  eapply Mem.perm_drop_1; eauto. 
+  intros NOVOL. 
   apply load_store_init_data_invariant with m2.
-  intros. eapply load_alloc_variables; eauto. 
-  red. rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
+  intros. transitivity (Mem.load chunk m3 (Mem.nextblock m) ofs).
+  eapply load_alloc_variables; eauto. 
+  red. rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
+  rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
   change (Mem.valid_block m1 (Mem.nextblock m)). eauto with mem.
+  eapply Mem.load_drop; eauto. repeat right. 
+  unfold perm_globvar. rewrite NOVOL. destruct (gvar_readonly gv); auto with mem.
   eapply store_init_data_list_charact; eauto. 
 
-  apply IHvl with m2; auto.
-  simpl. rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
+  apply IHvl with m3; auto.
+  simpl.
+  rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
+  rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
   rewrite (Mem.nextblock_alloc _ _ _ _ _ ALLOC). unfold block in *; omega.
 Qed.
 
@@ -785,8 +815,8 @@ Theorem find_var_exists:
   init_mem p = Some m ->
   exists b, find_symbol (globalenv p) id = Some b
          /\ find_var_info (globalenv p) b = Some gv
-         /\ Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) Writable
-         /\ load_store_init_data (globalenv p) m b 0 gv.(gvar_init).
+         /\ Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) (perm_globvar gv)
+         /\ (gv.(gvar_volatile) = false -> load_store_init_data (globalenv p) m b 0 gv.(gvar_init)).
 Proof.
   intros. exploit alloc_variables_charact; eauto. 
   instantiate (1 := Mem.empty). rewrite add_functions_nextvar. rewrite Mem.nextblock_empty; auto.
@@ -839,11 +869,15 @@ Lemma alloc_variable_neutral:
   Mem.inject_neutral thr m'.
 Proof.
   intros until m'. unfold alloc_variable. 
-  caseEq (Mem.alloc m 0 (init_data_list_size (gvar_init id#2))); intros m1 b; intros.
+  caseEq (Mem.alloc m 0 (init_data_list_size (gvar_init id#2))); intros m1 b ALLOC.
+  caseEq (store_init_data_list ge m1 b 0 (gvar_init id#2)); try congruence.
+  intros m2 STORE DROP NEUTRAL NEXT.
+  eapply Mem.drop_inject_neutral; eauto. 
   eapply store_init_data_list_neutral with (b := b).
   eapply Mem.alloc_inject_neutral; eauto.
-  rewrite (Mem.alloc_result _ _ _ _ _ H). auto.
+  rewrite (Mem.alloc_result _ _ _ _ _ ALLOC). auto.
   eauto.
+  rewrite (Mem.alloc_result _ _ _ _ _ ALLOC). auto.
 Qed.
 
 Lemma alloc_variables_neutral:
@@ -1067,6 +1101,10 @@ Proof.
   destruct (Mem.alloc m 0 (init_data_list_size init)). 
   rewrite store_init_data_list_match. 
   destruct (store_init_data_list (globalenv p) m0 b 0 init); auto.
+  change (perm_globvar (mkglobvar info2 init ro vo))
+    with (perm_globvar (mkglobvar info1 init ro vo)).
+  destruct (Mem.drop_perm m1 b 0 (init_data_list_size init)
+    (perm_globvar (mkglobvar info1 init ro vo))); auto.
 Qed.
 
 Theorem init_mem_match:
