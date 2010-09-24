@@ -216,12 +216,14 @@ let pack_bitfields ml =
             pack (nbits + n) ms (* add to current word *)
   in
   let (nbits, ml') = pack 0 ml in
-  let sz =
-    if nbits <= 8 then 1 else
-    if nbits <= 16 then 2 else
-    if nbits <= 32 then 4 else
-    if nbits <= 64 then 8 else assert false in
-  (sz, ml')
+  let (sz, al) =
+    (* A lone bitfield of width 0 consumes no space and aligns to 1 *) 
+    if nbits = 0 then (0, 1) else
+    if nbits <= 8 then (1, 1) else
+    if nbits <= 16 then (2, 2) else
+    if nbits <= 32 then (4, 4) else
+    if nbits <= 64 then (8, 8) else assert false in
+  (sz, al, ml')
 
 (* Natural alignment, in bytes *)
 
@@ -264,8 +266,8 @@ let alignof_struct_union env members =
         | None -> None
         | Some a -> align_rec (max a al) rem
       end else begin
-        let (sz, ml') = pack_bitfields ml in
-        align_rec (max sz al) ml'
+        let (s, a, ml') = pack_bitfields ml in
+        align_rec (max a al) ml'
       end
   in align_rec 1 members
 
@@ -355,8 +357,8 @@ let sizeof_struct env members =
         | Some a, Some s -> sizeof_rec (align ofs a + s) rem
         | _, _ -> None
       end else begin
-        let (sz, ml') = pack_bitfields ml in
-        sizeof_rec (align ofs sz + sz) ml'
+        let (s, a, ml') = pack_bitfields ml in
+        sizeof_rec (align ofs a + s) ml'
       end
   in sizeof_rec 0 members
 

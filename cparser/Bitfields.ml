@@ -88,19 +88,25 @@ let rec transf_members env id count = function
         m :: transf_members env id count ms
       else begin
         let (nbits, bitfields, ml') = pack_bitfields env id ml in
-        let carrier = sprintf "__bf%d" count in
-        let carrier_typ = TInt(unsigned_ikind_for_carrier nbits, []) in
-        List.iter
-          (fun (name, pos, sz, signed, signed2) ->
-            if name <> "" then
-              Hashtbl.add bitfield_table
-                (id, name)
-                {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
-                 bf_pos = pos; bf_size = sz;
-                 bf_signed = signed; bf_signed_res = signed2})
-          bitfields;
-        { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
-        :: transf_members env id (count + 1) ml'
+        if nbits = 0 then
+          (* Lone zero-size bitfield: just ignore *)
+          transf_members env id count ml'
+        else begin
+          (* Create integer field of sufficient size for this bitfield group *)
+          let carrier = sprintf "__bf%d" count in
+          let carrier_typ = TInt(unsigned_ikind_for_carrier nbits, []) in
+          List.iter
+            (fun (name, pos, sz, signed, signed2) ->
+              if name <> "" then
+                Hashtbl.add bitfield_table
+                  (id, name)
+                  {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
+                   bf_pos = pos; bf_size = sz;
+                   bf_signed = signed; bf_signed_res = signed2})
+            bitfields;
+          { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
+          :: transf_members env id (count + 1) ml'
+        end
       end
 
 let transf_composite env su id ml =
