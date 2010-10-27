@@ -26,7 +26,7 @@ option) any later version:
     cfrontend/Csem.v          lib/Maps.v           
     cfrontend/Csyntax.v       lib/Parmov.v         
     common/AST.v              lib/Camlcoq.ml
-    common/Errors.v           
+    common/Errors.v           lib/Floataux.ml
     common/Events.v           
     all files in the runtime/ directory
     all files in the cparser/ directory 
