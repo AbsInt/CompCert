@@ -885,9 +885,10 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_stmt c map sfalse nfalse nd nexits ngoto nret rret ->
      tr_condition c map nil a ns ntrue nfalse ->
      tr_stmt c map (Sifthenelse a strue sfalse) ns nd nexits ngoto nret rret
-  | tr_Sloop: forall sbody ns nd nexits ngoto nret rret nloop,
-     tr_stmt c map sbody nloop ns nexits ngoto nret rret ->
+  | tr_Sloop: forall sbody ns nd nexits ngoto nret rret nloop nend,
+     tr_stmt c map sbody nloop nend nexits ngoto nret rret ->
      c!ns = Some(Inop nloop) ->
+     c!nend = Some(Inop nloop) ->
      tr_stmt c map (Sloop sbody) ns nd nexits ngoto nret rret
   | tr_Sblock: forall sbody ns nd nexits ngoto nret rret,
      tr_stmt c map sbody ns nd (nd :: nexits) ngoto nret rret ->
@@ -1294,7 +1295,7 @@ Proof.
   econstructor. 
   apply tr_stmt_incr with s1; auto. 
   eapply IHstmt; eauto with rtlg.
-  eauto with rtlg.
+  eauto with rtlg. eauto with rtlg. 
   (* Sblock *)
   econstructor. 
   eapply IHstmt; eauto with rtlg.

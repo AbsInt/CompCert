@@ -591,7 +591,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do n1 <- reserve_instr;
       do n2 <- transl_stmt map sbody n1 nexits ngoto nret rret;
       do xx <- update_instr n1 (Inop n2);
-      ret n1
+      add_instr (Inop n2)
   | Sblock sbody =>
       transl_stmt map sbody nd (nd :: nexits) ngoto nret rret
   | Sexit n =>

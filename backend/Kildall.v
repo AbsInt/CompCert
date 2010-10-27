@@ -344,14 +344,12 @@ Proof.
            ((st_in st) !! n) (L.lub (st_in st) !! n out).
   split.
   eapply L.ge_trans. apply L.ge_refl. apply H; auto.
-  eapply L.ge_compat. apply L.lub_commut. apply L.eq_refl. 
-  apply L.ge_lub_left. 
+  apply L.ge_lub_right. 
   auto.
 
   simpl. split.
   rewrite PMap.gss.
-  eapply L.ge_compat. apply L.lub_commut. apply L.eq_refl. 
-  apply L.ge_lub_left. 
+  apply L.ge_lub_right.
   intros. rewrite PMap.gso; auto.
 Qed.
 
@@ -506,8 +504,7 @@ Proof.
   elim H.
   elim H; intros.
   subst a. rewrite PMap.gss.
-  eapply L.ge_compat. apply L.lub_commut. apply L.eq_refl. 
-  apply L.ge_lub_left.
+  apply L.ge_lub_right.
   destruct a. rewrite PMap.gsspec. case (peq n p); intro.
   subst p. apply L.ge_trans with (start_state_in ep)!!n.
   apply L.ge_lub_left. auto.
@@ -1168,49 +1165,41 @@ End BBlock_solver.
   greatest node in the working list.  For backward analysis,
   we will similarly pick the smallest node in the working list. *)
 
-Require Import FSets.
-Require Import FSetAVL.
-Require Import Ordered.
-
-Module PositiveSet := FSetAVL.Make(OrderedPositive).
-Module PositiveSetFacts := FSetFacts.Facts(PositiveSet).
+Require Import Heaps.
 
 Module NodeSetForward <: NODE_SET.
-  Definition t := PositiveSet.t.
-  Definition add (n: positive) (s: t) : t := PositiveSet.add n s.
+  Definition t := PHeap.t.
+  Definition add (n: positive) (s: t) : t := PHeap.insert n s.
   Definition pick (s: t) :=
-    match PositiveSet.max_elt s with
-    | Some n => Some(n, PositiveSet.remove n s)
+    match PHeap.findMax s with
+    | Some n => Some(n, PHeap.deleteMax s)
     | None => None
     end.
   Definition initial (successors: PTree.t (list positive)) :=
-    PTree.fold (fun s pc scs => PositiveSet.add pc s) successors PositiveSet.empty.
-  Definition In := PositiveSet.In.
+    PTree.fold (fun s pc scs => PHeap.insert pc s) successors PHeap.empty.
+  Definition In := PHeap.In.
 
   Lemma add_spec:
     forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
   Proof.
-    intros. exact (PositiveSetFacts.add_iff s n n').
+    intros. rewrite PHeap.In_insert. unfold In. intuition.
   Qed.
     
   Lemma pick_none:
     forall s n, pick s = None -> ~In n s.
   Proof.
-    intros until n; unfold pick. caseEq (PositiveSet.max_elt s); intros.
+    intros until n; unfold pick. caseEq (PHeap.findMax s); intros.
     congruence.
-    apply PositiveSet.max_elt_3. auto.
+    apply PHeap.findMax_empty. auto.
   Qed.
 
   Lemma pick_some:
     forall s n s', pick s = Some(n, s') ->
     forall n', In n' s <-> n = n' \/ In n' s'.
   Proof.
-    intros until s'; unfold pick. caseEq (PositiveSet.max_elt s); intros.
-    inversion H0; clear H0; subst. 
-    split; intros. 
-    destruct (peq n n'). auto. right. apply PositiveSet.remove_2; assumption.
-    elim H0; intro. subst n'. apply PositiveSet.max_elt_1. auto. 
-    apply PositiveSet.remove_3 with n; assumption.
+    intros until s'; unfold pick. caseEq (PHeap.findMax s); intros.
+    inv H0.
+    generalize (PHeap.In_deleteMax s n n' H). unfold In. intuition.
     congruence.
   Qed.
 
@@ -1233,39 +1222,36 @@ Module NodeSetForward <: NODE_SET.
 End NodeSetForward.
 
 Module NodeSetBackward <: NODE_SET.
-  Definition t := PositiveSet.t.
-  Definition add (n: positive) (s: t) : t := PositiveSet.add n s.
+  Definition t := PHeap.t.
+  Definition add (n: positive) (s: t) : t := PHeap.insert n s.
   Definition pick (s: t) :=
-    match PositiveSet.min_elt s with
-    | Some n => Some(n, PositiveSet.remove n s)
+    match PHeap.findMin s with
+    | Some n => Some(n, PHeap.deleteMin s)
     | None => None
     end.
   Definition initial (successors: PTree.t (list positive)) :=
-    PTree.fold (fun s pc scs => PositiveSet.add pc s) successors PositiveSet.empty.
-  Definition In := PositiveSet.In.
+    PTree.fold (fun s pc scs => PHeap.insert pc s) successors PHeap.empty.
+  Definition In := PHeap.In.
 
   Lemma add_spec:
     forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
   Proof NodeSetForward.add_spec.
-    
+
   Lemma pick_none:
     forall s n, pick s = None -> ~In n s.
   Proof.
-    intros until n; unfold pick. caseEq (PositiveSet.min_elt s); intros.
+    intros until n; unfold pick. caseEq (PHeap.findMin s); intros.
     congruence.
-    apply PositiveSet.min_elt_3. auto.
+    apply PHeap.findMin_empty. auto.
   Qed.
 
   Lemma pick_some:
     forall s n s', pick s = Some(n, s') ->
     forall n', In n' s <-> n = n' \/ In n' s'.
   Proof.
-    intros until s'; unfold pick. caseEq (PositiveSet.min_elt s); intros.
-    inversion H0; clear H0; subst. 
-    split; intros. 
-    destruct (peq n n'). auto. right. apply PositiveSet.remove_2; assumption.
-    elim H0; intro. subst n'. apply PositiveSet.min_elt_1. auto. 
-    apply PositiveSet.remove_3 with n; assumption.
+    intros until s'; unfold pick. caseEq (PHeap.findMin s); intros.
+    inv H0.
+    generalize (PHeap.In_deleteMin s n n' H). unfold In. intuition.
     congruence.
   Qed.
 

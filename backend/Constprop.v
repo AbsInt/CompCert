@@ -87,17 +87,18 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     | _, Novalue => x
     | _, _ => Unknown
     end.
-  Lemma lub_commut: forall x y, eq (lub x y) (lub y x).
-  Proof.
-    unfold lub, eq; intros.
-    case (eq_dec x y); case (eq_dec y x); intros; try congruence.
-    destruct x; destruct y; auto.
-  Qed.
   Lemma ge_lub_left: forall x y, ge (lub x y) x.
   Proof.
     unfold lub; intros.
     case (eq_dec x y); intro.
     apply ge_refl. apply eq_refl.
+    destruct x; destruct y; unfold ge; tauto.
+  Qed.
+  Lemma ge_lub_right: forall x y, ge (lub x y) y.
+  Proof.
+    unfold lub; intros.
+    case (eq_dec x y); intro.
+    apply ge_refl. subst. apply eq_refl.
     destruct x; destruct y; unfold ge; tauto.
   Qed.
 End Approx.

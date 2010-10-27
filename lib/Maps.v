@@ -98,6 +98,13 @@ Module Type TREE.
     forall (A B: Type) (f: elt -> A -> B) (i: elt) (m: t A),
     get i (map f m) = option_map (f i) (get i m).
 
+  (** Same as [map], but the function does not receive the [elt] argument. *)
+  Variable map1:
+    forall (A B: Type), (A -> B) -> t A -> t B.
+  Hypothesis gmap1:
+    forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
+    get i (map1 f m) = option_map f (get i m).
+
   (** Applying a function pairwise to all data of two trees. *)
   Variable combine:
     forall (A: Type), (option A -> option A -> option A) -> t A -> t A -> t A.
@@ -490,6 +497,19 @@ Module PTree <: TREE.
     replace (f i) with (f (append xH i)).
     apply xgmap.
     rewrite append_neutral_l; auto.
+  Qed.
+
+  Fixpoint map1 (A B: Type) (f: A -> B) (m: t A) {struct m} : t B :=
+    match m with
+    | Leaf => Leaf
+    | Node l o r => Node (map1 f l) (option_map f o) (map1 f r)
+    end.
+
+  Theorem gmap1:
+    forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
+    get i (map1 f m) = option_map f (get i m).
+  Proof.
+    induction i; intros; destruct m; simpl; auto.
   Qed.
 
   Definition Node' (A: Type) (l: t A) (x: option A) (r: t A): t A :=
@@ -1091,13 +1111,13 @@ Module PMap <: MAP.
   Qed.
 
   Definition map (A B : Type) (f : A -> B) (m : t A) : t B :=
-    (f (fst m), PTree.map (fun _ => f) (snd m)).
+    (f (fst m), PTree.map1 f (snd m)).
 
   Theorem gmap:
     forall (A B: Type) (f: A -> B) (i: positive) (m: t A),
     get i (map f m) = f(get i m).
   Proof.
-    intros. unfold map. unfold get. simpl. rewrite PTree.gmap.
+    intros. unfold map. unfold get. simpl. rewrite PTree.gmap1.
     unfold option_map. destruct (PTree.get i (snd m)); auto.
   Qed.
 

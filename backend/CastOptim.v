@@ -136,12 +136,12 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     | Single, Single => Single
     | _, _ => Unknown
     end.
-  Lemma lub_commut: forall x y, eq (lub x y) (lub y x).
-  Proof.
-    unfold lub, eq; intros.
-    destruct x; destruct y; auto.
-  Qed.
   Lemma ge_lub_left: forall x y, ge (lub x y) x.
+  Proof.
+    unfold lub, ge; intros.
+    destruct x; destruct y; auto. 
+  Qed.
+  Lemma ge_lub_right: forall x y, ge (lub x y) y.
   Proof.
     unfold lub, ge; intros.
     destruct x; destruct y; auto. 

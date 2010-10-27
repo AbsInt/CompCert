@@ -368,7 +368,7 @@ Definition successors_instr (i: instruction) : list node :=
   end.
 
 Definition successors (f: function) : PTree.t (list node) :=
-  PTree.map (fun pc i => successors_instr i) f.(fn_code).
+  PTree.map1 successors_instr f.(fn_code).
 
 (** Transformation of a RTL function instruction by instruction.
   This applies a given transformation function to all instructions

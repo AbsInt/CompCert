@@ -118,7 +118,7 @@ Proof.
   intros approxs; intros.
   apply regs_match_approx_increasing with (transfer f pc approxs!!pc).
   eapply DS.fixpoint_solution; eauto.
-  unfold successors_list, successors. rewrite PTree.gmap. rewrite H0. auto.
+  unfold successors_list, successors. rewrite PTree.gmap1. rewrite H0. auto.
   auto.
   intros. rewrite PMap.gi. apply regs_match_approx_top. 
 Qed.

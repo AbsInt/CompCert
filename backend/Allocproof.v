@@ -165,7 +165,7 @@ Proof.
   apply agree_increasing with (live!!n).
   eapply DS.fixpoint_solution. unfold analyze in H; eauto.
   unfold RTL.successors, Kildall.successors_list. 
-  rewrite PTree.gmap. rewrite H0. simpl. auto.
+  rewrite PTree.gmap1. rewrite H0. simpl. auto.
   auto.
 Qed.
 

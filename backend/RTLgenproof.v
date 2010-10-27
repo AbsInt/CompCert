@@ -1069,7 +1069,7 @@ Proof.
   inv H2. eapply IHs2; eauto.
   (* loop *)
   intros. inversion H1; subst.
-  eapply IHs; eauto. econstructor; eauto.
+  eapply IHs; eauto. econstructor; eauto. econstructor; eauto.
   (* block *)
   intros. inv H1.
   eapply IHs; eauto. econstructor; eauto.
@@ -1215,6 +1215,7 @@ Proof.
   econstructor; split.
   left. apply plus_one. eapply exec_Inop; eauto. 
   econstructor; eauto. 
+  econstructor; eauto.
   econstructor; eauto.
 
   (* block *)

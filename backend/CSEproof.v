@@ -695,7 +695,7 @@ Proof.
   intros res FIXPOINT WF AT SUCC.
   assert (Numbering.ge res!!pc' (transfer f pc res!!pc)).
     eapply Solver.fixpoint_solution; eauto.
-    unfold successors_list, successors. rewrite PTree.gmap.
+    unfold successors_list, successors. rewrite PTree.gmap1.
     rewrite AT. auto.
   apply H.
   intros. rewrite PMap.gi. apply empty_numbering_satisfiable.

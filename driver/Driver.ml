@@ -356,6 +356,7 @@ let cmdline_actions =
   @ f_opt "madd" option_fmadd
 
 let _ =
+  Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
   Cparser.Machine.config := Cparser.Machine.ilp32ll64;
   Cparser.Builtins.set C2C.builtins;
   CPragmas.initialize();
