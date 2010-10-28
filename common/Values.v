@@ -117,13 +117,13 @@ Definition absf (v: val) : val :=
 
 Definition intoffloat (v: val) : val :=
   match v with
-  | Vfloat f => Vint (Float.intoffloat f)
+  | Vfloat f => match Float.intoffloat f with Some n => Vint n | None => Vundef end
   | _ => Vundef
   end.
 
 Definition intuoffloat (v: val) : val :=
   match v with
-  | Vfloat f => Vint (Float.intuoffloat f)
+  | Vfloat f => match Float.intuoffloat f with Some n => Vint n | None => Vundef end
   | _ => Vundef
   end.
 

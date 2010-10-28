@@ -19,10 +19,14 @@ let singleoffloat f =
   Int32.float_of_bits (Int32.bits_of_float f)
 
 let intoffloat f =
-  coqint_of_camlint (Int32.of_float f)
+  if f < 2147483648.0 (*2^31 *) && f > -2147483649.0 (* -2^31-1 *)
+  then Some (coqint_of_camlint (Int32.of_float f))
+  else None
 
 let intuoffloat f =
-  coqint_of_camlint (Int64.to_int32 (Int64.of_float f))
+  if f < 4294967296.0 (* 2^32 *) && f >= 0.0
+  then Some (coqint_of_camlint (Int64.to_int32 (Int64.of_float f)))
+  else None
 
 let floatofint i =
   Int32.to_float (camlint_of_coqint i)

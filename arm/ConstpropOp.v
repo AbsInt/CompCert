@@ -185,7 +185,7 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | Omulf, F n1 :: F n2 :: nil => F(Float.mul n1 n2)
   | Odivf, F n1 :: F n2 :: nil => F(Float.div n1 n2)
   | Osingleoffloat, F n1 :: nil => F(Float.singleoffloat n1)
-  | Ointoffloat, F n1 :: nil => I(Float.intoffloat n1)
+  | Ointoffloat, F n1 :: nil =>  match Float.intoffloat n1 with Some x => I x | None => Unknown end
   | Ofloatofint, I n1 :: nil => F(Float.floatofint n1)
   | Ofloatofintu, I n1 :: nil => F(Float.floatofintu n1)
   | Ocmp c, vl =>
@@ -560,7 +560,7 @@ Definition eval_static_operation (op: operation) (vl: list approx) :=
   | eval_static_operation_case47 n1 =>
       F(Float.singleoffloat n1)
   | eval_static_operation_case48 n1 =>
-      I(Float.intoffloat n1)
+      match Float.intoffloat n1 with Some x => I x | None => Unknown end
   | eval_static_operation_case49 n1 =>
       F(Float.floatofint n1)
   | eval_static_operation_case51 c vl =>

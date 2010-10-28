@@ -220,8 +220,8 @@ Proof.
   apply eval_negf; auto.
   apply eval_absf; auto.
   apply eval_singleoffloat; auto.
-  apply eval_intoffloat; auto.
-  apply eval_intuoffloat; auto.
+  remember (Float.intoffloat f) as oi; destruct oi; inv H0. eapply eval_intoffloat; eauto.
+  remember (Float.intuoffloat f) as oi; destruct oi; inv H0. eapply eval_intuoffloat; eauto.
   apply eval_floatofint; auto.
   apply eval_floatofintu; auto.
 Qed.

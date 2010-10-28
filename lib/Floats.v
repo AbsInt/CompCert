@@ -31,13 +31,15 @@ Parameter zero: float.                  (**r the float [+0.0] *)
 
 Axiom eq_dec: forall (f1 f2: float), {f1 = f2} + {f1 <> f2}.
 
+Parameter of_Z: Z -> float.             (**r conversion from exact integers, for specification *)
+
 (** Arithmetic operations *)
 
 Parameter neg: float -> float.          (**r opposite (change sign) *)
 Parameter abs: float -> float.          (**r absolute value (set sign to [+]) *)
 Parameter singleoffloat: float -> float. (**r conversion to single precision *)
-Parameter intoffloat: float -> int.     (**r conversion to signed 32-bit int *)
-Parameter intuoffloat: float -> int.    (**r conversion to unsigned 32-bit int *)
+Parameter intoffloat: float -> option int. (**r conversion to signed 32-bit int *)
+Parameter intuoffloat: float -> option int. (**r conversion to unsigned 32-bit int *)
 Parameter floatofint: int -> float.     (**r conversion from signed 32-bit int *)
 Parameter floatofintu: int -> float.    (**r conversion from unsigned 32-bit int *)
 
@@ -116,6 +118,18 @@ Axiom bits_of_singleoffloat:
 Axiom singleoffloat_of_bits:
   forall b, singleoffloat (single_of_bits b) = single_of_bits b.
 
+(** Range of conversions from floats to ints. *)
+
+Axiom intuoffloat_defined:
+  forall f, 
+  cmp Clt f (of_Z Int.modulus) = true /\ cmp Cge f zero = true
+  <-> exists n, intuoffloat f = Some n.
+
+Axiom intoffloat_defined:
+  forall f, 
+  cmp Clt f (of_Z Int.half_modulus) = true /\ cmp Cgt f (of_Z (- Int.half_modulus - 1)) = true
+  <-> exists n, intoffloat f = Some n.
+
 (** Conversions between floats and unsigned ints can be defined
   in terms of conversions between floats and signed ints.
   (Most processors provide only the latter, forcing the compiler
@@ -140,11 +154,16 @@ Axiom intuoffloat_intoffloat_1:
   intuoffloat x = intoffloat x.
 
 Axiom intuoffloat_intoffloat_2:
-  forall x,
+  forall x n,
   cmp Clt x (floatofintu ox8000_0000) = false ->
-  intuoffloat x =
-  Int.add (intoffloat (sub x (floatofintu ox8000_0000)))
-          ox8000_0000.
+  intuoffloat x = Some n ->
+  intoffloat (sub x (floatofintu ox8000_0000)) = Some (Int.sub n ox8000_0000).
+
+Axiom intuoffloat_intoffloat_3:
+  forall x n,
+  cmp Clt x (floatofintu ox8000_0000) = false ->
+  intoffloat (sub x (floatofintu ox8000_0000)) = Some n ->
+  intuoffloat x = Some (Int.add n ox8000_0000).
 
 (** Conversions from ints to floats can be defined as bitwise manipulations
   over the in-memory representation.  This is what the PowerPC port does.

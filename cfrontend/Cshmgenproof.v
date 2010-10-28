@@ -361,8 +361,18 @@ Proof.
   destruct sg; econstructor; eauto. 
 Qed.
 
+Lemma make_intoffloat_correct:
+  forall e le m a sg f i,
+  eval_expr ge e le m a (Vfloat f) ->
+  cast_float_int sg f = Some i ->
+  eval_expr ge e le m (make_intoffloat a sg) (Vint i).
+Proof.
+  unfold cast_float_int, make_intoffloat; intros.
+  destruct sg; econstructor; eauto; simpl; rewrite H0; auto.
+Qed.
+
 Hint Resolve make_intconst_correct make_floatconst_correct
-             make_floatofint_correct
+             make_floatofint_correct make_intoffloat_correct
              eval_Eunop eval_Ebinop: cshm.
 Hint Extern 2 (@eq trace _ _) => traceEq: cshm.
 
@@ -650,7 +660,8 @@ Proof.
   (* cast_int_int *)
     destruct sz2; destruct si2; repeat econstructor; eauto with cshm.
   (* cast_float_int *)
-    destruct sz2; destruct si2; unfold make_intoffloat; repeat econstructor; eauto with cshm; simpl; auto.
+    exploit make_intoffloat_correct; eauto. intros A.
+    destruct sz2; destruct si2; eauto with cshm.
   (* cast_int_float *)
     destruct sz2; destruct si1; unfold make_floatofint; repeat econstructor; eauto with cshm; simpl; auto.
   (* cast_float_float *)

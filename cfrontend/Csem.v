@@ -49,7 +49,7 @@ Definition cast_int_float (si : signedness) (i: int) : float :=
   | Unsigned => Float.floatofintu i
   end.
 
-Definition cast_float_int (si : signedness) (f: float) : int :=
+Definition cast_float_int (si : signedness) (f: float) : option int :=
   match si with
   | Signed => Float.intoffloat f
   | Unsigned => Float.intuoffloat f
@@ -75,9 +75,10 @@ Inductive cast : val -> type -> type -> val -> Prop :=
   | cast_ii:   forall i sz2 sz1 si1 si2,            (**r int to int  *)
       cast (Vint i) (Tint sz1 si1) (Tint sz2 si2)
            (Vint (cast_int_int sz2 si2 i))
-  | cast_fi:   forall f sz1 sz2 si2,                (**r float to int *)
+  | cast_fi:   forall f sz1 sz2 si2 i,              (**r float to int *)
+      cast_float_int si2 f = Some i ->
       cast (Vfloat f) (Tfloat sz1) (Tint sz2 si2)
-           (Vint (cast_int_int sz2 si2 (cast_float_int si2 f)))
+           (Vint (cast_int_int sz2 si2 i))
   | cast_if:   forall i sz1 sz2 si1,                (**r int to float  *)
       cast (Vint i) (Tint sz1 si1) (Tfloat sz2)
           (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))

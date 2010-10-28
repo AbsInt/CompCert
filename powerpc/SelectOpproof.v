@@ -847,28 +847,37 @@ Theorem eval_absf:
 Proof. intros; unfold absf; EvalOp. Qed.
 
 Theorem eval_intoffloat:
-  forall le a x,
+  forall le a x n,
   eval_expr ge sp e m le a (Vfloat x) ->
-  eval_expr ge sp e m le (intoffloat a) (Vint (Float.intoffloat x)).
-Proof. intros; unfold intoffloat; EvalOp. Qed.
+  Float.intoffloat x = Some n ->
+  eval_expr ge sp e m le (intoffloat a) (Vint n).
+Proof.
+  intros; unfold intoffloat; EvalOp. simpl. rewrite H0; auto.
+Qed.
 
 Theorem eval_intuoffloat:
-  forall le a x,
+  forall le a x n,
   eval_expr ge sp e m le a (Vfloat x) ->
-  eval_expr ge sp e m le (intuoffloat a) (Vint (Float.intuoffloat x)).
+  Float.intuoffloat x = Some n ->
+  eval_expr ge sp e m le (intuoffloat a) (Vint n).
 Proof.
   intros. unfold intuoffloat. 
   econstructor. eauto. 
-  set (fm := Float.floatofintu Float.ox8000_0000).
-  assert (eval_expr ge sp e m (Vfloat x :: le) (Eletvar O) (Vfloat x)). constructor. auto. 
+  set (im := Int.repr Int.half_modulus).
+  set (fm := Float.floatofintu im).
+  assert (eval_expr ge sp e m (Vfloat x :: le) (Eletvar O) (Vfloat x)).
+    constructor. auto. 
   apply eval_Econdition with (v1 := Float.cmp Clt x fm).
   econstructor. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
   simpl. auto.
   caseEq (Float.cmp Clt x fm); intros.
-  rewrite Float.intuoffloat_intoffloat_1; auto.
-  EvalOp.
-  rewrite Float.intuoffloat_intoffloat_2; auto.
-  apply eval_addimm. apply eval_intoffloat. apply eval_subf; auto. EvalOp.
+  rewrite Float.intuoffloat_intoffloat_1 in H0; auto.
+  EvalOp. simpl. rewrite H0; auto.
+  exploit Float.intuoffloat_intoffloat_2; eauto. intro EQ.
+  replace n with (Int.add (Int.sub n Float.ox8000_0000) Float.ox8000_0000).
+  apply eval_addimm. eapply eval_intoffloat; eauto.
+  apply eval_subf; auto. EvalOp.
+  rewrite Int.sub_add_opp. rewrite Int.add_assoc. apply Int.add_zero. 
 Qed.
 
 Theorem eval_floatofint:

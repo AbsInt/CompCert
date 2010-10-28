@@ -30,6 +30,7 @@ Extract Inlined Constant Floats.float => "float".
 Extract Constant Floats.Float.zero   => "0.".
 Extract Constant Floats.Float.neg => "( ~-. )".
 Extract Constant Floats.Float.abs => "abs_float".
+Extract Constant Floats.Float.of_Z => "fun x -> assert false".
 Extract Constant Floats.Float.singleoffloat => "Floataux.singleoffloat".
 Extract Constant Floats.Float.intoffloat => "Floataux.intoffloat".
 Extract Constant Floats.Float.intuoffloat => "Floataux.intuoffloat".

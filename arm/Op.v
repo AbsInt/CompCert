@@ -281,7 +281,7 @@ Definition eval_operation
   | Omulf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.mul f1 f2))
   | Odivf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.div f1 f2))
   | Osingleoffloat, v1 :: nil => Some (Val.singleoffloat v1)
-  | Ointoffloat, Vfloat f1 :: nil => Some (Vint (Float.intoffloat f1))
+  | Ointoffloat, Vfloat f1 :: nil => option_map Vint (Float.intoffloat f1)
   | Ofloatofint, Vint n1 :: nil => Some (Vfloat (Float.floatofint n1))
   | Ocmp c, _ =>
       match eval_condition c vl with
@@ -547,6 +547,7 @@ Proof.
   destruct (Int.ltu i (Int.repr 31)).
   injection H0; intro; subst v; exact I. discriminate.
   destruct v0; exact I.
+  destruct (Float.intoffloat f); simpl in H0; inv H0. exact I.
   destruct (eval_condition c vl). 
   destruct b; injection H0; intro; subst v; exact I.
   discriminate.
@@ -718,6 +719,7 @@ Proof.
   unfold Int.ltu. rewrite zlt_true. congruence. 
   assert (Int.unsigned (Int.repr 31) < Int.unsigned Int.iwordsize). vm_compute; auto.
   omega. discriminate.
+  destruct (Float.intoffloat f); simpl in H; inv H. auto.
   caseEq (eval_condition c vl); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
   eapply eval_condition_weaken; eauto.
@@ -819,6 +821,7 @@ Proof.
   destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
   destruct (Int.ltu i (Int.repr 31)); inv H0; TrivialExists.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
+  destruct (Float.intoffloat f); simpl in *; inv H0. TrivialExists.
   caseEq (eval_condition c vl1); intros. rewrite H1 in H0. 
   rewrite (eval_condition_lessdef c H H1).
   destruct b; inv H0; TrivialExists.

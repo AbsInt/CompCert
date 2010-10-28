@@ -1250,8 +1250,8 @@ Proof.
   inv H0; inv H; TrivialOp.
   inv H0; inv H; TrivialOp.
   inv H0; inv H; TrivialOp.
-  inv H0; inv H; TrivialOp.
-  inv H0; inv H; TrivialOp.
+  inv H0; inv H. destruct (Float.intoffloat f0); simpl in H1; inv H1. TrivialOp.
+  inv H0; inv H. destruct (Float.intuoffloat f0); simpl in H1; inv H1. TrivialOp.
   inv H0; inv H; TrivialOp.
   inv H0; inv H; TrivialOp.
 Qed.

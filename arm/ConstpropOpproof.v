@@ -141,6 +141,8 @@ Proof.
 
   rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
 
+  inv H4. destruct (Float.intoffloat f); simpl in H0; inv H0. red; auto.
+
   caseEq (eval_static_condition c vl0).
   intros. generalize (eval_static_condition_correct _ _ _ _ H H1).
   intro. rewrite H2 in H0. 

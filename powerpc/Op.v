@@ -247,7 +247,7 @@ Definition eval_operation
   | Osingleoffloat, v1 :: nil =>
       Some (Val.singleoffloat v1)
   | Ointoffloat, Vfloat f1 :: nil => 
-      Some (Vint (Float.intoffloat f1))
+      option_map Vint (Float.intoffloat f1)
   | Ofloatofwords, Vint i1 :: Vint i2 :: nil =>
       Some (Vfloat (Float.from_words i1 i2))
   | Ocmp c, _ =>
@@ -515,6 +515,7 @@ Proof.
   destruct (Int.ltu i0 Int.iwordsize).
   injection H0; intro; subst v; exact I. discriminate.
   destruct v0; exact I.
+  destruct (Float.intoffloat f); simpl in H0; inv H0. exact I.
   destruct (eval_condition c vl). 
   destruct b; injection H0; intro; subst v; exact I.
   discriminate.
@@ -678,6 +679,7 @@ Proof.
   destruct (Int.ltu i Int.iwordsize); congruence.
   destruct (Int.ltu i Int.iwordsize); congruence.
   destruct (Int.ltu i0 Int.iwordsize); congruence.
+  destruct (Float.intoffloat f); inv H. auto.
   caseEq (eval_condition c vl); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
   eapply eval_condition_weaken; eauto.
@@ -782,6 +784,7 @@ Proof.
   destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
   destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
+  destruct (Float.intoffloat f); simpl in *; inv H0. TrivialExists.
   caseEq (eval_condition c vl1); intros. rewrite H1 in H0. 
   rewrite (eval_condition_lessdef c H H1).
   destruct b; inv H0; TrivialExists.
