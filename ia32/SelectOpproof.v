@@ -894,8 +894,8 @@ Proof.
   econstructor. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
   simpl. auto.
   caseEq (Float.cmp Clt x fm); intros.
-  rewrite Float.intuoffloat_intoffloat_1 in H0; auto.
-  EvalOp. simpl. rewrite H0; auto.
+  exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
+  EvalOp. simpl. rewrite EQ; auto.
   exploit Float.intuoffloat_intoffloat_2; eauto. intro EQ.
   replace n with (Int.add (Int.sub n Float.ox8000_0000) Float.ox8000_0000).
   apply eval_addimm. eapply eval_intoffloat; eauto.
