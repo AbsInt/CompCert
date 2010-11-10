@@ -133,21 +133,23 @@ let transf_assign env lhs rhs =
 
 (* Detect invariant l-values *)
 
-let rec invariant_lvalue e =
+let not_volatile env ty = not (List.mem AVolatile (attributes_of_type env ty))
+
+let rec invariant_lvalue env e =
   match e.edesc with
   | EVar _ -> true
-  | EUnop(Oderef, {edesc = EVar _}) -> true   (* to check *)
-  | EUnop(Odot _, e1) -> invariant_lvalue e1
+  | EUnop(Oderef, {edesc = EVar _; etyp = ty}) -> not_volatile env ty
+  | EUnop(Odot _, e1) -> invariant_lvalue env e1
   | _ -> false
 
 (* Bind a l-value to a temporary variable if it is not invariant. *)
 
-let rec bind_lvalue e fn =
+let rec bind_lvalue env e fn =
   match e.edesc with
   | EBinop(Ocomma, e1, e2, _) ->
-      ecomma e1 (bind_lvalue e2 fn)
+      ecomma e1 (bind_lvalue env e2 fn)
   | _ ->
-      if invariant_lvalue e then
+      if invariant_lvalue env e then
         fn e
       else begin
         let tmp = new_temp (TPtr(e.etyp, [])) in
@@ -162,8 +164,8 @@ type context = Val | Effects
 let rec transf_expr env ctx e =
   match e.edesc with
   | EBinop(Oassign, lhs, rhs, _) when is_composite_type env lhs.etyp ->
-      bind_lvalue (transf_expr env Val lhs) (fun l ->
-      bind_lvalue (transf_expr env Val rhs) (fun r ->
+      bind_lvalue env (transf_expr env Val lhs) (fun l ->
+      bind_lvalue env (transf_expr env Val rhs) (fun r ->
         let e' = transf_assign env l r in
         if ctx = Val then ecomma e' l else e'))
   | EConst c -> e
