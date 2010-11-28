@@ -360,7 +360,7 @@ let print_instruction oc labels = function
   | Pmovd_rf(rd, r1) ->
       fprintf oc "	movd	%a, %a\n" freg r1 ireg rd
   | Pmovsd_ff(rd, r1) ->
-      fprintf oc "	movsd	%a, %a\n" freg r1 freg rd
+      fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
   | Pmovsd_fi(rd, n) ->
       let b = Int64.bits_of_float n in
       if b = 0L then (* +0.0 *)
