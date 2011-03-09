@@ -239,7 +239,7 @@ let convertInt n = coqint_of_camlint(Int64.to_int32 n)
 
 let convertIkind = function
   | C.IBool -> unsupported "'_Bool' type"; (Unsigned, I8)
-  | C.IChar -> (Unsigned, I8)
+  | C.IChar -> ((if Configuration.signed_char then Signed else Unsigned), I8)
   | C.ISChar -> (Signed, I8)
   | C.IUChar -> (Unsigned, I8)
   | C.IInt -> (Signed, I32)
@@ -275,12 +275,15 @@ let convertTyp env t =
         let (sg, sz) = convertIkind ik in Tint(sz, sg)
     | C.TFloat(fk, a) ->
         Tfloat(convertFkind fk)
-    | C.TPtr(C.TStruct(id, _), _) when List.mem id seen ->
-        Tcomp_ptr(intern_string ("struct " ^ id.name))
-    | C.TPtr(C.TUnion(id, _), _) when List.mem id seen ->
-        Tcomp_ptr(intern_string ("union " ^ id.name))
     | C.TPtr(ty, a) ->
-        Tpointer(convertTyp seen ty)
+        begin match Cutil.unroll env ty with
+        | C.TStruct(id, _) when List.mem id seen ->
+            Tcomp_ptr(intern_string ("struct " ^ id.name))
+        | C.TUnion(id, _) when List.mem id seen ->
+            Tcomp_ptr(intern_string ("union " ^ id.name))
+        | _ ->
+            Tpointer(convertTyp seen ty)
+        end
     | C.TArray(ty, None, a) ->
         (* Cparser verified that the type ty[] occurs only in
            contexts that are safe for Clight, so just treat as ty[0]. *)
@@ -810,7 +813,6 @@ let convertInit env ty init =
       | Some(C.CEnum _) ->
           error "enum tag after constant folding"
       | None ->
-          Format.printf "%a@." Cprint.exp (0, e);
           error "initializer is not a compile-time constant"
       end
   | Init_array il ->

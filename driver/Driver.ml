@@ -357,7 +357,9 @@ let cmdline_actions =
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
-  Cparser.Machine.config := Cparser.Machine.ilp32ll64;
+  Cparser.Machine.config :=
+    { Cparser.Machine.ilp32ll64
+      with Cparser.Machine.char_signed = Configuration.signed_char };
   Cparser.Builtins.set C2C.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
