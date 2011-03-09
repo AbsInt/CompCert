@@ -243,7 +243,7 @@ Proof.
   apply Regset.add_2; apply Regset.add_2; tauto.
 
   intros. rewrite SetRegReg.fold_1. apply H. 
-  intuition. left. apply SetRegReg.elements_1. auto.
+  intuition. 
 Qed.
 
 Lemma in_setregreg_fold':
@@ -276,7 +276,7 @@ Proof.
   apply Regset.add_2; auto.
 
   intros. rewrite SetRegMreg.fold_1. apply H with mr2. 
-  intuition. left. apply SetRegMreg.elements_1. auto.
+  intuition.
 Qed.
 
 Lemma all_interf_regs_correct_1:

@@ -658,7 +658,7 @@ Lemma check_coloring_3_correct:
 Proof.
   unfold check_coloring_3; intros.
   exploit Regset.for_all_2; eauto.
-  red; intros. hnf in H1. congruence.
+  red; intros. congruence.
   apply Regset.mem_2. eauto.
   simpl. intro. elim (andb_prop _ _ H1); intros.
   split. apply loc_is_acceptable_correct; auto.

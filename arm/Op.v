@@ -128,6 +128,7 @@ Inductive addressing: Type :=
 
 Definition eq_shift (x y: shift): {x=y} + {x<>y}.
 Proof.
+  revert x y.
   generalize Int.eq_dec; intro.
   assert (forall (x y: shift_amount), {x=y}+{x<>y}).
   destruct x as [x Px]. destruct y as [y Py]. destruct (H x y).
@@ -846,7 +847,7 @@ Definition is_shift_amount_aux (n: int) :
   { Int.ltu n Int.iwordsize = true } +
   { Int.ltu n Int.iwordsize = false }.
 Proof.
-  intro. case (Int.ltu n Int.iwordsize). left; auto. right; auto.
+   case (Int.ltu n Int.iwordsize). left; auto. right; auto.
 Defined.
 
 Definition is_shift_amount (n: int) : option shift_amount :=

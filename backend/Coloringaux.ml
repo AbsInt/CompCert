@@ -169,13 +169,12 @@ end
 
 module IntSet = Set.Make(struct
   type t = int
-  let compare x y =
-    if x < y then -1 else if x > y then 1 else 0
+  let compare (x:int) (y:int) = compare x y
 end)
 
 module IntPairSet = Set.Make(struct
   type t = int * int
-  let compare (x1, y1) (x2, y2) =
+  let compare ((x1, y1): (int * int)) (x2, y2) =
     if x1 < x2 then -1 else
     if x1 > x2 then 1 else
     if y1 < y2 then -1 else

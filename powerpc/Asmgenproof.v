@@ -776,16 +776,16 @@ Proof.
   unfold rs1. rewrite nextinstr_inv; auto with ppcgen. auto. congruence.
   intros [rs2 [U [V W]]].
   exists rs2; split.
-  apply exec_straight_step with rs1 m'. 
+  apply exec_straight_step with rs1 m'.
   simpl. unfold load1. simpl. rewrite gpr_or_zero_not_zero.
   rewrite <- (sp_val _ _ _ AG). rewrite A. auto. congruence. auto. 
   auto.
   assert (agree (Regmap.set IT1 Vundef ms) sp rs1).
-  unfold rs1. eauto with ppcgen.
+  unfold rs1. change (IR GPR11) with (preg_of IT1).  auto with ppcgen. 
   apply agree_exten_2 with (rs1#(preg_of dst) <- v').
-  auto with ppcgen. 
-  intros. unfold Pregmap.set. destruct (PregEq.eq r (preg_of dst)). 
-  congruence. auto. 
+  auto with ppcgen.
+  intros. unfold Pregmap.set. destruct (PregEq.eq r (preg_of dst)).
+  congruence. auto.
 Qed.
 
 Lemma exec_Mop_prop:

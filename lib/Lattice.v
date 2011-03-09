@@ -64,11 +64,11 @@ Set Implicit Arguments.
 
 Module LPMap(L: SEMILATTICE_WITH_TOP) <: SEMILATTICE_WITH_TOP.
 
-Inductive t_ : Type :=
-  | Bot_except: PTree.t L.t -> t_
-  | Top_except: PTree.t L.t -> t_.
+Inductive t' : Type :=
+  | Bot_except: PTree.t L.t -> t'
+  | Top_except: PTree.t L.t -> t'.
 
-Definition t: Type := t_.
+Definition t: Type := t'.
 
 Definition get (p: positive) (x: t) : L.t :=
   match x with
@@ -611,12 +611,12 @@ End LFSet.
 
 Module LFlat(X: EQUALITY_TYPE) <: SEMILATTICE_WITH_TOP.
 
-Inductive t_ : Type :=
-  | Bot: t_
-  | Inj: X.t -> t_
-  | Top: t_.
+Inductive t' : Type :=
+  | Bot: t'
+  | Inj: X.t -> t'
+  | Top: t'.
 
-Definition t : Type := t_.
+Definition t : Type := t'.
 
 Definition eq (x y: t) := (x = y).
 Definition eq_refl: forall x, eq x x := (@refl_equal t).

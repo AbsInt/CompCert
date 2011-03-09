@@ -30,7 +30,7 @@ all_gcc: $(PROGS:%=%.gcc)
 %.gcc: %.c
 	$(CC) $(CFLAGS) -o $*.gcc $*.c $(LIBS)
 
-test_compcert:
+test:
 	@for i in $(PROGS); do \
 	   if ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \
@@ -51,7 +51,7 @@ time_gcc:
 	   echo -n "$$i: "; $(TIME) ./$$i.gcc; \
          done
 
-time_compcert:
+time:
 	@for i in $(PROGS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
          done

@@ -9,6 +9,8 @@ OBJS=memory.o gmllexer.o gmlparser.o eval.o \
   arrays.o vector.o matrix.o object.o intersect.o surface.o light.o \
   simplify.o render.o main.o
 
+all: render
+
 render: $(OBJS)
 	$(CC) $(CFLAGS) -o render $(OBJS) $(LIBS)
 

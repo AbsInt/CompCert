@@ -248,16 +248,13 @@ Next Obligation.
   destruct H2. congruence. auto. 
 Qed.
 Next Obligation.
-  elim wildcard'0. intros y [A B]. exists y; split; auto. omega.
+  exists wildcard'0; split; auto. omega.
 Qed.
 Next Obligation.
   exists (hi - 1); split; auto. omega.
 Qed.
 Next Obligation.
   omegaContradiction.
-Qed.
-Next Obligation.
-  apply Zwf_well_founded.
 Defined.
 
 End FORALL.

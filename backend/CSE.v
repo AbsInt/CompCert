@@ -57,15 +57,7 @@ Definition eq_valnum: forall (x y: valnum), {x=y}+{x<>y} := peq.
 
 Definition eq_list_valnum (x y: list valnum) : {x=y}+{x<>y}.
 Proof.
-  induction x; intros; case y; intros.
-  left; auto.
-  right; congruence.
-  right; congruence.
-  case (eq_valnum a v); intros.
-  case (IHx l); intros.
-  left; congruence.
-  right; congruence.
-  right; congruence.
+  decide equality. apply eq_valnum.
 Qed.
 
 Definition eq_rhs (x y: rhs) : {x=y}+{x<>y}.

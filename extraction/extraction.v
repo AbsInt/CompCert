@@ -23,7 +23,7 @@ Extract Inductive unit => "unit" [ "()" ].
 Extract Inductive bool => "bool" [ "true" "false" ].
 Extract Inductive sumbool => "bool" [ "true" "false" ].
 Extract Inductive option => "option" [ "Some" "None" ].
-Extract Inductive List.list => "list" [ "[]" "(::)" ].
+Extract Inductive list => "list" [ "[]" "(::)" ].
 
 (* Float *)
 Extract Inlined Constant Floats.float => "float".
@@ -52,6 +52,9 @@ Extract Constant Memdata.big_endian => "Memdataaux.big_endian".
 (* Memory - work around an extraction bug. *)
 Extraction NoInline Memory.Mem.valid_pointer.
 
+(* Errors *)
+Extraction Inline Errors.bind Errors.bind2.
+
 (* Iteration *)
 Extract Constant Iteration.dependent_description' =>
   "fun x -> assert false".
@@ -64,6 +67,7 @@ Extract Constant Iteration.GenIter.iterate =>
 (* RTLgen *)
 Extract Constant RTLgen.compile_switch => "RTLgenaux.compile_switch".
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".
+Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 
 (* RTLtyping *)
 Extract Constant RTLtyping.infer_type_environment => "RTLtypingaux.infer_type_environment".
@@ -73,6 +77,9 @@ Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
 
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
+
+(* SimplExpr *)
+Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
 
 (* Compiler *)
 Extract Constant Compiler.print_Csyntax => "PrintCsyntax.print_if".
@@ -84,12 +91,6 @@ Extract Constant Compiler.print_RTL_castopt => "PrintRTL.print_castopt".
 Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
 Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
 Extract Constant Compiler.print_LTLin => "PrintLTLin.print_if".
-
-(* Suppression of stupidly big equality functions *)
-Extract Constant Op.eq_operation => "fun (x: operation) (y: operation) -> x = y".
-Extract Constant Op.eq_addressing => "fun (x: addressing) (y: addressing) -> x = y".
-(*Extract Constant CSE.eq_rhs => "fun (x: rhs) (y: rhs) -> x = y".*)
-Extract Constant Machregs.mreg_eq => "fun (x: mreg) (y: mreg) -> x = y".
 
 (* Processor-specific extraction directives *)
 

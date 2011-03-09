@@ -635,26 +635,22 @@ Next Obligation.
   red. auto.
 Qed.
 Next Obligation.
-  destruct (find_x (exist (fun a' : elt => order (m uf) a' a) a'
-                   (find_x_obligation_1 a find_x a' Heq_anonymous)))
+  (* a <> b*)
+  destruct (find_x a')
   as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
   apply repr_some_diff. auto.
 Qed.
 Next Obligation.
-  destruct (find_x (exist (fun a' : elt => order (m uf) a' a) a'
-                   (find_x_obligation_1 a find_x a' Heq_anonymous)))
-  as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
+  destruct (find_x a') as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
   rewrite B. apply repr_some. auto.
 Qed.
 Next Obligation.
   split.
-  destruct (find_x (exist (fun a' : elt => order (m uf) a' a) a'
-                   (find_x_obligation_1 a find_x a' Heq_anonymous)))
+  destruct (find_x a')
   as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0.
   symmetry. apply repr_some. auto.
   intros. rewrite repr_compress. 
-  destruct (find_x (exist (fun a' : elt => order (m uf) a' a) a'
-                   (find_x_obligation_1 a find_x a' Heq_anonymous)))
+  destruct (find_x a')
   as [[b' uf''] [A B]]. simpl in *. inv Heq_anonymous0. auto.
 Qed.
 Next Obligation.

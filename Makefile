@@ -95,7 +95,6 @@ proof: $(FILES:.v=.vo)
 extraction:
 	rm -f extraction/*.ml extraction/*.mli
 	$(COQEXEC) extraction/extraction.v
-	cd extraction && ./fixextract
 
 ccomp: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \

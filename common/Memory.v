@@ -62,7 +62,7 @@ Definition perm_order' (po: option permission) (p: permission) :=
   | None => False
  end.
 
-Record mem_ : Type := mkmem {
+Record mem' : Type := mkmem {
   mem_contents: block -> Z -> memval;
   mem_access: block -> Z -> option permission;
   bounds: block -> Z * Z;
@@ -73,7 +73,7 @@ Record mem_ : Type := mkmem {
   noread_undef: forall b ofs,  perm_order' (mem_access b ofs) Readable \/ mem_contents b ofs = Undef
 }.
 
-Definition mem := mem_.
+Definition mem := mem'.
 
 Lemma mkmem_ext:
  forall cont1 cont2 acc1 acc2 bound1 bound2 next1 next2 
@@ -2397,7 +2397,7 @@ Qed.
   the [Vundef] values stored in [m1] by more defined values stored
   in [m2] at the same locations. *)
 
-Record extends_ (m1 m2: mem) : Prop :=
+Record extends' (m1 m2: mem) : Prop :=
   mk_extends {
     mext_next: nextblock m1 = nextblock m2;
     mext_inj:  mem_inj inject_id m1 m2
@@ -2406,7 +2406,7 @@ Record extends_ (m1 m2: mem) : Prop :=
 *)
   }.
 
-Definition extends := extends_.
+Definition extends := extends'.
 
 Theorem extends_refl:
   forall m, extends m m.
@@ -2645,7 +2645,7 @@ Qed.
 - the offsets [delta] are representable with signed machine integers.
 *)
 
-Record inject_ (f: meminj) (m1 m2: mem) : Prop :=
+Record inject' (f: meminj) (m1 m2: mem) : Prop :=
   mk_inject {
     mi_inj:
       mem_inj f m1 m2;
@@ -2666,7 +2666,7 @@ Record inject_ (f: meminj) (m1 m2: mem) : Prop :=
       (Int.min_signed <= low_bound m2 b' /\ high_bound m2 b' <= Int.max_signed)
   }.
 
-Definition inject := inject_.
+Definition inject := inject'.
 
 Hint Local Resolve mi_mappedblocks mi_range_offset: mem.
 

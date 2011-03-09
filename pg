@@ -1,0 +1,23 @@
+#!/bin/sh
+# Start Proof General with the right -I options
+# Use the Makefile to rebuild dependencies if needed
+# Recompile the modified file after coqide editing
+
+PWD=`pwd`
+ARCH=$PWD/`sed -n -e 's/^ARCH=//p' Makefile.config`
+VARIANT=$ARCH/`sed -n -e 's/^VARIANT=//p' Makefile.config`
+
+
+make -q ${1}o || {
+  make -n ${1}o | grep -v "\\b${1}\\b" | \
+  (while read cmd; do
+    $cmd || exit 2
+   done)
+}
+COQPROGNAME="coqtop"
+COQPROGARGS="\"-I\" \"$PWD/lib\" \"-I\" \"$PWD/common\" \"-I\" \"$VARIANT\" \"-I\" \"$ARCH\" \"-I\" \"$PWD/backend\" \"-I\" \"$PWD/cfrontend\""
+
+
+emacs --eval "(setq coq-prog-name \"$COQPROGNAME\")" \
+ --eval "(setq coq-prog-args '($COQPROGARGS))" $1 \
+&& make ${1}o

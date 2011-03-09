@@ -1017,7 +1017,7 @@ Lemma split_move_charact:
 Proof.
   unfold no_read. intros m r. functional induction (split_move m r).
   red; simpl. tauto.
-  rewrite _x. split. reflexivity. simpl;auto.
+  split. reflexivity. simpl; auto.
   rewrite e1 in IHo. simpl. intuition.
   rewrite e1 in IHo. destruct IHo. split. rewrite H. reflexivity.
   simpl. intuition.
