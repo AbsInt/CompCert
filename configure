@@ -70,7 +70,6 @@ case "$target" in
     arch="powerpc"
     variant="macosx"
     system="macosx"
-    signed_char="false"
     cc="gcc -arch ppc"
     cprepro="gcc -arch ppc -U__GNUC__ -U__BLOCKS__ -E"
     casm="gcc -arch ppc -c"
@@ -81,7 +80,6 @@ case "$target" in
     arch="powerpc"
     variant="eabi"
     system="linux"
-    signed_char="false"
     cc="gcc"
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
@@ -92,7 +90,6 @@ case "$target" in
     arch="arm"
     variant="linux"
     system="linux"
-    signed_char="false"
     cc="gcc"
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
@@ -103,7 +100,6 @@ case "$target" in
     arch="ia32"
     variant="standard"
     system="linux"
-    signed_char="true"
     cc="gcc -m32"
     cprepro="gcc -m32 -U__GNUC__ -E"
     casm="gcc -m32 -c"
@@ -114,7 +110,6 @@ case "$target" in
     arch="ia32"
     variant="standard"
     system="bsd"
-    signed_char="true"
     cc="gcc -m32"
     cprepro="gcc -m32 -U__GNUC__ -E"
     casm="gcc -m32 -c"
@@ -125,7 +120,6 @@ case "$target" in
     arch="ia32"
     variant="standard"
     system="macosx"
-    signed_char="true"
     cc="gcc -arch i386"
     cprepro="gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
     casm="gcc -arch i386 -c"
@@ -136,7 +130,6 @@ case "$target" in
     arch="ia32"
     variant="standard"
     system="cygwin"
-    signed_char="true"
     cc="gcc -m32"
     cprepro="gcc -m32 -U__GNUC__ -E"
     casm="gcc -m32 -c"
@@ -169,7 +162,6 @@ cat >> Makefile.config <<EOF
 ARCH=$arch
 VARIANT=$variant
 SYSTEM=$system
-SIGNED_CHAR=$signed_char
 CC=$cc
 CPREPRO=$cprepro
 CASM=$casm
@@ -206,11 +198,6 @@ VARIANT=
 # SYSTEM=macosx
 # SYSTEM=cygwin
 SYSTEM=
-
-# Is the "char" type signed?
-#SIGNED_CHAR=false
-#SIGNED_CHAR=true
-SIGNED_CHAR=
 
 # C compiler for compiling library files
 CC=gcc
@@ -255,7 +242,6 @@ CompCert configuration:
     Target architecture........... $arch
     Application binary interface.. $variant
     OS and development env........ $system
-    "char" type is signed?........ $signed_char
     C compiler.................... $cc
     C preprocessor................ $cprepro
     Assembler..................... $casm

@@ -239,7 +239,8 @@ let convertInt n = coqint_of_camlint(Int64.to_int32 n)
 
 let convertIkind = function
   | C.IBool -> unsupported "'_Bool' type"; (Unsigned, I8)
-  | C.IChar -> ((if Configuration.signed_char then Signed else Unsigned), I8)
+  | C.IChar -> ((if (!Cparser.Machine.config).Cparser.Machine.char_signed
+                 then Signed else Unsigned), I8)
   | C.ISChar -> (Signed, I8)
   | C.IUChar -> (Unsigned, I8)
   | C.IInt -> (Signed, I32)

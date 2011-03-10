@@ -150,7 +150,6 @@ driver/Configuration.ml: Makefile.config
          echo 'let arch = "$(ARCH)"'; \
          echo 'let variant = "$(VARIANT)"'; \
          echo 'let system = "$(SYSTEM)"'; \
-         echo 'let signed_char = $(SIGNED_CHAR)'; \
          echo 'let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER)') \
         > driver/Configuration.ml
 
