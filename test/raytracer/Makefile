@@ -48,6 +48,10 @@ gcc3:
 
 test:
 	./render < kal.gml
+	@if cmp kal.ppm Results/kal.ppm; \
+        then echo "raytracer: passed"; \
+        else echo "raytracer: FAILED"; \
+        fi
 
 bench:
 	$(TIME) ./render < kal.gml
