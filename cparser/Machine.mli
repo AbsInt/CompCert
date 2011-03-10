@@ -39,13 +39,20 @@ type t = {
   alignof_double: int;
   alignof_longdouble: int;
   alignof_void: int option;
-  alignof_fun: int option
+  alignof_fun: int option;
+  bitfields_msb_first: bool
+
 }
 
 val ilp32ll64 : t
 val i32lpll64 : t
 val il32pll64 : t
-val make_char_signed : t -> t
+val x86_32 : t
+val x86_64 : t
+val win64 : t
+val ppc_32_bigendian : t
+val arm_littleendian : t
+
 val gcc_extensions : t -> t
 
 val config : t ref

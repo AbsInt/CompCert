@@ -94,15 +94,22 @@ let rec transf_members env id count = function
         else begin
           (* Create integer field of sufficient size for this bitfield group *)
           let carrier = sprintf "__bf%d" count in
-          let carrier_typ = TInt(unsigned_ikind_for_carrier nbits, []) in
+          let carrier_ikind = unsigned_ikind_for_carrier nbits in
+          let carrier_typ = TInt(carrier_ikind, []) in
+          (* Enter each field with its bit position, size, signedness *)
           List.iter
             (fun (name, pos, sz, signed, signed2) ->
-              if name <> "" then
+              if name <> "" then begin
+                let pos' =
+                  if !config.bitfields_msb_first
+                  then sizeof_ikind carrier_ikind * 8 - pos - sz
+                  else pos in
                 Hashtbl.add bitfield_table
                   (id, name)
                   {bf_carrier = carrier; bf_carrier_typ = carrier_typ;
-                   bf_pos = pos; bf_size = sz;
-                   bf_signed = signed; bf_signed_res = signed2})
+                   bf_pos = pos'; bf_size = sz;
+                   bf_signed = signed; bf_signed_res = signed2}
+              end)
             bitfields;
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None}
           :: transf_members env id (count + 1) ml'
