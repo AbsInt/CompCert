@@ -10,13 +10,13 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require List.
 Require Iteration.
 Require Floats.
 Require RTLgen.
 Require Coloring.
 Require Allocation.
 Require Compiler.
+Require Initializers.
 
 (* Standard lib *)
 Extract Inductive unit => "unit" [ "()" ].

@@ -2,5 +2,8 @@
 
 #define NULL ((void *) 0)
 
-char x = NULL;
 int t[2] = { NULL, NULL };
+
+/* But this is an error in CompCert */
+
+/* char u = NULL; */

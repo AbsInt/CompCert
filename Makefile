@@ -70,6 +70,7 @@ BACKEND=\
 # C front-end modules (in cfrontend/)
 
 CFRONTEND=Csyntax.v Csem.v Cstrategy.v \
+  Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
   Clight.v Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v

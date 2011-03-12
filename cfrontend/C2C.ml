@@ -12,6 +12,8 @@
 
 open Printf
 
+module CompcertErrors = Errors (* avoid shadowing by Cparser.Errors *)
+
 open Cparser
 open Cparser.C
 open Cparser.Env
@@ -743,14 +745,20 @@ let convertFundecl env (sto, id, ty, optinit) =
 
 (** Initializers *)
 
-let init_data_of_string s =
-  let id = ref [] in
-  let enter_char c =
-    let n = coqint_of_camlint(Int32.of_int(Char.code c)) in
-    id := Init_int8 n :: !id in
-  enter_char '\000';
-  for i = String.length s - 1 downto 0 do enter_char s.[i] done;
-  !id
+let init_data_size = function
+  | Init_int8 _ -> 1
+  | Init_int16 _ -> 2
+  | Init_int32 _ -> 4
+  | Init_float32 _ -> 4
+  | Init_float64 _ -> 8
+  | Init_addrof _ -> 4
+  | Init_space _ -> assert false
+
+let string_of_errmsg msg =
+  let string_of_err = function
+  | CompcertErrors.MSG s -> camlstring_of_coqstring s
+  | CompcertErrors.CTX i -> extern_atom i
+  in String.concat "" (List.map string_of_err msg)
 
 let convertInit env ty init =
 
@@ -767,54 +775,17 @@ let convertInit env ty init =
   let check_align size =
     assert (!pos land (size - 1) = 0) in
 
-  let rec reduceInitExpr = function
-    | { edesc = C.EVar id; etyp = ty } ->
-        begin match Cutil.unroll env ty with
-        | C.TArray _ | C.TFun _ -> Some id
-        | _ -> None
-        end
-    | {edesc = C.EUnop(C.Oaddrof, {edesc = C.EVar id})} -> Some id
-    | {edesc = C.ECast(ty, e)} -> reduceInitExpr e
-    | _ -> None in
-
   let rec cvtInit ty = function
   | Init_single e ->
-      begin match reduceInitExpr e with
-      | Some id ->
-          check_align 4;
-          emit 4 (Init_addrof(intern_string id.name, coqint_of_camlint 0l))
-      | None ->
-      match Ceval.constant_expr env ty e with
-      | Some(C.CInt(v, ik, _)) ->
-          begin match convertIkind ik with
-          | (_, I8) ->
-              emit 1 (Init_int8(convertInt v))
-          | (_, I16) ->
-              check_align 2;
-              emit 2 (Init_int16(convertInt v))
-          | (_, I32) ->
-              check_align 4;
-              emit 4 (Init_int32(convertInt v))
-          end
-      | Some(C.CFloat(v, fk, _)) ->
-          begin match convertFkind fk with
-          | F32 ->
-              check_align 4;
-              emit 4 (Init_float32 v)
-          | F64 ->
-              check_align 8;
-              emit 8 (Init_float64 v)
-          end
-      | Some(C.CStr s) ->
-          check_align 4;
-          let id = name_for_string_literal env s in
-          emit 4 (Init_addrof(id, coqint_of_camlint 0l))
-      | Some(C.CWStr _) ->
-          unsupported "wide character strings"
-      | Some(C.CEnum _) ->
-          error "enum tag after constant folding"
-      | None ->
-          error "initializer is not a compile-time constant"
+      begin match Initializers.transl_init_single
+                     (convertTyp env ty) (convertExpr env e) with
+      | CompcertErrors.OK init ->
+          let sz = init_data_size init in
+          check_align sz;
+          emit sz init
+      | CompcertErrors.Error msg ->
+          Format.printf "%a@." Cprint.exp (0, e);
+          error ("in initializing expression above: " ^ string_of_errmsg msg)
       end
   | Init_array il ->
       let ty_elt =

@@ -13,7 +13,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Dynamic semantics for the Clight language *)
+(** Dynamic semantics for the Compcert C language *)
 
 Require Import Coqlib.
 Require Import Errors.

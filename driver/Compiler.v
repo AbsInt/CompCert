@@ -35,6 +35,7 @@ Require Linear.
 Require Mach.
 Require Asm.
 (** Translation passes. *)
+Require Initializers.
 Require SimplExpr.
 Require Cshmgen.
 Require Cminorgen.
@@ -172,6 +173,10 @@ Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   @@@ Cshmgen.transl_program
   @@@ Cminorgen.transl_program
   @@@ transf_cminor_program.
+
+(** Force [Initializers] to be extracted as well. *)
+
+Definition transl_single_init := Initializers.transl_init_single.
 
 (** The following lemmas help reason over compositions of passes. *)
 

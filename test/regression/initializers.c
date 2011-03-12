@@ -35,6 +35,17 @@ int * x14 = &x2;
 
 struct { char * y; int * z; float * u; double * v; } x15 = { x4, x5, &x11, &x12 };
 
+unsigned char * x16[3] = {
+  (unsigned char *) (x4 + 1),
+  (unsigned char *) &x4[2],
+  ((unsigned char *) x4) + 3 };
+
+char x17[] = "Hello!";
+
+char * x18 = "Hello!";
+
+char * x19[2] = { "Hello", "world!" };
+
 int main(int argc, char ** argv)
 {
   int i;
@@ -63,6 +74,17 @@ int main(int argc, char ** argv)
     printf("x15 ok\n");
   else
     printf("x15 error\n");
+  if (x16[0] == (unsigned char *) x4 + 1
+      && x16[1] == (unsigned char *) x4 + 2
+      && x16[2] == (unsigned char *) x4 + 3)
+    printf("x16 ok\n");
+  else
+    printf("x16 error\n");
+  printf("x17[%d] = { ", (int) sizeof(x17));
+  for (i = 0; i < sizeof(x17); i++) printf("'%c', ", x17[i]);
+  printf("}\n");
+  printf("x18 = \"%s\"\n", x18);
+  printf("x19 = { \"%s\", \"%s\" }\n", x19[0], x19[1]);
   return 0;
 }
 
