@@ -22,6 +22,7 @@ Require Import Values.
 Require Import AST.
 Require Import Memory.
 Require Import Globalenvs.
+Require Import Events.
 Require Import Smallstep.
 Require Import Csyntax.
 Require Import Csem.
@@ -711,12 +712,12 @@ Qed.
 
 Definition dummy_function := mkfunction Tvoid nil nil Sskip.
 
-Require Import Events.
-
-Fixpoint fieldlist_map (f: type -> type) (l: fieldlist) : fieldlist :=
-  match l with
-  | Fnil => Fnil
-  | Fcons id ty l' => Fcons id (f ty) (fieldlist_map f l')
+Fixpoint fields_of_struct (id: ident) (ty: type) (fl: fieldlist) (pos: Z) : list (Z * type) :=
+  match fl with
+  | Fnil => nil
+  | Fcons id1 ty1 fl' =>
+      (align pos (alignof ty1), unroll_composite id ty ty1) 
+      :: fields_of_struct id ty fl' (align pos (alignof ty1) + sizeof ty1)
   end.
 
 Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
@@ -731,7 +732,7 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
       exec_init_array m b ofs ty sz il m' ->
       exec_init m b ofs (Tarray ty sz) (Init_compound il) m'
   | exec_init_compound_struct: forall m b ofs id fl il m',
-      exec_init_struct m b ofs 0 (fieldlist_map (unroll_composite id (Tstruct id fl)) fl) il m' ->
+      exec_init_list m b ofs (fields_of_struct id (Tstruct id fl) fl 0) il m' ->
       exec_init m b ofs (Tstruct id fl) (Init_compound il) m'
   | exec_init_compound_union: forall m b ofs id id1 ty1 fl i m',
       exec_init m b ofs (unroll_composite id (Tunion id (Fcons id1 ty1 fl)) ty1) i m' ->
@@ -745,18 +746,18 @@ with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem 
       exec_init_array m' b (ofs + sizeof ty) ty (sz - 1) il m'' ->
       exec_init_array m b ofs ty sz (Init_cons i1 il) m''
 
-with exec_init_struct: mem -> block -> Z -> Z -> fieldlist -> initializer_list -> mem -> Prop :=
-  | exec_init_struct_nil: forall m b ofs pos,
-      exec_init_struct m b ofs pos Fnil Init_nil m
-  | exec_init_struct_cons: forall m b ofs pos id ty fl i1 il m' m'',
-      exec_init m b (ofs + align pos (alignof ty)) ty i1 m' ->
-      exec_init_struct m' b ofs (align pos (alignof ty) + sizeof ty) fl il m'' ->
-      exec_init_struct m b ofs pos (Fcons id ty fl) (Init_cons i1 il) m''.
+with exec_init_list: mem -> block -> Z -> list (Z * type) -> initializer_list -> mem -> Prop :=
+  | exec_init_list_nil: forall m b ofs,
+      exec_init_list m b ofs nil Init_nil m
+  | exec_init_list_cons: forall m b ofs pos ty l i1 il m' m'',
+      exec_init m b (ofs + pos) ty i1 m' ->
+      exec_init_list m' b ofs l il m'' ->
+      exec_init_list m b ofs ((pos, ty) :: l) (Init_cons i1 il) m''.
 
 Scheme exec_init_ind3 := Minimality for exec_init Sort Prop
   with exec_init_array_ind3 := Minimality for exec_init_array Sort Prop
-  with exec_init_struct_ind3 := Minimality for exec_init_struct Sort Prop.
-Combined Scheme exec_init_scheme from exec_init_ind3, exec_init_array_ind3, exec_init_struct_ind3.
+  with exec_init_list_ind3 := Minimality for exec_init_list Sort Prop.
+Combined Scheme exec_init_scheme from exec_init_ind3, exec_init_array_ind3, exec_init_list_ind3.
 
 Remark exec_init_array_length:
   forall m b ofs ty sz il m', 
@@ -792,10 +793,10 @@ Lemma transl_init_sound_gen:
 /\(forall m b ofs ty sz il m', exec_init_array m b ofs ty sz il m' ->
    forall data, transl_init_array ty il sz = OK data ->
    Genv.store_init_data_list ge m b ofs data = Some m')
-/\(forall m b ofs pos fl il m', exec_init_struct m b ofs pos fl il m' ->
-   forall id ty fl' data,
-   fl = fieldlist_map (unroll_composite id ty) fl' ->
-   transl_init_struct id ty fl' il pos = OK data ->
+/\(forall m b ofs l il m', exec_init_list m b ofs l il m' ->
+   forall id ty fl data pos,
+   l = fields_of_struct id ty fl pos ->
+   transl_init_struct id ty fl il pos = OK data ->
    Genv.store_init_data_list ge m b (ofs + pos) data = Some m').
 Proof.
   apply exec_init_scheme; simpl; intros.
@@ -810,7 +811,7 @@ Proof.
   eauto.
   (* struct *)
   destruct fl.
-  inv H. inv H1. auto. 
+  inv H. inv H1. auto.
   replace ofs with (ofs + 0) by omega. eauto.
   (* union *)
   monadInv H1. eapply store_init_data_list_app. eauto. apply store_init_data_list_padding. 
@@ -824,21 +825,21 @@ Proof.
   rewrite (transl_init_size _ _ _ EQ). eauto.
 
   (* struct, empty *)
-  destruct fl'; simpl in H; inv H. 
+  destruct fl; simpl in H; inv H. 
   inv H0. apply store_init_data_list_padding.
   (* struct, nonempty *)
-  destruct fl'; simpl in H3; inv H3.
+  destruct fl; simpl in H3; inv H3.
   monadInv H4. 
   eapply store_init_data_list_app. apply store_init_data_list_padding.
   rewrite padding_size. 
-  replace (ofs + pos + (align pos (alignof t) - pos))
-     with (ofs + align pos (alignof t)) by omega.
+  replace (ofs + pos0 + (align pos0 (alignof t) - pos0))
+     with (ofs + align pos0 (alignof t)) by omega.
   eapply store_init_data_list_app.
-  rewrite <- (alignof_unroll_composite id0 ty0 t).
   eauto.
   rewrite (transl_init_size _ _ _ EQ).
-  rewrite <- Zplus_assoc. rewrite <- (alignof_unroll_composite id0 ty0 t). 
-  eapply H2. eauto. rewrite alignof_unroll_composite. rewrite sizeof_unroll_composite. eauto.
+  rewrite <- Zplus_assoc. eapply H2.
+  rewrite sizeof_unroll_composite. eauto. 
+  rewrite sizeof_unroll_composite. eauto. 
   apply align_le. apply alignof_pos.
 Qed.
 
