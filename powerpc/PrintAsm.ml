@@ -97,7 +97,7 @@ let comment =
   match target with
   | MacOS -> ";"
   | Linux -> "#"
-  | Diab -> "%"
+  | Diab -> ";"
 
 let constant oc cst =
   match cst with
