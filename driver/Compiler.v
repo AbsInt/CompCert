@@ -176,7 +176,7 @@ Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
 
 (** Force [Initializers] to be extracted as well. *)
 
-Definition transl_single_init := Initializers.transl_init_single.
+Definition transl_init := Initializers.transl_init.
 
 (** The following lemmas help reason over compositions of passes. *)
 

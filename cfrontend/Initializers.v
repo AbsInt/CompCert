@@ -149,8 +149,15 @@ Fixpoint constval (a: expr) : res val :=
 
 (** * Translation of initializers *)
 
+Inductive initializer :=
+  | Init_single (a: expr)
+  | Init_compound (il: initializer_list)
+with initializer_list :=
+  | Init_nil
+  | Init_cons (i: initializer) (il: initializer_list).
+
 (** Translate an initializing expression [a] for a scalar variable
-  of type [ty].  Return the corresponding [init_data]. *)
+  of type [ty].  Return the corresponding initialization datum. *)
 
 Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   do v1 <- constval a;
@@ -168,6 +175,70 @@ Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   | _, _ => Error (msg "type mismatch in initializer")
   end.
 
-(** To come later: translation of compound initializers, currently
-  still done in Caml (module [C2C]). *)
+(** Translate an initializer [i] for a variable of type [ty].
+  Return the corresponding list of initialization data. *)
+
+Definition padding (frm to: Z) : list init_data :=
+  let n := to - frm in
+  if zle n 0 then nil else Init_space n :: nil.
+
+Fixpoint transl_init (ty: type) (i: initializer)
+                     {struct i} : res (list init_data) :=
+  match i, ty with
+  | Init_single a, _ =>
+      do d <- transl_init_single ty a; OK (d :: nil)
+  | Init_compound il, Tarray tyelt sz =>
+      if zle sz 0
+      then OK (Init_space(sizeof tyelt) :: nil)
+      else transl_init_array tyelt il sz
+  | Init_compound il, Tstruct _ Fnil =>
+      OK (Init_space (sizeof ty) :: nil)
+  | Init_compound il, Tstruct id fl =>
+      transl_init_struct id ty fl il 0
+  | Init_compound il, Tunion _ Fnil =>
+      OK (Init_space (sizeof ty) :: nil)
+  | Init_compound il, Tunion id (Fcons _ ty1 _) =>
+      transl_init_union id ty ty1 il
+  | _, _ =>
+      Error (msg "wrong type for compound initializer")
+  end
+
+with transl_init_array (ty: type) (il: initializer_list) (sz: Z)
+                       {struct il} : res (list init_data) :=
+  match il with
+  | Init_nil =>
+      if zeq sz 0
+      then OK nil
+      else Error (msg "wrong number of elements in array initializer")
+  | Init_cons i1 il' =>
+      do d1 <- transl_init ty i1;
+      do d2 <- transl_init_array ty il' (sz - 1);
+      OK (d1 ++ d2)
+  end
+
+with transl_init_struct (id: ident) (ty: type)
+                        (fl: fieldlist) (il: initializer_list) (pos: Z)
+                        {struct il} : res (list init_data) :=
+  match il, fl with
+  | Init_nil, Fnil =>
+      OK (padding pos (sizeof ty))
+  | Init_cons i1 il', Fcons _ ty1 fl' =>
+      let pos1 := align pos (alignof ty1) in
+      do d1 <- transl_init (unroll_composite id ty ty1) i1;
+      do d2 <- transl_init_struct id ty fl' il' (pos1 + sizeof ty1);
+      OK (padding pos pos1 ++ d1 ++ d2)
+  | _, _ =>
+      Error (msg "wrong number of elements in struct initializer")
+  end
+
+with transl_init_union (id: ident) (ty ty1: type) (il: initializer_list)
+                       {struct il} : res (list init_data) :=
+  match il with
+  | Init_nil =>
+      Error (msg "empty union initializer")
+  | Init_cons i1 _ =>
+      do d <- transl_init (unroll_composite id ty ty1) i1;
+      OK (d ++ padding (sizeof ty1) (sizeof ty))
+  end.
+
 

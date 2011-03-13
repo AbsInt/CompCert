@@ -23,6 +23,7 @@ open Camlcoq
 open AST
 open Values
 open Csyntax
+open Initializers
 
 (** Record the declarations of global variables and associate them
     with the corresponding atom. *)
@@ -745,75 +746,33 @@ let convertFundecl env (sto, id, ty, optinit) =
 
 (** Initializers *)
 
-let init_data_size = function
-  | Init_int8 _ -> 1
-  | Init_int16 _ -> 2
-  | Init_int32 _ -> 4
-  | Init_float32 _ -> 4
-  | Init_float64 _ -> 8
-  | Init_addrof _ -> 4
-  | Init_space _ -> assert false
-
 let string_of_errmsg msg =
   let string_of_err = function
   | CompcertErrors.MSG s -> camlstring_of_coqstring s
   | CompcertErrors.CTX i -> extern_atom i
   in String.concat "" (List.map string_of_err msg)
 
-let convertInit env ty init =
+let rec convertInit env init =
+  match init with
+  | C.Init_single e ->
+      Init_single (convertExpr env e)
+  | C.Init_array il ->
+      Init_compound (convertInitList env il)
+  | C.Init_struct(_, flds) ->
+      Init_compound (convertInitList env (List.map snd flds))
+  | C.Init_union(_, fld, i) ->
+      Init_compound (Init_cons(convertInit env i, Init_nil))
 
-  let k = ref []
-  and pos = ref 0 in
-  let emit size datum =
-    k := datum :: !k;
-    pos := !pos + size in
-  let emit_space size =
-    emit size (Init_space (z_of_camlint (Int32.of_int size))) in
-  let align size =
-    let n = !pos land (size - 1) in
-    if n > 0 then emit_space (size - n) in
-  let check_align size =
-    assert (!pos land (size - 1) = 0) in
+and convertInitList env il =
+  match il with
+  | [] -> Init_nil
+  | i :: il' -> Init_cons(convertInit env i, convertInitList env il')
 
-  let rec cvtInit ty = function
-  | Init_single e ->
-      begin match Initializers.transl_init_single
-                     (convertTyp env ty) (convertExpr env e) with
-      | CompcertErrors.OK init ->
-          let sz = init_data_size init in
-          check_align sz;
-          emit sz init
-      | CompcertErrors.Error msg ->
-          Format.printf "%a@." Cprint.exp (0, e);
-          error ("in initializing expression above: " ^ string_of_errmsg msg)
-      end
-  | Init_array il ->
-      let ty_elt =
-        match Cutil.unroll env ty with
-        | C.TArray(t, _, _) -> t
-        | _ -> error "array type expected in initializer"; C.TVoid [] in
-      List.iter (cvtInit ty_elt) il
-  | Init_struct(_, flds) ->
-      cvtPadToSizeof ty (fun () -> List.iter cvtFieldInit flds)
-  | Init_union(_, fld, i) ->
-      cvtPadToSizeof ty (fun () -> cvtFieldInit (fld,i))
-
-  and cvtFieldInit (fld, i) =
-    let ty' = convertTyp env fld.fld_typ in
-    let al = Int32.to_int (camlint_of_z (Csyntax.alignof ty')) in
-    align al;
-    cvtInit fld.fld_typ i
-
-  and cvtPadToSizeof ty fn =
-    let ty' = convertTyp env ty in
-    let sz = Int32.to_int (camlint_of_z (Csyntax.sizeof ty')) in
-    let pos0 = !pos in
-    fn();
-    let pos1 = !pos in
-    assert (pos1 <= pos0 + sz);
-    if pos1 < pos0 + sz then emit_space (pos0 + sz - pos1)
-
-  in cvtInit ty init; List.rev !k
+let convertInitializer env ty i =
+  match Initializers.transl_init (convertTyp env ty) (convertInit env i)
+  with
+  | CompcertErrors.OK init -> init
+  | CompcertErrors.Error msg -> error (string_of_errmsg msg); []
 
 (** Global variable *)
 
@@ -840,7 +799,7 @@ let convertGlobvar env (sto, id, ty, optinit) =
     | None ->
         if sto = C.Storage_extern then [] else [Init_space(Csyntax.sizeof ty')]
     | Some i ->
-        convertInit env ty i in
+        convertInitializer env ty i in
   Hashtbl.add decl_atom id'
     { a_storage = sto;
       a_env = env;
