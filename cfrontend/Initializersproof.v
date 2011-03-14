@@ -262,7 +262,7 @@ Proof.
     eapply simple_context_2; eauto. eapply rred_simple; eauto.
     (* callred *)
     assert (S: simple a) by (eapply simple_context_1; eauto).
-    inv H9; simpl in S; contradiction.
+    inv H10; simpl in S; contradiction.
   destruct X as [r1 [A [B C]]]. subst s2. 
   exploit IHstar; eauto. intros [D E]. 
   split. auto. destruct B; destruct E. split. congruence. auto. 
