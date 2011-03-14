@@ -1,3 +1,26 @@
+Release 1.8.1, 2011-03-14
+=========================
+
+- Adapted to Coq 8.3pl1.
+
+- Reduced compilation times through several algorithmic improvements
+  (contributed by A. Pilkiewicz).
+
+- In the various semantics, allow float-to-int conversions to fail
+  (if the float argument is outside the range of representable ints).
+
+- Initialization of global C variables made more robust and proved correct.
+
+- ABI conformance improved:
+     . the "char" type is now signed for x86, remains unsigned for PowerPC and ARM
+     . placement of bit-fields now follows SVR4 conventions (affects PowerPC)
+
+- Bug fixes in the C pre-simplifier:
+     . nontermination with some recursive struct types
+     . issues with zero-width bit fields
+     . elimination of struct assignments duplicating some volatile accesses
+
+
 Release 1.8, 2010-09-21
 =======================
 
