@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 struct s {
   char c;
   union { int i[3]; double d; } n;
@@ -29,3 +31,13 @@ struct bits2 {
 
 char b2[sizeof(struct bits2)];  /* should be 8 */
 
+int main()
+{
+  printf("sizeof(struct s) = %d, sizeof(tbl) = %d\n",
+         sizeof(struct s), sizeof(tbl));
+  printf("sizeof(struct bits1) = %d, sizeof(b1) = %d\n",
+         sizeof(struct bits1), sizeof(b1));
+  printf("sizeof(struct bits2) = %d, sizeof(b2) = %d\n",
+         sizeof(struct bits2), sizeof(b2));
+  return 0;
+}

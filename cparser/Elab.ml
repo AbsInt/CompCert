@@ -837,15 +837,22 @@ let elab_expr loc env a =
   | CAST ((spec, dcl), _) ->
       error "cast of initializer expression is not supported"
 
-  | EXPR_SIZEOF(CONSTANT(CONST_STRING s)) ->
-      let cst = CInt(Int64.of_int (String.length s), size_t_ikind, "") in
-      { edesc = EConst cst; etyp = type_of_constant cst }
-
   | EXPR_SIZEOF a1 ->
       let b1 = elab a1 in
       if sizeof env b1.etyp = None then
         err "incomplete type %a" Cprint.typ b1.etyp;
-      { edesc = ESizeof b1.etyp; etyp = TInt(size_t_ikind, []) }
+      let bdesc =
+        (* Catch special cases sizeof("string literal") *)
+        match b1.edesc with
+        | EConst(CStr s) ->
+            let sz = String.length s + 1 in
+            EConst(CInt(Int64.of_int sz, size_t_ikind, ""))
+        | EConst(CWStr s) ->
+            let sz = (!config).sizeof_wchar * (List.length s + 1) in
+            EConst(CInt(Int64.of_int sz, size_t_ikind, ""))
+        | _ ->
+            ESizeof b1.etyp in
+      { edesc = bdesc; etyp = TInt(size_t_ikind, []) }
 
   | TYPE_SIZEOF (spec, dcl) ->
       let ty = elab_type loc env spec dcl in
