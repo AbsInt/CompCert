@@ -1157,19 +1157,46 @@ Qed.
 
 End EXPR.
 
+Lemma is_constant_bool_true:
+  forall te le m a v ty,
+  Csharpminor.eval_expr tge te le m a v ->
+  is_true v ty ->
+  is_constant_bool a <> Some false.
+Proof.
+  intros. unfold is_constant_bool. destruct a; try congruence. destruct c; try congruence.
+  inv H. simpl in H2. inv H2. rewrite Int.eq_false. simpl; congruence. 
+  inv H0; auto.
+Qed.
+
+Lemma is_constant_bool_false:
+  forall te le m a v ty,
+  Csharpminor.eval_expr tge te le m a v ->
+  is_false v ty ->
+  is_constant_bool a <> Some true.
+Proof.
+  intros. unfold is_constant_bool. destruct a; try congruence. destruct c; try congruence.
+  inv H. simpl in H2. inv H2.
+  assert (i = Int.zero). inv H0; auto. 
+  subst i. simpl. congruence.
+Qed.
+
 Lemma exit_if_false_true:
   forall a ts e le m v te f tk,
   exit_if_false a = OK ts ->
   Clight.eval_expr ge e le m a v ->
   is_true v (typeof a) ->
   match_env e te ->
-  step tge (State f ts tk te le m) E0 (State f Sskip tk te le m).
+  star step tge (State f ts tk te le m) E0 (State f Sskip tk te le m).
 Proof.
   intros. monadInv H.
-  exploit make_boolean_correct_true.
-    eapply (transl_expr_correct _ _ _ _ H2 _ _ H0); eauto.
-    eauto.
-  intros [vb [EVAL ISTRUE]].
+  exploit transl_expr_correct; eauto. intros EV.
+  generalize (is_constant_bool_true _ _ _ _ _ _ EV H1); intros ICB.
+  destruct (is_constant_bool x). destruct b.
+  inv EQ0. apply star_refl.
+  congruence.
+  inv EQ0. 
+  exploit make_boolean_correct_true; eauto. intros [vb [EVAL ISTRUE]].
+  apply star_one.
   change Sskip with (if true then Sskip else Sexit 0).
   eapply step_ifthenelse; eauto. 
   apply Val.bool_of_true_val; eauto.  
@@ -1181,13 +1208,17 @@ Lemma exit_if_false_false:
   Clight.eval_expr ge e le m a v ->
   is_false v (typeof a) ->
   match_env e te ->
-  step tge (State f ts tk te le m) E0 (State f (Sexit 0) tk te le m).
+  star step tge (State f ts tk te le m) E0 (State f (Sexit 0) tk te le m).
 Proof.
   intros. monadInv H.
-  exploit make_boolean_correct_false.
-    eapply (transl_expr_correct _ _ _ _ H2 _ _ H0); eauto.
-    eauto.
-  intros [vb [EVAL ISFALSE]].
+  exploit transl_expr_correct; eauto. intros EV.
+  generalize (is_constant_bool_false _ _ _ _ _ _ EV H1); intros ICB.
+  destruct (is_constant_bool x). destruct b.
+  congruence.
+  inv EQ0. apply star_refl.
+  inv EQ0.
+  exploit make_boolean_correct_false; eauto. intros [vb [EVAL ISFALSE]].
+  apply star_one.
   change (Sexit 0) with (if false then Sskip else Sexit 0).
   eapply step_ifthenelse; eauto. 
   apply Val.bool_of_false_val; eauto. 
@@ -1322,7 +1353,8 @@ Variable tyret: type.
 Remark exit_if_false_no_label:
   forall a s, exit_if_false a = OK s -> forall k, find_label lbl s k = None.
 Proof.
-  intros. unfold exit_if_false in H. monadInv H. simpl. auto.
+  intros. unfold exit_if_false in H. monadInv H.
+  destruct (is_constant_bool x). destruct b; inv EQ0; auto. inv EQ0; auto.
 Qed.
   
 Lemma transl_find_label:
@@ -1549,7 +1581,7 @@ Proof.
   eapply star_plus_trans. eapply match_transl_step; eauto. 
   eapply plus_left. constructor. 
   eapply star_left. constructor.
-  eapply star_left. eapply exit_if_false_false; eauto.
+  eapply star_trans. eapply exit_if_false_false; eauto.
   eapply star_left. constructor. 
   eapply star_left. constructor.
   apply star_one. constructor.
@@ -1562,7 +1594,7 @@ Proof.
   eapply star_plus_trans. eapply match_transl_step; eauto. 
   eapply plus_left. constructor.
   eapply star_left. constructor.
-  eapply star_left. eapply exit_if_false_true; eauto.
+  eapply star_trans. eapply exit_if_false_true; eauto.
   eapply star_left. constructor.
   apply star_one. constructor.
   reflexivity. reflexivity. reflexivity. reflexivity. traceEq.
@@ -1608,7 +1640,7 @@ Proof.
   econstructor; split.
   eapply plus_left. destruct H2; subst ts'; constructor.
   eapply star_left. constructor.
-  eapply star_left. eapply exit_if_false_false; eauto.
+  eapply star_trans. eapply exit_if_false_false; eauto.
   eapply star_left. constructor.
   apply star_one. constructor.
   reflexivity. reflexivity. reflexivity. traceEq.
@@ -1621,7 +1653,7 @@ Proof.
   econstructor; split.
   eapply plus_left. destruct H2; subst ts'; constructor.
   eapply star_left. constructor.
-  eapply star_left. eapply exit_if_false_true; eauto.
+  eapply star_trans. eapply exit_if_false_true; eauto.
   apply star_one. constructor.
   reflexivity. reflexivity. traceEq.
   econstructor; eauto.
@@ -1643,7 +1675,7 @@ Proof.
   eapply star_plus_trans. eapply match_transl_step; eauto.
   eapply plus_left. constructor.
   eapply star_left. constructor.
-  eapply star_left. eapply exit_if_false_false; eauto.
+  eapply star_trans. eapply exit_if_false_false; eauto.
   eapply star_left. constructor. 
   eapply star_left. constructor.
   apply star_one. constructor.
@@ -1656,7 +1688,7 @@ Proof.
   eapply star_plus_trans. eapply match_transl_step; eauto.
   eapply plus_left. constructor.
   eapply star_left. constructor.
-  eapply star_left. eapply exit_if_false_true; eauto.
+  eapply star_trans. eapply exit_if_false_true; eauto.
   eapply star_left. constructor. 
   eapply star_left. constructor.
   apply star_one. constructor.
