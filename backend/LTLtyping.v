@@ -109,7 +109,7 @@ Inductive wt_instr : instruction -> Prop :=
       Loc.type arg = Tint ->
       loc_acceptable arg ->
       (forall lbl, In lbl tbl -> valid_successor lbl) ->
-      list_length_z tbl * 4 <= Int.max_signed ->
+      list_length_z tbl * 4 <= Int.max_unsigned ->
       wt_instr (Ljumptable arg tbl)
   | wt_Lreturn: 
       forall optres,

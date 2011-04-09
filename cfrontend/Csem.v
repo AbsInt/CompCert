@@ -413,19 +413,24 @@ Function sem_cmp (c:comparison)
                   (v1: val) (t1: type) (v2: val) (t2: type)
                   (m: mem): option val :=
   match classify_cmp t1 t2 with
-  | cmp_case_iiu =>
+  | cmp_case_ii Signed =>
+      match v1,v2 with
+      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmp c n1 n2))
+      | _,  _ => None
+      end
+  | cmp_case_ii Unsigned =>
       match v1,v2 with
       | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
       | _,  _ => None
       end
-  | cmp_case_ipip =>
+  | cmp_case_pp =>
       match v1,v2 with
-      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmp c n1 n2))
+      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
       | Vptr b1 ofs1,  Vptr b2 ofs2  =>
-          if Mem.valid_pointer m b1 (Int.signed ofs1)
-          && Mem.valid_pointer m b2 (Int.signed ofs2) then
+          if Mem.valid_pointer m b1 (Int.unsigned ofs1)
+          && Mem.valid_pointer m b2 (Int.unsigned ofs2) then
             if zeq b1 b2
-            then Some (Val.of_bool (Int.cmp c ofs1 ofs2))
+            then Some (Val.of_bool (Int.cmpu c ofs1 ofs2))
             else sem_cmp_mismatch c
           else None
       | Vptr b ofs, Vint n =>

@@ -1110,12 +1110,13 @@ Proof.
 Qed.
 
 Lemma transl_cond_correct:
-  forall cond args k ms sp rs m b,
+  forall cond args k ms sp rs m m' b,
   map mreg_type args = type_of_condition cond ->
   agree ms sp rs ->
-  eval_condition cond (map ms args) = Some b ->
+  eval_condition cond (map ms args) m = Some b ->
+  Mem.extends m m' ->
   exists rs',
-     exec_straight (transl_cond cond args k) rs m k rs' m
+     exec_straight (transl_cond cond args k) rs m' k rs' m'
   /\ rs'#(reg_of_crbit (fst (crbit_for_cond cond))) = 
        (if snd (crbit_for_cond cond)
         then Val.of_bool b
@@ -1124,9 +1125,9 @@ Lemma transl_cond_correct:
 Proof.
   intros.
   assert (eval_condition_total cond rs ## (preg_of ## args) = Val.of_bool b).
-    apply eval_condition_weaken. eapply eval_condition_lessdef; eauto. 
+    apply eval_condition_weaken with m'. eapply eval_condition_lessdef; eauto. 
     eapply preg_vals; eauto.
-  rewrite <- H2. eapply transl_cond_correct_aux; eauto.
+  rewrite <- H3. eapply transl_cond_correct_aux; eauto.
 Qed.
 
 (** Translation of arithmetic operations. *)
@@ -1155,21 +1156,22 @@ Ltac TranslOpSimpl :=
 *)
 
 Lemma transl_op_correct:
-  forall op args res k ms sp rs m v,
+  forall op args res k ms sp rs m v m',
   wt_instr (Mop op args res) ->
   agree ms sp rs ->
-  eval_operation ge sp op (map ms args) = Some v ->
+  eval_operation ge sp op (map ms args) m = Some v ->
+  Mem.extends m m' ->
   exists rs',
-    exec_straight (transl_op op args res k) rs m k rs' m
+    exec_straight (transl_op op args res k) rs m' k rs' m'
   /\ agree (Regmap.set res v (undef_op op ms)) sp rs'.
 Proof.
   intros.
   assert (exists v', Val.lessdef v v' /\
           eval_operation_total ge sp op (map rs (map preg_of args)) = v').
-    exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. 
+    exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eauto.
     intros [v' [A B]]. exists v'; split; auto.
-    apply eval_operation_weaken; eauto. 
-  destruct H2 as [v' [LD EQ]]. clear H1.
+    eapply eval_operation_weaken; eauto. 
+  destruct H3 as [v' [LD EQ]]. clear H1 H2.
   inv H.
   (* Omove *)
   simpl in *. 
@@ -1183,7 +1185,7 @@ Proof.
   (* Omove again *)
   congruence.
   (* Ointconst *)
-  destruct (loadimm_correct (ireg_of res) i k rs m)
+  destruct (loadimm_correct (ireg_of res) i k rs m')
   as [rs' [A [B C]]]. 
   exists rs'. split. auto. 
   rewrite <- B in LD. eauto with ppcgen. 
@@ -1198,7 +1200,7 @@ Proof.
   set (v' := symbol_offset ge i i0) in *.
   pose (rs1 := nextinstr (rs#GPR12 <- (high_half v'))).
   exists (nextinstr (rs1#(ireg_of res) <- v')).
-  split. apply exec_straight_two with rs1 m.
+  split. apply exec_straight_two with rs1 m'.
   unfold exec_instr. rewrite gpr_or_zero_zero.
   unfold const_high. rewrite Val.add_commut. 
   rewrite high_half_zero. reflexivity. 
@@ -1213,7 +1215,7 @@ Proof.
   intros. apply Pregmap.gso; auto.
   (* Oaddrstack *)
   assert (GPR1 <> GPR0). discriminate.
-  generalize (addimm_correct (ireg_of res) GPR1 i k rs m (ireg_of_not_GPR0 res) H1). 
+  generalize (addimm_correct (ireg_of res) GPR1 i k rs m' (ireg_of_not_GPR0 res) H1). 
   intros [rs' [EX [RES OTH]]].
   exists rs'. split. auto. 
   apply agree_set_mireg_exten with rs; auto with ppcgen.
@@ -1235,7 +1237,7 @@ Proof.
   unfold Val.rolm, Val.zero_ext. destruct (rs (ireg_of m0)); auto.
   rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
   (* Oaddimm *)
-  generalize (addimm_correct (ireg_of res) (ireg_of m0) i k rs m
+  generalize (addimm_correct (ireg_of res) (ireg_of m0) i k rs m'
                             (ireg_of_not_GPR0 res) (ireg_of_not_GPR0 m0)).
   intros [rs' [A [B C]]]. 
   exists rs'. split. auto.
@@ -1245,7 +1247,7 @@ Proof.
   econstructor; split.
   apply exec_straight_one. simpl; eauto. auto.
   auto 7 with ppcgen.
-  generalize (loadimm_correct GPR0 i (Psubfc (ireg_of res) (ireg_of m0) GPR0 :: k) rs m).
+  generalize (loadimm_correct GPR0 i (Psubfc (ireg_of res) (ireg_of m0) GPR0 :: k) rs m').
   intros [rs1 [EX [RES OTH]]].
   econstructor; split.
   eapply exec_straight_trans. eexact EX. 
@@ -1258,7 +1260,7 @@ Proof.
   econstructor; split.
   apply exec_straight_one. simpl; eauto. auto. 
   auto with ppcgen.
-  generalize (loadimm_correct GPR0 i (Pmullw (ireg_of res) (ireg_of m0) GPR0 :: k) rs m).
+  generalize (loadimm_correct GPR0 i (Pmullw (ireg_of res) (ireg_of m0) GPR0 :: k) rs m').
   intros [rs1 [EX [RES OTH]]].
   assert (agree (undef_temps ms) sp rs1). eauto with ppcgen.
   econstructor; split.
@@ -1275,22 +1277,22 @@ Proof.
   apply agree_exten_2 with rs1. unfold rs1; auto with ppcgen.
   auto.
   (* Oandimm *)
-  generalize (andimm_correct (ireg_of res) (ireg_of m0) i k rs m
+  generalize (andimm_correct (ireg_of res) (ireg_of m0) i k rs m'
                              (ireg_of_not_GPR0 m0)).
   intros [rs' [A [B [C D]]]]. 
   exists rs'. split. auto. rewrite <- B in LD. eauto with ppcgen.
   (* Oorimm *)
-  generalize (orimm_correct (ireg_of res) (ireg_of m0) i k rs m).
+  generalize (orimm_correct (ireg_of res) (ireg_of m0) i k rs m').
   intros [rs' [A [B C]]]. 
   exists rs'. split. auto. rewrite <- B in LD. eauto with ppcgen. 
   (* Oxorimm *)
-  generalize (xorimm_correct (ireg_of res) (ireg_of m0) i k rs m).
+  generalize (xorimm_correct (ireg_of res) (ireg_of m0) i k rs m').
   intros [rs' [A [B C]]]. 
   exists rs'. split. auto. rewrite <- B in LD. eauto with ppcgen.
   (* Oxhrximm *)
   pose (rs1 := nextinstr (rs#(ireg_of res) <- (Val.shr (rs (ireg_of m0)) (Vint i)) #CARRY <- (Val.shr_carry (rs (ireg_of m0)) (Vint i)))).
   exists (nextinstr (rs1#(ireg_of res) <- (Val.shrx (rs (ireg_of m0)) (Vint i)))).
-  split. apply exec_straight_two with rs1 m.
+  split. apply exec_straight_two with rs1 m'.
   auto. simpl. decEq. decEq. decEq. 
   unfold rs1. repeat (rewrite nextinstr_inv; try discriminate).
   rewrite Pregmap.gss. rewrite Pregmap.gso. rewrite Pregmap.gss. 
@@ -1312,7 +1314,7 @@ Proof.
   set (rs1 := nextinstr (rs#(ireg_of res) <- (Val.rolm (rs (ireg_of r)) Int.one Int.one))).
   set (rs2 := nextinstr (rs1#(ireg_of res) <- (Val.xor (rs1#(ireg_of res)) (Vint Int.one)))).
   exists rs2.
-  split. apply exec_straight_two with rs1 m; auto.
+  split. apply exec_straight_two with rs1 m'; auto.
   rewrite <- Val.rolm_ge_zero in LD.
   unfold rs2. apply agree_nextinstr.
   unfold rs1. apply agree_nextinstr_commut. fold rs1.
@@ -1334,19 +1336,19 @@ Proof.
         (if isset
          then k
          else Pxori (ireg_of res) (ireg_of res) (Cint Int.one) :: k)).
-  generalize (transl_cond_correct_aux c0 rl k1 ms sp rs m H1 H0).
+  generalize (transl_cond_correct_aux c0 rl k1 ms sp rs m' H1 H0).
   fold bit; fold isset. 
   intros [rs1 [EX1 [RES1 AG1]]].
   set (rs2 := nextinstr (rs1#(ireg_of res) <- (rs1#(reg_of_crbit bit)))).
   destruct isset.
   exists rs2.
-  split. apply exec_straight_trans with k1 rs1 m. assumption.
+  split. apply exec_straight_trans with k1 rs1 m'. assumption.
   unfold k1. apply exec_straight_one. 
   reflexivity. reflexivity. 
   unfold rs2. rewrite RES1. auto with ppcgen. 
   econstructor. 
-  split. apply exec_straight_trans with k1 rs1 m. assumption.
-  unfold k1. apply exec_straight_two with rs2 m.
+  split. apply exec_straight_trans with k1 rs1 m'. assumption.
+  unfold k1. apply exec_straight_two with rs2 m'.
   reflexivity. simpl. eauto. auto. auto. 
   apply agree_nextinstr. 
   unfold rs2 at 1. rewrite nextinstr_inv. rewrite Pregmap.gss. 

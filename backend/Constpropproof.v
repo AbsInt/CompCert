@@ -283,13 +283,13 @@ Proof.
   exists (State s' (transf_function f) sp pc' (rs#res <- v) m); split.
   TransfInstr. caseEq (op_strength_reduction (approx_reg (analyze f)!!pc) op args);
   intros op' args' OSR.
-  assert (eval_operation tge sp op' rs##args' = Some v).
+  assert (eval_operation tge sp op' rs##args' m = Some v).
     rewrite (eval_operation_preserved _ _ symbols_preserved). 
-    generalize (op_strength_reduction_correct ge (approx_reg (analyze f)!!pc) sp rs
+    generalize (op_strength_reduction_correct ge (approx_reg (analyze f)!!pc) sp rs m
                   MATCH op args v).
     rewrite OSR; simpl. auto.
   generalize (eval_static_operation_correct ge op sp
-               (approx_regs (analyze f)!!pc args) rs##args v
+               (approx_regs (analyze f)!!pc args) rs##args m v
                (approx_regs_val_list _ _ _ args MATCH) H0).
   case (eval_static_operation op (approx_regs (analyze f)!!pc args)); intros;
   simpl in H2;
@@ -370,14 +370,14 @@ Proof.
   exists (State s' (transf_function f) sp ifso rs m); split. 
   caseEq (cond_strength_reduction (approx_reg (analyze f)!!pc) cond args);
   intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' = Some true).
+  assert (eval_condition cond' rs##args' m = Some true).
     generalize (cond_strength_reduction_correct
-                  ge (approx_reg (analyze f)!!pc) rs MATCH cond args).
+                  ge (approx_reg (analyze f)!!pc) rs m MATCH cond args).
     rewrite CSR.  intro. congruence.
   TransfInstr. rewrite CSR. 
   caseEq (eval_static_condition cond (approx_regs (analyze f)!!pc args)).
   intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ _
+  generalize (eval_static_condition_correct ge cond _ _ m _
                (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
   replace b with true. intro; eapply exec_Inop; eauto. congruence.
   intros. eapply exec_Icond_true; eauto.
@@ -390,14 +390,14 @@ Proof.
   exists (State s' (transf_function f) sp ifnot rs m); split. 
   caseEq (cond_strength_reduction (approx_reg (analyze f)!!pc) cond args);
   intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' = Some false).
+  assert (eval_condition cond' rs##args' m = Some false).
     generalize (cond_strength_reduction_correct
-                  ge (approx_reg (analyze f)!!pc) rs MATCH cond args).
+                  ge (approx_reg (analyze f)!!pc) rs m MATCH cond args).
     rewrite CSR.  intro. congruence.
   TransfInstr. rewrite CSR. 
   caseEq (eval_static_condition cond (approx_regs (analyze f)!!pc args)).
   intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ _
+  generalize (eval_static_condition_correct ge cond _ _ m _
                (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
   replace b with false. intro; eapply exec_Inop; eauto. congruence.
   intros. eapply exec_Icond_false; eauto.

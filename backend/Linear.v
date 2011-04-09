@@ -123,7 +123,8 @@ Definition reglist (rs: locset) (rl: list mreg) : list val :=
 
   [call_regs caller] returns the location set at function entry,
   as a function of the location set [caller] of the calling function.
-- Machine registers have the same values as in the caller.
+- Temporary registers are undefined.
+- Other machine registers have the same values as in the caller.
 - Incoming stack slots (used for parameter passing) have the same
   values as the corresponding outgoing stack slots (used for argument
   passing) in the caller.
@@ -133,7 +134,7 @@ Definition reglist (rs: locset) (rl: list mreg) : list val :=
 Definition call_regs (caller: locset) : locset :=
   fun (l: loc) =>
     match l with
-    | R r => caller (R r)
+    | R r => if In_dec Loc.eq (R r) temporaries then Vundef else caller (R r)
     | S (Local ofs ty) => Vundef
     | S (Incoming ofs ty) => caller (S (Outgoing ofs ty))
     | S (Outgoing ofs ty) => Vundef
@@ -262,7 +263,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp b (Locmap.set (S sl) (rs (R r)) rs) m)
   | exec_Lop:
       forall s f sp op args res b rs m v,
-      eval_operation ge sp op (reglist rs args) = Some v ->
+      eval_operation ge sp op (reglist rs args) m = Some v ->
       step (State s f sp (Lop op args res :: b) rs m)
         E0 (State s f sp b (Locmap.set (R res) v (undef_op op rs)) m)
   | exec_Lload:
@@ -306,19 +307,19 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp b' rs m)
   | exec_Lcond_true:
       forall s f sp cond args lbl b rs m b',
-      eval_condition cond (reglist rs args) = Some true ->
+      eval_condition cond (reglist rs args) m = Some true ->
       find_label lbl f.(fn_code) = Some b' ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
         E0 (State s f sp b' (undef_temps rs) m)
   | exec_Lcond_false:
       forall s f sp cond args lbl b rs m,
-      eval_condition cond (reglist rs args) = Some false ->
+      eval_condition cond (reglist rs args) m = Some false ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
         E0 (State s f sp b (undef_temps rs) m)
   | exec_Ljumptable:
       forall s f sp arg tbl b rs m n lbl b',
       rs (R arg) = Vint n ->
-      list_nth_z tbl (Int.signed n) = Some lbl ->
+      list_nth_z tbl (Int.unsigned n) = Some lbl ->
       find_label lbl f.(fn_code) = Some b' ->
       step (State s f sp (Ljumptable arg tbl :: b) rs m)
         E0 (State s f sp b' (undef_temps rs) m)

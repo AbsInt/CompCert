@@ -165,8 +165,8 @@ Inductive instruction : Type :=
   | Psufd: freg -> freg -> freg -> instruction     (**r float subtraction *)
 
   (* Pseudo-instructions *)
-  | Pallocframe: Z -> Z -> int -> instruction      (**r allocate new stack frame *)
-  | Pfreeframe: Z -> Z -> int -> instruction       (**r deallocate stack frame and restore previous frame *)
+  | Pallocframe: Z -> int -> instruction      (**r allocate new stack frame *)
+  | Pfreeframe: Z -> int -> instruction       (**r deallocate stack frame and restore previous frame *)
   | Plabel: label -> instruction                   (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
@@ -186,20 +186,20 @@ lbl:    .word   symbol
 >>
   Initialized data in the constant data section are not modeled here,
   which is why we use a pseudo-instruction for this purpose.
-- [Pallocframe lo hi pos]: in the formal semantics, this pseudo-instruction
-  allocates a memory block with bounds [lo] and [hi], stores the value
+- [Pallocframe sz pos]: in the formal semantics, this pseudo-instruction
+  allocates a memory block with bounds [0] and [sz], stores the value
   of the stack pointer at offset [pos] in this block, and sets the
   stack pointer to the address of the bottom of this block.
   In the printed ASM assembly code, this allocation is:
 <<
         mov     r12, sp
-        sub     sp, sp, #(hi - lo)
+        sub     sp, sp, #sz
         str     r12, [sp, #pos]
 >>
   This cannot be expressed in our memory model, which does not reflect
   the fact that stack frames are adjacent and allocated/freed
   following a stack discipline.
-- [Pfreeframe pos]: in the formal semantics, this pseudo-instruction
+- [Pfreeframe sz pos]: in the formal semantics, this pseudo-instruction
   reads the word at [pos] of the block pointed by the stack pointer,
   frees this block, and sets the stack pointer to the value read.
   In the printed ASM assembly code, this freeing
@@ -494,20 +494,20 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Psufd r1 r2 r3 =>     
       OK (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
   (* Pseudo-instructions *)
-  | Pallocframe lo hi pos =>             
-      let (m1, stk) := Mem.alloc m lo hi in
-      let sp := (Vptr stk (Int.repr lo)) in
+  | Pallocframe sz pos =>             
+      let (m1, stk) := Mem.alloc m 0 sz in
+      let sp := (Vptr stk Int.zero) in
       match Mem.storev Mint32 m1 (Val.add sp (Vint pos)) rs#IR13 with
       | None => Error
-      | Some m2 => OK (nextinstr (rs#IR13 <- sp)) m2
+      | Some m2 => OK (nextinstr (rs #IR12 <- (rs#IR13) #IR13 <- sp)) m2
       end
-  | Pfreeframe lo hi pos =>
+  | Pfreeframe sz pos =>
       match Mem.loadv Mint32 m (Val.add rs#IR13 (Vint pos)) with
       | None => Error
       | Some v =>
           match rs#IR13 with
           | Vptr stk ofs =>
-              match Mem.free m stk lo hi with
+              match Mem.free m stk 0 sz with
               | None => Error
               | Some m' => OK (nextinstr (rs#IR13 <- v)) m'
               end
@@ -521,7 +521,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pbtbl r tbl =>
       match rs#r with
       | Vint n => 
-          let pos := Int.signed n in
+          let pos := Int.unsigned n in
           if zeq (Zmod pos 4) 0 then
             match list_nth_z tbl (pos / 4) with
             | None => Error

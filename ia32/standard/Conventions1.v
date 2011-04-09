@@ -62,7 +62,7 @@ Definition dummy_float_reg := X0.   (**r Used in [Coloring]. *)
 
 Definition index_int_callee_save (r: mreg) :=
   match r with
-  | BX => 1 | SI => 2 | DI => 3 | BP => 4 | _ => -1
+  | BX => 0 | SI => 1 | DI => 2 | BP => 3 | _ => -1
   end.
 
 Definition index_float_callee_save (r: mreg) := -1.

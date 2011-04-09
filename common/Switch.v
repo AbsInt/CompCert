@@ -60,7 +60,7 @@ Fixpoint comptree_match (n: int) (t: comptree) {struct t}: option nat :=
       if Int.ltu n key then comptree_match n t1 else comptree_match n t2
   | CTjumptable ofs sz tbl t' =>
       if Int.ltu (Int.sub n ofs) sz
-      then list_nth_z tbl (Int.signed (Int.sub n ofs))
+      then list_nth_z tbl (Int.unsigned (Int.sub n ofs))
       else comptree_match n t'
   end.
 
@@ -231,23 +231,22 @@ Qed.
 Lemma validate_jumptable_correct_rec:
   forall cases default tbl base v,
   validate_jumptable cases default tbl base = true ->
-  0 <= Int.signed v < list_length_z tbl -> Int.signed v <= Int.max_signed ->
-  list_nth_z tbl (Int.signed v) =
+  0 <= Int.unsigned v < list_length_z tbl ->
+  list_nth_z tbl (Int.unsigned v) =
   Some(match IntMap.find (Int.add base v) cases with Some a => a | None => default end).
 Proof.
   induction tbl; intros until v; simpl.
   unfold list_length_z; simpl. intros. omegaContradiction.
   rewrite list_length_z_cons. intros. destruct (andb_prop _ _ H). clear H.
-  generalize (beq_nat_eq _ _ (sym_equal H2)). clear H2. intro. subst a.
-  destruct (zeq (Int.signed v) 0).
-  rewrite Int.add_signed. rewrite e. rewrite Zplus_0_r. rewrite Int.repr_signed. auto.
-  assert (Int.signed (Int.sub v Int.one) = Int.signed v - 1).
-    rewrite Int.sub_signed. change (Int.signed Int.one) with 1. 
-    apply Int.signed_repr. split. apply Zle_trans with 0. 
-    vm_compute; congruence. omega. omega.
-    replace (Int.add base v) with (Int.add (Int.add base Int.one) (Int.sub v Int.one)).
+  generalize (beq_nat_eq _ _ (sym_equal H1)). clear H1. intro. subst a.
+  destruct (zeq (Int.unsigned v) 0).
+  unfold Int.add. rewrite e. rewrite Zplus_0_r. rewrite Int.repr_unsigned. auto.
+  assert (Int.unsigned (Int.sub v Int.one) = Int.unsigned v - 1).
+    unfold Int.sub. change (Int.unsigned Int.one) with 1. 
+    apply Int.unsigned_repr. split. omega.
+    generalize (Int.unsigned_range_2 v). omega.
+  replace (Int.add base v) with (Int.add (Int.add base Int.one) (Int.sub v Int.one)).
   rewrite <- IHtbl. rewrite H. auto. auto. rewrite H. omega. 
-  rewrite H. omega. 
   rewrite Int.sub_add_opp. rewrite Int.add_permut. rewrite Int.add_assoc. 
   replace (Int.add Int.one (Int.neg Int.one)) with Int.zero.
   rewrite Int.add_zero. apply Int.add_commut.
@@ -258,18 +257,17 @@ Lemma validate_jumptable_correct:
   forall cases default tbl ofs v sz,
   validate_jumptable cases default tbl ofs = true ->
   Int.ltu (Int.sub v ofs) sz = true ->
-  Int.unsigned sz <= list_length_z tbl <= Int.max_signed ->
-  list_nth_z tbl (Int.signed (Int.sub v ofs)) =
+  Int.unsigned sz <= list_length_z tbl ->
+  list_nth_z tbl (Int.unsigned (Int.sub v ofs)) =
   Some(match IntMap.find v cases with Some a => a | None => default end).
 Proof.
   intros.
-  exploit Int.ltu_range_test; eauto. omega. intros. 
+  exploit Int.ltu_inv; eauto. intros. 
   rewrite (validate_jumptable_correct_rec cases default tbl ofs).
   rewrite Int.sub_add_opp. rewrite Int.add_permut. rewrite <- Int.sub_add_opp. 
   rewrite Int.sub_idem. rewrite Int.add_zero. auto. 
   auto.
   omega. 
-  omega.
 Qed.
 
 Lemma validate_correct_rec:
@@ -278,6 +276,7 @@ Lemma validate_correct_rec:
   lo <= Int.unsigned v <= hi ->
   comptree_match v t = Some (switch_target v default cases).
 Proof.
+Opaque Int.sub.
   induction t; simpl; intros until hi.
   (* base case *)
   destruct cases as [ | [key1 act1] cases1]; intros.
@@ -320,7 +319,7 @@ Proof.
   rewrite (split_between_prop v _ _ _ _ _ _ EQ).
   case_eq (Int.ltu (Int.sub v i) i0); intros.
   eapply validate_jumptable_correct; eauto. 
-  split; eapply proj_sumbool_true; eauto.
+  eapply proj_sumbool_true; eauto.
   eapply IHt; eauto. 
 Qed.
 

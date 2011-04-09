@@ -130,7 +130,7 @@ Inductive instruction : Type :=
   | Paddi: ireg -> ireg -> constant -> instruction            (**r add immediate *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
   | Paddze: ireg -> ireg -> instruction                       (**r add Carry bit *)
-  | Pallocframe: Z -> Z -> int -> instruction                 (**r allocate new stack frame *)
+  | Pallocframe: Z -> int -> instruction                 (**r allocate new stack frame *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
   | Pandi_: ireg -> ireg -> constant -> instruction           (**r and immediate and set conditions *)
@@ -154,7 +154,7 @@ Inductive instruction : Type :=
   | Peqv: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-xor *)
   | Pextsb: ireg -> ireg -> instruction                       (**r 8-bit sign extension *)
   | Pextsh: ireg -> ireg -> instruction                       (**r 16-bit sign extension *)
-  | Pfreeframe: Z -> Z -> int -> instruction                  (**r deallocate stack frame and restore previous frame *)
+  | Pfreeframe: Z -> int -> instruction                  (**r deallocate stack frame and restore previous frame *)
   | Pfabs: freg -> freg -> instruction                        (**r float absolute value *)
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
@@ -249,19 +249,19 @@ lbl:    .double floatcst
         lfd     rdst, 0(r1)
         addi    r1, r1, 8
 >>
-- [Pallocframe lo hi ofs]: in the formal semantics, this pseudo-instruction
-  allocates a memory block with bounds [lo] and [hi], stores the value
+- [Pallocframe sz ofs]: in the formal semantics, this pseudo-instruction
+  allocates a memory block with bounds [0] and [sz], stores the value
   of register [r1] (the stack pointer, by convention) at offset [ofs]
   in this block, and sets [r1] to a pointer to the bottom of this
   block.  In the printed PowerPC assembly code, this allocation
   is just a store-decrement of register [r1], assuming that [ofs = 0]:
 <<
-        stwu    r1, (lo - hi)(r1)
+        stwu    r1, -sz(r1)
 >>
   This cannot be expressed in our memory model, which does not reflect
   the fact that stack frames are adjacent and allocated/freed
   following a stack discipline.
-- [Pfreeframe lo hi ofs]: in the formal semantics, this pseudo-instruction
+- [Pfreeframe sz ofs]: in the formal semantics, this pseudo-instruction
   reads the word at offset [ofs] in the block pointed by [r1] (the
   stack pointer), frees this block, and sets [r1] to the value of the
   word at offset [ofs].  In the printed PowerPC assembly code, this
@@ -527,9 +527,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
   | Paddze rd r1 =>
       OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY))) m
-  | Pallocframe lo hi ofs =>
-      let (m1, stk) := Mem.alloc m lo hi in
-      let sp := Vptr stk (Int.repr lo) in
+  | Pallocframe sz ofs =>
+      let (m1, stk) := Mem.alloc m 0 sz in
+      let sp := Vptr stk Int.zero in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
       | None => Error
       | Some m2 => OK (nextinstr (rs#GPR1 <- sp #GPR0 <- Vundef)) m2
@@ -570,7 +570,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pbtbl r tbl =>
       match gpr_or_zero rs r with
       | Vint n => 
-          let pos := Int.signed n in
+          let pos := Int.unsigned n in
           if zeq (Zmod pos 4) 0 then
             match list_nth_z tbl (pos / 4) with
             | None => Error
@@ -599,13 +599,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) m
   | Pextsh rd r1 =>
       OK (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
-  | Pfreeframe lo hi ofs =>
+  | Pfreeframe sz ofs =>
       match Mem.loadv Mint32 m (Val.add rs#GPR1 (Vint ofs)) with
       | None => Error
       | Some v =>
           match rs#GPR1 with
           | Vptr stk ofs =>
-              match Mem.free m stk lo hi with
+              match Mem.free m stk 0 sz with
               | None => Error
               | Some m' => OK (nextinstr (rs#GPR1 <- v)) m'
               end

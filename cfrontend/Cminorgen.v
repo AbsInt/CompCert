@@ -489,7 +489,7 @@ Definition transl_funbody
 Definition transl_function
          (gce: compilenv) (f: Csharpminor.function): res function :=
   let (cenv, stacksize) := build_compilenv gce f in
-  if zle stacksize Int.max_signed
+  if zle stacksize Int.max_unsigned
   then transl_funbody cenv stacksize f
   else Error(msg "Cminorgen: too many local variables, stack size exceeded").
 

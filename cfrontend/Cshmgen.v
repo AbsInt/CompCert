@@ -199,8 +199,9 @@ Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
-  | cmp_case_iiu => OK (Ebinop (Ocmpu c) e1 e2)
-  | cmp_case_ipip => OK (Ebinop (Ocmp c) e1 e2)
+  | cmp_case_ii Signed => OK (Ebinop (Ocmp c) e1 e2)
+  | cmp_case_ii Unsigned => OK (Ebinop (Ocmpu c) e1 e2)
+  | cmp_case_pp => OK (Ebinop (Ocmpu c) e1 e2)
   | cmp_case_ff => OK (Ebinop (Ocmpf c) e1 e2)
   | cmp_case_if sg => OK (Ebinop (Ocmpf c) (make_floatofint e1 sg) e2)
   | cmp_case_fi sg => OK (Ebinop (Ocmpf c) e1 (make_floatofint e2 sg))

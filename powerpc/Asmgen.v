@@ -466,12 +466,12 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pmtctr (ireg_of r) :: 
       Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR0 ::
-      Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) :: 
+      Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
       Pbctr :: k
   | Mtailcall sig (inr symb) =>
       Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR0 ::
-      Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) :: 
+      Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
       Pbs symb :: k
   | Mbuiltin ef args res =>
       Pbuiltin ef (map preg_of args) (preg_of res) :: k
@@ -489,7 +489,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
   | Mreturn =>
       Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
       Pmtlr GPR0 ::
-      Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) ::
+      Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
       Pblr :: k
   end.
 
@@ -502,7 +502,7 @@ Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
   around, leading to incorrect executions. *)
 
 Definition transl_function (f: Mach.function) :=
-  Pallocframe (- f.(fn_framesize)) f.(fn_stacksize) f.(fn_link_ofs) ::
+  Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
   Pmflr GPR0 ::
   Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
   transl_code f f.(fn_code).

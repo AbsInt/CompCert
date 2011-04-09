@@ -71,7 +71,7 @@ Inductive return_address_offset: Mach.function -> Mach.code -> int -> Prop :=
       forall f c ofs,
       (forall tf tc,
        transf_function f = OK tf ->
-       transl_code f c = OK tc ->
+       transl_code f c false = OK tc ->
        code_tail ofs tf tc) ->
       return_address_offset f c (Int.repr ofs).
 
@@ -202,7 +202,7 @@ Proof.
 Qed.
 
 Lemma transl_instr_tail:
-  forall f i k c, transl_instr f i k = OK c -> is_tail k c.
+  forall f i ep k c, transl_instr f i ep k = OK c -> is_tail k c.
 Proof.
   unfold transl_instr; intros. destruct i; IsTail.
   eapply is_tail_trans; eapply loadind_tail; eauto.
@@ -213,31 +213,39 @@ Proof.
   destruct s0; IsTail.
   eapply is_tail_trans. 2: eapply transl_cond_tail; eauto. IsTail.
 Qed.
- 
+
 Lemma transl_code_tail: 
   forall f c1 c2, is_tail c1 c2 ->
-  forall tc1 tc2, transl_code f c1 = OK tc1 -> transl_code f c2 = OK tc2 ->
-  is_tail tc1 tc2.
+  forall tc2 ep2, transl_code f c2 ep2 = OK tc2 ->
+  exists tc1, exists ep1, transl_code f c1 ep1 = OK tc1 /\ is_tail tc1 tc2.
 Proof.
   induction 1; simpl; intros.
-  replace tc2 with tc1 by congruence. constructor.
-  IsTail. apply is_tail_trans with x. eauto. eapply transl_instr_tail; eauto.
+  exists tc2; exists ep2; split; auto with coqlib.
+  monadInv H0. exploit IHis_tail; eauto. intros [tc1 [ep1 [A B]]].
+  exists tc1; exists ep1; split. auto. 
+  apply is_tail_trans with x. auto. eapply transl_instr_tail; eauto.
 Qed.
 
 Lemma return_address_exists:
-  forall f c, is_tail c f.(fn_code) ->
+  forall f sg ros c, is_tail (Mcall sg ros :: c) f.(fn_code) ->
   exists ra, return_address_offset f c ra.
 Proof.
   intros.
-  caseEq (transf_function f). intros tf TF. 
-  caseEq (transl_code f c). intros tc TC.  
-  assert (is_tail tc tf). 
-  unfold transf_function in TF. monadInv TF. 
-  destruct (zlt (list_length_z x) Int.max_unsigned); monadInv EQ0.
-  IsTail. eapply transl_code_tail; eauto. 
-  destruct (is_tail_code_tail _ _ H0) as [ofs A].
+  caseEq (transf_function f). intros tf TF.
+  assert (exists tc1, transl_code f (fn_code f) true = OK tc1 /\ is_tail tc1 tf).
+    monadInv TF.
+    destruct (zlt (list_length_z x) Int.max_unsigned); monadInv EQ0.
+    econstructor; eauto with coqlib.
+  destruct H0 as [tc2 [A B]].
+  exploit transl_code_tail; eauto. intros [tc1 [ep [C D]]].
+Opaque transl_instr.
+  monadInv C.
+  assert (is_tail x tf).
+    apply is_tail_trans with tc2; auto.
+    apply is_tail_trans with tc1; auto.
+    eapply transl_instr_tail; eauto.
+  exploit is_tail_code_tail. eexact H0. intros [ofs C].
   exists (Int.repr ofs). constructor; intros. congruence. 
-  intros. exists (Int.repr 0). constructor; intros; congruence.
   intros. exists (Int.repr 0). constructor; intros; congruence.
 Qed.
 

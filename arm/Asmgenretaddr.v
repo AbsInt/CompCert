@@ -102,6 +102,16 @@ Ltac IsTail :=
   | _ => idtac
   end.
 
+Lemma iterate_op_tail:
+  forall op1 op2 l k, is_tail k (iterate_op op1 op2 l k).
+Proof. 
+  intros. unfold iterate_op. 
+  destruct l.
+  auto with coqlib.
+  constructor. revert l; induction l; simpl; auto with coqlib.
+Qed.
+Hint Resolve iterate_op_tail: ppcretaddr.
+
 Lemma loadimm_tail:
   forall r n k, is_tail k (loadimm r n k).
 Proof. unfold loadimm; intros; IsTail. Qed.
@@ -117,10 +127,20 @@ Lemma andimm_tail:
 Proof. unfold andimm; intros; IsTail. Qed.
 Hint Resolve andimm_tail: ppcretaddr.
 
-Lemma makeimm_tail:
-  forall f r1 r2 n k, is_tail k (makeimm f r1 r2 n k).
-Proof. unfold makeimm; intros; IsTail. Qed.
-Hint Resolve makeimm_tail: ppcretaddr.
+Lemma rsubimm_tail:
+  forall r1 r2 n k, is_tail k (rsubimm r1 r2 n k).
+Proof. unfold rsubimm; intros; IsTail. Qed.
+Hint Resolve rsubimm_tail: ppcretaddr.
+
+Lemma orimm_tail:
+  forall r1 r2 n k, is_tail k (orimm r1 r2 n k).
+Proof. unfold orimm; intros; IsTail. Qed.
+Hint Resolve orimm_tail: ppcretaddr.
+
+Lemma xorimm_tail:
+  forall r1 r2 n k, is_tail k (xorimm r1 r2 n k).
+Proof. unfold xorimm; intros; IsTail. Qed.
+Hint Resolve xorimm_tail: ppcretaddr.
 
 Lemma transl_cond_tail:
   forall cond args k, is_tail k (transl_cond cond args k).
@@ -189,11 +209,11 @@ Proof.
 Qed.
 
 Lemma return_address_exists:
-  forall f c, is_tail c f.(fn_code) ->
+  forall f sg ros c, is_tail (Mcall sg ros :: c) f.(fn_code) ->
   exists ra, return_address_offset f c ra.
 Proof.
   intros. assert (is_tail (transl_code f c) (transl_function f)).
-  unfold transl_function. IsTail. apply transl_code_tail; auto.
+  unfold transl_function. IsTail. apply transl_code_tail; eauto with coqlib.
   destruct (is_tail_code_tail _ _ H0) as [ofs A].
   exists (Int.repr ofs). constructor. auto.
 Qed.

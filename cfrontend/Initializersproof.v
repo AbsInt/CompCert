@@ -336,13 +336,14 @@ Lemma sem_cmp_match:
   match_val v1 v1' -> match_val v2 v2' ->
   match_val v v'.
 Proof.
+Opaque zeq.
   intros. unfold sem_cmp in *.
-  destruct (classify_cmp ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
+  destruct (classify_cmp ty1 ty2); try (destruct s); inv H1; inv H2; inv H; inv H0; auto with mval.
   destruct (Int.eq n Int.zero); try discriminate. 
   unfold sem_cmp_mismatch in *. destruct c; inv H3; inv H2; constructor.
   destruct (Int.eq n Int.zero); try discriminate. 
   unfold sem_cmp_mismatch in *. destruct c; inv H2; inv H1; constructor.
-  rewrite (mem_empty_not_valid_pointer (Zpos id) (Int.signed ofs)) in H4. discriminate.
+  rewrite (mem_empty_not_valid_pointer (Zpos id) (Int.unsigned ofs)) in H4. discriminate.
 Qed.
 
 Lemma sem_binary_match:

@@ -184,8 +184,8 @@ Inductive instruction: Type :=
   | Pret
   (** Pseudo-instructions *)
   | Plabel(l: label)
-  | Pallocframe(lo hi: Z)(ofs_ra ofs_link: int)
-  | Pfreeframe(lo hi: Z)(ofs_ra ofs_link: int)
+  | Pallocframe(sz: Z)(ofs_ra ofs_link: int)
+  | Pfreeframe(sz: Z)(ofs_ra ofs_link: int)
   | Pbuiltin(ef: external_function)(args: list preg)(res: preg).
 
 Definition code := list instruction.
@@ -601,7 +601,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pjmptbl r tbl =>
       match rs#r with
       | Vint n => 
-          match list_nth_z tbl (Int.signed n) with
+          match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
           | Some lbl => goto_label c lbl (rs #ECX <- Vundef #EDX <- Vundef) m
           end
@@ -616,18 +616,18 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   (** Pseudo-instructions *)
   | Plabel lbl =>
       Next (nextinstr rs) m
-  | Pallocframe lo hi ofs_ra ofs_link =>
-      let (m1, stk) := Mem.alloc m lo hi in
-      let sp := Vptr stk (Int.repr lo) in
+  | Pallocframe sz ofs_ra ofs_link =>
+      let (m1, stk) := Mem.alloc m 0 sz in
+      let sp := Vptr stk Int.zero in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs_link)) rs#ESP with
       | None => Stuck
       | Some m2 =>
           match Mem.storev Mint32 m2 (Val.add sp (Vint ofs_ra)) rs#RA with
           | None => Stuck
-          | Some m3 => Next (nextinstr (rs#ESP <- sp)) m3
+          | Some m3 => Next (nextinstr (rs #EDX <- (rs#ESP) #ESP <- sp)) m3
           end
       end
-  | Pfreeframe lo hi ofs_ra ofs_link =>
+  | Pfreeframe sz ofs_ra ofs_link =>
       match Mem.loadv Mint32 m (Val.add rs#ESP (Vint ofs_ra)) with
       | None => Stuck
       | Some ra =>
@@ -636,7 +636,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
           | Some sp =>
               match rs#ESP with
               | Vptr stk ofs =>
-                  match Mem.free m stk lo hi with
+                  match Mem.free m stk 0 sz with
                   | None => Stuck
                   | Some m' => Next (nextinstr (rs#ESP <- sp #RA <- ra)) m'
                   end

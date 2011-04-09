@@ -585,19 +585,21 @@ Lemma make_cmp_correct:
 Proof.
   intros until m. intro SEM. unfold make_cmp.
   functional inversion SEM; rewrite H0; intros.
-  (* iiu *) 
+  (** ii Signed *)
+  inversion H8; eauto with cshm.
+  (* ii Unsigned *) 
   inversion H8. eauto with cshm.
-  (* ipip int int *)
+  (* pp int int *)
   inversion H8. eauto with cshm.
-  (* ipip ptr ptr *)
+  (* pp ptr ptr *)
   inversion H10. eapply eval_Ebinop; eauto with cshm.
   simpl. rewrite H3. unfold eq_block. rewrite H9. auto.
   inversion H10. eapply eval_Ebinop; eauto with cshm.
   simpl. rewrite H3. unfold eq_block. rewrite H9. auto.
-  (* ipip ptr int *)
+  (* pp ptr int *)
   inversion H9. eapply eval_Ebinop; eauto with cshm.
   simpl. unfold eval_compare_null. rewrite H8. auto.
-  (* ipip int ptr *)
+  (* pp int ptr *)
   inversion H9. eapply eval_Ebinop; eauto with cshm.
   simpl. unfold eval_compare_null. rewrite H8. auto.
   (* ff *)

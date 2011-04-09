@@ -512,14 +512,14 @@ Proof.
   TransfInstr. 
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) ifso rs' m'); split.
   eapply exec_Icond_true; eauto.
-  apply eval_condition_lessdef with (rs##args); auto. apply regset_get_list; auto.
+  apply eval_condition_lessdef with (rs##args) m; auto. apply regset_get_list; auto.
   constructor; auto. 
 
 (* cond false *)
   TransfInstr. 
   left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) ifnot rs' m'); split.
   eapply exec_Icond_false; eauto.
-  apply eval_condition_lessdef with (rs##args); auto. apply regset_get_list; auto.
+  apply eval_condition_lessdef with (rs##args) m; auto. apply regset_get_list; auto.
   constructor; auto. 
 
 (* jumptable *)

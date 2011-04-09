@@ -893,8 +893,8 @@ Definition classify_shift (ty1: type) (ty2: type) :=
 end.
 
 Inductive classify_cmp_cases : Type:=
-  | cmp_case_iiu               (**r unsigned int, unsigned int *)
-  | cmp_case_ipip              (**r int-or-pointer, int-or-pointer *)
+  | cmp_case_ii(s: signedness) (**r int, int *)
+  | cmp_case_pp                (**r pointer, pointer *)
   | cmp_case_ff                (**r float , float *)
   | cmp_case_if(s: signedness) (**r int, float *)
   | cmp_case_fi(s: signedness) (**r float, int *)
@@ -902,15 +902,15 @@ Inductive classify_cmp_cases : Type:=
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with 
-  | Tint I32 Unsigned , Tint _ _ => cmp_case_iiu
-  | Tint _ _ , Tint I32 Unsigned => cmp_case_iiu
-  | Tint _ _ , Tint _ _ => cmp_case_ipip
+  | Tint I32 Unsigned , Tint _ _ => cmp_case_ii Unsigned
+  | Tint _ _ , Tint I32 Unsigned => cmp_case_ii Unsigned
+  | Tint _ _ , Tint _ _ => cmp_case_ii Signed
   | Tfloat _ , Tfloat _ => cmp_case_ff
   | Tint _ sg, Tfloat _ => cmp_case_if sg
   | Tfloat _, Tint _ sg => cmp_case_fi sg
-  | Tpointer _ , Tpointer _ => cmp_case_ipip
-  | Tpointer _ , Tint _ _ => cmp_case_ipip
-  | Tint _ _, Tpointer _ => cmp_case_ipip
+  | Tpointer _ , Tpointer _ => cmp_case_pp
+  | Tpointer _ , Tint _ _ => cmp_case_pp
+  | Tint _ _, Tpointer _ => cmp_case_pp
   | _ , _ => cmp_default
   end.
 

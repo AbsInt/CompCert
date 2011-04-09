@@ -419,6 +419,7 @@ Lemma transl_switch_correct:
   nth_error nexits act = Some nd /\
   match_env map e nil rs'.
 Proof.
+  Opaque Int.sub.
   induction 1; simpl; intros.
 (* action *)
   inv H3. exists n; exists rs; intuition.
@@ -584,7 +585,7 @@ Lemma transl_expr_Eop_correct:
          (vargs : list val) (v : val),
   eval_exprlist ge sp e m le args vargs ->
   transl_exprlist_prop le args vargs ->
-  eval_operation ge sp op vargs = Some v ->
+  eval_operation ge sp op vargs m = Some v ->
   transl_expr_prop le (Eop op args) v.
 Proof.
   intros; red; intros. inv TE.
@@ -730,7 +731,7 @@ Lemma transl_condition_CEcond_correct:
          (vargs : list val) (b : bool),
   eval_exprlist ge sp e m le args vargs ->
   transl_exprlist_prop le args vargs ->
-  eval_condition cond vargs = Some b ->
+  eval_condition cond vargs m = Some b ->
   transl_condition_prop le (CEcond cond args) b.
 Proof.
   intros; red; intros; inv TE.

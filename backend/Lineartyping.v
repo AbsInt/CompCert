@@ -16,10 +16,10 @@ Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Memdata.
+Require Import Values.
 Require Import Op.
-Require Import RTL.
 Require Import Locations.
+Require Import LTL.
 Require Import Linear.
 Require Import Conventions.
 
@@ -106,7 +106,7 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Ljumptable:
       forall arg tbl,
       mreg_type arg = Tint ->
-      list_length_z tbl * 4 <= Int.max_signed ->
+      list_length_z tbl * 4 <= Int.max_unsigned ->
       wt_instr (Ljumptable arg tbl)
   | wt_Lreturn: 
       wt_instr (Lreturn).
@@ -129,3 +129,66 @@ Inductive wt_fundef: fundef -> Prop :=
 Definition wt_program (p: program) : Prop :=
   forall i f, In (i, f) (prog_funct p) -> wt_fundef f.
 
+(** Typing the run-time state.  These definitions are used in [Stackingproof]. *)
+
+Require Import Values.
+
+Definition wt_locset (ls: locset) : Prop :=
+  forall l, Val.has_type (ls l) (Loc.type l).
+
+Lemma wt_setloc:
+  forall ls l v,
+  Val.has_type v (Loc.type l) -> wt_locset ls -> wt_locset (Locmap.set l v ls).
+Proof.
+  intros; red; intros.
+  unfold Locmap.set. 
+  destruct (Loc.eq l l0). congruence.
+  destruct (Loc.overlap l l0).  red. auto.
+  auto.
+Qed.
+
+Lemma wt_undef_temps:
+  forall ls, wt_locset ls -> wt_locset (undef_temps ls).
+Proof.
+  unfold undef_temps. generalize temporaries. induction l; simpl; intros.
+  auto.
+  apply IHl. apply wt_setloc; auto. red; auto.
+Qed.
+
+Lemma wt_undef_op:
+  forall op ls, wt_locset ls -> wt_locset (undef_op op ls).
+Proof.
+  intros. generalize (wt_undef_temps ls H); intro. case op; simpl; auto.
+Qed.
+
+Lemma wt_undef_getstack:
+  forall s ls, wt_locset ls -> wt_locset (undef_getstack s ls).
+Proof.
+  intros. unfold undef_getstack. destruct s; auto. apply wt_setloc; auto. red; auto.
+Qed.
+
+Lemma wt_call_regs:
+  forall ls, wt_locset ls -> wt_locset (call_regs ls).
+Proof.
+  intros; red; intros. unfold call_regs. destruct l. auto. 
+  destruct (in_dec Loc.eq (R m) temporaries). red; auto. auto.
+  destruct s. red; auto. 
+  change (Loc.type (S (Incoming z t))) with (Loc.type (S (Outgoing z t))). auto.
+  red; auto.
+Qed.
+
+Lemma wt_return_regs:
+  forall caller callee,
+  wt_locset caller -> wt_locset callee -> wt_locset (return_regs caller callee).
+Proof.
+  intros; red; intros.
+  unfold return_regs. destruct l; auto. 
+  destruct (in_dec Loc.eq (R m) temporaries); auto.
+  destruct (in_dec Loc.eq (R m) destroyed_at_call); auto.
+Qed.
+
+Lemma wt_init:
+  wt_locset (Locmap.init Vundef).
+Proof.
+  red; intros. unfold Locmap.init. red; auto.
+Qed.

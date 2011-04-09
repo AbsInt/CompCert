@@ -582,7 +582,7 @@ Inductive volatile_load_sem (chunk: memory_chunk) (F V: Type) (ge: Genv.t F V):
           (Val.load_result chunk v) m
   | volatile_load_sem_nonvol: forall b ofs m v,
       block_is_volatile ge b = false ->
-      Mem.load chunk m b (Int.signed ofs) = Some v ->
+      Mem.load chunk m b (Int.unsigned ofs) = Some v ->
       volatile_load_sem chunk ge
           (Vptr b ofs :: nil) m
           E0
@@ -675,7 +675,7 @@ Inductive volatile_store_sem (chunk: memory_chunk) (F V: Type) (ge: Genv.t F V):
           Vundef m
   | volatile_store_sem_nonvol: forall b ofs m v m',
       block_is_volatile ge b = false ->
-      Mem.store chunk m b (Int.signed ofs) v = Some m' ->
+      Mem.store chunk m b (Int.unsigned ofs) v = Some m' ->
       volatile_store_sem chunk ge
           (Vptr b ofs :: v :: nil) m
           E0
@@ -719,7 +719,7 @@ Proof.
   generalize (size_chunk_pos chunk0). intro E.
   generalize (size_chunk_pos chunk). intro G.
   apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
-                              (Int.signed ofs, Int.signed ofs + size_chunk chunk)).
+                              (Int.unsigned ofs, Int.unsigned ofs + size_chunk chunk)).
   red; intros. generalize (H x H5). unfold loc_out_of_bounds, Intv.In; simpl. omega.
   simpl; omega. simpl; omega.
 
@@ -746,16 +746,16 @@ Proof.
   split; intros. eapply Mem.perm_store_1; eauto.
   rewrite <- H4. eapply Mem.load_store_other; eauto.
   destruct (eq_block b0 b2); auto. subst b0; right.
-  assert (EQ: Int.signed (Int.add ofs (Int.repr delta)) = Int.signed ofs + delta).
+  assert (EQ: Int.unsigned (Int.add ofs (Int.repr delta)) = Int.unsigned ofs + delta).
     eapply Mem.address_inject; eauto with mem.
-  simpl in A. rewrite EQ in A. rewrite EQ.
+  unfold Mem.storev in A. rewrite EQ in A. rewrite EQ.
   exploit Mem.valid_access_in_bounds. 
   eapply Mem.store_valid_access_3. eexact H0.
   intros [C D].
   generalize (size_chunk_pos chunk0). intro E.
   generalize (size_chunk_pos chunk). intro G.
   apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
-                              (Int.signed ofs + delta, Int.signed ofs + delta + size_chunk chunk)).
+                              (Int.unsigned ofs + delta, Int.unsigned ofs + delta + size_chunk chunk)).
   red; intros. exploit (H2 x H8). eauto. unfold Intv.In; simpl. omega.
   simpl; omega. simpl; omega.
   red; intros; congruence.
@@ -772,7 +772,7 @@ Qed.
 Inductive extcall_malloc_sem (F V: Type) (ge: Genv.t F V):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_malloc_sem_intro: forall n m m' b m'',
-      Mem.alloc m (-4) (Int.signed n) = (m', b) ->
+      Mem.alloc m (-4) (Int.unsigned n) = (m', b) ->
       Mem.store Mint32 m' b (-4) (Vint n) = Some m'' ->
       extcall_malloc_sem ge (Vint n :: nil) m E0 (Vptr b Int.zero) m''.
 
@@ -782,7 +782,7 @@ Lemma extcall_malloc_ok:
 Proof.
   assert (UNCHANGED:
     forall (P: block -> Z -> Prop) m n m' b m'',
-    Mem.alloc m (-4) (Int.signed n) = (m', b) ->
+    Mem.alloc m (-4) (Int.unsigned n) = (m', b) ->
     Mem.store Mint32 m' b (-4) (Vint n) = Some m'' ->
     mem_unchanged_on P m m'').
   intros; split; intros.
@@ -840,9 +840,9 @@ Qed.
 Inductive extcall_free_sem  (F V: Type) (ge: Genv.t F V):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_free_sem_intro: forall b lo sz m m',
-      Mem.load Mint32 m b (Int.signed lo - 4) = Some (Vint sz) ->
-      Int.signed sz > 0 ->
-      Mem.free m b (Int.signed lo - 4) (Int.signed lo + Int.signed sz) = Some m' ->
+      Mem.load Mint32 m b (Int.unsigned lo - 4) = Some (Vint sz) ->
+      Int.unsigned sz > 0 ->
+      Mem.free m b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) = Some m' ->
       extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'.
 
 Lemma extcall_free_ok:
@@ -889,13 +889,13 @@ Proof.
 
   inv H0. inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B. 
-  assert (Mem.range_perm m1 b (Int.signed lo - 4) (Int.signed lo + Int.signed sz) Freeable).
+  assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto. 
     apply Mem.perm_implies with Freeable; auto with mem.
     apply H0. instantiate (1 := lo). omega. 
   intro EQ.
-  assert (Mem.range_perm m1' b2 (Int.signed lo + delta - 4) (Int.signed lo + delta + Int.signed sz) Freeable).
+  assert (Mem.range_perm m1' b2 (Int.unsigned lo + delta - 4) (Int.unsigned lo + delta + Int.unsigned sz) Freeable).
     red; intros. 
     replace ofs with ((ofs - delta) + delta) by omega.
     eapply Mem.perm_inject; eauto. apply H0. omega. 
@@ -903,16 +903,16 @@ Proof.
   exists f; exists Vundef; exists m2'; intuition.
 
   econstructor.
-  rewrite EQ. replace (Int.signed lo + delta - 4) with (Int.signed lo - 4 + delta) by omega.
+  rewrite EQ. replace (Int.unsigned lo + delta - 4) with (Int.unsigned lo - 4 + delta) by omega.
   eauto. auto. 
   rewrite EQ. auto.
   
-  assert (Mem.free_list m1 ((b, Int.signed lo - 4, Int.signed lo + Int.signed sz) :: nil) = Some m2).
+  assert (Mem.free_list m1 ((b, Int.unsigned lo - 4, Int.unsigned lo + Int.unsigned sz) :: nil) = Some m2).
     simpl. rewrite H5. auto.
   eapply Mem.free_inject; eauto. 
   intros. destruct (eq_block b b1).
   subst b. assert (delta0 = delta) by congruence. subst delta0. 
-  exists (Int.signed lo - 4); exists (Int.signed lo + Int.signed sz); split.
+  exists (Int.unsigned lo - 4); exists (Int.unsigned lo + Int.unsigned sz); split.
   simpl; auto. omega.
   elimtype False.
   exploit Mem.inject_no_overlap. eauto. eauto. eauto. eauto. 
@@ -1110,4 +1110,17 @@ Proof.
   case_eq (Genv.find_var_info ge2 b); intros.
   exploit H2; eauto. intros [g1 [A B]]. congruence.
   auto.
+Qed.
+
+(** Corollary of [external_call_valid_block]. *)
+
+Lemma external_call_nextblock:
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m1 t vres m2,
+  external_call ef ge vargs m1 t vres m2 ->
+  Mem.nextblock m1 <= Mem.nextblock m2.
+Proof.
+  intros. 
+  exploit external_call_valid_block; eauto. 
+  instantiate (1 := Mem.nextblock m1 - 1). red; omega.
+  unfold Mem.valid_block. omega.
 Qed.

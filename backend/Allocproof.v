@@ -618,7 +618,7 @@ Proof.
   unfold ls1. simpl. apply Locmap.guo. eapply regalloc_not_temporary; eauto. 
   (* Not a move *)
   intros INMO CORR CODE.
-  assert (eval_operation tge sp op (map ls (map assign args)) = Some v).
+  assert (eval_operation tge sp op (map ls (map assign args)) m = Some v).
     replace (map ls (map assign args)) with (rs##args).
     rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved. 
     eapply agree_eval_regs; eauto.
@@ -706,7 +706,7 @@ Proof.
   eapply agree_reg_list_live; eauto.
 
   (* Icond, true *)
-  assert (COND: eval_condition cond (map ls (map assign args)) = Some true).
+  assert (COND: eval_condition cond (map ls (map assign args)) m = Some true).
     replace (map ls (map assign args)) with (rs##args). auto.
     eapply agree_eval_regs; eauto.
   econstructor; split.
@@ -715,7 +715,7 @@ Proof.
   eapply agree_undef_temps; eauto.
   eapply agree_reg_list_live. eauto.
   (* Icond, false *)
-  assert (COND: eval_condition cond (map ls (map assign args)) = Some false).
+  assert (COND: eval_condition cond (map ls (map assign args)) m = Some false).
     replace (map ls (map assign args)) with (rs##args). auto.
     eapply agree_eval_regs; eauto.
   econstructor; split.

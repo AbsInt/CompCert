@@ -453,30 +453,21 @@ let print_instruction oc labels = function
   | Psufd(r1, r2, r3) ->
       fprintf oc "	sufd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
   (* Pseudo-instructions *)
-  | Pallocframe(lo, hi, ofs) ->
-      let lo = camlint_of_coqint lo
-      and hi = camlint_of_coqint hi
-      and ofs = camlint_of_coqint ofs in
-      let sz = Int32.sub hi lo in
-      (* Keep stack 4-aligned *)
-      let sz4 = Int32.logand (Int32.add sz 3l) 0xFFFF_FFFCl in
-      (* FIXME: consider a store multiple? *)
-      (* R12 = first int temporary is unused at this point,
-         but this should be reflected in the proof *)
+  | Pallocframe(sz, ofs) ->
       fprintf oc "	mov	r12, sp\n";
       let ninstr = ref 0 in
       List.iter
-        (fun mask ->
-          let b = Int32.logand sz4 mask in
-          if b <> 0l then begin
-            fprintf oc "	sub	sp, sp, #%ld\n" b;
-            incr ninstr
-          end)
-        [0xFF000000l; 0x00FF0000l; 0x0000FF00l; 0x000000FFl];
-      fprintf oc "	str	r12, [sp, #%ld]\n" ofs;
+        (fun n ->
+           fprintf oc "	sub	sp, sp, #%a\n" coqint n;
+           incr ninstr)
+        (Asmgen.decompose_int sz);
+      fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
       2 + !ninstr
-  | Pfreeframe(lo, hi, ofs) ->
-      fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1
+  | Pfreeframe(sz, ofs) ->
+      if Asmgen.is_immed_arith sz
+      then fprintf oc "	add	sp, sp, #%a\n" coqint sz
+      else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs;
+      1
   | Plabel lbl ->
       if Labelset.mem lbl labels then
         fprintf oc "%a:\n" print_label lbl; 0

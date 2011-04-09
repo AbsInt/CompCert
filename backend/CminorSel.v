@@ -164,7 +164,7 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
       eval_expr le (Evar id) v
   | eval_Eop: forall le op al vl v,
       eval_exprlist le al vl ->
-      eval_operation ge sp op vl = Some v ->
+      eval_operation ge sp op vl m = Some v ->
       eval_expr le (Eop op al) v
   | eval_Eload: forall le chunk addr al vl vaddr v,
       eval_exprlist le al vl ->
@@ -190,7 +190,7 @@ with eval_condexpr: letenv -> condexpr -> bool -> Prop :=
       eval_condexpr le CEfalse false
   | eval_CEcond: forall le cond al vl b,
       eval_exprlist le al vl ->
-      eval_condition cond vl = Some b ->
+      eval_condition cond vl m = Some b ->
       eval_condexpr le (CEcond cond al) b
   | eval_CEcondition: forall le a b c vb1 vb2,
       eval_condexpr le a vb1 ->

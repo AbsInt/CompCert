@@ -156,10 +156,10 @@ Proof.
 Qed.
 
 Lemma not_enough_temporaries_addr:
-  forall (ge: genv) sp addr src args ls v,
+  forall (ge: genv) sp addr src args ls v m,
   enough_temporaries (src :: args) = false ->
   eval_addressing ge sp addr (List.map ls args) = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) (List.map ls args) = Some v.
+  eval_operation ge sp (op_for_binary_addressing addr) (List.map ls args) m = Some v.
 Proof.
   intros.
   apply eval_op_for_binary_addressing; auto.
@@ -692,7 +692,8 @@ Proof.
   unfold call_regs, parameter_of_argument. 
   generalize (loc_arguments_acceptable _ _ H). 
   unfold loc_argument_acceptable. 
-  destruct x. auto.
+  destruct x.
+  intros. destruct (in_dec Loc.eq (R m) temporaries). contradiction. auto.
   destruct s; intros; try contradiction. auto.
 Qed. 
 
@@ -1015,9 +1016,9 @@ Proof.
   exploit add_reloads_correct. 
     eapply enough_temporaries_op_args; eauto. auto.
   intros [ls2 [A [B C]]]. instantiate (1 := ls) in B. 
-  assert (exists tv, eval_operation tge sp op (reglist ls2 (regs_for args)) = Some tv
+  assert (exists tv, eval_operation tge sp op (reglist ls2 (regs_for args)) tm = Some tv
                      /\ Val.lessdef v tv).
-    apply eval_operation_lessdef with (map rs args); auto.
+    apply eval_operation_lessdef with (map rs args) m; auto.
     rewrite B. eapply agree_locs; eauto. 
     rewrite <- H. apply eval_operation_preserved. exact symbols_preserved.
   destruct H1 as [tv [P Q]].
@@ -1291,7 +1292,7 @@ Proof.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lcond_true; eauto.
-  rewrite B. apply eval_condition_lessdef with (map rs args); auto.
+  rewrite B. apply eval_condition_lessdef with (map rs args) m; auto.
   eapply agree_locs; eauto. 
   apply find_label_transf_function; eauto.
   traceEq.
@@ -1306,7 +1307,7 @@ Proof.
   intros [ls2 [A [B C]]].
   left; econstructor; split.
   eapply plus_right. eauto. eapply exec_Lcond_false; eauto.
-  rewrite B. apply eval_condition_lessdef with (map rs args); auto.
+  rewrite B. apply eval_condition_lessdef with (map rs args) m; auto.
   eapply agree_locs; eauto. 
   traceEq.
   econstructor; eauto with coqlib.

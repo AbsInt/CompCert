@@ -215,10 +215,10 @@ Definition transl_cond
   | Ccompu c, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2; OK (Pcmp_rr r1 r2 :: k)
   | Ccompimm c n, a1 :: nil =>
-      do r1 <- ireg_of a1; OK (Pcmp_ri r1 n :: k)
-  | Ccompuimm c n, a1 :: nil =>
       do r1 <- ireg_of a1;
       OK (if Int.eq_dec n Int.zero then Ptest_rr r1 r1 :: k else Pcmp_ri r1 n :: k)
+  | Ccompuimm c n, a1 :: nil =>
+      do r1 <- ireg_of a1; OK (Pcmp_ri r1 n :: k)
   | Ccompf cmp, a1 :: a2 :: nil =>
       do r1 <- freg_of a1; do r2 <- freg_of a2; OK (floatcomp cmp r1 r2 :: k)
   | Cnotcompf cmp, a1 :: a2 :: nil =>
@@ -443,15 +443,19 @@ Definition transl_store (chunk: memory_chunk)
 
 (** Translation of a Mach instruction. *)
 
-Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
+Definition transl_instr (f: Mach.function) (i: Mach.instruction)
+                        (edx_is_parent: bool) (k: code) :=
   match i with
   | Mgetstack ofs ty dst =>
       loadind ESP ofs ty dst k
   | Msetstack src ofs ty =>
       storeind src ESP ofs ty k
   | Mgetparam ofs ty dst =>
-      do k1 <- loadind EDX ofs ty dst k;
-      loadind ESP f.(fn_link_ofs) Tint IT1 k1
+      if edx_is_parent then
+        loadind EDX ofs ty dst k
+      else
+        (do k1 <- loadind EDX ofs ty dst k;
+         loadind ESP f.(fn_link_ofs) Tint IT1 k1)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -464,12 +468,10 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       OK (Pcall_s symb :: k)
   | Mtailcall sig (inl reg) =>
       do r <- ireg_of reg; 
-      OK (Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) 
-                     f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
+      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
           Pjmp_r r :: k)
   | Mtailcall sig (inr symb) =>
-      OK (Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) 
-                     f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
+      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
           Pjmp_s symb :: k)
   | Mlabel lbl =>
       OK(Plabel lbl :: k)
@@ -480,17 +482,27 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
   | Mjumptable arg tbl =>
       do r <- ireg_of arg; OK (Pjmptbl r tbl :: k)
   | Mreturn =>
-      OK (Pfreeframe (-f .(fn_framesize)) f.(fn_stacksize) 
-                     f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
+      OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
           Pret :: k)
   | Mbuiltin ef args res =>
       OK (Pbuiltin ef (List.map preg_of args) (preg_of res) :: k)
   end.
 
-Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction) :=
+(** Translation of a code sequence *)
+
+Definition edx_preserved (before: bool) (i: Mach.instruction) : bool :=
+  match i with
+  | Msetstack src ofs ty => before
+  | Mgetparam ofs ty dst => negb (mreg_eq dst IT1)
+  | _ => false
+  end.
+
+Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction)  (edx_is_parent: bool) :=
   match il with
   | nil => OK nil
-  | i1 :: il' => do k <- transl_code f il'; transl_instr f i1 k
+  | i1 :: il' =>
+      do k <- transl_code f il' (edx_preserved edx_is_parent i1);
+      transl_instr f i1 edx_is_parent k
   end.
 
 (** Translation of a whole function.  Note that we must check
@@ -499,10 +511,9 @@ Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction) :=
   around, leading to incorrect executions. *)
 
 Definition transf_function (f: Mach.function) : res Asm.code :=
-  do c <- transl_code f f.(fn_code);
+  do c <- transl_code f f.(fn_code) true;
   if zlt (list_length_z c) Int.max_unsigned 
-  then OK (Pallocframe (- f.(fn_framesize)) f.(fn_stacksize)
-                       f.(fn_retaddr_ofs) f.(fn_link_ofs) :: c)
+  then OK (Pallocframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: c)
   else Error (msg "code size exceeded").
 
 Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=

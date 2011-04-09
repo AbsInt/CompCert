@@ -78,7 +78,7 @@ Fixpoint condexpr_of_expr (e: expr) : condexpr :=
   | Econdition ce e1 e2 =>
       CEcondition ce (condexpr_of_expr e1) (condexpr_of_expr e2)
   | _ =>
-      CEcond (Ccompimm Cne Int.zero) (e:::Enil)
+      CEcond (Ccompuimm Cne Int.zero) (e:::Enil)
   end.
 
 (** Conversion of loads and stores *)

@@ -488,7 +488,7 @@ Definition load (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z): option val :
 
 Definition loadv (chunk: memory_chunk) (m: mem) (addr: val) : option val :=
   match addr with
-  | Vptr b ofs => load chunk m b (Int.signed ofs)
+  | Vptr b ofs => load chunk m b (Int.unsigned ofs)
   | _ => None
   end.
 
@@ -608,7 +608,7 @@ Definition store (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: val): op
 
 Definition storev (chunk: memory_chunk) (m: mem) (addr v: val) : option mem :=
   match addr with
-  | Vptr b ofs => store chunk m b (Int.signed ofs) v
+  | Vptr b ofs => store chunk m b (Int.unsigned ofs) v
   | _ => None
   end.
 
@@ -2658,12 +2658,12 @@ Record inject' (f: meminj) (m1 m2: mem) : Prop :=
     mi_range_offset:
       forall b b' delta,
       f b = Some(b', delta) ->
-      Int.min_signed <= delta <= Int.max_signed;
+      0 <= delta <= Int.max_unsigned;
     mi_range_block:
       forall b b' delta,
       f b = Some(b', delta) ->
       delta = 0 \/ 
-      (Int.min_signed <= low_bound m2 b' /\ high_bound m2 b' <= Int.max_signed)
+      (0 <= low_bound m2 b' /\ high_bound m2 b' <= Int.max_unsigned)
   }.
 
 Definition inject := inject'.
@@ -2731,17 +2731,17 @@ Qed.
 Lemma address_inject:
   forall f m1 m2 b1 ofs1 b2 delta,
   inject f m1 m2 ->
-  perm m1 b1 (Int.signed ofs1) Nonempty ->
+  perm m1 b1 (Int.unsigned ofs1) Nonempty ->
   f b1 = Some (b2, delta) ->
-  Int.signed (Int.add ofs1 (Int.repr delta)) = Int.signed ofs1 + delta.
+  Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 Proof.
   intros.
   exploit perm_inject; eauto. intro A.
   exploit perm_in_bounds. eexact A. intros [B C]. 
   exploit mi_range_block; eauto. intros [D | [E F]].
   subst delta. rewrite Int.add_zero. omega.
-  rewrite Int.add_signed.
-  repeat rewrite Int.signed_repr. auto.
+  unfold Int.add.
+  repeat rewrite Int.unsigned_repr. auto.
   eapply mi_range_offset; eauto.
   omega. 
   eapply mi_range_offset; eauto.
@@ -2750,9 +2750,9 @@ Qed.
 Lemma address_inject':
   forall f m1 m2 chunk b1 ofs1 b2 delta,
   inject f m1 m2 ->
-  valid_access m1 chunk b1 (Int.signed ofs1) Nonempty ->
+  valid_access m1 chunk b1 (Int.unsigned ofs1) Nonempty ->
   f b1 = Some (b2, delta) ->
-  Int.signed (Int.add ofs1 (Int.repr delta)) = Int.signed ofs1 + delta.
+  Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 Proof.
   intros. destruct H0. eapply address_inject; eauto. 
   apply H0. generalize (size_chunk_pos chunk). omega. 
@@ -2761,28 +2761,28 @@ Qed.
 Theorem valid_pointer_inject_no_overflow:
   forall f m1 m2 b ofs b' x,
   inject f m1 m2 ->
-  valid_pointer m1 b (Int.signed ofs) = true ->
+  valid_pointer m1 b (Int.unsigned ofs) = true ->
   f b = Some(b', x) ->
-  Int.min_signed <= Int.signed ofs + Int.signed (Int.repr x) <= Int.max_signed.
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr x) <= Int.max_unsigned.
 Proof.
   intros. rewrite valid_pointer_valid_access in H0.
   exploit address_inject'; eauto. intros.
-  rewrite Int.signed_repr; eauto.
-  rewrite <- H2. apply Int.signed_range. 
+  rewrite Int.unsigned_repr; eauto.
+  rewrite <- H2. apply Int.unsigned_range_2. 
   eapply mi_range_offset; eauto.
 Qed.
 
 Theorem valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
   inject f m1 m2 ->
-  valid_pointer m1 b (Int.signed ofs) = true ->
+  valid_pointer m1 b (Int.unsigned ofs) = true ->
   val_inject f (Vptr b ofs) (Vptr b' ofs') ->
-  valid_pointer m2 b' (Int.signed ofs') = true.
+  valid_pointer m2 b' (Int.unsigned ofs') = true.
 Proof.
   intros. inv H1.
   exploit valid_pointer_inject_no_overflow; eauto. intro NOOV.
-  rewrite Int.add_signed. rewrite Int.signed_repr; auto.
-  rewrite Int.signed_repr.
+  unfold Int.add. rewrite Int.unsigned_repr; auto.
+  rewrite Int.unsigned_repr.
   eapply valid_pointer_inject; eauto.
   eapply mi_range_offset; eauto.
 Qed.
@@ -2804,13 +2804,13 @@ Theorem different_pointers_inject:
   forall f m m' b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   inject f m m' ->
   b1 <> b2 ->
-  valid_pointer m b1 (Int.signed ofs1) = true ->
-  valid_pointer m b2 (Int.signed ofs2) = true ->
+  valid_pointer m b1 (Int.unsigned ofs1) = true ->
+  valid_pointer m b2 (Int.unsigned ofs2) = true ->
   f b1 = Some (b1', delta1) ->
   f b2 = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.signed (Int.add ofs1 (Int.repr delta1)) <>
-  Int.signed (Int.add ofs2 (Int.repr delta2)).
+  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <>
+  Int.unsigned (Int.add ofs2 (Int.repr delta2)).
 Proof.
   intros. 
   rewrite valid_pointer_valid_access in H1. 
@@ -2820,8 +2820,8 @@ Proof.
   inv H1. simpl in H5. inv H2. simpl in H1.
   eapply meminj_no_overlap_perm. 
   eapply mi_no_overlap; eauto. eauto. eauto. eauto. 
-  apply (H5 (Int.signed ofs1)). omega.
-  apply (H1 (Int.signed ofs2)). omega.
+  apply (H5 (Int.unsigned ofs1)). omega.
+  apply (H1 (Int.unsigned ofs2)). omega.
 Qed.
 
 (** Preservation of loads *)
@@ -2845,9 +2845,9 @@ Theorem loadv_inject:
 Proof.
   intros. inv H1; simpl in H0; try discriminate.
   exploit load_inject; eauto. intros [v2 [LOAD INJ]].
-  exists v2; split; auto. simpl.
-  replace (Int.signed (Int.add ofs1 (Int.repr delta)))
-     with (Int.signed ofs1 + delta).
+  exists v2; split; auto. unfold loadv. 
+  replace (Int.unsigned (Int.add ofs1 (Int.repr delta)))
+     with (Int.unsigned ofs1 + delta).
   auto. symmetry. eapply address_inject'; eauto with mem.
 Qed.
 
@@ -2944,8 +2944,9 @@ Theorem storev_mapped_inject:
     storev chunk m2 a2 v2 = Some n2 /\ inject f n1 n2.
 Proof.
   intros. inv H1; simpl in H0; try discriminate.
-  simpl. replace (Int.signed (Int.add ofs1 (Int.repr delta)))
-            with (Int.signed ofs1 + delta).
+  unfold storev.
+  replace (Int.unsigned (Int.add ofs1 (Int.repr delta)))
+    with (Int.unsigned ofs1 + delta).
   eapply store_mapped_inject; eauto.
   symmetry. eapply address_inject'; eauto with mem.
 Qed.
@@ -3026,8 +3027,8 @@ Theorem alloc_left_mapped_inject:
   inject f m1 m2 ->
   alloc m1 lo hi = (m1', b1) ->
   valid_block m2 b2 ->
-  Int.min_signed <= delta <= Int.max_signed ->
-  delta = 0 \/ Int.min_signed <= low_bound m2 b2 /\ high_bound m2 b2 <= Int.max_signed ->
+  0 <= delta <= Int.max_unsigned ->
+  delta = 0 \/ 0 <= low_bound m2 b2 /\ high_bound m2 b2 <= Int.max_unsigned ->
   (forall ofs p, lo <= ofs < hi -> perm m2 b2 (ofs + delta) p) ->
   inj_offset_aligned delta (hi-lo) ->
   (forall b ofs, 
@@ -3103,7 +3104,7 @@ Proof.
   eapply alloc_right_inject; eauto.
   eauto.
   instantiate (1 := b2). eauto with mem.
-  instantiate (1 := 0). generalize Int.min_signed_neg Int.max_signed_pos; omega.
+  instantiate (1 := 0). unfold Int.max_unsigned. generalize Int.modulus_pos; omega.
   auto.
   intros.
   apply perm_implies with Freeable; auto with mem.
@@ -3260,7 +3261,7 @@ Proof.
 (* range *)
   unfold flat_inj; intros.
   destruct (zlt b (nextblock m)); inv H0.
-  generalize Int.min_signed_neg Int.max_signed_pos; omega.
+  unfold Int.max_unsigned. generalize Int.modulus_pos; omega.
 (* range *)
   unfold flat_inj; intros.
   destruct (zlt b (nextblock m)); inv H0. auto.

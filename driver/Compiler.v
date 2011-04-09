@@ -77,7 +77,6 @@ Require Reloadproof.
 Require Reloadtyping.
 Require Stackingproof.
 Require Stackingtyping.
-Require Machabstr2concr.
 Require Asmgenproof.
 (** Pretty-printers (defined in Caml). *)
 Parameter print_Csyntax: Csyntax.program -> unit.
@@ -310,7 +309,6 @@ Proof.
              Stackingtyping.program_typing_preserved; intros.
 
   eapply Asmgenproof.transf_program_correct; eauto 6.
-  eapply Machabstr2concr.exec_program_equiv; eauto 6.
   eapply Stackingproof.transf_program_correct; eauto.
   eapply Reloadproof.transf_program_correct; eauto.
   eapply Linearizeproof.transf_program_correct; eauto.

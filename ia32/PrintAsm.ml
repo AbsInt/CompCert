@@ -165,12 +165,12 @@ let int32_align n a =
   then Int32.logand (Int32.add n (Int32.of_int (a-1))) (Int32.of_int (-a))
   else Int32.logand n (Int32.of_int (-a))
 
-let sp_adjustment lo hi =
-  let lo = camlint_of_coqint lo and hi = camlint_of_coqint hi in
-  let sz = Int32.sub hi lo in
-(* Enforce stack alignment, noting that 4 bytes are already allocated
-   by the call *)
-  let sz = Int32.sub (int32_align (Int32.add sz 4l) stack_alignment) 4l in
+let sp_adjustment sz =
+  let sz = camlint_of_coqint sz in
+  (* Preserve proper alignment of the stack *)
+  let sz = int32_align sz stack_alignment in
+  (* The top 4 bytes have already been allocated by the "call" instruction. *)
+  let sz = Int32.sub sz 4l in
   assert (sz >= 0l);
   sz
 
@@ -549,14 +549,14 @@ let print_instruction oc labels = function
   | Plabel(l) ->
       if Labelset.mem l labels then
         fprintf oc "%a:\n" label (transl_label l)
-  | Pallocframe(lo, hi, ofs_ra, ofs_link) ->
-      let sz = sp_adjustment lo hi in
+  | Pallocframe(sz, ofs_ra, ofs_link) ->
+      let sz = sp_adjustment sz in
       let ofs_link = camlint_of_coqint ofs_link in
       fprintf oc "	subl	$%ld, %%esp\n" sz;
       fprintf oc "	leal	%ld(%%esp), %%edx\n" (Int32.add sz 4l);
       fprintf oc "	movl	%%edx, %ld(%%esp)\n" ofs_link
-  | Pfreeframe(lo, hi, ofs_ra, ofs_link) ->
-      let sz = sp_adjustment lo hi in
+  | Pfreeframe(sz, ofs_ra, ofs_link) ->
+      let sz = sp_adjustment sz in
       fprintf oc "	addl	$%ld, %%esp\n" sz
   | Pbuiltin(ef, args, res) ->
       let name = extern_atom ef.ef_id in

@@ -13,8 +13,7 @@
 (** The Mach intermediate language: abstract syntax.
 
   Mach is the last intermediate language before generation of assembly
-  code.  This file defines the abstract syntax for Mach; two dynamic
-  semantics are given in modules [Machabstr] and [Machconcr].
+  code.  
 *)
 
 Require Import Coqlib.
@@ -25,6 +24,7 @@ Require Import Values.
 Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
+Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
 Require Import Conventions.
@@ -40,7 +40,7 @@ Require Import Conventions.
   [Mgetstack] and [Msetstack] to read and write within the activation
   record for the current function, at a given word offset and with a
   given type; and [Mgetparam], to read within the activation record of
-  the caller.
+  the caller. 
 
   These instructions implement a more concrete view of the activation
   record than the the [Lgetstack] and [Lsetstack] instructions of
@@ -72,7 +72,6 @@ Record function: Type := mkfunction
   { fn_sig: signature;
     fn_code: code;
     fn_stacksize: Z;
-    fn_framesize: Z;
     fn_link_ofs: int;
     fn_retaddr_ofs: int }.
 

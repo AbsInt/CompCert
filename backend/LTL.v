@@ -168,7 +168,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Lop:
       forall s f sp pc rs m op args res pc' v,
       (fn_code f)!pc = Some(Lop op args res pc') ->
-      eval_operation ge sp op (map rs args) = Some v ->
+      eval_operation ge sp op (map rs args) m = Some v ->
       step (State s f sp pc rs m)
         E0 (State s f sp pc' (Locmap.set res v (undef_temps rs)) m)
   | exec_Lload:
@@ -210,20 +210,20 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Lcond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) = Some true ->
+      eval_condition cond (map rs args) m = Some true ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifso (undef_temps rs) m)
   | exec_Lcond_false:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) = Some false ->
+      eval_condition cond (map rs args) m = Some false ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifnot (undef_temps rs) m)
   | exec_Ljumptable:
       forall s f sp pc rs m arg tbl n pc',
       (fn_code f)!pc = Some(Ljumptable arg tbl) ->
       rs arg = Vint n ->
-      list_nth_z tbl (Int.signed n) = Some pc' ->
+      list_nth_z tbl (Int.unsigned n) = Some pc' ->
       step (State s f sp pc rs m)
         E0 (State s f sp pc' (undef_temps rs) m)
   | exec_Lreturn:

@@ -191,6 +191,22 @@ Proof.
   intros; simpl. tauto.
 Qed.
 
+Lemma incoming_slot_in_parameters:
+  forall ofs ty sg,
+  In (S (Incoming ofs ty)) (loc_parameters sg) ->
+  In (S (Outgoing ofs ty)) (loc_arguments sg).
+Proof.
+  intros.
+  unfold loc_parameters in H. 
+  change (S (Incoming ofs ty)) with (parameter_of_argument (S (Outgoing ofs ty))) in H.
+  exploit list_in_map_inv. eexact H. intros [x [A B]]. simpl in A.
+  exploit loc_arguments_acceptable; eauto. unfold loc_argument_acceptable; intros.
+  destruct x; simpl in A; try discriminate.
+  destruct s; try contradiction. 
+  inv A. auto.
+Qed. 
+
+
 (** * Tail calls *)
 
 (** A tail-call is possible for a signature if the corresponding

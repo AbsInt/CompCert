@@ -88,10 +88,10 @@ Ltac InvVLMA :=
   approximations returned by [eval_static_operation]. *)
 
 Lemma eval_static_condition_correct:
-  forall cond al vl b,
+  forall cond al vl m b,
   val_list_match_approx al vl ->
   eval_static_condition cond al = Some b ->
-  eval_condition cond vl = Some b.
+  eval_condition cond vl m = Some b.
 Proof.
   intros until b.
   unfold eval_static_condition. 
@@ -120,9 +120,9 @@ Proof.
 Qed.
 
 Lemma eval_static_operation_correct:
-  forall op sp al vl v,
+  forall op sp al vl m v,
   val_list_match_approx al vl ->
-  eval_operation ge sp op vl = Some v ->
+  eval_operation ge sp op vl m = Some v ->
   val_match_approx (eval_static_operation op al) v.
 Proof.
   intros until v.
@@ -181,7 +181,7 @@ Proof.
   inv H4. destruct (Float.intoffloat f); inv H0. red; auto.
 
   caseEq (eval_static_condition c vl0).
-  intros. generalize (eval_static_condition_correct _ _ _ _ H H1).
+  intros. generalize (eval_static_condition_correct _ _ _ m _ H H1).
   intro. rewrite H2 in H0. 
   destruct b; injection H0; intro; subst v; simpl; auto.
   intros; simpl; auto.
@@ -202,6 +202,7 @@ Section STRENGTH_REDUCTION.
 Variable app: reg -> approx.
 Variable sp: val.
 Variable rs: regset.
+Variable m: mem.
 Hypothesis MATCH: forall r, val_match_approx (app r) rs#r.
 
 Lemma intval_correct:
@@ -217,20 +218,20 @@ Qed.
 Lemma cond_strength_reduction_correct:
   forall cond args,
   let (cond', args') := cond_strength_reduction app cond args in
-  eval_condition cond' rs##args' = eval_condition cond rs##args.
+  eval_condition cond' rs##args' m = eval_condition cond rs##args m.
 Proof.
   intros. unfold cond_strength_reduction.
   case (cond_strength_reduction_match cond args); intros.
   caseEq (intval app r1); intros.
   simpl. rewrite (intval_correct _ _ H). 
   destruct (rs#r2); auto. rewrite Int.swap_cmp. auto.
-  destruct c; reflexivity.
   caseEq (intval app r2); intros.
   simpl. rewrite (intval_correct _ _ H0). auto.
   auto.
   caseEq (intval app r1); intros.
   simpl. rewrite (intval_correct _ _ H). 
   destruct (rs#r2); auto. rewrite Int.swap_cmpu. auto.
+  destruct c; reflexivity.
   caseEq (intval app r2); intros.
   simpl. rewrite (intval_correct _ _ H0). auto.
   auto.
@@ -303,8 +304,8 @@ Qed.
 Lemma make_shlimm_correct:
   forall n r v,
   let (op, args) := make_shlimm n r in
-  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_shlimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -315,8 +316,8 @@ Qed.
 Lemma make_shrimm_correct:
   forall n r v,
   let (op, args) := make_shrimm n r in
-  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_shrimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -327,8 +328,8 @@ Qed.
 Lemma make_shruimm_correct:
   forall n r v,
   let (op, args) := make_shruimm n r in
-  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_shruimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -339,8 +340,8 @@ Qed.
 Lemma make_mulimm_correct:
   forall n r v,
   let (op, args) := make_mulimm n r in
-  eval_operation ge sp Omul (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Omul (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_mulimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -348,8 +349,8 @@ Proof.
   generalize (Int.eq_spec n Int.one); case (Int.eq n Int.one); intros.
   subst n. simpl in H1. simpl. FuncInv. rewrite Int.mul_one in H0. congruence.
   caseEq (Int.is_power2 n); intros.
-  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil))
-     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil)).
+  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil) m)
+     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil) m).
   apply make_shlimm_correct. 
   simpl. generalize (Int.is_power2_range _ _ H1). 
   change (Z_of_nat Int.wordsize) with 32. intro. rewrite H2.
@@ -360,8 +361,8 @@ Qed.
 Lemma make_andimm_correct:
   forall n r v,
   let (op, args) := make_andimm n r in
-  eval_operation ge sp Oand (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oand (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_andimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -374,8 +375,8 @@ Qed.
 Lemma make_orimm_correct:
   forall n r v,
   let (op, args) := make_orimm n r in
-  eval_operation ge sp Oor (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oor (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_orimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -388,8 +389,8 @@ Qed.
 Lemma make_xorimm_correct:
   forall n r v,
   let (op, args) := make_xorimm n r in
-  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) = Some v ->
-  eval_operation ge sp op rs##args = Some v.
+  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) m = Some v ->
+  eval_operation ge sp op rs##args m = Some v.
 Proof.
   intros; unfold make_xorimm.
   generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
@@ -400,8 +401,8 @@ Qed.
 Lemma op_strength_reduction_correct:
   forall op args v,
   let (op', args') := op_strength_reduction app op args in
-  eval_operation ge sp op rs##args = Some v ->
-  eval_operation ge sp op' rs##args' = Some v.
+  eval_operation ge sp op rs##args m = Some v ->
+  eval_operation ge sp op' rs##args' m = Some v.
 Proof.
   intros; unfold op_strength_reduction;
   case (op_strength_reduction_match op args); intros; simpl List.map.
@@ -432,8 +433,8 @@ Proof.
   caseEq (intval app r2); intros.
   caseEq (Int.is_power2 i); intros.
   rewrite (intval_correct _ _ H).
-  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil))
-     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil)).
+  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil) m)
+     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil) m).
   apply make_shruimm_correct. 
   simpl. destruct rs#r1; auto. 
   rewrite (Int.is_power2_range _ _ H0). 

@@ -267,17 +267,7 @@ Definition eval_constant (cst: constant) : option val :=
 
 Definition eval_unop := Cminor.eval_unop.
 
-Definition eval_binop (op: binary_operation)
-                      (arg1 arg2: val) (m: mem): option val :=
-  match op, arg1, arg2 with
-  | Cminor.Ocmp c, Vptr b1 n1, Vptr b2 n2 =>
-      if Mem.valid_pointer m b1 (Int.signed n1)
-      && Mem.valid_pointer m b2 (Int.signed n2)
-      then Cminor.eval_binop op arg1 arg2
-      else None
-  | _, _, _ =>
-      Cminor.eval_binop op arg1 arg2
-  end.
+Definition eval_binop := Cminor.eval_binop.
 
 (** Allocation of local variables at function entry.  Each variable is
   bound to the reference to a fresh block of the appropriate size. *)

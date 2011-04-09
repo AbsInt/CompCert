@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Computation of resource bounds forr Linear code. *)
+(** Computation of resource bounds for Linear code. *)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -36,11 +36,13 @@ Record bounds : Type := mkbounds {
   bound_int_callee_save: Z;
   bound_float_callee_save: Z;
   bound_outgoing: Z;
+  bound_stack_data: Z;
   bound_int_local_pos: bound_int_local >= 0;
   bound_float_local_pos: bound_float_local >= 0;
   bound_int_callee_save_pos: bound_int_callee_save >= 0;
   bound_float_callee_save_pos: bound_float_callee_save >= 0;
-  bound_outgoing_pos: bound_outgoing >= 0
+  bound_outgoing_pos: bound_outgoing >= 0;
+  bound_stack_data_pos: bound_stack_data >= 0
 }.
 
 (** The following predicates define the correctness of a set of bounds
@@ -186,14 +188,18 @@ Program Definition function_bounds :=
     (max_over_regs_of_funct float_callee_save)
     (Zmax (max_over_instrs outgoing_space)
           (max_over_slots_of_funct outgoing_slot))
+    (Zmax f.(fn_stacksize) 0)
     (max_over_slots_of_funct_pos int_local)
     (max_over_slots_of_funct_pos float_local)
     (max_over_regs_of_funct_pos int_callee_save)
     (max_over_regs_of_funct_pos float_callee_save)
-    _.
+    _ _.
 Next Obligation.
   apply Zle_ge. eapply Zle_trans. 2: apply Zmax2.
   apply Zge_le. apply max_over_slots_of_funct_pos.  
+Qed.
+Next Obligation.
+  apply Zle_ge. apply Zmax2.
 Qed.
 
 (** We now show the correctness of the inferred bounds. *)

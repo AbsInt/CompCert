@@ -110,13 +110,13 @@ Parameter store: forall (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: v
 
 Definition loadv (chunk: memory_chunk) (m: mem) (addr: val) : option val :=
   match addr with
-  | Vptr b ofs => load chunk m b (Int.signed ofs)
+  | Vptr b ofs => load chunk m b (Int.unsigned ofs)
   | _ => None
   end.
 
 Definition storev (chunk: memory_chunk) (m: mem) (addr v: val) : option mem :=
   match addr with
-  | Vptr b ofs => store chunk m b (Int.signed ofs) v
+  | Vptr b ofs => store chunk m b (Int.unsigned ofs) v
   | _ => None
   end.
 
@@ -837,23 +837,23 @@ Axiom valid_pointer_inject:
 Axiom address_inject:
   forall f m1 m2 b1 ofs1 b2 delta,
   inject f m1 m2 ->
-  perm m1 b1 (Int.signed ofs1) Nonempty ->
+  perm m1 b1 (Int.unsigned ofs1) Nonempty ->
   f b1 = Some (b2, delta) ->
-  Int.signed (Int.add ofs1 (Int.repr delta)) = Int.signed ofs1 + delta.
+  Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 
 Axiom valid_pointer_inject_no_overflow:
   forall f m1 m2 b ofs b' x,
   inject f m1 m2 ->
-  valid_pointer m1 b (Int.signed ofs) = true ->
+  valid_pointer m1 b (Int.unsigned ofs) = true ->
   f b = Some(b', x) ->
-  Int.min_signed <= Int.signed ofs + Int.signed (Int.repr x) <= Int.max_signed.
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr x) <= Int.max_unsigned.
 
 Axiom valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
   inject f m1 m2 ->
-  valid_pointer m1 b (Int.signed ofs) = true ->
+  valid_pointer m1 b (Int.unsigned ofs) = true ->
   val_inject f (Vptr b ofs) (Vptr b' ofs') ->
-  valid_pointer m2 b' (Int.signed ofs') = true.
+  valid_pointer m2 b' (Int.unsigned ofs') = true.
 
 Axiom inject_no_overlap:
   forall f m1 m2 b1 b2 b1' b2' delta1 delta2 ofs1 ofs2,
@@ -869,13 +869,13 @@ Axiom different_pointers_inject:
   forall f m m' b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
   inject f m m' ->
   b1 <> b2 ->
-  valid_pointer m b1 (Int.signed ofs1) = true ->
-  valid_pointer m b2 (Int.signed ofs2) = true ->
+  valid_pointer m b1 (Int.unsigned ofs1) = true ->
+  valid_pointer m b2 (Int.unsigned ofs2) = true ->
   f b1 = Some (b1', delta1) ->
   f b2 = Some (b2', delta2) ->
   b1' <> b2' \/
-  Int.signed (Int.add ofs1 (Int.repr delta1)) <>
-  Int.signed (Int.add ofs2 (Int.repr delta2)).
+  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <>
+  Int.unsigned (Int.add ofs2 (Int.repr delta2)).
 
 Axiom load_inject:
   forall f m1 m2 chunk b1 ofs b2 delta v1,
@@ -951,8 +951,8 @@ Axiom alloc_left_mapped_inject:
   inject f m1 m2 ->
   alloc m1 lo hi = (m1', b1) ->
   valid_block m2 b2 ->
-  Int.min_signed <= delta <= Int.max_signed ->
-  delta = 0 \/ Int.min_signed <= low_bound m2 b2 /\ high_bound m2 b2 <= Int.max_signed ->
+  0 <= delta <= Int.max_unsigned ->
+  delta = 0 \/ 0 <= low_bound m2 b2 /\ high_bound m2 b2 <= Int.max_unsigned ->
   (forall ofs p, lo <= ofs < hi -> perm m2 b2 (ofs + delta) p) ->
   inj_offset_aligned delta (hi-lo) ->
   (forall b ofs, 

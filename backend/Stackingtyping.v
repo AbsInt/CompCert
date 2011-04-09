@@ -204,42 +204,20 @@ Lemma wt_transf_function:
   wt_function tf.
 Proof.
   intros. 
-  generalize H; unfold transf_function.
-  case (zlt (Linear.fn_stacksize f) 0); intro.
-  intros; discriminate.
-  case (zlt (- Int.min_signed) (fe_size (make_env (function_bounds f)))); intro.
-  intros; discriminate. intro EQ.
-  generalize (unfold_transf_function f tf H); intro.
+  exploit unfold_transf_function; eauto. intro EQ.
   set (b := function_bounds f) in *.
   set (fe := make_env b) in *.
-  assert (fn_framesize tf = fe_size fe).
-    subst tf; reflexivity.
-  assert (Int.signed tf.(fn_link_ofs) = offset_of_index fe FI_link).
-    rewrite H1; unfold fn_link_ofs. 
-    change (fe_ofs_link fe) with (offset_of_index fe FI_link).
-    unfold fe, b; eapply offset_of_index_no_overflow. eauto. red; auto. 
-  assert (Int.signed tf.(fn_retaddr_ofs) = offset_of_index fe FI_retaddr).
-    rewrite H1; unfold fn_retaddr_ofs. 
-    change (fe_ofs_retaddr fe) with (offset_of_index fe FI_retaddr).
-    unfold fe, b; eapply offset_of_index_no_overflow. eauto. red; auto. 
   constructor.
   change (wt_instrs (fn_code tf)).
-  rewrite H1; simpl; unfold transl_body. 
+  rewrite EQ; simpl; unfold transl_body. 
   unfold fe, b; apply wt_save_callee_save; auto. 
   unfold transl_code. apply wt_fold_right. 
   intros. eapply wt_transl_instr; eauto. 
-  red; intros. elim H5.
-  subst tf; simpl; auto.
-  rewrite H2. generalize (size_pos f). fold b; fold fe; omega.
-  rewrite H1. change (4 | fe_size fe). unfold fe, b. apply frame_size_aligned.   
-  rewrite H3; rewrite H2. change 4 with (4 * typesize (type_of_index FI_link)).
-  unfold fe, b; apply offset_of_index_valid. red; auto.
-  rewrite H3. unfold fe,b; apply offset_of_index_aligned.
-  rewrite H4; rewrite H2. change 4 with (4 * typesize (type_of_index FI_retaddr)).
-  unfold fe, b; apply offset_of_index_valid. red; auto.
-  rewrite H4. unfold fe,b; apply offset_of_index_aligned.
-  rewrite H3; rewrite H4.
-  apply (offset_of_index_disj f FI_retaddr FI_link); red; auto.
+  red; intros. elim H1.
+  rewrite EQ; unfold fn_stacksize.
+  generalize (size_pos f).
+  generalize (size_no_overflow _ _ H).
+  unfold fe, b. omega.
 Qed.
 
 Lemma wt_transf_fundef:

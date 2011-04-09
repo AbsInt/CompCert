@@ -188,15 +188,19 @@ Definition add_unknown (n: numbering) (rd: reg) :=
               n.(num_eqs)
               (PTree.set rd n.(num_next) n.(num_reg)).
 
-(** [kill_load n] removes all equations involving memory loads.
+(** [kill_load n] removes all equations involving memory loads,
+  as well as those involving memory-dependent operators.
   It is used to reflect the effect of a memory store, which can
   potentially invalidate all such equations. *)
 
 Fixpoint kill_load_eqs (eqs: list (valnum * rhs)) : list (valnum * rhs) :=
   match eqs with
   | nil => nil
-  | (_, Load _ _ _) :: rem => kill_load_eqs rem
-  | v_rh :: rem => v_rh :: kill_load_eqs rem
+  | eq :: rem =>
+      match eq with
+      | (_, Op op _)  => if op_depends_on_memory op then kill_load_eqs rem else eq :: kill_load_eqs rem
+      | (_, Load _ _ _) => kill_load_eqs rem
+      end
   end.
 
 Definition kill_loads (n: numbering) : numbering :=
@@ -252,7 +256,7 @@ Definition equation_holds
      (vres: valnum) (rh: rhs) : Prop :=
   match rh with
   | Op op vl =>
-      eval_operation ge sp op (List.map valuation vl) =
+      eval_operation ge sp op (List.map valuation vl) m =
       Some (valuation vres)
   | Load chunk addr vl =>
       exists a,

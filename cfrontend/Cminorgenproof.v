@@ -76,7 +76,7 @@ Lemma sig_preserved:
 Proof.
   intros until tf; destruct f; simpl.
   unfold transl_function. destruct (build_compilenv gce f).
-  case (zle z Int.max_signed); simpl bind; try congruence.
+  case (zle z Int.max_unsigned); simpl bind; try congruence.
   intros. monadInv H. simpl. eapply sig_preserved_body; eauto. 
   intro. inv H. reflexivity.
 Qed.
@@ -1265,7 +1265,7 @@ Lemma eval_binop_compat:
   val_inject f v2 tv2 ->
   Mem.inject f m tm ->
   exists tv,
-     Cminor.eval_binop op tv1 tv2 = Some tv
+     Cminor.eval_binop op tv1 tv2 tm = Some tv
   /\ val_inject f v tv.
 Proof.
   destruct op; simpl; intros.
@@ -1302,19 +1302,25 @@ Proof.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
-    exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
-  (* cmp ptr ptr *)
-  caseEq (Mem.valid_pointer m b1 (Int.signed ofs1) && Mem.valid_pointer m b0 (Int.signed ofs0)); 
+(* cmpu *)
+  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
+  exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
+  (* cmpu ptr ptr *)
+  caseEq (Mem.valid_pointer m b1 (Int.unsigned ofs1) && Mem.valid_pointer m b0 (Int.unsigned ofs0)); 
   intro EQ; rewrite EQ in H4; try discriminate.
   elim (andb_prop _ _ EQ); intros.
+  exploit Mem.valid_pointer_inject_val. eauto. eexact H. econstructor; eauto. 
+  intros V1. rewrite V1.
+  exploit Mem.valid_pointer_inject_val. eauto. eexact H1. econstructor; eauto. 
+  intros V2. rewrite V2. simpl.
   destruct (eq_block b1 b0); inv H4.
   (* same blocks in source *)
   assert (b3 = b2) by congruence. subst b3.
   assert (delta0 = delta) by congruence. subst delta0.
-  exists (Val.of_bool (Int.cmp c ofs1 ofs0)); split.
+  exists (Val.of_bool (Int.cmpu c ofs1 ofs0)); split.
   unfold eq_block; rewrite zeq_true; simpl.
-  decEq. decEq. rewrite Int.translate_cmp. auto. 
+  decEq. decEq. rewrite Int.translate_cmpu. auto. 
   eapply Mem.valid_pointer_inject_no_overflow; eauto.
   eapply Mem.valid_pointer_inject_no_overflow; eauto.
   apply val_inject_val_of_bool.
@@ -1323,13 +1329,11 @@ Proof.
   destruct (eq_block b2 b3); auto.
   exploit Mem.different_pointers_inject; eauto. intros [A|A]. 
   congruence.
-  decEq. destruct c; simpl in H6; inv H6; unfold Int.cmp.
+  decEq. destruct c; simpl in H6; inv H6; unfold Int.cmpu.
   predSpec Int.eq Int.eq_spec (Int.add ofs1 (Int.repr delta)) (Int.add ofs0 (Int.repr delta0)).
   congruence. auto.
   predSpec Int.eq Int.eq_spec (Int.add ofs1 (Int.repr delta)) (Int.add ofs0 (Int.repr delta0)).
   congruence. auto.
-  (* cmpu *)
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
   (* cmpf *)
   inv H0; try discriminate; inv H1; inv H; TrivialOp.
 Qed.
@@ -1831,7 +1835,7 @@ Lemma match_callstack_alloc_variable:
   Mem.valid_block tm sp ->
   Mem.bounds tm sp = (0, tf.(fn_stackspace)) ->
   Mem.range_perm tm sp 0 tf.(fn_stackspace) Freeable ->
-  tf.(fn_stackspace) <= Int.max_signed ->
+  tf.(fn_stackspace) <= Int.max_unsigned ->
   Mem.alloc m 0 (sizeof lv) = (m', b) ->
   match_callstack f m tm 
                   (Frame cenv tf e le te sp lo (Mem.nextblock m) :: cs)
@@ -1862,9 +1866,8 @@ Proof.
     generalize (align_le sz (size_chunk chunk) SIZEPOS). fold ofs. intro SZOFS.
     exploit Mem.alloc_left_mapped_inject.
       eauto. eauto. eauto. 
-      instantiate (1 := ofs). 
-      generalize Int.min_signed_neg. omega.
-      right; rewrite BOUNDS; simpl. generalize Int.min_signed_neg. omega.
+      instantiate (1 := ofs). omega. 
+      right; rewrite BOUNDS; simpl. omega.
       intros. apply Mem.perm_implies with Freeable; auto with mem.
       apply PERMS. rewrite LV in H1. simpl in H1. omega.
       rewrite LV; simpl. rewrite Zminus_0_r. unfold ofs. 
@@ -1923,7 +1926,7 @@ Lemma match_callstack_alloc_variables_rec:
   Mem.valid_block tm sp ->
   Mem.bounds tm sp = (0, tf.(fn_stackspace)) ->
   Mem.range_perm tm sp 0 tf.(fn_stackspace) Freeable ->
-  tf.(fn_stackspace) <= Int.max_signed ->
+  tf.(fn_stackspace) <= Int.max_unsigned ->
   forall e m vars e' m',
   alloc_variables e m vars e' m' ->
   forall f cenv sz,
@@ -2016,7 +2019,7 @@ Qed.
 Lemma match_callstack_alloc_variables:
   forall fn cenv tf m e m' tm tm' sp f cs targs,
   build_compilenv gce fn = (cenv, tf.(fn_stackspace)) ->
-  tf.(fn_stackspace) <= Int.max_signed ->
+  tf.(fn_stackspace) <= Int.max_unsigned ->
   list_norepet (fn_params_names fn ++ fn_vars_names fn) ->
   alloc_variables Csharpminor.empty_env m (fn_variables fn) e m' ->
   Mem.alloc tm 0 tf.(fn_stackspace) = (tm', sp) ->
@@ -2200,7 +2203,7 @@ Lemma function_entry_ok:
   bind_parameters e m1 fn.(Csharpminor.fn_params) vargs m2 ->
   match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm) ->
   build_compilenv gce fn = (cenv, tf.(fn_stackspace)) ->
-  tf.(fn_stackspace) <= Int.max_signed ->
+  tf.(fn_stackspace) <= Int.max_unsigned ->
   Mem.alloc tm 0 tf.(fn_stackspace) = (tm1, sp) ->
   let tparams := List.map for_var (fn_params_names fn) in
   let tvars := List.map for_var (fn_vars_names fn) in
@@ -2924,7 +2927,7 @@ Proof.
 (* internal call *)
   monadInv TR. generalize EQ; clear EQ; unfold transl_function.
   caseEq (build_compilenv gce f). intros ce sz BC.
-  destruct (zle sz Int.max_signed); try congruence.
+  destruct (zle sz Int.max_unsigned); try congruence.
   intro TRBODY.
   generalize TRBODY; intro TMP. monadInv TMP.
   set (tf := mkfunction (Csharpminor.fn_sig f) 

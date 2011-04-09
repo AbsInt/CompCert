@@ -168,9 +168,9 @@ Proof.
 Qed.
 
 Lemma approx_operation_correct:
-  forall app rs (ge: genv) sp op args v,
+  forall app rs (ge: genv) sp op args m v,
   regs_match_approx app rs ->
-  eval_operation ge sp op rs##args = Some v ->
+  eval_operation ge sp op rs##args m = Some v ->
   val_match_approx (approx_operation op (approx_regs app args)) v.
 Proof.
   intros. destruct op; simpl; try (exact I). 
@@ -324,10 +324,10 @@ Qed.
 (** Correctness of [transf_operation]. *)
 
 Lemma transf_operation_correct:
-  forall (ge: genv) app rs sp op args v,
+  forall (ge: genv) app rs sp op args m v,
   regs_match_approx app rs ->
-  eval_operation ge sp op rs##args = Some v ->
-  eval_operation ge sp (transf_operation op (approx_regs app args)) rs##args = Some v.
+  eval_operation ge sp op rs##args m = Some v ->
+  eval_operation ge sp (transf_operation op (approx_regs app args)) rs##args m = Some v.
 Proof.
   intros until v. intro RMA.
   assert (A: forall a r, Approx.bge a (approx_reg app r) = true -> val_match_approx a rs#r).

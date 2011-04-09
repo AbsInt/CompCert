@@ -217,7 +217,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Iop:
       forall s f sp pc rs m op args res pc' v,
       (fn_code f)!pc = Some(Iop op args res pc') ->
-      eval_operation ge sp op rs##args = Some v ->
+      eval_operation ge sp op rs##args m = Some v ->
       step (State s f sp pc rs m)
         E0 (State s f sp pc' (rs#res <- v) m)
   | exec_Iload:
@@ -258,20 +258,20 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Icond_true:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args = Some true ->
+      eval_condition cond rs##args m = Some true ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifso rs m)
   | exec_Icond_false:
       forall s f sp pc rs m cond args ifso ifnot,
       (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args = Some false ->
+      eval_condition cond rs##args m = Some false ->
       step (State s f sp pc rs m)
         E0 (State s f sp ifnot rs m)
   | exec_Ijumptable:
       forall s f sp pc rs m arg tbl n pc',
       (fn_code f)!pc = Some(Ijumptable arg tbl) ->
       rs#arg = Vint n ->
-      list_nth_z tbl (Int.signed n) = Some pc' ->
+      list_nth_z tbl (Int.unsigned n) = Some pc' ->
       step (State s f sp pc rs m)
         E0 (State s f sp pc' rs m)
   | exec_Ireturn:
@@ -303,7 +303,7 @@ Inductive step: state -> trace -> state -> Prop :=
 Lemma exec_Iop':
   forall s f sp pc rs m op args res pc' rs' v,
   (fn_code f)!pc = Some(Iop op args res pc') ->
-  eval_operation ge sp op rs##args = Some v ->
+  eval_operation ge sp op rs##args m = Some v ->
   rs' = (rs#res <- v) ->
   step (State s f sp pc rs m)
     E0 (State s f sp pc' rs' m).

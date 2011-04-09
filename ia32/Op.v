@@ -32,6 +32,7 @@ Require Import Values.
 Require Import Memdata.
 Require Import Memory.
 Require Import Globalenvs.
+Require Import Events.
 
 Set Implicit Arguments.
 
@@ -147,27 +148,30 @@ Definition eval_compare_mismatch (c: comparison) : option bool :=
 Definition eval_compare_null (c: comparison) (n: int) : option bool :=
   if Int.eq n Int.zero then eval_compare_mismatch c else None.
 
-Definition eval_condition (cond: condition) (vl: list val):
+Definition eval_condition (cond: condition) (vl: list val) (m: mem):
                option bool :=
   match cond, vl with
   | Ccomp c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmp c n1 n2)
-  | Ccomp c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if eq_block b1 b2
-      then Some (Int.cmp c n1 n2)
-      else eval_compare_mismatch c
-  | Ccomp c, Vptr b1 n1 :: Vint n2 :: nil =>
-      eval_compare_null c n2
-  | Ccomp c, Vint n1 :: Vptr b2 n2 :: nil =>
-      eval_compare_null c n1
   | Ccompu c, Vint n1 :: Vint n2 :: nil =>
       Some (Int.cmpu c n1 n2)
+  | Ccompu c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
+      if Mem.valid_pointer m b1 (Int.unsigned n1)
+      && Mem.valid_pointer m b2 (Int.unsigned n2) then
+        if eq_block b1 b2
+        then Some (Int.cmpu c n1 n2)
+        else eval_compare_mismatch c
+      else None
+  | Ccompu c, Vptr b1 n1 :: Vint n2 :: nil =>
+      eval_compare_null c n2
+  | Ccompu c, Vint n1 :: Vptr b2 n2 :: nil =>
+      eval_compare_null c n1
   | Ccompimm c n, Vint n1 :: nil =>
       Some (Int.cmp c n1 n)
-  | Ccompimm c n, Vptr b1 n1 :: nil =>
-      eval_compare_null c n
   | Ccompuimm c n, Vint n1 :: nil =>
       Some (Int.cmpu c n1 n)
+  | Ccompuimm c n, Vptr b1 n1 :: nil =>
+      eval_compare_null c n
   | Ccompf c, Vfloat f1 :: Vfloat f2 :: nil =>
       Some (Float.cmp c f1 f2)
   | Cnotcompf c, Vfloat f1 :: Vfloat f2 :: nil =>
@@ -228,7 +232,7 @@ Definition eval_addressing
 
 Definition eval_operation
     (F V: Type) (genv: Genv.t F V) (sp: val)
-    (op: operation) (vl: list val): option val :=
+    (op: operation) (vl: list val) (m: mem): option val :=
   match op, vl with
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
@@ -289,7 +293,7 @@ Definition eval_operation
   | Ofloatofint, Vint n1 :: nil => 
       Some (Vfloat (Float.floatofint n1))
   | Ocmp c, _ =>
-      match eval_condition c vl with
+      match eval_condition c vl m with
       | None => None
       | Some false => Some Vfalse
       | Some true => Some Vtrue
@@ -340,21 +344,24 @@ Proof.
 Qed.
 
 Lemma eval_negate_condition:
-  forall (cond: condition) (vl: list val) (b: bool),
-  eval_condition cond vl = Some b ->
-  eval_condition (negate_condition cond) vl = Some (negb b).
+  forall (cond: condition) (vl: list val) (b: bool) (m: mem),
+  eval_condition cond vl m = Some b ->
+  eval_condition (negate_condition cond) vl m = Some (negb b).
 Proof.
   intros. 
   destruct cond; simpl in H; FuncInv; try subst b; simpl.
   rewrite Int.negate_cmp. auto.
+  rewrite Int.negate_cmpu. auto.
   apply eval_negate_compare_null; auto.
   apply eval_negate_compare_null; auto.
-  destruct (eq_block b0 b1). rewrite Int.negate_cmp. congruence.
+  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
+           Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
+  destruct (eq_block b0 b1); try discriminate.
+  rewrite Int.negate_cmpu. congruence.
   apply eval_negate_compare_mismatch; auto. 
-  rewrite Int.negate_cmpu. auto.
   rewrite Int.negate_cmp. auto.
-  apply eval_negate_compare_null; auto.
   rewrite Int.negate_cmpu. auto.
+  apply eval_negate_compare_null; auto.
   auto.
   rewrite negb_elim. auto.
   auto.
@@ -384,8 +391,8 @@ Proof.
 Qed.
 
 Lemma eval_operation_preserved:
-  forall sp op vl,
-  eval_operation ge2 sp op vl = eval_operation ge1 sp op vl.
+  forall sp op vl m,
+  eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
 Proof.
   intros.
   unfold eval_operation; destruct op; try rewrite agree_on_symbols; auto.
@@ -507,9 +514,9 @@ Proof.
 Qed.
 
 Lemma type_of_operation_sound:
-  forall op vl sp v,
+  forall op vl sp v m,
   op <> Omove ->
-  eval_operation genv sp op vl = Some v ->
+  eval_operation genv sp op vl m = Some v ->
   Val.has_type v (snd (type_of_operation op)).
 Proof.
   intros.
@@ -570,7 +577,7 @@ End SOUNDNESS.
 
 (** Alternate definition of [eval_condition], [eval_op], [eval_addressing]
   as total functions that return [Vundef] when not applicable
-  (instead of [None]).  Used in the proof of [PPCgen]. *)
+  (instead of [None]).  Used in the proof of [Asmgen]. *)
 
 Section EVAL_OP_TOTAL.
 
@@ -675,14 +682,16 @@ Proof.
 Qed.
 
 Lemma eval_condition_weaken:
-  forall c vl b,
-  eval_condition c vl = Some b ->
+  forall c vl b m,
+  eval_condition c vl m = Some b ->
   eval_condition_total c vl = Val.of_bool b.
 Proof.
   intros. 
   unfold eval_condition in H; destruct c; FuncInv;
   try subst b; try reflexivity; simpl;
   try (apply eval_compare_null_weaken; auto).
+  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
+           Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
   unfold eq_block in H. destruct (zeq b0 b1).
   congruence.
   apply eval_compare_mismatch_weaken; auto.
@@ -705,8 +714,8 @@ Proof.
 Qed.
 
 Lemma eval_operation_weaken:
-  forall sp op vl v,
-  eval_operation genv sp op vl = Some v ->
+  forall sp op vl v m,
+  eval_operation genv sp op vl m = Some v ->
   eval_operation_total sp op vl = v.
 Proof.
   intros.
@@ -729,7 +738,7 @@ Proof.
   destruct (Int.ltu i Int.iwordsize); congruence.
   apply eval_addressing_weaken; auto.
   destruct (Float.intoffloat f); simpl in H; inv H. auto.
-  caseEq (eval_condition c vl); intros; rewrite H0 in H.
+  caseEq (eval_condition c vl m); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
   eapply eval_condition_weaken; eauto.
   destruct b; simpl; congruence.
@@ -779,12 +788,20 @@ Ltac InvLessdef :=
   end.
 
 Lemma eval_condition_lessdef:
-  forall cond vl1 vl2 b,
+  forall cond vl1 vl2 b m1 m2,
   Val.lessdef_list vl1 vl2 ->
-  eval_condition cond vl1 = Some b ->
-  eval_condition cond vl2 = Some b.
+  Mem.extends m1 m2 ->
+  eval_condition cond vl1 m1 = Some b ->
+  eval_condition cond vl2 m2 = Some b.
 Proof.
   intros. destruct cond; simpl in *; FuncInv; InvLessdef; auto.
+  destruct (Mem.valid_pointer m1 b0 (Int.unsigned i) &&
+            Mem.valid_pointer m1 b1 (Int.unsigned i0)) as [] _eqn; try discriminate.
+  destruct (andb_prop _ _ Heqb2) as [A B].
+  assert (forall b ofs, Mem.valid_pointer m1 b ofs = true -> Mem.valid_pointer m2 b ofs = true).
+    intros until ofs. repeat rewrite Mem.valid_pointer_nonempty_perm. 
+    apply Mem.perm_extends; auto.
+  rewrite (H _ _ A). rewrite (H _ _ B). auto. 
 Qed.
 
 Ltac TrivialExists :=
@@ -808,10 +825,11 @@ Proof.
 Qed.
 
 Lemma eval_operation_lessdef:
-  forall sp op vl1 vl2 v1,
+  forall sp op vl1 vl2 v1 m1 m2,
   Val.lessdef_list vl1 vl2 ->
-  eval_operation genv sp op vl1 = Some v1 ->
-  exists v2, eval_operation genv sp op vl2 = Some v2 /\ Val.lessdef v1 v2.
+  Mem.extends m1 m2 ->
+  eval_operation genv sp op vl1 m1 = Some v1 ->
+  exists v2, eval_operation genv sp op vl2 m2 = Some v2 /\ Val.lessdef v1 v2.
 Proof.
   intros. destruct op; simpl in *; FuncInv; InvLessdef; TrivialExists.
   exists v2; auto.
@@ -819,29 +837,181 @@ Proof.
   exists (Val.zero_ext 8 v2); split. auto. apply Val.zero_ext_lessdef; auto.
   exists (Val.sign_ext 16 v2); split. auto. apply Val.sign_ext_lessdef; auto.
   exists (Val.zero_ext 16 v2); split. auto. apply Val.zero_ext_lessdef; auto.
-  destruct (eq_block b b0); inv H0. TrivialExists.
-  destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
-  destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
-  destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
-  destruct (Int.eq i0 Int.zero); inv H0; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
-  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
-  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
-  destruct (Int.ltu i (Int.repr 31)); inv H0; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H0; TrivialExists.
-  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
-  destruct (Int.ltu i Int.iwordsize); inv H0; TrivialExists.
+  destruct (eq_block b b0); inv H1. TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H1; TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H1; TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H1; TrivialExists.
+  destruct (Int.eq i0 Int.zero); inv H1; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i (Int.repr 31)); inv H1; TrivialExists.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H1; TrivialExists.
+  destruct (Int.ltu i Int.iwordsize); inv H1; TrivialExists.
   eapply eval_addressing_lessdef; eauto.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
   exists v1; split; auto. 
-  caseEq (eval_condition c vl1); intros. rewrite H1 in H0. 
-  rewrite (eval_condition_lessdef c H H1).
-  destruct b; inv H0; TrivialExists.
-  rewrite H1 in H0. discriminate.
+  destruct (eval_condition c vl1 m1) as [] _eqn. 
+  rewrite (eval_condition_lessdef c H H0 Heqo).
+  destruct b; inv H1; TrivialExists.
+  discriminate.
 Qed.
 
 End EVAL_LESSDEF.
+
+(** Shifting stack-relative references.  This is used in [Stacking]. *)
+
+Definition shift_stack_addressing (delta: int) (addr: addressing) :=
+  match addr with
+  | Ainstack ofs => Ainstack (Int.add delta ofs)
+  | _ => addr
+  end.
+
+Definition shift_stack_operation (delta: int) (op: operation) :=
+  match op with
+  | Olea addr => Olea (shift_stack_addressing delta addr)
+  | _ => op
+  end.
+
+Lemma type_shift_stack_addressing:
+  forall delta addr, type_of_addressing (shift_stack_addressing delta addr) = type_of_addressing addr.
+Proof.
+  intros. destruct addr; auto. 
+Qed.
+
+Lemma type_shift_stack_operation:
+  forall delta op, type_of_operation (shift_stack_operation delta op) = type_of_operation op.
+Proof.
+  intros. destruct op; auto. simpl. decEq. apply type_shift_stack_addressing. 
+Qed.
+
+(** Compatibility of the evaluation functions with memory injections. *)
+
+Section EVAL_INJECT.
+
+Variable F V: Type.
+Variable genv: Genv.t F V.
+Variable f: meminj.
+Hypothesis globals: meminj_preserves_globals genv f.
+Variable sp1: block.
+Variable sp2: block.
+Variable delta: Z.
+Hypothesis sp_inj: f sp1 = Some(sp2, delta).
+
+Ltac InvInject :=
+  match goal with
+  | [ H: val_inject _ (Vint _) _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_inject _ (Vfloat _) _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_inject _ (Vptr _ _) _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_list_inject _ nil _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_list_inject _ (_ :: _) _ |- _ ] =>
+      inv H; InvInject
+  | _ => idtac
+  end.
+
+Lemma eval_condition_inject:
+  forall cond vl1 vl2 b m1 m2,
+  val_list_inject f vl1 vl2 ->
+  Mem.inject f m1 m2 ->
+  eval_condition cond vl1 m1 = Some b ->
+  eval_condition cond vl2 m2 = Some b.
+Proof.
+  intros. destruct cond; simpl in *; FuncInv; InvInject; auto.
+  destruct (Mem.valid_pointer m1 b0 (Int.unsigned i)) as [] _eqn; try discriminate.
+  destruct (Mem.valid_pointer m1 b1 (Int.unsigned i0)) as [] _eqn; try discriminate.
+  simpl in H1.
+  exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb0. econstructor; eauto. 
+  intros V1. rewrite V1.
+  exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb2. econstructor; eauto. 
+  intros V2. rewrite V2.
+  simpl. 
+  destruct (eq_block b0 b1); inv H1.
+  rewrite H3 in H5; inv H5. rewrite dec_eq_true.
+  decEq. apply Int.translate_cmpu.
+  eapply Mem.valid_pointer_inject_no_overflow; eauto.
+  eapply Mem.valid_pointer_inject_no_overflow; eauto.
+  exploit Mem.different_pointers_inject; eauto. intros P.
+  destruct (eq_block b3 b4); auto.
+  destruct P. contradiction.
+  destruct c; unfold eval_compare_mismatch in *; inv H2. 
+  unfold Int.cmpu. rewrite Int.eq_false; auto. congruence. 
+  unfold Int.cmpu. rewrite Int.eq_false; auto. congruence.
+Qed.
+
+Ltac TrivialExists2 :=
+  match goal with
+  | [ |- exists v2, Some ?v1 = Some v2 /\ val_inject _ _ v2 ] =>
+      exists v1; split; [auto | econstructor; eauto]
+  | _ => idtac
+  end.
+
+Lemma eval_addressing_inject:
+  forall addr vl1 vl2 v1,
+  val_list_inject f vl1 vl2 ->
+  eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
+  exists v2, 
+     eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
+  /\ val_inject f v1 v2.
+Proof.
+  intros. destruct addr; simpl in *; FuncInv; InvInject; TrivialExists2.
+  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut. 
+  repeat rewrite Int.add_assoc. decEq. rewrite Int.add_commut. apply Int.add_assoc. 
+  repeat rewrite Int.add_assoc. decEq. rewrite Int.add_commut. apply Int.add_assoc. 
+  repeat rewrite Int.add_assoc. decEq. rewrite Int.add_commut. apply Int.add_assoc.
+  destruct (Genv.find_symbol genv i) as [] _eqn; inv H0.
+  TrivialExists2. eapply (proj1 globals); eauto. rewrite Int.add_zero; auto.
+  destruct (Genv.find_symbol genv i) as [] _eqn; inv H0.
+  TrivialExists2. eapply (proj1 globals); eauto. rewrite Int.add_zero; auto.
+  destruct (Genv.find_symbol genv i0) as [] _eqn; inv H0.
+  TrivialExists2. eapply (proj1 globals); eauto. rewrite Int.add_zero; auto.
+  rewrite Int.add_assoc. decEq. apply Int.add_commut.
+Qed.
+
+Lemma eval_operation_inject:
+  forall op vl1 vl2 v1 m1 m2,
+  val_list_inject f vl1 vl2 ->
+  Mem.inject f m1 m2 ->
+  eval_operation genv (Vptr sp1 Int.zero) op vl1 m1 = Some v1 ->
+  exists v2,
+     eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
+  /\ val_inject f v1 v2.
+Proof.
+  intros. destruct op; simpl in *; FuncInv; InvInject; TrivialExists2.
+  exists v'; auto.
+  exists (Val.sign_ext 8 v'); split; auto. inv H4; simpl; auto.
+  exists (Val.zero_ext 8 v'); split; auto. inv H4; simpl; auto.
+  exists (Val.sign_ext 16 v'); split; auto. inv H4; simpl; auto.
+  exists (Val.zero_ext 16 v'); split; auto. inv H4; simpl; auto.
+  rewrite Int.sub_add_l. auto.
+  destruct (eq_block b b0); inv H1. rewrite H3 in H5; inv H5. rewrite dec_eq_true.
+  rewrite Int.sub_shifted. TrivialExists2.
+  destruct (Int.eq i0 Int.zero); inv H1. TrivialExists2.
+  destruct (Int.eq i0 Int.zero); inv H1. TrivialExists2.
+  destruct (Int.eq i0 Int.zero); inv H1. TrivialExists2.
+  destruct (Int.eq i0 Int.zero); inv H1. TrivialExists2.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialExists2.
+  destruct (Int.ltu i Int.iwordsize); inv H1. TrivialExists2.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialExists2.
+  destruct (Int.ltu i Int.iwordsize); inv H1. TrivialExists2.
+  destruct (Int.ltu i (Int.repr 31)); inv H1. TrivialExists2.
+  destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialExists2.
+  destruct (Int.ltu i Int.iwordsize); inv H1. TrivialExists2.
+  destruct (Int.ltu i Int.iwordsize); inv H1. TrivialExists2.
+  eapply eval_addressing_inject; eauto.
+  exists (Val.singleoffloat v'); split; auto. inv H4; simpl; auto.
+  destruct (Float.intoffloat f0); simpl in *; inv H1. TrivialExists2.
+  destruct (eval_condition c vl1 m1) as [] _eqn; try discriminate.
+  exploit eval_condition_inject; eauto. intros EQ; rewrite EQ. 
+  destruct b; inv H1; TrivialExists2.
+Qed.
+
+End EVAL_INJECT.
 
 (** Transformation of addressing modes with two operands or more
   into an equivalent arithmetic operation.  This is used in the [Reload]
@@ -851,10 +1021,10 @@ End EVAL_LESSDEF.
 Definition op_for_binary_addressing (addr: addressing) : operation := Olea addr.
 
 Lemma eval_op_for_binary_addressing:
-  forall (F V: Type) (ge: Genv.t F V) sp addr args v,
+  forall (F V: Type) (ge: Genv.t F V) sp addr args v m,
   (length args >= 2)%nat ->
   eval_addressing ge sp addr args = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) args = Some v.
+  eval_operation ge sp (op_for_binary_addressing addr) args m = Some v.
 Proof.
   intros. simpl. auto.
 Qed.
@@ -925,53 +1095,21 @@ Definition is_trivial_op (op: operation) : bool :=
   | _ => false
   end.
 
-(** Shifting stack-relative references.  This is used in [Stacking]. *)
+(** Operations that depend on the memory state. *)
 
-Definition shift_stack_addressing (delta: int) (addr: addressing) :=
-  match addr with
-  | Ainstack ofs => Ainstack (Int.add delta ofs)
-  | _ => addr
-  end.
-
-Definition shift_stack_operation (delta: int) (op: operation) :=
+Definition op_depends_on_memory (op: operation) : bool :=
   match op with
-  | Olea addr => Olea (shift_stack_addressing delta addr)
-  | _ => op
+  | Ocmp (Ccompu _) => true
+  | _ => false
   end.
 
-Lemma shift_stack_eval_addressing:
-  forall (F V: Type) (ge: Genv.t F V) sp addr args delta,
-  eval_addressing ge (Val.sub sp (Vint delta)) (shift_stack_addressing delta addr) args =
-  eval_addressing ge sp addr args.
+Lemma op_depends_on_memory_correct:
+  forall (F V: Type) (ge: Genv.t F V) sp op args m1 m2,
+  op_depends_on_memory op = false ->
+  eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
-  intros. destruct addr; simpl; auto. 
-  destruct args; auto. unfold offset_sp. destruct sp; simpl; auto. 
-  decEq. decEq. rewrite <- Int.add_assoc. decEq. 
-  rewrite Int.sub_add_opp. rewrite Int.add_assoc.
-  rewrite (Int.add_commut (Int.neg delta)). rewrite <- Int.sub_add_opp. 
-  rewrite Int.sub_idem. apply Int.add_zero. 
+  intros until m2. destruct op; simpl; try congruence.
+  destruct c; simpl; congruence.
 Qed.
-
-Lemma shift_stack_eval_operation:
-  forall (F V: Type) (ge: Genv.t F V) sp op args delta,
-  eval_operation ge (Val.sub sp (Vint delta)) (shift_stack_operation delta op) args =
-  eval_operation ge sp op args.
-Proof.
-  intros. destruct op; simpl; auto.
-  apply shift_stack_eval_addressing. 
-Qed.
-
-Lemma type_shift_stack_addressing:
-  forall delta addr, type_of_addressing (shift_stack_addressing delta addr) = type_of_addressing addr.
-Proof.
-  intros. destruct addr; auto. 
-Qed.
-
-Lemma type_shift_stack_operation:
-  forall delta op, type_of_operation (shift_stack_operation delta op) = type_of_operation op.
-Proof.
-  intros. destruct op; auto. simpl. decEq. apply type_shift_stack_addressing. 
-Qed.
-
 
 

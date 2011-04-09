@@ -61,7 +61,7 @@ Definition addrstack (ofs: int) :=
 (** ** Boolean negation *)
 
 Definition notbool_base (e: expr) :=
-  Eop (Ocmp (Ccompimm Ceq Int.zero)) (e ::: Enil).
+  Eop (Ocmp (Ccompuimm Ceq Int.zero)) (e ::: Enil).
 
 Fixpoint notbool (e: expr) {struct e} : expr :=
   match e with

@@ -118,19 +118,17 @@ Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
 (** * Code transformation. *)
 
 (** Translation of operations and addressing mode.
-  In Linear, the stack pointer has offset 0, i.e. points to the
-  beginning of the Cminor stack data block.  In Mach, the stack
-  pointer points to the bottom of the activation record,
-  at offset [- fe.(fe_size)] where [fe] is the frame environment.
+  The Cminor stack data block starts at offset 0 in Linear,
+  but at offset [fe.(fe_stack_data)] in Mach.
   Operations and addressing mode that are relative to the stack pointer
-  must therefore be offset by [fe.(fe_size)] to preserve their
+  must therefore be offset by [fe.(fe_stack_data)] to preserve their
   behaviour. *)
 
 Definition transl_op (fe: frame_env) (op: operation) :=
-  shift_stack_operation (Int.repr fe.(fe_size)) op.
+  shift_stack_operation (Int.repr fe.(fe_stack_data)) op.
 
 Definition transl_addr (fe: frame_env) (addr: addressing) :=
-  shift_stack_addressing (Int.repr fe.(fe_size)) addr.
+  shift_stack_addressing (Int.repr fe.(fe_stack_data)) addr.
 
 (** Translation of a Linear instruction.  Prepends the corresponding
   Mach instructions to the given list of instructions.
@@ -193,8 +191,8 @@ Definition transl_instr
   by the translation of the function body.
 
   Subtle point: the compiler must check that the frame is no
-  larger than [- Int.min_signed] bytes, otherwise arithmetic overflows
-  could occur during frame accesses using signed machine integers as
+  larger than [Int.max_unsigned] bytes, otherwise arithmetic overflows
+  could occur during frame accesses using unsigned machine integers as
   offsets. *)
 
 Definition transl_code
@@ -208,15 +206,12 @@ Open Local Scope string_scope.
 
 Definition transf_function (f: Linear.function) : res Mach.function :=
   let fe := make_env (function_bounds f) in
-  if zlt f.(Linear.fn_stacksize) 0 then
-    Error (msg "Stacking.transf_function") 
-  else if zlt (- Int.min_signed) fe.(fe_size) then
+  if zlt Int.max_unsigned fe.(fe_size) then
     Error (msg "Too many spilled variables, stack size exceeded")
   else
     OK (Mach.mkfunction
          f.(Linear.fn_sig)
          (transl_body f fe)
-         f.(Linear.fn_stacksize)
          fe.(fe_size)
          (Int.repr fe.(fe_ofs_link))
          (Int.repr fe.(fe_ofs_retaddr))).

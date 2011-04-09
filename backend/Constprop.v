@@ -206,7 +206,7 @@ Definition transf_instr (app: D.t) (instr: instruction) :=
   | Ijumptable arg tbl =>
       match intval (approx_reg app) arg with
       | Some n =>
-          match list_nth_z tbl (Int.signed n) with
+          match list_nth_z tbl (Int.unsigned n) with
           | Some s => Inop s
           | None => instr
           end

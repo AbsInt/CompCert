@@ -179,11 +179,11 @@ Proof.
 Qed.
 
 Lemma return_address_exists:
-  forall f c, is_tail c f.(fn_code) ->
+  forall f sg ros c, is_tail (Mcall sg ros :: c) f.(fn_code) ->
   exists ra, return_address_offset f c ra.
 Proof.
   intros. assert (is_tail (transl_code f c) (transl_function f)).
-  unfold transl_function. IsTail. apply transl_code_tail; auto.
+  unfold transl_function. IsTail. apply transl_code_tail; eauto with coqlib.
   destruct (is_tail_code_tail _ _ H0) as [ofs A].
   exists (Int.repr ofs). constructor. auto.
 Qed.

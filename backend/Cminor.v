@@ -254,7 +254,7 @@ Definition eval_compare_null (c: comparison) (n: int) : option val :=
   if Int.eq n Int.zero then eval_compare_mismatch c else None.
 
 Definition eval_binop
-            (op: binary_operation) (arg1 arg2: val): option val :=
+            (op: binary_operation) (arg1 arg2: val) (m: mem): option val :=
   match op, arg1, arg2 with
   | Oadd, Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
   | Oadd, Vint n1, Vptr b2 n2 => Some (Vptr b2 (Int.add n2 n1))
@@ -287,16 +287,19 @@ Definition eval_binop
   | Odivf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.div f1 f2))
   | Ocmp c, Vint n1, Vint n2 =>
       Some (Val.of_bool(Int.cmp c n1 n2))
-  | Ocmp c, Vptr b1 n1, Vptr b2 n2 =>
-      if eq_block b1 b2
-      then Some(Val.of_bool(Int.cmp c n1 n2))
-      else eval_compare_mismatch c
-  | Ocmp c, Vptr b1 n1, Vint n2 =>
-      eval_compare_null c n2
-  | Ocmp c, Vint n1, Vptr b2 n2 =>
-      eval_compare_null c n1
   | Ocmpu c, Vint n1, Vint n2 =>
       Some (Val.of_bool(Int.cmpu c n1 n2))
+  | Ocmpu c, Vptr b1 n1, Vptr b2 n2 =>
+      if Mem.valid_pointer m b1 (Int.unsigned n1)
+      && Mem.valid_pointer m b2 (Int.unsigned n2) then
+        if eq_block b1 b2
+        then Some(Val.of_bool(Int.cmpu c n1 n2))
+        else eval_compare_mismatch c
+      else None
+  | Ocmpu c, Vptr b1 n1, Vint n2 =>
+      eval_compare_null c n2
+  | Ocmpu c, Vint n1, Vptr b2 n2 =>
+      eval_compare_null c n1
   | Ocmpf c, Vfloat f1, Vfloat f2 =>
       Some (Val.of_bool (Float.cmp c f1 f2))
   | _, _, _ => None
@@ -330,7 +333,7 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Ebinop: forall op a1 a2 v1 v2 v,
       eval_expr a1 v1 ->
       eval_expr a2 v2 ->
-      eval_binop op v1 v2 = Some v ->
+      eval_binop op v1 v2 m = Some v ->
       eval_expr (Ebinop op a1 a2) v
   | eval_Eload: forall chunk addr vaddr v,
       eval_expr addr vaddr ->

@@ -433,14 +433,11 @@ let print_instruction oc labels = function
       fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
   | Paddze(r1, r2) ->
       fprintf oc "	addze	%a, %a\n" ireg r1 ireg r2
-  | Pallocframe(lo, hi, ofs) ->
-      let lo = camlint_of_coqint lo
-      and hi = camlint_of_coqint hi
+  | Pallocframe(sz, ofs) ->
+      let sz = camlint_of_coqint sz
       and ofs = camlint_of_coqint ofs in
-      let sz = Int32.sub hi lo in
       assert (ofs = 0l);
-      (* Keep stack 16-aligned *)
-      let adj = Int32.neg (Int32.logand (Int32.add sz 15l) 0xFFFF_FFF0l) in
+      let adj = Int32.neg sz in
       if adj >= -0x8000l then
         fprintf oc "	stwu	%a, %ld(%a)\n" ireg GPR1 adj ireg GPR1
       else begin
@@ -509,8 +506,8 @@ let print_instruction oc labels = function
       fprintf oc "	extsb	%a, %a\n" ireg r1 ireg r2
   | Pextsh(r1, r2) ->
       fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
-  | Pfreeframe(lo, hi, ofs) ->
-      (* Note: could also do an add on GPR1 using lo and hi *)
+  | Pfreeframe(sz, ofs) ->
+      (* Note: could also do an add on GPR1 using sz *)
       fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1  (camlint_of_coqint ofs)  ireg GPR1
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2

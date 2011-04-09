@@ -208,9 +208,10 @@ Lemma kill_load_eqs_incl:
 Proof.
   induction eqs; simpl; intros.
   apply incl_refl.
-  destruct a. destruct r. apply incl_same_head; auto.
-  auto.
-  apply incl_tl. auto.
+  destruct a. destruct r. 
+  destruct (op_depends_on_memory o). auto with coqlib. 
+  apply incl_same_head; auto.
+  auto with coqlib.
 Qed.
 
 Lemma wf_kill_loads:
@@ -400,7 +401,7 @@ Definition rhs_evals_to
     (valu: valnum -> val) (rh: rhs) (v: val) : Prop :=
   match rh with
   | Op op vl => 
-      eval_operation ge sp op (List.map valu vl) = Some v
+      eval_operation ge sp op (List.map valu vl) m = Some v
   | Load chunk addr vl =>
       exists a,
       eval_addressing ge sp addr (List.map valu vl) = Some a /\
@@ -481,7 +482,7 @@ Lemma add_op_satisfiable:
   forall n rs op args dst v,
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
-  eval_operation ge sp op rs##args = Some v ->
+  eval_operation ge sp op rs##args m = Some v ->
   numbering_satisfiable ge sp (rs#dst <- v) m (add_op n dst op args).
 Proof.
   intros. inversion H0.
@@ -547,36 +548,22 @@ Proof.
   eauto.
 Qed.
 
-(** Allocation of a fresh memory block preserves satisfiability. *)
-
-Lemma alloc_satisfiable:
-  forall lo hi b m' rs n,
-  Mem.alloc m lo hi = (m', b) ->
-  numbering_satisfiable ge sp rs m n ->
-  numbering_satisfiable ge sp rs m' n.
-Proof.
-  intros. destruct H0 as [valu [A B]].
-  exists valu; split; intros.
-  generalize (A _ _ H0). destruct rh; simpl.
-  auto.
-  intros [addr [C D]]. exists addr; split. auto.
-  destruct addr; simpl in *; try discriminate. 
-  eapply Mem.load_alloc_other; eauto. 
-  eauto.
-Qed.
-
 (** [kill_load] preserves satisfiability.  Moreover, the resulting numbering
   is satisfiable in any concrete memory state. *)
 
 Lemma kill_load_eqs_ops:
   forall v rhs eqs,
   In (v, rhs) (kill_load_eqs eqs) ->
-  match rhs with Op _ _ => True | Load _ _ _ => False end.
+  match rhs with
+  | Op op _ => op_depends_on_memory op = false
+  | Load _ _ _ => False
+  end.
 Proof.
   induction eqs; simpl; intros.
   elim H.
-  destruct a. destruct r. 
-  elim H; intros. inversion H0; subst v0; subst rhs. auto.
+  destruct a. destruct r. destruct (op_depends_on_memory o) as [] _eqn.
+  apply IHeqs; auto.
+  simpl in H; destruct H. inv H. auto. 
   apply IHeqs. auto. 
   apply IHeqs. auto.
 Qed.
@@ -590,7 +577,9 @@ Proof.
   exists x. split; intros.
   generalize (H _ _ (H1 _ H2)). 
   generalize (kill_load_eqs_ops _ _ _ H2).
-  destruct rh; simpl; tauto.
+  destruct rh; simpl.
+  intros. rewrite <- H4. apply op_depends_on_memory_correct; auto.
+  tauto.
   apply H0. auto. 
 Qed.
 
@@ -645,7 +634,7 @@ Lemma find_op_correct:
   wf_numbering n ->
   numbering_satisfiable ge sp rs m n ->
   find_op n op args = Some r ->
-  eval_operation ge sp op rs##args = Some rs#r.
+  eval_operation ge sp op rs##args m = Some rs#r.
 Proof.
   intros until r. intros WF [valu NH].
   unfold find_op. caseEq (valnum_regs n args). intros n' vl VR FIND.
@@ -834,14 +823,14 @@ Proof.
 
   (* Iop *)
   exists (State s' (transf_function f) sp pc' (rs#res <- v) m); split.
-  assert (eval_operation tge sp op rs##args = Some v).
+  assert (eval_operation tge sp op rs##args m = Some v).
     rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
   generalize C; clear C.
   case (is_trivial_op op).
   intro. eapply exec_Iop'; eauto. 
   caseEq (find_op (analyze f)!!pc op args). intros r FIND CODE.
   eapply exec_Iop'; eauto. simpl. 
-  assert (eval_operation ge sp op rs##args = Some rs#r).
+  assert (eval_operation ge sp op rs##args m = Some rs#r).
     eapply find_op_correct; eauto.
     eapply wf_analyze; eauto.
   congruence.
