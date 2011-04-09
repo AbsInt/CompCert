@@ -430,8 +430,7 @@ Qed.
   property: if the execution does not fail because of a failed run-time
   test, the result values and register states match the static
   typing assumptions.  This preservation property will be useful
-  later for the proof of semantic equivalence between
-  [Machabstr] and [Machconcr].
+  later for the proof of semantic equivalence between [Linear] and [Mach].
   Even though we do not need it for [RTL], we show preservation for [RTL]
   here, as a warm-up exercise and because some of the lemmas will be
   useful later. *)

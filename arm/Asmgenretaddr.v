@@ -13,7 +13,7 @@
 (** Predictor for return addresses in generated PPC code.
 
     The [return_address_offset] predicate defined here is used in the
-    concrete semantics for Mach (module [Machconcr]) to determine the
+    semantics for Mach (module [Machsem]) to determine the
     return addresses that are stored in activation records. *)
 
 Require Import Coqlib.

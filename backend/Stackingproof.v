@@ -30,7 +30,7 @@ Require LTL.
 Require Import Linear.
 Require Import Lineartyping.
 Require Import Mach.
-Require Import Machconcr.
+Require Import Machsem.
 Require Import Bounds.
 Require Import Conventions.
 Require Import Stacklayout.
@@ -2215,7 +2215,7 @@ End EXTERNAL_ARGUMENTS.
 - Well-typedness of [f].
 *)
 
-Inductive match_states: Linear.state -> Machconcr.state -> Prop :=
+Inductive match_states: Linear.state -> Machsem.state -> Prop :=
   | match_states_intro:
       forall cs f sp c ls m cs' fb sp' rs m' j tf
         (MINJ: Mem.inject j m m')
@@ -2227,7 +2227,7 @@ Inductive match_states: Linear.state -> Machconcr.state -> Prop :=
         (AGFRAME: agree_frame f j ls (parent_locset cs) m sp m' sp' (parent_sp cs') (parent_ra cs'))
         (TAIL: is_tail c (Linear.fn_code f)),
       match_states (Linear.State cs f (Vptr sp Int.zero) c ls m)
-                  (Machconcr.State cs' fb (Vptr sp' Int.zero) (transl_code (make_env (function_bounds f)) c) rs m')
+                  (Machsem.State cs' fb (Vptr sp' Int.zero) (transl_code (make_env (function_bounds f)) c) rs m')
   | match_states_call:
       forall cs f ls m cs' fb rs m' j tf
         (MINJ: Mem.inject j m m')
@@ -2239,7 +2239,7 @@ Inductive match_states: Linear.state -> Machconcr.state -> Prop :=
         (AGREGS: agree_regs j ls rs)
         (AGLOCS: agree_callee_save ls (parent_locset cs)),
       match_states (Linear.Callstate cs f ls m)
-                  (Machconcr.Callstate cs' fb rs m')
+                  (Machsem.Callstate cs' fb rs m')
   | match_states_return:
       forall cs ls m cs' rs m' j sg 
         (MINJ: Mem.inject j m m')
@@ -2248,12 +2248,12 @@ Inductive match_states: Linear.state -> Machconcr.state -> Prop :=
         (AGREGS: agree_regs j ls rs)
         (AGLOCS: agree_callee_save ls (parent_locset cs)),
       match_states (Linear.Returnstate cs ls m)
-                  (Machconcr.Returnstate cs' rs m').
+                  (Machsem.Returnstate cs' rs m').
 
 Theorem transf_step_correct:
   forall s1 t s2, Linear.step ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1'),
-  exists s2', plus Machconcr.step tge s1' t s2' /\ match_states s2 s2'.
+  exists s2', plus Machsem.step tge s1' t s2' /\ match_states s2 s2'.
 Proof.
   assert (RED: forall f i c,
           transl_code (make_env (function_bounds f)) (i :: c) = 
@@ -2586,7 +2586,7 @@ Qed.
 
 Lemma transf_initial_states:
   forall st1, Linear.initial_state prog st1 ->
-  exists st2, Machconcr.initial_state tprog st2 /\ match_states st1 st2.
+  exists st2, Machsem.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inv H.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
@@ -2614,7 +2614,7 @@ Qed.
 
 Lemma transf_final_states:
   forall st1 st2 r, 
-  match_states st1 st2 -> Linear.final_state st1 r -> Machconcr.final_state st2 r.
+  match_states st1 st2 -> Linear.final_state st1 r -> Machsem.final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv STACKS.
   constructor.
@@ -2624,9 +2624,9 @@ Qed.
 
 Theorem transf_program_correct:
   forall (beh: program_behavior), not_wrong beh ->
-  Linear.exec_program prog beh -> Machconcr.exec_program tprog beh.
+  Linear.exec_program prog beh -> Machsem.exec_program tprog beh.
 Proof.
-  unfold Linear.exec_program, Machconcr.exec_program; intros.
+  unfold Linear.exec_program, Machsem.exec_program; intros.
   eapply simulation_plus_preservation; eauto.
   eexact transf_initial_states.
   eexact transf_final_states.

@@ -24,7 +24,7 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
-Require Import Machconcr.
+Require Import Machsem.
 Require Import Machtyping.
 Require Import Asm.
 Require Import Asmgen.
@@ -354,7 +354,7 @@ Qed.
 Lemma extcall_arg_match:
   forall ms sp rs m m' l v,
   agree ms sp rs ->
-  Machconcr.extcall_arg ms m sp l v ->
+  Machsem.extcall_arg ms m sp l v ->
   Mem.extends m m' ->
   exists v', Asm.extcall_arg rs m' l v' /\ Val.lessdef v v'.
 Proof.
@@ -369,7 +369,7 @@ Qed.
 Lemma extcall_args_match:
   forall ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
   forall ll vl,
-  Machconcr.extcall_args ms m sp ll vl ->
+  Machsem.extcall_args ms m sp ll vl ->
   exists vl', Asm.extcall_args rs m' ll vl' /\ Val.lessdef_list vl vl'.
 Proof.
   induction 3.
@@ -382,11 +382,11 @@ Qed.
 Lemma extcall_arguments_match:
   forall ms m sp rs sg args m',
   agree ms sp rs ->
-  Machconcr.extcall_arguments ms m sp sg args ->
+  Machsem.extcall_arguments ms m sp sg args ->
   Mem.extends m m' ->
   exists args', Asm.extcall_arguments rs m' sg args' /\ Val.lessdef_list args args'.
 Proof.
-  unfold Machconcr.extcall_arguments, Asm.extcall_arguments; intros.
+  unfold Machsem.extcall_arguments, Asm.extcall_arguments; intros.
   eapply extcall_args_match; eauto.
 Qed.
 

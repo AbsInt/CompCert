@@ -33,6 +33,7 @@ Require LTL.
 Require LTLin.
 Require Linear.
 Require Mach.
+Require Machsem.
 Require Asm.
 (** Translation passes. *)
 Require Initializers.

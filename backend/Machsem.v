@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** The Mach intermediate language: concrete semantics. *)
+(** The Mach intermediate language: operational semantics. *)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -28,8 +28,9 @@ Require Import Mach.
 Require Stacklayout.
 Require Asmgenretaddr.
 
-(** In the concrete semantics for Mach, the three stack-related Mach
-  instructions are interpreted as memory accesses relative to the
+(** The semantics for Mach is close to that of [Linear]: they differ only
+  on the interpretation of stack slot accesses.  In Mach, these
+  accesses are interpreted as memory accesses relative to the
   stack pointer.  More precisely:
 - [Mgetstack ofs ty r] is a memory load at offset [ofs * 4] relative
   to the stack pointer.
@@ -41,7 +42,7 @@ Require Asmgenretaddr.
   with the current record containing a pointer to the record of the
   caller function at offset 0.
 
-In addition to this linking of activation records, the concrete
+In addition to this linking of activation records, the
 semantics also make provisions for storing a back link at offset
 [f.(fn_link_ofs)] from the stack pointer, and a return address at
 offset [f.(fn_retaddr_ofs)].  The latter stack location will be used

@@ -26,7 +26,7 @@ Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
-Require Import Machconcr.
+Require Import Machsem.
 Require Import Machtyping.
 Require Import Conventions.
 Require Import Asm.
@@ -562,7 +562,7 @@ Qed.
 - Mach register values and PPC register values agree.
 *)
 
-Inductive match_stack: list Machconcr.stackframe -> Prop :=
+Inductive match_stack: list Machsem.stackframe -> Prop :=
   | match_stack_nil:
       match_stack nil
   | match_stack_cons: forall fb sp ra c s f tf tc,
@@ -572,7 +572,7 @@ Inductive match_stack: list Machconcr.stackframe -> Prop :=
       match_stack s ->
       match_stack (Stackframe fb sp ra c :: s).
 
-Inductive match_states: Machconcr.state -> Asm.state -> Prop :=
+Inductive match_states: Machsem.state -> Asm.state -> Prop :=
   | match_states_intro:
       forall s fb sp c ep ms m m' rs f tf tc
         (STACKS: match_stack s)
@@ -581,7 +581,7 @@ Inductive match_states: Machconcr.state -> Asm.state -> Prop :=
         (AT: transl_code_at_pc (rs PC) fb f c ep tf tc)
         (AG: agree ms sp rs)
         (DXP: ep = true -> rs#EDX = parent_sp s),
-      match_states (Machconcr.State s fb sp c ms m)
+      match_states (Machsem.State s fb sp c ms m)
                    (Asm.State rs m')
   | match_states_call:
       forall s fb ms m m' rs
@@ -590,7 +590,7 @@ Inductive match_states: Machconcr.state -> Asm.state -> Prop :=
         (AG: agree ms (parent_sp s) rs)
         (ATPC: rs PC = Vptr fb Int.zero)
         (ATLR: rs RA = parent_ra s),
-      match_states (Machconcr.Callstate s fb ms m)
+      match_states (Machsem.Callstate s fb ms m)
                    (Asm.State rs m')
   | match_states_return:
       forall s ms m m' rs
@@ -598,7 +598,7 @@ Inductive match_states: Machconcr.state -> Asm.state -> Prop :=
         (MEXT: Mem.extends m m')
         (AG: agree ms (parent_sp s) rs)
         (ATPC: rs PC = parent_ra s),
-      match_states (Machconcr.Returnstate s ms m)
+      match_states (Machsem.Returnstate s ms m)
                    (Asm.State rs m').
 
 Lemma exec_straight_steps:
@@ -614,7 +614,7 @@ Lemma exec_straight_steps:
     /\ (edx_preserved ep i = true -> rs2#EDX = parent_sp s)) ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
-  match_states (Machconcr.State s fb sp c ms2 m2) st'.
+  match_states (Machsem.State s fb sp c ms2 m2) st'.
 Proof.
   intros. inversion H2. subst. monadInv H7. 
   exploit H3; eauto. intros [rs2 [A [B C]]]. 
@@ -647,22 +647,22 @@ Qed.
   take infinitely many Mach transitions that correspond to zero
   transitions on the PPC side.  Actually, all Mach transitions
   correspond to at least one Asm transition, except the
-  transition from [Machconcr.Returnstate] to [Machconcr.State].
+  transition from [Machsem.Returnstate] to [Machsem.State].
   So, the following integer measure will suffice to rule out
   the unwanted behaviour. *)
 
-Definition measure (s: Machconcr.state) : nat :=
+Definition measure (s: Machsem.state) : nat :=
   match s with
-  | Machconcr.State _ _ _ _ _ _ => 0%nat
-  | Machconcr.Callstate _ _ _ _ => 0%nat
-  | Machconcr.Returnstate _ _ _ => 1%nat
+  | Machsem.State _ _ _ _ _ _ => 0%nat
+  | Machsem.Callstate _ _ _ _ => 0%nat
+  | Machsem.Returnstate _ _ _ => 1%nat
   end.
 
 (** We show the simulation diagram by case analysis on the Mach transition
   on the left.  Since the proof is large, we break it into one lemma
   per transition. *)
 
-Definition exec_instr_prop (s1: Machconcr.state) (t: trace) (s2: Machconcr.state) : Prop :=
+Definition exec_instr_prop (s1: Machsem.state) (t: trace) (s2: Machsem.state) : Prop :=
   forall s1' (MS: match_states s1 s1'),
   (exists s2', plus step tge s1' t s2' /\ match_states s2 s2')
   \/ (measure s2 < measure s1 /\ t = E0 /\ match_states s2 s1')%nat.
@@ -672,8 +672,8 @@ Lemma exec_Mlabel_prop:
   forall (s : list stackframe) (fb : block) (sp : val)
          (lbl : Mach.label) (c : list Mach.instruction) (ms : Mach.regset)
          (m : mem),
-  exec_instr_prop (Machconcr.State s fb sp (Mlabel lbl :: c) ms m) E0
-                  (Machconcr.State s fb sp c ms m).
+  exec_instr_prop (Machsem.State s fb sp (Mlabel lbl :: c) ms m) E0
+                  (Machsem.State s fb sp c ms m).
 Proof.
   intros; red; intros; inv MS.
   left; eapply exec_straight_steps; eauto; intros. 
@@ -686,8 +686,8 @@ Lemma exec_Mgetstack_prop:
          (ty : typ) (dst : mreg) (c : list Mach.instruction)
          (ms : Mach.regset) (m : mem) (v : val),
   load_stack m sp ty ofs = Some v ->
-  exec_instr_prop (Machconcr.State s fb sp (Mgetstack ofs ty dst :: c) ms m) E0
-                  (Machconcr.State s fb sp c (Regmap.set dst v ms) m).
+  exec_instr_prop (Machsem.State s fb sp (Mgetstack ofs ty dst :: c) ms m) E0
+                  (Machsem.State s fb sp c (Regmap.set dst v ms) m).
 Proof.
   intros; red; intros; inv MS.
   unfold load_stack in H.
@@ -705,8 +705,8 @@ Lemma exec_Msetstack_prop:
          (ofs : int) (ty : typ) (c : list Mach.instruction)
          (ms : mreg -> val) (m m' : mem),
   store_stack m sp ty ofs (ms src) = Some m' ->
-  exec_instr_prop (Machconcr.State s fb sp (Msetstack src ofs ty :: c) ms m) E0
-                  (Machconcr.State s fb sp c ms m').
+  exec_instr_prop (Machsem.State s fb sp (Msetstack src ofs ty :: c) ms m) E0
+                  (Machsem.State s fb sp c ms m').
 Proof.
   intros; red; intros; inv MS.
   unfold store_stack in H.
@@ -727,8 +727,8 @@ Lemma exec_Mgetparam_prop:
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   load_stack m sp Tint f.(fn_link_ofs) = Some (parent_sp s) ->
   load_stack m (parent_sp s) ty ofs = Some v ->
-  exec_instr_prop (Machconcr.State s fb sp (Mgetparam ofs ty dst :: c) ms m) E0
-                  (Machconcr.State s fb sp c (Regmap.set dst v (Regmap.set IT1 Vundef ms)) m).
+  exec_instr_prop (Machsem.State s fb sp (Mgetparam ofs ty dst :: c) ms m) E0
+                  (Machsem.State s fb sp c (Regmap.set dst v (Regmap.set IT1 Vundef ms)) m).
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
@@ -768,8 +768,8 @@ Lemma exec_Mop_prop:
          (args : list mreg) (res : mreg) (c : list Mach.instruction)
          (ms : mreg -> val) (m : mem) (v : val),
   eval_operation ge sp op ms ## args m = Some v ->
-  exec_instr_prop (Machconcr.State s fb sp (Mop op args res :: c) ms m) E0
-                  (Machconcr.State s fb sp c (Regmap.set res v (undef_op op ms)) m).
+  exec_instr_prop (Machsem.State s fb sp (Mop op args res :: c) ms m) E0
+                  (Machsem.State s fb sp c (Regmap.set res v (undef_op op ms)) m).
 Proof.
   intros; red; intros; inv MS.
   assert (eval_operation tge sp op ms##args m = Some v). 
@@ -793,8 +793,8 @@ Lemma exec_Mload_prop:
          (m : mem) (a v : val),
   eval_addressing ge sp addr ms ## args = Some a ->
   Mem.loadv chunk m a = Some v ->
-  exec_instr_prop (Machconcr.State s fb sp (Mload chunk addr args dst :: c) ms m)
-               E0 (Machconcr.State s fb sp c (Regmap.set dst v (undef_temps ms)) m).
+  exec_instr_prop (Machsem.State s fb sp (Mload chunk addr args dst :: c) ms m)
+               E0 (Machsem.State s fb sp c (Regmap.set dst v (undef_temps ms)) m).
 Proof.
   intros; red; intros; inv MS.
   assert (eval_addressing tge sp addr ms##args = Some a). 
@@ -816,8 +816,8 @@ Lemma exec_Mstore_prop:
          (m m' : mem) (a : val),
   eval_addressing ge sp addr ms ## args = Some a ->
   Mem.storev chunk m a (ms src) = Some m' ->
-  exec_instr_prop (Machconcr.State s fb sp (Mstore chunk addr args src :: c) ms m) E0
-                  (Machconcr.State s fb sp c (undef_temps ms) m').
+  exec_instr_prop (Machsem.State s fb sp (Mstore chunk addr args src :: c) ms m) E0
+                  (Machsem.State s fb sp c (undef_temps ms) m').
 Proof.
   intros; red; intros; inv MS.
   assert (eval_addressing tge sp addr ms##args = Some a). 
@@ -841,7 +841,7 @@ Lemma exec_Mcall_prop:
   find_function_ptr ge ros ms = Some f' ->
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   return_address_offset f c ra ->
-  exec_instr_prop (Machconcr.State s fb sp (Mcall sig ros :: c) ms m) E0
+  exec_instr_prop (Machsem.State s fb sp (Mcall sig ros :: c) ms m) E0
                   (Callstate (Stackframe fb sp (Vptr fb ra) c :: s) f' ms m).
 Proof.
   intros; red; intros; inv MS.
@@ -902,7 +902,7 @@ Lemma exec_Mtailcall_prop:
   load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
   Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
   exec_instr_prop
-          (Machconcr.State s fb (Vptr stk soff) (Mtailcall sig ros :: c) ms m) E0
+          (Machsem.State s fb (Vptr stk soff) (Mtailcall sig ros :: c) ms m) E0
           (Callstate s f' ms m').
 Proof.
   intros; red; intros; inv MS.
@@ -960,8 +960,8 @@ Lemma exec_Mgoto_prop:
          (m : mem) (c' : Mach.code),
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl (fn_code f) = Some c' ->
-  exec_instr_prop (Machconcr.State s fb sp (Mgoto lbl :: c) ms m) E0
-                  (Machconcr.State s fb sp c' ms m).
+  exec_instr_prop (Machsem.State s fb sp (Mgoto lbl :: c) ms m) E0
+                  (Machsem.State s fb sp c' ms m).
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
@@ -983,8 +983,8 @@ Lemma exec_Mbuiltin_prop:
          (args : list mreg) (res : mreg) (b : list Mach.instruction)
          (t : trace) (v : val) (m' : mem),
   external_call ef ge ms ## args m t v m' ->
-  exec_instr_prop (Machconcr.State s f sp (Mbuiltin ef args res :: b) ms m) t
-                  (Machconcr.State s f sp b (Regmap.set res v (undef_temps ms)) m').
+  exec_instr_prop (Machsem.State s f sp (Mbuiltin ef args res :: b) ms m) t
+                  (Machsem.State s f sp b (Regmap.set res v (undef_temps ms)) m').
 Proof.
   intros; red; intros; inv MS.
   inv AT. monadInv H3. 
@@ -1017,8 +1017,8 @@ Lemma exec_Mcond_true_prop:
   eval_condition cond ms ## args m = Some true ->
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl (fn_code f) = Some c' ->
-  exec_instr_prop (Machconcr.State s fb sp (Mcond cond args lbl :: c) ms m) E0
-                  (Machconcr.State s fb sp c' (undef_temps ms) m).
+  exec_instr_prop (Machsem.State s fb sp (Mcond cond args lbl :: c) ms m) E0
+                  (Machsem.State s fb sp c' (undef_temps ms) m).
 Proof.
   intros; red; intros; inv MS. assert (f0 = f) by congruence. subst f0.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
@@ -1045,8 +1045,8 @@ Lemma exec_Mcond_false_prop:
          (cond : condition) (args : list mreg) (lbl : Mach.label)
          (c : list Mach.instruction) (ms : mreg -> val) (m : mem),
   eval_condition cond ms ## args m = Some false ->
-  exec_instr_prop (Machconcr.State s fb sp (Mcond cond args lbl :: c) ms m) E0
-                  (Machconcr.State s fb sp c (undef_temps ms) m).
+  exec_instr_prop (Machsem.State s fb sp (Mcond cond args lbl :: c) ms m) E0
+                  (Machsem.State s fb sp c (undef_temps ms) m).
 Proof.
   intros; red; intros; inv MS.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
@@ -1069,8 +1069,8 @@ Lemma exec_Mjumptable_prop:
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl (fn_code f) = Some c' ->
   exec_instr_prop
-    (Machconcr.State s fb sp (Mjumptable arg tbl :: c) rs m) E0
-    (Machconcr.State s fb sp c' (undef_temps rs) m).
+    (Machsem.State s fb sp (Mjumptable arg tbl :: c) rs m) E0
+    (Machsem.State s fb sp c' (undef_temps rs) m).
 Proof.
   intros; red; intros; inv MS.
   assert (f0 = f) by congruence. subst f0.
@@ -1098,7 +1098,7 @@ Lemma exec_Mreturn_prop:
   load_stack m (Vptr stk soff) Tint f.(fn_link_ofs) = Some (parent_sp s) ->
   load_stack m (Vptr stk soff) Tint f.(fn_retaddr_ofs) = Some (parent_ra s) ->
   Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
-  exec_instr_prop (Machconcr.State s fb (Vptr stk soff) (Mreturn :: c) ms m) E0
+  exec_instr_prop (Machsem.State s fb (Vptr stk soff) (Mreturn :: c) ms m) E0
                   (Returnstate s ms m').
 Proof.
   intros; red; intros; inv MS.
@@ -1135,8 +1135,8 @@ Lemma exec_function_internal_prop:
   let sp := Vptr stk Int.zero in
   store_stack m1 sp Tint f.(fn_link_ofs) (parent_sp s) = Some m2 ->
   store_stack m2 sp Tint f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
-  exec_instr_prop (Machconcr.Callstate s fb ms m) E0
-                  (Machconcr.State s fb sp (fn_code f) (undef_temps ms) m3).
+  exec_instr_prop (Machsem.Callstate s fb ms m) E0
+                  (Machsem.State s fb sp (fn_code f) (undef_temps ms) m3).
 Proof.
   intros; red; intros; inv MS.
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
@@ -1174,10 +1174,10 @@ Lemma exec_function_external_prop:
          (ef : external_function) (args : list val) (res : val) (m': mem),
   Genv.find_funct_ptr ge fb = Some (External ef) ->
   external_call ef ge args m t0 res m' ->
-  Machconcr.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->
+  Machsem.extcall_arguments ms m (parent_sp s) (ef_sig ef) args ->
   ms' = Regmap.set (loc_result (ef_sig ef)) res ms ->
-  exec_instr_prop (Machconcr.Callstate s fb ms m)
-               t0 (Machconcr.Returnstate s ms' m').
+  exec_instr_prop (Machsem.Callstate s fb ms m)
+               t0 (Machsem.Returnstate s ms' m').
 Proof.
   intros; red; intros; inv MS.
   exploit functions_translated; eauto.
@@ -1200,8 +1200,8 @@ Qed.
 Lemma exec_return_prop:
   forall (s : list stackframe) (fb : block) (sp ra : val)
          (c : Mach.code) (ms : Mach.regset) (m : mem),
-  exec_instr_prop (Machconcr.Returnstate (Stackframe fb sp ra c :: s) ms m) E0
-                  (Machconcr.State s fb sp c ms m).
+  exec_instr_prop (Machsem.Returnstate (Stackframe fb sp ra c :: s) ms m) E0
+                  (Machsem.State s fb sp c ms m).
 Proof.
   intros; red; intros; inv MS. inv STACKS. simpl in *.
   right. split. omega. split. auto. 
@@ -1210,10 +1210,10 @@ Proof.
 Qed.
 
 Theorem transf_instr_correct:
-  forall s1 t s2, Machconcr.step ge s1 t s2 ->
+  forall s1 t s2, Machsem.step ge s1 t s2 ->
   exec_instr_prop s1 t s2.
 Proof
-  (Machconcr.step_ind ge exec_instr_prop
+  (Machsem.step_ind ge exec_instr_prop
            exec_Mlabel_prop
            exec_Mgetstack_prop
            exec_Msetstack_prop
@@ -1234,7 +1234,7 @@ Proof
            exec_return_prop).
 
 Lemma transf_initial_states:
-  forall st1, Machconcr.initial_state prog st1 ->
+  forall st1, Machsem.initial_state prog st1 ->
   exists st2, Asm.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H. unfold ge0 in *.
@@ -1254,7 +1254,7 @@ Qed.
 
 Lemma transf_final_states:
   forall st1 st2 r, 
-  match_states st1 st2 -> Machconcr.final_state st1 r -> Asm.final_state st2 r.
+  match_states st1 st2 -> Machsem.final_state st1 r -> Asm.final_state st2 r.
 Proof.
   intros. inv H0. inv H. constructor. auto. 
   compute in H1. 
@@ -1263,9 +1263,9 @@ Qed.
 
 Theorem transf_program_correct:
   forall (beh: program_behavior), not_wrong beh ->
-  Machconcr.exec_program prog beh -> Asm.exec_program tprog beh.
+  Machsem.exec_program prog beh -> Asm.exec_program tprog beh.
 Proof.
-  unfold Machconcr.exec_program, Asm.exec_program; intros.
+  unfold Machsem.exec_program, Asm.exec_program; intros.
   eapply simulation_star_preservation with (measure := measure); eauto.
   eexact transf_initial_states.
   eexact transf_final_states.
