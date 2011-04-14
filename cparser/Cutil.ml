@@ -63,6 +63,14 @@ let rec incl_attributes (al1: attributes) (al2: attributes) =
       else if a1 > a2 then incl_attributes al1 al2'
       else incl_attributes al1' al2'
 
+let rec find_custom_attributes (names: string list)  (al: attributes) =
+  match al with
+  | [] -> []
+  | Attr(name, args) :: tl when List.mem name names ->
+      args :: find_custom_attributes names tl
+  | _ :: tl ->
+      find_custom_attributes names tl
+
 (* Adding top-level attributes to a type.  Doesn't need to unroll defns. *)
 (* Array types cannot carry attributes, so add them to the element type. *)
 
@@ -96,7 +104,7 @@ let rec attributes_of_type env t =
   | TInt(ik, a) -> a
   | TFloat(fk, a) -> a
   | TPtr(ty, a) -> a
-  | TArray(ty, sz, a) -> a              (* correct? *)
+  | TArray(ty, sz, a) -> add_attributes a (attributes_of_type env ty)
   | TFun(ty, params, vararg, a) -> a
   | TNamed(s, a) -> attributes_of_type env (unroll env t)
   | TStruct(s, a) -> a

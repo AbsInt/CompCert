@@ -264,23 +264,29 @@ let elab_attr_arg loc = function
       let (v, _) = elab_int_constant loc s in AInt v
   | _ -> raise Wrong_attr_arg
 
-let elab_attribute loc = function
-  | ("const", []) -> Some AConst
-  | ("restrict", []) -> Some ARestrict
-  | ("volatile", []) -> Some AVolatile
-  | (name, args) -> 
-      try
-        Some (Attr(name, List.map (elab_attr_arg loc) args))
+let elab_gcc_attr loc = function
+  | VARIABLE v ->
+      [Attr(v, [])]
+  | CALL(VARIABLE v, args) ->
+      begin try
+        [Attr(v, List.map (elab_attr_arg loc) args)]
       with Wrong_attr_arg ->
-        warning loc "cannot parse '%s' attribute, ignored" name;
-        None
+        warning loc "cannot parse '%s' attribute, ignored" v; []
+      end
+  | _ ->
+      warning loc "ill-formed attribute, ignored"; []
 
-let rec elab_attributes loc = function
-  | [] -> []
-  | a1 :: al ->
-      match elab_attribute loc a1 with
-      | None -> elab_attributes loc al
-      | Some a -> add_attributes [a] (elab_attributes loc al)
+let elab_attribute loc = function
+  | ("const", []) -> [AConst]
+  | ("restrict", []) -> [ARestrict]
+  | ("volatile", []) -> [AVolatile]
+  | (("attribute" | "__attribute__"), l) ->
+        List.flatten (List.map (elab_gcc_attr loc) l)
+  | (name, _) ->
+        warning loc "`%s' annotation ignored" name; []
+
+let elab_attributes loc al =
+  List.fold_left add_attributes [] (List.map (elab_attribute loc) al)
 
 (* Auxiliary for typespec elaboration *)
 

@@ -33,6 +33,9 @@ val remove_attributes : attributes -> attributes -> attributes
   (* Difference [attr1 \ attr2] between two sets of attributes *)
 val incl_attributes : attributes -> attributes -> bool
   (* Check that first set of attributes is a subset of second set. *)
+val find_custom_attributes : string list -> attributes -> attr_arg list list
+  (* Extract arguments of custom [Attr] attributes whose names appear
+     in the given list of names. *)
 val attributes_of_type : Env.t -> typ -> attributes
   (* Return the attributes of the given type, expanding typedefs if needed. *)
 val add_attributes_type : attributes -> typ -> typ
