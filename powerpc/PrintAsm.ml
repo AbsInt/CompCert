@@ -201,8 +201,8 @@ let name_of_section_MacOS = function
 
 let name_of_section_Linux = function
   | Section_text -> ".text"
-  | Section_data i -> if i then ".data" else ".bss"
-  | Section_small_data i -> if i then ".sdata" else ".sbss"
+  | Section_data i -> ".data" (*if i then ".data" else ".bss"*)
+  | Section_small_data i -> ".sdata" (*if i then ".sdata" else ".sbss"*)
   | Section_const -> ".rodata"
   | Section_small_const -> ".sdata2"
   | Section_string -> ".rodata"
@@ -482,9 +482,9 @@ let print_instruction oc labels = function
       fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
   | Pbtbl(r, tbl) ->
       let lbl = new_label() in
-      fprintf oc "%s begin pseudoinstr btbl(%a)\n comment ireg r;
+      fprintf oc "%s begin pseudoinstr btbl(%a)\n" comment ireg r;
       fprintf oc "%s jumptable [ " comment;
-      List.iter (fun l -> fprintf oc "%a " (transl_label l)) tbl;
+      List.iter (fun l -> fprintf oc "%a " label (transl_label l)) tbl;
       fprintf oc "]\n";
       fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg r label_high lbl;
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
