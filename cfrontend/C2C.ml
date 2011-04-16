@@ -719,7 +719,7 @@ let convertFundef env fd =
       a_env = env;
       a_type = Cutil.fundef_typ fd;
       a_fundef = Some fd };
-  Sections.define_function id';
+  Sections.define_function env id' fd.fd_ret;
   Datatypes.Coq_pair(id',
                      Internal {fn_return = ret; fn_params = params;
                                fn_vars = vars; fn_body = body'})
@@ -776,21 +776,6 @@ let convertInitializer env ty i =
 
 (** Global variable *)
 
-let rec type_is_readonly env t =
-  let a = Cutil.attributes_of_type env t in
-  if List.mem C.AVolatile a then false else
-  if List.mem C.AConst a then true else
-  match Cutil.unroll env t with
-  | C.TArray(t', _, _) -> type_is_readonly env t'
-  | _ -> false
-
-let rec type_is_volatile env t =
-  let a = Cutil.attributes_of_type env t in
-  if List.mem C.AConst a then true else
-  match Cutil.unroll env t with
-  | C.TArray(t', _, _) -> type_is_volatile env t'
-  | _ -> false
-
 let convertGlobvar env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
@@ -805,13 +790,14 @@ let convertGlobvar env (sto, id, ty, optinit) =
       a_env = env;
       a_type = ty;
       a_fundef = None };
-  Sections.define_variable id'
-    (match Cutil.sizeof env ty with Some sz -> sz | None -> max_int)
-    (type_is_readonly env ty);
+  Sections.define_variable env id' ty;
+  let a = Cutil.attributes_of_type env ty in
+  let volatile = List.mem C.AVolatile a in
+  let readonly = List.mem C.AConst a && not volatile in
   Datatypes.Coq_pair(id', 
                      {gvar_info = ty'; gvar_init = init';
-                      gvar_readonly = type_is_readonly env ty;
-                      gvar_volatile = type_is_volatile env ty})
+                      gvar_readonly = readonly;
+                      gvar_volatile = volatile})
 
 (** Convert a list of global declarations.
   Result is a pair [(funs, vars)] where [funs] are 
@@ -937,6 +923,7 @@ let atom_is_extern a =
   with Not_found ->
     false
 
+(*
 let atom_is_readonly a =
   try
     let i = Hashtbl.find decl_atom a in type_is_readonly i.a_env i.a_type
@@ -948,10 +935,16 @@ let atom_sizeof a =
     let i = Hashtbl.find decl_atom a in Cutil.sizeof i.a_env i.a_type
   with Not_found ->
     None
+*)
 
 let atom_alignof a =
   try
-    let i = Hashtbl.find decl_atom a in Cutil.alignof i.a_env i.a_type
+    let i = Hashtbl.find decl_atom a in
+    match Cutil.find_custom_attributes
+                  ["aligned"; "__aligned__"]
+                  (Cutil.attributes_of_type i.a_env i.a_type) with
+    | [[C.AInt n]] -> Some(Int64.to_int n)
+    | _            -> Cutil.alignof i.a_env i.a_type
   with Not_found ->
     None
 

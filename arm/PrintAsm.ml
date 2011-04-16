@@ -15,6 +15,7 @@
 open Printf
 open Datatypes
 open Camlcoq
+open Sections
 open AST
 open Asm
 
@@ -97,6 +98,24 @@ let condition_name = function
   | CRlt -> "lt"
   | CRgt -> "gt"
   | CRle -> "le"
+
+(* Names of sections *)
+
+let name_of_section_ELF = function
+  | Section_text -> ".text"
+  | Section_data i -> if i then ".data" else ".bss"
+  | Section_small_data i -> if i then ".sdata" else ".sbss"
+  | Section_const -> ".rodata"
+  | Section_small_const -> ".sdata2"
+  | Section_string -> ".rodata"
+  | Section_literal -> ".section	.rodata.cst8,\"aM\",%progbits,8"
+  | Section_jumptable -> ".text"
+  | Section_user(s, wr, ex) ->
+       sprintf ".section	%s,\"a%s%s\",%progbits"
+               s (if wr then "w" else "") (if ex then "x" else "")
+
+let section oc sec =
+  fprintf oc "	%s\n" (name_of_section sec)
 
 (* Record current code position and latest position at which to
    emit float and symbol constants. *)
@@ -525,14 +544,16 @@ let print_function oc name code =
   Hashtbl.clear current_function_labels;
   reset_constants();
   currpos := 0;
-  fprintf oc "	.text\n";
+  let (text, _, _) = sections_for_function name in
+  section oc text;
   fprintf oc "	.align 2\n";
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
-  fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
   print_instructions oc (labels_of_code Labelset.empty code) code;
-  emit_constants oc
+  emit_constants oc;
+  fprintf oc "	.type	%a, %%function\n" print_symb name;
+  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
 
 (* Generation of stub code for external functions.
    Compcert passes the first two float arguments in F0 and F1,
@@ -566,7 +587,7 @@ let print_external_function oc name sg =
             move_args tys int_regs float_regs
         end
   in
-  fprintf oc "	.text\n";
+  section oc Section_text;
   fprintf oc "	.align 2\n";
   fprintf oc ".L%s$stub:\n" name;
   move_args sg.sig_args [IR0;IR1;IR2;IR3] [FR0;FR1];
@@ -616,15 +637,24 @@ let print_var oc (Coq_pair(name, v)) =
   match v.gvar_init with
   | [] -> ()
   | _  ->
-      if v.gvar_readonly
-      then fprintf oc "	.const\n"
-      else fprintf oc "	.data\n";
-      fprintf oc "	.align	2\n";
+      let init =
+        match v.gvar_init with [Init_space _] -> false | _ -> true in
+      let sec =
+        Sections.section_for_variable name init
+      and align =
+        match C2C.atom_alignof name with
+        | Some a -> log2 a
+        | None -> 3 (* 8-alignment is a safe default *)
+      in
+      section oc sec;
+      fprintf oc "	.align	%d\n" align;
       if not (C2C.atom_is_static name) then
         fprintf oc "	.global	%a\n" print_symb name;
       fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
-      print_init_data oc name v.gvar_init
+      print_init_data oc name v.gvar_init;
+      fprintf oc "	.type	%a, @object\n" print_symb name;
+      fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
 let print_program oc p =
   extfuns := IdentSet.empty;

@@ -15,6 +15,7 @@
 open Printf
 open Datatypes
 open Camlcoq
+open Sections
 open AST
 open Asm
 
@@ -132,26 +133,46 @@ let section oc name =
 
 (* Names of sections *)
 
-let (text, data, const_data, float_literal, jumptable_literal) =
+let name_of_section_ELF = function
+  | Section_text -> ".text"
+  | Section_data i | Section_small_data i -> if i then ".data" else ".bss"
+  | Section_const | Section_small_const -> ".rodata"
+  | Section_string -> ".rodata"
+  | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
+  | Section_jumptable -> ".text"
+  | Section_user(s, wr, ex) ->
+       sprintf ".section	%s,\"a%s%s\",@progbits"
+               s (if wr then "w" else "") (if ex then "x" else "")
+
+let name_of_section_MacOS = function
+  | Section_text -> ".text"
+  | Section_data _ | Section_small_data _ -> ".data"
+  | Section_const  | Section_small_const -> ".const"
+  | Section_string -> ".const"
+  | Section_literal -> ".literal8"
+  | Section_jumptable -> ".const"
+  | Section_user(s, wr, ex) ->
+       sprintf ".section	%s, %s, %s"
+               (if wr then "__DATA" else "__TEXT") s
+               (if ex then "regular, pure_instructions" else "regular")
+
+let name_of_section_Cygwin = function
+  | Section_text -> ".text"
+  | Section_data _ | Section_small_data _ -> ".data"
+  | Section_const  | Section_small_const -> ".section	.rdata,\"dr\""
+  | Section_string -> ".section	.rdata,\"dr\""
+  | Section_literal -> ".section	.rdata,\"dr\""
+  | Section_jumptable -> ".text"
+  | Section_user _ -> assert false
+
+let name_of_section =
   match target with
-  | ELF ->
-      (".text",
-       ".data",
-       ".section	.rodata",
-       ".section	.rodata.cst8,\"a\",@progbits",
-       ".text")
-  | MacOS ->
-      (".text",
-       ".data",
-       ".const",
-       ".const_data",
-       ".text")
-  | Cygwin ->
-      (".text",
-       ".data",
-       ".section	.rdata,\"dr\"",
-       ".section	.rdata,\"dr\"",
-       ".text")
+  | ELF    -> name_of_section_ELF
+  | MacOS  -> name_of_section_MacOS
+  | Cygwin -> name_of_section_Cygwin
+
+let section oc sec =
+  fprintf oc "	%s\n" (name_of_section sec)
 
 (* SP adjustment to allocate or free a stack frame *)
 
@@ -587,6 +608,7 @@ let print_function oc name code =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
+  let (text, lit, jmptbl) = sections_for_function name in
   section oc text;
   print_align oc 16;
   if not (C2C.atom_is_static name) then
@@ -598,13 +620,13 @@ let print_function oc name code =
     fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
   end;
   if !float_literals <> [] then begin
-    section oc float_literal;
+    section oc lit;
     print_align oc 8;
     List.iter (print_literal oc) !float_literals;
     float_literals := []
   end;
   if !jumptables <> [] then begin
-    section oc jumptable_literal;
+    section oc jmptbl;
     print_align oc 4;
     List.iter (print_jumptable oc) !jumptables;
     jumptables := []
@@ -645,8 +667,10 @@ let print_var oc (Coq_pair(name, v)) =
   match v.gvar_init with
   | [] -> ()
   | _  ->
+      let init =
+        match v.gvar_init with [Init_space _] -> false | _ -> true in
       let sec =
-        if v.gvar_readonly then const_data else data
+        Sections.section_for_variable name init
       and align =
         match C2C.atom_alignof name with
         | Some a -> a
@@ -668,7 +692,7 @@ let print_program oc p =
   List.iter (print_var oc) p.prog_vars;
   List.iter (print_fundef oc) p.prog_funct;
   if !need_masks then begin
-    section oc float_literal;
+    section oc Section_const;  (* not Section_literal because not 8-bytes *)
     print_align oc 16;
     fprintf oc "%a:	.quad   0x8000000000000000, 0\n"
                raw_symbol "__negd_mask";

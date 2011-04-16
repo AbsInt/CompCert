@@ -34,8 +34,8 @@ val define_section:
          -> ?writable:bool -> ?executable:bool -> ?near:bool -> unit -> unit
 val use_section_for: AST.ident -> string -> bool
 
-val define_function: AST.ident -> unit
-val define_variable: AST.ident -> int -> bool -> unit
+val define_function: Cparser.Env.t -> AST.ident -> Cparser.C.typ -> unit
+val define_variable: Cparser.Env.t -> AST.ident -> Cparser.C.typ -> unit
 val define_stringlit: AST.ident -> unit
 
 val section_for_variable: AST.ident -> bool -> section_name

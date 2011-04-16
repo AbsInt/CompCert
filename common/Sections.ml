@@ -14,6 +14,7 @@
 (* *********************************************************************)
 
 open Camlcoq
+open Cparser
 
 module StringMap = Map.Make(String)
 
@@ -165,19 +166,50 @@ let default_use_section id name =
     assert ok
   end
 
-let define_function id =
-  default_use_section id "CODE"
+(* Associate an undeclared section to a global symbol, GCC-style *)
+
+let use_gcc_section id name readonly exec =
+  Hashtbl.add section_table_at_def id !current_section_table;
+  let sn = Section_user(name, not readonly, exec) in
+  let si = { sec_name_init = sn; sec_name_uninit = sn;
+             sec_writable = not readonly; sec_executable = exec;
+             sec_near_access = false } in
+  Hashtbl.add use_section_table id si
+
+(* Record sections for a variable definition *)
+
+let define_variable env id ty =
+  let attr = Cutil.attributes_of_type env ty in
+  let readonly = List.mem C.AConst attr && not(List.mem C.AVolatile attr) in
+  (* Check for a GCC-style "section" attribute *)
+  match Cutil.find_custom_attributes ["section"; "__section__"] attr with
+  | [[C.AString name]] ->
+    (* Use gcc-style section *)
+    use_gcc_section id name readonly false
+  | _ ->
+    (* Use default section appropriate for size and const-ness *)
+    let size = match Cutil.sizeof env ty with Some sz -> sz | None -> max_int in
+    default_use_section id
+      (if readonly
+       then if size <= !Clflags.option_small_const then "SCONST" else "CONST"
+       else if size <= !Clflags.option_small_data then "SDATA" else "DATA")
+
+(* Record sections for a function definition *)
+
+let define_function env id ty_res =
+  let attr = Cutil.attributes_of_type env ty_res in
+  match Cutil.find_custom_attributes ["section"; "__section__"] attr with
+  | [[C.AString name]] ->
+      use_gcc_section id name true true
+  | _ ->
+      default_use_section id "CODE"
+
+(* Record sections for a string literal *)
 
 let define_stringlit id =
   default_use_section id "STRING"
 
-let define_variable id size readonly =
-  default_use_section id
-    (if readonly
-     then if size <= !Clflags.option_small_const then "SCONST" else "CONST"
-     else if size <= !Clflags.option_small_data then "SDATA" else "DATA")
-
-(* Determine section to use for a variable definition *)
+(* Determine section to use for a variable *)
 
 let section_for_variable a initialized =
   try
@@ -186,8 +218,7 @@ let section_for_variable a initialized =
   with Not_found ->
     Section_data initialized
 
-(* Determine (text, literal, jumptable) sections to use 
-   for a function definition *)
+(* Determine (text, literal, jumptable) sections to use for a function *)
 
 let sections_for_function a =
   let s_text =
