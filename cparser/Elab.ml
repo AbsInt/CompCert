@@ -280,7 +280,7 @@ let elab_attribute loc = function
   | ("const", []) -> [AConst]
   | ("restrict", []) -> [ARestrict]
   | ("volatile", []) -> [AVolatile]
-  | (("attribute" | "__attribute__"), l) ->
+  | (("__attribute" | "__attribute__"), l) ->
         List.flatten (List.map (elab_gcc_attr loc) l)
   | (name, _) ->
         warning loc "`%s' annotation ignored" name; []

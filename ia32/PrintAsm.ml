@@ -136,8 +136,8 @@ let section oc name =
 let name_of_section_ELF = function
   | Section_text -> ".text"
   | Section_data i | Section_small_data i -> if i then ".data" else ".bss"
-  | Section_const | Section_small_const -> ".rodata"
-  | Section_string -> ".rodata"
+  | Section_const | Section_small_const -> ".section	.rodata"
+  | Section_string -> ".section	.rodata"
   | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
