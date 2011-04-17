@@ -118,9 +118,11 @@ let transf_assign env lhs rhs =
     transf lhs rhs
   with Exit ->
     let by_words =
-      match Cutil.sizeof env lhs.etyp with
-      | Some n -> n mod !config.sizeof_ptr = 0
-      | None -> false in
+      match Cutil.alignof env lhs.etyp, Cutil.sizeof env lhs.etyp with
+      | Some al, Some sz -> 
+          al mod !config.sizeof_ptr = 0 && sz mod !config.sizeof_ptr = 0
+      | _, _->
+          false in
     let (ident, ty) =
       if by_words
       then memcpy_words_ident env
