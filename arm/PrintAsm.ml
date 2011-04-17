@@ -36,23 +36,29 @@ let label_for_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
-(* Record identifiers of external functions *)
+(* Record identifiers of external functions that need stub code *)
 
 module IdentSet = Set.Make(struct type t = ident let compare = compare end)
 
 let extfuns = (ref IdentSet.empty)
 
+let need_stub ef = List.mem Tfloat ef.ef_sig.sig_args
+
 let record_extfun (Coq_pair(name, defn)) =
   match defn with
-  | Internal _ -> ()
-  | External _ -> extfuns := IdentSet.add name !extfuns
+  | Internal f -> ()
+  | External ef -> if need_stub ef then extfuns := IdentSet.add name !extfuns
 
 (* Basic printing functions *)
+
+let strip_variadic_suffix name =
+  try String.sub name 0 (String.index name '$')
+  with Not_found -> name
 
 let print_symb oc symb =
   if IdentSet.mem symb !extfuns
   then fprintf oc ".L%s$stub" (extern_atom symb)
-  else fprintf oc "%s" (extern_atom symb)
+  else fprintf oc "%s" (strip_variadic_suffix (extern_atom symb))
 
 let print_label oc lbl =
   fprintf oc ".L%d" (label_for_label lbl)
@@ -111,11 +117,11 @@ let name_of_section_ELF = function
   | Section_literal -> ".section	.rodata.cst8,\"aM\",%progbits,8"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s,\"a%s%s\",%progbits"
+       sprintf ".section	%s,\"a%s%s\",%%progbits"
                s (if wr then "w" else "") (if ex then "x" else "")
 
 let section oc sec =
-  fprintf oc "	%s\n" (name_of_section sec)
+  fprintf oc "	%s\n" (name_of_section_ELF sec)
 
 (* Record current code position and latest position at which to
    emit float and symbol constants. *)
@@ -553,9 +559,9 @@ let print_function oc name code =
   print_instructions oc (labels_of_code Labelset.empty code) code;
   emit_constants oc;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
-  fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+  fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
-(* Generation of stub code for external functions.
+(* Generation of stub code for external functions that take floats.
    Compcert passes the first two float arguments in F0 and F1,
    while gcc passes them in pairs of integer registers. *)
 
@@ -592,15 +598,16 @@ let print_external_function oc name sg =
   fprintf oc ".L%s$stub:\n" name;
   move_args sg.sig_args [IR0;IR1;IR2;IR3] [FR0;FR1];
   (* Remove variadic prefix $iiff if any *)
-  let real_name =
-    try String.sub name 0 (String.index name '$')
-    with Not_found -> name in
+  let real_name = strip_variadic_suffix name in
   fprintf oc "	b	%s\n" real_name
 
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
-  | Internal code -> print_function oc name code
-  | External ef -> if not(is_builtin_function name) then print_external_function oc name ef.ef_sig
+  | Internal code ->
+      print_function oc name code
+  | External ef ->
+      if need_stub ef && not(is_builtin_function name)
+      then print_external_function oc name ef.ef_sig
 
 (* Data *)
 
@@ -632,6 +639,12 @@ let print_init_data oc name id =
     fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init id)
   else
     List.iter (print_init oc) id
+
+(* Base-2 log of a Caml integer *)
+
+let rec log2 n =
+  assert (n > 0);
+  if n = 1 then 0 else 1 + log2 (n lsr 1)
 
 let print_var oc (Coq_pair(name, v)) =
   match v.gvar_init with
