@@ -109,12 +109,10 @@ let condition_name = function
 
 let name_of_section_ELF = function
   | Section_text -> ".text"
-  | Section_data i -> if i then ".data" else ".bss"
-  | Section_small_data i -> if i then ".sdata" else ".sbss"
-  | Section_const -> ".rodata"
-  | Section_small_const -> ".sdata2"
-  | Section_string -> ".rodata"
-  | Section_literal -> ".section	.rodata.cst8,\"aM\",%progbits,8"
+  | Section_data i | Section_small_data i -> if i then ".data" else ".bss"
+  | Section_const | Section_small_const -> ".section	.rodata"
+  | Section_string -> ".section	.rodata"
+  | Section_literal -> ".text"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
        sprintf ".section	%s,\"a%s%s\",%%progbits"
@@ -663,10 +661,9 @@ let print_var oc (Coq_pair(name, v)) =
       fprintf oc "	.align	%d\n" align;
       if not (C2C.atom_is_static name) then
         fprintf oc "	.global	%a\n" print_symb name;
-      fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
       print_init_data oc name v.gvar_init;
-      fprintf oc "	.type	%a, @object\n" print_symb name;
+      fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
 let print_program oc p =
