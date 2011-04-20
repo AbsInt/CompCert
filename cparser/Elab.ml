@@ -257,36 +257,43 @@ let elab_constant loc = function
 
 exception Wrong_attr_arg
 
-let elab_attr_arg loc = function
-  | VARIABLE v -> AIdent v
-  | CONSTANT(CONST_STRING s) -> AString s
-  | CONSTANT(CONST_INT s) ->
-      let (v, _) = elab_int_constant loc s in AInt v
-  | _ -> raise Wrong_attr_arg
+let elab_attr_arg loc env a =
+  match a with
+  | VARIABLE s ->
+      begin match wrap Env.lookup_ident loc env s with
+      | (id, II_ident(sto, ty)) ->  AIdent s
+      | (id, II_enum v) -> AInt v
+      end
+  | _ ->
+      let b = !elab_expr_f loc env a in
+      match Ceval.constant_expr env b.etyp b with
+      | Some(CInt(n, _, _)) -> AInt n
+      | Some(CStr s) -> AString s
+      | _ -> raise Wrong_attr_arg
 
-let elab_gcc_attr loc = function
+let elab_gcc_attr loc env = function
   | VARIABLE v ->
       [Attr(v, [])]
   | CALL(VARIABLE v, args) ->
       begin try
-        [Attr(v, List.map (elab_attr_arg loc) args)]
+        [Attr(v, List.map (elab_attr_arg loc env) args)]
       with Wrong_attr_arg ->
         warning loc "cannot parse '%s' attribute, ignored" v; []
       end
   | _ ->
       warning loc "ill-formed attribute, ignored"; []
 
-let elab_attribute loc = function
+let elab_attribute loc env = function
   | ("const", []) -> [AConst]
   | ("restrict", []) -> [ARestrict]
   | ("volatile", []) -> [AVolatile]
   | (("__attribute" | "__attribute__"), l) ->
-        List.flatten (List.map (elab_gcc_attr loc) l)
+        List.flatten (List.map (elab_gcc_attr loc env) l)
   | (name, _) ->
         warning loc "`%s' annotation ignored" name; []
 
-let elab_attributes loc al =
-  List.fold_left add_attributes [] (List.map (elab_attribute loc) al)
+let elab_attributes loc env al =
+  List.fold_left add_attributes [] (List.map (elab_attribute loc env) al)
 
 (* Auxiliary for typespec elaboration *)
 
@@ -332,7 +339,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
         | CV_RESTRICT -> ARestrict in
       attr := add_attributes [a] !attr
   | SpecAttr a ->
-      attr := add_attributes (elab_attributes loc [a]) !attr
+      attr := add_attributes (elab_attributes loc env [a]) !attr
   | SpecStorage st ->
       if !sto <> Storage_default then
         error loc "multiple storage specifiers";
@@ -411,19 +418,19 @@ let rec elab_specifier ?(only = false) loc env specifier =
     | [Cabs.Tstruct(id, optmembers, a)] ->
         let (id', env') =
           elab_struct_or_union only Struct loc id optmembers env in
-        let attr' = add_attributes !attr (elab_attributes loc a) in
+        let attr' = add_attributes !attr (elab_attributes loc env a) in
         (!sto, !inline, TStruct(id', attr'), env')
 
     | [Cabs.Tunion(id, optmembers, a)] ->
         let (id', env') =
           elab_struct_or_union only Union loc id optmembers env in
-        let attr' = add_attributes !attr (elab_attributes loc a) in
+        let attr' = add_attributes !attr (elab_attributes loc env a) in
         (!sto, !inline, TUnion(id', attr'), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let env' = 
           elab_enum loc id optmembers env in
-        let attr' = add_attributes !attr (elab_attributes loc a) in
+        let attr' = add_attributes !attr (elab_attributes loc env a) in
         (!sto, !inline, TInt(enum_ikind, attr'), env')
 
     | [Cabs.TtypeofE _] ->
@@ -442,10 +449,10 @@ and elab_type_declarator loc env ty = function
       (ty, env)
   | Cabs.PARENTYPE(attr1, d, attr2) ->
       (* XXX ignoring the distinction between attrs after and before *)
-      let a = elab_attributes loc (attr1 @ attr2) in
+      let a = elab_attributes loc env (attr1 @ attr2) in
       elab_type_declarator loc env (add_attributes_type a ty) d
   | Cabs.ARRAY(d, attr, sz) ->
-      let a = elab_attributes loc attr in
+      let a = elab_attributes loc env attr in
       let sz' =
         match sz with
         | Cabs.NOTHING ->
@@ -460,7 +467,7 @@ and elab_type_declarator loc env ty = function
                 Some 1L in (* produces better error messages later *)
        elab_type_declarator loc env (TArray(ty, sz', a)) d
   | Cabs.PTR(attr, d) ->
-      let a = elab_attributes loc attr in
+      let a = elab_attributes loc env attr in
        elab_type_declarator loc env (TPtr(ty, a)) d
   | Cabs.PROTO(d, params, vararg) ->
        begin match unroll env ty with
@@ -502,7 +509,7 @@ and elab_parameter env (spec, name) =
 and elab_name env spec (id, decl, attr, loc) =
   let (sto, inl, bty, env') = elab_specifier loc env spec in
   let (ty, env'') = elab_type_declarator loc env' bty decl in 
-  let a = elab_attributes loc attr in
+  let a = elab_attributes loc env attr in
   (id, sto, inl, add_attributes_type a ty, env'')
 
 (* Elaboration of a name group *)
@@ -513,7 +520,7 @@ and elab_name_group env (spec, namelist) =
   let elab_one_name env (id, decl, attr, loc) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
-    let a = elab_attributes loc attr in
+    let a = elab_attributes loc env attr in
     ((id, sto, add_attributes_type a ty), env1) in
   mmap elab_one_name env' namelist
 
@@ -525,7 +532,7 @@ and elab_init_name_group env (spec, namelist) =
   let elab_one_name env ((id, decl, attr, loc), init) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
-    let a = elab_attributes loc attr in
+    let a = elab_attributes loc env attr in
     ((id, sto, add_attributes_type a ty, init), env1) in
   mmap elab_one_name env' namelist
 

@@ -8,7 +8,7 @@
 /* Alignment */
 
 char filler1 = 1;
-__attribute((__aligned__(16))) int a = 1234;
+__attribute((__aligned__(1<<4))) int a = 1234;
 char filler2 = 1;
 __attribute((__aligned__(8))) char b = 'b';
 
