@@ -116,6 +116,7 @@ let unop env op tyres ty v =
    | Oplus, TInt _, I n -> I n
    | Oplus, TFloat _, F n -> F n
    | Olognot, _, _ -> if boolean_value v then I 0L else I 1L
+   | Onot, _, I n -> I (Int64.lognot n)
    | _ -> raise Notconst
   in cast env ty tyres res
 

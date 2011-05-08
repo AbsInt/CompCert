@@ -60,6 +60,7 @@ BACKEND=\
   Tunneling.v Tunnelingproof.v Tunnelingtyping.v \
   LTLin.v LTLintyping.v \
   Linearize.v Linearizeproof.v Linearizetyping.v \
+  CleanupLabels.v CleanupLabelsproof.v CleanupLabelstyping.v \
   Linear.v Lineartyping.v \
   Parallelmove.v Reload.v Reloadproof.v Reloadtyping.v \
   Mach.v Machtyping.v \

@@ -49,6 +49,7 @@ Require CSE.
 Require Allocation.
 Require Tunneling.
 Require Linearize.
+Require CleanupLabels.
 Require Reload.
 Require Stacking.
 Require Asmgen.
@@ -74,6 +75,8 @@ Require Tunnelingproof.
 Require Tunnelingtyping.
 Require Linearizeproof.
 Require Linearizetyping.
+Require CleanupLabelsproof.
+Require CleanupLabelstyping.
 Require Reloadproof.
 Require Reloadtyping.
 Require Stackingproof.
@@ -142,6 +145,7 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
   @@@ Allocation.transf_fundef
    @@ Tunneling.tunnel_fundef
   @@@ Linearize.transf_fundef
+   @@ CleanupLabels.transf_fundef
    @@ print print_LTLin
    @@ Reload.transf_fundef
   @@@ Stacking.transf_fundef
@@ -305,13 +309,17 @@ Proof.
   repeat rewrite transform_program_print_identity in *. subst. 
   exploit transform_partial_program_identity; eauto. intro EQ. subst.
 
-  generalize Alloctyping.program_typing_preserved Tunnelingtyping.program_typing_preserved
-             Linearizetyping.program_typing_preserved Reloadtyping.program_typing_preserved
+  generalize Alloctyping.program_typing_preserved
+             Tunnelingtyping.program_typing_preserved
+             Linearizetyping.program_typing_preserved
+             CleanupLabelstyping.program_typing_preserved
+             Reloadtyping.program_typing_preserved
              Stackingtyping.program_typing_preserved; intros.
 
   eapply Asmgenproof.transf_program_correct; eauto 6.
-  eapply Stackingproof.transf_program_correct; eauto.
+  eapply Stackingproof.transf_program_correct; eauto 6.
   eapply Reloadproof.transf_program_correct; eauto.
+  eapply CleanupLabelsproof.transf_program_correct; eauto.
   eapply Linearizeproof.transf_program_correct; eauto.
   eapply Tunnelingproof.transf_program_correct; eauto.
   eapply Allocproof.transf_program_correct; eauto.

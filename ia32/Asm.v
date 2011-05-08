@@ -399,7 +399,9 @@ Inductive outcome: Type :=
   | Stuck: outcome.
 
 (** Manipulations over the [PC] register: continuing with the next
-  instruction ([nextinstr]) or branching to a label ([goto_label]). *)
+  instruction ([nextinstr]) or branching to a label ([goto_label]).
+  [nextinstr_nf] is a variant of [nextinstr] that sets condition flags
+  to [Vundef] in addition to incrementing the [PC]. *)
 
 Definition nextinstr (rs: regset) :=
   rs#PC <- (Val.add rs#PC Vone).
@@ -438,11 +440,18 @@ Definition exec_store (chunk: memory_chunk) (m: mem)
     that correspond to actual IA32 instructions, the cases are
     straightforward transliterations of the informal descriptions
     given in the IA32 reference manuals.  For pseudo-instructions,
-    refer to the informal descriptions given above.  Note that
-    we set to [Vundef] the registers used as temporaries by the
-    expansions of the pseudo-instructions, so that the IA32 code
-    we generate cannot use those registers to hold values that
-    must survive the execution of the pseudo-instruction.
+    refer to the informal descriptions given above.  
+
+    Note that we set to [Vundef] the registers used as temporaries by
+    the expansions of the pseudo-instructions, so that the IA32 code
+    we generate cannot use those registers to hold values that must
+    survive the execution of the pseudo-instruction.
+
+    Concerning condition flags, the comparison instructions set them
+    accurately; other instructions (moves, [lea]) preserve them;
+    and all other instruction set those flags to [Vundef], to reflect
+    the fact that the processor updates some or all of those flags,
+    but we do not need to model this precisely.
 *)
 
 Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome :=
@@ -451,7 +460,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pmov_rr rd r1 =>
       Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmov_ri rd n =>
-      Next (nextinstr (rs#rd <- (Vint n))) m
+      Next (nextinstr_nf (rs#rd <- (Vint n))) m
   | Pmov_rm rd a =>
       exec_load Mint32 m a rs rd
   | Pmov_mr a r1 =>

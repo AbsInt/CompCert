@@ -355,14 +355,12 @@ let print_annotation oc txt args res =
 
 (* Printing of instructions *)
 
-module Labelset = Set.Make(struct type t = label let compare = compare end)
-
 let float_literals : (int * int64) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
 (* Reminder on AT&T syntax: op source, dest *)
 
-let print_instruction oc labels = function
+let print_instruction oc = function
   (* Moves *)
   | Pmov_rr(rd, r1) ->
       fprintf oc "	movl	%a, %a\n" ireg r1 ireg rd
@@ -568,8 +566,7 @@ let print_instruction oc labels = function
       fprintf oc "	ret\n"
   (** Pseudo-instructions *)
   | Plabel(l) ->
-      if Labelset.mem l labels then
-        fprintf oc "%a:\n" label (transl_label l)
+      fprintf oc "%a:\n" label (transl_label l)
   | Pallocframe(sz, ofs_ra, ofs_link) ->
       let sz = sp_adjustment sz in
       let ofs_link = camlint_of_coqint ofs_link in
@@ -594,16 +591,6 @@ let print_jumptable oc (lbl, tbl) =
     (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
     tbl
 
-let rec labels_of_code accu = function
-  | [] ->
-      accu
-  | (Pjmp_l lbl | Pjcc(_, lbl)) :: c ->
-      labels_of_code (Labelset.add lbl accu) c
-  | Pjmptbl(_, tbl) :: c ->
-      labels_of_code (List.fold_right Labelset.add tbl accu) c
-  | _ :: c ->
-      labels_of_code accu c
-
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
   float_literals := [];
@@ -614,7 +601,7 @@ let print_function oc name code =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
-  List.iter (print_instruction oc (labels_of_code Labelset.empty code)) code;
+  List.iter (print_instruction oc) code;
   if target = ELF then begin
     fprintf oc "	.type	%a, @function\n" symbol name;
     fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
