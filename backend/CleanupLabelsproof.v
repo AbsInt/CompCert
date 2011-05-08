@@ -231,14 +231,16 @@ Proof.
   apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto with coqlib.
 (* Lload *)
+  assert (eval_addressing tge sp addr (map rs args) = Some a).
+    rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
-  econstructor; eauto. rewrite <- H.
-  apply eval_addressing_preserved. exact symbols_preserved.
+  econstructor; eauto. 
   econstructor; eauto with coqlib.
 (* Lstore *)
+  assert (eval_addressing tge sp addr (map rs args) = Some a).
+    rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
-  econstructor; eauto. rewrite <- H.
-  apply eval_addressing_preserved. exact symbols_preserved.
+  econstructor; eauto.
   econstructor; eauto with coqlib.
 (* Lcall *)
   left; econstructor; split.

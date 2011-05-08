@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Pretty-printer for LTLin code *)
+(** Pretty-printer for Mach code *)
 
 open Format
 open Camlcoq
@@ -20,7 +20,7 @@ open AST
 open Integers
 open Locations
 open Machregsaux
-open LTLin
+open Mach
 open PrintOp
 
 let name_of_chunk = function
@@ -36,19 +36,10 @@ let name_of_type = function
   | Tint -> "int"
   | Tfloat -> "float"
 
-let reg pp loc =
-  match loc with
-  | R r ->
-      begin match name_of_register r with
-      | Some s -> fprintf pp "%s" s
-      | None -> fprintf pp "<unknown reg>"
-      end
-  | S (Local(ofs, ty)) ->
-      fprintf pp "local(%s,%ld)" (name_of_type ty) (camlint_of_coqint ofs)
-  | S (Incoming(ofs, ty)) ->
-      fprintf pp "incoming(%s,%ld)" (name_of_type ty) (camlint_of_coqint ofs)
-  | S (Outgoing(ofs, ty)) ->
-      fprintf pp "outgoing(%s,%ld)" (name_of_type ty) (camlint_of_coqint ofs)
+let reg pp r =
+  match name_of_register r with
+  | Some s -> fprintf pp "%s" s
+  | None -> fprintf pp "<unknown reg>"
 
 let rec regs pp = function
   | [] -> ()
@@ -61,49 +52,54 @@ let ros pp = function
 
 let print_instruction pp i =
   match i with
-  | Lop(op, args, res) ->
+  | Mgetstack(ofs, ty, res) ->
+      fprintf pp "%a = stack(%ld, %s)@ "
+              reg res (camlint_of_coqint ofs) (name_of_type ty)
+  | Msetstack(arg, ofs, ty) ->
+      fprintf pp "stack(%ld, %s) = %a@ "
+              (camlint_of_coqint ofs) (name_of_type ty) reg arg
+  | Mgetparam(ofs, ty, res) ->
+      fprintf pp "%a = param(%ld, %s)@ "
+              reg res (camlint_of_coqint ofs) (name_of_type ty)
+  | Mop(op, args, res) ->
       fprintf pp "%a = %a@ "
          reg res (PrintOp.print_operation reg) (op, args)
-  | Lload(chunk, addr, args, dst) ->
+  | Mload(chunk, addr, args, dst) ->
       fprintf pp "%a = %s[%a]@ "
          reg dst (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
-  | Lstore(chunk, addr, args, src) ->
+  | Mstore(chunk, addr, args, src) ->
       fprintf pp "%s[%a] = %a@ "
          (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
          reg src
-  | Lcall(sg, fn, args, res) ->
-      fprintf pp "%a = %a(%a)@ "
-        reg res ros fn regs args
-  | Ltailcall(sg, fn, args) ->
-      fprintf pp "tailcall %a(%a)@ "
-        ros fn regs args
-  | Lbuiltin(ef, args, res) ->
+  | Mcall(sg, fn) ->
+      fprintf pp "call %a@ " ros fn
+  | Mtailcall(sg, fn) ->
+      fprintf pp "tailcall %a@ " ros fn
+  | Mbuiltin(ef, args, res) ->
       fprintf pp "%a = builtin \"%s\"(%a)@ "
         reg res (extern_atom ef.ef_id) regs args
-  | Llabel lbl ->
+  | Mlabel lbl ->
       fprintf pp "%ld:@ " (camlint_of_positive lbl)
-  | Lgoto lbl ->
+  | Mgoto lbl ->
       fprintf pp "goto %ld@ " (camlint_of_positive lbl)
-  | Lcond(cond, args, lbl) ->
+  | Mcond(cond, args, lbl) ->
       fprintf pp "if (%a) goto %ld@ "
         (PrintOp.print_condition reg) (cond, args)
         (camlint_of_positive lbl)
-  | Ljumptable(arg, tbl) ->
+  | Mjumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
       fprintf pp "@[<v 2>jumptable (%a)" reg arg;
       for i = 0 to Array.length tbl - 1 do
         fprintf pp "@ case %d: goto %ld" i (camlint_of_positive tbl.(i))
       done;
       fprintf pp "@]@ "
-  | Lreturn None ->
+  | Mreturn ->
       fprintf pp "return@ "
-  | Lreturn (Some arg) ->
-      fprintf pp "return %a@ " reg arg
 
 let print_function pp f =
-  fprintf pp "@[<v 2>f(%a) {@ " regs f.fn_params;
+  fprintf pp "@[<v 2>f() {@ ";
   List.iter (print_instruction pp) f.fn_code;
   fprintf pp "@;<0 -2>}@]@."
 

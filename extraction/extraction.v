@@ -91,6 +91,7 @@ Extract Constant Compiler.print_RTL_castopt => "PrintRTL.print_castopt".
 Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
 Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
 Extract Constant Compiler.print_LTLin => "PrintLTLin.print_if".
+Extract Constant Compiler.print_Mach => "PrintMach.print_if".
 Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
 

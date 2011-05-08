@@ -1263,8 +1263,6 @@ let elab_for_expr loc env = function
 
 (* Elaboration of initializers *)
 
-(* Initializers are first elaborated to the following type: *)
-
 let project_init loc il =
   List.map
    (fun (what, i) ->

@@ -46,16 +46,18 @@ let print_error oc msg =
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
+  let output =
+    if ofile = "-" then "" else sprintf "> %s" ofile in
   let cmd =
-    sprintf "%s -D__COMPCERT__ %s %s %s > %s"
+    sprintf "%s -D__COMPCERT__ %s %s %s %s"
       Configuration.prepro
       (if Configuration.need_stdlib_wrapper
        then sprintf "-I%s" !stdlib_path
        else "")
       (quote_options !prepro_options)
-      ifile ofile in
+      ifile output in
   if command cmd <> 0 then begin
-    safe_remove ofile;
+    if ofile <> "-" then safe_remove ofile;
     eprintf "Error during preprocessing.\n";
     exit 2
   end
@@ -103,6 +105,7 @@ let compile_c_file sourcename ifile ofile =
   set_dest PrintRTL.destination_constprop option_dconstprop ".constprop.rtl";
   set_dest PrintRTL.destination_cse option_dcse ".cse.rtl";
   set_dest PrintLTLin.destination option_dalloc ".alloc.ltl";
+  set_dest PrintMach.destination option_dmach ".mach";
   (* Convert to Asm *)
   let asm =
     match Compiler.transf_c_program csyntax with
@@ -152,7 +155,6 @@ let assemble ifile ofile =
     sprintf "%s -o %s %s"
       Configuration.asm ofile ifile in
   let retcode = command cmd in
-  if not !option_dasm then safe_remove ifile;
   if retcode <> 0 then begin
     safe_remove ofile;
     eprintf "Error during assembling.\n";
@@ -177,7 +179,7 @@ let linker exe_name files =
 let process_c_file sourcename =
   let prefixname = Filename.chop_suffix sourcename ".c" in
   if !option_E then begin
-    preprocess sourcename (prefixname ^ ".i")
+    preprocess sourcename "-"
   end else begin
     let preproname = Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
@@ -189,7 +191,8 @@ let process_c_file sourcename =
         then prefixname ^ ".s"
         else Filename.temp_file "compcert" ".s" in
       compile_c_file sourcename preproname asmname;
-      assemble asmname (prefixname ^ ".o")
+      assemble asmname (prefixname ^ ".o");
+      if not !option_dasm then safe_remove asmname
     end
   end;
   prefixname ^ ".o"
@@ -206,7 +209,27 @@ let process_cminor_file sourcename =
       then prefixname ^ ".s"
       else Filename.temp_file "compcert" ".s" in
     compile_cminor_file sourcename asmname;
-    assemble asmname (prefixname ^ ".o")
+    assemble asmname (prefixname ^ ".o");
+    if not !option_dasm then safe_remove asmname
+  end;
+  prefixname ^ ".o"
+
+(* Processing of .S and .s files *)
+
+let process_s_file sourcename =
+  let prefixname = Filename.chop_suffix sourcename ".s" in
+  assemble sourcename (prefixname ^ ".o");
+  prefixname ^ ".o"
+
+let process_S_file sourcename =
+  let prefixname = Filename.chop_suffix sourcename ".s" in
+  if !option_E then begin
+    preprocess sourcename "-"
+  end else begin
+    let preproname = Filename.temp_file "compcert" ".s" in
+    preprocess sourcename preproname;
+    assemble preproname (prefixname ^ ".o");
+    safe_remove preproname
   end;
   prefixname ^ ".o"
 
@@ -217,10 +240,12 @@ let usage_string =
 Recognized source files:
   .c             C source file
   .cm            Cminor source file
+  .s             Assembly file
+  .S             Assembly file, to be run through the preprocessor
   .o             Object file
   .a             Library file
 Processing options:
-  -E             Preprocess only, save result in <file>.i
+  -E             Preprocess only, send result to standard output
   -S             Compile to assembler only, save result in <file>.s
   -c             Compile to object file only (no linking), result in <file>.o
 Preprocessing options:
@@ -248,6 +273,7 @@ Tracing options:
   -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
   -dcse          Save RTL after CSE optimization in <file>.cse.rtl
   -dalloc        Save LTL after register allocation in <file>.alloc.ltl
+  -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
 Linking options:
   -l<lib>        Link library <lib>
@@ -332,6 +358,7 @@ let cmdline_actions =
   "-dconstprop$", Set option_dconstprop;
   "-dcse$", Set option_dcse;
   "-dalloc$", Set option_dalloc;
+  "-dmach$", Set option_dmach;
   "-dasm$", Set option_dasm;
   "-E$", Set option_E;
   "-S$", Set option_S;
@@ -342,6 +369,12 @@ let cmdline_actions =
       linker_options := objfile :: !linker_options);
   ".*\\.cm$", Self (fun s ->
       let objfile = process_cminor_file s in
+      linker_options := objfile :: !linker_options);
+  ".*\\.s$", Self (fun s ->
+      let objfile = process_s_file s in
+      linker_options := objfile :: !linker_options);
+  ".*\\.S$", Self (fun s ->
+      let objfile = process_S_file s in
       linker_options := objfile :: !linker_options);
   ".*\\.[oa]$", Self (fun s ->
       linker_options := s :: !linker_options);

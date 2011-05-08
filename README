@@ -154,13 +154,15 @@ a C construct that it cannot process.
 The "ccomp" command recognizes the following classes of input files:
   .c             C source file
   .cm            Cminor source file
+  .s             Assembly file
+  .S             Assembly file, to be run through the C preprocessor
   .o             Object code file
   .a             Library file
 
 The "ccomp" command recognizes the following options:
 
 Processing options:
-  -E             Preprocess only, save result in <file>.i
+  -E             Preprocess only, send result to standard output
   -S             Compile to assembler only, save result in <file>.s
   -c             Compile to object file only (no linking), result in <file>.o
 Preprocessing options:
@@ -188,6 +190,7 @@ Tracing options:
   -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
   -dcse          Save RTL after CSE optimization in <file>.cse.rtl
   -dalloc        Save LTL after register allocation in <file>.alloc.ltl
+  -dmach         Save generated Mach in <file>.mach
   -dasm          Save generated assembly in <file>.s
 Linking options:
   -l<lib>        Link library <lib>

@@ -363,9 +363,7 @@ let shift_addr oc = function
   | SAasr(r, n) -> fprintf oc "%a, asr #%a" ireg r coqint n
   | SAror(r, n) -> fprintf oc "%a, ror #%a" ireg r coqint n
 
-module Labelset = Set.Make(struct type t = label let compare = compare end)
-
-let print_instruction oc labels = function
+let print_instruction oc = function
   (* Core instructions *)
   | Padd(r1, r2, so) ->
       fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
@@ -492,8 +490,7 @@ let print_instruction oc labels = function
       else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs;
       1
   | Plabel lbl ->
-      if Labelset.mem lbl labels then
-        fprintf oc "%a:\n" print_label lbl; 0
+      fprintf oc "%a:\n" print_label lbl; 0
   | Ploadsymbol(r1, id, ofs) ->
       let lbl = label_symbol id ofs in
       fprintf oc "	ldr	%a, .L%d @ %a\n" 
@@ -517,7 +514,7 @@ let no_fallthrough = function
   | Pbreg _ -> true
   | _ -> false
 
-let rec print_instructions oc labels instrs =
+let rec print_instructions oc instrs =
   match instrs with
   | [] -> ()
   | i :: il ->
@@ -532,17 +529,7 @@ let rec print_instructions oc labels instrs =
         emit_constants oc;
         fprintf oc ".L%d:\n" lbl
       end;
-      print_instructions oc labels il
-
-let rec labels_of_code accu = function
-  | [] ->
-      accu
-  | (Pb lbl | Pbc(_, lbl)) :: c ->
-      labels_of_code (Labelset.add lbl accu) c
-  | Pbtbl(_, tbl) :: c ->
-      labels_of_code (List.fold_right Labelset.add tbl accu) c
-  | _ :: c ->
-      labels_of_code accu c
+      print_instructions oc il
 
 let print_function oc name code =
   Hashtbl.clear current_function_labels;
@@ -554,7 +541,7 @@ let print_function oc name code =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
-  print_instructions oc (labels_of_code Labelset.empty code) code;
+  print_instructions oc code;
   emit_constants oc;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name

@@ -1,3 +1,29 @@
+- Support for "aligned" attributes on global variables, e.g.
+    __attribute__((aligned(16))) int x;
+
+- Pointer comparisons now treated as unsigned comparisons (previously: signed).
+  This fixes an issue with arrays straddling the 0x8000_0000 boundary.
+  Consequently, the "ofs" part of pointer values "Vptr b ofs" is
+  now treated as unsigned (previously: signed).
+
+- Elimination of unreferenced labels now performed by a separate pass
+  (backend/CleanupLabels.v) and proved correct.
+
+- Stacking pass revised: supports more flexible layout of the stack
+  frame; two-step proof (Stackingproof + Machabstr2concr) merged
+  into one single proof (Stackingproof).
+
+- The requirement that pointers be valid in pointer comparisons
+  was pushed through all intermediate languages of the back-end
+  (previously: requirement present only in up to Csharpminor).
+
+- Improvements to the compiler driver:
+    .  -E option now prints preprocessed result to standard output
+       instead of saving it in a .i file
+    .  support for .s (assembly) and .S (assembly to be preprocessed)
+       input files
+
+
 Release 1.8.1, 2011-03-14
 =========================
 

@@ -92,6 +92,7 @@ Parameter print_RTL_castopt: RTL.fundef -> unit.
 Parameter print_RTL_constprop: RTL.fundef -> unit.
 Parameter print_RTL_cse: RTL.fundef -> unit.
 Parameter print_LTLin: LTLin.fundef -> unit.
+Parameter print_Mach: Mach.fundef -> unit.
 
 Open Local Scope string_scope.
 
@@ -113,7 +114,7 @@ Notation "a @@ b" :=
    (apply_total _ _ a b) (at level 50, left associativity).
 
 Definition print {A: Type} (printer: A -> unit) (prog: A) : A :=
-  match printer prog with tt => prog end.
+  let unused := printer prog in prog.
 
 (** We define three translation functions for whole programs: one
   starting with a C program, one with a Cminor program, one with an
@@ -149,6 +150,7 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    @@ print print_LTLin
    @@ Reload.transf_fundef
   @@@ Stacking.transf_fundef
+   @@ print print_Mach
   @@@ Asmgen.transf_fundef.
 
 (* Here is the translation of a CminorSel function to an Asm function. *)
@@ -316,7 +318,7 @@ Proof.
              Reloadtyping.program_typing_preserved
              Stackingtyping.program_typing_preserved; intros.
 
-  eapply Asmgenproof.transf_program_correct; eauto 6.
+  eapply Asmgenproof.transf_program_correct; eauto 8.
   eapply Stackingproof.transf_program_correct; eauto 6.
   eapply Reloadproof.transf_program_correct; eauto.
   eapply CleanupLabelsproof.transf_program_correct; eauto.
@@ -341,7 +343,6 @@ Proof.
   eapply transf_rtl_program_correct; eauto.
   eapply RTLgenproof.transf_program_correct; eauto.
   eapply Selectionproof.transf_program_correct; eauto.
-  rewrite print_identity. auto.
 Qed.
 
 Theorem transf_c_program_correct:
