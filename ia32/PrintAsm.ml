@@ -219,6 +219,74 @@ let need_masks = ref false
      locations dictated by the calling conventions; preserve
      callee-save regs only. *)
 
+(* Handling of __builtin_annotation *)
+
+let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
+
+let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
+
+let print_annotation oc txt args res =
+  fprintf oc "%s annotation: " comment;
+  let print_fragment = function
+  | Str.Text s ->
+      output_string oc s
+  | Str.Delim "%%" ->
+      output_char oc '%'
+  | Str.Delim s ->
+      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      try
+        preg oc (List.nth args (n-1))
+      with Failure _ ->
+        fprintf oc "<bad parameter %s>" s in
+  List.iter print_fragment (Str.full_split re_annot_param txt);
+  fprintf oc "\n";
+  match args, res with
+  | [], _ -> ()
+  | IR src :: _, IR dst ->
+      if dst <> src then fprintf oc "	movl	%a, %a\n" ireg src ireg dst
+  | FR src :: _, FR dst ->
+      if dst <> src then fprintf oc "	movsd	%a, %a\n" freg src freg dst
+  | _, _ -> assert false
+
+(* Handling of __builtin_memcpy_alX_szY *)
+
+let re_builtin_memcpy =
+   Str.regexp "__builtin_memcpy\\(_al\\([248]\\)\\)?_sz\\([0-9]+\\)$"
+
+(* Unaligned memory accesses are quite fast on IA32, so use large
+   memory accesses regardless of alignment. *)
+
+let print_builtin_memcpy oc sz dst src =
+  let tmp =
+    if src <> ECX && dst <> ECX then ECX
+    else if src <> EDX && dst <> EDX then EDX
+    else EAX in
+  let rec copy ofs sz =
+    if sz >= 8 then begin
+      fprintf oc "	movq	%d(%a), %a\n" ofs ireg src freg XMM6;
+      fprintf oc "	movq	%a, %d(%a)\n" freg XMM6 ofs ireg dst;
+      copy (ofs + 8) (sz - 8)
+    end else if sz >= 4 then begin
+      fprintf oc "	movd	%d(%a), %a\n" ofs ireg src freg XMM6;
+      fprintf oc "	movd	%a, %d(%a)\n" freg XMM6 ofs ireg dst;
+      copy (ofs + 4) (sz - 4)
+    end else if sz >= 2 then begin
+      fprintf oc "	movw	%d(%a), %a\n" ofs ireg src ireg16 tmp;
+      fprintf oc "	movw	%a, %d(%a)\n" ireg16 tmp ofs ireg dst;
+      copy (ofs + 2) (sz - 2)
+    end else if sz >= 1 then begin
+      fprintf oc "	movb	%d(%a), %a\n" ofs ireg src ireg8 tmp;
+      fprintf oc "	movb	%a, %d(%a)\n" ireg8 tmp ofs ireg dst;
+      copy (ofs + 1) (sz - 1)
+    end in
+  if tmp = EAX && sz mod 4 <> 0 then
+    fprintf oc "	movd	%a, %a\n" ireg EAX freg XMM7;
+  copy 0 sz;
+  if tmp = EAX && sz mod 4 <> 0 then
+    fprintf oc "	movd	%a, %a\n" freg XMM7 ireg EAX
+
+(* Handling of compiler-inlined builtins *)
+
 let print_builtin_inlined oc name args res =
   fprintf oc "%s begin builtin %s\n" comment name;
   begin match name, args, res with
@@ -285,15 +353,42 @@ let print_builtin_inlined oc name args res =
         fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
         fprintf oc "	minsd	%a, %a\n" freg a2 freg res
       end
+  (* Inlined memcpy *)
+  | name, [IR dst; IR src], _ when Str.string_match re_builtin_memcpy name 0 ->
+      let sz = int_of_string (Str.matched_group 3 name) in
+      print_builtin_memcpy oc sz dst src
+  (* Annotations *)
+  | name, args, res when Str.string_match re_builtin_annotation name 0 ->
+      let annot = Str.matched_group 1 name in
+      print_annotation oc annot args res
+  (* Catch-all *)  
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
   end;
   fprintf oc "%s end builtin %s\n" comment name
 
+(* Handling of other builtins *)
+
 let re_builtin_function = Str.regexp "__builtin_"
 
 let is_builtin_function s =
   Str.string_match re_builtin_function (extern_atom s) 0
+
+let print_memcpy oc sz =
+  fprintf oc "	movl	%%esi, %%eax\n";     (* Preserve esi, edi *)
+  fprintf oc "	movl	%%edi, %%edx\n";
+  fprintf oc "	movl	0(%%esp), %%edi\n";  (* Load args *)
+  fprintf oc "	movl	4(%%esp), %%esi\n";
+  fprintf oc "	movl	8(%%esp), %%ecx\n";
+  fprintf oc "	shr	$2, %%ecx\n";
+  fprintf oc "	rep movsl\n";                (* Copy by words *)
+  if sz < 4 then begin
+    fprintf oc "	movl	8(%%esp), %%ecx\n";
+    fprintf oc "	andl	$3, %%ecx\n";
+    fprintf oc "	rep movsb\n"         (* Finish copy by bytes *)
+  end;
+  fprintf oc "	movl	%%eax, %%esi\n";     (* Restore esi, edi *)
+  fprintf oc "	movl	%%edx, %%edi\n"
 
 let print_builtin_function oc s =
   fprintf oc "%s begin builtin function %s\n" comment (extern_atom s);
@@ -302,56 +397,16 @@ let print_builtin_function oc s =
   begin match extern_atom s with
   (* Block copy *)
   | "__builtin_memcpy" ->
-      fprintf oc "	movl	%%esi, %%eax\n";
-      fprintf oc "	movl	%%edi, %%edx\n";
-      fprintf oc "	movl	0(%%esp), %%edi\n";
-      fprintf oc "	movl	4(%%esp), %%esi\n";
-      fprintf oc "	movl	8(%%esp), %%ecx\n";
-      fprintf oc "	rep movsb\n";
-      fprintf oc "	movl	%%eax, %%esi\n";
-      fprintf oc "	movl	%%edx, %%edi\n"
-  | "__builtin_memcpy_words" ->
-      fprintf oc "	movl	%%esi, %%eax\n";
-      fprintf oc "	movl	%%edi, %%edx\n";
-      fprintf oc "	movl	0(%%esp), %%edi\n";
-      fprintf oc "	movl	4(%%esp), %%esi\n";
-      fprintf oc "	movl	8(%%esp), %%ecx\n";
-      fprintf oc "	shr	$2, %%ecx\n";
-      fprintf oc "	rep movsl\n";
-      fprintf oc "	movl	%%eax, %%esi\n";
-      fprintf oc "	movl	%%edx, %%edi\n"
+      print_memcpy oc 1
+  | "__builtin_memcpy_al2" ->
+      print_memcpy oc 2
+  | "__builtin_memcpy_al4" | "__builtin_memcpy_al8" ->
+      print_memcpy oc 4
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
   end;
   fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
-
-let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
-
-let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
-
-let print_annotation oc txt args res =
-  fprintf oc "%s annotation: " comment;
-  let print_fragment = function
-  | Str.Text s ->
-      output_string oc s
-  | Str.Delim "%%" ->
-      output_char oc '%'
-  | Str.Delim s ->
-      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
-      try
-        preg oc (List.nth args (n-1))
-      with Failure _ ->
-        fprintf oc "<bad parameter %s>" s in
-  List.iter print_fragment (Str.full_split re_annot_param txt);
-  fprintf oc "\n";
-  match args, res with
-  | [], _ -> ()
-  | IR src :: _, IR dst ->
-      if dst <> src then fprintf oc "	movl	%a, %a\n" ireg src ireg dst
-  | FR src :: _, FR dst ->
-      if dst <> src then fprintf oc "	movsd	%a, %a\n" freg src freg dst
-  | _, _ -> assert false
 
 (* Printing of instructions *)
 
@@ -578,9 +633,7 @@ let print_instruction oc = function
       fprintf oc "	addl	$%ld, %%esp\n" sz
   | Pbuiltin(ef, args, res) ->
       let name = extern_atom ef.ef_id in
-      if Str.string_match re_builtin_annotation name 0
-      then print_annotation oc (Str.matched_group 1 name) args res
-      else print_builtin_inlined oc name args res
+      print_builtin_inlined oc name args res
 
 let print_literal oc (lbl, n) =
   fprintf oc "%a:	.quad	0x%Lx\n" label lbl n

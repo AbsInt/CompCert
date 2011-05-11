@@ -111,7 +111,19 @@ let builtins_generic = {
             TPtr(TVoid [AConst], []); 
             TInt(Cutil.size_t_ikind, [])],
           false);
-    "__builtin_memcpy_words",
+    "__builtin_memcpy_al2",
+         (TVoid [],
+           [TPtr(TVoid [], []); 
+            TPtr(TVoid [AConst], []); 
+            TInt(Cutil.size_t_ikind, [])],
+          false);
+    "__builtin_memcpy_al4",
+         (TVoid [],
+           [TPtr(TVoid [], []); 
+            TPtr(TVoid [AConst], []); 
+            TInt(Cutil.size_t_ikind, [])],
+          false);
+    "__builtin_memcpy_al8",
          (TVoid [],
            [TPtr(TVoid [], []); 
             TPtr(TVoid [AConst], []); 
@@ -172,65 +184,89 @@ let globals_for_strings globs =
     (fun s id l -> global_for_string s id :: l)
     stringTable globs
 
-(** ** Handling of stubs for variadic functions *)
+(** ** Declaration of special external functions *)
 
-let stub_function_table = Hashtbl.create 47
+let special_externals_table : (string, fundef) Hashtbl.t = Hashtbl.create 47
+
+let register_special_external c_name int_name targs tres inline =
+  if not (Hashtbl.mem special_externals_table c_name) then begin
+    Hashtbl.add special_externals_table c_name
+      (External({ef_id = intern_string int_name;
+                 ef_sig = signature_of_type targs tres;
+                 ef_inline = inline},
+                targs, tres))
+  end
+
+let declare_special_externals k =
+  Hashtbl.fold
+    (fun c_name fd k ->
+       Datatypes.Coq_pair(intern_string c_name, fd) :: k)
+    special_externals_table k
+
+(** ** Handling of stubs for variadic functions *)
 
 let register_stub_function name tres targs =
   let rec letters_of_type = function
     | Tnil -> []
     | Tcons(Tfloat _, tl) -> "f" :: letters_of_type tl
     | Tcons(_, tl) -> "i" :: letters_of_type tl in
+  let rec types_of_types = function
+    | Tnil -> Tnil
+    | Tcons(Tfloat _, tl) -> Tcons(Tfloat F64, types_of_types tl)
+    | Tcons(_, tl) -> Tcons(Tpointer Tvoid, types_of_types tl) in
   let stub_name =
     name ^ "$" ^ String.concat "" (letters_of_type targs) in
-  try
-    (stub_name, Hashtbl.find stub_function_table stub_name)
-  with Not_found ->
-    let rec types_of_types = function
-      | Tnil -> Tnil
-      | Tcons(Tfloat _, tl) -> Tcons(Tfloat F64, types_of_types tl)
-      | Tcons(_, tl) -> Tcons(Tpointer Tvoid, types_of_types tl) in
-    let stub_type = Tfunction (types_of_types targs, tres) in
-    Hashtbl.add stub_function_table stub_name stub_type;
-    (stub_name, stub_type)
-
-let declare_stub_function stub_name stub_type =
-  match stub_type with
-  | Tfunction(targs, tres) ->
-      Datatypes.Coq_pair(intern_string stub_name,
-                         External({ ef_id = intern_string stub_name;
-                                    ef_sig = signature_of_type targs tres;
-                                    ef_inline = false },
-                                  targs, tres))
-  | _ -> assert false
-
-let declare_stub_functions k =
-  Hashtbl.fold (fun n i k -> declare_stub_function n i :: k)
-               stub_function_table k
+  let targs = types_of_types targs in
+  register_special_external stub_name stub_name targs tres false;
+  (stub_name, Tfunction (targs, tres))
 
 (** ** Handling of annotations *)
 
-let annot_function_list = ref []
 let annot_function_next = ref 0
 
 let register_annotation_function txt targs tres =
   incr annot_function_next;
   let fun_name =
-    intern_string
-      (Printf.sprintf "__builtin_annotation_%d" !annot_function_next)
-  and ext_ident =
-    intern_string
-      (Printf.sprintf "__builtin_annotation_\"%s\"" txt) in
-  annot_function_list :=
-      Datatypes.Coq_pair(fun_name,
-        External({ ef_id = ext_ident;
-                   ef_sig = signature_of_type targs tres;
-                   ef_inline = true },
-                 targs, tres)) :: !annot_function_list;
-  Evalof(Evar(fun_name, Tfunction(targs, tres)), Tfunction(targs, tres))
+    Printf.sprintf "__builtin_annotation_%d" !annot_function_next
+  and int_name =
+    Printf.sprintf "__builtin_annotation_\"%s\"" txt in
+  register_special_external fun_name int_name targs tres true;
+  Evalof(Evar(intern_string fun_name, Tfunction(targs, tres)), 
+         Tfunction(targs, tres))
 
-let declare_annotation_functions k =
-  List.rev_append !annot_function_list k
+(** ** Handling of inlined memcpy functions *)
+
+let alignof_pointed ty =
+  match ty with
+  | Tpointer ty' -> camlint_of_z (alignof ty')
+  | _ -> 1l (* safe default *)
+
+let register_inlined_memcpy basename sz =
+  let name = Printf.sprintf "%s_sz%ld" basename sz in
+  let targs = Tcons(Tpointer Tvoid, Tcons(Tpointer Tvoid, Tnil)) in
+  let tres = Tvoid in
+  register_special_external name name targs tres true;
+  Evalof(Evar(intern_string name, Tfunction(targs, tres)),
+         Tfunction(targs, tres))
+
+let memcpy_inline_threshold = ref 64l
+
+let make_builtin_memcpy name fn args =
+  match args with
+  | Econs(dst, Econs(src, Econs(sz, Enil))) ->
+      let sz1 =
+        match Initializers.constval sz with
+        | CompcertErrors.OK(Vint n) -> Some (camlint_of_coqint n)
+        | _ -> None in
+      begin match sz1 with
+      | Some sz2 when sz2 <= !memcpy_inline_threshold ->
+          let fn = register_inlined_memcpy name sz2 in
+          Ecall(fn, Econs(dst, Econs(src, Enil)), Tvoid)
+      | _ ->
+          Ecall(fn, args, Tvoid)
+      end
+  | _ ->
+    Ecall(fn, args, Tvoid)
 
 (** ** Translation functions *)
 
@@ -539,6 +575,13 @@ let rec convertExpr env e =
           ezero
       end          
 
+  | C.ECall({edesc = C.EVar {name = ("__builtin_memcpy"
+                                    |"__builtin_memcpy_al2"
+                                    |"__builtin_memcpy_al4"
+                                    |"__builtin_memcpy_al8" as name)}} as fn,
+            args) ->
+      make_builtin_memcpy name (convertExpr env fn) (convertExprList env args)
+
   | C.ECall(fn, args) ->
       match projFunType env fn.etyp with
       | None ->
@@ -727,8 +770,8 @@ let convertFundef env fd =
 (** External function declaration *)
 
 let noninlined_builtin_functions = [
-    "__builtin_memcpy";
-    "__builtin_memcpy_words"
+    "__builtin_memcpy"; "__builtin_memcpy_al2";
+    "__builtin_memcpy_al4"; "__builtin_memcpy_al8"
 ]
 
 let convertFundecl env (sto, id, ty, optinit) =
@@ -889,17 +932,16 @@ let convertProgram p =
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
-  Hashtbl.clear stub_function_table;
+  Hashtbl.clear special_externals_table;
   let p = Builtins.declarations() @ p in
   try
     let (funs1, vars1) =
       convertGlobdecls (translEnv Env.empty p) [] [] (cleanupGlobals p) in
-    let funs2 = declare_stub_functions funs1 in
-    let funs3 = declare_annotation_functions funs2 in
+    let funs2 = declare_special_externals funs1 in
     let vars2 = globals_for_strings vars1 in
     if !numErrors > 0
     then None
-    else Some { AST.prog_funct = funs3;
+    else Some { AST.prog_funct = funs2;
                 AST.prog_vars = vars2;
                 AST.prog_main = intern_string "main" }
   with Env.Error msg ->

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Abstract syntax and semantics for PowerPC assembly language *)
+(** Abstract syntax and semantics for IA32 assembly language *)
 
 Require Import Coqlib.
 Require Import Maps.

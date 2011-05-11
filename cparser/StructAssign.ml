@@ -25,11 +25,6 @@ open Env
 open Errors
 open Transform
 
-(* Max number of assignments that can be inlined.  Above this threshold,
-   we call memcpy() instead. *)
-
-let maxsize = ref 8
-
 (* Finding appropriate memcpy functions *)
 
 let memcpy_decl = ref (None : ident option)
@@ -46,11 +41,7 @@ let lookup_function env name =
   | (id, II_ident(sto, ty)) -> (id, ty)
   | (id, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
 
-let memcpy_ident env =
-  try lookup_function env "__builtin_memcpy"
-  with Env.Error _ ->
-  try lookup_function env "memcpy"
-  with Env.Error _ ->
+let default_memcpy () =
   match !memcpy_decl with
   | Some id ->
       (id, memcpy_type)
@@ -59,9 +50,20 @@ let memcpy_ident env =
       memcpy_decl := Some id;
       (id, memcpy_type)
 
-let memcpy_words_ident env =
-  try lookup_function env "__builtin_memcpy_words"
-  with Env.Error _ -> memcpy_ident env
+let rec find_memcpy env = function
+  | [] ->
+      default_memcpy()
+  | name :: rem ->
+      try lookup_function env name with Env.Error _ -> find_memcpy env rem
+
+let memcpy_1_ident env =
+  find_memcpy env ["__builtin_memcpy"; "memcpy"]
+let memcpy_2_ident env =
+  find_memcpy env ["__builtin_memcpy_al2"; "__builtin_memcpy"; "memcpy"]
+let memcpy_4_ident env =
+  find_memcpy env ["__builtin_memcpy_al4"; "__builtin_memcpy"; "memcpy"]
+let memcpy_8_ident env =
+  find_memcpy env ["__builtin_memcpy_al8"; "__builtin_memcpy"; "memcpy"]
 
 (* Smart constructor for "," expressions *)
 
@@ -71,67 +73,31 @@ let comma e1 e2 =
   | _, EConst _ -> e1
   | _, _ ->  ecomma e1 e2
 
+(* Smart constructor for "&" expressions *)
+
+let rec addrof e =
+  match e.edesc with
+  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (addrof e2)
+  | _ -> eaddrof e
+
 (* Translate an assignment [lhs = rhs] between composite types.
-   [lhs] and [rhs] must be pure, invariant l-values. *)
+   [lhs] and [rhs] must be l-values. *)
 
 let transf_assign env lhs rhs =
-
-  let num_assign = ref 0 in
-
-  let assign l r =
-    incr num_assign;
-    if !num_assign > !maxsize 
-    then raise Exit
-    else eassign l r in
-
-  let rec transf l r =
-    match unroll env l.etyp with
-    | TStruct(id, attr) ->
-        let ci = Env.find_struct env id in
-        transf_struct l r ci.ci_members
-    | TUnion(id, attr) ->
-        raise Exit
-    | TArray(ty_elt, Some sz, attr) ->
-        transf_array l r ty_elt 0L sz
-    | TArray(ty_elt, None, attr) ->
-        assert false
-    | _ ->
-        assign l r
-
-  and transf_struct l r = function
-    | [] -> nullconst
-    | f :: fl ->
-        comma (transf {edesc = EUnop(Odot f.fld_name, l); etyp = f.fld_typ}
-                      {edesc = EUnop(Odot f.fld_name, r); etyp = f.fld_typ})
-              (transf_struct l r fl)
-
-  and transf_array l r ty idx sz =
-    if idx >= sz then nullconst else begin
-      let e = intconst idx size_t_ikind in
-      comma (transf {edesc = EBinop(Oindex, l, e, ty); etyp = ty}
-                    {edesc = EBinop(Oindex, r, e, ty); etyp = ty})
-            (transf_array l r ty (Int64.add idx 1L) sz)
-    end
-  in
-
-  try
-    transf lhs rhs
-  with Exit ->
-    let by_words =
-      match Cutil.alignof env lhs.etyp, Cutil.sizeof env lhs.etyp with
-      | Some al, Some sz -> 
-          al mod !config.sizeof_ptr = 0 && sz mod !config.sizeof_ptr = 0
-      | _, _->
-          false in
-    let (ident, ty) =
-      if by_words
-      then memcpy_words_ident env
-      else memcpy_ident env in
-    let memcpy = {edesc = EVar(ident); etyp = ty} in
-    let e_lhs = {edesc = EUnop(Oaddrof, lhs); etyp = TPtr(lhs.etyp, [])} in
-    let e_rhs = {edesc = EUnop(Oaddrof, rhs); etyp = TPtr(rhs.etyp, [])} in
-    let e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])} in
-    {edesc = ECall(memcpy, [e_lhs; e_rhs; e_size]); etyp = TVoid[]}
+  let (al, sz) =
+     match Cutil.alignof env lhs.etyp, Cutil.sizeof env lhs.etyp with
+     | Some al, Some sz -> (al, sz)
+     | _, _ -> (1, 1) in
+  let (ident, ty) = 
+    if al mod 8 = 0 && sz mod 8 = 0 then memcpy_8_ident env
+    else if al mod 4 = 0 && sz mod 4 = 0 then memcpy_4_ident env
+    else if al mod 2 = 0 && sz mod 2 = 0 then memcpy_2_ident env
+    else memcpy_1_ident env in
+  let memcpy = {edesc = EVar(ident); etyp = ty} in
+  let e_lhs = addrof lhs in
+  let e_rhs = addrof rhs in
+  let e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])} in
+  {edesc = ECall(memcpy, [e_lhs; e_rhs; e_size]); etyp = TVoid[]}
 
 (* Detect invariant l-values *)
 
@@ -146,18 +112,14 @@ let rec invariant_lvalue env e =
 
 (* Bind a l-value to a temporary variable if it is not invariant. *)
 
-let rec bind_lvalue env e fn =
-  match e.edesc with
-  | EBinop(Ocomma, e1, e2, _) ->
-      ecomma e1 (bind_lvalue env e2 fn)
-  | _ ->
-      if invariant_lvalue env e then
-        fn e
-      else begin
-        let tmp = new_temp (TPtr(e.etyp, [])) in
-        ecomma (eassign tmp (eaddrof e))
-               (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
-      end
+let bind_lvalue env e fn =
+  if invariant_lvalue env e then
+    fn e
+  else begin
+    let tmp = new_temp (TPtr(e.etyp, [])) in
+    ecomma (eassign tmp (addrof e))
+           (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
+  end
 
 (* Transformation of expressions. *)
 
@@ -166,10 +128,14 @@ type context = Val | Effects
 let rec transf_expr env ctx e =
   match e.edesc with
   | EBinop(Oassign, lhs, rhs, _) when is_composite_type env lhs.etyp ->
-      bind_lvalue env (transf_expr env Val lhs) (fun l ->
-      bind_lvalue env (transf_expr env Val rhs) (fun r ->
-        let e' = transf_assign env l r in
-        if ctx = Val then ecomma e' l else e'))
+      let lhs' = transf_expr env Val lhs in
+      let rhs' = transf_expr env Val rhs in
+      begin match ctx with
+      | Effects ->
+          transf_assign env lhs' rhs'
+      | Val ->
+          bind_lvalue env lhs' (fun l -> ecomma (transf_assign env l rhs') l)
+      end
   | EConst c -> e
   | ESizeof ty -> e
   | EVar x -> e

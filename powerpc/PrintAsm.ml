@@ -272,6 +272,69 @@ let rec log2 n =
      locations dictated by the calling conventions; preserve
      callee-save regs only. *)
 
+(* Handling of __builtin_annotation *)
+
+let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
+
+let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
+
+let print_annotation oc txt args res =
+  fprintf oc "%s annotation: " comment;
+  let print_fragment = function
+  | Str.Text s ->
+      output_string oc s
+  | Str.Delim "%%" ->
+      output_char oc '%'
+  | Str.Delim s ->
+      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
+      try
+        preg oc (List.nth args (n-1))
+      with Failure _ ->
+        fprintf oc "<bad parameter %s>" s in
+  List.iter print_fragment (Str.full_split re_annot_param txt);
+  fprintf oc "\n";
+  match args, res with
+  | [], _ -> ()
+  | IR src :: _, IR dst ->
+      if dst <> src then fprintf oc "	mr	%a, %a\n" ireg dst ireg src 
+  | FR src :: _, FR dst ->
+      if dst <> src then fprintf oc "	fmr	%a, %a\n" freg dst freg src 
+  | _, _ -> assert false
+
+(* Handling of __builtin_memcpy_alX_szY *)
+
+let re_builtin_memcpy =
+   Str.regexp "__builtin_memcpy\\(_al\\([248]\\)\\)?_sz\\([0-9]+\\)$"
+
+(* On the PowerPC, unaligned accesses to 16- and 32-bit integers are
+   fast, but unaligned accesses to 64-bit floats can be slow
+   (not so much on G5, but clearly so on Power7).
+   So, use 64-bit accesses only if alignment >= 8.
+   Note that lfd and stfd cannot trap on ill-formed floats. *)
+
+let print_builtin_memcpy oc sz al dst src =
+  let rec copy ofs sz =
+    if sz >= 8 && al >= 8 then begin
+      fprintf oc "	lfd	%a, %d(%a)\n" freg FPR0 ofs ireg src;
+      fprintf oc "	stfd	%a, %d(%a)\n" freg FPR0 ofs ireg dst;
+      copy (ofs + 8) (sz - 8)
+    end else if sz >= 4 then begin
+      fprintf oc "	lwz	%a, %d(%a)\n" ireg GPR0 ofs ireg src;
+      fprintf oc "	stw	%a, %d(%a)\n" ireg GPR0 ofs ireg dst;
+      copy (ofs + 4) (sz - 4)
+    end else if sz >= 2 then begin
+      fprintf oc "	lhz	%a, %d(%a)\n" ireg GPR0 ofs ireg src;
+      fprintf oc "	sth	%a, %d(%a)\n" ireg GPR0 ofs ireg dst;
+      copy (ofs + 2) (sz - 2)
+    end else if sz >= 1 then begin
+      fprintf oc "	lbz	%a, %d(%a)\n" ireg GPR0 ofs ireg src;
+      fprintf oc "	stb	%a, %d(%a)\n" ireg GPR0 ofs ireg dst;
+      copy (ofs + 1) (sz - 1)
+    end in
+  copy 0 sz
+
+(* Handling of compiler-inlined builtins *)
+
 let print_builtin_inlined oc name args res =
   fprintf oc "%s begin builtin %s\n" comment name;
   (* Can use as temporaries: GPR0, GPR11, GPR12,  FPR0, FPR12, FPR13 *)
@@ -344,16 +407,41 @@ let print_builtin_inlined oc name args res =
       fprintf oc "	isync\n"
   | "__builtin_trap", [], _ ->
       fprintf oc "	trap\n"
+  (* Inlined memcpy *)
+  | name, [IR dst; IR src], _ when Str.string_match re_builtin_memcpy name 0 ->
+      let sz = int_of_string (Str.matched_group 3 name) in
+      let al = try int_of_string (Str.matched_group 2 name) with Not_found -> 1 in
+      print_builtin_memcpy oc sz al dst src
+  (* Annotations *)
+  | name, args, res when Str.string_match re_builtin_annotation name 0 ->
+      let annot = Str.matched_group 1 name in
+      print_annotation oc annot args res
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
   end;
   fprintf oc "%s end builtin %s\n" comment name
 
+(* Handling of other builtins *)
+
 let re_builtin_function = Str.regexp "__builtin_"
 
 let is_builtin_function s =
   Str.string_match re_builtin_function (extern_atom s) 0
+
+let print_memcpy oc sz prepare load store =
+  let lbl1 = new_label() in
+  let lbl2 = new_label() in
+  prepare GPR5;
+  fprintf oc "	beq     %a, %a\n" creg 0 label lbl1;
+  fprintf oc "	mtctr   %a\n" ireg GPR5;
+  fprintf oc "	addi    %a, %a, -%d\n" ireg GPR3 ireg GPR3 sz;
+  fprintf oc "	addi    %a, %a, -%d\n" ireg GPR4 ireg GPR4 sz;
+  fprintf oc "%a:\n" label lbl2;
+  load GPR4;
+  store GPR3;
+  fprintf oc "	bdnz    %a\n" label lbl2;
+  fprintf oc "%a:\n" label lbl1
 
 let print_builtin_function oc s =
   fprintf oc "%s begin builtin function %s\n" comment (extern_atom s);
@@ -364,61 +452,30 @@ let print_builtin_function oc s =
   (* Block copy *)
   begin match extern_atom s with
   | "__builtin_memcpy" ->
-      let lbl1 = new_label() in
-      let lbl2 = new_label() in
-      fprintf oc "      cmplwi  %a, %a, 0\n" creg 0 ireg GPR5;
-      fprintf oc "      beq     %a, %a\n" creg 0 label lbl1;
-      fprintf oc "      mtctr   %a\n" ireg GPR5;
-      fprintf oc "      addi    %a, %a, -1\n" ireg GPR3 ireg GPR3;
-      fprintf oc "      addi    %a, %a, -1\n" ireg GPR4 ireg GPR4;
-      fprintf oc "%a:   lbzu    %a, 1(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
-      fprintf oc "      stbu    %a, 1(%a)\n" ireg GPR0 ireg GPR3;
-      fprintf oc "      bdnz    %a\n" label lbl2;
-      fprintf oc "%a:\n" label lbl1
-  | "__builtin_memcpy_words" ->
-      let lbl1 = new_label() in
-      let lbl2 = new_label() in
-      fprintf oc "      rlwinm. %a, %a, 30, 2, 31\n" ireg GPR5 ireg GPR5;
-      fprintf oc "      beq     %a, %a\n" creg 0 label lbl1;
-      fprintf oc "      mtctr   %a\n" ireg GPR5;
-      fprintf oc "      addi    %a, %a, -4\n" ireg GPR3 ireg GPR3;
-      fprintf oc "      addi    %a, %a, -4\n" ireg GPR4 ireg GPR4;
-      fprintf oc "%a:   lwzu    %a, 4(%a)\n" label lbl2 ireg GPR0 ireg GPR4;
-      fprintf oc "      stwu    %a, 4(%a)\n" ireg GPR0 ireg GPR3;
-      fprintf oc "      bdnz    %a\n" label lbl2;
-      fprintf oc "%a:\n" label lbl1
+      print_memcpy oc 1
+        (fun r -> fprintf oc "	cmplwi	%a, %a, 0\n" creg 0 ireg r)
+        (fun r -> fprintf oc "	lbzu    %a, 1(%a)\n" ireg GPR0 ireg r)
+        (fun r -> fprintf oc "	stbu    %a, 1(%a)\n" ireg GPR0 ireg r)
+  | "__builtin_memcpy_al2" ->
+      print_memcpy oc 2
+        (fun r -> fprintf oc "	rlwinm.	%a, %a, 31, 1, 31\n" ireg r ireg r)
+        (fun r -> fprintf oc "	lhzu    %a, 2(%a)\n" ireg GPR0 ireg r)
+        (fun r -> fprintf oc "	sthu    %a, 2(%a)\n" ireg GPR0 ireg r)
+  | "__builtin_memcpy_al4" ->
+      print_memcpy oc 4
+        (fun r -> fprintf oc "	rlwinm.	%a, %a, 30, 2, 31\n" ireg r ireg r)
+        (fun r -> fprintf oc "	lwzu    %a, 4(%a)\n" ireg GPR0 ireg r)
+        (fun r -> fprintf oc "	stwu    %a, 4(%a)\n" ireg GPR0 ireg r)
+  | "__builtin_memcpy_al8" ->
+      print_memcpy oc 8
+        (fun r -> fprintf oc "	rlwinm.	%a, %a, 29, 3, 31\n" ireg r ireg r)
+        (fun r -> fprintf oc "	lfdu    %a, 8(%a)\n" freg FPR0 ireg r)
+        (fun r -> fprintf oc "	stfdu   %a, 8(%a)\n" freg FPR0 ireg r)
   (* Catch-all *)
   | s ->
       invalid_arg ("unrecognized builtin function " ^ s)
   end;
   fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
-
-let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
-
-let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
-
-let print_annotation oc txt args res =
-  fprintf oc "%s annotation: " comment;
-  let print_fragment = function
-  | Str.Text s ->
-      output_string oc s
-  | Str.Delim "%%" ->
-      output_char oc '%'
-  | Str.Delim s ->
-      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
-      try
-        preg oc (List.nth args (n-1))
-      with Failure _ ->
-        fprintf oc "<bad parameter %s>" s in
-  List.iter print_fragment (Str.full_split re_annot_param txt);
-  fprintf oc "\n";
-  match args, res with
-  | [], _ -> ()
-  | IR src :: _, IR dst ->
-      if dst <> src then fprintf oc "	mr	%a, %a\n" ireg dst ireg src 
-  | FR src :: _, FR dst ->
-      if dst <> src then fprintf oc "	fmr	%a, %a\n" freg dst freg src 
-  | _, _ -> assert false
 
 (* Printing of instructions *)
 
@@ -655,9 +712,7 @@ let print_instruction oc = function
       fprintf oc "%a:\n" label (transl_label lbl)
   | Pbuiltin(ef, args, res) ->
       let name = extern_atom ef.ef_id in
-      if Str.string_match re_builtin_annotation name 0
-      then print_annotation oc (Str.matched_group 1 name) args res
-      else print_builtin_inlined oc name args res
+      print_builtin_inlined oc name args res
 
 let print_literal oc (lbl, n) =
   let nlo = Int64.to_int32 n
