@@ -42,7 +42,7 @@ void test2(void)
 
 /* Now with byte-swapped fields */
 
-#if defined(__COMPCERT__) && defined(__powerpc__)
+#if defined(__COMPCERT__) && defined(_ARCH_PPC)
 #pragma pack(1,1,1)
 #else
 #pragma pack(1,1,0)
