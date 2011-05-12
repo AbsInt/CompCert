@@ -71,7 +71,9 @@ let compile_c_file sourcename ifile ofile =
     "b" (* blocks: mandatory *)
   ^ (if !option_fstruct_passing then "s" else "")
   ^ (if !option_fstruct_assign then "S" else "")
-  ^ (if !option_fbitfields then "f" else "") in
+  ^ (if !option_fbitfields then "f" else "")
+  ^ (if !option_fpacked_structs then "p" else "")
+  in
   (* Parsing and production of a simplified C AST *)
   let ast =
     match Cparser.Parse.preprocessed_file simplifs sourcename ifile with
@@ -258,6 +260,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fstruct-passing  Emulate passing structs and unions by value [off]
   -fstruct-assign   Emulate assignment between structs or unions [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
+  -fpacked-structs  Emulate packed structs [off]
 Code generation options:
   -fmadd         Use fused multiply-add and multiply-sub instructions [off]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
@@ -387,6 +390,7 @@ let cmdline_actions =
   @ f_opt "bitfields" option_fbitfields
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "madd" option_fmadd
+  @ f_opt "packed-structs" option_fpacked_structs
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };

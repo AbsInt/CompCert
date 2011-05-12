@@ -65,6 +65,7 @@ type composite_info = {
   ci_members: field list;               (* members, in order *)
   ci_alignof: int option;               (* alignment; None if incomplete *)
   ci_sizeof: int option;                (* size; None if incomplete *)
+  ci_attr: attributes                   (* attributes, if any *)
 }
 
 (* Infos associated with an ordinary identifier *)

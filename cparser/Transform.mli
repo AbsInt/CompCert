@@ -23,8 +23,12 @@ val get_temps : unit -> C.decl list
 val program :
   ?decl:(Env.t -> C.decl -> C.decl) ->
   ?fundef:(Env.t -> C.fundef -> C.fundef) ->
-  ?composite:(Env.t ->
-              C.struct_or_union -> C.ident -> C.field list -> C.field list) ->
+  ?composite:(Env.t -> C.struct_or_union -> 
+                C.ident -> C.attributes -> C.field list -> 
+                  C.attributes * C.field list) ->
   ?typedef:(Env.t -> C.ident -> Env.typedef_info -> Env.typedef_info) ->
+  ?enum:(Env.t -> C.ident -> (C.ident * C.exp option) list ->
+                                       (C.ident * C.exp option) list) ->
+  ?pragma:(Env.t -> string -> string) ->
   C.program ->
   C.program

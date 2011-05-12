@@ -45,8 +45,10 @@ let get_temps () =
 let program
     ?(decl = fun env d -> d)
     ?(fundef = fun env fd -> fd)
-    ?(composite = fun env su id fl -> fl)
+    ?(composite = fun env su id attr fl -> (attr, fl))
     ?(typedef = fun env id ty -> ty)
+    ?(enum = fun env id members -> members)
+    ?(pragma = fun env s -> s)
     p =
 
   let rec transf_globdecls env accu = function
@@ -59,16 +61,19 @@ let program
         | Gfundef f ->
            (Gfundef(fundef env f),
             Env.add_ident env f.fd_name f.fd_storage (fundef_typ f))
-        | Gcompositedecl(su, id) ->
-            (Gcompositedecl(su, id),
-             Env.add_composite env id (composite_info_decl env su))
-        | Gcompositedef(su, id, fl) ->
-            (Gcompositedef(su, id, composite env su id fl),
-             Env.add_composite env id (composite_info_def env su fl))
+        | Gcompositedecl(su, id, attr) ->
+            (Gcompositedecl(su, id, attr),
+             Env.add_composite env id (composite_info_decl env su attr))
+        | Gcompositedef(su, id, attr, fl) ->
+            let (attr', fl') = composite env su id attr fl in
+            (Gcompositedef(su, id, attr', fl'),
+             Env.add_composite env id (composite_info_def env su attr fl))
         | Gtypedef(id, ty) ->
             (Gtypedef(id, typedef env id ty), Env.add_typedef env id ty)
-        | Genumdef _ as gd -> (gd, env)
-        | Gpragma _ as gd -> (gd, env)
+        | Genumdef(id, members) ->
+            (Genumdef(id, enum env id members), env)
+        | Gpragma s ->
+            (Gpragma(pragma env s), env)
       in
         transf_globdecls env' ({g with gdesc = desc'} :: accu) gl
 

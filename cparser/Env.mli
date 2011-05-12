@@ -29,6 +29,7 @@ type composite_info = {
   ci_members: C.field list;             (* members, in order *)
   ci_alignof: int option;               (* alignment; None if incomplete *)
   ci_sizeof: int option;                (* size; None if incomplete *)
+  ci_attr: C.attributes                 (* attributes, if any *)
 }
 
 type ident_info = II_ident of C.storage * C.typ | II_enum of int64

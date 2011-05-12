@@ -197,11 +197,12 @@ and globdecl_desc env = function
   | Gfundef fd ->
       let (fd', env') = fundef env fd in
       (Gfundef fd', env')
-  | Gcompositedecl(kind, id) ->
+  | Gcompositedecl(kind, id, attr) ->
       let (id', env') = rename env id in
-      (Gcompositedecl(kind, id'), env')
-  | Gcompositedef(kind, id, members) ->
-      (Gcompositedef(kind, ident env id, List.map (field env) members), env)
+      (Gcompositedecl(kind, id', attr), env')
+  | Gcompositedef(kind, id, attr, members) ->
+      (Gcompositedef(kind, ident env id, attr, List.map (field env) members),
+       env)
   | Gtypedef(id, ty) ->
       let (id', env') = rename env id in
       (Gtypedef(id', typ env' ty), env')

@@ -417,15 +417,13 @@ let rec elab_specifier ?(only = false) loc env specifier =
 
     | [Cabs.Tstruct(id, optmembers, a)] ->
         let (id', env') =
-          elab_struct_or_union only Struct loc id optmembers env in
-        let attr' = add_attributes !attr (elab_attributes loc env a) in
-        (!sto, !inline, TStruct(id', attr'), env')
+          elab_struct_or_union only Struct loc id optmembers a env in
+        (!sto, !inline, TStruct(id', !attr), env')
 
     | [Cabs.Tunion(id, optmembers, a)] ->
         let (id', env') =
-          elab_struct_or_union only Union loc id optmembers env in
-        let attr' = add_attributes !attr (elab_attributes loc env a) in
-        (!sto, !inline, TUnion(id', attr'), env')
+          elab_struct_or_union only Union loc id optmembers a env in
+        (!sto, !inline, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let env' = 
@@ -581,7 +579,7 @@ and elab_field_group env (spec, fieldlist) =
 
 (* Elaboration of a struct or union *)
 
-and elab_struct_or_union_info kind loc env members =
+and elab_struct_or_union_info kind loc env members attrs =
   let (m, env') = mmap elab_field_group env members in
   let m = List.flatten m in
   (* Check for incomplete types *)
@@ -594,11 +592,16 @@ and elab_struct_or_union_info kind loc env members =
         error loc "member '%s' has incomplete type" fld.fld_name;
       check_incomplete rem in
   check_incomplete m;
-  (composite_info_def env' kind m, env')
+  (composite_info_def env' kind attrs m, env')
 
 (* Elaboration of a struct or union *)
 
-and elab_struct_or_union only kind loc tag optmembers env =
+and elab_struct_or_union only kind loc tag optmembers attrs env =
+  let attrs' =
+    elab_attributes loc env attrs in
+  let warn_attrs () =
+    if attrs' <> [] then
+      warning loc "attributes over struct/union ignored in this context" in
   let optbinding =
     if tag = "" then None else Env.lookup_composite env tag in
   match optbinding, optmembers with
@@ -609,16 +612,17 @@ and elab_struct_or_union only kind loc tag optmembers env =
          and the composite was bound in another scope,
          create a new incomplete composite instead via the case
          "_, None" below. *)
+      warn_attrs();
       (tag', env)
   | Some(tag', ({ci_sizeof = None} as ci)), Some members
     when Env.in_current_scope env tag' ->
       if ci.ci_kind <> kind then
         error loc "struct/union mismatch on tag '%s'" tag;
       (* finishing the definition of an incomplete struct or union *)
-      let (ci', env') = elab_struct_or_union_info kind loc env members in
+      let (ci', env') = elab_struct_or_union_info kind loc env members attrs' in
       (* Emit a global definition for it *)
       emit_elab (elab_loc loc)
-                (Gcompositedef(kind, tag', ci'.ci_members));
+                (Gcompositedef(kind, tag', attrs', ci'.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
   | Some(tag', {ci_sizeof = Some _}), Some _
@@ -629,26 +633,27 @@ and elab_struct_or_union only kind loc tag optmembers env =
       (* declaration of an incomplete struct or union *)
       if tag = "" then
         error loc "anonymous, incomplete struct or union";
-      let ci = composite_info_decl env kind in
+      let ci = composite_info_decl env kind attrs' in
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
       emit_elab (elab_loc loc)
-                (Gcompositedecl(kind, tag'));
+                (Gcompositedecl(kind, tag', attrs'));
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
-      let ci1 = composite_info_decl env kind in
+      let ci1 = composite_info_decl env kind attrs' in
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
       emit_elab (elab_loc loc)
-                (Gcompositedecl(kind, tag'));
+                (Gcompositedecl(kind, tag', attrs'));
       (* elaborate the members *)
-      let (ci2, env'') = elab_struct_or_union_info kind loc env' members in
+      let (ci2, env'') =
+        elab_struct_or_union_info kind loc env' members attrs' in
       (* emit a definition *)
       emit_elab (elab_loc loc)
-                (Gcompositedef(kind, tag', ci2.ci_members));
+                (Gcompositedef(kind, tag', attrs', ci2.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 

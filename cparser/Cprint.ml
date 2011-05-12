@@ -470,13 +470,15 @@ let globdecl pp g =
       fprintf pp "%a@ @ " full_decl d
   | Gfundef f ->
       fundef pp f
-  | Gcompositedecl(kind, id) ->
-      fprintf pp "%s %a;@ @ "
+  | Gcompositedecl(kind, id, attrs) ->
+      fprintf pp "%s%a %a;@ @ "
         (match kind with Struct -> "struct" | Union -> "union")
+        attributes attrs
         ident id
-  | Gcompositedef(kind, id, flds) ->
-      fprintf pp "@[<v 2>%s %a {"
+  | Gcompositedef(kind, id, attrs, flds) ->
+      fprintf pp "@[<v 2>%s%a %a {"
         (match kind with Struct -> "struct" | Union -> "union")
+        attributes attrs
         ident id;
       List.iter (fun fld -> fprintf pp "@ %a;" field fld) flds;
       fprintf pp "@;<0 -2>};@]@ @ "

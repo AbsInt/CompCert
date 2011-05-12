@@ -231,8 +231,9 @@ type globdecl =
 and globdecl_desc =
   | Gdecl of decl           (* variable declaration, function prototype *)
   | Gfundef of fundef                   (* function definition *)
-  | Gcompositedecl of struct_or_union * ident (* struct/union declaration *)
-  | Gcompositedef of struct_or_union * ident * field list
+  | Gcompositedecl of struct_or_union * ident * attributes
+                                        (* struct/union declaration *)
+  | Gcompositedef of struct_or_union * ident * attributes * field list
                                         (* struct/union definition *)
   | Gtypedef of ident * typ             (* typedef *)
   | Genumdef of ident * (ident * exp option) list  (* enum definition *)

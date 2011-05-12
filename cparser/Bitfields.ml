@@ -116,10 +116,10 @@ let rec transf_members env id count = function
         end
       end
 
-let transf_composite env su id ml =
+let transf_composite env su id attr ml =
   match su with
-  | Struct -> transf_members env id 1 ml
-  | Union  -> ml
+  | Struct -> (attr, transf_members env id 1 ml)
+  | Union  -> (attr, ml)
 
 (* Bitfield manipulation expressions *)
 

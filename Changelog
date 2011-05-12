@@ -1,5 +1,7 @@
-- Support for "aligned" attributes on global variables, e.g.
+- Support for "aligned" and "section" attributes on global variables, e.g.
     __attribute__((aligned(16))) int x;
+
+- Experimental emulation of packed structs (flag -fpacked-structs).
 
 - Pointer comparisons now treated as unsigned comparisons (previously: signed).
   This fixes an issue with arrays straddling the 0x8000_0000 boundary.
@@ -15,7 +17,7 @@
 
 - The requirement that pointers be valid in pointer comparisons
   was pushed through all intermediate languages of the back-end
-  (previously: requirement present only in up to Csharpminor).
+  (previously: requirement present only up to Csharpminor).
 
 - Improvements to the compiler driver:
     .  -E option now prints preprocessed result to standard output

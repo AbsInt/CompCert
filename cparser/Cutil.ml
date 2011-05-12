@@ -107,8 +107,10 @@ let rec attributes_of_type env t =
   | TArray(ty, sz, a) -> add_attributes a (attributes_of_type env ty)
   | TFun(ty, params, vararg, a) -> a
   | TNamed(s, a) -> attributes_of_type env (unroll env t)
-  | TStruct(s, a) -> a
-  | TUnion(s, a) -> a
+  | TStruct(s, a) -> 
+      let ci = Env.find_struct env s in add_attributes ci.ci_attr a
+  | TUnion(s, a) ->
+      let ci = Env.find_union env s in add_attributes ci.ci_attr a
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)
@@ -377,16 +379,20 @@ let incomplete_type env t =
 
 (* Computing composite_info records *)
 
-let composite_info_decl env su =
-  { ci_kind = su; ci_members = []; ci_alignof = None; ci_sizeof = None }
+let composite_info_decl env su attr =
+  { ci_kind = su; ci_members = [];
+    ci_alignof = None; ci_sizeof = None;
+    ci_attr = attr }
 
-let composite_info_def env su m =
+let composite_info_def env su attr m =
   { ci_kind = su; ci_members = m;
     ci_alignof = alignof_struct_union env m;
     ci_sizeof =
-      match su with
+      begin match su with
       | Struct -> sizeof_struct env m
-      | Union -> sizeof_union env m }
+      | Union -> sizeof_union env m
+      end;
+    ci_attr = attr }
 
 (* Type of a function definition *)
 
@@ -646,6 +652,17 @@ let is_literal_0 e =
   | EConst(CInt(0L, _, _)) -> true
   | _ -> false
 
+(* Assignment compatibility check over attributes.
+   Standard attributes ("const", "volatile", "restrict") can safely
+   be added (to the rhs type to get the lhs type) but must not be dropped.
+   Custom attributes can safely be dropped but must not be added. *)
+
+let valid_assignment_attr afrom ato =
+  let is_covariant = function Attr _ -> false | _ -> true in
+  let (afrom1, afrom2) = List.partition is_covariant afrom
+  and (ato1, ato2) = List.partition is_covariant ato in
+  incl_attributes afrom1 ato1 && incl_attributes ato2 afrom2
+
 (* Check that an assignment is allowed *)
 
 let valid_assignment env from tto =
@@ -653,7 +670,8 @@ let valid_assignment env from tto =
   | (TInt _ | TFloat _), (TInt _ | TFloat _) -> true
   | TInt _, TPtr _ -> is_literal_0 from
   | TPtr(ty, _), TPtr(ty', _) ->
-      incl_attributes (attributes_of_type env ty) (attributes_of_type env ty')
+      valid_assignment_attr (attributes_of_type env ty)
+                            (attributes_of_type env ty')
       && (is_void_type env ty || is_void_type env ty'
           || compatible_types env
                (erase_attributes_type env ty)

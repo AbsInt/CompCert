@@ -24,9 +24,10 @@ let transform_program t p =
   (run_pass (SimplExpr.program ~volatile:(CharSet.mem 'v' t)) 'e'
   (run_pass StructAssign.program 'S'
   (run_pass StructByValue.program 's'
+  (run_pass PackedStructs.program 'p'
   (run_pass Bitfields.program 'f'
   (run_pass Unblock.program 'b'
-  p))))))
+  p)))))))
 
 let parse_transformations s =
   let t = ref CharSet.empty in
@@ -40,6 +41,7 @@ let parse_transformations s =
             | 'S' -> set "bsS"
             | 'v' -> set "ev"
             | 'f' -> set "bf"
+            | 'p' -> set "bp"
             |  _  -> ())
     s;
   !t

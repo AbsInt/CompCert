@@ -21,5 +21,6 @@ cparser/AddCasts
 cparser/StructByValue
 cparser/StructAssign
 cparser/Bitfields
+cparser/PackedStructs
 cparser/Parse
 

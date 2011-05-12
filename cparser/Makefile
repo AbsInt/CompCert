@@ -16,7 +16,7 @@ SRCS=Errors.ml Cabs.ml Cabshelper.ml Parse_aux.ml Parser.ml Lexer.ml \
   Cleanup.ml Elab.ml Rename.ml \
   Transform.ml \
   Unblock.ml SimplExpr.ml AddCasts.ml StructByValue.ml StructAssign.ml \
-  Bitfields.ml \
+  Bitfields.ml PackedStructs.ml \
   Parse.ml
 
 COBJS=uint64.o

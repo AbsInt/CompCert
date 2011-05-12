@@ -22,7 +22,7 @@ open C
 open Cutil
 open Transform
 
-(* In function argument types, struct s -> struct s *
+(* In function argument types, struct s -> const struct s *
    In function result types, struct s -> void + add 1st parameter struct s *
    Try to preserve original typedef names when no change.
 *)
@@ -286,8 +286,8 @@ let transf_fundef env f =
 
 (* Composites *)
 
-let transf_composite env su id fl =
-  List.map (fun f -> {f with fld_typ = transf_type env f.fld_typ}) fl
+let transf_composite env su id attr fl =
+  (attr, List.map (fun f -> {f with fld_typ = transf_type env f.fld_typ}) fl)
 
 (* Entry point *)
 
