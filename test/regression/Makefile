@@ -12,7 +12,7 @@ TESTS=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 \
   expr1 initializers volatile2 \
   funct3 expr5 struct7 struct8 casts1 casts2 char1 \
-  sizeof1 sizeof2 packedstructs1
+  sizeof1 sizeof2 packedstruct1
 
 # Other tests: should compile to .s without errors (but expect warnings)
 EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
