@@ -289,8 +289,8 @@ let elab_attribute loc env = function
   | ("volatile", []) -> [AVolatile]
   | (("__attribute" | "__attribute__"), l) ->
         List.flatten (List.map (elab_gcc_attr loc env) l)
-  | (name, _) ->
-        warning loc "`%s' annotation ignored" name; []
+  | ("__asm__", _) -> []    (* MacOS X noise *)
+  | (name, _) -> warning loc "`%s' annotation ignored" name; []
 
 let elab_attributes loc env al =
   List.fold_left add_attributes [] (List.map (elab_attribute loc env) al)
