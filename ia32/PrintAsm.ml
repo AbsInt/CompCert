@@ -85,6 +85,10 @@ let int8_reg_name = function
   | EAX -> "%al"  | EBX -> "%bl"  | ECX -> "%cl"  | EDX -> "%dl"
   | _ -> assert false
 
+let high_int8_reg_name = function
+  | EAX -> "%ah"  | EBX -> "%bh"  | ECX -> "%ch"  | EDX -> "%dh"
+  | _ -> assert false
+
 let int16_reg_name = function
   | EAX -> "%ax"  | EBX -> "%bx"  | ECX -> "%cx"  | EDX -> "%dx"
   | ESI -> "%si"  | EDI -> "%di"  | EBP -> "%bp"  | ESP -> "%sp"
@@ -95,6 +99,7 @@ let float_reg_name = function
 
 let ireg oc r = output_string oc (int_reg_name r)
 let ireg8 oc r = output_string oc (int8_reg_name r)
+let high_ireg8 oc r = output_string oc (high_int8_reg_name r)
 let ireg16 oc r = output_string oc (int16_reg_name r)
 let freg oc r = output_string oc (float_reg_name r)
 
@@ -327,6 +332,28 @@ let print_builtin_inlined oc name args res =
       fprintf oc "	movss	%%xmm7, 0(%a)\n" ireg addr
   | "__builtin_volatile_write_float64", [IR addr; FR src], _ ->
       fprintf oc "	movsd	%a, 0(%a)\n" freg src ireg addr
+  (* Memory accesses *)
+  | "__builtin_read_int16_reversed", [IR a1], IR res ->
+      let tmp = if Asmgen.low_ireg res then res else ECX in
+      fprintf oc "	movzwl	0(%a), %a\n" ireg a1 ireg tmp;
+      fprintf oc "	xchg	%a, %a\n" ireg8 tmp high_ireg8 tmp;
+      if tmp <> res then
+        fprintf oc "	movl	%a, %a\n" ireg tmp ireg res
+  | "__builtin_read_int32_reversed", [IR a1], IR res ->
+      fprintf oc "	movl	0(%a), %a\n" ireg a1 ireg res;
+      fprintf oc "	bswap	%a\n" ireg res
+  | "__builtin_write_int16_reversed", [IR a1; IR a2], _ ->
+      let tmp = if a1 = ECX then EDX else ECX in
+      if a2 <> tmp then
+        fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
+      fprintf oc "	xchg	%a, %a\n" ireg8 tmp high_ireg8 tmp;
+      fprintf oc "	movw	%a, 0(%a)\n" ireg16 tmp ireg a1
+  | "__builtin_write_int32_reversed", [IR a1; IR a2], _ ->
+      let tmp = if a1 = ECX then EDX else ECX in
+      if a2 <> tmp then
+        fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
+      fprintf oc "	bswap	%a\n" ireg tmp;
+      fprintf oc "	movl	%a, 0(%a)\n" ireg tmp ireg a1
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], FR res ->
       need_masks := true;
@@ -357,10 +384,6 @@ let print_builtin_inlined oc name args res =
   | name, [IR dst; IR src], _ when Str.string_match re_builtin_memcpy name 0 ->
       let sz = int_of_string (Str.matched_group 3 name) in
       print_builtin_memcpy oc sz dst src
-  (* Annotations *)
-  | name, args, res when Str.string_match re_builtin_annotation name 0 ->
-      let annot = Str.matched_group 1 name in
-      print_annotation oc annot args res
   (* Catch-all *)  
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -633,7 +656,9 @@ let print_instruction oc = function
       fprintf oc "	addl	$%ld, %%esp\n" sz
   | Pbuiltin(ef, args, res) ->
       let name = extern_atom ef.ef_id in
-      print_builtin_inlined oc name args res
+      if Str.string_match re_builtin_annotation name 0
+      then print_annotation oc (Str.matched_group 1 name) args res
+      else print_builtin_inlined oc name args res
 
 let print_literal oc (lbl, n) =
   fprintf oc "%a:	.quad	0x%Lx\n" label lbl n

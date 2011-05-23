@@ -319,10 +319,6 @@ let print_builtin_inlined oc name args res =
       let sz = int_of_string (Str.matched_group 3 name) in
       let al = try int_of_string (Str.matched_group 2 name) with Not_found -> 1 in
       print_builtin_memcpy oc sz al dst src
-  (* Annotations *)
-  | name, args, res when Str.string_match re_builtin_annotation name 0 ->
-      let annot = Str.matched_group 1 name in
-      print_annotation oc annot args res
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -533,7 +529,9 @@ let print_instruction oc = function
       2 + List.length tbl
   | Pbuiltin(ef, args, res) ->
       let name = extern_atom ef.ef_id in
-      print_builtin_inlined oc name args res
+      if Str.string_match re_builtin_annotation name 0
+      then print_annotation oc (Str.matched_group 1 name) args res
+      else print_builtin_inlined oc name args res
 
 let no_fallthrough = function
   | Pb _ -> true
