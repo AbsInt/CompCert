@@ -24,7 +24,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The Compcert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 1.8.1, 2011-03-14</H3>
+<H3 align="center">Version 1.8.2, 2011-05-24</H3>
 
 <H2>Introduction</H2>
 
@@ -49,10 +49,15 @@ Journal of Automated Reasoning 43(4):363-446, 2009.
 </UL>
 
 <P>This Web site gives a commented listing of the underlying Coq
-specifications and proofs.  Proof scripts and the parts of the
-compiler written directly in Caml are omitted.  This development is a
-work in progress; some parts have substantially changed since the
-overview papers above were written.</P>
+specifications and proofs.  Proof scripts are folded by default, but
+can be viewed by clicking on "Proof".  Some modules (written in <I>italics</I> below) differ between the three supported target architectures.  The
+PowerPC versions of these modules are shown below; the ARM and x86
+versions can be found in the source distribution.
+</P>
+
+<P> This development is a work in progress; some parts have
+substantially changed since the overview papers above were
+written.</P>
 
 <P>The complete sources for Compcert can be downloaded from
 <A HREF="http://compcert.inria.fr/">the Compcert Web site</A>.</P>
@@ -97,7 +102,7 @@ See also: <A HREF="html/Memdata.html">Memdata</A> (in-memory representation of d
 <LI> <A HREF="html/Globalenvs.html">Globalenvs</A>: global execution environments.
 <LI> <A HREF="html/Smallstep.html">Smallstep</A>: tools for small-step semantics.
 <LI> <A HREF="html/Determinism.html">Determinism</A>: determinism properties of small-step semantics.
-<LI> <A HREF="html/Op.html">Op</A>: operators, addressing modes and their
+<LI> <A HREF="html/Op.html"><I>Op</I></A>: operators, addressing modes and their
 semantics.
 </UL>
 
@@ -123,15 +128,15 @@ pseudo-registers).
 code, control-flow graph, finitely many physical registers, infinitely
 many stack slots). <BR>
 See also: <A HREF="html/Locations.html">Locations</A> (representation of
-locations).
+locations) and <A HREF="html/Machregs.html"><I>Machregs</I></A> (description of processor registers).
 <LI> <A HREF="html/LTLin.html">LTLin</A>: like LTL, but the CFG is
 replaced by a linear list of instructions with explicit branches and labels.
 <LI> <A HREF="html/Linear.html">Linear</A>: like LTLin, with explicit
 spilling, reloading and enforcement of calling conventions.
 <LI> <A HREF="html/Mach.html">Mach</A>: like Linear, with a more concrete
 view of the activation record.  <BR>
-See also: <A HREF="html/Machsem.html">Machabstr</A> operational semantics for Mach. <BR>
-<LI> <A HREF="html/Asm.html">Asm</A>: abstract syntax for PowerPC assembly
+See also: <A HREF="html/Machsem.html">Machsem</A> operational semantics for Mach. <BR>
+<LI> <A HREF="html/Asm.html"><I>Asm</I></A>: abstract syntax for PowerPC assembly
 code.
 </UL>
 
@@ -173,14 +178,14 @@ code.
   <TD>Recognition of operators<br>and addressing modes</TD>
   <TD>Cminor to CminorSel</TD>
   <TD><A HREF="html/Selection.html">Selection</A><br>
-      <A HREF="html/SelectOp.html">SelectOp</A></TD>
+      <A HREF="html/SelectOp.html"><I>SelectOp</I></A></TD>
   <TD><A HREF="html/Selectionproof.html">Selectionproof</A><br>
-      <A HREF="html/SelectOpproof.html">SelectOpproof</A></TD>
+      <A HREF="html/SelectOpproof.html"><I>SelectOpproof</I></A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Construction of the CFG, <br>3-address code generation</TD>
-  <TD>Cminor to RTL</TD>
+  <TD>CminorSel to RTL</TD>
   <TD><A HREF="html/RTLgen.html">RTLgen</A></TD>
   <TD><A HREF="html/RTLgenspec.html">RTLgenspec</A><BR>
       <A HREF="html/RTLgenproof.html">RTLgenproof</A></TD>
@@ -197,9 +202,9 @@ code.
   <TD>Constant propagation</TD>
   <TD>RTL to RTL</TD>
   <TD><A HREF="html/Constprop.html">Constprop</A><br>
-      <A HREF="html/ConstpropOp.html">ConstpropOp</A></TD>
+      <A HREF="html/ConstpropOp.html"><I>ConstpropOp</I></A></TD>
   <TD><A HREF="html/Constpropproof.html">Constpropproof</A><br>
-      <A HREF="html/ConstpropOpproof.html">ConstproppOproof</A></TD>
+      <A HREF="html/ConstpropOpproof.html"><I>ConstproppOproof</I></A></TD>
 </TR>
 
 <TR valign="top">
@@ -242,10 +247,18 @@ code.
 </TR>
 
 <TR valign="top">
+  <TD>Removal of unreferenced labels</TD>
+  <TD>LTLin to LTLin</TD>
+  <TD><A HREF="html/CleanupLabels.html">CleanupLabels</A></TD>
+  <TD><A HREF="html/CleanupLabelsproof.html">CleanupLabelsproof</A></TD>
+</TR>
+
+<TR valign="top">
   <TD>Spilling, reloading, calling conventions</TD>
   <TD>LTLin to Linear</TD>
-  <TD><A HREF="html/Conventions.html">Conventions</A><BR>
-      <A HREF="html/Reload.html">Reload</A></TD>
+  <TD><A HREF="html/Reload.html">Reload</A><BR>
+      <A HREF="html/Conventions.html">Conventions</A><BR>
+      <A HREF="html/Conventions1.html"><I>Conventions1</I></A><BR></TD>
   <TD><A HREF="html/Parallelmove.html">Parallelmove</A><BR>
       <A HREF="html/Reloadproof.html">Reloadproof</A></TD>
 </TR>
@@ -253,24 +266,19 @@ code.
 <TR valign="top">
   <TD>Laying out the activation records</TD>
   <TD>Linear to Mach</TD>
-  <TD><A HREF="html/Bounds.html">Bounds</A><BR>
-      <A HREF="html/Stacking.html">Stacking</A></TD>
-  <TD><A HREF="html/Stackingproof.html">Stackingproof</A></TD>
+  <TD><A HREF="html/Stacking.html">Stacking</A><BR>
+      <A HREF="html/Bounds.html">Bounds</A><BR>
+      <A HREF="html/Stacklayout.html"><I>Stacklayout</I></A></TD>
+  <TD><A HREF="html/Stackingproof.html">Stackingproof</A><BR>
+      <A HREF="html/Asmgenretaddr.html"><I>Asmgenretaddr</I></A></TD>
 </TR>
-
-<TR valign="top">
-  <TD>Storing the activation records in memory</TD>
-  <TD>Mach to Mach</TD>
-  <TD>(none)
-  <TD><A HREF="html/Asmgenretaddr.html">Asmgenretaddr</A><BR>
-      <A HREF="html/Machabstr2concr.html">Machabstr2concr</A></TD>
 
 <TR valign="top">
   <TD>Emission of assembly code</TD>
   <TD>Mach to Asm</TD>
-  <TD><A HREF="html/Asmgen.html">Asmgen</A></TD>
-  <TD><A HREF="html/Asmgenproof1.html">Asmgenproof1</A><BR>
-      <A HREF="html/Asmgenproof.html">Asmgenproof</A></TD>
+  <TD><A HREF="html/Asmgen.html"><I>Asmgen</I></A></TD>
+  <TD><A HREF="html/Asmgenproof1.html"><I>Asmgenproof1</I></A><BR>
+      <A HREF="html/Asmgenproof.html"><I>Asmgenproof</I></A></TD>
 </TR>
 </TABLE>
 
@@ -291,6 +299,7 @@ Proofs that compiler passes are type-preserving:
 <LI> <A HREF="html/Alloctyping.html">Alloctyping</A> (register allocation).
 <LI> <A HREF="html/Tunnelingtyping.html">Tunnelingtyping</A> (branch tunneling).
 <LI> <A HREF="html/Linearizetyping.html">Linearizetyping</A> (code linearization).
+<LI> <A HREF="html/CleanupLabelstyping.html">CleanupLabelstyping</A> (removal of unreferenced labels).
 <LI> <A HREF="html/Reloadtyping.html">Reloadtyping</A> (spilling and reloading).
 <LI> <A HREF="html/Stackingtyping.html">Stackingtyping</A> (layout of activation records).
 </UL>
