@@ -22,6 +22,10 @@ Release 1.8.2, 2011-05-24
   was pushed through all intermediate languages of the back-end
   (previously: requirement present only up to Csharpminor).
 
+- Emulation of assignment between structs and between unions was
+  simplified and made more efficient, thanks to a better implementation
+  of __builtin_memcpy.
+
 - Improvements to the compiler driver:
     .  -E option now prints preprocessed result to standard output
        instead of saving it in a .i file
