@@ -531,7 +531,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sreturn None) k e le m)
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f a k e le m v v' m',
-      eval_expr e le m a v ->
+      eval_expr e le m a v -> 
       cast v (typeof a) f.(fn_return) v' ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e le m)
@@ -583,6 +583,305 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Returnstate v (Kcall (Some id) f e le k) m)
         E0 (State f Sskip k e (PTree.set id v le) m).
 
+
+(** * Alternate big-step semantics *)
+
+(** ** Big-step semantics for terminating statements and functions *)
+
+(** The execution of a statement produces an ``outcome'', indicating
+  how the execution terminated: either normally or prematurely
+  through the execution of a [break], [continue] or [return] statement. *)
+
+Inductive outcome: Type :=
+   | Out_break: outcome                 (**r terminated by [break] *)
+   | Out_continue: outcome              (**r terminated by [continue] *)
+   | Out_normal: outcome                (**r terminated normally *)
+   | Out_return: option (val * type) -> outcome. (**r terminated by [return] *)
+
+Inductive out_normal_or_continue : outcome -> Prop :=
+  | Out_normal_or_continue_N: out_normal_or_continue Out_normal
+  | Out_normal_or_continue_C: out_normal_or_continue Out_continue.
+
+Inductive out_break_or_return : outcome -> outcome -> Prop :=
+  | Out_break_or_return_B: out_break_or_return Out_break Out_normal
+  | Out_break_or_return_R: forall ov,
+      out_break_or_return (Out_return ov) (Out_return ov).
+
+Definition outcome_switch (out: outcome) : outcome :=
+  match out with
+  | Out_break => Out_normal
+  | o => o
+  end.
+
+Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
+  match out, t with
+  | Out_normal, Tvoid => v = Vundef
+  | Out_return None, Tvoid => v = Vundef
+  | Out_return (Some (v',t')), ty => ty <> Tvoid /\ cast v' t' t v
+  | _, _ => False
+  end. 
+
+(** [exec_stmt ge e m1 s t m2 out] describes the execution of 
+  the statement [s].  [out] is the outcome for this execution.
+  [m1] is the initial memory state, [m2] the final memory state.
+  [t] is the trace of input/output events performed during this
+  evaluation. *)
+
+Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env -> mem -> outcome -> Prop :=
+  | exec_Sskip:   forall e le m,
+      exec_stmt e le m Sskip
+               E0 le m Out_normal
+  | exec_Sassign:   forall e le m a1 a2 loc ofs v2 v m',
+      eval_lvalue e le m a1 loc ofs ->
+      eval_expr e le m a2 v2 ->
+      cast v2 (typeof a2) (typeof a1) v ->
+      store_value_of_type (typeof a1) m loc ofs v = Some m' ->
+      exec_stmt e le m (Sassign a1 a2)
+               E0 le m' Out_normal
+  | exec_Sset:     forall e le m id a v,
+      eval_expr e le m a v ->
+      exec_stmt e le m (Sset id a)
+               E0 (PTree.set id v le) m Out_normal      
+  | exec_Scall_none:   forall e le m a al tyargs tyres vf vargs f t m' vres,
+      typeof a = Tfunction tyargs tyres ->
+      eval_expr e le m a vf ->
+      eval_exprlist e le m al tyargs vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      eval_funcall le m f vargs t m' vres ->
+      exec_stmt e le m (Scall None a al)
+                t le m' Out_normal
+  | exec_Scall_some:   forall e le m id a al tyargs tyres vf vargs f t m' vres,
+      typeof a = Tfunction tyargs tyres ->
+      eval_expr e le m a vf ->
+      eval_exprlist e le m al tyargs vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      eval_funcall le m f vargs t m' vres ->
+      exec_stmt e le m (Scall (Some id) a al)
+                t (PTree.set id vres le) m' Out_normal
+  | exec_Sseq_1:   forall e le m s1 s2 t1 le1 m1 t2 le2 m2 out,
+      exec_stmt e le m s1 t1 le1 m1 Out_normal ->
+      exec_stmt e le1 m1 s2 t2 le2 m2 out ->
+      exec_stmt e le m (Ssequence s1 s2)
+                (t1 ** t2) le2 m2 out
+  | exec_Sseq_2:   forall e le m s1 s2 t1 le1 m1 out,
+      exec_stmt e le m s1 t1 le1 m1 out ->
+      out <> Out_normal ->
+      exec_stmt e le m (Ssequence s1 s2)
+                t1 le1 m1 out
+  | exec_Sifthenelse_true: forall e le m a s1 s2 v1 t le' m' out,
+      eval_expr e le m a v1 ->
+      is_true v1 (typeof a) ->
+      exec_stmt e le m s1 t le' m' out ->
+      exec_stmt e le m (Sifthenelse a s1 s2)
+                t le' m' out
+  | exec_Sifthenelse_false: forall e le m a s1 s2 v1 t le' m' out,
+      eval_expr e le m a v1 ->
+      is_false v1 (typeof a) ->
+      exec_stmt e le m s2 t le' m' out ->
+      exec_stmt e le m (Sifthenelse a s1 s2)
+                t le' m' out
+  | exec_Sreturn_none:   forall e le m,
+      exec_stmt e le m (Sreturn None)
+               E0 le m (Out_return None)
+  | exec_Sreturn_some: forall e le m a v,
+      eval_expr e le m a v ->
+      exec_stmt e le m (Sreturn (Some a))
+                E0 le m (Out_return (Some (v, typeof a)))
+  | exec_Sbreak:   forall e le m,
+      exec_stmt e le m Sbreak
+               E0 le m Out_break
+  | exec_Scontinue:   forall e le m,
+      exec_stmt e le m Scontinue
+               E0 le m Out_continue
+  | exec_Swhile_false: forall e le m a s v,
+      eval_expr e le m a v ->
+      is_false v (typeof a) ->
+      exec_stmt e le m (Swhile a s)
+               E0 le m Out_normal
+  | exec_Swhile_stop: forall e le m a v s t le' m' out' out,
+      eval_expr e le m a v ->
+      is_true v (typeof a) ->
+      exec_stmt e le m s t le' m' out' ->
+      out_break_or_return out' out ->
+      exec_stmt e le m (Swhile a s)
+                t le' m' out
+  | exec_Swhile_loop: forall e le m a s v t1 le1 m1 out1 t2 le2 m2 out,
+      eval_expr e le m a v ->
+      is_true v (typeof a) ->
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      exec_stmt e le1 m1 (Swhile a s) t2 le2 m2 out ->
+      exec_stmt e le m (Swhile a s)
+                (t1 ** t2) le2 m2 out
+  | exec_Sdowhile_false: forall e le m s a t le1 m1 out1 v,
+      exec_stmt e le m s t le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      eval_expr e le1 m1 a v ->
+      is_false v (typeof a) ->
+      exec_stmt e le m (Sdowhile a s)
+                t le1 m1 Out_normal
+  | exec_Sdowhile_stop: forall e le m s a t le1 m1 out1 out,
+      exec_stmt e le m s t le1 m1 out1 ->
+      out_break_or_return out1 out ->
+      exec_stmt e le m (Sdowhile a s)
+                t le1 m1 out
+  | exec_Sdowhile_loop: forall e le m s a le1 m1 le2 m2 t1 t2 out out1 v,
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      eval_expr e le1 m1 a v ->
+      is_true v (typeof a) ->
+      exec_stmt e le1 m1 (Sdowhile a s) t2 le2 m2 out ->
+      exec_stmt e le m (Sdowhile a s) 
+                (t1 ** t2) le2 m2 out
+
+  | exec_Sfor_false: forall e le m s a2 a3 v,
+      eval_expr e le m a2 v ->
+      is_false v (typeof a2) ->
+      exec_stmt e le m (Sfor' a2 a3 s)
+               E0 le m Out_normal
+  | exec_Sfor_stop: forall e le m s a2 a3 v le1 m1 t out1 out,
+      eval_expr e le m a2 v ->
+      is_true v (typeof a2) ->
+      exec_stmt e le m s t le1 m1 out1 ->
+      out_break_or_return out1 out ->
+      exec_stmt e le m (Sfor' a2 a3 s)
+                t le1 m1 out
+  | exec_Sfor_loop: forall e le m s a2 a3 v le1 m1 le2 m2 le3 m3 t1 t2 t3 out1 out,
+      eval_expr e le m a2 v ->
+      is_true v (typeof a2) ->
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      exec_stmt e le1 m1 a3 t2 le2 m2 Out_normal ->
+      exec_stmt e le2 m2 (Sfor' a2 a3 s) t3 le3 m3 out ->
+      exec_stmt e le m (Sfor' a2 a3 s)
+                (t1 ** t2 ** t3) le3 m3 out
+  | exec_Sswitch:   forall e le m a t n sl le1 m1 out,
+      eval_expr e le m a (Vint n) ->
+      exec_stmt e le m (seq_of_labeled_statement (select_switch n sl)) t le1 m1 out ->
+      exec_stmt e le m (Sswitch a sl)
+                t le1 m1 (outcome_switch out)
+
+(** [eval_funcall m1 fd args t m2 res] describes the invocation of
+  function [fd] with arguments [args].  [res] is the value returned
+  by the call.  *)
+
+with eval_funcall: temp_env -> mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
+  | eval_funcall_internal: forall le m f vargs t e m1 m2 m3 out vres m4,
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
+      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      exec_stmt e (PTree.empty val) m2 f.(fn_body) t le m3 out ->
+      outcome_result_value out f.(fn_return) vres ->
+      Mem.free_list m3 (blocks_of_env e) = Some m4 ->
+      eval_funcall (PTree.empty val) m (Internal f) vargs t m4 vres
+  | eval_funcall_external: forall m ef targs tres vargs t vres m',
+      external_call ef ge vargs m t vres m' ->
+      eval_funcall (PTree.empty val) m (External ef targs tres) vargs t m' vres.
+
+Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop
+  with eval_funcall_ind2 := Minimality for eval_funcall Sort Prop.
+
+(** ** Big-step semantics for diverging statements and functions *)
+
+(** Coinductive semantics for divergence.
+  [execinf_stmt ge e m s t] holds if the execution of statement [s]
+  diverges, i.e. loops infinitely.  [t] is the possibly infinite
+  trace of observable events performed during the execution. *)
+
+CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Prop :=
+  | execinf_Scall_none:   forall e le m a al vf tyargs tyres vargs f t,
+      typeof a = Tfunction tyargs tyres ->
+      eval_expr e le m a vf ->
+      eval_exprlist e le m al tyargs vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      evalinf_funcall le m f vargs t ->
+      execinf_stmt e le m (Scall None a al) t
+  | execinf_Scall_some:   forall e le m id a al vf tyargs tyres vargs f t,
+      typeof a = Tfunction tyargs tyres ->
+      eval_expr e le m a vf ->
+      eval_exprlist e le m al tyargs vargs ->
+      Genv.find_funct ge vf = Some f ->
+      type_of_fundef f = typeof a ->
+      evalinf_funcall le m f vargs t ->
+      execinf_stmt e le m (Scall (Some id) a al) t
+  | execinf_Sseq_1:   forall e le m s1 s2 t,
+      execinf_stmt e le m s1 t ->
+      execinf_stmt e le m (Ssequence s1 s2) t
+  | execinf_Sseq_2:   forall e le m s1 s2 t1 le1 m1 t2,
+      exec_stmt e le m s1 t1 le1 m1 Out_normal ->
+      execinf_stmt e le1 m1 s2 t2 ->
+      execinf_stmt e le m (Ssequence s1 s2) (t1 *** t2)
+  | execinf_Sifthenelse_true: forall e le m a s1 s2 v1 t,
+      eval_expr e le m a v1 ->
+      is_true v1 (typeof a) ->
+      execinf_stmt e le m s1 t ->
+      execinf_stmt e le m (Sifthenelse a s1 s2) t
+  | execinf_Sifthenelse_false: forall e le m a s1 s2 v1 t,
+      eval_expr e le m a v1 ->
+      is_false v1 (typeof a) ->
+      execinf_stmt e le m s2 t ->
+      execinf_stmt e le m (Sifthenelse a s1 s2) t
+  | execinf_Swhile_body: forall e le m a v s t,
+      eval_expr e le m a v ->
+      is_true v (typeof a) ->
+      execinf_stmt e le m s t ->
+      execinf_stmt e le m (Swhile a s) t
+  | execinf_Swhile_loop: forall e le m a s v t1 le1 m1 out1 t2,
+      eval_expr e le m a v ->
+      is_true v (typeof a) ->
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      execinf_stmt e le1 m1 (Swhile a s) t2 ->
+      execinf_stmt e le m (Swhile a s) (t1 *** t2)
+  | execinf_Sdowhile_body: forall e le m s a t,
+      execinf_stmt e le m s t ->
+      execinf_stmt e le m (Sdowhile a s) t
+  | execinf_Sdowhile_loop: forall e le m s a le1 m1 t1 t2 out1 v,
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      eval_expr e le1 m1 a v ->
+      is_true v (typeof a) ->
+      execinf_stmt e le1 m1 (Sdowhile a s) t2 ->
+      execinf_stmt e le m (Sdowhile a s) (t1 *** t2)
+  | execinf_Sfor_body: forall e le m s a2 a3 v t,
+      eval_expr e le m a2 v ->
+      is_true v (typeof a2) ->
+      execinf_stmt e le m s t ->
+      execinf_stmt e le m (Sfor' a2 a3 s) t
+  | execinf_Sfor_next: forall e le m s a2 a3 v le1 m1 t1 t2 out1,
+      eval_expr e le m a2 v ->
+      is_true v (typeof a2) ->
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      execinf_stmt e le1 m1 a3 t2 ->
+      execinf_stmt e le m (Sfor' a2 a3 s) (t1 *** t2)
+  | execinf_Sfor_loop: forall e le m s a2 a3 v le1 m1 le2 m2 t1 t2 t3 out1,
+      eval_expr e le m a2 v ->
+      is_true v (typeof a2) ->
+      exec_stmt e le m s t1 le1 m1 out1 ->
+      out_normal_or_continue out1 ->
+      exec_stmt e le1 m1 a3 t2 le2 m2 Out_normal ->
+      execinf_stmt e le2 m2 (Sfor' a2 a3 s) t3 ->
+      execinf_stmt e le m (Sfor' a2 a3 s) (t1 *** t2 *** t3)
+  | execinf_Sswitch:   forall e le m a t n sl,
+      eval_expr e le m a (Vint n) ->
+      execinf_stmt e le m (seq_of_labeled_statement (select_switch n sl)) t ->
+      execinf_stmt e le m (Sswitch a sl) t
+
+(** [evalinf_funcall ge m fd args t] holds if the invocation of function
+    [fd] on arguments [args] diverges, with observable trace [t]. *)
+
+with evalinf_funcall:temp_env -> mem -> fundef -> list val -> traceinf -> Prop :=
+  | evalinf_funcall_internal: forall m f vargs t e m1 m2,
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
+      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      execinf_stmt e (PTree.empty val) m2 f.(fn_body) t ->
+      evalinf_funcall (PTree.empty val) m (Internal f) vargs t.
+
 End SEMANTICS.
 
 (** * Whole-program semantics *)
@@ -614,3 +913,472 @@ Inductive final_state: state -> int -> Prop :=
 
 Definition exec_program (p: program) (beh: program_behavior) : Prop :=
   program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+
+(** Big-step execution of a whole program.  *)
+
+Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
+  | bigstep_program_terminates_intro: forall b f m0 m1 t r,
+      let ge := Genv.globalenv p in 
+      Genv.init_mem p = Some m0 ->
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
+      eval_funcall ge (PTree.empty val) m0 f nil t m1 (Vint r) ->
+      bigstep_program_terminates p t r.
+
+Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
+  | bigstep_program_diverges_intro: forall b f m0 t,
+      let ge := Genv.globalenv p in 
+      Genv.init_mem p = Some m0 ->
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
+      evalinf_funcall ge (PTree.empty val) m0 f nil t ->
+      bigstep_program_diverges p t.
+
+(** * Implication from big-step semantics to transition semantics *)
+
+Section BIGSTEP_TO_TRANSITIONS.
+
+Variable prog: program.
+Let ge : genv := Genv.globalenv prog.
+
+Definition exec_stmt_eval_funcall_ind
+  (PS: env -> temp_env -> mem -> statement -> trace -> temp_env -> mem -> outcome -> Prop)
+  (PF: temp_env -> mem -> fundef -> list val -> trace -> mem -> val -> Prop) :=
+  fun a b c d e f g h i j k l m n o p q r s t u v w x y =>
+  conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y)
+       (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y).
+
+Inductive outcome_state_match
+       (e: env) (le: temp_env) (m: mem) (f: function) (k: cont): outcome -> state -> Prop :=
+  | osm_normal:
+      outcome_state_match e le m f k Out_normal (State f Sskip k e le m)
+  | osm_break:
+      outcome_state_match e le m f k Out_break (State f Sbreak k e le m)
+  | osm_continue:
+      outcome_state_match e le m f k Out_continue (State f Scontinue k e le m)
+  | osm_return_none: forall k',
+      call_cont k' = call_cont k ->
+      outcome_state_match e le m f k 
+        (Out_return None) (State f (Sreturn None) k' e le m)
+  | osm_return_some: forall a v k',
+      call_cont k' = call_cont k ->
+      eval_expr ge e le m a v ->
+      outcome_state_match e le m f k
+        (Out_return (Some (v,typeof a))) (State f (Sreturn (Some a)) k' e le m).
+
+Lemma is_call_cont_call_cont:
+  forall k, is_call_cont k -> call_cont k = k.
+Proof.
+  destruct k; simpl; intros; contradiction || auto.
+Qed.
+
+Lemma exec_stmt_eval_funcall_steps:
+  (forall e le m s t le' m' out,
+   exec_stmt ge e le m s t le' m' out ->
+   forall f k, exists S,
+   star step ge (State f s k e le m) t S
+   /\ outcome_state_match e le' m' f k out S)
+/\
+  (forall le m fd args t m' res,
+   eval_funcall ge le m fd args t m' res ->
+   forall k,
+   is_call_cont k ->
+   star step ge (Callstate fd args k m) t (Returnstate res k m')).
+Proof.
+  apply exec_stmt_eval_funcall_ind; intros.
+
+(* skip *)
+  econstructor; split. apply star_refl. constructor.
+
+(* assign *)
+  econstructor; split. apply star_one. econstructor; eauto. constructor.
+
+(* set *)
+  econstructor; split. apply star_one. econstructor; eauto. constructor.
+
+(* call none *)
+  econstructor; split.
+  eapply star_left. econstructor; eauto. 
+  eapply star_right. apply H5. simpl; auto. econstructor. reflexivity. traceEq.
+  constructor.
+
+(* call some *)
+  econstructor; split.
+  eapply star_left. econstructor; eauto. 
+  eapply star_right. apply H5. simpl; auto. econstructor; eauto. reflexivity. traceEq.
+  constructor.
+
+(* sequence 2 *)
+  destruct (H0 f (Kseq s2 k)) as [S1 [A1 B1]]. inv B1.
+  destruct (H2 f k) as [S2 [A2 B2]]. 
+  econstructor; split.
+  eapply star_left. econstructor.
+  eapply star_trans. eexact A1. 
+  eapply star_left. constructor. eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* sequence 1 *)
+  destruct (H0 f (Kseq s2 k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out with
+    | Out_break => State f Sbreak k e le1 m1
+    | Out_continue => State f Scontinue k e le1 m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. econstructor.
+  eapply star_trans. eexact A1.
+  unfold S2; inv B1.
+    congruence.
+    apply star_one. apply step_break_seq.
+    apply star_one. apply step_continue_seq.
+    apply star_refl.
+    apply star_refl.
+  reflexivity. traceEq.
+  unfold S2; inv B1; congruence || econstructor; eauto.
+
+(* ifthenelse true *)
+  destruct (H2 f k) as [S1 [A1 B1]].
+  exists S1; split.
+  eapply star_left. eapply step_ifthenelse_true; eauto. eexact A1. traceEq.
+  auto.
+
+(* ifthenelse false *)
+  destruct (H2 f k) as [S1 [A1 B1]].
+  exists S1; split.
+  eapply star_left. eapply step_ifthenelse_false; eauto. eexact A1. traceEq.
+  auto.
+
+(* return none *)
+  econstructor; split. apply star_refl. constructor. auto.
+
+(* return some *)
+  econstructor; split. apply star_refl. econstructor; eauto.
+
+(* break *)
+  econstructor; split. apply star_refl. constructor.
+
+(* continue *)
+  econstructor; split. apply star_refl. constructor.
+
+(* while false *)
+  econstructor; split.
+  apply star_one. eapply step_while_false; eauto. 
+  constructor.
+
+(* while stop *)
+  destruct (H2 f (Kwhile a s k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out' with
+    | Out_break => State f Sskip k e le' m'
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. eapply step_while_true; eauto. 
+  eapply star_trans. eexact A1.
+  unfold S2. inversion H3; subst.
+  inv B1. apply star_one. constructor.    
+  apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inversion H3; subst. constructor. inv B1; econstructor; eauto.
+
+(* while loop *)
+  destruct (H2 f (Kwhile a s k)) as [S1 [A1 B1]].
+  destruct (H5 f k) as [S2 [A2 B2]].
+  exists S2; split.
+  eapply star_left. eapply step_while_true; eauto.
+  eapply star_trans. eexact A1.
+  eapply star_left.
+  inv H3; inv B1; apply step_skip_or_continue_while; auto.
+  eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* dowhile false *)
+  destruct (H0 f (Kdowhile a s k)) as [S1 [A1 B1]].
+  exists (State f Sskip k e le1 m1); split.
+  eapply star_left. constructor. 
+  eapply star_right. eexact A1.
+  inv H1; inv B1; eapply step_skip_or_continue_dowhile_false; eauto.
+  reflexivity. traceEq. 
+  constructor.
+
+(* dowhile stop *)
+  destruct (H0 f (Kdowhile a s k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out1 with
+    | Out_break => State f Sskip k e le1 m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. apply step_dowhile. 
+  eapply star_trans. eexact A1.
+  unfold S2. inversion H1; subst.
+  inv B1. apply star_one. constructor.
+  apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inversion H1; subst. constructor. inv B1; econstructor; eauto.
+
+(* dowhile loop *)
+  destruct (H0 f (Kdowhile a s k)) as [S1 [A1 B1]].
+  destruct (H5 f k) as [S2 [A2 B2]].
+  exists S2; split.
+  eapply star_left. apply step_dowhile. 
+  eapply star_trans. eexact A1.
+  eapply star_left.
+  inv H1; inv B1; eapply step_skip_or_continue_dowhile_true; eauto.
+  eexact A2.
+  reflexivity. reflexivity. traceEq.
+  auto.
+
+(* for false *)
+  econstructor; split.
+  eapply star_one. eapply step_for_false; eauto. 
+  constructor.
+
+(* for stop *)
+  destruct (H2 f (Kfor2 a2 a3 s k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out1 with
+    | Out_break => State f Sskip k e le1 m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. eapply step_for_true; eauto. 
+  eapply star_trans. eexact A1.
+  unfold S2. inversion H3; subst.
+  inv B1. apply star_one. constructor. 
+  apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inversion H3; subst. constructor. inv B1; econstructor; eauto.
+
+(* for loop *)
+  destruct (H2 f (Kfor2 a2 a3 s k)) as [S1 [A1 B1]].
+  destruct (H5 f (Kfor3 a2 a3 s k)) as [S2 [A2 B2]]. inv B2.
+  destruct (H7 f k) as [S3 [A3 B3]].
+  exists S3; split.
+  eapply star_left. eapply step_for_true; eauto. 
+  eapply star_trans. eexact A1.
+  eapply star_trans with (s2 := State f a3 (Kfor3 a2 a3 s k) e le1 m1).
+  inv H3; inv B1.
+  apply star_one. constructor. auto. 
+  apply star_one. constructor. auto. 
+  eapply star_trans. eexact A2. 
+  eapply star_left. constructor.
+  eexact A3.
+  reflexivity. reflexivity. reflexivity. reflexivity. traceEq.
+  auto.
+
+(* switch *)
+  destruct (H1 f (Kswitch k)) as [S1 [A1 B1]].
+  set (S2 :=
+    match out with
+    | Out_normal => State f Sskip k e le1 m1
+    | Out_break => State f Sskip k e le1 m1
+    | Out_continue => State f Scontinue k e le1 m1
+    | _ => S1
+    end).
+  exists S2; split.
+  eapply star_left. eapply step_switch; eauto. 
+  eapply star_trans. eexact A1. 
+  unfold S2; inv B1. 
+    apply star_one. constructor. auto. 
+    apply star_one. constructor. auto. 
+    apply star_one. constructor. 
+    apply star_refl.
+    apply star_refl.
+  reflexivity. traceEq.
+  unfold S2. inv B1; simpl; econstructor; eauto.
+
+(* call internal *)
+  destruct (H3 f k) as [S1 [A1 B1]].
+  eapply star_left. eapply step_internal_function; eauto.
+  eapply star_right. eexact A1. 
+   inv B1; simpl in H4; try contradiction.
+  (* Out_normal *)
+  assert (fn_return f = Tvoid /\ vres = Vundef).
+    destruct (fn_return f); auto || contradiction.
+  destruct H7. subst vres. apply step_skip_call; auto.
+  (* Out_return None *)
+  assert (fn_return f = Tvoid /\ vres = Vundef).
+    destruct (fn_return f); auto || contradiction.
+  destruct H8. subst vres.
+  rewrite <- (is_call_cont_call_cont k H6). rewrite <- H7.
+  apply step_return_0; auto.
+  (* Out_return Some *)
+  destruct H4.
+  rewrite <- (is_call_cont_call_cont k H6). rewrite <- H7.
+  eapply step_return_1; eauto.
+  reflexivity. traceEq.
+
+(* call external *)
+  apply star_one. apply step_external_function; auto. 
+Qed.
+
+Lemma exec_stmt_steps:
+   forall e le m s t le' m' out,
+   exec_stmt ge e le m s t le' m' out ->
+   forall f k, exists S,
+   star step ge (State f s k e le m) t S
+   /\ outcome_state_match e le' m' f k out S.
+Proof (proj1 exec_stmt_eval_funcall_steps).
+
+Lemma eval_funcall_steps:
+   forall le m fd args t m' res,
+   eval_funcall ge le m fd args t m' res ->
+   forall k,
+   is_call_cont k ->
+   star step ge (Callstate fd args k m) t (Returnstate res k m').
+Proof (proj2 exec_stmt_eval_funcall_steps).
+
+Definition order (x y: unit) := False.
+
+Lemma evalinf_funcall_forever:
+  forall le m fd args T k,
+  evalinf_funcall ge le m fd args T ->
+  forever_N step order ge tt (Callstate fd args k m) T.
+Proof.
+  cofix CIH_FUN.
+  assert (forall e le m s T f k,
+          execinf_stmt ge e le m s T ->
+          forever_N step order ge tt (State f s k e le m) T).
+  cofix CIH_STMT.
+  intros. inv H.
+
+(* call none *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_call; eauto. 
+  eapply CIH_FUN. eauto. traceEq.
+(* call some *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_call; eauto. 
+  eapply CIH_FUN. eauto. traceEq.
+
+(* seq 1 *)
+  eapply forever_N_plus.
+  apply plus_one. econstructor.
+  apply CIH_STMT; eauto. traceEq.
+(* seq 2 *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H0 f (Kseq s2 k)) as [S1 [A1 B1]].
+  inv B1.
+  eapply forever_N_plus.
+  eapply plus_left. constructor. eapply star_trans. eexact A1. 
+  apply star_one. constructor. reflexivity. reflexivity.
+  apply CIH_STMT; eauto. traceEq.
+
+(* ifthenelse true *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_ifthenelse_true; eauto. 
+  apply CIH_STMT; eauto. traceEq.
+(* ifthenelse false *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_ifthenelse_false; eauto. 
+  apply CIH_STMT; eauto. traceEq.
+
+(* while body *)
+  eapply forever_N_plus.
+  eapply plus_one. eapply step_while_true; eauto.
+  apply CIH_STMT; eauto. traceEq.
+(* while loop *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H2 f (Kwhile a s0 k)) as [S1 [A1 B1]].
+  eapply forever_N_plus with (s2 := State f (Swhile a s0) k e le1 m1).
+  eapply plus_left. eapply step_while_true; eauto.
+  eapply star_right. eexact A1.
+  inv H3; inv B1; apply step_skip_or_continue_while; auto. 
+  reflexivity. reflexivity.
+  apply CIH_STMT; eauto. traceEq.
+
+(* dowhile body *)
+  eapply forever_N_plus.
+  eapply plus_one. eapply step_dowhile.
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* dowhile loop *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H0 f (Kdowhile a s0 k)) as [S1 [A1 B1]].
+  eapply forever_N_plus with (s2 := State f (Sdowhile a s0) k e le1 m1).
+  eapply plus_left. eapply step_dowhile. 
+  eapply star_right. eexact A1.
+  inv H1; inv B1; eapply step_skip_or_continue_dowhile_true; eauto. 
+  reflexivity. reflexivity.
+  apply CIH_STMT. eauto. 
+  traceEq.
+
+(* for body *)
+  eapply forever_N_plus.
+  apply plus_one. eapply step_for_true; eauto. 
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* for next *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H2 f (Kfor2 a2 a3 s0 k)) as [S1 [A1 B1]].
+  eapply forever_N_plus.
+  eapply plus_left. eapply step_for_true; eauto.
+  eapply star_trans. eexact A1.
+  apply star_one.
+  inv H3; inv B1; apply step_skip_or_continue_for2; auto.
+  reflexivity. reflexivity. 
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* for body *)
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H2 f (Kfor2 a2 a3 s0 k)) as [S1 [A1 B1]].
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ H4 f (Kfor3 a2 a3 s0 k)) as [S2 [A2 B2]].
+  inv B2.
+  eapply forever_N_plus.
+  eapply plus_left. eapply step_for_true; eauto. 
+  eapply star_trans. eexact A1.
+  eapply star_left. inv H3; inv B1; apply step_skip_or_continue_for2; auto.
+  eapply star_right. eexact A2. 
+  constructor. 
+  reflexivity. reflexivity. reflexivity. reflexivity.  
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* switch *)
+  eapply forever_N_plus.
+  eapply plus_one. eapply step_switch; eauto.
+  apply CIH_STMT; eauto.
+  traceEq.
+
+(* call internal *)
+  intros. inv H0.
+  eapply forever_N_plus.
+  eapply plus_one. econstructor; eauto. 
+  apply H; eauto.
+  traceEq.
+Qed.
+
+Theorem bigstep_program_terminates_exec:
+  forall t r, bigstep_program_terminates prog t r -> exec_program prog (Terminates t r).
+Proof.
+  intros. inv H. 
+  econstructor.
+  econstructor. eauto. eauto. eauto. auto.
+  eapply eval_funcall_steps. eauto. red; auto. 
+  econstructor.
+Qed.
+
+Theorem bigstep_program_diverges_exec:
+  forall T, bigstep_program_diverges prog T ->
+  exec_program prog (Reacts T) \/
+  exists t, exec_program prog (Diverges t) /\ traceinf_prefix t T.
+Proof.
+  intros. inv H.
+  set (st := Callstate f nil Kstop m0).
+  assert (forever step ge0 st T). 
+    eapply forever_N_forever with (order := order).
+    red; intros. constructor; intros. red in H. elim H.
+    eapply evalinf_funcall_forever; eauto. 
+  destruct (forever_silent_or_reactive _ _ _ _ _ _ H)
+  as [A | [t [s' [T' [B [C D]]]]]]. 
+  left. econstructor. econstructor; eauto. eauto.
+  right. exists t. split.
+  econstructor. econstructor; eauto. eauto. auto. 
+  subst T. rewrite <- (E0_right t) at 1. apply traceinf_prefix_app. constructor.
+Qed.
+
+End BIGSTEP_TO_TRANSITIONS.
