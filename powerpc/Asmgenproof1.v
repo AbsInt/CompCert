@@ -1198,6 +1198,14 @@ Proof.
   (* Oaddrsymbol *)
   change (find_symbol_offset ge i i0) with (symbol_offset ge i i0) in LD.
   set (v' := symbol_offset ge i i0) in *.
+  caseEq (symbol_is_small_data i i0); intro SD.
+  (* small data *)
+  exists (nextinstr (rs#(ireg_of res) <- v')); split.
+  apply exec_straight_one; auto. simpl.
+  rewrite (small_data_area_addressing _ _ _ SD). unfold v', symbol_offset. 
+  destruct (Genv.find_symbol ge i); auto. rewrite Int.add_zero; auto. 
+  eauto with ppcgen. 
+  (* not small data *)
   pose (rs1 := nextinstr (rs#GPR12 <- (high_half v'))).
   exists (nextinstr (rs1#(ireg_of res) <- v')).
   split. apply exec_straight_two with rs1 m'.

@@ -252,8 +252,11 @@ Definition transl_op
   | Ofloatconst f, nil =>
       Plfi (freg_of r) f :: k
   | Oaddrsymbol s ofs, nil =>
-      Paddis GPR12 GPR0 (Csymbol_high s ofs) ::
-      Paddi (ireg_of r) GPR12 (Csymbol_low s ofs) :: k
+      if symbol_is_small_data s ofs then
+        Paddi (ireg_of r) GPR0 (Csymbol_sda s ofs) :: k
+      else
+        Paddis GPR12 GPR0 (Csymbol_high s ofs) ::
+        Paddi (ireg_of r) GPR12 (Csymbol_low s ofs) :: k
   | Oaddrstack n, nil =>
       addimm (ireg_of r) GPR1 n k
   | Ocast8signed, a1 :: nil =>
