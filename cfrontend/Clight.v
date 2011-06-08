@@ -648,7 +648,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
       type_of_fundef f = typeof a ->
-      eval_funcall le m f vargs t m' vres ->
+      eval_funcall m f vargs t m' vres ->
       exec_stmt e le m (Scall None a al)
                 t le m' Out_normal
   | exec_Scall_some:   forall e le m id a al tyargs tyres vf vargs f t m' vres,
@@ -657,7 +657,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
       type_of_fundef f = typeof a ->
-      eval_funcall le m f vargs t m' vres ->
+      eval_funcall m f vargs t m' vres ->
       exec_stmt e le m (Scall (Some id) a al)
                 t (PTree.set id vres le) m' Out_normal
   | exec_Sseq_1:   forall e le m s1 s2 t1 le1 m1 t2 le2 m2 out,
@@ -767,7 +767,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   function [fd] with arguments [args].  [res] is the value returned
   by the call.  *)
 
-with eval_funcall: temp_env -> mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
+with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
   | eval_funcall_internal: forall le m f vargs t e m1 m2 m3 out vres m4,
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
@@ -775,10 +775,10 @@ with eval_funcall: temp_env -> mem -> fundef -> list val -> trace -> mem -> val 
       exec_stmt e (PTree.empty val) m2 f.(fn_body) t le m3 out ->
       outcome_result_value out f.(fn_return) vres ->
       Mem.free_list m3 (blocks_of_env e) = Some m4 ->
-      eval_funcall (PTree.empty val) m (Internal f) vargs t m4 vres
+      eval_funcall m (Internal f) vargs t m4 vres
   | eval_funcall_external: forall m ef targs tres vargs t vres m',
       external_call ef ge vargs m t vres m' ->
-      eval_funcall (PTree.empty val) m (External ef targs tres) vargs t m' vres.
+      eval_funcall m (External ef targs tres) vargs t m' vres.
 
 Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop
   with eval_funcall_ind2 := Minimality for eval_funcall Sort Prop.
@@ -797,7 +797,7 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
       type_of_fundef f = typeof a ->
-      evalinf_funcall le m f vargs t ->
+      evalinf_funcall m f vargs t ->
       execinf_stmt e le m (Scall None a al) t
   | execinf_Scall_some:   forall e le m id a al vf tyargs tyres vargs f t,
       typeof a = Tfunction tyargs tyres ->
@@ -805,7 +805,7 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
       type_of_fundef f = typeof a ->
-      evalinf_funcall le m f vargs t ->
+      evalinf_funcall m f vargs t ->
       execinf_stmt e le m (Scall (Some id) a al) t
   | execinf_Sseq_1:   forall e le m s1 s2 t,
       execinf_stmt e le m s1 t ->
@@ -874,13 +874,13 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
 (** [evalinf_funcall ge m fd args t] holds if the invocation of function
     [fd] on arguments [args] diverges, with observable trace [t]. *)
 
-with evalinf_funcall:temp_env -> mem -> fundef -> list val -> traceinf -> Prop :=
+with evalinf_funcall: mem -> fundef -> list val -> traceinf -> Prop :=
   | evalinf_funcall_internal: forall m f vargs t e m1 m2,
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       execinf_stmt e (PTree.empty val) m2 f.(fn_body) t ->
-      evalinf_funcall (PTree.empty val) m (Internal f) vargs t.
+      evalinf_funcall m (Internal f) vargs t.
 
 End SEMANTICS.
 
@@ -923,7 +923,7 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
-      eval_funcall ge (PTree.empty val) m0 f nil t m1 (Vint r) ->
+      eval_funcall ge m0 f nil t m1 (Vint r) ->
       bigstep_program_terminates p t r.
 
 Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
@@ -933,7 +933,7 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
-      evalinf_funcall ge (PTree.empty val) m0 f nil t ->
+      evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
 
 (** * Implication from big-step semantics to transition semantics *)
@@ -945,7 +945,7 @@ Let ge : genv := Genv.globalenv prog.
 
 Definition exec_stmt_eval_funcall_ind
   (PS: env -> temp_env -> mem -> statement -> trace -> temp_env -> mem -> outcome -> Prop)
-  (PF: temp_env -> mem -> fundef -> list val -> trace -> mem -> val -> Prop) :=
+  (PF: mem -> fundef -> list val -> trace -> mem -> val -> Prop) :=
   fun a b c d e f g h i j k l m n o p q r s t u v w x y =>
   conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y)
        (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y).
@@ -981,8 +981,8 @@ Lemma exec_stmt_eval_funcall_steps:
    star step ge (State f s k e le m) t S
    /\ outcome_state_match e le' m' f k out S)
 /\
-  (forall le m fd args t m' res,
-   eval_funcall ge le m fd args t m' res ->
+  (forall m fd args t m' res,
+   eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
    star step ge (Callstate fd args k m) t (Returnstate res k m')).
@@ -1227,8 +1227,8 @@ Lemma exec_stmt_steps:
 Proof (proj1 exec_stmt_eval_funcall_steps).
 
 Lemma eval_funcall_steps:
-   forall le m fd args t m' res,
-   eval_funcall ge le m fd args t m' res ->
+   forall m fd args t m' res,
+   eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
    star step ge (Callstate fd args k m) t (Returnstate res k m').
@@ -1237,8 +1237,8 @@ Proof (proj2 exec_stmt_eval_funcall_steps).
 Definition order (x y: unit) := False.
 
 Lemma evalinf_funcall_forever:
-  forall le m fd args T k,
-  evalinf_funcall ge le m fd args T ->
+  forall m fd args T k,
+  evalinf_funcall ge m fd args T ->
   forever_N step order ge tt (Callstate fd args k m) T.
 Proof.
   cofix CIH_FUN.
