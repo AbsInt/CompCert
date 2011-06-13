@@ -94,7 +94,7 @@ Inductive wt_instr : instruction -> Prop :=
       forall ef args res s,
       List.map Loc.type args = (ef_sig ef).(sig_args) ->
       Loc.type res = proj_sig_res (ef_sig ef) ->
-      arity_ok (ef_sig ef).(sig_args) = true ->
+      arity_ok (ef_sig ef).(sig_args) = true \/ ef_reloads ef = false ->
       locs_acceptable args -> loc_acceptable res ->
       valid_successor s ->
       wt_instr (Lbuiltin ef args res s)

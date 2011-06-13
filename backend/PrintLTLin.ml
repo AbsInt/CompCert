@@ -21,20 +21,8 @@ open Integers
 open Locations
 open Machregsaux
 open LTLin
+open PrintAST
 open PrintOp
-
-let name_of_chunk = function
-  | Mint8signed -> "int8signed"
-  | Mint8unsigned -> "int8unsigned"
-  | Mint16signed -> "int16signed"
-  | Mint16unsigned -> "int16unsigned"
-  | Mint32 -> "int32"
-  | Mfloat32 -> "float32"
-  | Mfloat64 -> "float64"
-
-let name_of_type = function
-  | Tint -> "int"
-  | Tfloat -> "float"
 
 let reg pp loc =
   match loc with
@@ -80,8 +68,8 @@ let print_instruction pp i =
       fprintf pp "tailcall %a(%a)@ "
         ros fn regs args
   | Lbuiltin(ef, args, res) ->
-      fprintf pp "%a = builtin \"%s\"(%a)@ "
-        reg res (extern_atom ef.ef_id) regs args
+      fprintf pp "%a = builtin %s(%a)@ "
+        reg res (name_of_external ef) regs args
   | Llabel lbl ->
       fprintf pp "%ld:@ " (camlint_of_positive lbl)
   | Lgoto lbl ->

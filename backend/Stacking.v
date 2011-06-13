@@ -130,6 +130,16 @@ Definition transl_op (fe: frame_env) (op: operation) :=
 Definition transl_addr (fe: frame_env) (addr: addressing) :=
   shift_stack_addressing (Int.repr fe.(fe_stack_data)) addr.
 
+(** Translation of an annotation argument. *)
+
+Definition transl_annot_param (fe: frame_env) (l: loc) : annot_param :=
+  match l with
+  | R r => APreg r
+  | S (Local ofs ty) => APstack (chunk_of_type ty) (offset_of_index fe (FI_local ofs ty))
+  | S _ => APstack Mint32 (-1)     (**r never happens *)
+  end.
+
+
 (** Translation of a Linear instruction.  Prepends the corresponding
   Mach instructions to the given list of instructions.
   [Lgetstack] and [Lsetstack] moves between registers and stack slots
@@ -173,6 +183,8 @@ Definition transl_instr
         (Mtailcall sig ros :: k)
   | Lbuiltin ef args dst =>
       Mbuiltin ef args dst :: k
+  | Lannot ef args =>
+      Mannot ef (map (transl_annot_param fe) args) :: k
   | Llabel lbl =>
       Mlabel lbl :: k
   | Lgoto lbl =>

@@ -179,6 +179,9 @@ Proof.
   (* builtin *)
   apply wt_instrs_cons; auto.
   constructor; auto.
+  (* annot *)
+  apply wt_instrs_cons; auto.
+  constructor; auto.
   (* label *)
   apply wt_instrs_cons; auto.
   constructor.

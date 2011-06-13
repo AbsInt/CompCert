@@ -71,39 +71,6 @@ let builtins_generic = {
     (* Floating-point absolute value *)
     "__builtin_fabs",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
-    (* The volatile read/volatile write functions *)
-    "__builtin_volatile_read_int8unsigned",
-        (TInt(IUChar, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int8signed",
-        (TInt(ISChar, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int16unsigned",
-        (TInt(IUShort, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int16signed",
-        (TInt(IShort, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_int32",
-        (TInt(IInt, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_float32",
-        (TFloat(FFloat, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_float64",
-         (TFloat(FDouble, []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_read_pointer",
-         (TPtr(TVoid [], []), [TPtr(TVoid [], [])], false);
-    "__builtin_volatile_write_int8unsigned",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IUChar, [])], false);
-    "__builtin_volatile_write_int8signed",
-        (TVoid [], [TPtr(TVoid [], []); TInt(ISChar, [])], false);
-    "__builtin_volatile_write_int16unsigned",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IUShort, [])], false);
-    "__builtin_volatile_write_int16signed",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IShort, [])], false);
-    "__builtin_volatile_write_int32",
-        (TVoid [], [TPtr(TVoid [], []); TInt(IInt, [])], false);
-    "__builtin_volatile_write_float32",
-        (TVoid [], [TPtr(TVoid [], []); TFloat(FFloat, [])], false);
-    "__builtin_volatile_write_float64",
-         (TVoid [], [TPtr(TVoid [], []); TFloat(FDouble, [])], false);
-    "__builtin_volatile_write_pointer",
-         (TVoid [], [TPtr(TVoid [], []); TPtr(TVoid [], [])], false);
     (* Block copy *)
     "__builtin_memcpy",
          (TVoid [],
@@ -130,9 +97,13 @@ let builtins_generic = {
             TInt(Cutil.size_t_ikind, [])],
           false);
     (* Annotations *)
-    "__builtin_annotation",
-        (TVoid [],                      (* overriden during elaboration *)
+    "__builtin_annot",
+        (TVoid [],
           [TPtr(TInt(IChar, [AConst]), [])],
+          true);
+    "__builtin_annot_intval",
+        (TInt(IInt, []),
+          [TPtr(TInt(IChar, [AConst]), []); TInt(IInt, [])],
           false)
   ]
 }
@@ -188,19 +159,14 @@ let globals_for_strings globs =
 
 let special_externals_table : (string, fundef) Hashtbl.t = Hashtbl.create 47
 
-let register_special_external c_name int_name targs tres inline =
-  if not (Hashtbl.mem special_externals_table c_name) then begin
-    Hashtbl.add special_externals_table c_name
-      (External({ef_id = intern_string int_name;
-                 ef_sig = signature_of_type targs tres;
-                 ef_inline = inline},
-                targs, tres))
-  end
+let register_special_external name ef targs tres =
+  if not (Hashtbl.mem special_externals_table name) then
+    Hashtbl.add special_externals_table name (External(ef, targs, tres))
 
 let declare_special_externals k =
   Hashtbl.fold
-    (fun c_name fd k ->
-       Datatypes.Coq_pair(intern_string c_name, fd) :: k)
+    (fun name fd k ->
+       Datatypes.Coq_pair(intern_string name, fd) :: k)
     special_externals_table k
 
 (** ** Handling of stubs for variadic functions *)
@@ -217,35 +183,51 @@ let register_stub_function name tres targs =
   let stub_name =
     name ^ "$" ^ String.concat "" (letters_of_type targs) in
   let targs = types_of_types targs in
-  register_special_external stub_name stub_name targs tres false;
+  let ef = EF_external(intern_string stub_name, signature_of_type targs tres) in
+  register_special_external stub_name ef targs tres;
   (stub_name, Tfunction (targs, tres))
 
 (** ** Handling of annotations *)
 
 let annot_function_next = ref 0
 
-let register_annotation_function txt targs tres =
+let register_annotation_stmt txt targs =
+  let tres = Tvoid in
   incr annot_function_next;
   let fun_name =
-    Printf.sprintf "__builtin_annotation_%d" !annot_function_next
-  and int_name =
-    Printf.sprintf "__builtin_annotation_\"%s\"" txt in
-  register_special_external fun_name int_name targs tres true;
+    Printf.sprintf "__builtin_annot_%d" !annot_function_next
+  and ef =
+    EF_annot (intern_string txt, typlist_of_typelist targs) in
+  register_special_external fun_name ef targs tres;
   Evalof(Evar(intern_string fun_name, Tfunction(targs, tres)), 
+         Tfunction(targs, tres))
+
+let register_annotation_val txt targ =
+  let targs = Tcons(targ, Tnil)
+  and tres = targ in
+  incr annot_function_next;
+  let fun_name =
+    Printf.sprintf "__builtin_annot_val_%d" !annot_function_next
+  and ef =
+    EF_annot_val (intern_string txt, typ_of_type targ) in
+  register_special_external fun_name ef targs tres;
+  Evalof(Evar(intern_string fun_name, Tfunction(targs, tres)),
          Tfunction(targs, tres))
 
 (** ** Handling of inlined memcpy functions *)
 
-let alignof_pointed ty =
-  match ty with
-  | Tpointer ty' -> camlint_of_z (alignof ty')
-  | _ -> 1l (* safe default *)
-
 let register_inlined_memcpy basename sz =
+  let al =
+    match basename with
+    | "__builtin_memcpy_al2" -> 2l
+    | "__builtin_memcpy_al4" -> 4l
+    | "__builtin_memcpy_al8" -> 8l
+    | _ -> 1l in
   let name = Printf.sprintf "%s_sz%ld" basename sz in
-  let targs = Tcons(Tpointer Tvoid, Tcons(Tpointer Tvoid, Tnil)) in
-  let tres = Tvoid in
-  register_special_external name name targs tres true;
+  let targs = Tcons(Tpointer Tvoid, Tcons(Tpointer Tvoid, Tnil))
+  and tres = Tvoid
+  and ef = EF_memcpy(coqint_of_camlint sz, coqint_of_camlint al) in
+  register_special_external name ef targs tres;
   Evalof(Evar(intern_string name, Tfunction(targs, tres)),
          Tfunction(targs, tres))
 
@@ -407,29 +389,33 @@ let is_volatile_access env e =
   List.mem C.AVolatile (Cutil.attributes_of_type env e.etyp)
   && Cutil.is_lvalue env e
 
-let volatile_fun_suffix_type ty =
+let volatile_kind ty =
   match ty with
-  | Tint(I8, Unsigned) -> ("int8unsigned", ty)
-  | Tint(I8, Signed) -> ("int8signed", ty)
-  | Tint(I16, Unsigned) -> ("int16unsigned", ty)
-  | Tint(I16, Signed) -> ("int16signed", ty)
-  | Tint(I32, _) -> ("int32", Tint(I32, Signed))
-  | Tfloat F32 -> ("float32", ty)
-  | Tfloat F64 -> ("float64", ty)
+  | Tint(I8, Unsigned) -> ("int8unsigned", ty, Mint8unsigned)
+  | Tint(I8, Signed) -> ("int8signed", ty, Mint8signed)
+  | Tint(I16, Unsigned) -> ("int16unsigned", ty, Mint16unsigned)
+  | Tint(I16, Signed) -> ("int16signed", ty, Mint16signed)
+  | Tint(I32, _) -> ("int32", Tint(I32, Signed), Mint32)
+  | Tfloat F32 -> ("float32", ty, Mfloat32)
+  | Tfloat F64 -> ("float64", ty, Mfloat64)
   | Tpointer _ | Tarray _ | Tfunction _ | Tcomp_ptr _ ->
-      ("pointer", Tpointer Tvoid)
+      ("pointer", Tpointer Tvoid, Mint32)
   | _ ->
-      unsupported "operation on volatile struct or union"; ("", Tvoid)
+      unsupported "operation on volatile struct or union"; ("", Tvoid, Mint32)
 
 let volatile_read_fun ty =
-  let (suffix, ty') = volatile_fun_suffix_type ty in
-  let funty = Tfunction(Tcons(Tpointer Tvoid, Tnil), ty') in
-  Evalof(Evar(intern_string ("__builtin_volatile_read_" ^ suffix), funty), funty)
+  let (suffix, ty', chunk) = volatile_kind ty in
+  let targs = Tcons(Tpointer Tvoid, Tnil) in
+  let name = "__builtin_volatile_read_" ^ suffix in
+  register_special_external name (EF_vload chunk) targs ty';
+  Evalof(Evar(intern_string name, Tfunction(targs, ty')), Tfunction(targs, ty'))
 
 let volatile_write_fun ty =
-  let (suffix, ty') = volatile_fun_suffix_type ty in
-  let funty = Tfunction(Tcons(Tpointer Tvoid, Tcons(ty', Tnil)), Tvoid) in
-  Evalof(Evar(intern_string ("__builtin_volatile_write_" ^ suffix), funty), funty)
+  let (suffix, ty', chunk) = volatile_kind ty in
+  let targs = Tcons(Tpointer Tvoid, Tcons(ty', Tnil)) in
+  let name = "__builtin_volatile_write_" ^ suffix in
+  register_special_external name (EF_vstore chunk) targs Tvoid;
+  Evalof(Evar(intern_string name, Tfunction(targs, Tvoid)), Tfunction(targs, Tvoid))
 
 (** Expressions *)
 
@@ -562,20 +548,29 @@ let rec convertExpr env e =
   | C.ECast(ty1, e1) ->
       Ecast(convertExpr env e1, convertTyp env ty1)
 
-  | C.ECall({edesc = C.EVar {name = "__builtin_annotation"}}, args) ->
+  | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
       begin match args with
       | {edesc = C.EConst(CStr txt)} :: args1 ->
-          if List.length args1 > 2 then
-            error "too many arguments to __builtin_annotation";
           let targs1 = convertTypList env (List.map (fun e -> e.etyp) args1) in
-          let fn' = register_annotation_function txt targs1 ty in
+          let fn' = register_annotation_stmt txt targs1 in
           Ecall(fn', convertExprList env args1, ty)
       | _ ->
-          error "ill-formed __builtin_annotation (first argument must be string literal)";
+          error "ill-formed __builtin_annot (first argument must be string literal)";
+          ezero
+      end          
+ 
+  | C.ECall({edesc = C.EVar {name = "__builtin_annot_intval"}}, args) ->
+      begin match args with
+      | [ {edesc = C.EConst(CStr txt)}; arg ] ->
+          let targ = convertTyp env arg.etyp in
+          let fn' = register_annotation_val txt targ in
+          Ecall(fn', convertExprList env [arg], ty)
+      | _ ->
+          error "ill-formed __builtin_annot_intval (first argument must be string literal)";
           ezero
       end          
 
-  | C.ECall({edesc = C.EVar {name = ("__builtin_memcpy"
+ | C.ECall({edesc = C.EVar {name = ("__builtin_memcpy"
                                     |"__builtin_memcpy_al2"
                                     |"__builtin_memcpy_al4"
                                     |"__builtin_memcpy_al8" as name)}} as fn,
@@ -780,11 +775,12 @@ let convertFundecl env (sto, id, ty, optinit) =
     | Tfunction(args, res) -> (args, res)
     | _ -> assert false in
   let id' = intern_string id.name in
+  let sg = signature_of_type args res in
   let ef =
-    { ef_id = id';
-      ef_sig = signature_of_type args res;
-      ef_inline = List.mem_assoc id.name builtins.functions
-          && not (List.mem id.name noninlined_builtin_functions) } in
+    if List.mem_assoc id.name builtins.functions
+    && not (List.mem id.name noninlined_builtin_functions)
+    then EF_builtin(id', sg)
+    else EF_external(id', sg) in
   Datatypes.Coq_pair(id', External(ef, args, res))
 
 (** Initializers *)

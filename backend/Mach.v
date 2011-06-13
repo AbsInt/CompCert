@@ -60,11 +60,16 @@ Inductive instruction: Type :=
   | Mcall: signature -> mreg + ident -> instruction
   | Mtailcall: signature -> mreg + ident -> instruction
   | Mbuiltin: external_function -> list mreg -> mreg -> instruction
+  | Mannot: external_function -> list annot_param -> instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
   | Mcond: condition -> list mreg -> label -> instruction
   | Mjumptable: mreg -> list label -> instruction
-  | Mreturn: instruction.
+  | Mreturn: instruction
+
+with annot_param: Type :=
+  | APreg: mreg -> annot_param
+  | APstack: memory_chunk -> Z -> annot_param.
 
 Definition code := list instruction.
 
@@ -87,7 +92,12 @@ Definition funsig (fd: fundef) :=
 
 Definition genv := Genv.t fundef unit.
 
-(** * Dynamic semantics *)
+(** * Elements of dynamic semantics *)
+
+(** The operational semantics is in module [Machsem]. *)
+
+Definition chunk_of_type (ty: typ) :=
+  match ty with Tint => Mint32 | Tfloat => Mfloat64 end.
 
 Module RegEq.
   Definition t := mreg.

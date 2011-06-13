@@ -479,6 +479,7 @@ Opaque loadind.
   destruct s0; monadInv H; auto.
   destruct s0; monadInv H; auto. 
   monadInv H; auto.
+  monadInv H; auto.
   inv H; simpl. destruct (peq lbl l). congruence. auto. 
   monadInv H; auto.
   eapply trans_eq. eapply transl_cond_label; eauto. auto. 
@@ -1009,6 +1010,36 @@ Proof.
   congruence.
 Qed.
 
+Lemma exec_Mannot_prop:
+  forall (s : list stackframe) (f : block) (sp : val)
+         (ms : Mach.regset) (m : mem) (ef : external_function)
+         (args : list Mach.annot_param) (b : list Mach.instruction)
+         (vargs: list val) (t : trace) (v : val) (m' : mem),
+  Machsem.annot_arguments ms m sp args vargs ->
+  external_call ef ge vargs m t v m' ->
+  exec_instr_prop (Machsem.State s f sp (Mannot ef args :: b) ms m) t
+                  (Machsem.State s f sp b ms m').
+Proof.
+  intros; red; intros; inv MS.
+  inv AT. monadInv H4. 
+  exploit functions_transl; eauto. intro FN.
+  generalize (transf_function_no_overflow _ _ H3); intro NOOV.
+  exploit annot_arguments_match; eauto. intros [vargs' [P Q]]. 
+  exploit external_call_mem_extends; eauto.
+  intros [vres' [m2' [A [B [C D]]]]].
+  left. econstructor; split. apply plus_one. 
+  eapply exec_step_annot. eauto. eauto.
+  eapply find_instr_tail; eauto. eauto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  eapply match_states_intro with (ep := false); eauto with coqlib.
+  unfold nextinstr. rewrite Pregmap.gss. 
+  rewrite <- H1; simpl. econstructor; eauto.
+  eapply code_tail_next_int; eauto. 
+  apply agree_nextinstr. auto.
+  congruence.
+Qed.
+
 Lemma exec_Mcond_true_prop:
   forall (s : list stackframe) (fb : block) (f : function) (sp : val)
          (cond : condition) (args : list mreg) (lbl : Mach.label)
@@ -1224,6 +1255,7 @@ Proof
            exec_Mcall_prop
            exec_Mtailcall_prop
            exec_Mbuiltin_prop
+           exec_Mannot_prop
            exec_Mgoto_prop
            exec_Mcond_true_prop
            exec_Mcond_false_prop

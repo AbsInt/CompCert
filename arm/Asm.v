@@ -170,7 +170,12 @@ Inductive instruction : Type :=
   | Plabel: label -> instruction                   (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> int -> instruction (**r load the address of a symbol *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
-  | Pbuiltin: external_function -> list preg -> preg -> instruction. (**r built-in *)
+  | Pbuiltin: external_function -> list preg -> preg -> instruction  (**r built-in function *)
+  | Pannot: external_function -> list annot_param -> instruction (**r annotation statement *)
+
+with annot_param : Type :=
+  | APreg: preg -> annot_param
+  | APstack: memory_chunk -> Z -> annot_param.
 
 (** The pseudo-instructions are the following:
 
@@ -531,6 +536,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | _ => Error
       end
   | Pbuiltin ef args res => Error    (**r treated specially below *)
+  | Pannot ef args => Error          (**r treated specially below *)
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
@@ -584,19 +590,26 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
       Mem.loadv Mfloat64 m (Val.add (rs (IR IR13)) (Vint (Int.repr bofs))) = Some v ->
       extcall_arg rs m (S (Outgoing ofs Tfloat)) v.
 
-Inductive extcall_args (rs: regset) (m: mem): list loc -> list val -> Prop :=
-  | extcall_args_nil:
-      extcall_args rs m nil nil
-  | extcall_args_cons: forall l1 ll v1 vl,
-      extcall_arg rs m l1 v1 -> extcall_args rs m ll vl ->
-      extcall_args rs m (l1 :: ll) (v1 :: vl).
-
 Definition extcall_arguments
     (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
-  extcall_args rs m (loc_arguments sg) args.
+  list_forall2 (extcall_arg rs m) (loc_arguments sg) args.
 
 Definition loc_external_result (sg: signature) : preg :=
   preg_of (loc_result sg).
+
+(** Extract the values of the arguments of an annotation. *)
+
+Inductive annot_arg (rs: regset) (m: mem): annot_param -> val -> Prop :=
+  | annot_arg_reg: forall r,
+      annot_arg rs m (APreg r) (rs r)
+  | annot_arg_stack: forall chunk ofs stk base v,
+      rs (IR IR13) = Vptr stk base ->
+      Mem.load chunk m stk (Int.unsigned base + ofs) = Some v ->
+      annot_arg rs m (APstack chunk ofs) v.
+
+Definition annot_arguments
+    (rs: regset) (m: mem) (params: list annot_param) (args: list val) : Prop :=
+  list_forall2 (annot_arg rs m) params args.
 
 (** Execution of the instruction at [rs#PC]. *)
 
@@ -618,6 +631,14 @@ Inductive step: state -> trace -> state -> Prop :=
       find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
       external_call ef ge (map rs args) m t v m' ->
       step (State rs m) t (State (nextinstr(rs # res <- v)) m')
+  | exec_step_annot:
+      forall b ofs c ef args rs m vargs t v m',
+      rs PC = Vptr b ofs ->
+      Genv.find_funct_ptr ge b = Some (Internal c) ->
+      find_instr (Int.unsigned ofs) c = Some (Pannot ef args) ->
+      annot_arguments rs m args vargs ->
+      external_call ef ge vargs m t v m' ->
+      step (State rs m) t (State (nextinstr rs) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->

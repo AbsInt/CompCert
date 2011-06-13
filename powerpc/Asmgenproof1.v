@@ -503,13 +503,13 @@ Qed.
 Lemma extcall_args_match:
   forall ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
   forall ll vl,
-  Machsem.extcall_args ms m sp ll vl ->
-  exists vl', Asm.extcall_args rs m' ll vl' /\ Val.lessdef_list vl vl'.
+  list_forall2 (Machsem.extcall_arg ms m sp) ll vl ->
+  exists vl', list_forall2 (Asm.extcall_arg rs m') ll vl' /\ Val.lessdef_list vl vl'.
 Proof.
   induction 3; intros. 
   exists (@nil val); split. constructor. constructor.
   exploit extcall_arg_match; eauto. intros [v1' [A B]].
-  exploit IHextcall_args; eauto. intros [vl' [C D]].
+  destruct IHlist_forall2 as [vl' [C D]].
   exists (v1' :: vl'); split; constructor; auto.
 Qed.
 
@@ -521,6 +521,38 @@ Lemma extcall_arguments_match:
 Proof.
   unfold Machsem.extcall_arguments, Asm.extcall_arguments; intros.
   eapply extcall_args_match; eauto.
+Qed.
+
+(** Translation of arguments to annotations. *)
+
+Lemma annot_arg_match:
+  forall ms sp rs m m' p v,
+  agree ms sp rs ->
+  Mem.extends m m' ->
+  Machsem.annot_arg ms m sp p v ->
+  exists v', Asm.annot_arg rs m' (transl_annot_param p) v' /\ Val.lessdef v v'.
+Proof.
+  intros. inv H1; simpl.
+(* reg *)
+  exists (rs (preg_of r)); split. constructor. eapply preg_val; eauto.
+(* stack *)
+  exploit Mem.load_extends; eauto. intros [v' [A B]].
+  exists v'; split; auto. 
+  inv H. econstructor; eauto. 
+Qed.
+
+Lemma annot_arguments_match:
+  forall ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
+  forall pl vl,
+  Machsem.annot_arguments ms m sp pl vl ->
+  exists vl', Asm.annot_arguments rs m' (map transl_annot_param pl) vl'
+           /\ Val.lessdef_list vl vl'.
+Proof.
+  induction 3; intros. 
+  exists (@nil val); split. constructor. constructor.
+  exploit annot_arg_match; eauto. intros [v1' [A B]].
+  destruct IHlist_forall2 as [vl' [C D]].
+  exists (v1' :: vl'); split; constructor; auto.
 Qed.
 
 (** * Execution of straight-line code *)

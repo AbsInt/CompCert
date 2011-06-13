@@ -796,17 +796,6 @@ let elab_expr loc env a =
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
       { edesc = ECall(b1, [b2; b3]); etyp = ty }
 
-(* Hack to treat __builtin_annotation the CompCert way.
-   Arguments are treated as per the prototype (const char *, ...).
-   Result type is type of second argument, or void if only one argument. *)
-  | CALL((VARIABLE "__builtin_annotation" as a1), al) ->
-      let b1 = elab a1 in
-      let bl = List.map elab al in
-      let bl' = elab_arguments 1 bl [Env.fresh_ident "",
-                                     TPtr(TInt(IChar, [AConst]),[])] true in
-      let tyres = match bl' with _ :: b2 :: _ -> b2.etyp | _ -> TVoid[] in
-      { edesc = ECall(b1, bl'); etyp = tyres }
-
   | CALL(a1, al) ->
       let b1 =
         (* Catch the old-style usage of calling a function without

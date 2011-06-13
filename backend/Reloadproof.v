@@ -799,7 +799,7 @@ Proof.
     FL. FL. 
   destruct s0; FL; FL; FL.
   destruct s0; FL; FL; FL.
-  FL.
+  destruct (ef_reloads e). FL. FL. FL.
   destruct o; FL.
 Qed.
 
@@ -1254,8 +1254,9 @@ Proof.
 
   (* Lbuiltin *)
   ExploitWT; inv WTI.
+  case_eq (ef_reloads ef); intro RELOADS.
   exploit add_reloads_correct.
-    instantiate (1 := args). apply arity_ok_enough. rewrite H3. auto. auto.
+    instantiate (1 := args). apply arity_ok_enough. rewrite H3. destruct H5. auto. congruence. auto.
   intros [ls2 [A [B C]]].
   exploit external_call_mem_extends; eauto. 
   apply agree_locs; eauto. 
@@ -1273,6 +1274,19 @@ Proof.
   rewrite E. rewrite Locmap.gss. auto.
   intros. rewrite F; auto. rewrite Locmap.gso. rewrite undef_temps_others; auto. 
   apply reg_for_diff; auto.
+  (* no reload *)
+  exploit external_call_mem_extends; eauto. 
+  apply agree_locs; eauto. 
+  intros [v' [tm' [P [Q [R S]]]]].
+  assert (EQ: v = Vundef).
+    destruct ef; simpl in RELOADS; try congruence. simpl in H; inv H. auto.
+  subst v.
+  left; econstructor; split.
+  apply plus_one. eapply exec_Lannot.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto with coqlib.
+  apply agree_set with ls; auto.
 
   (* Llabel *)
   left; econstructor; split.

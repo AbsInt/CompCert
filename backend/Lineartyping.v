@@ -93,6 +93,12 @@ Inductive wt_instr : instruction -> Prop :=
       mreg_type res = proj_sig_res (ef_sig ef) ->
       arity_ok (ef_sig ef).(sig_args) = true ->
       wt_instr (Lbuiltin ef args res)
+  | wt_Lannot:
+      forall ef args,
+      List.map Loc.type args = (ef_sig ef).(sig_args) ->
+      ef_reloads ef = false ->
+      locs_acceptable args ->
+      wt_instr (Lannot ef args)
   | wt_Llabel:
       forall lbl,
       wt_instr (Llabel lbl)

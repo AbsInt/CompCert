@@ -436,6 +436,14 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   | Tfloat => storeind_float (freg_of src) base ofs k
   end.
 
+(** Translation of arguments to annotations *)
+
+Definition transl_annot_param (p: Mach.annot_param) : Asm.annot_param :=
+  match p with
+  | Mach.APreg r => APreg (preg_of r)
+  | Mach.APstack chunk ofs => APstack chunk ofs
+  end.
+
 (** Translation of a Mach instruction. *)
 
 Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
@@ -494,6 +502,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
         (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb :: k)
   | Mbuiltin ef args res =>
       Pbuiltin ef (map preg_of args) (preg_of res) :: k
+  | Mannot ef args =>
+      Pannot ef (map transl_annot_param args) :: k
   | Mlabel lbl =>
       Plabel lbl :: k
   | Mgoto lbl =>

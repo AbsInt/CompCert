@@ -236,10 +236,13 @@ Definition transf_instr
             (Ltailcall sig (inr _ id) :: k)
       end
   | LTLin.Lbuiltin ef args dst =>
-      let rargs := regs_for args in
-      let rdst := reg_for dst in
-      add_reloads args rargs
-        (Lbuiltin ef rargs rdst :: add_spill rdst dst k)
+      if ef_reloads ef then
+       (let rargs := regs_for args in
+        let rdst := reg_for dst in
+        add_reloads args rargs
+          (Lbuiltin ef rargs rdst :: add_spill rdst dst k))
+      else
+        Lannot ef args :: k
   | LTLin.Llabel lbl =>
       Llabel lbl :: k
   | LTLin.Lgoto lbl =>

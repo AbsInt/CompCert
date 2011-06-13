@@ -77,6 +77,10 @@ Inductive wt_instr : instruction -> Prop :=
       List.map mreg_type args = (ef_sig ef).(sig_args) ->
       mreg_type res = proj_sig_res (ef_sig ef) ->
       wt_instr (Mbuiltin ef args res)
+  | wt_Mannot:
+      forall ef args,
+      ef_reloads ef = false ->
+      wt_instr (Mannot ef args)
   | wt_Mgoto:
       forall lbl,
       wt_instr (Mgoto lbl)

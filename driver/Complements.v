@@ -97,15 +97,21 @@ Remark extcall_arguments_deterministic:
   extcall_arguments rs m sg args ->
   extcall_arguments rs m sg args' -> args = args'.
 Proof.
-  assert (
-    forall rs m ll args,
-    extcall_args rs m ll args ->
-    forall args', extcall_args rs m ll args' -> args = args').
-  induction 1; intros.
-  inv H. auto.
-  inv H1. decEq; eauto.
-  inv H; inv H4; congruence.
-  unfold extcall_arguments; intros; eauto.
+  unfold extcall_arguments; intros. 
+  revert args H args' H0. generalize (Conventions1.loc_arguments sg); induction 1; intros.
+  inv H0; auto.
+  inv H1; decEq; auto. inv H; inv H4; congruence. 
+Qed.
+
+Remark annot_arguments_deterministic:
+  forall rs m pl args args',
+  annot_arguments rs m pl args ->
+  annot_arguments rs m pl args' -> args = args'.
+Proof.
+  unfold annot_arguments; intros. 
+  revert pl args H args' H0. induction 1; intros.
+  inv H0; auto.
+  inv H1; decEq; auto. inv H; inv H4; congruence. 
 Qed.
 
 Lemma step_internal_deterministic:
@@ -113,27 +119,35 @@ Lemma step_internal_deterministic:
   Asm.step ge s t1 s1 -> Asm.step ge s t2 s2 -> matching_traces t1 t2 ->
   s1 = s2 /\ t1 = t2.
 Proof.
-  intros. inv H; inv H0.
-  assert (c0 = c) by congruence.
-  assert (i0 = i) by congruence.
-  assert (rs'0 = rs') by congruence.
-  assert (m'0 = m') by congruence.
-  subst. auto.
-  replace i with (Pbuiltin ef args res) in H5 by congruence. simpl in H5. inv H5.
-  congruence.
-  replace i with (Pbuiltin ef args res) in H12 by congruence. simpl in H12. inv H12.
-  rewrite H2 in H7; inv H7. rewrite H3 in H8; inv H8. rewrite H4 in H9; inv H9. 
-  exploit external_call_determ. eexact H5. eexact H12. auto. 
-  intros [A [B C]]. subst. auto. 
-  congruence.
-  congruence.
-  congruence.
-  assert (ef0 = ef) by congruence. subst ef0.
-  assert (args0 = args). eapply extcall_arguments_deterministic; eauto. subst args0.
-  exploit external_call_determ. 
-  eexact H4. eexact H9. auto. 
-  intros [A [B C]]. subst. 
-  intuition congruence.
+
+Ltac InvEQ :=
+  match goal with
+  | [ H1: ?x = ?y, H2: ?x = ?z |- _ ] => rewrite H1 in H2; inv H2; InvEQ
+  | _ => idtac
+  end.
+
+  intros. inv H; inv H0; InvEQ.
+(* regular, regular *)
+  split; congruence.
+(* regular, builtin *)
+  simpl in H5; inv H5.
+(* regular, annot *)
+  simpl in H5; inv H5.
+(* builtin, regular *)
+  simpl in H12; inv H12.
+(* builtin, builtin *)
+  exploit external_call_determ. eexact H5. eexact H12. auto. intros [A [B C]]. subst.
+  auto.
+(* annot, regular *)
+  simpl in H13. inv H13.
+(* annot, annot *)
+  exploit annot_arguments_deterministic. eexact H5. eexact H11. intros EQ; subst. 
+  exploit external_call_determ. eexact H6. eexact H14. auto. intros [A [B C]]. subst.
+  auto.
+(* extcall, extcall *)
+  exploit extcall_arguments_deterministic. eexact H5. eexact H10. intros EQ; subst.
+  exploit external_call_determ. eexact H4. eexact H9. auto. intros [A [B C]]. subst.
+  auto.
 Qed.
 
 Lemma initial_state_deterministic:
@@ -146,10 +160,7 @@ Qed.
 Lemma final_state_not_step:
   forall ge st r, final_state st r -> nostep step ge st.
 Proof.
-  unfold nostep. intros. red; intros. inv H. inv H0.
-  unfold Vzero in H1. congruence.
-  unfold Vzero in H1. congruence.
-  unfold Vzero in H1. congruence.
+  unfold nostep. intros. red; intros. inv H. inv H0; unfold Vzero in H1; congruence.
 Qed.
 
 Lemma final_state_deterministic:

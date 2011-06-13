@@ -20,10 +20,9 @@ open AST
 open Integers
 open Locations
 open LTL
+open PrintAST
 open PrintOp
 open PrintRTL
-
-let name_of_typ = function Tint -> "int" | Tfloat -> "float"
 
 let loc pp l =
   match l with
@@ -78,6 +77,10 @@ let print_instruction pp (pc, i) =
   | Ltailcall(sg, fn, args) ->
       fprintf pp "tailcall %a(%a)@ "
         ros fn locs args
+  | Lbuiltin(ef, args, res, s) ->
+      fprintf pp "%a = builtin %s(%a)@ "
+        loc res (name_of_external ef) locs args;
+      print_succ pp s (Int32.pred pc)
   | Lcond(cond, args, s1, s2) ->
       fprintf pp "if (%a) goto %ld else goto %ld@ "
         (print_condition loc) (cond, args)

@@ -56,16 +56,13 @@ function.  The [return_address_offset] predicate from module
 the Asm code generated later will store in the reserved location.
 *)
 
-Definition chunk_of_type (ty: typ) :=
-  match ty with Tint => Mint32 | Tfloat => Mfloat64 end.
-
 Definition load_stack (m: mem) (sp: val) (ty: typ) (ofs: int) :=
   Mem.loadv (chunk_of_type ty) m (Val.add sp (Vint ofs)).
 
 Definition store_stack (m: mem) (sp: val) (ty: typ) (ofs: int) (v: val) :=
   Mem.storev (chunk_of_type ty) m (Val.add sp (Vint ofs)) v.
 
-(** Extract the values of the arguments of an external call. *)
+(** Extract the values of the arguments to an external call. *)
 
 Inductive extcall_arg: regset -> mem -> val -> loc -> val -> Prop :=
   | extcall_arg_reg: forall rs m sp r,
@@ -74,16 +71,22 @@ Inductive extcall_arg: regset -> mem -> val -> loc -> val -> Prop :=
       load_stack m sp ty (Int.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
       extcall_arg rs m sp (S (Outgoing ofs ty)) v.
 
-Inductive extcall_args: regset -> mem -> val -> list loc -> list val -> Prop :=
-  | extcall_args_nil: forall rs m sp,
-      extcall_args rs m sp nil nil
-  | extcall_args_cons: forall rs m sp l1 ll v1 vl,
-      extcall_arg rs m sp l1 v1 -> extcall_args rs m sp ll vl ->
-      extcall_args rs m sp (l1 :: ll) (v1 :: vl).
-
 Definition extcall_arguments
-   (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
-  extcall_args rs m sp (loc_arguments sg) args.
+    (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
+  list_forall2 (extcall_arg rs m sp) (loc_arguments sg) args.
+
+(** Extract the values of the arguments to an annotation. *)
+
+Inductive annot_arg: regset -> mem -> val -> annot_param -> val -> Prop :=
+  | annot_arg_reg: forall rs m sp r,
+      annot_arg rs m sp (APreg r) (rs r)
+  | annot_arg_stack: forall rs m stk base chunk ofs v,
+      Mem.load chunk m stk (Int.unsigned base + ofs) = Some v ->
+      annot_arg rs m (Vptr stk base) (APstack chunk ofs) v.
+
+Definition annot_arguments
+   (rs: regset) (m: mem) (sp: val) (params: list annot_param) (args: list val) : Prop :=
+  list_forall2 (annot_arg rs m sp) params args.
 
 (** Mach execution states. *)
 
@@ -193,6 +196,12 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge rs##args m t v m' ->
       step (State s f sp (Mbuiltin ef args res :: b) rs m)
          t (State s f sp b ((undef_temps rs)#res <- v) m')
+  | exec_Mannot:
+      forall s f sp rs m ef args b vargs t v m',
+      annot_arguments rs m sp args vargs ->
+      external_call ef ge vargs m t v m' ->
+      step (State s f sp (Mannot ef args :: b) rs m)
+         t (State s f sp b rs m')
   | exec_Mgoto:
       forall s fb f sp lbl c rs m c',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->

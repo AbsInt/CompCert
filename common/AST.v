@@ -397,15 +397,84 @@ Qed.
 (** * External functions *)
 
 (** For most languages, the functions composing the program are either
-  internal functions, defined within the language, or external functions
-  (a.k.a. system calls) that emit an event when applied.  We define
-  a type for such functions and some generic transformation functions. *)
+  internal functions, defined within the language, or external functions,
+  defined outside.  External functions include system calls but also
+  compiler built-in functions.  We define a type for external functions
+  and associated operations. *)
 
-Record external_function : Type := mkextfun {
-  ef_id: ident;
-  ef_sig: signature;
-  ef_inline: bool
-}.
+Inductive external_function : Type :=
+  | EF_external (name: ident) (sg: signature)
+     (** A system call or library function.  Produces an event
+         in the trace. *)
+  | EF_builtin (name: ident) (sg: signature)
+     (** A compiler built-in function.  Behaves like an external, but
+         can be inlined by the compiler. *)
+  | EF_vload (chunk: memory_chunk)
+     (** A volatile read operation.  If the adress given as first argument
+         points within a volatile global variable, generate an
+         event and return the value found in this event.  Otherwise,
+         produce no event and behave like a regular memory load. *)
+  | EF_vstore (chunk: memory_chunk)
+     (** A volatile store operation.   If the adress given as first argument
+         points within a volatile global variable, generate an event.
+         Otherwise, produce no event and behave like a regular memory store. *)
+  | EF_malloc
+     (** Dynamic memory allocation.  Takes the requested size in bytes
+         as argument; returns a pointer to a fresh block of the given size.
+         Produces no observable event. *)
+  | EF_free
+     (** Dynamic memory deallocation.  Takes a pointer to a block
+         allocated by an [EF_malloc] external call and frees the
+         corresponding block.
+         Produces no observable event. *)
+  | EF_memcpy (sz: Z) (al: Z)
+     (** Block copy, of [sz] bytes, between addresses that are [al]-aligned. *)
+  | EF_annot (text: ident) (targs: list typ)
+     (** A programmer-supplied annotation.  Takes zero, one or several arguments,
+         produces an event carrying the text and the values of these arguments,
+         and returns no value. *)
+  | EF_annot_val (text:ident) (targ: typ).
+     (** Another form of annotation that takes one argument, produces
+         an event carrying the text and the value of this argument,
+         and returns the value of the argument. *)
+
+(** The type signature of an external function. *)
+
+Definition ef_sig (ef: external_function): signature :=
+  match ef with
+  | EF_external name sg => sg
+  | EF_builtin name sg => sg
+  | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk))
+  | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None
+  | EF_malloc => mksignature (Tint :: nil) (Some Tint)
+  | EF_free => mksignature (Tint :: nil) None
+  | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None
+  | EF_annot text targs => mksignature targs None
+  | EF_annot_val text targ => mksignature (targ :: nil) (Some targ)
+  end.
+
+(** Whether an external function should be inlined by the compiler. *)
+
+Definition ef_inline (ef: external_function) : bool :=
+  match ef with
+  | EF_external name sg => false
+  | EF_builtin name sg => true
+  | EF_vload chunk => true
+  | EF_vstore chunk => true
+  | EF_malloc => false
+  | EF_free => false
+  | EF_memcpy sz al => true
+  | EF_annot text targs => true
+  | EF_annot_val text targ => true
+  end.
+
+(** Whether an external function must reload its arguments. *)
+
+Definition ef_reloads (ef: external_function) : bool :=
+  match ef with
+  | EF_annot text targs => false
+  | _ => true
+  end.
 
 (** Function definitions are the union of internal and external functions. *)
 

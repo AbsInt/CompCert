@@ -2,22 +2,23 @@
 
 /* Annotations */
 
-int f(int x, int y)
+int f(int x)
 {
-  return __builtin_annotation("f(%1,%2)", x, y);
+  return __builtin_annot_intval("f(%1)", x + 1);
 }
 
-double g(double x)
+double g(double x, double y)
 {
-  return __builtin_annotation("g(%1 + 1.0)", x + 1.0);
+  __builtin_annot("g(%1, %2)", x, y);
+  return x + y;
 }
 
 int main()
 {
-  __builtin_annotation("calling f");
-  printf("f returns %d\n", f(12, 34));
-  __builtin_annotation("calling g");
-  printf("f returns %.2f\n", g(3.14));
+  __builtin_annot("calling f");
+  printf("f returns %d\n", f(12));
+  __builtin_annot("calling g");
+  printf("g returns %.2f\n", g(3.14, 2.718));
   return 0;
 }
 

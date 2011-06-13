@@ -606,8 +606,8 @@ Definition transl_fundef (f: Clight.fundef) : res fundef :=
   | Clight.Internal g => 
       do tg <- transl_function g; OK(AST.Internal tg)
   | Clight.External ef args res =>
-      if list_typ_eq ef.(ef_sig).(sig_args) (typlist_of_typelist args)
-      && opt_typ_eq ef.(ef_sig).(sig_res) (opttyp_of_type res)
+      if list_typ_eq (sig_args (ef_sig ef)) (typlist_of_typelist args)
+      && opt_typ_eq (sig_res (ef_sig ef)) (opttyp_of_type res)
       then OK(AST.External ef)
       else Error(msg "Cshmgen.transl_fundef: wrong external signature")
   end.

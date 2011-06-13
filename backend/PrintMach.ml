@@ -21,20 +21,8 @@ open Integers
 open Locations
 open Machregsaux
 open Mach
+open PrintAST
 open PrintOp
-
-let name_of_chunk = function
-  | Mint8signed -> "int8signed"
-  | Mint8unsigned -> "int8unsigned"
-  | Mint16signed -> "int16signed"
-  | Mint16unsigned -> "int16unsigned"
-  | Mint32 -> "int32"
-  | Mfloat32 -> "float32"
-  | Mfloat64 -> "float64"
-
-let name_of_type = function
-  | Tint -> "int"
-  | Tfloat -> "float"
 
 let reg pp r =
   match name_of_register r with
@@ -45,6 +33,15 @@ let rec regs pp = function
   | [] -> ()
   | [r] -> reg pp r
   | r1::rl -> fprintf pp "%a, %a" reg r1 regs rl
+
+let annot_param pp = function
+  | APreg r -> reg pp r
+  | APstack(chunk, ofs) -> fprintf pp "stack(%s,%ld)" (name_of_chunk chunk) (camlint_of_coqint ofs)
+
+let rec annot_params pp = function
+  | [] -> ()
+  | [r] -> annot_param pp r
+  | r1::rl -> fprintf pp "%a, %a" annot_param r1 annot_params rl
 
 let ros pp = function
   | Coq_inl r -> reg pp r
@@ -78,8 +75,10 @@ let print_instruction pp i =
   | Mtailcall(sg, fn) ->
       fprintf pp "tailcall %a@ " ros fn
   | Mbuiltin(ef, args, res) ->
-      fprintf pp "%a = builtin \"%s\"(%a)@ "
-        reg res (extern_atom ef.ef_id) regs args
+      fprintf pp "%a = builtin %s(%a)@ "
+        reg res (name_of_external ef) regs args
+  | Mannot(ef, args) ->
+      fprintf pp "%s(%a)@ " (name_of_external ef) annot_params args
   | Mlabel lbl ->
       fprintf pp "%ld:@ " (camlint_of_positive lbl)
   | Mgoto lbl ->

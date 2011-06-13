@@ -822,7 +822,8 @@ Proof.
 Qed.
 
 Lemma storev_8_signed_unsigned:  forall m a v,  Mem.storev Mint8signed m a v = Mem.storev Mint8unsigned m a v.Proof.  intros. unfold Mem.storev. 
-  destruct a; auto.  apply Mem.store_signed_unsigned_8.Qed.Lemma storev_16_signed_unsigned:  forall m a v,  Mem.storev Mint16signed m a v = Mem.storev Mint16unsigned m a v.Proof.  intros. unfold Mem.storev. destruct a; auto.  apply Mem.store_signed_unsigned_16.Qed.
+  destruct a; auto.   apply Mem.store_signed_unsigned_8. Qed.
+Lemma storev_16_signed_unsigned:  forall m a v,  Mem.storev Mint16signed m a v = Mem.storev Mint16unsigned m a v.Proof.  intros. unfold Mem.storev. destruct a; auto.   apply Mem.store_signed_unsigned_16. Qed.
 
 Lemma exec_Mstore_prop:
   forall (s : list stackframe) (fb : block) (sp : val)
@@ -1014,6 +1015,35 @@ Proof.
   apply agree_nextinstr. eapply agree_set_undef_mreg; eauto. 
   rewrite Pregmap.gss; auto. 
   intros. rewrite Pregmap.gso; auto.
+Qed.
+
+Lemma exec_Mannot_prop:
+  forall (s : list stackframe) (f : block) (sp : val)
+         (ms : Mach.regset) (m : mem) (ef : external_function)
+         (args : list Mach.annot_param) (b : list Mach.instruction)
+         (vargs: list val) (t : trace) (v : val) (m' : mem),
+  Machsem.annot_arguments ms m sp args vargs ->
+  external_call ef ge vargs m t v m' ->
+  exec_instr_prop (Machsem.State s f sp (Mannot ef args :: b) ms m) t
+                  (Machsem.State s f sp b ms m').
+Proof.
+  intros; red; intros; inv MS.
+  inv AT. simpl in H3.
+  generalize (functions_transl _ _ FIND); intro FN.
+  generalize (functions_transl_no_overflow _ _ FIND); intro NOOV.
+  exploit annot_arguments_match; eauto. intros [vargs' [P Q]]. 
+  exploit external_call_mem_extends; eauto.
+  intros [vres' [m2' [A [B [C D]]]]].
+  left. econstructor; split. apply plus_one. 
+  eapply exec_step_annot. eauto. eauto.
+  eapply find_instr_tail; eauto. eauto.
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto with coqlib.
+  unfold nextinstr. rewrite Pregmap.gss. 
+  rewrite <- H1; simpl. econstructor; auto.
+  eapply code_tail_next_int; eauto. 
+  apply agree_nextinstr. auto.
 Qed.
 
 Lemma exec_Mgoto_prop:
@@ -1335,6 +1365,7 @@ Proof
            exec_Mcall_prop
            exec_Mtailcall_prop
            exec_Mbuiltin_prop
+           exec_Mannot_prop
            exec_Mgoto_prop
            exec_Mcond_true_prop
            exec_Mcond_false_prop

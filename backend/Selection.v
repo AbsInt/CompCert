@@ -184,7 +184,7 @@ Definition expr_is_addrof_builtin (ge: Cminor.genv) (e: Cminor.expr) : option ex
       | None => None
       | Some b =>
           match Genv.find_funct_ptr ge b with
-          | Some(External ef) => if ef.(ef_inline) then Some ef else None
+          | Some(External ef) => if ef_inline ef then Some ef else None
           | _ => None
           end
       end

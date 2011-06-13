@@ -17,6 +17,7 @@ open Datatypes
 open Camlcoq
 open Sections
 open AST
+open Memdata
 open Asm
 
 (* Recognition of target ABI and asm syntax *)
@@ -264,7 +265,9 @@ let rec log2 n =
   assert (n > 0);
   if n = 1 then 0 else 1 + log2 (n lsr 1)
 
-(* Built-ins.  They come in two flavors: 
+(* Built-ins.  They come in three flavors: 
+   - annotation statements: take their arguments in registers or stack
+     locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
      registers; preserve all registers except the temporaries
      (GPR0, GPR11, GPR12,  FPR0, FPR12, FPR13);
@@ -272,13 +275,11 @@ let rec log2 n =
      locations dictated by the calling conventions; preserve
      callee-save regs only. *)
 
-(* Handling of __builtin_annotation *)
-
-let re_builtin_annotation = Str.regexp "__builtin_annotation_\"\\(.*\\)\"$"
+(* Handling of annotations *)
 
 let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
 
-let print_annotation oc txt args res =
+let print_annot_text print_arg oc txt args =
   fprintf oc "%s annotation: " comment;
   let print_fragment = function
   | Str.Text s ->
@@ -288,23 +289,29 @@ let print_annotation oc txt args res =
   | Str.Delim s ->
       let n = int_of_string (String.sub s 1 (String.length s - 1)) in
       try
-        preg oc (List.nth args (n-1))
+        print_arg oc (List.nth args (n-1))
       with Failure _ ->
         fprintf oc "<bad parameter %s>" s in
   List.iter print_fragment (Str.full_split re_annot_param txt);
-  fprintf oc "\n";
+  fprintf oc "\n"
+
+let print_annot_stmt oc txt args =
+  let print_annot_param oc = function
+  | APreg r -> preg oc r
+  | APstack(chunk, ofs) ->
+      fprintf oc "mem(R1 + %a, %a)" coqint ofs coqint (size_chunk chunk) in
+  print_annot_text print_annot_param oc txt args
+
+let print_annot_val oc txt args res =
+  print_annot_text preg oc txt args;
   match args, res with
-  | [], _ -> ()
   | IR src :: _, IR dst ->
       if dst <> src then fprintf oc "	mr	%a, %a\n" ireg dst ireg src 
   | FR src :: _, FR dst ->
       if dst <> src then fprintf oc "	fmr	%a, %a\n" freg dst freg src 
   | _, _ -> assert false
 
-(* Handling of __builtin_memcpy_alX_szY *)
-
-let re_builtin_memcpy =
-   Str.regexp "__builtin_memcpy\\(_al\\([248]\\)\\)?_sz\\([0-9]+\\)$"
+(* Handling of memcpy *)
 
 (* On the PowerPC, unaligned accesses to 16- and 32-bit integers are
    fast, but unaligned accesses to 64-bit floats can be slow
@@ -312,7 +319,9 @@ let re_builtin_memcpy =
    So, use 64-bit accesses only if alignment >= 8.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
-let print_builtin_memcpy oc sz al dst src =
+let print_builtin_memcpy oc sz al args =
+  let (dst, src) =
+    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
   let rec copy ofs sz =
     if sz >= 8 && al >= 8 then begin
       fprintf oc "	lfd	%a, %d(%a)\n" freg FPR0 ofs ireg src;
@@ -331,42 +340,61 @@ let print_builtin_memcpy oc sz al dst src =
       fprintf oc "	stb	%a, %d(%a)\n" ireg GPR0 ofs ireg dst;
       copy (ofs + 1) (sz - 1)
     end in
-  copy 0 sz
+  fprintf oc "%s begin builtin __builtin_memcpy, size = %d, alignment = %d\n"
+          comment sz al;
+  copy 0 sz;
+  fprintf oc "%s end builtin __builtin_memcpy\n" comment
+
+(* Handling of volatile reads and writes *)
+
+let print_builtin_vload oc chunk args res =
+  fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
+  begin match chunk, args, res with
+  | Mint8unsigned, [IR addr], IR res ->
+      fprintf oc "	lbz	%a, 0(%a)\n" ireg res ireg addr
+  | Mint8signed, [IR addr], IR res ->
+      fprintf oc "	lbz	%a, 0(%a)\n" ireg res ireg addr;
+      fprintf oc "	extsb	%a, %a\n" ireg res ireg res
+  | Mint16unsigned, [IR addr], IR res ->
+      fprintf oc "	lhz	%a, 0(%a)\n" ireg res ireg addr
+  | Mint16signed, [IR addr], IR res ->
+      fprintf oc "	lha	%a, 0(%a)\n" ireg res ireg addr
+  | Mint32, [IR addr], IR res ->
+      fprintf oc "	lwz	%a, 0(%a)\n" ireg res ireg addr
+  | Mfloat32, [IR addr], FR res ->
+      fprintf oc "	lfs	%a, 0(%a)\n" freg res ireg addr
+  | Mfloat64, [IR addr], FR res ->
+      fprintf oc "	lfd	%a, 0(%a)\n" freg res ireg addr
+  | _ ->
+      assert false
+  end;
+  fprintf oc "%s end builtin __builtin_volatile_read\n" comment
+
+let print_builtin_vstore oc chunk args =
+  fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
+  begin match chunk, args with
+  | (Mint8signed | Mint8unsigned), [IR addr; IR src] ->
+      fprintf oc "	stb	%a, 0(%a)\n" ireg src ireg addr
+  | (Mint16signed | Mint16unsigned), [IR addr; IR src] ->
+      fprintf oc "	sth	%a, 0(%a)\n" ireg src ireg addr
+  | Mint32, [IR addr; IR src] ->
+      fprintf oc "	stw	%a, 0(%a)\n" ireg src ireg addr
+  | Mfloat32, [IR addr; FR src] ->
+      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg src;
+      fprintf oc "	stfs	%a, 0(%a)\n" freg FPR13 ireg addr
+  | Mfloat64, [IR addr; FR src] ->
+      fprintf oc "	stfd	%a, 0(%a)\n" freg src ireg addr
+  | _ ->
+      assert false
+  end;
+  fprintf oc "%s end builtin __builtin_volatile_write\n" comment
 
 (* Handling of compiler-inlined builtins *)
 
-let print_builtin_inlined oc name args res =
+let print_builtin_inline oc name args res =
   fprintf oc "%s begin builtin %s\n" comment name;
   (* Can use as temporaries: GPR0, GPR11, GPR12,  FPR0, FPR12, FPR13 *)
   begin match name, args, res with
-  (* Volatile reads *)
-  | "__builtin_volatile_read_int8unsigned", [IR addr], IR res ->
-      fprintf oc "	lbz	%a, 0(%a)\n" ireg res ireg addr
-  | "__builtin_volatile_read_int8signed", [IR addr], IR res ->
-      fprintf oc "	lbz	%a, 0(%a)\n" ireg res ireg addr;
-      fprintf oc "	extsb	%a, %a\n" ireg res ireg res
-  | "__builtin_volatile_read_int16unsigned", [IR addr], IR res ->
-      fprintf oc "	lhz	%a, 0(%a)\n" ireg res ireg addr
-  | "__builtin_volatile_read_int16signed", [IR addr], IR res ->
-      fprintf oc "	lha	%a, 0(%a)\n" ireg res ireg addr
-  | ("__builtin_volatile_read_int32"|"__builtin_volatile_read_pointer"), [IR addr], IR res ->
-      fprintf oc "	lwz	%a, 0(%a)\n" ireg res ireg addr
-  | "__builtin_volatile_read_float32", [IR addr], FR res ->
-      fprintf oc "	lfs	%a, 0(%a)\n" freg res ireg addr
-  | "__builtin_volatile_read_float64", [IR addr], FR res ->
-      fprintf oc "	lfd	%a, 0(%a)\n" freg res ireg addr
-  (* Volatile writes *)
-  | ("__builtin_volatile_write_int8unsigned"|"__builtin_volatile_write_int8signed"), [IR addr; IR src], _ ->
-      fprintf oc "	stb	%a, 0(%a)\n" ireg src ireg addr
-  | ("__builtin_volatile_write_int16unsigned"|"__builtin_volatile_write_int16signed"), [IR addr; IR src], _ ->
-      fprintf oc "	sth	%a, 0(%a)\n" ireg src ireg addr
-  | ("__builtin_volatile_write_int32"|"__builtin_volatile_write_pointer"), [IR addr; IR src], _ ->
-      fprintf oc "	stw	%a, 0(%a)\n" ireg src ireg addr
-  | "__builtin_volatile_write_float32", [IR addr; FR src], _ ->
-      fprintf oc "	frsp	%a, %a\n" freg FPR13 freg src;
-      fprintf oc "	stfs	%a, 0(%a)\n" freg FPR13 ireg addr
-  | "__builtin_volatile_write_float64", [IR addr; FR src], _ ->
-      fprintf oc "	stfd	%a, 0(%a)\n" freg src ireg addr
   (* Integer arithmetic *)
   | "__builtin_mulhw", [IR a1; IR a2], IR res ->
       fprintf oc "	mulhw	%a, %a, %a\n" ireg res ireg a1 ireg a2
@@ -407,11 +435,6 @@ let print_builtin_inlined oc name args res =
       fprintf oc "	isync\n"
   | "__builtin_trap", [], _ ->
       fprintf oc "	trap\n"
-  (* Inlined memcpy *)
-  | name, [IR dst; IR src], _ when Str.string_match re_builtin_memcpy name 0 ->
-      let sz = int_of_string (Str.matched_group 3 name) in
-      let al = try int_of_string (Str.matched_group 2 name) with Not_found -> 1 in
-      print_builtin_memcpy oc sz al dst src
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -707,10 +730,28 @@ let print_instruction oc = function
   | Plabel lbl ->
       fprintf oc "%a:\n" label (transl_label lbl)
   | Pbuiltin(ef, args, res) ->
-      let name = extern_atom ef.ef_id in
-      if Str.string_match re_builtin_annotation name 0
-      then print_annotation oc (Str.matched_group 1 name) args res
-      else print_builtin_inlined oc name args res
+      begin match ef with
+      | EF_builtin(name, sg) ->
+          print_builtin_inline oc (extern_atom name) args res
+      | EF_vload chunk ->
+          print_builtin_vload oc chunk args res
+      | EF_vstore chunk ->
+          print_builtin_vstore oc chunk args
+      | EF_memcpy(sz, al) ->
+          print_builtin_memcpy oc (Int32.to_int (camlint_of_coqint sz))
+                                  (Int32.to_int (camlint_of_coqint al)) args
+      | EF_annot_val(txt, targ) ->
+          print_annot_val oc (extern_atom txt) args res
+      | _ ->
+          assert false
+      end
+  | Pannot(ef, args) ->
+      begin match ef with
+      | EF_annot(txt, targs) ->
+          print_annot_stmt oc (extern_atom txt) args
+      | _ ->
+          assert false
+      end
 
 let print_literal oc (lbl, n) =
   let nlo = Int64.to_int32 n
@@ -740,11 +781,13 @@ let print_function oc name code =
   end;
   if !float_literals <> [] then begin
     section oc lit;
+    fprintf oc "	.align 3\n";
     List.iter (print_literal oc) !float_literals;
     float_literals := []
   end;
   if !jumptables <> [] then begin
     section oc jmptbl;
+    fprintf oc "	.align 2\n";
     List.iter (print_jumptable oc) !jumptables;
     jumptables := []
   end
@@ -849,13 +892,13 @@ let non_variadic_stub oc name =
   fprintf oc "	.indirect_symbol _%s\n" name;
   fprintf oc "	.long	0\n"
 
-let stub_function oc name ef =
+let stub_function oc name sg =
   let name = extern_atom name in
   section oc Section_text;
   fprintf oc "	.align 2\n";
   fprintf oc "L%s$stub:\n" name;
   if Str.string_match re_variadic_stub name 0
-  then variadic_stub oc name (Str.matched_group 1 name) (ef_sig ef).sig_args
+  then variadic_stub oc name (Str.matched_group 1 name) sg.sig_args
   else non_variadic_stub oc name
 
 let function_needs_stub name = true
@@ -876,11 +919,11 @@ let variadic_stub oc stub_name fun_name args =
   else fprintf oc "	crxor	6, 6, 6\n";
   fprintf oc "	b	%s\n" fun_name
 
-let stub_function oc name ef =
+let stub_function oc name sg =
   let name = extern_atom name in
   (* Only variadic functions need a stub *)
   if Str.string_match re_variadic_stub name 0
-  then variadic_stub oc name (Str.matched_group 1 name) (ef_sig ef).sig_args
+  then variadic_stub oc name (Str.matched_group 1 name) sg.sig_args
 
 let function_needs_stub name =
   Str.string_match re_variadic_stub (extern_atom name) 0
@@ -902,7 +945,7 @@ let print_fundef oc (Coq_pair(name, defn)) =
   | Internal code ->
       print_function oc name code
   | External ef ->
-      if not (is_builtin_function name) then stub_function oc name ef
+      if not (is_builtin_function name) then stub_function oc name (ef_sig ef)
 
 let record_extfun (Coq_pair(name, defn)) =
   match defn with

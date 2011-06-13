@@ -20,6 +20,7 @@ open Memdata
 open Op
 open Registers
 open RTL
+open PrintAST
 
 exception Type_error of string
 
@@ -93,11 +94,11 @@ let type_instr retty (Coq_pair(pc, i)) =
         let sg = ef_sig ef in
         set_types args sg.sig_args;
         set_type res (match sg.sig_res with None -> Tint | Some ty -> ty);
-        if not (Conventions.arity_ok sg.sig_args) then
+        if ef_reloads ef && not (Conventions.arity_ok sg.sig_args) then
           raise(Type_error "wrong arity")
       with Type_error msg ->
         raise(Type_error (Printf.sprintf "type mismatch in Ibuiltin(%s): %s"
-                                         (extern_atom ef.ef_id) msg))
+                                         (name_of_external ef) msg))
       end
   | Icond(cond, args, _, _) ->
       set_types args (type_of_condition cond)

@@ -75,6 +75,7 @@ Definition instr_within_bounds (i: instruction) :=
   | Lload chunk addr args dst => mreg_within_bounds dst
   | Lcall sig ros => size_arguments sig <= bound_outgoing b
   | Lbuiltin ef args res => mreg_within_bounds res
+  | Lannot ef args => forall s, In (S s) args -> slot_within_bounds s
   | _ => True
   end.
 
@@ -107,6 +108,7 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lcall sig ros => nil
   | Ltailcall sig ros => nil
   | Lbuiltin ef args res => res :: nil
+  | Lannot ef args => nil
   | Llabel lbl => nil
   | Lgoto lbl => nil
   | Lcond cond args lbl => nil
@@ -114,10 +116,18 @@ Definition regs_of_instr (i: instruction) : list mreg :=
   | Lreturn => nil
   end.
 
+Fixpoint slots_of_locs (l: list loc) : list slot :=
+  match l with
+  | nil => nil
+  | S s :: l' => s :: slots_of_locs l'
+  | R r :: l' => slots_of_locs l'
+  end.
+
 Definition slots_of_instr (i: instruction) : list slot :=
   match i with
   | Lgetstack s r => s :: nil
   | Lsetstack r s => s :: nil
+  | Lannot ef args => slots_of_locs args
   | _ => nil
   end.
 
@@ -343,6 +353,14 @@ Proof.
   split. simpl in H1. exact H1. eapply outgoing_slot_bound; eauto.
 Qed.
 
+Lemma slots_of_locs_charact:
+  forall s l, In s (slots_of_locs l) <-> In (S s) l.
+Proof.
+  induction l; simpl; intros. 
+  tauto.
+  destruct a; simpl; intuition congruence.
+Qed.
+
 (** It follows that every instruction in the function is within bounds, 
     in the sense of the [instr_within_bounds] predicate. *)
 
@@ -356,9 +374,16 @@ Proof.
   destruct i;
   generalize (mreg_is_within_bounds _ H); generalize (slot_is_within_bounds _ H); 
   simpl; intros; auto.
+(* getstack *)
   inv H0. split; auto.
+(* setstack *)
   inv H0; auto.
+(* call *)
   eapply size_arguments_bound; eauto.
+(* annot *)
+  inv H0. apply H1. rewrite slots_of_locs_charact; auto. 
+  generalize (H8 _ H3). unfold loc_acceptable, slot_valid. 
+  destruct s; (contradiction || omega).
 Qed.
 
 Lemma function_is_within_bounds:

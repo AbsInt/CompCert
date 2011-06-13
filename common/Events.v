@@ -401,41 +401,6 @@ End EVENTVAL_INV.
 
 (** * Semantics of external functions *)
 
-(** Each external function is of one of the following kinds: *)
-
-Inductive extfun_kind: signature -> Type :=
-  | EF_syscall (name: ident) (sg: signature): extfun_kind sg
-     (** A system call.  Takes representable arguments (integers, floats,
-         pointers to globals), produces a representable result,
-         does not modify the memory, and produces an [Event_syscall] event
-         in the trace. *)
-  | EF_vload (chunk: memory_chunk): extfun_kind (mksignature (Tint :: nil) (Some (type_of_chunk chunk)))
-     (** A volatile read operation.  If the adress given as first argument
-         points within a volatile global variable, generate an [Event_vload]
-         event and return the value found in this event.  Otherwise,
-         produce no event and behave like a regular memory load. *)
-  | EF_vstore (chunk: memory_chunk): extfun_kind (mksignature (Tint :: type_of_chunk chunk :: nil) None)
-     (** A volatile store operation.   If the adress given as first argument
-         points within a volatile global variable, generate an [Event_vstore]
-         event.  Otherwise, produce no event and behave like a regular memory store. *)
-  | EF_malloc: extfun_kind (mksignature (Tint :: nil) (Some Tint))
-     (** Dynamic memory allocation.  Takes the requested size in bytes
-         as argument; returns a pointer to a fresh block of the given size.
-         Produces no observable event. *)
-  | EF_free: extfun_kind (mksignature (Tint :: nil) None)
-     (** Dynamic memory deallocation.  Takes a pointer to a block
-         allocated by an [EF_malloc] external call and frees the
-         corresponding block.
-         Produces no observable event. *)
-  | EF_annotation (text: ident) (sg: signature): extfun_kind sg.
-     (** A programmer-supplied annotation.  Takes representable arguments,
-         returns its first argument as result (or [Vundef] if no arguments),
-         does not modify the memory, and produces an [Event_annot]
-         event in the trace. *)
-
-Parameter classify_external_function: 
-  forall (ef: external_function), extfun_kind (ef.(ef_sig)).
-
 (** For each external function, its behavior is defined by a predicate relating:
 - the global environment
 - the values of the arguments passed to this function
@@ -934,6 +899,20 @@ Proof.
   inv H; inv H0. intuition congruence.
 Qed.
 
+(** ** Semantics of [memcpy] operations. *)
+
+(** To be done once [storebytes] is added to the [Memtype] interface. *)
+
+Definition extcall_memcpy_sem (sz al: Z) (F V: Type) (ge: Genv.t F V): list val -> mem -> trace -> val -> mem -> Prop :=
+  fun vargs m1 t vres m2 => False.
+
+Lemma extcall_memcpy_ok:
+  forall sz al,
+  extcall_properties (extcall_memcpy_sem sz al) (mksignature (Tint :: Tint :: nil) None).
+Proof.
+  intros. unfold extcall_memcpy_sem; constructor; contradiction.
+Qed.
+
 (** ** Semantics of system calls. *)
 
 Inductive extcall_io_sem (name: ident) (sg: signature) (F V: Type) (ge: Genv.t F V):
@@ -984,23 +963,19 @@ Qed.
 
 (** ** Semantics of annotation. *)
 
-Inductive extcall_annot_sem (text: ident) (sg: signature) (F V: Type) (ge: Genv.t F V):
+Inductive extcall_annot_sem (text: ident) (targs: list typ) (F V: Type) (ge: Genv.t F V):
               list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_annot_sem_intro: forall vargs m args vres,
-      eventval_list_match ge args (sig_args sg) vargs ->
-      sig_res sg = match sig_args sg with nil => None | t1 :: _ => Some t1 end ->
-      vres = match vargs with nil => Vundef | v1 :: _ => v1 end ->
-      extcall_annot_sem text sg ge vargs m (Event_annot text args :: E0) vres m.
+  | extcall_annot_sem_intro: forall vargs m args,
+      eventval_list_match ge args targs vargs ->
+      extcall_annot_sem text targs ge vargs m (Event_annot text args :: E0) Vundef m.
 
 Lemma extcall_annot_ok:
-  forall text sg,
-  extcall_properties (extcall_annot_sem text sg) sg.
+  forall text targs,
+  extcall_properties (extcall_annot_sem text targs) (mksignature targs None).
 Proof.
   intros; constructor; intros.
 
-  inv H. unfold proj_sig_res. rewrite H1. inv H0. 
-  constructor.
-  eapply eventval_match_type; eauto.
+  inv H. simpl. auto.
 
   inv H. eapply eventval_list_match_length; eauto.
 
@@ -1012,23 +987,63 @@ Proof.
   inv H; auto.
 
   inv H.
-  exists (match vargs' with nil => Vundef | v1 :: _ => v1 end); exists m1'; intuition.
+  exists Vundef; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_list_match_lessdef; eauto.
-  inv H1; auto.
   red; auto.
 
   inv H0.
-  exists f; exists (match vargs' with nil => Vundef | v1 :: _ => v1 end); exists m1'; intuition.
+  exists f; exists Vundef; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_list_match_inject; eauto.
-  inv H2; auto.
   red; auto.
   red; auto.
   red; intros; congruence.
 
   inv H; inv H0. simpl in H1.
   assert (args = args0). eapply eventval_list_match_determ_2; eauto. subst args0.
+  intuition.
+Qed.
+
+Inductive extcall_annot_val_sem (text: ident) (targ: typ) (F V: Type) (ge: Genv.t F V):
+              list val -> mem -> trace -> val -> mem -> Prop :=
+  | extcall_annot_val_sem_intro: forall varg m arg,
+      eventval_match ge arg targ varg ->
+      extcall_annot_val_sem text targ ge (varg :: nil) m (Event_annot text (arg :: nil) :: E0) varg m.
+
+Lemma extcall_annot_val_ok:
+  forall text targ,
+  extcall_properties (extcall_annot_val_sem text targ) (mksignature (targ :: nil) (Some targ)).
+Proof.
+  intros; constructor; intros.
+
+  inv H. unfold proj_sig_res; simpl. eapply eventval_match_type; eauto.
+
+  inv H. auto.
+
+  inv H1. econstructor; eauto. 
+  eapply eventval_match_preserved; eauto.
+
+  inv H; auto.
+
+  inv H; auto.
+
+  inv H. inv H1. inv H6. 
+  exists v2; exists m1'; intuition.
+  econstructor; eauto.
+  eapply eventval_match_lessdef; eauto.
+  red; auto.
+
+  inv H0. inv H2. inv H7.
+  exists f; exists v'; exists m1'; intuition.
+  econstructor; eauto.
+  eapply eventval_match_inject; eauto.
+  red; auto.
+  red; auto.
+  red; intros; congruence.
+
+  inv H; inv H0. simpl in H1.
+  assert (arg = arg0). eapply eventval_match_determ_2; eauto. subst arg0.
   intuition.
 Qed.
 
@@ -1046,26 +1061,32 @@ Qed.
 This predicate is used in the semantics of all CompCert languages. *)
 
 Definition external_call (ef: external_function): extcall_sem :=
-  match classify_external_function ef with
-  | EF_syscall name sg   => extcall_io_sem name sg
+  match ef with
+  | EF_external name sg  => extcall_io_sem name sg
+  | EF_builtin name sg   => extcall_io_sem name sg
   | EF_vload chunk       => volatile_load_sem chunk
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem 
   | EF_free              => extcall_free_sem
-  | EF_annotation txt sg => extcall_annot_sem txt sg
+  | EF_memcpy sz al      => extcall_memcpy_sem sz al
+  | EF_annot txt targs   => extcall_annot_sem txt targs
+  | EF_annot_val txt targ=> extcall_annot_val_sem txt targ
   end.
 
 Theorem external_call_spec:
   forall ef, 
   extcall_properties (external_call ef) (ef_sig ef).
 Proof.
-  intros. unfold external_call. destruct (classify_external_function ef). 
+  intros. unfold external_call, ef_sig. destruct ef.
+  apply extcall_io_ok.
   apply extcall_io_ok.
   apply volatile_load_ok.
   apply volatile_store_ok.
   apply extcall_malloc_ok.
   apply extcall_free_ok.
+  apply extcall_memcpy_ok.
   apply extcall_annot_ok.
+  apply extcall_annot_val_ok.
 Qed.
 
 Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).

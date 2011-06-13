@@ -33,9 +33,7 @@ Require Import Reloadproof.
   generate well-typed instruction sequences,
   given sufficient typing and well-formedness hypotheses over the locations involved. *)
 
-Hint Resolve wt_Lgetstack wt_Lsetstack wt_Lopmove
-             wt_Lop wt_Lload wt_Lstore wt_Lcall wt_Ltailcall wt_Lbuiltin
-             wt_Llabel wt_Lgoto wt_Lcond wt_Ljumptable wt_Lreturn: reloadty.
+Hint Constructors wt_instr: reloadty.
 
 Remark wt_code_cons:
   forall f i c, wt_instr f i -> wt_code f c -> wt_code f (i :: c).
@@ -292,9 +290,12 @@ Proof.
   destruct ros. destruct H2 as [A [B C]]. auto 10 with reloadty. 
   auto 10 with reloadty.
 
+  destruct (ef_reloads ef) as [] _eqn.
+  assert (arity_ok (sig_args (ef_sig ef)) = true) by intuition congruence.
   assert (map mreg_type (regs_for args) = map Loc.type args).
     apply wt_regs_for. apply arity_ok_enough. congruence.
   assert (mreg_type (reg_for res) = Loc.type res). eauto with reloadty.
+  auto 10 with reloadty.
   auto with reloadty.
 
 

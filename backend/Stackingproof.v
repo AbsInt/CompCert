@@ -2172,7 +2172,7 @@ Lemma transl_external_arguments_rec:
   forall locs,
   incl locs (loc_arguments sg) ->
   exists vl,
-  extcall_args rs m' (parent_sp cs') locs vl /\ val_list_inject j ls##locs vl.
+  list_forall2 (extcall_arg rs m' (parent_sp cs')) locs vl /\ val_list_inject j ls##locs vl.
 Proof.
   induction locs; simpl; intros.
   exists (@nil val); split. constructor. constructor.
@@ -2192,6 +2192,61 @@ Proof.
 Qed.
 
 End EXTERNAL_ARGUMENTS.
+
+(** Preservation of the arguments to an annotation. *)
+
+Section ANNOT_ARGUMENTS.
+
+Variable f: Linear.function.
+Let b := function_bounds f.
+Let fe := make_env b.
+Variable j: meminj.
+Variables m m': mem.
+Variables ls ls0: locset.
+Variable rs: regset.
+Variables sp sp': block.
+Variables parent retaddr: val.
+Hypothesis AGR: agree_regs j ls rs.
+Hypothesis AGF: agree_frame f j ls ls0 m sp m' sp' parent retaddr.
+
+Lemma transl_annot_param_correct:
+  forall l,
+  loc_acceptable l -> 
+  match l with S s => slot_within_bounds f b s | _ => True end ->
+  exists v, annot_arg rs m' (Vptr sp' Int.zero) (transl_annot_param fe l) v
+         /\ val_inject j (ls l) v.
+Proof.
+  intros. destruct l; red in H. 
+(* reg *)
+  exists (rs m0); split. constructor. auto.
+(* stack *) 
+  destruct s; try contradiction.
+  exploit agree_locals; eauto. intros [v [A B]]. inv A. 
+  exists v; split. constructor. rewrite Zplus_0_l. auto. auto.
+Qed.
+
+Lemma transl_annot_params_correct:
+  forall ll,
+  locs_acceptable ll ->
+  (forall s, In (S s) ll -> slot_within_bounds f b s) ->
+  exists vl,
+     annot_arguments rs m' (Vptr sp' Int.zero) (map (transl_annot_param fe) ll) vl
+  /\ val_list_inject j (map ls ll) vl.
+Proof.
+  induction ll; intros. 
+  exists (@nil val); split; constructor.
+  exploit (transl_annot_param_correct a). 
+    apply H; auto with coqlib.
+    destruct a; auto with coqlib.
+  intros [v1 [A B]].
+  exploit IHll.
+    red; intros; apply H; auto with coqlib.
+    intros; apply H0; auto with coqlib.
+  intros [vl [C D]].
+  exists (v1 :: vl); split; constructor; auto.
+Qed.
+
+End ANNOT_ARGUMENTS.
 
 (** The proof of semantic preservation relies on simulation diagrams
   of the following form:
@@ -2465,6 +2520,29 @@ Proof.
   eapply external_call_valid_block; eauto.
   eapply agree_valid_mach; eauto.
   inv WTI. simpl; rewrite H4. eapply external_call_well_typed; eauto.
+
+  (* Lannot *)
+  inv WTI.
+  exploit transl_annot_params_correct; eauto.
+  intros [vargs' [P Q]]. 
+  exploit external_call_mem_inject; eauto. 
+    eapply match_stacks_preserves_globals; eauto.
+  intros [j' [res' [m1' [A [B [C [D [E [F G]]]]]]]]].
+  econstructor; split.
+  apply plus_one. econstructor; eauto. 
+  eapply external_call_symbols_preserved; eauto.
+  exact symbols_preserved. exact varinfo_preserved.
+  econstructor; eauto with coqlib.
+  eapply match_stack_change_extcall; eauto.
+  apply Zlt_le_weak. change (Mem.valid_block m sp0). eapply agree_valid_linear; eauto.
+  apply Zlt_le_weak. change (Mem.valid_block m'0 sp'). eapply agree_valid_mach; eauto.
+  eapply agree_regs_inject_incr; eauto.
+  eapply agree_frame_inject_incr; eauto. 
+  apply agree_frame_extcall_invariant with m m'0; auto.
+  eapply external_call_valid_block; eauto.
+  eapply external_call_bounds; eauto. eapply agree_valid_linear; eauto.
+  eapply external_call_valid_block; eauto.
+  eapply agree_valid_mach; eauto.
 
   (* Llabel *)
   econstructor; split.

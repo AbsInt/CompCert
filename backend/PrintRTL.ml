@@ -19,18 +19,10 @@ open Maps
 open AST
 open Integers
 open RTL
+open PrintAST
 open PrintOp
 
 (* Printing of RTL code *)
-
-let name_of_chunk = function
-  | Mint8signed -> "int8signed"
-  | Mint8unsigned -> "int8unsigned"
-  | Mint16signed -> "int16signed"
-  | Mint16unsigned -> "int16unsigned"
-  | Mint32 -> "int32"
-  | Mfloat32 -> "float32"
-  | Mfloat64 -> "float64"
 
 let reg pp r =
   fprintf pp "x%ld" (camlint_of_positive r)
@@ -79,8 +71,8 @@ let print_instruction pp (pc, i) =
       fprintf pp "tailcall %a(%a)@ "
         ros fn regs args
   | Ibuiltin(ef, args, res, s) ->
-      fprintf pp "%a = builtin \"%s\"(%a)@ "
-        reg res (extern_atom ef.ef_id) regs args;
+      fprintf pp "%a = builtin %s(%a)@ "
+        reg res (name_of_external ef) regs args;
       print_succ pp s (Int32.pred pc)
   | Icond(cond, args, s1, s2) ->
       fprintf pp "if (%a) goto %ld else goto %ld@ "

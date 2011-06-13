@@ -110,7 +110,7 @@ Inductive wt_instr : instruction -> Prop :=
       forall ef args res s,
       List.map env args = (ef_sig ef).(sig_args) ->
       env res = proj_sig_res (ef_sig ef) ->
-      arity_ok (ef_sig ef).(sig_args) = true ->
+      arity_ok (ef_sig ef).(sig_args) = true \/ ef_reloads ef = false ->
       valid_successor s ->
       wt_instr (Ibuiltin ef args res s)
   | wt_Icond:
@@ -236,7 +236,7 @@ Definition check_instr (i: instruction) : bool :=
   | Ibuiltin ef args res s =>
       check_regs args (ef_sig ef).(sig_args)
       && check_reg res (proj_sig_res (ef_sig ef))
-      && arity_ok (ef_sig ef).(sig_args)
+      && (if ef_reloads ef then arity_ok (ef_sig ef).(sig_args) else true)
       && check_successor s
   | Icond cond args s1 s2 =>
       check_regs args (type_of_condition cond)
@@ -349,6 +349,7 @@ Proof.
   apply check_regs_correct; auto.
   apply check_reg_correct; auto.
   auto.
+  destruct (ef_reloads e); auto. 
   apply check_successor_correct; auto.
   (* cond *)
   constructor. apply check_regs_correct; auto.
