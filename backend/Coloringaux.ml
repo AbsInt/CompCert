@@ -817,6 +817,8 @@ let spill_costs f =
         charge_ros 10 ros; charge_list 1 args; charge 1 res
     | Itailcall(sg, ros, args) ->
         charge_ros 10 ros; charge_list 1 args
+    | Ibuiltin(EF_annot _, args, res, _) -> ()   (* not actually used *)
+    | Ibuiltin(EF_annot_val _, args, res, _) -> charge_list 1 args; charge 1 res
     | Ibuiltin(ef, args, res, _) -> charge_list 10 args; charge 10 res
     | Icond(cond, args, _, _) -> charge_list 10 args
     | Ijumptable(arg, _) -> charge 10 arg
