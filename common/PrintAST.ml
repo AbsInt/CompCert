@@ -1,0 +1,40 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Useful functions for pretty-printers *)
+
+open Printf
+open Camlcoq
+open AST
+
+let name_of_type = function Tint -> "int" | Tfloat -> "float"
+
+let name_of_chunk = function
+  | Mint8signed -> "int8signed"
+  | Mint8unsigned -> "int8unsigned"
+  | Mint16signed -> "int16signed"
+  | Mint16unsigned -> "int16unsigned"
+  | Mint32 -> "int32"
+  | Mfloat32 -> "float32"
+  | Mfloat64 -> "float64"
+
+let name_of_external = function
+  | EF_external(name, sg) -> extern_atom name
+  | EF_builtin(name, sg) -> extern_atom name
+  | EF_vload chunk -> sprintf "volatile load %s" (name_of_chunk chunk)
+  | EF_vstore chunk -> sprintf "volatile store %s" (name_of_chunk chunk)
+  | EF_malloc -> "malloc"
+  | EF_free -> "free"
+  | EF_memcpy(sz, al) ->
+      sprintf "memcpy size %ld align %ld " (camlint_of_z sz) (camlint_of_z al)
+  | EF_annot(text, targs) -> sprintf "annot %S" (extern_atom text)
+  | EF_annot_val(text, targ) ->  sprintf "annot_val %S" (extern_atom text)
