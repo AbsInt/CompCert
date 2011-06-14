@@ -263,7 +263,6 @@ Proof.
   apply add_interfs_indirect_call_correct. auto.
 Qed.
 
-
 Lemma add_prefs_call_incl:
   forall args locs g,
   graph_incl g (add_prefs_call args locs g).
@@ -274,6 +273,16 @@ Proof.
   eapply graph_incl_trans; [idtac|eauto]. 
   apply add_pref_mreg_incl.
   auto.
+Qed.
+
+Lemma add_prefs_builtin_incl:
+  forall ef args res g,
+  graph_incl g (add_prefs_builtin ef args res g).
+Proof.
+  intros. unfold add_prefs_builtin. 
+  destruct ef; try apply graph_incl_refl.
+  destruct args; try apply graph_incl_refl.
+  apply add_pref_incl. 
 Qed.
 
 Lemma add_interf_entry_incl:
@@ -384,7 +393,7 @@ Proof.
   apply add_interf_destroyed_incl.
   eapply graph_incl_trans; [idtac|apply add_prefs_call_incl].
   apply add_interfs_call_incl.
-  apply add_interf_op_incl.
+  eapply graph_incl_trans. apply add_interf_op_incl. apply add_prefs_builtin_incl.
   destruct o.
   apply add_pref_mreg_incl.
   apply graph_incl_refl.
@@ -508,7 +517,8 @@ Proof.
   apply add_interfs_call_correct. auto.
 
   (* Ibuiltin *)
-  intros. apply add_interf_op_correct; auto. 
+  intros. eapply interfere_incl. apply add_prefs_builtin_incl. 
+  apply add_interf_op_correct; auto. 
 Qed.
 
 Lemma add_edges_instrs_correct:

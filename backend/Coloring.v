@@ -139,6 +139,13 @@ Fixpoint add_prefs_call
   | _, _ => g
   end.
 
+Definition add_prefs_builtin (ef: external_function)
+                            (args: list reg) (res: reg) (g: graph) : graph :=
+  match ef, args with
+  | EF_annot_val txt targ, arg1 :: _ => add_pref arg1 res g
+  | _, _ => g
+  end.
+
 Definition add_interf_entry
     (params: list reg) (live: Regset.t) (g: graph): graph :=
   List.fold_left (fun g r => add_interf_op r live g) params g.
@@ -184,7 +191,7 @@ Definition add_edges_instr
       add_prefs_call args largs
         (add_interf_call ros largs g)
   | Ibuiltin ef args res s =>
-      add_interf_op res live g
+      add_prefs_builtin ef args res (add_interf_op res live g)
   | Ireturn (Some r) =>
       add_pref_mreg r (loc_result sig) g
   | _ => g
