@@ -85,6 +85,7 @@ Inductive operation : Type :=
   | Oshrximm: int -> operation          (**r [rd = r1 / 2^n] (signed) *)
   | Oshru: operation                    (**r [rd = r1 >> r2] (unsigned) *)
   | Orolm: int -> int -> operation      (**r rotate left and mask *)
+  | Oroli: int -> int -> operation      (**r rotate left and insert *)
 (*c Floating-point arithmetic: *)
   | Onegf: operation                    (**r [rd = - r1] *)
   | Oabsf: operation                    (**r [rd = abs(r1)] *)
@@ -238,6 +239,8 @@ Definition eval_operation
       if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
   | Orolm amount mask, Vint n1 :: nil =>
       Some (Vint (Int.rolm n1 amount mask))
+  | Oroli amount mask, Vint n1 :: Vint n2 :: nil =>
+      Some (Vint (Int.or (Int.and n1 (Int.not mask)) (Int.rolm n2 amount mask)))
   | Onegf, Vfloat f1 :: nil => Some (Vfloat (Float.neg f1))
   | Oabsf, Vfloat f1 :: nil => Some (Vfloat (Float.abs f1))
   | Oaddf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.add f1 f2))
@@ -456,6 +459,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Oshrximm _ => (Tint :: nil, Tint)
   | Oshru => (Tint :: Tint :: nil, Tint)
   | Orolm _ _ => (Tint :: nil, Tint)
+  | Oroli _ _ => (Tint :: Tint :: nil, Tint)
   | Onegf => (Tfloat :: nil, Tfloat)
   | Oabsf => (Tfloat :: nil, Tfloat)
   | Oaddf => (Tfloat :: Tfloat :: nil, Tfloat)
@@ -604,6 +608,8 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Oshrximm n, v1::nil => Val.shrx v1 (Vint n)
   | Oshru, v1::v2::nil => Val.shru v1 v2
   | Orolm amount mask, v1::nil => Val.rolm v1 amount mask
+  | Oroli amount mask, v1::v2::nil =>
+      Val.or (Val.and v1 (Vint (Int.not mask))) (Val.rolm v2 amount mask)
   | Onegf, v1::nil => Val.negf v1
   | Oabsf, v1::nil => Val.absf v1
   | Oaddf, v1::v2::nil => Val.addf v1 v2
@@ -1004,9 +1010,13 @@ Proof.
   intros. destruct addr; simpl in H; reflexivity || omegaContradiction.
 Qed.
 
-(** Two-address operations.  There are none in the PowerPC architecture. *)
+(** Two-address operations.  There is only one: rotate-mask-insert. *)
 
-Definition two_address_op (op: operation) : bool := false.
+Definition two_address_op (op: operation) : bool :=
+  match op with
+  | Oroli _ _ => true
+  | _ => false
+  end.
 
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
 
@@ -1018,7 +1028,6 @@ Definition is_trivial_op (op: operation) : bool :=
   | Oaddrstack _ => true
   | _ => false
   end.
-
 
 (** Operations that depend on the memory state. *)
 

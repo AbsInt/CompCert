@@ -69,10 +69,11 @@ Definition addrstack (ofs: int) :=
 <<
 Definition notint (e: expr) :=
   match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.not n)) Enil
   | Eop Oand (t1:::t2:::Enil) => Eop Onand (t1:::t2:::Enil)
   | Eop Oor (t1:::t2:::Enil) => Eop Onor (t1:::t2:::Enil)
   | Eop Oxor (t1:::t2:::Enil) => Eop Onxor (t1:::t2:::Enil)
-  | _ => Elet(e, Eop Onor (Eletvar O ::: Eletvar O ::: Enil)
+  | _ => Elet e (Eop Onor (Eletvar O ::: Eletvar O ::: Enil))
   end.
 >>
   However, Coq expands complex pattern-matchings like the above into
@@ -88,13 +89,16 @@ Definition notint (e: expr) :=
 
 Inductive notint_cases: forall (e: expr), Type :=
   | notint_case1:
-      forall (t1: expr) (t2: expr),
-      notint_cases (Eop Oand (t1:::t2:::Enil))
+      forall n,
+      notint_cases (Eop (Ointconst n) Enil)
   | notint_case2:
-      forall (t1: expr) (t2: expr),
-      notint_cases (Eop Oor (t1:::t2:::Enil))
+      forall t1 t2,
+      notint_cases (Eop Oand (t1:::t2:::Enil))
   | notint_case3:
-      forall (t1: expr) (t2: expr),
+      forall t1 t2,
+      notint_cases (Eop Oor (t1:::t2:::Enil))
+  | notint_case4:
+      forall t1 t2,
       notint_cases (Eop Oxor (t1:::t2:::Enil))
   | notint_default:
       forall (e: expr),
@@ -109,12 +113,14 @@ Inductive notint_cases: forall (e: expr), Type :=
 
 Definition notint_match (e: expr) :=
   match e as z1 return notint_cases z1 with
+  | Eop (Ointconst n) Enil =>
+      notint_case1 n
   | Eop Oand (t1:::t2:::Enil) =>
-      notint_case1 t1 t2
-  | Eop Oor (t1:::t2:::Enil) =>
       notint_case2 t1 t2
-  | Eop Oxor (t1:::t2:::Enil) =>
+  | Eop Oor (t1:::t2:::Enil) =>
       notint_case3 t1 t2
+  | Eop Oxor (t1:::t2:::Enil) =>
+      notint_case4 t1 t2
   | e =>
       notint_default e
   end.
@@ -130,11 +136,13 @@ Definition notint_match (e: expr) :=
 
 Definition notint (e: expr) :=
   match notint_match e with
-  | notint_case1 t1 t2 =>
-      Eop Onand (t1:::t2:::Enil)
+  | notint_case1 n =>
+      Eop (Ointconst (Int.not n)) Enil
   | notint_case2 t1 t2 =>
-      Eop Onor (t1:::t2:::Enil)
+      Eop Onand (t1:::t2:::Enil)
   | notint_case3 t1 t2 =>
+      Eop Onor (t1:::t2:::Enil)
+  | notint_case4 t1 t2 =>
       Eop Onxor (t1:::t2:::Enil)
   | notint_default e =>
       Elet e (Eop Onor (Eletvar O ::: Eletvar O ::: Enil))
@@ -674,9 +682,16 @@ Definition or (e1: expr) (e2: expr) :=
   | or_case1 amount1 mask1 t1 amount2 mask2 t2 =>
       if Int.eq amount1 amount2
       && is_rlw_mask (Int.or mask1 mask2)
-      && same_expr_pure t1 t2
-      then Eop (Orolm amount1 (Int.or mask1 mask2)) (t1:::Enil)
-      else Eop Oor (e1:::e2:::Enil)
+      && same_expr_pure t1 t2 then
+        Eop (Orolm amount1 (Int.or mask1 mask2)) (t1:::Enil)
+      else if Int.eq amount1 Int.zero
+           && Int.eq mask1 (Int.not mask2) then
+        Eop (Oroli amount2 mask2) (t1:::t2:::Enil)
+      else if Int.eq amount2 Int.zero
+           && Int.eq mask2 (Int.not mask1) then
+        Eop (Oroli amount1 mask1) (t2:::t1:::Enil)
+      else
+        Eop Oor (e1:::e2:::Enil)
   | or_default e1 e2 =>
       Eop Oor (e1:::e2:::Enil)
   end.

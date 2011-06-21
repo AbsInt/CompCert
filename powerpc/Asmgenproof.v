@@ -450,6 +450,7 @@ Proof.
   case (symbol_is_small_data i i0); reflexivity.
   case (Int.eq (high_s i) Int.zero); autorewrite with labels; reflexivity.
   case (Int.eq (high_s i) Int.zero); autorewrite with labels; reflexivity.
+  destruct (mreg_eq m r); reflexivity.
 Qed.
 Hint Rewrite transl_op_label: labels.
 

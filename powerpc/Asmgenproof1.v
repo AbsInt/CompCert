@@ -1340,7 +1340,27 @@ Proof.
   apply agree_nextinstr. unfold rs1. apply agree_nextinstr_commut. 
   apply agree_set_commut. auto with ppcgen. 
   apply agree_set_other. apply agree_set_mireg_twice; auto with ppcgen. 
-  compute; auto. auto with ppcgen. 
+  compute; auto. auto with ppcgen.
+  (* Oroli *)
+  destruct (mreg_eq m0 res). subst m0.
+  TranslOpSimpl.
+  econstructor; split.
+  eapply exec_straight_three.
+  simpl. reflexivity. 
+  simpl. reflexivity.
+  simpl. reflexivity.
+  auto. auto. auto.
+  set (rs1 := nextinstr (rs # GPR0 <- (rs (ireg_of m0)))).
+  set (rs2 := nextinstr (rs1 # GPR0 <-
+        (Val.or (Val.and (rs1 GPR0) (Vint (Int.not i0)))
+               (Val.rolm (rs1 (ireg_of m1)) i i0)))).
+  apply agree_nextinstr. apply agree_set_mireg; auto. apply agree_set_mreg. 
+  apply agree_undef_temps with rs. auto. 
+  intros. unfold rs2. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto. 
+  unfold rs1. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto. 
+  unfold rs2. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gss. 
+  unfold rs1. repeat rewrite nextinstr_inv; auto with ppcgen. 
+  rewrite Pregmap.gss. rewrite Pregmap.gso; auto with ppcgen. decEq. auto with ppcgen. 
   (* Ointoffloat *)
   econstructor; split.
   apply exec_straight_one. simpl; eauto. auto.

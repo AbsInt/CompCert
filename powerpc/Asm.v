@@ -195,6 +195,7 @@ Inductive instruction : Type :=
   | Pori: ireg -> ireg -> constant -> instruction             (**r or with immediate *)
   | Poris: ireg -> ireg -> constant -> instruction            (**r or with immediate high *)
   | Prlwinm: ireg -> ireg -> int -> int -> instruction        (**r rotate and mask *)
+  | Prlwimi: ireg -> ireg -> int -> int -> instruction        (**r rotate and insert *)
   | Pslw: ireg -> ireg -> ireg -> instruction                 (**r shift left *)
   | Psraw: ireg -> ireg -> ireg -> instruction                (**r shift right signed *)
   | Psrawi: ireg -> ireg -> int -> instruction                (**r shift right signed immediate *)
@@ -697,6 +698,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#rd <- (Val.or rs#r1 (const_high cst)))) m
   | Prlwinm rd r1 amount mask =>
       OK (nextinstr (rs#rd <- (Val.rolm rs#r1 amount mask))) m
+  | Prlwimi rd r1 amount mask =>
+      OK (nextinstr (rs#rd <- (Val.or (Val.and rs#rd (Vint (Int.not mask)))
+                                     (Val.rolm rs#r1 amount mask)))) m
   | Pslw rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.shl rs#r1 rs#r2))) m
   | Psraw rd r1 r2 =>

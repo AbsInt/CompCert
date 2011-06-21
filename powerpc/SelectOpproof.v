@@ -124,6 +124,7 @@ Theorem eval_notint:
   eval_expr ge sp e m le (notint a) (Vint (Int.not x)).
 Proof.
   unfold notint; intros until x; case (notint_match a); intros; InvEval.
+  EvalOp. 
   EvalOp. simpl. congruence.
   EvalOp. simpl. congruence.
   EvalOp. simpl. congruence.
@@ -524,11 +525,22 @@ Proof.
   generalize (Int.eq_spec amount1 amount2). rewrite H6. intro. subst amount2.
   exploit eval_same_expr; eauto. intros [EQ1 EQ2]. inv EQ1. inv EQ2. 
   simpl. EvalOp. simpl. rewrite Int.or_rolm. auto.
+  caseEq (Int.eq amount1 Int.zero && Int.eq mask1 (Int.not mask2)); intro.
+  destruct (andb_prop _ _ H4). 
+  generalize (Int.eq_spec amount1 Int.zero). rewrite H5. intro.
+  generalize (Int.eq_spec mask1 (Int.not mask2)). rewrite H6. intro.
+  subst. rewrite Int.rolm_zero. EvalOp.
+  caseEq (Int.eq amount2 Int.zero && Int.eq mask2 (Int.not mask1)); intro.
+  destruct (andb_prop _ _ H5). 
+  generalize (Int.eq_spec amount2 Int.zero). rewrite H6. intro.
+  generalize (Int.eq_spec mask2 (Int.not mask1)). rewrite H7. intro.
+  subst. rewrite Int.rolm_zero. rewrite Int.or_commut. EvalOp.
   simpl. apply eval_Eop with (Vint x :: Vint y :: nil).
   econstructor. EvalOp. simpl. congruence. 
   econstructor. EvalOp. simpl. congruence. constructor. auto.
   EvalOp.
 Qed.
+
 Theorem eval_divs:
   forall le a b x y,
   eval_expr ge sp e m le a (Vint x) ->

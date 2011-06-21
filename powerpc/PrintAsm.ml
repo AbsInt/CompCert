@@ -687,6 +687,11 @@ let print_instruction oc = function
       fprintf oc "	rlwinm	%a, %a, %ld, %d, %d %s 0x%lx\n"
                 ireg r1 ireg r2 (camlint_of_coqint c1) mb me
                 comment (camlint_of_coqint c2)
+  | Prlwimi(r1, r2, c1, c2) ->
+      let (mb, me) = rolm_mask (camlint_of_coqint c2) in
+      fprintf oc "	rlwimi	%a, %a, %ld, %d, %d %s 0x%lx\n"
+                ireg r1 ireg r2 (camlint_of_coqint c1) mb me
+                comment (camlint_of_coqint c2)
   | Pslw(r1, r2, r3) ->
       fprintf oc "	slw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psraw(r1, r2, r3) ->

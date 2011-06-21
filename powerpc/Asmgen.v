@@ -320,6 +320,13 @@ Definition transl_op
       Psrw (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Orolm amount mask, a1 :: nil =>
       Prlwinm (ireg_of r) (ireg_of a1) amount mask :: k
+  | Oroli amount mask, a1 :: a2 :: nil =>
+      if mreg_eq a1 r  then (**r should always be true *)
+        Prlwimi (ireg_of r) (ireg_of a2) amount mask :: k
+      else
+        Pmr GPR0 (ireg_of a1) ::
+	Prlwimi GPR0 (ireg_of a2) amount mask ::
+	Pmr (ireg_of r) GPR0 :: k
   | Onegf, a1 :: nil =>
       Pfneg (freg_of r) (freg_of a1) :: k
   | Oabsf, a1 :: nil =>
