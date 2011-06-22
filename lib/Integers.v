@@ -1213,16 +1213,28 @@ Proof.
   intros; apply H; omega. omega.
 Qed.
 
+Lemma Z_of_bits_complement:
+  forall f n i,
+  Z_of_bits n (fun j => negb (f j)) i = two_power_nat n - 1 - Z_of_bits n f i.
+Proof.
+  induction n; intros; simpl Z_of_bits.
+  auto.
+  rewrite two_power_nat_S. rewrite IHn.
+Opaque Zmult Zplus Zminus.
+  destruct (f i); simpl. ring. ring.
+Transparent Zmult Zplus Zminus.
+Qed.
+
 Lemma Z_of_bits_true:
   forall f n i,
   (forall j, i <= j < i + Z_of_nat n -> f j = true) ->
   Z_of_bits n f i = two_power_nat n - 1.
 Proof.
-  induction n; intros.
-  simpl. auto.
-  rewrite two_power_nat_S. simpl Z_of_bits. rewrite inj_S in H.
-  rewrite H. rewrite IHn. unfold Z_shift_add. omega.  
-  intros; apply H. omega. omega.
+  intros. set (z := fun (i: Z) => false). 
+  transitivity (Z_of_bits n (fun j => negb (z j)) i). 
+  apply Z_of_bits_exten; intros. unfold z. rewrite H. auto. omega. 
+  rewrite Z_of_bits_complement. rewrite Z_of_bits_false. omega. 
+  unfold z; auto.
 Qed.
 
 (** ** Properties of bitwise and, or, xor *)
@@ -1428,6 +1440,31 @@ Theorem xor_not_self:
   forall x, xor x (not x) = mone.
 Proof.
   intros. unfold not. rewrite <- xor_assoc. rewrite xor_idem. apply not_zero. 
+Qed.
+
+Theorem not_neg:
+  forall x, not x = add (neg x) mone.
+Proof.
+  intros.
+  unfold not, xor, bitwise_binop. rewrite unsigned_mone.
+  set (ux := unsigned x).
+  set (bx := bits_of_Z wordsize ux).
+  transitivity (repr (Z_of_bits wordsize (fun i => negb (bx i)) 0)).
+  decEq. apply Z_of_bits_exten. intros. rewrite bits_of_Z_mone; auto. omega.
+  rewrite Z_of_bits_complement. apply eqm_samerepr. rewrite unsigned_mone. fold modulus. 
+  replace (modulus - 1 - Z_of_bits wordsize bx 0)
+     with ((- Z_of_bits wordsize bx 0) + (modulus - 1)) by omega.
+  apply eqm_add. unfold neg. apply eqm_unsigned_repr_r. apply eqm_neg. 
+  apply Z_of_bits_of_Z. apply eqm_refl. 
+Qed.
+
+Theorem neg_not:
+  forall x, neg x = add (not x) one.
+Proof.
+  intros. rewrite not_neg. rewrite add_assoc. 
+  replace (add mone one) with zero. rewrite add_zero. auto. 
+  apply eqm_samerepr. rewrite unsigned_mone. rewrite unsigned_one. 
+  exists (-1). ring. 
 Qed.
 
 (** Connections between [add] and bitwise logical operations. *)
