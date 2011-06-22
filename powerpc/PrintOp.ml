@@ -82,6 +82,10 @@ let print_operation reg pp = function
   | Orolm(n,m), [r1] ->
       fprintf pp "(%a rol %ld) & 0x%lx"
               reg r1 (camlint_of_coqint n) (camlint_of_coqint m)
+  | Oroli(n,m), [r1;r2] ->
+      fprintf pp "(%a & ~0x%lx) | ((%a rol %ld) & 0x%lx)"
+              reg r1 (camlint_of_coqint m)
+              reg r2 (camlint_of_coqint n) (camlint_of_coqint m)
   | Onegf, [r1] -> fprintf pp "negf(%a)" reg r1
   | Oabsf, [r1] -> fprintf pp "absf(%a)" reg r1
   | Oaddf, [r1;r2] -> fprintf pp "%a +f %a" reg r1 reg r2
