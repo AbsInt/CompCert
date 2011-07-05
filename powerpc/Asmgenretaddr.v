@@ -147,11 +147,18 @@ Lemma transl_cond_tail:
 Proof. unfold transl_cond; intros; destruct cond; IsTail. Qed.
 Hint Resolve transl_cond_tail: ppcretaddr.
 
+Lemma transl_cond_op_tail:
+  forall cond args r k, is_tail k (transl_cond_op cond args r k).
+Proof.
+  unfold transl_cond_op; intros.
+  destruct (classify_condition cond args); IsTail.
+Qed.
+Hint Resolve transl_cond_op_tail: ppcretaddr.
+
 Lemma transl_op_tail:
   forall op args r k, is_tail k (transl_op op args r k).
 Proof.
   unfold transl_op; intros; destruct op; IsTail. 
-  destruct (classify_condition c args); IsTail.
 Qed.
 Hint Resolve transl_op_tail: ppcretaddr.
 

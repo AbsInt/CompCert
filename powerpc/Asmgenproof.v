@@ -417,28 +417,15 @@ Proof.
 Qed.
 Hint Rewrite transl_cond_label: labels.
 
-Remark transl_op_cmp_label:
+Remark transl_cond_op_label:
   forall c args r k,
-  find_label lbl
-    (match classify_condition c args with
-     | condition_ge0 _ a _ =>
-        Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one
-        :: Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k
-     | condition_lt0 _ a _ =>
-        Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one :: k
-     | condition_default _ _ =>
-        transl_cond c args
-          (Pmfcrbit (ireg_of r) (fst (crbit_for_cond c))
-           :: (if snd (crbit_for_cond c)
-               then k
-               else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k))
-    end) = find_label lbl k.
+  find_label lbl (transl_cond_op c args r k) = find_label lbl k.
 Proof.
-  intros. destruct (classify_condition c args); auto. 
-  autorewrite with labels. 
-  case (snd (crbit_for_cond c)); auto.
+  intros c args.
+  unfold transl_cond_op. destruct (classify_condition c args); intros; auto.
+  autorewrite with labels. destruct (snd (crbit_for_cond c)); auto. 
 Qed.
-Hint Rewrite transl_op_cmp_label: labels.
+Hint Rewrite transl_cond_op_label: labels.
 
 Remark transl_op_label:
   forall op args r k, find_label lbl (transl_op op args r k) = find_label lbl k.
@@ -719,11 +706,7 @@ Proof.
   intros [rs2 [EX [RES OTH]]].
   left; eapply exec_straight_steps; eauto with coqlib.
   simpl. exists rs2; split. auto. 
-  apply agree_exten_2 with (rs#(preg_of dst) <- v').
-  auto with ppcgen. 
-  intros. unfold Pregmap.set. destruct (PregEq.eq r0 (preg_of dst)).
-  subst r0. auto.
-  apply OTH; auto.
+  apply agree_set_mreg with rs; auto with ppcgen. congruence. 
 Qed.
 
 Lemma exec_Msetstack_prop:
@@ -748,7 +731,7 @@ Proof.
   intros [rs2 [EX OTH]].
   left; eapply exec_straight_steps; eauto with coqlib.
   exists rs2; split; auto.
-  apply agree_exten_2 with rs; auto.
+  apply agree_exten with rs; auto with ppcgen.
 Qed.
 
 Lemma exec_Mgetparam_prop:
@@ -782,12 +765,11 @@ Proof.
   simpl. unfold load1. simpl. rewrite gpr_or_zero_not_zero.
   rewrite <- (sp_val _ _ _ AG). rewrite A. auto. congruence. auto. 
   auto.
-  assert (agree (Regmap.set IT1 Vundef ms) sp rs1).
-  unfold rs1. change (IR GPR11) with (preg_of IT1).  auto with ppcgen. 
-  apply agree_exten_2 with (rs1#(preg_of dst) <- v').
-  auto with ppcgen.
-  intros. unfold Pregmap.set. destruct (PregEq.eq r (preg_of dst)).
-  congruence. auto.
+  apply agree_set_mreg with rs1; auto with ppcgen. 
+  unfold rs1. change (IR GPR11) with (preg_of IT1). 
+  apply agree_nextinstr. apply agree_set_mreg with rs; auto with ppcgen.
+  intros. apply Pregmap.gso; auto with ppcgen.
+  congruence.
 Qed.
 
 Lemma exec_Mop_prop:
@@ -1123,9 +1105,9 @@ Proof.
   rewrite <- H0. simpl. constructor; auto.
   eapply code_tail_next_int; eauto. 
   apply sym_not_equal. auto with ppcgen.
-  apply agree_nextinstr. apply agree_set_mreg; auto. 
-  eapply agree_undef_temps; eauto. 
-  intros. repeat rewrite Pregmap.gso; auto. 
+  apply agree_nextinstr. apply agree_set_mreg_undef_temps with rs; auto. 
+  rewrite Pregmap.gss. auto.
+  intros. repeat rewrite Pregmap.gso; auto with ppcgen.
 Qed.
 
 Lemma exec_Mannot_prop:
@@ -1178,7 +1160,7 @@ Proof.
   simpl; auto.
   econstructor; eauto.
   eapply Mach.find_label_incl; eauto.
-  apply agree_exten_2 with rs; auto. 
+  apply agree_exten with rs; auto with ppcgen.
 Qed.
 
 Lemma exec_Mcond_true_prop:
@@ -1221,7 +1203,7 @@ Proof.
   traceEq.
   econstructor; eauto. 
   eapply Mach.find_label_incl; eauto.
-  apply agree_exten_2 with rs2; auto with ppcgen. 
+  apply agree_undef_temps with rs2; auto with ppcgen.
 Qed.
 
 Lemma exec_Mcond_false_prop:
@@ -1245,7 +1227,7 @@ Proof.
   reflexivity.
   apply exec_straight_one. simpl. rewrite RES. reflexivity.
   reflexivity.
-  auto with ppcgen.
+  apply agree_nextinstr. apply agree_undef_temps with rs2; auto.
 Qed.
 
 Lemma exec_Mjumptable_prop:
@@ -1301,11 +1283,11 @@ Proof.
   change label with Mach.label; rewrite H0. exact GOTO. omega. traceEq.
   econstructor; eauto. 
   eapply Mach.find_label_incl; eauto.
-  apply agree_exten_2 with rs2; auto. 
-  unfold rs2, rs1. apply agree_set_other; auto with ppcgen.
   apply agree_undef_temps with rs0; auto.
-  intros. rewrite Pregmap.gso; auto. rewrite nextinstr_inv; auto.
-  rewrite Pregmap.gso; auto. 
+  intros. rewrite INV3; auto with ppcgen.
+  unfold rs2. repeat rewrite Pregmap.gso; auto with ppcgen.
+  unfold rs1. rewrite nextinstr_inv; auto with ppcgen. 
+  apply Pregmap.gso; auto with ppcgen.
 Qed.
 
 Lemma exec_Mreturn_prop:
@@ -1433,7 +1415,7 @@ Proof.
   eapply exec_straight_steps_1; eauto.
   change (Int.unsigned Int.zero) with 0. constructor.
   (* match states *)
-  econstructor; eauto with coqlib. auto with ppcgen.
+  econstructor; eauto with coqlib. apply agree_undef_temps with rs4; auto.
 Qed.
 
 Lemma exec_function_external_prop:
@@ -1460,7 +1442,11 @@ Proof.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto.
-  unfold loc_external_result. auto with ppcgen.
+  unfold loc_external_result. 
+  apply agree_set_other; auto with ppcgen.
+  apply agree_set_mreg with rs; auto. 
+  rewrite Pregmap.gss; auto. 
+  intros; apply Pregmap.gso; auto.
 Qed.
 
 Lemma exec_return_prop:

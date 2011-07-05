@@ -127,9 +127,11 @@ Definition label := positive.
 
 Inductive instruction : Type :=
   | Padd: ireg -> ireg -> ireg -> instruction                 (**r integer addition *)
+  | Padde: ireg -> ireg -> ireg -> instruction                 (**r integer addition with carry *)
   | Paddi: ireg -> ireg -> constant -> instruction            (**r add immediate *)
+  | Paddic: ireg -> ireg -> constant -> instruction            (**r add immediate and set carry *)
   | Paddis: ireg -> ireg -> constant -> instruction           (**r add immediate high *)
-  | Paddze: ireg -> ireg -> instruction                       (**r add Carry bit *)
+  | Paddze: ireg -> ireg -> instruction                       (**r add carry *)
   | Pallocframe: Z -> int -> instruction                      (**r allocate new stack frame *)
   | Pand_: ireg -> ireg -> ireg -> instruction                (**r bitwise and *)
   | Pandc: ireg -> ireg -> ireg -> instruction                (**r bitwise and-complement *)
@@ -211,6 +213,7 @@ Inductive instruction : Type :=
   | Pstw: ireg -> constant -> ireg -> instruction             (**r store 32-bit int *)
   | Pstwx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Psubfc: ireg -> ireg -> ireg -> instruction               (**r reversed integer subtraction *)
+  | Psubfe: ireg -> ireg -> ireg -> instruction               (**r reversed integer subtraction with carry *)
   | Psubfic: ireg -> ireg -> constant -> instruction          (**r integer subtraction from immediate *)
   | Pxor: ireg -> ireg -> ireg -> instruction                 (**r bitwise xor *)
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
@@ -527,12 +530,19 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   match i with
   | Padd rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#r2))) m
+  | Padde rd r1 r2 =>
+      OK (nextinstr (rs #rd <- (Val.add (Val.add rs#r1 rs#r2) rs#CARRY)
+                        #CARRY <- (Val.add_carry rs#r1 rs#r2 rs#CARRY))) m
   | Paddi rd r1 cst =>
       OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst)))) m
+  | Paddic rd r1 cst =>
+      OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst))
+                       #CARRY <- (Val.add_carry (gpr_or_zero rs r1) (const_low cst) Vzero))) m
   | Paddis rd r1 cst =>
       OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
   | Paddze rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY))) m
+      OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY)
+                       #CARRY <- (Val.add_carry rs#r1 Vzero rs#CARRY))) m
   | Pallocframe sz ofs =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Int.zero in
@@ -736,9 +746,14 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pstwx rd r1 r2 =>
       store2 Mint32 rd r1 r2 rs m
   | Psubfc rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.sub rs#r2 rs#r1) #CARRY <- Vundef)) m
+      OK (nextinstr (rs#rd <- (Val.sub rs#r2 rs#r1)
+                       #CARRY <- (Val.add_carry rs#r2 (Val.notint rs#r1) Vone))) m
+  | Psubfe rd r1 r2 =>
+      OK (nextinstr (rs#rd <- (Val.add (Val.add rs#r2 (Val.notint rs#r1)) rs#CARRY)
+                       #CARRY <- (Val.add_carry rs#r2 (Val.notint rs#r1) rs#CARRY))) m
   | Psubfic rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.sub (const_low cst) rs#r1) #CARRY <- Vundef)) m
+      OK (nextinstr (rs#rd <- (Val.sub (const_low cst) rs#r1)
+                       #CARRY <- (Val.add_carry (const_low cst) (Val.notint rs#r1) Vone))) m
   | Pxor rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.xor rs#r1 rs#r2))) m
   | Pxori rd r1 cst =>

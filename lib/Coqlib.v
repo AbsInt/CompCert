@@ -606,6 +606,13 @@ Definition nat_of_Z (z: Z) : nat :=
   | Zneg p => O
   end.
 
+Lemma nat_of_Z_of_nat:
+  forall n, nat_of_Z (Z_of_nat n) = n.
+Proof.
+  intros. unfold Z_of_nat. destruct n. auto.
+  simpl. rewrite nat_of_P_o_P_of_succ_nat_eq_succ. auto.
+Qed.
+
 Lemma nat_of_Z_max:
   forall z, Z_of_nat (nat_of_Z z) = Zmax z 0.
 Proof.
@@ -1131,6 +1138,13 @@ Lemma list_forall2_app:
   list_forall2 (a1 ++ a2) (b1 ++ b2).
 Proof.
   induction 1; intros; simpl. auto. constructor; auto. 
+Qed.
+
+Lemma list_forall2_length:
+  forall l1 l2,
+  list_forall2 l1 l2 -> length l1 = length l2.
+Proof.
+  induction 1; simpl; congruence.
 Qed.
 
 End FORALL2.

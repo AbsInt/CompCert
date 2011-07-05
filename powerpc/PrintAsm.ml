@@ -504,8 +504,12 @@ let jumptables : (int * label list) list ref = ref []
 let print_instruction oc = function
   | Padd(r1, r2, r3) ->
       fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+  | Padde(r1, r2, r3) ->
+      fprintf oc "	adde	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Paddi(r1, r2, c) ->
       fprintf oc "	addi	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
+  | Paddic(r1, r2, c) ->
+      fprintf oc "	addic	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
   | Paddis(r1, r2, c) ->
       fprintf oc "	addis	%a, %a, %a\n" ireg r1 ireg_or_zero r2 constant c
   | Paddze(r1, r2) ->
@@ -724,6 +728,8 @@ let print_instruction oc = function
       fprintf oc "	stwx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfc(r1, r2, r3) ->
       fprintf oc "	subfc	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+  | Psubfe(r1, r2, r3) ->
+      fprintf oc "	subfe	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Psubfic(r1, r2, c) ->
       fprintf oc "	subfic	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pxor(r1, r2, r3) ->

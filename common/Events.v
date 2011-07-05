@@ -901,16 +901,122 @@ Qed.
 
 (** ** Semantics of [memcpy] operations. *)
 
-(** To be done once [storebytes] is added to the [Memtype] interface. *)
-
-Definition extcall_memcpy_sem (sz al: Z) (F V: Type) (ge: Genv.t F V): list val -> mem -> trace -> val -> mem -> Prop :=
-  fun vargs m1 t vres m2 => False.
+Inductive extcall_memcpy_sem (sz al: Z) (F V: Type) (ge: Genv.t F V): list val -> mem -> trace -> val -> mem -> Prop :=
+  | extcall_memcpy_sem_intro: forall bdst odst bsrc osrc m bytes m',
+      al = 1 \/ al = 2 \/ al = 4 -> sz > 0 ->
+      (al | sz) -> (al | Int.unsigned osrc) -> (al | Int.unsigned odst) ->
+      bsrc <> bdst \/ Int.unsigned osrc = Int.unsigned odst
+                   \/ Int.unsigned osrc + sz <= Int.unsigned odst
+                   \/ Int.unsigned odst + sz <= Int.unsigned osrc ->
+      Mem.loadbytes m bsrc (Int.unsigned osrc) sz = Some bytes ->
+      Mem.storebytes m bdst (Int.unsigned odst) bytes = Some m' ->
+      extcall_memcpy_sem sz al ge (Vptr bdst odst :: Vptr bsrc osrc :: nil) m E0 Vundef m'.
 
 Lemma extcall_memcpy_ok:
   forall sz al,
   extcall_properties (extcall_memcpy_sem sz al) (mksignature (Tint :: Tint :: nil) None).
 Proof.
-  intros. unfold extcall_memcpy_sem; constructor; contradiction.
+  intros. constructor.
+(* return type *)
+  intros. inv H. constructor. 
+(* arity *)
+  intros. inv H. auto.
+(* change of globalenv *)
+  intros. inv H1. econstructor; eauto.
+(* valid blocks *)
+  intros. inv H. eauto with mem. 
+(* bounds *)
+  intros. inv H. eapply Mem.bounds_storebytes; eauto. 
+(* extensions *)
+  intros. inv H. 
+  inv H1. inv H13. inv H14. inv H10. inv H11.
+  exploit Mem.loadbytes_length; eauto. intros LEN.
+(*
+  destruct (zle sz 0).
+  (* empty copy *)
+  rewrite nat_of_Z_neg in LEN; auto. 
+  assert (bytes = nil). destruct bytes; simpl in LEN; congruence.
+  subst. rewrite Mem.storebytes_empty in H8. inv H8.
+  exists Vundef; exists m1'.
+  split. econstructor; eauto. rewrite Mem.loadbytes_empty; eauto. 
+  apply Mem.storebytes_empty. 
+  split. constructor. split. auto. red; auto.
+  (* nonempty copy *)
+*)
+  exploit Mem.loadbytes_extends; eauto. intros [bytes2 [A B]].
+  exploit Mem.storebytes_within_extends; eauto. intros [m2' [C D]].
+  exists Vundef; exists m2'.
+  split. econstructor; eauto.
+  split. constructor.
+  split. auto.
+  red; split; intros.
+  eauto with mem.  
+  exploit Mem.loadbytes_length. eexact H8. intros.
+  rewrite <- H1. eapply Mem.load_storebytes_other; eauto. 
+  destruct (eq_block b bdst); auto. subst b; right.
+  exploit Mem.range_perm_in_bounds. eapply Mem.storebytes_range_perm. eexact H9.
+  rewrite H10. rewrite nat_of_Z_eq. omega. omega.
+  intros [P Q].
+  exploit list_forall2_length; eauto. intros R. rewrite R in Q.
+  apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk)
+                              (Int.unsigned odst, Int.unsigned odst + Z_of_nat (length bytes2))); simpl.
+  red; intros. generalize (H x H11). unfold loc_out_of_bounds, Intv.In; simpl. omega.
+  generalize (size_chunk_pos chunk); omega.
+  rewrite <- R; rewrite H10. rewrite nat_of_Z_eq. omega. omega.
+(* injections *)
+  intros. inv H0. inv H2. inv H14. inv H15. inv H11. inv H12.
+  exploit Mem.loadbytes_length; eauto. intros LEN.
+(*
+  destruct (zle sz 0).
+  (* empty copy *)
+  rewrite nat_of_Z_neg in LEN; auto. 
+  assert (bytes = nil). destruct bytes; simpl in LEN; congruence.
+  subst. rewrite Mem.storebytes_empty in H9. inv H9.
+  exists f; exists Vundef; exists m1'.
+  split. econstructor; eauto. 
+*)
+  assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Nonempty).
+    eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
+  assert (RPDST: Mem.range_perm m1 bdst (Int.unsigned odst) (Int.unsigned odst + sz) Nonempty).
+    replace sz with (Z_of_nat (length bytes)).
+    eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
+    rewrite LEN. apply nat_of_Z_eq. omega.
+  assert (PSRC: Mem.perm m1 bsrc (Int.unsigned osrc) Nonempty).
+    apply RPSRC. omega.
+  assert (PDST: Mem.perm m1 bdst (Int.unsigned odst) Nonempty).
+    apply RPDST. omega.
+  exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
+  exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
+  exploit Mem.loadbytes_inject; eauto. intros [bytes2 [A B]].
+  exploit Mem.storebytes_mapped_inject; eauto. intros [m2' [C D]].
+  exists f; exists Vundef; exists m2'.
+  split. econstructor; try rewrite EQ1; try rewrite EQ2; eauto. 
+  eapply Mem.aligned_area_inject with (m := m1); eauto.
+  eapply Mem.aligned_area_inject with (m := m1); eauto.
+  eapply Mem.disjoint_or_equal_inject with (m := m1); eauto.
+  split. constructor.
+  split. auto.
+  split. red; split; intros. eauto with mem. 
+  rewrite <- H2. eapply Mem.load_storebytes_other; eauto. 
+  destruct (eq_block b bdst); auto. subst b. 
+  assert (loc_unmapped f bdst ofs). apply H0. generalize (size_chunk_pos chunk); omega. 
+  red in H12. congruence.
+  split. red; split; intros. eauto with mem.
+  rewrite <- H2. eapply Mem.load_storebytes_other; eauto. 
+  destruct (eq_block b b0); auto. subst b0; right.
+  rewrite <- (list_forall2_length B). rewrite LEN. rewrite nat_of_Z_eq; try omega.
+  apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk)
+                              (Int.unsigned odst + delta0, Int.unsigned odst + delta0 + sz)); simpl.
+  red; intros. generalize (H0 x H12). unfold loc_out_of_reach, Intv.In; simpl. 
+  intros. exploit H14; eauto. 
+  exploit Mem.range_perm_in_bounds. eexact RPDST. omega. 
+  omega.
+  generalize (size_chunk_pos chunk); omega.
+  omega.
+  split. apply inject_incr_refl.
+  red; intros; congruence.
+(* determinism *)
+  intros. inv H; inv H0. split. auto. split. auto. congruence.
 Qed.
 
 (** ** Semantics of system calls. *)

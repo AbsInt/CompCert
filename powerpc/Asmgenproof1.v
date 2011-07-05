@@ -115,58 +115,90 @@ Qed.
 
 (** Characterization of PPC registers that correspond to Mach registers. *)
 
-Definition is_data_reg (r: preg) : Prop :=
+Definition is_data_reg (r: preg) : bool :=
   match r with
-  | IR GPR0 => False
-  | PC => False    | LR => False    | CTR => False
-  | CR0_0 => False | CR0_1 => False | CR0_2 => False | CR0_3 => False
-  | CARRY => False
-  | _ => True
+  | IR GPR0 => false
+  | PC => false    | LR => false    | CTR => false
+  | CR0_0 => false | CR0_1 => false | CR0_2 => false | CR0_3 => false
+  | CARRY => false
+  | _ => true
   end.
 
 Lemma ireg_of_is_data_reg:
-  forall (r: mreg), is_data_reg (ireg_of r).
+  forall (r: mreg), is_data_reg (ireg_of r) = true.
 Proof.
-  destruct r; exact I.
+  destruct r; reflexivity.
 Qed.
 
 Lemma freg_of_is_data_reg:
-  forall (r: mreg), is_data_reg (ireg_of r).
+  forall (r: mreg), is_data_reg (ireg_of r) = true.
 Proof.
-  destruct r; exact I.
+  destruct r; reflexivity.
 Qed.
 
 Lemma preg_of_is_data_reg:
-  forall (r: mreg), is_data_reg (preg_of r).
+  forall (r: mreg), is_data_reg (preg_of r) = true.
 Proof.
-  destruct r; exact I.
+  destruct r; reflexivity.
 Qed.
+
+Lemma data_reg_diff:
+  forall r r', is_data_reg r = true -> is_data_reg r' = false -> r <> r'.
+Proof.
+  intros. congruence.
+Qed.
+
+Lemma ireg_diff:
+  forall r r', r <> r' -> IR r <> IR r'.
+Proof.
+  intros. congruence.
+Qed.
+
+Lemma diff_ireg:
+  forall r r', IR r <> IR r' -> r <> r'.
+Proof.
+  intros. congruence.
+Qed.
+
+Hint Resolve ireg_of_is_data_reg freg_of_is_data_reg preg_of_is_data_reg
+             data_reg_diff ireg_diff diff_ireg: ppcgen.
+
+Definition is_nontemp_reg (r: preg) : bool :=
+  match r with
+  | IR GPR0 => false | IR GPR11 => false | IR GPR12 => false
+  | FR FPR0 => false | FR FPR12 => false | FR FPR13 => false
+  | PC => false      | LR => false       | CTR => false
+  | CR0_0 => false   | CR0_1 => false    | CR0_2 => false    | CR0_3 => false
+  | CARRY => false
+  | _ => true
+  end.
+
+Remark is_nontemp_is_data:
+  forall r, is_nontemp_reg r = true -> is_data_reg r = true.
+Proof.
+  destruct r; simpl; try congruence. destruct i; congruence.
+Qed.
+
+Lemma nontemp_reg_diff:
+  forall r r', is_nontemp_reg r = true -> is_nontemp_reg r' = false -> r <> r'.
+Proof.
+  intros. congruence.
+Qed.
+
+Hint Resolve is_nontemp_is_data nontemp_reg_diff: ppcgen.
 
 Lemma ireg_of_not_GPR1:
   forall r, ireg_of r <> GPR1.
 Proof.
   intro. case r; discriminate.
 Qed.
-Lemma ireg_of_not_GPR0:
-  forall r, ireg_of r <> GPR0.
-Proof.
-  intro. case r; discriminate.
-Qed.
-Hint Resolve ireg_of_not_GPR1 ireg_of_not_GPR0: ppcgen.
-
-Lemma preg_of_not:
-  forall r1 r2, ~(is_data_reg r2) -> preg_of r1 <> r2.
-Proof.
-  intros; red; intro. subst r2. elim H. apply preg_of_is_data_reg.
-Qed.
-Hint Resolve preg_of_not: ppcgen.
 
 Lemma preg_of_not_GPR1:
   forall r, preg_of r <> GPR1.
 Proof.
   intro. case r; discriminate.
 Qed.
-Hint Resolve preg_of_not_GPR1: ppcgen.
+Hint Resolve ireg_of_not_GPR1 preg_of_not_GPR1: ppcgen.
 
 Lemma int_temp_for_diff:
   forall r, IR(int_temp_for r) <> preg_of r.
@@ -229,79 +261,63 @@ Proof.
   intros. elim H; auto.
 Qed.
 
-Lemma agree_exten_1:
+Lemma agree_exten:
   forall ms sp rs rs',
   agree ms sp rs ->
-  (forall r, is_data_reg r -> rs'#r = rs#r) ->
+  (forall r, is_data_reg r = true -> rs'#r = rs#r) ->
   agree ms sp rs'.
 Proof.
-  intros. inv H. constructor.
-  apply H0. exact I.
-  auto.
-  intros. rewrite H0. auto. apply preg_of_is_data_reg.
-Qed.
-
-Lemma agree_exten_2:
-  forall ms sp rs rs',
-  agree ms sp rs ->
-  (forall r,
-     r <> IR GPR0 ->
-     r <> PC -> r <> LR -> r <> CTR ->
-     r <> CR0_0 -> r <> CR0_1 -> r <> CR0_2 -> r <> CR0_3 ->
-     r <> CARRY ->
-     rs'#r = rs#r) ->
-  agree ms sp rs'.
-Proof.
-  intros. apply agree_exten_1 with rs. auto.
-  intros. apply H0; (red; intro; subst r; elim H1).
+  intros. inv H. constructor; auto. 
+  intros. rewrite H0; auto with ppcgen.
 Qed.
 
 (** Preservation of register agreement under various assignments. *)
 
 Lemma agree_set_mreg:
-  forall ms sp rs r v v',
+  forall ms sp rs r v rs',
   agree ms sp rs ->
-  Val.lessdef v v' ->
-  agree (Regmap.set r v ms) sp (rs#(preg_of r) <- v').
+  Val.lessdef v (rs'#(preg_of r)) ->
+  (forall r', is_data_reg r' = true -> r' <> preg_of r -> rs'#r' = rs#r') ->
+  agree (Regmap.set r v ms) sp rs'.
 Proof.
-  intros. inv H. constructor.
-  rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_GPR1.
-  auto.
-  intros. unfold Regmap.set. case (RegEq.eq r0 r); intro.
-  subst r0. rewrite Pregmap.gss. auto.
-  rewrite Pregmap.gso. auto. red; intro. 
-  elim n. apply preg_of_injective; auto.
+  intros. inv H. constructor; auto with ppcgen.
+  intros. unfold Regmap.set. destruct (RegEq.eq r0 r).
+  subst r0. auto.
+  rewrite H1; auto with ppcgen. red; intros; elim n; apply preg_of_injective; auto.
 Qed.
 Hint Resolve agree_set_mreg: ppcgen.
 
 Lemma agree_set_mireg:
-  forall ms sp rs r v,
-  agree ms sp (rs#(preg_of r) <- v) ->
+  forall ms sp rs r v (rs': regset),
+  agree ms sp rs ->
+  Val.lessdef v (rs'#(ireg_of r)) ->
   mreg_type r = Tint ->
-  agree ms sp (rs#(ireg_of r) <- v).
+  (forall r', is_data_reg r' = true -> r' <> preg_of r -> rs'#r' = rs#r') ->
+  agree (Regmap.set r v ms) sp rs'.
 Proof.
-  intros. unfold preg_of in H. rewrite H0 in H. auto.
+  intros. eapply agree_set_mreg; eauto.  unfold preg_of; rewrite H1; auto.
 Qed.
 Hint Resolve agree_set_mireg: ppcgen.
 
 Lemma agree_set_mfreg:
-  forall ms sp rs r v,
-  agree ms sp (rs#(preg_of r) <- v) ->
+  forall ms sp rs r v (rs': regset),
+  agree ms sp rs ->
+  Val.lessdef v (rs'#(freg_of r)) ->
   mreg_type r = Tfloat ->
-  agree ms sp (rs#(freg_of r) <- v).
+  (forall r', is_data_reg r' = true -> r' <> preg_of r -> rs'#r' = rs#r') ->
+  agree (Regmap.set r v ms) sp rs'.
 Proof.
-  intros. unfold preg_of in H. rewrite H0 in H. auto.
+  intros. eapply agree_set_mreg; eauto.  unfold preg_of; rewrite H1; auto.
 Qed.
-Hint Resolve agree_set_mfreg: ppcgen.
 
 Lemma agree_set_other:
   forall ms sp rs r v,
   agree ms sp rs ->
-  ~(is_data_reg r) ->
+  is_data_reg r = false ->
   agree ms sp (rs#r <- v).
 Proof.
-  intros. apply agree_exten_1 with rs.
-  auto. intros. apply Pregmap.gso. red; intro; subst r0; contradiction.
+  intros. apply agree_exten with rs.
+  auto. intros. apply Pregmap.gso. congruence.
 Qed.
 Hint Resolve agree_set_other: ppcgen.
 
@@ -313,24 +329,49 @@ Proof.
 Qed.
 Hint Resolve agree_nextinstr: ppcgen.
 
-Lemma agree_set_mireg_twice:
-  forall ms sp rs r v v' v1,
+Lemma agree_undef_regs:
+  forall rl ms sp rs rs',
   agree ms sp rs ->
-  mreg_type r = Tint ->
-  Val.lessdef v v' ->
-  agree (Regmap.set r v ms) sp (rs #(ireg_of r) <- v1 #(ireg_of r) <- v').
+  (forall r, is_data_reg r = true -> ~In r (List.map preg_of rl) -> rs'#r = rs#r) ->
+  agree (undef_regs rl ms) sp rs'.
 Proof.
-  intros. replace (IR (ireg_of r)) with (preg_of r). inv H.
-  split. repeat (rewrite Pregmap.gso; auto with ppcgen). auto.
-  intros. case (mreg_eq r r0); intro.
-  subst r0. rewrite Regmap.gss. rewrite Pregmap.gss. auto.
-  assert (preg_of r <> preg_of r0). 
-    red; intro. elim n. apply preg_of_injective. auto.
-  rewrite Regmap.gso; auto.
-  repeat (rewrite Pregmap.gso; auto).
-  unfold preg_of. rewrite H0. auto.
+  induction rl; simpl; intros.
+  apply agree_exten with rs; auto.
+  apply IHrl with (rs#(preg_of a) <- (rs'#(preg_of a))).
+  apply agree_set_mreg with rs; auto with ppcgen. 
+  intros. unfold Pregmap.set. destruct (PregEq.eq r' (preg_of a)).
+  congruence. auto.
+  intros. unfold Pregmap.set. destruct (PregEq.eq r (preg_of a)).
+  congruence. apply H0; auto. intuition congruence.
 Qed.
-Hint Resolve agree_set_mireg_twice: ppcgen.
+
+Lemma agree_undef_temps:
+  forall ms sp rs rs',
+  agree ms sp rs ->
+  (forall r, is_nontemp_reg r = true -> rs'#r = rs#r) ->
+  agree (undef_temps ms) sp rs'.
+Proof.
+  unfold undef_temps. intros. apply agree_undef_regs with rs; auto.
+  simpl. unfold preg_of; simpl. intros. intuition.
+  apply H0. destruct r; simpl in *; auto.
+  destruct i; intuition. destruct f; intuition.
+Qed.
+Hint Resolve agree_undef_temps: ppcgen.
+
+Lemma agree_set_mreg_undef_temps:
+  forall ms sp rs r v rs',
+  agree ms sp rs ->
+  Val.lessdef v (rs'#(preg_of r)) ->
+  (forall r', is_nontemp_reg r' = true -> r' <> preg_of r -> rs'#r' = rs#r') ->
+  agree (Regmap.set r v (undef_temps ms)) sp rs'.
+Proof.
+  intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))).
+  apply agree_undef_temps with rs; auto.
+  intros. unfold Pregmap.set. destruct (PregEq.eq r0 (preg_of r)). 
+  congruence. apply H1; auto. 
+  auto.
+  intros. rewrite Pregmap.gso; auto. 
+Qed.
 
 Lemma agree_set_twice_mireg:
   forall ms sp rs r v v1 v',
@@ -353,101 +394,6 @@ Proof.
   red; intros. elim n. apply preg_of_injective; auto.
   unfold preg_of. rewrite H0. auto.
 Qed.
-Hint Resolve agree_set_twice_mireg: ppcgen.
-
-Lemma agree_set_commut:
-  forall ms sp rs r1 r2 v1 v2,
-  r1 <> r2 ->
-  agree ms sp ((rs#r2 <- v2)#r1 <- v1) ->
-  agree ms sp ((rs#r1 <- v1)#r2 <- v2).
-Proof.
-  intros. apply agree_exten_1 with ((rs#r2 <- v2)#r1 <- v1). auto.
-  intros. 
-  case (preg_eq r r1); intro.
-  subst r1. rewrite Pregmap.gss. rewrite Pregmap.gso. rewrite Pregmap.gss.
-  auto. auto.
-  case (preg_eq r r2); intro.
-  subst r2. rewrite Pregmap.gss. rewrite Pregmap.gso. rewrite Pregmap.gss.
-  auto. auto.
-  repeat (rewrite Pregmap.gso; auto). 
-Qed. 
-Hint Resolve agree_set_commut: ppcgen.
-
-Lemma agree_nextinstr_commut:
-  forall ms sp rs r v,
-  agree ms sp (rs#r <- v) ->
-  r <> PC ->
-  agree ms sp ((nextinstr rs)#r <- v).
-Proof.
-  intros. unfold nextinstr. apply agree_set_commut. auto. 
-  apply agree_set_other. auto. auto. 
-Qed.
-Hint Resolve agree_nextinstr_commut: ppcgen.
-
-Lemma agree_set_mireg_exten:
-  forall ms sp rs r v (rs': regset),
-  agree ms sp rs ->
-  mreg_type r = Tint ->
-  Val.lessdef v rs'#(ireg_of r) ->
-  (forall r', 
-     r' <> IR GPR0 ->
-     r' <> PC -> r' <> LR -> r' <> CTR ->
-     r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 ->
-     r' <> CARRY ->
-     r' <> IR (ireg_of r) -> rs'#r' = rs#r') ->
-  agree (Regmap.set r v ms) sp rs'.
-Proof.
-  intros. set (v' := rs'#(ireg_of r)). 
-  apply agree_exten_2 with (rs#(ireg_of r) <- v').
-  auto with ppcgen.
-  intros. unfold Pregmap.set. case (PregEq.eq r0 (ireg_of r)); intro.
-  subst r0. auto. apply H2; auto.
-Qed.
-Hint Resolve agree_set_mireg_exten: ppcgen.
-
-Lemma agree_undef_regs:
-  forall rl ms sp rs rs',
-  agree ms sp rs ->
-  (forall r, is_data_reg r -> ~In r (List.map preg_of rl) -> rs'#r = rs#r) ->
-  agree (undef_regs rl ms) sp rs'.
-Proof.
-  induction rl; simpl; intros.
-  apply agree_exten_1 with rs; auto.
-  apply IHrl with (rs#(preg_of a) <- (rs'#(preg_of a))).
-  apply agree_set_mreg; auto.
-  intros. unfold Pregmap.set.
-  destruct (PregEq.eq r (preg_of a)).
-  congruence.
-  apply H0. auto. intuition congruence.
-Qed.
-
-Lemma agree_undef_temps:
-  forall ms sp rs rs',
-  agree ms sp rs ->
-  (forall r, 
-     r <> IR GPR0 ->
-     r <> PC -> r <> LR -> r <> CTR ->
-     r <> CR0_0 -> r <> CR0_1 -> r <> CR0_2 -> r <> CR0_3 ->
-     r <> CARRY ->
-     r <> IR GPR11 -> r <> IR GPR12 ->
-     r <> FR FPR0 -> r <> FR FPR12 -> r <> FR FPR13 ->
-     rs'#r = rs#r) ->
-  agree (undef_temps ms) sp rs'.
-Proof.
-  unfold undef_temps. intros. apply agree_undef_regs with rs; auto.
-  simpl. unfold preg_of; simpl. intros. 
-  apply H0; (red; intro; subst; simpl in H1; intuition congruence).
-Qed.
-Hint Resolve agree_undef_temps: ppcgen.
-
-Lemma agree_undef_temps_2:
-  forall ms sp rs,
-  agree ms sp rs ->
-  agree (undef_temps ms) sp rs.
-Proof.
-  intros. apply agree_undef_temps with rs; auto. 
-Qed.
-Hint Resolve agree_undef_temps_2: ppcgen.
 
 (** Useful properties of the PC and GPR0 registers. *)
 
@@ -457,15 +403,6 @@ Proof.
   intros. unfold nextinstr. apply Pregmap.gso. auto.
 Qed.
 Hint Resolve nextinstr_inv: ppcgen.
-
-Lemma nextinstr_set_preg:
-  forall rs m v,
-  (nextinstr (rs#(preg_of m) <- v))#PC = Val.add rs#PC Vone.
-Proof.
-  intros. unfold nextinstr. rewrite Pregmap.gss. 
-  rewrite Pregmap.gso. auto. apply sym_not_eq. auto with ppcgen.
-Qed.
-Hint Resolve nextinstr_set_preg: ppcgen.
 
 Lemma gpr_or_zero_not_zero:
   forall rs r, r <> GPR0 -> gpr_or_zero rs r = rs#r.
@@ -622,6 +559,19 @@ Qed.
 
 (** * Correctness of PowerPC constructor functions *)
 
+(*
+Ltac SIMP :=
+  match goal with
+  | [ |- nextinstr _ _ = _ ] => rewrite nextinstr_inv; [auto | auto with ppcgen]
+  | [ |- Pregmap.get ?x (Pregmap.set ?x _ _) = _ ] => rewrite Pregmap.gss; auto
+  | [ |- Pregmap.set ?x _ _ ?x = _ ] => rewrite Pregmap.gss; auto
+  | [ |- Pregmap.get _ (Pregmap.set _ _ _) = _ ] => rewrite Pregmap.gso; [auto | auto with ppcgen]
+  | [ |- Pregmap.set _ _ _ _ = _ ] => rewrite Pregmap.gso; [auto | auto with ppcgen]
+  end.
+*)
+Ltac SIMP :=
+  (rewrite nextinstr_inv || rewrite Pregmap.gss || rewrite Pregmap.gso); auto with ppcgen.
+
 (** Properties of comparisons. *)
 
 Lemma compare_float_spec:
@@ -630,15 +580,13 @@ Lemma compare_float_spec:
      rs1#CR0_0 = Val.cmpf Clt v1 v2
   /\ rs1#CR0_1 = Val.cmpf Cgt v1 v2
   /\ rs1#CR0_2 = Val.cmpf Ceq v1 v2
-  /\ forall r', r' <> PC -> r' <> CR0_0 -> r' <> CR0_1 ->
-       r' <> CR0_2 -> r' <> CR0_3 -> rs1#r' = rs#r'.
+  /\ forall r', r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 -> r' <> PC -> rs1#r' = rs#r'.
 Proof.
   intros. unfold rs1.
   split. reflexivity.
   split. reflexivity.
   split. reflexivity.
-  intros. rewrite nextinstr_inv; auto.
-  unfold compare_float. repeat (rewrite Pregmap.gso; auto).
+  intros. unfold compare_float. repeat SIMP.
 Qed.
 
 Lemma compare_sint_spec:
@@ -647,15 +595,13 @@ Lemma compare_sint_spec:
      rs1#CR0_0 = Val.cmp Clt v1 v2
   /\ rs1#CR0_1 = Val.cmp Cgt v1 v2
   /\ rs1#CR0_2 = Val.cmp Ceq v1 v2
-  /\ forall r', r' <> PC -> r' <> CR0_0 -> r' <> CR0_1 ->
-       r' <> CR0_2 -> r' <> CR0_3 -> rs1#r' = rs#r'.
+  /\ forall r', r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 -> r' <> PC -> rs1#r' = rs#r'.
 Proof.
   intros. unfold rs1.
   split. reflexivity.
   split. reflexivity.
   split. reflexivity.
-  intros. rewrite nextinstr_inv; auto.
-  unfold compare_sint. repeat (rewrite Pregmap.gso; auto).
+  intros. unfold compare_sint. repeat SIMP.
 Qed.
 
 Lemma compare_uint_spec:
@@ -664,15 +610,13 @@ Lemma compare_uint_spec:
      rs1#CR0_0 = Val.cmpu Clt v1 v2
   /\ rs1#CR0_1 = Val.cmpu Cgt v1 v2
   /\ rs1#CR0_2 = Val.cmpu Ceq v1 v2
-  /\ forall r', r' <> PC -> r' <> CR0_0 -> r' <> CR0_1 ->
-       r' <> CR0_2 -> r' <> CR0_3 -> rs1#r' = rs#r'.
+  /\ forall r', r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 -> r' <> PC -> rs1#r' = rs#r'.
 Proof.
   intros. unfold rs1.
   split. reflexivity.
   split. reflexivity.
   split. reflexivity.
-  intros. rewrite nextinstr_inv; auto.
-  unfold compare_uint. repeat (rewrite Pregmap.gso; auto).
+  intros. unfold compare_uint. repeat SIMP.
 Qed.
 
 (** Loading a constant. *)
@@ -689,11 +633,9 @@ Proof.
   (* addi *)
   exists (nextinstr (rs#r <- (Vint n))).
   split. apply exec_straight_one. 
-  simpl. rewrite Int.add_commut. rewrite Int.add_zero. reflexivity.
+  simpl. rewrite Int.add_zero_l. auto.
   reflexivity. 
-  split. rewrite nextinstr_inv; auto with ppcgen.
-   apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP. intros; repeat SIMP. 
   (* addis *)
   generalize (Int.eq_spec (low_s n) Int.zero); case (Int.eq (low_s n) Int.zero); intro.
   exists (nextinstr (rs#r <- (Vint n))).
@@ -701,19 +643,16 @@ Proof.
   simpl. rewrite Int.add_commut. 
   rewrite <- H. rewrite low_high_s. reflexivity.
   reflexivity. 
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP. intros; repeat SIMP. 
   (* addis + ori *)
   pose (rs1 := nextinstr (rs#r <- (Vint (Int.shl (high_u n) (Int.repr 16))))).
   exists (nextinstr (rs1#r <- (Vint n))).
   split. eapply exec_straight_two. 
-  simpl. rewrite Int.add_commut. rewrite Int.add_zero. reflexivity.
+  simpl. rewrite Int.add_zero_l. reflexivity.
   simpl. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gss. 
   unfold Val.or. rewrite low_high_u. reflexivity.
   reflexivity. reflexivity.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
-  unfold rs1. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
+  unfold rs1. split. repeat SIMP. intros; repeat SIMP. 
 Qed.
 
 (** Add integer immediate. *)
@@ -734,8 +673,7 @@ Proof.
   split. apply exec_straight_one. 
   simpl. rewrite gpr_or_zero_not_zero; auto.
   reflexivity. 
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto. 
+  split. repeat SIMP. intros. repeat SIMP.
   (* addis *)
   generalize (Int.eq_spec (low_s n) Int.zero); case (Int.eq (low_s n) Int.zero); intro.
   exists (nextinstr (rs#r1 <- (Val.add rs#r2 (Vint n)))).
@@ -744,8 +682,7 @@ Proof.
   generalize (low_high_s n). rewrite H1. rewrite Int.add_zero. intro.
   rewrite H2. auto.
   reflexivity.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP. intros; repeat SIMP.
   (* addis + addi *)
   pose (rs1 := nextinstr (rs#r1 <- (Val.add rs#r2 (Vint (Int.shl (high_s n) (Int.repr 16)))))).
   exists (nextinstr (rs1#r1 <- (Val.add rs#r2 (Vint n)))).
@@ -755,9 +692,7 @@ Proof.
   unfold rs1 at 1. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gss.
   rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
   reflexivity. reflexivity. 
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
-  unfold rs1. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  unfold rs1; split. repeat SIMP. intros; repeat SIMP.
 Qed. 
 
 (** And integer immediate. *)
@@ -770,10 +705,7 @@ Lemma andimm_correct:
      exec_straight (andimm r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = v
   /\ rs'#CR0_2 = Val.cmp Ceq v Vzero
-  /\ forall r': preg,
-       r' <> r1 -> r' <> GPR0 -> r' <> PC ->
-       r' <> CR0_0 -> r' <> CR0_1 -> r' <> CR0_2 -> r' <> CR0_3 ->
-       rs'#r' = rs#r'.
+  /\ forall r', is_data_reg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm.
   case (Int.eq (high_u n) Int.zero).
@@ -782,9 +714,9 @@ Proof.
   generalize (compare_sint_spec (rs#r1 <- v) v Vzero).
   intros [A [B [C D]]].
   split. apply exec_straight_one. reflexivity. reflexivity.
-  split. rewrite D; try discriminate. apply Pregmap.gss. 
+  split. rewrite D; auto with ppcgen. SIMP. 
   split. auto.
-  intros. rewrite D; auto. apply Pregmap.gso; auto.
+  intros. rewrite D; auto with ppcgen. SIMP.
   (* andis *)
   generalize (Int.eq_spec (low_u n) Int.zero);
   case (Int.eq (low_u n) Int.zero); intro.
@@ -794,9 +726,9 @@ Proof.
   split. apply exec_straight_one. simpl.
   generalize (low_high_u n). rewrite H0. rewrite Int.or_zero. 
   intro. rewrite H1. reflexivity. reflexivity.
-  split. rewrite D; try discriminate. apply Pregmap.gss. 
+  split. rewrite D; auto with ppcgen. SIMP. 
   split. auto.
-  intros. rewrite D; auto. apply Pregmap.gso; auto.
+  intros. rewrite D; auto with ppcgen. SIMP.
   (* loadimm + and *)
   generalize (loadimm_correct GPR0 n (Pand_ r1 r2 GPR0 :: k) rs m).
   intros [rs1 [EX1 [RES1 OTHER1]]].
@@ -807,9 +739,9 @@ Proof.
   apply exec_straight_one. simpl. rewrite RES1. 
   rewrite (OTHER1 r2). reflexivity. congruence. congruence.
   reflexivity. 
-  split. rewrite D; try discriminate. apply Pregmap.gss. 
+  split. rewrite D; auto with ppcgen. SIMP. 
   split. auto.
-  intros. rewrite D; auto. rewrite Pregmap.gso; auto.
+  intros. rewrite D; auto with ppcgen. SIMP.
 Qed.
 
 (** Or integer immediate. *)
@@ -827,8 +759,8 @@ Proof.
   (* ori *)
   exists (nextinstr (rs#r1 <- v)).
   split. apply exec_straight_one. reflexivity. reflexivity.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP.
+  intros. repeat SIMP.
   (* oris *)
   generalize (Int.eq_spec (low_u n) Int.zero);
   case (Int.eq (low_u n) Int.zero); intro.
@@ -836,19 +768,12 @@ Proof.
   split. apply exec_straight_one. simpl.
   generalize (low_high_u n). rewrite H. rewrite Int.or_zero. 
   intro. rewrite H0. reflexivity. reflexivity.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP.
+  intros. repeat SIMP.
   (* oris + ori *)
-  pose (rs1 := nextinstr (rs#r1 <- (Val.or rs#r2 (Vint (Int.shl (high_u n) (Int.repr 16)))))).
-  exists (nextinstr (rs1#r1 <- v)).
-  split. apply exec_straight_two with rs1 m.
-  reflexivity. simpl. unfold rs1 at 1. 
-  rewrite nextinstr_inv; auto with ppcgen.
-  rewrite Pregmap.gss. rewrite Val.or_assoc. simpl. 
-  rewrite low_high_u. reflexivity. reflexivity. reflexivity. 
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
-  unfold rs1. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
+  econstructor; split. eapply exec_straight_two; simpl; reflexivity.
+  split. repeat rewrite nextinstr_inv; auto with ppcgen. repeat rewrite Pregmap.gss.   rewrite Val.or_assoc. simpl. rewrite low_high_u. reflexivity. 
+  intros. repeat SIMP.
 Qed.
 
 (** Xor integer immediate. *)
@@ -866,8 +791,7 @@ Proof.
   (* xori *)
   exists (nextinstr (rs#r1 <- v)).
   split. apply exec_straight_one. reflexivity. reflexivity.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP. intros. repeat SIMP.
   (* xoris *)
   generalize (Int.eq_spec (low_u n) Int.zero);
   case (Int.eq (low_u n) Int.zero); intro.
@@ -875,20 +799,12 @@ Proof.
   split. apply exec_straight_one. simpl.
   generalize (low_high_u_xor n). rewrite H. rewrite Int.xor_zero. 
   intro. rewrite H0. reflexivity. reflexivity.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  split. repeat SIMP. intros. repeat SIMP.
   (* xoris + xori *)
-  pose (rs1 := nextinstr (rs#r1 <- (Val.xor rs#r2 (Vint (Int.shl (high_u n) (Int.repr 16)))))).
-  exists (nextinstr (rs1#r1 <- v)).
-  split. apply exec_straight_two with rs1 m.
-  reflexivity. simpl. unfold rs1 at 1. 
-  rewrite nextinstr_inv; try discriminate. 
-  rewrite Pregmap.gss. rewrite Val.xor_assoc. simpl. 
-  rewrite low_high_u_xor. reflexivity. reflexivity. reflexivity. 
-  split. rewrite nextinstr_inv; auto with ppcgen.
-  apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
-  unfold rs1. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
+  econstructor; split. eapply exec_straight_two; simpl; reflexivity.
+  split. repeat rewrite nextinstr_inv; auto with ppcgen. repeat rewrite Pregmap.gss.
+  rewrite Val.xor_assoc. simpl. rewrite low_high_u_xor. reflexivity. 
+  intros. repeat SIMP.
 Qed.
 
 (** Indexed memory loads. *)
@@ -906,24 +822,23 @@ Proof.
   intros. unfold loadind. destruct (Int.eq (high_s ofs) Int.zero).
 (* one load *)
   exists (nextinstr (rs#(preg_of dst) <- v)); split.
+  unfold preg_of. rewrite H0.
   destruct ty; apply exec_straight_one; auto with ppcgen; simpl.
   unfold load1. rewrite gpr_or_zero_not_zero; auto.
-  simpl in *. rewrite H. unfold preg_of; rewrite H0. auto.
+  simpl in *. rewrite H. auto.
   unfold load1. rewrite gpr_or_zero_not_zero; auto.
-  simpl in *. rewrite H. unfold preg_of; rewrite H0. auto.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+  simpl in *. rewrite H. auto.
+  split. repeat SIMP. intros. repeat SIMP.
 (* loadimm + one load *)
   exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [A [B C]]]. 
   exists (nextinstr (rs'#(preg_of dst) <- v)); split.
   eapply exec_straight_trans. eexact A.
+  unfold preg_of. rewrite H0.
   destruct ty; apply exec_straight_one; auto with ppcgen; simpl.
-  unfold load2. rewrite B. rewrite C; auto with ppcgen. simpl in H. rewrite H. 
-  unfold preg_of; rewrite H0. auto. congruence.
-  unfold load2. rewrite B. rewrite C; auto with ppcgen. simpl in H. rewrite H. 
-  unfold preg_of; rewrite H0. auto. congruence.
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss. 
-  intros. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto.
+  unfold load2. rewrite B. rewrite C; auto with ppcgen. simpl in H. rewrite H. auto.
+  unfold load2. rewrite B. rewrite C; auto with ppcgen. simpl in H. rewrite H. auto.
+  split. repeat SIMP.
+  intros. repeat SIMP. 
 Qed.
 
 (** Indexed memory stores. *)
@@ -948,7 +863,7 @@ Proof.
   intros. apply nextinstr_inv; auto.
 (* loadimm + one store *)
   exploit (loadimm_correct GPR0 ofs); eauto. intros [rs' [A [B C]]]. 
-  assert (rs' base = rs base). apply C; auto with ppcgen. congruence.
+  assert (rs' base = rs base). apply C; auto with ppcgen. 
   assert (rs' (preg_of src) = rs (preg_of src)). apply C; auto with ppcgen. 
   exists (nextinstr rs').
   split. eapply exec_straight_trans. eexact A. 
@@ -1035,17 +950,16 @@ Ltac UseTypeInfo :=
 
 (** Translation of conditions. *)
 
-Lemma transl_cond_correct_aux:
-  forall cond args k ms sp rs m,
+Lemma transl_cond_correct_1:
+  forall cond args k rs m,
   map mreg_type args = type_of_condition cond ->
-  agree ms sp rs ->
   exists rs',
      exec_straight (transl_cond cond args k) rs m k rs' m
   /\ rs'#(reg_of_crbit (fst (crbit_for_cond cond))) = 
        (if snd (crbit_for_cond cond)
         then eval_condition_total cond (map rs (map preg_of args))
         else Val.notbool (eval_condition_total cond (map rs (map preg_of args))))
-  /\ agree ms sp rs'.
+  /\ forall r, is_data_reg r = true -> rs'#r = rs#r.
 Proof.
   intros.
   destruct cond; simpl in H; TypeInv; simpl; UseTypeInfo.
@@ -1056,7 +970,7 @@ Proof.
   apply exec_straight_one. simpl; reflexivity. reflexivity.
   split. 
   case c; simpl; auto; rewrite <- Val.negate_cmp; simpl; auto.
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   (* Ccompu *)
   destruct (compare_uint_spec rs (rs (ireg_of m0)) (rs (ireg_of m1)))
   as [A [B [C D]]].
@@ -1064,7 +978,7 @@ Proof.
   apply exec_straight_one. simpl; reflexivity. reflexivity.
   split. 
   case c; simpl; auto; rewrite <- Val.negate_cmpu; simpl; auto.
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   (* Ccompimm *)
   case (Int.eq (high_s i) Int.zero).
   destruct (compare_sint_spec rs (rs (ireg_of m0)) (Vint i))
@@ -1073,21 +987,20 @@ Proof.
   apply exec_straight_one. simpl. eauto. reflexivity.
   split. 
   case c; simpl; auto; rewrite <- Val.negate_cmp; simpl; auto.
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   generalize (loadimm_correct GPR0 i (Pcmpw (ireg_of m0) GPR0 :: k) rs m).
   intros [rs1 [EX1 [RES1 OTH1]]].
   destruct (compare_sint_spec rs1 (rs (ireg_of m0)) (Vint i))
   as [A [B [C D]]].
   assert (rs1 (ireg_of m0) = rs (ireg_of m0)).
-    apply OTH1; auto with ppcgen. decEq. auto with ppcgen.
+    apply OTH1; auto with ppcgen. 
   exists (nextinstr (compare_sint rs1 (rs1 (ireg_of m0)) (Vint i))).
   split. eapply exec_straight_trans. eexact EX1.
   apply exec_straight_one. simpl. rewrite RES1; rewrite H; auto.
   reflexivity. 
   split. rewrite H. 
   case c; simpl; auto; rewrite <- Val.negate_cmp; simpl; auto.
-  apply agree_exten_2 with rs; auto.
-  intros. rewrite H; rewrite D; auto. 
+  intros. rewrite H; rewrite D; auto with ppcgen.
   (* Ccompuimm *)
   case (Int.eq (high_u i) Int.zero).
   destruct (compare_uint_spec rs (rs (ireg_of m0)) (Vint i))
@@ -1096,27 +1009,25 @@ Proof.
   apply exec_straight_one. simpl. eauto. reflexivity.
   split. 
   case c; simpl; auto; rewrite <- Val.negate_cmpu; simpl; auto.
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   generalize (loadimm_correct GPR0 i (Pcmplw (ireg_of m0) GPR0 :: k) rs m).
   intros [rs1 [EX1 [RES1 OTH1]]].
   destruct (compare_uint_spec rs1 (rs (ireg_of m0)) (Vint i))
   as [A [B [C D]]].
-  assert (rs1 (ireg_of m0) = rs (ireg_of m0)).
-    apply OTH1; auto with ppcgen. decEq. auto with ppcgen.
+  assert (rs1 (ireg_of m0) = rs (ireg_of m0)). apply OTH1; auto with ppcgen.
   exists (nextinstr (compare_uint rs1 (rs1 (ireg_of m0)) (Vint i))).
   split. eapply exec_straight_trans. eexact EX1.
   apply exec_straight_one. simpl. rewrite RES1; rewrite H; auto.
   reflexivity. 
   split. rewrite H. 
   case c; simpl; auto; rewrite <- Val.negate_cmpu; simpl; auto.
-  apply agree_exten_2 with rs; auto.
-  intros. rewrite H; rewrite D; auto. 
+  intros. rewrite H; rewrite D; auto with ppcgen.
   (* Ccompf *)
   destruct (floatcomp_correct c (freg_of m0) (freg_of m1) k rs m)
   as [rs' [EX [RES OTH]]].
   exists rs'. split. auto. 
   split. apply RES. 
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   (* Cnotcompf *)
   destruct (floatcomp_correct c (freg_of m0) (freg_of m1) k rs m)
   as [rs' [EX [RES OTH]]].
@@ -1126,23 +1037,41 @@ Proof.
     intros v1 v2; unfold Val.cmpf; destruct v1; destruct v2; auto. 
     apply Val.notbool_idem2.
   rewrite H. case (snd (crbit_for_fcmp c)); simpl; auto.
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   (* Cmaskzero *)
-  destruct (andimm_correct GPR0 (ireg_of m0) i k rs m (ireg_of_not_GPR0 m0))
-  as [rs' [A [B [C D]]]].
+  destruct (andimm_correct GPR0 (ireg_of m0) i k rs m)
+  as [rs' [A [B [C D]]]]. auto with ppcgen.
   exists rs'. split. assumption. 
   split. rewrite C. auto. 
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
   (* Cmasknotzero *)
-  destruct (andimm_correct GPR0 (ireg_of m0) i k rs m (ireg_of_not_GPR0 m0))
-  as [rs' [A [B [C D]]]].
+  destruct (andimm_correct GPR0 (ireg_of m0) i k rs m)
+  as [rs' [A [B [C D]]]]. auto with ppcgen.
   exists rs'. split. assumption. 
   split. rewrite C. rewrite Val.notbool_idem3. reflexivity. 
-  apply agree_exten_2 with rs; auto.
+  auto with ppcgen.
+Qed.
+
+Lemma transl_cond_correct_2:
+  forall cond args k rs m b,
+  map mreg_type args = type_of_condition cond ->
+  eval_condition cond (map rs (map preg_of args)) m = Some b ->
+  exists rs',
+     exec_straight (transl_cond cond args k) rs m k rs' m
+  /\ rs'#(reg_of_crbit (fst (crbit_for_cond cond))) = 
+       (if snd (crbit_for_cond cond)
+        then Val.of_bool b
+        else Val.notbool (Val.of_bool b))
+  /\ forall r, is_data_reg r = true -> rs'#r = rs#r.
+Proof.
+  intros.
+  assert (eval_condition_total cond rs ## (preg_of ## args) = Val.of_bool b).
+    apply eval_condition_weaken with m. auto.
+  rewrite <- H1. eapply transl_cond_correct_1; eauto.
 Qed.
 
 Lemma transl_cond_correct:
-  forall cond args k ms sp rs m m' b,
+  forall cond args k ms sp rs m b m',
   map mreg_type args = type_of_condition cond ->
   agree ms sp rs ->
   eval_condition cond (map ms args) m = Some b ->
@@ -1156,10 +1085,121 @@ Lemma transl_cond_correct:
   /\ agree ms sp rs'.
 Proof.
   intros.
-  assert (eval_condition_total cond rs ## (preg_of ## args) = Val.of_bool b).
-    apply eval_condition_weaken with m'. eapply eval_condition_lessdef; eauto. 
-    eapply preg_vals; eauto.
-  rewrite <- H3. eapply transl_cond_correct_aux; eauto.
+  exploit transl_cond_correct_2. eauto. 
+    eapply eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
+  intros [rs' [A [B C]]].
+  exists rs'; split. eauto. split. auto. apply agree_exten with rs; auto.
+Qed.
+
+(** Translation of condition operators *)
+
+Remark add_carry_eq0:
+  forall i,
+  Vint (Int.add (Int.add (Int.sub Int.zero i) i)
+                (Int.add_carry Int.zero (Int.xor i Int.mone) Int.one)) =
+  Val.of_bool (Int.eq i Int.zero).
+Proof.
+  intros. rewrite <- Int.sub_add_l. rewrite Int.add_zero_l.
+  rewrite Int.sub_idem. rewrite Int.add_zero_l. fold (Int.not i).
+  predSpec Int.eq Int.eq_spec i Int.zero. 
+  subst i. reflexivity.
+  unfold Val.of_bool, Vfalse. decEq. 
+  unfold Int.add_carry. rewrite Int.unsigned_zero. rewrite Int.unsigned_one.
+  apply zlt_true.
+  generalize (Int.unsigned_range (Int.not i)); intro. 
+  assert (Int.unsigned (Int.not i) <> Int.modulus - 1).
+    red; intros.
+    assert (Int.repr (Int.unsigned (Int.not i)) = Int.mone).
+      rewrite H1. apply Int.mkint_eq. reflexivity. 
+   rewrite Int.repr_unsigned in H2. 
+   assert (Int.not (Int.not i) = Int.zero).
+   rewrite H2. apply Int.mkint_eq; reflexivity.
+  rewrite Int.not_involutive in H3. 
+  congruence.
+  omega.
+Qed.
+
+Remark add_carry_ne0:
+  forall i,
+  Vint (Int.add (Int.add i (Int.xor (Int.add i Int.mone) Int.mone))
+                (Int.add_carry i Int.mone Int.zero)) =
+  Val.of_bool (negb (Int.eq i Int.zero)).
+Proof.
+  intros. fold (Int.not (Int.add i Int.mone)). rewrite Int.not_neg.
+  rewrite (Int.add_commut  (Int.neg (Int.add i Int.mone))).
+  rewrite <- Int.sub_add_opp. rewrite Int.sub_add_r. rewrite Int.sub_idem. 
+  rewrite Int.add_zero_l. rewrite Int.add_neg_zero. rewrite Int.add_zero_l.
+  unfold Int.add_carry, Int.eq. 
+  rewrite Int.unsigned_zero.  rewrite Int.unsigned_mone.
+  unfold negb, Val.of_bool, Vtrue, Vfalse.
+  destruct (zeq (Int.unsigned i) 0); decEq.
+  apply zlt_true. omega.
+  apply zlt_false. generalize (Int.unsigned_range i). omega.
+Qed.
+
+Lemma transl_cond_op_correct:
+  forall cond args r k rs m b,
+  mreg_type r = Tint ->
+  map mreg_type args = type_of_condition cond ->
+  eval_condition cond (map rs (map preg_of args)) m = Some b ->
+  exists rs',
+     exec_straight (transl_cond_op cond args r k) rs m k rs' m
+  /\ rs'#(ireg_of r) = Val.of_bool b
+  /\ forall r', is_data_reg r' = true -> r' <> ireg_of r -> rs'#r' = rs#r'.
+Proof.
+  intros until args. unfold transl_cond_op.
+  destruct (classify_condition cond args);
+  intros until b; intros TY1 TY2 EV; simpl in TY2.
+(* eq 0 *)
+  inv TY2. simpl in EV. unfold preg_of in *; rewrite H0 in *.
+  econstructor; split.
+  eapply exec_straight_two; simpl; reflexivity.
+  split. repeat SIMP. destruct (rs (ireg_of r)); inv EV. simpl. 
+  apply add_carry_eq0.
+  intros; repeat SIMP.
+(* ne 0 *)
+  inv TY2. simpl in EV. unfold preg_of in *; rewrite H0 in *.
+  econstructor; split.
+  eapply exec_straight_two; simpl; reflexivity.
+  split. repeat SIMP. rewrite gpr_or_zero_not_zero; auto with ppcgen.
+  destruct (rs (ireg_of r)); inv EV. simpl. 
+  apply add_carry_ne0.
+  intros; repeat SIMP.
+(* ge 0 *)
+  inv TY2. simpl in EV. unfold preg_of in *; rewrite H0 in *.
+  econstructor; split.
+  eapply exec_straight_two; simpl; reflexivity.
+  split. repeat SIMP. rewrite Val.rolm_ge_zero. 
+  destruct (rs (ireg_of r)); simpl; congruence. 
+  intros; repeat SIMP.
+(* lt 0 *)
+  inv TY2. simpl in EV. unfold preg_of in *; rewrite H0 in *.
+  econstructor; split.
+  apply exec_straight_one; simpl; reflexivity.
+  split. repeat SIMP. rewrite Val.rolm_lt_zero. 
+  destruct (rs (ireg_of r)); simpl; congruence. 
+  intros; repeat SIMP.
+(* default *)
+  set (bit := fst (crbit_for_cond c)).
+  set (isset := snd (crbit_for_cond c)).
+  set (k1 :=
+        Pmfcrbit (ireg_of r) bit ::
+        (if isset
+         then k
+         else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k)).
+  generalize (transl_cond_correct_2 c rl k1 rs m b TY2 EV).
+  fold bit; fold isset. 
+  intros [rs1 [EX1 [RES1 AG1]]].
+  destruct isset.
+  (* bit set *)
+  econstructor; split.  eapply exec_straight_trans. eexact EX1. 
+  unfold k1. apply exec_straight_one; simpl; reflexivity. 
+  split. repeat SIMP. intros; repeat SIMP.
+  (* bit clear *)
+  econstructor; split.  eapply exec_straight_trans. eexact EX1. 
+  unfold k1. eapply exec_straight_two; simpl; reflexivity. 
+  split. repeat SIMP. rewrite RES1. destruct b; compute; reflexivity.
+  intros; repeat SIMP.
 Qed.
 
 (** Translation of arithmetic operations. *)
@@ -1167,25 +1207,123 @@ Qed.
 Ltac TranslOpSimpl :=
   econstructor; split;
   [ apply exec_straight_one; [simpl; eauto | reflexivity]
-  | auto 7 with ppcgen; fail ].
-(*
-  match goal with
-  | H: (Val.lessdef ?v ?v') |-
-         exists rs' : regset,
-         exec_straight ?c ?rs ?m ?k rs' ?m /\
-         agree (Regmap.set ?res ?v ?ms) ?sp rs'  =>
+  | split; intros; (repeat SIMP; fail) ].
 
-    (exists (nextinstr (rs#(ireg_of res) <- v'));
-     split; 
-     [ apply exec_straight_one; auto; fail
-     | auto with ppcgen ])
-  ||
-    (exists (nextinstr (rs#(freg_of res) <- v'));
-     split; 
-     [ apply exec_straight_one; auto; fail
-     | auto with ppcgen ])
-  end.
-*)
+Lemma transl_op_correct_aux:
+  forall op args res k (rs: regset) m v,
+  wt_instr (Mop op args res) ->
+  eval_operation ge (rs#GPR1) op (map rs (map preg_of args)) m = Some v ->
+  exists rs',
+     exec_straight (transl_op op args res k) rs m k rs' m
+  /\ rs'#(preg_of res) = v
+  /\ forall r,
+     match op with Omove => is_data_reg r = true | _ => is_nontemp_reg r = true end ->
+     r <> preg_of res -> rs'#r = rs#r.
+Proof.
+  intros.
+  exploit eval_operation_weaken; eauto. intro EV.
+  inv H.
+  (* Omove *)
+  simpl in *. 
+  exists (nextinstr (rs#(preg_of res) <- (rs#(preg_of r1)))).
+  split. unfold preg_of. rewrite <- H2.
+  destruct (mreg_type r1); apply exec_straight_one; auto.
+  split. repeat SIMP. intros; repeat SIMP.
+  (* Other instructions *)
+  destruct op; simpl; simpl in H5; injection H5; clear H5; intros;
+  TypeInv; simpl in *; UseTypeInfo; try (TranslOpSimpl).
+  (* Omove again *)
+  congruence.
+  (* Ointconst *)
+  destruct (loadimm_correct (ireg_of res) i k rs m) as [rs' [A [B C]]]. 
+  exists rs'. split. auto. split. auto. auto with ppcgen.
+  (* Oaddrsymbol *)
+  change (find_symbol_offset ge i i0) with (symbol_offset ge i i0) in *.
+  set (v' := symbol_offset ge i i0) in *.
+  caseEq (symbol_is_small_data i i0); intro SD.
+  (* small data *)
+  econstructor; split. apply exec_straight_one; simpl; reflexivity.
+  split. repeat SIMP.
+  rewrite (small_data_area_addressing _ _ _ SD). unfold v', symbol_offset. 
+  destruct (Genv.find_symbol ge i); auto. rewrite Int.add_zero; auto. 
+  intros; repeat SIMP.
+  (* not small data *)
+Opaque Val.add.
+  econstructor; split. eapply exec_straight_two; simpl; reflexivity.
+  split. repeat SIMP. rewrite gpr_or_zero_zero.
+  rewrite gpr_or_zero_not_zero; auto with ppcgen. repeat SIMP. 
+  rewrite (Val.add_commut Vzero). rewrite high_half_zero. 
+  rewrite Val.add_commut. rewrite low_high_half. auto.
+  intros; repeat SIMP.
+  (* Oaddrstack *)
+  destruct (addimm_correct (ireg_of res) GPR1 i k rs m) as [rs' [EX [RES OTH]]].
+    auto with ppcgen. congruence.
+  exists rs'; auto with ppcgen.
+  (* Ocast8unsigned *)
+  econstructor; split. apply exec_straight_one; simpl; reflexivity.
+  split. repeat SIMP. 
+  destruct (rs (ireg_of m0)); simpl; auto. 
+  rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
+  intros; repeat SIMP.
+  (* Ocast16unsigned *)
+  econstructor; split. apply exec_straight_one; simpl; reflexivity.
+  split. repeat SIMP. 
+  destruct (rs (ireg_of m0)); simpl; auto. 
+  rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
+  intros; repeat SIMP.
+  (* Oaddimm *)
+  destruct (addimm_correct (ireg_of res) (ireg_of m0) i k rs m) as [rs' [A [B C]]]; auto with ppcgen.
+  exists rs'; auto with ppcgen.
+  (* Osubimm *)
+  case (Int.eq (high_s i) Int.zero).
+  TranslOpSimpl.
+  destruct (loadimm_correct GPR0 i (Psubfc (ireg_of res) (ireg_of m0) GPR0 :: k) rs m) as [rs1 [EX [RES OTH]]].
+  econstructor; split.
+  eapply exec_straight_trans. eexact EX. apply exec_straight_one; simpl; reflexivity.
+  split. repeat SIMP. rewrite RES. rewrite OTH; auto with ppcgen. 
+  intros; repeat SIMP. 
+  (* Omulimm *)
+  case (Int.eq (high_s i) Int.zero).
+  TranslOpSimpl.
+  destruct (loadimm_correct GPR0 i (Pmullw (ireg_of res) (ireg_of m0) GPR0 :: k) rs m) as [rs1 [EX [RES OTH]]].
+  econstructor; split.
+  eapply exec_straight_trans. eexact EX. apply exec_straight_one; simpl; reflexivity.
+  split. repeat SIMP. rewrite RES. rewrite OTH; auto with ppcgen. 
+  intros; repeat SIMP.
+  (* Oand *)
+  set (v' := Val.and (rs (ireg_of m0)) (rs (ireg_of m1))) in *.
+  pose (rs1 := rs#(ireg_of res) <- v').
+  generalize (compare_sint_spec rs1 v' Vzero).
+  intros [A [B [C D]]].
+  econstructor; split. apply exec_straight_one; simpl; reflexivity.
+  split. rewrite D; auto with ppcgen. unfold rs1. SIMP. 
+  intros. rewrite D; auto with ppcgen. unfold rs1. SIMP.
+  (* Oandimm *)
+  destruct (andimm_correct (ireg_of res) (ireg_of m0) i k rs m) as [rs' [A [B [C D]]]]; auto with ppcgen.
+  exists rs'; auto with ppcgen.
+  (* Oorimm *)
+  destruct (orimm_correct (ireg_of res) (ireg_of m0) i k rs m) as [rs' [A [B C]]]. 
+  exists rs'; auto with ppcgen.
+  (* Oxorimm *)
+  destruct (xorimm_correct (ireg_of res) (ireg_of m0) i k rs m) as [rs' [A [B C]]]. 
+  exists rs'; auto with ppcgen.
+  (* Oshrximm *)
+  econstructor; split.
+  eapply exec_straight_two; simpl; reflexivity. 
+  split. repeat SIMP. apply Val.shrx_carry. 
+  intros; repeat SIMP. 
+  (* Oroli *)
+  destruct (mreg_eq m0 res). subst m0.
+  TranslOpSimpl.
+  econstructor; split.
+  eapply exec_straight_three; simpl; reflexivity. 
+  split. repeat SIMP. intros; repeat SIMP.
+  (* Ocmp *)
+  destruct (eval_condition c rs ## (preg_of ## args) m) as [ b | ] _eqn; try discriminate.
+  destruct (transl_cond_op_correct c args res k rs m b) as [rs' [A [B C]]]; auto.
+  exists rs'; intuition auto with ppcgen. 
+  rewrite B. destruct b; inv H0; auto.
+Qed.
 
 Lemma transl_op_correct:
   forall op args res k ms sp rs m v m',
@@ -1194,228 +1332,18 @@ Lemma transl_op_correct:
   eval_operation ge sp op (map ms args) m = Some v ->
   Mem.extends m m' ->
   exists rs',
-    exec_straight (transl_op op args res k) rs m' k rs' m'
+     exec_straight (transl_op op args res k) rs m' k rs' m'
   /\ agree (Regmap.set res v (undef_op op ms)) sp rs'.
 Proof.
-  intros.
-  assert (exists v', Val.lessdef v v' /\
-          eval_operation_total ge sp op (map rs (map preg_of args)) = v').
-    exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eauto.
-    intros [v' [A B]]. exists v'; split; auto.
-    eapply eval_operation_weaken; eauto. 
-  destruct H3 as [v' [LD EQ]]. clear H1 H2.
-  inv H.
-  (* Omove *)
-  simpl in *. 
-  exists (nextinstr (rs#(preg_of res) <- (rs#(preg_of r1)))).
-  split. unfold preg_of. rewrite <- H2.
-  destruct (mreg_type r1); apply exec_straight_one; auto.
-  auto with ppcgen. 
-  (* Other instructions *)
-  destruct op; simpl; simpl in H5; injection H5; clear H5; intros;
-  TypeInv; simpl in *; UseTypeInfo; try (TranslOpSimpl).
-  (* Omove again *)
-  congruence.
-  (* Ointconst *)
-  destruct (loadimm_correct (ireg_of res) i k rs m')
-  as [rs' [A [B C]]]. 
-  exists rs'. split. auto. 
-  rewrite <- B in LD. eauto with ppcgen. 
-  (* Ofloatconst *)
-  exists (nextinstr (rs #GPR12 <- Vundef #(freg_of res) <- (Vfloat f))).
-  split. apply exec_straight_one. reflexivity. reflexivity.
-  apply agree_nextinstr. apply agree_set_mfreg; auto. apply agree_set_mreg; auto.
-  eapply agree_undef_temps; eauto. 
-  intros. apply Pregmap.gso; auto. 
-  (* Oaddrsymbol *)
-  change (find_symbol_offset ge i i0) with (symbol_offset ge i i0) in LD.
-  set (v' := symbol_offset ge i i0) in *.
-  caseEq (symbol_is_small_data i i0); intro SD.
-  (* small data *)
-  exists (nextinstr (rs#(ireg_of res) <- v')); split.
-  apply exec_straight_one; auto. simpl.
-  rewrite (small_data_area_addressing _ _ _ SD). unfold v', symbol_offset. 
-  destruct (Genv.find_symbol ge i); auto. rewrite Int.add_zero; auto. 
-  eauto with ppcgen. 
-  (* not small data *)
-  pose (rs1 := nextinstr (rs#GPR12 <- (high_half v'))).
-  exists (nextinstr (rs1#(ireg_of res) <- v')).
-  split. apply exec_straight_two with rs1 m'.
-  unfold exec_instr. rewrite gpr_or_zero_zero.
-  unfold const_high. rewrite Val.add_commut. 
-  rewrite high_half_zero. reflexivity. 
-  simpl. rewrite gpr_or_zero_not_zero. 2: congruence. 
-  unfold rs1 at 1. rewrite nextinstr_inv; auto with ppcgen.
-  rewrite Pregmap.gss. 
-  fold v'. rewrite Val.add_commut. unfold v'. rewrite low_high_half.
-  reflexivity. reflexivity. reflexivity. 
-  unfold rs1. apply agree_nextinstr. apply agree_set_mireg; auto.
-  apply agree_set_mreg; auto. apply agree_nextinstr.
-  eapply agree_undef_temps; eauto.
-  intros. apply Pregmap.gso; auto.
-  (* Oaddrstack *)
-  assert (GPR1 <> GPR0). discriminate.
-  generalize (addimm_correct (ireg_of res) GPR1 i k rs m' (ireg_of_not_GPR0 res) H1). 
-  intros [rs' [EX [RES OTH]]].
-  exists rs'. split. auto. 
-  apply agree_set_mireg_exten with rs; auto with ppcgen.
-  rewrite (sp_val ms sp rs) in LD; auto. rewrite RES; auto. 
-  (* Ocast8unsigned *)
-  econstructor; split.
-  apply exec_straight_one. simpl; reflexivity. reflexivity. 
-  replace (Val.zero_ext 8 (rs (ireg_of m0)))
-      with (Val.rolm (rs (ireg_of m0)) Int.zero (Int.repr 255)) in LD.
-  auto with ppcgen. 
-  unfold Val.rolm, Val.zero_ext. destruct (rs (ireg_of m0)); auto.
-  rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
-  (* Ocast16unsigned *)
-  econstructor; split.
-  apply exec_straight_one. simpl; reflexivity. reflexivity. 
-  replace (Val.zero_ext 16 (rs (ireg_of m0)))
-      with (Val.rolm (rs (ireg_of m0)) Int.zero (Int.repr 65535)) in LD.
-  auto with ppcgen. 
-  unfold Val.rolm, Val.zero_ext. destruct (rs (ireg_of m0)); auto.
-  rewrite Int.rolm_zero. rewrite Int.zero_ext_and. auto. compute; auto.
-  (* Oaddimm *)
-  generalize (addimm_correct (ireg_of res) (ireg_of m0) i k rs m'
-                            (ireg_of_not_GPR0 res) (ireg_of_not_GPR0 m0)).
-  intros [rs' [A [B C]]]. 
-  exists rs'. split. auto.
-  rewrite <- B in LD. eauto with ppcgen.  
-  (* Osubimm *)
-  case (Int.eq (high_s i) Int.zero).
-  econstructor; split.
-  apply exec_straight_one. simpl; eauto. auto.
-  auto 7 with ppcgen.
-  generalize (loadimm_correct GPR0 i (Psubfc (ireg_of res) (ireg_of m0) GPR0 :: k) rs m').
-  intros [rs1 [EX [RES OTH]]].
-  econstructor; split.
-  eapply exec_straight_trans. eexact EX. 
-  apply exec_straight_one. simpl; eauto. auto.
-  rewrite RES. rewrite OTH; auto with ppcgen.
-  assert (agree (undef_temps ms) sp rs1). eauto with ppcgen.  
-  auto with ppcgen. decEq; auto with ppcgen.
-  (* Omulimm *)
-  case (Int.eq (high_s i) Int.zero).
-  econstructor; split.
-  apply exec_straight_one. simpl; eauto. auto. 
-  auto with ppcgen.
-  generalize (loadimm_correct GPR0 i (Pmullw (ireg_of res) (ireg_of m0) GPR0 :: k) rs m').
-  intros [rs1 [EX [RES OTH]]].
-  assert (agree (undef_temps ms) sp rs1). eauto with ppcgen.
-  econstructor; split.
-  eapply exec_straight_trans. eexact EX. 
-  apply exec_straight_one. simpl; eauto. auto.
-  rewrite RES. rewrite OTH; auto with ppcgen. decEq; auto with ppcgen.
-  (* Oand *)
-  set (v' := Val.and (rs (ireg_of m0)) (rs (ireg_of m1))) in *.
-  pose (rs1 := rs#(ireg_of res) <- v').
-  generalize (compare_sint_spec rs1 v' Vzero).
-  intros [A [B [C D]]].
-  exists (nextinstr (compare_sint rs1 v' Vzero)).
-  split. apply exec_straight_one. auto. auto. 
-  apply agree_exten_2 with rs1. unfold rs1; auto with ppcgen.
+  intros. 
+  exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eauto. 
+  intros [v' [A B]].  rewrite (sp_val _ _ _ H0) in A. 
+  exploit transl_op_correct_aux; eauto. intros [rs' [P [Q R]]].
+  rewrite <- Q in B.
+  exists rs'; split. eexact P. 
+  unfold undef_op. destruct op;
+  (apply agree_set_mreg_undef_temps with rs || apply agree_set_mreg with rs);
   auto.
-  (* Oandimm *)
-  generalize (andimm_correct (ireg_of res) (ireg_of m0) i k rs m'
-                             (ireg_of_not_GPR0 m0)).
-  intros [rs' [A [B [C D]]]]. 
-  exists rs'. split. auto. rewrite <- B in LD. eauto with ppcgen.
-  (* Oorimm *)
-  generalize (orimm_correct (ireg_of res) (ireg_of m0) i k rs m').
-  intros [rs' [A [B C]]]. 
-  exists rs'. split. auto. rewrite <- B in LD. eauto with ppcgen. 
-  (* Oxorimm *)
-  generalize (xorimm_correct (ireg_of res) (ireg_of m0) i k rs m').
-  intros [rs' [A [B C]]]. 
-  exists rs'. split. auto. rewrite <- B in LD. eauto with ppcgen.
-  (* Oxhrximm *)
-  pose (rs1 := nextinstr (rs#(ireg_of res) <- (Val.shr (rs (ireg_of m0)) (Vint i)) #CARRY <- (Val.shr_carry (rs (ireg_of m0)) (Vint i)))).
-  exists (nextinstr (rs1#(ireg_of res) <- (Val.shrx (rs (ireg_of m0)) (Vint i)))).
-  split. apply exec_straight_two with rs1 m'.
-  auto. simpl. decEq. decEq. decEq. 
-  unfold rs1. repeat (rewrite nextinstr_inv; try discriminate).
-  rewrite Pregmap.gss. rewrite Pregmap.gso. rewrite Pregmap.gss. 
-  apply Val.shrx_carry. auto with ppcgen. auto. auto. 
-  apply agree_nextinstr. unfold rs1. apply agree_nextinstr_commut. 
-  apply agree_set_commut. auto with ppcgen. 
-  apply agree_set_other. apply agree_set_mireg_twice; auto with ppcgen. 
-  compute; auto. auto with ppcgen.
-  (* Oroli *)
-  destruct (mreg_eq m0 res). subst m0.
-  TranslOpSimpl.
-  econstructor; split.
-  eapply exec_straight_three.
-  simpl. reflexivity. 
-  simpl. reflexivity.
-  simpl. reflexivity.
-  auto. auto. auto.
-  set (rs1 := nextinstr (rs # GPR0 <- (rs (ireg_of m0)))).
-  set (rs2 := nextinstr (rs1 # GPR0 <-
-        (Val.or (Val.and (rs1 GPR0) (Vint (Int.not i0)))
-               (Val.rolm (rs1 (ireg_of m1)) i i0)))).
-  apply agree_nextinstr. apply agree_set_mireg; auto. apply agree_set_mreg. 
-  apply agree_undef_temps with rs. auto. 
-  intros. unfold rs2. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto. 
-  unfold rs1. rewrite nextinstr_inv; auto. rewrite Pregmap.gso; auto. 
-  unfold rs2. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gss. 
-  unfold rs1. repeat rewrite nextinstr_inv; auto with ppcgen. 
-  rewrite Pregmap.gss. rewrite Pregmap.gso; auto with ppcgen. decEq. auto with ppcgen. 
-  (* Ointoffloat *)
-  econstructor; split.
-  apply exec_straight_one. simpl; eauto. auto.
-  apply agree_nextinstr. apply agree_set_mireg; auto. apply agree_set_mreg; auto.
-  apply agree_undef_temps with rs; auto. intros. 
-  repeat rewrite Pregmap.gso; auto. 
-  (* Ocmp *)
-  revert H1 LD; case (classify_condition c args); intros.
-  (* Optimization: compimm Cge 0 *)
-  subst n. simpl in *. inv H1. UseTypeInfo. 
-  set (rs1 := nextinstr (rs#(ireg_of res) <- (Val.rolm (rs (ireg_of r)) Int.one Int.one))).
-  set (rs2 := nextinstr (rs1#(ireg_of res) <- (Val.xor (rs1#(ireg_of res)) (Vint Int.one)))).
-  exists rs2.
-  split. apply exec_straight_two with rs1 m'; auto.
-  rewrite <- Val.rolm_ge_zero in LD.
-  unfold rs2. apply agree_nextinstr.
-  unfold rs1. apply agree_nextinstr_commut. fold rs1.
-  replace (rs1 (ireg_of res)) with (Val.rolm (rs (ireg_of r)) Int.one Int.one).
-  apply agree_set_mireg_twice; auto with ppcgen.
-  unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss. auto. 
-  auto with ppcgen. auto with ppcgen. 
-  (* Optimization: compimm Clt 0 *)
-  subst n. simpl in *. inv H1. UseTypeInfo. 
-  exists (nextinstr (rs#(ireg_of res) <- (Val.rolm (rs (ireg_of r)) Int.one Int.one))).
-  split. apply exec_straight_one; auto. 
-  rewrite <- Val.rolm_lt_zero in LD.
-  auto with ppcgen. 
-  (* General case *)
-  set (bit := fst (crbit_for_cond c0)).
-  set (isset := snd (crbit_for_cond c0)).
-  set (k1 :=
-        Pmfcrbit (ireg_of res) bit ::
-        (if isset
-         then k
-         else Pxori (ireg_of res) (ireg_of res) (Cint Int.one) :: k)).
-  generalize (transl_cond_correct_aux c0 rl k1 ms sp rs m' H1 H0).
-  fold bit; fold isset. 
-  intros [rs1 [EX1 [RES1 AG1]]].
-  set (rs2 := nextinstr (rs1#(ireg_of res) <- (rs1#(reg_of_crbit bit)))).
-  destruct isset.
-  exists rs2.
-  split. apply exec_straight_trans with k1 rs1 m'. assumption.
-  unfold k1. apply exec_straight_one. 
-  reflexivity. reflexivity. 
-  unfold rs2. rewrite RES1. auto with ppcgen. 
-  econstructor. 
-  split. apply exec_straight_trans with k1 rs1 m'. assumption.
-  unfold k1. apply exec_straight_two with rs2 m'.
-  reflexivity. simpl. eauto. auto. auto. 
-  apply agree_nextinstr. 
-  unfold rs2 at 1. rewrite nextinstr_inv. rewrite Pregmap.gss. 
-  rewrite RES1. rewrite <- Val.notbool_xor. 
-  unfold rs2. auto 7 with ppcgen. 
-  apply eval_condition_total_is_bool.
-  auto with ppcgen. 
 Qed.
 
 Lemma transl_load_store_correct:
@@ -1452,10 +1380,10 @@ Proof.
   set (rs1 := nextinstr (rs#temp <- (Val.add (rs (ireg_of m0)) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
   exploit (H (Cint (low_s i)) temp rs1 k).
     simpl. UseTypeInfo. rewrite gpr_or_zero_not_zero; auto. 
-    unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss. 
-    rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
-    discriminate.
-  intros. unfold rs1. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+    unfold rs1; repeat SIMP. rewrite Val.add_assoc.
+Transparent Val.add.
+    simpl. rewrite low_high_s. auto.
+    intros; unfold rs1; repeat SIMP.
   intros [rs' [EX' AG']].
   exists rs'. split. apply exec_straight_step with rs1 m.
   simpl. rewrite gpr_or_zero_not_zero; auto with ppcgen. auto. 
@@ -1552,15 +1480,21 @@ Proof.
 (* mk1 *)
   intros. exists (nextinstr (rs1#(preg_of dst) <- v')). 
   split. apply exec_straight_one. rewrite H.
-  unfold load1. rewrite <- H6. rewrite C. auto.
-  auto with ppcgen.
-  eauto with ppcgen.
+  unfold load1. rewrite <- H6. rewrite C. auto. 
+  unfold nextinstr. SIMP. decEq. SIMP. apply sym_not_equal; auto with ppcgen.
+  apply agree_set_mreg with rs1. 
+  apply agree_undef_temps with rs; auto with ppcgen.
+  repeat SIMP. 
+  intros; repeat SIMP.
 (* mk2 *)
   intros. exists (nextinstr (rs#(preg_of dst) <- v')). 
   split. apply exec_straight_one. rewrite H0. 
   unfold load2. rewrite <- H6. rewrite C. auto.
-  auto with ppcgen.
-  eauto with ppcgen.
+  unfold nextinstr. SIMP. decEq. SIMP. apply sym_not_equal; auto with ppcgen.
+  apply agree_set_mreg with rs.
+  apply agree_undef_temps with rs; auto with ppcgen.
+  repeat SIMP. 
+  intros; repeat SIMP.
 (* not GPR0 *)
   congruence.
 Qed.
@@ -1611,9 +1545,9 @@ Proof.
   intros [rs3 [U V]].
   exists rs3; split.
   apply exec_straight_one. auto. rewrite V; auto with ppcgen. 
-  eapply agree_undef_temps; eauto. intros. 
-  rewrite V; auto. rewrite nextinstr_inv; auto. apply H7; auto. 
-  unfold int_temp_for. destruct (mreg_eq src IT2); auto.
+  apply agree_undef_temps with rs. auto. 
+  intros. rewrite V; auto with ppcgen. SIMP. apply H7; auto with ppcgen.
+  unfold int_temp_for. destruct (mreg_eq src IT2); auto with ppcgen.
 (* mk2 *)
   intros.
   exploit (H0 r1 r2 rs (nextinstr rs) m1').
@@ -1622,7 +1556,7 @@ Proof.
   exists rs3; split.
   apply exec_straight_one. auto. rewrite V; auto with ppcgen. 
   eapply agree_undef_temps; eauto. intros. 
-  rewrite V; auto. rewrite nextinstr_inv; auto.
+  rewrite V; auto with ppcgen. 
   unfold int_temp_for. destruct (mreg_eq src IT2); congruence.
 Qed.
 

@@ -213,6 +213,10 @@ Definition crbit_for_cond (cond: condition) :=
 (** Recognition of comparisons [>= 0] and [< 0]. *)
 
 Inductive condition_class: condition -> list mreg -> Type :=
+  | condition_eq0:
+      forall n r, n = Int.zero -> condition_class (Ccompimm Ceq n) (r :: nil)
+  | condition_ne0:
+      forall n r, n = Int.zero -> condition_class (Ccompimm Cne n) (r :: nil)
   | condition_ge0:
       forall n r, n = Int.zero -> condition_class (Ccompimm Cge n) (r :: nil)
   | condition_lt0:
@@ -222,6 +226,16 @@ Inductive condition_class: condition -> list mreg -> Type :=
 
 Definition classify_condition (c: condition) (args: list mreg): condition_class c args :=
   match c as z1, args as z2 return condition_class z1 z2 with
+  | Ccompimm Ceq n, r :: nil =>
+      match Int.eq_dec n Int.zero with
+      | left EQ => condition_eq0 n r EQ
+      | right _ => condition_default (Ccompimm Ceq n) (r :: nil)
+      end
+  | Ccompimm Cne n, r :: nil =>
+      match Int.eq_dec n Int.zero with
+      | left EQ => condition_ne0 n r EQ
+      | right _ => condition_default (Ccompimm Cne n) (r :: nil)
+      end
   | Ccompimm Cge n, r :: nil =>
       match Int.eq_dec n Int.zero with
       | left EQ => condition_ge0 n r EQ
@@ -234,6 +248,33 @@ Definition classify_condition (c: condition) (args: list mreg): condition_class 
       end
   | x, y =>
       condition_default x y
+  end.
+
+(** Translation of a condition operator.  The generated code sets
+  the [r] target register to 0 or 1 depending on the truth value of the
+  condition. *)
+
+Definition transl_cond_op
+             (cond: condition) (args: list mreg) (r: mreg) (k: code) :=
+  match classify_condition cond args with
+  | condition_eq0 _ a _ =>
+      Psubfic GPR0 (ireg_of a) (Cint Int.zero) ::
+      Padde (ireg_of r) GPR0 (ireg_of a) :: k
+  | condition_ne0 _ a _ =>
+      Paddic GPR0 (ireg_of a) (Cint Int.mone) ::
+      Psubfe (ireg_of r) GPR0 (ireg_of a) :: k
+  | condition_ge0 _ a _ =>
+      Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one ::
+      Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k
+  | condition_lt0 _ a _ =>
+      Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one :: k
+  | condition_default _ _ =>
+      let p := crbit_for_cond cond in
+      transl_cond cond args
+        (Pmfcrbit (ireg_of r) (fst p) ::
+         if snd p
+         then k
+         else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k)
   end.
 
 (** Translation of the arithmetic operation [r <- op(args)].
@@ -350,20 +391,7 @@ Definition transl_op
   | Ofloatofwords, a1 :: a2 :: nil =>
       Pfmake (freg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Ocmp cmp, _ =>
-      match classify_condition cmp args with
-      | condition_ge0 _ a _ =>
-          Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one ::
-          Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k
-      | condition_lt0 _ a _ =>
-          Prlwinm (ireg_of r) (ireg_of a) Int.one Int.one :: k
-      | condition_default _ _ =>
-          let p := crbit_for_cond cmp in
-          transl_cond cmp args
-            (Pmfcrbit (ireg_of r) (fst p) ::
-             if snd p
-             then k
-             else Pxori (ireg_of r) (ireg_of r) (Cint Int.one) :: k)
-      end
+      transl_cond_op cmp args r k
   | _, _ =>
       k (**r never happens for well-typed code *)
   end.

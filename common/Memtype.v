@@ -126,6 +126,11 @@ Definition storev (chunk: memory_chunk) (m: mem) (addr v: val) : option mem :=
   [None] is returned if the accessed addresses are not readable. *)
 Parameter loadbytes: forall (m: mem) (b: block) (ofs n: Z), option (list memval).
 
+(** [storebytes m b ofs bytes] stores the given list of bytes [bytes]
+  starting at location [(b, ofs)].  Returns updated memory state
+  or [None] if the accessed locations are not writable. *)
+Parameter storebytes: forall (m: mem) (b: block) (ofs: Z) (bytes: list memval), option mem.
+
 (** [free_list] frees all the given (block, lo, hi) triples. *)
 Fixpoint free_list (m: mem) (l: list (block * Z * Z)) {struct l}: option mem :=
   match l with
@@ -305,6 +310,18 @@ Axiom load_int16_signed_unsigned:
 
 (** ** Properties of [loadbytes]. *)
 
+(** [loadbytes] succeeds if and only if we have read permissions on the accessed
+    memory area. *)
+
+Axiom range_perm_loadbytes:
+  forall m b ofs len,
+  range_perm m b ofs (ofs + len) Readable ->
+  exists bytes, loadbytes m b ofs len = Some bytes.
+Axiom loadbytes_range_perm:
+  forall m b ofs len bytes,
+  loadbytes m b ofs len = Some bytes ->
+  range_perm m b ofs (ofs + len) Readable.
+
 (** If [loadbytes] succeeds, the corresponding [load] succeeds and
   returns a value that is determined by the
   bytes read by [loadbytes]. *)
@@ -328,6 +345,10 @@ Axiom loadbytes_length:
   forall m b ofs n bytes,
   loadbytes m b ofs n = Some bytes ->
   length bytes = nat_of_Z n.
+
+Axiom loadbytes_empty:
+  forall m b ofs n,
+  n <= 0 -> loadbytes m b ofs n = Some nil.
 
 (** Composing or decomposing [loadbytes] operations at adjacent addresses. *)
 Axiom loadbytes_concat:
@@ -472,6 +493,96 @@ Axiom store_float32_truncate:
   forall m b ofs n,
   store Mfloat32 m b ofs (Vfloat (Float.singleoffloat n)) =
   store Mfloat32 m b ofs (Vfloat n).
+
+(** ** Properties of [storebytes]. *)
+
+(** [storebytes] preserves block validity, permissions, access validity, and bounds.
+  Moreover, a [storebytes] succeeds if and only if we have write permissions
+  on the addressed memory area. *)
+
+Axiom range_perm_storebytes:
+  forall m1 b ofs bytes,
+  range_perm m1 b ofs (ofs + Z_of_nat (length bytes)) Writable ->
+  { m2 : mem | storebytes m1 b ofs bytes = Some m2 }.
+Axiom storebytes_range_perm:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  range_perm m1 b ofs (ofs + Z_of_nat (length bytes)) Writable.
+Axiom perm_storebytes_1:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall b' ofs' p, perm m1 b' ofs' p -> perm m2 b' ofs' p.
+Axiom perm_storebytes_2:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall b' ofs' p, perm m2 b' ofs' p -> perm m1 b' ofs' p.
+Axiom storebytes_valid_access_1:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall chunk' b' ofs' p,
+  valid_access m1 chunk' b' ofs' p -> valid_access m2 chunk' b' ofs' p.
+Axiom storebytes_valid_access_2:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall chunk' b' ofs' p,
+  valid_access m2 chunk' b' ofs' p -> valid_access m1 chunk' b' ofs' p.
+Axiom nextblock_storebytes:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  nextblock m2 = nextblock m1.
+Axiom storebytes_valid_block_1:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall b', valid_block m1 b' -> valid_block m2 b'.
+Axiom storebytes_valid_block_2:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall b', valid_block m2 b' -> valid_block m1 b'.
+Axiom bounds_storebytes:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall b', bounds m2 b' = bounds m1 b'.
+
+(** Connections between [store] and [storebytes]. *)
+
+Axiom storebytes_store:
+  forall m1 b ofs chunk v m2,
+  storebytes m1 b ofs (encode_val chunk v) = Some m2 ->
+  (align_chunk chunk | ofs) ->
+  store chunk m1 b ofs v = Some m2.
+
+Axiom store_storebytes:
+  forall m1 b ofs chunk v m2,
+  store chunk m1 b ofs v = Some m2 ->
+  storebytes m1 b ofs (encode_val chunk v) = Some m2.
+
+(** Load-store properties. *)
+
+Axiom loadbytes_storebytes_same:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  loadbytes m2 b ofs (Z_of_nat (length bytes)) = Some bytes.
+Axiom loadbytes_storebytes_other:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall b' ofs' len,
+  len >= 0 ->
+  b' <> b
+  \/ ofs' + len <= ofs
+  \/ ofs + Z_of_nat (length bytes) <= ofs' ->
+  loadbytes m2 b' ofs' len = loadbytes m1 b' ofs' len.
+Axiom load_storebytes_other:
+  forall m1 b ofs bytes m2, storebytes m1 b ofs bytes = Some m2 ->
+  forall chunk b' ofs',
+  b' <> b
+  \/ ofs' + size_chunk chunk <= ofs
+  \/ ofs + Z_of_nat (length bytes) <= ofs' ->
+  load chunk m2 b' ofs' = load chunk m1 b' ofs'.
+
+(** Composing or decomposing [storebytes] operations at adjacent addresses. *)
+
+Axiom storebytes_concat:
+  forall m b ofs bytes1 m1 bytes2 m2,
+  storebytes m b ofs bytes1 = Some m1 ->
+  storebytes m1 b (ofs + Z_of_nat(length bytes1)) bytes2 = Some m2 ->
+  storebytes m b ofs (bytes1 ++ bytes2) = Some m2.
+Axiom storebytes_split:
+  forall m b ofs bytes1 bytes2 m2,
+  storebytes m b ofs (bytes1 ++ bytes2) = Some m2 ->
+  exists m1,
+     storebytes m b ofs bytes1 = Some m1
+  /\ storebytes m1 b (ofs + Z_of_nat(length bytes1)) bytes2 = Some m2.
+Axiom storebytes_empty:
+  forall m b ofs, storebytes m b ofs nil = Some m.
 
 (** ** Properties of [alloc]. *)
 
@@ -717,6 +828,13 @@ Axiom loadv_extends:
   Val.lessdef addr1 addr2 ->
   exists v2, loadv chunk m2 addr2 = Some v2 /\ Val.lessdef v1 v2.
 
+Axiom loadbytes_extends:
+  forall m1 m2 b ofs len bytes1,
+  extends m1 m2 ->
+  loadbytes m1 b ofs len = Some bytes1 ->
+  exists bytes2, loadbytes m2 b ofs len = Some bytes2
+              /\ list_forall2 memval_lessdef bytes1 bytes2.
+
 Axiom store_within_extends:
   forall chunk m1 m2 b ofs v1 m1' v2,
   extends m1 m2 ->
@@ -742,6 +860,22 @@ Axiom storev_extends:
   exists m2',
      storev chunk m2 addr2 v2 = Some m2'
   /\ extends m1' m2'.
+
+Axiom storebytes_within_extends:
+  forall m1 m2 b ofs bytes1 m1' bytes2,
+  extends m1 m2 ->
+  storebytes m1 b ofs bytes1 = Some m1' ->
+  list_forall2 memval_lessdef bytes1 bytes2 ->
+  exists m2',
+     storebytes m2 b ofs bytes2 = Some m2'
+  /\ extends m1' m2'.
+
+Axiom storebytes_outside_extends:
+  forall m1 m2 b ofs bytes2 m2',
+  extends m1 m2 ->
+  storebytes m2 b ofs bytes2 = Some m2' ->
+  ofs + Z_of_nat (length bytes2) <= low_bound m1 b \/ high_bound m1 b <= ofs ->
+  extends m1 m2'.
 
 Axiom alloc_extends:
   forall m1 m2 lo1 hi1 b m1' lo2 hi2,
@@ -891,6 +1025,14 @@ Axiom loadv_inject:
   val_inject f a1 a2 ->
   exists v2, loadv chunk m2 a2 = Some v2 /\ val_inject f v1 v2.
 
+Axiom loadbytes_inject:
+  forall f m1 m2 b1 ofs len b2 delta bytes1,
+  inject f m1 m2 ->
+  loadbytes m1 b1 ofs len = Some bytes1 ->
+  f b1 = Some (b2, delta) ->
+  exists bytes2, loadbytes m2 b2 (ofs + delta) len = Some bytes2
+              /\ list_forall2 (memval_inject f) bytes1 bytes2.
+
 Axiom store_mapped_inject:
   forall f chunk m1 b1 ofs v1 n1 m2 b2 delta v2,
   inject f m1 m2 ->
@@ -926,6 +1068,33 @@ Axiom storev_mapped_inject:
   val_inject f v1 v2 ->
   exists n2,
     storev chunk m2 a2 v2 = Some n2 /\ inject f n1 n2.
+
+Axiom storebytes_mapped_inject:
+  forall f m1 b1 ofs bytes1 n1 m2 b2 delta bytes2,
+  inject f m1 m2 ->
+  storebytes m1 b1 ofs bytes1 = Some n1 ->
+  f b1 = Some (b2, delta) ->
+  list_forall2 (memval_inject f) bytes1 bytes2 ->
+  exists n2,
+    storebytes m2 b2 (ofs + delta) bytes2 = Some n2
+    /\ inject f n1 n2.
+
+Axiom storebytes_unmapped_inject:
+  forall f m1 b1 ofs bytes1 n1 m2,
+  inject f m1 m2 ->
+  storebytes m1 b1 ofs bytes1 = Some n1 ->
+  f b1 = None ->
+  inject f n1 m2.
+
+Axiom storebytes_outside_inject:
+  forall f m1 m2 b ofs bytes2 m2',
+  inject f m1 m2 ->
+  (forall b' delta,
+    f b' = Some(b, delta) ->
+    high_bound m1 b' + delta <= ofs
+    \/ ofs + Z_of_nat (length bytes2) <= low_bound m1 b' + delta) ->
+  storebytes m2 b ofs bytes2 = Some m2' ->
+  inject f m1 m2'.
 
 Axiom alloc_right_inject:
   forall f m1 m2 lo hi b2 m2',

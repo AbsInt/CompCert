@@ -227,6 +227,12 @@ Definition modu (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition add_carry (v1 v2 cin: val): val :=
+  match v1, v2, cin with
+  | Vint n1, Vint n2, Vint c => Vint(Int.add_carry n1 n2 c)
+  | _, _, _ => Vundef
+  end.
+
 Definition and (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 => Vint(Int.and n1 n2)

@@ -167,6 +167,11 @@ Definition divu (x y: int) : int :=
 Definition modu (x y: int) : int :=
   repr (Zmod (unsigned x) (unsigned y)).
 
+Definition add_carry (x y cin: int): int :=
+  if zlt (unsigned x + unsigned y + unsigned cin) modulus
+  then zero
+  else one.
+
 (** For bitwise operations, we need to convert between Coq integers [Z]
   and their bit-level representations.  Bit-level representations are
   represented as characteristic functions, that is, functions [f]
@@ -744,6 +749,11 @@ Theorem add_zero: forall x, add x zero = x.
 Proof.
   intros. unfold add. rewrite unsigned_zero.
   rewrite Zplus_0_r. apply repr_unsigned.
+Qed.
+
+Theorem add_zero_l: forall x, add zero x = x.
+Proof.
+  intros. rewrite add_commut. apply add_zero.
 Qed.
 
 Theorem add_assoc: forall x y z, add (add x y) z = add x (add y z).

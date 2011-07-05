@@ -69,10 +69,10 @@ Qed.
   multiple of the natural alignment for the chunk being addressed.
   This natural alignment is defined by the following 
   [align_chunk] function.  Some target architectures
-  (e.g. the PowerPC) have no alignment constraints, which we could
+  (e.g. PowerPC and x86) have no alignment constraints, which we could
   reflect by taking [align_chunk chunk = 1].  However, other architectures
   have stronger alignment requirements.  The following definition is
-  appropriate for PowerPC and ARM. *)
+  appropriate for PowerPC, ARM and x86. *)
 
 Definition align_chunk (chunk: memory_chunk) : Z := 
   match chunk with
@@ -1053,9 +1053,12 @@ Proof.
   constructor.
 Qed.
 
-Lemma memval_inject_id:
-  forall mv, memval_inject inject_id mv mv.
+Definition memval_lessdef: memval -> memval -> Prop := memval_inject inject_id.
+
+Lemma memval_lessdef_refl:
+  forall mv, memval_lessdef mv mv.
 Proof.
-  destruct mv; econstructor. unfold inject_id; reflexivity. rewrite Int.add_zero; auto. 
+  red. destruct mv; econstructor.
+  unfold inject_id; reflexivity. rewrite Int.add_zero; auto. 
 Qed.
  
