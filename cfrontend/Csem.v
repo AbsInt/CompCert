@@ -722,11 +722,12 @@ Inductive cast_arguments: exprlist -> typelist -> list val -> Prop :=
       cast_arguments (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
 
 Inductive callred: expr -> fundef -> list val -> type -> Prop :=
-  | red_Ecall: forall vf tyargs tyres el ty fd vargs,
+  | red_Ecall: forall vf tyf tyargs tyres el ty fd vargs,
       Genv.find_funct ge vf = Some fd ->
       cast_arguments el tyargs vargs ->
       type_of_fundef fd = Tfunction tyargs tyres ->
-      callred (Ecall (Eval vf (Tfunction tyargs tyres)) el ty)
+      classify_fun tyf = fun_case_f tyargs tyres ->
+      callred (Ecall (Eval vf tyf) el ty)
               fd vargs ty.
 
 (** Reduction contexts.  In accordance with C's nondeterministic semantics,

@@ -433,11 +433,11 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f Sskip k e (PTree.set id v le) m)
 
   | step_call:   forall f optid a al k e le m tyargs tyres vf vargs fd,
-      typeof a = Tfunction tyargs tyres ->
+      classify_fun (typeof a) = fun_case_f tyargs tyres ->
       eval_expr e le m a vf ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some fd ->
-      type_of_fundef fd = typeof a ->
+      type_of_fundef fd = Tfunction tyargs tyres ->
       step (State f (Scall optid a al) k e le m)
         E0 (Callstate fd vargs (Kcall optid f e le k) m)
 
@@ -643,20 +643,20 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       exec_stmt e le m (Sset id a)
                E0 (PTree.set id v le) m Out_normal      
   | exec_Scall_none:   forall e le m a al tyargs tyres vf vargs f t m' vres,
-      typeof a = Tfunction tyargs tyres ->
+      classify_fun (typeof a) = fun_case_f tyargs tyres ->
       eval_expr e le m a vf ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = typeof a ->
+      type_of_fundef f = Tfunction tyargs tyres ->
       eval_funcall m f vargs t m' vres ->
       exec_stmt e le m (Scall None a al)
                 t le m' Out_normal
   | exec_Scall_some:   forall e le m id a al tyargs tyres vf vargs f t m' vres,
-      typeof a = Tfunction tyargs tyres ->
+      classify_fun (typeof a) = fun_case_f tyargs tyres ->
       eval_expr e le m a vf ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = typeof a ->
+      type_of_fundef f = Tfunction tyargs tyres ->
       eval_funcall m f vargs t m' vres ->
       exec_stmt e le m (Scall (Some id) a al)
                 t (PTree.set id vres le) m' Out_normal
@@ -792,19 +792,19 @@ Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop
 
 CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Prop :=
   | execinf_Scall_none:   forall e le m a al vf tyargs tyres vargs f t,
-      typeof a = Tfunction tyargs tyres ->
+      classify_fun (typeof a) = fun_case_f tyargs tyres ->
       eval_expr e le m a vf ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = typeof a ->
+      type_of_fundef f = Tfunction tyargs tyres ->
       evalinf_funcall m f vargs t ->
       execinf_stmt e le m (Scall None a al) t
   | execinf_Scall_some:   forall e le m id a al vf tyargs tyres vargs f t,
-      typeof a = Tfunction tyargs tyres ->
+      classify_fun (typeof a) = fun_case_f tyargs tyres ->
       eval_expr e le m a vf ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = typeof a ->
+      type_of_fundef f = Tfunction tyargs tyres ->
       evalinf_funcall m f vargs t ->
       execinf_stmt e le m (Scall (Some id) a al) t
   | execinf_Sseq_1:   forall e le m s1 s2 t,

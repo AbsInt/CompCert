@@ -1525,11 +1525,10 @@ Proof.
   exploit transl_expr_correct; eauto.
   exploit transl_exprlist_correct; eauto.
   eapply transl_fundef_sig1; eauto.
-  rewrite H3. rewrite H. auto.
+  rewrite H3. auto.
   econstructor; eauto.  
   econstructor; eauto.
   simpl. auto.
-  rewrite H3; rewrite H; eauto. 
   eapply eval_exprlist_casted; eauto. 
 
 (* seq *)

@@ -288,7 +288,7 @@ Inductive estep: state -> trace -> state -> Prop :=
 
   | step_call: forall f C rf rargs ty k e m targs tres vf vargs fd,
       leftcontext RV RV C ->
-      typeof rf = Tfunction targs tres ->
+      classify_fun (typeof rf) = fun_case_f targs tres ->
       eval_simple_rvalue e m rf vf ->
       eval_simple_list e m rargs targs vargs ->
       Genv.find_funct ge vf = Some fd ->
@@ -490,7 +490,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Ecall (Eval vf tyf) rargs ty =>
       exprlist_all_values rargs ->
       exists tyargs, exists tyres, exists fd, exists vl,
-         tyf = Tfunction tyargs tyres
+         classify_fun tyf = fun_case_f tyargs tyres
       /\ Genv.find_funct ge vf = Some fd
       /\ cast_arguments rargs tyargs vl
       /\ type_of_fundef fd = Tfunction tyargs tyres
@@ -1209,7 +1209,7 @@ Proof.
   econstructor; split.
   eapply step_call with (C := C); eauto. eapply can_eval_simple_list; eauto.
   eapply plus_right. eapply star_trans; eauto. 
-  left. econstructor. rewrite U. econstructor; eauto. 
+  left. econstructor. econstructor; eauto. 
   eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
   traceEq.
 (* rparen *)
@@ -1537,7 +1537,7 @@ with eval_expr: env -> mem -> kind -> expr -> trace -> mem -> expr -> Prop :=
       eval_expr e m RV rf t1 m1 rf' -> eval_exprlist e m1 rargs t2 m2 rargs' ->
       eval_simple_rvalue ge e m2 rf' vf ->
       eval_simple_list ge e m2 rargs' targs vargs ->
-      typeof rf = Tfunction targs tres ->
+      classify_fun (typeof rf) = fun_case_f targs tres ->
       Genv.find_funct ge vf = Some fd ->
       type_of_fundef fd = Tfunction targs tres ->
       eval_funcall m2 fd vargs t3 m3 vres ->
@@ -1775,7 +1775,7 @@ CoInductive evalinf_expr: env -> mem -> kind -> expr -> traceinf -> Prop :=
       eval_expr e m RV rf t1 m1 rf' -> eval_exprlist e m1 rargs t2 m2 rargs' ->
       eval_simple_rvalue ge e m2 rf' vf ->
       eval_simple_list ge e m2 rargs' targs vargs ->
-      typeof rf = Tfunction targs tres ->
+      classify_fun (typeof rf) = fun_case_f targs tres ->
       Genv.find_funct ge vf = Some fd ->
       type_of_fundef fd = Tfunction targs tres ->
       evalinf_funcall m2 fd vargs t3 ->
@@ -1971,13 +1971,6 @@ Lemma bigstep_to_steps:
 /\(forall e m s t m' out,
    exec_stmt e m s t m' out ->
    forall f k,
-(*
-   match out with
-   | Out_return None => fn_return f = Tvoid
-   | Out_return (Some(v, ty)) => fn_return f <> Tvoid
-   | _ => True
-   end ->
-*)
    exists S,
    star step ge (State f s k e m) t S /\ outcome_state_match e m' f k out S)
 /\(forall m fd args t m' res,
