@@ -1514,11 +1514,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  Machsem.exec_program prog beh -> Asm.exec_program tprog beh.
+  forward_simulation (Machsem.semantics prog) (Asm.semantics tprog).
 Proof.
-  unfold Machsem.exec_program, Asm.exec_program; intros.
-  eapply simulation_star_preservation with (measure := measure); eauto.
+  eapply forward_simulation_star with (measure := measure).
+  eexact symbols_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact transf_instr_correct. 

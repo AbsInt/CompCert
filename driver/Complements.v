@@ -20,223 +20,179 @@ Require Import Values.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
-Require Import Determinism.
+Require Import Behaviors.
 Require Import Csyntax.
 Require Import Csem.
 Require Import Cstrategy.
+Require Import Clight.
+Require Import Cminor.
+Require Import RTL.
 Require Import Asm.
 Require Import Compiler.
 Require Import Errors.
 
-(** * Integrating a deterministic external world *)
+(** * Preservation of whole-program behaviors *)
 
-(** We now integrate a deterministic external world in the semantics
-  of Compcert C and Asm. *)
+(** From the simulation diagrams proved in file [Compiler]. it follows that
+  whole-program observable behaviors are preserved in the following sense.
+  First, every behavior of the generated assembly code is matched by
+  a behavior of the source C code. *)
 
-Section WORLD.
-
-Variable initial_world: world.
-
-Definition exec_C_program (p: Csyntax.program) (beh: program_behavior) : Prop :=
-  wprogram_behaves _ _
-      Csem.step (Csem.initial_state p) Csem.final_state
-      initial_world (Genv.globalenv p) beh.
-
-Definition exec_asm_program (p: Asm.program) (beh: program_behavior) : Prop :=
-  wprogram_behaves _ _
-      Asm.step (Asm.initial_state p) Asm.final_state
-      initial_world (Genv.globalenv p) beh.
-
-(** ** Safety of C programs. *)
-
-(** We show that a C program is safe (in the sense of [Cstrategy.safeprog])
-  if it cannot go wrong in the world-aware semantics. *)
-
-Lemma notwrong_safeprog:
-  forall p,
-  (forall beh, exec_C_program p beh -> not_wrong beh) ->
-  Cstrategy.safeprog p initial_world.
+Theorem transf_c_program_preservation:
+  forall p tp beh,
+  transf_c_program p = OK tp ->
+  program_behaves (Asm.semantics tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
 Proof.
-  intros; red.
-  assert (exists beh1, exec_C_program p beh1).
-    unfold exec_C_program. apply program_behaves_exists. 
-  destruct H0 as [beh1 A].
-  assert (B: not_wrong beh1) by auto.
-  split.
-  inv A; simpl in B.
-  destruct H0. exists (fst s); auto.
-  destruct H0. exists (fst s); auto.
-  destruct H0. exists (fst s); auto.
-  contradiction.
-  contradiction.
-  intros; red; intros.
-  destruct (classic (exists r, Csem.final_state s' r)).
-  (* 1. Final state.  This is immsafe. *)
-  destruct H3 as [r F]. eapply immsafe_final; eauto. 
-  (* 2. Not a final state. *)
-  destruct (classic (nostep (wstep _ _ Csem.step) (Genv.globalenv p) (s', w'))).
-  (* 2.1 No step possible -> going wrong *)
-  elim (H (Goes_wrong t)). 
-  eapply program_goes_wrong.
-  instantiate (1 := (s, initial_world)). split; auto.
-  instantiate (1 := (s', w')). apply Determinism.inject_star; auto. 
-  auto.
-  intros; red; intros. elim H3. exists r; auto. 
-  (* 2.2 One step possible -> this is immsafe *)
-  unfold nostep in H4. 
-  generalize (not_all_ex_not _ _ H4). clear H4. intros [t' P].
-  generalize (not_all_ex_not _ _ P). clear P. intros [s'' Q].
-  generalize (NNPP _ Q). clear Q. intros R. destruct R as [R1 R2]. simpl in *.
-  eapply immsafe_step. eauto. eauto. 
+  intros. eapply backward_simulation_behavior_improves; eauto. 
+  apply transf_c_program_correct; auto.
 Qed.
 
-(** ** Determinism of Asm semantics *)
-
-Remark extcall_arguments_deterministic:
-  forall rs m sg args args',
-  extcall_arguments rs m sg args ->
-  extcall_arguments rs m sg args' -> args = args'.
-Proof.
-  unfold extcall_arguments; intros. 
-  revert args H args' H0. generalize (Conventions1.loc_arguments sg); induction 1; intros.
-  inv H0; auto.
-  inv H1; decEq; auto. inv H; inv H4; congruence. 
-Qed.
-
-Remark annot_arguments_deterministic:
-  forall rs m pl args args',
-  annot_arguments rs m pl args ->
-  annot_arguments rs m pl args' -> args = args'.
-Proof.
-  unfold annot_arguments; intros. 
-  revert pl args H args' H0. induction 1; intros.
-  inv H0; auto.
-  inv H1; decEq; auto. inv H; inv H4; congruence. 
-Qed.
-
-Lemma step_internal_deterministic:
-  forall ge s t1 s1 t2 s2,
-  Asm.step ge s t1 s1 -> Asm.step ge s t2 s2 -> matching_traces t1 t2 ->
-  s1 = s2 /\ t1 = t2.
-Proof.
-
-Ltac InvEQ :=
-  match goal with
-  | [ H1: ?x = ?y, H2: ?x = ?z |- _ ] => rewrite H1 in H2; inv H2; InvEQ
-  | _ => idtac
-  end.
-
-  intros. inv H; inv H0; InvEQ.
-(* regular, regular *)
-  split; congruence.
-(* regular, builtin *)
-  simpl in H5; inv H5.
-(* regular, annot *)
-  simpl in H5; inv H5.
-(* builtin, regular *)
-  simpl in H12; inv H12.
-(* builtin, builtin *)
-  exploit external_call_determ. eexact H5. eexact H12. auto. intros [A [B C]]. subst.
-  auto.
-(* annot, regular *)
-  simpl in H13. inv H13.
-(* annot, annot *)
-  exploit annot_arguments_deterministic. eexact H5. eexact H11. intros EQ; subst. 
-  exploit external_call_determ. eexact H6. eexact H14. auto. intros [A [B C]]. subst.
-  auto.
-(* extcall, extcall *)
-  exploit extcall_arguments_deterministic. eexact H5. eexact H10. intros EQ; subst.
-  exploit external_call_determ. eexact H4. eexact H9. auto. intros [A [B C]]. subst.
-  auto.
-Qed.
-
-Lemma initial_state_deterministic:
-  forall p s1 s2,
-  initial_state p s1 -> initial_state p s2 -> s1 = s2.
-Proof.
-  intros. inv H; inv H0. f_equal. congruence.
-Qed.
-
-Lemma final_state_not_step:
-  forall ge st r, final_state st r -> nostep step ge st.
-Proof.
-  unfold nostep. intros. red; intros. inv H. inv H0; unfold Vzero in H1; congruence.
-Qed.
-
-Lemma final_state_deterministic:
-  forall st r1 r2, final_state st r1 -> final_state st r2 -> r1 = r2.
-Proof.
-  intros. inv H; inv H0. congruence.
-Qed.
-
-Theorem asm_exec_program_deterministic:
-  forall p beh1 beh2,
-  exec_asm_program p beh1 -> exec_asm_program p beh2 ->
-  beh1 = beh2.
-Proof.
-  intros. hnf in H; hnf in H0.
-  eapply (program_behaves_deterministic _ _
-             (wstep _ _ step)
-             (winitial_state _ (initial_state p) initial_world)
-             (wfinal_state _ final_state));
-  eauto.
-  apply wstep_deterministic. apply step_internal_deterministic.
-  apply winitial_state_determ. apply initial_state_deterministic.
-  apply wfinal_state_determ. apply final_state_deterministic.
-  apply wfinal_state_nostep. apply final_state_not_step.
-Qed.
-
-(** * Additional semantic preservation property *)
-
-(** Combining the semantic preservation theorem from module [Compiler]
-  with the determinism of Asm executions, we easily obtain
-  additional, stronger semantic preservation properties.
-  The first property states that, when compiling a Compcert C
-  program that has well-defined semantics, all possible executions
-  of the resulting Asm code correspond to an execution of
-  the source program. *)
+(** As a corollary, if the source C code cannot go wrong, the behavior of the
+  generated assembly code is one of the possible behaviors of the source C code. *)
 
 Theorem transf_c_program_is_refinement:
   forall p tp,
   transf_c_program p = OK tp ->
-  (forall beh, exec_C_program p beh -> not_wrong beh) ->
-  (forall beh, exec_asm_program tp beh -> exec_C_program p beh).
+  (forall beh, program_behaves (Csem.semantics p) beh -> not_wrong beh) ->
+  (forall beh, program_behaves (Asm.semantics tp) beh -> program_behaves (Csem.semantics p) beh).
 Proof.
-  intros. 
-  exploit Cstrategy.strategy_behavior.
-  apply notwrong_safeprog. eauto. 
-  intros [beh1 [A [B [C D]]]].
-  assert (Asm.exec_program tp beh1).
-    eapply transf_c_program_correct; eauto.
-  assert (exec_asm_program tp beh1).
-    red. apply inject_behaviors; auto.
-  assert (beh = beh1). eapply asm_exec_program_deterministic; eauto.
-  subst beh.
-  red. apply inject_behaviors; auto.
+  intros. eapply backward_simulation_same_safe_behavior; eauto.
+  apply transf_c_program_correct; auto.
 Qed.
 
-Section SPECS_PRESERVED.
+(** If we consider the C evaluation strategy implemented by the compiler,
+  we get stronger preservation results. *)
 
-(** The second additional results shows that if one execution
+Theorem transf_cstrategy_program_preservation:
+  forall p tp,
+  transf_c_program p = OK tp ->
+  (forall beh, program_behaves (Cstrategy.semantics p) beh ->
+     exists beh', program_behaves (Asm.semantics tp) beh' /\ behavior_improves beh beh')
+/\(forall beh, program_behaves (Asm.semantics tp) beh ->
+     exists beh', program_behaves (Cstrategy.semantics p) beh' /\ behavior_improves beh' beh)
+/\(forall beh, not_wrong beh ->
+     program_behaves (Cstrategy.semantics p) beh -> program_behaves (Asm.semantics tp) beh)
+/\(forall beh,
+     (forall beh', program_behaves (Cstrategy.semantics p) beh' -> not_wrong beh') ->
+     program_behaves (Asm.semantics tp) beh ->
+     program_behaves (Cstrategy.semantics p) beh).
+Proof.
+  intros. intuition.
+  eapply forward_simulation_behavior_improves; eauto. 
+    apply (fst (transf_cstrategy_program_correct _ _ H)).
+  eapply backward_simulation_behavior_improves; eauto. 
+    apply (snd (transf_cstrategy_program_correct _ _ H)).
+  eapply forward_simulation_same_safe_behavior; eauto.
+    apply (fst (transf_cstrategy_program_correct _ _ H)).
+  eapply backward_simulation_same_safe_behavior; eauto.
+    apply (snd (transf_cstrategy_program_correct _ _ H)).
+Qed.
+
+(** We can also use the alternate big-step semantics for [Cstrategy]
+  to establish behaviors of the generated assembly code. *)
+
+Theorem bigstep_cstrategy_preservation:
+  forall p tp,
+  transf_c_program p = OK tp ->
+  (forall t r,
+     Cstrategy.bigstep_program_terminates p t r ->
+     program_behaves (Asm.semantics tp) (Terminates t r))
+/\(forall T,
+     Cstrategy.bigstep_program_diverges p T ->
+       program_behaves (Asm.semantics tp) (Reacts T)
+    \/ exists t, program_behaves (Asm.semantics tp) (Diverges t) /\ traceinf_prefix t T).
+Proof.
+  intuition.
+  apply transf_cstrategy_program_preservation with p; auto. red; auto.
+  apply behavior_bigstep_terminates with (Cstrategy.bigstep_semantics p); auto.
+  apply Cstrategy.bigstep_semantics_sound.
+  exploit (behavior_bigstep_diverges (Cstrategy.bigstep_semantics_sound p)). eassumption.
+  intros [A | [t [A B]]]. 
+  left. apply transf_cstrategy_program_preservation with p; auto. red; auto.
+  right; exists t; split; auto. apply transf_cstrategy_program_preservation with p; auto. red; auto.
+Qed.
+
+(** * Satisfaction of specifications *)
+
+(** The second additional results shows that if all executions
   of the source C program satisfies a given specification
   (a predicate on the observable behavior of the program),
   then all executions of the produced Asm program satisfy
-  this specification as well.  *) 
+  this specification as well.  
+
+  We first show this result for specifications that are stable
+  under the [behavior_improves] relation. *) 
+
+Section SPECS_PRESERVED.
 
 Variable spec: program_behavior -> Prop.
 
-Hypothesis spec_not_wrong: forall b, spec b -> not_wrong b.
+Hypothesis spec_stable:
+  forall beh1 beh2, behavior_improves beh1 beh2 -> spec beh1 -> spec beh2.
 
 Theorem transf_c_program_preserves_spec:
   forall p tp,
   transf_c_program p = OK tp ->
-  (forall beh, exec_C_program p beh -> spec beh) ->
-  (forall beh, exec_asm_program tp beh -> spec beh).
+  (forall beh, program_behaves (Csem.semantics p) beh -> spec beh) ->
+  (forall beh, program_behaves (Asm.semantics tp) beh -> spec beh).
 Proof.
-  intros. apply H0. apply transf_c_program_is_refinement with tp; auto. 
+  intros.
+  exploit transf_c_program_preservation; eauto. intros [beh' [A B]].
+  apply spec_stable with beh'; auto. 
 Qed.
 
 End SPECS_PRESERVED.
 
-End WORLD.
+(** As a corollary, we obtain preservation of safety specifications:
+  specifications that exclude "going wrong" behaviors. *)
+
+Section SAFETY_PRESERVED.
+
+Variable spec: program_behavior -> Prop.
+
+Hypothesis spec_safety:
+  forall beh, spec beh -> not_wrong beh.
+
+Theorem transf_c_program_preserves_safety_spec:
+  forall p tp,
+  transf_c_program p = OK tp ->
+  (forall beh, program_behaves (Csem.semantics p) beh -> spec beh) ->
+  (forall beh, program_behaves (Asm.semantics tp) beh -> spec beh).
+Proof.
+  intros. eapply transf_c_program_preserves_spec; eauto. 
+  intros. destruct H2. congruence. destruct H2 as [t [EQ1 EQ2]]. 
+  subst beh1. elim (spec_safety _ H3). 
+Qed.
+
+End SAFETY_PRESERVED.
+
+(** We also have preservation of liveness specifications:
+  specifications that assert the existence of a prefix of the observable
+  trace satisfying some conditions. *)
+
+Section LIVENESS_PRESERVED.
+
+Variable spec: trace -> Prop.
+
+Definition liveness_spec_satisfied (b: program_behavior) : Prop :=
+  exists t, behavior_prefix t b /\ spec t.
+
+Theorem transf_c_program_preserves_liveness_spec:
+  forall p tp,
+  transf_c_program p = OK tp ->
+  (forall beh, program_behaves (Csem.semantics p) beh -> liveness_spec_satisfied beh) ->
+  (forall beh, program_behaves (Asm.semantics tp) beh -> liveness_spec_satisfied beh).
+Proof.
+  intros. eapply transf_c_program_preserves_spec; eauto.
+  intros. destruct H3 as [t1 [A B]]. destruct H2.
+  subst. exists t1; auto.
+  destruct H2 as [t [C D]]. subst.
+  destruct A as [b1 E]. destruct D as [b2 F].
+  destruct b1; simpl in E; inv E.
+  exists t1; split; auto. 
+  exists (behavior_app t0 b2); apply behavior_app_assoc. 
+Qed.
+
+End LIVENESS_PRESERVED.
 

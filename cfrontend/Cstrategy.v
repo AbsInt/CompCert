@@ -28,7 +28,6 @@ Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
-Require Import Determinism.
 Require Import Csyntax.
 Require Import Csem.
 
@@ -299,66 +298,7 @@ Inductive estep: state -> trace -> state -> Prop :=
 Definition step (S: state) (t: trace) (S': state) : Prop :=
   estep S t S' \/ sstep ge S t S'.
 
-(** * Safe executions. *)
-
-(** A C program is safe (in the nondeterministic strategy) 
-  if it cannot get stuck.  The definition is parameterized by
-  an external world (cf. file [Determinism]) to constrain the behavior
-  of external functions. *)
-
-Inductive immsafe: world -> state -> Prop :=
-  | immsafe_final: forall w s r,
-      final_state s r ->
-      immsafe w s
-  | immsafe_step: forall w s t s' w',
-      Csem.step ge s t s' -> possible_trace w t w' ->
-      immsafe w s.
-
-Definition safe (w: world) (s: Csem.state) : Prop :=
-  forall t s' w', star Csem.step ge s t s' -> possible_trace w t w' -> immsafe w' s'.
-
-Lemma safe_steps:
-  forall w s t s' w',
-  safe w s -> star Csem.step ge s t s' -> possible_trace w t w' -> safe w' s'.
-Proof.
-  intros; red; intros. 
-  eapply H. eapply star_trans; eauto. eapply possible_trace_app; eauto.
-Qed.
-
-Lemma safe_imm:
-  forall w s, safe w s -> immsafe w s.
-Proof.
-  intros. eapply H. apply star_refl. constructor.
-Qed.
-
-Lemma not_stuck_val:
-  forall e v ty m,
-  not_stuck ge e (Eval v ty) m.
-Proof.
-  intros; red; intros. inv H; try congruence. subst e'. constructor.
-Qed.
-
-Lemma safe_not_stuck:
-  forall w f a k e m,
-  safe w (ExprState f a k e m) ->
-  not_stuck ge e a m.
-Proof.
-  intros. exploit safe_imm; eauto; intro IS; inv IS. 
-  inv H0.
-  inv H0. inv H2; auto; apply not_stuck_val. inv H2; apply not_stuck_val.
-Qed.
-
-Lemma safe_not_imm_stuck:
-  forall k C w f a K e m,
-  safe w (ExprState f (C a) K e m) ->
-  context k RV C ->
-  not_imm_stuck ge e k a m.
-Proof.
-  intros. exploit safe_not_stuck; eauto.
-Qed.
-
-(** Simple, non-stuck expressions are well-formed with respect to
-    l-values and r-values. *)
+(** Properties of contexts *)
 
 Lemma context_compose:
   forall k2 k3 C2, context k2 k3 C2 ->
@@ -373,6 +313,75 @@ Proof.
   replace (fun x => C1 x) with C1. auto. apply extensionality; auto.
   induction 1; intros; constructor; eauto.
 Qed.
+
+Hint Constructors context contextlist.
+Hint Resolve context_compose contextlist_compose.
+
+(** * Safe executions. *)
+
+(** A state is safe according to the nondeterministic semantics 
+  if it cannot get stuck by doing silent transitions only. *)
+
+Definition safe (s: Csem.state) : Prop :=
+  forall s', star Csem.step ge s E0 s' ->
+  (exists r, final_state s' r) \/ (exists t, exists s'', Csem.step ge s' t s'').
+
+Lemma safe_steps:
+  forall s s',
+  safe s -> star Csem.step ge s E0 s' -> safe s'.
+Proof.
+  intros; red; intros. 
+  eapply H. eapply star_trans; eauto. 
+Qed.
+
+Lemma star_safe:
+  forall s1 s2 s3,
+  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> star Csem.step ge s2 E0 s3) ->
+  star Csem.step ge s1 E0 s3.
+Proof.
+  intros. eapply star_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
+Qed.
+
+Lemma plus_safe:
+  forall s1 s2 s3,
+  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> plus Csem.step ge s2 E0 s3) ->
+  plus Csem.step ge s1 E0 s3.
+Proof.
+  intros. eapply star_plus_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
+Qed.
+
+Remark not_stuck_val:
+  forall e v ty m,
+  not_stuck ge e (Eval v ty) m.
+Proof.
+  intros; red; intros. inv H; try congruence. subst e'. constructor.
+Qed.
+
+Lemma safe_not_stuck:
+  forall f a k e m,
+  safe (ExprState f a k e m) ->
+  not_stuck ge e a m.
+Proof.
+  intros. exploit H. apply star_refl. intros [[r FIN] | [t [s' STEP]]].
+  inv FIN.
+  inv STEP. 
+    inv H0; auto; apply not_stuck_val.
+    inv H0; apply not_stuck_val.
+Qed.
+
+Hint Resolve safe_not_stuck.
+
+Lemma safe_not_imm_stuck:
+  forall k C f a K e m,
+  safe (ExprState f (C a) K e m) ->
+  context k RV C ->
+  not_imm_stuck ge e k a m.
+Proof.
+  intros. exploit safe_not_stuck; eauto.
+Qed.
+
+(** Simple, non-stuck expressions are well-formed with respect to
+    l-values and r-values. *)
 
 Definition expr_kind (a: expr) : kind :=
   match a with
@@ -419,9 +428,9 @@ Proof.
 Qed.
 
 Lemma safe_expr_kind:
-  forall from C w f a k e m,
+  forall from C f a k e m,
   context from RV C ->
-  safe w (ExprState f (C a) k e m) ->
+  safe (ExprState f (C a) k e m) ->
   expr_kind a = from.
 Proof.
   intros. eapply not_imm_stuck_kind. eapply safe_not_imm_stuck; eauto.
@@ -544,31 +553,28 @@ Lemma invert_expr_context:
   invert_expr_prop a m ->
   ~exprlist_all_values (C a)).
 Proof.
-  apply context_contextlist_ind; intros; try (exploit H0; [eauto|intros]).
+  apply context_contextlist_ind; intros; try (exploit H0; [eauto|intros]); simpl.
   auto.
-  simpl. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction. 
-  simpl. destruct (C a); auto. contradiction. 
-  simpl. auto.
-  simpl. destruct (C a); auto. contradiction. 
-  simpl. destruct (C a); auto. contradiction. 
-  simpl.
-    destruct e1; auto. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction.
-  simpl.
-    destruct e1; auto. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction.
-  simpl.
-    destruct e1; auto. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction.
-  simpl. destruct (C a); auto. contradiction.
-  simpl. destruct e1; auto. intros. elim (H0 a m); auto.   
-  simpl. destruct (C a); auto. contradiction. 
-  simpl. destruct (C a); auto. contradiction.
-  simpl. red; intros. destruct (C a); auto. 
-  simpl; red; intros. destruct e1; auto. elim (H0 a m); auto. 
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct e1; auto; destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct e1; auto; destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct e1; auto; destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct e1; auto. intros. elim (H0 a m); auto.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  red; intros. destruct (C a); auto. 
+  red; intros. destruct e1; auto. elim (H0 a m); auto. 
 Qed.
 
 Lemma not_imm_stuck_inv:
@@ -595,6 +601,19 @@ Proof.
   red in H. destruct (C e0); auto; contradiction.
 Qed.
 
+Lemma safe_inv:
+  forall k C f a K m,
+  safe (ExprState f (C a) K e m) ->
+  context k RV C ->
+  match a with
+  | Eloc _ _ _ => True
+  | Eval _ _ => True
+  | _ => invert_expr_prop a m
+  end.
+Proof.
+  intros. eapply not_imm_stuck_inv; eauto. eapply safe_not_imm_stuck; eauto.
+Qed.
+
 End INVERSION_LEMMAS.
 
 (** * Correctness of the strategy. *)
@@ -605,180 +624,170 @@ Variable f: function.
 Variable k: cont.
 Variable e: env.
 Variable m: mem.
-Variable w: world.
 
-Lemma simple_eval:
+Lemma eval_simple_steps:
+   (forall a v, eval_simple_rvalue e m a v ->
+    forall C, context RV RV C -> safe (ExprState f (C a) k e m) ->
+    star Csem.step ge (ExprState f (C a) k e m)
+                  E0 (ExprState f (C (Eval v (typeof a))) k e m))
+/\ (forall a b ofs, eval_simple_lvalue e m a b ofs ->
+    forall C, context LV RV C -> safe (ExprState f (C a) k e m) ->
+    star Csem.step ge (ExprState f (C a) k e m)
+                  E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m)).
+Proof.
+
+Ltac Steps REC C' := eapply star_safe; eauto; [apply (REC C'); eauto | intros].
+Ltac FinishR := apply star_one; left; apply step_rred; eauto; simpl; try (econstructor; eauto; fail).
+Ltac FinishL := apply star_one; left; apply step_lred; eauto; simpl; try (econstructor; eauto; fail).
+
+  apply eval_simple_rvalue_lvalue_ind; intros.
+(* val *)
+  apply star_refl.
+(* valof *)
+  Steps H0 (fun x => C(Evalof x ty)). rewrite <- H1 in *. FinishR.
+(* addrof *)
+  Steps H0 (fun x => C(Eaddrof x ty)). FinishR.
+(* unop *)
+  Steps H0 (fun x => C(Eunop op x ty)). FinishR.
+(* binop *)
+  Steps H0 (fun x => C(Ebinop op x r2 ty)).
+  Steps H2 (fun x => C(Ebinop op (Eval v1 (typeof r1)) x ty)).
+  FinishR.
+(* cast *)
+  Steps H0 (fun x => C(Ecast x ty)). FinishR. 
+(* sizeof *)
+  FinishR.
+(* loc *)
+  apply star_refl.
+(* var local *)
+  FinishL. 
+(* var global *)
+  FinishL. apply red_var_global; auto.
+(* deref *)
+  Steps H0 (fun x => C(Ederef x ty)). FinishL. 
+(* field struct *)
+  Steps H0 (fun x => C(Efield x f0 ty)). rewrite H1 in *. FinishL.
+(* field union *)
+  Steps H0 (fun x => C(Efield x f0 ty)). rewrite H1 in *. FinishL.
+Qed.
+
+Lemma eval_simple_rvalue_steps:
+  forall a v, eval_simple_rvalue e m a v ->
+  forall C, context RV RV C -> safe (ExprState f (C a) k e m) ->
+  star Csem.step ge (ExprState f (C a) k e m)
+                E0 (ExprState f (C (Eval v (typeof a))) k e m).
+Proof (proj1 eval_simple_steps).
+
+Lemma eval_simple_lvalue_steps:
+  forall a b ofs, eval_simple_lvalue e m a b ofs ->
+  forall C, context LV RV C -> safe (ExprState f (C a) k e m) ->
+  star Csem.step ge (ExprState f (C a) k e m)
+                E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m).
+Proof (proj2 eval_simple_steps).
+
+Corollary eval_simple_rvalue_safe:
+  forall C a v,
+  eval_simple_rvalue e m a v ->
+  context RV RV C -> safe (ExprState f (C a) k e m) ->
+  safe (ExprState f (C (Eval v (typeof a))) k e m).
+Proof.
+  intros. eapply safe_steps; eauto. eapply eval_simple_rvalue_steps; eauto.
+Qed.
+
+Corollary eval_simple_lvalue_safe:
+  forall C a b ofs,
+  eval_simple_lvalue e m a b ofs ->
+  context LV RV C -> safe (ExprState f (C a) k e m) ->
+  safe (ExprState f (C (Eloc b ofs (typeof a))) k e m).
+Proof.
+  intros. eapply safe_steps; eauto. eapply eval_simple_lvalue_steps; eauto.
+Qed.
+
+Lemma simple_can_eval:
   forall a from C,
-  simple a -> context from RV C -> safe w (ExprState f (C a) k e m) ->
+  simple a -> context from RV C -> safe (ExprState f (C a) k e m) ->
   match from with
-  | LV =>
-     exists b, exists ofs,
-        eval_simple_lvalue e m a b ofs
-     /\ star Csem.step ge (ExprState f (C a) k e m)
-                       E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m)
-  | RV =>
-     exists v,
-        eval_simple_rvalue e m a v
-     /\ star Csem.step ge (ExprState f (C a) k e m)
-                       E0 (ExprState f (C (Eval v (typeof a))) k e m)
+  | LV => exists b, exists ofs, eval_simple_lvalue e m a b ofs
+  | RV => exists v, eval_simple_rvalue e m a v
   end.
 Proof.
+Ltac StepL REC C' a :=
+  let b := fresh "b" in let ofs := fresh "ofs" in
+  let E := fresh "E" in let S := fresh "SAFE" in
+  exploit (REC LV C'); eauto; intros [b [ofs E]];
+  assert (S: safe (ExprState f (C' (Eloc b ofs (typeof a))) k e m)) by 
+    (eapply (eval_simple_lvalue_safe C'); eauto);
+  simpl in S.
+Ltac StepR REC C' a :=
+  let v := fresh "v" in let E := fresh "E" in let S := fresh "SAFE" in
+  exploit (REC RV C'); eauto; intros [v E];
+  assert (S: safe (ExprState f (C' (Eval v (typeof a))) k e m)) by 
+    (eapply (eval_simple_rvalue_safe C'); eauto);
+  simpl in S.
+
   induction a; intros from C S CTX SAFE;
-  generalize (safe_expr_kind _ _ _ _ _ _ _ _ CTX SAFE); intro K; subst;
+  generalize (safe_expr_kind _ _ _ _ _ _ _ CTX SAFE); intro K; subst;
   simpl in S; try contradiction; simpl.
 (* val *)
-  exists v; split. constructor. apply star_refl.
+  exists v; constructor.
 (* var *)
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck; eauto.
-  simpl. intros [b A].
-  exists b; exists Int.zero; split.
+  exploit safe_inv; eauto; simpl. intros [b A].
+  exists b; exists Int.zero.
   intuition. apply esl_var_local; auto. apply esl_var_global; auto.
-  apply star_one. left; apply step_lred.
-  intuition. apply red_var_local; auto. apply red_var_global; auto. 
-  eapply safe_not_stuck; eauto. auto.
 (* field *)
-  set (C1 := fun x => Efield x f0 ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa LV C2); auto. eapply context_compose; eauto. repeat constructor.
-  unfold C2, C1; intros [b [ofs [A B]]].
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eapply safe_steps; eauto. constructor. eauto.
-  simpl. 
-  case_eq (typeof a); intros; try contradiction.
-  destruct H0 as [delta EQ]. 
-  exists b; econstructor; split.
-  eapply esl_field_struct; eauto.
-  eapply star_right. eauto. left; apply step_lred.
-  rewrite H. constructor; auto.
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
-  exists b; exists ofs; split.
-  eapply esl_field_union; eauto.
-  eapply star_right. eauto. left; apply step_lred.
-  rewrite H. constructor; auto.
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
+  StepL IHa (fun x => C(Efield x f0 ty)) a.
+  exploit safe_inv. eexact SAFE0. eauto. simpl. case_eq (typeof a); intros; try contradiction.
+  destruct H0 as [delta OFS]. exists b; exists (Int.add ofs (Int.repr delta)); econstructor; eauto.
+  exists b; exists ofs; econstructor; eauto.
 (* valof *)
-  set (C1 := fun x => Evalof x ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa LV C2); auto. eapply context_compose; eauto. repeat constructor.
-  unfold C2, C1; intros [b [ofs [A B]]].
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eapply safe_steps; eauto. constructor. eauto. 
-  simpl. intros [D [v E]].
-  exists v; split.
-  econstructor; eauto.
-  eapply star_right. eauto. left; apply step_rred.
-  simpl. rewrite D. constructor. auto. 
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
+  StepL IHa (fun x => C(Evalof x ty)) a.
+  exploit safe_inv. eexact SAFE0. eauto. simpl. intros [TY [v LOAD]]. 
+  exists v; econstructor; eauto.
 (* deref *)
-  set (C1 := fun x => Ederef x ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa RV C2); auto. eapply context_compose; eauto. repeat constructor.
-  unfold C2, C1; intros [v1 [A B]].
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eapply safe_steps; eauto. constructor. eauto.
-  simpl. intros [b [ofs D]]. subst v1. 
-  exists b; exists ofs; split.
-  econstructor; eauto. 
-  eapply star_right. eauto. left; apply step_lred.
-  simpl. constructor.
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
+  StepR IHa (fun x => C(Ederef x ty)) a.
+  exploit safe_inv. eexact SAFE0. eauto. simpl. intros [b [ofs EQ]].
+  subst v. exists b; exists ofs; econstructor; eauto.
 (* addrof *)
-  set (C1 := fun x => Eaddrof x ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa LV C2); auto. eapply context_compose; eauto. repeat constructor.
-  unfold C2, C1; intros [b [ofs [A B]]].
-  exists (Vptr b ofs); split.
-  econstructor; eauto.
-  eapply star_right. eauto. left; apply step_rred.
-  simpl. constructor. 
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
+  StepL IHa (fun x => C(Eaddrof x ty)) a.
+  exists (Vptr b ofs); econstructor; eauto.
 (* unop *)
-  set (C1 := fun x => Eunop op x ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa RV C2); auto. eapply context_compose; eauto. repeat constructor.
-  unfold C2, C1; intros [v1 [A B]].
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eapply safe_steps; eauto. constructor. eauto.
-  simpl. intros [v E].
-  exists v; split.
-  econstructor; eauto.
-  eapply star_right. eauto. left; apply step_rred.
-  simpl. constructor. auto. 
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
+  StepR IHa (fun x => C(Eunop op x ty)) a.
+  exploit safe_inv. eexact SAFE0. eauto. simpl. intros [v' EQ].
+  exists v'; econstructor; eauto.
 (* binop *)
-  set (C1 := fun x => Ebinop op x a2 ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa1 RV C2). tauto. eapply context_compose; eauto. repeat constructor. auto.
-  unfold C2, C1; intros [v1 [A B]].
-  assert (safe w (ExprState f (C (Ebinop op (Eval v1 (typeof a1)) a2 ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  set (C3 := fun x => Ebinop op (Eval v1 (typeof a1)) x ty).
-  set (C4 := fun x => C(C3 x)).
-  exploit (IHa2 RV C4). tauto. eapply context_compose; eauto. repeat constructor. auto.
-  unfold C4, C3; intros [v2 [D E]].
-  assert (safe w (ExprState f (C (Ebinop op (Eval v1 (typeof a1)) (Eval v2 (typeof a2)) ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eexact H0. eauto. 
-  simpl. intros [v F].
-  exists v; split.
-  econstructor; eauto.
-  eapply star_right. eapply star_trans; eauto. left; apply step_rred.
-  simpl. constructor. auto. 
-  eapply safe_not_stuck. eauto.
-  auto.
-  traceEq.
+  destruct S.
+  StepR IHa1 (fun x => C(Ebinop op x a2 ty)) a1.
+  StepR IHa2 (fun x => C(Ebinop op (Eval v (typeof a1)) x ty)) a2.
+  exploit safe_inv. eexact SAFE1. eauto. simpl. intros [v' EQ].
+  exists v'; econstructor; eauto.
 (* cast *)
-  set (C1 := fun x => Ecast x ty).
-  set (C2 := fun x => C(C1 x)).
-  exploit (IHa RV C2); auto. eapply context_compose; eauto. repeat constructor.
-  unfold C2, C1; intros [v1 [A B]].
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eapply safe_steps; eauto. constructor. eauto.
-  simpl. intros [v E].
-  exists v; split.
-  econstructor; eauto.
-  eapply star_right. eauto. left; apply step_rred.
-  simpl. constructor. auto. 
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. auto.
-  traceEq.
+  StepR IHa (fun x => C(Ecast x ty)) a.
+  exploit safe_inv. eexact SAFE0. eauto. simpl. intros [v' CAST].
+  exists v'; econstructor; eauto.
 (* sizeof *)
-  econstructor; split. constructor. 
-  apply star_one. left; apply step_rred. constructor. 
-  eapply safe_not_stuck; eauto.
-  auto.
+  econstructor; econstructor.
 (* loc *)
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck; eauto.
-  simpl. intros.
-  exists b; exists ofs; split. constructor. apply star_refl.
+  exists b; exists ofs; constructor.
 Qed.
 
-Lemma simple_eval_r:
-   forall r C, 
-   simple r -> context RV RV C -> safe w (ExprState f (C r) k e m) ->
-   exists v,
-      eval_simple_rvalue e m r v
-   /\ star Csem.step ge (ExprState f (C r) k e m)
-                     E0 (ExprState f (C (Eval v (typeof r))) k e m).
+Lemma simple_can_eval_rval:
+  forall r C, 
+  simple r -> context RV RV C -> safe (ExprState f (C r) k e m) ->
+  exists v, eval_simple_rvalue e m r v
+        /\ safe (ExprState f (C (Eval v (typeof r))) k e m).
 Proof.
-  intros. apply (simple_eval r RV); auto.
+  intros. exploit (simple_can_eval r RV); eauto. intros [v A]. 
+  exists v; split; auto. eapply eval_simple_rvalue_safe; eauto.
 Qed.
 
-Lemma simple_eval_l:
-   forall l C,
-   simple l -> context LV RV C -> safe w (ExprState f (C l) k e m) ->
-   exists b, exists ofs,
-      eval_simple_lvalue e m l b ofs
-   /\ star Csem.step ge (ExprState f (C l) k e m)
-                     E0 (ExprState f (C (Eloc b ofs (typeof l))) k e m).
+Lemma simple_can_eval_lval:
+  forall l C, 
+  simple l -> context LV RV C -> safe (ExprState f (C l) k e m) ->
+  exists b, exists ofs, eval_simple_lvalue e m l b ofs
+         /\ safe (ExprState f (C (Eloc b ofs (typeof l))) k e m).
 Proof.
-  intros. apply (simple_eval l LV); auto.
+  intros. exploit (simple_can_eval l LV); eauto. intros [b [ofs A]]. 
+  exists b; exists ofs; split; auto. eapply eval_simple_lvalue_safe; eauto.
 Qed.
 
 Fixpoint rval_list (vl: list val) (rl: exprlist) : exprlist :=
@@ -794,6 +803,29 @@ Inductive eval_simple_list': exprlist -> list val -> Prop :=
       eval_simple_rvalue e m r v ->
       eval_simple_list' rl vl ->
       eval_simple_list' (Econs r rl) (v :: vl).
+
+Lemma eval_simple_list_implies:
+  forall rl tyl vl,
+  eval_simple_list e m rl tyl vl -> 
+  exists vl', cast_arguments (rval_list vl' rl) tyl vl /\ eval_simple_list' rl vl'.
+Proof.
+  induction 1.
+  exists (@nil val); split. constructor. constructor.
+  destruct IHeval_simple_list as [vl' [A B]].
+  exists (v' :: vl'); split. constructor; auto. constructor; auto.
+Qed.
+
+Lemma can_eval_simple_list:
+  forall rl vl,
+  eval_simple_list' rl vl ->
+  forall tyl vl',
+  cast_arguments (rval_list vl rl) tyl vl' ->
+  eval_simple_list e m rl tyl vl'.
+Proof.
+  induction 1; simpl; intros. 
+  inv H. constructor.
+  inv H1. econstructor; eauto. 
+Qed.
 
 Fixpoint exprlist_app (rl1 rl2: exprlist) : exprlist :=
   match rl1 with
@@ -847,29 +879,39 @@ Proof.
   apply extensionality; intros. f_equal. f_equal. apply exprlist_app_assoc.
 Qed.
 
-Lemma simple_eval_rlist:
+Hint Resolve contextlist'_head contextlist'_tail.
+
+Lemma eval_simple_list_steps:
+  forall rl vl, eval_simple_list' rl vl ->
+  forall C, contextlist' C -> safe (ExprState f (C rl) k e m) ->
+  star Csem.step ge (ExprState f (C rl) k e m)
+                E0 (ExprState f (C (rval_list vl rl)) k e m).
+Proof.
+  induction 1; intros. 
+(* nil *)
+  apply star_refl.
+(* cons *)
+  eapply star_safe. eauto. 
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Econs x rl)); eauto.
+  intros. apply IHeval_simple_list' with (C := fun x => C(Econs (Eval v (typeof r)) x)); auto.
+Qed.
+
+Lemma simple_list_can_eval:
   forall rl C,
   simplelist rl ->
   contextlist' C ->
-  safe w (ExprState f (C rl) k e m) ->
-  exists vl,
-  eval_simple_list' rl vl
-  /\ star Csem.step ge (ExprState f (C rl) k e m)
-                       E0 (ExprState f (C (rval_list vl rl)) k e m).
+  safe (ExprState f (C rl) k e m) ->
+  exists vl, eval_simple_list' rl vl.
 Proof.
-  induction rl; intros. 
-  econstructor; split. constructor. simpl. apply star_refl.
-  simpl in H; destruct H.
-  set (C1 := fun x => C (Econs x rl)). 
-  exploit (simple_eval_r r1 C1). auto. apply contextlist'_head. auto. auto.
-  unfold C1; intros [v [X Y]].
-  assert (safe w (ExprState f (C (Econs (Eval v (typeof r1)) rl)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  set (C2 := fun x => C (Econs (Eval v (typeof r1)) x)). 
-  destruct (IHrl C2) as [vl [U V]]. auto. apply contextlist'_tail. auto. auto.
-  unfold C2 in V.
-  exists (v :: vl); split. constructor; auto.
-  simpl. eapply star_trans; eauto.
+  induction rl; intros.
+  econstructor; constructor.
+  simpl in H; destruct H. 
+  exploit (simple_can_eval r1 RV (fun x => C(Econs x rl))); eauto.
+  intros [v1 EV1].
+  exploit (IHrl (fun x => C(Econs (Eval v1 (typeof r1)) x))); eauto.
+  apply (eval_simple_rvalue_safe (fun x => C(Econs x rl))); eauto.
+  intros [vl EVl].
+  exists (v1 :: vl); constructor; auto.
 Qed.
 
 Lemma rval_list_all_values:
@@ -877,18 +919,6 @@ Lemma rval_list_all_values:
 Proof.
   induction vl; simpl; intros. auto. 
   destruct rl; simpl; auto.
-Qed.
-
-Lemma can_eval_simple_list:
-  forall rl vl,
-  eval_simple_list' rl vl ->
-  forall tyl vl',
-  cast_arguments (rval_list vl rl) tyl vl' ->
-  eval_simple_list e m rl tyl vl'.
-Proof.
-  induction 1; simpl; intros. 
-  inv H. constructor.
-  inv H1. econstructor; eauto. 
 Qed.
 
 End SIMPLE_EVAL.
@@ -901,7 +931,6 @@ Variable f: function.
 Variable k: cont.
 Variable e: env.
 Variable m: mem.
-Variable w: world.
 
 Definition simple_side_effect (r: expr) : Prop :=
   match r with
@@ -919,155 +948,76 @@ Scheme expr_ind2 := Induction for expr Sort Prop
   with exprlist_ind2 := Induction for exprlist Sort Prop.
 Combined Scheme expr_expr_list_ind from expr_ind2, exprlist_ind2.
 
+Hint Constructors leftcontext leftcontextlist.
+
 Lemma decompose_expr:
   (forall a from C,
-   context from RV C -> safe w (ExprState f (C a) k e m) ->
+   context from RV C -> safe (ExprState f (C a) k e m) ->
        simple a
-    \/ exists C', exists a', simple_side_effect a' /\ leftcontext RV from C' /\ a = C' a')
+    \/ exists C', exists a', a = C' a' /\ simple_side_effect a' /\ leftcontext RV from C')
 /\(forall rl C,
-   contextlist' C -> safe w (ExprState f (C rl) k e m) ->
+   contextlist' C -> safe (ExprState f (C rl) k e m) ->
        simplelist rl
-    \/ exists C', exists a', simple_side_effect a' /\ leftcontextlist RV C' /\ rl = C' a').
+    \/ exists C', exists a', rl = C' a' /\ simple_side_effect a' /\ leftcontextlist RV C').
 Proof.
   apply expr_expr_list_ind; intros; simpl; auto.
+
+Ltac Kind :=
+  exploit safe_expr_kind; eauto; simpl; intros X; rewrite <- X in *; clear X.
+Ltac Rec HR kind C C' :=
+  destruct (HR kind (fun x => C(C' x))) as [? | [C'' [a' [D [A B]]]]];
+  [eauto | eauto | auto |
+   right; exists (fun x => C'(C'' x)); exists a'; rewrite D; auto].
+Ltac Base :=
+  right; exists (fun x => x); econstructor; split; [eauto | simpl; auto].
+
 (* field *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H LV (fun x => C (Efield x f0 ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Efield (C' x) f0 ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H LV C (fun x => Efield x f0 ty).
 (* rvalof *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H LV (fun x => C (Evalof x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Evalof (C' x) ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H LV C (fun x => Evalof x ty).
 (* deref *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  subst. destruct (H RV (fun x => C (Ederef x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Ederef (C' x) ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => Ederef x ty).
 (* addrof *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H LV (fun x => C (Eaddrof x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Eaddrof (C' x) ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H LV C (fun x => Eaddrof x ty).
 (* unop *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C (Eunop op x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Eunop op (C' x) ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => Eunop op x ty).
 (* binop *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C (Ebinop op x r2 ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  destruct (H0 RV (fun x => C (Ebinop op r1 x ty))) as [A' | [C' [a' [A' [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Ebinop op r1 (C' x) ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
-  right; exists (fun x => Ebinop op (C' x) r2 ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => Ebinop op x r2 ty). Rec H0 RV C (fun x => Ebinop op r1 x ty).
 (* cast *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C (Ecast x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  auto.
-  right; exists (fun x => Ecast (C' x) ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => Ecast x ty).
 (* condition *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C(Econdition x r2 r3 ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  right. exists (fun x => x); exists (Econdition r1 r2 r3 ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Econdition (C' x) r2 r3 ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => Econdition x r2 r3 ty). Base.
 (* assign *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H LV (fun x => C (Eassign x r ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  destruct (H0 RV (fun x => C (Eassign l x ty))) as [A' | [C' [a' [A' [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  right. exists (fun x => x); exists (Eassign l r ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Eassign l (C' x) ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
-  right; exists (fun x => Eassign (C' x) r ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H LV C (fun x => Eassign x r ty). Rec H0 RV C (fun x => Eassign l x ty). Base.
 (* assignop *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H LV (fun x => C (Eassignop op x r tyres ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  destruct (H0 RV (fun x => C (Eassignop op l x tyres ty))) as [A' | [C' [a' [A' [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  right. exists (fun x => x); exists (Eassignop op l r tyres ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Eassignop op l (C' x) tyres ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
-  right; exists (fun x => Eassignop op (C' x) r tyres ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Kind. Rec H LV C (fun x => Eassignop op x r tyres ty). Rec H0 RV C (fun x => Eassignop op l x tyres ty). Base.
 (* postincr *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H LV (fun x => C(Epostincr id x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto. 
-  right. exists (fun x => x); exists (Epostincr id l ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Epostincr id (C' x) ty); exists a'. 
-  split. auto. split. econstructor; eauto. rewrite D; auto.
+  Kind. Rec H LV C (fun x => Epostincr id x ty). Base.
 (* comma *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C(Ecomma x r2 ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto. 
-  right. exists (fun x => x); exists (Ecomma r1 r2 ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Ecomma (C' x) r2 ty); exists a'. 
-  split. auto. split. econstructor; eauto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => Ecomma x r2 ty). Base.
 (* call *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C (Ecall x rargs ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  destruct (H0 (fun x => C (Ecall r1 x ty))) as [A' | [C' [a' [A' [B D]]]]].
+  Kind. Rec H RV C (fun x => Ecall x rargs ty). 
+  destruct (H0 (fun x => C (Ecall r1 x ty))) as [A | [C' [a' [D [A B]]]]].
     eapply contextlist'_intro with (C := C) (rl0 := Enil). auto. auto.
-  right. exists (fun x => x); exists (Ecall r1 rargs ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Ecall r1 (C' x) ty); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
-  right; exists (fun x => Ecall (C' x) rargs ty); exists a'.
-  split. auto. split. constructor; auto. rewrite D; auto.
+  Base.
+  right; exists (fun x => Ecall r1 (C' x) ty); exists a'. rewrite D; simpl; auto.
 (* rparen *)
-  exploit safe_expr_kind; eauto; simpl; intros. subst.
-  destruct (H RV (fun x => C (Eparen x ty))) as [A | [C' [a' [A [B D]]]]].
-    eapply context_compose; eauto. repeat constructor. auto.
-  right. exists (fun x => x); exists (Eparen r ty).
-  split. red; auto. split. constructor. auto.
-  right; exists (fun x => Eparen (C' x) ty); exists a'. 
-  split. auto. split. econstructor; eauto. rewrite D; auto.
+  Kind. Rec H RV C (fun x => (Eparen x ty)). Base.
 (* cons *)
   destruct (H RV (fun x => C (Econs x rl))) as [A | [C' [a' [A [B D]]]]].
     eapply contextlist'_head; eauto. auto.
   destruct (H0 (fun x => C (Econs r1 x))) as [A' | [C' [a' [A' [B D]]]]].
     eapply contextlist'_tail; eauto. auto. 
   auto.
-  right; exists (fun x => Econs r1 (C' x)); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
-  right; exists (fun x => Econs (C' x) rl); exists a'. 
-  split. auto. split. constructor; auto. rewrite D; auto.
+  right; exists (fun x => Econs r1 (C' x)); exists a'. rewrite A'; eauto.
+  right; exists (fun x => Econs (C' x) rl); exists a'. rewrite A; eauto.
 Qed.
 
 Lemma decompose_topexpr:
   forall a,
-  safe w (ExprState f a k e m) ->
+  safe (ExprState f a k e m) ->
        simple a
-    \/ exists C, exists a', simple_side_effect a' /\ leftcontext RV RV C /\ a = C a'.
+    \/ exists C, exists a', a = C a' /\ simple_side_effect a' /\ leftcontext RV RV C.
 Proof.
   intros. eapply (proj1 decompose_expr). apply ctx_top. auto.
 Qed.
@@ -1076,340 +1026,206 @@ End DECOMPOSITION.
 
 (** Simulation for expressions. *)
 
-Lemma can_estep:
-  forall w f a k e m,
-  safe w (ExprState f a k e m) ->
-  match a with Eval _ _ => False | _ => True end ->
-  exists S,
-     estep (ExprState f a k e m) E0 S
-  /\ plus Csem.step ge (ExprState f a k e m) E0 S.
+Lemma estep_simulation:
+  forall S t S',
+  estep S t S' -> safe S -> plus Csem.step ge S t S'.
 Proof.
-  intros. destruct (decompose_topexpr f k e m w a H) as [A | [C [b [P [Q R]]]]].
-(* expr *)
-  exploit (simple_eval_r f k e m w a (fun x => x)); auto. constructor.
-  intros [v [S T]].
-  econstructor; split. 
-  eapply step_expr; eauto.
-  inversion T. rewrite H2 in H0. contradiction. econstructor; eauto. 
-(* side effect *)
-  clear H0. subst a. red in P. destruct b; try contradiction. 
-(* condition *)
-  set (C1 := fun x => Econdition x b2 b3 ty).
-  exploit (simple_eval_r f k e m w b1 (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [v [A B]].
-  exploit not_imm_stuck_inv.
-    eapply safe_not_imm_stuck. eapply safe_steps; eauto. constructor. eauto.
-  simpl. intros [[X Y] | [X Y]].
-  econstructor; split. eapply step_condition_true; eauto.
-  eapply plus_right. eauto. left; eapply step_rred. constructor; auto.
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. apply leftcontext_context; auto.
-  traceEq.
-  econstructor; split. eapply step_condition_false; eauto.
-  eapply plus_right. eauto. left; eapply step_rred. constructor; auto.
-  eapply safe_not_stuck. eapply safe_steps; eauto. constructor. apply leftcontext_context; auto.
-  traceEq.
+  intros. inv H. 
+(* simple *)
+  exploit eval_simple_rvalue_steps; eauto. simpl; intros STEPS.
+  exploit star_inv; eauto. intros [[EQ1 EQ2] | A]; auto. 
+  inversion EQ1. rewrite <- H3 in H2; contradiction.
+(* condition true *)
+  eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Econdition x r2 r3 (typeof r2))); eauto.
+  intros. apply plus_one. left; apply step_rred; eauto. apply red_condition_true; auto. 
+(* condition false *)
+  eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Econdition x r2 r3 (typeof r3))); eauto.
+  intros. apply plus_one. left; apply step_rred; eauto. apply red_condition_false; auto. 
 (* assign *)
-  destruct P.
-  set (C1 := fun x => Eassign x b2 ty).
-  exploit (simple_eval_l f k e m w b1 (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [blk [ofs [A B]]].
-  assert (S1: safe w (ExprState f (C (Eassign (Eloc blk ofs (typeof b1)) b2 ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  set (C2 := fun x => Eassign (Eloc blk ofs (typeof b1)) x ty).
-  exploit (simple_eval_r f k e m w b2 (fun x => C(C2 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C2; intros [v [E F]].
-  assert (S2: safe w (ExprState f
-         (C (Eassign (Eloc blk ofs (typeof b1)) (Eval v (typeof b2)) ty)) k e
-         m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck. eexact S2. eauto. 
-  simpl. intros [v' [m' [X [Y Z]]]].
-  econstructor; split.
-  eapply step_assign with (C := C); eauto.
-  eapply star_plus_trans. eapply star_trans; eauto. 
-  apply plus_one. left. apply step_rred. rewrite X. econstructor; eauto. 
-  eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
-  traceEq.
-(* assignop *)
-  destruct P.
-  set (C1 := fun x => Eassignop op x b2 tyres ty).
-  exploit (simple_eval_l f k e m w b1 (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [blk [ofs [A B]]].
-  assert (S1: safe w (ExprState f (C (Eassignop op (Eloc blk ofs (typeof b1)) b2 tyres ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  set (C2 := fun x => Eassignop op (Eloc blk ofs (typeof b1)) x tyres ty).
-  exploit (simple_eval_r f k e m w b2 (fun x => C(C2 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C2; intros [v [E F]].
-  assert (S2: safe w (ExprState f
-         (C
-            (Eassignop op (Eloc blk ofs (typeof b1)) (Eval v (typeof b2))
-               tyres ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck. eexact S2. eauto. 
-  simpl. intros [v1 [v2 [v3 [m' [U [V [W [X Y]]]]]]]].
-  econstructor; split.
-  eapply step_assignop with (C := C); eauto.
-  eapply star_plus_trans. eapply star_trans; eauto. 
-  apply plus_one. left. apply step_rred. rewrite U. econstructor; eauto.
-  eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
-  traceEq.
+  eapply plus_safe; eauto.
+  eapply eval_simple_lvalue_steps with (C := fun x => C(Eassign x r (typeof l))); eauto.
+  intros. eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eassign (Eloc b ofs (typeof l)) x (typeof l))); eauto.
+  intros. apply plus_one; left; apply step_rred; eauto. econstructor; eauto.
+(* assignop *) 
+  eapply plus_safe; eauto.
+  eapply eval_simple_lvalue_steps with (C := fun x => C(Eassignop op x r tyres (typeof l))); eauto.
+  intros. eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eassignop op (Eloc b ofs (typeof l)) x tyres (typeof l))); eauto.
+  intros. apply plus_one; left; apply step_rred; eauto. econstructor; eauto.
 (* postincr *)
-  set (C1 := fun x => Epostincr id x ty).
-  exploit (simple_eval_l f k e m w b (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [blk [ofs [A B]]].
-  assert (S1: safe w (ExprState f (C (Epostincr id (Eloc blk ofs (typeof b)) ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck. eexact S1. eauto. 
-  simpl. intros [v1 [v2 [v3 [m' [U [V [W [X Y]]]]]]]].
-  econstructor; split.
-  eapply step_postincr with (C := C); eauto.
-  eapply star_plus_trans. eauto. 
-  apply plus_one. left. apply step_rred. subst ty. econstructor; eauto.
-  eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
-  traceEq.
+  eapply plus_safe; eauto.
+  eapply eval_simple_lvalue_steps with (C := fun x => C(Epostincr id x (typeof l))); eauto.
+  intros. apply plus_one; left; apply step_rred; eauto. econstructor; eauto.
 (* comma *)
-  set (C1 := fun x => Ecomma x b2 ty).
-  exploit (simple_eval_r f k e m w b1 (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [v1 [A B]].
-  assert (S1: safe w (ExprState f (C (Ecomma (Eval v1 (typeof b1)) b2 ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck. eexact S1. eauto. 
-  simpl. intro X.
-  econstructor; split.
-  eapply step_comma with (C := C); eauto.
-  eapply star_plus_trans. eauto. 
-  apply plus_one. left. apply step_rred. subst ty. econstructor; eauto.
-  eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
-  traceEq.
+  eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Ecomma x r2 (typeof r2))); eauto.
+  intros. apply plus_one; left; apply step_rred; eauto. econstructor; eauto.
+(* paren *)
+  eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eparen x (typeof r))); eauto.
+  intros. apply plus_one; left; apply step_rred; eauto. econstructor; eauto.
 (* call *)
-  destruct P.
-  set (C1 := fun x => Ecall x rargs ty).
-  exploit (simple_eval_r f k e m w b (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [vf [A B]].
-  assert (S1: safe w (ExprState f (C (Ecall (Eval vf (typeof b)) rargs ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit (simple_eval_rlist f k e m w rargs (fun x => C(Ecall (Eval vf (typeof b)) x ty))).
-    auto. eapply contextlist'_intro with (rl0 := Enil). auto. auto.
-  intros [vl [E F]].
-  assert (S2: safe w (ExprState f (C (Ecall (Eval vf (typeof b)) (rval_list vl rargs) ty))
-         k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck. eexact S2. eauto. 
-  simpl. intros X.
-  destruct X as [tyargs [tyres [fd [vl' [U [V [W X]]]]]]].
-  apply rval_list_all_values.
-  econstructor; split.
-  eapply step_call with (C := C); eauto. eapply can_eval_simple_list; eauto.
-  eapply plus_right. eapply star_trans; eauto. 
-  left. econstructor. econstructor; eauto. 
-  eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
-  traceEq.
-(* rparen *)
-  set (C1 := fun x => Eparen x ty).
-  exploit (simple_eval_r f k e m w b (fun x => C(C1 x))). auto. 
-    eapply context_compose; eauto. repeat constructor. auto. 
-  unfold C1; intros [v [A B]].
-  assert (S1: safe w (ExprState f (C (Eparen (Eval v (typeof b)) ty)) k e m)).
-    eapply safe_steps; eauto. constructor.
-  exploit not_imm_stuck_inv. eapply safe_not_imm_stuck. eexact S1. eauto. 
-  simpl. intros EQ. subst ty.
-  econstructor; split.
-  eapply step_paren with (C := C); eauto.
-  eapply star_plus_trans. eauto. 
-  apply plus_one. left. apply step_rred. econstructor; eauto.
-  eapply safe_not_stuck; eauto. apply leftcontext_context; auto.
-  traceEq.
+  exploit eval_simple_list_implies; eauto. intros [vl' [A B]].
+  eapply plus_safe; eauto.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Ecall x rargs ty)); eauto.
+  intros. eapply plus_safe; eauto. 
+  eapply eval_simple_list_steps with (C := fun x => C(Ecall (Eval vf (typeof rf)) x ty)); eauto.
+  eapply contextlist'_intro with (rl0 := Enil); auto.
+  intros. apply plus_one; left; apply Csem.step_call; eauto.
+  econstructor; eauto.
+Qed.
+
+Lemma can_estep:
+  forall f a k e m,
+  safe (ExprState f a k e m) ->
+  match a with Eval _ _ => False | _ => True end ->
+  exists S, estep (ExprState f a k e m) E0 S.
+Proof.
+  intros. destruct (decompose_topexpr f k e m a H) as [A | [C [b [P [Q R]]]]].
+(* simple expr *)
+  exploit (simple_can_eval f k e m a RV (fun x => x)); auto. intros [v P].
+  econstructor; eapply step_expr; eauto. 
+(* side effect *)
+  clear H0. subst a. red in Q. destruct b; try contradiction. 
+(* condition *)
+  exploit (simple_can_eval_rval f k e m b1 (fun x => C(Econdition x b2 b3 ty))); eauto.
+  intros [v1 [E1 S1]].
+  exploit safe_inv. eexact S1. eauto. simpl. intros [[T TY] | [F TY]]. 
+  econstructor; eapply step_condition_true; eauto. 
+  econstructor; eapply step_condition_false; eauto.
+(* assign *)
+  destruct Q.
+  exploit (simple_can_eval_lval f k e m b1 (fun x => C(Eassign x b2 ty))); eauto.
+  intros [b [ofs [E1 S1]]].
+  exploit (simple_can_eval_rval f k e m b2 (fun x => C(Eassign (Eloc b ofs (typeof b1)) x ty))); eauto.
+  intros [v [E2 S2]].
+  exploit safe_inv. eexact S2. eauto. simpl. intros [v' [m' [A [B D]]]].
+  econstructor; eapply step_assign; eauto. 
+(* assignop *)
+  destruct Q.
+  exploit (simple_can_eval_lval f k e m b1 (fun x => C(Eassignop op x b2 tyres ty))); eauto.
+  intros [b [ofs [E1 S1]]].
+  exploit (simple_can_eval_rval f k e m b2 (fun x => C(Eassignop op (Eloc b ofs (typeof b1)) x tyres ty))); eauto.
+  intros [v [E2 S2]].
+  exploit safe_inv. eexact S2. eauto. simpl. intros [v1 [v2 [v3 [m' [A [B [D [E F]]]]]]]].
+  econstructor; eapply step_assignop; eauto.
+(* postincr *)
+  exploit (simple_can_eval_lval f k e m b (fun x => C(Epostincr id x ty))); eauto.
+  intros [b1 [ofs [E1 S1]]].
+  exploit safe_inv. eexact S1. eauto. simpl. intros [v1 [v2 [v3 [m' [A [B [D [E F]]]]]]]].
+  econstructor; eapply step_postincr; eauto.
+(* comma *)
+  exploit (simple_can_eval_rval f k e m b1 (fun x => C(Ecomma x b2 ty))); eauto.
+  intros [v1 [E1 S1]].
+  exploit safe_inv. eexact S1. eauto. simpl. intros EQ.
+  econstructor; eapply step_comma; eauto.
+(* call *)
+  destruct Q.
+  exploit (simple_can_eval_rval f k e m b (fun x => C(Ecall x rargs ty))); eauto.
+  intros [vf [E1 S1]].
+  pose (C' := fun x => C(Ecall (Eval vf (typeof b)) x ty)).
+  assert (contextlist' C'). unfold C'; eapply contextlist'_intro with (rl0 := Enil); auto.
+  exploit (simple_list_can_eval f k e m rargs C'); eauto.
+  intros [vl E2].
+  exploit safe_inv. 2: eapply leftcontext_context; eexact R.
+  eapply safe_steps. eexact S1.
+  apply (eval_simple_list_steps f k e m rargs vl E2 C'); auto.
+  simpl. intros X. exploit X. eapply rval_list_all_values. 
+  intros [tyargs [tyres [fd [vargs [P [Q [U V]]]]]]].
+  econstructor; eapply step_call; eauto. eapply can_eval_simple_list; eauto. 
+(* paren *)
+  exploit (simple_can_eval_rval f k e m b (fun x => C(Eparen x ty))); eauto.
+  intros [v1 [E1 S1]].
+  exploit safe_inv. eexact S1. eauto. simpl. intros EQ.
+  econstructor; eapply step_paren; eauto.
+Qed.
+
+(** Simulation for all states *)
+
+Theorem step_simulation:
+  forall S1 t S2,
+  step S1 t S2 -> safe S1 -> plus Csem.step ge S1 t S2.
+Proof.
+  intros. inv H.
+  apply estep_simulation; auto.
+  apply plus_one. right. auto.
+Qed.
+
+Theorem progress:
+  forall S,
+  safe S -> (exists r, final_state S r) \/ (exists t, exists S', step S t S').
+Proof.
+  intros. exploit H. apply star_refl. intros [FIN | [t [S' STEP]]].
+  (* 1. Finished. *)
+  auto.
+  right. destruct STEP.
+  (* 2. Expression step. *)
+  assert (exists S', estep S E0 S').
+    inv H0.
+    (* lred *)
+    eapply can_estep; eauto. inv H3; auto. 
+    (* rred *)
+    eapply can_estep; eauto. inv H3; auto. inv H1; auto. 
+    (* callred *)
+    eapply can_estep; eauto. inv H3; auto. inv H1; auto.
+  destruct H1 as [S'' ESTEP].
+  exists E0; exists S''; left; auto.
+  (* 3. Other step. *)
+  exists t; exists S'; right; auto.
+Qed.
+
+End STRATEGY.
+
+(** The semantics that follows the strategy. *)
+
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
+
+(** This semantics is receptive to changes in events. *)
+
+Lemma semantics_receptive: 
+  forall p, receptive (semantics p).
+Proof.
+  intros. constructor; simpl; intros.
+(* receptiveness *)
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
+    intros. subst. inv H0. exists s1; auto.
+  inversion H; subst.
+  inv H2; auto.
+  inv H2; auto. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exists (Returnstate vres2 k m2). right; econstructor; eauto.
+(* trace length *)
+  inv H. 
+  inv H0; simpl; omega.
+  inv H0; simpl; try omega. eapply external_call_trace_length; eauto.
 Qed.
 
 (** The main simulation result. *)
 
 Theorem strategy_simulation:
-  forall w S,
-  safe w S ->
-     (exists r, final_state S r)
-  \/ (exists t, exists S', exists w',
-         step S t S'
-      /\ plus Csem.step ge S t S'
-      /\ possible_trace w t w').
-Proof.
-  intros. exploit safe_imm; eauto. intros IS; inv IS.
-(* terminated *)
-  left; exists r; auto.
-  destruct H0.
-(* expression step *)
-  inv H0. 
-  (* lred *)
-  exploit can_estep; eauto. inv H4; auto. 
-  intros [S [A B]]. right. exists E0; exists S; exists w. 
-  split. left; auto. split. auto. constructor.
-  (* rred *)
-  exploit can_estep; eauto. inv H4; auto. inv H2; auto. 
-  intros [S [A B]]. right. exists E0; exists S; exists w. 
-  split. left; auto. split. auto. constructor.
-  (* callred *)
-  exploit can_estep; eauto. inv H4; auto. inv H2; auto. 
-  intros [S [A B]]. right. exists E0; exists S; exists w. 
-  split. left; auto. split. auto. constructor.
-(* other step *)
-  right. exists t; exists s'; exists w'.
-  split. right. auto. 
-  split. apply plus_one. right. auto. 
-  auto.
-Qed.
-
-End STRATEGY.
-
-(** * Whole-program behaviors *)
-
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
-
-Definition safeprog (p: program) (w: world) : Prop :=
-  (exists s, initial_state p s)
-  /\ (forall s, initial_state p s -> safe (Genv.globalenv p) w s).
-
-(** We now show the existence of a safe behavior for the strategy,
-  which is also an acceptable behavior for the nondeterministic semantics. *)
-
-Section BEHAVIOR.
-
-Variable prog: program.
-Variable initial_world: world.
-
-(** We define a transition semantics that combines 
-- one strategy step;
-- one or several nondeterministic steps;
-- the state of the external world.
-*)
-
-Local Open Scope pair_scope.
-
-Definition comb_state := (state * world)%type.
-
-Definition comb_step (ge: genv) (s: comb_state) (t: trace) (s': comb_state) : Prop :=
-  (step ge s#1 t s'#1 /\ plus Csem.step ge s#1 t s'#1)
-  /\ possible_trace s#2 t s'#2.
-
-Definition comb_initial_state (s: comb_state) : Prop :=
-  initial_state prog s#1 /\ s#2 = initial_world.
-
-Definition comb_final_state (s: comb_state) (r: int) : Prop :=
-  final_state s#1 r.
-
-Definition comb_program_behaves (beh: program_behavior) : Prop :=
-  program_behaves comb_step comb_initial_state comb_final_state (Genv.globalenv prog) beh.
-
-(** If the source program is safe, the combined semantics cannot go wrong. *)
-
-Remark proj_star_comb_step:
-  forall ge s t s',
-  star comb_step ge s t s' ->
-  star Csem.step ge s#1 t s'#1 /\ possible_trace s#2 t s'#2.
-Proof.
-  induction 1. split; constructor.
-  destruct H as [[A B] C]. destruct IHstar. 
-  split. eapply star_trans. apply plus_star; eauto. eauto. auto. 
-  subst t. eapply possible_trace_app; eauto.
-Qed.
-
-Lemma comb_behavior_not_wrong:
-  forall beh,
-  safeprog prog initial_world -> comb_program_behaves beh -> not_wrong beh.
-Proof.
-  intros. destruct H. inv H0; simpl; auto.
-(* Goes wrong after some steps *)
-  destruct H2. exploit proj_star_comb_step; eauto. intros [A B].
-  assert (C: safe (Genv.globalenv prog) s'#2 s'#1).
-    eapply safe_steps. apply H1. eauto. eauto. congruence.
-  exploit strategy_simulation. eexact C. 
-  intros [[r P] | [t' [s'' [w'' [P [Q R]]]]]].
-  elim (H5 r). auto. 
-  elim (H4 t' (s'', w'')). red. auto. 
-(* Goes initiall wrong *)
-  destruct H as [s A]. elim (H2 (s, initial_world)). red; auto. 
-Qed.
-
-(** Any non-wrong behavior of the combined semantics is a behavior 
-  for the nondeterministic semantics. *)
-
-Lemma proj1_comb_behavior:
-  forall beh,
-  not_wrong beh ->
-  comb_program_behaves beh ->
-  Csem.exec_program prog beh.
-Proof.
-  intros. red in H0. red.
-  eapply simulation_plus_preservation with
-    (match_states := fun (S1: comb_state) (S2: state) => S2 = S1#1); eauto.
-  intros. destruct H1. exists (st1#1); auto.
-  intros. red in H2. congruence.
-  intros. destruct H1 as [[A B] D]. subst st2. exists (st1'#1); auto.
-Qed.
-
-(** Likewise, any non-wrong behavior of the combined semantics is a behavior 
-  for the strategy. *)
-
-Lemma proj2_comb_behavior:
-  forall beh,
-  not_wrong beh ->
-  comb_program_behaves beh ->
-  exec_program prog beh.
-Proof.
-  intros. red in H0. red.
-  eapply simulation_step_preservation with
-    (match_states := fun (S1: comb_state) (S2: state) => S2 = S1#1); eauto.
-  intros. destruct H1. exists (st1#1); auto.
-  intros. red in H2. congruence.
-  intros. destruct H1 as [[A B] D]. subst st2. exists (st1'#1); auto.
-Qed.
-
-(** Finally, any behavior of the combined semantics is possible in the
-  initial world. *)
-
-Lemma possible_comb_behavior:
-  forall beh,
-  comb_program_behaves beh ->
-  possible_behavior initial_world beh.
-Proof.
-  intros. 
-  apply (project_behaviors_trace _ _
-    (fun ge s t s' => step ge s t s' /\ plus Csem.step ge s t s')
-    (initial_state prog)
-    final_state
-    initial_world (Genv.globalenv prog)).
-  exact H. 
-Qed.
-
-(** It follows that a safe C program has a non-wrong behavior that
-  follows the strategy. *)
-
-Theorem strategy_behavior:
-  safeprog prog initial_world ->
-  exists beh, not_wrong beh 
-           /\ Csem.exec_program prog beh
-           /\ exec_program prog beh
-           /\ possible_behavior initial_world beh.
+  forall p, backward_simulation (Csem.semantics p) (semantics p).
 Proof.
   intros.
-  assert (exists beh, comb_program_behaves beh).
-    unfold comb_program_behaves. apply program_behaves_exists. 
-  destruct H0 as [beh CPB].
-  assert (not_wrong beh). eapply comb_behavior_not_wrong; eauto. 
-  exists beh. split. auto.
-  split. apply proj1_comb_behavior; auto.
-  split. apply proj2_comb_behavior; auto.
-  apply possible_comb_behavior; auto.
+  apply backward_simulation_plus with (match_states := fun (S1 S2: state) => S1 = S2); simpl.
+(* symbols *)
+  auto.
+(* trace length *)
+  intros. eapply sr_traces. apply semantics_receptive. simpl. eauto.
+(* initial states exist *)
+  intros. exists s1; auto.
+(* initial states match *)
+  intros. exists s2; auto.
+(* final states match *)
+  intros. subst s2. auto. 
+(* progress *)
+  intros. subst s2. apply progress. auto. 
+(* simulation *)
+  intros. subst s1. exists s2'; split; auto. apply step_simulation; auto.
 Qed.
-
-End BEHAVIOR.
 
 (** * A big-step semantics implementing the reduction strategy. *)
 
@@ -2778,34 +2594,22 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
 
-Theorem bigstep_program_terminates_exec:
-  forall prog t r,
-  bigstep_program_terminates prog t r -> exec_program prog (Terminates t r).
-Proof.
-  intros. inv H. 
-  econstructor.
-  econstructor; eauto.
-  apply eval_funcall_to_steps. eauto. red; auto. 
-  econstructor.
-Qed.
+Definition bigstep_semantics (p: program) :=
+  Bigstep_semantics (bigstep_program_terminates p) (bigstep_program_diverges p).
 
-Theorem bigstep_program_diverges_exec:
-  forall prog T,
-  bigstep_program_diverges prog T ->
-  exec_program prog (Reacts T) \/
-  exists t, exec_program prog (Diverges t) /\ traceinf_prefix t T.
+Theorem bigstep_semantics_sound:
+  forall p, bigstep_sound (bigstep_semantics p) (semantics p).
 Proof.
-  intros. inv H.
-  set (st := Callstate f nil Kstop m0).
-  assert (forever step ge st T). 
-    eapply forever_N_forever with (order := lt).
-    apply lt_wf. 
-    eapply evalinf_funcall_steps; eauto. 
-  destruct (forever_silent_or_reactive _ _ _ _ _ _ H)
-  as [A | [t [s' [T' [B [C D]]]]]]. 
-  left. econstructor. econstructor; eauto. eauto.
-  right. exists t. split.
-  econstructor. econstructor; eauto. eauto. auto. 
-  subst T. rewrite <- (E0_right t) at 1. apply traceinf_prefix_app. constructor.
+  intros; constructor; intros.
+(* termination *)
+  inv H. econstructor; econstructor. 
+  split. econstructor; eauto.
+  split. apply eval_funcall_to_steps. eauto. red; auto.
+  econstructor.
+(* divergence *)
+  inv H. econstructor.
+  split. econstructor; eauto.
+  eapply forever_N_forever with (order := lt).
+  apply lt_wf.
+  eapply evalinf_funcall_steps; eauto.
 Qed.
-

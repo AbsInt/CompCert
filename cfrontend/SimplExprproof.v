@@ -24,7 +24,6 @@ Require Import Memory.
 Require Import Events.
 Require Import Smallstep.
 Require Import Globalenvs.
-Require Import Determinism.
 Require Import Csyntax.
 Require Import Csem.
 Require Import Cstrategy.
@@ -1835,15 +1834,13 @@ Proof.
 Qed.
 
 Theorem transl_program_correct:
-  forall (beh: program_behavior),
-  not_wrong beh -> Cstrategy.exec_program prog beh ->
-  Clight.exec_program tprog beh.
+  forward_simulation (Cstrategy.semantics prog) (Clight.semantics tprog).
 Proof.
-  unfold Cstrategy.exec_program, Clight.exec_program. intros. 
-  eapply simulation_star_wf_preservation; eauto. 
+  eapply forward_simulation_star_wf with (order := ltof _ measure).
+  eexact symbols_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
-  instantiate (1 := ltof _ measure). apply well_founded_ltof. 
+  apply well_founded_ltof.
   exact simulation.
 Qed.
 

@@ -557,13 +557,7 @@ Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.
 
-(** Execution of a whole program: [exec_program p beh]
-  holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] has [beh] as observable
-  behavior. *)
+(** Wrapping up these definitions in a small-step semantics. *)
 
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state 
-                  (Genv.globalenv p) beh.
-
-
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).

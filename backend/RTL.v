@@ -345,8 +345,30 @@ Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate nil (Vint r) m) r.
 
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+(** The small-step semantics for a program. *)
+
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
+
+(** This semantics is receptive to changes in events. *)
+
+Lemma semantics_receptive:
+  forall (p: program), receptive (semantics p).
+Proof.
+  intros. constructor; simpl; intros.
+(* receptiveness *)
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
+    intros. subst. inv H0. exists s1; auto.
+  inversion H; subst; auto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exists (State s0 f sp pc' (rs#res <- vres2) m2). eapply exec_Ibuiltin; eauto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exists (Returnstate s0 vres2 m2). econstructor; eauto.
+(* trace length *)
+  inv H; simpl; try omega.
+  eapply external_call_trace_length; eauto.
+  eapply external_call_trace_length; eauto.
+Qed.
 
 (** * Operations on RTL abstract syntax *)
 

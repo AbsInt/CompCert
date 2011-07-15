@@ -560,15 +560,13 @@ Proof.
 Qed.
 
 (** The preservation of the observable behavior of the program then
-  follows, using the generic preservation theorem
-  [Smallstep.simulation_step_preservation]. *)
+  follows. *)
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  exec_program prog beh -> exec_program tprog beh.
+  forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
-  unfold exec_program; intros.
-  eapply simulation_step_preservation; eauto.
+  eapply forward_simulation_step.
+  eexact symbols_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact transf_step_correct. 

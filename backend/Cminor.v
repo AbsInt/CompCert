@@ -529,13 +529,26 @@ Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.
 
-(** Execution of a whole program: [exec_program p beh]
-  holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] has [beh] as observable
-  behavior. *)
+(** The corresponding small-step semantics. *)
 
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
+
+(** This semantics is receptive to changes in events. *)
+
+Lemma semantics_receptive:
+  forall (p: program), receptive (semantics p).
+Proof.
+  intros. constructor; simpl; intros.
+(* receptiveness *)
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
+    intros. subst. inv H0. exists s1; auto.
+  inversion H; subst; auto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exists (Returnstate vres2 k m2). econstructor; eauto.
+(* trace length *)
+  inv H; simpl; try omega. eapply external_call_trace_length; eauto.
+Qed.
 
 (** * Alternate operational semantics (big-step) *)
 
@@ -697,17 +710,6 @@ Scheme eval_funcall_ind2 := Minimality for eval_funcall Sort Prop
 Combined Scheme eval_funcall_exec_stmt_ind2 
   from eval_funcall_ind2, exec_stmt_ind2.
 
-(*
-Definition eval_funcall_exec_stmt_ind2 
-  (P1: mem -> fundef -> list val -> trace -> mem -> val -> Prop)
-  (P2: val -> env -> mem -> stmt -> trace ->
-              env -> mem -> outcome -> Prop) :=
-  fun a b c d e f g h i j k l m n o p q =>
-  conj
-    (eval_funcall_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q)
-    (exec_stmt_ind2 ge P1 P2 a b c d e f g h i j k l m n o p q).
-*)
-
 (** Coinductive semantics for divergence.
   [evalinf_funcall ge m f args t]
   means that the function [f] diverges when applied to the arguments [args] in
@@ -803,6 +805,9 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       funsig f = mksignature nil (Some Tint) ->
       evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
+
+Definition bigstep_semantics (p: program) :=
+  Bigstep_semantics (bigstep_program_terminates p) (bigstep_program_diverges p).
 
 (** ** Correctness of the big-step semantics with respect to the transition semantics *)
 
@@ -1102,32 +1107,20 @@ Proof.
   traceEq.
 Qed.
 
-Theorem bigstep_program_terminates_exec:
-  forall t r, bigstep_program_terminates prog t r -> exec_program prog (Terminates t r).
+Theorem bigstep_semantics_sound:
+  bigstep_sound (bigstep_semantics prog) (semantics prog).
 Proof.
-  intros. inv H.
+  constructor; intros.
+(* termination *)
+  inv H. econstructor; econstructor.
+  split. econstructor; eauto. 
+  split. apply eval_funcall_steps. eauto. red; auto. 
   econstructor.
-  econstructor; eauto. 
-  apply eval_funcall_steps. eauto. red; auto. 
-  econstructor.
-Qed.
-
-Theorem bigstep_program_diverges_exec:
-  forall T, bigstep_program_diverges prog T ->
-  exec_program prog (Reacts T) \/
-  exists t, exec_program prog (Diverges t) /\ traceinf_prefix t T.
-Proof.
-  intros. inv H.
-  set (st := Callstate f nil Kstop m0).
-  assert (forever step ge0 st T). 
-    eapply forever_plus_forever.
-    eapply evalinf_funcall_forever; eauto. 
-  destruct (forever_silent_or_reactive _ _ _ _ _ _ H)
-  as [A | [t [s' [T' [B [C D]]]]]]. 
-  left. econstructor. econstructor; eauto. auto.
-  right. exists t. split.
-  econstructor. econstructor; eauto. eauto. auto.  
-  subst T. rewrite <- (E0_right t) at 1. apply traceinf_prefix_app. constructor.
+(* divergence *)
+  inv H. econstructor.
+  split. econstructor; eauto. 
+  eapply forever_plus_forever.
+  eapply evalinf_funcall_forever; eauto.
 Qed.
 
 End BIGSTEP_TO_TRANSITION.

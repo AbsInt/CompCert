@@ -138,31 +138,31 @@ Qed.
 
 Section PRESERVATION.
 
-Variable p: program.
-Let tp := tunnel_program p.
-Let ge := Genv.globalenv p.
-Let tge := Genv.globalenv tp.
+Variable prog: program.
+Let tprog := tunnel_program prog.
+Let ge := Genv.globalenv prog.
+Let tge := Genv.globalenv tprog.
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (tunnel_fundef f).
-Proof (@Genv.find_funct_transf _ _ _ tunnel_fundef p).
+Proof (@Genv.find_funct_transf _ _ _ tunnel_fundef prog).
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   Genv.find_funct_ptr tge v = Some (tunnel_fundef f).
-Proof (@Genv.find_funct_ptr_transf _ _ _ tunnel_fundef p).
+Proof (@Genv.find_funct_ptr_transf _ _ _ tunnel_fundef prog).
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (@Genv.find_symbol_transf _ _ _ tunnel_fundef p).
+Proof (@Genv.find_symbol_transf _ _ _ tunnel_fundef prog).
 
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof (@Genv.find_var_info_transf _ _ _ tunnel_fundef p).
+Proof (@Genv.find_var_info_transf _ _ _ tunnel_fundef prog).
 
 Lemma sig_preserved:
   forall f, funsig (tunnel_fundef f) = funsig f.
@@ -358,14 +358,14 @@ Proof.
 Qed.
 
 Lemma transf_initial_states:
-  forall st1, initial_state p st1 ->
-  exists st2, initial_state tp st2 /\ match_states st1 st2.
+  forall st1, initial_state prog st1 ->
+  exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H. 
   exists (Callstate nil (tunnel_fundef f) nil m0); split.
   econstructor; eauto.
   apply Genv.init_mem_transf; auto.
-  change (prog_main tp) with (prog_main p).
+  change (prog_main tprog) with (prog_main prog).
   rewrite symbols_preserved. eauto.
   apply function_ptr_translated; auto.
   rewrite <- H3. apply sig_preserved. 
@@ -380,11 +380,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  exec_program p beh -> exec_program tp beh.
+  forward_simulation (LTL.semantics prog) (LTL.semantics tprog).
 Proof.
-  unfold exec_program; intros.
-  eapply simulation_opt_preservation; eauto.
+  eapply forward_simulation_opt.
+  eexact symbols_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact tunnel_step_correct. 

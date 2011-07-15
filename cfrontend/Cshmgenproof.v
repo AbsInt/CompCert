@@ -1846,14 +1846,14 @@ Proof.
 Qed.
 
 Lemma transl_initial_states:
-  forall S t S', Clight.initial_state prog S -> Clight.step ge S t S' ->
+  forall S, Clight.initial_state prog S ->
   exists R, initial_state tprog R /\ match_states S R.
 Proof.
   intros. inv H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   assert (C: Genv.find_symbol tge (prog_main tprog) = Some b).
     rewrite symbols_preserved. replace (prog_main tprog) with (prog_main prog).
-    exact H2. symmetry. unfold transl_program in TRANSL. 
+    auto. symmetry. unfold transl_program in TRANSL. 
     eapply transform_partial_program2_main; eauto.
   assert (funsig tf = signature_of_type Tnil (Tint I32 Signed)).
     eapply transl_fundef_sig2; eauto. 
@@ -1870,46 +1870,13 @@ Proof.
 Qed.
 
 Theorem transl_program_correct:
-  forall (beh: program_behavior),
-  not_wrong beh -> Clight.exec_program prog beh ->
-  Csharpminor.exec_program tprog beh.
+  forward_simulation (Clight.semantics prog) (Csharpminor.semantics tprog).
 Proof.
-  set (order := fun (S1 S2: Clight.state) => False).
-  assert (WF: well_founded order).
-  unfold order; red. intros. constructor; intros. contradiction.
-  assert (transl_step':
-     forall S1 t S2, Clight.step ge S1 t S2 ->
-     forall T1, match_states S1 T1 ->
-     exists T2,
-      (plus step tge T1 t T2 \/ star step tge T1 t T2 /\ order S2 S1)
-      /\ match_states S2 T2).
-  intros. exploit transl_step; eauto. intros [T2 [A B]].
-  exists T2; split. auto. auto.
-  intros. inv H0.
-(* Terminates *)
-  assert (exists t1, exists s1, Clight.step (Genv.globalenv prog) s t1 s1).
-  inv H3. inv H2. inv H1. exists t1; exists s2; auto.
-  destruct H0 as [t1 [s1 ST]].
-  exploit transl_initial_states; eauto. intros [R [A B]].
-  exploit simulation_star_star; eauto. intros [R' [C D]]. 
-  econstructor; eauto. eapply transl_final_states; eauto.
-(* Diverges *)
-  assert (exists t1, exists s1, Clight.step (Genv.globalenv prog) s t1 s1).
-  inv H2. inv H3. exists E0; exists s2; auto. exists t1; exists s2; auto.
-  destruct H0 as [t1 [s1 ST]].
-  exploit transl_initial_states; eauto. intros [R [A B]].
-  exploit simulation_star_star; eauto. intros [R' [C D]]. 
-  econstructor; eauto. eapply simulation_star_forever_silent; eauto.
-(* Reacts *)
-  assert (exists t1, exists s1, Clight.step (Genv.globalenv prog) s t1 s1).
-  inv H2. inv H0. congruence. exists t1; exists s0; auto.
-  destruct H0 as [t1 [s1 ST]].
-  exploit transl_initial_states; eauto. intros [R [A B]].
-  exploit simulation_star_forever_reactive; eauto.
-  intro C.
-  econstructor; eauto.
-(* Goes wrong *)
-  contradiction. contradiction.
+  eapply forward_simulation_plus.
+  eexact symbols_preserved.
+  eexact transl_initial_states.
+  eexact transl_final_states.
+  eexact transl_step.
 Qed.
 
 End CORRECTNESS.

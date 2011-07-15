@@ -1285,3 +1285,46 @@ Qed.
 
 End DECIDABLE_PREDICATE.
 
+(** * Well-founded orderings *)
+
+Require Import Relations.
+
+(** A non-dependent version of lexicographic ordering. *)
+
+Section LEX_ORDER.
+
+Variable A: Type.
+Variable B: Type.
+Variable ordA: A -> A -> Prop.
+Variable ordB: B -> B -> Prop.
+
+Inductive lex_ord: A*B -> A*B -> Prop :=
+  | lex_ord_left: forall a1 b1 a2 b2,
+      ordA a1 a2 -> lex_ord (a1,b1) (a2,b2)
+  | lex_ord_right: forall a b1 b2,
+      ordB b1 b2 -> lex_ord (a,b1) (a,b2).
+
+Lemma wf_lex_ord: 
+  well_founded ordA -> well_founded ordB -> well_founded lex_ord.
+Proof.
+  intros Awf Bwf.
+  assert (forall a, Acc ordA a -> forall b, Acc ordB b -> Acc lex_ord (a, b)).
+    induction 1. induction 1. constructor; intros. inv H3.
+    apply H0. auto. apply Bwf.
+    apply H2; auto. 
+  red; intros. destruct a as [a b]. apply H; auto.
+Qed.
+
+Lemma transitive_lex_ord:
+  transitive _ ordA -> transitive _ ordB -> transitive _ lex_ord.
+Proof.
+  intros trA trB; red; intros. 
+  inv H; inv H0. 
+  left; eapply trA; eauto.
+  left; auto.
+  left; auto.
+  right; eapply trB; eauto.
+Qed.
+
+End LEX_ORDER.
+

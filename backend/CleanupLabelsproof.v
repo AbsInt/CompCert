@@ -324,11 +324,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  exec_program prog beh -> LTLin.exec_program tprog beh.
+  forward_simulation (LTLin.semantics prog) (LTLin.semantics tprog).
 Proof.
-  unfold exec_program; intros.
-  eapply simulation_opt_preservation; eauto.
+  eapply forward_simulation_opt.
+  eexact symbols_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.

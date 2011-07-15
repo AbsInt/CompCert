@@ -177,26 +177,6 @@ Transparent E0.
   constructor. unfold E0; congruence. auto.
 Qed.
 
-(** The "is prefix of" relation between a finite and an infinite trace. *)
-
-Inductive traceinf_prefix: trace -> traceinf -> Prop :=
-  | traceinf_prefix_nil: forall T,
-      traceinf_prefix nil T
-  | traceinf_prefix_cons: forall e t1 T2,
-      traceinf_prefix t1 T2 ->
-      traceinf_prefix (e :: t1) (Econsinf e T2).
-
-Lemma traceinf_prefix_app:
-  forall t1 T2 t,
-  traceinf_prefix t1 T2 ->
-  traceinf_prefix (t ** t1) (t *** T2).
-Proof.
-  induction t; simpl; intros. auto.
-  change ((a :: t) ** t1) with (a :: (t ** t1)).
-  change ((a :: t) *** T2) with (Econsinf a (t *** T2)).
-  constructor. auto.
-Qed.
-
 (** An alternate presentation of infinite traces as
   infinite concatenations of nonempty finite traces. *)
 
@@ -246,6 +226,30 @@ Proof.
   simpl. destruct t. auto.
 Transparent Eappinf.
   simpl. f_equal. apply IHt. 
+Qed.
+
+(** Prefixes of traces. *)
+
+Definition trace_prefix (t1 t2: trace) :=
+  exists t3, t2 = t1 ** t3.
+
+Definition traceinf_prefix (t1: trace) (T2: traceinf) :=
+  exists T3, T2 = t1 *** T3.
+
+Lemma trace_prefix_app:
+  forall t1 t2 t,
+  trace_prefix t1 t2 ->
+  trace_prefix (t ** t1) (t ** t2).
+Proof.
+  intros. destruct H as [t3 EQ]. exists t3. traceEq. 
+Qed.
+
+Lemma traceinf_prefix_app:
+  forall t1 T2 t,
+  traceinf_prefix t1 T2 ->
+  traceinf_prefix (t ** t1) (t *** T2).
+Proof.
+  intros. destruct H as [T3 EQ]. exists T3. subst T2. traceEq.
 Qed.
 
 (** * Relating values and event values *)
@@ -370,6 +374,39 @@ Proof.
   eapply eventval_match_determ_2; eauto.
 Qed.
 
+(** Validity *)
+
+Definition eventval_valid (ev: eventval) : Prop :=
+  match ev with
+  | EVint _ => True
+  | EVfloat _ => True
+  | EVptr_global id ofs => exists b, Genv.find_symbol ge id = Some b
+  end.
+
+Definition eventval_type (ev: eventval) : typ :=
+  match ev with
+  | EVint _ => Tint
+  | EVfloat _ => Tfloat
+  | EVptr_global id ofs => Tint
+  end.
+
+Lemma eventval_valid_match:
+  forall ev ty,
+  eventval_valid ev -> eventval_type ev = ty -> exists v, eventval_match ev ty v.
+Proof.
+  intros. subst ty. destruct ev; simpl in *.
+  exists (Vint i); constructor.
+  exists (Vfloat f0); constructor.
+  destruct H as [b A]. exists (Vptr b i0); constructor; auto.
+Qed.
+
+Lemma eventval_match_valid:
+  forall ev ty v,
+  eventval_match ev ty v -> eventval_valid ev /\ eventval_type ev = ty.
+Proof.
+  induction 1; simpl; auto. split; auto. exists b; auto.
+Qed.
+
 End EVENTVAL.
 
 (** Invariance under changes to the global environment *)
@@ -397,7 +434,61 @@ Proof.
   induction 1; constructor; auto. eapply eventval_match_preserved; eauto.
 Qed.
 
+Lemma eventval_valid_preserved:
+  forall ev, eventval_valid ge1 ev -> eventval_valid ge2 ev.
+Proof.
+  unfold eventval_valid; destruct ev; auto. 
+  intros [b A]. exists b; rewrite symbols_preserved; auto.
+Qed.
+
 End EVENTVAL_INV.
+
+(** * Matching traces. *)
+
+Section MATCH_TRACES.
+
+Variables F V: Type.
+Variable ge: Genv.t F V.
+
+(** Matching between traces corresponding to single transitions.
+  Arguments (provided by the program) must be equal.
+  Results (provided by the outside world) can vary as long as they
+  can be converted safely to values. *)
+
+Inductive match_traces: trace -> trace -> Prop :=
+  | match_traces_E0:
+      match_traces nil nil
+  | match_traces_syscall: forall id args res1 res2,
+      eventval_valid ge res1 -> eventval_valid ge res2 -> eventval_type res1 = eventval_type res2 ->
+      match_traces (Event_syscall id args res1 :: nil) (Event_syscall id args res2 :: nil)
+  | match_traces_vload: forall chunk id ofs res1 res2,
+      eventval_valid ge res1 -> eventval_valid ge res2 -> eventval_type res1 = eventval_type res2 ->
+      match_traces (Event_vload chunk id ofs res1 :: nil) (Event_vload chunk id ofs res2 :: nil)
+  | match_traces_vstore: forall chunk id ofs arg,
+      match_traces (Event_vstore chunk id ofs arg :: nil) (Event_vstore chunk id ofs arg :: nil)
+  | match_traces_annot: forall id args,
+      match_traces (Event_annot id args :: nil) (Event_annot id args :: nil).
+
+End MATCH_TRACES.
+
+(** Invariance by change of global environment *)
+
+Section MATCH_TRACES_INV.
+
+Variables F1 V1 F2 V2: Type.
+Variable ge1: Genv.t F1 V1.
+Variable ge2: Genv.t F2 V2.
+
+Hypothesis symbols_preserved:
+  forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id.
+
+Lemma match_traces_preserved:
+  forall t1 t2, match_traces ge1 t1 t2 -> match_traces ge2 t1 t2.
+Proof.
+  induction 1; constructor; auto; eapply eventval_valid_preserved; eauto.
+Qed.
+
+End MATCH_TRACES_INV.
 
 (** * Semantics of external functions *)
 
@@ -438,20 +529,6 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   forall b1 b2 delta,
   f b1 = None -> f' b1 = Some(b2, delta) ->
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
-
-Fixpoint matching_traces (t1 t2: trace) {struct t1} : Prop :=
-  match t1, t2 with
-  | Event_syscall name1 args1 res1 :: t1', Event_syscall name2 args2 res2 :: t2' =>
-      name1 = name2 /\ args1 = args2 -> res1 = res2 /\ matching_traces t1' t2'
-  | Event_vload chunk1 id1 ofs1 res1 :: t1', Event_vload chunk2 id2 ofs2 res2 :: t2' =>
-      chunk1 = chunk2 /\ id1 = id2 /\ ofs1 = ofs2 -> res1 = res2 /\ matching_traces t1' t2'
-  | Event_vstore chunk1 id1 ofs1 arg1 :: t1', Event_vstore chunk2 id2 ofs2 arg2 :: t2' =>
-      chunk1 = chunk2 /\ id1 = id2 /\ ofs1 = ofs2 /\ arg1 = arg2 -> matching_traces t1' t2'
-  | Event_annot txt1 args1 :: t1', Event_annot txt2 args2 :: t2' =>
-      txt1 = txt2 /\ args1 = args2 -> matching_traces t1' t2'
-  | _, _ =>
-      True
-  end.
 
 Definition block_is_volatile (F V: Type) (ge: Genv.t F V) (b: block) : bool :=
   match Genv.find_var_info ge b with
@@ -525,13 +602,22 @@ Record extcall_properties (sem: extcall_sem)
     /\ inject_incr f f'
     /\ inject_separated f f' m1 m1';
 
-(** External calls must be internally deterministic:
-  if the observable traces match, the return states must be
-  identical. *)
+(** External calls produce at most one event. *)
+  ec_trace_length:
+    forall F V ge vargs m t vres m',
+    sem F V ge vargs m t vres m' -> (length t <= 1)%nat;
+
+(** External calls must be receptive to changes of traces by another, matching trace. *)
+  ec_receptive:
+    forall F V ge vargs m t1 vres1 m1 t2,
+    sem F V ge vargs m t1 vres1 m1 -> match_traces ge t1 t2 ->
+    exists vres2, exists m2, sem F V ge vargs m t2 vres2 m2;
+
+(** External calls must be deterministic up to matching between traces. *)
   ec_determ:
     forall F V ge vargs m t1 vres1 m1 t2 vres2 m2,
     sem F V ge vargs m t1 vres1 m1 -> sem F V ge vargs m t2 vres2 m2 ->
-    matching_traces t1 t2 -> t1 = t2 /\ vres1 = vres2 /\ m1 = m2
+    match_traces ge t1 t2 /\ (t1 = t2 -> vres1 = vres2 /\ m1 = m2)
 }.
 
 (** ** Semantics of volatile loads *)
@@ -573,21 +659,21 @@ Lemma volatile_load_ok:
                      (mksignature (Tint :: nil) (Some (type_of_chunk chunk))).
 Proof.
   intros; constructor; intros.
-
+(* well typed *)
   unfold proj_sig_res; simpl. destruct H.
   destruct chunk; destruct v; simpl; constructor.
   eapply Mem.load_type; eauto. 
-
+(* arity *)
   destruct H; simpl; auto.
-
+(* symbols *)
   destruct H1. 
   econstructor; eauto. rewrite H; auto. eapply eventval_match_preserved; eauto. 
   econstructor; eauto.
-
+(* valid blocks *)
   destruct H; auto.
-
+(* bounds *)
   destruct H; auto.
-
+(* mem extends *)
   destruct H. 
   inv H1. inv H8. inv H6. 
   exists (Val.load_result chunk v); exists m1'; intuition.
@@ -598,7 +684,7 @@ Proof.
   exists v'; exists m1'; intuition.
   econstructor; eauto.
   red; auto.
-
+(* mem injects *)
   destruct H0.
   inv H2. inv H9. inv H7.
   generalize H; intros [P [Q R]].
@@ -618,13 +704,25 @@ Proof.
   red; auto.
   red; auto.
   red; intros. congruence.
-
+(* trace length *)
+  inv H; simpl; omega.
+(* receptive *)
+  inv H; inv H0.
+  exploit eventval_match_valid; eauto. intros [A B]. 
+  exploit eventval_valid_match. eexact H9. rewrite <- H10; eauto. 
+  intros [v' EVM]. exists (Val.load_result chunk v'); exists m1.
+  eapply volatile_load_sem_vol; eauto. 
+  exists vres1; exists m1; eapply volatile_load_sem_nonvol; eauto.
+(* determ *)
   inv H; inv H0; try congruence.
   assert (id = id0) by (eapply Genv.genv_vars_inj; eauto). subst id0.
-  assert (ev = ev0) by (red in H1; tauto). subst ev0.
+  exploit eventval_match_valid. eexact H3. intros [V1 T1].
+  exploit eventval_match_valid. eexact H11. intros [V2 T2].
+  split. constructor; auto. congruence.
+  intros EQ; inv EQ. 
   assert (v = v0) by (eapply eventval_match_determ_1; eauto). subst v0.
   auto.
-  intuition congruence.
+  split. constructor. intuition congruence.
 Qed.
 
 (** ** Semantics of volatile stores *)
@@ -652,19 +750,19 @@ Lemma volatile_store_ok:
                      (mksignature (Tint :: type_of_chunk chunk :: nil) None).
 Proof.
   intros; constructor; intros.
-
+(* well typed *)
   unfold proj_sig_res; simpl. inv H; constructor.
-
+(* arity *)
   inv H; simpl; auto.
-
+(* symbols preserved *)
   inv H1. 
   constructor. rewrite H; auto. rewrite H0; auto. eapply eventval_match_preserved; eauto.
   constructor; auto. rewrite H0; auto.
-
+(* valid block *)
   inv H. auto. eauto with mem.
-
+(* bounds *)
   inv H. auto. eapply Mem.bounds_store; eauto.
-
+(* mem extends*)
   inv H.
   inv H1. inv H6. inv H8. inv H7.
   exists Vundef; exists m1'; intuition.
@@ -687,7 +785,7 @@ Proof.
                               (Int.unsigned ofs, Int.unsigned ofs + size_chunk chunk)).
   red; intros. generalize (H x H5). unfold loc_out_of_bounds, Intv.In; simpl. omega.
   simpl; omega. simpl; omega.
-
+(* mem injects *)
   inv H0.
   inv H2. inv H7. inv H9. inv H10.
   generalize H; intros [P [Q R]].
@@ -724,12 +822,17 @@ Proof.
   red; intros. exploit (H2 x H8). eauto. unfold Intv.In; simpl. omega.
   simpl; omega. simpl; omega.
   red; intros; congruence.
-
+(* trace length *)
+  inv H; simpl; omega.
+(* receptive *)
+  assert (t1 = t2). inv H; inv H0; auto. 
+  exists vres1; exists m1; congruence.
+(* determ *)
   inv H; inv H0; try congruence.
   assert (id = id0) by (eapply Genv.genv_vars_inj; eauto). subst id0.
   assert (ev = ev0) by (eapply eventval_match_determ_2; eauto). subst ev0.
-  auto.
-  intuition congruence.
+  split. constructor. auto.
+  split. constructor. intuition congruence.
 Qed.
 
 (** ** Semantics of dynamic memory allocation (malloc) *)
@@ -758,20 +861,20 @@ Proof.
   eapply Mem.load_alloc_other; eauto. 
 
   constructor; intros.
-
+(* well typed *)
   inv H. unfold proj_sig_res; simpl. auto.
-
+(* arity *)
   inv H. auto.
-
+(* symbols preserved *)
   inv H1; econstructor; eauto.
-
+(* valid block *)
   inv H. eauto with mem.
-
+(* bounds *)
   inv H. transitivity (Mem.bounds m' b).
   eapply Mem.bounds_store; eauto.
   eapply Mem.bounds_alloc_other; eauto.
   apply Mem.valid_not_valid_diff with m1; eauto with mem.
-
+(* mem extends *)
   inv H. inv H1. inv H5. inv H7. 
   exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
   intros [m3' [A B]].
@@ -781,7 +884,7 @@ Proof.
   exists (Vptr b Int.zero); exists m2'; intuition.
   econstructor; eauto.
   eapply UNCHANGED; eauto.
-
+(* mem injects *)
   inv H0. inv H2. inv H6. inv H8.
   exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl. 
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
@@ -796,8 +899,13 @@ Proof.
   red; intros. destruct (eq_block b1 b). 
   subst b1. rewrite C in H2. inv H2. eauto with mem. 
   rewrite D in H2. congruence. auto. 
-
-  inv H; inv H0. intuition congruence. 
+(* trace length *)
+  inv H; simpl; omega.
+(* receptive *)
+  assert (t1 = t2). inv H; inv H0; auto. subst t2.
+  exists vres1; exists m1; auto.
+(* determ *)
+  inv H; inv H0. split. constructor. intuition congruence. 
 Qed.
 
 (** ** Semantics of dynamic memory deallocation (free) *)
@@ -830,17 +938,17 @@ Proof.
   simpl; omega.
 
   constructor; intros.
-
+(* well typed *)
   inv H. unfold proj_sig_res. simpl. auto.
-
+(* arity *)
   inv H. auto.
-
+(* symbols preserved *)
   inv H1; econstructor; eauto.
-
+(* valid block *)
   inv H. eauto with mem.
-
+(* bounds *)
   inv H. eapply Mem.bounds_free; eauto.
-
+(* mem extends *)
   inv H. inv H1. inv H8. inv H6. 
   exploit Mem.load_extends; eauto. intros [vsz [A B]]. inv B. 
   exploit Mem.free_parallel_extends; eauto. intros [m2' [C D]].
@@ -851,7 +959,7 @@ Proof.
   red in H.
   exploit Mem.range_perm_in_bounds. 
   eapply Mem.free_range_perm. eexact H4. omega. omega.
-
+(* mem inject *)
   inv H0. inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B. 
   assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Freeable).
@@ -895,8 +1003,13 @@ Proof.
   exploit Mem.range_perm_in_bounds. eexact H0. omega. intros. omega.
 
   red; intros. congruence.
-
-  inv H; inv H0. intuition congruence.
+(* trace length *)
+  inv H; simpl; omega.
+(* receptive *)
+  assert (t1 = t2). inv H; inv H0; auto. subst t2.
+  exists vres1; exists m1; auto.
+(* determ *)
+  inv H; inv H0. split. constructor. intuition congruence.
 Qed.
 
 (** ** Semantics of [memcpy] operations. *)
@@ -1015,8 +1128,14 @@ Proof.
   omega.
   split. apply inject_incr_refl.
   red; intros; congruence.
-(* determinism *)
-  intros. inv H; inv H0. split. auto. split. auto. congruence.
+(* trace length *)
+  intros; inv H. simpl; omega.
+(* receptive *)
+  intros. 
+  assert (t1 = t2). inv H; inv H0; auto. subst t2.
+  exists vres1; exists m1; auto.
+(* determ *)
+  intros; inv H; inv H0. split. constructor. intros; split; congruence.
 Qed.
 
 (** ** Semantics of system calls. *)
@@ -1033,25 +1152,25 @@ Lemma extcall_io_ok:
   extcall_properties (extcall_io_sem name sg) sg.
 Proof.
   intros; constructor; intros.
-
+(* well typed *)
   inv H. eapply eventval_match_type; eauto.
-
+(* arity *)
   inv H. eapply eventval_list_match_length; eauto.
-
+(* symbols preserved *)
   inv H1. econstructor; eauto. 
   eapply eventval_list_match_preserved; eauto.
   eapply eventval_match_preserved; eauto. 
-
+(* valid block *)
   inv H; auto.
-
+(* bounds *)
   inv H; auto.
-
+(* mem extends *)
   inv H.
   exists vres; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_list_match_lessdef; eauto.
   red; auto.
-
+(* mem injects *)
   inv H0.
   exists f; exists vres; exists m1'; intuition.
   econstructor; eauto.
@@ -1060,11 +1179,20 @@ Proof.
   red; auto.
   red; auto.
   red; intros; congruence.
-
-  inv H; inv H0. simpl in H1.
+(* trace length *)
+  inv H; simpl; omega.
+(* receptive *)
+  inv H; inv H0.
+  exploit eventval_match_valid; eauto. intros [A B]. 
+  exploit eventval_valid_match. eexact H7. rewrite <- H8; eauto. 
+  intros [v' EVM]. exists v'; exists m1. econstructor; eauto. 
+(* determ *)
+  inv H; inv H0.
   assert (args = args0). eapply eventval_list_match_determ_2; eauto. subst args0.
-  assert (res = res0). tauto. subst res0.
-  intuition. eapply eventval_match_determ_1; eauto.
+  exploit eventval_match_valid. eexact H2. intros [V1 T1].
+  exploit eventval_match_valid. eexact H3. intros [V2 T2].
+  split. constructor; auto. congruence.
+  intros EQ; inv EQ. split; auto. eapply eventval_match_determ_1; eauto.
 Qed.
 
 (** ** Semantics of annotation. *)
@@ -1080,24 +1208,24 @@ Lemma extcall_annot_ok:
   extcall_properties (extcall_annot_sem text targs) (mksignature targs None).
 Proof.
   intros; constructor; intros.
-
+(* well typed *)
   inv H. simpl. auto.
-
+(* arity *)
   inv H. eapply eventval_list_match_length; eauto.
-
+(* symbols *)
   inv H1. econstructor; eauto. 
   eapply eventval_list_match_preserved; eauto.
-
+(* valid blocks *)
   inv H; auto.
-
+(* bounds *)
   inv H; auto.
-
+(* mem extends *)
   inv H.
   exists Vundef; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_list_match_lessdef; eauto.
   red; auto.
-
+(* mem injects *)
   inv H0.
   exists f; exists Vundef; exists m1'; intuition.
   econstructor; eauto.
@@ -1105,10 +1233,15 @@ Proof.
   red; auto.
   red; auto.
   red; intros; congruence.
-
-  inv H; inv H0. simpl in H1.
+(* trace length *)
+  inv H; simpl; omega.
+(* receptive *)
+  assert (t1 = t2). inv H; inv H0; auto. 
+  exists vres1; exists m1; congruence.
+(* determ *)
+  inv H; inv H0.
   assert (args = args0). eapply eventval_list_match_determ_2; eauto. subst args0.
-  intuition.
+  split. constructor. auto.
 Qed.
 
 Inductive extcall_annot_val_sem (text: ident) (targ: typ) (F V: Type) (ge: Genv.t F V):
@@ -1148,9 +1281,14 @@ Proof.
   red; auto.
   red; intros; congruence.
 
-  inv H; inv H0. simpl in H1.
+  inv H; simpl; omega.
+
+  assert (t1 = t2). inv H; inv H0; auto. subst t2.
+  exists vres1; exists m1; auto.
+
+  inv H; inv H0.
   assert (arg = arg0). eapply eventval_match_determ_2; eauto. subst arg0.
-  intuition.
+  split. constructor. auto.
 Qed.
 
 (** ** Combined semantics of external calls *)
@@ -1202,6 +1340,8 @@ Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef
 Definition external_call_bounds ef := ec_bounds (external_call_spec ef).
 Definition external_call_mem_extends ef := ec_mem_extends (external_call_spec ef).
 Definition external_call_mem_inject ef := ec_mem_inject (external_call_spec ef).
+Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).
+Definition external_call_receptive ef := ec_receptive (external_call_spec ef).
 Definition external_call_determ ef := ec_determ (external_call_spec ef).
 
 (** Special cases of [external_call_symbols_preserved_gen]. *)
@@ -1251,3 +1391,24 @@ Proof.
   instantiate (1 := Mem.nextblock m1 - 1). red; omega.
   unfold Mem.valid_block. omega.
 Qed.
+
+(** Corollaries of [external_call_determ]. *)
+
+Lemma external_call_match_traces:
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m t1 vres1 m1 t2 vres2 m2,
+  external_call ef ge vargs m t1 vres1 m1 ->
+  external_call ef ge vargs m t2 vres2 m2 ->
+  match_traces ge t1 t2.
+Proof.
+  intros. exploit external_call_determ. eexact H. eexact H0. tauto.
+Qed.
+
+Lemma external_call_deterministic:
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m t vres1 m1 vres2 m2,
+  external_call ef ge vargs m t vres1 m1 ->
+  external_call ef ge vargs m t vres2 m2 ->
+  vres1 = vres2 /\ m1 = m2.
+Proof.
+  intros. exploit external_call_determ. eexact H. eexact H0. intuition.
+Qed.
+

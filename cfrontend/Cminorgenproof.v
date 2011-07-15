@@ -3021,12 +3021,10 @@ Proof.
 Qed.
 
 Theorem transl_program_correct:
-  forall (beh: program_behavior),
-  not_wrong beh -> Csharpminor.exec_program prog beh ->
-  Cminor.exec_program tprog beh.
+  forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
 Proof.
-  unfold Csharpminor.exec_program, Cminor.exec_program; intros.
-  eapply simulation_star_preservation; eauto.
+  eapply forward_simulation_star; eauto.
+  eexact symbols_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step_correct. 

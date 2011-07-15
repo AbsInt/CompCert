@@ -171,14 +171,18 @@ Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    @@ Selection.sel_program
   @@@ transform_partial_program transf_cminorsel_fundef.
 
-Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
+Definition transf_clight_program (p: Clight.program) : res Asm.program :=
   OK p 
-   @@ print print_Csyntax
-  @@@ SimplExpr.transl_program
    @@ print print_Clight
   @@@ Cshmgen.transl_program
   @@@ Cminorgen.transl_program
   @@@ transf_cminor_program.
+
+Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
+  OK p 
+   @@ print print_Csyntax
+  @@@ SimplExpr.transl_program
+  @@@ transf_clight_program.
 
 (** Force [Initializers] to be extracted as well. *)
 
@@ -199,16 +203,18 @@ Lemma map_partial_compose:
          (f1: A -> res B) (f2: B -> res C)
          (pa: list (X * A)) (pc: list (X * C)),
   map_partial ctx (fun f => f1 f @@@ f2) pa = OK pc ->
-  exists pb, map_partial ctx f1 pa = OK pb /\ map_partial ctx f2 pb = OK pc.
+  { pb | map_partial ctx f1 pa = OK pb /\ map_partial ctx f2 pb = OK pc }.
 Proof.
   induction pa; simpl.
   intros. inv H. econstructor; eauto.
   intro pc. destruct a as [x a].
-  caseEq (f1 a); simpl; try congruence. intros b F1.
-  caseEq (f2 b); simpl; try congruence. intros c F2 EQ.
-  monadInv EQ. exploit IHpa; eauto. intros [pb [P Q]]. 
+  destruct (f1 a) as [] _eqn; simpl; try congruence.
+  destruct (f2 b) as [] _eqn; simpl; try congruence.
+  destruct (map_partial ctx (fun f => f1 f @@@ f2) pa) as [] _eqn; simpl; try congruence.
+  intros. inv H.
+  destruct (IHpa l) as [pb [P Q]]; auto.
   rewrite P; simpl.
-  exists ((x, b) :: pb); split. auto. simpl. rewrite F2. rewrite Q. auto. 
+  econstructor; split. eauto. simpl. rewrite Heqr0. rewrite Q. auto.
 Qed.
 
 Lemma transform_partial_program_compose:
@@ -216,11 +222,13 @@ Lemma transform_partial_program_compose:
          (f1: A -> res B) (f2: B -> res C)
          (pa: program A V) (pc: program C V),
   transform_partial_program (fun f => f1 f @@@ f2) pa = OK pc ->
-  exists pb, transform_partial_program f1 pa = OK pb /\
-             transform_partial_program f2 pb = OK pc.
+  { pb | transform_partial_program f1 pa = OK pb /\
+         transform_partial_program f2 pb = OK pc }.
 Proof.
-  intros. monadInv H. 
-  exploit map_partial_compose; eauto. intros [xb [P Q]].
+  intros. unfold transform_partial_program in H. 
+  destruct (map_partial prefix_name (fun f : A => f1 f @@@ f2) (prog_funct pa)) as [] _eqn;
+  simpl in H; inv H.
+  destruct (map_partial_compose _ _ _ _ _ _ _ _ _ Heqr) as [xb [P Q]].
   exists (mkprogram xb (prog_main pa) (prog_vars pa)); split.
   unfold transform_partial_program. rewrite P; auto. 
   unfold transform_partial_program. simpl. rewrite Q; auto.
@@ -240,14 +248,14 @@ Lemma transform_program_compose:
          (f1: A -> res B) (f2: B -> C)
          (pa: program A V) (pc: program C V),
   transform_partial_program (fun f => f1 f @@ f2) pa = OK pc ->
-  exists pb, transform_partial_program f1 pa = OK pb /\
-             transform_program f2 pb = pc.
+  { pb | transform_partial_program f1 pa = OK pb /\
+         transform_program f2 pb = pc }.
 Proof.
   intros. 
   replace (fun f : A => f1 f @@ f2)
      with (fun f : A => f1 f @@@ (fun x => OK (f2 x))) in H.
-  exploit transform_partial_program_compose; eauto.
-  intros [pb [X Y]]. exists pb; split. auto. 
+  destruct (transform_partial_program_compose _ _ _ _ _ _ _  _ H) as [pb [X Y]].
+  exists pb; split. auto. 
   apply transform_program_partial_program. auto. 
   apply extensionality; intro. destruct(f1 x); auto. 
 Qed.
@@ -283,9 +291,17 @@ Qed.
 
 (** * Semantic preservation *)
 
-(** We prove that the [transf_program] translations preserve semantics.
-  The proof composes the semantic preservation results for each pass.
-  This establishes the correctness of the whole compiler! *)
+(** We prove that the [transf_program] translations preserve semantics
+  by constructing the following simulations:
+- Forward simulations from [Cstrategy] / [Cminor] / [RTL] to [Asm]
+  (composition of the forward simulations for each pass).
+- Backward simulations for the same languages
+  (derived from the forward simulation, using receptiveness of the source
+  language and determinacy of [Asm]).
+- Backward simulation from [Csem] to [Asm]
+  (composition of two backward simulations).
+
+These results establish the correctness of the whole compiler! *)
 
 Ltac TransfProgInv :=
   match goal with
@@ -300,16 +316,17 @@ Ltac TransfProgInv :=
   end.
 
 Theorem transf_rtl_program_correct:
-  forall p tp beh,
+  forall p tp,
   transf_rtl_program p = OK tp ->
-  not_wrong beh ->
-  RTL.exec_program p beh ->
-  Asm.exec_program tp beh.
+  forward_simulation (RTL.semantics p) (Asm.semantics tp)
+  * backward_simulation (RTL.semantics p) (Asm.semantics tp).
 Proof.
-  intros. unfold transf_rtl_program, transf_rtl_fundef in H.
+  intros.
+  assert (F: forward_simulation (RTL.semantics p) (Asm.semantics tp)).
+  unfold transf_rtl_program, transf_rtl_fundef in H.
   repeat TransfProgInv. 
   repeat rewrite transform_program_print_identity in *. subst. 
-  exploit transform_partial_program_identity; eauto. intro EQ. subst.
+  generalize (transform_partial_program_identity _ _ _ _ X0). intro EQ. subst.
 
   generalize Alloctyping.program_typing_preserved
              Tunnelingtyping.program_typing_preserved
@@ -318,49 +335,93 @@ Proof.
              Reloadtyping.program_typing_preserved
              Stackingtyping.program_typing_preserved; intros.
 
-  eapply Asmgenproof.transf_program_correct; eauto 8.
-  eapply Stackingproof.transf_program_correct; eauto 6.
-  eapply Reloadproof.transf_program_correct; eauto.
-  eapply CleanupLabelsproof.transf_program_correct; eauto.
-  eapply Linearizeproof.transf_program_correct; eauto.
-  eapply Tunnelingproof.transf_program_correct; eauto.
-  eapply Allocproof.transf_program_correct; eauto.
-  eapply CSEproof.transf_program_correct; eauto.
-  eapply Constpropproof.transf_program_correct; eauto.
-  eapply CastOptimproof.transf_program_correct; eauto.
-  eapply Tailcallproof.transf_program_correct; eauto.
+  eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
+  eapply compose_forward_simulation. apply CastOptimproof.transf_program_correct.
+  eapply compose_forward_simulation. apply Constpropproof.transf_program_correct. 
+  eapply compose_forward_simulation. apply CSEproof.transf_program_correct.
+  eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.
+  eapply compose_forward_simulation. apply Tunnelingproof.transf_program_correct.
+  eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. eauto. 
+  eapply compose_forward_simulation. apply CleanupLabelsproof.transf_program_correct. 
+  eapply compose_forward_simulation. apply Reloadproof.transf_program_correct. eauto.
+  eapply compose_forward_simulation. apply Stackingproof.transf_program_correct. eassumption. eauto 8.
+  apply Asmgenproof.transf_program_correct; eauto 10.
+  split. auto. 
+  apply forward_to_backward_simulation. auto. 
+  apply RTL.semantics_receptive.
+  apply Asm.semantics_determinate.
 Qed.
 
 Theorem transf_cminor_program_correct:
-  forall p tp beh,
+  forall p tp,
   transf_cminor_program p = OK tp ->
-  not_wrong beh ->
-  Cminor.exec_program p beh ->
-  Asm.exec_program tp beh.
+  forward_simulation (Cminor.semantics p) (Asm.semantics tp)
+  * backward_simulation (Cminor.semantics p) (Asm.semantics tp).
 Proof.
-  intros. unfold transf_cminor_program, transf_cminorsel_fundef in H.
+  intros.
+  assert (F: forward_simulation (Cminor.semantics p) (Asm.semantics tp)).
+  unfold transf_cminor_program, transf_cminorsel_fundef in H.
   simpl in H. repeat TransfProgInv.
-  eapply transf_rtl_program_correct; eauto.
-  eapply RTLgenproof.transf_program_correct; eauto.
-  eapply Selectionproof.transf_program_correct; eauto.
+  eapply compose_forward_simulation. apply Selectionproof.transf_program_correct.
+  eapply compose_forward_simulation. apply RTLgenproof.transf_program_correct. eassumption.
+  exact (fst (transf_rtl_program_correct _ _ P)).
+
+  split. auto. 
+  apply forward_to_backward_simulation. auto. 
+  apply Cminor.semantics_receptive.
+  apply Asm.semantics_determinate.
+Qed.
+
+Theorem transf_clight_program_correct:
+  forall p tp,
+  transf_clight_program p = OK tp ->
+  forward_simulation (Clight.semantics p) (Asm.semantics tp)
+  * backward_simulation (Clight.semantics p) (Asm.semantics tp).
+Proof.
+  intros. 
+  assert (F: forward_simulation (Clight.semantics p) (Asm.semantics tp)).
+  revert H; unfold transf_clight_program; simpl.
+  rewrite print_identity.
+  caseEq (Cshmgen.transl_program p); simpl; try congruence; intros p1 EQ1.
+  caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2.
+  intros EQ3.
+  eapply compose_forward_simulation. apply Cshmgenproof.transl_program_correct. eauto.
+  eapply compose_forward_simulation. apply Cminorgenproof.transl_program_correct. eauto.
+  exact (fst (transf_cminor_program_correct _ _ EQ3)). 
+
+  split. auto. 
+  apply forward_to_backward_simulation. auto. 
+  apply Clight.semantics_receptive.
+  apply Asm.semantics_determinate.
+Qed.
+
+Theorem transf_cstrategy_program_correct:
+  forall p tp,
+  transf_c_program p = OK tp ->
+  forward_simulation (Cstrategy.semantics p) (Asm.semantics tp)
+  * backward_simulation (Cstrategy.semantics p) (Asm.semantics tp).
+Proof.
+  intros.
+  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics tp)).
+  revert H; unfold transf_c_program; simpl. rewrite print_identity.
+  caseEq (SimplExpr.transl_program p); simpl; try congruence; intros p0 EQ0.
+  intros EQ1.
+  eapply compose_forward_simulation. apply SimplExprproof.transl_program_correct. eauto.
+  exact (fst (transf_clight_program_correct _ _ EQ1)). 
+
+  split. auto. 
+  apply forward_to_backward_simulation. auto. 
+  apply Cstrategy.semantics_receptive.
+  apply Asm.semantics_determinate.
 Qed.
 
 Theorem transf_c_program_correct:
-  forall p tp beh,
+  forall p tp,
   transf_c_program p = OK tp ->
-  not_wrong beh ->
-  Cstrategy.exec_program p beh ->
-  Asm.exec_program tp beh.
+  backward_simulation (Csem.semantics p) (Asm.semantics tp).
 Proof.
-  intros until beh; unfold transf_c_program; simpl.
-  rewrite print_identity.
-  caseEq (SimplExpr.transl_program p); simpl; try congruence; intros p0 EQ0.
-  rewrite print_identity.
-  caseEq (Cshmgen.transl_program p0); simpl; try congruence; intros p1 EQ1.
-  caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2.
-  intros EQ3 NOTW SEM.
-  eapply transf_cminor_program_correct; eauto.
-  eapply Cminorgenproof.transl_program_correct; eauto. 
-  eapply Cshmgenproof.transl_program_correct; eauto.
-  eapply SimplExprproof.transl_program_correct; eauto.
+  intros. 
+  eapply compose_backward_simulation.
+  apply Cstrategy.strategy_simulation.
+  exact (snd (transf_cstrategy_program_correct _ _ H)).
 Qed.

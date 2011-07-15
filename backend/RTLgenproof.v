@@ -906,21 +906,12 @@ Fixpoint size_cont (k: cont) : nat :=
 
 Definition measure_state (S: CminorSel.state) :=
   match S with
-  | CminorSel.State _ s k _ _ _ =>
-      existS (fun (x: nat) => nat)
-             (size_stmt s + size_cont k)
-             (size_stmt s)
-  | _ =>
-      existS (fun (x: nat) => nat) 0 0
+  | CminorSel.State _ s k _ _ _ => (size_stmt s + size_cont k, size_stmt s)
+  | _                           => (0, 0)
   end.
 
-Require Import Relations.
-Require Import Wellfounded.
-
 Definition lt_state (S1 S2: CminorSel.state) :=
-  lexprod nat (fun (x: nat) => nat)
-          lt (fun (x: nat) => lt)
-          (measure_state S1) (measure_state S2).
+  lex_ord lt lt (measure_state S1) (measure_state S2).
 
 Lemma lt_state_intro:
   forall f1 s1 k1 sp1 e1 m1 f2 s2 k2 sp2 e2 m2,
@@ -931,20 +922,20 @@ Lemma lt_state_intro:
            (CminorSel.State f2 s2 k2 sp2 e2 m2).
 Proof.
   intros. unfold lt_state. simpl. destruct H as [A | [A B]].
-  apply left_lex. auto.
-  rewrite A. apply right_lex. auto.
+  left. auto.
+  rewrite A. right. auto.
 Qed.
 
 Ltac Lt_state :=
   apply lt_state_intro; simpl; try omega.
 
-Require Import Wf_nat.
+Require Import Wellfounded.
 
 Lemma lt_state_wf:
   well_founded lt_state.
 Proof.
   unfold lt_state. apply wf_inverse_image with (f := measure_state).
-  apply wf_lexprod. apply lt_wf. intros. apply lt_wf. 
+  apply wf_lex_ord. apply lt_wf. apply lt_wf. 
 Qed.
 
 (** ** Semantic preservation for the translation of statements *)   
@@ -1345,11 +1336,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  CminorSel.exec_program prog beh -> RTL.exec_program tprog beh.
+  forward_simulation (CminorSel.semantics prog) (RTL.semantics tprog).
 Proof.
-  unfold CminorSel.exec_program, RTL.exec_program; intros.
-  eapply simulation_star_wf_preservation with (order := lt_state); eauto.
+  eapply forward_simulation_star_wf with (order := lt_state).
+  eexact symbols_preserved.
   eexact transl_initial_states.
   eexact transl_final_states.
   apply lt_state_wf. 

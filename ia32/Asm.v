@@ -788,6 +788,69 @@ Inductive final_state: state -> int -> Prop :=
       rs#EAX = Vint r ->
       final_state (State rs m) r.
       
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
 
+(** Determinacy of the [Asm] semantics. *)
+
+Remark extcall_arguments_determ:
+  forall rs m sg args1 args2,
+  extcall_arguments rs m sg args1 -> extcall_arguments rs m sg args2 -> args1 = args2.
+Proof.
+  intros until m.
+  assert (forall ll vl1, list_forall2 (extcall_arg rs m) ll vl1 ->
+          forall vl2, list_forall2 (extcall_arg rs m) ll vl2 -> vl1 = vl2).
+    induction 1; intros vl2 EA; inv EA.
+    auto.
+    f_equal; auto. 
+    inv H; inv H3; congruence.
+  intros. red in H0; red in H1. eauto. 
+Qed.
+
+Remark annot_arguments_determ:
+  forall rs m params args1 args2,
+  annot_arguments rs m params args1 -> annot_arguments rs m params args2 -> args1 = args2.
+Proof.
+  unfold annot_arguments. intros. revert params args1 H args2 H0. 
+  induction 1; intros. 
+  inv H0; auto.
+  inv H1. decEq; eauto. inv H; inv H4. auto. congruence. 
+Qed.
+
+Lemma semantics_determinate: forall p, determinate (semantics p).
+Proof.
+Ltac Equalities :=
+  match goal with
+  | [ H1: ?a = ?b, H2: ?a = ?c |- _ ] =>
+      rewrite H1 in H2; inv H2; Equalities
+  | _ => idtac
+  end.
+  intros; constructor; simpl; intros.
+(* determ *)
+  inv H; inv H0; Equalities.
+  split. constructor. auto.
+  discriminate.
+  discriminate.
+  inv H11. 
+  exploit external_call_determ. eexact H4. eexact H11. intros [A B].
+  split. auto. intros. destruct B; auto. subst. auto.
+  inv H12.
+  assert (vargs0 = vargs) by (eapply annot_arguments_determ; eauto). subst vargs0.
+  exploit external_call_determ. eexact H5. eexact H13. intros [A B].
+  split. auto. intros. destruct B; auto. subst. auto.
+  assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
+  exploit external_call_determ. eexact H3. eexact H8. intros [A B].
+  split. auto. intros. destruct B; auto. subst. auto.
+(* trace length *)
+  inv H; simpl.
+  omega.
+  eapply external_call_trace_length; eauto.
+  eapply external_call_trace_length; eauto.
+  eapply external_call_trace_length; eauto.
+(* initial states *)
+  inv H; inv H0. f_equal. congruence.
+(* final no step *)
+  inv H. unfold Vzero in H0. red; intros; red; intros. inv H; congruence.
+(* final states *)
+  inv H; inv H0. congruence.
+Qed.

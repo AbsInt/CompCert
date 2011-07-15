@@ -19,8 +19,8 @@
   the one-step transition relations that are used to specify
   operational semantics in small-step style. *)
 
-Require Import Wf.
-Require Import Wf_nat.
+Require Import Relations.
+Require Import Wellfounded.
 Require Import Coqlib.
 Require Import AST.
 Require Import Events.
@@ -113,6 +113,20 @@ Lemma star_right:
 Proof.
   intros. eapply star_trans. eauto. apply star_one. eauto. auto.
 Qed.
+
+Lemma star_E0_ind:
+  forall ge (P: state -> state -> Prop),
+  (forall s, P s s) ->
+  (forall s1 s2 s3, step ge s1 E0 s2 -> P s2 s3 -> P s1 s3) ->
+  forall s1 s2, star ge s1 E0 s2 -> P s1 s2.
+Proof.
+  intros ge P BASE REC. 
+  assert (forall s1 t s2, star ge s1 t s2 -> t = E0 -> P s1 s2).
+    induction 1; intros; subst.
+    auto.
+    destruct (Eapp_E0_inv _ _ H2). subst. eauto.
+  eauto.
+Qed. 
 
 (** One or several transitions.  Also known as the transitive closure. *)
 
@@ -230,6 +244,56 @@ Lemma star_inv:
   (s2 = s1 /\ t = E0) \/ plus ge s1 t s2.
 Proof.
   intros. inv H. left; auto. right; econstructor; eauto.
+Qed.
+
+Lemma plus_ind2:
+  forall ge (P: state -> trace -> state -> Prop),
+  (forall s1 t s2, step ge s1 t s2 -> P s1 t s2) ->
+  (forall s1 t1 s2 t2 s3 t, 
+   step ge s1 t1 s2 -> plus ge s2 t2 s3 -> P s2 t2 s3 -> t = t1 ** t2 ->
+   P s1 t s3) ->
+  forall s1 t s2, plus ge s1 t s2 -> P s1 t s2.
+Proof.
+  intros ge P BASE IND.
+  assert (forall s1 t s2, star ge s1 t s2 ->
+         forall s0 t0, step ge s0 t0 s1 ->
+         P s0 (t0 ** t) s2).
+  induction 1; intros.
+  rewrite E0_right. apply BASE; auto.
+  eapply IND. eauto. econstructor; eauto. subst t. eapply IHstar; eauto. auto.
+
+  intros. inv H0. eauto. 
+Qed.
+
+Lemma plus_E0_ind:
+  forall ge (P: state -> state -> Prop),
+  (forall s1 s2 s3, step ge s1 E0 s2 -> star ge s2 E0 s3 -> P s1 s3) ->
+  forall s1 s2, plus ge s1 E0 s2 -> P s1 s2.
+Proof.
+  intros. inv H0. exploit Eapp_E0_inv; eauto. intros [A B]; subst. eauto.
+Qed.
+
+(** Counted sequences of transitions *)
+
+Inductive starN (ge: genv): nat -> state -> trace -> state -> Prop :=
+  | starN_refl: forall s,
+      starN ge O s E0 s
+  | starN_step: forall n s t t1 s' t2 s'',
+      step ge s t1 s' -> starN ge n s' t2 s'' -> t = t1 ** t2 ->
+      starN ge (S n) s t s''.
+
+Remark starN_star:
+  forall ge n s t s', starN ge n s t s' -> star ge s t s'.
+Proof.
+  induction 1; econstructor; eauto.
+Qed.
+
+Remark star_starN:
+  forall ge s t s', star ge s t s' -> exists n, starN ge n s t s'.
+Proof.
+  induction 1. 
+  exists O; constructor.
+  destruct IHstar as [n P]. exists (S n); econstructor; eauto.
 Qed.
 
 (** Infinitely many transitions *)
@@ -404,111 +468,101 @@ Proof.
   auto.
 Qed.
 
-(** * Outcomes for program executions *)
-
-(** The four possible outcomes for the execution of a program:
-- Termination, with a finite trace of observable events
-  and an integer value that stands for the process exit code
-  (the return value of the main function).
-- Divergence with a finite trace of observable events.
-  (At some point, the program runs forever without doing any I/O.)
-- Reactive divergence with an infinite trace of observable events.
-  (The program performs infinitely many I/O operations separated
-   by finite amounts of internal computations.)
-- Going wrong, with a finite trace of observable events
-  performed before the program gets stuck.
-*)
-
-Inductive program_behavior: Type :=
-  | Terminates: trace -> int -> program_behavior
-  | Diverges: trace -> program_behavior
-  | Reacts: traceinf -> program_behavior
-  | Goes_wrong: trace -> program_behavior.
-
-Definition not_wrong (beh: program_behavior) : Prop :=
-  match beh with
-  | Terminates _ _ => True
-  | Diverges _ => True
-  | Reacts _ => True
-  | Goes_wrong _ => False
-  end.
-
-(** Given a characterization of initial states and final states,
-  [program_behaves] relates a program behaviour with the 
-  sequences of transitions that can be taken from an initial state
-  to a final state. *)
-
-Variable initial_state: state -> Prop.
-Variable final_state: state -> int -> Prop.
-
-Inductive program_behaves (ge: genv): program_behavior -> Prop :=
-  | program_terminates: forall s t s' r,
-      initial_state s ->
-      star ge s t s' ->
-      final_state s' r ->
-      program_behaves ge (Terminates t r)
-  | program_diverges: forall s t s',
-      initial_state s ->
-      star ge s t s' -> forever_silent ge s' ->
-      program_behaves ge (Diverges t)
-  | program_reacts: forall s T,
-      initial_state s ->
-      forever_reactive ge s T ->
-      program_behaves ge (Reacts T)
-  | program_goes_wrong: forall s t s',
-      initial_state s ->
-      star ge s t s' ->
-      nostep ge s' ->
-      (forall r, ~final_state s' r) ->
-      program_behaves ge (Goes_wrong t)
-  | program_goes_initially_wrong:
-      (forall s, ~initial_state s) ->
-      program_behaves ge (Goes_wrong E0).
-
 End CLOSURES.
 
-(** * Simulations between two small-step semantics. *)
+(** * Transition semantics *)
 
-(** In this section, we show that if two transition relations 
-  satisfy certain simulation diagrams, then every program behaviour
-  generated by the first transition relation can also occur
-  with the second transition relation. *)
+(** The general form of a transition semantics. *)
 
-Section SIMULATION.
+Record semantics : Type := Semantics {
+  state: Type;
+  funtype: Type;
+  vartype: Type;
+  step : Genv.t funtype vartype -> state -> trace -> state -> Prop;
+  initial_state: state -> Prop;
+  final_state: state -> int -> Prop;
+  globalenv: Genv.t funtype vartype
+}.
 
-(** The first small-step semantics is axiomatized as follows. *)
+(** Handy notations. *)
 
-Variable genv1: Type.
-Variable state1: Type.
-Variable step1: genv1 -> state1 -> trace -> state1 -> Prop.
-Variable initial_state1: state1 -> Prop.
-Variable final_state1: state1 -> int -> Prop.
-Variable ge1: genv1.
+Notation " 'Step' L " := (step L (globalenv L)) (at level 1) : smallstep_scope.
+Notation " 'Star' L " := (star (step L) (globalenv L)) (at level 1) : smallstep_scope.
+Notation " 'Plus' L " := (plus (step L) (globalenv L)) (at level 1) : smallstep_scope.
+Notation " 'Forever_silent' L " := (forever_silent (step L) (globalenv L)) (at level 1) : smallstep_scope.
+Notation " 'Forever_reactive' L " := (forever_reactive (step L) (globalenv L)) (at level 1) : smallstep_scope.
+Notation " 'Nostep' L " := (nostep (step L) (globalenv L)) (at level 1) : smallstep_scope.
 
-(** The second small-step semantics is also axiomatized. *)
+Open Scope smallstep_scope.
 
-Variable genv2: Type.
-Variable state2: Type.
-Variable step2: genv2 -> state2 -> trace -> state2 -> Prop.
-Variable initial_state2: state2 -> Prop.
-Variable final_state2: state2 -> int -> Prop.
-Variable ge2: genv2.
+(** * Forward simulations between two transition semantics. *)
 
-(** We assume given a matching relation between states of both semantics.
-  This matching relation must be compatible with initial states
-  and with final states. *)
+(** The general form of a forward simulation. *)
 
-Variable match_states: state1 -> state2 -> Prop.
+Record forward_simulation (L1 L2: semantics) : Type :=
+  Forward_simulation {
+    fsim_index: Type;
+    fsim_order: fsim_index -> fsim_index -> Prop;
+    fsim_order_wf: well_founded fsim_order;
+    fsim_match_states :> fsim_index -> state L1 -> state L2 -> Prop;
+    fsim_match_initial_states:
+      forall s1, initial_state L1 s1 ->
+      exists i, exists s2, initial_state L2 s2 /\ fsim_match_states i s1 s2;
+    fsim_match_final_states:
+      forall i s1 s2 r, 
+      fsim_match_states i s1 s2 -> final_state L1 s1 r -> final_state L2 s2 r;
+    fsim_simulation:
+      forall s1 t s1', Step L1 s1 t s1' ->
+      forall i s2, fsim_match_states i s1 s2 ->
+      exists i', exists s2',
+         (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ fsim_order i' i))
+      /\ fsim_match_states i' s1' s2';
+    fsim_symbols_preserved:
+      forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id
+  }.
+
+Implicit Arguments forward_simulation [].
+
+(** An alternate form of the simulation diagram *)
+
+Lemma fsim_simulation':
+  forall L1 L2 (S: forward_simulation L1 L2),
+  forall i s1 t s1', Step L1 s1 t s1' ->
+  forall s2, S i s1 s2 ->
+  (exists i', exists s2', Plus L2 s2 t s2' /\ S i' s1' s2')
+  \/ (exists i', fsim_order S i' i /\ t = E0 /\ S i' s1' s2).
+Proof.
+  intros. exploit fsim_simulation; eauto. 
+  intros [i' [s2' [A B]]]. intuition. 
+  left; exists i'; exists s2'; auto.
+  inv H2. 
+  right; exists i'; auto.
+  left; exists i'; exists s2'; split; auto. econstructor; eauto. 
+Qed.
+
+(** ** Forward simulation diagrams. *)
+
+(** Various simulation diagrams that imply forward simulation *)
+
+Section FORWARD_SIMU_DIAGRAMS.
+
+Variable L1: semantics.
+Variable L2: semantics.
+
+Hypothesis symbols_preserved:
+  forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id.
+
+Variable match_states: state L1 -> state L2 -> Prop.
 
 Hypothesis match_initial_states:
-  forall st1, initial_state1 st1 ->
-  exists st2, initial_state2 st2 /\ match_states st1 st2.
+  forall s1, initial_state L1 s1 ->
+  exists s2, initial_state L2 s2 /\ match_states s1 s2.
 
 Hypothesis match_final_states:
-  forall st1 st2 r,
-  match_states st1 st2 ->
-  final_state1 st1 r ->
-  final_state2 st2 r.
+  forall s1 s2 r,
+  match_states s1 s2 ->
+  final_state L1 s1 r ->
+  final_state L2 s2 r.
 
 (** Simulation when one transition in the first program
     corresponds to zero, one or several transitions in the second program.
@@ -522,81 +576,27 @@ Section SIMULATION_STAR_WF.
   of the first semantics.  Stuttering steps must correspond
   to states that decrease w.r.t. [order]. *)
 
-Variable order: state1 -> state1 -> Prop.
+Variable order: state L1 -> state L1 -> Prop.
 Hypothesis order_wf: well_founded order.
 
 Hypothesis simulation:
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  exists st2',
-  (plus step2 ge2 st2 t st2' \/ (star step2 ge2 st2 t st2' /\ order st1' st1))
-  /\ match_states st1' st2'.
+  forall s1 t s1', Step L1 s1 t s1' ->
+  forall s2, match_states s1 s2 ->
+  exists s2',
+  (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ order s1' s1))
+  /\ match_states s1' s2'.
 
-Lemma simulation_star_star:
-  forall st1 t st1', star step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  exists st2', star step2 ge2 st2 t st2' /\ match_states st1' st2'.
+Lemma forward_simulation_star_wf: forward_simulation L1 L2.
 Proof.
-  induction 1; intros.
-  exists st2; split. apply star_refl. auto.
-  destruct (simulation H H2) as [st2' [A B]].
-  destruct (IHstar _ B) as [st3' [C D]].
-  exists st3'; split; auto.
-  apply star_trans with t1 st2' t2; auto. 
-  destruct A as [F | [F G]].
-  apply plus_star; auto.
+  apply Forward_simulation with
+    (fsim_order := order)
+    (fsim_match_states := fun idx s1 s2 => idx = s1 /\ match_states s1 s2);
   auto.
-Qed.
-
-Lemma simulation_star_forever_silent:
-  forall st1 st2,
-  forever_silent step1 ge1 st1 -> match_states st1 st2 ->
-  forever_silent step2 ge2 st2.
-Proof.
-  assert (forall st1 st2,
-    forever_silent step1 ge1 st1 -> match_states st1 st2 ->
-    forever_silent_N step2 order ge2 st1 st2).
-  cofix COINDHYP; intros.
-  inversion H; subst.
-  destruct (simulation H1 H0) as [st2' [A B]].
-  destruct A as [C | [C D]].
-  apply forever_silent_N_plus with st2' s2.
-  auto. apply COINDHYP. assumption. assumption.
-  apply forever_silent_N_star with st2' s2.
-  auto. auto. apply COINDHYP. assumption. auto.
-  intros. eapply forever_silent_N_forever; eauto.
-Qed.
-
-Lemma simulation_star_forever_reactive:
-  forall st1 st2 T,
-  forever_reactive step1 ge1 st1 T -> match_states st1 st2 ->
-  forever_reactive step2 ge2 st2 T.
-Proof.
-  cofix COINDHYP; intros.
-  inv H. 
-  destruct (simulation_star_star H1 H0) as [st2' [A B]].
-  econstructor. eexact A. auto. 
-  eapply COINDHYP. eauto. auto. 
-Qed.
-
-Lemma simulation_star_wf_preservation:
-  forall beh,
-  not_wrong beh ->
-  program_behaves step1 initial_state1 final_state1 ge1 beh ->
-  program_behaves step2 initial_state2 final_state2 ge2 beh.
-Proof.
-  intros. inv H0; simpl in H. 
-  destruct (match_initial_states H1) as [s2 [A B]].
-  destruct (simulation_star_star H2 B) as [s2' [C D]].
-  econstructor; eauto.
-  destruct (match_initial_states H1) as [s2 [A B]].
-  destruct (simulation_star_star H2 B) as [s2' [C D]].
-  econstructor; eauto.
-  eapply simulation_star_forever_silent; eauto.
-  destruct (match_initial_states H1) as [s2 [A B]].
-  econstructor; eauto. eapply simulation_star_forever_reactive; eauto.
-  contradiction.
-  contradiction.
+  intros. exploit match_initial_states; eauto. intros [s2 [A B]].
+    exists s1; exists s2; auto.
+  intros. destruct H. eapply match_final_states; eauto.
+  intros. destruct H0. subst i. exploit simulation; eauto. intros [s2' [A B]].
+  exists s1'; exists s2'; intuition.
 Qed.
 
 End SIMULATION_STAR_WF.
@@ -607,60 +607,24 @@ Section SIMULATION_STAR.
   associated with states of the first semantics.  It must decrease when we take 
   a stuttering step. *)
 
-Variable measure: state1 -> nat.
+Variable measure: state L1 -> nat.
 
 Hypothesis simulation:
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  (exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2')
-  \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat.
+  forall s1 t s1', Step L1 s1 t s1' ->
+  forall s2, match_states s1 s2 ->
+  (exists s2', Plus L2 s2 t s2' /\ match_states s1' s2')
+  \/ (measure s1' < measure s1 /\ t = E0 /\ match_states s1' s2)%nat.
 
-Lemma simulation_star_preservation:
-  forall beh,
-  not_wrong beh ->
-  program_behaves step1 initial_state1 final_state1 ge1 beh ->
-  program_behaves step2 initial_state2 final_state2 ge2 beh.
+Lemma forward_simulation_star: forward_simulation L1 L2.
 Proof.
-  intros.
-  apply simulation_star_wf_preservation with (ltof _ measure).
-  apply well_founded_ltof. intros.
-  destruct (simulation H1 H2) as [[st2' [A B]] | [A [B C]]].
-  exists st2'; auto.
-  exists st2; split. right; split. rewrite B. apply star_refl. auto. auto.
-  auto. auto.
+  apply forward_simulation_star_wf with (ltof _ measure).
+  apply well_founded_ltof.
+  intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
+  exists s2'; auto.
+  exists s2; split. right; split. rewrite B. apply star_refl. auto. auto.
 Qed.
 
 End SIMULATION_STAR.
-
-(** Lock-step simulation: each transition in the first semantics
-    corresponds to exactly one transition in the second semantics. *)
-
-Section SIMULATION_STEP.
-
-Hypothesis simulation:
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  exists st2', step2 ge2 st2 t st2' /\ match_states st1' st2'.
-
-Lemma simulation_step_preservation:
-  forall beh,
-  not_wrong beh ->
-  program_behaves step1 initial_state1 final_state1 ge1 beh ->
-  program_behaves step2 initial_state2 final_state2 ge2 beh.
-Proof.
-  intros.
-  pose (measure := fun (st: state1) => 0%nat).
-  assert (simulation':
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  (exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2')
-  \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat).
-  intros. destruct (simulation H1 H2) as [st2' [A B]].
-  left; exists st2'; split. apply plus_one; auto. auto.
-  eapply simulation_star_preservation; eauto.
-Qed.
-
-End SIMULATION_STEP.
 
 (** Simulation when one transition in the first program corresponds
     to one or several transitions in the second program. *)
@@ -668,29 +632,36 @@ End SIMULATION_STEP.
 Section SIMULATION_PLUS.
 
 Hypothesis simulation:
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2'.
+  forall s1 t s1', Step L1 s1 t s1' ->
+  forall s2, match_states s1 s2 ->
+  exists s2', Plus L2 s2 t s2' /\ match_states s1' s2'.
 
-Lemma simulation_plus_preservation:
-  forall beh,
-  not_wrong beh ->
-  program_behaves step1 initial_state1 final_state1 ge1 beh ->
-  program_behaves step2 initial_state2 final_state2 ge2 beh.
+Lemma forward_simulation_plus: forward_simulation L1 L2.
 Proof.
-  intros.
-  pose (measure := fun (st: state1) => 0%nat).
-  assert (simulation':
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  (exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2')
-  \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat).
-  intros. destruct (simulation H1 H2) as [st2' [A B]].
-  left; exists st2'; auto.
-  eapply simulation_star_preservation; eauto.
+  apply forward_simulation_star with (measure := fun _ => O).
+  intros. exploit simulation; eauto.
 Qed.
 
 End SIMULATION_PLUS.
+
+(** Lock-step simulation: each transition in the first semantics
+    corresponds to exactly one transition in the second semantics. *)
+
+Section SIMULATION_STEP.
+
+Hypothesis simulation:
+  forall s1 t s1', Step L1 s1 t s1' ->
+  forall s2, match_states s1 s2 ->
+  exists s2', Step L2 s2 t s2' /\ match_states s1' s2'.
+
+Lemma forward_simulation_step: forward_simulation L1 L2.
+Proof.
+  apply forward_simulation_plus. 
+  intros. exploit simulation; eauto. intros [s2' [A B]].
+  exists s2'; split; auto. apply plus_one; auto.
+Qed.
+
+End SIMULATION_STEP.
 
 (** Simulation when one transition in the first program
     corresponds to zero or one transitions in the second program.
@@ -700,294 +671,860 @@ End SIMULATION_PLUS.
 
 Section SIMULATION_OPT.
 
-Variable measure: state1 -> nat.
+Variable measure: state L1 -> nat.
 
 Hypothesis simulation:
-  forall st1 t st1', step1 ge1 st1 t st1' ->
-  forall st2, match_states st1 st2 ->
-  (exists st2', step2 ge2 st2 t st2' /\ match_states st1' st2')
-  \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat.
+  forall s1 t s1', Step L1 s1 t s1' ->
+  forall s2, match_states s1 s2 ->
+  (exists s2', Step L2 s2 t s2' /\ match_states s1' s2')
+  \/ (measure s1' < measure s1 /\ t = E0 /\ match_states s1' s2)%nat.
 
-Lemma simulation_opt_preservation:
-  forall beh,
-  not_wrong beh ->
-  program_behaves step1 initial_state1 final_state1 ge1 beh ->
-  program_behaves step2 initial_state2 final_state2 ge2 beh.
+Lemma forward_simulation_opt: forward_simulation L1 L2.
 Proof.
-  assert (simulation':
-    forall st1 t st1', step1 ge1 st1 t st1' ->
-    forall st2, match_states st1 st2 ->
-    (exists st2', plus step2 ge2 st2 t st2' /\ match_states st1' st2')
-    \/ (measure st1' < measure st1 /\ t = E0 /\ match_states st1' st2)%nat).
-  intros. elim (simulation H H0). 
-  intros [st2' [A B]]. left. exists st2'; split. apply plus_one; auto. auto.
-  intros [A [B C]]. right. intuition.
-  intros. eapply simulation_star_preservation; eauto.
+  apply forward_simulation_star with measure.
+  intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
+  left; exists s2'; split; auto. apply plus_one; auto.
+  right; auto.
 Qed.
 
 End SIMULATION_OPT.
 
-End SIMULATION.
+End FORWARD_SIMU_DIAGRAMS.
 
-(** * Existence of behaviors *)
+(** ** Forward simulation of transition sequences *)
 
-Require Import Classical.
-Require Import ClassicalEpsilon.
+Section SIMULATION_SEQUENCES.
 
-(** We now show that any program admits at least one behavior.
-  The proof requires classical logic: the axiom of excluded middle
-  and an axiom of description. *)
+Variable L1: semantics.
+Variable L2: semantics.
+Variable S: forward_simulation L1 L2.
 
-Section EXISTS_BEHAVIOR.
-
-Variable genv: Type.
-Variable state: Type.
-Variable initial_state: state -> Prop.
-Variable final_state: state -> int -> Prop.
-Variable step: genv -> state -> trace -> state -> Prop.
-
-(** The most difficult part of the proof is to show the existence
-  of an infinite trace in the case of reactive divergence. *)
-
-Section TRACEINF_REACTS.
-
-Variable ge: genv.
-Variable s0: state.
-
-Hypothesis reacts:
-  forall s1 t1, star step ge s0 t1 s1 ->
-  exists s2, exists t2, star step ge s1 t2 s2 /\ t2 <> E0.
-
-Lemma reacts':
-  forall s1 t1, star step ge s0 t1 s1 ->
-  { s2 : state & { t2 : trace | star step ge s1 t2 s2 /\ t2 <> E0 } }.
+Lemma simulation_star:
+  forall s1 t s1', Star L1 s1 t s1' ->
+  forall i s2, S i s1 s2 ->
+  exists i', exists s2', Star L2 s2 t s2' /\ S i' s1' s2'.
 Proof.
-  intros. 
-  destruct (constructive_indefinite_description _ (reacts H)) as [s2 A].
-  destruct (constructive_indefinite_description _ A) as [t2 [B C]].
-  exists s2; exists t2; auto.
+  induction 1; intros.
+  exists i; exists s2; split; auto. apply star_refl.
+  exploit fsim_simulation; eauto. intros [i' [s2' [A B]]].
+  exploit IHstar; eauto. intros [i'' [s2'' [C D]]].
+  exists i''; exists s2''; split; auto. eapply star_trans; eauto.
+  intuition. apply plus_star; auto. 
 Qed.
 
-CoFixpoint build_traceinf' (s1: state) (t1: trace) (ST: star step ge s0 t1 s1) : traceinf' :=
-  match reacts' ST with
-  | existT s2 (exist t2 (conj A B)) =>
-      Econsinf' t2 
-                (build_traceinf' (star_trans ST A (refl_equal _)))
-                B
-  end.
-
-Lemma reacts_forever_reactive_rec:
-  forall s1 t1 (ST: star step ge s0 t1 s1),
-  forever_reactive step ge s1 (traceinf_of_traceinf' (build_traceinf' ST)).
+Lemma simulation_plus:
+  forall s1 t s1', Plus L1 s1 t s1' ->
+  forall i s2, S i s1 s2 ->
+  (exists i', exists s2', Plus L2 s2 t s2' /\ S i' s1' s2')
+  \/ (exists i', clos_trans _ (fsim_order S) i' i /\ t = E0 /\ S i' s1' s2).
 Proof.
-  cofix COINDHYP; intros.
-  rewrite (unroll_traceinf' (build_traceinf' ST)). simpl. 
-  destruct (reacts' ST) as [s2 [t2 [A B]]]. 
-  rewrite traceinf_traceinf'_app. 
-  econstructor. eexact A. auto. apply COINDHYP. 
+  induction 1 using plus_ind2; intros.
+(* base case *)
+  exploit fsim_simulation'; eauto. intros [A | [i' A]].
+  left; auto.
+  right; exists i'; intuition. 
+(* inductive case *)
+  exploit fsim_simulation'; eauto. intros [[i' [s2' [A B]]] | [i' [A [B C]]]].
+  exploit simulation_star. apply plus_star; eauto. eauto. 
+  intros [i'' [s2'' [P Q]]].
+  left; exists i''; exists s2''; split; auto. eapply plus_star_trans; eauto.
+  exploit IHplus; eauto. intros [[i'' [s2'' [P Q]]] | [i'' [P [Q R]]]].
+  subst. simpl. left; exists i''; exists s2''; auto.
+  subst. simpl. right; exists i''; intuition.
+  eapply t_trans; eauto. eapply t_step; eauto.
 Qed.
 
-Lemma reacts_forever_reactive:
-  exists T, forever_reactive step ge s0 T.
+Lemma simulation_forever_silent:
+  forall i s1 s2,
+  Forever_silent L1 s1 -> S i s1 s2 ->
+  Forever_silent L2 s2.
 Proof.
-  exists (traceinf_of_traceinf' (build_traceinf' (star_refl step ge s0))).
-  apply reacts_forever_reactive_rec.
+  assert (forall i s1 s2,
+          Forever_silent L1 s1 -> S i s1 s2 ->
+          forever_silent_N (step L2) (fsim_order S) (globalenv L2) i s2).
+    cofix COINDHYP; intros.
+    inv H. destruct (fsim_simulation S _ _ _ H1 _ _ H0) as [i' [s2' [A B]]].
+    destruct A as [C | [C D]].
+    eapply forever_silent_N_plus; eauto.
+    eapply forever_silent_N_star; eauto.
+  intros. eapply forever_silent_N_forever; eauto. apply fsim_order_wf.
 Qed.
 
-End TRACEINF_REACTS.
-
-Lemma diverges_forever_silent:
-  forall ge s0,
-  (forall s1 t1, star step ge s0 t1 s1 -> exists s2, step ge s1 E0 s2) ->
-  forever_silent step ge s0.
-Proof.
-  cofix COINDHYP; intros. 
-  destruct (H s0 E0) as [s1 ST]. constructor. 
-  econstructor. eexact ST. apply COINDHYP. 
-  intros. eapply H. eapply star_left; eauto.
-Qed.
-
-Theorem program_behaves_exists:
-  forall ge, exists beh, program_behaves step initial_state final_state ge beh.
-Proof.
-  intros.
-  destruct (classic (exists s, initial_state s)) as [[s0 INIT] | NOTINIT].
-(* 1. Initial state is defined. *)
-  destruct (classic (forall s1 t1, star step ge s0 t1 s1 -> exists s2, exists t2, step ge s1 t2 s2)).
-(* 1.1 Divergence (silent or reactive) *)
-  destruct (classic (exists s1, exists t1, star step ge s0 t1 s1 /\
-                       (forall s2 t2, star step ge s1 t2 s2 ->
-                        exists s3, step ge s2 E0 s3))).
-(* 1.1.1 Silent divergence *)
-  destruct H0 as [s1 [t1 [A B]]].
-  exists (Diverges t1); econstructor; eauto. 
-  apply diverges_forever_silent; auto.
-(* 1.1.2 Reactive divergence *)
-  destruct (@reacts_forever_reactive ge s0) as [T FR].
-  intros.
-  generalize (not_ex_all_not _ _ H0 s1). intro A; clear H0.
-  generalize (not_ex_all_not _ _ A t1). intro B; clear A.
-  destruct (not_and_or _ _ B). contradiction. 
-  destruct (not_all_ex_not _ _ H0) as [s2 C]; clear H0. 
-  destruct (not_all_ex_not _ _ C) as [t2 D]; clear C.
-  destruct (imply_to_and _ _ D) as [E F]; clear D.
-  destruct (H s2 (t1 ** t2)) as [s3 [t3 G]]. eapply star_trans; eauto. 
-  exists s3; exists (t2 ** t3); split.
-  eapply star_right; eauto. 
-  red; intros. destruct (app_eq_nil t2 t3 H0). subst. elim F. exists s3; auto.
-  exists (Reacts T); econstructor; eauto.
-(* 1.2 Termination (normal or by going wrong) *)
-  destruct (not_all_ex_not _ _ H) as [s1 A]; clear H.
-  destruct (not_all_ex_not _ _ A) as [t1 B]; clear A.
-  destruct (imply_to_and _ _ B) as [C D]; clear B.
-  destruct (classic (exists r, final_state s1 r)) as [[r FINAL] | NOTFINAL].
-(* 1.2.1 Normal termination *)
-  exists (Terminates t1 r); econstructor; eauto.
-(* 1.2.2 Going wrong *)
-  exists (Goes_wrong t1); econstructor; eauto. red. intros. 
-  generalize (not_ex_all_not _ _ D s'); intros. 
-  generalize (not_ex_all_not _ _ H t); intros. 
-  auto.
-(* 2. Initial state is undefined *)
-  exists (Goes_wrong E0). apply program_goes_initially_wrong. 
-  intros. eapply not_ex_all_not; eauto. 
-Qed.
-
-End EXISTS_BEHAVIOR.
-
-(** * Additional results about infinite reduction sequences *)
-
-(** We now show that any infinite sequence of reductions is either of
-  the "reactive" kind or of the "silent" kind (after a finite number
-  of non-silent transitions).  The proof necessitates the axiom of
-  excluded middle.  This result is used in [Csem] and [Cminor] to
-  relate the coinductive big-step semantics for divergence with the
-  small-step notions of divergence. *)
-
-Unset Implicit Arguments.
-
-Section INF_SEQ_DECOMP.
-
-Variable genv: Type.
-Variable state: Type.
-Variable step: genv -> state -> trace -> state -> Prop.
-
-Variable ge: genv.
-
-Inductive State: Type :=
-  ST: forall (s: state) (T: traceinf), forever step ge s T -> State.
-
-Definition state_of_State (S: State): state :=
-  match S with ST s T F => s end.
-Definition traceinf_of_State (S: State) : traceinf :=
-  match S with ST s T F => T end.
-
-Inductive Step: trace -> State -> State -> Prop :=
-  | Step_intro: forall s1 t T s2 S F,
-      Step t (ST s1 (t *** T) (@forever_intro genv state step ge s1 t s2 T S F))
-             (ST s2 T F).
-
-Inductive Steps: State -> State -> Prop :=
-  | Steps_refl: forall S, Steps S S
-  | Steps_left: forall t S1 S2 S3, Step t S1 S2 -> Steps S2 S3 -> Steps S1 S3.
-
-Remark Steps_trans:
-  forall S1 S2, Steps S1 S2 -> forall S3, Steps S2 S3 -> Steps S1 S3.
-Proof.
-  induction 1; intros. auto. econstructor; eauto.
-Qed.
-
-Let Reactive (S: State) : Prop :=
-  forall S1, 
-  Steps S S1 ->
-  exists S2, exists S3, exists t, Steps S1 S2 /\ Step t S2 S3 /\ t <> E0.
-
-Let Silent (S: State) : Prop :=
-  forall S1 t S2, Steps S S1 -> Step t S1 S2 -> t = E0.
-
-Lemma Reactive_or_Silent:
-  forall S, Reactive S \/ (exists S', Steps S S' /\ Silent S').
-Proof.
-  intros. destruct (classic (exists S', Steps S S' /\ Silent S')).
-  auto.
-  left. red; intros. 
-  generalize (not_ex_all_not _ _ H S1). intros.
-  destruct (not_and_or _ _ H1). contradiction. 
-  unfold Silent in H2. 
-  generalize (not_all_ex_not _ _ H2). intros [S2 A].
-  generalize (not_all_ex_not _ _ A). intros [t B].
-  generalize (not_all_ex_not _ _ B). intros [S3 C].
-  generalize (imply_to_and _ _ C). intros [D F].
-  generalize (imply_to_and _ _ F). intros [G J].
-  exists S2; exists S3; exists t. auto.  
-Qed.
-
-Lemma Steps_star:
-  forall S1 S2, Steps S1 S2 ->
-  exists t, star step ge (state_of_State S1) t (state_of_State S2)
-         /\ traceinf_of_State S1 = t *** traceinf_of_State S2.
-Proof.
-  induction 1.
-  exists E0; split. apply star_refl. auto.
-  inv H. destruct IHSteps as [t' [A B]].
-  exists (t ** t'); split.
-  simpl; eapply star_left; eauto.
-  simpl in *. subst T. traceEq.
-Qed.
-
-Lemma Silent_forever_silent:
-  forall S,
-  Silent S -> forever_silent step ge (state_of_State S).
-Proof.
-  cofix COINDHYP; intro S. case S. intros until f. simpl. case f. intros.
-  assert (Step t (ST s1 (t *** T0) (forever_intro s1 t s0 f0))
-                 (ST s2 T0 f0)). 
-    constructor.
-  assert (t = E0). 
-    red in H. eapply H; eauto. apply Steps_refl.
-  apply forever_silent_intro with (state_of_State (ST s2 T0 f0)).
-  rewrite <- H1. assumption. 
-  apply COINDHYP. 
-  red; intros. eapply H. eapply Steps_left; eauto. eauto. 
-Qed.
-
-Lemma Reactive_forever_reactive:
-  forall S,
-  Reactive S -> forever_reactive step ge (state_of_State S) (traceinf_of_State S).
+Lemma simulation_forever_reactive:
+  forall i s1 s2 T,
+  Forever_reactive L1 s1 T -> S i s1 s2 ->
+  Forever_reactive L2 s2 T.
 Proof.
   cofix COINDHYP; intros.
-  destruct (H S) as [S1 [S2 [t [A [B C]]]]]. apply Steps_refl. 
-  destruct (Steps_star _ _ A) as [t' [P Q]].
-  inv B. simpl in *. rewrite Q. rewrite <- Eappinf_assoc. 
-  apply forever_reactive_intro with s2. 
-  eapply star_right; eauto. 
-  red; intros. destruct (Eapp_E0_inv _ _ H0). contradiction.
-  change (forever_reactive step ge (state_of_State (ST s2 T F)) (traceinf_of_State (ST s2 T F))).
-  apply COINDHYP. 
-  red; intros. apply H.
-  eapply Steps_trans. eauto.
-  eapply Steps_left. constructor. eauto.
+  inv H. 
+  destruct (simulation_star H1 i _ H0) as [i' [st2' [A B]]].
+  econstructor; eauto.
 Qed.
 
-Theorem forever_silent_or_reactive:
-  forall s T,
-  forever step ge s T ->
-  forever_reactive step ge s T \/
-  exists t, exists s', exists T',
-  star step ge s t s' /\ forever_silent step ge s' /\ T = t *** T'.
+End SIMULATION_SEQUENCES.
+
+(** ** Composing two forward simulations *)
+
+Section COMPOSE_SIMULATIONS.
+
+Variable L1: semantics.
+Variable L2: semantics.
+Variable L3: semantics.
+Variable S12: forward_simulation L1 L2.
+Variable S23: forward_simulation L2 L3.
+
+Let ff_index : Type := (fsim_index S23 * fsim_index S12)%type.
+
+Let ff_order : ff_index -> ff_index -> Prop :=
+  lex_ord (clos_trans _ (fsim_order S23)) (fsim_order S12).
+
+Let ff_match_states (i: ff_index) (s1: state L1) (s3: state L3) : Prop :=
+  exists s2, S12 (snd i) s1 s2 /\ S23 (fst i) s2 s3.
+
+Lemma compose_forward_simulation: forward_simulation L1 L3.
 Proof.
-  intros. 
-  destruct (Reactive_or_Silent (ST s T H)).
-  left. 
-  change (forever_reactive step ge (state_of_State (ST s T H)) (traceinf_of_State (ST s T H))).
-  apply Reactive_forever_reactive. auto.
-  destruct H0 as [S' [A B]].
-  exploit Steps_star; eauto. intros [t [C D]]. simpl in *.
-  right. exists t; exists (state_of_State S'); exists (traceinf_of_State S').
-  split. auto. 
-  split. apply Silent_forever_silent. auto.
+  apply Forward_simulation with (fsim_order := ff_order) (fsim_match_states := ff_match_states).
+(* well founded *)
+  unfold ff_order. apply wf_lex_ord. apply wf_clos_trans. apply fsim_order_wf. apply fsim_order_wf.
+(* initial states *)
+  intros. exploit (fsim_match_initial_states S12); eauto. intros [i [s2 [A B]]].
+  exploit (fsim_match_initial_states S23); eauto. intros [i' [s3 [C D]]].
+  exists (i', i); exists s3; split; auto. exists s2; auto. 
+(* final states *)
+  intros. destruct H as [s3 [A B]].
+  eapply (fsim_match_final_states S23); eauto.
+  eapply (fsim_match_final_states S12); eauto.
+(* simulation *)
+  intros. destruct H0 as [s3 [A B]]. destruct i as [i2 i1]; simpl in *.
+  exploit (fsim_simulation' S12); eauto. intros [[i1' [s3' [C D]]] | [i1' [C [D E]]]].
+  (* L2 makes one or several steps. *)
+  exploit simulation_plus; eauto. intros [[i2' [s2' [P Q]]] | [i2' [P [Q R]]]].
+  (* L3 makes one or several steps *)
+  exists (i2', i1'); exists s2'; split. auto. exists s3'; auto.
+  (* L3 makes no step *)
+  exists (i2', i1'); exists s2; split. 
+  right; split. subst t; apply star_refl. red. left. auto.
+  exists s3'; auto. 
+  (* L2 makes no step *)
+  exists (i2, i1'); exists s2; split.
+  right; split. subst t; apply star_refl. red. right. auto. 
+  exists s3; auto.
+(* symbols *)
+  intros. transitivity (Genv.find_symbol (globalenv L2) id); apply fsim_symbols_preserved; auto.
+Qed.
+
+End COMPOSE_SIMULATIONS.
+
+(** * Receptiveness and determinacy *)
+
+Record receptive (L: semantics) : Prop :=
+  Receptive {
+    sr_receptive: forall s t1 s1 t2,
+      Step L s t1 s1 -> match_traces (globalenv L) t1 t2 -> exists s2, Step L s t2 s2;
+    sr_traces: forall s t s',
+      Step L s t s' -> (length t <= 1)%nat
+  }.
+
+Record determinate (L: semantics) : Prop :=
+  Determinate {
+    sd_determ: forall s t1 s1 t2 s2,
+      Step L s t1 s1 -> Step L s t2 s2 ->
+      match_traces (globalenv L) t1 t2 /\ (t1 = t2 -> s1 = s2);
+    sd_traces: forall s t s',
+      Step L s t s' -> (length t <= 1)%nat;
+    sd_initial_determ: forall s1 s2,
+      initial_state L s1 -> initial_state L s2 -> s1 = s2;
+    sd_final_nostep: forall s r,
+      final_state L s r -> Nostep L s;
+    sd_final_determ: forall s r1 r2,
+      final_state L s r1 -> final_state L s r2 -> r1 = r2
+  }.
+
+Section DETERMINACY.
+
+Variable L: semantics.
+Hypothesis DET: determinate L.
+
+Lemma sd_determ_1:
+  forall s t1 s1 t2 s2,
+  Step L s t1 s1 -> Step L s t2 s2 -> match_traces (globalenv L) t1 t2.
+Proof.
+  intros. eapply sd_determ; eauto.
+Qed. 
+
+Lemma sd_determ_2:
+  forall s t s1 s2,
+  Step L s t s1 -> Step L s t s2 -> s1 = s2.
+Proof.
+  intros. eapply sd_determ; eauto.
+Qed.
+
+Lemma star_determinacy:
+  forall s t s', Star L s t s' ->
+  forall s'', Star L s t s'' -> Star L s' E0 s'' \/ Star L s'' E0 s'.
+Proof.
+  induction 1; intros. 
+  auto.
+  inv H2.
+  right. eapply star_step; eauto.
+  exploit sd_determ_1. eexact H. eexact H3. intros MT.
+  exploit (sd_traces DET). eexact H. intros L1.
+  exploit (sd_traces DET). eexact H3. intros L2.
+  assert (t1 = t0 /\ t2 = t3).
+    destruct t1. inv MT. auto. 
+    destruct t1; simpl in L1; try omegaContradiction. 
+    destruct t0. inv MT. destruct t0; simpl in L2; try omegaContradiction.
+    simpl in H5. split. congruence. congruence.
+  destruct H1; subst.
+  assert (s2 = s4) by (eapply sd_determ_2; eauto). subst s4. 
   auto.
 Qed.
 
-End INF_SEQ_DECOMP.
+End DETERMINACY.
+
+(** * Backward simulations between two transition semantics. *)
+
+Definition safe (L: semantics) (s: state L) : Prop :=
+  forall s',
+  Star L s E0 s' -> 
+  (exists r, final_state L s' r)
+  \/ (exists t, exists s'', Step L s' t s'').
+
+Lemma star_safe:
+  forall (L: semantics) s s',
+  Star L s E0 s' -> safe L s -> safe L s'.
+Proof.
+  intros; red; intros. apply H0. eapply star_trans; eauto.
+Qed. 
+
+(** The general form of a backward simulation. *)
+
+Record backward_simulation (L1 L2: semantics) : Type :=
+  Backward_simulation {
+    bsim_index: Type;
+    bsim_order: bsim_index -> bsim_index -> Prop;
+    bsim_order_wf: well_founded bsim_order;
+    bsim_match_states :> bsim_index -> state L1 -> state L2 -> Prop;
+    bsim_initial_states_exist:
+      forall s1, initial_state L1 s1 -> exists s2, initial_state L2 s2;
+    bsim_match_initial_states:
+      forall s1 s2, initial_state L1 s1 -> initial_state L2 s2 ->
+      exists i, exists s1', initial_state L1 s1' /\ bsim_match_states i s1' s2;
+    bsim_match_final_states:
+      forall i s1 s2 r, 
+      bsim_match_states i s1 s2 -> safe L1 s1 -> final_state L2 s2 r -> 
+      exists s1', Star L1 s1 E0 s1' /\ final_state L1 s1' r;
+    bsim_progress:
+      forall i s1 s2, 
+      bsim_match_states i s1 s2 -> safe L1 s1 ->
+      (exists r, final_state L2 s2 r) \/
+      (exists t, exists s2', Step L2 s2 t s2');
+    bsim_simulation:
+      forall s2 t s2', Step L2 s2 t s2' ->
+      forall i s1, bsim_match_states i s1 s2 -> safe L1 s1 ->
+      exists i', exists s1',
+         (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bsim_order i' i))
+      /\ bsim_match_states i' s1' s2';
+    bsim_traces:
+      forall s2 t s2', Step L2 s2 t s2' -> (length t <= 1)%nat;
+    bsim_symbols_preserved:
+      forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id
+  }.
+
+(** An alternate form of the simulation diagram *)
+
+Lemma bsim_simulation':
+  forall L1 L2 (S: backward_simulation L1 L2),
+  forall i s2 t s2', Step L2 s2 t s2' ->
+  forall s1, S i s1 s2 -> safe L1 s1 ->
+  (exists i', exists s1', Plus L1 s1 t s1' /\ S i' s1' s2')
+  \/ (exists i', bsim_order S i' i /\ t = E0 /\ S i' s1 s2').
+Proof.
+  intros. exploit bsim_simulation; eauto. 
+  intros [i' [s1' [A B]]]. intuition. 
+  left; exists i'; exists s1'; auto.
+  inv H3. 
+  right; exists i'; auto.
+  left; exists i'; exists s1'; split; auto. econstructor; eauto. 
+Qed.
+
+(** ** Backward simulation diagrams. *)
+
+(** Various simulation diagrams that imply backward simulation. *)
+
+Section BACKWARD_SIMU_DIAGRAMS.
+
+Variable L1: semantics.
+Variable L2: semantics.
+
+Hypothesis symbols_preserved:
+  forall id, Genv.find_symbol (globalenv L2) id = Genv.find_symbol (globalenv L1) id.
+
+Hypothesis length_traces:
+  forall s2 t s2', Step L2 s2 t s2' -> (length t <= 1)%nat.
+
+Variable match_states: state L1 -> state L2 -> Prop.
+
+Hypothesis initial_states_exist:
+  forall s1, initial_state L1 s1 -> exists s2, initial_state L2 s2.
+
+Hypothesis match_initial_states:
+  forall s1 s2, initial_state L1 s1 -> initial_state L2 s2 ->
+  exists s1', initial_state L1 s1' /\ match_states s1' s2.
+
+Hypothesis match_final_states:
+  forall s1 s2 r, 
+  match_states s1 s2 -> final_state L2 s2 r -> final_state L1 s1 r.
+
+Hypothesis progress:
+  forall s1 s2, 
+  match_states s1 s2 -> safe L1 s1 ->
+  (exists r, final_state L2 s2 r) \/
+  (exists t, exists s2', Step L2 s2 t s2').
+
+Section BACKWARD_SIMULATION_PLUS.
+
+Hypothesis simulation:
+  forall s2 t s2', Step L2 s2 t s2' ->
+  forall s1, match_states s1 s2 -> safe L1 s1 ->
+  exists s1', Plus L1 s1 t s1' /\ match_states s1' s2'.
+
+Lemma backward_simulation_plus: backward_simulation L1 L2.
+Proof.
+  apply Backward_simulation with
+    (bsim_order := fun (x y: unit) => False)
+    (bsim_match_states := fun (i: unit) s1 s2 => match_states s1 s2);
+  auto.
+  red; intros; constructor; intros. contradiction.
+  intros. exists tt; eauto.
+  intros. exists s1; split. apply star_refl. eauto. 
+  intros. exploit simulation; eauto. intros [s1' [A B]]. 
+  exists tt; exists s1'; auto.
+Qed.
+
+End BACKWARD_SIMULATION_PLUS.
+
+End BACKWARD_SIMU_DIAGRAMS.
+
+(** ** Backward simulation of transition sequences *)
+
+Section BACKWARD_SIMULATION_SEQUENCES.
+
+Variable L1: semantics.
+Variable L2: semantics.
+Variable S: backward_simulation L1 L2.
+
+Lemma bsim_E0_star:
+  forall s2 s2', Star L2 s2 E0 s2' ->
+  forall i s1, S i s1 s2 -> safe L1 s1 ->
+  exists i', exists s1', Star L1 s1 E0 s1' /\ S i' s1' s2'.
+Proof.
+  intros s20 s20' STAR0. pattern s20, s20'. eapply star_E0_ind; eauto.
+(* base case *)
+  intros. exists i; exists s1; split; auto. apply star_refl.
+(* inductive case *)
+  intros. exploit bsim_simulation; eauto. intros [i' [s1' [A B]]].
+  assert (Star L1 s0 E0 s1'). intuition. apply plus_star; auto. 
+  exploit H0. eauto. eapply star_safe; eauto. intros [i'' [s1'' [C D]]].
+  exists i''; exists s1''; split; auto. eapply star_trans; eauto.
+Qed.
+
+Lemma bsim_safe:
+  forall i s1 s2,
+  S i s1 s2 -> safe L1 s1 -> safe L2 s2.
+Proof.
+  intros; red; intros. 
+  exploit bsim_E0_star; eauto. intros [i' [s1' [A B]]].
+  eapply bsim_progress; eauto. eapply star_safe; eauto.
+Qed.
+
+Lemma bsim_E0_plus:
+  forall s2 t s2', Plus L2 s2 t s2' -> t = E0 ->
+  forall i s1, S i s1 s2 -> safe L1 s1 ->
+     (exists i', exists s1', Plus L1 s1 E0 s1' /\ S i' s1' s2')
+  \/ (exists i', clos_trans _ (bsim_order S) i' i /\ S i' s1 s2').
+Proof.
+  induction 1 using plus_ind2; intros; subst t.
+(* base case *)
+  exploit bsim_simulation'; eauto. intros [[i' [s1' [A B]]] | [i' [A [B C]]]].
+  left; exists i'; exists s1'; auto.
+  right; exists i'; intuition.
+(* inductive case *)
+  exploit Eapp_E0_inv; eauto. intros [EQ1 EQ2]; subst.
+  exploit bsim_simulation'; eauto. intros [[i' [s1' [A B]]] | [i' [A [B C]]]].
+  exploit bsim_E0_star. apply plus_star; eauto. eauto. eapply star_safe; eauto. apply plus_star; auto.
+  intros [i'' [s1'' [P Q]]]. 
+  left; exists i''; exists s1''; intuition. eapply plus_star_trans; eauto. 
+  exploit IHplus; eauto. intros [P | [i'' [P Q]]].
+  left; auto.
+  right; exists i''; intuition. eapply t_trans; eauto. apply t_step; auto.
+Qed.
+
+Lemma star_non_E0_split:
+  forall s2 t s2', Star L2 s2 t s2' -> (length t = 1)%nat ->
+  exists s2x, exists s2y, Star L2 s2 E0 s2x /\ Step L2 s2x t s2y /\ Star L2 s2y E0 s2'.
+Proof.
+  induction 1; intros.
+  simpl in H; discriminate.
+  subst t.
+  assert (EITHER: t1 = E0 \/ t2 = E0). 
+    unfold Eapp in H2; rewrite app_length in H2. 
+    destruct t1; auto. destruct t2; auto. simpl in H2; omegaContradiction.
+  destruct EITHER; subst. 
+  exploit IHstar; eauto. intros [s2x [s2y [A [B C]]]]. 
+  exists s2x; exists s2y; intuition. eapply star_left; eauto. 
+  rewrite E0_right. exists s1; exists s2; intuition. apply star_refl.
+Qed.
+
+End BACKWARD_SIMULATION_SEQUENCES.
+
+(** ** Composing two backward simulations *)
+
+Section COMPOSE_BACKWARD_SIMULATIONS.
+
+Variable L1: semantics.
+Variable L2: semantics.
+Variable L3: semantics.
+Variable S12: backward_simulation L1 L2.
+Variable S23: backward_simulation L2 L3.
+
+Let bb_index : Type := (bsim_index S12 * bsim_index S23)%type.
+
+Let bb_order : bb_index -> bb_index -> Prop :=
+  lex_ord (clos_trans _ (bsim_order S12)) (bsim_order S23).
+
+Inductive bb_match_states: bb_index -> state L1 -> state L3 -> Prop :=
+  | bb_match_later: forall i1 i2 s1 s3 s2x s2y,
+      S12 i1 s1 s2x -> Star L2 s2x E0 s2y -> S23 i2 s2y s3 ->
+      bb_match_states (i1, i2) s1 s3.
+
+Lemma bb_match_at: forall i1 i2 s1 s3 s2,
+  S12 i1 s1 s2 -> S23 i2 s2 s3 ->
+  bb_match_states (i1, i2) s1 s3.
+Proof.
+  intros. econstructor; eauto. apply star_refl.
+Qed. 
+
+Lemma bb_simulation_base:
+  forall s3 t s3', Step L3 s3 t s3' ->
+  forall i1 s1 i2 s2, S12 i1 s1 s2 -> S23 i2 s2 s3 -> safe L1 s1 ->
+  exists i', exists s1',
+    (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bb_order i' (i1, i2)))
+    /\ bb_match_states i' s1' s3'.
+Proof.
+  intros.
+  exploit (bsim_simulation' S23); eauto. eapply bsim_safe; eauto.
+  intros [ [i2' [s2' [PLUS2 MATCH2]]] | [i2' [ORD2 [EQ MATCH2]]]].
+  (* 1 L2 makes one or several transitions *)
+  assert (EITHER: t = E0 \/ (length t = 1)%nat).
+    exploit bsim_traces; eauto. 
+    destruct t; auto. destruct t; auto. simpl. intros. omegaContradiction.
+  destruct EITHER.
+  (* 1.1 these are silent transitions *)
+  subst t. exploit bsim_E0_plus; eauto. 
+  intros [ [i1' [s1' [PLUS1 MATCH1]]] | [i1' [ORD1 MATCH1]]].
+  (* 1.1.1 L1 makes one or several transitions *)
+  exists (i1', i2'); exists s1'; split. auto. eapply bb_match_at; eauto. 
+  (* 1.1.2 L1 makes no transitions *)
+  exists (i1', i2'); exists s1; split. 
+  right; split. apply star_refl. left; auto. 
+  eapply bb_match_at; eauto. 
+  (* 1.2 non-silent transitions *)
+  exploit star_non_E0_split. apply plus_star; eauto. auto. 
+  intros [s2x [s2y [P [Q R]]]].
+  exploit bsim_E0_star. eexact P. eauto. auto. intros [i1' [s1x [X Y]]].
+  exploit bsim_simulation'. eexact Q. eauto. eapply star_safe; eauto. 
+  intros [[i1'' [s1y [U V]]] | [i1'' [U [V W]]]]; try (subst t; discriminate).
+  exists (i1'', i2'); exists s1y; split.
+  left. eapply star_plus_trans; eauto. eapply bb_match_later; eauto.
+  (* 2. L2 makes no transitions *)
+  subst. exists (i1, i2'); exists s1; split.
+  right; split. apply star_refl. right; auto. 
+  eapply bb_match_at; eauto.
+Qed.
+
+Lemma bb_simulation:
+  forall s3 t s3', Step L3 s3 t s3' ->
+  forall i s1, bb_match_states i s1 s3 -> safe L1 s1 ->
+  exists i', exists s1',
+    (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ bb_order i' i))
+    /\ bb_match_states i' s1' s3'.
+Proof.
+  intros. inv H0. 
+  exploit star_inv; eauto. intros [[EQ1 EQ2] | PLUS].
+  (* 1. match at *)
+  subst. eapply bb_simulation_base; eauto.
+  (* 2. match later *)
+  exploit bsim_E0_plus; eauto. 
+  intros [[i1' [s1' [A B]]] | [i1' [A B]]].
+  (* 2.1 one or several silent transitions *)
+  exploit bb_simulation_base. eauto. auto. eexact B. eauto.
+    eapply star_safe; eauto. eapply plus_star; eauto.
+  intros [i'' [s1'' [C D]]].
+  exists i''; exists s1''; split; auto.
+  left. eapply plus_star_trans; eauto.
+  destruct C as [P | [P Q]]. apply plus_star; eauto. eauto. 
+  traceEq.
+  (* 2.2 no silent transition *)
+  exploit bb_simulation_base. eauto. auto. eexact B. eauto. auto.
+  intros [i'' [s1'' [C D]]].
+  exists i''; exists s1''; split; auto.
+  intuition. right; intuition. 
+  inv H6. left. eapply t_trans; eauto. left; auto.
+Qed.
+
+Lemma compose_backward_simulation: backward_simulation L1 L3.
+Proof.
+  apply Backward_simulation with (bsim_order := bb_order) (bsim_match_states := bb_match_states).
+(* well founded *)
+  unfold bb_order. apply wf_lex_ord. apply wf_clos_trans. apply bsim_order_wf. apply bsim_order_wf.
+(* initial states exist *)
+  intros. exploit (bsim_initial_states_exist S12); eauto. intros [s2 A].
+  eapply (bsim_initial_states_exist S23); eauto.
+(* match initial states *)
+  intros s1 s3 INIT1 INIT3.
+  exploit (bsim_initial_states_exist S12); eauto. intros [s2 INIT2].
+  exploit (bsim_match_initial_states S23); eauto. intros [i2 [s2' [INIT2' M2]]].
+  exploit (bsim_match_initial_states S12); eauto. intros [i1 [s1' [INIT1' M1]]].
+  exists (i1, i2); exists s1'; intuition. eapply bb_match_at; eauto.
+(* match final states *)
+  intros i s1 s3 r MS SAFE FIN. inv MS.
+  exploit (bsim_match_final_states S23); eauto. 
+    eapply star_safe; eauto. eapply bsim_safe; eauto. 
+  intros [s2' [A B]].
+  exploit bsim_E0_star. eapply star_trans. eexact H0. eexact A. auto. eauto. auto.
+  intros [i1' [s1' [C D]]].
+  exploit (bsim_match_final_states S12); eauto. eapply star_safe; eauto. 
+  intros [s1'' [P Q]]. 
+  exists s1''; split; auto. eapply star_trans; eauto.
+(* progress *)
+  intros i s1 s3 MS SAFE. inv MS.
+  eapply (bsim_progress S23). eauto. eapply star_safe; eauto. eapply bsim_safe; eauto. 
+(* simulation *)
+  exact bb_simulation.
+(* trace length *)
+  exact (bsim_traces S23). 
+(* symbols *)
+  intros. transitivity (Genv.find_symbol (globalenv L2) id); apply bsim_symbols_preserved; auto.
+Qed.
+
+End COMPOSE_BACKWARD_SIMULATIONS.
+
+(** ** Converting a forward simulation to a backward simulation *)
+
+Section FORWARD_TO_BACKWARD.
+
+Variable L1: semantics.
+Variable L2: semantics.
+Variable FS: forward_simulation L1 L2.
+
+Hypothesis receptive: receptive L1.
+Hypothesis determinate: determinate L2.
+
+(** Exploiting forward simulation *)
+
+Inductive f2b_transitions: state L1 -> state L2 -> Prop :=
+  | f2b_trans_final: forall s1 s2 s1' r,
+      Star L1 s1 E0 s1' ->
+      final_state L1 s1' r ->
+      final_state L2 s2 r ->
+      f2b_transitions s1 s2
+  | f2b_trans_step: forall s1 s2 s1' t s1'' s2' i' i'',
+      Star L1 s1 E0 s1' ->
+      Step L1 s1' t s1'' ->
+      Plus L2 s2 t s2' ->
+      FS i' s1' s2 -> 
+      FS i'' s1'' s2' ->
+      f2b_transitions s1 s2.
+
+Lemma f2b_progress:
+  forall i s1 s2, FS i s1 s2 -> safe L1 s1 -> f2b_transitions s1 s2.
+Proof.
+  intros i0; pattern i0. apply well_founded_ind with (R := fsim_order FS). 
+  apply fsim_order_wf.
+  intros i REC s1 s2 MATCH SAFE.
+  destruct (SAFE s1) as [[r FINAL] | [t [s1' STEP1]]]. apply star_refl.
+  (* final state reached *)
+  eapply f2b_trans_final; eauto. 
+  apply star_refl.
+  eapply fsim_match_final_states; eauto. 
+  (* L1 can make one step *)
+  exploit (fsim_simulation FS); eauto. intros [i' [s2' [A MATCH']]].
+  assert (B: Plus L2 s2 t s2' \/ (s2' = s2 /\ t = E0 /\ fsim_order FS i' i)).
+    intuition.
+    destruct (star_inv H0); intuition.
+  clear A. destruct B as [PLUS2 | [EQ1 [EQ2 ORDER]]].
+  eapply f2b_trans_step; eauto. apply star_refl.
+  subst. exploit REC; eauto. eapply star_safe; eauto. apply star_one; auto.
+  intros TRANS; inv TRANS.
+  eapply f2b_trans_final; eauto. eapply star_left; eauto. 
+  eapply f2b_trans_step; eauto. eapply star_left; eauto.
+Qed.
+
+Lemma fsim_simulation_not_E0:
+  forall s1 t s1', Step L1 s1 t s1' -> t <> E0 ->
+  forall i s2, FS i s1 s2 ->
+  exists i', exists s2', Plus L2 s2 t s2' /\ FS i' s1' s2'.
+Proof.
+  intros. exploit (fsim_simulation FS); eauto. intros [i' [s2' [A B]]].
+  exists i'; exists s2'; split; auto.
+  destruct A. auto. destruct H2. exploit star_inv; eauto. intros [[EQ1 EQ2] | P]; auto.
+  congruence.
+Qed.
+
+(** Exploiting determinacy *)
+
+Remark silent_or_not_silent:
+  forall t, t = E0 \/ t <> E0.
+Proof.
+  intros; unfold E0; destruct t; auto; right; congruence.
+Qed.
+
+Remark not_silent_length:
+  forall t1 t2, (length (t1 ** t2) <= 1)%nat -> t1 = E0 \/ t2 = E0.
+Proof.
+  unfold Eapp, E0; intros. rewrite app_length in H. 
+  destruct t1; destruct t2; auto. simpl in H. omegaContradiction.
+Qed.
+
+Lemma f2b_determinacy_inv:
+  forall s2 t' s2' t'' s2'',
+  Step L2 s2 t' s2' -> Step L2 s2 t'' s2'' ->
+  (t' = E0 /\ t'' = E0 /\ s2' = s2'')
+  \/ (t' <> E0 /\ t'' <> E0 /\ match_traces (globalenv L1) t' t'').
+Proof.
+  intros. 
+  assert (match_traces (globalenv L2) t' t'').
+    eapply sd_determ_1; eauto. 
+  destruct (silent_or_not_silent t').
+  subst. inv H1.  
+  left; intuition. eapply sd_determ_2; eauto.
+  destruct (silent_or_not_silent t'').
+  subst. inv H1. elim H2; auto. 
+  right; intuition. 
+  eapply match_traces_preserved with (ge1 := (globalenv L2)); auto. 
+  intros; symmetry; apply (fsim_symbols_preserved FS). 
+Qed.
+
+Lemma f2b_determinacy_star:
+  forall s s1, Star L2 s E0 s1 -> 
+  forall t s2 s3,
+  Step L2 s1 t s2 -> t <> E0 ->
+  Star L2 s t s3 ->
+  Star L2 s1 t s3.
+Proof.
+  intros s0 s01 ST0. pattern s0, s01. eapply star_E0_ind; eauto.
+  intros. inv H3. congruence.
+  exploit f2b_determinacy_inv. eexact H. eexact H4.
+  intros [[EQ1 [EQ2 EQ3]] | [NEQ1 [NEQ2 MT]]].
+  subst. simpl in *. eauto. 
+  congruence.
+Qed.
+
+(** Orders *)
+
+Inductive f2b_index : Type :=
+  | F2BI_before (n: nat)
+  | F2BI_after (n: nat).
+
+Inductive f2b_order: f2b_index -> f2b_index -> Prop :=
+  | f2b_order_before: forall n n',
+      (n' < n)%nat ->
+      f2b_order (F2BI_before n') (F2BI_before n)
+  | f2b_order_after: forall n n',
+      (n' < n)%nat ->
+      f2b_order (F2BI_after n') (F2BI_after n)
+  | f2b_order_switch: forall n n',
+      f2b_order (F2BI_before n') (F2BI_after n).
+
+Lemma wf_f2b_order:
+  well_founded f2b_order.
+Proof.
+  assert (ACC1: forall n, Acc f2b_order (F2BI_before n)).
+    intros n0; pattern n0; apply lt_wf_ind; intros.
+    constructor; intros. inv H0. auto. 
+  assert (ACC2: forall n, Acc f2b_order (F2BI_after n)).
+    intros n0; pattern n0; apply lt_wf_ind; intros.
+    constructor; intros. inv H0. auto. auto. 
+  red; intros. destruct a; auto.
+Qed.
+
+(** Constructing the backward simulation *)
+
+Inductive f2b_match_states: f2b_index -> state L1 -> state L2 -> Prop :=
+  | f2b_match_at: forall i s1 s2,
+      FS i s1 s2 ->
+      f2b_match_states (F2BI_after O) s1 s2
+  | f2b_match_before: forall s1 t s1' s2b s2 n s2a i,
+      Step L1 s1 t s1' ->  t <> E0 ->
+      Star L2 s2b E0 s2 ->
+      starN (step L2) (globalenv L2) n s2 t s2a ->
+      FS i s1 s2b ->
+      f2b_match_states (F2BI_before n) s1 s2
+  | f2b_match_after: forall n s2 s2a s1 i,
+      starN (step L2) (globalenv L2) (S n) s2 E0 s2a ->
+      FS i s1 s2a ->
+      f2b_match_states (F2BI_after (S n)) s1 s2.
+
+Remark f2b_match_after':
+  forall n s2 s2a s1 i,
+  starN (step L2) (globalenv L2) n s2 E0 s2a ->
+  FS i s1 s2a ->
+  f2b_match_states (F2BI_after n) s1 s2.
+Proof.
+  intros. inv H. 
+  econstructor; eauto.
+  econstructor; eauto. econstructor; eauto.
+Qed.
+
+(** Backward simulation of L2 steps *)
+
+Lemma f2b_simulation_step:
+  forall s2 t s2', Step L2 s2 t s2' ->
+  forall i s1, f2b_match_states i s1 s2 -> safe L1 s1 ->
+  exists i', exists s1',
+    (Plus L1 s1 t s1' \/ (Star L1 s1 t s1' /\ f2b_order i' i))
+     /\ f2b_match_states i' s1' s2'.
+Proof.
+  intros s2 t s2' STEP2 i s1 MATCH SAFE.
+  inv MATCH.
+(* 1. At matching states *)
+  exploit f2b_progress; eauto. intros TRANS; inv TRANS.
+  (* 1.1  L1 can reach final state and L2 is at final state: impossible! *)
+  exploit (sd_final_nostep determinate); eauto. contradiction.
+  (* 1.2  L1 can make 0 or several steps; L2 can make 1 or several matching steps. *)
+  inv H2. 
+  exploit f2b_determinacy_inv. eexact H5. eexact STEP2.
+  intros [[EQ1 [EQ2 EQ3]] | [NOT1 [NOT2 MT]]].
+  (* 1.2.1  L2 makes a silent transition *)
+  destruct (silent_or_not_silent t2).
+  (* 1.2.1.1  L1 makes a silent transition too: perform transition now and go to "after" state *)
+  subst. simpl in *. destruct (star_starN H6) as [n STEPS2].
+  exists (F2BI_after n); exists s1''; split.
+  left. eapply plus_right; eauto.
+  eapply f2b_match_after'; eauto.
+  (* 1.2.1.2 L1 makes a non-silent transition: keep it for later and go to "before" state *)
+  subst. simpl in *. destruct (star_starN H6) as [n STEPS2].
+  exists (F2BI_before n); exists s1'; split.
+  right; split. auto. constructor.
+  econstructor. eauto. auto. apply star_one; eauto. eauto. eauto. 
+  (* 1.2.2 L2 makes a non-silent transition, and so does L1 *)
+  exploit not_silent_length. eapply (sr_traces receptive); eauto. intros [EQ | EQ].
+  congruence.
+  subst t2. rewrite E0_right in H1. 
+  (* Use receptiveness to equate the traces *)
+  exploit (sr_receptive receptive); eauto. intros [s1''' STEP1].
+  exploit fsim_simulation_not_E0. eexact STEP1. auto. eauto. 
+  intros [i''' [s2''' [P Q]]]. inv P.
+  (* Exploit determinacy *)
+  exploit not_silent_length. eapply (sr_traces receptive); eauto. intros [EQ | EQ].
+  subst t0. simpl in *. exploit sd_determ_1. eauto. eexact STEP2. eexact H2. 
+  intros. elim NOT2. inv H8. auto.
+  subst t2. rewrite E0_right in *. 
+  assert (s4 = s2'). eapply sd_determ_2; eauto. subst s4. 
+  (* Perform transition now and go to "after" state *)
+  destruct (star_starN H7) as [n STEPS2]. exists (F2BI_after n); exists s1'''; split.
+  left. eapply plus_right; eauto. 
+  eapply f2b_match_after'; eauto.
+
+(* 2. Before *)
+  inv H2. congruence.
+  exploit f2b_determinacy_inv. eexact H4. eexact STEP2.
+  intros [[EQ1 [EQ2 EQ3]] | [NOT1 [NOT2 MT]]].
+  (* 2.1 L2 makes a silent transition: remain in "before" state *)
+  subst. simpl in *. exists (F2BI_before n0); exists s1; split.
+  right; split. apply star_refl. constructor. omega.
+  econstructor; eauto. eapply star_right; eauto. 
+  (* 2.2 L2 make a non-silent transition *)
+  exploit not_silent_length. eapply (sr_traces receptive); eauto. intros [EQ | EQ].
+  congruence.
+  subst. rewrite E0_right in *.
+  (* Use receptiveness to equate the traces *)
+  exploit (sr_receptive receptive); eauto. intros [s1''' STEP1].
+  exploit fsim_simulation_not_E0. eexact STEP1. auto. eauto. 
+  intros [i''' [s2''' [P Q]]].
+  (* Exploit determinacy *)
+  exploit f2b_determinacy_star. eauto. eexact STEP2. auto. apply plus_star; eauto. 
+  intro R. inv R. congruence. 
+  exploit not_silent_length. eapply (sr_traces receptive); eauto. intros [EQ | EQ].
+  subst. simpl in *. exploit sd_determ_1. eauto. eexact STEP2. eexact H2. 
+  intros. elim NOT2. inv H7; auto.  
+  subst. rewrite E0_right in *. 
+  assert (s3 = s2'). eapply sd_determ_2; eauto. subst s3.
+  (* Perform transition now and go to "after" state *)
+  destruct (star_starN H6) as [n STEPS2]. exists (F2BI_after n); exists s1'''; split.
+  left. apply plus_one; auto.
+  eapply f2b_match_after'; eauto.
+
+(* 3. After *)
+  inv H. exploit Eapp_E0_inv; eauto. intros [EQ1 EQ2]; subst. 
+  exploit f2b_determinacy_inv. eexact H2. eexact STEP2.
+  intros [[EQ1 [EQ2 EQ3]] | [NOT1 [NOT2 MT]]].
+  subst. exists (F2BI_after n); exists s1; split.
+  right; split. apply star_refl. constructor; omega.
+  eapply f2b_match_after'; eauto.
+  congruence.
+Qed.
+
+(** The backward simulation *)
+
+Lemma forward_to_backward_simulation: backward_simulation L1 L2.
+Proof.
+  apply Backward_simulation with (bsim_order := f2b_order) (bsim_match_states := f2b_match_states).
+  apply wf_f2b_order.
+(* initial states exist *)
+  intros. exploit (fsim_match_initial_states FS); eauto. intros [i [s2 [A B]]].
+  exists s2; auto.
+(* initial states *)
+  intros. exploit (fsim_match_initial_states FS); eauto. intros [i [s2' [A B]]].
+  assert (s2 = s2') by (eapply sd_initial_determ; eauto). subst s2'.
+  exists (F2BI_after O); exists s1; split; auto. econstructor; eauto.
+(* final states *)
+  intros. inv H.
+  exploit f2b_progress; eauto. intros TRANS; inv TRANS.
+  assert (r0 = r) by (eapply (sd_final_determ determinate); eauto). subst r0.
+  exists s1'; auto.
+  inv H4. exploit (sd_final_nostep determinate); eauto. contradiction.
+  inv H5. congruence. exploit (sd_final_nostep determinate); eauto. contradiction.
+  inv H2. exploit (sd_final_nostep determinate); eauto. contradiction.
+(* progress *)
+  intros. inv H. 
+  exploit f2b_progress; eauto. intros TRANS; inv TRANS. 
+  left; exists r; auto. 
+  inv H3. right; econstructor; econstructor; eauto.
+  inv H4. congruence. right; econstructor; econstructor; eauto.
+  inv H1. right; econstructor; econstructor; eauto.
+(* simulation *)
+  exact f2b_simulation_step.
+(* trace length *)
+  exact (sd_traces determinate).
+(* symbols preserved *)
+  exact (fsim_symbols_preserved FS).
+Qed.
+
+End FORWARD_TO_BACKWARD.
+
+(** * Connections with big-step semantics *)
+
+(** The general form of a big-step semantics *)
+
+Record bigstep_semantics : Type :=
+  Bigstep_semantics {
+    bigstep_terminates: trace -> int -> Prop;
+    bigstep_diverges: traceinf -> Prop
+  }.
+
+(** Soundness with respect to a small-step semantics *)
+
+Record bigstep_sound (B: bigstep_semantics) (L: semantics) : Prop :=
+  Bigstep_sound {
+    bigstep_terminates_sound:
+      forall t r,
+      bigstep_terminates B t r ->
+      exists s1, exists s2, initial_state L s1 /\ Star L s1 t s2 /\ final_state L s2 r;
+    bigstep_diverges_sound:
+      forall T,
+      bigstep_diverges B T ->
+      exists s1, initial_state L s1 /\ forever (step L) (globalenv L) s1 T
+}.
 

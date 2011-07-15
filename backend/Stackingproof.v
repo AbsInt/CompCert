@@ -2701,11 +2701,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  Linear.exec_program prog beh -> Machsem.exec_program tprog beh.
+  forward_simulation (Linear.semantics prog) (Machsem.semantics tprog).
 Proof.
-  unfold Linear.exec_program, Machsem.exec_program; intros.
-  eapply simulation_plus_preservation; eauto.
+  eapply forward_simulation_plus.
+  eexact symbols_preserved.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct. 

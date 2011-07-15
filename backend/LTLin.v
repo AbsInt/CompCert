@@ -254,8 +254,8 @@ Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall n m,
       final_state (Returnstate nil (Vint n) m) n.
 
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
 
 (** * Properties of the operational semantics *)
 

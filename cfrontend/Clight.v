@@ -906,13 +906,26 @@ Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.
 
-(** Execution of a whole program: [exec_program p beh]
-  holds if the application of [p]'s main function to no arguments
-  in the initial memory state for [p] has [beh] as observable
-  behavior. *)
+(** Wrapping up these definitions in a small-step semantics. *)
 
-Definition exec_program (p: program) (beh: program_behavior) : Prop :=
-  program_behaves step (initial_state p) final_state (Genv.globalenv p) beh.
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
+
+(** This semantics is receptive to changes in events. *)
+
+Lemma semantics_receptive:
+  forall (p: program), receptive (semantics p).
+Proof.
+  intros. constructor; simpl; intros.
+(* receptiveness *)
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
+    intros. subst. inv H0. exists s1; auto.
+  inversion H; subst; auto.
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  exists (Returnstate vres2 k m2). econstructor; eauto.
+(* trace length *)
+  inv H; simpl; try omega. eapply external_call_trace_length; eauto.
+Qed.
 
 (** Big-step execution of a whole program.  *)
 
@@ -935,6 +948,9 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
       evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
+
+Definition bigstep_semantics (p: program) :=
+  Bigstep_semantics (bigstep_program_terminates p) (bigstep_program_diverges p).
 
 (** * Implication from big-step semantics to transition semantics *)
 
@@ -1352,33 +1368,21 @@ Proof.
   traceEq.
 Qed.
 
-Theorem bigstep_program_terminates_exec:
-  forall t r, bigstep_program_terminates prog t r -> exec_program prog (Terminates t r).
+Theorem bigstep_semantics_sound:
+  bigstep_sound (bigstep_semantics prog) (semantics prog).
 Proof.
-  intros. inv H. 
+  constructor; simpl; intros.
+(* termination *)
+  inv H. econstructor; econstructor.
+  split. econstructor; eauto.
+  split. eapply eval_funcall_steps. eauto. red; auto. 
   econstructor.
-  econstructor. eauto. eauto. eauto. auto.
-  eapply eval_funcall_steps. eauto. red; auto. 
-  econstructor.
-Qed.
-
-Theorem bigstep_program_diverges_exec:
-  forall T, bigstep_program_diverges prog T ->
-  exec_program prog (Reacts T) \/
-  exists t, exec_program prog (Diverges t) /\ traceinf_prefix t T.
-Proof.
-  intros. inv H.
-  set (st := Callstate f nil Kstop m0).
-  assert (forever step ge0 st T). 
-    eapply forever_N_forever with (order := order).
-    red; intros. constructor; intros. red in H. elim H.
-    eapply evalinf_funcall_forever; eauto. 
-  destruct (forever_silent_or_reactive _ _ _ _ _ _ H)
-  as [A | [t [s' [T' [B [C D]]]]]]. 
-  left. econstructor. econstructor; eauto. eauto.
-  right. exists t. split.
-  econstructor. econstructor; eauto. eauto. auto. 
-  subst T. rewrite <- (E0_right t) at 1. apply traceinf_prefix_app. constructor.
+(* divergence *)
+  inv H. econstructor.
+  split. econstructor; eauto.
+  eapply forever_N_forever with (order := order).
+  red; intros. constructor; intros. red in H. elim H.
+  eapply evalinf_funcall_forever; eauto. 
 Qed.
 
 End BIGSTEP_TO_TRANSITIONS.

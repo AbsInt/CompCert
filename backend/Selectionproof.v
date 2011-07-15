@@ -565,11 +565,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forall (beh: program_behavior), not_wrong beh ->
-  Cminor.exec_program prog beh -> CminorSel.exec_program tprog beh.
+  forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
-  unfold CminorSel.exec_program, Cminor.exec_program; intros.
-  eapply simulation_opt_preservation; eauto.
+  eapply forward_simulation_opt.
+  eexact symbols_preserved.
   eexact sel_initial_states.
   eexact sel_final_states.
   eexact sel_step_correct. 
