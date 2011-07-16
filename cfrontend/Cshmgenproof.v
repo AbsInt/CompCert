@@ -134,28 +134,34 @@ Qed.
 
 Remark neutral_for_cast_chunk:
   forall ty chunk,
-  neutral_for_cast ty -> access_mode ty = By_value chunk -> chunk = Mint32.
+  neutral_for_cast ty = true -> access_mode ty = By_value chunk -> chunk = Mint32.
 Proof.
-  induction 1; simpl; intros; inv H; auto.
+  intros. destruct ty; inv H; simpl in H0.
+  destruct i; inv H2. congruence.
+  congruence.
+  congruence.
+  congruence.
 Qed.
 
 Lemma cast_result_normalized:
   forall chunk v1 ty1 ty2 v2,
-  cast v1 ty1 ty2 v2 ->
+  sem_cast v1 ty1 ty2 = Some v2 ->
   access_mode ty2 = By_value chunk ->
   val_normalized v2 chunk.
 Proof.
-  induction 1; intros; simpl.
+  intros. functional inversion H; subst.
   apply cast_int_int_normalized; auto.
   apply cast_int_int_normalized; auto.
   apply cast_float_float_normalized; auto.
   apply cast_float_float_normalized; auto.
-  rewrite (neutral_for_cast_chunk _ _ H0 H1). red; auto.
-  rewrite (neutral_for_cast_chunk _ _ H0 H1). red; auto.
+  destruct (andb_prop _ _ H8). 
+  rewrite (neutral_for_cast_chunk _ _ H2 H0). red; auto.
+  destruct (andb_prop _ _ H9). 
+  rewrite (neutral_for_cast_chunk _ _ H2 H0). red; auto.
 Qed.
 
 Definition val_casted (v: val) (ty: type) : Prop :=
-  exists v0, exists ty0, cast v0 ty0 ty v.
+  exists v0, exists ty0, sem_cast v0 ty0 ty = Some v.
 
 Lemma val_casted_normalized:
   forall v ty chunk,
@@ -386,40 +392,28 @@ Proof.
   simpl. auto.
 Qed.
 
-Lemma make_boolean_correct_true:
- forall e le m a v ty,
+Lemma make_boolean_correct:
+ forall e le m a v ty b,
   eval_expr ge e le m a v ->
-  is_true v ty ->
+  bool_val v ty = Some b ->
   exists vb,
     eval_expr ge e le m (make_boolean a ty) vb
-    /\ Val.is_true vb.
+    /\ Val.bool_of_val vb b.
 Proof.
-  intros until ty; intros EXEC VTRUE.
-  destruct ty; simpl;
-  try (exists v; intuition; inversion VTRUE; simpl; auto; fail).
-  exists Vtrue; split.
-  eapply eval_Ebinop; eauto with cshm. 
-  inversion VTRUE; simpl.
-  rewrite Float.cmp_ne_eq. rewrite H1. auto.
-  apply Vtrue_is_true.
-Qed.
-
-Lemma make_boolean_correct_false:
- forall e le m a v ty,
-  eval_expr ge e le m a v ->
-  is_false v ty ->
-  exists vb,
-    eval_expr ge e le m (make_boolean a ty) vb
-    /\ Val.is_false vb.
-Proof.
-  intros until ty; intros EXEC VFALSE.
-  destruct ty; simpl;
-  try (exists v; intuition; inversion VFALSE; simpl; auto; fail).
-  exists Vfalse; split.
-  eapply eval_Ebinop; eauto with cshm. 
-  inversion VFALSE; simpl.
-  rewrite Float.cmp_ne_eq. rewrite H1. auto.
-  apply Vfalse_is_false.
+  assert (VBI: forall n, Val.bool_of_val (Vint n) (negb (Int.eq n Int.zero))).
+    intros. predSpec Int.eq Int.eq_spec n Int.zero; simpl.
+    subst. constructor.
+    constructor. auto.
+  intros. functional inversion H0; subst; simpl.
+  exists (Vint n); split; auto.
+  exists (Vint n); split; auto.
+  exists (Vptr b0 ofs); split; auto. constructor.
+  exists (Vptr b0 ofs); split; auto. constructor.
+  rewrite <- Float.cmp_ne_eq. destruct (Float.cmp Cne f Float.zero) as []_eqn. 
+  exists Vtrue; split. eapply eval_Ebinop; eauto with cshm. simpl. rewrite Heqb; auto.
+  constructor. apply Int.one_not_zero.
+  exists Vfalse; split. eapply eval_Ebinop; eauto with cshm. simpl. rewrite Heqb; auto.
+  constructor.
 Qed.
 
 Lemma make_neg_correct:
@@ -650,15 +644,25 @@ Proof.
   eapply make_cmp_correct; eauto.
 Qed. 
 
+Lemma make_cast_neutral:
+  forall ty1 ty2 a,
+  neutral_for_cast ty1 && neutral_for_cast ty2 = true ->
+  make_cast ty1 ty2 a = a.
+Proof.
+  intros. destruct (andb_prop _ _ H). 
+  unfold make_cast. 
+  replace (make_cast1 ty1 ty2 a) with a. 
+  unfold make_cast2. destruct ty2; simpl in H1; inv H1; auto. destruct i; inv H3; auto.
+  unfold make_cast1. destruct ty1; simpl in H0; inv H0; auto. destruct ty2; simpl in H1; inv H1; auto.
+Qed.
+
 Lemma make_cast_correct:
   forall e le m a v ty1 ty2 v',
    eval_expr ge e le m a v ->
-   cast v ty1 ty2 v' ->
+   sem_cast v ty1 ty2 = Some v' ->
    eval_expr ge e le m (make_cast ty1 ty2 a) v'.
 Proof.
-  unfold make_cast, make_cast1, make_cast2.
-  intros until v'; intros EVAL CAST.
-  inversion CAST; clear CAST; subst.
+  intros. functional inversion H0; subst; simpl.
   (* cast_int_int *)
     destruct sz2; destruct si2; repeat econstructor; eauto with cshm.
   (* cast_float_int *)
@@ -669,9 +673,9 @@ Proof.
   (* cast_float_float *)
     destruct sz2; repeat econstructor; eauto with cshm.
   (* neutral, ptr *)
-   inversion H0; auto; inversion H; auto.
+    rewrite make_cast_neutral; auto. 
   (* neutral, int *)
-   inversion H0; auto; inversion H; auto.
+    rewrite make_cast_neutral; auto. 
 Qed.
 
 Lemma make_load_correct:
@@ -1092,16 +1096,11 @@ Proof.
   eapply transl_unop_correct; eauto.
 (* binop *)
   eapply transl_binop_correct; eauto.
-(* condition true *)
-  exploit make_boolean_correct_true. eapply H0; eauto. eauto.
-  intros [vb [EVAL ISTRUE]].
-  eapply eval_Econdition; eauto. apply Val.bool_of_true_val; eauto.
-  simpl. eauto. 
-(* condition false *)
-  exploit make_boolean_correct_false. eapply H0; eauto. eauto.
-  intros [vb [EVAL ISFALSE]].
-  eapply eval_Econdition; eauto. apply Val.bool_of_false_val; eauto.
-  simpl. eauto.
+(* condition *)
+  exploit make_boolean_correct. eapply H0; eauto. eauto.
+  intros [vb [EVAL BVAL]].
+  eapply eval_Econdition; eauto.
+  destruct b; eapply make_cast_correct; eauto. 
 (* cast *)
   eapply make_cast_correct; eauto.
 (* rvalue out of lvalue *)
@@ -1159,71 +1158,46 @@ Qed.
 
 End EXPR.
 
-Lemma is_constant_bool_true:
-  forall te le m a v ty,
+Lemma is_constant_bool_sound:
+  forall te le m a v ty b,
   Csharpminor.eval_expr tge te le m a v ->
-  is_true v ty ->
-  is_constant_bool a <> Some false.
+  bool_val v ty = Some b ->
+  is_constant_bool a = Some b \/ is_constant_bool a = None.
 Proof.
-  intros. unfold is_constant_bool. destruct a; try congruence. destruct c; try congruence.
-  inv H. simpl in H2. inv H2. rewrite Int.eq_false. simpl; congruence. 
-  inv H0; auto.
-Qed.
-
-Lemma is_constant_bool_false:
-  forall te le m a v ty,
-  Csharpminor.eval_expr tge te le m a v ->
-  is_false v ty ->
-  is_constant_bool a <> Some true.
-Proof.
-  intros. unfold is_constant_bool. destruct a; try congruence. destruct c; try congruence.
-  inv H. simpl in H2. inv H2.
-  assert (i = Int.zero). inv H0; auto. 
-  subst i. simpl. congruence.
+  intros. unfold is_constant_bool. destruct a; auto. destruct c; auto. 
+  left. decEq. inv H. simpl in H2. inv H2. functional inversion H0; auto.
 Qed.
 
 Lemma exit_if_false_true:
   forall a ts e le m v te f tk,
   exit_if_false a = OK ts ->
   Clight.eval_expr ge e le m a v ->
-  is_true v (typeof a) ->
+  bool_val v (typeof a) = Some true ->
   match_env e te ->
   star step tge (State f ts tk te le m) E0 (State f Sskip tk te le m).
 Proof.
   intros. monadInv H.
   exploit transl_expr_correct; eauto. intros EV.
-  generalize (is_constant_bool_true _ _ _ _ _ _ EV H1); intros ICB.
-  destruct (is_constant_bool x). destruct b.
-  inv EQ0. apply star_refl.
-  congruence.
-  inv EQ0. 
-  exploit make_boolean_correct_true; eauto. intros [vb [EVAL ISTRUE]].
-  apply star_one.
-  change Sskip with (if true then Sskip else Sexit 0).
-  eapply step_ifthenelse; eauto. 
-  apply Val.bool_of_true_val; eauto.  
+  exploit is_constant_bool_sound; eauto. intros [P | P]; rewrite P in EQ0; inv EQ0.
+  constructor.
+  exploit make_boolean_correct; eauto. intros [vb [EV' VB]].
+  apply star_one. apply step_ifthenelse with (v := vb) (b := true); auto. 
 Qed.
  
 Lemma exit_if_false_false:
   forall a ts e le m v te f tk,
   exit_if_false a = OK ts ->
   Clight.eval_expr ge e le m a v ->
-  is_false v (typeof a) ->
+  bool_val v (typeof a) = Some false ->
   match_env e te ->
   star step tge (State f ts tk te le m) E0 (State f (Sexit 0) tk te le m).
 Proof.
   intros. monadInv H.
   exploit transl_expr_correct; eauto. intros EV.
-  generalize (is_constant_bool_false _ _ _ _ _ _ EV H1); intros ICB.
-  destruct (is_constant_bool x). destruct b.
-  congruence.
-  inv EQ0. apply star_refl.
-  inv EQ0.
-  exploit make_boolean_correct_false; eauto. intros [vb [EVAL ISFALSE]].
-  apply star_one.
-  change (Sexit 0) with (if false then Sskip else Sexit 0).
-  eapply step_ifthenelse; eauto. 
-  apply Val.bool_of_false_val; eauto. 
+  exploit is_constant_bool_sound; eauto. intros [P | P]; rewrite P in EQ0; inv EQ0.
+  constructor.
+  exploit make_boolean_correct; eauto. intros [vb [EV' VB]].
+  apply star_one. apply step_ifthenelse with (v := vb) (b := false); auto. 
 Qed.
 
 (** ** Semantic preservation for statements *)
@@ -1556,25 +1530,14 @@ Proof.
   apply plus_one. constructor. 
   econstructor; eauto. simpl. reflexivity. constructor.
 
-(* ifthenelse true *)
+(* ifthenelse *)
   monadInv TR. inv MTR.
-  exploit make_boolean_correct_true; eauto. 
+  exploit make_boolean_correct; eauto. 
   exploit transl_expr_correct; eauto.
   intros [v [A B]].
   econstructor; split.
-  apply plus_one. apply step_ifthenelse with (v := v) (b := true). 
-  auto. apply Val.bool_of_true_val. auto.
-  econstructor; eauto. constructor.
-
-(* ifthenelse false *)
-  monadInv TR. inv MTR.
-  exploit make_boolean_correct_false; eauto. 
-  exploit transl_expr_correct; eauto.
-  intros [v [A B]].
-  econstructor; split.
-  apply plus_one. apply step_ifthenelse with (v := v) (b := false). 
-  auto. apply Val.bool_of_false_val. auto.
-  econstructor; eauto. constructor.
+  apply plus_one. apply step_ifthenelse with (v := v) (b := b); auto.
+  destruct b; econstructor; eauto; constructor.
 
 (* while false *)
   monadInv TR.

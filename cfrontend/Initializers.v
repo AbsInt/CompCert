@@ -26,50 +26,6 @@ Open Scope error_monad_scope.
 
 (** * Evaluation of compile-time constant expressions *)
 
-(** Computing the predicates [cast], [is_true], and [is_false]. *)
-
-Definition bool_val (v: val) (t: type) : res bool :=
-  match v, t with
-  | Vint n, Tint sz sg => OK (negb (Int.eq n Int.zero))
-  | Vint n, Tpointer t' => OK (negb (Int.eq n Int.zero))
-  | Vptr b ofs, Tint sz sg => OK true
-  | Vptr b ofs, Tpointer t' => OK true
-  | Vfloat f, Tfloat sz => OK (negb(Float.cmp Ceq f Float.zero))
-  | _, _ => Error(msg "undefined conditional")
-  end.
-
-Definition is_neutral_for_cast (t: type) : bool :=
-  match t with
-  | Tint I32 sg => true
-  | Tpointer ty => true
-  | Tarray ty sz => true
-  | Tfunction targs tres => true
-  | _ => false
-  end.
-
-Definition do_cast (v: val) (t1 t2: type) : res val :=
-  match v, t1, t2 with
-  | Vint i, Tint sz1 si1, Tint sz2 si2 =>
-      OK (Vint (cast_int_int sz2 si2 i))
-  | Vfloat f, Tfloat sz1, Tint sz2 si2 =>
-      match cast_float_int si2 f with
-      | Some i => OK (Vint (cast_int_int sz2 si2 i))
-      | None => Error(msg "overflow in float-to-int cast")
-      end
-  | Vint i, Tint sz1 si1, Tfloat sz2 =>
-      OK (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
-  | Vfloat f, Tfloat sz1, Tfloat sz2 =>
-      OK (Vfloat (cast_float_float sz2 f))
-  | Vptr b ofs, _, _ =>
-      if is_neutral_for_cast t1 && is_neutral_for_cast t2
-      then OK(Vptr b ofs) else Error(msg "undefined cast")
-  | Vint n, _, _ =>
-      if is_neutral_for_cast t1 && is_neutral_for_cast t2
-      then OK(Vint n) else Error(msg "undefined cast")
-  | _, _, _ =>
-      Error(msg "undefined cast")
-  end.
-
 (** To evaluate constant expressions at compile-time, we use the same [value]
   type and the same [sem_*] functions that are used in CompCert C's semantics
   (module [Csem]).  However, we interpret pointer values symbolically:
@@ -86,6 +42,12 @@ If [a] is a r-value, the returned value denotes:
 If [a] is a l-value, the returned value denotes:
 - [Vptr id ofs]: global variable [id] plus byte offset [ofs]
 *)
+
+Definition do_cast (v: val) (t1 t2: type) : res val :=
+  match sem_cast v t1 t2 with
+  | Some v' => OK v'
+  | None => Error(msg "undefined cast")
+  end.
 
 Fixpoint constval (a: expr) : res val :=
   match a with
@@ -115,15 +77,18 @@ Fixpoint constval (a: expr) : res val :=
       | None => Error(msg "undefined binary operation")
       end
   | Ecast r ty =>
-      do v <- constval r; do_cast v (typeof r) ty
+      do v1 <- constval r; do_cast v1 (typeof r) ty
   | Esizeof ty1 ty =>
       OK (Vint (Int.repr (sizeof ty1)))
   | Econdition r1 r2 r3 ty =>
       do v1 <- constval r1;
-      do b1 <- bool_val v1 (typeof r1);
       do v2 <- constval r2;
       do v3 <- constval r3;
-      OK (if b1 then v2 else v3)
+      match bool_val v1 (typeof r1) with
+      | Some true => do_cast v2 (typeof r2) ty
+      | Some false => do_cast v3 (typeof r3) ty
+      | None => Error(msg "condition is undefined")
+      end
   | Ecomma r1 r2 ty =>
       do v1 <- constval r1; constval r2
   | Evar x ty =>
@@ -142,7 +107,7 @@ Fixpoint constval (a: expr) : res val :=
           Error(msg "ill-typed field access")
       end
   | Eparen r ty =>
-      constval r
+      do v <- constval r; do_cast v (typeof r) ty
   | _ =>
     Error(msg "not a compile-time constant")
   end.

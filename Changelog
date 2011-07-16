@@ -1,3 +1,8 @@
+- Fixed two omissions in the semantics of CompCert C (reported by Brian Campbell):
+  . Functions calls through a function pointer had undefined semantics.
+  . Conditional expressions "e1 ? e2 : e3" where e2 and e3 have different
+    types were missing a cast to their common type.
+
 - Revised and strengthened the top-level statements of semantic preservation.
   In particular, we now show:
   . backward simulation for the whole compiler without assuming

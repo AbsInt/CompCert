@@ -253,7 +253,9 @@ let rec expr env e =
   | EBinop(op, e1, e2, ty) ->
       binop env op ty e.etyp e1.etyp (expr env e1) e2.etyp (expr env e2)
   | EConditional(e1, e2, e3) ->
-      if boolean_value (expr env e1) then expr env e2 else expr env e3
+      if boolean_value (expr env e1)
+      then cast env e.etyp e2.etyp (expr env e2)
+      else cast env e.etyp e3.etyp (expr env e3)
   | ECast(ty, e1) ->
       cast env ty e1.etyp (expr env e1)
   | ECall _ ->

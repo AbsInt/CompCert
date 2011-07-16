@@ -249,19 +249,15 @@ Inductive eval_expr: expr -> val -> Prop :=
       eval_expr a2 v2 ->
       sem_binary_operation op v1 (typeof a1) v2 (typeof a2) m = Some v ->
       eval_expr (Ebinop op a1 a2 ty) v
-  | eval_Econdition_true: forall a1 a2 a3 ty v1 v2,
+  | eval_Econdition: forall a1 a2 a3 ty v1 b v' v,
       eval_expr a1 v1 ->
-      is_true v1 (typeof a1) ->
-      eval_expr a2 v2 ->
-      eval_expr (Econdition a1 a2 a3 ty) v2
-  | eval_Econdition_false: forall a1 a2 a3 ty v1 v3,
-      eval_expr a1 v1 ->
-      is_false v1 (typeof a1) ->
-      eval_expr a3 v3 ->
-      eval_expr (Econdition a1 a2 a3 ty) v3
+      bool_val v1 (typeof a1) = Some b ->
+      eval_expr (if b then a2 else a3) v' ->
+      sem_cast v' (typeof (if b then a2 else a3)) ty = Some v ->
+      eval_expr (Econdition a1 a2 a3 ty) v
   | eval_Ecast:   forall a ty v1 v,
       eval_expr a v1 ->
-      cast v1 (typeof a) ty v ->
+      sem_cast v1 (typeof a) ty = Some v ->
       eval_expr (Ecast a ty) v
   | eval_Elvalue: forall a loc ofs v,
       eval_lvalue a loc ofs ->
@@ -308,7 +304,7 @@ Inductive eval_exprlist: list expr -> typelist -> list val -> Prop :=
       eval_exprlist nil Tnil nil
   | eval_Econs:   forall a bl ty tyl v1 v2 vl,
       eval_expr a v1 ->
-      cast v1 (typeof a) ty v2 ->
+      sem_cast v1 (typeof a) ty = Some v2 ->
       eval_exprlist bl tyl vl ->
       eval_exprlist (a :: bl) (Tcons ty tyl) (v2 :: vl).
 
@@ -422,7 +418,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_assign:   forall f a1 a2 k e le m loc ofs v2 v m',
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
-      cast v2 (typeof a2) (typeof a1) v ->
+      sem_cast v2 (typeof a2) (typeof a1) = Some v ->
       store_value_of_type (typeof a1) m loc ofs v = Some m' ->
       step (State f (Sassign a1 a2) k e le m)
         E0 (State f Sskip k e le m')
@@ -454,25 +450,20 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f Sbreak (Kseq s k) e le m)
         E0 (State f Sbreak k e le m)
 
-  | step_ifthenelse_true:  forall f a s1 s2 k e le m v1,
+  | step_ifthenelse:  forall f a s1 s2 k e le m v1 b,
       eval_expr e le m a v1 ->
-      is_true v1 (typeof a) ->
+      bool_val v1 (typeof a) = Some b ->
       step (State f (Sifthenelse a s1 s2) k e le m)
-        E0 (State f s1 k e le m)
-  | step_ifthenelse_false: forall f a s1 s2 k e le m v1,
-      eval_expr e le m a v1 ->
-      is_false v1 (typeof a) ->
-      step (State f (Sifthenelse a s1 s2) k e le m)
-        E0 (State f s2 k e le m)
+        E0 (State f (if b then s1 else s2) k e le m)
 
   | step_while_false: forall f a s k e le m v,
       eval_expr e le m a v ->
-      is_false v (typeof a) ->
+      bool_val v (typeof a) = Some false ->
       step (State f (Swhile a s) k e le m)
         E0 (State f Sskip k e le m)
   | step_while_true: forall f a s k e le m v,
       eval_expr e le m a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       step (State f (Swhile a s) k e le m)
         E0 (State f s (Kwhile a s k) e le m)
   | step_skip_or_continue_while: forall f x a s k e le m,
@@ -489,13 +480,13 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_skip_or_continue_dowhile_false: forall f x a s k e le m v,
       x = Sskip \/ x = Scontinue ->
       eval_expr e le m a v ->
-      is_false v (typeof a) ->
+      bool_val v (typeof a) = Some false ->
       step (State f x (Kdowhile a s k) e le m)
         E0 (State f Sskip k e le m)
   | step_skip_or_continue_dowhile_true: forall f x a s k e le m v,
       x = Sskip \/ x = Scontinue ->
       eval_expr e le m a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       step (State f x (Kdowhile a s k) e le m)
         E0 (State f (Sdowhile a s) k e le m)
   | step_break_dowhile: forall f a s k e le m,
@@ -504,12 +495,12 @@ Inductive step: state -> trace -> state -> Prop :=
 
   | step_for_false: forall f a2 a3 s k e le m v,
       eval_expr e le m a2 v ->
-      is_false v (typeof a2) ->
+      bool_val v (typeof a2) = Some false ->
       step (State f (Sfor' a2 a3 s) k e le m)
         E0 (State f Sskip k e le m)
   | step_for_true: forall f a2 a3 s k e le m v,
       eval_expr e le m a2 v ->
-      is_true v (typeof a2) ->
+      bool_val v (typeof a2) = Some true ->
       step (State f (Sfor' a2 a3 s) k e le m)
         E0 (State f s (Kfor2 a2 a3 s k) e le m)
   | step_skip_or_continue_for2: forall f x a2 a3 s k e le m,
@@ -532,7 +523,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f a k e le m v v' m',
       eval_expr e le m a v -> 
-      cast v (typeof a) f.(fn_return) v' ->
+      sem_cast v (typeof a) f.(fn_return) = Some v' ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f (Sreturn (Some a)) k e le m)
         E0 (Returnstate v' (call_cont k) m')
@@ -617,7 +608,7 @@ Definition outcome_result_value (out: outcome) (t: type) (v: val) : Prop :=
   match out, t with
   | Out_normal, Tvoid => v = Vundef
   | Out_return None, Tvoid => v = Vundef
-  | Out_return (Some (v',t')), ty => ty <> Tvoid /\ cast v' t' t v
+  | Out_return (Some (v',t')), ty => ty <> Tvoid /\ sem_cast v' t' t = Some v
   | _, _ => False
   end. 
 
@@ -634,7 +625,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   | exec_Sassign:   forall e le m a1 a2 loc ofs v2 v m',
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
-      cast v2 (typeof a2) (typeof a1) v ->
+      sem_cast v2 (typeof a2) (typeof a1) = Some v ->
       store_value_of_type (typeof a1) m loc ofs v = Some m' ->
       exec_stmt e le m (Sassign a1 a2)
                E0 le m' Out_normal
@@ -670,16 +661,10 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       out <> Out_normal ->
       exec_stmt e le m (Ssequence s1 s2)
                 t1 le1 m1 out
-  | exec_Sifthenelse_true: forall e le m a s1 s2 v1 t le' m' out,
+  | exec_Sifthenelse: forall e le m a s1 s2 v1 b t le' m' out,
       eval_expr e le m a v1 ->
-      is_true v1 (typeof a) ->
-      exec_stmt e le m s1 t le' m' out ->
-      exec_stmt e le m (Sifthenelse a s1 s2)
-                t le' m' out
-  | exec_Sifthenelse_false: forall e le m a s1 s2 v1 t le' m' out,
-      eval_expr e le m a v1 ->
-      is_false v1 (typeof a) ->
-      exec_stmt e le m s2 t le' m' out ->
+      bool_val v1 (typeof a) = Some b ->
+      exec_stmt e le m (if b then s1 else s2) t le' m' out ->
       exec_stmt e le m (Sifthenelse a s1 s2)
                 t le' m' out
   | exec_Sreturn_none:   forall e le m,
@@ -697,19 +682,19 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
                E0 le m Out_continue
   | exec_Swhile_false: forall e le m a s v,
       eval_expr e le m a v ->
-      is_false v (typeof a) ->
+      bool_val v (typeof a) = Some false ->
       exec_stmt e le m (Swhile a s)
                E0 le m Out_normal
   | exec_Swhile_stop: forall e le m a v s t le' m' out' out,
       eval_expr e le m a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       exec_stmt e le m s t le' m' out' ->
       out_break_or_return out' out ->
       exec_stmt e le m (Swhile a s)
                 t le' m' out
   | exec_Swhile_loop: forall e le m a s v t1 le1 m1 out1 t2 le2 m2 out,
       eval_expr e le m a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       exec_stmt e le1 m1 (Swhile a s) t2 le2 m2 out ->
@@ -719,7 +704,7 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       exec_stmt e le m s t le1 m1 out1 ->
       out_normal_or_continue out1 ->
       eval_expr e le1 m1 a v ->
-      is_false v (typeof a) ->
+      bool_val v (typeof a) = Some false ->
       exec_stmt e le m (Sdowhile a s)
                 t le1 m1 Out_normal
   | exec_Sdowhile_stop: forall e le m s a t le1 m1 out1 out,
@@ -731,26 +716,26 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       eval_expr e le1 m1 a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       exec_stmt e le1 m1 (Sdowhile a s) t2 le2 m2 out ->
       exec_stmt e le m (Sdowhile a s) 
                 (t1 ** t2) le2 m2 out
 
   | exec_Sfor_false: forall e le m s a2 a3 v,
       eval_expr e le m a2 v ->
-      is_false v (typeof a2) ->
+      bool_val v (typeof a2) = Some false ->
       exec_stmt e le m (Sfor' a2 a3 s)
                E0 le m Out_normal
   | exec_Sfor_stop: forall e le m s a2 a3 v le1 m1 t out1 out,
       eval_expr e le m a2 v ->
-      is_true v (typeof a2) ->
+      bool_val v (typeof a2) = Some true ->
       exec_stmt e le m s t le1 m1 out1 ->
       out_break_or_return out1 out ->
       exec_stmt e le m (Sfor' a2 a3 s)
                 t le1 m1 out
   | exec_Sfor_loop: forall e le m s a2 a3 v le1 m1 le2 m2 le3 m3 t1 t2 t3 out1 out,
       eval_expr e le m a2 v ->
-      is_true v (typeof a2) ->
+      bool_val v (typeof a2) = Some true ->
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       exec_stmt e le1 m1 a3 t2 le2 m2 Out_normal ->
@@ -814,24 +799,19 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
       exec_stmt e le m s1 t1 le1 m1 Out_normal ->
       execinf_stmt e le1 m1 s2 t2 ->
       execinf_stmt e le m (Ssequence s1 s2) (t1 *** t2)
-  | execinf_Sifthenelse_true: forall e le m a s1 s2 v1 t,
+  | execinf_Sifthenelse: forall e le m a s1 s2 v1 b t,
       eval_expr e le m a v1 ->
-      is_true v1 (typeof a) ->
-      execinf_stmt e le m s1 t ->
-      execinf_stmt e le m (Sifthenelse a s1 s2) t
-  | execinf_Sifthenelse_false: forall e le m a s1 s2 v1 t,
-      eval_expr e le m a v1 ->
-      is_false v1 (typeof a) ->
-      execinf_stmt e le m s2 t ->
+      bool_val v1 (typeof a) = Some b ->
+      execinf_stmt e le m (if b then s1 else s2) t ->
       execinf_stmt e le m (Sifthenelse a s1 s2) t
   | execinf_Swhile_body: forall e le m a v s t,
       eval_expr e le m a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       execinf_stmt e le m s t ->
       execinf_stmt e le m (Swhile a s) t
   | execinf_Swhile_loop: forall e le m a s v t1 le1 m1 out1 t2,
       eval_expr e le m a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       execinf_stmt e le1 m1 (Swhile a s) t2 ->
@@ -843,24 +823,24 @@ CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Pro
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       eval_expr e le1 m1 a v ->
-      is_true v (typeof a) ->
+      bool_val v (typeof a) = Some true ->
       execinf_stmt e le1 m1 (Sdowhile a s) t2 ->
       execinf_stmt e le m (Sdowhile a s) (t1 *** t2)
   | execinf_Sfor_body: forall e le m s a2 a3 v t,
       eval_expr e le m a2 v ->
-      is_true v (typeof a2) ->
+      bool_val v (typeof a2) = Some true ->
       execinf_stmt e le m s t ->
       execinf_stmt e le m (Sfor' a2 a3 s) t
   | execinf_Sfor_next: forall e le m s a2 a3 v le1 m1 t1 t2 out1,
       eval_expr e le m a2 v ->
-      is_true v (typeof a2) ->
+      bool_val v (typeof a2) = Some true ->
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       execinf_stmt e le1 m1 a3 t2 ->
       execinf_stmt e le m (Sfor' a2 a3 s) (t1 *** t2)
   | execinf_Sfor_loop: forall e le m s a2 a3 v le1 m1 le2 m2 t1 t2 t3 out1,
       eval_expr e le m a2 v ->
-      is_true v (typeof a2) ->
+      bool_val v (typeof a2) = Some true ->
       exec_stmt e le m s t1 le1 m1 out1 ->
       out_normal_or_continue out1 ->
       exec_stmt e le1 m1 a3 t2 le2 m2 Out_normal ->
@@ -962,9 +942,9 @@ Let ge : genv := Genv.globalenv prog.
 Definition exec_stmt_eval_funcall_ind
   (PS: env -> temp_env -> mem -> statement -> trace -> temp_env -> mem -> outcome -> Prop)
   (PF: mem -> fundef -> list val -> trace -> mem -> val -> Prop) :=
-  fun a b c d e f g h i j k l m n o p q r s t u v w x y =>
-  conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y)
-       (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y).
+  fun a b c d e f g h i j k l m n o p q r s t u v w x =>
+  conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x)
+       (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x).
 
 Inductive outcome_state_match
        (e: env) (le: temp_env) (m: mem) (f: function) (k: cont): outcome -> state -> Prop :=
@@ -1056,16 +1036,10 @@ Proof.
   reflexivity. traceEq.
   unfold S2; inv B1; congruence || econstructor; eauto.
 
-(* ifthenelse true *)
+(* ifthenelse *)
   destruct (H2 f k) as [S1 [A1 B1]].
   exists S1; split.
-  eapply star_left. eapply step_ifthenelse_true; eauto. eexact A1. traceEq.
-  auto.
-
-(* ifthenelse false *)
-  destruct (H2 f k) as [S1 [A1 B1]].
-  exists S1; split.
-  eapply star_left. eapply step_ifthenelse_false; eauto. eexact A1. traceEq.
+  eapply star_left. 2: eexact A1. eapply step_ifthenelse; eauto. traceEq.
   auto.
 
 (* return none *)
@@ -1285,13 +1259,9 @@ Proof.
   apply star_one. constructor. reflexivity. reflexivity.
   apply CIH_STMT; eauto. traceEq.
 
-(* ifthenelse true *)
+(* ifthenelse *)
   eapply forever_N_plus.
-  apply plus_one. eapply step_ifthenelse_true; eauto. 
-  apply CIH_STMT; eauto. traceEq.
-(* ifthenelse false *)
-  eapply forever_N_plus.
-  apply plus_one. eapply step_ifthenelse_false; eauto. 
+  apply plus_one. eapply step_ifthenelse with (b := b); eauto. 
   apply CIH_STMT; eauto. traceEq.
 
 (* while body *)

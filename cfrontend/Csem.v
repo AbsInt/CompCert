@@ -30,7 +30,7 @@ Require Import Smallstep.
 
 (** * Semantics of type-dependent operations *)
 
-(** Semantics of casts.  [cast v1 t1 t2 v2] holds if value [v1],
+(** Semantics of casts.  [sem_cast v1 t1 t2 = Some v2] if value [v1],
   viewed with static type [t1], can be cast to type [t2],
   resulting in value [v2].  *)
 
@@ -61,75 +61,52 @@ Definition cast_float_float (sz: floatsize) (f: float) : float :=
   | F64 => f
   end.
 
-Inductive neutral_for_cast: type -> Prop :=
-  | nfc_int: forall sg,
-      neutral_for_cast (Tint I32 sg)
-  | nfc_ptr: forall ty,
-      neutral_for_cast (Tpointer ty)
-  | nfc_array: forall ty sz,
-      neutral_for_cast (Tarray ty sz)
-  | nfc_fun: forall targs tres,
-      neutral_for_cast (Tfunction targs tres).
+Definition neutral_for_cast (t: type) : bool :=
+  match t with
+  | Tint I32 sg => true
+  | Tpointer ty => true
+  | Tarray ty sz => true
+  | Tfunction targs tres => true
+  | _ => false
+  end.
 
-Inductive cast : val -> type -> type -> val -> Prop :=
-  | cast_ii:   forall i sz2 sz1 si1 si2,            (**r int to int  *)
-      cast (Vint i) (Tint sz1 si1) (Tint sz2 si2)
-           (Vint (cast_int_int sz2 si2 i))
-  | cast_fi:   forall f sz1 sz2 si2 i,              (**r float to int *)
-      cast_float_int si2 f = Some i ->
-      cast (Vfloat f) (Tfloat sz1) (Tint sz2 si2)
-           (Vint (cast_int_int sz2 si2 i))
-  | cast_if:   forall i sz1 sz2 si1,                (**r int to float  *)
-      cast (Vint i) (Tint sz1 si1) (Tfloat sz2)
-          (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
-  | cast_ff:   forall f sz1 sz2,                    (**r float to float *)
-      cast (Vfloat f) (Tfloat sz1) (Tfloat sz2)
-           (Vfloat (cast_float_float sz2 f))
-  | cast_nn_p: forall b ofs t1 t2, (**r no change in data representation *)
-      neutral_for_cast t1 -> neutral_for_cast t2 ->
-      cast (Vptr b ofs) t1 t2 (Vptr b ofs)
-  | cast_nn_i: forall n t1 t2,     (**r no change in data representation *)
-      neutral_for_cast t1 -> neutral_for_cast t2 ->
-      cast (Vint n) t1 t2 (Vint n).
+Function sem_cast (v: val) (t1 t2: type) : option val :=
+  match v, t1, t2 with
+  | Vint i, Tint sz1 si1, Tint sz2 si2 =>            (**r int to int *)
+      Some (Vint (cast_int_int sz2 si2 i))
+  | Vfloat f, Tfloat sz1, Tint sz2 si2 =>            (**r float to int *)
+      match cast_float_int si2 f with
+      | Some i => Some (Vint (cast_int_int sz2 si2 i))
+      | None => None
+      end
+  | Vint i, Tint sz1 si1, Tfloat sz2 =>              (**r int to float *)
+      Some (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
+  | Vfloat f, Tfloat sz1, Tfloat sz2 =>              (**r float to float *)
+      Some (Vfloat (cast_float_float sz2 f))
+  | Vptr b ofs, _, _ =>                              (**r int32|pointer to int32|pointer *)
+      if neutral_for_cast t1 && neutral_for_cast t2
+      then Some(Vptr b ofs) else None
+  | Vint n, _, _ =>                                  (**r int32|pointer to int32|pointer *)
+      if neutral_for_cast t1 && neutral_for_cast t2
+      then Some(Vint n) else None
+  | _, _, _ =>
+      None
+  end.
 
 (** Interpretation of values as truth values.
   Non-zero integers, non-zero floats and non-null pointers are
   considered as true.  The integer zero (which also represents
   the null pointer) and the float 0.0 are false. *)
 
-Inductive is_false: val -> type -> Prop :=
-  | is_false_int: forall sz sg,
-      is_false (Vint Int.zero) (Tint sz sg)
-  | is_false_pointer: forall t,
-      is_false (Vint Int.zero) (Tpointer t)
- | is_false_float: forall sz f,
-      Float.cmp Ceq f Float.zero = true ->
-      is_false (Vfloat f) (Tfloat sz).
-
-Inductive is_true: val -> type -> Prop :=
-  | is_true_int_int: forall n sz sg,
-      n <> Int.zero ->
-      is_true (Vint n) (Tint sz sg)
-  | is_true_pointer_int: forall b ofs sz sg,
-      is_true (Vptr b ofs) (Tint sz sg)
-  | is_true_int_pointer: forall n t,
-      n <> Int.zero ->
-      is_true (Vint n) (Tpointer t)
-  | is_true_pointer_pointer: forall b ofs t,
-      is_true (Vptr b ofs) (Tpointer t)
- | is_true_float: forall f sz,
-      Float.cmp Ceq f Float.zero = false ->
-      is_true (Vfloat f) (Tfloat sz).
-
-(*
-Inductive bool_of_val : val -> type -> val -> Prop :=
-  | bool_of_val_true:   forall v ty, 
-         is_true v ty -> 
-         bool_of_val v ty Vtrue
-  | bool_of_val_false:   forall v ty,
-        is_false v ty ->
-        bool_of_val v ty Vfalse.
-*)
+Function bool_val (v: val) (t: type) : option bool :=
+  match v, t with
+  | Vint n, Tint sz sg => Some (negb (Int.eq n Int.zero))
+  | Vint n, Tpointer t' => Some (negb (Int.eq n Int.zero))
+  | Vptr b ofs, Tint sz sg => Some true
+  | Vptr b ofs, Tpointer t' => Some true
+  | Vfloat f, Tfloat sz => Some (negb(Float.cmp Ceq f Float.zero))
+  | _, _ => None
+  end.
 
 (** The following [sem_] functions compute the result of an operator
   application.  Since operators are overloaded, the result depends
@@ -139,7 +116,7 @@ Inductive bool_of_val : val -> type -> val -> Prop :=
 - If both arguments are of integer type, an integer operation is performed.
   For operations that behave differently at unsigned and signed types
   (e.g. division, modulus, comparisons), the unsigned operation is selected
-  if at least one of the arguments is of type "unsigned int 32", otherwise
+  if at least one of the arguments is of type "unsigned int32", otherwise
   the signed operation is performed.
 - If both arguments are of float type, a float operation is performed.
   We choose to perform all float arithmetic in double precision,
@@ -669,36 +646,32 @@ Inductive rred: expr -> mem -> expr -> mem -> Prop :=
       rred (Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty) m
            (Eval v ty) m
   | red_cast: forall ty v1 ty1 m v,
-      cast v1 ty1 ty v ->
+      sem_cast v1 ty1 ty = Some v ->
       rred (Ecast (Eval v1 ty1) ty) m
            (Eval v ty) m
-  | red_condition_true: forall v1 ty1 r1 r2 ty m,
-      is_true v1 ty1 -> typeof r1 = ty ->
+  | red_condition: forall v1 ty1 r1 r2 ty b m,
+      bool_val v1 ty1 = Some b ->
       rred (Econdition (Eval v1 ty1) r1 r2 ty) m
-           (Eparen r1 ty) m
-  | red_condition_false: forall v1 ty1 r1 r2 ty m,
-      is_false v1 ty1 -> typeof r2 = ty ->
-      rred (Econdition (Eval v1 ty1) r1 r2 ty) m
-           (Eparen r2 ty) m
+           (Eparen (if b then r1 else r2) ty) m
   | red_sizeof: forall ty1 ty m,
       rred (Esizeof ty1 ty) m
            (Eval (Vint (Int.repr (sizeof ty1))) ty) m
   | red_assign: forall b ofs ty1 v2 ty2 m v m',
-      cast v2 ty2 ty1 v ->
+      sem_cast v2 ty2 ty1 = Some v ->
       store_value_of_type ty1 m b ofs v = Some m' ->
       rred (Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty1) m
            (Eval v ty1) m'
   | red_assignop: forall op b ofs ty1 v2 ty2 tyres m v1 v v' m',
       load_value_of_type ty1 m b ofs = Some v1 ->
       sem_binary_operation op v1 ty1 v2 ty2 m = Some v ->
-      cast v tyres ty1 v' ->
+      sem_cast v tyres ty1 = Some v' ->
       store_value_of_type ty1 m b ofs v' = Some m' ->
       rred (Eassignop op (Eloc b ofs ty1) (Eval v2 ty2) tyres ty1) m
            (Eval v' ty1) m'
   | red_postincr: forall id b ofs ty m v1 v2 v3 m',
       load_value_of_type ty m b ofs = Some v1 ->
       sem_incrdecr id v1 ty = Some v2 ->
-      cast v2 (typeconv ty) ty v3 ->
+      sem_cast v2 (typeconv ty) ty = Some v3 ->
       store_value_of_type ty m b ofs v3 = Some m' ->
       rred (Epostincr id (Eloc b ofs ty) ty) m
            (Eval v1 ty) m'
@@ -706,10 +679,10 @@ Inductive rred: expr -> mem -> expr -> mem -> Prop :=
       typeof r2 = ty ->
       rred (Ecomma (Eval v ty1) r2 ty) m
            r2 m
-  | red_paren: forall r ty m,
-      typeof r = ty ->
-      rred (Eparen r ty) m
-           r m.
+  | red_paren: forall v1 ty1 ty m v,
+      sem_cast v1 ty1 ty = Some v ->
+      rred (Eparen (Eval v1 ty1) ty) m
+           (Eval v ty) m.
 
 (** Head reduction for function calls.
     (More exactly, identification of function calls that can reduce.) *)
@@ -718,7 +691,7 @@ Inductive cast_arguments: exprlist -> typelist -> list val -> Prop :=
   | cast_args_nil:
       cast_arguments Enil Tnil nil
   | cast_args_cons: forall v ty el targ1 targs v1 vl,
-      cast v ty targ1 v1 -> cast_arguments el targs vl ->
+      sem_cast v ty targ1 = Some v1 -> cast_arguments el targs vl ->
       cast_arguments (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
 
 Inductive callred: expr -> fundef -> list val -> type -> Prop :=
@@ -1004,45 +977,41 @@ Inductive sstep: state -> trace -> state -> Prop :=
 
   | step_do_1: forall f x k e m,
       sstep (State f (Sdo x) k e m)
-        E0 (ExprState f x (Kdo k) e m)
+         E0 (ExprState f x (Kdo k) e m)
   | step_do_2: forall f v ty k e m,
       sstep (ExprState f (Eval v ty) (Kdo k) e m)
-        E0 (State f Sskip k e m)
+         E0 (State f Sskip k e m)
 
   | step_seq:  forall f s1 s2 k e m,
       sstep (State f (Ssequence s1 s2) k e m)
-        E0 (State f s1 (Kseq s2 k) e m)
+         E0 (State f s1 (Kseq s2 k) e m)
   | step_skip_seq: forall f s k e m,
       sstep (State f Sskip (Kseq s k) e m)
-        E0 (State f s k e m)
+         E0 (State f s k e m)
   | step_continue_seq: forall f s k e m,
       sstep (State f Scontinue (Kseq s k) e m)
-        E0 (State f Scontinue k e m)
+         E0 (State f Scontinue k e m)
   | step_break_seq: forall f s k e m,
       sstep (State f Sbreak (Kseq s k) e m)
-        E0 (State f Sbreak k e m)
+         E0 (State f Sbreak k e m)
 
-  | step_ifthenelse: forall f a s1 s2 k e m,
+  | step_ifthenelse_1: forall f a s1 s2 k e m,
       sstep (State f (Sifthenelse a s1 s2) k e m)
-        E0 (ExprState f a (Kifthenelse s1 s2 k) e m)
-  | step_ifthenelse_true:  forall f v ty s1 s2 k e m,
-      is_true v ty ->
+         E0 (ExprState f a (Kifthenelse s1 s2 k) e m)
+  | step_ifthenelse_2:  forall f v ty s1 s2 k e m b,
+      bool_val v ty = Some b ->
       sstep (ExprState f (Eval v ty) (Kifthenelse s1 s2 k) e m)
-        E0 (State f s1 k e m)
-  | step_ifthenelse_false: forall f v ty s1 s2 k e m,
-      is_false v ty ->
-      sstep (ExprState f (Eval v ty) (Kifthenelse s1 s2 k) e m)
-        E0 (State f s2 k e m)
+         E0 (State f (if b then s1 else s2) k e m)
 
   | step_while: forall f x s k e m,
       sstep (State f (Swhile x s) k e m)
         E0 (ExprState f x (Kwhile1 x s k) e m)
   | step_while_false: forall f v ty x s k e m,
-      is_false v ty ->
+      bool_val v ty = Some false ->
       sstep (ExprState f (Eval v ty) (Kwhile1 x s k) e m)
         E0 (State f Sskip k e m)
   | step_while_true: forall f v ty x s k e m ,
-      is_true v ty ->
+      bool_val v ty = Some true ->
       sstep (ExprState f (Eval v ty) (Kwhile1 x s k) e m)
         E0 (State f s (Kwhile2 x s k) e m)
   | step_skip_or_continue_while: forall f s0 x s k e m,
@@ -1059,102 +1028,102 @@ Inductive sstep: state -> trace -> state -> Prop :=
   | step_skip_or_continue_dowhile: forall f s0 x s k e m,
       s0 = Sskip \/ s0 = Scontinue ->
       sstep (State f s0 (Kdowhile1 x s k) e m)
-        E0 (ExprState f x (Kdowhile2 x s k) e m)
+         E0 (ExprState f x (Kdowhile2 x s k) e m)
   | step_dowhile_false: forall f v ty x s k e m,
-      is_false v ty ->
+      bool_val v ty = Some false ->
       sstep (ExprState f (Eval v ty) (Kdowhile2 x s k) e m)
-        E0 (State f Sskip k e m)
+         E0 (State f Sskip k e m)
   | step_dowhile_true: forall f v ty x s k e m,
-      is_true v ty ->
+      bool_val v ty = Some true ->
       sstep (ExprState f (Eval v ty) (Kdowhile2 x s k) e m)
-        E0 (State f (Sdowhile x s) k e m)
+         E0 (State f (Sdowhile x s) k e m)
   | step_break_dowhile: forall f a s k e m,
       sstep (State f Sbreak (Kdowhile1 a s k) e m)
-        E0 (State f Sskip k e m)
+         E0 (State f Sskip k e m)
 
   | step_for_start: forall f a1 a2 a3 s k e m,
       a1 <> Sskip ->
       sstep (State f (Sfor a1 a2 a3 s) k e m)
-        E0 (State f a1 (Kseq (Sfor Sskip a2 a3 s) k) e m)
+         E0 (State f a1 (Kseq (Sfor Sskip a2 a3 s) k) e m)
   | step_for: forall f a2 a3 s k e m,
       sstep (State f (Sfor Sskip a2 a3 s) k e m)
-        E0 (ExprState f a2 (Kfor2 a2 a3 s k) e m)
+         E0 (ExprState f a2 (Kfor2 a2 a3 s k) e m)
   | step_for_false: forall f v ty a2 a3 s k e m,
-      is_false v ty ->
+      bool_val v ty = Some false ->
       sstep (ExprState f (Eval v ty) (Kfor2 a2 a3 s k) e m)
-        E0 (State f Sskip k e m)
+         E0 (State f Sskip k e m)
   | step_for_true: forall f v ty a2 a3 s k e m,
-      is_true v ty ->
+      bool_val v ty = Some true ->
       sstep (ExprState f (Eval v ty) (Kfor2 a2 a3 s k) e m)
-        E0 (State f s (Kfor3 a2 a3 s k) e m)
+         E0 (State f s (Kfor3 a2 a3 s k) e m)
   | step_skip_or_continue_for3: forall f x a2 a3 s k e m,
       x = Sskip \/ x = Scontinue ->
       sstep (State f x (Kfor3 a2 a3 s k) e m)
-        E0 (State f a3 (Kfor4 a2 a3 s k) e m)
+         E0 (State f a3 (Kfor4 a2 a3 s k) e m)
   | step_break_for3: forall f a2 a3 s k e m,
       sstep (State f Sbreak (Kfor3 a2 a3 s k) e m)
-        E0 (State f Sskip k e m)
+         E0 (State f Sskip k e m)
   | step_skip_for4: forall f a2 a3 s k e m,
       sstep (State f Sskip (Kfor4 a2 a3 s k) e m)
-        E0 (State f (Sfor Sskip a2 a3 s) k e m)
+         E0 (State f (Sfor Sskip a2 a3 s) k e m)
 
   | step_return_0: forall f k e m m',
       Mem.free_list m (blocks_of_env e) = Some m' ->
       sstep (State f (Sreturn None) k e m)
-        E0 (Returnstate Vundef (call_cont k) m')
+         E0 (Returnstate Vundef (call_cont k) m')
   | step_return_1: forall f x k e m,
       sstep (State f (Sreturn (Some x)) k e m)
-        E0 (ExprState f x (Kreturn k) e  m)
+         E0 (ExprState f x (Kreturn k) e  m)
   | step_return_2:  forall f v1 ty k e m v2 m',
-      cast v1 ty f.(fn_return) v2 ->
+      sem_cast v1 ty f.(fn_return) = Some v2 ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       sstep (ExprState f (Eval v1 ty) (Kreturn k) e m)
-        E0 (Returnstate v2 (call_cont k) m')
+         E0 (Returnstate v2 (call_cont k) m')
   | step_skip_call: forall f k e m m',
       is_call_cont k ->
       f.(fn_return) = Tvoid ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       sstep (State f Sskip k e m)
-        E0 (Returnstate Vundef k m')
+         E0 (Returnstate Vundef k m')
 
   | step_switch: forall f x sl k e m,
       sstep (State f (Sswitch x sl) k e m)
-        E0 (ExprState f x (Kswitch1 sl k) e m)
+         E0 (ExprState f x (Kswitch1 sl k) e m)
   | step_expr_switch: forall f n ty sl k e m,
       sstep (ExprState f (Eval (Vint n) ty) (Kswitch1 sl k) e m)
-        E0 (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
+         E0 (State f (seq_of_labeled_statement (select_switch n sl)) (Kswitch2 k) e m)
   | step_skip_break_switch: forall f x k e m,
       x = Sskip \/ x = Sbreak ->
       sstep (State f x (Kswitch2 k) e m)
-        E0 (State f Sskip k e m)
+         E0 (State f Sskip k e m)
   | step_continue_switch: forall f k e m,
       sstep (State f Scontinue (Kswitch2 k) e m)
-        E0 (State f Scontinue k e m)
+         E0 (State f Scontinue k e m)
 
   | step_label: forall f lbl s k e m,
       sstep (State f (Slabel lbl s) k e m)
-        E0 (State f s k e m)
+         E0 (State f s k e m)
 
   | step_goto: forall f lbl k e m s' k',
       find_label lbl f.(fn_body) (call_cont k) = Some (s', k') ->
       sstep (State f (Sgoto lbl) k e m)
-        E0 (State f s' k' e m)
+         E0 (State f s' k' e m)
 
   | step_internal_function: forall f vargs k m e m1 m2,
       list_norepet (var_names (fn_params f) ++ var_names (fn_vars f)) ->
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       sstep (Callstate (Internal f) vargs k m)
-        E0 (State f f.(fn_body) k e m2)
+         E0 (State f f.(fn_body) k e m2)
 
   | step_external_function: forall ef targs tres vargs k m vres t m',
       external_call ef  ge vargs m t vres m' ->
       sstep (Callstate (External ef targs tres) vargs k m)
-         t (Returnstate vres k m')
+          t (Returnstate vres k m')
 
   | step_returnstate: forall v f e C ty k m,
       sstep (Returnstate v (Kcall f e C ty k) m)
-        E0 (ExprState f (C (Eval v ty)) k e m).
+         E0 (ExprState f (C (Eval v ty)) k e m).
 
 Definition step (S: state) (t: trace) (S': state) : Prop :=
   estep S t S' \/ sstep S t S'.

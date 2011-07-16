@@ -41,14 +41,14 @@ Local Open Scope gensym_monad_scope.
   matching the given temporary environment [le].
 *)
 
-Definition final (dst: purpose) (a: expr) : list statement :=
+Definition final (dst: destination) (a: expr) : list statement :=
   match dst with
   | For_val => nil
   | For_effects => nil
-  | For_test s1 s2 => makeif a s1 s2 :: nil
+  | For_test tyl s1 s2 => makeif (fold_left Ecast tyl a) s1 s2 :: nil
   end.
 
-Inductive tr_expr: temp_env -> purpose -> C.expr -> list statement -> expr -> list ident -> Prop :=
+Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -> list ident -> Prop :=
   | tr_var: forall le dst id ty tmp,
       tr_expr le dst (C.Evar id ty)
               (final dst (Evar id ty)) (Evar id ty) tmp
@@ -69,13 +69,13 @@ Inductive tr_expr: temp_env -> purpose -> C.expr -> list statement -> expr -> li
          eval_expr tge e le' m a v) ->
       tr_expr le For_val (C.Eval v ty) 
                            nil a tmp
-  | tr_val_test: forall le s1 s2 v ty a any tmp,
+  | tr_val_test: forall le tyl s1 s2 v ty a any tmp,
       typeof a = ty ->
       (forall tge e le' m,
          (forall id, In id tmp -> le'!id = le!id) ->
          eval_expr tge e le' m a v) ->
-      tr_expr le (For_test s1 s2) (C.Eval v ty) 
-                   (makeif a s1 s2 :: nil) any tmp
+      tr_expr le (For_test tyl s1 s2) (C.Eval v ty) 
+                   (makeif (fold_left Ecast tyl a) s1 s2 :: nil) any tmp
   | tr_sizeof: forall le dst ty' ty tmp,
       tr_expr le dst (C.Esizeof ty' ty)
                    (final dst (Esizeof ty' ty))
@@ -117,14 +117,14 @@ Inductive tr_expr: temp_env -> purpose -> C.expr -> list statement -> expr -> li
       In t tmp -> ~In t tmp1 ->
       tr_expr le For_val (C.Econdition e1 e2 e3 ty)
                       (sl1 ++ makeif a1 
-                                (Ssequence (makeseq sl2) (Sset t a2))
-                                (Ssequence (makeseq sl3) (Sset t a3)) :: nil)
+                                (Ssequence (makeseq sl2) (Sset t (Ecast a2 ty)))
+                                (Ssequence (makeseq sl3) (Sset t (Ecast a3 ty))) :: nil)
                       (Etempvar t ty) tmp
   | tr_condition_effects: forall le dst e1 e2 e3 ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
       dst <> For_val ->
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le dst e2 sl2 a2 tmp2 ->
-      tr_expr le dst e3 sl3 a3 tmp3 ->
+      tr_expr le (cast_destination ty dst) e2 sl2 a2 tmp2 ->
+      tr_expr le (cast_destination ty dst) e3 sl3 a3 tmp3 ->
       list_disjoint tmp1 tmp2 ->
       list_disjoint tmp1 tmp3 ->
       incl tmp1 tmp -> incl tmp2 tmp -> incl tmp3 tmp ->
@@ -215,11 +215,11 @@ Inductive tr_expr: temp_env -> purpose -> C.expr -> list statement -> expr -> li
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       incl tmp1 tmp -> In t tmp -> 
       tr_expr le For_val (C.Eparen e1 ty)
-                       (sl1 ++ Sset t a1 :: nil)
+                       (sl1 ++ Sset t (Ecast a1 ty) :: nil)
                        (Etempvar t ty) tmp
   | tr_paren_effects: forall le dst e1 ty sl1 a1 tmp any,
       dst <> For_val ->
-      tr_expr le dst e1 sl1 a1 tmp ->
+      tr_expr le (cast_destination ty dst) e1 sl1 a1 tmp ->
       tr_expr le dst (C.Eparen e1 ty) sl1 any tmp
 
 with tr_exprlist: temp_env -> C.exprlist -> list statement -> list expr -> list ident -> Prop :=
@@ -249,7 +249,7 @@ with tr_exprlist_invariant:
 Proof.
   induction 1; intros; econstructor; eauto.
     intros. apply H0. intros. transitivity (le'!id); auto.
-    intros. apply H0. intros. transitivity (le'!id); auto.
+    intros. apply H0. auto. intros. transitivity (le'!id); auto.
   induction 1; intros; econstructor; eauto.
 Qed.
 
@@ -281,19 +281,19 @@ Variable e: env.
 Variable le: temp_env.
 Variable m: mem.
 
-Inductive tr_top: purpose -> C.expr -> list statement -> expr -> list ident -> Prop :=
+Inductive tr_top: destination -> C.expr -> list statement -> expr -> list ident -> Prop :=
   | tr_top_val_val: forall v ty a tmp,
       typeof a = ty -> eval_expr ge e le m a v ->
       tr_top For_val (C.Eval v ty) nil a tmp
-  | tr_top_val_test: forall s1 s2 v ty a any tmp,
+  | tr_top_val_test: forall tyl s1 s2 v ty a any tmp,
       typeof a = ty -> eval_expr ge e le m a v ->
-      tr_top (For_test s1 s2) (C.Eval v ty) (makeif a s1 s2 :: nil) any tmp
+      tr_top (For_test tyl s1 s2) (C.Eval v ty) (makeif (fold_left Ecast tyl a) s1 s2 :: nil) any tmp
   | tr_top_base: forall dst r sl a tmp,
       tr_expr le dst r sl a tmp ->
       tr_top dst r sl a tmp
-  | tr_top_paren_test: forall s1 s2 r ty sl a tmp,
-      tr_top (For_test s1 s2) r sl a tmp ->
-      tr_top (For_test s1 s2) (C.Eparen r ty) sl a tmp.
+  | tr_top_paren_test: forall tyl s1 s2 r ty sl a tmp,
+      tr_top (For_test (ty :: tyl) s1 s2) r sl a tmp ->
+      tr_top (For_test tyl s1 s2) (C.Eparen r ty) sl a tmp.
 
 End TR_TOP.
 
@@ -311,7 +311,7 @@ Inductive tr_expr_stmt: C.expr -> statement -> Prop :=
 
 Inductive tr_if: C.expr -> statement -> statement -> statement -> Prop :=
   | tr_if_intro: forall r s1 s2 sl a tmps,
-      (forall ge e le m, tr_top ge e le m (For_test s1 s2) r sl a tmps) ->
+      (forall ge e le m, tr_top ge e le m (For_test nil s1 s2) r sl a tmps) ->
       tr_if r s1 s2 (makeseq sl).
 
 Inductive tr_stmt: C.statement -> statement -> Prop :=
@@ -662,7 +662,7 @@ Opaque makeif.
   (* for test *)
   exists (x1 :: tmp1 ++ tmp2); split.
   repeat rewrite app_ass. simpl. 
-  intros. eapply tr_assign_val with (dst := For_test s1 s2); eauto with gensym.
+  intros. eapply tr_assign_val with (dst := For_test tyl s1 s2); eauto with gensym.
   apply contained_cons. eauto with gensym. 
   apply contained_app; eauto with gensym.
 (* assignop *)
@@ -681,7 +681,7 @@ Opaque makeif.
   (* for test *)
   exists (x1 :: tmp1 ++ tmp2); split.
   repeat rewrite app_ass. simpl.
-  intros. eapply tr_assignop_val with (dst := For_test s1 s2); eauto with gensym.
+  intros. eapply tr_assignop_val with (dst := For_test tyl s1 s2); eauto with gensym.
   apply contained_cons. eauto with gensym. 
   apply contained_app; eauto with gensym.
 (* postincr *)

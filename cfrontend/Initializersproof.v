@@ -116,22 +116,21 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Ebinop op r1 r2 ty) v
   | esr_cast: forall ty r1 v1 v,
       eval_simple_rvalue r1 v1 ->
-      cast v1 (typeof r1) ty v ->
+      sem_cast v1 (typeof r1) ty = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
   | esr_sizeof: forall ty1 ty,
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
-  | esr_condition_true: forall r1 r2 r3 ty v v1,
-      eval_simple_rvalue r1 v1 -> is_true v1 (typeof r1) -> eval_simple_rvalue r2 v ->
-      eval_simple_rvalue (Econdition r1 r2 r3 ty) v
-  | esr_condition_false: forall r1 r2 r3 ty v v1,
-      eval_simple_rvalue r1 v1 -> is_false v1 (typeof r1) -> eval_simple_rvalue r3 v ->
+  | esr_condition: forall r1 r2 r3 ty v v1 b v',
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some b -> 
+      eval_simple_rvalue (if b then r2 else r3) v' ->
+      sem_cast v' (typeof (if b then r2 else r3)) ty = Some v ->
       eval_simple_rvalue (Econdition r1 r2 r3 ty) v
   | esr_comma: forall r1 r2 ty v1 v,
       eval_simple_rvalue r1 v1 -> eval_simple_rvalue r2 v ->
       eval_simple_rvalue (Ecomma r1 r2 ty) v
-  | esr_paren: forall r ty v,
-      eval_simple_rvalue r v ->
-      eval_simple_rvalue (Eparen r ty) v.
+  | esr_paren: forall r ty v v',
+      eval_simple_rvalue r v -> sem_cast v (typeof r) ty = Some v' ->
+      eval_simple_rvalue (Eparen r ty) v'.
 
 End SIMPLE_EXPRS.
 
@@ -169,7 +168,7 @@ Qed.
 Lemma rred_simple:
   forall r m r' m', rred r m r' m' -> simple r -> simple r'.
 Proof.
-  induction 1; simpl; tauto.
+  induction 1; simpl; intuition. destruct b; auto. 
 Qed.
 
 Lemma rred_compat:
@@ -183,11 +182,10 @@ Proof.
   inv EV. econstructor; eauto. constructor. 
   inv EV. econstructor; eauto. constructor. constructor.
   inv EV. econstructor; eauto. constructor.
-  inv EV. eapply esr_condition_true; eauto. constructor. 
-  inv EV. eapply esr_condition_false; eauto. constructor.
+  inv EV. eapply esr_condition; eauto. constructor. 
   inv EV. constructor.
   econstructor; eauto. constructor.
-  constructor; auto.
+  inv EV. econstructor. constructor. auto. 
 Qed.
 
 Lemma compat_eval_context:
@@ -208,9 +206,7 @@ Proof.
   inv H0. econstructor; eauto. congruence.
   inv H0. econstructor; eauto. congruence.
   inv H0. econstructor; eauto. congruence.
-  inv H0.
-    eapply esr_condition_true; eauto. congruence.
-    eapply esr_condition_false; eauto. congruence.
+  inv H0. eapply esr_condition; eauto. congruence.
   inv H0.
   inv H0.
   inv H0.
@@ -219,7 +215,7 @@ Proof.
   inv H0.
   red; split; intros. auto. inv H0.
   inv H0. econstructor; eauto.
-  inv H0. constructor. auto. 
+  inv H0. econstructor; eauto. congruence. 
 Qed.
 
 Lemma simple_context_1:
@@ -397,49 +393,31 @@ Proof.
   eapply sem_cmp_match; eauto.
 Qed.
 
-Lemma is_neutral_for_cast_correct:
-  forall t, neutral_for_cast t -> is_neutral_for_cast t = true.
-Proof.
-  induction 1; simpl; auto.
-Qed.
-
-Lemma cast_match:
-  forall v1 ty1 ty2 v2, cast v1 ty1 ty2 v2 ->
+Lemma sem_cast_match:
+  forall v1 ty1 ty2 v2, sem_cast v1 ty1 ty2 = Some v2 ->
   forall v1' v2',  match_val v1' v1 -> do_cast v1' ty1 ty2 = OK v2' ->
   match_val v2' v2.
 Proof.
-  induction 1; intros v1' v2' MV DC; inv MV; simpl in DC.
-  inv DC; constructor.
-  rewrite H in DC. inv DC. constructor.
-  inv DC; constructor.
-  inv DC; constructor.
-  rewrite (is_neutral_for_cast_correct _ H) in DC. 
-  rewrite (is_neutral_for_cast_correct _ H0) in DC.
-  simpl in DC. inv DC. constructor; auto.
-  rewrite (is_neutral_for_cast_correct _ H) in DC. 
-  rewrite (is_neutral_for_cast_correct _ H0) in DC.
-  simpl in DC. 
-  assert (OK v2' = OK (Vint n)). 
-    inv H; auto. inv H0; auto.
-  inv H1. constructor.
+  intros. unfold do_cast in H1. destruct (sem_cast v1' ty1 ty2) as [v2''|] _eqn; inv H1.
+  inv H0.
+  replace v2' with v2 by congruence.
+  functional inversion H; subst; constructor.
+  replace v2' with v2 by congruence.
+  functional inversion H; subst; constructor.
+  simpl in H; simpl in Heqo. 
+  destruct (neutral_for_cast ty1 && neutral_for_cast ty2); inv H; inv Heqo. 
+  constructor; auto.
+  functional inversion H. 
 Qed.
 
-Lemma bool_val_true:
-  forall v v' ty, is_true v' ty -> match_val v v' -> bool_val v ty = OK true.
+Lemma bool_val_match:
+  forall v v' ty,
+  match_val v v' ->
+  bool_val v ty = bool_val v' ty.
 Proof.
-  induction 1; intros MV; inv MV; simpl; auto.
-  predSpec Int.eq Int.eq_spec n Int.zero. congruence. auto.
-  predSpec Int.eq Int.eq_spec n Int.zero. congruence. auto.
-  rewrite H; auto.
+  intros. inv H; auto.
 Qed.
-
-Lemma bool_val_false:
-  forall v v' ty, is_false v' ty -> match_val v v' -> bool_val v ty = OK false.
-Proof.
-  induction 1; intros MV; inv MV; simpl; auto.
-  rewrite H; auto.
-Qed.
-
+  
 (** Soundness of [constval] with respect to the big-step semantics *)
 
 Lemma constval_rvalue:
@@ -456,7 +434,7 @@ with constval_lvalue:
   match_val v' (Vptr b ofs).
 Proof.
   (* rvalue *)
-  induction 1; intros v' CV; simpl in CV; try (monadInv CV).
+  induction 1; intros vres CV; simpl in CV; try (monadInv CV).
   (* val *)
   destruct v; monadInv CV; constructor.
   (* rval *)
@@ -471,17 +449,16 @@ Proof.
   revert EQ2. caseEq (sem_binary_operation op x (typeof r1) x0 (typeof r2) Mem.empty); intros; inv EQ2.
   eapply sem_binary_match; eauto.
   (* cast *)
-  eapply cast_match; eauto. 
+  eapply sem_cast_match; eauto. 
   (* sizeof *)
   constructor.
-  (* conditional true *)
-  assert (x0 = true). exploit bool_val_true; eauto. congruence. subst x0. auto.
-  (* conditional false *)
-  assert (x0 = false). exploit bool_val_false; eauto. congruence. subst x0. auto.
+  (* conditional *)
+  rewrite (bool_val_match x v1 (typeof r1)) in EQ3; auto.
+  rewrite H0 in EQ3. destruct b; eapply sem_cast_match; eauto.
   (* comma *)
   auto.
   (* paren *)
-  auto.
+  eapply sem_cast_match; eauto.
 
   (* lvalue *)
   induction 1; intros v' CV; simpl in CV; try (monadInv CV).
@@ -528,14 +505,14 @@ Theorem transl_init_single_steps:
   forall ty a data f m w v1 ty1 m' v chunk b ofs m'',
   transl_init_single ty a = OK data ->
   star step ge (ExprState f a Kstop empty_env m) w (ExprState f (Eval v1 ty1) Kstop empty_env m') ->
-  cast v1 ty1 ty v ->
+  sem_cast v1 ty1 ty = Some v ->
   access_mode ty = By_value chunk ->
   Mem.store chunk m' b ofs v = Some m'' ->
   Genv.store_init_data ge m b ofs data = Some m''.
 Proof.
   intros. monadInv H. 
   exploit constval_steps; eauto. intros [A [B C]]. subst m' ty1.
-  exploit cast_match; eauto. intros D.
+  exploit sem_cast_match; eauto. intros D.
   unfold Genv.store_init_data. 
   inv D. 
   (* int *)
@@ -725,7 +702,7 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
   | exec_init_single: forall m b ofs ty a v1 ty1 chunk m' v m'',
       star step ge (ExprState dummy_function a Kstop empty_env m) 
                 E0 (ExprState dummy_function (Eval v1 ty1) Kstop empty_env m') ->
-      cast v1 ty1 ty v ->
+      sem_cast v1 ty1 ty = Some v ->
       access_mode ty = By_value chunk ->
       Mem.store chunk m' b ofs v = Some m'' ->
       exec_init m b ofs ty (Init_single a) m''

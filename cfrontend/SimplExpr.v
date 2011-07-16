@@ -20,6 +20,7 @@ Require Import Floats.
 Require Import Values.
 Require Import AST.
 Require Import Csyntax.
+Require Import Csem.
 Require Import Clight.
 
 Module C := Csyntax.
@@ -102,10 +103,26 @@ Definition makeseq (l: list statement) : statement :=
 
 (** Smart constructor for [if ... then ... else]. *)
 
-Function makeif (a: expr) (s1 s2: statement) : statement :=
+Function eval_simpl_expr (a: expr) : option val :=
   match a with
-  | Econst_int n _ => if Int.eq_dec n Int.zero then s2 else s1
-  | _              => Sifthenelse a s1 s2
+  | Econst_int n _ => Some(Vint n)
+  | Econst_float n _ => Some(Vfloat n)
+  | Ecast b ty => 
+      match eval_simpl_expr b with
+      | None => None
+      | Some v => sem_cast v (typeof b) ty
+      end
+  | _ => None
+  end.
+
+Function makeif (a: expr) (s1 s2: statement) : statement :=
+  match eval_simpl_expr a with
+  | Some v =>
+      match bool_val v (typeof a) with
+      | Some b => if b then s1 else s2
+      | None   => Sifthenelse a s1 s2
+      end
+  | None => Sifthenelse a s1 s2
   end.
 
 (** Translation of pre/post-increment/decrement. *)
@@ -130,21 +147,28 @@ Definition transl_incrdecr (id: incr_or_decr) (a: expr) (ty: type) : expr :=
   of the original expression.  [a] is meaningless.
 *)
 
-Inductive purpose : Type := 
+Inductive destination : Type := 
   | For_val
   | For_effects
-  | For_test (s1 s2: statement).
+  | For_test (tyl: list type) (s1 s2: statement).
 
 Definition dummy_expr := Econst_int Int.zero (Tint I32 Signed).
 
-Definition finish (dst: purpose) (sl: list statement) (a: expr) :=
+Definition finish (dst: destination) (sl: list statement) (a: expr) :=
   match dst with
   | For_val => (sl, a)
   | For_effects => (sl, a)
-  | For_test s1 s2 => (sl ++ makeif a s1 s2 :: nil, a)
+  | For_test tyl s1 s2 => (sl ++ makeif (fold_left Ecast tyl a) s1 s2 :: nil, a)
   end.
 
-Fixpoint transl_expr (dst: purpose) (a: C.expr) : mon (list statement * expr) :=
+Definition cast_destination (ty: type) (dst: destination) :=
+  match dst with
+  | For_val => For_val
+  | For_effects => For_effects
+  | For_test tyl s1 s2 => For_test (ty :: tyl) s1 s2
+  end.
+
+Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr) :=
   match a with
   | C.Eloc b ofs ty =>
       error (msg "SimplExpr.transl_expr: C.Eloc")
@@ -182,15 +206,15 @@ Fixpoint transl_expr (dst: purpose) (a: C.expr) : mon (list statement * expr) :=
       ret (finish dst sl1 (Ecast a1 ty))
   | C.Econdition r1 r2 r3 ty =>
       do (sl1, a1) <- transl_expr For_val r1;
-      do (sl2, a2) <- transl_expr dst r2;
-      do (sl3, a3) <- transl_expr dst r3;
+      do (sl2, a2) <- transl_expr (cast_destination ty dst) r2;
+      do (sl3, a3) <- transl_expr (cast_destination ty dst) r3;
       match dst with
       | For_val =>
           do t <- gensym ty;
-          ret (sl1 ++ makeif a1 (Ssequence (makeseq sl2) (Sset t a2))
-                                (Ssequence (makeseq sl3) (Sset t a3)) :: nil,
+          ret (sl1 ++ makeif a1 (Ssequence (makeseq sl2) (Sset t (Ecast a2 ty)))
+                                (Ssequence (makeseq sl3) (Sset t (Ecast a3 ty))) :: nil,
                Etempvar t ty)
-      | For_effects | For_test _ _ =>
+      | For_effects | For_test _ _ _ =>
           ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
                dummy_expr)
       end
@@ -200,7 +224,7 @@ Fixpoint transl_expr (dst: purpose) (a: C.expr) : mon (list statement * expr) :=
       let ty1 := C.typeof l1 in
       let ty2 := C.typeof r2 in
       match dst with
-      | For_val | For_test _ _ =>
+      | For_val | For_test _ _ _ =>
           do t <- gensym ty2;
           ret (finish dst 
                  (sl1 ++ sl2 ++ Sset t a2 :: Sassign a1 (Etempvar t ty2) :: nil)
@@ -214,7 +238,7 @@ Fixpoint transl_expr (dst: purpose) (a: C.expr) : mon (list statement * expr) :=
       do (sl2, a2) <- transl_expr For_val r2;
       let ty1 := C.typeof l1 in
       match dst with
-      | For_val | For_test _ _ =>
+      | For_val | For_test _ _ _ =>
           do t <- gensym tyres;
           ret (finish dst
                  (sl1 ++ sl2 ++
@@ -229,7 +253,7 @@ Fixpoint transl_expr (dst: purpose) (a: C.expr) : mon (list statement * expr) :=
       do (sl1, a1) <- transl_expr For_val l1;
       let ty1 := C.typeof l1 in
       match dst with
-      | For_val | For_test _ _ =>
+      | For_val | For_test _ _ _ =>
           do t <- gensym ty1;
           ret (finish dst
                  (sl1 ++ Sset t a1 ::
@@ -247,7 +271,7 @@ Fixpoint transl_expr (dst: purpose) (a: C.expr) : mon (list statement * expr) :=
       do (sl1, a1) <- transl_expr For_val r1;
       do (sl2, al2) <- transl_exprlist rl2;
       match dst with
-      | For_val | For_test _ _ =>
+      | For_val | For_test _ _ _ =>
           do t <- gensym ty;
           ret (finish dst (sl1 ++ sl2 ++ Scall (Some t) a1 al2 :: nil)
                           (Etempvar t ty))
@@ -275,7 +299,7 @@ Definition transl_expr_stmt (r: C.expr) : mon statement :=
   do (sl, a) <- transl_expr For_effects r; ret (makeseq sl).
 
 Definition transl_if (r: C.expr) (s1 s2: statement) : mon statement :=
-  do (sl, a) <- transl_expr (For_test s1 s2) r; ret (makeseq sl).
+  do (sl, a) <- transl_expr (For_test nil s1 s2) r; ret (makeseq sl).
 
 (** Translation of statements *)
 
