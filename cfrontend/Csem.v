@@ -61,6 +61,7 @@ Definition cast_float_float (sz: floatsize) (f: float) : float :=
   | F64 => f
   end.
 
+(*
 Definition neutral_for_cast (t: type) : bool :=
   match t with
   | Tint I32 sg => true
@@ -90,6 +91,44 @@ Function sem_cast (v: val) (t1 t2: type) : option val :=
       if neutral_for_cast t1 && neutral_for_cast t2
       then Some(Vint n) else None
   | _, _, _ =>
+      None
+  end.
+*)
+
+Function sem_cast (v: val) (t1 t2: type) : option val :=
+  match classify_cast t1 t2 with
+  | cast_case_neutral =>
+      match v with
+      | Vint _ | Vptr _ _ => Some v
+      | _ => None
+      end
+  | cast_case_i2i sz2 si2 =>
+      match v with
+      | Vint i => Some (Vint (cast_int_int sz2 si2 i))
+      | _ => None
+      end
+  | cast_case_f2f sz2 =>
+      match v with
+      | Vfloat f => Some (Vfloat (cast_float_float sz2 f))
+      | _ => None
+      end
+  | cast_case_i2f si1 sz2 =>
+      match v with
+      | Vint i => Some (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
+      | _ => None
+      end
+  | cast_case_f2i sz2 si2 =>
+      match v with
+      | Vfloat f =>
+          match cast_float_int si2 f with
+          | Some i => Some (Vint (cast_int_int sz2 si2 i))
+          | None => None
+          end
+      | _ => None
+      end
+  | cast_case_void =>
+      Some v
+  | cast_case_default =>
       None
   end.
 

@@ -214,7 +214,7 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
 -  [make_cast1]  converts from integers to floats or from floats to integers;
 -  [make_cast2]  converts to a "small" int or float type if necessary.
 *)
-
+(*
 Definition make_cast1 (from to: type) (e: expr) :=
   match from, to with
   | Tint _ uns, Tfloat _ => make_floatofint e uns
@@ -234,6 +234,33 @@ Definition make_cast2 (from to: type) (e: expr) :=
 
 Definition make_cast (from to: type) (e: expr) :=
   make_cast2 from to (make_cast1 from to e).
+*)
+
+Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
+  match sz, si with
+  | I8, Signed => Eunop Ocast8signed e  
+  | I8, Unsigned => Eunop Ocast8unsigned e  
+  | I16, Signed => Eunop Ocast16signed e  
+  | I16, Unsigned => Eunop Ocast16unsigned e  
+  | I32, _ => e
+  end.
+
+Definition make_cast_float (e: expr) (sz: floatsize) :=
+  match sz with
+  | F32 => Eunop Osingleoffloat e
+  | F64 => e
+  end.
+
+Definition make_cast (from to: type) (e: expr) :=
+  match classify_cast from to with
+  | cast_case_neutral => e
+  | cast_case_i2i sz2 si2 => make_cast_int e sz2 si2
+  | cast_case_f2f sz2 => make_cast_float e sz2
+  | cast_case_i2f si1 sz2 => make_cast_float (make_floatofint e si1) sz2
+  | cast_case_f2i sz2 si2 => make_cast_int (make_intoffloat e si2) sz2 si2
+  | cast_case_void => e
+  | cast_case_default => e
+  end.
 
 (** [make_load addr ty_res] loads a value of type [ty_res] from
    the memory location denoted by the Csharpminor expression [addr].

@@ -399,15 +399,14 @@ Lemma sem_cast_match:
   match_val v2' v2.
 Proof.
   intros. unfold do_cast in H1. destruct (sem_cast v1' ty1 ty2) as [v2''|] _eqn; inv H1.
-  inv H0.
-  replace v2' with v2 by congruence.
-  functional inversion H; subst; constructor.
-  replace v2' with v2 by congruence.
-  functional inversion H; subst; constructor.
-  simpl in H; simpl in Heqo. 
-  destruct (neutral_for_cast ty1 && neutral_for_cast ty2); inv H; inv Heqo. 
-  constructor; auto.
-  functional inversion H. 
+  unfold sem_cast in H; functional inversion Heqo; subst. 
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor; auto.
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. destruct (cast_float_int si2 f); inv H. inv H7. constructor.
+  rewrite H5 in H. inv H. auto.
 Qed.
 
 Lemma bool_val_match:

@@ -40,7 +40,7 @@ Proof.
   intros. unfold chunk_of_type in H. destruct ty; simpl in H; try monadInv H.
   destruct i; destruct s; monadInv H; reflexivity.
   destruct f; monadInv H; reflexivity.
-  reflexivity. reflexivity. 
+  reflexivity. 
 Qed.
 
 Remark transl_params_types:
@@ -132,15 +132,13 @@ Proof.
   auto.
 Qed.
 
-Remark neutral_for_cast_chunk:
-  forall ty chunk,
-  neutral_for_cast ty = true -> access_mode ty = By_value chunk -> chunk = Mint32.
+Remark cast_neutral_normalized:
+  forall ty1 ty2 chunk,
+  classify_cast ty1 ty2 = cast_case_neutral ->
+  access_mode ty2 = By_value chunk ->
+  chunk = Mint32.
 Proof.
-  intros. destruct ty; inv H; simpl in H0.
-  destruct i; inv H2. congruence.
-  congruence.
-  congruence.
-  congruence.
+  intros. functional inversion H; subst; simpl in H0; congruence.
 Qed.
 
 Lemma cast_result_normalized:
@@ -150,14 +148,13 @@ Lemma cast_result_normalized:
   val_normalized v2 chunk.
 Proof.
   intros. functional inversion H; subst.
-  apply cast_int_int_normalized; auto.
-  apply cast_int_int_normalized; auto.
-  apply cast_float_float_normalized; auto.
-  apply cast_float_float_normalized; auto.
-  destruct (andb_prop _ _ H8). 
-  rewrite (neutral_for_cast_chunk _ _ H2 H0). red; auto.
-  destruct (andb_prop _ _ H9). 
-  rewrite (neutral_for_cast_chunk _ _ H2 H0). red; auto.
+  rewrite (cast_neutral_normalized ty1 ty2 chunk); auto. red; auto.
+  rewrite (cast_neutral_normalized ty1 ty2 chunk); auto. red; auto.
+  functional inversion H2; subst. eapply cast_int_int_normalized; eauto.
+  functional inversion H2; subst. eapply cast_float_float_normalized; eauto.
+  functional inversion H2; subst. eapply cast_float_float_normalized; eauto.
+  functional inversion H2; subst. eapply cast_int_int_normalized; eauto.
+  functional inversion H5; subst. simpl in H0. congruence.
 Qed.
 
 Definition val_casted (v: val) (ty: type) : Prop :=
@@ -382,14 +379,49 @@ Hint Resolve make_intconst_correct make_floatconst_correct
              eval_Eunop eval_Ebinop: cshm.
 Hint Extern 2 (@eq trace _ _) => traceEq: cshm.
 
-Remark Vtrue_is_true: Val.is_true Vtrue.
+Lemma make_cast_int_correct:
+  forall e le m a n sz si,
+  eval_expr ge e le m a (Vint n) ->
+  eval_expr ge e le m (make_cast_int a sz si) (Vint (cast_int_int sz si n)).
 Proof.
-  simpl. apply Int.one_not_zero.
+  intros. unfold make_cast_int, cast_int_int. 
+  destruct sz.
+  destruct si; eauto with cshm.
+  destruct si; eauto with cshm.
+  auto.
 Qed.
 
-Remark Vfalse_is_false: Val.is_false Vfalse.
+Lemma make_cast_float_correct:
+  forall e le m a n sz,
+  eval_expr ge e le m a (Vfloat n) ->
+  eval_expr ge e le m (make_cast_float a sz) (Vfloat (cast_float_float sz n)).
 Proof.
-  simpl. auto.
+  intros. unfold make_cast_float, cast_float_float. 
+  destruct sz. eauto with cshm. auto.
+Qed.
+
+Hint Resolve make_cast_int_correct make_cast_float_correct: cshm.
+
+Lemma make_cast_correct:
+  forall e le m a v ty1 ty2 v',
+  eval_expr ge e le m a v ->
+  sem_cast v ty1 ty2 = Some v' ->
+  eval_expr ge e le m (make_cast ty1 ty2 a) v'.
+Proof.
+  intros. unfold make_cast. functional inversion H0; subst.
+  (* neutral *)
+  rewrite H2; auto.
+  rewrite H2; auto.
+  (* int -> int *)
+  rewrite H2. auto with cshm. 
+  (* float -> float *)
+  rewrite H2. auto with cshm.
+  (* int -> float *)
+  rewrite H2. auto with cshm. 
+  (* float -> int *)
+  rewrite H2. eauto with cshm.
+  (* void *)
+  rewrite H5. auto.
 Qed.
 
 Lemma make_boolean_correct:
@@ -643,40 +675,6 @@ Proof.
   eapply make_cmp_correct; eauto.
   eapply make_cmp_correct; eauto.
 Qed. 
-
-Lemma make_cast_neutral:
-  forall ty1 ty2 a,
-  neutral_for_cast ty1 && neutral_for_cast ty2 = true ->
-  make_cast ty1 ty2 a = a.
-Proof.
-  intros. destruct (andb_prop _ _ H). 
-  unfold make_cast. 
-  replace (make_cast1 ty1 ty2 a) with a. 
-  unfold make_cast2. destruct ty2; simpl in H1; inv H1; auto. destruct i; inv H3; auto.
-  unfold make_cast1. destruct ty1; simpl in H0; inv H0; auto. destruct ty2; simpl in H1; inv H1; auto.
-Qed.
-
-Lemma make_cast_correct:
-  forall e le m a v ty1 ty2 v',
-   eval_expr ge e le m a v ->
-   sem_cast v ty1 ty2 = Some v' ->
-   eval_expr ge e le m (make_cast ty1 ty2 a) v'.
-Proof.
-  intros. functional inversion H0; subst; simpl.
-  (* cast_int_int *)
-    destruct sz2; destruct si2; repeat econstructor; eauto with cshm.
-  (* cast_float_int *)
-    exploit make_intoffloat_correct; eauto. intros A.
-    destruct sz2; destruct si2; eauto with cshm.
-  (* cast_int_float *)
-    destruct sz2; destruct si1; unfold make_floatofint; repeat econstructor; eauto with cshm; simpl; auto.
-  (* cast_float_float *)
-    destruct sz2; repeat econstructor; eauto with cshm.
-  (* neutral, ptr *)
-    rewrite make_cast_neutral; auto. 
-  (* neutral, int *)
-    rewrite make_cast_neutral; auto. 
-Qed.
 
 Lemma make_load_correct:
   forall addr ty code b ofs v e le m,

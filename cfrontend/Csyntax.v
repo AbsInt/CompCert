@@ -662,7 +662,7 @@ Definition access_mode (ty: type) : mode :=
   | Tfunction _ _ => By_reference
   | Tstruct _ fList => By_nothing
   | Tunion _ fList => By_nothing
-  | Tcomp_ptr _ => By_value Mint32
+  | Tcomp_ptr _ => By_nothing
 end.
 
 (** Unroll the type of a structure or union field, substituting
@@ -923,6 +923,27 @@ Definition classify_fun (ty: type) :=
   | Tfunction args res => fun_case_f args res
   | Tpointer (Tfunction args res) => fun_case_f args res
   | _ => fun_default
+  end.
+
+Inductive classify_cast_cases : Type :=
+  | cast_case_neutral                   (**r int|pointer -> int32|pointer *)
+  | cast_case_i2i (sz2:intsize) (si2:signedness)   (**r int -> int *)
+  | cast_case_f2f (sz2:floatsize)                  (**r float -> float *)
+  | cast_case_i2f (si1:signedness) (sz2:floatsize) (**r int -> float *)
+  | cast_case_f2i (sz2:intsize) (si2:signedness)   (**r float -> int *)
+  | cast_case_void                                 (**r any -> void *)
+  | cast_case_default.
+
+Function classify_cast (tfrom tto: type) : classify_cast_cases :=
+  match tto, tfrom with
+  | Tint I32 si2, (Tint _ _ | Tpointer _ | Tarray _ _ | Tfunction _ _) => cast_case_neutral
+  | Tint sz2 si2, Tint sz1 si1 => cast_case_i2i sz2 si2
+  | Tint sz2 si2, Tfloat sz1 => cast_case_f2i sz2 si2
+  | Tfloat sz2, Tfloat sz1 => cast_case_f2f sz2
+  | Tfloat sz2, Tint sz1 si1 => cast_case_i2f si1 sz2
+  | Tpointer _, (Tint _ _ | Tpointer _ | Tarray _ _ | Tfunction _ _) => cast_case_neutral
+  | Tvoid, _ => cast_case_void
+  | _, _ => cast_case_default
   end.
 
 (** Translating C types to Cminor types, function signatures,
