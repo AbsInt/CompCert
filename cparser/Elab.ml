@@ -94,7 +94,7 @@ let redef fn env arg =
 let elab_expr_f : (cabsloc -> Env.t -> Cabs.expression -> C.exp) ref
   = ref (fun _ _ _ -> assert false)
 
-let elab_block_f : (cabsloc -> C.typ -> Env.t -> Cabs.block -> C.stmt) ref
+let elab_funbody_f : (cabsloc -> C.typ -> Env.t -> Cabs.block -> C.stmt) ref
   = ref (fun _ _ _ _ -> assert false)
 
 
@@ -1544,7 +1544,7 @@ let elab_fundef env (spec, name) body loc1 loc2 =
     List.fold_left (fun e (id, ty) -> Env.add_ident e id Storage_default ty)
                    (Env.new_scope env1) params in
   (* Elaborate function body *)
-  let body' = !elab_block_f loc2 ty_ret env2 body in
+  let body' = !elab_funbody_f loc2 ty_ret env2 body in
   (* Build and emit function definition *)
   let fn =
     { fd_storage = sto;
@@ -1607,7 +1607,36 @@ and elab_definitions local env = function
       (decl1 @ decl2, env2)
 
 
-(* Elaboration of statements *)
+(* Contexts for elaborating statements *)
+
+module StringSet = Set.Make(String)
+
+type stmt_context = {
+  ctx_return_typ: typ;
+  ctx_labels: StringSet.t;
+  ctx_break: bool;
+  ctx_continue: bool
+}
+
+let block_labels b =
+  let lbls = ref StringSet.empty in
+  let rec do_stmt = function
+  | BLOCK(b, _) -> do_block b
+  | IF(_, s1, s2, _) -> do_stmt s1; do_stmt s2
+  | WHILE(_, s1, _) -> do_stmt s1
+  | DOWHILE(_, s1, _) -> do_stmt s1
+  | FOR(_, _, _, s1, _) -> do_stmt s1
+  | SWITCH(_, s1, _) -> do_stmt s1
+  | CASE(_, s1, _) -> do_stmt s1
+  | DEFAULT(s1, _) -> do_stmt s1
+  | LABEL(lbl, s1, _) -> lbls := StringSet.add lbl !lbls; do_stmt s1
+  | _ -> ()
+  and do_block b = List.iter do_stmt b.bstmts
+  in do_block b; !lbls
+
+let ctx_loop ctx = { ctx with ctx_break = true; ctx_continue = true }
+
+let ctx_switch ctx = { ctx with ctx_break = true }
 
 (* Extract list of Cabs statements from a Cabs block *)
 
@@ -1618,11 +1647,10 @@ let block_body loc b =
     warning loc "ignoring attributes on this block";
   b.bstmts
 
-(* Elaboration of a block.  Return the corresponding C statement. *)
+
+(* Elaboration of statements *)
 
-let elab_block loc return_typ env b =
-
-let rec elab_stmt env s =
+let rec elab_stmt env ctx s =
 
   match s with
 
@@ -1634,7 +1662,7 @@ let rec elab_stmt env s =
 (* 8.3 Labeled statements *)
 
   | LABEL(lbl, s1, loc) ->
-      { sdesc = Slabeled(Slabel lbl, elab_stmt env s1); sloc = elab_loc loc }
+      { sdesc = Slabeled(Slabel lbl, elab_stmt env ctx s1); sloc = elab_loc loc }
 
   | CASE(a, s1, loc) ->
       let a' = elab_expr loc env a in
@@ -1643,19 +1671,19 @@ let rec elab_stmt env s =
             error loc "argument of 'case' must be an integer compile-time constant"
         | Some n -> ()
       end;
-      { sdesc = Slabeled(Scase a', elab_stmt env s1); sloc = elab_loc loc }
+      { sdesc = Slabeled(Scase a', elab_stmt env ctx s1); sloc = elab_loc loc }
 
   | CASERANGE(_, _, _, loc) ->
       error loc "GCC's 'case' with range of values is not supported";
       sskip
 
   | DEFAULT(s1, loc) ->
-      { sdesc = Slabeled(Sdefault, elab_stmt env s1); sloc = elab_loc loc }
+      { sdesc = Slabeled(Sdefault, elab_stmt env ctx s1); sloc = elab_loc loc }
 
 (* 8.4 Compound statements *)
 
   | BLOCK(b, loc) ->
-      elab_blk loc env b
+      elab_block loc env ctx b
 
 (* 8.5 Conditional statements *)
 
@@ -1663,8 +1691,8 @@ let rec elab_stmt env s =
       let a' = elab_expr loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'if' does not have scalar type";
-      let s1' = elab_stmt env s1 in
-      let s2' = elab_stmt env s2 in
+      let s1' = elab_stmt env ctx s1 in
+      let s2' = elab_stmt env ctx s2 in
       { sdesc = Sif(a', s1', s2'); sloc = elab_loc loc }
 
 (* 8.6 Iterative statements *)
@@ -1673,11 +1701,11 @@ let rec elab_stmt env s =
       let a' = elab_expr loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'while' does not have scalar type";
-      let s1' = elab_stmt env s1 in
+      let s1' = elab_stmt env (ctx_loop ctx) s1 in
       { sdesc = Swhile(a', s1'); sloc = elab_loc loc }
 
   | DOWHILE(a, s1, loc) ->
-      let s1' = elab_stmt env s1 in
+      let s1' = elab_stmt env (ctx_loop ctx) s1 in
       let a' = elab_expr loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "the condition of 'while' does not have scalar type";
@@ -1698,27 +1726,31 @@ let rec elab_stmt env s =
       if not (is_scalar_type env a2'.etyp) then
         error loc "the condition of 'for' does not have scalar type";
       let a3' = elab_for_expr loc env a3 in
-      let s1' = elab_stmt env s1 in
+      let s1' = elab_stmt env (ctx_loop ctx) s1 in
       { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc }
 
 (* 8.7 Switch statement *)
   | SWITCH(a, s1, loc) ->
       let a' = elab_expr loc env a in
-      if not (is_arith_type env a'.etyp) then
-        error loc "the argument of 'switch' does not have arithmetic type";
-      let s1' = elab_stmt env s1 in
+      if not (is_integer_type env a'.etyp) then
+        error loc "the argument of 'switch' is not an integer";
+      let s1' = elab_stmt env (ctx_switch ctx) s1 in
       { sdesc = Sswitch(a', s1'); sloc = elab_loc loc }
 
 (* 8,8 Break and continue statements *)
   | BREAK loc ->
+      if not ctx.ctx_break then
+        error loc "'break' outside a loop or a 'switch'";
       { sdesc = Sbreak; sloc = elab_loc loc }
   | CONTINUE loc ->
+      if not ctx.ctx_continue then
+        error loc "'continue' outside a loop";
       { sdesc = Scontinue; sloc = elab_loc loc }
 
 (* 8.9 Return statements *)
   | RETURN(a, loc) ->
       let a' = elab_opt_expr loc env a in
-      begin match (unroll env return_typ, a') with
+      begin match (unroll env ctx.ctx_return_typ, a') with
       | TVoid _, None -> ()
       | TVoid _, Some _ ->
           error loc
@@ -1726,25 +1758,27 @@ let rec elab_stmt env s =
       | _, None ->
           warning loc
             "'return' without a value in a function of return type@ %a"
-            Cprint.typ return_typ
+            Cprint.typ ctx.ctx_return_typ
       | _, Some b ->
-          if not (valid_assignment env b return_typ) then begin
-            if valid_cast env b.etyp return_typ then
+          if not (valid_assignment env b ctx.ctx_return_typ) then begin
+            if valid_cast env b.etyp ctx.ctx_return_typ then
               warning loc
                 "return value has type@ %a@ \
                  instead of the expected type@ %a"
-                Cprint.typ b.etyp Cprint.typ return_typ
+                Cprint.typ b.etyp Cprint.typ ctx.ctx_return_typ
             else
               error loc
                 "return value has type@ %a@ \
                  instead of the expected type@ %a"
-                Cprint.typ b.etyp Cprint.typ return_typ
+                Cprint.typ b.etyp Cprint.typ ctx.ctx_return_typ
           end
       end;
       { sdesc = Sreturn a'; sloc = elab_loc loc }
 
 (* 8.10 Goto statements *)
   | GOTO(lbl, loc) ->
+      if not (StringSet.mem lbl ctx.ctx_labels) then
+        error loc "unknown 'goto' label %s" lbl;
       { sdesc = Sgoto lbl; sloc = elab_loc loc }
 
 (* 8.11 Null statements *)
@@ -1768,11 +1802,11 @@ let rec elab_stmt env s =
       error loc "'try ... finally' statement is not supported";
       sskip
       
-and elab_blk loc env b =
-  let b' = elab_blk_body (Env.new_scope env) (block_body loc b) in
+and elab_block loc env ctx b =
+  let b' = elab_block_body (Env.new_scope env) ctx (block_body loc b) in
   { sdesc = Sblock b'; sloc = elab_loc loc }
 
-and elab_blk_body env sl =
+and elab_block_body env ctx sl =
   match sl with
   | [] ->
       []
@@ -1780,15 +1814,23 @@ and elab_blk_body env sl =
       let (dcl, env') = elab_definition true env def in
       let loc = elab_loc (get_definitionloc def) in
       List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl
-      @ elab_blk_body env' sl1
+      @ elab_block_body env' ctx sl1
   | s :: sl1 ->
-      let s' = elab_stmt env s in
-      s' :: elab_blk_body env sl1
+      let s' = elab_stmt env ctx s in
+      s' :: elab_block_body env ctx sl1
 
-in elab_blk loc env b
+(* Elaboration of a function body.  Return the corresponding C statement. *)
+
+let elab_funbody loc return_typ env b =
+  let ctx =
+    { ctx_return_typ = return_typ;
+      ctx_labels = block_labels b;
+      ctx_break = false;
+      ctx_continue = false } in
+  elab_block loc env ctx b
 
 (* Filling in forward declaration *)
-let _ = elab_block_f := elab_block
+let _ = elab_funbody_f := elab_funbody
 
 
 (** * Entry point *)
