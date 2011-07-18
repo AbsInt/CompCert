@@ -1612,10 +1612,10 @@ and elab_definitions local env = function
 module StringSet = Set.Make(String)
 
 type stmt_context = {
-  ctx_return_typ: typ;
-  ctx_labels: StringSet.t;
-  ctx_break: bool;
-  ctx_continue: bool
+  ctx_return_typ: typ;          (**r return type for the function *)
+  ctx_labels: StringSet.t;      (**r all labels defined in the function *)
+  ctx_break: bool;              (**r is 'break' allowed? *)
+  ctx_continue: bool            (**r is 'continue' allowed? *)
 }
 
 let block_labels b =
@@ -1629,7 +1629,11 @@ let block_labels b =
   | SWITCH(_, s1, _) -> do_stmt s1
   | CASE(_, s1, _) -> do_stmt s1
   | DEFAULT(s1, _) -> do_stmt s1
-  | LABEL(lbl, s1, _) -> lbls := StringSet.add lbl !lbls; do_stmt s1
+  | LABEL(lbl, s1, loc) ->
+      if StringSet.mem lbl !lbls then
+        error loc "multiply-defined label '%s'\n" lbl;
+      lbls := StringSet.add lbl !lbls;
+      do_stmt s1
   | _ -> ()
   and do_block b = List.iter do_stmt b.bstmts
   in do_block b; !lbls
@@ -1740,11 +1744,11 @@ let rec elab_stmt env ctx s =
 (* 8,8 Break and continue statements *)
   | BREAK loc ->
       if not ctx.ctx_break then
-        error loc "'break' outside a loop or a 'switch'";
+        error loc "'break' outside of a loop or a 'switch'";
       { sdesc = Sbreak; sloc = elab_loc loc }
   | CONTINUE loc ->
       if not ctx.ctx_continue then
-        error loc "'continue' outside a loop";
+        error loc "'continue' outside of a loop";
       { sdesc = Scontinue; sloc = elab_loc loc }
 
 (* 8.9 Return statements *)
