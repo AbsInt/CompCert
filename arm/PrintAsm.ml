@@ -323,7 +323,7 @@ let print_builtin_memcpy oc sz al args =
   fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
           comment sz al;
   let n =
-    if sz <= 64
+    if sz <= 32
     then print_builtin_memcpy_small oc sz al src dst
     else print_builtin_memcpy_big oc sz al src dst in
   fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment; n
@@ -646,7 +646,7 @@ let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code ->
       print_function oc name code
-  | External ef
+  | External ef ->
       if need_stub ef then print_external_function oc name (ef_sig ef)
 
 (* Data *)
