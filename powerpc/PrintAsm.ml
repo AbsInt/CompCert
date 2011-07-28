@@ -348,7 +348,7 @@ let print_builtin_memcpy_big oc sz al src dst =
   fprintf oc "	addi	%a, %a, -4\n" ireg s ireg src;
   fprintf oc "	addi	%a, %a, -4\n" ireg d ireg dst;
   let lbl = new_label() in
-  fprintf oc "%a:	lwzu	%a, 4(%a)\n" ireg GPR0 ireg s;
+  fprintf oc "%a:	lwzu	%a, 4(%a)\n" label lbl ireg GPR0 ireg s;
   fprintf oc "	stwu	%a, 4(%a)\n" ireg GPR0 ireg d;
   fprintf oc "	bdnz	%a\n" label lbl;
   (* s and d lag behind by 4 bytes *)
