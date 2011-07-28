@@ -268,21 +268,26 @@ let print_annot_val oc txt args res =
 (* Unaligned memory accesses are quite fast on IA32, so use large
    memory accesses regardless of alignment. *)
 
-let print_builtin_memcpy oc sz al args =
-  let (dst, src) =
-    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+let print_builtin_memcpy_small oc sz al src dst =
   let tmp =
     if src <> ECX && dst <> ECX then ECX
     else if src <> EDX && dst <> EDX then EDX
     else EAX in
+  let need_tmp =
+    sz mod 4 <> 0 || not !Clflags.option_fsse in
   let rec copy ofs sz =
-    if sz >= 8 then begin
+    if sz >= 8 && !Clflags.option_fsse then begin
       fprintf oc "	movq	%d(%a), %a\n" ofs ireg src freg XMM6;
       fprintf oc "	movq	%a, %d(%a)\n" freg XMM6 ofs ireg dst;
       copy (ofs + 8) (sz - 8)
     end else if sz >= 4 then begin
-      fprintf oc "	movd	%d(%a), %a\n" ofs ireg src freg XMM6;
-      fprintf oc "	movd	%a, %d(%a)\n" freg XMM6 ofs ireg dst;
+      if !Clflags.option_fsse then begin
+        fprintf oc "	movd	%d(%a), %a\n" ofs ireg src freg XMM6;
+        fprintf oc "	movd	%a, %d(%a)\n" freg XMM6 ofs ireg dst
+      end else begin
+        fprintf oc "	movl	%d(%a), %a\n" ofs ireg src ireg tmp;
+        fprintf oc "	movl	%a, %d(%a)\n" ireg tmp ofs ireg dst
+      end;
       copy (ofs + 4) (sz - 4)
     end else if sz >= 2 then begin
       fprintf oc "	movw	%d(%a), %a\n" ofs ireg src ireg16 tmp;
@@ -293,14 +298,39 @@ let print_builtin_memcpy oc sz al args =
       fprintf oc "	movb	%a, %d(%a)\n" ireg8 tmp ofs ireg dst;
       copy (ofs + 1) (sz - 1)
     end in
-  fprintf oc "%s begin builtin __builtin_memcpy, size = %d, alignment = %d\n"
-          comment sz al;
-  if tmp = EAX && sz mod 4 <> 0 then
-    fprintf oc "	movd	%a, %a\n" ireg EAX freg XMM7;
+  if need_tmp && tmp = EAX then
+    fprintf oc "	pushl	%a\n" ireg EAX;
   copy 0 sz;
-  if tmp = EAX && sz mod 4 <> 0 then
-    fprintf oc "	movd	%a, %a\n" freg XMM7 ireg EAX;
-  fprintf oc "%s end builtin __builtin_memcpy\n" comment
+  if need_tmp && tmp = EAX then
+    fprintf oc "	popl	%a\n" ireg EAX
+
+let print_builtin_memcpy_big oc sz al src dst =
+  fprintf oc "	pushl	%a\n" ireg ESI;
+  fprintf oc "	pushl	%a\n" ireg EDI;
+  begin match src, dst with
+  | ESI, EDI -> ()
+  | EDI, ESI -> fprintf oc "	xchgl	%a, %a\n" ireg ESI ireg EDI
+  | ESI, _   -> fprintf oc "	movl	%a, %a\n" ireg dst ireg EDI
+  | _,   EDI -> fprintf oc "	movl	%a, %a\n" ireg src ireg ESI
+  | _,   _   -> fprintf oc "	movl	%a, %a\n" ireg src ireg ESI;
+                fprintf oc "	movl	%a, %a\n" ireg dst ireg EDI
+  end;
+  fprintf oc "	movl	$%d, %a\n" (sz / 4) ireg ECX;
+  fprintf oc "	rep	movsl\n";
+  if sz mod 4 >= 2 then fprintf oc "	movsw\n";
+  if sz mod 2 >= 1 then fprintf oc "	movsb\n";
+  fprintf oc "	popl	%a\n" ireg EDI;
+  fprintf oc "	popl	%a\n" ireg ESI
+
+let print_builtin_memcpy oc sz al args =
+  let (dst, src) =
+    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+  fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
+          comment sz al;
+  if sz <= 64
+  then print_builtin_memcpy_small oc sz al src dst
+  else print_builtin_memcpy_big oc sz al src dst;
+  fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment
 
 (* Handling of volatile reads and writes *)
 
@@ -413,47 +443,6 @@ let print_builtin_inline oc name args res =
       invalid_arg ("unrecognized builtin " ^ name)
   end;
   fprintf oc "%s end builtin %s\n" comment name
-
-(* Handling of other builtins *)
-
-let re_builtin_function = Str.regexp "__builtin_"
-
-let is_builtin_function s =
-  Str.string_match re_builtin_function (extern_atom s) 0
-
-let print_memcpy oc sz =
-  fprintf oc "	movl	%%esi, %%eax\n";     (* Preserve esi, edi *)
-  fprintf oc "	movl	%%edi, %%edx\n";
-  fprintf oc "	movl	0(%%esp), %%edi\n";  (* Load args *)
-  fprintf oc "	movl	4(%%esp), %%esi\n";
-  fprintf oc "	movl	8(%%esp), %%ecx\n";
-  fprintf oc "	shr	$2, %%ecx\n";
-  fprintf oc "	rep movsl\n";                (* Copy by words *)
-  if sz < 4 then begin
-    fprintf oc "	movl	8(%%esp), %%ecx\n";
-    fprintf oc "	andl	$3, %%ecx\n";
-    fprintf oc "	rep movsb\n"         (* Finish copy by bytes *)
-  end;
-  fprintf oc "	movl	%%eax, %%esi\n";     (* Restore esi, edi *)
-  fprintf oc "	movl	%%edx, %%edi\n"
-
-let print_builtin_function oc s =
-  fprintf oc "%s begin builtin function %s\n" comment (extern_atom s);
-  (* arguments: on stack, starting at offset 0 *)
-  (* result: EAX or ST0 *)
-  begin match extern_atom s with
-  (* Block copy *)
-  | "__builtin_memcpy" ->
-      print_memcpy oc 1
-  | "__builtin_memcpy_al2" ->
-      print_memcpy oc 2
-  | "__builtin_memcpy_al4" | "__builtin_memcpy_al8" ->
-      print_memcpy oc 4
-  (* Catch-all *)
-  | s ->
-      invalid_arg ("unrecognized builtin function " ^ s)
-  end;
-  fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
 
 (* Printing of instructions *)
 
@@ -631,12 +620,7 @@ let print_instruction oc = function
   | Pjmp_l(l) ->
       fprintf oc "	jmp	%a\n" label (transl_label l)
   | Pjmp_s(f) ->
-      if not (is_builtin_function f) then
-        fprintf oc "	jmp	%a\n" symbol f
-      else begin
-        print_builtin_function oc f;
-        fprintf oc "	ret\n"
-      end
+      fprintf oc "	jmp	%a\n" symbol f
   | Pjmp_r(r) ->
       fprintf oc "	jmp	*%a\n" ireg r
   | Pjcc(c, l) ->
@@ -658,10 +642,7 @@ let print_instruction oc = function
       fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r;
       jumptables := (l, tbl) :: !jumptables
   | Pcall_s(f) ->
-      if not (is_builtin_function f) then
-        fprintf oc "	call	%a\n" symbol f
-      else
-        print_builtin_function oc f
+      fprintf oc "	call	%a\n" symbol f
   | Pcall_r(r) ->
       fprintf oc "	call	*%a\n" ireg r
   | Pret ->

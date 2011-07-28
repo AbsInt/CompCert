@@ -72,28 +72,11 @@ let builtins_generic = {
     "__builtin_fabs",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     (* Block copy *)
-    "__builtin_memcpy",
+    "__builtin_memcpy_aligned",
          (TVoid [],
            [TPtr(TVoid [], []); 
             TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, [])],
-          false);
-    "__builtin_memcpy_al2",
-         (TVoid [],
-           [TPtr(TVoid [], []); 
-            TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, [])],
-          false);
-    "__builtin_memcpy_al4",
-         (TVoid [],
-           [TPtr(TVoid [], []); 
-            TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, [])],
-          false);
-    "__builtin_memcpy_al8",
-         (TVoid [],
-           [TPtr(TVoid [], []); 
-            TPtr(TVoid [AConst], []); 
+            TInt(Cutil.size_t_ikind, []);
             TInt(Cutil.size_t_ikind, [])],
           false);
     (* Annotations *)
@@ -216,14 +199,10 @@ let register_annotation_val txt targ =
 
 (** ** Handling of inlined memcpy functions *)
 
-let register_inlined_memcpy basename sz =
+let register_inlined_memcpy sz al =
   let al =
-    match basename with
-    | "__builtin_memcpy_al2" -> 2l
-    | "__builtin_memcpy_al4" -> 4l
-    | "__builtin_memcpy_al8" -> 8l
-    | _ -> 1l in
-  let name = Printf.sprintf "%s_sz%ld" basename sz in
+    if al <= 4l then al else 4l in (* max alignment supported by CompCert *)
+  let name = Printf.sprintf "__builtin_memcpy_sz%ld_al%ld" sz al in
   let targs = Tcons(Tpointer Tvoid, Tcons(Tpointer Tvoid, Tnil))
   and tres = Tvoid
   and ef = EF_memcpy(coqint_of_camlint sz, coqint_of_camlint al) in
@@ -231,24 +210,21 @@ let register_inlined_memcpy basename sz =
   Evalof(Evar(intern_string name, Tfunction(targs, tres)),
          Tfunction(targs, tres))
 
-let memcpy_inline_threshold = ref 64l
-
-let make_builtin_memcpy name fn args =
+let make_builtin_memcpy args =
   match args with
-  | Econs(dst, Econs(src, Econs(sz, Enil))) ->
+  | Econs(dst, Econs(src, Econs(sz, Econs(al, Enil)))) ->
       let sz1 =
         match Initializers.constval sz with
-        | CompcertErrors.OK(Vint n) -> Some (camlint_of_coqint n)
-        | _ -> None in
-      begin match sz1 with
-      | Some sz2 when sz2 <= !memcpy_inline_threshold ->
-          let fn = register_inlined_memcpy name sz2 in
-          Ecall(fn, Econs(dst, Econs(src, Enil)), Tvoid)
-      | _ ->
-          Ecall(fn, args, Tvoid)
-      end
+        | CompcertErrors.OK(Vint n) -> camlint_of_coqint n
+        | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be a constant)"; 0l in
+      let al1 =
+        match Initializers.constval al with
+        | CompcertErrors.OK(Vint n) -> camlint_of_coqint n
+        | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be a constant)"; 0l in
+      let fn = register_inlined_memcpy sz1 al1 in
+      Ecall(fn, Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->
-    Ecall(fn, args, Tvoid)
+    assert false
 
 (** ** Translation functions *)
 
@@ -570,12 +546,8 @@ let rec convertExpr env e =
           ezero
       end          
 
- | C.ECall({edesc = C.EVar {name = ("__builtin_memcpy"
-                                    |"__builtin_memcpy_al2"
-                                    |"__builtin_memcpy_al4"
-                                    |"__builtin_memcpy_al8" as name)}} as fn,
-            args) ->
-      make_builtin_memcpy name (convertExpr env fn) (convertExprList env args)
+ | C.ECall({edesc = C.EVar {name = "__builtin_memcpy_aligned"}}, args) ->
+      make_builtin_memcpy (convertExprList env args)
 
   | C.ECall(fn, args) ->
       match projFunType env fn.etyp with
@@ -764,11 +736,6 @@ let convertFundef env fd =
 
 (** External function declaration *)
 
-let noninlined_builtin_functions = [
-    "__builtin_memcpy"; "__builtin_memcpy_al2";
-    "__builtin_memcpy_al4"; "__builtin_memcpy_al8"
-]
-
 let convertFundecl env (sto, id, ty, optinit) =
   let (args, res) =
     match convertTyp env ty with
@@ -777,8 +744,9 @@ let convertFundecl env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let sg = signature_of_type args res in
   let ef =
+    if id.name = "malloc" then EF_malloc else
+    if id.name = "free" then EF_free else
     if List.mem_assoc id.name builtins.functions
-    && not (List.mem id.name noninlined_builtin_functions)
     then EF_builtin(id', sg)
     else EF_external(id', sg) in
   Datatypes.Coq_pair(id', External(ef, args, res))

@@ -129,7 +129,7 @@ let name_type ty = name_cdecl "" ty
 type associativity = LtoR | RtoL | NA
 
 let rec precedence = function
-  | Eloc _ -> assert false
+  | Eloc _ -> (16, NA)
   | Evar _ -> (16, NA)
   | Ederef _ -> (15, RtoL)
   | Efield _ -> (16, LtoR)
@@ -153,7 +153,7 @@ let rec precedence = function
   | Eassign _ -> (2, RtoL)
   | Eassignop _ -> (2, RtoL)
   | Ecomma _ -> (1, LtoR)
-  | Eparen _ -> assert false
+  | Eparen _ -> (14, RtoL)
 
 (* Expressions *)
 
@@ -168,7 +168,7 @@ let rec expr p (prec, e) =
   else fprintf p "@[<hov 2>";
   begin match e with
   | Eloc _ ->
-      assert false
+      fprintf p "<loc>"
   | Evar(id, _) ->
       fprintf p "%s" (extern_atom id)
   | Ederef(a1, _) ->
@@ -181,8 +181,10 @@ let rec expr p (prec, e) =
       fprintf p "%ld" (camlint_of_coqint n)
   | Eval(Vfloat f, _) ->
       fprintf p "%F" f
-  | Eval(_, _) ->
-      assert false
+  | Eval(Vptr _, _) ->
+      fprintf p "<ptr>"
+  | Eval(Vundef, _) ->
+      fprintf p "<undef>"
   | Esizeof(ty, _) ->
       fprintf p "sizeof(%s)" (name_type ty)
   | Eunop(op, a1, _) ->
@@ -207,8 +209,8 @@ let rec expr p (prec, e) =
       fprintf p "%a,@ %a" expr (prec1, a1) expr (prec2, a2)
   | Ecall(a1, al, _) ->
       fprintf p "%a@[<hov 1>(%a)@]" expr (prec', a1) exprlist (true, al)
-  | Eparen _ ->
-      assert false
+  | Eparen(a1, ty) ->
+      fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -221,6 +223,7 @@ and exprlist p (first, rl) =
       exprlist p (false, rl)
 
 let print_expr p e = expr p (0, e)
+let print_exprlist p el = exprlist p (true, el)
 
 (* Statements *)
 

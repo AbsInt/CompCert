@@ -7,7 +7,7 @@ struct list * f(struct list ** p)
   return ((*p)->tl = 0);
 }
 
-int main(int argc, char ** argv)
+int main()
 {
   struct list l;
   l.tl = &l;

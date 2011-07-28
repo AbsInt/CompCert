@@ -50,20 +50,17 @@ let default_memcpy () =
       memcpy_decl := Some id;
       (id, memcpy_type)
 
-let rec find_memcpy env = function
-  | [] ->
-      default_memcpy()
-  | name :: rem ->
-      try lookup_function env name with Env.Error _ -> find_memcpy env rem
-
-let memcpy_1_ident env =
-  find_memcpy env ["__builtin_memcpy"; "memcpy"]
-let memcpy_2_ident env =
-  find_memcpy env ["__builtin_memcpy_al2"; "__builtin_memcpy"; "memcpy"]
-let memcpy_4_ident env =
-  find_memcpy env ["__builtin_memcpy_al4"; "__builtin_memcpy"; "memcpy"]
-let memcpy_8_ident env =
-  find_memcpy env ["__builtin_memcpy_al8"; "__builtin_memcpy"; "memcpy"]
+let find_memcpy env =
+  try
+    (lookup_function env "__builtin_memcpy_aligned", true)
+  with Env.Error _ ->
+  try
+    (lookup_function env "__builtin_memcpy", false)
+  with Env.Error _ ->
+  try
+    (lookup_function env "memcpy", false)
+  with Env.Error _ ->
+    (default_memcpy(), false)
 
 (* Smart constructor for "," expressions *)
 
@@ -84,20 +81,19 @@ let rec addrof e =
    [lhs] and [rhs] must be l-values. *)
 
 let transf_assign env lhs rhs =
-  let (al, sz) =
-     match Cutil.alignof env lhs.etyp, Cutil.sizeof env lhs.etyp with
-     | Some al, Some sz -> (al, sz)
-     | _, _ -> (1, 1) in
-  let (ident, ty) = 
-    if al mod 8 = 0 && sz mod 8 = 0 then memcpy_8_ident env
-    else if al mod 4 = 0 && sz mod 4 = 0 then memcpy_4_ident env
-    else if al mod 2 = 0 && sz mod 2 = 0 then memcpy_2_ident env
-    else memcpy_1_ident env in
+  let al =
+     match Cutil.alignof env lhs.etyp with Some al -> al | None -> 1 in
+  let ((ident, ty), four_args) = find_memcpy env in
   let memcpy = {edesc = EVar(ident); etyp = ty} in
-  let e_lhs = addrof lhs in
-  let e_rhs = addrof rhs in
-  let e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])} in
-  {edesc = ECall(memcpy, [e_lhs; e_rhs; e_size]); etyp = TVoid[]}
+  let e_lhs = addrof lhs
+  and e_rhs = addrof rhs
+  and e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])}
+  and e_align = intconst (Int64.of_int al) size_t_ikind in
+  let args =
+    if four_args
+    then [e_lhs; e_rhs; e_size; e_align]
+    else [e_lhs; e_rhs; e_size] in
+  {edesc = ECall(memcpy, args); etyp = TVoid[]}
 
 (* Detect invariant l-values *)
 

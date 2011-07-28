@@ -71,7 +71,7 @@ BACKEND=\
 
 # C front-end modules (in cfrontend/)
 
-CFRONTEND=Csyntax.v Csem.v Cstrategy.v \
+CFRONTEND=Csyntax.v Csem.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
   Clight.v Cshmgen.v Cshmgenproof.v \
@@ -114,7 +114,7 @@ ccomp.byte: driver/Configuration.ml
 runtime:
 	$(MAKE) -C runtime
 
-.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte runtime
+.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte cinterp cinterp.byte runtime
 
 all:
 	$(MAKE) proof

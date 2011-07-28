@@ -24,6 +24,7 @@ Require Import Smallstep.
 Require Csyntax.
 Require Csem.
 Require Cstrategy.
+Require Cexec.
 Require Clight.
 Require Csharpminor.
 Require Cminor.
@@ -82,8 +83,8 @@ Require Reloadtyping.
 Require Stackingproof.
 Require Stackingtyping.
 Require Asmgenproof.
+
 (** Pretty-printers (defined in Caml). *)
-Parameter print_Csyntax: Csyntax.program -> unit.
 Parameter print_Clight: Clight.program -> unit.
 Parameter print_Cminor: Cminor.program -> unit.
 Parameter print_RTL: RTL.fundef -> unit.
@@ -180,13 +181,13 @@ Definition transf_clight_program (p: Clight.program) : res Asm.program :=
 
 Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   OK p 
-   @@ print print_Csyntax
   @@@ SimplExpr.transl_program
   @@@ transf_clight_program.
 
-(** Force [Initializers] to be extracted as well. *)
+(** Force [Initializers] and [Cexec] to be extracted as well. *)
 
 Definition transl_init := Initializers.transl_init.
+Definition cexec_do_step := Cexec.do_step.
 
 (** The following lemmas help reason over compositions of passes. *)
 
@@ -403,7 +404,7 @@ Theorem transf_cstrategy_program_correct:
 Proof.
   intros.
   assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics tp)).
-  revert H; unfold transf_c_program; simpl. rewrite print_identity.
+  revert H; unfold transf_c_program; simpl.
   caseEq (SimplExpr.transl_program p); simpl; try congruence; intros p0 EQ0.
   intros EQ1.
   eapply compose_forward_simulation. apply SimplExprproof.transl_program_correct. eauto.

@@ -46,7 +46,7 @@ char * x18 = "Hello!";
 
 char * x19[2] = { "Hello", "world!" };
 
-int main(int argc, char ** argv)
+int main()
 {
   int i;
 

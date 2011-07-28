@@ -316,14 +316,12 @@ let print_annot_val oc txt args res =
 (* On the PowerPC, unaligned accesses to 16- and 32-bit integers are
    fast, but unaligned accesses to 64-bit floats can be slow
    (not so much on G5, but clearly so on Power7).
-   So, use 64-bit accesses only if alignment >= 8.
+   So, use 64-bit accesses only if alignment >= 4.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
 
-let print_builtin_memcpy oc sz al args =
-  let (dst, src) =
-    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+let print_builtin_memcpy_small oc sz al src dst =
   let rec copy ofs sz =
-    if sz >= 8 && al >= 8 then begin
+    if sz >= 8 && al >= 4 then begin
       fprintf oc "	lfd	%a, %d(%a)\n" freg FPR0 ofs ireg src;
       fprintf oc "	stfd	%a, %d(%a)\n" freg FPR0 ofs ireg dst;
       copy (ofs + 8) (sz - 8)
@@ -340,10 +338,40 @@ let print_builtin_memcpy oc sz al args =
       fprintf oc "	stb	%a, %d(%a)\n" ireg GPR0 ofs ireg dst;
       copy (ofs + 1) (sz - 1)
     end in
-  fprintf oc "%s begin builtin __builtin_memcpy, size = %d, alignment = %d\n"
+  copy 0 sz
+
+let print_builtin_memcpy_big oc sz al src dst =
+  assert (sz >= 4);
+  fprintf oc "	li	%a, %d\n" ireg GPR0 (sz / 4);
+  fprintf oc "	mtctr	%a\n" ireg GPR0;
+  let (s,d) = if dst <> GPR11 then (GPR11, GPR12) else (GPR12, GPR11) in
+  fprintf oc "	addi	%a, %a, -4\n" ireg s ireg src;
+  fprintf oc "	addi	%a, %a, -4\n" ireg d ireg dst;
+  let lbl = new_label() in
+  fprintf oc "%a:	lwzu	%a, 4(%a)\n" ireg GPR0 ireg s;
+  fprintf oc "	stwu	%a, 4(%a)\n" ireg GPR0 ireg d;
+  fprintf oc "	bdnz	%a\n" label lbl;
+  (* s and d lag behind by 4 bytes *)
+  match sz land 3 with
+  | 1 -> fprintf oc "	lbz	%a, 4(%a)\n" ireg GPR0 ireg s;
+         fprintf oc "	stb	%a, 4(%a)\n" ireg GPR0 ireg d
+  | 2 -> fprintf oc "	lhz	%a, 4(%a)\n" ireg GPR0 ireg s;
+         fprintf oc "	sth	%a, 4(%a)\n" ireg GPR0 ireg d
+  | 3 -> fprintf oc "	lhz	%a, 4(%a)\n" ireg GPR0 ireg s;
+         fprintf oc "	sth	%a, 4(%a)\n" ireg GPR0 ireg d;
+         fprintf oc "	lbz	%a, 6(%a)\n" ireg GPR0 ireg s;
+         fprintf oc "	stb	%a, 6(%a)\n" ireg GPR0 ireg d
+  | _ -> ()
+
+let print_builtin_memcpy oc sz al args =
+  let (dst, src) =
+    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+  fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
           comment sz al;
-  copy 0 sz;
-  fprintf oc "%s end builtin __builtin_memcpy\n" comment
+  if sz <= 64
+  then print_builtin_memcpy_small oc sz al src dst
+  else print_builtin_memcpy_big oc sz al src dst;
+  fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment
 
 (* Handling of volatile reads and writes *)
 
@@ -441,61 +469,6 @@ let print_builtin_inline oc name args res =
   end;
   fprintf oc "%s end builtin %s\n" comment name
 
-(* Handling of other builtins *)
-
-let re_builtin_function = Str.regexp "__builtin_"
-
-let is_builtin_function s =
-  Str.string_match re_builtin_function (extern_atom s) 0
-
-let print_memcpy oc sz prepare load store =
-  let lbl1 = new_label() in
-  let lbl2 = new_label() in
-  prepare GPR5;
-  fprintf oc "	beq     %a, %a\n" creg 0 label lbl1;
-  fprintf oc "	mtctr   %a\n" ireg GPR5;
-  fprintf oc "	addi    %a, %a, -%d\n" ireg GPR3 ireg GPR3 sz;
-  fprintf oc "	addi    %a, %a, -%d\n" ireg GPR4 ireg GPR4 sz;
-  fprintf oc "%a:\n" label lbl2;
-  load GPR4;
-  store GPR3;
-  fprintf oc "	bdnz    %a\n" label lbl2;
-  fprintf oc "%a:\n" label lbl1
-
-let print_builtin_function oc s =
-  fprintf oc "%s begin builtin function %s\n" comment (extern_atom s);
-  (* int args: GPR3, GPR4, GPR5     float args: FPR1, FPR2, FPR3
-     int res:  GPR3                 float res:  FPR1
-     Watch out for MacOSX/EABI incompatibility: functions that take
-     some floats then some ints.  There are none here. *)
-  (* Block copy *)
-  begin match extern_atom s with
-  | "__builtin_memcpy" ->
-      print_memcpy oc 1
-        (fun r -> fprintf oc "	cmplwi	%a, %a, 0\n" creg 0 ireg r)
-        (fun r -> fprintf oc "	lbzu    %a, 1(%a)\n" ireg GPR0 ireg r)
-        (fun r -> fprintf oc "	stbu    %a, 1(%a)\n" ireg GPR0 ireg r)
-  | "__builtin_memcpy_al2" ->
-      print_memcpy oc 2
-        (fun r -> fprintf oc "	rlwinm.	%a, %a, 31, 1, 31\n" ireg r ireg r)
-        (fun r -> fprintf oc "	lhzu    %a, 2(%a)\n" ireg GPR0 ireg r)
-        (fun r -> fprintf oc "	sthu    %a, 2(%a)\n" ireg GPR0 ireg r)
-  | "__builtin_memcpy_al4" ->
-      print_memcpy oc 4
-        (fun r -> fprintf oc "	rlwinm.	%a, %a, 30, 2, 31\n" ireg r ireg r)
-        (fun r -> fprintf oc "	lwzu    %a, 4(%a)\n" ireg GPR0 ireg r)
-        (fun r -> fprintf oc "	stwu    %a, 4(%a)\n" ireg GPR0 ireg r)
-  | "__builtin_memcpy_al8" ->
-      print_memcpy oc 8
-        (fun r -> fprintf oc "	rlwinm.	%a, %a, 29, 3, 31\n" ireg r ireg r)
-        (fun r -> fprintf oc "	lfdu    %a, 8(%a)\n" freg FPR0 ireg r)
-        (fun r -> fprintf oc "	stfdu   %a, 8(%a)\n" freg FPR0 ireg r)
-  (* Catch-all *)
-  | s ->
-      invalid_arg ("unrecognized builtin function " ^ s)
-  end;
-  fprintf oc "%s end builtin function %s\n" comment (extern_atom s)
-
 (* Printing of instructions *)
 
 let float_literals : (int * int64) list ref = ref []
@@ -543,17 +516,9 @@ let print_instruction oc = function
   | Pbf(bit, lbl) ->
       fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
   | Pbl s ->
-      if not (is_builtin_function s) then
-        fprintf oc "	bl	%a\n" symbol s
-      else
-        print_builtin_function oc s
+      fprintf oc "	bl	%a\n" symbol s
   | Pbs s ->
-      if not (is_builtin_function s) then
-        fprintf oc "	b	%a\n" symbol s
-      else begin
-        print_builtin_function oc s;
-        fprintf oc "	blr\n"
-      end
+      fprintf oc "	b	%a\n" symbol s
   | Pblr ->
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
@@ -955,15 +920,18 @@ let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code ->
       print_function oc name code
-  | External ef ->
-      if not (is_builtin_function name) then stub_function oc name (ef_sig ef)
+  | External (EF_external _ as ef) ->
+      if function_needs_stub name then stub_function oc name (ef_sig ef)
+  | External _ ->
+      ()
 
 let record_extfun (Coq_pair(name, defn)) =
   match defn with
   | Internal _ -> ()
-  | External _ ->
-      if function_needs_stub name && not (is_builtin_function name) then
+  | External (EF_external _) ->
+      if function_needs_stub name then
         stubbed_functions := IdentSet.add name !stubbed_functions
+  | External _ -> ()
 
 let print_init oc = function
   | Init_int8 n ->

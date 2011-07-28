@@ -269,9 +269,7 @@ let print_annot_val oc txt args res =
 
 (* The ARM has strict alignment constraints. *)
 
-let print_builtin_memcpy oc sz al args =
-  let (dst, src) =
-    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+let print_builtin_memcpy_small oc sz al src dst =
   let rec copy ofs sz ninstr =
     if sz >= 4 && al >= 4 then begin
       fprintf oc "	ldr	%a, [%a, #%d]\n" ireg IR14 ireg src ofs;
@@ -287,10 +285,50 @@ let print_builtin_memcpy oc sz al args =
       copy (ofs + 1) (sz - 1) (ninstr + 2)
     end else
       ninstr in
-  fprintf oc "%s begin builtin __builtin_memcpy, size = %d, alignment = %d\n"
+  copy 0 sz 0
+
+let print_builtin_memcpy_big oc sz al src dst =
+  assert (sz >= al);
+  assert (sz mod al = 0);
+  let (load, store, chunksize) =
+    if al >= 4 then ("ldr", "str", 4)
+    else if al = 2 then ("ldrh", "strh", 2)
+    else ("ldrb", "strb", 1) in
+  let tmp =
+    if src <> IR0 && dst <> IR0 then IR0
+    else if src <> IR1 && dst <> IR1 then IR1
+    else IR2 in
+  fprintf oc "	stmfd	sp!, {%a,%a,%a}\n" ireg tmp ireg src ireg dst;
+  begin match Asmgen.decompose_int
+                 (coqint_of_camlint (Int32.of_int (sz / chunksize))) with
+  | [] -> assert false
+  | hd::tl ->
+      fprintf oc "	mov	%a, #%a\n" ireg IR14 coqint hd;
+      List.iter
+        (fun n ->
+           fprintf oc "	orr	%a, %a, #%a\n" ireg IR14 ireg IR14 coqint n)
+        tl
+  end;
+  let lbl = new_label() in
+  fprintf oc ".L%d:	%s	%a, [%a], #%d\n" lbl load ireg tmp ireg src chunksize;
+  fprintf oc "	subs	%a, %a, #1\n" ireg IR14 ireg IR14;
+  fprintf oc "	%s	%a, [%a], #%d\n" store ireg tmp ireg dst chunksize;
+  fprintf oc "	bne	.L%d\n" lbl;
+  fprintf oc "	ldmfd	sp!, {%a,%a,%a}\n" ireg tmp ireg src ireg dst;
+  9
+
+let print_builtin_memcpy oc sz al args =
+  let (dst, src) =
+    match args with [IR d; IR s] -> (d, s) | _ -> assert false in
+  fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
           comment sz al;
-  let n = copy 0 sz 0 in
-  fprintf oc "%s end builtin __builtin_memcpy\n" comment; n
+  let n =
+    if sz <= 64
+    then print_builtin_memcpy_small oc sz al src dst
+    else print_builtin_memcpy_big oc sz al src dst in
+  fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment; n
+
+(* Handling of volatile reads and writes *)
 
 let print_builtin_vload oc chunk args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
@@ -351,46 +389,6 @@ let print_builtin_inline oc name args res =
   fprintf oc "%s end %s\n" comment name;
   n
 
-(* Handling of other builtins *)
-
-let re_builtin_function = Str.regexp "__builtin_"
-
-let is_builtin_function s =
-  Str.string_match re_builtin_function (extern_atom s) 0
-
-let print_memcpy oc load store sz log2sz =
-  let lbl1 = new_label() in
-  let lbl2 = new_label() in
-  if sz = 1
-  then fprintf oc "	cmp	%a, #0\n" ireg IR2
-  else fprintf oc "	movs	%a, %a, lsr #%d\n" ireg IR2 ireg IR2 log2sz;
-  fprintf oc "	beq	.L%d\n" lbl1;
-  fprintf oc ".L%d:	%s	%a, [%a], #%d\n" lbl2 load ireg IR3 ireg IR1 sz;
-  fprintf oc "	subs	%a, %a, #1\n" ireg IR2 ireg IR2;
-  fprintf oc "	%s	%a, [%a], #%d\n" store ireg IR3 ireg IR0 sz;
-  fprintf oc "	bne	.L%d\n" lbl2;
-  fprintf oc ".L%d:\n" lbl1;
-  7
-
-let print_builtin_function oc s =
-  fprintf oc "%s begin %s\n" comment (extern_atom s);
-  (* int args: IR0-IR3     float args: FR0, FR1
-     int res:  IR0        float res:  FR0 *)
-  let n = match extern_atom s with
-  (* Block copy *)
-  | "__builtin_memcpy" ->
-      print_memcpy oc "ldrb" "strb" 1 0
-  | "__builtin_memcpy_al2" ->
-      print_memcpy oc "ldrh" "strh" 2 1
-  | "__builtin_memcpy_al4" | "__builtin_memcpy_al8" ->
-      print_memcpy oc "ldr" "str" 4 2
-  (* Catch-all *)
-  | s ->
-      invalid_arg ("unrecognized builtin function " ^ s)
-  in
-  fprintf oc "%s end %s\n" comment (extern_atom s);
-  n
-
 (* Printing of instructions *)
 
 let shift_op oc = function
@@ -424,21 +422,11 @@ let print_instruction oc = function
   | Pbc(bit, lbl) ->
       fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
   | Pbsymb id ->
-      if not (is_builtin_function id) then begin
-        fprintf oc "	b	%a\n" print_symb id; 1
-      end else begin
-        let n = print_builtin_function oc id in
-        fprintf oc "	mov	pc, r14\n";
-        n + 1
-      end
+      fprintf oc "	b	%a\n" print_symb id; 1
   | Pbreg r ->
       fprintf oc "	mov	pc, %a\n" ireg r; 1
   | Pblsymb id ->
-      if not (is_builtin_function id) then begin
-        fprintf oc "	bl	%a\n" print_symb id; 1
-      end else begin
-        print_builtin_function oc id
-      end
+      fprintf oc "	bl	%a\n" print_symb id; 1
   | Pblreg r ->
       fprintf oc "	mov	lr, pc\n";
       fprintf oc "	mov	pc, %a\n" ireg r; 2
@@ -658,9 +646,8 @@ let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code ->
       print_function oc name code
-  | External ef ->
-      if need_stub ef && not(is_builtin_function name)
-      then print_external_function oc name (ef_sig ef)
+  | External ef
+      if need_stub ef then print_external_function oc name (ef_sig ef)
 
 (* Data *)
 

@@ -62,9 +62,9 @@ let preprocess ifile ofile =
     exit 2
   end
 
-(* From preprocessed C to asm *)
+(* From preprocessed C to Csyntax *)
 
-let compile_c_file sourcename ifile ofile =
+let parse_c_file sourcename ifile =
   Sections.initialize();
   (* Simplification options *)
   let simplifs =
@@ -94,11 +94,22 @@ let compile_c_file sourcename ifile ofile =
     | None -> exit 2
     | Some p -> p in
   flush stderr;
-  (* Prepare to dump Csyntax, Clight, RTL, etc, if requested *)
+  (* Save CompCert C AST if requested *)
+  if !option_dcmedium then begin
+    let ofile = Filename.chop_suffix sourcename ".c" ^ ".compcert.c" in
+    let oc = open_out ofile in
+    PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
+    close_out oc
+  end;
+  csyntax
+
+(* From CompCert C AST to asm *)
+
+let compile_c_ast sourcename csyntax ofile =
+  (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
     dst := if !opt then Some (Filename.chop_suffix sourcename ".c" ^ ext)
                    else None in
-  set_dest PrintCsyntax.destination option_dcmedium ".compcert.c";
   set_dest PrintClight.destination option_dclight ".light.c";
   set_dest PrintCminor.destination option_dcminor ".cm";
   set_dest PrintRTL.destination_rtl option_drtl ".rtl";
@@ -119,6 +130,11 @@ let compile_c_file sourcename ifile ofile =
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
   close_out oc
+
+(* From C source to asm *)
+
+let compile_c_file sourcename ifile ofile =
+  compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
 
 (* From Cminor to asm *)
 
@@ -178,6 +194,8 @@ let linker exe_name files =
 
 (* Processing of a .c file *)
 
+let option_interp = ref false
+
 let process_c_file sourcename =
   let prefixname = Filename.chop_suffix sourcename ".c" in
   if !option_E then begin
@@ -185,7 +203,10 @@ let process_c_file sourcename =
   end else begin
     let preproname = Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
-    if !option_S then begin
+    if !option_interp then begin
+      let csyntax = parse_c_file sourcename preproname in
+      Interp.execute csyntax
+    end else if !option_S then begin
       compile_c_file sourcename preproname (prefixname ^ ".s")
     end else begin
       let asmname =
@@ -235,57 +256,13 @@ let process_S_file sourcename =
   end;
   prefixname ^ ".o"
 
-(* Command-line parsing *)
+(* Interpretation of a .c file *)
 
-let usage_string =
-"ccomp [options] <source files>
-Recognized source files:
-  .c             C source file
-  .cm            Cminor source file
-  .s             Assembly file
-  .S             Assembly file, to be run through the preprocessor
-  .o             Object file
-  .a             Library file
-Processing options:
-  -E             Preprocess only, send result to standard output
-  -S             Compile to assembler only, save result in <file>.s
-  -c             Compile to object file only (no linking), result in <file>.o
-Preprocessing options:
-  -I<dir>        Add <dir> to search path for #include files
-  -D<symb>=<val> Define preprocessor symbol
-  -U<symb>       Undefine preprocessor symbol
-Language support options (use -fno-<opt> to turn off -f<opt>) :
-  -fbitfields    Emulate bit fields in structs [off]
-  -flonglong     Partial emulation of 'long long' types [on]
-  -fstruct-passing  Emulate passing structs and unions by value [off]
-  -fstruct-assign   Emulate assignment between structs or unions [off]
-  -fvararg-calls Emulate calls to variable-argument functions [on]
-  -fpacked-structs  Emulate packed structs [off]
-Code generation options:
-  -fmadd         Use fused multiply-add and multiply-sub instructions [off]
-  -fsmall-data <n>  Set maximal size <n> for allocation in small data area
-  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
-Tracing options:
-  -dparse        Save C file after parsing and elaboration in <file>.parse.c
-  -dc            Save generated Compcert C in <file>.compcert.c
-  -dclight       Save generated Clight in <file>.light.c
-  -dcminor       Save generated Cminor in <file>.cm
-  -drtl          Save unoptimized generated RTL in <file>.rtl
-  -dtailcall     Save RTL after tail call optimization in <file>.tailcall.rtl
-  -dcastopt      Save RTL after cast optimization in <file>.castopt.rtl
-  -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
-  -dcse          Save RTL after CSE optimization in <file>.cse.rtl
-  -dalloc        Save LTL after register allocation in <file>.alloc.ltl
-  -dmach         Save generated Mach code in <file>.mach
-  -dasm          Save generated assembly in <file>.s
-Linking options:
-  -l<lib>        Link library <lib>
-  -L<dir>        Add <dir> to search path for libraries
-  -o <file>      Generate executable in <file> (default: a.out)
-General options:
-  -stdlib <dir>  Set the path of the Compcert run-time library [MacOS X only]
-  -v             Print external commands before invoking them
-"
+let execute_c_file sourcename =
+  let preproname = Filename.temp_file "compcert" ".i" in
+  preprocess sourcename preproname
+
+(* Command-line parsing *)
 
 type action =
   | Set of bool ref
@@ -340,6 +317,63 @@ let parse_cmdline spec usage =
     end
   in parse 1
 
+let usage_string =
+"ccomp [options] <source files>
+Recognized source files:
+  .c             C source file
+  .cm            Cminor source file
+  .s             Assembly file
+  .S             Assembly file, to be run through the preprocessor
+  .o             Object file
+  .a             Library file
+Processing options:
+  -E             Preprocess only, send result to standard output
+  -S             Compile to assembler only, save result in <file>.s
+  -c             Compile to object file only (no linking), result in <file>.o
+Preprocessing options:
+  -I<dir>        Add <dir> to search path for #include files
+  -D<symb>=<val> Define preprocessor symbol
+  -U<symb>       Undefine preprocessor symbol
+Language support options (use -fno-<opt> to turn off -f<opt>) :
+  -fbitfields    Emulate bit fields in structs [off]
+  -flonglong     Partial emulation of 'long long' types [on]
+  -fstruct-passing  Emulate passing structs and unions by value [off]
+  -fstruct-assign   Emulate assignment between structs or unions [off]
+  -fvararg-calls Emulate calls to variable-argument functions [on]
+  -fpacked-structs  Emulate packed structs [off]
+Code generation options: (use -fno-<opt> to turn off -f<opt>) :
+  -fmadd         (PowerPC) Use fused multiply-add and multiply-sub instructions [off]
+  -fsse          (IA32) Use SSE2 instructions for some integer operations [on]
+  -fsmall-data <n>  Set maximal size <n> for allocation in small data area
+  -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
+Tracing options:
+  -dparse        Save C file after parsing and elaboration in <file>.parse.c
+  -dc            Save generated Compcert C in <file>.compcert.c
+  -dclight       Save generated Clight in <file>.light.c
+  -dcminor       Save generated Cminor in <file>.cm
+  -drtl          Save unoptimized generated RTL in <file>.rtl
+  -dtailcall     Save RTL after tail call optimization in <file>.tailcall.rtl
+  -dcastopt      Save RTL after cast optimization in <file>.castopt.rtl
+  -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
+  -dcse          Save RTL after CSE optimization in <file>.cse.rtl
+  -dalloc        Save LTL after register allocation in <file>.alloc.ltl
+  -dmach         Save generated Mach code in <file>.mach
+  -dasm          Save generated assembly in <file>.s
+Linking options:
+  -l<lib>        Link library <lib>
+  -L<dir>        Add <dir> to search path for libraries
+  -o <file>      Generate executable in <file> (default: a.out)
+General options:
+  -stdlib <dir>  Set the path of the Compcert run-time library [MacOS X only]
+  -v             Print external commands before invoking them
+Interpreter mode:
+  -interp        Execute given .c files using the reference interpreter
+  -quiet         Suppress diagnostic messages for the interpreter
+  -trace         Have the interpreter produce a detailed trace of reductions
+  -random        Randomize execution order
+  -all           Simulate all possible execution orders
+"
+
 let cmdline_actions =
   let f_opt name ref =
     ["-f" ^ name ^ "$", Set ref; "-fno-" ^ name ^ "$", Unset ref] in
@@ -367,6 +401,11 @@ let cmdline_actions =
   "-S$", Set option_S;
   "-c$", Set option_c;
   "-v$", Set option_v;
+  "-interp$", Set option_interp;
+  "-quiet$", Self (fun _ -> Interp.trace := 0);
+  "-trace$", Self (fun _ -> Interp.trace := 2);
+  "-random$", Self (fun _ -> Interp.mode := Interp.Random);
+  "-all$", Self (fun _ -> Interp.mode := Interp.All);
   ".*\\.c$", Self (fun s ->
       let objfile = process_c_file s in
       linker_options := objfile :: !linker_options);
@@ -391,6 +430,7 @@ let cmdline_actions =
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "madd" option_fmadd
   @ f_opt "packed-structs" option_fpacked_structs
+  @ f_opt "sse" option_fsse
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
@@ -405,7 +445,7 @@ let _ =
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
   if !linker_options <> [] 
-  && not (!option_c || !option_S || !option_E)
+  && not (!option_c || !option_S || !option_E || !option_interp)
   then begin
     linker !exe_name !linker_options
   end

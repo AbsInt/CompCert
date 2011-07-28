@@ -8,7 +8,7 @@
   *((ty *) &x) = v2;                                               \
   printf("%s 2: %s\n", msg, *((volatile ty *) &x) == v2 ? "OK" : "FAILED");
 
-int main(int argc, char ** argv)
+int main()
 {
   signed char sc;
   unsigned char uc;
