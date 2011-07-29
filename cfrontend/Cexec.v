@@ -1,3 +1,17 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Animating the CompCert C semantics *)
+
 Require Import Axioms.
 Require Import Coqlib.
 Require Import Errors.
@@ -13,8 +27,6 @@ Require Import Determinism.
 Require Import Csyntax.
 Require Import Csem.
 Require Cstrategy.
-
-(** Animating the CompCert C semantics *)
 
 Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}
 with typelist_eq: forall (tyl1 tyl2: typelist), {tyl1=tyl2} + {tyl1<>tyl2}

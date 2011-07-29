@@ -400,6 +400,7 @@ let rec explore p prog ge time ss =
   end
 
 let execute prog =
+  Random.self_init();
   let p = err_formatter in
   pp_set_max_boxes p 10;
   begin match Cexec.do_initial_state prog with
