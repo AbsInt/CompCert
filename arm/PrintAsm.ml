@@ -37,21 +37,6 @@ let label_for_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
-(* Record identifiers of external functions that need stub code *)
-
-module IdentSet = Set.Make(struct type t = ident let compare = compare end)
-
-let extfuns = (ref IdentSet.empty)
-
-let need_stub = function
-  | EF_external(name, sg) -> List.mem Tfloat sg.sig_args
-  | _ -> false
-
-let record_extfun (Coq_pair(name, defn)) =
-  match defn with
-  | Internal f -> ()
-  | External ef -> if need_stub ef then extfuns := IdentSet.add name !extfuns
-
 (* Basic printing functions *)
 
 let strip_variadic_suffix name =
@@ -59,9 +44,7 @@ let strip_variadic_suffix name =
   with Not_found -> name
 
 let print_symb oc symb =
-  if IdentSet.mem symb !extfuns
-  then fprintf oc ".L%s$stub" (extern_atom symb)
-  else fprintf oc "%s" (strip_variadic_suffix (extern_atom symb))
+  fprintf oc "%s" (strip_variadic_suffix (extern_atom symb))
 
 let print_label oc lbl =
   fprintf oc ".L%d" (label_for_label lbl)
@@ -83,11 +66,26 @@ let int_reg_name = function
   | IR12 -> "r12" | IR13 -> "sp" | IR14 -> "lr"
 
 let float_reg_name = function
-  | FR0 -> "f0"  | FR1 -> "f1"  | FR2 -> "f2"  | FR3 -> "f3"
-  | FR4 -> "f4"  | FR5 -> "f5"  | FR6 -> "f6"  | FR7 -> "f7"
+  | FR0 -> "d0"  | FR1 -> "d1"  | FR2 -> "d2"  | FR3 -> "d3"
+  | FR4 -> "d4"  | FR5 -> "d5"  | FR6 -> "d6"  | FR7 -> "d7"
+  | FR8 -> "d8"  | FR9 -> "d9"  | FR10 -> "d10"  | FR11 -> "d11"
+  | FR12 -> "d12"  | FR13 -> "d13"  | FR14 -> "d14"  | FR15 -> "d15"
+
+let single_float_reg_index = function
+  | FR0 -> 0  | FR1 -> 2  | FR2 -> 4  | FR3 -> 6
+  | FR4 -> 8  | FR5 -> 10  | FR6 -> 12  | FR7 -> 14
+  | FR8 -> 16  | FR9 -> 18  | FR10 -> 20  | FR11 -> 22
+  | FR12 -> 24  | FR13 -> 26  | FR14 -> 28  | FR15 -> 30
+
+let single_float_reg_name = function
+  | FR0 -> "s0"  | FR1 -> "s2"  | FR2 -> "s4"  | FR3 -> "s6"
+  | FR4 -> "s8"  | FR5 -> "s10"  | FR6 -> "s12"  | FR7 -> "s14"
+  | FR8 -> "s16"  | FR9 -> "s18"  | FR10 -> "s20"  | FR11 -> "s22"
+  | FR12 -> "s24"  | FR13 -> "s26"  | FR14 -> "s28"  | FR15 -> "s30"
 
 let ireg oc r = output_string oc (int_reg_name r)
 let freg oc r = output_string oc (float_reg_name r)
+let freg_single oc r = output_string oc (single_float_reg_name r)
 
 let preg oc = function
   | IR r -> ireg oc r
@@ -171,11 +169,10 @@ let reset_constants () =
 let emit_constants oc =
   Hashtbl.iter
     (fun bf lbl ->
-      (* Floats are mixed-endian on this flavor of ARM *)
+      (* Little-endian floats *)
       let bfhi = Int64.shift_right_logical bf 32
       and bflo = Int64.logand bf 0xFFFF_FFFFL in
-      fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n"
-          lbl bfhi bflo)
+      fprintf oc ".L%d:	.word	0x%Lx, 0x%Lx\n" lbl bflo bfhi)
     float_labels;
   Hashtbl.iter
     (fun (id, ofs) lbl ->
@@ -219,15 +216,13 @@ let call_helper oc fn dst arg1 arg2 =
   (* ... for a total of at most 7 instructions *)
   7
 
-(* Built-ins.  They come in three flavors: 
+(* Built-ins.  They come in two flavors: 
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
      registers; preserve all registers the temporaries
      (IR10, IR12, IR14, FP2, FP4)
-   - inlined while printing asm code; take their arguments in
-     locations dictated by the calling conventions; preserve
-     callee-save regs only. *)
+*)
 
 (* Handling of annotations *)
 
@@ -262,7 +257,7 @@ let print_annot_val oc txt args res =
   | IR src :: _, IR dst ->
       if dst = src then 0 else (fprintf oc "	mov	%a, %a\n" ireg dst ireg src; 1)
   | FR src :: _, FR dst ->
-      if dst = src then 0 else (fprintf oc "	mvfd	%a, %a\n" freg dst freg src; 1)
+      if dst = src then 0 else (fprintf oc "	fcpy	%a, %a\n" freg dst freg src; 1)
   | _, _ -> assert false
 
 (* Handling of memcpy *)
@@ -298,7 +293,8 @@ let print_builtin_memcpy_big oc sz al src dst =
     if src <> IR0 && dst <> IR0 then IR0
     else if src <> IR1 && dst <> IR1 then IR1
     else IR2 in
-  fprintf oc "	stmfd	sp!, {%a,%a,%a}\n" ireg tmp ireg src ireg dst;
+  let tosave = List.sort compare [tmp;src;dst] in
+  fprintf oc "	stmfd	sp!, {%a}\n" print_list_ireg tosave;
   begin match Asmgen.decompose_int
                  (coqint_of_camlint (Int32.of_int (sz / chunksize))) with
   | [] -> assert false
@@ -314,7 +310,7 @@ let print_builtin_memcpy_big oc sz al src dst =
   fprintf oc "	subs	%a, %a, #1\n" ireg IR14 ireg IR14;
   fprintf oc "	%s	%a, [%a], #%d\n" store ireg tmp ireg dst chunksize;
   fprintf oc "	bne	.L%d\n" lbl;
-  fprintf oc "	ldmfd	sp!, {%a,%a,%a}\n" ireg tmp ireg src ireg dst;
+  fprintf oc "	ldmfd	sp!, {%a}\n" print_list_ireg tosave;
   9
 
 let print_builtin_memcpy oc sz al args =
@@ -345,10 +341,10 @@ let print_builtin_vload oc chunk args res =
     | Mint32, [IR addr], IR res ->
         fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg addr; 1
     | Mfloat32, [IR addr], FR res ->
-        fprintf oc "	ldfs	%a, [%a, #0]\n" freg res ireg addr;
-        fprintf oc "	mvfd	%a, %a\n" freg res freg res; 2
+        fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr;
+        fprintf oc "	fcvtds	%a, %a\n" freg res freg_single res; 2
     | Mfloat64, [IR addr], FR res ->
-        fprintf oc "	ldfd	%a, [%a, #0]\n" freg res ireg addr; 1
+        fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
     | _ ->
         assert false
     end in
@@ -365,10 +361,10 @@ let print_builtin_vstore oc chunk args =
     | Mint32, [IR addr; IR src] ->
         fprintf oc "	str	%a, [%a, #0]\n" ireg src ireg addr; 1
     | Mfloat32, [IR addr; FR src] ->
-        fprintf oc "	mvfs	%a, %a\n" freg FR2 freg src;
-        fprintf oc "	stfs	%a, [%a, #0]\n" freg FR2 ireg addr; 2
+        fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg src;
+        fprintf oc "	fsts	%a, [%a, #0]\n" freg_single FR6 ireg addr; 2
     | Mfloat64, [IR addr; FR src] ->
-        fprintf oc "	stfd	%a, [%a, #0]\n" freg src ireg addr; 1
+        fprintf oc "	fstd	%a, [%a, #0]\n" freg src ireg addr; 1
     | _ ->
         assert false
     end in
@@ -381,13 +377,42 @@ let print_builtin_inline oc name args res =
   let n = match name, args, res with
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], FR res ->
-      fprintf oc "	absd	%a, %a\n" freg res freg a1; 1
+      fprintf oc "	fabsd	%a, %a\n" freg res freg a1; 1
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
   in
   fprintf oc "%s end %s\n" comment name;
   n
+
+(* Fixing up calling conventions *)
+
+type direction = Incoming | Outgoing
+
+let fixup_conventions oc dir tyl =
+  let fixup f i1 i2 =
+    match dir with
+    | Incoming ->     (* f <- (i1, i2)  *)
+        fprintf oc "	fmdlr	%a, %a\n" freg f ireg i1;
+        fprintf oc "	fmdhr	%a, %a\n" freg f ireg i2
+    | Outgoing ->      (* (i1, i2) <- f *)
+        fprintf oc "	fmrdl	%a, %a\n" ireg i1 freg f;
+        fprintf oc "	fmrdh	%a, %a\n" ireg i2 freg f in
+  match tyl with
+  | Tfloat :: Tfloat :: _ ->
+      fixup FR0 IR0 IR1; fixup FR1 IR2 IR3; 4
+  | Tfloat :: _ ->
+      fixup FR0 IR0 IR1; 2
+  | Tint :: Tfloat :: _ | Tint :: Tint :: Tfloat :: _ ->
+      fixup FR1 IR2 IR3; 2
+  | _ ->
+      0
+
+let fixup_arguments oc dir sg =
+  fixup_conventions oc dir sg.sig_args
+
+let fixup_result oc dir sg =
+  fixup_conventions oc dir (proj_sig_res sg :: [])
 
 (* Printing of instructions *)
 
@@ -421,15 +446,27 @@ let print_instruction oc = function
       fprintf oc "	b	%a\n" print_label lbl; 1
   | Pbc(bit, lbl) ->
       fprintf oc "	b%s	%a\n" (condition_name bit) print_label lbl; 1
-  | Pbsymb id ->
-      fprintf oc "	b	%a\n" print_symb id; 1
-  | Pbreg r ->
-      fprintf oc "	mov	pc, %a\n" ireg r; 1
-  | Pblsymb id ->
-      fprintf oc "	bl	%a\n" print_symb id; 1
-  | Pblreg r ->
-      fprintf oc "	mov	lr, pc\n";
-      fprintf oc "	mov	pc, %a\n" ireg r; 2
+  | Pbsymb(id, sg) ->
+      let n = fixup_arguments oc Outgoing sg in
+      fprintf oc "	b	%a\n" print_symb id;
+      n + 1
+  | Pbreg(r, sg) ->
+      let n = 
+        if r = IR14
+        then fixup_result oc Outgoing sg
+        else fixup_arguments oc Outgoing sg in
+      fprintf oc "	bx	%a\n" ireg r;
+      n + 1
+  | Pblsymb(id, sg) ->
+      let n1 = fixup_arguments oc Outgoing sg in
+      fprintf oc "	bl	%a\n" print_symb id;
+      let n2 = fixup_result oc Incoming sg in
+      n1 + 1 + n2
+  | Pblreg(r, sg) ->
+      let n1 = fixup_arguments oc Outgoing sg in
+      fprintf oc "	blx	%a\n" ireg r;
+      let n2 = fixup_result oc Incoming sg in
+      n1 + 1 + n2
   | Pbic(r1, r2, so) ->
       fprintf oc "	bic	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
   | Pcmp(r1, so) ->
@@ -465,52 +502,62 @@ let print_instruction oc = function
   | Pstrh(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
   | Psdiv(r1, r2, r3) ->
-      call_helper oc "__divsi3" r1 r2 r3
+      call_helper oc "__aeabi_idiv" r1 r2 r3
   | Psub(r1, r2, so) ->
       fprintf oc "	sub	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
   | Pudiv(r1, r2, r3) ->
-      call_helper oc "__udivsi3" r1 r2 r3
+      call_helper oc "__aeabi_uidiv" r1 r2 r3
   (* Floating-point coprocessor instructions *)
-  | Pabsd(r1, r2) ->
-      fprintf oc "	absd	%a, %a\n" freg r1 freg r2; 1
-  | Padfd(r1, r2, r3) ->
-      fprintf oc "	adfd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
-  | Pcmf(r1, r2) ->
-      fprintf oc "	cmf	%a, %a\n" freg r1 freg r2; 1
-  | Pdvfd(r1, r2, r3) ->
-      fprintf oc "	dvfd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
-  | Pfixz(r1, r2) ->
-      fprintf oc "	fixz	%a, %a\n" ireg r1 freg r2; 1
-  | Pfltd(r1, r2) ->
-      fprintf oc "	fltd	%a, %a\n" freg r1 ireg r2; 1
-  | Pldfd(r1, r2, n) ->
-      fprintf oc "	ldfd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
-  | Pldfs(r1, r2, n) ->
-      fprintf oc "	ldfs	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n;
-      fprintf oc "	mvfd	%a, %a\n" freg r1 freg r1; 2
-  | Plifd(r1, f) ->
+  | Pfcpyd(r1, r2) ->
+      fprintf oc "	fcpyd	%a, %a\n" freg r1 freg r2; 1
+  | Pfabsd(r1, r2) ->
+      fprintf oc "	fabsd	%a, %a\n" freg r1 freg r2; 1
+  | Pfnegd(r1, r2) ->
+      fprintf oc "	fnegd	%a, %a\n" freg r1 freg r2; 1
+  | Pfaddd(r1, r2, r3) ->
+      fprintf oc "	faddd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pfdivd(r1, r2, r3) ->
+      fprintf oc "	fdivd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pfmuld(r1, r2, r3) ->
+      fprintf oc "	fmuld	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pfsubd(r1, r2, r3) ->
+      fprintf oc "	fsubd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+  | Pflid(r1, f) ->
+(*
       if Int64.bits_of_float f = 0L (* +0.0 *) then begin
         fprintf oc "	mvfd	%a, #0.0\n" freg r1; 1
       end else begin
-        let lbl = label_float f in
-        fprintf oc "	ldfd	%a, .L%d @ %.12g\n" freg r1 lbl f; 1
-      end
-  | Pmnfd(r1, r2) ->
-      fprintf oc "	mnfd	%a, %a\n" freg r1 freg r2; 1
-  | Pmvfd(r1, r2) ->
-      fprintf oc "	mvfd	%a, %a\n" freg r1 freg r2; 1
-  | Pmvfs(r1, r2) ->
-      fprintf oc "	mvfs	%a, %a\n" freg r1 freg r2;
-      fprintf oc "	mvfd	%a, %a\n" freg r2 freg r2; 2
-  | Pmufd(r1, r2, r3) ->
-      fprintf oc "	mufd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
-  | Pstfd(r1, r2, n) ->
-      fprintf oc "	stfd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
-  | Pstfs(r1, r2, n) ->
-      fprintf oc "	mvfs	f3, %a\n" freg r1;
-      fprintf oc "	stfs	f3, [%a, #%a]\n" ireg r2 coqint n; 2
-  | Psufd(r1, r2, r3) ->
-      fprintf oc "	sufd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
+*)
+      let lbl = label_float f in
+      fprintf oc "	fldd	%a, .L%d @ %.12g\n" freg r1 lbl f; 1
+  | Pfcmpd(r1, r2) ->
+      fprintf oc "	fcmpd	%a, %a\n" freg r1 freg r2;
+      fprintf oc "	fmstat\n"; 2
+  | Pfsitod(r1, r2) ->
+      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	fsitod	%a, %a\n" freg r1 freg_single r1; 2
+  | Pfuitod(r1, r2) ->
+      fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;
+      fprintf oc "	fuitod	%a, %a\n" freg r1 freg_single r1; 2
+  | Pftosizd(r1, r2) ->
+      fprintf oc "	ftosizd	%a, %a\n" freg_single FR6 freg r2;
+      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+  | Pftouizd(r1, r2) ->
+      fprintf oc "	ftouizd	%a, %a\n" freg_single FR6 freg r2;
+      fprintf oc "	fmrs	%a, %a\n" ireg r1 freg_single FR6; 2
+  | Pfcvtsd(r1, r2) ->
+      fprintf oc "	fcvtsd	%a, %a\n" freg_single r1 freg r2;
+      fprintf oc "	fcvtds	%a, %a\n" freg r1 freg_single r1; 2
+  | Pfldd(r1, r2, n) ->
+      fprintf oc "	fldd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+  | Pflds(r1, r2, n) ->
+      fprintf oc "	flds	%a, [%a, #%a]\n" freg_single r1 ireg r2 coqint n;
+      fprintf oc "	fcvtds	%a, %a\n" freg r1 freg_single r1; 2
+  | Pfstd(r1, r2, n) ->
+      fprintf oc "	fstd	%a, [%a, #%a]\n" freg r1 ireg r2 coqint n; 1
+  | Pfsts(r1, r2, n) ->
+      fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg r1;
+      fprintf oc "	fsts	%a, [%a, #%a]\n" freg_single FR6 ireg r2 coqint n; 2
   (* Pseudo-instructions *)
   | Pallocframe(sz, ofs) ->
       fprintf oc "	mov	r12, sp\n";
@@ -587,7 +634,7 @@ let rec print_instructions oc instrs =
       end;
       print_instructions oc il
 
-let print_function oc name code =
+let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   reset_constants();
   currpos := 0;
@@ -597,57 +644,18 @@ let print_function oc name code =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
-  print_instructions oc code;
+  ignore (fixup_arguments oc Incoming fn.fn_sig);
+  print_instructions oc fn.fn_code;
   emit_constants oc;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
-
-(* Generation of stub code for external functions that take floats.
-   Compcert passes the first two float arguments in F0 and F1,
-   while gcc passes them in pairs of integer registers. *)
-
-let print_external_function oc name sg =
-  let name = extern_atom name in
-  let rec move_args ty_args int_regs float_regs =
-    match ty_args with
-    | [] -> ()
-    | Tint :: tys ->
-        begin match int_regs with
-        | [] -> move_args tys [] float_regs
-        | ir :: irs -> move_args tys irs float_regs
-        end
-    | Tfloat :: tys ->
-        begin match float_regs, int_regs with
-        | fr :: frs, ir1 :: ir2 :: irs ->
-            (* transfer fr to the pair (ir1, ir2) *)
-            fprintf oc "	stfd	%a, [sp, #-8]!\n" freg fr;
-            fprintf oc "	ldmfd	sp!, {%a, %a}\n" ireg ir1 ireg ir2;
-            move_args tys irs frs
-        | fr :: frs, ir1 :: [] ->
-            (* transfer fr to ir1 and the bottom stack word *)
-            fprintf oc "	stfd	%a, [sp, #-4]!\n" freg fr;
-            fprintf oc "	ldmfd	sp!, {%a}\n" ireg ir1;
-            move_args tys [] frs
-        | _, _ ->
-            (* no more float regs, or no more int regs:
-               float arg is already on stack, where it should be *)
-            move_args tys int_regs float_regs
-        end
-  in
-  section oc Section_text;
-  fprintf oc "	.align 2\n";
-  fprintf oc ".L%s$stub:\n" name;
-  move_args sg.sig_args [IR0;IR1;IR2;IR3] [FR0;FR1];
-  (* Remove variadic prefix $iiff if any *)
-  let real_name = strip_variadic_suffix name in
-  fprintf oc "	b	%s\n" real_name
 
 let print_fundef oc (Coq_pair(name, defn)) =
   match defn with
   | Internal code ->
       print_function oc name code
   | External ef ->
-      if need_stub ef then print_external_function oc name (ef_sig ef)
+      ()
 
 (* Data *)
 
@@ -659,13 +667,9 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.word	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.word	0x%lx @ %.15g \n" (Int32.bits_of_float n) n
+      fprintf oc "	.word	0x%lx %s %.15g \n" (Int32.bits_of_float n) comment n
   | Init_float64 n ->
-      (* Floats are mixed-endian on this flavor of ARM *)
-      let bf = Int64.bits_of_float n in
-      let bfhi = Int64.shift_right_logical bf 32
-      and bflo = Int64.logand bf 0xFFFF_FFFFL in
-      fprintf oc "	.word	0x%Lx, 0x%Lx @ %.15g\n" bfhi bflo n
+      fprintf oc "	.quad	%Ld %s %.18g\n" (Int64.bits_of_float n) comment n
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
@@ -709,8 +713,7 @@ let print_var oc (Coq_pair(name, v)) =
       fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
 let print_program oc p =
-  extfuns := IdentSet.empty;
-  List.iter record_extfun p.prog_funct;
+  fprintf oc "	.fpu	vfp\n";
   List.iter (print_var oc) p.prog_vars;
   List.iter (print_fundef oc) p.prog_funct
 

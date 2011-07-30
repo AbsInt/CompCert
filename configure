@@ -32,7 +32,7 @@ usage='Usage: ./configure [options] target
 Supported targets:
   ppc-macosx       (PowerPC, MacOS X)
   ppc-linux        (PowerPC, Linux)
-  arm-linux        (ARM, Linux)
+  arm-linux        (ARM, Linux EABI)
   ia32-linux       (x86 32 bits, Linux)
   ia32-bsd         (x86 32 bits, BSD)
   ia32-macosx      (x86 32 bits, MacOS X)
@@ -91,7 +91,7 @@ case "$target" in
     variant="linux"
     system="linux"
     cc="gcc"
-    cprepro="gcc -U__GNUC__ -E"
+    cprepro="gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
     casm="gcc -c"
     clinker="gcc"
     libmath="-lm"

@@ -207,8 +207,8 @@ Definition nontemp_preg (r: preg) : bool :=
   | IR IR10 => false
   | IR IR12 => false
   | IR _ => true
-  | FR FR2 => false
-  | FR FR3 => false
+  | FR FR6 => false
+  | FR FR7 => false
   | FR _ => true
   | CR _ => false
   | PC => false
@@ -1460,7 +1460,7 @@ Lemma transl_store_float_correct:
    exec_store chunk (Val.add rs1#r2 (Vint n)) r1 rs1 m1' = OK (nextinstr rs1) m2' ->
    exists rs2,
    exec_instr ge c (mk_instr r1 r2 n) rs1 m1' = OK rs2 m2'
-   /\ (forall (r: preg), r <> FR3 -> rs2 r = nextinstr rs1 r)) ->
+   /\ (forall (r: preg), r <> FR7 -> rs2 r = nextinstr rs1 r)) ->
   agree ms sp rs ->
   map mreg_type args = type_of_addressing addr ->
   mreg_type rd = Tfloat ->

@@ -946,23 +946,8 @@ Theorem eval_intuoffloat:
   Float.intuoffloat x = Some n ->
   eval_expr ge sp e m le (intuoffloat a) (Vint n).
 Proof.
-  intros. unfold intuoffloat. 
-  econstructor. eauto. 
-  set (im := Int.repr Int.half_modulus).
-  set (fm := Float.floatofintu im).
-  assert (eval_expr ge sp e m (Vfloat x :: le) (Eletvar O) (Vfloat x)).
-    constructor. auto. 
-  apply eval_Econdition with (v1 := Float.cmp Clt x fm).
-  econstructor. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
-  simpl. auto.
-  caseEq (Float.cmp Clt x fm); intros.
-  exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
-  EvalOp. simpl. rewrite EQ; auto.
-  exploit Float.intuoffloat_intoffloat_2; eauto. intro EQ.
-  replace n with (Int.add (Int.sub n Float.ox8000_0000) Float.ox8000_0000).
-  apply eval_addimm. eapply eval_intoffloat; eauto.
-  apply eval_subf; auto. EvalOp.
-  rewrite Int.sub_add_opp. rewrite Int.add_assoc. apply Int.add_zero. 
+  intros; unfold intuoffloat; EvalOp.
+  simpl. rewrite H0. auto.
 Qed.
 
 Theorem eval_floatofint:
@@ -975,23 +960,7 @@ Theorem eval_floatofintu:
   forall le a x,
   eval_expr ge sp e m le a (Vint x) ->
   eval_expr ge sp e m le (floatofintu a) (Vfloat (Float.floatofintu x)).
-Proof.
-  intros. unfold floatofintu. 
-  econstructor. eauto. 
-  set (f := Float.floatofintu Float.ox8000_0000).
-  assert (eval_expr ge sp e m (Vint x :: le) (Eletvar O) (Vint x)).
-    constructor. auto. 
-  apply eval_Econdition with (v1 := Int.ltu x Float.ox8000_0000).
-  econstructor. constructor. eauto. constructor.
-  simpl. auto.
-  caseEq (Int.ltu x Float.ox8000_0000); intros.
-  rewrite Float.floatofintu_floatofint_1; auto.
-  apply eval_floatofint; auto.
-  rewrite Float.floatofintu_floatofint_2; auto.
-  fold f. apply eval_addf. apply eval_floatofint. 
-  rewrite Int.sub_add_opp. apply eval_addimm; auto.
-  EvalOp.
-Qed.
+Proof. intros; unfold floatofintu; EvalOp. Qed.
 
 Lemma eval_addressing:
   forall le chunk a v b ofs,
@@ -1007,25 +976,25 @@ Proof.
   exists (@nil val). split. eauto with evalexpr. simpl. auto.
   exists (Vptr b0 i :: nil). split. eauto with evalexpr. 
     simpl. congruence.
-  destruct (is_float_addressing chunk).
-  exists (Vptr b0 ofs :: nil).
-    split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
-    simpl. rewrite Int.add_zero. congruence.
+  destruct (can_use_Aindexed2 chunk).
   exists (Vptr b0 i :: Vint i0 :: nil).
     split. eauto with evalexpr. simpl. congruence.
-  destruct (is_float_addressing chunk).
   exists (Vptr b0 ofs :: nil).
     split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
     simpl. rewrite Int.add_zero. congruence.
+  destruct (can_use_Aindexed chunk).
   exists (Vint i :: Vptr b0 i0 :: nil).
     split. eauto with evalexpr. simpl. 
     rewrite Int.add_commut. congruence.
-  destruct (is_float_addressing chunk).
   exists (Vptr b0 ofs :: nil).
     split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
     simpl. rewrite Int.add_zero. congruence.
+  destruct (can_use_Aindexed chunk).
   exists (Vptr b0 i :: Vint i0 :: nil).
     split. eauto with evalexpr. simpl. congruence.
+  exists (Vptr b0 ofs :: nil).
+    split. constructor. econstructor. eauto with evalexpr. simpl. congruence. constructor. 
+    simpl. rewrite Int.add_zero. congruence.
   exists (v :: nil). split. eauto with evalexpr. 
     subst v. simpl. rewrite Int.add_zero. auto.
 Qed.

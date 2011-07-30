@@ -145,14 +145,14 @@ latexdoc:
 	@$(COQC) -dump-glob doc/$(*F).glob $*.v
 
 driver/Configuration.ml: Makefile.config
-	(echo 'let stdlib_path = "$(LIBDIR)"'; \
-         echo 'let prepro = "$(CPREPRO)"'; \
-         echo 'let asm = "$(CASM)"'; \
-         echo 'let linker = "$(CLINKER)"'; \
-         echo 'let arch = "$(ARCH)"'; \
-         echo 'let variant = "$(VARIANT)"'; \
-         echo 'let system = "$(SYSTEM)"'; \
-         echo 'let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER)') \
+	(echo let stdlib_path = "\"$(LIBDIR)\""; \
+         echo let prepro = "\"$(CPREPRO)\""; \
+         echo let asm = "\"$(CASM)\""; \
+         echo let linker = "\"$(CLINKER)\""; \
+         echo let arch = "\"$(ARCH)\""; \
+         echo let variant = "\"$(VARIANT)\""; \
+         echo let system = "\"$(SYSTEM)\""; \
+         echo let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER)) \
         > driver/Configuration.ml
 
 depend: $(FILES)

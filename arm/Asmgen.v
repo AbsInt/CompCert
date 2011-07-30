@@ -152,9 +152,9 @@ Definition transl_cond
       else
         loadimm IR14 n (Pcmp (ireg_of a1) (SOreg IR14) :: k)
   | Ccompf cmp, a1 :: a2 :: nil =>
-      Pcmf (freg_of a1) (freg_of a2) :: k
+      Pfcmpd (freg_of a1) (freg_of a2) :: k
   | Cnotcompf cmp, a1 :: a2 :: nil =>
-      Pcmf (freg_of a1) (freg_of a2) :: k
+      Pfcmpd (freg_of a1) (freg_of a2) :: k
   | _, _ =>
      k (**r never happens for well-typed code *)
   end.
@@ -220,12 +220,12 @@ Definition transl_op
   | Omove, a1 :: nil =>
       match mreg_type a1 with
       | Tint => Pmov (ireg_of r) (SOreg (ireg_of a1)) :: k
-      | Tfloat => Pmvfd (freg_of r) (freg_of a1) :: k
+      | Tfloat => Pfcpyd (freg_of r) (freg_of a1) :: k
       end
   | Ointconst n, nil =>
       loadimm (ireg_of r) n k
   | Ofloatconst f, nil =>
-      Plifd (freg_of r) f :: k
+      Pflid (freg_of r) f :: k
   | Oaddrsymbol s ofs, nil =>
       Ploadsymbol (ireg_of r) s ofs :: k
   | Oaddrstack n, nil =>
@@ -304,23 +304,27 @@ Definition transl_op
          (Pmovc CRge IR14 (SOreg (ireg_of a1)) ::
           Pmov (ireg_of r) (SOasrimm IR14 n) :: k)
   | Onegf, a1 :: nil =>
-      Pmnfd (freg_of r) (freg_of a1) :: k
+      Pfnegd (freg_of r) (freg_of a1) :: k
   | Oabsf, a1 :: nil =>
-      Pabsd (freg_of r) (freg_of a1) :: k
+      Pfabsd (freg_of r) (freg_of a1) :: k
   | Oaddf, a1 :: a2 :: nil =>
-      Padfd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      Pfaddd (freg_of r) (freg_of a1) (freg_of a2) :: k
   | Osubf, a1 :: a2 :: nil =>
-      Psufd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      Pfsubd (freg_of r) (freg_of a1) (freg_of a2) :: k
   | Omulf, a1 :: a2 :: nil =>
-      Pmufd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      Pfmuld (freg_of r) (freg_of a1) (freg_of a2) :: k
   | Odivf, a1 :: a2 :: nil =>
-      Pdvfd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      Pfdivd (freg_of r) (freg_of a1) (freg_of a2) :: k
   | Osingleoffloat, a1 :: nil =>
-      Pmvfs (freg_of r) (freg_of a1) :: k
+      Pfcvtsd (freg_of r) (freg_of a1) :: k
   | Ointoffloat, a1 :: nil =>
-      Pfixz (ireg_of r) (freg_of a1) :: k
+      Pftosizd (ireg_of r) (freg_of a1) :: k
+  | Ointuoffloat, a1 :: nil =>
+      Pftouizd (ireg_of r) (freg_of a1) :: k
   | Ofloatofint, a1 :: nil =>
-      Pfltd (freg_of r) (ireg_of a1) :: k
+      Pfsitod (freg_of r) (ireg_of a1) :: k
+  | Ofloatofintu, a1 :: nil =>
+      Pfuitod (freg_of r) (ireg_of a1) :: k
   | Ocmp cmp, _ =>
       transl_cond cmp args
         (Pmov (ireg_of r) (SOimm Int.zero) ::
@@ -405,10 +409,10 @@ Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
 
 Definition loadind_float (base: ireg) (ofs: int) (dst: freg) (k: code) :=
   if is_immed_mem_float ofs then
-    Pldfd dst base ofs :: k
+    Pfldd dst base ofs :: k
   else
     addimm IR14 base ofs
-      (Pldfd dst IR14 Int.zero :: k).
+      (Pfldd dst IR14 Int.zero :: k).
 
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   match ty with
@@ -425,10 +429,10 @@ Definition storeind_int (src: ireg) (base: ireg) (ofs: int) (k: code) :=
 
 Definition storeind_float (src: freg) (base: ireg) (ofs: int) (k: code) :=
   if is_immed_mem_float ofs then
-    Pstfd src base ofs :: k
+    Pfstd src base ofs :: k
   else
     addimm IR14 base ofs
-      (Pstfd src IR14 Int.zero :: k).
+      (Pfstd src IR14 Int.zero :: k).
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   match ty with
@@ -461,7 +465,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       | Mint8signed =>
           transl_load_store_int Pldrsb is_immed_mem_small dst addr args k
       | Mint8unsigned =>
-          transl_load_store_int Pldrb is_immed_mem_small dst addr args k
+          transl_load_store_int Pldrb is_immed_mem_word dst addr args k
       | Mint16signed =>
           transl_load_store_int Pldrsh is_immed_mem_small dst addr args k
       | Mint16unsigned =>
@@ -469,16 +473,16 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       | Mint32 =>
           transl_load_store_int Pldr is_immed_mem_word dst addr args k
       | Mfloat32 =>
-          transl_load_store_float Pldfs is_immed_mem_float dst addr args k
+          transl_load_store_float Pflds is_immed_mem_float dst addr args k
       | Mfloat64 =>
-          transl_load_store_float Pldfd is_immed_mem_float dst addr args k
+          transl_load_store_float Pfldd is_immed_mem_float dst addr args k
       end
   | Mstore chunk addr args src =>
       match chunk with
       | Mint8signed =>
           transl_load_store_int Pstrb is_immed_mem_small src addr args k
       | Mint8unsigned =>
-          transl_load_store_int Pstrb is_immed_mem_small src addr args k
+          transl_load_store_int Pstrb is_immed_mem_word src addr args k
       | Mint16signed =>
           transl_load_store_int Pstrh is_immed_mem_small src addr args k
       | Mint16unsigned =>
@@ -486,20 +490,20 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       | Mint32 =>
           transl_load_store_int Pstr is_immed_mem_word src addr args k
       | Mfloat32 =>
-          transl_load_store_float Pstfs is_immed_mem_float src addr args k
+          transl_load_store_float Pfsts is_immed_mem_float src addr args k
       | Mfloat64 =>
-          transl_load_store_float Pstfd is_immed_mem_float src addr args k
+          transl_load_store_float Pfstd is_immed_mem_float src addr args k
       end
   | Mcall sig (inl r) =>
-      Pblreg (ireg_of r) :: k
+      Pblreg (ireg_of r) sig :: k
   | Mcall sig (inr symb) =>
-      Pblsymb symb :: k
+      Pblsymb symb sig :: k
   | Mtailcall sig (inl r) =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg (ireg_of r) :: k)
+        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg (ireg_of r) sig :: k)
   | Mtailcall sig (inr symb) =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb :: k)
+        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb sig :: k)
   | Mbuiltin ef args res =>
       Pbuiltin ef (map preg_of args) (preg_of res) :: k
   | Mannot ef args =>
@@ -515,7 +519,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       Pbtbl IR14 tbl :: k
   | Mreturn =>
       loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg IR14 :: k)
+        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg IR14 f.(Mach.fn_sig) :: k)
   end.
 
 Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
@@ -527,9 +531,10 @@ Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
   around, leading to incorrect executions. *)
 
 Definition transl_function (f: Mach.function) :=
-  Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-  Pstr IR14 IR13 (SAimm f.(fn_retaddr_ofs)) ::
-  transl_code f f.(fn_code).
+  mkfunction f.(Mach.fn_sig)
+    (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
+     Pstr IR14 IR13 (SAimm f.(fn_retaddr_ofs)) ::
+     transl_code f f.(Mach.fn_code)).
 
 Fixpoint code_size (c: code) : Z :=
   match c with
@@ -539,11 +544,11 @@ Fixpoint code_size (c: code) : Z :=
 
 Open Local Scope string_scope.
 
-Definition transf_function (f: Mach.function) : res Asm.code :=
-  let c := transl_function f in
-  if zlt Int.max_unsigned (code_size c)
+Definition transf_function (f: Mach.function) : res Asm.function :=
+  let tf := transl_function f in
+  if zlt Int.max_unsigned (code_size tf.(fn_code))
   then Errors.Error (msg "code size exceeded")
-  else Errors.OK c.
+  else Errors.OK tf.
 
 Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
   transf_partial_fundef transf_function f.

@@ -1022,27 +1022,13 @@ Definition negint (e: expr) := Eop (Orsubimm Int.zero) (e ::: Enil).
 Definition negf (e: expr) :=  Eop Onegf (e ::: Enil).
 Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
+Definition intuoffloat (e: expr) := Eop Ointuoffloat (e ::: Enil).
 Definition floatofint (e: expr) := Eop Ofloatofint (e ::: Enil).
+Definition floatofintu (e: expr) := Eop Ofloatofintu (e ::: Enil).
 Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
 Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
-
-(** ** Conversions between unsigned ints and floats *)
-
-Definition intuoffloat (e: expr) :=
-  let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
-  Elet e
-    (Econdition (CEcond (Ccompf Clt) (Eletvar O ::: f ::: Enil))
-      (intoffloat (Eletvar O))
-      (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar O) f)))).
-
-Definition floatofintu (e: expr) :=
-  let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
-  Elet e
-    (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
-      (floatofint (Eletvar O))
-      (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f)).
 
 (** ** Recognition of addressing modes for load and store operations *)
 
@@ -1090,13 +1076,30 @@ Definition addressing_match (e: expr) :=
 
 (** We do not recognize the [Aindexed2] and [Aindexed2shift] modes
     for floating-point accesses, since these are not supported
-    by the hardware and emulated inefficiently in [ARMgen]. *)
+    by the hardware and emulated inefficiently in [Asmgen].
+    Likewise, [Aindexed2shift] are not supported for halfword
+    and signed byte accesses. *)
 
-Definition is_float_addressing (chunk: memory_chunk): bool :=
+Definition can_use_Aindexed (chunk: memory_chunk): bool :=
   match chunk with
-  | Mfloat32 => true
-  | Mfloat64 => true
-  | _ => false
+  | Mint8signed => true
+  | Mint8unsigned => true
+  | Mint16signed => true
+  | Mint16unsigned => true
+  | Mint32 => true
+  | Mfloat32 => false
+  | Mfloat64 => false
+  end.
+
+Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
+  match chunk with
+  | Mint8signed => false
+  | Mint8unsigned => true
+  | Mint16signed => false
+  | Mint16unsigned => false
+  | Mint32 => true
+  | Mfloat32 => false
+  | Mfloat64 => false
   end.
 
 Definition addressing (chunk: memory_chunk) (e: expr) :=
@@ -1106,13 +1109,13 @@ Definition addressing (chunk: memory_chunk) (e: expr) :=
   | addressing_case3 n e1 =>
       (Aindexed n, e1:::Enil)
   | addressing_case4 s e1 e2 =>
-      if is_float_addressing chunk
-      then (Aindexed Int.zero, Eop (Oaddshift s) (e1:::e2:::Enil) ::: Enil)
-      else (Aindexed2shift s, e1:::e2:::Enil)
+      if can_use_Aindexed2 chunk
+      then (Aindexed2shift s, e1:::e2:::Enil)
+      else (Aindexed Int.zero, Eop (Oaddshift s) (e1:::e2:::Enil) ::: Enil)
   | addressing_case5 e1 e2 =>
-      if is_float_addressing chunk
-      then (Aindexed Int.zero, Eop Oadd (e1:::e2:::Enil) ::: Enil)
-      else (Aindexed2, e1:::e2:::Enil)
+      if can_use_Aindexed chunk
+      then (Aindexed2, e1:::e2:::Enil)
+      else (Aindexed Int.zero, Eop Oadd (e1:::e2:::Enil) ::: Enil)
   | addressing_default e =>
       (Aindexed Int.zero, e:::Enil)
   end.

@@ -143,6 +143,8 @@ Proof.
 
   inv H4. destruct (Float.intoffloat f); simpl in H0; inv H0. red; auto.
 
+  inv H4. destruct (Float.intuoffloat f); simpl in H0; inv H0. red; auto.
+
   caseEq (eval_static_condition c vl0).
   intros. generalize (eval_static_condition_correct _ _ _ m _ H H1).
   intro. rewrite H2 in H0. 

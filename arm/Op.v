@@ -112,7 +112,9 @@ Inductive operation : Type :=
   | Osingleoffloat: operation           (**r [rd] is [r1] truncated to single-precision float *)
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
+  | Ointuoffloat: operation             (**r [rd = unsigned_int_of_float(r1)] *)
   | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] *)
+  | Ofloatofintu: operation             (**r [rd = float_of_unsigned_int(r1)] *)
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
@@ -287,7 +289,9 @@ Definition eval_operation
   | Odivf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.div f1 f2))
   | Osingleoffloat, v1 :: nil => Some (Val.singleoffloat v1)
   | Ointoffloat, Vfloat f1 :: nil => option_map Vint (Float.intoffloat f1)
+  | Ointuoffloat, Vfloat f1 :: nil => option_map Vint (Float.intuoffloat f1)
   | Ofloatofint, Vint n1 :: nil => Some (Vfloat (Float.floatofint n1))
+  | Ofloatofintu, Vint n1 :: nil => Some (Vfloat (Float.floatofintu n1))
   | Ocmp c, _ =>
       match eval_condition c vl m with
       | None => None
@@ -491,7 +495,9 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Odivf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Osingleoffloat => (Tfloat :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
+  | Ointuoffloat => (Tfloat :: nil, Tint)
   | Ofloatofint => (Tint :: nil, Tfloat)
+  | Ofloatofintu => (Tint :: nil, Tfloat)
   | Ocmp c => (type_of_condition c, Tint)
   end.
 
@@ -555,6 +561,7 @@ Proof.
   injection H0; intro; subst v; exact I. discriminate.
   destruct v0; exact I.
   destruct (Float.intoffloat f); simpl in H0; inv H0. exact I.
+  destruct (Float.intuoffloat f); simpl in H0; inv H0. exact I.
   destruct (eval_condition c vl). 
   destruct b; injection H0; intro; subst v; exact I.
   discriminate.
@@ -656,7 +663,9 @@ Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :
   | Odivf, v1::v2::nil => Val.divf v1 v2
   | Osingleoffloat, v1::nil => Val.singleoffloat v1
   | Ointoffloat, v1::nil => Val.intoffloat v1
+  | Ointuoffloat, v1::nil => Val.intuoffloat v1
   | Ofloatofint, v1::nil => Val.floatofint v1
+  | Ofloatofintu, v1::nil => Val.floatofintu v1
   | Ocmp c, _ => eval_condition_total c vl
   | _, _ => Vundef
   end.
@@ -729,6 +738,7 @@ Proof.
   assert (Int.unsigned (Int.repr 31) < Int.unsigned Int.iwordsize). vm_compute; auto.
   omega. discriminate.
   destruct (Float.intoffloat f); simpl in H; inv H. auto.
+  destruct (Float.intuoffloat f); simpl in H; inv H. auto.
   caseEq (eval_condition c vl m); intros; rewrite H0 in H.
   replace v with (Val.of_bool b).
   eapply eval_condition_weaken; eauto.
@@ -840,6 +850,7 @@ Proof.
   destruct (Int.ltu i (Int.repr 31)); inv H1; TrivialExists.
   exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
   destruct (Float.intoffloat f); simpl in *; inv H1. TrivialExists.
+  destruct (Float.intuoffloat f); simpl in *; inv H1. TrivialExists.
   exists v1; split; auto. 
   destruct (eval_condition c vl1 m1) as [] _eqn. 
   rewrite (eval_condition_lessdef c H H0 Heqo).
@@ -1000,6 +1011,7 @@ Proof.
   destruct (Int.ltu i (Int.repr 31)); inv H1. TrivialExists2.
   exists (Val.singleoffloat v'); split; auto. inv H4; simpl; auto.
   destruct (Float.intoffloat f0); simpl in *; inv H1. TrivialExists2.
+  destruct (Float.intuoffloat f0); simpl in *; inv H1. TrivialExists2.
   destruct (eval_condition c vl1 m1) as [] _eqn; try discriminate.
   exploit eval_condition_inject; eauto. intros EQ; rewrite EQ. 
   destruct b; inv H1; TrivialExists2.

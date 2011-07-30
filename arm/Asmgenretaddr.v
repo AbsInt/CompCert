@@ -68,7 +68,7 @@ Qed.
 Inductive return_address_offset: Mach.function -> Mach.code -> int -> Prop :=
   | return_address_offset_intro:
       forall c f ofs,
-      code_tail ofs (transl_function f) (transl_code f c) ->
+      code_tail ofs (fn_code (transl_function f)) (transl_code f c) ->
       return_address_offset f c (Int.repr ofs).
 
 (** We now show that such an offset always exists if the Mach code [c]
@@ -209,11 +209,11 @@ Proof.
 Qed.
 
 Lemma return_address_exists:
-  forall f sg ros c, is_tail (Mcall sg ros :: c) f.(fn_code) ->
+  forall f sg ros c, is_tail (Mcall sg ros :: c) f.(Mach.fn_code) ->
   exists ra, return_address_offset f c ra.
 Proof.
-  intros. assert (is_tail (transl_code f c) (transl_function f)).
-  unfold transl_function. IsTail. apply transl_code_tail; eauto with coqlib.
+  intros. assert (is_tail (transl_code f c) (fn_code (transl_function f))).
+  unfold transl_function. simpl. IsTail. apply transl_code_tail; eauto with coqlib.
   destruct (is_tail_code_tail _ _ H0) as [ofs A].
   exists (Int.repr ofs). constructor. auto.
 Qed.

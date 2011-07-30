@@ -38,7 +38,9 @@ Inductive ireg: Type :=
 
 Inductive freg: Type :=
   | FR0: freg  | FR1: freg  | FR2: freg  | FR3: freg
-  | FR4: freg  | FR5: freg  | FR6: freg  | FR7: freg.
+  | FR4: freg  | FR5: freg  | FR6: freg  | FR7: freg
+  | FR8: freg  | FR9: freg  | FR10: freg  | FR11: freg
+  | FR12: freg  | FR13: freg  | FR14: freg  | FR15: freg.
 
 Lemma ireg_eq: forall (x y: ireg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
@@ -69,7 +71,7 @@ Proof. decide equality. Defined.
 
 Inductive preg: Type :=
   | IR: ireg -> preg                    (**r integer registers *)
-  | FR: freg -> preg                    (**r float registers *)
+  | FR: freg -> preg                    (**r double-precision VFP float registers *)
   | CR: crbit -> preg                   (**r bits in the condition register *)
   | PC: preg.                           (**r program counter *)
 
@@ -122,10 +124,10 @@ Inductive instruction : Type :=
   | Pand: ireg -> ireg -> shift_op -> instruction (**r bitwise and *)
   | Pb: label -> instruction                      (**r branch to label *)
   | Pbc: crbit -> label -> instruction            (**r conditional branch to label *)
-  | Pbsymb: ident -> instruction                  (**r branch to symbol *)
-  | Pbreg: ireg -> instruction                    (**r computed branch *)
-  | Pblsymb: ident -> instruction                 (**r branch and link to symbol *)
-  | Pblreg: ireg -> instruction                   (**r computed branch and link *)
+  | Pbsymb: ident -> signature -> instruction                  (**r branch to symbol *)
+  | Pbreg: ireg -> signature -> instruction                    (**r computed branch *)
+  | Pblsymb: ident -> signature -> instruction                 (**r branch and link to symbol *)
+  | Pblreg: ireg -> signature -> instruction                   (**r computed branch and link *)
   | Pbic: ireg -> ireg -> shift_op -> instruction (**r bitwise bit-clear *)
   | Pcmp: ireg -> shift_op -> instruction         (**r integer comparison *)
   | Peor: ireg -> ireg -> shift_op -> instruction (**r bitwise exclusive or *)
@@ -146,23 +148,25 @@ Inductive instruction : Type :=
   | Psdiv: ireg -> ireg -> ireg -> instruction      (**r signed division *)
   | Psub: ireg -> ireg -> shift_op -> instruction  (**r integer subtraction *)
   | Pudiv: ireg -> ireg -> ireg -> instruction      (**r unsigned division *)
-  (* Floating-point coprocessor instructions *)
-  | Pabsd: freg -> freg -> instruction             (**r float absolute value *)
-  | Padfd: freg -> freg -> freg -> instruction     (**r float addition *)
-  | Pcmf: freg -> freg -> instruction              (**r float comparison *)
-  | Pdvfd: freg -> freg -> freg -> instruction     (**r float division *)
-  | Pfixz: ireg -> freg -> instruction             (**r float to signed int *)
-  | Pfltd: freg -> ireg -> instruction             (**r signed int to float *)
-  | Pldfd: freg -> ireg -> int -> instruction      (**r float64 load *)
-  | Pldfs: freg -> ireg -> int -> instruction      (**r float32 load *)
-  | Plifd: freg -> float -> instruction            (**r load float constant *)
-  | Pmnfd: freg -> freg -> instruction             (**r float opposite *)
-  | Pmvfd: freg -> freg -> instruction             (**r float move *)
-  | Pmvfs: freg -> freg -> instruction             (**r float move single precision *)
-  | Pmufd: freg -> freg -> freg -> instruction     (**r float multiplication *)
-  | Pstfd: freg -> ireg -> int -> instruction      (**r float64 store *)
-  | Pstfs: freg -> ireg -> int -> instruction      (**r float32 store *)
-  | Psufd: freg -> freg -> freg -> instruction     (**r float subtraction *)
+  (* Floating-point coprocessor instructions (VFP double scalar operations) *)
+  | Pfcpyd: freg -> freg -> instruction             (**r float move *)
+  | Pfabsd: freg -> freg -> instruction             (**r float absolute value *)
+  | Pfnegd: freg -> freg -> instruction             (**r float opposite *)
+  | Pfaddd: freg -> freg -> freg -> instruction     (**r float addition *)
+  | Pfdivd: freg -> freg -> freg -> instruction     (**r float division *)
+  | Pfmuld: freg -> freg -> freg -> instruction     (**r float multiplication *)
+  | Pfsubd: freg -> freg -> freg -> instruction     (**r float subtraction *)
+  | Pflid: freg -> float -> instruction             (**r load float constant *)
+  | Pfcmpd: freg -> freg -> instruction             (**r float comparison *)
+  | Pfsitod: freg -> ireg -> instruction            (**r signed int to float *)
+  | Pfuitod: freg -> ireg -> instruction            (**r unsigned int to float *)
+  | Pftosizd: ireg -> freg -> instruction           (**r float to signed int *)
+  | Pftouizd: ireg -> freg -> instruction           (**r float to unsigned int *)
+  | Pfcvtsd: freg -> freg -> instruction            (**r round to singled precision *)
+  | Pfldd: freg -> ireg -> int -> instruction       (**r float64 load *)
+  | Pflds: freg -> ireg -> int -> instruction       (**r float32 load *)
+  | Pfstd: freg -> ireg -> int -> instruction       (**r float64 store *)
+  | Pfsts: freg -> ireg -> int -> instruction       (**r float32 store *)
 
   (* Pseudo-instructions *)
   | Pallocframe: Z -> int -> instruction      (**r allocate new stack frame *)
@@ -225,7 +229,8 @@ lbl:    .word   symbol
 *)
 
 Definition code := list instruction.
-Definition fundef := AST.fundef code.
+Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
+Definition fundef := AST.fundef function.
 Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
@@ -409,13 +414,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | Vint n => if Int.eq n Int.zero then OK (nextinstr rs) m else goto_label c lbl rs m
       | _ => Error
       end
-  | Pbsymb id =>                  
+  | Pbsymb id sg =>                  
       OK (rs#PC <- (symbol_offset id Int.zero)) m
-  | Pbreg r =>                    
+  | Pbreg r sg =>                    
       OK (rs#PC <- (rs#r)) m
-  | Pblsymb id =>                 
+  | Pblsymb id sg =>                 
       OK (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (symbol_offset id Int.zero)) m
-  | Pblreg r =>                   
+  | Pblreg r sg =>                   
       OK (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (rs#r)) m
   | Pbic r1 r2 so => 
       OK (nextinstr (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
@@ -463,41 +468,45 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pudiv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.divu rs#r1 rs#r2))) m
   (* Floating-point coprocessor instructions *)
-  | Pabsd r1 r2 => 
-      OK (nextinstr (rs#r1 <- (Val.absf rs#r2))) m
-  | Padfd r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.addf rs#r2 rs#r3))) m
-  | Pcmf r1 r2 =>              
-      OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
-  | Pdvfd r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.divf rs#r2 rs#r3))) m
-  | Pfixz r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.intoffloat rs#r2))) m
-  | Pfltd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.floatofint rs#r2))) m
-  | Pldfd r1 r2 n =>
-      exec_load Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
-  | Pldfs r1 r2 n =>
-      exec_load Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
-  | Plifd r1 f =>            
-      OK (nextinstr (rs#r1 <- (Vfloat f))) m
-  | Pmnfd r1 r2 => 
-      OK (nextinstr (rs#r1 <- (Val.negf rs#r2))) m
-  | Pmvfd r1 r2 =>
+  | Pfcpyd r1 r2 =>
       OK (nextinstr (rs#r1 <- (rs#r2))) m
-  | Pmvfs r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
-  | Pmufd r1 r2 r3 =>     
+  | Pfabsd r1 r2 => 
+      OK (nextinstr (rs#r1 <- (Val.absf rs#r2))) m
+  | Pfnegd r1 r2 => 
+      OK (nextinstr (rs#r1 <- (Val.negf rs#r2))) m
+  | Pfaddd r1 r2 r3 =>     
+      OK (nextinstr (rs#r1 <- (Val.addf rs#r2 rs#r3))) m
+  | Pfdivd r1 r2 r3 =>     
+      OK (nextinstr (rs#r1 <- (Val.divf rs#r2 rs#r3))) m
+  | Pfmuld r1 r2 r3 =>     
       OK (nextinstr (rs#r1 <- (Val.mulf rs#r2 rs#r3))) m
-  | Pstfd r1 r2 n =>      
+  | Pfsubd r1 r2 r3 =>     
+      OK (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
+  | Pflid r1 f =>            
+      OK (nextinstr (rs#r1 <- (Vfloat f))) m
+  | Pfcmpd r1 r2 =>              
+      OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
+  | Pfsitod r1 r2 =>
+      OK (nextinstr (rs#r1 <- (Val.floatofint rs#r2))) m
+  | Pfuitod r1 r2 =>
+      OK (nextinstr (rs#r1 <- (Val.floatofintu rs#r2))) m
+  | Pftosizd r1 r2 =>
+      OK (nextinstr (rs#r1 <- (Val.intoffloat rs#r2))) m
+  | Pftouizd r1 r2 =>
+      OK (nextinstr (rs#r1 <- (Val.intuoffloat rs#r2))) m
+  | Pfcvtsd r1 r2 =>
+      OK (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
+  | Pfldd r1 r2 n =>
+      exec_load Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pflds r1 r2 n =>
+      exec_load Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
+  | Pfstd r1 r2 n =>      
       exec_store Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
-  | Pstfs r1 r2 n =>
+  | Pfsts r1 r2 n =>
       match exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m with
-      | OK rs' m' => OK (rs'#FR3 <- Vundef) m'
+      | OK rs' m' => OK (rs'#FR7 <- Vundef) m'
       | Error => Error
       end
-  | Psufd r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
   (* Pseudo-instructions *)
   | Pallocframe sz pos =>             
       let (m1, stk) := Mem.alloc m 0 sz in
@@ -562,9 +571,11 @@ Definition ireg_of (r: mreg) : ireg :=
 
 Definition freg_of (r: mreg) : freg :=
   match r with
-  | F0 => FR0 | F1 => FR1
-  | F4 => FR4 | F5 => FR5 | F6 => FR6 | F7 => FR7
-  | FT1 => FR2 | FT2 => FR3
+  | F0 => FR0 | F1 => FR1 | F2 => FR2 | F3 => FR3
+  | F4 => FR4 | F5 => FR5
+  | F8 => FR8 | F9 => FR9 | F10 => FR10 | F11 => FR11
+  | F12 => FR12 | F13 => FR13 | F14 => FR14 | F15 => FR15
+  | FT1 => FR6 | FT2 => FR7
   | _ => FR0  (* should not happen *)
   end.
 
@@ -618,24 +629,24 @@ Inductive state: Type :=
 
 Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
-      forall b ofs c i rs m rs' m',
+      forall b ofs f i rs m rs' m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some i ->
-      exec_instr c i rs m = OK rs' m' ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) (fn_code f) = Some i ->
+      exec_instr (fn_code f) i rs m = OK rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs c ef args res rs m t v m',
+      forall b ofs f ef args res rs m t v m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) (fn_code f) = Some (Pbuiltin ef args res) ->
       external_call ef ge (map rs args) m t v m' ->
       step (State rs m) t (State (nextinstr(rs # res <- v)) m')
   | exec_step_annot:
-      forall b ofs c ef args rs m vargs t v m',
+      forall b ofs f ef args rs m vargs t v m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some (Pannot ef args) ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) (fn_code f) = Some (Pannot ef args) ->
       annot_arguments rs m args vargs ->
       external_call ef ge vargs m t v m' ->
       step (State rs m) t (State (nextinstr rs) m')
