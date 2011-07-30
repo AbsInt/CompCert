@@ -1,7 +1,14 @@
-- Fixed two omissions in the semantics of CompCert C (reported by Brian Campbell):
-  . Functions calls through a function pointer had undefined semantics.
-  . Conditional expressions "e1 ? e2 : e3" where e2 and e3 have different
-    types were missing a cast to their common type.
+Release 1.9, 2011-xx-xx
+=======================
+
+- The reduction semantics of CompCert C was made executable and turned
+  into a reference interpreter for CompCert C, enabling animation of
+  the semantics.  (Thanks to Brian Campbell for suggesting this approach.)
+  Usage is:  ccomp -interp [options] source.c
+  Options include:
+    -trace      to print a detailed trace of reduction steps
+    -random     to randomize execution order
+    -all        to explore all possible execution orders in parallel
 
 - Revised and strengthened the top-level statements of semantic preservation.
   In particular, we now show:
@@ -10,6 +17,11 @@
   . if the source program goes wrong after performing some I/O,
     the compiled code performs at least these I/O before continuing
     with an arbitrary behavior.
+
+- Fixed two omissions in the semantics of CompCert C (reported by Brian Campbell):
+  . Functions calls through a function pointer had undefined semantics.
+  . Conditional expressions "e1 ? e2 : e3" where e2 and e3 have different
+    types were missing a cast to their common type.
 
 - Revised handling of annotation statements.  Now they come in two forms:
     1. __builtin_annot("format", x1, ..., xN)
@@ -21,6 +33,13 @@
 
 - Related clean-ups in the handling of external functions and 
   compiler built-ins.
+
+- ARM code generator was ported to the new ABI (EABI in ARM parlance,
+  armel in Debian parlance), using VFD instructions for floating-point.
+  (Successfully tested on a Trimslice platform running Ubuntu 11.04.)
+
+- IA32 code generator: added -fno-sse option to prevent generation of
+  SSE instructions for memory copy operations.
 
 	
 Release 1.8.2, 2011-05-24

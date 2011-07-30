@@ -370,14 +370,50 @@ let print_builtin_vstore oc chunk args =
     end in
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n
 
+(* Magic sequence for byte-swapping *)
+
+let print_bswap oc src dst tmp =
+  (* tmp <> src, tmp <> dst, but can have dst = src *)
+  (* src = A . B .C . D *)
+  fprintf oc "	eor	%a, %a, %a, ror #16\n" ireg tmp ireg src ireg src;
+  (* tmp = A^C . B^D . C^A . D^B *)
+  fprintf oc "	bic	%a, %a, #0x00FF0000\n" ireg tmp ireg tmp;
+  (* tmp = A^C . 000 . C^A . D^B *)
+  fprintf oc "	mov	%a, %a, ror #8\n" ireg dst ireg src;
+  (* dst = D . A . B . C *)
+  fprintf oc "	eor	%a, %a, %a, lsr #8\n" ireg dst ireg dst ireg tmp
+  (* dst = D . A^A^C . B . C^C^A = D . C . B . A *)
+
 (* Handling of compiler-inlined builtins *)
 
 let print_builtin_inline oc name args res =
   fprintf oc "%s begin %s\n" comment name;
   let n = match name, args, res with
+  (* Integer arithmetic *)
+  | "__builtin_bswap", [IR a1], IR res ->
+      print_bswap oc a1 IR14 res; 4
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], FR res ->
       fprintf oc "	fabsd	%a, %a\n" freg res freg a1; 1
+  | "__builtin_fsqrt", [FR a1], FR res ->
+      fprintf oc "	fsqrtd	%a, %a\n" freg res freg a1; 1
+  (* Memory accesses *)
+  | "__builtin_read_int16_reversed", [IR a1], IR res ->
+      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
+      fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg res;
+      fprintf oc "	orr	%a, %a, %a, lsl #8\n" ireg res ireg IR14 ireg res; 3
+  | "__builtin_read_int32_reversed", [IR a1], IR res ->
+      fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
+      print_bswap oc res IR14 res; 5
+  | "__builtin_write_int16_reversed", [IR a1; IR a2], _ ->
+      fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg a2;
+      fprintf oc "	and	%a, %a, #0xFF\n" ireg IR14 ireg IR14;
+      fprintf oc "	orr	%a, %a, %a, lsl #8\n" ireg IR14 ireg IR14 ireg a2;
+      fprintf oc "	strh	%a, [%a, #0]\n" ireg IR14 ireg a1; 4
+  | "__builtin_write_int32_reversed", [IR a1; IR a2], _ ->
+      let tmp = if a1 = IR10 then IR12 else IR10 in
+      print_bswap oc a2 IR14 tmp;
+      fprintf oc "	str	%a, [%a, #0]\n" ireg tmp ireg a1; 5
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)

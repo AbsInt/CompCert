@@ -18,10 +18,24 @@
 open Cparser
 open C
 
-(* No ARM builtins for the moment *)
-
 let builtins = {
   Builtins.typedefs = [];
-  Builtins.functions = []
+  Builtins.functions = [
+    (* Integer arithmetic *)
+    "__builtin_bswap",
+      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    (* Float arithmetic *)
+    "__builtin_fsqrt",
+      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    (* Memory accesses *)
+    "__builtin_read_int16_reversed",
+      (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);
+    "__builtin_read_int32_reversed",
+      (TInt(IUInt, []), [TPtr(TInt(IUInt, [AConst]), [])], false);
+    "__builtin_write_int16_reversed",
+      (TVoid [], [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
+    "__builtin_write_int32_reversed",
+      (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
+  ]
 }
 
