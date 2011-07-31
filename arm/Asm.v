@@ -369,19 +369,28 @@ Definition compare_int (rs: regset) (v1 v2: val) :=
     #CRgt <- (Val.cmp Cgt v1 v2)
     #CRle <- (Val.cmp Cle v1 v2).
 
+(** Semantics of [fcmpd] instruction:
+<<
+==	EQ=1 NE=0 HS=1 LO=0 MI=0 PL=1 VS=0 VC=1 HI=0 LS=1 GE=1 LT=0 GT=0 LE=1 
+<	EQ=0 NE=1 HS=0 LO=1 MI=1 PL=0 VS=0 VC=1 HI=0 LS=1 GE=0 LT=1 GT=0 LE=1 
+>	EQ=0 NE=1 HS=1 LO=0 MI=0 PL=1 VS=0 VC=1 HI=1 LS=0 GE=1 LT=0 GT=1 LE=0 
+unord	EQ=0 NE=1 HS=1 LO=0 MI=0 PL=1 VS=1 VC=0 HI=1 LS=0 GE=0 LT=1 GT=0 LE=1 
+>>
+*)
+
 Definition compare_float (rs: regset) (v1 v2: val) :=
   rs#CReq <- (Val.cmpf Ceq v1 v2)
     #CRne <- (Val.cmpf Cne v1 v2)
-    #CRhs <- Vundef
-    #CRlo <- Vundef
-    #CRmi <- (Val.cmpf Clt v1 v2)                    (* lt *)
-    #CRpl <- (Val.notbool (Val.cmpf Clt v1 v2))      (* not lt *)
-    #CRhi <- (Val.notbool (Val.cmpf Cle v1 v2))      (* not le *)
-    #CRls <- (Val.cmpf Cle v1 v2)                    (* le *)
-    #CRge <- (Val.cmpf Cge v1 v2)                    (* ge *)
-    #CRlt <- (Val.notbool (Val.cmpf Cge v1 v2))      (* not ge *)
-    #CRgt <- (Val.cmpf Cgt v1 v2)                    (* gt *)
-    #CRle <- (Val.notbool (Val.cmpf Cgt v1 v2)).     (* not gt *)
+    #CRhs <- (Val.notbool (Val.cmpf Clt v1 v2))      (**r not lt *)
+    #CRlo <- (Val.cmpf Clt v1 v2)                    (**r lt *)
+    #CRmi <- (Val.cmpf Clt v1 v2)                    (**r lt *)
+    #CRpl <- (Val.notbool (Val.cmpf Clt v1 v2))      (**r not lt *)
+    #CRhi <- (Val.notbool (Val.cmpf Cle v1 v2))      (**r not le *)
+    #CRls <- (Val.cmpf Cle v1 v2)                    (**r le *)
+    #CRge <- (Val.cmpf Cge v1 v2)                    (**r ge *)
+    #CRlt <- (Val.notbool (Val.cmpf Cge v1 v2))      (**r not ge *)
+    #CRgt <- (Val.cmpf Cgt v1 v2)                    (**r gt *)
+    #CRle <- (Val.notbool (Val.cmpf Cgt v1 v2)).     (**r not gt *)
 
 (** Execution of a single instruction [i] in initial state
     [rs] and [m].  Return updated state.  For instructions
