@@ -419,9 +419,13 @@ let rec convertExpr env e =
       else
         Evalof(l, ty)
 
-  | C.EConst(C.CInt(i, _, _)) ->
+  | C.EConst(C.CInt(i, k, _)) ->
+      if k = C.ILongLong || k = C.IULongLong then
+        unsupported "'long long' integer literal";
       Eval(Vint(convertInt i), ty)
-  | C.EConst(C.CFloat(f, _, _)) ->
+  | C.EConst(C.CFloat(f, k, _)) ->
+      if k = C.FLongDouble then
+        unsupported "'long double' floating-point literal";
       Eval(Vfloat(f), ty)
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
