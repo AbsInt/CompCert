@@ -24,6 +24,8 @@ let builtins = {
     (* Integer arithmetic *)
     "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_cntlz",
+      (TInt(IUInt, []), [TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fsqrt",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);

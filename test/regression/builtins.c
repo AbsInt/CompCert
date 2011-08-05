@@ -15,7 +15,8 @@ int main(int argc, char ** argv)
 
   printf("mulhw(%x, %x) = %x\n", x, y, __builtin_mulhw(x, y));
   printf("mulhwu(%x, %x) = %x\n", x, y, __builtin_mulhwu(x, y));
-  printf("cntlzw(%x) = %d\n", x, __builtin_cntlzw(x));
+  printf("cntlz(%x) = %d\n", x, __builtin_cntlz(x));
+  printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
 
   printf("fmadd(%f, %f, %f) = %f\n", a, b, c, __builtin_fmadd(a, b, c));
   printf("fmsub(%f, %f, %f) = %f\n", a, b, c, __builtin_fmsub(a, b, c));
@@ -36,6 +37,7 @@ int main(int argc, char ** argv)
 #ifdef __arm__
 
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
+  printf("cntlz(%x) = %d\n", x, __builtin_cntlz(x));
 
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
   

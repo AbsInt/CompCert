@@ -26,7 +26,9 @@ let builtins = {
       (TInt(IInt, []), [TInt(IInt, []); TInt(IInt, [])], false);
     "__builtin_mulhwu",
       (TInt(IUInt, []), [TInt(IUInt, []); TInt(IUInt, [])], false);
-    "__builtin_cntlzw",
+    "__builtin_cntlz",
+      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
