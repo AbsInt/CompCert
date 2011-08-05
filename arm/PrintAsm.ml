@@ -372,7 +372,7 @@ let print_builtin_vstore oc chunk args =
 
 (* Magic sequence for byte-swapping *)
 
-let print_bswap oc src dst tmp =
+let print_bswap oc src tmp dst =
   (* tmp <> src, tmp <> dst, but can have dst = src *)
   (* src = A . B .C . D *)
   fprintf oc "	eor	%a, %a, %a, ror #16\n" ireg tmp ireg src ireg src;
@@ -400,8 +400,9 @@ let print_builtin_inline oc name args res =
   (* Memory accesses *)
   | "__builtin_read_int16_reversed", [IR a1], IR res ->
       fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
-      fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg res;
-      fprintf oc "	orr	%a, %a, %a, lsl #8\n" ireg res ireg IR14 ireg res; 3
+      fprintf oc "	mov	%a, %a, lsl #8\n" ireg IR14 ireg res;
+      fprintf oc "	and	%a, %a, #0xFF00\n" ireg IR14 ireg IR14;
+      fprintf oc "	orr	%a, %a, %a, lsr #8\n" ireg res ireg IR14 ireg res; 4
   | "__builtin_read_int32_reversed", [IR a1], IR res ->
       fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
       print_bswap oc res IR14 res; 5
