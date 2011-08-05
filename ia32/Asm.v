@@ -85,9 +85,7 @@ Inductive testcond: Type :=
   | Cond_e | Cond_ne
   | Cond_b | Cond_be | Cond_ae | Cond_a
   | Cond_l | Cond_le | Cond_ge | Cond_g
-  | Cond_p | Cond_np
-  | Cond_nep                            (**r synthetic: P or (not Z) *)
-  | Cond_enp.                           (**r synthetic: (not P) and Z *)
+  | Cond_p | Cond_np.
 
 (** Instructions.  IA32 instructions accept many combinations of
   registers, memory references and immediate constants as arguments.
@@ -178,6 +176,7 @@ Inductive instruction: Type :=
   | Pjmp_s (symb: ident)
   | Pjmp_r (r: ireg)
   | Pjcc (c: testcond)(l: label)
+  | Pjcc2 (c1 c2: testcond)(l: label)
   | Pjmptbl (r: ireg) (tbl: list label) (**r pseudo *)
   | Pcall_s (symb: ident)
   | Pcall_r (r: ireg)
@@ -381,6 +380,7 @@ Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
       | Vint n => Some (Int.eq n Int.zero)
       | _ => None
       end
+(*
   | Cond_nep =>
       match rs PF, rs ZF with
       | Vint p, Vint z => Some (Int.eq p Int.one || Int.eq z Int.zero)
@@ -391,6 +391,7 @@ Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
       | Vint p, Vint z => Some (Int.eq p Int.zero && Int.eq z Int.one)
       | _, _ => None
       end
+*)
   end.
 
 (** The semantics is purely small-step and defined as a function
@@ -580,8 +581,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       end
   | Psetcc c rd =>
       match eval_testcond c rs with
-      | Some true => Next (nextinstr (rs#ECX <- Vundef #EDX <- Vundef #rd <- Vtrue)) m
-      | Some false => Next (nextinstr (rs#ECX <- Vundef #EDX <- Vundef #rd <- Vfalse)) m
+      | Some b => Next (nextinstr (rs#ECX <- Vundef #rd <- (Val.of_bool b))) m
       | None => Stuck
       end
   (** Arithmetic operations over floats *)
@@ -611,6 +611,12 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | Some true => goto_label c lbl rs m
       | Some false => Next (nextinstr rs) m
       | None => Stuck
+      end
+  | Pjcc2 cond1 cond2 lbl =>
+      match eval_testcond cond1 rs, eval_testcond cond2 rs with
+      | Some true, Some true => goto_label c lbl rs m
+      | Some _, Some _ => Next (nextinstr rs) m
+      | _, _ => Stuck
       end
   | Pjmptbl r tbl =>
       match rs#r with

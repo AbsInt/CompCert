@@ -1147,6 +1147,22 @@ Proof.
   intros. repeat SOther. 
 Qed.
 
+Definition eval_extcond (xc: extcond) (rs: regset) : option bool :=
+  match xc with
+  | Cond_base c =>
+      eval_testcond c rs
+  | Cond_and c1 c2 =>
+      match eval_testcond c1 rs, eval_testcond c2 rs with
+      | Some b1, Some b2 => Some (b1 && b2)
+      | _, _ => None
+      end
+  | Cond_or c1 c2 =>
+      match eval_testcond c1 rs, eval_testcond c2 rs with
+      | Some b1, Some b2 => Some (b1 || b2)
+      | _, _ => None
+      end
+  end.
+
 Definition swap_floats (c: comparison) (n1 n2: float) : float :=
   match c with
   | Clt | Cle => n2
@@ -1155,9 +1171,9 @@ Definition swap_floats (c: comparison) (n1 n2: float) : float :=
 
 Lemma testcond_for_float_comparison_correct:
   forall c n1 n2 rs,
-  eval_testcond (testcond_for_condition (Ccompf c))
-                (nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
-                                           (Vfloat (swap_floats c n2 n1)) rs)) =
+  eval_extcond (testcond_for_condition (Ccompf c))
+               (nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
+                                          (Vfloat (swap_floats c n2 n1)) rs)) =
   Some(Float.cmp c n1 n2).
 Proof.
   intros.
@@ -1165,7 +1181,7 @@ Proof.
   set (rs' := nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
                                         (Vfloat (swap_floats c n2 n1)) rs)).
   intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
+  unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
   destruct c; simpl.
 (* eq *)
   rewrite Float.cmp_ne_eq.
@@ -1203,9 +1219,9 @@ Qed.
 
 Lemma testcond_for_neg_float_comparison_correct:
   forall c n1 n2 rs,
-  eval_testcond (testcond_for_condition (Cnotcompf c))
-                (nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
-                                           (Vfloat (swap_floats c n2 n1)) rs)) =
+  eval_extcond (testcond_for_condition (Cnotcompf c))
+               (nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
+                                          (Vfloat (swap_floats c n2 n1)) rs)) =
   Some(negb(Float.cmp c n1 n2)).
 Proof.
   intros.
@@ -1213,7 +1229,7 @@ Proof.
   set (rs' := nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
                                         (Vfloat (swap_floats c n2 n1)) rs)).
   intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
+  unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
   destruct c; simpl.
 (* eq *)
   rewrite Float.cmp_ne_eq.
@@ -1255,7 +1271,7 @@ Lemma transl_cond_correct:
   eval_condition cond (map rs (map preg_of args)) m = Some b ->
   exists rs',
      exec_straight c rs m k rs' m
-  /\ eval_testcond (testcond_for_condition cond) rs' = Some b
+  /\ eval_extcond (testcond_for_condition cond) rs' = Some b
   /\ forall r, nontemp_preg r = true -> rs'#r = rs r.
 Proof.
   unfold transl_cond; intros. 
@@ -1264,17 +1280,17 @@ Proof.
   simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0. rewrite (ireg_of_eq _ _ EQ1) in H0.
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
   split. simpl in H0. FuncInv.
-  subst b. apply testcond_for_signed_comparison_correct_ii. 
+  subst b. simpl. apply testcond_for_signed_comparison_correct_ii. 
   intros. unfold compare_ints. repeat SOther.
 (* compu *)
   simpl map in H0. 
   rewrite (ireg_of_eq _ _ EQ) in H0. rewrite (ireg_of_eq _ _ EQ1) in H0.
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
   split. simpl in H0. FuncInv.
-  subst b. apply testcond_for_unsigned_comparison_correct_ii. 
-  apply testcond_for_unsigned_comparison_correct_ip; auto. 
-  apply testcond_for_unsigned_comparison_correct_pi; auto.
-  eapply testcond_for_unsigned_comparison_correct_pp; eauto.
+  subst b. simpl; apply testcond_for_unsigned_comparison_correct_ii. 
+  simpl; apply testcond_for_unsigned_comparison_correct_ip; auto. 
+  simpl; apply testcond_for_unsigned_comparison_correct_pi; auto.
+  simpl; eapply testcond_for_unsigned_comparison_correct_pp; eauto.
   intros. unfold compare_ints. repeat SOther.
 (* compimm *)
   simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0.
@@ -1284,14 +1300,14 @@ Proof.
   simpl in H0. FuncInv. simpl. rewrite Int.and_idem. auto. auto.
   apply exec_straight_one; auto.
   split. simpl in H0. FuncInv.
-  subst b. apply testcond_for_signed_comparison_correct_ii.
+  subst b. simpl; apply testcond_for_signed_comparison_correct_ii.
   intros. unfold compare_ints. repeat SOther.
 (* compuimm *)
   simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0.
   econstructor. split. apply exec_straight_one. simpl; eauto. auto.
   split. simpl in H0. FuncInv. 
-  subst b. apply testcond_for_unsigned_comparison_correct_ii. 
-  apply testcond_for_unsigned_comparison_correct_pi; auto.
+  subst b. simpl; apply testcond_for_unsigned_comparison_correct_ii. 
+  simpl; apply testcond_for_unsigned_comparison_correct_pi; auto.
   intros. unfold compare_ints. repeat SOther.
 (* compf *)
   simpl map in H0. rewrite (freg_of_eq _ _ EQ) in H0. rewrite (freg_of_eq _ _ EQ1) in H0.
@@ -1325,6 +1341,78 @@ Proof.
   generalize (compare_ints_spec rs (Vint (Int.and i0 i)) Vzero).
   intros [A B]. rewrite A. subst b. simpl. destruct (Int.eq (Int.and i0 i) Int.zero); auto.
   intros. unfold compare_ints. repeat SOther.
+Qed.
+
+Remark eval_testcond_nextinstr:
+  forall c rs, eval_testcond c (nextinstr rs) = eval_testcond c rs.
+Proof.
+  intros. unfold eval_testcond. repeat rewrite nextinstr_inv; auto with ppcgen.
+Qed.
+
+Remark eval_testcond_set_ireg:
+  forall c rs r v, eval_testcond c (rs#(IR r) <- v) = eval_testcond c rs.
+Proof.
+  intros. unfold eval_testcond. repeat rewrite Pregmap.gso; auto with ppcgen.
+Qed.
+
+Lemma mk_setcc_correct:
+  forall cond rd k rs1 m b,
+  eval_extcond cond rs1 = Some b ->
+  exists rs2,
+  exec_straight (mk_setcc cond rd k) rs1 m k rs2 m
+  /\ rs2#rd = Val.of_bool b
+  /\ forall r, nontemp_preg r = true -> r <> rd -> rs2#r = rs1#r.
+Proof.
+  intros. destruct cond; simpl in *.
+(* base *)
+  econstructor; split.
+  apply exec_straight_one. simpl; rewrite H. eauto. auto.
+  split. repeat SRes. 
+  intros. repeat SOther. 
+(* or *)
+  destruct (eval_testcond c1 rs1) as [b1|]_eqn;
+  destruct (eval_testcond c2 rs1) as [b2|]_eqn; inv H.
+  assert (D: Val.or (Val.of_bool b1) (Val.of_bool b2) = Val.of_bool (b1 || b2)).
+    destruct b1; destruct b2; auto.
+  destruct (ireg_eq rd EDX).
+  subst rd. econstructor; split.
+  eapply exec_straight_three.
+  simpl; rewrite Heqo; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
+  simpl. eauto. 
+  auto. auto. auto.
+  split. SRes. 
+  intros. repeat SOther.
+  econstructor; split.
+  eapply exec_straight_three.
+  simpl; rewrite Heqo; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
+  simpl. eauto. 
+  auto. auto. auto.
+  split. repeat SRes. rewrite <- D. rewrite Val.or_commut. decEq; repeat SRes. 
+  intros. repeat SOther.
+(* and *)
+  destruct (eval_testcond c1 rs1) as [b1|]_eqn;
+  destruct (eval_testcond c2 rs1) as [b2|]_eqn; inv H.
+  assert (D: Val.and (Val.of_bool b1) (Val.of_bool b2) = Val.of_bool (b1 && b2)).
+    destruct b1; destruct b2; auto.
+  destruct (ireg_eq rd EDX).
+  subst rd. econstructor; split.
+  eapply exec_straight_three.
+  simpl; rewrite Heqo; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
+  simpl. eauto. 
+  auto. auto. auto.
+  split. SRes. 
+  intros. repeat SOther.
+  econstructor; split.
+  eapply exec_straight_three.
+  simpl; rewrite Heqo; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
+  simpl. eauto. 
+  auto. auto. auto.
+  split. repeat SRes. rewrite <- D. rewrite Val.and_commut. decEq; repeat SRes. 
+  intros. repeat SOther.
 Qed.
 
 (** Translation of arithmetic operations. *)
@@ -1366,8 +1454,6 @@ Ltac TranslOp :=
   econstructor; split;
   [ apply exec_straight_one; [ simpl; eauto | auto ] 
   | split; [ repeat SRes | intros; repeat SOther ]].
-
-(* Move elsewhere *)
 
 Lemma transl_op_correct:
   forall op args res k c (rs: regset) m v,
@@ -1425,11 +1511,11 @@ Proof.
   remember (eval_condition c0 rs ## (preg_of ## args) m) as ob. destruct ob; inv EV. 
   rewrite (eval_condition_weaken _ _ _ (sym_equal Heqob)). 
   exploit transl_cond_correct; eauto. intros [rs2 [P [Q R]]].
-  exists (nextinstr (rs2#ECX <- Vundef #EDX <- Vundef #x <- v)).
-  split. eapply exec_straight_trans. eauto. 
-  apply exec_straight_one. simpl. rewrite Q. destruct b; inv H0; auto. auto.
-  split. repeat SRes. destruct b; inv H0; auto. 
-  intros. repeat SOther. 
+  exploit mk_setcc_correct; eauto. intros [rs3 [S [T U]]].
+  exists rs3.
+  split. eapply exec_straight_trans. eexact P. eexact S.
+  split. auto.
+  intros. transitivity (rs2 r); auto.
 Qed.
 
 (** Translation of memory loads. *)

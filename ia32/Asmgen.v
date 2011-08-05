@@ -253,32 +253,59 @@ Definition testcond_for_unsigned_comparison (cmp: comparison) :=
   | Cge => Cond_ae
   end.
 
-Definition testcond_for_condition (cond: condition) : testcond :=
+Inductive extcond: Type :=
+  | Cond_base (c: testcond)
+  | Cond_or (c1 c2: testcond)
+  | Cond_and (c1 c2: testcond).
+
+Definition testcond_for_condition (cond: condition) : extcond :=
   match cond with
-  | Ccomp c => testcond_for_signed_comparison c
-  | Ccompu c => testcond_for_unsigned_comparison c
-  | Ccompimm c n => testcond_for_signed_comparison c
-  | Ccompuimm c n => testcond_for_unsigned_comparison c
+  | Ccomp c => Cond_base(testcond_for_signed_comparison c)
+  | Ccompu c => Cond_base(testcond_for_unsigned_comparison c)
+  | Ccompimm c n => Cond_base(testcond_for_signed_comparison c)
+  | Ccompuimm c n => Cond_base(testcond_for_unsigned_comparison c)
   | Ccompf c =>
       match c with
-      | Ceq => Cond_enp
-      | Cne => Cond_nep
-      | Clt => Cond_a
-      | Cle => Cond_ae
-      | Cgt => Cond_a
-      | Cge => Cond_ae
+      | Ceq => Cond_and Cond_np Cond_e
+      | Cne => Cond_or Cond_p Cond_ne
+      | Clt => Cond_base Cond_a
+      | Cle => Cond_base Cond_ae
+      | Cgt => Cond_base Cond_a
+      | Cge => Cond_base Cond_ae
       end
   | Cnotcompf c =>
       match c with
-      | Ceq => Cond_nep
-      | Cne => Cond_enp
-      | Clt => Cond_be
-      | Cle => Cond_b
-      | Cgt => Cond_be
-      | Cge => Cond_b
+      | Ceq => Cond_or Cond_p Cond_ne
+      | Cne => Cond_and Cond_np Cond_e
+      | Clt => Cond_base Cond_be
+      | Cle => Cond_base Cond_b
+      | Cgt => Cond_base Cond_be
+      | Cge => Cond_base Cond_b
       end
-  | Cmaskzero n => Cond_e
-  | Cmasknotzero n => Cond_ne
+  | Cmaskzero n => Cond_base Cond_e
+  | Cmasknotzero n => Cond_base Cond_ne
+  end.
+
+(** Acting upon extended conditions. *)
+
+Definition mk_setcc (cond: extcond) (rd: ireg) (k: code) :=
+  match cond with
+  | Cond_base c => Psetcc c rd :: k
+  | Cond_and c1 c2 =>
+      if ireg_eq rd EDX
+      then Psetcc c1 EDX :: Psetcc c2 ECX :: Pand_rr EDX ECX :: k
+      else Psetcc c1 EDX :: Psetcc c2 rd  :: Pand_rr rd EDX :: k
+  | Cond_or c1 c2 => 
+      if ireg_eq rd EDX
+      then Psetcc c1 EDX :: Psetcc c2 ECX :: Por_rr EDX ECX :: k
+      else Psetcc c1 EDX :: Psetcc c2 rd  :: Por_rr rd EDX :: k
+  end.
+
+Definition mk_jcc (cond: extcond) (lbl: label) (k: code) :=
+  match cond with
+  | Cond_base c => Pjcc c lbl :: k
+  | Cond_and c1 c2 => Pjcc2 c1 c2 lbl :: k
+  | Cond_or c1 c2 => Pjcc c1 lbl :: Pjcc c2 lbl :: k
   end.
 
 (** Translation of the arithmetic operation [r <- op(args)].
@@ -396,7 +423,7 @@ Definition transl_op
       do r <- freg_of res; do r1 <- ireg_of a1; OK (Pcvtsi2sd_fr r r1 :: k)
   | Ocmp c, args =>
       do r <- ireg_of res;
-      transl_cond c args (Psetcc (testcond_for_condition c) r :: k)
+      transl_cond c args (mk_setcc (testcond_for_condition c) r k)
   | _, _ =>
       Error(msg "Asmgen.transl_op")
   end.
@@ -486,7 +513,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mgoto lbl =>
       OK(Pjmp_l lbl :: k)
   | Mcond cond args lbl =>
-      transl_cond cond args (Pjcc (testcond_for_condition cond) lbl :: k)
+      transl_cond cond args (mk_jcc (testcond_for_condition cond) lbl k)
   | Mjumptable arg tbl =>
       do r <- ireg_of arg; OK (Pjmptbl r tbl :: k)
   | Mreturn =>

@@ -132,7 +132,12 @@ let name_of_condition = function
   | Cond_b -> "b" | Cond_be -> "be" | Cond_ae -> "ae" | Cond_a -> "a"
   | Cond_l -> "l" | Cond_le -> "le" | Cond_ge -> "ge" | Cond_g -> "g"
   | Cond_p -> "p" | Cond_np -> "np" 
-  | Cond_nep | Cond_enp -> assert false (* treated specially *)
+
+let name_of_neg_condition = function
+  | Cond_e -> "ne" | Cond_ne -> "e"
+  | Cond_b -> "ae" | Cond_be -> "a" | Cond_ae -> "b" | Cond_a -> "be"
+  | Cond_l -> "ge" | Cond_le -> "g" | Cond_ge -> "l" | Cond_g -> "le"
+  | Cond_p -> "np" | Cond_np -> "p" 
 
 let section oc name =
   fprintf oc "	%s\n" name
@@ -218,14 +223,11 @@ let need_masks = ref false
 
 (* Built-in functions *)
 
-(* Built-ins.  They come in three flavors: 
+(* Built-ins.  They come in two flavors: 
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
-     registers; preserve all registers except ECX, EDX, XMM6 and XMM7
-   - inlined while printing asm code; take their arguments in
-     locations dictated by the calling conventions; preserve
-     callee-save regs only. *)
+     registers; preserve all registers except ECX, EDX, XMM6 and XMM7. *)
 
 (* Handling of annotations *)
 
@@ -588,21 +590,9 @@ let print_instruction oc = function
   | Ptest_ri(r1, n) ->
       fprintf oc "	testl	$%a, %a\n" coqint n ireg r1
   | Pcmov(c, rd, r1) ->
-      assert (c <> Cond_nep && c <> Cond_enp);
       fprintf oc "	cmov%s	%a, %a\n" (name_of_condition c) ireg r1 ireg rd
   | Psetcc(c, rd) ->
-      begin match c with
-      | Cond_nep ->
-          fprintf oc "	setne	%%cl\n";
-          fprintf oc "	setp	%%dl\n";
-          fprintf oc "	orb	%%dl, %%cl\n"
-      | Cond_enp ->
-          fprintf oc "	sete	%%cl\n";
-          fprintf oc "	setnp	%%dl\n";
-          fprintf oc "	andb	%%dl, %%cl\n"
-      | _ ->
-          fprintf oc "	set%s	%%cl\n" (name_of_condition c)
-      end;
+      fprintf oc "	set%s	%%cl\n" (name_of_condition c);
       fprintf oc "	movzbl	%%cl, %a\n" ireg rd
   (** Arithmetic operations over floats *)
   | Paddd_ff(rd, r1) ->
@@ -630,18 +620,13 @@ let print_instruction oc = function
       fprintf oc "	jmp	*%a\n" ireg r
   | Pjcc(c, l) ->
       let l = transl_label l in
-      begin match c with
-      | Cond_nep ->
-          fprintf oc "	jp	%a\n" label l;
-          fprintf oc "	jne	%a\n" label l
-      | Cond_enp ->
-          let l' = new_label() in
-          fprintf oc "	jp	%a\n" label l';
-          fprintf oc "	je	%a\n" label l;
-          fprintf oc "%a:\n" label l'
-      | _ ->
-          fprintf oc "	j%s	%a\n" (name_of_condition c) label l
-      end
+      fprintf oc "	j%s	%a\n" (name_of_condition c) label l
+  | Pjcc2(c1, c2, l) ->
+      let l = transl_label l in
+      let l' = new_label() in
+      fprintf oc "	j%s	%a\n" (name_of_neg_condition c1) label l';
+      fprintf oc "	j%s	%a\n" (name_of_condition c2) label l;
+      fprintf oc "%a:\n" label l'
   | Pjmptbl(r, tbl) ->
       let l = new_label() in
       fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r;

@@ -401,6 +401,20 @@ Proof.
   destruct (preg_of src); inv H; auto.
 Qed.
 
+Remark mk_setcc_label:
+  forall xc rd k,
+  find_label lbl (mk_setcc xc rd k) = find_label lbl k.
+Proof.
+  intros. destruct xc; simpl; auto; destruct (ireg_eq rd EDX); auto.
+Qed.
+
+Remark mk_jcc_label:
+  forall xc lbl' k,
+  find_label lbl (mk_jcc xc lbl' k) = find_label lbl k.
+Proof.
+  intros. destruct xc; auto.
+Qed.
+
 Ltac ArgsInv :=
   match goal with
   | [ H: Error _ = OK _ |- _ ] => discriminate
@@ -441,7 +455,7 @@ Proof.
   eapply mk_shift_label; eauto.
   eapply mk_shrximm_label; eauto.
   eapply mk_shift_label; eauto.
-  eapply trans_eq. eapply transl_cond_label; eauto. auto.
+  eapply trans_eq. eapply transl_cond_label; eauto. apply mk_setcc_label.
 Qed.
 
 Remark transl_load_label:
@@ -482,7 +496,7 @@ Opaque loadind.
   monadInv H; auto.
   inv H; simpl. destruct (peq lbl l). congruence. auto. 
   monadInv H; auto.
-  eapply trans_eq. eapply transl_cond_label; eauto. auto. 
+  eapply trans_eq. eapply transl_cond_label; eauto. apply mk_jcc_label.
   monadInv H; auto.
   monadInv H; auto.
 Qed.
@@ -622,6 +636,43 @@ Proof.
   exists (State rs2 m2'); split.
   eapply exec_straight_exec; eauto. 
   econstructor; eauto. eapply exec_straight_at; eauto.
+Qed.
+
+Lemma exec_straight_steps_goto:
+  forall s fb f rs1 i c ep tf tc m1' m2 m2' sp ms2 lbl c',
+  match_stack s ->
+  Mem.extends m2 m2' ->
+  Genv.find_funct_ptr ge fb = Some (Internal f) ->
+  Mach.find_label lbl f.(fn_code) = Some c' ->
+  transl_code_at_pc (rs1 PC) fb f (i :: c) ep tf tc ->
+  edx_preserved ep i = false ->
+  (forall k c, transl_instr f i ep k = OK c ->
+   exists jmp, exists k', exists rs2,
+       exec_straight tge tf c rs1 m1' (jmp :: k') rs2 m2'
+    /\ agree ms2 sp rs2
+    /\ exec_instr tge tf jmp rs2 m2' = goto_label tf lbl rs2 m2') ->
+  exists st',
+  plus step tge (State rs1 m1') E0 st' /\
+  match_states (Machsem.State s fb sp c' ms2 m2) st'.
+Proof.
+  intros. inversion H3. subst. monadInv H9.
+  exploit H5; eauto. intros [jmp [k' [rs2 [A [B C]]]]].
+  generalize (functions_transl _ _ _ H7 H8); intro FN.
+  generalize (transf_function_no_overflow _ _ H8); intro NOOV.
+  exploit exec_straight_steps_2; eauto. 
+  intros [ofs' [PC2 CT2]].
+  exploit find_label_goto_label; eauto. 
+  intros [tc' [rs3 [GOTO [AT' OTH]]]].
+  exists (State rs3 m2'); split.
+  eapply plus_right'.
+  eapply exec_straight_steps_1; eauto. 
+  econstructor; eauto.
+  eapply find_instr_tail. eauto. 
+  rewrite C. eexact GOTO.
+  traceEq.
+  econstructor; eauto.
+  apply agree_exten with rs2; auto with ppcgen.
+  congruence.
 Qed.
 
 Lemma parent_sp_def: forall s, match_stack s -> parent_sp s <> Vundef.
@@ -1053,22 +1104,40 @@ Lemma exec_Mcond_true_prop:
 Proof.
   intros; red; intros; inv MS. assert (f0 = f) by congruence. subst f0.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
-  inv AT. monadInv H5.
+  left; eapply exec_straight_steps_goto; eauto.
+  intros. simpl in H2. 
   exploit transl_cond_correct; eauto. intros [rs' [A [B C]]].
-  generalize (functions_transl _ _ _ FIND H4); intro FN.
-  generalize (transf_function_no_overflow _ _ H4); intro NOOV.
-  exploit exec_straight_steps_2; eauto. 
-  intros [ofs' [PC2 CT2]].
-  exploit find_label_goto_label; eauto. 
-  intros [tc' [rs3 [GOTO [AT3 INV3]]]].
-  left; exists (State rs3 m'); split.
-  eapply plus_right'. 
-  eapply exec_straight_steps_1; eauto.
-  econstructor; eauto.
-  eapply find_instr_tail. eauto. simpl. rewrite B. eauto. traceEq.
-  econstructor; eauto. 
-  eapply agree_exten_temps; eauto. intros. rewrite INV3; auto with ppcgen.
-  congruence.
+  destruct (testcond_for_condition cond); simpl in *.
+(* simple jcc *)
+  exists (Pjcc c1 lbl); exists k; exists rs'.
+  split. eexact A.
+  split. eapply agree_exten_temps; eauto. 
+  simpl. rewrite B. auto.
+(* jcc; jcc *)
+  destruct (eval_testcond c1 rs') as [b1|]_eqn;
+  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct b1.   
+  (* first jcc jumps *)
+  exists (Pjcc c1 lbl); exists (Pjcc c2 lbl :: k); exists rs'.
+  split. eexact A.
+  split. eapply agree_exten_temps; eauto. 
+  simpl. rewrite Heqo. auto.
+  (* second jcc jumps *)
+  exists (Pjcc c2 lbl); exists k; exists (nextinstr rs').
+  split. eapply exec_straight_trans. eexact A. 
+  eapply exec_straight_one. simpl. rewrite Heqo. auto. auto.
+  split. eapply agree_exten_temps; eauto. 
+  intros. rewrite nextinstr_inv; auto with ppcgen.
+  simpl. rewrite eval_testcond_nextinstr. rewrite Heqo0.
+  destruct b2; auto || discriminate.
+(* jcc2 *)
+  destruct (eval_testcond c1 rs') as [b1|]_eqn;
+  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct (andb_prop _ _ H4). subst. 
+  exists (Pjcc2 c1 c2 lbl); exists k; exists rs'.
+  split. eexact A.
+  split. eapply agree_exten_temps; eauto. 
+  simpl. rewrite Heqo; rewrite Heqo0; auto. 
 Qed.
 
 Lemma exec_Mcond_false_prop:
@@ -1083,11 +1152,34 @@ Proof.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps; eauto. intros. simpl in H0. 
   exploit transl_cond_correct; eauto. intros [rs' [A [B C]]].
+  destruct (testcond_for_condition cond); simpl in *.
+(* simple jcc *)
   econstructor; split.
   eapply exec_straight_trans. eexact A. 
   apply exec_straight_one. simpl. rewrite B. eauto. auto. 
   split. apply agree_nextinstr. eapply agree_exten_temps; eauto.
   simpl; congruence.
+(* jcc ; jcc *)
+  destruct (eval_testcond c1 rs') as [b1|]_eqn;
+  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct (orb_false_elim _ _ H2); subst.
+  econstructor; split.
+  eapply exec_straight_trans. eexact A. 
+  eapply exec_straight_two. simpl. rewrite Heqo. eauto. auto. 
+  simpl. rewrite eval_testcond_nextinstr. rewrite Heqo0. eauto. auto. auto.
+  split. apply agree_nextinstr. apply agree_nextinstr. eapply agree_exten_temps; eauto.
+  simpl; congruence.
+(* jcc2 *)
+  destruct (eval_testcond c1 rs') as [b1|]_eqn;
+  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  exists (nextinstr rs'); split.
+  eapply exec_straight_trans. eexact A. 
+  apply exec_straight_one. simpl. 
+  rewrite Heqo; rewrite Heqo0. 
+  destruct b1. simpl in *. subst b2. auto. auto.
+  auto.
+  split. apply agree_nextinstr. eapply agree_exten_temps; eauto.
+  rewrite H2; congruence.
 Qed.
 
 Lemma exec_Mjumptable_prop:

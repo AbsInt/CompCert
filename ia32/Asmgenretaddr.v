@@ -173,8 +173,24 @@ Proof.
   unfold storeind; intros. destruct ty; IsTail. destruct (preg_of src); IsTail.
 Qed.
 
+Lemma mk_setcc_tail:
+  forall cond rd k, is_tail k (mk_setcc cond rd k).
+Proof.
+  unfold mk_setcc; intros. destruct cond.
+  IsTail.
+  destruct (ireg_eq rd EDX); IsTail.
+  destruct (ireg_eq rd EDX); IsTail.
+Qed.
+
+Lemma mk_jcc_tail:
+  forall cond lbl k, is_tail k (mk_jcc cond lbl k).
+Proof.
+  unfold mk_jcc; intros. destruct cond; IsTail.
+Qed.
+
 Hint Resolve mk_mov_tail mk_shift_tail mk_div_tail mk_mod_tail mk_shrximm_tail
-             mk_intconv_tail mk_smallstore_tail loadind_tail storeind_tail : ppcretaddr.
+             mk_intconv_tail mk_smallstore_tail loadind_tail storeind_tail
+             mk_setcc_tail mk_jcc_tail : ppcretaddr.
 
 Lemma transl_cond_tail:
   forall cond args k c, transl_cond cond args k = OK c -> is_tail k c.
