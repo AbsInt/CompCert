@@ -11,7 +11,7 @@ int main(int argc, char ** argv)
   double c = 1.414;
   unsigned short s = 0x1234;
 
-#ifdef __ppc__
+#if defined(__PPC__) || defined(__ppc__)
 
   printf("mulhw(%x, %x) = %x\n", x, y, __builtin_mulhw(x, y));
   printf("mulhwu(%x, %x) = %x\n", x, y, __builtin_mulhwu(x, y));
