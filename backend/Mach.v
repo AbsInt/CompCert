@@ -117,14 +117,34 @@ Fixpoint undef_regs (rl: list mreg) (rs: regset) {struct rl} : regset :=
   | r1 :: rl' => undef_regs rl' (Regmap.set r1 Vundef rs)
   end.
 
+Lemma undef_regs_other:
+  forall r rl rs, ~In r rl -> undef_regs rl rs r = rs r.
+Proof.
+  induction rl; simpl; intros. auto. rewrite IHrl. apply Regmap.gso. intuition. intuition.
+Qed.
+
+Lemma undef_regs_same:
+  forall r rl rs, In r rl \/ rs r = Vundef -> undef_regs rl rs r = Vundef.
+Proof.
+  induction rl; simpl; intros. tauto.
+  destruct H. destruct H. apply IHrl. right. subst; apply Regmap.gss.
+  auto.
+  apply IHrl. right. unfold Regmap.set. destruct (RegEq.eq r a); auto. 
+Qed.
+
 Definition undef_temps (rs: regset) := 
-  undef_regs (int_temporaries ++ float_temporaries) rs.
+  undef_regs temporary_regs rs.
+
+Definition undef_move (rs: regset) := 
+  undef_regs destroyed_at_move_regs rs.
 
 Definition undef_op (op: operation) (rs: regset) :=
   match op with
-  | Omove => rs
+  | Omove => undef_move rs
   | _ => undef_temps rs
   end.
+
+Definition undef_setstack (rs: regset) := undef_move rs.
 
 Definition is_label (lbl: label) (instr: instruction) : bool :=
   match instr with

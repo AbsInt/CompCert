@@ -55,8 +55,13 @@ Definition int_temporaries := IT1 :: IT2 :: nil.
 
 Definition float_temporaries := FT1 :: FT2 :: FT3 :: nil.
   
-Definition temporaries := 
-  R IT1 :: R IT2 :: R FT1 :: R FT2 :: R FT3 :: nil.
+Definition temporary_regs := int_temporaries ++ float_temporaries.
+
+Definition temporaries := List.map R temporary_regs.
+
+Definition destroyed_at_move_regs: list mreg := nil.
+
+Definition destroyed_at_move := List.map R destroyed_at_move_regs.
 
 Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F1.   (**r Used in [Coloring]. *)

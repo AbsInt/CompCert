@@ -238,11 +238,13 @@ Proof.
 Qed.
 
 Lemma source_not_temp1:
-  forall s, In s srcs \/ s = R IT2 \/ s = R FT2 -> Loc.diff s (R IT1) /\ Loc.diff s (R FT1).
+  forall s, In s srcs \/ s = R IT2 \/ s = R FT2 -> 
+  Loc.diff s (R IT1) /\ Loc.diff s (R FT1) /\ Loc.notin s destroyed_at_move.
 Proof.
-  intros. elim H; intro. 
-  split; apply NO_SRCS_TEMP; auto; simpl; tauto.
-  elim H0; intro; subst s; simpl; split; congruence.
+  intros. destruct H.
+  exploit Loc.disjoint_notin. eexact NO_SRCS_TEMP. eauto. 
+  simpl; tauto.
+  destruct H; subst s; simpl; intuition congruence.
 Qed.
 
 Lemma dest_noteq_diff:
@@ -265,16 +267,16 @@ Qed.
 
 Definition locmap_equiv (e1 e2: Locmap.t): Prop :=
   forall l,
-  no_overlap_dests l -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> e2 l = e1 l.
+  no_overlap_dests l -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> Loc.notin l destroyed_at_move -> e2 l = e1 l.
 
 (** The following predicates characterize the effect of one move
   move ([effect_move]) and of a sequence of elementary moves
   ([effect_seqmove]).  We allow the code generated for one move
-  to use the temporaries [IT1] and [FT1] in any way it needs. *)
+  to use the temporaries [IT1] and [FT1] and [destroyed_at_move] in any way it needs. *)
 
 Definition effect_move (src dst: loc) (e e': Locmap.t): Prop :=
   e' dst = e src /\
-  forall l, Loc.diff l dst -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> e' l = e l.
+  forall l, Loc.diff l dst -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> Loc.notin l destroyed_at_move -> e' l = e l.
 
 Inductive effect_seqmove: list (loc * loc) -> Locmap.t -> Locmap.t -> Prop :=
   | effect_seqmove_nil: forall e,
@@ -299,7 +301,7 @@ Lemma effect_move_equiv:
 Proof.
   intros. destruct H2. red; intros. 
   unfold Parmov.update. destruct (Loc.eq l d). 
-  subst l. elim (source_not_temp1 _ H); intros.
+  subst l. destruct (source_not_temp1 _ H) as [A [B C]]. 
   rewrite H2. apply H1; auto. apply source_no_overlap_dests; auto.
   rewrite H3; auto. apply dest_noteq_diff; auto. 
 Qed.
@@ -345,15 +347,16 @@ Proof.
   generalize (parmove_prop_1 srcs dsts LENGTH NOREPET NO_SRCS_TEMP NO_DSTS_TEMP e).
   fold mu. intros [A B]. 
   (* e' dsts = e srcs *)
-  split. rewrite <- A. apply list_map_exten; intros. 
+  split. rewrite <- A. apply list_map_exten; intros.
+  exploit Loc.disjoint_notin. eexact NO_DSTS_TEMP. eauto. simpl; intros.
   apply H1. apply dests_no_overlap_dests; auto.
-  apply NO_DSTS_TEMP; auto; simpl; tauto.
-  apply NO_DSTS_TEMP; auto; simpl; tauto.
+  tauto. tauto. simpl; tauto. 
   (* other locations *)
   intros. transitivity (exec_seq mu e l). 
   symmetry. apply H1. apply notin_dests_no_overlap_dests; auto.
   eapply Loc.in_notin_diff; eauto. simpl; tauto.
   eapply Loc.in_notin_diff; eauto. simpl; tauto.
+  simpl in H3; simpl; tauto.
   apply B. apply Loc.notin_not_in; auto.
   apply Loc.diff_not_eq. eapply Loc.in_notin_diff; eauto. simpl; tauto.
   apply Loc.diff_not_eq. eapply Loc.in_notin_diff; eauto. simpl; tauto.

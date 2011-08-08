@@ -228,16 +228,17 @@ Lemma add_reload_correct:
   forall l, 
     Loc.diff (R dst) l -> 
     loc_acceptable src \/ Loc.diff (R IT1) l ->
+    Loc.notin l destroyed_at_move ->
     rs' l = rs l.
 Proof.
   intros. unfold add_reload. destruct src.
-  case (mreg_eq m0 dst); intro.
+  destruct (mreg_eq m0 dst).
   subst dst. exists rs. split. apply star_refl. tauto.
-  exists (Locmap.set (R dst) (rs (R m0)) rs).
-  split. apply star_one; apply exec_Lop. reflexivity. 
-  split. apply Locmap.gss. 
-  intros; apply Locmap.gso; auto.
-  exists (Locmap.set (R dst) (rs (S s)) (undef_getstack s rs)).
+  econstructor.
+  split. apply star_one; apply exec_Lop. simpl; reflexivity.
+  unfold undef_op. split. apply Locmap.gss. 
+  intros. rewrite Locmap.gso; auto; apply Locmap.guo; auto.
+  econstructor.
   split. apply star_one; apply exec_Lgetstack. 
   split. apply Locmap.gss.
   intros. rewrite Locmap.gso; auto. 
@@ -279,19 +280,31 @@ Lemma add_spill_correct:
   star step ge (State stk f sp (add_spill src dst k) rs m)
             E0 (State stk f sp k rs' m) /\
   rs' dst = rs (R src) /\
-  forall l, Loc.diff dst l -> rs' l = rs l.
+  forall l, Loc.diff dst l -> Loc.notin l destroyed_at_move -> rs' l = rs l.
 Proof.
   intros. unfold add_spill. destruct dst.
-  case (mreg_eq src m0); intro.
+  destruct (mreg_eq src m0).
   subst src. exists rs. split. apply star_refl. tauto.
-  exists (Locmap.set (R m0) (rs (R src)) rs).
-  split. apply star_one. apply exec_Lop. reflexivity.
+  econstructor.
+  split. apply star_one. apply exec_Lop. simpl; reflexivity.
   split. apply Locmap.gss.
-  intros; apply Locmap.gso; auto.
-  exists (Locmap.set (S s) (rs (R src)) rs).
+  intros. rewrite Locmap.gso; auto; unfold undef_op; apply Locmap.guo; auto. 
+  econstructor.
   split. apply star_one. apply exec_Lsetstack. 
   split. apply Locmap.gss.
-  intros; apply Locmap.gso; auto.
+  intros. rewrite Locmap.gso; auto; unfold undef_setstack; apply Locmap.guo; auto.
+Qed.
+
+Remark notin_destroyed_move_1:
+  forall r, ~In r destroyed_at_move_regs -> Loc.notin (R r) destroyed_at_move.
+Proof.
+  intros. simpl in *. intuition congruence.
+Qed.
+
+Remark notin_destroyed_move_2:
+  forall s, Loc.notin (S s) destroyed_at_move.
+Proof.
+  intros. simpl in *. destruct s; auto.
 Qed.
 
 Lemma add_reloads_correct_rec:
@@ -300,21 +313,26 @@ Lemma add_reloads_correct_rec:
   enough_temporaries_rec srcs itmps ftmps = true ->
   (forall r, In (R r) srcs -> In r itmps -> False) ->
   (forall r, In (R r) srcs -> In r ftmps -> False) ->
+  (forall r, In (R r) srcs -> ~In r destroyed_at_move_regs) ->
   list_disjoint itmps ftmps ->
   list_norepet itmps ->
   list_norepet ftmps ->
+  list_disjoint itmps destroyed_at_move_regs ->
+  list_disjoint ftmps destroyed_at_move_regs ->
   exists rs',
   star step ge 
       (State stk f sp (add_reloads srcs (regs_for_rec srcs itmps ftmps) k) rs m)
    E0 (State stk f sp k rs' m) /\
   reglist rs' (regs_for_rec srcs itmps ftmps) = map rs srcs /\
-  (forall r, ~(In r itmps) -> ~(In r ftmps) -> rs' (R r) = rs (R r)) /\
+  (forall r, ~(In r itmps) -> ~(In r ftmps) -> ~(In r destroyed_at_move_regs) -> rs' (R r) = rs (R r)) /\
   (forall s, rs' (S s) = rs (S s)).
 Proof.
+Opaque destroyed_at_move_regs.
   induction srcs; simpl; intros.
   (* base case *)
   exists rs. split. apply star_refl. tauto.
   (* inductive case *)
+  simpl in H0. 
   assert (ACC1: loc_acceptable a) by (auto with coqlib).
   assert (ACC2: locs_acceptable srcs) by (red; auto with coqlib).
   destruct a as [r | s].
@@ -323,41 +341,53 @@ Proof.
   exploit IHsrcs; eauto.
   intros [rs' [EX [RES [OTH1 OTH2]]]].
   exists rs'. split. eauto.
-  split. simpl. decEq. apply OTH1. red; intros; eauto. red; intros; eauto. auto.
+  split. simpl. decEq.
+    apply OTH1. red; intros; eauto. red; intros; eauto. auto.
+    auto.
   auto.
   (* a is a stack slot *)
   destruct (slot_type s).
   (* ... of integer type *)
-  destruct itmps as [ | it1 itmps ]. discriminate. inv H4.
+  destruct itmps as [ | it1 itmps ]. discriminate. inv H5.
   destruct (add_reload_correct (S s) it1 (add_reloads srcs (regs_for_rec srcs itmps ftmps) k) rs m)
   as [rs1 [A [B C]]].
-  exploit IHsrcs; eauto. 
-  intros. apply H1 with r. tauto. simpl. tauto. eapply list_disjoint_cons_left; eauto. 
+  exploit IHsrcs; eauto with coqlib.
+  eapply list_disjoint_cons_left; eauto.
+  eapply list_disjoint_cons_left; eauto. 
   intros [rs' [P [Q [T U]]]]. 
   exists rs'. split. eapply star_trans; eauto. 
-  split. simpl. decEq. rewrite <- B. apply T. auto.
-    eapply list_disjoint_notin; eauto with coqlib.
+  split. simpl. decEq. rewrite <- B. apply T.
+    auto.
+    eapply list_disjoint_notin. eexact H4. eauto with coqlib.
+    eapply list_disjoint_notin. eapply H7. auto with coqlib.
     rewrite Q. apply list_map_exten. intros. symmetry. apply C. 
     simpl. destruct x; auto. red; intro; subst m0. apply H1 with it1; auto with coqlib.
     auto.
+    destruct x. apply notin_destroyed_move_1. auto. apply notin_destroyed_move_2.
   split. simpl. intros. transitivity (rs1 (R r)).
-    apply T; tauto. apply C. simpl. tauto. auto. 
-  intros. transitivity (rs1 (S s0)). auto. apply C. simpl. auto. auto.
+    apply T; tauto. apply C. simpl. tauto. auto.
+    apply notin_destroyed_move_1; auto.
+  intros. transitivity (rs1 (S s0)). auto. apply C. simpl. auto. auto. apply notin_destroyed_move_2.
   (* ... of float type *)
-  destruct ftmps as [ | ft1 ftmps ]. discriminate. inv H5.
+  destruct ftmps as [ | ft1 ftmps ]. discriminate. inv H6.
   destruct (add_reload_correct (S s) ft1 (add_reloads srcs (regs_for_rec srcs itmps ftmps) k) rs m)
   as [rs1 [A [B C]]].
-  exploit IHsrcs; eauto. 
-  intros. apply H2 with r. tauto. simpl. tauto. eapply list_disjoint_cons_right; eauto. 
+  exploit IHsrcs; eauto with coqlib.
+  eapply list_disjoint_cons_right; eauto.
+  eapply list_disjoint_cons_left; eauto.
   intros [rs' [P [Q [T U]]]]. 
-  exists rs'. split. eapply star_trans; eauto. 
-  split. simpl. decEq. rewrite <- B. apply T; auto.
-    eapply list_disjoint_notin; eauto. apply list_disjoint_sym. eauto. auto with coqlib.
+  exists rs'. split. eapply star_trans; eauto.
+  split. simpl. decEq. rewrite <- B. apply T. 
+    eapply list_disjoint_notin; eauto. apply list_disjoint_sym. apply H4. auto with coqlib.
+    auto.
+    eapply list_disjoint_notin. eexact H8. auto with coqlib.
     rewrite Q. apply list_map_exten. intros. symmetry. apply C. 
     simpl. destruct x; auto. red; intro; subst m0. apply H2 with ft1; auto with coqlib. auto.
+    destruct x. apply notin_destroyed_move_1. auto. apply notin_destroyed_move_2.
   split. simpl. intros. transitivity (rs1 (R r)).
-    apply T; tauto. apply C. simpl. tauto. auto. 
-  intros. transitivity (rs1 (S s0)). auto. apply C. simpl. auto. auto.
+    apply T; tauto. apply C. simpl. tauto. auto.  
+    apply notin_destroyed_move_1; auto.
+  intros. transitivity (rs1 (S s0)). auto. apply C. simpl. auto. auto. apply notin_destroyed_move_2; auto.
 Qed.
 
 Lemma add_reloads_correct:
@@ -370,22 +400,26 @@ Lemma add_reloads_correct:
   reglist rs' (regs_for srcs) = List.map rs srcs /\
   forall l, Loc.notin l temporaries -> rs' l = rs l.
 Proof.
+Transparent destroyed_at_move_regs.
   intros.
   unfold enough_temporaries in H.
-  exploit add_reloads_correct_rec; eauto. 
-    intros. generalize (H0 _ H1). unfold loc_acceptable. generalize H2. 
+  exploit add_reloads_correct_rec. eauto. eauto. 
+    intros. generalize (H0 _ H1). unfold loc_acceptable. generalize H2.  
     simpl. intuition congruence. 
     intros. generalize (H0 _ H1). unfold loc_acceptable. generalize H2. 
     simpl. intuition congruence. 
-    red; intros r1 r2; simpl. intuition congruence.
+    intros. generalize (H0 _ H1). unfold loc_acceptable.
+    simpl. intuition congruence. 
+    red; simpl; intros. intuition congruence.
     unfold int_temporaries. NoRepet.
     unfold float_temporaries. NoRepet.
+    red; simpl; intros. intuition congruence.
+    red; simpl; intros. intuition congruence.
   intros [rs' [EX [RES [OTH1 OTH2]]]].
   exists rs'. split. eexact EX. 
   split. exact RES.
-  intros. destruct l. apply OTH1.
-  generalize (Loc.notin_not_in _ _ H1). simpl. intuition congruence.
-  generalize (Loc.notin_not_in _ _ H1). simpl. intuition congruence.
+  intros. destruct l. generalize (Loc.notin_not_in _ _ H1); simpl; intro.
+  apply OTH1; simpl; intuition congruence.
   apply OTH2.
 Qed.
 
@@ -395,19 +429,21 @@ Lemma add_move_correct:
   star step ge (State stk f sp (add_move src dst k) rs m)
             E0 (State stk f sp k rs' m) /\
   rs' dst = rs src /\
-  forall l, Loc.diff l dst -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> rs' l = rs l.
+  forall l, 
+    Loc.diff l dst -> Loc.diff l (R IT1) -> Loc.diff l (R FT1) -> Loc.notin l destroyed_at_move ->
+    rs' l = rs l.
 Proof.
   intros; unfold add_move.
-  case (Loc.eq src dst); intro.
+  destruct (Loc.eq src dst).
   subst dst. exists rs. split. apply star_refl. tauto.
   destruct src.
   (* src is a register *)
   generalize (add_spill_correct m0 dst k rs m); intros [rs' [EX [RES OTH]]].
-  exists rs'; intuition. apply OTH; apply Loc.diff_sym; auto.
+  exists rs'; intuition. apply OTH. apply Loc.diff_sym; auto. auto.
   destruct dst.
   (* src is a stack slot, dst a register *)
   generalize (add_reload_correct (S s) m0 k rs m); intros [rs' [EX [RES OTH]]].
-  exists rs'; intuition. apply OTH. apply Loc.diff_sym; auto. right; apply Loc.diff_sym; auto.
+  exists rs'; intuition. apply OTH. apply Loc.diff_sym; auto. right; apply Loc.diff_sym; auto. auto.
   (* src and dst are stack slots *)
   set (tmp := match slot_type s with Tint => IT1 | Tfloat => FT1 end).
   generalize (add_reload_correct (S s) tmp (add_spill tmp (S s0) k) rs m);
@@ -419,8 +455,8 @@ Proof.
   split. congruence.
   intros. rewrite OTH2. apply OTH1. 
   apply Loc.diff_sym. unfold tmp; case (slot_type s); auto.
-  right. apply Loc.diff_sym; auto. 
-  apply Loc.diff_sym; auto.
+  right. apply Loc.diff_sym; auto. auto. 
+  apply Loc.diff_sym; auto. auto.
 Qed.
 
 Lemma effect_move_sequence:
@@ -440,7 +476,7 @@ Proof.
   destruct (add_move_correct src dst k1 rs m) as [rs1 [A [B C]]].
   destruct (IHmoves rs1 m) as [rs' [D E]].
   exists rs'; split. 
-  eapply star_trans; eauto. traceEq.
+  eapply star_trans; eauto.
   econstructor; eauto. red. tauto. 
 Qed.
 
@@ -566,7 +602,7 @@ Remark undef_op_others:
   Loc.notin l temporaries -> undef_op op rs l = rs l.
 Proof.
   intros. generalize (undef_temps_others rs l H); intro. 
-  destruct op; simpl; auto.
+  unfold undef_op; destruct op; auto; apply Locmap.guo; simpl in *; tauto.
 Qed.
 
 Lemma agree_undef_temps:
@@ -1006,7 +1042,7 @@ Proof.
   apply agree_set2 with ls; auto.
   rewrite B. simpl in H; inversion H. auto.
   intros. apply C. apply Loc.diff_sym; auto.
-  simpl in H7; tauto. simpl in H7; tauto.
+  simpl in H7; tauto. simpl in H7; tauto. simpl in *; tauto.
   (* other ops *)
   assert (is_move_operation op args = None).
     caseEq (is_move_operation op args); intros.
@@ -1032,7 +1068,7 @@ Proof.
   apply agree_set2 with ls; auto.
   rewrite E. rewrite Locmap.gss. auto.
   intros. rewrite F; auto. rewrite Locmap.gso. rewrite undef_op_others; auto. 
-  apply reg_for_diff; auto.
+  apply reg_for_diff; auto. simpl in *; tauto.
 
   (* Lload *)
   ExploitWT; inv WTI.
@@ -1056,7 +1092,7 @@ Proof.
   apply agree_set2 with ls; auto.
   rewrite E. rewrite Locmap.gss. auto.
   intros. rewrite F; auto. rewrite Locmap.gso. rewrite undef_temps_others; auto. 
-  apply reg_for_diff; auto.
+  apply reg_for_diff; auto. simpl in *; tauto.
 
   (* Lstore *)
   ExploitWT; inv WTI.
@@ -1212,10 +1248,12 @@ Proof.
                                  (map ls3 (loc_arguments sig))).
     replace (map ls3 (loc_arguments sig)) with (map ls2 (loc_arguments sig)).
     rewrite B. apply agree_locs; auto. 
-    apply list_map_exten; intros. apply F.
-    apply Loc.diff_sym.
-    apply (loc_arguments_not_temporaries sig x (R IT1)); simpl; auto.
+    apply list_map_exten; intros.
+    exploit Loc.disjoint_notin. apply loc_arguments_not_temporaries. eauto. simpl; intros.
+    apply F.
+    apply Loc.diff_sym; tauto.
     auto.
+    simpl; tauto.
   left; econstructor; split.
   eapply star_plus_trans. eexact A. eapply plus_right. eexact D. 
   eapply exec_Ltailcall; eauto.
@@ -1273,7 +1311,7 @@ Proof.
   apply agree_set with ls; auto.
   rewrite E. rewrite Locmap.gss. auto.
   intros. rewrite F; auto. rewrite Locmap.gso. rewrite undef_temps_others; auto. 
-  apply reg_for_diff; auto.
+  apply reg_for_diff; auto. simpl in *; tauto.
   (* no reload *)
   exploit external_call_mem_extends; eauto. 
   apply agree_locs; eauto. 
@@ -1401,6 +1439,7 @@ Proof.
   econstructor; eauto. 
   apply agree_set with ls; auto.
   rewrite B. auto.
+  intros. apply C; auto. simpl in *; tauto.
   unfold parent_locset in PRES.
   apply agree_postcall_2 with ls0; auto. 
 Qed.

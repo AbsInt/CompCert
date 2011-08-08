@@ -169,8 +169,8 @@ Definition return_regs (caller callee: locset) : locset :=
 
 Definition undef_op (op: operation) (rs: locset) :=
   match op with
-  | Omove => rs
-  | _ => undef_temps rs
+  | Omove => Locmap.undef destroyed_at_move rs
+  | _ => Locmap.undef temporaries rs
   end.
 
 Definition undef_getstack (s: slot) (rs: locset) :=
@@ -178,6 +178,9 @@ Definition undef_getstack (s: slot) (rs: locset) :=
   | Incoming _ _ => Locmap.set (R IT1) Vundef rs
   | _ => rs
   end.
+
+Definition undef_setstack (rs: locset) :=
+  Locmap.undef destroyed_at_move rs.
 
 (** Linear execution states. *)
 
@@ -261,7 +264,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Lsetstack:
       forall s f sp r sl b rs m,
       step (State s f sp (Lsetstack r sl :: b) rs m)
-        E0 (State s f sp b (Locmap.set (S sl) (rs (R r)) rs) m)
+        E0 (State s f sp b (Locmap.set (S sl) (rs (R r)) (undef_setstack rs)) m)
   | exec_Lop:
       forall s f sp op args res b rs m v,
       eval_operation ge sp op (reglist rs args) m = Some v ->

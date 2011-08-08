@@ -42,15 +42,22 @@ Definition float_callee_save_regs : list mreg := nil.
 Definition destroyed_at_call_regs :=
   int_caller_save_regs ++ float_caller_save_regs.
 
-Definition destroyed_at_call :=
-  List.map R destroyed_at_call_regs.
+Definition destroyed_at_call := List.map R destroyed_at_call_regs.
 
 Definition int_temporaries := IT1 :: IT2 :: nil.
 
-Definition float_temporaries := FT1 :: FT2 :: FP0 :: nil.
+Definition float_temporaries := FT1 :: FT2 :: nil.
+
+(** [FP0] is not used for reloading, hence it is not in [float_temporaries],
+  however it is not allocatable, hence it is in [temporaries]. *)
   
-Definition temporaries := 
-  R IT1 :: R IT2 :: R FT1 :: R FT2 :: R FP0 :: nil.
+Definition temporary_regs := IT1 :: IT2 :: FT1 :: FT2 :: FP0 :: nil.
+
+Definition temporaries := List.map R temporary_regs.
+
+Definition destroyed_at_move_regs := FP0 :: nil.
+
+Definition destroyed_at_move := List.map R destroyed_at_move_regs.
 
 Definition dummy_int_reg := AX.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := X0.   (**r Used in [Coloring]. *)

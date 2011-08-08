@@ -437,7 +437,7 @@ Definition exec_load (chunk: memory_chunk) (m: mem)
 Definition exec_store (chunk: memory_chunk) (m: mem)
                       (a: addrmode) (rs: regset) (r1: preg) :=
   match Mem.storev chunk m (eval_addrmode a rs) (rs r1) with
-  | Some m' => Next (nextinstr_nf rs) m'
+  | Some m' => Next (nextinstr_nf (if preg_eq r1 ST0 then rs#ST0 <- Vundef else rs)) m'
   | None => Stuck
   end.
 
@@ -488,7 +488,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfld_m a =>
       exec_load Mfloat64 m a rs ST0
   | Pfstp_f rd =>
-      Next (nextinstr (rs#rd <- (rs ST0))) m
+      Next (nextinstr (rs#rd <- (rs ST0) #ST0 <- Vundef)) m
   | Pfstp_m a =>
       exec_store Mfloat64 m a rs ST0
   (** Moves with conversion *)

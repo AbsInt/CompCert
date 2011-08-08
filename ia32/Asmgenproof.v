@@ -758,7 +758,7 @@ Lemma exec_Msetstack_prop:
          (ms : mreg -> val) (m m' : mem),
   store_stack m sp ty ofs (ms src) = Some m' ->
   exec_instr_prop (Machsem.State s fb sp (Msetstack src ofs ty :: c) ms m) E0
-                  (Machsem.State s fb sp c ms m').
+                  (Machsem.State s fb sp c (undef_setstack ms) m').
 Proof.
   intros; red; intros; inv MS.
   unfold store_stack in H.
@@ -768,7 +768,7 @@ Proof.
   left; eapply exec_straight_steps; eauto. intros. simpl in H1.
   exploit storeind_correct; eauto. intros [rs' [P Q]].
   exists rs'; split. eauto.
-  split. eapply agree_exten; eauto.
+  split. unfold undef_setstack. eapply agree_undef_move; eauto.
   simpl; intros. rewrite Q; auto with ppcgen.
 Qed.
 
@@ -834,7 +834,7 @@ Proof.
   split. rewrite <- Q in B.
   unfold undef_op.
   destruct op; try (eapply agree_set_undef_mreg; eauto).
-  eapply agree_set_mreg; eauto.
+  eapply agree_set_undef_move_mreg; eauto. 
   simpl; congruence.
 Qed.
 

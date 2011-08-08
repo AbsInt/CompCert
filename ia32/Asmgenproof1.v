@@ -232,6 +232,7 @@ Qed.
 
 Hint Resolve nontemp_diff: ppcgen.
 
+(*
 Remark undef_regs_1:
   forall l ms r, ms r = Vundef -> Mach.undef_regs l ms r = Vundef.
 Proof.
@@ -253,6 +254,7 @@ Proof.
   induction l; simpl; intros. auto.
   rewrite IHl. apply Regmap.gso. intuition. intuition.
 Qed.
+*)
 
 Lemma agree_exten_temps:
   forall ms sp rs rs',
@@ -263,10 +265,27 @@ Proof.
   intros. destruct H. split. 
   rewrite H0; auto. auto. 
   intros. unfold undef_temps. 
-  destruct (In_dec mreg_eq r (int_temporaries ++ float_temporaries)).
-  rewrite undef_regs_2; auto. 
-  rewrite undef_regs_3; auto. rewrite H0; auto.
+  destruct (In_dec mreg_eq r temporary_regs).
+  rewrite Mach.undef_regs_same; auto. 
+  rewrite Mach.undef_regs_other; auto. rewrite H0; auto.
   simpl in n. destruct r; auto; intuition.
+Qed.
+
+Lemma agree_undef_move:
+  forall ms sp rs rs',
+  agree ms sp rs ->
+  (forall r, important_preg r = true -> r <> ST0 -> rs'#r = rs#r) ->
+  agree (undef_move ms) sp rs'.
+Proof.
+  intros. destruct H. split. 
+  rewrite H0; auto. congruence. auto. 
+  intros. unfold undef_move. 
+  destruct (In_dec mreg_eq r destroyed_at_move_regs).
+  rewrite Mach.undef_regs_same; auto. 
+  rewrite Mach.undef_regs_other; auto.
+  assert (important_preg (preg_of r) = true /\ preg_of r <> ST0).
+    simpl in n. destruct r; simpl; auto; intuition congruence.
+  destruct H. rewrite H0; auto.
 Qed.
 
 Lemma agree_set_undef_mreg:
@@ -278,6 +297,20 @@ Lemma agree_set_undef_mreg:
 Proof.
   intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
   eapply agree_exten_temps; eauto. 
+  intros. unfold Pregmap.set. destruct (PregEq.eq r0 (preg_of r)). 
+  congruence. auto. 
+  intros. rewrite Pregmap.gso; auto. 
+Qed.
+
+Lemma agree_set_undef_move_mreg:
+  forall ms sp rs r v rs',
+  agree ms sp rs ->
+  Val.lessdef v (rs'#(preg_of r)) ->
+  (forall r', important_preg r' = true /\ r' <> ST0 -> r' <> preg_of r -> rs'#r' = rs#r') ->
+  agree (Regmap.set r v (undef_move ms)) sp rs'.
+Proof.
+  intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
+  eapply agree_undef_move; eauto. 
   intros. unfold Pregmap.set. destruct (PregEq.eq r0 (preg_of r)). 
   congruence. auto. 
   intros. rewrite Pregmap.gso; auto. 
@@ -499,7 +532,7 @@ Lemma mk_mov_correct:
   exists rs2,
      exec_straight c rs1 m k rs2 m
   /\ rs2#rd = rs1#rs
-  /\ forall r, important_preg r = true -> r <> rd -> rs2#r = rs1#r.
+  /\ forall r, important_preg r = true -> r <> ST0 -> r <> rd -> rs2#r = rs1#r.
 Proof.
   unfold mk_mov; intros. 
   destruct rd; try (monadInv H); destruct rs; monadInv H.
@@ -513,8 +546,10 @@ Proof.
   intros. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gso. auto. 
 (* getfp0 *)
   econstructor. split. apply exec_straight_one. simpl. eauto. auto. 
-  split. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gss.
-  intros. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gso; auto.
+  split. rewrite nextinstr_inv; auto with ppcgen. 
+  rewrite Pregmap.gso; auto with ppcgen.
+  apply Pregmap.gss.
+  intros. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gso; auto. rewrite Pregmap.gso; auto.
 (* setfp0 *)
   econstructor. split. apply exec_straight_one. simpl. eauto. auto. 
   split. auto. 
@@ -846,7 +881,7 @@ Proof.
   change (rs2 ECX) with (rs1 r). rewrite H0. eauto. 
   intros. unfold rs2. rewrite nextinstr_inv; auto with ppcgen. apply Pregmap.gso; auto with ppcgen.
   auto. auto. 
-  intros. repeat SOther. unfold rs2. repeat SOther.
+  intros. rewrite dec_eq_false. repeat SOther. unfold rs2. repeat SOther. congruence.
 Qed.
 
 (** Accessing slots in the stack frame *)
@@ -887,7 +922,7 @@ Lemma storeind_correct:
   Mem.storev (chunk_of_type ty) m (Val.add rs#base (Vint ofs)) (rs#(preg_of src)) = Some m' ->
   exists rs',
      exec_straight c rs m k rs' m'
-  /\ forall r, important_preg r = true -> rs'#r = rs#r.
+  /\ forall r, important_preg r = true -> r <> ST0 -> rs'#r = rs#r.
 Proof.
   unfold storeind; intros.
   set (addr := Addrmode (Some base) None (inl (ident * int) ofs)) in *.
@@ -907,7 +942,7 @@ Proof.
   intros. apply nextinstr_nf_inv1; auto.
   econstructor; split. apply exec_straight_one.
   simpl. unfold exec_store. rewrite H1; rewrite H0. eauto. auto.
-  intros. apply nextinstr_nf_inv1; auto.
+  intros. rewrite nextinstr_nf_inv1; auto. rewrite dec_eq_true. apply Pregmap.gso; auto.
 Qed.
 
 (** Translation of addressing modes *)
@@ -1463,7 +1498,7 @@ Lemma transl_op_correct:
      exec_straight c rs m k rs' m
   /\ rs'#(preg_of res) = v
   /\ forall r, 
-     match op with Omove => important_preg r = true | _ => nontemp_preg r = true end ->
+     match op with Omove => important_preg r = true /\ r <> ST0 | _ => nontemp_preg r = true end ->
      r <> preg_of res -> rs' r = rs r.
 Proof.
   intros until v; intros TR EV.
@@ -1471,7 +1506,7 @@ Proof.
   destruct op; simpl in TR; ArgsInv; try (TranslOp; fail).
 (* move *)
   exploit mk_mov_correct; eauto. intros [rs2 [A [B C]]]. 
-  exists rs2. split. eauto. split. simpl. auto. auto.
+  exists rs2. split. eauto. split. simpl. auto. intros. destruct H; auto.
 (* cast8signed *)
   eapply mk_intconv_correct; eauto.
 (* cast8unsigned *)

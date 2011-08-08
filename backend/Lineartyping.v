@@ -153,24 +153,35 @@ Proof.
   auto.
 Qed.
 
+Lemma wt_undef_locs:
+  forall locs ls, wt_locset ls -> wt_locset (Locmap.undef locs ls).
+Proof.
+  induction locs; simpl; intros. auto. apply IHlocs. apply wt_setloc; auto. red; auto.
+Qed.
+
 Lemma wt_undef_temps:
   forall ls, wt_locset ls -> wt_locset (undef_temps ls).
 Proof.
-  unfold undef_temps. generalize temporaries. induction l; simpl; intros.
-  auto.
-  apply IHl. apply wt_setloc; auto. red; auto.
+  intros; unfold undef_temps. apply wt_undef_locs; auto.
 Qed.
 
 Lemma wt_undef_op:
   forall op ls, wt_locset ls -> wt_locset (undef_op op ls).
 Proof.
-  intros. generalize (wt_undef_temps ls H); intro. case op; simpl; auto.
+  intros. generalize (wt_undef_temps ls H); intro. 
+  unfold undef_op; destruct op; auto; apply wt_undef_locs; auto.
 Qed.
 
 Lemma wt_undef_getstack:
   forall s ls, wt_locset ls -> wt_locset (undef_getstack s ls).
 Proof.
   intros. unfold undef_getstack. destruct s; auto. apply wt_setloc; auto. red; auto.
+Qed.
+
+Lemma wt_undef_setstack:
+  forall ls, wt_locset ls -> wt_locset (undef_setstack ls).
+Proof.
+  intros. unfold undef_setstack. apply wt_undef_locs; auto.
 Qed.
 
 Lemma wt_call_regs:

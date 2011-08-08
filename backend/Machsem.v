@@ -149,7 +149,7 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s f sp src ofs ty c rs m m',
       store_stack m sp ty ofs (rs src) = Some m' ->
       step (State s f sp (Msetstack src ofs ty :: c) rs m)
-        E0 (State s f sp c rs m')
+        E0 (State s f sp c (undef_setstack rs) m')
   | exec_Mgetparam:
       forall s fb f sp ofs ty dst c rs m v,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->

@@ -673,17 +673,44 @@ Proof.
   rewrite Locmap.gso; auto. red. auto.
 Qed.
 
+Lemma agree_regs_exten:
+  forall j ls rs ls' rs',
+  agree_regs j ls rs ->
+  (forall r, ls' (R r) = Vundef \/ ls' (R r) = ls (R r) /\ rs' r = rs r) ->
+  agree_regs j ls' rs'.
+Proof.
+  intros; red; intros.
+  destruct (H0 r) as [A | [A B]]. 
+  rewrite A. constructor. 
+  rewrite A; rewrite B; auto.
+Qed.
+
+Lemma agree_regs_undef_list:
+  forall j rl ls rs,
+  agree_regs j ls rs ->
+  agree_regs j (Locmap.undef (List.map R rl) ls) (undef_regs rl rs).
+Proof.
+  induction rl; simpl; intros.
+  auto. 
+  apply IHrl. apply agree_regs_set_reg; auto. 
+Qed.
+
 Lemma agree_regs_undef_temps:
   forall j ls rs,
   agree_regs j ls rs ->
   agree_regs j (LTL.undef_temps ls) (undef_temps rs).
 Proof.
-  unfold LTL.undef_temps, undef_temps.
-  change temporaries with (List.map R (int_temporaries ++ float_temporaries)).
-  generalize (int_temporaries ++ float_temporaries).
-  induction l; simpl; intros.
-  auto. 
-  apply IHl. apply agree_regs_set_reg; auto. 
+  unfold LTL.undef_temps, undef_temps, temporaries.
+  intros; apply agree_regs_undef_list; auto.
+Qed.
+
+Lemma agree_regs_undef_setstack:
+  forall j ls rs,
+  agree_regs j ls rs ->
+  agree_regs j (Linear.undef_setstack ls) (undef_setstack rs).
+Proof.
+  intros. unfold Linear.undef_setstack, undef_setstack, destroyed_at_move.
+  apply agree_regs_undef_list; auto.
 Qed.
 
 Lemma agree_regs_undef_op:
@@ -691,9 +718,9 @@ Lemma agree_regs_undef_op:
   agree_regs j ls rs ->
   agree_regs j (Linear.undef_op op ls) (undef_op (transl_op fe op) rs).
 Proof.
-  intros.
-  generalize (agree_regs_undef_temps _ _ _ H). 
-  destruct op; simpl; auto.
+  intros. generalize (agree_regs_undef_temps _ _ _ H); intro A.
+Opaque destroyed_at_move_regs.
+  destruct op; auto; simpl; apply agree_regs_undef_setstack; auto.
 Qed.
 
 (** Preservation under assignment of stack slot *)
@@ -740,7 +767,7 @@ Lemma agree_frame_set_reg:
   forall j ls ls0 m sp m' sp' parent ra r v,
   agree_frame j ls ls0 m sp m' sp' parent ra ->
   mreg_within_bounds b r ->
-  Val.has_type v (Loc.type (R r)) ->
+   Val.has_type v (Loc.type (R r)) ->
   agree_frame j (Locmap.set (R r) v ls) ls0 m sp m' sp' parent ra.
 Proof.
   intros. inv H; constructor; auto; intros.
@@ -767,25 +794,36 @@ Proof.
   contradiction.
 Qed.
 
-Lemma agree_frame_undef_temps:
-  forall j ls ls0 m sp m' sp' parent ra,
+Lemma agree_frame_undef_locs:
+  forall j ls0 m sp m' sp' parent ra regs ls,
   agree_frame j ls ls0 m sp m' sp' parent ra ->
-  agree_frame j (LTL.undef_temps ls) ls0 m sp m' sp' parent ra.
+  incl (List.map R regs) temporaries ->
+  agree_frame j (Locmap.undef (List.map R regs) ls) ls0 m sp m' sp' parent ra.
 Proof.
-  intros until ra.
-  assert (forall regs ls,
-         incl (List.map R regs) temporaries ->
-         agree_frame j ls ls0 m sp m' sp' parent ra ->
-         agree_frame j (Locmap.undef (List.map R regs) ls) ls0 m sp m' sp' parent ra).
   induction regs; simpl; intros.
   auto.
   apply IHregs; eauto with coqlib.
   apply agree_frame_set_reg; auto. 
   apply temporary_within_bounds; eauto with coqlib.
   red; auto.
-  intros. unfold LTL.undef_temps.
-  change temporaries with (List.map R (int_temporaries ++ float_temporaries)).
-  apply H; auto. apply incl_refl. 
+Qed.
+
+Lemma agree_frame_undef_temps:
+  forall j ls ls0 m sp m' sp' parent ra,
+  agree_frame j ls ls0 m sp m' sp' parent ra ->
+  agree_frame j (LTL.undef_temps ls) ls0 m sp m' sp' parent ra.
+Proof.
+  intros. unfold temporaries. apply agree_frame_undef_locs; auto. apply incl_refl. 
+Qed.
+
+Lemma agree_frame_undef_setstack:
+  forall j ls ls0 m sp m' sp' parent ra,
+  agree_frame j ls ls0 m sp m' sp' parent ra ->
+  agree_frame j (Linear.undef_setstack ls) ls0 m sp m' sp' parent ra.
+Proof.
+  intros. unfold Linear.undef_setstack, destroyed_at_move. 
+  apply agree_frame_undef_locs; auto.
+  red; simpl; tauto.
 Qed.
 
 Lemma agree_frame_undef_op:
@@ -794,7 +832,8 @@ Lemma agree_frame_undef_op:
   agree_frame j (Linear.undef_op op ls) ls0 m sp m' sp' parent ra.
 Proof.
   intros. 
-  exploit agree_frame_undef_temps; eauto. destruct op; simpl; auto.
+  exploit agree_frame_undef_temps; eauto.
+  destruct op; simpl; auto; intros; apply agree_frame_undef_setstack; auto. 
 Qed.
 
 (** Preservation by assignment to local slot *)
@@ -1083,7 +1122,6 @@ Variable fb: block.
 Variable sp: block.
 Variable csregs: list mreg.
 Variable ls: locset.
-Variable rs: regset.
 
 Inductive stores_in_frame: mem -> mem -> Prop :=
   | stores_in_frame_refl: forall m,
@@ -1116,19 +1154,22 @@ Hypothesis mkindex_diff:
 Hypothesis csregs_typ:
   forall r, In r csregs -> mreg_type r = ty.
 
-Hypothesis agree: agree_regs j ls rs.
+Hypothesis ls_temp_undef:
+  forall r, In r destroyed_at_move_regs -> ls (R r) = Vundef.
+
 Hypothesis wt_ls: wt_locset ls.
 
 Lemma save_callee_save_regs_correct:
-  forall l k m,
+  forall l k rs m,
   incl l csregs ->
   list_norepet l ->
   frame_perm_freeable m sp ->
-  exists m',
+  agree_regs j ls rs ->
+  exists rs', exists m',
     star step tge 
        (State cs fb (Vptr sp Int.zero)
          (save_callee_save_regs bound number mkindex ty fe l k) rs m)
-    E0 (State cs fb (Vptr sp Int.zero) k rs m')
+    E0 (State cs fb (Vptr sp Int.zero) k rs' m')
   /\ (forall r,
        In r l -> number r < bound fe ->
        index_contains_inj j m' sp (mkindex (number r)) (ls (R r)))
@@ -1139,12 +1180,13 @@ Lemma save_callee_save_regs_correct:
        index_contains m sp idx v ->
        index_contains m' sp idx v)
   /\ stores_in_frame m m'
-  /\ frame_perm_freeable m' sp.
+  /\ frame_perm_freeable m' sp
+  /\ agree_regs j ls rs'.
 Proof.
   induction l; intros; simpl save_callee_save_regs.
   (* base case *)
-  exists m. split. apply star_refl. 
-  split. intros. elim H2.
+  exists rs; exists m. split. apply star_refl. 
+  split. intros. elim H3.
   split. auto.
   split. constructor.
   auto.
@@ -1156,20 +1198,24 @@ Proof.
   (* a store takes place *)
   exploit store_index_succeeds. apply (mkindex_valid a); auto with coqlib. 
   eauto. instantiate (1 := rs a). intros [m1 ST].
-  exploit (IHl k m1).  auto with coqlib. auto. 
+  exploit (IHl k (undef_setstack rs) m1).  auto with coqlib. auto. 
   red; eauto with mem.
-  intros [m' [A [B [C [D E]]]]].
-  exists m'. 
-  split. eapply star_left; eauto. constructor. 
+  apply agree_regs_exten with ls rs. auto.
+  intros. destruct (In_dec mreg_eq r destroyed_at_move_regs). 
+  left. apply ls_temp_undef; auto. 
+  right; split. auto. unfold undef_setstack, undef_move. apply undef_regs_other; auto.
+  intros [rs' [m' [A [B [C [D [E F]]]]]]].
+  exists rs'; exists m'. 
+  split. eapply star_left; eauto. econstructor. 
   rewrite <- (mkindex_typ (number a)). 
   apply store_stack_succeeds; auto with coqlib.
   traceEq.
   split; intros.
-  simpl in H2. destruct (mreg_eq a r). subst r.
+  simpl in H3. destruct (mreg_eq a r). subst r.
   assert (index_contains_inj j m1 sp (mkindex (number a)) (ls (R a))).
     eapply gss_index_contains_inj; eauto.
     rewrite mkindex_typ. rewrite <- (csregs_typ a). apply wt_ls. auto with coqlib.
-  destruct H4 as [v' [P Q]].
+  destruct H5 as [v' [P Q]].
   exists v'; split; auto. apply C; auto. 
   intros. apply mkindex_inj. apply number_inj; auto with coqlib. 
   inv H0. intuition congruence.
@@ -1182,44 +1228,49 @@ Proof.
   rewrite size_type_chunk. apply offset_of_index_disj_stack_data_2; eauto with coqlib.
   auto.
   (* no store takes place *)
-  exploit (IHl k m); auto with coqlib. 
-  intros [m' [A [B [C [D E]]]]].
-  exists m'; intuition. 
-  simpl in H2. destruct H2. subst r. omegaContradiction. apply B; auto.
+  exploit (IHl k rs m); auto with coqlib. 
+  intros [rs' [m' [A [B [C [D [E F]]]]]]].
+  exists rs'; exists m'; intuition. 
+  simpl in H3. destruct H3. subst r. omegaContradiction. apply B; auto.
   apply C; auto with coqlib.
-  intros. eapply H3; eauto. auto with coqlib.
+  intros. eapply H4; eauto. auto with coqlib.
 Qed.
 
 End SAVE_CALLEE_SAVE.
 
 Lemma save_callee_save_correct:
   forall j ls rs sp cs fb k m,
-  agree_regs j ls rs -> wt_locset ls ->
+  agree_regs j (call_regs ls) rs -> wt_locset (call_regs ls) ->
   frame_perm_freeable m sp ->
-  exists m',
+  exists rs', exists m',
     star step tge 
        (State cs fb (Vptr sp Int.zero) (save_callee_save fe k) rs m)
-    E0 (State cs fb (Vptr sp Int.zero) k rs m')
+    E0 (State cs fb (Vptr sp Int.zero) k rs' m')
   /\ (forall r,
        In r int_callee_save_regs -> index_int_callee_save r < b.(bound_int_callee_save) ->
-       index_contains_inj j m' sp (FI_saved_int (index_int_callee_save r)) (ls (R r)))
+       index_contains_inj j m' sp (FI_saved_int (index_int_callee_save r)) (call_regs ls (R r)))
   /\ (forall r,
        In r float_callee_save_regs -> index_float_callee_save r < b.(bound_float_callee_save) ->
-       index_contains_inj j m' sp (FI_saved_float (index_float_callee_save r)) (ls (R r)))
+       index_contains_inj j m' sp (FI_saved_float (index_float_callee_save r)) (call_regs ls (R r)))
   /\ (forall idx v,
        index_valid idx ->
        match idx with FI_saved_int _ => False | FI_saved_float _ => False | _ => True end ->
        index_contains m sp idx v ->
        index_contains m' sp idx v)
   /\ stores_in_frame sp m m'
-  /\ frame_perm_freeable m' sp.
+  /\ frame_perm_freeable m' sp
+  /\ agree_regs j (call_regs ls) rs'.
 Proof.
   intros.
+  assert (ls_temp_undef: forall r, In r destroyed_at_move_regs -> call_regs ls (R r) = Vundef).
+    intros; unfold call_regs. apply pred_dec_true.
+Transparent destroyed_at_move_regs.
+    simpl in *; intuition congruence.
   exploit (save_callee_save_regs_correct 
              fe_num_int_callee_save
              index_int_callee_save
              FI_saved_int Tint
-             j cs fb sp int_callee_save_regs ls rs).
+             j cs fb sp int_callee_save_regs (call_regs ls)).
   intros. apply index_int_callee_save_inj; auto. 
   intros. simpl. split. apply Zge_le. apply index_int_callee_save_pos; auto. assumption.
   auto.
@@ -1231,12 +1282,13 @@ Proof.
   apply incl_refl. 
   apply int_callee_save_norepet.
   eauto.
-  intros [m1 [A [B [C [D E]]]]].
+  eauto.
+  intros [rs1 [m1 [A [B [C [D [E F]]]]]]].
   exploit (save_callee_save_regs_correct 
              fe_num_float_callee_save
              index_float_callee_save
              FI_saved_float Tfloat
-             j cs fb sp float_callee_save_regs ls rs).
+             j cs fb sp float_callee_save_regs (call_regs ls)).
   intros. apply index_float_callee_save_inj; auto. 
   intros. simpl. split. apply Zge_le. apply index_float_callee_save_pos; auto. assumption.
   simpl; auto.
@@ -1248,8 +1300,9 @@ Proof.
   apply incl_refl. 
   apply float_callee_save_norepet.
   eexact E.
-  intros [m2 [P [Q [R [S T]]]]].
-  exists m2.
+  eexact F.
+  intros [rs2 [m2 [P [Q [R [S [T U]]]]]]].
+  exists rs2; exists m2.
   split. unfold save_callee_save, save_callee_save_int, save_callee_save_float.
   eapply star_trans; eauto. 
   split; intros.
@@ -1318,14 +1371,14 @@ Lemma function_prologue_correct:
   Mem.inject j m1 m1' ->
   Mem.alloc m1 0 f.(Linear.fn_stacksize) = (m2, sp) ->
   Val.has_type parent Tint -> Val.has_type ra Tint ->
-  exists j', exists m2', exists sp', exists m3', exists m4', exists m5',
+  exists j', exists rs', exists m2', exists sp', exists m3', exists m4', exists m5',
      Mem.alloc m1' 0 tf.(fn_stacksize) = (m2', sp')
   /\ store_stack m2' (Vptr sp' Int.zero) Tint tf.(fn_link_ofs) parent = Some m3'
   /\ store_stack m3' (Vptr sp' Int.zero) Tint tf.(fn_retaddr_ofs) ra = Some m4'
   /\ star step tge 
          (State cs fb (Vptr sp' Int.zero) (save_callee_save fe k) (undef_temps rs) m4')
-      E0 (State cs fb (Vptr sp' Int.zero) k (undef_temps rs) m5')
-  /\ agree_regs j' (call_regs ls) (undef_temps rs)
+      E0 (State cs fb (Vptr sp' Int.zero) k rs' m5')
+  /\ agree_regs j' (call_regs ls) rs'
   /\ agree_frame j' (call_regs ls) ls0 m2 sp m5' sp' parent ra
   /\ inject_incr j j'
   /\ inject_separated j j' m1 m1'
@@ -1368,11 +1421,10 @@ Proof.
   assert (PERM4: frame_perm_freeable m4' sp').
     red; intros. eauto with mem. 
   exploit save_callee_save_correct. 
-    apply agree_regs_undef_temps.
-    eapply agree_regs_inject_incr; eauto.
-    apply wt_undef_temps. auto.
+    apply agree_regs_call_regs. eapply agree_regs_inject_incr; eauto.
+    apply wt_call_regs. auto.
     eexact PERM4.
-  intros [m5' [STEPS [ICS [FCS [OTHERS [STORES PERM5]]]]]].
+  intros [rs' [m5' [STEPS [ICS [FCS [OTHERS [STORES [PERM5 AGREGS']]]]]]]].
   (* stores in frames *)
   assert (SIF: stores_in_frame sp' m2' m5').
     econstructor; eauto. 
@@ -1388,7 +1440,7 @@ Proof.
     assert (~Mem.valid_block m1' sp') by eauto with mem.
     contradiction.
   (* Conclusions *)
-  exists j'; exists m2'; exists sp'; exists m3'; exists m4'; exists m5'.
+  exists j'; exists rs'; exists m2'; exists sp'; exists m3'; exists m4'; exists m5'.
   split. auto.
   (* store parent *)
   split. change Tint with (type_of_index FI_link). 
@@ -1401,7 +1453,7 @@ Proof.
   (* saving of registers *)
   split. eexact STEPS.
   (* agree_regs *)
-  split. apply agree_regs_call_regs. apply agree_regs_inject_incr with j; auto.
+  split. auto.
   (* agree frame *)
   split. constructor; intros.
     (* unused regs *)
@@ -1423,15 +1475,15 @@ Proof.
     apply OTHERS; auto. red; auto.
     eapply gss_index_contains; eauto. red; auto.
     (* int callee save *)
-    rewrite <- AGCS. replace (ls (R r)) with (LTL.undef_temps ls (R r)).
+    rewrite <- AGCS. replace (ls (R r)) with (call_regs ls (R r)).
     apply ICS; auto.
-    unfold LTL.undef_temps. apply Locmap.guo. apply Loc.reg_notin. 
+    unfold call_regs. apply pred_dec_false.
     red; intros; exploit int_callee_save_not_destroyed; eauto. 
     auto.
     (* float callee save *)
-    rewrite <- AGCS. replace (ls (R r)) with (LTL.undef_temps ls (R r)).
+    rewrite <- AGCS. replace (ls (R r)) with (call_regs ls (R r)).
     apply FCS; auto.
-    unfold LTL.undef_temps. apply Locmap.guo. apply Loc.reg_notin. 
+    unfold call_regs. apply pred_dec_false.
     red; intros; exploit float_callee_save_not_destroyed; eauto. 
     auto.
     (* inj *)
@@ -2350,7 +2402,7 @@ Proof.
   econstructor; eauto with coqlib. econstructor; eauto.
   apply agree_regs_set_reg. apply agree_regs_set_reg. auto. auto. congruence. 
   eapply agree_frame_set_reg; eauto. eapply agree_frame_set_reg; eauto. 
-  apply temporary_within_bounds. unfold temporaries; auto with coqlib.
+  apply temporary_within_bounds. simpl; auto. 
   simpl; auto. simpl; rewrite <- H1. eapply agree_wt_ls; eauto.
   (* Lgetstack, outgoing *)
   exploit agree_outgoing; eauto. intros [v [A B]].
@@ -2389,11 +2441,13 @@ Proof.
     omega.
   apply match_stacks_change_mach_mem with m'; auto.
   eauto with mem. eauto with mem. intros. rewrite <- H4; eapply Mem.load_store_other; eauto. left; unfold block; omega.
-  apply agree_regs_set_slot; auto.
+  apply agree_regs_set_slot. apply agree_regs_undef_setstack; auto. 
   destruct sl.
-    eapply agree_frame_set_local; eauto. simpl in H1; rewrite H1; eapply agree_wt_ls; eauto.
+    eapply agree_frame_set_local. eapply agree_frame_undef_setstack; eauto. auto. auto.
+    simpl in H1; rewrite H1; eapply agree_wt_ls; eauto. auto.
     simpl in H3; contradiction.
-    eapply agree_frame_set_outgoing; eauto. simpl in H1; rewrite H1; eapply agree_wt_ls; eauto.
+    eapply agree_frame_set_outgoing. apply agree_frame_undef_setstack; eauto. auto. auto.
+    simpl in H1; rewrite H1; eapply agree_wt_ls; eauto. auto.
 
   (* Lop *)
   assert (Val.has_type v (mreg_type res)).
@@ -2611,7 +2665,7 @@ Proof.
   exploit function_prologue_correct; eauto.
   eapply match_stacks_type_sp; eauto. 
   eapply match_stacks_type_retaddr; eauto.
-  intros [j' [m2' [sp' [m3' [m4' [m5' [A [B [C [D [E [F [G [J [K L]]]]]]]]]]]]]]].
+  intros [j' [rs' [m2' [sp' [m3' [m4' [m5' [A [B [C [D [E [F [G [J [K L]]]]]]]]]]]]]]]].
   econstructor; split.
   eapply plus_left. econstructor; eauto. 
   rewrite (unfold_transf_function _ _ TRANSL). unfold fn_code. unfold transl_body. 
