@@ -62,20 +62,18 @@ let find_memcpy env =
   with Env.Error _ ->
     (default_memcpy(), false)
 
-(* Smart constructor for "," expressions *)
-
-let comma e1 e2 =
-  match e1.edesc, e2.edesc with
-  | EConst _, _ -> e2
-  | _, EConst _ -> e1
-  | _, _ ->  ecomma e1 e2
-
-(* Smart constructor for "&" expressions *)
+(* Smart constructors that "bubble up" sequence expressions *)
 
 let rec addrof e =
   match e.edesc with
   | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (addrof e2)
+  | EUnop(Oderef, e1) -> e1
   | _ -> eaddrof e
+
+let rec dot f e ty =
+  match e.edesc with
+  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (dot f e2 ty)
+  | _ -> { edesc = EUnop(Odot f, e); etyp = ty }
 
 (* Translate an assignment [lhs = rhs] between composite types.
    [lhs] and [rhs] must be l-values. *)
@@ -97,12 +95,9 @@ let transf_assign env lhs rhs =
 
 (* Detect invariant l-values *)
 
-let not_volatile env ty = not (List.mem AVolatile (attributes_of_type env ty))
-
 let rec invariant_lvalue env e =
   match e.edesc with
   | EVar _ -> true
-  | EUnop(Oderef, {edesc = EVar _; etyp = ty}) -> not_volatile env ty
   | EUnop(Odot _, e1) -> invariant_lvalue env e1
   | _ -> false
 
@@ -134,13 +129,36 @@ let rec transf_expr env ctx e =
       end
   | EConst c -> e
   | ESizeof ty -> e
-  | EVar x -> e
+  | EVar x ->
+      if ctx = Effects && is_composite_type env e.etyp
+      then nullconst
+      else e
+  | EUnop(Oaddrof, e1) ->
+      addrof (transf_expr env Val e1)
+  | EUnop(Oderef, e1) ->
+      let e1' = transf_expr env Val e1 in
+      if ctx = Effects && is_composite_type env e.etyp
+      then e1'
+      else {edesc = EUnop(Oderef, e1'); etyp = e.etyp}
+  | EUnop(Odot f, e1) ->
+      let e1' = transf_expr env Val e1 in
+      if ctx = Effects && is_composite_type env e.etyp
+      then e1'
+      else dot f e1' e.etyp
+  | EUnop(Oarrow f, e1) ->
+      let e1' = transf_expr env Val e1 in
+      if ctx = Effects && is_composite_type env e.etyp
+      then e1'
+      else {edesc = EUnop(Oarrow f, e1'); etyp = e.etyp}
   | EUnop(op, e1) ->
       {edesc = EUnop(op, transf_expr env Val e1); etyp = e.etyp}
+  | EBinop(Oindex, e1, e2, ty) ->
+      let e1' = transf_expr env Val e1 and e2' = transf_expr env Val e2 in
+      if ctx = Effects && is_composite_type env e.etyp
+      then ecomma e1' e2'
+      else {edesc = EBinop(Oindex, e1', e2', ty); etyp = e.etyp}
   | EBinop(Ocomma, e1, e2, ty) ->
-      {edesc = EBinop(Ocomma, transf_expr env Effects e1,
-                              transf_expr env ctx e2, ty);
-       etyp = e.etyp}
+      ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
   | EBinop(op, e1, e2, ty) ->
       {edesc = EBinop(op, transf_expr env Val e1,
                           transf_expr env Val e2, ty);
