@@ -136,27 +136,23 @@ let rec transf_expr env ctx e =
   | EUnop(Oaddrof, e1) ->
       addrof (transf_expr env Val e1)
   | EUnop(Oderef, e1) ->
-      let e1' = transf_expr env Val e1 in
       if ctx = Effects && is_composite_type env e.etyp
-      then e1'
-      else {edesc = EUnop(Oderef, e1'); etyp = e.etyp}
+      then transf_expr env Effects e1
+      else {edesc = EUnop(Oderef, transf_expr env Val e1); etyp = e.etyp}
   | EUnop(Odot f, e1) ->
-      let e1' = transf_expr env Val e1 in
       if ctx = Effects && is_composite_type env e.etyp
-      then e1'
-      else dot f e1' e.etyp
+      then transf_expr env Effects e1
+      else dot f (transf_expr env Val e1) e.etyp
   | EUnop(Oarrow f, e1) ->
-      let e1' = transf_expr env Val e1 in
       if ctx = Effects && is_composite_type env e.etyp
-      then e1'
-      else {edesc = EUnop(Oarrow f, e1'); etyp = e.etyp}
+      then transf_expr env Effects e1
+      else {edesc = EUnop(Oarrow f, transf_expr env Val e1); etyp = e.etyp}
   | EUnop(op, e1) ->
       {edesc = EUnop(op, transf_expr env Val e1); etyp = e.etyp}
   | EBinop(Oindex, e1, e2, ty) ->
-      let e1' = transf_expr env Val e1 and e2' = transf_expr env Val e2 in
       if ctx = Effects && is_composite_type env e.etyp
-      then ecomma e1' e2'
-      else {edesc = EBinop(Oindex, e1', e2', ty); etyp = e.etyp}
+      then ecomma (transf_expr env Effects e1) (transf_expr env Effects e2)
+      else {edesc = EBinop(Oindex, transf_expr env Val e1, transf_expr env Val e2, ty); etyp = e.etyp}
   | EBinop(Ocomma, e1, e2, ty) ->
       ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
   | EBinop(op, e1, e2, ty) ->
