@@ -18,6 +18,8 @@ open Datatypes
 open BinPos
 open BinInt
 open AST
+open Integers
+open Floats
 open Values
 open Memory
 open Globalenvs
@@ -33,6 +35,8 @@ let trace = ref 1   (* 0 if quiet, 1 if normally verbose, 2 if full trace *)
 type mode = First | Random | All
 
 let mode = ref First
+
+let random_volatiles = ref false
 
 (* Printing events *)
 
@@ -329,6 +333,7 @@ and world_io id args =
       None
 
 and world_vload chunk id ofs =
+  assert !random_volatiles;
   let res = match chunk with
     | Mint8signed -> EVint(coqint_of_camlint(Int32.sub (Random.int32 0x100l) 0x80l))
     | Mint8unsigned -> EVint(coqint_of_camlint(Random.int32 0x100l))
@@ -339,7 +344,8 @@ and world_vload chunk id ofs =
     | Mfloat64 -> EVfloat(Random.float 1.0)
   in Some(Coq_pair(res, world))
 
-and world_vstore chunk id ofs arg =
+and world_vstore chunk id ofs v =
+  assert !random_volatiles;
   Some world
 
 let do_event p ge time s ev =
@@ -399,11 +405,20 @@ let rec explore p prog ge time ss =
     explore p prog ge (time + 1) ss'
   end
 
+let unvolatile prog =
+  let unvolatile_globvar (Coq_pair(id, gv)) =
+    Coq_pair(id,
+             if gv.gvar_volatile
+             then {gv with gvar_readonly = false; gvar_volatile = false}
+             else gv) in
+  {prog with prog_vars = List.map unvolatile_globvar prog.prog_vars}
+
 let execute prog =
   Random.self_init();
   let p = err_formatter in
   pp_set_max_boxes p 10;
-  begin match Cexec.do_initial_state prog with
+  let prog' = if !random_volatiles then prog else unvolatile prog in
+  begin match Cexec.do_initial_state prog' with
   | None -> fprintf p "ERROR: Initial state undefined@."
   | Some(Coq_pair(ge, s)) -> explore p prog ge 0 (StateSet.singleton s)
   end
