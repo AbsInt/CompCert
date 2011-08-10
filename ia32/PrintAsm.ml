@@ -306,17 +306,29 @@ let print_builtin_memcpy_small oc sz al src dst =
   if need_tmp && tmp = EAX then
     fprintf oc "	popl	%a\n" ireg EAX
 
+let print_mov2 oc src1 dst1 src2 dst2 =
+  if src1 = dst1 then
+    if src2 = dst2
+    then ()
+    else fprintf oc "	movl	%a, %a\n" ireg src2 ireg dst2
+  else if src2 = dst2 then
+    fprintf oc "	movl	%a, %a\n" ireg src1 ireg dst1
+  else if src2 = dst1 then
+    if src1 = dst2 then
+      fprintf oc "	xchgl	%a, %a\n" ireg src1 ireg src2
+    else begin
+      fprintf oc "	movl	%a, %a\n" ireg src2 ireg dst2;
+      fprintf oc "	movl	%a, %a\n" ireg src1 ireg dst1
+    end
+  else begin
+    fprintf oc "	movl	%a, %a\n" ireg src1 ireg dst1;
+    fprintf oc "	movl	%a, %a\n" ireg src2 ireg dst2
+  end
+
 let print_builtin_memcpy_big oc sz al src dst =
   fprintf oc "	pushl	%a\n" ireg ESI;
   fprintf oc "	pushl	%a\n" ireg EDI;
-  begin match src, dst with
-  | ESI, EDI -> ()
-  | EDI, ESI -> fprintf oc "	xchgl	%a, %a\n" ireg ESI ireg EDI
-  | ESI, _   -> fprintf oc "	movl	%a, %a\n" ireg dst ireg EDI
-  | _,   EDI -> fprintf oc "	movl	%a, %a\n" ireg src ireg ESI
-  | _,   _   -> fprintf oc "	movl	%a, %a\n" ireg src ireg ESI;
-                fprintf oc "	movl	%a, %a\n" ireg dst ireg EDI
-  end;
+  print_mov2 oc src ESI dst EDI;
   fprintf oc "	movl	$%d, %a\n" (sz / 4) ireg ECX;
   fprintf oc "	rep	movsl\n";
   if sz mod 4 >= 2 then fprintf oc "	movsw\n";
