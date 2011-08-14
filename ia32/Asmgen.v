@@ -33,8 +33,6 @@ Open Local Scope error_monad_scope.
 - Argument and result registers are of the correct type.
 - For two-address instructions, the result and the first argument
   are in the same register.  (True by construction in [RTLgen], and preserved by [Reload].)
-- The first argument register is never [ECX] (a.k.a. [IT2]) nor [XMM7]
-  (a.k.a [FT2]).
 - The top of the floating-point stack ([ST0], a.k.a. [FP0]) can only
   appear in [mov] instructions, but never in arithmetic instructions.
 
@@ -64,9 +62,23 @@ Definition mk_shift (shift_instr: ireg -> instruction)
                     (r1 r2: ireg) (k: code) : res code :=
   if ireg_eq r2 ECX then
     OK (shift_instr r1 :: k)
+  else if ireg_eq r1 ECX then
+    OK (Pxchg_rr r2 ECX :: shift_instr r2 :: Pxchg_rr r2 ECX :: k)
   else
-    do x <- assertion (negb (ireg_eq r1 ECX));
     OK (Pmov_rr ECX r2 :: shift_instr r1 :: k).
+
+Definition mk_mov2 (src1 dst1 src2 dst2: ireg) (k: code) : code :=
+  if ireg_eq src1 dst1 then
+    Pmov_rr dst2 src2 :: k
+  else if ireg_eq src2 dst2 then
+    Pmov_rr dst1 src1 :: k
+  else if ireg_eq src2 dst1 then
+    if ireg_eq src1 dst2 then
+      Pxchg_rr src1 src2 :: k
+    else
+      Pmov_rr dst2 src2 :: Pmov_rr dst1 src1 :: k
+  else
+    Pmov_rr dst1 src1 :: Pmov_rr dst2 src2 :: k.
 
 Definition mk_div (div_instr: ireg -> instruction)
                   (r1 r2: ireg) (k: code) : res code :=
@@ -76,15 +88,9 @@ Definition mk_div (div_instr: ireg -> instruction)
     else
       OK (div_instr r2 :: k)
   else
-    do x <- assertion (negb (ireg_eq r1 ECX));
-    if ireg_eq r2 EAX then
-      OK (Pmov_rr ECX EAX :: Pmov_rr EAX r1 ::
-          div_instr ECX ::
-          Pmov_rr r1 EAX :: Pmov_rr EAX ECX :: k)
-    else
-      OK (Pmovd_fr XMM7 EAX :: Pmov_rr ECX r2 :: Pmov_rr EAX r1 ::
-          div_instr ECX ::
-          Pmov_rr r2 ECX :: Pmov_rr r1 EAX :: Pmovd_rf EAX XMM7 :: k).
+      OK (Pmovd_fr XMM7 EAX ::
+          mk_mov2 r1 EAX r2 ECX 
+            (div_instr ECX :: Pmov_rr r1 EAX :: Pmovd_rf EAX XMM7 :: k)).
 
 Definition mk_mod (div_instr: ireg -> instruction)
                   (r1 r2: ireg) (k: code) : res code :=
@@ -94,22 +100,16 @@ Definition mk_mod (div_instr: ireg -> instruction)
     else
       OK (div_instr r2 :: Pmov_rr EAX EDX :: k)
   else
-    do x <- assertion (negb (ireg_eq r1 ECX));
-    if ireg_eq r2 EDX then
-      OK (Pmovd_fr XMM7 EAX :: Pmov_rr ECX EDX :: Pmov_rr EAX r1 ::
-          div_instr ECX ::
-          Pmov_rr r1 EDX :: Pmovd_rf EAX XMM7 :: k)
-    else
-      OK (Pmovd_fr XMM7 EAX :: Pmov_rr ECX r2 :: Pmov_rr EAX r1 ::
-          div_instr ECX ::
-          Pmov_rr r2 ECX :: Pmov_rr r1 EDX :: Pmovd_rf EAX XMM7 :: k).
+      OK (Pmovd_fr XMM7 EAX ::
+          mk_mov2 r1 EAX r2 ECX 
+            (div_instr ECX :: Pmov_rr r1 EDX :: Pmovd_rf EAX XMM7 :: k)).
 
 Definition mk_shrximm (r: ireg) (n: int) (k: code) : res code :=
-  do x <- assertion (negb (ireg_eq r ECX));
+  let tmp := if ireg_eq r ECX then EDX else ECX in
   let p := Int.sub (Int.shl Int.one n) Int.one in
   OK (Ptest_rr r r ::
-      Plea ECX (Addrmode (Some r) None (inl _ p)) ::
-      Pcmov Cond_l r ECX ::
+      Plea tmp (Addrmode (Some r) None (inl _ p)) ::
+      Pcmov Cond_l r tmp ::
       Psar_ri r n :: k).
 
 Definition low_ireg (r: ireg) : bool :=

@@ -112,7 +112,7 @@ Ltac IsTail :=
   match goal with
   | [ |- is_tail _ (_ :: _) ] => constructor; IsTail
   | [ H: Error _ = OK _ |- _ ] => discriminate
-  | [ H: OK _ = OK _ |- _ ] => inversion H; subst; IsTail
+  | [ H: OK _ = OK _ |- _ ] => inv H; IsTail
   | [ H: bind _ _ = OK _ |- _ ] => monadInv H; IsTail
   | [ H: (if ?x then _ else _) = OK _ |- _ ] => destruct x; IsTail
   | [ H: match ?x with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct x; IsTail
@@ -131,16 +131,28 @@ Proof.
   unfold mk_shift; intros; IsTail.
 Qed.
 
+Lemma mk_mov2_tail:
+  forall r1 r2 r3 r4 k, is_tail k (mk_mov2 r1 r2 r3 r4 k).
+Proof.
+  unfold mk_mov2; intros.
+  destruct (ireg_eq r1 r2). IsTail.
+  destruct (ireg_eq r3 r4). IsTail.
+  destruct (ireg_eq r3 r2); IsTail.
+  destruct (ireg_eq r1 r4); IsTail.
+Qed.
+
 Lemma mk_div_tail:
   forall di r1 r2 k c, mk_div di r1 r2 k = OK c -> is_tail k c.
 Proof.
   unfold mk_div; intros; IsTail.
+  eapply is_tail_trans. 2: eapply mk_mov2_tail. IsTail.
 Qed.
 
 Lemma mk_mod_tail:
   forall di r1 r2 k c, mk_mod di r1 r2 k = OK c -> is_tail k c.
 Proof.
   unfold mk_mod; intros; IsTail.
+  eapply is_tail_trans. 2: eapply mk_mov2_tail. IsTail.
 Qed.
 
 Lemma mk_shrximm_tail:

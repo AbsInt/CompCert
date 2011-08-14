@@ -280,6 +280,15 @@ Module Loc.
     apply overlap_aux_false_1. exact H0.
   Qed.
 
+  Definition diff_dec (l1 l2: loc) : { Loc.diff l1 l2 } + {~Loc.diff l1 l2}.
+  Proof.
+    intros. case (eq l1 l2); intros. 
+    right. rewrite e. apply same_not_diff.
+    case_eq (overlap l1 l2); intros.
+    right. apply overlap_not_diff; auto.
+    left. apply non_overlap_diff; auto.
+  Qed.
+
 (** We now redefine some standard notions over lists, using the [Loc.diff]
   predicate instead of standard disequality [<>].
 

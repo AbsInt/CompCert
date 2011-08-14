@@ -120,6 +120,7 @@ Inductive instruction: Type :=
   | Pfld_m (a: addrmode)                (**r [fld] from memory *)
   | Pfstp_f (rd: freg)                  (**r [fstp] to XMM register (pseudo) *)
   | Pfstp_m (a: addrmode)               (**r [fstp] to memory *)
+  | Pxchg_rr (r1: ireg) (r2: ireg)      (**r register-register exchange *)
   (** Moves with conversion *)
   | Pmovb_mr (a: addrmode) (rs: ireg)   (**r [mov] (8-bit int) *)
   | Pmovw_mr (a: addrmode) (rs: ireg)   (**r [mov] (16-bit int) *)
@@ -380,18 +381,6 @@ Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
       | Vint n => Some (Int.eq n Int.zero)
       | _ => None
       end
-(*
-  | Cond_nep =>
-      match rs PF, rs ZF with
-      | Vint p, Vint z => Some (Int.eq p Int.one || Int.eq z Int.zero)
-      | _, _ => None
-      end
-  | Cond_enp =>
-      match rs PF, rs ZF with
-      | Vint p, Vint z => Some (Int.eq p Int.zero && Int.eq z Int.one)
-      | _, _ => None
-      end
-*)
   end.
 
 (** The semantics is purely small-step and defined as a function
@@ -491,6 +480,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr (rs#rd <- (rs ST0) #ST0 <- Vundef)) m
   | Pfstp_m a =>
       exec_store Mfloat64 m a rs ST0
+  | Pxchg_rr r1 r2 =>
+      Next (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) m
   (** Moves with conversion *)
   | Pmovb_mr a r1 =>
       exec_store Mint8unsigned m a rs r1

@@ -589,13 +589,23 @@ Lemma mk_shift_correct:
   /\ forall r, nontemp_preg r = true -> r <> r1 -> rs2#r = rs1#r.
 Proof.
   unfold mk_shift; intros. 
-  destruct (ireg_eq r2 ECX); monadInv H. 
+  destruct (ireg_eq r2 ECX).
 (* fast case *)
+  monadInv H.
   econstructor. split. apply exec_straight_one. apply H0. auto. 
   split. repeat SRes.
   intros. repeat SOther.
+(* xchg case *)
+  destruct (ireg_eq r1 ECX); monadInv H. 
+  econstructor. split. eapply exec_straight_three.
+  simpl; eauto. 
+  apply H0.
+  simpl; eauto.
+  auto. auto. auto. 
+  split. repeat SRes. repeat rewrite nextinstr_inv; auto with ppcgen. 
+  rewrite Pregmap.gss. decEq. rewrite Pregmap.gso; auto with ppcgen. apply Pregmap.gss.
+  intros. destruct (preg_eq r r2). subst. repeat SRes. repeat SOther.
 (* general case *)
-  monadInv EQ.
   econstructor. split. eapply exec_straight_two. simpl; eauto. apply H0. 
   auto. auto. 
   split. repeat SRes. repeat rewrite nextinstr_inv; auto with ppcgen.
@@ -603,8 +613,40 @@ Proof.
   intros. repeat SOther.
 Qed.
 
-(** Smart constructor for division *)
+(** Parallel move 2 *)
 
+Lemma mk_mov2_correct:
+  forall src1 dst1 src2 dst2 k rs m,
+  dst1 <> dst2 ->
+  exists rs',
+     exec_straight (mk_mov2 src1 dst1 src2 dst2 k) rs m k rs' m
+  /\ rs'#dst1 = rs#src1
+  /\ rs'#dst2 = rs#src2
+  /\ forall r, r <> PC -> r <> dst1 -> r <> dst2 -> rs'#r = rs#r.
+Proof.
+  intros. unfold mk_mov2. 
+(* single moves *)
+  destruct (ireg_eq src1 dst1). subst.
+  econstructor; split. apply exec_straight_one. simpl; eauto. auto.
+  split. repeat SRes. split. repeat SRes. intros; repeat SOther. 
+  destruct (ireg_eq src2 dst2). subst.
+  econstructor; split. apply exec_straight_one. simpl; eauto. auto.
+  split. repeat SRes. split. repeat SRes. intros; repeat SOther. 
+(* xchg *)
+  destruct (ireg_eq src2 dst1). destruct (ireg_eq src1 dst2).
+  subst. econstructor; split. apply exec_straight_one. simpl; eauto. auto.
+  split. repeat SRes. split. repeat SRes. intros; repeat SOther.
+(* move 2; move 1 *)
+  subst. econstructor; split. eapply exec_straight_two.
+  simpl; eauto. simpl; eauto. auto. auto.
+  split. repeat SRes. split. repeat SRes. intros; repeat SOther.
+(* move 1; move 2*)
+  subst. econstructor; split. eapply exec_straight_two.
+  simpl; eauto. simpl; eauto. auto. auto.
+  split. repeat SRes. split. repeat SRes. intros; repeat SOther.
+Qed.
+
+(** Smart constructor for division *)
 
 Lemma mk_div_correct:
   forall mkinstr dsem msem r1 r2 k c rs1 m,
@@ -629,52 +671,19 @@ Proof.
   split. repeat SRes. decEq. apply Pregmap.gso. congruence. 
   intros. repeat SOther. 
 (* r1 <> EAX *)
-  monadInv H. monadInv EQ. destruct (ireg_eq r2 EAX); monadInv EQ0.
-(* r1 <> EAX, r1 <> ECX, r2 = EAX *)
-  set (rs2 := nextinstr (rs1#ECX <- (rs1#EAX))).
-  set (rs3 := nextinstr (rs2#EAX <- (rs2#r1))).
-  set (rs4 := nextinstr_nf (rs3#EAX <- (dsem rs3#EAX (rs3#EDX <- Vundef)#ECX) 
-                               #EDX <- (msem rs3#EAX (rs3#EDX <- Vundef)#ECX))).
-  set (rs5 := nextinstr (rs4#r1 <- (rs4#EAX))).
-  set (rs6 := nextinstr (rs5#EAX <- (rs5#ECX))).
-  exists rs6. split. apply exec_straight_step with rs2 m; auto.
-  apply exec_straight_step with rs3 m; auto.
-  apply exec_straight_step with rs4 m; auto. apply H0.
-  apply exec_straight_step with rs5 m; auto.
-  apply exec_straight_one; auto.
-  split. unfold rs6. SRes. unfold rs5. repeat SRes.
-  unfold rs4. repeat SRes. decEq.
-  unfold rs3. repeat SRes. unfold rs2. repeat SRes. 
-  intros. unfold rs6. SOther.
-  unfold Pregmap.set. destruct (PregEq.eq r EAX). subst r.
-  unfold rs5. repeat SOther.
-  unfold rs5. repeat SOther. unfold rs4. repeat SOther. 
-  unfold rs3. repeat SOther. unfold rs2. repeat SOther. 
-(* r1 <> EAX, r1 <> ECX, r2 <> EAX *)
+  monadInv H.
   set (rs2 := nextinstr (rs1#XMM7 <- (rs1#EAX))).
-  set (rs3 := nextinstr (rs2#ECX <- (rs2#r2))).
-  set (rs4 := nextinstr (rs3#EAX <- (rs3#r1))).
-  set (rs5 := nextinstr_nf (rs4#EAX <- (dsem rs4#EAX (rs4#EDX <- Vundef)#ECX) 
-                               #EDX <- (msem rs4#EAX (rs4#EDX <- Vundef)#ECX))).
-  set (rs6 := nextinstr (rs5#r2 <- (rs5#ECX))).
-  set (rs7 := nextinstr (rs6#r1 <- (rs6#EAX))).
-  set (rs8 := nextinstr (rs7#EAX <- (rs7#XMM7))).
-  exists rs8. split. apply exec_straight_step with rs2 m; auto.
-  apply exec_straight_step with rs3 m; auto.
-  apply exec_straight_step with rs4 m; auto.
-  apply exec_straight_step with rs5 m; auto. apply H0. 
-  apply exec_straight_step with rs6 m; auto.
-  apply exec_straight_step with rs7 m; auto.
-  apply exec_straight_one; auto.
-  split. unfold rs8. SRes. unfold rs7. repeat SRes.
-  unfold rs6. repeat SRes. unfold rs5. repeat SRes. 
-  decEq. unfold rs4. repeat SRes. unfold rs3. repeat SRes. 
-   intros. unfold rs8. SOther.
-  unfold Pregmap.set. destruct (PregEq.eq r EAX). subst r. auto.
-  unfold rs7. repeat SOther. unfold rs6. SOther.
-  unfold Pregmap.set. destruct (PregEq.eq r r2). subst r. auto. 
-  unfold rs5. repeat SOther. unfold rs4. repeat SOther.
-  unfold rs3. repeat SOther. unfold rs2. repeat SOther.
+  exploit (mk_mov2_correct r1 EAX r2 ECX). congruence. instantiate (1 := rs2). 
+  intros [rs3 [A [B [C D]]]].
+  econstructor; split.
+  apply exec_straight_step with rs2 m; auto.
+  eapply exec_straight_trans. eexact A. 
+  eapply exec_straight_three. simpl; eauto. simpl; eauto. simpl; eauto. 
+  auto. auto. auto. 
+  split. repeat SRes. decEq. rewrite B; unfold rs2; SRes. SOther.
+  intros. destruct (preg_eq r EAX). subst.
+  repeat SRes. rewrite D; auto with ppcgen. 
+  repeat SOther. rewrite D; auto with ppcgen. unfold rs2; repeat SOther.
 Qed.
 
 (** Smart constructor for modulus *)
@@ -703,55 +712,19 @@ Proof.
   split. repeat SRes. decEq. apply Pregmap.gso. congruence. 
   intros. repeat SOther. 
 (* r1 <> EAX *)
-  monadInv H. monadInv EQ. destruct (ireg_eq r2 EDX); monadInv EQ0.
-(* r1 <> EAX, r1 <> ECX, r2 = EDX *)
+  monadInv H.
   set (rs2 := nextinstr (rs1#XMM7 <- (rs1#EAX))).
-  set (rs3 := nextinstr (rs2#ECX <- (rs2#EDX))).
-  set (rs4 := nextinstr (rs3#EAX <- (rs3#r1))).
-  set (rs5 := nextinstr_nf (rs4#EAX <- (dsem rs4#EAX (rs4#EDX <- Vundef)#ECX) 
-                               #EDX <- (msem rs4#EAX (rs4#EDX <- Vundef)#ECX))).
-  set (rs6 := nextinstr (rs5#r1 <- (rs5#EDX))).
-  set (rs7 := nextinstr (rs6#EAX <- (rs6#XMM7))).
-  exists rs7. split. apply exec_straight_step with rs2 m; auto.
-  apply exec_straight_step with rs3 m; auto.
-  apply exec_straight_step with rs4 m; auto.
-  apply exec_straight_step with rs5 m; auto. apply H0. 
-  apply exec_straight_step with rs6 m; auto.
-  apply exec_straight_one; auto.
-  split. unfold rs7. repeat SRes. unfold rs6. repeat SRes.
-  unfold rs5. repeat SRes. decEq.
-  unfold rs4. repeat SRes. unfold rs3. repeat SRes. 
-  intros. unfold rs7. SOther.
-  unfold Pregmap.set. destruct (PregEq.eq r EAX). subst r.
-  unfold rs6. repeat SOther.
-  unfold rs6. repeat SOther.
-  unfold rs5. repeat SOther. unfold rs4. repeat SOther. 
-  unfold rs3. repeat SOther. unfold rs2. repeat SOther. 
-(* r1 <> EAX, r1 <> ECX, r2 <> EDX *)
-  set (rs2 := nextinstr (rs1#XMM7 <- (rs1#EAX))).
-  set (rs3 := nextinstr (rs2#ECX <- (rs2#r2))).
-  set (rs4 := nextinstr (rs3#EAX <- (rs3#r1))).
-  set (rs5 := nextinstr_nf (rs4#EAX <- (dsem rs4#EAX (rs4#EDX <- Vundef)#ECX) 
-                               #EDX <- (msem rs4#EAX (rs4#EDX <- Vundef)#ECX))).
-  set (rs6 := nextinstr (rs5#r2 <- (rs5#ECX))).
-  set (rs7 := nextinstr (rs6#r1 <- (rs6#EDX))).
-  set (rs8 := nextinstr (rs7#EAX <- (rs7#XMM7))).
-  exists rs8. split. apply exec_straight_step with rs2 m; auto.
-  apply exec_straight_step with rs3 m; auto.
-  apply exec_straight_step with rs4 m; auto.
-  apply exec_straight_step with rs5 m; auto. apply H0. 
-  apply exec_straight_step with rs6 m; auto.
-  apply exec_straight_step with rs7 m; auto.
-  apply exec_straight_one; auto.
-  split. unfold rs8. SRes. unfold rs7. repeat SRes.
-  unfold rs6. repeat SRes. unfold rs5. repeat SRes. 
-  decEq. unfold rs4. repeat SRes. unfold rs3. repeat SRes. 
-   intros. unfold rs8. SOther.
-  unfold Pregmap.set. destruct (PregEq.eq r EAX). subst r. auto.
-  unfold rs7. repeat SOther. unfold rs6. SOther.
-  unfold Pregmap.set. destruct (PregEq.eq r r2). subst r. auto. 
-  unfold rs5. repeat SOther. unfold rs4. repeat SOther.
-  unfold rs3. repeat SOther. unfold rs2. repeat SOther.
+  exploit (mk_mov2_correct r1 EAX r2 ECX). congruence. instantiate (1 := rs2). 
+  intros [rs3 [A [B [C D]]]].
+  econstructor; split.
+  apply exec_straight_step with rs2 m; auto.
+  eapply exec_straight_trans. eexact A. 
+  eapply exec_straight_three. simpl; eauto. simpl; eauto. simpl; eauto. 
+  auto. auto. auto. 
+  split. repeat SRes. decEq. rewrite B; unfold rs2; SRes. SOther.
+  intros. destruct (preg_eq r EAX). subst.
+  repeat SRes. rewrite D; auto with ppcgen. 
+  repeat SOther. rewrite D; auto with ppcgen. unfold rs2; repeat SOther.
 Qed.
 
 (** Smart constructor for [shrx] *)
@@ -766,15 +739,19 @@ Lemma mk_shrximm_correct:
   /\ rs2#r1 = Vint (Int.shrx x n)
   /\ forall r, nontemp_preg r = true -> r <> r1 -> rs2#r = rs1#r.
 Proof.
-  unfold mk_shrximm; intros. monadInv H. monadInv EQ.
+  unfold mk_shrximm; intros. inv H.
+  set (tmp := if ireg_eq r1 ECX then EDX else ECX).
+  assert (TMP1: tmp <> r1). unfold tmp; destruct (ireg_eq r1 ECX); congruence. 
+  assert (TMP2: nontemp_preg tmp = false). unfold tmp; destruct (ireg_eq r1 ECX); auto. 
   rewrite Int.shrx_shr; auto.
   set (tnm1 := Int.sub (Int.shl Int.one n) Int.one).
   set (x' := Int.add x tnm1).
   set (rs2 := nextinstr (compare_ints (Vint x) (Vint Int.zero) rs1)).
-  set (rs3 := nextinstr (rs2#ECX <- (Vint x'))).
+  set (rs3 := nextinstr (rs2#tmp <- (Vint x'))).
   set (rs4 := nextinstr (if Int.lt x Int.zero then rs3#r1 <- (Vint x') else rs3)).
   set (rs5 := nextinstr_nf (rs4#r1 <- (Val.shr rs4#r1 (Vint n)))).
   assert (rs3#r1 = Vint x). unfold rs3. SRes. SRes. 
+  assert (rs3#tmp = Vint x'). unfold rs3. SRes. SRes. 
   exists rs5. split. 
   apply exec_straight_step with rs2 m. simpl. rewrite H0. simpl. rewrite Int.and_idem. auto. auto.
   apply exec_straight_step with rs3 m. simpl. 
@@ -783,7 +760,7 @@ Proof.
   apply exec_straight_step with rs4 m. simpl. 
   change (rs3 SOF) with (rs2 SOF). unfold rs2. rewrite nextinstr_inv; auto with ppcgen. 
   unfold compare_ints. rewrite Pregmap.gso; auto with ppcgen. rewrite Pregmap.gss. 
-  simpl. unfold rs4. destruct (Int.lt x Int.zero); auto. 
+  simpl. unfold rs4. destruct (Int.lt x Int.zero); auto. rewrite H2; auto. 
   unfold rs4. destruct (Int.lt x Int.zero); auto.
   apply exec_straight_one. auto. auto.
   split. unfold rs5. SRes. SRes. unfold rs4. rewrite nextinstr_inv; auto with ppcgen.
@@ -791,8 +768,8 @@ Proof.
     unfold Int.ltu in *. change (Int.unsigned (Int.repr 31)) with 31 in H1. 
     destruct (zlt (Int.unsigned n) 31); try discriminate.
     change (Int.unsigned Int.iwordsize) with 32. apply zlt_true. omega.
-  destruct (Int.lt x Int.zero). rewrite Pregmap.gss. unfold Val.shr. rewrite H2. auto.
-  rewrite H. unfold Val.shr. rewrite H2. auto. 
+  destruct (Int.lt x Int.zero). rewrite Pregmap.gss. unfold Val.shr. rewrite H3. auto.
+  rewrite H. unfold Val.shr. rewrite H3. auto. 
   intros. unfold rs5. repeat SOther. unfold rs4. SOther.
   transitivity (rs3#r). destruct (Int.lt x Int.zero). SOther. auto. 
   unfold rs3. repeat SOther. unfold rs2. repeat SOther. 

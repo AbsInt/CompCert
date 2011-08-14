@@ -332,7 +332,19 @@ Remark mk_shift_label:
   find_label lbl c = find_label lbl k.
 Proof.
   unfold mk_shift; intros.
-  destruct (ireg_eq r2 ECX); monadInv H; simpl; rewrite H0; auto.
+  destruct (ireg_eq r2 ECX). monadInv H; simpl; rewrite H0; auto.
+  destruct (ireg_eq r1 ECX); monadInv H; simpl; rewrite H0; auto.
+Qed.
+
+Remark mk_mov2_label:
+  forall r1 r2 r3 r4 k,
+  find_label lbl (mk_mov2 r1 r2 r3 r4 k) = find_label lbl k.
+Proof.
+  intros; unfold mk_mov2. 
+  destruct (ireg_eq r1 r2); auto.
+  destruct (ireg_eq r3 r4); auto.
+  destruct (ireg_eq r3 r2); auto.
+  destruct (ireg_eq r1 r4); auto.
 Qed.
 
 Remark mk_div_label:
@@ -343,7 +355,7 @@ Proof.
   unfold mk_div; intros.
   destruct (ireg_eq r1 EAX).
   destruct (ireg_eq r2 EDX); monadInv H; simpl; rewrite H0; auto.
-  destruct (ireg_eq r2 EAX); monadInv H; simpl; rewrite H0; auto.
+  monadInv H; simpl. rewrite mk_mov2_label. simpl; rewrite H0; auto.
 Qed.
 
 Remark mk_mod_label:
@@ -354,7 +366,7 @@ Proof.
   unfold mk_mod; intros.
   destruct (ireg_eq r1 EAX).
   destruct (ireg_eq r2 EDX); monadInv H; simpl; rewrite H0; auto.
-  destruct (ireg_eq r2 EDX); monadInv H; simpl; rewrite H0; auto.
+  monadInv H; simpl. rewrite mk_mov2_label. simpl; rewrite H0; auto.
 Qed.
 
 Remark mk_shrximm_label:
