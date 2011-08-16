@@ -63,6 +63,7 @@ BACKEND=\
   CleanupLabels.v CleanupLabelsproof.v CleanupLabelstyping.v \
   Linear.v Lineartyping.v \
   Parallelmove.v Reload.v Reloadproof.v Reloadtyping.v \
+  RRE.v RREproof.v RREtyping.v \
   Mach.v Machtyping.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v Stackingtyping.v \
   Machsem.v \

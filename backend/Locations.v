@@ -301,22 +301,26 @@ Module Loc.
     | l1 :: ls => diff l l1 /\ notin l ls
     end.
 
+  Lemma notin_iff:
+    forall l ll, notin l ll <-> (forall l', In l' ll -> Loc.diff l l').
+  Proof.
+    induction ll; simpl. 
+    tauto.
+    rewrite IHll. intuition. subst a. auto. 
+  Qed.
+
   Lemma notin_not_in:
     forall l ll, notin l ll -> ~(In l ll).
   Proof.
-    unfold not; induction ll; simpl; intros.
-    auto.
-    elim H; intros. elim H0; intro. 
-    subst l. exact (same_not_diff a H1).
-    auto.
+    intros; red; intros. rewrite notin_iff in H.
+    elim (diff_not_eq l l); auto.
   Qed.
 
   Lemma reg_notin:
     forall r ll, ~(In (R r) ll) -> notin (R r) ll.
   Proof.
-    induction ll; simpl; intros. auto. 
-    split. destruct a; auto. intuition congruence.
-    apply IHll. intuition.
+    intros. rewrite notin_iff; intros. 
+    destruct l'; simpl. congruence. auto.
   Qed.
 
 (** [Loc.disjoint l1 l2] is true if the locations in list [l1]
@@ -347,29 +351,20 @@ Module Loc.
   Lemma in_notin_diff:
     forall l1 l2 ll, notin l1 ll -> In l2 ll -> diff l1 l2.
   Proof.
-    induction ll; simpl; intros.
-    elim H0.
-    elim H0; intro. subst a. tauto. apply IHll; tauto.
+    intros. rewrite notin_iff in H. auto. 
   Qed.
 
   Lemma notin_disjoint:
     forall l1 l2,
     (forall x, In x l1 -> notin x l2) -> disjoint l1 l2.
   Proof.
-    unfold disjoint; induction l1; intros.
-    elim H0. 
-    elim H0; intro.
-    subst x1. eapply in_notin_diff. apply H. auto with coqlib. auto.
-    eapply IHl1; eauto. intros. apply H. auto with coqlib.
+    intros; red; intros. exploit H; eauto. rewrite notin_iff; intros. auto. 
   Qed.
 
   Lemma disjoint_notin:
     forall l1 l2 x, disjoint l1 l2 -> In x l1 -> notin x l2.
   Proof.
-    unfold disjoint; induction l2; simpl; intros.
-    auto.
-    split. apply H. auto. tauto.
-    apply IHl2. intros. apply H. auto. tauto. auto.
+    intros; rewrite notin_iff; intros. red in H. auto. 
   Qed.
 
 (** [Loc.norepet ll] holds if the locations in list [ll] are pairwise

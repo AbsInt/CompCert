@@ -52,6 +52,7 @@ Require Tunneling.
 Require Linearize.
 Require CleanupLabels.
 Require Reload.
+Require RRE.
 Require Stacking.
 Require Asmgen.
 (** Type systems. *)
@@ -80,6 +81,8 @@ Require CleanupLabelsproof.
 Require CleanupLabelstyping.
 Require Reloadproof.
 Require Reloadtyping.
+Require RREproof.
+Require RREtyping.
 Require Stackingproof.
 Require Stackingtyping.
 Require Asmgenproof.
@@ -150,6 +153,7 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    @@ CleanupLabels.transf_fundef
    @@ print print_LTLin
    @@ Reload.transf_fundef
+   @@ RRE.transf_fundef
   @@@ Stacking.transf_fundef
    @@ print print_Mach
   @@@ Asmgen.transf_fundef.
@@ -327,13 +331,14 @@ Proof.
   unfold transf_rtl_program, transf_rtl_fundef in H.
   repeat TransfProgInv. 
   repeat rewrite transform_program_print_identity in *. subst. 
-  generalize (transform_partial_program_identity _ _ _ _ X0). intro EQ. subst.
+  generalize (transform_partial_program_identity _ _ _ _ X). intro EQ. subst.
 
   generalize Alloctyping.program_typing_preserved
              Tunnelingtyping.program_typing_preserved
              Linearizetyping.program_typing_preserved
              CleanupLabelstyping.program_typing_preserved
              Reloadtyping.program_typing_preserved
+             RREtyping.program_typing_preserved
              Stackingtyping.program_typing_preserved; intros.
 
   eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
@@ -345,6 +350,7 @@ Proof.
   eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. eauto. 
   eapply compose_forward_simulation. apply CleanupLabelsproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Reloadproof.transf_program_correct. eauto.
+  eapply compose_forward_simulation. apply RREproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply Stackingproof.transf_program_correct. eassumption. eauto 8.
   apply Asmgenproof.transf_program_correct; eauto 10.
   split. auto. 
