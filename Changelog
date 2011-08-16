@@ -18,7 +18,8 @@ Release 1.9, 2011-xx-xx
     the compiled code performs at least these I/O before continuing
     with an arbitrary behavior.
 
-- Fixed two omissions in the semantics of CompCert C (reported by Brian Campbell):
+- Fixed two omissions in the semantics of CompCert C
+  (reported by Brian Campbell):
   . Functions calls through a function pointer had undefined semantics.
   . Conditional expressions "e1 ? e2 : e3" where e2 and e3 have different
     types were missing a cast to their common type.
@@ -32,14 +33,21 @@ Release 1.9, 2011-xx-xx
         returned as result).
 
 - Related clean-ups in the handling of external functions and 
-  compiler built-ins.
+  compiler built-ins.  In particular, __builtin_memcpy is now
+  fully specified.
 
 - ARM code generator was ported to the new ABI (EABI in ARM parlance,
   armel in Debian parlance), using VFD instructions for floating-point.
   (Successfully tested on a Trimslice platform running Ubuntu 11.04.)
 
-- IA32 code generator: added -fno-sse option to prevent generation of
-  SSE instructions for memory copy operations.
+- IA32 code generator:
+    . Added -fno-sse option to prevent generation of SSE instructions
+      for memory copy operations.
+    . More realistic modeling of the ST0 (top-of-FP-stack) register
+      and of floating-point compare and branch.
+
+- PowerPC code generator: more efficient instruction sequences generated
+  for insertion in a bit field and for some comparisons against 0.
 
 	
 Release 1.8.2, 2011-05-24
