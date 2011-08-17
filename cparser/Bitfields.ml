@@ -15,8 +15,8 @@
 
 (* Elimination of bit fields in structs *)
 
-(* Assumes: unblocked, simplified code.
-   Preserves: unblocked, simplified code. *)
+(* Assumes: unblocked code.
+   Preserves: unblocked code. *)
 
 open Printf
 open Machine
@@ -200,26 +200,6 @@ let bitfield_assign bf carrier newval =
      etyp = TInt(IUInt,[])} in
   {edesc = EBinop(Oor,  oldval_masked, newval_masked,  TInt(IUInt,[]));
    etyp =  TInt(IUInt,[])}
-
-(* Detect invariant l-values *)
-
-let rec invariant_lvalue e =
-  match e.edesc with
-  | EVar _ -> true
-  | EUnop(Oderef, {edesc = EVar _}) -> true   (* to check *)
-  | EUnop(Odot _, e1) -> invariant_lvalue e1
-  | _ -> false
-
-(* Bind a l-value to a temporary variable if it is not invariant. *)
-
-let bind_lvalue e fn =
-  if invariant_lvalue e then
-    fn e
-  else begin
-    let tmp = new_temp (TPtr(e.etyp, [])) in
-    ecomma (eassign tmp (eaddrof e))
-           (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
-  end
 
 (* Transformation of operators *)
 

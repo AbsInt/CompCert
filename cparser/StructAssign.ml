@@ -93,25 +93,6 @@ let transf_assign env lhs rhs =
     else [e_lhs; e_rhs; e_size] in
   {edesc = ECall(memcpy, args); etyp = TVoid[]}
 
-(* Detect invariant l-values *)
-
-let rec invariant_lvalue env e =
-  match e.edesc with
-  | EVar _ -> true
-  | EUnop(Odot _, e1) -> invariant_lvalue env e1
-  | _ -> false
-
-(* Bind a l-value to a temporary variable if it is not invariant. *)
-
-let bind_lvalue env e fn =
-  if invariant_lvalue env e then
-    fn e
-  else begin
-    let tmp = new_temp (TPtr(e.etyp, [])) in
-    ecomma (eassign tmp (addrof e))
-           (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
-  end
-
 (* Transformation of expressions. *)
 
 type context = Val | Effects
