@@ -1429,28 +1429,6 @@ Qed.
 
 (** Translation of arithmetic operations. *)
 
-(*
-Ltac TranslOpSimpl :=
-  match goal with
-  | |- exists rs' : regset,
-         exec_straight ?c ?rs ?m ?k rs' ?m /\
-         agree (Regmap.set ?res ?v ?ms) ?sp rs'  =>
-    (exists (nextinstr (rs#(ireg_of res) <- v));
-     split; 
-     [ apply exec_straight_one;
-       [ repeat (rewrite (ireg_val ms sp rs); auto); reflexivity
-       | reflexivity ]
-     | auto with ppcgen ])
-  ||
-    (exists (nextinstr (rs#(freg_of res) <- v));
-     split; 
-     [ apply exec_straight_one;
-       [ repeat (rewrite (freg_val ms sp rs); auto); reflexivity
-       | reflexivity ]
-     | auto with ppcgen ])
-  end.
-*)
-
 Ltac ArgsInv :=
   match goal with
   | [ H: Error _ = OK _ |- _ ] => discriminate
@@ -1484,6 +1462,10 @@ Proof.
 (* move *)
   exploit mk_mov_correct; eauto. intros [rs2 [A [B C]]]. 
   exists rs2. split. eauto. split. simpl. auto. intros. destruct H; auto.
+(* intconst *)
+  inv EV. destruct (Int.eq_dec i Int.zero). subst i. TranslOp. TranslOp.
+(* floatconst *)
+  inv EV. destruct (Float.eq_dec f Float.zero). subst f. TranslOp. TranslOp.
 (* cast8signed *)
   eapply mk_intconv_correct; eauto.
 (* cast8unsigned *)

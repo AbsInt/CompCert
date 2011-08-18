@@ -317,9 +317,11 @@ Definition transl_op
   | Omove, a1 :: nil =>
       mk_mov (preg_of res) (preg_of a1) k
   | Ointconst n, nil =>
-      do r <- ireg_of res; OK (Pmov_ri r n :: k)
+      do r <- ireg_of res;
+      OK ((if Int.eq_dec n Int.zero then Pxor_r r else Pmov_ri r n) :: k)
   | Ofloatconst f, nil =>
-      do r <- freg_of res; OK (Pmovsd_fi r f :: k)
+      do r <- freg_of res; 
+      OK ((if Float.eq_dec f Float.zero then Pxorpd_f r else Pmovsd_fi r f) :: k)
   | Ocast8signed, a1 :: nil =>
       do r1 <- ireg_of a1; do r <- ireg_of res; mk_intconv Pmovsb_rr r r1 k
   | Ocast8unsigned, a1 :: nil =>

@@ -455,6 +455,8 @@ Remark transl_op_label:
 Proof.
   unfold transl_op; intros. destruct op; ArgsInv; auto. 
   eapply mk_mov_label; eauto.
+  destruct (Int.eq_dec i Int.zero); auto.
+  destruct (Float.eq_dec f Float.zero); auto.
   eapply mk_intconv_label; eauto.
   eapply mk_intconv_label; eauto.
   eapply mk_intconv_label; eauto.

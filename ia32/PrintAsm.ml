@@ -475,11 +475,7 @@ let print_instruction oc = function
   | Pmov_rr(rd, r1) ->
       fprintf oc "	movl	%a, %a\n" ireg r1 ireg rd
   | Pmov_ri(rd, n) ->
-      let n = camlint_of_coqint n in
-      if n = 0l then
-        fprintf oc "	xorl	%a, %a\n" ireg rd ireg rd
-      else
-        fprintf oc "	movl	$%ld, %a\n" n ireg rd
+      fprintf oc "	movl	$%ld, %a\n" (camlint_of_coqint n) ireg rd
   | Pmov_rm(rd, a) ->
       fprintf oc "	movl	%a, %a\n" addressing a ireg rd
   | Pmov_mr(a, r1) ->
@@ -492,13 +488,9 @@ let print_instruction oc = function
       fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
   | Pmovsd_fi(rd, n) ->
       let b = Int64.bits_of_float n in
-      if b = 0L then (* +0.0 *)
-        fprintf oc "	xorpd	%a, %a %s +0.0\n" freg rd freg rd comment
-      else begin
-        let lbl = new_label() in
-        fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment n;
-        float_literals := (lbl, b) :: !float_literals
-      end
+      let lbl = new_label() in
+      fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment n;
+      float_literals := (lbl, b) :: !float_literals
   | Pmovsd_fm(rd, a) ->
       fprintf oc "	movsd	%a, %a\n" addressing a freg rd
   | Pmovsd_mf(a, r1) ->
@@ -577,6 +569,8 @@ let print_instruction oc = function
       fprintf oc "	orl	%a, %a\n" ireg r1 ireg rd
   | Por_ri(rd, n) ->
       fprintf oc "	orl	$%a, %a\n" coqint n ireg rd
+  | Pxor_r(rd) ->
+      fprintf oc "	xorl	%a, %a\n" ireg rd ireg rd
   | Pxor_rr(rd, r1) ->
       fprintf oc "	xorl	%a, %a\n" ireg r1 ireg rd
   | Pxor_ri(rd, n) ->
@@ -625,6 +619,8 @@ let print_instruction oc = function
       fprintf oc "	andpd	%a, %a\n" raw_symbol "__absd_mask" freg rd
   | Pcomisd_ff(r1, r2) ->
       fprintf oc "	comisd	%a, %a\n" freg r2 freg r1
+  | Pxorpd_f (rd) ->
+      fprintf oc "	xorpd	%a, %a\n" freg rd freg rd
   (** Branches and calls *)
   | Pjmp_l(l) ->
       fprintf oc "	jmp	%a\n" label (transl_label l)

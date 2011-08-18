@@ -149,6 +149,7 @@ Inductive instruction: Type :=
   | Pand_ri (rd: ireg) (n: int)
   | Por_rr (rd: ireg) (r1: ireg)
   | Por_ri (rd: ireg) (n: int)
+  | Pxor_r (rd: ireg)                  (**r [xor] with self = set to zero *)
   | Pxor_rr (rd: ireg) (r1: ireg)
   | Pxor_ri (rd: ireg) (n: int)
   | Psal_rcl (rd: ireg)
@@ -172,6 +173,7 @@ Inductive instruction: Type :=
   | Pnegd (rd: freg)
   | Pabsd (rd: freg)
   | Pcomisd_ff (r1 r2: freg)
+  | Pxorpd_f (rd: freg)	              (**r [xor] with self = set to zero *)
   (** Branches and calls *)
   | Pjmp_l (l: label)
   | Pjmp_s (symb: ident)
@@ -538,6 +540,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr_nf (rs#rd <- (Val.or rs#rd rs#r1))) m
   | Por_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.or rs#rd (Vint n)))) m
+  | Pxor_r rd =>
+      Next (nextinstr_nf (rs#rd <- Vzero)) m
   | Pxor_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.xor rs#rd rs#r1))) m
   | Pxor_ri rd n =>
@@ -590,6 +594,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr (rs#rd <- (Val.absf rs#rd))) m
   | Pcomisd_ff r1 r2 =>
       Next (nextinstr (compare_floats (rs r1) (rs r2) rs)) m
+  | Pxorpd_f rd =>
+      Next (nextinstr_nf (rs#rd <- (Vfloat Float.zero))) m
   (** Branches and calls *)
   | Pjmp_l lbl =>
       goto_label c lbl rs m
