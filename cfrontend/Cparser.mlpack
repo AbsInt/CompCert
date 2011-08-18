@@ -22,5 +22,6 @@ cparser/StructByValue
 cparser/StructAssign
 cparser/Bitfields
 cparser/PackedStructs
+cparser/SimplVolatile
 cparser/Parse
 

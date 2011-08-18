@@ -28,7 +28,7 @@ TIME=xtime -o /dev/null     # Xavier's hack
 #TIME=time >/dev/null       # Otherwise
 
 bench:
-	$(TIME) ./spass problem.dfg
+	@echo -n "spass: "; $(TIME) ./spass problem.dfg
 
 depend:
 	gcc -MM $(SRCS) > .depend

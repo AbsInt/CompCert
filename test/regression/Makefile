@@ -1,8 +1,7 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=-stdlib ../../runtime -dparse -dc -dclight -dasm \
-  -fstruct-passing -fstruct-assign -fbitfields -fpacked-structs
+CCOMPFLAGS=-stdlib ../../runtime -dparse -dc -dclight -dasm -fall
 
 LIBS=$(LIBMATH)
 
@@ -10,7 +9,7 @@ LIBS=$(LIBMATH)
 
 TESTS=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 \
-  expr1 expr6 initializers volatile2 \
+  expr1 expr6 initializers volatile2 volatile3 \
   funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
   sizeof1 sizeof2 packedstruct1
 
@@ -44,3 +43,4 @@ test:
 	   fi; \
          done
 
+bench:

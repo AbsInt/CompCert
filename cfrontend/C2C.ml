@@ -491,7 +491,7 @@ let rec convertExpr env e =
       if is_volatile_access env e1 then
         Ecall(volatile_write_fun (typeof e1'),
               Econs(Eaddrof(e1', Tpointer(typeof e1')), Econs(e2', Enil)),
-              Tvoid)   (* typing issue here *)
+              Tvoid)   (* SimplVolatile guarantees that ret. value is unused *)
       else
         Eassign(e1', e2', ty)
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|

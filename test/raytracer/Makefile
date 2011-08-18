@@ -54,4 +54,4 @@ test:
         fi
 
 bench:
-	$(TIME) ./render < kal.gml
+	@echo -n "raytracer: "; $(TIME) ./render < kal.gml

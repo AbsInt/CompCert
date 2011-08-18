@@ -46,12 +46,12 @@ test_gcc:
 	   fi; \
          done
 
-time_gcc:
+bench_gcc:
 	@for i in $(PROGS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.gcc; \
          done
 
-time:
+bench:
 	@for i in $(PROGS); do \
 	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
          done

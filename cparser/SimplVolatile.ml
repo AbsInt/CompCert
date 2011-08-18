@@ -23,19 +23,25 @@ open Transform
 
 (* Expansion of read-write-modify constructs. *)
 
+(* Temporaries must not be [const] because we assign into them,
+   and should not be [volatile] because they are private. *)
+
+let mk_temp env ty =
+  new_temp (erase_attributes_type env ty)
+
 (** [l = r]. *)
 
-let mk_assign ctx l r =
+let mk_assign env ctx l r =
   match ctx with
   | Effects ->
       eassign l r
   | Val ->
-      let tmp = new_temp l.etyp in
+      let tmp = mk_temp env l.etyp in
       ecomma (eassign tmp r) (ecomma (eassign l tmp) tmp)
 
 (** [l op= r].  Warning: [l] is evaluated twice. *)
 
-let mk_assignop ctx op l r ty =
+let mk_assignop env ctx op l r ty =
   let op' =
     match op with
     | Oadd_assign -> Oadd | Osub_assign -> Osub
@@ -48,22 +54,22 @@ let mk_assignop ctx op l r ty =
   | Effects ->
       eassign l res
   | Val ->
-      let tmp = new_temp l.etyp in
+      let tmp = mk_temp env l.etyp in
       ecomma (eassign tmp res) (ecomma (eassign l tmp) tmp)
 
 (** [++l] or [--l].  Warning: [l] is evaluated twice. *)
 
-let mk_preincrdecr ctx op l ty =
+let mk_preincrdecr env ctx op l ty =
   let op' =
     match op with
     | Opreincr -> Oadd_assign
     | Opredecr -> Osub_assign
     | _ -> assert false in  
-  mk_assignop ctx op' l (intconst 1L IInt) ty
+  mk_assignop env ctx op' l (intconst 1L IInt) ty
 
 (** [l++] or [l--].  Warning: [l] is evaluated twice. *)
 
-let mk_postincrdecr ctx op l ty =
+let mk_postincrdecr env ctx op l ty =
   let op' =
     match op with
     | Opostincr -> Oadd
@@ -74,7 +80,7 @@ let mk_postincrdecr ctx op l ty =
       let newval = {edesc = EBinop(op', l, intconst 1L IInt, ty); etyp = ty} in
       eassign l newval
   | Val ->
-      let tmp = new_temp l.etyp in
+      let tmp = mk_temp env l.etyp in
       let newval = {edesc = EBinop(op', tmp, intconst 1L IInt, ty); etyp = ty} in
       ecomma (eassign tmp l) (ecomma (eassign l newval) tmp)
 
@@ -92,21 +98,21 @@ let transf_expr loc env ctx e =
     | EVar _ -> e
     | EUnop((Opreincr|Opredecr as op), e1) when is_volatile e1.etyp ->
         bind_lvalue env (texp Val e1)
-          (fun l -> mk_preincrdecr ctx op l (unary_conversion env l.etyp))
+          (fun l -> mk_preincrdecr env ctx op l (unary_conversion env l.etyp))
     | EUnop((Opostincr|Opostdecr as op), e1) when is_volatile e1.etyp ->
         bind_lvalue env (texp Val e1)
-          (fun l -> mk_postincrdecr ctx op l (unary_conversion env l.etyp))
+          (fun l -> mk_postincrdecr env ctx op l (unary_conversion env l.etyp))
     | EUnop(op, e1) ->
         {edesc = EUnop(op, texp Val e1); etyp = e.etyp}
     | EBinop(Oassign, e1, e2, ty) when is_volatile e1.etyp ->
-        mk_assign ctx (texp Val e1) (texp Val e2)
+        mk_assign env ctx (texp Val e1) (texp Val e2)
     | EBinop((Oadd_assign | Osub_assign | Omul_assign
               | Odiv_assign | Omod_assign
               | Oand_assign | Oor_assign | Oxor_assign
               | Oshl_assign | Oshr_assign) as op, e1, e2, ty)
       when is_volatile e1.etyp ->
         bind_lvalue env (texp Val e1)
-          (fun l -> mk_assignop ctx op l (texp Val e2) ty)
+          (fun l -> mk_assignop env ctx op l (texp Val e2) ty)
     | EBinop(Ocomma, e1, e2, ty) ->
         {edesc = EBinop(Ocomma, texp Effects e1, texp ctx e2, ty);
          etyp = e.etyp}

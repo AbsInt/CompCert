@@ -24,6 +24,14 @@ Release 1.9, 2011-xx-xx
   . Conditional expressions "e1 ? e2 : e3" where e2 and e3 have different
     types were missing a cast to their common type.
 
+- Support for "read-modify-write" operations over volatiles
+  (such as e++ or --e or e |= 1 where e has volatile type)
+  through a new presimplification (flag -fvolatile-rmw, "on" by default).
+
+- New optimization pass: Redundant Reload Elimination, which fixes up
+  inefficiencies introduced during the Reload pass.  On x86, it increases
+  performance by up to 10%.  On PowerPC and ARM, the effect is negligible.
+
 - Revised handling of annotation statements.  Now they come in two forms:
     1. __builtin_annot("format", x1, ..., xN)
        (arbitrarily many arguments; no code generated, even if some

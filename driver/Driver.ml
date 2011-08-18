@@ -73,6 +73,7 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fstruct_assign then "S" else "")
   ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
+  ^ (if !option_fvolatile_rmw then "v" else "")
   in
   (* Parsing and production of a simplified C AST *)
   let ast =
@@ -340,7 +341,10 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fstruct-passing  Emulate passing structs and unions by value [off]
   -fstruct-assign   Emulate assignment between structs or unions [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
+  -fvolatile-rmw Emulate ++, -- and op= on volatile l-values [on]
   -fpacked-structs  Emulate packed structs [off]
+  -fall          Activate all language support options above
+  -fnone         Turn off all language support options above
 Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -fmadd         (PowerPC) Use fused multiply-add and multiply-sub instructions [off]
   -fsse          (IA32) Use SSE2 instructions for some integer operations [on]
@@ -373,6 +377,12 @@ Interpreter mode:
   -random        Randomize execution order
   -all           Simulate all possible execution orders
 "
+
+let language_support_options = [
+  option_fbitfields; option_flonglong; option_fstruct_passing;
+  option_fstruct_assign; option_fvararg_calls; option_fpacked_structs;
+  option_fvolatile_rmw
+]
 
 let cmdline_actions =
   let f_opt name ref =
@@ -421,7 +431,11 @@ let cmdline_actions =
   ".*\\.[oa]$", Self (fun s ->
       linker_options := s :: !linker_options);
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
-  "-fsmall-const$", Integer(fun n -> option_small_const := n)
+  "-fsmall-const$", Integer(fun n -> option_small_const := n);
+  "-fall$", Self (fun _ ->
+              List.iter (fun r -> r := true) language_support_options);
+  "-fnone$", Self (fun _ ->
+              List.iter (fun r -> r := false) language_support_options);
   ]
   @ f_opt "longlong" option_flonglong
   @ f_opt "struct-passing" option_fstruct_passing
@@ -431,6 +445,7 @@ let cmdline_actions =
   @ f_opt "madd" option_fmadd
   @ f_opt "packed-structs" option_fpacked_structs
   @ f_opt "sse" option_fsse
+  @ f_opt "volatile-rmw" option_fvolatile_rmw
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };

@@ -24,7 +24,7 @@ LZSS_OBJS=$(COMMON_OBJS) lzvars.o lzhash.o lzencode.o lzdecode.o lzssmain.o
 lzss: $(LZSS_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(LZSS_OBJS) $(LIBS)
 
-TESTFILE:=$(firstword $(wildcard /mach_kernel) $(wildcard /boot/vmlinuz) ./lzss)
+TESTFILE:=$(firstword $(wildcard /usr/share/dict/words) ./lzss)
 TESTCOMPR=/tmp/testcompr.out
 TESTEXPND=/tmp/testexpnd.out
 
