@@ -251,8 +251,6 @@ let rec is_bitfield_access env e =
 
 (* Expressions *)
 
-type context = Val | Effects
-
 let transf_expr env ctx e =
 
   let rec texp ctx e =
@@ -329,7 +327,7 @@ let transf_expr env ctx e =
       {edesc = EUnop(Odot bf.bf_carrier, texp Val e); etyp = bf.bf_carrier_typ}
 
   and transf_assign ctx e1 bf e2 =
-    bind_lvalue (texp Val e1) (fun base ->
+    bind_lvalue env (texp Val e1) (fun base ->
       let carrier =
         {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
       let asg =
@@ -337,7 +335,7 @@ let transf_expr env ctx e =
       if ctx = Val then ecomma asg (bitfield_extract bf carrier) else asg)
 
   and transf_assignop ctx op e1 bf e2 tyres =
-    bind_lvalue (texp Val e1) (fun base ->
+    bind_lvalue env (texp Val e1) (fun base ->
       let carrier =
         {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
       let rhs =
@@ -355,7 +353,7 @@ let transf_expr env ctx e =
     if ctx = Effects then
       transf_pre ctx op e1 bf tyfield
     else begin
-      bind_lvalue (texp Val e1) (fun base ->
+      bind_lvalue env (texp Val e1) (fun base ->
         let carrier =
           {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
         let temp = new_temp tyfield in
@@ -372,47 +370,13 @@ let transf_expr env ctx e =
 
 (* Statements *)
 
-let rec transf_stmt env s =
-  match s.sdesc with
-  | Sskip -> s
-  | Sdo e ->
-      {sdesc = Sdo(transf_expr env Effects e); sloc = s.sloc}
-  | Sseq(s1, s2) -> 
-      {sdesc = Sseq(transf_stmt env s1, transf_stmt env s2); sloc = s.sloc }
-  | Sif(e, s1, s2) ->
-      {sdesc = Sif(transf_expr env Val e, transf_stmt env s1, transf_stmt env s2);
-       sloc = s.sloc}
-  | Swhile(e, s1) ->
-      {sdesc = Swhile(transf_expr env Val e, transf_stmt env s1);
-       sloc = s.sloc}
-  | Sdowhile(s1, e) ->
-      {sdesc = Sdowhile(transf_stmt env s1, transf_expr env Val e);
-       sloc = s.sloc}
-  | Sfor(s1, e, s2, s3) ->
-      {sdesc = Sfor(transf_stmt env s1, transf_expr env Val e,
-                    transf_stmt env s2, transf_stmt env s3);
-       sloc = s.sloc}
-  | Sbreak -> s
-  | Scontinue -> s
-  | Sswitch(e, s1) ->
-      {sdesc = Sswitch(transf_expr env Val e, transf_stmt env s1);
-       sloc = s.sloc}
-  | Slabeled(lbl, s) ->
-      {sdesc = Slabeled(lbl, transf_stmt env s); sloc = s.sloc}
-  | Sgoto lbl -> s
-  | Sreturn None -> s
-  | Sreturn (Some e) ->
-      {sdesc = Sreturn(Some(transf_expr env Val e)); sloc = s.sloc}
-  | Sblock _ | Sdecl _ ->
-      assert false     (* should not occur in unblocked code *)
+let transf_stmt env s =
+  Transform.stmt (fun loc env ctx e -> transf_expr env ctx e) env s
 
 (* Functions *)
 
 let transf_fundef env f =
-  reset_temps();
-  let newbody = transf_stmt env f.fd_body in
-  let temps = get_temps() in  
-  { f with fd_locals = f.fd_locals @ temps; fd_body = newbody }
+  Transform.fundef transf_stmt env f
 
 (* Initializers *)
 

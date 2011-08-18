@@ -709,9 +709,9 @@ let floatconst v fk =
 let nullconst =
   { edesc = EConst(CInt(0L, ptr_t_ikind, "0")); etyp = TPtr(TVoid [], []) }
 
-(* Construct an address-of expression *)
+(* Construct a cast expression *)
 
-let eaddrof e = { edesc = EUnop(Oaddrof, e); etyp = TPtr(e.etyp, []) }
+let ecast e ty = { edesc = ECast(ty, e); etyp = ty }
 
 (* Construct an assignment expression *)
 
@@ -720,6 +720,14 @@ let eassign e1 e2 = { edesc = EBinop(Oassign, e1, e2, e1.etyp); etyp = e1.etyp }
 (* Construct a "," expression *)
 
 let ecomma e1 e2 = { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
+
+(* Construct an address-of expression.  Can be applied not just to
+   an l-value but also to a sequence. *)
+
+let rec eaddrof e =
+  match e.edesc with
+  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (eaddrof e2)
+  | _ -> { edesc = EUnop(Oaddrof, e); etyp = TPtr(e.etyp, []) }
 
 (* Construct a sequence *)
 

@@ -62,17 +62,11 @@ let find_memcpy env =
   with Env.Error _ ->
     (default_memcpy(), false)
 
-(* Smart constructors that "bubble up" sequence expressions *)
+(* Smart constructor that "bubble up" sequence expressions *)
 
-let rec addrof e =
+let rec edot f e ty =
   match e.edesc with
-  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (addrof e2)
-  | EUnop(Oderef, e1) -> e1
-  | _ -> eaddrof e
-
-let rec dot f e ty =
-  match e.edesc with
-  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (dot f e2 ty)
+  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (edot f e2 ty)
   | _ -> { edesc = EUnop(Odot f, e); etyp = ty }
 
 (* Translate an assignment [lhs = rhs] between composite types.
@@ -83,8 +77,8 @@ let transf_assign env lhs rhs =
      match Cutil.alignof env lhs.etyp with Some al -> al | None -> 1 in
   let ((ident, ty), four_args) = find_memcpy env in
   let memcpy = {edesc = EVar(ident); etyp = ty} in
-  let e_lhs = addrof lhs
-  and e_rhs = addrof rhs
+  let e_lhs = eaddrof lhs
+  and e_rhs = eaddrof rhs
   and e_size = {edesc = ESizeof(lhs.etyp); etyp = TInt(size_t_ikind, [])}
   and e_align = intconst (Int64.of_int al) size_t_ikind in
   let args =
@@ -95,13 +89,12 @@ let transf_assign env lhs rhs =
 
 (* Transformation of expressions. *)
 
-type context = Val | Effects
-
-let rec transf_expr env ctx e =
+let transf_expr loc env ctx e =
+  let rec texp ctx e =
   match e.edesc with
   | EBinop(Oassign, lhs, rhs, _) when is_composite_type env lhs.etyp ->
-      let lhs' = transf_expr env Val lhs in
-      let rhs' = transf_expr env Val rhs in
+      let lhs' = texp Val lhs in
+      let rhs' = texp Val rhs in
       begin match ctx with
       | Effects ->
           transf_assign env lhs' rhs'
@@ -115,76 +108,52 @@ let rec transf_expr env ctx e =
       then nullconst
       else e
   | EUnop(Oaddrof, e1) ->
-      addrof (transf_expr env Val e1)
+      eaddrof (texp Val e1)
   | EUnop(Oderef, e1) ->
       if ctx = Effects && is_composite_type env e.etyp
-      then transf_expr env Effects e1
-      else {edesc = EUnop(Oderef, transf_expr env Val e1); etyp = e.etyp}
+      then texp Effects e1
+      else {edesc = EUnop(Oderef, texp Val e1); etyp = e.etyp}
   | EUnop(Odot f, e1) ->
       if ctx = Effects && is_composite_type env e.etyp
-      then transf_expr env Effects e1
-      else dot f (transf_expr env Val e1) e.etyp
+      then texp Effects e1
+      else edot f (texp Val e1) e.etyp
   | EUnop(Oarrow f, e1) ->
       if ctx = Effects && is_composite_type env e.etyp
-      then transf_expr env Effects e1
-      else {edesc = EUnop(Oarrow f, transf_expr env Val e1); etyp = e.etyp}
+      then texp Effects e1
+      else {edesc = EUnop(Oarrow f, texp Val e1); etyp = e.etyp}
   | EUnop(op, e1) ->
-      {edesc = EUnop(op, transf_expr env Val e1); etyp = e.etyp}
+      {edesc = EUnop(op, texp Val e1); etyp = e.etyp}
   | EBinop(Oindex, e1, e2, ty) ->
       if ctx = Effects && is_composite_type env e.etyp
-      then ecomma (transf_expr env Effects e1) (transf_expr env Effects e2)
-      else {edesc = EBinop(Oindex, transf_expr env Val e1, transf_expr env Val e2, ty); etyp = e.etyp}
+      then ecomma (texp Effects e1) (texp Effects e2)
+      else {edesc = EBinop(Oindex, texp Val e1, texp Val e2, ty); etyp = e.etyp}
   | EBinop(Ocomma, e1, e2, ty) ->
-      ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
+      ecomma (texp Effects e1) (texp ctx e2)
   | EBinop(op, e1, e2, ty) ->
-      {edesc = EBinop(op, transf_expr env Val e1,
-                          transf_expr env Val e2, ty);
+      {edesc = EBinop(op, texp Val e1, texp Val e2, ty);
        etyp = e.etyp}
   | EConditional(e1, e2, e3) ->
-      {edesc = EConditional(transf_expr env Val e1,
-                            transf_expr env ctx e2, transf_expr env ctx e3);
+      {edesc = EConditional(texp Val e1, texp ctx e2, texp ctx e3);
        etyp = e.etyp}
   | ECast(ty, e1) ->
-      {edesc = ECast(ty, transf_expr env Val e1); etyp = e.etyp}
+      {edesc = ECast(ty, texp Val e1); etyp = e.etyp}
   | ECall(e1, el) ->
-      {edesc = ECall(transf_expr env Val e1,
-                     List.map (transf_expr env Val) el);
+      {edesc = ECall(texp Val e1,
+                     List.map (texp Val) el);
        etyp = e.etyp}
+  in texp ctx e
 
 (* Transformation of statements *)
 
-let rec transf_stmt env s =
-  match s.sdesc with
-  | Sskip -> s
-  | Sdo e -> {s with sdesc = Sdo(transf_expr env Effects e)}
-  | Sseq(s1, s2) ->
-      {s with sdesc = Sseq(transf_stmt env s1, transf_stmt env s2)}
-  | Sif(e, s1, s2) ->
-      {s with sdesc = Sif(transf_expr env Val e,
-                          transf_stmt env s1, transf_stmt env s2)}
-  | Swhile(e, s1) ->
-      {s with sdesc = Swhile(transf_expr env Val e, transf_stmt env s1)}
-  | Sdowhile(s1, e) ->
-      {s with sdesc = Sdowhile(transf_stmt env s1, transf_expr env Val e)}
-  | Sfor(s1, e, s2, s3) ->
-      {s with sdesc = Sfor(transf_stmt env s1, transf_expr env Val e,
-                           transf_stmt env s2, transf_stmt env s3)}
-  | Sbreak -> s
-  | Scontinue -> s
-  | Sswitch(e, s1) ->
-      {s with sdesc = Sswitch(transf_expr env Val e, transf_stmt env s1)}
-  | Slabeled(lbl, s1) ->
-      {s with sdesc = Slabeled(lbl, transf_stmt env s1)}
-  | Sgoto lbl -> s
-  | Sreturn None -> s
-  | Sreturn (Some e) -> {s with sdesc = Sreturn(Some(transf_expr env Val e))}
-  | Sblock _ | Sdecl _ -> assert false (* not in unblocked code *)
+let transf_stmt env s =
+  Transform.stmt transf_expr env s
+
+(* Transformation of function definitions *)
 
 let transf_fundef env f =
-  reset_temps();
-  let newbody = transf_stmt env f.fd_body in
-  let temps = get_temps() in
-  {f with fd_locals = f.fd_locals @ temps; fd_body = newbody}
+  Transform.fundef transf_stmt env f
+
+(* Transformation of programs *)
 
 let program p =
   memcpy_decl := None;

@@ -13,12 +13,28 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Generic program transformation *)
-
+(** Creation of fresh temporary variables. *)
 val reset_temps : unit -> unit
 val new_temp_var : ?name:string -> C.typ -> C.ident
 val new_temp : ?name:string -> C.typ -> C.exp
 val get_temps : unit -> C.decl list
+
+(** Avoiding repeated evaluation of a l-value *)
+
+val bind_lvalue: Env.t -> C.exp -> (C.exp -> C.exp) -> C.exp
+
+(** Generic transformation of a statement *)
+
+type context = Val | Effects
+
+val stmt : (C.location -> Env.t -> context -> C.exp -> C.exp) ->
+           Env.t -> C.stmt -> C.stmt
+
+(** Generic transformation of a function definition *)
+
+val fundef : (Env.t -> C.stmt -> C.stmt) -> Env.t -> C.fundef -> C.fundef
+
+(** Generic transformation of a program *)
 
 val program :
   ?decl:(Env.t -> C.decl -> C.decl) ->

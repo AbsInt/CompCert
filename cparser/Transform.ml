@@ -53,12 +53,54 @@ let bind_lvalue env e fn =
     fn e
   else begin
     let tmp = new_temp (TPtr(e.etyp, [])) in
-    ecomma (eassign tmp (addrof e))
+    ecomma (eassign tmp (eaddrof e))
            (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
   end
 
+(* Generic transformation of a statement, transforming expressions within
+   and preserving the statement structure.  Applies only to unblocked code. *)
 
-(* Generic transformation *)
+type context = Val | Effects
+
+let stmt trexpr env s =
+  let rec stm s =
+  match s.sdesc with
+  | Sskip -> s
+  | Sdo e ->
+      {s with sdesc = Sdo(trexpr s.sloc env Effects e)}
+  | Sseq(s1, s2) -> 
+      {s with sdesc = Sseq(stm s1, stm s2)}
+  | Sif(e, s1, s2) ->
+      {s with sdesc = Sif(trexpr s.sloc env Val e, stm s1, stm s2)}
+  | Swhile(e, s1) ->
+      {s with sdesc = Swhile(trexpr s.sloc env Val e, stm s1)}
+  | Sdowhile(s1, e) ->
+      {s with sdesc = Sdowhile(stm s1, trexpr s.sloc env Val e)}
+  | Sfor(s1, e, s2, s3) ->
+      {s with sdesc = Sfor(stm s1, trexpr s.sloc env Val e, stm s2, stm s3)}
+  | Sbreak -> s
+  | Scontinue -> s
+  | Sswitch(e, s1) ->
+      {s with sdesc = Sswitch(trexpr s.sloc env Val e, stm s1)}
+  | Slabeled(lbl, s) ->
+      {s with sdesc = Slabeled(lbl, stm s)}
+  | Sgoto lbl -> s
+  | Sreturn None -> s
+  | Sreturn (Some e) ->
+      {s with sdesc = Sreturn(Some(trexpr s.sloc env Val e))}
+  | Sblock _ | Sdecl _ ->
+      assert false     (* should not occur in unblocked code *)
+  in stm s
+
+(* Generic transformation of a function definition *)
+
+let fundef trstmt env f =
+  reset_temps();
+  let newbody = trstmt env f.fd_body in
+  let temps = get_temps() in
+  {f with fd_locals = f.fd_locals @ temps; fd_body = newbody}
+
+(* Generic transformation of a program *)
 
 let program
     ?(decl = fun env d -> d)

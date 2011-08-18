@@ -20,6 +20,7 @@ open C
 open Cutil
 open Env
 open Errors
+open Transform
 
 type field_info = {
   fi_offset: int;                       (* byte offset within struct *)
@@ -177,8 +178,6 @@ let bswap_write loc env lhs rhs ik =
 
 (* Expressions *)
 
-type context = Val | Effects
-
 let transf_expr loc env ctx e =
 
   let is_packed_access ty fieldname =
@@ -284,45 +283,13 @@ let transf_expr loc env ctx e =
 
 (* Statements *)
 
-let rec transf_stmt env s =
-  match s.sdesc with
-  | Sskip -> s
-  | Sdo e ->
-      {sdesc = Sdo(transf_expr s.sloc env Effects e); sloc = s.sloc}
-  | Sseq(s1, s2) -> 
-      {sdesc = Sseq(transf_stmt env s1, transf_stmt env s2); sloc = s.sloc }
-  | Sif(e, s1, s2) ->
-      {sdesc = Sif(transf_expr s.sloc env Val e,
-                   transf_stmt env s1, transf_stmt env s2);
-       sloc = s.sloc}
-  | Swhile(e, s1) ->
-      {sdesc = Swhile(transf_expr s.sloc env Val e, transf_stmt env s1);
-       sloc = s.sloc}
-  | Sdowhile(s1, e) ->
-      {sdesc = Sdowhile(transf_stmt env s1, transf_expr s.sloc env Val e);
-       sloc = s.sloc}
-  | Sfor(s1, e, s2, s3) ->
-      {sdesc = Sfor(transf_stmt env s1, transf_expr s.sloc env Val e,
-                    transf_stmt env s2, transf_stmt env s3);
-       sloc = s.sloc}
-  | Sbreak -> s
-  | Scontinue -> s
-  | Sswitch(e, s1) ->
-      {sdesc = Sswitch(transf_expr s.sloc env Val e,
-                       transf_stmt env s1); sloc = s.sloc}
-  | Slabeled(lbl, s) ->
-      {sdesc = Slabeled(lbl, transf_stmt env s); sloc = s.sloc}
-  | Sgoto lbl -> s
-  | Sreturn None -> s
-  | Sreturn (Some e) ->
-      {sdesc = Sreturn(Some(transf_expr s.sloc env Val e)); sloc = s.sloc}
-  | Sblock _ | Sdecl _ ->
-      assert false     (* should not occur in unblocked code *)
+let transf_stmt env s =
+  Transform.stmt transf_expr env s
 
 (* Functions *)
 
 let transf_fundef env f =
-  { f with fd_body = transf_stmt env f.fd_body }
+  Transform.fundef transf_stmt env f
 
 (* Initializers *)
 

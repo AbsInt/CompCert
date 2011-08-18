@@ -55,17 +55,7 @@ and transf_funarg env (id, t) =
   then (id, TPtr(add_attributes_type [AConst] t, []))
   else (id, t)
 
-(* Smart constructor that "bubble up" sequence expressions *)
-
-let rec addrof e =
-  match e.edesc with
-  | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (addrof e2)
-  | EUnop(Oderef, e1) -> e1
-  | _ -> eaddrof e
-
 (* Expressions: transform calls + rewrite the types *)
-
-type context = Val | Effects
 
 let rec transf_expr env ctx e =
   let newty = transf_type env e.etyp in
@@ -109,7 +99,7 @@ let rec transf_expr env ctx e =
 
 and transf_arg env e =
   let e' = transf_expr env Val e in
-  if is_composite_type env e'.etyp then addrof e' else e'
+  if is_composite_type env e'.etyp then eaddrof e' else e'
 
 (* Function calls returning a composite: add first argument.
     ctx = Effects:   lv = f(...)     -> f(&lv, ...)
@@ -125,17 +115,17 @@ and transf_composite_call env ctx opt_lhs fn args ty =
   match ctx, opt_lhs with
   | Effects, None ->
       let tmp = new_temp ~name:"_res" ty in
-      {edesc = ECall(fn, addrof tmp :: args); etyp = TVoid []}
+      {edesc = ECall(fn, eaddrof tmp :: args); etyp = TVoid []}
   | Effects, Some lhs ->
       let lhs = transf_expr env Val lhs in
-      {edesc = ECall(fn, addrof lhs :: args); etyp = TVoid []}
+      {edesc = ECall(fn, eaddrof lhs :: args); etyp = TVoid []}
   | Val, None ->
       let tmp = new_temp ~name:"_res" ty in
-      ecomma {edesc = ECall(fn, addrof tmp :: args); etyp = TVoid []} tmp
+      ecomma {edesc = ECall(fn, eaddrof tmp :: args); etyp = TVoid []} tmp
   | Val, Some lhs ->
       let lhs = transf_expr env Val lhs in
       let tmp = new_temp ~name:"_res" ty in
-      ecomma (ecomma {edesc = ECall(fn, addrof tmp :: args); etyp = TVoid []}
+      ecomma (ecomma {edesc = ECall(fn, eaddrof tmp :: args); etyp = TVoid []}
                      (eassign lhs tmp))
              tmp
 
