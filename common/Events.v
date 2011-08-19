@@ -1044,18 +1044,6 @@ Proof.
   intros. inv H. 
   inv H1. inv H13. inv H14. inv H10. inv H11.
   exploit Mem.loadbytes_length; eauto. intros LEN.
-(*
-  destruct (zle sz 0).
-  (* empty copy *)
-  rewrite nat_of_Z_neg in LEN; auto. 
-  assert (bytes = nil). destruct bytes; simpl in LEN; congruence.
-  subst. rewrite Mem.storebytes_empty in H8. inv H8.
-  exists Vundef; exists m1'.
-  split. econstructor; eauto. rewrite Mem.loadbytes_empty; eauto. 
-  apply Mem.storebytes_empty. 
-  split. constructor. split. auto. red; auto.
-  (* nonempty copy *)
-*)
   exploit Mem.loadbytes_extends; eauto. intros [bytes2 [A B]].
   exploit Mem.storebytes_within_extends; eauto. intros [m2' [C D]].
   exists Vundef; exists m2'.
@@ -1079,15 +1067,6 @@ Proof.
 (* injections *)
   intros. inv H0. inv H2. inv H14. inv H15. inv H11. inv H12.
   exploit Mem.loadbytes_length; eauto. intros LEN.
-(*
-  destruct (zle sz 0).
-  (* empty copy *)
-  rewrite nat_of_Z_neg in LEN; auto. 
-  assert (bytes = nil). destruct bytes; simpl in LEN; congruence.
-  subst. rewrite Mem.storebytes_empty in H9. inv H9.
-  exists f; exists Vundef; exists m1'.
-  split. econstructor; eauto. 
-*)
   assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
   assert (RPDST: Mem.range_perm m1 bdst (Int.unsigned odst) (Int.unsigned odst + sz) Nonempty).

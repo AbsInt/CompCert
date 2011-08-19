@@ -494,18 +494,6 @@ Definition binary_constructor_correct
   eval_expr ge e le m b vb ->
   eval_expr ge e le m c v.
 
-(*
-Definition binary_constructor_correct'
-    (make: expr -> type -> expr -> type -> res expr)
-    (sem: val -> val -> option val): Prop :=
-  forall a tya b tyb c va vb v e le m,
-  sem va vb = Some v ->
-  make a tya b tyb = OK c ->  
-  eval_expr ge e le m a va ->
-  eval_expr ge e le m b vb ->
-  eval_expr ge e le m c v.
-*)
-
 Lemma make_add_correct: binary_constructor_correct make_add sem_add.
 Proof.
   red; intros until m. intro SEM. unfold make_add. 

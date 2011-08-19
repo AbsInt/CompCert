@@ -998,11 +998,6 @@ Module PTree <: TREE.
     destruct H0. congruence.
   Qed.
 
-(*
-  Definition fold (A B : Type) (f: B -> positive -> A -> B) (tr: t A) (v: B) :=
-     List.fold_left (fun a p => f a (fst p) (snd p)) (elements tr) v.
-*)
-
   Fixpoint xfold (A B: Type) (f: B -> positive -> A -> B)
                  (i: positive) (m: t A) (v: B) {struct m} : B :=
     match m with

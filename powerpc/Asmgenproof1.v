@@ -559,16 +559,6 @@ Qed.
 
 (** * Correctness of PowerPC constructor functions *)
 
-(*
-Ltac SIMP :=
-  match goal with
-  | [ |- nextinstr _ _ = _ ] => rewrite nextinstr_inv; [auto | auto with ppcgen]
-  | [ |- Pregmap.get ?x (Pregmap.set ?x _ _) = _ ] => rewrite Pregmap.gss; auto
-  | [ |- Pregmap.set ?x _ _ ?x = _ ] => rewrite Pregmap.gss; auto
-  | [ |- Pregmap.get _ (Pregmap.set _ _ _) = _ ] => rewrite Pregmap.gso; [auto | auto with ppcgen]
-  | [ |- Pregmap.set _ _ _ _ = _ ] => rewrite Pregmap.gso; [auto | auto with ppcgen]
-  end.
-*)
 Ltac SIMP :=
   (rewrite nextinstr_inv || rewrite Pregmap.gss || rewrite Pregmap.gso); auto with ppcgen.
 

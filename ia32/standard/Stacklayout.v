@@ -138,13 +138,3 @@ Proof.
   tauto.
 Qed.
 
-(*  
-Remark align_float_part:
-  forall b,
-  4 * bound_outgoing b + 4 + 4 + 4 * bound_int_local b + 4 * bound_int_callee_save b <=
-  align (4 * bound_outgoing b + 4 + 4 + 4 * bound_int_local b + 4 * bound_int_callee_save b) 8.
-
-Proof.
-  intros. apply align_le. omega.
-Qed.
-*)

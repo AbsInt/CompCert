@@ -209,32 +209,7 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
   end.
 
 (** [make_cast from to e] applies to [e] the numeric conversions needed
-   to transform a result of type [from] to a result of type [to].
-   It is decomposed in two functions:
--  [make_cast1]  converts from integers to floats or from floats to integers;
--  [make_cast2]  converts to a "small" int or float type if necessary.
-*)
-(*
-Definition make_cast1 (from to: type) (e: expr) :=
-  match from, to with
-  | Tint _ uns, Tfloat _ => make_floatofint e uns
-  | Tfloat _, Tint _ uns => make_intoffloat e uns
-  | _, _ => e
-  end.
-
-Definition make_cast2 (from to: type) (e: expr) :=
-  match to with
-  | Tint I8 Signed => Eunop Ocast8signed e  
-  | Tint I8 Unsigned => Eunop Ocast8unsigned e  
-  | Tint I16 Signed => Eunop Ocast16signed e  
-  | Tint I16 Unsigned => Eunop Ocast16unsigned e  
-  | Tfloat F32 => Eunop Osingleoffloat e
-  | _ => e
-  end.
-
-Definition make_cast (from to: type) (e: expr) :=
-  make_cast2 from to (make_cast1 from to e).
-*)
+   to transform a result of type [from] to a result of type [to]. *)
 
 Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
   match sz, si with

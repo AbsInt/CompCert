@@ -416,15 +416,6 @@ Inductive exec_assign: env -> mem -> ident -> val -> mem -> Prop :=
     Mem.store chunk m b 0 v = Some m' ->
     exec_assign e m id v m'.
 
-(*
-Inductive exec_opt_assign: env -> mem -> option ident -> val -> mem -> Prop :=
-  | exec_assign_none: forall e m v,
-      exec_opt_assign e m None v m
-  | exec_assign_some: forall e m id v m',
-      exec_assign e m id v m' ->
-      exec_opt_assign e m (Some id) v m'.
-*)
-
 (** One step of execution *)
 
 Inductive step: state -> trace -> state -> Prop :=

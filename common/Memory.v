@@ -947,16 +947,6 @@ Variable ofs: Z.
 Variable v: val.
 Variable m2: mem.
 Hypothesis STORE: store chunk m1 b ofs v = Some m2.
-(*
-Lemma store_result:
-  m2 = unchecked_store chunk m1 b ofs v.
-Proof.
-  unfold store in STORE.
-  destruct (valid_access_dec m1 chunk b ofs Writable).
-  congruence. 
-  congruence.
-Qed.
-*)
 
 Lemma store_access: mem_access m2 = mem_access m1.
 Proof.

@@ -90,23 +90,6 @@ Qed.
 
 Hint Resolve is_tail_refl: ppcretaddr.
 
-(*
-Ltac IsTail :=
-  auto with ppcretaddr;
-  match goal with
-  | [ |- is_tail _ (_ :: _) ] => constructor; IsTail
-  | [ |- is_tail _ (match ?x with true => _ | false => _ end) ] => destruct x; IsTail
-  | [ |- is_tail _ (match ?x with left _ => _ | right _ => _ end) ] => destruct x; IsTail
-  | [ |- is_tail _ (match ?x with nil => _ | _ :: _ => _ end) ] => destruct x; IsTail
-  | [ |- is_tail _ (match ?x with Tint => _ | Tfloat => _ end) ] => destruct x; IsTail
-  | [ |- is_tail _ (?f _ _ _ _ _ _ ?k) ] => apply is_tail_trans with k; IsTail
-  | [ |- is_tail _ (?f _ _ _ _ _ ?k) ] => apply is_tail_trans with k; IsTail
-  | [ |- is_tail _ (?f _ _ _ _ ?k) ] => apply is_tail_trans with k; IsTail
-  | [ |- is_tail _ (?f _ _ _ ?k) ] => apply is_tail_trans with k; IsTail
-  | [ |- is_tail _ (?f _ _ ?k) ] => apply is_tail_trans with k; IsTail
-  | _ => idtac
-  end.
-*)
 Ltac IsTail :=
   eauto with ppcretaddr;
   match goal with

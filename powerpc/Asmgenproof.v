@@ -114,14 +114,6 @@ Proof.
   eauto.
 Qed.
 
-(*
-Remark code_size_pos:
-  forall fn, code_size fn >= 0.
-Proof.
-  induction fn; simpl; omega.
-Qed.
-*)
-
 Remark code_tail_bounds:
   forall fn ofs i c,
   code_tail ofs fn (i :: c) -> 0 <= ofs < list_length_z fn.

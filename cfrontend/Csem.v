@@ -61,40 +61,6 @@ Definition cast_float_float (sz: floatsize) (f: float) : float :=
   | F64 => f
   end.
 
-(*
-Definition neutral_for_cast (t: type) : bool :=
-  match t with
-  | Tint I32 sg => true
-  | Tpointer ty => true
-  | Tarray ty sz => true
-  | Tfunction targs tres => true
-  | _ => false
-  end.
-
-Function sem_cast (v: val) (t1 t2: type) : option val :=
-  match v, t1, t2 with
-  | Vint i, Tint sz1 si1, Tint sz2 si2 =>            (**r int to int *)
-      Some (Vint (cast_int_int sz2 si2 i))
-  | Vfloat f, Tfloat sz1, Tint sz2 si2 =>            (**r float to int *)
-      match cast_float_int si2 f with
-      | Some i => Some (Vint (cast_int_int sz2 si2 i))
-      | None => None
-      end
-  | Vint i, Tint sz1 si1, Tfloat sz2 =>              (**r int to float *)
-      Some (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
-  | Vfloat f, Tfloat sz1, Tfloat sz2 =>              (**r float to float *)
-      Some (Vfloat (cast_float_float sz2 f))
-  | Vptr b ofs, _, _ =>                              (**r int32|pointer to int32|pointer *)
-      if neutral_for_cast t1 && neutral_for_cast t2
-      then Some(Vptr b ofs) else None
-  | Vint n, _, _ =>                                  (**r int32|pointer to int32|pointer *)
-      if neutral_for_cast t1 && neutral_for_cast t2
-      then Some(Vint n) else None
-  | _, _, _ =>
-      None
-  end.
-*)
-
 Function sem_cast (v: val) (t1 t2: type) : option val :=
   match classify_cast t1 t2 with
   | cast_case_neutral =>

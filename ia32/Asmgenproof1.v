@@ -232,30 +232,6 @@ Qed.
 
 Hint Resolve nontemp_diff: ppcgen.
 
-(*
-Remark undef_regs_1:
-  forall l ms r, ms r = Vundef -> Mach.undef_regs l ms r = Vundef.
-Proof.
-  induction l; simpl; intros. auto. apply IHl. unfold Regmap.set.
-  destruct (RegEq.eq r a); congruence.
-Qed.
-
-Remark undef_regs_2:
-  forall l ms r, In r l -> Mach.undef_regs l ms r = Vundef.
-Proof.
-  induction l; simpl; intros. contradiction. 
-  destruct H. subst. apply undef_regs_1. apply Regmap.gss.
-  auto.
-Qed.
-
-Remark undef_regs_3:
-  forall l ms r, ~In r l -> Mach.undef_regs l ms r = ms r.
-Proof.
-  induction l; simpl; intros. auto.
-  rewrite IHl. apply Regmap.gso. intuition. intuition.
-Qed.
-*)
-
 Lemma agree_exten_temps:
   forall ms sp rs rs',
   agree ms sp rs ->

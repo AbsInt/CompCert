@@ -534,14 +534,6 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
       end
   end.
 
-(*
-Lemma inj_pointer_length:
-  forall b ofs n, List.length(inj_pointer n b ofs) = n.
-Proof.
-  induction n; simpl; congruence.
-Qed.
-*)
-
 Lemma encode_val_length:
   forall chunk v, length(encode_val chunk v) = size_chunk_nat chunk.
 Proof.

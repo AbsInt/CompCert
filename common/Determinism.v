@@ -126,25 +126,6 @@ Proof.
   inv H4; inv H3. inv H7; inv H6. auto.
 Qed.
 
-(*
-Lemma possible_event_final_world:
-  forall w ev w1 w2,
-  possible_event w ev w1 -> possible_event w ev w2 -> w1 = w2.
-Proof.
-  intros. inv H; inv H0; congruence.
-Qed.
-
-Lemma possible_trace_final_world:
-  forall w0 t w1, possible_trace w0 t w1 ->
-  forall w2, possible_trace w0 t w2 -> w1 = w2.
-Proof.
-  induction 1; intros.
-  inv H. auto.
-  inv H1. assert (w2 = w5) by (eapply possible_event_final_world; eauto). 
-  subst; eauto.
-Qed.
-*)
-
 CoInductive possible_traceinf: world -> traceinf -> Prop :=
   | possible_traceinf_cons: forall w1 ev w2 T,
       possible_event w1 ev w2 ->

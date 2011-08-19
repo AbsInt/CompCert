@@ -479,10 +479,6 @@ Lemma match_env_alloc_same:
 Proof.
   intros until tv.
   intros ME ALLOC INCR ACOND OTHER TE E.
-(*
-  assert (ALLOC_RES: b = Mem.nextblock m1) by eauto with mem.
-  assert (ALLOC_NEXT: Mem.nextblock m2 = Zsucc(Mem.nextblock m1)) by eauto with mem.
-*)
   inv ME; constructor.
 (* vars *)
   intros. rewrite PMap.gsspec. destruct (peq id0 id). subst id0.
@@ -900,22 +896,6 @@ Proof.
   unfold block_of_binding in A. inv A. 
   exists id; exists lv; intuition. apply PTree.elements_complete. auto.
 Qed.
-
-(*
-Lemma free_list_perm:
-  forall l m m',
-  Mem.free_list m l = Some m' ->
-  forall b ofs p,
-  Mem.perm m' b ofs p -> Mem.perm m b ofs p.
-Proof.
-  induction l; simpl; intros. 
-  inv H; auto.
-  revert H. destruct a as [[b' lo'] hi'].
-  caseEq (Mem.free m b' lo' hi'); try congruence.
-  intros m1 FREE1 FREE2.
-  eauto with mem. 
-Qed.
-*)
 
 Lemma match_callstack_freelist:
   forall f cenv tf e le te sp lo hi cs m m' tm,
@@ -1661,85 +1641,6 @@ Proof.
   rewrite NEXTBLOCK. rewrite (nextblock_storev _ _ _ _ _ STORE'). 
   eapply match_callstack_store_mapped; eauto.
 Qed.
-
-(*
-Lemma var_set_self_correct:
-  forall cenv id ty s a f tf e le te sp lo hi m cs tm tv te' v m' fn k,
-  var_set_self cenv id ty s = OK a ->
-  match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m) (Mem.nextblock tm) ->
-  val_inject f v tv ->
-  Mem.inject f m tm ->
-  exec_assign ge e m id v m' ->
-  te'!(for_var id) = Some tv ->
-  (forall i, i <> for_var id -> te'!i = te!i) ->
-  exists te'', exists tm',
-    star step tge (State fn a k (Vptr sp Int.zero) te' tm)
-               E0 (State fn s k (Vptr sp Int.zero) te'' tm') /\
-    Mem.inject f m' tm' /\
-    match_callstack f m' tm' (Frame cenv tf e le te'' sp lo hi :: cs) (Mem.nextblock m') (Mem.nextblock tm') /\
-    (forall id', id' <> for_var id -> te''!id' = te'!id').
-Proof.
-  intros until k. 
-  intros VS MCS VINJ MINJ ASG VAL OTHERS.
-  unfold var_set_self in VS. inv ASG. 
-  assert (NEXTBLOCK: Mem.nextblock m' = Mem.nextblock m).
-    eapply Mem.nextblock_store; eauto.
-  assert (MV: match_var f id e m te sp cenv!!id).
-    inv MCS. inv MENV. auto.
-  assert (EVAR: eval_expr tge (Vptr sp Int.zero) te' tm (Evar (for_var id)) tv).
-    constructor. auto.
-  revert VS; inv MV; intro VS; inv VS; inv H; try congruence.
-  (* var_local *)
-  assert (b0 = b) by congruence. subst b0.
-  assert (chunk0 = chunk) by congruence. subst chunk0.
-  exists te'; exists tm.
-  split. apply star_refl. 
-  split. eapply Mem.store_unmapped_inject; eauto. 
-  split. rewrite NEXTBLOCK. 
-  apply match_callstack_extensional with (PTree.set (for_var id) tv te).
-  intros. repeat rewrite PTree.gsspec.
-  destruct (peq (for_var id0) (for_var id)). congruence. auto.
-  intros. assert (for_temp id0 <> for_var id). unfold for_temp, for_var; congruence.
-  rewrite PTree.gso; auto. 
-  eapply match_callstack_store_local; eauto.
-  intros. auto. 
-  (* var_stack_scalar *)
-  assert (b0 = b) by congruence. subst b0.
-  assert (chunk0 = chunk) by congruence. subst chunk0.
-  assert (Mem.storev chunk m (Vptr b Int.zero) v = Some m'). assumption.
-  exploit make_store_correct.
-    eapply make_stackaddr_correct.
-    eauto. eauto. eauto. eauto. eauto. 
-  intros [tm' [tvrhs' [EVAL' [STORE' MEMINJ]]]].
-  exists te'; exists tm'.
-  split. eapply star_three. constructor. eauto. constructor. traceEq.
-  split. auto.
-  split. rewrite NEXTBLOCK. rewrite (nextblock_storev _ _ _ _ _ STORE'). 
-  apply match_callstack_extensional with te.
-  intros. apply OTHERS. unfold for_var; congruence.
-  intros. apply OTHERS. unfold for_var, for_temp; congruence.
-  eapply match_callstack_storev_mapped; eauto.
-  auto.
-  (* var_global_scalar *)
-  simpl in *.
-  assert (chunk0 = chunk). exploit H4; eauto. congruence. subst chunk0.  
-  assert (Mem.storev chunk m (Vptr b Int.zero) v = Some m'). assumption.
-  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
-  exploit make_store_correct.
-    eapply make_globaladdr_correct; eauto.
-    rewrite symbols_preserved; eauto. eauto. eauto. eauto. eauto. eauto.
-  intros [tm' [tvrhs' [EVAL' [STORE' MEMINJ]]]].
-  exists te'; exists tm'.
-  split. eapply star_three. constructor. eauto. constructor. traceEq.
-  split. auto. 
-  split. rewrite NEXTBLOCK. rewrite (nextblock_storev _ _ _ _ _ STORE'). 
-  apply match_callstack_extensional with te.
-  intros. apply OTHERS. unfold for_var; congruence.
-  intros. apply OTHERS. unfold for_var, for_temp; congruence.
-  eapply match_callstack_store_mapped; eauto.
-  auto.
-Qed.
-*)
 
 (** * Correctness of stack allocation of local variables *)
 

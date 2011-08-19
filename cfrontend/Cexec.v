@@ -1653,20 +1653,6 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
   | _ => nil
   end.
 
-(*
-Definition at_external (S: state): option (external_function * list val * mem) :=
-  match S with
-  | Callstate (External ef _ _) vargs k m => Some (ef, vargs, m)
-  | _ => None
-  end.
-
-Definition after_external (S: state) (v: val) (m: mem): option state :=
-  match S with
-  | Callstate _ _ k _ => Some (Returnstate v k m)
-  | _ => None
-  end.
-*)
-
 Ltac myinv :=
   match goal with
   | [ |- In _ nil -> _ ] => intro X; elim X
