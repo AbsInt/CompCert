@@ -893,11 +893,8 @@ let elab_expr loc env a =
 
   | UNARY(ADDROF, a1) ->
       let b1 = elab a1 in
-      begin match unroll env b1.etyp with
-      | TArray _ | TFun _ -> ()
-      | _ -> 
-        if not (is_lvalue env b1) then err "argument of '&' is not a l-value"
-      end;
+      if not (is_function_type env b1.etyp || is_lvalue env b1) then
+        err "argument of '&' is not an l-value";
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) }
 
   | UNARY(MEMOF, a1) ->
@@ -1048,7 +1045,7 @@ let elab_expr loc env a =
       let b1 = elab a1 in
       let b2 = elab a2 in
       if not (is_lvalue env b1) then
-        err "left-hand side of assignment is not a l-value";
+        err "left-hand side of assignment is not an l-value";
       if List.mem AConst (attributes_of_type env b1.etyp) then
         err "left-hand side of assignment has 'const' type";
       if not (valid_assignment env b2 b1.etyp) then begin
@@ -1080,7 +1077,7 @@ let elab_expr loc env a =
       begin match elab (BINARY(sop, a1, a2)) with
       | { edesc = EBinop(_, b1, b2, _); etyp = ty } as b ->
           if not (is_lvalue env b1) then
-            err ("left-hand side of assignment is not a l-value");
+            err ("left-hand side of assignment is not an l-value");
           if List.mem AConst (attributes_of_type env b1.etyp) then
             err "left-hand side of assignment has 'const' type";
           if not (valid_assignment env b b1.etyp) then begin
@@ -1137,7 +1134,7 @@ let elab_expr loc env a =
   and elab_pre_post_incr_decr op msg a1 =
       let b1 = elab a1 in
       if not (is_lvalue env b1) then
-        err "the argument of %s is not a l-value" msg;
+        err "the argument of %s is not an l-value" msg;
       if not (is_scalar_type env b1.etyp) then
         err "the argument of %s must be an arithmetic or pointer type" msg;
       { edesc = EUnop(op, b1); etyp = b1.etyp }
