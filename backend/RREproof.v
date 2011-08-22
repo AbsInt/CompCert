@@ -215,9 +215,8 @@ Lemma agree_regs:
 Proof.
   induction rl; intros; simpl. 
   auto.
-  decEq. apply agree_reg with sm; auto.
-    destruct H0; auto.
-    right. eapply list_disjoint_notin; eauto with coqlib.
+  decEq. apply agree_reg with sm. auto.
+    destruct H0. auto. right. eapply list_disjoint_notin; eauto with coqlib.
   apply IHrl; auto. destruct H0; auto. right. eapply list_disjoint_cons_left; eauto.
 Qed.
 
@@ -404,7 +403,7 @@ Opaque destroyed_at_move_regs.
     destruct sl; simpl in Heqb0; discriminate || auto.
   left; econstructor; split. constructor.
   repeat rewrite UGS.
-  apply match_states_regular with sm; auto.
+  apply match_states_regular with sm. auto.
   apply kill_loc_hold. apply kill_loc_hold; auto.
   rewrite (agree_slot _ _ _ sl AG). apply agree_set. apply agree_set. auto.
   tauto.
@@ -419,7 +418,7 @@ Opaque destroyed_at_move_regs.
   assert (EQ1: rs' (S sl) = rs (S sl)) by (eapply agree_slot; eauto).
   assert (EQ2: rs' (R r) = rs (R r)) by (eapply agree_reg; eauto; tauto).
   rewrite <- EQ1; rewrite EQ; rewrite EQ2. rewrite locmap_set_reg_same.
-  apply match_states_regular with sm; auto. tauto. 
+  apply match_states_regular with sm; auto; tauto. 
   (* found an equation *)
   destruct (find_reg_containing sl eqs) as [r'|]_eqn.
   exploit EQH. eapply find_reg_containing_sound; eauto. 
@@ -434,14 +433,14 @@ Opaque destroyed_at_move_regs.
   (* left as a getstack *)
   left; econstructor; split. constructor.
   repeat rewrite UGS.
-  apply match_states_regular with sm; auto. 
+  apply match_states_regular with sm. auto. 
   apply eqs_getstack_hold; auto. 
   rewrite (agree_slot _ _ _ sl AG). apply agree_set. auto. 
   intuition congruence. 
   (* no equation, left as a getstack *)
   left; econstructor; split. constructor.
   repeat rewrite UGS.
-  apply match_states_regular with sm; auto. 
+  apply match_states_regular with sm. auto. 
   apply eqs_getstack_hold; auto. 
   rewrite (agree_slot _ _ _ sl AG). apply agree_set. auto.
   tauto.
