@@ -632,17 +632,26 @@ let type_of_constant = function
 
 (* Check that a C expression is a lvalue *)
 
-let rec is_lvalue env e =
-  (* Type must not be array or function *)
-  match unroll env e.etyp with
-  | TFun _ | TArray _ -> false
-  | _ ->
-    match e.edesc with
-    | EVar id -> true
-    | EUnop((Oderef | Oarrow _), _) -> true
-    | EUnop(Odot _, e') -> is_lvalue env e'
-    | EBinop(Oindex, _, _, _) -> true
-    | _ -> false
+let rec is_lvalue e =
+  match e.edesc with
+  | EVar id -> true
+  | EUnop((Oderef | Oarrow _), _) -> true
+  | EUnop(Odot _, e') -> is_lvalue e'
+  | EBinop(Oindex, _, _, _) -> true
+  | _ -> false
+
+(* Check that a C expression is a modifiable l-value: an l-value
+   whose type is not const, neither an array type, nor a function type,
+   nor an incomplete type. *)
+
+let is_modifiable_lvalue env e =
+  is_lvalue e
+  && not (List.mem AConst (attributes_of_type env e.etyp))
+  && not (incomplete_type env e.etyp)
+  && begin match unroll env e.etyp with
+     | TFun _ | TArray _ -> false
+     | _ -> true
+     end
 
 (* Check that a C expression is the literal "0", which can be used
    as a pointer. *)

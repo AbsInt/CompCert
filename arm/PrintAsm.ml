@@ -752,7 +752,7 @@ let print_var oc (Coq_pair(name, v)) =
       fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
 let print_program oc p =
-  fprintf oc "	.fpu	vfp\n";
+(*  fprintf oc "	.fpu	vfp\n"; *)
   List.iter (print_var oc) p.prog_vars;
   List.iter (print_fundef oc) p.prog_funct
 

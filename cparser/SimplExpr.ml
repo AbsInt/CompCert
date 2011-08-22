@@ -106,7 +106,7 @@ let simpl_expr loc env e act =
   let is_volatile_read e =
     !volatilize
     && List.mem AVolatile (attributes_of_type env e.etyp)
-    && is_lvalue env e in
+    && is_lvalue e in
 
   let lhs_to_rhs e =
     if is_volatile_read e

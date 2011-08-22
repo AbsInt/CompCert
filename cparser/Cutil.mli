@@ -149,8 +149,10 @@ val type_of_member : Env.t -> field -> typ
      small unsigned bitfields. *)
 val is_literal_0 : exp -> bool
   (* Is the given expression the integer literal "0"?  *)
-val is_lvalue : Env.t -> exp -> bool
+val is_lvalue : exp -> bool
   (* Is the given expression a l-value? *)
+val is_modifiable_lvalue : Env.t -> exp -> bool
+  (* Is the given expression a modifiable l-value? *)
 val valid_assignment : Env.t -> exp -> typ -> bool
   (* Check that an assignment of the given expression to a l-value of
      the given type is allowed. *)

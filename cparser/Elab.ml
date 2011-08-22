@@ -893,7 +893,7 @@ let elab_expr loc env a =
 
   | UNARY(ADDROF, a1) ->
       let b1 = elab a1 in
-      if not (is_function_type env b1.etyp || is_lvalue env b1) then
+      if not (is_lvalue b1 || is_function_type env b1.etyp) then
         err "argument of '&' is not an l-value";
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) }
 
@@ -1044,10 +1044,10 @@ let elab_expr loc env a =
   | BINARY(ASSIGN, a1, a2) ->
       let b1 = elab a1 in
       let b2 = elab a2 in
-      if not (is_lvalue env b1) then
-        err "left-hand side of assignment is not an l-value";
       if List.mem AConst (attributes_of_type env b1.etyp) then
         err "left-hand side of assignment has 'const' type";
+      if not (is_modifiable_lvalue env b1) then
+        err "left-hand side of assignment is not a modifiable l-value";
       if not (valid_assignment env b2 b1.etyp) then begin
         if valid_cast env b2.etyp b1.etyp then
           warning "assigning a value of type@ %a@ to a lvalue of type@ %a"
@@ -1076,10 +1076,10 @@ let elab_expr loc env a =
         | _ -> assert false in
       begin match elab (BINARY(sop, a1, a2)) with
       | { edesc = EBinop(_, b1, b2, _); etyp = ty } as b ->
-          if not (is_lvalue env b1) then
-            err ("left-hand side of assignment is not an l-value");
           if List.mem AConst (attributes_of_type env b1.etyp) then
             err "left-hand side of assignment has 'const' type";
+          if not (is_modifiable_lvalue env b1) then
+            err ("left-hand side of assignment is not a modifiable l-value");
           if not (valid_assignment env b b1.etyp) then begin
             if valid_cast env ty b1.etyp then
               warning "assigning a value of type@ %a@ to a lvalue of type@ %a"
@@ -1133,8 +1133,8 @@ let elab_expr loc env a =
 (* Elaboration of pre- or post- increment/decrement *)
   and elab_pre_post_incr_decr op msg a1 =
       let b1 = elab a1 in
-      if not (is_lvalue env b1) then
-        err "the argument of %s is not an l-value" msg;
+      if not (is_modifiable_lvalue env b1) then
+        err "the argument of %s is not a modifiable l-value" msg;
       if not (is_scalar_type env b1.etyp) then
         err "the argument of %s must be an arithmetic or pointer type" msg;
       { edesc = EUnop(op, b1); etyp = b1.etyp }

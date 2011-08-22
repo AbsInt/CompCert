@@ -363,7 +363,7 @@ let first_class_value env ty =
 
 let is_volatile_access env e =
   List.mem C.AVolatile (Cutil.attributes_of_type env e.etyp)
-  && Cutil.is_lvalue env e
+  && Cutil.is_lvalue e
 
 let volatile_kind ty =
   match ty with
