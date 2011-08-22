@@ -24,7 +24,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The Compcert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 1.8.2, 2011-05-24</H3>
+<H3 align="center">Version 1.9, 2011-08-22</H3>
 
 <H2>Introduction</H2>
 
@@ -264,6 +264,13 @@ code.
 </TR>
 
 <TR valign="top">
+  <TD>Redundant reload elimination</TD>
+  <TD>Linear to Linear</TD>
+  <TD><A HREF="html/RRE.html">RRE</A></TD>
+  <TD><A HREF="html/RREproof.html">RREproof</A></TD>
+</TR>
+
+<TR valign="top">
   <TD>Laying out the activation records</TD>
   <TD>Linear to Mach</TD>
   <TD><A HREF="html/Stacking.html">Stacking</A><BR>
@@ -301,6 +308,7 @@ Proofs that compiler passes are type-preserving:
 <LI> <A HREF="html/Linearizetyping.html">Linearizetyping</A> (code linearization).
 <LI> <A HREF="html/CleanupLabelstyping.html">CleanupLabelstyping</A> (removal of unreferenced labels).
 <LI> <A HREF="html/Reloadtyping.html">Reloadtyping</A> (spilling and reloading).
+<LI> <A HREF="html/RREtyping.html">RREtyping</A> (redundant reload elimination).
 <LI> <A HREF="html/Stackingtyping.html">Stackingtyping</A> (layout of activation records).
 </UL>
 

@@ -2742,18 +2742,17 @@ Qed.
 
 (** ** Properties of [one_bits] (decomposition in sum of powers of two) *)
 
-Opaque Z_one_bits. (* Otherwise, next Qed blows up! *)
-
 Theorem one_bits_range:
   forall x i, In i (one_bits x) -> ltu i iwordsize = true.
 Proof.
+  assert (A: forall p, 0 <= p < Z_of_nat wordsize -> ltu (repr p) iwordsize = true).
+    intros. unfold ltu, iwordsize. apply zlt_true. 
+    repeat rewrite unsigned_repr. tauto. 
+    generalize wordsize_max_unsigned. omega.
+    generalize wordsize_max_unsigned. omega.
   intros. unfold one_bits in H.
-  elim (list_in_map_inv _ _ _ H). intros i0 [EQ IN].
-  subst i. unfold ltu. unfold iwordsize. apply zlt_true. 
-  generalize (Z_one_bits_range _ _ IN). intros.
-  assert (0 <= Z_of_nat wordsize <= max_unsigned).
-    generalize wordsize_pos wordsize_max_unsigned; omega.
-  repeat rewrite unsigned_repr; omega.
+  destruct (list_in_map_inv _ _ _ H) as [i0 [EQ IN]].
+  subst i. apply A. apply Z_one_bits_range with (unsigned x); auto.
 Qed.
 
 Fixpoint int_of_one_bits (l: list int) : int :=

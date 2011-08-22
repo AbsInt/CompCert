@@ -1,4 +1,4 @@
-Release 1.9, 2011-xx-xx
+Release 1.9, 2011-08-22
 =======================
 
 - The reduction semantics of CompCert C was made executable and turned

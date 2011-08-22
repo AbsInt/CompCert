@@ -20,6 +20,7 @@ COQC=coqc -q $(INCLUDES)
 COQDEP=coqdep $(INCLUDES)
 COQDOC=coqdoc
 COQEXEC=coqtop $(INCLUDES) -batch -load-vernac-source
+COQCHK=coqchk $(INCLUDES)
 
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
@@ -185,6 +186,12 @@ distclean:
 
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
+
+# Problems with coqchk:
+#   Integers.one_bits_range takes forever to check
+#   Mach#<>#instruction causes a failure
+check-proof: $(FILES)
+	$(COQCHK) -admit Integers Complements
 
 include .depend
 
