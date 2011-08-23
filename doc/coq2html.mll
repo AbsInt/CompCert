@@ -249,7 +249,7 @@ let end_html_page () =
 let space = [' ' '\t']
 let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '0'-'9' '_']*
 let path = ident ("." ident)*
-let start_proof = "Proof." | ("Next" space+ "Obligation.")
+let start_proof = "Proof." | ("Proof" space+ "with") | ("Next" space+ "Obligation.")
 let end_proof = "Qed." | "Defined." | "Save." | "Admitted." | "Abort."
 
 let xref = ['A'-'Z' 'a'-'z' '0'-'9' '_' '.']+ | "<>"
