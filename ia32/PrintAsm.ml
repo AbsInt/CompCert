@@ -559,8 +559,18 @@ let print_instruction oc = function
       fprintf oc "	xorl	%%edx, %%edx\n";
       fprintf oc "	divl	%a\n" ireg r1
   | Pidiv(r1) ->
+      let lbl1 = new_label() in
+      let lbl2 = new_label() in
+      fprintf oc "	cmpl	$-1, %a\n" ireg r1;
+      fprintf oc "	je	%a\n" label lbl1;
       fprintf oc "	cltd\n";
-      fprintf oc "	idivl	%a\n" ireg r1
+      fprintf oc "	idivl	%a\n" ireg r1;
+      fprintf oc "	jmp	%a\n" label lbl2;
+      (* Division by -1 can cause an overflow trap if dividend = min_int.
+         Force x div (-1) = -x and x mod (-1) = 0. *)
+      fprintf oc "%a:	negl	%a\n" label lbl1 ireg EAX;
+      fprintf oc "	xorl	%a, %a\n" ireg EDX ireg EDX;
+      fprintf oc "%a:\n" label lbl2
   | Pand_rr(rd, r1) ->
       fprintf oc "	andl	%a, %a\n" ireg r1 ireg rd
   | Pand_ri(rd, n) ->
