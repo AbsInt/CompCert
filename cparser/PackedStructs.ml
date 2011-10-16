@@ -65,12 +65,11 @@ let layout_struct mfa msa swapped loc env struct_id fields =
         | Some s, Some a -> (s, a)
         | _, _ -> error "%a: struct field has incomplete type" formatloc loc;
                   (0, 1) in
-      let swap = swapped && sz > 1 in
       let al1 = min al mfa in
       let pos1 = align pos al1 in
       Hashtbl.add packed_fields
          (struct_id, f.fld_name)
-         {fi_offset = pos1; fi_swap = swap};
+         {fi_offset = pos1; fi_swap = swapped};
       let pos2 = pos1 + sz in
       layout (max max_al al1) pos2 rem in
   let (al, sz) = layout 1 0 fields in
@@ -156,23 +155,27 @@ let arrow_packed_field base pf ty =
 let bswap_read loc env lval ty =
   let (bsize, aty) =
     accessor_type loc env ty in
-  let (id, fty) =
-    lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
-  let fn = {edesc = EVar id; etyp = fty} in
-  let args = [ecast (TPtr(aty,[])) (eaddrof lval)] in
-  let call = {edesc = ECall(fn, args); etyp = aty} in
-  ecast_opt env ty call
+  if bsize = 8 then lval else begin
+    let (id, fty) =
+      lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
+    let fn = {edesc = EVar id; etyp = fty} in
+    let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lval)] in
+    let call = {edesc = ECall(fn, args); etyp = aty} in
+    ecast_opt env ty call
+  end
 
 (*  __builtin_write_intNN_reversed(&lhs,rhs)  *)
 let bswap_write loc env lhs rhs ty =
   let (bsize, aty) =
     accessor_type loc env ty in
-  let (id, fty) =
-    lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
-  let fn = {edesc = EVar id; etyp = fty} in
-  let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
-              ecast_opt env aty rhs] in
-  {edesc = ECall(fn, args); etyp = TVoid[]}
+  if bsize = 8 then eassign lhs rhs else begin
+    let (id, fty) =
+      lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
+    let fn = {edesc = EVar id; etyp = fty} in
+    let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
+                ecast_opt env aty rhs] in
+    {edesc = ECall(fn, args); etyp = TVoid[]}
+  end
 
 (* Expressions *)
 

@@ -735,6 +735,7 @@ let ecomma e1 e2 = { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
 
 let rec eaddrof e =
   match e.edesc with
+  | EUnop(Oderef, e1) -> e1
   | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (eaddrof e2)
   | EConditional(e1, e2, e3) -> 
       { edesc = EConditional(e1, eaddrof e2, eaddrof e3); etyp = TPtr(e.etyp, []) }
