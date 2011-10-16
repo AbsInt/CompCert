@@ -450,13 +450,13 @@ let print_builtin_inline oc name args res =
   | "__builtin_fsel", [FR a1; FR a2; FR a3], FR res ->
       fprintf oc "	fsel	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
   (* Memory accesses *)
-  | "__builtin_read_int16_reversed", [IR a1], IR res ->
+  | "__builtin_read16_reversed", [IR a1], IR res ->
       fprintf oc "	lhbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1
-  | "__builtin_read_int32_reversed", [IR a1], IR res ->
+  | "__builtin_read32_reversed", [IR a1], IR res ->
       fprintf oc "	lwbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1
-  | "__builtin_write_int16_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
       fprintf oc "	sthbrx	%a, %a, %a\n" ireg a2 ireg_or_zero GPR0 ireg a1
-  | "__builtin_write_int32_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
       fprintf oc "	stwbrx	%a, %a, %a\n" ireg a2 ireg_or_zero GPR0 ireg a1
   (* Synchronization *)
   | "__builtin_eieio", [], _ ->

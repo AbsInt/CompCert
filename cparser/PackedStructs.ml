@@ -16,6 +16,7 @@
 (* Emulation of #pragma pack (experimental) *)
 
 open Printf
+open Machine
 open C
 open Cutil
 open Env
@@ -24,7 +25,7 @@ open Transform
 
 type field_info = {
   fi_offset: int;                       (* byte offset within struct *)
-  fi_swap: ikind option                 (* Some ik if byte-swapped *)
+  fi_swap: bool                         (* true if byte-swapped *)
 }
 
 (* Mapping from (struct name, field name) to field_info.
@@ -59,22 +60,12 @@ let layout_struct mfa msa swapped loc env struct_id fields =
       if f.fld_bitfield <> None then
         error "%a: Error: bitfields in packed structs not allowed"
               formatloc loc;
-      let swap =
-        if swapped then begin
-          match unroll env f.fld_typ with
-          | TInt(ik, _) ->
-              if sizeof_ikind ik = 1 then None else Some ik
-          | _ ->
-              error "%a: Error: byte-swapped fields must have integer type"
-                    formatloc loc;
-              None
-        end else
-          None in
       let (sz, al) =
         match sizeof env f.fld_typ, alignof env f.fld_typ with
         | Some s, Some a -> (s, a)
         | _, _ -> error "%a: struct field has incomplete type" formatloc loc;
                   (0, 1) in
+      let swap = swapped && sz > 1 in
       let al1 = min al mfa in
       let pos1 = align pos al1 in
       Hashtbl.add packed_fields
@@ -123,8 +114,21 @@ let lookup_function loc env name =
   with Env.Error msg ->
     fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
 
+(* Type for the access *)
+
+let accessor_type loc env ty =
+  match unroll env ty with
+  | TInt(ik,_) -> (8 * sizeof_ikind ik, TInt(unsigned_ikind_of ik,[]))
+  | TPtr _     -> (8 * !config.sizeof_ptr, TInt(ptr_t_ikind,[]))
+  | _ ->
+     error "%a: unsupported type for byte-swapped field access" formatloc loc;
+     (32, TVoid [])
+
 (*  (ty) e *)
 let ecast ty e = {edesc = ECast(ty, e); etyp = ty}
+
+let ecast_opt env ty e =
+  if compatible_types env ty e.etyp then e else ecast ty e
 
 (*  *e  *)
 let ederef ty e = {edesc = EUnop(Oderef, e); etyp = ty}
@@ -148,32 +152,26 @@ let arrow_packed_field base pf ty =
      etyp = TArray(TInt(IChar,[]),None,[]) } in
   ederef ty (ecast (TPtr(ty, [])) (eoffset payload pf.fi_offset))
 
-(*  (ty) __builtin_read_intNN_reversed(&lval)  *)
-let bswap_read loc env lval ik =
-  let uik = unsigned_ikind_of ik in
-  let bsize = sizeof_ikind ik * 8 in
+(*  (ty) __builtin_read_NN_reversed(&lval)  *)
+let bswap_read loc env lval ty =
+  let (bsize, aty) =
+    accessor_type loc env ty in
   let (id, fty) =
-    lookup_function loc env (sprintf "__builtin_read_int%d_reversed" bsize) in
+    lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
   let fn = {edesc = EVar id; etyp = fty} in
-  let args =
-    if uik = ik
-    then [eaddrof lval]
-    else [ecast (TPtr(TInt(uik,[]),[])) (eaddrof lval)] in
-  let call = {edesc = ECall(fn, args); etyp = TInt(uik, [])} in
-  if ik = uik then call else ecast (TInt(ik,[])) call
+  let args = [ecast (TPtr(aty,[])) (eaddrof lval)] in
+  let call = {edesc = ECall(fn, args); etyp = aty} in
+  ecast_opt env ty call
 
 (*  __builtin_write_intNN_reversed(&lhs,rhs)  *)
-let bswap_write loc env lhs rhs ik =
-  let uik = unsigned_ikind_of ik in
-  let bsize = sizeof_ikind ik * 8 in
+let bswap_write loc env lhs rhs ty =
+  let (bsize, aty) =
+    accessor_type loc env ty in
   let (id, fty) =
-    lookup_function loc env (sprintf "__builtin_write_int%d_reversed" bsize) in
+    lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
   let fn = {edesc = EVar id; etyp = fty} in
-  let args =
-    if uik = ik
-    then [eaddrof lhs; rhs]
-    else [ecast (TPtr(TInt(uik,[]),[])) (eaddrof lhs);
-          ecast (TInt(uik,[])) rhs] in
+  let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
+              ecast_opt env aty rhs] in
   {edesc = ECall(fn, args); etyp = TVoid[]}
 
 (* Expressions *)
@@ -193,15 +191,14 @@ let transf_expr loc env ctx e =
     | _ -> None in 
 
   (* Transformation of l-values.  Return transformed expr plus
-     [Some ik] if l-value is a byte-swapped field of kind [ik]
-     or [None] otherwise. *)
+     [true] if l-value is a byte-swapped field and [false] otherwise. *)
   let rec lvalue e =
     match e.edesc with
     | EUnop(Odot fieldname, e1) ->
         let e1' = texp Val e1 in
         begin match is_packed_access e1.etyp fieldname with
         | None ->
-            ({edesc = EUnop(Odot fieldname, e1'); etyp = e.etyp}, None)
+            ({edesc = EUnop(Odot fieldname, e1'); etyp = e.etyp}, false)
         | Some pf ->
             (dot_packed_field e1' pf e.etyp, pf.fi_swap)
         end
@@ -209,12 +206,15 @@ let transf_expr loc env ctx e =
         let e1' = texp Val e1 in
         begin match is_packed_access_ptr e1.etyp fieldname with
         | None ->
-            ({edesc = EUnop(Oarrow fieldname, e1'); etyp = e.etyp}, None)
+            ({edesc = EUnop(Oarrow fieldname, e1'); etyp = e.etyp}, false)
         | Some pf ->
             (arrow_packed_field e1' pf e.etyp, pf.fi_swap)
         end
+    | EBinop(Oindex, e1, e2, tyres) ->
+        let (e1', swap) = lvalue e1 in
+        ({edesc = EBinop(Oindex, e1', e2, tyres); etyp = e.etyp}, swap)
     | _ ->
-        (texp Val e, None) 
+        (texp Val e, false) 
 
   and texp ctx e =
     match e.edesc with
@@ -222,17 +222,14 @@ let transf_expr loc env ctx e =
     | ESizeof _ -> e
     | EVar _ -> e
 
-    | EUnop(Odot _, _) | EUnop(Oarrow _, _) ->
+    | EUnop(Odot _, _) | EUnop(Oarrow _, _) | EBinop(Oindex, _, _, _) ->
         let (e', swap) = lvalue e in
-        begin match swap with
-        | None -> e'
-        | Some ik -> bswap_read loc env e' ik
-        end
+        if swap then bswap_read loc env e' e'.etyp else e'
 
     | EUnop((Oaddrof|Opreincr|Opredecr|Opostincr|Opostdecr as op), e1) ->
         let (e1', swap) = lvalue e1 in
-        if swap <> None then
-          error "%a: Error: &, ++ and -- over byte-swap field are not supported"
+        if swap then
+          error "%a: Error: &, ++ and -- over byte-swapped field are not supported"
                 formatloc loc;
         {edesc = EUnop(op, e1'); etyp = e.etyp}
 
@@ -242,23 +239,21 @@ let transf_expr loc env ctx e =
     | EBinop(Oassign, e1, e2, ty) ->
         let (e1', swap) = lvalue e1 in
         let e2' = texp Val e2 in
-        begin match swap with
-        | None ->
-            {edesc = EBinop(Oassign, e1', e2', ty); etyp = e.etyp}
-        | Some ik ->
-            if ctx <> Effects then
-              error "%a: Error: assignment over byte-swapped field in value context is not supported"
-                    formatloc loc;
-            bswap_write loc env e1' e2' ik
-        end
+        if swap then begin
+          if ctx <> Effects then
+            error "%a: Error: assignment over byte-swapped field in value context is not supported"
+                  formatloc loc;
+          bswap_write loc env e1' e2' e1'.etyp
+        end else
+          {edesc = EBinop(Oassign, e1', e2', ty); etyp = e.etyp}
 
     | EBinop((Oadd_assign|Osub_assign|Omul_assign|Odiv_assign|Omod_assign|
               Oand_assign|Oor_assign|Oxor_assign|Oshl_assign|Oshr_assign as op),
               e1, e2, ty) ->
         let (e1', swap) = lvalue e1 in
         let e2' = texp Val e2 in
-        if swap <> None then
-          error "%a: Error: op-assignment over byte-swapped field in value context is not supported"
+        if swap then
+          error "%a: Error: op-assignment over byte-swapped field is not supported"
                 formatloc loc;
         {edesc = EBinop(op, e1', e2', ty); etyp = e.etyp}
 

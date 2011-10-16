@@ -50,20 +50,30 @@ struct s3 {
   unsigned int z;
   signed short v;
   signed int w;
+  char * p;
+  unsigned int t[3];
 };
 
 struct s3 s3;
 
 void test3(void)
 {
+  char xx;
+
   printf("sizeof(struct s3) = %d\n", sizeof(struct s3));
   s3.x = 123;
   s3.y = 45678;
   s3.z = 0x80000001U;
   s3.v = -456;
   s3.w = -1234567;
-  printf("s3 = {x = %u, y = %u, z = %u, v = %d, w = %d}\n\n",
-         s3.x, s3.y, s3.z, s3.v, s3.w);
+  s3.p = &xx;
+  s3.t[0] = 111;
+  s3.t[1] = 222;
+  s3.t[2] = 333;
+  printf("s3 = {x = %u, y = %u, z = %u, v = %d, w = %d, p is %s, t = {%d,%d,%d}}\n\n",
+         s3.x, s3.y, s3.z, s3.v, s3.w,
+         (s3.p == &xx ? "ok" : "BAD"),
+         s3.t[0], s3.t[1], s3.t[2]);
 }
 
 /* Back to normal */

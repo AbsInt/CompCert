@@ -731,11 +731,13 @@ let eassign e1 e2 = { edesc = EBinop(Oassign, e1, e2, e1.etyp); etyp = e1.etyp }
 let ecomma e1 e2 = { edesc = EBinop(Ocomma, e1, e2, e2.etyp); etyp = e2.etyp }
 
 (* Construct an address-of expression.  Can be applied not just to
-   an l-value but also to a sequence. *)
+   an l-value but also to a sequence or a conditional of l-values. *)
 
 let rec eaddrof e =
   match e.edesc with
   | EBinop(Ocomma, e1, e2, _) -> ecomma e1 (eaddrof e2)
+  | EConditional(e1, e2, e3) -> 
+      { edesc = EConditional(e1, eaddrof e2, eaddrof e3); etyp = TPtr(e.etyp, []) }
   | _ -> { edesc = EUnop(Oaddrof, e); etyp = TPtr(e.etyp, []) }
 
 (* Construct a sequence *)
