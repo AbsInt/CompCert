@@ -256,7 +256,9 @@ let convertIkind = function
 let convertFkind = function
   | C.FFloat -> F32
   | C.FDouble -> F64
-  | C.FLongDouble -> unsupported "'long double' type"; F64
+  | C.FLongDouble ->
+      if not !Clflags.option_flongdouble then unsupported "'long double' type"; 
+      F64
 
 let int64_struct =
   let ty = Tint(I32,Unsigned) in

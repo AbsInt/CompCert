@@ -763,7 +763,7 @@ let elab_expr loc env a =
       let b1 = elab a1 in
       let (fld, attrs) =
         match unroll env b1.etyp with
-        | TPtr(t, _) ->
+        | TPtr(t, _) | TArray(t,_,_) ->
             begin match unroll env t with
             | TStruct(id, attrs) ->
                 (wrap Env.find_struct_member loc env (id, fieldname), attrs)
@@ -1262,34 +1262,33 @@ let project_init loc il =
       i)
    il
 
-let below_optsize n opt_sz =
-  match opt_sz with None -> true | Some sz -> n < sz
-
 let init_char_array_string opt_size s =
-  let init = ref []
-  and len = ref 0L in
-  let enter x =
-    if below_optsize !len opt_size then begin
-      init := Init_single (intconst x IChar) :: !init;
-      len := Int64.succ !len
+  let len = Int64.of_int (String.length s) in
+  let size =
+    match opt_size with
+    | Some sz -> sz
+    | None -> Int64.succ len  (* include final 0 character *) in
+  let rec add_chars i init =
+    if i < 0L then init else begin
+      let c =
+        if i < len then Int64.of_int (Char.code s.[Int64.to_int i]) else 0L in
+      add_chars (Int64.pred i) (Init_single (intconst c IChar) :: init)
     end in
-  for i = 0 to String.length s - 1 do
-    enter (Int64.of_int (Char.code s.[i]))
-  done;
-  enter 0L;
-  Init_array (List.rev !init)
+  Init_array (add_chars (Int64.pred size) [])
 
 let init_int_array_wstring opt_size s =
-  let init = ref []
-  and len = ref 0L in
-  let enter x =
-    if below_optsize !len opt_size then begin
-      init := Init_single (intconst x IInt) :: !init;
-      len := Int64.succ !len
+  let len = Int64.of_int (List.length s) in
+  let size =
+    match opt_size with
+    | Some sz -> sz
+    | None -> Int64.succ len  (* include final 0 character *) in
+  let rec add_chars i s init =
+    if i < 0L then init else begin
+      let (c, s') =
+        match s with [] -> (0L, []) | c::s' -> (c, s') in
+      add_chars (Int64.pred i) s' (Init_single (intconst c IInt) :: init)
     end in
-  List.iter enter s;
-  enter 0L;
-  Init_array (List.rev !init)
+  Init_array (add_chars (Int64.pred size) (List.rev s) [])
 
 let check_init_type loc env a ty =
   if valid_assignment env a ty then ()

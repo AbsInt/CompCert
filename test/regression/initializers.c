@@ -46,6 +46,21 @@ char * x18 = "Hello!";
 
 char * x19[2] = { "Hello", "world!" };
 
+char x20[3] = "Hello!";
+
+char x21[10] = "Hello!";
+
+static void print_chars(char * s, int sz)
+{
+  int i;
+  for (i = 0; i < sz; i++) {
+    if (s[i] >= 32 && s[i] < 127)
+      printf("'%c', ", s[i]);
+    else
+      printf("%d, ", s[i]);
+  }
+}
+
 int main()
 {
   int i;
@@ -62,7 +77,7 @@ int main()
   printf("x7 = { %d, '%c' }\n", x7.y, x7.z);
   printf("x8 = { '%c', %d }\n", x8.y, x8.z);
   printf("x9 = { { ");
-  for (i = 0; i < 9; i++) printf("'%c', ", x9.y[i]);
+  print_chars(x9.y, 9);
   printf("}, %.3f }\n", x9.z);
   printf("x10 = { { '%c', %d }, %.3f }\n",
          x10.u.y, x10.u.z, x10.v);
@@ -81,10 +96,16 @@ int main()
   else
     printf("x16 error\n");
   printf("x17[%d] = { ", (int) sizeof(x17));
-  for (i = 0; i < sizeof(x17); i++) printf("'%c', ", x17[i]);
+  print_chars(x17, sizeof(x17));
   printf("}\n");
   printf("x18 = \"%s\"\n", x18);
   printf("x19 = { \"%s\", \"%s\" }\n", x19[0], x19[1]);
+  printf("x20 = { ");
+  print_chars(x20, sizeof(x20));
+  printf("}\n");
+  printf("x21 = { ");
+  print_chars(x21, sizeof(x21));
+  printf("}\n");
   return 0;
 }
 
