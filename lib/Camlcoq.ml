@@ -109,27 +109,11 @@ let extern_atom a =
 
 (* Strings *)
 
-let char_of_ascii (Ascii.Ascii(a0, a1, a2, a3, a4, a5, a6, a7)) =
-  Char.chr(  (if a0 then 1 else 0)
-           + (if a1 then 2 else 0)
-           + (if a2 then 4 else 0)
-           + (if a3 then 8 else 0)
-           + (if a4 then 16 else 0)
-           + (if a5 then 32 else 0)
-           + (if a6 then 64 else 0)
-           + (if a7 then 128 else 0))
-
-let coqstring_length s =
-  let rec len accu = function
-  | String0.EmptyString -> accu
-  | String0.String(_, s) -> len (accu + 1) s
-  in len 0 s
-
-let camlstring_of_coqstring s =
-  let r = String.create (coqstring_length s) in
+let camlstring_of_coqstring (s: char list) =
+  let r = String.create (List.length s) in
   let rec fill pos = function
-  | String0.EmptyString -> r
-  | String0.String(c, s) -> r.[pos] <- char_of_ascii c; fill (pos + 1) s
+  | [] -> r
+  | c :: s -> r.[pos] <- c; fill (pos + 1) s
   in fill 0 s
 
 (* Timing facility *)

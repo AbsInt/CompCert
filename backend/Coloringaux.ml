@@ -410,11 +410,11 @@ let build g typenv spillcosts =
       n in
   (* Fill the adjacency set and the adjacency lists; compute the degrees. *)
   SetRegReg.fold
-    (fun (Coq_pair(r1, r2)) () ->
+    (fun (r1, r2) () ->
       addEdge (find_reg_node r1) (find_reg_node r2))
     g.interf_reg_reg ();
   SetRegMreg.fold
-    (fun (Coq_pair(r1, mr2)) () ->
+    (fun (r1, mr2) () ->
       addEdge (find_reg_node r1) (find_mreg_node mr2))
     g.interf_reg_mreg ();
   (* Process the moves and insert them in worklistMoves *)
@@ -427,11 +427,11 @@ let build g typenv spillcosts =
     n2.movelist <- m :: n2.movelist;
     DLinkMove.insert m worklistMoves in
   SetRegReg.fold
-    (fun (Coq_pair(r1, r2)) () ->
+    (fun (r1, r2) () ->
       add_move (find_reg_node r1) (find_reg_node r2))
     g.pref_reg_reg ();
   SetRegMreg.fold
-    (fun (Coq_pair(r1, mr2)) () ->
+    (fun (r1, mr2) () ->
       let r1' = find_reg_node r1 in
       if List.mem mr2 !allocatable_registers then
         add_move r1' (find_mreg_node mr2))

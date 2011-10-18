@@ -132,9 +132,8 @@ let global_for_string s id =
        :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
-  Datatypes.Coq_pair(id,
-                     {gvar_info = typeStringLiteral s; gvar_init = !init;
-                      gvar_readonly = true; gvar_volatile = false})
+  (id, {gvar_info = typeStringLiteral s; gvar_init = !init;
+        gvar_readonly = true; gvar_volatile = false})
 
 let globals_for_strings globs =
   Hashtbl.fold
@@ -151,8 +150,7 @@ let register_special_external name ef targs tres =
 
 let declare_special_externals k =
   Hashtbl.fold
-    (fun name fd k ->
-       Datatypes.Coq_pair(intern_string name, fd) :: k)
+    (fun name fd k -> (intern_string name, fd) :: k)
     special_externals_table k
 
 (** ** Handling of stubs for variadic functions *)
@@ -720,7 +718,7 @@ let convertFundef env fd =
       (fun (id, ty) ->
         if Cutil.is_composite_type env ty then
           unsupported "function parameter of struct or union type";
-        Datatypes.Coq_pair(intern_string id.name, convertTyp env ty))
+        (intern_string id.name, convertTyp env ty))
       fd.fd_params in
   let vars =
     List.map
@@ -729,7 +727,7 @@ let convertFundef env fd =
           unsupported "'static' or 'extern' local variable";
         if init <> None then
           unsupported "initialized local variable";
-        Datatypes.Coq_pair(intern_string id.name, convertTyp env ty))
+        (intern_string id.name, convertTyp env ty))
       fd.fd_locals in
   let body' = convertStmt env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
@@ -739,9 +737,8 @@ let convertFundef env fd =
       a_type = Cutil.fundef_typ fd;
       a_fundef = Some fd };
   Sections.define_function env id' fd.fd_ret;
-  Datatypes.Coq_pair(id',
-                     Internal {fn_return = ret; fn_params = params;
-                               fn_vars = vars; fn_body = body'})
+  (id', Internal {fn_return = ret; fn_params = params;
+                  fn_vars = vars; fn_body = body'})
 
 (** External function declaration *)
 
@@ -758,7 +755,7 @@ let convertFundecl env (sto, id, ty, optinit) =
     if List.mem_assoc id.name builtins.functions
     then EF_builtin(id', sg)
     else EF_external(id', sg) in
-  Datatypes.Coq_pair(id', External(ef, args, res))
+  (id', External(ef, args, res))
 
 (** Initializers *)
 
@@ -810,10 +807,8 @@ let convertGlobvar env (sto, id, ty, optinit) =
   let a = Cutil.attributes_of_type env ty in
   let volatile = List.mem C.AVolatile a in
   let readonly = List.mem C.AConst a && not volatile in
-  Datatypes.Coq_pair(id', 
-                     {gvar_info = ty'; gvar_init = init';
-                      gvar_readonly = readonly;
-                      gvar_volatile = volatile})
+  (id', {gvar_info = ty'; gvar_init = init';
+         gvar_readonly = readonly; gvar_volatile = volatile})
 
 (** Convert a list of global declarations.
   Result is a pair [(funs, vars)] where [funs] are 

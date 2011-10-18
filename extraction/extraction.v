@@ -19,11 +19,8 @@ Require Compiler.
 Require Initializers.
 
 (* Standard lib *)
-Extract Inductive unit => "unit" [ "()" ].
-Extract Inductive bool => "bool" [ "true" "false" ].
-Extract Inductive sumbool => "bool" [ "true" "false" ].
-Extract Inductive option => "option" [ "Some" "None" ].
-Extract Inductive list => "list" [ "[]" "(::)" ].
+Require Import ExtrOcamlBasic.
+Require Import ExtrOcamlString.
 
 (* Float *)
 Extract Inlined Constant Floats.float => "float".

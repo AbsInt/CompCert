@@ -114,7 +114,7 @@ let addressing oc (Addrmode(base, shift, cst)) =
   | Coq_inl n ->
       let n = camlint_of_coqint n in
       fprintf oc "%ld" n
-  | Coq_inr(Coq_pair(id, ofs)) -> 
+  | Coq_inr(id, ofs) -> 
       let ofs = camlint_of_coqint ofs in
       if ofs = 0l
       then symbol oc id
@@ -123,8 +123,8 @@ let addressing oc (Addrmode(base, shift, cst)) =
   begin match base, shift with
   | None, None -> ()
   | Some r1, None -> fprintf oc "(%a)" ireg r1
-  | None, Some(Coq_pair(r2,sc)) -> fprintf oc "(,%a,%a)" ireg r2 coqint sc
-  | Some r1, Some(Coq_pair(r2,sc)) -> fprintf oc "(%a,%a,%a)" ireg r1 ireg r2 coqint sc
+  | None, Some(r2,sc) -> fprintf oc "(,%a,%a)" ireg r2 coqint sc
+  | Some r1, Some(r2,sc) -> fprintf oc "(%a,%a,%a)" ireg r1 ireg r2 coqint sc
   end
 
 let name_of_condition = function
@@ -730,7 +730,7 @@ let print_function oc name code =
     jumptables := []
   end
 
-let print_fundef oc (Coq_pair(name, defn)) =
+let print_fundef oc (name, defn) =
   match defn with
   | Internal code -> print_function oc name code
   | External ef -> ()
@@ -761,7 +761,7 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (Coq_pair(name, v)) =
+let print_var oc (name, v) =
   match v.gvar_init with
   | [] -> ()
   | _  ->

@@ -201,7 +201,7 @@ let call_helper oc fn dst arg1 arg2 =
   let moves =
     Parmov.parmove2 (=) (fun _ -> IR14) [arg1; arg2] [IR0; IR1] in
   List.iter
-    (fun (Coq_pair(s, d)) ->
+    (fun (s, d) ->
       fprintf oc "	mov	%a, %a\n" ireg d ireg s)
     moves;
   (* Call the helper function *)
@@ -689,7 +689,7 @@ let print_function oc name fn =
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
-let print_fundef oc (Coq_pair(name, defn)) =
+let print_fundef oc (name, defn) =
   match defn with
   | Internal code ->
       print_function oc name code
@@ -729,7 +729,7 @@ let rec log2 n =
   assert (n > 0);
   if n = 1 then 0 else 1 + log2 (n lsr 1)
 
-let print_var oc (Coq_pair(name, v)) =
+let print_var oc (name, v) =
   match v.gvar_init with
   | [] -> ()
   | _  ->

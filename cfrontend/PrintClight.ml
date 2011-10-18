@@ -231,17 +231,17 @@ let print_function p id f =
                         f.fn_return);
   fprintf p "@[<v 2>{@ ";
   List.iter
-    (fun (Coq_pair(id, ty)) ->
+    (fun (id, ty) ->
       fprintf p "%s;@ " (name_cdecl (extern_atom id) ty))
     f.fn_vars;
   List.iter
-    (fun (Coq_pair(id, ty)) ->
+    (fun (id, ty) ->
       fprintf p "register %s;@ " (name_cdecl (temp_name id) ty))
     f.fn_temps;
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ @ "
 
-let print_fundef p (Coq_pair(id, fd)) =
+let print_fundef p (id, fd) =
   match fd with
   | External(_, args, res) ->
       fprintf p "extern %s;@ @ "
@@ -314,17 +314,17 @@ and collect_cases = function
 
 let collect_function f =
   collect_type f.fn_return;
-  List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_params;
-  List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_vars;
-  List.iter (fun (Coq_pair(id, ty)) -> collect_type ty) f.fn_temps;
+  List.iter (fun (id, ty) -> collect_type ty) f.fn_params;
+  List.iter (fun (id, ty) -> collect_type ty) f.fn_vars;
+  List.iter (fun (id, ty) -> collect_type ty) f.fn_temps;
   collect_stmt f.fn_body
 
-let collect_fundef (Coq_pair(id, fd)) =
+let collect_fundef (id, fd) =
   match fd with
   | External(_, args, res) -> collect_type_list args; collect_type res
   | Internal f -> collect_function f
 
-let collect_globvar (Coq_pair(id, v)) =
+let collect_globvar (id, v) =
   collect_type v.gvar_info
 
 let collect_program p =

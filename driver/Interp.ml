@@ -78,7 +78,7 @@ let print_event p = function
 let name_of_fundef prog fd =
   let rec find_name = function
   | [] -> "<unknown function>"
-  | Coq_pair(id, fd') :: rem ->
+  | (id, fd') :: rem ->
       if fd = fd' then extern_atom id else find_name rem
   in find_name prog.prog_funct
 
@@ -131,7 +131,7 @@ let compare_mem m1 m2 =
   if m1 == m2 then 0 else
   let c = compare m1.Mem.nextblock m2.Mem.nextblock in if c <> 0 then c else
   compare_Z_range Z0 m1.Mem.nextblock (fun b ->
-    let (Coq_pair(lo, hi) as bnds) = m1.Mem.bounds b in
+    let ((lo, hi) as bnds) = m1.Mem.bounds b in
     let c = compare bnds (m2.Mem.bounds b) in if c <> 0 then c else
     let contents1 = m1.Mem.mem_contents b and contents2 = m2.Mem.mem_contents b in
     if contents1 == contents2 then 0 else
@@ -328,7 +328,7 @@ let rec world = Determinism.World(world_io, world_vload, world_vstore)
 and world_io id args =
   match chop_stub(extern_atom id), args with
   | "printf", EVptr_global(id, ofs) :: args' ->
-      Some(Coq_pair(EVint Integers.Int.zero, world))
+      Some(EVint Integers.Int.zero, world)
   | _, _ ->
       None
 
@@ -342,7 +342,7 @@ and world_vload chunk id ofs =
     | Mint32 -> EVint(coqint_of_camlint(Random.int32 0x7FFF_FFFFl))
     | Mfloat32 -> EVfloat(Floats.Float.singleoffloat(Random.float 1.0))
     | Mfloat64 -> EVfloat(Random.float 1.0)
-  in Some(Coq_pair(res, world))
+  in Some(res, world)
 
 and world_vstore chunk id ofs v =
   assert !random_volatiles;
@@ -390,7 +390,7 @@ let do_step p prog ge time s =
           fprintf p "@].";
           exit 126
       | l ->
-          List.iter (fun (Coq_pair(t, s')) -> do_events p ge time s t) l;
+          List.iter (fun (t, s') -> do_events p ge time s t) l;
           List.map snd l
 
 let rec explore p prog ge time ss =
@@ -405,13 +405,16 @@ let rec explore p prog ge time ss =
     explore p prog ge (time + 1) ss'
   end
 
+(* Massaging the source program *)
+
 let unvolatile prog =
-  let unvolatile_globvar (Coq_pair(id, gv)) =
-    Coq_pair(id,
-             if gv.gvar_volatile
-             then {gv with gvar_readonly = false; gvar_volatile = false}
-             else gv) in
+  let unvolatile_globvar (id, gv) =
+    (id, if gv.gvar_volatile
+         then {gv with gvar_readonly = false; gvar_volatile = false}
+         else gv) in
   {prog with prog_vars = List.map unvolatile_globvar prog.prog_vars}
+
+(* Execution of a whole program *)
 
 let execute prog =
   Random.self_init();
@@ -420,5 +423,5 @@ let execute prog =
   let prog' = if !random_volatiles then prog else unvolatile prog in
   begin match Cexec.do_initial_state prog' with
   | None -> fprintf p "ERROR: Initial state undefined@."
-  | Some(Coq_pair(ge, s)) -> explore p prog ge 0 (StateSet.singleton s)
+  | Some(ge, s) -> explore p prog ge 0 (StateSet.singleton s)
   end

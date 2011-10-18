@@ -39,7 +39,7 @@ let rec set_types rl tyl =
 
 (* First pass: process constraints of the form typeof(r) = ty *)
 
-let type_instr retty (Coq_pair(pc, i)) =
+let type_instr retty (pc, i) =
   match i with
   | Inop(_) ->
       ()
@@ -48,7 +48,7 @@ let type_instr retty (Coq_pair(pc, i)) =
   | Iop(op, args, res, _) ->
       if two_address_op op && List.length args >= 1 && List.hd args <> res
       then raise (Type_error "two-address constraint violation");
-      let (Coq_pair(targs, tres)) = type_of_operation op in
+      let (targs, tres) = type_of_operation op in
       set_types args targs; set_type res tres
   | Iload(chunk, addr, args, dst, _) ->
       set_types args (type_of_addressing addr);
@@ -119,7 +119,7 @@ let type_pass1 retty instrs =
 
 let rec extract_moves = function
   | [] -> []
-  | Coq_pair(pc, i) :: rem ->
+  | (pc, i) :: rem ->
       match i with
       | Iop(Omove, [r1], r2, _) ->
           (r1, r2) :: extract_moves rem

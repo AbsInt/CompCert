@@ -29,7 +29,7 @@ module IntSet = Set.Make(IntOrd)
 let normalize_table tbl =
   let rec norm keys accu = function
   | [] -> (accu, keys)
-  | Datatypes.Coq_pair(key, act) :: rem ->
+  | (key, act) :: rem ->
       if IntSet.mem key keys
       then norm keys accu rem
       else norm (IntSet.add key keys) ((key, act) :: accu) rem

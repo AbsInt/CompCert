@@ -920,7 +920,7 @@ let stub_function =
   | MacOS       -> Stubs_MacOS.stub_function
   | Linux|Diab  -> Stubs_EABI.stub_function
 
-let print_fundef oc (Coq_pair(name, defn)) =
+let print_fundef oc (name, defn) =
   match defn with
   | Internal code ->
       print_function oc name code
@@ -929,7 +929,7 @@ let print_fundef oc (Coq_pair(name, defn)) =
   | External _ ->
       ()
 
-let record_extfun (Coq_pair(name, defn)) =
+let record_extfun (name, defn) =
   match defn with
   | Internal _ -> ()
   | External (EF_external _) ->
@@ -967,7 +967,7 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (Coq_pair(name, v)) =
+let print_var oc (name, v) =
   match v.gvar_init with
   | [] -> ()
   | _  ->

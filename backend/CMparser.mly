@@ -141,7 +141,7 @@ let mkswitch expr (cases, dfl) =
   let rec mktable = function
   | [] -> []
   | (key, exit) :: rem ->
-      Coq_pair(coqint_of_camlint key, exitnum exit) :: mktable rem in
+      (coqint_of_camlint key, exitnum exit) :: mktable rem in
   prepend_seq !convert_accu (Sswitch(c, mktable cases, exitnum dfl))
 
 (***
@@ -166,7 +166,7 @@ let mkmatch_aux expr cases =
     | [] -> assert false
     | [key, action] -> []
     | (key, action) :: rem ->
-        Coq_pair(coqint_of_camlint key, nat_of_camlint n)
+        (coqint_of_camlint key, nat_of_camlint n)
         :: mktable (Int32.succ n) rem in
   let sw =
     Sswitch(expr, mktable 0l cases, nat_of_camlint (Int32.pred ncases)) in
@@ -324,8 +324,8 @@ global_declarations:
 
 global_declaration:
     VAR STRINGLIT LBRACKET INTLIT RBRACKET
-      { Coq_pair($2, {gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
-                      gvar_readonly = false; gvar_volatile = false}) }
+      { ($2, {gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
+              gvar_readonly = false; gvar_volatile = false}) }
 ;
 
 proc_list:
@@ -345,14 +345,13 @@ proc:
       { let tmp = !temporaries in
         temporaries := [];
         temp_counter := 0;
-        Coq_pair($1,
-        Internal { fn_sig = $6;
-                   fn_params = List.rev $3;
-                   fn_vars = List.rev (tmp @ $9);
-                   fn_stackspace = $8;
-                   fn_body = $10 }) }
+        ($1, Internal { fn_sig = $6;
+                        fn_params = List.rev $3;
+                        fn_vars = List.rev (tmp @ $9);
+                        fn_stackspace = $8;
+                        fn_body = $10 }) }
   | EXTERN STRINGLIT COLON signature 
-      { Coq_pair($2, External(EF_external($2, $4))) }
+      { ($2, External(EF_external($2, $4))) }
 ;
 
 signature:

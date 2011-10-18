@@ -223,7 +223,7 @@ let rec print_stmt p s =
   | Sswitch(e, cases, dfl) ->
       fprintf p "@[<v 2>switch (%a) {" print_expr e;
       List.iter
-        (fun (Coq_pair(n, x)) ->
+        (fun (n, x) ->
            fprintf p "@ case %ld: exit %d;\n" 
                      (camlint_of_coqint n) (camlint_of_nat x))
         cases;
@@ -262,7 +262,7 @@ let print_function p id f =
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ "
 
-let print_fundef p (Coq_pair(id, fd)) =
+let print_fundef p (id, fd) =
   match fd with
   | External ef ->
       () (* Todo? *)

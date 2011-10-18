@@ -96,7 +96,7 @@ let print_function pp f =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
       (List.map
-        (fun (Coq_pair(pc, i)) -> (camlint_of_positive pc, i))
+        (fun (pc, i) -> (camlint_of_positive pc, i))
         (PTree.elements f.fn_code)) in
   print_succ pp f.fn_entrypoint 
     (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1l);
