@@ -414,14 +414,45 @@ let unvolatile prog =
          else gv) in
   {prog with prog_vars = List.map unvolatile_globvar prog.prog_vars}
 
+let change_main_function p old_main old_main_ty =
+  let tint = Tint(I32, Signed) in
+  let old_main = Evalof(Evar(old_main, old_main_ty), old_main_ty) in
+  let arg1 = Eval(Vint(coqint_of_camlint 0l), tint) in
+  let arg2 = arg1 in
+  let body =
+    Sreturn(Some(Ecall(old_main, Econs(arg1, Econs(arg2, Enil)), tint))) in
+  let new_main_fn =
+    { fn_return = tint; fn_params = []; fn_vars = []; fn_body = body } in
+  let new_main_id = intern_string "___main" in
+  { p with
+    prog_main = new_main_id;
+    prog_funct = (new_main_id, Internal new_main_fn) :: p.prog_funct }
+
+let fixup_main p =
+  try
+    match type_of_fundef (List.assoc p.prog_main p.prog_funct) with
+    | Tfunction(Tnil, Tint(I32, Signed)) ->
+        Some p
+    | Tfunction(Tcons(Tint _, Tcons(Tpointer(Tpointer(Tint(I8,_))), Tnil)),
+                Tint _) as ty ->
+        Some (change_main_function p p.prog_main ty)
+    | _ ->
+        fprintf err_formatter "ERROR: wrong type for main() function";
+        None
+  with Not_found ->
+    fprintf err_formatter "ERROR: no main() function";
+    None
+
 (* Execution of a whole program *)
 
 let execute prog =
   Random.self_init();
   let p = err_formatter in
   pp_set_max_boxes p 10;
-  let prog' = if !random_volatiles then prog else unvolatile prog in
-  begin match Cexec.do_initial_state prog' with
-  | None -> fprintf p "ERROR: Initial state undefined@."
-  | Some(ge, s) -> explore p prog ge 0 (StateSet.singleton s)
-  end
+  match fixup_main prog with
+  | None -> ()
+  | Some prog1 ->
+      let prog2 = if !random_volatiles then prog1 else unvolatile prog1 in
+      match Cexec.do_initial_state prog2 with
+      | None -> fprintf p "ERROR: Initial state undefined@."
+      | Some(ge, s) -> explore p prog2 ge 0 (StateSet.singleton s)

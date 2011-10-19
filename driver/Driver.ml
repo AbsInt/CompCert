@@ -257,12 +257,6 @@ let process_S_file sourcename =
   end;
   prefixname ^ ".o"
 
-(* Interpretation of a .c file *)
-
-let execute_c_file sourcename =
-  let preproname = Filename.temp_file "compcert" ".i" in
-  preprocess sourcename preproname
-
 (* Command-line parsing *)
 
 type action =
