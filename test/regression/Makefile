@@ -9,14 +9,14 @@ LIBS=$(LIBMATH)
 
 TESTS=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 \
-  expr1 expr6 initializers volatile2 volatile3 \
+  expr1 expr6 initializers volatile1 volatile2 volatile3 \
   funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
   sizeof1 sizeof2 packedstruct1
 
 # Other tests: should compile to .s without errors (but expect warnings)
 EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
   init2 init3 init4 pragmas ptrs1 ptrs2 struct1 struct2 struct3 \
-  struct4 struct5 struct6 struct9 struct10 types1 volatile1
+  struct4 struct5 struct6 struct9 struct10 types1
 
 # Test known to fail
 FAILURES=funct1 varargs1

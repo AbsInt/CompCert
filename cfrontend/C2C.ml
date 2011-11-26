@@ -367,6 +367,10 @@ let first_class_value env ty =
 let is_volatile_access env e =
   List.mem C.AVolatile (Cutil.attributes_of_type env e.etyp)
   && Cutil.is_lvalue e
+  && begin match Cutil.unroll env e.etyp with
+     | TFun _ | TArray _ -> false
+     | _ -> true
+     end
 
 let volatile_kind ty =
   match ty with
@@ -377,8 +381,7 @@ let volatile_kind ty =
   | Tint(I32, _) -> ("int32", Tint(I32, Signed), Mint32)
   | Tfloat F32 -> ("float32", ty, Mfloat32)
   | Tfloat F64 -> ("float64", ty, Mfloat64)
-  | Tpointer _ | Tarray _ | Tfunction _ | Tcomp_ptr _ ->
-      ("pointer", Tpointer Tvoid, Mint32)
+  | Tpointer _ -> ("pointer", Tpointer Tvoid, Mint32)
   | _ ->
       unsupported "operation on volatile struct or union"; ("", Tvoid, Mint32)
 
