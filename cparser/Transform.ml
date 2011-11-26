@@ -26,6 +26,11 @@ let temporaries = ref ([]: decl list)
 let reset_temps () =
   temporaries := []
 
+let get_temps () =
+  let temps = !temporaries in
+  temporaries := [];
+  List.rev temps
+
 let new_temp_var ?(name = "t") ty =
   let id = Env.fresh_ident name in
   temporaries := (Storage_default, id, ty, None) :: !temporaries;
@@ -35,10 +40,13 @@ let new_temp ?(name = "t") ty =
   let id = new_temp_var ~name ty in
   { edesc = EVar id; etyp = ty }
 
-let get_temps () =
-  let temps = !temporaries in
-  temporaries := [];
-  List.rev temps
+(* Temporaries should not be [const] because we assign into them
+   and not be [volatile] because they are local and not observable *)
+
+let attributes_to_remove_from_temp = add_attributes [AConst] [AVolatile]
+
+let mk_temp env ?(name = "t") ty =
+  new_temp (remove_attributes_type env attributes_to_remove_from_temp ty)
 
 (* Bind a l-value to a temporary variable if it is not invariant. *)
 
@@ -57,10 +65,80 @@ let bind_lvalue env e fn =
            (fn {edesc = EUnop(Oderef, tmp); etyp = e.etyp})
   end
 
-(* Generic transformation of a statement, transforming expressions within
-   and preserving the statement structure.  Applies only to unblocked code. *)
+(* Most transformations over expressions can be optimized if the
+   value of the expression is not needed and it is evaluated only
+   for its side-effects.  The type [context] records whether
+   we are in a side-effects-only position ([Effects]) or not ([Val]). *)
 
 type context = Val | Effects
+
+(* Expansion of assignment expressions *)
+
+let op_for_assignop = function
+  | Oadd_assign -> Oadd
+  | Osub_assign -> Osub
+  | Omul_assign -> Omul
+  | Odiv_assign -> Odiv
+  | Omod_assign -> Omod
+  | Oand_assign -> Oand
+  | Oor_assign -> Oor 
+  | Oxor_assign -> Oxor
+  | Oshl_assign -> Oshl
+  | Oshr_assign -> Oshr
+  | _ -> assert false
+
+let op_for_incr_decr = function
+  | Opreincr -> Oadd
+  | Opredecr -> Osub
+  | Opostincr -> Oadd
+  | Opostdecr -> Osub
+  | _ -> assert false
+
+let assignop_for_incr_decr = function
+  | Opreincr -> Oadd_assign
+  | Opredecr -> Osub_assign
+  | _ -> assert false
+
+let expand_assign ~write env ctx l r =
+  match ctx with
+  | Effects ->
+      write l r
+  | Val ->
+      let tmp = mk_temp env l.etyp in
+      ecomma (eassign tmp r) (ecomma (write l tmp) tmp)
+
+let expand_assignop ~read ~write env ctx op l r ty =
+  bind_lvalue env l (fun l ->
+    let res = {edesc = EBinop(op_for_assignop op, read l, r, ty); etyp = ty} in
+    match ctx with
+    | Effects ->
+        write l res
+    | Val ->
+        let tmp = mk_temp env l.etyp in
+        ecomma (eassign tmp res) (ecomma (write l tmp) tmp))
+
+let expand_preincrdecr ~read ~write env ctx op l =
+  expand_assignop ~read ~write env ctx (assignop_for_incr_decr op) 
+              l (intconst 1L IInt) (unary_conversion env l.etyp)
+
+let expand_postincrdecr ~read ~write env ctx op l =
+  bind_lvalue env l (fun l ->
+    let ty = unary_conversion env l.etyp in
+    match ctx with
+    | Effects ->
+        let newval =
+          {edesc = EBinop(op_for_incr_decr op, read l, intconst 1L IInt, ty);
+           etyp = ty} in
+        write l newval
+    | Val ->
+        let tmp = mk_temp env l.etyp in
+        let newval =
+          {edesc = EBinop(op_for_incr_decr op, tmp, intconst 1L IInt, ty);
+           etyp = ty} in
+        ecomma (eassign tmp (read l)) (ecomma (write l newval) tmp))
+
+(* Generic transformation of a statement, transforming expressions within
+   and preserving the statement structure.  Applies only to unblocked code. *)
 
 let stmt trexpr env s =
   let rec stm s =

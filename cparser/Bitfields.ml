@@ -201,28 +201,6 @@ let bitfield_assign bf carrier newval =
   {edesc = EBinop(Oor,  oldval_masked, newval_masked,  TInt(IUInt,[]));
    etyp =  TInt(IUInt,[])}
 
-(* Transformation of operators *)
-
-let op_for_incr_decr = function
-  | Opreincr -> Oadd
-  | Opredecr -> Osub
-  | Opostincr -> Oadd
-  | Opostdecr -> Osub
-  | _ -> assert false
-
-let op_for_assignop = function
-  | Oadd_assign -> Oadd
-  | Osub_assign -> Osub
-  | Omul_assign -> Omul
-  | Odiv_assign -> Odiv
-  | Omod_assign -> Omod
-  | Oand_assign -> Oand
-  | Oor_assign -> Oor 
-  | Oxor_assign -> Oxor
-  | Oshl_assign -> Oshl
-  | Oshr_assign -> Oshr
-  | _ -> assert false
-
 (* Check whether a field access (e.f or e->f) is a bitfield access.
    If so, return carrier expression (e and *e, respectively)
    and bitfield_info *)
@@ -356,7 +334,7 @@ let transf_expr env ctx e =
       bind_lvalue env (texp Val e1) (fun base ->
         let carrier =
           {edesc = EUnop(Odot bf.bf_carrier, base); etyp = bf.bf_carrier_typ} in
-        let temp = new_temp tyfield in
+        let temp = mk_temp env tyfield in
         let tyres = unary_conversion env tyfield in
         let settemp = eassign temp (bitfield_extract bf carrier) in
         let rhs =

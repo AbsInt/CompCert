@@ -40,8 +40,8 @@ type t = {
   alignof_longdouble: int;
   alignof_void: int option;
   alignof_fun: int option;
+  bigendian: bool;
   bitfields_msb_first: bool
-
 }
 
 val ilp32ll64 : t

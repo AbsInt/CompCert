@@ -28,6 +28,11 @@ type field_info = {
   fi_swap: bool                         (* true if byte-swapped *)
 }
 
+(* Mapping from struct name to size.
+   Only packed structs are mentioned in this table. *)
+
+let packed_structs : (ident, int) Hashtbl.t = Hashtbl.create 17
+
 (* Mapping from (struct name, field name) to field_info.
    Only fields of packed structs are mentioned in this table. *)
 
@@ -50,6 +55,15 @@ let align x boundary =
   assert (is_pow2 boundary);
   (x + boundary - 1) land (lnot (boundary - 1))
 
+(* What are the types that can be byte-swapped? *)
+
+let rec can_byte_swap env ty =
+  match unroll env ty with
+  | TInt(ik, _) -> (true, sizeof_ikind ik > 1)
+  | TPtr(_, _) -> (true, true)          (* tolerance? *)
+  | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
+  | _ -> (false, false)
+
 (* Layout algorithm *)
 
 let layout_struct mfa msa swapped loc env struct_id fields =
@@ -63,13 +77,21 @@ let layout_struct mfa msa swapped loc env struct_id fields =
       let (sz, al) =
         match sizeof env f.fld_typ, alignof env f.fld_typ with
         | Some s, Some a -> (s, a)
-        | _, _ -> error "%a: struct field has incomplete type" formatloc loc;
+        | _, _ -> error "%a: Error: struct field has incomplete type" formatloc loc;
                   (0, 1) in
+      let swap =
+        if swapped then begin
+          let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
+          if not can_swap then
+            error "%a: Error: cannot byte-swap field of type '%a'"
+                  formatloc loc Cprint.typ f.fld_typ;
+          must_swap
+        end else false in
       let al1 = min al mfa in
       let pos1 = align pos al1 in
       Hashtbl.add packed_fields
          (struct_id, f.fld_name)
-         {fi_offset = pos1; fi_swap = swapped};
+         {fi_offset = pos1; fi_swap = swap};
       let pos2 = pos1 + sz in
       layout (max max_al al1) pos2 rem in
   let (al, sz) = layout 1 0 fields in
@@ -79,6 +101,11 @@ let layout_struct mfa msa swapped loc env struct_id fields =
     (msa, align sz msa)
 
 (* Rewriting of struct declarations *)
+
+let payload_field sz =
+  { fld_name = "__payload";
+    fld_typ = TArray(TInt(IUChar, []), Some(Int64.of_int sz), []);
+    fld_bitfield = None}
 
 let transf_composite loc env su id attrs ml =
   match su with
@@ -93,13 +120,12 @@ let transf_composite loc env su id attrs ml =
           (0, 0, false) in
       if mfa = 0 then (attrs, ml) else begin
         let (al, sz) = layout_struct mfa msa swapped loc env id ml in
+        Hashtbl.add packed_structs id sz;
         let attrs =
           if al = 0 then attrs else
             add_attributes [Attr("__aligned__", [AInt(Int64.of_int al)])] attrs
         and field =
-          {fld_name = "__payload";
-           fld_typ = TArray(TInt(IChar, []), Some(Int64.of_int sz), []);
-           fld_bitfield = None}
+          payload_field sz
         in (attrs, [field])
       end
 
@@ -152,7 +178,8 @@ let arrow_packed_field base pf ty =
   ederef ty (ecast (TPtr(ty, [])) (eoffset payload pf.fi_offset))
 
 (*  (ty) __builtin_read_NN_reversed(&lval)  *)
-let bswap_read loc env lval ty =
+let bswap_read loc env lval =
+  let ty = lval.etyp in
   let (bsize, aty) =
     accessor_type loc env ty in
   if bsize = 8 then lval else begin
@@ -165,7 +192,8 @@ let bswap_read loc env lval ty =
   end
 
 (*  __builtin_write_intNN_reversed(&lhs,rhs)  *)
-let bswap_write loc env lhs rhs ty =
+let bswap_write loc env lhs rhs =
+  let ty = lhs.etyp in
   let (bsize, aty) =
     accessor_type loc env ty in
   if bsize = 8 then eassign lhs rhs else begin
@@ -227,14 +255,31 @@ let transf_expr loc env ctx e =
 
     | EUnop(Odot _, _) | EUnop(Oarrow _, _) | EBinop(Oindex, _, _, _) ->
         let (e', swap) = lvalue e in
-        if swap then bswap_read loc env e' e'.etyp else e'
+        if swap then bswap_read loc env e' else e'
 
-    | EUnop((Oaddrof|Opreincr|Opredecr|Opostincr|Opostdecr as op), e1) ->
+    | EUnop(Oaddrof, e1) ->
         let (e1', swap) = lvalue e1 in
         if swap then
-          error "%a: Error: &, ++ and -- over byte-swapped field are not supported"
-                formatloc loc;
-        {edesc = EUnop(op, e1'); etyp = e.etyp}
+          error "%a: Error: & over byte-swapped field" formatloc loc;
+        {edesc = EUnop(Oaddrof, e1'); etyp = e.etyp}
+
+    | EUnop((Opreincr|Opredecr) as op, e1) ->
+        let (e1', swap) = lvalue e1 in
+        if swap then
+          expand_preincrdecr
+            ~read:(bswap_read loc env) ~write:(bswap_write loc env)
+            env ctx op e1'
+        else
+          {edesc = EUnop(op, e1'); etyp = e.etyp}
+
+    | EUnop((Opostincr|Opostdecr as op), e1) ->
+        let (e1', swap) = lvalue e1 in
+        if swap then
+          expand_postincrdecr
+            ~read:(bswap_read loc env) ~write:(bswap_write loc env)
+            env ctx op e1'
+        else
+          {edesc = EUnop(op, e1'); etyp = e.etyp}
 
     | EUnop(op, e1) ->
         {edesc = EUnop(op, texp Val e1); etyp = e.etyp}
@@ -242,12 +287,9 @@ let transf_expr loc env ctx e =
     | EBinop(Oassign, e1, e2, ty) ->
         let (e1', swap) = lvalue e1 in
         let e2' = texp Val e2 in
-        if swap then begin
-          if ctx <> Effects then
-            error "%a: Error: assignment over byte-swapped field in value context is not supported"
-                  formatloc loc;
-          bswap_write loc env e1' e2' e1'.etyp
-        end else
+        if swap then
+          expand_assign ~write:(bswap_write loc env) env ctx e1' e2'
+        else
           {edesc = EBinop(Oassign, e1', e2', ty); etyp = e.etyp}
 
     | EBinop((Oadd_assign|Osub_assign|Omul_assign|Odiv_assign|Omod_assign|
@@ -256,9 +298,11 @@ let transf_expr loc env ctx e =
         let (e1', swap) = lvalue e1 in
         let e2' = texp Val e2 in
         if swap then
-          error "%a: Error: op-assignment over byte-swapped field is not supported"
-                formatloc loc;
-        {edesc = EBinop(op, e1', e2', ty); etyp = e.etyp}
+          expand_assignop
+            ~read:(bswap_read loc env) ~write:(bswap_write loc env)
+            env ctx op e1' e2' ty
+        else
+          {edesc = EBinop(op, e1', e2', ty); etyp = e.etyp}
 
     | EBinop(Ocomma, e1, e2, ty) ->
         {edesc = EBinop(Ocomma, texp Effects e1, texp Val e2, ty);
@@ -291,29 +335,80 @@ let transf_fundef env f =
 
 (* Initializers *)
 
-let rec check_init i =
-  match i with
-  | Init_single e -> true
-  | Init_array il -> List.for_all check_init il
+let extract_byte env e i =
+  let ty = unary_conversion env e.etyp in
+  let e1 =
+    if i = 0 then e else
+      { edesc = EBinop(Oshr, e, intconst (Int64.of_int (i*8)) IInt, ty);
+        etyp = ty } in
+  { edesc = EBinop(Oand, e1, intconst 0xFFL IInt, ty); etyp = ty }
+
+let init_packed_struct loc env struct_id struct_sz initdata =
+
+  let new_initdata = Array.make struct_sz (Init_single (intconst 0L IUChar)) in
+
+  let enter_scalar pos e sz bigendian =
+    for i = 0 to sz - 1 do
+      let bytenum = if bigendian then sz - 1 - i else i in
+      new_initdata.(pos + i) <- Init_single(extract_byte env e bytenum)
+    done in
+
+  let rec enter_init pos ty init bigendian =
+    match (unroll env ty, init) with
+    | (TInt(ik, _), Init_single e) ->
+        enter_scalar pos e (sizeof_ikind ik) bigendian
+    | (TPtr _, Init_single e) ->
+        enter_scalar pos e ((!Machine.config).sizeof_ptr) bigendian
+    | (TArray(ty_elt, _, _), Init_array il) ->
+        begin match sizeof env ty_elt with
+        | Some sz -> enter_init_array pos ty_elt sz il bigendian
+        | None -> fatal_error "%a: Internal error: incomplete type in init data" formatloc loc
+        end
+    | (_, _) ->
+        error "%a: Unsupported initializer for packed struct" formatloc loc
+  and enter_init_array pos ty sz il bigendian =
+    match il with
+    | [] -> ()
+    | i1 :: il' ->
+        enter_init pos ty i1 bigendian;
+        enter_init_array (pos + sz) ty sz il' bigendian in
+
+  let enter_field (fld, init) =
+    let finfo =
+      try Hashtbl.find packed_fields (struct_id, fld.fld_name)
+      with Not_found ->
+        fatal_error "%a: Internal error: non-packed field in packed struct"
+                    formatloc loc in
+    enter_init finfo.fi_offset fld.fld_typ init
+               ((!Machine.config).bigendian <> finfo.fi_swap) in
+
+  List.iter enter_field initdata;
+
+  Init_struct(struct_id, [
+    (payload_field struct_sz, Init_array (Array.to_list new_initdata))
+  ])
+
+let transf_init loc env i =
+  let rec trinit = function
+  | Init_single e as i -> i
+  | Init_array il -> Init_array (List.map trinit il)
   | Init_struct(id, fld_init_list) ->
-      List.for_all
-        (fun (f, i) ->
-          not (Hashtbl.mem packed_fields (id, f.fld_name)))
-        fld_init_list
-  | Init_union(id, fld, i) ->
-      check_init i
+      begin try
+        let sz = Hashtbl.find packed_structs id in
+        init_packed_struct loc env id sz fld_init_list
+      with Not_found ->
+        Init_struct(id, List.map (fun (f,i) -> (f, trinit i)) fld_init_list)
+      end
+  | Init_union(id, fld, i) -> Init_union(id, fld, trinit i)
+  in trinit i
 
 (* Declarations *)
 
-let transf_decl loc env (sto, id, ty, init_opt as decl) =
-  begin match init_opt with
-  | None -> () 
-  | Some i ->
-      if not (check_init i) then
-        error "%a: Error: Initialization of packed structs is not supported"
-              formatloc loc
-  end;
-  decl
+let transf_decl loc env (sto, id, ty, init_opt) =
+  (sto, id, ty,
+   match init_opt with
+   | None -> None
+   | Some i -> Some (transf_init loc env i))
 
 (* Pragmas *)
 

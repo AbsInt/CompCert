@@ -52,6 +52,7 @@ struct s3 {
   signed int w;
   char * p;
   unsigned int t[3];
+  unsigned char s[2];
 };
 
 struct s3 s3;
@@ -61,6 +62,7 @@ void test3(void)
   char xx;
 
   printf("sizeof(struct s3) = %d\n", sizeof(struct s3));
+  printf("offsetof(s) = %d\n", offsetof(s3,s));
   s3.x = 123;
   s3.y = 45678;
   s3.z = 0x80000001U;
@@ -70,10 +72,13 @@ void test3(void)
   s3.t[0] = 111;
   s3.t[1] = 222;
   s3.t[2] = 333;
-  printf("s3 = {x = %u, y = %u, z = %u, v = %d, w = %d, p is %s, t = {%d,%d,%d}}\n\n",
+  s3.s[0] = 'o';
+  s3.s[1] = 'k';
+  printf("s3 = {x = %u, y = %u, z = %u, v = %d, w = %d, p is %s, t = {%d,%d,%d}, s = {'%c','%c'}}\n\n",
          s3.x, s3.y, s3.z, s3.v, s3.w,
          (s3.p == &xx ? "ok" : "BAD"),
-         s3.t[0], s3.t[1], s3.t[2]);
+         s3.t[0], s3.t[1], s3.t[2],
+         s3.s[0], s3.s[1]);
 }
 
 /* Back to normal */

@@ -40,6 +40,7 @@ type t = {
   alignof_longdouble: int;
   alignof_void: int option;
   alignof_fun: int option;
+  bigendian: bool;
   bitfields_msb_first: bool
 }
 
@@ -68,6 +69,7 @@ let ilp32ll64 = {
   alignof_longdouble = 16;
   alignof_void = None;
   alignof_fun = None;
+  bigendian = false;
   bitfields_msb_first = false
 }
 
@@ -96,6 +98,7 @@ let i32lpll64 = {
   alignof_longdouble = 16;
   alignof_void = None;
   alignof_fun = None;
+  bigendian = false;
   bitfields_msb_first = false
 }
 
@@ -124,6 +127,7 @@ let il32pll64 = {
   alignof_longdouble = 16;
   alignof_void = None;
   alignof_fun = None;
+  bigendian = false;
   bitfields_msb_first = false
 }
 
@@ -132,7 +136,7 @@ let il32pll64 = {
 let x86_32 = { ilp32ll64 with char_signed = true }
 let x86_64 = { i32lpll64 with char_signed = true }
 let win64 = { il32pll64 with char_signed = true }
-let ppc_32_bigendian = { ilp32ll64 with bitfields_msb_first = true }
+let ppc_32_bigendian = { ilp32ll64 with bigendian = true; bitfields_msb_first = true }
 let arm_littleendian = ilp32ll64
 
 (* Add GCC extensions re: sizeof and alignof *)

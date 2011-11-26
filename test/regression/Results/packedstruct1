@@ -7,8 +7,9 @@ sizeof(struct s2) = 16
 offsetof(x) = 0, offsetof(y) = 2, offsetof(z) = 6
 s2 = {x = 57, y = -456, z = 3.14159}
 
-sizeof(struct s3) = 29
-s3 = {x = 123, y = 45678, z = 2147483649, v = -456, w = -1234567, p is ok, t = {111,222,333}}
+sizeof(struct s3) = 31
+offsetof(s) = 29
+s3 = {x = 123, y = 45678, z = 2147483649, v = -456, w = -1234567, p is ok, t = {111,222,333}, s = {'o','k'}}
 
 sizeof(struct s4) = 16
 offsetof(x) = 0, offsetof(y) = 4, offsetof(z) = 8
