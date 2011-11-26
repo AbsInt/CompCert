@@ -654,14 +654,17 @@ let rec convertStmt env s =
   | C.Sseq(s1, s2) ->
       Ssequence(convertStmt env s1, convertStmt env s2)
   | C.Sif(e, s1, s2) ->
-      Sifthenelse(convertExpr env e, convertStmt env s1, convertStmt env s2)
+      let te = convertExpr env e in
+      Sifthenelse(te, convertStmt env s1, convertStmt env s2)
   | C.Swhile(e, s1) ->
-      Swhile(convertExpr env e, convertStmt env s1)
+      let te = convertExpr env e in
+      Swhile(te, convertStmt env s1)
   | C.Sdowhile(s1, e) ->
-      Sdowhile(convertExpr env e, convertStmt env s1)
+      let te = convertExpr env e in
+      Sdowhile(te, convertStmt env s1)
   | C.Sfor(s1, e, s2, s3) ->
-      Sfor(convertStmt env s1, convertExpr env e, convertStmt env s2,
-           convertStmt env s3)
+      let te = convertExpr env e in
+      Sfor(convertStmt env s1, te, convertStmt env s2, convertStmt env s3)
   | C.Sbreak ->
       Sbreak
   | C.Scontinue ->
@@ -672,7 +675,8 @@ let rec convertStmt env s =
         unsupported "ill-formed 'switch' statement";
       if init.sdesc <> C.Sskip then
         warning "ignored code at beginning of 'switch'";
-      Sswitch(convertExpr env e, convertSwitch env cases)
+      let te = convertExpr env e in
+      Sswitch(te, convertSwitch env cases)
   | C.Slabeled(C.Slabel lbl, s1) ->
       Slabel(intern_string lbl, convertStmt env s1)
   | C.Slabeled(C.Scase _, _) ->
