@@ -1,3 +1,22 @@
+Release 1.9.1, 2011-11-28
+=========================
+
+Bug fixes:
+- Initialization of a char array by a short string literal was wrongly rejected
+- Incorrect handling of volatile arrays.
+- IA32 code generator: make sure that min_int / -1 does not cause a
+  machine trap.
+
+Improvements:
+- Added language option -flongdouble to treat "long double" like "double".
+- The reference interpreter (ccomp -interp) now supports 2-argument main
+  functions (int main(int, char **)).
+- Improved but still very experimental emulation of packed structs
+  (-fpacked-structs)
+- Coq->Caml extraction: extract Coq pairs to Caml pairs and Coq
+  characters to Caml "char" type.
+
+
 Release 1.9, 2011-08-22
 =======================
 
@@ -40,7 +59,7 @@ Release 1.9, 2011-08-22
        (one integer argument, reloaded in a register if needed,
         returned as result).
 
-- Related clean-ups in the handling of external functions and 
+- Related clean-ups in the handling of external functions and
   compiler built-ins.  In particular, __builtin_memcpy is now
   fully specified.
 
@@ -57,7 +76,7 @@ Release 1.9, 2011-08-22
 - PowerPC code generator: more efficient instruction sequences generated
   for insertion in a bit field and for some comparisons against 0.
 
-	
+
 Release 1.8.2, 2011-05-24
 =========================
 
@@ -135,7 +154,7 @@ Release 1.8, 2010-09-21
   (About 75% of the performance of gcc -O1 for x86, compared with
    > 90% for PowerPC.)
 
-- More faithful semantics for volatile accesses: 
+- More faithful semantics for volatile accesses:
   . volatile reads and writes from a volatile global variable are treated
     like input and output system calls (respectively), bypassing
     the memory model entirely;
@@ -163,7 +182,7 @@ Release 1.8, 2010-09-21
 
 - Fixed some bugs in the emulation of bit fields.
 
-	
+
 Release 1.7.1, 2010-04-13
 =========================
 
@@ -210,7 +229,7 @@ Release 1.7, 2010-03-31
   is correctly compiled.
 
 - The memory model now supports fine-grained access control to individual
-  bytes of a memory block.  This feature is currently unused in the 
+  bytes of a memory block.  This feature is currently unused in the
   compiler proofs, but will facilitate connections with separation logics
   later.
 
@@ -226,7 +245,7 @@ Release 1.7, 2010-03-31
 
 - The C test suite was enriched and restructured.
 
-	
+
 Release 1.6, 2010-01-13
 =======================
 
@@ -260,7 +279,7 @@ Release 1.5, 2009-08-28
 - Traces for diverging executions are now uniquely defined;
   tightened semantic preservation results accordingly.
 
-- Emulated assignments between structures 
+- Emulated assignments between structures
   (during the C to Clight initial translation).
 
 - Fixed spurious compile-time error on Clight statements of the form
