@@ -3105,6 +3105,15 @@ Proof.
   eapply mi_access; eauto. auto. 
 Qed.
 
+Theorem valid_pointer_extends:
+  forall m1 m2 b ofs,
+  extends m1 m2 -> valid_pointer m1 b ofs = true -> valid_pointer m2 b ofs = true.
+Proof.
+  intros. 
+  rewrite valid_pointer_valid_access in *. 
+  eapply valid_access_extends; eauto.
+Qed.
+
 (*
 Theorem bounds_extends:
   forall m1 m2 b,

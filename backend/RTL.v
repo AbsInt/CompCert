@@ -255,18 +255,13 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge rs##args m t v m' ->
       step (State s f sp pc rs m)
          t (State s f sp pc' (rs#res <- v) m')
-  | exec_Icond_true:
-      forall s f sp pc rs m cond args ifso ifnot,
+  | exec_Icond:
+      forall s f sp pc rs m cond args ifso ifnot b pc',
       (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args m = Some true ->
+      eval_condition cond rs##args m = Some b ->
+      pc' = (if b then ifso else ifnot) ->
       step (State s f sp pc rs m)
-        E0 (State s f sp ifso rs m)
-  | exec_Icond_false:
-      forall s f sp pc rs m cond args ifso ifnot,
-      (fn_code f)!pc = Some(Icond cond args ifso ifnot) ->
-      eval_condition cond rs##args m = Some false ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp ifnot rs m)
+        E0 (State s f sp pc' rs m)
   | exec_Ijumptable:
       forall s f sp pc rs m arg tbl n pc',
       (fn_code f)!pc = Some(Ijumptable arg tbl) ->

@@ -565,7 +565,6 @@ Proof.
   rewrite H6. eapply external_call_well_typed; eauto. 
   (* Icond *)
   econstructor; eauto.
-  econstructor; eauto.
   (* Ijumptable *)
   econstructor; eauto.
   (* Ireturn *)

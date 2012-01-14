@@ -36,11 +36,11 @@ Require Import Events.
 
 Set Implicit Arguments.
 
-Record shift_amount : Type :=
-  mk_shift_amount { 
-    s_amount: int;
-    s_amount_ltu: Int.ltu s_amount Int.iwordsize = true 
-  }.
+Record shift_amount: Type := 
+  { s_amount: int;
+    s_range: Int.ltu s_amount Int.iwordsize = true }.
+
+Coercion s_amount: shift_amount >-> int.
 
 Inductive shift : Type :=
   | Slsl: shift_amount -> shift
@@ -70,10 +70,6 @@ Inductive operation : Type :=
   | Oaddrsymbol: ident -> int -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
   | Oaddrstack: int -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
 (*c Integer arithmetic: *)
-  | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
-  | Ocast8unsigned: operation           (**r [rd] is 8-bit zero extension of [r1] *)
-  | Ocast16signed: operation            (**r [rd] is 16-bit sign extension of [r1] *)
-  | Ocast16unsigned: operation          (**r [rd] is 16-bit zero extension of [r1] *)
   | Oadd: operation                     (**r [rd = r1 + r2] *)
   | Oaddshift: shift -> operation       (**r [rd = r1 + shifted r2] *)
   | Oaddimm: int -> operation           (**r [rd = r1 + n] *)
@@ -158,68 +154,39 @@ Proof.
   decide equality.
 Qed.
 
+(** * Evaluation functions *)
+
+Definition symbol_address (F V: Type) (genv: Genv.t F V) (id: ident) (ofs: int) : val :=
+  match Genv.find_symbol genv id with
+  | Some b => Vptr b ofs
+  | None => Vundef
+  end.
+
 (** Evaluation of conditions, operators and addressing modes applied
-  to lists of values.  Return [None] when the computation is undefined:
-  wrong number of arguments, arguments of the wrong types, undefined 
-  operations such as division by zero.  [eval_condition] returns a boolean,
+  to lists of values.  Return [None] when the computation can trigger an
+  error, e.g. integer division by zero.  [eval_condition] returns a boolean,
   [eval_operation] and [eval_addressing] return a value. *)
 
-Definition eval_compare_mismatch (c: comparison) : option bool :=
-  match c with Ceq => Some false | Cne => Some true | _ => None end.
-
-Definition eval_compare_null (c: comparison) (n: int) : option bool :=
-  if Int.eq n Int.zero then eval_compare_mismatch c else None.
-
-Definition eval_shift (s: shift) (n: int) : int :=
+Definition eval_shift (s: shift) (v: val) : val :=
   match s with
-  | Slsl x => Int.shl n (s_amount x)
-  | Slsr x => Int.shru n (s_amount x)
-  | Sasr x => Int.shr n (s_amount x)
-  | Sror x => Int.ror n (s_amount x)
+  | Slsl x => Val.shl v (Vint x)
+  | Slsr x => Val.shru v (Vint x)
+  | Sasr x => Val.shr v (Vint x)
+  | Sror x => Val.ror v (Vint x)
   end.
 
 Definition eval_condition (cond: condition) (vl: list val) (m: mem):
                option bool :=
   match cond, vl with
-  | Ccomp c, Vint n1 :: Vint n2 :: nil =>
-      Some (Int.cmp c n1 n2)
-  | Ccompu c, Vint n1 :: Vint n2 :: nil =>
-      Some (Int.cmpu c n1 n2)
-  | Ccompu c, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if Mem.valid_pointer m b1 (Int.unsigned n1)
-      && Mem.valid_pointer m b2 (Int.unsigned n2) then
-        if eq_block b1 b2
-        then Some (Int.cmpu c n1 n2)
-        else eval_compare_mismatch c
-      else None
-  | Ccompu c, Vptr b1 n1 :: Vint n2 :: nil =>
-      eval_compare_null c n2
-  | Ccompu c, Vint n1 :: Vptr b2 n2 :: nil =>
-      eval_compare_null c n1
-  | Ccompshift c s, Vint n1 :: Vint n2 :: nil =>
-      Some (Int.cmp c n1 (eval_shift s n2))
-  | Ccompushift c s, Vint n1 :: Vint n2 :: nil =>
-      Some (Int.cmpu c n1 (eval_shift s n2))
-  | Ccompushift c s, Vptr b1 n1 :: Vint n2 :: nil =>
-      eval_compare_null c (eval_shift s n2)
-  | Ccompimm c n, Vint n1 :: nil =>
-      Some (Int.cmp c n1 n)
-  | Ccompuimm c n, Vint n1 :: nil =>
-      Some (Int.cmpu c n1 n)
-  | Ccompuimm c n, Vptr b1 n1 :: nil =>
-      eval_compare_null c n
-  | Ccompf c, Vfloat f1 :: Vfloat f2 :: nil =>
-      Some (Float.cmp c f1 f2)
-  | Cnotcompf c, Vfloat f1 :: Vfloat f2 :: nil =>
-      Some (negb (Float.cmp c f1 f2))
-  | _, _ =>
-      None
-  end.
-
-Definition offset_sp (sp: val) (delta: int) : option val :=
-  match sp with
-  | Vptr b n => Some (Vptr b (Int.add n delta))
-  | _ => None
+  | Ccomp c, v1 :: v2 :: nil => Val.cmp_bool c v1 v2
+  | Ccompu c, v1 :: v2 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 v2
+  | Ccompshift c s, v1 :: v2 :: nil => Val.cmp_bool c v1 (eval_shift s v2)
+  | Ccompushift c s, v1 :: v2 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (eval_shift s v2)
+  | Ccompimm c n, v1 :: nil => Val.cmp_bool c v1 (Vint n)
+  | Ccompuimm c n, v1 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n)
+  | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
+  | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
+  | _, _ => None
   end.
 
 Definition eval_operation
@@ -229,75 +196,48 @@ Definition eval_operation
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
-  | Oaddrsymbol s ofs, nil =>
-      match Genv.find_symbol genv s with
-      | None => None
-      | Some b => Some (Vptr b ofs)
-      end
-  | Oaddrstack ofs, nil => offset_sp sp ofs
-  | Ocast8signed, v1 :: nil => Some (Val.sign_ext 8 v1)
-  | Ocast8unsigned, v1 :: nil => Some (Val.zero_ext 8 v1)
-  | Ocast16signed, v1 :: nil => Some (Val.sign_ext 16 v1)
-  | Ocast16unsigned, v1 :: nil => Some (Val.zero_ext 16 v1)
-  | Oadd, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.add n1 n2))
-  | Oadd, Vint n1 :: Vptr b2 n2 :: nil => Some (Vptr b2 (Int.add n2 n1))
-  | Oadd, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.add n1 n2))
-  | Oaddshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.add n1 (eval_shift s n2)))
-  | Oaddshift s, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.add n1 (eval_shift s n2)))
-  | Oaddimm n, Vint n1 :: nil => Some (Vint (Int.add n1 n))
-  | Oaddimm n, Vptr b1 n1 :: nil => Some (Vptr b1 (Int.add n1 n))
-  | Osub, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.sub n1 n2))
-  | Osub, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.sub n1 n2))
-  | Osub, Vptr b1 n1 :: Vptr b2 n2 :: nil =>
-      if eq_block b1 b2 then Some (Vint (Int.sub n1 n2)) else None
-  | Osubshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.sub n1 (eval_shift s n2)))
-  | Osubshift s, Vptr b1 n1 :: Vint n2 :: nil => Some (Vptr b1 (Int.sub n1 (eval_shift s n2)))
-  | Orsubshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.sub (eval_shift s n2) n1))
-  | Orsubimm n, Vint n1 :: nil => Some (Vint (Int.sub n n1))
-  | Omul, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.mul n1 n2))
-  | Odiv, Vint n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.divs n1 n2))
-  | Odivu, Vint n1 :: Vint n2 :: nil =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.divu n1 n2))
-  | Oand, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.and n1 n2))
-  | Oandshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.and n1 (eval_shift s n2)))
-  | Oandimm n, Vint n1 :: nil => Some (Vint (Int.and n1 n))
-  | Oor, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.or n1 n2))
-  | Oorshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.or n1 (eval_shift s n2)))
-  | Oorimm n, Vint n1 :: nil => Some (Vint (Int.or n1 n))
-  | Oxor, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.xor n1 n2))
-  | Oxorshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.xor n1 (eval_shift s n2)))
-  | Oxorimm n, Vint n1 :: nil => Some (Vint (Int.xor n1 n))
-  | Obic, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.and n1 (Int.not n2)))
-  | Obicshift s, Vint n1 :: Vint n2 :: nil => Some (Vint (Int.and n1 (Int.not (eval_shift s n2))))
-  | Onot, Vint n1 :: nil => Some (Vint (Int.not n1))
-  | Onotshift s, Vint n1 :: nil => Some (Vint (Int.not (eval_shift s n1)))
-  | Oshl, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shl n1 n2)) else None
-  | Oshr, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
-  | Oshru, Vint n1 :: Vint n2 :: nil =>
-      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
-  | Oshift s, Vint n :: nil => Some (Vint (eval_shift s n))
-  | Oshrximm n, Vint n1 :: nil =>
-      if Int.ltu n (Int.repr 31) then Some (Vint (Int.shrx n1 n)) else None
-  | Onegf, Vfloat f1 :: nil => Some (Vfloat (Float.neg f1))
-  | Oabsf, Vfloat f1 :: nil => Some (Vfloat (Float.abs f1))
-  | Oaddf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.add f1 f2))
-  | Osubf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.sub f1 f2))
-  | Omulf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.mul f1 f2))
-  | Odivf, Vfloat f1 :: Vfloat f2 :: nil => Some (Vfloat (Float.div f1 f2))
-  | Osingleoffloat, v1 :: nil => Some (Val.singleoffloat v1)
-  | Ointoffloat, Vfloat f1 :: nil => option_map Vint (Float.intoffloat f1)
-  | Ointuoffloat, Vfloat f1 :: nil => option_map Vint (Float.intuoffloat f1)
-  | Ofloatofint, Vint n1 :: nil => Some (Vfloat (Float.floatofint n1))
-  | Ofloatofintu, Vint n1 :: nil => Some (Vfloat (Float.floatofintu n1))
-  | Ocmp c, _ =>
-      match eval_condition c vl m with
-      | None => None
-      | Some false => Some Vfalse
-      | Some true => Some Vtrue
-      end
+  | Oaddrsymbol s ofs, nil => Some (symbol_address genv s ofs)
+  | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
+  | Oadd, v1 :: v2 :: nil => Some (Val.add v1 v2)
+  | Oaddshift s, v1 :: v2 :: nil => Some (Val.add v1 (eval_shift s v2))
+  | Oaddimm n, v1 :: nil => Some (Val.add v1 (Vint n))
+  | Osub, v1 :: v2 :: nil => Some (Val.sub v1 v2)
+  | Osubshift s, v1 :: v2 :: nil => Some (Val.sub v1 (eval_shift s v2))
+  | Orsubshift s, v1 :: v2 :: nil => Some (Val.sub (eval_shift s v2) v1)
+  | Orsubimm n, v1 :: nil => Some (Val.sub (Vint n) v1)
+  | Omul, v1 :: v2 :: nil => Some (Val.mul v1 v2)
+  | Odiv, v1 :: v2 :: nil => Val.divs v1 v2
+  | Odivu, v1 :: v2 :: nil => Val.divu v1 v2
+  | Oand, v1 :: v2 :: nil => Some (Val.and v1 v2)
+  | Oandshift s, v1 :: v2 :: nil => Some (Val.and v1 (eval_shift s v2))
+  | Oandimm n, v1 :: nil => Some (Val.and v1 (Vint n))
+  | Oor, v1 :: v2 :: nil => Some (Val.or v1 v2)
+  | Oorshift s, v1 :: v2 :: nil => Some (Val.or v1 (eval_shift s v2))
+  | Oorimm n, v1 :: nil => Some (Val.or v1 (Vint n))
+  | Oxor, v1 :: v2 :: nil => Some (Val.xor v1 v2)
+  | Oxorshift s, v1 :: v2 :: nil => Some (Val.xor v1 (eval_shift s v2))
+  | Oxorimm n, v1 :: nil => Some (Val.xor v1 (Vint n))
+  | Obic, v1 :: v2 :: nil => Some (Val.and v1 (Val.notint v2))
+  | Obicshift s, v1 :: v2 :: nil => Some (Val.and v1 (Val.notint (eval_shift s v2)))
+  | Onot, v1 :: nil => Some (Val.notint v1)
+  | Onotshift s, v1 :: nil => Some (Val.notint (eval_shift s v1))
+  | Oshl, v1 :: v2 :: nil => Some (Val.shl v1 v2)
+  | Oshr, v1 :: v2 :: nil => Some (Val.shr v1 v2)
+  | Oshru, v1 :: v2 :: nil => Some (Val.shru v1 v2)
+  | Oshift s, v1 :: nil => Some (eval_shift s v1)
+  | Oshrximm n, v1 :: nil => Val.shrx v1 (Vint n)
+  | Onegf, v1::nil => Some(Val.negf v1)
+  | Oabsf, v1::nil => Some(Val.absf v1)
+  | Oaddf, v1::v2::nil => Some(Val.addf v1 v2)
+  | Osubf, v1::v2::nil => Some(Val.subf v1 v2)
+  | Omulf, v1::v2::nil => Some(Val.mulf v1 v2)
+  | Odivf, v1::v2::nil => Some(Val.divf v1 v2)
+  | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
+  | Ointoffloat, v1::nil => Val.intoffloat v1
+  | Ointuoffloat, v1::nil => Val.intuoffloat v1
+  | Ofloatofint, v1::nil => Val.floatofint v1
+  | Ofloatofintu, v1::nil => Val.floatofintu v1
+  | Ocmp c, _ => Some(Val.of_optbool (eval_condition c vl m))
   | _, _ => None
   end.
 
@@ -305,29 +245,11 @@ Definition eval_addressing
     (F V: Type) (genv: Genv.t F V) (sp: val)
     (addr: addressing) (vl: list val) : option val :=
   match addr, vl with
-  | Aindexed n, Vptr b1 n1 :: nil =>
-      Some (Vptr b1 (Int.add n1 n))
-  | Aindexed2, Vptr b1 n1 :: Vint n2 :: nil =>
-      Some (Vptr b1 (Int.add n1 n2))
-  | Aindexed2, Vint n1 :: Vptr b2 n2 :: nil =>
-      Some (Vptr b2 (Int.add n1 n2))
-  | Aindexed2shift s, Vptr b1 n1 :: Vint n2 :: nil =>
-      Some (Vptr b1 (Int.add n1 (eval_shift s n2)))
-  | Ainstack ofs, nil =>
-      offset_sp sp ofs
+  | Aindexed n, v1 :: nil => Some (Val.add v1 (Vint n))
+  | Aindexed2, v1 :: v2 :: nil => Some (Val.add v1 v2)
+  | Aindexed2shift s, v1 :: v2 :: nil => Some (Val.add v1 (eval_shift s v2))
+  | Ainstack ofs, nil => Some (Val.add sp (Vint ofs))
   | _, _ => None
-  end.
-
-Definition negate_condition (cond: condition): condition :=
-  match cond with
-  | Ccomp c => Ccomp(negate_comparison c)
-  | Ccompu c => Ccompu(negate_comparison c)
-  | Ccompshift c s => Ccompshift (negate_comparison c) s
-  | Ccompushift c s => Ccompushift (negate_comparison c) s
-  | Ccompimm c n => Ccompimm (negate_comparison c) n
-  | Ccompuimm c n => Ccompuimm (negate_comparison c) n
-  | Ccompf c => Cnotcompf c
-  | Cnotcompf c => Ccompf c
   end.
 
 Ltac FuncInv :=
@@ -342,99 +264,7 @@ Ltac FuncInv :=
       idtac
   end.
 
-Remark eval_negate_compare_null:
-  forall c n b,
-  eval_compare_null c n = Some b ->
-  eval_compare_null (negate_comparison c) n = Some (negb b).
-Proof.
-  intros until b. unfold eval_compare_null.
-  case (Int.eq n Int.zero). 
-  destruct c; intro EQ; simplify_eq EQ; intros; subst b; reflexivity.
-  intro; discriminate. 
-Qed.
-
-Lemma eval_negate_condition:
-  forall (cond: condition) (vl: list val) (b: bool) (m: mem),
-  eval_condition cond vl m = Some b ->
-  eval_condition (negate_condition cond) vl m = Some (negb b).
-Proof.
-  intros. 
-  destruct cond; simpl in H; FuncInv; try subst b; simpl.
-  rewrite Int.negate_cmp. auto.
-  rewrite Int.negate_cmpu. auto.
-  apply eval_negate_compare_null; auto.
-  apply eval_negate_compare_null; auto.
-  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
-           Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
-  destruct (eq_block b0 b1). rewrite Int.negate_cmpu. congruence.
-  destruct c; simpl in H; inv H; auto.
-  rewrite Int.negate_cmp. auto.
-  rewrite Int.negate_cmpu. auto.
-  apply eval_negate_compare_null; auto.
-  rewrite Int.negate_cmp. auto.
-  rewrite Int.negate_cmpu. auto.
-  apply eval_negate_compare_null; auto.
-  auto.
-  rewrite negb_elim. auto.
-Qed.
-
-(** [eval_operation] and [eval_addressing] depend on a global environment
-  for resolving references to global symbols.  We show that they give
-  the same results if a global environment is replaced by another that
-  assigns the same addresses to the same symbols. *)
-
-Section GENV_TRANSF.
-
-Variable F1 F2 V1 V2: Type.
-Variable ge1: Genv.t F1 V1.
-Variable ge2: Genv.t F2 V2.
-Hypothesis agree_on_symbols:
-  forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
-
-Lemma eval_operation_preserved:
-  forall sp op vl m,
-  eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
-Proof.
-  intros.
-  unfold eval_operation; destruct op; try rewrite agree_on_symbols;
-  reflexivity.
-Qed.
-
-Lemma eval_addressing_preserved:
-  forall sp addr vl,
-  eval_addressing ge2 sp addr vl = eval_addressing ge1 sp addr vl.
-Proof.
-  intros.
-  assert (UNUSED: forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s).
-  exact agree_on_symbols.
-  unfold eval_addressing; destruct addr; try rewrite agree_on_symbols;
-  reflexivity.
-Qed.
-
-End GENV_TRANSF.
-
-(** Recognition of move operations. *)
-
-Definition is_move_operation
-    (A: Type) (op: operation) (args: list A) : option A :=
-  match op, args with
-  | Omove, arg :: nil => Some arg
-  | _, _ => None
-  end.
-
-Lemma is_move_operation_correct:
-  forall (A: Type) (op: operation) (args: list A) (a: A),
-  is_move_operation op args = Some a ->
-  op = Omove /\ args = a :: nil.
-Proof.
-  intros until a. unfold is_move_operation; destruct op;
-  try (intros; discriminate).
-  destruct args. intros; discriminate.
-  destruct args. intros. intuition congruence. 
-  intros; discriminate.
-Qed.
-
-(** Static typing of conditions, operators and addressing modes. *)
+(** * Static typing of conditions, operators and addressing modes. *)
 
 Definition type_of_condition (c: condition) : list typ :=
   match c with
@@ -455,10 +285,6 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Ofloatconst _ => (nil, Tfloat)
   | Oaddrsymbol _ _ => (nil, Tint)
   | Oaddrstack _ => (nil, Tint)
-  | Ocast8signed => (Tint :: nil, Tint)
-  | Ocast8unsigned => (Tint :: nil, Tint)
-  | Ocast16signed => (Tint :: nil, Tint)
-  | Ocast16unsigned => (Tint :: nil, Tint)
   | Oadd => (Tint :: Tint :: nil, Tint)
   | Oaddshift _ => (Tint :: Tint :: nil, Tint)
   | Oaddimm _ => (Tint :: nil, Tint)
@@ -534,37 +360,54 @@ Lemma type_of_operation_sound:
   op <> Omove ->
   eval_operation genv sp op vl m = Some v ->
   Val.has_type v (snd (type_of_operation op)).
-Proof.
+Proof with (try exact I).
+  assert (S: forall s v, Val.has_type (eval_shift s v) Tint).
+    intros. unfold eval_shift. destruct s; destruct v; simpl; auto; rewrite s_range; exact I.
   intros.
-  destruct op; simpl in H0; FuncInv; try subst v; try exact I.
+  destruct op; simpl; simpl in H0; FuncInv; try subst v...
   congruence.
-  destruct (Genv.find_symbol genv i); simplify_eq H0; intro; subst v; exact I.
-  simpl. unfold offset_sp in H0. destruct sp; try discriminate.
-  inversion H0. exact I.
-  destruct v0; exact I. 
-  destruct v0; exact I. 
-  destruct v0; exact I. 
-  destruct v0; exact I. 
-  destruct (eq_block b b0). injection H0; intro; subst v; exact I.
-  discriminate.
-  destruct (Int.eq i0 Int.zero). discriminate. 
-  injection H0; intro; subst v; exact I.
-  destruct (Int.eq i0 Int.zero). discriminate. 
-  injection H0; intro; subst v; exact I.
-  destruct (Int.ltu i0 Int.iwordsize).
-  injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i0 Int.iwordsize).
-  injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i0 Int.iwordsize).
-  injection H0; intro; subst v; exact I. discriminate.
-  destruct (Int.ltu i (Int.repr 31)).
-  injection H0; intro; subst v; exact I. discriminate.
-  destruct v0; exact I.
-  destruct (Float.intoffloat f); simpl in H0; inv H0. exact I.
-  destruct (Float.intuoffloat f); simpl in H0; inv H0. exact I.
-  destruct (eval_condition c vl). 
-  destruct b; injection H0; intro; subst v; exact I.
-  discriminate.
+  unfold symbol_address. destruct (Genv.find_symbol genv i)...
+  destruct sp...
+  destruct v0; destruct v1...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; tauto.
+  destruct v0...
+  destruct v0; destruct v1... simpl. destruct (zeq b b0)...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; intuition. destruct (zeq b b0)...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; intuition. destruct (zeq b0 b)...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1; simpl in H0; inv H0. destruct (Int.eq i0 Int.zero); inv H2...
+  destruct v0; destruct v1; simpl in H0; inv H0. destruct (Int.eq i0 Int.zero); inv H2...
+  destruct v0; destruct v1...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; tauto.
+  destruct v0...
+  destruct v0; destruct v1...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; tauto.
+  destruct v0...
+  destruct v0; destruct v1...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; tauto.
+  destruct v0...
+  destruct v0; destruct v1...
+  generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; tauto.
+  destruct v0...
+  generalize (S s v0). destruct (eval_shift s v0); simpl; tauto.
+  destruct v0; destruct v1... simpl. destruct (Int.ltu i0 Int.iwordsize)...
+  destruct v0; destruct v1... simpl. destruct (Int.ltu i0 Int.iwordsize)...
+  destruct v0; destruct v1... simpl. destruct (Int.ltu i0 Int.iwordsize)...
+  apply S.
+  destruct v0; simpl in H0; inv H0. destruct (Int.ltu i (Int.repr 31)); inv H2...
+  destruct v0...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); simpl in H2; inv H2...
+  destruct v0; simpl in H0; inv H0. destruct (Float.intuoffloat f); simpl in H2; inv H2...
+  destruct v0; simpl in H0; inv H0...
+  destruct v0; simpl in H0; inv H0...
+  destruct (eval_condition c vl m)... destruct b...
 Qed.
 
 Lemma type_of_chunk_correct:
@@ -582,293 +425,79 @@ Qed.
 
 End SOUNDNESS.
 
-(** Alternate definition of [eval_condition], [eval_op], [eval_addressing]
-  as total functions that return [Vundef] when not applicable
-  (instead of [None]).  Used in the proof of [PPCgen]. *)
+(** * Manipulating and transforming operations *)
 
-Section EVAL_OP_TOTAL.
+(** Constructing shift amounts. *)
 
-Variable F V: Type.
-Variable genv: Genv.t F V.
-
-Definition find_symbol_offset (id: ident) (ofs: int) : val :=
-  match Genv.find_symbol genv id with
-  | Some b => Vptr b ofs
-  | None => Vundef
-  end.
-
-Definition eval_shift_total (s: shift) (v: val) : val :=
-  match v with
-  | Vint n => Vint(eval_shift s n)
-  | _ => Vundef
-  end.
-
-Definition eval_condition_total (cond: condition) (vl: list val) : val :=
-  match cond, vl with
-  | Ccomp c, v1::v2::nil => Val.cmp c v1 v2
-  | Ccompu c, v1::v2::nil => Val.cmpu c v1 v2
-  | Ccompshift c s, v1::v2::nil => Val.cmp c v1 (eval_shift_total s v2)
-  | Ccompushift c s, v1::v2::nil => Val.cmpu c v1 (eval_shift_total s v2)
-  | Ccompimm c n, v1::nil => Val.cmp c v1 (Vint n)
-  | Ccompuimm c n, v1::nil => Val.cmpu c v1 (Vint n)
-  | Ccompf c, v1::v2::nil => Val.cmpf c v1 v2
-  | Cnotcompf c, v1::v2::nil => Val.notbool(Val.cmpf c v1 v2)
-  | _, _ => Vundef
-  end.
-
-Definition eval_operation_total (sp: val) (op: operation) (vl: list val) : val :=
-  match op, vl with
-  | Omove, v1::nil => v1
-  | Ointconst n, nil => Vint n
-  | Ofloatconst n, nil => Vfloat n
-  | Oaddrsymbol s ofs, nil => find_symbol_offset s ofs
-  | Oaddrstack ofs, nil => Val.add sp (Vint ofs)
-  | Ocast8signed, v1::nil => Val.sign_ext 8 v1
-  | Ocast8unsigned, v1::nil => Val.zero_ext 8 v1
-  | Ocast16signed, v1::nil => Val.sign_ext 16 v1
-  | Ocast16unsigned, v1::nil => Val.zero_ext 16 v1
-  | Oadd, v1::v2::nil => Val.add v1 v2
-  | Oaddshift s, v1::v2::nil => Val.add v1 (eval_shift_total s v2)
-  | Oaddimm n, v1::nil => Val.add v1 (Vint n)
-  | Osub, v1::v2::nil => Val.sub v1 v2
-  | Osubshift s, v1::v2::nil => Val.sub v1 (eval_shift_total s v2)
-  | Orsubshift s, v1::v2::nil => Val.sub (eval_shift_total s v2) v1
-  | Orsubimm n, v1::nil => Val.sub (Vint n) v1
-  | Omul, v1::v2::nil => Val.mul v1 v2
-  | Odiv, v1::v2::nil => Val.divs v1 v2
-  | Odivu, v1::v2::nil => Val.divu v1 v2
-  | Oand, v1::v2::nil => Val.and v1 v2
-  | Oandshift s, v1::v2::nil => Val.and v1 (eval_shift_total s v2)
-  | Oandimm n, v1::nil => Val.and v1 (Vint n)
-  | Oor, v1::v2::nil => Val.or v1 v2
-  | Oorshift s, v1::v2::nil => Val.or v1 (eval_shift_total s v2)
-  | Oorimm n, v1::nil => Val.or v1 (Vint n)
-  | Oxor, v1::v2::nil => Val.xor v1 v2
-  | Oxorshift s, v1::v2::nil => Val.xor v1 (eval_shift_total s v2)
-  | Oxorimm n, v1::nil => Val.xor v1 (Vint n)
-  | Obic, v1::v2::nil => Val.and v1 (Val.notint v2)
-  | Obicshift s, v1::v2::nil => Val.and v1 (Val.notint (eval_shift_total s v2))
-  | Onot, v1::nil => Val.notint v1
-  | Onotshift s, v1::nil => Val.notint (eval_shift_total s v1)
-  | Oshl, v1::v2::nil => Val.shl v1 v2
-  | Oshr, v1::v2::nil => Val.shr v1 v2
-  | Oshru, v1::v2::nil => Val.shru v1 v2
-  | Oshrximm n, v1::nil => Val.shrx v1 (Vint n)
-  | Oshift s, v1::nil => eval_shift_total s v1
-  | Onegf, v1::nil => Val.negf v1
-  | Oabsf, v1::nil => Val.absf v1
-  | Oaddf, v1::v2::nil => Val.addf v1 v2
-  | Osubf, v1::v2::nil => Val.subf v1 v2
-  | Omulf, v1::v2::nil => Val.mulf v1 v2
-  | Odivf, v1::v2::nil => Val.divf v1 v2
-  | Osingleoffloat, v1::nil => Val.singleoffloat v1
-  | Ointoffloat, v1::nil => Val.intoffloat v1
-  | Ointuoffloat, v1::nil => Val.intuoffloat v1
-  | Ofloatofint, v1::nil => Val.floatofint v1
-  | Ofloatofintu, v1::nil => Val.floatofintu v1
-  | Ocmp c, _ => eval_condition_total c vl
-  | _, _ => Vundef
-  end.
-
-Definition eval_addressing_total
-    (sp: val) (addr: addressing) (vl: list val) : val :=
-  match addr, vl with
-  | Aindexed n, v1::nil => Val.add v1 (Vint n)
-  | Aindexed2, v1::v2::nil => Val.add v1 v2
-  | Aindexed2shift s, v1::v2::nil => Val.add v1 (eval_shift_total s v2)
-  | Ainstack ofs, nil => Val.add sp (Vint ofs)
-  | _, _ => Vundef
-  end.
-
-Lemma eval_compare_mismatch_weaken:
-  forall c b,
-  eval_compare_mismatch c = Some b ->
-  Val.cmp_mismatch c = Val.of_bool b.
-Proof.
-  unfold eval_compare_mismatch. intros. destruct c; inv H; auto.
+Program Definition mk_shift_amount (n: int) : shift_amount :=
+  {| s_amount := Int.modu n Int.iwordsize; s_range := _ |}.
+Next Obligation.
+  assert (0 <= Zmod (Int.unsigned n) 32 < 32). apply Z_mod_lt. omega.
+  unfold Int.ltu, Int.modu. change (Int.unsigned Int.iwordsize) with 32. 
+  rewrite Int.unsigned_repr. apply zlt_true. omega. 
+  assert (32 < Int.max_unsigned). compute; auto. omega.
 Qed.
 
-Lemma eval_compare_null_weaken:
-  forall c i b,
-  eval_compare_null c i = Some b ->
-  (if Int.eq i Int.zero then Val.cmp_mismatch c else Vundef) = Val.of_bool b.
+Lemma mk_shift_amount_eq:
+  forall n, Int.ltu n Int.iwordsize = true -> s_amount (mk_shift_amount n) = n.
 Proof.
-  unfold eval_compare_null. intros. 
-  destruct (Int.eq i Int.zero); try discriminate.
-  apply eval_compare_mismatch_weaken; auto.
+  intros; simpl. unfold Int.modu. transitivity (Int.repr (Int.unsigned n)). 
+  decEq. apply Zmod_small. apply Int.ltu_inv; auto.
+  apply Int.repr_unsigned.
 Qed.
 
-Lemma eval_condition_weaken:
-  forall c vl b m,
-  eval_condition c vl m = Some b ->
-  eval_condition_total c vl = Val.of_bool b.
+(** Recognition of move operations. *)
+
+Definition is_move_operation
+    (A: Type) (op: operation) (args: list A) : option A :=
+  match op, args with
+  | Omove, arg :: nil => Some arg
+  | _, _ => None
+  end.
+
+Lemma is_move_operation_correct:
+  forall (A: Type) (op: operation) (args: list A) (a: A),
+  is_move_operation op args = Some a ->
+  op = Omove /\ args = a :: nil.
+Proof.
+  intros until a. unfold is_move_operation; destruct op;
+  try (intros; discriminate).
+  destruct args. intros; discriminate.
+  destruct args. intros. intuition congruence. 
+  intros; discriminate.
+Qed.
+
+(** [negate_condition cond] returns a condition that is logically
+  equivalent to the negation of [cond]. *)
+
+Definition negate_condition (cond: condition): condition :=
+  match cond with
+  | Ccomp c => Ccomp(negate_comparison c)
+  | Ccompu c => Ccompu(negate_comparison c)
+  | Ccompshift c s => Ccompshift (negate_comparison c) s
+  | Ccompushift c s => Ccompushift (negate_comparison c) s
+  | Ccompimm c n => Ccompimm (negate_comparison c) n
+  | Ccompuimm c n => Ccompuimm (negate_comparison c) n
+  | Ccompf c => Cnotcompf c
+  | Cnotcompf c => Ccompf c
+  end.
+
+Lemma eval_negate_condition:
+  forall (cond: condition) (vl: list val) (b: bool) (m: mem),
+  eval_condition cond vl m = Some b ->
+  eval_condition (negate_condition cond) vl m = Some (negb b).
 Proof.
   intros. 
-  unfold eval_condition in H; destruct c; FuncInv;
-  try subst b; try reflexivity; simpl;
-  try (apply eval_compare_null_weaken; auto).
-  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
-           Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
-  unfold eq_block in H. destruct (zeq b0 b1); try congruence.
-  apply eval_compare_mismatch_weaken; auto.
-  symmetry. apply Val.notbool_negb_1. 
+  destruct cond; simpl in H; FuncInv; simpl.
+  rewrite Val.negate_cmp_bool; rewrite H; auto.
+  rewrite Val.negate_cmpu_bool; rewrite H; auto.
+  rewrite Val.negate_cmp_bool; rewrite H; auto.
+  rewrite Val.negate_cmpu_bool; rewrite H; auto.
+  rewrite Val.negate_cmp_bool; rewrite H; auto.
+  rewrite Val.negate_cmpu_bool; rewrite H; auto.
+  rewrite H; auto.
+  destruct (Val.cmpf_bool c v v0); simpl in H; inv H. rewrite negb_elim; auto. 
 Qed.
-
-Lemma eval_operation_weaken:
-  forall sp op vl v m,
-  eval_operation genv sp op vl m = Some v ->
-  eval_operation_total sp op vl = v.
-Proof.
-  intros.
-  unfold eval_operation in H; destruct op; FuncInv;
-  try subst v; try reflexivity; simpl.
-  unfold find_symbol_offset. 
-  destruct (Genv.find_symbol genv i); try discriminate.
-  congruence.
-  unfold offset_sp in H. 
-  destruct sp; try discriminate. simpl. congruence.
-  unfold eq_block in H. destruct (zeq b b0); congruence.
-  destruct (Int.eq i0 Int.zero); congruence.
-  destruct (Int.eq i0 Int.zero); congruence.
-  destruct (Int.ltu i0 Int.iwordsize); congruence.
-  destruct (Int.ltu i0 Int.iwordsize); congruence.
-  destruct (Int.ltu i0 Int.iwordsize); congruence.
-  unfold Int.ltu in H. destruct (zlt (Int.unsigned i) (Int.unsigned (Int.repr 31))).
-  unfold Int.ltu. rewrite zlt_true. congruence. 
-  assert (Int.unsigned (Int.repr 31) < Int.unsigned Int.iwordsize). vm_compute; auto.
-  omega. discriminate.
-  destruct (Float.intoffloat f); simpl in H; inv H. auto.
-  destruct (Float.intuoffloat f); simpl in H; inv H. auto.
-  caseEq (eval_condition c vl m); intros; rewrite H0 in H.
-  replace v with (Val.of_bool b).
-  eapply eval_condition_weaken; eauto.
-  destruct b; simpl; congruence.
-  discriminate.
-Qed.
-
-Lemma eval_addressing_weaken:
-  forall sp addr vl v,
-  eval_addressing genv sp addr vl = Some v ->
-  eval_addressing_total sp addr vl = v.
-Proof.
-  intros.
-  unfold eval_addressing in H; destruct addr; FuncInv;
-  try subst v; simpl; try reflexivity.
-  decEq. apply Int.add_commut.
-  unfold offset_sp in H. destruct sp; simpl; congruence.
-Qed.
-
-Lemma eval_condition_total_is_bool:
-  forall cond vl, Val.is_bool (eval_condition_total cond vl).
-Proof.
-  intros; destruct cond;
-  destruct vl; try apply Val.undef_is_bool;
-  destruct vl; try apply Val.undef_is_bool;
-  try (destruct vl; try apply Val.undef_is_bool); simpl.
-  apply Val.cmp_is_bool.
-  apply Val.cmpu_is_bool.
-  apply Val.cmp_is_bool.
-  apply Val.cmpu_is_bool.
-  apply Val.cmp_is_bool.
-  apply Val.cmpu_is_bool.
-  apply Val.cmpf_is_bool.
-  apply Val.notbool_is_bool.
-Qed.
-
-End EVAL_OP_TOTAL.
-
-(** Compatibility of the evaluation functions with the
-    ``is less defined'' relation over values and memory states. *)
-
-Section EVAL_LESSDEF.
-
-Variable F V: Type.
-Variable genv: Genv.t F V.
-
-Ltac InvLessdef :=
-  match goal with
-  | [ H: Val.lessdef (Vint _) _ |- _ ] =>
-      inv H; InvLessdef
-  | [ H: Val.lessdef (Vfloat _) _ |- _ ] =>
-      inv H; InvLessdef
-  | [ H: Val.lessdef (Vptr _ _) _ |- _ ] =>
-      inv H; InvLessdef
-  | [ H: Val.lessdef_list nil _ |- _ ] =>
-      inv H; InvLessdef
-  | [ H: Val.lessdef_list (_ :: _) _ |- _ ] =>
-      inv H; InvLessdef
-  | _ => idtac
-  end.
-
-Lemma eval_condition_lessdef:
-  forall cond vl1 vl2 b m1 m2,
-  Val.lessdef_list vl1 vl2 ->
-  Mem.extends m1 m2 ->
-  eval_condition cond vl1 m1 = Some b ->
-  eval_condition cond vl2 m2 = Some b.
-Proof.
-  intros. destruct cond; simpl in *; FuncInv; InvLessdef; auto.
-  destruct (Mem.valid_pointer m1 b0 (Int.unsigned i) &&
-            Mem.valid_pointer m1 b1 (Int.unsigned i0)) as [] _eqn; try discriminate.
-  destruct (andb_prop _ _ Heqb2) as [A B].
-  assert (forall b ofs, Mem.valid_pointer m1 b ofs = true -> Mem.valid_pointer m2 b ofs = true).
-    intros until ofs. repeat rewrite Mem.valid_pointer_nonempty_perm. 
-    apply Mem.perm_extends; auto.
-  rewrite (H _ _ A). rewrite (H _ _ B). auto. 
-Qed.
-
-Ltac TrivialExists :=
-  match goal with
-  | [ |- exists v2, Some ?v1 = Some v2 /\ Val.lessdef ?v1 v2 ] =>
-      exists v1; split; [auto | constructor]
-  | _ => idtac
-  end.
-
-Lemma eval_operation_lessdef:
-  forall sp op vl1 vl2 v1 m1 m2,
-  Val.lessdef_list vl1 vl2 ->
-  Mem.extends m1 m2 ->
-  eval_operation genv sp op vl1 m1 = Some v1 ->
-  exists v2, eval_operation genv sp op vl2 m2 = Some v2 /\ Val.lessdef v1 v2.
-Proof.
-  intros. destruct op; simpl in *; FuncInv; InvLessdef; TrivialExists.
-  exists v2; auto.
-  destruct (Genv.find_symbol genv i); inv H1. TrivialExists.
-  exists v1; auto. 
-  exists (Val.sign_ext 8 v2); split. auto. apply Val.sign_ext_lessdef; auto.
-  exists (Val.zero_ext 8 v2); split. auto. apply Val.zero_ext_lessdef; auto.
-  exists (Val.sign_ext 16 v2); split. auto. apply Val.sign_ext_lessdef; auto.
-  exists (Val.zero_ext 16 v2); split. auto. apply Val.zero_ext_lessdef; auto.
-  destruct (eq_block b b0); inv H1. TrivialExists.
-  destruct (Int.eq i0 Int.zero); inv H1; TrivialExists.
-  destruct (Int.eq i0 Int.zero); inv H1; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialExists.
-  destruct (Int.ltu i Int.iwordsize); inv H1; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H2; TrivialExists.
-  destruct (Int.ltu i0 Int.iwordsize); inv H2; TrivialExists.
-  destruct (Int.ltu i (Int.repr 31)); inv H1; TrivialExists.
-  exists (Val.singleoffloat v2); split. auto. apply Val.singleoffloat_lessdef; auto.
-  destruct (Float.intoffloat f); simpl in *; inv H1. TrivialExists.
-  destruct (Float.intuoffloat f); simpl in *; inv H1. TrivialExists.
-  exists v1; split; auto. 
-  destruct (eval_condition c vl1 m1) as [] _eqn. 
-  rewrite (eval_condition_lessdef c H H0 Heqo).
-  auto.
-  discriminate.
-Qed.
-
-Lemma eval_addressing_lessdef:
-  forall sp addr vl1 vl2 v1,
-  Val.lessdef_list vl1 vl2 ->
-  eval_addressing genv sp addr vl1 = Some v1 ->
-  exists v2, eval_addressing genv sp addr vl2 = Some v2 /\ Val.lessdef v1 v2.
-Proof.
-  intros. destruct addr; simpl in *; FuncInv; InvLessdef; TrivialExists.
-  exists v1; auto.
-Qed.
-
-End EVAL_LESSDEF.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
 
@@ -896,160 +525,22 @@ Proof.
   intros. destruct op; auto.
 Qed.
 
-(** Compatibility of the evaluation functions with memory injections. *)
-
-Section EVAL_INJECT.
-
-Variable F V: Type.
-Variable genv: Genv.t F V.
-Variable f: meminj.
-Hypothesis globals: meminj_preserves_globals genv f.
-Variable sp1: block.
-Variable sp2: block.
-Variable delta: Z.
-Hypothesis sp_inj: f sp1 = Some(sp2, delta).
-
-Ltac InvInject :=
-  match goal with
-  | [ H: val_inject _ (Vint _) _ |- _ ] =>
-      inv H; InvInject
-  | [ H: val_inject _ (Vfloat _) _ |- _ ] =>
-      inv H; InvInject
-  | [ H: val_inject _ (Vptr _ _) _ |- _ ] =>
-      inv H; InvInject
-  | [ H: val_list_inject _ nil _ |- _ ] =>
-      inv H; InvInject
-  | [ H: val_list_inject _ (_ :: _) _ |- _ ] =>
-      inv H; InvInject
-  | _ => idtac
-  end.
-
-Lemma eval_condition_inject:
-  forall cond vl1 vl2 b m1 m2,
-  val_list_inject f vl1 vl2 ->
-  Mem.inject f m1 m2 ->
-  eval_condition cond vl1 m1 = Some b ->
-  eval_condition cond vl2 m2 = Some b.
+Lemma eval_shift_stack_addressing:
+  forall F V (ge: Genv.t F V) sp addr vl delta,
+  eval_addressing ge sp (shift_stack_addressing delta addr) vl =
+  eval_addressing ge (Val.add sp (Vint delta)) addr vl.
 Proof.
-  intros. destruct cond; simpl in *; FuncInv; InvInject; auto.
-  destruct (Mem.valid_pointer m1 b0 (Int.unsigned i)) as [] _eqn; try discriminate.
-  destruct (Mem.valid_pointer m1 b1 (Int.unsigned i0)) as [] _eqn; try discriminate.
-  simpl in H1.
-  exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb0. econstructor; eauto. 
-  intros V1. rewrite V1.
-  exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb2. econstructor; eauto. 
-  intros V2. rewrite V2.
-  simpl. 
-  destruct (eq_block b0 b1); inv H1.
-  rewrite H3 in H5; inv H5. rewrite dec_eq_true.
-  decEq. apply Int.translate_cmpu.
-  eapply Mem.valid_pointer_inject_no_overflow; eauto.
-  eapply Mem.valid_pointer_inject_no_overflow; eauto.
-  exploit Mem.different_pointers_inject; eauto. intros P.
-  destruct (eq_block b3 b4); auto.
-  destruct P. contradiction.
-  destruct c; unfold eval_compare_mismatch in *; inv H2. 
-  unfold Int.cmpu. rewrite Int.eq_false; auto. congruence. 
-  unfold Int.cmpu. rewrite Int.eq_false; auto. congruence.
+  intros. destruct addr; simpl; auto.
+  rewrite Val.add_assoc. simpl. auto.
 Qed.
 
-Ltac TrivialExists2 :=
-  match goal with
-  | [ |- exists v2, Some ?v1 = Some v2 /\ val_inject _ _ v2 ] =>
-      exists v1; split; [auto | econstructor; eauto]
-  | _ => idtac
-  end.
-
-Lemma eval_addressing_inject:
-  forall addr vl1 vl2 v1,
-  val_list_inject f vl1 vl2 ->
-  eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
-  exists v2, 
-     eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
-  /\ val_inject f v1 v2.
+Lemma eval_shift_stack_operation:
+  forall F V (ge: Genv.t F V) sp op vl m delta,
+  eval_operation ge sp (shift_stack_operation delta op) vl m =
+  eval_operation ge (Val.add sp (Vint delta)) op vl m.
 Proof.
-  assert (UNUSED: meminj_preserves_globals genv f). exact globals.
-  intros. destruct addr; simpl in *; FuncInv; InvInject; TrivialExists2.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut. 
-  repeat rewrite Int.add_assoc. auto.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut. 
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-Qed.
-
-Lemma eval_operation_inject:
-  forall op vl1 vl2 v1 m1 m2,
-  val_list_inject f vl1 vl2 ->
-  Mem.inject f m1 m2 ->
-  eval_operation genv (Vptr sp1 Int.zero) op vl1 m1 = Some v1 ->
-  exists v2,
-     eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
-  /\ val_inject f v1 v2.
-Proof.
-  intros. destruct op; simpl in *; FuncInv; InvInject; TrivialExists2.
-  exists v'; auto.
-  destruct (Genv.find_symbol genv i) as [] _eqn; inv H1.
-  TrivialExists2. eapply (proj1 globals); eauto. rewrite Int.add_zero; auto.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  exists (Val.sign_ext 8 v'); split; auto. inv H4; simpl; auto.
-  exists (Val.zero_ext 8 v'); split; auto. inv H4; simpl; auto.
-  exists (Val.sign_ext 16 v'); split; auto. inv H4; simpl; auto.
-  exists (Val.zero_ext 16 v'); split; auto. inv H4; simpl; auto.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  rewrite Int.sub_add_l. auto.
-  destruct (eq_block b b0); inv H1. rewrite H3 in H5; inv H5. rewrite dec_eq_true.
-  rewrite Int.sub_shifted. TrivialExists2.
-  rewrite Int.sub_add_l. auto.
-  destruct (Int.eq i0 Int.zero); inv H1. TrivialExists2.
-  destruct (Int.eq i0 Int.zero); inv H1. TrivialExists2.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialExists2.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialExists2.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialExists2.
-  destruct (Int.ltu i (Int.repr 31)); inv H1. TrivialExists2.
-  exists (Val.singleoffloat v'); split; auto. inv H4; simpl; auto.
-  destruct (Float.intoffloat f0); simpl in *; inv H1. TrivialExists2.
-  destruct (Float.intuoffloat f0); simpl in *; inv H1. TrivialExists2.
-  destruct (eval_condition c vl1 m1) as [] _eqn; try discriminate.
-  exploit eval_condition_inject; eauto. intros EQ; rewrite EQ. 
-  destruct b; inv H1; TrivialExists2.
-Qed.
-
-End EVAL_INJECT.
-
-(** Recognition of integers that are valid shift amounts. *)
-
-Definition is_shift_amount_aux (n: int) :
-  { Int.ltu n Int.iwordsize = true } +
-  { Int.ltu n Int.iwordsize = false }.
-Proof.
-   case (Int.ltu n Int.iwordsize). left; auto. right; auto.
-Defined.
-
-Definition is_shift_amount (n: int) : option shift_amount :=
-  match is_shift_amount_aux n with
-  | left H => Some(mk_shift_amount n H)
-  | right _ => None
-  end.
-
-Lemma is_shift_amount_Some:
-  forall n s, is_shift_amount n = Some s -> s_amount s = n.
-Proof.
-  intros until s. unfold is_shift_amount. 
-  destruct (is_shift_amount_aux n). 
-  simpl. intros. inv H. reflexivity.
-  congruence.
-Qed.
-
-Lemma is_shift_amount_None:
-  forall n, is_shift_amount n = None -> Int.ltu n Int.iwordsize = true -> False.
-Proof.
-  intro n. unfold is_shift_amount.
-  destruct (is_shift_amount_aux n). 
-  congruence.
-  congruence.
+  intros. destruct op; simpl; auto.
+  rewrite Val.add_assoc. simpl. auto.
 Qed.
 
 (** Transformation of addressing modes with two operands or more
@@ -1076,7 +567,6 @@ Lemma eval_op_for_binary_addressing:
 Proof.
   intros.
   unfold eval_addressing in H0; destruct addr; FuncInv; simpl in H; try omegaContradiction; simpl.
-  rewrite Int.add_commut. congruence.
   congruence.
   congruence.
 Qed.
@@ -1099,17 +589,15 @@ Definition is_trivial_op (op: operation) : bool :=
   match op with
   | Omove => true
   | Ointconst _ => true
-  | Oaddrsymbol _ _ => true
   | Oaddrstack _ => true
   | _ => false
   end.
-
 
 (** Operations that depend on the memory state. *)
 
 Definition op_depends_on_memory (op: operation) : bool :=
   match op with
-  | Ocmp (Ccompu _) => true
+  | Ocmp (Ccompu _ | Ccompushift _ _) => true
   | _ => false
   end.
 
@@ -1119,7 +607,421 @@ Lemma op_depends_on_memory_correct:
   eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
   intros until m2. destruct op; simpl; try congruence.
-  destruct c; simpl; congruence.
+  intros. destruct c; simpl; auto; congruence.
 Qed.
 
+(** * Invariance and compatibility properties. *)
+
+(** [eval_operation] and [eval_addressing] depend on a global environment
+  for resolving references to global symbols.  We show that they give
+  the same results if a global environment is replaced by another that
+  assigns the same addresses to the same symbols. *)
+
+Section GENV_TRANSF.
+
+Variable F1 F2 V1 V2: Type.
+Variable ge1: Genv.t F1 V1.
+Variable ge2: Genv.t F2 V2.
+Hypothesis agree_on_symbols:
+  forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
+
+Lemma eval_operation_preserved:
+  forall sp op vl m,
+  eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
+Proof.
+  intros.
+  unfold eval_operation; destruct op; auto. 
+  unfold symbol_address. rewrite agree_on_symbols; auto.
+Qed.
+
+Lemma eval_addressing_preserved:
+  forall sp addr vl,
+  eval_addressing ge2 sp addr vl = eval_addressing ge1 sp addr vl.
+Proof.
+  intros.
+  assert (UNUSED: forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s).
+  exact agree_on_symbols.
+  unfold eval_addressing; destruct addr; auto.
+Qed.
+
+End GENV_TRANSF.
+
+(** Compatibility of the evaluation functions with value injections. *)
+
+Section EVAL_COMPAT.
+
+Variable F V: Type.
+Variable genv: Genv.t F V.
+Variable f: meminj.
+
+Hypothesis symbol_address_inj: 
+  forall id ofs,
+  val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
+
+Variable m1: mem.
+Variable m2: mem.
+
+Hypothesis valid_pointer_inj:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
+  Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+
+Hypothesis valid_pointer_no_overflow:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+
+Hypothesis valid_different_pointers_inj:
+  forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
+  b1 <> b2 ->
+  Mem.valid_pointer m1 b1 (Int.unsigned ofs1) = true ->
+  Mem.valid_pointer m1 b2 (Int.unsigned ofs2) = true ->
+  f b1 = Some (b1', delta1) ->
+  f b2 = Some (b2', delta2) ->
+  b1' <> b2' \/
+  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+
+Ltac InvInject :=
+  match goal with
+  | [ H: val_inject _ (Vint _) _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_inject _ (Vfloat _) _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_inject _ (Vptr _ _) _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_list_inject _ nil _ |- _ ] =>
+      inv H; InvInject
+  | [ H: val_list_inject _ (_ :: _) _ |- _ ] =>
+      inv H; InvInject
+  | _ => idtac
+  end.
+
+Remark val_add_inj:
+  forall v1 v1' v2 v2',
+  val_inject f v1 v1' -> val_inject f v2 v2' -> val_inject f (Val.add v1 v2) (Val.add v1' v2').
+Proof.
+  intros. inv H; inv H0; simpl; econstructor; eauto. 
+  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+Qed.
+
+Remark val_sub_inj:
+  forall v1 v1' v2 v2',
+  val_inject f v1 v1' -> val_inject f v2 v2' -> val_inject f (Val.sub v1 v2) (Val.sub v1' v2').
+Proof.
+  intros. inv H; inv H0; simpl; auto.
+  econstructor; eauto. rewrite Int.sub_add_l. auto.
+  destruct (zeq b1 b0); auto. subst. rewrite H1 in H. inv H. rewrite zeq_true. 
+  rewrite Int.sub_shifted. auto.
+Qed.
+
+Remark eval_shift_inj:
+  forall s v v', val_inject f v v' -> val_inject f (eval_shift s v) (eval_shift s v').
+Proof.
+  intros. inv H; destruct s; simpl; auto; rewrite s_range; auto. 
+Qed.
+
+Lemma eval_condition_inj:
+  forall cond vl1 vl2 b,
+  val_list_inject f vl1 vl2 ->
+  eval_condition cond vl1 m1 = Some b ->
+  eval_condition cond vl2 m2 = Some b.
+Proof.
+Opaque Int.add.
+  assert (CMP:
+    forall c v1 v2 v1' v2' b,
+    val_inject f v1 v1' ->
+    val_inject f v2 v2' ->
+    Val.cmp_bool c v1 v2 = Some b ->
+    Val.cmp_bool c v1' v2' = Some b).
+  intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
+
+  assert (CMPU:
+    forall c v1 v2 v1' v2' b,
+    val_inject f v1 v1' ->
+    val_inject f v2 v2' ->
+    Val.cmpu_bool (Mem.valid_pointer m1) c v1 v2 = Some b ->
+    Val.cmpu_bool (Mem.valid_pointer m2) c v1' v2' = Some b).
+  intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
+  destruct (Mem.valid_pointer m1 b1 (Int.unsigned ofs1)) as []_eqn; try discriminate.
+  destruct (Mem.valid_pointer m1 b0 (Int.unsigned ofs0)) as []_eqn; try discriminate.
+  rewrite (valid_pointer_inj _ H2 Heqb4).
+  rewrite (valid_pointer_inj _ H Heqb0). simpl.
+  destruct (zeq b1 b0); simpl in H1.
+  inv H1. rewrite H in H2; inv H2. rewrite zeq_true. 
+  decEq. apply Int.translate_cmpu.
+  eapply valid_pointer_no_overflow; eauto.
+  eapply valid_pointer_no_overflow; eauto.
+  exploit valid_different_pointers_inj; eauto. intros P.
+  destruct (zeq b2 b3); auto.
+  destruct P. congruence. 
+  destruct c; simpl in H1; inv H1.
+  simpl; decEq. rewrite Int.eq_false; auto. congruence.
+  simpl; decEq. rewrite Int.eq_false; auto. congruence.
+
+  intros. destruct cond; simpl in H0; FuncInv; InvInject; simpl.
+  eapply CMP; eauto.
+  eapply CMPU; eauto.
+  eapply CMP. eauto. eapply eval_shift_inj. eauto. auto.
+  eapply CMPU. eauto. eapply eval_shift_inj. eauto. auto.
+  eapply CMP; eauto. 
+  eapply CMPU; eauto.
+  inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; inv H2; simpl in H0; inv H0; auto.
+Qed.
+
+Ltac TrivialExists :=
+  match goal with
+  | [ |- exists v2, Some ?v1 = Some v2 /\ val_inject _ _ v2 ] =>
+      exists v1; split; auto
+  | _ => idtac
+  end.
+
+Lemma eval_operation_inj:
+  forall op sp1 vl1 sp2 vl2 v1,
+  val_inject f sp1 sp2 ->
+  val_list_inject f vl1 vl2 ->
+  eval_operation genv sp1 op vl1 m1 = Some v1 ->
+  exists v2, eval_operation genv sp2 op vl2 m2 = Some v2 /\ val_inject f v1 v2.
+Proof.
+  intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
+  apply val_add_inj; auto.
+  apply val_add_inj; auto.
+  apply val_add_inj; auto. apply eval_shift_inj; auto.
+  apply val_add_inj; auto.
+
+  apply val_sub_inj; auto.
+  apply val_sub_inj; auto. apply eval_shift_inj; auto.
+  apply val_sub_inj; auto. apply eval_shift_inj; auto.
+  apply (@val_sub_inj (Vint i) (Vint i) v v'); auto.
+
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H3; simpl in H1; inv H1. simpl. 
+    destruct (Int.eq i0 Int.zero); inv H2. TrivialExists.
+  inv H4; inv H3; simpl in H1; inv H1. simpl. 
+    destruct (Int.eq i0 Int.zero); inv H2. TrivialExists.
+
+  inv H4; inv H2; simpl; auto.
+  exploit (eval_shift_inj s). eexact H2. intros IS. inv H4; inv IS; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  exploit (eval_shift_inj s). eexact H2. intros IS. inv H4; inv IS; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  exploit (eval_shift_inj s). eexact H2. intros IS. inv H4; inv IS; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  exploit (eval_shift_inj s). eexact H2. intros IS. inv H4; inv IS; simpl; auto.
+
+  inv H4; simpl; auto.
+  exploit (eval_shift_inj s). eexact H4. intros IS. inv IS; simpl; auto.
+
+  inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int.iwordsize); auto.
+  inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int.iwordsize); auto.
+  inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int.iwordsize); auto.
+  apply eval_shift_inj; auto.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Int.ltu i (Int.repr 31)); inv H2. TrivialExists.
+
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
+  exists (Vint i); auto.
+  inv H4; simpl in H1; inv H1. simpl. destruct (Float.intuoffloat f0); simpl in H2; inv H2.
+  exists (Vint i); auto.
+  inv H4; simpl in *; inv H1. TrivialExists.
+  inv H4; simpl in *; inv H1. TrivialExists.
+
+  subst v1. destruct (eval_condition c vl1 m1) as []_eqn.
+  exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
+  destruct b; simpl; constructor.
+  simpl; constructor.
+Qed.
+
+Lemma eval_addressing_inj:
+  forall addr sp1 vl1 sp2 vl2 v1,
+  val_inject f sp1 sp2 ->
+  val_list_inject f vl1 vl2 ->
+  eval_addressing genv sp1 addr vl1 = Some v1 ->
+  exists v2, eval_addressing genv sp2 addr vl2 = Some v2 /\ val_inject f v1 v2.
+Proof.
+  assert (UNUSED: forall id ofs,
+            val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs)).
+  exact symbol_address_inj.
+  intros. destruct addr; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
+  apply val_add_inj; auto.
+  apply val_add_inj; auto.
+  apply val_add_inj; auto. apply eval_shift_inj; auto.
+  apply val_add_inj; auto.
+Qed.
+
+End EVAL_COMPAT.
+
+(** Compatibility of the evaluation functions with the ``is less defined'' relation over values. *)
+
+Section EVAL_LESSDEF.
+
+Variable F V: Type.
+Variable genv: Genv.t F V.
+
+Remark valid_pointer_extends:
+  forall m1 m2, Mem.extends m1 m2 ->
+  forall b1 ofs b2 delta,
+  Some(b1, 0) = Some(b2, delta) ->
+  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
+  Mem.valid_pointer m2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+Proof.
+  intros. inv H0. rewrite Int.add_zero. eapply Mem.valid_pointer_extends; eauto. 
+Qed.
+
+Remark valid_pointer_no_overflow_extends:
+  forall m1 b1 ofs b2 delta,
+  Some(b1, 0) = Some(b2, delta) ->
+  Mem.valid_pointer m1 b1 (Int.unsigned ofs) = true ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+Proof.
+  intros. inv H. rewrite Zplus_0_r. apply Int.unsigned_range_2.
+Qed.
+
+Remark valid_different_pointers_extends:
+  forall m1 b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
+  b1 <> b2 ->
+  Mem.valid_pointer m1 b1 (Int.unsigned ofs1) = true ->
+  Mem.valid_pointer m1 b2 (Int.unsigned ofs2) = true ->
+  Some(b1, 0) = Some (b1', delta1) ->
+  Some(b2, 0) = Some (b2', delta2) ->
+  b1' <> b2' \/
+  Int.unsigned(Int.add ofs1 (Int.repr delta1)) <> Int.unsigned(Int.add ofs2 (Int.repr delta2)).
+Proof.
+  intros. inv H2; inv H3. auto.
+Qed.
+
+Lemma eval_condition_lessdef:
+  forall cond vl1 vl2 b m1 m2,
+  Val.lessdef_list vl1 vl2 ->
+  Mem.extends m1 m2 ->
+  eval_condition cond vl1 m1 = Some b ->
+  eval_condition cond vl2 m2 = Some b.
+Proof.
+  intros. eapply eval_condition_inj with (f := fun b => Some(b, 0)) (m1 := m1).
+  apply valid_pointer_extends; auto.
+  apply valid_pointer_no_overflow_extends; auto. 
+  apply valid_different_pointers_extends; auto.
+  rewrite <- val_list_inject_lessdef. eauto. auto.
+Qed.
+
+Lemma eval_operation_lessdef:
+  forall sp op vl1 vl2 v1 m1 m2,
+  Val.lessdef_list vl1 vl2 ->
+  Mem.extends m1 m2 ->
+  eval_operation genv sp op vl1 m1 = Some v1 ->
+  exists v2, eval_operation genv sp op vl2 m2 = Some v2 /\ Val.lessdef v1 v2.
+Proof.
+  intros. rewrite val_list_inject_lessdef in H.
+  assert (exists v2 : val,
+          eval_operation genv sp op vl2 m2 = Some v2
+          /\ val_inject (fun b => Some(b, 0)) v1 v2).
+  eapply eval_operation_inj with (m1 := m1) (sp1 := sp).
+  intros. rewrite <- val_inject_lessdef; auto.
+  apply valid_pointer_extends; auto.
+  apply valid_pointer_no_overflow_extends; auto. 
+  apply valid_different_pointers_extends; auto.
+  rewrite <- val_inject_lessdef; auto.
+  eauto. auto. 
+  destruct H2 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
+Qed.
+
+Lemma eval_addressing_lessdef:
+  forall sp addr vl1 vl2 v1,
+  Val.lessdef_list vl1 vl2 ->
+  eval_addressing genv sp addr vl1 = Some v1 ->
+  exists v2, eval_addressing genv sp addr vl2 = Some v2 /\ Val.lessdef v1 v2.
+Proof.
+  intros. rewrite val_list_inject_lessdef in H.
+  assert (exists v2 : val,
+          eval_addressing genv sp addr vl2 = Some v2
+          /\ val_inject (fun b => Some(b, 0)) v1 v2).
+  eapply eval_addressing_inj with (sp1 := sp).
+  intros. rewrite <- val_inject_lessdef; auto. 
+  rewrite <- val_inject_lessdef; auto. 
+  eauto. auto. 
+  destruct H1 as [v2 [A B]]. exists v2; split; auto. rewrite val_inject_lessdef; auto. 
+Qed.
+
+End EVAL_LESSDEF.
+
+(** Compatibility of the evaluation functions with memory injections. *)
+
+Section EVAL_INJECT.
+
+Variable F V: Type.
+Variable genv: Genv.t F V.
+Variable f: meminj.
+Hypothesis globals: meminj_preserves_globals genv f.
+Variable sp1: block.
+Variable sp2: block.
+Variable delta: Z.
+Hypothesis sp_inj: f sp1 = Some(sp2, delta).
+
+Remark symbol_address_inject:
+  forall id ofs, val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
+Proof.
+  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) as []_eqn; auto.
+  exploit (proj1 globals); eauto. intros. 
+  econstructor; eauto. rewrite Int.add_zero; auto.
+Qed.
+
+Lemma eval_condition_inject:
+  forall cond vl1 vl2 b m1 m2,
+  val_list_inject f vl1 vl2 ->
+  Mem.inject f m1 m2 ->
+  eval_condition cond vl1 m1 = Some b ->
+  eval_condition cond vl2 m2 = Some b.
+Proof.
+  intros. eapply eval_condition_inj with (f := f) (m1 := m1); eauto.
+  intros; eapply Mem.valid_pointer_inject_val; eauto.
+  intros; eapply Mem.valid_pointer_inject_no_overflow; eauto.
+  intros; eapply Mem.different_pointers_inject; eauto.
+Qed.
+
+Lemma eval_addressing_inject:
+  forall addr vl1 vl2 v1,
+  val_list_inject f vl1 vl2 ->
+  eval_addressing genv (Vptr sp1 Int.zero) addr vl1 = Some v1 ->
+  exists v2, 
+     eval_addressing genv (Vptr sp2 Int.zero) (shift_stack_addressing (Int.repr delta) addr) vl2 = Some v2
+  /\ val_inject f v1 v2.
+Proof.
+  intros. 
+  rewrite eval_shift_stack_addressing. simpl.
+  eapply eval_addressing_inj with (sp1 := Vptr sp1 Int.zero); eauto.
+  exact symbol_address_inject.
+Qed.
+
+Lemma eval_operation_inject:
+  forall op vl1 vl2 v1 m1 m2,
+  val_list_inject f vl1 vl2 ->
+  Mem.inject f m1 m2 ->
+  eval_operation genv (Vptr sp1 Int.zero) op vl1 m1 = Some v1 ->
+  exists v2,
+     eval_operation genv (Vptr sp2 Int.zero) (shift_stack_operation (Int.repr delta) op) vl2 m2 = Some v2
+  /\ val_inject f v1 v2.
+Proof.
+  intros. 
+  rewrite eval_shift_stack_operation. simpl.
+  eapply eval_operation_inj with (sp1 := Vptr sp1 Int.zero) (m1 := m1); eauto.
+  exact symbol_address_inject.
+  intros; eapply Mem.valid_pointer_inject_val; eauto.
+  intros; eapply Mem.valid_pointer_inject_no_overflow; eauto.
+  intros; eapply Mem.different_pointers_inject; eauto.
+Qed.
+
+End EVAL_INJECT.
 

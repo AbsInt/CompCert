@@ -625,26 +625,37 @@ Qed.
 (** Smart constructor for division *)
 
 Lemma mk_div_correct:
-  forall mkinstr dsem msem r1 r2 k c rs1 m,
+  forall mkinstr dsem msem r1 r2 k c (rs1: regset) m vq vr,
   mk_div mkinstr r1 r2 k = OK c ->
   (forall r c rs m,
    exec_instr ge c (mkinstr r) rs m =
-   Next (nextinstr_nf (rs#EAX <- (dsem rs#EAX (rs#EDX <- Vundef)#r) 
-                         #EDX <- (msem rs#EAX (rs#EDX <- Vundef)#r))) m) ->
+      let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r in
+      match dsem vn vd, msem vn vd with
+      | Some vq, Some vr => Next (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) m
+      | _, _ => Stuck
+      end) ->
+  dsem rs1#r1 rs1#r2 = Some vq ->
+  msem rs1#r1 rs1#r2 = Some vr ->
   exists rs2,
      exec_straight c rs1 m k rs2 m
-  /\ rs2#r1 = dsem rs1#r1 rs1#r2
+  /\ rs2#r1 = vq
   /\ forall r, nontemp_preg r = true -> r <> r1 -> rs2#r = rs1#r.
 Proof.
   unfold mk_div; intros. 
   destruct (ireg_eq r1 EAX). destruct (ireg_eq r2 EDX); monadInv H.
 (* r1=EAX r2=EDX *)
-  econstructor. split. eapply exec_straight_two. simpl; eauto. apply H0. auto. auto.
+  econstructor. split. eapply exec_straight_two. simpl; eauto. 
+  rewrite H0.
+  change (nextinstr rs1 # ECX <- (rs1 EDX) EAX) with (rs1#EAX). 
+  change ((nextinstr rs1 # ECX <- (rs1 EDX)) # EDX <- Vundef ECX) with (rs1#EDX).
+  rewrite H1. rewrite H2. eauto. auto. auto. 
   split. SRes. 
-  intros. repeat SOther. 
+  intros. repeat SOther.
 (* r1=EAX r2<>EDX *)
-  econstructor. split. eapply exec_straight_one. apply H0. auto.
-  split. repeat SRes. decEq. apply Pregmap.gso. congruence. 
+  econstructor. split. eapply exec_straight_one. rewrite H0. 
+  replace (rs1 # EDX <- Vundef r2) with (rs1 r2). rewrite H1; rewrite H2. eauto. 
+  symmetry. SOther. auto.
+  split. SRes.
   intros. repeat SOther. 
 (* r1 <> EAX *)
   monadInv H.
@@ -654,9 +665,12 @@ Proof.
   econstructor; split.
   apply exec_straight_step with rs2 m; auto.
   eapply exec_straight_trans. eexact A. 
-  eapply exec_straight_three. simpl; eauto. simpl; eauto. simpl; eauto. 
+  eapply exec_straight_three.
+  rewrite H0. replace (rs3 EAX) with (rs1 r1). replace (rs3 # EDX <- Vundef ECX) with (rs1 r2).
+  rewrite H1; rewrite H2. eauto.  
+  simpl; eauto. simpl; eauto.
   auto. auto. auto. 
-  split. repeat SRes. decEq. rewrite B; unfold rs2; SRes. SOther.
+  split. repeat SRes.
   intros. destruct (preg_eq r EAX). subst.
   repeat SRes. rewrite D; auto with ppcgen. 
   repeat SOther. rewrite D; auto with ppcgen. unfold rs2; repeat SOther.
@@ -665,27 +679,42 @@ Qed.
 (** Smart constructor for modulus *)
 
 Lemma mk_mod_correct:
-  forall mkinstr dsem msem r1 r2 k c rs1 m,
+ forall mkinstr dsem msem r1 r2 k c (rs1: regset) m vq vr,
   mk_mod mkinstr r1 r2 k = OK c ->
   (forall r c rs m,
    exec_instr ge c (mkinstr r) rs m =
-   Next (nextinstr_nf (rs#EAX <- (dsem rs#EAX (rs#EDX <- Vundef)#r) 
-                         #EDX <- (msem rs#EAX (rs#EDX <- Vundef)#r))) m) ->
+      let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r in
+      match dsem vn vd, msem vn vd with
+      | Some vq, Some vr => Next (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) m
+      | _, _ => Stuck
+      end) ->
+  dsem rs1#r1 rs1#r2 = Some vq ->
+  msem rs1#r1 rs1#r2 = Some vr ->
   exists rs2,
      exec_straight c rs1 m k rs2 m
-  /\ rs2#r1 = msem rs1#r1 rs1#r2
+  /\ rs2#r1 = vr
   /\ forall r, nontemp_preg r = true -> r <> r1 -> rs2#r = rs1#r.
 Proof.
   unfold mk_mod; intros. 
   destruct (ireg_eq r1 EAX). destruct (ireg_eq r2 EDX); monadInv H.
 (* r1=EAX r2=EDX *)
   econstructor. split. eapply exec_straight_three.
-  simpl; eauto. apply H0. simpl; eauto. auto. auto. auto.
+  simpl; eauto.
+  rewrite H0.
+  change (nextinstr rs1 # ECX <- (rs1 EDX) EAX) with (rs1#EAX). 
+  change ((nextinstr rs1 # ECX <- (rs1 EDX)) # EDX <- Vundef ECX) with (rs1#EDX).
+  rewrite H1. rewrite H2. eauto.
+  simpl; eauto.
+  auto. auto. auto. 
   split. SRes. 
-  intros. repeat SOther. 
+  intros. repeat SOther.
 (* r1=EAX r2<>EDX *)
-  econstructor. split. eapply exec_straight_two. apply H0. simpl; eauto. auto. auto.
-  split. repeat SRes. decEq. apply Pregmap.gso. congruence. 
+  econstructor. split. eapply exec_straight_two. rewrite H0. 
+  replace (rs1 # EDX <- Vundef r2) with (rs1 r2). rewrite H1; rewrite H2. eauto. 
+  symmetry. SOther. 
+  simpl; eauto. 
+  auto. auto. 
+  split. SRes.
   intros. repeat SOther. 
 (* r1 <> EAX *)
   monadInv H.
@@ -695,57 +724,79 @@ Proof.
   econstructor; split.
   apply exec_straight_step with rs2 m; auto.
   eapply exec_straight_trans. eexact A. 
-  eapply exec_straight_three. simpl; eauto. simpl; eauto. simpl; eauto. 
+  eapply exec_straight_three.
+  rewrite H0. replace (rs3 EAX) with (rs1 r1). replace (rs3 # EDX <- Vundef ECX) with (rs1 r2).
+  rewrite H1; rewrite H2. eauto.  
+  simpl; eauto. simpl; eauto.
   auto. auto. auto. 
-  split. repeat SRes. decEq. rewrite B; unfold rs2; SRes. SOther.
+  split. repeat SRes.
   intros. destruct (preg_eq r EAX). subst.
   repeat SRes. rewrite D; auto with ppcgen. 
   repeat SOther. rewrite D; auto with ppcgen. unfold rs2; repeat SOther.
 Qed.
 
+Remark divs_mods_exist:
+  forall v1 v2,
+  match Val.divs v1 v2, Val.mods v1 v2 with
+  | Some _, Some _ => True
+  | None, None => True
+  | _, _ => False
+  end.
+Proof.
+  intros. unfold Val.divs, Val.mods. destruct v1; auto. destruct v2; auto.
+  destruct (Int.eq i0 Int.zero); auto. 
+Qed.
+
+Remark divu_modu_exist:
+  forall v1 v2,
+  match Val.divu v1 v2, Val.modu v1 v2 with
+  | Some _, Some _ => True
+  | None, None => True
+  | _, _ => False
+  end.
+Proof.
+  intros. unfold Val.divu, Val.modu. destruct v1; auto. destruct v2; auto.
+  destruct (Int.eq i0 Int.zero); auto. 
+Qed.
+
 (** Smart constructor for [shrx] *)
 
 Lemma mk_shrximm_correct:
-  forall r1 n k c (rs1: regset) x m,
+  forall r1 n k c (rs1: regset) v m,
   mk_shrximm r1 n k = OK c ->
-  rs1#r1 = Vint x ->
-  Int.ltu n (Int.repr 31) = true ->
+  Val.shrx (rs1#r1) (Vint n) = Some v ->
   exists rs2,
      exec_straight c rs1 m k rs2 m
-  /\ rs2#r1 = Vint (Int.shrx x n)
+  /\ rs2#r1 = v
   /\ forall r, nontemp_preg r = true -> r <> r1 -> rs2#r = rs1#r.
 Proof.
   unfold mk_shrximm; intros. inv H.
+  exploit Val.shrx_shr; eauto. intros [x [y [A [B C]]]].
+  inversion B; clear B; subst y; subst v; clear H0.
   set (tmp := if ireg_eq r1 ECX then EDX else ECX).
   assert (TMP1: tmp <> r1). unfold tmp; destruct (ireg_eq r1 ECX); congruence. 
   assert (TMP2: nontemp_preg tmp = false). unfold tmp; destruct (ireg_eq r1 ECX); auto. 
-  rewrite Int.shrx_shr; auto.
   set (tnm1 := Int.sub (Int.shl Int.one n) Int.one).
   set (x' := Int.add x tnm1).
-  set (rs2 := nextinstr (compare_ints (Vint x) (Vint Int.zero) rs1)).
+  set (rs2 := nextinstr (compare_ints (Vint x) (Vint Int.zero) rs1 m)).
   set (rs3 := nextinstr (rs2#tmp <- (Vint x'))).
   set (rs4 := nextinstr (if Int.lt x Int.zero then rs3#r1 <- (Vint x') else rs3)).
   set (rs5 := nextinstr_nf (rs4#r1 <- (Val.shr rs4#r1 (Vint n)))).
   assert (rs3#r1 = Vint x). unfold rs3. SRes. SRes. 
   assert (rs3#tmp = Vint x'). unfold rs3. SRes. SRes. 
   exists rs5. split. 
-  apply exec_straight_step with rs2 m. simpl. rewrite H0. simpl. rewrite Int.and_idem. auto. auto.
+  apply exec_straight_step with rs2 m. simpl. rewrite A. simpl. rewrite Int.and_idem. auto. auto.
   apply exec_straight_step with rs3 m. simpl. 
-  change (rs2 r1) with (rs1 r1). rewrite H0. simpl. 
+  change (rs2 r1) with (rs1 r1). rewrite A. simpl. 
   rewrite (Int.add_commut Int.zero tnm1). rewrite Int.add_zero. auto. auto.
   apply exec_straight_step with rs4 m. simpl. 
   change (rs3 SOF) with (rs2 SOF). unfold rs2. rewrite nextinstr_inv; auto with ppcgen. 
-  unfold compare_ints. rewrite Pregmap.gso; auto with ppcgen. rewrite Pregmap.gss. 
-  simpl. unfold rs4. destruct (Int.lt x Int.zero); auto. rewrite H2; auto. 
-  unfold rs4. destruct (Int.lt x Int.zero); auto.
+  unfold compare_ints. rewrite Pregmap.gso; auto with ppcgen. rewrite Pregmap.gss.
+  unfold Val.cmp. simpl. unfold rs4. destruct (Int.lt x Int.zero); simpl; auto. rewrite H0; auto.
+  unfold rs4. destruct (Int.lt x Int.zero); simpl; auto.
   apply exec_straight_one. auto. auto.
   split. unfold rs5. SRes. SRes. unfold rs4. rewrite nextinstr_inv; auto with ppcgen.
-  assert (Int.ltu n Int.iwordsize = true).
-    unfold Int.ltu in *. change (Int.unsigned (Int.repr 31)) with 31 in H1. 
-    destruct (zlt (Int.unsigned n) 31); try discriminate.
-    change (Int.unsigned Int.iwordsize) with 32. apply zlt_true. omega.
-  destruct (Int.lt x Int.zero). rewrite Pregmap.gss. unfold Val.shr. rewrite H3. auto.
-  rewrite H. unfold Val.shr. rewrite H3. auto. 
+  destruct (Int.lt x Int.zero). rewrite Pregmap.gss. rewrite A; auto. rewrite A; rewrite H; auto.
   intros. unfold rs5. repeat SOther. unfold rs4. SOther.
   transitivity (rs3#r). destruct (Int.lt x Int.zero). SOther. auto. 
   unfold rs3. repeat SOther. unfold rs2. repeat SOther. 
@@ -904,58 +955,55 @@ Lemma transl_addressing_mode_correct:
   forall addr args am (rs: regset) v,
   transl_addressing addr args = OK am ->
   eval_addressing ge (rs ESP) addr (List.map rs (List.map preg_of args)) = Some v ->
-  eval_addrmode ge am rs = v.
+  Val.lessdef v (eval_addrmode ge am rs).
 Proof.
   assert (A: forall n, Int.add Int.zero n = n). 
     intros. rewrite Int.add_commut. apply Int.add_zero.
   assert (B: forall n i, (if Int.eq i Int.one then Vint n else Vint (Int.mul n i)) = Vint (Int.mul n i)).
-    intros. generalize (Int.eq_spec i Int.one); destruct (Int.eq i Int.one); intros.
+    intros. predSpec Int.eq Int.eq_spec i Int.one. 
     subst i. rewrite Int.mul_one. auto. auto.
+  assert (C: forall v i,
+    Val.lessdef (Val.mul v (Vint i))
+               (if Int.eq i Int.one then v else Val.mul v (Vint i))).
+    intros. predSpec Int.eq Int.eq_spec i Int.one.
+    subst i. destruct v; simpl; auto. rewrite Int.mul_one; auto.
+    destruct v; simpl; auto.
   unfold transl_addressing; intros.
-  destruct addr; repeat (destruct args; try discriminate); simpl in H0.
+  destruct addr; repeat (destruct args; try discriminate); simpl in H0; inv H0.
 (* indexed *)
-  monadInv H. rewrite (ireg_of_eq _ _ EQ) in H0. simpl.
-  destruct (rs x); inv H0; simpl. rewrite A; auto. rewrite A; auto.
+  monadInv H. rewrite (ireg_of_eq _ _ EQ). simpl. rewrite A; auto.
 (* indexed2 *)
-  monadInv H. rewrite (ireg_of_eq _ _ EQ) in H0; rewrite (ireg_of_eq _ _ EQ1) in H0. simpl.
-  destruct (rs x); try discriminate; destruct (rs x0); inv H0; simpl.
-  rewrite Int.add_assoc; auto. 
-  repeat rewrite Int.add_assoc. decEq. decEq. apply Int.add_commut.
-  rewrite Int.add_assoc; auto.
+  monadInv H. rewrite (ireg_of_eq _ _ EQ); rewrite (ireg_of_eq _ _ EQ1). simpl.
+  rewrite Val.add_assoc; auto. 
 (* scaled *)
-  monadInv H. rewrite (ireg_of_eq _ _ EQ) in H0. simpl.
-  destruct (rs x); inv H0; simpl.
-  rewrite B. simpl. rewrite A. auto.
+  monadInv H. rewrite (ireg_of_eq _ _ EQ). unfold eval_addrmode. 
+  rewrite Val.add_permut. simpl. rewrite A. apply Val.add_lessdef; auto. 
 (* indexed2scaled *)
-  monadInv H. rewrite (ireg_of_eq _ _ EQ) in H0; rewrite (ireg_of_eq _ _ EQ1) in H0. simpl.
-  destruct (rs x); try discriminate; destruct (rs x0); inv H0; simpl.
-  rewrite B. simpl. auto.
-  rewrite B. simpl. auto.
+  monadInv H. rewrite (ireg_of_eq _ _ EQ); rewrite (ireg_of_eq _ _ EQ1); simpl.
+  apply Val.add_lessdef; auto. apply Val.add_lessdef; auto. 
 (* global *)
-  inv H. simpl. unfold symbol_offset. destruct (Genv.find_symbol ge i); inv H0.
-  repeat rewrite Int.add_zero. auto.
+  inv H. simpl. unfold symbol_address, symbol_offset.
+  destruct (Genv.find_symbol ge i); simpl; auto. repeat rewrite Int.add_zero. auto.
 (* based *)
-  monadInv H. rewrite (ireg_of_eq _ _ EQ) in H0. simpl.
-  destruct (rs x); inv H0; simpl.
-  unfold symbol_offset. destruct (Genv.find_symbol ge i); inv H1. 
-  rewrite Int.add_zero; auto.
+  monadInv H. rewrite (ireg_of_eq _ _ EQ). simpl.
+  unfold symbol_address, symbol_offset. destruct (Genv.find_symbol ge i); simpl; auto.
+  rewrite Int.add_zero. rewrite Val.add_commut. auto. 
 (* basedscaled *)
-  monadInv H. rewrite (ireg_of_eq _ _ EQ) in H0. simpl.
-  destruct (rs x); inv H0; simpl.
-  rewrite B. unfold symbol_offset. destruct (Genv.find_symbol ge i0); inv H1. 
-  simpl. rewrite Int.add_zero. auto.
+  monadInv H. rewrite (ireg_of_eq _ _ EQ). unfold eval_addrmode. 
+  rewrite (Val.add_commut Vzero). rewrite Val.add_assoc. rewrite Val.add_permut.
+  apply Val.add_lessdef; auto. destruct (rs x); simpl; auto. rewrite B. simpl.
+  rewrite Int.add_zero. auto.
 (* instack *)
-  inv H; simpl. unfold offset_sp in H0. 
-  destruct (rs ESP); inv H0. simpl. rewrite A; auto. 
+  inv H; simpl. rewrite A; auto.
 Qed.
 
 (** Processor conditions and comparisons *)
 
 Lemma compare_ints_spec:
-  forall rs v1 v2,
-  let rs' := nextinstr (compare_ints v1 v2 rs) in
-     rs'#ZF = Val.cmp Ceq v1 v2
-  /\ rs'#CF = Val.cmpu Clt v1 v2
+  forall rs v1 v2 m,
+  let rs' := nextinstr (compare_ints v1 v2 rs m) in
+     rs'#ZF = Val.cmpu (Mem.valid_pointer m) Ceq v1 v2
+  /\ rs'#CF = Val.cmpu (Mem.valid_pointer m) Clt v1 v2
   /\ rs'#SOF = Val.cmp Clt v1 v2
   /\ (forall r, nontemp_preg r = true -> rs'#r = rs#r).
 Proof.
@@ -1012,112 +1060,69 @@ Proof.
   intros. rewrite <- negb_orb. rewrite <- int_not_ltu. rewrite negb_involutive. auto.
 Qed.
 
-Lemma testcond_for_signed_comparison_correct_ii:
-  forall c n1 n2 rs,
+Lemma testcond_for_signed_comparison_correct:
+  forall c v1 v2 rs m b,
+  Val.cmp_bool c v1 v2 = Some b ->
   eval_testcond (testcond_for_signed_comparison c)
-                (nextinstr (compare_ints (Vint n1) (Vint n2) rs)) =
-  Some(Int.cmp c n1 n2).
+                (nextinstr (compare_ints v1 v2 rs m)) = Some b.
 Proof.
-  intros. generalize (compare_ints_spec rs (Vint n1) (Vint n2)).
-  set (rs' := nextinstr (compare_ints (Vint n1) (Vint n2) rs)). 
+  intros. generalize (compare_ints_spec rs v1 v2 m).
+  set (rs' := nextinstr (compare_ints v1 v2 rs m)).
   intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
+  destruct v1; destruct v2; simpl in H; inv H.
+  unfold eval_testcond. rewrite A; rewrite B; rewrite C. unfold Val.cmp, Val.cmpu.
   destruct c; simpl.
-  destruct (Int.eq n1 n2); auto.
-  destruct (Int.eq n1 n2); auto.
-  destruct (Int.lt n1 n2); auto.
-  rewrite int_not_lt. destruct (Int.lt n1 n2); destruct (Int.eq n1 n2); auto.
-  rewrite (int_lt_not n1 n2). destruct (Int.lt n1 n2); destruct (Int.eq n1 n2); auto.
-  destruct (Int.lt n1 n2); auto.
+  destruct (Int.eq i i0); auto.
+  destruct (Int.eq i i0); auto.
+  destruct (Int.lt i i0); auto.
+  rewrite int_not_lt. destruct (Int.lt i i0); simpl; destruct (Int.eq i i0); auto.
+  rewrite (int_lt_not i i0). destruct (Int.lt i i0); destruct (Int.eq i i0); reflexivity.
+  destruct (Int.lt i i0); reflexivity.
 Qed.
 
-Lemma testcond_for_unsigned_comparison_correct_ii:
-  forall c n1 n2 rs,
+Lemma testcond_for_unsigned_comparison_correct:
+  forall c v1 v2 rs m b,
+  Val.cmpu_bool (Mem.valid_pointer m) c v1 v2 = Some b ->
   eval_testcond (testcond_for_unsigned_comparison c)
-                (nextinstr (compare_ints (Vint n1) (Vint n2) rs)) =
-  Some(Int.cmpu c n1 n2).
+                (nextinstr (compare_ints v1 v2 rs m)) = Some b.
 Proof.
-  intros. generalize (compare_ints_spec rs (Vint n1) (Vint n2)).
-  set (rs' := nextinstr (compare_ints (Vint n1) (Vint n2) rs)). 
+  intros. generalize (compare_ints_spec rs v1 v2 m).
+  set (rs' := nextinstr (compare_ints v1 v2 rs m)).
   intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
-  destruct c; simpl.
-  destruct (Int.eq n1 n2); auto.
-  destruct (Int.eq n1 n2); auto.
-  destruct (Int.ltu n1 n2); auto.
-  rewrite int_not_ltu. destruct (Int.ltu n1 n2); destruct (Int.eq n1 n2); auto.
-  rewrite (int_ltu_not n1 n2). destruct (Int.ltu n1 n2); destruct (Int.eq n1 n2); auto.
-  destruct (Int.ltu n1 n2); auto.
-Qed.
-
-Lemma testcond_for_unsigned_comparison_correct_pi:
-  forall c blk n1 n2 rs b,
-  eval_compare_null c n2 = Some b ->
-  eval_testcond (testcond_for_unsigned_comparison c)
-                (nextinstr (compare_ints (Vptr blk n1) (Vint n2) rs)) = Some b.
-Proof.
-  intros.
-  revert H. unfold eval_compare_null. 
-  generalize (Int.eq_spec n2 Int.zero); destruct (Int.eq n2 Int.zero); intros; try discriminate.
-  subst n2.
-  generalize (compare_ints_spec rs (Vptr blk n1) (Vint Int.zero)).
-  set (rs' := nextinstr (compare_ints (Vptr blk n1) (Vint Int.zero) rs)). 
-  intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
-  destruct c; simpl; try discriminate.
-  rewrite <- H0; auto.
-  rewrite <- H0; auto.
-Qed.
-
-Lemma testcond_for_unsigned_comparison_correct_ip:
-  forall c blk n1 n2 rs b,
-  eval_compare_null c n1 = Some b ->
-  eval_testcond (testcond_for_unsigned_comparison c)
-                (nextinstr (compare_ints (Vint n1) (Vptr blk n2) rs)) = Some b.
-Proof.
-  intros.
-  revert H. unfold eval_compare_null. 
-  generalize (Int.eq_spec n1 Int.zero); destruct (Int.eq n1 Int.zero); intros; try discriminate.
-  subst n1.
-  generalize (compare_ints_spec rs (Vint Int.zero) (Vptr blk n2)).
-  set (rs' := nextinstr (compare_ints (Vint Int.zero) (Vptr blk n2) rs)). 
-  intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
-  destruct c; simpl; try discriminate.
-  rewrite <- H0; auto.
-  rewrite <- H0; auto.
-Qed.
-
-Lemma testcond_for_unsigned_comparison_correct_pp:
-  forall c b1 n1 b2 n2 rs m b,
-  (if Mem.valid_pointer m b1 (Int.unsigned n1) && Mem.valid_pointer m b2 (Int.unsigned n2) 
-   then if eq_block b1 b2 then Some (Int.cmpu c n1 n2) else eval_compare_mismatch c
-   else None) = Some b ->
-  eval_testcond (testcond_for_unsigned_comparison c)
-                (nextinstr (compare_ints (Vptr b1 n1) (Vptr b2 n2) rs)) =
-  Some b.
-Proof.
-  intros.
-  destruct (Mem.valid_pointer m b1 (Int.unsigned n1) && Mem.valid_pointer m b2 (Int.unsigned n2)); try discriminate.
-  generalize (compare_ints_spec rs (Vptr b1 n1) (Vptr b2 n2)).
-  set (rs' := nextinstr (compare_ints (Vptr b1 n1) (Vptr b2 n2) rs)). 
-  intros [A [B [C D]]]. unfold eq_block in H.
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C.
-  destruct c; simpl.
-  destruct (zeq b1 b2). inversion H. destruct (Int.eq n1 n2); auto.
-  rewrite <- H; auto.
-  destruct (zeq b1 b2). inversion H. destruct (Int.eq n1 n2); auto.
-  rewrite <- H; auto.
-  destruct (zeq b1 b2). inversion H. destruct (Int.ltu n1 n2); auto.
-  discriminate.
-  destruct (zeq b1 b2). inversion H. 
-  rewrite int_not_ltu. destruct (Int.ltu n1 n2); destruct (Int.eq n1 n2); auto.
-  discriminate.
-  destruct (zeq b1 b2). inversion H. 
-  rewrite (int_ltu_not n1 n2). destruct (Int.ltu n1 n2); destruct (Int.eq n1 n2); auto.
-  discriminate.
-  destruct (zeq b1 b2). inversion H. destruct (Int.ltu n1 n2); auto.
-  discriminate.
+  unfold eval_testcond. rewrite A; rewrite B; rewrite C. unfold Val.cmpu, Val.cmp.
+  destruct v1; destruct v2; simpl in H; inv H.
+(* int int *)
+  destruct c; simpl; auto.
+  destruct (Int.eq i i0); reflexivity.
+  destruct (Int.eq i i0); auto.
+  destruct (Int.ltu i i0); auto.
+  rewrite int_not_ltu. destruct (Int.ltu i i0); simpl; destruct (Int.eq i i0); auto.
+  rewrite (int_ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
+  destruct (Int.ltu i i0); reflexivity.
+(* int ptr *)
+  destruct (Int.eq i Int.zero) as []_eqn; try discriminate.
+  destruct c; simpl in *; inv H1.
+  rewrite Heqb1; reflexivity. 
+  rewrite Heqb1; reflexivity.
+(* ptr int *)
+  destruct (Int.eq i0 Int.zero) as []_eqn; try discriminate.
+  destruct c; simpl in *; inv H1.
+  rewrite Heqb1; reflexivity. 
+  rewrite Heqb1; reflexivity.
+(* ptr ptr *)
+  simpl. 
+  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
+            Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
+  destruct (zeq b0 b1).
+  inversion H1.
+  destruct c; simpl; auto.
+  destruct (Int.eq i i0); reflexivity.
+  destruct (Int.eq i i0); auto.
+  destruct (Int.ltu i i0); auto.
+  rewrite int_not_ltu. destruct (Int.ltu i i0); simpl; destruct (Int.eq i i0); auto.
+  rewrite (int_ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
+  destruct (Int.ltu i i0); reflexivity.
+  destruct c; simpl in *; inv H1; reflexivity.
 Qed.
 
 Lemma compare_floats_spec:
@@ -1151,7 +1156,113 @@ Definition eval_extcond (xc: extcond) (rs: regset) : option bool :=
       end
   end.
 
-Definition swap_floats (c: comparison) (n1 n2: float) : float :=
+(*******
+
+Definition swap_floats {A: Type} (c: comparison) (n1 n2: A) : A :=
+  match c with
+  | Clt | Cle => n2
+  | Ceq | Cne | Cgt | Cge => n1
+  end.
+
+Lemma testcond_for_float_comparison_correct:
+  forall c v1 v2 rs b,
+  Val.cmpf_bool c v1 v2 = Some b ->
+  eval_extcond (testcond_for_condition (Ccompf c))
+               (nextinstr (compare_floats (swap_floats c v1 v2)
+                                         (swap_floats c v2 v1) rs)) = Some b.
+Proof.
+  intros. destruct v1; destruct v2; simpl in H; inv H.
+  assert (SWP: forall f1 f2, Vfloat (swap_floats c f1 f2) = swap_floats c (Vfloat f1) (Vfloat f2)).
+    destruct c; auto.
+  generalize (compare_floats_spec rs (swap_floats c f f0) (swap_floats c f0 f)).
+  repeat rewrite <- SWP.
+  set (rs' := nextinstr (compare_floats (Vfloat (swap_floats c f f0))
+                                      (Vfloat (swap_floats c f0 f)) rs)).
+  intros [A [B [C D]]].
+  unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
+  destruct c; simpl.
+(* eq *)
+  rewrite Float.cmp_ne_eq.
+  destruct (Float.cmp Ceq f f0). auto.
+  simpl. destruct (Float.cmp Clt f f0 || Float.cmp Cgt f f0); auto.
+(* ne *)
+  rewrite Float.cmp_ne_eq.
+  destruct (Float.cmp Ceq f f0). auto.
+  simpl. destruct (Float.cmp Clt f f0 || Float.cmp Cgt f f0); auto.
+(* lt *)
+  rewrite <- (Float.cmp_swap Cge f f0).
+  rewrite <- (Float.cmp_swap Cne f f0).
+  simpl.
+  rewrite Float.cmp_ne_eq. rewrite Float.cmp_le_lt_eq.
+  caseEq (Float.cmp Clt f f0); intros; simpl.
+  caseEq (Float.cmp Ceq f f0); intros; simpl. 
+  elimtype False. eapply Float.cmp_lt_eq_false; eauto. 
+  auto. 
+  destruct (Float.cmp Ceq f f0); auto.
+(* le *)
+  rewrite <- (Float.cmp_swap Cge f f0). simpl.
+  destruct (Float.cmp Cle f f0); auto.
+(* gt *)
+  rewrite Float.cmp_ne_eq. rewrite Float.cmp_ge_gt_eq. 
+  caseEq (Float.cmp Cgt f f0); intros; simpl.
+  caseEq (Float.cmp Ceq f f0); intros; simpl. 
+  elimtype False. eapply Float.cmp_gt_eq_false; eauto. 
+  auto. 
+  destruct (Float.cmp Ceq f f0); auto.
+(* ge *)
+  destruct (Float.cmp Cge f f0); auto.
+Qed.
+
+Lemma testcond_for_neg_float_comparison_correct:
+  forall c n1 n2 rs,
+  eval_extcond (testcond_for_condition (Cnotcompf c))
+               (nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
+                                          (Vfloat (swap_floats c n2 n1)) rs)) =
+  Some(negb(Float.cmp c n1 n2)).
+Proof.
+  intros.
+  generalize (compare_floats_spec rs (swap_floats c n1 n2) (swap_floats c n2 n1)).
+  set (rs' := nextinstr (compare_floats (Vfloat (swap_floats c n1 n2))
+                                        (Vfloat (swap_floats c n2 n1)) rs)).
+  intros [A [B [C D]]].
+  unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
+  destruct c; simpl.
+(* eq *)
+  rewrite Float.cmp_ne_eq.
+  caseEq (Float.cmp Ceq n1 n2); intros.
+  auto.
+  simpl. destruct (Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2); auto.
+(* ne *)
+  rewrite Float.cmp_ne_eq.
+  caseEq (Float.cmp Ceq n1 n2); intros.
+  auto.
+  simpl. destruct (Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2); auto.
+(* lt *)
+  rewrite <- (Float.cmp_swap Cge n1 n2).
+  rewrite <- (Float.cmp_swap Cne n1 n2).
+  simpl.
+  rewrite Float.cmp_ne_eq. rewrite Float.cmp_le_lt_eq.
+  caseEq (Float.cmp Clt n1 n2); intros; simpl.
+  caseEq (Float.cmp Ceq n1 n2); intros; simpl. 
+  elimtype False. eapply Float.cmp_lt_eq_false; eauto.
+  auto. 
+  destruct (Float.cmp Ceq n1 n2); auto.
+(* le *)
+  rewrite <- (Float.cmp_swap Cge n1 n2). simpl.
+  destruct (Float.cmp Cle n1 n2); auto.
+(* gt *)
+  rewrite Float.cmp_ne_eq. rewrite Float.cmp_ge_gt_eq. 
+  caseEq (Float.cmp Cgt n1 n2); intros; simpl.
+  caseEq (Float.cmp Ceq n1 n2); intros; simpl. 
+  elimtype False. eapply Float.cmp_gt_eq_false; eauto. 
+  auto. 
+  destruct (Float.cmp Ceq n1 n2); auto.
+(* ge *)
+  destruct (Float.cmp Cge n1 n2); auto.
+Qed.
+***************)
+
+Definition swap_floats {A: Type} (c: comparison) (n1 n2: A) : A :=
   match c with
   | Clt | Cle => n2
   | Ceq | Cne | Cgt | Cge => n1
@@ -1253,81 +1364,95 @@ Proof.
   destruct (Float.cmp Cge n1 n2); auto.
 Qed.
 
+Remark swap_floats_commut:
+  forall c x y, swap_floats c (Vfloat x) (Vfloat y) = Vfloat (swap_floats c x y).
+Proof.
+  intros. destruct c; auto. 
+Qed.
+
+Remark compare_floats_inv:
+  forall vx vy rs r,
+  r <> CR ZF -> r <> CR CF -> r <> CR PF -> r <> CR SOF ->
+  compare_floats vx vy rs r = rs r.
+Proof.
+  intros. 
+  assert (DFL: undef_regs (CR ZF :: CR CF :: CR PF :: CR SOF :: nil) rs r = rs r).
+    simpl. repeat SOther.
+  unfold compare_floats; destruct vx; destruct vy; auto. repeat SOther.
+Qed.  
+
 Lemma transl_cond_correct:
-  forall cond args k c rs m b,
+  forall cond args k c rs m,
   transl_cond cond args k = OK c ->
-  eval_condition cond (map rs (map preg_of args)) m = Some b ->
   exists rs',
      exec_straight c rs m k rs' m
-  /\ eval_extcond (testcond_for_condition cond) rs' = Some b
+  /\ match eval_condition cond (map rs (map preg_of args)) m with
+     | None => True
+     | Some b => eval_extcond (testcond_for_condition cond) rs' = Some b
+     end
   /\ forall r, nontemp_preg r = true -> rs'#r = rs r.
 Proof.
   unfold transl_cond; intros. 
   destruct cond; repeat (destruct args; try discriminate); monadInv H.
 (* comp *)
-  simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0. rewrite (ireg_of_eq _ _ EQ1) in H0.
+  simpl. rewrite (ireg_of_eq _ _ EQ). rewrite (ireg_of_eq _ _ EQ1).
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
-  split. simpl in H0. FuncInv.
-  subst b. simpl. apply testcond_for_signed_comparison_correct_ii. 
+  split. destruct (Val.cmp_bool c0 (rs x) (rs x0)) as []_eqn; auto.
+  eapply testcond_for_signed_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compu *)
-  simpl map in H0. 
-  rewrite (ireg_of_eq _ _ EQ) in H0. rewrite (ireg_of_eq _ _ EQ1) in H0.
+  simpl. rewrite (ireg_of_eq _ _ EQ). rewrite (ireg_of_eq _ _ EQ1).
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
-  split. simpl in H0. FuncInv.
-  subst b. simpl; apply testcond_for_unsigned_comparison_correct_ii. 
-  simpl; apply testcond_for_unsigned_comparison_correct_ip; auto. 
-  simpl; apply testcond_for_unsigned_comparison_correct_pi; auto.
-  simpl; eapply testcond_for_unsigned_comparison_correct_pp; eauto.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (rs x0)) as []_eqn; auto.
+  eapply testcond_for_unsigned_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compimm *)
-  simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0.
-  exists (nextinstr (compare_ints (rs x) (Vint i) rs)).
-  split. destruct (Int.eq_dec i Int.zero). 
-  apply exec_straight_one. subst i. simpl.
-  simpl in H0. FuncInv. simpl. rewrite Int.and_idem. auto. auto.
-  apply exec_straight_one; auto.
-  split. simpl in H0. FuncInv.
-  subst b. simpl; apply testcond_for_signed_comparison_correct_ii.
+  simpl. rewrite (ireg_of_eq _ _ EQ). destruct (Int.eq_dec i Int.zero).
+  econstructor; split. apply exec_straight_one. simpl; eauto. auto. 
+  split. destruct (rs x); simpl; auto. subst. rewrite Int.and_idem.
+  eapply testcond_for_signed_comparison_correct; eauto. 
+  intros. unfold compare_ints. repeat SOther.
+  econstructor; split. apply exec_straight_one. simpl; eauto. auto. 
+  split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) as []_eqn; auto.
+  eapply testcond_for_signed_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compuimm *)
-  simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0.
-  econstructor. split. apply exec_straight_one. simpl; eauto. auto.
-  split. simpl in H0. FuncInv. 
-  subst b. simpl; apply testcond_for_unsigned_comparison_correct_ii. 
-  simpl; apply testcond_for_unsigned_comparison_correct_pi; auto.
+  simpl. rewrite (ireg_of_eq _ _ EQ).
+  econstructor. split. apply exec_straight_one. simpl. eauto. auto.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) as []_eqn; auto.
+  eapply testcond_for_unsigned_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compf *)
-  simpl map in H0. rewrite (freg_of_eq _ _ EQ) in H0. rewrite (freg_of_eq _ _ EQ1) in H0.
-  remember (rs x) as v1; remember (rs x0) as v2. simpl in H0. FuncInv.
-  exists (nextinstr (compare_floats (Vfloat (swap_floats c0 f f0)) (Vfloat (swap_floats c0 f0 f)) rs)).
+  simpl. rewrite (freg_of_eq _ _ EQ). rewrite (freg_of_eq _ _ EQ1).
+  exists (nextinstr (compare_floats (swap_floats c0 (rs x) (rs x0)) (swap_floats c0 (rs x0) (rs x)) rs)).
   split. apply exec_straight_one. 
-  destruct c0; unfold floatcomp, exec_instr, swap_floats; congruence.
-  auto.
-  split. subst b. apply testcond_for_float_comparison_correct. 
-  intros. unfold compare_floats. repeat SOther.
+  destruct c0; simpl; auto.
+  unfold nextinstr. rewrite Pregmap.gss. rewrite compare_floats_inv; auto with ppcgen. 
+  split. destruct (rs x); destruct (rs x0); simpl; auto.
+  repeat rewrite swap_floats_commut. apply testcond_for_float_comparison_correct.
+  intros. SOther. apply compare_floats_inv; auto with ppcgen. 
 (* notcompf *)
-  simpl map in H0. rewrite (freg_of_eq _ _ EQ) in H0. rewrite (freg_of_eq _ _ EQ1) in H0.
-  remember (rs x) as v1; remember (rs x0) as v2. simpl in H0. FuncInv.
-  exists (nextinstr (compare_floats (Vfloat (swap_floats c0 f f0)) (Vfloat (swap_floats c0 f0 f)) rs)).
+  simpl. rewrite (freg_of_eq _ _ EQ). rewrite (freg_of_eq _ _ EQ1).
+  exists (nextinstr (compare_floats (swap_floats c0 (rs x) (rs x0)) (swap_floats c0 (rs x0) (rs x)) rs)).
   split. apply exec_straight_one. 
-  destruct c0; unfold floatcomp, exec_instr, swap_floats; congruence.
-  auto.
-  split. subst b. apply testcond_for_neg_float_comparison_correct. 
-  intros. unfold compare_floats. repeat SOther.
+  destruct c0; simpl; auto.
+  unfold nextinstr. rewrite Pregmap.gss. rewrite compare_floats_inv; auto with ppcgen. 
+  split. destruct (rs x); destruct (rs x0); simpl; auto.
+  repeat rewrite swap_floats_commut. apply testcond_for_neg_float_comparison_correct.
+  intros. SOther. apply compare_floats_inv; auto with ppcgen. 
 (* maskzero *)
-  simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0.
+  simpl. rewrite (ireg_of_eq _ _ EQ).
   econstructor. split. apply exec_straight_one. simpl; eauto. auto.
-  split. simpl in H0. FuncInv. simpl.
-  generalize (compare_ints_spec rs (Vint (Int.and i0 i)) Vzero).
-  intros [A B]. rewrite A. subst b. simpl. destruct (Int.eq (Int.and i0 i) Int.zero); auto.
+  split. destruct (rs x); simpl; auto. 
+  generalize (compare_ints_spec rs (Vint (Int.and i0 i)) Vzero m).
+  intros [A B]. rewrite A. unfold Val.cmpu; simpl. destruct (Int.eq (Int.and i0 i) Int.zero); auto.
   intros. unfold compare_ints. repeat SOther.
 (* masknotzero *)
-  simpl map in H0. rewrite (ireg_of_eq _ _ EQ) in H0.
+  simpl. rewrite (ireg_of_eq _ _ EQ).
   econstructor. split. apply exec_straight_one. simpl; eauto. auto.
-  split. simpl in H0. FuncInv. simpl.
-  generalize (compare_ints_spec rs (Vint (Int.and i0 i)) Vzero).
-  intros [A B]. rewrite A. subst b. simpl. destruct (Int.eq (Int.and i0 i) Int.zero); auto.
+  split. destruct (rs x); simpl; auto. 
+  generalize (compare_ints_spec rs (Vint (Int.and i0 i)) Vzero m).
+  intros [A B]. rewrite A. unfold Val.cmpu; simpl. destruct (Int.eq (Int.and i0 i) Int.zero); auto.
   intros. unfold compare_ints. repeat SOther.
 Qed.
 
@@ -1344,62 +1469,83 @@ Proof.
 Qed.
 
 Lemma mk_setcc_correct:
-  forall cond rd k rs1 m b,
-  eval_extcond cond rs1 = Some b ->
+  forall cond rd k rs1 m,
   exists rs2,
   exec_straight (mk_setcc cond rd k) rs1 m k rs2 m
-  /\ rs2#rd = Val.of_bool b
+  /\ rs2#rd = Val.of_optbool(eval_extcond cond rs1)
   /\ forall r, nontemp_preg r = true -> r <> rd -> rs2#r = rs1#r.
 Proof.
   intros. destruct cond; simpl in *.
 (* base *)
   econstructor; split.
-  apply exec_straight_one. simpl; rewrite H. eauto. auto.
-  split. repeat SRes. 
-  intros. repeat SOther. 
+  apply exec_straight_one. simpl; eauto. auto. 
+  split. SRes. SRes. 
+  intros; repeat SOther.
 (* or *)
-  destruct (eval_testcond c1 rs1) as [b1|]_eqn;
-  destruct (eval_testcond c2 rs1) as [b2|]_eqn; inv H.
-  assert (D: Val.or (Val.of_bool b1) (Val.of_bool b2) = Val.of_bool (b1 || b2)).
-    destruct b1; destruct b2; auto.
+  assert (Val.of_optbool
+    match eval_testcond c1 rs1 with
+    | Some b1 =>
+        match eval_testcond c2 rs1 with
+        | Some b2 => Some (b1 || b2)
+        | None => None
+        end
+    | None => None
+    end =
+    Val.or (Val.of_optbool (eval_testcond c1 rs1)) (Val.of_optbool (eval_testcond c2 rs1))).
+  destruct (eval_testcond c1 rs1). destruct (eval_testcond c2 rs1). 
+  destruct b; destruct b0; auto.
+  destruct b; auto.
+  auto.
+  rewrite H; clear H.
   destruct (ireg_eq rd EDX).
   subst rd. econstructor; split.
   eapply exec_straight_three.
-  simpl; rewrite Heqo; eauto.
-  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
-  simpl. eauto. 
+  simpl; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg. eauto.
+  simpl; eauto.
   auto. auto. auto.
   split. SRes. 
   intros. repeat SOther.
   econstructor; split.
   eapply exec_straight_three.
-  simpl; rewrite Heqo; eauto.
-  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
+  simpl; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg. eauto. 
   simpl. eauto. 
   auto. auto. auto.
-  split. repeat SRes. rewrite <- D. rewrite Val.or_commut. decEq; repeat SRes. 
+  split. repeat SRes. rewrite Val.or_commut. decEq; repeat SRes. 
   intros. repeat SOther.
 (* and *)
-  destruct (eval_testcond c1 rs1) as [b1|]_eqn;
-  destruct (eval_testcond c2 rs1) as [b2|]_eqn; inv H.
-  assert (D: Val.and (Val.of_bool b1) (Val.of_bool b2) = Val.of_bool (b1 && b2)).
-    destruct b1; destruct b2; auto.
+  assert (Val.of_optbool
+    match eval_testcond c1 rs1 with
+    | Some b1 =>
+        match eval_testcond c2 rs1 with
+        | Some b2 => Some (b1 && b2)
+        | None => None
+        end
+    | None => None
+    end =
+    Val.and (Val.of_optbool (eval_testcond c1 rs1)) (Val.of_optbool (eval_testcond c2 rs1))).
+  destruct (eval_testcond c1 rs1). destruct (eval_testcond c2 rs1). 
+  destruct b; destruct b0; auto.
+  destruct b; auto.
+  auto.
+  rewrite H; clear H.
   destruct (ireg_eq rd EDX).
   subst rd. econstructor; split.
   eapply exec_straight_three.
-  simpl; rewrite Heqo; eauto.
-  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
-  simpl. eauto. 
+  simpl; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg. eauto.
+  simpl; eauto.
   auto. auto. auto.
   split. SRes. 
   intros. repeat SOther.
   econstructor; split.
   eapply exec_straight_three.
-  simpl; rewrite Heqo; eauto.
-  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg.  rewrite Heqo0. eauto. 
+  simpl; eauto.
+  simpl. rewrite eval_testcond_nextinstr. repeat rewrite eval_testcond_set_ireg. eauto. 
   simpl. eauto. 
   auto. auto. auto.
-  split. repeat SRes. rewrite <- D. rewrite Val.and_commut. decEq; repeat SRes. 
+  split. repeat SRes. rewrite Val.and_commut. decEq; repeat SRes. 
   intros. repeat SOther.
 Qed.
 
@@ -1421,70 +1567,93 @@ Ltac TranslOp :=
   [ apply exec_straight_one; [ simpl; eauto | auto ] 
   | split; [ repeat SRes | intros; repeat SOther ]].
 
+
 Lemma transl_op_correct:
   forall op args res k c (rs: regset) m v,
   transl_op op args res k = OK c ->
   eval_operation ge (rs#ESP) op (map rs (map preg_of args)) m = Some v ->
   exists rs',
      exec_straight c rs m k rs' m
-  /\ rs'#(preg_of res) = v
+  /\ Val.lessdef v rs'#(preg_of res)
   /\ forall r, 
      match op with Omove => important_preg r = true /\ r <> ST0 | _ => nontemp_preg r = true end ->
      r <> preg_of res -> rs' r = rs r.
 Proof.
   intros until v; intros TR EV.
-  rewrite <- (eval_operation_weaken _ _ _ _ _ EV).
-  destruct op; simpl in TR; ArgsInv; try (TranslOp; fail).
+  assert (SAME:
+  (exists rs',
+     exec_straight c rs m k rs' m
+  /\ rs'#(preg_of res) = v
+  /\ forall r, 
+     match op with Omove => important_preg r = true /\ r <> ST0 | _ => nontemp_preg r = true end ->
+     r <> preg_of res -> rs' r = rs r) ->
+  exists rs',
+     exec_straight c rs m k rs' m
+  /\ Val.lessdef v rs'#(preg_of res)
+  /\ forall r, 
+     match op with Omove => important_preg r = true /\ r <> ST0 | _ => nontemp_preg r = true end ->
+     r <> preg_of res -> rs' r = rs r).
+  intros [rs' [A [B C]]]. subst v. exists rs'; auto. 
+
+  destruct op; simpl in TR; ArgsInv; simpl in EV; try (inv EV); try (apply SAME; TranslOp; fail).
 (* move *)
   exploit mk_mov_correct; eauto. intros [rs2 [A [B C]]]. 
-  exists rs2. split. eauto. split. simpl. auto. intros. destruct H; auto.
+  apply SAME. exists rs2. split. eauto. split. simpl. auto. intros. destruct H; auto.
 (* intconst *)
-  inv EV. destruct (Int.eq_dec i Int.zero). subst i. TranslOp. TranslOp.
+  apply SAME. destruct (Int.eq_dec i Int.zero). subst i. TranslOp. TranslOp.
 (* floatconst *)
-  inv EV. destruct (Float.eq_dec f Float.zero). subst f. TranslOp. TranslOp.
+  apply SAME. destruct (Float.eq_dec f Float.zero). subst f. TranslOp. TranslOp.
 (* cast8signed *)
-  eapply mk_intconv_correct; eauto.
+  apply SAME. eapply mk_intconv_correct; eauto.
 (* cast8unsigned *)
-  eapply mk_intconv_correct; eauto. 
+  apply SAME. eapply mk_intconv_correct; eauto. 
 (* cast16signed *)
-  eapply mk_intconv_correct; eauto.
+  apply SAME. eapply mk_intconv_correct; eauto.
 (* cast16unsigned *)
-  eapply mk_intconv_correct; eauto.
+  apply SAME. eapply mk_intconv_correct; eauto.
 (* div *)
-  eapply mk_div_correct; eauto. intros. simpl. eauto. 
+  apply SAME.
+  specialize (divs_mods_exist (rs x0) (rs x1)). rewrite H0. 
+  destruct (Val.mods (rs x0) (rs x1)) as [vr|]_eqn; intros; try contradiction.
+  eapply mk_div_correct with (dsem := Val.divs) (msem := Val.mods); eauto.
 (* divu *)
-  eapply mk_div_correct; eauto. intros. simpl. eauto. 
+  apply SAME.
+  specialize (divu_modu_exist (rs x0) (rs x1)). rewrite H0. 
+  destruct (Val.modu (rs x0) (rs x1)) as [vr|]_eqn; intros; try contradiction.
+  eapply mk_div_correct with (dsem := Val.divu) (msem := Val.modu); eauto.
 (* mod *)
-  eapply mk_mod_correct; eauto. intros. simpl. eauto. 
+  apply SAME.
+  specialize (divs_mods_exist (rs x0) (rs x1)). rewrite H0. 
+  destruct (Val.divs (rs x0) (rs x1)) as [vq|]_eqn; intros; try contradiction.
+  eapply mk_mod_correct with (dsem := Val.divs) (msem := Val.mods); eauto.
 (* modu *)
-  eapply mk_mod_correct; eauto. intros. simpl. eauto. 
+  apply SAME.
+  specialize (divu_modu_exist (rs x0) (rs x1)). rewrite H0. 
+  destruct (Val.divu (rs x0) (rs x1)) as [vq|]_eqn; intros; try contradiction.
+  eapply mk_mod_correct with (dsem := Val.divu) (msem := Val.modu); eauto.
 (* shl *)
-  eapply mk_shift_correct; eauto. 
+  apply SAME. eapply mk_shift_correct; eauto. 
 (* shr *)
-  eapply mk_shift_correct; eauto. 
+  apply SAME. eapply mk_shift_correct; eauto. 
 (* shrximm *)
-  remember (rs x0) as v1. FuncInv.
-  remember (Int.ltu i (Int.repr 31)) as L. destruct L; inv EV.
-  simpl. replace (Int.ltu i Int.iwordsize) with true. 
-  apply mk_shrximm_correct; auto.
-  unfold Int.ltu. rewrite zlt_true; auto. 
-  generalize (Int.ltu_inv _ _ (sym_equal HeqL)).
-  assert (Int.unsigned (Int.repr 31) < Int.unsigned Int.iwordsize) by (compute; auto).
-  omega. 
+  apply SAME. eapply mk_shrximm_correct; eauto.
 (* shru *)
-  eapply mk_shift_correct; eauto.
+  apply SAME. eapply mk_shift_correct; eauto.
 (* lea *)
   exploit transl_addressing_mode_correct; eauto. intros EA.
-  rewrite (eval_addressing_weaken _ _ _ _ EV). rewrite <- EA. 
-  TranslOp.
+  TranslOp. rewrite nextinstr_inv; auto with ppcgen. rewrite Pregmap.gss; auto.
+(* intoffloat *)
+  apply SAME. TranslOp. rewrite H0; auto.
+(* floatofint *)
+  apply SAME. TranslOp. rewrite H0; auto.
 (* condition *)
-  remember (eval_condition c0 rs ## (preg_of ## args) m) as ob. destruct ob; inv EV. 
-  rewrite (eval_condition_weaken _ _ _ (sym_equal Heqob)). 
   exploit transl_cond_correct; eauto. intros [rs2 [P [Q R]]].
   exploit mk_setcc_correct; eauto. intros [rs3 [S [T U]]].
   exists rs3.
   split. eapply exec_straight_trans. eexact P. eexact S.
-  split. auto.
+  split. rewrite T. destruct (eval_condition c0 rs ## (preg_of ## args) m).
+  rewrite Q. auto.
+  simpl; auto.
   intros. transitivity (rs2 r); auto.
 Qed.
 
@@ -1502,9 +1671,10 @@ Lemma transl_load_correct:
 Proof.
   unfold transl_load; intros. monadInv H. 
   exploit transl_addressing_mode_correct; eauto. intro EA.
+  assert (EA': eval_addrmode ge x rs = a). destruct a; simpl in H1; try discriminate; inv EA; auto.
   set (rs2 := nextinstr_nf (rs#(preg_of dest) <- v)).
   assert (exec_load ge chunk m x rs (preg_of dest) = Next rs2 m).
-    unfold exec_load. rewrite EA. rewrite H1. auto.
+    unfold exec_load. rewrite EA'. rewrite H1. auto.
   assert (rs2 PC = Val.add (rs PC) Vone).
     transitivity (Val.add ((rs#(preg_of dest) <- v) PC) Vone).
     auto. decEq. apply Pregmap.gso; auto with ppcgen.
@@ -1524,8 +1694,9 @@ Lemma transl_store_correct:
   /\ forall r, nontemp_preg r = true -> rs'#r = rs#r.
 Proof.
   unfold transl_store; intros. monadInv H. 
-  exploit transl_addressing_mode_correct; eauto. intro EA. rewrite <- EA in H1.
-  destruct chunk; ArgsInv.
+  exploit transl_addressing_mode_correct; eauto. intro EA.
+  assert (EA': eval_addrmode ge x rs = a). destruct a; simpl in H1; try discriminate; inv EA; auto.
+  rewrite <- EA' in H1. destruct chunk; ArgsInv.
 (* int8signed *)
   eapply mk_smallstore_correct; eauto.
   intros. simpl. unfold exec_store.

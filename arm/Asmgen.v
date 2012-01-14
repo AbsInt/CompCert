@@ -230,17 +230,6 @@ Definition transl_op
       Ploadsymbol (ireg_of r) s ofs :: k
   | Oaddrstack n, nil =>
       addimm (ireg_of r) IR13 n k
-  | Ocast8signed, a1 :: nil =>
-      Pmov (ireg_of r) (SOlslimm (ireg_of a1) (Int.repr 24)) ::
-      Pmov (ireg_of r) (SOasrimm (ireg_of r) (Int.repr 24)) :: k
-  | Ocast8unsigned, a1 :: nil =>
-      Pand (ireg_of r) (ireg_of a1) (SOimm (Int.repr 255)) :: k
-  | Ocast16signed, a1 :: nil =>
-      Pmov (ireg_of r) (SOlslimm (ireg_of a1) (Int.repr 16)) ::
-      Pmov (ireg_of r) (SOasrimm (ireg_of r) (Int.repr 16)) :: k
-  | Ocast16unsigned, a1 :: nil =>
-      Pmov (ireg_of r) (SOlslimm (ireg_of a1) (Int.repr 16)) ::
-      Pmov (ireg_of r) (SOlsrimm (ireg_of r) (Int.repr 16)) :: k
   | Oadd, a1 :: a2 :: nil =>
       Padd (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
   | Oaddshift s, a1 :: a2 :: nil =>

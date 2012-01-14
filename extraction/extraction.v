@@ -83,7 +83,6 @@ Extract Constant Compiler.print_Clight => "PrintClight.print_if".
 Extract Constant Compiler.print_Cminor => "PrintCminor.print_if".
 Extract Constant Compiler.print_RTL => "PrintRTL.print_rtl".
 Extract Constant Compiler.print_RTL_tailcall => "PrintRTL.print_tailcall".
-Extract Constant Compiler.print_RTL_castopt => "PrintRTL.print_castopt".
 Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
 Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
 Extract Constant Compiler.print_LTLin => "PrintLTLin.print_if".

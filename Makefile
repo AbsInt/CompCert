@@ -52,7 +52,6 @@ BACKEND=\
   Tailcall.v Tailcallproof.v \
   RTLtyping.v \
   Kildall.v \
-  CastOptim.v CastOptimproof.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSE.v CSEproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v LTLtyping.v \
@@ -69,6 +68,8 @@ BACKEND=\
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v Stackingtyping.v \
   Machsem.v \
   Asm.v Asmgen.v Asmgenretaddr.v Asmgenproof1.v Asmgenproof.v
+
+#  CastOptim.v CastOptimproof.v \
 
 # C front-end modules (in cfrontend/)
 
@@ -136,15 +137,22 @@ doc/coq2html: doc/coq2html.ml
 doc/coq2html.ml: doc/coq2html.mll
 	ocamllex doc/coq2html.mll
 
+tools/ndfun: tools/ndfun.ml
+	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
+
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
 
-.SUFFIXES: .v .vo
-
-.v.vo:
+%.vo: %.v
 	@rm -f doc/glob/$(*F).glob
 	@echo "COQC $*.v"
 	@$(COQC) -dump-glob doc/$(*F).glob $*.v
+
+%.v: %.vp tools/ndfun
+	@rm -f $*.v
+	@echo "Preprocessing $*.vp"
+	@tools/ndfun $*.vp > $*.v || { rm -f $*.v; exit 2; }
+	@chmod -w $*.v
 
 driver/Configuration.ml: Makefile.config
 	(echo let stdlib_path = "\"$(LIBDIR)\""; \

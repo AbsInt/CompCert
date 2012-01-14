@@ -844,8 +844,9 @@ Proof.
   intros [v' [A B]]. rewrite (sp_val _ _ _ AG) in A. 
   left; eapply exec_straight_steps; eauto; intros. simpl in H1. 
   exploit transl_op_correct; eauto. intros [rs2 [P [Q R]]]. 
+  assert (S: Val.lessdef v (rs2 (preg_of res))) by (eapply Val.lessdef_trans; eauto).
   exists rs2; split. eauto.
-  split. rewrite <- Q in B.
+  split.
   unfold undef_op.
   destruct op; try (eapply agree_set_undef_mreg; eauto).
   eapply agree_set_undef_move_mreg; eauto. 
@@ -1119,8 +1120,10 @@ Proof.
   intros; red; intros; inv MS. assert (f0 = f) by congruence. subst f0.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps_goto; eauto.
-  intros. simpl in H2. 
-  exploit transl_cond_correct; eauto. intros [rs' [A [B C]]].
+  intros. simpl in H2.
+  destruct (transl_cond_correct tge tf cond args _ _ rs m' H2)
+  as [rs' [A [B C]]]. 
+  unfold PregEq.t in B; rewrite EC in B.
   destruct (testcond_for_condition cond); simpl in *.
 (* simple jcc *)
   exists (Pjcc c1 lbl); exists k; exists rs'.
@@ -1165,7 +1168,9 @@ Proof.
   intros; red; intros; inv MS.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps; eauto. intros. simpl in H0. 
-  exploit transl_cond_correct; eauto. intros [rs' [A [B C]]].
+  destruct (transl_cond_correct tge tf cond args _ _ rs m' H0)
+  as [rs' [A [B C]]]. 
+  unfold PregEq.t in B; rewrite EC in B.
   destruct (testcond_for_condition cond); simpl in *.
 (* simple jcc *)
   econstructor; split.

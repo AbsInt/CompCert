@@ -295,9 +295,9 @@ Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
 
 SOF is (morally) the XOR of the SF and OF flags of the processor. *)
 
-Definition compare_ints (x y: val) (rs: regset) : regset :=
-  rs #ZF  <- (Val.cmp Ceq x y)
-     #CF  <- (Val.cmpu Clt x y)
+Definition compare_ints (x y: val) (rs: regset) (m: mem): regset :=
+  rs #ZF  <- (Val.cmpu (Mem.valid_pointer m) Ceq x y)
+     #CF  <- (Val.cmpu (Mem.valid_pointer m) Clt x y)
      #SOF <- (Val.cmp Clt x y)
      #PF  <- Vundef.
 
@@ -512,9 +512,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pcvtsd2ss_mf a r1 =>
       exec_store Mfloat32 m a rs r1
   | Pcvttsd2si_rf rd r1 =>
-      Next (nextinstr (rs#rd <- (Val.intoffloat rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pcvtsi2sd_fr rd r1 =>
-      Next (nextinstr (rs#rd <- (Val.floatofint rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) m
   (** Integer arithmetic *)
   | Plea rd a =>
       Next (nextinstr (rs#rd <- (eval_addrmode a rs))) m
@@ -527,11 +527,17 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pimul_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.mul rs#rd (Vint n)))) m
   | Pdiv r1 =>
-      Next (nextinstr_nf (rs#EAX <- (Val.divu rs#EAX (rs#EDX <- Vundef)#r1)
-                            #EDX <- (Val.modu rs#EAX (rs#EDX <- Vundef)#r1))) m
+      let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r1 in
+      match Val.divu vn vd, Val.modu vn vd with
+      | Some vq, Some vr => Next (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) m
+      | _, _ => Stuck
+      end
   | Pidiv r1 =>
-      Next (nextinstr_nf (rs#EAX <- (Val.divs rs#EAX (rs#EDX <- Vundef)#r1)
-                            #EDX <- (Val.mods rs#EAX (rs#EDX <- Vundef)#r1))) m
+      let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r1 in
+      match Val.divs vn vd, Val.mods vn vd with
+      | Some vq, Some vr => Next (nextinstr_nf (rs#EAX <- vq #EDX <- vr)) m
+      | _, _ => Stuck
+      end
   | Pand_rr rd r1 =>
       Next (nextinstr_nf (rs#rd <- (Val.and rs#rd rs#r1))) m
   | Pand_ri rd n =>
@@ -561,24 +567,21 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pror_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.ror rs#rd (Vint n)))) m
   | Pcmp_rr r1 r2 =>
-      Next (nextinstr (compare_ints (rs r1) (rs r2) rs)) m
+      Next (nextinstr (compare_ints (rs r1) (rs r2) rs m)) m
   | Pcmp_ri r1 n =>
-      Next (nextinstr (compare_ints (rs r1) (Vint n) rs)) m
+      Next (nextinstr (compare_ints (rs r1) (Vint n) rs m)) m
   | Ptest_rr r1 r2 =>
-      Next (nextinstr (compare_ints (Val.and (rs r1) (rs r2)) Vzero rs)) m
+      Next (nextinstr (compare_ints (Val.and (rs r1) (rs r2)) Vzero rs m)) m
   | Ptest_ri r1 n =>
-      Next (nextinstr (compare_ints (Val.and (rs r1) (Vint n)) Vzero rs)) m
+      Next (nextinstr (compare_ints (Val.and (rs r1) (Vint n)) Vzero rs m)) m
   | Pcmov c rd r1 =>
       match eval_testcond c rs with
       | Some true => Next (nextinstr (rs#rd <- (rs#r1))) m
       | Some false => Next (nextinstr rs) m
-      | None => Stuck
+      | None => Next (nextinstr (rs#rd <- Vundef)) m
       end
   | Psetcc c rd =>
-      match eval_testcond c rs with
-      | Some b => Next (nextinstr (rs#ECX <- Vundef #rd <- (Val.of_bool b))) m
-      | None => Stuck
-      end
+      Next (nextinstr (rs#ECX <- Vundef #rd <- (Val.of_optbool (eval_testcond c rs)))) m
   (** Arithmetic operations over floats *)
   | Paddd_ff rd r1 =>
       Next (nextinstr (rs#rd <- (Val.addf rs#rd rs#r1))) m

@@ -791,10 +791,9 @@ Proof.
   exists m'; split; auto.
   exists rs'; split. simpl. eexact P. 
   assert (agree (Regmap.set res v ms) sp rs').
-    apply agree_set_mreg with rs; auto. congruence. 
-    auto with ppcgen.
+    apply agree_set_mreg with rs; auto. eapply Val.lessdef_trans; eauto.
   assert (agree (Regmap.set res v (undef_temps ms)) sp rs').
-    apply agree_set_undef_mreg with rs; auto. congruence. 
+    apply agree_set_undef_mreg with rs; auto. eapply Val.lessdef_trans; eauto.
     auto with ppcgen.
   destruct op; assumption.
 Qed.
@@ -1086,7 +1085,8 @@ Proof.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros A.
   exploit transl_cond_correct. eauto. eauto. 
-  intros [rs2 [EX [RES OTH]]].
+  instantiate (1 := rs). instantiate (1 := m'). unfold PregEq.t. rewrite A. 
+  intros [rs2 [EX [RES OTH]]]. 
   inv AT. simpl in H5.
   generalize (functions_transl _ _ H4); intro FN.
   generalize (functions_transl_no_overflow _ _ H4); intro NOOV.
@@ -1120,7 +1120,8 @@ Proof.
   intro WTI. inv WTI.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros A.
-  exploit transl_cond_correct. eauto. eauto. 
+  exploit transl_cond_correct. eauto. 
+  instantiate (1 := rs). instantiate (1 := m'). unfold PregEq.t. rewrite A. 
   intros [rs2 [EX [RES OTH]]].
   left; eapply exec_straight_steps; eauto with coqlib.
   exists m'; split; auto.

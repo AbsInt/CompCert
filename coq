@@ -9,7 +9,7 @@ VARIANT=`sed -n -e 's/^VARIANT=//p' Makefile.config`
 make -q ${1}o || {
   make -n ${1}o | grep -v "\\b${1}\\b" | \
   (while read cmd; do
-    $cmd || exit 2
+    sh -c "$cmd" || exit 2
    done)
 }
 

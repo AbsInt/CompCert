@@ -69,13 +69,19 @@ Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
     Paddis r1 r2 (Cint (high_s n)) ::
     Paddi r1 r1 (Cint (low_s n)) :: k.
 
-Definition andimm (r1 r2: ireg) (n: int) (k: code) :=
+Definition andimm_base (r1 r2: ireg) (n: int) (k: code) :=
   if Int.eq (high_u n) Int.zero then
     Pandi_ r1 r2 (Cint n) :: k
   else if Int.eq (low_u n) Int.zero then
     Pandis_ r1 r2 (Cint (high_u n)) :: k
   else
     loadimm GPR0 n (Pand_ r1 r2 GPR0 :: k).
+
+Definition andimm (r1 r2: ireg) (n: int) (k: code) :=
+  if is_rlw_mask n then
+    Prlwinm r1 r2 Int.zero n :: k
+  else
+    andimm_base r1 r2 n k.
 
 Definition orimm (r1 r2: ireg) (n: int) (k: code) :=
   if Int.eq (high_u n) Int.zero then
@@ -94,6 +100,12 @@ Definition xorimm (r1 r2: ireg) (n: int) (k: code) :=
   else
     Pxoris r1 r2 (Cint (high_u n)) ::
     Pxori r1 r1 (Cint (low_u n)) :: k.
+
+Definition rolm (r1 r2: ireg) (amount mask: int) (k: code) :=
+  if is_rlw_mask mask then
+    Prlwinm r1 r2 amount mask :: k
+  else
+    Prlwinm r1 r2 amount Int.mone :: andimm_base r1 r1 mask k.
 
 (** Accessing slots in the stack frame.  *)
 
@@ -166,9 +178,9 @@ Definition transl_cond
   | Cnotcompf cmp, a1 :: a2 :: nil =>
       floatcomp cmp (freg_of a1) (freg_of a2) k
   | Cmaskzero n, a1 :: nil =>
-      andimm GPR0 (ireg_of a1) n k
+      andimm_base GPR0 (ireg_of a1) n k
   | Cmasknotzero n, a1 :: nil =>
-      andimm GPR0 (ireg_of a1) n k
+      andimm_base GPR0 (ireg_of a1) n k
   | _, _ =>
      k (**r never happens for well-typed code *)
   end.
@@ -302,12 +314,8 @@ Definition transl_op
       addimm (ireg_of r) GPR1 n k
   | Ocast8signed, a1 :: nil =>
       Pextsb (ireg_of r) (ireg_of a1) :: k
-  | Ocast8unsigned, a1 :: nil =>
-      Prlwinm (ireg_of r) (ireg_of a1) Int.zero (Int.repr 255) :: k
   | Ocast16signed, a1 :: nil =>
       Pextsh (ireg_of r) (ireg_of a1) :: k
-  | Ocast16unsigned, a1 :: nil =>
-      Prlwinm (ireg_of r) (ireg_of a1) Int.zero (Int.repr 65535) :: k
   | Oadd, a1 :: a2 :: nil =>
       Padd (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Oaddimm n, a1 :: nil =>
@@ -360,7 +368,7 @@ Definition transl_op
   | Oshru, a1 :: a2 :: nil =>
       Psrw (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Orolm amount mask, a1 :: nil =>
-      Prlwinm (ireg_of r) (ireg_of a1) amount mask :: k
+      rolm (ireg_of r) (ireg_of a1) amount mask k
   | Oroli amount mask, a1 :: a2 :: nil =>
       if mreg_eq a1 r  then (**r should always be true *)
         Prlwimi (ireg_of r) (ireg_of a2) amount mask :: k

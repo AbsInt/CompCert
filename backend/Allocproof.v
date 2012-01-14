@@ -705,22 +705,13 @@ Proof.
   eapply agree_assign_live; eauto.
   eapply agree_reg_list_live; eauto.
 
-  (* Icond, true *)
-  assert (COND: eval_condition cond (map ls (map assign args)) m = Some true).
+  (* Icond *)
+  assert (COND: eval_condition cond (map ls (map assign args)) m = Some b).
     replace (map ls (map assign args)) with (rs##args). auto.
     eapply agree_eval_regs; eauto.
   econstructor; split.
-  eapply exec_Lcond_true; eauto. TranslInstr.
-  MatchStates.
-  eapply agree_undef_temps; eauto.
-  eapply agree_reg_list_live. eauto.
-  (* Icond, false *)
-  assert (COND: eval_condition cond (map ls (map assign args)) m = Some false).
-    replace (map ls (map assign args)) with (rs##args). auto.
-    eapply agree_eval_regs; eauto.
-  econstructor; split.
-  eapply exec_Lcond_false; eauto. TranslInstr.
-  MatchStates.
+  eapply exec_Lcond; eauto. TranslInstr.
+  MatchStates. destruct b; simpl; auto.
   eapply agree_undef_temps; eauto.
   eapply agree_reg_list_live. eauto.
 

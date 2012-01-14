@@ -319,14 +319,9 @@ Proof.
   (* cond *)
   generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.
-  eapply exec_Lcond_true; eauto.
+  eapply exec_Lcond; eauto.
   rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
-  econstructor; eauto.
-  generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
-  left; econstructor; split.
-  eapply exec_Lcond_false; eauto.
-  rewrite (tunnel_function_lookup _ _ _ H); simpl; eauto.
-  econstructor; eauto.
+  destruct b; econstructor; eauto.
   (* jumptable *)
   generalize (record_gotos_correct f pc); rewrite H; intro A; rewrite A.
   left; econstructor; split.

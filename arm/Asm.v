@@ -355,15 +355,15 @@ Definition exec_store (chunk: memory_chunk) (addr: val) (r: preg)
 
 (** Operations over condition bits. *)
 
-Definition compare_int (rs: regset) (v1 v2: val) :=
-  rs#CReq <- (Val.cmp Ceq v1 v2)
-    #CRne <- (Val.cmp Cne v1 v2)
-    #CRhs <- (Val.cmpu Cge v1 v2)
-    #CRlo <- (Val.cmpu Clt v1 v2)
+Definition compare_int (rs: regset) (v1 v2: val) (m: mem) :=
+  rs#CReq <- (Val.cmpu (Mem.valid_pointer m) Ceq v1 v2)
+    #CRne <- (Val.cmpu (Mem.valid_pointer m) Cne v1 v2)
+    #CRhs <- (Val.cmpu (Mem.valid_pointer m) Cge v1 v2)
+    #CRlo <- (Val.cmpu (Mem.valid_pointer m) Clt v1 v2)
     #CRmi <- Vundef
     #CRpl <- Vundef
-    #CRhi <- (Val.cmpu Cgt v1 v2)
-    #CRls <- (Val.cmpu Cle v1 v2)
+    #CRhi <- (Val.cmpu (Mem.valid_pointer m) Cgt v1 v2)
+    #CRls <- (Val.cmpu (Mem.valid_pointer m) Cle v1 v2)
     #CRge <- (Val.cmp Cge v1 v2)
     #CRlt <- (Val.cmp Clt v1 v2)
     #CRgt <- (Val.cmp Cgt v1 v2)
@@ -434,7 +434,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pbic r1 r2 so => 
       OK (nextinstr (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
   | Pcmp r1 so => 
-      OK (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs))) m
+      OK (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs) m)) m
   | Peor r1 r2 so => 
       OK (nextinstr (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
   | Pldr r1 r2 sa => 
@@ -454,7 +454,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | Vint n => if Int.eq n Int.zero 
                   then OK (nextinstr rs) m
                   else OK (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
-      | _ => Error
+      | _ => OK (nextinstr (rs#r1 <- Vundef)) m
       end
   | Pmul r1 r2 r3 =>      
       OK (nextinstr (rs#r1 <- (Val.mul rs#r2 rs#r3))) m
@@ -471,11 +471,17 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pstrh r1 r2 sa => 
       exec_store Mint16unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Psdiv rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.divs rs#r1 rs#r2))) m
+      match Val.divs rs#r1 rs#r2 with
+      | Some v => OK (nextinstr (rs#rd <- v)) m
+      | None => Error
+      end
   | Psub r1 r2 so =>  
       OK (nextinstr (rs#r1 <- (Val.sub rs#r2 (eval_shift_op so rs)))) m
   | Pudiv rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.divu rs#r1 rs#r2))) m
+      match Val.divu rs#r1 rs#r2 with
+      | Some v => OK (nextinstr (rs#rd <- v)) m
+      | None => Error
+      end
   (* Floating-point coprocessor instructions *)
   | Pfcpyd r1 r2 =>
       OK (nextinstr (rs#r1 <- (rs#r2))) m
@@ -496,13 +502,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfcmpd r1 r2 =>              
       OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfsitod r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.floatofint rs#r2))) m
+      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofint rs#r2)))) m
   | Pfuitod r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.floatofintu rs#r2))) m
+      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofintu rs#r2)))) m
   | Pftosizd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.intoffloat rs#r2))) m
+      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.intoffloat rs#r2)))) m
   | Pftouizd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.intuoffloat rs#r2))) m
+      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.intuoffloat rs#r2)))) m
   | Pfcvtsd r1 r2 =>
       OK (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
   | Pfldd r1 r2 n =>

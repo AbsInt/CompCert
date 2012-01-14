@@ -36,9 +36,10 @@ Require Import ConstpropOpproof.
 Section ANALYSIS.
 
 Variable ge: genv.
+Variable sp: val.
 
 Definition regs_match_approx (a: D.t) (rs: regset) : Prop :=
-  forall r, val_match_approx ge (D.get r a) rs#r.
+  forall r, val_match_approx ge sp (D.get r a) rs#r.
 
 Lemma regs_match_approx_top:
   forall rs, regs_match_approx D.top rs.
@@ -49,7 +50,7 @@ Qed.
 
 Lemma val_match_approx_increasing:
   forall a1 a2 v,
-  Approx.ge a1 a2 -> val_match_approx ge a2 v -> val_match_approx ge a1 v.
+  Approx.ge a1 a2 -> val_match_approx ge sp a2 v -> val_match_approx ge sp a1 v.
 Proof.
   intros until v.
   intros [A|[B|C]].
@@ -68,7 +69,7 @@ Qed.
 
 Lemma regs_match_approx_update:
   forall ra rs a v r,
-  val_match_approx ge a v ->
+  val_match_approx ge sp a v ->
   regs_match_approx ra rs ->
   regs_match_approx (D.set r a ra) (rs#r <- v).
 Proof.
@@ -81,13 +82,12 @@ Qed.
 Lemma approx_regs_val_list:
   forall ra rs rl,
   regs_match_approx ra rs ->
-  val_list_match_approx ge (approx_regs ra rl) rs##rl.
+  val_list_match_approx ge sp (approx_regs ra rl) rs##rl.
 Proof.
   induction rl; simpl; intros.
   constructor.
   constructor. apply H. auto.
 Qed.
-
 
 (** The correctness of the static analysis follows from the results
   of module [ConstpropOpproof] and the fact that the result of
@@ -178,26 +178,56 @@ Proof.
   intros. destruct f; reflexivity.
 Qed.
 
-Lemma transf_ros_correct:
-  forall ros rs f approx,
-  regs_match_approx ge approx rs ->
-  find_function ge ros rs = Some f ->
-  find_function tge (transf_ros approx ros) rs = Some (transf_fundef f).
+Definition regs_lessdef (rs1 rs2: regset) : Prop :=
+  forall r, Val.lessdef (rs1#r) (rs2#r).
+
+Lemma regs_lessdef_regs:
+  forall rs1 rs2, regs_lessdef rs1 rs2 ->
+  forall rl, Val.lessdef_list rs1##rl rs2##rl.
 Proof.
-  intros until approx; intro MATCH.
-  destruct ros; simpl.
-  intro.
-  exploit functions_translated; eauto. intro FIND.  
-  caseEq (D.get r approx); intros; auto.
-  generalize (Int.eq_spec i0 Int.zero); case (Int.eq i0 Int.zero); intros; auto.
-  generalize (MATCH r). rewrite H0. intros [b [A B]].
-  rewrite <- symbols_preserved in A.
-  rewrite B in FIND. rewrite H1 in FIND. 
-  rewrite Genv.find_funct_find_funct_ptr in FIND.
-  simpl. rewrite A. auto.
-  rewrite symbols_preserved. destruct (Genv.find_symbol ge i).
-  intro. apply function_ptr_translated. auto.
-  congruence.
+  induction rl; constructor; auto.
+Qed.
+
+Lemma set_reg_lessdef:
+  forall r v1 v2 rs1 rs2,
+  Val.lessdef v1 v2 -> regs_lessdef rs1 rs2 -> regs_lessdef (rs1#r <- v1) (rs2#r <- v2).
+Proof.
+  intros; red; intros. repeat rewrite Regmap.gsspec. 
+  destruct (peq r0 r); auto.
+Qed.
+
+Lemma init_regs_lessdef:
+  forall rl vl1 vl2,
+  Val.lessdef_list vl1 vl2 ->
+  regs_lessdef (init_regs vl1 rl) (init_regs vl2 rl).
+Proof.
+  induction rl; simpl; intros.
+  red; intros. rewrite Regmap.gi. auto.
+  inv H. red; intros. rewrite Regmap.gi. auto.
+  apply set_reg_lessdef; auto.
+Qed.
+
+Lemma transf_ros_correct:
+  forall sp ros rs rs' f approx,
+  regs_match_approx ge sp approx rs ->
+  find_function ge ros rs = Some f ->
+  regs_lessdef rs rs' ->
+  find_function tge (transf_ros approx ros) rs' = Some (transf_fundef f).
+Proof.
+  intros. destruct ros; simpl in *.
+  generalize (H r); intro MATCH. generalize (H1 r); intro LD.
+  destruct (rs#r); simpl in H0; try discriminate.
+  destruct (Int.eq_dec i Int.zero); try discriminate.
+  inv LD. 
+  assert (find_function tge (inl _ r) rs' = Some (transf_fundef f)).
+    simpl. rewrite <- H4. simpl. rewrite dec_eq_true. apply function_ptr_translated. auto.
+  destruct (D.get r approx); auto.
+  predSpec Int.eq Int.eq_spec i0 Int.zero; intros; auto.
+  simpl in *. unfold symbol_address in MATCH. rewrite symbols_preserved.
+  destruct (Genv.find_symbol ge i); try discriminate. 
+  inv MATCH. apply function_ptr_translated; auto.
+  rewrite symbols_preserved. destruct (Genv.find_symbol ge i); try discriminate.
+  apply function_ptr_translated; auto.
 Qed.
 
 (** The proof of semantic preservation is a simulation argument
@@ -227,29 +257,37 @@ Qed.
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
    match_stackframe_intro:
-      forall res sp pc rs f,
-      (forall v, regs_match_approx ge (analyze f)!!pc (rs#res <- v)) ->
+      forall res sp pc rs f rs',
+      regs_lessdef rs rs' ->
+      (forall v, regs_match_approx ge sp (analyze f)!!pc (rs#res <- v)) ->
     match_stackframes
         (Stackframe res f sp pc rs)
-        (Stackframe res (transf_function f) sp pc rs).
+        (Stackframe res (transf_function f) sp pc rs').
 
 Inductive match_states: state -> state -> Prop :=
   | match_states_intro:
-      forall s sp pc rs m f s'
-           (MATCH: regs_match_approx ge (analyze f)!!pc rs)
-           (STACKS: list_forall2 match_stackframes s s'),
+      forall s sp pc rs m f s' rs' m'
+           (MATCH: regs_match_approx ge sp (analyze f)!!pc rs)
+           (STACKS: list_forall2 match_stackframes s s')
+           (REGS: regs_lessdef rs rs')
+           (MEM: Mem.extends m m'),
       match_states (State s f sp pc rs m)
-                   (State s' (transf_function f) sp pc rs m)
+                   (State s' (transf_function f) sp pc rs' m')
   | match_states_call:
-      forall s f args m s',
-      list_forall2 match_stackframes s s' ->
+      forall s f args m s' args' m'
+           (STACKS: list_forall2 match_stackframes s s')
+           (ARGS: Val.lessdef_list args args')
+           (MEM: Mem.extends m m'),
       match_states (Callstate s f args m)
-                   (Callstate s' (transf_fundef f) args m)
+                   (Callstate s' (transf_fundef f) args' m')
   | match_states_return:
-      forall s s' v m,
+      forall s v m s' v' m'
+           (STACKS: list_forall2 match_stackframes s s')
+           (RES: Val.lessdef v v')
+           (MEM: Mem.extends m m'),
       list_forall2 match_stackframes s s' ->
       match_states (Returnstate s v m)
-                   (Returnstate s' v m).
+                   (Returnstate s' v' m').
 
 Ltac TransfInstr :=
   match goal with
@@ -272,7 +310,7 @@ Proof.
   induction 1; intros; inv MS.
 
   (* Inop *)
-  exists (State s' (transf_function f) sp pc' rs m); split.
+  exists (State s' (transf_function f) sp pc' rs' m'); split.
   TransfInstr; intro. eapply exec_Inop; eauto.
   econstructor; eauto.
   eapply analyze_correct_1 with (pc := pc); eauto.
@@ -280,58 +318,78 @@ Proof.
   unfold transfer; rewrite H. auto.
 
   (* Iop *)
-  exists (State s' (transf_function f) sp pc' (rs#res <- v) m); split.
-  TransfInstr. caseEq (op_strength_reduction (approx_reg (analyze f)!!pc) op args);
-  intros op' args' OSR.
-  assert (eval_operation tge sp op' rs##args' m = Some v).
-    rewrite (eval_operation_preserved _ _ symbols_preserved). 
-    generalize (op_strength_reduction_correct ge (approx_reg (analyze f)!!pc) sp rs m
-                  MATCH op args v).
-    rewrite OSR; simpl. auto.
-  generalize (eval_static_operation_correct ge op sp
-               (approx_regs (analyze f)!!pc args) rs##args m v
-               (approx_regs_val_list _ _ _ args MATCH) H0).
-  case (eval_static_operation op (approx_regs (analyze f)!!pc args)); intros;
-  simpl in H2;
-  eapply exec_Iop; eauto; simpl.
-  congruence.
-  congruence.
-  elim H2; intros b [A B]. rewrite symbols_preserved. 
-  rewrite A; rewrite B; auto.
-  econstructor; eauto. 
-  eapply analyze_correct_1 with (pc := pc); eauto.
-  simpl; auto.
-  unfold transfer; rewrite H. 
-  apply regs_match_approx_update; auto. 
-  eapply eval_static_operation_correct; eauto.
-  apply approx_regs_val_list; auto.
+  assert (MATCH': regs_match_approx ge sp (analyze f) # pc' rs # res <- v).
+    eapply analyze_correct_1 with (pc := pc); eauto. simpl; auto.
+    unfold transfer; rewrite H. 
+    apply regs_match_approx_update; auto. 
+    eapply eval_static_operation_correct; eauto.
+    apply approx_regs_val_list; auto.
+  TransfInstr.
+  exploit eval_static_operation_correct; eauto. eapply approx_regs_val_list; eauto. intros VM.
+  destruct (eval_static_operation op (approx_regs (analyze f) # pc args)); intros; simpl in VM.
+  (* Novalue *)
+  contradiction.
+  (* Unknown *)
+  exploit op_strength_reduction_correct. eexact MATCH. reflexivity. eauto. 
+  destruct (op_strength_reduction op args (approx_regs (analyze f) # pc args)) as [op' args'].
+  intros [v' [EV' LD']].
+  assert (EV'': exists v'', eval_operation ge sp op' rs'##args' m' = Some v'' /\ Val.lessdef v' v'').
+    eapply eval_operation_lessdef; eauto. eapply regs_lessdef_regs; eauto.
+  destruct EV'' as [v'' [EV'' LD'']].
+  exists (State s' (transf_function f) sp pc' (rs'#res <- v'') m'); split.
+  econstructor. eauto. rewrite <- EV''. apply eval_operation_preserved. exact symbols_preserved.
+  econstructor; eauto. apply set_reg_lessdef; auto. eapply Val.lessdef_trans; eauto.
+  (* I i *)
+  subst v. exists (State s' (transf_function f) sp pc' (rs'#res <- (Vint i)) m'); split.
+  econstructor; eauto.
+  econstructor; eauto. apply set_reg_lessdef; auto.
+  (* F *)
+  subst v. exists (State s' (transf_function f) sp pc' (rs'#res <- (Vfloat f0)) m'); split.
+  econstructor; eauto.
+  econstructor; eauto. apply set_reg_lessdef; auto.
+  (* G *)
+  subst v. exists (State s' (transf_function f) sp pc' (rs'#res <- (symbol_address tge i i0)) m'); split.
+  econstructor; eauto.
+  econstructor; eauto. apply set_reg_lessdef; auto.
+  unfold symbol_address. rewrite symbols_preserved; auto. 
+  (* S *)
+  subst v. exists (State s' (transf_function f) sp pc' (rs'#res <- (Val.add sp (Vint i))) m'); split.
+  econstructor; eauto.
+  econstructor; eauto. apply set_reg_lessdef; auto.
 
   (* Iload *)
-  caseEq (addr_strength_reduction (approx_reg (analyze f)!!pc) addr args);
-  intros addr' args' ASR.
-  assert (eval_addressing tge sp addr' rs##args' = Some a).
-    rewrite (eval_addressing_preserved _ _ symbols_preserved). 
-    generalize (addr_strength_reduction_correct ge (approx_reg (analyze f)!!pc) sp rs
-                  MATCH addr args).
-    rewrite ASR; simpl. congruence. 
-  TransfInstr. rewrite ASR. intro.
-  exists (State s' (transf_function f) sp pc' (rs#dst <- v) m); split.
+  TransfInstr. 
+  generalize (addr_strength_reduction_correct ge sp (analyze f)!!pc rs
+                  MATCH addr args (approx_regs (analyze f) # pc args) (refl_equal _)).
+  destruct (addr_strength_reduction addr args (approx_regs (analyze f) # pc args)) as [addr' args'].
+  intros P Q. rewrite H0 in P.
+  assert (ADDR': exists a', eval_addressing ge sp addr' rs'##args' = Some a' /\ Val.lessdef a a').
+    eapply eval_addressing_lessdef; eauto. eapply regs_lessdef_regs; eauto.
+  destruct ADDR' as [a' [A B]].
+  assert (C: eval_addressing tge sp addr' rs'##args' = Some a').
+    rewrite <- A. apply eval_addressing_preserved. exact symbols_preserved.
+  exploit Mem.loadv_extends; eauto. intros [v' [D E]].
+  exists (State s' (transf_function f) sp pc' (rs'#dst <- v') m'); split.
   eapply exec_Iload; eauto.
   econstructor; eauto. 
   eapply analyze_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   apply regs_match_approx_update; auto. simpl; auto.
+  apply set_reg_lessdef; auto. 
 
   (* Istore *)
-  caseEq (addr_strength_reduction (approx_reg (analyze f)!!pc) addr args);
-  intros addr' args' ASR.
-  assert (eval_addressing tge sp addr' rs##args' = Some a).
-    rewrite (eval_addressing_preserved _ _ symbols_preserved). 
-    generalize (addr_strength_reduction_correct ge (approx_reg (analyze f)!!pc) sp rs
-                  MATCH addr args).
-    rewrite ASR; simpl. congruence. 
-  TransfInstr. rewrite ASR. intro.
-  exists (State s' (transf_function f) sp pc' rs m'); split.
+  TransfInstr.
+  generalize (addr_strength_reduction_correct ge sp (analyze f)!!pc rs
+                  MATCH addr args (approx_regs (analyze f) # pc args) (refl_equal _)).
+  destruct (addr_strength_reduction addr args (approx_regs (analyze f) # pc args)) as [addr' args'].
+  intros P Q. rewrite H0 in P.
+  assert (ADDR': exists a', eval_addressing ge sp addr' rs'##args' = Some a' /\ Val.lessdef a a').
+    eapply eval_addressing_lessdef; eauto. eapply regs_lessdef_regs; eauto.
+  destruct ADDR' as [a' [A B]].
+  assert (C: eval_addressing tge sp addr' rs'##args' = Some a').
+    rewrite <- A. apply eval_addressing_preserved. exact symbols_preserved.
+  exploit Mem.storev_extends; eauto. intros [m2' [D E]].
+  exists (State s' (transf_function f) sp pc' rs' m2'); split.
   eapply exec_Istore; eauto.
   econstructor; eauto. 
   eapply analyze_correct_1; eauto. simpl; auto. 
@@ -347,17 +405,22 @@ Proof.
   intros. eapply analyze_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H.
   apply regs_match_approx_update; auto. simpl. auto.
+  apply regs_lessdef_regs; auto. 
 
   (* Itailcall *)
+  exploit Mem.free_parallel_extends; eauto. intros [m2' [A B]].
   exploit transf_ros_correct; eauto. intros FIND'.
   TransfInstr; intro.
   econstructor; split.
   eapply exec_Itailcall; eauto. apply sig_function_translated; auto.
-  constructor; auto. 
+  constructor; auto. apply regs_lessdef_regs; auto. 
 
   (* Ibuiltin *)
+  exploit external_call_mem_extends; eauto. 
+  instantiate (1 := rs'##args). apply regs_lessdef_regs; auto.
+  intros [v' [m2' [A [B [C D]]]]].
   TransfInstr. intro.
-  exists (State s' (transf_function f) sp pc' (rs#res <- v) m'); split.
+  exists (State s' (transf_function f) sp pc' (rs'#res <- v') m2'); split.
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
@@ -365,72 +428,61 @@ Proof.
   eapply analyze_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   apply regs_match_approx_update; auto. simpl; auto.
+  apply set_reg_lessdef; auto.
 
-  (* Icond, true *)
-  exists (State s' (transf_function f) sp ifso rs m); split. 
-  caseEq (cond_strength_reduction (approx_reg (analyze f)!!pc) cond args);
-  intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' m = Some true).
-    generalize (cond_strength_reduction_correct
-                  ge (approx_reg (analyze f)!!pc) rs m MATCH cond args).
-    rewrite CSR.  intro. congruence.
-  TransfInstr. rewrite CSR. 
-  caseEq (eval_static_condition cond (approx_regs (analyze f)!!pc args)).
-  intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ m _
-               (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
-  replace b with true. intro; eapply exec_Inop; eauto. congruence.
-  intros. eapply exec_Icond_true; eauto.
-  econstructor; eauto.
-  eapply analyze_correct_1; eauto.
-  simpl; auto.
-  unfold transfer; rewrite H; auto.
-
-  (* Icond, false *)
-  exists (State s' (transf_function f) sp ifnot rs m); split. 
-  caseEq (cond_strength_reduction (approx_reg (analyze f)!!pc) cond args);
-  intros cond' args' CSR.
-  assert (eval_condition cond' rs##args' m = Some false).
-    generalize (cond_strength_reduction_correct
-                  ge (approx_reg (analyze f)!!pc) rs m MATCH cond args).
-    rewrite CSR.  intro. congruence.
-  TransfInstr. rewrite CSR. 
-  caseEq (eval_static_condition cond (approx_regs (analyze f)!!pc args)).
-  intros b ESC. 
-  generalize (eval_static_condition_correct ge cond _ _ m _
-               (approx_regs_val_list _ _ _ args MATCH) ESC); intro.
-  replace b with false. intro; eapply exec_Inop; eauto. congruence.
-  intros. eapply exec_Icond_false; eauto.
-  econstructor; eauto.
-  eapply analyze_correct_1; eauto.
-  simpl; auto.
-  unfold transfer; rewrite H; auto.
+  (* Icond *)
+  TransfInstr. 
+  generalize (cond_strength_reduction_correct ge sp (analyze f)#pc rs m
+                    MATCH cond args (approx_regs (analyze f) # pc args) (refl_equal _)).
+  destruct (cond_strength_reduction cond args (approx_regs (analyze f) # pc args)) as [cond' args'].
+  intros EV1. 
+  exists (State s' (transf_function f) sp (if b then ifso else ifnot) rs' m'); split. 
+  destruct (eval_static_condition cond (approx_regs (analyze f) # pc args)) as []_eqn.
+  assert (eval_condition cond rs ## args m = Some b0).
+    eapply eval_static_condition_correct; eauto. eapply approx_regs_val_list; eauto.
+  assert (b = b0) by congruence. subst b0.
+  destruct b; eapply exec_Inop; eauto. 
+  eapply exec_Icond; eauto.
+  eapply eval_condition_lessdef with (vl1 := rs##args'); eauto. eapply regs_lessdef_regs; eauto. congruence.
+  econstructor; eauto. 
+  eapply analyze_correct_1; eauto. destruct b; simpl; auto. 
+  unfold transfer; rewrite H. auto. 
 
   (* Ijumptable *)
-  exists (State s' (transf_function f) sp pc' rs m); split.
-  caseEq (intval (approx_reg (analyze f)!!pc) arg); intros.
-  exploit intval_correct; eauto. eexact MATCH. intro VRS.
-  eapply exec_Inop; eauto. TransfInstr. rewrite H2. 
-  replace i with n by congruence. rewrite H1. auto.
-  eapply exec_Ijumptable; eauto. TransfInstr. rewrite H2. auto.
-  constructor; auto.
+  assert (A: (fn_code (transf_function f))!pc = Some(Ijumptable arg tbl)
+             \/ (fn_code (transf_function f))!pc = Some(Inop pc')).
+  TransfInstr. destruct (approx_reg (analyze f) # pc arg) as []_eqn; auto.
+  generalize (MATCH arg). unfold approx_reg in Heqt. rewrite Heqt. rewrite H0. 
+  simpl. intro EQ; inv EQ. rewrite H1. auto.
+  assert (B: rs'#arg = Vint n).
+  generalize (REGS arg); intro LD; inv LD; congruence.
+  exists (State s' (transf_function f) sp pc' rs' m'); split.
+  destruct A. eapply exec_Ijumptable; eauto. eapply exec_Inop; eauto. 
+  econstructor; eauto.
   eapply analyze_correct_1; eauto.
   simpl. eapply list_nth_z_in; eauto.
   unfold transfer; rewrite  H; auto.
 
   (* Ireturn *)
-  exists (Returnstate s' (regmap_optget or Vundef rs) m'); split.
+  exploit Mem.free_parallel_extends; eauto. intros [m2' [A B]].
+  exists (Returnstate s' (regmap_optget or Vundef rs') m2'); split.
   eapply exec_Ireturn; eauto. TransfInstr; auto.
   constructor; auto.
+  destruct or; simpl; auto. 
 
   (* internal function *)
+  exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl.
+  intros [m2' [A B]].
   simpl. unfold transf_function.
   econstructor; split.
   eapply exec_function_internal; simpl; eauto.
   simpl. econstructor; eauto.
   apply analyze_correct_3; auto.
+  apply init_regs_lessdef; auto.
 
   (* external function *)
+  exploit external_call_mem_extends; eauto. 
+  intros [v' [m2' [A [B [C D]]]]].
   simpl. econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto.
@@ -441,7 +493,7 @@ Proof.
   inv H3. inv H1. 
   econstructor; split.
   eapply exec_return; eauto. 
-  econstructor; eauto. 
+  econstructor; eauto. apply set_reg_lessdef; auto. 
 Qed.
 
 Lemma transf_initial_states:
@@ -457,14 +509,14 @@ Proof.
   rewrite symbols_preserved. eauto.
   reflexivity.
   rewrite <- H3. apply sig_function_translated.
-  constructor. constructor.
+  constructor. constructor. constructor. apply Mem.extends_refl.
 Qed.
 
 Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H4. constructor. 
+  intros. inv H0. inv H. inv STACKS. inv RES. constructor. 
 Qed.
 
 (** The preservation of the observable behavior of the program then

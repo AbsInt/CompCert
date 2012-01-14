@@ -30,6 +30,7 @@ Require Import Constprop.
 Section ANALYSIS.
 
 Variable ge: genv.
+Variable sp: val.
 
 (** We first show that the dataflow analysis is correct with respect
   to the dynamic semantics: the approximations (sets of values) 
@@ -43,7 +44,8 @@ Definition val_match_approx (a: approx) (v: val) : Prop :=
   | Unknown => True
   | I p => v = Vint p
   | F p => v = Vfloat p
-  | S symb ofs => exists b, Genv.find_symbol ge symb = Some b /\ v = Vptr b ofs
+  | G symb ofs => v = symbol_address ge symb ofs
+  | S ofs => v = Val.add sp (Vint ofs)
   | _ => False
   end.
 
@@ -62,12 +64,10 @@ Ltac SimplVMA :=
       simpl in H; (try subst v); SimplVMA
   | H: (val_match_approx (F _) ?v) |- _ =>
       simpl in H; (try subst v); SimplVMA
-  | H: (val_match_approx (S _ _) ?v) |- _ =>
-      simpl in H; 
-      (try (elim H;
-            let b := fresh "b" in let A := fresh in let B := fresh in
-            (intros b [A B]; subst v; clear H)));
-      SimplVMA
+  | H: (val_match_approx (G _ _) ?v) |- _ =>
+      simpl in H; (try subst v); SimplVMA
+  | H: (val_match_approx (S _) ?v) |- _ =>
+      simpl in H; (try subst v); SimplVMA
   | _ =>
       idtac
   end.
@@ -75,9 +75,9 @@ Ltac SimplVMA :=
 Ltac InvVLMA :=
   match goal with
   | H: (val_list_match_approx nil ?vl) |- _ =>
-      inversion H
+      inv H
   | H: (val_list_match_approx (?a :: ?al) ?vl) |- _ =>
-      inversion H; SimplVMA; InvVLMA
+      inv H; SimplVMA; InvVLMA
   | _ =>
       idtac
   end.
@@ -99,8 +99,15 @@ Proof.
   InvVLMA; simpl; congruence.
 Qed.
 
+Remark shift_symbol_address:
+  forall symb ofs n,
+  symbol_address ge symb (Int.add ofs n) = Val.add (symbol_address ge symb ofs) (Vint n).
+Proof.
+  unfold symbol_address; intros. destruct (Genv.find_symbol ge symb); auto. 
+Qed.
+
 Lemma eval_static_operation_correct:
-  forall op sp al vl m v,
+  forall op al vl m v,
   val_list_match_approx al vl ->
   eval_operation ge sp op vl m = Some v ->
   val_match_approx (eval_static_operation op al) v.
@@ -108,57 +115,44 @@ Proof.
   intros until v.
   unfold eval_static_operation. 
   case (eval_static_operation_match op al); intros;
-  InvVLMA; simpl in *; FuncInv; try congruence.
+  InvVLMA; simpl in *; FuncInv; try subst v; auto.
 
-  destruct (Genv.find_symbol ge s). exists b. intuition congruence.
-  congruence.
+  rewrite shift_symbol_address; auto.
 
-  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
-  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
+  rewrite Int.add_commut. rewrite shift_symbol_address. rewrite Val.add_commut. auto.
 
-  exists b. split. auto. congruence. 
-  exists b. split. auto. congruence.
-  exists b. split. auto. congruence.
+  rewrite Int.add_commut; auto.
 
-  replace n2 with i0. destruct (Int.eq i0 Int.zero). 
-  discriminate. injection H0; intro; subst v. simpl. congruence. congruence.
+  rewrite Val.add_assoc. rewrite Int.add_commut. auto.
 
-  replace n2 with i0. destruct (Int.eq i0 Int.zero). 
-  discriminate. injection H0; intro; subst v. simpl. congruence. congruence.
+  change (Val.add (Vint n1) (Val.add sp (Vint n2)) = Val.add sp (Vint (Int.add n1 n2))).
+  rewrite Val.add_permut. auto.
 
-  subst v. unfold Int.not. congruence.
-  subst v. unfold Int.not. congruence.
-  subst v. unfold Int.not. congruence.
+  rewrite shift_symbol_address; auto.
 
-  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
-  injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
+  rewrite Val.add_assoc; auto.
 
-  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
-  injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
+  unfold symbol_address. destruct (Genv.find_symbol ge s1); auto. 
 
-  destruct (Int.ltu n Int.iwordsize).
-  injection H0; intro; subst v. simpl. congruence. discriminate. 
+  rewrite Val.sub_add_opp. rewrite Val.add_assoc. simpl. rewrite Int.sub_add_opp. auto.
 
-  destruct (Int.ltu n Int.iwordsize).
-  injection H0; intro; subst v. simpl. congruence. discriminate. 
+  destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
+  destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
 
-  replace n2 with i0. destruct (Int.ltu i0 Int.iwordsize).
-  injection H0; intro; subst v. simpl. congruence. discriminate. congruence. 
+  destruct (Int.ltu n2 Int.iwordsize); simpl; auto.
+  destruct (Int.ltu n2 Int.iwordsize); simpl; auto.
+  destruct (Int.ltu n Int.iwordsize); simpl; auto.
+  destruct (Int.ltu n (Int.repr 31)); inv H0. simpl; auto.
+  destruct (Int.ltu n2 Int.iwordsize); simpl; auto.
 
-  rewrite <- H3. replace v0 with (Vfloat n1). reflexivity. congruence.
+  unfold eval_static_intoffloat. destruct (Float.intoffloat n1); simpl in H0; inv H0.
+  simpl; auto.
 
-  inv H4. destruct (Float.intoffloat f); simpl in H0; inv H0. red; auto.
-
-  caseEq (eval_static_condition c vl0).
-  intros. generalize (eval_static_condition_correct _ _ _ m _ H H1).
-  intro. rewrite H2 in H0. 
-  destruct b; injection H0; intro; subst v; simpl; auto.
-  intros; simpl; auto.
-
-  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
-  rewrite <- H3. replace v0 with (Vint n1). reflexivity. congruence.
-
-  auto.
+  unfold eval_static_condition_val, Val.of_optbool.
+  destruct (eval_static_condition c vl0) as []_eqn.
+  rewrite (eval_static_condition_correct _ _ _ m _ H Heqo).
+  destruct b; simpl; auto. 
+  simpl; auto.
 Qed.
 
 (** * Correctness of strength reduction *)
@@ -171,352 +165,243 @@ Qed.
 
 Section STRENGTH_REDUCTION.
 
-Variable app: reg -> approx.
-Variable sp: val.
+Variable app: D.t.
 Variable rs: regset.
 Variable m: mem.
-Hypothesis MATCH: forall r, val_match_approx (app r) rs#r.
+Hypothesis MATCH: forall r, val_match_approx (approx_reg app r) rs#r.
 
-Lemma intval_correct:
-  forall r n,
-  intval app r = Some n -> rs#r = Vint n.
-Proof.
-  intros until n.
-  unfold intval. caseEq (app r); intros; try discriminate.
-  generalize (MATCH r). unfold val_match_approx. rewrite H.
-  congruence. 
-Qed.
+Ltac InvApproxRegs :=
+  match goal with
+  | [ H: _ :: _ = _ :: _ |- _ ] => 
+        injection H; clear H; intros; InvApproxRegs
+  | [ H: ?v = approx_reg app ?r |- _ ] => 
+        generalize (MATCH r); rewrite <- H; clear H; intro; InvApproxRegs
+  | _ => idtac
+  end.
 
 Lemma cond_strength_reduction_correct:
-  forall cond args,
-  let (cond', args') := cond_strength_reduction app cond args in
+  forall cond args vl,
+  vl = approx_regs app args ->
+  let (cond', args') := cond_strength_reduction cond args vl in
   eval_condition cond' rs##args' m = eval_condition cond rs##args m.
 Proof.
-  intros. unfold cond_strength_reduction.
-  case (cond_strength_reduction_match cond args); intros.
-  caseEq (intval app r1); intros.
-  simpl. rewrite (intval_correct _ _ H). 
-  destruct (rs#r2); auto. rewrite Int.swap_cmp. auto.
-  caseEq (intval app r2); intros.
-  simpl. rewrite (intval_correct _ _ H0). auto.
-  auto.
-  caseEq (intval app r1); intros.
-  simpl. rewrite (intval_correct _ _ H). 
-  destruct (rs#r2); auto. rewrite Int.swap_cmpu. auto.
-  destruct c; reflexivity.
-  caseEq (intval app r2); intros.
-  simpl. rewrite (intval_correct _ _ H0). auto.
-  auto.
+  intros until vl. unfold cond_strength_reduction.
+  case (cond_strength_reduction_match cond args vl); simpl; intros; InvApproxRegs; SimplVMA.
+  rewrite H0. apply Val.swap_cmp_bool. 
+  rewrite H. auto.
+  rewrite H0. apply Val.swap_cmpu_bool.
+  rewrite H. auto.
   auto.
 Qed.
 
 Lemma make_addimm_correct:
-  forall n r v,
+  forall n r,
   let (op, args) := make_addimm n r in
-  eval_operation ge sp Oadd (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.add rs#r (Vint n)) v.
 Proof.
-  intros; unfold make_addimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.add_zero in H. congruence.
-  rewrite Int.add_zero in H. congruence.
-  exact H0.
+  intros. unfold make_addimm.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. 
+  subst. exists (rs#r); split; auto. destruct (rs#r); simpl; auto; rewrite Int.add_zero; auto.
+  exists (Val.add rs#r (Vint n)); auto.
 Qed.
   
 Lemma make_shlimm_correct:
-  forall n r v,
-  let (op, args) := make_shlimm n r in
-  eval_operation ge sp Oshl (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_shlimm n r1 r2 in
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.shl rs#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shlimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.shl_zero in H. congruence.
-  simpl in *. FuncInv. caseEq (Int.ltu n Int.iwordsize); intros.
-  rewrite H1 in H0. rewrite Int.shl_rolm in H0. auto. exact H1.
-  rewrite H1 in H0. discriminate.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shl_zero. auto.
+  destruct (Int.ltu n Int.iwordsize) as []_eqn; intros.
+  rewrite Val.shl_rolm; auto. econstructor; split; eauto. auto. 
+  econstructor; split; eauto. simpl. congruence.
 Qed.
 
 Lemma make_shrimm_correct:
-  forall n r v,
-  let (op, args) := make_shrimm n r in
-  eval_operation ge sp Oshr (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_shrimm n r1 r2 in
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.shr rs#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shrimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.shr_zero in H. congruence.
-  assumption.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shr_zero. auto.
+  destruct (Int.ltu n Int.iwordsize) as []_eqn.
+  econstructor; split; eauto. simpl. auto.
+  econstructor; split; eauto. simpl. congruence.
 Qed.
 
 Lemma make_shruimm_correct:
-  forall n r v,
-  let (op, args) := make_shruimm n r in
-  eval_operation ge sp Oshru (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_shruimm n r1 r2 in
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.shru rs#r1 (Vint n)) v.
 Proof.
   intros; unfold make_shruimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.shru_zero in H. congruence.
-  simpl in *. FuncInv. caseEq (Int.ltu n Int.iwordsize); intros.
-  rewrite H1 in H0. rewrite Int.shru_rolm in H0. auto. exact H1.
-  rewrite H1 in H0. discriminate.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shru_zero. auto.
+  destruct (Int.ltu n Int.iwordsize) as []_eqn; intros.
+  rewrite Val.shru_rolm; auto. econstructor; split; eauto. auto. 
+  econstructor; split; eauto. simpl. congruence.
 Qed.
 
 Lemma make_mulimm_correct:
-  forall n r v,
-  let (op, args) := make_mulimm n r in
-  eval_operation ge sp Omul (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  forall n r1 r2,
+  rs#r2 = Vint n ->
+  let (op, args) := make_mulimm n r1 r2 in
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.mul rs#r1 (Vint n)) v.
 Proof.
   intros; unfold make_mulimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in H0. FuncInv. rewrite Int.mul_zero in H. simpl. congruence.
-  generalize (Int.eq_spec n Int.one); case (Int.eq n Int.one); intros.
-  subst n. simpl in H1. simpl. FuncInv. rewrite Int.mul_one in H0. congruence.
-  caseEq (Int.is_power2 n); intros.
-  replace (eval_operation ge sp Omul (rs # r :: Vint n :: nil) m)
-     with (eval_operation ge sp Oshl (rs # r :: Vint i :: nil) m).
-  apply make_shlimm_correct. 
-  simpl. generalize (Int.is_power2_range _ _ H1). 
-  change (Z_of_nat Int.wordsize) with 32. intro. rewrite H2.
-  destruct rs#r; auto. rewrite (Int.mul_pow2 i0 _ _ H1). auto.
-  exact H2.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
+  exists (Vint Int.zero); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.mul_zero; auto.
+  predSpec Int.eq Int.eq_spec n Int.one; intros. subst.
+  exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.mul_one; auto.
+  destruct (Int.is_power2 n) as []_eqn; intros.
+  rewrite (Val.mul_pow2 rs#r1 _ _ Heqo). rewrite Val.shl_rolm. 
+  econstructor; split; eauto. auto. 
+  eapply Int.is_power2_range; eauto.
+  econstructor; split; eauto. auto. 
+Qed.
+
+Lemma make_divimm_correct:
+  forall n r1 r2 v,
+  Val.divs rs#r1 rs#r2 = Some v ->
+  rs#r2 = Vint n ->
+  let (op, args) := make_divimm n r1 r2 in
+  exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
+Proof.
+  intros; unfold make_divimm.
+  destruct (Int.is_power2 n) as []_eqn. 
+  destruct (Int.ltu i (Int.repr 31)) as []_eqn.
+  exists v; split; auto. simpl. eapply Val.divs_pow2; eauto. congruence. 
+  exists v; auto.
+  exists v; auto.
+Qed.
+
+Lemma make_divuimm_correct:
+  forall n r1 r2 v,
+  Val.divu rs#r1 rs#r2 = Some v ->
+  rs#r2 = Vint n ->
+  let (op, args) := make_divuimm n r1 r2 in
+  exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
+Proof.
+  intros; unfold make_divuimm.
+  destruct (Int.is_power2 n) as []_eqn. 
+  econstructor; split. simpl; eauto.
+  exploit Int.is_power2_range; eauto. intros RANGE.
+  rewrite <- Val.shru_rolm; auto. rewrite H0 in H. 
+  destruct (rs#r1); simpl in *; inv H. 
+  destruct (Int.eq n Int.zero); inv H2.
+  rewrite RANGE. rewrite (Int.divu_pow2 i0 _ _ Heqo). auto.
+  exists v; auto.
 Qed.
 
 Lemma make_andimm_correct:
-  forall n r v,
+  forall n r,
   let (op, args) := make_andimm n r in
-  eval_operation ge sp Oand (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.and rs#r (Vint n)) v.
 Proof.
   intros; unfold make_andimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.and_zero in H. congruence.
-  generalize (Int.eq_spec n Int.mone); case (Int.eq n Int.mone); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.and_mone in H0. congruence.
-  exact H1.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros.
+  subst n. exists (Vint Int.zero); split; auto. destruct (rs#r); simpl; auto. rewrite Int.and_zero; auto.
+  predSpec Int.eq Int.eq_spec n Int.mone; intros.
+  subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int.and_mone; auto.
+  econstructor; split; eauto. auto. 
 Qed.
 
 Lemma make_orimm_correct:
-  forall n r v,
+  forall n r,
   let (op, args) := make_orimm n r in
-  eval_operation ge sp Oor (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.or rs#r (Vint n)) v.
 Proof.
   intros; unfold make_orimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.or_zero in H. congruence.
-  generalize (Int.eq_spec n Int.mone); case (Int.eq n Int.mone); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.or_mone in H0. congruence.
-  exact H1.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros.
+  subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int.or_zero; auto.
+  predSpec Int.eq Int.eq_spec n Int.mone; intros.
+  subst n. exists (Vint Int.mone); split; auto. destruct (rs#r); simpl; auto. rewrite Int.or_mone; auto.
+  econstructor; split; eauto. auto. 
 Qed.
 
 Lemma make_xorimm_correct:
-  forall n r v,
+  forall n r,
   let (op, args) := make_xorimm n r in
-  eval_operation ge sp Oxor (rs#r :: Vint n :: nil) m = Some v ->
-  eval_operation ge sp op rs##args m = Some v.
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.xor rs#r (Vint n)) v.
 Proof.
   intros; unfold make_xorimm.
-  generalize (Int.eq_spec n Int.zero); case (Int.eq n Int.zero); intros.
-  subst n. simpl in *. FuncInv. rewrite Int.xor_zero in H. congruence.
-  exact H0.
+  predSpec Int.eq Int.eq_spec n Int.zero; intros.
+  subst n. exists (rs#r); split; auto. destruct (rs#r); simpl; auto. rewrite Int.xor_zero; auto.
+  econstructor; split; eauto. auto. 
 Qed.
 
 Lemma op_strength_reduction_correct:
-  forall op args v,
-  let (op', args') := op_strength_reduction app op args in
+  forall op args vl v,
+  vl = approx_regs app args ->
   eval_operation ge sp op rs##args m = Some v ->
-  eval_operation ge sp op' rs##args' m = Some v.
+  let (op', args') := op_strength_reduction op args vl in
+  exists w, eval_operation ge sp op' rs##args' m = Some w /\ Val.lessdef v w.
 Proof.
-  intros; unfold op_strength_reduction;
-  case (op_strength_reduction_match op args); intros; simpl List.map.
-  (* Oadd *)
-  caseEq (intval app r1); intros.
-  rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oadd (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oadd (rs # r2 :: Vint i :: nil) m).
-  apply make_addimm_correct. 
-  simpl. destruct rs#r2; auto. rewrite Int.add_commut; auto.
-  caseEq (intval app r2); intros.
-  rewrite (intval_correct _ _ H0). apply make_addimm_correct.
-  assumption.
-  (* Osub *)
-  caseEq (intval app r1); intros.
-  rewrite (intval_correct _ _ H) in H0. assumption. 
-  caseEq (intval app r2); intros.
-  rewrite (intval_correct _ _ H0). 
-  replace (eval_operation ge sp Osub (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oadd (rs # r1 :: Vint (Int.neg i) :: nil) m).
-  apply make_addimm_correct.
-  simpl. destruct rs#r1; auto; rewrite Int.sub_add_opp; auto. 
-  assumption.
-  (* Omul *)
-  caseEq (intval app r1); intros.
-  rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Omul (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Omul (rs # r2 :: Vint i :: nil) m).
-  apply make_mulimm_correct. 
-  simpl. destruct rs#r2; auto. rewrite Int.mul_commut; auto.
-  caseEq (intval app r2); intros.
-  rewrite (intval_correct _ _ H0). apply make_mulimm_correct.
-  assumption.
-  (* Odiv *)
-  caseEq (intval app r2); intros.
-  caseEq (Int.is_power2 i); intros.
-  rewrite (intval_correct _ _ H) in H1.   
-  simpl in *; FuncInv. destruct (Int.eq i Int.zero). congruence.
-  change 32 with (Z_of_nat Int.wordsize). 
-  rewrite (Int.is_power2_range _ _ H0). 
-  rewrite (Int.divs_pow2 i1 _ _ H0) in H1. auto.
-  assumption.
-  assumption.
-  (* Odivu *)
-  caseEq (intval app r2); intros.
-  caseEq (Int.is_power2 i); intros.
-  rewrite (intval_correct _ _ H).
-  replace (eval_operation ge sp Odivu (rs # r1 :: Vint i :: nil) m)
-     with (eval_operation ge sp Oshru (rs # r1 :: Vint i0 :: nil) m).
-  apply make_shruimm_correct. 
-  simpl. destruct rs#r1; auto. 
-  change 32 with (Z_of_nat Int.wordsize). 
-  rewrite (Int.is_power2_range _ _ H0). 
-  generalize (Int.eq_spec i Int.zero); case (Int.eq i Int.zero); intros.
-  subst i. discriminate. 
-  rewrite (Int.divu_pow2 i1 _ _ H0). auto.
-  assumption.
-  assumption.
-  (* Oand *)
-  caseEq (intval app r1); intros.
-  rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oand (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oand (rs # r2 :: Vint i :: nil) m).
-  apply make_andimm_correct. 
-  simpl. destruct rs#r2; auto. rewrite Int.and_commut; auto.
-  caseEq (intval app r2); intros.
-  rewrite (intval_correct _ _ H0). apply make_andimm_correct.
-  assumption.
-  (* Oor *)
-  caseEq (intval app r1); intros.
-  rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oor (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oor (rs # r2 :: Vint i :: nil) m).
-  apply make_orimm_correct. 
-  simpl. destruct rs#r2; auto. rewrite Int.or_commut; auto.
-  caseEq (intval app r2); intros.
-  rewrite (intval_correct _ _ H0). apply make_orimm_correct.
-  assumption.
-  (* Oxor *)
-  caseEq (intval app r1); intros.
-  rewrite (intval_correct _ _ H). 
-  replace (eval_operation ge sp Oxor (Vint i :: rs # r2 :: nil) m)
-     with (eval_operation ge sp Oxor (rs # r2 :: Vint i :: nil) m).
-  apply make_xorimm_correct. 
-  simpl. destruct rs#r2; auto. rewrite Int.xor_commut; auto.
-  caseEq (intval app r2); intros.
-  rewrite (intval_correct _ _ H0). apply make_xorimm_correct.
-  assumption.
-  (* Oshl *)
-  caseEq (intval app r2); intros.
-  caseEq (Int.ltu i Int.iwordsize); intros.
-  rewrite (intval_correct _ _ H). apply make_shlimm_correct.
-  assumption.
-  assumption.
-  (* Oshr *)
-  caseEq (intval app r2); intros.
-  caseEq (Int.ltu i Int.iwordsize); intros.
-  rewrite (intval_correct _ _ H). apply make_shrimm_correct.
-  assumption.
-  assumption.
-  (* Oshru *)
-  caseEq (intval app r2); intros.
-  caseEq (Int.ltu i Int.iwordsize); intros.
-  rewrite (intval_correct _ _ H). apply make_shruimm_correct.
-  assumption.
-  assumption.
-  (* Ocmp *)
-  generalize (cond_strength_reduction_correct c rl).
-  destruct (cond_strength_reduction app c rl).
-  simpl. intro. rewrite H. auto.
-  (* default *)
-  assumption.
+  intros until v; unfold op_strength_reduction;
+  case (op_strength_reduction_match op args vl); simpl; intros.
+(* add *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H1. rewrite Val.add_commut. apply make_addimm_correct.
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_addimm_correct.
+(* sub *)
+  InvApproxRegs; SimplVMA. inv H0. rewrite H1. econstructor; split; eauto. 
+  InvApproxRegs; SimplVMA. inv H0. rewrite H. rewrite Val.sub_add_opp. apply make_addimm_correct.
+(* mul *)
+  InvApproxRegs; SimplVMA. inv H0. rewrite H1. rewrite Val.mul_commut. apply make_mulimm_correct; auto.
+  InvApproxRegs; SimplVMA. inv H0. rewrite H. apply make_mulimm_correct; auto.
+(* divs *)
+  assert (rs#r2 = Vint n2). clear H0. InvApproxRegs; SimplVMA; auto.
+  apply make_divimm_correct; auto.
+(* divu *)
+  assert (rs#r2 = Vint n2). clear H0. InvApproxRegs; SimplVMA; auto.
+  apply make_divuimm_correct; auto.
+(* and *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H1. rewrite Val.and_commut. apply make_andimm_correct.
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_andimm_correct.
+(* or *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H1. rewrite Val.or_commut. apply make_orimm_correct.
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_orimm_correct.
+(* xor *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H1. rewrite Val.xor_commut. apply make_xorimm_correct.
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_xorimm_correct.
+(* shl *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_shlimm_correct; auto.
+(* shr *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_shrimm_correct; auto.
+(* shru *)
+  InvApproxRegs. SimplVMA. inv H0. rewrite H. apply make_shruimm_correct; auto.
+(* cmp *)
+  generalize (cond_strength_reduction_correct c args0 vl0). 
+  destruct (cond_strength_reduction c args0 vl0) as [c' args']; intros.
+  rewrite <- H1 in H0; auto. econstructor; split; eauto.
+(* default *)
+  exists v; auto.
 Qed.
-
-Ltac KnownApprox :=
-  match goal with
-  | H: ?approx ?r = ?a |- _ =>
-      generalize (MATCH r); rewrite H; intro; clear H; KnownApprox
-  | _ => idtac
-  end.
  
 Lemma addr_strength_reduction_correct:
-  forall addr args,
-  let (addr', args') := addr_strength_reduction app addr args in
+  forall addr args vl,
+  vl = approx_regs app args ->
+  let (addr', args') := addr_strength_reduction addr args vl in
   eval_addressing ge sp addr' rs##args' = eval_addressing ge sp addr rs##args.
 Proof.
-  intros. 
-
-  (* Useful lemmas *)
-  assert (A0: forall r1 r2,
-    eval_addressing ge sp Aindexed2 (rs ## (r1 :: r2 :: nil)) =
-    eval_addressing ge sp Aindexed2 (rs ## (r2 :: r1 :: nil))).
-  intros. simpl. destruct (rs#r1); destruct (rs#r2); auto;
-  rewrite Int.add_commut; auto.
-
-  assert (A1: forall r1 r2 n,
-    val_match_approx (I n) rs#r2 -> 
-    eval_addressing ge sp (Aindexed n) (rs ## (r1 :: nil)) =
-    eval_addressing ge sp Aindexed2 (rs ## (r1 :: r2 :: nil))).
-  intros; simpl in *. rewrite H. auto.
-
-  assert (A2: forall r1 r2 n,
-    val_match_approx (I n) rs#r1 -> 
-    eval_addressing ge sp (Aindexed n) (rs ## (r2 :: nil)) =
-    eval_addressing ge sp Aindexed2 (rs ## (r1 :: r2 :: nil))).
-  intros. rewrite A0. apply A1. auto.
-
-  assert (A3: forall r1 r2 id ofs,
-    val_match_approx (S id ofs) rs#r1 ->
-    eval_addressing ge sp (Abased id ofs) (rs ## (r2 :: nil)) =
-    eval_addressing ge sp Aindexed2 (rs ## (r1 :: r2 :: nil))).
-  intros. elim H. intros b [A B]. simpl. rewrite A; rewrite B. auto.
-
-  assert (A4: forall r1 r2 id ofs,
-    val_match_approx (S id ofs) rs#r2 ->
-    eval_addressing ge sp (Abased id ofs) (rs ## (r1 :: nil)) =
-    eval_addressing ge sp Aindexed2 (rs ## (r1 :: r2 :: nil))).
-  intros. rewrite A0. apply A3. auto.
-
-  assert (A5: forall r1 r2 id ofs n,
-    val_match_approx (S id ofs) rs#r1 ->
-    val_match_approx (I n) rs#r2 ->
-    eval_addressing ge sp (Aglobal id (Int.add ofs n)) nil =
-    eval_addressing ge sp Aindexed2 (rs ## (r1 :: r2 :: nil))).
-  intros. elim H. intros b [A B]. simpl. rewrite A; rewrite B. 
-  simpl in H0. rewrite H0. auto.
-
-  unfold addr_strength_reduction;
-  case (addr_strength_reduction_match addr args); intros.
-
-  (* Aindexed2 *)
-  caseEq (app r1); intros;
-  caseEq (app r2); intros;
-  try reflexivity; KnownApprox; auto.
-  rewrite A0. rewrite Int.add_commut. apply A5; auto.
-
-  (* Abased *)
-  caseEq (intval app r1); intros.
-  simpl; rewrite (intval_correct _ _ H). auto.
+  intros until vl. unfold addr_strength_reduction.
+  destruct (addr_strength_reduction_match addr args vl); simpl; intros; InvApproxRegs; SimplVMA.
+  rewrite H; rewrite H0. rewrite shift_symbol_address. auto.
+  rewrite H; rewrite H0. rewrite Int.add_commut. rewrite shift_symbol_address. rewrite Val.add_commut; auto.
+  rewrite H; rewrite H0. rewrite Val.add_assoc; auto.
+  rewrite H; rewrite H0. rewrite Val.add_permut; auto. 
+  rewrite H0. auto.
+  rewrite H. rewrite Val.add_commut. auto.
+  rewrite H0. rewrite Val.add_commut; auto.
+  rewrite H; auto.
+  rewrite H. rewrite shift_symbol_address. auto. 
+  rewrite H. rewrite shift_symbol_address. auto.
+  rewrite H. rewrite Val.add_assoc. auto.
   auto.
-
-  (* Aindexed *)
-  caseEq (app r1); intros; auto.
-  simpl; KnownApprox. 
-  elim H0. intros b [A B]. rewrite A; rewrite B. auto.
-
-  (* default *)
-  reflexivity.
 Qed.
 
 End STRENGTH_REDUCTION.

@@ -1154,7 +1154,7 @@ Proof.
   eapply star_right. eauto. 
   eapply exec_Lstore with (a := ta); eauto.
     simpl reglist. rewrite G. unfold ls3. rewrite Locmap.gss. simpl. 
-    destruct ta; simpl in Y; try discriminate. rewrite Int.add_zero. auto.
+    destruct ta; simpl in Y; try discriminate. simpl; rewrite Int.add_zero; auto.
   reflexivity. reflexivity. traceEq. 
   econstructor; eauto with coqlib.
   apply agree_undef_temps2. apply agree_exten with ls; auto.

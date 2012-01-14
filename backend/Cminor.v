@@ -216,93 +216,53 @@ Definition eval_constant (sp: val) (cst: constant) : option val :=
   | Ointconst n => Some (Vint n)
   | Ofloatconst n => Some (Vfloat n)
   | Oaddrsymbol s ofs =>
-      match Genv.find_symbol ge s with
-      | None => None
-      | Some b => Some (Vptr b ofs)
-      end
-  | Oaddrstack ofs =>
-      match sp with
-      | Vptr b n => Some (Vptr b (Int.add n ofs))
-      | _ => None
-      end
+      Some(match Genv.find_symbol ge s with
+           | None => Vundef
+           | Some b => Vptr b ofs end)
+  | Oaddrstack ofs => Some (Val.add sp (Vint ofs))
   end.
 
 Definition eval_unop (op: unary_operation) (arg: val) : option val :=
-  match op, arg with
-  | Ocast8unsigned, _ => Some (Val.zero_ext 8 arg)
-  | Ocast8signed, _ => Some (Val.sign_ext 8 arg)
-  | Ocast16unsigned, _ => Some (Val.zero_ext 16 arg)
-  | Ocast16signed, _ => Some (Val.sign_ext 16 arg)
-  | Onegint, Vint n1 => Some (Vint (Int.neg n1))
-  | Onotbool, Vint n1 => Some (Val.of_bool (Int.eq n1 Int.zero))
-  | Onotbool, Vptr b1 n1 => Some Vfalse
-  | Onotint, Vint n1 => Some (Vint (Int.not n1))
-  | Onegf, Vfloat f1 => Some (Vfloat (Float.neg f1))
-  | Oabsf, Vfloat f1 => Some (Vfloat (Float.abs f1))
-  | Osingleoffloat, _ => Some (Val.singleoffloat arg)
-  | Ointoffloat, Vfloat f1 => option_map Vint (Float.intoffloat f1)
-  | Ointuoffloat, Vfloat f1 => option_map Vint (Float.intuoffloat f1)
-  | Ofloatofint, Vint n1 => Some (Vfloat (Float.floatofint n1))
-  | Ofloatofintu, Vint n1 => Some (Vfloat (Float.floatofintu n1))
-  | _, _ => None
+  match op with
+  | Ocast8unsigned => Some (Val.zero_ext 8 arg)
+  | Ocast8signed => Some (Val.sign_ext 8 arg)
+  | Ocast16unsigned => Some (Val.zero_ext 16 arg)
+  | Ocast16signed => Some (Val.sign_ext 16 arg)
+  | Onegint => Some (Val.negint arg)
+  | Onotbool => Some (Val.notbool arg)
+  | Onotint => Some (Val.notint arg)
+  | Onegf => Some (Val.negf arg)
+  | Oabsf => Some (Val.absf arg)
+  | Osingleoffloat => Some (Val.singleoffloat arg)
+  | Ointoffloat => Val.intoffloat arg
+  | Ointuoffloat => Val.intuoffloat arg
+  | Ofloatofint => Val.floatofint arg
+  | Ofloatofintu => Val.floatofintu arg
   end.
-
-Definition eval_compare_mismatch (c: comparison) : option val :=
-  match c with Ceq => Some Vfalse | Cne => Some Vtrue | _ => None end.
-
-Definition eval_compare_null (c: comparison) (n: int) : option val :=
-  if Int.eq n Int.zero then eval_compare_mismatch c else None.
 
 Definition eval_binop
             (op: binary_operation) (arg1 arg2: val) (m: mem): option val :=
-  match op, arg1, arg2 with
-  | Oadd, Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
-  | Oadd, Vint n1, Vptr b2 n2 => Some (Vptr b2 (Int.add n2 n1))
-  | Oadd, Vptr b1 n1, Vint n2 => Some (Vptr b1 (Int.add n1 n2))
-  | Osub, Vint n1, Vint n2 => Some (Vint (Int.sub n1 n2))
-  | Osub, Vptr b1 n1, Vint n2 => Some (Vptr b1 (Int.sub n1 n2))
-  | Osub, Vptr b1 n1, Vptr b2 n2 =>
-      if eq_block b1 b2 then Some (Vint (Int.sub n1 n2)) else None
-  | Omul, Vint n1, Vint n2 => Some (Vint (Int.mul n1 n2))
-  | Odiv, Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.divs n1 n2))
-  | Odivu, Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.divu n1 n2))
-  | Omod, Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.mods n1 n2))
-  | Omodu, Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then None else Some (Vint (Int.modu n1 n2))
-  | Oand, Vint n1, Vint n2 => Some (Vint (Int.and n1 n2))
-  | Oor, Vint n1, Vint n2 => Some (Vint (Int.or n1 n2))
-  | Oxor, Vint n1, Vint n2 => Some (Vint (Int.xor n1 n2))
-  | Oshl, Vint n1, Vint n2 =>
-      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shl n1 n2)) else None
-  | Oshr, Vint n1, Vint n2 =>
-      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
-  | Oshru, Vint n1, Vint n2 =>
-      if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
-   | Oaddf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.add f1 f2))
-  | Osubf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.sub f1 f2))
-  | Omulf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.mul f1 f2))
-  | Odivf, Vfloat f1, Vfloat f2 => Some (Vfloat (Float.div f1 f2))
-  | Ocmp c, Vint n1, Vint n2 =>
-      Some (Val.of_bool(Int.cmp c n1 n2))
-  | Ocmpu c, Vint n1, Vint n2 =>
-      Some (Val.of_bool(Int.cmpu c n1 n2))
-  | Ocmpu c, Vptr b1 n1, Vptr b2 n2 =>
-      if Mem.valid_pointer m b1 (Int.unsigned n1)
-      && Mem.valid_pointer m b2 (Int.unsigned n2) then
-        if eq_block b1 b2
-        then Some(Val.of_bool(Int.cmpu c n1 n2))
-        else eval_compare_mismatch c
-      else None
-  | Ocmpu c, Vptr b1 n1, Vint n2 =>
-      eval_compare_null c n2
-  | Ocmpu c, Vint n1, Vptr b2 n2 =>
-      eval_compare_null c n1
-  | Ocmpf c, Vfloat f1, Vfloat f2 =>
-      Some (Val.of_bool (Float.cmp c f1 f2))
-  | _, _, _ => None
+  match op with
+  | Oadd => Some (Val.add arg1 arg2)
+  | Osub => Some (Val.sub arg1 arg2)
+  | Omul => Some (Val.mul arg1 arg2)
+  | Odiv => Val.divs arg1 arg2
+  | Odivu => Val.divu arg1 arg2
+  | Omod => Val.mods arg1 arg2
+  | Omodu => Val.modu arg1 arg2
+  | Oand => Some (Val.and arg1 arg2)
+  | Oor => Some (Val.or arg1 arg2)
+  | Oxor => Some (Val.xor arg1 arg2)
+  | Oshl => Some (Val.shl arg1 arg2)
+  | Oshr => Some (Val.shr arg1 arg2)
+  | Oshru => Some (Val.shru arg1 arg2)
+  | Oaddf => Some (Val.addf arg1 arg2)
+  | Osubf => Some (Val.subf arg1 arg2)
+  | Omulf => Some (Val.mulf arg1 arg2)
+  | Odivf => Some (Val.divf arg1 arg2)
+  | Ocmp c => Some (Val.cmp c arg1 arg2)
+  | Ocmpu c => Some (Val.cmpu (Mem.valid_pointer m) c arg1 arg2)
+  | Ocmpf c => Some (Val.cmpf c arg1 arg2)
   end.
 
 (** Evaluation of an expression: [eval_expr ge sp e m a v]

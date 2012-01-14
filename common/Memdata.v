@@ -1029,22 +1029,6 @@ Proof.
   apply repeat_Undef_inject_any. apply encode_val_length. 
 Qed.
 
-(** The identity injection has interesting properties. *)
-
-Definition inject_id : meminj := fun b => Some(b, 0).
-
-Lemma val_inject_id:
-  forall v1 v2,
-  val_inject inject_id v1 v2 <-> Val.lessdef v1 v2.
-Proof.
-  intros; split; intros.
-  inv H. constructor. constructor.
-  unfold inject_id in H0. inv H0. rewrite Int.add_zero. constructor.
-  constructor.
-  inv H. destruct v2; econstructor. unfold inject_id; reflexivity. rewrite Int.add_zero; auto.
-  constructor.
-Qed.
-
 Definition memval_lessdef: memval -> memval -> Prop := memval_inject inject_id.
 
 Lemma memval_lessdef_refl:

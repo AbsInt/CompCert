@@ -427,22 +427,22 @@ Proof.
 (* ifeq *)
   caseEq (Int.eq i key); intro EQ; rewrite EQ in H5.
   inv H5. exists nfound; exists rs; intuition.
-  apply star_one. eapply exec_Icond_true; eauto. 
-  simpl. rewrite H2. congruence.
+  apply star_one. eapply exec_Icond with (b := true); eauto. 
+  simpl. rewrite H2. simpl. congruence.
   exploit IHtr_switch; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
   exists nd1; exists rs1; intuition.
-  eapply star_step. eapply exec_Icond_false; eauto. 
-  simpl. rewrite H2. congruence. eexact EX. traceEq.
+  eapply star_step. eapply exec_Icond with (b := false); eauto. 
+  simpl. rewrite H2. simpl. congruence. eexact EX. traceEq.
 (* iflt *)
   caseEq (Int.ltu i key); intro EQ; rewrite EQ in H5.
   exploit IHtr_switch1; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
   exists nd1; exists rs1; intuition.
-  eapply star_step. eapply exec_Icond_true; eauto. 
-  simpl. rewrite H2. congruence. eexact EX. traceEq.
+  eapply star_step. eapply exec_Icond with (b := true); eauto. 
+  simpl. rewrite H2. simpl. congruence. eexact EX. traceEq.
   exploit IHtr_switch2; eauto. intros [nd1 [rs1 [EX [NTH ME]]]].
   exists nd1; exists rs1; intuition.
-  eapply star_step. eapply exec_Icond_false; eauto. 
-  simpl. rewrite H2. congruence. eexact EX. traceEq.
+  eapply star_step. eapply exec_Icond with (b := false); eauto. 
+  simpl. rewrite H2. simpl. congruence. eexact EX. traceEq.
 (* jumptable *)
   set (rs1 := rs#rt <- (Vint(Int.sub i ofs))).
   assert (ME1: match_env map e nil rs1).
@@ -451,21 +451,21 @@ Proof.
     eapply exec_Iop; eauto. 
     predSpec Int.eq Int.eq_spec ofs Int.zero; simpl.
     rewrite H10. rewrite Int.sub_zero_l. congruence.
-    rewrite H6. rewrite <- Int.sub_add_opp. auto. 
+    rewrite H6. simpl. rewrite <- Int.sub_add_opp. auto. 
   caseEq (Int.ltu (Int.sub i ofs) sz); intro EQ; rewrite EQ in H9.
   exploit H5; eauto. intros [nd [A B]].
   exists nd; exists rs1; intuition. 
   eapply star_step. eexact EX1.
-  eapply star_step. eapply exec_Icond_true; eauto. 
-  simpl. unfold rs1. rewrite Regmap.gss. congruence. 
+  eapply star_step. eapply exec_Icond with (b := true); eauto. 
+  simpl. unfold rs1. rewrite Regmap.gss. simpl. congruence. 
   apply star_one. eapply exec_Ijumptable; eauto. unfold rs1. apply Regmap.gss. 
   reflexivity. traceEq.
   exploit (IHtr_switch rs1); eauto. unfold rs1. rewrite Regmap.gso; auto.
   intros [nd [rs' [EX [NTH ME]]]].
   exists nd; exists rs'; intuition.
   eapply star_step. eexact EX1.
-  eapply star_step. eapply exec_Icond_false; eauto. 
-  simpl. unfold rs1. rewrite Regmap.gss. congruence.
+  eapply star_step. eapply exec_Icond with (b := false); eauto. 
+  simpl. unfold rs1. rewrite Regmap.gss. simpl. congruence.
   eexact EX. reflexivity. traceEq.
 Qed.
 
@@ -739,11 +739,8 @@ Proof.
   exists rs1.
 (* Exec *)
   split. eapply star_right. eexact EX1. 
-  destruct b.
-  eapply exec_Icond_true; eauto. 
-  rewrite RES1. assumption.
-  eapply exec_Icond_false; eauto. 
-  rewrite RES1. assumption.
+  eapply exec_Icond with (b := b); eauto. 
+  rewrite RES1. auto.
   traceEq.
 (* Match-env *)
   split. assumption.

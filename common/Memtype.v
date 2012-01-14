@@ -917,6 +917,9 @@ Axiom perm_extends:
 Axiom valid_access_extends:
   forall m1 m2 chunk b ofs p,
   extends m1 m2 -> valid_access m1 chunk b ofs p -> valid_access m2 chunk b ofs p.
+Axiom valid_pointer_extends:
+  forall m1 m2 b ofs,
+  extends m1 m2 -> valid_pointer m1 b ofs = true -> valid_pointer m2 b ofs = true.
 
 (** * Memory injections *)
 

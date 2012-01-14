@@ -1152,62 +1152,239 @@ Proof.
   intros. symmetry. eapply IMAGE; eauto. 
 Qed.
 
-(** * Correctness of Cminor construction functions *)
+(** * Properties of compile-time approximations of values *)
+
+Definition val_match_approx (a: approx) (v: val) : Prop :=
+  match a with
+  | Int7 => v = Val.zero_ext 8 v /\ v = Val.sign_ext 8 v
+  | Int8u => v = Val.zero_ext 8 v
+  | Int8s => v = Val.sign_ext 8 v
+  | Int15 => v = Val.zero_ext 16 v /\ v = Val.sign_ext 16 v
+  | Int16u => v = Val.zero_ext 16 v
+  | Int16s => v = Val.sign_ext 16 v
+  | Float32 => v = Val.singleoffloat v
+  | Any => True
+  end.
+
+Remark undef_match_approx: forall a, val_match_approx a Vundef.
+Proof.
+  destruct a; simpl; auto.
+Qed.
+
+Lemma val_match_approx_increasing:
+  forall a1 a2 v,
+  Approx.bge a1 a2 = true -> val_match_approx a2 v -> val_match_approx a1 v.
+Proof.
+  assert (A: forall v, v = Val.zero_ext 8 v -> v = Val.zero_ext 16 v).
+    intros. rewrite H.
+    destruct v; simpl; auto. decEq. symmetry. 
+    apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
+  assert (B: forall v, v = Val.sign_ext 8 v -> v = Val.sign_ext 16 v).
+    intros. rewrite H.
+    destruct v; simpl; auto. decEq. symmetry. 
+    apply Int.sign_ext_widen. compute; auto. split. omega. compute; auto.
+  assert (C: forall v, v = Val.zero_ext 8 v -> v = Val.sign_ext 16 v).
+    intros. rewrite H.
+    destruct v; simpl; auto. decEq. symmetry. 
+    apply Int.sign_zero_ext_widen. compute; auto. split. omega. compute; auto.
+  intros. 
+  unfold Approx.bge in H; destruct a1; try discriminate; destruct a2; simpl in *; try discriminate; intuition; auto.
+Qed.
+
+Lemma approx_lub_ge_left:
+  forall x y, Approx.bge (Approx.lub x y) x = true.
+Proof.
+  destruct x; destruct y; auto. 
+Qed.
+
+Lemma approx_lub_ge_right:
+  forall x y, Approx.bge (Approx.lub x y) y = true.
+Proof.
+  destruct x; destruct y; auto. 
+Qed.
+
+Lemma approx_of_int_sound:
+  forall n, val_match_approx (Approx.of_int n) (Vint n).
+Proof.
+  unfold Approx.of_int; intros. 
+  destruct (Int.eq_dec n (Int.zero_ext 7 n)). simpl.
+    split.
+    decEq. rewrite e. symmetry. apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
+    decEq. rewrite e. symmetry. apply Int.sign_zero_ext_widen. compute; auto. compute; auto. 
+  destruct (Int.eq_dec n (Int.zero_ext 8 n)). simpl; congruence.
+  destruct (Int.eq_dec n (Int.sign_ext 8 n)). simpl; congruence.
+  destruct (Int.eq_dec n (Int.zero_ext 15 n)). simpl.
+    split.
+    decEq. rewrite e. symmetry. apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
+    decEq. rewrite e. symmetry. apply Int.sign_zero_ext_widen. compute; auto. compute; auto. 
+  destruct (Int.eq_dec n (Int.zero_ext 16 n)). simpl; congruence.
+  destruct (Int.eq_dec n (Int.sign_ext 16 n)). simpl; congruence.
+  exact I.
+Qed.
+
+Lemma approx_of_float_sound:
+  forall f, val_match_approx (Approx.of_float f) (Vfloat f).
+Proof.
+  unfold Approx.of_float; intros. 
+  destruct (Float.eq_dec f (Float.singleoffloat f)); simpl; auto. congruence.
+Qed.
+
+Lemma approx_of_chunk_sound:
+  forall chunk m b ofs v,
+  Mem.load chunk m b ofs = Some v ->
+  val_match_approx (Approx.of_chunk chunk) v.
+Proof.
+  intros. exploit Mem.load_cast; eauto. 
+  destruct chunk; intros; simpl; auto.
+Qed.
+
+Lemma approx_of_unop_sound:
+  forall op v1 v a1,
+  eval_unop op v1 = Some v ->
+  val_match_approx a1 v1 ->
+  val_match_approx (Approx.unop op a1) v.
+Proof.
+  destruct op; simpl; intros; auto; inv H.
+  destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. compute; auto.
+  destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
+  destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. compute; auto.
+  destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
+  destruct v1; simpl; auto. destruct (Int.eq i Int.zero); auto.
+  destruct v1; simpl; auto. rewrite Float.singleoffloat_idem; auto.
+Qed.
+
+Lemma approx_bitwise_and_sound:
+  forall a1 v1 a2 v2,
+  val_match_approx a1 v1 -> val_match_approx a2 v2 ->
+  val_match_approx (Approx.bitwise_and a1 a2) (Val.and v1 v2).
+Proof.
+  assert (X: forall v1 v2 N, 0 < N < Z_of_nat Int.wordsize ->
+            v2 = Val.zero_ext N v2 ->
+            Val.and v1 v2 = Val.zero_ext N (Val.and v1 v2)).
+    intros. rewrite Val.zero_ext_and in *; auto. 
+    rewrite Val.and_assoc. congruence. 
+  assert (Y: forall v1 v2 N, 0 < N < Z_of_nat Int.wordsize ->
+            v1 = Val.zero_ext N v1 ->
+            Val.and v1 v2 = Val.zero_ext N (Val.and v1 v2)).
+    intros. rewrite (Val.and_commut v1 v2). apply X; auto.
+  assert (P: forall a v, val_match_approx a v -> Approx.bge Int8u a = true ->
+               v = Val.zero_ext 8 v).
+    intros. apply (val_match_approx_increasing Int8u a v); auto.
+  assert (Q: forall a v, val_match_approx a v -> Approx.bge Int16u a = true ->
+               v = Val.zero_ext 16 v).
+    intros. apply (val_match_approx_increasing Int16u a v); auto.
+  intros; unfold Approx.bitwise_and. 
+  destruct (Approx.bge Int8u a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
+  destruct (Approx.bge Int8u a2) as []_eqn. simpl. apply X; eauto. compute; auto.
+  destruct (Approx.bge Int16u a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
+  destruct (Approx.bge Int16u a2) as []_eqn. simpl. apply X; eauto. compute; auto.
+  simpl; auto. 
+Qed.
+
+Lemma approx_bitwise_or_sound:
+  forall (sem_op: val -> val -> val) a1 v1 a2 v2,
+  (forall a b c, sem_op (Val.and a (Vint c)) (Val.and b (Vint c)) =
+                 Val.and (sem_op a b) (Vint c)) ->
+  val_match_approx a1 v1 -> val_match_approx a2 v2 ->
+  val_match_approx (Approx.bitwise_or a1 a2) (sem_op v1 v2).
+Proof.
+  intros.
+  assert (X: forall v v' N, 0 < N < Z_of_nat Int.wordsize ->
+            v = Val.zero_ext N v ->
+            v' = Val.zero_ext N v' ->
+            sem_op v v' = Val.zero_ext N (sem_op v v')).
+    intros. rewrite Val.zero_ext_and in *; auto.
+    rewrite H3; rewrite H4. rewrite H. rewrite Val.and_assoc.
+    simpl. rewrite Int.and_idem. auto.
+
+  unfold Approx.bitwise_or. 
+  destruct (Approx.bge Int8u a1 && Approx.bge Int8u a2) as []_eqn.
+  destruct (andb_prop _ _ Heqb).
+  simpl. apply X. compute; auto. 
+  apply (val_match_approx_increasing Int8u a1 v1); auto.
+  apply (val_match_approx_increasing Int8u a2 v2); auto.
+
+  destruct (Approx.bge Int16u a1 && Approx.bge Int16u a2) as []_eqn.
+  destruct (andb_prop _ _ Heqb0).
+  simpl. apply X. compute; auto. 
+  apply (val_match_approx_increasing Int16u a1 v1); auto.
+  apply (val_match_approx_increasing Int16u a2 v2); auto.
+
+  exact I.
+Qed.
+
+Lemma approx_of_binop_sound:
+  forall op v1 a1 v2 a2 m v,
+  eval_binop op v1 v2 m = Some v ->
+  val_match_approx a1 v1 -> val_match_approx a2 v2 ->
+  val_match_approx (Approx.binop op a1 a2) v.
+Proof.
+  assert (OB: forall ob, val_match_approx Int7 (Val.of_optbool ob)).
+    destruct ob; simpl. destruct b; auto. auto.
+  
+  destruct op; intros; simpl Approx.binop; simpl in H; try (exact I); inv H.
+  apply approx_bitwise_and_sound; auto.
+  apply approx_bitwise_or_sound; auto.
+    intros. destruct a; destruct b; simpl; auto.
+    rewrite (Int.and_commut i c); rewrite (Int.and_commut i0 c). 
+    rewrite <- Int.and_or_distrib. rewrite Int.and_commut. auto.
+  apply approx_bitwise_or_sound; auto.
+    intros. destruct a; destruct b; simpl; auto.
+    rewrite (Int.and_commut i c); rewrite (Int.and_commut i0 c). 
+    rewrite <- Int.and_xor_distrib. rewrite Int.and_commut. auto.
+  apply OB.
+  apply OB.
+  apply OB.
+Qed.
+
+Lemma approx_unop_is_redundant_sound:
+  forall op a v,
+  Approx.unop_is_redundant op a = true ->
+  val_match_approx a v ->
+  eval_unop op v = Some v.
+Proof.
+  unfold Approx.unop_is_redundant; intros; destruct op; try discriminate.
+(* cast8unsigned *)
+  assert (V: val_match_approx Int8u v) by (eapply val_match_approx_increasing; eauto).
+  simpl in *. congruence.
+(* cast8signed *)
+  assert (V: val_match_approx Int8s v) by (eapply val_match_approx_increasing; eauto).
+  simpl in *. congruence.
+(* cast16unsigned *)
+  assert (V: val_match_approx Int16u v) by (eapply val_match_approx_increasing; eauto).
+  simpl in *. congruence.
+(* cast16signed *)
+  assert (V: val_match_approx Int16s v) by (eapply val_match_approx_increasing; eauto).
+  simpl in *. congruence.
+(* singleoffloat *)
+  assert (V: val_match_approx Float32 v) by (eapply val_match_approx_increasing; eauto).
+  simpl in *. congruence.
+Qed.
+
+(** * Compatibility of evaluation functions with respect to memory injections. *)
 
 Remark val_inject_val_of_bool:
   forall f b, val_inject f (Val.of_bool b) (Val.of_bool b).
 Proof.
-  intros; destruct b; unfold Val.of_bool, Vtrue, Vfalse; constructor.
+  intros; destruct b; constructor.
 Qed.
 
-Remark val_inject_eval_compare_mismatch:
-  forall f c v,  
-  eval_compare_mismatch c = Some v ->
-  val_inject f v v.
+Remark val_inject_val_of_optbool:
+  forall f ob, val_inject f (Val.of_optbool ob) (Val.of_optbool ob).
 Proof.
-  unfold eval_compare_mismatch; intros.
-  destruct c; inv H; unfold Vfalse, Vtrue; constructor.
+  intros; destruct ob; simpl. destruct b; constructor. constructor.
 Qed.
 
-Remark val_inject_eval_compare_null:
-  forall f i c v,  
-  eval_compare_null c i = Some v ->
-  val_inject f v v.
-Proof.
-  unfold eval_compare_null. intros. destruct (Int.eq i Int.zero). 
-  eapply val_inject_eval_compare_mismatch; eauto. 
-  discriminate.
-Qed.
-
-Hint Resolve eval_Econst eval_Eunop eval_Ebinop eval_Eload: evalexpr.
-
-Ltac TrivialOp :=
+Ltac TrivialExists :=
   match goal with
-  | [ |- exists y, _ /\ val_inject _ (Vint ?x) _ ] =>
-      exists (Vint x); split;
-      [eauto with evalexpr | constructor]
-  | [ |- exists y, _ /\ val_inject _ (Vfloat ?x) _ ] =>
-      exists (Vfloat x); split;
-      [eauto with evalexpr | constructor]
-  | [ |- exists y, _ /\ val_inject _ (Val.of_bool ?x) _ ] =>
-      exists (Val.of_bool x); split;
-      [eauto with evalexpr | apply val_inject_val_of_bool]
   | [ |- exists y, Some ?x = Some y /\ val_inject _ _ _ ] =>
-      exists x; split; [auto | econstructor; eauto]
+      exists x; split; [auto | try(econstructor; eauto)]
+  | [ |- exists y, _ /\ val_inject _ (Vint ?x) _ ] =>
+      exists (Vint x); split; [eauto with evalexpr | constructor]
+  | [ |- exists y, _ /\ val_inject _ (Vfloat ?x) _ ] =>
+      exists (Vfloat x); split; [eauto with evalexpr | constructor]
   | _ => idtac
   end.
-
-(** Correctness of [transl_constant]. *)
-
-Lemma transl_constant_correct:
-  forall f sp cst v,
-  Csharpminor.eval_constant cst = Some v ->
-  exists tv,
-     eval_constant tge sp (transl_constant cst) = Some tv
-  /\ val_inject f v tv.
-Proof.
-  destruct cst; simpl; intros; inv H; TrivialOp.
-Qed.
 
 (** Compatibility of [eval_unop] with respect to [val_inject]. *)
 
@@ -1220,103 +1397,95 @@ Lemma eval_unop_compat:
   /\ val_inject f v tv.
 Proof.
   destruct op; simpl; intros.
-  inv H; inv H0; simpl; TrivialOp.
-  inv H; inv H0; simpl; TrivialOp.
-  inv H; inv H0; simpl; TrivialOp.
-  inv H; inv H0; simpl; TrivialOp.
-  inv H0; inv H. TrivialOp. unfold Vfalse; TrivialOp.
-  inv H0; inv H. TrivialOp. unfold Vfalse; TrivialOp.
-  inv H0; inv H; TrivialOp.
-  inv H0; inv H; TrivialOp.
-  inv H0; inv H; TrivialOp.
-  inv H0; inv H; TrivialOp.
-  inv H0; inv H. destruct (Float.intoffloat f0); simpl in H1; inv H1. TrivialOp.
-  inv H0; inv H. destruct (Float.intuoffloat f0); simpl in H1; inv H1. TrivialOp.
-  inv H0; inv H; TrivialOp.
-  inv H0; inv H; TrivialOp.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists. apply val_inject_val_of_bool.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.intoffloat f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.intuoffloat f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
 Qed.
 
 (** Compatibility of [eval_binop] with respect to [val_inject]. *)
 
 Lemma eval_binop_compat:
   forall f op v1 tv1 v2 tv2 v m tm,
-  Csharpminor.eval_binop op v1 v2 m = Some v ->
+  eval_binop op v1 v2 m = Some v ->
   val_inject f v1 tv1 ->
   val_inject f v2 tv2 ->
   Mem.inject f m tm ->
   exists tv,
-     Cminor.eval_binop op tv1 tv2 tm = Some tv
+     eval_binop op tv1 tv2 tm = Some tv
   /\ val_inject f v tv.
 Proof.
   destruct op; simpl; intros.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H; inv H0; inv H1; TrivialExists.
     repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
     repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H; inv H0; inv H1; TrivialExists.
     apply Int.sub_add_l.
-    destruct (eq_block b1 b0); inv H4. 
-    assert (b3 = b2) by congruence. subst b3. 
-    unfold eq_block; rewrite zeq_true. TrivialOp.
-    replace delta0 with delta by congruence.
-    decEq. decEq. apply Int.sub_shifted.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.eq i0 Int.zero); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-    destruct (Int.ltu i0 Int.iwordsize); inv H1. TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+    simpl. destruct (zeq b1 b0); auto.
+    subst b1. rewrite H in H0; inv H0. 
+    rewrite zeq_true. rewrite Int.sub_shifted. auto.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int.iwordsize); auto.
+  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int.iwordsize); auto.
+  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int.iwordsize); auto.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
 (* cmpu *)
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
-  exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
-  exists v; split; auto. eapply val_inject_eval_compare_null; eauto.
-  (* cmpu ptr ptr *)
-  caseEq (Mem.valid_pointer m b1 (Int.unsigned ofs1) && Mem.valid_pointer m b0 (Int.unsigned ofs0)); 
-  intro EQ; rewrite EQ in H4; try discriminate.
-  elim (andb_prop _ _ EQ); intros.
-  exploit Mem.valid_pointer_inject_val. eauto. eexact H. econstructor; eauto. 
-  intros V1. rewrite V1.
-  exploit Mem.valid_pointer_inject_val. eauto. eexact H1. econstructor; eauto. 
-  intros V2. rewrite V2. simpl.
-  destruct (eq_block b1 b0); inv H4.
-  (* same blocks in source *)
-  assert (b3 = b2) by congruence. subst b3.
-  assert (delta0 = delta) by congruence. subst delta0.
-  exists (Val.of_bool (Int.cmpu c ofs1 ofs0)); split.
-  unfold eq_block; rewrite zeq_true; simpl.
-  decEq. decEq. rewrite Int.translate_cmpu. auto. 
-  eapply Mem.valid_pointer_inject_no_overflow; eauto.
-  eapply Mem.valid_pointer_inject_no_overflow; eauto.
-  apply val_inject_val_of_bool.
-  (* different blocks in source *)
-  simpl. exists v; split; [idtac | eapply val_inject_eval_compare_mismatch; eauto].
-  destruct (eq_block b2 b3); auto.
-  exploit Mem.different_pointers_inject; eauto. intros [A|A]. 
-  congruence.
-  decEq. destruct c; simpl in H6; inv H6; unfold Int.cmpu.
-  predSpec Int.eq Int.eq_spec (Int.add ofs1 (Int.repr delta)) (Int.add ofs0 (Int.repr delta0)).
-  congruence. auto.
-  predSpec Int.eq Int.eq_spec (Int.add ofs1 (Int.repr delta)) (Int.add ofs0 (Int.repr delta0)).
-  congruence. auto.
+  inv H; inv H0; inv H1; TrivialExists.
+    apply val_inject_val_of_optbool.
+    apply val_inject_val_of_optbool.
+    apply val_inject_val_of_optbool.
+Opaque Int.add.
+    unfold Val.cmpu. simpl. 
+    destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) as []_eqn; simpl; auto.
+    destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) as []_eqn; simpl; auto.
+    exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb. econstructor; eauto. 
+    intros V1. rewrite V1.
+    exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb0. econstructor; eauto. 
+    intros V2. rewrite V2. simpl.
+    destruct (zeq b1 b0).
+    (* same blocks *)
+    subst b1. rewrite H in H0; inv H0. rewrite zeq_true. 
+    rewrite Int.translate_cmpu. apply val_inject_val_of_optbool.
+    eapply Mem.valid_pointer_inject_no_overflow; eauto.
+    eapply Mem.valid_pointer_inject_no_overflow; eauto.
+    (* different source blocks *)
+    destruct (zeq b2 b3).
+    exploit Mem.different_pointers_inject; eauto. intros [A|A]. 
+    congruence.
+    destruct c; simpl; auto. 
+    rewrite Int.eq_false. constructor. congruence.
+    rewrite Int.eq_false. constructor. congruence.
+    apply val_inject_val_of_optbool.
   (* cmpf *)
-  inv H0; try discriminate; inv H1; inv H; TrivialOp.
+  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
 Qed.
+
+(** * Correctness of Cminor construction functions *)
 
 Lemma make_stackaddr_correct:
   forall sp te tm ofs,
@@ -1340,30 +1509,160 @@ Qed.
 
 (** Correctness of [make_store]. *)
 
+Inductive val_lessdef_upto (n: Z): val -> val -> Prop :=
+  | val_lessdef_upto_base:
+      forall v1 v2, Val.lessdef v1 v2 -> val_lessdef_upto n v1 v2
+  | val_lessdef_upto_int:
+      forall n1 n2, Int.zero_ext n n1 = Int.zero_ext n n2 -> val_lessdef_upto n (Vint n1) (Vint n2).
+
+Hint Resolve val_lessdef_upto_base.
+
+Remark val_lessdef_upto_zero_ext:
+  forall n n' v1 v2,
+  0 < n < Z_of_nat Int.wordsize -> n <= n' < Z_of_nat Int.wordsize ->
+  val_lessdef_upto n v1 v2 ->
+  val_lessdef_upto n (Val.zero_ext n' v1) v2.
+Proof.
+  intros. inv H1. inv H2. 
+  destruct v2; simpl; auto. 
+  apply val_lessdef_upto_int. apply Int.zero_ext_narrow; auto. 
+  simpl; auto.
+  apply val_lessdef_upto_int. rewrite <- H2. apply Int.zero_ext_narrow; auto.
+Qed.
+ 
+Remark val_lessdef_upto_sign_ext:
+  forall n n' v1 v2,
+  0 < n < Z_of_nat Int.wordsize -> n <= n' < Z_of_nat Int.wordsize ->
+  val_lessdef_upto n v1 v2 ->
+  val_lessdef_upto n (Val.sign_ext n' v1) v2.
+Proof.
+  intros. inv H1. inv H2. 
+  destruct v2; simpl; auto. 
+  apply val_lessdef_upto_int. apply Int.zero_sign_ext_narrow; auto. 
+  simpl; auto.
+  apply val_lessdef_upto_int. rewrite <- H2. apply Int.zero_sign_ext_narrow; auto.
+Qed.
+
+Remark val_lessdef_upto_and:
+  forall n v1 v2 m,
+  0 < n < Z_of_nat Int.wordsize ->
+  Int.eq (Int.and m (Int.repr (two_p n - 1))) (Int.repr (two_p n - 1)) = true ->
+  val_lessdef_upto n v1 v2 ->
+  val_lessdef_upto n (Val.and v1 (Vint m)) v2.
+Proof.
+  intros. set (p := Int.repr (two_p n - 1)) in *.
+  generalize (Int.eq_spec (Int.and m p) p). rewrite H0; intros.
+  inv H1. inv H3. 
+  destruct v2; simpl; auto. 
+  apply val_lessdef_upto_int. repeat rewrite Int.zero_ext_and; auto.
+  rewrite Int.and_assoc. congruence.
+  simpl; auto.
+  apply val_lessdef_upto_int. rewrite <- H3. repeat rewrite Int.zero_ext_and; auto.
+  rewrite Int.and_assoc. congruence.
+Qed.
+
+Lemma eval_uncast_int8:
+  forall sp te tm a x,
+  eval_expr tge sp te tm a x ->
+  exists v, eval_expr tge sp te tm (uncast_int8 a) v /\ val_lessdef_upto 8 x v.
+Proof.
+  intros until a. functional induction (uncast_int8 a); intros.
+  (* cast8unsigned *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_zero_ext; auto. 
+  compute; auto. split. omega. compute; auto.
+  (* cast8signed *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_sign_ext; auto. 
+  compute; auto. split. omega. compute; auto.
+  (* cast16unsigned *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_zero_ext; auto. 
+  compute; auto. split. omega. compute; auto.
+  (* cast16signed *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_sign_ext; auto. 
+  compute; auto. split. omega. compute; auto.
+  (* and *)
+  inv H. inv H5. simpl in H0. inv H0. simpl in H6. inv H6. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_and; auto. compute; auto.
+  (* and 2 *)
+  exists x; split; auto.
+  (* default *)
+  exists x; split; auto.
+Qed.
+
+Lemma eval_uncast_int16:
+  forall sp te tm a x,
+  eval_expr tge sp te tm a x ->
+  exists v, eval_expr tge sp te tm (uncast_int16 a) v /\ val_lessdef_upto 16 x v.
+Proof.
+  intros until a. functional induction (uncast_int16 a); intros.
+  (* cast16unsigned *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_zero_ext; auto. 
+  compute; auto. split. omega. compute; auto.
+  (* cast16signed *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_sign_ext; auto. 
+  compute; auto. split. omega. compute; auto.
+  (* and *)
+  inv H. inv H5. simpl in H0. inv H0. simpl in H6. inv H6. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_and; auto. compute; auto.
+  (* and 2 *)
+  exists x; split; auto.
+  (* default *)
+  exists x; split; auto.
+Qed.
+
+Inductive val_lessdef_upto_single: val -> val -> Prop :=
+  | val_lessdef_upto_single_base:
+      forall v1 v2, Val.lessdef v1 v2 -> val_lessdef_upto_single v1 v2
+  | val_lessdef_upto_single_float:
+      forall n1 n2, Float.singleoffloat n1 = Float.singleoffloat n2 -> val_lessdef_upto_single (Vfloat n1) (Vfloat n2).
+
+Hint Resolve val_lessdef_upto_single_base.
+
+Lemma eval_uncast_float32:
+  forall sp te tm a x,
+  eval_expr tge sp te tm a x ->
+  exists v, eval_expr tge sp te tm (uncast_float32 a) v /\ val_lessdef_upto_single x v.
+Proof.
+  intros until a. functional induction (uncast_float32 a); intros.
+  (* singleoffloat *)
+  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto.
+  inv B. inv H. destruct v; simpl; auto. 
+  apply val_lessdef_upto_single_float. apply Float.singleoffloat_idem. 
+  simpl; auto.
+  apply val_lessdef_upto_single_float. rewrite H. apply Float.singleoffloat_idem.
+  (* default *)
+  exists x; auto.
+Qed.
+
 Inductive val_content_inject (f: meminj): memory_chunk -> val -> val -> Prop :=
   | val_content_inject_8_signed:
-      forall n,
-      val_content_inject f Mint8signed (Vint (Int.sign_ext 8 n)) (Vint n)
+      forall n1 n2, Int.sign_ext 8 n1 = Int.sign_ext 8 n2 ->
+      val_content_inject f Mint8signed (Vint n1) (Vint n2)
   | val_content_inject_8_unsigned:
-      forall n,
-      val_content_inject f Mint8unsigned (Vint (Int.zero_ext 8 n)) (Vint n)
+      forall n1 n2, Int.zero_ext 8 n1 = Int.zero_ext 8 n2 ->
+      val_content_inject f Mint8unsigned (Vint n1) (Vint n2)
   | val_content_inject_16_signed:
-      forall n,
-      val_content_inject f Mint16signed (Vint (Int.sign_ext 16 n)) (Vint n)
+      forall n1 n2, Int.sign_ext 16 n1 = Int.sign_ext 16 n2 ->
+      val_content_inject f Mint16signed (Vint n1) (Vint n2)
   | val_content_inject_16_unsigned:
-      forall n,
-      val_content_inject f Mint16unsigned (Vint (Int.zero_ext 16 n)) (Vint n)
-  | val_content_inject_32:
-      forall n,
-      val_content_inject f Mfloat32 (Vfloat (Float.singleoffloat n)) (Vfloat n)
+      forall n1 n2, Int.zero_ext 16 n1 = Int.zero_ext 16 n2 ->
+      val_content_inject f Mint16unsigned (Vint n1) (Vint n2)
+  | val_content_inject_single:
+      forall n1 n2, Float.singleoffloat n1 = Float.singleoffloat n2 ->
+      val_content_inject f Mfloat32 (Vfloat n1) (Vfloat n2)
   | val_content_inject_base:
-      forall chunk v1 v2,
-      val_inject f v1 v2 ->
+      forall chunk v1 v2, val_inject f v1 v2 ->
       val_content_inject f chunk v1 v2.
 
 Hint Resolve val_content_inject_base.
 
-Lemma store_arg_content_inject:
+Lemma eval_store_arg:
   forall f sp te tm a v va chunk,
   eval_expr tge sp te tm a va ->
   val_inject f v va ->
@@ -1371,20 +1670,37 @@ Lemma store_arg_content_inject:
      eval_expr tge sp te tm (store_arg chunk a) vb
   /\ val_content_inject f chunk v vb.
 Proof.
-  intros. 
-  assert (exists vb,
-       eval_expr tge sp te tm a vb  
-    /\ val_content_inject f chunk v vb).
-  exists va; split. assumption. constructor. assumption.
-  destruct a; simpl store_arg; trivial;
-  destruct u; trivial;
-  destruct chunk; trivial;
-  inv H; simpl in H6; inv H6;
-  econstructor; (split; [eauto|idtac]);
-  destruct v1; simpl in H0; inv H0; constructor; constructor.
+  intros.
+  assert (DFL: forall v', Val.lessdef va v' -> val_content_inject f chunk v v').
+    intros. apply val_content_inject_base. inv H1. auto. inv H0. auto.
+  destruct chunk; simpl.
+  (* int8signed *)
+  exploit eval_uncast_int8; eauto. intros [v' [A B]].
+  exists v'; split; auto.
+  inv B; auto. inv H0; auto. constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
+  (* int8unsigned *)
+  exploit eval_uncast_int8; eauto. intros [v' [A B]].
+  exists v'; split; auto.
+  inv B; auto. inv H0; auto. constructor. auto.
+  (* int16signed *)
+  exploit eval_uncast_int16; eauto. intros [v' [A B]].
+  exists v'; split; auto.
+  inv B; auto. inv H0; auto. constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
+  (* int16unsigned *)
+  exploit eval_uncast_int16; eauto. intros [v' [A B]].
+  exists v'; split; auto.
+  inv B; auto. inv H0; auto. constructor. auto.
+  (* int32 *)
+  exists va; auto.
+  (* float32 *)
+  exploit eval_uncast_float32; eauto. intros [v' [A B]].
+  exists v'; split; auto.
+  inv B; auto. inv H0; auto. constructor. auto.
+  (* float64 *)
+  exists va; auto.
 Qed.
 
-Lemma storev_mapped_inject':
+Lemma storev_mapped_content_inject:
   forall f chunk m1 a1 v1 n1 m2 a2 v2,
   Mem.inject f m1 m2 ->
   Mem.storev chunk m1 a1 v1 = Some n1 ->
@@ -1400,11 +1716,11 @@ Proof.
   intros. rewrite <- H0. destruct a1; simpl; auto. 
   inv H2; (eapply Mem.storev_mapped_inject; [eauto|idtac|eauto|eauto]);
   auto; apply H3; intros.
-  apply Mem.store_int8_sign_ext.
-  apply Mem.store_int8_zero_ext.
-  apply Mem.store_int16_sign_ext.
-  apply Mem.store_int16_zero_ext.
-  apply Mem.store_float32_truncate.
+  rewrite <- Mem.store_int8_sign_ext. rewrite H4. apply Mem.store_int8_sign_ext.
+  rewrite <- Mem.store_int8_zero_ext. rewrite H4. apply Mem.store_int8_zero_ext.
+  rewrite <- Mem.store_int16_sign_ext. rewrite H4. apply Mem.store_int16_sign_ext.
+  rewrite <- Mem.store_int16_zero_ext. rewrite H4. apply Mem.store_int16_zero_ext.
+  rewrite <- Mem.store_float32_truncate. rewrite H4. apply Mem.store_float32_truncate.
 Qed.
 
 Lemma make_store_correct:
@@ -1422,36 +1738,87 @@ Lemma make_store_correct:
   /\ Mem.inject f m' tm'.
 Proof.
   intros. unfold make_store.
-  exploit store_arg_content_inject. eexact H0. eauto. 
+  exploit eval_store_arg. eexact H0. eauto. 
   intros [tv [EVAL VCINJ]].
-  exploit storev_mapped_inject'; eauto.
+  exploit storev_mapped_content_inject; eauto.
   intros [tm' [STORE MEMINJ]].
   exists tm'; exists tv.
   split. eapply step_store; eauto.
   auto.
 Qed.
 
+(** Correctness of [make_unop]. *)
+
+Lemma eval_make_unop:
+  forall sp te tm a v op v',
+  eval_expr tge sp te tm a v ->
+  eval_unop op v = Some v' ->
+  exists v'', eval_expr tge sp te tm (make_unop op a) v'' /\ Val.lessdef v' v''.
+Proof.
+  intros; unfold make_unop. 
+  assert (DFL: exists v'', eval_expr tge sp te tm (Eunop op a) v'' /\ Val.lessdef v' v'').
+    exists v'; split. econstructor; eauto. auto.
+  destruct op; auto; simpl in H0; inv H0.
+(* cast8unsigned *)
+  exploit eval_uncast_int8; eauto. intros [v1 [A B]].
+  exists (Val.zero_ext 8 v1); split. econstructor; eauto. 
+  inv B. apply Val.zero_ext_lessdef; auto. simpl. rewrite H0; auto. 
+(* cast8signed *)
+  exploit eval_uncast_int8; eauto. intros [v1 [A B]].
+  exists (Val.sign_ext 8 v1); split. econstructor; eauto. 
+  inv B. apply Val.sign_ext_lessdef; auto. simpl.
+  exploit Int.sign_ext_equal_if_zero_equal; eauto. compute; auto. intro EQ; rewrite EQ; auto.
+(* cast16unsigned *)
+  exploit eval_uncast_int16; eauto. intros [v1 [A B]].
+  exists (Val.zero_ext 16 v1); split. econstructor; eauto. 
+  inv B. apply Val.zero_ext_lessdef; auto. simpl. rewrite H0; auto. 
+(* cast16signed *)
+  exploit eval_uncast_int16; eauto. intros [v1 [A B]].
+  exists (Val.sign_ext 16 v1); split. econstructor; eauto. 
+  inv B. apply Val.sign_ext_lessdef; auto. simpl.
+  exploit Int.sign_ext_equal_if_zero_equal; eauto. compute; auto. intro EQ; rewrite EQ; auto.
+(* singleoffloat *)
+  exploit eval_uncast_float32; eauto. intros [v1 [A B]].
+  exists (Val.singleoffloat v1); split. econstructor; eauto. 
+  inv B. apply Val.singleoffloat_lessdef; auto. simpl. rewrite H0; auto.
+Qed.
+
+Lemma make_unop_correct:
+  forall f sp te tm a v op v' tv,
+  eval_expr tge sp te tm a tv ->
+  eval_unop op v = Some v' ->
+  val_inject f v tv ->
+  exists tv', eval_expr tge sp te tm (make_unop op a) tv' /\ val_inject f v' tv'.
+Proof.
+  intros. exploit eval_unop_compat; eauto. intros [tv' [A B]].
+  exploit eval_make_unop; eauto. intros [tv'' [C D]].
+  exists tv''; split; auto. 
+  inv D. auto. inv B. auto.
+Qed.
+
 (** Correctness of the variable accessors [var_get], [var_addr],
   and [var_set]. *)
 
 Lemma var_get_correct:
-  forall cenv id a f tf e le te sp lo hi m cs tm b chunk v,
-  var_get cenv id = OK a ->
+  forall cenv id a app f tf e le te sp lo hi m cs tm b chunk v,
+  var_get cenv id = OK (a, app) ->
   match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m) (Mem.nextblock tm) ->
   Mem.inject f m tm ->
   eval_var_ref ge e id b chunk ->
   Mem.load chunk m b 0 = Some v ->
   exists tv,
-    eval_expr tge (Vptr sp Int.zero) te tm a tv /\
-    val_inject f v tv.
+     eval_expr tge (Vptr sp Int.zero) te tm a tv
+  /\ val_inject f v tv
+  /\ val_match_approx app v.
 Proof.
   unfold var_get; intros.
   assert (match_var f id e m te sp cenv!!id). inv H0. inv MENV. auto.
   inv H4; rewrite <- H5 in H; inv H; inv H2; try congruence.
   (* var_local *)
+  rewrite H in H6; inv H6.
   exists v'; split.
   apply eval_Evar. auto.
-  congruence.
+  split. congruence. eapply approx_of_chunk_sound; eauto. 
   (* var_stack_scalar *)
   assert (b0 = b). congruence. subst b0.
   assert (chunk0 = chunk). congruence. subst chunk0.
@@ -1460,7 +1827,7 @@ Proof.
   intros [tv [LOAD INJ]].
   exists tv; split. 
   eapply eval_Eload; eauto. eapply make_stackaddr_correct; eauto.
-  auto.
+  split. auto. eapply approx_of_chunk_sound; eauto. 
   (* var_global_scalar *)
   simpl in *.
   exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
@@ -1472,17 +1839,18 @@ Proof.
   exists tv; split. 
   eapply eval_Eload; eauto. eapply make_globaladdr_correct; eauto.
   rewrite symbols_preserved; auto.
-  auto.
+  split. auto. eapply approx_of_chunk_sound; eauto. 
 Qed.
 
 Lemma var_addr_correct:
-  forall cenv id a f tf e le te sp lo hi m cs tm b,
+  forall cenv id a app f tf e le te sp lo hi m cs tm b,
   match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m) (Mem.nextblock tm) ->
-  var_addr cenv id = OK a ->
+  var_addr cenv id = OK (a, app) ->
   eval_var_addr ge e id b ->
   exists tv,
-    eval_expr tge (Vptr sp Int.zero) te tm a tv /\
-    val_inject f (Vptr b Int.zero) tv.
+     eval_expr tge (Vptr sp Int.zero) te tm a tv
+  /\ val_inject f (Vptr b Int.zero) tv
+  /\ val_match_approx app (Vptr b Int.zero).
 Proof.
   unfold var_addr; intros.
   assert (match_var f id e m te sp cenv!!id).
@@ -1490,20 +1858,21 @@ Proof.
   inv H2; rewrite <- H3 in H0; inv H0; inv H1; try congruence.
   (* var_stack_scalar *)
   exists (Vptr sp (Int.repr ofs)); split.
-  eapply make_stackaddr_correct. congruence. 
+  eapply make_stackaddr_correct.
+  split. congruence. exact I. 
   (* var_stack_array *)
   exists (Vptr sp (Int.repr ofs)); split.
-  eapply make_stackaddr_correct. congruence.
+  eapply make_stackaddr_correct. split. congruence. exact I. 
   (* var_global_scalar *)
   exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   exists (Vptr b Int.zero); split.
   eapply make_globaladdr_correct; eauto. rewrite symbols_preserved; auto.
-  econstructor; eauto. 
+  split. econstructor; eauto. exact I.
   (* var_global_array *)
   exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
   exists (Vptr b Int.zero); split.
   eapply make_globaladdr_correct; eauto. rewrite symbols_preserved; auto.
-  econstructor; eauto. 
+  split. econstructor; eauto. exact I.
 Qed.
 
 Lemma var_set_correct:
@@ -2172,6 +2541,20 @@ Proof.
   intros. inv H0; inv H; constructor; auto.
 Qed.
 
+Lemma transl_constant_correct:
+  forall f sp cst v,
+  Csharpminor.eval_constant cst = Some v ->
+  let (tcst, a) := transl_constant cst in
+  exists tv,
+     eval_constant tge sp tcst = Some tv
+  /\ val_inject f v tv
+  /\ val_match_approx a v.
+Proof.
+  destruct cst; simpl; intros; inv H. 
+  exists (Vint i); intuition. apply approx_of_int_sound.
+  exists (Vfloat f0); intuition. apply approx_of_float_sound.
+Qed.
+
 Lemma transl_expr_correct:
   forall f m tm cenv tf e le te sp lo hi cs
     (MINJ: Mem.inject f m tm)
@@ -2180,44 +2563,58 @@ Lemma transl_expr_correct:
              (Mem.nextblock m) (Mem.nextblock tm)),
   forall a v,
   Csharpminor.eval_expr ge e le m a v ->
-  forall ta
-    (TR: transl_expr cenv a = OK ta),
+  forall ta app
+    (TR: transl_expr cenv a = OK (ta, app)),
   exists tv,
      eval_expr tge (Vptr sp Int.zero) te tm ta tv
-  /\ val_inject f v tv.
+  /\ val_inject f v tv
+  /\ val_match_approx app v.
 Proof.
   induction 3; intros; simpl in TR; try (monadInv TR).
   (* Evar *)
   eapply var_get_correct; eauto.
   (* Etempvar *)
   inv MATCH. inv MENV. exploit me_temps0; eauto. intros [tv [A B]]. 
-  exists tv; split; auto. constructor; auto.
+  exists tv; split. constructor; auto. split. auto. exact I.
   (* Eaddrof *)
   eapply var_addr_correct; eauto.
   (* Econst *)
-  exploit transl_constant_correct; eauto. intros [tv [A B]].
+  exploit transl_constant_correct; eauto. 
+  destruct (transl_constant cst) as [tcst a]; inv TR.
+  intros [tv [A [B C]]].
   exists tv; split. constructor; eauto. eauto.
   (* Eunop *)
-  exploit IHeval_expr; eauto. intros [tv1 [EVAL1 INJ1]].
-  exploit eval_unop_compat; eauto. intros [tv [EVAL INJ]].
-  exists tv; split. econstructor; eauto. auto.
+  exploit IHeval_expr; eauto. intros [tv1 [EVAL1 [INJ1 APP1]]].
+  unfold Csharpminor.eval_unop in H0. 
+  destruct (Approx.unop_is_redundant op x0) as []_eqn; inv EQ0.
+  (* -- eliminated *)
+  exploit approx_unop_is_redundant_sound; eauto. intros. 
+  replace v with v1 by congruence.
+  exists tv1; auto.
+  (* -- preserved *)
+  exploit make_unop_correct; eauto. intros [tv [A B]].
+  exists tv; split. auto. split. auto. eapply approx_of_unop_sound; eauto.
   (* Ebinop *)
-  exploit IHeval_expr1; eauto. intros [tv1 [EVAL1 INJ1]].
-  exploit IHeval_expr2; eauto. intros [tv2 [EVAL2 INJ2]].
+  exploit IHeval_expr1; eauto. intros [tv1 [EVAL1 [INJ1 APP1]]].
+  exploit IHeval_expr2; eauto. intros [tv2 [EVAL2 [INJ2 APP2]]].
   exploit eval_binop_compat; eauto. intros [tv [EVAL INJ]].
-  exists tv; split. econstructor; eauto. auto.
+  exists tv; split. econstructor; eauto. split. auto. eapply approx_of_binop_sound; eauto.
   (* Eload *)
-  exploit IHeval_expr; eauto. intros [tv1 [EVAL1 INJ1]].
+  exploit IHeval_expr; eauto. intros [tv1 [EVAL1 [INJ1 APP1]]].
   exploit Mem.loadv_inject; eauto. intros [tv [LOAD INJ]].
-  exists tv; split. econstructor; eauto. auto.
+  exists tv; split. econstructor; eauto. split. auto.
+  destruct v1; simpl in H0; try discriminate. eapply approx_of_chunk_sound; eauto.
   (* Econdition *)
-  exploit IHeval_expr1; eauto. intros [tv1 [EVAL1 INJ1]].
+  exploit IHeval_expr1; eauto. intros [tv1 [EVAL1 [INJ1 APP1]]].
   assert (transl_expr cenv (if vb1 then b else c) =
-          OK (if vb1 then x0 else x1)).
+          OK ((if vb1 then x1 else x3), (if vb1 then x2 else x4))).
     destruct vb1; auto.
-  exploit IHeval_expr2; eauto. intros [tv2 [EVAL2 INJ2]].
+  exploit IHeval_expr2; eauto. intros [tv2 [EVAL2 [INJ2 APP2]]].
   exists tv2; split. eapply eval_Econdition; eauto.
-  eapply bool_of_val_inject; eauto. auto.
+  eapply bool_of_val_inject; eauto.
+  split. auto.
+  apply val_match_approx_increasing with (if vb1 then x2 else x4); auto.
+  destruct vb1. apply approx_lub_ge_left. apply approx_lub_ge_right. 
 Qed.
 
 Lemma transl_exprlist_correct:
@@ -2236,7 +2633,7 @@ Lemma transl_exprlist_correct:
 Proof.
   induction 3; intros; monadInv TR.
   exists (@nil val); split. constructor. constructor.
-  exploit transl_expr_correct; eauto. intros [tv1 [EVAL1 VINJ1]].
+  exploit transl_expr_correct; eauto. intros [tv1 [EVAL1 [VINJ1 APP1]]].
   exploit IHeval_exprlist; eauto. intros [tv2 [EVAL2 VINJ2]].
   exists (tv1 :: tv2); split. constructor; auto. constructor; auto.
 Qed.
@@ -2669,7 +3066,7 @@ Proof.
 
 (* assign *)
   monadInv TR. 
-  exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
+  exploit transl_expr_correct; eauto. intros [tv [EVAL [VINJ APP]]].
   exploit var_set_correct; eauto. 
   intros [te' [tm' [EXEC [MINJ' [MCS' OTHER]]]]].
   left; econstructor; split.
@@ -2678,7 +3075,7 @@ Proof.
 
 (* set *)
   monadInv TR.
-  exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
+  exploit transl_expr_correct; eauto. intros [tv [EVAL [VINJ APP]]].
   left; econstructor; split.
   apply plus_one. econstructor; eauto. 
   econstructor; eauto. 
@@ -2687,9 +3084,9 @@ Proof.
 (* store *)
   monadInv TR.
   exploit transl_expr_correct. eauto. eauto. eexact H. eauto. 
-  intros [tv1 [EVAL1 VINJ1]].
+  intros [tv1 [EVAL1 [VINJ1 APP1]]].
   exploit transl_expr_correct. eauto. eauto. eexact H0. eauto. 
-  intros [tv2 [EVAL2 VINJ2]].
+  intros [tv2 [EVAL2 [VINJ2 APP2]]].
   exploit make_store_correct. eexact EVAL1. eexact EVAL2. eauto. eauto. auto. auto.
   intros [tm' [tv' [EXEC [STORE' MINJ']]]].
   left; econstructor; split.
@@ -2703,7 +3100,7 @@ Proof.
 (* call *)
   simpl in H1. exploit functions_translated; eauto. intros [tfd [FIND TRANS]].
   monadInv TR.
-  exploit transl_expr_correct; eauto. intros [tvf [EVAL1 VINJ1]].
+  exploit transl_expr_correct; eauto. intros [tvf [EVAL1 [VINJ1 APP1]]].
   assert (tvf = vf).
     exploit match_callstack_match_globalenvs; eauto. intros [bnd MG].
     eapply val_inject_function_pointer; eauto.
@@ -2728,8 +3125,8 @@ Proof.
 
 (* ifthenelse *)
   monadInv TR.
-  exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
-  left; exists (State tfn (if b then x0 else x1) tk (Vptr sp Int.zero) te tm); split.
+  exploit transl_expr_correct; eauto. intros [tv [EVAL [VINJ APP]]].
+  left; exists (State tfn (if b then x1 else x2) tk (Vptr sp Int.zero) te tm); split.
   apply plus_one. eapply step_ifthenelse; eauto. eapply bool_of_val_inject; eauto.
   econstructor; eauto. destruct b; auto.
 
@@ -2781,7 +3178,7 @@ Proof.
 
 (* switch *)
   monadInv TR. left.
-  exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
+  exploit transl_expr_correct; eauto. intros [tv [EVAL [VINJ APP]]].
   inv VINJ.
   exploit switch_descent; eauto. intros [k1 [A B]].
   exploit switch_ascent; eauto. intros [k2 [C D]].
@@ -2805,7 +3202,7 @@ Proof.
 
 (* return some *)
   monadInv TR. left. 
-  exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
+  exploit transl_expr_correct; eauto. intros [tv [EVAL [VINJ APP]]].
   exploit match_callstack_freelist; eauto. intros [tm' [A [B C]]].
   econstructor; split.
   apply plus_one. eapply step_return_1. eauto. eauto. 

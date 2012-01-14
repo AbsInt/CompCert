@@ -899,21 +899,14 @@ Proof.
   apply add_unknown_satisfiable. apply wf_kill_loads. apply wf_analyze.
   eapply kill_load_satisfiable; eauto. 
 
-  (* Icond true *)
+  (* Icond *)
   econstructor; split.
-  eapply exec_Icond_true; eauto. 
+  eapply exec_Icond; eauto. 
   econstructor; eauto.
-  eapply analysis_correct_1; eauto. simpl; auto.
+  destruct b; eapply analysis_correct_1; eauto; simpl; auto;
   unfold transfer; rewrite H; auto.
 
-  (* Icond false *)
-  econstructor; split.
-  eapply exec_Icond_false; eauto. 
-  econstructor; eauto.
-  eapply analysis_correct_1; eauto. simpl; auto.
-  unfold transfer; rewrite H; auto.
-
-  (* Icond false *)
+  (* Ijumptable *)
   econstructor; split.
   eapply exec_Ijumptable; eauto. 
   econstructor; eauto.

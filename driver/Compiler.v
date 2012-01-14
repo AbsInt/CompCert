@@ -44,7 +44,6 @@ Require Cminorgen.
 Require Selection.
 Require RTLgen.
 Require Tailcall.
-Require CastOptim.
 Require Constprop.
 Require CSE.
 Require Allocation.
@@ -68,7 +67,6 @@ Require Cminorgenproof.
 Require Selectionproof.
 Require RTLgenproof.
 Require Tailcallproof.
-Require CastOptimproof.
 Require Constpropproof.
 Require CSEproof.
 Require Allocproof.
@@ -92,7 +90,6 @@ Parameter print_Clight: Clight.program -> unit.
 Parameter print_Cminor: Cminor.program -> unit.
 Parameter print_RTL: RTL.fundef -> unit.
 Parameter print_RTL_tailcall: RTL.fundef -> unit.
-Parameter print_RTL_castopt: RTL.fundef -> unit.
 Parameter print_RTL_constprop: RTL.fundef -> unit.
 Parameter print_RTL_cse: RTL.fundef -> unit.
 Parameter print_LTLin: LTLin.fundef -> unit.
@@ -141,8 +138,6 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    @@ print print_RTL
    @@ Tailcall.transf_fundef
    @@ print print_RTL_tailcall
-   @@ CastOptim.transf_fundef
-   @@ print print_RTL_castopt
    @@ Constprop.transf_fundef
    @@ print print_RTL_constprop
    @@ CSE.transf_fundef
@@ -342,7 +337,6 @@ Proof.
              Stackingtyping.program_typing_preserved; intros.
 
   eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply CastOptimproof.transf_program_correct.
   eapply compose_forward_simulation. apply Constpropproof.transf_program_correct. 
   eapply compose_forward_simulation. apply CSEproof.transf_program_correct.
   eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.

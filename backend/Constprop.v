@@ -50,14 +50,16 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     apply Float.eq_dec.
     apply Int.eq_dec.
     apply ident_eq.
+    apply Int.eq_dec.
   Qed.
   Definition beq (x y: t) := if eq_dec x y then true else false.
   Lemma beq_correct: forall x y, beq x y = true -> x = y.
   Proof.
     unfold beq; intros.  destruct (eq_dec x y). auto. congruence.
   Qed.
-  Definition ge (x y: t) : Prop :=
-    x = Unknown \/ y = Novalue \/ x = y.
+
+  Definition ge (x y: t) : Prop := x = Unknown \/ y = Novalue \/ x = y.
+
   Lemma ge_refl: forall x y, eq x y -> ge x y.
   Proof.
     unfold eq, ge; tauto.
@@ -165,7 +167,7 @@ Definition transf_ros (app: D.t) (ros: reg + ident) : reg + ident :=
   match ros with
   | inl r =>
       match D.get r app with
-      | S symb ofs => if Int.eq ofs Int.zero then inr _ symb else ros
+      | G symb ofs => if Int.eq ofs Int.zero then inr _ symb else ros
       | _ => ros
       end
   | inr s => ros
@@ -179,17 +181,19 @@ Definition transf_instr (app: D.t) (instr: instruction) :=
           Iop (Ointconst n) nil res s
       | F n =>
           Iop (Ofloatconst n) nil res s
-      | S symb ofs =>
+      | G symb ofs =>
           Iop (Oaddrsymbol symb ofs) nil res s
+      | S ofs =>
+          Iop (Oaddrstack ofs) nil res s
       | _ =>
-          let (op', args') := op_strength_reduction (approx_reg app) op args in
+          let (op', args') := op_strength_reduction op args (approx_regs app args) in
           Iop op' args' res s
       end
   | Iload chunk addr args dst s =>
-      let (addr', args') := addr_strength_reduction (approx_reg app) addr args in
+      let (addr', args') := addr_strength_reduction addr args (approx_regs app args) in
       Iload chunk addr' args' dst s      
   | Istore chunk addr args src s =>
-      let (addr', args') := addr_strength_reduction (approx_reg app) addr args in
+      let (addr', args') := addr_strength_reduction addr args (approx_regs app args) in
       Istore chunk addr' args' src s      
   | Icall sig ros args res s =>
       Icall sig (transf_ros app ros) args res s
@@ -200,17 +204,17 @@ Definition transf_instr (app: D.t) (instr: instruction) :=
       | Some b =>
           if b then Inop s1 else Inop s2
       | None =>
-          let (cond', args') := cond_strength_reduction (approx_reg app) cond args in
+          let (cond', args') := cond_strength_reduction cond args (approx_regs app args) in
           Icond cond' args' s1 s2
       end
   | Ijumptable arg tbl =>
-      match intval (approx_reg app) arg with
-      | Some n =>
+      match approx_reg app arg with
+      | I n =>
           match list_nth_z tbl (Int.unsigned n) with
           | Some s => Inop s
           | None => instr
           end
-      | None => instr
+      | _ => instr
       end
   | _ =>
       instr

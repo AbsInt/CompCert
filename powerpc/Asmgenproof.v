@@ -343,12 +343,21 @@ Proof.
 Qed.
 Hint Rewrite addimm_label: labels.
 
+Remark andimm_base_label:
+  forall r1 r2 n k, find_label lbl (andimm_base r1 r2 n k) = find_label lbl k.
+Proof.
+  intros; unfold andimm_base. 
+  case (Int.eq (high_u n) Int.zero). reflexivity.
+  case (Int.eq (low_u n) Int.zero). reflexivity.
+  autorewrite with labels. reflexivity.
+Qed.
+Hint Rewrite andimm_base_label: labels.
+
 Remark andimm_label:
   forall r1 r2 n k, find_label lbl (andimm r1 r2 n k) = find_label lbl k.
 Proof.
   intros; unfold andimm. 
-  case (Int.eq (high_u n) Int.zero). reflexivity.
-  case (Int.eq (low_u n) Int.zero). reflexivity.
+  case (is_rlw_mask n). reflexivity.
   autorewrite with labels. reflexivity.
 Qed.
 Hint Rewrite andimm_label: labels.
@@ -370,6 +379,15 @@ Proof.
   case (Int.eq (low_u n) Int.zero). reflexivity. reflexivity.
 Qed.
 Hint Rewrite xorimm_label: labels.
+
+Remark rolm_label:
+  forall r1 r2 amount mask k, find_label lbl (rolm r1 r2 amount mask k) = find_label lbl k.
+Proof.
+  intros; unfold rolm. 
+  case (is_rlw_mask mask). reflexivity.
+  simpl. autorewrite with labels. auto.
+Qed.
+Hint Rewrite rolm_label: labels.
 
 Remark loadind_label:
   forall base ofs ty dst k, find_label lbl (loadind base ofs ty dst k) = find_label lbl k.
@@ -405,7 +423,7 @@ Proof.
   case (Int.eq (high_u i) Int.zero). reflexivity. 
   autorewrite with labels; reflexivity.
   apply floatcomp_label. apply floatcomp_label.
-  apply andimm_label. apply andimm_label.
+  apply andimm_base_label. apply andimm_base_label.
 Qed.
 Hint Rewrite transl_cond_label: labels.
 

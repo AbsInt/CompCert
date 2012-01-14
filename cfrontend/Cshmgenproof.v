@@ -441,11 +441,10 @@ Proof.
   exists (Vint n); split; auto.
   exists (Vptr b0 ofs); split; auto. constructor.
   exists (Vptr b0 ofs); split; auto. constructor.
-  rewrite <- Float.cmp_ne_eq. destruct (Float.cmp Cne f Float.zero) as []_eqn. 
-  exists Vtrue; split. eapply eval_Ebinop; eauto with cshm. simpl. rewrite Heqb; auto.
-  constructor. apply Int.one_not_zero.
-  exists Vfalse; split. eapply eval_Ebinop; eauto with cshm. simpl. rewrite Heqb; auto.
-  constructor.
+  rewrite <- Float.cmp_ne_eq.
+  exists (Val.of_bool (Float.cmp Cne f Float.zero)); split.
+  econstructor; eauto with cshm. 
+  destruct (Float.cmp Cne f Float.zero); simpl; constructor. apply Int.one_not_zero.
 Qed.
 
 Lemma make_neg_correct:
@@ -607,15 +606,18 @@ Proof.
   inversion H8. eauto with cshm.
   (* pp ptr ptr *)
   inversion H10. eapply eval_Ebinop; eauto with cshm.
-  simpl. rewrite H3. unfold eq_block. rewrite H9. auto.
+  simpl. unfold Val.cmpu. simpl. rewrite H3. rewrite H9. auto.
   inversion H10. eapply eval_Ebinop; eauto with cshm.
-  simpl. rewrite H3. unfold eq_block. rewrite H9. auto.
+  simpl. unfold Val.cmpu. simpl. rewrite H3. rewrite H9.
+  destruct cmp; simpl in *; inv H; auto.
   (* pp ptr int *)
   inversion H9. eapply eval_Ebinop; eauto with cshm.
-  simpl. unfold eval_compare_null. rewrite H8. auto.
+  simpl. unfold Val.cmpu. simpl. rewrite H8.
+  destruct cmp; simpl in *; inv H; auto.
   (* pp int ptr *)
   inversion H9. eapply eval_Ebinop; eauto with cshm.
-  simpl. unfold eval_compare_null. rewrite H8. auto.
+  simpl. unfold Val.cmpu. simpl. rewrite H8.
+  destruct cmp; simpl in *; inv H; auto.
   (* ff *)
   inversion H8. eauto with cshm.
   (* if *)

@@ -496,10 +496,10 @@ Definition compare_sint (rs: regset) (v1 v2: val) :=
     #CR0_2 <- (Val.cmp Ceq v1 v2)
     #CR0_3 <- Vundef.
 
-Definition compare_uint (rs: regset) (v1 v2: val) :=
-  rs#CR0_0 <- (Val.cmpu Clt v1 v2)
-    #CR0_1 <- (Val.cmpu Cgt v1 v2)
-    #CR0_2 <- (Val.cmpu Ceq v1 v2)
+Definition compare_uint (rs: regset) (m: mem) (v1 v2: val) :=
+  rs#CR0_0 <- (Val.cmpu (Mem.valid_pointer m) Clt v1 v2)
+    #CR0_1 <- (Val.cmpu (Mem.valid_pointer m) Cgt v1 v2)
+    #CR0_2 <- (Val.cmpu (Mem.valid_pointer m) Ceq v1 v2)
     #CR0_3 <- Vundef.
 
 Definition compare_float (rs: regset) (v1 v2: val) :=
@@ -596,9 +596,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | _ => Error
       end
   | Pcmplw r1 r2 =>
-      OK (nextinstr (compare_uint rs rs#r1 rs#r2)) m
+      OK (nextinstr (compare_uint rs m rs#r1 rs#r2)) m
   | Pcmplwi r1 cst =>
-      OK (nextinstr (compare_uint rs rs#r1 (const_low cst))) m
+      OK (nextinstr (compare_uint rs m rs#r1 (const_low cst))) m
   | Pcmpw r1 r2 =>
       OK (nextinstr (compare_sint rs rs#r1 rs#r2)) m
   | Pcmpwi r1 cst =>
@@ -606,9 +606,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pcror bd b1 b2 =>
       OK (nextinstr (rs#(reg_of_crbit bd) <- (Val.or rs#(reg_of_crbit b1) rs#(reg_of_crbit b2)))) m
   | Pdivw rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.divs rs#r1 rs#r2))) m
+      OK (nextinstr (rs#rd <- (Val.maketotal (Val.divs rs#r1 rs#r2)))) m
   | Pdivwu rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.divu rs#r1 rs#r2))) m
+      OK (nextinstr (rs#rd <- (Val.maketotal (Val.divu rs#r1 rs#r2)))) m
   | Peqv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.notint (Val.xor rs#r1 rs#r2)))) m
   | Pextsb rd r1 =>
@@ -635,7 +635,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfcmpu r1 r2 =>
       OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfcti rd r1 =>
-      OK (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.intoffloat rs#r1))) m
+      OK (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfmadd rd r1 r2 r3 =>

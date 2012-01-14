@@ -112,6 +112,11 @@ Lemma addimm_tail:
 Proof. unfold addimm; intros; IsTail. Qed.
 Hint Resolve addimm_tail: ppcretaddr.
 
+Lemma andimm_base_tail:
+  forall r1 r2 n k, is_tail k (andimm_base r1 r2 n k).
+Proof. unfold andimm_base; intros; IsTail. Qed.
+Hint Resolve andimm_base_tail: ppcretaddr.
+
 Lemma andimm_tail:
   forall r1 r2 n k, is_tail k (andimm r1 r2 n k).
 Proof. unfold andimm; intros; IsTail. Qed.
@@ -126,6 +131,11 @@ Lemma xorimm_tail:
   forall r1 r2 n k, is_tail k (xorimm r1 r2 n k).
 Proof. unfold xorimm; intros; IsTail. Qed.
 Hint Resolve xorimm_tail: ppcretaddr.
+
+Lemma rolm_tail:
+  forall r1 r2 amount mask k, is_tail k (rolm r1 r2 amount mask k).
+Proof. unfold rolm; intros; IsTail. Qed.
+Hint Resolve rolm_tail: ppcretaddr.
 
 Lemma loadind_tail:
   forall base ofs ty dst k, is_tail k (loadind base ofs ty dst k).

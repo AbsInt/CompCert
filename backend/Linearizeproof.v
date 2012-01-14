@@ -629,12 +629,14 @@ Proof.
   traceEq.
   econstructor; eauto.
 
-  (* Lcond true *)
+  (* Lcond *)
   destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
   simpl in EQ. subst c.
+  destruct b.
+  (* true *)
   assert (REACH': (reachable f)!!ifso = true).
   eapply reachable_successors; eauto. simpl; auto.
-  exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].
+  exploit find_label_lin_succ; eauto. inv WTI; eauto. intros [c'' AT'].
   destruct (starts_with ifso c').
   econstructor; split.
   eapply plus_left'.  
@@ -648,10 +650,7 @@ Proof.
   econstructor; split.
   apply plus_one. eapply exec_Lcond_true; eauto.
   econstructor; eauto.
-
-  (* Lcond false *)
-  destruct (find_label_lin_inv _ _ _ _ _ TRF H REACH AT) as [c' EQ].
-  simpl in EQ. subst c.
+  (* false *)
   assert (REACH': (reachable f)!!ifnot = true).
   eapply reachable_successors; eauto. simpl; auto.
   exploit find_label_lin_succ; eauto. inv WTI; auto. intros [c'' AT'].

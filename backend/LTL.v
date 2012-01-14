@@ -207,18 +207,13 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge (map rs args) m t v m' ->
       step (State s f sp pc rs m)
          t (State s f sp pc' (Locmap.set res v rs) m')
-  | exec_Lcond_true:
-      forall s f sp pc rs m cond args ifso ifnot,
+  | exec_Lcond:
+      forall s f sp pc rs m cond args ifso ifnot b pc',
       (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) m = Some true ->
+      eval_condition cond (map rs args) m = Some b ->
+      pc' = (if b then ifso else ifnot) ->
       step (State s f sp pc rs m)
-        E0 (State s f sp ifso (undef_temps rs) m)
-  | exec_Lcond_false:
-      forall s f sp pc rs m cond args ifso ifnot,
-      (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) m = Some false ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp ifnot (undef_temps rs) m)
+        E0 (State s f sp pc' (undef_temps rs) m)
   | exec_Ljumptable:
       forall s f sp pc rs m arg tbl n pc',
       (fn_code f)!pc = Some(Ljumptable arg tbl) ->

@@ -508,17 +508,10 @@ Proof.
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto. apply regset_set; auto.
 
-(* cond true *)
+(* cond *)
   TransfInstr. 
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) ifso rs' m'); split.
-  eapply exec_Icond_true; eauto.
-  apply eval_condition_lessdef with (rs##args) m; auto. apply regset_get_list; auto.
-  constructor; auto. 
-
-(* cond false *)
-  TransfInstr. 
-  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) ifnot rs' m'); split.
-  eapply exec_Icond_false; eauto.
+  left. exists (State s' (transf_function f) (Vptr sp0 Int.zero) (if b then ifso else ifnot) rs' m'); split.
+  eapply exec_Icond; eauto.
   apply eval_condition_lessdef with (rs##args) m; auto. apply regset_get_list; auto.
   constructor; auto. 
 

@@ -54,8 +54,6 @@ Definition Vfalse: val := Vint Int.zero.
 
 Module Val.
 
-Definition of_bool (b: bool): val := if b then Vtrue else Vfalse.
-
 Definition has_type (v: val) (t: typ) : Prop :=
   match v, t with
   | Vundef, _ => True
@@ -115,28 +113,31 @@ Definition absf (v: val) : val :=
   | _ => Vundef
   end.
 
-Definition intoffloat (v: val) : val :=
+Definition maketotal (ov: option val) : val :=
+  match ov with Some v => v | None => Vundef end.
+
+Definition intoffloat (v: val) : option val :=
   match v with
-  | Vfloat f => match Float.intoffloat f with Some n => Vint n | None => Vundef end
-  | _ => Vundef
+  | Vfloat f => option_map Vint (Float.intoffloat f)
+  | _ => None
   end.
 
-Definition intuoffloat (v: val) : val :=
+Definition intuoffloat (v: val) : option val :=
   match v with
-  | Vfloat f => match Float.intuoffloat f with Some n => Vint n | None => Vundef end
-  | _ => Vundef
+  | Vfloat f => option_map Vint (Float.intuoffloat f)
+  | _ => None
   end.
 
-Definition floatofint (v: val) : val :=
+Definition floatofint (v: val) : option val :=
   match v with
-  | Vint n => Vfloat (Float.floatofint n)
-  | _ => Vundef
+  | Vint n => Some (Vfloat (Float.floatofint n))
+  | _ => None
   end.
 
-Definition floatofintu (v: val) : val :=
+Definition floatofintu (v: val) : option val :=
   match v with
-  | Vint n => Vfloat (Float.floatofintu n)
-  | _ => Vundef
+  | Vint n => Some (Vfloat (Float.floatofintu n))
+  | _ => None
   end.
 
 Definition floatofwords (v1 v2: val) : val :=
@@ -145,11 +146,19 @@ Definition floatofwords (v1 v2: val) : val :=
   | _, _ => Vundef
   end.
 
-Definition notint (v: val) : val :=
+Definition negint (v: val) : val :=
   match v with
-  | Vint n => Vint (Int.xor n Int.mone)
+  | Vint n => Vint (Int.neg n)
   | _ => Vundef
   end.
+
+Definition notint (v: val) : val :=
+  match v with
+  | Vint n => Vint (Int.not n)
+  | _ => Vundef
+  end.
+
+Definition of_bool (b: bool): val := if b then Vtrue else Vfalse.
 
 Definition notbool (v: val) : val :=
   match v with
@@ -199,32 +208,32 @@ Definition mul (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
-Definition divs (v1 v2: val): val :=
+Definition divs (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then Vundef else Vint(Int.divs n1 n2)
-  | _, _ => Vundef
+      if Int.eq n2 Int.zero then None else Some(Vint(Int.divs n1 n2))
+  | _, _ => None
   end.
 
-Definition mods (v1 v2: val): val :=
+Definition mods (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then Vundef else Vint(Int.mods n1 n2)
-  | _, _ => Vundef
+      if Int.eq n2 Int.zero then None else Some(Vint(Int.mods n1 n2))
+  | _, _ => None
   end.
 
-Definition divu (v1 v2: val): val :=
+Definition divu (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then Vundef else Vint(Int.divu n1 n2)
-  | _, _ => Vundef
+      if Int.eq n2 Int.zero then None else Some(Vint(Int.divu n1 n2))
+  | _, _ => None
   end.
 
-Definition modu (v1 v2: val): val :=
+Definition modu (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-      if Int.eq n2 Int.zero then Vundef else Vint(Int.modu n1 n2)
-  | _, _ => Vundef
+      if Int.eq n2 Int.zero then None else Some(Vint(Int.modu n1 n2))
+  | _, _ => None
   end.
 
 Definition add_carry (v1 v2 cin: val): val :=
@@ -278,13 +287,13 @@ Definition shr_carry (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
-Definition shrx (v1 v2: val): val :=
+Definition shrx (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-     if Int.ltu n2 Int.iwordsize
-     then Vint(Int.shrx n1 n2)
-     else Vundef
-  | _, _ => Vundef
+     if Int.ltu n2 (Int.repr 31)
+     then Some(Vint(Int.shrx n1 n2))
+     else None
+  | _, _ => None
   end.
 
 Definition shru (v1 v2: val): val :=
@@ -335,47 +344,59 @@ Definition divf (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
-Definition cmp_mismatch (c: comparison): val :=
-  match c with
-  | Ceq => Vfalse
-  | Cne => Vtrue
-  | _   => Vundef
-  end.
+Section COMPARISONS.
 
-Definition cmp (c: comparison) (v1 v2: val): val :=
+Variable valid_ptr: block -> Z -> bool.
+
+Definition cmp_bool (c: comparison) (v1 v2: val): option bool :=
   match v1, v2 with
-  | Vint n1, Vint n2 => of_bool (Int.cmp c n1 n2)
-  | Vint n1, Vptr b2 ofs2 =>
-      if Int.eq n1 Int.zero then cmp_mismatch c else Vundef
-  | Vptr b1 ofs1, Vptr b2 ofs2 =>
-      if zeq b1 b2
-      then of_bool (Int.cmp c ofs1 ofs2)
-      else cmp_mismatch c
-  | Vptr b1 ofs1, Vint n2 =>
-      if Int.eq n2 Int.zero then cmp_mismatch c else Vundef
-  | _, _ => Vundef
+  | Vint n1, Vint n2 => Some (Int.cmp c n1 n2)
+  | _, _ => None
   end.
 
-Definition cmpu (c: comparison) (v1 v2: val): val :=
+Definition cmp_different_blocks (c: comparison): option bool :=
+  match c with
+  | Ceq => Some false
+  | Cne => Some true
+  | _   => None
+  end.
+
+Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
   match v1, v2 with
   | Vint n1, Vint n2 =>
-      of_bool (Int.cmpu c n1 n2)
+      Some (Int.cmpu c n1 n2)
   | Vint n1, Vptr b2 ofs2 =>
-      if Int.eq n1 Int.zero then cmp_mismatch c else Vundef
+      if Int.eq n1 Int.zero then cmp_different_blocks c else None
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
-      if zeq b1 b2
-      then of_bool (Int.cmpu c ofs1 ofs2)
-      else cmp_mismatch c
+      if valid_ptr b1 (Int.unsigned ofs1) && valid_ptr b2 (Int.unsigned ofs2) then
+        if zeq b1 b2
+        then Some (Int.cmpu c ofs1 ofs2)
+        else cmp_different_blocks c
+      else None
   | Vptr b1 ofs1, Vint n2 =>
-      if Int.eq n2 Int.zero then cmp_mismatch c else Vundef
-  | _, _ => Vundef
+      if Int.eq n2 Int.zero then cmp_different_blocks c else None
+  | _, _ => None
   end.
 
-Definition cmpf (c: comparison) (v1 v2: val): val :=
+Definition cmpf_bool (c: comparison) (v1 v2: val): option bool :=
   match v1, v2 with
-  | Vfloat f1, Vfloat f2 => of_bool (Float.cmp c f1 f2)
-  | _, _ => Vundef
+  | Vfloat f1, Vfloat f2 => Some (Float.cmp c f1 f2)
+  | _, _ => None
   end.
+
+Definition of_optbool (ob: option bool): val :=
+  match ob with Some true => Vtrue | Some false => Vfalse | None => Vundef end.
+
+Definition cmp (c: comparison) (v1 v2: val): val :=
+  of_optbool (cmp_bool c v1 v2).
+
+Definition cmpu (c: comparison) (v1 v2: val): val :=
+  of_optbool (cmpu_bool c v1 v2).
+
+Definition cmpf (c: comparison) (v1 v2: val): val :=
+  of_optbool (cmpf_bool c v1 v2).
+
+End COMPARISONS.
 
 (** [load_result] is used in the memory model (library [Mem])
   to post-process the results of a memory read.  For instance,
@@ -483,6 +504,12 @@ Proof.
   destruct b; reflexivity.
 Qed.
 
+Theorem notbool_negb_3:
+  forall ob, of_optbool (option_map negb ob) = notbool (of_optbool ob).
+Proof.
+  destruct ob; auto. destruct b; auto.
+Qed.
+
 Theorem notbool_idem2:
   forall b, notbool(notbool(of_bool b)) = of_bool b.
 Proof.
@@ -494,6 +521,12 @@ Theorem notbool_idem3:
 Proof.
   destruct x; simpl; auto. 
   case (Int.eq i Int.zero); reflexivity.
+Qed.
+
+Theorem notbool_idem4:
+  forall ob, notbool (notbool (of_optbool ob)) = of_optbool ob.
+Proof.
+  destruct ob; auto. destruct b; auto.
 Qed.
 
 Theorem add_commut: forall x y, add x y = add y x.
@@ -612,59 +645,59 @@ Proof.
 Qed.  
 
 Theorem mods_divs:
-  forall x y, mods x y = sub x (mul (divs x y) y).
+  forall x y z,
+  mods x y = Some z -> exists v, divs x y = Some v /\ z = sub x (mul v y).
 Proof.
-  destruct x; destruct y; simpl; auto.
-  case (Int.eq i0 Int.zero); simpl. auto. decEq. apply Int.mods_divs.
+  intros. destruct x; destruct y; simpl in *; try discriminate.
+  destruct (Int.eq i0 Int.zero); inv H. 
+  exists (Vint (Int.divs i i0)); split; auto. 
+  simpl. rewrite Int.mods_divs. auto.
 Qed.
 
 Theorem modu_divu:
-  forall x y, modu x y = sub x (mul (divu x y) y).
+  forall x y z,
+  modu x y = Some z -> exists v, divu x y = Some v /\ z = sub x (mul v y).
 Proof.
-  destruct x; destruct y; simpl; auto.
-  generalize (Int.eq_spec i0 Int.zero);
-  case (Int.eq i0 Int.zero); simpl. auto. 
-  intro. decEq. apply Int.modu_divu. auto.
+  intros. destruct x; destruct y; simpl in *; try discriminate.
+  destruct (Int.eq i0 Int.zero) as []_eqn; inv H. 
+  exists (Vint (Int.divu i i0)); split; auto. 
+  simpl. rewrite Int.modu_divu. auto.
+  generalize (Int.eq_spec i0 Int.zero). rewrite Heqb; auto. 
 Qed.
 
 Theorem divs_pow2:
-  forall x n logn,
-  Int.is_power2 n = Some logn ->
-  divs x (Vint n) = shrx x (Vint logn).
+  forall x n logn y,
+  Int.is_power2 n = Some logn -> Int.ltu logn (Int.repr 31) = true ->
+  divs x (Vint n) = Some y ->
+  shrx x (Vint logn) = Some y.
 Proof.
-  intros; destruct x; simpl; auto.
-  change 32 with (Z_of_nat Int.wordsize).
-  rewrite (Int.is_power2_range _ _ H). 
-  generalize (Int.eq_spec n Int.zero);
-  case (Int.eq n Int.zero); intro.
-  subst n. compute in H. discriminate.
-  decEq. apply Int.divs_pow2. auto.
+  intros; destruct x; simpl in H1; inv H1.
+  destruct (Int.eq n Int.zero); inv H3. 
+  simpl. rewrite H0. decEq. decEq. symmetry. apply Int.divs_pow2. auto.
 Qed.
 
 Theorem divu_pow2:
-  forall x n logn,
+  forall x n logn y,
   Int.is_power2 n = Some logn ->
-  divu x (Vint n) = shru x (Vint logn).
+  divu x (Vint n) = Some y ->
+  shru x (Vint logn) = y.
 Proof.
-  intros; destruct x; simpl; auto.
-  change 32 with (Z_of_nat Int.wordsize).
-  rewrite (Int.is_power2_range _ _ H). 
-  generalize (Int.eq_spec n Int.zero);
-  case (Int.eq n Int.zero); intro.
-  subst n. compute in H. discriminate.
-  decEq. apply Int.divu_pow2. auto.
+  intros; destruct x; simpl in H0; inv H0.
+  destruct (Int.eq n Int.zero); inv H2. 
+  simpl. 
+  rewrite (Int.is_power2_range _ _ H).
+  decEq. symmetry. apply Int.divu_pow2. auto.
 Qed.
 
 Theorem modu_pow2:
-  forall x n logn,
+  forall x n logn y,
   Int.is_power2 n = Some logn ->
-  modu x (Vint n) = and x (Vint (Int.sub n Int.one)).
+  modu x (Vint n) = Some y ->
+  and x (Vint (Int.sub n Int.one)) = y.
 Proof.
-  intros; destruct x; simpl; auto.
-  generalize (Int.eq_spec n Int.zero);
-  case (Int.eq n Int.zero); intro.
-  subst n. compute in H. discriminate.
-  decEq. eapply Int.modu_and; eauto.
+  intros; destruct x; simpl in H0; inv H0.
+  destruct (Int.eq n Int.zero); inv H2. 
+  simpl. decEq. symmetry. eapply Int.modu_and; eauto.
 Qed.
 
 Theorem and_commut: forall x y, and x y = and y x.
@@ -700,7 +733,7 @@ Proof.
   decEq. apply Int.xor_assoc.
 Qed.
 
-Theorem shl_mul: forall x y, Val.mul x (Val.shl Vone y) = Val.shl x y.
+Theorem shl_mul: forall x y, mul x (shl Vone y) = shl x y.
 Proof.
   destruct x; destruct y; simpl; auto. 
   case (Int.ltu i0 Int.iwordsize); auto.
@@ -726,12 +759,32 @@ Proof.
 Qed.
 
 Theorem shrx_carry:
-  forall x y,
-  add (shr x y) (shr_carry x y) = shrx x y.
+  forall x y z,
+  shrx x y = Some z ->
+  add (shr x y) (shr_carry x y) = z.
 Proof.
-  destruct x; destruct y; simpl; auto.
-  case (Int.ltu i0 Int.iwordsize); auto.
-  simpl. decEq. apply Int.shrx_carry.
+  intros. destruct x; destruct y; simpl in H; inv H. 
+  destruct (Int.ltu i0 (Int.repr 31)) as []_eqn; inv H1.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 31)) with 31. intros.
+  assert (Int.ltu i0 Int.iwordsize = true). 
+    unfold Int.ltu. apply zlt_true. change (Int.unsigned Int.iwordsize) with 32. omega. 
+  simpl. rewrite H0. simpl. decEq. rewrite Int.shrx_carry; auto.
+Qed.
+
+Theorem shrx_shr:
+  forall x y z,
+  shrx x y = Some z ->
+  exists p, exists q,
+    x = Vint p /\ y = Vint q /\
+    z = shr (if Int.lt p Int.zero then add x (Vint (Int.sub (Int.shl Int.one q) Int.one)) else x) (Vint q).
+Proof.
+  intros. destruct x; destruct y; simpl in H; inv H. 
+  destruct (Int.ltu i0 (Int.repr 31)) as []_eqn; inv H1.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 31)) with 31. intros.
+  assert (Int.ltu i0 Int.iwordsize = true). 
+    unfold Int.ltu. apply zlt_true. change (Int.unsigned Int.iwordsize) with 32. omega. 
+  exists i; exists i0; intuition. 
+  rewrite Int.shrx_shr; auto. destruct (Int.lt i Int.zero); simpl; rewrite H0; auto.
 Qed.
 
 Theorem or_rolm:
@@ -765,173 +818,112 @@ Proof.
   destruct x; destruct y; simpl; auto. decEq. apply Float.addf_commut.
 Qed.
 
-Lemma negate_cmp_mismatch:
-  forall c,
-  cmp_mismatch (negate_comparison c) = notbool(cmp_mismatch c).
+Theorem negate_cmp_bool:
+  forall c x y, cmp_bool (negate_comparison c) x y = option_map negb (cmp_bool c x y).
 Proof.
-  destruct c; reflexivity.
+  destruct x; destruct y; simpl; auto. rewrite Int.negate_cmp. auto.
+Qed.
+
+Theorem negate_cmpu_bool:
+  forall valid_ptr c x y,
+  cmpu_bool valid_ptr (negate_comparison c) x y = option_map negb (cmpu_bool valid_ptr c x y).
+Proof.
+  assert (forall c,
+    cmp_different_blocks (negate_comparison c) = option_map negb (cmp_different_blocks c)).
+  destruct c; auto. 
+  destruct x; destruct y; simpl; auto.
+  rewrite Int.negate_cmpu. auto.
+  destruct (Int.eq i Int.zero); auto. 
+  destruct (Int.eq i0 Int.zero); auto.
+  destruct (valid_ptr b (Int.unsigned i) && valid_ptr b0 (Int.unsigned i0)); auto.
+  destruct (zeq b b0); auto. rewrite Int.negate_cmpu. auto.
+Qed.
+
+Lemma not_of_optbool:
+  forall ob, of_optbool (option_map negb ob) = notbool (of_optbool ob).
+Proof.
+  destruct ob; auto. destruct b; auto. 
 Qed.
 
 Theorem negate_cmp:
   forall c x y,
   cmp (negate_comparison c) x y = notbool (cmp c x y).
 Proof.
-  destruct x; destruct y; simpl; auto.
-  rewrite Int.negate_cmp. apply notbool_negb_1.
-  case (Int.eq i Int.zero). apply negate_cmp_mismatch. reflexivity.
-  case (Int.eq i0 Int.zero). apply negate_cmp_mismatch. reflexivity.
-  case (zeq b b0); intro.
-  rewrite Int.negate_cmp. apply notbool_negb_1.
-  apply negate_cmp_mismatch.
+  intros. unfold cmp. rewrite negate_cmp_bool. apply not_of_optbool.
 Qed.
 
 Theorem negate_cmpu:
-  forall c x y,
-  cmpu (negate_comparison c) x y = notbool (cmpu c x y).
+  forall valid_ptr c x y,
+  cmpu valid_ptr (negate_comparison c) x y = notbool (cmpu valid_ptr c x y).
 Proof.
-  destruct x; destruct y; simpl; auto.
-  rewrite Int.negate_cmpu. apply notbool_negb_1.
-  case (Int.eq i Int.zero). apply negate_cmp_mismatch. reflexivity.
-  case (Int.eq i0 Int.zero). apply negate_cmp_mismatch. reflexivity.
-  case (zeq b b0); intro.
-  rewrite Int.negate_cmpu. apply notbool_negb_1.
-  apply negate_cmp_mismatch.
+  intros. unfold cmpu. rewrite negate_cmpu_bool. apply not_of_optbool.
 Qed.
 
-Lemma swap_cmp_mismatch:
-  forall c, cmp_mismatch (swap_comparison c) = cmp_mismatch c.
-Proof.
-  destruct c; reflexivity.
-Qed.
-  
-Theorem swap_cmp:
+Theorem swap_cmp_bool:
   forall c x y,
-  cmp (swap_comparison c) x y = cmp c y x.
+  cmp_bool (swap_comparison c) x y = cmp_bool c y x.
 Proof.
-  destruct x; destruct y; simpl; auto.
-  rewrite Int.swap_cmp. auto.
-  case (Int.eq i Int.zero). apply swap_cmp_mismatch. auto.
-  case (Int.eq i0 Int.zero). apply swap_cmp_mismatch. auto.
-  case (zeq b b0); intro.
-  subst b0. rewrite zeq_true. rewrite Int.swap_cmp. auto.
-  rewrite zeq_false. apply swap_cmp_mismatch. auto.
+  destruct x; destruct y; simpl; auto. rewrite Int.swap_cmp. auto.
 Qed.
 
-Theorem swap_cmpu:
-  forall c x y,
-  cmpu (swap_comparison c) x y = cmpu c y x.
+Theorem swap_cmpu_bool:
+  forall valid_ptr c x y,
+  cmpu_bool valid_ptr (swap_comparison c) x y = cmpu_bool valid_ptr c y x.
 Proof.
+  assert (forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
+    destruct c; auto.
   destruct x; destruct y; simpl; auto.
   rewrite Int.swap_cmpu. auto.
-  case (Int.eq i Int.zero). apply swap_cmp_mismatch. auto.
-  case (Int.eq i0 Int.zero). apply swap_cmp_mismatch. auto.
-  case (zeq b b0); intro.
-  subst b0. rewrite zeq_true. rewrite Int.swap_cmpu. auto.
-  rewrite zeq_false. apply swap_cmp_mismatch. auto.
+  case (Int.eq i Int.zero); auto.
+  case (Int.eq i0 Int.zero); auto.
+  destruct (valid_ptr b (Int.unsigned i)); destruct (valid_ptr b0 (Int.unsigned i0)); auto.
+  simpl. destruct (zeq b b0); subst. 
+  rewrite zeq_true. rewrite Int.swap_cmpu. auto.
+  rewrite zeq_false; auto.
 Qed.
 
 Theorem negate_cmpf_eq:
   forall v1 v2, notbool (cmpf Cne v1 v2) = cmpf Ceq v1 v2.
 Proof.
-  destruct v1; destruct v2; simpl; auto.
-  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1. 
-  apply notbool_idem2.
+  destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool. 
+  rewrite Float.cmp_ne_eq. destruct (Float.cmp Ceq f f0); auto.
 Qed.
 
 Theorem negate_cmpf_ne:
   forall v1 v2, notbool (cmpf Ceq v1 v2) = cmpf Cne v1 v2.
 Proof.
-  destruct v1; destruct v2; simpl; auto.
-  rewrite Float.cmp_ne_eq. rewrite notbool_negb_1. auto. 
-Qed.
-
-Lemma or_of_bool:
-  forall b1 b2, or (of_bool b1) (of_bool b2) = of_bool (b1 || b2).
-Proof.
-  destruct b1; destruct b2; reflexivity.
+  destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool. 
+  rewrite Float.cmp_ne_eq. destruct (Float.cmp Ceq f f0); auto.
 Qed.
 
 Theorem cmpf_le:
   forall v1 v2, cmpf Cle v1 v2 = or (cmpf Clt v1 v2) (cmpf Ceq v1 v2).
 Proof.
-  destruct v1; destruct v2; simpl; auto.
-  rewrite or_of_bool. decEq. apply Float.cmp_le_lt_eq.
+  destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool. 
+  rewrite Float.cmp_le_lt_eq.
+  destruct (Float.cmp Clt f f0); destruct (Float.cmp Ceq f f0); auto.
 Qed.
 
 Theorem cmpf_ge:
   forall v1 v2, cmpf Cge v1 v2 = or (cmpf Cgt v1 v2) (cmpf Ceq v1 v2).
 Proof.
-  destruct v1; destruct v2; simpl; auto.
-  rewrite or_of_bool. decEq. apply Float.cmp_ge_gt_eq.
+  destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool. 
+  rewrite Float.cmp_ge_gt_eq.
+  destruct (Float.cmp Cgt f f0); destruct (Float.cmp Ceq f f0); auto.
 Qed.
 
-Definition is_bool (v: val) :=
-  v = Vundef \/ v = Vtrue \/ v = Vfalse.
-
-Lemma of_bool_is_bool:
-  forall b, is_bool (of_bool b).
+Lemma zero_ext_and:
+  forall n v, 
+  0 < n < Z_of_nat Int.wordsize ->
+  Val.zero_ext n v = Val.and v (Vint (Int.repr (two_p n - 1))).
 Proof.
-  destruct b; unfold is_bool; simpl; tauto.
-Qed.
-
-Lemma undef_is_bool: is_bool Vundef.
-Proof.
-  unfold is_bool; tauto.
-Qed.
-
-Lemma cmp_mismatch_is_bool:
-  forall c, is_bool (cmp_mismatch c).
-Proof.
-  destruct c; simpl; unfold is_bool; tauto.
-Qed.
-
-Lemma cmp_is_bool:
-  forall c v1 v2, is_bool (cmp c v1 v2).
-Proof.
-  destruct v1; destruct v2; simpl; try apply undef_is_bool.
-  apply of_bool_is_bool.
-  case (Int.eq i Int.zero). apply cmp_mismatch_is_bool. apply undef_is_bool.
-  case (Int.eq i0 Int.zero). apply cmp_mismatch_is_bool. apply undef_is_bool.
-  case (zeq b b0); intro. apply of_bool_is_bool. apply cmp_mismatch_is_bool.
-Qed.
-
-Lemma cmpu_is_bool:
-  forall c v1 v2, is_bool (cmpu c v1 v2).
-Proof.
-  destruct v1; destruct v2; simpl; try apply undef_is_bool.
-  apply of_bool_is_bool.
-  case (Int.eq i Int.zero). apply cmp_mismatch_is_bool. apply undef_is_bool.
-  case (Int.eq i0 Int.zero). apply cmp_mismatch_is_bool. apply undef_is_bool.
-  case (zeq b b0); intro. apply of_bool_is_bool. apply cmp_mismatch_is_bool.
-Qed.
-
-Lemma cmpf_is_bool:
-  forall c v1 v2, is_bool (cmpf c v1 v2).
-Proof.
-  destruct v1; destruct v2; simpl;
-  apply undef_is_bool || apply of_bool_is_bool.
-Qed.
-
-Lemma notbool_is_bool:
-  forall v, is_bool (notbool v).
-Proof.
-  destruct v; simpl.
-  apply undef_is_bool. apply of_bool_is_bool. 
-  apply undef_is_bool. unfold is_bool; tauto.
-Qed.
-
-Lemma notbool_xor:
-  forall v, is_bool v -> v = xor (notbool v) Vone.
-Proof.
-  intros. elim H; intro.  
-  subst v. reflexivity.
-  elim H0; intro; subst v; reflexivity.
+  intros. destruct v; simpl; auto. decEq. apply Int.zero_ext_and; auto.
 Qed.
 
 Lemma rolm_lt_zero:
   forall v, rolm v Int.one Int.one = cmp Clt v (Vint Int.zero).
 Proof.
-  intros. destruct v; simpl; auto.
+  intros. unfold cmp, cmp_bool; destruct v; simpl; auto.
   transitivity (Vint (Int.shru i (Int.repr (Z_of_nat Int.wordsize - 1)))).
   decEq. symmetry. rewrite Int.shru_rolm. auto. auto. 
   rewrite Int.shru_lt_zero. destruct (Int.lt i Int.zero); auto. 
@@ -942,7 +934,7 @@ Lemma rolm_ge_zero:
   xor (rolm v Int.one Int.one) (Vint Int.one) = cmp Cge v (Vint Int.zero).
 Proof.
   intros. rewrite rolm_lt_zero. destruct v; simpl; auto.
-  destruct (Int.lt i Int.zero); auto.
+  unfold cmp; simpl. destruct (Int.lt i Int.zero); auto.
 Qed.
 
 (** The ``is less defined'' relation between values. 
@@ -952,6 +944,12 @@ Qed.
 Inductive lessdef: val -> val -> Prop :=
   | lessdef_refl: forall v, lessdef v v
   | lessdef_undef: forall v, lessdef Vundef v.
+
+Lemma lessdef_trans:
+  forall v1 v2 v3, lessdef v1 v2 -> lessdef v2 v3 -> lessdef v1 v3.
+Proof.
+  intros. inv H. auto. constructor.
+Qed.
 
 Inductive lessdef_list: list val -> list val -> Prop :=
   | lessdef_list_nil:
@@ -971,6 +969,8 @@ Proof.
   inv H. destruct IHlessdef_list. 
   left; congruence. tauto. tauto.
 Qed.
+
+(** Compatibility of operations with the [lessdef] relation. *)
 
 Lemma load_result_lessdef:
   forall chunk v1 v2,
@@ -995,6 +995,37 @@ Lemma singleoffloat_lessdef:
   forall v1 v2, lessdef v1 v2 -> lessdef (singleoffloat v1) (singleoffloat v2).
 Proof.
   intros; inv H; simpl; auto.
+Qed.
+
+Lemma add_lessdef:
+  forall v1 v1' v2 v2',
+  lessdef v1 v1' -> lessdef v2 v2' -> lessdef (add v1 v2) (add v1' v2').
+Proof.
+  intros. inv H. inv H0. auto. destruct v1'; simpl; auto. simpl; auto.
+Qed.
+
+Lemma cmpu_bool_lessdef:
+  forall valid_ptr valid_ptr' c v1 v1' v2 v2' b,
+  (forall b ofs, valid_ptr b ofs = true -> valid_ptr' b ofs = true) ->
+  lessdef v1 v1' -> lessdef v2 v2' ->
+  cmpu_bool valid_ptr c v1 v2 = Some b ->
+  cmpu_bool valid_ptr' c v1' v2' = Some b.
+Proof.
+  intros. 
+  destruct v1; simpl in H2; try discriminate;
+  destruct v2; simpl in H2; try discriminate;
+  inv H0; inv H1; simpl; auto.
+  destruct (valid_ptr b0 (Int.unsigned i)) as []_eqn; try discriminate.
+  destruct (valid_ptr b1 (Int.unsigned i0)) as []_eqn; try discriminate.
+  rewrite (H _ _ Heqb2). rewrite (H _ _ Heqb0). auto.
+Qed.
+
+Lemma of_optbool_lessdef:
+  forall ob ob',
+  (forall b, ob = Some b -> ob' = Some b) ->
+  lessdef (of_optbool ob) (of_optbool ob').
+Proof.
+  intros. destruct ob; simpl; auto. rewrite (H b); auto. 
 Qed.
 
 End Val.
@@ -1084,4 +1115,36 @@ Proof.
 Qed.
 
 Hint Resolve inject_incr_refl val_inject_incr val_list_inject_incr.
+
+Lemma val_inject_lessdef:
+  forall v1 v2, Val.lessdef v1 v2 <-> val_inject (fun b => Some(b, 0)) v1 v2.
+Proof.
+  intros; split; intros.
+  inv H; auto. destruct v2; econstructor; eauto. rewrite Int.add_zero; auto. 
+  inv H; auto. inv H0. rewrite Int.add_zero; auto.
+Qed.
+
+Lemma val_list_inject_lessdef:
+  forall vl1 vl2, Val.lessdef_list vl1 vl2 <-> val_list_inject (fun b => Some(b, 0)) vl1 vl2.
+Proof.
+  intros; split.
+  induction 1; constructor; auto. apply val_inject_lessdef; auto.
+  induction 1; constructor; auto. apply val_inject_lessdef; auto.
+Qed.
+
+(** The identity injection gives rise to the "less defined than" relation. *)
+
+Definition inject_id : meminj := fun b => Some(b, 0).
+
+Lemma val_inject_id:
+  forall v1 v2,
+  val_inject inject_id v1 v2 <-> Val.lessdef v1 v2.
+Proof.
+  intros; split; intros.
+  inv H. constructor. constructor.
+  unfold inject_id in H0. inv H0. rewrite Int.add_zero. constructor.
+  constructor.
+  inv H. destruct v2; econstructor. unfold inject_id; reflexivity. rewrite Int.add_zero; auto.
+  constructor.
+Qed.
 
