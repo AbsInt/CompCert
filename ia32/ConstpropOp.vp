@@ -70,58 +70,69 @@ Definition eval_static_condition_val (cond: condition) (vl: list approx) :=
 Definition eval_static_intoffloat (f: float) :=
   match Float.intoffloat f with Some x => I x | None => Unknown end.
 
+Nondetfunction eval_static_addressing (addr: addressing) (vl: list approx) :=
+  match addr, vl with
+  | Aindexed n, I n1::nil => I (Int.add n1 n)
+  | Aindexed n, G id ofs::nil => G id (Int.add ofs n)
+  | Aindexed n, S ofs::nil => S (Int.add ofs n)
+  | Aindexed2 n, I n1::I n2::nil => I (Int.add (Int.add n1 n2) n)
+  | Aindexed2 n, G id ofs::I n2::nil => G id (Int.add (Int.add ofs n2) n)
+  | Aindexed2 n, I n1::G id ofs::nil => G id (Int.add (Int.add ofs n1) n)
+  | Aindexed2 n, S ofs::I n2::nil => S (Int.add (Int.add ofs n2) n)
+  | Aindexed2 n, I n1::S ofs::nil => S (Int.add (Int.add ofs n1) n)
+  | Ascaled sc n, I n1::nil => I (Int.add (Int.mul n1 sc) n)
+  | Aindexed2scaled sc n, I n1::I n2::nil => I (Int.add n1 (Int.add (Int.mul n2 sc) n))
+  | Aindexed2scaled sc n, G id ofs::I n2::nil => G id (Int.add ofs (Int.add (Int.mul n2 sc) n))
+  | Aindexed2scaled sc n, S ofs::I n2::nil => S (Int.add ofs (Int.add (Int.mul n2 sc) n))
+  | Aglobal id ofs, nil => G id ofs
+  | Abased id ofs, I n1::nil => G id (Int.add ofs n1)
+  | Abasedscaled sc id ofs, I n1::nil => G id (Int.add ofs (Int.mul sc n1))
+  | Ainstack ofs, nil => S ofs
+  | _, _ => Unknown
+  end.
+
 Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   match op, vl with
   | Omove, v1::nil => v1
   | Ointconst n, nil => I n
   | Ofloatconst n, nil => F n
-  | Oaddrsymbol s n, nil => G s n
-  | Oaddrstack n, nil => S n
   | Ocast8signed, I n1 :: nil => I(Int.sign_ext 8 n1)
+  | Ocast8unsigned, I n1 :: nil => I(Int.zero_ext 8 n1)
   | Ocast16signed, I n1 :: nil => I(Int.sign_ext 16 n1)
-  | Oadd, I n1 :: I n2 :: nil => I(Int.add n1 n2)
-  | Oadd, G s1 n1 :: I n2 :: nil => G s1 (Int.add n1 n2)
-  | Oadd, I n1 :: G s2 n2 :: nil => G s2 (Int.add n1 n2)
-  | Oadd, S n1 :: I n2 :: nil => S (Int.add n1 n2)
-  | Oadd, I n1 :: S n2 :: nil => S (Int.add n1 n2)
-  | Oaddimm n, I n1 :: nil => I (Int.add n1 n)
-  | Oaddimm n, G s1 n1 :: nil => G s1 (Int.add n1 n)
-  | Oaddimm n, S n1 :: nil => S (Int.add n1 n)
+  | Ocast16unsigned, I n1 :: nil => I(Int.zero_ext 16 n1)
+  | Oneg, I n1 :: nil => I(Int.neg n1)
   | Osub, I n1 :: I n2 :: nil => I(Int.sub n1 n2)
   | Osub, G s1 n1 :: I n2 :: nil => G s1 (Int.sub n1 n2)
-  | Osub, S n1 :: I n2 :: nil => S (Int.sub n1 n2)
-  | Osubimm n, I n1 :: nil => I (Int.sub n n1)
   | Omul, I n1 :: I n2 :: nil => I(Int.mul n1 n2)
   | Omulimm n, I n1 :: nil => I(Int.mul n1 n)
   | Odiv, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.divs n1 n2)
   | Odivu, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.divu n1 n2)
+  | Omod, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.mods n1 n2)
+  | Omodu, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.modu n1 n2)
   | Oand, I n1 :: I n2 :: nil => I(Int.and n1 n2)
   | Oandimm n, I n1 :: nil => I(Int.and n1 n)
   | Oor, I n1 :: I n2 :: nil => I(Int.or n1 n2)
   | Oorimm n, I n1 :: nil => I(Int.or n1 n)
   | Oxor, I n1 :: I n2 :: nil => I(Int.xor n1 n2)
   | Oxorimm n, I n1 :: nil => I(Int.xor n1 n)
-  | Onand, I n1 :: I n2 :: nil => I(Int.xor (Int.and n1 n2) Int.mone)
-  | Onor, I n1 :: I n2 :: nil => I(Int.xor (Int.or n1 n2) Int.mone)
-  | Onxor, I n1 :: I n2 :: nil => I(Int.xor (Int.xor n1 n2) Int.mone)
   | Oshl, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shl n1 n2) else Unknown
+  | Oshlimm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.shl n1 n) else Unknown
   | Oshr, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shr n1 n2) else Unknown
   | Oshrimm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.shr n1 n) else Unknown
   | Oshrximm n, I n1 :: nil => if Int.ltu n (Int.repr 31) then I(Int.shrx n1 n) else Unknown
   | Oshru, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shru n1 n2) else Unknown
-  | Orolm amount mask, I n1 :: nil => I(Int.rolm n1 amount mask)
-  | Oroli amount mask, I n1 :: I n2 :: nil => I(Int.or (Int.and n1 (Int.not mask)) (Int.rolm n2 amount mask))
+  | Oshruimm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.shru n1 n) else Unknown
+  | Ororimm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.ror n1 n) else Unknown
+  | Olea mode, vl => eval_static_addressing mode vl
   | Onegf, F n1 :: nil => F(Float.neg n1)
   | Oabsf, F n1 :: nil => F(Float.abs n1)
   | Oaddf, F n1 :: F n2 :: nil => F(Float.add n1 n2)
   | Osubf, F n1 :: F n2 :: nil => F(Float.sub n1 n2)
   | Omulf, F n1 :: F n2 :: nil => F(Float.mul n1 n2)
   | Odivf, F n1 :: F n2 :: nil => F(Float.div n1 n2)
-  | Omuladdf, F n1 :: F n2 :: F n3 :: nil => F(Float.add (Float.mul n1 n2) n3)
-  | Omulsubf, F n1 :: F n2 :: F n3 :: nil => F(Float.sub (Float.mul n1 n2) n3)
   | Osingleoffloat, F n1 :: nil => F(Float.singleoffloat n1)
   | Ointoffloat, F n1 :: nil => eval_static_intoffloat n1
-  | Ofloatofwords, I n1 :: I n2 :: nil => F(Float.from_words n1 n2)
+  | Ofloatofint, I n1 :: nil => F(Float.floatofint n1)
   | Ocmp c, vl => eval_static_condition_val c vl
   | _, _ => Unknown
   end.
@@ -134,6 +145,8 @@ Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   large pattern-matchings expressed in indirect style. *)
 
 Section STRENGTH_REDUCTION.
+
+Variable app: reg -> approx.
 
 Nondetfunction cond_strength_reduction 
               (cond: condition) (args: list reg) (vl: list approx) :=
@@ -150,59 +163,79 @@ Nondetfunction cond_strength_reduction
       (cond, args)
   end.
 
+Nondetfunction addr_strength_reduction
+                (addr: addressing) (args: list reg) (vl: list approx) :=
+  match addr, args, vl with
+
+  | Aindexed ofs, r1 :: nil, G symb n :: nil =>
+      (Aglobal symb (Int.add n ofs), nil)
+  | Aindexed ofs, r1 :: nil, S n :: nil =>
+      (Ainstack (Int.add n ofs), nil)
+
+  | Aindexed2 ofs, r1 :: r2 :: nil, G symb n1 :: I n2 :: nil =>
+      (Aglobal symb (Int.add (Int.add n1 n2) ofs), nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, I n1 :: G symb n2 :: nil =>
+      (Aglobal symb (Int.add (Int.add n1 n2) ofs), nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, S n1 :: I n2 :: nil =>
+      (Ainstack (Int.add (Int.add n1 n2) ofs), nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, I n1 :: S n2 :: nil =>
+      (Ainstack (Int.add (Int.add n1 n2) ofs), nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, G symb n1 :: v2 :: nil =>
+      (Abased symb (Int.add n1 ofs), r2 :: nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, v1 :: G symb n2 :: nil =>
+      (Abased symb (Int.add n2 ofs), r1 :: nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
+      (Aindexed (Int.add n1 ofs), r2 :: nil)
+  | Aindexed2 ofs, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Aindexed (Int.add n2 ofs), r1 :: nil)
+
+  | Aindexed2scaled sc ofs, r1 :: r2 :: nil, G symb n1 :: I n2 :: nil =>
+      (Aglobal symb (Int.add (Int.add n1 (Int.mul n2 sc)) ofs), nil)
+  | Aindexed2scaled sc ofs, r1 :: r2 :: nil, G symb n1 :: v2 :: nil =>
+      (Abasedscaled sc symb (Int.add n1 ofs), r2 :: nil)
+  | Aindexed2scaled sc ofs, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Aindexed (Int.add (Int.mul n2 sc) ofs), r1 :: nil)
+
+  | Abased id ofs, r1 :: nil, I n1 :: nil =>
+      (Aglobal id (Int.add ofs n1), nil)
+
+  | Abasedscaled sc id ofs, r1 :: nil, I n1 :: nil =>
+      (Aglobal id (Int.add ofs (Int.mul sc n1)), nil)
+
+  | _, _ =>
+      (addr, args)
+  end.
+
 Definition make_addimm (n: int) (r: reg) :=
   if Int.eq n Int.zero
   then (Omove, r :: nil)
   else (Oaddimm n, r :: nil).
 
-Definition make_shlimm (n: int) (r1 r2: reg) :=
-  if Int.eq n Int.zero then
-    (Omove, r1 :: nil)
-  else if Int.ltu n Int.iwordsize then
-    (Orolm n (Int.shl Int.mone n), r1 :: nil)
-  else
-    (Oshl, r1 :: r2 :: nil).
+Definition make_shlimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero
+  then (Omove, r :: nil)
+  else (Oshlimm n, r :: nil).
 
-Definition make_shrimm (n: int) (r1 r2: reg) :=
-  if Int.eq n Int.zero then
-    (Omove, r1 :: nil)
-  else if Int.ltu n Int.iwordsize then
-    (Oshrimm n, r1 :: nil)
-  else
-    (Oshr, r1 :: r2 :: nil).
+Definition make_shrimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero
+  then (Omove, r :: nil)
+  else (Oshrimm n, r :: nil).
 
-Definition make_shruimm (n: int) (r1 r2: reg) :=
-  if Int.eq n Int.zero then
-    (Omove, r1 :: nil)
-  else if Int.ltu n Int.iwordsize then
-    (Orolm (Int.sub Int.iwordsize n) (Int.shru Int.mone n), r1 :: nil)
-  else
-    (Oshru, r1 :: r2 :: nil).
+Definition make_shruimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero
+  then (Omove, r :: nil)
+  else (Oshruimm n, r :: nil).
 
-Definition make_mulimm (n: int) (r1 r2: reg) :=
+Definition make_mulimm (n: int) (r: reg) :=
   if Int.eq n Int.zero then
     (Ointconst Int.zero, nil)
   else if Int.eq n Int.one then
-    (Omove, r1 :: nil)
+    (Omove, r :: nil)
   else
     match Int.is_power2 n with
-    | Some l => (Orolm l (Int.shl Int.mone l), r1 :: nil)
-    | None => (Omulimm n, r1 :: nil)
+    | Some l => make_shlimm l r
+    | None => (Omulimm n, r :: nil)
     end.
-
-Definition make_divimm (n: int) (r1 r2: reg) :=
-  match Int.is_power2 n with
-  | Some l => if Int.ltu l (Int.repr 31)
-              then (Oshrximm l, r1 :: nil)
-              else (Odiv, r1 :: r2 :: nil)
-  | None   => (Odiv, r1 :: r2 :: nil)
-  end.
-
-Definition make_divuimm (n: int) (r1 r2: reg) :=
-  match Int.is_power2 n with
-  | Some l => (Orolm (Int.sub Int.iwordsize l) (Int.shru Int.mone l), r1 :: nil)
-  | None   => (Odivu, r1 :: r2 :: nil)
-  end.
 
 Definition make_andimm (n: int) (r: reg) :=
   if Int.eq n Int.zero
@@ -220,58 +253,51 @@ Definition make_xorimm (n: int) (r: reg) :=
   then (Omove, r :: nil)
   else (Oxorimm n, r :: nil).
 
+Definition make_divimm n (r1 r2: reg) :=
+  match Int.is_power2 n with
+  | Some l => if Int.ltu l (Int.repr 31)
+              then (Oshrximm l, r1 :: nil)
+              else (Odiv, r1 :: r2 :: nil)
+  | None   => (Odiv, r1 :: r2 :: nil)
+  end.
+
+Definition make_divuimm n (r1 r2: reg) :=
+  match Int.is_power2 n with
+  | Some l => make_shruimm l r1
+  | None   => (Odivu, r1 :: r2 :: nil)
+  end.
+
+Definition make_moduimm n (r1 r2: reg) :=
+  match Int.is_power2 n with
+  | Some l => (Oandimm (Int.sub n Int.one), r1 :: nil)
+  | None   => (Omodu, r1 :: r2 :: nil)
+  end.
+
+(** We must be careful to preserve 2-address constraints over the
+    RTL code, which means that commutative operations cannot
+    be specialized if their first argument is a constant. *)
+
 Nondetfunction op_strength_reduction 
               (op: operation) (args: list reg) (vl: list approx) :=
   match op, args, vl with
-  | Oadd, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_addimm n1 r2
-  | Oadd, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm n2 r1
-  | Osub, r1 :: r2 :: nil, I n1 :: v2 :: nil => (Osubimm n1, r2 :: nil)
   | Osub, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (Int.neg n2) r1
-  | Omul, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_mulimm n1 r2 r1
-  | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1 r2
+  | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1
   | Odiv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divimm n2 r1 r2
   | Odivu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divuimm n2 r1 r2
-  | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2
+  | Omodu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_moduimm n2 r1 r2
   | Oand, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm n2 r1
-  | Oor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_orimm n1 r2
   | Oor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm n2 r1
-  | Oxor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_xorimm n1 r2
   | Oxor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm n2 r1
-  | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1 r2
-  | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
-  | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
+  | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1
+  | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1
+  | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1
+  | Olea addr, args, vl =>
+      let (addr', args') := addr_strength_reduction addr args vl in
+      (Olea addr', args')
   | Ocmp c, args, vl =>
-      let (c', args') := cond_strength_reduction c args vl in (Ocmp c', args')
+      let (c', args') := cond_strength_reduction c args vl in 
+      (Ocmp c', args')
   | _, _, _ => (op, args)
-  end.
-
-Nondetfunction addr_strength_reduction
-                (addr: addressing) (args: list reg) (vl: list approx) :=
-  match addr, args, vl with
-  | Aindexed2, r1 :: r2 :: nil, G symb n1 :: I n2 :: nil =>
-      (Aglobal symb (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, I n1 :: G symb n2 :: nil =>
-      (Aglobal symb (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, S n1 :: I n2 :: nil =>
-      (Ainstack (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, I n1 :: S n2 :: nil =>
-      (Ainstack (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, G symb n1 :: v2 :: nil =>
-      (Abased symb n1, r2 :: nil)
-  | Aindexed2, r1 :: r2 :: nil, v1 :: G symb n2 :: nil =>
-      (Abased symb n2, r1 :: nil)
-  | Aindexed2, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
-      (Aindexed n1, r2 :: nil)
-  | Aindexed2, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
-      (Aindexed n2, r1 :: nil)
-  | Abased symb ofs, r1 :: nil, I n1 :: nil =>
-      (Aglobal symb (Int.add ofs n1), nil)
-  | Aindexed n, r1 :: nil, G symb n1 :: nil =>
-      (Aglobal symb (Int.add n1 n), nil)
-  | Aindexed n, r1 :: nil, S n1 :: nil =>
-      (Ainstack (Int.add n1 n), nil)
-  | _, _, _ =>
-      (addr, args)
   end.
 
 Nondetfunction builtin_strength_reduction

@@ -1270,6 +1270,20 @@ Definition do_ef_volatile_store (chunk: memory_chunk)
   | _ => None
   end.
 
+Definition do_ef_volatile_load_global (chunk: memory_chunk) (id: ident) (ofs: int)
+       (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
+  match Genv.find_symbol genv id with
+  | Some b => do_ef_volatile_load chunk w (Vptr b ofs :: vargs) m
+  | None => None
+  end.
+
+Definition do_ef_volatile_store_global (chunk: memory_chunk) (id: ident) (ofs: int)
+       (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
+  match Genv.find_symbol genv id with
+  | Some b => do_ef_volatile_store chunk w (Vptr b ofs :: vargs) m
+  | None => None
+  end.
+
 Definition do_ef_malloc
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   match vargs with
@@ -1358,6 +1372,8 @@ Definition do_external (ef: external_function):
   | EF_builtin name sg => do_ef_external name sg
   | EF_vload chunk => do_ef_volatile_load chunk
   | EF_vstore chunk => do_ef_volatile_store chunk
+  | EF_vload_global chunk id ofs => do_ef_volatile_load_global chunk id ofs
+  | EF_vstore_global chunk id ofs => do_ef_volatile_store_global chunk id ofs
   | EF_malloc => do_ef_malloc
   | EF_free => do_ef_free
   | EF_memcpy sz al => do_ef_memcpy sz al
@@ -1389,25 +1405,45 @@ Proof with try congruence.
     apply val_of_eventval_sound; auto. 
     econstructor. constructor; eauto. constructor.
 
+  assert (VLOAD: forall chunk vargs,
+    do_ef_volatile_load chunk w vargs m = Some (w', t, vres, m') ->
+    volatile_load_sem chunk genv vargs m t vres m' /\ possible_trace w t w').
+  intros chunk vargs'.
+  unfold do_ef_volatile_load. destruct vargs'... destruct v... destruct vargs'... 
+  mydestr. destruct p as [res w'']; mydestr.
+  split. constructor. apply Genv.invert_find_symbol; auto. auto. 
+  apply val_of_eventval_sound; auto. 
+  econstructor. constructor; eauto. constructor.
+  split. constructor; auto. constructor.
+
+  assert (VSTORE: forall chunk vargs,
+    do_ef_volatile_store chunk w vargs m = Some (w', t, vres, m') ->
+    volatile_store_sem chunk genv vargs m t vres m' /\ possible_trace w t w').
+  intros chunk vargs'.
+  unfold do_ef_volatile_store. destruct vargs'... destruct v... destruct vargs'... destruct vargs'... 
+  mydestr.
+  split. constructor. apply Genv.invert_find_symbol; auto. auto. 
+  apply eventval_of_val_sound; auto. 
+  econstructor. constructor; eauto. constructor.
+  split. constructor; auto. constructor.
+
   destruct ef; simpl.
 (* EF_external *)
   auto. 
 (* EF_builtin *)
   auto.
 (* EF_vload *)
-  unfold do_ef_volatile_load. destruct vargs... destruct v... destruct vargs... 
-  mydestr. destruct p as [res w'']; mydestr.
-  split. constructor. apply Genv.invert_find_symbol; auto. auto. 
-  apply val_of_eventval_sound; auto. 
-  econstructor. constructor; eauto. constructor.
-  split. constructor; auto. constructor.
+  auto.
 (* EF_vstore *)
-  unfold do_ef_volatile_store. destruct vargs... destruct v... destruct vargs... destruct vargs... 
-  mydestr.
-  split. constructor. apply Genv.invert_find_symbol; auto. auto. 
-  apply eventval_of_val_sound; auto. 
-  econstructor. constructor; eauto. constructor.
-  split. constructor; auto. constructor.
+  auto.
+(* EF_vload_global *)
+  rewrite volatile_load_global_charact.
+  unfold do_ef_volatile_load_global. destruct (Genv.find_symbol genv)...
+  intros. exploit VLOAD; eauto. intros [A B]. split; auto. exists b; auto.
+(* EF_vstore_global *)
+  rewrite volatile_store_global_charact.
+  unfold do_ef_volatile_store_global. destruct (Genv.find_symbol genv)...
+  intros. exploit VSTORE; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_malloc *)
   unfold do_ef_malloc. destruct vargs... destruct v... destruct vargs...
   destruct (Mem.alloc m (-4) (Int.unsigned i)) as [m1 b]_eqn. mydestr.
@@ -1443,23 +1479,39 @@ Proof.
     unfold do_ef_external. rewrite (list_eventval_of_val_complete _ _ _ H2). rewrite H8. 
     rewrite (val_of_eventval_complete _ _ _ H3). auto.
  
+  assert (VLOAD: forall chunk vargs,
+             volatile_load_sem chunk genv vargs m t vres m' ->
+             do_ef_volatile_load chunk w vargs m = Some (w', t, vres, m')).
+  intros. inv H1; unfold do_ef_volatile_load.
+  inv H0. inv H9. inv H7. 
+  rewrite H3. rewrite (Genv.find_invert_symbol _ _ H2). rewrite H10. 
+  rewrite (val_of_eventval_complete _ _ _ H4). auto.
+  inv H0. rewrite H2. rewrite H3. auto.
+
+  assert (VSTORE: forall chunk vargs,
+             volatile_store_sem chunk genv vargs m t vres m' ->
+             do_ef_volatile_store chunk w vargs m = Some (w', t, vres, m')).
+  intros. inv H1; unfold do_ef_volatile_store.
+  inv H0. inv H9. inv H7. 
+  rewrite H3. rewrite (Genv.find_invert_symbol _ _ H2).
+  rewrite (eventval_of_val_complete _ _ _ H4). rewrite H10. auto.
+  inv H0. rewrite H2. rewrite H3. auto.
+
   destruct ef; simpl in *.
 (* EF_external *)
   auto.
 (* EF_builtin *)
   auto.
 (* EF_vload *)
-  inv H; unfold do_ef_volatile_load.
-  inv H0. inv H8. inv H6. 
-  rewrite H2. rewrite (Genv.find_invert_symbol _ _ H1). rewrite H9. 
-  rewrite (val_of_eventval_complete _ _ _ H3). auto.
-  inv H0. rewrite H1. rewrite H2. auto.
+  auto.
 (* EF_vstore *)
-  inv H; unfold do_ef_volatile_store.
-  inv H0. inv H8. inv H6. 
-  rewrite H2. rewrite (Genv.find_invert_symbol _ _ H1).
-  rewrite (eventval_of_val_complete _ _ _ H3). rewrite H9. auto.
-  inv H0. rewrite H1. rewrite H2. auto.
+  auto.
+(* EF_vload_global *)
+  rewrite volatile_load_global_charact in H. destruct H as [b [P Q]]. 
+  unfold do_ef_volatile_load_global. rewrite P. auto. 
+(* EF_vstore *)
+  rewrite volatile_store_global_charact in H. destruct H as [b [P Q]]. 
+  unfold do_ef_volatile_store_global. rewrite P. auto. 
 (* EF_malloc *)
   inv H; unfold do_ef_malloc. 
   inv H0. rewrite H1. rewrite H2. auto.

@@ -199,6 +199,9 @@ Definition transf_instr (app: D.t) (instr: instruction) :=
       Icall sig (transf_ros app ros) args res s
   | Itailcall sig ros args =>
       Itailcall sig (transf_ros app ros) args
+  | Ibuiltin ef args res s =>
+      let (ef', args') := builtin_strength_reduction ef args (approx_regs app args) in
+      Ibuiltin ef' args' res s
   | Icond cond args s1 s2 =>
       match eval_static_condition cond (approx_regs app args) with
       | Some b =>

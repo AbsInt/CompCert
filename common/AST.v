@@ -418,6 +418,12 @@ Inductive external_function : Type :=
      (** A volatile store operation.   If the adress given as first argument
          points within a volatile global variable, generate an event.
          Otherwise, produce no event and behave like a regular memory store. *)
+  | EF_vload_global (chunk: memory_chunk) (id: ident) (ofs: int)
+     (** A volatile load operation from a global variable. 
+         Specialized version of [EF_vload]. *)
+  | EF_vstore_global (chunk: memory_chunk) (id: ident) (ofs: int)
+     (** A volatile store operation in a global variable. 
+         Specialized version of [EF_vstore]. *)
   | EF_malloc
      (** Dynamic memory allocation.  Takes the requested size in bytes
          as argument; returns a pointer to a fresh block of the given size.
@@ -446,6 +452,8 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_builtin name sg => sg
   | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk))
   | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None
+  | EF_vload_global chunk _ _ => mksignature nil (Some (type_of_chunk chunk))
+  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk chunk :: nil) None
   | EF_malloc => mksignature (Tint :: nil) (Some Tint)
   | EF_free => mksignature (Tint :: nil) None
   | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None
@@ -461,6 +469,8 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_builtin name sg => true
   | EF_vload chunk => true
   | EF_vstore chunk => true
+  | EF_vload_global chunk id ofs => true
+  | EF_vstore_global chunk id ofs => true
   | EF_malloc => false
   | EF_free => false
   | EF_memcpy sz al => true

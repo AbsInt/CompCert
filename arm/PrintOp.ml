@@ -59,10 +59,6 @@ let print_operation reg pp = function
       fprintf pp "\"%s\" + %ld" (extern_atom id) (camlint_of_coqint ofs)
   | Oaddrstack ofs, [] ->
       fprintf pp "stack(%ld)" (camlint_of_coqint ofs)
-  | Ocast8signed, [r1] -> fprintf pp "int8signed(%a)" reg r1
-  | Ocast8unsigned, [r1] -> fprintf pp "int8unsigned(%a)" reg r1
-  | Ocast16signed, [r1] -> fprintf pp "int16signed(%a)" reg r1
-  | Ocast16unsigned, [r1] -> fprintf pp "int16unsigned(%a)" reg r1
   | Oadd, [r1;r2] -> fprintf pp "%a + %a" reg r1 reg r2
   | Oaddshift s, [r1;r2] -> fprintf pp "%a + %a %a" reg r1 reg r2 shift s
   | Oaddimm n, [r1] -> fprintf pp "%a + %ld" reg r1 (camlint_of_coqint n)

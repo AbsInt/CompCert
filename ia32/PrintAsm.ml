@@ -348,52 +348,85 @@ let print_builtin_memcpy oc sz al args =
 
 (* Handling of volatile reads and writes *)
 
+let print_builtin_vload_common oc chunk addr res =
+  match chunk, res with
+  | Mint8unsigned, IR res ->
+      fprintf oc "	movzbl	%a, %a\n" addressing addr ireg res
+  | Mint8signed, IR res ->
+      fprintf oc "	movsbl	%a, %a\n" addressing addr ireg res
+  | Mint16unsigned, IR res ->
+      fprintf oc "	movzwl	%a, %a\n" addressing addr ireg res
+  | Mint16signed, IR res ->
+      fprintf oc "	movswl	%a, %a\n" addressing addr ireg res
+  | Mint32, IR res ->
+      fprintf oc "	movl	%a, %a\n" addressing addr ireg res
+  | Mfloat32, FR res ->
+      fprintf oc "	cvtss2sd %a, %a\n" addressing addr freg res
+  | Mfloat64, FR res ->
+      fprintf oc "	movsd	%a, %a\n" addressing addr freg res
+  | _ ->
+      assert false
+
 let print_builtin_vload oc chunk args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-  begin match chunk, args, res with
-  | Mint8unsigned, [IR addr], IR res ->
-      fprintf oc "	movzbl	0(%a), %a\n" ireg addr ireg res
-  | Mint8signed, [IR addr], IR res ->
-      fprintf oc "	movsbl	0(%a), %a\n" ireg addr ireg res
-  | Mint16unsigned, [IR addr], IR res ->
-      fprintf oc "	movzwl	0(%a), %a\n" ireg addr ireg res
-  | Mint16signed, [IR addr], IR res ->
-      fprintf oc "	movswl	0(%a), %a\n" ireg addr ireg res
-  | Mint32, [IR addr], IR res ->
-      fprintf oc "	movl	0(%a), %a\n" ireg addr ireg res
-  | Mfloat32, [IR addr], FR res ->
-      fprintf oc "	cvtss2sd 0(%a), %a\n" ireg addr freg res
-  | Mfloat64, [IR addr], FR res ->
-      fprintf oc "	movsd	0(%a), %a\n" ireg addr freg res
+  begin match args with
+  | [IR addr] ->
+      print_builtin_vload_common oc chunk
+                 (Addrmode(Some addr, None, Coq_inl Integers.Int.zero)) res
   | _ ->
       assert false
   end;
   fprintf oc "%s end builtin __builtin_volatile_read\n" comment
 
+let print_builtin_vload_global oc chunk id ofs args res =
+  fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
+  print_builtin_vload_common oc chunk
+                 (Addrmode(None, None, Coq_inr(id,ofs))) res;
+  fprintf oc "%s end builtin __builtin_volatile_read\n" comment
+
+let print_builtin_vstore_common oc chunk addr src =
+  match chunk, src with
+  | (Mint8signed | Mint8unsigned), IR src ->
+      if Asmgen.low_ireg src then
+        fprintf oc "	movb	%a, %a\n" ireg8 src addressing addr
+      else begin
+        fprintf oc "	movl	%a, %%ecx\n" ireg src;
+        fprintf oc "	movb	%%cl, %a\n" addressing addr
+      end
+  | (Mint16signed | Mint16unsigned), IR src ->
+      if Asmgen.low_ireg src then
+        fprintf oc "	movw	%a, %a\n" ireg16 src addressing addr
+      else begin
+        fprintf oc "	movl	%a, %%ecx\n" ireg src;
+        fprintf oc "	movw	%%cx, %a\n" addressing addr
+      end
+  | Mint32, IR src ->
+      fprintf oc "	movl	%a, %a\n" ireg src addressing addr
+  | Mfloat32, FR src ->
+      fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
+      fprintf oc "	movss	%%xmm7, %a\n" addressing addr
+  | Mfloat64, FR src ->
+      fprintf oc "	movsd	%a, %a\n" freg src addressing addr
+  | _ ->
+      assert false
+
 let print_builtin_vstore oc chunk args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
-  begin match chunk, args with
-  | (Mint8signed | Mint8unsigned), [IR addr; IR src] ->
-      if Asmgen.low_ireg src then
-        fprintf oc "	movb	%a, 0(%a)\n" ireg8 src ireg addr
-      else begin
-        fprintf oc "	movl	%a, %%ecx\n" ireg src;
-        fprintf oc "	movb	%%cl, 0(%a)\n" ireg addr
-      end
-  | (Mint16signed | Mint16unsigned), [IR addr; IR src] ->
-      if Asmgen.low_ireg src then
-        fprintf oc "	movw	%a, 0(%a)\n" ireg16 src ireg addr
-      else begin
-        fprintf oc "	movl	%a, %%ecx\n" ireg src;
-        fprintf oc "	movw	%%cx, 0(%a)\n" ireg addr
-      end
-  | Mint32, [IR addr; IR src] ->
-      fprintf oc "	movl	%a, 0(%a)\n" ireg src ireg addr
-  | Mfloat32, [IR addr; FR src] ->
-      fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
-      fprintf oc "	movss	%%xmm7, 0(%a)\n" ireg addr
-  | Mfloat64, [IR addr; FR src] ->
-      fprintf oc "	movsd	%a, 0(%a)\n" freg src ireg addr
+  begin match args with
+  | [IR addr; src] ->
+      print_builtin_vstore_common oc chunk
+                 (Addrmode(Some addr, None, Coq_inl Integers.Int.zero)) src
+  | _ ->
+      assert false
+  end;
+  fprintf oc "%s end builtin __builtin_volatile_write\n" comment
+
+let print_builtin_vstore_global oc chunk id ofs args =
+  fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
+  begin match args with
+  | [src] ->
+      print_builtin_vstore_common oc chunk
+                       (Addrmode(None, None, Coq_inr(id,ofs))) src
   | _ ->
       assert false
   end;
@@ -677,6 +710,10 @@ let print_instruction oc = function
           print_builtin_vload oc chunk args res
       | EF_vstore chunk ->
           print_builtin_vstore oc chunk args
+      | EF_vload_global(chunk, id, ofs) ->
+          print_builtin_vload_global oc chunk id ofs args res
+      | EF_vstore_global(chunk, id, ofs) ->
+          print_builtin_vstore_global oc chunk id ofs args
       | EF_memcpy(sz, al) ->
           print_builtin_memcpy oc (Int32.to_int (camlint_of_coqint sz))
                                   (Int32.to_int (camlint_of_coqint al)) args

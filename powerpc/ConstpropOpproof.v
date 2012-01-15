@@ -19,6 +19,7 @@ Require Import Floats.
 Require Import Values.
 Require Import Memory.
 Require Import Globalenvs.
+Require Import Events.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
@@ -401,6 +402,24 @@ Proof.
   rewrite H. rewrite shift_symbol_address. auto. 
   rewrite H. rewrite shift_symbol_address. auto.
   rewrite H. rewrite Val.add_assoc. auto.
+  auto.
+Qed.
+
+Lemma builtin_strength_reduction_correct:
+  forall ef args vl m t vres m',
+  vl = approx_regs app args ->
+  external_call ef ge rs##args m t vres m' ->
+  let (ef', args') := builtin_strength_reduction ef args vl in
+  external_call ef' ge rs##args' m t vres m'.
+Proof.
+  intros until m'. unfold builtin_strength_reduction.
+  destruct (builtin_strength_reduction_match ef args vl); simpl; intros; InvApproxRegs; SimplVMA.
+  unfold symbol_address in H. destruct (Genv.find_symbol ge symb) as [b|]_eqn; rewrite H in H0.
+  rewrite volatile_load_global_charact. exists b; auto. 
+  inv H0.
+  unfold symbol_address in H1. destruct (Genv.find_symbol ge symb) as [b|]_eqn; rewrite H1 in H0.
+  rewrite volatile_store_global_charact. exists b; auto. 
+  inv H0.
   auto.
 Qed.
 

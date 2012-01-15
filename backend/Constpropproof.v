@@ -416,12 +416,16 @@ Proof.
   constructor; auto. apply regs_lessdef_regs; auto. 
 
   (* Ibuiltin *)
+Opaque builtin_strength_reduction.
+  destruct (builtin_strength_reduction ef args (approx_regs (analyze f)#pc args)) as [ef' args']_eqn.
+  generalize (builtin_strength_reduction_correct ge sp (analyze f)!!pc rs
+                  MATCH ef args (approx_regs (analyze f) # pc args) _ _ _ _ (refl_equal _) H0).
+  rewrite Heqp. intros P.
   exploit external_call_mem_extends; eauto. 
-  instantiate (1 := rs'##args). apply regs_lessdef_regs; auto.
+  instantiate (1 := rs'##args'). apply regs_lessdef_regs; auto.
   intros [v' [m2' [A [B [C D]]]]].
-  TransfInstr. intro.
   exists (State s' (transf_function f) sp pc' (rs'#res <- v') m2'); split.
-  eapply exec_Ibuiltin; eauto.
+  eapply exec_Ibuiltin. TransfInstr. rewrite Heqp. eauto.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto. 

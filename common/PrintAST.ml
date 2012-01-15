@@ -32,6 +32,12 @@ let name_of_external = function
   | EF_builtin(name, sg) -> extern_atom name
   | EF_vload chunk -> sprintf "volatile load %s" (name_of_chunk chunk)
   | EF_vstore chunk -> sprintf "volatile store %s" (name_of_chunk chunk)
+  | EF_vload_global(chunk, id, ofs) ->
+      sprintf "volatile load %s global %s %ld"
+              (name_of_chunk chunk) (extern_atom id) (camlint_of_coqint ofs)
+  | EF_vstore_global(chunk, id, ofs) ->
+      sprintf "volatile store %s global %s %ld"
+              (name_of_chunk chunk) (extern_atom id) (camlint_of_coqint ofs)
   | EF_malloc -> "malloc"
   | EF_free -> "free"
   | EF_memcpy(sz, al) ->
