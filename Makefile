@@ -69,8 +69,6 @@ BACKEND=\
   Machsem.v \
   Asm.v Asmgen.v Asmgenretaddr.v Asmgenproof1.v Asmgenproof.v
 
-#  CastOptim.v CastOptimproof.v \
-
 # C front-end modules (in cfrontend/)
 
 CFRONTEND=Csyntax.v Csem.v Cstrategy.v Cexec.v \

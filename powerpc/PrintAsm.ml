@@ -375,7 +375,7 @@ let print_builtin_memcpy oc sz al args =
 
 (* Handling of volatile reads and writes *)
 
-let print_builtin_vload_shared oc chunk base offset res =
+let print_builtin_vload_common oc chunk base offset res =
   match chunk, res with
   | Mint8unsigned, IR res ->
       fprintf oc "	lbz	%a, %a(%a)\n" ireg res constant offset ireg base
@@ -399,7 +399,7 @@ let print_builtin_vload oc chunk args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
   begin match args with
   | [IR addr] ->
-      print_builtin_vload_shared oc chunk addr (Cint Integers.Int.zero) res
+      print_builtin_vload_common oc chunk addr (Cint Integers.Int.zero) res
   | _ ->
       assert false
   end;
@@ -409,10 +409,10 @@ let print_builtin_vload_global oc chunk id ofs args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
   fprintf oc "	addis	%a, %a, %a\n"
              ireg GPR11 ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
-  print_builtin_vload_shared oc chunk GPR11 (Csymbol_low(id, ofs)) res;
+  print_builtin_vload_common oc chunk GPR11 (Csymbol_low(id, ofs)) res;
   fprintf oc "%s end builtin __builtin_volatile_read\n" comment
 
-let print_builtin_vstore_shared oc chunk base offset src =
+let print_builtin_vstore_common oc chunk base offset src =
   match chunk, src with
   | (Mint8signed | Mint8unsigned), IR src ->
       fprintf oc "	stb	%a, %a(%a)\n" ireg src ireg base constant offset
@@ -432,7 +432,7 @@ let print_builtin_vstore oc chunk args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
   begin match args with
   | [IR addr; src] ->
-      print_builtin_vstore_shared oc chunk addr (Cint Integers.Int.zero) src
+      print_builtin_vstore_common oc chunk addr (Cint Integers.Int.zero) src
   | _ ->
       assert false
   end;
@@ -445,7 +445,7 @@ let print_builtin_vstore_global oc chunk id ofs args =
       let tmp = if src = IR GPR11 then GPR12 else GPR11 in
       fprintf oc "	addis	%a, %a, %a\n"
                  ireg tmp ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
-      print_builtin_vstore_shared oc chunk tmp (Csymbol_low(id, ofs)) src
+      print_builtin_vstore_common oc chunk tmp (Csymbol_low(id, ofs)) src
   | _ ->
       assert false
   end;
