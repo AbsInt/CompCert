@@ -415,16 +415,16 @@ let print_builtin_vload_global oc chunk id ofs args res =
 let print_builtin_vstore_common oc chunk base offset src =
   match chunk, src with
   | (Mint8signed | Mint8unsigned), IR src ->
-      fprintf oc "	stb	%a, %a(%a)\n" ireg src ireg base constant offset
+      fprintf oc "	stb	%a, %a(%a)\n" ireg src constant offset ireg base
   | (Mint16signed | Mint16unsigned), IR src ->
-      fprintf oc "	sth	%a, %a(%a)\n" ireg src ireg base constant offset
+      fprintf oc "	sth	%a, %a(%a)\n" ireg src constant offset ireg base
   | Mint32, IR src ->
-      fprintf oc "	stw	%a, %a(%a)\n" ireg src ireg base constant offset
+      fprintf oc "	stw	%a, %a(%a)\n" ireg src constant offset ireg base
   | Mfloat32, FR src ->
       fprintf oc "	frsp	%a, %a\n" freg FPR13 freg src;
-      fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 ireg base constant offset
+      fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant offset ireg base
   | Mfloat64, FR src ->
-      fprintf oc "	stfd	%a, %a(%a)\n" freg src ireg base constant offset
+      fprintf oc "	stfd	%a, %a(%a)\n" freg src constant offset ireg base
   | _ ->
       assert false
 
