@@ -210,6 +210,13 @@ Nondetfunction andimm (n1: int) (e2: expr) :=
   match e2 with
   | Eop (Ointconst n2) Enil =>
       Eop (Ointconst (Int.and n1 n2)) Enil
+  | Eop (Oandimm n2) (Eop (Oshrimm amount) (t2:::Enil) ::: Enil) =>
+      let n := Int.and n1 n2 in
+      if Int.eq (Int.shru (Int.shl n amount) amount) n
+      && Int.ltu amount Int.iwordsize
+      then rolm t2 (Int.sub Int.iwordsize amount) 
+                   (Int.and (Int.shru Int.mone amount) n)
+      else Eop (Oandimm n) (Eop (Oshrimm amount) (t2:::Enil) ::: Enil)
   | Eop (Oandimm n2) (t2:::Enil) =>
       Eop (Oandimm (Int.and n1 n2)) (t2:::Enil)
   | Eop (Orolm amount2 mask2) (t2:::Enil) =>

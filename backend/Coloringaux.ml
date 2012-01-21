@@ -809,21 +809,38 @@ let spill_costs f =
   let process_instr () pc i =
     match i with
     | Inop _ -> ()
-    | Iop(Op.Omove, arg::nil, res, _) -> charge 1 arg; charge 1 res
-    | Iop(op, args, res, _) -> charge_list 10 args; charge 10 res
-    | Iload(chunk, addr, args, dst, _) -> charge_list 10 args; charge 10 dst
-    | Istore(chunk, addr, args, src, _) -> charge_list 10 args; charge 10 src
+    | Iop(Op.Omove, arg::nil, res, _) ->
+        charge 1 arg; charge 1 res
+    | Iop(op, args, res, _) ->
+        charge_list 10 args; charge 10 res
+    | Iload(chunk, addr, args, dst, _) ->
+        charge_list 10 args; charge 10 dst
+    | Istore(chunk, addr, args, src, _) ->
+        charge_list 10 args; charge 10 src
     | Icall(sg, ros, args, res, _) ->
         charge_ros 10 ros; charge_list 1 args; charge 1 res
     | Itailcall(sg, ros, args) ->
         charge_ros 10 ros; charge_list 1 args
-    | Ibuiltin(EF_annot _, args, res, _) -> ()   (* not actually used *)
-    | Ibuiltin(EF_annot_val _, args, res, _) -> charge_list 1 args; charge 1 res
-    | Ibuiltin(ef, args, res, _) -> charge_list 10 args; charge 10 res
-    | Icond(cond, args, _, _) -> charge_list 10 args
-    | Ijumptable(arg, _) -> charge 10 arg
-    | Ireturn(Some r) -> charge 1 r
-    | Ireturn None -> () in
+    | Ibuiltin(EF_annot _, args, res, _) ->
+        (* arguments are not actually used, so charge 0 for them;
+           result is not used but should not be spilled, so charge a lot *)
+        charge 1_000_000 res
+    | Ibuiltin(EF_annot_val _, args, res, _) -> 
+        (* like a move *)
+        charge_list 1 args; charge 1 res
+    | Ibuiltin((EF_vstore _|EF_vstore_global _|EF_memcpy _), args, res, _) ->
+        (* result is not used but should not be spilled, so charge a lot *)
+        charge_list 10 args; charge 1_000_000 res
+    | Ibuiltin(ef, args, res, _) ->
+        charge_list 10 args; charge 10 res
+    | Icond(cond, args, _, _) ->
+        charge_list 10 args
+    | Ijumptable(arg, _) ->
+        charge 10 arg
+    | Ireturn(Some r) ->
+        charge 1 r
+    | Ireturn None ->
+        () in
   charge_list 1 f.fn_params;
   PTree.fold process_instr f.fn_code ();
   (* Result is cost function reg -> (num accesses, integer cost *)

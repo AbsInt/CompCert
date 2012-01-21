@@ -343,6 +343,21 @@ Theorem eval_andimm:
 Proof.
   intros; red; intros until x. unfold andimm. case (andimm_match a); intros.
   InvEval. TrivialExists. simpl. rewrite Int.and_commut; auto.
+  set (n' := Int.and n n2). 
+  destruct (Int.eq (Int.shru (Int.shl n' amount) amount) n' &&
+            Int.ltu amount Int.iwordsize) as []_eqn.
+  InvEval. destruct (andb_prop _ _ Heqb). 
+  generalize (Int.eq_spec (Int.shru (Int.shl n' amount) amount) n'). rewrite H1; intros.
+  replace (Val.and x (Vint n))
+     with (Val.rolm v0 (Int.sub Int.iwordsize amount) (Int.and (Int.shru Int.mone amount) n')).
+  apply eval_rolm; auto.
+  subst. destruct v0; simpl; auto. rewrite H3. simpl. decEq. rewrite Int.and_assoc.
+  rewrite (Int.and_commut n2 n).
+  transitivity (Int.and (Int.shru i amount) (Int.and n n2)).
+  rewrite (Int.shru_rolm i); auto. unfold Int.rolm. rewrite Int.and_assoc; auto. 
+  symmetry. apply Int.shr_and_shru_and. auto.
+  set (e2 := Eop (Oshrimm amount) (t2 ::: Enil)) in *.
+  InvEval. subst. rewrite Val.and_assoc. simpl. rewrite Int.and_commut. TrivialExists.  
   InvEval. subst. rewrite Val.and_assoc. simpl. rewrite Int.and_commut. TrivialExists. 
   InvEval. subst. TrivialExists. simpl. 
   destruct v1; auto. simpl. unfold Int.rolm. rewrite Int.and_assoc. 
