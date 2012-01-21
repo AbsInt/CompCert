@@ -391,7 +391,7 @@ let print_builtin_vload_common oc chunk base offset res =
   | Mfloat32, FR res ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg res constant offset ireg base
   | Mfloat64, FR res ->
-      fprintf oc "	lfs	%a, %a(%a)\n" freg res constant offset ireg base
+      fprintf oc "	lfd	%a, %a(%a)\n" freg res constant offset ireg base
   | _ ->
       assert false
 
