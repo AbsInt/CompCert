@@ -5,14 +5,14 @@ typedef signed char S8;
 typedef unsigned short U16;
 typedef signed short S16;
 
-U8 b, bres[10];
-S8 sb, sbres[10];
-U16 s, sres[10];
-S16 ss, ssres[10];
+U8 b, bres[20];
+S8 sb, sbres[20];
+U16 s, sres[20];
+S16 ss, ssres[20];
 int i, res[50];
 unsigned int ui;
-float f, fres[10];
-double d, dres[10];
+float f, fres[20];
+double d, dres[20];
 
 #ifdef __COMPCERT__
 #define TEST(x) __builtin_annot(#x); x
@@ -119,22 +119,22 @@ int main()
   f = 2.5; d = -3.14159;
   test();
   printf("bres = ");
-  for (n = 0; n < 10; n++) printf("%d ", bres[n]);
+  for (n = 0; n < 20; n++) printf("%d ", bres[n]);
   printf("\n");
   printf("sbres = ");
-  for (n = 0; n < 10; n++) printf("%d ", sbres[n]);
+  for (n = 0; n < 20; n++) printf("%d ", sbres[n]);
   printf("\n");
   printf("sres = ");
-  for (n = 0; n < 10; n++) printf("%d ", sres[n]);
+  for (n = 0; n < 20; n++) printf("%d ", sres[n]);
   printf("\n");
   printf("ssres = ");
-  for (n = 0; n < 10; n++) printf("%d ", ssres[n]);
+  for (n = 0; n < 20; n++) printf("%d ", ssres[n]);
   printf("\n");
   printf("res = ");
   for (n = 0; n < 50; n++) printf("%d ", res[n]);
   printf("\n");
   printf("fres = ");
-  for (n = 0; n < 10; n++) printf("%g ", fres[n]);
+  for (n = 0; n < 20; n++) printf("%g ", fres[n]);
   printf("\n");
   return 0;
 }
