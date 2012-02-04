@@ -48,6 +48,14 @@ Definition final (dst: destination) (a: expr) : list statement :=
   | For_test tyl s1 s2 => makeif (fold_left Ecast tyl a) s1 s2 :: nil
   end.
 
+Inductive tr_rvalof: type -> expr -> list statement -> expr -> list ident -> Prop :=
+  | tr_rvalof_nonvol: forall ty a tmp,
+      type_is_volatile ty = false ->
+      tr_rvalof ty a nil a tmp
+  | tr_rvalof_vol: forall ty a t tmp,
+      type_is_volatile ty = true -> In t tmp ->
+      tr_rvalof ty a (Svolread t a :: nil) (Etempvar t ty) tmp.
+
 Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -> list ident -> Prop :=
   | tr_var: forall le dst id ty tmp,
       tr_expr le dst (C.Evar id ty)
@@ -80,11 +88,13 @@ Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -
       tr_expr le dst (C.Esizeof ty' ty)
                    (final dst (Esizeof ty' ty))
                    (Esizeof ty' ty) tmp
-  | tr_valof: forall le dst e1 ty tmp sl1 a1,
-      tr_expr le For_val e1 sl1 a1 tmp ->
+  | tr_valof: forall le dst e1 ty tmp sl1 a1 tmp1 sl2 a2 tmp2,
+      tr_expr le For_val e1 sl1 a1 tmp1 ->
+      tr_rvalof (C.typeof e1) a1 sl2 a2 tmp2 ->
+      list_disjoint tmp1 tmp2 -> incl tmp1 tmp -> incl tmp2 tmp ->
       tr_expr le dst (C.Evalof e1 ty)
-                   (sl1 ++ final dst a1)
-                   a1 tmp
+                    (sl1 ++ sl2 ++ final dst a2)
+                    a2 tmp
   | tr_addrof: forall le dst e1 ty tmp sl1 a1,
       tr_expr le For_val e1 sl1 a1 tmp ->
       tr_expr le dst (C.Eaddrof e1 ty) 
@@ -153,38 +163,45 @@ Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -
                     Sassign a1 (Etempvar t ty2) ::
                     final dst (Ecast (Etempvar t ty2) ty1))
                    (Ecast (Etempvar t ty2) ty1) tmp
-  | tr_assignop_effects: forall le op e1 e2 tyres ty sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
+  | tr_assignop_effects: forall le op e1 e2 tyres ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
-      list_disjoint tmp1 tmp2 ->  
-      incl tmp1 tmp -> incl tmp2 tmp ->
+      ty1 = C.typeof e1 ->
+      tr_rvalof ty1 a1 sl3 a3 tmp3 ->
+      list_disjoint tmp1 tmp2 -> list_disjoint tmp1 tmp3 -> list_disjoint tmp2 tmp3 ->
+      incl tmp1 tmp -> incl tmp2 tmp -> incl tmp3 tmp ->
       tr_expr le For_effects (C.Eassignop op e1 e2 tyres ty)
-                      (sl1 ++ sl2 ++ Sassign a1 (Ebinop op a1 a2 tyres) :: nil)
+                      (sl1 ++ sl2 ++ sl3 ++ Sassign a1 (Ebinop op a3 a2 tyres) :: nil)
                       any tmp
-  | tr_assignop_val: forall le dst op e1 e2 tyres ty sl1 a1 tmp1 sl2 a2 tmp2 t tmp ty1,
+  | tr_assignop_val: forall le dst op e1 e2 tyres ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 t tmp ty1,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
-      list_disjoint tmp1 tmp2 ->  
-      incl tmp1 tmp -> incl tmp2 tmp ->
-      In t tmp -> ~In t tmp1 -> ~In t tmp2 ->
+      tr_rvalof ty1 a1 sl3 a3 tmp3 ->
+      list_disjoint tmp1 tmp2 -> list_disjoint tmp1 tmp3 -> list_disjoint tmp2 tmp3 ->
+      incl tmp1 tmp -> incl tmp2 tmp -> incl tmp3 tmp ->
+      In t tmp -> ~In t tmp1 -> ~In t tmp2 -> ~In t tmp3 ->
       ty1 = C.typeof e1 ->
       tr_expr le dst (C.Eassignop op e1 e2 tyres ty)
-                   (sl1 ++ sl2 ++ 
-                    Sset t (Ebinop op a1 a2 tyres) ::
+                   (sl1 ++ sl2 ++ sl3 ++
+                    Sset t (Ebinop op a3 a2 tyres) ::
                     Sassign a1 (Etempvar t tyres) ::
                     final dst (Ecast (Etempvar t tyres) ty1))
                    (Ecast (Etempvar t tyres) ty1) tmp
-  | tr_postincr_effects: forall le id e1 ty sl1 a1 tmp any,
-      tr_expr le For_val e1 sl1 a1 tmp ->
+  | tr_postincr_effects: forall le id e1 ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
+      tr_expr le For_val e1 sl1 a1 tmp1 ->
+      tr_rvalof ty1 a1 sl2 a2 tmp2 ->
+      ty1 = C.typeof e1 ->
+      incl tmp1 tmp -> incl tmp2 tmp ->
+      list_disjoint tmp1 tmp2 ->  
       tr_expr le For_effects (C.Epostincr id e1 ty)
-                      (sl1 ++ Sassign a1 (transl_incrdecr id a1 (C.typeof e1)) :: nil)
+                      (sl1 ++ sl2 ++ Sassign a1 (transl_incrdecr id a2 ty1) :: nil)
                       any tmp
   | tr_postincr_val: forall le dst id e1 ty sl1 a1 tmp1 t ty1 tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       incl tmp1 tmp -> In t tmp -> ~In t tmp1 ->
       ty1 = C.typeof e1 ->
       tr_expr le dst (C.Epostincr id e1 ty)
-                   (sl1 ++ Sset t a1 ::
+                   (sl1 ++ make_set t a1 ::
                     Sassign a1 (transl_incrdecr id (Etempvar t ty1) ty1) ::
                     final dst (Etempvar t ty1))
                    (Etempvar t ty1) tmp
@@ -253,6 +270,13 @@ Proof.
   induction 1; intros; econstructor; eauto.
 Qed.
 
+Lemma tr_rvalof_monotone:
+  forall ty a sl b tmps, tr_rvalof ty a sl b tmps ->
+  forall tmps', incl tmps tmps' -> tr_rvalof ty a sl b tmps'.
+Proof.
+  induction 1; intros; econstructor; unfold incl in *; eauto.
+Qed.
+
 Lemma tr_expr_monotone:
   forall le dst r sl a tmps, tr_expr le dst r sl a tmps ->
   forall tmps', incl tmps tmps' -> tr_expr le dst r sl a tmps'
@@ -260,6 +284,7 @@ with tr_exprlist_monotone:
   forall le rl sl al tmps, tr_exprlist le rl sl al tmps ->
   forall tmps', incl tmps tmps' -> tr_exprlist le rl sl al tmps'.
 Proof.
+  specialize tr_rvalof_monotone. intros RVALOF.
   induction 1; intros; econstructor; unfold incl in *; eauto.
   induction 1; intros; econstructor; unfold incl in *; eauto.
 Qed.
@@ -572,6 +597,25 @@ Ltac UseFinish :=
       repeat rewrite app_ass
   end.
 
+Lemma transl_valof_meets_spec:
+  forall ty a g sl b g' I,
+  transl_valof ty a g = Res (sl, b) g' I ->
+  exists tmps, tr_rvalof ty a sl b tmps /\ contained tmps g g'.
+Proof.
+  unfold transl_valof; intros.
+  destruct (type_is_volatile ty) as []_eqn; monadInv H.
+  exists (x :: nil); split; eauto with gensym. econstructor; eauto with coqlib.
+  exists (@nil ident); split; eauto with gensym. constructor; auto.
+(*
+  destruct (access_mode ty) as []_eqn.
+  destruct (Csem.type_is_volatile ty) as []_eqn; monadInv H.
+  exists (x :: nil); split; eauto with gensym. econstructor; eauto with coqlib.
+  exists (@nil ident); split; eauto with gensym. constructor; auto.
+  monadInv H. exists (@nil ident); split; eauto with gensym. constructor; auto.
+  monadInv H. exists (@nil ident); split; eauto with gensym. constructor; auto.
+*)
+Qed.
+
 Scheme expr_ind2 := Induction for C.expr Sort Prop
   with exprlist_ind2 := Induction for C.exprlist Sort Prop.
 Combined Scheme expr_exprlist_ind from expr_ind2, exprlist_ind2.
@@ -603,9 +647,11 @@ Opaque makeif.
   monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
   econstructor; split; eauto. constructor; auto. 
 (* valof *)
-  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.  
-  econstructor; split.
-  econstructor; eauto. eauto with gensym.
+  monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
+  exploit transl_valof_meets_spec; eauto. intros [tmp2 [C D]]. UseFinish.
+  exists (tmp1 ++ tmp2); split.
+  econstructor; eauto with gensym.
+  eauto with gensym.
 (* deref *)
   monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
   econstructor; split; eauto. constructor; auto. 
@@ -668,18 +714,19 @@ Opaque makeif.
 (* assignop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [C D]].
-  destruct dst; monadInv EQ2.
+  exploit transl_valof_meets_spec; eauto. intros [tmp3 [E F]].
+  destruct dst; monadInv EQ3.
   (* for value *)
-  exists (x1 :: tmp1 ++ tmp2); split.
+  exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
   intros. eapply tr_assignop_val with (dst := For_val); eauto with gensym.
   apply contained_cons. eauto with gensym. 
   apply contained_app; eauto with gensym.
   (* for effects *)
-  exists (tmp1 ++ tmp2); split. 
+  exists (tmp1 ++ tmp2 ++ tmp3); split. 
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for test *)
-  exists (x1 :: tmp1 ++ tmp2); split.
+  exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
   repeat rewrite app_ass. simpl.
   intros. eapply tr_assignop_val with (dst := For_test tyl s1 s2); eauto with gensym.
   apply contained_cons. eauto with gensym. 
@@ -692,8 +739,10 @@ Opaque makeif.
   econstructor; eauto with gensym.
   apply contained_cons; eauto with gensym. 
   (* for effects *)
-  exists tmp1; split. 
-  econstructor; eauto with gensym. auto.
+  exploit transl_valof_meets_spec; eauto. intros [tmp2 [C D]].
+  exists (tmp1 ++ tmp2); split. 
+  econstructor; eauto with gensym.
+  eauto with gensym. 
   (* for test *)
   repeat rewrite app_ass; simpl.
   exists (x0 :: tmp1); split. 

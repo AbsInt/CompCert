@@ -46,20 +46,21 @@ Definition chunk_of_type (ty: type): res memory_chunk :=
 
 Definition var_kind_of_type (ty: type): res var_kind :=
   match ty with
-  | Tint I8 Signed => OK(Vscalar Mint8signed)
-  | Tint I8 Unsigned => OK(Vscalar Mint8unsigned)
-  | Tint I16 Signed => OK(Vscalar Mint16signed)
-  | Tint I16 Unsigned => OK(Vscalar Mint16unsigned)
-  | Tint I32 _ => OK(Vscalar Mint32)
-  | Tfloat F32 => OK(Vscalar Mfloat32)
-  | Tfloat F64 => OK(Vscalar Mfloat64)
+  | Tint I8 Signed _ => OK(Vscalar Mint8signed)
+  | Tint I8 Unsigned _ => OK(Vscalar Mint8unsigned)
+  | Tint I16 Signed _ => OK(Vscalar Mint16signed)
+  | Tint I16 Unsigned _ => OK(Vscalar Mint16unsigned)
+  | Tint I32 _ _ => OK(Vscalar Mint32)
+  | Tint IBool _ _ => OK(Vscalar Mint8unsigned)
+  | Tfloat F32 _ => OK(Vscalar Mfloat32)
+  | Tfloat F64 _ => OK(Vscalar Mfloat64)
   | Tvoid => Error (msg "Cshmgen.var_kind_of_type(void)")
-  | Tpointer _ => OK(Vscalar Mint32)
-  | Tarray _ _ => OK(Varray (Csyntax.sizeof ty))
+  | Tpointer _ _ => OK(Vscalar Mint32)
+  | Tarray _ _ _ => OK(Varray (Csyntax.sizeof ty) (Csyntax.alignof ty))
   | Tfunction _ _ => Error (msg "Cshmgen.var_kind_of_type(function)")
-  | Tstruct _ fList => OK(Varray (Csyntax.sizeof ty))
-  | Tunion _ fList => OK(Varray (Csyntax.sizeof ty))
-  | Tcomp_ptr _ => OK(Vscalar Mint32)
+  | Tstruct _ fList _ => OK(Varray (Csyntax.sizeof ty) (Csyntax.alignof ty))
+  | Tunion _ fList _ => OK(Varray (Csyntax.sizeof ty) (Csyntax.alignof ty))
+  | Tcomp_ptr _ _ => OK(Vscalar Mint32)
 end.
   
 (** * Csharpminor constructors *)
@@ -101,7 +102,7 @@ Definition make_intoffloat (e: expr) (sg: signedness) :=
 *)
 Definition make_boolean (e: expr) (ty: type) :=
   match ty with
-  | Tfloat _ => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
+  | Tfloat _ _ => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
   | _ => e
   end.
 
@@ -128,10 +129,10 @@ Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   | add_case_ff => OK (Ebinop Oaddf e1 e2)
   | add_case_if sg => OK (Ebinop Oaddf (make_floatofint e1 sg) e2)
   | add_case_fi sg => OK (Ebinop Oaddf e1 (make_floatofint e2 sg))
-  | add_case_pi ty =>
+  | add_case_pi ty _ =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
-  | add_case_ip ty =>
+  | add_case_ip ty _ =>
       let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n e1))
   | add_default => Error (msg "Cshmgen.make_add")
@@ -218,6 +219,7 @@ Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
   | I16, Signed => Eunop Ocast16signed e  
   | I16, Unsigned => Eunop Ocast16unsigned e  
   | I32, _ => e
+  | IBool, _ => Eunop Oboolval e
   end.
 
 Definition make_cast_float (e: expr) (sz: floatsize) :=
@@ -233,6 +235,10 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_f2f sz2 => make_cast_float e sz2
   | cast_case_i2f si1 sz2 => make_cast_float (make_floatofint e si1) sz2
   | cast_case_f2i sz2 si2 => make_cast_int (make_intoffloat e si2) sz2 si2
+  | cast_case_ip2bool => Eunop Oboolval e
+  | cast_case_f2bool => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
+  | cast_case_struct id1 fld1 id2 fld2 => e
+  | cast_case_union id1 fld1 id2 fld2 => e
   | cast_case_void => e
   | cast_case_default => e
   end.
@@ -247,10 +253,30 @@ Definition make_load (addr: expr) (ty_res: type) :=
   match (access_mode ty_res) with
   | By_value chunk => OK (Eload chunk addr)
   | By_reference => OK addr
+  | By_copy => OK addr
   | By_nothing => Error (msg "Cshmgen.make_load")
   end.
 
-(** [make_store addr ty_res rhs ty_rhs] stores the value of the
+(** [make_vol_load dst addr ty] loads a volatile value of type [ty] from
+   the memory location denoted by the Csharpminor expression [addr],
+   and stores its result in variable [dst]. *)
+
+Definition make_vol_load (dst: ident) (addr: expr) (ty: type) :=
+  match (access_mode ty) with
+  | By_value chunk => OK (Sbuiltin (Some dst) (EF_vload chunk) (addr :: nil))
+  | By_reference => OK (Sset dst addr)
+  | By_copy => OK (Sset dst addr)
+  | By_nothing => Error (msg "Cshmgen.make_vol_load")
+  end.
+
+(** [make_memcpy dst src ty] returns a [memcpy] builtin appropriate for
+  by-copy assignment of a value of Clight type [ty]. *)
+
+Definition make_memcpy (dst src: expr) (ty: type) :=
+  Sbuiltin None (EF_memcpy (Csyntax.sizeof ty) (Zmin (Csyntax.alignof ty) 4))
+                (dst :: src :: nil).
+
+(** [make_store addr ty rhs] stores the value of the
    Csharpminor expression [rhs] into the memory location denoted by the
    Csharpminor expression [addr].  
    [ty] is the type of the memory location. *)
@@ -258,6 +284,17 @@ Definition make_load (addr: expr) (ty_res: type) :=
 Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
   match access_mode ty with
   | By_value chunk => OK (Sstore chunk addr rhs)
+  | By_copy => OK (make_memcpy addr rhs ty)
+  | _ => Error (msg "Cshmgen.make_store")
+  end.
+
+(** [make_vol_store] is similar, but for a store to a location that
+    can be volatile. *)
+
+Definition make_vol_store (addr: expr) (ty: type) (rhs: expr) :=
+  match access_mode ty with
+  | By_value chunk => OK (Sbuiltin None (EF_vstore chunk) (addr :: rhs :: nil))
+  | By_copy => OK (make_memcpy addr rhs ty)
   | _ => Error (msg "Cshmgen.make_store")
   end.
 
@@ -282,6 +319,7 @@ Definition var_get (id: ident) (ty: type) :=
   match access_mode ty with
   | By_value chunk => OK (Evar id)
   | By_reference => OK (Eaddrof id)
+  | By_copy => OK (Eaddrof id)
   | _ => Error (MSG "Cshmgen.var_get " :: CTX id :: nil)
   end.
 
@@ -292,6 +330,7 @@ Definition var_get (id: ident) (ty: type) :=
 Definition var_set (id: ident) (ty: type) (rhs: expr) :=
   match access_mode ty with
   | By_value chunk => OK (Sassign id rhs)
+  | By_copy => OK (make_memcpy (Eaddrof id) rhs ty)
   | _ => Error (MSG "Cshmgen.var_set " :: CTX id :: nil)
   end.
 
@@ -368,14 +407,14 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
       OK(make_intconst (Int.repr (Csyntax.sizeof ty)))
   | Clight.Efield b i ty => 
       match typeof b with
-      | Tstruct _ fld =>
-          do tb <- transl_lvalue b;
+      | Tstruct _ fld _ =>
+          do tb <- transl_expr b;
           do ofs <- field_offset i fld;
           make_load
             (Ebinop Oadd tb (make_intconst (Int.repr ofs)))
             ty
-      | Tunion _ fld =>
-          do tb <- transl_lvalue b;
+      | Tunion _ fld _ =>
+          do tb <- transl_expr b;
           make_load tb ty
       | _ =>
           Error(msg "Cshmgen.transl_expr(field)")
@@ -395,12 +434,12 @@ with transl_lvalue (a: Clight.expr) {struct a} : res expr :=
       transl_expr b
   | Clight.Efield b i ty => 
       match typeof b with
-      | Tstruct _ fld =>
-          do tb <- transl_lvalue b;
+      | Tstruct _ fld _ =>
+          do tb <- transl_expr b;
           do ofs <- field_offset i fld;
           OK (Ebinop Oadd tb (make_intconst (Int.repr ofs)))
-      | Tunion _ fld =>
-          transl_lvalue b
+      | Tunion _ fld _ =>
+          transl_expr b
       | _ =>
           Error(msg "Cshmgen.transl_lvalue(field)")
       end
@@ -503,7 +542,11 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sskip =>
       OK Sskip
   | Clight.Sassign b c =>
-      match is_variable b with
+      if type_is_volatile (typeof b) then
+         (do tb <- transl_lvalue b;
+          do tc <- transl_expr c;
+          make_vol_store tb (typeof b) (make_cast (typeof c) (typeof b) tc))
+      else match is_variable b with
       | Some id =>
           do tc <- transl_expr c;
           var_set id (typeof b) (make_cast (typeof c) (typeof b) tc)
@@ -515,6 +558,9 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sset x b =>
       do tb <- transl_expr b;
       OK(Sset x tb)
+  | Clight.Svolread x b =>
+      do tb <- transl_lvalue b;
+      make_vol_load x tb (typeof b)
   | Clight.Scall x b cl =>
       match classify_fun (typeof b) with
       | fun_case_f args res =>
@@ -583,13 +629,11 @@ with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
 Definition prefix_var_name (id: ident) : errmsg :=
   MSG "In local variable " :: CTX id :: MSG ": " :: nil.
 
-Definition transl_params (l: list (ident * type)) :=
-   AST.map_partial prefix_var_name chunk_of_type l.
 Definition transl_vars (l: list (ident * type)) :=
    AST.map_partial prefix_var_name var_kind_of_type l.
 
 Definition transl_function (f: Clight.function) : res function :=
-  do tparams <- transl_params (Clight.fn_params f);
+  do tparams <- transl_vars (Clight.fn_params f);
   do tvars <- transl_vars (Clight.fn_vars f);
   do tbody <- transl_statement f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
   OK (mkfunction 

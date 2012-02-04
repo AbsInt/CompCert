@@ -32,27 +32,24 @@ Require Import Cshmgen.
 
 (** * Properties of operations over types *)
 
-Remark type_of_chunk_of_type:
-  forall ty chunk,
-  chunk_of_type ty = OK chunk ->
-  type_of_chunk chunk = typ_of_type ty.
+Remark type_of_kind_of_type:
+  forall t k,
+  var_kind_of_type t = OK k -> type_of_kind k = typ_of_type t.
 Proof.
-  intros. unfold chunk_of_type in H. destruct ty; simpl in H; try monadInv H.
-  destruct i; destruct s; monadInv H; reflexivity.
-  destruct f; monadInv H; reflexivity.
-  reflexivity. 
+  intros. destruct t; try (monadInv H); auto. 
+  destruct i; destruct s; monadInv H; auto.
+  destruct f; monadInv H; auto.
 Qed.
 
 Remark transl_params_types:
   forall p tp,
-  transl_params p = OK tp ->
-  map type_of_chunk (map param_chunk tp) = typlist_of_typelist (type_of_params p).
+  transl_vars p = OK tp ->
+  map type_of_kind (map variable_kind tp) = typlist_of_typelist (type_of_params p).
 Proof.
   induction p; simpl; intros. 
   inv H. auto.
-  destruct a as [id ty]. generalize H; clear H. case_eq (chunk_of_type ty); intros.
-  monadInv H0. simpl. f_equal; auto. apply type_of_chunk_of_type; auto.
-  inv H0.
+  destruct a as [id ty]. destruct (var_kind_of_type ty) as []_eqn; monadInv H.
+  simpl. f_equal; auto. apply type_of_kind_of_type; auto.
 Qed.
 
 Lemma transl_fundef_sig1:
@@ -93,13 +90,24 @@ Proof.
   destruct f; congruence.
 Qed.
 
+Lemma var_kind_by_reference:
+  forall ty vk,
+  access_mode ty = By_reference \/ access_mode ty = By_copy ->
+  var_kind_of_type ty = OK vk ->
+  vk = Varray (Csyntax.sizeof ty) (Csyntax.alignof ty).
+Proof.
+  intros ty vk; destruct ty; simpl; try intuition congruence.
+  destruct i; try congruence; destruct s; intuition congruence.
+  destruct f; intuition congruence.
+Qed.
+
 Lemma sizeof_var_kind_of_type:
   forall ty vk,
   var_kind_of_type ty = OK vk ->
   Csharpminor.sizeof vk = Csyntax.sizeof ty.
 Proof.
   intros ty vk.
-  assert (sizeof (Varray (Csyntax.sizeof ty)) = Csyntax.sizeof ty).
+  assert (sizeof (Varray (Csyntax.sizeof ty) (Csyntax.alignof ty)) = Csyntax.sizeof ty).
     simpl. rewrite Zmax_spec. apply zlt_false. 
     generalize (Csyntax.sizeof_pos ty). omega.
   destruct ty; try (destruct i; try destruct s); try (destruct f); 
@@ -107,8 +115,8 @@ Proof.
 Qed.
 
 Remark cast_int_int_normalized:
-  forall sz si chunk n,
-  access_mode (Tint sz si) = By_value chunk ->
+  forall sz si a chunk n,
+  access_mode (Tint sz si a) = By_value chunk ->
   val_normalized (Vint (cast_int_int sz si n)) chunk.
 Proof.
   unfold access_mode, cast_int_int, val_normalized; intros. destruct sz.
@@ -119,11 +127,12 @@ Proof.
   rewrite Int.sign_ext_idem; auto. compute; auto.
   rewrite Int.zero_ext_idem; auto. compute; auto.
   inv H. auto.
+  inv H. destruct (Int.eq n Int.zero); auto.
 Qed.
 
 Remark cast_float_float_normalized:
-  forall sz chunk n,
-  access_mode (Tfloat sz) = By_value chunk ->
+  forall sz a chunk n,
+  access_mode (Tfloat sz a) = By_value chunk ->
   val_normalized (Vfloat (cast_float_float sz n)) chunk.
 Proof.
   unfold access_mode, cast_float_float, val_normalized; intros. 
@@ -154,6 +163,16 @@ Proof.
   functional inversion H2; subst. eapply cast_float_float_normalized; eauto.
   functional inversion H2; subst. eapply cast_float_float_normalized; eauto.
   functional inversion H2; subst. eapply cast_int_int_normalized; eauto.
+  assert (chunk = Mint8unsigned). 
+    functional inversion H2; subst; simpl in H0; try congruence.
+  subst chunk. destruct (Int.eq i Int.zero); red; auto.
+  assert (chunk = Mint8unsigned). 
+    functional inversion H2; subst; simpl in H0; try congruence.
+  subst chunk. red; auto.
+  functional inversion H2; subst. simpl in H0. inv H0. red; auto.
+  functional inversion H2; subst. simpl in H0. inv H0. red; auto.
+  functional inversion H2; subst. simpl in H0. congruence.
+  functional inversion H2; subst. simpl in H0. congruence.
   functional inversion H5; subst. simpl in H0. congruence.
 Qed.
 
@@ -213,14 +232,6 @@ Proof.
   inv H0. rewrite (IHl1 _ _ _ H H1). auto.
 Qed.
  
-Lemma transl_params_names:
-  forall vars tvars,
-  transl_params vars = OK tvars ->
-  List.map param_name tvars = var_names vars.
-Proof.
-  exact (map_partial_names _ _ chunk_of_type).
-Qed.
-
 Lemma transl_vars_names:
   forall vars tvars,
   transl_vars vars = OK tvars ->
@@ -232,13 +243,13 @@ Qed.
 Lemma transl_names_norepet:
   forall params vars sg tparams tvars temps body,
   list_norepet (var_names params ++ var_names vars) ->
-  transl_params params = OK tparams ->
+  transl_vars params = OK tparams ->
   transl_vars vars = OK tvars ->
   let f := Csharpminor.mkfunction sg tparams tvars temps body in
   list_norepet (fn_params_names f ++ fn_vars_names f).
 Proof.
-  intros. unfold fn_params_names, fn_vars_names, f. simpl.
-  rewrite (transl_params_names _ _ H0).
+  intros. unfold fn_params_names, fn_vars_names; simpl. 
+  rewrite (transl_vars_names _ _ H0).
   rewrite (transl_vars_names _ _ H1).
   auto.
 Qed.
@@ -251,33 +262,15 @@ Proof.
   exact (map_partial_append _ _ var_kind_of_type).
 Qed.
 
-Lemma transl_params_vars:
-  forall params tparams,
-  transl_params params = OK tparams ->
-  transl_vars params =
-  OK (List.map (fun id_chunk => (fst id_chunk, Vscalar (snd id_chunk))) tparams).
-Proof.
-  induction params; intro tparams; simpl.
-  intros. inversion H. reflexivity.
-  destruct a as [id x]. 
-  unfold chunk_of_type. caseEq (access_mode x); try congruence.
-  intros chunk AM. 
-  caseEq (transl_params params); simpl; intros; try congruence.
-  inv H0. 
-  rewrite (var_kind_by_value _ _ AM). 
-  rewrite (IHparams _ H). reflexivity.
-Qed.
-
 Lemma transl_fn_variables:
   forall params vars sg tparams tvars temps body,
-  transl_params params = OK tparams ->
+  transl_vars params = OK tparams ->
   transl_vars vars = OK tvars ->
   let f := Csharpminor.mkfunction sg tparams tvars temps body in
   transl_vars (params ++ vars) = OK (fn_variables f).
 Proof.
   intros. 
-  generalize (transl_params_vars _ _ H); intro.
-  rewrite (transl_vars_append _ _ _ _ H1 H0).
+  rewrite (transl_vars_append _ _ _ _ H H0).
   reflexivity.
 Qed.
 
@@ -300,16 +293,20 @@ Lemma transl_expr_lvalue:
   (exists tb, transl_lvalue a = OK tb /\
               make_load tb (typeof a) = OK ta).
 Proof.
-  intros. inversion H; subst; clear H; simpl in H0.
+  intros until ta; intros EVAL TR. inv EVAL.
+  (* var local *)
   left; exists id; exists ty; auto.
+  (* var global *)
   left; exists id; exists ty; auto.
-  monadInv H0. right. exists x; split; auto.
-  rewrite H2 in H0. monadInv H0. right.  
-  exists (Ebinop Oadd x (make_intconst (Int.repr x0))). split; auto.
-  simpl. rewrite H2. rewrite EQ. rewrite EQ1. auto.
-  rewrite H2 in H0. monadInv H0. right.
-  exists x; split; auto. 
-  simpl. rewrite H2. auto.
+  (* deref *)
+  monadInv TR. right. exists x; split; auto.
+  (* field struct *)
+  simpl in TR. rewrite H0 in TR. monadInv TR.
+  right. econstructor; split. simpl. rewrite H0.
+  rewrite EQ; rewrite EQ1; simpl; eauto. auto.
+  (* field union *)
+  simpl in TR. rewrite H0 in TR. monadInv TR.
+  right. econstructor; split. simpl. rewrite H0. rewrite EQ; simpl; eauto. auto.
 Qed.
 
 (** Properties of labeled statements *)
@@ -389,6 +386,7 @@ Proof.
   destruct si; eauto with cshm.
   destruct si; eauto with cshm.
   auto.
+  econstructor. eauto. simpl. destruct (Int.eq n Int.zero); auto.
 Qed.
 
 Lemma make_cast_float_correct:
@@ -420,7 +418,19 @@ Proof.
   rewrite H2. auto with cshm. 
   (* float -> int *)
   rewrite H2. eauto with cshm.
-  (* void *)
+  (* int/pointer -> bool *)
+  rewrite H2. econstructor; eauto. simpl. destruct (Int.eq i Int.zero); auto.
+  rewrite H2. econstructor; eauto. 
+  (* float -> bool *)
+  rewrite H2. econstructor; eauto with cshm.
+  simpl. unfold Val.cmpf, Val.cmpf_bool. rewrite Float.cmp_ne_eq. rewrite H7; auto.
+  rewrite H2. econstructor; eauto with cshm.
+  simpl. unfold Val.cmpf, Val.cmpf_bool. rewrite Float.cmp_ne_eq. rewrite H7; auto.
+  (* struct -> struct *)
+  rewrite H2. auto.
+  (* union -> union *)
+  rewrite H2. auto.
+  (* any -> void *)
   rewrite H5. auto.
 Qed.
 
@@ -439,6 +449,10 @@ Proof.
   intros. functional inversion H0; subst; simpl.
   exists (Vint n); split; auto.
   exists (Vint n); split; auto.
+  exists (Vint n); split; auto.
+  exists (Vint n); split; auto.
+  exists (Vptr b0 ofs); split; auto. constructor.
+  exists (Vptr b0 ofs); split; auto. constructor.
   exists (Vptr b0 ofs); split; auto. constructor.
   exists (Vptr b0 ofs); split; auto. constructor.
   rewrite <- Float.cmp_ne_eq.
@@ -670,31 +684,128 @@ Lemma make_load_correct:
   forall addr ty code b ofs v e le m,
   make_load addr ty = OK code ->
   eval_expr ge e le m addr (Vptr b ofs) ->
-  load_value_of_type ty m b ofs = Some v ->
+  deref_loc ge ty m b ofs E0 v ->
+  type_is_volatile ty = false ->
   eval_expr ge e le m code v.
 Proof.
-  unfold make_load, load_value_of_type.
-  intros until m; intros MKLOAD EVEXP LDVAL.
-  destruct (access_mode ty); inversion MKLOAD.
-  (* access_mode ty = By_value m *)
-  apply eval_Eload with (Vptr b ofs); auto.
-  (* access_mode ty = By_reference *)
-  subst code. inversion LDVAL. auto.
+  unfold make_load; intros until m; intros MKLOAD EVEXP DEREF NONVOL.
+  inv DEREF. 
+  (* nonvolatile scalar *)
+  rewrite H in MKLOAD. inv MKLOAD. apply eval_Eload with (Vptr b ofs); auto.
+  (* volatile scalar *)
+  congruence.
+  (* by reference *)
+  rewrite H in MKLOAD. inv MKLOAD. auto.
+  (* by copy *)
+  rewrite H in MKLOAD. inv MKLOAD. auto.
 Qed.
 
+Lemma make_vol_load_correct:
+  forall id addr ty code b ofs t v e le m f k,
+  make_vol_load id addr ty = OK code ->
+  eval_expr ge e le m addr (Vptr b ofs) ->
+  deref_loc ge ty m b ofs t v ->
+  type_is_volatile ty = true ->
+  step ge (State f code k e le m) t (State f Sskip k e (PTree.set id v le) m).
+Proof.
+  unfold make_vol_load; intros until k; intros MKLOAD EVEXP DEREF VOL.
+  inv DEREF.
+  (* nonvolatile scalar *)
+  congruence.
+(**
+  rewrite H in MKLOAD. inv MKLOAD.
+  change (PTree.set id v le) with (Cminor.set_optvar (Some id) v le).
+  econstructor. constructor. eauto. constructor. constructor; auto. constructor; auto. 
+*)
+  (* volatile scalar *)
+  rewrite H in MKLOAD. inv MKLOAD.
+  change (PTree.set id v le) with (Cminor.set_optvar (Some id) v le).
+  econstructor. constructor. eauto. constructor. constructor; auto.
+  (* by reference *)
+  rewrite H in MKLOAD. inv MKLOAD. constructor; auto. 
+  (* by copy *)
+  rewrite H in MKLOAD. inv MKLOAD. constructor; auto. 
+Qed.
+
+Remark capped_alignof_divides:
+  forall ty n, 
+  (alignof ty | n) -> (Zmin (alignof ty) 4 | n).
+Proof.
+  intros. generalize (alignof_1248 ty). 
+  intros [A|[A|[A|A]]]; rewrite A in *; auto. 
+  apply Zdivides_trans with 8; auto. exists 2; auto.
+Qed.
+
+Remark capped_alignof_124:
+  forall ty,
+  Zmin (alignof ty) 4 = 1 \/ Zmin (alignof ty) 4 = 2 \/ Zmin (alignof ty) 4 = 4.
+Proof.
+  intros. generalize (alignof_1248 ty). 
+  intros [A|[A|[A|A]]]; rewrite A; auto.
+Qed.
+
+Lemma make_memcpy_correct:
+  forall f dst src ty k e le m b ofs v t m',
+  eval_expr ge e le m dst (Vptr b ofs) ->
+  eval_expr ge e le m src v ->
+  assign_loc ge ty m b ofs v t m' ->
+  access_mode ty = By_copy ->
+  step ge (State f (make_memcpy dst src ty) k e le m) t (State f Sskip k e le m').
+Proof.
+  intros. inv H1; try congruence. 
+  unfold make_memcpy. change le with (set_optvar None Vundef le) at 2. 
+  econstructor.
+  econstructor. eauto. econstructor. eauto. constructor. 
+  econstructor; eauto. 
+  apply capped_alignof_124.
+  apply sizeof_pos. 
+  apply capped_alignof_divides. apply sizeof_alignof_compat.
+  apply capped_alignof_divides; auto.
+  apply capped_alignof_divides; auto.
+Qed.
+ 
 Lemma make_store_correct:
-  forall addr ty rhs code e le m b ofs v m' f k,
+  forall addr ty rhs code e le m b ofs v t m' f k,
   make_store addr ty rhs = OK code ->
   eval_expr ge e le m addr (Vptr b ofs) ->
   eval_expr ge e le m rhs v ->
-  store_value_of_type ty m b ofs v = Some m' ->
-  step ge (State f code k e le m) E0 (State f Sskip k e le m').
+  assign_loc ge ty m b ofs v t m' ->
+  type_is_volatile ty = false ->
+  step ge (State f code k e le m) t (State f Sskip k e le m').
 Proof.
-  unfold make_store, store_value_of_type.
-  intros until k; intros MKSTORE EV1 EV2 STVAL.
-  destruct (access_mode ty); inversion MKSTORE.
-  (* access_mode ty = By_value m *)
-  eapply step_store; eauto. 
+  unfold make_store. intros until k; intros MKSTORE EV1 EV2 ASSIGN NONVOL.
+  inversion ASSIGN; subst.
+  (* nonvolatile scalar *)
+  rewrite H in MKSTORE; inv MKSTORE.
+  econstructor; eauto. 
+  (* volatile scalar *)
+  congruence.
+  (* by copy *)
+  rewrite H in MKSTORE; inv MKSTORE. 
+  eapply make_memcpy_correct; eauto. 
+Qed.
+
+Lemma make_vol_store_correct:
+  forall addr ty rhs code e le m b ofs v t m' f k,
+  make_vol_store addr ty rhs = OK code ->
+  eval_expr ge e le m addr (Vptr b ofs) ->
+  eval_expr ge e le m rhs v ->
+  assign_loc ge ty m b ofs v t m' ->
+  type_is_volatile ty = true ->
+  step ge (State f code k e le m) t (State f Sskip k e le m').
+Proof.
+  unfold make_vol_store. intros until k; intros MKSTORE EV1 EV2 ASSIGN VOL.
+  inversion ASSIGN; subst.
+  (* nonvolatile scalar *)
+  congruence.
+  (* volatile scalar *)
+  rewrite H in MKSTORE; inv MKSTORE. 
+  change le with (Cminor.set_optvar None Vundef le) at 2.
+  econstructor. constructor. eauto. constructor. eauto. constructor.
+  constructor. auto.
+  (* by copy *)
+  rewrite H in MKSTORE; inv MKSTORE. 
+  eapply make_memcpy_correct; eauto. 
 Qed.
 
 End CONSTRUCTORS.
@@ -731,6 +842,49 @@ Lemma var_info_translated:
   Genv.find_var_info ge b = Some v ->
   exists tv, Genv.find_var_info tge b = Some tv /\ transf_globvar transl_globvar v = OK tv.
 Proof (Genv.find_var_info_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+
+Lemma var_info_rev_translated:
+  forall b tv,
+  Genv.find_var_info tge b = Some tv ->
+  exists v, Genv.find_var_info ge b = Some v /\ transf_globvar transl_globvar v = OK tv.
+Proof (Genv.find_var_info_rev_transf_partial2 transl_fundef transl_globvar _ TRANSL).
+
+Lemma block_is_volatile_preserved:
+  forall b, block_is_volatile tge b = block_is_volatile ge b.
+Proof.
+  intros. unfold block_is_volatile.
+  destruct (Genv.find_var_info ge b) as []_eqn.
+  exploit var_info_translated; eauto. intros [tv [A B]]. rewrite A. 
+  unfold transf_globvar in B. monadInv B. auto.
+  destruct (Genv.find_var_info tge b) as []_eqn.
+  exploit var_info_rev_translated; eauto. intros [tv [A B]]. congruence.
+  auto.
+Qed.
+
+Lemma deref_loc_preserved:
+  forall ty m b ofs t v,
+  deref_loc ge ty m b ofs t v -> deref_loc tge ty m b ofs t v.
+Proof.
+  intros. inv H. 
+  eapply deref_loc_value; eauto.
+  eapply deref_loc_volatile; eauto.
+  eapply volatile_load_preserved with (ge1 := ge); auto.
+  exact symbols_preserved. exact block_is_volatile_preserved.
+  eapply deref_loc_reference; eauto.
+  eapply deref_loc_copy; eauto.
+Qed.
+
+Lemma assign_loc_preserved:
+  forall ty m b ofs v t m',
+  assign_loc ge ty m b ofs v t m' -> assign_loc tge ty m b ofs v t m'.
+Proof.
+  intros. inv H. 
+  eapply assign_loc_value; eauto.
+  eapply assign_loc_volatile; eauto.
+  eapply volatile_store_preserved with (ge1 := ge); auto.
+  exact symbols_preserved. exact block_is_volatile_preserved.
+  eapply assign_loc_copy; eauto.
+Qed.
 
 (** * Matching between environments *)
 
@@ -861,31 +1015,42 @@ Qed.
 
 Lemma bind_parameters_match:
   forall e m1 vars vals m2,
-  Csem.bind_parameters e m1 vars vals m2 ->
+  Csem.bind_parameters ge e m1 vars vals m2 ->
   forall te tvars,
   val_casted_list vals (type_of_params vars) ->
   match_env e te ->
-  transl_params vars = OK tvars ->
-  Csharpminor.bind_parameters te m1 tvars vals m2.
+  transl_vars vars = OK tvars ->
+  Csharpminor.bind_parameters tge te m1 tvars vals m2.
 Proof.
   induction 1; intros.
 (* base case *)
   monadInv H1. constructor.
 (* inductive case *)
   simpl in H2. destruct H2.
-  revert H4; simpl.
-  caseEq (chunk_of_type ty); simpl; [intros chunk CHK | congruence].
-  caseEq (transl_params params); simpl; [intros tparams TPARAMS | congruence].
-  intro EQ; inversion EQ; clear EQ; subst tvars.
-  generalize CHK. unfold chunk_of_type. 
-  caseEq (access_mode ty); intros; try discriminate.
-  inversion CHK0; clear CHK0; subst m0.
-  unfold store_value_of_type in H0. rewrite H4 in H0.
-  apply bind_parameters_cons with b m1. 
-  exploit me_local; eauto. intros [vk [A B]].
-  exploit var_kind_by_value; eauto. congruence.
+  simpl in H4. destruct (var_kind_of_type ty) as [vk|]_eqn; monadInv H4.
+  assert (A: (exists chunk, access_mode ty = By_value chunk /\ Mem.store chunk m b 0 v1 = Some m1)
+             \/ access_mode ty = By_copy).
+    inv H0; auto; left; econstructor; split; eauto. inv H7. auto. 
+  destruct A as [[chunk [MODE STORE]] | MODE].
+  (* scalar case *)
+  assert (vk = Vscalar chunk). exploit var_kind_by_value; eauto. congruence. 
+  subst vk.
+  apply bind_parameters_scalar with b m1. 
+  exploit me_local; eauto. intros [vk [A B]]. congruence. 
   eapply val_casted_normalized; eauto.
   assumption.
+  apply IHbind_parameters; auto.
+  (* array case *)
+  inv H0; try congruence.
+  exploit var_kind_by_reference; eauto. intros; subst vk.
+  apply bind_parameters_array with b m1. 
+  exploit me_local; eauto. intros [vk [A B]]. congruence. 
+  econstructor; eauto. 
+  apply capped_alignof_124.
+  apply sizeof_pos. 
+  apply capped_alignof_divides. apply sizeof_alignof_compat. 
+  apply capped_alignof_divides; auto.
+  apply capped_alignof_divides; auto.
   apply IHbind_parameters; auto.
 Qed.
 
@@ -896,16 +1061,21 @@ Qed.
 Lemma var_get_correct:
   forall e le m id ty loc ofs v code te,
   Clight.eval_lvalue ge e le m (Clight.Evar id ty) loc ofs ->
-  load_value_of_type ty m loc ofs = Some v ->
+  deref_loc ge ty m loc ofs E0 v ->
   var_get id ty = OK code ->
   match_env e te ->
   eval_expr tge te le m code v.
 Proof.
-  intros. revert H0 H1. unfold load_value_of_type, var_get. 
-  case_eq (access_mode ty).
+  unfold var_get; intros. 
+  destruct (access_mode ty) as [chunk| | | ]_eqn.
   (* access mode By_value *)
-  intros chunk ACC LOAD EQ. inv EQ.
-  inv H.
+  assert (Mem.loadv chunk m (Vptr loc ofs) = Some v).
+    inv H0.
+    congruence.
+    inv H5. simpl. congruence.
+    congruence.
+    congruence.
+  inv H1. inv H.
     (* local variable *)
     exploit me_local; eauto. intros [vk [A B]].
     assert (vk = Vscalar chunk).
@@ -922,7 +1092,20 @@ Proof.
     eauto. eauto. 
     assumption. 
   (* access mode By_reference *)
-  intros ACC EQ1 EQ2. inv EQ1; inv EQ2; inv H.
+  assert (v = Vptr loc ofs). inv H0; congruence.
+  inv H1. inv H.
+    (* local variable *)
+    exploit me_local; eauto. intros [vk [A B]].
+    eapply eval_Eaddrof.
+    eapply eval_var_addr_local. eauto. 
+    (* global variable *)
+    exploit match_env_globals; eauto. intros [A B].
+    eapply eval_Eaddrof.
+    eapply eval_var_addr_global. auto. 
+    rewrite symbols_preserved. eauto.
+  (* access mode By_copy *)
+  assert (v = Vptr loc ofs). inv H0; congruence.
+  inv H1. inv H.
     (* local variable *)
     exploit me_local; eauto. intros [vk [A B]].
     eapply eval_Eaddrof.
@@ -939,19 +1122,19 @@ Qed.
 (** Correctness of the code generated by [var_set]. *)
 
 Lemma var_set_correct:
-  forall e le m id ty loc ofs v m' code te rhs f k, 
+  forall e le m id ty loc ofs v t m' code te rhs f k, 
   Clight.eval_lvalue ge e le m (Clight.Evar id ty) loc ofs ->
   val_casted v ty ->
-  store_value_of_type ty m loc ofs v = Some m' ->
+  assign_loc ge ty m loc ofs v t m' ->
+  type_is_volatile ty = false ->
   var_set id ty rhs = OK code ->
   match_env e te ->
   eval_expr tge te le m rhs v ->
-  step tge (State f code k te le m) E0 (State f Sskip k te le m').
+  step tge (State f code k te le m) t (State f Sskip k te le m').
 Proof.
-  intros. revert H1 H2. unfold store_value_of_type, var_set.
-  caseEq (access_mode ty).
-  (* access mode By_value *)
-  intros chunk ACC STORE EQ. inv EQ. 
+  intros. unfold var_set in H3.
+  inversion H1; subst; rewrite H6 in H3; inv H3.
+  (* scalar, non volatile *)
   inv H.
     (* local variable *)
     exploit me_local; eauto. intros [vk [A B]].
@@ -968,64 +1151,19 @@ Proof.
     econstructor. eapply eval_var_ref_global. auto.
     rewrite symbols_preserved. eauto.
     eauto. eauto.
-    eapply val_casted_normalized; eauto. assumption. 
-  (* access mode By_reference *)
+    eapply val_casted_normalized; eauto. assumption.
+  (* scalar, volatile *)
   congruence.
-  (* access mode By_nothing *)
-  congruence.
+  (* array *)
+  assert (eval_expr tge te le m (Eaddrof id) (Vptr loc ofs)).
+    inv H. 
+    exploit me_local; eauto. intros [vk [A B]].
+    constructor. eapply eval_var_addr_local; eauto. 
+    exploit match_env_globals; eauto. intros [A B].
+    constructor. eapply eval_var_addr_global; eauto. 
+    rewrite symbols_preserved. eauto.
+  eapply make_memcpy_correct; eauto. eapply assign_loc_preserved; eauto. 
 Qed.
-
-(****************************
-Lemma call_dest_correct:
-  forall e m lhs loc ofs optid te,
-  Csem.eval_lvalue ge e m lhs loc ofs ->
-  transl_lhs_call (Some lhs) = OK optid ->
-  match_env e te ->
-  exists id,
-     optid = Some id
-  /\ ofs = Int.zero
-  /\ match access_mode (typeof lhs) with
-     | By_value chunk => eval_var_ref tge te id loc chunk
-     | _ => True
-     end.
-Proof.
-  intros. revert H0. simpl. caseEq (is_variable lhs); try congruence.
-  intros id ISV EQ. inv EQ. 
-  exploit is_variable_correct; eauto. intro EQ.
-  rewrite EQ in H. clear EQ.
-  exists id. split; auto.
-  inv H.
-(* local variable *)
-  split. auto. 
-  exploit me_local; eauto. intros [vk [A B]].
-  case_eq (access_mode (typeof lhs)); intros; auto.
-  assert (vk = Vscalar m0).
-    exploit var_kind_by_value; eauto. congruence.
-  subst vk. apply eval_var_ref_local; auto.
-(* global variable *)
-  split. auto.
-  exploit match_env_globals; eauto. intros [A B].
-  case_eq (access_mode (typeof lhs)); intros; auto.
-  exploit B; eauto. intros [gv [C D]].
-  eapply eval_var_ref_global; eauto.
-  rewrite symbols_preserved. auto.
-Qed.
-
-Lemma set_call_dest_correct:
-  forall ty m loc v m' e te id,
-  store_value_of_type ty m loc Int.zero v = Some m' ->
-  match access_mode ty with
-  | By_value chunk => eval_var_ref tge te id loc chunk
-  | _ => True
-  end ->
-  match_env e te ->
-  exec_opt_assign tge te m (Some id) v m'.
-Proof.
-  intros. generalize H. unfold store_value_of_type. case_eq (access_mode ty); intros; try congruence.
-  rewrite H2 in H0. 
-  constructor. econstructor. eauto. auto.
-Qed.
-**************************)
 
 (** * Proof of semantic preservation *)
 
@@ -1097,7 +1235,7 @@ Proof.
   (* Case a is a variable *)
   subst a. eapply var_get_correct; eauto.
   (* Case a is another lvalue *)
-  eapply make_load_correct; eauto.
+  eapply make_load_correct; eauto. eapply deref_loc_preserved; eauto. 
 (* var local *)
   exploit (me_local _ _ MENV); eauto.
   intros [vk [A B]].
@@ -1352,11 +1490,17 @@ Proof.
 (* skip *)
   auto.
 (* assign *)
-  simpl in TR. destruct (is_variable e); monadInv TR.
-  unfold var_set in EQ0. destruct (access_mode (typeof e)); inv EQ0. auto.
-  unfold make_store in EQ2. destruct (access_mode (typeof e)); inv EQ2. auto.
+  simpl in TR. destruct (type_is_volatile (typeof e)) as []_eqn.
+  monadInv TR. unfold make_vol_store, make_memcpy in EQ2.
+  destruct (access_mode (typeof e)); inv EQ2; auto.
+  destruct (is_variable e); monadInv TR.
+  unfold var_set, make_memcpy in EQ0.
+  destruct (access_mode (typeof e)); inv EQ0; auto.
+  unfold make_store, make_memcpy in EQ2. destruct (access_mode (typeof e)); inv EQ2; auto.
 (* set *)
   auto.
+(* vol load *)
+  unfold make_vol_load in EQ0. destruct (access_mode (typeof e)); inv EQ0; auto.
 (* call *)
   simpl in TR. destruct (classify_fun (typeof e)); monadInv TR. auto.
 (* seq *)
@@ -1451,30 +1595,55 @@ Proof.
   induction 1; intros T1 MST; inv MST.
 
 (* assign *)
-  revert TR. simpl. case_eq (is_variable a1); intros; monadInv TR. 
-  exploit is_variable_correct; eauto. intro EQ1. rewrite EQ1 in H.
-  assert (ts' = ts /\ tk' = tk).
+  simpl in TR. destruct (type_is_volatile (typeof a1)) as []_eqn. 
+  (* Case 1: volatile *)
+  monadInv TR. 
+  assert (SAME: ts' = ts /\ tk' = tk).
     inversion MTR. auto. 
-    subst ts. unfold var_set in EQ0. destruct (access_mode (typeof a1)); congruence.
-  destruct H4; subst ts' tk'.
+    subst ts. unfold make_vol_store, make_memcpy in EQ2.
+    destruct (access_mode (typeof a1)); congruence.
+  destruct SAME; subst ts' tk'.
+  econstructor; split.
+  apply plus_one. eapply make_vol_store_correct; eauto.
+  eapply transl_lvalue_correct; eauto. eapply make_cast_correct; eauto.
+  eapply transl_expr_correct; eauto. eapply assign_loc_preserved; eauto. 
+  eapply match_states_skip; eauto.
+  (* Case 2: variable *)
+  destruct (is_variable a1) as []_eqn; monadInv TR.
+  assert (SAME: ts' = ts /\ tk' = tk).
+    inversion MTR. auto. 
+    subst ts. unfold var_set, make_memcpy in EQ0. destruct (access_mode (typeof a1)); congruence.
+  destruct SAME; subst ts' tk'.
+  exploit is_variable_correct; eauto. intro EQ1. rewrite EQ1 in H.
   econstructor; split.
   apply plus_one. eapply var_set_correct; eauto. exists v2; exists (typeof a2); auto.
   eapply make_cast_correct; eauto. eapply transl_expr_correct; eauto.
   eapply match_states_skip; eauto.
-
-  assert (ts' = ts /\ tk' = tk).
+  (* Case 3: everything else *)
+  assert (SAME: ts' = ts /\ tk' = tk).
     inversion MTR. auto. 
-    subst ts. unfold make_store in EQ2. destruct (access_mode (typeof a1)); congruence.
-  destruct H4; subst ts' tk'.
+    subst ts. unfold make_store, make_memcpy in EQ2. destruct (access_mode (typeof a1)); congruence.
+  destruct SAME; subst ts' tk'.
   econstructor; split.
   apply plus_one. eapply make_store_correct; eauto.
-  exploit transl_lvalue_correct; eauto.
-  eapply make_cast_correct; eauto. eapply transl_expr_correct; eauto.
+  eapply transl_lvalue_correct; eauto. eapply make_cast_correct; eauto.
+  eapply transl_expr_correct; eauto. eapply assign_loc_preserved; eauto. 
   eapply match_states_skip; eauto.
 
 (* set *)
   monadInv TR. inv MTR. econstructor; split.
   apply plus_one. econstructor. eapply transl_expr_correct; eauto. 
+  eapply match_states_skip; eauto.
+
+(* vol read *)
+  monadInv TR. 
+  assert (SAME: ts' = ts /\ tk' = tk).
+    inversion MTR. auto. 
+    subst ts. unfold make_vol_load in EQ0. destruct (access_mode (typeof a)); congruence.
+  destruct SAME; subst ts' tk'.
+  econstructor; split.
+  apply plus_one. eapply make_vol_load_correct; eauto. eapply transl_lvalue_correct; eauto.
+  eapply deref_loc_preserved; eauto.
   eapply match_states_skip; eauto.
 
 (* call *)
@@ -1759,8 +1928,8 @@ Proof.
   monadInv TR. monadInv EQ.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   exploit match_env_alloc_variables; eauto. 
-  apply match_env_empty. 
-  apply transl_fn_variables. eauto. eauto. 
+  apply match_env_empty.
+  eapply transl_fn_variables; eauto.
   intros [te1 [C D]].
   econstructor; split.
   apply plus_one. econstructor.
@@ -1806,7 +1975,7 @@ Proof.
     rewrite symbols_preserved. replace (prog_main tprog) with (prog_main prog).
     auto. symmetry. unfold transl_program in TRANSL. 
     eapply transform_partial_program2_main; eauto.
-  assert (funsig tf = signature_of_type Tnil (Tint I32 Signed)).
+  assert (funsig tf = signature_of_type Tnil type_int32s).
     eapply transl_fundef_sig2; eauto. 
   econstructor; split.
   econstructor; eauto. eapply Genv.init_mem_transf_partial2; eauto. 

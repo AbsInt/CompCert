@@ -112,6 +112,7 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Ocast16unsigned => cast16unsigned arg 
   | Cminor.Ocast16signed => cast16signed arg 
   | Cminor.Onegint => negint arg
+  | Cminor.Oboolval => boolval arg
   | Cminor.Onotbool => notbool arg
   | Cminor.Onotint => notint arg
   | Cminor.Onegf => negf arg
@@ -202,6 +203,8 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : stmt :=
       | None => Scall optid sg (sel_expr fn) (sel_exprlist args)
       | Some ef => Sbuiltin optid ef (sel_exprlist args)
       end
+  | Cminor.Sbuiltin optid ef args =>
+      Sbuiltin optid ef (sel_exprlist args)
   | Cminor.Stailcall sg fn args => 
       Stailcall sg (sel_expr fn) (sel_exprlist args)
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt ge s1) (sel_stmt ge s2)

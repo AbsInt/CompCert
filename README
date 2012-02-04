@@ -33,12 +33,12 @@ SUPPORTED PLATFORMS:
     natively at full speed on PowerPC-based Macs, and runs under
     software emulation at reduced speed on Intel-based Macs.
 
-- PowerPC / Linux   [somewhat experimental]
+- PowerPC / Linux   [stable]
     For PowerPC machines running the Linux operating system.
 
-- IA32 / Linux or MacOS or Windows+Cygwin  [experimental]
+- IA32 / Linux or MacOS or Windows+Cygwin  [stable]
    For Intel/AMD x86 processors with SSE2 extensions
-   (i.e. Pentium 4 and later), running either Linux, MacOS 10.6,
+   (i.e. Pentium 4 and later), running either Linux, MacOS 10.6 or 10.7,
    or Windows with the Cygwin environment (http://www.cygwin.com/).
 
 - ARM / Linux       [experimental]
@@ -60,7 +60,7 @@ PREREQUISITES:
 * The Caml functional language, version 3.10 or later.
   Caml is free software, available from http://caml.inria.fr/
 
-* Under MacOS 10.5 and 10.6, some standard C include files in /usr/include/
+* Under MacOS, some standard C include files in /usr/include/
   contain gcc-isms that cause errors when compiling with CompCert.
   Symptoms include:
     - references to undefined types uint16_t and uint32_t
@@ -84,6 +84,8 @@ where <target> is one of:
 
             ppc-macosx       (PowerPC, MacOS X)
             ppc-linux        (PowerPC, Linux)
+            ppc-eabi-unix    (PowerPC, EABI with Unix tools)
+            ppc-eabi-diab    (PowerPC, EABI with Diab tools)
             arm-linux        (ARM, Linux)
             ia32-linux       (x86 SSE2 32 bits, Linux)
             ia32-macosx      (x86 SSE2 32 bits, MacOS X)
@@ -172,9 +174,12 @@ Preprocessing options:
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flonglong     Partial emulation of 'long long' types [on]
-  -fstruct-passing  Emulate passing structs and unions by value [off]
-  -fstruct-assign   Emulate assignment between structs or unions [off]
+  -flongdouble   Treat 'long double' as 'double' [off]
+  -fstruct-return  Emulate returning structs and unions by value [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
+  -fpacked-structs  Emulate packed structs [off]
+  -fall          Activate all language support options above
+  -fnone         Turn off all language support options above
 Code generation options:
   -fmadd         Use fused multiply-add and multiply-sub instructions
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area

@@ -530,6 +530,156 @@ Qed.
 
 End BACKWARD_SIMULATIONS.
 
+(** * Program behaviors for the "atomic" construction *)
+
+Section ATOMIC.
+
+Variable L: semantics.
+Hypothesis Lwb: well_behaved_traces L.
+
+Remark atomic_finish: forall s t, output_trace t -> Star (atomic L) (t, s) t (E0, s).
+Proof.
+  induction t; intros.
+  apply star_refl.
+  simpl in H; destruct H. eapply star_left; eauto.
+  simpl. apply atomic_step_continue; auto. simpl; auto. auto.
+Qed.
+
+Lemma step_atomic_plus:
+  forall s1 t s2, Step L s1 t s2 -> Plus (atomic L) (E0,s1) t (E0,s2).
+Proof.
+  intros.  destruct t.
+  apply plus_one. simpl; apply atomic_step_silent; auto.
+  exploit Lwb; eauto. simpl; intros. 
+  eapply plus_left. eapply atomic_step_start; eauto. eapply atomic_finish; eauto. auto.
+Qed.
+
+Lemma star_atomic_star:
+  forall s1 t s2, Star L s1 t s2 -> Star (atomic L) (E0,s1) t (E0,s2).
+Proof.
+  induction 1. apply star_refl. eapply star_trans with (s2 := (E0,s2)).
+  apply plus_star. eapply step_atomic_plus; eauto. eauto. auto.
+Qed.
+ 
+Lemma atomic_forward_simulation: forward_simulation L (atomic L).
+Proof.
+  set (ms := fun (s: state L) (ts: state (atomic L)) => ts = (E0,s)).
+  apply forward_simulation_plus with ms; intros.
+  auto.
+  exists (E0,s1); split. simpl; auto. red; auto. 
+  red in H. subst s2. simpl; auto. 
+  red in H0. subst s2. exists (E0,s1'); split.
+  apply step_atomic_plus; auto. red; auto.
+Qed.
+
+Lemma atomic_star_star_gen:
+  forall ts1 t ts2, Star (atomic L) ts1 t ts2 ->
+  exists t', Star L (snd ts1) t' (snd ts2) /\ fst ts1 ** t' = t ** fst ts2.
+Proof.
+  induction 1. 
+  exists E0; split. apply star_refl. traceEq.
+  destruct IHstar as [t' [A B]].
+  simpl in H; inv H; simpl in *.
+  exists t'; split. eapply star_left; eauto. auto.
+  exists (ev :: t0 ** t'); split. eapply star_left; eauto. rewrite B; auto. 
+  exists t'; split. auto. rewrite B; auto.
+Qed.
+
+Lemma atomic_star_star:
+  forall s1 t s2, Star (atomic L) (E0,s1) t (E0,s2) -> Star L s1 t s2.
+Proof.
+  intros. exploit atomic_star_star_gen; eauto. intros [t' [A B]]. 
+  simpl in *. replace t with t'. auto. subst; traceEq. 
+Qed.
+
+Lemma atomic_forever_silent_forever_silent:
+  forall s, Forever_silent (atomic L) s -> Forever_silent L (snd s).
+Proof.
+  cofix COINDHYP; intros. inv H. inv H0. 
+  apply forever_silent_intro with (snd (E0, s')). auto. apply COINDHYP; auto. 
+Qed.
+
+Remark star_atomic_output_trace:
+  forall s t t' s',
+  Star (atomic L) (E0, s) t (t', s') -> output_trace t'.
+Proof.
+  assert (forall ts1 t ts2, Star (atomic L) ts1 t ts2 ->
+          output_trace (fst ts1) -> output_trace (fst ts2)).
+  induction 1; intros. auto. inv H; simpl in *.
+  apply IHstar. auto.
+  apply IHstar. exploit Lwb; eauto.
+  destruct H2. apply IHstar. auto.
+  intros. change t' with (fst (t',s')). eapply H; eauto. simpl; auto. 
+Qed.
+
+Lemma atomic_forever_reactive_forever_reactive:
+  forall s T, Forever_reactive (atomic L) (E0,s) T -> Forever_reactive L s T.
+Proof.
+  assert (forall t s T, Forever_reactive (atomic L) (t,s) T ->
+          exists T', Forever_reactive (atomic L) (E0,s) T' /\ T = t *** T').
+  induction t; intros. exists T; auto.
+  inv H. inv H0. congruence. simpl in H; inv H. 
+  destruct (IHt s (t2***T0)) as [T' [A B]]. eapply star_forever_reactive; eauto.
+  exists T'; split; auto. simpl. congruence. 
+
+  cofix COINDHYP; intros. inv H0. destruct s2 as [t2 s2]. 
+  destruct (H _ _ _ H3) as [T' [A B]].  
+  assert (Star (atomic L) (E0, s) (t**t2) (E0, s2)).
+    eapply star_trans. eauto. apply atomic_finish. eapply star_atomic_output_trace; eauto. auto. 
+  replace (t *** T0) with ((t ** t2) *** T'). apply forever_reactive_intro with s2. 
+  apply atomic_star_star; auto. destruct t; simpl in *; unfold E0 in *; congruence.
+  apply COINDHYP. auto.
+  subst T0; traceEq.
+Qed.
+
+Theorem atomic_behaviors:
+  forall beh, program_behaves L beh <-> program_behaves (atomic L) beh.
+Proof.
+  intros; split; intros.
+  (* L -> atomic L *)
+  exploit forward_simulation_behavior_improves. eapply atomic_forward_simulation. eauto. 
+  intros [beh2 [A B]]. red in B. destruct B as [EQ | [t [C D]]].
+  congruence.
+  subst beh. inv H. inv H1.
+  apply program_runs with (E0,s). simpl; auto. 
+  apply state_goes_wrong with (E0,s'). apply star_atomic_star; auto. 
+  red; intros; red; intros. inv H. eelim H3; eauto. eelim H3; eauto. 
+  intros; red; intros. simpl in H. destruct H. eelim H4; eauto. 
+  apply program_goes_initially_wrong. 
+  intros; red; intros. simpl in H; destruct H. eelim H1; eauto. 
+  (* atomic L -> L *)
+  inv H.
+  (* initial state defined *)
+  destruct s as [t s]. simpl in H0. destruct H0; subst t. 
+  apply program_runs with s; auto. 
+  inv H1.
+  (* termination *)
+  destruct s' as [t' s']. simpl in H2; destruct H2; subst t'. 
+  econstructor. eapply atomic_star_star; eauto. auto. 
+  (* silent divergence *)
+  destruct s' as [t' s'].
+  assert (t' = E0). inv H2. inv H1; auto. subst t'. 
+  econstructor. eapply atomic_star_star; eauto. 
+  change s' with (snd (E0,s')). apply atomic_forever_silent_forever_silent. auto.
+  (* reactive divergence *)
+  econstructor. apply atomic_forever_reactive_forever_reactive. auto. 
+  (* going wrong *)
+  destruct s' as [t' s'].
+  assert (t' = E0).
+    destruct t'; auto. eelim H2. simpl. apply atomic_step_continue.
+    eapply star_atomic_output_trace; eauto.
+  subst t'. econstructor. apply atomic_star_star; eauto. 
+  red; intros; red; intros. destruct t0.
+  elim (H2 E0 (E0,s'0)). constructor; auto. 
+  elim (H2 (e::nil) (t0,s'0)). constructor; auto.
+  intros; red; intros. elim (H3 r). simpl; auto. 
+  (* initial state undefined *)
+  apply program_goes_initially_wrong. 
+  intros; red; intros. elim (H0 (E0,s)); simpl; auto.
+Qed.
+
+End ATOMIC.
+
 (** * Additional results about infinite reduction sequences *)
 
 (** We now show that any infinite sequence of reductions is either of

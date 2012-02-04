@@ -16,12 +16,8 @@ cparser/Elab
 cparser/Rename
 cparser/Transform
 cparser/Unblock
-cparser/SimplExpr
-cparser/AddCasts
-cparser/StructByValue
-cparser/StructAssign
+cparser/StructReturn
 cparser/Bitfields
 cparser/PackedStructs
-cparser/SimplVolatile
 cparser/Parse
 

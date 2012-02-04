@@ -86,14 +86,14 @@ Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
       eval_simple_lvalue (Ederef r ty) b ofs
-  | esl_field_struct: forall l f ty b ofs id fList delta,
-      eval_simple_lvalue l b ofs ->
-      typeof l = Tstruct id fList -> field_offset f fList = OK delta ->
-      eval_simple_lvalue (Efield l f ty) b (Int.add ofs (Int.repr delta))
-  | esl_field_union: forall l f ty b ofs id fList,
-      eval_simple_lvalue l b ofs ->
-      typeof l = Tunion id fList ->
-      eval_simple_lvalue (Efield l f ty) b ofs
+  | esl_field_struct: forall r f ty b ofs id fList a delta,
+      eval_simple_rvalue r (Vptr b ofs) ->
+      typeof r = Tstruct id fList a -> field_offset f fList = OK delta ->
+      eval_simple_lvalue (Efield r f ty) b (Int.add ofs (Int.repr delta))
+  | esl_field_union: forall r f ty b ofs id fList a,
+      eval_simple_rvalue r (Vptr b ofs) ->
+      typeof r = Tunion id fList a ->
+      eval_simple_lvalue (Efield r f ty) b ofs
 
 with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_val: forall v ty,
@@ -101,7 +101,7 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_rvalof: forall b ofs l ty v,
       eval_simple_lvalue l b ofs ->
       ty = typeof l ->
-      load_value_of_type ty m b ofs = Some v ->
+      deref_loc ge ty m b ofs E0 v ->
       eval_simple_rvalue (Evalof l ty) v
   | esr_addrof: forall b ofs l ty,
       eval_simple_lvalue l b ofs ->
@@ -166,17 +166,17 @@ Proof.
 Qed.
 
 Lemma rred_simple:
-  forall r m r' m', rred r m r' m' -> simple r -> simple r'.
+  forall r m t r' m', rred ge r m t r' m' -> simple r -> simple r'.
 Proof.
   induction 1; simpl; intuition. destruct b; auto. 
 Qed.
 
 Lemma rred_compat:
-  forall e r m r' m', rred r m r' m' ->
+  forall e r m r' m', rred ge r m E0 r' m' ->
   simple r ->
   m = m' /\ compat_eval RV e r r' m.
 Proof.
-  induction 1; simpl; intro SIMP; try contradiction; split; auto; split; auto; intros vx EV.
+  intros until m'; intros RED SIMP. inv RED; simpl in SIMP; try contradiction; split; auto; split; auto; intros vx EV.
   inv EV. econstructor. constructor. auto. auto. 
   inv EV. econstructor. constructor.
   inv EV. econstructor; eauto. constructor. 
@@ -227,12 +227,12 @@ Qed.
 Lemma simple_context_2:
   forall a a', simple a' -> forall from to C, context from to C -> simple (C a) -> simple (C a').
 Proof.
-  induction 2; simpl; tauto. 
+  induction 2; simpl; try tauto. 
 Qed.
 
 Lemma compat_eval_steps:
-  forall f r e m w r' m',
-  star step ge (ExprState f r Kstop e m) w (ExprState f r' Kstop e m') ->
+  forall f r e m  r' m',
+  star step ge (ExprState f r Kstop e m) E0 (ExprState f r' Kstop e m') ->
   simple r -> 
   m' = m /\ compat_eval RV e r r' m.
 Proof.
@@ -240,10 +240,10 @@ Proof.
   (* base case *) 
   split. auto. red; auto.
   (* inductive case *)
-  destruct H.
+  destruct (app_eq_nil t1 t2); auto. subst. inv H.
   (* expression step *)
   assert (X: exists r1, s2 = ExprState f r1 Kstop e m /\ compat_eval RV e r r1 m /\ simple r1).
-    inv H.
+    inv H3.
     (* lred *)
     assert (S: simple a) by (eapply simple_context_1; eauto).
     exploit lred_compat; eauto. intros [A B]. subst m'0.
@@ -258,17 +258,19 @@ Proof.
     eapply simple_context_2; eauto. eapply rred_simple; eauto.
     (* callred *)
     assert (S: simple a) by (eapply simple_context_1; eauto).
-    inv H10; simpl in S; contradiction.
+    inv H9; simpl in S; contradiction.
+    (* stuckred *)
+    inv H2. destruct H; inv H. 
   destruct X as [r1 [A [B C]]]. subst s2. 
   exploit IHstar; eauto. intros [D E]. 
   split. auto. destruct B; destruct E. split. congruence. auto. 
   (* statement steps *)
-  inv H.
+  inv H3.
 Qed.
 
 Theorem eval_simple_steps:
-  forall f r e m w v ty m',
-  star step ge (ExprState f r Kstop e m) w (ExprState f (Eval v ty) Kstop e m') ->
+  forall f r e m v ty m',
+  star step ge (ExprState f r Kstop e m) E0 (ExprState f (Eval v ty) Kstop e m') ->
   simple r ->
   m' = m /\ ty = typeof r /\ eval_simple_rvalue e m r v.
 Proof.
@@ -406,6 +408,12 @@ Proof.
   rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. inv H0. destruct (cast_float_int si2 f); inv H. inv H7. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. inv H. rewrite H7. constructor.
+  rewrite H2 in H. inv H0. inv H. rewrite H7. constructor.
+  rewrite H2 in H. destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. auto.
+  rewrite H2 in H. destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. auto.
   rewrite H5 in H. inv H. auto.
 Qed.
 
@@ -437,8 +445,7 @@ Proof.
   (* val *)
   destruct v; monadInv CV; constructor.
   (* rval *)
-  unfold load_value_of_type in H1. destruct (access_mode ty); try congruence. inv H1. 
-  eauto.
+  inv H1; rewrite H2 in CV; try congruence. eauto. 
   (* addrof *)
   eauto.
   (* unop *)
@@ -468,10 +475,10 @@ Proof.
   (* deref *)
   eauto.
   (* field struct *)
-  rewrite H0 in CV. monadInv CV. exploit IHeval_simple_lvalue; eauto. intro MV. inv MV.
+  rewrite H0 in CV. monadInv CV. exploit constval_rvalue; eauto. intro MV. inv MV.
   simpl. replace x with delta by congruence. constructor. auto.
   (* field union *)
-  rewrite H0 in CV. auto.
+  rewrite H0 in CV. eauto.
 Qed.
 
 Lemma constval_simple:
@@ -487,8 +494,8 @@ Qed.
 (** Soundness of [constval] with respect to the reduction semantics. *)
 
 Theorem constval_steps:
-  forall f r m w v v' ty m',
-  star step ge (ExprState f r Kstop empty_env m) w (ExprState f (Eval v' ty) Kstop empty_env m') ->
+  forall f r m v v' ty m',
+  star step ge (ExprState f r Kstop empty_env m) E0 (ExprState f (Eval v' ty) Kstop empty_env m') ->
   constval r = OK v ->
   m' = m /\ ty = typeof r /\ match_val v v'.
 Proof.
@@ -501,9 +508,9 @@ Qed.
 (** Soundness for single initializers. *)
 
 Theorem transl_init_single_steps:
-  forall ty a data f m w v1 ty1 m' v chunk b ofs m'',
+  forall ty a data f m v1 ty1 m' v chunk b ofs m'',
   transl_init_single ty a = OK data ->
-  star step ge (ExprState f a Kstop empty_env m) w (ExprState f (Eval v1 ty1) Kstop empty_env m') ->
+  star step ge (ExprState f a Kstop empty_env m) E0 (ExprState f (Eval v1 ty1) Kstop empty_env m') ->
   sem_cast v1 ty1 ty = Some v ->
   access_mode ty = By_value chunk ->
   Mem.store chunk m' b ofs v = Some m'' ->
@@ -583,9 +590,9 @@ Proof.
 Qed.
 
 Remark sizeof_struct_eq:
-  forall id fl,
+  forall id fl a,
   fl <> Fnil ->
-  sizeof (Tstruct id fl) = align (sizeof_struct fl 0) (alignof (Tstruct id fl)).
+  sizeof (Tstruct id fl a) = align (sizeof_struct fl 0) (alignof (Tstruct id fl a)).
 Proof.
   intros. simpl. f_equal. rewrite Zmax_spec. apply zlt_false. 
   destruct fl. congruence. simpl. 
@@ -595,9 +602,9 @@ Proof.
 Qed.
 
 Remark sizeof_union_eq:
-  forall id fl,
+  forall id fl a,
   fl <> Fnil ->
-  sizeof (Tunion id fl) = align (sizeof_union fl) (alignof (Tunion id fl)).
+  sizeof (Tunion id fl a) = align (sizeof_union fl) (alignof (Tunion id fl a)).
 Proof.
   intros. simpl. f_equal. rewrite Zmax_spec. apply zlt_false. 
   destruct fl. congruence. simpl. 
@@ -705,15 +712,15 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
       access_mode ty = By_value chunk ->
       Mem.store chunk m' b ofs v = Some m'' ->
       exec_init m b ofs ty (Init_single a) m''
-  | exec_init_compound_array: forall m b ofs ty sz il m',
+  | exec_init_compound_array: forall m b ofs ty sz a il m',
       exec_init_array m b ofs ty sz il m' ->
-      exec_init m b ofs (Tarray ty sz) (Init_compound il) m'
-  | exec_init_compound_struct: forall m b ofs id fl il m',
-      exec_init_list m b ofs (fields_of_struct id (Tstruct id fl) fl 0) il m' ->
-      exec_init m b ofs (Tstruct id fl) (Init_compound il) m'
-  | exec_init_compound_union: forall m b ofs id id1 ty1 fl i m',
-      exec_init m b ofs (unroll_composite id (Tunion id (Fcons id1 ty1 fl)) ty1) i m' ->
-      exec_init m b ofs (Tunion id (Fcons id1 ty1 fl)) (Init_compound (Init_cons i Init_nil)) m'
+      exec_init m b ofs (Tarray ty sz a) (Init_compound il) m'
+  | exec_init_compound_struct: forall m b ofs id fl a il m',
+      exec_init_list m b ofs (fields_of_struct id (Tstruct id fl a) fl 0) il m' ->
+      exec_init m b ofs (Tstruct id fl a) (Init_compound il) m'
+  | exec_init_compound_union: forall m b ofs id id1 ty1 fl a i m',
+      exec_init m b ofs (unroll_composite id (Tunion id (Fcons id1 ty1 fl) a) ty1) i m' ->
+      exec_init m b ofs (Tunion id (Fcons id1 ty1 fl) a) (Init_compound (Init_cons i Init_nil)) m'
 
 with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem -> Prop :=
   | exec_init_array_nil: forall m b ofs ty,

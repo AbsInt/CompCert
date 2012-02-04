@@ -508,12 +508,6 @@ Definition compare_float (rs: regset) (v1 v2: val) :=
     #CR0_2 <- (Val.cmpf Ceq v1 v2)
     #CR0_3 <- Vundef.
 
-Definition val_cond_reg (rs: regset) :=
-  Val.or (Val.shl rs#CR0_0 (Vint (Int.repr 31)))
-  (Val.or (Val.shl rs#CR0_1 (Vint (Int.repr 30)))
-   (Val.or (Val.shl rs#CR0_2 (Vint (Int.repr 29)))
-            (Val.shl rs#CR0_3 (Vint (Int.repr 28))))).
-
 (** Execution of a single instruction [i] in initial state
     [rs] and [m].  Return updated state.  For instructions
     that correspond to actual PowerPC instructions, the cases are
@@ -968,7 +962,7 @@ Ltac Equalities :=
   exploit external_call_determ. eexact H3. eexact H8. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
 (* trace length *)
-  inv H; simpl.
+  red; intros. inv H; simpl.
   omega.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.

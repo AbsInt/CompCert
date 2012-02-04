@@ -61,6 +61,18 @@ Lemma functions_translated:
   Genv.find_funct tge v = Some tf /\ transl_fundef gce f = OK tf.
 Proof (Genv.find_funct_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
 
+Lemma var_info_translated:
+  forall b v,
+  Genv.find_var_info ge b = Some v ->
+  exists tv, Genv.find_var_info tge b = Some tv /\ transf_globvar transl_globvar v = OK tv.
+Proof (Genv.find_var_info_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
+
+Lemma var_info_rev_translated:
+  forall b tv,
+  Genv.find_var_info tge b = Some tv ->
+  exists v, Genv.find_var_info ge b = Some v /\ transf_globvar transl_globvar v = OK tv.
+Proof (Genv.find_var_info_rev_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
+
 Lemma sig_preserved_body:
   forall f tf cenv size,
   transl_funbody cenv size f = OK tf -> 
@@ -245,10 +257,10 @@ Inductive match_var (f: meminj) (id: ident)
       val_inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
       match_var f id e m te sp (Var_stack_scalar chunk ofs)
   | match_var_stack_array:
-      forall ofs sz b,
-      PTree.get id e = Some (b, Varray sz) ->
+      forall ofs sz al b,
+      PTree.get id e = Some (b, Varray sz al) ->
       val_inject f (Vptr b Int.zero) (Vptr sp (Int.repr ofs)) ->
-      match_var f id e m te sp (Var_stack_array ofs)
+      match_var f id e m te sp (Var_stack_array ofs sz al)
   | match_var_global_scalar:
       forall chunk,
       PTree.get id e = None ->
@@ -463,8 +475,8 @@ Inductive alloc_condition: var_info -> var_kind -> block -> option (block * Z) -
       alloc_condition (Var_local chunk) (Vscalar chunk) sp None
   | alloc_cond_stack_scalar: forall chunk pos sp,
       alloc_condition (Var_stack_scalar chunk pos) (Vscalar chunk) sp (Some(sp, pos))
-  | alloc_cond_stack_array: forall pos sz sp,
-      alloc_condition (Var_stack_array pos) (Varray sz) sp (Some(sp, pos)).
+  | alloc_cond_stack_array: forall pos sz al sp,
+      alloc_condition (Var_stack_array pos sz al) (Varray sz al) sp (Some(sp, pos)).
 
 Lemma match_env_alloc_same:
   forall f1 cenv e le m1 te sp lo lv m2 b f2 id info tv,
@@ -1156,6 +1168,7 @@ Qed.
 
 Definition val_match_approx (a: approx) (v: val) : Prop :=
   match a with
+  | Int1 => v = Val.zero_ext 1 v
   | Int7 => v = Val.zero_ext 8 v /\ v = Val.sign_ext 8 v
   | Int8u => v = Val.zero_ext 8 v
   | Int8s => v = Val.sign_ext 8 v
@@ -1187,8 +1200,16 @@ Proof.
     intros. rewrite H.
     destruct v; simpl; auto. decEq. symmetry. 
     apply Int.sign_zero_ext_widen. compute; auto. split. omega. compute; auto.
+  assert (D: forall v, v = Val.zero_ext 1 v -> v = Val.zero_ext 8 v).
+    intros. rewrite H.
+    destruct v; simpl; auto. decEq. symmetry. 
+    apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
+  assert (E: forall v, v = Val.zero_ext 1 v -> v = Val.sign_ext 8 v).
+    intros. rewrite H.
+    destruct v; simpl; auto. decEq. symmetry. 
+    apply Int.sign_zero_ext_widen. compute; auto. split. omega. compute; auto.
   intros. 
-  unfold Approx.bge in H; destruct a1; try discriminate; destruct a2; simpl in *; try discriminate; intuition; auto.
+  unfold Approx.bge in H; destruct a1; try discriminate; destruct a2; simpl in *; try discriminate; intuition.
 Qed.
 
 Lemma approx_lub_ge_left:
@@ -1206,7 +1227,9 @@ Qed.
 Lemma approx_of_int_sound:
   forall n, val_match_approx (Approx.of_int n) (Vint n).
 Proof.
-  unfold Approx.of_int; intros. 
+  unfold Approx.of_int; intros.
+  destruct (Int.eq_dec n Int.zero); simpl. subst; auto. 
+  destruct (Int.eq_dec n Int.one); simpl. subst; auto. 
   destruct (Int.eq_dec n (Int.zero_ext 7 n)). simpl.
     split.
     decEq. rewrite e. symmetry. apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
@@ -1249,7 +1272,8 @@ Proof.
   destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
   destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. compute; auto.
   destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
-  destruct v1; simpl; auto. destruct (Int.eq i Int.zero); auto.
+  destruct v1; simpl; auto. destruct (Int.eq i Int.zero); simpl; auto.
+  destruct v1; simpl; auto. destruct (Int.eq i Int.zero); simpl; auto.
   destruct v1; simpl; auto. rewrite Float.singleoffloat_idem; auto.
 Qed.
 
@@ -1273,7 +1297,13 @@ Proof.
   assert (Q: forall a v, val_match_approx a v -> Approx.bge Int16u a = true ->
                v = Val.zero_ext 16 v).
     intros. apply (val_match_approx_increasing Int16u a v); auto.
+  assert (R: forall a v, val_match_approx a v -> Approx.bge Int1 a = true ->
+               v = Val.zero_ext 1 v).
+    intros. apply (val_match_approx_increasing Int1 a v); auto.
+
   intros; unfold Approx.bitwise_and. 
+  destruct (Approx.bge Int1 a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
+  destruct (Approx.bge Int1 a2) as []_eqn. simpl. apply X; eauto. compute; auto.
   destruct (Approx.bge Int8u a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
   destruct (Approx.bge Int8u a2) as []_eqn. simpl. apply X; eauto. compute; auto.
   destruct (Approx.bge Int16u a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
@@ -1298,14 +1328,21 @@ Proof.
     simpl. rewrite Int.and_idem. auto.
 
   unfold Approx.bitwise_or. 
-  destruct (Approx.bge Int8u a1 && Approx.bge Int8u a2) as []_eqn.
+
+  destruct (Approx.bge Int1 a1 && Approx.bge Int1 a2) as []_eqn.
   destruct (andb_prop _ _ Heqb).
+  simpl. apply X. compute; auto. 
+  apply (val_match_approx_increasing Int1 a1 v1); auto.
+  apply (val_match_approx_increasing Int1 a2 v2); auto.
+
+  destruct (Approx.bge Int8u a1 && Approx.bge Int8u a2) as []_eqn.
+  destruct (andb_prop _ _ Heqb0).
   simpl. apply X. compute; auto. 
   apply (val_match_approx_increasing Int8u a1 v1); auto.
   apply (val_match_approx_increasing Int8u a2 v2); auto.
 
   destruct (Approx.bge Int16u a1 && Approx.bge Int16u a2) as []_eqn.
-  destruct (andb_prop _ _ Heqb0).
+  destruct (andb_prop _ _ Heqb1).
   simpl. apply X. compute; auto. 
   apply (val_match_approx_increasing Int16u a1 v1); auto.
   apply (val_match_approx_increasing Int16u a2 v2); auto.
@@ -1319,7 +1356,7 @@ Lemma approx_of_binop_sound:
   val_match_approx a1 v1 -> val_match_approx a2 v2 ->
   val_match_approx (Approx.binop op a1 a2) v.
 Proof.
-  assert (OB: forall ob, val_match_approx Int7 (Val.of_optbool ob)).
+  assert (OB: forall ob, val_match_approx Int1 (Val.of_optbool ob)).
     destruct ob; simpl. destruct b; auto. auto.
   
   destruct op; intros; simpl Approx.binop; simpl in H; try (exact I); inv H.
@@ -1356,6 +1393,20 @@ Proof.
 (* cast16signed *)
   assert (V: val_match_approx Int16s v) by (eapply val_match_approx_increasing; eauto).
   simpl in *. congruence.
+(* boolval *)
+  assert (V: val_match_approx Int1 v) by (eapply val_match_approx_increasing; eauto).
+  simpl in *.
+  assert (v = Vundef \/ v = Vzero \/ v = Vone).
+    rewrite V. destruct v; simpl; auto. 
+    assert (0 <= Int.unsigned (Int.zero_ext 1 i) < 2).
+      apply Int.zero_ext_range. compute; auto.
+    assert (Int.unsigned(Int.zero_ext 1 i) = 0 \/ Int.unsigned(Int.zero_ext 1 i) = 1) by omega.
+    destruct H2.
+    assert (Int.repr (Int.unsigned (Int.zero_ext 1 i)) = Int.repr 0) by congruence.
+    rewrite Int.repr_unsigned in H3. rewrite H3; auto. 
+    assert (Int.repr (Int.unsigned (Int.zero_ext 1 i)) = Int.repr 1) by congruence.
+    rewrite Int.repr_unsigned in H3. rewrite H3; auto. 
+  intuition; subst v; auto.
 (* singleoffloat *)
   assert (V: val_match_approx Float32 v) by (eapply val_match_approx_increasing; eauto).
   simpl in *. congruence.
@@ -1401,6 +1452,7 @@ Proof.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists. apply val_inject_val_of_bool.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists. apply val_inject_val_of_bool.
   inv H; inv H0; simpl; TrivialExists.
@@ -1946,9 +1998,9 @@ Proof.
   apply match_env_extensional with te1; auto.
 Qed.
 
-Lemma var_set_self_correct:
-  forall cenv id ty s a f tf e le te sp lo hi m cs tm tv v m' fn k,
-  var_set_self cenv id ty s = OK a ->
+Lemma var_set_self_correct_scalar:
+  forall cenv id s a f tf e le te sp lo hi m cs tm tv v m' fn k,
+  var_set_self cenv id s = OK a ->
   match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m) (Mem.nextblock tm) ->
   val_inject f v tv ->
   Mem.inject f m tm ->
@@ -1995,20 +2047,55 @@ Proof.
   split. auto.
   rewrite NEXTBLOCK. rewrite (nextblock_storev _ _ _ _ _ STORE'). 
   eapply match_callstack_storev_mapped; eauto.
-  (* var_global_scalar *)
-  simpl in *.
-  assert (chunk0 = chunk). exploit H4; eauto. congruence. subst chunk0.  
-  assert (Mem.storev chunk m (Vptr b Int.zero) v = Some m'). assumption.
-  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
-  exploit make_store_correct.
-    eapply make_globaladdr_correct; eauto.
-    rewrite symbols_preserved; eauto. eauto. eauto. eauto. eauto. eauto.
-  intros [tm' [tvrhs' [EVAL' [STORE' MEMINJ]]]].
-  exists tm'.
-  split. eapply star_three. constructor. eauto. constructor. traceEq.
-  split. auto. 
-  rewrite NEXTBLOCK. rewrite (nextblock_storev _ _ _ _ _ STORE'). 
-  eapply match_callstack_store_mapped; eauto.
+Qed.
+
+Lemma var_set_self_correct_array:
+  forall cenv id s a f tf e le te sp lo hi m cs tm tv b v sz al m' fn k,
+  var_set_self cenv id s = OK a ->
+  match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m) (Mem.nextblock tm) ->
+  val_inject f v tv ->
+  Mem.inject f m tm ->
+  PTree.get id e = Some(b, Varray sz al) ->
+  extcall_memcpy_sem sz (Zmin al 4) ge
+                             (Vptr b Int.zero :: v :: nil) m E0 Vundef m' ->
+  te!(for_var id) = Some tv ->
+  exists f', exists tm',
+    star step tge (State fn a k (Vptr sp Int.zero) te tm)
+               E0 (State fn s k (Vptr sp Int.zero) te tm') /\
+    Mem.inject f' m' tm' /\
+    match_callstack f' m' tm' (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m') (Mem.nextblock tm') /\
+    inject_incr f f'.
+Proof.
+  intros until k. 
+  intros VS MCS VINJ MINJ KIND MEMCPY VAL.
+  assert (MV: match_var f id e m te sp cenv!!id).
+    inv MCS. inv MENV. auto.
+  inv MV; try congruence. rewrite KIND in H0; inv H0.
+  (* var_stack_array *)
+  unfold var_set_self in VS. rewrite <- H in VS. inv VS.
+  exploit match_callstack_match_globalenvs; eauto. intros [hi' MG].
+  assert (external_call (EF_memcpy sz0 (Zmin al0 4)) ge (Vptr b0 Int.zero :: v :: nil) m E0 Vundef m').
+    assumption.
+  exploit external_call_mem_inject; eauto. 
+  eapply inj_preserves_globals; eauto.
+  intros [f' [vres' [tm' [EC' [VINJ' [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
+  exists f'; exists tm'.
+  split. eapply star_step. constructor. 
+  eapply star_step. econstructor; eauto. 
+  constructor. apply make_stackaddr_correct. constructor. constructor. eauto. constructor.
+  eapply external_call_symbols_preserved_2; eauto.
+  exact symbols_preserved.
+  eexact var_info_translated.
+  eexact var_info_rev_translated.
+  apply star_one. constructor. reflexivity. traceEq.
+  split. auto.
+  split. apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
+  eapply match_callstack_external_call; eauto.
+  intros. eapply external_call_bounds; eauto.
+  omega. omega.
+  eapply external_call_nextblock_incr; eauto.
+  eapply external_call_nextblock_incr; eauto.
+  auto.
 Qed.
 
 (** * Correctness of stack allocation of local variables *)
@@ -2032,15 +2119,14 @@ Remark assign_variable_incr:
 Proof.
   intros until sz'; simpl.
   destruct lv. case (Identset.mem id atk); intros.
-  inv H.  generalize (size_chunk_pos m). intro.
-  generalize (align_le sz (size_chunk m) H). omega.
+  inv H.  generalize (size_chunk_pos chunk). intro.
+  generalize (align_le sz (size_chunk chunk) H). omega.
   inv H. omega.
   intros. inv H. 
-  generalize (align_le sz (array_alignment z) (array_alignment_pos z)).
-  assert (0 <= Zmax 0 z). apply Zmax_bound_l. omega.
+  generalize (align_le sz (array_alignment sz0) (array_alignment_pos sz0)).
+  assert (0 <= Zmax 0 sz0). apply Zmax_bound_l. omega.
   omega.
 Qed.
-
 
 Remark assign_variables_incr:
   forall atk vars cenv sz cenv' sz',
@@ -2166,7 +2252,7 @@ Proof.
     subst b0. congruence.
     rewrite OTHER in H; eauto.
   (* 2 info = Var_stack_array ofs *)
-  intros dim LV EQ. injection EQ; clear EQ; intros. rewrite <- H0.
+  intros dim al LV EQ. injection EQ; clear EQ; intros. rewrite <- H.
   assert (0 <= Zmax 0 dim). apply Zmax1. 
   generalize (align_le sz (array_alignment dim) (array_alignment_pos dim)). intro.
   set (ofs := align sz (array_alignment dim)) in *.
@@ -2181,7 +2267,7 @@ Proof.
     intros. generalize (RANGE _ _ H3). omega. 
   intros [f1 [MINJ1 [INCR1 [SAME OTHER]]]].
   exists f1; split. auto. split. auto. split. 
-  eapply match_callstack_alloc_left; eauto.
+  subst cenv'. eapply match_callstack_alloc_left; eauto.
   rewrite <- LV; auto. 
   rewrite SAME; constructor.
   intros. rewrite (Mem.bounds_alloc _ _ _ _ _ ALLOC). 
@@ -2317,14 +2403,12 @@ Proof.
   eapply Mem.valid_block_inject_2; eauto.
   intros. unfold te. apply set_locals_params_defined.
   elim (in_app_or _ _ _ H6); intros.
-  elim (list_in_map_inv _ _ _ H7). intros x [A B].
-  apply in_or_app; left. unfold tparams. apply List.in_map. inversion A. apply List.in_map. auto.
+  apply in_or_app; left. unfold tparams. apply List.in_map.
+  change id with (fst (id, lv)). apply List.in_map. auto.
   apply in_or_app; right. apply in_or_app; left. unfold tvars. apply List.in_map. 
   change id with (fst (id, lv)). apply List.in_map; auto.
   (* norepet *)
-  unfold fn_variables. 
-  rewrite List.map_app. rewrite list_map_compose. simpl. 
-  assumption.
+  unfold fn_variables. rewrite List.map_app. assumption.
   (* undef *)
   intros. unfold empty_env. apply PTree.gempty. 
 Qed.
@@ -2333,17 +2417,23 @@ Qed.
   to store in memory the values of parameters that are stack-allocated. *)
 
 Inductive vars_vals_match (f:meminj):
-             list (ident * memory_chunk) -> list val -> env -> Prop :=
+             list (ident * var_kind) -> list val -> env -> Prop :=
   | vars_vals_nil:
       forall te,
       vars_vals_match f nil nil te
-  | vars_vals_cons:
+  | vars_vals_scalar:
       forall te id chunk vars v vals tv,
       te!(for_var id) = Some tv ->
       val_inject f v tv ->
       val_normalized v chunk ->
       vars_vals_match f vars vals te ->
-      vars_vals_match f ((id, chunk) :: vars) (v :: vals) te.
+      vars_vals_match f ((id, Vscalar chunk) :: vars) (v :: vals) te
+  | vars_vals_array:
+      forall te id sz al vars v vals tv,
+      te!(for_var id) = Some tv ->
+      val_inject f v tv ->
+      vars_vals_match f vars vals te ->
+      vars_vals_match f ((id, Varray sz al) :: vars) (v :: vals) te.
 
 Lemma vars_vals_match_extensional:
   forall f vars vals te,
@@ -2357,88 +2447,120 @@ Proof.
   econstructor; eauto. 
   rewrite <- H. eauto with coqlib. 
   apply IHvars_vals_match. intros. eapply H3; eauto with coqlib.
+  econstructor; eauto. 
+  rewrite <- H. eauto with coqlib. 
+  apply IHvars_vals_match. intros. eapply H2; eauto with coqlib.
+Qed.
+
+Lemma vars_vals_match_incr:
+  forall f f', inject_incr f f' ->
+  forall vars vals te,
+  vars_vals_match f vars vals te ->
+  vars_vals_match f' vars vals te.
+Proof.
+  induction 2; intros; econstructor; eauto. 
 Qed.
 
 Lemma store_parameters_correct:
   forall e le te m1 params vl m2,
-  bind_parameters e m1 params vl m2 ->
+  bind_parameters ge e m1 params vl m2 ->
   forall s f cenv tf sp lo hi cs tm1 fn k,
   vars_vals_match f params vl te ->
-  list_norepet (List.map param_name params) ->
+  list_norepet (List.map variable_name params) ->
   Mem.inject f m1 tm1 ->
   match_callstack f m1 tm1 (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m1) (Mem.nextblock tm1) ->
   store_parameters cenv params = OK s ->
-  exists tm2,
+  exists f', exists tm2,
      star step tge (State fn s k (Vptr sp Int.zero) te tm1)
                 E0 (State fn Sskip k (Vptr sp Int.zero) te tm2)
-  /\ Mem.inject f m2 tm2
-  /\ match_callstack f m2 tm2 (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m2) (Mem.nextblock tm2).
+  /\ Mem.inject f' m2 tm2
+  /\ match_callstack f' m2 tm2 (Frame cenv tf e le te sp lo hi :: cs) (Mem.nextblock m2) (Mem.nextblock tm2)
+  /\ inject_incr f f'.
 Proof.
   induction 1.
   (* base case *)
   intros; simpl. monadInv H3.
-  exists tm1. split. constructor. tauto.
-  (* inductive case *)
+  exists f; exists tm1. split. constructor. auto. 
+  (* scalar case *)
   intros until k.  intros VVM NOREPET MINJ MATCH STOREP.
-  monadInv STOREP.
-  inv VVM. 
-  inv NOREPET.
-  exploit var_set_self_correct; eauto.
+  monadInv STOREP. inv VVM. inv NOREPET.
+  exploit var_set_self_correct_scalar; eauto.
     econstructor; eauto. econstructor; eauto.
   intros [tm2 [EXEC1 [MINJ1 MATCH1]]].
   exploit IHbind_parameters; eauto.
-  intros [tm3 [EXEC2 [MINJ2 MATCH2]]].
-  exists tm3.
+  intros [f' [tm3 [EXEC2 [MINJ2 [MATCH2 INCR2]]]]].
+  exists f'; exists tm3.
   split. eapply star_trans; eauto. 
   auto.
+  (* array case *)
+  intros until k.  intros VVM NOREPET MINJ MATCH STOREP.
+  monadInv STOREP. inv VVM. inv NOREPET.
+  exploit var_set_self_correct_array; eauto.
+  intros [f2 [tm2 [EXEC1 [MINJ1 [MATCH1 INCR1]]]]].
+  exploit IHbind_parameters. eapply vars_vals_match_incr; eauto. auto. eauto. eauto. eauto. 
+  intros [f3 [tm3 [EXEC2 [MINJ2 [MATCH2 INCR2]]]]].
+  exists f3; exists tm3.
+  split. eapply star_trans; eauto.
+  split. auto. split. auto. eapply inject_incr_trans; eauto.
 Qed.
+
+Definition val_normalized' (v: val) (vk: var_kind) : Prop :=
+  match vk with
+  | Vscalar chunk => val_normalized v chunk
+  | Varray _ _ => True
+  end.
 
 Lemma vars_vals_match_holds_1:
   forall f params args targs,
-  list_norepet (List.map param_name params) ->
+  list_norepet (List.map variable_name params) ->
   val_list_inject f args targs ->
-  list_forall2 val_normalized args (List.map param_chunk params) ->
+  list_forall2 val_normalized' args (List.map variable_kind params) ->
   vars_vals_match f params args
-    (set_params targs (List.map for_var (List.map param_name params))).
+    (set_params targs (List.map for_var (List.map variable_name params))).
 Proof.
 Opaque for_var.
   induction params; simpl; intros.
   inv H1. constructor.
   inv H. inv H1. inv H0. 
-  destruct a as [id chunk]; simpl in *. econstructor.
-  rewrite PTree.gss. reflexivity. 
-  auto. auto.
+  destruct a as [id vk]; simpl in *.
+  assert (R: vars_vals_match f params al 
+          (PTree.set (for_var id) v'
+            (set_params vl' (map for_var (map variable_name params))))).
   apply vars_vals_match_extensional
-  with (set_params vl' (map for_var (map param_name params))).
+  with (set_params vl' (map for_var (map variable_name params))).
   eapply IHparams; eauto. 
 Transparent for_var.
   intros. apply PTree.gso. unfold for_var; red; intros. inv H0. 
-  elim H4. change id with (param_name (id, lv)). apply List.in_map; auto.
+  elim H4. change id with (variable_name (id, lv)). apply List.in_map; auto.
+
+  destruct vk; red in H6.
+  econstructor. rewrite PTree.gss. reflexivity. auto. auto. auto.
+  econstructor. rewrite PTree.gss. reflexivity. auto. auto.
 Qed.
 
 Lemma vars_vals_match_holds_2:
   forall f params args e,
   vars_vals_match f params args e ->
   forall vl,
-  (forall id1 id2, In id1 (List.map param_name params) -> In id2 vl -> for_var id1 <> id2) ->
+  (forall id1 id2, In id1 (List.map variable_name params) -> In id2 vl -> for_var id1 <> id2) ->
   vars_vals_match f params args (set_locals vl e).
 Proof.
   induction vl; simpl; intros.
   auto.
   apply vars_vals_match_extensional with (set_locals vl e); auto. 
   intros. apply PTree.gso. apply H0. 
-  change id with (param_name (id, lv)). apply List.in_map. auto.
+  change id with (variable_name (id, lv)). apply List.in_map. auto.
   auto.
 Qed.
 
 Lemma vars_vals_match_holds:
   forall f params args targs vars temps,
-  list_norepet (List.map param_name params ++ vars) ->
+  list_norepet (List.map variable_name params ++ vars) ->
   val_list_inject f args targs ->
-  list_forall2 val_normalized args (List.map param_chunk params) ->
+  list_forall2 val_normalized' args (List.map variable_kind params) ->
   vars_vals_match f params args
     (set_locals (List.map for_var vars ++ List.map for_temp temps)
-      (set_params targs (List.map for_var (List.map param_name params)))).
+      (set_params targs (List.map for_var (List.map variable_name params)))).
 Proof.
   intros. rewrite list_norepet_app in H. destruct H as [A [B C]].
   apply vars_vals_match_holds_2; auto. apply vars_vals_match_holds_1; auto.
@@ -2452,12 +2574,13 @@ Qed.
 
 Remark bind_parameters_normalized:
   forall e m params args m',
-  bind_parameters e m params args m' ->
-  list_forall2 val_normalized args (List.map param_chunk params).
+  bind_parameters ge e m params args m' ->
+  list_forall2 val_normalized' args (List.map variable_kind params).
 Proof.
   induction 1; simpl.
   constructor.
   constructor; auto.
+  constructor; auto. red; auto.
 Qed.
 
 (** The main result in this section: the behaviour of function entry
@@ -2470,7 +2593,7 @@ Lemma function_entry_ok:
   forall fn m e m1 vargs m2 f cs tm cenv tf tm1 sp tvargs s fn' k,
   list_norepet (fn_params_names fn ++ fn_vars_names fn) ->
   alloc_variables empty_env m (fn_variables fn) e m1 ->
-  bind_parameters e m1 fn.(Csharpminor.fn_params) vargs m2 ->
+  bind_parameters ge e m1 fn.(Csharpminor.fn_params) vargs m2 ->
   match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm) ->
   build_compilenv gce fn = (cenv, tf.(fn_stackspace)) ->
   tf.(fn_stackspace) <= Int.max_unsigned ->
@@ -2504,8 +2627,9 @@ Proof.
   exploit store_parameters_correct.
     eauto. eauto. eapply list_norepet_append_left; eauto.
     eexact MINJ1. eexact MATCH1. eauto.
-  intros [tm2 [EXEC [MINJ2 MATCH2]]].
-  exists f1; exists tm2. eauto. 
+  intros [f2 [tm2 [EXEC [MINJ2 [MATCH2 INCR2]]]]].
+  exists f2; exists tm2. 
+  split; eauto. split; auto. split; auto. eapply inject_incr_trans; eauto. 
 Qed.
 
 (** * Semantic preservation for the translation *)
@@ -2888,8 +3012,8 @@ Proof.
 Qed.
 
 Remark find_label_var_set_self:
-  forall id ty s0 s k,
-  var_set_self cenv id ty s0 = OK s ->
+  forall id s0 s k,
+  var_set_self cenv id s0 = OK s ->
   find_label lbl s k = find_label lbl s0 k.
 Proof.
   intros. unfold var_set_self in H.
@@ -3114,6 +3238,35 @@ Proof.
   eapply match_Kcall with (cenv' := cenv); eauto.
   red; auto.
 
+(* builtin *)
+  monadInv TR.
+  exploit transl_exprlist_correct; eauto.
+  intros [tvargs [EVAL2 VINJ2]].
+  exploit match_callstack_match_globalenvs; eauto. intros [hi' MG].
+  exploit external_call_mem_inject; eauto. 
+  eapply inj_preserves_globals; eauto.
+  intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
+  left; econstructor; split.
+  apply plus_one. econstructor. eauto. 
+  eapply external_call_symbols_preserved_2; eauto.
+  exact symbols_preserved.
+  eexact var_info_translated.
+  eexact var_info_rev_translated.
+  assert (MCS': match_callstack f' m' tm'
+                 (Frame cenv tfn e le te sp lo hi :: cs)
+                 (Mem.nextblock m') (Mem.nextblock tm')).
+    apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
+    eapply match_callstack_external_call; eauto.
+    intros. eapply external_call_bounds; eauto.
+    omega. omega. 
+    eapply external_call_nextblock_incr; eauto.
+    eapply external_call_nextblock_incr; eauto.
+  econstructor; eauto.
+Opaque PTree.set.
+  unfold set_optvar. destruct optid; simpl. 
+  eapply match_callstack_set_temp; eauto. 
+  auto.
+
 (* seq *)
   monadInv TR. 
   left; econstructor; split.
@@ -3256,8 +3409,8 @@ Proof.
   apply plus_one. econstructor.
   eapply external_call_symbols_preserved_2; eauto.
   exact symbols_preserved.
-  eexact (Genv.find_var_info_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
-  eexact (Genv.find_var_info_rev_transf_partial2 (transl_fundef gce) transl_globvar _ TRANSL).
+  eexact var_info_translated.
+  eexact var_info_rev_translated.
   econstructor; eauto.
   apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_callstack_external_call; eauto.

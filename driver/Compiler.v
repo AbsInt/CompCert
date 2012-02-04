@@ -400,7 +400,7 @@ Theorem transf_cstrategy_program_correct:
   forall p tp,
   transf_c_program p = OK tp ->
   forward_simulation (Cstrategy.semantics p) (Asm.semantics tp)
-  * backward_simulation (Cstrategy.semantics p) (Asm.semantics tp).
+  * backward_simulation (atomic (Cstrategy.semantics p)) (Asm.semantics tp).
 Proof.
   intros.
   assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics tp)).
@@ -411,8 +411,9 @@ Proof.
   exact (fst (transf_clight_program_correct _ _ EQ1)). 
 
   split. auto. 
-  apply forward_to_backward_simulation. auto. 
-  apply Cstrategy.semantics_receptive.
+  apply forward_to_backward_simulation.
+  apply factor_forward_simulation. auto. eapply sd_traces. eapply Asm.semantics_determinate.
+  apply atomic_receptive. apply Cstrategy.semantics_strongly_receptive.
   apply Asm.semantics_determinate.
 Qed.
 
@@ -422,7 +423,11 @@ Theorem transf_c_program_correct:
   backward_simulation (Csem.semantics p) (Asm.semantics tp).
 Proof.
   intros. 
-  eapply compose_backward_simulation.
+  apply compose_backward_simulation with (atomic (Cstrategy.semantics p)).
+  eapply sd_traces; eapply Asm.semantics_determinate.
+  apply factor_backward_simulation. 
   apply Cstrategy.strategy_simulation.
+  apply Csem.semantics_single_events.
+  eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive.
   exact (snd (transf_cstrategy_program_correct _ _ H)).
 Qed.

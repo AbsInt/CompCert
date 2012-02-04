@@ -122,7 +122,9 @@ let name_for_string_literal env s =
     id
 
 let typeStringLiteral s =
-  Tarray(Tint(I8, Unsigned), z_of_camlint(Int32.of_int(String.length s + 1)))
+  Tarray(Tint(I8, Unsigned, noattr),
+         z_of_camlint(Int32.of_int(String.length s + 1)),
+         noattr)
 
 let global_for_string s id =
   let init = ref [] in
@@ -162,8 +164,8 @@ let register_stub_function name tres targs =
     | Tcons(_, tl) -> "i" :: letters_of_type tl in
   let rec types_of_types = function
     | Tnil -> Tnil
-    | Tcons(Tfloat _, tl) -> Tcons(Tfloat F64, types_of_types tl)
-    | Tcons(_, tl) -> Tcons(Tpointer Tvoid, types_of_types tl) in
+    | Tcons(Tfloat _, tl) -> Tcons(Tfloat(F64, noattr), types_of_types tl)
+    | Tcons(_, tl) -> Tcons(Tpointer(Tvoid, noattr), types_of_types tl) in
   let stub_name =
     name ^ "$" ^ String.concat "" (letters_of_type targs) in
   let targs = types_of_types targs in
@@ -204,7 +206,8 @@ let register_inlined_memcpy sz al =
   let al =
     if al <= 4l then al else 4l in (* max alignment supported by CompCert *)
   let name = Printf.sprintf "__builtin_memcpy_sz%ld_al%ld" sz al in
-  let targs = Tcons(Tpointer Tvoid, Tcons(Tpointer Tvoid, Tnil))
+  let targs = Tcons(Tpointer(Tvoid, noattr),
+              Tcons(Tpointer(Tvoid, noattr), Tnil))
   and tres = Tvoid
   and ef = EF_memcpy(coqint_of_camlint sz, coqint_of_camlint al) in
   register_special_external name ef targs tres;
@@ -233,10 +236,14 @@ let make_builtin_memcpy args =
 
 let convertInt n = coqint_of_camlint(Int64.to_int32 n)
 
+(** Attributes *)
+
+let convertAttr a = List.mem AVolatile a
+
 (** Types *)
 
 let convertIkind = function
-  | C.IBool -> unsupported "'_Bool' type"; (Unsigned, I8)
+  | C.IBool -> (Unsigned, IBool)
   | C.IChar -> ((if (!Cparser.Machine.config).Cparser.Machine.char_signed
                  then Signed else Unsigned), I8)
   | C.ISChar -> (Signed, I8)
@@ -258,12 +265,13 @@ let convertFkind = function
       if not !Clflags.option_flongdouble then unsupported "'long double' type"; 
       F64
 
-let int64_struct =
-  let ty = Tint(I32,Unsigned) in
+let int64_struct a =
+  let ty = Tint(I32,Unsigned,noattr) in
   Tstruct(intern_string "struct __int64",
-    if Memdataaux.big_endian
-    then Fcons(intern_string "hi", ty, Fcons(intern_string "lo", ty, Fnil))
-    else Fcons(intern_string "lo", ty, Fcons(intern_string "hi", ty, Fnil)))
+    (if Memdataaux.big_endian
+     then Fcons(intern_string "hi", ty, Fcons(intern_string "lo", ty, Fnil))
+     else Fcons(intern_string "lo", ty, Fcons(intern_string "hi", ty, Fnil))),
+    a)
 
 let convertTyp env t =
 
@@ -271,27 +279,27 @@ let convertTyp env t =
     match Cutil.unroll env t with
     | C.TVoid a -> Tvoid
     | C.TInt((C.ILongLong|C.IULongLong), a) when !Clflags.option_flonglong ->
-        int64_struct
+        int64_struct (convertAttr a)
     | C.TInt(ik, a) ->
-        let (sg, sz) = convertIkind ik in Tint(sz, sg)
+        let (sg, sz) = convertIkind ik in Tint(sz, sg, convertAttr a)
     | C.TFloat(fk, a) ->
-        Tfloat(convertFkind fk)
+        Tfloat(convertFkind fk, convertAttr a)
     | C.TPtr(ty, a) ->
         begin match Cutil.unroll env ty with
         | C.TStruct(id, _) when List.mem id seen ->
-            Tcomp_ptr(intern_string ("struct " ^ id.name))
+            Tcomp_ptr(intern_string ("struct " ^ id.name), convertAttr a)
         | C.TUnion(id, _) when List.mem id seen ->
-            Tcomp_ptr(intern_string ("union " ^ id.name))
+            Tcomp_ptr(intern_string ("union " ^ id.name), convertAttr a)
         | _ ->
-            Tpointer(convertTyp seen ty)
+            Tpointer(convertTyp seen ty, convertAttr a)
         end
     | C.TArray(ty, None, a) ->
         (* Cparser verified that the type ty[] occurs only in
            contexts that are safe for Clight, so just treat as ty[0]. *)
         (* warning "array type of unspecified size"; *)
-        Tarray(convertTyp seen ty, coqint_of_camlint 0l)
+        Tarray(convertTyp seen ty, coqint_of_camlint 0l, convertAttr a)
     | C.TArray(ty, Some sz, a) ->
-        Tarray(convertTyp seen ty, convertInt sz)
+        Tarray(convertTyp seen ty, convertInt sz, convertAttr a)
     | C.TFun(tres, targs, va, a) ->
         if va then unsupported "variadic function type";
         if Cutil.is_composite_type env tres then
@@ -309,20 +317,18 @@ let convertTyp env t =
             convertFields (id :: seen) (Env.find_struct env id)
           with Env.Error e ->
             error (Env.error_message e); Fnil in
-        Tstruct(intern_string("struct " ^ id.name), flds)
+        Tstruct(intern_string("struct " ^ id.name), flds, convertAttr a)
     | C.TUnion(id, a) ->
         let flds =
           try
             convertFields (id :: seen) (Env.find_union env id)
           with Env.Error e ->
             error (Env.error_message e); Fnil in
-        Tunion(intern_string("union " ^ id.name), flds)
+        Tunion(intern_string("union " ^ id.name), flds, convertAttr a)
 
   and convertParams seen = function
     | [] -> Tnil
     | (id, ty) :: rem ->
-        if Cutil.is_composite_type env ty then
-          unsupported "function parameter of struct or union type";
         Tcons(convertTyp seen ty, convertParams seen rem)
 
   and convertFields seen ci =
@@ -358,9 +364,9 @@ let string_of_type ty =
 let first_class_value env ty =
   match Cutil.unroll env ty with
   | C.TInt((C.ILongLong|C.IULongLong), _) -> false
-  | C.TStruct _ -> false
-  | C.TUnion _ -> false
   | _ -> true
+
+(************ REMOVED
 
 (* Handling of volatile *)
 
@@ -398,16 +404,15 @@ let volatile_write_fun ty =
   let name = "__builtin_volatile_write_" ^ suffix in
   register_special_external name (EF_vstore chunk) targs Tvoid;
   Evalof(Evar(intern_string name, Tfunction(targs, Tvoid)), Tfunction(targs, Tvoid))
+****************************)
 
 (** Expressions *)
 
-let ezero = Eval(Vint(coqint_of_camlint 0l), Tint(I32, Signed))
+let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
 
 let check_assignop msg env e =
   if not (first_class_value env e.etyp) then
-    unsupported (msg ^ " on a l-value of type " ^ string_of_type e.etyp);
-  if is_volatile_access env e then
-    unsupported (msg ^ " on a volatile l-value")
+    unsupported (msg ^ " on a l-value of type " ^ string_of_type e.etyp)
 
 let rec convertExpr env e =
   let ty = convertTyp env e.etyp in
@@ -418,12 +423,7 @@ let rec convertExpr env e =
       let l = convertLvalue env e in
       if not (first_class_value env e.etyp) then
         unsupported ("r-value of type " ^ string_of_type e.etyp);
-      if is_volatile_access env e then
-        Ecall(volatile_read_fun (typeof l),
-              Econs(Eaddrof(l, Tpointer(typeof l)), Enil),
-              ty)
-      else
-        Evalof(l, ty)
+      Evalof(l, ty)
 
   | C.EConst(C.CInt(i, k, _)) ->
       if k = C.ILongLong || k = C.IULongLong then
@@ -492,14 +492,8 @@ let rec convertExpr env e =
   | C.EBinop(C.Oassign, e1, e2, _) ->
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
-      if not (first_class_value env e1.etyp) then      
-        unsupported ("assignment to a l-value of type " ^ string_of_type e1.etyp);
-      if is_volatile_access env e1 then
-        Ecall(volatile_write_fun (typeof e1'),
-              Econs(Eaddrof(e1', Tpointer(typeof e1')), Econs(e2', Enil)),
-              Tvoid)   (* SimplVolatile guarantees that ret. value is unused *)
-      else
-        Eassign(e1', e2', ty)
+      check_assignop "assignment" env e1;
+      Eassign(e1', e2', ty)
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
               C.Oshl_assign|C.Oshr_assign) as op,
@@ -599,7 +593,7 @@ and convertLvalue env e =
       let e1' = convertExpr env e1 in
       let ty1 =
         match typeof e1' with
-        | Tpointer t -> t
+        | Tpointer(t, _) -> t
         | _ -> error ("wrong type for ->" ^ id ^ " access"); Tvoid in
       Efield(Ederef(e1', ty1), intern_string id, ty)
   | C.EBinop(C.Oindex, e1, e2, _) ->
@@ -723,8 +717,6 @@ let convertFundef env fd =
   let params =
     List.map
       (fun (id, ty) ->
-        if Cutil.is_composite_type env ty then
-          unsupported "function parameter of struct or union type";
         (intern_string id.name, convertTyp env ty))
       fd.fd_params in
   let vars =

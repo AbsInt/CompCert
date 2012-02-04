@@ -68,6 +68,7 @@ Inductive stmt : Type :=
   | Sset : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
   | Scall : option ident -> signature -> expr -> list expr -> stmt
+  | Sbuiltin : option ident -> external_function -> list expr -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: expr -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
@@ -84,32 +85,36 @@ with lbl_stmt : Type :=
 
 (** The variables can be either scalar variables
   (whose type, size and signedness are given by a [memory_chunk]
-  or array variables (of the indicated sizes).  The only operation
-  permitted on an array variable is taking its address. *)
+  or array variables (of the indicated sizes and alignment).
+  The only operation permitted on an array variable is taking its address. *)
 
 Inductive var_kind : Type :=
-  | Vscalar: memory_chunk -> var_kind
-  | Varray: Z -> var_kind.
+  | Vscalar(chunk: memory_chunk)
+  | Varray(sz al: Z).
 
 Definition sizeof (lv: var_kind) : Z :=
   match lv with
   | Vscalar chunk => size_chunk chunk
-  | Varray sz => Zmax 0 sz
+  | Varray sz al => Zmax 0 sz
+  end.
+
+Definition type_of_kind (lv: var_kind) : typ :=
+  match lv with
+  | Vscalar chunk => type_of_chunk chunk
+  | Varray _ _ => Tint
   end.
 
 (** Functions are composed of a return type, a list of parameter names
-  with associated memory chunks (parameters must be scalar), a list of
-  local variables with associated [var_kind] description, and a
+  with associated [var_kind] descriptions, a list of
+  local variables with associated [var_kind] descriptions, and a
   statement representing the function body.  *)
 
-Definition param_name (p: ident * memory_chunk) := fst p.
-Definition param_chunk (p: ident * memory_chunk) := snd p.
 Definition variable_name (v: ident * var_kind) := fst v.
 Definition variable_kind (v: ident * var_kind) := snd v.
 
 Record function : Type := mkfunction {
   fn_return: option typ;
-  fn_params: list (ident * memory_chunk);
+  fn_params: list (ident * var_kind);
   fn_vars: list (ident * var_kind);
   fn_temps: list ident;
   fn_body: stmt
@@ -120,7 +125,7 @@ Definition fundef := AST.fundef function.
 Definition program : Type := AST.program fundef var_kind.
 
 Definition fn_sig (f: function) :=
-  mksignature (List.map type_of_chunk (List.map param_chunk f.(fn_params)))
+  mksignature (List.map type_of_kind (List.map variable_kind f.(fn_params)))
               f.(fn_return).
 
 Definition funsig (fd: fundef) :=
@@ -129,13 +134,9 @@ Definition funsig (fd: fundef) :=
   | External ef => ef_sig ef
   end.
 
-Definition var_of_param (p: ident * memory_chunk) : ident * var_kind :=
-  (fst p, Vscalar (snd p)).
+Definition fn_variables (f: function) := f.(fn_params) ++ f.(fn_vars).
 
-Definition fn_variables (f: function) :=
-  List.map var_of_param f.(fn_params) ++ f.(fn_vars).
-
-Definition fn_params_names (f: function) := List.map param_name f.(fn_params).
+Definition fn_params_names (f: function) := List.map variable_name f.(fn_params).
 Definition fn_vars_names (f: function) := List.map variable_name f.(fn_vars).
 
 (** * Operational semantics *)
@@ -292,6 +293,10 @@ Definition block_of_binding (id_b_lv: ident * (block * var_kind)) :=
 Definition blocks_of_env (e: env) : list (block * Z * Z) :=
   List.map block_of_binding (PTree.elements e).
 
+Section RELSEM.
+
+Variable ge: genv.
+
 (** Initialization of local variables that are parameters.  The value
   of the corresponding argument is stored into the memory block
   bound to the parameter. *)
@@ -300,22 +305,26 @@ Definition val_normalized (v: val) (chunk: memory_chunk) : Prop :=
   Val.load_result chunk v = v.
 
 Inductive bind_parameters: env ->
-                           mem -> list (ident * memory_chunk) -> list val ->
+                           mem -> list (ident * var_kind) -> list val ->
                            mem -> Prop :=
   | bind_parameters_nil:
       forall e m,
       bind_parameters e m nil nil m
-  | bind_parameters_cons:
+  | bind_parameters_scalar:
       forall e m id chunk params v1 vl b m1 m2,
       PTree.get id e = Some (b, Vscalar chunk) ->
       val_normalized v1 chunk ->
       Mem.store chunk m b 0 v1 = Some m1 ->
       bind_parameters e m1 params vl m2 ->
-      bind_parameters e m ((id, chunk) :: params) (v1 :: vl) m2.
+      bind_parameters e m ((id, Vscalar chunk) :: params) (v1 :: vl) m2
+  | bind_parameters_array:
+      forall e m id sz al params v1 vl b m1 m2,
+      PTree.get id e = Some (b, Varray sz al) ->
+      extcall_memcpy_sem sz (Zmin al 4) 
+                   ge (Vptr b Int.zero :: v1 :: nil) m E0 Vundef m1 ->
+      bind_parameters e m1 params vl m2 ->
+      bind_parameters e m ((id, Varray sz al) :: params) (v1 :: vl) m2.
 
-Section RELSEM.
-
-Variable ge: genv.
 
 (* Evaluation of the address of a variable: 
    [eval_var_addr prg ge e id b] states that variable [id] 
@@ -458,6 +467,12 @@ Inductive step: state -> trace -> state -> Prop :=
       funsig fd = sig ->
       step (State f (Scall optid sig a bl) k e le m)
         E0 (Callstate fd vargs (Kcall optid f e le k) m)
+
+  | step_builtin: forall f optid ef bl k e le m vargs t vres m',
+      eval_exprlist e le m bl vargs ->
+      external_call ef ge vargs m t vres m' ->
+      step (State f (Sbuiltin optid ef bl) k e le m)
+         t (State f Sskip k e (Cminor.set_optvar optid vres le) m')
 
   | step_seq: forall f s1 s2 k e le m,
       step (State f (Sseq s1 s2) k e le m)

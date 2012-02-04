@@ -138,6 +138,31 @@ Proof.
   unfold notint; red; intros. TrivialExists. 
 Qed.
 
+Theorem eval_boolval: unary_constructor_sound boolval Val.boolval.
+Proof.
+  assert (DFL: 
+    forall le a x,
+    eval_expr ge sp e m le a x ->
+     exists v, eval_expr ge sp e m le (Eop (Ocmp (Ccompuimm Cne Int.zero)) (a ::: Enil)) v
+           /\ Val.lessdef (Val.boolval x) v).
+  intros. TrivialExists. simpl. destruct x; simpl; auto.
+
+  red. induction a; simpl; intros; eauto. destruct o; eauto.
+(* intconst *)
+  destruct e0; eauto. InvEval. TrivialExists. simpl. destruct (Int.eq i Int.zero); auto.
+(* cmp *)
+  inv H. simpl in H5.
+  destruct (eval_condition c vl m) as []_eqn. 
+  TrivialExists. simpl. inv H5. rewrite Heqo. destruct b; auto.
+  simpl in H5. inv H5. 
+  exists Vundef; split; auto. EvalOp; simpl. rewrite Heqo; auto.
+
+(* condition *)
+  inv H. destruct v1.
+  exploit IHa1; eauto. intros [v [A B]]. exists v; split; auto. eapply eval_Econdition; eauto. 
+  exploit IHa2; eauto. intros [v [A B]]. exists v; split; auto. eapply eval_Econdition; eauto. 
+Qed.
+
 Theorem eval_notbool: unary_constructor_sound notbool Val.notbool.
 Proof.
   assert (DFL: 

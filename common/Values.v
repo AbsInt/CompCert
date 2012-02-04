@@ -160,6 +160,13 @@ Definition notint (v: val) : val :=
 
 Definition of_bool (b: bool): val := if b then Vtrue else Vfalse.
 
+Definition boolval (v: val) : val :=
+  match v with
+  | Vint n => of_bool (negb (Int.eq n Int.zero))
+  | Vptr b ofs => Vtrue
+  | _ => Vundef
+  end.
+
 Definition notbool (v: val) : val :=
   match v with
   | Vint n => of_bool (Int.eq n Int.zero)

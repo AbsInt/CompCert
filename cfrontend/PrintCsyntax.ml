@@ -15,6 +15,7 @@
 
 (** Pretty-printer for Csyntax *)
 
+open Printf
 open Format
 open Camlcoq
 open Datatypes
@@ -53,6 +54,7 @@ let name_inttype sz sg =
   | I16, Unsigned -> "unsigned short"
   | I32, Signed -> "int"
   | I32, Unsigned -> "unsigned int"
+  | IBool, _ -> "_Bool"
 
 let name_floattype sz =
   match sz with
@@ -73,31 +75,38 @@ let register_struct_union id fld =
 
 (* Declarator (identifier + type) *)
 
+let attributes a =
+  if attr_volatile a then " volatile" else ""
+
 let name_optid id =
   if id = "" then "" else " " ^ id
 
+(*
 let parenthesize_if_pointer id =
   if String.length id > 0 && id.[0] = '*' then "(" ^ id ^ ")" else id
+*)
 
 let rec name_cdecl id ty =
   match ty with
   | Tvoid ->
       "void" ^ name_optid id
-  | Tint(sz, sg) ->
-      name_inttype sz sg ^ name_optid id
-  | Tfloat sz ->
-      name_floattype sz ^ name_optid id
-  | Tpointer t ->
-      name_cdecl ("*" ^ id) t
-  | Tarray(t, n) ->
-      name_cdecl
-        (sprintf "%s[%ld]" (parenthesize_if_pointer id) (camlint_of_coqint n))
-        t
+  | Tint(sz, sg, a) ->
+      name_inttype sz sg ^ attributes a ^ name_optid id
+  | Tfloat(sz, a) ->
+      name_floattype sz ^ attributes a ^ name_optid id
+  | Tpointer(t, a) ->
+      let id' =
+        match t with
+        | Tfunction _ | Tarray _ -> sprintf "(*%s%s)" (attributes a) id
+        | _                      -> sprintf "*%s%s" (attributes a) id in
+      name_cdecl id' t
+  | Tarray(t, n, a) ->
+      name_cdecl (sprintf "%s[%ld]" id (camlint_of_coqint n)) t
   | Tfunction(args, res) ->
       let b = Buffer.create 20 in
       if id = ""
       then Buffer.add_string b "(*)"
-      else Buffer.add_string b (parenthesize_if_pointer id);
+      else Buffer.add_string b id;
       Buffer.add_char b '(';
       begin match args with
       | Tnil ->
@@ -113,12 +122,12 @@ let rec name_cdecl id ty =
       end;
       Buffer.add_char b ')';
       name_cdecl (Buffer.contents b) res
-  | Tstruct(name, fld) ->
-      extern_atom name ^ name_optid id
-  | Tunion(name, fld) ->
-      extern_atom name ^ name_optid id
-  | Tcomp_ptr name ->
-      extern_atom name ^ " *" ^ id
+  | Tstruct(name, fld, a) ->
+      extern_atom name ^ attributes a ^ name_optid id
+  | Tunion(name, fld, a) ->
+      extern_atom name ^ attributes a ^ name_optid id
+  | Tcomp_ptr(name, a) ->
+      extern_atom name ^ " *" ^ attributes a ^ id
 
 (* Type *)
 
@@ -403,13 +412,13 @@ let print_globvar p (id, v) =
 
 let rec collect_type = function
   | Tvoid -> ()
-  | Tint(sz, sg) -> ()
-  | Tfloat sz -> ()
-  | Tpointer t -> collect_type t
-  | Tarray(t, n) -> collect_type t
+  | Tint _ -> ()
+  | Tfloat _ -> ()
+  | Tpointer(t, _) -> collect_type t
+  | Tarray(t, _, _) -> collect_type t
   | Tfunction(args, res) -> collect_type_list args; collect_type res
-  | Tstruct(id, fld) -> register_struct_union id fld; collect_fields fld
-  | Tunion(id, fld) -> register_struct_union id fld; collect_fields fld
+  | Tstruct(id, fld, _) -> register_struct_union id fld; collect_fields fld
+  | Tunion(id, fld, _) -> register_struct_union id fld; collect_fields fld
   | Tcomp_ptr _ -> ()
 
 and collect_type_list = function

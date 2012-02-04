@@ -1508,13 +1508,13 @@ let rec enter_decdefs local loc env = function
       (* check for incomplete type *)
       if sto' <> Storage_extern && incomplete_type env ty' then
         warning loc "'%s' has incomplete type" s;
-      if local && sto <> Storage_extern && sto <> Storage_static then begin
+      if local && sto' <> Storage_extern && sto' <> Storage_static then begin
         (* Local definition *)
         let (decls, env3) = enter_decdefs local loc env2 rem in
         ((sto', id, ty', init') :: decls, env3)
       end else begin
         (* Global definition *)
-        emit_elab (elab_loc loc) (Gdecl(sto, id, ty', init'));
+        emit_elab (elab_loc loc) (Gdecl(sto', id, ty', init'));
         enter_decdefs local loc env2 rem
       end
 

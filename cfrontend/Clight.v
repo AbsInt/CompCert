@@ -91,6 +91,7 @@ Inductive statement : Type :=
   | Sskip : statement                   (**r do nothing *)
   | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
   | Sset : ident -> expr -> statement   (**r assignment [tempvar = rvalue] *)
+  | Svolread : ident -> expr -> statement (**r volatile read [tempvar = volatile lvalue] *)
   | Scall: option ident -> expr -> list expr -> statement (**r function call *)
   | Ssequence : statement -> statement -> statement  (**r sequence *)
   | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)
@@ -179,7 +180,6 @@ Definition empty_env: env := (PTree.empty (block * type)).
 
 Definition temp_env := PTree.t val.
 
-
 (** Selection of the appropriate case of a [switch], given the value [n]
   of the selector expression. *)
 
@@ -260,8 +260,8 @@ Inductive eval_expr: expr -> val -> Prop :=
       sem_cast v1 (typeof a) ty = Some v ->
       eval_expr (Ecast a ty) v
   | eval_Elvalue: forall a loc ofs v,
-      eval_lvalue a loc ofs ->
-      load_value_of_type (typeof a) m loc ofs = Some v ->
+      eval_lvalue a loc ofs -> type_is_volatile (typeof a) = false ->
+      deref_loc ge (typeof a) m loc ofs E0 v ->
       eval_expr a v
 
 (** [eval_lvalue ge e m a b ofs] defines the evaluation of expression [a]
@@ -280,14 +280,14 @@ with eval_lvalue: expr -> block -> int -> Prop :=
   | eval_Ederef: forall a ty l ofs,
       eval_expr a (Vptr l ofs) ->
       eval_lvalue (Ederef a ty) l ofs
- | eval_Efield_struct:   forall a i ty l ofs id fList delta,
-      eval_lvalue a l ofs ->
-      typeof a = Tstruct id fList ->
+ | eval_Efield_struct:   forall a i ty l ofs id fList att delta,
+      eval_expr a (Vptr l ofs) ->
+      typeof a = Tstruct id fList att ->
       field_offset i fList = OK delta ->
       eval_lvalue (Efield a i ty) l (Int.add ofs (Int.repr delta))
- | eval_Efield_union:   forall a i ty l ofs id fList,
-      eval_lvalue a l ofs ->
-      typeof a = Tunion id fList ->
+ | eval_Efield_union:   forall a i ty l ofs id fList att,
+      eval_expr a (Vptr l ofs) ->
+      typeof a = Tunion id fList att ->
       eval_lvalue (Efield a i ty) l ofs.
 
 Scheme eval_expr_ind2 := Minimality for eval_expr Sort Prop
@@ -415,18 +415,25 @@ with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont)
 
 Inductive step: state -> trace -> state -> Prop :=
 
-  | step_assign:   forall f a1 a2 k e le m loc ofs v2 v m',
+  | step_assign:   forall f a1 a2 k e le m loc ofs v2 v t m',
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
       sem_cast v2 (typeof a2) (typeof a1) = Some v ->
-      store_value_of_type (typeof a1) m loc ofs v = Some m' ->
+      assign_loc ge (typeof a1) m loc ofs v t m' ->
       step (State f (Sassign a1 a2) k e le m)
-        E0 (State f Sskip k e le m')
+         t (State f Sskip k e le m')
 
   | step_set:   forall f id a k e le m v,
       eval_expr e le m a v ->
       step (State f (Sset id a) k e le m)
         E0 (State f Sskip k e (PTree.set id v le) m)
+
+  | step_vol_read:   forall f id a k e le m loc ofs t v,
+      eval_lvalue e le m a loc ofs ->
+      deref_loc ge (typeof a) m loc ofs t v ->
+      type_is_volatile (typeof a) = true ->
+      step (State f (Svolread id a) k e le m)
+         t (State f Sskip k e (PTree.set id v le) m)
 
   | step_call:   forall f optid a al k e le m tyargs tyres vf vargs fd,
       classify_fun (typeof a) = fun_case_f tyargs tyres ->
@@ -558,7 +565,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | step_internal_function: forall f vargs k m e m1 m2,
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      bind_parameters ge e m1 f.(fn_params) vargs m2 ->
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k e (PTree.empty val) m2)
 
@@ -622,17 +629,23 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   | exec_Sskip:   forall e le m,
       exec_stmt e le m Sskip
                E0 le m Out_normal
-  | exec_Sassign:   forall e le m a1 a2 loc ofs v2 v m',
+  | exec_Sassign:   forall e le m a1 a2 loc ofs v2 v t m',
       eval_lvalue e le m a1 loc ofs ->
       eval_expr e le m a2 v2 ->
       sem_cast v2 (typeof a2) (typeof a1) = Some v ->
-      store_value_of_type (typeof a1) m loc ofs v = Some m' ->
+      assign_loc ge (typeof a1) m loc ofs v t m' ->
       exec_stmt e le m (Sassign a1 a2)
-               E0 le m' Out_normal
+               t le m' Out_normal
   | exec_Sset:     forall e le m id a v,
       eval_expr e le m a v ->
       exec_stmt e le m (Sset id a)
-               E0 (PTree.set id v le) m Out_normal      
+               E0 (PTree.set id v le) m Out_normal 
+  | exec_Svol_read:   forall e le m id a loc ofs t v,
+      eval_lvalue e le m a loc ofs ->
+      type_is_volatile (typeof a) = true ->
+      deref_loc ge (typeof a) m loc ofs t v ->
+      exec_stmt e le m (Svolread id a)
+               t (PTree.set id v le) m Out_normal 
   | exec_Scall_none:   forall e le m a al tyargs tyres vf vargs f t m' vres,
       classify_fun (typeof a) = fun_case_f tyargs tyres ->
       eval_expr e le m a vf ->
@@ -756,7 +769,7 @@ with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
   | eval_funcall_internal: forall le m f vargs t e m1 m2 m3 out vres m4,
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      bind_parameters ge e m1 f.(fn_params) vargs m2 ->
       exec_stmt e (PTree.empty val) m2 f.(fn_body) t le m3 out ->
       outcome_result_value out f.(fn_return) vres ->
       Mem.free_list m3 (blocks_of_env e) = Some m4 ->
@@ -858,7 +871,7 @@ with evalinf_funcall: mem -> fundef -> list val -> traceinf -> Prop :=
   | evalinf_funcall_internal: forall m f vargs t e m1 m2,
       alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
       list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+      bind_parameters ge e m1 f.(fn_params) vargs m2 ->
       execinf_stmt e (PTree.empty val) m2 f.(fn_body) t ->
       evalinf_funcall m (Internal f) vargs t.
 
@@ -877,7 +890,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
+      type_of_fundef f = Tfunction Tnil type_int32s ->
       initial_state p (Callstate f nil Kstop m0).
 
 (** A final state is a [Returnstate] with an empty continuation. *)
@@ -901,10 +914,19 @@ Proof.
   assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
+  (* assign *)
+  inv H5; auto. exploit volatile_store_receptive; eauto. intros EQ. subst t2; econstructor; eauto.
+  (* volatile read *)
+  inv H3; auto. exploit volatile_load_receptive; eauto. intros [v2 LD]. 
+  econstructor. eapply step_vol_read; eauto. eapply deref_loc_volatile; eauto. 
+  (* external *)
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
   exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
-  inv H; simpl; try omega. eapply external_call_trace_length; eauto.
+  red; intros. inv H; simpl; try omega.
+  inv H3; simpl; try omega. inv H5; simpl; omega.
+  inv H1; simpl; try omega. inv H4; simpl; omega.
+  eapply external_call_trace_length; eauto.
 Qed.
 
 (** Big-step execution of a whole program.  *)
@@ -915,7 +937,7 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
+      type_of_fundef f = Tfunction Tnil type_int32s ->
       eval_funcall ge m0 f nil t m1 (Vint r) ->
       bigstep_program_terminates p t r.
 
@@ -925,7 +947,7 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil (Tint I32 Signed) ->
+      type_of_fundef f = Tfunction Tnil type_int32s ->
       evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
 
@@ -942,9 +964,9 @@ Let ge : genv := Genv.globalenv prog.
 Definition exec_stmt_eval_funcall_ind
   (PS: env -> temp_env -> mem -> statement -> trace -> temp_env -> mem -> outcome -> Prop)
   (PF: mem -> fundef -> list val -> trace -> mem -> val -> Prop) :=
-  fun a b c d e f g h i j k l m n o p q r s t u v w x =>
-  conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x)
-       (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x).
+  fun a b c d e f g h i j k l m n o p q r s t u v w x y =>
+  conj (exec_stmt_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y)
+       (eval_funcall_ind2 ge PS PF a b c d e f g h i j k l m n o p q r s t u v w x y).
 
 Inductive outcome_state_match
        (e: env) (le: temp_env) (m: mem) (f: function) (k: cont): outcome -> state -> Prop :=
@@ -992,6 +1014,9 @@ Proof.
   econstructor; split. apply star_one. econstructor; eauto. constructor.
 
 (* set *)
+  econstructor; split. apply star_one. econstructor; eauto. constructor.
+
+(* set volatile *)
   econstructor; split. apply star_one. econstructor; eauto. constructor.
 
 (* call none *)

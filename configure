@@ -32,6 +32,8 @@ usage='Usage: ./configure [options] target
 Supported targets:
   ppc-macosx       (PowerPC, MacOS X)
   ppc-linux        (PowerPC, Linux)
+  ppc-eabi-unix    (PowerPC, EABI with Unix tools)
+  ppc-eabi-diab    (PowerPC, EABI with Diab tools)
   arm-linux        (ARM, Linux EABI)
   ia32-linux       (x86 32 bits, Linux)
   ia32-bsd         (x86 32 bits, BSD)
@@ -76,7 +78,7 @@ case "$target" in
     clinker="gcc -arch ppc"
     libmath=""
     need_stdlib_wrapper="true";;
-  powerpc-linux|ppc-linux)
+  powerpc-linux|ppc-linux|powerpc-eabi-unix|ppc-eabi-unix)
     arch="powerpc"
     variant="eabi"
     system="linux"
@@ -84,6 +86,16 @@ case "$target" in
     cprepro="gcc -U__GNUC__ -E"
     casm="gcc -c"
     clinker="gcc"
+    libmath="-lm"
+    need_stdlib_wrapper="false";;
+  powerpc-eabi-diab|ppc-eabi-diab)
+    arch="powerpc"
+    variant="eabi"
+    system="diab"
+    cc="dcc"
+    cprepro="dcc -E"
+    casm="das"
+    clinker="dcc"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   arm-linux)
@@ -227,7 +239,7 @@ fi
 if test "$target" = "manual"; then
 cat <<EOF
 
-Please finish the configuration by editing file ./Makefile.config
+Please finish the configuration by editing file ./Makefile.config.
 
 EOF
 
@@ -250,6 +262,8 @@ CompCert configuration:
     Needs wrapper around stdlib... $need_stdlib_wrapper
     Binaries installed in......... $bindirexp
     Library files installed in.... $libdirexp
+
+If anything above looks wrong, please edit file ./Makefile.config to correct.
 
 EOF
 

@@ -90,6 +90,7 @@ let type_unary_operation = function
   | Ocast8unsigned -> tint, tint
   | Ocast16unsigned -> tint, tint
   | Onegint -> tint, tint
+  | Oboolval -> tint, tint
   | Onotbool -> tint, tint
   | Onotint -> tint, tint
   | Onegf -> tfloat, tfloat
@@ -134,6 +135,7 @@ let name_of_unary_operation = function
   | Ocast8unsigned -> "cast8unsigned"
   | Ocast16unsigned -> "cast16unsigned"
   | Onegint -> "negint"
+  | Oboolval -> "notbool"
   | Onotbool -> "notbool"
   | Onotint -> "notint"
   | Onegf -> "negf"
@@ -292,6 +294,22 @@ let rec type_stmt env blk ret s =
         end
       with Error s ->
         raise (Error (sprintf "In call:\n%s" s))
+      end
+  | Sbuiltin(optid, ef, el) ->
+      let sg = ef_sig ef in
+      let tel = type_exprlist env [] el in
+      begin try
+        unify_list (ty_of_sig_args sg.sig_args) tel;
+        let ty_res =
+          match sg.sig_res with
+          | None -> tint (*???*)
+          | Some t -> ty_of_typ t in
+        begin match optid with
+        | None -> ()
+        | Some id -> unify (type_var env id) ty_res
+        end
+      with Error s ->
+        raise (Error (sprintf "In builtin call:\n%s" s))
       end
   | Sseq(s1, s2) ->
       type_stmt env blk ret s1;

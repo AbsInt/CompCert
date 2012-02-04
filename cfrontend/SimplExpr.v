@@ -129,9 +129,34 @@ Function makeif (a: expr) (s1 s2: statement) : statement :=
 
 Definition transl_incrdecr (id: incr_or_decr) (a: expr) (ty: type) : expr :=
   match id with
-  | Incr => Ebinop Oadd a (Econst_int Int.one (Tint I32 Signed)) (typeconv ty)
-  | Decr => Ebinop Osub a (Econst_int Int.one (Tint I32 Signed)) (typeconv ty)
+  | Incr => Ebinop Oadd a (Econst_int Int.one type_int32s) (typeconv ty)
+  | Decr => Ebinop Osub a (Econst_int Int.one type_int32s) (typeconv ty)
   end.
+
+(** Generate a [Sset] or [Svolread] operation as appropriate
+  to dereference a l-value [l] and store its result in temporary variable [id]. *)
+
+Definition make_set (id: ident) (l: expr) : statement :=
+  if type_is_volatile (typeof l)
+  then Svolread id l
+  else Sset id l.
+
+(** Translation of a "valof" operation.
+  If the l-value accessed is of volatile type, we go through a temporary. *)
+
+Definition transl_valof (ty: type) (l: expr) : mon (list statement * expr) :=
+  if type_is_volatile ty
+  then (do t <- gensym ty; ret (Svolread t l :: nil, Etempvar t ty))
+  else ret (nil, l).
+(*
+  match access_mode ty with
+  | By_value _ =>
+      if type_is_volatile ty
+      then (do t <- gensym ty; ret (Sset t l :: nil, Etempvar t ty))
+      else ret (nil, l)
+  | _ => ret (nil, l)
+  end.
+*)
 
 (** Translation of expressions.  Return a pair [(sl, a)] of
     a list of statements [sl] and a pure expression [a].
@@ -152,7 +177,7 @@ Inductive destination : Type :=
   | For_effects
   | For_test (tyl: list type) (s1 s2: statement).
 
-Definition dummy_expr := Econst_int Int.zero (Tint I32 Signed).
+Definition dummy_expr := Econst_int Int.zero type_int32s.
 
 Definition finish (dst: destination) (sl: list statement) (a: expr) :=
   match dst with
@@ -177,8 +202,8 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
   | C.Ederef r ty =>
       do (sl, a) <- transl_expr For_val r;
       ret (finish dst sl (Ederef a ty))
-  | C.Efield l1 f ty =>
-      do (sl, a) <- transl_expr For_val l1;
+  | C.Efield r f ty =>
+      do (sl, a) <- transl_expr For_val r;
       ret (finish dst sl (Efield a f ty))
   | C.Eval (Vint n) ty =>
       ret (finish dst nil (Econst_int n ty))
@@ -189,8 +214,9 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
   | C.Esizeof ty' ty =>
       ret (finish dst nil (Esizeof ty' ty))
   | C.Evalof l ty =>
-      do (sl, a) <- transl_expr For_val l;
-      ret (finish dst sl a)
+      do (sl1, a1) <- transl_expr For_val l;
+      do (sl2, a2) <- transl_valof (C.typeof l) a1;
+      ret (finish dst (sl1 ++ sl2) a2)
   | C.Eaddrof l ty =>
       do (sl, a) <- transl_expr For_val l;
       ret (finish dst sl (Eaddrof a ty))
@@ -234,33 +260,35 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
                dummy_expr)
       end
   | C.Eassignop op l1 r2 tyres ty =>
+      let ty1 := C.typeof l1 in
       do (sl1, a1) <- transl_expr For_val l1;
       do (sl2, a2) <- transl_expr For_val r2;
-      let ty1 := C.typeof l1 in
+      do (sl3, a3) <- transl_valof ty1 a1;
       match dst with
       | For_val | For_test _ _ _ =>
           do t <- gensym tyres;
           ret (finish dst
-                 (sl1 ++ sl2 ++
-                  Sset t (Ebinop op a1 a2 tyres) ::
+                 (sl1 ++ sl2 ++ sl3 ++
+                  Sset t (Ebinop op a3 a2 tyres) ::
                   Sassign a1 (Etempvar t tyres) :: nil)
                  (Ecast (Etempvar t tyres) ty1))
       | For_effects =>
-          ret (sl1 ++ sl2 ++ Sassign a1 (Ebinop op a1 a2 tyres) :: nil,
+          ret (sl1 ++ sl2 ++ sl3 ++ Sassign a1 (Ebinop op a3 a2 tyres) :: nil,
                dummy_expr)
       end
   | C.Epostincr id l1 ty =>
-      do (sl1, a1) <- transl_expr For_val l1;
       let ty1 := C.typeof l1 in
+      do (sl1, a1) <- transl_expr For_val l1;
       match dst with
       | For_val | For_test _ _ _ =>
           do t <- gensym ty1;
           ret (finish dst
-                 (sl1 ++ Sset t a1 ::
+                 (sl1 ++ make_set t a1 ::
                   Sassign a1 (transl_incrdecr id (Etempvar t ty1) ty1) :: nil)
                  (Etempvar t ty1))
       | For_effects =>
-          ret (sl1 ++ Sassign a1 (transl_incrdecr id a1 ty1) :: nil,
+          do (sl2, a2) <- transl_valof ty1 a1;
+          ret (sl1 ++ sl2 ++ Sassign a1 (transl_incrdecr id a2 ty1) :: nil,
                dummy_expr)
       end
   | C.Ecomma r1 r2 ty =>
@@ -303,7 +331,7 @@ Definition transl_if (r: C.expr) (s1 s2: statement) : mon statement :=
 
 (** Translation of statements *)
 
-Definition expr_true := Econst_int Int.one (Tint I32 Signed).
+Definition expr_true := Econst_int Int.one type_int32s.
 
 Definition is_Sskip:
   forall s, {s = C.Sskip} + {s <> C.Sskip}.

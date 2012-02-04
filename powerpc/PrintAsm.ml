@@ -202,8 +202,8 @@ let name_of_section_MacOS = function
 
 let name_of_section_Linux = function
   | Section_text -> ".text"
-  | Section_data i -> ".data" (*if i then ".data" else ".bss"*)
-  | Section_small_data i -> ".sdata" (*if i then ".sdata" else ".sbss"*)
+  | Section_data i -> if i then ".data" else "COMM"
+  | Section_small_data i -> if i then ".sdata" else "COMM"
   | Section_const -> ".rodata"
   | Section_small_const -> ".sdata2"
   | Section_string -> ".rodata"
@@ -238,7 +238,9 @@ let name_of_section =
   | Diab  -> name_of_section_Diab
 
 let section oc sec =
-  fprintf oc "	%s\n" (name_of_section sec)
+  let name = name_of_section sec in
+  assert (name <> "COMM");
+  fprintf oc "	%s\n" name
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -663,8 +665,8 @@ let print_instruction oc = function
   | Plwzx(r1, r2, r3) ->
       fprintf oc "	lwzx	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pmfcrbit(r1, bit) ->
-      fprintf oc "	mfcr	%a\n" ireg GPR12;
-      fprintf oc "	rlwinm	%a, %a, %d, 31, 31\n" ireg r1  ireg GPR12  (1 + num_crbit bit)
+      fprintf oc "	mfcr	%a\n" ireg r1;
+      fprintf oc "	rlwinm	%a, %a, %d, 31, 31\n" ireg r1  ireg r1 (1 + num_crbit bit)
   | Pmflr(r1) ->
       fprintf oc "	mflr	%a\n" ireg r1
   | Pmr(r1, r2) ->
@@ -1012,21 +1014,32 @@ let print_var oc (name, v) =
       let init =
         match v.gvar_init with [Init_space _] -> false | _ -> true in
       let sec =
-        Sections.section_for_variable name init
-      and align =
+        Sections.section_for_variable name init in
+      let align =
         match C2C.atom_alignof name with
         | Some a -> log2 a
-        | None -> 3 (* 8-alignment is a safe default *)
-      in
-      section oc sec;
-      fprintf oc "	.align	%d\n" align;
-      if not (C2C.atom_is_static name) then
-        fprintf oc "	.globl	%a\n" symbol name;
-      fprintf oc "%a:\n" symbol name;
-      print_init_data oc name v.gvar_init;
-      if target <> MacOS then begin
-        fprintf oc "	.type	%a, @object\n" symbol name;
-        fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+        | None -> 3 in (* 8-alignment is a safe default *)
+      let name_sec =
+        name_of_section sec in
+      if name_sec <> "COMM" then begin
+        fprintf oc "	%s\n" name_sec;
+        fprintf oc "	.align	%d\n" align;
+        if not (C2C.atom_is_static name) then
+          fprintf oc "	.globl	%a\n" symbol name;
+        fprintf oc "%a:\n" symbol name;
+        print_init_data oc name v.gvar_init;
+        if target <> MacOS then begin
+          fprintf oc "	.type	%a, @object\n" symbol name;
+          fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+        end
+      end else begin
+        let sz =
+          match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
+        fprintf oc "	%s	%a, %ld, %d\n"
+          (if C2C.atom_is_static name then ".lcomm" else ".comm")
+          symbol name
+          (camlint_of_coqint sz)
+          (1 lsl align)
       end
 
 let print_program oc p =

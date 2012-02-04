@@ -20,28 +20,18 @@ module CharSet = Set.Make(struct type t = char let compare = compare end)
 let transform_program t p =
   let run_pass pass flag p = if CharSet.mem flag t then pass p else p in
   Rename.program
-  (run_pass (AddCasts.program ~all:(CharSet.mem 'C' t)) 'c'
-  (run_pass (SimplExpr.program ~volatile:(CharSet.mem 'V' t)) 'e'
-  (run_pass SimplVolatile.program 'v'
-  (run_pass StructAssign.program 'S'
-  (run_pass StructByValue.program 's'
+  (run_pass StructReturn.program 's'
   (run_pass PackedStructs.program 'p'
   (run_pass Bitfields.program 'f'
   (run_pass Unblock.program 'b'
-  p))))))))
+  p))))
 
 let parse_transformations s =
   let t = ref CharSet.empty in
   let set s = String.iter (fun c -> t := CharSet.add c !t) s in
   String.iter
     (function 'b' -> set "b"
-            | 'e' -> set "e"
-            | 'c' -> set "ec"
-            | 'C' -> set "ecC"
             | 's' -> set "s"
-            | 'S' -> set "bsS"
-            | 'v' -> set "v"
-            | 'V' -> set "eV"
             | 'f' -> set "bf"
             | 'p' -> set "bp"
             |  _  -> ())

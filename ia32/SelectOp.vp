@@ -62,6 +62,21 @@ Definition addrstack (ofs: int) :=
 
 Definition notint (e: expr) := Eop (Oxorimm Int.mone) (e ::: Enil).
 
+(** ** Boolean value and boolean negation *)
+
+Fixpoint boolval (e: expr) {struct e} : expr :=
+  let default := Eop (Ocmp (Ccompuimm Cne Int.zero)) (e ::: Enil) in
+  match e with 
+  | Eop (Ointconst n) Enil =>
+      Eop (Ointconst (if Int.eq n Int.zero then Int.zero else Int.one)) Enil
+  | Eop (Ocmp cond) args =>
+      Eop (Ocmp cond) args
+  | Econdition e1 e2 e3 =>
+      Econdition e1 (boolval e2) (boolval e3)
+  | _ =>
+      default
+  end.
+
 (** ** Boolean negation *)
 
 Fixpoint notbool (e: expr) {struct e} : expr :=

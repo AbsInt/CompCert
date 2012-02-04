@@ -128,6 +128,8 @@ let rec print_stmt p s =
       fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
   | Sset(id, e2) ->
       fprintf p "@[<hv 2>%s =@ %a;@]" (temp_name id) print_expr e2
+  | Svolread(id, e2) ->
+      fprintf p "@[<hv 2>%s =@ %a; /*volatile*/@]" (temp_name id) print_expr e2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
                 print_expr e1
@@ -251,25 +253,6 @@ let print_fundef p (id, fd) =
 
 (* Collect struct and union types *)
 
-let rec collect_type = function
-  | Tvoid -> ()
-  | Tint(sz, sg) -> ()
-  | Tfloat sz -> ()
-  | Tpointer t -> collect_type t
-  | Tarray(t, n) -> collect_type t
-  | Tfunction(args, res) -> collect_type_list args; collect_type res
-  | Tstruct(id, fld) -> register_struct_union id fld; collect_fields fld
-  | Tunion(id, fld) -> register_struct_union id fld; collect_fields fld
-  | Tcomp_ptr _ -> ()
-
-and collect_type_list = function
-  | Tnil -> ()
-  | Tcons(hd, tl) -> collect_type hd; collect_type_list tl
-
-and collect_fields = function
-  | Fnil -> ()
-  | Fcons(id, hd, tl) -> collect_type hd; collect_fields tl
-
 let rec collect_expr = function
   | Econst_int _ -> ()
   | Econst_float _ -> ()
@@ -293,6 +276,7 @@ let rec collect_stmt = function
   | Sskip -> ()
   | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
   | Sset(id, e2) -> collect_expr e2
+  | Svolread(id, e2) -> collect_expr e2
   | Scall(optid, e1, el) -> collect_expr e1; collect_exprlist el
   | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
   | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2

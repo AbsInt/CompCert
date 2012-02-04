@@ -750,7 +750,7 @@ Ltac Equalities :=
   exploit external_call_determ. eexact H3. eexact H8. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
 (* trace length *)
-  inv H; simpl.
+  red; intros; inv H; simpl.
   omega.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.

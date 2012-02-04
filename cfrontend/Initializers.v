@@ -97,11 +97,11 @@ Fixpoint constval (a: expr) : res val :=
       constval r
   | Efield l f ty =>
       match typeof l with
-      | Tstruct id fList =>
+      | Tstruct id fList _ =>
           do delta <- field_offset f fList;
           do v <- constval l;
           OK (Val.add v (Vint (Int.repr delta)))
-      | Tunion id fList =>
+      | Tunion id fList _ =>
           constval l
       | _ =>
           Error(msg "ill-typed field access")
@@ -128,14 +128,14 @@ Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   do v1 <- constval a;
   do v2 <- do_cast v1 (typeof a) ty;
   match v2, ty with
-  | Vint n, Tint I8 sg => OK(Init_int8 n)
-  | Vint n, Tint I16 sg => OK(Init_int16 n)
-  | Vint n, Tint I32 sg => OK(Init_int32 n)
-  | Vint n, Tpointer _ => OK(Init_int32 n)
-  | Vfloat f, Tfloat F32 => OK(Init_float32 f)
-  | Vfloat f, Tfloat F64 => OK(Init_float64 f)
-  | Vptr (Zpos id) ofs, Tint I32 sg => OK(Init_addrof id ofs)
-  | Vptr (Zpos id) ofs, Tpointer _ => OK(Init_addrof id ofs)
+  | Vint n, Tint I8 sg _ => OK(Init_int8 n)
+  | Vint n, Tint I16 sg _ => OK(Init_int16 n)
+  | Vint n, Tint I32 sg _ => OK(Init_int32 n)
+  | Vint n, Tpointer _ _ => OK(Init_int32 n)
+  | Vfloat f, Tfloat F32 _ => OK(Init_float32 f)
+  | Vfloat f, Tfloat F64 _ => OK(Init_float64 f)
+  | Vptr (Zpos id) ofs, Tint I32 sg _ => OK(Init_addrof id ofs)
+  | Vptr (Zpos id) ofs, Tpointer _ _ => OK(Init_addrof id ofs)
   | Vundef, _ => Error(msg "undefined operation in initializer")
   | _, _ => Error (msg "type mismatch in initializer")
   end.
@@ -152,17 +152,17 @@ Fixpoint transl_init (ty: type) (i: initializer)
   match i, ty with
   | Init_single a, _ =>
       do d <- transl_init_single ty a; OK (d :: nil)
-  | Init_compound il, Tarray tyelt sz =>
+  | Init_compound il, Tarray tyelt sz _ =>
       if zle sz 0
       then OK (Init_space(sizeof tyelt) :: nil)
       else transl_init_array tyelt il sz
-  | Init_compound il, Tstruct _ Fnil =>
+  | Init_compound il, Tstruct _ Fnil _ =>
       OK (Init_space (sizeof ty) :: nil)
-  | Init_compound il, Tstruct id fl =>
+  | Init_compound il, Tstruct id fl _ =>
       transl_init_struct id ty fl il 0
-  | Init_compound il, Tunion _ Fnil =>
+  | Init_compound il, Tunion _ Fnil _ =>
       OK (Init_space (sizeof ty) :: nil)
-  | Init_compound il, Tunion id (Fcons _ ty1 _) =>
+  | Init_compound il, Tunion id (Fcons _ ty1 _) _ =>
       transl_init_union id ty ty1 il
   | _, _ =>
       Error (msg "wrong type for compound initializer")

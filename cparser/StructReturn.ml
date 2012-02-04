@@ -13,17 +13,14 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Eliminate by-value passing of structs and unions. *)
-
-(* Assumes: nothing.
-   Preserves: unblocked code *)
+(* Eliminate structs and unions being returned by value as function results *)
+(* This is a simpler special case of [StructByValue]. *)
 
 open C
 open Cutil
 open Transform
 
-(* In function argument types, struct s -> const struct s *
-   In function result types, struct s -> void + add 1st parameter struct s *
+(* In function result types, struct s -> void + add 1st parameter struct s *
    Try to preserve original typedef names when no change.
 *)
 
@@ -49,11 +46,7 @@ let rec transf_type env t =
       if t1' = t1 then t else TArray(transf_type env t1, sz, attr)
   | _ -> t
 
-and transf_funarg env (id, t) =
-  let t = transf_type env t in
-  if is_composite_type env t
-  then (id, TPtr(add_attributes_type [AConst] t, []))
-  else (id, t)
+and transf_funarg env (id, t) = (id, transf_type env t)
 
 (* Expressions: transform calls + rewrite the types *)
 
@@ -92,26 +85,21 @@ let rec transf_expr env ctx e =
       if is_composite_type env e.etyp then
         transf_composite_call env ctx None fn args e.etyp
       else
-        {edesc = ECall(transf_expr env Val fn, List.map (transf_arg env) args);
+        {edesc = ECall(transf_expr env Val fn,
+                       List.map (transf_expr env Val) args);
          etyp = newty}
 
-(* Function arguments: pass by reference those having composite type *)
-
-and transf_arg env e =
-  let e' = transf_expr env Val e in
-  if is_composite_type env e'.etyp then eaddrof e' else e'
-
 (* Function calls returning a composite: add first argument.
-    ctx = Effects:   lv = f(...)     -> f(&lv, ...)
+    ctx = Effects:   lv = f(...)     -> f(&lv, ...)      [copy optimization]
                      f(...)          -> f(&newtemp, ...)
-    ctx = Val:       lv = f(...)     -> f(&newtemp, ...), lv = newtemp, newtemp
+    ctx = Val:       lv = f(...)     -> f(&newtemp, ...), lv = newtemp
                      f(...)          -> f(&newtemp, ...), newtemp
 *)
 
 and transf_composite_call env ctx opt_lhs fn args ty =
   let ty = transf_type env ty in
   let fn = transf_expr env Val fn in
-  let args = List.map (transf_arg env) args in
+  let args = List.map (transf_expr env Val) args in
   match ctx, opt_lhs with
   | Effects, None ->
       let tmp = new_temp ~name:"_res" ty in
@@ -125,54 +113,14 @@ and transf_composite_call env ctx opt_lhs fn args ty =
   | Val, Some lhs ->
       let lhs = transf_expr env Val lhs in
       let tmp = new_temp ~name:"_res" ty in
-      ecomma (ecomma {edesc = ECall(fn, eaddrof tmp :: args); etyp = TVoid []}
-                     (eassign lhs tmp))
-             tmp
-
-(* The transformation above can create ill-formed lhs containing ",", as in
-     f().x = y    --->   (f(&tmp), tmp).x = y
-     f(g(x));     --->   f(&(g(&tmp),tmp))
-   We fix this by floating the "," above the lhs, up to the nearest enclosing
-   rhs:
-     f().x = y    --->   (f(&tmp), tmp).x = y   --> f(&tmp), tmp.x = y
-     f(g(x));     --->   f(&(g(&tmp),tmp))      --> f((g(&tmp), &tmp))
-*)
-
-let rec float_comma e =
-  match e.edesc with
-  | EConst c -> e
-  | ESizeof ty -> e
-  | EVar x -> e
-  (* lvalue-consuming unops *)
-  | EUnop((Oaddrof|Opreincr|Opredecr|Opostincr|Opostdecr|Odot _) as op,
-          {edesc = EBinop(Ocomma, e1, e2, _)}) ->
-      ecomma (float_comma e1)
-             (float_comma {edesc = EUnop(op, e2); etyp = e.etyp})
-  (* lvalue-consuming binops *)
-  | EBinop((Oassign|Oadd_assign|Osub_assign|Omul_assign|Odiv_assign
-                   |Omod_assign|Oand_assign|Oor_assign|Oxor_assign
-                   |Oshl_assign|Oshr_assign) as op,
-           {edesc = EBinop(Ocomma, e1, e2, _)}, e3, tyres) ->
-      ecomma (float_comma e1)
-             (float_comma {edesc = EBinop(op, e2, e3, tyres); etyp = e.etyp})
-  (* other expressions *)
-  | EUnop(op, e1) ->
-      {edesc = EUnop(op, float_comma e1); etyp = e.etyp}
-  | EBinop(op, e1, e2, tyres) ->
-      {edesc = EBinop(op, float_comma e1, float_comma e2, tyres); etyp = e.etyp}
-  | EConditional(e1, e2, e3) ->
-      {edesc = EConditional(float_comma e1, float_comma e2, float_comma e3);
-       etyp = e.etyp}
-  | ECast(ty, e1) ->
-      {edesc = ECast(ty, float_comma e1); etyp = e.etyp}
-  | ECall(e1, el) ->
-      {edesc = ECall(float_comma e1, List.map float_comma el); etyp = e.etyp}
+      ecomma {edesc = ECall(fn, eaddrof tmp :: args); etyp = TVoid []}
+             (eassign lhs tmp)
 
 (* Initializers *)
 
 let rec transf_init env = function
   | Init_single e ->
-      Init_single (float_comma(transf_expr env Val e))
+      Init_single (transf_expr env Val e)
   | Init_array il ->
       Init_array (List.map (transf_init env) il)
   | Init_struct(id, fil) ->
@@ -190,7 +138,7 @@ let transf_decl env (sto, id, ty, init) =
 
 let transf_funbody env body optres =
 
-let transf_expr ctx e = float_comma(transf_expr env ctx e) in
+let transf_expr ctx e = transf_expr env ctx e in
 
 (* Function returns: if return type is struct or union,
      return x      -> _res = x; return
@@ -239,33 +187,11 @@ let rec transf_stmt s =
 in
   transf_stmt body
 
-let transf_params loc env params =
-  let rec transf_prm = function
-  | [] ->
-      ([], [], sskip)
-  | (id, ty) :: params ->
-      let ty = transf_type env ty in
-      if is_composite_type env ty then begin
-        let id' = Env.fresh_ident id.name in
-        let ty' = TPtr(add_attributes_type [AConst] ty, []) in
-        let (params', decls, init) = transf_prm params in
-        ((id', ty') :: params',
-         (Storage_default, id, ty, None) :: decls,
-         sseq loc
-          (sassign loc {edesc = EVar id; etyp = ty}
-                       {edesc = EUnop(Oderef, {edesc = EVar id'; etyp = ty'});
-                        etyp = ty})
-          init)
-      end else begin
-        let (params', decls, init) = transf_prm params in
-        ((id, ty) :: params', decls, init)
-      end
-  in transf_prm params
-
 let transf_fundef env f =
   reset_temps();
   let ret = transf_type env f.fd_ret in
-  let (params, newdecls, init) = transf_params f.fd_body.sloc env f.fd_params in
+  let params =
+    List.map (fun (id, ty) -> (id, transf_type env ty)) f.fd_params in
   let (ret1, params1, body1) =
     if is_composite_type env ret then begin
       let vres = Env.fresh_ident "_res" in
@@ -277,10 +203,9 @@ let transf_fundef env f =
        transf_funbody env f.fd_body (Some eeres))
     end else
       (ret, params, transf_funbody env f.fd_body None) in
-  let body2 = sseq body1.sloc init body1 in
   let temps = get_temps() in
   {f with fd_ret = ret1; fd_params = params1;
-          fd_locals = newdecls @ f.fd_locals @ temps; fd_body = body2}
+          fd_locals = f.fd_locals @ temps; fd_body = body1}
 
 (* Composites *)
 

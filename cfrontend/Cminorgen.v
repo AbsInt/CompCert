@@ -62,11 +62,11 @@ Definition for_temp (id: ident) : ident := xI id.
   global variables, stored in the global symbols with the same names. *)
 
 Inductive var_info: Type :=
-  | Var_local: memory_chunk -> var_info
-  | Var_stack_scalar: memory_chunk -> Z -> var_info
-  | Var_stack_array: Z -> var_info
-  | Var_global_scalar: memory_chunk -> var_info
-  | Var_global_array: var_info.
+  | Var_local (chunk: memory_chunk)
+  | Var_stack_scalar (chunk: memory_chunk) (ofs: Z)
+  | Var_stack_array (ofs sz al: Z)
+  | Var_global_scalar (chunk: memory_chunk)
+  | Var_global_array.
 
 Definition compilenv := PMap.t var_info.
 
@@ -140,6 +140,7 @@ Definition make_unop (op: unary_operation) (e: expr): expr :=
 
 Inductive approx : Type :=
   | Any                   (**r any value *)
+  | Int1                  (**r [0] or [1] *)
   | Int7                  (**r [[0,127]] *)
   | Int8s                 (**r [[-128,127]] *)
   | Int8u                 (**r [[0,255]] *)
@@ -153,41 +154,51 @@ Module Approx.
 Definition bge (x y: approx) : bool :=
   match x, y with
   | Any, _ => true
-  | Int7, Int7 => true
-  | Int8s, (Int7 | Int8s) => true
-  | Int8u, (Int7 | Int8u) => true
-  | Int15, (Int7 | Int8u | Int15) => true
-  | Int16s, (Int7 | Int8s | Int8u | Int15 | Int16s) => true
-  | Int16u, (Int7 | Int8u | Int15 | Int16u) => true
+  | Int1, Int1 => true
+  | Int7, (Int1 | Int7) => true
+  | Int8s, (Int1 | Int7 | Int8s) => true
+  | Int8u, (Int1 | Int7 | Int8u) => true
+  | Int15, (Int1 | Int7 | Int8u | Int15) => true
+  | Int16s, (Int1 | Int7 | Int8s | Int8u | Int15 | Int16s) => true
+  | Int16u, (Int1 | Int7 | Int8u | Int15 | Int16u) => true
   | Float32, Float32 => true
   | _, _ => false
   end.
 
 Definition lub (x y: approx) : approx :=
   match x, y with
+  | Int1, Int1 => Int1
+  | Int1, Int7 => Int7
+  | Int1, Int8u => Int8u
+  | Int1, Int8s => Int8s
+  | Int1, Int15 => Int15
+  | Int1, Int16u => Int16u
+  | Int1, Int16s => Int16s
+  | Int7, Int1 => Int7
   | Int7, Int7 => Int7
   | Int7, Int8u => Int8u
   | Int7, Int8s => Int8s
   | Int7, Int15 => Int15
   | Int7, Int16u => Int16u
   | Int7, Int16s => Int16s
-  | Int8u, (Int7|Int8u) => Int8u
+  | Int8u, (Int1|Int7|Int8u) => Int8u
   | Int8u, Int15 => Int15
   | Int8u, Int16u => Int16u
   | Int8u, Int16s => Int16s
-  | Int8s, (Int7|Int8s) => Int8s
+  | Int8s, (Int1|Int7|Int8s) => Int8s
   | Int8s, (Int15|Int16s) => Int16s
-  | Int15, (Int7|Int8u|Int15) => Int15
+  | Int15, (Int1|Int7|Int8u|Int15) => Int15
   | Int15, Int16u => Int16u
   | Int15, (Int8s|Int16s) => Int16s
-  | Int16u, (Int7|Int8u|Int15|Int16u) => Int16u
-  | Int16s, (Int7|Int8u|Int8s|Int15|Int16s) => Int16s
+  | Int16u, (Int1|Int7|Int8u|Int15|Int16u) => Int16u
+  | Int16s, (Int1|Int7|Int8u|Int8s|Int15|Int16s) => Int16s
   | Float32, Float32 => Float32
   | _, _ => Any
   end.
 
 Definition of_int (n: int) :=
-  if Int.eq_dec n (Int.zero_ext 7 n) then Int7
+  if Int.eq_dec n Int.zero || Int.eq_dec n Int.one then Int1
+  else if Int.eq_dec n (Int.zero_ext 7 n) then Int7
   else if Int.eq_dec n (Int.zero_ext 8 n) then Int8u
   else if Int.eq_dec n (Int.sign_ext 8 n) then Int8s
   else if Int.eq_dec n (Int.zero_ext 15 n) then Int15
@@ -216,7 +227,8 @@ Definition unop (op: unary_operation) (a: approx) :=
   | Ocast16unsigned => Int16u
   | Ocast16signed => Int16s
   | Osingleoffloat => Float32
-  | Onotbool => Int7
+  | Oboolval => Int1
+  | Onotbool => Int1
   | _ => Any
   end.
 
@@ -226,17 +238,20 @@ Definition unop_is_redundant (op: unary_operation) (a: approx) :=
   | Ocast8signed => bge Int8s a
   | Ocast16unsigned => bge Int16u a
   | Ocast16signed => bge Int16s a
+  | Oboolval => bge Int1 a
   | Osingleoffloat => bge Float32 a
   | _ => false
   end.
 
 Definition bitwise_and (a1 a2: approx) :=
-  if bge Int8u a1 || bge Int8u a2 then Int8u
+  if bge Int1 a1 || bge Int1 a2 then Int1
+  else if bge Int8u a1 || bge Int8u a2 then Int8u
   else if bge Int16u a1 || bge Int16u a2 then Int16u
   else Any.
 
 Definition bitwise_or (a1 a2: approx) :=
-  if bge Int8u a1 && bge Int8u a2 then Int8u
+  if bge Int1 a1 && bge Int1 a2 then Int1
+  else if bge Int8u a1 && bge Int8u a2 then Int8u
   else if bge Int16u a1 && bge Int16u a2 then Int16u
   else Any.
 
@@ -244,9 +259,9 @@ Definition binop (op: binary_operation) (a1 a2: approx) :=
   match op with
   | Oand => bitwise_and a1 a2
   | Oor | Oxor => bitwise_or a1 a2
-  | Ocmp _ => Int7
-  | Ocmpu _ => Int7
-  | Ocmpf _ => Int7
+  | Ocmp _ => Int1
+  | Ocmpu _ => Int1
+  | Ocmpf _ => Int1
   | _ => Any
   end.
 
@@ -275,7 +290,7 @@ Definition var_addr (cenv: compilenv) (id: ident): res (expr * approx) :=
   match PMap.get id cenv with
   | Var_local chunk => Error(msg "Cminorgen.var_addr")
   | Var_stack_scalar chunk ofs => OK (make_stackaddr ofs, Any)
-  | Var_stack_array ofs => OK (make_stackaddr ofs, Any)
+  | Var_stack_array ofs sz al => OK (make_stackaddr ofs, Any)
   | _ => OK (make_globaladdr id, Any)
   end.
 
@@ -299,16 +314,17 @@ Definition var_set (cenv: compilenv)
 (** A variant of [var_set] used for initializing function parameters.
   The value to be stored already resides in the Cminor variable called [id]. *)
 
-Definition var_set_self (cenv: compilenv) (id: ident) (ty: typ) (k: stmt): res stmt :=
+Definition var_set_self (cenv: compilenv) (id: ident) (k: stmt): res stmt :=
   match PMap.get id cenv with
   | Var_local chunk =>
       OK k
   | Var_stack_scalar chunk ofs =>
       OK (Sseq (make_store chunk (make_stackaddr ofs) (Evar (for_var id))) k)
-  | Var_global_scalar chunk =>
-      OK (Sseq (make_store chunk (make_globaladdr id) (Evar (for_var id))) k)
+  | Var_stack_array ofs sz al =>
+      OK (Sseq (Sbuiltin None (EF_memcpy sz (Zmin al 4))
+                         (make_stackaddr ofs :: Evar (for_var id) :: nil)) k)
   | _ =>
-      Error(msg "Cminorgen.var_set_self.2")
+      Error(msg "Cminorgen.var_set_self")
   end.
 
 (** Translation of constants. *)
@@ -432,6 +448,9 @@ Fixpoint transl_stmt (ret: option typ) (cenv: compilenv)
       do (te, a) <- transl_expr cenv e;
       do tel <- transl_exprlist cenv el;
       OK (Scall (option_map for_temp optid) sig te tel)
+  | Csharpminor.Sbuiltin optid ef el =>
+      do tel <- transl_exprlist cenv el;
+      OK (Sbuiltin (option_map for_temp optid) ef tel)
   | Csharpminor.Sseq s1 s2 =>
       do ts1 <- transl_stmt ret cenv xenv s1;
       do ts2 <- transl_stmt ret cenv xenv s2;
@@ -515,6 +534,8 @@ Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
       Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Scall optid sig e el =>
       Identset.union (addr_taken_expr e) (addr_taken_exprlist el)
+  | Csharpminor.Sbuiltin optid ef el =>
+      addr_taken_exprlist el
   | Csharpminor.Sseq s1 s2 =>
       Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2)
   | Csharpminor.Sifthenelse e s1 s2 =>
@@ -554,9 +575,9 @@ Definition assign_variable
     (cenv_stacksize: compilenv * Z) : compilenv * Z :=
   let (cenv, stacksize) := cenv_stacksize in
   match id_lv with
-  | (id, Varray sz) =>
+  | (id, Varray sz al) =>
       let ofs := align stacksize (array_alignment sz) in
-      (PMap.set id (Var_stack_array ofs) cenv, ofs + Zmax 0 sz)
+      (PMap.set id (Var_stack_array ofs sz al) cenv, ofs + Zmax 0 sz)
   | (id, Vscalar chunk) =>
       if Identset.mem id atk then
         let sz := size_chunk chunk in
@@ -589,7 +610,7 @@ Definition assign_global_variable
   match info with
   | (id, mkglobvar vk _ _ _) =>
       PMap.set id (match vk with Vscalar chunk => Var_global_scalar chunk
-                               | Varray _ => Var_global_array
+                               | Varray _ _ => Var_global_array
                    end)
                ce
   end.
@@ -605,13 +626,13 @@ Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
   local variables.) *)
 
 Fixpoint store_parameters
-       (cenv: compilenv) (params: list (ident * memory_chunk))
+       (cenv: compilenv) (params: list (ident * var_kind))
        {struct params} : res stmt :=
   match params with
   | nil => OK Sskip
-  | (id, chunk) :: rem =>
+  | (id, vk) :: rem =>
       do s <- store_parameters cenv rem;
-      var_set_self cenv id (type_of_chunk chunk) s
+      var_set_self cenv id s
   end.
 
 (** Translation of a Csharpminor function.  We must check that the

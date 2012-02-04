@@ -78,15 +78,21 @@ Theorem transf_cstrategy_program_preservation:
      program_behaves (Asm.semantics tp) beh ->
      program_behaves (Cstrategy.semantics p) beh).
 Proof.
+  assert (WBT: forall p, well_behaved_traces (Cstrategy.semantics p)).
+    intros. eapply ssr_well_behaved. apply Cstrategy.semantics_strongly_receptive.
   intros. intuition.
   eapply forward_simulation_behavior_improves; eauto. 
     apply (fst (transf_cstrategy_program_correct _ _ H)).
-  eapply backward_simulation_behavior_improves; eauto. 
+  exploit backward_simulation_behavior_improves.
     apply (snd (transf_cstrategy_program_correct _ _ H)).
+    eauto.
+  intros [beh1 [A B]]. exists beh1; split; auto. rewrite atomic_behaviors; auto.
   eapply forward_simulation_same_safe_behavior; eauto.
     apply (fst (transf_cstrategy_program_correct _ _ H)).
-  eapply backward_simulation_same_safe_behavior; eauto.
+  exploit backward_simulation_same_safe_behavior.
     apply (snd (transf_cstrategy_program_correct _ _ H)).
+    intros. rewrite <- atomic_behaviors in H2; eauto. eauto.
+    intros. rewrite atomic_behaviors; auto. 
 Qed.
 
 (** We can also use the alternate big-step semantics for [Cstrategy]
