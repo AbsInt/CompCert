@@ -17,16 +17,6 @@ bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
 target=''
 
-prompt() {
-    echo "$1 [$x] ? " | tr -d '\n'
-    read y
-    case "$y" in
-        "") ;;
-      none) x="";;
-         *) x="$y";;
-    esac
-}
-
 usage='Usage: ./configure [options] target
 
 Supported targets:

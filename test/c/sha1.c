@@ -210,7 +210,9 @@ static void do_bench(int nblocks)
   struct SHA1Context ctx;
   unsigned char output[20];
   unsigned char data[64];
+  int i;
 
+  for (i = 0; i < 64; i++) data[i] = i;
   SHA1_init(&ctx);
   for (; nblocks > 0; nblocks--) 
     SHA1_add_data(&ctx, data, 64);

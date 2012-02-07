@@ -74,14 +74,6 @@ let builtins_generic = {
     (* Floating-point absolute value *)
     "__builtin_fabs",
       (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
-    (* Block copy *)
-    "__builtin_memcpy_aligned",
-         (TVoid [],
-           [TPtr(TVoid [], []); 
-            TPtr(TVoid [AConst], []); 
-            TInt(Cutil.size_t_ikind, []);
-            TInt(Cutil.size_t_ikind, [])],
-          false);
     (* Annotations *)
     "__builtin_annot",
         (TVoid [],
@@ -199,36 +191,6 @@ let register_annotation_val txt targ =
   register_special_external fun_name ef targs tres;
   Evalof(Evar(intern_string fun_name, Tfunction(targs, tres)),
          Tfunction(targs, tres))
-
-(** ** Handling of inlined memcpy functions *)
-
-let register_inlined_memcpy sz al =
-  let al =
-    if al <= 4l then al else 4l in (* max alignment supported by CompCert *)
-  let name = Printf.sprintf "__builtin_memcpy_sz%ld_al%ld" sz al in
-  let targs = Tcons(Tpointer(Tvoid, noattr),
-              Tcons(Tpointer(Tvoid, noattr), Tnil))
-  and tres = Tvoid
-  and ef = EF_memcpy(coqint_of_camlint sz, coqint_of_camlint al) in
-  register_special_external name ef targs tres;
-  Evalof(Evar(intern_string name, Tfunction(targs, tres)),
-         Tfunction(targs, tres))
-
-let make_builtin_memcpy args =
-  match args with
-  | Econs(dst, Econs(src, Econs(sz, Econs(al, Enil)))) ->
-      let sz1 =
-        match Initializers.constval sz with
-        | CompcertErrors.OK(Vint n) -> camlint_of_coqint n
-        | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be a constant)"; 0l in
-      let al1 =
-        match Initializers.constval al with
-        | CompcertErrors.OK(Vint n) -> camlint_of_coqint n
-        | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be a constant)"; 0l in
-      let fn = register_inlined_memcpy sz1 al1 in
-      Ecall(fn, Econs(dst, Econs(src, Enil)), Tvoid)
-  | _ ->
-    assert false
 
 (** ** Translation functions *)
 
@@ -550,9 +512,6 @@ let rec convertExpr env e =
           ezero
       end          
 
- | C.ECall({edesc = C.EVar {name = "__builtin_memcpy_aligned"}}, args) ->
-      make_builtin_memcpy (convertExprList env args)
-
   | C.ECall(fn, args) ->
       match projFunType env fn.etyp with
       | None ->
@@ -588,14 +547,14 @@ and convertLvalue env e =
   | C.EUnop(C.Oderef, e1) ->
       Ederef(convertExpr env e1, ty)
   | C.EUnop(C.Odot id, e1) ->
-      Efield(convertLvalue env e1, intern_string id, ty)
+      Efield(convertExpr env e1, intern_string id, ty)
   | C.EUnop(C.Oarrow id, e1) ->
       let e1' = convertExpr env e1 in
       let ty1 =
         match typeof e1' with
         | Tpointer(t, _) -> t
         | _ -> error ("wrong type for ->" ^ id ^ " access"); Tvoid in
-      Efield(Ederef(e1', ty1), intern_string id, ty)
+      Efield(Evalof(Ederef(e1', ty1), ty1), intern_string id, ty)
   | C.EBinop(C.Oindex, e1, e2, _) ->
       coq_Eindex (convertExpr env e1) (convertExpr env e2) ty
   | _ ->
@@ -784,7 +743,9 @@ let convertInitializer env ty i =
   match Initializers.transl_init (convertTyp env ty) (convertInit env i)
   with
   | CompcertErrors.OK init -> init
-  | CompcertErrors.Error msg -> error (string_of_errmsg msg); []
+  | CompcertErrors.Error msg ->
+      error (sprintf "Initializer is not a compile-time constant (%s)"
+                     (string_of_errmsg msg)); []
 
 (** Global variable *)
 

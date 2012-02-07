@@ -50,6 +50,8 @@ char x20[3] = "Hello!";
 
 char x21[10] = "Hello!";
 
+char * x22 = &(x10.u.y);
+
 static void print_chars(char * s, int sz)
 {
   int i;
@@ -106,6 +108,10 @@ int main()
   printf("x21 = { ");
   print_chars(x21, sizeof(x21));
   printf("}\n");
+  if (x22 == &(x10.u.y))
+    printf("x22 ok\n");
+  else
+    printf("x22 error\n");
   return 0;
 }
 

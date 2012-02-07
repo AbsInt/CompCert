@@ -58,8 +58,8 @@ Fixpoint constval (a: expr) : res val :=
       end
   | Evalof l ty =>
       match access_mode ty with
-      | By_reference => constval l
-      | _ => Error(msg "dereference operation")
+      | By_reference | By_copy => constval l
+      | _ => Error(msg "dereferencing of an l-value")
       end
   | Eaddrof l ty =>
       constval l

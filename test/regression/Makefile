@@ -44,4 +44,16 @@ test:
 	   fi; \
          done
 
+interp:
+	@for i in $(TESTS); do \
+           if $(CCOMP) -fall -interp 2>/dev/null $$i.c > _cinterp.log; then \
+             if cmp -s _cinterp.log Results/$$i; \
+             then echo "$$i: interpreter passed"; \
+             else echo "$$i: interpreter FAILED"; \
+             fi; \
+           else \
+             echo "$$i: interpreter undefined behavior"; \
+           fi; \
+         done
+
 bench:

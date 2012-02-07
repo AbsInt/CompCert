@@ -445,7 +445,7 @@ Proof.
   (* val *)
   destruct v; monadInv CV; constructor.
   (* rval *)
-  inv H1; rewrite H2 in CV; try congruence. eauto. 
+  inv H1; rewrite H2 in CV; try congruence. eauto. eauto. 
   (* addrof *)
   eauto.
   (* unop *)
