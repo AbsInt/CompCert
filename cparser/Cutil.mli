@@ -171,6 +171,8 @@ val nullconst : exp
   (* Expression for [(void * ) 0] *)
 val eaddrof : exp -> exp
   (* Expression for [&e] *)
+val ecast : typ -> exp -> exp
+  (* Expression for [(ty)e] *)
 val eassign : exp -> exp -> exp
   (* Expression for [e1 = e2] *)
 val ecomma :  exp -> exp -> exp

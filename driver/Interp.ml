@@ -371,6 +371,50 @@ let do_event p ge time s ev =
 let do_events p ge time s t =
   List.iter (do_event p ge time s) t
 
+(* Debugging stuck expressions *)
+
+let (|||) a b = a || b (* strict boolean or *)
+
+let diagnose_stuck_expr p ge f a kont e m =
+  let rec diagnose k a =
+  (* diagnose subexpressions first *)
+  let found =
+    match k, a with
+    | LV, Ederef(r, ty) -> diagnose RV r
+    | LV, Efield(r, f, ty) -> diagnose RV r
+    | RV, Evalof(l, ty) -> diagnose LV l
+    | RV, Eaddrof(l, ty) -> diagnose LV l
+    | RV, Eunop(op, r1, ty) -> diagnose RV r1
+    | RV, Ebinop(op, r1, r2, ty) -> diagnose RV r1 ||| diagnose RV r2
+    | RV, Ecast(r1, ty) -> diagnose RV r1
+    | RV, Econdition(r1, r2, r3, ty) -> diagnose RV r1
+    | RV, Eassign(l1, r2, ty) -> diagnose LV l1 ||| diagnose RV r2
+    | RV, Eassignop(op, l1, r2, tyres, ty) -> diagnose LV l1 ||| diagnose RV r2
+    | RV, Epostincr(id, l, ty) -> diagnose LV l
+    | RV, Ecomma(r1, r2, ty) -> diagnose RV r1
+    | RV, Eparen(r1, ty) -> diagnose RV r1
+    | RV, Ecall(r1, rargs, ty) -> diagnose RV r1 ||| diagnose_list rargs
+    | _, _ -> false in
+  if found then true else begin
+    let l = Cexec.step_expr ge e world k a m in
+    if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
+      fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
+              PrintCsyntax.print_expr a;
+      true
+    end else false
+  end
+
+  and diagnose_list al =
+    match al with
+    | Enil -> false
+    | Econs(a1, al') -> diagnose RV a1 ||| diagnose_list al'
+
+  in diagnose RV a
+
+let diagnose_stuck_state p ge = function
+  | ExprState(f,a,k,e,m) -> ignore(diagnose_stuck_expr p ge f a k e m)
+  | _ -> ()
+
 (* Exploration *)
 
 let do_step p prog ge time s =
@@ -388,8 +432,9 @@ let do_step p prog ge time s =
   | None ->
       let l = Cexec.do_step ge world s in
       if l = [] || List.exists (fun (t,s) -> s = Stuckstate) l then begin
-        if !trace = 1 then
-          fprintf p "@[<hov 2>Time %d: %a@]@." time (print_state prog) s;
+        pp_set_max_boxes p 1000;
+        fprintf p "@[<hov 2>Stuck state: %a@]@." (print_state prog) s;
+        diagnose_stuck_state p ge s;
         fprintf p "ERROR: Undefined behavior@.";
         fprintf p "@].";
         exit 126
@@ -452,6 +497,7 @@ let fixup_main p =
 let execute prog =
   Random.self_init();
   let p = err_formatter in
+  pp_set_max_indent p 30;
   pp_set_max_boxes p 10;
   match fixup_main prog with
   | None -> ()

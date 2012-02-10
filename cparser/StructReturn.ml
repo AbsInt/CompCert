@@ -65,10 +65,7 @@ let rec transf_expr env ctx e =
     when is_composite_type env ty ->
       transf_composite_call env ctx (Some lhs) fn args ty
   | EBinop(Ocomma, e1, e2, ty) ->
-      {edesc = EBinop(Ocomma, transf_expr env Effects e1,
-                              transf_expr env ctx e2,
-                              transf_type env ty);
-       etyp = newty}
+      ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
   | EBinop(op, e1, e2, ty) ->
       {edesc = EBinop(op, transf_expr env Val e1,
                           transf_expr env Val e2,

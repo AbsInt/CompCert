@@ -720,7 +720,7 @@ let nullconst =
 
 (* Construct a cast expression *)
 
-let ecast e ty = { edesc = ECast(ty, e); etyp = ty }
+let ecast ty e = { edesc = ECast(ty, e); etyp = ty }
 
 (* Construct an assignment expression *)
 
