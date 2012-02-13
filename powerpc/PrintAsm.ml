@@ -14,6 +14,7 @@
 
 open Printf
 open Datatypes
+open Maps
 open Camlcoq
 open Sections
 open AST
@@ -509,12 +510,20 @@ let print_builtin_inline oc name args res =
   end;
   fprintf oc "%s end builtin %s\n" comment name
 
+(* Determine if the displacement of a conditional branch fits the short form *)
+
+let short_cond_branch tbl pc lbl_dest =
+  match PTree.get lbl_dest tbl with
+  | None -> assert false
+  | Some pc_dest -> 
+      let disp = pc_dest - pc in -0x2000 <= disp && disp < 0x2000
+
 (* Printing of instructions *)
 
 let float_literals : (int * int64) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
-let print_instruction oc = function
+let print_instruction oc tbl pc = function
   | Padd(r1, r2, r3) ->
       fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Padde(r1, r2, r3) ->
@@ -554,7 +563,14 @@ let print_instruction oc = function
   | Pbctrl ->
       fprintf oc "	bctrl\n"
   | Pbf(bit, lbl) ->
-      fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
+      if short_cond_branch tbl pc lbl then
+        fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
+      else begin
+        let next = new_label() in
+        fprintf oc "	bt	%a, %a\n" crbit bit label next;
+        fprintf oc "	b	%a\n" label (transl_label lbl);
+        fprintf oc "%a:\n" label next
+      end
   | Pbl s ->
       fprintf oc "	bl	%a\n" symbol s
   | Pbs s ->
@@ -562,7 +578,14 @@ let print_instruction oc = function
   | Pblr ->
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
-      fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
+      if short_cond_branch tbl pc lbl then
+        fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
+      else begin
+        let next = new_label() in
+        fprintf oc "	bf	%a, %a\n" crbit bit label next;
+        fprintf oc "	b	%a\n" label (transl_label lbl);
+        fprintf oc "%a:\n" label next
+      end
   | Pbtbl(r, tbl) ->
       let lbl = new_label() in
       fprintf oc "%s begin pseudoinstr btbl(%a)\n" comment ireg r;
@@ -773,6 +796,65 @@ let print_instruction oc = function
           assert false
       end
 
+(* Estimate the size of an Asm instruction encoding, in number of actual
+   PowerPC instructions.  We can over-approximate. *)
+
+let instr_size = function
+  | Pallocframe(sz, ofs) -> 3
+  | Pbf(bit, lbl) -> 2
+  | Pbt(bit, lbl) -> 2
+  | Pbtbl(r, tbl) -> 4
+  | Pfcti(r1, r2) -> 4
+  | Pfmake(rd, r1, r2) -> 4
+  | Plfi(r1, c) -> 2
+  | Pmfcrbit(r1, bit) -> 2
+  | Pstfs(r1, c, r2) -> 2
+  | Pstfsx(r1, r2, r3) -> 2
+  | Plabel lbl -> 0
+  | Pbuiltin(ef, args, res) ->
+      begin match ef with
+      | EF_builtin(name, sg) ->
+          begin match extern_atom name with
+          | "__builtin_bswap" -> 3
+          | _ -> 1
+          end
+      | EF_vload chunk ->
+          if chunk = Mint8signed then 2 else 1
+      | EF_vstore chunk ->
+          if chunk = Mfloat32 then 2 else 1
+      | EF_vload_global(chunk, id, ofs) ->
+          if chunk = Mint8signed then 3 else 2
+      | EF_vstore_global(chunk, id, ofs) ->
+          if chunk = Mfloat32 then 3 else 2
+      | EF_memcpy(sz, al) ->
+          let sz = Int32.to_int (camlint_of_coqint sz) in
+          if sz <= 64 then (sz / 4) * 2 + 6 else 11
+      | EF_annot_val(txt, targ) ->
+          0
+      | _ ->
+          assert false
+      end
+  | Pannot(ef, args) -> 0
+  | _ -> 1
+
+(* Build a table label -> estimated position in generated code.
+   Used to predict if relative conditional branches can use the short form. *)
+
+let rec label_positions tbl pc = function
+  | [] -> tbl
+  | Plabel lbl :: c -> label_positions (PTree.set lbl pc tbl) pc c
+  | i :: c -> label_positions tbl (pc + instr_size i) c
+
+(* Emit a sequence of instructions *)
+
+let rec print_instructions oc tbl pc = function
+  | [] -> ()
+  | i :: c ->
+      print_instruction oc tbl pc i;
+      print_instructions oc tbl (pc + instr_size i) c
+
+(* Print the code for a function *)
+
 let print_literal oc (lbl, n) =
   let nlo = Int64.to_int32 n
   and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
@@ -794,7 +876,7 @@ let print_function oc name code =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
-  List.iter (print_instruction oc) code;
+  print_instructions oc (label_positions PTree.empty 0 code) 0 code;
   if target <> MacOS then begin
     fprintf oc "	.type	%a, @function\n" symbol name;
     fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
