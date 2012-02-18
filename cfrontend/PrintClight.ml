@@ -245,9 +245,11 @@ let print_function p id f =
 
 let print_fundef p (id, fd) =
   match fd with
-  | External(_, args, res) ->
+  | External(EF_external(_,_), args, res) ->
       fprintf p "extern %s;@ @ "
                 (name_cdecl (extern_atom id) (Tfunction(args, res)))
+  | External(_, _, _) ->
+      ()
   | Internal f ->
       print_function p id f
 
@@ -326,7 +328,7 @@ let print_struct_or_union p (name, fld) =
       fprintf p "@ %s;" (name_cdecl (extern_atom id) ty);
       print_fields rem in
   print_fields fld;
-  fprintf p "@;<0 -2>};@]@ "
+  fprintf p "@;<0 -2>};@]@ @ "
 
 let print_program p prog =
   struct_unions := StructUnionSet.empty;
