@@ -104,10 +104,11 @@ let name_for_string_literal env s =
     incr stringNum;
     let name = Printf.sprintf "__stringlit_%d" !stringNum in
     let id = intern_string name in
+    let sz = Int64.of_int (String.length s + 1) in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
         a_env = env;
-        a_type = C.TPtr(C.TInt(C.IChar,[C.AConst]),[]);
+        a_type = C.TArray(C.TInt(C.IChar,[C.AConst]), Some sz, []);
         a_fundef = None };
     Sections.define_stringlit id;
     Hashtbl.add stringTable s id;
