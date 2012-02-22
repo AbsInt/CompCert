@@ -34,10 +34,8 @@ val define_section:
          -> ?writable:bool -> ?executable:bool -> ?near:bool -> unit -> unit
 val use_section_for: AST.ident -> string -> bool
 
-val define_function: Cparser.Env.t -> AST.ident -> Cparser.C.typ -> unit
-val define_variable: Cparser.Env.t -> AST.ident -> Cparser.C.typ -> unit
-val define_stringlit: AST.ident -> unit
-
-val section_for_variable: AST.ident -> bool -> section_name
-val sections_for_function: AST.ident -> section_name * section_name * section_name
-val atom_is_small_data: AST.ident -> Integers.Int.int -> bool
+val for_variable: Cparser.Env.t -> AST.ident -> Cparser.C.typ -> bool ->
+                                          section_name * bool
+val for_function: Cparser.Env.t -> AST.ident -> Cparser.C.typ -> 
+                                          section_name list
+val for_stringlit: unit -> section_name

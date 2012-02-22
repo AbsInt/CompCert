@@ -16,8 +16,6 @@
 open Camlcoq
 open Cparser
 
-module StringMap = Map.Make(String)
-
 (* Handling of linker sections *)
 
 type section_name =
@@ -92,40 +90,28 @@ let builtin_sections = [
       sec_near_access = false}
 ]
 
-let default_section_table =
-  List.fold_right
-    (fun (s, i) t -> StringMap.add s i t)
-    builtin_sections StringMap.empty
-
-
 (* The current mapping from section names to section info *)
 
-let current_section_table : (section_info StringMap.t) ref = 
-  ref StringMap.empty
+let current_section_table : (string, section_info) Hashtbl.t =
+  Hashtbl.create 17
 
-(* The section to use for each global symbol: either explicitly
-   assigned using a "use_section" pragma, or inferred at definition
-   time. *)
+(* The section assigned to a global symbol using a "use_section" pragma *)
 
 let use_section_table : (AST.ident, section_info) Hashtbl.t =
   Hashtbl.create 51
 
-(* For each global symbol, the mapping sect name -> sect info
-   current at the time it was defined *)
-
-let section_table_at_def : (AST.ident, section_info StringMap.t) Hashtbl.t =
-  Hashtbl.create 51
-
 let initialize () =
-  current_section_table := default_section_table;
-  Hashtbl.clear use_section_table;
-  Hashtbl.clear section_table_at_def
+  Hashtbl.clear current_section_table;
+  List.iter
+    (fun (s, i) -> Hashtbl.add current_section_table s i)
+    builtin_sections;
+  Hashtbl.clear use_section_table
 
 (* Define or update a given section. *)
 
 let define_section name ?iname ?uname ?writable ?executable ?near () =
   let si = 
-    try StringMap.find name !current_section_table
+    try Hashtbl.find current_section_table name
     with Not_found -> default_section_info in
   let writable =
     match writable with Some b -> b | None -> si.sec_writable
@@ -145,98 +131,91 @@ let define_section name ?iname ?uname ?writable ?executable ?near () =
       sec_writable = writable;
       sec_executable = executable;
       sec_near_access = near } in
-  current_section_table := StringMap.add name new_si !current_section_table
+  Hashtbl.replace current_section_table name new_si
 
 (* Explicitly associate a section to a global symbol *)
 
 let use_section_for id name =
   try
-    let si = StringMap.find name !current_section_table in
+    let si = Hashtbl.find current_section_table name in
     Hashtbl.add use_section_table id si;
     true
   with Not_found ->
     false
 
-(* Default association of a section to a global symbol *)
+(* Undeclared section attached to a global variable, GCC-style *)
 
-let default_use_section id name =
-  Hashtbl.add section_table_at_def id !current_section_table;
-  if not (Hashtbl.mem use_section_table id) then begin
-    let ok = use_section_for id name in
-    assert ok
-  end
-
-(* Associate an undeclared section to a global symbol, GCC-style *)
-
-let use_gcc_section id name readonly exec =
-  Hashtbl.add section_table_at_def id !current_section_table;
+let gcc_section name readonly exec =
   let sn = Section_user(name, not readonly, exec) in
-  let si = { sec_name_init = sn; sec_name_uninit = sn;
-             sec_writable = not readonly; sec_executable = exec;
-             sec_near_access = false } in
-  Hashtbl.add use_section_table id si
+  { sec_name_init = sn; sec_name_uninit = sn;
+    sec_writable = not readonly; sec_executable = exec;
+    sec_near_access = false }
 
-(* Record sections for a variable definition *)
+(* Determine section for a variable definition *)
 
-let define_variable env id ty =
+let for_variable env id ty init =
   let attr = Cutil.attributes_of_type env ty in
   let readonly = List.mem C.AConst attr && not(List.mem C.AVolatile attr) in
-  (* Check for a GCC-style "section" attribute *)
-  match Cutil.find_custom_attributes ["section"; "__section__"] attr with
-  | [[C.AString name]] ->
-    (* Use gcc-style section *)
-    use_gcc_section id name readonly false
-  | _ ->
-    (* Use default section appropriate for size and const-ness *)
-    let size = match Cutil.sizeof env ty with Some sz -> sz | None -> max_int in
-    default_use_section id
-      (if readonly
-       then if size <= !Clflags.option_small_const then "SCONST" else "CONST"
-       else if size <= !Clflags.option_small_data then "SDATA" else "DATA")
+  let si =
+    try
+      (* 1- Section explicitly associated with #use_section *)
+      Hashtbl.find use_section_table id
+    with Not_found ->
+      match Cutil.find_custom_attributes ["section"; "__section__"] attr with
+      | [[C.AString name]] ->
+        (* 2- Section given as an attribute, gcc-style *)
+        gcc_section name readonly false
+      | _ ->
+        (* 3- Default section appropriate for size and const-ness *)
+        let size =
+          match Cutil.sizeof env ty with Some sz -> sz | None -> max_int in
+        let name =
+          if readonly
+          then if size <= !Clflags.option_small_const then "SCONST" else "CONST"
+          else if size <= !Clflags.option_small_data then "SDATA" else "DATA" in
+        try
+          Hashtbl.find current_section_table name
+        with Not_found ->
+          assert false in
+  ((if init then si.sec_name_init else si.sec_name_uninit), si.sec_near_access)
 
-(* Record sections for a function definition *)
+(* Determine sections for a function definition *)
 
-let define_function env id ty_res =
+let for_function env id ty_res =
   let attr = Cutil.attributes_of_type env ty_res in
-  match Cutil.find_custom_attributes ["section"; "__section__"] attr with
-  | [[C.AString name]] ->
-      use_gcc_section id name true true
-  | _ ->
-      default_use_section id "CODE"
+  let si_code =
+    try
+      (* 1- Section explicitly associated with #use_section *)
+      Hashtbl.find use_section_table id
+    with Not_found ->
+      match Cutil.find_custom_attributes ["section"; "__section__"] attr with
+      | [[C.AString name]] ->
+          (* 2- Section given as an attribute, gcc-style *)
+          gcc_section name true true
+      | _ ->
+          (* 3- Default section *)
+          try
+            Hashtbl.find current_section_table "CODE"
+          with Not_found ->
+            assert false in
+  let si_literal =
+    try
+      Hashtbl.find current_section_table "LITERAL"
+    with Not_found ->
+      assert false in
+  let si_jumptbl =
+    try
+      Hashtbl.find current_section_table "JUMPTABLE"
+    with Not_found ->
+      assert false in
+  [si_code.sec_name_init; si_literal.sec_name_init; si_jumptbl.sec_name_init]
+ 
+(* Determine section for a string literal *)
 
-(* Record sections for a string literal *)
-
-let define_stringlit id =
-  default_use_section id "STRING"
-
-(* Determine section to use for a variable *)
-
-let section_for_variable a initialized =
-  try
-    let si = Hashtbl.find use_section_table a in
-    if initialized then si.sec_name_init else si.sec_name_uninit
-  with Not_found ->
-    Section_data initialized
-
-(* Determine (text, literal, jumptable) sections to use for a function *)
-
-let sections_for_function a =
-  let s_text =
-    try (Hashtbl.find use_section_table a).sec_name_init
-    with Not_found -> Section_text in
-  let s_table =
-    try Hashtbl.find section_table_at_def a
-    with Not_found -> default_section_table in
-  let s_literal =
-    try (StringMap.find "LITERAL" s_table).sec_name_init
-    with Not_found -> Section_literal in
-  let s_jumptable =
-    try (StringMap.find "JUMPTABLE" s_table).sec_name_init
-    with Not_found -> Section_jumptable in
-  (s_text, s_literal, s_jumptable)
-
-(* Say if an atom is in a small data area *)
-
-let atom_is_small_data a ofs =
-  try (Hashtbl.find use_section_table a).sec_near_access
-  with Not_found -> false
+let for_stringlit() =
+  let si =
+    try
+      Hashtbl.find current_section_table "STRING"
+    with Not_found ->
+      assert false in
+  si.sec_name_init

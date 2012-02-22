@@ -28,14 +28,17 @@ open Values
 open Csyntax
 open Initializers
 
-(** Record the declarations of global variables and associate them
-    with the corresponding atom. *)
+(** Record useful information about global variables and functions,
+  and associate it with the corresponding atoms. *)
 
 type atom_info =
-  { a_storage: C.storage;
-    a_env: Env.t;
-    a_type: C.typ;
-    a_fundef: C.fundef option }
+  { a_storage: C.storage;              (* storage class *)
+    a_alignment: int option;           (* alignment *)
+    a_sections: Sections.section_name list; (* in which section to put it *)
+      (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
+    a_small_data: bool;                (* data in a small data area? *)
+    a_inline: bool                     (* function declared inline? *)
+}
 
 let decl_atom : (AST.ident, atom_info) Hashtbl.t = Hashtbl.create 103
 
@@ -104,13 +107,12 @@ let name_for_string_literal env s =
     incr stringNum;
     let name = Printf.sprintf "__stringlit_%d" !stringNum in
     let id = intern_string name in
-    let sz = Int64.of_int (String.length s + 1) in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
-        a_env = env;
-        a_type = C.TArray(C.TInt(C.IChar,[C.AConst]), Some sz, []);
-        a_fundef = None };
-    Sections.define_stringlit id;
+        a_alignment = Some 1;
+        a_sections = [Sections.for_stringlit()];
+        a_small_data = false;
+        a_inline = false };
     Hashtbl.add stringTable s id;
     id
 
@@ -328,46 +330,6 @@ let first_class_value env ty =
   match Cutil.unroll env ty with
   | C.TInt((C.ILongLong|C.IULongLong), _) -> false
   | _ -> true
-
-(************ REMOVED
-
-(* Handling of volatile *)
-
-let is_volatile_access env e =
-  List.mem C.AVolatile (Cutil.attributes_of_type env e.etyp)
-  && Cutil.is_lvalue e
-  && begin match Cutil.unroll env e.etyp with
-     | TFun _ | TArray _ -> false
-     | _ -> true
-     end
-
-let volatile_kind ty =
-  match ty with
-  | Tint(I8, Unsigned) -> ("int8unsigned", ty, Mint8unsigned)
-  | Tint(I8, Signed) -> ("int8signed", ty, Mint8signed)
-  | Tint(I16, Unsigned) -> ("int16unsigned", ty, Mint16unsigned)
-  | Tint(I16, Signed) -> ("int16signed", ty, Mint16signed)
-  | Tint(I32, _) -> ("int32", Tint(I32, Signed), Mint32)
-  | Tfloat F32 -> ("float32", ty, Mfloat32)
-  | Tfloat F64 -> ("float64", ty, Mfloat64)
-  | Tpointer _ -> ("pointer", Tpointer Tvoid, Mint32)
-  | _ ->
-      unsupported "operation on volatile struct or union"; ("", Tvoid, Mint32)
-
-let volatile_read_fun ty =
-  let (suffix, ty', chunk) = volatile_kind ty in
-  let targs = Tcons(Tpointer Tvoid, Tnil) in
-  let name = "__builtin_volatile_read_" ^ suffix in
-  register_special_external name (EF_vload chunk) targs ty';
-  Evalof(Evar(intern_string name, Tfunction(targs, ty')), Tfunction(targs, ty'))
-
-let volatile_write_fun ty =
-  let (suffix, ty', chunk) = volatile_kind ty in
-  let targs = Tcons(Tpointer Tvoid, Tcons(ty', Tnil)) in
-  let name = "__builtin_volatile_write_" ^ suffix in
-  register_special_external name (EF_vstore chunk) targs Tvoid;
-  Evalof(Evar(intern_string name, Tfunction(targs, Tvoid)), Tfunction(targs, Tvoid))
-****************************)
 
 (** Expressions *)
 
@@ -692,10 +654,10 @@ let convertFundef env fd =
   let id' = intern_string fd.fd_name.name in
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
-      a_env = env;
-      a_type = Cutil.fundef_typ fd;
-      a_fundef = Some fd };
-  Sections.define_function env id' fd.fd_ret;
+      a_alignment = None;
+      a_sections = Sections.for_function env id' fd.fd_ret;
+      a_small_data = false;
+      a_inline = fd.fd_inline };
   (id', Internal {fn_return = ret; fn_params = params;
                   fn_vars = vars; fn_body = body'})
 
@@ -753,21 +715,27 @@ let convertInitializer env ty i =
 let convertGlobvar env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
+  let attr = Cutil.attributes_of_type env ty in
   let init' =
     match optinit with
     | None ->
         if sto = C.Storage_extern then [] else [Init_space(Csyntax.sizeof ty')]
     | Some i ->
         convertInitializer env ty i in
+  let align =
+    match Cutil.find_custom_attributes ["aligned"; "__aligned__"] attr with
+    | [[C.AInt n]] -> Some(Int64.to_int n)
+    | _            -> Cutil.alignof env ty in
+  let (section, near_access) =
+    Sections.for_variable env id' ty (optinit <> None) in
   Hashtbl.add decl_atom id'
     { a_storage = sto;
-      a_env = env;
-      a_type = ty;
-      a_fundef = None };
-  Sections.define_variable env id' ty;
-  let a = Cutil.attributes_of_type env ty in
-  let volatile = List.mem C.AVolatile a in
-  let readonly = List.mem C.AConst a && not volatile in
+      a_alignment = align;
+      a_sections = [section];
+      a_small_data = near_access;
+      a_inline = false };
+  let volatile = List.mem C.AVolatile attr in
+  let readonly = List.mem C.AConst attr && not volatile in
   (id', {gvar_info = ty'; gvar_init = init';
          gvar_readonly = readonly; gvar_volatile = volatile})
 
@@ -880,42 +848,33 @@ let convertProgram p =
 
 let atom_is_static a =
   try
-    match Hashtbl.find decl_atom a with
-    | { a_storage = C.Storage_static } -> true
-    (* We do not inline functions, but at least let's not make them globals *)
-    | { a_fundef = Some { fd_inline = true } } -> true 
-    | _ -> false
+    let i = Hashtbl.find decl_atom a in
+    i.a_storage = C.Storage_static || i.a_inline
+    (* inline functions can remain in generated code, but at least
+       let's not make them global *)
   with Not_found ->
     false
 
 let atom_is_extern a =
   try
-    let i = Hashtbl.find decl_atom a in i.a_storage = C.Storage_extern
+    (Hashtbl.find decl_atom a).a_storage = C.Storage_extern
   with Not_found ->
     false
-
-(*
-let atom_is_readonly a =
-  try
-    let i = Hashtbl.find decl_atom a in type_is_readonly i.a_env i.a_type
-  with Not_found ->
-    false
-
-let atom_sizeof a =
-  try
-    let i = Hashtbl.find decl_atom a in Cutil.sizeof i.a_env i.a_type
-  with Not_found ->
-    None
-*)
 
 let atom_alignof a =
   try
-    let i = Hashtbl.find decl_atom a in
-    match Cutil.find_custom_attributes
-                  ["aligned"; "__aligned__"]
-                  (Cutil.attributes_of_type i.a_env i.a_type) with
-    | [[C.AInt n]] -> Some(Int64.to_int n)
-    | _            -> Cutil.alignof i.a_env i.a_type
+    (Hashtbl.find decl_atom a).a_alignment
   with Not_found ->
     None
 
+let atom_sections a =
+  try
+    (Hashtbl.find decl_atom a).a_sections
+  with Not_found ->
+    []
+
+let atom_is_small_data a ofs =
+  try
+    (Hashtbl.find decl_atom a).a_small_data
+  with Not_found ->
+    false

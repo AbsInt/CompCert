@@ -870,7 +870,10 @@ let print_function oc name code =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
-  let (text, lit, jmptbl) = sections_for_function name in
+  let (text, lit, jmptbl) =
+    match C2C.atom_sections name with
+    | [t;l;j] -> (t, l, j)
+    |    _    -> (Section_text, Section_literal, Section_jumptable) in
   section oc text;
   fprintf oc "	.align 2\n";
   if not (C2C.atom_is_static name) then
@@ -1093,11 +1096,11 @@ let print_var oc (name, v) =
   match v.gvar_init with
   | [] -> ()
   | _  ->
-      let init =
-        match v.gvar_init with [Init_space _] -> false | _ -> true in
       let sec =
-        Sections.section_for_variable name init in
-      let align =
+        match C2C.atom_sections name with
+        | [s] -> s
+        |  _  -> Section_data true
+      and align =
         match C2C.atom_alignof name with
         | Some a -> log2 a
         | None -> 3 in (* 8-alignment is a safe default *)

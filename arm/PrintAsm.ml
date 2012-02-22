@@ -677,7 +677,10 @@ let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   reset_constants();
   currpos := 0;
-  let (text, _, _) = sections_for_function name in
+  let text =
+    match C2C.atom_sections name with
+    | t :: _ -> t
+    |   _    -> Section_text in
   section oc text;
   fprintf oc "	.align 2\n";
   if not (C2C.atom_is_static name) then
@@ -733,10 +736,10 @@ let print_var oc (name, v) =
   match v.gvar_init with
   | [] -> ()
   | _  ->
-      let init =
-        match v.gvar_init with [Init_space _] -> false | _ -> true in
       let sec =
-        Sections.section_for_variable name init
+        match C2C.atom_sections name with
+        | [s] -> s
+        |  _  -> Section_data true
       and align =
         match C2C.atom_alignof name with
         | Some a -> log2 a

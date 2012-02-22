@@ -139,9 +139,6 @@ let name_of_neg_condition = function
   | Cond_l -> "ge" | Cond_le -> "g" | Cond_ge -> "l" | Cond_g -> "le"
   | Cond_p -> "np" | Cond_np -> "p" 
 
-let section oc name =
-  fprintf oc "	%s\n" name
-
 (* Names of sections *)
 
 let name_of_section_ELF = function
@@ -174,7 +171,9 @@ let name_of_section_Cygwin = function
   | Section_string -> ".section	.rdata,\"dr\""
   | Section_literal -> ".section	.rdata,\"dr\""
   | Section_jumptable -> ".text"
-  | Section_user _ -> assert false
+  | Section_user(s, wr, ex) ->
+       sprintf ".section	%s, \"%s\"\n"
+             s (if ex then "xr" else if wr then "d" else "dr")
 
 let name_of_section =
   match target with
@@ -743,7 +742,10 @@ let print_function oc name code =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
-  let (text, lit, jmptbl) = sections_for_function name in
+  let (text, lit, jmptbl) =
+    match C2C.atom_sections name with
+    | [t;l;j] -> (t, l, j)
+    |    _    -> (Section_text, Section_literal, Section_jumptable) in
   section oc text;
   print_align oc 16;
   if not (C2C.atom_is_static name) then
@@ -802,10 +804,10 @@ let print_var oc (name, v) =
   match v.gvar_init with
   | [] -> ()
   | _  ->
-      let init =
-        match v.gvar_init with [Init_space _] -> false | _ -> true in
       let sec =
-        Sections.section_for_variable name init
+        match C2C.atom_sections name with
+        | [s] -> s
+        |  _  -> Section_data true
       and align =
         match C2C.atom_alignof name with
         | Some a -> a

@@ -1,3 +1,38 @@
+Release 1.10, 2012-02-15
+========================
+
+Improvements in confidence:
+- CompCert C now natively supports volatile types.  Its semantics fully
+  specifies the meaning of volatile memory accesses.  The translation
+  of volatile accesses to built-in function invocations is now proved correct.
+- CompCert C now natively supports assignment between composite types
+  (structs or unions), passing composite types by value as function
+  parameters, and other instances of composites used as r-values, with
+  the exception of returning composites by value from a function.
+  (The latter remains emulated, using the -fstruct-return option.)
+
+Language features:
+- Support for _Bool type from ISO C99.
+
+Performance improvements:
+- Improvements in instruction selection, especially for integer casts
+  and their combinations with bitwise operations.
+- Shorter, more efficient code generated for accessing volatile global
+  variables.
+- Better code generated for && and || outside conditional tests.
+- Improved register allocation for invocations of built-ins,
+  especially for annotations.
+- In Cminor and down, make safe operators non-strict: they return Vundef
+  instead of getting stuck.  This enables more optimizations.
+- Cast optimization is no longer performed by a separate pass over
+  RTL, but equivalent optimization is done during Cminor generation
+  and during instruction selection.
+
+Other improvements:
+- PowerPC/EABI: uninitialized global variables now go in common (bss) section.
+- PowerPC: work around limited excursion of conditional branch instructions.
+
+
 Release 1.9.1, 2011-11-28
 =========================
 

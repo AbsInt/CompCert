@@ -45,6 +45,7 @@ const char t[5][5] = { 1, 2, 3 };
 
 double h(int n)
 {
+  w[0] --;
   w[n] ++;
   return v;
 }
