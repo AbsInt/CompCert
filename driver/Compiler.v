@@ -140,7 +140,7 @@ Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
    @@ print print_RTL_tailcall
    @@ Constprop.transf_fundef
    @@ print print_RTL_constprop
-   @@ CSE.transf_fundef
+  @@@ CSE.transf_fundef
    @@ print print_RTL_cse
   @@@ Allocation.transf_fundef
    @@ Tunneling.tunnel_fundef
@@ -338,7 +338,7 @@ Proof.
 
   eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Constpropproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply CSEproof.transf_program_correct.
+  eapply compose_forward_simulation. apply CSEproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Tunnelingproof.transf_program_correct.
   eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. eauto. 

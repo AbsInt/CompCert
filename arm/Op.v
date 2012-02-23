@@ -610,6 +610,37 @@ Proof.
   intros. destruct c; simpl; auto; congruence.
 Qed.
 
+(** Checking whether two addressings, applied to the same arguments, produce
+  separated memory addresses.  Used in [CSE]. *)
+
+Definition addressing_separated (chunk1: memory_chunk) (addr1: addressing)
+                               (chunk2: memory_chunk) (addr2: addressing) : bool :=
+  match addr1, addr2 with
+  | Aindexed ofs1, Aindexed ofs2 => 
+      Int.no_overlap ofs1 (size_chunk chunk1) ofs2 (size_chunk chunk2)
+  | Ainstack ofs1, Ainstack ofs2 =>
+      Int.no_overlap ofs1 (size_chunk chunk1) ofs2 (size_chunk chunk2)
+  | _, _ => false
+  end.
+
+Lemma addressing_separated_sound:
+  forall (F V: Type) (ge: Genv.t F V) sp chunk1 addr1 chunk2 addr2 vl b1 n1 b2 n2,
+  addressing_separated chunk1 addr1 chunk2 addr2 = true ->
+  eval_addressing ge sp addr1 vl = Some(Vptr b1 n1) ->
+  eval_addressing ge sp addr2 vl = Some(Vptr b2 n2) ->
+  b1 <> b2 \/ Int.unsigned n1 + size_chunk chunk1 <= Int.unsigned n2 \/ Int.unsigned n2 + size_chunk chunk2 <= Int.unsigned n1.
+Proof.
+  unfold addressing_separated; intros.
+  generalize (size_chunk_pos chunk1) (size_chunk_pos chunk2); intros SZ1 SZ2.
+  destruct addr1; destruct addr2; try discriminate; simpl in *; FuncInv.
+(* Aindexed *)
+  destruct v; simpl in *; inv H1; inv H2.
+  right. apply Int.no_overlap_sound; auto. 
+(* Ainstack *)
+  destruct sp; simpl in *; inv H1; inv H2.
+  right. apply Int.no_overlap_sound; auto. 
+Qed.
+
 (** * Invariance and compatibility properties. *)
 
 (** [eval_operation] and [eval_addressing] depend on a global environment

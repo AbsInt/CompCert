@@ -782,6 +782,30 @@ Proof.
   auto with ints. omega.
 Qed.
 
+Theorem unsigned_add_carry:
+  forall x y,
+  unsigned (add x y) = unsigned x + unsigned y - unsigned (add_carry x y zero) * modulus.
+Proof.
+  intros.
+  unfold add, add_carry. rewrite unsigned_zero. rewrite Zplus_0_r. simpl. 
+  generalize (unsigned_range x) (unsigned_range y). intros. 
+  destruct (zlt (unsigned x + unsigned y) modulus). 
+  rewrite unsigned_zero. apply Zmod_unique with 0. omega. omega. 
+  rewrite unsigned_one. apply Zmod_unique with 1. omega. omega. 
+Qed. 
+
+Corollary unsigned_add_either:
+  forall x y,
+  unsigned (add x y) = unsigned x + unsigned y
+  \/ unsigned (add x y) = unsigned x + unsigned y - modulus.
+Proof.
+  intros. rewrite unsigned_add_carry. unfold add_carry. 
+  rewrite unsigned_zero. rewrite Zplus_0_r. 
+  destruct (zlt (unsigned x + unsigned y) modulus).
+  rewrite unsigned_zero. left; omega.
+  rewrite unsigned_one. right; omega.
+Qed.
+
 (** ** Properties of negation *)
 
 Theorem neg_repr: forall z, neg (repr z) = repr (-z).
@@ -3021,6 +3045,32 @@ Proof.
   unfold ltu in H. destruct (zlt (unsigned x) (unsigned y)); try discriminate.
   rewrite signed_eq_unsigned.
   generalize (unsigned_range x). omega. omega.
+Qed.
+
+(** Non-overlapping test *)
+
+Definition no_overlap (ofs1: int) (sz1: Z) (ofs2: int) (sz2: Z) : bool :=
+  let x1 := unsigned ofs1 in let x2 := unsigned ofs2 in
+     zlt (x1 + sz1) modulus && zlt (x2 + sz2) modulus
+  && (zle (x1 + sz1) x2 || zle (x2 + sz2) x1).
+
+Lemma no_overlap_sound:
+  forall ofs1 sz1 ofs2 sz2 base,
+  sz1 > 0 -> sz2 > 0 -> no_overlap ofs1 sz1 ofs2 sz2 = true ->
+  unsigned (add base ofs1) + sz1 <= unsigned (add base ofs2)
+  \/ unsigned (add base ofs2) + sz2 <= unsigned (add base ofs1).
+Proof.
+  intros. 
+  destruct (andb_prop _ _ H1). clear H1. 
+  destruct (andb_prop _ _ H2). clear H2.
+  exploit proj_sumbool_true. eexact H1. intro A; clear H1.
+  exploit proj_sumbool_true. eexact H4. intro B; clear H4.
+  assert (unsigned ofs1 + sz1 <= unsigned ofs2 \/ unsigned ofs2 + sz2 <= unsigned ofs1).
+  destruct (orb_prop _ _ H3). left. eapply proj_sumbool_true; eauto. right. eapply proj_sumbool_true; eauto.
+  clear H3.
+  generalize (unsigned_range ofs1) (unsigned_range ofs2). intros P Q.
+  generalize (unsigned_add_either base ofs1) (unsigned_add_either base ofs2).
+  intros [C|C] [D|D]; omega.
 Qed.
 
 End Make.

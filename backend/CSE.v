@@ -15,6 +15,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -24,6 +25,7 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
+Require Import RTLtyping.
 Require Import Kildall.
 
 (** * Value numbering *)
@@ -188,25 +190,56 @@ Definition add_unknown (n: numbering) (rd: reg) :=
               n.(num_eqs)
               (PTree.set rd n.(num_next) n.(num_reg)).
 
-(** [kill_load n] removes all equations involving memory loads,
-  as well as those involving memory-dependent operators.
-  It is used to reflect the effect of a memory store, which can
-  potentially invalidate all such equations. *)
+(** [kill_equations pred n] remove all equations satisfying predicate [pred]. *)
 
-Fixpoint kill_load_eqs (eqs: list (valnum * rhs)) : list (valnum * rhs) :=
+Fixpoint kill_eqs (pred: rhs -> bool) (eqs: list (valnum * rhs)) : list (valnum * rhs) :=
   match eqs with
   | nil => nil
-  | eq :: rem =>
-      match eq with
-      | (_, Op op _)  => if op_depends_on_memory op then kill_load_eqs rem else eq :: kill_load_eqs rem
-      | (_, Load _ _ _) => kill_load_eqs rem
-      end
+  | eq :: rem => if pred (snd eq) then kill_eqs pred rem else eq :: kill_eqs pred rem
+  end.
+
+Definition kill_equations (pred: rhs -> bool) (n: numbering) : numbering :=
+  mknumbering n.(num_next)
+              (kill_eqs pred n.(num_eqs))
+              n.(num_reg).
+
+(** [kill_loads n] removes all equations involving memory loads,
+  as well as those involving memory-dependent operators.
+  It is used to reflect the effect of a builtin operation, which can
+  change memory in unpredictable ways and potentially invalidate all such equations. *)
+
+Definition filter_loads (r: rhs) : bool :=
+  match r with
+  | Op op _ => op_depends_on_memory op
+  | Load _ _ _ => true
   end.
 
 Definition kill_loads (n: numbering) : numbering :=
-  mknumbering n.(num_next)
-              (kill_load_eqs n.(num_eqs))
-              n.(num_reg).
+  kill_equations filter_loads n.
+
+(** [add_store n chunk addr rargs rsrc] updates the numbering [n] to reflect
+  the effect of a store instruction [Istore chunk addr rargs rsrc].
+  Equations involving the memory state are removed from [n], unless we
+  can prove that the store does not invalidate them.
+  Then, an equations [rsrc = Load chunk addr rargs] is added to reflect
+  the known content of the stored memory area, but only if [chunk] is
+  a "full-size" quantity ([Mint32] or [Mfloat64]). *)
+
+Definition filter_after_store (chunk: memory_chunk) (addr: addressing) (vl: list valnum) (r: rhs) : bool :=
+  match r with
+  | Op op vl' => op_depends_on_memory op
+  | Load chunk' addr' vl' =>
+      negb(eq_list_valnum vl vl' && addressing_separated chunk addr chunk' addr')
+  end.
+
+Definition add_store (n: numbering) (chunk: memory_chunk) (addr: addressing)
+                                   (rargs: list reg) (rsrc: reg) : numbering :=
+  let (n1, vargs) := valnum_regs n rargs in
+  let n2 := kill_equations (filter_after_store chunk addr vargs) n1 in
+  match chunk with
+  | Mint32 | Mfloat64 => add_rhs n2 rsrc (Load chunk addr vargs)
+  | _ => n2
+  end.
 
 (* [reg_valnum n vn] returns a register that is mapped to value number
    [vn], or [None] if no such register exists. *)
@@ -339,7 +372,7 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
       | Iload chunk addr args dst s =>
           add_load before dst chunk addr args
       | Istore chunk addr args src s =>
-          kill_loads before
+          add_store before chunk addr args src
       | Icall sig ros args res s =>
           empty_numbering
       | Itailcall sig ros args =>
@@ -358,16 +391,10 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
 (** The static analysis solves the dataflow inequations implied
   by the [transfer] function using the ``extended basic block'' solver,
   which produces sub-optimal solutions quickly.  The result is
-  a mapping from program points to numberings.  In the unlikely
-  case where the solver fails to find a solution, we simply associate
-  empty numberings to all program points, which is semantically correct
-  and effectively deactivates the CSE optimization. *)
+  a mapping from program points to numberings. *)
 
-Definition analyze (f: RTL.function): PMap.t numbering :=
-  match Solver.fixpoint (successors f) (transfer f) f.(fn_entrypoint) with
-  | None => PMap.init empty_numbering
-  | Some res => res
-  end.
+Definition analyze (f: RTL.function): option (PMap.t numbering) :=
+  Solver.fixpoint (successors f) (transfer f) f.(fn_entrypoint).
 
 (** * Code transformation *)
 
@@ -400,18 +427,25 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
 Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
   PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
 
-Definition transf_function (f: function) : function :=
-  let approxs := analyze f in
-  mkfunction
-        f.(fn_sig)
-        f.(fn_params)
-        f.(fn_stacksize)
-        (transf_code approxs f.(fn_code))
-        f.(fn_entrypoint).
+Definition transf_function (f: function) : res function :=
+  match type_function f with
+  | Error msg => Error msg
+  | OK tyenv =>
+      match analyze f with
+      | None => Error (msg "CSE failure")
+      | Some approxs =>
+          OK(mkfunction
+               f.(fn_sig)
+               f.(fn_params)
+               f.(fn_stacksize)
+               (transf_code approxs f.(fn_code))
+               f.(fn_entrypoint))
+      end
+  end.
 
-Definition transf_fundef (f: fundef) : fundef :=
-  AST.transf_fundef transf_function f.
+Definition transf_fundef (f: fundef) : res fundef :=
+  AST.transf_partial_fundef transf_function f.
 
-Definition transf_program (p: program) : program :=
-  transform_program transf_fundef p.
+Definition transf_program (p: program) : res program :=
+  transform_partial_program transf_fundef p.
 

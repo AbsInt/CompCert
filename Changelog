@@ -20,6 +20,7 @@ Performance improvements:
 - Shorter, more efficient code generated for accessing volatile global
   variables.
 - Better code generated for && and || outside conditional tests.
+- More aggressive common subexpression elimination (CSE) of memory loads.
 - Improved register allocation for invocations of built-ins,
   especially for annotations.
 - In Cminor and down, make safe operators non-strict: they return Vundef
