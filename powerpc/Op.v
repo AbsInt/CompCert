@@ -74,9 +74,12 @@ Inductive operation : Type :=
   | Oorimm: int -> operation            (**r [rd = r1 | n] *)
   | Oxor: operation                     (**r [rd = r1 ^ r2] *)
   | Oxorimm: int -> operation           (**r [rd = r1 ^ n] *)
+  | Onot: operation                     (**r [rd = ~r1] *)
   | Onand: operation                    (**r [rd = ~(r1 & r2)] *)
   | Onor: operation                     (**r [rd = ~(r1 | r2)] *)
   | Onxor: operation                    (**r [rd = ~(r1 ^ r2)] *)
+  | Oandc: operation                    (**r [rd = r1 & ~r2] *)
+  | Oorc: operation                     (**r [rd = r1 | ~r2] *)
   | Oshl: operation                     (**r [rd = r1 << r2] *)
   | Oshr: operation                     (**r [rd = r1 >> r2] (signed) *)
   | Oshrimm: int -> operation           (**r [rd = r1 >> n] (signed) *)
@@ -180,9 +183,12 @@ Definition eval_operation
   | Oorimm n, v1::nil => Some (Val.or v1 (Vint n))
   | Oxor, v1::v2::nil => Some(Val.xor v1 v2)
   | Oxorimm n, v1::nil => Some (Val.xor v1 (Vint n))
+  | Onot, v1::nil => Some(Val.notint v1)
   | Onand, v1::v2::nil => Some (Val.notint (Val.and v1 v2))
   | Onor, v1::v2::nil => Some (Val.notint (Val.or v1 v2))
   | Onxor, v1::v2::nil => Some (Val.notint (Val.xor v1 v2))
+  | Oandc, v1::v2::nil => Some (Val.and v1 (Val.notint v2))
+  | Oorc, v1::v2::nil => Some (Val.or v1 (Val.notint v2))
   | Oshl, v1::v2::nil => Some (Val.shl v1 v2)
   | Oshr, v1::v2::nil => Some (Val.shr v1 v2)
   | Oshrimm n, v1::nil => Some (Val.shr v1 (Vint n))
@@ -267,9 +273,12 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Oorimm _ => (Tint :: nil, Tint)
   | Oxor => (Tint :: Tint :: nil, Tint)
   | Oxorimm _ => (Tint :: nil, Tint)
+  | Onot => (Tint :: nil, Tint)
   | Onand => (Tint :: Tint :: nil, Tint)
   | Onor => (Tint :: Tint :: nil, Tint)
   | Onxor => (Tint :: Tint :: nil, Tint)
+  | Oandc => (Tint :: Tint :: nil, Tint)
+  | Oorc => (Tint :: Tint :: nil, Tint)
   | Oshl => (Tint :: Tint :: nil, Tint)
   | Oshr => (Tint :: Tint :: nil, Tint)
   | Oshrimm _ => (Tint :: nil, Tint)
@@ -338,6 +347,9 @@ Proof with (try exact I).
   destruct v0...
   destruct v0; destruct v1...
   destruct v0...
+  destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
@@ -765,6 +777,9 @@ Proof.
   inv H4; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.

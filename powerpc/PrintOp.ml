@@ -69,9 +69,12 @@ let print_operation reg pp = function
   | Oorimm n, [r1] ->  fprintf pp "%a | %ld" reg r1 (camlint_of_coqint n)
   | Oxor, [r1;r2] -> fprintf pp "%a ^ %a" reg r1 reg r2
   | Oxorimm n, [r1] -> fprintf pp "%a ^ %ld" reg r1 (camlint_of_coqint n)
+  | Onot, [r1] -> fprintf pp "not(%a)" reg r1
   | Onand, [r1;r2] -> fprintf pp "not(%a & %a)" reg r1 reg r2
   | Onor, [r1;r2] -> fprintf pp "not(%a | %a)" reg r1 reg r2
   | Onxor, [r1;r2] -> fprintf pp "not(%a ^ %a)" reg r1 reg r2
+  | Oandc, [r1;r2] -> fprintf pp "%a & not %a" reg r1 reg r2
+  | Oorc, [r1;r2] -> fprintf pp "%a | not %a" reg r1 reg r2
   | Oshl, [r1;r2] -> fprintf pp "%a << %a" reg r1 reg r2
   | Oshr, [r1;r2] -> fprintf pp "%a >>s %a" reg r1 reg r2
   | Oshrimm n, [r1] -> fprintf pp "%a >>s %ld" reg r1 (camlint_of_coqint n)

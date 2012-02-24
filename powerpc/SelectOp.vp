@@ -63,10 +63,16 @@ Definition addrstack (ofs: int) :=
 Nondetfunction notint (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil => Eop (Ointconst (Int.not n)) Enil
+  | Eop Onot (t1:::Enil) => t1
   | Eop Oand (t1:::t2:::Enil) => Eop Onand (t1:::t2:::Enil)
   | Eop Oor (t1:::t2:::Enil) => Eop Onor (t1:::t2:::Enil)
   | Eop Oxor (t1:::t2:::Enil) => Eop Onxor (t1:::t2:::Enil)
-  | _ => Elet e (Eop Onor (Eletvar O ::: Eletvar O ::: Enil))
+  | Eop Onand (t1:::t2:::Enil) => Eop Oand (t1:::t2:::Enil)
+  | Eop Onor (t1:::t2:::Enil) => Eop Oor (t1:::t2:::Enil)
+  | Eop Onxor (t1:::t2:::Enil) => Eop Oxor (t1:::t2:::Enil)
+  | Eop Oandc (t1:::t2:::Enil) => Eop Oorc (t2:::t1:::Enil)
+  | Eop Oorc (t1:::t2:::Enil) => Eop Oandc (t2:::t1:::Enil)
+  | _ => Eop Onot (e:::Enil)
   end.
 
 (** ** Boolean value and boolean negation *)
@@ -248,6 +254,8 @@ Nondetfunction and (e1: expr) (e2: expr) :=
   match e1, e2 with
   | Eop (Ointconst n1) Enil, t2 => andimm n1 t2
   | t1, Eop (Ointconst n2) Enil => andimm n2 t1
+  | Eop Onot (t1:::Enil), t2 => Eop Oandc (t2:::t1:::Enil)
+  | t1, Eop Onot (t2:::Enil) => Eop Oandc (t1:::t2:::Enil)
   | _, _ => Eop Oand (e1:::e2:::Enil)
   end.
 
@@ -280,6 +288,8 @@ Nondetfunction or (e1: expr) (e2: expr) :=
       else Eop Oor (e1:::e2:::Enil)
   | Eop (Ointconst n1) Enil, t2 => orimm n1 t2
   | t1, Eop (Ointconst n2) Enil => orimm n2 t1
+  | Eop Onot (t1:::Enil), t2 => Eop Oorc (t2:::t1:::Enil)
+  | t1, Eop Onot (t2:::Enil) => Eop Oorc (t1:::t2:::Enil)
   | _, _ => Eop Oor (e1:::e2:::Enil)
   end.
 

@@ -134,18 +134,24 @@ Qed.
 
 Theorem eval_notint: unary_constructor_sound notint Val.notint.
 Proof.
+  assert (forall v, Val.lessdef (Val.notint (Val.notint v)) v).
+    destruct v; simpl; auto. rewrite Int.not_involutive; auto.
   unfold notint; red; intros until x; case (notint_match a); intros; InvEval.
-  TrivialExists. 
+  TrivialExists.
+  subst. exists v1; split; auto.
   subst. TrivialExists. 
   subst. TrivialExists.
   subst. TrivialExists.
-  econstructor; split; eauto. 
-  eapply eval_Elet. eexact H. 
-  eapply eval_Eop.
-  eapply eval_Econs. apply eval_Eletvar. simpl. reflexivity.
-  eapply eval_Econs. apply eval_Eletvar. simpl. reflexivity.
-  apply eval_Enil.  
-  simpl. destruct x; simpl; auto. rewrite Int.or_idem. auto.
+  subst. exists (Val.and v1 v0); split; auto. EvalOp.
+  subst. exists (Val.or v1 v0); split; auto. EvalOp.
+  subst. exists (Val.xor v1 v0); split; auto. EvalOp.
+  subst. exists (Val.or v0 (Val.notint v1)); split. EvalOp. 
+    destruct v0; destruct v1; simpl; auto. rewrite Int.not_and_or_not. rewrite Int.not_involutive.
+    rewrite Int.or_commut. auto.
+  subst. exists (Val.and v0 (Val.notint v1)); split. EvalOp. 
+    destruct v0; destruct v1; simpl; auto. rewrite Int.not_or_and_not. rewrite Int.not_involutive.
+    rewrite Int.and_commut. auto.
+  TrivialExists. 
 Qed.
 
 Theorem eval_boolval: unary_constructor_sound boolval Val.boolval.
@@ -407,6 +413,8 @@ Proof.
   red; intros until y; unfold and; case (and_match a b); intros; InvEval.
   rewrite Val.and_commut. apply eval_andimm; auto.
   apply eval_andimm; auto.
+  subst. rewrite Val.and_commut. TrivialExists.
+  subst. TrivialExists.
   TrivialExists.
 Qed.
 
@@ -460,6 +468,9 @@ Proof.
 (* intconst *)
   InvEval. rewrite Val.or_commut. apply eval_orimm; auto. 
   InvEval. apply eval_orimm; auto.
+(* orc *)
+  InvEval. subst. rewrite Val.or_commut. TrivialExists.
+  InvEval. subst. TrivialExists.
 (* default *)
   TrivialExists. 
 Qed.

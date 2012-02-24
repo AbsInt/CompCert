@@ -350,12 +350,18 @@ Definition transl_op
       Pxor (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Oxorimm n, a1 :: nil =>
       xorimm (ireg_of r) (ireg_of a1) n k
+  | Onot, a1 :: nil =>
+      Pnor (ireg_of r) (ireg_of a1) (ireg_of a1) :: k
   | Onand, a1 :: a2 :: nil =>
       Pnand (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Onor, a1 :: a2 :: nil =>
       Pnor (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Onxor, a1 :: a2 :: nil =>
       Peqv (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
+  | Oandc, a1 :: a2 :: nil =>
+      Pandc (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
+  | Oorc, a1 :: a2 :: nil =>
+      Porc (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Oshl, a1 :: a2 :: nil =>
       Pslw (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
   | Oshr, a1 :: a2 :: nil =>

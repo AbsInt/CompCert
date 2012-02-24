@@ -1049,7 +1049,7 @@ let print_fundef oc (name, defn) =
   match defn with
   | Internal code ->
       print_function oc name code
-  | External (EF_external _ as ef) ->
+  | External ((EF_external _ | EF_malloc | EF_free) as ef) ->
       if function_needs_stub name then stub_function oc name (ef_sig ef)
   | External _ ->
       ()
@@ -1057,7 +1057,7 @@ let print_fundef oc (name, defn) =
 let record_extfun (name, defn) =
   match defn with
   | Internal _ -> ()
-  | External (EF_external _) ->
+  | External (EF_external _ | EF_malloc | EF_free) ->
       if function_needs_stub name then
         stubbed_functions := IdentSet.add name !stubbed_functions
   | External _ -> ()

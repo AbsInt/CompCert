@@ -1340,6 +1340,11 @@ Opaque Val.add.
   (* Oxorimm *)
   destruct (xorimm_correct (ireg_of res) (ireg_of m0) i k rs m) as [rs' [A [B C]]]. 
   exists rs'; auto with ppcgen.
+  (* Onor *)
+  replace (Val.notint (rs (ireg_of m0)))
+     with (Val.notint (Val.or (rs (ireg_of m0)) (rs (ireg_of m0)))).
+  TranslOpSimpl.
+  destruct (rs (ireg_of m0)); simpl; auto. rewrite Int.or_idem. auto.
   (* Oshrximm *)
   econstructor; split.
   eapply exec_straight_two; simpl; reflexivity. 
