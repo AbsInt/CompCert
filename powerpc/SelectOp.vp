@@ -460,3 +460,10 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   | _ => (Aindexed Int.zero, e:::Enil)
   end.
   
+(** ** Turning an expression into a condition *)
+
+Nondetfunction cond_of_expr (e: expr) :=
+  match e with
+  | Eop (Oandimm n) (t1:::Enil) => (Cmasknotzero n, t1:::Enil)
+  | _ => (Ccompuimm Cne Int.zero, e:::Enil)
+  end.

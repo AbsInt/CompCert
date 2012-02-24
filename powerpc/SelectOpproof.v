@@ -817,5 +817,28 @@ Proof.
   rewrite Int.add_zero. auto.
 Qed.
 
+Theorem eval_cond_of_expr:
+  forall le a v b,
+  eval_expr ge sp e m le a v ->
+  Val.bool_of_val v b ->
+  match cond_of_expr a with (cond, args) =>
+    exists vl,
+    eval_exprlist ge sp e m le args vl /\
+    eval_condition cond vl m = Some b
+  end.
+Proof.
+  intros until v. unfold cond_of_expr; case (cond_of_expr_match a); intros; InvEval.
+  subst v. exists (v1 :: nil); split; auto with evalexpr.
+  simpl. destruct b.
+  generalize (Val.bool_of_true_val2 _ H0); clear H0; intro ISTRUE.
+  destruct v1; simpl in ISTRUE; try contradiction. 
+  rewrite Int.eq_false; auto.
+  generalize (Val.bool_of_false_val2 _ H0); clear H0; intro ISFALSE.
+  destruct v1; simpl in ISFALSE; try contradiction.
+  rewrite ISFALSE. rewrite Int.eq_true; auto.
+  exists (v :: nil); split; auto with evalexpr.
+  simpl. inversion H0; simpl. rewrite Int.eq_false; auto. auto. auto. 
+Qed.
+
 End CMCONSTR.
 

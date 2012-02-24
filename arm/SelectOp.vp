@@ -454,4 +454,4 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   | _ => (Aindexed Int.zero, e:::Enil)
   end.
 
-
+Definition cond_of_expr (e: expr) := (Ccompuimm Cne Int.zero, e:::Enil).

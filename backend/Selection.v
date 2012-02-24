@@ -62,6 +62,9 @@ Definition is_compare_eq_zero (c: condition) : bool :=
   | _ => false
   end.
 
+Definition condexpr_of_expr_base (e: expr) : condexpr :=
+  let (c, args) := cond_of_expr e in CEcond c args.
+
 Fixpoint condexpr_of_expr (e: expr) : condexpr :=
   match e with
   | Eop (Ointconst n) Enil =>
@@ -78,7 +81,7 @@ Fixpoint condexpr_of_expr (e: expr) : condexpr :=
   | Econdition ce e1 e2 =>
       CEcondition ce (condexpr_of_expr e1) (condexpr_of_expr e2)
   | _ =>
-      CEcond (Ccompuimm Cne Int.zero) (e:::Enil)
+      condexpr_of_expr_base e
   end.
 
 (** Conversion of loads and stores *)

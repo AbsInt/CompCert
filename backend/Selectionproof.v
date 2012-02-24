@@ -81,17 +81,17 @@ Proof.
   intros. simpl. auto.
 Qed.
 
-Lemma eval_base_condition_of_expr:
+Lemma eval_condition_of_expr_base:
   forall le a v b,
   eval_expr ge sp e m le a v ->
   Val.bool_of_val v b ->
-  eval_condexpr ge sp e m le 
-                (CEcond (Ccompuimm Cne Int.zero) (a ::: Enil))
-                b.
+  eval_condexpr ge sp e m le (condexpr_of_expr_base a) b.
 Proof.
-  intros. 
-  eapply eval_CEcond. eauto with evalexpr. 
-  inversion H0; simpl. rewrite Int.eq_false; auto. auto. auto.
+  intros. unfold condexpr_of_expr_base. 
+  exploit eval_cond_of_expr; eauto. 
+  destruct (cond_of_expr a) as [cond args]. 
+  intros [vl [A B]].
+  econstructor; eauto. 
 Qed.
 
 Lemma is_compare_neq_zero_correct:
@@ -135,15 +135,15 @@ Lemma eval_condition_of_expr:
 Proof.
   intro a0; pattern a0.
   apply expr_induction_principle; simpl; intros;
-    try (eapply eval_base_condition_of_expr; eauto; fail).
+    try (eapply eval_condition_of_expr_base; eauto; fail).
   
-  destruct o; try (eapply eval_base_condition_of_expr; eauto; fail).
+  destruct o; try (eapply eval_condition_of_expr_base; eauto; fail).
 
   destruct e0. inv H0. inv H5. simpl in H7. inv H7.  
   inversion H1. 
   rewrite Int.eq_false; auto. constructor.
   subst i; rewrite Int.eq_true. constructor.
-  eapply eval_base_condition_of_expr; eauto.
+  eapply eval_condition_of_expr_base; eauto.
 
   inv H0. simpl in H7.
   assert (eval_condition c vl m = Some b).

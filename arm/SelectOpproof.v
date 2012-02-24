@@ -769,4 +769,19 @@ Proof.
   exists (v :: nil); split. eauto with evalexpr. subst. simpl. rewrite Int.add_zero; auto.
 Qed.
 
+Theorem eval_cond_of_expr:
+  forall le a v b,
+  eval_expr ge sp e m le a v ->
+  Val.bool_of_val v b ->
+  match cond_of_expr a with (cond, args) =>
+    exists vl,
+    eval_exprlist ge sp e m le args vl /\
+    eval_condition cond vl m = Some b
+  end.
+Proof.
+  intros. unfold cond_of_expr; simpl.
+  exists (v :: nil); split; auto with evalexpr.
+  simpl. inversion H0; simpl. rewrite Int.eq_false; auto. auto. auto. 
+Qed.
+
 End CMCONSTR.
