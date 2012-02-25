@@ -7,7 +7,7 @@ Improvements in confidence:
   of volatile accesses to built-in function invocations is now proved correct.
 - CompCert C now natively supports assignment between composite types
   (structs or unions), passing composite types by value as function
-  parameters, and other instances of composites used as r-values, with
+  parameters, and other instances of using composites as r-values, with
   the exception of returning composites by value from a function.
   (The latter remains emulated, using the -fstruct-return option.)
 
@@ -19,7 +19,7 @@ Performance improvements:
   and their combinations with bitwise operations.
 - Shorter, more efficient code generated for accessing volatile global
   variables.
-- Better code generated for && and || outside conditional tests.
+- Better code generated for the && and || operators.
 - More aggressive common subexpression elimination (CSE) of memory loads.
 - Improved register allocation for invocations of built-ins,
   especially for annotations.

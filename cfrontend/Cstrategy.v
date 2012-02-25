@@ -44,30 +44,30 @@ Variable ge: genv.
 
 (** Simple expressions are defined as follows. *)
 
-Fixpoint simple (a: expr) : Prop :=
+Fixpoint simple (a: expr) : bool :=
   match a with
-  | Eloc _ _ _ => True
-  | Evar _ _ => True
+  | Eloc _ _ _ => true
+  | Evar _ _ => true
   | Ederef r _ => simple r
   | Efield r _ _ => simple r
-  | Eval _ _ => True
-  | Evalof l _ => simple l /\ type_is_volatile (typeof l) = false
+  | Eval _ _ => true
+  | Evalof l _ => simple l && negb(type_is_volatile (typeof l))
   | Eaddrof l _ => simple l
   | Eunop _ r1 _ => simple r1
-  | Ebinop _ r1 r2 _ => simple r1 /\ simple r2
+  | Ebinop _ r1 r2 _ => simple r1 && simple r2
   | Ecast r1 _ => simple r1
-  | Econdition _ _ _ _ => False
-  | Esizeof _ _ => True
-  | Eassign _ _ _ => False
-  | Eassignop _ _ _ _ _ => False
-  | Epostincr _ _ _ => False
-  | Ecomma _ _ _ => False
-  | Ecall _ _ _ => False
-  | Eparen _ _ => False
+  | Econdition r1 r2 r3 _ => simple r1 && simple r2 && simple r3
+  | Esizeof _ _ => true
+  | Eassign _ _ _ => false
+  | Eassignop _ _ _ _ _ => false
+  | Epostincr _ _ _ => false
+  | Ecomma _ _ _ => false
+  | Ecall _ _ _ => false
+  | Eparen _ _ => false
   end.
 
-Fixpoint simplelist (rl: exprlist) : Prop :=
-  match rl with Enil => True | Econs r rl' => simple r /\ simplelist rl' end.
+Fixpoint simplelist (rl: exprlist) : bool :=
+  match rl with Enil => true | Econs r rl' => simple r && simplelist rl' end.
 
 (** Simple expressions have interesting properties: their evaluations always
   terminate, are deterministic, and preserve the memory state.
@@ -125,6 +125,13 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue r1 v1 ->
       sem_cast v1 (typeof r1) ty = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
+  | esr_condition: forall r1 r2 r3 ty v1 b v2 v,
+      simple r2 = true -> simple r3 = true ->
+      eval_simple_rvalue r1 v1 -> 
+      bool_val v1 (typeof r1) = Some b ->
+      eval_simple_rvalue (if b then r2 else r3) v2 ->
+      sem_cast v2 (typeof (if b then r2 else r3)) ty = Some v ->
+      eval_simple_rvalue (Econdition r1 r2 r3 ty) v
   | esr_sizeof: forall ty1 ty,
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1))).
 
@@ -161,7 +168,7 @@ Inductive leftcontext: kind -> kind -> (expr -> expr) -> Prop :=
   | lctx_binop_left: forall k C op e2 ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Ebinop op (C x) e2 ty)
   | lctx_binop_right: forall k C op e1 ty,
-      simple e1 -> leftcontext k RV C ->
+      simple e1 = true -> leftcontext k RV C ->
       leftcontext k RV (fun x => Ebinop op e1 (C x) ty)
   | lctx_cast: forall k C ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Ecast (C x) ty)
@@ -170,19 +177,19 @@ Inductive leftcontext: kind -> kind -> (expr -> expr) -> Prop :=
   | lctx_assign_left: forall k C e2 ty,
       leftcontext k LV C -> leftcontext k RV (fun x => Eassign (C x) e2 ty)
   | lctx_assign_right: forall k C e1 ty,
-      simple e1 -> leftcontext k RV C ->
+      simple e1 = true -> leftcontext k RV C ->
       leftcontext k RV (fun x => Eassign e1 (C x) ty)
   | lctx_assignop_left: forall k C op e2 tyres ty,
       leftcontext k LV C -> leftcontext k RV (fun x => Eassignop op (C x) e2 tyres ty)
   | lctx_assignop_right: forall k C op e1 tyres ty,
-      simple e1 -> leftcontext k RV C ->
+      simple e1 = true -> leftcontext k RV C ->
       leftcontext k RV (fun x => Eassignop op e1 (C x) tyres ty)
   | lctx_postincr: forall k C id ty,
       leftcontext k LV C -> leftcontext k RV (fun x => Epostincr id (C x) ty)
   | lctx_call_left: forall k C el ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Ecall (C x) el ty)
   | lctx_call_right: forall k C e1 ty,
-      simple e1 -> leftcontextlist k C ->
+      simple e1 = true -> leftcontextlist k C ->
       leftcontext k RV (fun x => Ecall e1 (C x) ty)
   | lctx_comma: forall k C e2 ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Ecomma (C x) e2 ty)
@@ -193,7 +200,7 @@ with leftcontextlist: kind -> (expr -> exprlist) -> Prop :=
   | lctx_list_head: forall k C el,
       leftcontext k RV C -> leftcontextlist k (fun x => Econs (C x) el)
   | lctx_list_tail: forall k C e1,
-      simple e1 -> leftcontextlist k C ->
+      simple e1 = true -> leftcontextlist k C ->
       leftcontextlist k (fun x => Econs e1 (C x)).
 
 Lemma leftcontext_context:
@@ -231,6 +238,7 @@ Inductive estep: state -> trace -> state -> Prop :=
           t (ExprState f (C (Eval v ty)) k e m)
 
   | step_condition: forall f C r1 r2 r3 ty k e m v b,
+      simple r2 = false \/ simple r3 = false ->
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
       bool_val v (typeof r1) = Some b ->
@@ -670,6 +678,12 @@ Ltac FinishL := apply star_one; left; apply step_lred; eauto; simpl; try (econst
   FinishR.
 (* cast *)
   Steps H0 (fun x => C(Ecast x ty)). FinishR. 
+(* condition *)
+  Steps H2 (fun x => C(Econdition x r2 r3 ty)).
+  eapply star_left with (s2 := ExprState f (C (Eparen (if b then r2 else r3) ty)) k e m).
+  left; apply step_rred; eauto. constructor; auto. 
+  Steps H5 (fun x => C(Eparen x ty)). 
+  FinishR. auto.
 (* sizeof *)
   FinishR.
 (* loc *)
@@ -720,7 +734,7 @@ Qed.
 
 Lemma simple_can_eval:
   forall a from C,
-  simple a -> context from RV C -> safe (ExprState f (C a) k e m) ->
+  simple a = true -> context from RV C -> safe (ExprState f (C a) k e m) ->
   match from with
   | LV => exists b, exists ofs, eval_simple_lvalue e m a b ofs
   | RV => exists v, eval_simple_rvalue e m a v
@@ -742,7 +756,7 @@ Ltac StepR REC C' a :=
 
   induction a; intros from C S CTX SAFE;
   generalize (safe_expr_kind _ _ _ _ _ _ _ CTX SAFE); intro K; subst;
-  simpl in S; try contradiction; simpl.
+  simpl in S; try discriminate; simpl.
 (* val *)
   exists v; constructor.
 (* var *)
@@ -756,7 +770,8 @@ Ltac StepR REC C' a :=
   destruct TY as [delta OFS]. exists b; exists (Int.add ofs (Int.repr delta)); econstructor; eauto.
   exists b; exists ofs; econstructor; eauto.
 (* valof *)
-  destruct S. StepL IHa (fun x => C(Evalof x ty)) a.
+  destruct (andb_prop _ _ S) as [S1 S2]. clear S. rewrite negb_true_iff in S2.
+  StepL IHa (fun x => C(Evalof x ty)) a.
   exploit safe_inv. eexact SAFE0. eauto. simpl. intros [TY [t [v LOAD]]].
   assert (t = E0). inv LOAD; auto. congruence. subst t.
   exists v; econstructor; eauto. congruence.
@@ -772,7 +787,7 @@ Ltac StepR REC C' a :=
   exploit safe_inv. eexact SAFE0. eauto. simpl. intros [v' EQ].
   exists v'; econstructor; eauto.
 (* binop *)
-  destruct S.
+  destruct (andb_prop _ _ S) as [S1 S2]; clear S.
   StepR IHa1 (fun x => C(Ebinop op x a2 ty)) a1.
   StepR IHa2 (fun x => C(Ebinop op (Eval v (typeof a1)) x ty)) a2.
   exploit safe_inv. eexact SAFE1. eauto. simpl. intros [v' EQ].
@@ -781,6 +796,23 @@ Ltac StepR REC C' a :=
   StepR IHa (fun x => C(Ecast x ty)) a.
   exploit safe_inv. eexact SAFE0. eauto. simpl. intros [v' CAST].
   exists v'; econstructor; eauto.
+(* condition *)
+  destruct (andb_prop _ _ S) as [S' S3]. destruct (andb_prop _ _ S') as [S1 S2]. clear S S'.
+  StepR IHa1 (fun x => C(Econdition x a2 a3 ty)) a1.
+  exploit safe_inv. eexact SAFE0. eauto. simpl. intros [b BV].
+  set (a' := if b then a2 else a3).
+  assert (SAFE1: safe (ExprState f (C (Eparen a' ty)) k e m)).
+    eapply safe_steps. eexact SAFE0. apply star_one. left; apply step_rred; auto. 
+    unfold a'; constructor; auto.
+  assert (EV': exists v, eval_simple_rvalue e m a' v).
+    unfold a'; destruct b. 
+    eapply (IHa2 RV (fun x => C(Eparen x ty))); eauto.
+    eapply (IHa3 RV (fun x => C(Eparen x ty))); eauto.
+  destruct EV' as [v1 E1].
+  exploit safe_inv. eapply (eval_simple_rvalue_safe (fun x => C(Eparen x ty))). 
+  eexact E1. eauto. auto. eauto. 
+  simpl. intros [v2 CAST].
+  exists v2. econstructor; eauto. 
 (* sizeof *)
   econstructor; econstructor.
 (* loc *)
@@ -789,7 +821,7 @@ Qed.
 
 Lemma simple_can_eval_rval:
   forall r C, 
-  simple r -> context RV RV C -> safe (ExprState f (C r) k e m) ->
+  simple r = true -> context RV RV C -> safe (ExprState f (C r) k e m) ->
   exists v, eval_simple_rvalue e m r v
         /\ safe (ExprState f (C (Eval v (typeof r))) k e m).
 Proof.
@@ -799,7 +831,7 @@ Qed.
 
 Lemma simple_can_eval_lval:
   forall l C, 
-  simple l -> context LV RV C -> safe (ExprState f (C l) k e m) ->
+  simple l = true -> context LV RV C -> safe (ExprState f (C l) k e m) ->
   exists b, exists ofs, eval_simple_lvalue e m l b ofs
          /\ safe (ExprState f (C (Eloc b ofs (typeof l))) k e m).
 Proof.
@@ -916,14 +948,14 @@ Qed.
 
 Lemma simple_list_can_eval:
   forall rl C,
-  simplelist rl ->
+  simplelist rl = true ->
   contextlist' C ->
   safe (ExprState f (C rl) k e m) ->
   exists vl, eval_simple_list' rl vl.
 Proof.
   induction rl; intros.
   econstructor; constructor.
-  simpl in H; destruct H. 
+  simpl in H. destruct (andb_prop _ _ H). 
   exploit (simple_can_eval r1 RV (fun x => C(Econs x rl))); eauto.
   intros [v1 EV1].
   exploit (IHrl (fun x => C(Econs (Eval v1 (typeof r1)) x))); eauto.
@@ -952,14 +984,14 @@ Variable m: mem.
 
 Definition simple_side_effect (r: expr) : Prop :=
   match r with
-  | Evalof l _ => simple l /\ type_is_volatile (typeof l) = true
-  | Econdition r1 r2 r3 _ => simple r1
-  | Eassign l1 r2 _ => simple l1 /\ simple r2
-  | Eassignop _ l1 r2 _ _ => simple l1 /\ simple r2
-  | Epostincr _ l1 _ => simple l1
-  | Ecomma r1 r2 _ => simple r1
-  | Ecall r1 rl _ => simple r1 /\ simplelist rl
-  | Eparen r1 _ => simple r1
+  | Evalof l _ => simple l = true /\ type_is_volatile (typeof l) = true
+  | Econdition r1 r2 r3 _ => simple r1 = true /\ (simple r2 = false \/ simple r3 = false)
+  | Eassign l1 r2 _ => simple l1 = true /\ simple r2 = true
+  | Eassignop _ l1 r2 _ _ => simple l1 = true /\ simple r2 = true
+  | Epostincr _ l1 _ => simple l1 = true
+  | Ecomma r1 r2 _ => simple r1 = true
+  | Ecall r1 rl _ => simple r1 = true /\ simplelist rl = true
+  | Eparen r1 _ => simple r1 = true
   | _ => False
   end.
 
@@ -972,11 +1004,11 @@ Hint Constructors leftcontext leftcontextlist.
 Lemma decompose_expr:
   (forall a from C,
    context from RV C -> safe (ExprState f (C a) k e m) ->
-       simple a
+       simple a = true
     \/ exists C', exists a', a = C' a' /\ simple_side_effect a' /\ leftcontext RV from C')
 /\(forall rl C,
    contextlist' C -> safe (ExprState f (C rl) k e m) ->
-       simplelist rl
+       simplelist rl = true
     \/ exists C', exists a', rl = C' a' /\ simple_side_effect a' /\ leftcontextlist RV C').
 Proof.
   apply expr_expr_list_ind; intros; simpl; auto.
@@ -995,7 +1027,7 @@ Ltac Base :=
 (* rvalof *)
   Kind. Rec H LV C (fun x => Evalof x ty).
   destruct (type_is_volatile (typeof l)) as []_eqn.
-  Base. auto.
+  Base. rewrite H2; auto.
 (* deref *)
   Kind. Rec H RV C (fun x => Ederef x ty).
 (* addrof *)
@@ -1003,11 +1035,14 @@ Ltac Base :=
 (* unop *)
   Kind. Rec H RV C (fun x => Eunop op x ty).
 (* binop *)
-  Kind. Rec H RV C (fun x => Ebinop op x r2 ty). Rec H0 RV C (fun x => Ebinop op r1 x ty).
+  Kind. Rec H RV C (fun x => Ebinop op x r2 ty). rewrite H3.
+  Rec H0 RV C (fun x => Ebinop op r1 x ty).
 (* cast *)
   Kind. Rec H RV C (fun x => Ecast x ty).
 (* condition *)
-  Kind. Rec H RV C (fun x => Econdition x r2 r3 ty). Base.
+  Kind. Rec H RV C (fun x => Econdition x r2 r3 ty). rewrite H4; simpl. 
+  destruct (simple r2 && simple r3) as []_eqn. auto. 
+  rewrite andb_false_iff in Heqb. Base.
 (* assign *)
   Kind. Rec H LV C (fun x => Eassign x r ty). Rec H0 RV C (fun x => Eassign l x ty). Base.
 (* assignop *)
@@ -1028,8 +1063,8 @@ Ltac Base :=
   destruct (H RV (fun x => C (Econs x rl))) as [A | [C' [a' [A [B D]]]]].
     eapply contextlist'_head; eauto. auto.
   destruct (H0 (fun x => C (Econs r1 x))) as [A' | [C' [a' [A' [B D]]]]].
-    eapply contextlist'_tail; eauto. auto. 
-  auto.
+    eapply contextlist'_tail; eauto. auto.
+  rewrite A; rewrite A'; auto. 
   right; exists (fun x => Econs r1 (C' x)); exists a'. rewrite A'; eauto.
   right; exists (fun x => Econs (C' x) rl); exists a'. rewrite A; eauto.
 Qed.
@@ -1037,7 +1072,7 @@ Qed.
 Lemma decompose_topexpr:
   forall a,
   safe (ExprState f a k e m) ->
-       simple a
+       simple a = true
     \/ exists C, exists a', a = C a' /\ simple_side_effect a' /\ leftcontext RV RV C.
 Proof.
   intros. eapply (proj1 decompose_expr). apply ctx_top. auto.
@@ -1178,6 +1213,7 @@ Proof.
   exploit safe_inv. eexact S1. eauto. simpl. intros [A [t [v B]]].
   econstructor; econstructor; eapply step_rvalof_volatile; eauto. congruence. 
 (* condition *)
+  destruct Q.
   exploit (simple_can_eval_rval f k e m b1 (fun x => C(Econdition x b2 b3 ty))); eauto.
   intros [v1 [E1 S1]].
   exploit safe_inv. eexact S1. eauto. simpl. intros [b BV].
@@ -1541,6 +1577,7 @@ with eval_expr: env -> mem -> kind -> expr -> trace -> mem -> expr -> Prop :=
       eval_expr e m RV a t m' a' ->
       eval_expr e m RV (Ecast a ty) t m' (Ecast a' ty)
   | eval_condition: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 m'' a' v' b v,
+      simple a2 = false \/ simple a3 = false ->
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
       bool_val v1 (typeof a1) = Some b ->
       eval_expr e m' RV (if b then a2 else a3) t2 m'' a' -> eval_simple_rvalue ge e m'' a' v' ->
@@ -1774,7 +1811,8 @@ CoInductive evalinf_expr: env -> mem -> kind -> expr -> traceinf -> Prop :=
   | evalinf_condition: forall e m a1 a2 a3 ty t1,
       evalinf_expr e m RV a1 t1 ->
       evalinf_expr e m RV (Econdition a1 a2 a3 ty) t1
-  | evalinf_condition_true: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 b,
+  | evalinf_condition_2: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 b,
+      simple a2 = false \/ simple a3 = false ->
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
       bool_val v1 (typeof a1) = Some b ->
       evalinf_expr e m' RV (if b then a2 else a3) t2 ->
@@ -1973,17 +2011,18 @@ Qed.
 
 Lemma exprlist_app_leftcontext:
   forall rl1 rl2,
-  simplelist rl1 -> leftcontextlist RV (fun x => exprlist_app rl1 (Econs x rl2)).
+  simplelist rl1 = true -> leftcontextlist RV (fun x => exprlist_app rl1 (Econs x rl2)).
 Proof.
   induction rl1; simpl; intros. 
   apply lctx_list_head. constructor.
-  destruct H. apply lctx_list_tail. auto. auto. 
+  destruct (andb_prop _ _ H). apply lctx_list_tail. auto. auto. 
 Qed.
 
 Lemma exprlist_app_simple:
-  forall rl1 rl2, simplelist rl1 -> simplelist rl2 -> simplelist (exprlist_app rl1 rl2).
+  forall rl1 rl2,
+  simplelist (exprlist_app rl1 rl2) = simplelist rl1 && simplelist rl2.
 Proof.
-  induction rl1; simpl; intros. auto. destruct H; auto. 
+  induction rl1; intros; simpl. auto. rewrite IHrl1. apply andb_assoc. 
 Qed.
 
 Lemma bigstep_to_steps:
@@ -1994,12 +2033,12 @@ Lemma bigstep_to_steps:
 /\(forall e m K a t m' a',
    eval_expr e m K a t m' a' ->
    forall C f k, leftcontext K RV C ->
-   simple a' /\ typeof a' = typeof a /\
+   simple a' = true /\ typeof a' = typeof a /\
    star step ge (ExprState f (C a) k e m) t (ExprState f (C a') k e m'))
 /\(forall e m al t m' al',
    eval_exprlist e m al t m' al' ->
-   forall a1 al2 ty C f k, leftcontext RV RV C -> simple a1 -> simplelist al2 ->
-   simplelist al' /\
+   forall a1 al2 ty C f k, leftcontext RV RV C -> simple a1 = true -> simplelist al2 = true ->
+   simplelist al' = true /\
    star step ge (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
               t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m'))
 /\(forall e m s t m' out,
@@ -2033,7 +2072,7 @@ Proof.
 (* valof *)
   exploit (H1 (fun x => C(Evalof x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
-  simpl; intuition; eauto. congruence.
+  simpl; intuition; eauto. rewrite A; rewrite B; rewrite H; auto.
 (* valof volatile *)
   exploit (H1 (fun x => C(Evalof x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
@@ -2064,11 +2103,11 @@ Proof.
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
   simpl; intuition; eauto.
 (* condition *)
-  exploit (H0 (fun x => C(Econdition x a2 a3 ty))).
+  exploit (H1 (fun x => C(Econdition x a2 a3 ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
-  exploit (H4 (fun x => C(Eparen x ty))).
+  exploit (H5 (fun x => C(Eparen x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [E [F G]].
-  simpl; intuition.
+  simpl. split; auto. split; auto. 
   eapply star_trans. eexact D.
   eapply star_left. left; eapply step_condition; eauto. rewrite B; eauto. 
   eapply star_right. eexact G. left; eapply step_paren; eauto. congruence. 
@@ -2115,7 +2154,7 @@ Proof.
 (* call *)
   exploit (H0 (fun x => C(Ecall x rargs ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
-  exploit (H2 rf' Enil ty C); eauto. red; auto. intros [E F].
+  exploit (H2 rf' Enil ty C); eauto. intros [E F].
   simpl; intuition. 
   eapply star_trans. eexact D.
   eapply star_trans. eexact F. 
@@ -2130,10 +2169,9 @@ Proof.
     eapply leftcontext_compose; eauto. repeat constructor. auto.
     apply exprlist_app_leftcontext; auto. intros [A [B D]].
   exploit (H2 a0 (exprlist_app al2 (Econs a1' Enil))); eauto.
-  apply exprlist_app_simple; auto. simpl. auto. 
+  rewrite exprlist_app_simple. simpl. rewrite H5; rewrite A; auto. 
   repeat rewrite exprlist_app_assoc. simpl.  
   intros [E F].
-
   simpl; intuition. 
   eapply star_trans; eauto.
 
@@ -2398,15 +2436,15 @@ Lemma eval_expr_to_steps:
    forall e m K a t m' a',
    eval_expr e m K a t m' a' ->
    forall C f k, leftcontext K RV C ->
-   simple a' /\ typeof a' = typeof a /\
+   simple a' = true /\ typeof a' = typeof a /\
    star step ge (ExprState f (C a) k e m) t (ExprState f (C a') k e m').
 Proof (proj1 (proj2 bigstep_to_steps)).
 
 Lemma eval_exprlist_to_steps:
    forall e m al t m' al',
    eval_exprlist e m al t m' al' ->
-   forall a1 al2 ty C f k, leftcontext RV RV C -> simple a1 -> simplelist al2 ->
-   simplelist al' /\
+   forall a1 al2 ty C f k, leftcontext RV RV C -> simple a1 = true -> simplelist al2 = true ->
+   simplelist al' = true /\
    star step ge (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
               t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m').
 Proof (proj1 (proj2 (proj2 bigstep_to_steps))).
@@ -2495,7 +2533,7 @@ Proof.
   assert (COEL:
     forall e m a t C f k a1 al ty,
     evalinf_exprlist e m a t ->
-    leftcontext RV RV C -> simple a1 -> simplelist al ->
+    leftcontext RV RV C -> simple a1 = true -> simplelist al = true ->
     forever_N step lt ge (esizelist a)
                    (ExprState f (C (Ecall a1 (exprlist_app al a) ty)) k e m) t).
   cofix COEL.
@@ -2516,7 +2554,8 @@ Proof.
   change (Econs a1' al0) with (exprlist_app (Econs a1' Enil) al0).
   rewrite <- exprlist_app_assoc.  
   eapply COEL. eauto. auto. auto. 
-  apply exprlist_app_simple. auto. simpl; auto. traceEq.
+  rewrite exprlist_app_simple. simpl. rewrite H2; rewrite P; auto.
+  auto.
 
   intros. inv H.
 (* field *)
@@ -2559,7 +2598,7 @@ Proof.
   eapply COE with (C := fun x => C(Econdition x a2 a3 ty)). eauto. 
   eapply leftcontext_compose; eauto. repeat constructor. traceEq.
 (* condition *)
-  destruct (eval_expr_to_steps _ _ _ _ _ _ _ H1 (fun x => C(Econdition x a2 a3 ty)) f k)
+  destruct (eval_expr_to_steps _ _ _ _ _ _ _ H2 (fun x => C(Econdition x a2 a3 ty)) f k)
   as [P [Q R]]. 
   eapply leftcontext_compose; eauto. repeat constructor.
   eapply forever_N_plus. eapply plus_right. eexact R. 
@@ -2613,7 +2652,7 @@ Proof.
   as [P [Q R]]. 
   eapply leftcontext_compose; eauto. repeat constructor.
   eapply forever_N_star with (a2 := (esizelist a2)). eexact R. simpl; omega.
-  eapply COEL with (al := Enil). eauto. auto. auto. red; auto. traceEq.
+  eapply COEL with (al := Enil). eauto. auto. auto. auto. traceEq.
 (* call *)
   destruct (eval_expr_to_steps _ _ _ _ _ _ _ H1 (fun x => C(Ecall x rargs ty)) f k)
   as [P [Q R]]. 

@@ -21,6 +21,7 @@ Require Import Values.
 Require Import AST.
 Require Import Csyntax.
 Require Import Csem.
+Require Cstrategy.
 Require Import Clight.
 
 Module C := Csyntax.
@@ -231,19 +232,25 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
       do (sl1, a1) <- transl_expr For_val r1;
       ret (finish dst sl1 (Ecast a1 ty))
   | C.Econdition r1 r2 r3 ty =>
-      do (sl1, a1) <- transl_expr For_val r1;
-      do (sl2, a2) <- transl_expr (cast_destination ty dst) r2;
-      do (sl3, a3) <- transl_expr (cast_destination ty dst) r3;
-      match dst with
-      | For_val =>
-          do t <- gensym ty;
-          ret (sl1 ++ makeif a1 (Ssequence (makeseq sl2) (Sset t (Ecast a2 ty)))
-                                (Ssequence (makeseq sl3) (Sset t (Ecast a3 ty))) :: nil,
-               Etempvar t ty)
-      | For_effects | For_test _ _ _ =>
-          ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
-               dummy_expr)
-      end
+      if Cstrategy.simple r2 && Cstrategy.simple r3 then (
+        do (sl1, a1) <- transl_expr For_val r1;
+        do (sl2, a2) <- transl_expr For_val r2;
+        do (sl3, a3) <- transl_expr For_val r3;
+        ret (finish dst sl1 (Econdition a1 a2 a3 ty))
+      ) else (
+        do (sl1, a1) <- transl_expr For_val r1;
+        do (sl2, a2) <- transl_expr (cast_destination ty dst) r2;
+        do (sl3, a3) <- transl_expr (cast_destination ty dst) r3;
+        match dst with
+        | For_val =>
+            do t <- gensym ty;
+            ret (sl1 ++ makeif a1 (Ssequence (makeseq sl2) (Sset t (Ecast a2 ty)))
+                                  (Ssequence (makeseq sl3) (Sset t (Ecast a3 ty))) :: nil,
+                 Etempvar t ty)
+        | For_effects | For_test _ _ _ =>
+            ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
+                 dummy_expr)
+        end)
   | C.Eassign l1 r2 ty =>
       do (sl1, a1) <- transl_expr For_val l1;
       do (sl2, a2) <- transl_expr For_val r2;

@@ -110,32 +110,38 @@ Qed.
 
 Lemma tr_simple_nil:
   (forall le dst r sl a tmps, tr_expr le dst r sl a tmps ->
-   dst = For_val \/ dst = For_effects -> simple r -> sl = nil)
+   dst = For_val \/ dst = For_effects -> simple r = true -> sl = nil)
 /\(forall le rl sl al tmps, tr_exprlist le rl sl al tmps ->
-   simplelist rl -> sl = nil).
+   simplelist rl = true -> sl = nil).
 Proof.
   assert (A: forall dst a, dst = For_val \/ dst = For_effects -> final dst a = nil).
     intros. destruct H; subst dst; auto.
-  apply tr_expr_exprlist; intros; simpl in *; try contradiction; auto.
+  apply tr_expr_exprlist; intros; simpl in *; try discriminate; auto.
   rewrite H0; auto. simpl; auto.
   rewrite H0; auto. simpl; auto.
   destruct H1; congruence.
-  destruct H6. inv H1; try congruence. rewrite H0; auto. simpl; auto.
+  destruct (andb_prop _ _ H6). inv H1.
+  rewrite H0; auto. simpl; auto.
+  rewrite H9 in H8; discriminate.
   rewrite H0; auto. simpl; auto.
   rewrite H0; auto. simpl; auto.
-  destruct H7. rewrite H0; auto. rewrite H2; auto. simpl; auto.
+  destruct (andb_prop _ _ H7). rewrite H0; auto. rewrite H2; auto. simpl; auto.
   rewrite H0; auto. simpl; auto.
-  destruct H6. rewrite H0; auto.
+  destruct (andb_prop _ _ H13). destruct (andb_prop _ _ H14).
+  rewrite H2; auto. simpl; auto.
+  destruct (andb_prop _ _ H14). destruct (andb_prop _ _ H15). intuition congruence.
+  destruct (andb_prop _ _ H13). destruct (andb_prop _ _ H14). intuition congruence.
+  destruct (andb_prop _ _ H6). rewrite H0; auto.
 Qed.
 
 Lemma tr_simple_expr_nil:
   forall le dst r sl a tmps, tr_expr le dst r sl a tmps ->
-  dst = For_val \/ dst = For_effects -> simple r -> sl = nil.
+  dst = For_val \/ dst = For_effects -> simple r = true -> sl = nil.
 Proof (proj1 tr_simple_nil).
 
 Lemma tr_simple_exprlist_nil:
   forall le rl sl al tmps, tr_exprlist le rl sl al tmps ->
-  simplelist rl -> sl = nil.
+  simplelist rl = true -> sl = nil.
 Proof (proj2 tr_simple_nil).
 
 (** Evaluation of simple expressions and of their translation *)
@@ -222,6 +228,16 @@ Opaque makeif.
   subst sl1; simpl.
   assert (eval_expr tge e le m (Ecast a1 ty) v). econstructor; eauto. congruence.
   destruct dst; auto. simpl; econstructor; eauto.
+(* condition *)
+  exploit H2; eauto. intros [A [B C]]. subst sl1. 
+  assert (tr_expr le For_val (if b then r2 else r3) (if b then sl2 else sl3) (if b then a2 else a3) (if b then tmp2 else tmp3)).
+    destruct b; auto.
+  exploit H5; eauto. intros [D [E F]]. 
+  assert (eval_expr tge e le m (Econdition a1 a2 a3 ty) v).
+    econstructor; eauto. congruence. rewrite <- E. auto. 
+  destruct dst; auto. simpl; econstructor; eauto. 
+  intuition congruence.
+  intuition congruence.
 (* sizeof *)
   destruct dst.
   split; auto. split; auto. constructor.
@@ -445,12 +461,20 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor; eauto.
 (* condition *)
   inv H1.
+  (* simple *)
+  exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [U [R S]]]]]]]]].
+  TR. subst sl1. rewrite app_ass. eauto. 
+  red; auto. 
+  intros. rewrite <- app_ass. econstructor. auto. auto. eauto.
+  eapply tr_expr_invariant; eauto. UNCHANGED.
+  eapply tr_expr_invariant; eauto. UNCHANGED.
+  auto. auto. auto. auto. auto. 
   (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [U [R S]]]]]]]]].
   TR. 
   rewrite Q. rewrite app_ass. eauto. 
   red; auto.
-  intros. rewrite <- app_ass. econstructor. apply S; auto. 
+  intros. rewrite <- app_ass. econstructor. auto. apply S; auto. 
   eapply tr_expr_invariant; eauto. UNCHANGED.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto. auto. auto. auto. 
@@ -459,7 +483,7 @@ Ltac UNCHANGED :=
   TR. 
   rewrite Q. rewrite app_ass. eauto. 
   red; auto.
-  intros. rewrite <- app_ass. econstructor. auto. apply S; auto. 
+  intros. rewrite <- app_ass. econstructor. auto. auto. apply S; auto. 
   eapply tr_expr_invariant; eauto. UNCHANGED.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto. auto.
@@ -1065,8 +1089,8 @@ Proof.
   rewrite (makeseq_nolabel sl2); auto.
   rewrite (makeseq_nolabel sl3); auto.
   apply makeif_nolabel; NoLabelTac.
-  rewrite (makeseq_nolabel sl2). auto. apply H3. apply nolabel_dest_cast; auto. 
-  rewrite (makeseq_nolabel sl3). auto. apply H5. apply nolabel_dest_cast; auto.
+  rewrite (makeseq_nolabel sl2). auto. apply H4. apply nolabel_dest_cast; auto. 
+  rewrite (makeseq_nolabel sl3). auto. apply H6. apply nolabel_dest_cast; auto.
   eapply tr_rvalof_nolabel; eauto.
   eapply tr_rvalof_nolabel; eauto.
   eapply tr_rvalof_nolabel; eauto.
@@ -1341,10 +1365,12 @@ Proof.
   apply S. apply tr_val_gen. auto. intros. constructor. rewrite H5; auto. apply PTree.gss.
   intros. apply PTree.gso. red; intros; subst; elim H5; auto. 
   auto.
-(* condition true *)
-  exploit tr_top_leftcontext; eauto. clear H9. 
+(* condition *)
+  exploit tr_top_leftcontext; eauto. clear H10. 
   intros [dst' [sl1 [sl2 [a' [tmp' [P [Q [T [R S]]]]]]]]].
-  inv P. inv H2. 
+  inv P. inv H3. 
+  (* simple *)
+  intuition congruence.
   (* for value *)
   exploit tr_simple_rvalue; eauto. intros [SL [TY EV]].
   subst sl0; simpl Kseqlist. destruct b.

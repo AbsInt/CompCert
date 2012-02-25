@@ -21,6 +21,7 @@ Require Import Values.
 Require Import Memory.
 Require Import AST.
 Require Import Csyntax.
+Require Cstrategy.
 Require Import Clight.
 Require Import SimplExpr.
 
@@ -117,7 +118,19 @@ Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -
       tr_expr le dst (C.Ecast e1 ty)
                    (sl1 ++ final dst (Ecast a1 ty))
                    (Ecast a1 ty) tmp
+  | tr_condition_simple: forall le dst e1 e2 e3 ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 tmp,
+      Cstrategy.simple e2 = true -> Cstrategy.simple e3 = true ->
+      tr_expr le For_val e1 sl1 a1 tmp1 ->
+      tr_expr le For_val e2 sl2 a2 tmp2 ->
+      tr_expr le For_val e3 sl3 a3 tmp3 ->
+      list_disjoint tmp1 tmp2 ->
+      list_disjoint tmp1 tmp3 ->
+      incl tmp1 tmp -> incl tmp2 tmp -> incl tmp3 tmp ->
+      tr_expr le dst (C.Econdition e1 e2 e3 ty)
+                       (sl1 ++ final dst (Econdition a1 a2 a3 ty))
+                       (Econdition a1 a2 a3 ty) tmp
   | tr_condition_val: forall le e1 e2 e3 ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 t tmp,
+      Cstrategy.simple e2 = false \/ Cstrategy.simple e3 = false ->
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
       tr_expr le For_val e3 sl3 a3 tmp3 ->
@@ -131,6 +144,7 @@ Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -
                                 (Ssequence (makeseq sl3) (Sset t (Ecast a3 ty))) :: nil)
                       (Etempvar t ty) tmp
   | tr_condition_effects: forall le dst e1 e2 e3 ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
+      Cstrategy.simple e2 = false \/ Cstrategy.simple e3 = false ->
       dst <> For_val ->
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le (cast_destination ty dst) e2 sl2 a2 tmp2 ->
@@ -671,23 +685,36 @@ Opaque makeif.
   monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish. 
   econstructor; split; eauto. constructor; auto.
 (* condition *) 
+  simpl in H2. 
+  destruct (Cstrategy.simple r2 && Cstrategy.simple r3) as []_eqn.
+  (* simple *)
   monadInv H2. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [C D]].
   exploit H1; eauto. intros [tmp3 [E F]].
+  UseFinish. destruct (andb_prop _ _ Heqb). 
+  exists (tmp1 ++ tmp2 ++ tmp3); split.
+  intros; eapply tr_condition_simple; eauto with gensym. 
+  apply contained_app. eauto with gensym.
+  apply contained_app; eauto with gensym.
+  (* not simple *)
+  monadInv H2. exploit H; eauto. intros [tmp1 [A B]].
+  exploit H0; eauto. intros [tmp2 [C D]].
+  exploit H1; eauto. intros [tmp3 [E F]].
+  rewrite andb_false_iff in Heqb.
   destruct dst; monadInv EQ3.
   (* for value *)
   exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split. 
-  econstructor; eauto with gensym.
+  intros; eapply tr_condition_val; eauto with gensym.
   apply contained_cons. eauto with gensym. 
   apply contained_app. eauto with gensym.
   apply contained_app; eauto with gensym.
   (* for effects *)
   exists (tmp1 ++ tmp2 ++ tmp3); split.
-  econstructor; eauto with gensym. congruence.
+  intros; eapply tr_condition_effects; eauto with gensym. congruence.
   apply contained_app; eauto with gensym.
   (* for test *)
   exists (tmp1 ++ tmp2 ++ tmp3); split.
-  econstructor; eauto with gensym. congruence.
+  intros; eapply tr_condition_effects; eauto with gensym. congruence.
   apply contained_app; eauto with gensym.
 (* sizeof *)
   monadInv H. UseFinish.
