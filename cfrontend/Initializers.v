@@ -80,6 +80,8 @@ Fixpoint constval (a: expr) : res val :=
       do v1 <- constval r; do_cast v1 (typeof r) ty
   | Esizeof ty1 ty =>
       OK (Vint (Int.repr (sizeof ty1)))
+  | Ealignof ty1 ty =>
+      OK (Vint (Int.repr (alignof ty1)))
   | Econdition r1 r2 r3 ty =>
       do v1 <- constval r1;
       do v2 <- constval r2;

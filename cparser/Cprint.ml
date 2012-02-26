@@ -181,6 +181,7 @@ type associativity = LtoR | RtoL | NA
 let precedence = function               (* H&S section 7.2 *)
   | EConst _ -> (16, NA)
   | ESizeof _ -> (15, RtoL)
+  | EAlignof _ -> (15, RtoL)
   | EVar _ -> (16, NA)
   | EBinop(Oindex, _, _, _) -> (16, LtoR)
   | ECall _ -> (16, LtoR)
@@ -215,6 +216,7 @@ let rec exp pp (prec, a) =
   | EConst cst -> const pp cst
   | EVar id -> ident pp id
   | ESizeof ty -> fprintf pp "sizeof(%a)" typ ty
+  | EAlignof ty -> fprintf pp "__alignof(%a)" typ ty
   | EUnop(Ominus, a1) ->
       fprintf pp "-%a" exp (prec', a1)
   | EUnop(Oplus, a1) ->

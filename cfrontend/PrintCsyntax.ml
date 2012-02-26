@@ -145,6 +145,7 @@ let rec precedence = function
   | Eval _ -> (16, NA)
   | Evalof(l, _) -> precedence l
   | Esizeof _ -> (15, RtoL)
+  | Ealignof _ -> (15, RtoL)
   | Ecall _ -> (16, LtoR)
   | Epostincr _ -> (16, LtoR)
   | Eunop _ -> (15, RtoL)
@@ -196,6 +197,8 @@ let rec expr p (prec, e) =
       fprintf p "<undef>"
   | Esizeof(ty, _) ->
       fprintf p "sizeof(%s)" (name_type ty)
+  | Ealignof(ty, _) ->
+      fprintf p "__alignof__(%s)" (name_type ty)
   | Eunop(op, a1, _) ->
       fprintf p "%s%a" (name_unop op) expr (prec', a1)
   | Eaddrof(a1, _) ->
@@ -444,7 +447,8 @@ let rec collect_expr = function
   | Ecast(r, _) -> collect_expr r
   | Econdition(r1, r2, r3, _) -> 
       collect_expr r1; collect_expr r2; collect_expr r3
-  | Esizeof _ -> ()
+  | Esizeof(ty, _) -> collect_type ty
+  | Ealignof(ty, _) -> collect_type ty
   | Eassign(l, r, _) -> collect_expr l; collect_expr r
   | Eassignop(_, l, r, _, _) -> collect_expr l; collect_expr r
   | Epostincr(_, l, _) -> collect_expr l

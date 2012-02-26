@@ -1,4 +1,4 @@
-Release 1.10, 2012-02-15
+Release 1.10, 2012-02-28
 ========================
 
 Improvements in confidence:
@@ -13,6 +13,8 @@ Improvements in confidence:
 
 Language features:
 - Support for _Bool type from ISO C99.
+- Support for _Alignof(ty) operator from ISO C 2011
+  and __alignof__(ty), __alignof__(expr) from GCC.
 
 Performance improvements:
 - Improvements in instruction selection, especially for integer casts

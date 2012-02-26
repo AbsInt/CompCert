@@ -53,6 +53,7 @@ Fixpoint simple (a: expr) : Prop :=
   | Ecast r1 _ => simple r1
   | Econdition r1 r2 r3 _ => simple r1 /\ simple r2 /\ simple r3
   | Esizeof _ _ => True
+  | Ealignof _ _ => True
   | Eassign _ _ _ => False
   | Eassignop _ _ _ _ _ => False
   | Epostincr _ _ _ => False
@@ -120,6 +121,8 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Ecast r1 ty) v
   | esr_sizeof: forall ty1 ty,
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
+  | esr_alignof: forall ty1 ty,
+      eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ty1)))
   | esr_condition: forall r1 r2 r3 ty v v1 b v',
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some b -> 
       eval_simple_rvalue (if b then r2 else r3) v' ->
@@ -183,6 +186,7 @@ Proof.
   inv EV. econstructor; eauto. constructor. constructor.
   inv EV. econstructor; eauto. constructor.
   inv EV. eapply esr_condition; eauto. constructor. 
+  inv EV. constructor.
   inv EV. constructor.
   econstructor; eauto. constructor.
   inv EV. econstructor. constructor. auto. 
@@ -457,6 +461,8 @@ Proof.
   (* cast *)
   eapply sem_cast_match; eauto. 
   (* sizeof *)
+  constructor.
+  (* alignof *)
   constructor.
   (* conditional *)
   rewrite (bool_val_match x v1 (typeof r1)) in EQ3; auto.

@@ -235,6 +235,7 @@ let transf_expr env ctx e =
     match e.edesc with
     | EConst _ -> e
     | ESizeof _ -> e
+    | EAlignof _ -> e
     | EVar _ -> e
 
     | EUnop(Odot s, e1) ->

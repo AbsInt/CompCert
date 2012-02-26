@@ -867,6 +867,18 @@ let elab_expr loc env a =
         err "incomplete type %a" Cprint.typ ty;
       { edesc = ESizeof ty; etyp = TInt(size_t_ikind, []) }
 
+  | EXPR_ALIGNOF a1 ->
+      let b1 = elab a1 in
+      if sizeof env b1.etyp = None then
+        err "incomplete type %a" Cprint.typ b1.etyp;
+      { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind, []) }
+
+  | TYPE_ALIGNOF (spec, dcl) ->
+      let ty = elab_type loc env spec dcl in
+      if sizeof env ty = None then
+        err "incomplete type %a" Cprint.typ ty;
+      { edesc = EAlignof ty; etyp =  TInt(size_t_ikind, []) }
+
   | UNARY(PLUS, a1) ->
       let b1 = elab a1 in
       if not (is_arith_type env b1.etyp) then
@@ -1110,25 +1122,6 @@ let elab_expr loc env a =
       error "GCC's &&label construct is not supported"
   | GNU_BODY _ ->
       error "GCC's statements within expressions are not supported"
-  | EXPR_ALIGNOF _ | TYPE_ALIGNOF _ ->
-      error "GCC's __alignof__ construct is not supported"
-
-(*
-  | EXPR_ALIGNOF a1 ->
-      warning "nonstandard `alignof' expression, turned into a constant";
-      let b1 = elab a1 in
-      begin match alignof env b1.etyp with
-      | None -> error "incomplete type %a" Cprint.typ b1.etyp
-      | Some al -> intconst (Int64.of_int al) size_t_ikind
-      end
-  | TYPE_ALIGNOF (spec, dcl) ->
-      warning "nonstandard `alignof' expression, turned into a constant";
-      let ty = elab_type loc env spec dcl in
-      begin match alignof env ty with
-      | None -> error "incomplete type %a" Cprint.typ ty
-      | Some al -> intconst (Int64.of_int al) size_t_ikind
-      end
-*)
 
 (* Elaboration of pre- or post- increment/decrement *)
   and elab_pre_post_incr_decr op msg a1 =

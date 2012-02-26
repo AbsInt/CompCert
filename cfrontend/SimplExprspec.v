@@ -89,6 +89,10 @@ Inductive tr_expr: temp_env -> destination -> C.expr -> list statement -> expr -
       tr_expr le dst (C.Esizeof ty' ty)
                    (final dst (Esizeof ty' ty))
                    (Esizeof ty' ty) tmp
+  | tr_alignof: forall le dst ty' ty tmp,
+      tr_expr le dst (C.Ealignof ty' ty)
+                   (final dst (Ealignof ty' ty))
+                   (Ealignof ty' ty) tmp
   | tr_valof: forall le dst e1 ty tmp sl1 a1 tmp1 sl2 a2 tmp2,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_rvalof (C.typeof e1) a1 sl2 a2 tmp2 ->
@@ -717,6 +721,9 @@ Opaque makeif.
   intros; eapply tr_condition_effects; eauto with gensym. congruence.
   apply contained_app; eauto with gensym.
 (* sizeof *)
+  monadInv H. UseFinish.
+  exists (@nil ident); split; auto with gensym. constructor.
+(* alignof *)
   monadInv H. UseFinish.
   exists (@nil ident); split; auto with gensym. constructor.
 (* assign *)

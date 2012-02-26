@@ -57,8 +57,12 @@ Inductive expr : Type :=
   | Ebinop: binary_operation -> expr -> expr -> type -> expr (**r binary operation *)
   | Ecast: expr -> type -> expr   (**r type cast ([(ty) e]) *)
   | Econdition: expr -> expr -> expr -> type -> expr (**r conditional ([e1 ? e2 : e3]) *)
-  | Esizeof: type -> type -> expr         (**r size of a type *)
   | Efield: expr -> ident -> type -> expr. (**r access to a member of a struct or union *)
+
+(** [sizeof] and [alignof] are derived forms. *)
+
+Definition Esizeof (ty' ty: type) : expr := Econst_int (Int.repr(sizeof ty')) ty.
+Definition Ealignof (ty' ty: type) : expr := Econst_int (Int.repr(alignof ty')) ty.
 
 (** Extract the type part of a type-annotated Clight expression. *)
 
@@ -74,7 +78,6 @@ Definition typeof (e: expr) : type :=
   | Ebinop _ _ _ ty => ty
   | Ecast _ ty => ty
   | Econdition _ _ _ ty => ty
-  | Esizeof _ ty => ty
   | Efield _ _ ty => ty
   end.
 
@@ -238,8 +241,6 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Eaddrof: forall a ty loc ofs,
       eval_lvalue a loc ofs ->
       eval_expr (Eaddrof a ty) (Vptr loc ofs)
-  | eval_Esizeof: forall ty' ty,
-      eval_expr (Esizeof ty' ty) (Vint (Int.repr (sizeof ty')))
   | eval_Eunop:  forall op a ty v1 v,
       eval_expr a v1 ->
       sem_unary_operation op v1 (typeof a) = Some v ->

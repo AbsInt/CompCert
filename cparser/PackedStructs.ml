@@ -251,6 +251,7 @@ let transf_expr loc env ctx e =
     match e.edesc with
     | EConst _ -> e
     | ESizeof _ -> e
+    | EAlignof _ -> e
     | EVar _ -> e
 
     | EUnop(Odot _, _) | EUnop(Oarrow _, _) | EBinop(Oindex, _, _, _) ->

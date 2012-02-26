@@ -102,6 +102,7 @@ let rec exp env e =
 and exp_desc env = function
   | EConst cst -> EConst(constant env cst)
   | ESizeof ty -> ESizeof(typ env ty)
+  | EAlignof ty -> EAlignof(typ env ty)
   | EVar id -> EVar(ident env id)
   | EUnop(op, a) -> EUnop(op, exp env a)
   | EBinop(op, a, b, ty) -> EBinop(op, exp env a, exp env b, typ env ty)

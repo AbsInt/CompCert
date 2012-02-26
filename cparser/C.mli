@@ -151,6 +151,7 @@ type exp = { edesc: exp_desc; etyp: typ }
 and exp_desc =
   | EConst of constant
   | ESizeof of typ
+  | EAlignof of typ
   | EVar of ident
   | EUnop of unary_operator * exp
   | EBinop of binary_operator * exp * exp * typ

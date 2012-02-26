@@ -58,6 +58,7 @@ let rec add_exp e =
   | EConst (CEnum(id, v)) -> addref id
   | EConst _ -> ()
   | ESizeof ty -> add_typ ty
+  | EAlignof ty -> add_typ ty
   | EVar id -> addref id
   | EUnop(op, e1) -> add_exp e1
   | EBinop(op, e1, e2, ty) -> add_exp e1; add_exp e2

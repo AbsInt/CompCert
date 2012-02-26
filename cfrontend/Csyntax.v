@@ -210,6 +210,7 @@ Inductive expr : Type :=
   | Ecast (r: expr) (ty: type)                        (**r type cast [(ty)r] *)
   | Econdition (r1 r2 r3: expr) (ty: type)  (**r conditional [r1 ? r2 : r3] *)
   | Esizeof (ty': type) (ty: type)                      (**r size of a type *)
+  | Ealignof (ty': type) (ty: type)        (**r natural alignment of a type *)
   | Eassign (l: expr) (r: expr) (ty: type)          (**r assignment [l = r] *)
   | Eassignop (op: binary_operation) (l: expr) (r: expr) (tyres ty: type)
                                   (**r assignment with arithmetic [l op= r] *)
@@ -296,6 +297,7 @@ Definition typeof (a: expr) : type :=
   | Ecast _ ty => ty
   | Econdition _ _ _ ty => ty
   | Esizeof _ ty => ty
+  | Ealignof _ ty => ty
   | Eassign _ _ ty => ty
   | Eassignop _ _ _ _ ty => ty
   | Epostincr _ _ ty => ty

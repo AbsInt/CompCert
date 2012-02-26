@@ -734,6 +734,9 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
   | red_sizeof: forall ty1 ty m,
       rred (Esizeof ty1 ty) m
         E0 (Eval (Vint (Int.repr (sizeof ty1))) ty) m
+  | red_alignof: forall ty1 ty m,
+      rred (Ealignof ty1 ty) m
+        E0 (Eval (Vint (Int.repr (alignof ty1))) ty) m
   | red_assign: forall b ofs ty1 v2 ty2 m v t m',
       sem_cast v2 ty2 ty1 = Some v ->
       assign_loc ge ty1 m b ofs v t m' ->

@@ -787,6 +787,8 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       end
   | RV, Esizeof ty' ty =>
       topred (Rred (Eval (Vint (Int.repr (sizeof ty'))) ty) m E0)
+  | RV, Ealignof ty' ty =>
+      topred (Rred (Eval (Vint (Int.repr (alignof ty'))) ty) m E0)
   | RV, Eassign l1 r2 ty =>
       match is_loc l1, is_val r2 with
       | Some(b, ofs, ty1), Some(v2, ty2) =>
@@ -1363,6 +1365,8 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   eapply incontext_ok; eauto.
 (* sizeof *)
   apply topred_ok; auto. split. apply red_sizeof. exists w; constructor.
+(* alignof *)
+  apply topred_ok; auto. split. apply red_alignof. exists w; constructor.
 (* assign *)
   destruct (is_loc a1) as [[[b ofs] ty1] | ]_eqn. 
   destruct (is_val a2) as [[v2 ty2] | ]_eqn. 
@@ -1493,6 +1497,8 @@ Proof.
 (* condition *)
   inv H0. rewrite H; auto.
 (* sizeof *)
+  inv H. auto.
+(* alignof *)
   inv H. auto.
 (* assign *)
   rewrite dec_eq_true; auto. rewrite H. rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ H0 H1). auto.

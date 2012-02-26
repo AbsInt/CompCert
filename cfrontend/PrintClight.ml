@@ -54,7 +54,6 @@ let rec precedence = function
   | Efield _ -> (16, LtoR)
   | Econst_int _ -> (16, NA)
   | Econst_float _ -> (16, NA)
-  | Esizeof _ -> (15, RtoL)
   | Eunop _ -> (15, RtoL)
   | Eaddrof _ -> (15, RtoL)
   | Ecast _ -> (14, RtoL)
@@ -92,8 +91,6 @@ let rec expr p (prec, e) =
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
       fprintf p "%F" f
-  | Esizeof(ty, _) ->
-      fprintf p "sizeof(%s)" (name_type ty)
   | Eunop(op, a1, _) ->
       fprintf p "%s%a" (name_unop op) expr (prec', a1)
   | Eaddrof(a1, _) ->
@@ -268,7 +265,6 @@ let rec collect_expr = function
   | Ecast(r, _) -> collect_expr r
   | Econdition(r1, r2, r3, _) -> 
       collect_expr r1; collect_expr r2; collect_expr r3
-  | Esizeof _ -> ()
 
 let rec collect_exprlist = function
   | [] -> ()

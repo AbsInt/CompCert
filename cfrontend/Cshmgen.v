@@ -403,8 +403,6 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
       OK(Econdition (make_boolean tb (typeof b))
                     (make_cast (typeof c) ty tc)
                     (make_cast (typeof d) ty td))
-  | Clight.Esizeof ty _ =>
-      OK(make_intconst (Int.repr (Csyntax.sizeof ty)))
   | Clight.Efield b i ty => 
       match typeof b with
       | Tstruct _ fld _ =>

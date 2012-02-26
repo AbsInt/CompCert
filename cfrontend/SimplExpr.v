@@ -214,6 +214,8 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
       error (msg "SimplExpr.transl_expr: val")
   | C.Esizeof ty' ty =>
       ret (finish dst nil (Esizeof ty' ty))
+  | C.Ealignof ty' ty =>
+      ret (finish dst nil (Ealignof ty' ty))
   | C.Evalof l ty =>
       do (sl1, a1) <- transl_expr For_val l;
       do (sl2, a2) <- transl_valof (C.typeof l) a1;

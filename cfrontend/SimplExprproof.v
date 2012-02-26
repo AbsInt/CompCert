@@ -243,6 +243,11 @@ Opaque makeif.
   split; auto. split; auto. constructor.
   auto.
   exists (Esizeof ty1 ty). split. auto. split. auto. constructor.
+(* alignof *)
+  destruct dst.
+  split; auto. split; auto. constructor.
+  auto.
+  exists (Ealignof ty1 ty). split. auto. split. auto. constructor.
 (* var local *)
   split; auto. split; auto. apply eval_Evar_local; auto. 
 (* var global *)
@@ -1280,6 +1285,7 @@ Fixpoint esize (a: C.expr) : nat :=
   | C.Ecast r1 _ => S(esize r1)
   | C.Econdition r1 _ _ _ => S(esize r1)
   | C.Esizeof _ _ => 1%nat
+  | C.Ealignof _ _ => 1%nat
   | C.Eassign l1 r2 _ => S(esize l1 + esize r2)%nat
   | C.Eassignop _ l1 r2 _ _ => S(esize l1 + esize r2)%nat
   | C.Epostincr _ l1 _ => S(esize l1)

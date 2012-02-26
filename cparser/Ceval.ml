@@ -246,6 +246,11 @@ let rec expr env e =
       | None -> raise Notconst
       | Some n -> I(Int64.of_int n)
       end
+  | EAlignof ty ->
+      begin match alignof env ty with
+      | None -> raise Notconst
+      | Some n -> I(Int64.of_int n)
+      end
   | EVar _ ->
       raise Notconst
   | EUnop(op, e1) ->

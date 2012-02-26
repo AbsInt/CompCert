@@ -58,6 +58,7 @@ Fixpoint simple (a: expr) : bool :=
   | Ecast r1 _ => simple r1
   | Econdition r1 r2 r3 _ => simple r1 && simple r2 && simple r3
   | Esizeof _ _ => true
+  | Ealignof _ _ => true
   | Eassign _ _ _ => false
   | Eassignop _ _ _ _ _ => false
   | Epostincr _ _ _ => false
@@ -133,7 +134,9 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       sem_cast v2 (typeof (if b then r2 else r3)) ty = Some v ->
       eval_simple_rvalue (Econdition r1 r2 r3 ty) v
   | esr_sizeof: forall ty1 ty,
-      eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1))).
+      eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
+  | esr_alignof: forall ty1 ty,
+      eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ty1))).
 
 Inductive eval_simple_list: exprlist -> typelist -> list val -> Prop :=
   | esrl_nil:
@@ -686,6 +689,8 @@ Ltac FinishL := apply star_one; left; apply step_lred; eauto; simpl; try (econst
   FinishR. auto.
 (* sizeof *)
   FinishR.
+(* alignof *)
+  FinishR.
 (* loc *)
   apply star_refl.
 (* var local *)
@@ -814,6 +819,8 @@ Ltac StepR REC C' a :=
   simpl. intros [v2 CAST].
   exists v2. econstructor; eauto. 
 (* sizeof *)
+  econstructor; econstructor.
+(* alignof *)
   econstructor; econstructor.
 (* loc *)
   exists b; exists ofs; constructor.
@@ -1585,6 +1592,8 @@ with eval_expr: env -> mem -> kind -> expr -> trace -> mem -> expr -> Prop :=
       eval_expr e m RV (Econdition a1 a2 a3 ty) (t1**t2) m'' (Eval v ty)
   | eval_sizeof: forall e m ty' ty,
       eval_expr e m RV (Esizeof ty' ty) E0 m (Esizeof ty' ty)
+  | eval_alignof: forall e m ty' ty,
+      eval_expr e m RV (Ealignof ty' ty) E0 m (Ealignof ty' ty)
   | eval_assign: forall e m l r ty t1 m1 l' t2 m2 r' b ofs v v' t3 m3,
       eval_expr e m LV l t1 m1 l' -> eval_expr e m1 RV r t2 m2 r' ->
       eval_simple_lvalue ge e m2 l' b ofs ->
@@ -2114,6 +2123,8 @@ Proof.
   reflexivity. reflexivity. traceEq.
 (* sizeof *)
   simpl; intuition. apply star_refl.
+(* alignof *)
+  simpl; intuition. apply star_refl.
 (* assign *)
   exploit (H0 (fun x => C(Eassign x r ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
@@ -2479,6 +2490,7 @@ Fixpoint esize (a: expr) : nat :=
   | Ecast r1 _ => S(esize r1)
   | Econdition r1 _ _ _ => S(esize r1)
   | Esizeof _ _ => 1%nat
+  | Ealignof _ _ => 1%nat
   | Eassign l1 r2 _ => S(esize l1 + esize r2)%nat
   | Eassignop _ l1 r2 _ _ => S(esize l1 + esize r2)%nat
   | Epostincr _ l1 _ => S(esize l1)

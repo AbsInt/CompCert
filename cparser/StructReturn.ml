@@ -57,6 +57,8 @@ let rec transf_expr env ctx e =
       {edesc = EConst c; etyp = newty}
   | ESizeof ty ->
       {edesc = ESizeof (transf_type env ty); etyp = newty}
+  | EAlignof ty ->
+      {edesc = EAlignof (transf_type env ty); etyp = newty}
   | EVar x ->
       {edesc = EVar x; etyp = newty}
   | EUnop(op, e1) ->

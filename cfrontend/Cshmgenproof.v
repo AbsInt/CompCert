@@ -1216,8 +1216,6 @@ Proof.
   constructor; auto.
 (* addrof *)
   simpl in TR. auto. 
-(* sizeof *)
-  constructor; auto.
 (* unop *)
   eapply transl_unop_correct; eauto.
 (* binop *)
