@@ -13,7 +13,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Platform-dependent handling of pragmas *)
+(* Handling of pragmas *)
 
 open Printf
 open Camlcoq
@@ -59,7 +59,7 @@ let re_pragma_section = Str.regexp(
 ^ "\\([A-Za-z_][A-Za-z_0-9]*\\)[ \t]+"  (* class_name *)
 ^ "\\(\"[^\"]*\"\\)?[ \t]*"             (* istring *)
 ^ "\\(\"[^\"]*\"\\)?[ \t]*"             (* ustring *)
-^ "\\(standard\\|near-absolute\\|far-absolute\\|near-data\\|far-data\\|near-code\\|far-code\\)?[ \t]*"                  (* addressing mode *)
+^ "\\([a-zA-Z-]+\\)?[ \t]*"             (* addressing mode *)
 ^ "\\([RWXON]*\\)"                      (* access mode *)
 )
 
