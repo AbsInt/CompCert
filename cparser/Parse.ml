@@ -44,7 +44,7 @@ let preprocessed_file transfs name sourcefile =
   let ic = open_in sourcefile in
   let p =
     try
-      Rename.program (transform_program t (Elab.elab_preprocessed_file name ic))
+      transform_program t (Elab.elab_preprocessed_file name ic)
     with Parsing.Parse_error ->
            Errors.error "Error during parsing"; []
        | Errors.Abort ->

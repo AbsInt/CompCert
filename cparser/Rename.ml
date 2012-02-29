@@ -19,26 +19,38 @@ open C
 open Cutil
 
 module StringSet = Set.Make(String)
+module StringMap = Map.Make(String)
 
 type rename_env = {
   re_id: ident IdentMap.t;
+  re_public: ident StringMap.t;
   re_used: StringSet.t
 }
 
-let empty_env = { re_id = IdentMap.empty; re_used = StringSet.empty }
+let empty_env =
+  { re_id = IdentMap.empty;
+    re_public = StringMap.empty;
+    re_used = StringSet.empty }
 
 (* For public global identifiers, we must keep their names *)
 
-let enter_global env id =
-  { re_id = IdentMap.add id id env.re_id;
-    re_used = StringSet.add id.name env.re_used }
+let enter_public env id =
+  try
+    let id' = StringMap.find id.name env.re_public in
+    { env with re_id = IdentMap.add id id' env.re_id }
+  with Not_found ->
+    { re_id = IdentMap.add id id env.re_id;
+      re_public = StringMap.add id.name id env.re_public;
+      re_used = StringSet.add id.name env.re_used }
 
 (* For static or local identifiers, we make up a new name if needed *)
 (* If the same identifier has already been declared, 
    don't rename a second time *)
 
 let rename env id =
-  if IdentMap.mem id env.re_id then (id, env) else begin
+  try
+    (IdentMap.find id env.re_id, env)
+  with Not_found ->
     let basename =
       if id.name = "" then Printf.sprintf "_%d" id.stamp else id.name in
     let newname =
@@ -53,8 +65,8 @@ let rename env id =
     let newid = {name = newname; stamp = id.stamp } in
     ( newid,
       { re_id = IdentMap.add id newid env.re_id;
+        re_public = env.re_public;
         re_used = StringSet.add newname env.re_used } )
-  end
 
 (* Monadic map to thread an environment *)
 
@@ -223,7 +235,7 @@ let rec globdecls env accu = function
 (* Reserve names of builtins *)
 
 let reserve_builtins () =
-  List.fold_left enter_global empty_env (Builtins.identifiers())
+  List.fold_left enter_public empty_env (Builtins.identifiers())
 
 (* Reserve global declarations with public visibility *)
 
@@ -234,13 +246,13 @@ let rec reserve_public env = function
         match dcl.gdesc with
         | Gdecl(sto, id, _, _) ->
             begin match sto with
-            | Storage_default | Storage_extern -> enter_global env id
+            | Storage_default | Storage_extern -> enter_public env id
             | Storage_static -> env
             | _ -> assert false
             end
         | Gfundef f ->
             begin match f.fd_storage with
-            | Storage_default | Storage_extern -> enter_global env f.fd_name
+            | Storage_default | Storage_extern -> enter_public env f.fd_name
             | Storage_static -> env
             | _ -> assert false
             end

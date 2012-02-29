@@ -839,32 +839,55 @@ let rec translEnv env = function
             env in
       translEnv env' gl
 
-(** Eliminate forward declarations of globals that are defined later. *)
+(** Eliminate multiple declarations of globals. *)
 
 module IdentSet = Set.Make(struct type t = C.ident let compare = compare end)
 
 let cleanupGlobals p =
   
+  (* First pass: determine what is defined *)
+  let strong = ref IdentSet.empty (* def functions or variables with inits *)
+  and weak = ref IdentSet.empty (* variables without inits *)
+  and extern = ref IdentSet.empty in (* extern decls *)
+  let classify_def g =
+        updateLoc g.gloc;
+    match g.gdesc with
+    | C.Gfundef fd ->
+        if IdentSet.mem fd.fd_name !strong then
+          error ("multiple definitions of " ^ fd.fd_name.name);
+        strong := IdentSet.add fd.fd_name !strong
+    | C.Gdecl(Storage_extern, id, ty, init) ->
+        extern := IdentSet.add id !extern
+    | C.Gdecl(sto, id, ty, Some i) ->
+        if IdentSet.mem id !strong then
+          error ("multiple definitions of " ^ id.name);
+        strong := IdentSet.add id !strong
+    | C.Gdecl(sto, id, ty, None) ->
+        weak := IdentSet.add id !weak
+    | _ -> () in
+  List.iter classify_def p;
+
+  (* Second pass: keep "best" definition for each identifier *)  
   let rec clean defs accu = function
     | [] -> accu
     | g :: gl ->
         updateLoc g.gloc;
         match g.gdesc with
-        | C.Gdecl(sto, id, ty, None) ->
-            if IdentSet.mem id defs
+        | C.Gdecl(sto, id, ty, init) ->
+            let better_def_exists =
+              if sto = Storage_extern then
+                IdentSet.mem id !strong || IdentSet.mem id !weak
+              else if init = None then
+                IdentSet.mem id !strong
+              else
+                false in
+            if IdentSet.mem id defs || better_def_exists
             then clean defs accu gl
             else clean (IdentSet.add id defs) (g :: accu) gl
-        | C.Gdecl(_, id, ty, _) ->
-            if IdentSet.mem id defs then
-              error ("multiple definitions of " ^ id.name);
-            clean (IdentSet.add id defs) (g :: accu) gl
         | C.Gfundef fd ->
-            if IdentSet.mem fd.fd_name defs then
-              error ("multiple definitions of " ^ fd.fd_name.name);
             clean (IdentSet.add fd.fd_name defs) (g :: accu) gl
         | _ ->
             clean defs (g :: accu) gl
-
   in clean IdentSet.empty [] (List.rev p)
 
 (** Convert a [C.program] into a [Csyntax.program] *)
