@@ -169,8 +169,8 @@ let compile_cminor_file ifile ofile =
 
 let assemble ifile ofile =
   let cmd =
-    sprintf "%s -o %s %s"
-      Configuration.asm ofile ifile in
+    sprintf "%s -o %s %s %s"
+      Configuration.asm ofile (quote_options !assembler_options) ifile in
   let retcode = command cmd in
   if retcode <> 0 then begin
     safe_remove ofile;
@@ -257,6 +257,11 @@ let process_S_file sourcename =
 
 (* Command-line parsing *)
 
+let explode_comma_option s =
+  match Str.split (Str.regexp ",") s with
+  | [] -> assert false
+  | hd :: tl -> tl
+
 type action =
   | Set of bool ref
   | Unset of bool ref
@@ -327,6 +332,7 @@ Preprocessing options:
   -I<dir>        Add <dir> to search path for #include files
   -D<symb>=<val> Define preprocessor symbol
   -U<symb>       Undefine preprocessor symbol
+  -Wp,<opt>      Pass option <opt> to the preprocessor
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
   -flonglong     Partial emulation of 'long long' types [on]
@@ -341,6 +347,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -fsse          (IA32) Use SSE2 instructions for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
+  -Wa,<opt>      Pass option <opt> to the assembler
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
   -dc            Save generated Compcert C in <file>.compcert.c
@@ -358,6 +365,7 @@ Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
   -o <file>      Generate executable in <file> (default: a.out)
+  -Wl,<opt>      Pass option <opt> to the linker
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library [MacOS X only]
   -v             Print external commands before invoking them
@@ -419,6 +427,12 @@ let cmdline_actions =
       let objfile = process_S_file s in
       linker_options := objfile :: !linker_options);
   ".*\\.[oa]$", Self (fun s ->
+      linker_options := s :: !linker_options);
+  "-Wp,", Self (fun s ->
+      prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
+  "-Wa,", Self (fun s ->
+      assembler_options := s :: !assembler_options);
+  "-Wl,", Self (fun s ->
       linker_options := s :: !linker_options);
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
   "-fsmall-const$", Integer(fun n -> option_small_const := n);

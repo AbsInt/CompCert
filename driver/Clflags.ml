@@ -14,6 +14,7 @@
 
 let prepro_options = ref ([]: string list)
 let linker_options = ref ([]: string list)
+let assembler_options = ref ([]: string list)
 let exe_name = ref "a.out"
 let option_flonglong = ref true
 let option_flongdouble = ref false

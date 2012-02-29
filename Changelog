@@ -1,4 +1,4 @@
-Release 1.10, 2012-02-28
+Release 1.10, 2012-02-29
 ========================
 
 Improvements in confidence:
@@ -34,6 +34,9 @@ Performance improvements:
 Other improvements:
 - PowerPC/EABI: uninitialized global variables now go in common (bss) section.
 - PowerPC: work around limited excursion of conditional branch instructions.
+- Reference interpreter: better printing of pointer values and locations.
+- Added command-line options -Wp,<opt> -Wa,<opt> -Wl,<opt> to pass
+  specific options to the preprocessor, assembler, or linker, respectively.
 
 
 Release 1.9.1, 2011-11-28
