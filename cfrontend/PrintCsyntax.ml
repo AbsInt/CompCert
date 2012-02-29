@@ -21,6 +21,7 @@ open Camlcoq
 open Datatypes
 open Values
 open AST
+open Globalenvs
 open Csyntax
 
 let name_unop = function
@@ -167,6 +168,17 @@ let rec precedence = function
 
 (* Expressions *)
 
+let print_pointer_hook
+   : (formatter -> Values.block * Integers.Int.int -> unit) ref
+   = ref (fun p (b, ofs) -> ())
+
+let print_value p v =
+  match v with
+  | Vint n -> fprintf p "%ld" (camlint_of_coqint n)
+  | Vfloat f -> fprintf p "%F" f
+  | Vptr(b, ofs) -> fprintf p "<ptr%a>" !print_pointer_hook (b, ofs)
+  | Vundef -> fprintf p "<undef>"
+
 let rec expr p (prec, e) =
   let (prec', assoc) = precedence e in
   let (prec1, prec2) =
@@ -177,8 +189,8 @@ let rec expr p (prec, e) =
   then fprintf p "@[<hov 2>("
   else fprintf p "@[<hov 2>";
   begin match e with
-  | Eloc _ ->
-      fprintf p "<loc>"
+  | Eloc(b, ofs, _) ->
+      fprintf p "<loc%a>" !print_pointer_hook (b, ofs)
   | Evar(id, _) ->
       fprintf p "%s" (extern_atom id)
   | Ederef(a1, _) ->
@@ -187,14 +199,8 @@ let rec expr p (prec, e) =
       fprintf p "%a.%s" expr (prec', a1) (extern_atom f)
   | Evalof(l, _) ->
       expr p (prec, l)
-  | Eval(Vint n, _) ->
-      fprintf p "%ld" (camlint_of_coqint n)
-  | Eval(Vfloat f, _) ->
-      fprintf p "%F" f
-  | Eval(Vptr _, _) ->
-      fprintf p "<ptr>"
-  | Eval(Vundef, _) ->
-      fprintf p "<undef>"
+  | Eval(v, _) ->
+      print_value p (v)
   | Esizeof(ty, _) ->
       fprintf p "sizeof(%s)" (name_type ty)
   | Ealignof(ty, _) ->

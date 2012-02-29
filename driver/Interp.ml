@@ -40,11 +40,16 @@ let random_volatiles = ref false
 
 (* Printing events *)
 
+let print_id_ofs p (id, ofs) =
+  let id = extern_atom id and ofs = camlint_of_coqint ofs in
+  if ofs = 0l
+  then fprintf p " %s" id
+  else fprintf p " %s%+ld" id ofs
+
 let print_eventval p = function
   | EVint n -> fprintf p "%ld" (camlint_of_coqint n)
   | EVfloat f -> fprintf p "%F" f
-  | EVptr_global(id, ofs) -> 
-      fprintf p "&%s%+ld" (extern_atom id) (camlint_of_coqint ofs)
+  | EVptr_global(id, ofs) -> fprintf p "&%a" print_id_ofs (id, ofs)
 
 let print_eventval_list p = function
   | [] -> ()
@@ -85,32 +90,47 @@ let name_of_fundef prog fd =
 let name_of_function prog fn =
   name_of_fundef prog (Internal fn)
 
-let print_val p = function
-  | Vint n -> fprintf p "%ld" (camlint_of_coqint n)
-  | Vfloat f -> fprintf p "%F" f
-  | Vptr(b, ofs) -> fprintf p "<ptr>"
-  | Vundef -> fprintf p "<undef>"
+let invert_local_variable e b =
+  Maps.PTree.fold 
+    (fun res id (b', _) -> if b = b' then Some id else res)
+    e None
 
-let print_val_list p = function
+let print_pointer ge e p (b, ofs) =
+  match invert_local_variable e b with
+  | Some id -> print_id_ofs p (id, ofs)
+  | None ->
+      match Genv.invert_symbol ge b with
+      | Some id -> print_id_ofs p (id, ofs)
+      | None -> ()
+
+let print_val = PrintCsyntax.print_value
+
+let print_val_list p vl =
+  match vl with
   | [] -> ()
   | v1 :: vl ->
       print_val p v1;
       List.iter (fun v -> fprintf p ",@ %a" print_val v) vl
 
-let print_state prog p = function
+let print_state p (prog, ge, s) =
+  match s with
   | State(f, s, k, e, m) ->
+      PrintCsyntax.print_pointer_hook := print_pointer ge e;
       fprintf p "in function %s, statement@ @[<hv 0>%a@]"
               (name_of_function prog f)
-              PrintCsyntax.print_stmt s 
+              PrintCsyntax.print_stmt s
   | ExprState(f, r, k, e, m) ->
+      PrintCsyntax.print_pointer_hook := print_pointer ge e;
       fprintf p "in function %s, expression@ @[<hv 0>%a@]"
               (name_of_function prog f)
               PrintCsyntax.print_expr r
   | Callstate(fd, args, k, m) ->
+      PrintCsyntax.print_pointer_hook := print_pointer ge Maps.PTree.empty;
       fprintf p "calling@ @[<hov 2>%s(%a)@]"
               (name_of_fundef prog fd)
               print_val_list args
   | Returnstate(res, k, m) ->
+      PrintCsyntax.print_pointer_hook := print_pointer ge Maps.PTree.empty;
       fprintf p "returning@ %a"
               print_val res
   | Stuckstate ->
@@ -398,6 +418,7 @@ let diagnose_stuck_expr p ge f a kont e m =
   if found then true else begin
     let l = Cexec.step_expr ge e world k a m in
     if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
+      PrintCsyntax.print_pointer_hook := print_pointer ge e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
               PrintCsyntax.print_expr a;
       true
@@ -419,7 +440,7 @@ let diagnose_stuck_state p ge = function
 
 let do_step p prog ge time s =
   if !trace >= 2 then
-    fprintf p "@[<hov 2>Time %d: %a@]@." time (print_state prog) s;
+    fprintf p "@[<hov 2>Time %d: %a@]@." time print_state (prog, ge, s);
   match Cexec.at_final_state s with
   | Some r ->
       if !trace >= 1 then begin
@@ -433,10 +454,9 @@ let do_step p prog ge time s =
       let l = Cexec.do_step ge world s in
       if l = [] || List.exists (fun (t,s) -> s = Stuckstate) l then begin
         pp_set_max_boxes p 1000;
-        fprintf p "@[<hov 2>Stuck state: %a@]@." (print_state prog) s;
+        fprintf p "@[<hov 2>Stuck state: %a@]@." print_state (prog, ge, s);
         diagnose_stuck_state p ge s;
         fprintf p "ERROR: Undefined behavior@.";
-        fprintf p "@].";
         exit 126
       end else begin
         List.iter (fun (t, s') -> do_events p ge time s t) l;
@@ -496,7 +516,7 @@ let fixup_main p =
 
 let execute prog =
   Random.self_init();
-  let p = err_formatter in
+  let p = std_formatter in
   pp_set_max_indent p 30;
   pp_set_max_boxes p 10;
   match fixup_main prog with
@@ -504,5 +524,7 @@ let execute prog =
   | Some prog1 ->
       let prog2 = if !random_volatiles then prog1 else unvolatile prog1 in
       match Cexec.do_initial_state prog2 with
-      | None -> fprintf p "ERROR: Initial state undefined@."
-      | Some(ge, s) -> explore p prog2 ge 0 (StateSet.singleton s)
+      | None ->
+          fprintf p "ERROR: Initial state undefined@."
+      | Some(ge, s) ->
+          explore p prog2 ge 0 (StateSet.singleton s)
