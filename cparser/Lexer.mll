@@ -144,7 +144,9 @@ let init_lexicon _ =
       ("asm", fun loc -> ASM loc);
       ("__typeof__", fun loc -> TYPEOF loc);
       ("__typeof", fun loc -> TYPEOF loc);
+(*
       ("typeof", fun loc -> TYPEOF loc); 
+*)
       ("_Alignof", fun loc -> ALIGNOF loc);
       ("__alignof", fun loc -> ALIGNOF loc);
       ("__alignof__", fun loc -> ALIGNOF loc);
