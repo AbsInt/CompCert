@@ -15,6 +15,7 @@
 prefix=/usr/local
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
+toolprefix=''
 target=''
 
 usage='Usage: ./configure [options] target
@@ -22,7 +23,7 @@ usage='Usage: ./configure [options] target
 Supported targets:
   ppc-macosx       (PowerPC, MacOS X)
   ppc-linux        (PowerPC, Linux)
-  ppc-eabi-unix    (PowerPC, EABI with Unix tools)
+  ppc-eabi         (PowerPC, EABI with GNU/Unix tools)
   ppc-eabi-diab    (PowerPC, EABI with Diab tools)
   arm-linux        (ARM, Linux EABI)
   ia32-linux       (x86 32 bits, Linux)
@@ -35,6 +36,7 @@ Options:
   -prefix <dir>    Install in <dir>/bin and <dir>/lib/compcert
   -bindir <dir>    Install binaries in <dir>
   -libdir <dir>    Install libraries in <dir>
+  -toolprefix <pref>  Prefix names of tools ("gcc", etc) with <pref>
 '
 
 # Parse command-line arguments
@@ -43,11 +45,13 @@ while : ; do
   case "$1" in
     "") break;;
     -prefix|--prefix)
-        prefix=$2; shift;;
+        prefix="$2"; shift;;
     -bindir|--bindir)
-        bindir=$2; shift;;
+        bindir="$2"; shift;;
     -libdir|--libdir)
-        libdir=$2; shift;;
+        libdir="$2"; shift;;
+    -toolprefix|--toolprefix)
+        toolprefix="$2"; shift;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -62,80 +66,80 @@ case "$target" in
     arch="powerpc"
     variant="macosx"
     system="macosx"
-    cc="gcc -arch ppc"
-    cprepro="gcc -arch ppc -U__GNUC__ -U__BLOCKS__ -E"
-    casm="gcc -arch ppc -c"
-    clinker="gcc -arch ppc"
+    cc="${toolprefix}gcc -arch ppc"
+    cprepro="${toolprefix}gcc -arch ppc -U__GNUC__ -U__BLOCKS__ -E"
+    casm="${toolprefix}gcc -arch ppc -c"
+    clinker="${toolprefix}gcc -arch ppc"
     libmath=""
     need_stdlib_wrapper="true";;
-  powerpc-linux|ppc-linux|powerpc-eabi-unix|ppc-eabi-unix)
+  powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
     arch="powerpc"
     variant="eabi"
     system="linux"
-    cc="gcc"
-    cprepro="gcc -U__GNUC__ -E"
-    casm="gcc -c"
-    clinker="gcc"
+    cc="${toolprefix}gcc"
+    cprepro="${toolprefix}gcc -U__GNUC__ -E"
+    casm="${toolprefix}gcc -c"
+    clinker="${toolprefix}gcc"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   powerpc-eabi-diab|ppc-eabi-diab)
     arch="powerpc"
     variant="eabi"
     system="diab"
-    cc="dcc"
-    cprepro="dcc -E"
-    casm="das"
-    clinker="dcc"
+    cc="${toolprefix}dcc"
+    cprepro="${toolprefix}dcc -E"
+    casm="${toolprefix}das"
+    clinker="${toolprefix}dcc"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   arm-linux)
     arch="arm"
     variant="linux"
     system="linux"
-    cc="gcc"
-    cprepro="gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
-    casm="gcc -c"
-    clinker="gcc"
+    cc="${toolprefix}gcc"
+    cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+    casm="${toolprefix}gcc -c"
+    clinker="${toolprefix}gcc"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   ia32-linux)
     arch="ia32"
     variant="standard"
     system="linux"
-    cc="gcc -m32"
-    cprepro="gcc -m32 -U__GNUC__ -E"
-    casm="gcc -m32 -c"
-    clinker="gcc -m32"
+    cc="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc -m32 -c"
+    clinker="${toolprefix}gcc -m32"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   ia32-bsd)
     arch="ia32"
     variant="standard"
     system="bsd"
-    cc="gcc -m32"
-    cprepro="gcc -m32 -U__GNUC__ -E"
-    casm="gcc -m32 -c"
-    clinker="gcc -m32"
+    cc="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc -m32 -c"
+    clinker="${toolprefix}gcc -m32"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   ia32-macosx)
     arch="ia32"
     variant="standard"
     system="macosx"
-    cc="gcc -arch i386"
-    cprepro="gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
-    casm="gcc -arch i386 -c"
-    clinker="gcc -arch i386"
+    cc="${toolprefix}gcc -arch i386"
+    cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
+    casm="${toolprefix}gcc -arch i386 -c"
+    clinker="${toolprefix}gcc -arch i386"
     libmath=""
     need_stdlib_wrapper="true";;
   ia32-cygwin)
     arch="ia32"
     variant="standard"
     system="cygwin"
-    cc="gcc -m32"
-    cprepro="gcc -m32 -U__GNUC__ -E"
-    casm="gcc -m32 -c"
-    clinker="gcc -m32"
+    cc="${toolprefix}gcc -m32"
+    cprepro="${toolprefix}gcc -m32 -U__GNUC__ -E"
+    casm="${toolprefix}gcc -m32 -c"
+    clinker="${toolprefix}gcc -m32"
     libmath="-lm"
     need_stdlib_wrapper="false";;
   manual)
