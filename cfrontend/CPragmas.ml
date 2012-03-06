@@ -27,8 +27,7 @@ let process_section_pragma classname istring ustring addrmode accmode =
     ?uname: (if ustring = "" then None else Some ustring)
     ?writable: (if accmode = "" then None else Some(String.contains accmode 'W'))
     ?executable: (if accmode = "" then None else Some(String.contains accmode 'X'))
-    ?near: (if addrmode = "" then None
-            else Some(addrmode = "near-code" || addrmode = "near-data"))
+    ?near: (if addrmode = "" then None else Some(addrmode = "near-data"))
     ()
 
 (* #pragma use_section *)
