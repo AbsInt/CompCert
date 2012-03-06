@@ -19,9 +19,9 @@ purposes.
 COPYRIGHT:
 
 The Compcert verified compiler is Copyright 2004, 2005, 2006, 2007,
-2008, 2009, 2010, 2011 Institut National de Recherche en Informatique
-et en Automatique (INRIA).  It is distributed under the conditions
-stated in file LICENSE.
+2008, 2009, 2010, 2011, 2012 Institut National de Recherche en
+Informatique et en Automatique (INRIA).  It is distributed under the
+conditions stated in file LICENSE.
 
 
 SUPPORTED PLATFORMS:
