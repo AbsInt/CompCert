@@ -49,7 +49,7 @@ let byte_swap_fields = ref false
 (* Alignment *)
 
 let is_pow2 n =
-  n > 0 && n land (n - 1) == 0
+  n > 0 && n land (n - 1) = 0
 
 let align x boundary =
   assert (is_pow2 boundary);
@@ -64,6 +64,28 @@ let rec can_byte_swap env ty =
   | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
   | _ -> (false, false)
 
+(* Compute size and alignment of a type, taking "aligned" attributes
+   into account *)
+
+let sizeof_alignof loc env ty =
+  match sizeof env ty, alignof env ty with
+  | Some sz, Some al ->
+      begin match find_custom_attributes ["aligned"; "__aligned__"]
+                                      (attributes_of_type env ty) with
+      | [] ->
+          (sz, al)
+      | [[AInt n]] when is_pow2 (Int64.to_int n) ->
+          let al' = max al (Int64.to_int n) in
+          (align sz al', al')
+      | _ ->
+          warning "%a: Warning: Ill-formed 'aligned' attribute, ignored"
+                  formatloc loc;
+          (sz, al)
+      end
+  | _, _ ->
+      error "%a: Error: struct field has incomplete type" formatloc loc;
+      (0, 1)
+
 (* Layout algorithm *)
 
 let layout_struct mfa msa swapped loc env struct_id fields =
@@ -74,11 +96,7 @@ let layout_struct mfa msa swapped loc env struct_id fields =
       if f.fld_bitfield <> None then
         error "%a: Error: bitfields in packed structs not allowed"
               formatloc loc;
-      let (sz, al) =
-        match sizeof env f.fld_typ, alignof env f.fld_typ with
-        | Some s, Some a -> (s, a)
-        | _, _ -> error "%a: Error: struct field has incomplete type" formatloc loc;
-                  (0, 1) in
+      let (sz, al) = sizeof_alignof loc env f.fld_typ in
       let swap =
         if swapped then begin
           let (can_swap, must_swap) = can_byte_swap env f.fld_typ in

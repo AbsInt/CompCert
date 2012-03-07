@@ -342,8 +342,6 @@ let convertTyp env t =
   and convertFieldList seen = function
     | [] -> Fnil
     | f :: fl ->
-        if f.fld_bitfield <> None then
-          unsupported "bit field in struct or union";
         Fcons(intern_string f.fld_name, convertTyp seen f.fld_typ,
               convertFieldList seen fl)
 
@@ -784,6 +782,17 @@ let convertGlobvar env (sto, id, ty, optinit) =
   (id', {gvar_info = ty'; gvar_init = init';
          gvar_readonly = readonly; gvar_volatile = volatile})
 
+(** Sanity checks on composite declarations. *)
+
+let checkComposite env si id attr flds =
+  let checkField f =
+    if f.fld_bitfield <> None then
+      unsupported "bit field in struct or union";
+    if Cutil.find_custom_attributes ["aligned"; "__aligned__"] 
+          (Cutil.attributes_of_type env f.fld_typ) <> [] then
+      warning ("ignoring 'aligned' attribute on field " ^ f.fld_name)
+  in List.iter checkField flds
+
 (** Convert a list of global declarations.
   Result is a pair [(funs, vars)] where [funs] are 
   the function definitions (internal and external)
@@ -812,10 +821,13 @@ let rec convertGlobdecls env funs vars gl =
           end
       | C.Gfundef fd ->
           convertGlobdecls env (convertFundef env fd :: funs) vars gl'
-      | C.Gcompositedecl _ | C.Gcompositedef _
-      | C.Gtypedef _ | C.Genumdef _ ->
+      | C.Gcompositedecl _ | C.Gtypedef _ | C.Genumdef _ ->
           (* typedefs are unrolled, structs are expanded inline, and
              enum tags are folded.  So we just skip their declarations. *)
+          convertGlobdecls env funs vars gl'
+      | C.Gcompositedef(su, id, attr, flds) ->
+          (* sanity checks on fields *)
+          checkComposite env su id attr flds;
           convertGlobdecls env funs vars gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
