@@ -10,6 +10,8 @@ Improvements in confidence:
   parameters, and other instances of using composites as r-values, with
   the exception of returning composites by value from a function.
   (The latter remains emulated, using the -fstruct-return option.)
+- PowerPC: removed the -fmadd option, not semantically-preserving
+  in the strict sense.
 
 Language features:
 - Support for _Bool type from ISO C99.
@@ -34,6 +36,7 @@ Performance improvements:
 Other improvements:
 - PowerPC/EABI: uninitialized global variables now go in common (bss) section.
 - PowerPC: work around limited excursion of conditional branch instructions.
+- PowerPC: added __builtin_fnmadd() and __builtin_fnmsub().
 - Reference interpreter: better printing of pointer values and locations.
 - Added command-line options -Wp,<opt> -Wa,<opt> -Wl,<opt> to pass
   specific options to the preprocessor, assembler, or linker, respectively.

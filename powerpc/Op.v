@@ -94,8 +94,6 @@ Inductive operation : Type :=
   | Osubf: operation                    (**r [rd = r1 - r2] *)
   | Omulf: operation                    (**r [rd = r1 * r2] *)
   | Odivf: operation                    (**r [rd = r1 / r2] *)
-  | Omuladdf: operation                 (**r [rd = r1 * r2 + r3] *)
-  | Omulsubf: operation                 (**r [rd = r1 * r2 - r3] *)
   | Osingleoffloat: operation           (**r [rd] is [r1] truncated to single-precision float *)
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
@@ -203,8 +201,6 @@ Definition eval_operation
   | Osubf, v1::v2::nil => Some(Val.subf v1 v2)
   | Omulf, v1::v2::nil => Some(Val.mulf v1 v2)
   | Odivf, v1::v2::nil => Some(Val.divf v1 v2)
-  | Omuladdf, v1::v2::v3::nil => Some(Val.addf (Val.mulf v1 v2) v3)
-  | Omulsubf, v1::v2::v3::nil => Some(Val.subf (Val.mulf v1 v2) v3)
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
   | Ointoffloat, v1::nil => Val.intoffloat v1
   | Ofloatofwords, v1::v2::nil => Some(Val.floatofwords v1 v2)
@@ -292,8 +288,6 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osubf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Omulf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Odivf => (Tfloat :: Tfloat :: nil, Tfloat)
-  | Omuladdf => (Tfloat :: Tfloat :: Tfloat :: nil, Tfloat)
-  | Omulsubf => (Tfloat :: Tfloat :: Tfloat :: nil, Tfloat)
   | Osingleoffloat => (Tfloat :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
   | Ofloatofwords => (Tint :: Tint :: nil, Tfloat)
@@ -366,8 +360,6 @@ Proof with (try exact I).
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
-  destruct v0; destruct v1; destruct v2...
-  destruct v0; destruct v1; destruct v2...
   destruct v0...
   destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); inv H2...
   destruct v0; destruct v1...
@@ -796,8 +788,6 @@ Proof.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
-  inv H4; simpl; auto; inv H2; simpl; auto; inv H3; simpl; auto.
-  inv H4; simpl; auto; inv H2; simpl; auto; inv H3; simpl; auto.
   inv H4; simpl; auto.
   inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
   exists (Vint i); auto.

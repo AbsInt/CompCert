@@ -22,7 +22,6 @@ let option_fstruct_return = ref false
 let option_fbitfields = ref false
 let option_fvararg_calls = ref true
 let option_fpacked_structs = ref false
-let option_fmadd = ref false
 let option_fsse = ref true
 let option_dparse = ref false
 let option_dcmedium = ref false

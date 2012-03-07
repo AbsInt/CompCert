@@ -370,24 +370,8 @@ Nondetfunction shru (e1: expr) (e2: expr) :=
 
 Definition negf (e: expr) :=  Eop Onegf (e ::: Enil).
 Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
-
-Parameter use_fused_mul : unit -> bool.
-
-Nondetfunction addf (e1: expr) (e2: expr) :=
-  if negb(use_fused_mul tt) then Eop Oaddf (e1:::e2:::Enil) else 
-  match e1, e2 with
-  | Eop Omulf (t1:::t2:::Enil), t3 => Eop Omuladdf (t1:::t2:::t3:::Enil)
-  | t1, Eop Omulf (t2:::t3:::Enil) => Eop Omuladdf (t2:::t3:::t1:::Enil)
-  | _, _ => Eop Oaddf (e1:::e2:::Enil)
-  end.
-
-Nondetfunction subf (e1: expr) (e2: expr) :=
-  if negb(use_fused_mul tt) then Eop Osubf (e1:::e2:::Enil) else 
-  match e1 with
-  | Eop Omulf (t1:::t2:::Enil) => Eop Omulsubf (t1:::t2:::e2:::Enil)
-  | _ => Eop Osubf (e1:::e2:::Enil)
-  end.
-
+Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
+Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
 Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
 

@@ -394,10 +394,6 @@ Definition transl_op
       Pfmul (freg_of r) (freg_of a1) (freg_of a2) :: k
   | Odivf, a1 :: a2 :: nil =>
       Pfdiv (freg_of r) (freg_of a1) (freg_of a2) :: k
-  | Omuladdf, a1 :: a2 :: a3 :: nil =>
-      Pfmadd (freg_of r) (freg_of a1) (freg_of a2) (freg_of a3) :: k
-  | Omulsubf, a1 :: a2 :: a3 :: nil =>
-      Pfmsub (freg_of r) (freg_of a1) (freg_of a2) (freg_of a3) :: k
   | Osingleoffloat, a1 :: nil =>
       Pfrsp (freg_of r) (freg_of a1) :: k
   | Ointoffloat, a1 :: nil =>

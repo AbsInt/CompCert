@@ -93,8 +93,6 @@ let print_operation reg pp = function
   | Osubf, [r1;r2] -> fprintf pp "%a -f %a" reg r1 reg r2
   | Omulf, [r1;r2] -> fprintf pp "%a *f %a" reg r1 reg r2
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
-  | Omuladdf, [r1;r2;r3] -> fprintf pp "%a *f %a +f %a" reg r1 reg r2 reg r3
-  | Omulsubf, [r1;r2;r3] -> fprintf pp "%a *f %a -f %a" reg r1 reg r2 reg r3
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
   | Ofloatofwords, [r1;r2] -> fprintf pp "floatofwords(%a,%a)" reg r1 reg r2

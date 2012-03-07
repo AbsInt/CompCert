@@ -631,23 +631,12 @@ Qed.
 
 Theorem eval_addf: binary_constructor_sound addf Val.addf.
 Proof.
-  red; intros until y; unfold addf.
-  destruct (use_fused_mul tt); simpl.
-  case (addf_match a b); intros; InvEval.
-  TrivialExists. simpl. congruence.
-  TrivialExists. simpl. rewrite Val.addf_commut. congruence.
-  intros. TrivialExists.
-  intros. TrivialExists.
+  red; intros; TrivialExists.
 Qed.
  
 Theorem eval_subf: binary_constructor_sound subf Val.subf.
 Proof.
-  red; intros until y; unfold subf.
-  destruct (use_fused_mul tt); simpl.
-  case (subf_match a); intros; InvEval.
-  TrivialExists. simpl. congruence.
-  TrivialExists.
-  intros. TrivialExists.
+  red; intros; TrivialExists.
 Qed.
 
 Theorem eval_mulf: binary_constructor_sound mulf Val.mulf.

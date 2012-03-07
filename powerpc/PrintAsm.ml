@@ -476,6 +476,10 @@ let print_builtin_inline oc name args res =
       fprintf oc "	fmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
   | "__builtin_fmsub", [FR a1; FR a2; FR a3], FR res ->
       fprintf oc "	fmsub	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
+  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], FR res ->
+      fprintf oc "	fnmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
+  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], FR res ->
+      fprintf oc "	fnmsub	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
   | "__builtin_fabs", [FR a1], FR res ->
       fprintf oc "	fabs	%a, %a\n" freg res freg a1
   | "__builtin_fsqrt", [FR a1], FR res ->
@@ -636,8 +640,6 @@ let print_instruction oc tbl pc = function
       fprintf oc "%s end pseudoinstr fcti\n" comment
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
-  | Pfmadd(r1, r2, r3, r4) ->
-      fprintf oc "	fmadd	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
   | Pfmake(rd, r1, r2) ->
       fprintf oc "%s begin pseudoinstr %a = fmake(%a, %a)\n"
               comment freg rd ireg r1 ireg r2;
@@ -648,8 +650,6 @@ let print_instruction oc tbl pc = function
       fprintf oc "%s end pseudoinstr fmake\n" comment
   | Pfmr(r1, r2) ->
       fprintf oc "	fmr	%a, %a\n" freg r1 freg r2
-  | Pfmsub(r1, r2, r3, r4) ->
-      fprintf oc "	fmsub	%a, %a, %a, %a\n" freg r1 freg r2 freg r3 freg r4
   | Pfmul(r1, r2, r3) ->
       fprintf oc "	fmul	%a, %a, %a\n" freg r1 freg r2 freg r3
   | Pfneg(r1, r2) ->

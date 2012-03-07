@@ -343,7 +343,6 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
 Code generation options: (use -fno-<opt> to turn off -f<opt>) :
-  -fmadd         (PowerPC) Use fused multiply-add and multiply-sub instructions [off]
   -fsse          (IA32) Use SSE2 instructions for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
@@ -446,7 +445,6 @@ let cmdline_actions =
   @ f_opt "struct-return" option_fstruct_return
   @ f_opt "bitfields" option_fbitfields
   @ f_opt "vararg-calls" option_fvararg_calls
-  @ f_opt "madd" option_fmadd
   @ f_opt "packed-structs" option_fpacked_structs
   @ f_opt "sse" option_fsse
 

@@ -162,10 +162,8 @@ Inductive instruction : Type :=
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion *)
   | Pfdiv: freg -> freg -> freg -> instruction                (**r float division *)
-  | Pfmadd: freg -> freg -> freg -> freg -> instruction       (**r float multiply-add *)
   | Pfmake: freg -> ireg -> ireg -> instruction               (**r build a float from 2 ints *)
   | Pfmr: freg -> freg -> instruction                         (**r float move *)
-  | Pfmsub: freg -> freg -> freg -> freg -> instruction       (**r float multiply-sub *)
   | Pfmul: freg -> freg -> freg -> instruction                (**r float multiply *)
   | Pfneg: freg -> freg -> instruction                        (**r float negation *)
   | Pfrsp: freg -> freg -> instruction                        (**r float round to single precision *)
@@ -632,14 +630,10 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
-  | Pfmadd rd r1 r2 r3 =>
-      OK (nextinstr (rs#rd <- (Val.addf (Val.mulf rs#r1 rs#r2) rs#r3))) m
   | Pfmake rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.floatofwords rs#r1 rs#r2))) m
   | Pfmr rd r1 =>
       OK (nextinstr (rs#rd <- (rs#r1))) m
-  | Pfmsub rd r1 r2 r3 =>
-      OK (nextinstr (rs#rd <- (Val.subf (Val.mulf rs#r1 rs#r2) rs#r3))) m
   | Pfmul rd r1 r2 =>
       OK (nextinstr (rs#rd <- (Val.mulf rs#r1 rs#r2))) m
   | Pfneg rd r1 =>

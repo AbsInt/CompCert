@@ -21,13 +21,19 @@ open Cparser
 
 (* #pragma section *)
 
+let sda_supported =
+  match Configuration.arch, Configuration.system with
+  | "powerpc", "linux" -> true
+  | "powerpc", "diab"  -> true
+  | _, _ -> false
+
 let process_section_pragma classname istring ustring addrmode accmode =
   Sections.define_section classname
     ?iname: (if istring = "" then None else Some istring)
     ?uname: (if ustring = "" then None else Some ustring)
     ?writable: (if accmode = "" then None else Some(String.contains accmode 'W'))
     ?executable: (if accmode = "" then None else Some(String.contains accmode 'X'))
-    ?near: (if addrmode = "" then None else Some(addrmode = "near-data"))
+    ?near: (if addrmode = "" then None else Some(sda_supported && addrmode = "near-data"))
     ()
 
 (* #pragma use_section *)
