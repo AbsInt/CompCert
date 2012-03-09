@@ -98,9 +98,9 @@ int main(int argc, char ** argv)
   int numtests = 1000000;
 
   TEST(test_intoffloat, cases_intoffloat, double,
-       (random_double() - 2147483648.0) * 1.1);
+       (random_double() - 2147483648.0));
   TEST(test_intuoffloat, cases_intuoffloat, double,
-       random_double() * 1.1);
+       random_double());
   TEST(test_floatofint, cases_floatofint, int,
        (int) random_uint());
   TEST(test_floatofintu, cases_floatofintu, unsigned int,

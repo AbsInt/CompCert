@@ -173,7 +173,7 @@ let rec print_sig p = function
 let rec print_stmt p s =
   match s with
   | Sskip ->
-      fprintf p "/*skip*/;"
+      fprintf p "/*skip*/"
   | Sassign(id, e2) ->
       fprintf p "@[<hv 2>%s =@ %a;@]" (ident_name id) print_expr e2
   | Sstore(chunk, a1, a2) ->

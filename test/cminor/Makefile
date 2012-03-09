@@ -62,12 +62,12 @@ clean::
 	rm -f lists
 
 stopcopy: stopcopy.o maingc.o
-	$(CC) $(CFLAGS) -o stopcopy stopcopy.o maingc.o
+	$(CC) $(CFLAGS) -o stopcopy stopcopy.o maingc.o $(LIBMATH)
 clean::
 	rm -f stopcopy
 
 marksweep: marksweep.o maingc.o marksweepcheck.o
-	$(CC) $(CFLAGS) -o marksweep marksweep.o maingc.o marksweepcheck.o
+	$(CC) $(CFLAGS) -o marksweep marksweep.o maingc.o marksweepcheck.o $(LIBMATH)
 clean::
 	rm -f marksweep
 

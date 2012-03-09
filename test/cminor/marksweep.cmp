@@ -44,7 +44,7 @@ var "gray_cache_overflow"[4]
   p = "freelist_head";
   {{ {{ loop {
       b = int32[p];               /* b is current free block */
-      if (b == 0) exit 2;         /* free list exhausted */
+      if (b == 0) exit 1;         /* free list exhausted */
       header = int32[b - 4];
       size = Size_header(header);
       if (size >= req_size) exit;
