@@ -13,6 +13,10 @@
 /*                                                                     */
 /* *********************************************************************/
 
+/* HASP: Modified to parse global data declarations, other small changes */
+/* Note that this compiles a superset of the language defined by the AST, 
+   including function calls in expressions, matches, while statements, etc. */
+
 %{
 open Datatypes
 open Camlcoq
@@ -21,6 +25,7 @@ open BinInt
 open Integers
 open AST
 open Cminor
+
 
 (** Naming function calls in expressions *)
 
@@ -40,7 +45,7 @@ let temporaries = ref []
 let mktemp () =
   incr temp_counter;
   let n = Printf.sprintf "__t%d" !temp_counter in
-  let id = intern_string n in
+  let id = Coq_xO (intern_string n) in
   temporaries := id :: !temporaries;
   id
 
@@ -123,6 +128,9 @@ let mktailcall sg e1 el =
   let cl = convert_rexpr_list el in
   prepend_seq !convert_accu (Stailcall(sg, c1, cl))
 
+let mkwhile expr body =
+  Sblock (Sloop (mkifthenelse expr body (Sexit O)))
+
 (** Other constructors *)
 
 let intconst n =
@@ -133,7 +141,7 @@ let andbool e1 e2 =
 let orbool e1 e2 =
   Rcondition(e1, intconst 1l, e2)
 
-let exitnum n = nat_of_camlint(Int32.pred n)
+let exitnum n = nat_of_camlint n
 
 let mkswitch expr (cases, dfl) =
   convert_accu := [];
@@ -207,7 +215,6 @@ let mkmatch expr cases =
 %token COLON
 %token COMMA
 %token DEFAULT
-%token DOLLAR
 %token ELSE
 %token EQUAL
 %token EQUALEQUAL
@@ -222,6 +229,7 @@ let mkmatch expr cases =
 %token <float> FLOATLIT
 %token FLOATOFINT
 %token FLOATOFINTU
+%token GOTO
 %token GREATER
 %token GREATERF
 %token GREATERU
@@ -233,10 +241,13 @@ let mkmatch expr cases =
 %token <AST.ident> IDENT
 %token IF
 %token IN
+%token INLINE
 %token INT
+%token INT16
 %token INT16S
 %token INT16U
 %token INT32
+%token INT8
 %token INT8S
 %token INT8U
 %token <int32> INTLIT
@@ -267,6 +278,7 @@ let mkmatch expr cases =
 %token RBRACE
 %token RBRACERBRACE
 %token RBRACKET
+%token READONLY
 %token RETURN
 %token RPAREN
 %token SEMICOLON
@@ -282,6 +294,8 @@ let mkmatch expr cases =
 %token TAILCALL
 %token VAR
 %token VOID
+%token VOLATILE
+%token WHILE
 
 /* Precedences from low to high */
 
@@ -323,10 +337,46 @@ global_declarations:
 ;
 
 global_declaration:
-    VAR STRINGLIT LBRACKET INTLIT RBRACKET
+    VAR STRINGLIT LBRACKET INTLIT RBRACKET  /* old style */
       { ($2, {gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
               gvar_readonly = false; gvar_volatile = false}) }
+  | VAR STRINGLIT is_readonly is_volatile LBRACE init_data_list RBRACE
+       { ($2, {gvar_info = (); gvar_init = List.rev $6;
+               gvar_readonly = $3; gvar_volatile = $4; } ) }
 ;
+
+is_readonly:
+  /* empty */          { false }
+  | READONLY           { true }
+
+is_volatile:
+  /* empty */          { false }
+  |  VOLATILE          { true }
+
+init_data_list:
+    /* empty */                                 { [] }
+   | init_data_list_1                           { $1 }
+ ;
+ 
+init_data_list_1:
+     init_data                                   { [$1] }
+   | init_data_list_1 COMMA init_data            { $3 :: $1 }
+ ;
+ 
+init_data:
+     INT8 INTLIT                                 { Init_int8 (coqint_of_camlint $2) }
+   | INT16 INTLIT                                { Init_int16 (coqint_of_camlint $2) }
+   | INT32 INTLIT                                { Init_int32 (coqint_of_camlint $2) }
+   | INT INTLIT                                  { Init_int32 (coqint_of_camlint $2) }
+   | INTLIT                                      { Init_int32 (coqint_of_camlint $1) }
+   | FLOAT32 FLOATLIT                            { Init_float32 ($2) }
+   | FLOAT64 FLOATLIT                            { Init_float64 ($2) }
+   | FLOAT FLOATLIT                              { Init_float64 ($2) }
+   | FLOATLIT                                    { Init_float64 ($1) }
+   | LBRACKET INTLIT RBRACKET                    { Init_space (z_of_camlint $2) }
+   | INTLIT LPAREN STRINGLIT RPAREN              { Init_addrof ($3, coqint_of_camlint $1) }
+ ;
+ 
 
 proc_list:
     /* empty */                                 { [] }
@@ -345,13 +395,14 @@ proc:
       { let tmp = !temporaries in
         temporaries := [];
         temp_counter := 0;
-        ($1, Internal { fn_sig = $6;
-                        fn_params = List.rev $3;
-                        fn_vars = List.rev (tmp @ $9);
-                        fn_stackspace = $8;
-                        fn_body = $10 }) }
+        ($1,
+        Internal { fn_sig = $6;
+                   fn_params = List.rev $3;
+                   fn_vars = List.rev (tmp @ $9);
+                   fn_stackspace = $8;
+                   fn_body = $10 }) }
   | EXTERN STRINGLIT COLON signature 
-      { ($2, External(EF_external($2, $4))) }
+      { ($2, External(EF_external($2,$4))) }
 ;
 
 signature:
@@ -408,6 +459,9 @@ stmt:
                                                 { mkmatch $3 $6 }
   | TAILCALL expr LPAREN expr_list RPAREN COLON signature SEMICOLON
                                                 { mktailcall $7 $2 $4 }
+  | WHILE LPAREN expr RPAREN stmts              { mkwhile $3 $5 }
+  | IDENT COLON stmts                           { Slabel ($1,$3) }
+  | GOTO IDENT SEMICOLON                        { Sgoto $2 }
 ;
 
 stmts:
@@ -525,3 +579,4 @@ type_:
     INT                                         { Tint }
   | FLOAT                                       { Tfloat }
 ;
+

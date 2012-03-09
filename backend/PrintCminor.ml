@@ -42,7 +42,7 @@ let rec precedence = function
   | Eload _ -> (15, RtoL)
   | Econdition _ -> (3, RtoL)
 
-(* Naming idents.  We assume we run after Cminorgen, which encoded idents. *)
+(* Naming idents.  We assume idents are encoded as in Cminorgen. *)
 
 let ident_name id =
   match id with
@@ -185,7 +185,7 @@ let rec print_stmt p s =
                 print_expr_list (true, el)
                 print_sig sg
   | Scall(Some id, sg, e1, el) ->
-      fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@]);@] : @[<hov 0>%a@]"
+      fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@])@] : @[<hov 0>%a;@]"
                 (ident_name id)
                 print_expr e1
                 print_expr_list (true, el)
@@ -245,9 +245,9 @@ let rec print_stmt p s =
   | Sreturn (Some e) ->
       fprintf p "return %a;" print_expr e
   | Slabel(lbl, s1) ->
-      fprintf p "%s:@ %a" (extern_atom lbl) print_stmt s1
+      fprintf p "%s:@ %a" (ident_name lbl) print_stmt s1  (* wrong for Cminorgen output *)
   | Sgoto lbl ->
-      fprintf p "goto %s;" (extern_atom lbl)
+      fprintf p "goto %s;" (ident_name lbl)               (* wrong for Cminorgen output *)
 
 (* Functions *)
 
@@ -273,15 +273,50 @@ let print_function p id f =
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ "
 
+let print_extfun p id ef =
+  fprintf p "@[<v 0>extern @[<hov 2>\"%s\":@ %a@]@ "
+    (extern_atom id) print_sig (ef_sig ef)
+
 let print_fundef p (id, fd) =
   match fd with
   | External ef ->
-      () (* Todo? *)
+      print_extfun p id ef
   | Internal f ->
       print_function p id f
 
+let print_init_data p = function
+  | Init_int8 i -> fprintf p "int8 %ld" (camlint_of_coqint i)
+  | Init_int16 i -> fprintf p "int16 %ld" (camlint_of_coqint i)
+  | Init_int32 i -> fprintf p "%ld" (camlint_of_coqint i)
+  | Init_float32 f -> fprintf p "float32 %F" f
+  | Init_float64 f -> fprintf p "%F" f
+  | Init_space i -> fprintf p "[%ld]" (camlint_of_coqint i)
+  | Init_addrof(id,off) -> fprintf p "%ld(\"%s\")" (camlint_of_coqint off) (extern_atom id)
+
+let rec print_init_data_list p = function
+  | [] -> ()
+  | [item] -> print_init_data p item
+  | item::rest -> 
+      (print_init_data p item;
+       fprintf p ",";
+       print_init_data_list p rest)
+
+let print_globvar p gv = 
+  if (gv.gvar_readonly) then
+    fprintf p "readonly ";
+  if (gv.gvar_volatile) then
+    fprintf p "volatile ";
+  fprintf p "{";
+  print_init_data_list p gv.gvar_init;
+  fprintf p "}"
+
+let print_var p (id, gv) =
+  fprintf p "var \"%s\" %a\n" (extern_atom id) print_globvar gv
+
 let print_program p prog =
-  fprintf p "@[<v 0>";
+  fprintf p "@[<v>";
+  List.iter (print_var p) prog.prog_vars;
+  fprintf p "@]@[<v 0>";
   List.iter (print_fundef p) prog.prog_funct;
   fprintf p "@]@."
 

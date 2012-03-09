@@ -727,6 +727,7 @@ let string_of_errmsg msg =
   let string_of_err = function
   | CompcertErrors.MSG s -> camlstring_of_coqstring s
   | CompcertErrors.CTX i -> extern_atom i
+  | CompcertErrors.CTXL i -> "" (* should not happen *)
   in String.concat "" (List.map string_of_err msg)
 
 let rec convertInit env init =

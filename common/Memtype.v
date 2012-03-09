@@ -1159,6 +1159,16 @@ Axiom free_inject:
     exists lo1, exists hi1, In (b1, lo1, hi1) l /\ lo1 <= ofs < hi1) ->
   inject f m1' m2'.
 
+Axiom drop_outside_inject:
+  forall f m1 m2 b lo hi p m2',
+  inject f m1 m2 -> 
+  drop_perm m2 b lo hi p = Some m2' -> 
+  (forall b' delta,
+    f b' = Some(b, delta) ->
+    high_bound m1 b' + delta <= lo 
+    \/ hi <= low_bound m1 b' + delta) ->
+  inject f m1 m2'.
+
 (** Memory states that inject into themselves. *)
 
 Definition flat_inj (thr: block) : meminj :=

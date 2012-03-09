@@ -2817,6 +2817,41 @@ Proof.
   auto.
 Qed.
 
+Lemma drop_outside_inj: forall f m1 m2 b lo hi p m2',
+  mem_inj f m1 m2 -> 
+  drop_perm m2 b lo hi p = Some m2' -> 
+  (forall b' delta,
+    f b' = Some(b, delta) ->
+    high_bound m1 b' + delta <= lo 
+    \/ hi <= low_bound m1 b' + delta) ->
+  mem_inj f m1 m2'.
+Proof. 
+  intros. destruct H. constructor; intros.
+
+  (* access *)
+  inversion H2.
+  destruct (range_perm_in_bounds _ _ _ _ _ H3). 
+    pose proof (size_chunk_pos chunk). omega.
+  pose proof (mi_access0 b1 b2 delta chunk ofs p0 H H2). clear mi_access0 H2 H3. 
+  unfold valid_access in *.  intuition. clear H3. 
+  unfold range_perm in *. intros. 
+  eapply perm_drop_3; eauto.  
+  destruct (eq_block b2 b); subst; try (intuition; fail).  
+    destruct (H1 b1 delta H); intuition omega. 
+
+  (* memval *)
+  pose proof (mi_memval0 _ _ _ _  H H2). clear mi_memval0. 
+  unfold Mem.drop_perm in H0. 
+  destruct (Mem.range_perm_dec m2 b lo hi p); inversion H0; subst; clear H0. 
+  simpl.  unfold update.  destruct (zeq b2 b); subst; auto. 
+    pose proof (perm_in_bounds _ _ _ _ H2). 
+    destruct (H1 b1 delta H). 
+       destruct (zle lo (ofs + delta)); simpl; auto. exfalso; omega. 
+       destruct (zle lo (ofs + delta)); destruct (zlt (ofs + delta) hi); simpl; auto. 
+           exfalso; omega. 
+Qed.
+
+
 (** * Memory extensions *)
 
 (**  A store [m2] extends a store [m1] if [m2] can be obtained from [m1]
@@ -3867,6 +3902,23 @@ Proof.
   split. eauto. apply perm_in_bounds with p. auto.
 Qed.
 *)
+
+Lemma drop_outside_inject: forall f m1 m2 b lo hi p m2',
+  inject f m1 m2 -> 
+  drop_perm m2 b lo hi p = Some m2' -> 
+  (forall b' delta,
+    f b' = Some(b, delta) ->
+    high_bound m1 b' + delta <= lo 
+    \/ hi <= low_bound m1 b' + delta) ->
+  inject f m1 m2'.
+Proof.
+  intros. destruct H. constructor; eauto.
+  eapply drop_outside_inj; eauto.
+
+  intros.  unfold valid_block in *. erewrite nextblock_drop; eauto. 
+
+  intros.  erewrite bounds_drop; eauto. 
+Qed.
 
 (** Injecting a memory into itself. *)
 

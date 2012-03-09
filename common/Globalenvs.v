@@ -3,6 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*   with contributions from Andrew Tolmach (Portland State University)  *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -214,8 +215,21 @@ Qed.
 Definition add_functions (ge: t) (fl: list (ident * F)) : t :=
   List.fold_left add_function fl ge.
 
+Lemma add_functions_app : forall ge fl1 fl2,
+  add_functions ge (fl1 ++ fl2) = add_functions (add_functions ge fl1) fl2.
+Proof. 
+  intros. unfold add_functions. rewrite fold_left_app. auto.
+Qed.
+
+
 Definition add_variables (ge: t) (vl: list (ident * globvar V)) : t :=
   List.fold_left add_variable vl ge.
+
+Lemma add_variables_app : forall ge vl1 vl2 ,
+  add_variables ge (vl1 ++ vl2) = add_variables (add_variables ge vl1) vl2.
+Proof. 
+  intros. unfold add_variables. rewrite fold_left_app. auto.
+Qed.
 
 Definition globalenv (p: program F V) :=
   add_variables (add_functions empty_genv p.(prog_funct)) p.(prog_vars).
@@ -262,9 +276,49 @@ Proof.
   intros. unfold globalenv; eauto. 
 Qed.
 
+
+Remark add_variables_inversion : forall vs e x b,
+  find_symbol (add_variables e vs) x = Some b ->
+  In x (var_names vs) \/ find_symbol e x = Some b. 
+Proof.
+  induction vs; intros. 
+    simpl in H.  intuition.
+    simpl in H. destruct (IHvs _ _ _ H).
+       left. simpl. intuition.
+       destruct a as [y ?]. 
+       unfold add_variable, find_symbol in H0. simpl in H0. 
+       rewrite PTree.gsspec in H0. destruct (peq x y); subst; simpl; intuition.
+Qed.
+
+Remark add_functions_inversion : forall fs e x b,
+  find_symbol (add_functions e fs) x = Some b -> 
+  In x (funct_names fs) \/ find_symbol e x = Some b. 
+  induction fs; intros. 
+    simpl in H.  intuition.
+    simpl in H. destruct (IHfs _ _ _ H).
+       left. simpl. intuition.
+       destruct a as [y ?]. 
+       unfold add_variable, find_symbol in H0. simpl in H0. 
+       rewrite PTree.gsspec in H0. destruct (peq x y); subst; simpl; intuition.
+Qed.
+
+Lemma find_symbol_inversion : forall p x b,
+  find_symbol (globalenv p) x = Some b ->
+  In x (prog_var_names p ++ prog_funct_names p). 
+Proof.
+ unfold prog_var_names, prog_funct_names, globalenv. 
+ intros.
+ apply in_app.
+ apply add_variables_inversion in H. intuition.
+ apply add_functions_inversion in H0. inversion H0. intuition. 
+ unfold find_symbol in H. 
+ rewrite PTree.gempty in H. inversion H.
+Qed.
+ 
+
 Remark add_functions_same_symb:
   forall id fl ge, 
-  ~In id (map (@fst ident F) fl) ->
+  ~In id (funct_names fl) ->
   find_symbol (add_functions ge fl) id = find_symbol ge id.
 Proof.
   induction fl; simpl; intros. auto. 
@@ -284,7 +338,7 @@ Qed.
 
 Remark add_variables_same_symb:
   forall id vl ge, 
-  ~In id (map (@fst ident (globvar V)) vl) ->
+  ~In id (var_names vl) -> 
   find_symbol (add_variables ge vl) id = find_symbol ge id.
 Proof.
   induction vl; simpl; intros. auto. 
@@ -332,7 +386,7 @@ Theorem find_funct_ptr_exists:
 Proof.
   intros until f.
 
-  assert (forall fl ge, In (id, f) fl -> list_norepet (map (@fst ident F) fl) ->
+  assert (forall fl ge, In (id, f) fl -> list_norepet (funct_names fl) ->
           exists b, find_symbol (add_functions ge fl) id = Some b
                  /\ find_funct_ptr (add_functions ge fl) b = Some f).
   induction fl; simpl; intros. contradiction. inv H0. 
@@ -606,6 +660,15 @@ Fixpoint alloc_variables (m: mem) (vl: list (ident * globvar V))
       end
   end.
 
+Lemma alloc_variables_app : forall vl1 vl2 m m1,
+  alloc_variables m vl1 = Some m1 ->
+  alloc_variables m1 vl2 = alloc_variables m (vl1 ++ vl2).
+Proof.
+  induction vl1.
+    simpl. intros.  inversion H; subst. auto.
+    simpl. intros. destruct (alloc_variable m a); eauto. inversion H.
+Qed.
+
 Remark store_init_data_list_nextblock:
   forall idl b m p m',
   store_init_data_list m b p idl = Some m' ->
@@ -628,6 +691,28 @@ Proof.
   rewrite IHo; eauto with mem.
   congruence.
 Qed.
+
+Remark alloc_variable_nextblock:
+  forall v m m',
+  alloc_variable m v = Some m' ->
+  Mem.nextblock m' = Zsucc(Mem.nextblock m).
+Proof.
+  unfold alloc_variable.
+  intros until m'.   
+  set (init := gvar_init v#2).
+  set (sz := init_data_list_size init).
+  caseEq (Mem.alloc m 0 sz). intros m1 b ALLOC.
+  caseEq (store_zeros m1 b sz); try congruence. intros m2 STZ.
+  caseEq (store_init_data_list m2 b 0 init); try congruence. intros m3 STORE.
+  caseEq (Mem.drop_perm m3 b 0 sz (perm_globvar v#2)); try congruence. intros m4 DROP REC. 
+  inv REC; subst.
+  rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
+  rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
+  rewrite (store_zeros_nextblock _ _ _ STZ). 
+  rewrite (Mem.nextblock_alloc _ _ _ _ _ ALLOC). 
+  auto.
+Qed.
+
 
 Remark alloc_variables_nextblock:
   forall vl m m',
@@ -897,6 +982,17 @@ Proof.
   red. rewrite H1. rewrite <- H3. intuition.
 Qed.
 
+Lemma init_mem_genv_vars : forall p m,
+    init_mem p = Some m -> 
+    genv_nextvar (globalenv p) = Mem.nextblock m.
+Proof.
+    clear. unfold globalenv, init_mem.  intros.
+    exploit alloc_variables_nextblock; eauto.
+    simpl (Mem.nextblock Mem.empty). 
+    rewrite add_variables_nextvar.  rewrite add_functions_nextvar.
+    simpl (genv_nextvar empty_genv).  auto.
+Qed.
+
 Theorem find_var_info_not_fresh:
   forall p b gv m,
   init_mem p = Some m ->
@@ -1028,6 +1124,102 @@ Proof.
   omega.
 Qed.
 
+Section INITMEM_AUGMENT_INJ. 
+
+Variable ge: t.
+Variable thr: block.
+
+Lemma store_init_data_augment: 
+  forall m1 m2 b p id m2', 
+  Mem.inject (Mem.flat_inj thr) m1 m2 -> 
+  b >= thr -> 
+  store_init_data ge m2 b p id = Some m2' ->
+  Mem.inject (Mem.flat_inj thr) m1 m2'.
+Proof. 
+  intros until m2'. intros INJ BND ST. 
+  assert (P: forall chunk ofs v m2', 
+             Mem.store chunk m2 b ofs v = Some m2' -> 
+             Mem.inject (Mem.flat_inj thr) m1 m2'). 
+    intros. eapply Mem.store_outside_inject; eauto. 
+        intros b' ? INJ'. unfold Mem.flat_inj in INJ'. 
+         destruct (zlt b' thr); inversion INJ'; subst. omega. 
+  destruct id; simpl in ST; try (eapply P; eauto; fail).
+  inv ST; auto. 
+  revert ST.  caseEq (find_symbol ge i); try congruence. intros; eapply P; eauto. 
+Qed.
+
+Lemma store_init_data_list_augment:
+  forall b idl m1 m2 p m2', 
+  Mem.inject (Mem.flat_inj thr) m1 m2 -> 
+  b >= thr -> 
+  store_init_data_list ge m2 b p idl = Some m2' ->
+  Mem.inject (Mem.flat_inj thr) m1 m2'.
+Proof. 
+  induction idl; simpl.
+  intros; congruence.
+  intros until m2'; intros INJ FB.
+  caseEq (store_init_data ge m2 b p a); try congruence. intros. 
+  eapply IHidl. eapply store_init_data_augment; eauto. auto. eauto. 
+Qed.
+
+Lemma store_zeros_augment:
+  forall m1 m2 b n m2',
+  Mem.inject (Mem.flat_inj thr) m1 m2 ->
+  b >= thr ->
+  store_zeros m2 b n = Some m2' ->
+  Mem.inject (Mem.flat_inj thr) m1 m2'.
+Proof.
+  intros until n. functional induction (store_zeros m2 b n); intros.
+  inv H1; auto.
+  apply IHo; auto. exploit Mem.store_outside_inject; eauto. simpl. 
+  intros. exfalso. unfold Mem.flat_inj in H2. destruct (zlt b' thr). 
+    inversion H2; subst; omega.  
+    discriminate.
+  inv H1.
+Qed.
+
+Lemma alloc_variable_augment:
+  forall id m1 m2 m2',
+  alloc_variable ge m2 id = Some m2' ->
+  Mem.inject (Mem.flat_inj thr) m1 m2 -> 
+  Mem.nextblock m2 >= thr -> 
+  Mem.inject (Mem.flat_inj thr) m1 m2'.
+Proof.
+  intros until m2'. unfold alloc_variable. 
+  set (sz := init_data_list_size (gvar_init id#2)).
+  caseEq (Mem.alloc m2 0 sz); try congruence. intros m3 b ALLOC.
+  caseEq (store_zeros m3 b sz); try congruence. intros m4 STZ.
+  caseEq (store_init_data_list ge m4 b 0 (gvar_init id#2)); try congruence.
+  intros m5 STORE DROP INJ NEXT.
+  assert (b >= thr). 
+     pose proof (Mem.fresh_block_alloc _ _ _ _ _ ALLOC).  
+     unfold Mem.valid_block in H.  unfold block in *; omega. 
+  eapply Mem.drop_outside_inject. 2: eauto.  
+  eapply store_init_data_list_augment. 2: eauto. 2: eauto. 
+  eapply store_zeros_augment. 2: eauto. 2: eauto.
+  eapply Mem.alloc_right_inject; eauto. 
+  intros. unfold Mem.flat_inj in H0. destruct (zlt b' thr); inversion H0. 
+     subst; exfalso; omega.
+Qed.
+
+Lemma alloc_variables_augment:
+  forall idl m1 m2 m2',
+  alloc_variables ge m2 idl = Some m2' ->
+  Mem.inject (Mem.flat_inj thr) m1 m2 ->
+  Mem.nextblock m2 >= thr ->
+  Mem.inject (Mem.flat_inj thr) m1 m2'.
+Proof.
+  induction idl; simpl.
+  intros. congruence.
+  intros until m2'. caseEq (alloc_variable ge m2 a); try congruence. intros.
+  eapply IHidl with (m2 := m); eauto.  
+    eapply alloc_variable_augment; eauto. 
+    rewrite (alloc_variable_nextblock _ _ _ H). 
+    unfold block in *; omega. 
+Qed.
+
+End INITMEM_AUGMENT_INJ. 
+
 End GENV.
 
 (** * Commutation with program transformations *)
@@ -1045,48 +1237,65 @@ Inductive match_globvar: globvar V -> globvar W -> Prop :=
       match_varinfo info1 info2 ->
       match_globvar (mkglobvar info1 init ro vo) (mkglobvar info2 init ro vo).
 
-Record match_genvs (ge1: t A V) (ge2: t B W): Prop := {
-  mge_nextfun: genv_nextfun ge1 = genv_nextfun ge2;
-  mge_nextvar: genv_nextvar ge1 = genv_nextvar ge2;
-  mge_symb:    genv_symb ge1 = genv_symb ge2;
+Record match_genvs (new_functs : list (ident * B)) (new_vars : list (ident * globvar W)) 
+                   (ge1: t A V) (ge2: t B W): Prop := {
+  mge_nextfun: genv_nextfun ge2 = genv_nextfun ge1 - Z_of_nat(length new_functs);
+  mge_nextvar: genv_nextvar ge2 = genv_nextvar ge1 + Z_of_nat(length new_vars);
+  mge_symb:    forall id,  ~ In id ((funct_names new_functs) ++ (var_names new_vars)) -> 
+                   PTree.get id (genv_symb ge2) = PTree.get id (genv_symb ge1);
   mge_funs:
     forall b f, ZMap.get b (genv_funs ge1) = Some f ->
     exists tf, ZMap.get b (genv_funs ge2) = Some tf /\ match_fun f tf;
   mge_rev_funs:
     forall b tf, ZMap.get b (genv_funs ge2) = Some tf ->
-    exists f, ZMap.get b (genv_funs ge1) = Some f /\ match_fun f tf;
+    if zlt (genv_nextfun ge1) b then 
+      exists f, ZMap.get b (genv_funs ge1) = Some f /\ match_fun f tf
+    else 
+      In tf (map (@snd ident B) new_functs);
   mge_vars:
     forall b v, ZMap.get b (genv_vars ge1) = Some v ->
     exists tv, ZMap.get b (genv_vars ge2) = Some tv /\ match_globvar v tv;
   mge_rev_vars:
     forall b tv, ZMap.get b (genv_vars ge2) = Some tv ->
-    exists v, ZMap.get b (genv_vars ge1) = Some v /\ match_globvar v tv
+    if zlt b (genv_nextvar ge1) then
+      exists v, ZMap.get b (genv_vars ge1) = Some v /\ match_globvar v tv
+    else
+      In tv (map (@snd ident (globvar W)) new_vars)
 }.
 
 Lemma add_function_match:
   forall ge1 ge2 id f1 f2,
-  match_genvs ge1 ge2 ->
+  match_genvs nil nil ge1 ge2 ->
   match_fun f1 f2 ->
-  match_genvs (add_function ge1 (id, f1)) (add_function ge2 (id, f2)).
+  match_genvs nil nil (add_function ge1 (id, f1)) (add_function ge2 (id, f2)).
 Proof.
-  intros. destruct H. constructor; simpl. 
-  congruence. congruence. congruence.
+  intros. destruct H. 
+     simpl in mge_nextfun0. rewrite Zminus_0_r in mge_nextfun0. 
+     simpl in mge_nextvar0. rewrite Zplus_0_r in mge_nextvar0. 
+  constructor; simpl. 
+  rewrite Zminus_0_r. congruence.
+  rewrite Zplus_0_r. congruence.
+  intros. rewrite mge_nextfun0. 
+    repeat rewrite PTree.gsspec. destruct (peq id0 id); auto. 
+    rewrite mge_nextfun0. intros. rewrite ZMap.gsspec in H. rewrite ZMap.gsspec. 
+    destruct (ZIndexed.eq b (genv_nextfun ge1)). 
+     exists f2; split; congruence.
+     eauto.
   rewrite mge_nextfun0. intros. rewrite ZMap.gsspec in H. rewrite ZMap.gsspec. 
-  destruct (ZIndexed.eq b (genv_nextfun ge2)). 
-  exists f2; split; congruence.
-  eauto.
-  rewrite mge_nextfun0. intros. rewrite ZMap.gsspec in H. rewrite ZMap.gsspec. 
-  destruct (ZIndexed.eq b (genv_nextfun ge2)). 
-  exists f1; split; congruence.
-  eauto.
+   destruct (ZIndexed.eq b (genv_nextfun ge1)). 
+    subst b. destruct (zlt (genv_nextfun ge1 - 1) (genv_nextfun ge1)). 
+      exists f1; split; congruence. omega. 
+    pose proof (mge_rev_funs0 b tf H). 
+    destruct (zlt (genv_nextfun ge1) b); 
+      destruct (zlt (genv_nextfun ge1 - 1) b).  auto. omega. exfalso; omega. intuition.
   auto.
   auto.
 Qed.
 
 Lemma add_functions_match:
   forall fl1 fl2, list_forall2 (match_funct_entry match_fun) fl1 fl2 ->
-  forall ge1 ge2, match_genvs ge1 ge2 ->
-  match_genvs (add_functions ge1 fl1) (add_functions ge2 fl2).
+  forall ge1 ge2, match_genvs nil nil ge1 ge2 ->
+  match_genvs nil nil (add_functions ge1 fl1) (add_functions ge2 fl2).
 Proof.
   induction 1; intros; simpl. 
   auto.
@@ -1094,46 +1303,151 @@ Proof.
   destruct H. subst. apply IHlist_forall2. apply add_function_match; auto.
 Qed.
 
-Lemma add_variable_match:
-  forall ge1 ge2 id v1 v2,
-  match_genvs ge1 ge2 ->
-  match_globvar v1 v2 ->
-  match_genvs (add_variable ge1 (id, v1)) (add_variable ge2 (id, v2)).
+Lemma add_function_augment_match: 
+  forall new_functs new_vars ge1 ge2 id f2,
+  match_genvs new_functs new_vars ge1 ge2 ->
+  match_genvs (new_functs++((id,f2)::nil)) new_vars ge1 (add_function ge2 (id, f2)).
 Proof.
   intros. destruct H. constructor; simpl. 
-  congruence. congruence. congruence.
+  rewrite mge_nextfun0. rewrite app_length. 
+       simpl. rewrite inj_plus. rewrite inj_S. rewrite inj_0. unfold block; omega. (* painful! *)
+  auto.
+  intros. unfold funct_names in H. rewrite map_app in H. rewrite in_app in H.  rewrite in_app in H. simpl in H. 
+     destruct (peq id id0). subst. intuition. rewrite PTree.gso. 
+     apply mge_symb0. intro.  apply H. rewrite in_app in H0. inversion H0; intuition. intuition. 
+  intros. rewrite ZMap.gso. auto. 
+     rewrite mge_nextfun0. pose proof (genv_funs_range ge1 b H). intro; subst; omega.
+  intros. rewrite ZMap.gsspec in H. 
+     destruct (ZIndexed.eq b (genv_nextfun ge2)). 
+       destruct (zlt (genv_nextfun ge1) b). 
+          exfalso.  rewrite mge_nextfun0 in e.  unfold block; omega. 
+          rewrite map_app. rewrite in_app.  simpl.  inversion H; intuition.
+       pose proof (mge_rev_funs0 b tf H). 
+          destruct (zlt (genv_nextfun ge1) b). 
+            auto.
+            rewrite map_app. rewrite in_app. intuition. 
+  auto.
+  auto.
+Qed.
+
+
+Lemma add_functions_augment_match:
+  forall fl new_functs new_vars ge1 ge2, 
+    match_genvs new_functs new_vars ge1 ge2 ->
+    match_genvs (new_functs++fl) new_vars ge1 (add_functions ge2 fl).
+Proof.
+  induction fl; simpl. 
+    intros. rewrite app_nil_r. auto. 
+    intros. replace (new_functs ++ a :: fl) with ((new_functs ++ (a::nil)) ++ fl) 
+       by (rewrite app_ass; auto). 
+     apply IHfl. destruct a. apply add_function_augment_match. auto.
+Qed.
+
+
+Lemma add_variable_match:
+  forall new_functs ge1 ge2 id v1 v2,
+  match_genvs new_functs nil ge1 ge2 ->
+  match_globvar v1 v2 ->
+  match_genvs new_functs nil (add_variable ge1 (id, v1)) (add_variable ge2 (id, v2)).
+Proof.
+  intros. destruct H. 
+     simpl in mge_nextvar0. rewrite Zplus_0_r in mge_nextvar0. 
+  constructor; simpl. 
+  auto. 
+    rewrite Zplus_0_r. rewrite mge_nextvar0. auto. 
+  intros. rewrite mge_nextvar0. 
+    repeat rewrite PTree.gsspec. destruct (peq id0 id); auto. 
   auto.
   auto.
   rewrite mge_nextvar0. intros. rewrite ZMap.gsspec in H. rewrite ZMap.gsspec. 
-  destruct (ZIndexed.eq b (genv_nextvar ge2)). 
-  exists v2; split; congruence.
-  eauto.
+    destruct (ZIndexed.eq b (genv_nextvar ge1)). 
+     exists v2; split; congruence.
+     eauto.
   rewrite mge_nextvar0. intros. rewrite ZMap.gsspec in H. rewrite ZMap.gsspec. 
-  destruct (ZIndexed.eq b (genv_nextvar ge2)). 
-  exists v1; split; congruence.
-  eauto.
+   destruct (ZIndexed.eq b (genv_nextvar ge1)). 
+    subst b. inversion H; subst. 
+      destruct (zlt (genv_nextvar ge1) (genv_nextvar ge1 + 1)). 
+        exists v1; split; congruence. omega. 
+      pose proof (mge_rev_vars0 _ _ H).
+        destruct (zlt b (genv_nextvar ge1));
+          destruct (zlt b (genv_nextvar ge1 + 1)).  auto. omega. exfalso; omega. intuition.
 Qed.
 
 Lemma add_variables_match:
   forall vl1 vl2, list_forall2 (match_var_entry match_varinfo) vl1 vl2 ->
-  forall ge1 ge2, match_genvs ge1 ge2 ->
-  match_genvs (add_variables ge1 vl1) (add_variables ge2 vl2).
+  forall new_functs ge1 ge2, match_genvs new_functs nil ge1 ge2 ->
+  match_genvs new_functs nil (add_variables ge1 vl1) (add_variables ge2 vl2).
 Proof.
   induction 1; intros; simpl. 
   auto.
   inv H. apply IHlist_forall2. apply add_variable_match; auto. constructor; auto.
 Qed.
 
+
+Lemma add_variable_augment_match:
+  forall ge1 new_functs new_vars ge2 id v2,
+  match_genvs new_functs new_vars ge1 ge2 ->
+  match_genvs new_functs (new_vars++((id,v2)::nil)) ge1 (add_variable ge2 (id, v2)).
+Proof.
+  intros. destruct H. constructor; simpl. 
+  auto.
+  rewrite mge_nextvar0. rewrite app_length. 
+       simpl. rewrite inj_plus. rewrite inj_S. rewrite inj_0. unfold block; omega. (* painful! *)
+  intros. unfold funct_names, var_names in H. rewrite map_app in H. rewrite in_app in H.  rewrite in_app in H. simpl in H. 
+     destruct (peq id id0). subst. intuition. rewrite PTree.gso. 
+     apply mge_symb0. intro.  apply H. rewrite in_app in H0. inversion H0; intuition. intuition. 
+  auto.
+  auto.
+  intros. rewrite ZMap.gso. auto. 
+     rewrite mge_nextvar0. pose proof (genv_vars_range ge1 b H). intro; subst; omega.
+  intros. rewrite ZMap.gsspec in H. 
+     destruct (ZIndexed.eq b (genv_nextvar ge2)). 
+       destruct (zlt b (genv_nextvar ge1)). 
+          exfalso.  rewrite mge_nextvar0 in e.  unfold block; omega. 
+          rewrite map_app. rewrite in_app.  simpl.  inversion H; intuition.
+       pose proof (mge_rev_vars0 b tv H). 
+          destruct (zlt b (genv_nextvar ge1)). 
+            auto.
+            rewrite map_app. rewrite in_app. intuition. 
+
+Qed.
+
+Lemma add_variables_augment_match:
+  forall vl ge1 new_functs new_vars ge2, 
+    match_genvs new_functs new_vars ge1 ge2 ->
+    match_genvs new_functs (new_vars++vl) ge1  (add_variables ge2 vl).
+Proof.
+  induction vl; simpl. 
+    intros. rewrite app_nil_r. auto. 
+    intros. replace (new_vars ++ a :: vl) with ((new_vars ++ (a::nil)) ++ vl) 
+       by (rewrite app_ass; auto). 
+     apply IHvl. destruct a. apply add_variable_augment_match. auto.
+Qed.
+
+Variable new_functs : list (ident * B).
+Variable new_vars : list (ident * globvar W).
+Variable new_main : ident.
+
 Variable p: program A V.
 Variable p': program B W.
-Hypothesis progmatch: match_program match_fun match_varinfo p p'.
+Hypothesis progmatch: 
+  match_program match_fun match_varinfo new_functs new_vars new_main p p'.
 
 Lemma globalenvs_match:
-  match_genvs (globalenv p) (globalenv p').
+  match_genvs new_functs new_vars (globalenv p) (globalenv p').
 Proof.
-  unfold globalenv. destruct progmatch. destruct H0. 
-  apply add_variables_match; auto. apply add_functions_match; auto. 
-  constructor; simpl; auto; intros; rewrite ZMap.gi in H2; congruence.
+  unfold globalenv. destruct progmatch. clear progmatch.
+  destruct H as [tfuncts [P1 P2]]. destruct H0.  clear H0. destruct H as [tvars [Q1 Q2]]. 
+  rewrite P2.  rewrite Q2. clear P2 Q2.
+  rewrite add_variables_app. 
+  rewrite add_functions_app. 
+  pattern new_vars at 1. replace new_vars with (nil++new_vars) by auto.
+  apply add_variables_augment_match.
+  apply add_variables_match; auto. 
+  pattern new_functs at 1. replace new_functs with (nil++new_functs) by auto. 
+  apply add_functions_augment_match.
+  apply add_functions_match; auto. 
+  constructor; simpl; auto; intros; rewrite ZMap.gi in H; congruence.
 Qed.
 
 Theorem find_funct_ptr_match:
@@ -1146,8 +1460,10 @@ Proof (mge_funs globalenvs_match).
 Theorem find_funct_ptr_rev_match:
   forall (b : block) (tf : B),
   find_funct_ptr (globalenv p') b = Some tf ->
-  exists f : A,
-  find_funct_ptr (globalenv p) b = Some f /\ match_fun f tf.
+  if zlt (genv_nextfun (globalenv p)) b then 
+      exists f, find_funct_ptr (globalenv p) b = Some f /\ match_fun f tf
+  else 
+      In tf (map (@snd ident B) new_functs).
 Proof (mge_rev_funs globalenvs_match).
 
 Theorem find_funct_match:
@@ -1161,15 +1477,17 @@ Proof.
   apply find_funct_ptr_match. auto.
 Qed.
 
-Theorem find_funct_rev_match:
+Theorem find_funct_rev_match: (* a little weak *)
   forall (v : val) (tf : B),
   find_funct (globalenv p') v = Some tf ->
-  exists f : A, find_funct (globalenv p) v = Some f /\ match_fun f tf.
+  (exists f, find_funct (globalenv p) v = Some f /\ match_fun f tf) 
+  \/ (In tf (map (@snd ident B) new_functs)).
 Proof.
   intros. exploit find_funct_inv; eauto. intros [b EQ]. subst v. 
   rewrite find_funct_find_funct_ptr in H. 
   rewrite find_funct_find_funct_ptr.
-  apply find_funct_ptr_rev_match. auto.
+  apply find_funct_ptr_rev_match in H. 
+   destruct (zlt (genv_nextfun (globalenv p)) b); intuition. 
 Qed.
 
 Theorem find_var_info_match:
@@ -1182,78 +1500,104 @@ Proof (mge_vars globalenvs_match).
 Theorem find_var_info_rev_match:
   forall (b : block) (tv : globvar W),
   find_var_info (globalenv p') b = Some tv ->
-  exists v,
-  find_var_info (globalenv p) b = Some v /\ match_globvar v tv.
+  if zlt b (genv_nextvar (globalenv p)) then 
+    exists v, find_var_info (globalenv p) b = Some v /\ match_globvar v tv
+  else
+    In tv (map (@snd ident (globvar W)) new_vars).  
 Proof (mge_rev_vars globalenvs_match).
 
 Theorem find_symbol_match:
   forall (s : ident),
+  ~In s (funct_names new_functs ++ var_names new_vars) -> 
   find_symbol (globalenv p') s = find_symbol (globalenv p) s.
 Proof.
-  intros. destruct globalenvs_match. unfold find_symbol. congruence. 
+  intros. destruct globalenvs_match. unfold find_symbol.  auto. 
 Qed.
 
+Hypothesis new_ids_fresh : 
+  (forall s', find_symbol (globalenv p) s' <> None  -> 
+             ~In s' (funct_names new_functs ++ var_names new_vars)).
+
 Lemma store_init_data_list_match:
-  forall idl m b ofs,
-  store_init_data_list (globalenv p') m b ofs idl =
-  store_init_data_list (globalenv p) m b ofs idl.
+  forall idl m b ofs m',
+  store_init_data_list (globalenv p) m b ofs idl = Some m' ->
+  store_init_data_list (globalenv p') m b ofs idl = Some m'.
 Proof.
   induction idl; simpl; intros. 
   auto.
-  assert (store_init_data (globalenv p') m b ofs a =
-          store_init_data (globalenv p) m b ofs a).
-  destruct a; simpl; auto. rewrite find_symbol_match. auto. 
-  rewrite H. destruct (store_init_data (globalenv p) m b ofs a); auto. 
+  assert (forall m', store_init_data (globalenv p) m b ofs a = Some m' ->
+          store_init_data (globalenv p') m b ofs a = Some m').
+   destruct a; simpl; auto. rewrite find_symbol_match. auto. 
+     inversion H.  case_eq (find_symbol (globalenv p) i). 
+       intros. apply new_ids_fresh. intro. rewrite H0 in H2; inversion H2. 
+       intro. rewrite H0 in H1. inversion H1. 
+  case_eq (store_init_data (globalenv p) m b ofs a); intros. 
+    rewrite H1 in H. 
+    pose proof (H0 _ H1). rewrite H2. auto. 
+    rewrite H1 in H. inversion H. 
 Qed.
 
 Lemma alloc_variables_match:
   forall vl1 vl2, list_forall2 (match_var_entry match_varinfo) vl1 vl2 ->
-  forall m,
-  alloc_variables (globalenv p') m vl2 = alloc_variables (globalenv p) m vl1.
+  forall m m',
+  alloc_variables (globalenv p) m vl1 = Some m' -> 
+  alloc_variables (globalenv p') m vl2 = Some m'.
 Proof.
-  induction 1; intros; simpl.
+  induction 1; intros until m'; simpl.
   auto.
   inv H. 
   unfold alloc_variable; simpl. 
   destruct (Mem.alloc m 0 (init_data_list_size init)). 
-  destruct (store_zeros m0 b (init_data_list_size init)); auto.
-  rewrite store_init_data_list_match. 
-  destruct (store_init_data_list (globalenv p) m1 b 0 init); auto.
+  destruct (store_zeros m0 b (init_data_list_size init)); auto. 
+  case_eq (store_init_data_list (globalenv p) m1 b 0 init); intros m2 P. 
+  rewrite (store_init_data_list_match _ _ _ _ P). 
   change (perm_globvar (mkglobvar info2 init ro vo))
     with (perm_globvar (mkglobvar info1 init ro vo)).
   destruct (Mem.drop_perm m2 b 0 (init_data_list_size init)
-    (perm_globvar (mkglobvar info1 init ro vo))); auto.
+    (perm_globvar (mkglobvar info1 init ro vo))); auto. 
+  inversion P. 
 Qed.
 
 Theorem init_mem_match:
-  forall m, init_mem p = Some m -> init_mem p' = Some m.
+  forall m, init_mem p = Some m -> 
+  init_mem p' = alloc_variables (globalenv p') m new_vars.
 Proof.
-  intros. rewrite <- H. unfold init_mem. destruct progmatch. destruct H1. 
-  apply alloc_variables_match; auto. 
+  unfold init_mem. destruct progmatch. destruct H0.  destruct H0 as [tvars [P1 P2]].
+  rewrite P2. 
+  intros. 
+  erewrite <- alloc_variables_app; eauto. 
+  eapply alloc_variables_match; eauto. 
 Qed.
 
 End MATCH_PROGRAMS.
 
-Section TRANSF_PROGRAM_PARTIAL2.
+Section TRANSF_PROGRAM_AUGMENT.
 
 Variable A B V W: Type.
 Variable transf_fun: A -> res B.
 Variable transf_var: V -> res W.
+
+Variable new_functs : list (ident * B).
+Variable new_vars : list (ident * globvar W).
+Variable new_main : ident.
+
 Variable p: program A V.
 Variable p': program B W.
+
 Hypothesis transf_OK:
-  transform_partial_program2 transf_fun transf_var p = OK p'.
+  transform_partial_augment_program transf_fun transf_var new_functs new_vars new_main p = OK p'.
 
 Remark prog_match:
   match_program
     (fun fd tfd => transf_fun fd = OK tfd)
     (fun info tinfo => transf_var info = OK tinfo)
+    new_functs new_vars new_main
     p p'.
 Proof.
-  apply transform_partial_program2_match; auto.
+  apply transform_partial_augment_program_match; auto.
 Qed.
 
-Theorem find_funct_ptr_transf_partial2:
+Theorem find_funct_ptr_transf_augment:
   forall (b: block) (f: A),
   find_funct_ptr (globalenv p) b = Some f ->
   exists f',
@@ -1264,16 +1608,52 @@ Proof.
   intros [tf [X Y]]. exists tf; auto.
 Qed.
 
-Theorem find_funct_ptr_rev_transf_partial2:
-  forall (b: block) (tf: B),
-  find_funct_ptr (globalenv p') b = Some tf ->
-  exists f, find_funct_ptr (globalenv p) b = Some f /\ transf_fun f = OK tf.
+
+
+(* This may not yet be in the ideal form for easy use .*)
+Theorem find_new_funct_ptr_exists: 
+  list_norepet (prog_funct_names p ++ funct_names new_functs) ->
+  list_disjoint (prog_funct_names p ++ funct_names new_functs)  (prog_var_names p ++ var_names new_vars) ->
+  forall id f, In (id, f) new_functs -> 
+  exists b, find_symbol (globalenv p') id = Some b
+         /\ find_funct_ptr (globalenv p') b = Some f.
 Proof.
   intros. 
-  exploit find_funct_ptr_rev_match. eexact prog_match. eauto. auto. 
+  destruct p. 
+  unfold transform_partial_augment_program in transf_OK. 
+  monadInv transf_OK. rename x into prog_funct'.  rename x0 into prog_vars'. simpl in *.
+  assert (funct_names prog_funct = funct_names prog_funct').
+   clear - EQ.  generalize dependent prog_funct'. induction prog_funct; intros.
+      simpl in EQ. inversion EQ; subst; auto.
+      simpl in EQ. destruct a. destruct (transf_fun a); try discriminate. monadInv EQ.
+      simpl; f_equal; auto.
+  assert (var_names prog_vars = var_names prog_vars').
+   clear - EQ1.  generalize dependent prog_vars'. induction prog_vars; intros.
+      simpl in EQ1. inversion EQ1; subst; auto.
+      simpl in EQ1. destruct a. destruct (transf_globvar transf_var g); try discriminate. monadInv EQ1.
+      simpl; f_equal; auto.
+  apply find_funct_ptr_exists. 
+  unfold prog_funct_names in *; simpl in *. 
+  rewrite funct_names_app. rewrite <- H2. auto.
+  unfold prog_funct_names, prog_var_names in *; simpl in *.  
+  rewrite funct_names_app. rewrite var_names_app. rewrite <- H2. rewrite <- H3.  auto.
+  simpl. intuition.
 Qed.
 
-Theorem find_funct_transf_partial2:
+Theorem find_funct_ptr_rev_transf_augment:
+  forall (b: block) (tf: B),
+  find_funct_ptr (globalenv p') b = Some tf ->
+  if (zlt (genv_nextfun (globalenv p)) b) then
+   (exists f, find_funct_ptr (globalenv p) b = Some f /\ transf_fun f = OK tf)
+  else 
+   In tf (map (@snd ident B) new_functs).
+Proof.
+  intros. 
+  exploit find_funct_ptr_rev_match;eauto. eexact prog_match; eauto. auto. 
+Qed.
+
+
+Theorem find_funct_transf_augment:
   forall (v: val) (f: A),
   find_funct (globalenv p) v = Some f ->
   exists f',
@@ -1284,16 +1664,17 @@ Proof.
   intros [tf [X Y]]. exists tf; auto.
 Qed.
 
-Theorem find_funct_rev_transf_partial2:
+Theorem find_funct_rev_transf_augment: 
   forall (v: val) (tf: B),
   find_funct (globalenv p') v = Some tf ->
-  exists f, find_funct (globalenv p) v = Some f /\ transf_fun f = OK tf.
+  (exists f, find_funct (globalenv p) v = Some f /\ transf_fun f = OK tf) \/
+  In tf (map (@snd ident B) new_functs). 
 Proof.
   intros. 
   exploit find_funct_rev_match. eexact prog_match. eauto. auto. 
 Qed.
 
-Theorem find_var_info_transf_partial2:
+Theorem find_var_info_transf_augment:
   forall (b: block) (v: globvar V),
   find_var_info (globalenv p) b = Some v ->
   exists v',
@@ -1305,29 +1686,172 @@ Proof.
   rewrite H0; simpl. auto.
 Qed.
 
+
+(* This may not yet be in the ideal form for easy use .*)
+Theorem find_new_var_exists: 
+  list_norepet (prog_var_names p ++ var_names new_vars) -> 
+  forall id gv m, In (id, gv) new_vars -> 
+  init_mem p' = Some m -> 
+  exists b, find_symbol (globalenv p') id = Some b
+         /\ find_var_info (globalenv p') b = Some gv
+         /\ Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) (perm_globvar gv)
+         /\ (gv.(gvar_volatile) = false -> load_store_init_data (globalenv p') m b 0 gv.(gvar_init)).
+Proof.
+  intros. 
+  destruct p. 
+  unfold transform_partial_augment_program in transf_OK. 
+  monadInv transf_OK. rename x into prog_funct'.  rename x0 into prog_vars'. simpl in *.
+  assert (var_names prog_vars = var_names prog_vars').
+   clear - EQ1.  generalize dependent prog_vars'. induction prog_vars; intros.
+      simpl in EQ1. inversion EQ1; subst; auto.
+      simpl in EQ1. destruct a. destruct (transf_globvar transf_var g); try discriminate. monadInv EQ1.
+      simpl; f_equal; auto.
+  apply find_var_exists. 
+  unfold prog_var_names in *; simpl in *.  
+  rewrite var_names_app. rewrite <- H2. auto.
+  simpl. intuition.
+  auto.
+Qed.
+
+Theorem find_var_info_rev_transf_augment:
+  forall (b: block) (v': globvar W),
+  find_var_info (globalenv p') b = Some v' ->
+  if zlt b (genv_nextvar (globalenv p)) then
+    (exists v, find_var_info (globalenv p) b = Some v /\ transf_globvar transf_var v = OK v')
+  else
+    (In v' (map (@snd ident (globvar W)) new_vars)).
+Proof.
+  intros. 
+  exploit find_var_info_rev_match. eexact prog_match. eauto.
+  destruct (zlt b (genv_nextvar (globalenv p))); auto.
+  intros [v [X Y]]. exists v; split; auto. inv Y. unfold transf_globvar; simpl. 
+  rewrite H0; simpl. auto.
+Qed.
+
+Theorem find_symbol_transf_augment:  
+  forall (s: ident), 
+  ~ In s (funct_names new_functs ++ var_names new_vars) -> 
+  find_symbol (globalenv p') s = find_symbol (globalenv p) s.
+Proof.
+  intros. eapply find_symbol_match. eexact prog_match. auto.
+Qed.
+
+Theorem init_mem_transf_augment: 
+   (forall s', find_symbol (globalenv p) s' <> None -> 
+     ~ In s' (funct_names new_functs ++ var_names new_vars)) -> 
+   forall m, init_mem p = Some m -> 
+   init_mem p' = alloc_variables (globalenv p') m new_vars.
+Proof.
+  intros. eapply init_mem_match. eexact prog_match. auto. auto.
+Qed.
+ 
+Theorem init_mem_inject_transf_augment:
+   (forall s', find_symbol (globalenv p) s' <> None -> 
+     ~ In s' (funct_names new_functs ++ var_names new_vars)) -> 
+  forall m, init_mem p = Some m ->
+  forall m', init_mem p' = Some m' -> 
+  Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m'.
+Proof.
+  intros. 
+  pose proof (initmem_inject p H0). 
+  erewrite init_mem_transf_augment in H1; eauto. 
+  eapply alloc_variables_augment; eauto. omega.
+Qed.
+
+
+End TRANSF_PROGRAM_AUGMENT.
+
+Section TRANSF_PROGRAM_PARTIAL2.
+
+Variable A B V W: Type.
+Variable transf_fun: A -> res B.
+Variable transf_var: V -> res W.
+Variable p: program A V.
+Variable p': program B W.
+Hypothesis transf_OK:
+  transform_partial_program2 transf_fun transf_var p = OK p'.
+
+Remark transf_augment_OK:
+  transform_partial_augment_program transf_fun transf_var nil nil p.(prog_main) p = OK p'.
+Proof.
+  rewrite <- transf_OK. 
+  unfold transform_partial_augment_program, transform_partial_program2. 
+  destruct (map_partial prefix_name transf_fun (prog_funct p)); auto. simpl. 
+  destruct (map_partial prefix_name (transf_globvar transf_var) (prog_vars p)); simpl. 
+  repeat rewrite app_nil_r. auto. auto.
+Qed.
+
+Theorem find_funct_ptr_transf_partial2:
+  forall (b: block) (f: A),
+  find_funct_ptr (globalenv p) b = Some f ->
+  exists f',
+  find_funct_ptr (globalenv p') b = Some f' /\ transf_fun f = OK f'.
+Proof.
+  exact (@find_funct_ptr_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+Qed.
+
+Theorem find_funct_ptr_rev_transf_partial2:
+  forall (b: block) (tf: B),
+  find_funct_ptr (globalenv p') b = Some tf ->
+  exists f, find_funct_ptr (globalenv p) b = Some f /\ transf_fun f = OK tf.
+Proof.
+  pose proof (@find_funct_ptr_rev_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+  intros.  pose proof (H b tf H0). 
+  destruct (zlt (genv_nextfun (globalenv p)) b).  auto. inversion H1. 
+Qed.
+
+Theorem find_funct_transf_partial2:
+  forall (v: val) (f: A),
+  find_funct (globalenv p) v = Some f ->
+  exists f',
+  find_funct (globalenv p') v = Some f' /\ transf_fun f = OK f'.
+Proof.
+  exact (@find_funct_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+Qed.
+
+Theorem find_funct_rev_transf_partial2:
+  forall (v: val) (tf: B),
+  find_funct (globalenv p') v = Some tf ->
+  exists f, find_funct (globalenv p) v = Some f /\ transf_fun f = OK tf.
+Proof.
+  pose proof (@find_funct_rev_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+  intros. pose proof (H v tf H0). 
+  destruct H1. auto. inversion H1. 
+Qed.
+
+Theorem find_var_info_transf_partial2:
+  forall (b: block) (v: globvar V),
+  find_var_info (globalenv p) b = Some v ->
+  exists v',
+  find_var_info (globalenv p') b = Some v' /\ transf_globvar transf_var v = OK v'.
+Proof.
+  exact (@find_var_info_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+Qed.
+
 Theorem find_var_info_rev_transf_partial2:
   forall (b: block) (v': globvar W),
   find_var_info (globalenv p') b = Some v' ->
   exists v,
   find_var_info (globalenv p) b = Some v /\ transf_globvar transf_var v = OK v'.
 Proof.
-  intros. 
-  exploit find_var_info_rev_match. eexact prog_match. eauto. 
-  intros [v [X Y]]. exists v; split; auto. inv Y. unfold transf_globvar; simpl.
-  rewrite H0; simpl. auto.
+  pose proof (@find_var_info_rev_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+  intros.  pose proof (H b v' H0). 
+  destruct (zlt b (genv_nextvar (globalenv p))).  auto. inversion H1. 
 Qed.
 
 Theorem find_symbol_transf_partial2:
   forall (s: ident),
   find_symbol (globalenv p') s = find_symbol (globalenv p) s.
 Proof.
-  intros. eapply find_symbol_match. eexact prog_match.
+  pose proof (@find_symbol_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+  auto.
 Qed.
 
 Theorem init_mem_transf_partial2:
   forall m, init_mem p = Some m -> init_mem p' = Some m.
 Proof.
-  intros. eapply init_mem_match. eexact prog_match. auto.
+  pose proof (@init_mem_transf_augment _ _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
+  intros. simpl in H. apply H; auto.  
 Qed.
 
 End TRANSF_PROGRAM_PARTIAL2.

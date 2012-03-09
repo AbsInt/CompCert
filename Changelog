@@ -40,6 +40,7 @@ Other improvements:
 - Reference interpreter: better printing of pointer values and locations.
 - Added command-line options -Wp,<opt> -Wa,<opt> -Wl,<opt> to pass
   specific options to the preprocessor, assembler, or linker, respectively.
+- More complete Cminor parser and printer (contributed by Andrew Tolmach).
 
 
 Release 1.9.1, 2011-11-28

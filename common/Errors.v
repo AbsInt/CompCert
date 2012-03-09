@@ -30,7 +30,8 @@ Set Implicit Arguments.
 
 Inductive errcode: Type :=
   | MSG: string -> errcode
-  | CTX: positive -> errcode.
+  | CTX: positive -> errcode    (* a top-level identifier *)
+  | CTXL: positive -> errcode.  (* an encoded local identifier *)
 
 Definition errmsg: Type := list errcode.
 

@@ -35,10 +35,19 @@ let safe_remove file =
 
 (* Printing of error messages *)
 
+(* Locally named idents are encoded as in Cminorgen.
+   This function should live somewhere more central. *)
+let ident_name id =
+   match id with
+  | BinPos.Coq_xO n -> Camlcoq.extern_atom n
+  | BinPos.Coq_xI n -> Printf.sprintf "$%ld" (Camlcoq.camlint_of_positive n)
+  | BinPos.Coq_xH -> "$0"
+
 let print_error oc msg =
   let print_one_error = function
   | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
   | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
+  | Errors.CTXL i -> output_string oc (ident_name i)
   in
     List.iter print_one_error msg;
     output_char oc '\n'

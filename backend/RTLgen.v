@@ -319,7 +319,7 @@ Fixpoint add_vars (map: mapping) (names: list ident)
 
 Definition find_var (map: mapping) (name: ident) : mon reg :=
   match PTree.get name map.(map_vars) with
-  | None => error (Errors.MSG "RTLgen: unbound variable " :: Errors.CTX name :: nil)
+  | None => error (Errors.MSG "RTLgen: unbound variable " :: Errors.CTXL name :: nil)
   | Some r => ret r
   end.
 

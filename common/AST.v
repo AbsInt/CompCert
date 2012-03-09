@@ -131,11 +131,29 @@ Record program (F V: Type) : Type := mkprogram {
   prog_vars: list (ident * globvar V)
 }.
 
+Definition funct_names (F: Type) (fl: list (ident * F)) : list ident :=
+  map (@fst ident F) fl. 
+
+Lemma funct_names_app : forall (F: Type) (fl1 fl2 : list (ident * F)),
+  funct_names (fl1 ++ fl2) = funct_names fl1 ++ funct_names fl2. 
+Proof.
+  intros; unfold funct_names; apply list_append_map.
+Qed.
+  
+Definition var_names (V: Type) (vl: list (ident * globvar V)) : list ident :=
+  map (@fst ident (globvar V)) vl. 
+
+Lemma var_names_app : forall (V: Type) (vl1 vl2 : list (ident * globvar V)),
+  var_names (vl1 ++ vl2) = var_names vl1 ++ funct_names vl2. 
+Proof.
+  intros; unfold var_names; apply list_append_map.
+Qed.
+  
 Definition prog_funct_names (F V: Type) (p: program F V) : list ident :=
-  map (@fst ident F) p.(prog_funct).
+  funct_names p.(prog_funct).
 
 Definition prog_var_names (F V: Type) (p: program F V) : list ident :=
-  map (@fst ident (globvar V)) p.(prog_vars).
+  var_names p.(prog_vars).
 
 (** * Generic transformations over programs *)
 
@@ -337,12 +355,71 @@ Qed.
 
 End TRANSF_PARTIAL_PROGRAM2.
 
+(** The following is a variant of [transform_partial_program2] where the
+     where the set of functions and global data is augmented, and
+     the main function is potentially changed. *)
+
+Section TRANSF_PARTIAL_AUGMENT_PROGRAM.
+
+Variable A B V W: Type.
+Variable transf_partial_function: A -> res B.
+Variable transf_partial_variable: V -> res W.
+
+Variable new_functs : list (ident * B).
+Variable new_vars : list (ident * globvar W).
+Variable new_main : ident.
+
+Definition transform_partial_augment_program (p: program A V) : res (program B W)  :=
+  do fl <- map_partial prefix_name transf_partial_function p.(prog_funct);
+  do vl <- map_partial prefix_name (transf_globvar transf_partial_variable) p.(prog_vars);
+  OK (mkprogram (fl ++ new_functs) new_main (vl ++ new_vars)).
+
+Lemma transform_partial_augment_program_function:
+  forall p tp i tf,
+  transform_partial_augment_program p = OK tp ->
+  In (i, tf) tp.(prog_funct) ->
+  (exists f, In (i, f) p.(prog_funct) /\ transf_partial_function f = OK tf)
+  \/ In (i,tf) new_functs.
+Proof.
+  intros. monadInv H. simpl in H0.  
+  rewrite in_app in H0.  destruct H0. 
+  left. eapply In_map_partial; eauto.
+  right. auto. 
+Qed.
+
+Lemma transform_partial_augment_program_main:
+  forall p tp,
+  transform_partial_augment_program p = OK tp ->
+  tp.(prog_main) = new_main.
+Proof.
+  intros. monadInv H. reflexivity.
+Qed.
+
+
+Lemma transform_partial_augment_program_variable:
+  forall p tp i tg,
+  transform_partial_augment_program p = OK tp ->
+  In (i, tg) tp.(prog_vars) ->
+  (exists v, In (i, mkglobvar v tg.(gvar_init) tg.(gvar_readonly) tg.(gvar_volatile)) p.(prog_vars) /\ transf_partial_variable v = OK tg.(gvar_info))
+  \/ In (i,tg) new_vars.
+Proof.
+  intros. monadInv H. 
+  simpl in H0.  rewrite in_app in H0.  inversion H0. 
+  left. exploit In_map_partial; eauto.  intros [g [P Q]]. 
+  monadInv Q. simpl in *. exists (gvar_info g); split. destruct g; auto. auto. 
+  right. auto.
+Qed.
+
+End TRANSF_PARTIAL_AUGMENT_PROGRAM.
+
+
 (** The following is a relational presentation of 
-  [transform_program_partial2].  Given relations between function
+  [transform_partial_augment_preogram].  Given relations between function
   definitions and between variable information, it defines a relation
-  between programs stating that the two programs have the same shape
-  (same global names, etc) and that identically-named function definitions 
-  are variable information are related. *)
+  between programs stating that the two programs have appropriately related
+  shapes (global names are preserved and possibly augmented, etc) 
+  and that identically-named function definitions
+  and variable information are related. *)
 
 Section MATCH_PROGRAM.
 
@@ -361,37 +438,50 @@ Inductive match_var_entry: ident * globvar V -> ident * globvar W -> Prop :=
       match_var_entry (id, mkglobvar info1 init ro vo)
                       (id, mkglobvar info2 init ro vo).
 
-Definition match_program (p1: program A V) (p2: program B W) : Prop :=
-  list_forall2 match_funct_entry p1.(prog_funct) p2.(prog_funct)
-  /\ p1.(prog_main) = p2.(prog_main)
-  /\ list_forall2 match_var_entry p1.(prog_vars) p2.(prog_vars).
+Definition match_program (new_functs : list (ident * B))
+                         (new_vars : list (ident * globvar W))
+                         (new_main : ident)
+                         (p1: program A V)  (p2: program B W) : Prop :=
+  (exists tfuncts, list_forall2 match_funct_entry p1.(prog_funct) tfuncts /\
+                                (p2.(prog_funct) = tfuncts ++ new_functs)) /\
+  (exists tvars, list_forall2 match_var_entry p1.(prog_vars) tvars /\
+                                (p2.(prog_vars) = tvars ++ new_vars)) /\
+  p2.(prog_main) = new_main.
 
 End MATCH_PROGRAM.
 
-Remark transform_partial_program2_match:
+Remark transform_partial_augment_program_match:
   forall (A B V W: Type)
          (transf_partial_function: A -> res B)
-         (transf_partial_variable: V -> res W)
-         (p: program A V) (tp: program B W),
-  transform_partial_program2 transf_partial_function transf_partial_variable p = OK tp ->
+         (transf_partial_variable : V -> res W)
+         (p: program A V) 
+         (new_functs : list (ident * B))
+         (new_vars : list (ident * globvar W))
+         (new_main : ident)
+         (tp: program B W),
+  transform_partial_augment_program transf_partial_function transf_partial_variable new_functs new_vars new_main p = OK tp ->
   match_program 
     (fun fd tfd => transf_partial_function fd = OK tfd)
     (fun info tinfo => transf_partial_variable info = OK tinfo)
+    new_functs new_vars new_main
     p tp.
 Proof.
-  intros. monadInv H. split.
+  intros. unfold transform_partial_augment_program in H. monadInv H. split.
+  exists x. split. 
   apply list_forall2_imply with
     (fun (ab: ident * A) (ac: ident * B) =>
        fst ab = fst ac /\ transf_partial_function (snd ab) = OK (snd ac)).
   eapply map_partial_forall2. eauto. 
-  intros. destruct v1; destruct v2; simpl in *. destruct H1; subst. constructor. auto.
-  split. auto.
+  intros. destruct v1; destruct v2; simpl in *.
+  destruct H1; subst. constructor. auto. 
+  auto. 
+  split. exists x0.  split.
   apply list_forall2_imply with
     (fun (ab: ident * globvar V) (ac: ident * globvar W) =>
        fst ab = fst ac /\ transf_globvar transf_partial_variable (snd ab) = OK (snd ac)).
-  eapply map_partial_forall2. eauto. 
+  eapply map_partial_forall2. eauto.
   intros. destruct v1; destruct v2; simpl in *. destruct H1; subst. 
-  monadInv H2. destruct g; simpl in *. constructor. auto.
+  monadInv H2. destruct g; simpl in *.  constructor. auto.  auto.  auto. 
 Qed.
 
 (** * External functions *)

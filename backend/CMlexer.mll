@@ -24,7 +24,8 @@ let floatlit =
   ['0'-'9'] ['0'-'9' '_']* 
   ('.' ['0'-'9' '_']* )?
   (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
-let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '0'-'9']*
+let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '$' '0'-'9']*
+let temp = "$" ['0'-'9'] ['0'-'9']*
 let intlit = "-"? ( ['0'-'9']+ | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+
                                | "0o" ['0'-'7']+ | "0b" ['0'-'1']+ )
 let stringlit = "\"" [ ^ '"' ] * '"'
@@ -46,7 +47,6 @@ rule token = parse
   | ":"    { COLON }
   | ","    { COMMA }
   | "default" { DEFAULT }
-  | "$"    { DOLLAR }
   | "else"    { ELSE }
   | "="    { EQUAL }
   | "=="    { EQUALEQUAL }
@@ -59,6 +59,7 @@ rule token = parse
   | "float64"    { FLOAT64 }
   | "floatofint"    { FLOATOFINT }
   | "floatofintu"    { FLOATOFINTU }
+  | "goto"  { GOTO } 
   | ">"    { GREATER }
   | ">f"    { GREATERF }
   | ">u"    { GREATERU }
@@ -69,10 +70,13 @@ rule token = parse
   | ">>u"    { GREATERGREATERU }
   | "if"    { IF }
   | "in"    { IN }
+  | "inline" { INLINE }
   | "int"    { INT }
+  | "int16"    { INT16 }
   | "int16s"    { INT16S }
   | "int16u"    { INT16U }
   | "int32"    { INT32 }
+  | "int8"    { INT8 }
   | "int8s"    { INT8S }
   | "int8u"    { INT8U }
   | "intoffloat"    { INTOFFLOAT }
@@ -102,6 +106,7 @@ rule token = parse
   | "}"    { RBRACE }
   | "}}"    { RBRACERBRACE }
   | "]"    { RBRACKET }
+  | "readonly" { READONLY }
   | "return"    { RETURN }
   | ")"    { RPAREN }
   | ";"    { SEMICOLON }
@@ -116,12 +121,17 @@ rule token = parse
   | "~"    { TILDE }
   | "var"    { VAR }
   | "void"    { VOID }
+  | "volatile" { VOLATILE }
+  | "while" { WHILE }
 
   | intlit    { INTLIT(Int32.of_string(Lexing.lexeme lexbuf)) }
   | floatlit     { FLOATLIT(float_of_string(Lexing.lexeme lexbuf)) }
   | stringlit { let s = Lexing.lexeme lexbuf in
                 STRINGLIT(intern_string(String.sub s 1 (String.length s - 2))) }
-  | ident    { IDENT(intern_string(Lexing.lexeme lexbuf)) }
+  | ident    { IDENT(BinPos.Coq_xO (intern_string(Lexing.lexeme lexbuf))) }
+  | temp     { let s = Lexing.lexeme lexbuf in
+               let n = Int32.of_string(String.sub s 1 (String.length s -1)) in
+	       IDENT(if n = 0l then BinPos.Coq_xH else BinPos.Coq_xI (positive_of_camlint n)) }
   | eof      { EOF }
   | _        { raise(Error("illegal character `" ^ Char.escaped (Lexing.lexeme_char lexbuf 0) ^ "'")) }
 
