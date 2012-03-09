@@ -230,7 +230,7 @@ let rec print_stmt p s =
       fprintf p "@[<v 3>{{ %a@;<0 -3>}}@]"
               print_stmt s
   | Sexit n ->
-      fprintf p "exit %d;" (camlint_of_nat n + 1)
+      fprintf p "exit %d;" (camlint_of_nat n)
   | Sswitch(e, cases, dfl) ->
       fprintf p "@[<v 2>switch (%a) {" print_expr e;
       List.iter
