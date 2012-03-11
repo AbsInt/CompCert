@@ -87,8 +87,8 @@ Lemma eval_condition_of_expr_base:
   Val.bool_of_val v b ->
   eval_condexpr ge sp e m le (condexpr_of_expr_base a) b.
 Proof.
-  intros. unfold condexpr_of_expr_base. 
-  exploit eval_cond_of_expr; eauto. 
+  intros. unfold condexpr_of_expr_base.
+  generalize (eval_cond_of_expr _ _ _ _ _ _ _ _ H H0). 
   destruct (cond_of_expr a) as [cond args]. 
   intros [vl [A B]].
   econstructor; eauto. 
