@@ -3,7 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
-(*   with contributions from Andrew Tolmach (Portland State University)  *)
+(*  with contributions from Andrew Tolmach (Portland State University) *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -1477,7 +1477,7 @@ Proof.
   apply find_funct_ptr_match. auto.
 Qed.
 
-Theorem find_funct_rev_match: (* a little weak *)
+Theorem find_funct_rev_match:
   forall (v : val) (tf : B),
   find_funct (globalenv p') v = Some tf ->
   (exists f, find_funct (globalenv p) v = Some f /\ match_fun f tf) 

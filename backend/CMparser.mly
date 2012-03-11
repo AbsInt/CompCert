@@ -13,7 +13,6 @@
 /*                                                                     */
 /* *********************************************************************/
 
-/* HASP: Modified to parse global data declarations, other small changes */
 /* Note that this compiles a superset of the language defined by the AST, 
    including function calls in expressions, matches, while statements, etc. */
 

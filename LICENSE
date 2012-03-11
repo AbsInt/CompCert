@@ -1,12 +1,12 @@
-All files in this distribution are part of the Compcert verified compiler.
+All files in this distribution are part of the CompCert verified compiler.
 
-The Compcert verified compiler is Copyright 2004, 2005, 2006, 2007,
-2008, 2009, 2010, 2011 Institut National de Recherche en Informatique
+The CompCert verified compiler is Copyright 2004, 2005, 2006, 2007,
+2008, 2009, 2010, 2011, 2012 Institut National de Recherche en Informatique
 et en Automatique (INRIA).
 
-The Compcert verified compiler is distributed under the terms of the
+The CompCert verified compiler is distributed under the terms of the
 INRIA Non-Commercial License Agreement given below.  This is a
-non-free license that grants you the right to use the Compcert verified
+non-free license that grants you the right to use the CompCert verified
 compiler for educational, research or evaluation purposes only, but
 prohibits commercial uses.
 
@@ -54,10 +54,10 @@ BSD license, included below.
 
 ----------------------------------------------------------------------
 
-INRIA Non-Commercial License Agreement for the Compcert verified compiler
+INRIA Non-Commercial License Agreement for the CompCert verified compiler
 
 1. Background: Institut National de Recherche en Informatique et en
-   Automatique (the "Provider") developed the Compcert verified
+   Automatique (the "Provider") developed the CompCert verified
    compiler (the "Software") and seeks to distribute the Software for
    public use and benefit.
 
@@ -92,7 +92,7 @@ INRIA Non-Commercial License Agreement for the Compcert verified compiler
    Software and all copyrights, trade secrets, or other intellectual
    property rights in the Software and any accompanying information.
 
-6. Publication Credit: You agree to acknowledge the INRIA Compcert
+6. Publication Credit: You agree to acknowledge the INRIA CompCert
    research project with appropriate citations in any publication or
    presentation containing research results obtained in whole or in
    part through the use of the Software.
