@@ -293,6 +293,7 @@ Qed.
 Remark add_functions_inversion : forall fs e x b,
   find_symbol (add_functions e fs) x = Some b -> 
   In x (funct_names fs) \/ find_symbol e x = Some b. 
+Proof.
   induction fs; intros. 
     simpl in H.  intuition.
     simpl in H. destruct (IHfs _ _ _ H).
