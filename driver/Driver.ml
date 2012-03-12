@@ -383,6 +383,7 @@ Interpreter mode:
   -trace         Have the interpreter produce a detailed trace of reductions
   -random        Randomize execution order
   -all           Simulate all possible execution orders
+  -randvol       Return random results for reading volatile variables
 "
 
 let language_support_options = [
@@ -422,6 +423,7 @@ let cmdline_actions =
   "-trace$", Self (fun _ -> Interp.trace := 2);
   "-random$", Self (fun _ -> Interp.mode := Interp.Random);
   "-all$", Self (fun _ -> Interp.mode := Interp.All);
+  "-randvol$", Self (fun _ -> Interp.random_volatiles := true);
   ".*\\.c$", Self (fun s ->
       let objfile = process_c_file s in
       linker_options := objfile :: !linker_options);
