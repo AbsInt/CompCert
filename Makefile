@@ -182,6 +182,7 @@ clean:
 	rm -f doc/coq2html.ml doc/coq2html
 	rm -f driver/Configuration.ml
 	rm -f extraction/*.ml extraction/*.mli
+	rm -f tools/ndfun
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test/cminor clean
 	$(MAKE) -C test/c clean
