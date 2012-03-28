@@ -16,7 +16,7 @@
 (* Operations on C types and abstract syntax *)
 
 open Printf
-open Errors
+open Cerrors
 open C
 open Env
 open Machine

@@ -15,7 +15,6 @@
 
 (* Processor-dependent builtin C functions *)
 
-open Cparser
 open C
 
 let builtins = {

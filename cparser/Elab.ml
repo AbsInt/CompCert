@@ -16,7 +16,7 @@
 (* Elaboration from Cabs parse tree to C simplified, typed syntax tree *)
 
 open Format
-open Errors
+open Cerrors
 open Machine
 open Cabs
 open Cabshelper
@@ -29,13 +29,13 @@ open Env
 (* Error reporting  *)
 
 let fatal_error loc fmt =
-  Errors.fatal_error ("%a: Error:@ " ^^ fmt) format_cabsloc loc
+  Cerrors.fatal_error ("%a: Error:@ " ^^ fmt) format_cabsloc loc
 
 let error loc fmt =
-  Errors.error ("%a: Error:@ " ^^ fmt) format_cabsloc loc
+  Cerrors.error ("%a: Error:@ " ^^ fmt) format_cabsloc loc
 
 let warning loc fmt =
-  Errors.warning ("%a: Warning:@ " ^^ fmt) format_cabsloc loc
+  Cerrors.warning ("%a: Warning:@ " ^^ fmt) format_cabsloc loc
 
 (* Error reporting for Env functions *)
 

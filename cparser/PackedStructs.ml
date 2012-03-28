@@ -20,7 +20,7 @@ open Machine
 open C
 open Cutil
 open Env
-open Errors
+open Cerrors
 open Transform
 
 type field_info = {

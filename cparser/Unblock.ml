@@ -20,7 +20,7 @@
 
 open C
 open Cutil
-open Errors
+open Cerrors
 
 (* Convert an initializer to a list of assignments.
    Prepend those assignments to the given statement. *)

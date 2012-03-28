@@ -15,12 +15,9 @@
 
 open Printf
 
-module CompcertErrors = Errors (* avoid shadowing by Cparser.Errors *)
-
-open Cparser
-open Cparser.C
-open Cparser.Env
-open Cparser.Builtins
+open C
+open Env
+open Builtins
 
 open Camlcoq
 open AST
@@ -222,12 +219,12 @@ let make_builtin_memcpy args =
   | Econs(dst, Econs(src, Econs(sz, Econs(al, Enil)))) ->
       let sz1 =
         match Initializers.constval sz with
-        | CompcertErrors.OK(Vint n) -> camlint_of_coqint n
+        | Errors.OK(Vint n) -> camlint_of_coqint n
         | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be 
 a constant)"; 0l in
       let al1 =
         match Initializers.constval al with
-        | CompcertErrors.OK(Vint n) -> camlint_of_coqint n
+        | Errors.OK(Vint n) -> camlint_of_coqint n
         | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be 
 a constant)"; 0l in
       let fn = register_inlined_memcpy sz1 al1 in
@@ -249,7 +246,7 @@ let convertAttr a = List.mem AVolatile a
 
 let convertIkind = function
   | C.IBool -> (Unsigned, IBool)
-  | C.IChar -> ((if (!Cparser.Machine.config).Cparser.Machine.char_signed
+  | C.IChar -> ((if (!Machine.config).Machine.char_signed
                  then Signed else Unsigned), I8)
   | C.ISChar -> (Signed, I8)
   | C.IUChar -> (Unsigned, I8)
@@ -725,9 +722,9 @@ let convertFundecl env (sto, id, ty, optinit) =
 
 let string_of_errmsg msg =
   let string_of_err = function
-  | CompcertErrors.MSG s -> camlstring_of_coqstring s
-  | CompcertErrors.CTX i -> extern_atom i
-  | CompcertErrors.CTXL i -> "" (* should not happen *)
+  | Errors.MSG s -> camlstring_of_coqstring s
+  | Errors.CTX i -> extern_atom i
+  | Errors.CTXL i -> "" (* should not happen *)
   in String.concat "" (List.map string_of_err msg)
 
 let rec convertInit env init =
@@ -749,8 +746,8 @@ and convertInitList env il =
 let convertInitializer env ty i =
   match Initializers.transl_init (convertTyp env ty) (convertInit env i)
   with
-  | CompcertErrors.OK init -> init
-  | CompcertErrors.Error msg ->
+  | Errors.OK init -> init
+  | Errors.Error msg ->
       error (sprintf "Initializer is not a compile-time constant (%s)"
                      (string_of_errmsg msg)); []
 

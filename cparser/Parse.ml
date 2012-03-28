@@ -39,15 +39,15 @@ let parse_transformations s =
   !t
 
 let preprocessed_file transfs name sourcefile =
-  Errors.reset();
+  Cerrors.reset();
   let t = parse_transformations transfs in
   let ic = open_in sourcefile in
   let p =
     try
       transform_program t (Elab.elab_preprocessed_file name ic)
     with Parsing.Parse_error ->
-           Errors.error "Error during parsing"; []
-       | Errors.Abort ->
+           Cerrors.error "Error during parsing"; []
+       | Cerrors.Abort ->
            [] in
   close_in ic;
-  if Errors.check_errors() then None else Some p
+  if Cerrors.check_errors() then None else Some p

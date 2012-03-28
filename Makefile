@@ -27,7 +27,11 @@ OCB_OPTIONS=\
   -j 2 \
   -no-hygiene \
   -no-links \
-  -I extraction $(INCLUDES)
+  -I extraction -I cparser $(INCLUDES)
+OCB_OPTIONS_CHECKLINK=\
+  $(OCB_OPTIONS) \
+  -I checklink \
+  -use-ocamlfind
 
 VPATH=$(DIRS)
 GPATH=$(DIRS)
@@ -114,7 +118,15 @@ ccomp.byte: driver/Configuration.ml
 runtime:
 	$(MAKE) -C runtime
 
-.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte cinterp cinterp.byte runtime
+cchecklink: driver/Configuration.ml
+	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.native \
+        && rm -f cchecklink && $(SLN) _build/checklink/Validator.native cchecklink
+
+cchecklink.byte: driver/Configuration.ml
+	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
+        && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
+
+.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte
 
 all:
 	$(MAKE) proof
@@ -152,7 +164,7 @@ latexdoc:
 	@tools/ndfun $*.vp > $*.v || { rm -f $*.v; exit 2; }
 	@chmod -w $*.v
 
-driver/Configuration.ml: Makefile.config
+driver/Configuration.ml: Makefile.config VERSION
 	(echo let stdlib_path = "\"$(LIBDIR)\""; \
          echo let prepro = "\"$(CPREPRO)\""; \
          echo let asm = "\"$(CASM)\""; \
@@ -160,7 +172,9 @@ driver/Configuration.ml: Makefile.config
          echo let arch = "\"$(ARCH)\""; \
          echo let variant = "\"$(VARIANT)\""; \
          echo let system = "\"$(SYSTEM)\""; \
-         echo let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER)) \
+         echo let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER); \
+         version=`cat VERSION`; \
+         echo let version = "\"$$version\"") \
         > driver/Configuration.ml
 
 depend: $(FILES)

@@ -17,7 +17,6 @@
 
 open Printf
 open Camlcoq
-open Cparser
 
 (* #pragma section *)
 

@@ -14,7 +14,7 @@
 (* *********************************************************************)
 
 open Format
-open Errors
+open Cerrors
 open Cabshelper
 
 (* Report parsing errors *)

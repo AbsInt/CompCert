@@ -84,7 +84,7 @@ let parse_c_file sourcename ifile =
   in
   (* Parsing and production of a simplified C AST *)
   let ast =
-    match Cparser.Parse.preprocessed_file simplifs sourcename ifile with
+    match Parse.preprocessed_file simplifs sourcename ifile with
     | None -> exit 2
     | Some p -> p in
   (* Remove preprocessed file (always a temp file) *)
@@ -93,7 +93,7 @@ let parse_c_file sourcename ifile =
   if !option_dparse then begin
     let ofile = Filename.chop_suffix sourcename ".c" ^ ".parsed.c" in
     let oc = open_out ofile in
-    Cparser.Cprint.program (Format.formatter_of_out_channel oc) ast;
+    Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
   end;
   (* Conversion to Csyntax *)
@@ -110,6 +110,18 @@ let parse_c_file sourcename ifile =
     close_out oc
   end;
   csyntax
+
+(* Dump Asm code in binary format for the validator *)
+
+let sdump_magic_number = "CompCertSDUMP" ^ Configuration.version
+
+let dump_asm asm destfile =
+  let oc = open_out_bin destfile in
+  output_string oc sdump_magic_number;
+  output_value oc asm;
+  output_value oc Camlcoq.string_of_atom;
+  output_value oc C2C.decl_atom;
+  close_out oc
 
 (* From CompCert C AST to asm *)
 
@@ -134,7 +146,10 @@ let compile_c_ast sourcename csyntax ofile =
     | Errors.Error msg ->
         print_error stderr msg;
         exit 2 in
-  (* Save asm *)
+  (* Dump Asm in binary format *)  
+  if !option_sdump then
+    dump_asm asm (Filename.chop_suffix sourcename ".c" ^ ".sdump");
+  (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc asm;
   close_out oc
@@ -286,7 +301,7 @@ let rec find_action s = function
 let parse_cmdline spec usage =
   let acts = List.map (fun (pat, act) -> (Str.regexp pat, act)) spec in
   let error () =
-    eprintf "Usage: %s" usage;
+    eprintf "%s" usage;
     exit 2 in
   let rec parse i =
     if i < Array.length Sys.argv then begin
@@ -325,7 +340,8 @@ let parse_cmdline spec usage =
   in parse 1
 
 let usage_string =
-"ccomp [options] <source files>
+"The CompCert C verified compiler, version " ^ Configuration.version ^ "
+Usage: ccomp [options] <source files>
 Recognized source files:
   .c             C source file
   .cm            Cminor source file
@@ -369,6 +385,7 @@ Tracing options:
   -dalloc        Save LTL after register allocation in <file>.alloc.ltl
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
+  -sdump         Save info for post-linking validation in <file>.sdump
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
@@ -414,6 +431,7 @@ let cmdline_actions =
   "-dalloc$", Set option_dalloc;
   "-dmach$", Set option_dmach;
   "-dasm$", Set option_dasm;
+  "-sdump$", Set option_sdump;
   "-E$", Set option_E;
   "-S$", Set option_S;
   "-c$", Set option_c;
@@ -461,14 +479,14 @@ let cmdline_actions =
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
-  Cparser.Machine.config :=
+  Machine.config :=
     begin match Configuration.arch with
-    | "powerpc" -> Cparser.Machine.ppc_32_bigendian
-    | "arm"     -> Cparser.Machine.arm_littleendian
-    | "ia32"    -> Cparser.Machine.x86_32
+    | "powerpc" -> Machine.ppc_32_bigendian
+    | "arm"     -> Machine.arm_littleendian
+    | "ia32"    -> Machine.x86_32
     | _         -> assert false
     end;
-  Cparser.Builtins.set C2C.builtins;
+  Builtins.set C2C.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
   if !linker_options <> [] 

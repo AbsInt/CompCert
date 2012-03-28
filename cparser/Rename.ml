@@ -83,8 +83,8 @@ let ident env id =
   try
     IdentMap.find id env.re_id
   with Not_found ->
-    Errors.fatal_error "Internal error: Rename: %s__%d unbound" 
-                       id.name id.stamp
+    Cerrors.fatal_error "Internal error: Rename: %s__%d unbound" 
+                        id.name id.stamp
 
 let rec typ env = function
   | TPtr(ty, a) -> TPtr(typ env ty, a)

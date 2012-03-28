@@ -14,7 +14,6 @@
 (* *********************************************************************)
 
 open Camlcoq
-open Cparser
 
 (* Handling of linker sections *)
 

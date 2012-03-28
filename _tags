@@ -1,2 +1,3 @@
-<cparser/*.cmx>: for-pack(Cparser)
 <driver/Driver.*{byte,native}>: use_unix,use_str,use_Cparser
+<checklink/*.ml>: pkg_bitstring
+<checklink/Validator.*{byte,native}>: pkg_unix,pkg_str,pkg_bitstring,use_Cparser
