@@ -1082,6 +1082,21 @@ Proof.
   split. rewrite <- Val.negate_cmpf_ne in B. rewrite <- Val.negate_cmpf_eq in A.  
   destruct c; apply MATCH; simpl; rewrite Val.notbool_negb_3; auto.
   auto.
+  (* Ccompfzero *)
+  generalize (compare_float_spec rs (rs (freg_of m0)) (Vfloat Float.zero)).
+  intros [A [B [C [D [E [F [G [H [I [J K]]]]]]]]]].
+  econstructor.
+  split. apply exec_straight_one. simpl. eauto. auto.
+  split. case c; apply MATCH; assumption.
+  auto.
+  (* Cnotcompf *)
+  generalize (compare_float_spec rs (rs (freg_of m0)) (Vfloat Float.zero)).
+  intros [A [B [C [D [E [F [G [H [I [J K]]]]]]]]]].
+  econstructor.
+  split. apply exec_straight_one. simpl. eauto. auto.
+  split. rewrite <- Val.negate_cmpf_ne in B. rewrite <- Val.negate_cmpf_eq in A.  
+  destruct c; apply MATCH; simpl; rewrite Val.notbool_negb_3; auto.
+  auto.
 Qed.
 
 (** Translation of arithmetic operations. *)

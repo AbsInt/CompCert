@@ -158,6 +158,7 @@ Inductive instruction : Type :=
   | Pfsubd: freg -> freg -> freg -> instruction     (**r float subtraction *)
   | Pflid: freg -> float -> instruction             (**r load float constant *)
   | Pfcmpd: freg -> freg -> instruction             (**r float comparison *)
+  | Pfcmpzd: freg -> instruction             (**r float comparison with 0.0 *)
   | Pfsitod: freg -> ireg -> instruction            (**r signed int to float *)
   | Pfuitod: freg -> ireg -> instruction            (**r unsigned int to float *)
   | Pftosizd: ireg -> freg -> instruction           (**r float to signed int *)
@@ -501,6 +502,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       OK (nextinstr (rs#r1 <- (Vfloat f))) m
   | Pfcmpd r1 r2 =>              
       OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
+  | Pfcmpzd r1 =>              
+      OK (nextinstr (compare_float rs rs#r1 (Vfloat Float.zero))) m
   | Pfsitod r1 r2 =>
       OK (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofint rs#r2)))) m
   | Pfuitod r1 r2 =>

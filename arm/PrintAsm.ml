@@ -562,15 +562,15 @@ let print_instruction oc = function
   | Pfsubd(r1, r2, r3) ->
       fprintf oc "	fsubd	%a, %a, %a\n" freg r1 freg r2 freg r3; 1
   | Pflid(r1, f) ->
-(*
-      if Int64.bits_of_float f = 0L (* +0.0 *) then begin
-        fprintf oc "	mvfd	%a, #0.0\n" freg r1; 1
-      end else begin
-*)
+      (* We could make good use of the fconstd instruction, but it's available
+         in VFD v3 and up, not in v1 nor v2 *)
       let lbl = label_float f in
       fprintf oc "	fldd	%a, .L%d @ %.12g\n" freg r1 lbl f; 1
   | Pfcmpd(r1, r2) ->
       fprintf oc "	fcmpd	%a, %a\n" freg r1 freg r2;
+      fprintf oc "	fmstat\n"; 2
+  | Pfcmpzd(r1) ->
+      fprintf oc "	fcmpzd	%a\n" freg r1;
       fprintf oc "	fmstat\n"; 2
   | Pfsitod(r1, r2) ->
       fprintf oc "	fmsr	%a, %a\n" freg_single r1 ireg r2;

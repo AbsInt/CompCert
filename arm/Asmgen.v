@@ -155,6 +155,10 @@ Definition transl_cond
       Pfcmpd (freg_of a1) (freg_of a2) :: k
   | Cnotcompf cmp, a1 :: a2 :: nil =>
       Pfcmpd (freg_of a1) (freg_of a2) :: k
+  | Ccompfzero cmp, a1 :: nil =>
+      Pfcmpzd (freg_of a1) :: k
+  | Cnotcompfzero cmp, a1 :: nil =>
+      Pfcmpzd (freg_of a1) :: k
   | _, _ =>
      k (**r never happens for well-typed code *)
   end.
@@ -209,6 +213,8 @@ Definition crbit_for_cond (cond: condition) :=
   | Ccompuimm cmp n => crbit_for_unsigned_cmp cmp
   | Ccompf cmp => crbit_for_float_cmp cmp
   | Cnotcompf cmp => crbit_for_float_not_cmp cmp
+  | Ccompfzero cmp => crbit_for_float_cmp cmp
+  | Cnotcompfzero cmp => crbit_for_float_not_cmp cmp
   end.
 
 (** Translation of the arithmetic operation [r <- op(args)].

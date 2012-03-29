@@ -58,7 +58,10 @@ Inductive condition : Type :=
   | Ccompimm: comparison -> int -> condition (**r signed integer comparison with a constant *)
   | Ccompuimm: comparison -> int -> condition (**r unsigned integer comparison with a constant *)
   | Ccompf: comparison -> condition     (**r floating-point comparison *)
-  | Cnotcompf: comparison -> condition. (**r negation of a floating-point comparison *)
+  | Cnotcompf: comparison -> condition (**r negation of a floating-point comparison *)
+  | Ccompfzero: comparison -> condition     (**r floating-point comparison with 0.0 *)
+  | Cnotcompfzero: comparison -> condition. (**r negation of a floating-point comparison with 0.0 *)
+
 
 (** Arithmetic and logical operations.  In the descriptions, [rd] is the
   result of the operation and [r1], [r2], etc, are the arguments. *)
@@ -186,6 +189,8 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem):
   | Ccompuimm c n, v1 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n)
   | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
   | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
+  | Ccompfzero c, v1 :: nil => Val.cmpf_bool c v1 (Vfloat Float.zero)
+  | Cnotcompfzero c, v1 :: nil => option_map negb (Val.cmpf_bool c v1 (Vfloat Float.zero))
   | _, _ => None
   end.
 
@@ -276,6 +281,8 @@ Definition type_of_condition (c: condition) : list typ :=
   | Ccompuimm _ _ => Tint :: nil
   | Ccompf _ => Tfloat :: Tfloat :: nil
   | Cnotcompf _ => Tfloat :: Tfloat :: nil
+  | Ccompfzero _ => Tfloat :: nil
+  | Cnotcompfzero _ => Tfloat :: nil
   end.
 
 Definition type_of_operation (op: operation) : list typ * typ :=
@@ -480,6 +487,8 @@ Definition negate_condition (cond: condition): condition :=
   | Ccompuimm c n => Ccompuimm (negate_comparison c) n
   | Ccompf c => Cnotcompf c
   | Cnotcompf c => Ccompf c
+  | Ccompfzero c => Cnotcompfzero c
+  | Cnotcompfzero c => Ccompfzero c
   end.
 
 Lemma eval_negate_condition:
@@ -497,6 +506,8 @@ Proof.
   rewrite Val.negate_cmpu_bool; rewrite H; auto.
   rewrite H; auto.
   destruct (Val.cmpf_bool c v v0); simpl in H; inv H. rewrite negb_elim; auto. 
+  rewrite H; auto.
+  destruct (Val.cmpf_bool c v (Vfloat Float.zero)); simpl in H; inv H. rewrite negb_elim; auto. 
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -801,6 +812,8 @@ Opaque Int.add.
   eapply CMPU; eauto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; simpl in H0; inv H0; auto.
+  inv H3; simpl in H0; inv H0; auto.
 Qed.
 
 Ltac TrivialExists :=

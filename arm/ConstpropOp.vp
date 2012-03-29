@@ -67,6 +67,8 @@ Nondetfunction eval_static_condition (cond: condition) (vl: list approx) :=
   | Ccompuimm c n, I n1 :: nil => Some(Int.cmpu c n1 n)
   | Ccompf c, F n1 :: F n2 :: nil => Some(Float.cmp c n1 n2)
   | Cnotcompf c, F n1 :: F n2 :: nil => Some(negb(Float.cmp c n1 n2))
+  | Ccompfzero c, F n1 :: nil => Some(Float.cmp c n1 Float.zero)
+  | Cnotcompfzero c, F n1 :: nil => Some(negb(Float.cmp c n1 Float.zero))
   | _, _ => None
   end.
 
@@ -166,6 +168,22 @@ Nondetfunction cond_strength_reduction
       (Ccompimm c (eval_static_shift s n2), r1 :: nil)
   | Ccompushift c s, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
       (Ccompuimm c (eval_static_shift s n2), r1 :: nil)
+  | Ccompf c, r1 :: r2 :: nil, F n1 :: v2 :: nil =>
+      if Float.eq_dec n1 Float.zero
+      then (Ccompfzero (swap_comparison c), r2 :: nil)
+      else (cond, args)
+  | Ccompf c, r1 :: r2 :: nil, v1 :: F n2 :: nil =>
+      if Float.eq_dec n2 Float.zero
+      then (Ccompfzero c, r1 :: nil)
+      else (cond, args)
+  | Cnotcompf c, r1 :: r2 :: nil, F n1 :: v2 :: nil =>
+      if Float.eq_dec n1 Float.zero
+      then (Cnotcompfzero (swap_comparison c), r2 :: nil)
+      else (cond, args)
+  | Cnotcompf c, r1 :: r2 :: nil, v1 :: F n2 :: nil =>
+      if Float.eq_dec n2 Float.zero
+      then (Cnotcompfzero c, r1 :: nil)
+      else (cond, args)
   | _, _, _ => 
       (cond, args)
   end.

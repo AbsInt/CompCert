@@ -192,6 +192,15 @@ Proof.
   rewrite H. rewrite eval_static_shift_correct. auto.
   rewrite H. rewrite eval_static_shift_correct. auto.
   auto.
+  destruct (Float.eq_dec n1 Float.zero); simpl; auto.
+  rewrite H0; subst n1. destruct (rs#r2); simpl; auto. rewrite Float.cmp_swap. auto.
+  destruct (Float.eq_dec n2 Float.zero); simpl; auto.
+  congruence.
+  destruct (Float.eq_dec n1 Float.zero); simpl; auto.
+  rewrite H0; subst n1. destruct (rs#r2); simpl; auto. rewrite Float.cmp_swap. auto.
+  destruct (Float.eq_dec n2 Float.zero); simpl; auto.
+  congruence.
+  auto.
 Qed.
 
 Lemma make_addimm_correct:

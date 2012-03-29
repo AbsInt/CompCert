@@ -48,6 +48,10 @@ let print_condition reg pp = function
       fprintf pp "%a %sf %a" reg r1 (comparison_name c) reg r2
   | (Cnotcompf c, [r1;r2]) ->
       fprintf pp "%a not(%sf) %a" reg r1 (comparison_name c) reg r2
+  | (Ccompfzero c, [r1]) ->
+      fprintf pp "%a %sf 0.0" reg r1 (comparison_name c)
+  | (Cnotcompfzero c, [r1]) ->
+      fprintf pp "%a not(%sf) 0.0" reg r1 (comparison_name c)
   | _ ->
       fprintf pp "<bad condition>"
 
