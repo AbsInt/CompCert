@@ -51,6 +51,9 @@ let fuzz_check elfmap bs byte old sdumps =
   | Assert_failure(s, l, c) ->
       if !fuzz_debug
       then Printf.printf "fuzz_check failed an assertion at %s (%d, %d)\n" s l c
+  | Library.Integer_overflow ->
+      if !fuzz_debug
+      then Printf.printf "fuzz_check raised an integer overflow exception\n"
   | Match_failure(s, l, c) ->
       if !fuzz_debug
       then Printf.printf "fuzz_check raised a match failure at %s (%d, %d)\n" s l c
