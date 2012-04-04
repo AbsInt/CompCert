@@ -133,6 +133,9 @@ all:
 	$(MAKE) extraction
 	$(MAKE) ccomp
 	$(MAKE) runtime
+ifeq ($(CCHECKLINK),true)
+	$(MAKE) cchecklink
+endif
 
 documentation: doc/coq2html $(FILES)
 	mkdir -p doc/html
@@ -186,11 +189,14 @@ depend: $(FILES)
 install:
 	install -d $(BINDIR)
 	install ./ccomp $(BINDIR)
+ifeq ($(CCHECKLINK),true)
+	install ./cchecklink $(BINDIR)
+endif
 	$(MAKE) -C runtime install
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
-	rm -f ccomp ccomp.byte
+	rm -f ccomp ccomp.byte cchecklink cchecklink.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
 	rm -f doc/coq2html.ml doc/coq2html

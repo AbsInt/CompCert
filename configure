@@ -61,6 +61,8 @@ done
 
 # Per-target configuration
 
+cchecklink=false
+
 case "$target" in
   powerpc-macosx|ppc-macosx)
     arch="powerpc"
@@ -81,7 +83,8 @@ case "$target" in
     casm="${toolprefix}gcc -c"
     clinker="${toolprefix}gcc"
     libmath="-lm"
-    need_stdlib_wrapper="false";;
+    need_stdlib_wrapper="false"
+    cchecklink=true;;
   powerpc-eabi-diab|ppc-eabi-diab)
     arch="powerpc"
     variant="eabi"
@@ -91,7 +94,8 @@ case "$target" in
     casm="${toolprefix}das"
     clinker="${toolprefix}dcc"
     libmath="-lm"
-    need_stdlib_wrapper="false";;
+    need_stdlib_wrapper="false"
+    cchecklink=true;;
   arm-linux)
     arch="arm"
     variant="linux"
@@ -154,6 +158,17 @@ case "$target" in
     exit 2;;
 esac
 
+# Additional packages needed for cchecklink
+
+if $cchecklink; then
+  if ocamlfind query bitstring > /dev/null
+  then :
+  else 
+    echo "ocamlfind or ocaml-bitstring missing, cchecklink will not be built"
+    cchecklink=false
+  fi
+fi
+
 # Generate Makefile.config
 
 rm -f Makefile.config
@@ -174,6 +189,7 @@ CASM=$casm
 CLINKER=$clinker
 LIBMATH=$libmath
 NEED_STDLIB_WRAPPER=$need_stdlib_wrapper
+CCHECKLINK=$cchecklink
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -256,6 +272,7 @@ CompCert configuration:
     Needs wrapper around stdlib... $need_stdlib_wrapper
     Binaries installed in......... $bindirexp
     Library files installed in.... $libdirexp
+    cchecklink tool supported..... $cchecklink
 
 If anything above looks wrong, please edit file ./Makefile.config to correct.
 

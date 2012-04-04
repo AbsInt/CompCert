@@ -16,7 +16,7 @@ dispatch begin function
     (* ocamlfind libraries *)
     flag ["ocaml"; "link"; "pkg_unix"] & S[A"-package"; A "unix"];
     flag ["ocaml"; "link"; "pkg_str"] & S[A"-package"; A "str"];
-    flag ["ocaml"; "compile";  "pkg_bitstring"] & S[A"-package"; A"bitstring,bitstring.syntax"; A"-syntax"; A"bitstring.syntax"; A"-syntax"; A"camlp4o"];
+    flag ["ocaml"; "compile";  "pkg_bitstring"] & S[A"-package"; A"bitstring,bitstring.syntax"; A"-syntax"; A"bitstring.syntax,camlp4o"];
     flag ["ocaml"; "ocamldep";  "pkg_bitstring"] & S[A"-package"; A"bitstring,bitstring.syntax"; A"-syntax"; A"bitstring.syntax,camlp4o"];
     flag ["ocaml"; "link";  "pkg_bitstring"] & S[A"-package"; A"bitstring"]
 
