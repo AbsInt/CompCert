@@ -4,7 +4,7 @@ TESTS=c arcode lzw lzss raytracer regression spass
 
 all: $(TESTS)
 
-CL=../cchecklink -noexhaust
+CL=../cchecklink $(ARGS)
 TESTDIR=../test
 
 C=aes almabench binarytrees bisect chomp fannkuch fft fib integr knucleotide \
