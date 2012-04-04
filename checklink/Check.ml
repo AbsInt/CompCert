@@ -181,15 +181,12 @@ let mark_covered_fun_sym_ndx (ndx: int) ffw: f_framework =
   in
   ffw.sf.ef.chkd_fun_syms.(ndx) <- true;
   ffw
-  >>> ff_ef ^%=
-      add_range sym_begin sym_size align (Function_symbol(sym))
+  >>> (ff_ef ^%= add_range sym_begin sym_size align (Function_symbol(sym)))
   >>> (ff_sf ^%=
       if not (is_well_aligned sym_ofs_local align)
       then (
         sf_ef ^%=
-          add_log (ERROR(
-            "Symbol not correctly aligned in the ELF file"
-          ))
+          add_log (ERROR("Symbol not correctly aligned in the ELF file"))
       )
       else id
   )
@@ -2928,7 +2925,7 @@ let check_elf_identification efw =
   >>> ef_checkb (ei.ei_data = ELFDATA2MSB || ei.ei_data = ELFDATA2LSB)
     "ELF should be MSB or LSB"
   >>> ef_checkb (ei.ei_version = EV_CURRENT)
-    "ELF identificatin version should be EV_CURRENT"
+    "ELF identification version should be EV_CURRENT"
 
 let check_elf_header efw: e_framework =
   let eh = efw.elf.e_hdr in

@@ -103,12 +103,6 @@ let log = {
   get = (fun ef -> ef.log);
   set = (fun l ef -> { ef with log = l });
 }
-(*
-let chkd_syms = {
-  get = (fun ef -> ef.chkd_syms);
-  set = (fun s ef -> { ef with chkd_syms = s });
-}
-*)
 
 let ident_to_sym_ndx = {
   get = (fun sf -> sf.ident_to_sym_ndx);
@@ -128,7 +122,6 @@ let add_range (start: int32) (length: int32) (align: int) (bcd: byte_chunk_desc)
   let stop = Int32.(sub (add start length) 1l) in
   {
     efw with
-      (*chkd_bytes_diet = ELFCoverage.r_add start stop efw.chkd_bytes_diet;*)
       chkd_bytes_list =
       (* Float constants can appear several times in the code, we don't
          want to add them multiple times *)
