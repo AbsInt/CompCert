@@ -33,10 +33,6 @@ type byte_chunk_desc =
 type e_framework = {
   elf: elf;
   log: log_entry list;
-  (*
-  chkd_syms: SymCoverage.t;
-  chkd_bytes_diet: ELFCoverage.t;
-  *)
   (** Every time a chunk of the ELF file is checked, it is added to this list.
       The first two fields are the start and stop offsets, the third is an
       alignment constraint, the last is a description. *)

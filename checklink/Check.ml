@@ -26,11 +26,6 @@ let debug = ref false
 (** Whether to dump the ELF map *)
 let dump_elfmap = ref false
 
-(*
-  module ELFCoverage = MakeRangeSet(MeasurableUInt32)
-  module SymCoverage = MakeRangeSet(MeasurableInt)
-*)
-
 (** CompCert Asm *)
 type ccode = Asm.instruction list
 
@@ -177,7 +172,6 @@ let mark_covered_fun_sym_ndx (ndx: int) ffw: f_framework =
     | None -> 0
   in
   ffw
-  (*>>> ((ff_ef |-- chkd_syms) ^%= (SymCoverage.add ndx))*)
   >>> (ff_ef ^%=
       (add_range sym_begin sym_size align (Function_symbol(sym)))
   )
@@ -725,10 +719,6 @@ let match_memcpy_big ecode pc sz al src dst fw
     program counter [pc].
 *)
 let rec compare_code ccode ecode pc fw: f_framework on_success =
-  (*
-    PosMap.iter (fun k v -> print_endline (string_of_positive k ^ " -> " ^
-    string_of_int32 v)) i.ident_to_sym_ndx;
-  *)
   let error = ERR("Non-matching instructions") in
   match ccode, ecode with
   | [], []        -> OK(fw)
@@ -2584,7 +2574,6 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
               add_range sym_begin sym_size align (Data_symbol(sym))
           end
         )
-        (*>>> ((sf_ef |-- chkd_syms) ^%= (SymCoverage.add ndx))*)
         >>> (
           if not (is_well_aligned sym_ofs_local align)
           then (
@@ -2715,7 +2704,7 @@ let check_stubs sfw =
               >>> (sf_ef ^%= add_log (ERROR("Couldn't match stub")))
           end
     | _ -> assert false
-    end 
+    end
   in
   PosMap.fold check_stub sfw.stub_ident_to_vaddr sfw
 
@@ -2888,12 +2877,6 @@ let check_padding efw =
           }
         )
     | ((b1, e1, a1, n1) as h1) :: ((b2, e2, a2, n2) as h2) :: rest ->
-        (*print_endline (
-          "\n1: [" ^ string_of_int32 b1 ^ " - " ^ string_of_int32 e1 ^ "]"
-          );
-          print_endline (
-          "2: [" ^ string_of_int32 b2 ^ " - " ^ string_of_int32 e2 ^ "]"
-          );*)
         let pad_start = Int32.add e1 1l in
         let pad_stop = Int32.sub b2 1l in
         if
@@ -2908,12 +2891,6 @@ let check_padding efw =
             (h2 :: rest)
           else check_padding_aux efw (h1 :: accu) (h2 :: rest)
         else ( (* this is padding! *)
-          (*          let efw =
-                      { efw with
-                      chkd_bytes_diet =
-                      ELFCoverage.r_add pad_start pad_stop efw.chkd_bytes_diet;
-                      }
-                      in*)
           check_padding_aux efw
             ((pad_start, pad_stop, 0, Padding) :: h1 :: accu)
             (h2 :: rest)
@@ -3000,8 +2977,6 @@ let check_elf elf sdumps =
     {
       elf = elf;
       log = [];
-      (*chkd_syms = SymCoverage.empty;
-        chkd_bytes_diet = ELFCoverage.empty;*)
       chkd_bytes_list = [];
     }
     >>> check_elf_header
@@ -3029,17 +3004,6 @@ let check_elf elf sdumps =
   in
   List.fold_left process_sdump efw sdumps
   >>> check_padding
-  (*
-    print_endline "UNCOVERED SYMBOLS:";
-    let sym_range = SymCoverage.r_singleton 0 ((Array.length e.e_symtab) - 1) in
-    print_endline
-    (string_of_list
-    (fun ndx -> "(" ^ string_of_int ndx ^ "): " ^
-    e.e_symtab.(ndx).st_name)
-    "\n"
-    SymCoverage.(elements (diff sym_range efw.chkd_syms))
-    );
-  *)
   >>> add_log (LOG("ELF map:"))
   >>> (fun efw ->
     efw

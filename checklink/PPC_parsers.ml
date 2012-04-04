@@ -382,8 +382,6 @@ let parse_instr bs =
   | { bits:32:bitstring }
     -> UNKNOWN(bits)
 
-exception Wrong_code_size
-
 let rec parse_code_as_list bs =
   bitmatch bs with
   | { instr:32:bitstring; rest:-1:bitstring } ->
@@ -391,7 +389,7 @@ let rec parse_code_as_list bs =
   | { rest:-1:bitstring } ->
       if Bitstring.bitstring_length rest = 0
       then []
-      else raise Wrong_code_size
+      else assert false
 
 let parse_nth_instr bs n = parse_instr (Bitstring.subbitstring bs (n * 32) 32)
 
