@@ -6,10 +6,9 @@ open Lens
 open Library
 
 type log_entry =
-  | LOG of string
+  | DEBUG of string
   | ERROR of string
   | WARNING of string
-  | DEBUG of string
 
 type byte_chunk_desc =
   | ELF_header
@@ -37,6 +36,8 @@ type e_framework = {
       The first two fields are the start and stop offsets, the third is an
       alignment constraint, the last is a description. *)
   chkd_bytes_list: (int32 * int32 * int * byte_chunk_desc) list;
+  chkd_fun_syms: bool array;
+  chkd_data_syms: bool array;
 }
 
 module PosOT = struct
@@ -164,11 +165,10 @@ let ( ^%=? ) (lens: ('a, 'b) Lens.t) (transf: 'b -> 'b on_success)
 (** Finally, some printers.
 *)
 
-let string_of_log_entry = function
-| LOG(s)     -> s
+let string_of_log_entry show_debug = function
+| DEBUG(s)   -> if show_debug then s else ""
 | ERROR(s)   -> "ERROR: " ^ s
 | WARNING(s) -> "WARNING: " ^ s
-| DEBUG(s)   -> "DEBUG: " ^ s
 
 let string_of_byte_chunk_desc = function
 | ELF_header -> "ELF header"

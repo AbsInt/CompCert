@@ -19,19 +19,26 @@ open PPC_utils
 open Sections
 
 (** Enables immediate printing of log information to stdout.
-    Warning: will print out everything before backtracking.
+    Warning: will print out everything even when backtracking.
 *)
 let debug = ref false
 
+(** Whether to print the ELF map *)
+let print_elfmap = ref false
+
 (** Whether to dump the ELF map *)
 let dump_elfmap = ref false
+
+(** Whether to check that all ELF function/data symbols have been matched
+    against CompCert idents *)
+let exhaustivity = ref true
 
 (** CompCert Asm *)
 type ccode = Asm.instruction list
 
 (** Adds a log entry into the framework. *)
 let add_log (entry: log_entry) (efw: e_framework): e_framework =
-  if !debug then print_endline (string_of_log_entry entry);
+  if !debug then print_endline (string_of_log_entry true entry);
   {efw with log = entry :: efw.log}
 
 (** [flag] should have only one bit set. *)
@@ -102,10 +109,12 @@ let match_sections_name
   then sfw
   else (
     sfw
-    >>> (sf_ef ^%=
-        (add_log (ERROR(
-          "Section should be " ^ c_name ^ " instead of " ^ e_name)))
-    )
+    >>> sf_ef ^%=
+      (add_log
+         (ERROR
+            ("Section should be " ^ c_name ^ " instead of " ^ e_name)
+         )
+      )
   )
 
 (** Checks the symbol table entry of the function symbol number [sym_ndx],
@@ -145,9 +154,8 @@ let check_fun_symtab
     )
   )
   >>> match_sections_name section elf.e_shdra.(sym.st_shndx).sh_name
-  >>> (sf_ef ^%=
+  >>> sf_ef ^%=
       add_range symtab_ent_start 16l 4 (Symtab_function(sym))
-  )
 
 (** Checks that the offset [ofs] is well aligned with regards to [al], expressed
     in bytes. *)
@@ -171,10 +179,10 @@ let mark_covered_fun_sym_ndx (ndx: int) ffw: f_framework =
     | Some(a) -> a
     | None -> 0
   in
+  ffw.sf.ef.chkd_fun_syms.(ndx) <- true;
   ffw
-  >>> (ff_ef ^%=
-      (add_range sym_begin sym_size align (Function_symbol(sym)))
-  )
+  >>> ff_ef ^%=
+      add_range sym_begin sym_size align (Function_symbol(sym))
   >>> (ff_sf ^%=
       if not (is_well_aligned sym_ofs_local align)
       then (
@@ -463,7 +471,7 @@ let rec bitmask mb me =
     0 0 0 0 1 1 1 0 0 0 0    bitmask (me + 1) (mb - 1)
   *)
   else if mb = me + 1
-  then (-1l)
+  then (-1l) (* this needs special handling *)
   else Int32.(sub (-1l) (bitmask (me + 1) (mb - 1)))
 
 (** Checks that a label did not occur twice in the same function. *)
@@ -725,9 +733,15 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
   | [], _ | _, [] -> ERR("Codes have different lengths")
   | c::cs, e::es  ->
       let recur_simpl = compare_code cs es (Int32.add 4l pc) in
-      (*let curr_instr = "  [" ^ string_of_int32 pc ^ "] " ^
-        string_of_instruction c ^ " - " ^ string_of_instr e in
-        let fw = (ff_ef ^%= add_log (LOG(curr_instr))) fw in*)
+      let fw =
+        if !debug
+        then (
+          let curr_instr = "  [" ^ string_of_int32 pc ^ "] " ^
+            string_of_instruction c ^ " - " ^ string_of_instr e in
+          (ff_ef ^%= add_log (DEBUG(curr_instr))) fw
+        )
+        else fw
+      in
       match c with
       | Padd(rd, r1, r2) ->
           begin match ecode with
@@ -2326,7 +2340,7 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
         | Some ecode ->
             sfw
             >>> sf_ef ^%=
-            add_log (LOG("  Processing function: " ^ name))
+            add_log (DEBUG("  Processing function: " ^ name))
             >>> (fun sfw ->
               {
                 sf = sfw;
@@ -2342,8 +2356,9 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
       begin match candidates with
       | []    ->
           sfw
-          >>> sf_ef ^%= add_log (ERROR("Skipping missing symbol " ^ name))
-                        >>> worklist_process wl
+          >>> sf_ef ^%=
+          add_log (ERROR("Skipping missing symbol " ^ name))
+          >>> worklist_process wl
       | [ndx] ->
           begin match process_ndx ndx with
           | OK(ffw) ->
@@ -2511,7 +2526,7 @@ let check_data_symtab ident sym_ndx size sfw =
     match sym.st_type with
     | STT_OBJECT -> id
     | STT_NOTYPE -> (sf_ef ^%=
-        add_log (WARNING("Missing type for symbol"))
+        add_log (WARNING("Missing type for symbol " ^ sym.st_name))
     )
     | _ -> (sf_ef ^%=
         add_log (ERROR("Symbol should have type STT_OBJECT"))
@@ -2549,7 +2564,7 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     in
     let res =
       sfw
-      >>> (sf_ef ^%= add_log (LOG("  Processing data: " ^ sym.st_name)))
+      >>> (sf_ef ^%= add_log (DEBUG("  Processing data: " ^ sym.st_name)))
       >>> compare_data ldata sym_bs in
     match res with
     | ERR(s) -> ERR(s)
@@ -2564,11 +2579,12 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
           | Some(a) -> a
           end
         in
+        sfw.ef.chkd_data_syms.(ndx) <- true;
         sfw
         >>> (
           begin match sym_shdr.sh_type with
           | SHT_NOBITS ->
-              id
+              id (* These occupy no space, for now we just forget them *)
           | _ ->
               sf_ef ^%=
               add_range sym_begin sym_size align (Data_symbol(sym))
@@ -2813,46 +2829,45 @@ let is_padding bs start stop =
     Returns a framework where [chkd_bytes_list] is sorted and full.
 *)
 let check_padding efw =
-  (*let elf = efw.elf in
-    let sndxes = list_n elf.e_hdr.e_shnum in
-    let matching_sections x y =
+  let elf = efw.elf in
+  let sndxes = list_n elf.e_hdr.e_shnum in
+  let matching_sections x y =
     string_of_list
-    id
-    ", "
-    List.(map
-    (fun ndx -> elf.e_shdra.(ndx).sh_name)
-    (List.filter
-    (fun ndx ->
-    let shdr = elf.e_shdra.(ndx) in
-    intersect (x, y) shdr.sh_offset shdr.sh_size
-    )
-    sndxes
-    )
-    )
-    in*)
-  (*let matching_symbols x y =
+      id
+      ", "
+      (List.map
+         (fun ndx -> elf.e_shdra.(ndx).sh_name)
+         (List.filter
+            (fun ndx ->
+              let shdr = elf.e_shdra.(ndx) in
+              intersect (x, y) shdr.sh_offset shdr.sh_size
+            )
+            sndxes
+         )
+      )
+  in
+  let matching_symbols x y =
     string_of_list
-    id
-    ", "
-    List.(map
-    (fun sym -> sym.st_name)
-    (List.filter
-    (fun sym ->
-    if sym.st_shndx >= Array.length elf.e_shdra
-    then false (* special section *)
-    else
-    let offset =
-    physical_offset_of_vaddr elf sym.st_shndx sym.st_value
-    in
-    intersect (x, y) offset sym.st_size
-    )
-    (Array.to_list elf.e_symtab)
-    )
-    )
-    in*)
-  let unknown x y = Unknown(""
-  (*^ "Sections: " ^ matching_sections x y*)
-  (*^ "\nSymbols: " ^ matching_symbols x y*)
+      id
+      ", "
+      (List.map
+         (fun sym -> sym.st_name)
+         (List.filter
+            (fun sym ->
+              if sym.st_shndx >= Array.length elf.e_shdra
+              then false (* special section *)
+              else
+                let offset =
+                  physical_offset_of_vaddr elf sym.st_shndx sym.st_value
+                in
+                intersect (x, y) offset sym.st_size
+            )
+            (Array.to_list elf.e_symtab)
+         )
+      )
+  in
+  let unknown x y = Unknown(
+    "\nSections: " ^ matching_sections x y ^ "\nSymbols: " ^ matching_symbols x y
   )
   in
   (* check_padding_aux assumes a sorted list *)
@@ -2967,9 +2982,12 @@ let check_sym_tab_zero efw =
   )
   >>> add_range elf.e_shdra.(elf.e_symtab_sndx).sh_offset 16l 4 Zero_symbol
 
-(** Checks a whole ELF file according to a list of .sdump files. *)
-let check_elf elf sdumps =
+(** Checks a whole ELF file according to a list of .sdump files. This never
+    dumps anything, so it can be safely used when fuzz-testing even if the
+    user accidentally enabled dumping options. *)
+let check_elf_nodump elf sdumps =
   let eh = elf.e_hdr in
+  let nb_syms = Array.length elf.e_symtab in
   let section_strtab = elf.e_shdra.(eh.e_shstrndx) in
   let symtab_shdr = elf.e_shdra.(elf.e_symtab_sndx) in
   let symbol_strtab = elf.e_shdra.(int32_int symtab_shdr.sh_link) in
@@ -2978,6 +2996,8 @@ let check_elf elf sdumps =
       elf = elf;
       log = [];
       chkd_bytes_list = [];
+      chkd_fun_syms = Array.make nb_syms false;
+      chkd_data_syms = Array.make nb_syms false;
     }
     >>> check_elf_header
     >>> add_range
@@ -3002,43 +3022,118 @@ let check_elf elf sdumps =
       ELF_symbol_strtab
     >>> check_sym_tab_zero
   in
+  (* Thread the framework through the processing of all .sdump files *)
   List.fold_left process_sdump efw sdumps
+  (* then finally, check the padding in between identified byte chunks *)
   >>> check_padding
-  >>> add_log (LOG("ELF map:"))
-  >>> (fun efw ->
-    efw
-    >>> add_log (LOG(
+
+(** Checks a whole ELF file according to .sdump files.
+    If requested, dump the calculated bytes mapping, so that it can be
+    reused by the fuzzer. *)
+let check_elf_dump elffilename sdumps =
+  let elf = read_elf elffilename in
+  let efw = check_elf_nodump elf sdumps in
+  (* print the elfmap if requested *)
+  if !print_elfmap then begin
+    print_endline (
       string_of_list
         (fun (a, b, align, r) -> string_of_range a b ^ " (" ^
           string_of_int align ^ ") " ^ string_of_byte_chunk_desc r)
         "\n"
         efw.chkd_bytes_list
-    ))
-  )
-
-(** Checks a whole ELF file according to .sdump files.
-    If requested, dump the calculated bytes mapping, so that it can be
-    reused by the fuzzer. *)
-let check_and_dump elffilename sdumps =
-  let elf = read_elf elffilename in
-  check_elf elf sdumps
-  >>> (fun efw ->
-    if !dump_elfmap then begin
-      (* dump the elf map for fuzz-testing *)
-      let oc = open_out (elffilename ^ ".elfmap") in
-      output_value oc efw.chkd_bytes_list;
-      close_out oc
-    end;
-    efw
-  )
-  >>> (fun efw ->
-    if not !debug
-    then List.(
-      iter
-        (fun e ->
-          print_endline (string_of_log_entry e)
-        )
-        (rev efw.log)
     )
-  )
-
+  end;
+  (* dump the elfmap if requested *)
+  if !dump_elfmap then begin
+    let oc = open_out (elffilename ^ ".elfmap") in
+    output_value oc efw.chkd_bytes_list;
+    close_out oc
+  end;
+  (* indicate function symbols that have not been checked *)
+  let miss_fun =
+    List.filter
+      (fun ndx ->
+        let symtype = efw.elf.e_symtab.(ndx).st_type in
+        symtype = STT_FUNC || symtype = STT_NOTYPE
+      )
+      (filter_some
+         (Array.to_list
+            (Array.mapi
+               (fun ndx b -> if b then None else Some(ndx))
+               efw.chkd_fun_syms
+            )
+         )
+      )
+  in
+  if !exhaustivity
+  then
+    begin match miss_fun with
+    | [] -> ()
+    | _  ->
+        print_endline
+          "\nWARNING: the following function symbols do not appear in .sdump files.";
+        print_endline (
+          string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun
+        )
+    end
+  ;
+  (* indicate data symbols that have not been checked *)
+  let miss_data =
+    List.filter
+      (fun ndx ->
+        let symtype = efw.elf.e_symtab.(ndx).st_type in
+        symtype = STT_OBJECT || symtype = STT_NOTYPE
+      )
+      (filter_some
+         (Array.to_list
+            (Array.mapi
+               (fun ndx b -> if b then None else Some(ndx))
+               efw.chkd_data_syms
+            )
+         )
+      )
+  in
+  if !exhaustivity
+  then
+    begin match miss_data with
+    | [] -> ()
+    | _  ->
+        print_endline
+          "\nWARNING: the following data symbols do not appear in .sdump files.";
+        print_endline (
+          string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data
+        )
+    end
+  ;
+  (* print diagnosis *)
+  let worrysome = List.filter
+    (function ERROR(_) -> true | WARNING(_) -> true | DEBUG(_) -> false)
+    efw.log
+  in
+  let exists_unknown_chunk =
+    List.exists
+      (function (_, _, _, Unknown(_)) -> true | _ -> false)
+      efw.chkd_bytes_list
+  in
+  begin match worrysome with
+  | [] ->
+      print_endline "\nEverything seems fine with this ELF.";
+      if exists_unknown_chunk
+      then begin
+        print_endline (
+          "However, some parts of the ELF could not be identified." ^
+            if !print_elfmap
+            then ""
+            else " Use -printelfmap to see what was covered."
+        )
+      end
+  | _ ->
+      List.(iter
+              (fun e ->
+                match string_of_log_entry false e with
+                | "" -> ()
+                | s -> print_endline s
+              )
+              (rev efw.log)
+      )
+  end;

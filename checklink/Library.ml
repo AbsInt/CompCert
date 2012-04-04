@@ -3,9 +3,15 @@ open BinPos
 
 type bitstring = Bitstring.bitstring
 
+let is_some = function
+| Some(_) -> true
+| None    -> false
+
 let from_some = function
 | Some(x) -> x
 | None    -> raise Not_found
+
+let filter_some l = List.(map from_some (filter is_some l))
 
 type 'a on_success =
   | OK of 'a

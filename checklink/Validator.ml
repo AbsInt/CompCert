@@ -6,7 +6,7 @@ open Fuzz
 let elf_file = ref (None: string option)
 let sdump_files = ref ([] : string list)
 let option_fuzz = ref false
-let option_dumpelf = ref false
+let option_printelf = ref false
 
 let set_elf_file s =
   match !elf_file with
@@ -14,16 +14,20 @@ let set_elf_file s =
   | Some _ -> raise (Arg.Bad "multiple ELF executables given on command line")
 
 let options = [
-  "-dumpelf", Arg.Set option_dumpelf,
-    "Print the contents of the ELF executable";
+  "-printelf", Arg.Set option_printelf,
+    "Print the contents of the unanalyzed ELF executable";
+  "-printelfmap", Arg.Set Check.print_elfmap,
+    "Print a map of the analyzed ELF executable";
   "-debug", Arg.Set Check.debug,
     "Print a detailed trace of verification";
-  "-elfmap", Arg.Set Check.dump_elfmap,
-    "Dump an ELF map to <exename>.elfmap>, for use with random fuzzing";
+  "-dumpelfmap", Arg.Set Check.dump_elfmap,
+    "Dump an ELF map to <exename>.elfmap, for use with random fuzzing";
   "-exe <filename>", Arg.String set_elf_file,
     "Specify the ELF executable file to analyze";
   "-fuzz", Arg.Set option_fuzz,
-    "Random fuzzing test"
+    "Random fuzzing test";
+  "-noexhaust", Arg.Clear Check.exhaustivity,
+    "Disable the exhaustivity check of ELF function and data symbols"
 ]
 
 let anonymous arg =
@@ -34,7 +38,8 @@ let anonymous arg =
 
 let usage =
 "The CompCert C post-linking validator, version " ^ Configuration.version ^ "
-Usage: valink [options] <.sdump files> <ELF executable>
+Usage: cchecklink [options] <.sdump files> <ELF executable>
+In the absence of options, checks are performed and a short result is displayed.
 Options are:"
 
 let _ =
@@ -48,9 +53,9 @@ let _ =
       if !option_fuzz then begin
         Random.self_init();
         fuzz_loop elffilename sdumps
-      end else if !option_dumpelf then begin
+      end else if !option_printelf then begin
         let elf = read_elf elffilename in
         print_endline (string_of_elf elf)
       end else begin
-        check_and_dump elffilename sdumps
+        check_elf_dump elffilename sdumps
       end

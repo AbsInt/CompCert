@@ -14,6 +14,9 @@ let range_of_byte elfmap byte =
   let (_, _, _, r) = full_range_of_byte elfmap byte in
   r
 
+(** [fuzz_check] will print what happened on stderr, and report errors (that is,
+    when the check went fine) to stdout.
+*)
 let fuzz_check elfmap bs byte old sdumps =
   try
     (* The point here is to go all the way through the checks, and see whether
@@ -21,7 +24,7 @@ let fuzz_check elfmap bs byte old sdumps =
        might be missing a bug!
     *)
     let elf = read_elf_bs bs in
-    let efw = check_elf elf sdumps in
+    let efw = check_elf_nodump elf sdumps in
     if List.exists (function ERROR(s) -> true | _ -> false) efw.log
     then () (* finding an ERROR is expected *)
     else (* not finding an ERROR is bad! This is reported. *)
