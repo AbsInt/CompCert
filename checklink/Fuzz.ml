@@ -15,27 +15,40 @@ let range_of_byte elfmap byte =
   r
 
 let fuzz_check elfmap bs byte old sdumps =
-  let (str, _, _) = bs in
-  try (
+  try
+    (* The point here is to go all the way through the checks, and see whether
+       the checker returns an ERROR or raises an exception. If not, then we
+       might be missing a bug!
+    *)
     let elf = read_elf_bs bs in
-    try (
-      let efw = check_elf elf sdumps in
-      try (
-        let _ = List.find (function ERROR(s) -> true | _ -> false) efw.log in
-        ()
-      ) with
-      | Not_found ->
-          print_endline (
-            string_of_int32 (int_int32 byte) ^ " <- " ^
-              string_of_byte (Char.code str.[byte]) ^ " (was " ^
-              string_of_byte (Char.code old) ^ ") - " ^
-              string_of_byte_chunk_desc (range_of_byte elfmap byte)
-          )
-    ) with
-    | e -> ()
-  ) with
-  | e -> ()
+    let efw = check_elf elf sdumps in
+    if List.exists (function ERROR(s) -> true | _ -> false) efw.log
+    then () (* finding an ERROR is expected *)
+    else (* not finding an ERROR is bad! This is reported. *)
+      let (str, _, _) = bs in
+      print_endline (
+        string_of_int32 (int_int32 byte) ^ " <- " ^
+          string_of_byte (Char.code str.[byte]) ^ " (was " ^
+          string_of_byte (Char.code old) ^ ") - " ^
+          string_of_byte_chunk_desc (range_of_byte elfmap byte)
+      )
+  with
+  | Assert_failure(s, l, c) ->
+      Printf.eprintf "fuzz_check failed an assertion at %s (%d, %d)\n" s l c
+  | Match_failure(s, l, c) ->
+      Printf.eprintf "fuzz_check raised a match failure at %s (%d, %d)\n" s l c
+  | Not_found ->
+      Printf.eprintf "fuzz_check raised a not found exception\n"
+  | Invalid_argument(s) ->
+      Printf.eprintf "fuzz_check raised an invalid argument: %s\n" s
+  | ELF_parsers.Unknown_endianness ->
+      Printf.eprintf "fuzz_check raised an unknown endianness exception\n"
 
+(** Tries to prevent some easy-to-catch false positives. Some known false
+    positives are however hard to predict. For instance, when the virtual
+    address of a stub is replaced by the virtual address of another exact
+    same stub.
+*)
 let ok_fuzz elfmap str byte fuzz =
   let (a, b, _, r) = full_range_of_byte elfmap byte in
   let a = int32_int a in
@@ -66,15 +79,8 @@ let ok_fuzz elfmap str byte fuzz =
       (* False positive: 0. becomes -0. *)
       not (
         (byte + 7 <= b)
-        && (fuz = 0x80)
-        && (Char.code str.[byte + 0] = 0x00)
-        && (Char.code str.[byte + 1] = 0x00)
-        && (Char.code str.[byte + 2] = 0x00)
-        && (Char.code str.[byte + 3] = 0x00)
-        && (Char.code str.[byte + 4] = 0x00)
-        && (Char.code str.[byte + 5] = 0x00)
-        && (Char.code str.[byte + 6] = 0x00)
-        && (Char.code str.[byte + 7] = 0x00)
+        && (fuz = 0x80) (* sign bit *)
+        && String.sub str byte 8 = "\000\000\000\000\000\000\000\000"
       )
   | Function_symbol(_) ->
       let opcode = Char.code str.[byte - 3] in
@@ -88,17 +94,12 @@ let ok_fuzz elfmap str byte fuzz =
       (* False positive: 0. becomes -0. *)
       not (
         (byte = a)
-        && (fuz = 0x80)
-        && (Char.code str.[byte + 0] = 0x00)
-        && (Char.code str.[byte + 1] = 0x00)
-        && (Char.code str.[byte + 2] = 0x00)
-        && (Char.code str.[byte + 3] = 0x00)
-        && (Char.code str.[byte + 4] = 0x00)
-        && (Char.code str.[byte + 5] = 0x00)
-        && (Char.code str.[byte + 6] = 0x00)
-        && (Char.code str.[byte + 7] = 0x00)
+        && (fuz = 0x80) (* sign bit *)
+        && String.sub str byte 8 = "\000\000\000\000\000\000\000\000"
       )
-  | Padding            -> false (* padding may be non-null *)
+  (* padding is allowed to be non-null, but won't be recognized as padding, but
+     as unknown, which is not an ERROR *)
+  | Padding            -> false
   | Unknown(_)         -> false
 
 let fuzz_byte str byte_ndx =
@@ -120,6 +121,7 @@ let get_elfmap elffilename =
   close_in ic;
   elfmap
 
+(** Randomly fuzz bytes forever *)
 let fuzz_loop elffilename sdumps =
   let elfmap = get_elfmap elffilename in
   let (str, ofs, len) = Bitstring.bitstring_of_file elffilename in
@@ -130,26 +132,22 @@ let fuzz_loop elffilename sdumps =
     fuzz_check elfmap (str', ofs, len) byte str.[byte] sdumps;
     fuzz_loop_aux ()
   in fuzz_loop_aux ()
-(*
-  let fuzz_all elffilename sdumps =
+
+(** Fuzz each byte of the file once with a random new value *)
+let fuzz_every_byte_once elffilename sdumps =
   let elfmap = get_elfmap elffilename in
   let (str, ofs, len) = Bitstring.bitstring_of_file elffilename in
-  let rec fuzz_all_aux current limit =
-  if current = limit
-  then ()
-  else (
-  if ok_fuzz elfmap current
-  then (
-  let str' = String.copy str in
-  fuzz_byte str' current;
-  let msg = string_of_int32 (int_int32 current) ^ " <- " ^
-  string_of_byte (Char.code str'.[current]) ^ " (was " ^
-  string_of_byte (Char.code str.[current]) ^ ") - " ^
-  string_of_elf_range (range_of_byte elfmap current)
-  in
-  fuzz_check msg (str', ofs, len) sdumps
-  );
-  fuzz_all_aux (current + 1) limit
-  )
-  in fuzz_all_aux 0 (len/8)
-*)
+  let rec fuzz_every_byte_once_aux current limit =
+    if current = limit
+    then ()
+    else (
+      let fuzz = fuzz_byte str current in
+      if ok_fuzz elfmap str current fuzz
+      then (
+        let str' = String.copy str in
+        str'.[current] <- fuzz;
+        fuzz_check elfmap (str', ofs, len) current str.[current] sdumps
+      );
+      fuzz_every_byte_once_aux (current + 1) limit
+    )
+  in fuzz_every_byte_once_aux 0 (len/8)
