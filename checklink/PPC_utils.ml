@@ -17,7 +17,7 @@ let code_of_sym_ndx (e: elf) (ndx: int): ecode option =
   match sym.st_type with
   | STT_FUNC ->
       let sym_vaddr = sym.st_value in
-      let sym_size = 8 * (int32_int sym.st_size) in
+      let sym_size = Safe.(of_int32 sym.st_size * 8) in
       let sym_sndx = sym.st_shndx in
       let code_bs =
         bitstring_at_vaddr e sym_sndx sym_vaddr sym_size in

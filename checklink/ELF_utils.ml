@@ -11,9 +11,9 @@ let section_ndx_by_name (e: elf)(name: string): int option =
 
 let section_bitstring_noelf
     (bs: bitstring)(eshdra: elf32_shdr array)(sndx: int): bitstring =
-  let sofs = int32_int eshdra.(sndx).sh_offset in
-  let size = int32_int eshdra.(sndx).sh_size in
-  Bitstring.subbitstring bs (sofs * 8) (size * 8)
+  let sofs = Safe32.to_int eshdra.(sndx).sh_offset in
+  let size = Safe32.to_int eshdra.(sndx).sh_size in
+  Bitstring.subbitstring bs Safe.(sofs * 8) Safe.(size * 8)
 
 let section_bitstring (e: elf): int -> bitstring =
   section_bitstring_noelf e.e_bitstring e.e_shdra
@@ -30,6 +30,16 @@ let section_at_vaddr (e: elf)(vaddr: int32): int option =
     e.e_shdra
 
 (**
+   Returns the bitstring of the specified size beginning at the specified
+   virtual address within the specified section.
+*)
+let bitstring_at_vaddr e sndx vaddr size =
+  let shdr = e.e_shdra.(sndx) in
+  let bs = section_bitstring e sndx in
+  let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
+  Bitstring.subbitstring bs bit_ofs size
+
+(**
    Returns the entire bitstring that begins at the specified virtual address
    within the specified section and ends at the end of the file. This is useful
    when you don't know the sections size yet.
@@ -37,20 +47,8 @@ let section_at_vaddr (e: elf)(vaddr: int32): int option =
 let bitstring_at_vaddr_nosize (e: elf)(sndx: int)(vaddr: int32): bitstring =
   let shdr = e.e_shdra.(sndx) in
   let bs = section_bitstring e sndx in
-  let ofs = int32_int (Int32.sub vaddr shdr.sh_addr) in
-  bitmatch bs with
-  | { subbs : -1 : bitstring, offset(8*ofs) } -> subbs
-
-(**
-   Returns the bitstring of the specified size beginning at the specified
-   virtual address within the specified section.
-*)
-let bitstring_at_vaddr e sndx vaddr size =
-  let shdr = e.e_shdra.(sndx) in
-  let bs = section_bitstring e sndx in
-  let ofs = int32_int (Int32.sub vaddr shdr.sh_addr) in
-  bitmatch bs with
-  | { subbs : size : bitstring, offset(8*ofs) } -> subbs
+  let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
+  Bitstring.dropbits bit_ofs bs
 
 (**
    Removes symbol version for GCC's symbols.

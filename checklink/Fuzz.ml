@@ -9,7 +9,7 @@ let fuzz_debug = ref false
 let string_of_byte = Printf.sprintf "0x%02x"
 
 let full_range_of_byte elfmap byte =
-  let byte = int_int32 byte in
+  let byte = Int32.of_int byte in
   List.find (fun (a, b, _, _) -> a <= byte && byte <= b) elfmap 
 
 let range_of_byte elfmap byte =
@@ -23,7 +23,7 @@ let fuzz_check elfmap bs byte old sdumps =
   let is_error = function ERROR(_) -> true | _ -> false in
   let (str, _, _) = bs in
   let fuzz_description =
-    string_of_int32 (int_int32 byte) ^ " <- " ^
+    string_of_int32 (Int32.of_int byte) ^ " <- " ^
       string_of_byte (Char.code str.[byte]) ^ " (was " ^
       string_of_byte (Char.code old) ^ ") - " ^
       string_of_byte_chunk_desc (range_of_byte elfmap byte)
@@ -51,7 +51,7 @@ let fuzz_check elfmap bs byte old sdumps =
   | Assert_failure(s, l, c) ->
       if !fuzz_debug
       then Printf.printf "fuzz_check failed an assertion at %s (%d, %d)\n" s l c
-  | Library.Integer_overflow ->
+  | Exc.IntOverflow | Exc.Int32Overflow ->
       if !fuzz_debug
       then Printf.printf "fuzz_check raised an integer overflow exception\n"
   | Match_failure(s, l, c) ->
@@ -74,8 +74,8 @@ let fuzz_check elfmap bs byte old sdumps =
 *)
 let ok_fuzz elfmap str byte fuzz =
   let (a, b, _, r) = full_range_of_byte elfmap byte in
-  let a = int32_int a in
-  let b = int32_int b in
+  let a = Safe32.to_int a in
+  let b = Safe32.to_int b in
   let old = Char.code str.[byte] in
   let fuz = Char.code fuzz in
   match r with

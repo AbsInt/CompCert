@@ -129,7 +129,7 @@ let check_fun_symtab
   let symtab_ent_start =
     Int32.(add
              elf.e_shdra.(symtab_sndx).sh_offset
-             (int_int32 (16 * sym_ndx))) in
+             (Safe32.of_int (16 * sym_ndx))) in
   let sym = sfw.ef.elf.e_symtab.(sym_ndx) in
   let atom = Hashtbl.find sfw.atoms ident in
   let section =
@@ -160,7 +160,7 @@ let check_fun_symtab
 (** Checks that the offset [ofs] is well aligned with regards to [al], expressed
     in bytes. *)
 let is_well_aligned (ofs: int32) (al: int): bool =
-  al = 0 || Int32.rem ofs (int_int32 al) = 0l
+  al = 0 || Int32.rem ofs (Safe32.of_int al) = 0l
 
 (** Adds a function symbol to the set of covered symbols. *)
 let mark_covered_fun_sym_ndx (ndx: int) ffw: f_framework =
@@ -201,7 +201,7 @@ let re_variadic_stub: Str.regexp = Str.regexp "\\(.*\\)\\$[if]*$"
     out all symbols whose virtual address does not match [vaddr].
 *)
 let idmap_unify
-    (k: positive) (vaddr: int32) (sfw: s_framework): s_framework on_success =
+    (k: positive) (vaddr: int32) (sfw: s_framework): s_framework or_err =
   try (
     let id_ndxes = PosMap.find k sfw.ident_to_sym_ndx in
     match List.filter
@@ -260,7 +260,7 @@ let idmap_unify
     Subsequent references to the label will have to conform.
 *)
 let lblmap_unify (k: label) (v: int32) (ffw: f_framework)
-    : f_framework on_success =
+    : f_framework or_err =
   try (
     let v' = PosMap.find k ffw.label_to_vaddr in
     if v = v'
@@ -408,7 +408,7 @@ let match_z_int32 (cz: coq_Z) (ei: int32) =
   check_eq "match_z_int32" (z_int32 cz) ei
 
 let match_z_int (cz: coq_Z) (ei: int) =
-  check_eq "match_z_int" (z_int32 cz) (int_int32 ei)
+  check_eq "match_z_int" (z_int32 cz) (Safe32.of_int ei)
 
 (* [m] is interpreted as a bitmask, and checked against [ei]. *)
 let match_mask (m: coq_Z) (ei: int32) =
@@ -544,7 +544,7 @@ let rec match_jmptbl lbllist vaddr size ffw =
       )
       >>> match_jmptbl_aux lbllist bs
       >>? (ff_ef ^%=
-          add_range ofs (int_int32 (size / 8)) 0 Jumptable)
+          add_range ofs (Safe32.of_int (size / 8)) 0 Jumptable)
 
 (** Matches [ecode] agains the expected code for a small memory copy
     pseudo-instruction. Returns a triple containing the updated framework,
@@ -553,7 +553,7 @@ let rec match_jmptbl lbllist vaddr size ffw =
 let match_memcpy_small ecode pc sz al src dst (fw: f_framework)
     : (f_framework * ecode * int32) option =
   let rec match_memcpy_small_aux ofs sz ecode pc (fw: f_framework) =
-    let ofs32 = int_int32 ofs in
+    let ofs32 = Safe32.of_int ofs in
     if sz >= 8 && al >= 4
     then (
       match ecode with
@@ -632,7 +632,7 @@ let match_memcpy_big ecode pc sz al src dst fw
       STWU (rS5, rA5, d5)              :: (*           | *)
       BCx  (bo6,  bi6,  bd6, aa6, lk6) :: (* pc + 24 --  *)
       es ->
-      let sz' = int_int32 (sz / 4) in
+      let sz' = Safe32.of_int (sz / 4) in
       let (s, d) = if dst <> GPR11 then (GPR11, GPR12) else (GPR12, GPR11) in
       let target_vaddr = Int32.(add 16l pc) in
       let dest_vaddr = Int32.(add (add 24l pc) (mul 4l (exts bd6))) in
@@ -723,7 +723,7 @@ let match_memcpy_big ecode pc sz al src dst fw
 (** Compares a whole CompCert function code against an ELF code, starting at
     program counter [pc].
 *)
-let rec compare_code ccode ecode pc fw: f_framework on_success =
+let rec compare_code ccode ecode pc fw: f_framework or_err =
   let error = ERR("Non-matching instructions") in
   match ccode, ecode with
   | [], []        -> OK(fw)
@@ -790,7 +790,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rD
               >>> match_iregs r1  rA
-              >>> match_csts  cst (int_int32 simm)
+              >>> match_csts  cst (Safe32.of_int simm)
               >>> recur_simpl
           | _ -> error
           end
@@ -851,7 +851,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rA
               >>> match_iregs r1  rS
-              >>> match_csts  cst (int_int32 uimm)
+              >>> match_csts  cst (Safe32.of_int uimm)
               >>> recur_simpl
           | _ -> error
           end
@@ -861,7 +861,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rA
               >>> match_iregs r1  rS
-              >>> match_csts  cst (int_int32 uimm)
+              >>> match_csts  cst (Safe32.of_int uimm)
               >>> recur_simpl
           | _ -> error
           end
@@ -984,7 +984,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               MTSPR (rS2, spr2)       ::
               BCCTRx(bo3, bi3, rc3)   :: es ->
               let tblvaddr = Int32.(
-                add (shift_left (int_int32 simm0) 16) (exts d1)
+                add (shift_left (Safe32.of_int simm0) 16) (exts d1)
               ) in
               let tblsize = (32 * List.length table) in
               fw
@@ -1260,7 +1260,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
                   fw
                   >>> match_iregs  GPR11 rD
                   >>> match_iregs  GPR0  rA
-                  >>> match_csts   high  (int_int32 simm)
+                  >>> match_csts   high  (Safe32.of_int simm)
                   >>> check_builtin_vload_common
                     cs es (Int32.add pc 4l) chunk GPR11
                     (Csymbol_low(ident, ofs)) res
@@ -1280,7 +1280,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
                       fw
                       >>> match_iregs  tmp   rD
                       >>> match_iregs  GPR0  rA
-                      >>> match_csts   high  (int_int32 simm)
+                      >>> match_csts   high  (Safe32.of_int simm)
                       >>> check_builtin_vstore_common
                         cs es (Int32.add pc 4l) chunk tmp
                         (Csymbol_low(ident, ofs)) src
@@ -1358,7 +1358,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
           | CMPLI(crfD, l, rA, uimm) :: es ->
               fw
               >>> match_iregs  r1      rA
-              >>> match_csts   cst     (int_int32 uimm)
+              >>> match_csts   cst     (Safe32.of_int uimm)
               >>> match_crbits CRbit_0 crfD
               >>> match_bools  false   l
               >>> recur_simpl
@@ -1699,7 +1699,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
           |   ADDIS(rD0, rA0, simm0) ::
               LFD  (frD1, rA1, d1)   :: es ->
               let vaddr = Int32.(
-                add (shift_left (int_int32 simm0) 16) (exts d1)
+                add (shift_left (Safe32.of_int simm0) 16) (exts d1)
               ) in
               if Int32.rem vaddr 8l <> 0l
               then ERR("Float constants should be 8-byte aligned")
@@ -1892,7 +1892,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rA
               >>> match_iregs r1  rS
-              >>> match_csts  cst (int_int32 uimm)
+              >>> match_csts  cst (Safe32.of_int uimm)
               >>> recur_simpl
           | _ -> error
           end
@@ -1902,7 +1902,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rA
               >>> match_iregs r1  rS
-              >>> match_csts  cst (int_int32 uimm)
+              >>> match_csts  cst (Safe32.of_int uimm)
               >>> recur_simpl
           | _ -> error
           end
@@ -2133,7 +2133,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rA
               >>> match_iregs r1  rS
-              >>> match_csts  cst (int_int32 uimm)
+              >>> match_csts  cst (Safe32.of_int uimm)
               >>> recur_simpl
           | _ -> error
           end
@@ -2143,7 +2143,7 @@ let rec compare_code ccode ecode pc fw: f_framework on_success =
               fw
               >>> match_iregs rd  rA
               >>> match_iregs r1  rS
-              >>> match_csts  cst (int_int32 uimm)
+              >>> match_csts  cst (Safe32.of_int uimm)
               >>> recur_simpl
           | _ -> error
           end
@@ -2406,10 +2406,10 @@ type maybe_bitstring =
     framework as well as the size of the data matched.
 **)
 let compare_data (l: init_data list) (maybebs: maybe_bitstring) (sfw: s_framework)
-    : (s_framework * int) on_success =
+    : (s_framework * int) or_err =
   let error = ERR("Reached end of data bitstring too soon") in
   let rec compare_data_aux l bs s (sfw: s_framework):
-      (s_framework * int) on_success =
+      (s_framework * int) or_err =
     match l with
     | [] -> OK(sfw, s)
     | d::l ->
@@ -2476,7 +2476,7 @@ let compare_data (l: init_data list) (maybebs: maybe_bitstring) (sfw: s_framewor
         end
   in
   let rec compare_data_empty l s (sfw: s_framework):
-      (s_framework * int) on_success =
+      (s_framework * int) or_err =
     match l with
     | [] -> OK(sfw, s)
     | d::l ->
@@ -2496,7 +2496,7 @@ let check_data_symtab ident sym_ndx size sfw =
   let symtab_ent_start = Int32.(
     add
       elf.e_shdra.(elf.e_symtab_sndx).sh_offset
-      (int_int32 (16 * sym_ndx))
+      (Safe32.of_int (16 * sym_ndx))
   ) in
   let sym = sfw.ef.elf.e_symtab.(sym_ndx) in
   let atom = Hashtbl.find sfw.atoms ident in
@@ -2507,7 +2507,7 @@ let check_data_symtab ident sym_ndx size sfw =
   in
   sfw
   >>> (
-    if sym.st_size = int_int32 size
+    if sym.st_size = Safe32.of_int size
     then id
     else (
       sf_ef ^%=
@@ -2554,7 +2554,7 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     let sym_bs =
       match elf.e_shdra.(sym_sndx).sh_type with
       | SHT_NOBITS ->
-          Empty(int32_int sym.st_size * 8)
+          Empty(Safe.(of_int32 sym.st_size * 8))
       | SHT_PROGBITS ->
           NonEmpty(bitstring_at_vaddr_nosize elf sym_sndx sym_vaddr)
       | _ -> assert false
@@ -2872,7 +2872,7 @@ let check_padding efw =
        the end. *)
     | [(_, e, _, _) as h] ->
         let elf_size =
-          int_int32 ((Bitstring.bitstring_length efw.elf.e_bitstring) / 8) in
+          Safe32.of_int ((Bitstring.bitstring_length efw.elf.e_bitstring) / 8) in
         let elf_end = Int32.sub elf_size 1l in
         if e = elf_end
         then { efw with
@@ -2890,9 +2890,9 @@ let check_padding efw =
         let pad_stop = Int32.sub b2 1l in
         if
           pad_start = b2 (* if they are directly consecutive *)
-          || int32_int (Int32.sub b2 e1) > a2 (* or if they are too far away *)
+          || Safe.(of_int32 b2 - of_int32 e1) > a2 (* or if they are too far away *)
           || not (is_padding efw.elf.e_bitstring
-                    (int32_int pad_start) (int32_int pad_stop))
+                    (Safe32.to_int pad_start) (Safe32.to_int pad_stop))
         then (* not padding *)
           if pad_start <= pad_stop
           then check_padding_aux efw
@@ -2984,7 +2984,7 @@ let check_elf_nodump elf sdumps =
   let nb_syms = Array.length elf.e_symtab in
   let section_strtab = elf.e_shdra.(eh.e_shstrndx) in
   let symtab_shdr = elf.e_shdra.(elf.e_symtab_sndx) in
-  let symbol_strtab = elf.e_shdra.(int32_int symtab_shdr.sh_link) in
+  let symbol_strtab = elf.e_shdra.(Safe32.to_int symtab_shdr.sh_link) in
   let efw =
     {
       elf = elf;
@@ -2996,12 +2996,12 @@ let check_elf_nodump elf sdumps =
     >>> check_elf_header
     >>> add_range
       eh.e_phoff
-      (int_int32 (eh.e_phnum * eh.e_phentsize))
+      Safe.(to_int32 (eh.e_phnum * eh.e_phentsize))
       4
       ELF_progtab
     >>> add_range
       eh.e_shoff
-      (int_int32 (eh.e_shnum * eh.e_shentsize))
+      Safe.(to_int32 (eh.e_shnum * eh.e_shentsize))
       4
       ELF_shtab
     >>> add_range

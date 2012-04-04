@@ -138,18 +138,18 @@ let add_range (start: int32) (length: int32) (align: int) (bcd: byte_chunk_desc)
 (* external ( >>> ) : 'a -> ('a -> 'b) -> 'b = "%revapply" *)
 let ( >>> ) (a: 'a) (f: 'a -> 'b): 'b = f a
 
-let ( >>? ) (a: 'a on_success) (f: 'a -> 'b): 'b on_success =
+let ( >>? ) (a: 'a or_err) (f: 'a -> 'b): 'b or_err =
   match a with
   | ERR(s) -> ERR(s)
   | OK(x) -> OK(f x)
 
-let ( >>= ) (a: 'a on_success) (f: 'a -> 'b on_success): 'b on_success =
+let ( >>= ) (a: 'a or_err) (f: 'a -> 'b or_err): 'b or_err =
   match a with
   | ERR(s) -> ERR(s)
   | OK(x) -> f x
 
-let ( ^%=? ) (lens: ('a, 'b) Lens.t) (transf: 'b -> 'b on_success)
-    (arg: 'a): 'a on_success =
+let ( ^%=? ) (lens: ('a, 'b) Lens.t) (transf: 'b -> 'b or_err)
+    (arg: 'a): 'a or_err =
   let focus = arg |. lens in
   match transf focus with
   | OK(res) -> OK((lens ^= res) arg)

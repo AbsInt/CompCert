@@ -1,0 +1,2 @@
+exception IntOverflow
+exception Int32Overflow
