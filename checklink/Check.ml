@@ -2612,22 +2612,19 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     match successes with
     | [] ->
         sfw
-        >>> sf_ef ^%= add_log (ERROR(
+        >>> sf_ef ^%=
+        add_log (ERROR(
           "No matching data segment among candidates [" ^
             (string_of_list
                (fun ndx -> sfw.ef.elf.e_symtab.(ndx).st_name)
                ", "
                ident_ndxes
             ) ^
-            "]\nErrors:\n" ^
+            "], Errors: [" ^
             string_of_list
-            (fun x ->
-              match x with
-              | OK(_) -> ""
-              | ERR(s) -> s ^ "\n"
-            )
-            ""
-            results
+            (function OK(_) -> "" | ERR(s) -> s)
+            ", "
+            (List.filter (function ERR(_) -> true | _ -> false) results)
         ))
     | [sfw] -> sfw
     | fws ->

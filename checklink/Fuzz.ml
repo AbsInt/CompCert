@@ -46,7 +46,7 @@ let fuzz_check elfmap bs byte old sdumps =
         )
       end
     else (* not finding an ERROR is bad thus reported *)
-      print_endline (fuzz_description ^ "DID NOT CAUSE AN ERROR!")
+      print_endline (fuzz_description ^ " DID NOT CAUSE AN ERROR!")
   with
   | Assert_failure(s, l, c) ->
       if !fuzz_debug
