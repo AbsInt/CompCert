@@ -2413,6 +2413,13 @@ let compare_data (l: init_data list) (maybebs: maybe_bitstring) (sfw: s_framewor
     match l with
     | [] -> OK(sfw, s)
     | d::l ->
+        let sfw =
+          if !debug
+          then (
+            (sf_ef ^%= add_log (DEBUG(string_of_init_data d))) sfw
+          )
+          else sfw
+        in
         begin match d with
         | Init_int8(i) -> (
           bitmatch bs with

@@ -228,3 +228,12 @@ let string_of_instruction = function
 | Pbuiltin  (e0, p1, p2)        -> "Pbuiltin(" ^ string_of_external_function e0 ^ ", " ^ string_of_list string_of_preg ", " p1 ^ ", " ^ string_of_preg p2 ^ ")"
 | Pannot    (e0, a1)            -> "Pannot(" ^ string_of_external_function e0 ^ ", " ^ string_of_list string_of_annot_param ", " a1 ^ ")"
 
+let string_of_init_data = function
+| Init_int8(i)    -> "Init_int8("    ^ string_of_int (z_int_lax i)  ^ ")"
+| Init_int16(i)   -> "Init_int16("   ^ string_of_int (z_int_lax i)  ^ ")"
+| Init_int32(i)   -> "Init_int32("   ^ string_of_int32i (z_int32 i) ^ ")"
+| Init_float32(f) -> "Init_float32(" ^ string_of_float f            ^ ")"
+| Init_float64(f) -> "Init_float64(" ^ string_of_float f            ^ ")"
+| Init_space(z)   -> "Init_space("   ^ string_of_int (z_int z)      ^ ")"
+| Init_addrof(ident, ofs) ->
+    "Init_addrof(" ^ string_of_pos ident ^ ", " ^ string_of_int32i (z_int32 ofs) ^ ")"
