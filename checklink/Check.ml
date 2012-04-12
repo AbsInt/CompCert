@@ -817,9 +817,19 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           |   ADDIS   (rD0, rA0, simm0)  ::
               ORI     (rS1, rA1, uimm1)  ::
               STWUX   (rS2, rA2, rB2)    :: es ->
+              let sz32 = Int32.neg (z_int32 sz) in
+              let sz_hi = Int32.shift_right_logical sz32 16 in
+              let sz_lo = Int32.logand sz32 0xFFFFl in
               fw
-              >>> ff_ef ^%=
-              add_log (ERROR("TODO"))
+              >>> match_iregs  GPR12 rD0
+              >>> match_iregs  GPR0  rA0
+              >>> match_int32s sz_hi (Safe32.of_int simm0)
+              >>> match_iregs  GPR12 rS1
+              >>> match_iregs  GPR12 rA1
+              >>> match_int32s sz_lo (Safe32.of_int uimm1)
+              >>> match_iregs  GPR1  rS2
+              >>> match_iregs  GPR1  rA2
+              >>> match_iregs  GPR12 rB2
               >>> compare_code cs es (Int32.add 12l pc)
           | _ -> error
           end
