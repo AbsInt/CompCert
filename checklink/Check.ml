@@ -720,6 +720,38 @@ let match_memcpy_big ecode pc sz al src dst fw
       )
   | _ -> None
 
+let match_bo_bt_bool bo =
+  bitmatch bo with
+    | { false:1; true:1; true:1; false:1; false:1 } -> true
+    | { _ } -> false
+
+let match_bo_bf_bool bo =
+  bitmatch bo with
+    | { false:1; false:1; true:1; false:1; false:1 } -> true
+    | { _ } -> false
+
+let match_bo_bt bo ffw =
+  ffw >>> (ff_ef ^%=
+      bitmatch bo with
+        | { false:1; true:1; true:1; false:1; false:1 } -> id
+        | { _ } -> add_log (ERROR("match_bo_bt"))
+  )
+
+let match_bo_bf bo ffw =
+  ffw >>> (ff_ef ^%=
+      if match_bo_bf_bool bo
+      then id
+      else add_log (ERROR("match_bo_bf"))
+  )
+
+let match_bo_ctr bo ffw =
+  ffw
+  >>> (ff_ef ^%=
+      bitmatch bo with
+        | { true:1; false:1; true:1; false:1; false:1 } -> id
+        | { _ } -> add_log (ERROR("bitmatch"))
+  )
+
 (** Compares a whole CompCert function code against an ELF code, starting at
     program counter [pc].
 *)
@@ -883,9 +915,9 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           | Bx(li, aa, lk) :: es ->
               let lblvaddr = Int32.(add pc (mul 4l (exts li))) in
               fw
-              >>> match_bools  false aa
-              >>> match_bools  false lk
               >>> lblmap_unify lbl   lblvaddr
+              >>? match_bools  false aa
+              >>? match_bools  false lk
               >>= recur_simpl
           | _ -> error
           end
@@ -893,11 +925,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           begin match ecode with
           | BCCTRx(bo, bi, lk) :: es ->
               fw
-              >>> (ff_ef ^%=
-                  bitmatch bo with
-                  | { true:1; false:1; true:1; false:1; false:1 } -> id
-                  | { _ } -> add_log (ERROR("bitmatch"))
-              )
+              >>> match_bo_ctr bo
               >>> match_ints  0     bi
               >>> match_bools false lk
               >>> recur_simpl
@@ -907,11 +935,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           begin match ecode with
           | BCCTRx(bo, bi, lk) :: es ->
               fw
-              >>> (ff_ef ^%=
-                  bitmatch bo with
-                  | { true:1; false:1; true:1; false:1; false:1 } -> id
-                  | { _ } -> add_log (ERROR("bitmatch"))
-              )
+              >>> match_bo_ctr bo
               >>> match_ints  0    bi
               >>> match_bools true lk
               >>> recur_simpl
@@ -919,19 +943,30 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           end
       | Pbf(bit, lbl) ->
           begin match ecode with
-          | BCx(bo, bi, bd, aa, lk) :: es ->
+          | BCx(bo, bi, bd, aa, lk) :: es when match_bo_bf_bool bo ->
               let lblvaddr = Int32.(add pc (mul 4l (exts bd))) in
               fw
-              >>> (ff_ef ^%=
-                  bitmatch bo with
-                  | { false:1; false:1; true:1; false:1; false:1 } -> id
-                  | { _ } -> add_log (ERROR("bitmatch"))
-              )
+              (* >>> match_bo_bf  bo   already done in pattern match *)
               >>> match_crbits bit   bi
               >>> lblmap_unify lbl   lblvaddr
               >>? match_bools  false aa
               >>? match_bools  false lk
               >>= recur_simpl
+          |   BCx(bo0, bi0, bd0, aa0, lk0) ::
+              Bx (li1, aa1, lk1)           :: es ->
+              let cnext = Int32.add pc 8l in
+              let enext = Int32.(add pc (mul 4l (exts bd0))) in
+              let lblvaddr = Int32.(add pc (mul 4l (exts bd0))) in
+              fw
+              >>> match_bo_bt  bo0
+              >>> match_crbits bit bi0
+              >>> match_int32s cnext enext
+              >>> match_bools  false aa0
+              >>> match_bools  false lk0
+              >>> lblmap_unify lbl   lblvaddr
+              >>? match_bools  false aa1
+              >>? match_bools  false lk1
+              >>= compare_code cs es (Int32.add 8l pc)
           | _ -> error
           end
       | Pbl(ident) ->
@@ -939,9 +974,9 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           | Bx(li, aa, lk) :: es ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
               fw
-              >>> match_bools false aa
-              >>> match_bools true  lk
               >>> (ff_sf ^%=? idmap_unify ident dest)
+              >>? match_bools false aa
+              >>? match_bools true  lk
               >>= recur_simpl
           | _ -> error
           end
@@ -949,11 +984,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           begin match ecode with
           | BCLRx(bo, bi, lk) :: es ->
               fw
-              >>> (ff_ef ^%=
-                  bitmatch bo with
-                  | { true:1; false:1; true:1; false:1; false:1 } -> id
-                  | { _ } -> add_log (ERROR("bitmatch"))
-              )
+              >>> match_bo_ctr bo
               >>> match_ints  0     bi
               >>> match_bools false lk
               >>> recur_simpl
@@ -972,19 +1003,30 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           end
       | Pbt(bit, lbl) ->
           begin match ecode with
-          | BCx(bo, bi, bd, aa, lk) :: es ->
+          | BCx(bo, bi, bd, aa, lk) :: es when match_bo_bt_bool bo ->
               let lblvaddr = Int32.(add pc (mul 4l (exts bd))) in
               fw
-              >>> (ff_ef ^%=
-                  bitmatch bo with
-                  | { false:1; true:1; true:1; false:1; false:1 } -> id
-                  | { _ } -> add_log (ERROR("bitmatch"))
-              )
+              (* >>> match_bo_bt  bo   already done in pattern match *)
               >>> match_crbits bit   bi
               >>> lblmap_unify lbl   lblvaddr
               >>? match_bools  false aa
               >>? match_bools  false lk
               >>= recur_simpl
+          |   BCx(bo0, bi0, bd0, aa0, lk0) ::
+              Bx (li1, aa1, lk1)           :: es ->
+              let cnext = Int32.add pc 8l in
+              let enext = Int32.(add pc (mul 4l (exts bd0))) in
+              let lblvaddr = Int32.(add pc (mul 4l (exts bd0))) in
+              fw
+              >>> match_bo_bf  bo0
+              >>> match_crbits bit bi0
+              >>> match_int32s cnext enext
+              >>> match_bools  false aa0
+              >>> match_bools  false lk0
+              >>> lblmap_unify lbl   lblvaddr
+              >>? match_bools  false aa1
+              >>? match_bools  false lk1
+              >>= compare_code cs es (Int32.add 8l pc)
           | _ -> error
           end
       | Pbtbl(reg, table) ->
@@ -998,17 +1040,13 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
               ) in
               let tblsize = (32 * List.length table) in
               fw
-              >>> match_iregs GPR12 rD0
-              >>> match_iregs reg   rA0
-              >>> match_iregs GPR12 rD1
-              >>> match_iregs GPR12 rA1
-              >>> match_iregs GPR12 rS2
-              >>> match_ctr   spr2
-              >>> (ff_ef ^%=
-                  bitmatch bo3 with
-                  | { true:1; false:1; true:1; false:1; false:1 } -> id
-                  | { _ } -> add_log (ERROR("bitmatch"))
-              )
+              >>> match_iregs  GPR12 rD0
+              >>> match_iregs  reg   rA0
+              >>> match_iregs  GPR12 rD1
+              >>> match_iregs  GPR12 rA1
+              >>> match_iregs  GPR12 rS2
+              >>> match_ctr    spr2
+              >>> match_bo_ctr bo3
               >>> match_ints   0     bi3
               >>> match_bools  false rc3
               >>> match_jmptbl table tblvaddr tblsize
