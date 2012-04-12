@@ -3,6 +3,8 @@ open BinPos
 
 type bitstring = Bitstring.bitstring
 
+module StringMap = Map.Make (String)
+
 let is_some: 'a option -> bool = function
 | Some(_) -> true
 | None    -> false

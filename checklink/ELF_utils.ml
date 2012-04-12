@@ -65,19 +65,16 @@ let strip_mangling (s: string): string =
   with Not_found -> s
 
 (**
+   Returns the list of all symbols matching the specified name.
+*)
+let ndxes_of_sym_name (e: elf) (name: string): int list =
+  try StringMap.find (strip_mangling name) e.e_syms_by_name with Not_found -> []
+
+(**
    Returns the index of the first symbol matching the specified name, if it
    exists.
 *)
 let ndx_of_sym_name (e: elf) (name: string): int option =
-  array_exists
-    (fun x -> strip_versioning x.st_name = strip_mangling name)
-    e.e_symtab
-
-(**
-   Returns the list of all symbols matching the specified name.
-*)
-let ndxes_of_sym_name (e: elf) (name: string): int list =
-  List.map fst
-    (List.filter
-       (fun (_, x) -> strip_versioning x.st_name = strip_mangling name)
-       (Array.to_list (Array.mapi (fun a b -> (a, b)) e.e_symtab)))
+  match ndxes_of_sym_name e name with
+  | [] -> None
+  | h::_ -> Some(h)

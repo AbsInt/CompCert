@@ -159,10 +159,11 @@ type elf32_phdr = {
 
 (** ELF *)
 type elf = {
-  e_bitstring:   bitstring;
-  e_hdr:         elf32_ehdr;
-  e_shdra:       elf32_shdr array;
-  e_phdra:       elf32_phdr array;
-  e_symtab:      elf32_sym array;
-  e_symtab_sndx: int; (* to avoid having to find it again when needed *)
+  e_bitstring:    bitstring;
+  e_hdr:          elf32_ehdr;
+  e_shdra:        elf32_shdr array;
+  e_phdra:        elf32_phdr array;
+  e_symtab:       elf32_sym array;
+  e_symtab_sndx:  int; (* to avoid having to find it again when needed *)
+  e_syms_by_name: int list StringMap.t; (* faster lookup *)
 }

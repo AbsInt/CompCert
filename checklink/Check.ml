@@ -2749,7 +2749,9 @@ let read_sdump file =
 (** Processes a .sdump file.
 *)
 let process_sdump efw sdump: e_framework =
+  if !debug then print_endline ("Beginning reading " ^ sdump);
   let (prog, names, atoms) = read_sdump sdump in
+  if !debug then print_endline "Constructing mapping from idents to symbol indices";
   let ident_to_sym_ndx =
     Hashtbl.fold
       (fun ident name m ->
@@ -2760,6 +2762,7 @@ let process_sdump efw sdump: e_framework =
       names
       PosMap.empty
   in
+  if !debug then print_endline "Constructing worklist";
   let worklist_fundefs =
     List.filter
       (fun f ->
@@ -2778,6 +2781,7 @@ let process_sdump efw sdump: e_framework =
       )
       worklist_fundefs
   in
+  if !debug then print_endline "Beginning processing of the worklist";
   efw
   >>> (fun efw ->
     {
@@ -2790,7 +2794,15 @@ let process_sdump efw sdump: e_framework =
     }
   )
   >>> worklist_process wl
+  >>> (fun sfw ->
+    if !debug then print_endline "Checking stubs";
+    sfw
+  )
   >>> check_stubs
+  >>> (fun sfw ->
+    if !debug then print_endline "Checking data";
+    sfw
+  )
   >>> check_data prog.prog_vars
   >>> (fun sfw -> sfw.ef)
 
@@ -3023,6 +3035,7 @@ let check_elf_nodump elf sdumps =
       ELF_symbol_strtab
     >>> check_sym_tab_zero
   in
+  if !debug then print_endline "Done checking header, beginning processing of .sdumps";
   (* Thread the framework through the processing of all .sdump files *)
   List.fold_left process_sdump efw sdumps
   (* then finally, check the padding in between identified byte chunks *)
@@ -3032,7 +3045,9 @@ let check_elf_nodump elf sdumps =
     If requested, dump the calculated bytes mapping, so that it can be
     reused by the fuzzer. *)
 let check_elf_dump elffilename sdumps =
+  if !debug then print_endline "Beginning ELF parsing";
   let elf = read_elf elffilename in
+  if !debug then print_endline "Beginning ELF checking";
   let efw = check_elf_nodump elf sdumps in
   (* print the elfmap if requested *)
   if !print_elfmap then begin
@@ -3137,4 +3152,4 @@ let check_elf_dump elffilename sdumps =
               )
               (rev efw.log)
       )
-  end;
+  end

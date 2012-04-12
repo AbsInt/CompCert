@@ -304,12 +304,7 @@ let read_elf_bs (bs: bitstring): elf =
   in
   check_overlaps e_shdra e_hdr;
   let symtab_sndx = section_ndx_by_name_noelf e_shdra ".symtab" in
-  {
-    e_bitstring = bs      ;
-    e_hdr       = e_hdr   ;
-    e_shdra     = e_shdra ;
-    e_phdra     = Array.init e_hdr.e_phnum (read_elf32_phdr e_hdr bs) ;
-    e_symtab    = (
+  let e_symtab = (
       let symtab_shdr = e_shdra.(symtab_sndx) in
       let symtab_strtab_sndx = symtab_shdr.sh_link in
       let symtab_nb_ent = (Safe32.to_int symtab_shdr.sh_size / 16) in
@@ -317,8 +312,23 @@ let read_elf_bs (bs: bitstring): elf =
         (read_elf32_sym e_hdr
            (section_bitstring_noelf bs e_shdra symtab_sndx)
            (section_bitstring_noelf bs e_shdra (Safe32.to_int symtab_strtab_sndx)))
-    );
+  ) in
+  {
+    e_bitstring = bs;
+    e_hdr       = e_hdr;
+    e_shdra     = e_shdra;
+    e_phdra     = Array.init e_hdr.e_phnum (read_elf32_phdr e_hdr bs);
+    e_symtab    = e_symtab;
     e_symtab_sndx = symtab_sndx;
+    e_syms_by_name = (
+      let m = ref StringMap.empty in
+      for i = 0 to Array.length e_symtab - 1 do
+        let name = strip_versioning e_symtab.(i).st_name in
+        let list = try StringMap.find name !m with Not_found -> [] in
+        m := StringMap.add name (i :: list) !m
+      done;
+      !m
+    );
   }
 
 (** Reads a whole ELF file from a file name *)
