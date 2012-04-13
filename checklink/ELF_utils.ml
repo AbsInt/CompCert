@@ -35,20 +35,26 @@ let section_at_vaddr (e: elf)(vaddr: int32): int option =
 *)
 let bitstring_at_vaddr e sndx vaddr size =
   let shdr = e.e_shdra.(sndx) in
-  let bs = section_bitstring e sndx in
-  let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
-  Bitstring.subbitstring bs bit_ofs size
+  if vaddr < shdr.sh_addr || Safe32.(shdr.sh_addr + shdr.sh_size) <= vaddr
+  then None
+  else
+    let bs = section_bitstring e sndx in
+    let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
+    Some(Bitstring.subbitstring bs bit_ofs size)
 
 (**
    Returns the entire bitstring that begins at the specified virtual address
    within the specified section and ends at the end of the file. This is useful
    when you don't know the sections size yet.
 *)
-let bitstring_at_vaddr_nosize (e: elf)(sndx: int)(vaddr: int32): bitstring =
+let bitstring_at_vaddr_nosize (e: elf)(sndx: int)(vaddr: int32): bitstring option =
   let shdr = e.e_shdra.(sndx) in
-  let bs = section_bitstring e sndx in
-  let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
-  Bitstring.dropbits bit_ofs bs
+  if vaddr < shdr.sh_addr || Safe32.(shdr.sh_addr + shdr.sh_size) <= vaddr
+  then None
+  else
+    let bs = section_bitstring e sndx in
+    let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
+    Some(Bitstring.dropbits bit_ofs bs)
 
 (**
    Removes symbol version for GCC's symbols.

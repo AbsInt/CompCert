@@ -104,17 +104,22 @@ let match_sections_name
     s_framework
     =
   let c_name = name_of_section c_section in
-  if e_name = c_name ||
-    (c_name = ".bss" && e_name = ".sbss") (* this is complicated! *)
-  then sfw
-  else (
+  try
+    let expected = StringMap.find c_name sfw.ef.section_map in
+    if e_name = expected
+    then sfw
+    else (
+      sfw
+      >>> sf_ef ^%=
+        add_log (ERROR(
+          Printf.sprintf
+            "CompCert section %s was mapped to both %s and %s"
+            c_name expected e_name
+        ))
+    )
+  with Not_found -> (
     sfw
-    >>> sf_ef ^%=
-      (add_log
-         (ERROR
-            ("Section should be " ^ c_name ^ " instead of " ^ e_name)
-         )
-      )
+    >>> (sf_ef |-- section_map) ^%= StringMap.add c_name e_name
   )
 
 (** Checks the symbol table entry of the function symbol number [sym_ndx],
@@ -533,18 +538,22 @@ let rec match_jmptbl lbllist vaddr size ffw =
   in
   let elf = ffw.sf.ef.elf in
   let cur_sym_ndx = elf.e_symtab.(ffw.this_sym_ndx).st_shndx in
-  let bs = bitstring_at_vaddr elf cur_sym_ndx vaddr size in
-  match section_at_vaddr elf vaddr with
-  | None -> ERR("Jumptable's virtual address is out of any section")
-  | Some(sndx) ->
-      let ofs = physical_offset_of_vaddr elf sndx vaddr in
-      ffw
-      >>> (ff_sf ^%=
-          match_sections_name jmptbl_section elf.e_shdra.(sndx).sh_name
-      )
-      >>> match_jmptbl_aux lbllist bs
-      >>? (ff_ef ^%=
-          add_range ofs (Safe32.of_int (size / 8)) 0 Jumptable)
+  begin match bitstring_at_vaddr elf cur_sym_ndx vaddr size with
+  | None -> ERR("Symbol out of its parent section")
+  | Some(bs) ->
+      begin match section_at_vaddr elf vaddr with
+      | None -> ERR("Jumptable's virtual address is out of any section")
+      | Some(sndx) ->
+          let ofs = physical_offset_of_vaddr elf sndx vaddr in
+          ffw
+          >>> (ff_sf ^%=
+              match_sections_name jmptbl_section elf.e_shdra.(sndx).sh_name
+          )
+          >>> match_jmptbl_aux lbllist bs
+          >>? (ff_ef ^%=
+              add_range ofs (Safe32.of_int (size / 8)) 0 Jumptable)
+      end
+  end
 
 (** Matches [ecode] agains the expected code for a small memory copy
     pseudo-instruction. Returns a triple containing the updated framework,
@@ -722,19 +731,19 @@ let match_memcpy_big ecode pc sz al src dst fw
 
 let match_bo_bt_bool bo =
   bitmatch bo with
-    | { false:1; true:1; true:1; false:1; false:1 } -> true
-    | { _ } -> false
+  | { false:1; true:1; true:1; false:1; false:1 } -> true
+  | { _ } -> false
 
 let match_bo_bf_bool bo =
   bitmatch bo with
-    | { false:1; false:1; true:1; false:1; false:1 } -> true
-    | { _ } -> false
+  | { false:1; false:1; true:1; false:1; false:1 } -> true
+  | { _ } -> false
 
 let match_bo_bt bo ffw =
   ffw >>> (ff_ef ^%=
       bitmatch bo with
-        | { false:1; true:1; true:1; false:1; false:1 } -> id
-        | { _ } -> add_log (ERROR("match_bo_bt"))
+      | { false:1; true:1; true:1; false:1; false:1 } -> id
+      | { _ } -> add_log (ERROR("match_bo_bt"))
   )
 
 let match_bo_bf bo ffw =
@@ -748,8 +757,8 @@ let match_bo_ctr bo ffw =
   ffw
   >>> (ff_ef ^%=
       bitmatch bo with
-        | { true:1; false:1; true:1; false:1; false:1 } -> id
-        | { _ } -> add_log (ERROR("bitmatch"))
+      | { true:1; false:1; true:1; false:1; false:1 } -> id
+      | { _ } -> add_log (ERROR("bitmatch"))
   )
 
 (** Compares a whole CompCert function code against an ELF code, starting at
@@ -1766,7 +1775,13 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                 | Some(sndx) ->
                     let section_bitstring = bitstring_at_vaddr elf sndx in
                     let f = (
-                      bitmatch (section_bitstring vaddr 64) with
+                      let bs =
+                        begin match section_bitstring vaddr 64 with
+                        | None -> assert false
+                        | Some(bs) -> bs
+                        end
+                      in
+                      bitmatch bs with
                       | { f : 64 : int } -> Int64.float_of_bits f
                     ) in
                     let ofs = physical_offset_of_vaddr elf sndx vaddr in
@@ -2381,11 +2396,11 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
         let elf = (sfw |. sf_ef).elf in
         let pc = elf.e_symtab.(ndx).st_value in
         match code_of_sym_ndx elf ndx with
-        | None -> assert false
+        | None -> ERR("Could not find symbol data for function symbol " ^ name)
         | Some ecode ->
             sfw
             >>> sf_ef ^%=
-            add_log (DEBUG("  Processing function: " ^ name))
+            add_log (DEBUG("Processing function: " ^ name))
             >>> (fun sfw ->
               {
                 sf = sfw;
@@ -2606,18 +2621,27 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     let sym_vaddr = sym.st_value in
     let sym_size = sym.st_size in
     let sym_sndx = sym.st_shndx in
-    let sym_bs =
-      match elf.e_shdra.(sym_sndx).sh_type with
+    let sym_bs_opt =
+      begin match elf.e_shdra.(sym_sndx).sh_type with
       | SHT_NOBITS ->
-          Empty(Safe.(of_int32 sym.st_size * 8))
+          Some(Empty(Safe.(of_int32 sym.st_size * 8)))
       | SHT_PROGBITS ->
-          NonEmpty(bitstring_at_vaddr_nosize elf sym_sndx sym_vaddr)
+          begin match bitstring_at_vaddr_nosize elf sym_sndx sym_vaddr with
+          | None -> None
+          | Some(bs) -> Some(NonEmpty(bs))
+          end
       | _ -> assert false
+      end
     in
     let res =
-      sfw
-      >>> (sf_ef ^%= add_log (DEBUG("  Processing data: " ^ sym.st_name)))
-      >>> compare_data ldata sym_bs in
+      begin match sym_bs_opt with
+      | None -> ERR("Could not find symbol data for data symbol " ^ sym.st_name)
+      | Some(sym_bs) ->
+          sfw
+          >>> (sf_ef ^%= add_log (DEBUG("Processing data: " ^ sym.st_name)))
+          >>> compare_data ldata sym_bs
+      end
+    in
     match res with
     | ERR(s) -> ERR(s)
     | OK(sfw, size) ->
@@ -2680,6 +2704,7 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
             (function OK(_) -> "" | ERR(s) -> s)
             ", "
             (List.filter (function ERR(_) -> true | _ -> false) results)
+                        ^ "]"
         ))
     | [sfw] -> sfw
     | fws ->
@@ -3043,6 +3068,22 @@ let check_sym_tab_zero efw =
   )
   >>> add_range elf.e_shdra.(elf.e_symtab_sndx).sh_offset 16l 4 Zero_symbol
 
+let warn_sections_remapping efw =
+  StringMap.fold
+    (fun c_name e_name efw ->
+      if c_name = e_name
+      then efw
+      else (
+        efw >>> add_log (WARNING(
+          Printf.sprintf
+            "Section %s has been re-mapped to %s by your linker script"
+            c_name e_name
+        ))
+      )
+    )
+    efw.section_map
+    efw
+
 (** Checks a whole ELF file according to a list of .sdump files. This never
     dumps anything, so it can be safely used when fuzz-testing even if the
     user accidentally enabled dumping options. *)
@@ -3059,6 +3100,7 @@ let check_elf_nodump elf sdumps =
       chkd_bytes_list = [];
       chkd_fun_syms = Array.make nb_syms false;
       chkd_data_syms = Array.make nb_syms false;
+      section_map = StringMap.empty;
     }
     >>> check_elf_header
     >>> add_range
@@ -3086,8 +3128,10 @@ let check_elf_nodump elf sdumps =
   if !debug then print_endline "Done checking header, beginning processing of .sdumps";
   (* Thread the framework through the processing of all .sdump files *)
   List.fold_left process_sdump efw sdumps
-  (* then finally, check the padding in between identified byte chunks *)
+  (* check the padding in between identified byte chunks *)
   >>> check_padding
+  (* warn if some CompCert sections have been remapped by the linker script *)
+  >>> warn_sections_remapping
 
 (** Checks a whole ELF file according to .sdump files.
     If requested, dump the calculated bytes mapping, so that it can be

@@ -38,6 +38,7 @@ type e_framework = {
   chkd_bytes_list: (int32 * int32 * int * byte_chunk_desc) list;
   chkd_fun_syms: bool array;
   chkd_data_syms: bool array;
+  section_map: string StringMap.t;
 }
 
 module PosOT = struct
@@ -102,6 +103,11 @@ let ff_ef = ff_sf |-- sf_ef
 let log = {
   get = (fun ef -> ef.log);
   set = (fun l ef -> { ef with log = l });
+}
+
+let section_map = {
+  get = (fun ef -> ef.section_map);
+  set = (fun m ef -> { ef with section_map = m });
 }
 
 let ident_to_sym_ndx = {
