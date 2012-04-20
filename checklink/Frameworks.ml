@@ -38,7 +38,13 @@ type e_framework = {
   chkd_bytes_list: (int32 * int32 * int * byte_chunk_desc) list;
   chkd_fun_syms: bool array;
   chkd_data_syms: bool array;
+  (** The mapping from CompCert sections to ELF sections will be inferred along
+      the way. This way, we can check things without prior knowledge of the
+      linker script. *)
   section_map: string StringMap.t;
+  (** We will assign a virtual address to each register that can act as an SDA
+      base register. *)
+  sda_map: int32 IntMap.t;
 }
 
 module PosOT = struct
@@ -108,6 +114,11 @@ let log = {
 let section_map = {
   get = (fun ef -> ef.section_map);
   set = (fun m ef -> { ef with section_map = m });
+}
+
+let sda_map = {
+  get = (fun ef -> ef.sda_map);
+  set = (fun m ef -> { ef with sda_map = m });
 }
 
 let ident_to_sym_ndx = {

@@ -68,8 +68,7 @@ let name_of_section_Linux:
   | Section_const -> ".rodata"
   | Section_small_const -> ".sdata2"
   | Section_string -> ".rodata"
-  | Section_literal -> ".rodata" (* should have been .rodata.cst8, but ld script
-                                    merges it with .rodata *)
+  | Section_literal -> ".rodata.cst8"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) -> s
 
@@ -406,8 +405,7 @@ let match_csts (cc: constant) (ec: int32) (ffw: f_framework): f_framework =
           else ((ff_sf |-- ident_to_sym_ndx) ^%= (PosMap.add ident vaddrs)) ffw
       end
   | Csymbol_sda (ident, i) ->
-      ffw
-      >>> ff_ef ^%= (add_log (ERROR("TODO")))
+      assert false (* sda should be handled separately in places it occurs *)
 
 let match_z_int32 (cz: coq_Z) (ei: int32) =
   check_eq "match_z_int32" (z_int32 cz) ei
@@ -761,6 +759,36 @@ let match_bo_ctr bo ffw =
       | { _ } -> add_log (ERROR("bitmatch"))
   )
 
+let check_sda ident ofs r addr ffw: f_framework or_err =
+  let ofs = z_int32 ofs in
+  let check_sda_aux ndx: f_framework or_err =
+    let elf = ffw.sf.ef.elf in
+    let sym = elf.e_symtab.(ndx) in
+    let sxn = elf.e_shdra.(sym.st_shndx) in
+    try
+      let r_addr = IntMap.find r ffw.sf.ef.sda_map in
+      if r_addr < sxn.sh_offset || r_addr >= Safe32.(sxn.sh_offset + sxn.sh_size)
+      then ERR("SDA register out of the address range of its symbol's section")
+      else if Safe32.(r_addr + ofs) = sym.st_value
+      then OK(ffw)
+      else ERR(
+        Printf.sprintf
+          "SDA register %d is expected to point both at 0x%lx and 0x%lx"
+          r r_addr Safe32.(sym.st_value - ofs)
+      )
+    with Not_found ->
+      OK(
+        ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r Safe32.(sym.st_value - ofs)
+      )
+  in
+  let sym_list = PosMap.find ident ffw.sf.ident_to_sym_ndx in
+  let res = List.map check_sda_aux sym_list in
+  match filter_ok res with
+  | [] -> ERR("No satisfying SDA mapping, errors were: " ^
+                 string_of_list id ", " (filter_err res))
+  | [ffw] -> OK(ffw)
+  | _ -> assert false (* This should not happen... *)
+
 (** Compares a whole CompCert function code against an ELF code, starting at
     program counter [pc].
 *)
@@ -803,6 +831,15 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
               >>> match_bools false oe
               >>> match_bools false rc
               >>> recur_simpl
+          | _ -> error
+          end
+      | Paddi(rd, r1, Csymbol_sda(ident, ofs)) ->
+          begin match ecode with
+          | ADDI(rD, rA, simm) :: es ->
+              fw
+              >>> match_iregs rd  rD
+              >>> check_sda ident ofs rA (exts simm)
+              >>= recur_simpl
           | _ -> error
           end
       | Paddi(rd, r1, cst) ->
@@ -1661,6 +1698,15 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           >>> lblmap_unify lbl pc
           >>? (fun fw -> {fw with label_list = lbl :: fw.label_list})
           >>= compare_code cs ecode pc
+      | Plbz(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | LBZ(rD, rA, d) :: es ->
+              fw
+              >>> match_iregs rd  rD
+              >>> check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plbz(rd, cst, r1) ->
           begin match ecode with
           | LBZ(rD, rA, d) :: es ->
@@ -1681,6 +1727,15 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
               >>> recur_simpl
           | _ -> error
           end
+      | Plfd(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | LFD(frD, rA, d) :: es ->
+              fw
+              >>> match_fregs rd  frD
+              >>> check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plfd(rd, cst, r1) ->
           begin match ecode with
           | LFD(frD, rA, d) :: es ->
@@ -1696,56 +1751,6 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           | LFDX(frD, rA, rB) :: es ->
               fw
               >>> match_fregs rd frD
-              >>> match_iregs r1 rA
-              >>> match_iregs r2 rB
-              >>> recur_simpl
-          | _ -> error
-          end
-      | Plfs(rd, cst, r1) ->
-          begin match ecode with
-          | LFS(frD, rA, d) :: es ->
-              fw
-              >>> match_fregs rd  frD
-              >>> match_csts  cst (exts d)
-              >>> match_iregs r1  rA
-              >>> recur_simpl
-          | _ -> error
-          end
-      | Plfsx(rd, r1, r2) ->
-          begin match ecode with
-          | LFSX(frD, rA, rB) :: es ->
-              fw
-              >>> match_fregs rd frD
-              >>> match_iregs r1 rA
-              >>> match_iregs r2 rB
-              >>> recur_simpl
-          | _ -> error
-          end
-      | Plha(rd, cst, r1) ->
-          begin match ecode with
-          | LHA(rD, rA, d) :: es ->
-              fw
-              >>> match_iregs rd  rD
-              >>> match_csts  cst (exts d)
-              >>> match_iregs r1  rA
-              >>> recur_simpl
-          | _ -> error
-          end
-      | Plhax(rd, r1, r2) ->
-          begin match ecode with
-          | LHAX(rD, rA, rB) :: es ->
-              fw
-              >>> match_iregs rd rD
-              >>> match_iregs r1 rA
-              >>> match_iregs r2 rB
-              >>> recur_simpl
-          | _ -> error
-          end
-      | Plhzx(rd, r1, r2) ->
-          begin match ecode with
-          | LHZX(rD, rA, rB) :: es ->
-              fw
-              >>> match_iregs rd rD
               >>> match_iregs r1 rA
               >>> match_iregs r2 rB
               >>> recur_simpl
@@ -1801,6 +1806,73 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                 end
           | _ -> error
           end
+      | Plfs(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | LFS(frD, rA, d) :: es ->
+              fw
+              >>> match_fregs rd  frD
+              >>> check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Plfs(rd, cst, r1) ->
+          begin match ecode with
+          | LFS(frD, rA, d) :: es ->
+              fw
+              >>> match_fregs rd  frD
+              >>> match_csts  cst (exts d)
+              >>> match_iregs r1  rA
+              >>> recur_simpl
+          | _ -> error
+          end
+      | Plfsx(rd, r1, r2) ->
+          begin match ecode with
+          | LFSX(frD, rA, rB) :: es ->
+              fw
+              >>> match_fregs rd frD
+              >>> match_iregs r1 rA
+              >>> match_iregs r2 rB
+              >>> recur_simpl
+          | _ -> error
+          end
+      | Plha(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | LHA(rD, rA, d) :: es ->
+              fw
+              >>> match_iregs rd  rD
+              >>> check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Plha(rd, cst, r1) ->
+          begin match ecode with
+          | LHA(rD, rA, d) :: es ->
+              fw
+              >>> match_iregs rd  rD
+              >>> match_csts  cst (exts d)
+              >>> match_iregs r1  rA
+              >>> recur_simpl
+          | _ -> error
+          end
+      | Plhax(rd, r1, r2) ->
+          begin match ecode with
+          | LHAX(rD, rA, rB) :: es ->
+              fw
+              >>> match_iregs rd rD
+              >>> match_iregs r1 rA
+              >>> match_iregs r2 rB
+              >>> recur_simpl
+          | _ -> error
+          end
+      | Plhz(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | LHZ(rD, rA, d) :: es ->
+              fw
+              >>> match_iregs rd  rD
+              >>> check_sda ident ofs rA (exts d)
+              >>= recur_simpl
+          | _ -> error
+          end
       | Plhz(rd, cst, r1) ->
           begin match ecode with
           | LHZ(rD, rA, d) :: es ->
@@ -1809,6 +1881,25 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
               >>> match_csts  cst (exts d)
               >>> match_iregs r1  rA
               >>> recur_simpl
+          | _ -> error
+          end
+      | Plhzx(rd, r1, r2) ->
+          begin match ecode with
+          | LHZX(rD, rA, rB) :: es ->
+              fw
+              >>> match_iregs rd rD
+              >>> match_iregs r1 rA
+              >>> match_iregs r2 rB
+              >>> recur_simpl
+          | _ -> error
+          end
+      | Plwz(rd, Csymbol_sda(ident, ofs), r1) ->
+          begin match ecode with
+          | LWZ(rD, rA, d) :: es ->
+              fw
+              >>> match_iregs rd  rD
+              >>> check_sda ident ofs rA (exts d)
+              >>= recur_simpl
           | _ -> error
           end
       | Plwz(rd, cst, r1) ->
@@ -2479,7 +2570,7 @@ let compare_data (l: init_data list) (maybebs: maybe_bitstring) (sfw: s_framewor
         let sfw =
           if !debug
           then (
-            (sf_ef ^%= add_log (DEBUG(string_of_init_data d))) sfw
+            (sf_ef ^%= add_log (DEBUG("  " ^ string_of_init_data d))) sfw
           )
           else sfw
         in
@@ -3068,6 +3159,9 @@ let check_sym_tab_zero efw =
   )
   >>> add_range elf.e_shdra.(elf.e_symtab_sndx).sh_offset 16l 4 Zero_symbol
 
+(** If CompCert sections have been mapped to an ELF section whose name is
+    not the same, we warn the user.
+*)
 let warn_sections_remapping efw =
   StringMap.fold
     (fun c_name e_name efw ->
@@ -3083,6 +3177,22 @@ let warn_sections_remapping efw =
     )
     efw.section_map
     efw
+
+let warn_sda_mapping efw =
+  if IntMap.is_empty efw.sda_map
+  then efw
+  else (
+    IntMap.fold
+      (fun r vaddr efw ->
+        efw >>> add_log (WARNING(
+          Printf.sprintf
+            "SDA register %d has been mapped to virtual address 0x%lx by your linker script"
+            r vaddr
+        ))
+      )
+      efw.sda_map
+      efw
+  )
 
 (** Checks a whole ELF file according to a list of .sdump files. This never
     dumps anything, so it can be safely used when fuzz-testing even if the
@@ -3101,6 +3211,7 @@ let check_elf_nodump elf sdumps =
       chkd_fun_syms = Array.make nb_syms false;
       chkd_data_syms = Array.make nb_syms false;
       section_map = StringMap.empty;
+      sda_map = IntMap.empty;
     }
     >>> check_elf_header
     >>> add_range
@@ -3132,6 +3243,7 @@ let check_elf_nodump elf sdumps =
   >>> check_padding
   (* warn if some CompCert sections have been remapped by the linker script *)
   >>> warn_sections_remapping
+  >>> warn_sda_mapping
 
 (** Checks a whole ELF file according to .sdump files.
     If requested, dump the calculated bytes mapping, so that it can be
@@ -3182,7 +3294,8 @@ let check_elf_dump elffilename sdumps =
           "\nWARNING: the following function symbols do not appear in .sdump files.";
         print_endline (
           string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun
-        )
+        );
+        print_newline ()
     end
   ;
   (* indicate data symbols that have not been checked *)
@@ -3207,15 +3320,20 @@ let check_elf_dump elffilename sdumps =
     | [] -> ()
     | _  ->
         print_endline
-          "\nWARNING: the following data symbols do not appear in .sdump files.";
+          "WARNING: the following data symbols do not appear in .sdump files.";
         print_endline (
           string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data
-        )
+        );
+        print_newline ()
     end
   ;
   (* print diagnosis *)
   let worrysome = List.filter
-    (function ERROR(_) -> true | WARNING(_) -> true | DEBUG(_) -> false)
+    (function
+    | ERROR(_) -> true
+    | WARNING(_) -> true
+    | DEBUG(_) -> false
+    )
     efw.log
   in
   let exists_unknown_chunk =
@@ -3236,6 +3354,10 @@ let check_elf_dump elffilename sdumps =
         )
       end
   | _ ->
+      if !debug
+      then print_endline (
+        "DEBUG MODE: The following messages are actual problems."
+      );
       List.(iter
               (fun e ->
                 match string_of_log_entry false e with

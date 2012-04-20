@@ -3,6 +3,7 @@ open BinPos
 
 type bitstring = Bitstring.bitstring
 
+module IntMap = Map.Make(struct type t = int let compare = compare end)
 module StringMap = Map.Make (String)
 
 let is_some: 'a option -> bool = function
@@ -24,12 +25,21 @@ let is_ok: 'a or_err -> bool = function
 | OK(_) -> true
 | ERR(_) -> false
 
+let is_err x = not (is_ok x)
+
 let from_ok: 'a or_err -> 'a = function
 | OK(x) -> x
-| ERR(_) -> raise Not_found
+| ERR(_) -> assert false
+
+let from_err: 'a or_err -> string = function
+| OK(_) -> assert false
+| ERR(s) -> s
 
 let filter_ok (l: 'a or_err list): 'a list =
   List.(map from_ok (filter is_ok l))
+
+let filter_err (l: 'a or_err list): string list =
+  List.(map from_err (filter is_err l))
 
 external id : 'a -> 'a = "%identity"
 
