@@ -318,8 +318,11 @@ let match_ints:   int   -> int   -> f_framework -> f_framework =
   check_eq "match_ints"
 let match_int32s: int32 -> int32 -> f_framework -> f_framework =
   check_eq "match_int32s"
-let match_floats: float -> float -> f_framework -> f_framework =
-  check_eq "match_floats"
+(** We compare floats by their bit representation, so that 0.0 and -0.0 are
+    different. *)
+let match_floats (a: float) (b: float): f_framework -> f_framework =
+  check_eq "match_floats" (Int64.bits_of_float a) (Int64.bits_of_float b)
+
 let match_crbits cb eb = check_eq "match_crbits" cb (crbit_arr.(eb))
 let match_iregs  cr er = check_eq "match_iregs" cr (ireg_arr.(er))
 let match_fregs  cr er = check_eq "match_fregs" cr (freg_arr.(er))
