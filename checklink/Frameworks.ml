@@ -136,7 +136,7 @@ let stub_ident_to_vaddr = {
 let add_range (start: int32) (length: int32) (align: int) (bcd: byte_chunk_desc)
     (efw: e_framework): e_framework =
   assert (0l <= start && 0l < length);
-  let stop = Int32.(sub (add start length) 1l) in
+  let stop = Safe32.(start + length - 1l) in
   {
     efw with
       chkd_bytes_list =
@@ -196,5 +196,3 @@ let string_of_byte_chunk_desc = function
 | Float_literal(f) -> "Float literal: " ^ string_of_float f
 | Padding -> "Padding"
 | Unknown(s) -> "   ???   " ^ s
-
-

@@ -18,10 +18,16 @@ let section_bitstring_noelf
 let section_bitstring (e: elf): int -> bitstring =
   section_bitstring_noelf e.e_bitstring e.e_shdra
 
-let physical_offset_of_vaddr (e: elf)(sndx: int)(vaddr: int32): int32 =
-  let shdr = e.e_shdra.(sndx) in
-  Int32.(add shdr.sh_offset (sub vaddr shdr.sh_addr))
+let physical_offset_of_vaddr (e: elf)(vaddr: int32): int32 option =
+  begin match e.e_sym_phdr vaddr with
+  | None -> None
+  | Some(pndx) ->
+      let phdr = e.e_phdra.(pndx) in
+      let vaddr_ofs = Safe32.(vaddr - phdr.p_vaddr) in
+      Some(Safe32.(phdr.p_offset + vaddr_ofs))
+  end
 
+(* TODO: could make this more efficient, but it's not often called *)
 let section_at_vaddr (e: elf)(vaddr: int32): int option =
   array_exists
     (fun shdr ->
@@ -30,31 +36,67 @@ let section_at_vaddr (e: elf)(vaddr: int32): int option =
     e.e_shdra
 
 (**
-   Returns the bitstring of the specified size beginning at the specified
-   virtual address within the specified section.
+   Returns the bitstring of the specified byte size beginning at the specified
+   virtual address, along with its physical byte offset and physical byte size,
+   that is, the space it occupies in the file.
 *)
-let bitstring_at_vaddr e sndx vaddr size =
-  let shdr = e.e_shdra.(sndx) in
-  if vaddr < shdr.sh_addr || Safe32.(shdr.sh_addr + shdr.sh_size) <= vaddr
-  then None
-  else
-    let bs = section_bitstring e sndx in
-    let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
-    Some(Bitstring.subbitstring bs bit_ofs size)
+let bitstring_at_vaddr (e: elf)(vaddr: int32)(size:int32):
+    (bitstring * int32 * int32) option =
+  match e.e_sym_phdr vaddr with
+  | None -> None
+  | Some(pndx) ->
+      let phdr = e.e_phdra.(pndx) in
+      let phdr_mem_first = phdr.p_vaddr in
+      let phdr_mem_last = Safe32.(phdr.p_vaddr + phdr.p_memsz - 1l) in
+      let vaddr_mem_first = vaddr in
+      let vaddr_mem_last = Safe32.(vaddr + size - 1l) in
+      if not (phdr_mem_first <= vaddr_mem_first && vaddr_mem_last <= phdr_mem_last)
+      then None (* we're overlapping segments *)
+      else
+        let vaddr_relative_ofs = Safe32.(vaddr_mem_first - phdr_mem_first) in
+        let vaddr_file_ofs = Safe32.(phdr.p_offset + vaddr_relative_ofs) in
+        if phdr.p_filesz = 0l || vaddr_relative_ofs > phdr.p_filesz
+        then
+          Some(
+            Bitstring.create_bitstring Safe32.(to_int (8l * size)),
+            phdr.p_offset, (* whatever? *)
+            0l
+          )
+        else if Safe32.(vaddr_relative_ofs + size) > phdr.p_filesz
+        then
+          let bit_start = Safe32.(to_int (8l * vaddr_file_ofs)) in
+          let vaddr_file_len = Safe32.(phdr.p_filesz - vaddr_relative_ofs) in
+          let bit_len = Safe32.(to_int (8l * vaddr_file_len)) in
+          let first = Bitstring.subbitstring e.e_bitstring bit_start bit_len in
+          let rest = Bitstring.create_bitstring (8 * Safe32.to_int size - bit_len) in
+          Some(
+            Bitstring.concat [first; rest],
+            vaddr_file_ofs,
+            vaddr_file_len
+          )
+        else
+          let bit_start = Safe32.(to_int (8l * (phdr.p_offset + vaddr_relative_ofs))) in
+          let bit_len = Safe.(8 * Safe32.to_int size) in
+          Some(
+            Bitstring.subbitstring e.e_bitstring bit_start bit_len,
+            vaddr_file_ofs,
+            size
+          )
 
 (**
-   Returns the entire bitstring that begins at the specified virtual address
-   within the specified section and ends at the end of the file. This is useful
-   when you don't know the sections size yet.
+   Returns the entire bitstring that begins at the specified virtual address and
+   ends at the end of the segment.
 *)
-let bitstring_at_vaddr_nosize (e: elf)(sndx: int)(vaddr: int32): bitstring option =
-  let shdr = e.e_shdra.(sndx) in
-  if vaddr < shdr.sh_addr || Safe32.(shdr.sh_addr + shdr.sh_size) <= vaddr
-  then None
-  else
-    let bs = section_bitstring e sndx in
-    let bit_ofs = Safe.(8 * Safe32.(to_int (vaddr - shdr.sh_addr))) in
-    Some(Bitstring.dropbits bit_ofs bs)
+let bitstring_at_vaddr_nosize (e: elf)(vaddr: int32):
+    (bitstring * int32 * int32) option =
+  match e.e_sym_phdr vaddr with
+  | None -> None
+  | Some(pndx) ->
+      let phdr = e.e_phdra.(pndx) in
+      let first_byte_vaddr = vaddr in
+      let last_byte_vaddr = Safe32.(phdr.p_vaddr + phdr.p_memsz - 1l) in
+      let size = Safe32.(last_byte_vaddr - first_byte_vaddr + 1l) in
+      bitstring_at_vaddr e vaddr size
 
 (**
    Removes symbol version for GCC's symbols.

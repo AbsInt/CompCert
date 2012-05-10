@@ -4,28 +4,17 @@ open Library
 open PPC_parsers
 open PPC_types
 
-let code_at_vaddr (e: elf) (vaddr: int32) (nb_instr: int): ecode option =
-  begin match section_at_vaddr e vaddr with
+let code_at_vaddr (e: elf)(vaddr: int32)(nb_instr: int): ecode option =
+  begin match bitstring_at_vaddr e vaddr (Safe32.of_int (4 * nb_instr)) with
   | None -> None
-  | Some(sndx) ->
-      begin match bitstring_at_vaddr e sndx vaddr (32 * nb_instr) with
-      | None -> None
-      | Some(code_bs) -> Some (parse_code_as_list code_bs)
-      end
+  | Some(code_bs, _, _) -> Some (parse_code_as_list code_bs)
   end
 
 let code_of_sym_ndx (e: elf) (ndx: int): ecode option =
   let sym = e.e_symtab.(ndx) in
-  begin match sym.st_type with
-  | STT_FUNC ->
-      let sym_vaddr = sym.st_value in
-      let sym_size = Safe.(of_int32 sym.st_size * 8) in
-      let sym_sndx = sym.st_shndx in
-      begin match bitstring_at_vaddr e sym_sndx sym_vaddr sym_size with
-      | None -> None
-      | Some(code_bs) -> Some (parse_code_as_list code_bs)
-      end
-  | _ -> None
+  begin match bitstring_at_vaddr e sym.st_value sym.st_size with
+  | None -> None
+  | Some(bs, _, _) -> Some(parse_code_as_list bs)
   end
 
 let code_of_sym_name (e: elf) (name: string): ecode option =
@@ -33,5 +22,3 @@ let code_of_sym_name (e: elf) (name: string): ecode option =
   | Some ndx -> code_of_sym_ndx e ndx
   | None     -> None
   end
-
-      

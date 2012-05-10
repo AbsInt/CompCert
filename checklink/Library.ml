@@ -134,3 +134,17 @@ let string_of_int32i = Int32.to_string
 let string_of_positive p = string_of_int32i (positive_int32 p)
 
 let string_of_z z = string_of_int32 (z_int32 z)
+
+let sorted_lookup (compare: 'a -> 'b -> int) (arr: 'a array) (v: 'b): 'a option =
+  let rec sorted_lookup_aux (i_from: int) (i_to: int): 'a option =
+    if i_from > i_to
+    then None
+    else
+      let i_mid = (i_from + i_to) / 2 in
+      let comp = compare arr.(i_mid) v in
+      if comp < 0 (* v_mid < v *)
+      then sorted_lookup_aux (i_mid + 1) i_to
+      else if comp > 0
+      then sorted_lookup_aux i_from (i_mid - 1)
+      else Some(arr.(i_mid))
+  in sorted_lookup_aux 0 (Array.length arr - 1)

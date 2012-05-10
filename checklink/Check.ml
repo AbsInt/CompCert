@@ -538,21 +538,19 @@ let rec match_jmptbl lbllist vaddr size ffw =
     )
   in
   let elf = ffw.sf.ef.elf in
-  let cur_sym_ndx = elf.e_symtab.(ffw.this_sym_ndx).st_shndx in
-  begin match bitstring_at_vaddr elf cur_sym_ndx vaddr size with
-  | None -> ERR("Symbol out of its parent section")
-  | Some(bs) ->
-      begin match section_at_vaddr elf vaddr with
-      | None -> ERR("Jumptable's virtual address is out of any section")
-      | Some(sndx) ->
-          let ofs = physical_offset_of_vaddr elf sndx vaddr in
+  begin match section_at_vaddr elf vaddr with
+  | None -> ERR("No section for the jumptable")
+  | Some(sndx) ->
+      begin match bitstring_at_vaddr elf vaddr size with
+      | None -> ERR("")
+      | Some(bs, pofs, psize) ->
           ffw
           >>> (ff_sf ^%=
               match_sections_name jmptbl_section elf.e_shdra.(sndx).sh_name
           )
           >>> match_jmptbl_aux lbllist bs
           >>? (ff_ef ^%=
-              add_range ofs (Safe32.of_int (size / 8)) 0 Jumptable)
+              add_range pofs psize 0 Jumptable)
       end
   end
 
@@ -798,8 +796,15 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
 let rec compare_code ccode ecode pc fw: f_framework or_err =
   let error = ERR("Non-matching instructions") in
   match ccode, ecode with
-  | [], []        -> OK(fw)
-  | [], _ | _, [] -> ERR("Codes have different lengths")
+  | [], [] -> OK(fw)
+  | [], e_rest ->
+      let rest_str = String.concat "\n" (List.map string_of_instr e_rest) in
+      ERR("CompCert code exhausted before the end of ELF code, remaining:\n"
+          ^ rest_str)
+  | c_rest, [] ->
+      let rest_str = String.concat "\n" (List.map string_of_instruction c_rest) in
+      ERR("ELF code exhausted before the end of CompCert code, remaining:\n"
+          ^ rest_str)
   | c::cs, e::es  ->
       let recur_simpl = compare_code cs es (Int32.add 4l pc) in
       let fw =
@@ -1087,7 +1092,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
               let tblvaddr = Int32.(
                 add (shift_left (Safe32.of_int simm0) 16) (exts d1)
               ) in
-              let tblsize = (32 * List.length table) in
+              let tblsize = Safe32.of_int (32 * List.length table) in
               fw
               >>> match_iregs  GPR12 rD0
               >>> match_iregs  reg   rA0
@@ -1777,33 +1782,28 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   | _ -> Section_literal
                   end
                 in
-                begin match section_at_vaddr elf vaddr with
-                | None ->
-                    ERR("Float literal's virtual address out of any section")
-                | Some(sndx) ->
-                    let section_bitstring = bitstring_at_vaddr elf sndx in
-                    let f = (
-                      let bs =
-                        begin match section_bitstring vaddr 64 with
-                        | None -> assert false
-                        | Some(bs) -> bs
-                        end
-                      in
+                begin match bitstring_at_vaddr elf vaddr 64l with
+                | None -> assert false
+                | Some(bs, pofs, psize) ->
+                    let f =
                       bitmatch bs with
                       | { f : 64 : int } -> Int64.float_of_bits f
-                    ) in
-                    let ofs = physical_offset_of_vaddr elf sndx vaddr in
+                    in
                     fw
                     >>> (ff_sf ^%=
-                        match_sections_name
-                          literal_section
-                          elf.e_shdra.(sndx).sh_name
+                        begin match section_at_vaddr elf vaddr with
+                        | None -> sf_ef ^%= add_log (ERROR("No section at that virtual address"))
+                        | Some(sndx) ->
+                            match_sections_name
+                              literal_section
+                              elf.e_shdra.(sndx).sh_name
+                        end
                     )
                     >>> match_iregs  GPR12 rD0
                     >>> match_iregs  GPR0  rA0
                     >>> match_fregs  r1    frD1
                     >>> match_floats c     f
-                    >>> (ff_ef ^%= add_range ofs 8l 8 (Float_literal(f)))
+                    >>> (ff_ef ^%= add_range pofs psize 8 (Float_literal(f)))
                     >>> match_iregs  GPR12 rA1
                     >>> compare_code cs es (Int32.add 8l pc)
                 end
@@ -2551,18 +2551,10 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
           end
       end
 
-(** This variant helps representing big empty bitstrings without allocating
-    memory. It is useful to create a bitstring for an STT_NOBITS symbol, for
-    instance.
-*)
-type maybe_bitstring =
-  | Empty of int
-  | NonEmpty of bitstring
-
 (** Compares a data symbol with its expected contents. Returns the updated
     framework as well as the size of the data matched.
 **)
-let compare_data (l: init_data list) (maybebs: maybe_bitstring) (sfw: s_framework)
+let compare_data (l: init_data list) (bs: bitstring) (sfw: s_framework)
     : (s_framework * int) or_err =
   let error = ERR("Reached end of data bitstring too soon") in
   let rec compare_data_aux l bs s (sfw: s_framework):
@@ -2639,19 +2631,7 @@ let compare_data (l: init_data list) (maybebs: maybe_bitstring) (sfw: s_framewor
         )
         end
   in
-  let rec compare_data_empty l s (sfw: s_framework):
-      (s_framework * int) or_err =
-    match l with
-    | [] -> OK(sfw, s)
-    | d::l ->
-        begin match d with
-        | Init_space(z) -> compare_data_empty l (s + z_int z) sfw
-        | _ -> ERR("Expected empty data")
-        end
-  in
-  match maybebs with
-  | Empty(_)     -> compare_data_empty l 0 sfw
-  | NonEmpty(bs) -> compare_data_aux l bs 0 sfw
+  compare_data_aux l bs 0 sfw
 
 (** Checks the data symbol table.
 *)
@@ -2710,104 +2690,84 @@ let check_data_symtab ident sym_ndx size sfw =
 let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     : s_framework =
   let process_ndx ident ldata sfw ndx =
-    let elf = (sfw |. sf_ef).elf in
+    let elf = sfw.ef.elf in
     let sym = elf.e_symtab.(ndx) in
     let sym_vaddr = sym.st_value in
-    let sym_size = sym.st_size in
-    let sym_sndx = sym.st_shndx in
-    let sym_bs_opt =
-      begin match elf.e_shdra.(sym_sndx).sh_type with
-      | SHT_NOBITS ->
-          Some(Empty(Safe.(of_int32 sym.st_size * 8)))
-      | SHT_PROGBITS ->
-          begin match bitstring_at_vaddr_nosize elf sym_sndx sym_vaddr with
-          | None -> None
-          | Some(bs) -> Some(NonEmpty(bs))
-          end
-      | _ -> assert false
-      end
-    in
-    let res =
-      begin match sym_bs_opt with
-      | None -> ERR("Could not find symbol data for data symbol " ^ sym.st_name)
-      | Some(sym_bs) ->
+    begin match bitstring_at_vaddr_nosize elf sym_vaddr with
+    | None -> ERR("Could not find symbol data for data symbol " ^ sym.st_name)
+    | Some(sym_bs, pofs, psize) ->
+        let res =
           sfw
           >>> (sf_ef ^%= add_log (DEBUG("Processing data: " ^ sym.st_name)))
           >>> compare_data ldata sym_bs
-      end
-    in
-    match res with
-    | ERR(s) -> ERR(s)
-    | OK(sfw, size) ->
-        let sym_shdr = (sfw |. sf_ef).elf.e_shdra.(sym_sndx) in
-        let sym_ofs_local = Int32.sub sym_vaddr sym_shdr.sh_addr in
-        let sxn_ofs = sym_shdr.sh_offset in
-        let sym_begin = Int32.add sxn_ofs sym_ofs_local in
-        let align =
-          begin match (Hashtbl.find sfw.atoms ident).a_alignment with
-          | None -> 0
-          | Some(a) -> a
-          end
         in
-        sfw.ef.chkd_data_syms.(ndx) <- true;
-        sfw
-        >>> (
-          begin match sym_shdr.sh_type with
-          | SHT_NOBITS ->
-              id (* These occupy no space, for now we just forget them *)
-          | _ ->
-              sf_ef ^%=
-              add_range sym_begin sym_size align (Data_symbol(sym))
-          end
-        )
-        >>> (
-          if not (is_well_aligned sym_ofs_local align)
-          then (
-            sf_ef ^%= add_log (ERROR(
-              "Symbol not correctly aligned in the ELF file"
-            ))
-          )
-          else id
-        )
-        >>> check_data_symtab ident ndx size
-        >>> (fun sfw -> OK(sfw))
-  in
-  let check_data_aux sfw ig =
-    let (ident, gv) = ig in
-    let init_data = gv.gvar_init in
-    let ident_ndxes = PosMap.find ident sfw.ident_to_sym_ndx in
+        begin match res with
+        | ERR(s) -> ERR(s)
+        | OK(sfw, size) ->
+            let align =
+              begin match (Hashtbl.find sfw.atoms ident).a_alignment with
+              | None -> 0
+              | Some(a) -> a
+              end
+            in
+            sfw.ef.chkd_data_syms.(ndx) <- true;
+            sfw
+            >>> (
+              if size = 0
+              then id (* These occupy no space, for now we just forget them *)
+              else sf_ef ^%=
+                add_range pofs (Safe32.of_int size) align (Data_symbol(sym))
+            )
+            >>> (
+              if not (is_well_aligned sym_vaddr align)
+              then (
+                sf_ef ^%= add_log (ERROR(
+                  "Symbol not correctly aligned in the ELF file"
+                ))
+              )
+              else id
+            )
+            >>> check_data_symtab ident ndx size
+            >>> (fun sfw -> OK(sfw))
+        end
+    end
+      in
+    let check_data_aux sfw ig =
+      let (ident, gv) = ig in
+      let init_data = gv.gvar_init in
+      let ident_ndxes = PosMap.find ident sfw.ident_to_sym_ndx in
     (*print_endline ("Candidates: " ^ string_of_list id ", "
       (List.map
       (fun ndx -> fw.elf.e_symtab.(ndx).st_name)
       ident_ndxes));*)
-    let results = List.map (process_ndx ident init_data sfw) ident_ndxes in
-    let successes = filter_ok results in
-    match successes with
-    | [] ->
-        sfw
-        >>> sf_ef ^%=
-        add_log (ERROR(
-          "No matching data segment among candidates [" ^
-            (string_of_list
-               (fun ndx -> sfw.ef.elf.e_symtab.(ndx).st_name)
-               ", "
-               ident_ndxes
-            ) ^
-            "], Errors: [" ^
-            string_of_list
-            (function OK(_) -> "" | ERR(s) -> s)
-            ", "
-            (List.filter (function ERR(_) -> true | _ -> false) results)
-                        ^ "]"
-        ))
-    | [sfw] -> sfw
-    | fws ->
-        sfw
-        >>> sf_ef ^%= add_log (ERROR("Multiple matching data segments!"))
-  in
-  List.fold_left check_data_aux sfw
+      let results = List.map (process_ndx ident init_data sfw) ident_ndxes in
+      let successes = filter_ok results in
+      match successes with
+      | [] ->
+          sfw
+          >>> sf_ef ^%=
+          add_log (ERROR(
+            "No matching data segment among candidates [" ^
+              (string_of_list
+                 (fun ndx -> sfw.ef.elf.e_symtab.(ndx).st_name)
+                 ", "
+                 ident_ndxes
+              ) ^
+              "], Errors: [" ^
+              string_of_list
+              (function OK(_) -> "" | ERR(s) -> s)
+              ", "
+              (List.filter (function ERR(_) -> true | _ -> false) results)
+                          ^ "]"
+          ))
+      | [sfw] -> sfw
+      | fws ->
+          sfw
+          >>> sf_ef ^%= add_log (ERROR("Multiple matching data segments!"))
+    in
+    List.fold_left check_data_aux sfw
     (* Empty lists mean the symbol is external, no need for check *)
-    (List.filter (fun (_, gv) -> gv.gvar_init <> []) pv)
+      (List.filter (fun (_, gv) -> gv.gvar_init <> []) pv)
 
 (** Checks that everything that has been assimiled as a stub during checks
     indeed looks like a stub.
@@ -2825,8 +2785,7 @@ let check_stubs sfw =
     in
     let elf = sfw.ef.elf in
     let stub_ecode = from_some (code_at_vaddr elf vaddr 2) in
-    let stub_sndx = from_some (section_at_vaddr elf vaddr) in
-    let stub_offset = physical_offset_of_vaddr elf stub_sndx vaddr in
+    let stub_offset = from_some (physical_offset_of_vaddr elf vaddr) in
     begin match fundef with
     | (_, External(EF_external(dest_ident, _) as ef)) ->
         let args = (ef_sig ef).sig_args in
@@ -3037,10 +2996,9 @@ let check_padding efw =
               if sym.st_shndx >= Array.length elf.e_shdra
               then false (* special section *)
               else
-                let offset =
-                  physical_offset_of_vaddr elf sym.st_shndx sym.st_value
-                in
-                intersect (x, y) offset sym.st_size
+                match physical_offset_of_vaddr elf sym.st_value with
+                | None -> false
+                | Some(ofs) -> intersect (x, y) ofs sym.st_size
             )
             (Array.to_list elf.e_symtab)
          )
@@ -3074,17 +3032,18 @@ let check_padding efw =
     | ((b1, e1, a1, n1) as h1) :: ((b2, e2, a2, n2) as h2) :: rest ->
         let pad_start = Int32.add e1 1l in
         let pad_stop = Int32.sub b2 1l in
-        if
-          pad_start = b2 (* if they are directly consecutive *)
-          || Safe.(of_int32 b2 - of_int32 e1) > a2 (* or if they are too far away *)
-          || not (is_padding efw.elf.e_bitstring
-                    (Safe32.to_int pad_start) (Safe32.to_int pad_stop))
+        if pad_start = b2 (* if they are directly consecutive *)
+        || Safe.(of_int32 b2 - of_int32 e1) > a2 (* or if they are too far away *)
+        || not (is_padding efw.elf.e_bitstring
+                  (Safe32.to_int pad_start) (Safe32.to_int pad_stop))
         then (* not padding *)
           if pad_start <= pad_stop
-          then check_padding_aux efw
-            ((pad_start, pad_stop, 0, unknown pad_start pad_stop) :: h1 :: accu)
-            (h2 :: rest)
-          else check_padding_aux efw (h1 :: accu) (h2 :: rest)
+          then
+            check_padding_aux efw
+              ((pad_start, pad_stop, 0, unknown pad_start pad_stop) :: h1 :: accu)
+              (h2 :: rest)
+          else
+            check_padding_aux efw (h1 :: accu) (h2 :: rest)
         else ( (* this is padding! *)
           check_padding_aux efw
             ((pad_start, pad_stop, 0, Padding) :: h1 :: accu)

@@ -5,6 +5,16 @@ open ELF_utils
 open Library
 open PPC_parsers
 
+(** Allows relaxations of the parser:
+
+    1. Any segment that has the same p_offset and p_memsz as another segment,
+    and a null p_filesz, will be considered as having a p_filesz equal to the
+    other segment. This allow symbol's contents resolution to succeed even in
+    the presence of a bootstrapping copy mechanism from one segment to the
+    other.
+*)
+let relaxed = ref false
+
 exception Unknown_endianness
 
 (** Converts an elf endian into a bitstring endian *)
@@ -305,30 +315,83 @@ let read_elf_bs (bs: bitstring): elf =
   check_overlaps e_shdra e_hdr;
   let symtab_sndx = section_ndx_by_name_noelf e_shdra ".symtab" in
   let e_symtab = (
-      let symtab_shdr = e_shdra.(symtab_sndx) in
-      let symtab_strtab_sndx = symtab_shdr.sh_link in
-      let symtab_nb_ent = (Safe32.to_int symtab_shdr.sh_size / 16) in
-      Array.init symtab_nb_ent
-        (read_elf32_sym e_hdr
-           (section_bitstring_noelf bs e_shdra symtab_sndx)
-           (section_bitstring_noelf bs e_shdra (Safe32.to_int symtab_strtab_sndx)))
+    let symtab_shdr = e_shdra.(symtab_sndx) in
+    let symtab_strtab_sndx = symtab_shdr.sh_link in
+    let symtab_nb_ent = (Safe32.to_int symtab_shdr.sh_size / 16) in
+    Array.init symtab_nb_ent
+      (read_elf32_sym e_hdr
+         (section_bitstring_noelf bs e_shdra symtab_sndx)
+         (section_bitstring_noelf bs e_shdra (Safe32.to_int symtab_strtab_sndx)))
   ) in
+  let e_phdra =
+    let untweaked = Array.init e_hdr.e_phnum (read_elf32_phdr e_hdr bs) in
+    if !relaxed
+    then
+      Array.mapi
+        (fun ndx curr ->
+          if ndx < 1
+          then curr
+          else
+            let prev = untweaked.(ndx - 1) in
+            if (curr.p_offset = prev.p_offset)
+              && (curr.p_memsz = prev.p_memsz)
+            then { curr with p_filesz = prev.p_filesz }
+            else curr
+        )
+        untweaked
+    else untweaked
+  in
+  let e_sym_phdr =
+    let intervals =
+      Array.mapi
+        (fun ndx phdr -> (* (ndx, (start, stop), type) *)
+          (ndx,
+           (phdr.p_vaddr, Safe32.(phdr.p_vaddr + phdr.p_memsz - 1l)),
+           phdr.p_type
+          )
+        )
+        e_phdra
+    in
+    let intervals = Array.of_list (
+      List.filter
+        (function (_, _, PT_LOAD) -> true | _ -> false)
+        (Array.to_list intervals)
+    ) in
+    Array.fast_sort (fun (_, (x, _), _) (_, (y, _), _) -> compare x y) intervals;
+    let lookup =
+      sorted_lookup
+        (
+          fun (_, (a, b), _) v ->
+            if a <= v && v <= b
+            then 0
+            else compare a v
+        )
+        intervals
+    in
+    fun vaddr ->
+      begin match lookup vaddr with
+      | None -> None
+      | Some(ndx, (_, _), _) -> Some(ndx)
+      end
+  in
+  let e_syms_by_name =
+    let m = ref StringMap.empty in
+    for i = 0 to Array.length e_symtab - 1 do
+      let name = strip_versioning e_symtab.(i).st_name in
+      let list = try StringMap.find name !m with Not_found -> [] in
+      m := StringMap.add name (i :: list) !m
+    done;
+    !m
+  in
   {
-    e_bitstring = bs;
-    e_hdr       = e_hdr;
-    e_shdra     = e_shdra;
-    e_phdra     = Array.init e_hdr.e_phnum (read_elf32_phdr e_hdr bs);
-    e_symtab    = e_symtab;
-    e_symtab_sndx = symtab_sndx;
-    e_syms_by_name = (
-      let m = ref StringMap.empty in
-      for i = 0 to Array.length e_symtab - 1 do
-        let name = strip_versioning e_symtab.(i).st_name in
-        let list = try StringMap.find name !m with Not_found -> [] in
-        m := StringMap.add name (i :: list) !m
-      done;
-      !m
-    );
+    e_bitstring    = bs;
+    e_hdr          = e_hdr;
+    e_shdra        = e_shdra;
+    e_phdra        = e_phdra;
+    e_symtab       = e_symtab;
+    e_symtab_sndx  = symtab_sndx;
+    e_sym_phdr     = e_sym_phdr;
+    e_syms_by_name = e_syms_by_name;
   }
 
 (** Reads a whole ELF file from a file name *)

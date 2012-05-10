@@ -10,9 +10,10 @@ let option_bytefuzz = ref false
 let option_printelf = ref false
 
 let set_elf_file s =
-  match !elf_file with
+  begin match !elf_file with
   | None -> elf_file := Some s
   | Some _ -> raise (Arg.Bad "multiple ELF executables given on command line")
+  end
 
 let options = [
   "-exe <filename>", Arg.String set_elf_file,
@@ -33,6 +34,9 @@ let options = [
   "Random fuzz testing byte per byte";
   "-debugfuzz", Arg.Set Fuzz.fuzz_debug,
   "Print a detailed trace of ongoing fuzz testing";
+  "-relaxed", Arg.Set ELF_parsers.relaxed,
+  "Allows the following behaviors in the ELF parser:
+\t* Use of a fallback heuristic to resolve symbols bootstrapped at load time";
 ]
 
 let anonymous arg =
@@ -49,7 +53,7 @@ Options are:"
 
 let _ =
   Arg.parse options anonymous usage;
-  match !elf_file with
+  begin match !elf_file with
   | None ->
       Arg.usage options usage;
       exit 2
@@ -67,3 +71,4 @@ let _ =
       end else begin
         check_elf_dump elffilename sdumps
       end
+  end
