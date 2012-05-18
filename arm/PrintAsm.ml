@@ -432,11 +432,9 @@ let fixup_conventions oc dir tyl =
   let fixup f i1 i2 =
     match dir with
     | Incoming ->     (* f <- (i1, i2)  *)
-        fprintf oc "	fmdlr	%a, %a\n" freg f ireg i1;
-        fprintf oc "	fmdhr	%a, %a\n" freg f ireg i2
+        fprintf oc "	fmdrr	%a, %a, %a\n" freg f ireg i1 ireg i2
     | Outgoing ->      (* (i1, i2) <- f *)
-        fprintf oc "	fmrdl	%a, %a\n" ireg i1 freg f;
-        fprintf oc "	fmrdh	%a, %a\n" ireg i2 freg f in
+        fprintf oc "	fmrrd	%a, %a, %a\n" ireg i1 ireg i2 freg f in
   match tyl with
   | Tfloat :: Tfloat :: _ ->
       fixup FR0 IR0 IR1; fixup FR1 IR2 IR3; 4
