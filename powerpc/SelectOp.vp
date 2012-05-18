@@ -304,6 +304,8 @@ Nondetfunction xor (e1: expr) (e2: expr) :=
   match e1, e2 with
   | Eop (Ointconst n1) Enil, t2 => xorimm n1 t2
   | t1, Eop (Ointconst n2) Enil => xorimm n2 t1
+  | Eop Onot (t1:::Enil), t2 => Eop Onxor (t1:::t2:::Enil)
+  | t1, Eop Onot (t2:::Enil) => Eop Onxor (t1:::t2:::Enil)
   | _, _ => Eop Oxor (e1:::e2:::Enil)
   end.
 

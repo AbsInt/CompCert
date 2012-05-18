@@ -740,6 +740,11 @@ Proof.
   decEq. apply Int.xor_assoc.
 Qed.
 
+Theorem not_xor: forall x, notint x = xor x (Vint Int.mone).
+Proof.
+  destruct x; simpl; auto. 
+Qed.
+
 Theorem shl_mul: forall x y, mul x (shl Vone y) = shl x y.
 Proof.
   destruct x; destruct y; simpl; auto. 

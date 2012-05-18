@@ -490,6 +490,9 @@ Proof.
   red; intros until y; unfold xor; case (xor_match a b); intros; InvEval.
   rewrite Val.xor_commut. apply eval_xorimm; auto.
   apply eval_xorimm; auto.
+  subst x. rewrite Val.xor_commut. rewrite Val.not_xor. rewrite <- Val.xor_assoc. 
+  rewrite <- Val.not_xor. rewrite Val.xor_commut. TrivialExists.
+  subst y. rewrite Val.not_xor. rewrite <- Val.xor_assoc. rewrite <- Val.not_xor. TrivialExists.
   TrivialExists.
 Qed.
 
