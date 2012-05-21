@@ -134,7 +134,7 @@ let compile_c_ast sourcename csyntax ofile =
   set_dest PrintCminor.destination option_dcminor ".cm";
   set_dest PrintRTL.destination_rtl option_drtl ".rtl";
   set_dest PrintRTL.destination_tailcall option_dtailcall ".tailcall.rtl";
-  set_dest PrintRTL.destination_castopt option_dcastopt ".castopt.rtl";
+  set_dest PrintRTL.destination_inlining option_dinlining ".inlining.rtl";
   set_dest PrintRTL.destination_constprop option_dconstprop ".constprop.rtl";
   set_dest PrintRTL.destination_cse option_dcse ".cse.rtl";
   set_dest PrintLTLin.destination option_dalloc ".alloc.ltl";
@@ -151,7 +151,7 @@ let compile_c_ast sourcename csyntax ofile =
     dump_asm asm (Filename.chop_suffix sourcename ".c" ^ ".sdump");
   (* Print Asm in text form *)
   let oc = open_out ofile in
-  PrintAsm.print_program oc asm;
+  PrintAsm.print_program oc (Unusedglob.transf_program asm);
   close_out oc
 
 (* From C source to asm *)
@@ -371,6 +371,8 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -fsse          (IA32) Use SSE2 instructions for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
+  -ffloat-const-prop <n>  Control constant propagation of floats
+                   (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
   -Wa,<opt>      Pass option <opt> to the assembler
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
@@ -379,7 +381,7 @@ Tracing options:
   -dcminor       Save generated Cminor in <file>.cm
   -drtl          Save unoptimized generated RTL in <file>.rtl
   -dtailcall     Save RTL after tail call optimization in <file>.tailcall.rtl
-  -dcastopt      Save RTL after cast optimization in <file>.castopt.rtl
+  -dinlining     Save RTL after inlining optimization in <file>.inlining.rtl
   -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
   -dcse          Save RTL after CSE optimization in <file>.cse.rtl
   -dalloc        Save LTL after register allocation in <file>.alloc.ltl
@@ -425,7 +427,7 @@ let cmdline_actions =
   "-dcminor", Set option_dcminor;
   "-drtl$", Set option_drtl;
   "-dtailcall$", Set option_dtailcall;
-  "-dcastopt$", Set option_dcastopt;
+  "-dinlining$", Set option_dinlining;
   "-dconstprop$", Set option_dconstprop;
   "-dcse$", Set option_dcse;
   "-dalloc$", Set option_dalloc;
@@ -464,6 +466,7 @@ let cmdline_actions =
       linker_options := s :: !linker_options);
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
   "-fsmall-const$", Integer(fun n -> option_small_const := n);
+  "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);
   "-fall$", Self (fun _ ->
               List.iter (fun r -> r := true) language_support_options);
   "-fnone$", Self (fun _ ->

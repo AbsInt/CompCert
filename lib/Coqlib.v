@@ -23,23 +23,6 @@ Require Export List.
 Require Export Bool.
 Require Import Wf_nat.
 
-(***
-
-(** * Logical axioms *)
-
-(** We use two logical axioms that are not provable in Coq but consistent
-  with the logic: function extensionality and proof irrelevance.
-  These are used in the memory model to show that two memory states
-  that have identical contents are equal. *)
-
-Axiom extensionality:
-  forall (A B: Type) (f g : A -> B),
-  (forall x, f x = g x) -> f = g.
-
-Axiom proof_irrelevance:
-  forall (P: Prop) (p1 p2: P), p1 = p2.
-***)
-  
 (** * Useful tactics *)
 
 Ltac inv H := inversion H; clear H; subst.
@@ -51,7 +34,7 @@ Ltac caseEq name :=
   generalize (refl_equal name); pattern name at -1 in |- *; case name.
 
 Ltac destructEq name :=
-  generalize (refl_equal name); pattern name at -1 in |- *; destruct name; intro.
+  destruct name as []_eqn.
 
 Ltac decEq :=
   match goal with

@@ -90,29 +90,26 @@ let print_instruction pp i =
   | Lreturn (Some arg) ->
       fprintf pp "return %a@ " reg arg
 
-let print_function pp f =
-  fprintf pp "@[<v 2>f(%a) {@ " regs f.fn_params;
+let print_function pp id f =
+  fprintf pp "@[<v 2>%s(%a) {@ " (extern_atom id) regs f.fn_params;
   List.iter (print_instruction pp) f.fn_code;
   fprintf pp "@;<0 -2>}@]@."
 
-let print_fundef pp fd =
+let print_fundef pp (id, fd) =
   match fd with
-  | Internal f -> print_function pp f
+  | Internal f -> print_function pp id f
   | External _ -> ()
 
-let destination : string option ref = ref None
-let currpp : formatter option ref = ref None
+let print_program pp prog =
+  List.iter (print_fundef pp) prog.prog_funct
 
-let print_if fd =
+let destination : string option ref = ref None
+
+let print_if prog =
   match !destination with
   | None -> ()
   | Some f ->
-      let pp =
-        match !currpp with
-        | Some pp -> pp
-        | None ->
-            let oc = open_out f in
-            let pp = formatter_of_out_channel oc in
-            currpp := Some pp;
-            pp
-      in print_fundef pp fd
+      let oc = open_out f in
+      let pp = formatter_of_out_channel oc in
+      print_program pp prog;
+      close_out oc

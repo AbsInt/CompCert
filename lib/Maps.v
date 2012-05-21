@@ -77,6 +77,9 @@ Module Type TREE.
   Hypothesis grspec:
     forall (A: Type) (i j: elt) (m: t A),
     get i (remove j m) = if elt_eq i j then None else get i m.
+  Hypothesis set2:
+    forall (A: Type) (i: elt) (m: t A) (v1 v2: A),
+    set i v2 (set i v1 m) = set i v2 m.
 
   (** Extensional equality between trees. *)
   Variable beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
@@ -302,8 +305,15 @@ Module PTree <: TREE.
      rewrite (IHi m1 v H); congruence.
   Qed.
 
-    Lemma rleaf : forall (A : Type) (i : positive), remove i (Leaf : t A) = Leaf.
-    Proof. destruct i; simpl; auto. Qed.
+  Theorem set2:
+    forall (A: Type) (i: elt) (m: t A) (v1 v2: A),
+    set i v2 (set i v1 m) = set i v2 m.
+  Proof.
+    induction i; intros; destruct m; simpl; try (rewrite IHi); auto.
+  Qed.
+
+  Lemma rleaf : forall (A : Type) (i : positive), remove i (Leaf : t A) = Leaf.
+  Proof. destruct i; simpl; auto. Qed.
 
   Theorem grs:
     forall (A: Type) (i: positive) (m: t A), get i (remove i m) = None.
@@ -1116,6 +1126,13 @@ Module PMap <: MAP.
     unfold option_map. destruct (PTree.get i (snd m)); auto.
   Qed.
 
+  Theorem set2:
+    forall (A: Type) (i: elt) (x y: A) (m: t A),
+    set i y (set i x m) = set i y m.
+  Proof.
+    intros. unfold set. simpl. decEq. apply PTree.set2.
+  Qed.
+
 End PMap.
 
 (** * An implementation of maps over any type that injects into type [positive] *)
@@ -1176,6 +1193,13 @@ Module IMap(X: INDEXED_TYPE).
     get i (map f m) = f(get i m).
   Proof.
     intros. unfold map, get. apply PMap.gmap. 
+  Qed.
+
+  Lemma set2:
+    forall (A: Type) (i: elt) (x y: A) (m: t A),
+    set i y (set i x m) = set i y m.
+  Proof.
+    intros. unfold set. apply PMap.set2.
   Qed.
 
 End IMap.
@@ -1378,6 +1402,76 @@ Qed.
 
 End TREE_FOLD_IND.
 
+(** A nonnegative measure over trees *)
+
+Section MEASURE.
+
+Variable V: Type.
+
+Definition cardinal (x: T.t V) : nat := List.length (T.elements x).
+
+Remark list_incl_length:
+  forall (A: Type) (l1: list A), list_norepet l1 ->
+  forall (l2: list A), List.incl l1 l2 -> (List.length l1 <= List.length l2)%nat.
+Proof.
+  induction 1; simpl; intros.
+  omega.
+  exploit (List.in_split hd l2). auto with coqlib. intros [l3 [l4 EQ]]. subst l2.
+  assert (length tl <= length (l3 ++ l4))%nat.
+    apply IHlist_norepet. red; intros. 
+    exploit (H1 a); auto with coqlib. 
+    repeat rewrite in_app_iff. simpl. intuition. subst. contradiction.
+  repeat rewrite app_length in *. simpl. omega. 
+Qed.
+
+Remark list_length_incl:
+  forall (A: Type) (l1: list A), list_norepet l1 ->
+  forall l2, List.incl l1 l2 -> List.length l1 = List.length l2 -> List.incl l2 l1.
+Proof.
+  induction 1; simpl; intros.
+  destruct l2; simpl in *. auto with coqlib. discriminate.
+  exploit (List.in_split hd l2). auto with coqlib. intros [l3 [l4 EQ]]. subst l2.
+  assert (incl (l3 ++ l4) tl).
+    apply IHlist_norepet. red; intros. 
+    exploit (H1 a); auto with coqlib. 
+    repeat rewrite in_app_iff. simpl. intuition. subst. contradiction.
+    repeat rewrite app_length in *. simpl in H2. omega. 
+  red; simpl; intros. rewrite in_app_iff in H4; simpl in H4. intuition. 
+Qed.
+
+Remark list_strict_incl_length:
+  forall (A: Type) (l1 l2: list A) (x: A),
+  list_norepet l1 -> List.incl l1 l2 -> ~In x l1 -> In x l2 ->
+  (List.length l1 < List.length l2)%nat.
+Proof.
+  intros. exploit list_incl_length; eauto. intros. 
+  assert (length l1 = length l2 \/ length l1 < length l2)%nat by omega.
+  destruct H4; auto. elim H1. eapply list_length_incl; eauto. 
+Qed.
+
+Remark list_norepet_map:
+  forall (A B: Type) (f: A -> B) (l: list A),
+  list_norepet (List.map f l) -> list_norepet l.
+Proof.
+  induction l; simpl; intros.
+  constructor.
+  inv H. constructor; auto. red; intros; elim H2. apply List.in_map; auto.
+Qed.
+
+Theorem cardinal_remove:
+  forall x m y, T.get x m = Some y -> (cardinal (T.remove x m) < cardinal m)%nat.
+Proof.
+  unfold cardinal; intros. apply list_strict_incl_length with (x := (x, y)).
+  apply list_norepet_map with (f := @fst T.elt V). apply T.elements_keys_norepet.
+  red; intros. destruct a as [x' y']. exploit T.elements_complete; eauto. 
+  rewrite T.grspec. destruct (T.elt_eq x' x); intros; try discriminate.
+  apply T.elements_correct; auto.
+  red; intros. exploit T.elements_complete; eauto. rewrite T.grspec. rewrite dec_eq_true. congruence.
+  apply T.elements_correct; auto.
+Qed.
+
+End MEASURE.
+
 End Tree_Properties.
 
 Module PTree_Properties := Tree_Properties(PTree).
@@ -1386,5 +1480,3 @@ Module PTree_Properties := Tree_Properties(PTree).
 
 Notation "a ! b" := (PTree.get b a) (at level 1).
 Notation "a !! b" := (PMap.get b a) (at level 1).
-
-(* $Id: Maps.v,v 1.12.4.4 2006/01/07 11:46:55 xleroy Exp $ *)

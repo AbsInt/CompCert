@@ -560,23 +560,22 @@ Definition extcall_sem : Type :=
 (** We now specify the expected properties of this predicate. *)
 
 Definition mem_unchanged_on (P: block -> Z -> Prop) (m_before m_after: mem): Prop :=
-  (forall b ofs p,
-   P b ofs -> Mem.perm m_before b ofs p -> Mem.perm m_after b ofs p)
+  (forall b ofs k p,
+   P b ofs -> Mem.perm m_before b ofs k p -> Mem.perm m_after b ofs k p)
 /\(forall chunk b ofs v,
    (forall i, ofs <= i < ofs + size_chunk chunk -> P b i) ->
    Mem.load chunk m_before b ofs = Some v ->
    Mem.load chunk m_after b ofs = Some v).
 
 Definition loc_out_of_bounds (m: mem) (b: block) (ofs: Z) : Prop :=
-  ofs < Mem.low_bound m b \/ ofs > Mem.high_bound m b.
+  ~Mem.perm m b ofs Max Nonempty.
 
 Definition loc_unmapped (f: meminj) (b: block) (ofs: Z): Prop :=
   f b = None.
 
 Definition loc_out_of_reach (f: meminj) (m: mem) (b: block) (ofs: Z): Prop :=
   forall b0 delta,
-  f b0 = Some(b, delta) ->
-  ofs < Mem.low_bound m b0 + delta \/ ofs >= Mem.high_bound m b0 + delta.
+  f b0 = Some(b, delta) -> ~Mem.perm m b0 (ofs - delta) Max Nonempty.
 
 Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   forall b1 b2 delta,
@@ -613,11 +612,22 @@ Record extcall_properties (sem: extcall_sem)
     sem F V ge vargs m1 t vres m2 ->
     Mem.valid_block m1 b -> Mem.valid_block m2 b;
 
-(** External calls preserve the bounds of valid blocks. *)
-  ec_bounds:
-    forall F V (ge: Genv.t F V) vargs m1 t vres m2 b,
+(** External calls cannot increase the max permissions of a valid block.
+    They can decrease the max permissions, e.g. by freeing. *)
+  ec_max_perm:
+    forall F V (ge: Genv.t F V) vargs m1 t vres m2 b ofs p,
     sem F V ge vargs m1 t vres m2 ->
-    Mem.valid_block m1 b -> Mem.bounds m2 b = Mem.bounds m1 b;
+    Mem.valid_block m1 b -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p;
+
+(** External call cannot modify memory unless they have [Max, Writable]
+   permissions. *)
+  ec_readonly:
+    forall F V (ge: Genv.t F V) vargs m1 t vres m2 chunk b ofs,
+    sem F V ge vargs m1 t vres m2 ->
+    Mem.valid_block m1 b ->
+    (forall ofs', ofs <= ofs' < ofs + size_chunk chunk ->
+                          ~(Mem.perm m1 b ofs' Max Writable)) ->
+    Mem.load chunk m2 b ofs = Mem.load chunk m1 b ofs;
 
 (** External calls must commute with memory extensions, in the
   following sense. *)
@@ -759,7 +769,9 @@ Proof.
   inv H1. constructor. eapply volatile_load_preserved; eauto. 
 (* valid blocks *)
   inv H; auto.
-(* bounds *)
+(* max perms *)
+  inv H; auto.
+(* readonly *)
   inv H; auto.
 (* mem extends *)
   inv H. inv H1. inv H6. inv H4. 
@@ -821,7 +833,9 @@ Proof.
   inv H1. econstructor. rewrite H; eauto. eapply volatile_load_preserved; eauto. 
 (* valid blocks *)
   inv H; auto.
-(* bounds *)
+(* max perm *)
+  inv H; auto.
+(* readonly *)
   inv H; auto.
 (* extends *)
   inv H. inv H1. exploit volatile_load_extends; eauto. intros [v' [A B]].
@@ -867,6 +881,28 @@ Proof.
   rewrite H0; auto.
 Qed.
 
+Lemma volatile_store_readonly:
+  forall F V (ge: Genv.t F V) chunk1 m1 b1 ofs1 v t m2 chunk ofs b,
+  volatile_store ge chunk1 m1 b1 ofs1 v t m2 ->
+  Mem.valid_block m1 b ->
+  (forall ofs', ofs <= ofs' < ofs + size_chunk chunk ->
+                        ~(Mem.perm m1 b ofs' Max Writable)) ->
+  Mem.load chunk m2 b ofs = Mem.load chunk m1 b ofs.
+Proof.
+  intros. inv H.
+  auto.
+  eapply Mem.load_store_other; eauto.
+  destruct (eq_block b b1); auto. subst b1. right.
+  apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk)
+                              (Int.unsigned ofs1, Int.unsigned ofs1 + size_chunk chunk1)).
+  red; intros; red; intros. 
+  elim (H1 x); auto. 
+  exploit Mem.store_valid_access_3; eauto. intros [A B].
+  apply Mem.perm_cur_max. apply A. auto.
+  simpl. generalize (size_chunk_pos chunk); omega.
+  simpl. generalize (size_chunk_pos chunk1); omega.
+Qed.
+
 Lemma volatile_store_extends:
   forall F V (ge: Genv.t F V) chunk m1 b ofs v t m2 m1' v',
   volatile_store ge chunk m1 b ofs v t m2 ->
@@ -886,15 +922,14 @@ Proof.
   eapply Mem.perm_store_1; eauto.
   rewrite <- H4. eapply Mem.load_store_other; eauto.
   destruct (eq_block b0 b); auto. subst b0; right. 
-  exploit Mem.valid_access_in_bounds. 
-  eapply Mem.store_valid_access_3. eexact H3.
-  intros [C D].
-  generalize (size_chunk_pos chunk0). intro E.
-  generalize (size_chunk_pos chunk). intro G.
   apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
                               (Int.unsigned ofs, Int.unsigned ofs + size_chunk chunk)).
-  red; intros. generalize (H x H5). unfold loc_out_of_bounds, Intv.In; simpl. omega.
-  simpl; omega. simpl; omega.
+  red; intros; red; intros.
+  exploit (H x H5). exploit Mem.store_valid_access_3. eexact H3. intros [E G].
+  apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
+  auto.
+  simpl. generalize (size_chunk_pos chunk0). omega.
+  simpl. generalize (size_chunk_pos chunk). omega.
 Qed.
 
 Lemma volatile_store_inject:
@@ -929,15 +964,15 @@ Proof.
   assert (EQ: Int.unsigned (Int.add ofs (Int.repr delta)) = Int.unsigned ofs + delta).
     eapply Mem.address_inject; eauto with mem.
   unfold Mem.storev in A. rewrite EQ in A. rewrite EQ.
-  exploit Mem.valid_access_in_bounds. 
-  eapply Mem.store_valid_access_3. eexact H0.
-  intros [C D].
-  generalize (size_chunk_pos chunk0). intro E.
-  generalize (size_chunk_pos chunk). intro G.
   apply (Intv.range_disjoint' (ofs0, ofs0 + size_chunk chunk0)
                               (Int.unsigned ofs + delta, Int.unsigned ofs + delta + size_chunk chunk)).
-  red; intros. exploit (H1 x H7). eauto. unfold Intv.In; simpl. omega.
-  simpl; omega. simpl; omega.
+  red; intros; red; intros. exploit (H1 x H7). eauto.
+  exploit Mem.store_valid_access_3. eexact H0. intros [C D].
+  apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
+  apply C. red in H8; simpl in H8. omega. 
+  auto.
+  simpl. generalize (size_chunk_pos chunk0). omega.
+  simpl. generalize (size_chunk_pos chunk). omega.
 Qed.
 
 Lemma volatile_store_receptive:
@@ -961,8 +996,10 @@ Proof.
   inv H1. constructor. eapply volatile_store_preserved; eauto. 
 (* valid block *)
   inv H. inv H1. auto. eauto with mem.
-(* bounds *)
-  inv H. inv H1. auto. eapply Mem.bounds_store; eauto.
+(* perms *)
+  inv H. inv H2. auto. eauto with mem. 
+(* readonly *)
+  inv H. eapply volatile_store_readonly; eauto.
 (* mem extends*)
   inv H. inv H1. inv H6. inv H7. inv H4.
   exploit volatile_store_extends; eauto. intros [m2' [A [B C]]]. 
@@ -1016,8 +1053,10 @@ Proof.
   inv H1. econstructor. rewrite H; eauto. eapply volatile_store_preserved; eauto. 
 (* valid block *)
   inv H. inv H2. auto. eauto with mem.
-(* bounds *)
-  inv H. inv H2. auto. eapply Mem.bounds_store; eauto.
+(* perms *)
+  inv H. inv H3. auto. eauto with mem. 
+(* readonly *)
+  inv H. eapply volatile_store_readonly; eauto.
 (* mem extends*)
   rewrite volatile_store_global_charact in H. destruct H as [b [P Q]]. 
   exploit ec_mem_extends. eapply volatile_store_ok. eexact Q. eauto. eauto. 
@@ -1076,11 +1115,15 @@ Proof.
   inv H1; econstructor; eauto.
 (* valid block *)
   inv H. eauto with mem.
-(* bounds *)
-  inv H. transitivity (Mem.bounds m' b).
-  eapply Mem.bounds_store; eauto.
-  eapply Mem.bounds_alloc_other; eauto.
+(* perms *)
+  inv H. exploit Mem.perm_alloc_inv. eauto. eapply Mem.perm_store_2; eauto.
+  rewrite zeq_false. auto. 
   apply Mem.valid_not_valid_diff with m1; eauto with mem.
+(* readonly *)
+  inv H. transitivity (Mem.load chunk m' b ofs).
+  eapply Mem.load_store_other; eauto. 
+  left. apply Mem.valid_not_valid_diff with m1; eauto with mem.
+  eapply Mem.load_alloc_unchanged; eauto.
 (* mem extends *)
   inv H. inv H1. inv H5. inv H7. 
   exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
@@ -1153,8 +1196,21 @@ Proof.
   inv H1; econstructor; eauto.
 (* valid block *)
   inv H. eauto with mem.
-(* bounds *)
-  inv H. eapply Mem.bounds_free; eauto.
+(* perms *)
+  inv H. eapply Mem.perm_free_3; eauto. 
+(* readonly *)
+  inv H. eapply Mem.load_free; eauto.
+  destruct (eq_block b b0); auto.
+  subst b0. right; right. 
+  apply (Intv.range_disjoint'
+           (ofs, ofs + size_chunk chunk)
+           (Int.unsigned lo - 4, Int.unsigned lo + Int.unsigned sz)).
+  red; intros; red; intros.
+  elim (H1 x). auto. apply Mem.perm_cur_max. 
+  apply Mem.perm_implies with Freeable; auto with mem.
+  exploit Mem.free_range_perm; eauto. 
+  simpl. generalize (size_chunk_pos chunk); omega.
+  simpl. omega.
 (* mem extends *)
   inv H. inv H1. inv H8. inv H6. 
   exploit Mem.load_extends; eauto. intros [vsz [A B]]. inv B. 
@@ -1163,19 +1219,20 @@ Proof.
   econstructor; eauto.
   eapply UNCHANGED; eauto. omega. 
   intros. destruct (eq_block b' b); auto. subst b; right.
-  red in H.
-  exploit Mem.range_perm_in_bounds. 
-  eapply Mem.free_range_perm. eexact H4. omega. omega.
+  assert (~(Int.unsigned lo - 4 <= ofs < Int.unsigned lo + Int.unsigned sz)).
+    red; intros; elim H. apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
+    eapply Mem.free_range_perm. eexact H4. auto. 
+  omega.
 (* mem inject *)
   inv H0. inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [vsz [A B]]. inv B. 
-  assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Freeable).
+  assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto. 
-    apply Mem.perm_implies with Freeable; auto with mem.
+    apply Mem.perm_implies with Freeable; auto with mem. apply Mem.perm_cur_max.
     apply H0. instantiate (1 := lo). omega. 
   intro EQ.
-  assert (Mem.range_perm m1' b2 (Int.unsigned lo + delta - 4) (Int.unsigned lo + delta + Int.unsigned sz) Freeable).
+  assert (Mem.range_perm m1' b2 (Int.unsigned lo + delta - 4) (Int.unsigned lo + delta + Int.unsigned sz) Cur Freeable).
     red; intros. 
     replace ofs with ((ofs - delta) + delta) by omega.
     eapply Mem.perm_inject; eauto. apply H0. omega. 
@@ -1194,20 +1251,23 @@ Proof.
   subst b. assert (delta0 = delta) by congruence. subst delta0. 
   exists (Int.unsigned lo - 4); exists (Int.unsigned lo + Int.unsigned sz); split.
   simpl; auto. omega.
-  elimtype False.
-  exploit Mem.inject_no_overlap. eauto. eauto. eauto. eauto. 
-  instantiate (1 := ofs + delta0 - delta). 
-  apply Mem.perm_implies with Freeable; auto with mem.
-  apply H0. omega. eauto with mem.
+  elimtype False. exploit Mem.inject_no_overlap. eauto. eauto. eauto. eauto. 
+  instantiate (1 := ofs + delta0 - delta).
+  apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
+  apply H0. omega.
+  eapply Mem.perm_max. eauto with mem.
   unfold block; omega.
 
   eapply UNCHANGED; eauto. omega. intros.  
   red in H7. left. congruence. 
 
   eapply UNCHANGED; eauto. omega. intros.
-  destruct (eq_block b' b2); auto. subst b'. right. 
-  red in H7. generalize (H7 _ _ H6). intros. 
-  exploit Mem.range_perm_in_bounds. eexact H0. omega. intros. omega.
+  destruct (eq_block b' b2); auto. subst b'. right.
+  assert (~(Int.unsigned lo + delta - 4 <= ofs < Int.unsigned lo + delta + Int.unsigned sz)).
+    red; intros. elim (H7 _ _ H6). 
+    apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
+    apply H0. omega.
+  omega.
 
   red; intros. congruence.
 (* trace length *)
@@ -1245,8 +1305,20 @@ Proof.
   intros. inv H1. econstructor; eauto.
 (* valid blocks *)
   intros. inv H. eauto with mem. 
-(* bounds *)
-  intros. inv H. eapply Mem.bounds_storebytes; eauto. 
+(* perms *)
+  intros. inv H. eapply Mem.perm_storebytes_2; eauto. 
+(* readonly *)
+  intros. inv H. eapply Mem.load_storebytes_other; eauto.
+  destruct (eq_block b bdst); auto.   subst b. right.
+  apply (Intv.range_disjoint'
+          (ofs, ofs + size_chunk chunk)
+          (Int.unsigned odst, Int.unsigned odst + Z_of_nat (length bytes))).
+  red; intros; red; intros. elim (H1 x); auto.
+  apply Mem.perm_cur_max. 
+  eapply Mem.storebytes_range_perm; eauto. 
+  simpl. generalize (size_chunk_pos chunk); omega.
+  simpl. rewrite (Mem.loadbytes_length _ _ _ _ _ H8). rewrite nat_of_Z_eq.
+  omega. omega.
 (* extensions *)
   intros. inv H. 
   inv H1. inv H13. inv H14. inv H10. inv H11.
@@ -1262,30 +1334,31 @@ Proof.
   exploit Mem.loadbytes_length. eexact H8. intros.
   rewrite <- H1. eapply Mem.load_storebytes_other; eauto. 
   destruct (eq_block b bdst); auto. subst b; right.
-  exploit Mem.range_perm_in_bounds. eapply Mem.storebytes_range_perm. eexact H9.
-  rewrite H10. rewrite nat_of_Z_eq. omega. omega.
-  intros [P Q].
-  exploit list_forall2_length; eauto. intros R. rewrite R in Q.
+  exploit list_forall2_length; eauto. intros R. 
   apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk)
                               (Int.unsigned odst, Int.unsigned odst + Z_of_nat (length bytes2))); simpl.
-  red; intros. generalize (H x H11). unfold loc_out_of_bounds, Intv.In; simpl. omega.
-  generalize (size_chunk_pos chunk); omega.
-  rewrite <- R; rewrite H10. rewrite nat_of_Z_eq. omega. omega.
+  red; unfold Intv.In; simpl; intros; red; intros.
+  eapply (H x H11).
+  apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
+  eapply Mem.storebytes_range_perm. eexact H9.
+  rewrite R. auto. 
+  generalize (size_chunk_pos chunk). omega.
+  rewrite <- R. rewrite H10. rewrite nat_of_Z_eq. omega. omega.
 (* injections *)
   intros. inv H0. inv H2. inv H14. inv H15. inv H11. inv H12.
   exploit Mem.loadbytes_length; eauto. intros LEN.
-  assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Nonempty).
+  assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
-  assert (RPDST: Mem.range_perm m1 bdst (Int.unsigned odst) (Int.unsigned odst + sz) Nonempty).
+  assert (RPDST: Mem.range_perm m1 bdst (Int.unsigned odst) (Int.unsigned odst + sz) Cur Nonempty).
     replace sz with (Z_of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
     rewrite LEN. apply nat_of_Z_eq. omega.
-  assert (PSRC: Mem.perm m1 bsrc (Int.unsigned osrc) Nonempty).
+  assert (PSRC: Mem.perm m1 bsrc (Int.unsigned osrc) Cur Nonempty).
     apply RPSRC. omega.
-  assert (PDST: Mem.perm m1 bdst (Int.unsigned odst) Nonempty).
+  assert (PDST: Mem.perm m1 bdst (Int.unsigned odst) Cur Nonempty).
     apply RPDST. omega.
-  exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
-  exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
+  exploit Mem.address_inject.  eauto. apply Mem.perm_cur_max. eexact PSRC. eauto. intros EQ1.
+  exploit Mem.address_inject.  eauto. apply Mem.perm_cur_max. eexact PDST. eauto. intros EQ2.
   exploit Mem.loadbytes_inject; eauto. intros [bytes2 [A B]].
   exploit Mem.storebytes_mapped_inject; eauto. intros [m2' [C D]].
   exists f; exists Vundef; exists m2'.
@@ -1293,6 +1366,8 @@ Proof.
   eapply Mem.aligned_area_inject with (m := m1); eauto.
   eapply Mem.aligned_area_inject with (m := m1); eauto.
   eapply Mem.disjoint_or_equal_inject with (m := m1); eauto.
+  apply Mem.range_perm_max with Cur; auto.
+  apply Mem.range_perm_max with Cur; auto.
   split. constructor.
   split. auto.
   split. red; split; intros. eauto with mem. 
@@ -1306,10 +1381,8 @@ Proof.
   rewrite <- (list_forall2_length B). rewrite LEN. rewrite nat_of_Z_eq; try omega.
   apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk)
                               (Int.unsigned odst + delta0, Int.unsigned odst + delta0 + sz)); simpl.
-  red; intros. generalize (H0 x H12). unfold loc_out_of_reach, Intv.In; simpl. 
-  intros. exploit H14; eauto. 
-  exploit Mem.range_perm_in_bounds. eexact RPDST. omega. 
-  omega.
+  red; unfold Intv.In; simpl; intros; red; intros.
+  eapply (H0 x H12). eauto. apply Mem.perm_cur_max. apply RPDST. omega. 
   generalize (size_chunk_pos chunk); omega.
   omega.
   split. apply inject_incr_refl.
@@ -1348,7 +1421,9 @@ Proof.
   eapply eventval_match_preserved; eauto. 
 (* valid block *)
   inv H; auto.
-(* bounds *)
+(* perms *)
+  inv H; auto.
+(* readonly *)
   inv H; auto.
 (* mem extends *)
   inv H.
@@ -1403,7 +1478,9 @@ Proof.
   eapply eventval_list_match_preserved; eauto.
 (* valid blocks *)
   inv H; auto.
-(* bounds *)
+(* perms *)
+  inv H; auto.
+(* readonly *)
   inv H; auto.
 (* mem extends *)
   inv H.
@@ -1448,6 +1525,8 @@ Proof.
 
   inv H1. econstructor; eauto. 
   eapply eventval_match_preserved; eauto.
+
+  inv H; auto.
 
   inv H; auto.
 
@@ -1527,7 +1606,8 @@ Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).
 Definition external_call_arity ef := ec_arity (external_call_spec ef).
 Definition external_call_symbols_preserved_gen ef := ec_symbols_preserved (external_call_spec ef).
 Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef).
-Definition external_call_bounds ef := ec_bounds (external_call_spec ef).
+Definition external_call_max_perm ef := ec_max_perm (external_call_spec ef).
+Definition external_call_readonly ef := ec_readonly (external_call_spec ef).
 Definition external_call_mem_extends ef := ec_mem_extends (external_call_spec ef).
 Definition external_call_mem_inject ef := ec_mem_inject (external_call_spec ef).
 Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).

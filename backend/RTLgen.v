@@ -557,19 +557,28 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
       do no <- add_instr (Istore chunk addr rl r nd);
       do ns <- transl_expr map b r no;
          transl_exprlist map al rl ns
-  | Scall optid sig b cl =>
+  | Scall optid sig (inl b) cl =>
       do rf <- alloc_reg map b;
       do rargs <- alloc_regs map cl;
       do r <- alloc_optreg map optid;
       do n1 <- add_instr (Icall sig (inl _ rf) rargs r nd);
       do n2 <- transl_exprlist map cl rargs n1;
          transl_expr map b rf n2
-  | Stailcall sig b cl =>
+  | Scall optid sig (inr id) cl =>
+      do rargs <- alloc_regs map cl;
+      do r <- alloc_optreg map optid;
+      do n1 <- add_instr (Icall sig (inr _ id) rargs r nd);
+      transl_exprlist map cl rargs n1
+  | Stailcall sig (inl b) cl =>
       do rf <- alloc_reg map b;
       do rargs <- alloc_regs map cl;
       do n1 <- add_instr (Itailcall sig (inl _ rf) rargs);
       do n2 <- transl_exprlist map cl rargs n1;
          transl_expr map b rf n2
+  | Stailcall sig (inr id) cl =>
+      do rargs <- alloc_regs map cl;
+      do n1 <- add_instr (Itailcall sig (inr _ id) rargs);
+      transl_exprlist map cl rargs n1
   | Sbuiltin optid ef al =>
       do rargs <- alloc_regs map al;
       do r <- alloc_optreg map optid;

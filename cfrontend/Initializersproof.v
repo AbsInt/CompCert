@@ -327,8 +327,8 @@ Qed.
 Lemma mem_empty_not_valid_pointer:
   forall b ofs, Mem.valid_pointer Mem.empty b ofs = false.
 Proof.
-  intros. unfold Mem.valid_pointer. destruct (Mem.perm_dec Mem.empty b ofs Nonempty); auto.
-  red in p. simpl in p. contradiction.
+  intros. unfold Mem.valid_pointer. destruct (Mem.perm_dec Mem.empty b ofs Cur Nonempty); auto.
+  eelim Mem.perm_empty; eauto. 
 Qed.
 
 Lemma sem_cmp_match:

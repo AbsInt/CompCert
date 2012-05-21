@@ -1142,7 +1142,8 @@ Proof.
   econstructor; eauto. constructor.
 
   (* call *)
-  inv TS. 
+  inv TS; inv H.
+  (* indirect *)
   exploit transl_expr_correct; eauto.
   intros [rs' [A [B [C D]]]].
   exploit transl_exprlist_correct; eauto.
@@ -1154,9 +1155,21 @@ Proof.
   apply sig_transl_function; auto.
   traceEq.
   rewrite G. constructor. auto. econstructor; eauto.
+  (* direct *)
+  exploit transl_exprlist_correct; eauto.
+  intros [rs'' [E [F [G J]]]].
+  exploit functions_translated; eauto. intros [tf' [P Q]].
+  econstructor; split.
+  left; eapply plus_right. eexact E.
+  eapply exec_Icall; eauto. simpl. rewrite symbols_preserved. rewrite H4. 
+    rewrite Genv.find_funct_find_funct_ptr in P. eauto. 
+  apply sig_transl_function; auto.
+  traceEq.
+  rewrite G. constructor. auto. econstructor; eauto.
 
   (* tailcall *)
-  inv TS. 
+  inv TS; inv H.
+  (* indirect *)
   exploit transl_expr_correct; eauto.
   intros [rs' [A [B [C D]]]].
   exploit transl_exprlist_correct; eauto.
@@ -1168,7 +1181,21 @@ Proof.
   left; eapply plus_right. eapply star_trans. eexact A. eexact E. reflexivity.
   eapply exec_Itailcall; eauto. simpl. rewrite J. rewrite C. eauto. simpl; auto.
   apply sig_transl_function; auto.
-  rewrite H2; eauto.
+  rewrite H; eauto.
+  traceEq.
+  rewrite G. constructor; auto.
+  (* direct *)
+  exploit transl_exprlist_correct; eauto.
+  intros [rs'' [E [F [G J]]]].
+  exploit functions_translated; eauto. intros [tf' [P Q]].
+  exploit match_stacks_call_cont; eauto. intros [U V].
+  assert (fn_stacksize tf = fn_stackspace f). inv TF; auto.
+  econstructor; split.
+  left; eapply plus_right. eexact E.
+  eapply exec_Itailcall; eauto. simpl. rewrite symbols_preserved. rewrite H5. 
+  rewrite Genv.find_funct_find_funct_ptr in P. eauto. 
+  apply sig_transl_function; auto.
+  rewrite H; eauto.
   traceEq.
   rewrite G. constructor; auto.
 

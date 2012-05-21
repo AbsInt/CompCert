@@ -270,21 +270,27 @@ Proof.
   predSpec Int.eq Int.eq_spec i0 Int.zero; congruence.
 Qed.
 
-Lemma expr_is_addrof_builtin_correct:
-  forall ge sp e m a v ef fd,
-  expr_is_addrof_builtin ge a = Some ef ->
+Lemma classify_call_correct:
+  forall ge sp e m a v fd,
   Cminor.eval_expr ge sp e m a v ->
   Genv.find_funct ge v = Some fd ->
-  fd = External ef.
+  match classify_call ge a with
+  | Call_default => True
+  | Call_imm id => exists b, Genv.find_symbol ge id = Some b /\ v = Vptr b Int.zero
+  | Call_builtin ef => fd = External ef
+  end.
 Proof.
-  intros until fd; unfold expr_is_addrof_builtin.
-  case_eq (expr_is_addrof_ident a); intros; try congruence.
-  exploit expr_is_addrof_ident_correct; eauto. intro EQ; subst a.
-  inv H1. inv H4. 
-  destruct (Genv.find_symbol ge i); try congruence.
-  rewrite Genv.find_funct_find_funct_ptr in H2. rewrite H2 in H0. 
-  destruct fd; try congruence. 
-  destruct (ef_inline e0); congruence.
+  unfold classify_call; intros. 
+  destruct (expr_is_addrof_ident a) as [id|]_eqn. 
+  exploit expr_is_addrof_ident_correct; eauto. intros EQ; subst a.
+  inv H. inv H2. 
+  destruct (Genv.find_symbol ge id) as [b|]_eqn. 
+  rewrite Genv.find_funct_find_funct_ptr in H0. 
+  rewrite H0. 
+  destruct fd. exists b; auto. 
+  destruct (ef_inline e0). auto. exists b; auto.
+  simpl in H0. discriminate.
+  auto.
 Qed.
 
 (** Compatibility of evaluation functions with the "less defined than" relation. *)
@@ -539,7 +545,9 @@ Proof.
 (* store *)
   unfold store. destruct (addressing m (sel_expr e)); simpl; auto.
 (* call *)
-  destruct (expr_is_addrof_builtin ge e); simpl; auto.
+  destruct (classify_call ge e); simpl; auto.
+(* tailcall *)
+  destruct (classify_call ge e); simpl; auto.
 (* seq *)
   exploit (IHs1 (Cminor.Kseq s2 k)). constructor; eauto. 
   destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)) as [[sx kx] | ];
@@ -598,27 +606,38 @@ Proof.
   eapply eval_store; eauto.
   constructor; auto.
   (* Scall *)
-  exploit sel_expr_correct; eauto. intros [vf' [A B]].
   exploit sel_exprlist_correct; eauto. intros [vargs' [C D]].
-  destruct (expr_is_addrof_builtin ge a) as [ef|]_eqn.
-  (* Scall turned into Sbuiltin *)
-  exploit expr_is_addrof_builtin_correct; eauto. intro EQ1. subst fd.
-  right; split. omega. split. auto. 
-  econstructor; eauto.
-  (* Scall preserved *)
+  exploit classify_call_correct; eauto. 
+  destruct (classify_call ge a) as [ | id | ef].
+  (* indirect *)
+  exploit sel_expr_correct; eauto. intros [vf' [A B]].
   left; econstructor; split.
-  econstructor; eauto.
+  econstructor; eauto. econstructor; eauto. 
   eapply functions_translated; eauto. 
   apply sig_function_translated.
   constructor; auto. constructor; auto.
+  (* direct *)
+  intros [b [U V]]. 
+  left; econstructor; split.
+  econstructor; eauto. econstructor; eauto. rewrite symbols_preserved; eauto.
+  eapply functions_translated; eauto. subst vf; auto. 
+  apply sig_function_translated.
+  constructor; auto. constructor; auto.
+  (* turned into Sbuiltin *)
+  intros EQ. subst fd. 
+  right; split. omega. split. auto. 
+  econstructor; eauto.
   (* Stailcall *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [P Q]].
   exploit sel_expr_correct; eauto. intros [vf' [A B]].
   exploit sel_exprlist_correct; eauto. intros [vargs' [C D]].
   left; econstructor; split.
-  econstructor; eauto.
-  eapply functions_translated; eauto. 
-  apply sig_function_translated.
+  exploit classify_call_correct; eauto. 
+  destruct (classify_call ge a) as [ | id | ef]; intros. 
+  econstructor; eauto. econstructor; eauto. eapply functions_translated; eauto. apply sig_function_translated.
+  destruct H2 as [b [U V]].
+  econstructor; eauto. econstructor; eauto. rewrite symbols_preserved; eauto. eapply functions_translated; eauto. subst vf; auto. apply sig_function_translated.
+  econstructor; eauto. econstructor; eauto. eapply functions_translated; eauto. apply sig_function_translated.
   constructor; auto. apply call_cont_commut; auto.
   (* Sbuiltin *)
   exploit sel_exprlist_correct; eauto. intros [vargs' [P Q]].

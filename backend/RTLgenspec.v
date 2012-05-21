@@ -865,12 +865,21 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Icall sig (inl _ rf) rargs rd nd) ->
      reg_map_ok map rd optid ->
-     tr_stmt c map (Scall optid sig b cl) ns nd nexits ngoto nret rret
+     tr_stmt c map (Scall optid sig (inl _ b) cl) ns nd nexits ngoto nret rret
+  | tr_Scall_imm: forall optid sig id cl ns nd nexits ngoto nret rret rd n2 rargs,
+     tr_exprlist c map nil cl ns n2 rargs ->
+     c!n2 = Some (Icall sig (inr _ id) rargs rd nd) ->
+     reg_map_ok map rd optid ->
+     tr_stmt c map (Scall optid sig (inr _ id) cl) ns nd nexits ngoto nret rret
   | tr_Stailcall: forall sig b cl ns nd nexits ngoto nret rret n1 rf n2 rargs,
      tr_expr c map nil b ns n1 rf None ->
      tr_exprlist c map (rf :: nil) cl n1 n2 rargs ->
      c!n2 = Some (Itailcall sig (inl _ rf) rargs) ->
-     tr_stmt c map (Stailcall sig b cl) ns nd nexits ngoto nret rret
+     tr_stmt c map (Stailcall sig (inl _ b) cl) ns nd nexits ngoto nret rret
+  | tr_Stailcall_imm: forall sig id cl ns nd nexits ngoto nret rret n2 rargs,
+     tr_exprlist c map nil cl ns n2 rargs ->
+     c!n2 = Some (Itailcall sig (inr _ id) rargs) ->
+     tr_stmt c map (Stailcall sig (inr _ id) cl) ns nd nexits ngoto nret rret
   | tr_Sbuiltin: forall optid ef al ns nd nexits ngoto nret rret rd n1 rargs,
      tr_exprlist c map nil al ns n1 rargs ->
      c!n1 = Some (Ibuiltin ef rargs rd nd) ->
@@ -1251,22 +1260,33 @@ Proof.
   apply tr_expr_incr with s3; auto.
   eapply transl_expr_charact; eauto 4 with rtlg.
   (* Scall *)
+  destruct s0 as [b | id]; monadInv TR; saturateTrans.
+  (* indirect *)
   econstructor; eauto 4 with rtlg.
   eapply transl_expr_charact; eauto 3 with rtlg.
   apply tr_exprlist_incr with s5. auto. 
   eapply transl_exprlist_charact; eauto 3 with rtlg.
-  eapply alloc_regs_target_ok with (s1 := s1); eauto 3 with rtlg.
+  eapply alloc_regs_target_ok with (s1 := s0); eauto 3 with rtlg.
   apply regs_valid_cons; eauto 3 with rtlg.
-  apply regs_valid_incr with s1; eauto 3 with rtlg.
+  apply regs_valid_incr with s0; eauto 3 with rtlg.
   apply regs_valid_cons; eauto 3 with rtlg.
   apply regs_valid_incr with s2; eauto 3 with rtlg.
   eapply alloc_optreg_map_ok with (s1 := s2); eauto 3 with rtlg.
+  (* direct *)
+  econstructor; eauto 4 with rtlg.
+  eapply transl_exprlist_charact; eauto 3 with rtlg.
+  eapply alloc_optreg_map_ok with (s1 := s0); eauto 3 with rtlg.
   (* Stailcall *)
-  assert (RV: regs_valid (x :: nil) s1).
+  destruct s0 as [b | id]; monadInv TR; saturateTrans.
+  (* indirect *)
+  assert (RV: regs_valid (x :: nil) s0).
     apply regs_valid_cons; eauto 3 with rtlg. 
   econstructor; eauto 3 with rtlg.
   eapply transl_expr_charact; eauto 3 with rtlg.
   apply tr_exprlist_incr with s4; auto.
+  eapply transl_exprlist_charact; eauto 4 with rtlg.
+  (* direct *)
+  econstructor; eauto 3 with rtlg.
   eapply transl_exprlist_charact; eauto 4 with rtlg.
   (* Sbuiltin *)
   econstructor; eauto 4 with rtlg.

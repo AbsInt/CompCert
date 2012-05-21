@@ -423,13 +423,13 @@ Definition frame_perm_freeable (m: mem) (sp: block): Prop :=
   forall ofs,
   0 <= ofs < fe.(fe_size) ->
   ofs < fe.(fe_stack_data) \/ fe.(fe_stack_data) + f.(Linear.fn_stacksize) <= ofs ->
-  Mem.perm m sp ofs Freeable.
+  Mem.perm m sp ofs Cur Freeable.
 
 Lemma offset_of_index_perm:
   forall m sp idx,
   index_valid idx ->
   frame_perm_freeable m sp ->
-  Mem.range_perm m sp (offset_of_index fe idx) (offset_of_index fe idx + AST.typesize (type_of_index idx)) Freeable.
+  Mem.range_perm m sp (offset_of_index fe idx) (offset_of_index fe idx + AST.typesize (type_of_index idx)) Cur Freeable.
 Proof.
   intros.
   exploit offset_of_index_valid; eauto. intros [A B].
@@ -612,7 +612,7 @@ Record agree_frame (j: meminj) (ls ls0: locset)
 
     (** Bounds of the Linear stack data block *)
     agree_bounds:
-      Mem.bounds m sp = (0, f.(Linear.fn_stacksize));
+      forall ofs p, Mem.perm m sp ofs Max p -> 0 <= ofs < f.(Linear.fn_stacksize);
 
     (** Permissions on the frame part of the Mach stack block *)
     agree_perm:
@@ -928,16 +928,16 @@ Lemma agree_frame_invariant:
   forall j ls ls0 m sp m' sp' parent retaddr m1 m1',
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   (Mem.valid_block m sp -> Mem.valid_block m1 sp) ->
-  (Mem.bounds m1 sp = Mem.bounds m sp) ->
+  (forall ofs p, Mem.perm m1 sp ofs Max p -> Mem.perm m sp ofs Max p) ->
   (Mem.valid_block m' sp' -> Mem.valid_block m1' sp') ->
   (forall chunk ofs v,
      ofs + size_chunk chunk <= fe.(fe_stack_data) \/
      fe.(fe_stack_data) + f.(Linear.fn_stacksize) <= ofs ->
      Mem.load chunk m' sp' ofs = Some v ->
      Mem.load chunk m1' sp' ofs = Some v) ->
-  (forall ofs p,
+  (forall ofs k p,
      ofs < fe.(fe_stack_data) \/ fe.(fe_stack_data) + f.(Linear.fn_stacksize) <= ofs ->
-     Mem.perm m' sp' ofs p -> Mem.perm m1' sp' ofs p) ->
+     Mem.perm m' sp' ofs k p -> Mem.perm m1' sp' ofs k p) ->
   agree_frame j ls ls0 m1 sp m1' sp' parent retaddr.
 Proof.
   intros.
@@ -950,7 +950,7 @@ Proof.
               index_contains_inj j m' sp' idx v -> index_contains_inj j m1' sp' idx v).
     intros. destruct H5 as [v' [A B]]. exists v'; split; auto. 
   inv H; constructor; auto; intros.
-  rewrite H1; auto.
+  eauto.
   red; intros. apply H4; auto.
 Qed.
 
@@ -960,7 +960,7 @@ Lemma agree_frame_extcall_invariant:
   forall j ls ls0 m sp m' sp' parent retaddr m1 m1',
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   (Mem.valid_block m sp -> Mem.valid_block m1 sp) ->
-  (Mem.bounds m1 sp = Mem.bounds m sp) ->
+  (forall ofs p, Mem.perm m1 sp ofs Max p -> Mem.perm m sp ofs Max p) ->
   (Mem.valid_block m' sp' -> Mem.valid_block m1' sp') ->
   mem_unchanged_on (loc_out_of_reach j m) m' m1' ->
   agree_frame j ls ls0 m1 sp m1' sp' parent retaddr.
@@ -970,7 +970,7 @@ Proof.
      ofs < fe.(fe_stack_data) \/ fe.(fe_stack_data) + f.(Linear.fn_stacksize) <= ofs ->
     loc_out_of_reach j m sp' ofs).
   intros; red; intros. exploit agree_inj_unique; eauto. intros [EQ1 EQ2]; subst.
-  rewrite (agree_bounds _ _ _ _ _ _ _ _ _ H). unfold fst, snd. omega.
+  red; intros. exploit agree_bounds; eauto. omega. 
   eapply agree_frame_invariant; eauto.
   intros. apply H3. intros. apply REACH. omega. auto. 
   intros. apply H3; auto. 
@@ -992,17 +992,23 @@ Opaque Int.add.
   inv VINJ; simpl in *; try discriminate.
   eapply agree_frame_invariant; eauto.
   eauto with mem.
-  eapply Mem.bounds_store; eauto. 
+  eauto with mem.
   eauto with mem.
   intros. rewrite <- H1. eapply Mem.load_store_other; eauto. 
     destruct (zeq sp' b2); auto.
     subst b2. right.
     exploit agree_inj_unique; eauto. intros [P Q]. subst b1 delta.
     exploit Mem.store_valid_access_3. eexact STORE1. intros [A B].
-    exploit Mem.range_perm_in_bounds. eexact A. generalize (size_chunk_pos chunk); omega.
-    rewrite (agree_bounds _ _ _ _ _ _ _ _ _ AG). unfold fst,snd. intros [C D].
-    rewrite shifted_stack_offset_no_overflow. omega.
-    generalize (size_chunk_pos chunk); omega. 
+    rewrite shifted_stack_offset_no_overflow.
+    exploit agree_bounds. eauto. apply Mem.perm_cur_max. apply A. 
+    instantiate (1 := Int.unsigned ofs1). generalize (size_chunk_pos chunk). omega.
+    intros C.
+    exploit agree_bounds. eauto. apply Mem.perm_cur_max. apply A. 
+    instantiate (1 := Int.unsigned ofs1 + size_chunk chunk - 1). generalize (size_chunk_pos chunk). omega.
+    intros D.
+    omega.
+    eapply agree_bounds. eauto. apply Mem.perm_cur_max. apply A. 
+    generalize (size_chunk_pos chunk). omega.
   intros; eauto with mem.
 Qed.
 
@@ -1325,7 +1331,7 @@ Qed.
 Lemma stores_in_frame_inject:
   forall j sp sp' m,
   (forall b delta, j b = Some(sp', delta) -> b = sp /\ delta = fe.(fe_stack_data)) ->
-  Mem.bounds m sp = (0, f.(Linear.fn_stacksize)) ->
+  (forall ofs k p, Mem.perm m sp ofs k p -> 0 <= ofs < f.(Linear.fn_stacksize)) ->
   forall m1 m2, stores_in_frame sp' m1 m2 -> Mem.inject j m m1 -> Mem.inject j m m2.
 Proof.
   induction 3; intros.
@@ -1333,7 +1339,7 @@ Proof.
   apply IHstores_in_frame.
   intros. eapply Mem.store_outside_inject; eauto.
   intros. exploit H; eauto. intros [A B]; subst.
-  rewrite H0; unfold fst, snd. omega.
+  exploit H0; eauto. omega. 
 Qed.
 
 Lemma stores_in_frame_valid:
@@ -1343,7 +1349,7 @@ Proof.
 Qed.
 
 Lemma stores_in_frame_perm:
-  forall b ofs p sp m m', stores_in_frame sp m m' -> Mem.perm m b ofs p -> Mem.perm m' b ofs p.
+  forall b ofs k p sp m m', stores_in_frame sp m m' -> Mem.perm m b ofs k p -> Mem.perm m' b ofs k p.
 Proof.
   induction 1; intros. auto. apply IHstores_in_frame. eauto with mem.
 Qed.
@@ -1396,8 +1402,9 @@ Proof.
     instantiate (1 := sp'). eauto with mem.
     instantiate (1 := fe_stack_data fe).
     generalize stack_data_offset_valid (bound_stack_data_pos b) size_no_overflow; omega.
-    right. rewrite (Mem.bounds_alloc_same _ _ _ _ _ ALLOC'). unfold fst, snd.
-    split. omega. apply size_no_overflow.
+    intros; right. 
+    exploit Mem.perm_alloc_inv. eexact ALLOC'. eauto. rewrite zeq_true. 
+    generalize size_no_overflow. omega. 
     intros. apply Mem.perm_implies with Freeable; auto with mem. 
     eapply Mem.perm_alloc_2; eauto.
     generalize stack_data_offset_valid bound_stack_data_stacksize; omega.
@@ -1495,7 +1502,7 @@ Proof.
     (* valid sp' *)
     eapply stores_in_frame_valid with (m := m2'); eauto with mem.
     (* bounds *)
-    eapply Mem.bounds_alloc_same; eauto.
+    exploit Mem.perm_alloc_inv. eexact ALLOC. eauto. rewrite zeq_true. auto.
     (* perms *)
     auto.
     (* wt *)
@@ -1506,7 +1513,7 @@ Proof.
   split. eapply inject_alloc_separated; eauto with mem.
   (* inject *)
   split. eapply stores_in_frame_inject; eauto.
-  eapply Mem.bounds_alloc_same; eauto.
+  intros. exploit Mem.perm_alloc_inv. eexact ALLOC. eauto. rewrite zeq_true. auto.
   (* stores in frame *)
   auto.
 Qed.
@@ -1690,8 +1697,7 @@ Proof.
   simpl. rewrite H2. auto.
   intros. exploit agree_inj_unique; eauto. intros [P Q]; subst b1 delta.
   exists 0; exists (Linear.fn_stacksize f); split. auto with coqlib.
-  exploit Mem.perm_in_bounds; eauto. 
-  rewrite (agree_bounds _ _ _ _ _ _ _ _ _ H0). auto.
+  eapply agree_bounds. eauto. eapply Mem.perm_max. eauto.  
   (* can execute epilogue *)
   exploit restore_callee_save_correct; eauto.
     instantiate (1 := rs). red; intros. 
@@ -1775,7 +1781,7 @@ Lemma match_stacks_change_linear_mem:
   forall j m1 m2 m' cs cs' sg bound bound',
   match_stacks j m1 m' cs cs' sg bound bound' ->
   (forall b, b < bound -> Mem.valid_block m1 b -> Mem.valid_block m2 b) ->
-  (forall b, b < bound -> Mem.bounds m2 b = Mem.bounds m1 b) ->
+  (forall b ofs p, b < bound -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
   match_stacks j m2 m' cs cs' sg bound bound'.
 Proof.
   induction 1; intros.
@@ -1784,7 +1790,7 @@ Proof.
   eapply agree_frame_invariant; eauto. 
   apply IHmatch_stacks.
   intros. apply H0; auto. omega.
-  intros. apply H1. omega.
+  intros. apply H1. omega. auto.
 Qed.
 
 (** Invariance with respect to change of [m']. *)
@@ -1793,7 +1799,7 @@ Lemma match_stacks_change_mach_mem:
   forall j m m1' m2' cs cs' sg bound bound',
   match_stacks j m m1' cs cs' sg bound bound' ->
   (forall b, b < bound' -> Mem.valid_block m1' b -> Mem.valid_block m2' b) ->
-  (forall b ofs p, b < bound' -> Mem.perm m1' b ofs p -> Mem.perm m2' b ofs p) ->
+  (forall b ofs k p, b < bound' -> Mem.perm m1' b ofs k p -> Mem.perm m2' b ofs k p) ->
   (forall chunk b ofs v, b < bound' -> Mem.load chunk m1' b ofs = Some v -> Mem.load chunk m2' b ofs = Some v) ->
   match_stacks j m m2' cs cs' sg bound bound'.
 Proof.
@@ -1813,7 +1819,7 @@ Lemma match_stacks_change_mem_extcall:
   forall j m1 m2 m1' m2' cs cs' sg bound bound',
   match_stacks j m1 m1' cs cs' sg bound bound' ->
   (forall b, b < bound -> Mem.valid_block m1 b -> Mem.valid_block m2 b) ->
-  (forall b, b < bound -> Mem.bounds m2 b = Mem.bounds m1 b) ->
+  (forall b ofs p, b < bound -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
   (forall b, b < bound' -> Mem.valid_block m1' b -> Mem.valid_block m2' b) ->
   mem_unchanged_on (loc_out_of_reach j m1) m1' m2' ->
   match_stacks j m2 m2' cs cs' sg bound bound'.
@@ -1824,7 +1830,7 @@ Proof.
   eapply agree_frame_extcall_invariant; eauto.
   apply IHmatch_stacks. 
   intros; apply H0; auto; omega.
-  intros; apply H1; omega.
+  intros; apply H1. omega. auto.
   intros; apply H2; auto; omega.
   auto.
 Qed.
@@ -1888,7 +1894,7 @@ Proof.
   eapply match_stacks_change_meminj; eauto. 
   eapply match_stacks_change_mem_extcall; eauto.
   intros; eapply external_call_valid_block; eauto.
-  intros; eapply external_call_bounds; eauto. red; omega.
+  intros; eapply external_call_max_perm; eauto. red; omega.
   intros; eapply external_call_valid_block; eauto.
 Qed.
 
@@ -2435,9 +2441,9 @@ Proof.
   econstructor; eauto with coqlib.
   eapply Mem.store_outside_inject; eauto. 
     intros. exploit agree_inj_unique; eauto. intros [EQ1 EQ2]; subst b' delta.
-    rewrite (agree_bounds _ _ _ _ _ _ _ _ _ _ AGFRAME). unfold fst, snd. rewrite Zplus_0_l. 
-    rewrite size_type_chunk. 
+    rewrite size_type_chunk in H5.
     exploit offset_of_index_disj_stack_data_2; eauto.
+    exploit agree_bounds. eauto. apply Mem.perm_cur_max. eauto. 
     omega.
   apply match_stacks_change_mach_mem with m'; auto.
   eauto with mem. eauto with mem. intros. rewrite <- H4; eapply Mem.load_store_other; eauto. left; unfold block; omega.
@@ -2546,7 +2552,7 @@ Proof.
   auto. 
   eauto with mem. intros. eapply Mem.perm_free_1; eauto. left; unfold block; omega. 
   intros. rewrite <- H2. eapply Mem.load_free; eauto. left; unfold block; omega.
-  eauto with mem. intros. eapply Mem.bounds_free; eauto.
+  eauto with mem. intros. eapply Mem.perm_free_3; eauto. 
   apply Zlt_le_weak. change (Mem.valid_block m' stk). eapply Mem.valid_block_free_1; eauto. eapply agree_valid_linear; eauto. 
   apply Zlt_le_weak. change (Mem.valid_block m1' sp'). eapply Mem.valid_block_free_1; eauto. eapply agree_valid_mach; eauto. 
   eapply find_function_well_typed; eauto.
@@ -2570,7 +2576,7 @@ Proof.
   eapply agree_frame_inject_incr; eauto. 
   apply agree_frame_extcall_invariant with m m'0; auto.
   eapply external_call_valid_block; eauto.
-  eapply external_call_bounds; eauto. eapply agree_valid_linear; eauto.
+  intros. eapply external_call_max_perm; eauto. eapply agree_valid_linear; eauto.
   eapply external_call_valid_block; eauto.
   eapply agree_valid_mach; eauto.
   inv WTI. simpl; rewrite H4. eapply external_call_well_typed; eauto.
@@ -2594,7 +2600,7 @@ Proof.
   eapply agree_frame_inject_incr; eauto. 
   apply agree_frame_extcall_invariant with m m'0; auto.
   eapply external_call_valid_block; eauto.
-  eapply external_call_bounds; eauto. eapply agree_valid_linear; eauto.
+  intros. eapply external_call_max_perm; eauto. eapply agree_valid_linear; eauto.
   eapply external_call_valid_block; eauto.
   eapply agree_valid_mach; eauto.
 
@@ -2652,7 +2658,7 @@ Proof.
   eauto. 
   eauto with mem. intros. eapply Mem.perm_free_1; eauto. left; unfold block; omega. 
   intros. rewrite <- H1. eapply Mem.load_free; eauto. left; unfold block; omega.
-  eauto with mem. intros. eapply Mem.bounds_free; eauto.
+  eauto with mem. intros. eapply Mem.perm_free_3; eauto. 
   apply Zlt_le_weak. change (Mem.valid_block m' stk). eapply Mem.valid_block_free_1; eauto. eapply agree_valid_linear; eauto. 
   apply Zlt_le_weak. change (Mem.valid_block m1' sp'). eapply Mem.valid_block_free_1; eauto. eapply agree_valid_mach; eauto. 
   apply wt_return_regs; auto. eapply match_stacks_wt_locset; eauto. eapply agree_wt_ls; eauto.
@@ -2677,7 +2683,8 @@ Proof.
   apply match_stacks_change_linear_mem with m.
   rewrite SP_EQ; rewrite SP'_EQ.
   eapply match_stacks_change_meminj; eauto. omega.
-  eauto with mem. intros. eapply Mem.bounds_alloc_other; eauto. unfold block; omega. 
+  eauto with mem. intros. exploit Mem.perm_alloc_inv. eexact H. eauto. 
+  rewrite zeq_false. auto. omega. 
   intros. eapply stores_in_frame_valid; eauto with mem. 
   intros. eapply stores_in_frame_perm; eauto with mem.
   intros. rewrite <- H1. transitivity (Mem.load chunk m2' b ofs). eapply stores_in_frame_contents; eauto.

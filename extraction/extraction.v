@@ -10,9 +10,12 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+Require Wfsimpl.
 Require Iteration.
 Require Floats.
 Require RTLgen.
+Require Inlining.
+Require Constprop.
 Require Coloring.
 Require Allocation.
 Require Compiler.
@@ -21,6 +24,9 @@ Require Initializers.
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
+
+(* Wfsimpl *)
+Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
 (* Float *)
 Extract Inlined Constant Floats.float => "float".
@@ -53,8 +59,6 @@ Extraction NoInline Memory.Mem.valid_pointer.
 Extraction Inline Errors.bind Errors.bind2.
 
 (* Iteration *)
-Extract Constant Iteration.dependent_description' =>
-  "fun x -> assert false".
 
 Extract Constant Iteration.GenIter.iterate =>
   "let rec iter f a =
@@ -66,8 +70,18 @@ Extract Constant RTLgen.compile_switch => "RTLgenaux.compile_switch".
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".
 Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 
+(* Inlining *)
+Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".
+Extraction Inline Inlining.ret Inlining.bind.
+
 (* RTLtyping *)
 Extract Constant RTLtyping.infer_type_environment => "RTLtypingaux.infer_type_environment".
+
+(* Constprop *)
+Extract Constant ConstpropOp.propagate_float_constants =>
+  "fun _ -> !Clflags.option_ffloatconstprop >= 1".
+Extract Constant Constprop.generate_float_constants =>
+  "fun _ -> !Clflags.option_ffloatconstprop >= 2".
 
 (* Coloring *)
 Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
@@ -83,6 +97,7 @@ Extract Constant Compiler.print_Clight => "PrintClight.print_if".
 Extract Constant Compiler.print_Cminor => "PrintCminor.print_if".
 Extract Constant Compiler.print_RTL => "PrintRTL.print_rtl".
 Extract Constant Compiler.print_RTL_tailcall => "PrintRTL.print_tailcall".
+Extract Constant Compiler.print_RTL_inline => "PrintRTL.print_inlining".
 Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
 Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
 Extract Constant Compiler.print_LTLin => "PrintLTLin.print_if".

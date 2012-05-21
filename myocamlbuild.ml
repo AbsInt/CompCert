@@ -13,7 +13,7 @@ dispatch begin function
     (* make sure libCparser.a is up to date *)
     dep  ["link"; "ocaml"; "use_Cparser"] ["cparser/libCparser.a"];
 
-    (* ocamlfind libraries *)
+    (* libraries and syntax extensions accessed via ocamlfind *)
     flag ["ocaml"; "link"; "pkg_unix"] & S[A"-package"; A "unix"];
     flag ["ocaml"; "link"; "pkg_str"] & S[A"-package"; A "str"];
     flag ["ocaml"; "compile";  "pkg_bitstring"] & S[A"-package"; A"bitstring,bitstring.syntax"; A"-syntax"; A"bitstring.syntax,camlp4o"];

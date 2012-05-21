@@ -956,3 +956,9 @@ let atom_is_small_data a ofs =
     (Hashtbl.find decl_atom a).a_small_data
   with Not_found ->
     false
+
+let atom_is_inline a =
+  try
+    (Hashtbl.find decl_atom a).a_inline
+  with Not_found ->
+    false

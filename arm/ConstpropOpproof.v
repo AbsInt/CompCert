@@ -124,7 +124,7 @@ Proof.
   unfold eval_static_operation. 
   case (eval_static_operation_match op al); intros;
   InvVLMA; simpl in *; FuncInv; try (subst v); try (rewrite eval_static_shift_correct); auto.
-
+  destruct (propagate_float_constants tt); simpl; auto.
   rewrite shift_symbol_address; auto. 
   rewrite shift_symbol_address; auto.
   rewrite Val.add_assoc; auto.
@@ -145,12 +145,34 @@ Proof.
   destruct (Int.ltu n2 Int.iwordsize); simpl; auto.
   unfold eval_static_intoffloat. destruct (Float.intoffloat n1); simpl in H0; inv H0; simpl; auto.
   unfold eval_static_intuoffloat. destruct (Float.intuoffloat n1); simpl in H0; inv H0; simpl; auto.
-
+  destruct (propagate_float_constants tt); simpl; auto.
+  destruct (propagate_float_constants tt); simpl; auto.
   unfold eval_static_condition_val, Val.of_optbool.
   destruct (eval_static_condition c vl0) as []_eqn.
   rewrite (eval_static_condition_correct _ _ _ m _ H Heqo).
   destruct b; simpl; auto. 
   simpl; auto.
+Qed.
+
+Lemma eval_static_addressing_correct:
+  forall addr al vl v,
+  val_list_match_approx al vl ->
+  eval_addressing ge sp addr vl = Some v ->
+  val_match_approx (eval_static_addressing addr al) v.
+Proof.
+  intros until v. unfold eval_static_addressing.
+  case (eval_static_addressing_match addr al); intros;
+  InvVLMA; simpl in *; FuncInv; try (subst v); try (rewrite eval_static_shift_correct); auto.
+  rewrite shift_symbol_address; auto.
+  rewrite Val.add_assoc. auto. 
+  repeat rewrite shift_symbol_address. auto.
+  fold (Val.add (Vint n1) (symbol_address ge id ofs)).
+  repeat rewrite shift_symbol_address. apply Val.add_commut.
+  repeat rewrite Val.add_assoc. auto.
+  fold (Val.add (Vint n1) (Val.add sp (Vint ofs))).
+  rewrite Val.add_permut. decEq. rewrite Val.add_commut. auto.
+  rewrite shift_symbol_address. auto.
+  rewrite Val.add_assoc. auto.
 Qed.
 
 (** * Correctness of strength reduction *)

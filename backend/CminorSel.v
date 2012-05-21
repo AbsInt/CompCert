@@ -68,8 +68,8 @@ Inductive stmt : Type :=
   | Sskip: stmt
   | Sassign : ident -> expr -> stmt
   | Sstore : memory_chunk -> addressing -> exprlist -> expr -> stmt
-  | Scall : option ident -> signature -> expr -> exprlist -> stmt
-  | Stailcall: signature -> expr -> exprlist -> stmt
+  | Scall : option ident -> signature -> expr + ident -> exprlist -> stmt
+  | Stailcall: signature -> expr + ident -> exprlist -> stmt
   | Sbuiltin : option ident -> external_function -> exprlist -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: condexpr -> stmt -> stmt -> stmt
@@ -208,6 +208,14 @@ Scheme eval_expr_ind3 := Minimality for eval_expr Sort Prop
   with eval_condexpr_ind3 := Minimality for eval_condexpr Sort Prop
   with eval_exprlist_ind3 := Minimality for eval_exprlist Sort Prop.
 
+Inductive eval_expr_or_symbol: letenv -> expr + ident -> val -> Prop :=
+  | eval_eos_e: forall le e v,
+      eval_expr le e v ->
+      eval_expr_or_symbol le (inl _ e) v
+  | eval_eos_s: forall le id b,
+      Genv.find_symbol ge id = Some b ->
+      eval_expr_or_symbol le (inr _ id) (Vptr b Int.zero).
+
 End EVAL_EXPR.
 
 (** Pop continuation until a call or stop *)
@@ -282,7 +290,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f Sskip k sp e m')
 
   | step_call: forall f optid sig a bl k sp e m vf vargs fd,
-      eval_expr sp e m nil a vf ->
+      eval_expr_or_symbol sp e m nil a vf ->
       eval_exprlist sp e m nil bl vargs ->
       Genv.find_funct ge vf = Some fd ->
       funsig fd = sig ->
@@ -290,7 +298,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Callstate fd vargs (Kcall optid f sp e k) m)
 
   | step_tailcall: forall f sig a bl k sp e m vf vargs fd m',
-      eval_expr (Vptr sp Int.zero) e m nil a vf ->
+      eval_expr_or_symbol (Vptr sp Int.zero) e m nil a vf ->
       eval_exprlist (Vptr sp Int.zero) e m nil bl vargs ->
       Genv.find_funct ge vf = Some fd ->
       funsig fd = sig ->

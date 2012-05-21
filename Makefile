@@ -39,12 +39,13 @@ GPATH=$(DIRS)
 # General-purpose libraries (in lib/)
 
 LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
-  Iteration.v Integers.v Floats.v Parmov.v UnionFind.v
+  Iteration.v Integers.v Floats.v Parmov.v UnionFind.v Wfsimpl.v \
+  Postorder.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
-COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v Values.v \
-  Smallstep.v Behaviors.v Switch.v Determinism.v
+COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
+  Values.v Smallstep.v Behaviors.v Switch.v Determinism.v
 
 # Back-end modules (in backend/, $(ARCH)/, $(ARCH)/$(VARIANT))
 
@@ -54,6 +55,8 @@ BACKEND=\
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   Tailcall.v Tailcallproof.v \
+  Inlining.v Inliningspec.v Inliningproof.v \
+  Renumber.v Renumberproof.v \
   RTLtyping.v \
   Kildall.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \

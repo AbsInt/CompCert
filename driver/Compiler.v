@@ -44,6 +44,8 @@ Require Cminorgen.
 Require Selection.
 Require RTLgen.
 Require Tailcall.
+Require Inlining.
+Require Renumber.
 Require Constprop.
 Require CSE.
 Require Allocation.
@@ -67,6 +69,8 @@ Require Cminorgenproof.
 Require Selectionproof.
 Require RTLgenproof.
 Require Tailcallproof.
+Require Inliningproof.
+Require Renumberproof.
 Require Constpropproof.
 Require CSEproof.
 Require Allocproof.
@@ -88,12 +92,13 @@ Require Asmgenproof.
 (** Pretty-printers (defined in Caml). *)
 Parameter print_Clight: Clight.program -> unit.
 Parameter print_Cminor: Cminor.program -> unit.
-Parameter print_RTL: RTL.fundef -> unit.
-Parameter print_RTL_tailcall: RTL.fundef -> unit.
-Parameter print_RTL_constprop: RTL.fundef -> unit.
-Parameter print_RTL_cse: RTL.fundef -> unit.
-Parameter print_LTLin: LTLin.fundef -> unit.
-Parameter print_Mach: Mach.fundef -> unit.
+Parameter print_RTL: RTL.program -> unit.
+Parameter print_RTL_tailcall: RTL.program -> unit.
+Parameter print_RTL_inline: RTL.program -> unit.
+Parameter print_RTL_constprop: RTL.program -> unit.
+Parameter print_RTL_cse: RTL.program -> unit.
+Parameter print_LTLin: LTLin.program -> unit.
+Parameter print_Mach: Mach.program -> unit.
 
 Open Local Scope string_scope.
 
@@ -120,56 +125,38 @@ Definition print {A: Type} (printer: A -> unit) (prog: A) : A :=
 (** We define three translation functions for whole programs: one
   starting with a C program, one with a Cminor program, one with an
   RTL program.  The three translations produce Asm programs ready for
-  pretty-printing and assembling.
+  pretty-printing and assembling. *)
 
-  There are two ways to compose the compiler passes.  The first
-  translates every function from the Cminor program from Cminor to
-  RTL, then to LTL, etc, all the way to Asm, and iterates this
-  transformation for every function.  The second translates the whole
-  Cminor program to a RTL program, then to an LTL program, etc. 
-  Between CminorSel and Asm, we follow the first approach because it has
-  lower memory requirements.  The translation from Clight to Asm
-  follows the second approach.
-  
-  The translation of an RTL function to an Asm function is as follows. *)
-
-Definition transf_rtl_fundef (f: RTL.fundef) : res Asm.fundef :=
+Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    OK f
    @@ print print_RTL
-   @@ Tailcall.transf_fundef
+   @@ Tailcall.transf_program
    @@ print print_RTL_tailcall
-   @@ Constprop.transf_fundef
+  @@@ Inlining.transf_program
+   @@ Renumber.transf_program
+   @@ print print_RTL_inline
+   @@ Constprop.transf_program
+   @@ Renumber.transf_program
    @@ print print_RTL_constprop
-  @@@ CSE.transf_fundef
+  @@@ CSE.transf_program
    @@ print print_RTL_cse
-  @@@ Allocation.transf_fundef
-   @@ Tunneling.tunnel_fundef
-  @@@ Linearize.transf_fundef
-   @@ CleanupLabels.transf_fundef
+  @@@ Allocation.transf_program
+   @@ Tunneling.tunnel_program
+  @@@ Linearize.transf_program
+   @@ CleanupLabels.transf_program
    @@ print print_LTLin
-   @@ Reload.transf_fundef
-   @@ RRE.transf_fundef
-  @@@ Stacking.transf_fundef
+   @@ Reload.transf_program
+   @@ RRE.transf_program
+  @@@ Stacking.transf_program
    @@ print print_Mach
-  @@@ Asmgen.transf_fundef.
-
-(* Here is the translation of a CminorSel function to an Asm function. *)
-
-Definition transf_cminorsel_fundef (f: CminorSel.fundef) : res Asm.fundef :=
-  OK f
-  @@@ RTLgen.transl_fundef
-  @@@ transf_rtl_fundef.
-
-(** The corresponding translations for whole program follow. *)
-
-Definition transf_rtl_program (p: RTL.program) : res Asm.program :=
-  transform_partial_program transf_rtl_fundef p.
+  @@@ Asmgen.transf_program.
 
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    OK p
    @@ print print_Cminor
    @@ Selection.sel_program
-  @@@ transform_partial_program transf_cminorsel_fundef.
+  @@@ RTLgen.transl_program
+  @@@ transf_rtl_program.
 
 Definition transf_clight_program (p: Clight.program) : res Asm.program :=
   OK p 
@@ -323,21 +310,40 @@ Theorem transf_rtl_program_correct:
 Proof.
   intros.
   assert (F: forward_simulation (RTL.semantics p) (Asm.semantics tp)).
-  unfold transf_rtl_program, transf_rtl_fundef in H.
-  repeat TransfProgInv. 
-  repeat rewrite transform_program_print_identity in *. subst. 
-  generalize (transform_partial_program_identity _ _ _ _ X). intro EQ. subst.
+  unfold transf_rtl_program in H.
+  repeat rewrite compose_print_identity in H.
+  simpl in H.
+  set (p1 := Tailcall.transf_program p) in *.
+  destruct (Inlining.transf_program p1) as [p11|]_eqn; simpl in H; try discriminate.
+  set (p12 := Renumber.transf_program p11) in *.
+  set (p2 := Constprop.transf_program p12) in *.
+  set (p21 := Renumber.transf_program p2) in *.
+  destruct (CSE.transf_program p21) as [p3|]_eqn; simpl in H; try discriminate.
+  destruct (Allocation.transf_program p3) as [p4|]_eqn; simpl in H; try discriminate.
+  set (p5 := Tunneling.tunnel_program p4) in *.
+  destruct (Linearize.transf_program p5) as [p6|]_eqn; simpl in H; try discriminate.
+  set (p7 := CleanupLabels.transf_program p6) in *.
+  set (p8 := Reload.transf_program p7) in *.
+  set (p9 := RRE.transf_program p8) in *.
+  destruct (Stacking.transf_program p9) as [p10|]_eqn; simpl in H; try discriminate.
 
-  generalize Alloctyping.program_typing_preserved
-             Tunnelingtyping.program_typing_preserved
-             Linearizetyping.program_typing_preserved
-             CleanupLabelstyping.program_typing_preserved
-             Reloadtyping.program_typing_preserved
-             RREtyping.program_typing_preserved
-             Stackingtyping.program_typing_preserved; intros.
+  assert(TY1: LTLtyping.wt_program p5).
+    eapply Tunnelingtyping.program_typing_preserved. 
+    eapply Alloctyping.program_typing_preserved; eauto.
+  assert(TY2: LTLintyping.wt_program p7).
+    eapply CleanupLabelstyping.program_typing_preserved.
+    eapply Linearizetyping.program_typing_preserved; eauto.
+  assert(TY3: Lineartyping.wt_program p9).
+    eapply RREtyping.program_typing_preserved.
+    eapply Reloadtyping.program_typing_preserved; eauto.
+  assert(TY4: Machtyping.wt_program p10).
+    eapply Stackingtyping.program_typing_preserved; eauto.
 
   eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
+  eapply compose_forward_simulation. apply Inliningproof.transf_program_correct. eassumption.
+  eapply compose_forward_simulation. apply Renumberproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Constpropproof.transf_program_correct. 
+  eapply compose_forward_simulation. apply Renumberproof.transf_program_correct. 
   eapply compose_forward_simulation. apply CSEproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Tunnelingproof.transf_program_correct.
@@ -345,8 +351,8 @@ Proof.
   eapply compose_forward_simulation. apply CleanupLabelsproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Reloadproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply RREproof.transf_program_correct. eauto.
-  eapply compose_forward_simulation. apply Stackingproof.transf_program_correct. eassumption. eauto 8.
-  apply Asmgenproof.transf_program_correct; eauto 10.
+  eapply compose_forward_simulation. apply Stackingproof.transf_program_correct. eassumption. eauto.
+  apply Asmgenproof.transf_program_correct; eauto.
   split. auto. 
   apply forward_to_backward_simulation. auto. 
   apply RTL.semantics_receptive.
@@ -361,11 +367,14 @@ Theorem transf_cminor_program_correct:
 Proof.
   intros.
   assert (F: forward_simulation (Cminor.semantics p) (Asm.semantics tp)).
-  unfold transf_cminor_program, transf_cminorsel_fundef in H.
-  simpl in H. repeat TransfProgInv.
+  unfold transf_cminor_program in H.
+  repeat rewrite compose_print_identity in H.
+  simpl in H. 
+  set (p1 := Selection.sel_program p) in *.
+  destruct (RTLgen.transl_program p1) as [p2|]_eqn; simpl in H; try discriminate.
   eapply compose_forward_simulation. apply Selectionproof.transf_program_correct.
   eapply compose_forward_simulation. apply RTLgenproof.transf_program_correct. eassumption.
-  exact (fst (transf_rtl_program_correct _ _ P)).
+  exact (fst (transf_rtl_program_correct _ _ H)).
 
   split. auto. 
   apply forward_to_backward_simulation. auto. 

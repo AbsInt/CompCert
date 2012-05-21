@@ -141,7 +141,7 @@ Proof.
   unfold eval_static_operation. 
   case (eval_static_operation_match op al); intros;
   InvVLMA; simpl in *; FuncInv; try subst v; auto.
-
+  destruct (propagate_float_constants tt); simpl; auto.
   rewrite Int.sub_add_opp. rewrite shift_symbol_address. rewrite Val.sub_add_opp. auto.
   destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
   destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
@@ -159,6 +159,7 @@ Proof.
   unfold eval_static_intoffloat.
   destruct (Float.intoffloat n1) as []_eqn; simpl in H0; inv H0.
   simpl; auto.
+  destruct (propagate_float_constants tt); simpl; auto.
   unfold eval_static_condition_val. destruct (eval_static_condition c vl0) as [b|]_eqn.
   rewrite (eval_static_condition_correct _ _ _ m _ H Heqo). 
   destruct b; simpl; auto.

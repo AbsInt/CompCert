@@ -276,6 +276,40 @@ Proof.
   intros. unfold globalenv; eauto. 
 Qed.
 
+Theorem find_var_exists:
+  forall p id gv,
+  list_norepet (prog_var_names p) ->
+  In (id, gv) (prog_vars p) ->
+  exists b,
+     find_symbol (globalenv p) id = Some b
+  /\ find_var_info (globalenv p) b = Some gv.
+Proof.
+  intros until gv.
+  assert (forall vl ge,
+    ~In id (var_names vl) ->
+    (exists b, find_symbol ge id = Some b /\ find_var_info ge b = Some gv) ->
+    (exists b, find_symbol (add_variables ge vl) id = Some b
+           /\  find_var_info (add_variables ge vl) b = Some gv)).
+  induction vl; simpl; intros.
+  auto.
+  apply IHvl. tauto. destruct a as [id1 gv1]. destruct H0 as [b [P Q]].
+  unfold add_variable, find_symbol, find_var_info; simpl. 
+  exists b; split. rewrite PTree.gso. auto. intuition. 
+  rewrite ZMap.gso. auto. exploit genv_vars_range; eauto.
+  unfold ZIndexed.t; omega.
+
+  unfold globalenv, prog_var_names.
+  generalize (prog_vars p) (add_functions empty_genv (prog_funct p)).
+  induction l; simpl; intros.
+  contradiction.
+  destruct a as [id1 gv1]; simpl in *. inv H0.
+  destruct H1. inv H0.
+  apply H; auto.
+  exists (genv_nextvar t0); split.
+  unfold find_symbol, add_variable; simpl. apply PTree.gss.
+  unfold find_var_info, add_variable; simpl. apply ZMap.gss.
+  apply IHl; auto. 
+Qed.  
 
 Remark add_variables_inversion : forall vs e x b,
   find_symbol (add_variables e vs) x = Some b ->
@@ -740,50 +774,63 @@ Qed.
 
 
 Remark store_zeros_perm:
-  forall prm b' q m b n m',
+  forall k prm b' q m b n m',
   store_zeros m b n = Some m' ->
-  Mem.perm m b' q prm -> Mem.perm m' b' q prm.
+  (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm).
 Proof.
   intros until n. functional induction (store_zeros m b n); intros.
-  inv H; auto.
-  eauto with mem.
+  inv H; tauto.
+  destruct (IHo _ H); intros. split; eauto with mem.
   congruence.
 Qed.
 
 Remark store_init_data_list_perm:
-  forall prm b' q idl b m p m',
+  forall k prm b' q idl b m p m',
   store_init_data_list m b p idl = Some m' ->
-  Mem.perm m b' q prm -> Mem.perm m' b' q prm.
+  (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm).
 Proof.
   induction idl; simpl; intros until m'.
-  intros. congruence.
-  caseEq (store_init_data m b p a); try congruence. intros. 
-  eapply IHidl; eauto. 
-  destruct a; simpl in H; eauto with mem.
-  congruence.
+  intros. inv H. tauto. 
+  caseEq (store_init_data m b p a); try congruence. intros.
+  rewrite <- (IHidl _ _ _ _ H0).
+  destruct a; simpl in H; split; eauto with mem.
+  inv H; auto. inv H; auto. 
+  destruct (find_symbol ge i); try congruence. eauto with mem.
   destruct (find_symbol ge i); try congruence. eauto with mem.
 Qed.
 
 Remark alloc_variables_perm:
-  forall prm b' q vl m m',
+  forall k prm b' q vl m m',
   alloc_variables m vl = Some m' ->
-  Mem.perm m b' q prm -> Mem.perm m' b' q prm.
+  Mem.valid_block m b' ->
+  (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm).
 Proof.
   induction vl.
-  simpl; intros. congruence.
+  simpl; intros. inv H. tauto. 
   intros until m'. simpl. unfold alloc_variable. 
   set (init := gvar_init a#2).
   set (sz := init_data_list_size init).
   caseEq (Mem.alloc m 0 sz). intros m1 b ALLOC.
   caseEq (store_zeros m1 b sz); try congruence. intros m2 STZ.
   caseEq (store_init_data_list m2 b 0 init); try congruence. intros m3 STORE.
-  caseEq (Mem.drop_perm m3 b 0 sz (perm_globvar a#2)); try congruence. intros m4 DROP REC PERM.
+  caseEq (Mem.drop_perm m3 b 0 sz (perm_globvar a#2)); try congruence. intros m4 DROP REC VALID.
   assert (b' <> b). apply Mem.valid_not_valid_diff with m; eauto with mem.
-  eapply IHvl; eauto.
-  eapply Mem.perm_drop_3; eauto. 
-  eapply store_init_data_list_perm; eauto.
-  eapply store_zeros_perm; eauto.
+  assert (VALID': Mem.valid_block m4 b').
+    unfold Mem.valid_block. rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP).
+    rewrite (store_init_data_list_nextblock _ _ _ _ STORE).  
+    rewrite (store_zeros_nextblock _ _ _ STZ).  
+    change (Mem.valid_block m1 b'). eauto with mem.
+  rewrite <- (IHvl _ _ REC VALID').
+  split; intros.
+  eapply Mem.perm_drop_3; eauto.
+  rewrite <- store_init_data_list_perm; [idtac|eauto].
+  rewrite <- store_zeros_perm; [idtac|eauto].
   eauto with mem.
+  assert (Mem.perm m1 b' q k prm).
+    rewrite store_zeros_perm; [idtac|eauto].
+    rewrite store_init_data_list_perm; [idtac|eauto].
+    eapply Mem.perm_drop_4; eauto.
+  exploit Mem.perm_alloc_inv; eauto. rewrite zeq_false; auto.
 Qed.
 
 Remark store_zeros_outside:
@@ -913,56 +960,93 @@ Proof.
   repeat rewrite H. destruct a; intuition. 
 Qed.
 
-Lemma alloc_variables_charact:
-  forall id gv vl g m m',
+Definition variables_initialized (g: t) (m: mem) :=
+  forall b gv,
+  find_var_info g b = Some gv ->
+  Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) Cur (perm_globvar gv)
+  /\ (forall ofs k p, Mem.perm m b ofs k p ->
+        0 <= ofs < init_data_list_size gv.(gvar_init) /\ perm_order (perm_globvar gv) p)
+  /\ (gv.(gvar_volatile) = false -> load_store_init_data m b 0 gv.(gvar_init)).
+
+Lemma alloc_variable_initialized:
+  forall g m id v m',
+  genv_nextvar g = Mem.nextblock m ->
+  alloc_variable m (id, v) = Some m' ->
+  variables_initialized g m ->
+  variables_initialized (add_variable g (id, v)) m'
+  /\ genv_nextvar (add_variable g (id,v)) = Mem.nextblock m'.
+Proof.
+  intros. revert H0. unfold alloc_variable. simpl. 
+  set (il := gvar_init v).
+  set (sz := init_data_list_size il).
+  caseEq (Mem.alloc m 0 sz).   intros m1 b1 ALLOC.
+  caseEq (store_zeros m1 b1 sz); try congruence. intros m2 ZEROS.
+  caseEq (store_init_data_list m2 b1 0 il); try congruence. intros m3 INIT DROP.
+  exploit Mem.nextblock_alloc; eauto.  intros NB1.
+  assert (Mem.nextblock m' = Mem.nextblock m1).
+    rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP).
+    rewrite (store_init_data_list_nextblock _ _ _ _ INIT).
+    eapply store_zeros_nextblock; eauto.
+  exploit Mem.alloc_result; eauto. intro RES.
+  split.
+  (* var-init *)
+  red; intros. revert H2.
+  unfold add_variable, find_var_info; simpl.
+  rewrite H; rewrite <- RES.
+  rewrite ZMap.gsspec. destruct (ZIndexed.eq b b1); intros VI.
+  (* new var *)
+  injection VI; intro EQ. subst b gv. clear VI.
+  fold il. fold sz.
+  split. red; intros. eapply Mem.perm_drop_1; eauto.
+  split. intros. 
+    assert (0 <= ofs < sz).
+      eapply Mem.perm_alloc_3; eauto. 
+      rewrite store_zeros_perm; [idtac|eauto].
+      rewrite store_init_data_list_perm; [idtac|eauto].
+      eapply Mem.perm_drop_4; eauto.
+  split; auto. eapply Mem.perm_drop_2; eauto.
+  intros. 
+  apply load_store_init_data_invariant with m3.
+  intros. eapply Mem.load_drop; eauto. right; right; right.
+  unfold perm_globvar. destruct (gvar_volatile v); try discriminate.
+  destruct (gvar_readonly v); auto with mem.
+  eapply store_init_data_list_charact; eauto.
+  (* older vars *)
+  exploit H1; eauto. intros [A [B C]].
+  split. red; intros. eapply Mem.perm_drop_3; eauto. 
+  rewrite <- store_init_data_list_perm; [idtac|eauto].
+  rewrite <- store_zeros_perm; [idtac|eauto].
+  eapply Mem.perm_alloc_1; eauto.
+  split. intros. eapply B. 
+  eapply Mem.perm_alloc_4; eauto.   
+  rewrite store_zeros_perm; [idtac|eauto].
+  rewrite store_init_data_list_perm; [idtac|eauto].
+  eapply Mem.perm_drop_4; eauto.
+  intros. apply load_store_init_data_invariant with m; auto.
+  intros. transitivity (Mem.load chunk m3 b ofs). 
+  eapply Mem.load_drop; eauto. 
+  transitivity (Mem.load chunk m2 b ofs). 
+  eapply store_init_data_list_outside; eauto.
+  transitivity (Mem.load chunk m1 b ofs). 
+  eapply store_zeros_outside; eauto.
+  eapply Mem.load_alloc_unchanged; eauto.
+  red. exploit genv_vars_range; eauto. rewrite <- H. omega.
+  rewrite H0; rewrite NB1; rewrite H; auto.
+Qed.
+
+Lemma alloc_variables_initialized:
+  forall vl g m m',
   genv_nextvar g = Mem.nextblock m ->
   alloc_variables m vl = Some m' ->
-  list_norepet (map (@fst ident (globvar V)) vl) ->
-  In (id, gv) vl ->
-  exists b, find_symbol (add_variables g vl) id = Some b 
-         /\ find_var_info (add_variables g vl) b = Some gv
-         /\ Mem.range_perm m' b 0 (init_data_list_size gv.(gvar_init)) (perm_globvar gv)
-         /\ (gv.(gvar_volatile) = false -> load_store_init_data m' b 0 gv.(gvar_init)).
+  variables_initialized g m ->
+  variables_initialized (add_variables g vl) m'.
 Proof.
-  induction vl; simpl.
-  contradiction.
-  intros until m'; intro NEXT.
-  unfold alloc_variable. destruct a as [id' gv']. simpl.
-  set (init := gvar_init gv').
-  set (sz := init_data_list_size init).
-  caseEq (Mem.alloc m 0 sz); try congruence. intros m1 b ALLOC.
-  caseEq (store_zeros m1 b sz); try congruence. intros m2 STZ.
-  caseEq (store_init_data_list m2 b 0 init); try congruence. intros m3 STORE.
-  caseEq (Mem.drop_perm m3 b 0 sz (perm_globvar gv')); try congruence.
-  intros m4 DROP REC NOREPET IN. inv NOREPET.
-  exploit Mem.alloc_result; eauto. intro BEQ. 
-  destruct IN. inversion H; subst id gv.
-  exists (Mem.nextblock m); split. 
-  rewrite add_variables_same_symb; auto. unfold find_symbol; simpl. 
-  rewrite PTree.gss. congruence. 
-  split. rewrite add_variables_same_address. unfold find_var_info; simpl.
-  rewrite NEXT. apply ZMap.gss.
-  simpl. rewrite <- NEXT; omega.
-  split. red; intros.
-  rewrite <- BEQ. eapply alloc_variables_perm; eauto. eapply Mem.perm_drop_1; eauto. 
-  intros NOVOL. 
-  apply load_store_init_data_invariant with m3.
-  intros. transitivity (Mem.load chunk m4 (Mem.nextblock m) ofs).
-  eapply load_alloc_variables; eauto. 
-  red. rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
-  rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
-  rewrite (store_zeros_nextblock _ _ _ STZ).
-  change (Mem.valid_block m1 (Mem.nextblock m)). rewrite <- BEQ. eauto with mem.
-  eapply Mem.load_drop; eauto. repeat right. 
-  unfold perm_globvar. rewrite NOVOL. destruct (gvar_readonly gv'); auto with mem.
-  rewrite <- BEQ. eapply store_init_data_list_charact; eauto. 
-
-  apply IHvl with m4; auto.
-  simpl.
-  rewrite (Mem.nextblock_drop _ _ _ _ _ _ DROP). 
-  rewrite (store_init_data_list_nextblock _ _ _ _ STORE).
-  rewrite (store_zeros_nextblock _ _ _ STZ).
-  rewrite (Mem.nextblock_alloc _ _ _ _ _ ALLOC). unfold block in *; omega.
+  induction vl; simpl; intros.
+  inv H0; auto.
+  destruct (alloc_variable m a) as [m1|]_eqn; try discriminate.
+  destruct a as [id gv].
+  exploit alloc_variable_initialized; eauto. intros [P Q].
+  eapply IHvl; eauto. 
 Qed.
 
 End INITMEM.
@@ -1007,19 +1091,19 @@ Proof.
   red. rewrite H1. rewrite <- H3. intuition.
 Qed.
 
-Theorem find_var_exists:
-  forall p id gv m,
-  list_norepet (prog_var_names p) ->
-  In (id, gv) (prog_vars p) ->
+Theorem init_mem_characterization:
+  forall p b gv m,
+  find_var_info (globalenv p) b = Some gv ->
   init_mem p = Some m ->
-  exists b, find_symbol (globalenv p) id = Some b
-         /\ find_var_info (globalenv p) b = Some gv
-         /\ Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) (perm_globvar gv)
-         /\ (gv.(gvar_volatile) = false -> load_store_init_data (globalenv p) m b 0 gv.(gvar_init)).
+  Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) Cur (perm_globvar gv)
+  /\ (forall ofs k p, Mem.perm m b ofs k p ->
+        0 <= ofs < init_data_list_size gv.(gvar_init) /\ perm_order (perm_globvar gv) p)
+  /\ (gv.(gvar_volatile) = false -> load_store_init_data (globalenv p) m b 0 gv.(gvar_init)).
 Proof.
-  intros. exploit alloc_variables_charact; eauto. 
-  instantiate (1 := Mem.empty). rewrite add_functions_nextvar. rewrite Mem.nextblock_empty; auto.
-  assumption.
+  intros. eapply alloc_variables_initialized; eauto. 
+  rewrite add_functions_nextvar; auto. 
+  red; intros. exploit genv_vars_range; eauto. rewrite add_functions_nextvar. 
+  simpl. intros. omegaContradiction.
 Qed.
 
 (** ** Compatibility with memory injections *)
@@ -1142,8 +1226,8 @@ Proof.
              Mem.store chunk m2 b ofs v = Some m2' -> 
              Mem.inject (Mem.flat_inj thr) m1 m2'). 
     intros. eapply Mem.store_outside_inject; eauto. 
-        intros b' ? INJ'. unfold Mem.flat_inj in INJ'. 
-         destruct (zlt b' thr); inversion INJ'; subst. omega. 
+    intros. unfold Mem.flat_inj in H0.
+    destruct (zlt b' thr); inversion H0; subst. omega. 
   destruct id; simpl in ST; try (eapply P; eauto; fail).
   inv ST; auto. 
   revert ST.  caseEq (find_symbol ge i); try congruence. intros; eapply P; eauto. 
@@ -1687,31 +1771,40 @@ Proof.
   rewrite H0; simpl. auto.
 Qed.
 
-
-(* This may not yet be in the ideal form for easy use .*)
-Theorem find_new_var_exists: 
-  list_norepet (prog_var_names p ++ var_names new_vars) -> 
-  forall id gv m, In (id, gv) new_vars -> 
-  init_mem p' = Some m -> 
-  exists b, find_symbol (globalenv p') id = Some b
-         /\ find_var_info (globalenv p') b = Some gv
-         /\ Mem.range_perm m b 0 (init_data_list_size gv.(gvar_init)) (perm_globvar gv)
-         /\ (gv.(gvar_volatile) = false -> load_store_init_data (globalenv p') m b 0 gv.(gvar_init)).
+Theorem find_new_var_exists:
+  forall id gv,
+  list_norepet (var_names new_vars) ->
+  In (id, gv) new_vars ->
+  exists b, find_symbol (globalenv p') id = Some b /\ find_var_info (globalenv p') b = Some gv.
 Proof.
   intros. 
-  destruct p. 
+  assert (P: forall b vars (ge: t B W),
+          ~In id (var_names vars) ->
+          find_symbol ge id = Some b
+          /\ find_var_info ge b = Some gv ->
+          find_symbol (add_variables ge vars) id = Some b
+          /\ find_var_info (add_variables ge vars) b = Some gv).
+  induction vars; simpl; intros. auto. apply IHvars. tauto.
+  destruct a as [id1 gv1]; unfold add_variable, find_symbol, find_var_info; simpl in *.
+  destruct H2; split. rewrite PTree.gso. auto. intuition. 
+  rewrite ZMap.gso. auto. exploit genv_vars_range; eauto. unfold ZIndexed.t; omega.
+
+  assert (Q: forall vars (ge: t B W),
+          list_norepet (var_names vars) ->
+          In (id, gv) vars ->
+          exists b, find_symbol (add_variables ge vars) id = Some b
+                 /\ find_var_info (add_variables ge vars) b = Some gv).
+    induction vars; simpl; intros.
+    contradiction.
+    destruct a as [id1 gv1]; simpl in *. inv H1. destruct H2. inv H1. 
+    exists (genv_nextvar ge). apply P; auto. 
+    unfold add_variable, find_symbol, find_var_info; simpl in *.
+    split. apply PTree.gss. apply ZMap.gss. 
+    apply IHvars; auto. 
+
   unfold transform_partial_augment_program in transf_OK. 
   monadInv transf_OK. rename x into prog_funct'.  rename x0 into prog_vars'. simpl in *.
-  assert (var_names prog_vars = var_names prog_vars').
-   clear - EQ1.  generalize dependent prog_vars'. induction prog_vars; intros.
-      simpl in EQ1. inversion EQ1; subst; auto.
-      simpl in EQ1. destruct a. destruct (transf_globvar transf_var g); try discriminate. monadInv EQ1.
-      simpl; f_equal; auto.
-  apply find_var_exists. 
-  unfold prog_var_names in *; simpl in *.  
-  rewrite var_names_app. rewrite <- H2. auto.
-  simpl. intuition.
-  auto.
+  unfold globalenv; simpl. repeat rewrite add_variables_app. apply Q; auto.
 Qed.
 
 Theorem find_var_info_rev_transf_augment:

@@ -171,7 +171,13 @@ Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
   | a :: bl => Econs (sel_expr a) (sel_exprlist bl)
   end.
 
-(** Recognition of calls to built-in functions that should be inlined *)
+(** Recognition of immediate calls and calls to built-in functions
+    that should be inlined *)
+
+Inductive call_kind : Type :=
+  | Call_default
+  | Call_imm (id: ident)
+  | Call_builtin (ef: external_function).
 
 Definition expr_is_addrof_ident (e: Cminor.expr) : option ident :=
   match e with
@@ -180,16 +186,16 @@ Definition expr_is_addrof_ident (e: Cminor.expr) : option ident :=
   | _ => None
   end.
 
-Definition expr_is_addrof_builtin (ge: Cminor.genv) (e: Cminor.expr) : option external_function :=
+Definition classify_call (ge: Cminor.genv) (e: Cminor.expr) : call_kind :=
   match expr_is_addrof_ident e with
-  | None => None
+  | None => Call_default
   | Some id =>
       match Genv.find_symbol ge id with
-      | None => None
+      | None => Call_imm id
       | Some b =>
           match Genv.find_funct_ptr ge b with
-          | Some(External ef) => if ef_inline ef then Some ef else None
-          | _ => None
+          | Some(External ef) => if ef_inline ef then Call_builtin ef else Call_imm id
+          | _ => Call_imm id
           end
       end
   end.
@@ -202,14 +208,18 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : stmt :=
   | Cminor.Sassign id e => Sassign id (sel_expr e)
   | Cminor.Sstore chunk addr rhs => store chunk (sel_expr addr) (sel_expr rhs)
   | Cminor.Scall optid sg fn args =>
-      match expr_is_addrof_builtin ge fn with
-      | None => Scall optid sg (sel_expr fn) (sel_exprlist args)
-      | Some ef => Sbuiltin optid ef (sel_exprlist args)
+      match classify_call ge fn with
+      | Call_default => Scall optid sg (inl _ (sel_expr fn)) (sel_exprlist args)
+      | Call_imm id  => Scall optid sg (inr _ id) (sel_exprlist args)
+      | Call_builtin ef => Sbuiltin optid ef (sel_exprlist args)
       end
   | Cminor.Sbuiltin optid ef args =>
       Sbuiltin optid ef (sel_exprlist args)
   | Cminor.Stailcall sg fn args => 
-      Stailcall sg (sel_expr fn) (sel_exprlist args)
+      match classify_call ge fn with
+      | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)
+      | _            => Stailcall sg (inl _ (sel_expr fn)) (sel_exprlist args)
+      end
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt ge s1) (sel_stmt ge s2)
   | Cminor.Sifthenelse e ifso ifnot =>
       Sifthenelse (condexpr_of_expr (sel_expr e))

@@ -87,6 +87,7 @@ semi-lattices.
 inequations by fixpoint iteration.
 <LI> <A HREF="html/Parmov.html">Parmov</A>: compilation of parallel assignments.
 <LI> <A HREF="html/UnionFind.html">UnionFind</A>: a persistent union-find data structure.
+<LI> <A HREF="html/Postorder.html">Postorder</A>: postorder numbering of a directed graph.
 </UL>
 
 <H3>Definitions and theorems used in many parts of the development</H3>
@@ -102,6 +103,7 @@ See also: <A HREF="html/Memory.html">Memory</A> (implementation of the memory mo
 See also: <A HREF="html/Memdata.html">Memdata</A> (in-memory representation of data).
 <LI> <A HREF="html/Globalenvs.html">Globalenvs</A>: global execution environments.
 <LI> <A HREF="html/Smallstep.html">Smallstep</A>: tools for small-step semantics.
+<LI> <A HREF="html/Behaviors.html">Behaviors</A>: from small-step semantics to observable behaviors of programs.
 <LI> <A HREF="html/Determinism.html">Determinism</A>: determinism properties of small-step semantics.
 <LI> <A HREF="html/Op.html"><I>Op</I></A>: operators, addressing modes and their
 semantics.
@@ -115,7 +117,7 @@ semantics.
 <A HREF="html/Csem.html">semantics</A> and
 <A HREF="html/Cstrategy.html">determinized semantics</A>.<BR>
 See also: <A HREF="html/Cexec.html">reference interpreter</A>.
-<LI> <A HREF="html/Clight.html">Clight</A>: a simpler version of Cmedium where expressions contain no side-effects.
+<LI> <A HREF="html/Clight.html">Clight</A>: a simpler version of CompCert C where expressions contain no side-effects.
 <LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level
  structured language.
 <LI> <A HREF="html/Cminor.html">Cminor</A>: low-level structured
@@ -198,6 +200,21 @@ code.
   <TD>RTL to RTL</TD>
   <TD><A HREF="html/Tailcall.html">Tailcall</A></TD>
   <TD><A HREF="html/Tailcallproof.html">Tailcallproof</A></TD>
+</TR>
+
+<TR valign="top">
+  <TD>Function inlining</TD>
+  <TD>RTL to RTL</TD>
+  <TD><A HREF="html/Inlining.html">Inlining</A></TD>
+  <TD><A HREF="html/Inliningspec.html">Inliningspec</A>
+      <A HREF="html/Inliningproof.html">Inliningproof</A></TD>
+</TR>
+
+<TR valign="top">
+  <TD>Postorder renumbering of the CFG</TD>
+  <TD>RTL to RTL</TD>
+  <TD><A HREF="html/Renumber.html">Renumber</A></TD>
+  <TD><A HREF="html/Renumberproof.html">Renumberproof</A></TD>
 </TR>
 
 <TR valign="top">

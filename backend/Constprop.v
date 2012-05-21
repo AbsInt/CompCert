@@ -107,11 +107,84 @@ End Approx.
 
 Module D := LPMap Approx.
 
-(** The transfer function for the dataflow analysis is straightforward:
-  for [Iop] instructions, we set the approximation of the destination
-  register to the result of executing abstractly the operation;
-  for [Iload] and [Icall], we set the approximation of the destination
-  to [Unknown]. *)
+(** We keep track of read-only global variables (i.e. "const" global
+  variables in C) as a map from their names to their initialization
+  data. *)
+
+Definition global_approx : Type := PTree.t (list init_data).
+
+(** Given some initialization data and a byte offset, compute a static
+  approximation of the result of a memory load from a memory block
+  initialized with this data. *)
+
+Fixpoint eval_load_init (chunk: memory_chunk) (pos: Z) (il: list init_data): approx :=
+  match il with
+  | nil => Unknown
+  | Init_int8 n :: il' =>
+      if zeq pos 0 then
+        match chunk with
+        | Mint8unsigned => I (Int.zero_ext 8 n)
+        | Mint8signed => I (Int.sign_ext 8 n)
+        | _ => Unknown
+        end
+      else eval_load_init chunk (pos - 1) il'
+  | Init_int16 n :: il' =>
+      if zeq pos 0 then
+        match chunk with
+        | Mint16unsigned => I (Int.zero_ext 16 n)
+        | Mint16signed => I (Int.sign_ext 16 n)
+        | _ => Unknown
+        end
+      else eval_load_init chunk (pos - 2) il'
+  | Init_int32 n :: il' =>
+      if zeq pos 0 
+      then match chunk with Mint32 => I n | _ => Unknown end
+      else eval_load_init chunk (pos - 4) il'
+  | Init_float32 n :: il' =>
+      if zeq pos 0
+      then match chunk with 
+           | Mfloat32 => if propagate_float_constants tt then F (Float.singleoffloat n) else Unknown
+           | _ => Unknown
+           end
+      else eval_load_init chunk (pos - 4) il'
+  | Init_float64 n :: il' =>
+      if zeq pos 0 
+      then match chunk with
+           | Mfloat64 => if propagate_float_constants tt then F n else Unknown
+           | _ => Unknown
+           end
+      else eval_load_init chunk (pos - 8) il'
+  | Init_addrof symb ofs :: il' =>
+      if zeq pos 0
+      then match chunk with Mint32 => G symb ofs | _ => Unknown end
+      else eval_load_init chunk (pos - 4) il'
+  | Init_space n :: il' =>
+      eval_load_init chunk (pos - Zmax n 0) il'
+  end.
+
+(** Compute a static approximation for the result of a load at an address whose
+  approximation is known.  If the approximation points to a global variable,
+  and this global variable is read-only, we use its initialization data
+  to determine a static approximation.  Otherwise, [Unknown] is returned. *)
+
+Definition eval_static_load (gapp: global_approx) (chunk: memory_chunk) (addr: approx) : approx :=
+  match addr with
+  | G symb ofs =>
+      match gapp!symb with
+      | None => Unknown
+      | Some il => eval_load_init chunk (Int.unsigned ofs) il
+      end
+  | _ => Unknown
+  end.
+
+(** The transfer function for the dataflow analysis is straightforward.
+  For [Iop] instructions, we set the approximation of the destination
+  register to the result of executing abstractly the operation.
+  For [Iload] instructions, we set the approximation of the destination
+  register to the result of [eval_static_load].
+  For [Icall] and [Ibuiltin], the destination register becomes [Unknown].
+  Other instructions keep the approximations unchanged, as they preserve
+  the values of all registers. *)
 
 Definition approx_reg (app: D.t) (r: reg) := 
   D.get r app.
@@ -119,7 +192,7 @@ Definition approx_reg (app: D.t) (r: reg) :=
 Definition approx_regs (app: D.t) (rl: list reg):=
   List.map (approx_reg app) rl.
 
-Definition transfer (f: function) (pc: node) (before: D.t) :=
+Definition transfer (gapp: global_approx) (f: function) (pc: node) (before: D.t) :=
   match f.(fn_code)!pc with
   | None => before
   | Some i =>
@@ -128,7 +201,9 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
           let a := eval_static_operation op (approx_regs before args) in
           D.set res a before
       | Iload chunk addr args dst s =>
-          D.set dst Unknown before
+          let a := eval_static_load gapp chunk
+                     (eval_static_addressing addr (approx_regs before args)) in
+          D.set dst a before
       | Icall sig ros args res s =>
           D.set res Unknown before
       | Ibuiltin ef args res s =>
@@ -142,12 +217,13 @@ Definition transfer (f: function) (pc: node) (before: D.t) :=
   generic solver for forward dataflow inequations. [analyze f]
   returns a mapping from program points to mappings of pseudo-registers
   to approximations.  It can fail to reach a fixpoint in a reasonable
-  number of iterations, in which case [None] is returned. *)
+  number of iterations, in which case we use the trivial mapping
+  (program point -> [D.top]) instead. *)
 
 Module DS := Dataflow_Solver(D)(NodeSetForward).
 
-Definition analyze (f: RTL.function): PMap.t D.t :=
-  match DS.fixpoint (successors f) (transfer f) 
+Definition analyze (gapp: global_approx) (f: RTL.function): PMap.t D.t :=
+  match DS.fixpoint (successors f) (transfer gapp f) 
                     ((f.(fn_entrypoint), D.top) :: nil) with
   | None => PMap.init D.top
   | Some res => res
@@ -158,10 +234,12 @@ Definition analyze (f: RTL.function): PMap.t D.t :=
 (** The code transformation proceeds instruction by instruction.
     Operators whose arguments are all statically known are turned
     into ``load integer constant'', ``load float constant'' or
-    ``load symbol address'' operations.  Operators for which some
+    ``load symbol address'' operations.  Likewise for loads whose
+    result can be statically predicted.  Operators for which some
     but not all arguments are known are subject to strength reduction,
     and similarly for the addressing modes of load and store instructions.
-    Other instructions are unchanged. *)
+    Conditional branches and multi-way branches are statically resolved
+    into [Inop] instructions if possible. Other instructions are unchanged. *)
 
 Definition transf_ros (app: D.t) (ros: reg + ident) : reg + ident :=
   match ros with
@@ -173,25 +251,38 @@ Definition transf_ros (app: D.t) (ros: reg + ident) : reg + ident :=
   | inr s => ros
   end.
 
-Definition transf_instr (app: D.t) (instr: instruction) :=
+Parameter generate_float_constants : unit -> bool.
+
+Definition const_for_result (a: approx) : option operation :=
+  match a with
+  | I n => Some(Ointconst n)
+  | F n => if generate_float_constants tt then Some(Ofloatconst n) else None
+  | G symb ofs => Some(Oaddrsymbol symb ofs)
+  | S ofs => Some(Oaddrstack ofs)
+  | _ => None
+  end.
+
+Definition transf_instr (gapp: global_approx) (app: D.t) (instr: instruction) :=
   match instr with
   | Iop op args res s =>
-      match eval_static_operation op (approx_regs app args) with
-      | I n =>
-          Iop (Ointconst n) nil res s
-      | F n =>
-          Iop (Ofloatconst n) nil res s
-      | G symb ofs =>
-          Iop (Oaddrsymbol symb ofs) nil res s
-      | S ofs =>
-          Iop (Oaddrstack ofs) nil res s
-      | _ =>
+      let a := eval_static_operation op (approx_regs app args) in
+      match const_for_result a with
+      | Some cop =>
+          Iop cop nil res s
+      | None =>
           let (op', args') := op_strength_reduction op args (approx_regs app args) in
           Iop op' args' res s
       end
   | Iload chunk addr args dst s =>
-      let (addr', args') := addr_strength_reduction addr args (approx_regs app args) in
-      Iload chunk addr' args' dst s      
+      let a := eval_static_load gapp chunk
+                  (eval_static_addressing addr (approx_regs app args)) in
+      match const_for_result a with
+      | Some cop =>
+          Iop cop nil dst s
+      | None =>
+          let (addr', args') := addr_strength_reduction addr args (approx_regs app args) in
+          Iload chunk addr' args' dst s      
+      end
   | Istore chunk addr args src s =>
       let (addr', args') := addr_strength_reduction addr args (approx_regs app args) in
       Istore chunk addr' args' src s      
@@ -223,20 +314,32 @@ Definition transf_instr (app: D.t) (instr: instruction) :=
       instr
   end.
 
-Definition transf_code (approxs: PMap.t D.t) (instrs: code) : code :=
-  PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
+Definition transf_code (gapp: global_approx) (app: PMap.t D.t) (instrs: code) : code :=
+  PTree.map (fun pc instr => transf_instr gapp app!!pc instr) instrs.
 
-Definition transf_function (f: function) : function :=
-  let approxs := analyze f in
+Definition transf_function (gapp: global_approx) (f: function) : function :=
+  let approxs := analyze gapp f in
   mkfunction
     f.(fn_sig)
     f.(fn_params)
     f.(fn_stacksize)
-    (transf_code approxs f.(fn_code))
+    (transf_code gapp approxs f.(fn_code))
     f.(fn_entrypoint).
 
-Definition transf_fundef (fd: fundef) : fundef :=
-  AST.transf_fundef transf_function fd.
+Definition transf_fundef (gapp: global_approx) (fd: fundef) : fundef :=
+  AST.transf_fundef (transf_function gapp) fd.
+
+Fixpoint make_global_approx (gapp: global_approx) (vars: list (ident * globvar unit)) : global_approx :=
+  match vars with
+  | nil => gapp
+  | (id, gv) :: vars' =>
+      let gapp1 :=
+        if gv.(gvar_readonly) && negb gv.(gvar_volatile)
+        then PTree.set id gv.(gvar_init) gapp
+        else PTree.remove id gapp in
+      make_global_approx gapp1 vars'
+  end.
 
 Definition transf_program (p: program) : program :=
-  transform_program transf_fundef p.
+  let gapp := make_global_approx (PTree.empty _) p.(prog_vars) in
+  transform_program (transf_fundef gapp) p.

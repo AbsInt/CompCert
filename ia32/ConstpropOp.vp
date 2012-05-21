@@ -91,11 +91,13 @@ Nondetfunction eval_static_addressing (addr: addressing) (vl: list approx) :=
   | _, _ => Unknown
   end.
 
+Parameter propagate_float_constants: unit -> bool.
+
 Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   match op, vl with
   | Omove, v1::nil => v1
   | Ointconst n, nil => I n
-  | Ofloatconst n, nil => F n
+  | Ofloatconst n, nil => if propagate_float_constants tt then F n else Unknown
   | Ocast8signed, I n1 :: nil => I(Int.sign_ext 8 n1)
   | Ocast8unsigned, I n1 :: nil => I(Int.zero_ext 8 n1)
   | Ocast16signed, I n1 :: nil => I(Int.sign_ext 16 n1)
@@ -132,7 +134,7 @@ Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   | Odivf, F n1 :: F n2 :: nil => F(Float.div n1 n2)
   | Osingleoffloat, F n1 :: nil => F(Float.singleoffloat n1)
   | Ointoffloat, F n1 :: nil => eval_static_intoffloat n1
-  | Ofloatofint, I n1 :: nil => F(Float.floatofint n1)
+  | Ofloatofint, I n1 :: nil => if propagate_float_constants tt then F(Float.floatofint n1) else Unknown
   | Ocmp c, vl => eval_static_condition_val c vl
   | _, _ => Unknown
   end.

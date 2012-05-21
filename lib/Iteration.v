@@ -10,65 +10,88 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Bounded and unbounded iterators *)
+(** Bounded and unbounded iterators *)
 
 Require Import Axioms.
 Require Import Coqlib.
-Require Import Classical.
-Require Import Max.
+Require Import Wfsimpl.
 
-Module Type ITER.
-Variable iterate
-     : forall A B : Type, (A -> B + A) -> A -> option B.
-Hypothesis iterate_prop
-     : forall (A B : Type) (step : A -> B + A) (P : A -> Prop) (Q : B -> Prop),
-       (forall a : A, P a ->
-           match step a with inl b => Q b | inr a' => P a' end) ->
-       forall (a : A) (b : B), iterate A B step a = Some b -> P a -> Q b.
-End ITER.
+(** This modules defines several Coq encodings of a general "while" loop.
+  The loop is presented in functional style as the iteration
+  of a [step] function of type [A -> B + A]:
+<<
+        let rec iterate step a =
+          match step a with
+          | inl b -> b
+          | inr a' -> iterate step a'
+>>
+  This iteration cannot be defined directly in Coq using [Fixpoint],
+  because Coq is a logic of total functions, and therefore we must
+  guarantee termination of the loop.
+*)
 
-Axiom
-  dependent_description' :
-    forall (A:Type) (B:A -> Type) (R:forall x:A, B x -> Prop),
-      (forall x:A,
-          exists y : B x, R x y /\ (forall y':B x, R x y' -> y = y')) ->
-       sigT (fun f : forall x:A, B x => (forall x:A, R x (f x))).
+(** * Terminating iteration *)
 
-(* A constructive implementation using bounded iteration. *)
+(** We first implement the case where termination is guaranteed because
+  the current state [a] decreases at each iteration. *)
 
-Module PrimIter: ITER.
+Module WfIter.
 
 Section ITERATION.
 
 Variables A B: Type.
 Variable step: A -> B + A.
+Variable ord: A -> A -> Prop.
+Hypothesis ord_wf: well_founded ord.
+Hypothesis step_decr: forall a a', step a = inr _ a' -> ord a' a.
 
-(** The [step] parameter represents one step of the iteration.  From a 
-  current iteration state [a: A], it either returns a value of type [B],
-  meaning that iteration is over and that this [B] value is the final
-  result of the iteration, or a value [a' : A] which is the next state
-  of the iteration.
+Definition step_info (a: A) : {b | step a = inl _ b} + {a' | step a = inr _ a' & ord a' a}.
+Proof.
+  caseEq (step a); intros. left; exists b; auto. right; exists a0; auto. 
+Qed.
 
-  The naive way to define the iteration is:
-<<
-Fixpoint iterate (a: A) : B :=
-  match step a with
-  | inl b => b
-  | inr a' => iterate a'
+Definition iterate_F (a: A) (rec: forall a', ord a' a -> B) : B :=
+  match step_info a with
+  | inl (exist b P) => b
+  | inr (exist2 a' P Q) => rec a' Q
   end.
->>
-  However, this is a general recursion, not guaranteed to terminate,
-  and therefore not expressible in Coq.  The standard way to work around
-  this difficulty is to use Noetherian recursion (Coq module [Wf]).
-  This requires that we equip the type [A] with a well-founded ordering [<]
-  (no infinite ascending chains) and we demand that [step] satisfies
-  [step a = inr a' -> a < a'].  For the types [A] that are of interest to us
-  in this development, it is however very painful to define adequate
-  well-founded orderings, even though we know our iterations always
-  terminate.
 
-  Instead, we choose to bound the number of iterations by an arbitrary
-  constant.  [iterate] then becomes a function that can fail,
+Definition iterate (a: A) : B := Fix ord_wf iterate_F a.
+
+(** We now prove an invariance property [iterate_prop], similar to the Hoare
+  logic rule for "while" loops. *)
+
+Variable P: A -> Prop.
+Variable Q: B -> Prop.
+
+Hypothesis step_prop:
+  forall a : A, P a ->
+  match step a with inl b => Q b | inr a' => P a' end.
+
+Lemma iterate_prop:
+  forall a, P a -> Q (iterate a).
+Proof.
+  intros a0. pattern a0. apply well_founded_ind with (R := ord). auto.
+  intros. unfold iterate; rewrite unroll_Fix. unfold iterate_F. 
+  destruct (step_info x) as [[b U] | [a' U V]]. 
+  exploit step_prop; eauto. rewrite U; auto.
+  apply H. auto. exploit step_prop; eauto. rewrite U; auto. 
+Qed.
+
+End ITERATION.
+
+End WfIter.
+
+(** * Bounded iteration *)
+
+(** The presentation of iteration shown above is predicated on the existence
+  of a well-founded ordering that decreases at each step of the iteration.
+  In several parts of the CompCert development, it is very painful to define
+  such a well-founded ordering and to prove decrease, even though we know our
+  iterations always terminate.
+
+  In the presentation below, we choose instead to bound the number of iterations
+  by an arbitrary constant.  [iterate] then becomes a function that can fail,
   of type [A -> option B].  The [None] result denotes failure to reach
   a result in the number of iterations prescribed, or, in other terms,
   failure to find a solution to the dataflow problem.  The compiler
@@ -81,6 +104,13 @@ Fixpoint iterate (a: A) : B :=
   Failure will therefore never happen in practice, but of
   course our proofs also cover the failure case and show that 
   nothing bad happens in this hypothetical case either.  *)
+
+Module PrimIter.
+
+Section ITERATION.
+
+Variables A B: Type.
+Variable step: A -> B + A.
 
 Definition num_iterations := 1000000000000%positive.
 
@@ -117,19 +147,7 @@ Definition iter_step (x: positive)
       end
   end.
 
-Definition iter: positive -> A -> option B :=
-  Fix Plt_wf (fun _ => A -> option B) iter_step.
-
-(** We then prove the expected unrolling equations for [iter]. *)
-
-Remark unroll_iter:
-  forall x, iter x = iter_step x (fun y _ => iter y).
-Proof.
-  unfold iter; apply (Fix_eq Plt_wf (fun _ => A -> option B) iter_step).
-  intros. unfold iter_step. apply extensionality. intro s. 
-  case (peq x xH); intro. auto. 
-  rewrite H. auto. 
-Qed.
+Definition iter: positive -> A -> option B := Fix Plt_wf iter_step.
 
 (** The [iterate] function is defined as [iter] up to
     [num_iterations] through the loop. *)
@@ -150,11 +168,12 @@ Lemma iter_prop:
 Proof.
   apply (well_founded_ind Plt_wf 
          (fun p => forall a b, P a -> iter p a = Some b -> Q b)).
-  intros until b. intro. rewrite unroll_iter.
-  unfold iter_step. case (peq x 1); intro. congruence.
-  generalize (step_prop a H0).
-  case (step a); intros. congruence. 
-  apply H with (Ppred x) a0. apply Ppred_Plt; auto. auto. auto.
+  intros. unfold iter in H1. rewrite unroll_Fix in H1. unfold iter_step in H1.
+  destruct (peq x 1). discriminate.
+  specialize (step_prop a H0). 
+  destruct (step a) as [b'|a']_eqn.
+  inv H1. auto.
+  apply H with (Ppred x) a'. apply Ppred_Plt; auto. auto. auto.
 Qed.
 
 Lemma iterate_prop:
@@ -167,11 +186,21 @@ End ITERATION.
 
 End PrimIter.
 
+(** * General iteration *)
+
 (* An implementation using classical logic and unbounded iteration,
   in the style of Yves Bertot's paper, "Extending the Calculus
-  of Constructions with Tarski's fix-point theorem". *)
+  of Constructions with Tarski's fix-point theorem".
 
-Module GenIter: ITER.
+  As in the bounded case, the [iterate] function returns an option type.
+  [None] means that iteration does not terminate.
+  [Some b] means that iteration terminates with the result [b]. *)
+
+Require Import Classical.
+Require Import ClassicalDescription.
+Require Import Max.
+
+Module GenIter.
 
 Section ITERATION.
 
@@ -249,30 +278,29 @@ Proof.
 Qed.
 
 Lemma converges_to_exists_uniquely:
-  forall a, exists b, converges_to a b /\ forall b', converges_to a b' -> b = b'.
+  forall a, exists! b, converges_to a b .
 Proof.
   intro. destruct (converges_to_exists a) as [b CT]. 
   exists b. split. assumption. exact (converges_to_unique _ _ CT).
 Qed.
 
-Definition exists_iterate :=
-  dependent_description' A (fun _ => option B)
-     converges_to converges_to_exists_uniquely.
-
-Definition iterate : A -> option B :=
-  match exists_iterate with existT f P => f end.
+Definition iterate (a: A) : option B :=
+  proj1_sig (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)).
 
 Lemma converges_to_iterate:
   forall a b, converges_to a b -> iterate a = b.
 Proof.
-  intros. unfold iterate. destruct exists_iterate as [f P]. 
-  apply converges_to_unique with a. apply P. auto.
+  intros. unfold iterate. 
+  destruct (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
+  simpl. apply converges_to_unique with a; auto.
 Qed.
 
 Lemma iterate_converges_to:
   forall a, converges_to a (iterate a).
 Proof.
-  intros. unfold iterate. destruct exists_iterate as [f P]. apply P.
+  intros. unfold iterate. 
+  destruct (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
+  simpl; auto.
 Qed.
 
 (** Invariance property. *)

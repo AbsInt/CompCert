@@ -90,8 +90,8 @@ let print_instruction pp (pc, i) =
   | Ireturn (Some arg) ->
       fprintf pp "return %a@ " reg arg
 
-let print_function pp f =
-  fprintf pp "@[<v 2>f(%a) {@ " regs f.fn_params;
+let print_function pp id f =
+  fprintf pp "@[<v 2>%s(%a) {@ " (extern_atom id) regs f.fn_params;
   let instrs =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
@@ -103,42 +103,35 @@ let print_function pp f =
   List.iter (print_instruction pp) instrs;
   fprintf pp "@;<0 -2>}@]@."
 
-let print_fundef pp fd =
+let print_fundef pp (id, fd) =
   match fd with
-  | Internal f -> print_function pp f
+  | Internal f -> print_function pp id f
   | External _ -> ()
 
-let print_if optdest currpp fd =
+let print_program pp (prog: RTL.program) =
+  List.iter (print_fundef pp) prog.prog_funct
+
+let print_if optdest prog =
   match !optdest with
   | None -> ()
   | Some f ->
-      let pp =
-        match !currpp with
-        | Some pp -> pp
-        | None ->
-            let oc = open_out f in
-            let pp = formatter_of_out_channel oc in
-            currpp := Some pp;
-            pp
-      in print_fundef pp fd
+      let oc = open_out f in
+      let pp = formatter_of_out_channel oc in
+      print_program pp prog;
+      close_out oc
 
 let destination_rtl : string option ref = ref None
-let pp_rtl : formatter option ref = ref None
-let print_rtl = print_if destination_rtl pp_rtl
+let print_rtl = print_if destination_rtl
 
 let destination_tailcall : string option ref = ref None
-let pp_tailcall : formatter option ref = ref None
-let print_tailcall = print_if destination_tailcall pp_tailcall
+let print_tailcall = print_if destination_tailcall
 
-let destination_castopt : string option ref = ref None
-let pp_castopt : formatter option ref = ref None
-let print_castopt = print_if destination_castopt pp_castopt
+let destination_inlining : string option ref = ref None
+let print_inlining = print_if destination_inlining
 
 let destination_constprop : string option ref = ref None
-let pp_constprop : formatter option ref = ref None
-let print_constprop = print_if destination_constprop pp_constprop
+let print_constprop = print_if destination_constprop
 
 let destination_cse : string option ref = ref None
-let pp_cse : formatter option ref = ref None
-let print_cse = print_if destination_cse pp_cse
+let print_cse = print_if destination_cse
 
