@@ -80,13 +80,14 @@ Qed.
   fresh value numbers. *)
 
 Record numbering : Type := mknumbering {
-  num_next: valnum;
-  num_eqs: list (valnum * rhs);
-  num_reg: PTree.t valnum
+  num_next: valnum;                  (**r first unused value number *)
+  num_eqs: list (valnum * rhs);       (**r valid equations *)
+  num_reg: PTree.t valnum;           (**r mapping register to valnum *)
+  num_val: PMap.t (list reg)         (**r reverse mapping valnum to regs containing it *)
 }.
 
 Definition empty_numbering :=
-  mknumbering 1%positive nil (PTree.empty valnum).
+  mknumbering 1%positive nil (PTree.empty valnum) (PMap.init nil).
 
 (** [valnum_reg n r] returns the value number for the contents of
   register [r].  If none exists, a fresh value number is returned
@@ -97,10 +98,13 @@ Definition empty_numbering :=
 Definition valnum_reg (n: numbering) (r: reg) : numbering * valnum :=
   match PTree.get r n.(num_reg) with
   | Some v => (n, v)
-  | None   => (mknumbering (Psucc n.(num_next))
-                           n.(num_eqs)
-                           (PTree.set r n.(num_next) n.(num_reg)),
-               n.(num_next))
+  | None   =>
+      let v := n.(num_next) in
+      (mknumbering (Psucc v)
+                   n.(num_eqs)
+                   (PTree.set r v n.(num_reg))
+                   (PMap.set v (r :: nil) n.(num_val)),
+       v)
   end.
 
 Fixpoint valnum_regs (n: numbering) (rl: list reg)
@@ -126,6 +130,29 @@ Fixpoint find_valnum_rhs (r: rhs) (eqs: list (valnum * rhs))
       if eq_rhs r r' then Some v else find_valnum_rhs r eqs1
   end.
 
+(** [find_valnum_num vn eqs] searches the list of equations [eqs]
+  for an equation of the form [vn = rhs] for some equation [rhs].
+  If found, [Some rhs] is returned, otherwise [None] is returned. *)
+
+Fixpoint find_valnum_num (v: valnum) (eqs: list (valnum * rhs))
+                         {struct eqs} : option rhs :=
+  match eqs with
+  | nil => None
+  | (v', r') :: eqs1 =>
+      if peq v v' then Some r' else find_valnum_num v eqs1
+  end.
+
+(** Update the [num_val] mapping prior to a redefinition of register [r]. *)
+
+Definition forget_reg (n: numbering) (rd: reg) : PMap.t (list reg) :=
+  match PTree.get rd n.(num_reg) with
+  | None => n.(num_val)
+  | Some v => PMap.set v (List.remove peq rd (PMap.get v n.(num_val))) n.(num_val)
+  end.
+
+Definition update_reg (n: numbering) (rd: reg) (vn: valnum) : PMap.t (list reg) :=
+  let nv := forget_reg n rd in PMap.set vn (rd :: PMap.get vn nv) nv.
+
 (** [add_rhs n rd rhs] updates the value numbering [n] to reflect
   the computation of the operation or load represented by [rhs]
   and the storing of the result in register [rd].  If an equation
@@ -138,10 +165,12 @@ Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
   | Some vres =>
       mknumbering n.(num_next) n.(num_eqs)
                   (PTree.set rd vres n.(num_reg))
+                  (update_reg n rd vres)
   | None =>
       mknumbering (Psucc n.(num_next))
                   ((n.(num_next), rh) :: n.(num_eqs))
                   (PTree.set rd n.(num_next) n.(num_reg))
+                  (update_reg n rd n.(num_next))
   end.
 
 (** [add_op n rd op rs] specializes [add_rhs] for the case of an
@@ -164,7 +193,8 @@ Definition add_op (n: numbering) (rd: reg) (op: operation) (rs: list reg) :=
   match is_move_operation op rs with
   | Some r =>
       let (n1, v) := valnum_reg n r in
-      mknumbering n1.(num_next) n1.(num_eqs) (PTree.set rd v n1.(num_reg))  
+      mknumbering n1.(num_next) n1.(num_eqs)
+                 (PTree.set rd v n1.(num_reg)) (update_reg n1 rd v)
   | None =>
       let (n1, vs) := valnum_regs n rs in
       add_rhs n1 rd (Op op vs)
@@ -188,7 +218,8 @@ Definition add_load (n: numbering) (rd: reg)
 Definition add_unknown (n: numbering) (rd: reg) :=
   mknumbering (Psucc n.(num_next))
               n.(num_eqs)
-              (PTree.set rd n.(num_next) n.(num_reg)).
+              (PTree.set rd n.(num_next) n.(num_reg))
+              (forget_reg n rd).
 
 (** [kill_equations pred n] remove all equations satisfying predicate [pred]. *)
 
@@ -201,7 +232,7 @@ Fixpoint kill_eqs (pred: rhs -> bool) (eqs: list (valnum * rhs)) : list (valnum 
 Definition kill_equations (pred: rhs -> bool) (n: numbering) : numbering :=
   mknumbering n.(num_next)
               (kill_eqs pred n.(num_eqs))
-              n.(num_reg).
+              n.(num_reg) n.(num_val).
 
 (** [kill_loads n] removes all equations involving memory loads,
   as well as those involving memory-dependent operators.
@@ -245,10 +276,10 @@ Definition add_store (n: numbering) (chunk: memory_chunk) (addr: addressing)
    [vn], or [None] if no such register exists. *)
 
 Definition reg_valnum (n: numbering) (vn: valnum) : option reg :=
-  PTree.fold
-    (fun (res: option reg) (r: reg) (v: valnum) =>
-       if peq v vn then Some r else res)
-    n.(num_reg) None.
+  match PMap.get vn n.(num_val) with
+  | nil => None
+  | r :: rs => Some r
+  end.
 
 (* [find_rhs] and its specializations [find_op] and [find_load]
    return a register that already holds the result of the given arithmetic
