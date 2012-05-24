@@ -43,6 +43,18 @@ let filter_err (l: 'a or_err list): string list =
 
 external id : 'a -> 'a = "%identity"
 
+(** [a; a + 1; ... ; b - 1; b] *)
+let list_ab (a: int) (b: int): int list =
+  let rec list_ab_aux a b res =
+    if b < a
+    then res
+    else list_ab_aux a (b - 1) (b :: res)
+  in list_ab_aux a b []
+
+(** [0; 1; ...; n - 1] *)
+let list_n (n: int): int list =
+  list_ab 0 (n - 1)
+
 (** Checks for existence of an array element satisfying a condition, and returns
     its index if it exists.
 *)

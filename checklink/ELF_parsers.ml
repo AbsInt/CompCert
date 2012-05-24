@@ -257,43 +257,6 @@ let read_elf32_sym (e_hdr: elf32_ehdr) (symtab: bitstring) (strtab: bitstring)
         st_shndx = st_shndx ;
       }
 
-(** Abort if two sections overlap *)
-let check_overlaps (shdra: elf32_shdr array) (ehdr: elf32_ehdr): unit =
-  let intersect a asize b bsize =
-    asize <> 0l && bsize <> 0l &&
-      (
-        let last x xsize = Int32.(sub (add x xsize) 1l) in
-        let alast = last a asize in
-        let blast = last b bsize in
-        let within (a, b) x = (a <= x) && (x <= b) in
-        (within (a, alast) b) || (within (b, blast) a)
-      )
-  in
-  Array.iteri
-    (fun i ai ->
-      if ai.sh_type <> SHT_NOBITS
-      then
-        let ai_intersects = intersect ai.sh_offset ai.sh_size in
-        if
-          ai_intersects 0l 52l (* ELF header *)
-          || ai_intersects ehdr.e_phoff
-            (Int32.of_int (ehdr.e_phnum * ehdr.e_phentsize))
-          || ai_intersects ehdr.e_shoff
-            (Int32.of_int (ehdr.e_shnum * ehdr.e_shentsize))
-        then assert false
-        else
-          Array.iteri
-            (fun j aj ->
-              if
-                i <> j
-                && aj.sh_type <> SHT_NOBITS
-                && ai_intersects aj.sh_offset aj.sh_size
-              then assert false
-            )
-            shdra
-    )
-    shdra
-
 (** Reads a whole ELF file from a bitstring *)
 let read_elf_bs (bs: bitstring): elf =
   let e_hdr = read_elf32_ehdr bs in
@@ -312,7 +275,6 @@ let read_elf_bs (bs: bitstring): elf =
   let e_shdra =
     Array.init e_hdr.e_shnum (read_elf32_shdr e_hdr bs strtab)
   in
-  check_overlaps e_shdra e_hdr;
   let symtab_sndx = section_ndx_by_name_noelf e_shdra ".symtab" in
   let e_symtab = (
     let symtab_shdr = e_shdra.(symtab_sndx) in

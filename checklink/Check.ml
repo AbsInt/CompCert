@@ -91,10 +91,10 @@ let name_of_section:
     section_name -> string
   =
   begin match Configuration.system with
-  | "macosx" -> assert false
+  | "macosx" -> failwith "Unsupported CompCert configuration: macosx"
   | "linux"  -> name_of_section_Linux
   | "diab"   -> name_of_section_Diab
-  | _        -> assert false
+  | _        -> failwith "Unsupported CompCert configuration"
   end
 
 (** Compares a CompCert section name with an ELF section name. *)
@@ -408,7 +408,8 @@ let match_csts (cc: constant) (ec: int32) (ffw: f_framework): f_framework =
           else ((ff_sf |-- ident_to_sym_ndx) ^%= (PosMap.add ident vaddrs)) ffw
       end
   | Csymbol_sda (ident, i) ->
-      assert false (* sda should be handled separately in places it occurs *)
+      (* sda should be handled separately in places it occurs *)
+      failwith "Unhandled Csymbol_sda, please report."
 
 let match_z_int32 (cz: coq_Z) (ei: int32) =
   check_eq "match_z_int32" (z_int32 cz) ei
@@ -788,7 +789,7 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
   | [] -> ERR("No satisfying SDA mapping, errors were: " ^
                  string_of_list id ", " (filter_err res))
   | [ffw] -> OK(ffw)
-  | _ -> assert false (* This should not happen... *)
+  | _ -> failwith "Multiple possible SDA mappings, please report."
 
 (** Compares a whole CompCert function code against an ELF code, starting at
     program counter [pc].
@@ -1345,7 +1346,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   fw
                   >>> check_builtin_vload_common
                     cs ecode pc chunk addr (Cint Integers.Int.zero) res
-              | _ -> assert false
+              | _ -> failwith "Unexpected args in EF_vload, please report."
               end
           | EF_vstore(chunk) ->
               begin match args with
@@ -1353,7 +1354,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   fw
                   >>> check_builtin_vstore_common
                     cs ecode pc chunk addr (Cint Integers.Int.zero) src
-              | _ -> assert false
+              | _ -> failwith "Unexpected args in EF_vstore, please report."
               end
           | EF_vload_global(chunk, ident, ofs) ->
               begin match ecode with
@@ -1388,7 +1389,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                         (Csymbol_low(ident, ofs)) src
                   | _ -> error
                   end
-              | _ -> assert false
+              | _ -> failwith "Unexpected args in EF_vstore_global, please report."
               end
           | EF_memcpy(sz, al) ->
               let sz = z_int sz in
@@ -1439,10 +1440,10 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   else compare_code cs ecode pc fw
               | _ -> error
               end
-          | EF_annot(_, _) -> assert false
-          | EF_external(_, _) -> assert false
-          | EF_free -> assert false
-          | EF_malloc -> assert false
+          | EF_annot(_, _)    -> failwith "Unexpected EF_annot, please report."
+          | EF_external(_, _) -> failwith "Unexpected EF_external, please report."
+          | EF_free           -> failwith "Unexpected EF_free, please report."
+          | EF_malloc         -> failwith "Unexpected EF_malloc, please report."
           end
       | Pcmplw(r1, r2) ->
           begin match ecode with
@@ -1782,8 +1783,12 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   | _ -> Section_literal
                   end
                 in
+                let continue = compare_code cs es (Int32.add 8l pc) in
                 begin match bitstring_at_vaddr elf vaddr 64l with
-                | None -> assert false
+                | None ->
+                    fw
+                    >>> (ff_ef ^%= add_log (ERROR("Floating point constant address is wrong")))
+                    >>> continue
                 | Some(bs, pofs, psize) ->
                     let f =
                       bitmatch bs with
@@ -1805,7 +1810,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                     >>> match_floats c     f
                     >>> (ff_ef ^%= add_range pofs psize 8 (Float_literal(f)))
                     >>> match_iregs  GPR12 rA1
-                    >>> compare_code cs es (Int32.add 8l pc)
+                    >>> continue
                 end
           | _ -> error
           end
@@ -2846,7 +2851,7 @@ let check_stubs sfw =
               sfw
               >>> (sf_ef ^%= add_log (ERROR("Couldn't match stub")))
           end
-    | _ -> assert false
+    | _ -> failwith "Unexpected fundef in check_stubs, please report."
     end
   in
   PosMap.fold check_stub sfw.stub_ident_to_vaddr sfw
@@ -2903,7 +2908,7 @@ let process_sdump efw sdump: e_framework =
       (fun f ->
         match f with
         | ident, Internal ccode -> (ident, Hashtbl.find names ident, ccode)
-        | _,     External _     -> assert false
+        | _,     External _     -> failwith "IMPOSSIBRU!"
       )
       worklist_fundefs
   in
@@ -2931,14 +2936,6 @@ let process_sdump efw sdump: e_framework =
   )
   >>> check_data prog.prog_vars
   >>> (fun sfw -> sfw.ef)
-
-(** Builds the list [0; 1; ...; n - 1]. *)
-let list_n (n: int): int list =
-  let rec list_n_aux x l =
-    if x < 0
-    then l
-    else list_n_aux (x - 1) (x :: l)
-  in list_n_aux (n - 1) []
 
 (** Returns true if [a, b] intersects [ofs, ofs + size - 1]. *)
 let intersect (a, b) ofs size: bool =
@@ -3011,7 +3008,7 @@ let check_padding efw =
   (* check_padding_aux assumes a sorted list *)
   let rec check_padding_aux efw accu l =
     match l with
-    | [] -> assert false
+    | [] -> efw
     (* if there is only one chunk left, we add an unknown space between it and
        the end. *)
     | [(_, e, _, _) as h] ->
@@ -3156,6 +3153,48 @@ let warn_sda_mapping efw =
       efw
   )
 
+let (>>=) li f = List.flatten (List.map f li)
+
+(** Returns the list of all strictly-ordered pairs of [[0; len - 1]] that don't
+    satisfy f. *)
+let forall_sym (len: int) (f: 'a -> 'a -> bool): ('a * 'a) list =
+  (list_n len)                >>= fun x ->
+  (list_ab (x + 1) (len - 1)) >>= fun y ->
+  (if f x y then [] else [(x, y)])
+
+let check_overlaps efw =
+  let shdra = efw.elf.e_shdra in
+  let intersect a asize b bsize =
+    asize <> 0l && bsize <> 0l &&
+      (
+        let last x xsize = Int32.(sub (add x xsize) 1l) in
+        let alast = last a asize in
+        let blast = last b bsize in
+        let within (a, b) x = (a <= x) && (x <= b) in
+        (within (a, alast) b) || (within (b, blast) a)
+      )
+  in
+  match
+    forall_sym (Array.length shdra)
+      (fun i j ->
+        let ai = shdra.(i) in
+        let aj = shdra.(j) in
+        (ai.sh_type = SHT_NOBITS)
+        || (aj.sh_type = SHT_NOBITS)
+        || (not (intersect ai.sh_offset ai.sh_size aj.sh_offset aj.sh_size))
+      )
+  with
+  | [] -> efw
+  | l  ->
+      List.fold_left
+        (fun efw (i, j) ->
+          let msg =
+            Printf.sprintf "Sections %s and %s overlap" shdra.(i).sh_name shdra.(j).sh_name
+          in
+          add_log (ERROR(msg)) efw
+        )
+        efw l
+
 (** Checks a whole ELF file according to a list of .sdump files. This never
     dumps anything, so it can be safely used when fuzz-testing even if the
     user accidentally enabled dumping options. *)
@@ -3205,6 +3244,8 @@ let check_elf_nodump elf sdumps =
   >>> check_padding
   (* warn if some CompCert sections have been remapped by the linker script *)
   >>> warn_sections_remapping
+  (* warn if there exists non-empty overlapping sections *)
+  >>> check_overlaps
   >>> warn_sda_mapping
 
 (** Checks a whole ELF file according to .sdump files.
