@@ -868,9 +868,10 @@ Proof.
     eauto.
   fold (saddr ctx addr). intros [a' [P Q]].
   exploit Mem.loadv_inject; eauto. intros [v' [U V]].
+  assert (eval_addressing tge (Vptr sp' Int.zero) (saddr ctx addr) rs' ## (sregs ctx args) = Some a').
+  rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
-  eapply plus_one. eapply exec_Iload; eauto. erewrite eval_addressing_preserved; eauto.
-  exact symbols_preserved. 
+  eapply plus_one. eapply exec_Iload; eauto.
   econstructor; eauto. 
   apply match_stacks_inside_set_reg; auto.
   apply agree_set_reg; auto. 
@@ -885,9 +886,10 @@ Proof.
   fold saddr. intros [a' [P Q]].
   exploit Mem.storev_mapped_inject; eauto. eapply agree_val_reg; eauto. 
   intros [m1' [U V]].
+  assert (eval_addressing tge (Vptr sp' Int.zero) (saddr ctx addr) rs' ## (sregs ctx args) = Some a').
+    rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
-  eapply plus_one. eapply exec_Istore; eauto. erewrite eval_addressing_preserved; eauto.
-  exact symbols_preserved. 
+  eapply plus_one. eapply exec_Istore; eauto.
   destruct a; simpl in H1; try discriminate.
   destruct a'; simpl in U; try discriminate.
   econstructor; eauto.

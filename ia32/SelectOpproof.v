@@ -176,13 +176,9 @@ Proof.
 (* intconst *)
   destruct e0; eauto. InvEval. TrivialExists. simpl. destruct (Int.eq i Int.zero); auto.
 (* cmp *)
-  inv H. simpl in H5.
-  destruct (eval_condition c vl m) as []_eqn. 
-  TrivialExists. simpl. rewrite (eval_negate_condition _ _ _ Heqo). destruct b; inv H5; auto.
-  inv H5. simpl. 
-  destruct (eval_condition (negate_condition c) vl m) as []_eqn.
-  destruct b; [exists Vtrue | exists Vfalse]; split; auto; EvalOp; simpl. rewrite Heqo0; auto. rewrite Heqo0; auto.
-  exists Vundef; split; auto; EvalOp; simpl. rewrite Heqo0; auto.
+  inv H. simpl in H5. inv H5.
+  TrivialExists. simpl. rewrite eval_negate_condition. 
+  destruct (eval_condition c vl m); auto. destruct b; auto. 
 (* condition *)
   inv H. destruct v1.
   exploit IHa1; eauto. intros [v [A B]]. exists v; split; auto. eapply eval_Econdition; eauto. 

@@ -492,22 +492,20 @@ Definition negate_condition (cond: condition): condition :=
   end.
 
 Lemma eval_negate_condition:
-  forall (cond: condition) (vl: list val) (b: bool) (m: mem),
-  eval_condition cond vl m = Some b ->
-  eval_condition (negate_condition cond) vl m = Some (negb b).
+  forall cond vl m,
+  eval_condition (negate_condition cond) vl m = option_map negb (eval_condition cond vl m).
 Proof.
-  intros. 
-  destruct cond; simpl in H; FuncInv; simpl.
-  rewrite Val.negate_cmp_bool; rewrite H; auto.
-  rewrite Val.negate_cmpu_bool; rewrite H; auto.
-  rewrite Val.negate_cmp_bool; rewrite H; auto.
-  rewrite Val.negate_cmpu_bool; rewrite H; auto.
-  rewrite Val.negate_cmp_bool; rewrite H; auto.
-  rewrite Val.negate_cmpu_bool; rewrite H; auto.
-  rewrite H; auto.
-  destruct (Val.cmpf_bool c v v0); simpl in H; inv H. rewrite negb_elim; auto. 
-  rewrite H; auto.
-  destruct (Val.cmpf_bool c v (Vfloat Float.zero)); simpl in H; inv H. rewrite negb_elim; auto. 
+  intros. destruct cond; simpl.
+  repeat (destruct vl; auto). apply Val.negate_cmp_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmp_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmp_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
+  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
+  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v (Vfloat Float.zero)); auto. destruct b; auto.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)

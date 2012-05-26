@@ -50,7 +50,7 @@ Proof.
   induction 1; simpl.
   constructor.
   constructor.
-  econstructor. eauto. apply eval_negate_condition. auto.
+  econstructor. eauto. rewrite eval_negate_condition. rewrite H0. auto.
   econstructor. eauto. destruct vb1; auto.
 Qed. 
 
@@ -124,7 +124,7 @@ Proof.
   intros. apply is_compare_neq_zero_correct with (negate_condition c).
   destruct c; simpl in H; simpl; try discriminate;
   destruct c; simpl; try discriminate; auto.
-  apply eval_negate_condition; auto.
+  rewrite eval_negate_condition. rewrite H0. auto.
 Qed.
 
 Lemma eval_condition_of_expr:

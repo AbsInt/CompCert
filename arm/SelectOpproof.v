@@ -179,13 +179,9 @@ Proof.
 (* intconst *)
   destruct e0; eauto. InvEval. TrivialExists. simpl. destruct (Int.eq i Int.zero); auto.
 (* cmp *)
-  inv H. simpl in H5.
-  destruct (eval_condition c vl m) as []_eqn. 
-  TrivialExists. simpl. rewrite (eval_negate_condition _ _ _ Heqo). destruct b; inv H5; auto.
-  inv H5. simpl. 
-  destruct (eval_condition (negate_condition c) vl m) as []_eqn.
-  destruct b; [exists Vtrue | exists Vfalse]; split; auto; EvalOp; simpl. rewrite Heqo0; auto. rewrite Heqo0; auto.
-  exists Vundef; split; auto; EvalOp; simpl. rewrite Heqo0; auto.
+  inv H. simpl in H5. inv H5.
+  TrivialExists. simpl. rewrite eval_negate_condition.
+  destruct (eval_condition c vl m); auto. destruct b; auto. 
 (* condition *)
   inv H. destruct v1.
   exploit IHa1; eauto. intros [v [A B]]. exists v; split; auto. eapply eval_Econdition; eauto. 
@@ -211,6 +207,7 @@ Proof.
   red; intros until y.
   unfold add; case (add_match a b); intros; InvEval.
   rewrite Val.add_commut. apply eval_addimm; auto.
+  apply eval_addimm; auto.
   subst. 
   replace (Val.add (Val.add v1 (Vint n1)) (Val.add v0 (Vint n2)))
      with (Val.add (Val.add v1 v0) (Val.add (Vint n1) (Vint n2))).
@@ -221,7 +218,6 @@ Proof.
      with (Val.add (Val.add v1 y) (Vint n1)).
   apply eval_addimm. EvalOp.
   repeat rewrite Val.add_assoc. decEq. apply Val.add_commut.
-  apply eval_addimm; auto.
   subst. rewrite <- Val.add_assoc. apply eval_addimm. EvalOp.
   subst. rewrite Val.add_commut. TrivialExists.
   subst. TrivialExists.

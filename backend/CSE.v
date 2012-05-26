@@ -27,6 +27,7 @@ Require Import Registers.
 Require Import RTL.
 Require Import RTLtyping.
 Require Import Kildall.
+Require Import CombineOp.
 
 (** * Value numbering *)
 
@@ -49,11 +50,13 @@ Require Import Kildall.
   Equations are of the form [valnum = rhs], where the right-hand sides
   [rhs] are either arithmetic operations or memory loads. *)
 
+(*
 Definition valnum := positive.
 
 Inductive rhs : Type :=
   | Op: operation -> list valnum -> rhs
   | Load: memory_chunk -> addressing -> list valnum -> rhs.
+*)
 
 Definition eq_valnum: forall (x y: valnum), {x=y}+{x<>y} := peq.
 
@@ -272,8 +275,8 @@ Definition add_store (n: numbering) (chunk: memory_chunk) (addr: addressing)
   | _ => n2
   end.
 
-(* [reg_valnum n vn] returns a register that is mapped to value number
-   [vn], or [None] if no such register exists. *)
+(** [reg_valnum n vn] returns a register that is mapped to value number
+    [vn], or [None] if no such register exists. *)
 
 Definition reg_valnum (n: numbering) (vn: valnum) : option reg :=
   match PMap.get vn n.(num_val) with
@@ -281,10 +284,19 @@ Definition reg_valnum (n: numbering) (vn: valnum) : option reg :=
   | r :: rs => Some r
   end.
 
-(* [find_rhs] and its specializations [find_op] and [find_load]
-   return a register that already holds the result of the given arithmetic
-   operation or memory load, according to the given numbering.
-   [None] is returned if no such register exists. *)
+Fixpoint regs_valnums (n: numbering) (vl: list valnum) : option (list reg) :=
+  match vl with
+  | nil => Some nil
+  | v1 :: vs =>
+      match reg_valnum n v1, regs_valnums n vs with
+      | Some r1, Some rs => Some (r1 :: rs)
+      | _, _ => None
+      end
+  end.
+
+(** [find_rhs] return a register that already holds the result of the given arithmetic
+    operation or memory load, according to the given numbering.
+    [None] is returned if no such register exists. *)
 
 Definition find_rhs (n: numbering) (rh: rhs) : option reg :=
   match find_valnum_rhs rh n.(num_eqs) with
@@ -292,15 +304,44 @@ Definition find_rhs (n: numbering) (rh: rhs) : option reg :=
   | Some vres => reg_valnum n vres
   end.
 
-Definition find_op
-    (n: numbering) (op: operation) (rs: list reg) : option reg :=
-  let (n1, vl) := valnum_regs n rs in
-  find_rhs n1 (Op op vl).
+(** Experimental: take advantage of known equations to select more efficient
+  forms of operations, addressing modes, and conditions. *)
 
-Definition find_load
-    (n: numbering) (chunk: memory_chunk) (addr: addressing) (rs: list reg) : option reg :=
-  let (n1, vl) := valnum_regs n rs in
-  find_rhs n1 (Load chunk addr vl).
+Section REDUCE.
+
+Variable A: Type.
+Variable f: (valnum -> option rhs) -> A -> list valnum -> option (A * list valnum).
+Variable n: numbering.
+
+Fixpoint reduce_rec (niter: nat) (op: A) (args: list valnum) : option(A * list reg) :=
+  match niter with
+  | O => None
+  | S niter' =>
+      match f (fun v => find_valnum_num v n.(num_eqs)) op args with
+      | None => None
+      | Some(op', args') =>
+          match reduce_rec niter' op' args' with
+          | None =>
+              match regs_valnums n args' with Some rl => Some(op', rl) | None => None end
+          | Some _ as res =>
+              res
+          end
+      end
+  end.
+
+Definition reduce (op: A) (rl: list reg) (vl: list valnum) : A * list reg :=
+  match reduce_rec 4%nat op vl with
+  | None     => (op, rl)
+  | Some res => res
+  end.
+
+End REDUCE.
+
+(*
+Parameter combine_cond: (valnum -> option rhs) -> condition -> list valnum -> option (condition * list valnum).
+Parameter combine_addr: (valnum -> option rhs) -> addressing -> list valnum -> option (addressing * list valnum).
+Parameter combine_op: (valnum -> option rhs) -> operation -> list valnum -> option (operation * list valnum).
+*)
 
 (** * The static analysis *)
 
@@ -442,15 +483,31 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
   match instr with
   | Iop op args res s =>
       if is_trivial_op op then instr else
-        match find_op n op args with
-        | None => instr
-        | Some r => Iop Omove (r :: nil) res s
+        let (n1, vl) := valnum_regs n args in
+        match find_rhs n1 (Op op vl) with
+        | Some r =>
+            Iop Omove (r :: nil) res s
+        | None =>
+            let (op', args') := reduce _ combine_op n1 op args vl in
+            Iop op' args' res s
         end
   | Iload chunk addr args dst s =>
-      match find_load n chunk addr args with
-      | None => instr
-      | Some r => Iop Omove (r :: nil) dst s
+      let (n1, vl) := valnum_regs n args in
+      match find_rhs n1 (Load chunk addr vl) with
+      | Some r =>
+          Iop Omove (r :: nil) dst s
+      | None =>
+          let (addr', args') := reduce _ combine_addr n1 addr args vl in
+          Iload chunk addr' args' dst s
       end
+  | Istore chunk addr args src s =>
+      let (n1, vl) := valnum_regs n args in
+      let (addr', args') := reduce _ combine_addr n1 addr args vl in
+      Istore chunk addr' args' src s
+  | Icond cond args s1 s2 =>
+      let (n1, vl) := valnum_regs n args in
+      let (cond', args') := reduce _ combine_cond n1 cond args vl in
+      Icond cond' args' s1 s2
   | _ =>
       instr
   end.

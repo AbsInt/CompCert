@@ -418,7 +418,6 @@ Axiom load_store_similar:
 
 Axiom load_store_same:
   forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
-  Val.has_type v (type_of_chunk chunk) ->
   load chunk m2 b ofs = Some (Val.load_result chunk v).
 
 Axiom load_store_other:

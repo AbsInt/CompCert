@@ -897,7 +897,6 @@ Proof.
   assert (A: forall chunk v m b p m1 il m',
     Mem.store chunk m b p v = Some m1 ->
     store_init_data_list m1 b (p + size_chunk chunk) il = Some m' ->
-    Val.has_type v (type_of_chunk chunk) ->
     Mem.load chunk m' b p = Some(Val.load_result chunk v)).
   intros. transitivity (Mem.load chunk m1 b p).
   eapply store_init_data_list_outside; eauto. right. omega. 
@@ -909,13 +908,13 @@ Proof.
   intros m1 B C.
   exploit IHil; eauto. intro D. 
   destruct a; simpl in B; intuition.
-  eapply (A Mint8unsigned (Vint i)); eauto. simpl; auto.
-  eapply (A Mint16unsigned (Vint i)); eauto. simpl; auto.
-  eapply (A Mint32 (Vint i)); eauto. simpl; auto.
-  eapply (A Mfloat32 (Vfloat f)); eauto. simpl; auto.
-  eapply (A Mfloat64 (Vfloat f)); eauto. simpl; auto.
+  eapply (A Mint8unsigned (Vint i)); eauto.
+  eapply (A Mint16unsigned (Vint i)); eauto.
+  eapply (A Mint32 (Vint i)); eauto.
+  eapply (A Mfloat32 (Vfloat f)); eauto.
+  eapply (A Mfloat64 (Vfloat f)); eauto.
   destruct (find_symbol ge i); try congruence. exists b0; split; auto. 
-  eapply (A Mint32 (Vptr b0 i0)); eauto. simpl; auto. 
+  eapply (A Mint32 (Vptr b0 i0)); eauto. 
 Qed.
 
 Remark load_alloc_variables:

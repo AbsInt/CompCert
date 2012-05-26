@@ -111,10 +111,10 @@ Nondetfunction addimm (n: int) (e: expr) :=
 Nondetfunction add (e1: expr) (e2: expr) :=
   match e1, e2 with
   | Eop (Ointconst n1) Enil, t2 => addimm n1 t2
+  | t1, Eop (Ointconst n2) Enil => addimm n2 t1
   | Eop (Oaddimm n1) (t1:::Enil), Eop (Oaddimm n2) (t2:::Enil) =>
       addimm (Int.add n1 n2) (Eop Oadd (t1:::t2:::Enil))
   | Eop(Oaddimm n1) (t1:::Enil), t2 => addimm n1 (Eop Oadd (t1:::t2:::Enil))
-  | t1, Eop (Ointconst n2) Enil => addimm n2 t1
   | t1, Eop (Oaddimm n2) (t2:::Enil) => addimm n2 (Eop Oadd (t1:::t2:::Enil))
   | Eop (Oshift s) (t1:::Enil), t2 => Eop (Oaddshift s) (t2:::t1:::Enil)
   | t1, Eop (Oshift s) (t2:::Enil) => Eop (Oaddshift s) (t1:::t2:::Enil)

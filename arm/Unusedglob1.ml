@@ -26,7 +26,7 @@ let referenced_instr = function
   | Pbsymb(s, _) -> [s]
   | Pblsymb(s, _) -> [s]
   | Ploadsymbol(_, s, _) -> [s]
-  | Pbuiltin ef -> referenced_builtin ef
+  | Pbuiltin(ef, _, _) -> referenced_builtin ef
   | _ -> []
 
 let code_of_function f = f.fn_code

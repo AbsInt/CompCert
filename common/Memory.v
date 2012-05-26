@@ -659,7 +659,8 @@ Proof.
   set (cl := getN (size_chunk_nat Mint8unsigned) ofs m.(mem_contents)#b).
   destruct (valid_access_dec m Mint8signed b ofs Readable).
   rewrite pred_dec_true; auto. unfold decode_val. 
-  destruct (proj_bytes cl); auto. rewrite decode_int8_signed_unsigned. auto.
+  destruct (proj_bytes cl); auto.
+  simpl. decEq. decEq. rewrite Int.sign_ext_zero_ext. auto. compute; auto.
   rewrite pred_dec_false; auto.
 Qed.
 
@@ -672,7 +673,8 @@ Proof.
   set (cl := getN (size_chunk_nat Mint16unsigned) ofs m.(mem_contents)#b).
   destruct (valid_access_dec m Mint16signed b ofs Readable).
   rewrite pred_dec_true; auto. unfold decode_val. 
-  destruct (proj_bytes cl); auto. rewrite decode_int16_signed_unsigned. auto.
+  destruct (proj_bytes cl); auto.
+  simpl. decEq. decEq. rewrite Int.sign_ext_zero_ext. auto. compute; auto.
   rewrite pred_dec_false; auto.
 Qed.
 
@@ -939,13 +941,20 @@ Proof.
   apply inj_eq_rev; auto.
 Qed.
 
+Theorem load_store_similar_2:
+  forall chunk',
+  size_chunk chunk' = size_chunk chunk ->
+  type_of_chunk chunk' = type_of_chunk chunk ->
+  load chunk' m2 b ofs = Some (Val.load_result chunk' v).
+Proof.
+  intros. destruct (load_store_similar chunk') as [v' [A B]]. auto.
+  rewrite A. decEq. eapply decode_encode_val_similar with (chunk1 := chunk); eauto.
+Qed.
+
 Theorem load_store_same:
-  Val.has_type v (type_of_chunk chunk) ->
   load chunk m2 b ofs = Some (Val.load_result chunk v).
 Proof.
-  intros.
-  destruct (load_store_similar chunk) as [v' [A B]]. auto.
-  rewrite A. decEq. eapply decode_encode_val_similar; eauto. 
+  apply load_store_similar_2; auto.
 Qed.
 
 Theorem load_store_other:
@@ -1276,7 +1285,10 @@ Theorem store_float32_truncate:
   forall m b ofs n,
   store Mfloat32 m b ofs (Vfloat (Float.singleoffloat n)) =
   store Mfloat32 m b ofs (Vfloat n).
-Proof. intros. apply store_similar_chunks. simpl. decEq. apply encode_float32_cast. Qed.
+Proof.
+  intros. apply store_similar_chunks. simpl. decEq.
+  repeat rewrite encode_float32_eq. rewrite Float.bits_of_singleoffloat. auto. 
+Qed.
 
 (** ** Properties related to [storebytes]. *)
 

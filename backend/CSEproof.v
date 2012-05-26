@@ -28,6 +28,8 @@ Require Import Registers.
 Require Import RTL.
 Require Import RTLtyping.
 Require Import Kildall.
+Require Import CombineOp.
+Require Import CombineOpproof.
 Require Import CSE.
 
 (** * Semantic properties of value numberings *)
@@ -708,7 +710,7 @@ Proof.
   eapply VAL. rewrite Heql. auto with coqlib.
 Qed.
 
-(** Correctness of [find_op] and [find_load]: if successful and in a
+(** Correctness of [find_rhs]: if successful and in a
   satisfiable numbering, the returned register does contain the 
   result value of the operation or memory load. *)
 
@@ -730,41 +732,72 @@ Proof.
   discriminate.
 Qed.
 
-Lemma find_op_correct:
-  forall rs m n op args r,
-  wf_numbering n ->
-  numbering_satisfiable ge sp rs m n ->
-  find_op n op args = Some r ->
-  eval_operation ge sp op rs##args m = Some rs#r.
+(** Correctness of operator reduction *)
+
+Section REDUCE.
+
+Variable A: Type.
+Variable f: (valnum -> option rhs) -> A -> list valnum -> option (A * list valnum).
+Variable V: Type.
+Variable rs: regset.
+Variable m: mem.
+Variable sem: A -> list val -> option V.
+Hypothesis f_sound:
+  forall eqs valu op args op' args',
+  (forall v rhs, eqs v = Some rhs -> equation_holds valu ge sp m v rhs) ->
+  f eqs op args = Some(op', args') ->
+  sem op' (map valu args') = sem op (map valu args).
+Variable n: numbering.
+Variable valu: valnum -> val.
+Hypothesis n_holds: numbering_holds valu ge sp rs m n.
+Hypothesis n_wf: wf_numbering n.
+
+Lemma regs_valnums_correct:
+  forall vl rl, regs_valnums n vl = Some rl -> rs##rl = map valu vl.
 Proof.
-  intros until r. intros WF [valu NH].
-  unfold find_op. caseEq (valnum_regs n args). intros n' vl VR FIND.
-  assert (WF': wf_numbering n') by (eapply wf_valnum_regs; eauto).
-  generalize (valnum_regs_holds _ _ _ _ _ _ _ WF NH VR).
-  intros [valu2 [NH2 [EQ AG]]].
-  rewrite <- EQ. 
-  change (rhs_evals_to valu2 (Op op vl) m rs#r).
-  eapply find_rhs_correct; eauto.
+  induction vl; simpl; intros.
+  inv H. auto.
+  destruct (reg_valnum n a) as [r1|]_eqn; try discriminate.
+  destruct (regs_valnums n vl) as [rx|]_eqn; try discriminate.
+  inv H. simpl; decEq; auto. 
+  eapply (proj2 n_holds); eauto. eapply reg_valnum_correct; eauto.
 Qed.
 
-Lemma find_load_correct:
-  forall rs m n chunk addr args r,
-  wf_numbering n ->
-  numbering_satisfiable ge sp rs m n ->
-  find_load n chunk addr args = Some r ->
-  exists a,
-  eval_addressing ge sp addr rs##args = Some a /\
-  Mem.loadv chunk m a = Some rs#r.
+Lemma reduce_rec_sound:
+  forall niter op args op' rl' res,
+  reduce_rec A f n niter op args = Some(op', rl') ->
+  sem op (map valu args) = Some res ->
+  sem op' (rs##rl') = Some res.
 Proof.
-  intros until r. intros WF [valu NH].
-  unfold find_load. caseEq (valnum_regs n args). intros n' vl VR FIND.
-  assert (WF': wf_numbering n') by (eapply wf_valnum_regs; eauto).
-  generalize (valnum_regs_holds _ _ _ _ _ _ _ WF NH VR).
-  intros [valu2 [NH2 [EQ AG]]].
-  rewrite <- EQ. 
-  change (rhs_evals_to valu2 (Load chunk addr vl) m rs#r).
-  eapply find_rhs_correct; eauto.
+  induction niter; simpl; intros.
+  discriminate.
+  destruct (f (fun v : valnum => find_valnum_num v (num_eqs n)) op args)
+           as [[op1 args1] | ]_eqn.
+  assert (sem op1 (map valu args1) = Some res).
+    rewrite <- H0. eapply f_sound; eauto.
+    simpl; intros. apply (proj1 n_holds). eapply find_valnum_num_correct; eauto. 
+  destruct (reduce_rec A f n niter op1 args1) as [[op2 rl2] | ]_eqn.
+  inv H. eapply IHniter; eauto.
+  destruct (regs_valnums n args1) as [rl|]_eqn.
+  inv H. erewrite regs_valnums_correct; eauto.
+  discriminate.
+  discriminate.
 Qed.
+
+Lemma reduce_sound:
+  forall op rl vl op' rl' res,
+  reduce A f n op rl vl = (op', rl') ->
+  map valu vl = rs##rl ->
+  sem op rs##rl = Some res ->
+  sem op' rs##rl' = Some res.
+Proof.
+  unfold reduce; intros. 
+  destruct (reduce_rec A f n 4%nat op vl) as [[op1 rl1] | ]_eqn; inv H.
+  eapply reduce_rec_sound; eauto. congruence.
+  auto.
+Qed.
+
+End REDUCE.
 
 End SATISFIABILITY.
 
@@ -942,17 +975,27 @@ Proof.
 
   (* Iop *)
   exists (State s' (transf_function' f approx) sp pc' (rs#res <- v) m); split.
-  assert (eval_operation tge sp op rs##args m = Some v).
-    rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
   destruct (is_trivial_op op) as []_eqn.
-  eapply exec_Iop'; eauto. 
-  destruct (find_op approx!!pc op args) as [r|]_eqn. 
-  eapply exec_Iop'; eauto. simpl. 
-  assert (eval_operation ge sp op rs##args m = Some rs#r).
-    eapply find_op_correct; eauto.
-    eapply wf_analyze; eauto.
-  congruence.
   eapply exec_Iop'; eauto.
+  rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
+  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
+  destruct SAT as [valu1 NH1].
+  exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
+  assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
+  destruct (find_rhs n1 (Op op vl)) as [r|]_eqn.
+  (* replaced by move *)
+  assert (EV: rhs_evals_to ge sp valu2 (Op op vl) m rs#r). eapply find_rhs_correct; eauto.
+  assert (RES: rs#r = v). red in EV. congruence.
+  eapply exec_Iop'; eauto. simpl. congruence. 
+  (* possibly simplified *)
+  destruct (reduce operation combine_op n1 op args vl) as [op' args']_eqn.
+  assert (RES: eval_operation ge sp op' rs##args' m = Some v).
+    eapply reduce_sound with (sem := fun op vl => eval_operation ge sp op vl m); eauto. 
+    intros; eapply combine_op_sound; eauto.
+  eapply exec_Iop'; eauto.
+  rewrite <- RES. apply eval_operation_preserved. exact symbols_preserved.
+  (* state matching *)
   econstructor; eauto.
   apply wt_regset_assign; auto. 
   generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
@@ -966,17 +1009,25 @@ Proof.
 
   (* Iload *)
   exists (State s' (transf_function' f approx) sp pc' (rs#dst <- v) m); split.
-  assert (eval_addressing tge sp addr rs##args = Some a).
-    rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
-  destruct (find_load approx!!pc chunk addr args) as [r|]_eqn.
-  eapply exec_Iop'; eauto. simpl. 
-  assert (exists a, eval_addressing ge sp addr rs##args = Some a
-                 /\ Mem.loadv chunk m a = Some rs#r).
-    eapply find_load_correct; eauto.
-    eapply wf_analyze; eauto.
-  destruct H3 as [a' [A B]].
-  congruence.
-  eapply exec_Iload'; eauto.
+  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
+  destruct SAT as [valu1 NH1].
+  exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
+  assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
+  destruct (find_rhs n1 (Load chunk addr vl)) as [r|]_eqn.
+  (* replaced by move *)
+  assert (EV: rhs_evals_to ge sp valu2 (Load chunk addr vl) m rs#r). eapply find_rhs_correct; eauto.
+  assert (RES: rs#r = v). red in EV. destruct EV as [a' [EQ1 EQ2]]. congruence.
+  eapply exec_Iop'; eauto. simpl. congruence. 
+  (* possibly simplified *)
+  destruct (reduce addressing combine_addr n1 addr args vl) as [addr' args']_eqn.
+  assert (ADDR: eval_addressing ge sp addr' rs##args' = Some a).
+    eapply reduce_sound with (sem := fun addr vl => eval_addressing ge sp addr vl); eauto. 
+    intros; eapply combine_addr_sound; eauto.
+  assert (ADDR': eval_addressing tge sp addr' rs##args' = Some a).
+    rewrite <- ADDR. apply eval_addressing_preserved. exact symbols_preserved.
+  eapply exec_Iload; eauto.
+  (* state matching *)
   econstructor; eauto.
   generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
   apply wt_regset_assign. auto. rewrite H8. eapply type_of_chunk_correct; eauto.
@@ -986,8 +1037,17 @@ Proof.
 
   (* Istore *)
   exists (State s' (transf_function' f approx) sp pc' rs m'); split.
-  assert (eval_addressing tge sp addr rs##args = Some a).
-    rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved.
+  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
+  destruct SAT as [valu1 NH1].
+  exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
+  assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
+  destruct (reduce addressing combine_addr n1 addr args vl) as [addr' args']_eqn.
+  assert (ADDR: eval_addressing ge sp addr' rs##args' = Some a).
+    eapply reduce_sound with (sem := fun addr vl => eval_addressing ge sp addr vl); eauto. 
+    intros; eapply combine_addr_sound; eauto.
+  assert (ADDR': eval_addressing tge sp addr' rs##args' = Some a).
+    rewrite <- ADDR. apply eval_addressing_preserved. exact symbols_preserved.
   eapply exec_Istore; eauto.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto. 
@@ -1035,6 +1095,15 @@ Proof.
   eapply kill_loads_satisfiable; eauto. 
 
   (* Icond *)
+  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
+  elim SAT; intros valu1 NH1.
+  exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
+  assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
+  destruct (reduce condition combine_cond n1 cond args vl) as [cond' args']_eqn.
+  assert (RES: eval_condition cond' rs##args' m = Some b).
+    eapply reduce_sound with (sem := fun cond vl => eval_condition cond vl m); eauto. 
+    intros; eapply combine_cond_sound; eauto.
   econstructor; split.
   eapply exec_Icond; eauto. 
   econstructor; eauto.

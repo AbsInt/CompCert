@@ -420,20 +420,18 @@ Definition negate_condition (cond: condition): condition :=
   end.
 
 Lemma eval_negate_condition:
-  forall cond vl m b,
-  eval_condition cond vl m = Some b ->
-  eval_condition (negate_condition cond) vl m = Some (negb b).
+  forall cond vl m,
+  eval_condition (negate_condition cond) vl m = option_map negb (eval_condition cond vl m).
 Proof.
-  intros. 
-  destruct cond; simpl in H; FuncInv; simpl.
-  rewrite Val.negate_cmp_bool; rewrite H; auto.
-  rewrite Val.negate_cmpu_bool; rewrite H; auto.
-  rewrite Val.negate_cmp_bool; rewrite H; auto.
-  rewrite Val.negate_cmpu_bool; rewrite H; auto.
-  rewrite H; auto.
-  destruct (Val.cmpf_bool c v v0); simpl in H; inv H. rewrite negb_elim; auto. 
-  rewrite H0; auto.
-  rewrite <- H0. rewrite negb_elim; auto.
+  intros. destruct cond; simpl.
+  repeat (destruct vl; auto). apply Val.negate_cmp_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmp_bool.
+  repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
+  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
+  destruct vl; auto. destruct v; auto. destruct vl; auto. 
+  destruct vl; auto. destruct v; auto. destruct vl; auto. simpl. rewrite negb_involutive. auto.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)

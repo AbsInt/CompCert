@@ -171,13 +171,15 @@ Proof.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* load *)
   econstructor; split.
-  eapply exec_Iload; eauto.
+  assert (eval_addressing tge sp addr rs ## args = Some a).
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved. 
+  eapply exec_Iload; eauto.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* store *)
   econstructor; split.
-  eapply exec_Istore; eauto.
+  assert (eval_addressing tge sp addr rs ## args = Some a).
   rewrite <- H0. apply eval_addressing_preserved. exact symbols_preserved. 
+  eapply exec_Istore; eauto.
   constructor; auto. eapply reach_succ; eauto. simpl; auto.
 (* call *)
   econstructor; split.

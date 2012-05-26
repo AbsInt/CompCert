@@ -641,7 +641,7 @@ Proof.
   econstructor; split.
   eapply plus_left'.  
   eapply exec_Lcond_false; eauto.
-  change false with (negb true). apply eval_negate_condition; auto.
+  rewrite eval_negate_condition; rewrite H0; auto.
   eapply add_branch_correct; eauto.
   eapply is_tail_add_branch. eapply is_tail_cons_left. 
   eapply is_tail_find_label. eauto.
@@ -657,7 +657,7 @@ Proof.
   destruct (starts_with ifso c').
   econstructor; split.
   apply plus_one. eapply exec_Lcond_true; eauto.
-  change true with (negb false). apply eval_negate_condition; auto.
+  rewrite eval_negate_condition; rewrite H0; auto.
   econstructor; eauto.
   econstructor; split.
   eapply plus_left'. 

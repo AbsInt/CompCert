@@ -60,7 +60,7 @@ BACKEND=\
   RTLtyping.v \
   Kildall.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
-  CSE.v CSEproof.v \
+  CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v LTLtyping.v \
   InterfGraph.v Coloring.v Coloringproof.v \
   Allocation.v Allocproof.v Alloctyping.v \

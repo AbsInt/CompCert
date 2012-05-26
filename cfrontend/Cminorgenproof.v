@@ -373,9 +373,9 @@ Proof.
     assert (b0 = b) by congruence. subst.
     assert (chunk0 = chunk) by congruence. subst.
     econstructor. eauto. 
-    eapply Mem.load_store_same; eauto. apply val_normalized_has_type; auto. auto. 
+    eapply Mem.load_store_same; eauto. auto. 
     rewrite PTree.gss. reflexivity.
-    red in H0. rewrite H0. auto. 
+    red in H0. rewrite H0. auto.
     (* a different variable *)
     econstructor; eauto.
     rewrite <- H6. eapply Mem.load_store_other; eauto. 
