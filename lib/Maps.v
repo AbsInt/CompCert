@@ -108,6 +108,14 @@ Module Type TREE.
     forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map1 f m) = option_map f (get i m).
 
+  (** Filtering data that match a given predicate. *)
+  Variable filter1:
+    forall (A: Type), (A -> bool) -> t A -> t A.
+  Hypothesis gfilter1:
+    forall (A: Type) (pred: A -> bool) (i: elt) (m: t A),
+    get i (filter1 pred m) =
+    match get i m with None => None | Some x => if pred x then Some x else None end.
+
   (** Applying a function pairwise to all data of two trees. *)
   Variable combine:
     forall (A: Type), (option A -> option A -> option A) -> t A -> t A -> t A.
@@ -535,6 +543,24 @@ Module PTree <: TREE.
     intros. unfold Node'. 
     destruct l; destruct x; destruct r; auto.
     destruct i; simpl; auto; rewrite gleaf; auto.
+  Qed.
+
+  Fixpoint filter1 (A: Type) (pred: A -> bool) (m: t A) {struct m} : t A :=
+    match m with
+    | Leaf => Leaf
+    | Node l o r =>
+        let o' := match o with None => None | Some x => if pred x then o else None end in
+        Node' (filter1 pred l) o' (filter1 pred r)
+    end.
+
+  Theorem gfilter1:
+    forall (A: Type) (pred: A -> bool) (i: elt) (m: t A),
+    get i (filter1 pred m) =
+    match get i m with None => None | Some x => if pred x then Some x else None end.
+  Proof.
+    intros until m. revert m i. induction m; simpl; intros. 
+    rewrite gleaf; auto.
+    rewrite gnode'. destruct i; simpl; auto. destruct o; auto. 
   Qed.
 
   Section COMBINE.

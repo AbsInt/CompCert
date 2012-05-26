@@ -136,11 +136,40 @@ Fixpoint int_of_bytes (l: list byte): Z :=
   | b :: l' => Byte.unsigned b + int_of_bytes l' * 256
   end.
 
+Parameter big_endian: bool.
+
+Definition rev_if_be (l: list byte) : list byte :=
+  if big_endian then List.rev l else l.
+
+Definition encode_int (sz: nat) (x: Z) : list byte :=
+  rev_if_be (bytes_of_int sz x).
+
+Definition decode_int (b: list byte) : Z :=
+  int_of_bytes (rev_if_be b).
+
+(** Length properties *)
+
 Lemma length_bytes_of_int:
   forall n x, length (bytes_of_int n x) = n.
 Proof.
   induction n; simpl; intros. auto. decEq. auto.
 Qed.
+
+Lemma rev_if_be_length:
+  forall l, length (rev_if_be l) = length l.
+Proof.
+  intros; unfold rev_if_be; destruct big_endian.
+  apply List.rev_length.
+  auto.
+Qed.
+
+Lemma encode_int_length:
+  forall sz x, length(encode_int sz x) = sz.
+Proof.
+  intros. unfold encode_int. rewrite rev_if_be_length. apply length_bytes_of_int.
+Qed.
+
+(** Decoding after encoding *)
 
 Lemma int_of_bytes_of_int:
   forall n x,
@@ -156,16 +185,52 @@ Opaque Byte.wordsize.
   apply two_p_gt_ZERO. omega. apply two_p_gt_ZERO. omega.
 Qed.
 
-Lemma int_of_bytes_of_int_2:
-  forall n x,
-  (n = 1 \/ n = 2)%nat ->
-  Int.repr (int_of_bytes (bytes_of_int n (Int.unsigned x))) = Int.zero_ext (Z_of_nat n * 8) x.
+Lemma rev_if_be_involutive:
+  forall l, rev_if_be (rev_if_be l) = l.
 Proof.
-  intros. rewrite int_of_bytes_of_int. 
-  rewrite <- (Int.repr_unsigned (Int.zero_ext (Z_of_nat n * 8) x)). 
-  decEq. symmetry. apply Int.zero_ext_mod.
-  destruct H; subst n; compute; auto.
+  intros; unfold rev_if_be; destruct big_endian. 
+  apply List.rev_involutive. 
+  auto.
 Qed.
+
+Lemma decode_encode_int:
+  forall n x, decode_int (encode_int n x) = x mod (two_p (Z_of_nat n * 8)).
+Proof.
+  unfold decode_int, encode_int; intros. rewrite rev_if_be_involutive. 
+  apply int_of_bytes_of_int.
+Qed.
+
+Lemma decode_encode_int_1:
+  forall x, Int.repr (decode_int (encode_int 1 (Int.unsigned x))) = Int.zero_ext 8 x.
+Proof.
+  intros. rewrite decode_encode_int. 
+  rewrite <- (Int.repr_unsigned (Int.zero_ext 8 x)).
+  decEq. symmetry. apply Int.zero_ext_mod. compute; auto. 
+Qed.
+
+Lemma decode_encode_int_2:
+  forall x, Int.repr (decode_int (encode_int 2 (Int.unsigned x))) = Int.zero_ext 16 x.
+Proof.
+  intros. rewrite decode_encode_int. 
+  rewrite <- (Int.repr_unsigned (Int.zero_ext 16 x)).
+  decEq. symmetry. apply Int.zero_ext_mod. compute; auto. 
+Qed.
+
+Lemma decode_encode_int_4:
+  forall x, Int.repr (decode_int (encode_int 4 (Int.unsigned x))) = x.
+Proof.
+  intros. rewrite decode_encode_int. transitivity (Int.repr (Int.unsigned x)).
+  decEq. apply Zmod_small. apply Int.unsigned_range. apply Int.repr_unsigned.
+Qed.
+
+Lemma decode_encode_int_8:
+  forall x, Int64.repr (decode_int (encode_int 8 (Int64.unsigned x))) = x.
+Proof.
+  intros. rewrite decode_encode_int. transitivity (Int64.repr (Int64.unsigned x)).
+  decEq. apply Zmod_small. apply Int64.unsigned_range. apply Int64.repr_unsigned.
+Qed.
+
+(** A length-[n] encoding depends only on the low [8*n] bits of the integer. *)
 
 Lemma bytes_of_int_mod:
   forall n x y,
@@ -187,158 +252,21 @@ Proof.
   rewrite <- Z_div_plus_full_l. decEq. change (two_p 8) with 256. ring. omega.
 Qed.
 
-Parameter big_endian: bool.
-
-Definition rev_if_be (l: list byte) : list byte :=
-  if big_endian then List.rev l else l.
-
-Lemma rev_if_be_involutive:
-  forall l, rev_if_be (rev_if_be l) = l.
-Proof.
-  intros; unfold rev_if_be; destruct big_endian. 
-  apply List.rev_involutive. 
-  auto.
-Qed.
-
-Lemma rev_if_be_length:
-  forall l, length (rev_if_be l) = length l.
-Proof.
-  intros; unfold rev_if_be; destruct big_endian.
-  apply List.rev_length.
-  auto.
-Qed.
-
-Definition encode_int (sz: nat) (x: int) : list byte :=
-  rev_if_be (bytes_of_int sz (Int.unsigned x)).
-
-Definition decode_int (b: list byte) : int :=
-  Int.repr (int_of_bytes (rev_if_be b)).
-
-Lemma encode_int_length:
-  forall sz x, length(encode_int sz x) = sz.
-Proof.
-  intros. unfold encode_int. rewrite rev_if_be_length. apply length_bytes_of_int.
-Qed.
-
-Lemma decode_encode_int_1:
-  forall x, decode_int (encode_int 1%nat x) = Int.zero_ext 8 x.
-Proof.
-  intros; unfold decode_int, encode_int. rewrite rev_if_be_involutive. 
-  rewrite int_of_bytes_of_int_2. reflexivity. auto.
-Qed.
-
-Lemma decode_encode_int_2:
-  forall x, decode_int (encode_int 2%nat x) = Int.zero_ext 16 x.
-Proof.
-  intros; unfold decode_int, encode_int. rewrite rev_if_be_involutive. 
-  rewrite int_of_bytes_of_int_2. reflexivity. auto.
-Qed.
-
-Lemma decode_encode_int_4:
-  forall x, decode_int (encode_int 4%nat x) = x.
-Proof.
-  intros; unfold decode_int, encode_int. rewrite rev_if_be_involutive. 
-  rewrite int_of_bytes_of_int.
-  transitivity (Int.repr (Int.unsigned x)). 
-  apply Int.eqm_samerepr. apply Int.eqm_sym. apply Int.eqmod_mod. apply two_p_gt_ZERO. omega. 
-  apply Int.repr_unsigned.
-Qed.
-
 Lemma encode_int_8_mod:
   forall x y,
-  Int.eqmod (two_p 8) (Int.unsigned x) (Int.unsigned y) ->
+  Int.eqmod (two_p 8) x y ->
   encode_int 1%nat x = encode_int 1%nat y.
 Proof.
   intros. unfold encode_int. decEq. apply bytes_of_int_mod. auto.
 Qed.
 
-Lemma encode_16_mod:
+Lemma encode_int_16_mod:
   forall x y,
-  Int.eqmod (two_p 16) (Int.unsigned x) (Int.unsigned y) ->
+  Int.eqmod (two_p 16) x y ->
   encode_int 2%nat x = encode_int 2%nat y.
 Proof.
   intros. unfold encode_int. decEq. apply bytes_of_int_mod. auto.
 Qed.
-
-(** * Encoding and decoding floats *)
-
-Definition encode_float_32 (f: float) : list byte :=
-  rev_if_be (bytes_of_int 4%nat (Int.unsigned (Float.bits_of_single f))).
-
-Definition encode_float_64 (f: float) : list byte :=
-  rev_if_be (bytes_of_int 8%nat (Int64.unsigned (Float.bits_of_double f))).
-
-Definition decode_float_32 (b: list byte) : float :=
-  Float.single_of_bits (Int.repr (int_of_bytes (rev_if_be b))).
-
-Definition decode_float_64 (b: list byte) : float :=
-  Float.double_of_bits (Int64.repr (int_of_bytes (rev_if_be b))).
-
-Lemma encode_float_32_length:
-  forall n, length(encode_float_32 n) = 4%nat.
-Proof.
-  unfold encode_float_32; intros. rewrite rev_if_be_length. apply length_bytes_of_int. 
-Qed.
-
-Lemma encode_float_64_length:
-  forall n, length(encode_float_64 n) = 8%nat.
-Proof.
-  unfold encode_float_64; intros. rewrite rev_if_be_length. apply length_bytes_of_int. 
-Qed.
-
-Lemma decode_encode_float32: forall n,
-  decode_float_32 (encode_float_32 n) = Float.singleoffloat n.
-Proof.
-  intros; unfold decode_float_32, encode_float_32. 
-  rewrite rev_if_be_involutive. 
-  rewrite int_of_bytes_of_int. rewrite <- Float.single_of_bits_of_single. 
-  decEq. 
-  transitivity (Int.repr (Int.unsigned (Float.bits_of_single n))). 
-  apply Int.eqm_samerepr. apply Int.eqm_sym. apply Int.eqmod_mod. apply two_p_gt_ZERO. omega. 
-  apply Int.repr_unsigned.
-Qed.
-
-Lemma decode_encode_float64: forall n,
-  decode_float_64 (encode_float_64 n) = n.
-Proof.
-  intros; unfold decode_float_64, encode_float_64. 
-  rewrite rev_if_be_involutive. 
-  rewrite int_of_bytes_of_int.
-  set (x := Float.bits_of_double n).
-  transitivity (Float.double_of_bits(Int64.repr (Int64.unsigned x))).
-  decEq. 
-  apply Int64.eqm_samerepr. apply Int64.eqm_sym. apply Int64.eqmod_mod. apply two_p_gt_ZERO. omega. 
-  rewrite Int64.repr_unsigned. apply Float.double_of_bits_of_double.
-Qed.
-
-Lemma encode_float32_eq:
-  forall f, encode_float_32 f = encode_int 4%nat (Float.bits_of_single f).
-Proof.
-  auto.
-Qed.
-
-Lemma decode_float32_eq:
-  forall bl, decode_float_32 bl = Float.single_of_bits (decode_int bl).
-Proof.
-  auto.
-Qed.
-
-(*
-Lemma encode_float32_cast:
-  forall f,
-  encode_float_32 (Float.singleoffloat f) = encode_float_32 f.
-Proof.
-  intros; unfold encode_float_32. decEq. decEq. decEq. 
-  apply Float.bits_of_singleoffloat.
-Qed.
-
-Lemma decode_float32_cast:
-  forall l,
-  Float.singleoffloat (decode_float_32 l) = decode_float_32 l.
-Proof.
-  intros; unfold decode_float_32. rewrite Float.singleoffloat_of_bits. auto.
-Qed.
-*)
 
 (** * Encoding and decoding values *)
 
@@ -398,12 +326,12 @@ Definition proj_pointer (vl: list memval) : val :=
 
 Definition encode_val (chunk: memory_chunk) (v: val) : list memval :=
   match v, chunk with
-  | Vint n, (Mint8signed | Mint8unsigned) => inj_bytes (encode_int 1%nat n)
-  | Vint n, (Mint16signed | Mint16unsigned) => inj_bytes (encode_int 2%nat n)
-  | Vint n, Mint32 => inj_bytes (encode_int 4%nat n)
+  | Vint n, (Mint8signed | Mint8unsigned) => inj_bytes (encode_int 1%nat (Int.unsigned n))
+  | Vint n, (Mint16signed | Mint16unsigned) => inj_bytes (encode_int 2%nat (Int.unsigned n))
+  | Vint n, Mint32 => inj_bytes (encode_int 4%nat (Int.unsigned n))
   | Vptr b ofs, Mint32 => inj_pointer 4%nat b ofs
-  | Vfloat n, Mfloat32 => inj_bytes (encode_float_32 n)
-  | Vfloat n, Mfloat64 => inj_bytes (encode_float_64 n)
+  | Vfloat n, Mfloat32 => inj_bytes (encode_int 4%nat (Int.unsigned (Float.bits_of_single n)))
+  | Vfloat n, Mfloat64 => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.bits_of_double n)))
   | _, _ => list_repeat (size_chunk_nat chunk) Undef
   end.
 
@@ -411,13 +339,13 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
   match proj_bytes vl with
   | Some bl =>
       match chunk with
-      | Mint8signed => Vint(Int.sign_ext 8 (decode_int bl))
-      | Mint8unsigned => Vint(Int.zero_ext 8 (decode_int bl))
-      | Mint16signed => Vint(Int.sign_ext 16 (decode_int bl))
-      | Mint16unsigned => Vint(Int.zero_ext 16 (decode_int bl))
-      | Mint32 => Vint(decode_int bl)
-      | Mfloat32 => Vfloat(decode_float_32 bl)
-      | Mfloat64 => Vfloat(decode_float_64 bl)
+      | Mint8signed => Vint(Int.sign_ext 8 (Int.repr (decode_int bl)))
+      | Mint8unsigned => Vint(Int.zero_ext 8 (Int.repr (decode_int bl)))
+      | Mint16signed => Vint(Int.sign_ext 16 (Int.repr (decode_int bl)))
+      | Mint16unsigned => Vint(Int.zero_ext 16 (Int.repr (decode_int bl)))
+      | Mint32 => Vint(Int.repr(decode_int bl))
+      | Mfloat32 => Vfloat(Float.single_of_bits (Int.repr (decode_int bl)))
+      | Mfloat64 => Vfloat(Float.double_of_bits (Int64.repr (decode_int bl)))
       end
   | None =>
       match chunk with
@@ -429,8 +357,10 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
 Lemma encode_val_length:
   forall chunk v, length(encode_val chunk v) = size_chunk_nat chunk.
 Proof.
-  intros. destruct v; simpl; destruct chunk; try (apply length_list_repeat); auto;
-  rewrite length_inj_bytes; try (apply encode_int_length). apply encode_float_64_length.
+  intros. destruct v; simpl; destruct chunk; 
+  solve [ reflexivity
+        | apply length_list_repeat
+        | rewrite length_inj_bytes; apply encode_int_length ].
 Qed.
 
 Lemma check_inj_pointer:
@@ -489,13 +419,13 @@ Opaque inj_pointer.
   rewrite decode_encode_int_2. decEq. apply Int.sign_ext_zero_ext. compute; auto.
   rewrite decode_encode_int_2. decEq. apply Int.zero_ext_idem. compute; auto.
   rewrite decode_encode_int_4. auto.
-  rewrite decode_float32_eq. rewrite decode_encode_int_4. auto.
-  rewrite encode_float32_eq. rewrite decode_encode_int_4. auto.
-  rewrite decode_encode_float32. auto.
-  rewrite decode_encode_float64. auto.
+  rewrite decode_encode_int_4. auto.
+  rewrite decode_encode_int_4. auto.
+  rewrite decode_encode_int_4. decEq. apply Float.single_of_bits_of_single. 
+  rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
   change (proj_bytes (inj_pointer 4 b i)) with (@None (list byte)). simpl. 
-  unfold proj_pointer. generalize (check_inj_pointer b i 4%nat). 
-Transparent inj_pointer.
+  unfold proj_pointer. generalize (check_inj_pointer b i 4%nat).
+Transparent inj_pointer. 
   simpl. intros EQ; rewrite EQ; auto.
 Qed.
 
@@ -552,13 +482,13 @@ Qed.
 Lemma encode_val_int16_zero_ext:
   forall n, encode_val Mint16unsigned (Vint (Int.zero_ext 16 n)) = encode_val Mint16unsigned (Vint n).
 Proof.
-  intros; unfold encode_val. decEq. apply encode_16_mod. apply Int.eqmod_zero_ext. compute; auto.
+  intros; unfold encode_val. decEq. apply encode_int_16_mod. apply Int.eqmod_zero_ext. compute; auto.
 Qed.
 
 Lemma encode_val_int16_sign_ext:
   forall n, encode_val Mint16signed (Vint (Int.sign_ext 16 n)) = encode_val Mint16signed (Vint n).
 Proof.
-  intros; unfold encode_val. decEq. apply encode_16_mod. apply Int.eqmod_sign_ext'. compute; auto.
+  intros; unfold encode_val. decEq. apply encode_int_16_mod. apply Int.eqmod_sign_ext'. compute; auto.
 Qed.
 
 Lemma decode_val_cast:
@@ -578,7 +508,7 @@ Proof.
   unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. compute; auto.
   unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. compute; auto.
   unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. compute; auto.
-  simpl. rewrite decode_float32_eq. rewrite Float.singleoffloat_of_bits. auto.
+  simpl. rewrite Float.singleoffloat_of_bits. auto.
 Qed.
 
 (** Pointers cannot be forged. *)
@@ -606,16 +536,15 @@ Lemma encode_val_shape:
 Proof.
   intros. 
   destruct (size_chunk_nat_pos chunk) as [sz1 EQ].
-  assert (encoding_shape (list_repeat (size_chunk_nat chunk) Undef)).
+  assert (A: encoding_shape (list_repeat (size_chunk_nat chunk) Undef)).
     rewrite EQ; simpl; constructor. exact I. 
     intros. replace mv with Undef. exact I. symmetry; eapply in_list_repeat; eauto.
-  assert (forall bl, length bl = size_chunk_nat chunk ->
+  assert (B: forall bl, length bl = size_chunk_nat chunk ->
           encoding_shape (inj_bytes bl)).
     intros. destruct bl; simpl in *. congruence. 
     constructor. exact I. unfold inj_bytes. intros.
-    exploit list_in_map_inv; eauto. intros [x [A B]]. subst mv. exact I.
-  destruct v; auto; destruct chunk; simpl; auto; try (apply H0); try (apply encode_int_length).
-  apply encode_float_64_length. 
+    exploit list_in_map_inv; eauto. intros [x [C D]]. subst mv. exact I.
+  destruct v; auto; destruct chunk; simpl; auto; try (apply B; apply encode_int_length).
   constructor. red. auto.
   simpl; intros. intuition; subst mv; red; simpl; congruence.
 Qed.
@@ -678,9 +607,7 @@ Proof.
     intros. destruct bl; simpl in *; congruence.
   unfold encode_val; destruct v; destruct chunk;
   (apply A; assumption) ||
-  (apply B; try (rewrite encode_int_length; congruence)) || idtac.
-  rewrite encode_float_32_length; congruence.
-  rewrite encode_float_64_length; congruence.
+  (apply B; rewrite encode_int_length; congruence) || idtac.
   simpl. intros EQ; inv EQ; auto. 
 Qed.
 
