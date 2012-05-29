@@ -68,21 +68,6 @@ Function combine_addr (addr: addressing) (args: list valnum) : option(addressing
 
 Function combine_op (op: operation) (args: list valnum) : option(operation * list valnum) :=
   match op, args with
-  | Oandimm n, x :: nil =>
-      match get x with
-      | Some(Op (Oandimm m) ys) => Some(Oandimm (Int.and m n), ys)
-      | _ => None
-      end
-  | Oorimm n, x :: nil =>
-      match get x with
-      | Some(Op (Oorimm m) ys) => Some(Oorimm (Int.or m n), ys)
-      | _ => None
-      end
-  | Oxorimm n, x :: nil =>
-      match get x with
-      | Some(Op (Oxorimm m) ys) => Some(Oxorimm (Int.xor m n), ys)
-      | _ => None
-      end
   | Olea addr, _ =>
       match combine_addr addr args with
       | Some(addr', args') => Some(Olea addr', args')

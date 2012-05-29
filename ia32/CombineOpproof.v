@@ -112,15 +112,6 @@ Theorem combine_op_sound:
   eval_operation ge sp op' (map valu args') m = eval_operation ge sp op (map valu args) m.
 Proof.
   intros. functional inversion H; subst.
-(* andimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.and_assoc. auto.
-(* orimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.or_assoc. auto.
-(* xorimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.xor_assoc. auto.
 (* lea *)
   simpl. eapply combine_addr_sound; eauto. 
 (* cmp *)
