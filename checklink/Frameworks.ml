@@ -6,8 +6,9 @@ open Lens
 open Library
 
 type log_entry =
-  | DEBUG of string
-  | ERROR of string
+  | DEBUG   of string
+  | ERROR   of string
+  | INFO    of string
   | WARNING of string
 
 type byte_chunk_desc =
@@ -16,16 +17,16 @@ type byte_chunk_desc =
   | ELF_shtab
   | ELF_section_strtab
   | ELF_symbol_strtab
-  | Symtab_data of elf32_sym
-  | Symtab_function of elf32_sym
-  | Data_symbol of elf32_sym
-  | Function_symbol of elf32_sym
+  | Symtab_data        of elf32_sym
+  | Symtab_function    of elf32_sym
+  | Data_symbol        of elf32_sym
+  | Function_symbol    of elf32_sym
   | Zero_symbol
-  | Stub of string
+  | Stub               of string
   | Jumptable
-  | Float_literal of float
+  | Float_literal      of float
   | Padding
-  | Unknown of string
+  | Unknown            of string
 
 (** This framework is carried along while analyzing the whole ELF file.
 *)
@@ -175,10 +176,16 @@ let ( ^%=? ) (lens: ('a, 'b) Lens.t) (transf: 'b -> 'b or_err)
 (** Finally, some printers.
 *)
 
-let string_of_log_entry show_debug = function
-| DEBUG(s)   -> if show_debug then s else ""
-| ERROR(s)   -> "ERROR: " ^ s
-| WARNING(s) -> "WARNING: " ^ s
+let format_logtype = Printf.sprintf "%10s"
+
+let string_of_log_entry show_debug entry =
+  match entry with
+  | DEBUG(s)   -> if show_debug then (format_logtype "DEBUG: ") ^ s else ""
+  | ERROR(s)   -> (format_logtype "ERROR: ") ^ s
+  | INFO(s)    -> (format_logtype "INFO: ") ^ s
+  | WARNING(s) -> (format_logtype "WARNING: ") ^ s
+
+let fatal s = failwith ((format_logtype "FATAL: ") ^ s)
 
 let string_of_byte_chunk_desc = function
 | ELF_header -> "ELF header"

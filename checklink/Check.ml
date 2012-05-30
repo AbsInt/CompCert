@@ -36,6 +36,9 @@ let exhaustivity = ref true
 (** CompCert Asm *)
 type ccode = Asm.instruction list
 
+let print_debug s =
+  if !debug then print_endline (string_of_log_entry true (DEBUG(s)))
+
 (** Adds a log entry into the framework. *)
 let add_log (entry: log_entry) (efw: e_framework): e_framework =
   if !debug then print_endline (string_of_log_entry true entry);
@@ -91,10 +94,10 @@ let name_of_section:
     section_name -> string
   =
   begin match Configuration.system with
-  | "macosx" -> failwith "Unsupported CompCert configuration: macosx"
+  | "macosx" -> fatal "Unsupported CompCert configuration: macosx"
   | "linux"  -> name_of_section_Linux
   | "diab"   -> name_of_section_Diab
-  | _        -> failwith "Unsupported CompCert configuration"
+  | _        -> fatal "Unsupported CompCert configuration"
   end
 
 (** Compares a CompCert section name with an ELF section name. *)
@@ -409,7 +412,7 @@ let match_csts (cc: constant) (ec: int32) (ffw: f_framework): f_framework =
       end
   | Csymbol_sda (ident, i) ->
       (* sda should be handled separately in places it occurs *)
-      failwith "Unhandled Csymbol_sda, please report."
+      fatal "Unhandled Csymbol_sda, please report."
 
 let match_z_int32 (cz: coq_Z) (ei: int32) =
   check_eq "match_z_int32" (z_int32 cz) ei
@@ -534,7 +537,6 @@ let rec match_jmptbl lbllist vaddr size ffw =
           >>> lblmap_unify lbl vaddr
           >>= match_jmptbl_aux lbls rest
       | { _ } ->
-          print_endline "Ill-formed jump table";
           ERR("Ill-formed jump table")
     )
   in
@@ -789,7 +791,7 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
   | [] -> ERR("No satisfying SDA mapping, errors were: " ^
                  string_of_list id ", " (filter_err res))
   | [ffw] -> OK(ffw)
-  | _ -> failwith "Multiple possible SDA mappings, please report."
+  | _ -> fatal "Multiple possible SDA mappings, please report."
 
 (** Compares a whole CompCert function code against an ELF code, starting at
     program counter [pc].
@@ -1346,7 +1348,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   fw
                   >>> check_builtin_vload_common
                     cs ecode pc chunk addr (Cint Integers.Int.zero) res
-              | _ -> failwith "Unexpected args in EF_vload, please report."
+              | _ -> fatal "Unexpected args in EF_vload, please report."
               end
           | EF_vstore(chunk) ->
               begin match args with
@@ -1354,7 +1356,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   fw
                   >>> check_builtin_vstore_common
                     cs ecode pc chunk addr (Cint Integers.Int.zero) src
-              | _ -> failwith "Unexpected args in EF_vstore, please report."
+              | _ -> fatal "Unexpected args in EF_vstore, please report."
               end
           | EF_vload_global(chunk, ident, ofs) ->
               begin match ecode with
@@ -1389,7 +1391,7 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                         (Csymbol_low(ident, ofs)) src
                   | _ -> error
                   end
-              | _ -> failwith "Unexpected args in EF_vstore_global, please report."
+              | _ -> fatal "Unexpected args in EF_vstore_global, please report."
               end
           | EF_memcpy(sz, al) ->
               let sz = z_int sz in
@@ -1440,10 +1442,10 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
                   else compare_code cs ecode pc fw
               | _ -> error
               end
-          | EF_annot(_, _)    -> failwith "Unexpected EF_annot, please report."
-          | EF_external(_, _) -> failwith "Unexpected EF_external, please report."
-          | EF_free           -> failwith "Unexpected EF_free, please report."
-          | EF_malloc         -> failwith "Unexpected EF_malloc, please report."
+          | EF_annot(_, _)    -> fatal "Unexpected EF_annot, please report."
+          | EF_external(_, _) -> fatal "Unexpected EF_external, please report."
+          | EF_free           -> fatal "Unexpected EF_free, please report."
+          | EF_malloc         -> fatal "Unexpected EF_malloc, please report."
           end
       | Pcmplw(r1, r2) ->
           begin match ecode with
@@ -2851,7 +2853,7 @@ let check_stubs sfw =
               sfw
               >>> (sf_ef ^%= add_log (ERROR("Couldn't match stub")))
           end
-    | _ -> failwith "Unexpected fundef in check_stubs, please report."
+    | _ -> fatal "Unexpected fundef in check_stubs, please report."
     end
   in
   PosMap.fold check_stub sfw.stub_ident_to_vaddr sfw
@@ -2865,7 +2867,7 @@ let read_sdump file =
   try
     let magic = String.create (String.length sdump_magic_number) in
     really_input ic magic 0 (String.length sdump_magic_number);
-    if magic <> sdump_magic_number then failwith "bad magic number";
+    if magic <> sdump_magic_number then fatal "Bad magic number";
     let prog = (input_value ic: Asm.program) in
     let names = (input_value ic: (ident, string) Hashtbl.t) in
     let atoms = (input_value ic: (ident, C2C.atom_info) Hashtbl.t) in
@@ -2880,9 +2882,9 @@ let read_sdump file =
 (** Processes a .sdump file.
 *)
 let process_sdump efw sdump: e_framework =
-  if !debug then print_endline ("Beginning reading " ^ sdump);
+  print_debug ("Beginning reading " ^ sdump);
   let (prog, names, atoms) = read_sdump sdump in
-  if !debug then print_endline "Constructing mapping from idents to symbol indices";
+  print_debug ("Constructing mapping from idents to symbol indices");
   let ident_to_sym_ndx =
     Hashtbl.fold
       (fun ident name m ->
@@ -2893,7 +2895,7 @@ let process_sdump efw sdump: e_framework =
       names
       PosMap.empty
   in
-  if !debug then print_endline "Constructing worklist";
+  print_debug("Constructing worklist");
   let worklist_fundefs =
     List.filter
       (fun f ->
@@ -2908,11 +2910,11 @@ let process_sdump efw sdump: e_framework =
       (fun f ->
         match f with
         | ident, Internal ccode -> (ident, Hashtbl.find names ident, ccode)
-        | _,     External _     -> failwith "IMPOSSIBRU!"
+        | _,     External _     -> fatal "IMPOSSIBRU!"
       )
       worklist_fundefs
   in
-  if !debug then print_endline "Beginning processing of the worklist";
+  print_debug("Beginning processing of the worklist");
   efw
   >>> (fun efw ->
     {
@@ -2926,12 +2928,12 @@ let process_sdump efw sdump: e_framework =
   )
   >>> worklist_process wl
   >>> (fun sfw ->
-    if !debug then print_endline "Checking stubs";
+    print_debug "Checking stubs";
     sfw
   )
   >>> check_stubs
   >>> (fun sfw ->
-    if !debug then print_endline "Checking data";
+    print_debug "Checking data";
     sfw
   )
   >>> check_data prog.prog_vars
@@ -3237,7 +3239,7 @@ let check_elf_nodump elf sdumps =
       ELF_symbol_strtab
     >>> check_sym_tab_zero
   in
-  if !debug then print_endline "Done checking header, beginning processing of .sdumps";
+  print_debug "Done checking header, beginning processing of .sdumps";
   (* Thread the framework through the processing of all .sdump files *)
   List.fold_left process_sdump efw sdumps
   (* check the padding in between identified byte chunks *)
@@ -3252,26 +3254,30 @@ let check_elf_nodump elf sdumps =
     If requested, dump the calculated bytes mapping, so that it can be
     reused by the fuzzer. *)
 let check_elf_dump elffilename sdumps =
-  if !debug then print_endline "Beginning ELF parsing";
+  print_debug "Beginning ELF parsing";
   let elf = read_elf elffilename in
-  if !debug then print_endline "Beginning ELF checking";
+  print_debug "Beginning ELF checking";
   let efw = check_elf_nodump elf sdumps in
   (* print the elfmap if requested *)
-  if !print_elfmap then begin
-    print_endline (
-      string_of_list
-        (fun (a, b, align, r) -> string_of_range a b ^ " (" ^
-          string_of_int align ^ ") " ^ string_of_byte_chunk_desc r)
-        "\n"
-        efw.chkd_bytes_list
-    )
-  end;
+  if !print_elfmap
+  then
+    begin
+      Printf.printf "\n\n%s\n\n\n"
+        (string_of_list
+           (fun (a, b, align, r) -> string_of_range a b ^ " (" ^
+             string_of_int align ^ ") " ^ string_of_byte_chunk_desc r)
+           "\n"
+           efw.chkd_bytes_list
+        )
+    end;
   (* dump the elfmap if requested *)
-  if !dump_elfmap then begin
-    let oc = open_out (elffilename ^ ".elfmap") in
-    output_value oc efw.chkd_bytes_list;
-    close_out oc
-  end;
+  if !dump_elfmap
+  then
+    begin
+      let oc = open_out (elffilename ^ ".elfmap") in
+      output_value oc efw.chkd_bytes_list;
+      close_out oc
+    end;
   (* indicate function symbols that have not been checked *)
   let miss_fun =
     List.filter
@@ -3293,12 +3299,11 @@ let check_elf_dump elffilename sdumps =
     begin match miss_fun with
     | [] -> ()
     | _  ->
-        print_endline
-          "\nWARNING: the following function symbols do not appear in .sdump files.";
-        print_endline (
-          string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun
-        );
-        print_newline ()
+        Printf.printf "%s\n%s\n\n"
+          (string_of_log_entry false
+             (WARNING("the following function symbols do not appear in .sdump files."))
+          )
+          (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun)
     end
   ;
   (* indicate data symbols that have not been checked *)
@@ -3322,20 +3327,20 @@ let check_elf_dump elffilename sdumps =
     begin match miss_data with
     | [] -> ()
     | _  ->
-        print_endline
-          "WARNING: the following data symbols do not appear in .sdump files.";
-        print_endline (
-          string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data
-        );
-        print_newline ()
+        Printf.printf "%s\n%s\n\n"
+          (string_of_log_entry false
+             (WARNING("the following data symbols do not appear in .sdump files."))
+          )
+          (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
     end
   ;
   (* print diagnosis *)
   let worrysome = List.filter
     (function
-    | ERROR(_) -> true
+    | DEBUG(_)   -> false
+    | ERROR(_)   -> true
+    | INFO(_)    -> false
     | WARNING(_) -> true
-    | DEBUG(_) -> false
     )
     efw.log
   in
@@ -3346,21 +3351,30 @@ let check_elf_dump elffilename sdumps =
   in
   begin match worrysome with
   | [] ->
-      print_endline "\nEverything seems fine with this ELF.";
+      Printf.printf "%s\n\n"
+        (string_of_log_entry false
+           (INFO("Everything seems fine with this ELF."))
+        );
       if exists_unknown_chunk
-      then begin
-        print_endline (
-          "However, some parts of the ELF could not be identified." ^
-            if !print_elfmap
-            then ""
-            else " Use -printelfmap to see what was covered."
-        )
-      end
+      then
+        begin
+          Printf.printf "%s\n\n"
+            (string_of_log_entry false
+               (INFO("However, some parts of the ELF could not be identified." ^
+                        if !print_elfmap
+                        then ""
+                        else " Use -printelfmap to see what was covered."
+                ))
+            )
+        end
   | _ ->
       if !debug
-      then print_endline (
-        "DEBUG MODE: The following messages are actual problems."
-      );
+      then
+        begin
+          Printf.printf "%s\n\n"
+            (string_of_log_entry false
+               (DEBUG("Final error log:")))
+        end;
       List.(iter
               (fun e ->
                 match string_of_log_entry false e with
