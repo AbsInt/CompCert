@@ -141,7 +141,7 @@ let parse_instr bs =
     -> FRESx(d, b, rc)
   | { 63:6; d:5;    0:5;    b:5;    12:10;  rc:1 }
     -> FRSPx(d, b, rc)
-  | { 63:6; d:5;    0:5;    b:5;    0:5;    22:5;   rc:1 }
+  | { 63:6; d:5;    0:5;    b:5;    0:5;    26:5;   rc:1 }
     -> FRSQRTEx(d, b, rc)
   | { 63:6; d:5;    a:5;    b:5;    c:5;    23:5;   rc:1 }
     -> FSELx(d, a, b, c, rc)
