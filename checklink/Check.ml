@@ -797,7 +797,6 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
     program counter [pc].
 *)
 let rec compare_code ccode ecode pc fw: f_framework or_err =
-  let error = ERR("Non-matching instructions") in
   match ccode, ecode with
   | [], [] -> OK(fw)
   | [], e_rest ->
@@ -810,13 +809,12 @@ let rec compare_code ccode ecode pc fw: f_framework or_err =
           ^ rest_str)
   | c::cs, e::es  ->
       let recur_simpl = compare_code cs es (Int32.add 4l pc) in
+      let current_instr =
+        "[" ^ string_of_int32 pc ^ "] " ^ string_of_instruction c ^ " - " ^ string_of_instr e in
+      let error = ERR("Non-matching instructions: " ^ current_instr) in
       let fw =
         if !debug
-        then (
-          let curr_instr = "  [" ^ string_of_int32 pc ^ "] " ^
-            string_of_instruction c ^ " - " ^ string_of_instr e in
-          (ff_ef ^%= add_log (DEBUG(curr_instr))) fw
-        )
+        then (ff_ef ^%= add_log (DEBUG(current_instr))) fw
         else fw
       in
       match c with
@@ -2533,7 +2531,10 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
               sfw
               >>> sf_ef ^%=
               add_log (ERROR(
-                "Unique candidate did not match: " ^ s
+                Printf.sprintf
+                  "Unique candidate for %s did not match, reason: %s"
+                  name
+                  s
               ))
               >>> worklist_process wl
           end
@@ -2544,7 +2545,7 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
           | [] ->
               sfw
               >>> sf_ef ^%=
-              add_log (ERROR("No matching candidate"))
+              add_log (ERROR("No matching candidate for: " ^ name))
               >>> worklist_process wl
           | [ffw] ->
               worklist_process wl ffw.sf
@@ -2552,7 +2553,7 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
               sfw
               >>> sf_ef ^%=
               add_log (ERROR(
-                "Multiple matching candidates for symbol: " ^ name
+                "Multiple matching candidates for: " ^ name
               ))
               >>> worklist_process wl
           end
