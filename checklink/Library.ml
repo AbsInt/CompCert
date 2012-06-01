@@ -140,6 +140,7 @@ let string_of_bitstring bs =
 
 (* To print addresses/offsets *)
 let string_of_int32 = Printf.sprintf "0x%08lx"
+let string_of_int64 = Printf.sprintf "0x%08Lx"
 (* To print counts/indices *)
 let string_of_int32i = Int32.to_string
 

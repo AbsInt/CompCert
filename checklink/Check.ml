@@ -317,19 +317,41 @@ let check (cond: bool) (msg: string): checker =
   fun ffw -> if cond then OK(ffw) else ERR(msg)
 let check_eq (msg: string) (a: 'a) (b: 'a): checker =
   check (a = b) msg
-let match_bools:  bool  -> bool  -> checker =
-  check_eq "match_bools"
-let match_ints:   int   -> int   -> checker =
-  check_eq "match_ints"
-let match_int32s: int32 -> int32 -> checker =
-  check_eq "match_int32s"
+let match_bools a b =
+  check_eq (
+    Printf.sprintf "match_bools %s %s" (string_of_bool a) (string_of_bool b)
+  ) a b
+let match_ints a b =
+  check_eq (
+    Printf.sprintf "match_ints %s %s" (string_of_int a) (string_of_int b)
+  ) a b
+let match_int32s a b: checker =
+  check_eq (
+    Printf.sprintf "match_int32s %s %s" (string_of_int32 a) (string_of_int32 b)
+  ) a b
 (** We compare floats by their bit representation, so that 0.0 and -0.0 are
     different. *)
 let match_floats (a: float) (b: float): checker =
-  check_eq "match_floats" (Int64.bits_of_float a) (Int64.bits_of_float b)
-let match_crbits cb eb = check_eq "match_crbits" cb (crbit_arr.(eb))
-let match_iregs  cr er = check_eq "match_iregs" cr (ireg_arr.(er))
-let match_fregs  cr er = check_eq "match_fregs" cr (freg_arr.(er))
+  let a = Int64.bits_of_float a in
+  let b = Int64.bits_of_float b in
+  check_eq (
+    Printf.sprintf "match_floats %s %s" (string_of_int64 a) (string_of_int64 b)
+  ) a b
+let match_crbits cb eb =
+  let eb = crbit_arr.(eb) in
+  check_eq (
+    Printf.sprintf "match_crbits %s %s" (string_of_crbit cb) (string_of_crbit eb)
+  ) cb eb
+let match_iregs  cr er =
+  let er = ireg_arr.(er) in
+  check_eq (
+    Printf.sprintf "match_iregs %s %s" (string_of_ireg cr) (string_of_ireg er)
+  ) cr er
+let match_fregs  cr er =
+  let er = freg_arr.(er) in
+  check_eq (
+    Printf.sprintf "match_fregs %s %s" (string_of_freg cr) (string_of_freg er)
+  ) cr er
 
 let name_of_ndx (efw: e_framework) (ndx: int): string =
   let st = efw.elf.e_symtab.(ndx) in
@@ -419,17 +441,26 @@ let match_csts (cc: constant) (ec: int32): checker = fun ffw ->
       fatal "Unhandled Csymbol_sda, please report."
 
 let match_z_int32 (cz: coq_Z) (ei: int32) =
-  check_eq "match_z_int32" (z_int32 cz) ei
+  let cz = z_int32 cz in
+  check_eq (
+    Printf.sprintf "match_z_int32 %s %s" (string_of_int32 cz) (string_of_int32 ei)
+  ) cz ei
 
 let match_z_int (cz: coq_Z) (ei: int) =
-  check_eq "match_z_int" (z_int32 cz) (Safe32.of_int ei)
+  let cz = z_int32 cz in
+  let ei = Safe32.of_int ei in
+  check_eq (
+    Printf.sprintf "match_z_int %s %s" (string_of_int32i cz) (string_of_int32i ei)
+  ) cz ei
 
 (* [m] is interpreted as a bitmask, and checked against [ei]. *)
 let match_mask (m: coq_Z) (ei: int32) =
-  check_eq
-    ("match_mask " ^ string_of_int32 (z_int32_lax m) ^ " and " ^
-        string_of_int32 ei)
-    (z_int32_lax m) ei
+  let m = z_int32_lax m in
+  check_eq (
+    Printf.sprintf "match_mask %s %s"
+      (string_of_int32 m)
+      (string_of_int32 ei)
+  ) m ei
 
 (** Checks that the special register referred to in [spr] is [r]. *)
 let match_spr (str: string) (r: int) (spr: bitstring): checker = fun ffw ->
