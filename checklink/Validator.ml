@@ -1,4 +1,5 @@
 open Check
+open Disassembler
 open ELF_parsers
 open ELF_printers
 open Fuzz
@@ -15,9 +16,17 @@ let set_elf_file s =
   | Some _ -> raise (Arg.Bad "multiple ELF executables given on command line")
   end
 
+let option_disassemble = ref false
+let disassemble_list = ref ([]: string list)
+let add_disassemble s =
+  disassemble_list := s :: !disassemble_list;
+  option_disassemble := true
+
 let options = [
-  "-exe <filename>", Arg.String set_elf_file,
-  "Specify the ELF executable file to analyze";
+  "-exe", Arg.String set_elf_file,
+  "<filename> Specify the ELF executable file to analyze";
+  "-disass", Arg.String add_disassemble,
+  "<symname> Disassemble the symbol with specified name (can be repeated)";
   "-debug", Arg.Set Check.debug,
   "Print a detailed trace of verification";
   "-noexhaust", Arg.Clear Check.exhaustivity,
@@ -59,7 +68,14 @@ let _ =
       exit 2
   | Some elffilename ->
       let sdumps = List.rev !sdump_files in
-      if !option_bytefuzz then begin
+      if !option_disassemble then begin
+        let elf = read_elf elffilename in
+        List.iter
+          (fun s ->
+            Printf.printf "Disassembling %s:\n%s\n\n" s (disassemble elf s)
+          )
+          !disassemble_list
+      end else if !option_bytefuzz then begin
         Random.self_init();
         fuzz_every_byte_loop elffilename sdumps
       end else if !option_fuzz then begin

@@ -156,7 +156,7 @@ let add_range (start: int32) (length: int32) (align: int) (bcd: byte_chunk_desc)
 (* external ( >>> ) : 'a -> ('a -> 'b) -> 'b = "%revapply" *)
 let ( >>> ) (a: 'a) (f: 'a -> 'b): 'b = f a
 
-let ( >>? ) (a: 'a or_err) (f: 'a -> 'b): 'b or_err =
+let ( >>^ ) (a: 'a or_err) (f: 'a -> 'b): 'b or_err =
   match a with
   | ERR(s) -> ERR(s)
   | OK(x) -> OK(f x)
