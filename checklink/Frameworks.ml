@@ -187,6 +187,8 @@ let string_of_log_entry show_debug entry =
 
 let fatal s = failwith ((format_logtype "FATAL: ") ^ s)
 
+let verbose_elfmap = ref false
+
 let string_of_byte_chunk_desc = function
 | ELF_header -> "ELF header"
 | ELF_progtab -> "ELF program header table"
@@ -202,4 +204,4 @@ let string_of_byte_chunk_desc = function
 | Jumptable -> "Jump table"
 | Float_literal(f) -> "Float literal: " ^ string_of_float f
 | Padding -> "Padding"
-| Unknown(s) -> "   ???   " ^ s
+| Unknown(s) -> "???" ^ (if !verbose_elfmap then s else "")

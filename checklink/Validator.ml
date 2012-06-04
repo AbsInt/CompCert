@@ -23,29 +23,39 @@ let add_disassemble s =
   option_disassemble := true
 
 let options = [
+  (* Main options *)
   "-exe", Arg.String set_elf_file,
   "<filename> Specify the ELF executable file to analyze";
-  "-disass", Arg.String add_disassemble,
-  "<symname> Disassemble the symbol with specified name (can be repeated)";
-  "-debug", Arg.Set Check.debug,
-  "Print a detailed trace of verification";
-  "-noexhaust", Arg.Clear Check.exhaustivity,
-  "Disable the exhaustivity check of ELF function and data symbols";
-  "-printelf", Arg.Set option_printelf,
-  "Print the contents of the unanalyzed ELF executable";
-  "-printelfmap", Arg.Set Check.print_elfmap,
-  "Print a map of the analyzed ELF executable";
-  "-dumpelfmap", Arg.Set Check.dump_elfmap,
-  "Dump an ELF map to <exename>.elfmap, for use with random fuzzing";
-  "-fuzz", Arg.Set option_fuzz,
-  "Random fuzz testing";
-  "-bytefuzz", Arg.Set option_bytefuzz,
-  "Random fuzz testing byte per byte";
-  "-debugfuzz", Arg.Set Fuzz.fuzz_debug,
-  "Print a detailed trace of ongoing fuzz testing";
+  (* Parsing behavior *)
   "-relaxed", Arg.Set ELF_parsers.relaxed,
   "Allows the following behaviors in the ELF parser:
 \t* Use of a fallback heuristic to resolve symbols bootstrapped at load time";
+  (* Printing behavior *)
+  "-no-exhaustive", Arg.Clear Check.exhaustivity,
+  "Disable the exhaustivity check of ELF function and data symbols";
+  "-list-missing", Arg.Set Check.list_missing,
+  "List function and data symbols that were missing in the exhaustivity check";
+  (* Alternative outputs *)
+  "-debug", Arg.Set Check.debug,
+  "Print a detailed trace of verification";
+  "-disass", Arg.String add_disassemble,
+  "<symname> Disassemble the symbol with specified name (can be repeated)";
+  "-print-elf", Arg.Set option_printelf,
+  "Print the contents of the unanalyzed ELF executable";
+  (* ELF map related *)
+  "-print-elfmap", Arg.Set Check.print_elfmap,
+  "Print a map of the analyzed ELF executable";
+  "-verbose-elfmap", Arg.Set Frameworks.verbose_elfmap,
+  "Show sections and symbols contained in the unknown parts of the elf map";
+  (* Fuzz testing related *)
+  "-dump-elfmap", Arg.Set Check.dump_elfmap,
+  "Dump an ELF map to <exename>.elfmap, for use with random fuzzing";
+  "-fuzz", Arg.Set option_fuzz,
+  "Random fuzz testing";
+  "-fuzz-byte", Arg.Set option_bytefuzz,
+  "Random fuzz testing byte per byte";
+  "-fuzz-debug", Arg.Set Fuzz.fuzz_debug,
+  "Print a detailed trace of ongoing fuzz testing";
 ]
 
 let anonymous arg =

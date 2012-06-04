@@ -161,3 +161,6 @@ let sorted_lookup (compare: 'a -> 'b -> int) (arr: 'a array) (v: 'b): 'a option 
       then sorted_lookup_aux i_from (i_mid - 1)
       else Some(arr.(i_mid))
   in sorted_lookup_aux 0 (Array.length arr - 1)
+
+let list_false_indices a =
+  filter_some (Array.(to_list (mapi (fun ndx b -> if b then None else Some(ndx)) a)))

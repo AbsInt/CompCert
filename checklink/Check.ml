@@ -23,15 +23,19 @@ open Sections
 *)
 let debug = ref false
 
-(** Whether to print the ELF map *)
+(** Whether to print the ELF map. *)
 let print_elfmap = ref false
 
-(** Whether to dump the ELF map *)
+(** Whether to dump the ELF map. *)
 let dump_elfmap = ref false
 
 (** Whether to check that all ELF function/data symbols have been matched
-    against CompCert idents *)
+    against CompCert idents. *)
 let exhaustivity = ref true
+
+(** Whether to print the list of all symbols (function and data) that were not
+    found in .sdump files. *)
+let list_missing = ref false
 
 (** CompCert Asm *)
 type ccode = Asm.instruction list
@@ -41,7 +45,7 @@ let print_debug s =
 
 (** Adds a log entry into the framework. *)
 let add_log (entry: log_entry) (efw: e_framework): e_framework =
-  if !debug then print_endline (string_of_log_entry true entry);
+  if !debug then print_endline ("--DEBUG-- " ^ string_of_log_entry true entry);
   {efw with log = entry :: efw.log}
 
 (** [flag] should have only one bit set. *)
@@ -380,12 +384,13 @@ let match_csts (cc: constant) (ec: int32): checker = fun ffw ->
   let efw = ffw |. ff_ef in
   match cc with
   | Cint (i) ->
+      let i = z_int32_lax i in
       let msg =
         Printf.sprintf "match_csts Cint %s %s"
-          (string_of_z i)
+          (string_of_int32 i)
           (string_of_int32 ec)
       in
-      check_eq msg ec (z_int32_lax i) ffw
+      check_eq msg ec i ffw
   | Csymbol_low (ident, i) ->
       let candidates =
         try PosMap.find ident sfw.ident_to_sym_ndx
@@ -3315,25 +3320,30 @@ let check_elf_dump elffilename sdumps =
         let symtype = efw.elf.e_symtab.(ndx).st_type in
         symtype = STT_FUNC || symtype = STT_NOTYPE
       )
-      (filter_some
-         (Array.to_list
-            (Array.mapi
-               (fun ndx b -> if b then None else Some(ndx))
-               efw.chkd_fun_syms
-            )
-         )
-      )
+      (list_false_indices efw.chkd_fun_syms)
   in
   if !exhaustivity
   then
     begin match miss_fun with
     | [] -> ()
     | _  ->
-        Printf.printf "%s\n%s\n\n"
-          (string_of_log_entry false
-             (WARNING("the following function symbols do not appear in .sdump files."))
-          )
-          (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun)
+        if !list_missing
+        then
+          Printf.printf "%s\n%s\n"
+            (string_of_log_entry false
+               (WARNING("the following function symbols do not appear in .sdump files."))
+            )
+            (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun)
+        else
+          print_endline
+            (string_of_log_entry false
+               (WARNING(
+                 Printf.sprintf
+                   "%d function symbols do not appear in .sdump files. Add -list-missing to list them."
+                   (List.length miss_fun)
+                )
+               )
+            )
     end
   ;
   (* indicate data symbols that have not been checked *)
@@ -3343,25 +3353,30 @@ let check_elf_dump elffilename sdumps =
         let symtype = efw.elf.e_symtab.(ndx).st_type in
         symtype = STT_OBJECT || symtype = STT_NOTYPE
       )
-      (filter_some
-         (Array.to_list
-            (Array.mapi
-               (fun ndx b -> if b then None else Some(ndx))
-               efw.chkd_data_syms
-            )
-         )
-      )
+      (list_false_indices efw.chkd_data_syms)
   in
   if !exhaustivity
   then
     begin match miss_data with
     | [] -> ()
     | _  ->
-        Printf.printf "%s\n%s\n\n"
-          (string_of_log_entry false
-             (WARNING("the following data symbols do not appear in .sdump files."))
-          )
-          (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
+        if !list_missing
+        then
+          Printf.printf "%s\n%s\n"
+            (string_of_log_entry false
+               (WARNING("the following data symbols do not appear in .sdump files."))
+            )
+            (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
+        else
+           print_endline
+            (string_of_log_entry false
+               (WARNING(
+                 Printf.sprintf
+                   "%d data symbols do not appear in .sdump files. Add -list-missing to list them."
+                   (List.length miss_data)
+                )
+               )
+            )
     end
   ;
   (* print diagnosis *)
@@ -3381,14 +3396,14 @@ let check_elf_dump elffilename sdumps =
   in
   begin match worrysome with
   | [] ->
-      Printf.printf "%s\n\n"
+      Printf.printf "%s\n"
         (string_of_log_entry false
            (INFO("Everything seems fine with this ELF."))
         );
       if exists_unknown_chunk
       then
         begin
-          Printf.printf "%s\n\n"
+          Printf.printf "%s\n"
             (string_of_log_entry false
                (INFO("However, some parts of the ELF could not be identified." ^
                         if !print_elfmap
@@ -3399,17 +3414,13 @@ let check_elf_dump elffilename sdumps =
         end
   | _ ->
       if !debug
-      then
-        begin
-          Printf.printf "%s\n\n"
-            (string_of_log_entry false
-               (DEBUG("Final error log:")))
-        end;
+      then Printf.printf "%s\n"
+        (string_of_log_entry true (DEBUG("Final error log:")));
       List.(iter
               (fun e ->
                 match string_of_log_entry false e with
                 | "" -> ()
-                | s -> print_endline s
+                | s -> print_endline (s ^ "scoubidou")
               )
               (rev efw.log)
       )
