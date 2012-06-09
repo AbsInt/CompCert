@@ -139,7 +139,8 @@ Proof.
 
   rewrite Val.sub_add_opp. rewrite Val.add_assoc. simpl. rewrite Int.sub_add_opp. auto.
 
-  destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
+  destruct (Int.eq n2 Int.zero). inv H0. 
+  destruct (Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); inv H0; simpl; auto.
   destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
 
   destruct (Int.ltu n2 Int.iwordsize); simpl; auto.

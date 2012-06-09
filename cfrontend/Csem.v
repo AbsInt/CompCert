@@ -300,7 +300,9 @@ Function sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   | div_case_ii Signed =>
       match v1,v2 with
        | Vint n1, Vint n2 =>
-          if Int.eq n2 Int.zero then None else Some (Vint(Int.divs n1 n2))
+          if Int.eq n2 Int.zero
+          || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone
+          then None else Some (Vint(Int.divs n1 n2))
       | _,_ => None
       end
   | div_case_ff =>
@@ -333,7 +335,9 @@ Function sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   | binint_case_ii Signed =>
       match v1,v2 with
       | Vint n1, Vint n2 =>
-          if Int.eq n2 Int.zero then None else Some (Vint (Int.mods n1 n2))
+          if Int.eq n2 Int.zero
+          || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone
+          then None else Some (Vint (Int.mods n1 n2))
       | _, _ => None
       end
   | binint_default =>

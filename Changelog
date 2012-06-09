@@ -1,3 +1,12 @@
+
+- In accordance with ISO C standards, the signed division min_int / -1
+  and the signed remainder min_int % -1 (where min_int is the smallest
+  representable signed integer) now have undefined semantics and are
+  treated as "going wrong" behaviors.
+  (Previously, they were defined with results min_int and 0 respectively,
+  but this behavior requires unnatural code to be generated on IA32 and
+  PowerPC.)	
+
 Release 1.10, 2012-03-13
 ========================
 

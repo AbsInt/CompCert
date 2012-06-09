@@ -367,15 +367,15 @@ Proof.
   unfold sem_mul in *. destruct (classify_mul ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
 (* div *)
   unfold sem_div in H0. functional inversion H; rewrite H4 in H0; inv H1; inv H2; inv H0.
-  rewrite H11 in H2. inv H2. inv H12. constructor.
-  rewrite H11 in H2. inv H2. inv H12. constructor.
+  inv H12. rewrite H11 in H2. inv H2. constructor.
+  inv H12. rewrite H11 in H2. inv H2. constructor.
   inv H11. constructor.
   inv H11. constructor.
   inv H11. constructor.
 (* mod *)
   unfold sem_mod in H0. functional inversion H; rewrite H4 in H0; inv H1; inv H2; inv H0.
-  rewrite H11 in H2. inv H2. inv H12. constructor.
-  rewrite H11 in H2. inv H2. inv H12. constructor.
+  inv H12. rewrite H11 in H2. inv H2. constructor.
+  inv H12. rewrite H11 in H2. inv H2. constructor.
 (* and *)
   unfold sem_and in *. destruct (classify_binint ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
 (* or *)

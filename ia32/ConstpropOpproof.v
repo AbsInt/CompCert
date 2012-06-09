@@ -143,9 +143,11 @@ Proof.
   InvVLMA; simpl in *; FuncInv; try subst v; auto.
   destruct (propagate_float_constants tt); simpl; auto.
   rewrite Int.sub_add_opp. rewrite shift_symbol_address. rewrite Val.sub_add_opp. auto.
+  destruct (Int.eq n2 Int.zero). inv H0. 
+    destruct (Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); inv H0; simpl; auto.
   destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
-  destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
-  destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
+  destruct (Int.eq n2 Int.zero). inv H0. 
+    destruct (Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); inv H0; simpl; auto.
   destruct (Int.eq n2 Int.zero); inv H0; simpl; auto.
   destruct (Int.ltu n2 Int.iwordsize); simpl; auto.
   destruct (Int.ltu n Int.iwordsize); simpl; auto.

@@ -1459,11 +1459,13 @@ Proof.
     rewrite zeq_true. rewrite Int.sub_shifted. auto.
   inv H; inv H0; inv H1; TrivialExists.
   inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
-    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
+    destruct (Int.eq i0 Int.zero
+      || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H; TrivialExists.
   inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
     destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
   inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
-    destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
+    destruct (Int.eq i0 Int.zero
+      || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H; TrivialExists.
   inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
     destruct (Int.eq i0 Int.zero); inv H. TrivialExists.
   inv H; inv H0; inv H1; TrivialExists.

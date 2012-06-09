@@ -744,7 +744,7 @@ Remark divs_mods_exist:
   end.
 Proof.
   intros. unfold Val.divs, Val.mods. destruct v1; auto. destruct v2; auto.
-  destruct (Int.eq i0 Int.zero); auto. 
+  destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); auto. 
 Qed.
 
 Remark divu_modu_exist:

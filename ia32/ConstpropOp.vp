@@ -107,9 +107,15 @@ Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   | Osub, G s1 n1 :: I n2 :: nil => G s1 (Int.sub n1 n2)
   | Omul, I n1 :: I n2 :: nil => I(Int.mul n1 n2)
   | Omulimm n, I n1 :: nil => I(Int.mul n1 n)
-  | Odiv, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.divs n1 n2)
+  | Odiv, I n1 :: I n2 :: nil =>
+      if Int.eq n2 Int.zero then Unknown else
+      if Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone then Unknown
+      else I(Int.divs n1 n2)
   | Odivu, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.divu n1 n2)
-  | Omod, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.mods n1 n2)
+  | Omod, I n1 :: I n2 :: nil =>
+      if Int.eq n2 Int.zero then Unknown else
+      if Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone then Unknown
+      else I(Int.mods n1 n2)
   | Omodu, I n1 :: I n2 :: nil => if Int.eq n2 Int.zero then Unknown else I(Int.modu n1 n2)
   | Oand, I n1 :: I n2 :: nil => I(Int.and n1 n2)
   | Oandimm n, I n1 :: nil => I(Int.and n1 n)
