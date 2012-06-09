@@ -910,6 +910,15 @@ Proof.
   apply repr_unsigned.
 Qed.
 
+Theorem mul_mone: forall x, mul x mone = neg x.
+Proof.
+  intros; unfold mul, neg. rewrite unsigned_mone. 
+  apply eqm_samerepr.
+  replace (-unsigned x) with (0 - unsigned x) by omega.
+  replace (unsigned x * (modulus - 1)) with (unsigned x * modulus - unsigned x) by ring.
+  apply eqm_sub. exists (unsigned x). omega. apply eqm_refl.
+Qed.
+
 Theorem mul_assoc: forall x y z, mul (mul x y) z = mul x (mul y z).
 Proof.
   intros; unfold mul.
@@ -1005,6 +1014,36 @@ Proof.
   apply eqm_sub. apply eqm_signed_unsigned. 
   apply eqm_unsigned_repr_r. 
   apply eqm_mult. auto with ints. apply eqm_signed_unsigned.
+Qed.
+
+Theorem divu_one:
+  forall x, divu x one = x.
+Proof.
+  unfold divu; intros. rewrite unsigned_one. rewrite Zdiv_1_r. apply repr_unsigned.
+Qed.
+
+Theorem modu_one:
+  forall x, modu x one = zero.
+Proof.
+  intros. rewrite modu_divu. rewrite divu_one. rewrite mul_one. apply sub_idem.
+  apply one_not_zero.
+Qed.
+
+Theorem divs_mone:
+  forall x, divs x mone = neg x.
+Proof.
+  unfold divs, neg; intros. 
+  rewrite signed_mone. replace (Zdiv_round (signed x) (-1)) with (- (signed x)). 
+  apply eqm_samerepr. apply eqm_neg. apply eqm_signed_unsigned. 
+  unfold Zdiv_round. destruct (zlt (signed x) 0).
+  simpl. rewrite Zdiv_1_r. auto. simpl. rewrite Zdiv_1_r. auto. 
+Qed.
+
+Theorem mods_mone:
+  forall x, mods x mone = zero.
+Proof.
+  intros. rewrite mods_divs. rewrite divs_mone. 
+  rewrite <- neg_mul_distr_l. rewrite mul_mone. rewrite neg_involutive. apply sub_idem. 
 Qed.
 
 (** ** Properties of binary decompositions *)
