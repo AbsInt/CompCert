@@ -1224,6 +1224,24 @@ Proof.
   rewrite inj_S in H. omega. rewrite inj_S in H. omega.
 Qed.
 
+Lemma bits_of_Z_greater:
+  forall n x i,
+  0 <= x < two_p i -> bits_of_Z n x i = false.
+Proof.
+  induction n; intros.
+  auto.
+  destruct (zlt i 0). apply bits_of_Z_below. auto.
+  simpl. 
+  destruct (Z_bin_decomp x) as [b x1]_eqn.
+  destruct (zeq i 0).
+  subst i. simpl in H. assert (x = 0) by omega. subst x. simpl in Heqp. congruence.
+  apply IHn. 
+  rewrite <- (Z_shift_add_bin_decomp x) in H. rewrite Heqp in H. simpl in H.
+  replace i with (Zsucc (i-1)) in H by omega. rewrite two_p_S in H. 
+  unfold Z_shift_add in H. destruct b; omega. 
+  omega.
+Qed.
+
 Lemma bits_of_Z_of_bits_gen':
   forall n f i j,
   bits_of_Z n (Z_of_bits n f j) i =
@@ -2281,6 +2299,28 @@ Proof.
   intros. generalize (is_power2_correct n logn H); intro.
   rewrite shl_mul_two_p. rewrite <- H0. rewrite repr_unsigned.
   auto.
+Qed.
+
+Theorem shifted_or_is_add:
+  forall x y n,
+  0 <= n < Z_of_nat wordsize ->
+  unsigned y < two_p n ->
+  or (shl x (repr n)) y = repr(unsigned x * two_p n + unsigned y).
+Proof.
+  intros. rewrite <- add_is_or. 
+  rewrite shl_mul_two_p. rewrite unsigned_repr.
+  unfold add. apply eqm_samerepr. unfold mul. auto with ints. 
+  generalize wordsize_max_unsigned; omega.
+  unfold and, shl, bitwise_binop. unfold zero. decEq. apply Z_of_bits_false. intros.
+  rewrite unsigned_repr; auto with ints. rewrite bits_of_Z_of_bits_gen.
+  rewrite unsigned_repr. apply andb_false_iff.  
+  destruct (zlt j n).
+  left. apply bits_of_Z_below. omega. 
+  right. apply bits_of_Z_greater. 
+  split. generalize (unsigned_range y); omega.
+  assert (two_p n <= two_p j). apply two_p_monotone. omega. omega.
+  generalize wordsize_max_unsigned; omega.
+  omega.
 Qed.
 
 (** Unsigned right shifts and unsigned divisions by powers of 2. *)

@@ -189,6 +189,20 @@ Definition from_words (hi lo: int) : float :=
     (Int64.or (Int64.shl (Int64.repr (Int.unsigned hi)) (Int64.repr 32))
               (Int64.repr (Int.unsigned lo))).
 
+Lemma from_words_eq:
+  forall lo hi,
+  from_words hi lo =
+  double_of_bits (Int64.repr (Int.unsigned hi * two_p 32 + Int.unsigned lo)).
+Proof.
+  intros. unfold from_words. decEq.
+  rewrite Int64.shifted_or_is_add.
+  apply Int64.eqm_samerepr. auto with ints.
+  change (Z_of_nat Int64.wordsize) with 64. omega.
+  generalize (Int.unsigned_range lo). intros [A B]. 
+  rewrite Int64.unsigned_repr. assumption. 
+  assert (Int.modulus < Int64.max_unsigned). compute; auto. omega.
+Qed.
+
 (** Below are the only properties of floating-point arithmetic that we
   rely on in the compiler proof. *)
 

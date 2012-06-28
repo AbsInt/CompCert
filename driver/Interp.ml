@@ -147,32 +147,9 @@ let mem_of_state = function
 
 (* Comparing memory states *)
 
-let compare_mem m1 m2 =
+let compare_mem m1 m2 = (* should permissions be taken into account? *)
   Pervasives.compare (m1.Mem.nextblock, m1.Mem.mem_contents)
                      (m2.Mem.nextblock, m1.Mem.mem_contents)
-(* FIXME: should permissions be taken into account? *)
-
-(*
-let rec compare_Z_range lo hi f =
-  if coq_Zcompare lo hi = Lt then begin
-    let c = f lo in if c <> 0 then c else compare_Z_range (coq_Zsucc lo) hi f
-  end else 0
-
-let compare_mem m1 m2 =
-  if m1 == m2 then 0 else
-  let c = compare m1.Mem.nextblock m2.Mem.nextblock in if c <> 0 then c else
-  compare_Z_range Z0 m1.Mem.nextblock (fun b ->
-
-    let ((lo, hi) as bnds) = m1.Mem.bounds b in
-    let c = compare bnds (m2.Mem.bounds b) in if c <> 0 then c else
-    let contents1 = m1.Mem.mem_contents b and contents2 = m2.Mem.mem_contents b in
-    if contents1 == contents2 then 0 else
-    let c = compare_Z_range lo hi (fun ofs ->
-               compare (contents1 ofs) (contents2 ofs)) in if c <> 0 then c else
-    let access1 = m1.Mem.mem_access b and access2 = m2.Mem.mem_access b in
-    if access1 == access2 then 0 else
-    compare_Z_range lo hi (fun ofs -> compare (access1 ofs) (access2 ofs)))
-*)
 
 (* Comparing continuations *)
 

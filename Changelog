@@ -1,4 +1,12 @@
+Release 1.11
+========================
 
+Improvements in confidence:
+- Floating-point numbers and arithmetic operations, previously axiomatized,
+  are now implemented and proved correct in Coq, using the Flocq library
+  of S. Boldo and G. Melquiond.
+
+Language semantics:
 - In accordance with ISO C standards, the signed division min_int / -1
   and the signed remainder min_int % -1 (where min_int is the smallest
   representable signed integer) now have undefined semantics and are
@@ -6,6 +14,36 @@
   (Previously, they were defined with results min_int and 0 respectively,
   but this behavior requires unnatural code to be generated on IA32 and
   PowerPC.)	
+
+Performance improvements:
+- Function inlining is now implemented.  The functions that are inlined
+  are those declared "inline" in the C source, provided they are not
+  recursive.
+- Constant propagation is now able to propagate the initial values of	 
+  "const" global variables.
+- Added option -ffloat-const-prop to control the propagation of
+  floating-point constants; see user's manual for documentation.
+- Common subexpression elimination can now eliminate memory loads
+  following a memory store at the same location.  
+- ARM: make use of the "fcmpzd" and "fmdrr" instructions.
+
+New tool:
+- The "cchecklink" tool performs a posteriori validation of the 
+  assembling and linking phases.  It is available for PowerPC-EABI
+  only.  It takes as inputs an ELF-PowerPC executable as produced
+  by the linker, as well as .sdump files (abstract assembly) as
+  produced by "ccomp -sdump", and checks that the executable contains
+  properly-assembled and linked code and data corresponding to those
+  produced by CompCert.
+
+Other changes:
+- Elimination of "static" functions and global variables that are unused.
+- The memory model was enriched with "max" permissions in addition to
+  "current" permissions, to better reason over "const" blocks and
+  already-deallocated blocks.
+- More efficient implementation of the memory model, resulting
+  in faster interpretation of source files by "ccomp -interp".
+
 
 Release 1.10, 2012-03-13
 ========================
