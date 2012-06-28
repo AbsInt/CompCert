@@ -392,7 +392,7 @@ let rec convertExpr env e =
   | C.EConst(C.CFloat(f, k, _)) ->
       if k = C.FLongDouble then
         unsupported "'long double' floating-point literal";
-      Eval(Vfloat(f), ty)
+      Eval(Vfloat(coqfloat_of_camlfloat f), ty)
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
       Evalof(Evar(name_for_string_literal env s, ty), ty)

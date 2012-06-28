@@ -13,7 +13,9 @@ TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
 PROGS=fib integr qsort fft sha1 aes almabench lists \
   binarytrees fannkuch knucleotide mandelbrot nbody \
   nsieve nsievebits spectral vmach \
-  bisect chomp perlin
+  bisect chomp perlin floats
+
+PROGS_INTERP=floats
 
 all_s: $(PROGS:%=%.s)
 
@@ -35,6 +37,12 @@ test:
 	   if ./$$i.compcert | cmp -s - Results/$$i; \
            then echo "$$i: passed"; \
            else echo "$$i: FAILED"; \
+	   fi; \
+         done
+	@for i in $(PROGS_INTERP); do \
+	   if $(CCOMP) -interp -quiet $$i.c | cmp -s - Results/$$i; \
+           then echo "$$i (interpreted): passed"; \
+           else echo "$$i (interpreted): FAILED"; \
 	   fi; \
          done
 

@@ -125,7 +125,7 @@ let type_binary_operation = function
 
 let name_of_constant = function
   | Ointconst n -> sprintf "intconst %ld" (camlint_of_coqint n)
-  | Ofloatconst n -> sprintf "floatconst %g" n
+  | Ofloatconst n -> sprintf "floatconst %g" (camlfloat_of_coqfloat n)
   | Oaddrsymbol (s, ofs) -> sprintf "addrsymbol %s %ld" (extern_atom s) (camlint_of_coqint ofs)
   | Oaddrstack n -> sprintf "addrstack %ld" (camlint_of_coqint n)
 

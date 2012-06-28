@@ -18,6 +18,7 @@
 open Datatypes
 open BinPos
 open BinInt
+open Floats
 
 (* Integers *)
 
@@ -115,6 +116,13 @@ let camlstring_of_coqstring (s: char list) =
   | [] -> r
   | c :: s -> r.[pos] <- c; fill (pos + 1) s
   in fill 0 s
+
+(* Floats *)
+
+let coqfloat_of_camlfloat f =
+  Float.double_of_bits(coqint_of_camlint64(Int64.bits_of_float f))
+let camlfloat_of_coqfloat f =
+  Int64.float_of_bits(camlint64_of_coqint(Float.bits_of_double f))
 
 (* Timing facility *)
 

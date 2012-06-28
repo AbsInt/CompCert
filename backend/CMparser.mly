@@ -368,10 +368,10 @@ init_data:
    | INT32 INTLIT                                { Init_int32 (coqint_of_camlint $2) }
    | INT INTLIT                                  { Init_int32 (coqint_of_camlint $2) }
    | INTLIT                                      { Init_int32 (coqint_of_camlint $1) }
-   | FLOAT32 FLOATLIT                            { Init_float32 ($2) }
-   | FLOAT64 FLOATLIT                            { Init_float64 ($2) }
-   | FLOAT FLOATLIT                              { Init_float64 ($2) }
-   | FLOATLIT                                    { Init_float64 ($1) }
+   | FLOAT32 FLOATLIT                            { Init_float32 (coqfloat_of_camlfloat $2) }
+   | FLOAT64 FLOATLIT                            { Init_float64 (coqfloat_of_camlfloat $2) }
+   | FLOAT FLOATLIT                              { Init_float64 (coqfloat_of_camlfloat $2) }
+   | FLOATLIT                                    { Init_float64 (coqfloat_of_camlfloat $1) }
    | LBRACKET INTLIT RBRACKET                    { Init_space (z_of_camlint $2) }
    | INTLIT LPAREN STRINGLIT RPAREN              { Init_addrof ($3, coqint_of_camlint $1) }
  ;
@@ -491,7 +491,7 @@ expr:
     LPAREN expr RPAREN                          { $2 }
   | IDENT                                       { Rvar $1 }
   | INTLIT                                      { intconst $1 }
-  | FLOATLIT                                    { Rconst(Ofloatconst $1) }
+  | FLOATLIT                                    { Rconst(Ofloatconst (coqfloat_of_camlfloat $1)) }
   | STRINGLIT                                   { Rconst(Oaddrsymbol($1, Int.zero)) }
   | AMPERSAND INTLIT                            { Rconst(Oaddrstack(coqint_of_camlint $2)) }
   | MINUS expr    %prec p_uminus                { Runop(Onegint, $2) }

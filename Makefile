@@ -12,7 +12,8 @@
 
 include Makefile.config
 
-DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver
+DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver \
+  flocq/Core flocq/Prop flocq/Calc flocq/Appli
 
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
@@ -35,6 +36,17 @@ OCB_OPTIONS_CHECKLINK=\
 
 VPATH=$(DIRS)
 GPATH=$(DIRS)
+
+# Flocq
+FLOCQ_CORE=Fcore_float_prop.v Fcore_Zaux.v Fcore_rnd_ne.v Fcore_FTZ.v \
+  Fcore_FLT.v Fcore_defs.v Fcore_Raux.v Fcore_ulp.v Fcore_rnd.v Fcore_FLX.v \
+  Fcore_FIX.v Fcore_digits.v Fcore_generic_fmt.v Fcore.v
+FLOCQ_PROP=Fprop_Sterbenz.v Fprop_mult_error.v Fprop_relative.v \
+  Fprop_div_sqrt_error.v Fprop_plus_error.v
+FLOCQ_CALC=Fcalc_ops.v Fcalc_bracket.v Fcalc_sqrt.v Fcalc_div.v Fcalc_round.v \
+  Fcalc_digits.v
+FLOCQ_APPLI=Fappli_IEEE_bits.v Fappli_IEEE.v
+FLOCQ=$(FLOCQ_CORE) $(FLOCQ_PROP) $(FLOCQ_CALC) $(FLOCQ_APPLI)
 
 # General-purpose libraries (in lib/)
 
@@ -90,7 +102,7 @@ DRIVER=Compiler.v Complements.v
 
 # All source files
 
-FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER)
+FILES=$(LIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ)
 
 # Symbolic links vs. copy
 

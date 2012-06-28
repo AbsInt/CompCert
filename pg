@@ -15,7 +15,7 @@ make -q ${1}o || {
    done)
 }
 COQPROGNAME="coqtop"
-COQPROGARGS="\"-I\" \"$PWD/lib\" \"-I\" \"$PWD/common\" \"-I\" \"$VARIANT\" \"-I\" \"$ARCH\" \"-I\" \"$PWD/backend\" \"-I\" \"$PWD/cfrontend\""
+COQPROGARGS="\"-I\" \"$PWD/lib\" \"-I\" \"$PWD/common\" \"-I\" \"$VARIANT\" \"-I\" \"$ARCH\" \"-I\" \"$PWD/backend\" \"-I\" \"$PWD/cfrontend\" \"-I\" \"$PWD/flocq\" \"-I\" \"$PWD/flocq/Appli\" \"-I\" \"$PWD/flocq/Calc\" \"-I\" \"$PWD/flocq/Core\" \"-I\" \"$PWD/flocq/Prop\""
 
 
 emacs --eval "(setq coq-prog-name \"$COQPROGNAME\")" \

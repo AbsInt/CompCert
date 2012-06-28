@@ -669,8 +669,8 @@ let print_instruction oc tbl pc = function
   | Plfi(r1, c) ->
       let lbl = new_label() in
       fprintf oc "	addis	%a, 0, %a\n" ireg GPR12 label_high lbl;
-      fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment c;
-      float_literals := (lbl, Int64.bits_of_float c) :: !float_literals;
+      fprintf oc "	lfd	%a, %a(%a) %s %.18g\n" freg r1 label_low lbl ireg GPR12 comment (camlfloat_of_coqfloat c);
+      float_literals := (lbl, camlint64_of_coqint (Floats.Float.bits_of_double c)) :: !float_literals;
   | Plfs(r1, c, r2) ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg r1 constant c ireg r2
   | Plfsx(r1, r2, r3) ->
@@ -1070,13 +1070,14 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.long	%ld %s %.18g\n" (Int32.bits_of_float n) comment n
+      fprintf oc "	.long	%ld %s %.18g\n" (camlint_of_coqint (Floats.Float.bits_of_single n))
+	comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
-      let b = Int64.bits_of_float n in
+      let b = camlint64_of_coqint (Floats.Float.bits_of_double n) in
       fprintf oc "	.long	%Ld, %Ld %s %.18g\n"
                  (Int64.shift_right_logical b 32)
                  (Int64.logand b 0xFFFFFFFFL)
-                 comment n
+                 comment (camlfloat_of_coqfloat n)
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n

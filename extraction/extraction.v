@@ -28,27 +28,6 @@ Require Import ExtrOcamlString.
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
-(* Float *)
-Extract Inlined Constant Floats.float => "float".
-Extract Constant Floats.Float.zero   => "0.".
-Extract Constant Floats.Float.neg => "( ~-. )".
-Extract Constant Floats.Float.abs => "abs_float".
-Extract Constant Floats.Float.singleoffloat => "Floataux.singleoffloat".
-Extract Constant Floats.Float.intoffloat => "Floataux.intoffloat".
-Extract Constant Floats.Float.intuoffloat => "Floataux.intuoffloat".
-Extract Constant Floats.Float.floatofint => "Floataux.floatofint".
-Extract Constant Floats.Float.floatofintu => "Floataux.floatofintu".
-Extract Constant Floats.Float.add => "( +. )".
-Extract Constant Floats.Float.sub => "( -. )".
-Extract Constant Floats.Float.mul => "( *. )".
-Extract Constant Floats.Float.div => "( /. )".
-Extract Constant Floats.Float.cmp => "Floataux.cmp".
-Extract Constant Floats.Float.eq_dec => "fun (x: float) (y: float) -> x = y".
-Extract Constant Floats.Float.bits_of_double => "Floataux.bits_of_double".
-Extract Constant Floats.Float.double_of_bits => "Floataux.double_of_bits".
-Extract Constant Floats.Float.bits_of_single => "Floataux.bits_of_single".
-Extract Constant Floats.Float.single_of_bits => "Floataux.single_of_bits".
-
 (* Memdata *)
 Extract Constant Memdata.big_endian => "Memdataaux.big_endian".
 
@@ -111,6 +90,13 @@ Load extractionMachdep.
 
 (* Avoid name clashes *)
 Extraction Blacklist List String Int.
+
+(* Cutting the dependancy to R. *)
+Extract Inlined Constant Fcore_defs.F2R => "fun _ -> assert false".
+Extract Inlined Constant Fappli_IEEE.FF2R => "fun _ -> assert false".
+Extract Inlined Constant Fappli_IEEE.B2R => "fun _ -> assert false".
+Extract Inlined Constant Fappli_IEEE.round_mode => "fun _ -> assert false".
+Extract Inlined Constant Fcalc_bracket.inbetween_loc => "fun _ -> assert false".
 
 (* Go! *)
 Cd "extraction".

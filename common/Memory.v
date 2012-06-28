@@ -1970,7 +1970,7 @@ Proof.
   destruct (zlt ofs0 lo). eapply perm_drop_3; eauto. 
   destruct (zle hi ofs0). eapply perm_drop_3; eauto.
   apply perm_implies with p. eapply perm_drop_1; eauto. omega. 
-  generalize (size_chunk_pos chunk); intros. intuition. omegaContradiction. omegaContradiction.
+  generalize (size_chunk_pos chunk); intros. intuition.
   eapply perm_drop_3; eauto.
 Qed.
 

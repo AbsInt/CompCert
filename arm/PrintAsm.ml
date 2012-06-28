@@ -137,7 +137,7 @@ let distance_to_emit_constants () =
 let float_labels = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
 
 let label_float f =
-  let bf = Int64.bits_of_float f in
+  let bf = camlint64_of_coqint(Floats.Float.bits_of_double f) in
   try
     Hashtbl.find float_labels bf
   with Not_found ->
@@ -563,7 +563,7 @@ let print_instruction oc = function
       (* We could make good use of the fconstd instruction, but it's available
          in VFD v3 and up, not in v1 nor v2 *)
       let lbl = label_float f in
-      fprintf oc "	fldd	%a, .L%d @ %.12g\n" freg r1 lbl f; 1
+      fprintf oc "	fldd	%a, .L%d @ %.12g\n" freg r1 lbl (camlfloat_of_coqfloat f); 1
   | Pfcmpd(r1, r2) ->
       fprintf oc "	fcmpd	%a, %a\n" freg r1 freg r2;
       fprintf oc "	fmstat\n"; 2
@@ -707,9 +707,11 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.word	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.word	0x%lx %s %.15g \n" (Int32.bits_of_float n) comment n
+      fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float.bits_of_single n))
+	comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
-      fprintf oc "	.quad	%Ld %s %.18g\n" (Int64.bits_of_float n) comment n
+      fprintf oc "	.quad	%Ld %s %.18g\n" (camlint64_of_coqint (Floats.Float.bits_of_double n))
+	comment (camlfloat_of_coqfloat n)
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n

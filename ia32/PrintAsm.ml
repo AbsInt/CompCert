@@ -519,9 +519,9 @@ let print_instruction oc = function
   | Pmovsd_ff(rd, r1) ->
       fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
   | Pmovsd_fi(rd, n) ->
-      let b = Int64.bits_of_float n in
+      let b = camlint64_of_coqint (Floats.Float.bits_of_double n) in
       let lbl = new_label() in
-      fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment n;
+      fprintf oc "	movsd	%a, %a %s %.18g\n" label lbl freg rd comment (camlfloat_of_coqfloat n);
       float_literals := (lbl, b) :: !float_literals
   | Pmovsd_fm(rd, a) ->
       fprintf oc "	movsd	%a, %a\n" addressing a freg rd
@@ -772,9 +772,13 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.long	%ld %s %.18g\n" (Int32.bits_of_float n) comment n
+      fprintf oc "	.long	%ld %s %.18g\n"
+	(camlint_of_coqint (Floats.Float.bits_of_single n))
+	comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
-      fprintf oc "	.quad	%Ld %s %.18g\n" (Int64.bits_of_float n) comment n
+      fprintf oc "	.quad	%Ld %s %.18g\n"
+	(camlint64_of_coqint (Floats.Float.bits_of_double n))
+	comment (camlfloat_of_coqfloat n)
   | Init_space n ->
       let n = camlint_of_z n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
