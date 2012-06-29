@@ -3420,7 +3420,7 @@ let check_elf_dump elffilename sdumps =
               (fun e ->
                 match string_of_log_entry false e with
                 | "" -> ()
-                | s -> print_endline (s ^ "scoubidou")
+                | s -> print_endline s
               )
               (rev efw.log)
       )
