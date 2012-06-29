@@ -1828,18 +1828,18 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                     in
                     OK(fw)
                     >>= (fun ffw ->
-                        begin match section_at_vaddr elf vaddr with
-                        | None -> ERR("No section at that virtual address")
-                        | Some(sndx) ->
-                            let section_name = elf.e_shdra.(sndx).sh_name in
-                            OK(
-                              ffw
-                              >>> (
-                                ff_sf ^%=
-                                  match_sections_name literal_section section_name
-                              )
+                      begin match section_at_vaddr elf vaddr with
+                      | None -> ERR("No section at that virtual address")
+                      | Some(sndx) ->
+                          let section_name = elf.e_shdra.(sndx).sh_name in
+                          OK(
+                            ffw
+                            >>> (
+                              ff_sf ^%=
+                                match_sections_name literal_section section_name
                             )
-                        end
+                          )
+                      end
                     )
                     >>= match_iregs  GPR12 rD0
                     >>= match_iregs  GPR0  rA0
@@ -2779,10 +2779,10 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     let (ident, gv) = ig in
     let init_data = gv.gvar_init in
     let ident_ndxes = PosMap.find ident sfw.ident_to_sym_ndx in
-      (*print_endline ("Candidates: " ^ string_of_list id ", "
-        (List.map
-        (fun ndx -> fw.elf.e_symtab.(ndx).st_name)
-        ident_ndxes));*)
+    (*print_endline ("Candidates: " ^ string_of_list id ", "
+      (List.map
+      (fun ndx -> fw.elf.e_symtab.(ndx).st_name)
+      ident_ndxes));*)
     let results = List.map (process_ndx ident init_data sfw) ident_ndxes in
     let successes = filter_ok results in
     match successes with
@@ -2809,7 +2809,7 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
         >>> sf_ef ^%= add_log (ERROR("Multiple matching data segments!"))
   in
   List.fold_left check_data_aux sfw
-      (* Empty lists mean the symbol is external, no need for check *)
+    (* Empty lists mean the symbol is external, no need for check *)
     (List.filter (fun (_, gv) -> gv.gvar_init <> []) pv)
 
 (** Checks that everything that has been assimiled as a stub during checks
@@ -3368,7 +3368,7 @@ let check_elf_dump elffilename sdumps =
             )
             (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
         else
-           print_endline
+          print_endline
             (string_of_log_entry false
                (WARNING(
                  Printf.sprintf
