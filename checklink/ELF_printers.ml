@@ -24,10 +24,15 @@ let string_of_ev = function
 | EV_UNKNOWN -> "EV_UNKNOWN"
 
 let string_of_elf_identification ei =
-  "{\nei_class   = " ^ string_of_elfclass ei.ei_class ^
-  ";\nei_data    = " ^ string_of_elfdata ei.ei_data ^
-  ";\nei_version = " ^ string_of_ev ei.ei_version ^
-  ";\n}"
+  Printf.sprintf
+    "{
+ei_class   = %s;
+ei_data    = %s;
+ei_version = %s;
+}"
+    (string_of_elfclass ei.ei_class  )
+    (string_of_elfdata  ei.ei_data   )
+    (string_of_ev       ei.ei_version)
 
 let string_of_et = function
 | ET_NONE    -> "ET_NONE"
@@ -51,21 +56,37 @@ let string_of_em = function
 | EM_UNKNOWN     -> "EM_UNKNOWN"
 
 let string_of_elf32_ehdr eh =
-  "{\ne_ident     = " ^ string_of_elf_identification  eh.e_ident      ^
-  ";\ne_type      = " ^ string_of_et                  eh.e_type       ^
-  ";\ne_machine   = " ^ string_of_em                  eh.e_machine    ^
-  ";\ne_version   = " ^ string_of_ev                  eh.e_version    ^
-  ";\ne_entry     = " ^ string_of_elf32_addr          eh.e_entry      ^
-  ";\ne_phoff     = " ^ string_of_elf32_off           eh.e_phoff      ^
-  ";\ne_shoff     = " ^ string_of_elf32_off           eh.e_shoff      ^
-  ";\ne_flags     = " ^ string_of_bitstring           eh.e_flags      ^
-  ";\ne_ehsize    = " ^ string_of_elf32_half          eh.e_ehsize     ^
-  ";\ne_phentsize = " ^ string_of_elf32_half          eh.e_phentsize  ^
-  ";\ne_phnum     = " ^ string_of_elf32_half          eh.e_phnum      ^
-  ";\ne_shentsize = " ^ string_of_elf32_half          eh.e_shentsize  ^
-  ";\ne_shnum     = " ^ string_of_elf32_half          eh.e_shnum      ^
-  ";\ne_shstrndx  = " ^ string_of_elf32_half          eh.e_shstrndx   ^
-  ";\n}"
+  Printf.sprintf
+    "{
+e_ident     = %s;
+e_type      = %s;
+e_machine   = %s;
+e_version   = %s;
+e_entry     = %s;
+e_phoff     = %s;
+e_shoff     = %s;
+e_flags     = %s;
+e_ehsize    = %s;
+e_phentsize = %s;
+e_phnum     = %s;
+e_shentsize = %s;
+e_shnum     = %s;
+e_shstrndx  = %s;
+}"
+    (string_of_elf_identification eh.e_ident    )
+    (string_of_et                 eh.e_type     )
+    (string_of_em                 eh.e_machine  )
+    (string_of_ev                 eh.e_version  )
+    (string_of_elf32_addr         eh.e_entry    )
+    (string_of_elf32_off          eh.e_phoff    )
+    (string_of_elf32_off          eh.e_shoff    )
+    (string_of_bitstring          eh.e_flags    )
+    (string_of_elf32_half         eh.e_ehsize   )
+    (string_of_elf32_half         eh.e_phentsize)
+    (string_of_elf32_half         eh.e_phnum    )
+    (string_of_elf32_half         eh.e_shentsize)
+    (string_of_elf32_half         eh.e_shnum    )
+    (string_of_elf32_half         eh.e_shstrndx )
 
 let string_of_sht = function
 | SHT_NULL     -> "SHT_NULL"
@@ -83,17 +104,29 @@ let string_of_sht = function
 | SHT_UNKNOWN  -> "SHT_UNKNOWN"
 
 let string_of_elf32_shdr sh =
-  "{\nsh_name      = " ^ sh.sh_name ^
-  ";\nsh_type      = " ^ string_of_sht         sh.sh_type      ^
-  ";\nsh_flags     = " ^ string_of_elf32_word  sh.sh_flags     ^
-  ";\nsh_addr      = " ^ string_of_elf32_addr  sh.sh_addr      ^
-  ";\nsh_offset    = " ^ string_of_elf32_off   sh.sh_offset    ^
-  ";\nsh_size      = " ^ string_of_elf32_word  sh.sh_size      ^
-  ";\nsh_link      = " ^ string_of_elf32_word  sh.sh_link      ^
-  ";\nsh_info      = " ^ string_of_elf32_word  sh.sh_info      ^
-  ";\nsh_addralign = " ^ string_of_elf32_word  sh.sh_addralign ^
-  ";\nsh_entsize   = " ^ string_of_elf32_word  sh.sh_entsize   ^
-  ";\n}"
+  Printf.sprintf
+    "{
+sh_name      = %s;
+sh_type      = %s;
+sh_flags     = %s;
+sh_addr      = %s;
+sh_offset    = %s;
+sh_size      = %s;
+sh_link      = %s;
+sh_info      = %s;
+sh_addralign = %s;
+sh_entsize   = %s;
+}"
+    (sh.sh_name                           )
+    (string_of_sht         sh.sh_type     )
+    (string_of_elf32_word  sh.sh_flags    )
+    (string_of_elf32_addr  sh.sh_addr     )
+    (string_of_elf32_off   sh.sh_offset   )
+    (string_of_elf32_word  sh.sh_size     )
+    (string_of_elf32_word  sh.sh_link     )
+    (string_of_elf32_word  sh.sh_info     )
+    (string_of_elf32_word  sh.sh_addralign)
+    (string_of_elf32_word  sh.sh_entsize  )
 
 let string_of_p_type = function
 | PT_NULL    -> "PT_NULL"
@@ -106,15 +139,25 @@ let string_of_p_type = function
 | PT_UNKNOWN -> "PT_UNKNOWN"
 
 let string_of_elf32_phdr ph =
-  "{\np_type   = " ^ string_of_p_type      ph.p_type   ^
-  ";\np_offset = " ^ string_of_elf32_off   ph.p_offset ^
-  ";\np_vaddr  = " ^ string_of_elf32_addr  ph.p_vaddr  ^
-  ";\np_paddr  = " ^ string_of_elf32_addr  ph.p_paddr  ^
-  ";\np_filesz = " ^ string_of_elf32_word  ph.p_filesz ^
-  ";\np_memsz  = " ^ string_of_elf32_word  ph.p_memsz  ^
-  ";\np_flags  = " ^ string_of_bitstring   ph.p_flags  ^
-  ";\np_align  = " ^ string_of_elf32_word  ph.p_align  ^
-  ";\n}"
+  Printf.sprintf
+    "{
+p_type   = %s;
+p_offset = %s;
+p_vaddr  = %s;
+p_paddr  = %s;
+p_filesz = %s;
+p_memsz  = %s;
+p_flags  = %s;
+p_align  = %s;
+}"
+    (string_of_p_type     ph.p_type  )
+    (string_of_elf32_off  ph.p_offset)
+    (string_of_elf32_addr ph.p_vaddr )
+    (string_of_elf32_addr ph.p_paddr )
+    (string_of_elf32_word ph.p_filesz)
+    (string_of_elf32_word ph.p_memsz )
+    (string_of_bitstring  ph.p_flags )
+    (string_of_elf32_word ph.p_align )
 
 let string_of_elf32_st_bind = function
 | STB_LOCAL   -> "STB_LOCAL"
@@ -131,18 +174,33 @@ let string_of_elf32_st_type = function
 | STT_UNKNOWN -> "STT_UNKNOWN"
 
 let string_of_elf32_sym s =
-  "{\nst_name  = " ^ s.st_name ^
-  ";\nst_value = " ^ string_of_elf32_addr      s.st_value  ^
-  ";\nst_size  = " ^ string_of_elf32_word      s.st_size   ^
-  ";\nst_bind  = " ^ string_of_elf32_st_bind   s.st_bind   ^
-  ";\nst_type  = " ^ string_of_elf32_st_type   s.st_type   ^
-  ";\nst_other = " ^ string_of_int             s.st_other  ^
-  ";\nst_shndx = " ^ string_of_elf32_half      s.st_shndx  ^
-  ";\n}"
+  Printf.sprintf
+    "{
+st_name  = %s;
+st_value = %s;
+st_size  = %s;
+st_bind  = %s;
+st_type  = %s;
+st_other = %s;
+st_shndx = %s;
+}"
+    (s.st_name                           )
+    (string_of_elf32_addr      s.st_value)
+    (string_of_elf32_word      s.st_size )
+    (string_of_elf32_st_bind   s.st_bind )
+    (string_of_elf32_st_type   s.st_type )
+    (string_of_int             s.st_other)
+    (string_of_elf32_half      s.st_shndx)
 
 let string_of_elf e =
-  "{\ne_header   = " ^ string_of_elf32_ehdr e.e_hdr ^
-  ";\ne_sections = " ^ string_of_array string_of_elf32_shdr ",\n" e.e_shdra ^
-  ";\ne_programs = " ^ string_of_array string_of_elf32_phdr ",\n" e.e_phdra ^
-  ";\ne_symtab   = " ^ string_of_array string_of_elf32_sym ",\n" e.e_symtab ^
-  ";\n}"
+  Printf.sprintf
+    "{
+e_header   = %s;
+e_sections = %s;
+e_programs = %s;
+e_symtab   = %s;
+}"
+    (string_of_elf32_ehdr e.e_hdr                        )
+    (string_of_array string_of_elf32_shdr ",\n" e.e_shdra)
+    (string_of_array string_of_elf32_phdr ",\n" e.e_phdra)
+    (string_of_array string_of_elf32_sym ",\n" e.e_symtab)

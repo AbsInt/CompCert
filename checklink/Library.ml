@@ -113,18 +113,17 @@ let z_int_lax z = Safe32.to_int (z_int32_lax z)
 (* Some more printers *)
 
 let string_of_array string_of_elt sep a =
-  let contents =
-    (fst
-       (Array.fold_left
-          (fun accu elt ->
-            let (str, ndx) = accu in
-            (str ^ (if ndx > 0 then sep else "") ^ string_of_int ndx ^ ": " ^
-               string_of_elt elt, ndx + 1)
-          )
-          ("", 0) a
-       )
-    )
-  in "[\n" ^ contents ^ "\n]"
+  let b = Buffer.create 1024 in
+  Buffer.add_string b "[\n";
+  Array.iteri
+    (fun ndx elt ->
+       if ndx > 0 then Buffer.add_string b sep;
+       Buffer.add_string b (string_of_int ndx);
+       Buffer.add_string b ": ";
+       Buffer.add_string b (string_of_elt elt)
+    ) a;
+  Buffer.add_string b "\n]";
+  Buffer.contents b
 
 let string_of_list string_of_elt sep l =
   String.concat sep (List.map string_of_elt l)
