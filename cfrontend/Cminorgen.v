@@ -77,27 +77,28 @@ Definition compilenv := PMap.t var_info.
   with that implicitly performed by the memory store.
   [store_arg] detects this case and strips away the redundant cast. *)
 
-Function uncast_int8 (e: expr) : expr :=
+Function uncast_int (m: int) (e: expr) {struct e} : expr :=
   match e with
-  | Eunop (Ocast8unsigned|Ocast8signed|Ocast16unsigned|Ocast16signed) e1 =>
-      uncast_int8 e1
+  | Eunop (Ocast8unsigned|Ocast8signed) e1 =>
+      if Int.eq (Int.and (Int.repr 255) m) m then uncast_int m e1 else e
+  | Eunop (Ocast16unsigned|Ocast16signed) e1 =>
+      if Int.eq (Int.and (Int.repr 65535) m) m then uncast_int m e1 else e
   | Ebinop Oand e1 (Econst (Ointconst n)) =>
-      if Int.eq (Int.and n (Int.repr 255)) (Int.repr 255)
-      then uncast_int8 e1
+      if Int.eq (Int.and n m) m then uncast_int m e1 else e
+  | Ebinop Oshru e1 (Econst (Ointconst n)) =>
+      if Int.eq (Int.shru (Int.shl m n) n) m
+      then Ebinop Oshru (uncast_int (Int.shl m n) e1) (Econst (Ointconst n))
+      else e
+  | Ebinop Oshr e1 (Econst (Ointconst n)) =>
+      if Int.eq (Int.shru (Int.shl m n) n) m
+      then Ebinop Oshr (uncast_int (Int.shl m n) e1) (Econst (Ointconst n))
       else e
   | _ => e
   end.
 
-Function uncast_int16 (e: expr) : expr :=
-  match e with
-  | Eunop (Ocast16unsigned|Ocast16signed) e1 =>
-      uncast_int16 e1
-  | Ebinop Oand e1 (Econst (Ointconst n)) =>
-      if Int.eq (Int.and n (Int.repr 65535)) (Int.repr 65535)
-      then uncast_int16 e1
-      else e
-  | _ => e
-  end.
+Definition uncast_int8 (e: expr) : expr := uncast_int (Int.repr 255) e.
+
+Definition uncast_int16 (e: expr) : expr := uncast_int (Int.repr 65535) e.
 
 Function uncast_float32 (e: expr) : expr :=
   match e with

@@ -1534,108 +1534,128 @@ Qed.
 
 (** Correctness of [make_store]. *)
 
-Inductive val_lessdef_upto (n: Z): val -> val -> Prop :=
+Inductive val_lessdef_upto (m: int): val -> val -> Prop :=
   | val_lessdef_upto_base:
-      forall v1 v2, Val.lessdef v1 v2 -> val_lessdef_upto n v1 v2
+      forall v1 v2, Val.lessdef v1 v2 -> val_lessdef_upto m v1 v2
   | val_lessdef_upto_int:
-      forall n1 n2, Int.zero_ext n n1 = Int.zero_ext n n2 -> val_lessdef_upto n (Vint n1) (Vint n2).
+      forall n1 n2, Int.and n1 m = Int.and n2 m -> val_lessdef_upto m (Vint n1) (Vint n2).
 
 Hint Resolve val_lessdef_upto_base.
 
-Remark val_lessdef_upto_zero_ext:
-  forall n n' v1 v2,
-  0 < n < Z_of_nat Int.wordsize -> n <= n' < Z_of_nat Int.wordsize ->
-  val_lessdef_upto n v1 v2 ->
-  val_lessdef_upto n (Val.zero_ext n' v1) v2.
-Proof.
-  intros. inv H1. inv H2. 
-  destruct v2; simpl; auto. 
-  apply val_lessdef_upto_int. apply Int.zero_ext_narrow; auto. 
-  simpl; auto.
-  apply val_lessdef_upto_int. rewrite <- H2. apply Int.zero_ext_narrow; auto.
-Qed.
- 
-Remark val_lessdef_upto_sign_ext:
-  forall n n' v1 v2,
-  0 < n < Z_of_nat Int.wordsize -> n <= n' < Z_of_nat Int.wordsize ->
-  val_lessdef_upto n v1 v2 ->
-  val_lessdef_upto n (Val.sign_ext n' v1) v2.
-Proof.
-  intros. inv H1. inv H2. 
-  destruct v2; simpl; auto. 
-  apply val_lessdef_upto_int. apply Int.zero_sign_ext_narrow; auto. 
-  simpl; auto.
-  apply val_lessdef_upto_int. rewrite <- H2. apply Int.zero_sign_ext_narrow; auto.
-Qed.
-
 Remark val_lessdef_upto_and:
-  forall n v1 v2 m,
-  0 < n < Z_of_nat Int.wordsize ->
-  Int.eq (Int.and m (Int.repr (two_p n - 1))) (Int.repr (two_p n - 1)) = true ->
-  val_lessdef_upto n v1 v2 ->
-  val_lessdef_upto n (Val.and v1 (Vint m)) v2.
+  forall m v1 v2 p,
+  val_lessdef_upto m v1 v2 -> Int.and p m = m ->
+  val_lessdef_upto m (Val.and v1 (Vint p)) v2.
 Proof.
-  intros. set (p := Int.repr (two_p n - 1)) in *.
-  generalize (Int.eq_spec (Int.and m p) p). rewrite H0; intros.
-  inv H1. inv H3. 
-  destruct v2; simpl; auto. 
-  apply val_lessdef_upto_int. repeat rewrite Int.zero_ext_and; auto.
-  rewrite Int.and_assoc. congruence.
-  simpl; auto.
-  apply val_lessdef_upto_int. rewrite <- H3. repeat rewrite Int.zero_ext_and; auto.
-  rewrite Int.and_assoc. congruence.
+  intros. inversion H; clear H.
+  inversion H1. destruct v2; simpl; auto. 
+  apply val_lessdef_upto_int. rewrite Int.and_assoc. congruence.
+  simpl. auto. 
+  simpl. apply val_lessdef_upto_int. rewrite Int.and_assoc. congruence. 
 Qed.
 
-Lemma eval_uncast_int8:
-  forall sp te tm a x,
-  eval_expr tge sp te tm a x ->
-  exists v, eval_expr tge sp te tm (uncast_int8 a) v /\ val_lessdef_upto 8 x v.
+Remark val_lessdef_upto_zero_ext:
+  forall m v1 v2 p,
+  val_lessdef_upto m v1 v2 -> Int.and (Int.repr (two_p p - 1)) m = m -> 0 < p < 32 ->
+  val_lessdef_upto m (Val.zero_ext p v1) v2.
 Proof.
-  intros until a. functional induction (uncast_int8 a); intros.
+  intros. inversion H; clear H.
+  inversion H2. destruct v2; simpl; auto.
+  apply val_lessdef_upto_int. rewrite Int.zero_ext_and; auto. 
+  rewrite Int.and_assoc. rewrite H0. auto. 
+  simpl; auto.
+  simpl. apply val_lessdef_upto_int. rewrite Int.zero_ext_and; auto.
+  rewrite Int.and_assoc. rewrite H0. auto.
+Qed.
+
+Remark val_lessdef_upto_sign_ext:
+  forall m v1 v2 p,
+  val_lessdef_upto m v1 v2 -> Int.and (Int.repr (two_p p - 1)) m = m -> 0 < p < 32 ->
+  val_lessdef_upto m (Val.sign_ext p v1) v2.
+Proof.
+  intros.
+  assert (A: forall x, Int.and (Int.sign_ext p x) m = Int.and x m).
+    intros. transitivity (Int.and (Int.zero_ext p (Int.sign_ext p x)) m).
+    rewrite Int.zero_ext_and; auto. rewrite Int.and_assoc. congruence.
+    rewrite Int.zero_ext_sign_ext.
+    rewrite Int.zero_ext_and; auto. rewrite Int.and_assoc. congruence.
+  inversion H; clear H.
+  inversion H2. destruct v2; simpl; auto.
+  apply val_lessdef_upto_int. auto. 
+  simpl; auto.
+  simpl. apply val_lessdef_upto_int. rewrite A. auto. 
+Qed.
+
+Remark val_lessdef_upto_shru:
+  forall m v1 v2 p,
+  val_lessdef_upto (Int.shl m p) v1 v2 -> Int.shru (Int.shl m p) p = m ->
+  val_lessdef_upto m (Val.shru v1 (Vint p)) (Val.shru v2 (Vint p)).
+Proof.
+  intros. inversion H; clear H.
+  inversion H1; simpl; auto.
+  simpl. destruct (Int.ltu p Int.iwordsize); auto. apply val_lessdef_upto_int.
+  rewrite <- H0. repeat rewrite Int.and_shru. congruence.
+Qed.
+
+Remark val_lessdef_upto_shr:
+  forall m v1 v2 p,
+  val_lessdef_upto (Int.shl m p) v1 v2 -> Int.shru (Int.shl m p) p = m ->
+  val_lessdef_upto m (Val.shr v1 (Vint p)) (Val.shr v2 (Vint p)).
+Proof.
+  intros. inversion H; clear H.
+  inversion H1; simpl; auto.
+  simpl. destruct (Int.ltu p Int.iwordsize); auto. apply val_lessdef_upto_int.
+  repeat rewrite Int.shr_and_shru_and; auto.
+  rewrite <- H0. repeat rewrite Int.and_shru. congruence.
+Qed.
+
+Lemma eval_uncast_int:
+  forall m sp te tm a x,
+  eval_expr tge sp te tm a x ->
+  exists v, eval_expr tge sp te tm (uncast_int m a) v /\ val_lessdef_upto m x v.
+Proof.
+  assert (EQ: forall p q, Int.eq p q = true -> p = q).
+    intros. generalize (Int.eq_spec p q). rewrite H; auto.   
+  intros until a. functional induction (uncast_int m a); intros.
   (* cast8unsigned *)
   inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
   exists v; split; auto. apply val_lessdef_upto_zero_ext; auto. 
-  compute; auto. split. omega. compute; auto.
+  compute; auto.
+  exists x; auto. 
   (* cast8signed *)
   inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
   exists v; split; auto. apply val_lessdef_upto_sign_ext; auto. 
-  compute; auto. split. omega. compute; auto.
+  compute; auto.
+  exists x; auto. 
   (* cast16unsigned *)
   inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
   exists v; split; auto. apply val_lessdef_upto_zero_ext; auto. 
-  compute; auto. split. omega. compute; auto.
+  compute; auto.
+  exists x; auto. 
   (* cast16signed *)
   inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
   exists v; split; auto. apply val_lessdef_upto_sign_ext; auto. 
-  compute; auto. split. omega. compute; auto.
+  compute; auto.
+  exists x; auto. 
   (* and *)
-  inv H. inv H5. simpl in H0. inv H0. simpl in H6. inv H6. exploit IHe; eauto. intros [v [A B]].
-  exists v; split; auto. apply val_lessdef_upto_and; auto. compute; auto.
-  (* and 2 *)
-  exists x; split; auto.
-  (* default *)
-  exists x; split; auto.
-Qed.
-
-Lemma eval_uncast_int16:
-  forall sp te tm a x,
-  eval_expr tge sp te tm a x ->
-  exists v, eval_expr tge sp te tm (uncast_int16 a) v /\ val_lessdef_upto 16 x v.
-Proof.
-  intros until a. functional induction (uncast_int16 a); intros.
-  (* cast16unsigned *)
-  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
-  exists v; split; auto. apply val_lessdef_upto_zero_ext; auto. 
-  compute; auto. split. omega. compute; auto.
-  (* cast16signed *)
-  inv H. simpl in H4; inv H4. exploit IHe; eauto. intros [v [A B]].
-  exists v; split; auto. apply val_lessdef_upto_sign_ext; auto. 
-  compute; auto. split. omega. compute; auto.
-  (* and *)
-  inv H. inv H5. simpl in H0. inv H0. simpl in H6. inv H6. exploit IHe; eauto. intros [v [A B]].
-  exists v; split; auto. apply val_lessdef_upto_and; auto. compute; auto.
-  (* and 2 *)
-  exists x; split; auto.
+  inv H. simpl in H6; inv H6. inv H5. simpl in H0. inv H0.
+  exploit IHe; eauto. intros [v [A B]].
+  exists v; split; auto. apply val_lessdef_upto_and; auto.
+  exists x; auto.
+  (* shru *)
+  inv H. simpl in H6; inv H6. inv H5. simpl in H0. inv H0.
+  exploit IHe; eauto. intros [v [A B]].
+  exists (Val.shru v (Vint n)); split.
+  econstructor. eauto. econstructor. simpl; reflexivity. auto. 
+  apply val_lessdef_upto_shru; auto.
+  exists x; auto.
+  (* shr *)
+  inv H. simpl in H6; inv H6. inv H5. simpl in H0. inv H0.
+  exploit IHe; eauto. intros [v [A B]].
+  exists (Val.shr v (Vint n)); split.
+  econstructor. eauto. econstructor. simpl; reflexivity. auto. 
+  apply val_lessdef_upto_shr; auto.
+  exists x; auto.
   (* default *)
   exists x; split; auto.
 Qed.
@@ -1700,21 +1720,31 @@ Proof.
     intros. apply val_content_inject_base. inv H1. auto. inv H0. auto.
   destruct chunk; simpl.
   (* int8signed *)
-  exploit eval_uncast_int8; eauto. intros [v' [A B]].
+  exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v' [A B]].
   exists v'; split; auto.
-  inv B; auto. inv H0; auto. constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
+  inv B; auto. inv H0; auto. constructor.
+  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
+  apply Int.sign_ext_equal_if_zero_equal; auto.
+  repeat rewrite Int.zero_ext_and; auto.
   (* int8unsigned *)
-  exploit eval_uncast_int8; eauto. intros [v' [A B]].
+  exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v' [A B]].
   exists v'; split; auto.
-  inv B; auto. inv H0; auto. constructor. auto.
+  inv B; auto. inv H0; auto. constructor.
+  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
+  repeat rewrite Int.zero_ext_and; auto.
   (* int16signed *)
-  exploit eval_uncast_int16; eauto. intros [v' [A B]].
+  exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v' [A B]].
   exists v'; split; auto.
-  inv B; auto. inv H0; auto. constructor. apply Int.sign_ext_equal_if_zero_equal; auto. compute; auto.
+  inv B; auto. inv H0; auto. constructor.
+  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
+  apply Int.sign_ext_equal_if_zero_equal; auto.
+  repeat rewrite Int.zero_ext_and; auto.
   (* int16unsigned *)
-  exploit eval_uncast_int16; eauto. intros [v' [A B]].
+  exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v' [A B]].
   exists v'; split; auto.
-  inv B; auto. inv H0; auto. constructor. auto.
+  inv B; auto. inv H0; auto. constructor.
+  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
+  repeat rewrite Int.zero_ext_and; auto.
   (* int32 *)
   exists va; auto.
   (* float32 *)
@@ -1785,23 +1815,33 @@ Proof.
     exists v'; split. econstructor; eauto. auto.
   destruct op; auto; simpl in H0; inv H0.
 (* cast8unsigned *)
-  exploit eval_uncast_int8; eauto. intros [v1 [A B]].
+  exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v1 [A B]].
   exists (Val.zero_ext 8 v1); split. econstructor; eauto. 
-  inv B. apply Val.zero_ext_lessdef; auto. simpl. rewrite H0; auto. 
+  inv B. apply Val.zero_ext_lessdef; auto. simpl.
+  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
+  repeat rewrite Int.zero_ext_and; auto. change (two_p 8 - 1) with 255. rewrite H0. auto. 
 (* cast8signed *)
-  exploit eval_uncast_int8; eauto. intros [v1 [A B]].
+  exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v1 [A B]].
   exists (Val.sign_ext 8 v1); split. econstructor; eauto. 
   inv B. apply Val.sign_ext_lessdef; auto. simpl.
-  exploit Int.sign_ext_equal_if_zero_equal; eauto. compute; auto. intro EQ; rewrite EQ; auto.
+  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
+  replace (Int.sign_ext 8 n2) with (Int.sign_ext 8 n1). auto.
+  apply Int.sign_ext_equal_if_zero_equal; auto.
+  repeat rewrite Int.zero_ext_and; auto.
 (* cast16unsigned *)
-  exploit eval_uncast_int16; eauto. intros [v1 [A B]].
+  exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v1 [A B]].
   exists (Val.zero_ext 16 v1); split. econstructor; eauto. 
-  inv B. apply Val.zero_ext_lessdef; auto. simpl. rewrite H0; auto. 
+  inv B. apply Val.zero_ext_lessdef; auto. simpl.
+  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
+  repeat rewrite Int.zero_ext_and; auto. change (two_p 16 - 1) with 65535. rewrite H0. auto. 
 (* cast16signed *)
-  exploit eval_uncast_int16; eauto. intros [v1 [A B]].
+  exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v1 [A B]].
   exists (Val.sign_ext 16 v1); split. econstructor; eauto. 
   inv B. apply Val.sign_ext_lessdef; auto. simpl.
-  exploit Int.sign_ext_equal_if_zero_equal; eauto. compute; auto. intro EQ; rewrite EQ; auto.
+  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
+  replace (Int.sign_ext 16 n2) with (Int.sign_ext 16 n1). auto.
+  apply Int.sign_ext_equal_if_zero_equal; auto.
+  repeat rewrite Int.zero_ext_and; auto.
 (* singleoffloat *)
   exploit eval_uncast_float32; eauto. intros [v1 [A B]].
   exists (Val.singleoffloat v1); split. econstructor; eauto. 
