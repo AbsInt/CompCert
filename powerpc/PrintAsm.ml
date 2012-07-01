@@ -875,7 +875,9 @@ let print_function oc name code =
     | [t;l;j] -> (t, l, j)
     |    _    -> (Section_text, Section_literal, Section_jumptable) in
   section oc text;
-  fprintf oc "	.align 2\n";
+  let alignment =
+    match !Clflags.option_falignfunctions with Some n -> log2 n | None -> 2 in
+  fprintf oc "	.align %d\n" alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
@@ -1070,11 +1072,12 @@ let print_init oc = function
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
   | Init_float32 n ->
-      fprintf oc "	.long	%ld %s %.18g\n" (camlint_of_coqint (Floats.Float.bits_of_single n))
-	comment (camlfloat_of_coqfloat n)
+      fprintf oc "	.long	0x%lx %s %.18g\n"
+                 (camlint_of_coqint (Floats.Float.bits_of_single n))
+                 comment (camlfloat_of_coqfloat n)
   | Init_float64 n ->
       let b = camlint64_of_coqint (Floats.Float.bits_of_double n) in
-      fprintf oc "	.long	%Ld, %Ld %s %.18g\n"
+      fprintf oc "	.long	0x%Lx, 0x%Lx %s %.18g\n"
                  (Int64.shift_right_logical b 32)
                  (Int64.logand b 0xFFFFFFFFL)
                  comment (camlfloat_of_coqfloat n)

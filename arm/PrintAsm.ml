@@ -680,7 +680,9 @@ let print_function oc name fn =
     | t :: _ -> t
     |   _    -> Section_text in
   section oc text;
-  fprintf oc "	.align 2\n";
+  let alignment =
+    match !Clflags.option_falignfunctions with Some n -> log2 n | None -> 2 in
+  fprintf oc "	.align %d\n" alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;

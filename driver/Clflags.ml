@@ -24,6 +24,7 @@ let option_fvararg_calls = ref true
 let option_fpacked_structs = ref false
 let option_fsse = ref true
 let option_ffloatconstprop = ref 2
+let option_falignfunctions = ref (None: int option)
 let option_dparse = ref false
 let option_dcmedium = ref false
 let option_dclight = ref false

@@ -737,7 +737,9 @@ let print_function oc name code =
     | [t;l;j] -> (t, l, j)
     |    _    -> (Section_text, Section_literal, Section_jumptable) in
   section oc text;
-  print_align oc 16;
+  let alignment =
+    match !Clflags.option_falignfunctions with Some n -> n | None -> 16 in
+  print_align oc alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;

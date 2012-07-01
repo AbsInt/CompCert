@@ -37,12 +37,14 @@ New tool:
   produced by CompCert.
 
 Other changes:
-- Elimination of "static" functions and global variables that are unused.
+- Elimination of "static" functions and "static" global variables that
+  are not referenced in the generated code.
 - The memory model was enriched with "max" permissions in addition to
   "current" permissions, to better reason over "const" blocks and
   already-deallocated blocks.
 - More efficient implementation of the memory model, resulting
   in faster interpretation of source files by "ccomp -interp".
+- Added option "-falign-functions" to control alignment of function code.
 
 
 Release 1.10, 2012-03-13
