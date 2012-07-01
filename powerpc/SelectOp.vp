@@ -417,11 +417,11 @@ Definition cast16signed (e: expr) := Eop Ocast16signed (e ::: Enil).
 Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
 
 Definition intuoffloat (e: expr) :=
-  let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
   Elet e
-    (Econdition (CEcond (Ccompf Clt) (Eletvar O ::: f ::: Enil))
-      (intoffloat (Eletvar O))
-      (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar O) f)))).
+  (Elet (Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil)
+    (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
+      (intoffloat (Eletvar 1))
+      (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
 
 Definition floatofintu (e: expr) :=
   subf (Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: e ::: Enil))

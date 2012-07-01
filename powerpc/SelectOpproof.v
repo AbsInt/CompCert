@@ -720,27 +720,28 @@ Proof.
   exists (Vint n); split; auto. unfold intuoffloat.
   set (im := Int.repr Int.half_modulus).
   set (fm := Float.floatofintu im).
-  assert (eval_expr ge sp e m (Vfloat f :: le) (Eletvar O) (Vfloat f)).
-    constructor. auto. 
+  assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
+    constructor. auto.
+  assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar O) (Vfloat fm)).
+    constructor. auto.
   econstructor. eauto.
+  econstructor. instantiate (1 := Vfloat fm). EvalOp. 
   apply eval_Econdition with (v1 := Float.cmp Clt f fm).
-  econstructor. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
-  simpl. auto.
+  econstructor. eauto with evalexpr. auto.
   destruct (Float.cmp Clt f fm) as []_eqn.
   exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
   EvalOp. simpl. rewrite EQ; auto.
-  exploit Float.intuoffloat_intoffloat_2; eauto. intro EQ.
-  set (t1 := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil).
-  set (t2 := subf (Eletvar 0) t1).
+  exploit Float.intuoffloat_intoffloat_2; eauto. 
+  change Float.ox8000_0000 with im. fold fm. intro EQ.
+  set (t2 := subf (Eletvar (S O)) (Eletvar O)).
   set (t3 := intoffloat t2).
-  exploit (eval_subf (Vfloat f :: le) (Eletvar 0) (Vfloat f) t1). 
-    auto. unfold t1; EvalOp. simpl; eauto. 
+  exploit (eval_subf (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f) (Eletvar O)); eauto.
   fold t2. intros [v2 [A2 B2]]. simpl in B2. inv B2. 
-  exploit (eval_addimm Float.ox8000_0000 (Vfloat f :: le) t3).
+  exploit (eval_addimm Float.ox8000_0000 (Vfloat fm :: Vfloat f :: le) t3).
     unfold t3. unfold intoffloat. EvalOp. simpl. rewrite EQ. simpl. eauto. 
   intros [v4 [A4 B4]]. simpl in B4. inv B4. 
   rewrite Int.sub_add_opp in A4. rewrite Int.add_assoc in A4. 
-  rewrite (Int.add_commut (Int.neg Float.ox8000_0000)) in A4. 
+  rewrite (Int.add_commut (Int.neg im)) in A4. 
   rewrite Int.add_neg_zero in A4. 
   rewrite Int.add_zero in A4.
   auto.
@@ -763,7 +764,7 @@ Proof.
   exploit (eval_subf le t2). 
   unfold t2. EvalOp. constructor. EvalOp. simpl; eauto. constructor. eauto. constructor. 
   unfold eval_operation. eauto. 
-  instantiate (2 := t3). unfold t3. EvalOp. simpl; eauto.
+  instantiate (2 := t3). unfold t3. EvalOp. simpl; eauto.  
   intros [v2 [A2 B2]]. simpl in B2. inv B2. rewrite Float.floatofint_from_words. auto.
 Qed.
 
