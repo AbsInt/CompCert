@@ -58,6 +58,31 @@ Proof.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
 
+Lemma combine_compimm_eq_1_sound:
+  forall x cond args,
+  combine_compimm_eq_1 get x = Some(cond, args) ->
+  eval_condition cond (map valu args) m = Val.cmp_bool Ceq (valu x) (Vint Int.one) /\
+  eval_condition cond (map valu args) m = Val.cmpu_bool (Mem.valid_pointer m) Ceq (valu x) (Vint Int.one).
+Proof.
+  intros until args. functional induction (combine_compimm_eq_1 get x); intros EQ; inv EQ.
+  (* of cmp *)
+  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
+Qed.
+
+Lemma combine_compimm_ne_1_sound:
+  forall x cond args,
+  combine_compimm_ne_1 get x = Some(cond, args) ->
+  eval_condition cond (map valu args) m = Val.cmp_bool Cne (valu x) (Vint Int.one) /\
+  eval_condition cond (map valu args) m = Val.cmpu_bool (Mem.valid_pointer m) Cne (valu x) (Vint Int.one).
+Proof.
+  intros until args. functional induction (combine_compimm_eq_1 get x); intros EQ; inv EQ.
+  (* of cmp *)
+  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  rewrite eval_negate_condition.
+  destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
+Qed.
+
 Theorem combine_cond_sound:
   forall cond args cond' args',
   combine_cond get cond args = Some(cond', args') ->
@@ -68,10 +93,14 @@ Proof.
   simpl; eapply combine_compimm_ne_0_sound; eauto.
   (* compimm eq zero *)
   simpl; eapply combine_compimm_eq_0_sound; eauto.
+  (* compimm eq one *)
+  simpl; eapply combine_compimm_eq_1_sound; eauto.
   (* compuimm ne zero *)
   simpl; eapply combine_compimm_ne_0_sound; eauto.
   (* compuimm eq zero *)
   simpl; eapply combine_compimm_eq_0_sound; eauto.
+  (* compuimm eq one *)
+  simpl; eapply combine_compimm_eq_1_sound; eauto.
 Qed.
 
 Theorem combine_addr_sound:

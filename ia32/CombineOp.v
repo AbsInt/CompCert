@@ -43,16 +43,36 @@ Function combine_compimm_eq_0 (x: valnum) : option(condition * list valnum) :=
   | _ => None
   end.
 
+Function combine_compimm_eq_1 (x: valnum) : option(condition * list valnum) :=
+  match get x with
+  | Some(Op (Ocmp c) ys) => Some (c, ys)
+  | _ => None
+  end.
+
+Function combine_compimm_ne_1 (x: valnum) : option(condition * list valnum) :=
+  match get x with
+  | Some(Op (Ocmp c) ys) => Some (negate_condition c, ys)
+  | _ => None
+  end.
+
 Function combine_cond (cond: condition) (args: list valnum) : option(condition * list valnum) :=
   match cond, args with
   | Ccompimm Cne n, x::nil =>
-      if Int.eq_dec n Int.zero then combine_compimm_ne_0 x else None
+      if Int.eq_dec n Int.zero then combine_compimm_ne_0 x
+      else if Int.eq_dec n Int.one then combine_compimm_ne_1 x
+      else None
   | Ccompimm Ceq n, x::nil =>
-      if Int.eq_dec n Int.zero then combine_compimm_eq_0 x else None
+      if Int.eq_dec n Int.zero then combine_compimm_eq_0 x
+      else if Int.eq_dec n Int.one then combine_compimm_eq_1 x
+      else None
   | Ccompuimm Cne n, x::nil =>
-      if Int.eq_dec n Int.zero then combine_compimm_ne_0 x else None
+      if Int.eq_dec n Int.zero then combine_compimm_ne_0 x
+      else if Int.eq_dec n Int.one then combine_compimm_ne_1 x
+      else None
   | Ccompuimm Ceq n, x::nil =>
-      if Int.eq_dec n Int.zero then combine_compimm_eq_0 x else None
+      if Int.eq_dec n Int.zero then combine_compimm_eq_0 x
+      else if Int.eq_dec n Int.one then combine_compimm_eq_1 x
+      else None
   | _, _ => None
   end.
 
