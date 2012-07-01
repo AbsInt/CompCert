@@ -16,6 +16,8 @@
 (** Postorder numbering of a directed graph. *)
 
 Require Import Wellfounded.
+Require Import Permutation.
+Require Import Mergesort.
 Require Import Coqlib.
 Require Import Maps.
 Require Import Iteration.
@@ -26,6 +28,25 @@ Require Import Iteration.
 Definition node: Type := positive.
 
 Definition graph: Type := PTree.t (list node).
+
+(** A sorting function over lists of positives.  While not necessary for
+  correctness, we process the successors of a node in increasing order.
+  This preserves more of the shape of the original graph and is good for
+  our CFG linearization heuristic. *)
+
+Module PositiveOrd.
+  Definition t := positive.
+  Definition leb (x y: t): bool := if plt y x then false else true.
+(*  Infix "<=?" := leb (at level 35). *)
+  Theorem leb_total : forall x y, is_true (leb x y) \/ is_true (leb y x).
+  Proof.
+    unfold leb, is_true; intros.
+    destruct (plt x y); auto. destruct (plt y x); auto. 
+    elim (Plt_strict x). eapply Plt_trans; eauto. 
+  Qed.
+End PositiveOrd.
+
+Module Sort := Mergesort.Sort(PositiveOrd).
 
 (** The traversal is presented as an iteration that modifies the following state. *)
 
@@ -40,7 +61,7 @@ Definition init_state (g: graph) (root: node) :=
   match g!root with
   | Some succs =>
      {| gr := PTree.remove root g;
-        wrk := (root, succs) :: nil;
+        wrk := (root, Sort.sort succs) :: nil;
         map := PTree.empty positive;
         next := 1%positive |}
   | None =>
@@ -52,16 +73,25 @@ Definition init_state (g: graph) (root: node) :=
 
 Definition transition (s: state) : PTree.t positive + state :=
   match s.(wrk) with
-  | nil =>
+  | nil =>                              (**r empty worklist, we are done *)
       inl _ s.(map)
-  | (x, nil) :: l =>
-      inr _ {| gr := s.(gr); wrk := l; map := PTree.set x s.(next) s.(map); next := Psucc s.(next) |}
-  | (x, y :: succs_x) :: l =>
+  | (x, nil) :: l =>                    (**r all successors of [x] are numbered; number [x] itself *)
+      inr _ {| gr := s.(gr);
+               wrk := l;
+               map := PTree.set x s.(next) s.(map);
+               next := Psucc s.(next) |}
+  | (x, y :: succs_x) :: l =>           (**r consider [y], the next unnumbered successor of [x] *)
       match s.(gr)!y with
-      | None =>
-          inr _ {| gr := s.(gr); wrk := (x, succs_x) :: l; map := s.(map); next := s.(next) |}
-      | Some succs_y =>
-          inr _ {| gr := PTree.remove y s.(gr); wrk := (y, succs_y) :: (x, succs_x) :: l; map := s.(map); next := s.(next) |}
+      | None =>                         (**r [y] is already numbered: discard from worklist *)
+          inr _ {| gr := s.(gr);
+                   wrk := (x, succs_x) :: l;
+                   map := s.(map);
+                   next := s.(next) |}
+      | Some succs_y =>                 (**r push [y] on the worklist *)
+          inr _ {| gr := PTree.remove y s.(gr);
+                   wrk := (y, Sort.sort succs_y) :: (x, succs_x) :: l;
+                   map := s.(map);
+                   next := s.(next) |}
       end
   end.
 
@@ -89,8 +119,8 @@ Inductive invariant (s: state) : Prop :=
     (* worklist is well-formed *)
     (WKLIST: forall x l, In (x, l) s.(wrk) ->
              s.(gr)!x = None /\
-             exists l', ginit!x = Some(l' ++ l)
-                    /\  forall y, In y l' -> s.(gr)!y = None)
+             exists l', ginit!x = Some l'
+                    /\ forall y, In y l' -> ~In y l -> s.(gr)!y = None)
     (* all grey nodes are on the worklist *)
     (GREY: forall x, ginit!x <> None -> s.(gr)!x = None -> s.(map)!x = None ->
            exists l, In (x,l) s.(wrk)).
@@ -100,6 +130,14 @@ Inductive postcondition (map: PTree.t positive) : Prop :=
     (INJ: forall x1 x2 y, map!x1 = Some y -> map!x2 = Some y -> x1 = x2)
     (ROOT: ginit!root <> None -> map!root <> None)
     (SUCCS: forall x succs y, ginit!x = Some succs -> map!x <> None -> In y succs -> ginit!y <> None -> map!y <> None).
+
+Remark In_sort:
+  forall x l, In x l <-> In x (Sort.sort l).
+Proof.
+  intros; split; intros.
+  apply Permutation_in with l. apply Sort.Permuted_sort. auto.
+  apply Permutation_in with (Sort.sort l). apply Permutation_sym. apply Sort.Permuted_sort. auto.
+Qed.
 
 Lemma transition_spec:
   forall s, invariant s -> 
@@ -138,8 +176,9 @@ Proof.
   (* color *)
   rewrite PTree.gsspec in H0. destruct (peq x0 x). 
   inv H0.  exploit (WKLIST x nil); auto with coqlib. 
-  intros [A [l' [B C]]]. rewrite app_nil_r in B. 
-  assert (l' = succs) by congruence. subst l'. eauto. 
+  intros [A [l' [B C]]].
+  assert (l' = succs) by congruence. subst l'.
+  apply C; auto. 
   eauto.
   (* wklist *)
   apply WKLIST. auto with coqlib.
@@ -167,21 +206,20 @@ Proof.
   rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); eauto. 
   (* wklist *)
   destruct H. 
-  inv H. split. apply PTree.grs. exists (@nil positive); simpl; intuition. 
+  inv H. split. apply PTree.grs. exists succs_y; split. eauto. 
+  intros. rewrite In_sort in H. tauto.
   destruct H.
   inv H. exploit WKLIST; eauto with coqlib. intros [A [l' [B C]]].
   split. rewrite PTree.grspec. destruct (PTree.elt_eq x0 y); auto. 
-  exists (l' ++ y :: nil); split. rewrite app_ass. auto. 
-  intros. rewrite in_app_iff in H. simpl in H. intuition. 
-  rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); auto. 
-  subst y0. apply PTree.grs.
+  exists l'; split. auto. intros. rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); auto.
+  apply C; auto. simpl. intuition congruence. 
   exploit (WKLIST x0 l0); eauto with coqlib. intros [A [l' [B C]]].
   split. rewrite PTree.grspec. destruct (PTree.elt_eq x0 y); auto. 
   exists l'; split; auto. intros. 
   rewrite PTree.grspec. destruct (PTree.elt_eq y0 y); auto.
   (* grey *)
   rewrite PTree.grspec in H0. destruct (PTree.elt_eq x0 y) in H0. 
-  subst. exists succs_y; auto with coqlib.
+  subst. exists (Sort.sort succs_y); auto with coqlib.
   exploit GREY; eauto. simpl. intros [l1 A]. destruct A. 
   inv H2. exists succ_x; auto. 
   exists l1; auto.
@@ -191,8 +229,8 @@ Proof.
   (* wklist *)
   destruct H. inv H. 
   exploit (WKLIST x0); eauto with coqlib. intros [A [l' [B C]]].
-  split. auto. exists (l' ++ y :: nil); split. rewrite app_ass; auto. 
-  intros. rewrite in_app_iff in H; simpl in H. intuition. congruence. 
+  split. auto. exists l'; split. auto. 
+  intros. destruct (peq y y0). congruence. apply C; auto. simpl. intuition congruence.
   eapply WKLIST; eauto with coqlib.
   (* grey *)
   exploit GREY; eauto. intros [l1 A]. simpl in A. destruct A.
@@ -220,10 +258,11 @@ Proof.
   rewrite PTree.gempty in H0; inv H0.
   (* wklist *)
   destruct H; inv H. 
-  split. apply PTree.grs. exists (@nil positive); simpl; tauto.
+  split. apply PTree.grs. exists succs; split; auto. 
+  intros. rewrite In_sort in H. intuition.
   (* grey *)
   rewrite PTree.grspec in H0. destruct (PTree.elt_eq x root).
-  subst. exists succs; auto. 
+  subst. exists (Sort.sort succs); auto. 
   contradiction.
 
   (* root has no succs *)
