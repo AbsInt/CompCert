@@ -1,5 +1,6 @@
 open BinInt
 open BinPos
+open Camlcoq
 
 type bitstring = Bitstring.bitstring
 
@@ -111,6 +112,8 @@ let z_int z = Safe32.to_int (z_int32 z)
 let z_int_lax z = Safe32.to_int (z_int32_lax z)
 
 (* Some more printers *)
+
+let string_of_ffloat f = string_of_float (camlfloat_of_coqfloat f)
 
 let string_of_array string_of_elt sep a =
   let b = Buffer.create 1024 in

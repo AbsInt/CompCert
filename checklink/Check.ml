@@ -5,6 +5,7 @@ open BinInt
 open BinPos
 open Bitstring_utils
 open C2C
+open Camlcoq
 open ELF_parsers
 open ELF_printers
 open ELF_types
@@ -335,8 +336,8 @@ let match_int32s a b: checker =
   ) a b
 (** We compare floats by their bit representation, so that 0.0 and -0.0 are
     different. *)
-let match_floats (a: float) (b: float): checker =
-  let a = Int64.bits_of_float a in
+let match_floats (a: Floats.float) (b: float): checker =
+  let a = Int64.bits_of_float (camlfloat_of_coqfloat a) in
   let b = Int64.bits_of_float b in
   check_eq (
     Printf.sprintf "match_floats %s %s" (string_of_int64 a) (string_of_int64 b)
@@ -2642,7 +2643,7 @@ let compare_data (l: init_data list) (bs: bitstring) (sfw: s_framework)
         | Init_float32(f) -> (
           bitmatch bs with
           | { j : 32 : int; bs : -1 : bitstring } ->
-              if f = Int32.float_of_bits j
+              if camlfloat_of_coqfloat f = Int32.float_of_bits j
               then compare_data_aux l bs (s + 4) sfw
               else ERR("Wrong float32")
           | { _ } -> error
@@ -2650,7 +2651,7 @@ let compare_data (l: init_data list) (bs: bitstring) (sfw: s_framework)
         | Init_float64(f) -> (
           bitmatch bs with
           | { j : 64 : int; bs : -1 : bitstring } ->
-              if f = Int64.float_of_bits j
+              if camlfloat_of_coqfloat f = Int64.float_of_bits j
               then compare_data_aux l bs (s + 8) sfw
               else ERR("Wrong float64")
           | { _ } -> error
