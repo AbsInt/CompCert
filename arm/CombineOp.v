@@ -41,6 +41,12 @@ Function combine_compimm_eq_0 (x: valnum) : option(condition * list valnum) :=
   | _ => None
   end.
 
+Function combine_compimm_eq_1 (x: valnum) : option(condition * list valnum) :=
+  match get x with
+  | Some(Op (Ocmp c) ys) => Some (c, ys)
+  | _ => None
+  end.
+
 Function combine_compimm_ne_1 (x: valnum) : option(condition * list valnum) :=
   match get x with
   | Some(Op (Ocmp c) ys) => Some (negate_condition c, ys)

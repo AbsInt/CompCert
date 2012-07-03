@@ -76,11 +76,11 @@ Lemma combine_compimm_ne_1_sound:
   eval_condition cond (map valu args) m = Val.cmp_bool Cne (valu x) (Vint Int.one) /\
   eval_condition cond (map valu args) m = Val.cmpu_bool (Mem.valid_pointer m) Cne (valu x) (Vint Int.one).
 Proof.
-  intros until args. functional induction (combine_compimm_eq_1 get x); intros EQ; inv EQ.
+  intros until args. functional induction (combine_compimm_ne_1 get x); intros EQ; inv EQ.
   (* of cmp *)
   exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
   rewrite eval_negate_condition.
-  destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
+  destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
 
 Theorem combine_cond_sound:
@@ -91,12 +91,16 @@ Proof.
   intros. functional inversion H; subst.
   (* compimm ne zero *)
   simpl; eapply combine_compimm_ne_0_sound; eauto.
+  (* compimm ne one *)
+  simpl; eapply combine_compimm_ne_1_sound; eauto.
   (* compimm eq zero *)
   simpl; eapply combine_compimm_eq_0_sound; eauto.
   (* compimm eq one *)
   simpl; eapply combine_compimm_eq_1_sound; eauto.
   (* compuimm ne zero *)
   simpl; eapply combine_compimm_ne_0_sound; eauto.
+  (* compuimm ne one *)
+  simpl; eapply combine_compimm_ne_1_sound; eauto.
   (* compuimm eq zero *)
   simpl; eapply combine_compimm_eq_0_sound; eauto.
   (* compuimm eq one *)
