@@ -2987,7 +2987,8 @@ let string_of_range a b = "[0x" ^ Printf.sprintf "%08lx" a ^ " - 0x" ^
 let is_padding bs start stop =
   let bs_start = start * 8 in
   let bs_length = (stop - start + 1) * 8 in
-  is_zeros (Bitstring.subbitstring bs bs_start bs_length) bs_length
+  start <= stop &&
+    is_zeros (Bitstring.subbitstring bs bs_start bs_length) bs_length
 
 (** This functions goes through the list of checked bytes, and tries to find
     padding in it. That is, it takes pairs of chunks in order, and adds a
