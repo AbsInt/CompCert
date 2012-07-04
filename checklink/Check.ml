@@ -3237,6 +3237,103 @@ let check_overlaps efw =
         )
         efw l
 
+let check_unknown_chunks efw =
+  if
+    List.exists
+      (function (_, _, _, Unknown(_)) -> true | _ -> false)
+      efw.chkd_bytes_list
+  then add_log (WARNING(
+    "Some parts of the ELF file are unknown." ^
+      (if !print_elfmap then "" else " Use -print-elfmap to see what was covered.")
+  )) efw
+  else efw
+
+let check_missed_function_symbols efw =
+  if !exhaustivity
+  then
+    begin
+      let miss_fun =
+        List.filter
+          (fun ndx ->
+            let symtype = efw.elf.e_symtab.(ndx).st_type in
+            symtype = STT_FUNC || symtype = STT_NOTYPE
+          )
+          (list_false_indices efw.chkd_fun_syms)
+      in
+      match miss_fun with
+      | [] -> efw
+      | _  ->
+          if !list_missing
+          then
+            add_log (WARNING(
+              Printf.sprintf
+                "The following function symbols do not appear in .sdump files:\n%s"
+                (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun)
+            )) efw
+          else
+            add_log (WARNING(
+              Printf.sprintf
+                "%d function symbols do not appear in .sdump files. Add -list-missing to list them."
+                (List.length miss_fun)
+            )) efw
+    end
+  else efw
+
+let check_missed_data_symbols efw =
+  if !exhaustivity
+  then
+    begin
+      let miss_data =
+        List.filter
+          (fun ndx ->
+            let symtype = efw.elf.e_symtab.(ndx).st_type in
+            symtype = STT_OBJECT || symtype = STT_NOTYPE
+          )
+          (list_false_indices efw.chkd_data_syms)
+      in
+      match miss_data with
+      | [] -> efw
+      | _  ->
+          if !list_missing
+          then
+            add_log (WARNING(
+              Printf.sprintf
+                "The following data symbols do not appear in .sdump files:\n%s"
+                (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
+            )) efw
+          else
+            add_log (WARNING(
+              Printf.sprintf
+                "%d data symbols do not appear in .sdump files. Add -list-missing to list them."
+                (List.length miss_data)
+            )) efw
+    end
+  else efw
+
+let print_diagnosis efw =
+  let (nb_err, nb_warn) = List.fold_left
+    (fun (e, w) -> function
+    | DEBUG(_)   -> (e, w)
+    | ERROR(_)   -> (e + 1, w)
+    | INFO(_)    -> (e, w)
+    | WARNING(_) -> (e, w + 1)
+    )
+    (0, 0)
+    efw.log
+  in
+  if !debug
+  then Printf.printf "\n\nFINAL LOG:\n\n";
+  List.(iter
+          (fun e ->
+            match string_of_log_entry false e with
+            | "" -> ()
+            | s -> print_endline s
+          )
+          (rev efw.log)
+  );
+  Printf.printf " SUMMARY: %d error(s), %d warning(s)\n" nb_err nb_warn;
+  efw
+
 (** Checks a whole ELF file according to a list of .sdump files. This never
     dumps anything, so it can be safely used when fuzz-testing even if the
     user accidentally enabled dumping options. *)
@@ -3288,7 +3385,13 @@ let check_elf_nodump elf sdumps =
   >>> warn_sections_remapping
   (* warn if there exists non-empty overlapping sections *)
   >>> check_overlaps
+  (* warn about inferred SDA registers *)
   >>> warn_sda_mapping
+  (* warn about regions of the ELF file that could not be identified *)
+  >>> check_unknown_chunks
+  >>> check_missed_function_symbols
+  >>> check_missed_data_symbols
+  >>> print_diagnosis
 
 (** Checks a whole ELF file according to .sdump files.
     If requested, dump the calculated bytes mapping, so that it can be
@@ -3317,116 +3420,4 @@ let check_elf_dump elffilename sdumps =
       let oc = open_out (elffilename ^ ".elfmap") in
       output_value oc efw.chkd_bytes_list;
       close_out oc
-    end;
-  (* indicate function symbols that have not been checked *)
-  let miss_fun =
-    List.filter
-      (fun ndx ->
-        let symtype = efw.elf.e_symtab.(ndx).st_type in
-        symtype = STT_FUNC || symtype = STT_NOTYPE
-      )
-      (list_false_indices efw.chkd_fun_syms)
-  in
-  if !exhaustivity
-  then
-    begin match miss_fun with
-    | [] -> ()
-    | _  ->
-        if !list_missing
-        then
-          Printf.printf "%s\n%s\n"
-            (string_of_log_entry false
-               (WARNING("the following function symbols do not appear in .sdump files."))
-            )
-            (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun)
-        else
-          print_endline
-            (string_of_log_entry false
-               (WARNING(
-                 Printf.sprintf
-                   "%d function symbols do not appear in .sdump files. Add -list-missing to list them."
-                   (List.length miss_fun)
-                )
-               )
-            )
     end
-  ;
-  (* indicate data symbols that have not been checked *)
-  let miss_data =
-    List.filter
-      (fun ndx ->
-        let symtype = efw.elf.e_symtab.(ndx).st_type in
-        symtype = STT_OBJECT || symtype = STT_NOTYPE
-      )
-      (list_false_indices efw.chkd_data_syms)
-  in
-  if !exhaustivity
-  then
-    begin match miss_data with
-    | [] -> ()
-    | _  ->
-        if !list_missing
-        then
-          Printf.printf "%s\n%s\n"
-            (string_of_log_entry false
-               (WARNING("the following data symbols do not appear in .sdump files."))
-            )
-            (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
-        else
-          print_endline
-            (string_of_log_entry false
-               (WARNING(
-                 Printf.sprintf
-                   "%d data symbols do not appear in .sdump files. Add -list-missing to list them."
-                   (List.length miss_data)
-                )
-               )
-            )
-    end
-  ;
-  (* print diagnosis *)
-  let worrysome = List.filter
-    (function
-    | DEBUG(_)   -> false
-    | ERROR(_)   -> true
-    | INFO(_)    -> false
-    | WARNING(_) -> true
-    )
-    efw.log
-  in
-  let exists_unknown_chunk =
-    List.exists
-      (function (_, _, _, Unknown(_)) -> true | _ -> false)
-      efw.chkd_bytes_list
-  in
-  begin match worrysome with
-  | [] ->
-      Printf.printf "%s\n"
-        (string_of_log_entry false
-           (INFO("Everything seems fine with this ELF."))
-        );
-      if exists_unknown_chunk
-      then
-        begin
-          Printf.printf "%s\n"
-            (string_of_log_entry false
-               (INFO("However, some parts of the ELF could not be identified." ^
-                        if !print_elfmap
-                        then ""
-                        else " Use -printelfmap to see what was covered."
-                ))
-            )
-        end
-  | _ ->
-      if !debug
-      then Printf.printf "%s\n"
-        (string_of_log_entry true (DEBUG("Final error log:")));
-      List.(iter
-              (fun e ->
-                match string_of_log_entry false e with
-                | "" -> ()
-                | s -> print_endline s
-              )
-              (rev efw.log)
-      )
-  end
