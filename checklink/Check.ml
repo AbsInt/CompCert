@@ -1819,7 +1819,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                   end
                 in
                 let continue = compare_code cs es (Int32.add 8l pc) in
-                begin match bitstring_at_vaddr elf vaddr 64l with
+                begin match bitstring_at_vaddr elf vaddr 8l with
                 | None ->
                     ERR("Floating point constant address is wrong")
                 | Some(bs, pofs, psize) ->
