@@ -189,6 +189,8 @@ Ltac monadInv1 H :=
   | (assertion ?b = OK ?X) =>
       let A := fresh "A" in (generalize (assertion_inversion _ H); intro A);
       clear H
+  | (let _ := _ in ?Y) =>  
+      monadInv1 Y
   | (mmap ?F ?L = OK ?M) =>
       generalize (mmap_inversion F L H); intro
   end.
@@ -200,6 +202,7 @@ Ltac monadInv H :=
   | (bind ?F ?G = OK ?X) => monadInv1 H
   | (bind2 ?F ?G = OK ?X) => monadInv1 H
   | (assertion _ = OK _) => monadInv1 H
+  | (let _ := ?X in OK _ = OK _) => destruct X as [[XT XM] XV]; monadInv1 H
   | (?F _ _ _ _ _ _ _ _ = OK _) => 
       ((progress simpl in H) || unfold F in H); monadInv1 H
   | (?F _ _ _ _ _ _ _ = OK _) => 

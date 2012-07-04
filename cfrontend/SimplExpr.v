@@ -456,9 +456,3 @@ Definition transl_fundef (fd: C.fundef) : res fundef :=
 
 Definition transl_program (p: C.program) : res program :=
   transform_partial_program transl_fundef p.
-
-
-
-      
-
-
