@@ -3004,6 +3004,7 @@ let is_padding bs start stop =
     Returns a framework where [chkd_bytes_list] is sorted and full.
 *)
 let check_padding efw =
+  print_debug "Checking padding";
   let elf = efw.elf in
   let sndxes = list_n elf.e_hdr.e_shnum in
   let matching_sections x y =
@@ -3161,6 +3162,7 @@ let check_sym_tab_zero efw =
     not the same, we warn the user.
 *)
 let warn_sections_remapping efw =
+  print_debug "Checking remapped sections";
   StringMap.fold
     (fun c_name e_name efw ->
       if c_name = e_name
@@ -3177,6 +3179,7 @@ let warn_sections_remapping efw =
     efw
 
 let warn_sda_mapping efw =
+  print_debug "Checking SDA mappings";
   if IntMap.is_empty efw.sda_map
   then efw
   else (
