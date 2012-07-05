@@ -2953,13 +2953,12 @@ let process_sdump efw sdump: e_framework =
   print_debug("Beginning processing of the worklist");
   efw
   >>> (fun efw ->
-    {
-      ef                  = efw;
-      program             = prog;
-      ident_to_name       = names;
-      ident_to_sym_ndx    = ident_to_sym_ndx;
-      stub_ident_to_vaddr = PosMap.empty;
-      atoms               = atoms;
+    { ef                  = efw
+    ; program             = prog
+    ; ident_to_name       = names
+    ; ident_to_sym_ndx    = ident_to_sym_ndx
+    ; stub_ident_to_vaddr = PosMap.empty
+    ; atoms               = atoms
     }
   )
   >>> worklist_process wl
@@ -3331,7 +3330,9 @@ let print_diagnosis efw =
           )
           (rev efw.log)
   );
-  Printf.printf " SUMMARY: %d error(s), %d warning(s)\n" nb_err nb_warn;
+  let plural n = if n > 1 then "s" else "" in
+  Printf.printf " SUMMARY: %d error%s, %d warning%s\n"
+    nb_err (plural nb_err) nb_warn (plural nb_warn);
   efw
 
 (** Checks a whole ELF file according to a list of .sdump files. This never
