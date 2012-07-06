@@ -2087,10 +2087,3 @@ Definition at_final_state (S: state): option int :=
   | Returnstate (Vint r) Kstop m => Some r
   | _ => None
   end.
-
-(* 
-*** Local Variables: ***
-*** coq-prog-name: "/usr/local/bin/coqtop" ***
-*** coq-prog-args: ("-emacs-U" "-I" "../lib" "-I" "../common" "-I" "../cfrontend" "-I" "../backend") ***
-*** End: ***
-*)

@@ -17,10 +17,10 @@ DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver \
 
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
-COQC=/usr/local/bin/coqc -q $(INCLUDES)
-COQDEP=/usr/local/bin/coqdep $(INCLUDES)
-COQDOC=/usr/local/bin/coqdoc
-COQEXEC=/usr/local/bin/coqtop $(INCLUDES) -batch -load-vernac-source
+COQC=coqc -q $(INCLUDES)
+COQDEP=coqdep $(INCLUDES)
+COQDOC=coqdoc
+COQEXEC=coqtop $(INCLUDES) -batch -load-vernac-source
 COQCHK=coqchk $(INCLUDES)
 
 OCAMLBUILD=ocamlbuild
@@ -86,14 +86,14 @@ BACKEND=\
   Mach.v Machtyping.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v Stackingtyping.v \
   Machsem.v \
-  Asm.v Asmgen.v Asmgenretaddr.v Asmgenproof1.v Asmgenproof.v 
+  Asm.v Asmgen.v Asmgenretaddr.v Asmgenproof1.v Asmgenproof.v
 
 # C front-end modules (in cfrontend/)
 
 CFRONTEND=Csyntax.v Csem.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
-  Clight.v Cshmgen.v Cshmgenproof.v  \
+  Clight.v Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
 
 # Putting everything together (in driver/)
