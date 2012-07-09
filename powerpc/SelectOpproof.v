@@ -286,16 +286,6 @@ Proof.
   TrivialExists. econstructor. eauto. econstructor. EvalOp. simpl; eauto. constructor. auto.
 Qed.
 
-Theorem eval_shrimm:
-  forall n, unary_constructor_sound (fun a => shrimm a n)
-                                    (fun x => Val.shr x (Vint n)).
-Proof.
-  red; intros.  unfold shrimm.
-  predSpec Int.eq Int.eq_spec n Int.zero.
-  subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shr_zero; auto.
-  TrivialExists.
-Qed.
-
 Theorem eval_shruimm:
   forall n, unary_constructor_sound (fun a => shruimm a n)
                                     (fun x => Val.shru x (Vint n)).
@@ -306,6 +296,24 @@ Proof.
   destruct (Int.ltu n Int.iwordsize) as []_eqn. 
   rewrite Val.shru_rolm; auto. apply eval_rolm; auto. 
   TrivialExists. econstructor. eauto. econstructor. EvalOp. simpl; eauto. constructor. auto.
+Qed.
+
+Theorem eval_shrimm:
+  forall n, unary_constructor_sound (fun a => shrimm a n)
+                                    (fun x => Val.shr x (Vint n)).
+Proof.
+  red; intros until x. unfold shrimm. 
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  intros. subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shr_zero; auto.
+  case (shrimm_match a); intros.
+  destruct (Int.lt mask1 Int.zero) as []_eqn. 
+  TrivialExists.
+  replace (Val.shr x (Vint n)) with (Val.shru x (Vint n)). 
+  apply eval_shruimm; auto.
+  destruct x; simpl; auto. destruct (Int.ltu n Int.iwordsize); auto. 
+  decEq. symmetry. InvEval. destruct v1; simpl in H0; inv H0. 
+  apply Int.shr_and_is_shru_and; auto.
+  TrivialExists.
 Qed.
 
 Lemma eval_mulimm_base:

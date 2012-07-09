@@ -179,12 +179,6 @@ Definition shlimm (e1: expr) (n2: int) :=
   else
     Eop Oshl (e1:::Eop (Ointconst n2) Enil:::Enil).
 
-Definition shrimm (e1: expr) (n2: int) :=
-  if Int.eq n2 Int.zero then
-    e1
-  else
-    Eop (Oshrimm n2) (e1:::Enil).
-
 Definition shruimm (e1: expr) (n2: int) :=
   if Int.eq n2 Int.zero then
     e1
@@ -192,6 +186,19 @@ Definition shruimm (e1: expr) (n2: int) :=
     rolm e1 (Int.sub Int.iwordsize n2) (Int.shru Int.mone n2)
   else
     Eop Oshru (e1:::Eop (Ointconst n2) Enil:::Enil).
+
+Nondetfunction shrimm (e1: expr) (n2: int) :=
+  if Int.eq n2 Int.zero then
+    e1
+  else
+    match e1 with
+    | Eop (Oandimm mask1) (t1:::Enil) =>
+        if Int.lt mask1 Int.zero
+        then Eop (Oshrimm n2) (e1:::Enil)
+        else shruimm e1 n2
+    | _ =>
+        Eop (Oshrimm n2) (e1:::Enil)
+    end.
 
 (** ** Integer multiply *)
 

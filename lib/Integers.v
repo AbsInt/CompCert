@@ -653,6 +653,14 @@ Proof.
   auto. unfold max_signed in H. omegaContradiction.
 Qed.
 
+Theorem signed_positive:
+  forall x, signed x >= 0 <-> unsigned x <= max_signed.
+Proof.
+  intros. unfold signed, max_signed.
+  generalize (unsigned_range x) half_modulus_modulus half_modulus_pos; intros.
+  destruct (zlt (unsigned x) half_modulus); omega.
+Qed.
+
 (** ** Properties of zero, one, minus one *)
 
 Theorem unsigned_zero: unsigned zero = 0.
@@ -2658,6 +2666,44 @@ Proof.
   unfold max_unsigned; omega.
   generalize (signed_range x). fold sx. intros. split. omega. unfold max_signed. omega. 
   generalize min_signed_neg. unfold max_signed. omega. 
+Qed.
+
+(** Connections between [shr] and [shru]. *)
+
+Lemma shr_shru_positive:
+  forall x y,
+  signed x >= 0 -> 
+  shr x y = shru x y.
+Proof.
+  intros.
+  rewrite shr_div_two_p. rewrite shru_div_two_p.
+  rewrite signed_eq_unsigned. auto. apply signed_positive. auto.
+Qed.
+
+Lemma and_positive:
+  forall x y, signed y >= 0 -> signed (and x y) >= 0.
+Proof.
+  intros.
+  assert (unsigned y < half_modulus). rewrite signed_positive in H. unfold max_signed in H; omega. 
+  generalize (sign_bit_of_Z y). rewrite zlt_true; auto. intros A.
+  generalize (sign_bit_of_Z (and x y)).
+  unfold and at 1. unfold bitwise_binop at 1.
+  set (fx := bits_of_Z wordsize (unsigned x)).
+  set (fy := bits_of_Z wordsize (unsigned y)).
+  rewrite unsigned_repr; auto with ints. 
+  rewrite bits_of_Z_of_bits. unfold fy. rewrite A. rewrite andb_false_r. 
+  destruct (zlt (unsigned (and x y)) half_modulus); intros.
+  rewrite signed_positive. unfold max_signed; omega.
+  congruence.
+  generalize wordsize_pos; omega.
+Qed.
+
+Theorem shr_and_is_shru_and:
+  forall x y z,
+  lt y zero = false -> shr (and x y) z = shru (and x y) z.
+Proof.
+  intros. apply shr_shru_positive. apply and_positive. 
+  unfold lt in H. rewrite signed_zero in H. destruct (zlt (signed y) 0). congruence. auto.
 Qed.
 
 (** ** Properties of integer zero extension and sign extension. *)
