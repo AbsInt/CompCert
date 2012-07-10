@@ -803,21 +803,19 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
   let check_sda_aux ndx: f_framework or_err =
     let elf = ffw.sf.ef.elf in
     let sym = elf.e_symtab.(ndx) in
-    let sxn = elf.e_shdra.(sym.st_shndx) in
+    let expected_addr = Safe32.(sym.st_value + ofs - addr) in
     try
       let r_addr = IntMap.find r ffw.sf.ef.sda_map in
-      if r_addr < sxn.sh_offset || r_addr >= Safe32.(sxn.sh_offset + sxn.sh_size)
-      then ERR("SDA register out of the address range of its symbol's section")
-      else if Safe32.(r_addr + ofs) = sym.st_value
+      if Safe32.(r_addr = expected_addr)
       then OK(ffw)
       else ERR(
         Printf.sprintf
           "SDA register %d is expected to point both at 0x%lx and 0x%lx"
-          r r_addr Safe32.(sym.st_value - ofs)
+          r r_addr expected_addr
       )
     with Not_found ->
       OK(
-        ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r Safe32.(sym.st_value - ofs)
+        ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r expected_addr
       )
   in
   let sym_list = PosMap.find ident ffw.sf.ident_to_sym_ndx in
