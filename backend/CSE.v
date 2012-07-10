@@ -337,12 +337,6 @@ Definition reduce (op: A) (rl: list reg) (vl: list valnum) : A * list reg :=
 
 End REDUCE.
 
-(*
-Parameter combine_cond: (valnum -> option rhs) -> condition -> list valnum -> option (condition * list valnum).
-Parameter combine_addr: (valnum -> option rhs) -> addressing -> list valnum -> option (addressing * list valnum).
-Parameter combine_op: (valnum -> option rhs) -> operation -> list valnum -> option (operation * list valnum).
-*)
-
 (** * The static analysis *)
 
 (** We now define a notion of satisfiability of a numbering.  This semantic

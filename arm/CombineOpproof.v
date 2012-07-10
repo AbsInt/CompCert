@@ -116,12 +116,6 @@ Proof.
   (* indexed - addimm *)
   exploit get_sound; eauto. unfold equation_holds; simpl; intro EQ. FuncInv.
   rewrite <- H0. rewrite Val.add_assoc. auto. 
-  (* indexed 0 - add *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intro EQ. FuncInv.
-  rewrite <- H0. destruct v; destruct v0; simpl; auto; rewrite Int.add_zero; auto.
-  (* indexed 0 - addshift *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intro EQ. FuncInv.
-  rewrite <- H0. destruct v; destruct (eval_shift s v0); simpl; auto; rewrite Int.add_zero; auto.
 Qed.
 
 Theorem combine_op_sound:

@@ -400,20 +400,20 @@ let print_builtin_inline oc name args res =
   | "__builtin_fsqrt", [FR a1], FR res ->
       fprintf oc "	fsqrtd	%a, %a\n" freg res freg a1; 1
   (* Memory accesses *)
-  | "__builtin_read_int16_reversed", [IR a1], IR res ->
+  | "__builtin_read16_reversed", [IR a1], IR res ->
       fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
       fprintf oc "	mov	%a, %a, lsl #8\n" ireg IR14 ireg res;
       fprintf oc "	and	%a, %a, #0xFF00\n" ireg IR14 ireg IR14;
       fprintf oc "	orr	%a, %a, %a, lsr #8\n" ireg res ireg IR14 ireg res; 4
-  | "__builtin_read_int32_reversed", [IR a1], IR res ->
+  | "__builtin_read32_reversed", [IR a1], IR res ->
       fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
       print_bswap oc res IR14 res; 5
-  | "__builtin_write_int16_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
       fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg a2;
       fprintf oc "	and	%a, %a, #0xFF\n" ireg IR14 ireg IR14;
       fprintf oc "	orr	%a, %a, %a, lsl #8\n" ireg IR14 ireg IR14 ireg a2;
       fprintf oc "	strh	%a, [%a, #0]\n" ireg IR14 ireg a1; 4
-  | "__builtin_write_int32_reversed", [IR a1; IR a2], _ ->
+  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
       let tmp = if a1 = IR10 then IR12 else IR10 in
       print_bswap oc a2 IR14 tmp;
       fprintf oc "	str	%a, [%a, #0]\n" ireg tmp ireg a1; 5
@@ -671,6 +671,12 @@ let rec print_instructions oc instrs =
       end;
       print_instructions oc il
 
+(* Base-2 log of a Caml integer *)
+
+let rec log2 n =
+  assert (n > 0);
+  if n = 1 then 0 else 1 + log2 (n lsr 1)
+
 let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   reset_constants();
@@ -727,12 +733,6 @@ let print_init_data oc name id =
     fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init id)
   else
     List.iter (print_init oc) id
-
-(* Base-2 log of a Caml integer *)
-
-let rec log2 n =
-  assert (n > 0);
-  if n = 1 then 0 else 1 + log2 (n lsr 1)
 
 let print_var oc (name, v) =
   match v.gvar_init with

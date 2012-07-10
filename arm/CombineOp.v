@@ -74,13 +74,16 @@ Function combine_cond (cond: condition) (args: list valnum) : option(condition *
   | _, _ => None
   end.
 
+(* Problem: on ARM, not all load/store instructions accept the Aindexed2
+   and Aindexed2shift addressing modes.  For the time being,
+   avoid producing them. *)
+
 Function combine_addr (addr: addressing) (args: list valnum) : option(addressing * list valnum) :=
   match addr, args with
   | Aindexed n, x::nil =>
       match get x with
-      | Some(Op (Oaddimm m) ys) => Some(Aindexed (Int.add m n), ys)
-      | Some(Op Oadd ys) => if Int.eq_dec n Int.zero then Some(Aindexed2, ys) else None
-      | Some(Op (Oaddshift s) ys) => if Int.eq_dec n Int.zero then Some(Aindexed2shift s, ys) else None
+      | Some(Op (Oaddimm m) ys) =>
+          Some(Aindexed (Int.add m n), ys)
       | _ => None
       end
   | _, _ => None
