@@ -61,8 +61,8 @@ let re_start_pragma_section = Str.regexp "section\\b"
 let re_pragma_section = Str.regexp(
   "section[ \t]+"
 ^ "\\([A-Za-z_][A-Za-z_0-9]*\\)[ \t]+"  (* class_name *)
-^ "\\(\"[^\"]*\"\\)?[ \t]*"             (* istring *)
-^ "\\(\"[^\"]*\"\\)?[ \t]*"             (* ustring *)
+^ "\"\\([^\"]*\\)\"?[ \t]*"             (* istring *)
+^ "\"\\([^\"]*\\)\"?[ \t]*"             (* ustring *)
 ^ "\\([a-zA-Z-]+\\)?[ \t]*"             (* addressing mode *)
 ^ "\\([RWXON]*\\)"                      (* access mode *)
 )

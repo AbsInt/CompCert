@@ -116,7 +116,7 @@ let name_of_section_ELF = function
   | Section_literal -> ".text"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s,\"a%s%s\",%%progbits"
+       sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
                s (if wr then "w" else "") (if ex then "x" else "")
 
 let section oc sec =

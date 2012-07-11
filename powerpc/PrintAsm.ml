@@ -197,7 +197,7 @@ let name_of_section_MacOS = function
   | Section_literal -> ".literal8"
   | Section_jumptable -> ".const"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s, %s, %s"
+       sprintf ".section	\"%s\", %s, %s"
                (if wr then "__DATA" else "__TEXT") s
                (if ex then "regular, pure_instructions" else "regular")
 
@@ -211,7 +211,7 @@ let name_of_section_Linux = function
   | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s,\"a%s%s\",@progbits"
+       sprintf ".section	\"%s\",\"a%s%s\",@progbits"
                s (if wr then "w" else "") (if ex then "x" else "")
 
 let name_of_section_Diab = function
@@ -224,7 +224,7 @@ let name_of_section_Diab = function
   | Section_literal -> ".text"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s,,%c"
+       sprintf ".section	\"%s\",,%c"
                s
                (match wr, ex with
                 | true, true -> 'm'                 (* text+data *)

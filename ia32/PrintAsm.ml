@@ -149,7 +149,7 @@ let name_of_section_ELF = function
   | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s,\"a%s%s\",@progbits"
+       sprintf ".section	\"%s\",\"a%s%s\",@progbits"
                s (if wr then "w" else "") (if ex then "x" else "")
 
 let name_of_section_MacOS = function
@@ -160,7 +160,7 @@ let name_of_section_MacOS = function
   | Section_literal -> ".literal8"
   | Section_jumptable -> ".const"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s, %s, %s"
+       sprintf ".section	\"%s\", %s, %s"
                (if wr then "__DATA" else "__TEXT") s
                (if ex then "regular, pure_instructions" else "regular")
 
@@ -172,7 +172,7 @@ let name_of_section_Cygwin = function
   | Section_literal -> ".section	.rdata,\"dr\""
   | Section_jumptable -> ".text"
   | Section_user(s, wr, ex) ->
-       sprintf ".section	%s, \"%s\"\n"
+       sprintf ".section	\"%s\", \"%s\"\n"
              s (if ex then "xr" else if wr then "d" else "dr")
 
 let name_of_section =
