@@ -105,7 +105,7 @@ let z_int32 = function
 let z_int32_lax = function
 | Z0      -> 0l
 | Zpos(p) -> positive_int32_lax p
-| Zneg(p) -> raise Int32Overflow
+| Zneg(_) -> raise Int32Overflow
 
 let z_int z = Safe32.to_int (z_int32 z)
 
