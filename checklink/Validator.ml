@@ -16,6 +16,12 @@ let set_elf_file s =
   | Some _ -> raise (Arg.Bad "multiple ELF executables given on command line")
   end
 
+let set_conf_file s =
+  begin match !conf_file with
+  | None -> conf_file := Some s
+  | Some _ -> raise (Arg.Bad "multiple configuration files given on command line")
+  end
+
 let option_disassemble = ref false
 let disassemble_list = ref ([]: string list)
 let add_disassemble s =
@@ -26,6 +32,8 @@ let options = [
   (* Main options *)
   "-exe", Arg.String set_elf_file,
   "<filename> Specify the ELF executable file to analyze";
+  "-conf", Arg.String set_conf_file,
+  "<filename> Specify a configuration file (see README)";
   (* Parsing behavior *)
   "-relaxed", Arg.Set ELF_parsers.relaxed,
   "Allows the following behaviors in the ELF parser:

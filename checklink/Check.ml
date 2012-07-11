@@ -66,38 +66,32 @@ let check_st_bind atom (sym: elf32_sym): s_framework -> s_framework =
       ))
   )
 
-(** Taken from CompCert *)
-let name_of_section_Linux:
-    section_name -> string
-  = function
-  | Section_text -> ".text"
-  | Section_data i -> if i then ".data" else ".bss"
-  | Section_small_data i -> if i then ".sdata" else ".sbss"
-  | Section_const -> ".rodata"
-  | Section_small_const -> ".sdata2"
-  | Section_string -> ".rodata"
-  | Section_literal -> ".rodata.cst8"
-  | Section_jumptable -> ".text"
-  | Section_user(s, wr, ex) -> s
+(** Adapted from CompCert *)
+let name_of_section_Linux: section_name -> string = function
+| Section_text -> ".text"
+| Section_data i -> if i then ".data" else ".bss"
+| Section_small_data i -> if i then ".sdata" else ".sbss"
+| Section_const -> ".rodata"
+| Section_small_const -> ".sdata2"
+| Section_string -> ".rodata"
+| Section_literal -> ".rodata.cst8"
+| Section_jumptable -> ".text"
+| Section_user(s, wr, ex) -> s
+
+(** Adapted from CompCert *)
+let name_of_section_Diab: section_name -> string = function
+| Section_text -> ".text"
+| Section_data i -> if i then ".data" else ".bss"
+| Section_small_data i -> if i then ".sdata" else ".sbss"
+| Section_const -> ".text"
+| Section_small_const -> ".sdata2"
+| Section_string -> ".text"
+| Section_literal -> ".text"
+| Section_jumptable -> ".text"
+| Section_user(s, wr, ex) -> s
 
 (** Taken from CompCert *)
-let name_of_section_Diab:
-    section_name -> string
-  = function
-  | Section_text -> ".text"
-  | Section_data i -> if i then ".data" else ".bss"
-  | Section_small_data i -> if i then ".sdata" else ".sbss"
-  | Section_const -> ".text"
-  | Section_small_const -> ".sdata2"
-  | Section_string -> ".text"
-  | Section_literal -> ".text"
-  | Section_jumptable -> ".text"
-  | Section_user(s, wr, ex) -> s
-
-(** Taken from CompCert *)
-let name_of_section:
-    section_name -> string
-  =
+let name_of_section: section_name -> string =
   begin match Configuration.system with
   | "macosx" -> fatal "Unsupported CompCert configuration: macosx"
   | "linux"  -> name_of_section_Linux
@@ -112,21 +106,17 @@ let match_sections_name
     =
   let c_name = name_of_section c_section in
   try
-    let expected = StringMap.find c_name sfw.ef.section_map in
+    let res = StringMap.find c_name sfw.ef.section_map in
+    let expected = from_inferrable res in
     if e_name = expected
     then sfw
     else (
       sfw
-      >>> sf_ef ^%=
-        add_log (ERROR(
-          Printf.sprintf
-            "CompCert section %s was mapped to both %s and %s"
-            c_name expected e_name
-        ))
+      >>> (sf_ef |-- section_map) ^%= StringMap.add c_name (add_failure e_name res)
     )
   with Not_found -> (
     sfw
-    >>> (sf_ef |-- section_map) ^%= StringMap.add c_name e_name
+    >>> (sf_ef |-- section_map) ^%= StringMap.add c_name (Inferred(e_name, []))
   )
 
 (** Checks the symbol table entry of the function symbol number [sym_ndx],
@@ -805,7 +795,7 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
     let sym = elf.e_symtab.(ndx) in
     let expected_addr = Safe32.(sym.st_value + ofs - addr) in
     try
-      let r_addr = IntMap.find r ffw.sf.ef.sda_map in
+      let r_addr = from_inferrable (IntMap.find r ffw.sf.ef.sda_map) in
       if Safe32.(r_addr = expected_addr)
       then OK(ffw)
       else ERR(
@@ -815,7 +805,7 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
       )
     with Not_found ->
       OK(
-        ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r expected_addr
+        ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r (Inferred(expected_addr, []))
       )
   in
   let sym_list = PosMap.find ident ffw.sf.ident_to_sym_ndx in
@@ -3162,15 +3152,33 @@ let warn_sections_remapping efw =
   print_debug "Checking remapped sections";
   StringMap.fold
     (fun c_name e_name efw ->
-      if c_name = e_name
-      then efw
-      else (
-        efw >>> add_log (WARNING(
-          Printf.sprintf
-            "Section %s has been re-mapped to %s by your linker script"
-            c_name e_name
-        ))
-      )
+      match e_name with
+      | Provided(_, []) -> efw
+      | Provided(e_name, conflicts) ->
+          efw
+          >>> add_log (ERROR(
+            Printf.sprintf "
+    Conflicting remappings for section %s:
+      Specified: %s
+      Expected:  %s"
+              c_name e_name (string_of_list id ", " conflicts)
+          ))
+      | Inferred(e_name, []) when c_name = e_name -> efw
+      | Inferred(e_name, []) ->
+          efw
+          >>> add_log (WARNING(
+            Printf.sprintf
+              "Detected linker script remapping: section %S -> %S"
+              c_name e_name
+          ))
+      | Inferred(e_name, conflicts) ->
+          efw
+          >>> add_log (ERROR(
+            Printf.sprintf "
+    Conflicting remappings for section %s:
+      %s"
+              c_name (string_of_list id ", " (e_name :: conflicts))
+          ))
     )
     efw.section_map
     efw
@@ -3182,11 +3190,29 @@ let warn_sda_mapping efw =
   else (
     IntMap.fold
       (fun r vaddr efw ->
-        efw >>> add_log (WARNING(
-          Printf.sprintf
-            "SDA register %d has been mapped to virtual address 0x%lx by your linker script"
-            r vaddr
-        ))
+        match vaddr with
+        | Provided(_, []) -> efw
+        | Provided(vaddr, conflicts) ->
+          efw
+          >>> add_log (ERROR(
+            Printf.sprintf "Conflicting SDA mappings for register r%u:
+Specified: 0x%lX
+Expected: %s"
+              r vaddr (string_of_list (Printf.sprintf "0x%lX") ", " conflicts)
+          ))
+        | Inferred(vaddr, []) ->
+            efw >>> add_log (WARNING(
+              Printf.sprintf
+                "SDA register mapping: register r%u = 0x%lX"
+                r vaddr
+            ))
+        | Inferred(vaddr, conflicts) ->
+          efw
+          >>> add_log (ERROR(
+            Printf.sprintf "Conflicting SDA mappings for register r%u:
+%s"
+              r (string_of_list (Printf.sprintf "0x%lX") ", " (vaddr :: conflicts))
+          ))
       )
       efw.sda_map
       efw
@@ -3333,6 +3359,66 @@ let print_diagnosis efw =
     nb_err (plural nb_err) nb_warn (plural nb_warn);
   efw
 
+let conf_file = ref (None: string option)
+
+let parse_conf filename =
+  let section_map = ref StringMap.empty in
+  let sda_map = ref IntMap.empty in
+  let ic = open_in filename in
+  try
+    while true
+    do
+      let line = input_line ic in
+      (* Test different patterns one by one, until one of them works *)
+      let rec match_line = function
+      | [] -> failwith (Printf.sprintf "Couldn't read configuration line: %s" line)
+      | try_match::rest ->
+          try try_match ()
+          with Scanf.Scan_failure(_) -> match_line rest
+      in
+      (* an empty line is ignored *)
+      if line <> ""
+      then
+        match_line
+          (* a comment *)
+          [ (fun () ->
+            Scanf.sscanf line
+              "#%s"
+              (fun _ -> ())
+            )
+          (* a section remapping *)
+          ; (fun () ->
+            Scanf.sscanf line
+              "section %S -> %S"
+              (fun sfrom sto ->
+                if StringMap.mem sfrom !section_map
+                then failwith (
+                  Printf.sprintf
+                    "Your configuration file contains multiple mappings for section %s"
+                    sfrom
+                )
+                else
+                  section_map := StringMap.add sfrom (Provided(sto, [])) !section_map)
+          )
+          (* a SDA mapping *)
+          ; (fun () ->
+            Scanf.sscanf line
+              "register r%u = 0x%lX"
+              (fun r addr ->
+                if IntMap.mem r !sda_map
+                then failwith (
+                  Printf.sprintf
+                    "Your configuration file contains multiple SDA mappings for register %u"
+                    r
+                )
+                else
+                  sda_map := IntMap.add r (Provided(addr, [])) !sda_map)
+          )
+          ]
+    done; raise End_of_file (* unreachable, just to please the typer *)
+  with
+  | End_of_file -> (!section_map, !sda_map)
+
 (** Checks a whole ELF file according to a list of .sdump files. This never
     dumps anything, so it can be safely used when fuzz-testing even if the
     user accidentally enabled dumping options. *)
@@ -3342,15 +3428,19 @@ let check_elf_nodump elf sdumps =
   let section_strtab = elf.e_shdra.(eh.e_shstrndx) in
   let symtab_shdr = elf.e_shdra.(elf.e_symtab_sndx) in
   let symbol_strtab = elf.e_shdra.(Safe32.to_int symtab_shdr.sh_link) in
+  let (section_map, sda_map) =
+    match !conf_file with
+    | None -> (StringMap.empty, IntMap.empty)
+    | Some(filename) -> parse_conf filename
+  in
   let efw =
-    {
-      elf = elf;
-      log = [];
-      chkd_bytes_list = [];
-      chkd_fun_syms = Array.make nb_syms false;
-      chkd_data_syms = Array.make nb_syms false;
-      section_map = StringMap.empty;
-      sda_map = IntMap.empty;
+    { elf             = elf
+    ; log             = []
+    ; chkd_bytes_list = []
+    ; chkd_fun_syms   = Array.make nb_syms false
+    ; chkd_data_syms  = Array.make nb_syms false
+    ; section_map     = section_map
+    ; sda_map         = sda_map
     }
     >>> check_elf_header
     >>> add_range

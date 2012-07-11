@@ -28,6 +28,24 @@ type byte_chunk_desc =
   | Padding
   | Unknown            of string
 
+let add_uniq x l = if List.mem x l then l else x :: l
+
+(* This type specifies whether its argument was inferred by the tool or provided
+   via a config file, and lists the conflicts that were detected by the tool in
+   the right component of the pair. This allows us to report every conflict once
+   rather than at every occurence of a conflict. *)
+type 'a inferrable =
+  | Inferred of 'a * 'a list
+  | Provided of 'a * 'a list
+
+let add_failure failure = function
+| Inferred(x, failures) -> Inferred(x, add_uniq failure failures)
+| Provided(x, failures) -> Provided(x, add_uniq failure failures)
+
+let from_inferrable = function
+| Inferred(x, _) -> x
+| Provided(x, _) -> x
+
 (** This framework is carried along while analyzing the whole ELF file.
 *)
 type e_framework = {
@@ -42,10 +60,10 @@ type e_framework = {
   (** The mapping from CompCert sections to ELF sections will be inferred along
       the way. This way, we can check things without prior knowledge of the
       linker script. *)
-  section_map: string StringMap.t;
+  section_map: (string inferrable) StringMap.t;
   (** We will assign a virtual address to each register that can act as an SDA
       base register. *)
-  sda_map: int32 IntMap.t;
+  sda_map: (int32 inferrable) IntMap.t;
 }
 
 module PosOT = struct
