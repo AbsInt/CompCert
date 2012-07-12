@@ -106,17 +106,19 @@ let match_sections_name
     =
   let c_name = name_of_section c_section in
   try
-    let res = StringMap.find c_name sfw.ef.section_map in
-    let expected = from_inferrable res in
+    let (value, conflicts) = StringMap.find c_name sfw.ef.section_map in
+    let expected = from_inferrable value in
     if e_name = expected
     then sfw
     else (
       sfw
-      >>> (sf_ef |-- section_map) ^%= StringMap.add c_name (add_failure e_name res)
+      >>> (sf_ef |-- section_map) ^%=
+        StringMap.add c_name (value, StringSet.add e_name conflicts)
     )
   with Not_found -> (
     sfw
-    >>> (sf_ef |-- section_map) ^%= StringMap.add c_name (Inferred(e_name, []))
+    >>> (sf_ef |-- section_map) ^%=
+      StringMap.add c_name (Inferred(e_name), StringSet.empty)
   )
 
 (** Checks the symbol table entry of the function symbol number [sym_ndx],
@@ -788,32 +790,47 @@ let match_bo_ctr bo: checker = fun ffw ->
   | { true:1; false:1; true:1; false:1; false:1 } -> OK(ffw)
   | { _ } -> ERR("match_bo_ctr")
 
+(** Checks whether it is feasible that the position at offset [ofs] from the
+    CompCert symbol [ident] is situated at a relative address [addr] from
+    the SDA register [r]. This means that the following equation must hold:
+    [r] + addr = @ident + ofs
+    This allows us to determine what address [r] has to contain. If it is the
+    first such guess or if it matches previous expectations, it's fine.
+    Otherwise, there is a conflict that is reported in sda_map.
+*)
 let check_sda ident ofs r addr ffw: f_framework or_err =
   let ofs = z_int32 ofs in
-  let check_sda_aux ndx: f_framework or_err =
+  let check_sda_aux ndx: (int * f_framework) or_err =
     let elf = ffw.sf.ef.elf in
     let sym = elf.e_symtab.(ndx) in
     let expected_addr = Safe32.(sym.st_value + ofs - addr) in
     try
       let r_addr = from_inferrable (IntMap.find r ffw.sf.ef.sda_map) in
       if r_addr = expected_addr
-      then OK(ffw)
+      then OK(ndx, ffw)
       else ERR(
         Printf.sprintf
           "SDA register %d is expected to point both at 0x%lx and 0x%lx"
           r r_addr expected_addr
       )
     with Not_found ->
-      OK(
-        ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r (Inferred(expected_addr, []))
+      OK(ndx,
+         ffw >>> (ff_ef |-- sda_map) ^%= IntMap.add r (Inferred(expected_addr))
       )
   in
+  (* We might not know yet what symbols is the one for that ident *)
   let sym_list = PosMap.find ident ffw.sf.ident_to_sym_ndx in
+  (* So we test all the candidates *)
   let res = List.map check_sda_aux sym_list in
+  (* For now, we hope at most one matches *)
   match filter_ok res with
   | [] -> ERR("No satisfying SDA mapping, errors were: " ^
                  string_of_list id ", " (filter_err res))
-  | [ffw] -> OK(ffw)
+  | [(ndx, ffw)] -> OK(
+    ffw
+    (* We instantiate the relationship for that ident to the matching symbol *)
+    >>> (ff_sf |-- ident_to_sym_ndx) ^%= PosMap.add ident [ndx]
+  )
   | _ -> fatal "Multiple possible SDA mappings, please report."
 
 (** Compares a whole CompCert function code against an ELF code, starting at
@@ -3153,34 +3170,43 @@ let check_sym_tab_zero efw =
 let warn_sections_remapping efw =
   print_debug "Checking remapped sections";
   StringMap.fold
-    (fun c_name e_name efw ->
-      match e_name with
-      | Provided(_, []) -> efw
-      | Provided(e_name, conflicts) ->
-          efw
-          >>> add_log (ERROR(
-            Printf.sprintf "
+    (fun c_name (e_name, conflicts) efw ->
+      if StringSet.is_empty conflicts
+      then
+        match e_name with
+        | Provided(e_name) ->
+            efw
+        | Inferred(e_name) ->
+            if c_name = e_name
+            then efw
+            else
+              begin
+                efw
+                >>> add_log (WARNING(
+                  Printf.sprintf
+                    "Detected linker script remapping: section %S -> %S"
+                    c_name e_name
+                ))
+              end
+      else (* conflicts not empty *)
+        match e_name with
+        | Provided(e_name) ->
+            efw
+            >>> add_log (ERROR(
+              Printf.sprintf "
     Conflicting remappings for section %s:
       Specified: %s
       Expected:  %s"
-              c_name e_name (string_of_list id ", " conflicts)
-          ))
-      | Inferred(e_name, []) when c_name = e_name -> efw
-      | Inferred(e_name, []) ->
-          efw
-          >>> add_log (WARNING(
-            Printf.sprintf
-              "Detected linker script remapping: section %S -> %S"
-              c_name e_name
-          ))
-      | Inferred(e_name, conflicts) ->
-          efw
-          >>> add_log (ERROR(
-            Printf.sprintf "
+                c_name e_name (string_of_list id ", " (StringSet.elements conflicts))
+            ))
+        | Inferred(e_name) ->
+            efw
+            >>> add_log (ERROR(
+              Printf.sprintf "
     Conflicting remappings for section %s:
       %s"
-              c_name (string_of_list id ", " (e_name :: conflicts))
-          ))
+                c_name (string_of_list id ", " (e_name :: (StringSet.elements conflicts)))
+            ))
     )
     efw.section_map
     efw
@@ -3193,30 +3219,13 @@ let warn_sda_mapping efw =
     IntMap.fold
       (fun r vaddr efw ->
         match vaddr with
-        | Provided(_, []) -> efw
-        | Provided(vaddr, conflicts) ->
-          efw
-          >>> add_log (ERROR(
-            Printf.sprintf "
-    Conflicting SDA mappings for register r%u:
-      Specified: 0x%lX
-      Expected: %s"
-              r vaddr (string_of_list (Printf.sprintf "0x%lX") ", " conflicts)
-          ))
-        | Inferred(vaddr, []) ->
+        | Provided(_) -> efw
+        | Inferred(vaddr) ->
             efw >>> add_log (WARNING(
               Printf.sprintf
-                "SDA register mapping: register r%u = 0x%lX"
+                "This SDA register mapping was inferred: register r%u = 0x%lX"
                 r vaddr
             ))
-        | Inferred(vaddr, conflicts) ->
-          efw
-          >>> add_log (ERROR(
-            Printf.sprintf "
-    Conflicting SDA mappings for register r%u:
-      %s"
-              r (string_of_list (Printf.sprintf "0x%lX") ", " (vaddr :: conflicts))
-          ))
       )
       efw.sda_map
       efw
@@ -3404,7 +3413,9 @@ let parse_conf filename =
                     sfrom
                 )
                 else
-                  section_map := StringMap.add sfrom (Provided(sto, [])) !section_map)
+                  section_map :=
+                    StringMap.add sfrom (Provided(sto), StringSet.empty) !section_map
+              )
           )
           (* a SDA mapping *)
           ; (fun () ->
@@ -3418,7 +3429,7 @@ let parse_conf filename =
                     r
                 )
                 else
-                  sda_map := IntMap.add r (Provided(addr, [])) !sda_map)
+                  sda_map := IntMap.add r (Provided(addr)) !sda_map)
           )
           (* a list of symbols supposed to be missing from the .sdump files *)
           ; (fun () ->
