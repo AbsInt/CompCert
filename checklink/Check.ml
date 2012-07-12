@@ -796,7 +796,7 @@ let check_sda ident ofs r addr ffw: f_framework or_err =
     let expected_addr = Safe32.(sym.st_value + ofs - addr) in
     try
       let r_addr = from_inferrable (IntMap.find r ffw.sf.ef.sda_map) in
-      if Safe32.(r_addr = expected_addr)
+      if r_addr = expected_addr
       then OK(ffw)
       else ERR(
         Printf.sprintf
@@ -3197,9 +3197,10 @@ let warn_sda_mapping efw =
         | Provided(vaddr, conflicts) ->
           efw
           >>> add_log (ERROR(
-            Printf.sprintf "Conflicting SDA mappings for register r%u:
-Specified: 0x%lX
-Expected: %s"
+            Printf.sprintf "
+    Conflicting SDA mappings for register r%u:
+      Specified: 0x%lX
+      Expected: %s"
               r vaddr (string_of_list (Printf.sprintf "0x%lX") ", " conflicts)
           ))
         | Inferred(vaddr, []) ->
@@ -3211,8 +3212,9 @@ Expected: %s"
         | Inferred(vaddr, conflicts) ->
           efw
           >>> add_log (ERROR(
-            Printf.sprintf "Conflicting SDA mappings for register r%u:
-%s"
+            Printf.sprintf "
+    Conflicting SDA mappings for register r%u:
+      %s"
               r (string_of_list (Printf.sprintf "0x%lX") ", " (vaddr :: conflicts))
           ))
       )

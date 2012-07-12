@@ -33,7 +33,7 @@ let options = [
   "-exe", Arg.String set_elf_file,
   "<filename> Specify the ELF executable file to analyze";
   "-conf", Arg.String set_conf_file,
-  "<filename> Specify a configuration file (see README)";
+  "<filename> Specify a configuration file";
   (* Parsing behavior *)
   "-relaxed", Arg.Set ELF_parsers.relaxed,
   "Allows the following behaviors in the ELF parser:
