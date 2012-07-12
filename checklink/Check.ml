@@ -3409,7 +3409,7 @@ let parse_conf filename =
           (* a SDA mapping *)
           ; (fun () ->
             Scanf.sscanf line
-              "register r%u = 0x%lX"
+              "register r%u = %li"
               (fun r addr ->
                 if IntMap.mem r !sda_map
                 then failwith (
