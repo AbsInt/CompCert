@@ -3308,7 +3308,6 @@ let check_missed_symbols efw =
     match missed_syms_l with
     | [] -> efw
     | _  ->
-        Printf.printf "%s\n" (string_of_list string_of_int ", " missed_syms_l);
         let symtab = efw.elf.e_symtab in
         let symlist_names = string_of_list (fun ndx -> symtab.(ndx).st_name) " " in
         let missed_funs =

@@ -28,8 +28,6 @@ type byte_chunk_desc =
   | Padding
   | Unknown            of string
 
-let add_uniq x l = if List.mem x l then l else x :: l
-
 (* This type specifies whether its argument was inferred by the tool or provided
    via a config file. *)
 type 'a inferrable =
