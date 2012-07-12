@@ -3107,6 +3107,8 @@ let check_elf_header efw: e_framework =
 let check_sym_tab_zero efw =
   let elf = efw.elf in
   let sym0 = efw.elf.e_symtab.(0) in
+  (* First, let's mark it checked as a data symbol, to avoid warnings *)
+  efw.chkd_data_syms.(0) <- true;
   efw
   >>> (
     if sym0.st_name = ""
@@ -3271,67 +3273,68 @@ let check_unknown_chunks efw =
   )) efw
   else efw
 
-let check_missed_function_symbols efw =
-  if !exhaustivity
-  then
-    begin
-      let miss_fun =
-        List.filter
-          (fun ndx ->
-            let symtype = efw.elf.e_symtab.(ndx).st_type in
-            symtype = STT_FUNC || symtype = STT_NOTYPE
-          )
-          (list_false_indices efw.chkd_fun_syms)
-      in
-      match miss_fun with
-      | [] -> efw
-      | _  ->
-          if !list_missing
-          then
-            add_log (WARNING(
-              Printf.sprintf
-                "The following function symbols do not appear in .sdump files:\n%s"
-                (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_fun)
-            )) efw
-          else
-            add_log (WARNING(
-              Printf.sprintf
-                "%d function symbols do not appear in .sdump files. Add -list-missing to list them."
-                (List.length miss_fun)
-            )) efw
-    end
-  else efw
-
-let check_missed_data_symbols efw =
-  if !exhaustivity
-  then
-    begin
-      let miss_data =
-        List.filter
-          (fun ndx ->
-            let symtype = efw.elf.e_symtab.(ndx).st_type in
-            symtype = STT_OBJECT || symtype = STT_NOTYPE
-          )
-          (list_false_indices efw.chkd_data_syms)
-      in
-      match miss_data with
-      | [] -> efw
-      | _  ->
-          if !list_missing
-          then
-            add_log (WARNING(
-              Printf.sprintf
-                "The following data symbols do not appear in .sdump files:\n%s"
-                (string_of_list (fun ndx -> efw.elf.e_symtab.(ndx).st_name) " " miss_data)
-            )) efw
-          else
-            add_log (WARNING(
-              Printf.sprintf
-                "%d data symbols do not appear in .sdump files. Add -list-missing to list them."
-                (List.length miss_data)
-            )) efw
-    end
-  else efw
+let check_missed_symbols efw =
+  if not !exhaustivity
+  then efw
+  else
+    let chkd_syms_a =
+      Array.init
+        (Array.length efw.elf.e_symtab)
+        (
+          fun ndx ->
+            match efw.elf.e_symtab.(ndx).st_type with
+            (* we only care about function and data symbols *)
+            | STT_SECTION | STT_FILE -> true
+            | STT_OBJECT | STT_FUNC | STT_NOTYPE | STT_UNKNOWN ->
+                (* checked as either a function or a data symbol *)
+                efw.chkd_fun_syms.(ndx)
+                || efw.chkd_data_syms.(ndx)
+                (* or part of the symbols we know are mising *)
+                || StringSet.mem efw.elf.e_symtab.(ndx).st_name efw.missing_syms
+        )
+    in
+    let missed_syms_l = list_false_indices chkd_syms_a in
+    match missed_syms_l with
+    | [] -> efw
+    | _  ->
+        Printf.printf "%s\n" (string_of_list string_of_int ", " missed_syms_l);
+        let symtab = efw.elf.e_symtab in
+        let symlist_names = string_of_list (fun ndx -> symtab.(ndx).st_name) " " in
+        let missed_funs =
+          List.filter (fun ndx -> symtab.(ndx).st_type = STT_FUNC) missed_syms_l in
+        let missed_data =
+          List.filter (fun ndx -> symtab.(ndx).st_type = STT_OBJECT) missed_syms_l in
+        let missed_unknown =
+          List.filter (fun ndx ->
+            match symtab.(ndx).st_type with
+            | STT_NOTYPE | STT_UNKNOWN -> true
+            | _ -> false
+          ) missed_syms_l in
+        if !list_missing
+        then
+          efw
+           >>> add_log (WARNING(
+             Printf.sprintf
+               "
+    The following function symbol(s) do not appear in .sdump files:
+      %s
+    The following data symbols do not appear in .sdump files:
+      %s
+    The following unknown type symbols do not appear in .sdump files:
+      %s"
+               (symlist_names missed_funs)
+               (symlist_names missed_data)
+               (symlist_names missed_unknown)
+           ))
+        else
+          efw
+           >>> add_log (WARNING(
+             Printf.sprintf
+               "%u function symbol(s), %u data symbol(s) and %u unknown type symbol(s) do not appear in .sdump files. Add -list-missing to list them."
+               (List.length missed_funs)
+               (List.length missed_data)
+               (List.length missed_unknown)
+           ))
 
 let print_diagnosis efw =
   let (nb_err, nb_warn) = List.fold_left
@@ -3364,6 +3367,7 @@ let conf_file = ref (None: string option)
 let parse_conf filename =
   let section_map = ref StringMap.empty in
   let sda_map = ref IntMap.empty in
+  let missing_syms = ref StringSet.empty in
   let ic = open_in filename in
   try
     while true
@@ -3414,10 +3418,21 @@ let parse_conf filename =
                 else
                   sda_map := IntMap.add r (Provided(addr, [])) !sda_map)
           )
+          (* a list of symbols supposed to be missing from the .sdump files *)
+          ; (fun () ->
+            Scanf.sscanf line
+              "external %s@\n"
+              (fun sym_list_s ->
+                let sym_list = Str.split (Str.regexp "[ \t]+") sym_list_s in
+                List.iter
+                  (fun sym -> missing_syms := StringSet.add sym !missing_syms)
+                  sym_list
+              )
+          )
           ]
     done; raise End_of_file (* unreachable, just to please the typer *)
   with
-  | End_of_file -> (!section_map, !sda_map)
+  | End_of_file -> (!section_map, !sda_map, !missing_syms)
 
 (** Checks a whole ELF file according to a list of .sdump files. This never
     dumps anything, so it can be safely used when fuzz-testing even if the
@@ -3428,9 +3443,9 @@ let check_elf_nodump elf sdumps =
   let section_strtab = elf.e_shdra.(eh.e_shstrndx) in
   let symtab_shdr = elf.e_shdra.(elf.e_symtab_sndx) in
   let symbol_strtab = elf.e_shdra.(Safe32.to_int symtab_shdr.sh_link) in
-  let (section_map, sda_map) =
+  let (section_map, sda_map, missing_syms) =
     match !conf_file with
-    | None -> (StringMap.empty, IntMap.empty)
+    | None -> (StringMap.empty, IntMap.empty, StringSet.empty)
     | Some(filename) -> parse_conf filename
   in
   let efw =
@@ -3441,6 +3456,7 @@ let check_elf_nodump elf sdumps =
     ; chkd_data_syms  = Array.make nb_syms false
     ; section_map     = section_map
     ; sda_map         = sda_map
+    ; missing_syms    = missing_syms
     }
     >>> check_elf_header
     >>> add_range
@@ -3478,8 +3494,7 @@ let check_elf_nodump elf sdumps =
   >>> warn_sda_mapping
   (* warn about regions of the ELF file that could not be identified *)
   >>> check_unknown_chunks
-  >>> check_missed_function_symbols
-  >>> check_missed_data_symbols
+  >>> check_missed_symbols
   >>> print_diagnosis
 
 (** Checks a whole ELF file according to .sdump files.

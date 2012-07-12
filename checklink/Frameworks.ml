@@ -64,6 +64,8 @@ type e_framework = {
   (** We will assign a virtual address to each register that can act as an SDA
       base register. *)
   sda_map: (int32 inferrable) IntMap.t;
+  (** Contains the symbols that we expect to be missing from the .sdump files *)
+  missing_syms: StringSet.t;
 }
 
 module PosOT = struct

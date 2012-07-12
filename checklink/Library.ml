@@ -6,6 +6,7 @@ type bitstring = Bitstring.bitstring
 
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 module StringMap = Map.Make (String)
+module StringSet = Set.Make (String)
 
 let is_some: 'a option -> bool = function
 | Some(_) -> true
