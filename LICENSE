@@ -43,11 +43,11 @@ non-commercial contexts, subject to the terms of the GNU General
 Public License.
 
 The files contained in the flocq/ directory and its subdirectories are
-taken from the Flocq project, http://flocq.gforge.inria.fr/ These
-files are Copyright 2010-2012 INRIA and distributed under the terms of
-the GNU Lesser General Public Licence, either version 3 of the
-licence, or (at your option) any later version.  A copy of the
-GNU Lesser General Public Licence version 3 is included below.
+taken from the Flocq project, http://flocq.gforge.inria.fr/
+These files are Copyright 2010-2012 INRIA and distributed under the
+terms of the GNU Lesser General Public Licence, either version 3 of
+the licence, or (at your option) any later version.  A copy of the GNU
+Lesser General Public Licence version 3 is included below.
 
 Finally, the following files are taken from the CIL library:
     cparser/Cabs.ml
