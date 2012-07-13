@@ -15,7 +15,7 @@ Require Iteration.
 Require Floats.
 Require RTLgen.
 Require Inlining.
-Require Constprop.
+Require ConstpropOp.
 Require Coloring.
 Require Allocation.
 Require Compiler.
@@ -59,7 +59,7 @@ Extract Constant RTLtyping.infer_type_environment => "RTLtypingaux.infer_type_en
 (* Constprop *)
 Extract Constant ConstpropOp.propagate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 1".
-Extract Constant Constprop.generate_float_constants =>
+Extract Constant ConstpropOp.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
 
 (* Coloring *)

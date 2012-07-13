@@ -108,6 +108,7 @@ Inductive instruction: Type :=
   (** Moves *)
   | Pmov_rr (rd: ireg) (r1: ireg)       (**r [mov] (32-bit int) *)
   | Pmov_ri (rd: ireg) (n: int)
+  | Pmov_raddr (rd: ireg) (id: ident)
   | Pmov_rm (rd: ireg) (a: addrmode)
   | Pmov_mr (a: addrmode) (rs: ireg)
   | Pmovd_fr (rd: freg) (r1: ireg)      (**r [movd] (32-bit int) *)
@@ -458,6 +459,8 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmov_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Vint n))) m
+  | Pmov_raddr rd id =>
+      Next (nextinstr_nf (rs#rd <- (symbol_offset id Int.zero))) m
   | Pmov_rm rd a =>
       exec_load Mint32 m a rs rd
   | Pmov_mr a r1 =>

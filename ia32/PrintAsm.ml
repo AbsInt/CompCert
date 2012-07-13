@@ -20,6 +20,8 @@ open AST
 open Memdata
 open Asm
 
+module StringSet = Set.Make(String)
+
 (* Recognition of target ABI and asm syntax *)
 
 type target = ELF | MacOS | Cygwin
@@ -499,6 +501,7 @@ let print_builtin_inline oc name args res =
 
 let float_literals : (int * int64) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
+let indirect_symbols : StringSet.t ref = ref StringSet.empty
 
 (* Reminder on AT&T syntax: op source, dest *)
 
@@ -508,6 +511,13 @@ let print_instruction oc = function
       fprintf oc "	movl	%a, %a\n" ireg r1 ireg rd
   | Pmov_ri(rd, n) ->
       fprintf oc "	movl	$%ld, %a\n" (camlint_of_coqint n) ireg rd
+  | Pmov_raddr(rd, id) ->
+      if target = MacOS then begin
+        let id = extern_atom id in
+        indirect_symbols := StringSet.add id !indirect_symbols;
+        fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
+      end else
+        fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
   | Pmov_rm(rd, a) ->
       fprintf oc "	movl	%a, %a\n" addressing a ireg rd
   | Pmov_mr(a, r1) ->
@@ -822,6 +832,7 @@ let print_var oc (name, v) =
 
 let print_program oc p =
   need_masks := false;
+  indirect_symbols := StringSet.empty;
   List.iter (print_var oc) p.prog_vars;
   List.iter (print_fundef oc) p.prog_funct;
   if !need_masks then begin
@@ -831,4 +842,13 @@ let print_program oc p =
                raw_symbol "__negd_mask";
     fprintf oc "%a:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF\n"
                raw_symbol "__absd_mask"
+  end;
+  if target = MacOS then begin
+    fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";
+    StringSet.iter
+      (fun s ->
+        fprintf oc "L%a$non_lazy_ptr:\n" raw_symbol s;
+        fprintf oc "	.indirect_symbol %a\n" raw_symbol s;
+        fprintf oc "	.long	0\n")
+      !indirect_symbols
   end

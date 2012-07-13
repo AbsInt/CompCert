@@ -52,8 +52,20 @@ Open Local Scope cminorsel_scope.
 
 (** ** Constants **)
 
+(** External oracle to determine whether a symbol is external and must
+  be addressed through [Oaddrsymbol], or is local and can be addressed
+  through [Olea Aglobal].  This is to accommodate MacOS X's limitations
+  on references to data symbols imported from shared libraries. *)
+
+Parameter symbol_is_external: ident -> bool.
+
 Definition addrsymbol (id: ident) (ofs: int) :=
-  Eop (Olea (Aglobal id ofs)) Enil.
+  if symbol_is_external id then
+    if Int.eq ofs Int.zero
+    then Eop (Oaddrsymbol id) Enil
+    else Eop (Olea (Aindexed ofs)) (Eop (Oaddrsymbol id) Enil ::: Enil)
+  else
+    Eop (Olea (Aglobal id ofs)) Enil.
 
 Definition addrstack (ofs: int) :=
   Eop (Olea (Ainstack ofs)) Enil.
@@ -410,9 +422,10 @@ Definition floatofint (e: expr) := Eop Ofloatofint (e ::: Enil).
 Definition intuoffloat (e: expr) :=
   let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
   Elet e
-    (Econdition (CEcond (Ccompf Clt) (Eletvar O ::: f ::: Enil))
-      (intoffloat (Eletvar O))
-      (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar O) f)))).
+    (Elet (Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil)
+      (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
+        (intoffloat (Eletvar 1))
+        (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
 
 Definition floatofintu (e: expr) :=
   let f := Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil in
