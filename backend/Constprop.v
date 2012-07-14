@@ -251,6 +251,17 @@ Definition transf_ros (app: D.t) (ros: reg + ident) : reg + ident :=
   | inr s => ros
   end.
 
+Parameter generate_float_constants : unit -> bool.
+
+Definition const_for_result (a: approx) : option operation :=
+  match a with
+  | I n => Some(Ointconst n)
+  | F n => if generate_float_constants tt then Some(Ofloatconst n) else None
+  | G symb ofs => Some(Oaddrsymbol symb ofs)
+  | S ofs => Some(Oaddrstack ofs)
+  | _ => None
+  end.
+
 Definition transf_instr (gapp: global_approx) (app: D.t) (instr: instruction) :=
   match instr with
   | Iop op args res s =>

@@ -60,7 +60,7 @@ let preprocess ifile ofile =
   let cmd =
     sprintf "%s -D__COMPCERT__ %s %s %s %s"
       Configuration.prepro
-      (if Configuration.need_stdlib_wrapper
+      (if Configuration.has_runtime_lib
        then sprintf "-I%s" !stdlib_path
        else "")
       (quote_options !prepro_options)
@@ -210,7 +210,7 @@ let linker exe_name files =
       Configuration.linker
       (Filename.quote exe_name)
       (quote_options files)
-      (if Configuration.need_stdlib_wrapper
+      (if Configuration.has_runtime_lib
        then sprintf "-L%s -lcompcert" !stdlib_path
        else "") in
   if command cmd <> 0 then exit 2

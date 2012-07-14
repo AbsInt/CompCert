@@ -322,9 +322,9 @@ Definition transl_op
   | Ofloatconst f, nil =>
       do r <- freg_of res; 
       OK ((if Float.eq_dec f Float.zero then Pxorpd_f r else Pmovsd_fi r f) :: k)
-  | Oaddrsymbol id, nil =>
+  | Oindirectsymbol id, nil =>
       do r <- ireg_of res;
-      OK (Pmov_raddr r id :: k)
+      OK (Pmov_ra r id :: k)
   | Ocast8signed, a1 :: nil =>
       do r1 <- ireg_of a1; do r <- ireg_of res; mk_intconv Pmovsb_rr r r1 k
   | Ocast8unsigned, a1 :: nil =>

@@ -511,7 +511,7 @@ let print_instruction oc = function
       fprintf oc "	movl	%a, %a\n" ireg r1 ireg rd
   | Pmov_ri(rd, n) ->
       fprintf oc "	movl	$%ld, %a\n" (camlint_of_coqint n) ireg rd
-  | Pmov_raddr(rd, id) ->
+  | Pmov_ra(rd, id) ->
       if target = MacOS then begin
         let id = extern_atom id in
         indirect_symbols := StringSet.add id !indirect_symbols;

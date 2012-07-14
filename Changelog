@@ -1,3 +1,11 @@
+Release 1.12
+========================
+
+Other changes:
+- IA32/MacOS X: now supports referencing global variables defined in shared
+  libraries; old hack for stdio is no longer needed.
+
+	
 Release 1.11, 2012-07-13
 ========================
 

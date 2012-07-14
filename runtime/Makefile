@@ -1,11 +1,11 @@
 include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
-OBJS=stdio.o
+INCLUDES=
+OBJS=
 LIB=libcompcert.a
-INCLUDES=stdio.h
 
-ifeq ($(strip $(NEED_STDLIB_WRAPPER)),true)
+ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 all: $(LIB) $(INCLUDES)
 else
 all:
@@ -18,7 +18,7 @@ $(LIB): $(OBJS)
 clean:
 	rm -f *.o $(LIB)
 
-ifeq ($(strip $(NEED_STDLIB_WRAPPER)),true)
+ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 install:
 	install -d $(LIBDIR)
 	install -c $(LIB) $(INCLUDES) $(LIBDIR)

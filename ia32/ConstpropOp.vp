@@ -145,19 +145,6 @@ Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   | _, _ => Unknown
   end.
 
-(** * Generation of constants *)
-
-Parameter generate_float_constants : unit -> bool.
-
-Definition const_for_result (a: approx) : option operation :=
-  match a with
-  | I n => Some(Ointconst n)
-  | F n => if generate_float_constants tt then Some(Ofloatconst n) else None
-  | G symb ofs => Some(Olea (Aglobal symb ofs))
-  | S ofs => Some(Olea (Ainstack ofs))
-  | _ => None
-  end.
-
 (** * Operator strength reduction *)
 
 (** We now define auxiliary functions for strength reduction of

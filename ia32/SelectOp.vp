@@ -62,8 +62,8 @@ Parameter symbol_is_external: ident -> bool.
 Definition addrsymbol (id: ident) (ofs: int) :=
   if symbol_is_external id then
     if Int.eq ofs Int.zero
-    then Eop (Oaddrsymbol id) Enil
-    else Eop (Olea (Aindexed ofs)) (Eop (Oaddrsymbol id) Enil ::: Enil)
+    then Eop (Oindirectsymbol id) Enil
+    else Eop (Olea (Aindexed ofs)) (Eop (Oindirectsymbol id) Enil ::: Enil)
   else
     Eop (Olea (Aglobal id ofs)) Enil.
 

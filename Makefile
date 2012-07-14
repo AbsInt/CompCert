@@ -190,7 +190,7 @@ driver/Configuration.ml: Makefile.config VERSION
          echo let arch = "\"$(ARCH)\""; \
          echo let variant = "\"$(VARIANT)\""; \
          echo let system = "\"$(SYSTEM)\""; \
-         echo let need_stdlib_wrapper = $(NEED_STDLIB_WRAPPER); \
+         echo let has_runtime_lib = $(HAS_RUNTIME_LIB); \
          version=`cat VERSION`; \
          echo let version = "\"$$version\"") \
         > driver/Configuration.ml

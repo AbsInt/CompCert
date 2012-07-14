@@ -69,7 +69,7 @@ Inductive operation : Type :=
   | Omove: operation                    (**r [rd = r1] *)
   | Ointconst: int -> operation         (**r [rd] is set to the given integer constant *)
   | Ofloatconst: float -> operation     (**r [rd] is set to the given float constant *)
-  | Oaddrsymbol: ident -> operation     (**r [rd] is set to the address of the symbol *)
+  | Oindirectsymbol: ident -> operation (**r [rd] is set to the address of the symbol *)
 (*c Integer arithmetic: *)
   | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
   | Ocast8unsigned: operation           (**r [rd] is 8-bit zero extension of [r1] *)
@@ -114,6 +114,7 @@ Inductive operation : Type :=
 
 (** Derived operators. *)
 
+Definition Oaddrsymbol (id: ident) (ofs: int) : operation := Olea (Aglobal id ofs).
 Definition Oaddrstack (ofs: int) : operation := Olea (Ainstack ofs).
 Definition Oaddimm (n: int) : operation := Olea (Aindexed n).
 
@@ -193,7 +194,7 @@ Definition eval_operation
   | Omove, v1::nil => Some v1
   | Ointconst n, nil => Some (Vint n)
   | Ofloatconst n, nil => Some (Vfloat n)
-  | Oaddrsymbol id, nil => Some (symbol_address genv id Int.zero)
+  | Oindirectsymbol id, nil => Some (symbol_address genv id Int.zero)
   | Ocast8signed, v1 :: nil => Some (Val.sign_ext 8 v1)
   | Ocast8unsigned, v1 :: nil => Some (Val.zero_ext 8 v1)
   | Ocast16signed, v1 :: nil => Some (Val.sign_ext 16 v1)
@@ -277,7 +278,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Omove => (nil, Tint)   (* treated specially *)
   | Ointconst _ => (nil, Tint)
   | Ofloatconst _ => (nil, Tfloat)
-  | Oaddrsymbol _ => (nil, Tint)
+  | Oindirectsymbol _ => (nil, Tint)
   | Ocast8signed => (Tint :: nil, Tint)
   | Ocast8unsigned => (Tint :: nil, Tint)
   | Ocast16signed => (Tint :: nil, Tint)
@@ -542,7 +543,7 @@ Definition two_address_op (op: operation) : bool :=
   | Omove => false
   | Ointconst _ => false
   | Ofloatconst _ => false
-  | Oaddrsymbol _ => false
+  | Oindirectsymbol _ => false
   | Ocast8signed => false
   | Ocast8unsigned => false
   | Ocast16signed => false
