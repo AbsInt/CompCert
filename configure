@@ -21,7 +21,6 @@ target=''
 usage='Usage: ./configure [options] target
 
 Supported targets:
-  ppc-macosx       (PowerPC, MacOS X)
   ppc-linux        (PowerPC, Linux)
   ppc-eabi         (PowerPC, EABI with GNU/Unix tools)
   ppc-eabi-diab    (PowerPC, EABI with Diab tools)
@@ -65,15 +64,6 @@ cchecklink=false
 has_runtime_lib=false
 
 case "$target" in
-  powerpc-macosx|ppc-macosx)
-    arch="powerpc"
-    variant="macosx"
-    system="macosx"
-    cc="${toolprefix}gcc -arch ppc"
-    cprepro="${toolprefix}gcc -arch ppc -U__GNUC__ -U__BLOCKS__ -E"
-    casm="${toolprefix}gcc -arch ppc -c"
-    clinker="${toolprefix}gcc -arch ppc"
-    libmath="";;
   powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
     arch="powerpc"
     variant="eabi"
@@ -194,7 +184,6 @@ cat >> Makefile.config <<'EOF'
 ARCH=
 
 # Target ABI
-# VARIANT=macosx   # for PowerPC / MacOS X
 # VARIANT=eabi     # for PowerPC / Linux and other SVR4 or EABI platforms
 # VARIANT=linux    # for ARM
 # VARIANT=standard # for IA32
