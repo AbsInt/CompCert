@@ -80,7 +80,8 @@ Inductive memory_chunk : Type :=
   | Mint16unsigned : memory_chunk  (**r 16-bit unsigned integer *)
   | Mint32 : memory_chunk          (**r 32-bit integer, or pointer *)
   | Mfloat32 : memory_chunk        (**r 32-bit single-precision float *)
-  | Mfloat64 : memory_chunk.       (**r 64-bit double-precision float *)
+  | Mfloat64 : memory_chunk        (**r 64-bit double-precision float *)
+  | Mfloat64al32 : memory_chunk.   (**r 64-bit double-precision float, 4-aligned *)
 
 (** The type (integer/pointer or float) of a chunk. *)
 
@@ -93,6 +94,7 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
   | Mint32 => Tint
   | Mfloat32 => Tfloat
   | Mfloat64 => Tfloat
+  | Mfloat64al32 => Tfloat
   end.
 
 (** Initialization data for global variables. *)

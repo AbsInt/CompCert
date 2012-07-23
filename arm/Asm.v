@@ -515,11 +515,11 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfcvtsd r1 r2 =>
       OK (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
   | Pfldd r1 r2 n =>
-      exec_load Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
+      exec_load Mfloat64al32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pflds r1 r2 n =>
       exec_load Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfstd r1 r2 n =>      
-      exec_store Mfloat64 (Val.add rs#r2 (Vint n)) r1 rs m
+      exec_store Mfloat64al32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfsts r1 r2 n =>
       match exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m with
       | OK rs' m' => OK (rs'#FR7 <- Vundef) m'
@@ -616,7 +616,7 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
       extcall_arg rs m (S (Outgoing ofs Tint)) v
   | extcall_arg_float_stack: forall ofs bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mfloat64 m (Val.add (rs (IR IR13)) (Vint (Int.repr bofs))) = Some v ->
+      Mem.loadv Mfloat64al32 m (Val.add (rs (IR IR13)) (Vint (Int.repr bofs))) = Some v ->
       extcall_arg rs m (S (Outgoing ofs Tfloat)) v.
 
 Definition extcall_arguments

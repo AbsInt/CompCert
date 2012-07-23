@@ -414,6 +414,7 @@ Axiom load_store_similar:
   forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall chunk',
   size_chunk chunk' = size_chunk chunk ->
+  align_chunk chunk' <= align_chunk chunk ->
   exists v', load chunk' m2 b ofs = Some v' /\ decode_encode_val v chunk chunk' v'.
 
 Axiom load_store_same:

@@ -219,6 +219,7 @@ Definition of_chunk (chunk: memory_chunk) :=
   | Mint32 => Any
   | Mfloat32 => Float32
   | Mfloat64 => Any
+  | Mfloat64al32 => Any
   end.
 
 Definition unop (op: unary_operation) (a: approx) :=
@@ -322,7 +323,7 @@ Definition var_set_self (cenv: compilenv) (id: ident) (k: stmt): res stmt :=
   | Var_stack_scalar chunk ofs =>
       OK (Sseq (make_store chunk (make_stackaddr ofs) (Evar (for_var id))) k)
   | Var_stack_array ofs sz al =>
-      OK (Sseq (Sbuiltin None (EF_memcpy sz (Zmin al 4))
+      OK (Sseq (Sbuiltin None (EF_memcpy sz al)
                          (make_stackaddr ofs :: Evar (for_var id) :: nil)) k)
   | _ =>
       Error(msg "Cminorgen.var_set_self")

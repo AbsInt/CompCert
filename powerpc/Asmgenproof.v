@@ -827,9 +827,9 @@ Proof.
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   left; eapply exec_straight_steps; eauto with coqlib;
   destruct chunk; simpl; simpl in H6;
-  (* all cases but Mint8signed *)
+  (* all cases but Mint8signed and Mfloat64 *)
   try (eapply transl_load_correct; eauto;
-       intros; simpl; unfold preg_of; rewrite H6; auto).
+       intros; simpl; unfold preg_of; rewrite H6; auto; fail).
   (* Mint8signed *)
   exploit loadv_8_signed_unsigned; eauto. intros [v' [LOAD EQ]].
   assert (X1: forall (cst : constant) (r1 : ireg) (rs1 : regset),
@@ -849,6 +849,10 @@ Proof.
   eapply agree_set_twice_mireg; eauto.
   rewrite EQ. apply Val.sign_ext_lessdef. 
   generalize (ireg_val _ _ _ dst AG1 H6). rewrite Regmap.gss. auto.
+  (* Mfloat64 *)
+  exploit Mem.loadv_float64al32; eauto. intros. clear H0.
+  eapply transl_load_correct; eauto;
+  intros; simpl; unfold preg_of; rewrite H6; auto.
 Qed.
 
 Lemma storev_8_signed_unsigned:
@@ -883,6 +887,7 @@ Proof.
   rewrite <- (eval_addressing_preserved _ _ symbols_preserved) in H.
   left; eapply exec_straight_steps_bis; eauto with coqlib.
   destruct chunk; simpl; simpl in H6;
+  try (generalize (Mem.storev_float64al32 _ _ _ _ H0); intros);
   try (rewrite storev_8_signed_unsigned in H0);
   try (rewrite storev_16_signed_unsigned in H0);
   simpl; eapply transl_store_correct; eauto;

@@ -2420,7 +2420,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= recur_simpl
       | _ -> error
       end
-  | Mfloat64, FR res ->
+  | (Mfloat64 | Mfloat64al32), FR res ->
       begin match ecode with
       | LFD(frD, rA, d) :: es ->
           OK(fw)
@@ -2480,7 +2480,7 @@ and check_builtin_vstore_common ccode ecode pc chunk addr offset src fw =
           >>= compare_code ccode es (Int32.add pc 8l)
       | _ -> error
       end
-  | Mfloat64, FR src ->
+  | (Mfloat64 | Mfloat64al32), FR src ->
       begin match ecode with
       | STFD(frS, rA, d) :: es ->
           OK(fw)

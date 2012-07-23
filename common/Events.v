@@ -1283,7 +1283,7 @@ Qed.
 
 Inductive extcall_memcpy_sem (sz al: Z) (F V: Type) (ge: Genv.t F V): list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_memcpy_sem_intro: forall bdst odst bsrc osrc m bytes m',
-      al = 1 \/ al = 2 \/ al = 4 -> sz > 0 ->
+      al = 1 \/ al = 2 \/ al = 4 \/ al = 8 -> sz > 0 ->
       (al | sz) -> (al | Int.unsigned osrc) -> (al | Int.unsigned odst) ->
       bsrc <> bdst \/ Int.unsigned osrc = Int.unsigned odst
                    \/ Int.unsigned osrc + sz <= Int.unsigned odst

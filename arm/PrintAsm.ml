@@ -343,7 +343,7 @@ let print_builtin_vload oc chunk args res =
     | Mfloat32, [IR addr], FR res ->
         fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr;
         fprintf oc "	fcvtds	%a, %a\n" freg res freg_single res; 2
-    | Mfloat64, [IR addr], FR res ->
+    | (Mfloat64 | Mfloat64al32), [IR addr], FR res ->
         fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
     | _ ->
         assert false
@@ -363,7 +363,7 @@ let print_builtin_vstore oc chunk args =
     | Mfloat32, [IR addr; FR src] ->
         fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg src;
         fprintf oc "	fsts	%a, [%a, #0]\n" freg_single FR6 ireg addr; 2
-    | Mfloat64, [IR addr; FR src] ->
+    | (Mfloat64 | Mfloat64al32), [IR addr; FR src] ->
         fprintf oc "	fstd	%a, [%a, #0]\n" freg src ireg addr; 1
     | _ ->
         assert false

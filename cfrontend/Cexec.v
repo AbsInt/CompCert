@@ -435,7 +435,7 @@ Definition do_ef_free
 
 Definition memcpy_args_ok
   (sz al: Z) (bdst: block) (odst: Z) (bsrc: block) (osrc: Z) : Prop :=
-      (al = 1 \/ al = 2 \/ al = 4)
+      (al = 1 \/ al = 2 \/ al = 4 \/ al = 8)
    /\ sz > 0
    /\ (al | sz) /\ (al | osrc) /\ (al | odst)
    /\ (bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc).
@@ -445,8 +445,9 @@ Remark memcpy_check_args:
   {memcpy_args_ok sz al bdst odst bsrc osrc} + {~memcpy_args_ok sz al bdst odst bsrc osrc}.
 Proof with try (right; intuition omega).
   intros. 
-  assert (X: {al = 1 \/ al = 2 \/ al = 4} + {~(al = 1 \/ al = 2 \/ al = 4)}).
-    destruct (zeq al 1); auto. destruct (zeq al 2); auto. destruct (zeq al 4); auto...
+  assert (X: {al = 1 \/ al = 2 \/ al = 4 \/ al = 8} + {~(al = 1 \/ al = 2 \/ al = 4 \/ al = 8)}).
+    destruct (zeq al 1); auto. destruct (zeq al 2); auto.
+    destruct (zeq al 4); auto. destruct (zeq al 8); auto...
   unfold memcpy_args_ok. destruct X...
   assert (al > 0) by (intuition omega).
   destruct (zlt 0 sz)...

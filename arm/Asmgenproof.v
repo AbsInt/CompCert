@@ -816,6 +816,7 @@ Proof.
   left; eapply exec_straight_steps; eauto with coqlib.
   exists m'; split; auto.
   destruct chunk; simpl; simpl in H6;
+  try (generalize (Mem.loadv_float64al32 _ _ _ H0); intros);
   (eapply transl_load_int_correct || eapply transl_load_float_correct);
   eauto; intros; reflexivity.
 Qed.
@@ -843,6 +844,7 @@ Proof.
   destruct chunk; simpl; simpl in H6;
   try (rewrite storev_8_signed_unsigned in H0);
   try (rewrite storev_16_signed_unsigned in H0);
+  try (generalize (Mem.storev_float64al32 _ _ _ _ H0); intros);
   simpl;
   (eapply transl_store_int_correct || eapply transl_store_float_correct);
   eauto; intros; simpl; auto.

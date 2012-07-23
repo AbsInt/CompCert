@@ -469,7 +469,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
           transl_load_store_int Pldr is_immed_mem_word dst addr args k
       | Mfloat32 =>
           transl_load_store_float Pflds is_immed_mem_float dst addr args k
-      | Mfloat64 =>
+      | Mfloat64 | Mfloat64al32 =>
           transl_load_store_float Pfldd is_immed_mem_float dst addr args k
       end
   | Mstore chunk addr args src =>
@@ -486,7 +486,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
           transl_load_store_int Pstr is_immed_mem_word src addr args k
       | Mfloat32 =>
           transl_load_store_float Pfsts is_immed_mem_float src addr args k
-      | Mfloat64 =>
+      | Mfloat64 | Mfloat64al32 =>
           transl_load_store_float Pfstd is_immed_mem_float src addr args k
       end
   | Mcall sig (inl r) =>

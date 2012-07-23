@@ -647,9 +647,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Plbzx rd r1 r2 =>
       load2 Mint8unsigned rd r1 r2 rs m
   | Plfd rd cst r1 =>
-      load1 Mfloat64 rd cst r1 rs m
+      load1 Mfloat64al32 rd cst r1 rs m
   | Plfdx rd r1 r2 =>
-      load2 Mfloat64 rd r1 r2 rs m
+      load2 Mfloat64al32 rd r1 r2 rs m
   | Plfs rd cst r1 =>
       load1 Mfloat32 rd cst r1 rs m
   | Plfsx rd r1 r2 =>
@@ -712,9 +712,9 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pstbx rd r1 r2 =>
       store2 Mint8unsigned rd r1 r2 rs m
   | Pstfd rd cst r1 =>
-      store1 Mfloat64 rd cst r1 rs m
+      store1 Mfloat64al32 rd cst r1 rs m
   | Pstfdx rd r1 r2 =>
-      store2 Mfloat64 rd r1 r2 rs m
+      store2 Mfloat64al32 rd r1 r2 rs m
   | Pstfs rd cst r1 =>
       match store1 Mfloat32 rd cst r1 rs m with
       | OK rs' m' => OK (rs'#FPR13 <- Vundef) m'
@@ -814,7 +814,7 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
       extcall_arg rs m (S (Outgoing ofs Tint)) v
   | extcall_arg_float_stack: forall ofs bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mfloat64 m (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
+      Mem.loadv Mfloat64al32 m (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
       extcall_arg rs m (S (Outgoing ofs Tfloat)) v.
 
 Definition extcall_arguments

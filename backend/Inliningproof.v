@@ -671,6 +671,11 @@ Proof.
     destruct (zle sz 2). omegaContradiction.
     destruct (zle sz 4). auto.
     apply Zdivides_trans with 8; auto. exists 2; auto.
+  assert (8 <= sz -> (8 | n)). intros.
+    destruct (zle sz 1). omegaContradiction.
+    destruct (zle sz 2). omegaContradiction.
+    destruct (zle sz 4). omegaContradiction.
+    auto.
   destruct chunk; simpl in *; auto.
   apply Zone_divide.
   apply Zone_divide.

@@ -452,7 +452,7 @@ Definition transl_load (chunk: memory_chunk)
       do r <- ireg_of dest; OK(Pmov_rm r am :: k)
   | Mfloat32 =>
       do r <- freg_of dest; OK(Pcvtss2sd_fm r am :: k)
-  | Mfloat64 =>
+  | Mfloat64 | Mfloat64al32 =>
       do r <- freg_of dest; OK(Pmovsd_fm r am :: k)
   end.
 
@@ -469,7 +469,7 @@ Definition transl_store (chunk: memory_chunk)
       do r <- ireg_of src; OK(Pmov_mr am r :: k)
   | Mfloat32 =>
       do r <- freg_of src; OK(Pcvtsd2ss_mf am r :: k)
-  | Mfloat64 =>
+  | Mfloat64 | Mfloat64al32 =>
       do r <- freg_of src; OK(Pmovsd_mf am r :: k)
   end.
 

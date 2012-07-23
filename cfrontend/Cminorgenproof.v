@@ -1753,6 +1753,8 @@ Proof.
   inv B; auto. inv H0; auto. constructor. auto.
   (* float64 *)
   exists va; auto.
+  (* float64al32 *)
+  exists va; auto.
 Qed.
 
 Lemma storev_mapped_content_inject:
@@ -2069,8 +2071,7 @@ Lemma var_set_self_correct_array:
   val_inject f v tv ->
   Mem.inject f m tm ->
   PTree.get id e = Some(b, Varray sz al) ->
-  extcall_memcpy_sem sz (Zmin al 4) ge
-                             (Vptr b Int.zero :: v :: nil) m E0 Vundef m' ->
+  extcall_memcpy_sem sz al ge (Vptr b Int.zero :: v :: nil) m E0 Vundef m' ->
   te!(for_var id) = Some tv ->
   exists f', exists tm',
     star step tge (State fn a k (Vptr sp Int.zero) te tm)
@@ -2087,7 +2088,7 @@ Proof.
   (* var_stack_array *)
   unfold var_set_self in VS. rewrite <- H in VS. inv VS.
   exploit match_callstack_match_globalenvs; eauto. intros [hi' MG].
-  assert (external_call (EF_memcpy sz0 (Zmin al0 4)) ge (Vptr b0 Int.zero :: v :: nil) m E0 Vundef m').
+  assert (external_call (EF_memcpy sz0 al0) ge (Vptr b0 Int.zero :: v :: nil) m E0 Vundef m').
     assumption.
   exploit external_call_mem_inject; eauto. 
   eapply inj_preserves_globals; eauto.

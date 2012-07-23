@@ -273,7 +273,7 @@ Definition make_vol_load (dst: ident) (addr: expr) (ty: type) :=
   by-copy assignment of a value of Clight type [ty]. *)
 
 Definition make_memcpy (dst src: expr) (ty: type) :=
-  Sbuiltin None (EF_memcpy (Csyntax.sizeof ty) (Zmin (Csyntax.alignof ty) 4))
+  Sbuiltin None (EF_memcpy (Csyntax.sizeof ty) (Csyntax.alignof ty))
                 (dst :: src :: nil).
 
 (** [make_store addr ty rhs] stores the value of the

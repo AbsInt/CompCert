@@ -232,7 +232,7 @@ Proof.
 Qed.
 
 Lemma fe_stack_data_aligned:
-  (4 | fe_stack_data fe).
+  (8 | fe_stack_data fe).
 Proof.
   intros.
   generalize (frame_env_aligned b). intuition. fold fe in H. intuition.
@@ -371,7 +371,7 @@ Lemma gss_index_contains_base:
   /\ decode_encode_val v (chunk_of_type (type_of_index idx)) (chunk_of_type (type_of_index idx)) v'.
 Proof.
   intros. 
-  exploit Mem.load_store_similar. eauto. reflexivity. 
+  exploit Mem.load_store_similar. eauto. reflexivity. omega. 
   intros [v' [A B]].
   exists v'; split; auto. constructor; auto.
 Qed.
@@ -1408,7 +1408,7 @@ Proof.
     intros. apply Mem.perm_implies with Freeable; auto with mem. 
     eapply Mem.perm_alloc_2; eauto.
     generalize stack_data_offset_valid bound_stack_data_stacksize; omega.
-    red. intros. apply Zdivides_trans with 4. 
+    red. intros. apply Zdivides_trans with 8. 
     destruct chunk; simpl; auto with align_4.
     apply fe_stack_data_aligned.
     intros.

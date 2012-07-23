@@ -727,6 +727,7 @@ Proof.
   rewrite H in MKLOAD. inv MKLOAD. constructor; auto. 
 Qed.
 
+(*
 Remark capped_alignof_divides:
   forall ty n, 
   (alignof ty | n) -> (Zmin (alignof ty) 4 | n).
@@ -743,6 +744,7 @@ Proof.
   intros. generalize (alignof_1248 ty). 
   intros [A|[A|[A|A]]]; rewrite A; auto.
 Qed.
+*)
 
 Lemma make_memcpy_correct:
   forall f dst src ty k e le m b ofs v t m',
@@ -757,11 +759,9 @@ Proof.
   econstructor.
   econstructor. eauto. econstructor. eauto. constructor. 
   econstructor; eauto. 
-  apply capped_alignof_124.
+  apply alignof_1248.
   apply sizeof_pos. 
-  apply capped_alignof_divides. apply sizeof_alignof_compat.
-  apply capped_alignof_divides; auto.
-  apply capped_alignof_divides; auto.
+  apply sizeof_alignof_compat.
 Qed.
  
 Lemma make_store_correct:
@@ -1046,11 +1046,9 @@ Proof.
   apply bind_parameters_array with b m1. 
   exploit me_local; eauto. intros [vk [A B]]. congruence. 
   econstructor; eauto. 
-  apply capped_alignof_124.
+  apply alignof_1248.
   apply sizeof_pos. 
-  apply capped_alignof_divides. apply sizeof_alignof_compat. 
-  apply capped_alignof_divides; auto.
-  apply capped_alignof_divides; auto.
+  apply sizeof_alignof_compat. 
   apply IHbind_parameters; auto.
 Qed.
 

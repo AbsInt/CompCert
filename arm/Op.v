@@ -342,17 +342,6 @@ Definition type_of_addressing (addr: addressing) : list typ :=
   | Ainstack _ => nil
   end.
 
-Definition type_of_chunk (c: memory_chunk) : typ :=
-  match c with
-  | Mint8signed => Tint
-  | Mint8unsigned => Tint
-  | Mint16signed => Tint
-  | Mint16unsigned => Tint
-  | Mint32 => Tint
-  | Mfloat32 => Tfloat
-  | Mfloat64 => Tfloat
-  end.
-
 (** Weak type soundness results for [eval_operation]:
   the result values, when defined, are always of the type predicted
   by [type_of_operation]. *)

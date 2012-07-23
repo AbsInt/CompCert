@@ -26,6 +26,7 @@ let name_of_chunk = function
   | Mint32 -> "int32"
   | Mfloat32 -> "float32"
   | Mfloat64 -> "float64"
+  | Mfloat64al32 -> "float64al32"
 
 let name_of_external = function
   | EF_external(name, sg) -> extern_atom name

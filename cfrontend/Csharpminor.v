@@ -320,8 +320,8 @@ Inductive bind_parameters: env ->
   | bind_parameters_array:
       forall e m id sz al params v1 vl b m1 m2,
       PTree.get id e = Some (b, Varray sz al) ->
-      extcall_memcpy_sem sz (Zmin al 4) 
-                   ge (Vptr b Int.zero :: v1 :: nil) m E0 Vundef m1 ->
+      extcall_memcpy_sem sz al
+                         ge (Vptr b Int.zero :: v1 :: nil) m E0 Vundef m1 ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, Varray sz al) :: params) (v1 :: vl) m2.
 

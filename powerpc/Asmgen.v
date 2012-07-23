@@ -485,7 +485,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       | Mfloat32 =>
           transl_load_store
             (Plfs (freg_of dst)) (Plfsx (freg_of dst)) addr args GPR12 k
-      | Mfloat64 =>
+      | Mfloat64 | Mfloat64al32 =>
           transl_load_store
             (Plfd (freg_of dst)) (Plfdx (freg_of dst)) addr args GPR12 k
       end
@@ -510,7 +510,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
       | Mfloat32 =>
           transl_load_store
             (Pstfs (freg_of src)) (Pstfsx (freg_of src)) addr args temp k
-      | Mfloat64 =>
+      | Mfloat64 | Mfloat64al32 =>
           transl_load_store
             (Pstfd (freg_of src)) (Pstfdx (freg_of src)) addr args temp k
       end

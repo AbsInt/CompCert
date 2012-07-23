@@ -353,7 +353,7 @@ and world_vload chunk id ofs =
     | Mint32 -> EVint(coqint_of_camlint(Random.int32 0x7FFF_FFFFl))
     | Mfloat32 -> EVfloat(
 	Floats.Float.singleoffloat(coqfloat_of_camlfloat(Random.float 1.0)))
-    | Mfloat64 -> EVfloat(coqfloat_of_camlfloat(Random.float 1.0))
+    | Mfloat64 | Mfloat64al32 -> EVfloat(coqfloat_of_camlfloat(Random.float 1.0))
   in Some(res, world)
 
 and world_vstore chunk id ofs v =

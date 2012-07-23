@@ -113,7 +113,7 @@ Remark frame_env_aligned:
   /\ (8 | fe.(fe_ofs_float_local))
   /\ (8 | fe.(fe_ofs_float_callee_save))
   /\ (4 | fe.(fe_ofs_retaddr))
-  /\ (4 | fe.(fe_stack_data))
+  /\ (8 | fe.(fe_stack_data))
   /\ (16 | fe.(fe_size)).
 Proof.
   intros.
@@ -133,8 +133,7 @@ Proof.
   set (x5 := x4 + 8 * bound_float_local b).
   assert (8 | x5). unfold x5. apply Zdivide_plus_r; auto. exists (bound_float_local b); ring.
   set (x6 := x5 + 8 * bound_float_callee_save b).
-  assert (4 | x6).
-    apply Zdivides_trans with 8. exists 2; auto.
+  assert (8 | x6).
     unfold x6. apply Zdivide_plus_r; auto. exists (bound_float_callee_save b); ring.
   set (x7 := align (x6 + bound_stack_data b) 16).
   assert (16 | x7). unfold x7; apply align_divides. omega.

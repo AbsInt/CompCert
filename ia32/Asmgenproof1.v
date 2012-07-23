@@ -1679,7 +1679,11 @@ Proof.
     transitivity (Val.add ((rs#(preg_of dest) <- v) PC) Vone).
     auto. decEq. apply Pregmap.gso; auto with ppcgen.
   exists rs2. split. 
-  destruct chunk; ArgsInv; apply exec_straight_one; simpl; auto.
+  destruct chunk; ArgsInv; apply exec_straight_one; auto.
+  (* Mfloat64 -> Mfloat64al32 *)
+  rewrite <- H. simpl. unfold exec_load. rewrite H1.
+  destruct (eval_addrmode ge x rs); simpl in *; try discriminate.
+  erewrite Mem.load_float64al32; eauto. 
   split. unfold rs2. rewrite nextinstr_nf_inv1. SRes. apply preg_of_important.
   intros. unfold rs2. repeat SOther. 
 Qed.
@@ -1725,6 +1729,10 @@ Proof.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.
   intros. SOther.
 (* float64 *)
+  econstructor; split.
+  apply exec_straight_one. simpl. unfold exec_store. erewrite Mem.storev_float64al32; eauto. auto.
+  intros. SOther.
+(* float64al32 *)
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.
   intros. SOther.

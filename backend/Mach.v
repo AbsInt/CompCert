@@ -97,7 +97,7 @@ Definition genv := Genv.t fundef unit.
 (** The operational semantics is in module [Machsem]. *)
 
 Definition chunk_of_type (ty: typ) :=
-  match ty with Tint => Mint32 | Tfloat => Mfloat64 end.
+  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 end.
 
 Module RegEq.
   Definition t := mreg.

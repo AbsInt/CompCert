@@ -363,7 +363,7 @@ let print_builtin_vload_common oc chunk addr res =
       fprintf oc "	movl	%a, %a\n" addressing addr ireg res
   | Mfloat32, FR res ->
       fprintf oc "	cvtss2sd %a, %a\n" addressing addr freg res
-  | Mfloat64, FR res ->
+  | (Mfloat64 | Mfloat64al32), FR res ->
       fprintf oc "	movsd	%a, %a\n" addressing addr freg res
   | _ ->
       assert false
@@ -406,7 +406,7 @@ let print_builtin_vstore_common oc chunk addr src =
   | Mfloat32, FR src ->
       fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
       fprintf oc "	movss	%%xmm7, %a\n" addressing addr
-  | Mfloat64, FR src ->
+  | (Mfloat64 | Mfloat64al32), FR src ->
       fprintf oc "	movsd	%a, %a\n" freg src addressing addr
   | _ ->
       assert false

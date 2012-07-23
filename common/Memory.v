@@ -62,7 +62,7 @@ Record mem' : Type := mkmem {
   access_max: 
     forall b ofs, perm_order'' (mem_access#b ofs Max) (mem_access#b ofs Cur);
   nextblock_noaccess:
-    forall b ofs k, b <= 0 \/ b >= nextblock -> mem_access#b ofs k = None
+    forall b ofs k, b >= nextblock -> mem_access#b ofs k = None
 }.
 
 Definition mem := mem'.
@@ -267,11 +267,12 @@ Qed.
 Lemma valid_access_compat:
   forall m chunk1 chunk2 b ofs p,
   size_chunk chunk1 = size_chunk chunk2 ->
+  align_chunk chunk2 <= align_chunk chunk1 ->
   valid_access m chunk1 b ofs p->
   valid_access m chunk2 b ofs p.
 Proof.
-  intros. inv H0. rewrite H in H1. constructor; auto.
-  rewrite <- (align_chunk_compat _ _ H). auto.
+  intros. inv H1. rewrite H in H2. constructor; auto.
+  eapply Zdivide_trans; eauto. eapply align_le_divides; eauto.
 Qed.
 
 Lemma valid_access_dec:
@@ -678,6 +679,22 @@ Proof.
   rewrite pred_dec_false; auto.
 Qed.
 
+Theorem load_float64al32:
+  forall m b ofs v,
+  load Mfloat64 m b ofs = Some v -> load Mfloat64al32 m b ofs = Some v.
+Proof.
+  unfold load; intros. destruct (valid_access_dec m Mfloat64 b ofs Readable); try discriminate.
+  rewrite pred_dec_true. assumption. 
+  apply valid_access_compat with Mfloat64; auto. simpl; omega. 
+Qed.
+
+Theorem loadv_float64al32:
+  forall m a v,
+  loadv Mfloat64 m a = Some v -> loadv Mfloat64al32 m a = Some v.
+Proof.
+  unfold loadv; intros. destruct a; auto. apply load_float64al32; auto.
+Qed.
+
 (** ** Properties related to [loadbytes] *)
 
 Theorem range_perm_loadbytes:
@@ -925,11 +942,12 @@ Local Hint Resolve store_valid_access_1 store_valid_access_2 store_valid_access_
 Theorem load_store_similar:
   forall chunk',
   size_chunk chunk' = size_chunk chunk ->
+  align_chunk chunk' <= align_chunk chunk ->
   exists v', load chunk' m2 b ofs = Some v' /\ decode_encode_val v chunk chunk' v'.
 Proof.
   intros.
   exploit (valid_access_load m2 chunk').
-    eapply valid_access_compat. symmetry; eauto. eauto with mem. 
+    eapply valid_access_compat. symmetry; eauto. auto. eauto with mem. 
   intros [v' LOAD].
   exists v'; split; auto.
   exploit load_result; eauto. intros B. 
@@ -944,17 +962,18 @@ Qed.
 Theorem load_store_similar_2:
   forall chunk',
   size_chunk chunk' = size_chunk chunk ->
+  align_chunk chunk' <= align_chunk chunk ->
   type_of_chunk chunk' = type_of_chunk chunk ->
   load chunk' m2 b ofs = Some (Val.load_result chunk' v).
 Proof.
-  intros. destruct (load_store_similar chunk') as [v' [A B]]. auto.
+  intros. destruct (load_store_similar chunk') as [v' [A B]]; auto.
   rewrite A. decEq. eapply decode_encode_val_similar with (chunk1 := chunk); eauto.
 Qed.
 
 Theorem load_store_same:
   load chunk m2 b ofs = Some (Val.load_result chunk v).
 Proof.
-  apply load_store_similar_2; auto.
+  apply load_store_similar_2; auto. omega.
 Qed.
 
 Theorem load_store_other:
@@ -1229,6 +1248,7 @@ Qed.
 Lemma store_similar_chunks:
   forall chunk1 chunk2 v1 v2 m b ofs,
   encode_val chunk1 v1 = encode_val chunk2 v2 ->
+  align_chunk chunk1 = align_chunk chunk2 ->
   store chunk1 m b ofs v1 = store chunk2 m b ofs v2.
 Proof.
   intros. unfold store. 
@@ -1238,48 +1258,47 @@ Proof.
     rewrite <- (encode_val_length chunk2 v2).
     congruence.
   unfold store.
-  destruct (valid_access_dec m chunk1 b ofs Writable);
-  destruct (valid_access_dec m chunk2 b ofs Writable); auto.
+  destruct (valid_access_dec m chunk1 b ofs Writable).
+  rewrite pred_dec_true. 
   f_equal. apply mkmem_ext; auto. congruence.
-  elimtype False.
-  destruct chunk1; destruct chunk2;  inv H0; unfold valid_access, align_chunk in *; try contradiction.
-  elimtype False.
-  destruct chunk1; destruct chunk2;  inv H0; unfold valid_access, align_chunk in *; try contradiction.
+  apply valid_access_compat with chunk1; auto. omega.
+  destruct (valid_access_dec m chunk2 b ofs Writable); auto.
+  elim n. apply valid_access_compat with chunk2; auto. omega.
 Qed.
 
 Theorem store_signed_unsigned_8:
   forall m b ofs v,
   store Mint8signed m b ofs v = store Mint8unsigned m b ofs v.
-Proof. intros. apply store_similar_chunks. apply encode_val_int8_signed_unsigned. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int8_signed_unsigned. auto. Qed.
 
 Theorem store_signed_unsigned_16:
   forall m b ofs v,
   store Mint16signed m b ofs v = store Mint16unsigned m b ofs v.
-Proof. intros. apply store_similar_chunks. apply encode_val_int16_signed_unsigned. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int16_signed_unsigned. auto. Qed.
 
 Theorem store_int8_zero_ext:
   forall m b ofs n,
   store Mint8unsigned m b ofs (Vint (Int.zero_ext 8 n)) =
   store Mint8unsigned m b ofs (Vint n).
-Proof. intros. apply store_similar_chunks. apply encode_val_int8_zero_ext. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int8_zero_ext. auto. Qed.
 
 Theorem store_int8_sign_ext:
   forall m b ofs n,
   store Mint8signed m b ofs (Vint (Int.sign_ext 8 n)) =
   store Mint8signed m b ofs (Vint n).
-Proof. intros. apply store_similar_chunks. apply encode_val_int8_sign_ext. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int8_sign_ext. auto. Qed.
 
 Theorem store_int16_zero_ext:
   forall m b ofs n,
   store Mint16unsigned m b ofs (Vint (Int.zero_ext 16 n)) =
   store Mint16unsigned m b ofs (Vint n).
-Proof. intros. apply store_similar_chunks. apply encode_val_int16_zero_ext. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int16_zero_ext. auto. Qed.
 
 Theorem store_int16_sign_ext:
   forall m b ofs n,
   store Mint16signed m b ofs (Vint (Int.sign_ext 16 n)) =
   store Mint16signed m b ofs (Vint n).
-Proof. intros. apply store_similar_chunks. apply encode_val_int16_sign_ext. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int16_sign_ext. auto. Qed.
 
 Theorem store_float32_truncate:
   forall m b ofs n,
@@ -1287,7 +1306,25 @@ Theorem store_float32_truncate:
   store Mfloat32 m b ofs (Vfloat n).
 Proof.
   intros. apply store_similar_chunks. simpl. decEq.
-  repeat rewrite encode_float32_eq. rewrite Float.bits_of_singleoffloat. auto. 
+  repeat rewrite encode_float32_eq. rewrite Float.bits_of_singleoffloat. auto.
+  auto.
+Qed.
+
+Theorem store_float64al32:
+  forall m b ofs v m',
+  store Mfloat64 m b ofs v = Some m' -> store Mfloat64al32 m b ofs v = Some m'.
+Proof.
+  unfold store; intros. 
+  destruct (valid_access_dec m Mfloat64 b ofs Writable); try discriminate.
+  rewrite pred_dec_true. rewrite <- H. auto. 
+  apply valid_access_compat with Mfloat64; auto. simpl; omega.
+Qed.
+
+Theorem storev_float64al32:
+  forall m a v m',
+  storev Mfloat64 m a v = Some m' -> storev Mfloat64al32 m a v = Some m'.
+Proof.
+  unfold storev; intros. destruct a; auto. apply store_float64al32; auto.
 Qed.
 
 (** ** Properties related to [storebytes]. *)
@@ -2861,8 +2898,8 @@ Qed.
 - unallocated blocks in [m1] must be mapped to [None] by [f];
 - if [f b = Some(b', delta)], [b'] must be valid in [m2];
 - distinct blocks in [m1] are mapped to non-overlapping sub-blocks in [m2];
-- the sizes of [m2]'s blocks are representable with signed machine integers;
-- the offsets [delta] are representable with signed machine integers.
+- the sizes of [m2]'s blocks are representable with unsigned machine integers;
+- the offsets [delta] are representable with unsigned machine integers.
 *)
 
 Record inject' (f: meminj) (m1 m2: mem) : Prop :=
@@ -2875,20 +2912,16 @@ Record inject' (f: meminj) (m1 m2: mem) : Prop :=
       forall b b' delta, f b = Some(b', delta) -> valid_block m2 b';
     mi_no_overlap:
       meminj_no_overlap f m1;
-    mi_range_offset:
-      forall b b' delta,
-      f b = Some(b', delta) ->
-      0 <= delta <= Int.max_unsigned;
-    mi_range_block:
+    mi_representable:
       forall b b' delta ofs k p,
       f b = Some(b', delta) ->
-      perm m2 b' ofs k p ->
-      delta = 0 \/ 0 <= ofs <= Int.max_unsigned
+      perm m1 b (Int.unsigned ofs) k p ->
+      delta >= 0 /\ 0 <= Int.unsigned ofs + delta <= Int.max_unsigned
   }.
 
 Definition inject := inject'.
 
-Local Hint Resolve mi_mappedblocks mi_range_offset: mem.
+Local Hint Resolve mi_mappedblocks: mem.
 
 (** Preservation of access validity and pointer validity *)
 
@@ -2957,6 +2990,21 @@ Qed.
 (** The following lemmas establish the absence of machine integer overflow
   during address computations. *)
 
+(*
+Lemma address_no_overflow:
+  forall f m1 m2 b1 b2 delta ofs1 k p,
+  inject f m1 m2 ->
+  perm m1 b1 (Int.unsigned ofs1) k p ->
+  f b1 = Some (b2, delta) ->
+  0 <= Int.unsigned ofs1 + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+Proof.
+  intros. exploit mi_representable; eauto. intros [A | [A B]].
+  subst delta. change (Int.unsigned (Int.repr 0)) with 0. 
+  rewrite Zplus_0_r. apply Int.unsigned_range_2.
+  rewrite Int.unsigned_repr; auto. 
+Qed.
+*)
+
 Lemma address_inject:
   forall f m1 m2 b1 ofs1 b2 delta,
   inject f m1 m2 ->
@@ -2965,14 +3013,10 @@ Lemma address_inject:
   Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 Proof.
   intros.
-  exploit perm_inject; eauto. intro A.
-  exploit mi_range_block; eauto. intros [D | E].
-  subst delta. rewrite Int.add_zero. omega.
-  unfold Int.add.
-  repeat rewrite Int.unsigned_repr. auto.
-  eapply mi_range_offset; eauto.
-  auto.
-  eapply mi_range_offset; eauto.
+  exploit mi_representable; eauto. intros [A B].
+  assert (0 <= delta <= Int.max_unsigned).
+    generalize (Int.unsigned_range ofs1). omega.
+  unfold Int.add. repeat rewrite Int.unsigned_repr; auto.
 Qed.
 
 Lemma address_inject':
@@ -2994,10 +3038,11 @@ Theorem valid_pointer_inject_no_overflow:
   0 <= Int.unsigned ofs + Int.unsigned (Int.repr x) <= Int.max_unsigned.
 Proof.
   intros. rewrite valid_pointer_valid_access in H0.
-  exploit address_inject'; eauto. intros.
-  rewrite Int.unsigned_repr; eauto.
-  rewrite <- H2. apply Int.unsigned_range_2. 
-  eapply mi_range_offset; eauto.
+  assert (perm m1 b (Int.unsigned ofs) Cur Nonempty).
+    apply H0. simpl. omega.
+  exploit mi_representable; eauto. intros [A B].
+  rewrite Int.unsigned_repr; auto.
+  generalize (Int.unsigned_range ofs). omega.
 Qed.
 
 Theorem valid_pointer_inject_val:
@@ -3008,11 +3053,9 @@ Theorem valid_pointer_inject_val:
   valid_pointer m2 b' (Int.unsigned ofs') = true.
 Proof.
   intros. inv H1.
-  exploit valid_pointer_inject_no_overflow; eauto. intro NOOV.
-  unfold Int.add. rewrite Int.unsigned_repr; auto.
-  rewrite Int.unsigned_repr.
+  erewrite address_inject'; eauto. 
   eapply valid_pointer_inject; eauto.
-  eapply mi_range_offset; eauto.
+  rewrite valid_pointer_valid_access in H0. eauto.
 Qed.
 
 Theorem inject_no_overlap:
@@ -3085,7 +3128,7 @@ Qed.
 Theorem aligned_area_inject:
   forall f m m' b ofs al sz b' delta,
   inject f m m' ->
-  al = 1 \/ al = 2 \/ al = 4 -> sz > 0 ->
+  al = 1 \/ al = 2 \/ al = 4 \/ al = 8 -> sz > 0 ->
   (al | sz) ->
   range_perm m b ofs (ofs + sz) Cur Nonempty ->
   (al | ofs) ->
@@ -3099,7 +3142,8 @@ Proof.
   assert (R: exists chunk, al = align_chunk chunk /\ al = size_chunk chunk).
     destruct H0. subst; exists Mint8unsigned; auto.
     destruct H0. subst; exists Mint16unsigned; auto.
-    subst; exists Mint32; auto.
+    destruct H0. subst; exists Mint32; auto.
+    subst; exists Mfloat64; auto.
   destruct R as [chunk [A B]].
   assert (valid_access m chunk b ofs Nonempty).
     split. red; intros; apply H3. omega. congruence.
@@ -3168,9 +3212,7 @@ Proof.
   eauto with mem.
 (* no overlap *)
   red; intros. eauto with mem.
-(* range offset *)
-  eauto.
-(* range blocks *)
+(* representable *)
   eauto with mem. 
 Qed.
 
@@ -3191,10 +3233,8 @@ Proof.
   eauto with mem.
 (* no overlap *)
   red; intros. eauto with mem.
-(* range offset *)
-  eauto.
-(* range blocks *)
-  auto.
+(* representable *)
+  eauto with mem.
 Qed.
 
 Theorem store_outside_inject:
@@ -3216,10 +3256,8 @@ Proof.
   eauto with mem.
 (* no overlap *)
   auto.
-(* range offset *)
-  auto.
-(* range blocks *)
-  intros. eauto with mem. 
+(* representable *)
+  eauto with mem.
 Qed.
 
 Theorem storev_mapped_inject:
@@ -3260,10 +3298,8 @@ Proof.
   intros. eapply storebytes_valid_block_1; eauto. 
 (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto. 
-(* range offset *)
-  eauto.
-(* range blocks *)
-  intros. eapply mi_range_block0; eauto. eapply perm_storebytes_2; eauto. 
+(* representable *)
+  intros. eapply mi_representable0; eauto. eapply perm_storebytes_2; eauto. 
 Qed.
 
 Theorem storebytes_unmapped_inject:
@@ -3283,10 +3319,8 @@ Proof.
   eauto with mem.
 (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto. 
-(* range offset *)
-  eauto.
-(* range blocks *)
-  eauto.
+(* representable *)
+  intros. eapply mi_representable0; eauto. eapply perm_storebytes_2; eauto. 
 Qed.
 
 Theorem storebytes_outside_inject:
@@ -3308,10 +3342,8 @@ Proof.
   intros. eapply storebytes_valid_block_1; eauto. 
 (* no overlap *)
   auto.
-(* range offset *)
+(* representable *)
   auto.
-(* range blocks *)
-  intros. eapply mi_range_block0; eauto. eapply perm_storebytes_2; eauto. 
 Qed.
 
 (* Preservation of allocations *)
@@ -3332,11 +3364,8 @@ Proof.
   eauto with mem.
 (* no overlap *)
   auto.
-(* range offset *)
+(* representable *)
   auto.
-(* range block *)
-  intros. exploit perm_alloc_inv; eauto. rewrite zeq_false. eauto. 
-  eapply valid_not_valid_diff; eauto with mem.
 Qed.
 
 Theorem alloc_left_unmapped_inject:
@@ -3375,12 +3404,10 @@ Proof.
   eapply mi_no_overlap0. eexact H3. eauto. eauto.
   exploit perm_alloc_inv. eauto. eexact H6. rewrite zeq_false; auto. 
   exploit perm_alloc_inv. eauto. eexact H7. rewrite zeq_false; auto. 
-(* range offset *)
+(* representable *)
   unfold f'; intros.
-  destruct (zeq b b1). congruence. eauto.
-(* range block *)
-  unfold f'; intros.
-  destruct (zeq b b1). congruence. eauto.
+  exploit perm_alloc_inv; eauto. 
+  destruct (zeq b b1). congruence. eauto with mem.
 (* incr *)
   split. auto. 
 (* image *)
@@ -3450,10 +3477,12 @@ Proof.
     destruct (zeq b1' b2); auto. subst b1'. right; red; intros.
     eapply H6; eauto. omega.
   eauto.
-(* range offset *)
-  unfold f'; intros. destruct (zeq b b1). congruence. eauto. 
-(* range block *)
-  unfold f'; intros. destruct (zeq b b1). inversion H9; subst b b' delta0. eauto. eauto. 
+(* representable *)
+  unfold f'; intros. exploit perm_alloc_inv; eauto. destruct (zeq b b1); intros.
+  inversion H9; subst b' delta0. exploit H3. apply H4 with (k := k) (p := p); eauto.
+  intros [A | A]. generalize (Int.unsigned_range_2 ofs). omega.
+  generalize (Int.unsigned_range_2 ofs). omega.
+  eauto.
 (* incr *)
   split. auto.
 (* image of b1 *)
@@ -3507,10 +3536,8 @@ Proof.
   auto.
 (* no overlap *)
   red; intros. eauto with mem. 
-(* range offset *)
-  auto.
-(* range block *)
-  auto.
+(* representable *)
+  eauto with mem. 
 Qed.
 
 Lemma free_list_left_inject:
@@ -3544,10 +3571,8 @@ Proof.
   eauto with mem.
 (* no overlap *)
   auto.
-(* range offset *)
+(* representable *)
   auto.
-(* range blocks *)
-  intros. eauto with mem. 
 Qed.
 
 Lemma perm_free_list:
@@ -3597,7 +3622,66 @@ Proof.
   intros. destruct H. constructor; eauto.
   eapply drop_outside_inj; eauto.
   intros. unfold valid_block in *. erewrite nextblock_drop; eauto. 
-  intros. eapply mi_range_block0; eauto. eapply perm_drop_4; eauto. 
+Qed.
+
+(** Composing two memory injections. *)
+
+Theorem inject_compose:
+  forall f f' m1 m2 m3,
+  inject f m1 m2 -> inject f' m2 m3 ->
+  inject (compose_meminj f f') m1 m3.
+Proof.
+  unfold compose_meminj; intros.
+  inv H; inv H0. constructor.
+(* inj *)
+  inv mi_inj0; inv mi_inj1; constructor; intros.
+  (* perm *)
+  destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
+  destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
+  replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
+  eauto.
+  (* valid access *)
+  destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
+  destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
+  replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
+  eauto.
+  (* memval *)
+  destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
+  destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
+  replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
+  eapply memval_inject_compose; eauto. 
+(* unmapped *)
+  intros. erewrite mi_freeblocks0; eauto. 
+(* mapped *)
+  intros. 
+  destruct (f b) as [[b1 delta1] |]_eqn; try discriminate.
+  destruct (f' b1) as [[b2 delta2] |]_eqn; inv H. 
+  eauto.
+(* no overlap *)
+  red; intros. 
+  destruct (f b1) as [[b1x delta1x] |]_eqn; try discriminate.
+  destruct (f' b1x) as [[b1y delta1y] |]_eqn; inv H0. 
+  destruct (f b2) as [[b2x delta2x] |]_eqn; try discriminate.
+  destruct (f' b2x) as [[b2y delta2y] |]_eqn; inv H1.
+  exploit mi_no_overlap0; eauto. intros A.
+  destruct (eq_block b1x b2x). 
+  subst b1x. destruct A. congruence. 
+  assert (delta1y = delta2y) by congruence. right; omega.
+  exploit mi_no_overlap1. eauto. eauto. eauto.
+    eapply perm_inj. eauto. eexact H2. eauto. 
+    eapply perm_inj. eauto. eexact H3. eauto. 
+  unfold block; omega.
+(* representable *)
+  intros. 
+  destruct (f b) as [[b1 delta1] |]_eqn; try discriminate.
+  destruct (f' b1) as [[b2 delta2] |]_eqn; inv H. 
+  exploit mi_representable0; eauto. intros [A B].
+  set (ofs' := Int.repr (Int.unsigned ofs + delta1)).
+  assert (Int.unsigned ofs' = Int.unsigned ofs + delta1). 
+    unfold ofs'; apply Int.unsigned_repr. auto.
+  exploit mi_representable1. eauto. instantiate (3 := ofs'). 
+  rewrite H. eapply perm_inj; eauto. rewrite H. intros [C D].
+  omega.
 Qed.
 
 (** Injecting a memory into itself. *)
@@ -3633,11 +3717,7 @@ Proof.
   apply flat_inj_no_overlap.
 (* range *)
   unfold flat_inj; intros.
-  destruct (zlt b (nextblock m)); inv H0.
-  unfold Int.max_unsigned. generalize Int.modulus_pos; omega.
-(* range *)
-  unfold flat_inj; intros.
-  destruct (zlt b (nextblock m)); inv H0. auto.
+  destruct (zlt b (nextblock m)); inv H0. generalize (Int.unsigned_range_2 ofs); omega.
 Qed.
 
 Theorem empty_inject_neutral:

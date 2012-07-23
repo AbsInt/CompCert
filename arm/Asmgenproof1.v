@@ -802,7 +802,7 @@ Qed.
 
 Lemma loadind_float_correct:
   forall (base: ireg) ofs dst (rs: regset) m v k,
-  Mem.loadv Mfloat64 m (Val.add rs#base (Vint ofs)) = Some v ->
+  Mem.loadv Mfloat64al32 m (Val.add rs#base (Vint ofs)) = Some v ->
   exists rs',
      exec_straight (loadind_float base ofs dst k) rs m k rs' m
   /\ rs'#dst = v
@@ -868,7 +868,7 @@ Qed.
 
 Lemma storeind_float_correct:
   forall (base: ireg) ofs (src: freg) (rs: regset) m m' k,
-  Mem.storev Mfloat64 m (Val.add rs#base (Vint ofs)) (rs#src) = Some m' ->
+  Mem.storev Mfloat64al32 m (Val.add rs#base (Vint ofs)) (rs#src) = Some m' ->
   base <> IR14 ->
   exists rs',
      exec_straight (storeind_float src base ofs k) rs m k rs' m'

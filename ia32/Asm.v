@@ -474,17 +474,17 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pmovsd_fi rd n =>
       Next (nextinstr (rs#rd <- (Vfloat n))) m
   | Pmovsd_fm rd a =>
-      exec_load Mfloat64 m a rs rd
+      exec_load Mfloat64al32 m a rs rd
   | Pmovsd_mf a r1 =>
-      exec_store Mfloat64 m a rs r1
+      exec_store Mfloat64al32 m a rs r1
   | Pfld_f r1 =>
       Next (nextinstr (rs#ST0 <- (rs r1))) m
   | Pfld_m a =>
-      exec_load Mfloat64 m a rs ST0
+      exec_load Mfloat64al32 m a rs ST0
   | Pfstp_f rd =>
       Next (nextinstr (rs#rd <- (rs ST0) #ST0 <- Vundef)) m
   | Pfstp_m a =>
-      exec_store Mfloat64 m a rs ST0
+      exec_store Mfloat64al32 m a rs ST0
   | Pxchg_rr r1 r2 =>
       Next (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) m
   (** Moves with conversion *)
@@ -709,7 +709,7 @@ Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
       extcall_arg rs m (S (Outgoing ofs Tint)) v
   | extcall_arg_float_stack: forall ofs bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mfloat64 m (Val.add (rs (IR ESP)) (Vint (Int.repr bofs))) = Some v ->
+      Mem.loadv Mfloat64al32 m (Val.add (rs (IR ESP)) (Vint (Int.repr bofs))) = Some v ->
       extcall_arg rs m (S (Outgoing ofs Tfloat)) v.
 
 Definition extcall_arguments
