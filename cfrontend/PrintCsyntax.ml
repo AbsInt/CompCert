@@ -440,7 +440,9 @@ and collect_fields = function
   | Fnil -> ()
   | Fcons(id, hd, tl) -> collect_type hd; collect_fields tl
 
-let rec collect_expr = function
+let rec collect_expr e =
+  collect_type (typeof e);
+  match e with
   | Eloc _ -> assert false
   | Evar _ -> ()
   | Ederef(r, _) -> collect_expr r

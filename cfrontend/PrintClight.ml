@@ -252,7 +252,9 @@ let print_fundef p (id, fd) =
 
 (* Collect struct and union types *)
 
-let rec collect_expr = function
+let rec collect_expr e =
+  collect_type (typeof e);
+  match e with
   | Econst_int _ -> ()
   | Econst_float _ -> ()
   | Evar _ -> ()
