@@ -10,9 +10,9 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Characterization and properties of deterministic semantics *)
+(** Characterization and properties of deterministic external worlds
+  and deterministic semantics *)
 
-Require Import Classical.
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
@@ -21,14 +21,6 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Behaviors.
-
-(** This file uses classical logic (the axiom of excluded middle), as
-  well as the following extensionality property over infinite
-  sequences of events.  All these axioms are sound in a set-theoretic
-  model of Coq's logic. *)
-
-Axiom traceinf_extensionality:
-  forall T T', traceinf_sim T T' -> T = T'.
 
 (** * Deterministic worlds *)
 
@@ -428,58 +420,66 @@ Qed.
 
 (** Determinism for program executions *)
 
+Definition same_behaviors (beh1 beh2: program_behavior) : Prop :=
+  match beh1, beh2 with
+  | Terminates t1 r1, Terminates t2 r2 => t1 = t2 /\ r1 = r2
+  | Diverges t1, Diverges t2 => t1 = t2
+  | Reacts t1, Reacts t2 => traceinf_sim t1 t2
+  | Goes_wrong t1, Goes_wrong t2 => t1 = t2
+  | _, _ => False
+  end.
+
 Lemma state_behaves_deterministic:
   forall s beh1 beh2,
-  state_behaves L s beh1 -> state_behaves L s beh2 -> beh1 = beh2.
+  state_behaves L s beh1 -> state_behaves L s beh2 -> same_behaviors beh1 beh2.
 Proof.
   generalize (det_final_nostep L DET); intro dfns.
   intros until beh2; intros BEH1 BEH2.
-  inv BEH1; inv BEH2.
+  inv BEH1; inv BEH2; red.
 (* terminates, terminates *)
   assert (t = t0 /\ s' = s'0). eapply steps_deterministic; eauto.
-  destruct H3. f_equal; auto. subst. eapply det_final_state; eauto. 
+  destruct H3. split; auto. subst. eapply det_final_state; eauto. 
 (* terminates, diverges *)
-  byContradiction. eapply star2_final_not_forever_silent with (s1 := s') (s2 := s'0); eauto.
+  eapply star2_final_not_forever_silent with (s1 := s') (s2 := s'0); eauto.
 (* terminates, reacts *)
-  byContradiction. eapply star_final_not_forever_reactive; eauto.
+  eapply star_final_not_forever_reactive; eauto.
 (* terminates, goes_wrong *)
-  byContradiction. eapply terminates_not_goes_wrong with (s1 := s') (s2 := s'0); eauto.
+  eapply terminates_not_goes_wrong with (s1 := s') (s2 := s'0); eauto.
 (* diverges, terminates *)
-  byContradiction. eapply star2_final_not_forever_silent with (s2 := s') (s1 := s'0); eauto.
+  eapply star2_final_not_forever_silent with (s2 := s') (s1 := s'0); eauto.
 (* diverges, diverges *)
-  f_equal. use_star_step_diamond.
+  use_star_step_diamond.
   exploit star_forever_silent_inv. eexact P. eauto.  
   intros [A B]. subst; traceEq.
   exploit star_forever_silent_inv. eexact P. eauto. 
   intros [A B]. subst; traceEq.
 (* diverges, reacts *)
-  byContradiction. eapply forever_silent_reactive_exclusive2; eauto.
+  eapply forever_silent_reactive_exclusive2; eauto.
 (* diverges, goes wrong *)
-  byContradiction. eapply star2_final_not_forever_silent with (s1 := s'0) (s2 := s'); eauto.
+  eapply star2_final_not_forever_silent with (s1 := s'0) (s2 := s'); eauto.
 (* reacts, terminates *)
-  byContradiction. eapply star_final_not_forever_reactive; eauto.
+  eapply star_final_not_forever_reactive; eauto.
 (* reacts, diverges *) 
-  byContradiction. eapply forever_silent_reactive_exclusive2; eauto.
+  eapply forever_silent_reactive_exclusive2; eauto.
 (* reacts, reacts *)
-  f_equal. apply traceinf_extensionality. 
   eapply forever_reactive_determ; eauto. 
 (* reacts, goes wrong *)
-  byContradiction. eapply star_final_not_forever_reactive; eauto.
+  eapply star_final_not_forever_reactive; eauto.
 (* goes wrong, terminate *)
-  byContradiction. eapply terminates_not_goes_wrong with (s1 := s'0) (s2 := s'); eauto.
+  eapply terminates_not_goes_wrong with (s1 := s'0) (s2 := s'); eauto.
 (* goes wrong, diverges *)
-  byContradiction. eapply star2_final_not_forever_silent with (s1 := s') (s2 := s'0); eauto.
+  eapply star2_final_not_forever_silent with (s1 := s') (s2 := s'0); eauto.
 (* goes wrong, reacts *)
-  byContradiction. eapply star_final_not_forever_reactive; eauto.
+  eapply star_final_not_forever_reactive; eauto.
 (* goes wrong, goes wrong *)
   assert (t = t0 /\ s' = s'0). eapply steps_deterministic; eauto.
-  destruct H5. congruence.
+  tauto. 
 Qed.
 
 Theorem program_behaves_deterministic:
   forall beh1 beh2,
   program_behaves L beh1 -> program_behaves L beh2 ->
-  beh1 = beh2.
+  same_behaviors beh1 beh2.
 Proof.
   intros until beh2; intros BEH1 BEH2. inv BEH1; inv BEH2.
 (* both initial states defined *)
@@ -489,7 +489,7 @@ Proof.
   elim (H1 _ H).
   elim (H _ H0).
 (* both initial states undefined *)
-  auto.
+  red; auto.
 Qed.
 
 End DETERM_SEM.
@@ -541,268 +541,6 @@ Proof.
 (* final no step *)
   red; simpl; intros. red; intros [A B]. exploit (sd_final_nostep D); eauto. 
 Qed.
-
-(*** To be updated. *)
-(***********
-Variable genv: Type.
-Variable state: Type.
-Variable step: genv -> state -> trace -> state -> Prop.
-Variable initial_state: state -> Prop.
-Variable final_state: state -> int -> Prop.
-Variable initial_world: world.
-
-Definition wstate : Type := (state * world)%type.
-
-
-Definition wstep (ge: genv) (S: wstate) (t: trace) (S': wstate) :=
-  step ge S#1 t S'#1 /\ possible_trace S#2 t S'#2.
-
-Definition winitial_state (S: wstate) :=
-  initial_state S#1 /\ S#2 = initial_world.
-
-Definition wfinal_state (S: wstate) (r: int) :=
-  final_state S#1 r.
-
-Definition wprogram_behaves (ge: genv) (beh: program_behavior) :=
-  program_behaves wstep winitial_state wfinal_state ge beh.
-
-(** We now relate sequences of transitions and behaviors between the two semantics. *)
-
-Section TRANSITIONS.
-
-Variable ge: genv.
-
-Lemma inject_star:
-  forall S t S', star step ge S t S' ->
-  forall w w', possible_trace w t w' ->
-  star wstep ge (S, w) t (S', w').
-Proof.
-  induction 1; intros; subst; possibleTraceInv.
-  constructor.
-  apply star_step with t1 (s2,w0) t2. split; auto. auto. auto.
-Qed.
- 
-Lemma project_star:
-  forall S t S', star wstep ge S t S' -> star step ge S#1 t S'#1.
-Proof.
-  induction 1. constructor. destruct H. econstructor; eauto.
-Qed.
-
-Lemma project_star_trace:
-  forall S t S', star wstep ge S t S' -> possible_trace S#2 t S'#2.
-Proof.
-  induction 1. constructor. subst t. destruct H. eapply possible_trace_app. eauto. eauto.
-Qed.
-
-Lemma inject_forever_silent:
-  forall S w, forever_silent step ge S -> forever_silent wstep ge (S, w).
-Proof.
-  cofix COINDHYP; intros. inv H.
-  apply forever_silent_intro with (s2,w). 
-  split. auto. constructor. apply COINDHYP; auto.
-Qed.
-
-Lemma project_forever_silent:
-  forall S, forever_silent wstep ge S -> forever_silent step ge S#1.
-Proof.
-  cofix COINDHYP; intros. inv H. destruct H0. 
-  apply forever_silent_intro with (s2#1). auto. apply COINDHYP; auto.
-Qed.
-
-Lemma inject_forever_reactive:
-  forall S T w, forever_reactive step ge S T -> possible_traceinf w T ->
-  forever_reactive wstep ge (S, w) T.
-Proof.
-  cofix COINDHYP; intros. inv H. possibleTraceInv. 
-  apply forever_reactive_intro with (s2,w0).
-  apply inject_star; auto. auto. apply COINDHYP; auto.
-Qed.
-
-Lemma project_forever_reactive:
-  forall S T, forever_reactive wstep ge S T -> forever_reactive step ge S#1 T.
-Proof.
-  cofix COINDHYP; intros. inv H.
-  apply forever_reactive_intro with (s2#1).
-  apply project_star; auto. auto. apply COINDHYP; auto.
-Qed.
-
-Lemma project_forever_reactive_trace:
-  forall S T, forever_reactive wstep ge S T -> possible_traceinf S#2 T.
-Proof.
-  intros. apply possible_traceinf'_traceinf. revert S T H. 
-  cofix COINDHYP; intros. inv H. econstructor.
-  apply project_star_trace. eauto. auto. apply COINDHYP; auto. 
-Qed.
-
-Lemma inject_behaviors:
-  forall beh,
-  program_behaves step initial_state final_state ge beh ->
-  possible_behavior initial_world beh ->
-  wprogram_behaves ge beh.
-Proof.
-  intros. inv H; simpl in H0.
-(* terminates *)
-  destruct H0 as [w' A]. econstructor.
-    instantiate (1 := (s, initial_world)). red; eauto.
-    apply inject_star; eauto. 
-    red; auto.
-(* diverges silently *)
-  destruct H0 as [w' A]. econstructor.
-    instantiate (1 := (s, initial_world)). red; eauto.
-    apply inject_star; eauto. apply inject_forever_silent; auto. 
-(* diverges reactively *)
-  econstructor.
-    instantiate (1 := (s, initial_world)). red; eauto.
-    apply inject_forever_reactive; auto.
-(* goes wrong *)
-  destruct H0 as [w' A]. red in H3.
-  econstructor. 
-    instantiate (1 := (s, initial_world)). red; eauto.
-    apply inject_star; eauto. 
-    red. intros. red; intros [C D]. elim (H3 t0 s'0#1); auto.
-    unfold wfinal_state; simpl. auto. 
-(* goes initially wrong *)
-  apply program_goes_initially_wrong. intros; red; intros. destruct H. 
-  elim (H1 s#1); auto.
-Qed.
-
-Lemma project_behaviors_trace:
-  forall beh,
-  wprogram_behaves ge beh ->
-  possible_behavior initial_world beh.
-Proof.
-  intros. inv H; simpl.
-  destruct H0. rewrite <- H0. exists (s'#2); apply project_star_trace; auto. 
-  destruct H0. rewrite <- H0. exists (s'#2); apply project_star_trace; auto. 
-  destruct H0. rewrite <- H0. apply project_forever_reactive_trace; auto.
-  destruct H0. rewrite <- H0. exists (s'#2); apply project_star_trace; auto. 
-  exists initial_world; constructor.
-Qed.
-
-Lemma project_behaviors:
-  forall beh,
-  wprogram_behaves ge beh ->
-  program_behaves step initial_state final_state ge beh
-  \/ exists S, exists t, exists S', exists w', exists S'', exists t',
-     beh = Goes_wrong t /\     
-     initial_state S /\ star step ge S t S' /\ possible_trace initial_world t w' /\
-     step ge S' t' S'' /\ forall w'', ~(possible_trace w' t' w'').
-Proof.
-  intros. inv H.
-(* terminates *)
-  destruct H0.
-  left. econstructor; eauto. apply project_star; auto. 
-(* diverges silently *)
-  destruct H0.
-  left. econstructor; eauto. apply project_star; eauto. apply project_forever_silent; auto.
-(* diverges reactively *)
-  destruct H0.
-  left. econstructor; eauto. apply project_forever_reactive; auto. 
-(* goes wrong *)
-  destruct H0.
-  red in H2. 
-  destruct (classic (forall t s'', ~step ge s'#1 t s'')). 
-  left. econstructor; eauto. apply project_star; eauto.
-  destruct (not_all_ex_not _ _ H4) as [t' A]. clear H4.
-  destruct (not_all_ex_not _ _ A) as [s'' B]. clear A.
-  assert (C: step ge s'#1 t' s''). apply NNPP; auto. clear B.
-  right. do 6 econstructor. split. eauto. split. eauto. 
-  split. apply project_star; eauto.
-  split. rewrite <- H0. apply project_star_trace; eauto. 
-  split. eauto. 
-  intros; red; intros. elim (H2 t' (s'',w'')). split; auto.
-(* goes initially wrong *)
-  left. apply program_goes_initially_wrong. intros; red; intros. 
-  elim (H0 (s, initial_world)). split; auto.
-Qed.
-
-End TRANSITIONS.
-
-Section INTERNAL_DET_TO_DET.
-
-(** We assume given a transition semantics that is internally
-  deterministic: the only source of non-determinism is the return
-  value of system calls.   Under this assumption, the world-aware semantics
-  is deterministic. *)
-
-Hypothesis step_internal_deterministic:
-  forall ge s t1 s1 t2 s2,
-  step ge s t1 s1 -> step ge s t2 s2 -> matching_traces t1 t2 -> s1 = s2 /\ t1 = t2.
-
-Hypothesis initial_state_determ:
-  forall s1 s2, initial_state s1 -> initial_state s2 -> s1 = s2.
-
-Hypothesis final_state_determ:
-  forall st r1 r2, final_state st r1 -> final_state st r2 -> r1 = r2.
-
-Hypothesis final_state_nostep:
-  forall ge st r, final_state st r -> nostep step ge st.
-
-Remark matching_possible_traces:
-  forall w0 t1 w1, possible_trace w0 t1 w1 ->
-  forall t2 w2, possible_trace w0 t2 w2 ->
-  matching_traces t1 t2.
-Proof.
-  induction 1; intros.
-  destruct t2; simpl; auto.
-  destruct t2; simpl. destruct ev; auto. inv H1.
-  inv H; inv H5; auto; intros.
-  destruct H2. subst. rewrite H in H1; inv H1. split; eauto.
-  destruct H2. destruct H3. subst. rewrite H in H1; inv H1. split; eauto.
-  destruct H2. destruct H3. destruct H4. subst. rewrite H in H1; inv H1. eauto.
-Qed.
-
-Lemma wstep_deterministic:
-  forall ge S0 t1 S1 t2 S2,
-  wstep ge S0 t1 S1 -> wstep ge S0 t2 S2 -> S1 = S2 /\ t1 = t2.
-Proof.
-  intros. destruct H; destruct H0. 
-  exploit step_internal_deterministic. eexact H. eexact H0. 
-  eapply matching_possible_traces; eauto. 
-  intros [A B]. split. apply injective_projections. auto.
-  subst t2. eapply possible_trace_final_world; eauto.
-  auto.
-Qed.
-
-Lemma winitial_state_determ:
-  forall s1 s2, winitial_state s1 -> winitial_state s2 -> s1 = s2.
-Proof.
-  intros. destruct H; destruct H0. apply injective_projections. eauto. congruence.
-Qed. 
-
-Lemma wfinal_state_determ:
-  forall st r1 r2, wfinal_state st r1 -> wfinal_state st r2 -> r1 = r2.
-Proof. 
-  unfold wfinal_state. eauto.
-Qed. 
-
-Lemma wfinal_state_nostep:
-  forall ge st r, wfinal_state st r -> nostep wstep ge st.
-Proof.
-  unfold wfinal_state. intros; red; intros; red; intros [A B]. 
-  eapply final_state_nostep; eauto. 
-Qed.
-
-Theorem program_behaves_world_deterministic:
-  forall ge beh1 beh2,
-  program_behaves step initial_state final_state ge beh1 -> possible_behavior initial_world beh1 ->
-  program_behaves step initial_state final_state ge beh2 -> possible_behavior initial_world beh2 ->
-  beh1 = beh2.
-Proof.
-  intros. 
-  apply program_behaves_deterministic with
-    (step := wstep) (initial_state := winitial_state) (final_state := wfinal_state) (ge := ge).
-  exact wstep_deterministic.
-  exact winitial_state_determ.
-  exact wfinal_state_determ.
-  exact wfinal_state_nostep. 
-  apply inject_behaviors; auto.
-  apply inject_behaviors; auto.
-Qed.
-
-End INTERNAL_DET_TO_DET.
-
-***********)
 
 End WORLD_SEM.
 
