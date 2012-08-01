@@ -1,9 +1,15 @@
 Release 1.12
 ========================
 
+Performance improvements:
+- More aggressive elimination of conditional branches during constant
+  propagation, taking better advantage of inferred constants.
+	
 Other changes:
 - IA32/MacOS X: now supports referencing global variables defined in shared
   libraries; old hack for stdio is no longer needed.
+- PowerPC/MacOS X: this port was removed, as recent version of MacOS X
+  no longer support PowerPC.
 
 	
 Release 1.11, 2012-07-13

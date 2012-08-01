@@ -239,7 +239,22 @@ Definition analyze (gapp: global_approx) (f: RTL.function): PMap.t D.t :=
     but not all arguments are known are subject to strength reduction,
     and similarly for the addressing modes of load and store instructions.
     Conditional branches and multi-way branches are statically resolved
-    into [Inop] instructions if possible. Other instructions are unchanged. *)
+    into [Inop] instructions if possible. Other instructions are unchanged.
+
+    In addition, we try to jump over conditionals whose condition can
+    be statically resolved based on the abstract state "after" the
+    instruction that branches to the conditional.  A typical example is:
+<<
+          1: x := 0 and goto 2
+          2: if (x == 0) goto 3 else goto 4
+>>
+    where other instructions branch into 2 with different abstract values
+    for [x].  We transform this code into:
+<<
+          1: x := 0 and goto 3
+          2: if (x == 0) goto 3 else goto 4
+>>
+*)
 
 Definition transf_ros (app: D.t) (ros: reg + ident) : reg + ident :=
   match ros with
@@ -262,16 +277,40 @@ Definition const_for_result (a: approx) : option operation :=
   | _ => None
   end.
 
-Definition transf_instr (gapp: global_approx) (app: D.t) (instr: instruction) :=
+Fixpoint successor_rec (n: nat) (f: function) (app: D.t) (pc: node) : node :=
+  match n with
+  | O => pc
+  | Datatypes.S n' =>
+      match f.(fn_code)!pc with
+      | Some (Inop s) =>
+          successor_rec n' f app s
+      | Some (Icond cond args s1 s2) =>
+          match eval_static_condition cond (approx_regs app args) with
+          | Some b => if b then s1 else s2
+          | None => pc
+          end
+      | _ => pc
+      end
+  end.
+
+Definition num_iter := 10%nat.
+
+Definition successor (f: function) (app: D.t) (pc: node) : node :=
+  successor_rec num_iter f app pc.
+
+Definition transf_instr (gapp: global_approx) (f: function) (apps: PMap.t D.t)
+                       (pc: node) (instr: instruction) :=
+  let app := apps!!pc in
   match instr with
   | Iop op args res s =>
       let a := eval_static_operation op (approx_regs app args) in
+      let s' := successor f (D.set res a app) s in
       match const_for_result a with
       | Some cop =>
-          Iop cop nil res s
+          Iop cop nil res s'
       | None =>
           let (op', args') := op_strength_reduction op args (approx_regs app args) in
-          Iop op' args' res s
+          Iop op' args' res s'
       end
   | Iload chunk addr args dst s =>
       let a := eval_static_load gapp chunk
@@ -314,8 +353,8 @@ Definition transf_instr (gapp: global_approx) (app: D.t) (instr: instruction) :=
       instr
   end.
 
-Definition transf_code (gapp: global_approx) (app: PMap.t D.t) (instrs: code) : code :=
-  PTree.map (fun pc instr => transf_instr gapp app!!pc instr) instrs.
+Definition transf_code (gapp: global_approx) (f: function) (app: PMap.t D.t) (instrs: code) : code :=
+  PTree.map (transf_instr gapp f app) instrs.
 
 Definition transf_function (gapp: global_approx) (f: function) : function :=
   let approxs := analyze gapp f in
@@ -323,7 +362,7 @@ Definition transf_function (gapp: global_approx) (f: function) : function :=
     f.(fn_sig)
     f.(fn_params)
     f.(fn_stacksize)
-    (transf_code gapp approxs f.(fn_code))
+    (transf_code gapp f approxs f.(fn_code))
     f.(fn_entrypoint).
 
 Definition transf_fundef (gapp: global_approx) (fd: fundef) : fundef :=
