@@ -27,10 +27,10 @@ Require Import LTL.
   so that they jump directly to the end of the branch sequence.
   For example:
 <<
-     L1: goto L2;                          L1: goto L3;
-     L2; goto L3;               becomes    L2: goto L3;
-     L3: instr;                            L3: instr;
-     L4: if (cond) goto L1;                L4: if (cond) goto L3;
+     L1: nop L2;                          L1: nop L3;
+     L2; nop L3;               becomes    L2: nop L3;
+     L3: instr;                           L3: instr;
+     L4: if (cond) goto L1;               L4: if (cond) goto L3;
 >>
   This optimization can be applied to several of our intermediate
   languages.  We choose to perform it on the [LTL] language,
@@ -39,41 +39,32 @@ Require Import LTL.
   computations or useless moves), therefore there are more
   opportunities for tunneling after allocation than before.
   Symmetrically, prior tunneling helps linearization to produce
-  better code, e.g. by revealing that some [goto] instructions are
-  dead code (as the "goto L3" in the example above).
+  better code, e.g. by revealing that some [nop] instructions are
+  dead code (as the "nop L3" in the example above).
 *)
 
-(** [branch_target f pc] returns the node of the CFG that is at
-  the end of the branch sequence starting at [pc].  If the instruction
-  at [pc] is not a [goto], [pc] itself is returned.
-  The naive definition of [branch_target] is:
+(** The naive implementation of branch tunneling would replace
+  any branch to a node [pc] by a branch to the node
+  [branch_target f pc], defined as follows:
 <<
-  branch_target f pc = branch_target f pc'  if f(pc) = goto pc'
+  branch_target f pc = branch_target f pc'  if f(pc) = nop pc'
                      = pc                   otherwise
 >>
   However, this definition can fail to terminate if
   the program can contain loops consisting only of branches, as in
 <<
-     L1: goto L1;
+     L1: nop L1;
 >>
   or
-<<   L1: goto L2;
-     L2: goto L1;
+<<   L1: nop L2;
+     L2: nop L1;
 >>
   Coq warns us of this fact by not accepting the definition 
   of [branch_target] above.
 
-  The proper way to handle this problem is to detect [goto] cycles
-  in the control-flow graph.  For simplicity, we just bound arbitrarily
-  the number of iterations performed by [branch_target],
-  never chasing more than 10 [goto] instructions.  (This many
-  consecutive branches is rarely, if even, encountered.)  
-
-  For a sequence of more than 10 [goto] instructions, we can return
-  (as branch target) any of the labels of the [goto] instructions.
-  This is semantically correct in any case.  However, the proof
-  is simpler if we return the label of the first [goto] in the sequence.
-*)
+  To handle this problem, we proceed in two passes.  The first pass
+  populates a union-find data structure, adding equalities [pc = pc']
+  for every instruction [pc: nop pc'] in the function. *)
 
 Module U := UnionFind.UF(PTree).
 
@@ -86,9 +77,9 @@ Definition record_goto (uf: U.t) (pc: node) (i: instruction) : U.t :=
 Definition record_gotos (f: LTL.function) : U.t :=
   PTree.fold record_goto f.(fn_code) U.empty.
 
-(** The tunneling optimization simply rewrites all LTL basic blocks,
-  replacing the destinations of the [Bgoto] and [Bcond] instructions
-  with their final target, as computed by [branch_target]. *)
+(** The second pass rewrites all LTL instructions, replacing every
+  successor [s] of every instruction by the canonical representative
+  of its equivalence class in the union-find data structure. *)
 
 Definition tunnel_instr (uf: U.t) (b: instruction) : instruction :=
   match b with
