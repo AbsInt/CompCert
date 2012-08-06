@@ -443,9 +443,7 @@ Lemma make_boolean_correct:
     /\ Val.bool_of_val vb b.
 Proof.
   assert (VBI: forall n, Val.bool_of_val (Vint n) (negb (Int.eq n Int.zero))).
-    intros. predSpec Int.eq Int.eq_spec n Int.zero; simpl.
-    subst. constructor.
-    constructor. auto.
+    constructor.
   intros. functional inversion H0; subst; simpl.
   exists (Vint n); split; auto.
   exists (Vint n); split; auto.
@@ -458,7 +456,7 @@ Proof.
   rewrite <- Float.cmp_ne_eq.
   exists (Val.of_bool (Float.cmp Cne f Float.zero)); split.
   econstructor; eauto with cshm. 
-  destruct (Float.cmp Cne f Float.zero); simpl; constructor. apply Int.one_not_zero.
+  destruct (Float.cmp Cne f Float.zero); simpl; constructor.
 Qed.
 
 Lemma make_neg_correct:

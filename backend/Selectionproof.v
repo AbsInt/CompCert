@@ -103,16 +103,10 @@ Proof.
   intros.
   destruct c; simpl in H; try discriminate;
   destruct c; simpl in H; try discriminate;
-  generalize (Int.eq_spec i Int.zero); rewrite H; intro; subst i.
+  generalize (Int.eq_spec i Int.zero); rewrite H; intros; subst.
 
-  simpl in H0. destruct v; inv H0. 
-  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intros; simpl.
-  subst i; constructor. constructor; auto.
-
-  simpl in H0. destruct v; inv H0. 
-  generalize (Int.eq_spec i Int.zero). destruct (Int.eq i Int.zero); intros; simpl.
-  subst i; constructor. constructor; auto.
-  constructor.
+  simpl in H0. destruct v; inv H0. constructor. 
+  simpl in H0. destruct v; inv H0. constructor. constructor.
 Qed.
 
 Lemma is_compare_eq_zero_correct:
@@ -139,17 +133,13 @@ Proof.
   
   destruct o; try (eapply eval_condition_of_expr_base; eauto; fail).
 
-  destruct e0. inv H0. inv H5. simpl in H7. inv H7.  
-  inversion H1. 
-  rewrite Int.eq_false; auto. constructor.
-  subst i; rewrite Int.eq_true. constructor.
+  destruct e0. inv H0. inv H5. simpl in H7. inv H7. inv H1.
+  destruct (Int.eq i Int.zero); constructor.
   eapply eval_condition_of_expr_base; eauto.
 
   inv H0. simpl in H7.
   assert (eval_condition c vl m = Some b).
-    destruct (eval_condition c vl m).
-    destruct b0; inv H7; inversion H1; congruence.
-    inv H7. inv H1.
+    inv H7. eapply Val.bool_of_val_of_optbool; eauto.
   assert (eval_condexpr ge sp e m le (CEcond c e0) b).
     eapply eval_CEcond; eauto.
   destruct e0; auto. destruct e1; auto.

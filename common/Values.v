@@ -74,26 +74,13 @@ Fixpoint has_type_list (vl: list val) (tl: list typ) {struct vl} : Prop :=
   The integer 0 (also used to represent the null pointer) is [False].
   [Vundef] and floats are neither true nor false. *)
 
-Definition is_true (v: val) : Prop :=
-  match v with
-  | Vint n => n <> Int.zero
-  | Vptr b ofs => True
-  | _ => False
-  end.
-
-Definition is_false (v: val) : Prop :=
-  match v with
-  | Vint n => n = Int.zero
-  | _ => False
-  end.
-
 Inductive bool_of_val: val -> bool -> Prop :=
-  | bool_of_val_int_true:
-      forall n, n <> Int.zero -> bool_of_val (Vint n) true
-  | bool_of_val_int_false:
-      bool_of_val (Vint Int.zero) false
+  | bool_of_val_int:
+      forall n, bool_of_val (Vint n) (negb (Int.eq n Int.zero))
   | bool_of_val_ptr:
       forall b ofs, bool_of_val (Vptr b ofs) true.
+
+(** Arithmetic operations *)
 
 Definition neg (v: val) : val :=
   match v with
@@ -357,6 +344,8 @@ Definition divf (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+(** Comparisons *)
+
 Section COMPARISONS.
 
 Variable valid_ptr: block -> Z -> bool.
@@ -449,60 +438,18 @@ Proof.
   change 65535 with (two_p 16 - 1). apply Int.zero_ext_and. vm_compute; auto.
 Qed.
 
-Theorem istrue_not_isfalse:
-  forall v, is_false v -> is_true (notbool v).
+Theorem bool_of_val_of_bool:
+  forall b1 b2, bool_of_val (of_bool b1) b2 -> b1 = b2.
 Proof.
-  destruct v; simpl; try contradiction.
-  intros. subst i. simpl. discriminate.
+  intros. destruct b1; simpl in H; inv H; auto.
 Qed.
 
-Theorem isfalse_not_istrue:
-  forall v, is_true v -> is_false (notbool v).
+Theorem bool_of_val_of_optbool:
+  forall ob b, bool_of_val (of_optbool ob) b -> ob = Some b.
 Proof.
-  destruct v; simpl; try contradiction.
-  intros. generalize (Int.eq_spec i Int.zero).
-  case (Int.eq i Int.zero); intro.
-  contradiction. simpl. auto.
-  auto.
-Qed.
-
-Theorem bool_of_true_val:
-  forall v, is_true v -> bool_of_val v true.
-Proof.
-  intro. destruct v; simpl; intros; try contradiction.
-  constructor; auto. constructor.
-Qed.
-
-Theorem bool_of_true_val2:
-  forall v, bool_of_val v true -> is_true v.
-Proof.
-  intros. inversion H; simpl; auto.
-Qed.
-
-Theorem bool_of_true_val_inv:
-  forall v b, is_true v -> bool_of_val v b -> b = true.
-Proof.
-  intros. inversion H0; subst v b; simpl in H; auto. 
-Qed.
-
-Theorem bool_of_false_val:
-  forall v, is_false v -> bool_of_val v false.
-Proof.
-  intro. destruct v; simpl; intros; try contradiction.
-  subst i;  constructor.
-Qed.
-
-Theorem bool_of_false_val2:
-  forall v, bool_of_val v false -> is_false v.
-Proof.
-  intros. inversion H; simpl; auto.
-Qed.
-
-Theorem bool_of_false_val_inv:
-  forall v b, is_false v -> bool_of_val v b -> b = false.
-Proof.
-  intros. inversion H0; subst v b; simpl in H.
-  congruence. auto. contradiction.
+  intros. destruct ob; simpl in H. 
+  destruct b0; simpl in H; inv H; auto.
+  inv H.
 Qed.
 
 Theorem notbool_negb_1:
@@ -930,6 +877,54 @@ Proof.
   destruct v1; destruct v2; auto. unfold cmpf, cmpf_bool. 
   rewrite Float.cmp_ge_gt_eq.
   destruct (Float.cmp Cgt f f0); destruct (Float.cmp Ceq f f0); auto.
+Qed.
+
+Theorem cmp_ne_0_optbool:
+  forall ob, cmp Cne (of_optbool ob) (Vint Int.zero) = of_optbool ob.
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmp_eq_1_optbool:
+  forall ob, cmp Ceq (of_optbool ob) (Vint Int.one) = of_optbool ob.
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmp_eq_0_optbool:
+  forall ob, cmp Ceq (of_optbool ob) (Vint Int.zero) = of_optbool (option_map negb ob).
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmp_ne_1_optbool:
+  forall ob, cmp Cne (of_optbool ob) (Vint Int.one) = of_optbool (option_map negb ob).
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmpu_ne_0_optbool:
+  forall valid_ptr ob, cmpu valid_ptr Cne (of_optbool ob) (Vint Int.zero) = of_optbool ob.
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmpu_eq_1_optbool:
+  forall valid_ptr ob, cmpu valid_ptr Ceq (of_optbool ob) (Vint Int.one) = of_optbool ob.
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmpu_eq_0_optbool:
+  forall valid_ptr ob, cmpu valid_ptr Ceq (of_optbool ob) (Vint Int.zero) = of_optbool (option_map negb ob).
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
+Qed.
+
+Theorem cmpu_ne_1_optbool:
+  forall valid_ptr ob, cmpu valid_ptr Cne (of_optbool ob) (Vint Int.one) = of_optbool (option_map negb ob).
+Proof.
+  intros. destruct ob; simpl; auto. destruct b; auto. 
 Qed.
 
 Lemma zero_ext_and:

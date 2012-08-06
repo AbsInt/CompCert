@@ -770,15 +770,9 @@ Theorem eval_cond_of_expr:
 Proof.
   intros until v. unfold cond_of_expr; case (cond_of_expr_match a); intros; InvEval.
   subst v. exists (v1 :: nil); split; auto with evalexpr.
-  simpl. destruct b.
-  generalize (Val.bool_of_true_val2 _ H0); clear H0; intro ISTRUE.
-  destruct v1; simpl in ISTRUE; try contradiction. 
-  rewrite Int.eq_false; auto.
-  generalize (Val.bool_of_false_val2 _ H0); clear H0; intro ISFALSE.
-  destruct v1; simpl in ISFALSE; try contradiction.
-  rewrite ISFALSE. rewrite Int.eq_true; auto.
+  simpl. destruct v1; unfold Val.and in H0; inv H0; auto.
   exists (v :: nil); split; auto with evalexpr.
-  simpl. inversion H0; simpl. rewrite Int.eq_false; auto. auto. auto. 
+  simpl. inv H0; auto.
 Qed.
 
 End CMCONSTR.
