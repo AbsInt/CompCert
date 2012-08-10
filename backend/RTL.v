@@ -387,6 +387,41 @@ Definition successors_instr (i: instruction) : list node :=
 Definition successors (f: function) : PTree.t (list node) :=
   PTree.map1 successors_instr f.(fn_code).
 
+(** The registers used by an instruction *)
+
+Definition instr_uses (i: instruction) : list reg :=
+  match i with
+  | Inop s => nil
+  | Iop op args res s => args
+  | Iload chunk addr args dst s => args
+  | Istore chunk addr args src s => src :: args
+  | Icall sig (inl r) args res s => r :: args
+  | Icall sig (inr id) args res s => args
+  | Itailcall sig (inl r) args => r :: args
+  | Itailcall sig (inr id) args => args
+  | Ibuiltin ef args res s => args
+  | Icond cond args ifso ifnot => args
+  | Ijumptable arg tbl => arg :: nil
+  | Ireturn None => nil
+  | Ireturn (Some arg) => arg :: nil
+  end.
+
+(** The register defined by an instruction, if any *)
+
+Definition instr_defs (i: instruction) : option reg :=
+  match i with
+  | Inop s => None
+  | Iop op args res s => Some res
+  | Iload chunk addr args dst s => Some dst
+  | Istore chunk addr args src s => None
+  | Icall sig ros args res s => Some res
+  | Itailcall sig ros args => None
+  | Ibuiltin ef args res s => Some res
+  | Icond cond args ifso ifnot => None
+  | Ijumptable arg tbl => None
+  | Ireturn optarg => None
+  end.
+
 (** Transformation of a RTL function instruction by instruction.
   This applies a given transformation function to all instructions
   of a function and constructs a transformed function from that. *)
