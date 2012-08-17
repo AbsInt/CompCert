@@ -385,27 +385,21 @@ let print_builtin_vload_global oc chunk id ofs args res =
                  (Addrmode(None, None, Coq_inr(id,ofs))) res;
   fprintf oc "%s end builtin __builtin_volatile_read\n" comment
 
-let print_builtin_vstore_common oc chunk addr src =
+let print_builtin_vstore_common oc chunk addr src tmp =
   match chunk, src with
   | (Mint8signed | Mint8unsigned), IR src ->
       if Asmgen.low_ireg src then
         fprintf oc "	movb	%a, %a\n" ireg8 src addressing addr
       else begin
-        fprintf oc "	movl	%a, %%ecx\n" ireg src;
-        fprintf oc "	movb	%%cl, %a\n" addressing addr
+        fprintf oc "	movl	%a, %a\n" ireg src ireg tmp;
+        fprintf oc "	movb	%a, %a\n" ireg8 tmp addressing addr
       end
   | (Mint16signed | Mint16unsigned), IR src ->
-      if Asmgen.low_ireg src then
-        fprintf oc "	movw	%a, %a\n" ireg16 src addressing addr
-      else begin
-        fprintf oc "	movl	%a, %%ecx\n" ireg src;
-        fprintf oc "	movw	%%cx, %a\n" addressing addr
-      end
+      fprintf oc "	movw	%a, %a\n" ireg16 src addressing addr
   | Mint32, IR src ->
       fprintf oc "	movl	%a, %a\n" ireg src addressing addr
   | Mfloat32, FR src ->
-      fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
-      fprintf oc "	movss	%%xmm7, %a\n" addressing addr
+      fprintf oc "	cvtsd2ss %a, %a\n" freg src addressing addr
   | (Mfloat64 | Mfloat64al32), FR src ->
       fprintf oc "	movsd	%a, %a\n" freg src addressing addr
   | _ ->
@@ -417,6 +411,7 @@ let print_builtin_vstore oc chunk args =
   | [IR addr; src] ->
       print_builtin_vstore_common oc chunk
                  (Addrmode(Some addr, None, Coq_inl Integers.Int.zero)) src
+                 (if addr = ECX then EDX else ECD)
   | _ ->
       assert false
   end;
@@ -427,7 +422,7 @@ let print_builtin_vstore_global oc chunk id ofs args =
   begin match args with
   | [src] ->
       print_builtin_vstore_common oc chunk
-                       (Addrmode(None, None, Coq_inr(id,ofs))) src
+                       (Addrmode(None, None, Coq_inr(id,ofs))) src EDX
   | _ ->
       assert false
   end;
