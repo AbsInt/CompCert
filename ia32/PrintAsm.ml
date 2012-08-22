@@ -399,7 +399,8 @@ let print_builtin_vstore_common oc chunk addr src tmp =
   | Mint32, IR src ->
       fprintf oc "	movl	%a, %a\n" ireg src addressing addr
   | Mfloat32, FR src ->
-      fprintf oc "	cvtsd2ss %a, %a\n" freg src addressing addr
+      fprintf oc "      cvtsd2ss %a, %%xmm7\n" freg src;
+      fprintf oc "      movss   %%xmm7, %a\n" addressing addr
   | (Mfloat64 | Mfloat64al32), FR src ->
       fprintf oc "	movsd	%a, %a\n" freg src addressing addr
   | _ ->
@@ -411,7 +412,7 @@ let print_builtin_vstore oc chunk args =
   | [IR addr; src] ->
       print_builtin_vstore_common oc chunk
                  (Addrmode(Some addr, None, Coq_inl Integers.Int.zero)) src
-                 (if addr = ECX then EDX else ECD)
+                 (if addr = ECX then EDX else ECX)
   | _ ->
       assert false
   end;
