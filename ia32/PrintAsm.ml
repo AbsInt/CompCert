@@ -399,8 +399,8 @@ let print_builtin_vstore_common oc chunk addr src tmp =
   | Mint32, IR src ->
       fprintf oc "	movl	%a, %a\n" ireg src addressing addr
   | Mfloat32, FR src ->
-      fprintf oc "      cvtsd2ss %a, %%xmm7\n" freg src;
-      fprintf oc "      movss   %%xmm7, %a\n" addressing addr
+      fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
+      fprintf oc "	movss	%%xmm7, %a\n" addressing addr
   | (Mfloat64 | Mfloat64al32), FR src ->
       fprintf oc "	movsd	%a, %a\n" freg src addressing addr
   | _ ->

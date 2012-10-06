@@ -173,62 +173,25 @@ let register_stub_function name tres targs =
   register_special_external stub_name ef targs tres;
   (stub_name, Tfunction (targs, tres))
 
-(** ** Handling of annotations *)
-
-let annot_function_next = ref 0
-
-let register_annotation_stmt txt targs =
-  let tres = Tvoid in
-  incr annot_function_next;
-  let fun_name =
-    Printf.sprintf "__builtin_annot_%d" !annot_function_next
-  and ef =
-    EF_annot (intern_string txt, typlist_of_typelist targs) in
-  register_special_external fun_name ef targs tres;
-  Evalof(Evar(intern_string fun_name, Tfunction(targs, tres)), 
-         Tfunction(targs, tres))
-
-let register_annotation_val txt targ =
-  let targs = Tcons(targ, Tnil)
-  and tres = targ in
-  incr annot_function_next;
-  let fun_name =
-    Printf.sprintf "__builtin_annot_val_%d" !annot_function_next
-  and ef =
-    EF_annot_val (intern_string txt, typ_of_type targ) in
-  register_special_external fun_name ef targs tres;
-  Evalof(Evar(intern_string fun_name, Tfunction(targs, tres)),
-         Tfunction(targs, tres))
-
 (** ** Handling of inlined memcpy functions *)
-
-let register_inlined_memcpy sz al =
-  let al =
-    if al <= 4l then al else 4l in (* max alignment supported by CompCert *)
-  let name = Printf.sprintf "__builtin_memcpy_sz%ld_al%ld" sz al in
-  let targs = Tcons(Tpointer(Tvoid, noattr),
-              Tcons(Tpointer(Tvoid, noattr), Tnil))
-  and tres = Tvoid
-  and ef = EF_memcpy(coqint_of_camlint sz, coqint_of_camlint al) in
-  register_special_external name ef targs tres;
-  Evalof(Evar(intern_string name, Tfunction(targs, tres)),
-         Tfunction(targs, tres))
 
 let make_builtin_memcpy args =
   match args with
   | Econs(dst, Econs(src, Econs(sz, Econs(al, Enil)))) ->
       let sz1 =
         match Initializers.constval sz with
-        | Errors.OK(Vint n) -> camlint_of_coqint n
+        | Errors.OK(Vint n) -> n
         | _ -> error "ill-formed __builtin_memcpy_aligned (3rd argument must be 
-a constant)"; 0l in
+a constant)"; Integers.Int.zero in
       let al1 =
         match Initializers.constval al with
-        | Errors.OK(Vint n) -> camlint_of_coqint n
+        | Errors.OK(Vint n) -> n
         | _ -> error "ill-formed __builtin_memcpy_aligned (4th argument must be 
-a constant)"; 0l in
-      let fn = register_inlined_memcpy sz1 al1 in
-      Ecall(fn, Econs(dst, Econs(src, Enil)), Tvoid)
+a constant)"; Integers.Int.one in
+      (* to check: sz1 > 0, al1 divides sz1, al1 = 1|2|4|8 *)
+      Ebuiltin(EF_memcpy(sz1, al1),
+               Tcons(typeof dst, Tcons(typeof src, Tnil)),
+               Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->
     assert false
 
@@ -481,9 +444,9 @@ let rec convertExpr env e =
   | C.EBinop(C.Ocomma, e1, e2, _) ->
       Ecomma(convertExpr env e1, convertExpr env e2, ty)
   | C.EBinop(C.Ologand, e1, e2, _) ->
-      coq_Eseqand (convertExpr env e1) (convertExpr env e2) ty
+      Eseqand(convertExpr env e1, convertExpr env e2, ty)
   | C.EBinop(C.Ologor, e1, e2, _) ->
-      coq_Eseqor (convertExpr env e1) (convertExpr env e2) ty
+      Eseqor(convertExpr env e1, convertExpr env e2, ty)
 
   | C.EConditional(e1, e2, e3) ->
       Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3, ty)
@@ -494,8 +457,8 @@ let rec convertExpr env e =
       begin match args with
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypList env (List.map (fun e -> e.etyp) args1) in
-          let fn' = register_annotation_stmt txt targs1 in
-          Ecall(fn', convertExprList env args1, ty)
+          Ebuiltin(EF_annot(intern_string txt, typlist_of_typelist targs1),
+                   targs1, convertExprList env args1, ty)
       | _ ->
           error "ill-formed __builtin_annot (first argument must be string literal)";
           ezero
@@ -505,8 +468,8 @@ let rec convertExpr env e =
       begin match args with
       | [ {edesc = C.EConst(CStr txt)}; arg ] ->
           let targ = convertTyp env arg.etyp in
-          let fn' = register_annotation_val txt targ in
-          Ecall(fn', convertExprList env [arg], ty)
+          Ebuiltin(EF_annot_val(intern_string txt, typ_of_type targ),
+                   Tcons(targ, Tnil), convertExprList env [arg], ty)
       | _ ->
           error "ill-formed __builtin_annot_intval (first argument must be string literal)";
           ezero

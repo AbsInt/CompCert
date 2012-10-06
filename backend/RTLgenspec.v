@@ -749,11 +749,11 @@ Inductive tr_expr (c: code):
       c!n1 = Some (Iload chunk addr rl rd nd) ->
       reg_map_ok map rd dst -> ~In rd pr ->
       tr_expr c map pr (Eload chunk addr al) ns nd rd dst
-  | tr_Econdition: forall map pr b ifso ifnot ns nd rd ntrue nfalse dst,
-      tr_condition c map pr b ns ntrue nfalse ->
+  | tr_Econdition: forall map pr cond bl ifso ifnot ns nd rd ntrue nfalse dst,
+      tr_condition c map pr cond bl ns ntrue nfalse ->
       tr_expr c map pr ifso ntrue nd rd dst ->
       tr_expr c map pr ifnot nfalse nd rd dst ->
-      tr_expr c map pr (Econdition b ifso ifnot) ns nd rd dst
+      tr_expr c map pr (Econdition cond bl ifso ifnot) ns nd rd dst
   | tr_Elet: forall map pr b1 b2 ns nd rd n1 r dst,
       ~reg_in_map map r ->
       tr_expr c map pr b1 ns n1 r None ->
@@ -765,26 +765,17 @@ Inductive tr_expr (c: code):
       tr_move c ns r nd rd ->
       tr_expr c map pr (Eletvar n) ns nd rd dst
 
-(** [tr_condition c map pr cond ns ntrue nfalse rd] holds if the graph [c],
+(** [tr_condition c map pr cond al ns ntrue nfalse rd] holds if the graph [c],
   starting at node [ns], contains instructions that compute the truth
   value of the Cminor conditional expression [cond] and terminate
   on node [ntrue] if the condition holds and on node [nfalse] otherwise. *)
 
 with tr_condition (c: code): 
-       mapping -> list reg -> condexpr -> node -> node -> node -> Prop :=
-  | tr_CEtrue: forall map pr ntrue nfalse,
-      tr_condition c map pr CEtrue ntrue ntrue nfalse
-  | tr_CEfalse: forall map pr ntrue nfalse,
-      tr_condition c map pr CEfalse nfalse ntrue nfalse
+       mapping -> list reg -> condition -> exprlist -> node -> node -> node -> Prop :=
   | tr_CEcond: forall map pr cond bl ns ntrue nfalse n1 rl,
       tr_exprlist c map pr bl ns n1 rl ->
       c!n1 = Some (Icond cond rl ntrue nfalse) ->
-      tr_condition c map pr (CEcond cond bl) ns ntrue nfalse
-  | tr_CEcondition: forall map pr b ifso ifnot ns ntrue nfalse ntrue' nfalse',
-      tr_condition c map pr b ns ntrue' nfalse' ->
-      tr_condition c map pr ifso ntrue' ntrue nfalse ->
-      tr_condition c map pr ifnot nfalse' ntrue nfalse ->
-      tr_condition c map pr (CEcondition b ifso ifnot) ns ntrue nfalse
+      tr_condition c map pr cond bl ns ntrue nfalse
 
 (** [tr_exprlist c map pr exprs ns nd rds] holds if the graph [c],
   between nodes [ns] and [nd], contains instructions that compute the values
@@ -889,11 +880,11 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_stmt c map s2 n nd nexits ngoto nret rret ->
      tr_stmt c map s1 ns n nexits ngoto nret rret ->
      tr_stmt c map (Sseq s1 s2) ns nd nexits ngoto nret rret
-  | tr_Sifthenelse: forall a strue sfalse ns nd nexits ngoto nret rret ntrue nfalse,
+  | tr_Sifthenelse: forall cond al strue sfalse ns nd nexits ngoto nret rret ntrue nfalse,
      tr_stmt c map strue ntrue nd nexits ngoto nret rret ->
      tr_stmt c map sfalse nfalse nd nexits ngoto nret rret ->
-     tr_condition c map nil a ns ntrue nfalse ->
-     tr_stmt c map (Sifthenelse a strue sfalse) ns nd nexits ngoto nret rret
+     tr_condition c map nil cond al ns ntrue nfalse ->
+     tr_stmt c map (Sifthenelse cond al strue sfalse) ns nd nexits ngoto nret rret
   | tr_Sloop: forall sbody ns nd nexits ngoto nret rret nloop nend,
      tr_stmt c map sbody nloop nend nexits ngoto nret rret ->
      c!ns = Some(Inop nloop) ->
@@ -963,9 +954,9 @@ Lemma tr_expr_incr:
   tr_expr s2.(st_code) map pr a ns nd rd dst
 with tr_condition_incr:
   forall s1 s2, state_incr s1 s2 ->
-  forall map pr a ns ntrue nfalse,
-  tr_condition s1.(st_code) map pr a ns ntrue nfalse ->
-  tr_condition s2.(st_code) map pr a ns ntrue nfalse
+  forall map pr cond al ns ntrue nfalse,
+  tr_condition s1.(st_code) map pr cond al ns ntrue nfalse ->
+  tr_condition s2.(st_code) map pr cond al ns ntrue nfalse
 with tr_exprlist_incr:
   forall s1 s2, state_incr s1 s2 ->
   forall map pr al ns nd rl,
@@ -1004,13 +995,6 @@ Lemma transl_expr_charact:
      (VALID2: reg_valid rd s),
    tr_expr s'.(st_code) map pr a ns nd rd None
 
-with transl_condexpr_charact:
-  forall a map ntrue nfalse s ns s' pr INCR
-     (TR: transl_condition map a ntrue nfalse s = OK ns s' INCR)
-     (VALID: regs_valid pr s)
-     (WF: map_valid map s),
-   tr_condition s'.(st_code) map pr a ns ntrue nfalse
-
 with transl_exprlist_charact:
   forall al map rl nd s ns s' pr INCR
      (TR: transl_exprlist map al rl nd s = OK ns s' INCR)
@@ -1040,9 +1024,10 @@ Proof.
   (* Econdition *)
   inv OK.
   econstructor; eauto with rtlg.
-  apply tr_expr_incr with s1; auto. 
+  econstructor; eauto with rtlg. eapply transl_exprlist_charact; eauto with rtlg. 
+  apply tr_expr_incr with s2; auto. 
   eapply transl_expr_charact; eauto 2 with rtlg. constructor; auto.
-  apply tr_expr_incr with s0; auto. 
+  apply tr_expr_incr with s1; auto. 
   eapply transl_expr_charact; eauto 2 with rtlg. constructor; auto.
   (* Elet *)
   inv OK.
@@ -1064,24 +1049,6 @@ Proof.
   inv OK. left; split; congruence. right; eauto with rtlg.
   eapply add_move_charact; eauto.
   monadInv EQ1.
-
-(* Conditions *)
-  induction a; intros; try (monadInv TR); saturateTrans.
-
-  (* CEtrue *)
-  constructor.
-  (* CEfalse *)
-  constructor.
-  (* CEcond *)
-  econstructor; eauto with rtlg.
-  eapply transl_exprlist_charact; eauto with rtlg.
-  (* CEcondition *)
-  econstructor.
-  eapply transl_condexpr_charact; eauto with rtlg.
-  apply tr_condition_incr with s1; auto.
-  eapply transl_condexpr_charact; eauto with rtlg.
-  apply tr_condition_incr with s0; auto.
-  eapply transl_condexpr_charact; eauto with rtlg.
 
 (* Lists *)
 
@@ -1127,10 +1094,10 @@ Opaque two_address_op.
   (* Econdition *)
   simpl in NOT2ADDR. destruct (orb_false_elim _ _ NOT2ADDR).
   econstructor; eauto with rtlg.
-  eapply transl_condexpr_charact; eauto with rtlg.
+  econstructor; eauto with rtlg. eapply transl_exprlist_charact; eauto with rtlg. 
+  apply tr_expr_incr with s2; auto. 
+  eapply IHa1; eauto 2 with rtlg. 
   apply tr_expr_incr with s1; auto. 
-  eapply IHa1; eauto 2 with rtlg.
-  apply tr_expr_incr with s0; auto. 
   eapply IHa2; eauto 2 with rtlg.
   (* Elet *)
   simpl in NOT2ADDR.
@@ -1298,19 +1265,21 @@ Proof.
   eapply IHstmt2; eauto with rtlg.
   eapply IHstmt1; eauto with rtlg.
   (* Sifthenelse *)
-  destruct (more_likely c stmt1 stmt2); monadInv TR.
+  destruct (more_likely c stmt1 stmt2); monadInv EQ0.
   econstructor.
-  apply tr_stmt_incr with s1; auto. 
-  eapply IHstmt1; eauto with rtlg.
-  apply tr_stmt_incr with s0; auto.
-  eapply IHstmt2; eauto with rtlg.
-  eapply transl_condexpr_charact; eauto with rtlg.
-  econstructor.
-  apply tr_stmt_incr with s0; auto. 
+  apply tr_stmt_incr with s2; auto. 
   eapply IHstmt1; eauto with rtlg.
   apply tr_stmt_incr with s1; auto.
   eapply IHstmt2; eauto with rtlg.
-  eapply transl_condexpr_charact; eauto with rtlg.
+  econstructor; eauto with rtlg. 
+  eapply transl_exprlist_charact; eauto with rtlg.
+  econstructor.
+  apply tr_stmt_incr with s1; auto. 
+  eapply IHstmt1; eauto with rtlg.
+  apply tr_stmt_incr with s2; auto.
+  eapply IHstmt2; eauto with rtlg.
+  econstructor; eauto with rtlg. 
+  eapply transl_exprlist_charact; eauto with rtlg.
   (* Sloop *)
   econstructor. 
   apply tr_stmt_incr with s1; auto. 

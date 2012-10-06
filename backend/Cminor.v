@@ -44,9 +44,7 @@ Inductive unary_operation : Type :=
   | Ocast8signed: unary_operation          (**r 8-bit sign extension  *)
   | Ocast16unsigned: unary_operation       (**r 16-bit zero extension  *)
   | Ocast16signed: unary_operation         (**r 16-bit sign extension *)
-  | Oboolval: unary_operation              (**r 0 if null, 1 if non-null *)
   | Onegint: unary_operation               (**r integer opposite *)
-  | Onotbool: unary_operation              (**r boolean negation  *)
   | Onotint: unary_operation               (**r bitwise complement  *)
   | Onegf: unary_operation                 (**r float opposite *)
   | Oabsf: unary_operation                 (**r float absolute value *)
@@ -87,8 +85,7 @@ Inductive expr : Type :=
   | Econst : constant -> expr
   | Eunop : unary_operation -> expr -> expr
   | Ebinop : binary_operation -> expr -> expr -> expr
-  | Eload : memory_chunk -> expr -> expr
-  | Econdition : expr -> expr -> expr -> expr.
+  | Eload : memory_chunk -> expr -> expr.
 
 (** Statements include expression evaluation, assignment to local variables,
   memory stores, function calls, an if/then/else conditional, infinite
@@ -230,9 +227,7 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | Ocast8signed => Some (Val.sign_ext 8 arg)
   | Ocast16unsigned => Some (Val.zero_ext 16 arg)
   | Ocast16signed => Some (Val.sign_ext 16 arg)
-  | Oboolval => Some(Val.boolval arg)
   | Onegint => Some (Val.negint arg)
-  | Onotbool => Some (Val.notbool arg)
   | Onotint => Some (Val.notint arg)
   | Onegf => Some (Val.negf arg)
   | Oabsf => Some (Val.absf arg)
@@ -301,12 +296,7 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Eload: forall chunk addr vaddr v,
       eval_expr addr vaddr ->
       Mem.loadv chunk m vaddr = Some v ->     
-      eval_expr (Eload chunk addr) v
-  | eval_Econdition: forall a1 a2 a3 v1 b1 v2,
-      eval_expr a1 v1 ->
-      Val.bool_of_val v1 b1 ->
-      eval_expr (if b1 then a2 else a3) v2 ->
-      eval_expr (Econdition a1 a2 a3) v2.
+      eval_expr (Eload chunk addr) v.
 
 Inductive eval_exprlist: list expr -> list val -> Prop :=
   | eval_Enil:

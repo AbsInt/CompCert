@@ -134,30 +134,42 @@ Definition transl_incrdecr (id: incr_or_decr) (a: expr) (ty: type) : expr :=
   | Decr => Ebinop Osub a (Econst_int Int.one type_int32s) (typeconv ty)
   end.
 
-(** Generate a [Sset] or [Svolread] operation as appropriate
+(** Generate a [Sset] or [Sbuiltin] operation as appropriate
   to dereference a l-value [l] and store its result in temporary variable [id]. *)
 
+Definition chunk_for_volatile_type (ty: type) : option memory_chunk :=
+  if type_is_volatile ty 
+  then match access_mode ty with By_value chunk => Some chunk | _ => None end
+  else None.
+
 Definition make_set (id: ident) (l: expr) : statement :=
-  if type_is_volatile (typeof l)
-  then Svolread id l
-  else Sset id l.
+  match chunk_for_volatile_type (typeof l) with
+  | None => Sset id l
+  | Some chunk =>
+      let typtr := Tpointer (typeof l) noattr in
+      Sbuiltin (Some id) (EF_vload chunk) (Tcons typtr Tnil) ((Eaddrof l typtr):: nil)
+  end.
 
 (** Translation of a "valof" operation.
   If the l-value accessed is of volatile type, we go through a temporary. *)
 
 Definition transl_valof (ty: type) (l: expr) : mon (list statement * expr) :=
   if type_is_volatile ty
-  then (do t <- gensym ty; ret (Svolread t l :: nil, Etempvar t ty))
+  then do t <- gensym ty; ret (make_set t l :: nil, Etempvar t ty)
   else ret (nil, l).
-(*
-  match access_mode ty with
-  | By_value _ =>
-      if type_is_volatile ty
-      then (do t <- gensym ty; ret (Sset t l :: nil, Etempvar t ty))
-      else ret (nil, l)
-  | _ => ret (nil, l)
+
+(** Translation of an assignment. *)
+
+Definition make_assign (l r: expr) : statement :=
+  match chunk_for_volatile_type (typeof l) with
+  | None =>
+      Sassign l r
+  | Some chunk =>
+      let ty := typeof l in
+      let typtr := Tpointer ty noattr in
+      Sbuiltin None (EF_vstore chunk) (Tcons typtr (Tcons ty Tnil))
+                    (Eaddrof l typtr :: r :: nil)
   end.
-*)
 
 (** Translation of expressions.  Return a pair [(sl, a)] of
     a list of statements [sl] and a pure expression [a].
@@ -167,31 +179,31 @@ Definition transl_valof (ty: type) (l: expr) : mon (list statement * expr) :=
 - If the [dst] argument is [For_effects], the statements [sl]
   perform the side effects of the original expression,
   and [a] is meaningless.
-- If the [dst] argument is [For_test s1 s2], the statements [sl]
-  perform the side effects of the original expression, followed
-  by an [if (v) { s1 } else { s2 }] test, where [v] is the value
-  of the original expression.  [a] is meaningless.
+- If the [dst] argument is [For_set tyl tvar], the statements [sl]
+  perform the side effects of the original expression, then
+  assign the value of the original expression to the temporary [tvar].
+  The value is casted according to the list of types [tyl] before
+  assignment.  In this case, [a] is meaningless.
 *)
 
 Inductive destination : Type := 
   | For_val
   | For_effects
-  | For_test (tyl: list type) (s1 s2: statement).
+  | For_set (tyl: list type) (tmp: ident).
 
 Definition dummy_expr := Econst_int Int.zero type_int32s.
+
+Fixpoint do_set (tmp: ident) (tyl: list type) (a: expr) : list statement :=
+  match tyl with
+  | nil => nil
+  | ty1 :: tys => Sset tmp (Ecast a ty1) :: do_set tmp tys (Etempvar tmp ty1)
+  end.
 
 Definition finish (dst: destination) (sl: list statement) (a: expr) :=
   match dst with
   | For_val => (sl, a)
   | For_effects => (sl, a)
-  | For_test tyl s1 s2 => (sl ++ makeif (fold_left Ecast tyl a) s1 s2 :: nil, a)
-  end.
-
-Definition cast_destination (ty: type) (dst: destination) :=
-  match dst with
-  | For_val => For_val
-  | For_effects => For_effects
-  | For_test tyl s1 s2 => For_test (ty :: tyl) s1 s2
+  | For_set tyl tmp => (sl ++ do_set tmp tyl a, a)
   end.
 
 Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr) :=
@@ -233,39 +245,75 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
   | C.Ecast r1 ty =>
       do (sl1, a1) <- transl_expr For_val r1;
       ret (finish dst sl1 (Ecast a1 ty))
+  | C.Eseqand r1 r2 ty =>
+      do (sl1, a1) <- transl_expr For_val r1;
+      match dst with
+      | For_val =>
+          do t <- gensym ty;
+          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: nil) t) r2;
+          ret (sl1 ++ 
+               makeif a1 (makeseq sl2) (Sset t (Econst_int Int.zero ty)) :: nil,
+               Etempvar t ty)
+      | For_effects =>
+          do (sl2, a2) <- transl_expr For_effects r2;
+          ret (sl1 ++ makeif a1 (makeseq sl2) Sskip :: nil, dummy_expr)
+      | For_set tyl t =>
+          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: tyl) t) r2;
+          ret (sl1 ++ 
+               makeif a1 (makeseq sl2) (makeseq (do_set t tyl (Econst_int Int.zero ty))) :: nil,
+               dummy_expr)
+      end
+  | C.Eseqor r1 r2 ty =>
+      do (sl1, a1) <- transl_expr For_val r1;
+      match dst with
+      | For_val =>
+          do t <- gensym ty;
+          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: nil) t) r2;
+          ret (sl1 ++ 
+               makeif a1 (Sset t (Econst_int Int.one ty)) (makeseq sl2) :: nil,
+               Etempvar t ty)
+      | For_effects =>
+          do (sl2, a2) <- transl_expr For_effects r2;
+          ret (sl1 ++ makeif a1 Sskip (makeseq sl2) :: nil, dummy_expr)
+      | For_set tyl t =>
+          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: tyl) t) r2;
+          ret (sl1 ++ 
+               makeif a1 (makeseq (do_set t tyl (Econst_int Int.one ty))) (makeseq sl2) :: nil,
+               dummy_expr)
+      end
   | C.Econdition r1 r2 r3 ty =>
-      if Cstrategy.simple r2 && Cstrategy.simple r3 then (
-        do (sl1, a1) <- transl_expr For_val r1;
-        do (sl2, a2) <- transl_expr For_val r2;
-        do (sl3, a3) <- transl_expr For_val r3;
-        ret (finish dst sl1 (Econdition a1 a2 a3 ty))
-      ) else (
-        do (sl1, a1) <- transl_expr For_val r1;
-        do (sl2, a2) <- transl_expr (cast_destination ty dst) r2;
-        do (sl3, a3) <- transl_expr (cast_destination ty dst) r3;
-        match dst with
-        | For_val =>
-            do t <- gensym ty;
-            ret (sl1 ++ makeif a1 (Ssequence (makeseq sl2) (Sset t (Ecast a2 ty)))
-                                  (Ssequence (makeseq sl3) (Sset t (Ecast a3 ty))) :: nil,
-                 Etempvar t ty)
-        | For_effects | For_test _ _ _ =>
-            ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
-                 dummy_expr)
-        end)
+      do (sl1, a1) <- transl_expr For_val r1;
+      match dst with
+      | For_val =>
+          do t <- gensym ty;
+          do (sl2, a2) <- transl_expr (For_set (ty::nil) t) r2;
+          do (sl3, a3) <- transl_expr (For_set (ty::nil) t) r3;
+          ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
+               Etempvar t ty)
+      | For_effects =>
+          do (sl2, a2) <- transl_expr For_effects r2;
+          do (sl3, a3) <- transl_expr For_effects r3;
+          ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
+               dummy_expr)
+      | For_set tyl t =>
+          do (sl2, a2) <- transl_expr (For_set (ty::tyl) t) r2;
+          do (sl3, a3) <- transl_expr (For_set (ty::tyl) t) r3;
+          ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
+               dummy_expr)
+      end
   | C.Eassign l1 r2 ty =>
       do (sl1, a1) <- transl_expr For_val l1;
       do (sl2, a2) <- transl_expr For_val r2;
       let ty1 := C.typeof l1 in
       let ty2 := C.typeof r2 in
       match dst with
-      | For_val | For_test _ _ _ =>
+      | For_val | For_set _ _ =>
           do t <- gensym ty2;
           ret (finish dst 
-                 (sl1 ++ sl2 ++ Sset t a2 :: Sassign a1 (Etempvar t ty2) :: nil)
+                 (sl1 ++ sl2 ++ Sset t a2 :: make_assign a1 (Etempvar t ty2) :: nil)
                  (Ecast (Etempvar t ty2) ty1))
       | For_effects =>
-          ret (sl1 ++ sl2 ++ Sassign a1 a2 :: nil,
+          ret (sl1 ++ sl2 ++ make_assign a1 a2 :: nil,
                dummy_expr)
       end
   | C.Eassignop op l1 r2 tyres ty =>
@@ -274,30 +322,30 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
       do (sl2, a2) <- transl_expr For_val r2;
       do (sl3, a3) <- transl_valof ty1 a1;
       match dst with
-      | For_val | For_test _ _ _ =>
+      | For_val | For_set _ _ =>
           do t <- gensym tyres;
           ret (finish dst
                  (sl1 ++ sl2 ++ sl3 ++
                   Sset t (Ebinop op a3 a2 tyres) ::
-                  Sassign a1 (Etempvar t tyres) :: nil)
+                  make_assign a1 (Etempvar t tyres) :: nil)
                  (Ecast (Etempvar t tyres) ty1))
       | For_effects =>
-          ret (sl1 ++ sl2 ++ sl3 ++ Sassign a1 (Ebinop op a3 a2 tyres) :: nil,
+          ret (sl1 ++ sl2 ++ sl3 ++ make_assign a1 (Ebinop op a3 a2 tyres) :: nil,
                dummy_expr)
       end
   | C.Epostincr id l1 ty =>
       let ty1 := C.typeof l1 in
       do (sl1, a1) <- transl_expr For_val l1;
       match dst with
-      | For_val | For_test _ _ _ =>
+      | For_val | For_set _ _ =>
           do t <- gensym ty1;
           ret (finish dst
                  (sl1 ++ make_set t a1 ::
-                  Sassign a1 (transl_incrdecr id (Etempvar t ty1) ty1) :: nil)
+                  make_assign a1 (transl_incrdecr id (Etempvar t ty1) ty1) :: nil)
                  (Etempvar t ty1))
       | For_effects =>
           do (sl2, a2) <- transl_valof ty1 a1;
-          ret (sl1 ++ sl2 ++ Sassign a1 (transl_incrdecr id a2 ty1) :: nil,
+          ret (sl1 ++ sl2 ++ make_assign a1 (transl_incrdecr id a2 ty1) :: nil,
                dummy_expr)
       end
   | C.Ecomma r1 r2 ty =>
@@ -308,12 +356,22 @@ Fixpoint transl_expr (dst: destination) (a: C.expr) : mon (list statement * expr
       do (sl1, a1) <- transl_expr For_val r1;
       do (sl2, al2) <- transl_exprlist rl2;
       match dst with
-      | For_val | For_test _ _ _ =>
+      | For_val | For_set _ _ =>
           do t <- gensym ty;
           ret (finish dst (sl1 ++ sl2 ++ Scall (Some t) a1 al2 :: nil)
                           (Etempvar t ty))
       | For_effects =>
           ret (sl1 ++ sl2 ++ Scall None a1 al2 :: nil, dummy_expr)
+      end
+  | C.Ebuiltin ef tyargs rl ty =>
+      do (sl, al) <- transl_exprlist rl;
+      match dst with
+      | For_val | For_set _ _ =>
+          do t <- gensym ty;
+          ret (finish dst (sl ++ Sbuiltin (Some t) ef tyargs al :: nil)
+                          (Etempvar t ty))
+      | For_effects =>
+          ret (sl ++ Sbuiltin None ef tyargs al :: nil, dummy_expr)
       end
   | C.Eparen r1 ty =>
       error (msg "SimplExpr.transl_expr: paren")
@@ -335,8 +393,14 @@ Definition transl_expression (r: C.expr) : mon (statement * expr) :=
 Definition transl_expr_stmt (r: C.expr) : mon statement :=
   do (sl, a) <- transl_expr For_effects r; ret (makeseq sl).
 
+(*
 Definition transl_if (r: C.expr) (s1 s2: statement) : mon statement :=
   do (sl, a) <- transl_expr (For_test nil s1 s2) r; ret (makeseq sl).
+*)
+
+Definition transl_if (r: C.expr) (s1 s2: statement) : mon statement :=
+  do (sl, a) <- transl_expr For_val r;
+  ret (makeseq (sl ++ makeif a s1 s2 :: nil)).
 
 (** Translation of statements *)
 
@@ -353,7 +417,7 @@ Defined.
   but can duplicate the "then" and "else" branches.
   The other produces no code duplication.  We choose between the
   two based on the shape of the "then" and "else" branches. *)
-
+(*
 Fixpoint small_stmt (s: statement) : bool :=
   match s with
   | Sskip => true
@@ -364,6 +428,7 @@ Fixpoint small_stmt (s: statement) : bool :=
   | Ssequence s1 s2 => small_stmt s1 && small_stmt s2
   | _ => false
   end.
+*)
 
 Fixpoint transl_stmt (s: C.statement) : mon statement :=
   match s with
@@ -376,28 +441,25 @@ Fixpoint transl_stmt (s: C.statement) : mon statement :=
   | C.Sifthenelse e s1 s2 =>
       do ts1 <- transl_stmt s1;
       do ts2 <- transl_stmt s2;
-      if small_stmt ts1 && small_stmt ts2 then
-        transl_if e ts1 ts2
-      else
-       (do (s', a) <- transl_expression e;
-        ret (Ssequence s' (Sifthenelse a ts1 ts2)))
+      do (s', a) <- transl_expression e;
+      ret (Ssequence s' (Sifthenelse a ts1 ts2))
   | C.Swhile e s1 =>
       do s' <- transl_if e Sskip Sbreak;
       do ts1 <- transl_stmt s1;
-      ret (Swhile expr_true (Ssequence s' ts1))
+      ret (Sloop (Ssequence s' ts1) Sskip)
   | C.Sdowhile e s1 =>
       do s' <- transl_if e Sskip Sbreak;
       do ts1 <- transl_stmt s1;
-      ret (Sfor' expr_true s' ts1)
+      ret (Sloop ts1 s')
   | C.Sfor s1 e2 s3 s4 =>
       do ts1 <- transl_stmt s1;
       do s' <- transl_if e2 Sskip Sbreak;
       do ts3 <- transl_stmt s3;
       do ts4 <- transl_stmt s4;
       if is_Sskip s1 then
-        ret (Sfor' expr_true ts3 (Ssequence s' ts4))
+        ret (Sloop (Ssequence s' ts4) ts3)
       else
-        ret (Ssequence ts1 (Sfor' expr_true ts3 (Ssequence s' ts4)))
+        ret (Ssequence ts1 (Sloop (Ssequence s' ts4) ts3))
   | C.Sbreak =>
       ret Sbreak
   | C.Scontinue =>

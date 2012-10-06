@@ -46,10 +46,12 @@ extern "fmod": float -> float -> float
 
 "anpm"(a): float -> float
 {
-  var w;
+  var w, t;
   w = fmod(a,TWOPI);
-  if (absf(w) >=f PI) 
-    w = w -f ((a <f 0.0) ? -f TWOPI : TWOPI);
+  if (absf(w) >=f PI) {
+    if (a <f 0.0) { t = -f TWOPI; } else { t = TWOPI; }
+    w = w -f t;
+  }
   return w;
 }
 
@@ -109,8 +111,8 @@ extern "fmod": float -> float -> float
         ae  = ae +f dae;
         k   = k + 1;
     
-        if ((k >= 10) || (absf(dae) <f 1e-12))
-          exit;
+        if (k >= 10) exit;
+        if (absf(dae) <f 1e-12) exit;
     } }}
 
     ae2 = ae /f 2.0;

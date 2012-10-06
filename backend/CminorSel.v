@@ -35,24 +35,15 @@ Require Import Smallstep.
   languages ([RTL] and below).  Moreover, to express sharing of
   sub-computations, a "let" binding is provided (constructions
   [Elet] and [Eletvar]), using de Bruijn indices to refer to "let"-bound
-  variables.  Finally, a variant [condexpr] of [expr]
-  is used to represent expressions which are evaluated for their
-  boolean value only and not their exact value.
-*)
+  variables. *)
 
 Inductive expr : Type :=
   | Evar : ident -> expr
   | Eop : operation -> exprlist -> expr
   | Eload : memory_chunk -> addressing -> exprlist -> expr
-  | Econdition : condexpr -> expr -> expr -> expr
+  | Econdition : condition -> exprlist -> expr -> expr -> expr
   | Elet : expr -> expr -> expr
   | Eletvar : nat -> expr
-
-with condexpr : Type :=
-  | CEtrue: condexpr
-  | CEfalse: condexpr
-  | CEcond: condition -> exprlist -> condexpr
-  | CEcondition : condexpr -> condexpr -> condexpr -> condexpr
 
 with exprlist : Type :=
   | Enil: exprlist
@@ -60,9 +51,10 @@ with exprlist : Type :=
 
 Infix ":::" := Econs (at level 60, right associativity) : cminorsel_scope.
 
-(** Statements are as in Cminor, except that the condition of an
-  if/then/else conditional is a [condexpr], and the [Sstore] construct
-  uses a machine-dependent addressing mode. *)
+(** Statements are as in Cminor, except that the [Sifthenelse]
+  construct uses a machine-dependent condition (with multiple
+  arguments), and the [Sstore] construct uses a machine-dependent
+  addressing mode. *)
 
 Inductive stmt : Type :=
   | Sskip: stmt
@@ -72,7 +64,7 @@ Inductive stmt : Type :=
   | Stailcall: signature -> expr + ident -> exprlist -> stmt
   | Sbuiltin : option ident -> external_function -> exprlist -> stmt
   | Sseq: stmt -> stmt -> stmt
-  | Sifthenelse: condexpr -> stmt -> stmt -> stmt
+  | Sifthenelse: condition -> exprlist -> stmt -> stmt -> stmt
   | Sloop: stmt -> stmt
   | Sblock: stmt -> stmt
   | Sexit: nat -> stmt
@@ -147,10 +139,7 @@ Variable ge: genv.
 
 (** The evaluation predicates have the same general shape as those
     of Cminor.  Refer to the description of Cminor semantics for
-    the meaning of the parameters of the predicates.
-    One additional predicate is introduced:
-    [eval_condexpr ge sp e m le a b], meaning that the conditional
-    expression [a] evaluates to the boolean [b]. *)
+    the meaning of the parameters of the predicates. *)
 
 Section EVAL_EXPR.
 
@@ -171,10 +160,11 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
       eval_addressing ge sp addr vl = Some vaddr ->
       Mem.loadv chunk m vaddr = Some v ->     
       eval_expr le (Eload chunk addr al) v
-  | eval_Econdition: forall le a b c v1 v2,
-      eval_condexpr le a v1 ->
-      eval_expr le (if v1 then b else c) v2 ->
-      eval_expr le (Econdition a b c) v2
+  | eval_Econdition: forall le cond al b c vl vb v,
+      eval_exprlist le al vl ->
+      eval_condition cond vl m = Some vb ->
+      eval_expr le (if vb then b else c) v ->
+      eval_expr le (Econdition cond al b c) v
   | eval_Elet: forall le a b v1 v2,
       eval_expr le a v1 ->
       eval_expr (v1 :: le) b v2 ->
@@ -183,20 +173,6 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
       nth_error le n = Some v ->
       eval_expr le (Eletvar n) v
 
-with eval_condexpr: letenv -> condexpr -> bool -> Prop :=
-  | eval_CEtrue: forall le,
-      eval_condexpr le CEtrue true
-  | eval_CEfalse: forall le,
-      eval_condexpr le CEfalse false
-  | eval_CEcond: forall le cond al vl b,
-      eval_exprlist le al vl ->
-      eval_condition cond vl m = Some b ->
-      eval_condexpr le (CEcond cond al) b
-  | eval_CEcondition: forall le a b c vb1 vb2,
-      eval_condexpr le a vb1 ->
-      eval_condexpr le (if vb1 then b else c) vb2 ->
-      eval_condexpr le (CEcondition a b c) vb2
-
 with eval_exprlist: letenv -> exprlist -> list val -> Prop :=
   | eval_Enil: forall le,
       eval_exprlist le Enil nil
@@ -204,9 +180,8 @@ with eval_exprlist: letenv -> exprlist -> list val -> Prop :=
       eval_expr le a1 v1 -> eval_exprlist le al vl ->
       eval_exprlist le (Econs a1 al) (v1 :: vl).
 
-Scheme eval_expr_ind3 := Minimality for eval_expr Sort Prop
-  with eval_condexpr_ind3 := Minimality for eval_condexpr Sort Prop
-  with eval_exprlist_ind3 := Minimality for eval_exprlist Sort Prop.
+Scheme eval_expr_ind2 := Minimality for eval_expr Sort Prop
+  with eval_exprlist_ind2 := Minimality for eval_exprlist Sort Prop.
 
 Inductive eval_expr_or_symbol: letenv -> expr + ident -> val -> Prop :=
   | eval_eos_e: forall le e v,
@@ -245,7 +220,7 @@ Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
       | Some sk => Some sk
       | None => find_label lbl s2 k
       end
-  | Sifthenelse a s1 s2 =>
+  | Sifthenelse cond al s1 s2 =>
       match find_label lbl s1 k with
       | Some sk => Some sk
       | None => find_label lbl s2 k
@@ -316,9 +291,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sseq s1 s2) k sp e m)
         E0 (State f s1 (Kseq s2 k) sp e m)
 
-  | step_ifthenelse: forall f a s1 s2 k sp e m b,
-      eval_condexpr sp e m nil a b ->
-      step (State f (Sifthenelse a s1 s2) k sp e m)
+  | step_ifthenelse: forall f cond al s1 s2 k sp e m vl b,
+      eval_exprlist sp e m nil al vl ->
+      eval_condition cond vl m = Some b ->
+      step (State f (Sifthenelse cond al s1 s2) k sp e m)
         E0 (State f (if b then s1 else s2) k sp e m)
 
   | step_loop: forall f s k sp e m,
@@ -395,7 +371,7 @@ Inductive final_state: state -> int -> Prop :=
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
-Hint Constructors eval_expr eval_condexpr eval_exprlist: evalexpr.
+Hint Constructors eval_expr eval_exprlist: evalexpr.
 
 (** * Lifting of let-bound variables *)
 
@@ -409,20 +385,11 @@ Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
   | Evar id => Evar id
   | Eop op bl => Eop op (lift_exprlist p bl)
   | Eload chunk addr bl => Eload chunk addr (lift_exprlist p bl)
-  | Econdition b c d =>
-      Econdition (lift_condexpr p b) (lift_expr p c) (lift_expr p d)
+  | Econdition cond al b c =>
+      Econdition cond (lift_exprlist p al) (lift_expr p b) (lift_expr p c)
   | Elet b c => Elet (lift_expr p b) (lift_expr (S p) c)
   | Eletvar n =>
       if le_gt_dec p n then Eletvar (S n) else Eletvar n
-  end
-
-with lift_condexpr (p: nat) (a: condexpr) {struct a}: condexpr :=
-  match a with
-  | CEtrue => CEtrue
-  | CEfalse => CEfalse
-  | CEcond cond bl => CEcond cond (lift_exprlist p bl)
-  | CEcondition b c d =>
-      CEcondition (lift_condexpr p b) (lift_condexpr p c) (lift_condexpr p d)
   end
 
 with lift_exprlist (p: nat) (a: exprlist) {struct a}: exprlist :=
@@ -478,29 +445,22 @@ Lemma eval_lift_expr:
   eval_expr ge sp e m le' (lift_expr p a) v.
 Proof.
   intros until w.
-  apply (eval_expr_ind3 ge sp e m
+  apply (eval_expr_ind2 ge sp e m
     (fun le a v =>
       forall p le', insert_lenv le p w le' ->
       eval_expr ge sp e m le' (lift_expr p a) v)
-    (fun le a v =>
-      forall p le', insert_lenv le p w le' ->
-      eval_condexpr ge sp e m le' (lift_condexpr p a) v)
     (fun le al vl =>
       forall p le', insert_lenv le p w le' ->
       eval_exprlist ge sp e m le' (lift_exprlist p al) vl));
   simpl; intros; eauto with evalexpr.
 
-  destruct v1; eapply eval_Econdition;
-  eauto with evalexpr; simpl; eauto with evalexpr.
+  eapply eval_Econdition; eauto. destruct vb; eauto.
 
   eapply eval_Elet. eauto. apply H2. apply insert_lenv_S; auto.
 
   case (le_gt_dec p n); intro. 
   apply eval_Eletvar. eapply insert_lenv_lookup2; eauto.
   apply eval_Eletvar. eapply insert_lenv_lookup1; eauto.
-
-  destruct vb1; eapply eval_CEcondition;
-  eauto with evalexpr; simpl; eauto with evalexpr.
 Qed.
 
 Lemma eval_lift:

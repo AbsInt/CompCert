@@ -147,7 +147,7 @@ let rec precedence = function
   | Evalof(l, _) -> precedence l
   | Esizeof _ -> (15, RtoL)
   | Ealignof _ -> (15, RtoL)
-  | Ecall _ -> (16, LtoR)
+  | Ecall _ | Ebuiltin _ -> (16, LtoR)
   | Epostincr _ -> (16, LtoR)
   | Eunop _ -> (15, RtoL)
   | Eaddrof _ -> (15, RtoL)
@@ -160,6 +160,8 @@ let rec precedence = function
   | Ebinop(Oand, _, _, _) -> (8, LtoR)
   | Ebinop(Oxor, _, _, _) -> (7, LtoR)
   | Ebinop(Oor, _, _, _) -> (6, LtoR)
+  | Eseqand _ -> (5, LtoR)
+  | Eseqor _ -> (4, LtoR)
   | Econdition _ -> (3, RtoL)
   | Eassign _ -> (2, RtoL)
   | Eassignop _ -> (2, RtoL)
@@ -221,12 +223,28 @@ let rec expr p (prec, e) =
       fprintf p "%a =@ %a" expr (prec1, a1) expr (prec2, a2)
   | Eassignop(op, a1, a2, _, _) ->
       fprintf p "%a %s=@ %a" expr (prec1, a1) (name_binop op) expr (prec2, a2)
+  | Eseqand(a1, a2, _) ->
+      fprintf p "%a@ && %a" expr (prec1, a1) expr (prec2, a2)
+  | Eseqor(a1, a2, _) ->
+      fprintf p "%a@ || %a" expr (prec1, a1) expr (prec2, a2)
   | Econdition(a1, a2, a3, _) ->
       fprintf p "%a@ ? %a@ : %a" expr (4, a1) expr (4, a2) expr (4, a3)
   | Ecomma(a1, a2, _) ->
       fprintf p "%a,@ %a" expr (prec1, a1) expr (prec2, a2)
   | Ecall(a1, al, _) ->
       fprintf p "%a@[<hov 1>(%a)@]" expr (prec', a1) exprlist (true, al)
+  | Ebuiltin(EF_memcpy(sz, al), _, args, _) ->
+      fprintf p "__builtin_memcpy_aligned@[<hov 1>(%ld,@ %ld,@ %a)@]"
+                (camlint_of_coqint sz) (camlint_of_coqint al)
+                exprlist (true, args)
+  | Ebuiltin(EF_annot(txt, _), _, args, _) ->
+      fprintf p "__builtin_annot@[<hov 1>(%S,@ %a)@]"
+                (extern_atom txt) exprlist (true, args)
+  | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
+      fprintf p "__builtin_annot_val@[<hov 1>(%S,@ %a)@]"
+                (extern_atom txt) exprlist (true, args)
+  | Ebuiltin(_, _, args, _) ->
+      fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
   | Eparen(a1, ty) ->
       fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
   end;
@@ -453,6 +471,8 @@ let rec collect_expr e =
   | Eunop(_, r, _) -> collect_expr r
   | Ebinop(_, r1, r2, _) -> collect_expr r1; collect_expr r2
   | Ecast(r, _) -> collect_expr r
+  | Eseqand(r1, r2, _) -> collect_expr r1; collect_expr r2
+  | Eseqor(r1, r2, _) -> collect_expr r1; collect_expr r2
   | Econdition(r1, r2, r3, _) -> 
       collect_expr r1; collect_expr r2; collect_expr r3
   | Esizeof(ty, _) -> collect_type ty
@@ -462,6 +482,7 @@ let rec collect_expr e =
   | Epostincr(_, l, _) -> collect_expr l
   | Ecomma(r1, r2, _) -> collect_expr r1; collect_expr r2
   | Ecall(r1, rl, _) ->  collect_expr r1; collect_exprlist rl
+  | Ebuiltin(_, _, rl, _) -> collect_exprlist rl
   | Eparen _ -> assert false
 
 and collect_exprlist = function

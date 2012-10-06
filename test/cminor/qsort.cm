@@ -9,11 +9,13 @@
   {{ loop {
     if (! (i < j)) exit;
     {{ loop {
-      if (i >= hi || int32[a + i * 4] > pivot) exit;
+      if (i >= hi) exit;
+      if (int32[a + i * 4] > pivot) exit;
       i = i + 1;
     } }}
     {{ loop {
-      if (j <= lo || int32[a + j * 4] < pivot) exit;
+      if (j <= lo) exit;
+      if (int32[a + j * 4] < pivot) exit;
       j = j - 1;
     } }}
     if (i < j) {

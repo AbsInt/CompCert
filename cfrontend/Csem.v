@@ -93,16 +93,16 @@ Function sem_cast (v: val) (t1 t2: type) : option val :=
           end
       | _ => None
       end
-  | cast_case_ip2bool =>
-      match v with
-      | Vint i => Some (Vint (cast_int_int IBool Signed i))
-      | Vptr _ _ => Some (Vint Int.one)
-      | _ => None
-      end
   | cast_case_f2bool =>
       match v with
       | Vfloat f =>
           Some(Vint(if Float.cmp Ceq f Float.zero then Int.zero else Int.one))
+      | _ => None
+      end
+  | cast_case_p2bool =>
+      match v with
+      | Vint i => Some (Vint (cast_int_int IBool Signed i))
+      | Vptr _ _ => Some (Vint Int.one)
       | _ => None
       end
   | cast_case_struct id1 fld1 id2 fld2 =>
@@ -120,12 +120,25 @@ Function sem_cast (v: val) (t1 t2: type) : option val :=
   considered as true.  The integer zero (which also represents
   the null pointer) and the float 0.0 are false. *)
 
-Function bool_val (v: val) (t: type) : option bool :=
-  match v, t with
-  | Vint n, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => Some (negb (Int.eq n Int.zero))
-  | Vptr b ofs, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => Some true
-  | Vfloat f, Tfloat sz _ => Some (negb(Float.cmp Ceq f Float.zero))
-  | _, _ => None
+Definition bool_val (v: val) (t: type) : option bool :=
+  match classify_bool t with
+  | bool_case_i =>
+      match v with
+      | Vint n => Some (negb (Int.eq n Int.zero))
+      | _ => None
+      end
+  | bool_case_f =>
+      match v with
+      | Vfloat f => Some (negb (Float.cmp Ceq f Float.zero))
+      | _ => None
+      end
+  | bool_case_p =>
+      match v with
+      | Vint n => Some (negb (Int.eq n Int.zero))
+      | Vptr b ofs => Some true
+      | _ => None
+      end
+  | bool_default => None
   end.
 
 (** The following [sem_] functions compute the result of an operator
@@ -172,15 +185,20 @@ Function sem_notint (v: val) (ty: type): option val :=
 
 Function sem_notbool (v: val) (ty: type) : option val :=
   match classify_bool ty with
-  | bool_case_ip =>
+  | bool_case_i =>
       match v with
       | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
-      | Vptr _ _ => Some Vfalse
       | _ => None
       end
   | bool_case_f =>
       match v with
       | Vfloat f => Some (Val.of_bool (Float.cmp Ceq f Float.zero))
+      | _ => None
+      end
+  | bool_case_p =>
+      match v with
+      | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
+      | Vptr _ _ => Some Vfalse
       | _ => None
       end
   | bool_default => None
@@ -502,7 +520,17 @@ Lemma cast_bool_bool_val:
   sem_cast v t (Tint IBool Signed noattr) =
   match bool_val v t with None => None | Some b => Some(Val.of_bool b) end.
 Proof.
-  intros. unfold sem_cast, bool_val. destruct t; simpl; destruct v; auto.
+  intros.
+  assert (A: classify_bool t =
+    match t with
+    | Tint _ _ _ => bool_case_i
+    | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ => bool_case_p
+    | Tfloat _ _ => bool_case_f
+    | _ => bool_default
+    end).
+  unfold classify_bool; destruct t; simpl; auto. destruct i; auto. destruct s; auto.
+
+  unfold bool_val. rewrite A. unfold sem_cast. destruct t; simpl; auto; destruct v; auto.
   destruct (Int.eq i0 Int.zero); auto. 
   destruct (Float.cmp Ceq f0 Float.zero); auto.
   destruct (Int.eq i Int.zero); auto. 
@@ -515,14 +543,8 @@ Lemma notbool_bool_val:
   sem_notbool v t =
   match bool_val v t with None => None | Some b => Some(Val.of_bool (negb b)) end.
 Proof.
-  assert (CB: forall i s a, classify_bool (Tint i s a) = bool_case_ip).
-    intros. destruct i; auto. destruct s; auto. 
-  intros. unfold sem_notbool, bool_val. destruct t; try rewrite CB; simpl; destruct v; auto.
-  destruct (Int.eq i0 Int.zero); auto. 
-  destruct (Float.cmp Ceq f0 Float.zero); auto.
-  destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i Int.zero); auto. 
-  destruct (Int.eq i Int.zero); auto. 
+  intros. unfold sem_notbool, bool_val. 
+  destruct (classify_bool t); auto; destruct v; auto; rewrite negb_involutive; auto.
 Qed.
 
 (** * Operational semantics *)
@@ -657,6 +679,15 @@ Fixpoint seq_of_labeled_statement (sl: labeled_statements) : statement :=
   | LScase c s sl' => Ssequence s (seq_of_labeled_statement sl')
   end.
 
+(** Extract the values from a list of function arguments *)
+
+Inductive cast_arguments: exprlist -> typelist -> list val -> Prop :=
+  | cast_args_nil:
+      cast_arguments Enil Tnil nil
+  | cast_args_cons: forall v ty el targ1 targs v1 vl,
+      sem_cast v ty targ1 = Some v1 -> cast_arguments el targs vl ->
+      cast_arguments (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
+
 Section SEMANTICS.
 
 Variable ge: genv.
@@ -731,6 +762,22 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
       sem_cast v1 ty1 ty = Some v ->
       rred (Ecast (Eval v1 ty1) ty) m
         E0 (Eval v ty) m
+  | red_seqand_true: forall v1 ty1 r2 ty m,
+      bool_val v1 ty1 = Some true ->
+      rred (Eseqand (Eval v1 ty1) r2 ty) m
+        E0 (Eparen (Eparen r2 type_bool) ty) m
+  | red_seqand_false: forall v1 ty1 r2 ty m,
+      bool_val v1 ty1 = Some false ->
+      rred (Eseqand (Eval v1 ty1) r2 ty) m
+        E0 (Eval (Vint Int.zero) ty) m
+  | red_seqor_true: forall v1 ty1 r2 ty m,
+      bool_val v1 ty1 = Some true ->
+      rred (Eseqor (Eval v1 ty1) r2 ty) m
+        E0 (Eval (Vint Int.one) ty) m
+  | red_seqor_false: forall v1 ty1 r2 ty m,
+      bool_val v1 ty1 = Some false ->
+      rred (Eseqor (Eval v1 ty1) r2 ty) m
+        E0 (Eparen (Eparen r2 type_bool) ty) m
   | red_condition: forall v1 ty1 r1 r2 ty b m,
       bool_val v1 ty1 = Some b ->
       rred (Econdition (Eval v1 ty1) r1 r2 ty) m
@@ -766,17 +813,16 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
   | red_paren: forall v1 ty1 ty m v,
       sem_cast v1 ty1 ty = Some v ->
       rred (Eparen (Eval v1 ty1) ty) m
-        E0 (Eval v ty) m.
+        E0 (Eval v ty) m
+  | red_builtin: forall ef tyargs el ty m vargs t vres m',
+      cast_arguments el tyargs vargs ->
+      external_call ef ge vargs m t vres m' ->
+      rred (Ebuiltin ef tyargs el ty) m
+         t (Eval vres ty) m'.
+
 
 (** Head reduction for function calls.
     (More exactly, identification of function calls that can reduce.) *)
-
-Inductive cast_arguments: exprlist -> typelist -> list val -> Prop :=
-  | cast_args_nil:
-      cast_arguments Enil Tnil nil
-  | cast_args_cons: forall v ty el targ1 targs v1 vl,
-      sem_cast v ty targ1 = Some v1 -> cast_arguments el targs vl ->
-      cast_arguments (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
 
 Inductive callred: expr -> fundef -> list val -> type -> Prop :=
   | red_Ecall: forall vf tyf tyargs tyres el ty fd vargs,
@@ -791,13 +837,16 @@ Inductive callred: expr -> fundef -> list val -> type -> Prop :=
   we allow reduction both to the left and to the right of a binary operator.
   To enforce C's notion of sequence point, reductions within a conditional
   [a ? b : c] can only take place in [a], not in [b] nor [c];
-  and reductions within a sequence [a, b] can only take place in [a], not in [b].
+  reductions within a sequential "or" / "and" [a && b] or [a || b] can
+  only take place in [a], not in [b];
+  and reductions within a sequence [a, b] can only take place in [a],
+  not in [b].
 
-  Reduction contexts are represented by functions [C] from expressions to expressions,
-  suitably constrained by the [context from to C] predicate below.
-  Contexts are "kinded" with respect to l-values and r-values:
-  [from] is the kind of the hole in the context and [to] is the kind of
-  the term resulting from filling the hole.
+  Reduction contexts are represented by functions [C] from expressions
+  to expressions, suitably constrained by the [context from to C]
+  predicate below.  Contexts are "kinded" with respect to l-values and
+  r-values: [from] is the kind of the hole in the context and [to] is
+  the kind of the term resulting from filling the hole.
 *)
 
 Inductive kind : Type := LV | RV.
@@ -821,6 +870,10 @@ Inductive context: kind -> kind -> (expr -> expr) -> Prop :=
       context k RV C -> context k RV (fun x => Ebinop op e1 (C x) ty)
   | ctx_cast: forall k C ty,
       context k RV C -> context k RV (fun x => Ecast (C x) ty)
+  | ctx_seqand: forall k C r2 ty,
+      context k RV C -> context k RV (fun x => Eseqand (C x) r2 ty)
+  | ctx_seqor: forall k C r2 ty,
+      context k RV C -> context k RV (fun x => Eseqor (C x) r2 ty)
   | ctx_condition: forall k C r2 r3 ty,
       context k RV C -> context k RV (fun x => Econdition (C x) r2 r3 ty)
   | ctx_assign_left: forall k C e2 ty,
@@ -837,6 +890,8 @@ Inductive context: kind -> kind -> (expr -> expr) -> Prop :=
       context k RV C -> context k RV (fun x => Ecall (C x) el ty)
   | ctx_call_right: forall k C e1 ty,
       contextlist k C -> context k RV (fun x => Ecall e1 (C x) ty)
+  | ctx_builtin: forall k C ef tyargs ty,
+      contextlist k C -> context k RV (fun x => Ebuiltin ef tyargs (C x) ty)
   | ctx_comma: forall k C e2 ty,
       context k RV C -> context k RV (fun x => Ecomma (C x) e2 ty)
   | ctx_paren: forall k C ty,
@@ -912,7 +967,7 @@ Inductive cont: Type :=
   | Kdowhile2: expr -> statement -> cont -> cont    (**r [Kdowhile2 x s k] = after [x] in [do s while (x)] *)
   | Kfor2: expr -> statement -> statement -> cont -> cont   (**r [Kfor2 e2 e3 s k] = after [e2] in [for(e1;e2;e3) s] *)
   | Kfor3: expr -> statement -> statement -> cont -> cont   (**r [Kfor3 e2 e3 s k] = after [s] in [for(e1;e2;e3) s] *)
-  | Kfor4: expr -> statement -> statement -> cont -> cont   (**r [Kfor3 e2 e3 s k] = after [e3] in [for(e1;e2;e3) s] *)
+  | Kfor4: expr -> statement -> statement -> cont -> cont   (**r [Kfor4 e2 e3 s k] = after [e3] in [for(e1;e2;e3) s] *)
   | Kswitch1: labeled_statements -> cont -> cont     (**r [Kswitch1 ls k] = after [e] in [switch(e) { ls }] *)
   | Kswitch2: cont -> cont       (**r catches [break] statements arising out of [switch] *)
   | Kreturn: cont -> cont        (**r [Kreturn k] = after [e] in [return e;] *)
@@ -1256,5 +1311,6 @@ Proof.
   assert (ASSIGN: forall chunk m b ofs t v m', assign_loc ge chunk m b ofs v t m' -> (length t <= 1)%nat).
     intros. inv H0; simpl; try omega. inv H3; simpl; try omega.
   inv H; simpl; try omega. inv H0; eauto; simpl; try omega.
+  eapply external_call_trace_length; eauto.
   inv H; simpl; try omega. eapply external_call_trace_length; eauto.
 Qed.

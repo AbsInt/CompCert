@@ -37,51 +37,12 @@ Require Import SelectOp.
 
 Open Local Scope cminorsel_scope.
 
-(** Conversion of conditional expressions *)
+(** Conversion of conditions *)
 
-Fixpoint negate_condexpr (e: condexpr): condexpr :=
+Function condition_of_expr (e: expr) : condition * exprlist :=
   match e with
-  | CEtrue => CEfalse
-  | CEfalse => CEtrue
-  | CEcond c el => CEcond (negate_condition c) el
-  | CEcondition e1 e2 e3 =>
-      CEcondition e1 (negate_condexpr e2) (negate_condexpr e3)
-  end.
-
-Definition is_compare_neq_zero (c: condition) : bool :=
-  match c with
-  | Ccompimm Cne n => Int.eq n Int.zero
-  | Ccompuimm Cne n => Int.eq n Int.zero
-  | _ => false
-  end.
-
-Definition is_compare_eq_zero (c: condition) : bool :=
-  match c with
-  | Ccompimm Ceq n => Int.eq n Int.zero
-  | Ccompuimm Ceq n => Int.eq n Int.zero
-  | _ => false
-  end.
-
-Definition condexpr_of_expr_base (e: expr) : condexpr :=
-  let (c, args) := cond_of_expr e in CEcond c args.
-
-Fixpoint condexpr_of_expr (e: expr) : condexpr :=
-  match e with
-  | Eop (Ointconst n) Enil =>
-      if Int.eq n Int.zero then CEfalse else CEtrue
-  | Eop (Ocmp c) (e1 ::: Enil) =>
-      if is_compare_neq_zero c then
-        condexpr_of_expr e1
-      else if is_compare_eq_zero c then
-        negate_condexpr (condexpr_of_expr e1)
-      else
-        CEcond c (e1 ::: Enil)
-  | Eop (Ocmp c) el =>
-      CEcond c el
-  | Econdition ce e1 e2 =>
-      CEcondition ce (condexpr_of_expr e1) (condexpr_of_expr e2)
-  | _ =>
-      condexpr_of_expr_base e
+  | Eop (Ocmp c) el => (c, el)
+  | _ => (Ccompuimm Cne Int.zero, e ::: Enil)
   end.
 
 (** Conversion of loads and stores *)
@@ -115,8 +76,6 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Ocast16unsigned => cast16unsigned arg 
   | Cminor.Ocast16signed => cast16signed arg 
   | Cminor.Onegint => negint arg
-  | Cminor.Oboolval => boolval arg
-  | Cminor.Onotbool => notbool arg
   | Cminor.Onotint => notint arg
   | Cminor.Onegf => negf arg
   | Cminor.Oabsf => absf arg
@@ -160,9 +119,6 @@ Fixpoint sel_expr (a: Cminor.expr) : expr :=
   | Cminor.Eunop op arg => sel_unop op (sel_expr arg)
   | Cminor.Ebinop op arg1 arg2 => sel_binop op (sel_expr arg1) (sel_expr arg2)
   | Cminor.Eload chunk addr => load chunk (sel_expr addr)
-  | Cminor.Econdition cond ifso ifnot =>
-      Econdition (condexpr_of_expr (sel_expr cond))
-                 (sel_expr ifso) (sel_expr ifnot)
   end.
 
 Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
@@ -222,8 +178,8 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : stmt :=
       end
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt ge s1) (sel_stmt ge s2)
   | Cminor.Sifthenelse e ifso ifnot =>
-      Sifthenelse (condexpr_of_expr (sel_expr e))
-                  (sel_stmt ge ifso) (sel_stmt ge ifnot)
+      let (cond, args) := condition_of_expr (sel_expr e) in
+      Sifthenelse cond args (sel_stmt ge ifso) (sel_stmt ge ifnot)
   | Cminor.Sloop body => Sloop (sel_stmt ge body)
   | Cminor.Sblock body => Sblock (sel_stmt ge body)
   | Cminor.Sexit n => Sexit n

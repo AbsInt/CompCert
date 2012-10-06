@@ -68,34 +68,6 @@ Nondetfunction notint (e: expr) :=
   | _ => Eop Onot (e:::Enil)
   end.
 
-(** ** Boolean value and boolean negation *)
-
-Fixpoint boolval (e: expr) {struct e} : expr :=
-  let default := Eop (Ocmp (Ccompuimm Cne Int.zero)) (e ::: Enil) in
-  match e with 
-  | Eop (Ointconst n) Enil =>
-      Eop (Ointconst (if Int.eq n Int.zero then Int.zero else Int.one)) Enil
-  | Eop (Ocmp cond) args =>
-      Eop (Ocmp cond) args
-  | Econdition e1 e2 e3 =>
-      Econdition e1 (boolval e2) (boolval e3)
-  | _ =>
-      default
-  end.
-
-Fixpoint notbool (e: expr) {struct e} : expr :=
-  let default := Eop (Ocmp (Ccompuimm Ceq Int.zero)) (e ::: Enil) in
-  match e with 
-  | Eop (Ointconst n) Enil =>
-      Eop (Ointconst (if Int.eq n Int.zero then Int.one else Int.zero)) Enil
-  | Eop (Ocmp cond) args =>
-      Eop (Ocmp (negate_condition cond)) args
-  | Econdition e1 e2 e3 =>
-      Econdition e1 (notbool e2) (notbool e3)
-  | _ =>
-      default
-  end.
-
 (** ** Integer addition and pointer addition *)
 
 Nondetfunction addimm (n: int) (e: expr) :=
@@ -360,32 +332,48 @@ Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
 
 (** ** Comparisons *)
 
+Nondetfunction compimm (default: comparison -> int -> condition)
+                       (sem: comparison -> int -> int -> bool)
+                       (c: comparison) (e1: expr) (n2: int) :=
+  match c, e1 with
+  | c, Eop (Ointconst n1) Enil =>
+      Eop (Ointconst (if sem c n1 n2 then Int.one else Int.zero)) Enil
+  | Ceq, Eop (Ocmp c) el =>
+      if Int.eq_dec n2 Int.zero then
+        Eop (Ocmp (negate_condition c)) el
+      else if Int.eq_dec n2 Int.one then
+        Eop (Ocmp c) el
+      else 
+        Eop (Ointconst Int.zero) Enil
+  | Cne, Eop (Ocmp c) el =>
+      if Int.eq_dec n2 Int.zero then
+        Eop (Ocmp c) el
+      else if Int.eq_dec n2 Int.one then
+        Eop (Ocmp (negate_condition c)) el
+      else 
+        Eop (Ointconst Int.one) Enil
+  | _, _ =>
+       Eop (Ocmp (default c n2)) (e1 ::: Enil)
+  end.
+
 Nondetfunction comp (c: comparison) (e1: expr) (e2: expr) :=
   match e1, e2 with
   | Eop (Ointconst n1) Enil, t2 =>
-      Eop (Ocmp (Ccompimm (swap_comparison c) n1)) (t2:::Enil)
+      compimm Ccompimm Int.cmp (swap_comparison c) t2 n1
   | t1, Eop (Ointconst n2) Enil =>
-      Eop (Ocmp (Ccompimm c n2)) (t1:::Enil)
-  | Eop (Oshift s) (t1:::Enil), t2 =>
-      Eop (Ocmp (Ccompshift (swap_comparison c) s)) (t2:::t1:::Enil)
-  | t1, Eop (Oshift s) (t2:::Enil) =>
-      Eop (Ocmp (Ccompshift c s)) (t1:::t2:::Enil)
+      compimm Ccompimm Int.cmp c t1 n2
   | _, _ =>
-      Eop (Ocmp (Ccomp c)) (e1:::e2:::Enil)
+      Eop (Ocmp (Ccomp c)) (e1 ::: e2 ::: Enil)
   end.
 
 Nondetfunction compu (c: comparison) (e1: expr) (e2: expr) :=
   match e1, e2 with
   | Eop (Ointconst n1) Enil, t2 =>
-      Eop (Ocmp (Ccompuimm (swap_comparison c) n1)) (t2:::Enil)
+      compimm Ccompuimm Int.cmpu (swap_comparison c) t2 n1
   | t1, Eop (Ointconst n2) Enil =>
-      Eop (Ocmp (Ccompuimm c n2)) (t1:::Enil)
-  | Eop (Oshift s) (t1:::Enil), t2 =>
-      Eop (Ocmp (Ccompushift (swap_comparison c) s)) (t2:::t1:::Enil)
-  | t1, Eop (Oshift s) (t2:::Enil) =>
-      Eop (Ocmp (Ccompushift c s)) (t1:::t2:::Enil)
+      compimm Ccompuimm Int.cmpu c t1 n2
   | _, _ =>
-      Eop (Ocmp (Ccompu c)) (e1:::e2:::Enil)
+      Eop (Ocmp (Ccompu c)) (e1 ::: e2 ::: Enil)
   end.
 
 Definition compf (c: comparison) (e1: expr) (e2: expr) :=
@@ -456,4 +444,3 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   | _ => (Aindexed Int.zero, e:::Enil)
   end.
 
-Definition cond_of_expr (e: expr) := (Ccompuimm Cne Int.zero, e:::Enil).

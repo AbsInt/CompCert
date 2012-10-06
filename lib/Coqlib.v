@@ -909,6 +909,20 @@ Qed.
 Definition list_disjoint (A: Type) (l1 l2: list A) : Prop :=
   forall (x y: A), In x l1 -> In y l2 -> x <> y.
 
+Lemma list_disjoint_cons_l:
+  forall (A: Type) (a: A) (l1 l2: list A),
+  list_disjoint l1 l2 -> ~In a l2 -> list_disjoint (a :: l1) l2.
+Proof.
+  unfold list_disjoint; simpl; intros. destruct H1. congruence. apply H; auto.
+Qed.
+
+Lemma list_disjoint_cons_r:
+  forall (A: Type) (a: A) (l1 l2: list A),
+  list_disjoint l1 l2 -> ~In a l1 -> list_disjoint l1 (a :: l2).
+Proof.
+  unfold list_disjoint; simpl; intros. destruct H2. congruence. apply H; auto.
+Qed.
+
 Lemma list_disjoint_cons_left:
   forall (A: Type) (a: A) (l1 l2: list A),
   list_disjoint (a :: l1) l2 -> list_disjoint l1 l2.

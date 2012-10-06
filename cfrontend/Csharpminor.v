@@ -51,8 +51,7 @@ Inductive expr : Type :=
   | Econst : constant -> expr           (**r constants *)
   | Eunop : unary_operation -> expr -> expr  (**r unary operation *)
   | Ebinop : binary_operation -> expr -> expr -> expr (**r binary operation *)
-  | Eload : memory_chunk -> expr -> expr (**r memory read *)
-  | Econdition : expr -> expr -> expr -> expr. (**r conditional expression *)
+  | Eload : memory_chunk -> expr -> expr. (**r memory read *)
 
 (** Statements include expression evaluation, variable assignment,
   memory stores, function calls, an if/then/else conditional,
@@ -155,7 +154,14 @@ Definition env := PTree.t (block * var_kind).
 Definition temp_env := PTree.t val.
 
 Definition empty_env : env := PTree.empty (block * var_kind).
-Definition empty_temp_env : temp_env := PTree.empty val.
+
+(** Initialization of temporary variables *)
+
+Fixpoint create_undef_temps (temps: list ident) : temp_env :=
+  match temps with
+  | nil => PTree.empty val
+  | id :: temps' => PTree.set id Vundef (create_undef_temps temps')
+ end.
 
 (** Continuations *)
 
@@ -395,12 +401,7 @@ Inductive eval_expr: expr -> val -> Prop :=
   | eval_Eload: forall chunk a v1 v,
       eval_expr a v1 ->
       Mem.loadv chunk m v1 = Some v ->
-      eval_expr (Eload chunk a) v
-  | eval_Econdition: forall a b c v1 vb1 v2,
-      eval_expr a v1 ->
-      Val.bool_of_val v1 vb1 ->
-      eval_expr (if vb1 then b else c) v2 ->
-      eval_expr (Econdition a b c) v2.
+      eval_expr (Eload chunk a) v.
 
 (** Evaluation of a list of expressions:
   [eval_exprlist prg e m al vl] states that the list [al] of
@@ -530,7 +531,7 @@ Inductive step: state -> trace -> state -> Prop :=
       alloc_variables empty_env m (fn_variables f) e m1 ->
       bind_parameters e m1 f.(fn_params) vargs m2 ->
       step (Callstate (Internal f) vargs k m)
-        E0 (State f f.(fn_body) k e empty_temp_env m2)
+        E0 (State f f.(fn_body) k e (create_undef_temps f.(fn_temps)) m2)
 
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->

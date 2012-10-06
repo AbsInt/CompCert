@@ -90,8 +90,6 @@ let type_unary_operation = function
   | Ocast8unsigned -> tint, tint
   | Ocast16unsigned -> tint, tint
   | Onegint -> tint, tint
-  | Oboolval -> tint, tint
-  | Onotbool -> tint, tint
   | Onotint -> tint, tint
   | Onegf -> tfloat, tfloat
   | Oabsf -> tfloat, tfloat
@@ -135,8 +133,6 @@ let name_of_unary_operation = function
   | Ocast8unsigned -> "cast8unsigned"
   | Ocast16unsigned -> "cast16unsigned"
   | Onegint -> "negint"
-  | Oboolval -> "notbool"
-  | Onotbool -> "notbool"
   | Onotint -> "notint"
   | Onegf -> "negf"
   | Oabsf -> "absf"
@@ -224,24 +220,6 @@ let rec type_expr env lenv e =
                               (name_of_chunk chunk) s))
       end;
       type_chunk chunk
-  | Econdition(e1, e2, e3) ->
-      type_condexpr env lenv e1;
-      let te2 = type_expr env lenv e2 in
-      let te3 = type_expr env lenv e3 in
-      begin try
-        unify te2 te3
-      with Error s ->
-        raise (Error (sprintf "In conditional expression:\n%s" s))
-      end;
-      te2
-(*
-  | Elet(e1, e2) ->
-      let te1 = type_expr env lenv e1 in
-      let te2 = type_expr env (te1 :: lenv) e2 in
-      te2
-  | Eletvar n ->
-      type_letvar lenv n
-*)
 
 and type_exprlist env lenv el =
   match el with

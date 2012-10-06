@@ -35,13 +35,11 @@ rule token = parse
   | "/*"         { comment lexbuf; token lexbuf }
   | "absf" { ABSF }
   | "&" { AMPERSAND }
-  | "&&" { AMPERSANDAMPERSAND }
   | "!"    { BANG }
   | "!="    { BANGEQUAL }
   | "!=f"    { BANGEQUALF }
   | "!=u"    { BANGEQUALU }
   | "|"     { BAR }
-  | "||"    { BARBAR }
   | "^"     { CARET }
   | "case"  { CASE }
   | ":"    { COLON }
@@ -102,7 +100,6 @@ rule token = parse
   | "%u"    { PERCENTU }
   | "+"    { PLUS }
   | "+f"    { PLUSF }
-  | "?"    { QUESTION }
   | "}"    { RBRACE }
   | "}}"    { RBRACERBRACE }
   | "]"    { RBRACKET }

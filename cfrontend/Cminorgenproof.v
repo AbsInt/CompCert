@@ -987,12 +987,13 @@ Proof.
 Qed.
 
 Lemma match_callstack_alloc_right:
-  forall f m tm cs tf sp tm' te,
+  forall f le m tm cs tf sp tm' te,
   match_callstack f m tm cs (Mem.nextblock m) (Mem.nextblock tm) ->
   Mem.alloc tm 0 tf.(fn_stackspace) = (tm', sp) ->
   Mem.inject f m tm ->
+  (forall id v, le!id = Some v -> exists v', te!(for_temp id) = Some v' /\ val_inject f v v') ->
   match_callstack f m tm'
-    (Frame gce tf empty_env empty_temp_env te sp (Mem.nextblock m) (Mem.nextblock m) :: cs)
+    (Frame gce tf empty_env le te sp (Mem.nextblock m) (Mem.nextblock m) :: cs)
     (Mem.nextblock m) (Mem.nextblock tm').
 Proof.
   intros.
@@ -1007,13 +1008,13 @@ Proof.
   constructor. apply PTree.gempty. auto.
   constructor. apply PTree.gempty.
 (* temps *)
-  intros. rewrite PTree.gempty in H2. congruence.  
+  assumption.
 (* low high *)
   omega.
 (* bounded *)
-  intros. rewrite PTree.gempty in H2. congruence.
+  intros. rewrite PTree.gempty in H3. congruence.
 (* inj *)
-  intros. rewrite PTree.gempty in H2. congruence.
+  intros. rewrite PTree.gempty in H3. congruence.
 (* inv *)
   intros. 
   assert (sp <> sp). apply Mem.valid_not_valid_diff with tm.
@@ -1023,7 +1024,7 @@ Proof.
   intros. rewrite RES. change (Mem.valid_block tm tb).
   eapply Mem.valid_block_inject_2; eauto.
 (* bounds *)
-  unfold empty_env; intros. rewrite PTree.gempty in H2. congruence.
+  unfold empty_env; intros. rewrite PTree.gempty in H3. congruence.
 (* padding freeable *)
   red; intros. left. eapply Mem.perm_alloc_2; eauto. 
 (* previous call stack *)
@@ -1183,18 +1184,6 @@ Proof.
   unfold Approx.bge in H; destruct a1; try discriminate; destruct a2; simpl in *; try discriminate; intuition.
 Qed.
 
-Lemma approx_lub_ge_left:
-  forall x y, Approx.bge (Approx.lub x y) x = true.
-Proof.
-  destruct x; destruct y; auto. 
-Qed.
-
-Lemma approx_lub_ge_right:
-  forall x y, Approx.bge (Approx.lub x y) y = true.
-Proof.
-  destruct x; destruct y; auto. 
-Qed.
-
 Lemma approx_of_int_sound:
   forall n, val_match_approx (Approx.of_int n) (Vint n).
 Proof.
@@ -1243,8 +1232,6 @@ Proof.
   destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
   destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. compute; auto.
   destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
-  destruct v1; simpl; auto. destruct (Int.eq i Int.zero); simpl; auto.
-  destruct v1; simpl; auto. destruct (Int.eq i Int.zero); simpl; auto.
   destruct v1; simpl; auto. rewrite Float.singleoffloat_idem; auto.
 Qed.
 
@@ -1364,20 +1351,6 @@ Proof.
 (* cast16signed *)
   assert (V: val_match_approx Int16s v) by (eapply val_match_approx_increasing; eauto).
   simpl in *. congruence.
-(* boolval *)
-  assert (V: val_match_approx Int1 v) by (eapply val_match_approx_increasing; eauto).
-  simpl in *.
-  assert (v = Vundef \/ v = Vzero \/ v = Vone).
-    rewrite V. destruct v; simpl; auto. 
-    assert (0 <= Int.unsigned (Int.zero_ext 1 i) < 2).
-      apply Int.zero_ext_range. compute; auto.
-    assert (Int.unsigned(Int.zero_ext 1 i) = 0 \/ Int.unsigned(Int.zero_ext 1 i) = 1) by omega.
-    destruct H2.
-    assert (Int.repr (Int.unsigned (Int.zero_ext 1 i)) = Int.repr 0) by congruence.
-    rewrite Int.repr_unsigned in H3. rewrite H3; auto. 
-    assert (Int.repr (Int.unsigned (Int.zero_ext 1 i)) = Int.repr 1) by congruence.
-    rewrite Int.repr_unsigned in H3. rewrite H3; auto. 
-  intuition; subst v; auto.
 (* singleoffloat *)
   assert (V: val_match_approx Float32 v) by (eapply val_match_approx_increasing; eauto).
   simpl in *. congruence.
@@ -1423,9 +1396,7 @@ Proof.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
-  inv H; inv H0; simpl; TrivialExists. apply val_inject_val_of_bool.
   inv H; inv H0; simpl; TrivialExists.
-  inv H; inv H0; simpl; TrivialExists. apply val_inject_val_of_bool.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
   inv H; inv H0; simpl; TrivialExists.
@@ -2383,6 +2354,16 @@ Proof.
   left; auto.
 Qed.
 
+Lemma create_undef_temps_val:
+  forall id v temps, (create_undef_temps temps)!id = Some v -> In id temps /\ v = Vundef.
+Proof.
+  induction temps; simpl; intros.
+  rewrite PTree.gempty in H. congruence.
+  rewrite PTree.gsspec in H. destruct (peq id a).
+  split. auto. congruence.
+  exploit IHtemps; eauto. tauto. 
+Qed.
+
 (** Preservation of [match_callstack] by simultaneous allocation
   of Csharpminor local variables and of the Cminor stack data block. *)
 
@@ -2403,7 +2384,7 @@ Lemma match_callstack_alloc_variables:
      inject_incr f f'
   /\ Mem.inject f' m' tm'
   /\ match_callstack f' m' tm'
-                     (Frame cenv tf e empty_temp_env te sp (Mem.nextblock m) (Mem.nextblock m') :: cs)
+                     (Frame cenv tf e (create_undef_temps (Csharpminor.fn_temps fn)) te sp (Mem.nextblock m) (Mem.nextblock m') :: cs)
                      (Mem.nextblock m') (Mem.nextblock tm').
 Proof.
   intros. 
@@ -2411,6 +2392,11 @@ Proof.
   eapply match_callstack_alloc_variables_rec; eauto with mem.
   red; intros. eapply Mem.perm_alloc_2; eauto. 
   eapply match_callstack_alloc_right; eauto.
+    intros. exploit create_undef_temps_val; eauto. intros [A B]. subst v.
+    assert (te!(for_temp id) <> None).
+      unfold te. apply set_locals_defined. left. 
+      apply in_or_app. right. apply in_map. auto.
+    destruct (te!(for_temp id)). exists v; auto. congruence. 
   eapply Mem.alloc_right_inject; eauto. omega. 
   intros. elim (Mem.valid_not_valid_diff tm sp sp); eauto with mem.
   eapply Mem.valid_block_inject_2; eauto.
@@ -2624,7 +2610,7 @@ Lemma function_entry_ok:
   /\ Mem.inject f2 m2 tm2
   /\ inject_incr f f2
   /\ match_callstack f2 m2 tm2
-       (Frame cenv tf e empty_temp_env te sp (Mem.nextblock m) (Mem.nextblock m1) :: cs)
+       (Frame cenv tf e (create_undef_temps (Csharpminor.fn_temps fn)) te sp (Mem.nextblock m) (Mem.nextblock m1) :: cs)
        (Mem.nextblock m2) (Mem.nextblock tm2).
 Proof.
   intros.
@@ -2741,17 +2727,6 @@ Proof.
   exploit Mem.loadv_inject; eauto. intros [tv [LOAD INJ]].
   exists tv; split. econstructor; eauto. split. auto.
   destruct v1; simpl in H0; try discriminate. eapply approx_of_chunk_sound; eauto.
-  (* Econdition *)
-  exploit IHeval_expr1; eauto. intros [tv1 [EVAL1 [INJ1 APP1]]].
-  assert (transl_expr cenv (if vb1 then b else c) =
-          OK ((if vb1 then x1 else x3), (if vb1 then x2 else x4))).
-    destruct vb1; auto.
-  exploit IHeval_expr2; eauto. intros [tv2 [EVAL2 [INJ2 APP2]]].
-  exists tv2; split. eapply eval_Econdition; eauto.
-  eapply bool_of_val_inject; eauto.
-  split. auto.
-  apply val_match_approx_increasing with (if vb1 then x2 else x4); auto.
-  destruct vb1. apply approx_lub_ge_left. apply approx_lub_ge_right. 
 Qed.
 
 Lemma transl_exprlist_correct:

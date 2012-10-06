@@ -51,6 +51,8 @@ Fixpoint simple (a: expr) : Prop :=
   | Eunop _ r1 _ => simple r1
   | Ebinop _ r1 r2 _ => simple r1 /\ simple r2
   | Ecast r1 _ => simple r1
+  | Eseqand r1 r2 _ => simple r1 /\ simple r2
+  | Eseqor r1 r2 _ => simple r1 /\ simple r2
   | Econdition r1 r2 r3 _ => simple r1 /\ simple r2 /\ simple r3
   | Esizeof _ _ => True
   | Ealignof _ _ => True
@@ -59,6 +61,7 @@ Fixpoint simple (a: expr) : Prop :=
   | Epostincr _ _ _ => False
   | Ecomma r1 r2 _ => simple r1 /\ simple r2
   | Ecall _ _ _ => False
+  | Ebuiltin _ _ _ _ => False
   | Eparen r1 _ => simple r1
   end.
 
@@ -123,6 +126,24 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
   | esr_alignof: forall ty1 ty,
       eval_simple_rvalue (Ealignof ty1 ty) (Vint (Int.repr (alignof ty1)))
+  | esr_seqand_true: forall r1 r2 ty v1 v2 v3 v4,
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
+      eval_simple_rvalue r2 v2 ->
+      sem_cast v2 (typeof r2) type_bool = Some v3 ->
+      sem_cast v3 type_bool ty = Some v4 ->
+      eval_simple_rvalue (Eseqand r1 r2 ty) v4
+  | esr_seqand_false: forall r1 r2 ty v1,
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some false ->
+      eval_simple_rvalue (Eseqand r1 r2 ty) (Vint Int.zero)
+  | esr_seqor_false: forall r1 r2 ty v1 v2 v3 v4,
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some false ->
+      eval_simple_rvalue r2 v2 ->
+      sem_cast v2 (typeof r2) type_bool = Some v3 ->
+      sem_cast v3 type_bool ty = Some v4 ->
+      eval_simple_rvalue (Eseqor r1 r2 ty) v4
+  | esr_seqor_true: forall r1 r2 ty v1,
+      eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some true ->
+      eval_simple_rvalue (Eseqor r1 r2 ty) (Vint Int.one)
   | esr_condition: forall r1 r2 r3 ty v v1 b v',
       eval_simple_rvalue r1 v1 -> bool_val v1 (typeof r1) = Some b -> 
       eval_simple_rvalue (if b then r2 else r3) v' ->
@@ -185,6 +206,10 @@ Proof.
   inv EV. econstructor; eauto. constructor. 
   inv EV. econstructor; eauto. constructor. constructor.
   inv EV. econstructor; eauto. constructor.
+  inv EV. inv H2. eapply esr_seqand_true; eauto. constructor.
+  inv EV. eapply esr_seqand_false; eauto. constructor.
+  inv EV. eapply esr_seqor_true; eauto. constructor.
+  inv EV. inv H2. eapply esr_seqor_false; eauto. constructor.
   inv EV. eapply esr_condition; eauto. constructor. 
   inv EV. constructor.
   inv EV. constructor.
@@ -210,6 +235,12 @@ Proof.
   inv H0. econstructor; eauto. congruence.
   inv H0. econstructor; eauto. congruence.
   inv H0. econstructor; eauto. congruence.
+  inv H0. 
+    eapply esr_seqand_true; eauto. rewrite TY; auto. 
+    eapply esr_seqand_false; eauto. rewrite TY; auto.
+  inv H0. 
+    eapply esr_seqor_false; eauto. rewrite TY; auto. 
+    eapply esr_seqor_true; eauto. rewrite TY; auto.
   inv H0. eapply esr_condition; eauto. congruence.
   inv H0.
   inv H0.
@@ -217,6 +248,7 @@ Proof.
   inv H0.
   inv H0.
   inv H0.
+  red; split; intros. auto. inv H0.
   red; split; intros. auto. inv H0.
   inv H0. econstructor; eauto.
   inv H0. econstructor; eauto. congruence. 
@@ -412,10 +444,10 @@ Proof.
   rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. inv H0. destruct (cast_float_int si2 f); inv H. inv H7. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. inv H0. inv H. rewrite H7. constructor.
   rewrite H2 in H. inv H0. inv H. rewrite H7. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor.
+  rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. auto.
   rewrite H2 in H. destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. auto.
   rewrite H5 in H. inv H. auto.
@@ -464,6 +496,16 @@ Proof.
   constructor.
   (* alignof *)
   constructor.
+  (* seqand *)
+  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
+  monadInv EQ2. eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
+  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
+  monadInv EQ2. constructor.
+  (* seqor *)
+  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
+  monadInv EQ2. eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
+  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
+  monadInv EQ2. constructor.
   (* conditional *)
   rewrite (bool_val_match x v1 (typeof r1)) in EQ3; auto.
   rewrite H0 in EQ3. destruct b; eapply sem_cast_match; eauto.
@@ -496,7 +538,7 @@ Proof.
   destruct (access_mode ty); discriminate || eauto.
   intuition eauto.
 Qed.
-  
+
 (** Soundness of [constval] with respect to the reduction semantics. *)
 
 Theorem constval_steps:

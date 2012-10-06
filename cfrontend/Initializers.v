@@ -82,6 +82,22 @@ Fixpoint constval (a: expr) : res val :=
       OK (Vint (Int.repr (sizeof ty1)))
   | Ealignof ty1 ty =>
       OK (Vint (Int.repr (alignof ty1)))
+  | Eseqand r1 r2 ty =>
+      do v1 <- constval r1;
+      do v2 <- constval r2;
+      match bool_val v1 (typeof r1) with
+      | Some true => do v3 <- do_cast v2 (typeof r2) type_bool; do_cast v3 type_bool ty
+      | Some false => OK (Vint Int.zero)
+      | None => Error(msg "undefined && operation")
+      end
+  | Eseqor r1 r2 ty =>
+      do v1 <- constval r1;
+      do v2 <- constval r2;
+      match bool_val v1 (typeof r1) with
+      | Some false => do v3 <- do_cast v2 (typeof r2) type_bool; do_cast v3 type_bool ty
+      | Some true => OK (Vint Int.one)
+      | None => Error(msg "undefined || operation")
+      end
   | Econdition r1 r2 r3 ty =>
       do v1 <- constval r1;
       do v2 <- constval r2;

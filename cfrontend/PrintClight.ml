@@ -20,6 +20,7 @@ open Camlcoq
 open Datatypes
 open Values
 open AST
+open PrintAST
 open Csyntax
 open PrintCsyntax
 open Clight
@@ -65,7 +66,6 @@ let rec precedence = function
   | Ebinop(Oand, _, _, _) -> (8, LtoR)
   | Ebinop(Oxor, _, _, _) -> (7, LtoR)
   | Ebinop(Oor, _, _, _) -> (6, LtoR)
-  | Econdition _ -> (3, RtoL)
 
 (* Expressions *)
 
@@ -100,8 +100,6 @@ let rec expr p (prec, e) =
                  expr (prec1, a1) (name_binop op) expr (prec2, a2)
   | Ecast(a1, ty) ->
       fprintf p "(%s) %a" (name_type ty) expr (prec', a1)
-  | Econdition(a1, a2, a3, _) ->
-      fprintf p "%a@ ? %a@ : %a" expr (4, a1) expr (4, a2) expr (4, a3)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -125,8 +123,6 @@ let rec print_stmt p s =
       fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
   | Sset(id, e2) ->
       fprintf p "@[<hv 2>%s =@ %a;@]" (temp_name id) print_expr e2
-  | Svolread(id, e2) ->
-      fprintf p "@[<hv 2>%s =@ %a; /*volatile*/@]" (temp_name id) print_expr e2
   | Scall(None, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@]);@]"
                 print_expr e1
@@ -135,6 +131,15 @@ let rec print_stmt p s =
       fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@]);@]"
                 (temp_name id)
                 print_expr e1
+                print_expr_list (true, el)
+  | Sbuiltin(None, ef, tyargs, el) ->
+      fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
+                (name_of_external ef)
+                print_expr_list (true, el)
+  | Sbuiltin(Some id, ef, tyargs, el) ->
+      fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
+                (temp_name id)
+                (name_of_external ef)
                 print_expr_list (true, el)
   | Ssequence(Sskip, s2) ->
       print_stmt p s2
@@ -155,19 +160,13 @@ let rec print_stmt p s =
               print_expr e
               print_stmt s1
               print_stmt s2
-  | Swhile(e, s) ->
-      fprintf p "@[<v 2>while (%a) {@ %a@;<0 -2>}@]"
-              print_expr e
-              print_stmt s
-  | Sdowhile(e, s) ->
-      fprintf p "@[<v 2>do {@ %a@;<0 -2>} while(%a);@]"
-              print_stmt s
-              print_expr e
-  | Sfor'(e, s_iter, s_body) ->
-      fprintf p "@[<v 2>for (@[<hv 0>;@ %a;@ %a) {@]@ %a@;<0 -2>}@]"
-              print_expr e
-              print_stmt_for s_iter
-              print_stmt s_body
+  | Sloop(s1, Sskip) ->
+      fprintf p "@[<v 2>while (1) {@ %a@;<0 -2>}@]"
+              print_stmt s1
+  | Sloop(s1, s2) ->
+      fprintf p "@[<v 2>for (@[<hv 0>;@ 1;@ %a) {@]@ %a@;<0 -2>}@]"
+              print_stmt_for s2
+              print_stmt s1
   | Sbreak ->
       fprintf p "break;"
   | Scontinue ->
@@ -220,6 +219,15 @@ and print_stmt_for p s =
                 (temp_name id)
                 print_expr e1
                 print_expr_list (true, el)
+  | Sbuiltin(None, ef, tyargs, el) ->
+      fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
+                (name_of_external ef)
+                print_expr_list (true, el)
+  | Sbuiltin(Some id, ef, tyargs, el) ->
+      fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]"
+                (temp_name id)
+                (name_of_external ef)
+                print_expr_list (true, el)
   | _ ->
       fprintf p "({ %a })" print_stmt s
 
@@ -265,8 +273,6 @@ let rec collect_expr e =
   | Eunop(_, r, _) -> collect_expr r
   | Ebinop(_, r1, r2, _) -> collect_expr r1; collect_expr r2
   | Ecast(r, _) -> collect_expr r
-  | Econdition(r1, r2, r3, _) -> 
-      collect_expr r1; collect_expr r2; collect_expr r3
 
 let rec collect_exprlist = function
   | [] -> ()
@@ -276,14 +282,11 @@ let rec collect_stmt = function
   | Sskip -> ()
   | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
   | Sset(id, e2) -> collect_expr e2
-  | Svolread(id, e2) -> collect_expr e2
   | Scall(optid, e1, el) -> collect_expr e1; collect_exprlist el
+  | Sbuiltin(optid, ef, tyargs, el) -> collect_exprlist el
   | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
   | Sifthenelse(e, s1, s2) -> collect_expr e; collect_stmt s1; collect_stmt s2
-  | Swhile(e, s) -> collect_expr e; collect_stmt s
-  | Sdowhile(e, s) -> collect_stmt s; collect_expr e
-  | Sfor'(e, s_iter, s_body) ->
-      collect_expr e; collect_stmt s_iter; collect_stmt s_body
+  | Sloop(s1, s2) -> collect_stmt s1; collect_stmt s2
   | Sbreak -> ()
   | Scontinue -> ()
   | Sswitch(e, cases) -> collect_expr e; collect_cases cases

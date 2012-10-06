@@ -40,125 +40,23 @@ Variable sp: val.
 Variable e: env.
 Variable m: mem.
 
-(** Conversion of condition expressions. *)
-
-Lemma negate_condexpr_correct:
-  forall le a b,
-  eval_condexpr ge sp e m le a b ->
-  eval_condexpr ge sp e m le (negate_condexpr a) (negb b).
-Proof.
-  induction 1; simpl.
-  constructor.
-  constructor.
-  econstructor. eauto. rewrite eval_negate_condition. rewrite H0. auto.
-  econstructor. eauto. destruct vb1; auto.
-Qed. 
-
-Scheme expr_ind2 := Induction for expr Sort Prop
-  with exprlist_ind2 := Induction for exprlist Sort Prop.
-
-Fixpoint forall_exprlist (P: expr -> Prop) (el: exprlist) {struct el}: Prop :=
-  match el with
-  | Enil => True
-  | Econs e el' => P e /\ forall_exprlist P el'
-  end.
-
-Lemma expr_induction_principle:
-  forall (P: expr -> Prop),
-  (forall i : ident, P (Evar i)) ->
-  (forall (o : operation) (e : exprlist),
-     forall_exprlist P e -> P (Eop o e)) ->
-  (forall (m : memory_chunk) (a : Op.addressing) (e : exprlist),
-     forall_exprlist P e -> P (Eload m a e)) ->
-  (forall (c : condexpr) (e : expr),
-     P e -> forall e0 : expr, P e0 -> P (Econdition c e e0)) ->
-  (forall e : expr, P e -> forall e0 : expr, P e0 -> P (Elet e e0)) ->
-  (forall n : nat, P (Eletvar n)) ->
-  forall e : expr, P e.
-Proof.
-  intros. apply expr_ind2 with (P := P) (P0 := forall_exprlist P); auto.
-  simpl. auto.
-  intros. simpl. auto.
-Qed.
-
-Lemma eval_condition_of_expr_base:
+Lemma eval_condition_of_expr:
   forall le a v b,
   eval_expr ge sp e m le a v ->
   Val.bool_of_val v b ->
-  eval_condexpr ge sp e m le (condexpr_of_expr_base a) b.
+  match condition_of_expr a with (cond, args) =>
+    exists vl,
+    eval_exprlist ge sp e m le args vl /\
+    eval_condition cond vl m = Some b
+  end.
 Proof.
-  intros. unfold condexpr_of_expr_base.
-  generalize (eval_cond_of_expr _ _ _ _ _ _ _ _ H H0). 
-  destruct (cond_of_expr a) as [cond args]. 
-  intros [vl [A B]].
-  econstructor; eauto. 
-Qed.
-
-Lemma is_compare_neq_zero_correct:
-  forall c v b,
-  is_compare_neq_zero c = true ->
-  eval_condition c (v :: nil) m = Some b ->
-  Val.bool_of_val v b.
-Proof.
-  intros.
-  destruct c; simpl in H; try discriminate;
-  destruct c; simpl in H; try discriminate;
-  generalize (Int.eq_spec i Int.zero); rewrite H; intros; subst.
-
-  simpl in H0. destruct v; inv H0. constructor. 
-  simpl in H0. destruct v; inv H0. constructor. constructor.
-Qed.
-
-Lemma is_compare_eq_zero_correct:
-  forall c v b,
-  is_compare_eq_zero c = true ->
-  eval_condition c (v :: nil) m = Some b ->
-  Val.bool_of_val v (negb b).
-Proof.
-  intros. apply is_compare_neq_zero_correct with (negate_condition c).
-  destruct c; simpl in H; simpl; try discriminate;
-  destruct c; simpl; try discriminate; auto.
-  rewrite eval_negate_condition. rewrite H0. auto.
-Qed.
-
-Lemma eval_condition_of_expr:
-  forall a le v b,
-  eval_expr ge sp e m le a v ->
-  Val.bool_of_val v b ->
-  eval_condexpr ge sp e m le (condexpr_of_expr a) b.
-Proof.
-  intro a0; pattern a0.
-  apply expr_induction_principle; simpl; intros;
-    try (eapply eval_condition_of_expr_base; eauto; fail).
-  
-  destruct o; try (eapply eval_condition_of_expr_base; eauto; fail).
-
-  destruct e0. inv H0. inv H5. simpl in H7. inv H7. inv H1.
-  destruct (Int.eq i Int.zero); constructor.
-  eapply eval_condition_of_expr_base; eauto.
-
-  inv H0. simpl in H7.
-  assert (eval_condition c vl m = Some b).
-    inv H7. eapply Val.bool_of_val_of_optbool; eauto.
-  assert (eval_condexpr ge sp e m le (CEcond c e0) b).
-    eapply eval_CEcond; eauto.
-  destruct e0; auto. destruct e1; auto.
-  simpl in H. destruct H.
-  inv H5. inv H11.
-
-  case_eq (is_compare_neq_zero c); intros.
-  eapply H; eauto.
-  apply is_compare_neq_zero_correct with c; auto.
-
-  case_eq (is_compare_eq_zero c); intros.
-  replace b with (negb (negb b)). apply negate_condexpr_correct.
-  eapply H; eauto.
-  apply is_compare_eq_zero_correct with c; auto.
-  apply negb_involutive.
-
-  auto.
-
-  inv H1. destruct v1; eauto with evalexpr.
+  intros until a. functional induction (condition_of_expr a); intros.
+(* compare *)
+  inv H. exists vl; split; auto.
+  simpl in H6. inv H6. apply Val.bool_of_val_of_optbool. auto.
+(* default *)
+  exists (v :: nil); split. constructor. auto. constructor.
+  simpl. inv H0. auto. auto. 
 Qed.
 
 Lemma eval_load:
@@ -202,9 +100,7 @@ Proof.
   apply eval_cast8signed; auto.
   apply eval_cast16unsigned; auto.
   apply eval_cast16signed; auto.
-  apply eval_boolval; auto.
   apply eval_negint; auto.
-  apply eval_notbool; auto.
   apply eval_notint; auto.
   apply eval_negf; auto.
   apply eval_absf; auto.
@@ -436,14 +332,6 @@ Proof.
   exploit IHeval_expr; eauto. intros [vaddr' [A B]].
   exploit Mem.loadv_extends; eauto. intros [v' [C D]].
   exists v'; split; auto. eapply eval_load; eauto.
-  (* Econdition *)
-  exploit IHeval_expr1; eauto. intros [v1' [A B]].
-  exploit IHeval_expr2; eauto. intros [v2' [C D]].
-  replace (sel_expr (if b1 then a2 else a3)) with (if b1 then sel_expr a2 else sel_expr a3) in C.
-  assert (Val.bool_of_val v1' b1). inv B. auto. inv H0.
-  exists v2'; split; auto. 
-  econstructor; eauto. eapply eval_condition_of_expr; eauto. 
-  destruct b1; auto.
 Qed.
 
 Lemma sel_exprlist_correct:
@@ -544,6 +432,7 @@ Proof.
   destruct (find_label lbl (sel_stmt ge s1) (Kseq (sel_stmt ge s2) k')) as [[sy ky] | ];
   intuition. apply IHs2; auto.
 (* ifthenelse *)
+  destruct (condition_of_expr (sel_expr e)) as [cond args]. simpl.
   exploit (IHs1 k); eauto. 
   destruct (Cminor.find_label lbl s1 k) as [[sx kx] | ];
   destruct (find_label lbl (sel_stmt ge s1) k') as [[sy ky] | ];
@@ -643,8 +532,11 @@ Proof.
   (* Sifthenelse *)
   exploit sel_expr_correct; eauto. intros [v' [A B]].
   assert (Val.bool_of_val v' b). inv B. auto. inv H0.
+  exploit eval_condition_of_expr; eauto.
+  destruct (condition_of_expr (sel_expr a)) as [cond args].
+  intros [vl' [C D]].
   left; exists (State (sel_function ge f) (if b then sel_stmt ge s1 else sel_stmt ge s2) k' sp e' m'); split.
-  constructor. eapply eval_condition_of_expr; eauto.
+  econstructor; eauto. 
   constructor; auto. destruct b; auto.
   (* Sloop *)
   left; econstructor; split. constructor. constructor; auto. constructor; auto.

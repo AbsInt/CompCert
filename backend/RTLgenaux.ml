@@ -14,7 +14,7 @@ open Camlcoq
 open Switch
 open CminorSel
 
-let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) = false
+let more_likely (c: Op.condition) (ifso: stmt) (ifnot: stmt) = false
 
 module IntOrd =
   struct

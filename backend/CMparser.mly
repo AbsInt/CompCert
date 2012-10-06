@@ -34,7 +34,6 @@ type rexpr =
   | Runop of unary_operation * rexpr
   | Rbinop of binary_operation * rexpr * rexpr
   | Rload of memory_chunk * rexpr
-  | Rcondition of rexpr * rexpr * rexpr
   | Rcall of signature * rexpr * rexpr list
 
 let temp_counter = ref 0
@@ -59,11 +58,6 @@ let rec convert_rexpr = function
       let c2 = convert_rexpr e2 in
       Ebinop(op, c1, c2)
   | Rload(chunk, e1) -> Eload(chunk, convert_rexpr e1)
-  | Rcondition(e1, e2, e3) ->
-      let c1 = convert_rexpr e1 in
-      let c2 = convert_rexpr e2 in
-      let c3 = convert_rexpr e3 in
-      Econdition(c1, c2, c3)
   | Rcall(sg, e1, el) ->
       let c1 = convert_rexpr e1 in
       let cl = convert_rexpr_list el in
@@ -135,11 +129,6 @@ let mkwhile expr body =
 let intconst n =
   Rconst(Ointconst(coqint_of_camlint n))
 
-let andbool e1 e2 =
-  Rcondition(e1, e2, intconst 0l)
-let orbool e1 e2 =
-  Rcondition(e1, intconst 1l, e2)
-
 let exitnum n = nat_of_camlint n
 
 let mkswitch expr (cases, dfl) =
@@ -202,13 +191,11 @@ let mkmatch expr cases =
 
 %token ABSF
 %token AMPERSAND
-%token AMPERSANDAMPERSAND
 %token BANG
 %token BANGEQUAL
 %token BANGEQUALF
 %token BANGEQUALU
 %token BAR
-%token BARBAR
 %token CARET
 %token CASE
 %token COLON
@@ -273,7 +260,6 @@ let mkmatch expr cases =
 %token PERCENTU
 %token PLUS
 %token PLUSF
-%token QUESTION
 %token RBRACE
 %token RBRACERBRACE
 %token RBRACKET
@@ -301,9 +287,6 @@ let mkmatch expr cases =
 %left COMMA
 %left p_let
 %right EQUAL
-%right QUESTION COLON
-%left BARBAR
-%left AMPERSANDAMPERSAND
 %left BAR
 %left CARET
 %left AMPERSAND
@@ -502,7 +485,7 @@ expr:
   | FLOATOFINT expr                             { Runop(Ofloatofint, $2) }
   | FLOATOFINTU expr                            { Runop(Ofloatofintu, $2) }
   | TILDE expr                                  { Runop(Onotint, $2) }
-  | BANG expr                                   { Runop(Onotbool, $2) }
+  | BANG expr                                   { Rbinop(Ocmpu Ceq, $2, intconst 0l) }
   | INT8S expr                                  { Runop(Ocast8signed, $2) }
   | INT8U expr                                  { Runop(Ocast8unsigned, $2) }
   | INT16S expr                                 { Runop(Ocast16signed, $2) }
@@ -544,9 +527,6 @@ expr:
   | expr GREATERF expr                          { Rbinop(Ocmpf Cgt, $1, $3) }
   | expr GREATEREQUALF expr                     { Rbinop(Ocmpf Cge, $1, $3) }
   | memory_chunk LBRACKET expr RBRACKET         { Rload($1, $3) }
-  | expr AMPERSANDAMPERSAND expr                { andbool $1 $3 }
-  | expr BARBAR expr                            { orbool $1 $3 }
-  | expr QUESTION expr COLON expr               { Rcondition($1, $3, $5) }
   | expr LPAREN expr_list RPAREN COLON signature{ Rcall($6, $1, $3) }
 ;
 

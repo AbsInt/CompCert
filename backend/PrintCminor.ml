@@ -40,7 +40,6 @@ let rec precedence = function
   | Ebinop(Oxor, _, _) -> (7, LtoR)
   | Ebinop(Oor, _, _) -> (6, LtoR)
   | Eload _ -> (15, RtoL)
-  | Econdition _ -> (3, RtoL)
 
 (* Naming idents.  We assume idents are encoded as in Cminorgen. *)
 
@@ -58,8 +57,6 @@ let name_of_unop = function
   | Ocast16unsigned -> "int16u"
   | Ocast16signed -> "int16s"
   | Onegint -> "-"
-  | Oboolval -> "(_Bool)"
-  | Onotbool -> "!"
   | Onotint -> "~"
   | Onegf -> "-f"
   | Oabsf -> "absf"
@@ -141,8 +138,6 @@ let rec expr p (prec, e) =
                  expr (prec1, a1) (name_of_binop op) expr (prec2, a2)
   | Eload(chunk, a1) ->
       fprintf p "%s[%a]" (name_of_chunk chunk) expr (0, a1)
-  | Econdition(a1, a2, a3) ->
-      fprintf p "%a@ ? %a@ : %a" expr (4, a1) expr (4, a2) expr (4, a3)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

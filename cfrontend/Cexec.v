@@ -778,6 +778,24 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       | None =>
           incontext (fun x => Ecast x ty) (step_expr RV r1 m)
       end
+  | RV, Eseqand r1 r2 ty =>
+      match is_val r1 with
+      | Some(v1, ty1) =>
+          do b <- bool_val v1 ty1;
+          if b then topred (Rred (Eparen (Eparen r2 type_bool) ty) m E0)
+               else topred (Rred (Eval (Vint Int.zero) ty) m E0)
+      | None =>
+          incontext (fun x => Eseqand x r2 ty) (step_expr RV r1 m)
+      end
+  | RV, Eseqor r1 r2 ty =>
+      match is_val r1 with
+      | Some(v1, ty1) =>
+          do b <- bool_val v1 ty1;
+          if b then topred (Rred (Eval (Vint Int.one) ty) m E0)
+               else topred (Rred (Eparen (Eparen r2 type_bool) ty) m E0)
+      | None =>
+          incontext (fun x => Eseqor x r2 ty) (step_expr RV r1 m)
+      end
   | RV, Econdition r1 r2 r3 ty =>
       match is_val r1 with
       | Some(v1, ty1) =>
@@ -858,6 +876,17 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       | _, _ =>
           incontext2 (fun x => Ecall x rargs ty) (step_expr RV r1 m)
                      (fun x => Ecall r1 x ty) (step_exprlist rargs m)
+      end
+  | RV, Ebuiltin ef tyargs rargs ty =>
+      match is_val_list rargs with
+      | Some vtl =>
+          do vargs <- sem_cast_arguments vtl tyargs;
+          match do_external ef w vargs m with
+          | None => stuck
+          | Some(w',t,v,m') => topred (Rred (Eval v ty) m' t)
+          end
+      | _ =>
+          incontext (fun x => Ebuiltin ef tyargs x ty) (step_exprlist rargs m)
       end
   | _, _ => stuck
   end
@@ -949,6 +978,10 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists v, sem_binary_operation op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
       exists v, sem_cast v1 ty1 ty = Some v
+  | Eseqand (Eval v1 ty1) r2 ty =>
+      exists b, bool_val v1 ty1 = Some b
+  | Eseqor (Eval v1 ty1) r2 ty =>
+      exists b, bool_val v1 ty1 = Some b
   | Econdition (Eval v1 ty1) r1 r2 ty =>
       exists b, bool_val v1 ty1 = Some b
   | Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty =>
@@ -971,6 +1004,12 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       /\ Genv.find_funct ge vf = Some fd
       /\ cast_arguments rargs tyargs vl
       /\ type_of_fundef fd = Tfunction tyargs tyres
+  | Ebuiltin ef tyargs rargs ty =>
+      exprlist_all_values rargs ->
+      exists vargs, exists t, exists vres, exists m', exists w',
+         cast_arguments rargs tyargs vargs
+      /\ external_call ef ge vargs m t vres m'
+      /\ possible_trace w t w'
   | _ => True
   end.
 
@@ -993,11 +1032,14 @@ Proof.
   exists v; auto.
   exists v; auto.
   exists v; auto.
+  exists true; auto. exists false; auto.
+  exists true; auto. exists false; auto.
   exists b; auto.
   exists v; exists m'; exists t; exists w'; auto.
   exists t; exists v1; exists w'; auto.
   exists t; exists v1; exists w'; auto.
   exists v; auto.
+  intros; exists vargs; exists t; exists vres; exists m'; exists w'; auto.
 Qed.
 
 Lemma callred_invert:
@@ -1035,12 +1077,15 @@ Proof.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
   destruct e1; auto; destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct e1; auto; destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct e1; auto. intros. elim (H0 a m); auto.
+  intros. elim (H0 a m); auto.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   red; intros. destruct (C a); auto. 
@@ -1224,6 +1269,20 @@ Proof.
   destruct H5. destruct k1; intuition congruence. destruct k2; intuition congruence.
 Qed.
 
+Lemma incontext_list_ok:
+  forall ef tyargs al ty m res,
+  list_reducts_ok al m res ->
+  is_val_list al = None ->
+  reducts_ok RV (Ebuiltin ef tyargs al ty) m
+                (incontext (fun x => Ebuiltin ef tyargs x ty) res).
+Proof.
+  unfold reducts_ok, incontext; intros. destruct H. split; intros.
+  exploit list_in_map_inv; eauto. intros [[C1 rd1] [P Q]]. inv P.
+  exploit H; eauto. intros [a'' [k'' [U [V W]]]].
+  exists a''; exists k''. split. eauto. rewrite V; auto.
+  destruct res; simpl in H2. elim H1; auto. congruence.
+Qed.
+
 Lemma incontext2_list_ok:
   forall a1 a2 ty m res1 res2,
   reducts_ok RV a1 m res1 ->
@@ -1357,6 +1416,22 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   apply topred_ok; auto. split. apply red_cast; auto. exists w; constructor. 
   (* depth *)
   eapply incontext_ok; eauto.
+(* seqand *)
+  destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  (* top *)
+  destruct (bool_val v ty') as [v'|]_eqn... destruct v'.
+  apply topred_ok; auto. split. eapply red_seqand_true; eauto. exists w; constructor.
+  apply topred_ok; auto. split. eapply red_seqand_false; eauto. exists w; constructor.
+  (* depth *)
+  eapply incontext_ok; eauto.
+(* seqor *)
+  destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  (* top *)
+  destruct (bool_val v ty') as [v'|]_eqn... destruct v'.
+  apply topred_ok; auto. split. eapply red_seqor_true; eauto. exists w; constructor.
+  apply topred_ok; auto. split. eapply red_seqor_false; eauto. exists w; constructor.
+  (* depth *)
+  eapply incontext_ok; eauto.
 (* condition *)
   destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
@@ -1430,7 +1505,26 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   apply not_invert_ok; simpl; intros; myinv. specialize (H ALLVAL). myinv. congruence.
   (* depth *)
   eapply incontext2_list_ok; eauto.
-  eapply incontext2_list_ok; eauto. 
+  eapply incontext2_list_ok; eauto.
+(* builtin *)
+  destruct (is_val_list rargs) as [vtl | ]_eqn. 
+  exploit is_val_list_all_values; eauto. intros ALLVAL.
+  (* top *)
+  destruct (sem_cast_arguments vtl tyargs) as [vargs|]_eqn... 
+  destruct (do_external ef w vargs m) as [[[[? ?] v] m'] | ]_eqn...
+  exploit do_ef_external_sound; eauto. intros [EC PT].
+  apply topred_ok; auto. red. split; auto. eapply red_builtin; eauto. 
+  eapply sem_cast_arguments_sound; eauto.
+  exists w0; auto.
+  apply not_invert_ok; simpl; intros; myinv. specialize (H ALLVAL). myinv.
+  assert (x = vargs). 
+    exploit sem_cast_arguments_complete; eauto. intros [vtl' [A B]]. congruence.
+  subst x. exploit do_ef_external_complete; eauto. congruence.
+  apply not_invert_ok; simpl; intros; myinv. specialize (H ALLVAL). myinv. 
+  exploit sem_cast_arguments_complete; eauto. intros [vtl' [A B]]. congruence.
+  (* depth *)
+  eapply incontext_list_ok; eauto.
+ 
 (* loc *)
   split; intros. tauto. simpl; congruence.
 (* paren *)
@@ -1495,6 +1589,12 @@ Proof.
   inv H0. rewrite H; auto.
 (* cast *)
   inv H0. rewrite H; auto.
+(* seqand *)
+  inv H0. rewrite H; auto.
+  inv H0. rewrite H; auto.
+(* seqor *)
+  inv H0. rewrite H; auto.
+  inv H0. rewrite H; auto.
 (* condition *)
   inv H0. rewrite H; auto.
 (* sizeof *)
@@ -1511,6 +1611,10 @@ Proof.
   inv H0. rewrite dec_eq_true; auto.
 (* paren *)
   inv H0. rewrite H; auto.
+(* builtin *)
+  exploit sem_cast_arguments_complete; eauto. intros [vtl [A B]].
+  exploit do_ef_external_complete; eauto. intros C. 
+  rewrite A. rewrite B. rewrite C. auto.
 Qed.
 
 Lemma callred_topred:
@@ -1631,6 +1735,12 @@ Proof.
 (* cast *)
   eapply reducts_incl_trans with (C' := fun x => Ecast x ty); eauto.
   destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+(* seqand *)
+  eapply reducts_incl_trans with (C' := fun x => Eseqand x r2 ty); eauto.
+  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+(* seqor *)
+  eapply reducts_incl_trans with (C' := fun x => Eseqor x r2 ty); eauto.
+  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
 (* condition *)
   eapply reducts_incl_trans with (C' := fun x => Econdition x r2 r3 ty); eauto.
   destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
@@ -1657,6 +1767,9 @@ Proof.
 (* call right *)
   eapply reducts_incl_trans with (C' := fun x => Ecall e1 x ty). apply step_exprlist_context. auto. 
   destruct (is_val e1) as [[v1 ty1]|]_eqn; eauto.
+  destruct (is_val_list (C a)) as [vl|]_eqn; eauto.
+(* builtin *)
+  eapply reducts_incl_trans with (C' := fun x => Ebuiltin ef tyargs x ty). apply step_exprlist_context. auto. 
   destruct (is_val_list (C a)) as [vl|]_eqn; eauto.
 (* comma *)
   eapply reducts_incl_trans with (C' := fun x => Ecomma x e2 ty); eauto.

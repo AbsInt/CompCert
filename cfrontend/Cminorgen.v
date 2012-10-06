@@ -166,37 +166,6 @@ Definition bge (x y: approx) : bool :=
   | _, _ => false
   end.
 
-Definition lub (x y: approx) : approx :=
-  match x, y with
-  | Int1, Int1 => Int1
-  | Int1, Int7 => Int7
-  | Int1, Int8u => Int8u
-  | Int1, Int8s => Int8s
-  | Int1, Int15 => Int15
-  | Int1, Int16u => Int16u
-  | Int1, Int16s => Int16s
-  | Int7, Int1 => Int7
-  | Int7, Int7 => Int7
-  | Int7, Int8u => Int8u
-  | Int7, Int8s => Int8s
-  | Int7, Int15 => Int15
-  | Int7, Int16u => Int16u
-  | Int7, Int16s => Int16s
-  | Int8u, (Int1|Int7|Int8u) => Int8u
-  | Int8u, Int15 => Int15
-  | Int8u, Int16u => Int16u
-  | Int8u, Int16s => Int16s
-  | Int8s, (Int1|Int7|Int8s) => Int8s
-  | Int8s, (Int15|Int16s) => Int16s
-  | Int15, (Int1|Int7|Int8u|Int15) => Int15
-  | Int15, Int16u => Int16u
-  | Int15, (Int8s|Int16s) => Int16s
-  | Int16u, (Int1|Int7|Int8u|Int15|Int16u) => Int16u
-  | Int16s, (Int1|Int7|Int8u|Int8s|Int15|Int16s) => Int16s
-  | Float32, Float32 => Float32
-  | _, _ => Any
-  end.
-
 Definition of_int (n: int) :=
   if Int.eq_dec n Int.zero || Int.eq_dec n Int.one then Int1
   else if Int.eq_dec n (Int.zero_ext 7 n) then Int7
@@ -229,8 +198,6 @@ Definition unop (op: unary_operation) (a: approx) :=
   | Ocast16unsigned => Int16u
   | Ocast16signed => Int16s
   | Osingleoffloat => Float32
-  | Oboolval => Int1
-  | Onotbool => Int1
   | _ => Any
   end.
 
@@ -240,7 +207,6 @@ Definition unop_is_redundant (op: unary_operation) (a: approx) :=
   | Ocast8signed => bge Int8s a
   | Ocast16unsigned => bge Int16u a
   | Ocast16signed => bge Int16s a
-  | Oboolval => bge Int1 a
   | Osingleoffloat => bge Float32 a
   | _ => false
   end.
@@ -366,11 +332,6 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
   | Csharpminor.Eload chunk e =>
       do (te, a) <- transl_expr cenv e;
       OK (Eload chunk te, Approx.of_chunk chunk)
-  | Csharpminor.Econdition e1 e2 e3 =>
-      do (te1, a1) <- transl_expr cenv e1;
-      do (te2, a2) <- transl_expr cenv e2;
-      do (te3, a3) <- transl_expr cenv e3;
-      OK (Econdition te1 te2 te3, Approx.lub a2 a3)
   end.
 
 Fixpoint transl_exprlist (cenv: compilenv) (el: list Csharpminor.expr)
@@ -515,9 +476,6 @@ Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
   | Csharpminor.Ebinop op e1 e2 =>
       Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
   | Csharpminor.Eload chunk e => addr_taken_expr e
-  | Csharpminor.Econdition e1 e2 e3 =>
-      Identset.union (addr_taken_expr e1) 
-        (Identset.union (addr_taken_expr e2) (addr_taken_expr e3))
   end.
 
 Fixpoint addr_taken_exprlist (e: list Csharpminor.expr): Identset.t :=

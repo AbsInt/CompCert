@@ -94,16 +94,30 @@ Definition make_intoffloat (e: expr) (sg: signedness) :=
   end.
 
 (** [make_boolean e ty] returns a Csharpminor expression that evaluates
-   to the boolean value of [e].  Recall that:
--  in Csharpminor, [false] is the integer 0,
-       [true] any non-zero integer or any pointer
--  in C, [false] is the integer 0, the null pointer, the float 0.0
-       [true] is any non-zero integer, non-null pointer, non-null float.
-*)
+   to the boolean value of [e].  *)
+
+Definition make_cmp_ne_zero (e: expr) :=
+  match e with
+  | Ebinop (Ocmp c) e1 e2 => e
+  | Ebinop (Ocmpu c) e1 e2 => e
+  | Ebinop (Ocmpf c) e1 e2 => e
+  | _ => Ebinop (Ocmp Cne) e (make_intconst Int.zero)
+  end.
+
 Definition make_boolean (e: expr) (ty: type) :=
-  match ty with
-  | Tfloat _ _ => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
-  | _ => e
+  match classify_bool ty with
+  | bool_case_i => make_cmp_ne_zero e
+  | bool_case_f => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
+  | bool_case_p => Ebinop (Ocmpu Cne) e (make_intconst Int.zero)
+  | bool_default => e   (**r should not happen *)
+  end.
+
+Definition make_notbool (e: expr) (ty: type) :=
+  match classify_bool ty with
+  | bool_case_i => OK (Ebinop (Ocmp Ceq) e (make_intconst Int.zero))
+  | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
+  | bool_case_p => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
+  | _ => Error (msg "Cshmgen.make_notbool")
   end.
 
 Definition make_neg (e: expr) (ty: type) :=
@@ -111,13 +125,6 @@ Definition make_neg (e: expr) (ty: type) :=
   | neg_case_i _ => OK (Eunop Onegint e)
   | neg_case_f => OK (Eunop Onegf e)
   | _ => Error (msg "Cshmgen.make_neg")
-  end.
-
-Definition make_notbool (e: expr) (ty: type) :=
-  match classify_bool ty with
-  | bool_case_ip => OK (Eunop Onotbool e)
-  | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
-  | _ => Error (msg "Cshmgen.make_notbool")
   end.
 
 Definition make_notint (e: expr) (ty: type) :=
@@ -219,7 +226,7 @@ Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
   | I16, Signed => Eunop Ocast16signed e  
   | I16, Unsigned => Eunop Ocast16unsigned e  
   | I32, _ => e
-  | IBool, _ => Eunop Oboolval e
+  | IBool, _ => make_cmp_ne_zero e
   end.
 
 Definition make_cast_float (e: expr) (sz: floatsize) :=
@@ -235,8 +242,8 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_f2f sz2 => make_cast_float e sz2
   | cast_case_i2f si1 sz2 => make_cast_float (make_floatofint e si1) sz2
   | cast_case_f2i sz2 si2 => make_cast_int (make_intoffloat e si2) sz2 si2
-  | cast_case_ip2bool => Eunop Oboolval e
   | cast_case_f2bool => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
+  | cast_case_p2bool => Ebinop (Ocmpu Cne) e (make_intconst Int.zero)
   | cast_case_struct id1 fld1 id2 fld2 => e
   | cast_case_union id1 fld1 id2 fld2 => e
   | cast_case_void => e
@@ -257,18 +264,6 @@ Definition make_load (addr: expr) (ty_res: type) :=
   | By_nothing => Error (msg "Cshmgen.make_load")
   end.
 
-(** [make_vol_load dst addr ty] loads a volatile value of type [ty] from
-   the memory location denoted by the Csharpminor expression [addr],
-   and stores its result in variable [dst]. *)
-
-Definition make_vol_load (dst: ident) (addr: expr) (ty: type) :=
-  match (access_mode ty) with
-  | By_value chunk => OK (Sbuiltin (Some dst) (EF_vload chunk) (addr :: nil))
-  | By_reference => OK (Sset dst addr)
-  | By_copy => OK (Sset dst addr)
-  | By_nothing => Error (msg "Cshmgen.make_vol_load")
-  end.
-
 (** [make_memcpy dst src ty] returns a [memcpy] builtin appropriate for
   by-copy assignment of a value of Clight type [ty]. *)
 
@@ -284,16 +279,6 @@ Definition make_memcpy (dst src: expr) (ty: type) :=
 Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
   match access_mode ty with
   | By_value chunk => OK (Sstore chunk addr rhs)
-  | By_copy => OK (make_memcpy addr rhs ty)
-  | _ => Error (msg "Cshmgen.make_store")
-  end.
-
-(** [make_vol_store] is similar, but for a store to a location that
-    can be volatile. *)
-
-Definition make_vol_store (addr: expr) (ty: type) (rhs: expr) :=
-  match access_mode ty with
-  | By_value chunk => OK (Sbuiltin None (EF_vstore chunk) (addr :: rhs :: nil))
   | By_copy => OK (make_memcpy addr rhs ty)
   | _ => Error (msg "Cshmgen.make_store")
   end.
@@ -396,13 +381,6 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
   | Clight.Ecast b ty =>
       do tb <- transl_expr b;
       OK (make_cast (typeof b) ty tb)
-  | Clight.Econdition b c d ty =>
-      do tb <- transl_expr b;
-      do tc <- transl_expr c;
-      do td <- transl_expr d;
-      OK(Econdition (make_boolean tb (typeof b))
-                    (make_cast (typeof c) ty tc)
-                    (make_cast (typeof d) ty td))
   | Clight.Efield b i ty => 
       match typeof b with
       | Tstruct _ fld _ =>
@@ -445,51 +423,24 @@ with transl_lvalue (a: Clight.expr) {struct a} : res expr :=
       Error(msg "Cshmgen.transl_lvalue")
   end.
 
-(** [transl_exprlist al tyl] returns a list of Csharpminor expressions
+(** [transl_arglist al tyl] returns a list of Csharpminor expressions
    that compute the values of the list [al] of Csyntax expressions,
    casted to the corresponding types in [tyl].
    Used for function applications. *)
 
-Fixpoint transl_exprlist (al: list Clight.expr) (tyl: typelist)
+Fixpoint transl_arglist (al: list Clight.expr) (tyl: typelist)
                          {struct al}: res (list expr) :=
   match al, tyl with
   | nil, Tnil => OK nil
   | a1 :: a2, Tcons ty1 ty2 =>
       do ta1 <- transl_expr a1;
-      do ta2 <- transl_exprlist a2 ty2;
+      do ta2 <- transl_arglist a2 ty2;
       OK (make_cast (typeof a1) ty1 ta1 :: ta2)
   | _, _ =>
-      Error(msg "Cshmgen.transl_exprlist: arity mismatch")
+      Error(msg "Cshmgen.transl_arglist: arity mismatch")
   end.
 
 (** * Translation of statements *)
-
-(** [exit_if_false e] return the statement that tests the boolean
-   value of the Clight expression [e].  If [e] evaluates to false,
-   an [exit 0] is performed.  If [e] evaluates to true, the generated
-   statement continues in sequence.
-
-   The Clight code generated by [SimplExpr] contains many [while(1)]
-   and [for(;1;...)] loops, so we optimize the case where [e] is a constant.
- *)
-
-Definition is_constant_bool (e: expr) : option bool :=
-  match e with
-  | Econst (Ointconst n) => Some (negb (Int.eq n Int.zero))
-  | _ => None
-  end.
-
-Definition exit_if_false (e: Clight.expr) : res stmt :=
-  do te <- transl_expr e;
-  match is_constant_bool te with
-  | Some true => OK(Sskip)
-  | Some false => OK(Sexit 0%nat)
-  | None =>
-      OK(Sifthenelse
-            (make_boolean te (typeof e))
-            Sskip
-            (Sexit 0%nat))
-  end.
 
 (** [transl_statement nbrk ncnt s] returns a Csharpminor statement
    that performs the same computations as the CabsCoq statement [s].
@@ -504,34 +455,14 @@ Definition exit_if_false (e: Clight.expr) : res stmt :=
 
    The general translation for loops is as follows:
 <<
-while (e1) s;       --->     block {
+loop s1 s2          --->     block {
                                loop {
-                                 if (!e1) exit 0;
-                                 block { s }
-                                 // continue in s branches here
+                                 block { s1 };
+                                 // continue in s1 branches here
+                                 s2;
                                }
                              }
-                             // break in s branches here
-
-do s; while (e1);   --->     block {
-                               loop {
-                                 block { s }
-                                 // continue in s branches here
-                                 if (!e1) exit 0;
-                               }
-                             }
-                             // break in s branches here
-
-for (;e2;e3) s;   --->       block {
-                               loop {
-                                 if (!e2) exit 0;
-                                 block { s }
-                                 // continue in s branches here
-                                 e3;
-                               }
-                             }
-                             // break in s branches here
->>
+                             // break in s1 and s2 branches here
 *)
 
 Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
@@ -540,11 +471,7 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sskip =>
       OK Sskip
   | Clight.Sassign b c =>
-      if type_is_volatile (typeof b) then
-         (do tb <- transl_lvalue b;
-          do tc <- transl_expr c;
-          make_vol_store tb (typeof b) (make_cast (typeof c) (typeof b) tc))
-      else match is_variable b with
+      match is_variable b with
       | Some id =>
           do tc <- transl_expr c;
           var_set id (typeof b) (make_cast (typeof c) (typeof b) tc)
@@ -556,17 +483,17 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sset x b =>
       do tb <- transl_expr b;
       OK(Sset x tb)
-  | Clight.Svolread x b =>
-      do tb <- transl_lvalue b;
-      make_vol_load x tb (typeof b)
   | Clight.Scall x b cl =>
       match classify_fun (typeof b) with
       | fun_case_f args res =>
           do tb <- transl_expr b;
-          do tcl <- transl_exprlist cl args;
+          do tcl <- transl_arglist cl args;
           OK(Scall x (signature_of_type args res) tb tcl)
       | _ => Error(msg "Cshmgen.transl_stmt(call)")
       end
+  | Clight.Sbuiltin x ef tyargs bl =>
+      do tbl <- transl_arglist bl tyargs;
+      OK(Sbuiltin x ef tbl)
   | Clight.Ssequence s1 s2 =>
       do ts1 <- transl_statement tyret nbrk ncnt s1;
       do ts2 <- transl_statement tyret nbrk ncnt s2;
@@ -576,19 +503,10 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
       do ts1 <- transl_statement tyret nbrk ncnt s1;
       do ts2 <- transl_statement tyret nbrk ncnt s2;
       OK (Sifthenelse (make_boolean te (typeof e)) ts1 ts2)
-  | Clight.Swhile e s1 =>
-      do te <- exit_if_false e;
+  | Clight.Sloop s1 s2 =>
       do ts1 <- transl_statement tyret 1%nat 0%nat s1;
-      OK (Sblock (Sloop (Sseq te (Sblock ts1))))
-  | Clight.Sdowhile e s1 =>
-      do te <- exit_if_false e;
-      do ts1 <- transl_statement tyret 1%nat 0%nat s1;
-      OK (Sblock (Sloop (Sseq (Sblock ts1) te)))
-  | Clight.Sfor' e2 e3 s1 =>
-      do te2 <- exit_if_false e2;
-      do te3 <- transl_statement tyret 0%nat (S ncnt) e3;
-      do ts1 <- transl_statement tyret 1%nat 0%nat s1;
-      OK (Sblock (Sloop (Sseq te2 (Sseq (Sblock ts1) te3))))
+      do ts2 <- transl_statement tyret 0%nat (S ncnt) s2;
+      OK (Sblock (Sloop (Sseq (Sblock ts1) ts2)))
   | Clight.Sbreak =>
       OK (Sexit nbrk)
   | Clight.Scontinue =>

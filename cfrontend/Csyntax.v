@@ -208,6 +208,8 @@ Inductive expr : Type :=
   | Ebinop (op: binary_operation) (r1 r2: expr) (ty: type)
                                            (**r binary arithmetic operation *)
   | Ecast (r: expr) (ty: type)                        (**r type cast [(ty)r] *)
+  | Eseqand (r1 r2: expr) (ty: type)       (**r sequential "and" [r1 && r2] *)
+  | Eseqor (r1 r2: expr) (ty: type)        (**r sequential "or" [r1 && r2] *)
   | Econdition (r1 r2 r3: expr) (ty: type)  (**r conditional [r1 ? r2 : r3] *)
   | Esizeof (ty': type) (ty: type)                      (**r size of a type *)
   | Ealignof (ty': type) (ty: type)        (**r natural alignment of a type *)
@@ -219,6 +221,8 @@ Inductive expr : Type :=
   | Ecomma (r1 r2: expr) (ty: type)       (**r sequence expression [r1, r2] *)
   | Ecall (r1: expr) (rargs: exprlist) (ty: type)
                                              (**r function call [r1(rargs)] *)
+  | Ebuiltin (ef: external_function) (tyargs: typelist) (rargs: exprlist) (ty: type)
+                                                 (**r builtin function call *)
   | Eloc (b: block) (ofs: int) (ty: type)
                        (**r memory location, result of evaluating a l-value *)
   | Eparen (r: expr) (ty: type)                   (**r marked subexpression *)
@@ -263,24 +267,6 @@ Definition Epreincr (id: incr_or_decr) (l: expr) (ty: type) :=
   Eassignop (match id with Incr => Oadd | Decr => Osub end) 
             l (Eval (Vint Int.one) type_int32s) (typeconv ty) ty.
 
-(** Sequential ``and'' [r1 && r2] is viewed as a conditional and a cast:
-  [r1 ? (_Bool) r2 : 0]. *)
-
-Definition Eseqand (r1 r2: expr) (ty: type) :=
-  Econdition r1 
-    (Ecast r2 type_bool)
-    (Eval (Vint Int.zero) type_int32s)
-    ty.
-                  
-(** Sequential ``or'' [r1 || r2] is viewed as a conditional and a cast:
-    [r1 ? 1 : (_Bool) r2]. *)
-
-Definition Eseqor (r1 r2: expr) (ty: type) :=
-  Econdition r1 
-    (Eval (Vint Int.one) type_int32s)
-    (Ecast r2 type_bool)
-    ty.
-
 (** Extract the type part of a type-annotated expression. *)
 
 Definition typeof (a: expr) : type :=
@@ -296,6 +282,8 @@ Definition typeof (a: expr) : type :=
   | Ebinop _ _ _ ty => ty
   | Ecast _ ty => ty
   | Econdition _ _ _ ty => ty
+  | Eseqand _ _ ty => ty
+  | Eseqor _ _ ty => ty
   | Esizeof _ ty => ty
   | Ealignof _ ty => ty
   | Eassign _ _ ty => ty
@@ -303,6 +291,7 @@ Definition typeof (a: expr) : type :=
   | Epostincr _ _ ty => ty
   | Ecomma _ _ ty => ty
   | Ecall _ _ ty => ty
+  | Ebuiltin _ _ _ ty => ty
   | Eparen _ ty => ty
   end.
 
@@ -790,14 +779,15 @@ Definition classify_notint (ty: type) : classify_notint_cases :=
   the [!] and [?] operators, as well as the [if], [while], [for] statements. *)
 
 Inductive classify_bool_cases : Type :=
-  | bool_case_ip                          (**r integer or pointer *)
+  | bool_case_i                           (**r integer *)
   | bool_case_f                           (**r float *)
+  | bool_case_p                           (**r pointer *)
   | bool_default.
 
 Definition classify_bool (ty: type) : classify_bool_cases :=
   match typeconv ty with
-  | Tint _ _ _ => bool_case_ip
-  | Tpointer _ _ => bool_case_ip
+  | Tint _ _ _ => bool_case_i
+  | Tpointer _ _ => bool_case_p
   | Tfloat _ _ => bool_case_f
   | _ => bool_default
   end.
@@ -949,8 +939,8 @@ Inductive classify_cast_cases : Type :=
   | cast_case_f2f (sz2:floatsize)                  (**r float -> float *)
   | cast_case_i2f (si1:signedness) (sz2:floatsize) (**r int -> float *)
   | cast_case_f2i (sz2:intsize) (si2:signedness)   (**r float -> int *)
-  | cast_case_ip2bool                   (**r int|pointer -> bool *)
   | cast_case_f2bool                    (**r float -> bool *)
+  | cast_case_p2bool                    (**r pointer -> bool *)
   | cast_case_struct (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r struct -> struct *)
   | cast_case_union (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r union -> union *)
   | cast_case_void                                 (**r any -> void *)
@@ -959,8 +949,8 @@ Inductive classify_cast_cases : Type :=
 Function classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
   | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
-  | Tint IBool _ _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_ip2bool
   | Tint IBool _ _, Tfloat _ _ => cast_case_f2bool
+  | Tint IBool _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_p2bool
   | Tint sz2 si2 _, Tint sz1 si1 _ => cast_case_i2i sz2 si2
   | Tint sz2 si2 _, Tfloat sz1 _ => cast_case_f2i sz2 si2
   | Tfloat sz2 _, Tfloat sz1 _ => cast_case_f2f sz2

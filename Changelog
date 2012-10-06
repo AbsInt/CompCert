@@ -1,17 +1,33 @@
 Release 1.12
 ========================
 
+Language semantics:
+- The "&&" and "||" operators are now primitive in CompCert C and are
+  given explicit semantic rules, instead of being expressed in terms
+  of "_ ? _ : _" as in previous CompCert releases.
+- Added a "Ebuiltin" expression form (invocation of built-in function)
+  to CompCert C, and a "Sbuiltin" statement form to Clight.
+  Used it to simplify the encoding of annotations, memcpy, and volatile
+  memory accesses.
+
 Performance improvements:
+- Better code generated for "&&" and "||" operators.
 - More aggressive elimination of conditional branches during constant
   propagation, taking better advantage of inferred constants.
-	
+
+Internal simplifications:
+- Clight, Csharpminor, Cminor: suppressed the "Econdition" conditional
+  expressions, no longer useful.
+- Cminor: suppressed the "Oboolval" and "Onotbool" operators,
+  which can be expressed in terms of "Ocmpu" at no performance costs.
+
 Other changes:
 - IA32/MacOS X: now supports referencing global variables defined in shared
   libraries; old hack for stdio is no longer needed.
 - PowerPC/MacOS X: this port was removed, as recent version of MacOS X
   no longer support PowerPC.
 
-	
+
 Release 1.11, 2012-07-13
 ========================
 
@@ -27,22 +43,22 @@ Language semantics:
   treated as "going wrong" behaviors.
   (Previously, they were defined with results min_int and 0 respectively,
   but this behavior requires unnatural code to be generated on IA32 and
-  PowerPC.)	
+  PowerPC.)
 
 Performance improvements:
 - Function inlining is now implemented.  The functions that are inlined
   are those declared "inline" in the C source, provided they are not
   recursive.
-- Constant propagation is now able to propagate the initial values of	 
+- Constant propagation is now able to propagate the initial values of
   "const" global variables.
 - Added option -ffloat-const-prop to control the propagation of
   floating-point constants; see user's manual for documentation.
 - Common subexpression elimination can now eliminate memory loads
-  following a memory store at the same location.  
+  following a memory store at the same location.
 - ARM: make use of the "fcmpzd" and "fmdrr" instructions.
 
 New tool:
-- The "cchecklink" tool performs a posteriori validation of the 
+- The "cchecklink" tool performs a posteriori validation of the
   assembling and linking phases.  It is available for PowerPC-EABI
   only.  It takes as inputs an ELF-PowerPC executable as produced
   by the linker, as well as .sdump files (abstract assembly) as

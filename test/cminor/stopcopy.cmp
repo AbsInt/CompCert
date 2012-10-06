@@ -174,8 +174,9 @@ extern "malloc" : int -> int
   var from, to;
 
   from = "malloc"(hsize) : int -> int;
+  if (from == 0) return -1;
   to = "malloc"(hsize) : int -> int;
-  if (from == 0 || to == 0) return -1;
+  if (to == 0) return -1;
   int32["fromspace_start_ptr"] = from;
   int32["fromspace_end_ptr"] = from + hsize;
   int32["tospace_start_ptr"] = to;

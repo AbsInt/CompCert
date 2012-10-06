@@ -56,7 +56,9 @@ Fixpoint simple (a: expr) : bool :=
   | Eunop _ r1 _ => simple r1
   | Ebinop _ r1 r2 _ => simple r1 && simple r2
   | Ecast r1 _ => simple r1
-  | Econdition r1 r2 r3 _ => simple r1 && simple r2 && simple r3
+  | Eseqand _ _ _ => false
+  | Eseqor _ _ _ => false
+  | Econdition _ _ _ _ => false
   | Esizeof _ _ => true
   | Ealignof _ _ => true
   | Eassign _ _ _ => false
@@ -64,6 +66,7 @@ Fixpoint simple (a: expr) : bool :=
   | Epostincr _ _ _ => false
   | Ecomma _ _ _ => false
   | Ecall _ _ _ => false
+  | Ebuiltin _ _ _ _ => false
   | Eparen _ _ => false
   end.
 
@@ -126,13 +129,6 @@ with eval_simple_rvalue: expr -> val -> Prop :=
       eval_simple_rvalue r1 v1 ->
       sem_cast v1 (typeof r1) ty = Some v ->
       eval_simple_rvalue (Ecast r1 ty) v
-  | esr_condition: forall r1 r2 r3 ty v1 b v2 v,
-      simple r2 = true -> simple r3 = true ->
-      eval_simple_rvalue r1 v1 -> 
-      bool_val v1 (typeof r1) = Some b ->
-      eval_simple_rvalue (if b then r2 else r3) v2 ->
-      sem_cast v2 (typeof (if b then r2 else r3)) ty = Some v ->
-      eval_simple_rvalue (Econdition r1 r2 r3 ty) v
   | esr_sizeof: forall ty1 ty,
       eval_simple_rvalue (Esizeof ty1 ty) (Vint (Int.repr (sizeof ty1)))
   | esr_alignof: forall ty1 ty,
@@ -175,6 +171,10 @@ Inductive leftcontext: kind -> kind -> (expr -> expr) -> Prop :=
       leftcontext k RV (fun x => Ebinop op e1 (C x) ty)
   | lctx_cast: forall k C ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Ecast (C x) ty)
+  | lctx_seqand: forall k C r2 ty,
+      leftcontext k RV C -> leftcontext k RV (fun x => Eseqand (C x) r2 ty)
+  | lctx_seqor: forall k C r2 ty,
+      leftcontext k RV C -> leftcontext k RV (fun x => Eseqor (C x) r2 ty)
   | lctx_condition: forall k C r2 r3 ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Econdition (C x) r2 r3 ty)
   | lctx_assign_left: forall k C e2 ty,
@@ -194,6 +194,9 @@ Inductive leftcontext: kind -> kind -> (expr -> expr) -> Prop :=
   | lctx_call_right: forall k C e1 ty,
       simple e1 = true -> leftcontextlist k C ->
       leftcontext k RV (fun x => Ecall e1 (C x) ty)
+  | lctx_builtin: forall k C ef tyargs ty,
+      leftcontextlist k C ->
+      leftcontext k RV (fun x => Ebuiltin ef tyargs (C x) ty)
   | lctx_comma: forall k C e2 ty,
       leftcontext k RV C -> leftcontext k RV (fun x => Ecomma (C x) e2 ty)
   | lctx_paren: forall k C ty,
@@ -240,8 +243,33 @@ Inductive estep: state -> trace -> state -> Prop :=
       estep (ExprState f (C (Evalof l ty)) k e m)
           t (ExprState f (C (Eval v ty)) k e m)
 
+  | step_seqand_true: forall f C r1 r2 ty k e m v,
+      leftcontext RV RV C ->
+      eval_simple_rvalue e m r1 v ->
+      bool_val v (typeof r1) = Some true ->
+      estep (ExprState f (C (Eseqand r1 r2 ty)) k e m)
+         E0 (ExprState f (C (Eparen (Eparen r2 type_bool) ty)) k e m)
+  | step_seqand_false: forall f C r1 r2 ty k e m v,
+      leftcontext RV RV C ->
+      eval_simple_rvalue e m r1 v ->
+      bool_val v (typeof r1) = Some false ->
+      estep (ExprState f (C (Eseqand r1 r2 ty)) k e m)
+         E0 (ExprState f (C (Eval (Vint Int.zero) ty)) k e m)
+
+  | step_seqor_true: forall f C r1 r2 ty k e m v,
+      leftcontext RV RV C ->
+      eval_simple_rvalue e m r1 v ->
+      bool_val v (typeof r1) = Some true ->
+      estep (ExprState f (C (Eseqor r1 r2 ty)) k e m)
+         E0 (ExprState f (C (Eval (Vint Int.one) ty)) k e m)
+  | step_seqor_false: forall f C r1 r2 ty k e m v,
+      leftcontext RV RV C ->
+      eval_simple_rvalue e m r1 v ->
+      bool_val v (typeof r1) = Some false ->
+      estep (ExprState f (C (Eseqor r1 r2 ty)) k e m)
+         E0 (ExprState f (C (Eparen (Eparen r2 type_bool) ty)) k e m)
+
   | step_condition: forall f C r1 r2 r3 ty k e m v b,
-      simple r2 = false \/ simple r3 = false ->
       leftcontext RV RV C ->
       eval_simple_rvalue e m r1 v ->
       bool_val v (typeof r1) = Some b ->
@@ -338,7 +366,14 @@ Inductive estep: state -> trace -> state -> Prop :=
       Genv.find_funct ge vf = Some fd ->
       type_of_fundef fd = Tfunction targs tres ->
       estep (ExprState f (C (Ecall rf rargs ty)) k e m)
-         E0 (Callstate fd vargs (Kcall f e C ty k) m).
+         E0 (Callstate fd vargs (Kcall f e C ty k) m)
+
+  | step_builtin: forall f C ef tyargs rargs ty k e m vargs t vres m',
+      leftcontext RV RV C ->
+      eval_simple_list e m rargs tyargs vargs ->
+      external_call ef ge vargs m t vres m' ->
+      estep (ExprState f (C (Ebuiltin ef tyargs rargs ty)) k e m)
+          t (ExprState f (C (Eval vres ty)) k e m').
 
 Definition step (S: state) (t: trace) (S': state) : Prop :=
   estep S t S' \/ sstep ge S t S'.
@@ -503,6 +538,10 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists v, sem_binary_operation op v1 ty1 v2 ty2 m = Some v
   | Ecast (Eval v1 ty1) ty =>
       exists v, sem_cast v1 ty1 ty = Some v
+  | Eseqand (Eval v1 ty1) r2 ty =>
+      exists b, bool_val v1 ty1 = Some b
+  | Eseqor (Eval v1 ty1) r2 ty =>
+      exists b, bool_val v1 ty1 = Some b
   | Econdition (Eval v1 ty1) r1 r2 ty =>
       exists b, bool_val v1 ty1 = Some b
   | Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty =>
@@ -527,6 +566,11 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       /\ Genv.find_funct ge vf = Some fd
       /\ cast_arguments rargs tyargs vl
       /\ type_of_fundef fd = Tfunction tyargs tyres
+  | Ebuiltin ef tyargs rargs ty =>
+      exprlist_all_values rargs ->
+      exists vargs, exists t, exists vres, exists m',
+         cast_arguments rargs tyargs vargs
+      /\ external_call ef ge vargs m t vres m'
   | _ => True
   end.
 
@@ -549,11 +593,14 @@ Proof.
   exists v; auto.
   exists v; auto.
   exists v; auto.
+  exists true; auto. exists false; auto.
+  exists true; auto. exists false; auto.
   exists b; auto.
   exists v; exists m'; exists t; auto.
   exists t; exists v1; auto.
   exists t; exists v1; auto.
   exists v; auto.
+  intros. exists vargs; exists t; exists vres; exists m'; auto.
 Qed.
 
 Lemma callred_invert:
@@ -591,12 +638,15 @@ Proof.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
+  destruct (C a); auto; contradiction.
   destruct e1; auto; destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct e1; auto; destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct e1; auto. intros. elim (H0 a m); auto.
+  intros. elim (H0 a m); auto. 
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   red; intros. destruct (C a); auto. 
@@ -681,12 +731,6 @@ Ltac FinishL := apply star_one; left; apply step_lred; eauto; simpl; try (econst
   FinishR.
 (* cast *)
   Steps H0 (fun x => C(Ecast x ty)). FinishR. 
-(* condition *)
-  Steps H2 (fun x => C(Econdition x r2 r3 ty)).
-  eapply star_left with (s2 := ExprState f (C (Eparen (if b then r2 else r3) ty)) k e m).
-  left; apply step_rred; eauto. constructor; auto. 
-  Steps H5 (fun x => C(Eparen x ty)). 
-  FinishR. auto.
 (* sizeof *)
   FinishR.
 (* alignof *)
@@ -801,23 +845,6 @@ Ltac StepR REC C' a :=
   StepR IHa (fun x => C(Ecast x ty)) a.
   exploit safe_inv. eexact SAFE0. eauto. simpl. intros [v' CAST].
   exists v'; econstructor; eauto.
-(* condition *)
-  destruct (andb_prop _ _ S) as [S' S3]. destruct (andb_prop _ _ S') as [S1 S2]. clear S S'.
-  StepR IHa1 (fun x => C(Econdition x a2 a3 ty)) a1.
-  exploit safe_inv. eexact SAFE0. eauto. simpl. intros [b BV].
-  set (a' := if b then a2 else a3).
-  assert (SAFE1: safe (ExprState f (C (Eparen a' ty)) k e m)).
-    eapply safe_steps. eexact SAFE0. apply star_one. left; apply step_rred; auto. 
-    unfold a'; constructor; auto.
-  assert (EV': exists v, eval_simple_rvalue e m a' v).
-    unfold a'; destruct b. 
-    eapply (IHa2 RV (fun x => C(Eparen x ty))); eauto.
-    eapply (IHa3 RV (fun x => C(Eparen x ty))); eauto.
-  destruct EV' as [v1 E1].
-  exploit safe_inv. eapply (eval_simple_rvalue_safe (fun x => C(Eparen x ty))). 
-  eexact E1. eauto. auto. eauto. 
-  simpl. intros [v2 CAST].
-  exists v2. econstructor; eauto. 
 (* sizeof *)
   econstructor; econstructor.
 (* alignof *)
@@ -898,9 +925,12 @@ Proof.
 Qed.
 
 Inductive contextlist' : (exprlist -> expr) -> Prop :=
-  | contextlist'_intro: forall r1 rl0 ty C,
+  | contextlist'_call: forall r1 rl0 ty C,
       context RV RV C ->
-      contextlist' (fun rl => C (Ecall r1 (exprlist_app rl0 rl) ty)).
+      contextlist' (fun rl => C (Ecall r1 (exprlist_app rl0 rl) ty))
+  | contextlist'_builtin: forall ef tyargs rl0 ty C,
+      context RV RV C ->
+      contextlist' (fun rl => C (Ebuiltin ef tyargs (exprlist_app rl0 rl) ty)).
 
 Lemma exprlist_app_context:
   forall rl1 rl2,
@@ -921,6 +951,10 @@ Proof.
   assert (context RV RV C'). constructor. apply exprlist_app_context.
   change (context RV RV (fun x => C0 (C' x))). 
   eapply context_compose; eauto.
+  set (C' := fun x => Ebuiltin ef tyargs (exprlist_app rl0 (Econs x rl)) ty).
+  assert (context RV RV C'). constructor. apply exprlist_app_context.
+  change (context RV RV (fun x => C0 (C' x))). 
+  eapply context_compose; eauto.
 Qed.
 
 Lemma contextlist'_tail:
@@ -931,6 +965,10 @@ Proof.
   intros. inv H. 
   replace (fun x => C0 (Ecall r0 (exprlist_app rl0 (Econs r1 x)) ty))
      with (fun x => C0 (Ecall r0 (exprlist_app (exprlist_app rl0 (Econs r1 Enil)) x) ty)).
+  constructor. auto. 
+  apply extensionality; intros. f_equal. f_equal. apply exprlist_app_assoc.
+  replace (fun x => C0 (Ebuiltin ef tyargs (exprlist_app rl0 (Econs r1 x)) ty))
+     with (fun x => C0 (Ebuiltin ef tyargs (exprlist_app (exprlist_app rl0 (Econs r1 Enil)) x) ty)).
   constructor. auto. 
   apply extensionality; intros. f_equal. f_equal. apply exprlist_app_assoc.
 Qed.
@@ -992,12 +1030,15 @@ Variable m: mem.
 Definition simple_side_effect (r: expr) : Prop :=
   match r with
   | Evalof l _ => simple l = true /\ type_is_volatile (typeof l) = true
-  | Econdition r1 r2 r3 _ => simple r1 = true /\ (simple r2 = false \/ simple r3 = false)
+  | Eseqand r1 r2 _ => simple r1 = true
+  | Eseqor r1 r2 _ => simple r1 = true
+  | Econdition r1 r2 r3 _ => simple r1 = true
   | Eassign l1 r2 _ => simple l1 = true /\ simple r2 = true
   | Eassignop _ l1 r2 _ _ => simple l1 = true /\ simple r2 = true
   | Epostincr _ l1 _ => simple l1 = true
   | Ecomma r1 r2 _ => simple r1 = true
   | Ecall r1 rl _ => simple r1 = true /\ simplelist rl = true
+  | Ebuiltin ef tyargs rl _ => simplelist rl = true
   | Eparen r1 _ => simple r1 = true
   | _ => False
   end.
@@ -1046,10 +1087,12 @@ Ltac Base :=
   Rec H0 RV C (fun x => Ebinop op r1 x ty).
 (* cast *)
   Kind. Rec H RV C (fun x => Ecast x ty).
+(* seqand *)
+  Kind. Rec H RV C (fun x => Eseqand x r2 ty). Base.
+(* seqor *)
+  Kind. Rec H RV C (fun x => Eseqor x r2 ty). Base.
 (* condition *)
-  Kind. Rec H RV C (fun x => Econdition x r2 r3 ty). rewrite H4; simpl. 
-  destruct (simple r2 && simple r3) as []_eqn. auto. 
-  rewrite andb_false_iff in Heqb. Base.
+  Kind. Rec H RV C (fun x => Econdition x r2 r3 ty). Base.
 (* assign *)
   Kind. Rec H LV C (fun x => Eassign x r ty). Rec H0 RV C (fun x => Eassign l x ty). Base.
 (* assignop *)
@@ -1061,9 +1104,15 @@ Ltac Base :=
 (* call *)
   Kind. Rec H RV C (fun x => Ecall x rargs ty). 
   destruct (H0 (fun x => C (Ecall r1 x ty))) as [A | [C' [a' [D [A B]]]]].
-    eapply contextlist'_intro with (C := C) (rl0 := Enil). auto. auto.
+    eapply contextlist'_call with (C := C) (rl0 := Enil). auto. auto.
   Base.
   right; exists (fun x => Ecall r1 (C' x) ty); exists a'. rewrite D; simpl; auto.
+(* builtin *)
+  Kind. 
+  destruct (H (fun x => C (Ebuiltin ef tyargs x ty))) as [A | [C' [a' [D [A B]]]]].
+    eapply contextlist'_builtin with (C := C) (rl0 := Enil). auto. auto.
+  Base.
+  right; exists (fun x => Ebuiltin ef tyargs (C' x) ty); exists a'. rewrite D; simpl; auto.
 (* rparen *)
   Kind. Rec H RV C (fun x => (Eparen x ty)). Base.
 (* cons *)
@@ -1102,6 +1151,22 @@ Proof.
   eapply plus_right. 
   eapply eval_simple_lvalue_steps with (C := fun x => C(Evalof x (typeof l))); eauto.
   left. apply step_rred; eauto. econstructor; eauto. auto.
+(* seqand true *)
+  eapply plus_right.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eseqand x r2 ty)); eauto. 
+  left. apply step_rred; eauto. apply red_seqand_true; auto. traceEq.
+(* seqand false *)
+  eapply plus_right.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eseqand x r2 ty)); eauto. 
+  left. apply step_rred; eauto. apply red_seqand_false; auto. traceEq.
+(* seqor true *)
+  eapply plus_right.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eseqor x r2 ty)); eauto. 
+  left. apply step_rred; eauto. apply red_seqor_true; auto. traceEq.
+(* seqor false *)
+  eapply plus_right.
+  eapply eval_simple_rvalue_steps with (C := fun x => C(Eseqor x r2 ty)); eauto. 
+  left. apply step_rred; eauto. apply red_seqor_false; auto. traceEq.
 (* condition *)
   eapply plus_right.
   eapply eval_simple_rvalue_steps with (C := fun x => C(Econdition x r2 r3 ty)); eauto.
@@ -1196,9 +1261,16 @@ Proof.
   eapply eval_simple_rvalue_steps with (C := fun x => C(Ecall x rargs ty)); eauto.
   eapply plus_right.
   eapply eval_simple_list_steps with (C := fun x => C(Ecall (Eval vf (typeof rf)) x ty)); eauto.
-  eapply contextlist'_intro with (rl0 := Enil); auto.
+  eapply contextlist'_call with (rl0 := Enil); auto.
   left; apply Csem.step_call; eauto. econstructor; eauto.
   traceEq. auto.
+(* builtin *)
+  exploit eval_simple_list_implies; eauto. intros [vl' [A B]].
+  eapply plus_right.
+  eapply eval_simple_list_steps with (C := fun x => C(Ebuiltin ef tyargs x ty)); eauto.
+  eapply contextlist'_builtin with (rl0 := Enil); auto.
+  left; apply Csem.step_rred; eauto. econstructor; eauto.
+  traceEq. 
 Qed.
 
 Lemma can_estep:
@@ -1219,8 +1291,21 @@ Proof.
   intros [b1 [ofs [E1 S1]]].
   exploit safe_inv. eexact S1. eauto. simpl. intros [A [t [v B]]].
   econstructor; econstructor; eapply step_rvalof_volatile; eauto. congruence. 
+(* seqand *)
+  exploit (simple_can_eval_rval f k e m b1 (fun x => C(Eseqand x b2 ty))); eauto.
+  intros [v1 [E1 S1]].
+  exploit safe_inv. eexact S1. eauto. simpl. intros [b BV].
+  destruct b.
+  econstructor; econstructor; eapply step_seqand_true; eauto. 
+  econstructor; econstructor; eapply step_seqand_false; eauto. 
+(* seqor *)
+  exploit (simple_can_eval_rval f k e m b1 (fun x => C(Eseqor x b2 ty))); eauto.
+  intros [v1 [E1 S1]].
+  exploit safe_inv. eexact S1. eauto. simpl. intros [b BV].
+  destruct b.
+  econstructor; econstructor; eapply step_seqor_true; eauto. 
+  econstructor; econstructor; eapply step_seqor_false; eauto. 
 (* condition *)
-  destruct Q.
   exploit (simple_can_eval_rval f k e m b1 (fun x => C(Econdition x b2 b3 ty))); eauto.
   intros [v1 [E1 S1]].
   exploit safe_inv. eexact S1. eauto. simpl. intros [b BV].
@@ -1276,7 +1361,7 @@ Proof.
   exploit (simple_can_eval_rval f k e m b (fun x => C(Ecall x rargs ty))); eauto.
   intros [vf [E1 S1]].
   pose (C' := fun x => C(Ecall (Eval vf (typeof b)) x ty)).
-  assert (contextlist' C'). unfold C'; eapply contextlist'_intro with (rl0 := Enil); auto.
+  assert (contextlist' C'). unfold C'; eapply contextlist'_call with (rl0 := Enil); auto.
   exploit (simple_list_can_eval f k e m rargs C'); eauto.
   intros [vl E2].
   exploit safe_inv. 2: eapply leftcontext_context; eexact R.
@@ -1285,6 +1370,18 @@ Proof.
   simpl. intros X. exploit X. eapply rval_list_all_values. 
   intros [tyargs [tyres [fd [vargs [P [Q [U V]]]]]]].
   econstructor; econstructor; eapply step_call; eauto. eapply can_eval_simple_list; eauto. 
+(* builtin *)
+  pose (C' := fun x => C(Ebuiltin ef tyargs x ty)).
+  assert (contextlist' C'). unfold C'; eapply contextlist'_builtin with (rl0 := Enil); auto.
+  exploit (simple_list_can_eval f k e m rargs C'); eauto.
+  intros [vl E].
+  exploit safe_inv. 2: eapply leftcontext_context; eexact R.
+  eapply safe_steps. eexact H.
+  apply (eval_simple_list_steps f k e m rargs vl E C'); auto.
+  simpl. intros X. exploit X. eapply rval_list_all_values.
+  intros [vargs [t [vres [m' [U V]]]]].
+  econstructor; econstructor; eapply step_builtin; eauto.
+  eapply can_eval_simple_list; eauto. 
 (* paren *)
   exploit (simple_can_eval_rval f k e m b (fun x => C(Eparen x ty))); eauto.
   intros [v1 [E1 S1]].
@@ -1448,6 +1545,11 @@ Proof.
   rewrite Heqo; rewrite Heqo0; auto.
   econstructor; econstructor. left; eapply step_postincr_stuck with (v1 := v1'); eauto. 
   rewrite Heqo; auto.
+  (* builtin *)
+  exploit external_call_trace_length; eauto. destruct t1; simpl; intros. 
+  exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]]. 
+  econstructor; econstructor. left; eapply step_builtin; eauto.
+  omegaContradiction.
   (* external calls *)
   inv H1.
   exploit external_call_trace_length; eauto. destruct t1; simpl; intros. 
@@ -1474,6 +1576,9 @@ Proof.
   tauto.
   (* postincr stuck *)
   exploit deref_loc_trace; eauto. destruct t; auto. destruct t; tauto.
+  (* builtins *)
+  exploit external_call_trace_length; eauto.
+  destruct t; simpl; auto. destruct t; simpl; auto. intros; omegaContradiction.
   (* external calls *)
   exploit external_call_trace_length; eauto.
   destruct t; simpl; auto. destruct t; simpl; auto. intros; omegaContradiction.
@@ -1501,6 +1606,8 @@ Proof.
 Qed.
 
 (** * A big-step semantics implementing the reduction strategy. *)
+
+(** TODO: update with seqand / seqor *)
 
 Section BIGSTEP.
 
@@ -2488,6 +2595,8 @@ Fixpoint esize (a: expr) : nat :=
   | Eunop _ r1 _ => S(esize r1)
   | Ebinop _ r1 r2 _ => S(esize r1 + esize r2)%nat
   | Ecast r1 _ => S(esize r1)
+  | Eseqand r1 r2 _ => S(esize r1)
+  | Eseqor r1 r2 _ => S(esize r1)
   | Econdition r1 _ _ _ => S(esize r1)
   | Esizeof _ _ => 1%nat
   | Ealignof _ _ => 1%nat
@@ -2496,6 +2605,7 @@ Fixpoint esize (a: expr) : nat :=
   | Epostincr _ l1 _ => S(esize l1)
   | Ecomma r1 r2 _ => S(esize r1 + esize r2)%nat
   | Ecall r1 rl2 _ => S(esize r1 + esizelist rl2)%nat
+  | Ebuiltin ef tyargs rl _ => S(esizelist rl)
   | Eparen r1 _ => S(esize r1)
   end
 
@@ -2518,8 +2628,11 @@ with leftcontextlist_size:
   (esize e1 < esize e2)%nat ->
   (esizelist (C e1) < esizelist (C e2))%nat.
 Proof.
-  induction 1; intros; simpl; auto with arith. exploit leftcontextlist_size; eauto. auto with arith.
-  induction 1; intros; simpl; auto with arith. exploit leftcontext_size; eauto. auto with arith.
+  induction 1; intros; simpl; auto with arith.
+  exploit leftcontextlist_size; eauto. auto with arith.
+  exploit leftcontextlist_size; eauto. auto with arith.
+  induction 1; intros; simpl; auto with arith.
+  exploit leftcontext_size; eauto. auto with arith.
 Qed.
 
 Lemma evalinf_funcall_steps:
