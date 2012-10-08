@@ -21,7 +21,8 @@ open Datatypes
 open Values
 open AST
 open PrintAST
-open Csyntax
+open Ctypes
+open Cop
 open PrintCsyntax
 open Clight
 

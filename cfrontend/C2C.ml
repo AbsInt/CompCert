@@ -22,6 +22,8 @@ open Builtins
 open Camlcoq
 open AST
 open Values
+open Ctypes
+open Cop
 open Csyntax
 open Initializers
 
@@ -723,7 +725,7 @@ let convertGlobvar env (sto, id, ty, optinit) =
   let init' =
     match optinit with
     | None ->
-        if sto = C.Storage_extern then [] else [Init_space(Csyntax.sizeof ty')]
+        if sto = C.Storage_extern then [] else [Init_space(Ctypes.sizeof ty')]
     | Some i ->
         convertInitializer env ty i in
   let align =

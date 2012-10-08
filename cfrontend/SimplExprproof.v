@@ -24,6 +24,8 @@ Require Import Memory.
 Require Import Events.
 Require Import Smallstep.
 Require Import Globalenvs.
+Require Import Ctypes.
+Require Import Cop.
 Require Import Csyntax.
 Require Import Csem.
 Require Import Cstrategy.
@@ -1883,6 +1885,14 @@ Proof.
   intros. inv H. auto. inv H0. auto. 
 Qed.
 
+Lemma alloc_variables_preserved:
+  forall e m params e' m',
+  Csem.alloc_variables e m params e' m' ->
+  alloc_variables e m params e' m'.
+Proof.
+  induction 1; econstructor; eauto.
+Qed.
+
 Lemma bind_parameters_preserved:
   forall e m params args m',
   Csem.bind_parameters ge e m params args m' ->
@@ -2138,7 +2148,7 @@ Proof.
   econstructor; split.
   left; apply plus_one. eapply step_internal_function. 
   rewrite C; rewrite D; auto.
-  rewrite C; rewrite D; eauto.
+  rewrite C; rewrite D. eapply alloc_variables_preserved; eauto.
   rewrite C. eapply bind_parameters_preserved; eauto.
   constructor; auto. 
 

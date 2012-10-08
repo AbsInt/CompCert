@@ -19,6 +19,8 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import AST.
+Require Import Ctypes.
+Require Import Cop.
 Require Import Csyntax.
 Require Import Csem.
 Require Cstrategy.

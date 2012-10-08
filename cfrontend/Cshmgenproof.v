@@ -23,8 +23,8 @@ Require Import Events.
 Require Import Memory.
 Require Import Globalenvs.
 Require Import Smallstep.
-Require Import Csyntax.
-Require Import Csem.
+Require Import Ctypes.
+Require Import Cop.
 Require Import Clight.
 Require Import Cminor.
 Require Import Csharpminor.
@@ -94,7 +94,7 @@ Lemma var_kind_by_reference:
   forall ty vk,
   access_mode ty = By_reference \/ access_mode ty = By_copy ->
   var_kind_of_type ty = OK vk ->
-  vk = Varray (Csyntax.sizeof ty) (Csyntax.alignof ty).
+  vk = Varray (Ctypes.sizeof ty) (Ctypes.alignof ty).
 Proof.
   intros ty vk; destruct ty; simpl; try intuition congruence.
   destruct i; try congruence; destruct s; intuition congruence.
@@ -104,12 +104,12 @@ Qed.
 Lemma sizeof_var_kind_of_type:
   forall ty vk,
   var_kind_of_type ty = OK vk ->
-  Csharpminor.sizeof vk = Csyntax.sizeof ty.
+  Csharpminor.sizeof vk = Ctypes.sizeof ty.
 Proof.
   intros ty vk.
-  assert (sizeof (Varray (Csyntax.sizeof ty) (Csyntax.alignof ty)) = Csyntax.sizeof ty).
+  assert (sizeof (Varray (Ctypes.sizeof ty) (Ctypes.alignof ty)) = Ctypes.sizeof ty).
     simpl. rewrite Zmax_spec. apply zlt_false. 
-    generalize (Csyntax.sizeof_pos ty). omega.
+    generalize (Ctypes.sizeof_pos ty). omega.
   destruct ty; try (destruct i; try destruct s); try (destruct f); 
   simpl; intro EQ; inversion EQ; subst vk; auto.
 Qed.
@@ -860,7 +860,7 @@ Qed.
 Lemma match_env_same_blocks:
   forall e te,
   match_env e te ->
-  blocks_of_env te = Csem.blocks_of_env e.
+  blocks_of_env te = Clight.blocks_of_env e.
 Proof.
   intros.
   set (R := fun (x: (block * type)) (y: (block * var_kind)) =>
@@ -879,10 +879,10 @@ Proof.
   assert (vk' = vk) by congruence. subst vk'.
   exists (b, ty); split; auto. red. auto.
 
-  unfold blocks_of_env, Csem.blocks_of_env.
+  unfold blocks_of_env, Clight.blocks_of_env.
   generalize H0. induction 1. auto. 
   simpl. f_equal; auto.
-  unfold block_of_binding, Csem.block_of_binding. 
+  unfold block_of_binding, Clight.block_of_binding. 
   destruct a1 as [id1 [blk1 ty1]]. destruct b1 as [id2 [blk2 vk2]].
   simpl in *. destruct H1 as [A [B C]]. subst blk2 id2. f_equal.
   apply sizeof_var_kind_of_type. auto. 
@@ -891,7 +891,7 @@ Qed.
 Lemma match_env_free_blocks:
   forall e te m m',
   match_env e te ->
-  Mem.free_list m (Csem.blocks_of_env e) = Some m' ->
+  Mem.free_list m (Clight.blocks_of_env e) = Some m' ->
   Mem.free_list m (blocks_of_env te) = Some m'.
 Proof.
   intros. rewrite (match_env_same_blocks _ _ H). auto.
@@ -912,7 +912,7 @@ Qed.
 
 Lemma match_env_alloc_variables:
   forall e1 m1 vars e2 m2,
-  Csem.alloc_variables e1 m1 vars e2 m2 ->
+  Clight.alloc_variables e1 m1 vars e2 m2 ->
   forall te1 tvars,
   match_env e1 te1 ->
   transl_vars vars = OK tvars ->

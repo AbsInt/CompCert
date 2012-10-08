@@ -28,11 +28,10 @@ Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
-Require Import Csyntax.
-Require Import Csem.
+Require Import Ctypes.
+Require Import Cop.
 
 (** * Abstract syntax *)
-
 
 (** ** Expressions *)
 
@@ -84,8 +83,9 @@ Definition typeof (e: expr) : type :=
 (** Clight statements are similar to those of Compcert C, with the addition
   of assigment (of a rvalue to a lvalue), assignment to a temporary,
   and function call (with assignment of the result to a temporary).
-  The three C loops are replaced by a single infinite loop [Sloop s1 s2]
-  that executes [s1] then [s2] repeatedly.  A [continue] in [s1] branches to [s2]. *)
+  The three C loops are replaced by a single infinite loop [Sloop s1
+  s2] that executes [s1] then [s2] repeatedly.  A [continue] in [s1]
+  branches to [s2]. *)
 
 Definition label := ident.
 
@@ -145,16 +145,6 @@ Inductive fundef : Type :=
   | Internal: function -> fundef
   | External: external_function -> typelist -> type -> fundef.
 
-(** ** Programs *)
-
-(** A program is a collection of named functions, plus a collection
-  of named global variables, carrying their types and optional initialization 
-  data.  See module [AST] for more details. *)
-
-Definition program : Type := AST.program fundef type.
-
-(** * Operations over types *)
-
 (** The type of a function definition. *)
 
 Definition type_of_function (f: function) : type :=
@@ -166,6 +156,14 @@ Definition type_of_fundef (f: fundef) : type :=
   | External id args res => Tfunction args res
   end.
 
+(** ** Programs *)
+
+(** A program is a collection of named functions, plus a collection
+  of named global variables, carrying their types and optional initialization 
+  data.  See module [AST] for more details. *)
+
+Definition program : Type := AST.program fundef type.
+
 (** * Operational semantics *)
 
 (** The semantics uses two environments.  The global environment
@@ -174,9 +172,9 @@ Definition type_of_fundef (f: fundef) : type :=
 
 Definition genv := Genv.t fundef type.
 
-(** The local environment maps local variables to block references
-  and types.  The current value of the variable is stored in the associated memory
-  block. *)
+(** The local environment maps local variables to block references and
+  types.  The current value of the variable is stored in the
+  associated memory block. *)
 
 Definition env := PTree.t (block * type). (* map variable -> location & type *)
 
@@ -226,6 +224,25 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: int):
       Mem.storebytes m b (Int.unsigned ofs) bytes = Some m' ->
       assign_loc ty m b ofs (Vptr b' ofs') m'.
 
+(** Allocation of function-local variables.
+  [alloc_variables e1 m1 vars e2 m2] allocates one memory block
+  for each variable declared in [vars], and associates the variable
+  name with this block.  [e1] and [m1] are the initial local environment
+  and memory state.  [e2] and [m2] are the final local environment
+  and memory state. *)
+
+Inductive alloc_variables: env -> mem ->
+                           list (ident * type) ->
+                           env -> mem -> Prop :=
+  | alloc_variables_nil:
+      forall e m,
+      alloc_variables e m nil e m
+  | alloc_variables_cons:
+      forall e m id ty vars m1 b1 m2 e2,
+      Mem.alloc m 0 (sizeof ty) = (m1, b1) ->
+      alloc_variables (PTree.set id (b1, ty) e) m1 vars e2 m2 ->
+      alloc_variables e m ((id, ty) :: vars) e2 m2.
+
 (** Initialization of local variables that are parameters to a function.
   [bind_parameters e m1 params args m2] stores the values [args]
   in the memory blocks corresponding to the variables [params].
@@ -251,6 +268,14 @@ Fixpoint create_undef_temps (temps: list (ident * type)) : temp_env :=
   | nil => PTree.empty val
   | (id, t) :: temps' => PTree.set id Vundef (create_undef_temps temps')
  end.
+
+(** Return the list of blocks in the codomain of [e], with low and high bounds. *)
+
+Definition block_of_binding (id_b_ty: ident * (block * type)) :=
+  match id_b_ty with (id, (b, ty)) => (b, 0, sizeof ty) end.
+
+Definition blocks_of_env (e: env) : list (block * Z * Z) :=
+  List.map block_of_binding (PTree.elements e).
 
 (** Optional assignment to a temporary *)
 

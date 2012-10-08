@@ -22,13 +22,14 @@ option) any later version:
     backend/CMtypecheck.ml           common/Mem.v         
     backend/CMtypecheck.mli          common/Smallstep.v   
     cfrontend/C2C.ml                 common/Switch.v      
-    cfrontend/Csem.v                 common/Values.v      
-    cfrontend/Csyntax.v              lib/Coqlib.v         
-    cfrontend/Cstrategy.v            lib/Floats.v         
-    cfrontend/Clight.v               lib/Integers.v       
-    cfrontend/PrintCsyntax.ml        lib/Maps.v           
-    cfrontend/PrintClight.ml         lib/Parmov.v         
-                                     lib/Camlcoq.ml       
+    cfrontend/Cop.v                  common/Values.v      
+    cfrontend/Ctypes.v               lib/Coqlib.v         
+    cfrontend/Csem.v                 lib/Floats.v         
+    cfrontend/Csyntax.v              lib/Integers.v       
+    cfrontend/Cstrategy.v            lib/Maps.v           
+    cfrontend/Clight.v               lib/Parmov.v         
+    cfrontend/PrintCsyntax.ml        lib/Camlcoq.ml       
+    cfrontend/PrintClight.ml         
 
     all files in the runtime/ directory
     all files in the cparser/ directory 

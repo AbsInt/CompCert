@@ -25,7 +25,8 @@ Require Import Errors.
 Require Import Integers.
 Require Import Floats.
 Require Import AST.
-Require Import Csyntax.
+Require Import Ctypes.
+Require Import Cop.
 Require Import Clight.
 Require Import Cminor.
 Require Import Csharpminor.
@@ -56,10 +57,10 @@ Definition var_kind_of_type (ty: type): res var_kind :=
   | Tfloat F64 _ => OK(Vscalar Mfloat64)
   | Tvoid => Error (msg "Cshmgen.var_kind_of_type(void)")
   | Tpointer _ _ => OK(Vscalar Mint32)
-  | Tarray _ _ _ => OK(Varray (Csyntax.sizeof ty) (Csyntax.alignof ty))
+  | Tarray _ _ _ => OK(Varray (Ctypes.sizeof ty) (Ctypes.alignof ty))
   | Tfunction _ _ => Error (msg "Cshmgen.var_kind_of_type(function)")
-  | Tstruct _ fList _ => OK(Varray (Csyntax.sizeof ty) (Csyntax.alignof ty))
-  | Tunion _ fList _ => OK(Varray (Csyntax.sizeof ty) (Csyntax.alignof ty))
+  | Tstruct _ fList _ => OK(Varray (Ctypes.sizeof ty) (Ctypes.alignof ty))
+  | Tunion _ fList _ => OK(Varray (Ctypes.sizeof ty) (Ctypes.alignof ty))
   | Tcomp_ptr _ _ => OK(Vscalar Mint32)
 end.
   
@@ -137,10 +138,10 @@ Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   | add_case_if sg => OK (Ebinop Oaddf (make_floatofint e1 sg) e2)
   | add_case_fi sg => OK (Ebinop Oaddf e1 (make_floatofint e2 sg))
   | add_case_pi ty _ =>
-      let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
   | add_case_ip ty _ =>
-      let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n e1))
   | add_default => Error (msg "Cshmgen.make_add")
   end.
@@ -152,10 +153,10 @@ Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   | sub_case_if sg => OK (Ebinop Osubf (make_floatofint e1 sg) e2)
   | sub_case_fi sg => OK (Ebinop Osubf e1 (make_floatofint e2 sg))
   | sub_case_pi ty =>
-      let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
-      let n := make_intconst (Int.repr (Csyntax.sizeof ty)) in
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Odivu (Ebinop Osub e1 e2) n)
   | sub_default => Error (msg "Cshmgen.make_sub")
   end.
@@ -268,7 +269,7 @@ Definition make_load (addr: expr) (ty_res: type) :=
   by-copy assignment of a value of Clight type [ty]. *)
 
 Definition make_memcpy (dst src: expr) (ty: type) :=
-  Sbuiltin None (EF_memcpy (Csyntax.sizeof ty) (Csyntax.alignof ty))
+  Sbuiltin None (EF_memcpy (Ctypes.sizeof ty) (Ctypes.alignof ty))
                 (dst :: src :: nil).
 
 (** [make_store addr ty rhs] stores the value of the
@@ -321,33 +322,33 @@ Definition var_set (id: ident) (ty: type) (rhs: expr) :=
 
 (** ** Translation of operators *)
 
-Definition transl_unop (op: Csyntax.unary_operation) (a: expr) (ta: type) : res expr :=
+Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr :=
   match op with
-  | Csyntax.Onotbool => make_notbool a ta
-  | Csyntax.Onotint => OK(make_notint a ta)
-  | Csyntax.Oneg => make_neg a ta
+  | Cop.Onotbool => make_notbool a ta
+  | Cop.Onotint => OK(make_notint a ta)
+  | Cop.Oneg => make_neg a ta
   end.
 
-Definition transl_binop (op: Csyntax.binary_operation)
+Definition transl_binop (op: Cop.binary_operation)
                         (a: expr) (ta: type)
                         (b: expr) (tb: type) : res expr :=
   match op with
-  | Csyntax.Oadd => make_add a ta b tb
-  | Csyntax.Osub => make_sub a ta b tb
-  | Csyntax.Omul => make_mul a ta b tb
-  | Csyntax.Odiv => make_div a ta b tb
-  | Csyntax.Omod => make_mod a ta b tb
-  | Csyntax.Oand => make_and a ta b tb
-  | Csyntax.Oor  => make_or a ta b tb
-  | Csyntax.Oxor => make_xor a ta b tb
-  | Csyntax.Oshl => make_shl a ta b tb
-  | Csyntax.Oshr => make_shr a ta b tb
-  | Csyntax.Oeq => make_cmp Ceq a ta b tb
-  | Csyntax.One => make_cmp Cne a ta b tb
-  | Csyntax.Olt => make_cmp Clt a ta b tb
-  | Csyntax.Ogt => make_cmp Cgt a ta b tb
-  | Csyntax.Ole => make_cmp Cle a ta b tb
-  | Csyntax.Oge => make_cmp Cge a ta b tb
+  | Cop.Oadd => make_add a ta b tb
+  | Cop.Osub => make_sub a ta b tb
+  | Cop.Omul => make_mul a ta b tb
+  | Cop.Odiv => make_div a ta b tb
+  | Cop.Omod => make_mod a ta b tb
+  | Cop.Oand => make_and a ta b tb
+  | Cop.Oor  => make_or a ta b tb
+  | Cop.Oxor => make_xor a ta b tb
+  | Cop.Oshl => make_shl a ta b tb
+  | Cop.Oshr => make_shr a ta b tb
+  | Cop.Oeq => make_cmp Ceq a ta b tb
+  | Cop.One => make_cmp Cne a ta b tb
+  | Cop.Olt => make_cmp Clt a ta b tb
+  | Cop.Ogt => make_cmp Cgt a ta b tb
+  | Cop.Ole => make_cmp Cle a ta b tb
+  | Cop.Oge => make_cmp Cge a ta b tb
   end.
 
 (** * Translation of expressions *)
@@ -424,7 +425,7 @@ with transl_lvalue (a: Clight.expr) {struct a} : res expr :=
   end.
 
 (** [transl_arglist al tyl] returns a list of Csharpminor expressions
-   that compute the values of the list [al] of Csyntax expressions,
+   that compute the values of the list [al] of Clight expressions,
    casted to the corresponding types in [tyl].
    Used for function applications. *)
 

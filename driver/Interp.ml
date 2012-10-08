@@ -26,6 +26,8 @@ open Values
 open Memory
 open Globalenvs
 open Events
+open Ctypes
+open Cop
 open Csyntax
 open Csem
 open Clflags

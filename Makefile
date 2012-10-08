@@ -90,7 +90,7 @@ BACKEND=\
 
 # C front-end modules (in cfrontend/)
 
-CFRONTEND=Csyntax.v Csem.v Cstrategy.v Cexec.v \
+CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
   Clight.v Cshmgen.v Cshmgenproof.v \

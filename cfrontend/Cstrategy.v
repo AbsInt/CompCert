@@ -28,6 +28,8 @@ Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
+Require Import Ctypes.
+Require Import Cop.
 Require Import Csyntax.
 Require Import Csem.
 

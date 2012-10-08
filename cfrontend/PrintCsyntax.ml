@@ -22,6 +22,8 @@ open Datatypes
 open Values
 open AST
 open Globalenvs
+open Ctypes
+open Cop
 open Csyntax
 
 let name_unop = function

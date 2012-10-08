@@ -20,6 +20,8 @@ Require Import Floats.
 Require Import Values.
 Require Import Memory.
 Require Import AST.
+Require Import Ctypes.
+Require Import Cop.
 Require Import Csyntax.
 Require Cstrategy.
 Require Import Clight.
