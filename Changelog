@@ -18,10 +18,16 @@ Performance improvements:
 Internal simplifications:
 - Clight, Csharpminor, Cminor: suppressed the "Econdition" conditional
   expressions, no longer useful.
+- Clight: a single loop form, the three C loops are derived forms.
+- Clight: volatile memory accesses are materialized as builtin operations.
+- Clight: removed dependencies on CompCert C syntax and semantics.
 - Cminor: suppressed the "Oboolval" and "Onotbool" operators,
   which can be expressed in terms of "Ocmpu" at no performance costs.
 
 Other changes:
+- For compatibility with other C compilers, output files are now generated
+  in the current directory, by default; output file name can be controlled
+  with the -o option, somewhat like with GCC.
 - IA32/MacOS X: now supports referencing global variables defined in shared
   libraries; old hack for stdio is no longer needed.
 - PowerPC/MacOS X: this port was removed, as recent version of MacOS X

@@ -15,7 +15,6 @@
 let prepro_options = ref ([]: string list)
 let linker_options = ref ([]: string list)
 let assembler_options = ref ([]: string list)
-let exe_name = ref "a.out"
 let option_flonglong = ref true
 let option_flongdouble = ref false
 let option_fstruct_return = ref false
@@ -38,6 +37,7 @@ let option_dalloc = ref false
 let option_dmach = ref false
 let option_dasm = ref false
 let option_sdump = ref false
+let option_o = ref (None: string option)
 let option_E = ref false
 let option_S = ref false
 let option_c = ref false

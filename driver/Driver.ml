@@ -52,6 +52,24 @@ let print_error oc msg =
     List.iter print_one_error msg;
     output_char oc '\n'
 
+(* Determine names for output files.  We use -o option if specified
+   and if this is the final destination file (not a dump file).
+   Otherwise, we generate a file in the current directory. *)
+
+let output_filename ?(final = false) source_file source_suffix output_suffix =
+  match !option_o with
+  | Some file when final -> option_o := None; file
+  | _ -> 
+    Filename.basename (Filename.chop_suffix source_file source_suffix)
+    ^ output_suffix
+
+(* A variant of [output_filename] where the default output name is fixed *)
+
+let output_filename_default default_file =
+  match !option_o with
+  | Some file -> option_o := None; file
+  | None -> default_file
+
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
@@ -91,7 +109,7 @@ let parse_c_file sourcename ifile =
   safe_remove ifile;
   (* Save C AST if requested *)
   if !option_dparse then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".parsed.c" in
+    let ofile = output_filename sourcename ".c" ".parsed.c" in
     let oc = open_out ofile in
     Cprint.program (Format.formatter_of_out_channel oc) ast;
     close_out oc
@@ -104,7 +122,7 @@ let parse_c_file sourcename ifile =
   flush stderr;
   (* Save CompCert C AST if requested *)
   if !option_dcmedium then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".compcert.c" in
+    let ofile = output_filename sourcename ".c" ".compcert.c" in
     let oc = open_out ofile in
     PrintCsyntax.print_program (Format.formatter_of_out_channel oc) csyntax;
     close_out oc
@@ -128,7 +146,7 @@ let dump_asm asm destfile =
 let compile_c_ast sourcename csyntax ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
-    dst := if !opt then Some (Filename.chop_suffix sourcename ".c" ^ ext)
+    dst := if !opt then Some (output_filename sourcename ".c" ext)
                    else None in
   set_dest PrintClight.destination option_dclight ".light.c";
   set_dest PrintCminor.destination option_dcminor ".cm";
@@ -148,7 +166,7 @@ let compile_c_ast sourcename csyntax ofile =
         exit 2 in
   (* Dump Asm in binary format *)  
   if !option_sdump then
-    dump_asm asm (Filename.chop_suffix sourcename ".c" ^ ".sdump");
+    dump_asm asm (output_filename sourcename ".c" ".sdump");
   (* Print Asm in text form *)
   let oc = open_out ofile in
   PrintAsm.print_program oc (Unusedglob.transf_program asm);
@@ -220,64 +238,71 @@ let linker exe_name files =
 let option_interp = ref false
 
 let process_c_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".c" in
   if !option_E then begin
-    preprocess sourcename "-"
+    preprocess sourcename (output_filename_default "-");
+    ""
   end else begin
     let preproname = Filename.temp_file "compcert" ".i" in
     preprocess sourcename preproname;
     if !option_interp then begin
       let csyntax = parse_c_file sourcename preproname in
-      Interp.execute csyntax
+      Interp.execute csyntax;
+      ""
     end else if !option_S then begin
-      compile_c_file sourcename preproname (prefixname ^ ".s")
+      compile_c_file sourcename preproname
+                     (output_filename ~final:true sourcename ".c" ".s");
+      ""
     end else begin
       let asmname =
         if !option_dasm
-        then prefixname ^ ".s"
+        then output_filename sourcename ".c" ".s"
         else Filename.temp_file "compcert" ".s" in
       compile_c_file sourcename preproname asmname;
-      assemble asmname (prefixname ^ ".o");
-      if not !option_dasm then safe_remove asmname
+      let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+      assemble asmname objname;
+      if not !option_dasm then safe_remove asmname;
+      objname
     end
-  end;
-  prefixname ^ ".o"
+  end
 
 (* Processing of a .cm file *)
 
 let process_cminor_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".cm" in
   if !option_S then begin
-    compile_cminor_file sourcename (prefixname ^ ".s")
+    compile_cminor_file sourcename
+                        (output_filename ~final:true sourcename ".cm" ".s");
+    ""
   end else begin
     let asmname =
       if !option_dasm
-      then prefixname ^ ".s"
+      then output_filename sourcename ".cm" ".s"
       else Filename.temp_file "compcert" ".s" in
     compile_cminor_file sourcename asmname;
-    assemble asmname (prefixname ^ ".o");
-    if not !option_dasm then safe_remove asmname
-  end;
-  prefixname ^ ".o"
+    let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+    assemble asmname objname;
+    if not !option_dasm then safe_remove asmname;
+    objname
+  end
 
 (* Processing of .S and .s files *)
 
 let process_s_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".s" in
-  assemble sourcename (prefixname ^ ".o");
-  prefixname ^ ".o"
+  let objname = output_filename ~final: !option_c sourcename ".s" ".o" in
+  assemble sourcename objname;
+  objname
 
 let process_S_file sourcename =
-  let prefixname = Filename.chop_suffix sourcename ".s" in
   if !option_E then begin
-    preprocess sourcename "-"
+    preprocess sourcename (output_filename_default "-");
+    ""
   end else begin
     let preproname = Filename.temp_file "compcert" ".s" in
     preprocess sourcename preproname;
-    assemble preproname (prefixname ^ ".o");
-    safe_remove preproname
-  end;
-  prefixname ^ ".o"
+    let objname = output_filename ~final: !option_c sourcename ".S" ".o" in
+    assemble preproname objname;
+    safe_remove preproname;
+    objname
+  end
 
 (* Command-line parsing *)
 
@@ -350,9 +375,10 @@ Recognized source files:
   .o             Object file
   .a             Library file
 Processing options:
+  -c             Compile to object file only (no linking), result in <file>.o
   -E             Preprocess only, send result to standard output
   -S             Compile to assembler only, save result in <file>.s
-  -c             Compile to object file only (no linking), result in <file>.o
+  -o <file>      Generate output in <file>
 Preprocessing options:
   -I<dir>        Add <dir> to search path for #include files
   -D<symb>=<val> Define preprocessor symbol
@@ -392,7 +418,6 @@ Tracing options:
 Linking options:
   -l<lib>        Link library <lib>
   -L<dir>        Add <dir> to search path for libraries
-  -o <file>      Generate executable in <file> (default: a.out)
   -Wl,<opt>      Pass option <opt> to the linker
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library [MacOS X only]
@@ -420,7 +445,7 @@ let cmdline_actions =
   "-U$", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
   "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
   "-[lL].", Self(fun s -> linker_options := s :: !linker_options);
-  "-o$", String(fun s -> exe_name := s);
+  "-o$", String(fun s -> option_o := Some s);
   "-stdlib$", String(fun s -> stdlib_path := s);
   "-dparse$", Set option_dparse;
   "-dc$", Set option_dcmedium;
@@ -497,5 +522,5 @@ let _ =
   if !linker_options <> [] 
   && not (!option_c || !option_S || !option_E || !option_interp)
   then begin
-    linker !exe_name !linker_options
+    linker (output_filename_default "a.out") !linker_options
   end
