@@ -1607,9 +1607,7 @@ Proof.
   intros. subst s1. exists s2'; split; auto. apply step_simulation; auto.
 Qed.
 
-(** * A big-step semantics implementing the reduction strategy. *)
-
-(** TODO: update with seqand / seqor *)
+(** * A big-step semantics for CompCert C implementing the reduction strategy. *)
 
 Section BIGSTEP.
 
@@ -1692,8 +1690,29 @@ with eval_expr: env -> mem -> kind -> expr -> trace -> mem -> expr -> Prop :=
   | eval_cast: forall e m a t m' a' ty,
       eval_expr e m RV a t m' a' ->
       eval_expr e m RV (Ecast a ty) t m' (Ecast a' ty)
+  | eval_seqand_true: forall e m a1 a2 ty t1 m' a1' v1 t2 m'' a2' v2 v' v,
+      eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
+      bool_val v1 (typeof a1) = Some true ->
+      eval_expr e m' RV a2 t2 m'' a2' -> eval_simple_rvalue ge e m'' a2' v2 ->
+      sem_cast v2 (typeof a2) type_bool = Some v' ->
+      sem_cast v' type_bool ty = Some v ->
+      eval_expr e m RV (Eseqand a1 a2 ty) (t1**t2) m'' (Eval v ty)
+  | eval_seqand_false: forall e m a1 a2 ty t1 m' a1' v1,
+      eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
+      bool_val v1 (typeof a1) = Some false ->
+      eval_expr e m RV (Eseqand a1 a2 ty) t1 m' (Eval (Vint Int.zero) ty)
+  | eval_seqor_false: forall e m a1 a2 ty t1 m' a1' v1 t2 m'' a2' v2 v' v,
+      eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
+      bool_val v1 (typeof a1) = Some false ->
+      eval_expr e m' RV a2 t2 m'' a2' -> eval_simple_rvalue ge e m'' a2' v2 ->
+      sem_cast v2 (typeof a2) type_bool = Some v' ->
+      sem_cast v' type_bool ty = Some v ->
+      eval_expr e m RV (Eseqor a1 a2 ty) (t1**t2) m'' (Eval v ty)
+  | eval_seqor_true: forall e m a1 a2 ty t1 m' a1' v1,
+      eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
+      bool_val v1 (typeof a1) = Some true ->
+      eval_expr e m RV (Eseqor a1 a2 ty) t1 m' (Eval (Vint Int.one) ty)
   | eval_condition: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 m'' a' v' b v,
-      simple a2 = false \/ simple a3 = false ->
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
       bool_val v1 (typeof a1) = Some b ->
       eval_expr e m' RV (if b then a2 else a3) t2 m'' a' -> eval_simple_rvalue ge e m'' a' v' ->
@@ -1926,11 +1945,26 @@ CoInductive evalinf_expr: env -> mem -> kind -> expr -> traceinf -> Prop :=
   | evalinf_cast: forall e m a t ty,
       evalinf_expr e m RV a t ->
       evalinf_expr e m RV (Ecast a ty) t
+  | evalinf_seqand: forall e m a1 a2 ty t1,
+      evalinf_expr e m RV a1 t1 ->
+      evalinf_expr e m RV (Eseqand a1 a2 ty) t1
+  | evalinf_seqand_2: forall e m a1 a2 ty t1 m' a1' v1 t2,
+      eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
+      bool_val v1 (typeof a1) = Some true ->
+      evalinf_expr e m' RV a2 t2 ->
+      evalinf_expr e m RV (Eseqand a1 a2 ty) (t1***t2)
+  | evalinf_seqor: forall e m a1 a2 ty t1,
+      evalinf_expr e m RV a1 t1 ->
+      evalinf_expr e m RV (Eseqor a1 a2 ty) t1
+  | evalinf_seqor_2: forall e m a1 a2 ty t1 m' a1' v1 t2,
+      eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
+      bool_val v1 (typeof a1) = Some false ->
+      evalinf_expr e m' RV a2 t2 ->
+      evalinf_expr e m RV (Eseqor a1 a2 ty) (t1***t2)
   | evalinf_condition: forall e m a1 a2 a3 ty t1,
       evalinf_expr e m RV a1 t1 ->
       evalinf_expr e m RV (Econdition a1 a2 a3 ty) t1
   | evalinf_condition_2: forall e m a1 a2 a3 ty t1 m' a1' v1 t2 b,
-      simple a2 = false \/ simple a3 = false ->
       eval_expr e m RV a1 t1 m' a1' -> eval_simple_rvalue ge e m' a1' v1 ->
       bool_val v1 (typeof a1) = Some b ->
       evalinf_expr e m' RV (if b then a2 else a3) t2 ->
@@ -2220,10 +2254,52 @@ Proof.
   exploit (H0 (fun x => C(Ecast x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
   simpl; intuition; eauto.
-(* condition *)
-  exploit (H1 (fun x => C(Econdition x a2 a3 ty))).
+(* seqand true *)
+  exploit (H0 (fun x => C(Eseqand x a2 ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
-  exploit (H5 (fun x => C(Eparen x ty))).
+  exploit (H4 (fun x => C(Eparen (Eparen x type_bool) ty))).
+    eapply leftcontext_compose; eauto. repeat constructor. intros [E [F G]].
+  simpl; intuition. eapply star_trans. eexact D. 
+  eapply star_left. left; eapply step_seqand_true; eauto. rewrite B; auto. 
+  eapply star_trans. eexact G.
+  set (C' := fun x => C (Eparen x ty)).
+  change (C (Eparen (Eparen a2' type_bool) ty)) with (C' (Eparen a2' type_bool)).
+  eapply star_two.
+  left; eapply step_paren; eauto. unfold C'; eapply leftcontext_compose; eauto. repeat constructor.
+  rewrite F; eauto.
+  unfold C'. left; eapply step_paren; eauto. constructor. 
+  eauto. eauto. eauto. traceEq. 
+(* seqand false *)
+  exploit (H0 (fun x => C(Eseqand x a2 ty))).
+    eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
+  simpl; intuition. eapply star_right. eexact D. 
+  left; eapply step_seqand_false; eauto. rewrite B; auto.
+  traceEq.
+(* seqor false *)
+  exploit (H0 (fun x => C(Eseqor x a2 ty))).
+    eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
+  exploit (H4 (fun x => C(Eparen (Eparen x type_bool) ty))).
+    eapply leftcontext_compose; eauto. repeat constructor. intros [E [F G]].
+  simpl; intuition. eapply star_trans. eexact D. 
+  eapply star_left. left; eapply step_seqor_false; eauto. rewrite B; auto. 
+  eapply star_trans. eexact G.
+  set (C' := fun x => C (Eparen x ty)).
+  change (C (Eparen (Eparen a2' type_bool) ty)) with (C' (Eparen a2' type_bool)).
+  eapply star_two.
+  left; eapply step_paren; eauto. unfold C'; eapply leftcontext_compose; eauto. repeat constructor.
+  rewrite F; eauto.
+  unfold C'. left; eapply step_paren; eauto. constructor. 
+  eauto. eauto. eauto. traceEq. 
+(* seqor true *)
+  exploit (H0 (fun x => C(Eseqor x a2 ty))).
+    eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
+  simpl; intuition. eapply star_right. eexact D. 
+  left; eapply step_seqor_true; eauto. rewrite B; auto.
+  traceEq.
+(* condition *)
+  exploit (H0 (fun x => C(Econdition x a2 a3 ty))).
+    eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
+  exploit (H4 (fun x => C(Eparen x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [E [F G]].
   simpl. split; auto. split; auto. 
   eapply star_trans. eexact D.
@@ -2720,12 +2796,38 @@ Proof.
   eapply forever_N_star with (a2 := (esize a0)). apply star_refl. simpl; omega.
   eapply COE with (C := fun x => C(Ecast x ty)). eauto. 
   eapply leftcontext_compose; eauto. repeat constructor. traceEq.
+(* seqand left *)
+  eapply forever_N_star with (a2 := (esize a1)). apply star_refl. simpl; omega.
+  eapply COE with (C := fun x => C(Eseqand x a2 ty)). eauto. 
+  eapply leftcontext_compose; eauto. repeat constructor. traceEq.
+(* seqand 2 *)
+  destruct (eval_expr_to_steps _ _ _ _ _ _ _ H1 (fun x => C(Eseqand x a2 ty)) f k)
+  as [P [Q R]]. 
+  eapply leftcontext_compose; eauto. repeat constructor.
+  eapply forever_N_plus. eapply plus_right. eexact R. 
+  left; eapply step_seqand_true; eauto. rewrite Q; eauto.
+  reflexivity. 
+  eapply COE with (C := fun x => (C (Eparen (Eparen x type_bool) ty))). eauto.
+  eapply leftcontext_compose; eauto. repeat constructor. traceEq.
+(* seqor left *)
+  eapply forever_N_star with (a2 := (esize a1)). apply star_refl. simpl; omega.
+  eapply COE with (C := fun x => C(Eseqor x a2 ty)). eauto. 
+  eapply leftcontext_compose; eauto. repeat constructor. traceEq.
+(* seqor 2 *)
+  destruct (eval_expr_to_steps _ _ _ _ _ _ _ H1 (fun x => C(Eseqor x a2 ty)) f k)
+  as [P [Q R]]. 
+  eapply leftcontext_compose; eauto. repeat constructor.
+  eapply forever_N_plus. eapply plus_right. eexact R. 
+  left; eapply step_seqor_false; eauto. rewrite Q; eauto.
+  reflexivity. 
+  eapply COE with (C := fun x => (C (Eparen (Eparen x type_bool) ty))). eauto.
+  eapply leftcontext_compose; eauto. repeat constructor. traceEq.
 (* condition top *)
   eapply forever_N_star with (a2 := (esize a1)). apply star_refl. simpl; omega.
   eapply COE with (C := fun x => C(Econdition x a2 a3 ty)). eauto. 
   eapply leftcontext_compose; eauto. repeat constructor. traceEq.
 (* condition *)
-  destruct (eval_expr_to_steps _ _ _ _ _ _ _ H2 (fun x => C(Econdition x a2 a3 ty)) f k)
+  destruct (eval_expr_to_steps _ _ _ _ _ _ _ H1 (fun x => C(Econdition x a2 a3 ty)) f k)
   as [P [Q R]]. 
   eapply leftcontext_compose; eauto. repeat constructor.
   eapply forever_N_plus. eapply plus_right. eexact R. 

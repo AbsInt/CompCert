@@ -93,7 +93,7 @@ BACKEND=\
 CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
-  Clight.v Cshmgen.v Cshmgenproof.v \
+  Clight.v ClightBigstep.v Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
 
 # Putting everything together (in driver/)
