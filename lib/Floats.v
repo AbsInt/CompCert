@@ -66,6 +66,13 @@ Definition binary_normalize64_correct (m e:Z) (s:bool) :=
   binary_normalize_correct 53 1024 eq_refl eq_refl mode_NE m e s.
 Global Opaque binary_normalize64_correct.
 
+Definition binary_normalize32 (m e:Z) (s:bool) : binary32 :=
+  binary_normalize 24 128 eq_refl eq_refl mode_NE m e s.
+
+Definition binary_normalize32_correct (m e:Z) (s:bool) :=
+  binary_normalize_correct 24 128 eq_refl eq_refl mode_NE m e s.
+Global Opaque binary_normalize32_correct.
+
 Definition floatofbinary32 (f: binary32) : float := (**r single precision embedding in double precision *)
   match f with
     | B754_nan => B754_nan _ _
@@ -81,12 +88,11 @@ Definition binary32offloat (f: float) : binary32 := (**r conversion to single pr
     | B754_infinity s => B754_infinity _ _ s
     | B754_zero s => B754_zero _ _ s
     | B754_finite s m e _ =>
-      binary_normalize 24 128 eq_refl eq_refl mode_NE (cond_Zopp s (Zpos m)) e s
+      binary_normalize32 (cond_Zopp s (Zpos m)) e s
   end.
 
 Definition singleoffloat (f: float): float := (**r conversion to single precision, embedded in double *)
   floatofbinary32 (binary32offloat f).
-
 
 Definition Zoffloat (f:float): option Z := (**r conversion to Z *)
   match f with
@@ -116,6 +122,35 @@ Definition intuoffloat (f:float): option int := (**r conversion to unsigned 32-b
         None
     | None => None
   end.
+
+(* Functions used to parse floats *)
+Program Definition build_from_parsed
+  (prec:Z) (emax:Z) (prec_gt_0 :Prec_gt_0 prec) (Hmax:prec < emax)
+  (base:positive) (intPart:positive) (expPart:Z) :=
+  match expPart return _ with
+    | Z0 =>
+      binary_normalize prec emax prec_gt_0 Hmax mode_NE (Zpos intPart) Z0 false
+    | Zpos p =>
+      binary_normalize prec emax prec_gt_0 Hmax mode_NE ((Zpos intPart) * Zpower_pos (Zpos base) p) Z0 false
+    | Zneg p =>
+      let exp := Zpower_pos (Zpos base) p in
+      match exp return 0 < exp -> _ with
+        | Zneg _ | Z0 => _
+        | Zpos p =>
+          fun _ =>
+          FF2B prec emax _ (proj1 (Bdiv_correct_aux prec emax prec_gt_0 Hmax mode_NE false intPart Z0 false p Z0))
+      end _
+  end.
+Next Obligation.
+apply Zpower_pos_gt_0.
+reflexivity.
+Qed.
+
+Definition build_from_parsed64 (base:positive) (intPart:positive) (expPart:Z) : float :=
+  build_from_parsed 53 1024 eq_refl eq_refl  base intPart expPart.
+
+Definition build_from_parsed32 (base:positive) (intPart:positive) (expPart:Z) : float :=
+  floatofbinary32 (build_from_parsed 24 128 eq_refl eq_refl  base intPart expPart).
 
 Definition floatofint (n:int): float := (**r conversion from signed 32-bit int *)
   binary_normalize64 (Int.signed n) 0 false.
@@ -260,9 +295,10 @@ Proof.
   specialize (H eq_refl); destruct H.
   destruct (floatofbinary32 (B754_finite 24 128 s m e e0)) as [ | | |s1 m1 e1]; try discriminate.
   unfold binary32offloat.
-  pose proof (binary_normalize_correct 24 128 eq_refl eq_refl mode_NE (cond_Zopp s1 (Zpos m1)) e1 s1).
+  pose proof (binary_normalize32_correct (cond_Zopp s1 (Zpos m1)) e1 s1).
   unfold B2R at 2 in H0; cbv iota zeta beta in H0; rewrite <- H0, round_generic in H1.
   rewrite Rlt_bool_true in H1.
+  unfold binary_normalize32.
   apply B2R_inj; intuition; match goal with [|- _ _ _ ?f = true] => destruct f end; try discriminate.
   symmetry in H2; apply F2R_eq_0_reg in H2; destruct s; discriminate.
   reflexivity.

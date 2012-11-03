@@ -1,6 +1,11 @@
 Release 1.12
 ========================
 
+Improvements in confidence:
+- Floating-point literals are now parsed and converted to IEEE-754 binary
+  FP numbers using a provably-correct conversion function implemented on
+  top of the Flocq library.
+
 Language semantics:
 - The "&&" and "||" operators are now primitive in CompCert C and are
   given explicit semantic rules, instead of being expressed in terms

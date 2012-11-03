@@ -51,27 +51,19 @@ let normalize_int n ik =
 
 (* Reduce n to the range of representable floats of the given kind *)
 
-let normalize_float f fk =
-  match fk with
-  | FFloat -> Int32.float_of_bits (Int32.bits_of_float f)
-  | FDouble -> f
-  | FLongDouble -> raise Notconst (* cannot accurately compute on this type *)
-
 type value =
   | I of int64
-  | F of float
   | S of string
   | WS of int64 list
 
 let boolean_value v =
   match v with
   | I n -> n <> 0L
-  | F n -> n <> 0.0
   | S _ | WS _ -> true
 
 let constant = function
   | CInt(v, ik, _) -> I (normalize_int v ik)
-  | CFloat(v, fk, _) -> F (normalize_float v fk)
+  | CFloat(v, fk) -> raise Notconst
   | CStr s -> S s
   | CWStr s -> WS s
   | CEnum(id, v) -> I v
@@ -87,22 +79,12 @@ let cast env ty_to ty_from v =
       if boolean_value v then I 1L else I 0L
   | TInt(ik, _), I n ->
       I(normalize_int n ik)
-  | TInt(ik, _), F n ->
-      I(normalize_int (Int64.of_float n) ik)
   | TInt(ik, _), (S _ | WS _) ->
       if sizeof_ikind ik >= !config.sizeof_ptr
       then v
       else raise Notconst
-  | TFloat(fk, _), F n ->
-      F(normalize_float n fk)
-  | TFloat(fk, _), I n ->
-      if is_signed env ty_from
-      then F(normalize_float (Int64.to_float n) fk)
-      else F(normalize_float (int64_unsigned_to_float n) fk)
   | TPtr(ty, _), I n ->
       I (normalize_int n ptr_t_ikind)
-  | TPtr(ty, _), F n ->
-      if n = 0.0 then I 0L else raise Notconst
   | TPtr(ty, _), (S _ | WS _) ->
       v
   | _, _ ->
@@ -112,9 +94,7 @@ let unop env op tyres ty v =
   let res =
    match op, tyres, v with
    | Ominus, TInt _, I n -> I (Int64.neg n)
-   | Ominus, TFloat _, F n -> F (-. n)
    | Oplus, TInt _, I n -> I n
-   | Oplus, TFloat _, F n -> F n
    | Olognot, _, _ -> if boolean_value v then I 0L else I 1L
    | Onot, _, I n -> I (Int64.lognot n)
    | _ -> raise Notconst
@@ -128,8 +108,6 @@ let comparison env direction ptraction tyop ty1 v1 ty2 v2 =
         if is_signed env tyop
         then direction (compare n1 n2) 0
         else direction (int64_unsigned_compare n1 n2) 0 (* including pointers *)
-    | F n1, F n2 ->
-        direction (compare n1 n2) 0
     | (S _ | WS _), I 0L ->
         begin match ptraction with None -> raise Notconst | Some b -> b end
     | I 0L, (S _ | WS _) ->
@@ -147,7 +125,6 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         if is_arith_type env ty1 && is_arith_type env ty2 then begin
           match cast env tyop ty1 v1, cast env tyop ty2 v2 with
           | I n1, I n2 -> I (Int64.add n1 n2)
-          | F n1, F n2 -> F (n1 +. n2)
           | _, _ -> raise Notconst
         end else
           raise Notconst
@@ -155,14 +132,12 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         if is_arith_type env ty1 && is_arith_type env ty2 then begin
           match cast env tyop ty1 v1, cast env tyop ty2 v2 with
           | I n1, I n2 -> I (Int64.sub n1 n2)
-          | F n1, F n2 -> F (n1 -. n2)
           | _, _ -> raise Notconst
         end else
           raise Notconst
     | Omul ->
         begin match cast env tyop ty1 v1, cast env tyop ty2 v2 with
           | I n1, I n2 -> I (Int64.mul n1 n2)
-          | F n1, F n2 -> F (n1 *. n2)
           | _, _ -> raise Notconst
         end
     | Odiv ->
@@ -171,7 +146,6 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
               if n2 = 0L then raise Notconst else
               if is_signed env tyop then I (Int64.div n1 n2)
               else I (int64_unsigned_div n1 n2)
-          | F n1, F n2 -> F (n1 /. n2)
           | _, _ -> raise Notconst
         end
     | Omod ->
@@ -261,6 +235,7 @@ let rec expr env e =
       if boolean_value (expr env e1)
       then cast env e.etyp e2.etyp (expr env e2)
       else cast env e.etyp e3.etyp (expr env e3)
+  (* | ECast(TInt (_, _), EConst (CFloat (_, _))) -> TODO *)
   | ECast(ty, e1) ->
       cast env ty e1.etyp (expr env e1)
   | ECall _ ->
@@ -277,7 +252,6 @@ let constant_expr env ty e =
   try
     match unroll env ty, cast env ty e.etyp (expr env e) with
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
-    | TFloat(fk, _), F n -> Some(CFloat(n, fk, ""))
     | TPtr(_, _), I 0L -> Some(CInt(0L, IInt, ""))
     | TPtr(_, _), S s -> Some(CStr s)
     | TPtr(_, _), WS s -> Some(CWStr s)

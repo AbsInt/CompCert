@@ -26,6 +26,7 @@ open Ctypes
 open Cop
 open Csyntax
 open Initializers
+open Floats
 
 (** Record useful information about global variables and functions,
   and associate it with the corresponding atoms. *)
@@ -331,6 +332,51 @@ let first_class_value env ty =
   | C.TInt((C.ILongLong|C.IULongLong), _) -> false
   | _ -> true
 
+(** Floating point constants *)
+
+let z_of_str hex str fst =
+  let res = ref BinInt.Z0 in
+  let base = if hex then 16l else 10l in
+  for i = fst to String.length str - 1 do
+    let d = int_of_char str.[i] in
+    let d =
+      if hex && d >= int_of_char 'a' && d <= int_of_char 'f' then
+	d - int_of_char 'a' + 10
+      else if hex && d >= int_of_char 'A' && d <= int_of_char 'F' then
+	d - int_of_char 'A' + 10
+      else
+	d - int_of_char '0'
+    in
+    let d = Int32.of_int d in
+    assert (d >= 0l && d < base);
+    res := BinInt.coq_Zplus
+      (BinInt.coq_Zmult (z_of_camlint base) !res) (z_of_camlint d)
+  done;
+  !res
+
+let convertFloat f kind =
+  let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
+  match mant with
+    | BinInt.Z0 -> Float.zero
+    | BinInt.Zpos mant ->
+
+      let sgExp = match f.C.exp.[0] with '+' | '-' -> true | _ -> false in
+      let exp = z_of_str false f.C.exp (if sgExp then 1 else 0) in
+      let exp = if f.C.exp.[0] = '-' then BinInt.coq_Zopp exp else exp in
+      let shift_exp =
+	Int32.of_int ((if f.C.hex then 4 else 1) * String.length f.C.fracPart) in
+      let exp = BinInt.coq_Zminus exp (z_of_camlint shift_exp) in
+
+      let base = positive_of_camlint (if f.C.hex then 16l else 10l) in
+
+      begin match kind with
+	| FFloat ->
+	  Float.build_from_parsed32 base mant exp
+	| FDouble | FLongDouble ->
+	  Float.build_from_parsed64 base mant exp
+      end
+    | BinInt.Zneg _ -> assert false
+
 (** Expressions *)
 
 let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
@@ -354,10 +400,10 @@ let rec convertExpr env e =
       if k = C.ILongLong || k = C.IULongLong then
         unsupported "'long long' integer literal";
       Eval(Vint(convertInt i), ty)
-  | C.EConst(C.CFloat(f, k, _)) ->
+  | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
         unsupported "'long double' floating-point literal";
-      Eval(Vfloat(coqfloat_of_camlfloat f), ty)
+      Eval(Vfloat(convertFloat f k), ty)
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
       Evalof(Evar(name_for_string_literal env s, ty), ty)

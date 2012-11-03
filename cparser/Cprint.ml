@@ -45,16 +45,16 @@ let const pp = function
         | IUInt -> fprintf pp "U"
         | _ -> ()
       end
-  | CFloat(v, fk, s) ->
-      if s <> "" then
-        fprintf pp "%s" s
-      else begin
-        fprintf pp "%.18g" v;
-        match fk with
-        | FFloat -> fprintf pp "F"
-        | FLongDouble -> fprintf pp "L"
-        | _ -> ()
-      end
+  | CFloat(v, fk) ->
+    if v.hex then
+      fprintf pp "0x%s.%sP%s" v.intPart v.fracPart v.exp
+    else
+      fprintf pp "%s.%sE%s" v.intPart v.fracPart v.exp;
+    begin match fk with
+      | FFloat -> fprintf pp "F"
+      | FLongDouble -> fprintf pp "L"
+      | FDouble -> ()
+    end
   | CStr s ->
       fprintf pp "\"";
       for i = 0 to String.length s - 1 do

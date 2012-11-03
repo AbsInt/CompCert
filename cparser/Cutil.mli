@@ -165,8 +165,8 @@ val fundef_typ: fundef -> typ
 
 val intconst : int64 -> ikind -> exp
   (* Build expression for given integer constant. *)
-val floatconst : float -> fkind -> exp
-  (* Build expression for given float constant. *)
+val floatconst0 : exp
+  (* Build expression for (double)0. *)
 val nullconst : exp
   (* Expression for [(void * ) 0] *)
 val eaddrof : exp -> exp

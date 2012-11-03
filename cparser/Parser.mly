@@ -199,14 +199,13 @@ let transformOffsetOf (speclist, dtype) member =
   let sizeofType = [SpecType Tunsigned], JUSTBASE in
   let resultExpr = CAST (sizeofType, SINGLE_INIT addrExpr) in
   resultExpr
-
 %}
 
 %token <string * Cabs.cabsloc> IDENT
 %token <int64 list * Cabs.cabsloc> CST_CHAR
 %token <int64 list * Cabs.cabsloc> CST_WCHAR
 %token <string * Cabs.cabsloc> CST_INT
-%token <string * Cabs.cabsloc> CST_FLOAT
+%token <Cabs.floatInfo * Cabs.cabsloc> CST_FLOAT
 %token <string * Cabs.cabsloc> NAMED_TYPE
 
 /* Each character is its own list element, and the terminating nul is not

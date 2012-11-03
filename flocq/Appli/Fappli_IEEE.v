@@ -1309,7 +1309,7 @@ Definition Fdiv_core_binary m1 e1 m2 e2 :=
   (q, e', new_location m2 r loc_Exact).
 
 Lemma Bdiv_correct_aux :
-  forall m sx mx ex (Hx : bounded mx ex = true) sy my ey (Hy : bounded my ey = true),
+  forall m sx mx ex sy my ey,
   let x := F2R (Float radix2 (cond_Zopp sx (Zpos mx)) ex) in
   let y := F2R (Float radix2 (cond_Zopp sy (Zpos my)) ey) in
   let z :=
@@ -1325,7 +1325,7 @@ Lemma Bdiv_correct_aux :
   else
     z = binary_overflow m (xorb sx sy).
 Proof.
-intros m sx mx ex Hx sy my ey Hy.
+intros m sx mx ex sy my ey.
 replace (Fdiv_core_binary (Zpos mx) ex (Zpos my) ey) with (Fdiv_core radix2 prec (Zpos mx) ex (Zpos my) ey).
 2: now unfold Fdiv_core_binary ; rewrite 2!Zdigits2_Zdigits.
 refine (_ (Fdiv_core_correct radix2 prec (Zpos mx) ex (Zpos my) ey _ _ _)) ; try easy.
@@ -1418,8 +1418,8 @@ Definition Bdiv m x y :=
   | B754_finite sx _ _ _, B754_zero sy => B754_infinity (xorb sx sy)
   | B754_zero sx, B754_finite sy _ _ _ => B754_zero (xorb sx sy)
   | B754_zero sx, B754_zero sy => B754_nan
-  | B754_finite sx mx ex Hx, B754_finite sy my ey Hy =>
-    FF2B _ (proj1 (Bdiv_correct_aux m sx mx ex Hx sy my ey Hy))
+  | B754_finite sx mx ex _, B754_finite sy my ey _ =>
+    FF2B _ (proj1 (Bdiv_correct_aux m sx mx ex sy my ey))
   end.
 
 Theorem Bdiv_correct :

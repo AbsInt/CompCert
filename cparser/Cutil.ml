@@ -625,7 +625,7 @@ let enum_ikind = IInt
 
 let type_of_constant = function
   | CInt(_, ik, _) -> TInt(ik, [])
-  | CFloat(_, fk, _) -> TFloat(fk, [])
+  | CFloat(_, fk) -> TFloat(fk, [])
   | CStr _ -> TPtr(TInt(IChar, []), [])          (* XXX or array? const? *)
   | CWStr _ -> TPtr(TInt(wchar_ikind, []), [])   (* XXX or array? const? *)
   | CEnum(_, _) -> TInt(IInt, [])
@@ -708,10 +708,11 @@ let valid_cast env tfrom tto =
 let intconst v ik =
   { edesc = EConst(CInt(v, ik, "")); etyp = TInt(ik, []) }
 
-(* Construct a float constant *)
+(* Construct the 0 float constant of double type *)
 
-let floatconst v fk =
-  { edesc = EConst(CFloat(v, fk, "")); etyp = TFloat(fk, []) }
+let floatconst0 =
+  { edesc = EConst(CFloat({hex=false; intPart="0"; fracPart="0"; exp="0"}, FDouble));
+    etyp = TFloat(FDouble, []) }
 
 (* Construct the literal "0" with void * type *)
 

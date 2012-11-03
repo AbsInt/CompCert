@@ -200,20 +200,19 @@ let elab_int_constant loc s0 =
   in
   (v, ty)
 
-let elab_float_constant loc s0 =
-  let s = String.uppercase s0 in
-  (* Determine type and chop suffix *)
-  let (s, ty) =
-    if has_suffix s "L" then
-      (chop_last s 1, FLongDouble)
-    else if has_suffix s "F" then
-      (chop_last s 1, FFloat)
-    else
-      (s, FDouble) in
-  (* Convert to Caml float - XXX loss of precision for long double *)
-  let v =
-    try float_of_string s
-    with Failure _ -> error loc "bad float literal '%s'" s0; 0.0 in
+let elab_float_constant loc f =
+  let ty = match f.suffix_FI with
+    | Some 'l' | Some 'L' -> FLongDouble
+    | Some 'f' | Some 'F' -> FFloat
+    | None -> FDouble
+    | _ -> assert false (* The lexer should not accept anything else. *)
+  in
+  let v = {
+    hex=f.isHex_FI;
+    intPart=begin match f.integer_FI with Some s -> s | None -> "0" end;
+    fracPart=begin match f.fraction_FI with Some s -> s | None -> "0" end;
+    exp=begin match f.exponent_FI with Some s -> s | None -> "0" end }
+  in
   (v, ty)
 
 let elab_char_constant loc sz cl =
@@ -238,9 +237,9 @@ let elab_constant loc = function
   | CONST_INT s ->
       let (v, ik) = elab_int_constant loc s in
       CInt(v, ik, s)
-  | CONST_FLOAT s ->
-      let (v, fk) = elab_float_constant loc s in
-      CFloat(v, fk, s)
+  | CONST_FLOAT f ->
+      let (v, fk) = elab_float_constant loc f in
+      CFloat(v, fk)
   | CONST_CHAR cl ->
       let (v, ik) = elab_char_constant loc 1 cl in
       CInt(v, ik, "")
@@ -1386,7 +1385,7 @@ let rec elab_init loc env ty ile =
       | (NO_INIT :: ile1) | ([] as ile1) ->
           begin match unroll env ty with
           | TInt _   -> (Init_single (intconst 0L IInt), ile1)
-          | TFloat _ -> (Init_single (floatconst 0.0 FDouble), ile1)
+          | TFloat _ -> (Init_single floatconst0, ile1)
           | TPtr _   -> (Init_single nullconst, ile1)
           | _        -> assert false
           end

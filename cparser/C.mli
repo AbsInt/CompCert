@@ -52,9 +52,16 @@ type fkind =
 
 (** Constants *)
 
+type float_cst = {
+  hex : bool;
+  intPart : string;
+  fracPart : string;
+  exp : string;
+}
+
 type constant =
   | CInt of int64 * ikind * string      (* as it appeared in the source *)
-  | CFloat of float * fkind * string    (* as it appeared in the source *)
+  | CFloat of float_cst * fkind
   | CStr of string
   | CWStr of int64 list
   | CEnum of ident * int64              (* enum tag, integer value *)

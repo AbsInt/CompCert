@@ -46,8 +46,8 @@ Env.cmo: C.cmi Env.cmi
 Env.cmx: C.cmi Env.cmi
 GCC.cmo: Cutil.cmi C.cmi Builtins.cmi GCC.cmi
 GCC.cmx: Cutil.cmx C.cmi Builtins.cmx GCC.cmi
-Lexer.cmo: Parser.cmi Parse_aux.cmi Cabshelper.cmo Lexer.cmi
-Lexer.cmx: Parser.cmx Parse_aux.cmx Cabshelper.cmx Lexer.cmi
+Lexer.cmo: Parser.cmi Parse_aux.cmi Cabshelper.cmo Cabs.cmo Lexer.cmi
+Lexer.cmx: Parser.cmx Parse_aux.cmx Cabshelper.cmx Cabs.cmx Lexer.cmi
 Machine.cmo: Machine.cmi
 Machine.cmx: Machine.cmi
 Main.cmo: Parse.cmi GCC.cmi Cprint.cmi Builtins.cmi

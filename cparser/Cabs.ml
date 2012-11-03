@@ -267,9 +267,17 @@ and expression =
   | MEMBEROFPTR of expression * string
   | GNU_BODY of block
 
+and floatInfo = {
+  isHex_FI:bool;
+  integer_FI:string option;
+  fraction_FI:string option;
+  exponent_FI:string option;
+  suffix_FI:char option;
+}
+
 and constant =
   | CONST_INT of string   (* the textual representation *)
-  | CONST_FLOAT of string (* the textual representaton *)
+  | CONST_FLOAT of floatInfo
   | CONST_CHAR of int64 list
   | CONST_WCHAR of int64 list
   | CONST_STRING of string

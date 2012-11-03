@@ -365,9 +365,8 @@ let letter = ['a'- 'z' 'A'-'Z']
 
 let usuffix = ['u' 'U']
 let lsuffix = "l"|"L"|"ll"|"LL"
-let intsuffix = lsuffix | usuffix | usuffix lsuffix | lsuffix usuffix 
+let intsuffix = lsuffix | usuffix | usuffix lsuffix | lsuffix usuffix
               | usuffix ? "i64"
-                
 
 let hexprefix = '0' ['x' 'X']
 
@@ -375,21 +374,19 @@ let intnum = decdigit+ intsuffix?
 let octnum = '0' octdigit+ intsuffix?
 let hexnum = hexprefix hexdigit+ intsuffix?
 
-let exponent = ['e' 'E']['+' '-']? decdigit+
-let fraction  = '.' decdigit+
-let decfloat = (intnum? fraction)
-	      |(intnum exponent)
-	      |(intnum? fraction exponent)
-	      | (intnum '.') 
-              | (intnum '.' exponent) 
-
-let hexfraction = hexdigit* '.' hexdigit+ | hexdigit+
-let binexponent = ['p' 'P'] ['+' '-']? decdigit+
-let hexfloat = hexprefix hexfraction binexponent
-             | hexprefix hexdigit+   binexponent
-
-let floatsuffix = ['f' 'F' 'l' 'L']
-let floatnum = (decfloat | hexfloat) floatsuffix?
+let floating_suffix = ['f' 'F' 'l' 'L'] as suffix
+let exponent_part = ['e' 'E']((['+' '-']? decdigit+) as expo)
+let fractional_constant = ((decdigit+ as intpart)? '.' (decdigit+ as frac))
+	                 |((decdigit+ as intpart)  '.')
+let decimal_floating_constant =
+   (fractional_constant exponent_part? floating_suffix?)
+  |((decdigit+ as intpart) exponent_part floating_suffix?)
+let binary_exponent_part =  ['p' 'P']((['+' '-']? decdigit+) as expo)
+let hexadecimal_fractional_constant = ((hexdigit+ as intpart)? '.' (hexdigit+ as frac))
+                                     |((hexdigit+ as intpart) '.')
+let hexadecimal_floating_constant =
+   (hexprefix hexadecimal_fractional_constant binary_exponent_part floating_suffix?)
+  |(hexprefix (hexdigit+ as intpart) binary_exponent_part floating_suffix?)
 
 let ident = (letter|'_'|'$')(letter|decdigit|'_'|'$')* 
 let blank = [' ' '\t' '\012' '\r']+
@@ -425,7 +422,20 @@ rule initial =
                                           CST_STRING (str lexbuf, currentLoc lexbuf) }
 |		"L\""			{ (* weimer: wchar_t string literal *)
                                           CST_WSTRING(str lexbuf, currentLoc lexbuf) }
-|		floatnum		{CST_FLOAT (Lexing.lexeme lexbuf, currentLoc lexbuf)}
+|               decimal_floating_constant
+                                        {CST_FLOAT ({Cabs.isHex_FI = false;
+						     Cabs.integer_FI = intpart;
+						     Cabs.fraction_FI = frac;
+						     Cabs.exponent_FI = expo;
+						     Cabs.suffix_FI = suffix},
+                                                    currentLoc lexbuf)}
+|               hexadecimal_floating_constant
+                                        {CST_FLOAT ({Cabs.isHex_FI = true;
+						     Cabs.integer_FI = intpart;
+						     Cabs.fraction_FI = frac;
+						     Cabs.exponent_FI = Some expo;
+						     Cabs.suffix_FI = suffix},
+                                                    currentLoc lexbuf)}
 |		hexnum			{CST_INT (Lexing.lexeme lexbuf, currentLoc lexbuf)}
 |		octnum			{CST_INT (Lexing.lexeme lexbuf, currentLoc lexbuf)}
 |		intnum			{CST_INT (Lexing.lexeme lexbuf, currentLoc lexbuf)}
