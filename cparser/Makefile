@@ -9,7 +9,7 @@ LIBDIR=`$(OCAMLC) -where`/cparser
 
 INTFS=C.mli
 
-SRCS=Errors.ml Cabs.ml Cabshelper.ml Parse_aux.ml Parser.ml Lexer.ml \
+SRCS=Cerrors.ml Cabs.ml Cabshelper.ml Parse_aux.ml Parser.ml Lexer.ml \
   Machine.ml \
   Env.ml Cprint.ml Cutil.ml Ceval.ml \
   Builtins.ml GCC.ml \
