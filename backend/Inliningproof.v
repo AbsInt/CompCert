@@ -358,7 +358,8 @@ Inductive match_globalenvs (F: meminj) (bound: Z): Prop :=
       (DOMAIN: forall b, b < bound -> F b = Some(b, 0))
       (IMAGE: forall b1 b2 delta, F b1 = Some(b2, delta) -> b2 < bound -> b1 = b2)
       (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> b < bound)
-      (INFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
+      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> b < bound)
+      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
 
 Lemma find_function_agree:
   forall ros rs fd F ctx rs' bound,
@@ -374,9 +375,9 @@ Proof.
     exploit Genv.find_funct_inv; eauto. intros [b EQ].
     assert (A: val_inject F rs#r rs'#(sreg ctx r)). eapply agree_val_reg; eauto.
     rewrite EQ in A; inv A.
-    inv H1. rewrite DOMAIN in H5. inv H5. auto. 
-    rewrite EQ in H; rewrite Genv.find_funct_find_funct_ptr in H.
-    exploit Genv.find_funct_ptr_negative. unfold ge in H; eexact H. omega.
+    inv H1. rewrite DOMAIN in H5. inv H5. auto.
+    apply FUNCTIONS with fd. 
+    rewrite EQ in H; rewrite Genv.find_funct_find_funct_ptr in H. auto.
   rewrite H2. eapply functions_translated; eauto.
   (* symbol *)
   rewrite symbols_preserved. destruct (Genv.find_symbol ge id); try discriminate.
@@ -1219,7 +1220,8 @@ Proof.
     apply Mem.nextblock_pos.
     unfold Mem.flat_inj. apply zlt_true; auto. 
     unfold Mem.flat_inj in H. destruct (zlt b1 (Mem.nextblock m0)); congruence.
-    eapply Genv.find_symbol_not_fresh; eauto. 
+    eapply Genv.find_symbol_not_fresh; eauto.
+    eapply Genv.find_funct_ptr_not_fresh; eauto.
     eapply Genv.find_var_info_not_fresh; eauto. 
     omega.
   eapply Genv.initmem_inject; eauto.

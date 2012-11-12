@@ -368,17 +368,21 @@ Definition transf_function (gapp: global_approx) (f: function) : function :=
 Definition transf_fundef (gapp: global_approx) (fd: fundef) : fundef :=
   AST.transf_fundef (transf_function gapp) fd.
 
-Fixpoint make_global_approx (gapp: global_approx) (vars: list (ident * globvar unit)) : global_approx :=
-  match vars with
+Fixpoint make_global_approx (gapp: global_approx) (gdl: list (ident * globdef fundef unit)): global_approx :=
+  match gdl with
   | nil => gapp
-  | (id, gv) :: vars' =>
+  | (id, gl) :: gdl' =>
       let gapp1 :=
-        if gv.(gvar_readonly) && negb gv.(gvar_volatile)
-        then PTree.set id gv.(gvar_init) gapp
-        else PTree.remove id gapp in
-      make_global_approx gapp1 vars'
+        match gl with
+        | Gfun f => PTree.remove id gapp
+        | Gvar gv =>
+            if gv.(gvar_readonly) && negb gv.(gvar_volatile)
+            then PTree.set id gv.(gvar_init) gapp
+            else PTree.remove id gapp
+        end in
+      make_global_approx gapp1 gdl'
   end.
 
 Definition transf_program (p: program) : program :=
-  let gapp := make_global_approx (PTree.empty _) p.(prog_vars) in
+  let gapp := make_global_approx (PTree.empty _) p.(prog_defs) in
   transform_program (transf_fundef gapp) p.

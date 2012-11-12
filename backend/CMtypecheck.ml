@@ -349,10 +349,11 @@ let type_function id f =
   with Error s ->
     raise (Error (sprintf "In function %s:\n%s" (extern_atom id) s))
 
-let type_fundef (id, fd) =
-  match fd with
-  | Internal f -> type_function id f
-  | External ef -> ()
+let type_globdef (id, gd) =
+  match gd with
+  | Gfun(Internal f) -> type_function id f
+  | Gfun(External ef) -> ()
+  | Gvar v -> ()
 
 let type_program p =
-  List.iter type_fundef p.prog_funct; p
+  List.iter type_globdef p.prog_defs; p

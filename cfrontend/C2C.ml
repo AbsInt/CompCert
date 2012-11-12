@@ -137,8 +137,8 @@ let global_for_string s id =
        :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
-  (id, {gvar_info = typeStringLiteral s; gvar_init = !init;
-        gvar_readonly = true; gvar_volatile = false})
+  (id, Gvar {gvar_info = typeStringLiteral s; gvar_init = !init;
+             gvar_readonly = true; gvar_volatile = false})
 
 let globals_for_strings globs =
   Hashtbl.fold
@@ -155,7 +155,7 @@ let register_special_external name ef targs tres =
 
 let declare_special_externals k =
   Hashtbl.fold
-    (fun name fd k -> (intern_string name, fd) :: k)
+    (fun name fd k -> (intern_string name, Gfun fd) :: k)
     special_externals_table k
 
 (** ** Handling of stubs for variadic functions *)
@@ -709,8 +709,8 @@ let convertFundef env fd =
       a_sections = Sections.for_function env id' fd.fd_ret;
       a_small_data = false;
       a_inline = fd.fd_inline };
-  (id', Internal {fn_return = ret; fn_params = params;
-                  fn_vars = vars; fn_body = body'})
+  (id', Gfun(Internal {fn_return = ret; fn_params = params;
+                       fn_vars = vars; fn_body = body'}))
 
 (** External function declaration *)
 
@@ -727,7 +727,7 @@ let convertFundecl env (sto, id, ty, optinit) =
     if List.mem_assoc id.name builtins.functions
     then EF_builtin(id', sg)
     else EF_external(id', sg) in
-  (id', External(ef, args, res))
+  (id', Gfun(External(ef, args, res)))
 
 (** Initializers *)
 
@@ -788,8 +788,8 @@ let convertGlobvar env (sto, id, ty, optinit) =
       a_inline = false };
   let volatile = List.mem C.AVolatile attr in
   let readonly = List.mem C.AConst attr && not volatile in
-  (id', {gvar_info = ty'; gvar_init = init';
-         gvar_readonly = readonly; gvar_volatile = volatile})
+  (id', Gvar {gvar_info = ty'; gvar_init = init';
+              gvar_readonly = readonly; gvar_volatile = volatile})
 
 (** Sanity checks on composite declarations. *)
 
@@ -803,13 +803,12 @@ let checkComposite env si id attr flds =
   in List.iter checkField flds
 
 (** Convert a list of global declarations.
-  Result is a pair [(funs, vars)] where [funs] are 
-  the function definitions (internal and external)
-  and [vars] the variable declarations. *)
+  Result is a list of CompCert C global declarations (functions +
+  variables). *)
 
-let rec convertGlobdecls env funs vars gl =
+let rec convertGlobdecls env res gl =
   match gl with
-  | [] -> (List.rev funs, List.rev vars)
+  | [] -> List.rev res
   | g :: gl' ->
       updateLoc g.gloc;
       match g.gdesc with
@@ -819,29 +818,29 @@ let rec convertGlobdecls env funs vars gl =
              Other types become variable declarations. *)
           begin match Cutil.unroll env ty with
           | TFun(_, Some _, false, _) ->
-              convertGlobdecls env (convertFundecl env d :: funs) vars gl'
+              convertGlobdecls env (convertFundecl env d :: res) gl'
           | TFun(_, None, false, _) ->
               error "function declaration without prototype";
-              convertGlobdecls env funs vars gl'
+              convertGlobdecls env res gl'
           | TFun(_, _, true, _) ->
-              convertGlobdecls env funs vars gl'
+              convertGlobdecls env res gl'
           | _ ->
-              convertGlobdecls env funs (convertGlobvar env d :: vars) gl'
+              convertGlobdecls env (convertGlobvar env d :: res) gl'
           end
       | C.Gfundef fd ->
-          convertGlobdecls env (convertFundef env fd :: funs) vars gl'
+          convertGlobdecls env (convertFundef env fd :: res) gl'
       | C.Gcompositedecl _ | C.Gtypedef _ | C.Genumdef _ ->
           (* typedefs are unrolled, structs are expanded inline, and
              enum tags are folded.  So we just skip their declarations. *)
-          convertGlobdecls env funs vars gl'
+          convertGlobdecls env res gl'
       | C.Gcompositedef(su, id, attr, flds) ->
           (* sanity checks on fields *)
           checkComposite env su id attr flds;
-          convertGlobdecls env funs vars gl'
+          convertGlobdecls env res gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
             warning ("'#pragma " ^ s ^ "' directive ignored");
-          convertGlobdecls env funs vars gl'
+          convertGlobdecls env res gl'
 
 (** Build environment of typedefs and structs *)
 
@@ -921,14 +920,12 @@ let convertProgram p =
   Hashtbl.clear special_externals_table;
   let p = Builtins.declarations() @ p in
   try
-    let (funs1, vars1) =
-      convertGlobdecls (translEnv Env.empty p) [] [] (cleanupGlobals p) in
-    let funs2 = declare_special_externals funs1 in
-    let vars2 = globals_for_strings vars1 in
+    let gl1 = convertGlobdecls (translEnv Env.empty p) [] (cleanupGlobals p) in
+    let gl2 = declare_special_externals gl1 in
+    let gl3 = globals_for_strings gl2 in
     if !numErrors > 0
     then None
-    else Some { AST.prog_funct = funs2;
-                AST.prog_vars = vars2;
+    else Some { AST.prog_defs = gl3;
                 AST.prog_main = intern_string "main" }
   with Env.Error msg ->
     error (Env.error_message msg); None

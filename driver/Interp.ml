@@ -87,9 +87,11 @@ let print_event p = function
 let name_of_fundef prog fd =
   let rec find_name = function
   | [] -> "<unknown function>"
-  | (id, fd') :: rem ->
+  | (id, Gfun fd') :: rem ->
       if fd = fd' then extern_atom id else find_name rem
-  in find_name prog.prog_funct
+  | (id, Gvar v) :: rem ->
+      find_name rem
+  in find_name prog.prog_defs
 
 let name_of_function prog fn =
   name_of_fundef prog (Internal fn)
@@ -468,11 +470,13 @@ let rec explore p prog ge time ss =
 (* Massaging the source program *)
 
 let unvolatile prog =
-  let unvolatile_globvar (id, gv) =
-    (id, if gv.gvar_volatile
-         then {gv with gvar_readonly = false; gvar_volatile = false}
-         else gv) in
-  {prog with prog_vars = List.map unvolatile_globvar prog.prog_vars}
+  let unvolatile_globdef = function
+  | (id, Gvar gv) ->
+      (id, Gvar(if gv.gvar_volatile
+                then {gv with gvar_readonly = false; gvar_volatile = false}
+                else gv))
+  | idfd -> idfd in
+  {prog with prog_defs = List.map unvolatile_globdef prog.prog_defs}
 
 let change_main_function p old_main old_main_ty =
   let old_main = Evalof(Evar(old_main, old_main_ty), old_main_ty) in
@@ -483,24 +487,29 @@ let change_main_function p old_main old_main_ty =
   let new_main_fn =
     { fn_return = type_int32s; fn_params = []; fn_vars = []; fn_body = body } in
   let new_main_id = intern_string "___main" in
-  { p with
-    prog_main = new_main_id;
-    prog_funct = (new_main_id, Internal new_main_fn) :: p.prog_funct }
+  { prog_main = new_main_id;
+    prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs }
+
+let rec find_main_function name = function
+  | [] -> None
+  | (id, Gfun fd) :: gdl -> if id = name then Some fd else find_main_function name gdl
+  | (id, Gvar v) :: gdl -> find_main_function name gdl
 
 let fixup_main p =
-  try
-    match type_of_fundef (List.assoc p.prog_main p.prog_funct) with
-    | Tfunction(Tnil, Tint(I32, Signed, _)) ->
-        Some p
-    | Tfunction(Tcons(Tint _, Tcons(Tpointer(Tpointer(Tint(I8,_,_),_),_), Tnil)),
-                Tint _) as ty ->
-        Some (change_main_function p p.prog_main ty)
-    | _ ->
-        fprintf err_formatter "ERROR: wrong type for main() function";
-        None
-  with Not_found ->
-    fprintf err_formatter "ERROR: no main() function";
-    None
+  match find_main_function p.prog_main p.prog_defs with
+  | None ->
+      fprintf err_formatter "ERROR: no main() function";
+      None
+  | Some main_fd ->
+      match type_of_fundef main_fd with
+      | Tfunction(Tnil, Tint(I32, Signed, _)) ->
+          Some p
+      | Tfunction(Tcons(Tint _, Tcons(Tpointer(Tpointer(Tint(I8,_,_),_),_), Tnil)),
+                  Tint _) as ty ->
+          Some (change_main_function p p.prog_main ty)
+      | _ ->
+          fprintf err_formatter "ERROR: wrong type for main() function";
+          None
 
 (* Execution of a whole program *)
 

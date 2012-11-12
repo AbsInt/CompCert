@@ -1734,7 +1734,8 @@ Inductive match_globalenvs (j: meminj) (bound: Z) : Prop :=
       (DOMAIN: forall b, b < bound -> j b = Some(b, 0))
       (IMAGE: forall b1 b2 delta, j b1 = Some(b2, delta) -> b2 < bound -> b1 = b2)
       (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> b < bound)
-      (INFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
+      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> b < bound)
+      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
 
 Inductive match_stacks (j: meminj) (m m': mem): 
        list Linear.stackframe -> list stackframe -> signature -> Z -> Z -> Prop :=
@@ -2170,9 +2171,8 @@ Proof.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists b; exists tf; split; auto. simpl.
   generalize (AG m0). rewrite EQ. intro INJ. inv INJ.
-  exploit Genv.find_funct_ptr_negative. unfold ge in FF; eexact FF. intros. 
-  inv MG. rewrite (DOMAIN b) in H2. inv H2. auto. omega. 
-  revert FF. case_eq (Genv.find_symbol ge i); intros; try discriminate. 
+  inv MG. rewrite DOMAIN in H2. inv H2. simpl. auto. eapply FUNCTIONS; eauto. 
+  destruct (Genv.find_symbol ge i) as [b|]_eqn; try discriminate. 
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists b; exists tf; split; auto. simpl. 
   rewrite symbols_preserved. auto.
@@ -2742,6 +2742,7 @@ Proof.
     intros. unfold Mem.flat_inj. apply zlt_true; auto.
     unfold Mem.flat_inj; intros. destruct (zlt b1 (Mem.nextblock m0)); congruence.
     intros. change (Mem.valid_block m0 b0). eapply Genv.find_symbol_not_fresh; eauto.
+    intros. change (Mem.valid_block m0 b0). eapply Genv.find_funct_ptr_not_fresh; eauto.
     intros. change (Mem.valid_block m0 b0). eapply Genv.find_var_info_not_fresh; eauto.
   rewrite H3. red; intros. contradiction.
   eapply Genv.find_funct_ptr_prop. eexact wt_prog. 

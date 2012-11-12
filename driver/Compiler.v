@@ -184,91 +184,6 @@ Proof.
   intros; unfold print. destruct (printer prog); auto. 
 Qed.
 
-Lemma map_partial_compose:
-  forall (X A B C: Type)
-         (ctx: X -> errmsg)
-         (f1: A -> res B) (f2: B -> res C)
-         (pa: list (X * A)) (pc: list (X * C)),
-  map_partial ctx (fun f => f1 f @@@ f2) pa = OK pc ->
-  { pb | map_partial ctx f1 pa = OK pb /\ map_partial ctx f2 pb = OK pc }.
-Proof.
-  induction pa; simpl.
-  intros. inv H. econstructor; eauto.
-  intro pc. destruct a as [x a].
-  destruct (f1 a) as [] _eqn; simpl; try congruence.
-  destruct (f2 b) as [] _eqn; simpl; try congruence.
-  destruct (map_partial ctx (fun f => f1 f @@@ f2) pa) as [] _eqn; simpl; try congruence.
-  intros. inv H.
-  destruct (IHpa l) as [pb [P Q]]; auto.
-  rewrite P; simpl.
-  econstructor; split. eauto. simpl. rewrite Heqr0. rewrite Q. auto.
-Qed.
-
-Lemma transform_partial_program_compose:
-  forall (A B C V: Type)
-         (f1: A -> res B) (f2: B -> res C)
-         (pa: program A V) (pc: program C V),
-  transform_partial_program (fun f => f1 f @@@ f2) pa = OK pc ->
-  { pb | transform_partial_program f1 pa = OK pb /\
-         transform_partial_program f2 pb = OK pc }.
-Proof.
-  intros. unfold transform_partial_program in H. 
-  destruct (map_partial prefix_name (fun f : A => f1 f @@@ f2) (prog_funct pa)) as [] _eqn;
-  simpl in H; inv H.
-  destruct (map_partial_compose _ _ _ _ _ _ _ _ _ Heqr) as [xb [P Q]].
-  exists (mkprogram xb (prog_main pa) (prog_vars pa)); split.
-  unfold transform_partial_program. rewrite P; auto. 
-  unfold transform_partial_program. simpl. rewrite Q; auto.
-Qed.
-
-Lemma transform_program_partial_program:
-  forall (A B V: Type) (f: A -> B) (p: program A V) (tp: program B V),
-  transform_partial_program (fun x => OK (f x)) p = OK tp ->
-  transform_program f p = tp.
-Proof.
-  intros until tp. unfold transform_partial_program. 
-  rewrite map_partial_total. simpl. intros. inv H. auto. 
-Qed.
-
-Lemma transform_program_compose:
-  forall (A B C V: Type)
-         (f1: A -> res B) (f2: B -> C)
-         (pa: program A V) (pc: program C V),
-  transform_partial_program (fun f => f1 f @@ f2) pa = OK pc ->
-  { pb | transform_partial_program f1 pa = OK pb /\
-         transform_program f2 pb = pc }.
-Proof.
-  intros. 
-  replace (fun f : A => f1 f @@ f2)
-     with (fun f : A => f1 f @@@ (fun x => OK (f2 x))) in H.
-  destruct (transform_partial_program_compose _ _ _ _ _ _ _  _ H) as [pb [X Y]].
-  exists pb; split. auto. 
-  apply transform_program_partial_program. auto. 
-  apply extensionality; intro. destruct(f1 x); auto. 
-Qed.
-
-Lemma transform_partial_program_identity:
-  forall (A V: Type) (pa pb: program A V),
-  transform_partial_program (@OK A) pa = OK pb ->
-  pa = pb.
-Proof.
-  intros until pb. unfold transform_partial_program. 
-  replace (@OK A) with (fun b => @OK A b).
-  rewrite map_partial_identity. simpl. destruct pa; simpl; congruence.
-  apply extensionality; auto. 
-Qed.
-
-Lemma transform_program_print_identity:
-  forall (A V: Type) (p: program A V) (f: A -> unit),
-  transform_program (print f) p = p.
-Proof.
-  intros until f. unfold transform_program, transf_program. 
-  destruct p; simpl; f_equal. 
-  transitivity (map (fun x => x) prog_funct). 
-  apply list_map_exten; intros. destruct x; simpl. rewrite print_identity. auto.
-  apply list_map_identity.
-Qed.
-
 Lemma compose_print_identity:
   forall (A: Type) (x: res A) (f: A -> unit), 
   x @@ print f = x.
@@ -289,18 +204,6 @@ Qed.
   (composition of two backward simulations).
 
 These results establish the correctness of the whole compiler! *)
-
-Ltac TransfProgInv :=
-  match goal with
-  | [ H: transform_partial_program (fun f => _ @@@ _) _ = OK _ |- _ ] =>
-      let p := fresh "p" in let X := fresh "X" in let P := fresh "P" in
-      destruct (transform_partial_program_compose _ _ _ _ _ _ _ _ H) as [p [X P]];
-      clear H
-  | [ H: transform_partial_program (fun f => _ @@ _) _ = OK _ |- _ ] =>
-      let p := fresh "p" in let X := fresh "X" in let P := fresh "P" in
-      destruct (transform_program_compose _ _ _ _ _ _ _ _ H) as [p [X P]];
-      clear H
-  end.
 
 Theorem transf_rtl_program_correct:
   forall p tp,

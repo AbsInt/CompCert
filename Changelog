@@ -7,6 +7,9 @@ Improvements in confidence:
   top of the Flocq library.
 
 Language semantics:
+- Comparison between function pointers is now correctly defined
+  in the semantics of CompCert C (it was previously undefined behavior,
+  by mistake).
 - The "&&" and "||" operators are now primitive in CompCert C and are
   given explicit semantic rules, instead of being expressed in terms
   of "_ ? _ : _" as in previous CompCert releases.
@@ -28,6 +31,9 @@ Internal simplifications:
 - Clight: removed dependencies on CompCert C syntax and semantics.
 - Cminor: suppressed the "Oboolval" and "Onotbool" operators,
   which can be expressed in terms of "Ocmpu" at no performance costs.
+- All languages: programs are now presented as a list of global definitions
+  (of functions or variables) instead of two lists, one for functions
+  and the other for variables.
 
 Other changes:
 - For compatibility with other C compilers, output files are now generated

@@ -28,10 +28,6 @@ let add_referenced_instr rf i =
 let referenced_function f =
   List.fold_left add_referenced_instr IdentSet.empty (code_of_function f)
 
-let referenced_fundef = function
-  | Internal f -> referenced_function f
-  | External ef -> IdentSet.empty
-
 (* The set of globals referenced from a variable definition (initialization) *)
 
 let add_referenced_init_data rf = function
@@ -43,10 +39,15 @@ let referenced_globvar gv =
 
 (* The map global |-> set of globals it references *)
 
+let referenced_globdef gd =
+  match gd with
+  | Gfun(Internal f) -> referenced_function f
+  | Gfun(External ef) -> IdentSet.empty
+  | Gvar gv -> referenced_globvar gv
+
 let use_map p =
-  List.fold_left (fun m (id, gv) -> PTree.set id (referenced_globvar gv) m)
-  (List.fold_left (fun m (id, fd) -> PTree.set id (referenced_fundef fd) m)
-   PTree.empty p.prog_funct) p.prog_vars
+  List.fold_left (fun m (id, gd) -> PTree.set id (referenced_globdef gd) m)
+    PTree.empty p.prog_defs
 
 (* Worklist algorithm computing the set of used globals *)
 
@@ -66,9 +67,8 @@ let add_nonstatic wrk id =
   if C2C.atom_is_static id then wrk else id :: wrk
 
 let initial_worklist p =
-  List.fold_left (fun wrk (id, gv) -> add_nonstatic wrk id)
-   (List.fold_left (fun wrk (id, fd) -> add_nonstatic wrk id)
-     [] p.prog_funct) p.prog_vars
+  List.fold_left (fun wrk (id, gd) -> add_nonstatic wrk id)
+    [] p.prog_defs
 
 (* Eliminate unused definitions *)
 
@@ -80,9 +80,8 @@ let rec filter used = function
       else filter used rem
 
 let filter_prog used p =
-  { prog_funct = filter used p.prog_funct;
-    prog_main = p.prog_main;
-    prog_vars = filter used p.prog_vars }
+  { prog_defs = filter used p.prog_defs;
+    prog_main = p.prog_main }
 
 (* Entry point *)
 

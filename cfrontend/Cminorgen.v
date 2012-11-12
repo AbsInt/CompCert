@@ -565,19 +565,19 @@ Definition build_compilenv
     (fn_variables f)
     (globenv, 0).
 
-Definition assign_global_variable
-     (ce: compilenv) (info: ident * globvar var_kind) : compilenv :=
-  match info with
-  | (id, mkglobvar vk _ _ _) =>
-      PMap.set id (match vk with Vscalar chunk => Var_global_scalar chunk
-                               | Varray _ _ => Var_global_array
-                   end)
-               ce
-  end.
+Definition assign_global_def
+     (ce: compilenv) (gdef: ident * globdef Csharpminor.fundef var_kind) : compilenv :=
+  let (id, gd) := gdef in
+  let kind :=
+    match gd with
+    | Gvar (mkglobvar (Vscalar chunk) _ _ _) => Var_global_scalar chunk
+    | Gvar (mkglobvar (Varray _ _) _ _ _) => Var_global_array
+    | Gfun f => Var_global_array
+    end in
+  PMap.set id kind ce.
 
 Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
-  List.fold_left assign_global_variable 
-                 p.(prog_vars) (PMap.init Var_global_array).
+  List.fold_left assign_global_def p.(prog_defs) (PMap.init Var_global_array).
 
 (** * Translation of functions *)
 

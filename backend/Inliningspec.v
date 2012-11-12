@@ -35,43 +35,30 @@ Definition fenv_compat (ge: genv) (fenv: funenv) : Prop :=
   fenv!id = Some f -> Genv.find_symbol ge id = Some b ->
   Genv.find_funct_ptr ge b = Some (Internal f).
 
-Remark add_fundef_compat:
-  forall ge fenv idf,
+Remark add_globdef_compat:
+  forall ge fenv idg,
   fenv_compat ge fenv ->
-  fenv_compat (Genv.add_function ge idf) (Inlining.add_fundef fenv idf).
+  fenv_compat (Genv.add_global ge idg) (Inlining.add_globdef fenv idg).
 Proof.
-  intros. destruct idf as [id fd]. red; simpl; intros.
+  intros. destruct idg as [id gd]. red; simpl; intros.
   unfold Genv.find_symbol in H1; simpl in H1. 
   unfold Genv.find_funct_ptr; simpl.
   rewrite PTree.gsspec in H1. destruct (peq id0 id).
   (* same *)
-  subst id0. inv H1. rewrite ZMap.gss. 
-  destruct fd. destruct (should_inline id f0).
-  rewrite PTree.gss in H0. inv H0; auto.
+  subst id0. inv H1. destruct gd. destruct f0. 
+  destruct (should_inline id f0).
+  rewrite PTree.gss in H0. rewrite ZMap.gss. inv H0; auto.
+  rewrite PTree.grs in H0; discriminate.
   rewrite PTree.grs in H0; discriminate.
   rewrite PTree.grs in H0; discriminate.
   (* different *)
-  rewrite ZMap.gso. eapply H; eauto.
-  destruct fd. destruct (should_inline id f0).
+  destruct gd. rewrite ZMap.gso. eapply H; eauto. 
+  destruct f0. destruct (should_inline id f0).
   rewrite PTree.gso in H0; auto.
   rewrite PTree.gro in H0; auto.
   rewrite PTree.gro in H0; auto.
-  exploit Genv.genv_symb_range; eauto. intros [A B]. unfold ZIndexed.t; omega. 
-Qed.
-
-Remark remove_vardef_compat:
-  forall ge fenv idv,
-  fenv_compat ge fenv ->
-  fenv_compat (Genv.add_variable ge idv) (Inlining.remove_vardef fenv idv).
-Proof.
-  intros. destruct idv as [id vi]. red; simpl; intros.
-  unfold Genv.find_symbol in H1; simpl in H1. 
-  unfold Genv.find_funct_ptr; simpl.
-  unfold remove_vardef in H0; simpl in H0.
-  rewrite PTree.gsspec in H1. rewrite PTree.grspec in H0. 
-  unfold PTree.elt_eq in H0. destruct (peq id0 id).
-  discriminate.
-  eapply H; eauto.
+  exploit Genv.genv_symb_range; eauto. intros [A B]. unfold ZIndexed.t; omega.
+  rewrite PTree.gro in H0; auto. eapply H; eauto. 
 Qed.
 
 Lemma funenv_program_compat:
@@ -79,17 +66,11 @@ Lemma funenv_program_compat:
 Proof.
   intros.
   unfold Genv.globalenv, funenv_program.
-  assert (forall funs ge fenv,
+  assert (forall gl ge fenv,
          fenv_compat ge fenv ->
-         fenv_compat (Genv.add_functions ge funs) (fold_left add_fundef funs fenv)).
-    unfold Genv.add_functions. induction funs; simpl; intros.
-    auto. apply IHfuns. apply add_fundef_compat; auto.
-  assert (forall vars ge fenv,
-         fenv_compat ge fenv ->
-         fenv_compat (Genv.add_variables ge vars) (fold_left remove_vardef vars fenv)).
-    unfold Genv.add_variables. induction vars; simpl; intros.
-    auto. apply IHvars. apply remove_vardef_compat; auto.
-  apply H0. apply H. red; intros. rewrite PTree.gempty in H1; discriminate.
+         fenv_compat (Genv.add_globals ge gl) (fold_left add_globdef gl fenv)).
+    induction gl; simpl; intros. auto. apply IHgl. apply add_globdef_compat; auto. 
+  apply H. red; intros. rewrite PTree.gempty in H0; discriminate.
 Qed.
 
 (** ** Soundness of the computed bounds over function resources *)

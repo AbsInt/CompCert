@@ -214,39 +214,15 @@ Qed.
 
 (** * Properties of the translation functions *)
 
-Lemma map_partial_names:
-  forall (A B: Type) (f: A -> res B)
-         (l: list (ident * A)) (tl: list (ident * B)),
-  map_partial prefix_var_name f l = OK tl ->
-  List.map (@fst ident B) tl = List.map (@fst ident A) l.
-Proof.
-  induction l; simpl.
-  intros. inversion H. reflexivity.
-  intro tl. destruct a as [id x]. destruct (f x); try congruence.
-  caseEq (map_partial prefix_var_name f l); simpl; intros; try congruence.
-  inv H0. simpl. decEq. auto.
-Qed.
-   
-Lemma map_partial_append:
-  forall (A B: Type) (f: A -> res B)
-         (l1 l2: list (ident * A)) (tl1 tl2: list (ident * B)),
-  map_partial prefix_var_name f l1 = OK tl1 ->
-  map_partial prefix_var_name f l2 = OK tl2 ->
-  map_partial prefix_var_name f (l1 ++ l2) = OK (tl1 ++ tl2).
-Proof.
-  induction l1; intros until tl2; simpl.
-  intros. inversion H. simpl; auto.
-  destruct a as [id x]. destruct (f x); try congruence.
-  caseEq (map_partial prefix_var_name f l1); simpl; intros; try congruence.
-  inv H0. rewrite (IHl1 _ _ _ H H1). auto.
-Qed.
- 
 Lemma transl_vars_names:
   forall vars tvars,
   transl_vars vars = OK tvars ->
   List.map variable_name tvars = var_names vars.
 Proof.
-  exact (map_partial_names _ _ var_kind_of_type).
+  induction vars; simpl; intros. 
+  monadInv H. auto.
+  destruct a as [id ty]. destruct (var_kind_of_type ty); monadInv H. 
+  simpl. decEq; auto.
 Qed.
 
 Lemma transl_names_norepet:
@@ -268,7 +244,10 @@ Lemma transl_vars_append:
   transl_vars l1 = OK tl1 -> transl_vars l2 = OK tl2 ->
   transl_vars (l1 ++ l2) = OK (tl1 ++ tl2).
 Proof.
-  exact (map_partial_append _ _ var_kind_of_type).
+  induction l1; simpl; intros.
+  inv H. auto.
+  destruct a as [id ty]. destruct (var_kind_of_type ty); monadInv H. 
+  erewrite IHl1; eauto. simpl. auto.
 Qed.
 
 Lemma transl_fn_variables:

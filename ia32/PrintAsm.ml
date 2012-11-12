@@ -767,11 +767,6 @@ let print_function oc name code =
     jumptables := []
   end
 
-let print_fundef oc (name, defn) =
-  match defn with
-  | Internal code -> print_function oc name code
-  | External ef -> ()
-
 let print_init oc = function
   | Init_int8 n ->
       fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -802,7 +797,7 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (name, v) =
+let print_var oc name v =
   match v.gvar_init with
   | [] -> ()
   | _  ->
@@ -826,11 +821,16 @@ let print_var oc (name, v) =
         fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
       end
 
+let print_globdef oc (name, gdef) =
+  match gdef with
+  | Gfun(Internal code) -> print_function oc name code
+  | Gfun(External ef) -> ()
+  | Gvar v -> print_var oc name v
+
 let print_program oc p =
   need_masks := false;
   indirect_symbols := StringSet.empty;
-  List.iter (print_var oc) p.prog_vars;
-  List.iter (print_fundef oc) p.prog_funct;
+  List.iter (print_globdef oc) p.prog_defs;
   if !need_masks then begin
     section oc Section_const;  (* not Section_literal because not 8-bytes *)
     print_align oc 16;

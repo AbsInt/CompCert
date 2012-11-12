@@ -546,8 +546,16 @@ with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
 Definition prefix_var_name (id: ident) : errmsg :=
   MSG "In local variable " :: CTX id :: MSG ": " :: nil.
 
-Definition transl_vars (l: list (ident * type)) :=
-   AST.map_partial prefix_var_name var_kind_of_type l.
+Fixpoint transl_vars (l: list (ident * type)) : res (list (ident * var_kind)) :=
+  match l with
+  | nil => OK nil
+  | (id, ty) :: l' =>
+      match var_kind_of_type ty with
+      | Error msg => Error (MSG "In local variable " :: CTX id :: MSG ": " :: msg)
+      | OK vk =>
+          do tl' <- transl_vars l'; OK ((id, vk) :: tl')
+      end
+  end.
 
 Definition transl_function (f: Clight.function) : res function :=
   do tparams <- transl_vars (Clight.fn_params f);

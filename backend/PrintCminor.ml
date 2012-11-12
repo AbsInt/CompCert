@@ -273,13 +273,6 @@ let print_extfun p id ef =
   fprintf p "@[<v 0>extern @[<hov 2>\"%s\":@ %a@]@ "
     (extern_atom id) print_sig (ef_sig ef)
 
-let print_fundef p (id, fd) =
-  match fd with
-  | External ef ->
-      print_extfun p id ef
-  | Internal f ->
-      print_function p id f
-
 let print_init_data p = function
   | Init_int8 i -> fprintf p "int8 %ld" (camlint_of_coqint i)
   | Init_int16 i -> fprintf p "int16 %ld" (camlint_of_coqint i)
@@ -306,14 +299,18 @@ let print_globvar p gv =
   print_init_data_list p gv.gvar_init;
   fprintf p "}"
 
-let print_var p (id, gv) =
-  fprintf p "var \"%s\" %a\n" (extern_atom id) print_globvar gv
+let print_globdef p (id, gd) =
+  match gd with
+  | Gfun(External ef) ->
+      print_extfun p id ef
+  | Gfun(Internal f) ->
+      print_function p id f
+  | Gvar gv ->
+     fprintf p "var \"%s\" %a\n" (extern_atom id) print_globvar gv
 
 let print_program p prog =
-  fprintf p "@[<v>";
-  List.iter (print_var p) prog.prog_vars;
-  fprintf p "@]@[<v 0>";
-  List.iter (print_fundef p) prog.prog_funct;
+  fprintf p "@[<v 0>";
+  List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 
 let destination : string option ref = ref None

@@ -698,13 +698,6 @@ let print_function oc name fn =
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
-let print_fundef oc (name, defn) =
-  match defn with
-  | Internal code ->
-      print_function oc name code
-  | External ef ->
-      ()
-
 (* Data *)
 
 let print_init oc = function
@@ -734,7 +727,7 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (name, v) =
+let print_var oc name v =
   match v.gvar_init with
   | [] -> ()
   | _  ->
@@ -756,8 +749,14 @@ let print_var oc (name, v) =
       fprintf oc "	.type	%a, %%object\n" print_symb name;
       fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
+let print_globdef oc (name, gdef) =
+  | Gfun(Internal f) -> print_function oc name f
+  | Gfun(External ef) -> ()
+  | Gvar v -> print_var oc name v
+
 let print_program oc p =
 (*  fprintf oc "	.fpu	vfp\n"; *)
   List.iter (print_var oc) p.prog_vars;
-  List.iter (print_fundef oc) p.prog_funct
+  List.iter (print_globdef oc) p.prog_defs
+
 

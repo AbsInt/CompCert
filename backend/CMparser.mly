@@ -307,10 +307,9 @@ let mkmatch expr cases =
 /* Programs */
 
 prog:
-    global_declarations proc_list EOF
-      { { prog_funct = List.rev $2;
-          prog_main = intern_string "main";
-          prog_vars = List.rev $1; } }
+    global_declarations EOF
+      { { prog_defs = List.rev $1;
+          prog_main = intern_string "main" } }
 ;
 
 global_declarations:
@@ -319,12 +318,14 @@ global_declarations:
 ;
 
 global_declaration:
-    VAR STRINGLIT LBRACKET INTLIT RBRACKET  /* old style */
-      { ($2, {gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
-              gvar_readonly = false; gvar_volatile = false}) }
+    proc
+      { $1 }
+  | VAR STRINGLIT LBRACKET INTLIT RBRACKET  /* old style */
+      { ($2, Gvar{gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
+                  gvar_readonly = false; gvar_volatile = false}) }
   | VAR STRINGLIT is_readonly is_volatile LBRACE init_data_list RBRACE
-       { ($2, {gvar_info = (); gvar_init = List.rev $6;
-               gvar_readonly = $3; gvar_volatile = $4; } ) }
+       { ($2, Gvar{gvar_info = (); gvar_init = List.rev $6;
+                   gvar_readonly = $3; gvar_volatile = $4; } ) }
 ;
 
 is_readonly:
@@ -359,12 +360,6 @@ init_data:
    | INTLIT LPAREN STRINGLIT RPAREN              { Init_addrof ($3, coqint_of_camlint $1) }
  ;
  
-
-proc_list:
-    /* empty */                                 { [] }
-  | proc_list proc                              { $2 :: $1 }
-;
-
 /* Procedures */
 
 proc:
@@ -378,13 +373,13 @@ proc:
         temporaries := [];
         temp_counter := 0;
         ($1,
-        Internal { fn_sig = $6;
-                   fn_params = List.rev $3;
-                   fn_vars = List.rev (tmp @ $9);
-                   fn_stackspace = $8;
-                   fn_body = $10 }) }
+        Gfun(Internal { fn_sig = $6;
+                        fn_params = List.rev $3;
+                        fn_vars = List.rev (tmp @ $9);
+                        fn_stackspace = $8;
+                        fn_body = $10 })) }
   | EXTERN STRINGLIT COLON signature 
-      { ($2, External(EF_external($2,$4))) }
+      { ($2, Gfun(External(EF_external($2,$4)))) }
 ;
 
 signature:

@@ -249,7 +249,7 @@ let print_function p id f =
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ @ "
 
-let print_fundef p (id, fd) =
+let print_fundef p id fd =
   match fd with
   | External(EF_external(_,_), args, res) ->
       fprintf p "extern %s;@ @ "
@@ -258,6 +258,11 @@ let print_fundef p (id, fd) =
       ()
   | Internal f ->
       print_function p id f
+
+let print_globdef p (id, gd) =
+  match gd with
+  | Gfun f -> print_fundef p id f
+  | Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
 
 (* Collect struct and union types *)
 
@@ -307,17 +312,14 @@ let collect_function f =
   List.iter (fun (id, ty) -> collect_type ty) f.fn_temps;
   collect_stmt f.fn_body
 
-let collect_fundef (id, fd) =
-  match fd with
-  | External(_, args, res) -> collect_type_list args; collect_type res
-  | Internal f -> collect_function f
-
-let collect_globvar (id, v) =
-  collect_type v.gvar_info
+let collect_globdef (id, gd) =
+  match gd with
+  | Gfun(External(_, args, res)) -> collect_type_list args; collect_type res
+  | Gfun(Internal f) -> collect_function f
+  | Gvar v -> collect_type v.gvar_info
 
 let collect_program p =
-  List.iter collect_globvar p.prog_vars;
-  List.iter collect_fundef p.prog_funct
+  List.iter collect_globdef p.prog_defs
 
 let declare_struct_or_union p (name, fld) =
   fprintf p "%s;@ @ " name
@@ -338,8 +340,7 @@ let print_program p prog =
   fprintf p "@[<v 0>";
   StructUnionSet.iter (declare_struct_or_union p) !struct_unions;
   StructUnionSet.iter (print_struct_or_union p) !struct_unions;
-  List.iter (print_globvar p) prog.prog_vars;
-  List.iter (print_fundef p) prog.prog_funct;
+  List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 
 let destination : string option ref = ref None

@@ -28,7 +28,7 @@ Ltac xomega := unfold Plt, Ple in *; zify; omega.
 (** ** Environment of inlinable functions *)
 
 (** We maintain a mapping from function names to their definitions.
-  In this mapping, we only include functions that are eligible for
+  In this mapping, we only include internal functions that are eligible for
   inlining, as determined by the external heuristic
   [should_inline]. *)
 
@@ -38,22 +38,18 @@ Definition size_fenv (fenv: funenv) := PTree_Properties.cardinal fenv.
 
 Parameter should_inline: ident -> function -> bool.
 
-Definition add_fundef (fenv: funenv) (idf: ident * fundef) : funenv :=
-  match idf with
-  | (id, External ef) =>
-      PTree.remove id fenv
-  | (id, Internal f) =>
+Definition add_globdef (fenv: funenv) (idg: ident * globdef fundef unit) : funenv :=
+  match idg with
+  | (id, Gfun (Internal f)) =>
       if should_inline id f
       then PTree.set id f fenv
       else PTree.remove id fenv
+  | (id, _) =>
+      PTree.remove id fenv
   end.
 
-Definition remove_vardef (fenv: funenv) (idv: ident * globvar unit) : funenv :=
-  PTree.remove (fst idv) fenv.
-
 Definition funenv_program (p: program) : funenv :=
-  List.fold_left remove_vardef p.(prog_vars)
-    (List.fold_left add_fundef p.(prog_funct) (PTree.empty function)).
+  List.fold_left add_globdef p.(prog_defs) (PTree.empty function).
 
 (** Resources used by a function. *)
 

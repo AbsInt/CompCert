@@ -1,5 +1,7 @@
 #include <stdio.h>
 
+int x0;
+
 char x1 = 'x';
 
 int x2 = 12345;
@@ -67,6 +69,7 @@ int main()
 {
   int i;
 
+  printf("x0 = %d\n", x0);
   printf("x1 = '%c'\n", x1);
   printf("x2 = %d\n", x2);
   printf("x3 = %.5f\n", x3);

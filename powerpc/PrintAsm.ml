@@ -881,7 +881,7 @@ let function_needs_stub name =
 
 (* Generation of whole programs *)
 
-let print_fundef oc (name, defn) =
+let print_fundef oc name defn =
   match defn with
   | Internal code ->
       print_function oc name code
@@ -890,13 +890,12 @@ let print_fundef oc (name, defn) =
   | External _ ->
       ()
 
-let record_extfun (name, defn) =
-  match defn with
-  | Internal _ -> ()
-  | External (EF_external _ | EF_malloc | EF_free) ->
+let record_extfun (name, gd) =
+  match gd with
+  | Gfun(External (EF_external _ | EF_malloc | EF_free)) ->
       if function_needs_stub name then
         stubbed_functions := IdentSet.add name !stubbed_functions
-  | External _ -> ()
+  | _ -> ()
 
 let print_init oc = function
   | Init_int8 n ->
@@ -930,7 +929,7 @@ let print_init_data oc name id =
   else
     List.iter (print_init oc) id
 
-let print_var oc (name, v) =
+let print_var oc name v =
   match v.gvar_init with
   | [] -> ()
   | _  ->
@@ -963,9 +962,13 @@ let print_var oc (name, v) =
           (1 lsl align)
       end
 
+let print_globdef oc (name, gdef) =
+  match gdef with
+  | Gfun f -> print_fundef oc name f
+  | Gvar v -> print_var oc name v
+
 let print_program oc p =
   stubbed_functions := IdentSet.empty;
-  List.iter record_extfun p.prog_funct;
-  List.iter (print_var oc) p.prog_vars;
-  List.iter (print_fundef oc) p.prog_funct
+  List.iter record_extfun p.prog_defs;
+  List.iter (print_globdef oc) p.prog_defs
 

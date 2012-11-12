@@ -37,7 +37,7 @@ Variable prog: program.
 Let tprog := transf_program prog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
-Let gapp := make_global_approx (PTree.empty _) prog.(prog_vars).
+Let gapp := make_global_approx (PTree.empty _) prog.(prog_defs).
 
 (** * Correctness of the static analysis *)
 
@@ -279,31 +279,34 @@ Definition global_approx_charact (g: genv) (ga: global_approx) : Prop :=
   Genv.find_var_info g b = Some (mkglobvar tt il true false).
 
 Lemma make_global_approx_correct:
-  forall vl g ga,
+  forall gdl g ga,
   global_approx_charact g ga ->
-  global_approx_charact (Genv.add_variables g vl) (make_global_approx ga vl).
+  global_approx_charact (Genv.add_globals g gdl) (make_global_approx ga gdl).
 Proof.
-  induction vl; simpl; intros.
+  induction gdl; simpl; intros.
   auto.
-  destruct a as [id gv]. apply IHvl. 
+  destruct a as [id gd]. apply IHgdl. 
   red; intros. 
-  assert (EITHER: id0 = id /\ gv = mkglobvar tt il true false
+  assert (EITHER: id0 = id /\ gd = Gvar(mkglobvar tt il true false)
                \/ id0 <> id /\ ga!id0 = Some il).
-  destruct (gvar_readonly gv && negb (gvar_volatile gv)) as []_eqn.
+  destruct gd.
+  rewrite PTree.grspec in H0. destruct (PTree.elt_eq id0 id); [discriminate|auto].
+  destruct (gvar_readonly v && negb (gvar_volatile v)) as []_eqn.
   rewrite PTree.gsspec in H0. destruct (peq id0 id).
   inv H0. left. split; auto. 
-  destruct gv; simpl in *. 
+  destruct v; simpl in *. 
   destruct gvar_readonly; try discriminate.
   destruct gvar_volatile; try discriminate.
   destruct gvar_info. auto.
-  right; auto.
-  rewrite PTree.grspec in H0. destruct (PTree.elt_eq id0 id); try discriminate.
-  right; auto.
-  unfold Genv.add_variable, Genv.find_symbol, Genv.find_var_info in *;
+  auto.
+  rewrite PTree.grspec in H0. destruct (PTree.elt_eq id0 id); [discriminate|auto].
+
+  unfold Genv.add_global, Genv.find_symbol, Genv.find_var_info in *;
   simpl in *.
   destruct EITHER as [[A B] | [A B]].
   subst id0. rewrite PTree.gss in H1. inv H1. rewrite ZMap.gss. auto.
-  rewrite PTree.gso in H1; auto. rewrite ZMap.gso. eapply H. eauto. auto.
+  rewrite PTree.gso in H1; auto. destruct gd. eapply H; eauto. 
+  rewrite ZMap.gso. eapply H; eauto.
   exploit Genv.genv_symb_range; eauto. unfold ZIndexed.t. omega.
 Qed.
 

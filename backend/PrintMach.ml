@@ -102,13 +102,13 @@ let print_function pp id f =
   List.iter (print_instruction pp) f.fn_code;
   fprintf pp "@;<0 -2>}@]@."
 
-let print_fundef pp (id, fd) =
-  match fd with
-  | Internal f -> print_function pp id f
-  | External _ -> ()
+let print_globdef pp (id, gd) =
+  match gd with
+  | Gfun(Internal f) -> print_function pp id f
+  | _ -> ()
 
 let print_program pp prog =
-  List.iter (print_fundef pp) prog.prog_funct
+  List.iter (print_globdef pp) prog.prog_defs
 
 let destination : string option ref = ref None
 

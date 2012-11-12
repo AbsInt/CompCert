@@ -109,23 +109,28 @@ Lemma global_compilenv_charact:
 Proof.
   assert (A: forall ge, global_compilenv_match (PMap.init Var_global_array) ge).
     intros; red; intros. rewrite PMap.gi. auto.
-  assert (B: forall ce ge v,
+  assert (B: forall ce ge idg,
              global_compilenv_match ce ge ->
-             global_compilenv_match (assign_global_variable ce v)
-                                    (Genv.add_variable ge v)).
-  intros; red; intros. destruct v as [id1 [info1 init1 ro1 vo1]].
-  unfold assign_global_variable, Genv.find_symbol, Genv.find_var_info; simpl.
-  rewrite PMap.gsspec. destruct (peq id id1). subst id.
+             global_compilenv_match (assign_global_def ce idg)
+                                    (Genv.add_global ge idg)).
+  intros; red; intros. unfold assign_global_def. 
+  destruct idg as [id1 gd]. rewrite PMap.gsspec. destruct (peq id id1).
+  (* same var *)
+  subst id1. destruct gd as [f | [info1 init1 ro1 vo1]]. auto. 
   destruct info1; auto. 
-  rewrite PTree.gss. intros. inv H0. rewrite ZMap.gss in H1. inv H1. auto. 
-  generalize (H id). destruct (ce!!id); auto.
-  rewrite PTree.gso; auto. intros. rewrite ZMap.gso in H2. eapply H0; eauto.
+  unfold Genv.find_symbol, Genv.find_var_info. simpl; intros.
+  rewrite PTree.gss in H0. inv H0. rewrite ZMap.gss in H1. inv H1; auto. 
+  (* different var *)
+  generalize (H id). unfold Genv.find_symbol, Genv.find_var_info. simpl. intros.
+  destruct (ce!!id); auto. intros. 
+  rewrite PTree.gso in H1; auto.
+  destruct gd as [f|v]. eauto. rewrite ZMap.gso in H2. eauto.
   exploit Genv.genv_symb_range; eauto. unfold block, ZIndexed.t; omega.
-  assert (C: forall vl ce ge,
+  assert (C: forall gl ce ge,
              global_compilenv_match ce ge ->
-             global_compilenv_match (fold_left assign_global_variable vl ce)
-                                    (Genv.add_variables ge vl)).
-  induction vl; simpl; intros. auto. apply IHvl. apply B. auto.
+             global_compilenv_match (fold_left assign_global_def gl ce)
+                                    (Genv.add_globals ge gl)).
+  induction gl; simpl; intros. auto. apply IHgl. apply B. auto.
 
   unfold gce, build_global_compilenv, ge, Genv.globalenv.
   apply C. apply A.
@@ -680,7 +685,8 @@ Inductive match_globalenvs (f: meminj) (bound: Z): Prop :=
       (DOMAIN: forall b, b < bound -> f b = Some(b, 0))
       (IMAGE: forall b1 b2 delta, f b1 = Some(b2, delta) -> b2 < bound -> b1 = b2)
       (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> b < bound)
-      (INFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
+      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> b < bound)
+      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> b < bound).
 
 (** Matching of call stacks imply:
 - matching of environments for each of the frames
@@ -1132,7 +1138,7 @@ Remark inj_preserves_globals:
 Proof.
   intros. inv H.
   split. intros. apply DOMAIN. eapply SYMBOLS. eauto.
-  split. intros. apply DOMAIN. eapply INFOS. eauto. 
+  split. intros. apply DOMAIN. eapply VARINFOS. eauto. 
   intros. symmetry. eapply IMAGE; eauto. 
 Qed.
 
@@ -2822,16 +2828,15 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
 
 Remark val_inject_function_pointer:
   forall bound v fd f tv,
-  Genv.find_funct tge v = Some fd ->
+  Genv.find_funct ge v = Some fd ->
   match_globalenvs f bound ->
   val_inject f v tv ->
   tv = v.
 Proof.
   intros. exploit Genv.find_funct_inv; eauto. intros [b EQ]. subst v.
-  rewrite Genv.find_funct_find_funct_ptr in H. 
-  assert (b < 0). unfold tge in H. eapply Genv.find_funct_ptr_negative; eauto.
-  assert (f b = Some(b, 0)). inv H0. apply DOMAIN. omega.  
-  inv H1. rewrite H3 in H6; inv H6. reflexivity.
+  rewrite Genv.find_funct_find_funct_ptr in H.
+  assert (f b = Some(b, 0)). inv H0. apply DOMAIN. eapply FUNCTIONS; eauto.
+  inv H1. rewrite H2 in H5; inv H5. reflexivity.
 Qed.
 
 Lemma match_call_cont:
@@ -3426,6 +3431,7 @@ Proof.
   intros. unfold Mem.flat_inj in H0. 
   destruct (zlt b1 (Mem.nextblock m)); congruence.
   intros. eapply Genv.find_symbol_not_fresh; eauto.
+  intros. eapply Genv.find_funct_ptr_not_fresh; eauto.
   intros. eapply Genv.find_var_info_not_fresh; eauto. 
 Qed.
 
