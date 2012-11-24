@@ -27,7 +27,9 @@ int main(int argc, char ** argv)
   printf("fres(%f) = %f\n", a, __builtin_fres(a));
   printf("fsel(%f, %f, %f) = %f\n", a, b, c, __builtin_fsel(a, b, c));
   printf("fsel(%f, %f, %f) = %f\n", -a, b, c, __builtin_fsel(-a, b, c));
-
+  printf("fcti(%f) = %d\n", a, __builtin_fcti(a));
+  printf("fcti(%f) = %d\n", b, __builtin_fcti(b));
+  printf("fcti(%f) = %d\n", c, __builtin_fcti(c));
   __builtin_eieio();
   __builtin_sync();
   __builtin_isync();
