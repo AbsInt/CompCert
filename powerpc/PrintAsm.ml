@@ -447,6 +447,11 @@ let print_builtin_inline oc name args res =
       fprintf oc "	fres	%a, %a\n" freg res freg a1
   | "__builtin_fsel", [FR a1; FR a2; FR a3], FR res ->
       fprintf oc "	fsel	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
+  | "__builtin_fcti", [FR a1], IR res ->
+      fprintf oc "	fctiw	%a, %a\n" freg FPR13 freg a1;
+      fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
+      fprintf oc "	lwz	%a, 4(%a)\n" ireg res ireg GPR1;
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
   (* Memory accesses *)
   | "__builtin_read16_reversed", [IR a1], IR res ->
       fprintf oc "	lhbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1

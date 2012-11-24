@@ -56,6 +56,10 @@ let builtins = {
       (TFloat(FDouble, []), 
        [TFloat(FDouble, []); TFloat(FDouble, []); TFloat(FDouble, [])],
        false);
+    "__builtin_fcti",
+      (TInt(IInt, []),
+       [TFloat(FDouble, [])],
+       false);
     (* Memory accesses *)
     "__builtin_read16_reversed",
       (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);
