@@ -425,10 +425,9 @@ let rec elab_specifier ?(only = false) loc env specifier =
         (!sto, !inline, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
-        let env' = 
-          elab_enum loc id optmembers env in
-        let attr' = add_attributes !attr (elab_attributes loc env a) in
-        (!sto, !inline, TInt(enum_ikind, attr'), env')
+        let (id', env') = 
+          elab_enum loc id optmembers a env in
+        (!sto, !inline, TEnum(id', !attr), env')
 
     | [Cabs.TtypeofE _] ->
         fatal_error loc "GCC __typeof__ not supported"
@@ -549,28 +548,29 @@ and elab_field_group env (spec, fieldlist) =
           let ik =
             match unroll env' ty with
             | TInt(ik, _) -> ik
+            | TEnum(_, _) -> enum_ikind
             | _ -> ILongLong (* trigger next error message *) in
           if integer_rank ik > integer_rank IInt then
               error loc
-                "the type of a bit field must be an integer type \
-                 no bigger than 'int'";
+                "the type of '%s' must be an integer type \
+                 no bigger than 'int'" id;
           match Ceval.integer_expr env' (!elab_expr_f loc env sz) with
           | Some n ->
               if n < 0L then begin
-                error loc "bit size of member %s (%Ld) is negative" id n;
+                error loc "bit size of '%s' (%Ld) is negative" id n;
                 None
               end else
               if n > Int64.of_int(sizeof_ikind ik * 8) then begin
-                error loc "bit size of member %s (%Ld) is too large" id n;
+                error loc "bit size of '%s' (%Ld) exceeds its type" id n;
                 None
               end else
               if n = 0L && id <> "" then begin
-                error loc "member %s has zero size" id;
+                error loc "member '%s' has zero size" id;
                 None
               end else
                 Some(Int64.to_int n)
           | None ->
-              error loc "bit size of member %s is not a compile-time constant" id;
+              error loc "bit size of '%s' is not a compile-time constant" id;
               None in
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' } 
   in
@@ -673,14 +673,21 @@ and elab_enum_item env (s, exp, loc) nextval =
             (nextval, Some exp') in
   if redef Env.lookup_ident env s <> None then
     error loc "redefinition of enumerator '%s'" s;
+  if not (int_representable v (8 * sizeof_ikind enum_ikind) (is_signed_ikind enum_ikind)) then
+     warning loc "the value of '%s' is not representable with type %a"
+                 s Cprint.typ (TInt(enum_ikind, []));
   let (id, env') = Env.enter_enum_item env s v in
-  ((id, exp'), Int64.succ v, env')
+  ((id, v, exp'), Int64.succ v, env')
 
 (* Elaboration of an enumeration declaration *)
 
-and elab_enum loc tag optmembers env =
+and elab_enum loc tag optmembers attrs env =
+  let attrs' =
+    elab_attributes loc env attrs in
   match optmembers with
-  | None -> env
+  | None ->
+      let (tag', info) = wrap Env.lookup_enum loc env tag in (tag', env)
+      (* XXX this will cause an error for incomplete enum definitions. *)
   | Some members ->
       let rec elab_members env nextval = function
       | [] -> ([], env)
@@ -689,9 +696,10 @@ and elab_enum loc tag optmembers env =
           let (dcl2, env2) = elab_members env1 nextval1 tl in
           (dcl1 :: dcl2, env2) in
       let (dcls, env') = elab_members env 0L members in
-      let tag' = Env.fresh_ident tag in
-      emit_elab (elab_loc loc) (Genumdef(tag', dcls));
-      env'
+      let info = { ei_members = dcls; ei_attr = attrs' } in
+      let (tag', env'') = Env.enter_enum env' tag info in
+      emit_elab (elab_loc loc) (Genumdef(tag', attrs', dcls));
+      (tag', env'')
 
 (* Elaboration of a naked type, e.g. in a cast *)
 
@@ -739,8 +747,8 @@ let elab_expr loc env a =
       let b1 = elab a1 in let b2 = elab a2 in
       let tres =
         match (unroll env b1.etyp, unroll env b2.etyp) with
-        | (TPtr(t, _) | TArray(t, _, _)), TInt _ -> t
-        | TInt _, (TPtr(t, _) | TArray(t, _, _)) -> t
+        | (TPtr(t, _) | TArray(t, _, _)), (TInt _ | TEnum _) -> t
+        | (TInt _ | TEnum _), (TPtr(t, _) | TArray(t, _, _)) -> t
         | t1, t2 -> error "incorrect types for array subscripting" in
       { edesc = EBinop(Oindex, b1, b2, TPtr(tres, [])); etyp = tres }
 
@@ -801,6 +809,7 @@ let elab_expr loc env a =
            having declared it *)
         match a1 with
         | VARIABLE n when not (Env.ident_is_bound env n) ->
+            warning "implicit declaration of function '%s'" n;
             let ty = TFun(TInt(IInt, []), None, false, []) in
             (* Emit an extern declaration for it *)
             let id = Env.fresh_ident n in
@@ -944,8 +953,8 @@ let elab_expr loc env a =
         else begin
           let (ty, attr) =
             match unroll env b1.etyp, unroll env b2.etyp with
-            | (TPtr(ty, a) | TArray(ty, _, a)), TInt _ -> (ty, a)
-            | TInt _, (TPtr(ty, a) | TArray(ty, _, a)) -> (ty, a)
+            | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) -> (ty, a)
+            | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) -> (ty, a)
             | _, _ -> error "type error in binary '+'" in
           if not (pointer_arithmetic_ok env ty) then
             err "illegal pointer arithmetic in binary '+'";
@@ -962,11 +971,11 @@ let elab_expr loc env a =
           (tyres, tyres)
         end else begin
           match unroll env b1.etyp, unroll env b2.etyp with
-          | (TPtr(ty, a) | TArray(ty, _, a)), TInt _ ->
+          | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) ->
               if not (pointer_arithmetic_ok env ty) then
                 err "illegal pointer arithmetic in binary '-'";
               (TPtr(ty, a), TPtr(ty, a))
-          | TInt _, (TPtr(ty, a) | TArray(ty, _, a)) ->
+          | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) ->
               if not (pointer_arithmetic_ok env ty) then
                 err "illegal pointer arithmetic in binary '-'";
               (TPtr(ty, a), TPtr(ty, a))
@@ -1022,7 +1031,7 @@ let elab_expr loc env a =
       if not (is_scalar_type env b1.etyp) then
         err ("the first argument of '? :' is not a scalar type");
       begin match pointer_decay env b2.etyp, pointer_decay env b3.etyp with
-      | (TInt _ | TFloat _), (TInt _ | TFloat _) ->
+      | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) ->
           { edesc = EConditional(b1, b2, b3);
             etyp = binary_conversion env b2.etyp b3.etyp }
       | TPtr(ty1, a1), TPtr(ty2, a2) ->
@@ -1170,7 +1179,7 @@ let elab_expr loc env a =
       let b2 = elab a2 in
       let resdesc =
         match pointer_decay env b1.etyp, pointer_decay env b2.etyp with
-        | (TInt _ | TFloat _), (TInt _ | TFloat _) ->
+        | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) ->
             EBinop(op, b1, b2, binary_conversion env b1.etyp b2.etyp)
         | TInt _, TPtr(ty, _) when is_literal_0 b1 ->
             EBinop(op, nullconst, b2, TPtr(ty, []))
@@ -1186,8 +1195,8 @@ let elab_expr loc env a =
             if not (compatible_types ~noattrs:true env ty1 ty2) then
               warning "comparison between incompatible pointer types";
             EBinop(op, b1, b2, TPtr(ty1, []))
-        | TPtr _, TInt _
-        | TInt _, TPtr _ ->
+        | TPtr _, (TInt _ | TEnum _)
+        | (TInt _ | TEnum _), TPtr _ ->
             warning "comparison between integer and pointer";
             EBinop(op, b1, b2, TPtr(TVoid [], []))
         | ty1, ty2 ->
@@ -1374,7 +1383,7 @@ let rec elab_init loc env ty ile =
           let (i, rem) = elab_init loc env fld1.fld_typ ile in
           (Init_union(id, fld1, i), rem)
       end
-  | TInt _ | TFloat _ | TPtr _ ->
+  | TInt _ | TFloat _ | TPtr _ | TEnum _ ->
       begin match ile with
       (* scalar = elt *)
       | SINGLE_INIT a :: ile1 ->
@@ -1384,7 +1393,7 @@ let rec elab_init loc env ty ile =
       (* scalar = nothing (within a bigger compound initializer) *)
       | (NO_INIT :: ile1) | ([] as ile1) ->
           begin match unroll env ty with
-          | TInt _   -> (Init_single (intconst 0L IInt), ile1)
+          | TInt _ | TEnum _ -> (Init_single (intconst 0L IInt), ile1)
           | TFloat _ -> (Init_single floatconst0, ile1)
           | TPtr _   -> (Init_single nullconst, ile1)
           | _        -> assert false
@@ -1399,7 +1408,7 @@ let elab_initial loc env ty ie =
   match unroll env ty, ie with
   | _, NO_INIT -> None
   (* scalar or composite = expr *)
-  | (TInt _ | TFloat _ | TPtr _ | TStruct _ | TUnion _), SINGLE_INIT a ->
+  | (TInt _ | TFloat _ | TPtr _ | TStruct _ | TUnion _ | TEnum _), SINGLE_INIT a ->
       let a' = elab_expr loc env a in
       check_init_type loc env a' ty;
       Some (Init_single a')
@@ -1777,15 +1786,18 @@ let rec elab_stmt env ctx s =
   | NOP loc ->
       { sdesc = Sskip; sloc = elab_loc loc }
 
+(* Traditional extensions *)
+  | ASM(attr, txt, details, loc) ->
+      if details <> None then
+        error loc "GCC's extended 'asm' statements are not supported";
+      { sdesc = Sasm(String.concat "" txt); sloc = elab_loc loc }
+
 (* Unsupported *)
   | DEFINITION def ->
       error (get_definitionloc def) "ill-placed definition";
       sskip
   | COMPGOTO(a, loc) ->
       error loc "GCC's computed 'goto' is not supported";
-      sskip
-  | ASM(_, _, _, loc) ->
-      error loc "'asm' statement is not supported";
       sskip
   | TRY_EXCEPT(_, _, _, loc) ->
       error loc "'try ... except' statement is not supported";

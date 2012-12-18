@@ -150,6 +150,7 @@ type typ =
   | TNamed of ident * attributes
   | TStruct of ident * attributes
   | TUnion of ident * attributes
+  | TEnum of ident * attributes
 
 (** Expressions *)
 
@@ -187,6 +188,7 @@ and stmt_desc =
   | Sreturn of exp option
   | Sblock of stmt list
   | Sdecl of decl
+  | Sasm of string
 
 and slabel = 
   | Slabel of string
@@ -218,6 +220,10 @@ type struct_or_union =
   | Struct
   | Union
 
+(** Enumerator *)
+
+type enumerator = ident * int64 * exp option
+
 (** Function definitions *)
 
 type fundef = {
@@ -244,7 +250,8 @@ and globdecl_desc =
   | Gcompositedef of struct_or_union * ident * attributes * field list
                                         (* struct/union definition *)
   | Gtypedef of ident * typ             (* typedef *)
-  | Genumdef of ident * (ident * exp option) list  (* enum definition *)
+  | Genumdef of ident * attributes * enumerator list
+                                        (* enum definition *)
   | Gpragma of string                   (* #pragma directive *)
 
 type program = globdecl list

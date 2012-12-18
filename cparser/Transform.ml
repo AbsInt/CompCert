@@ -166,6 +166,7 @@ let stmt trexpr env s =
   | Sreturn None -> s
   | Sreturn (Some e) ->
       {s with sdesc = Sreturn(Some(trexpr s.sloc env Val e))}
+  | Sasm _ -> s
   | Sblock _ | Sdecl _ ->
       assert false     (* should not occur in unblocked code *)
   in stm s
@@ -185,7 +186,7 @@ let program
     ?(fundef = fun env fd -> fd)
     ?(composite = fun env su id attr fl -> (attr, fl))
     ?(typedef = fun env id ty -> ty)
-    ?(enum = fun env id members -> members)
+    ?(enum = fun env id attr members -> (attr, members))
     ?(pragma = fun env s -> s)
     p =
 
@@ -208,8 +209,10 @@ let program
              Env.add_composite env id (composite_info_def env su attr fl))
         | Gtypedef(id, ty) ->
             (Gtypedef(id, typedef env id ty), Env.add_typedef env id ty)
-        | Genumdef(id, members) ->
-            (Genumdef(id, enum env id members), env)
+        | Genumdef(id, attr, members) ->
+            let (attr', members') = enum env id attr members in
+            (Genumdef(id, attr', members'),
+             Env.add_enum env id {ei_members =  members; ei_attr = attr})
         | Gpragma s ->
             (Gpragma(pragma env s), env)
       in

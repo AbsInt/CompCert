@@ -86,6 +86,7 @@ a)
   | TNamed(s, a) -> TNamed(s, add_attributes attr a)
   | TStruct(s, a) -> TStruct(s, add_attributes attr a)
   | TUnion(s, a) -> TUnion(s, add_attributes attr a)
+  | TEnum(s, a) -> TEnum(s, add_attributes attr a)
 
 (* Unrolling of typedef *)
 
@@ -111,6 +112,8 @@ let rec attributes_of_type env t =
       let ci = Env.find_struct env s in add_attributes ci.ci_attr a
   | TUnion(s, a) ->
       let ci = Env.find_union env s in add_attributes ci.ci_attr a
+  | TEnum(s, a) ->
+      let ei = Env.find_enum env s in add_attributes ei.ei_attr a
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)
@@ -130,6 +133,7 @@ let rec change_attributes_type env (f: attributes -> attributes) t =
       if t2 = t1 then t else t2         (* avoid useless expansion *)
   | TStruct(s, a) -> TStruct(s, f a)
   | TUnion(s, a) -> TUnion(s, f a)
+  | TEnum(s, a) -> TEnum(s, f a)
 
 let remove_attributes_type env attr t =
   change_attributes_type env (fun a -> remove_attributes a attr) t
@@ -199,6 +203,8 @@ let combine_types ?(noattrs = false) env t1 t2 =
         TStruct(comp_base s1 s2, comp_attr a1 a2)
     | TUnion(s1, a1), TUnion(s2, a2) -> 
         TUnion(comp_base s1 s2, comp_attr a1 a2)
+    | TEnum(s1, a1), TEnum(s2, a2) -> 
+        TEnum(comp_base s1 s2, comp_attr a1 a2)
     | _, _ ->
         raise Incompat
 
@@ -251,6 +257,8 @@ let alignof_fkind = function
 
 (* Return natural alignment of given type, or None if the type is incomplete *)
 
+let enum_ikind = IInt
+
 let rec alignof env t =
   match t with
   | TVoid _ -> !config.alignof_void
@@ -264,6 +272,7 @@ let rec alignof env t =
       let ci = Env.find_struct env name in ci.ci_alignof
   | TUnion(name, _) ->
       let ci = Env.find_union env name in ci.ci_alignof
+  | TEnum(_, _) -> Some(alignof_ikind enum_ikind)
 
 (* Compute the natural alignment of a struct or union. *)
 
@@ -330,6 +339,7 @@ let rec sizeof env t =
       let ci = Env.find_struct env name in ci.ci_sizeof
   | TUnion(name, _) ->
       let ci = Env.find_union env name in ci.ci_sizeof
+  | TEnum(_, _) -> Some(sizeof_ikind enum_ikind)
 
 (* Compute the size of a union.
    It is the size is the max of the sizes of fields, rounded up to the
@@ -394,6 +404,15 @@ let composite_info_def env su attr m =
       end;
     ci_attr = attr }
 
+(* Is an integer [v] representable in [n] bits, signed or unsigned? *)
+
+let int_representable v nbits sgn =
+  if nbits >= 64 then true else
+  if sgn then 
+    let p = Int64.shift_left 1L (nbits - 1) in Int64.neg p <= v && v < p
+  else
+    0L <= v && v < Int64.shift_left 1L nbits
+  
 (* Type of a function definition *)
 
 let fundef_typ fd =
@@ -445,12 +464,14 @@ let is_void_type env t =
 let is_integer_type env t =
   match unroll env t with
   | TInt(_, _) -> true
+  | TEnum(_, _) -> true
   | _ -> false
 
 let is_arith_type env t =
   match unroll env t with
   | TInt(_, _) -> true
   | TFloat(_, _) -> true
+  | TEnum(_, _) -> true
   | _ -> false
 
 let is_pointer_type env t =
@@ -465,6 +486,7 @@ let is_scalar_type env t =
   | TPtr _ -> true
   | TArray _ -> true                    (* assume implicit decay *)
   | TFun _ -> true                      (* assume implicit decay *)
+  | TEnum(_, _) -> true
   | _ -> false
 
 let is_composite_type env t =
@@ -514,6 +536,8 @@ let unary_conversion env t =
       | IInt | IUInt | ILong | IULong | ILongLong | IULongLong ->
           TInt(kind, attr)
       end
+  (* Enums are like signed ints *)
+  | TEnum(id, attr) -> TInt(enum_ikind, attr)
   (* Arrays and functions decay automatically to pointers *)
   | TArray(ty, _, _) -> TPtr(ty, [])
   | TFun _ as ty -> TPtr(ty, [])
@@ -593,13 +617,14 @@ let type_of_member env fld =
   match fld.fld_bitfield with
   | None -> fld.fld_typ
   | Some w ->
-      match unroll env fld.fld_typ with
-      | TInt(ik, attr) ->
-          if w < sizeof_ikind ik * 8
-          then TInt(signed_ikind_of ik, attr)
-          else fld.fld_typ
-      | _ ->
-          assert false
+      let (ik, attr) =
+        match unroll env fld.fld_typ with
+        | TInt(ik, attr) -> (ik, attr)
+        | TEnum(_, attr) -> (enum_ikind, attr)
+        | _ -> assert false in
+      if w < sizeof_ikind ik * 8
+      then TInt(signed_ikind_of ik, attr)
+      else fld.fld_typ
 
 (** Special types *)
 
@@ -619,15 +644,14 @@ let wchar_ikind = find_matching_unsigned_ikind !config.sizeof_wchar
 let size_t_ikind = find_matching_unsigned_ikind !config.sizeof_size_t
 let ptr_t_ikind = find_matching_unsigned_ikind !config.sizeof_ptr
 let ptrdiff_t_ikind = find_matching_signed_ikind !config.sizeof_ptrdiff_t
-let enum_ikind = IInt
 
 (** The type of a constant *)
 
 let type_of_constant = function
   | CInt(_, ik, _) -> TInt(ik, [])
   | CFloat(_, fk) -> TFloat(fk, [])
-  | CStr _ -> TPtr(TInt(IChar, []), [])          (* XXX or array? const? *)
-  | CWStr _ -> TPtr(TInt(wchar_ikind, []), [])   (* XXX or array? const? *)
+  | CStr _ -> TPtr(TInt(IChar, []), [])
+  | CWStr _ -> TPtr(TInt(wchar_ikind, []), [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)
@@ -676,7 +700,7 @@ let valid_assignment_attr afrom ato =
 
 let valid_assignment env from tto =
   match pointer_decay env from.etyp, pointer_decay env tto with
-  | (TInt _ | TFloat _), (TInt _ | TFloat _) -> true
+  | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) -> true
   | TInt _, TPtr _ -> is_literal_0 from
   | TPtr(ty, _), TPtr(ty', _) ->
       valid_assignment_attr (attributes_of_type env ty)
@@ -697,9 +721,9 @@ let valid_cast env tfrom tto =
   | _, TVoid _ -> true
   (* from any int-or-pointer (with array and functions decaying to pointers)
      to any int-or-pointer *)
-  | (TInt _ | TPtr _ | TArray _ | TFun _), (TInt _ | TPtr _) -> true
+  | (TInt _ | TPtr _ | TArray _ | TFun _ | TEnum _), (TInt _ | TPtr _ | TEnum _) -> true
   (* between int and float types *)
-  | (TInt _ | TFloat _), (TInt _ | TFloat _) -> true
+  | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) -> true
   | _, _ -> false
   end
 

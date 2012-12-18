@@ -110,6 +110,7 @@ let rec unblock_stmt env s =
   | Sreturn opte -> s
   | Sblock sl -> unblock_block env sl
   | Sdecl d -> assert false
+  | Sasm _ -> s
 
 and unblock_block env = function
   | [] -> sskip

@@ -447,10 +447,16 @@ Inductive external_function : Type :=
      (** A programmer-supplied annotation.  Takes zero, one or several arguments,
          produces an event carrying the text and the values of these arguments,
          and returns no value. *)
-  | EF_annot_val (text:ident) (targ: typ).
+  | EF_annot_val (text: ident) (targ: typ)
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
+  | EF_inline_asm (text: ident).
+     (** Inline [asm] statements.  Semantically, treated like an
+         annotation with no parameters ([EF_annot text nil]).  To be
+         used with caution, as it can invalidate the semantic
+         preservation theorem.  Generated only if [-finline-asm] is
+         given. *)
 
 (** The type signature of an external function. *)
 
@@ -467,6 +473,7 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None
   | EF_annot text targs => mksignature targs None
   | EF_annot_val text targ => mksignature (targ :: nil) (Some targ)
+  | EF_inline_asm text => mksignature nil None
   end.
 
 (** Whether an external function should be inlined by the compiler. *)
@@ -484,6 +491,7 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_memcpy sz al => true
   | EF_annot text targs => true
   | EF_annot_val text targ => true
+  | EF_inline_asm text => true
   end.
 
 (** Whether an external function must reload its arguments. *)

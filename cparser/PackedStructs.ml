@@ -60,6 +60,7 @@ let align x boundary =
 let rec can_byte_swap env ty =
   match unroll env ty with
   | TInt(ik, _) -> (true, sizeof_ikind ik > 1)
+  | TEnum(_, _) -> (true, sizeof_ikind enum_ikind > 1)
   | TPtr(_, _) -> (true, true)          (* tolerance? *)
   | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
   | _ -> (false, false)
@@ -162,6 +163,7 @@ let lookup_function loc env name =
 let accessor_type loc env ty =
   match unroll env ty with
   | TInt(ik,_) -> (8 * sizeof_ikind ik, TInt(unsigned_ikind_of ik,[]))
+  | TEnum(_,_) -> (8 * sizeof_ikind enum_ikind, TInt(unsigned_ikind_of enum_ikind,[]))
   | TPtr _     -> (8 * !config.sizeof_ptr, TInt(ptr_t_ikind,[]))
   | _ ->
      error "%a: unsupported type for byte-swapped field access" formatloc loc;
@@ -376,6 +378,8 @@ let init_packed_struct loc env struct_id struct_sz initdata =
     match (unroll env ty, init) with
     | (TInt(ik, _), Init_single e) ->
         enter_scalar pos e (sizeof_ikind ik) bigendian
+    | (TEnum(_, _), Init_single e) ->
+        enter_scalar pos e (sizeof_ikind enum_ikind) bigendian
     | (TPtr _, Init_single e) ->
         enter_scalar pos e ((!Machine.config).sizeof_ptr) bigendian
     | (TArray(ty_elt, _, _), Init_array il) ->

@@ -96,6 +96,7 @@ let rec typ env = function
   | TNamed(id, a) -> TNamed(ident env id, a)
   | TStruct(id, a) -> TStruct(ident env id, a)
   | TUnion(id, a) -> TUnion(ident env id, a)
+  | TEnum(id, a) -> TEnum(ident env id, a)
   | ty -> ty
 
 and param env (id, ty) =
@@ -168,6 +169,7 @@ and stmt_desc env = function
   | Sreturn a -> Sreturn (optexp env a)
   | Sblock sl -> let (sl', _) = mmap stmt_or_decl env sl in Sblock sl'
   | Sdecl d -> assert false
+  | Sasm txt -> Sasm txt
 
 and stmt_or_decl env s =
   match s.sdesc with
@@ -195,9 +197,9 @@ let fundef env f =
       fd_body = stmt env2 f.fd_body },
     env0 )
 
-let enum env (id, opte) = 
+let enum env (id, v, opte) = 
   let (id', env') = rename env id in
-  ((id', optexp env' opte), env')
+  ((id', v, optexp env' opte), env')
 
 let rec globdecl env g =
   let (desc', env') = globdecl_desc env g.gdesc in
@@ -219,10 +221,10 @@ and globdecl_desc env = function
   | Gtypedef(id, ty) ->
       let (id', env') = rename env id in
       (Gtypedef(id', typ env' ty), env')
-  | Genumdef(id, members) ->
+  | Genumdef(id, attr, members) ->
       let (id', env') = rename env id in
       let (members', env'') = mmap enum env' members in
-      (Genumdef(id', members'), env'')
+      (Genumdef(id', attr, members'), env'')
   | Gpragma s ->
       (Gpragma s, env)
 

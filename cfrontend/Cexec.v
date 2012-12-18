@@ -506,6 +506,7 @@ Definition do_external (ef: external_function):
   | EF_memcpy sz al => do_ef_memcpy sz al
   | EF_annot text targs => do_ef_annot text targs
   | EF_annot_val text targ => do_ef_annot_val text targ
+  | EF_inline_asm text => do_ef_annot text nil
   end.
 
 Lemma do_ef_external_sound:
@@ -575,6 +576,10 @@ Proof with try congruence.
   unfold do_ef_annot_val. destruct vargs... destruct vargs... mydestr. 
   split. constructor. apply eventval_of_val_sound; auto.
   econstructor. constructor; eauto. constructor.
+(* EF_inline_asm *)
+  unfold do_ef_annot. destruct vargs; simpl... mydestr. 
+  split. constructor. constructor. 
+  econstructor. constructor; eauto. constructor.
 Qed.
 
 Lemma do_ef_external_complete:
@@ -633,6 +638,8 @@ Proof.
 (* EF_annot_val *)
   inv H; unfold do_ef_annot_val. inv H0. inv H6. inv H4. 
   rewrite (eventval_of_val_complete _ _ _ H1). auto.
+(* EF_inline_asm *)
+  inv H; unfold do_ef_annot. inv H0. inv H6. inv H4. inv H1. simpl. auto.
 Qed.
 
 (** * Reduction of expressions *)

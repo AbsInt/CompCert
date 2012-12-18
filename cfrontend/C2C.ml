@@ -293,6 +293,9 @@ let convertTyp env t =
           with Env.Error e ->
             error (Env.error_message e); Fnil in
         Tunion(intern_string("union " ^ id.name), flds, convertAttr a)
+    | C.TEnum(id, a) ->
+        let (sg, sz) = convertIkind Cutil.enum_ikind in
+        Tint(sz, sg, convertAttr a)
 
   and convertParams seen = function
     | [] -> Tnil
@@ -330,6 +333,12 @@ let string_of_type ty =
 let first_class_value env ty =
   match Cutil.unroll env ty with
   | C.TInt((C.ILongLong|C.IULongLong), _) -> false
+  | _ -> true
+
+let supported_return_type env ty =
+  match Cutil.unroll env ty with
+  | C.TInt((C.ILongLong|C.IULongLong), _) -> false
+  | C.TStruct _  | C.TUnion _ -> false
   | _ -> true
 
 (** Floating point constants *)
@@ -499,6 +508,8 @@ let rec convertExpr env e =
   | C.EConditional(e1, e2, e3) ->
       Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3, ty)
   | C.ECast(ty1, e1) ->
+      if not (first_class_value env ty1) then
+        unsupported ("cast to type " ^ string_of_type ty1);
       Ecast(convertExpr env e1, convertTyp env ty1)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
@@ -527,6 +538,8 @@ let rec convertExpr env e =
       make_builtin_memcpy (convertExprList env args)
 
   | C.ECall(fn, args) ->
+      if not (supported_return_type env e.etyp) then
+        unsupported ("function returning a result of type " ^ string_of_type e.etyp);
       match projFunType env fn.etyp with
       | None ->
           error "wrong type for function part of a call"; ezero
@@ -660,6 +673,10 @@ let rec convertStmt env s =
       unsupported "nested blocks"; Sskip
   | C.Sdecl _ ->
       unsupported "inner declarations"; Sskip
+  | C.Sasm txt ->
+      if not !Clflags.option_finline_asm then
+        unsupported "inline 'asm' statement (consider adding option -finline-asm)";
+      Sdo (Ebuiltin (EF_inline_asm (intern_string txt), Tnil, Enil, Tvoid))
 
 and convertSwitch env = function
   | [] ->
@@ -820,7 +837,7 @@ let rec convertGlobdecls env res gl =
           | TFun(_, Some _, false, _) ->
               convertGlobdecls env (convertFundecl env d :: res) gl'
           | TFun(_, None, false, _) ->
-              error "function declaration without prototype";
+              error ("'" ^ id.name ^ "' is declared without a function prototype");
               convertGlobdecls env res gl'
           | TFun(_, _, true, _) ->
               convertGlobdecls env res gl'
@@ -842,7 +859,7 @@ let rec convertGlobdecls env res gl =
             warning ("'#pragma " ^ s ^ "' directive ignored");
           convertGlobdecls env res gl'
 
-(** Build environment of typedefs and structs *)
+(** Build environment of typedefs, structs, unions and enums *)
 
 let rec translEnv env = function
   | [] -> env
@@ -855,6 +872,8 @@ let rec translEnv env = function
             Env.add_composite env id (Cutil.composite_info_def env su attr fld)
         | C.Gtypedef(id, ty) ->
             Env.add_typedef env id ty
+        | C.Genumdef(id, attr, members) ->
+            Env.add_enum env id {ei_members = members; ei_attr = attr}
         | _ ->
             env in
       translEnv env' gl

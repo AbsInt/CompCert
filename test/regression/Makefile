@@ -8,7 +8,7 @@ LIBS=$(LIBMATH)
 # Can run and have reference output in Results
 
 TESTS=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
-  bitfields5 bitfields6 bitfields7 \
+  bitfields5 bitfields6 bitfields7 bitfields8 \
   expr1 expr6 funptr2 initializers volatile1 volatile2 volatile3 \
   funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
   sizeof1 sizeof2 packedstruct1 packedstruct2 \

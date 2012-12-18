@@ -182,6 +182,7 @@ let rec transf_stmt s =
       {s with sdesc = Sblock(List.map transf_stmt sl)}
   | Sdecl d ->
       {s with sdesc = Sdecl(transf_decl env d)}
+  | Sasm _ -> s
 
 in
   transf_stmt body

@@ -160,6 +160,9 @@ val valid_cast : Env.t -> typ -> typ -> bool
   (* Check that a cast from the first type to the second is allowed. *)
 val fundef_typ: fundef -> typ
   (* Return the function type for the given function definition. *)
+val int_representable: int64 -> int -> bool -> bool
+  (* Is the given int64 representable with the given number of bits and
+     signedness? *)
 
 (* Constructors *)
 

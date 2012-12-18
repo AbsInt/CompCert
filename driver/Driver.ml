@@ -391,6 +391,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fstruct-return  Emulate returning structs and unions by value [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
   -fpacked-structs  Emulate packed structs [off]
+  -finline-asm   Support inline 'asm' statements [off]
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
 Code generation options: (use -fno-<opt> to turn off -f<opt>) :
@@ -433,7 +434,8 @@ Interpreter mode:
 
 let language_support_options = [
   option_fbitfields; option_flonglong; option_flongdouble;
-  option_fstruct_return; option_fvararg_calls; option_fpacked_structs
+  option_fstruct_return; option_fvararg_calls; option_fpacked_structs;
+  option_finline_asm
 ]
 
 let cmdline_actions =
@@ -505,6 +507,7 @@ let cmdline_actions =
   @ f_opt "bitfields" option_fbitfields
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "packed-structs" option_fpacked_structs
+  @ f_opt "inline-asm" option_finline_asm
   @ f_opt "sse" option_fsse
 
 let _ =

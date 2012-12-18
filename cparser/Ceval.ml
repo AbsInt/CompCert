@@ -71,6 +71,7 @@ let constant = function
 let is_signed env ty =
   match unroll env ty with
   | TInt(ik, _) -> is_signed_ikind ik
+  | TEnum(_, _) -> is_signed_ikind enum_ikind
   | _ -> false
 
 let cast env ty_to ty_from v =
@@ -87,6 +88,8 @@ let cast env ty_to ty_from v =
       I (normalize_int n ptr_t_ikind)
   | TPtr(ty, _), (S _ | WS _) ->
       v
+  | TEnum(_, _), I n ->
+      I (normalize_int n enum_ikind)
   | _, _ ->
       raise Notconst
 
@@ -255,5 +258,6 @@ let constant_expr env ty e =
     | TPtr(_, _), I 0L -> Some(CInt(0L, IInt, ""))
     | TPtr(_, _), S s -> Some(CStr s)
     | TPtr(_, _), WS s -> Some(CWStr s)
+    | TEnum(_, _), I n -> Some(CInt(n, enum_ikind, ""))
     | _   -> None
   with Notconst -> None

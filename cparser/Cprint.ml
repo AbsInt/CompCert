@@ -172,6 +172,8 @@ let rec dcl pp ty n =
       fprintf pp "struct %a%a%t" ident id attributes a n
   | TUnion(id, a) ->
       fprintf pp "union %a%a%t" ident id attributes a n
+  | TEnum(id, a) ->
+      fprintf pp "enum %a%a%t" ident id attributes a n
 
 let typ pp ty =
   dcl pp ty (fun _ -> ())
@@ -424,6 +426,8 @@ let rec stmt pp s =
       fprintf pp "@[<v 2>{@ %a@;<0 -2>}@]" stmt_block s
   | Sdecl d ->
       full_decl pp d
+  | Sasm txt ->
+      fprintf pp "asm(%a);" const (CStr txt)
 
 and slabel pp = function
   | Slabel s ->
@@ -486,17 +490,17 @@ let globdecl pp g =
       fprintf pp "@;<0 -2>};@]@ @ "
   | Gtypedef(id, ty) ->
       fprintf pp "@[<hov 2>typedef %a;@]@ @ " simple_decl (id, ty)
-  | Genumdef(id, fields) ->
-      fprintf pp "@[<v 2>enum %a {" ident id;
+  | Genumdef(id, attrs, vals) ->
+      fprintf pp "@[<v 2>enum%a %a {" attributes attrs ident id;
       List.iter
-        (fun (name, opt_e) ->
+        (fun (name, v, opt_e) ->
            fprintf pp "@ %a" ident name;
            begin match opt_e with
            | None -> ()
            | Some e -> fprintf pp " = %a" exp (0, e)
            end;
            fprintf pp ",")
-         fields;
+         vals;
        fprintf pp "@;<0 -2>};@]@ @ "
   | Gpragma s ->
        fprintf pp "#pragma %s@ @ " s

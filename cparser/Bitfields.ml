@@ -46,7 +46,7 @@ type bitfield_info =
 let bitfield_table =
       (Hashtbl.create 57: (ident * string, bitfield_info) Hashtbl.t)
 
-(* Packing algorithm -- keep consistent with [Cutil.pack_bitfield]! *)
+(* Signedness issues *)
 
 let unsigned_ikind_for_carrier nbits =
   if nbits <= 8 then IUChar else
@@ -56,7 +56,26 @@ let unsigned_ikind_for_carrier nbits =
   if nbits <= 8 * !config.sizeof_longlong then IULongLong else
   assert false
 
-let pack_bitfields env id ml =
+let fits_unsigned v n =
+  v >= 0L && v < Int64.shift_left 1L n
+
+let fits_signed v n =
+  let p =  Int64.shift_left 1L (n-1) in v >= Int64.neg p && v < p
+
+let is_signed_enum_bitfield env sid fld eid n =
+  let info = Env.find_enum env eid in
+  if List.for_all (fun (_, v, _) -> int_representable v n false) info.Env.ei_members
+  then false
+  else if List.for_all (fun (_, v, _) -> int_representable v n true) info.Env.ei_members
+  then true
+  else begin
+    Cerrors.warning "Warning: not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)" eid.name fld sid.name n;
+    false
+  end
+
+(* Packing algorithm -- keep consistent with [Cutil.pack_bitfield]! *)
+
+let pack_bitfields env sid ml =
   let rec pack accu pos = function
   | [] ->
       (pos, accu, [])
@@ -72,6 +91,7 @@ let pack_bitfields env id ml =
             let signed =
               match unroll env m.fld_typ with
               | TInt(ik, _) -> is_signed_ikind ik
+              | TEnum(eid, _) -> is_signed_enum_bitfield env sid m.fld_name eid n
               | _ -> assert false (* should never happen, checked in Elab *) in
             let signed2 =
               match unroll env (type_of_member env m) with

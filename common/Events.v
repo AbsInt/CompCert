@@ -1582,6 +1582,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_memcpy sz al      => extcall_memcpy_sem sz al
   | EF_annot txt targs   => extcall_annot_sem txt targs
   | EF_annot_val txt targ=> extcall_annot_val_sem txt targ
+  | EF_inline_asm txt    => extcall_annot_sem txt nil
   end.
 
 Theorem external_call_spec:
@@ -1600,6 +1601,7 @@ Proof.
   apply extcall_memcpy_ok.
   apply extcall_annot_ok.
   apply extcall_annot_val_ok.
+  apply extcall_annot_ok.
 Qed.
 
 Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).

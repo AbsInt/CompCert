@@ -65,9 +65,9 @@ val program :
   ?composite:(Env.t -> C.struct_or_union -> 
                 C.ident -> C.attributes -> C.field list -> 
                   C.attributes * C.field list) ->
-  ?typedef:(Env.t -> C.ident -> Env.typedef_info -> Env.typedef_info) ->
-  ?enum:(Env.t -> C.ident -> (C.ident * C.exp option) list ->
-                                       (C.ident * C.exp option) list) ->
+  ?typedef:(Env.t -> C.ident -> C.typ -> C.typ) ->
+  ?enum:(Env.t -> C.ident -> C.attributes -> C.enumerator list -> 
+                  C.attributes * C.enumerator list) ->
   ?pragma:(Env.t -> string -> string) ->
   C.program ->
   C.program

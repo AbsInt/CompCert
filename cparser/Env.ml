@@ -72,11 +72,18 @@ type composite_info = {
 
 type ident_info =
   | II_ident of storage * typ
-  | II_enum of int64                    (* value of the enum *)
+  | II_enum of int64  (* value of enumerator *)
 
 (* Infos associated with a typedef *)
 
 type typedef_info = typ
+
+(* Infos associated with an enum *)
+
+type enum_info = {
+  ei_members: enumerator list; (* list of all members *)
+  ei_attr: attributes          (* attributes, if any *)
+}
 
 (* Environments *)
 
@@ -84,14 +91,16 @@ type t = {
   env_scope: int;
   env_ident: ident_info IdentMap.t;
   env_tag: composite_info IdentMap.t;
-  env_typedef: typedef_info IdentMap.t
+  env_typedef: typedef_info IdentMap.t;
+  env_enum: enum_info IdentMap.t
 }
 
 let empty = {
   env_scope = 0;
   env_ident = IdentMap.empty;
   env_tag = IdentMap.empty;
-  env_typedef = IdentMap.empty
+  env_typedef = IdentMap.empty;
+  env_enum = IdentMap.empty
 }
 
 (* Enter a new scope. *)
@@ -142,6 +151,12 @@ let lookup_typedef env s =
     IdentMap.lookup s env.env_typedef
   with Not_found ->
     raise(Error(Unbound_typedef s))
+
+let lookup_enum env s =
+  try
+    IdentMap.lookup s env.env_enum
+  with Not_found ->
+    raise(Error(Unbound_tag(s, "enum")))
 
 (* Checking if a source name is bound *)
 
@@ -200,6 +215,12 @@ let find_typedef env id =
   with Not_found ->
     raise(Error(Unbound_typedef(id.name)))
 
+let find_enum env id =
+  try
+    IdentMap.find id env.env_enum
+  with Not_found ->
+    raise(Error(Unbound_tag(id.name, "enum")))
+
 (* Inserting things by source name, with generation of a translated name *)
 
 let enter_ident env s sto ty =
@@ -219,6 +240,10 @@ let enter_typedef env s info =
   let id = fresh_ident s in
   (id, { env with env_typedef = IdentMap.add id info env.env_typedef })
 
+let enter_enum env s info =
+  let id = fresh_ident s in
+  (id, { env with env_enum = IdentMap.add id info env.env_enum })
+
 (* Inserting things by translated name *)
 
 let add_ident env id sto ty =
@@ -229,6 +254,13 @@ let add_composite env id ci =
 
 let add_typedef env id info =
   { env with env_typedef = IdentMap.add id info env.env_typedef }
+
+let add_enum env id info =
+  let add_enum_item env (id, v, exp) =
+    { env with env_ident = IdentMap.add id (II_enum v) env.env_ident } in
+  List.fold_left add_enum_item 
+    { env with env_enum = IdentMap.add id info env.env_enum }
+    info.ei_members
 
 (* Error reporting *)
 

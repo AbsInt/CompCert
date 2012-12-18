@@ -10,6 +10,9 @@ Language semantics:
 - Comparison between function pointers is now correctly defined
   in the semantics of CompCert C (it was previously undefined behavior,
   by mistake).
+- Bit-fields of 'enum' type are now treated as either unsigned or signed,
+  whichever is able to represent all values of the enum.
+  (Previously: always signed.)
 - The "&&" and "||" operators are now primitive in CompCert C and are
   given explicit semantic rules, instead of being expressed in terms
   of "_ ? _ : _" as in previous CompCert releases.

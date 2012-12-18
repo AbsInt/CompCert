@@ -47,6 +47,7 @@ let rec add_typ = function
   | TNamed(id, _) -> addref id
   | TStruct(id, _) -> addref id
   | TUnion(id, _) -> addref id
+  | TEnum(id, _) -> addref id
   | _ -> ()
 
 and add_vars vl =
@@ -96,6 +97,7 @@ let rec add_stmt s =
   | Sreturn(Some e) -> add_exp e
   | Sblock sl -> List.iter add_stmt sl
   | Sdecl d -> add_decl d
+  | Sasm _ -> ()
 
 let add_fundef f =
   add_typ f.fd_ret;
@@ -107,7 +109,7 @@ let add_field f = add_typ f.fld_typ
 
 let add_enum e =
   List.iter
-    (fun (id, opt_e) -> match opt_e with Some e -> add_exp e | None -> ())
+    (fun (id, v, opt_e) -> match opt_e with Some e -> add_exp e | None -> ())
     e
 
 (* Saturate the set of referenced identifiers, starting with externally
@@ -152,8 +154,8 @@ let rec add_needed_globdecls accu = function
           if needed id
           then (add_typ ty; add_needed_globdecls accu rem)
           else add_needed_globdecls (g :: accu) rem
-      | Genumdef(id, enu) ->
-          if List.exists (fun (id, _) -> needed id) enu
+      | Genumdef(id, _, enu) ->
+          if needed id || List.exists (fun (id, _, _) -> needed id) enu
           then (add_enum enu; add_needed_globdecls accu rem)
           else add_needed_globdecls (g :: accu) rem
       | _ ->
@@ -180,7 +182,8 @@ let rec simpl_globdecls accu = function
         | Gcompositedecl(_, id, _) -> needed id
         | Gcompositedef(_, id, _, flds) -> needed id
         | Gtypedef(id, ty) -> needed id
-        | Genumdef(id, enu) -> List.exists (fun (id, _) -> needed id) enu
+        | Genumdef(id, _, enu) ->
+            needed id || List.exists (fun (id, _, _) -> needed id) enu
         | Gpragma s -> true in
       if need
       then simpl_globdecls (g :: accu) rem
