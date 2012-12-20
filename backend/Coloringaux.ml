@@ -283,21 +283,24 @@ let interfere n1 n2 =
   let p = if i1 < i2 then (i1, i2) else (i2, i1) in
   IntPairSet.mem p !adjSet
 
-(* Add an edge to the graph.  Assume edge is not in graph already *)
+(* Add an edge to the graph.  Assume edge is not in graph already.
+   Do not add edges between nodes of different types. *)
 
 let addEdge n1 n2 =
-  (*i  Printf.printf "  %s -- %s;\n" (name_of_node n1) (name_of_node n2); *)
-  assert (n1 != n2 && not (interfere n1 n2));
-  let i1 = n1.ident and i2 = n2.ident in
-  let p = if i1 < i2 then (i1, i2) else (i2, i1) in
-  adjSet := IntPairSet.add p !adjSet;
-  if n1.nstate <> Colored then begin
-    n1.adjlist <- n2 :: n1.adjlist;
-    n1.degree  <- 1 + n1.degree
-  end;
-  if n2.nstate <> Colored then begin
-    n2.adjlist <- n1 :: n2.adjlist;
-    n2.degree  <- 1 + n2.degree
+  if n1.typ = n2.typ then begin
+    (*i  Printf.printf "  %s -- %s;\n" (name_of_node n1) (name_of_node n2); *)
+    assert (n1 != n2 && not (interfere n1 n2));
+    let i1 = n1.ident and i2 = n2.ident in
+    let p = if i1 < i2 then (i1, i2) else (i2, i1) in
+    adjSet := IntPairSet.add p !adjSet;
+    if n1.nstate <> Colored then begin
+      n1.adjlist <- n2 :: n1.adjlist;
+      n1.degree  <- 1 + n1.degree
+    end;
+    if n2.nstate <> Colored then begin
+      n2.adjlist <- n1 :: n2.adjlist;
+      n2.degree  <- 1 + n2.degree
+    end
   end
 
 (* Apply the given function to the relevant adjacent nodes of a node *)
