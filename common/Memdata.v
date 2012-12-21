@@ -189,7 +189,8 @@ Opaque Byte.wordsize.
   rewrite inj_S. simpl.
   replace (Zsucc (Z_of_nat n) * 8) with (Z_of_nat n * 8 + 8) by omega.
   rewrite two_p_is_exp; try omega. 
-  rewrite Zmod_recombine. rewrite IHn. rewrite Zplus_comm. reflexivity. 
+  rewrite Zmod_recombine. rewrite IHn. rewrite Zplus_comm. 
+  rewrite Byte.Z_mod_two_p_eq. reflexivity. 
   apply two_p_gt_ZERO. omega. apply two_p_gt_ZERO. omega.
 Qed.
 
