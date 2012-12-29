@@ -66,4 +66,4 @@ bench:
 
 clean:
 	rm -f *.compcert *.gcc
-	rm -f *.light.c *.compcert.c *.s *.o *~ 
+	rm -f *.light.c *.parsed.c *.s *.o *~ 
