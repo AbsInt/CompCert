@@ -113,21 +113,33 @@ else
 SLN=ln -s
 endif
 
+all:
+	$(MAKE) proof
+	$(MAKE) extraction
+	$(MAKE) ccomp
+	$(MAKE) runtime
+ifeq ($(CCHECKLINK),true)
+	$(MAKE) cchecklink
+endif
+
 proof: $(FILES:.v=.vo)
 
-extraction:
+extraction: extraction/STAMP
+
+extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v
 	rm -f extraction/*.ml extraction/*.mli
 	$(COQEXEC) extraction/extraction.v
+	touch extraction/STAMP
 
-ccomp: driver/Configuration.ml
+ccomp: extraction/STAMP driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.native \
         && rm -f ccomp && $(SLN) _build/driver/Driver.native ccomp
 
-ccomp.prof: driver/Configuration.ml
+ccomp.prof: extraction/STAMP driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.p.native \
         && rm -f ccomp.prof && $(SLN) _build/driver/Driver.p.native ccomp.prof
 
-ccomp.byte: driver/Configuration.ml
+ccomp.byte: extraction/STAMP driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Driver.d.byte \
         && rm -f ccomp.byte && $(SLN) _build/driver/Driver.d.byte ccomp.byte
 
@@ -142,24 +154,15 @@ cchecklink.byte: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
         && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
 
-clightgen: driver/Configuration.ml
+clightgen: extraction/STAMP driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Clightgen.native \
         && rm -f clightgen && $(SLN) _build/driver/Clightgen.native clightgen
 
-clightgen.byte: driver/Configuration.ml
+clightgen.byte: extraction/STAMP driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS) Clightgen.d.byte \
         && rm -f clightgen.byte && $(SLN) _build/driver/Clightgen.d.byte clightgen.byte
 
-.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte clightgen clightgen.byte
-
-all:
-	$(MAKE) proof
-	$(MAKE) extraction
-	$(MAKE) ccomp
-	$(MAKE) runtime
-ifeq ($(CCHECKLINK),true)
-	$(MAKE) cchecklink
-endif
+.PHONY: proof extraction ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte clightgen clightgen.byte
 
 documentation: doc/coq2html $(FILES)
 	mkdir -p doc/html
@@ -220,12 +223,12 @@ endif
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
-	rm -f ccomp ccomp.byte cchecklink cchecklink.byte
+	rm -f ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
 	rm -f doc/coq2html.ml doc/coq2html
 	rm -f driver/Configuration.ml
-	rm -f extraction/*.ml extraction/*.mli
+	rm -f extraction/STAMP extraction/*.ml extraction/*.mli
 	rm -f tools/ndfun
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test/cminor clean
