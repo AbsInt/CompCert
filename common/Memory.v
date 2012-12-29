@@ -3626,15 +3626,11 @@ Qed.
 
 (** Composing two memory injections. *)
 
-Theorem inject_compose:
+Lemma mem_inj_compose:
   forall f f' m1 m2 m3,
-  inject f m1 m2 -> inject f' m2 m3 ->
-  inject (compose_meminj f f') m1 m3.
+  mem_inj f m1 m2 -> mem_inj f' m2 m3 -> mem_inj (compose_meminj f f') m1 m3.
 Proof.
-  unfold compose_meminj; intros.
-  inv H; inv H0. constructor.
-(* inj *)
-  inv mi_inj0; inv mi_inj1; constructor; intros.
+  intros. unfold compose_meminj. inv H; inv H0; constructor; intros.
   (* perm *)
   destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
   destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
@@ -3649,7 +3645,18 @@ Proof.
   destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
   destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
   replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
-  eapply memval_inject_compose; eauto. 
+  eapply memval_inject_compose; eauto.
+Qed. 
+
+Theorem inject_compose:
+  forall f f' m1 m2 m3,
+  inject f m1 m2 -> inject f' m2 m3 ->
+  inject (compose_meminj f f') m1 m3.
+Proof.
+  unfold compose_meminj; intros.
+  inv H; inv H0. constructor.
+(* inj *)
+  eapply mem_inj_compose; eauto. 
 (* unmapped *)
   intros. erewrite mi_freeblocks0; eauto. 
 (* mapped *)
@@ -3682,6 +3689,71 @@ Proof.
   exploit mi_representable1. eauto. instantiate (3 := ofs'). 
   rewrite H. eapply perm_inj; eauto. rewrite H. intros [C D].
   omega.
+Qed.
+
+Lemma val_lessdef_inject_compose:
+  forall f v1 v2 v3,
+  Val.lessdef v1 v2 -> val_inject f v2 v3 -> val_inject f v1 v3.
+Proof.
+  intros. inv H. auto. auto.
+Qed.
+
+Lemma val_inject_lessdef_compose:
+  forall f v1 v2 v3,
+  val_inject f v1 v2 -> Val.lessdef v2 v3 -> val_inject f v1 v3.
+Proof.
+  intros. inv H0. auto. inv H. auto.
+Qed.
+
+Lemma extends_inject_compose:
+  forall f m1 m2 m3,
+  extends m1 m2 -> inject f m2 m3 -> inject f m1 m3.
+Proof.
+  intros. inversion H; inv H0. constructor; intros.
+(* inj *)
+  replace f with (compose_meminj inject_id f). eapply mem_inj_compose; eauto.
+  apply extensionality; intros. unfold compose_meminj, inject_id. 
+  destruct (f x) as [[y delta] | ]; auto.
+(* unmapped *)
+  eapply mi_freeblocks0. erewrite <- valid_block_extends; eauto. 
+(* mapped *)
+  eauto.
+(* no overlap *)
+  red; intros. eapply mi_no_overlap0; eauto; eapply perm_extends; eauto.
+(* representable *)
+  eapply mi_representable0; eauto. eapply perm_extends; eauto. 
+Qed.
+
+Lemma inject_extends_compose:
+  forall f m1 m2 m3,
+  inject f m1 m2 -> extends m2 m3 -> inject f m1 m3.
+Proof.
+  intros. inv H; inversion H0. constructor; intros.
+(* inj *)
+  replace f with (compose_meminj f inject_id). eapply mem_inj_compose; eauto.
+  apply extensionality; intros. unfold compose_meminj, inject_id. 
+  destruct (f x) as [[y delta] | ]; auto. decEq. decEq. omega.
+(* unmapped *)
+  eauto.
+(* mapped *)
+  erewrite <- valid_block_extends; eauto. 
+(* no overlap *)
+  red; intros. eapply mi_no_overlap0; eauto.
+(* representable *)
+  eapply mi_representable0; eauto.
+Qed.
+
+Lemma extends_extends_compose:
+  forall m1 m2 m3,
+  extends m1 m2 -> extends m2 m3 -> extends m1 m3.
+Proof.
+  intros. inv H; inv H0; constructor; intros.
+  (* nextblock *)
+  congruence.
+  (* meminj *)
+  replace inject_id with (compose_meminj inject_id inject_id).
+  eapply mem_inj_compose; eauto. 
+  apply extensionality; intros. unfold compose_meminj, inject_id. auto.
 Qed.
 
 (** Injecting a memory into itself. *)
