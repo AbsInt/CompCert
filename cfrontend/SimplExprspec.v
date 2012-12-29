@@ -1062,7 +1062,7 @@ Theorem transl_function_spec:
   /\ fn_vars tf = C.fn_vars f.
 Proof.
   intros until tf. unfold transl_function.
-  case_eq (transl_stmt (C.fn_body f) initial_generator); intros; inv H0.
+  case_eq (transl_stmt (C.fn_body f) (initial_generator tt)); intros; inv H0.
   simpl. intuition. eapply transl_stmt_meets_spec; eauto.
 Qed.
 

@@ -14,6 +14,8 @@
 
 Require Import FSets.
 Require FSetAVL.
+Require Import Orders.
+Require Mergesort.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
@@ -49,26 +51,10 @@ Local Open Scope error_monad_scope.
 
 (** * Handling of variables *)
 
-Definition for_var (id: ident) : ident := xO id.
-Definition for_temp (id: ident) : ident := xI id.
+(** To every Csharpminor variable, the compiler associates its offset
+  in the Cminor stack data block. *)
 
-(** Compile-time information attached to each Csharpminor
-  variable: global variables, local variables, function parameters.
-  [Var_local] denotes a scalar local variable whose address is not
-  taken; it will be translated to a Cminor local variable of the
-  same name.  [Var_stack_scalar] and [Var_stack_array] denote
-  local variables that are stored as sub-blocks of the Cminor stack
-  data block.  [Var_global_scalar] and [Var_global_array] denote
-  global variables, stored in the global symbols with the same names. *)
-
-Inductive var_info: Type :=
-  | Var_local (chunk: memory_chunk)
-  | Var_stack_scalar (chunk: memory_chunk) (ofs: Z)
-  | Var_stack_array (ofs sz al: Z)
-  | Var_global_scalar (chunk: memory_chunk)
-  | Var_global_array.
-
-Definition compilenv := PMap.t var_info.
+Definition compilenv := PTree.t Z.
 
 (** * Helper functions for code generation *)
 
@@ -237,62 +223,13 @@ End Approx.
 
 (** * Translation of expressions and statements. *)
 
-(** Generation of a Cminor expression for reading a Csharpminor variable. *)
-
-Definition var_get (cenv: compilenv) (id: ident): res (expr * approx) :=
-  match PMap.get id cenv with
-  | Var_local chunk =>
-      OK(Evar (for_var id), Approx.of_chunk chunk)
-  | Var_stack_scalar chunk ofs =>
-      OK(Eload chunk (make_stackaddr ofs), Approx.of_chunk chunk)
-  | Var_global_scalar chunk =>
-      OK(Eload chunk (make_globaladdr id), Approx.of_chunk chunk)
-  | _ =>
-      Error(msg "Cminorgen.var_get")
-  end.
-
 (** Generation of a Cminor expression for taking the address of
   a Csharpminor variable. *)
 
-Definition var_addr (cenv: compilenv) (id: ident): res (expr * approx) :=
-  match PMap.get id cenv with
-  | Var_local chunk => Error(msg "Cminorgen.var_addr")
-  | Var_stack_scalar chunk ofs => OK (make_stackaddr ofs, Any)
-  | Var_stack_array ofs sz al => OK (make_stackaddr ofs, Any)
-  | _ => OK (make_globaladdr id, Any)
-  end.
-
-(** Generation of a Cminor statement performing an assignment to
-  a variable.  The value being assigned is normalized according to
-  its chunk type, as guaranteed by C#minor semantics. *)
-
-Definition var_set (cenv: compilenv)
-                   (id: ident) (rhs: expr): res stmt :=
-  match PMap.get id cenv with
-  | Var_local chunk =>
-      OK(Sassign (for_var id) rhs)
-  | Var_stack_scalar chunk ofs =>
-      OK(make_store chunk (make_stackaddr ofs) rhs)
-  | Var_global_scalar chunk =>
-      OK(make_store chunk (make_globaladdr id) rhs)
-  | _ =>
-      Error(msg "Cminorgen.var_set")
-  end.
-
-(** A variant of [var_set] used for initializing function parameters.
-  The value to be stored already resides in the Cminor variable called [id]. *)
-
-Definition var_set_self (cenv: compilenv) (id: ident) (k: stmt): res stmt :=
-  match PMap.get id cenv with
-  | Var_local chunk =>
-      OK k
-  | Var_stack_scalar chunk ofs =>
-      OK (Sseq (make_store chunk (make_stackaddr ofs) (Evar (for_var id))) k)
-  | Var_stack_array ofs sz al =>
-      OK (Sseq (Sbuiltin None (EF_memcpy sz al)
-                         (make_stackaddr ofs :: Evar (for_var id) :: nil)) k)
-  | _ =>
-      Error(msg "Cminorgen.var_set_self")
+Definition var_addr (cenv: compilenv) (id: ident): expr :=
+  match PTree.get id cenv with
+  | Some ofs => make_stackaddr ofs
+  | None     => make_globaladdr id
   end.
 
 (** Translation of constants. *)
@@ -313,11 +250,9 @@ Fixpoint transl_expr (cenv: compilenv) (e: Csharpminor.expr)
                      {struct e}: res (expr * approx) :=
   match e with
   | Csharpminor.Evar id =>
-      var_get cenv id
-  | Csharpminor.Etempvar id =>
-      OK (Evar (for_temp id), Any)
+      OK (Evar id, Any)
   | Csharpminor.Eaddrof id =>
-      var_addr cenv id
+      OK (var_addr cenv id, Any)
   | Csharpminor.Econst cst =>
       let (tcst, a) := transl_constant cst in OK (Econst tcst, a)
   | Csharpminor.Eunop op e1 =>
@@ -388,21 +323,14 @@ Fixpoint switch_env (ls: lbl_stmt) (e: exit_env) {struct ls}: exit_env :=
 (** Translation of statements.  The nonobvious part is
   the translation of [switch] statements, outlined above. *)
 
-Definition typ_of_opttyp (ot: option typ) :=
-  match ot with None => Tint | Some t => t end.
-
-Fixpoint transl_stmt (ret: option typ) (cenv: compilenv) 
-                     (xenv: exit_env) (s: Csharpminor.stmt)
+Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
                      {struct s}: res stmt :=
   match s with
   | Csharpminor.Sskip =>
       OK Sskip
-  | Csharpminor.Sassign id e =>
-      do (te, a) <- transl_expr cenv e;
-      var_set cenv id te
   | Csharpminor.Sset id e =>
       do (te, a) <- transl_expr cenv e;
-      OK (Sassign (for_temp id) te)
+      OK (Sassign id te)
   | Csharpminor.Sstore chunk e1 e2 =>
       do (te1, a1) <- transl_expr cenv e1;
       do (te2, a2) <- transl_expr cenv e2;
@@ -410,24 +338,24 @@ Fixpoint transl_stmt (ret: option typ) (cenv: compilenv)
   | Csharpminor.Scall optid sig e el =>
       do (te, a) <- transl_expr cenv e;
       do tel <- transl_exprlist cenv el;
-      OK (Scall (option_map for_temp optid) sig te tel)
+      OK (Scall optid sig te tel)
   | Csharpminor.Sbuiltin optid ef el =>
       do tel <- transl_exprlist cenv el;
-      OK (Sbuiltin (option_map for_temp optid) ef tel)
+      OK (Sbuiltin optid ef tel)
   | Csharpminor.Sseq s1 s2 =>
-      do ts1 <- transl_stmt ret cenv xenv s1;
-      do ts2 <- transl_stmt ret cenv xenv s2;
+      do ts1 <- transl_stmt cenv xenv s1;
+      do ts2 <- transl_stmt cenv xenv s2;
       OK (Sseq ts1 ts2)
   | Csharpminor.Sifthenelse e s1 s2 =>
       do (te, a) <- transl_expr cenv e;
-      do ts1 <- transl_stmt ret cenv xenv s1;
-      do ts2 <- transl_stmt ret cenv xenv s2;
+      do ts1 <- transl_stmt cenv xenv s1;
+      do ts2 <- transl_stmt cenv xenv s2;
       OK (Sifthenelse te ts1 ts2)
   | Csharpminor.Sloop s =>
-      do ts <- transl_stmt ret cenv xenv s;
+      do ts <- transl_stmt cenv xenv s;
       OK (Sloop ts)
   | Csharpminor.Sblock s =>
-      do ts <- transl_stmt ret cenv (true :: xenv) s;
+      do ts <- transl_stmt cenv (true :: xenv) s;
       OK (Sblock ts)
   | Csharpminor.Sexit n =>
       OK (Sexit (shift_exit xenv n))
@@ -435,195 +363,95 @@ Fixpoint transl_stmt (ret: option typ) (cenv: compilenv)
       let cases := switch_table ls O in
       let default := length cases in
       do (te, a) <- transl_expr cenv e;
-      transl_lblstmt ret cenv (switch_env ls xenv) ls (Sswitch te cases default)
+      transl_lblstmt cenv (switch_env ls xenv) ls (Sswitch te cases default)
   | Csharpminor.Sreturn None =>
       OK (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>
       do (te, a) <- transl_expr cenv e;
       OK (Sreturn (Some te))
   | Csharpminor.Slabel lbl s =>
-      do ts <- transl_stmt ret cenv xenv s; OK (Slabel lbl ts)
+      do ts <- transl_stmt cenv xenv s; OK (Slabel lbl ts)
   | Csharpminor.Sgoto lbl =>
       OK (Sgoto lbl)
   end
 
-with transl_lblstmt (ret: option typ) (cenv: compilenv)
-                    (xenv: exit_env) (ls: Csharpminor.lbl_stmt) (body: stmt)
+with transl_lblstmt (cenv: compilenv) (xenv: exit_env) (ls: Csharpminor.lbl_stmt) (body: stmt)
                     {struct ls}: res stmt :=
   match ls with
   | Csharpminor.LSdefault s =>
-      do ts <- transl_stmt ret cenv xenv s;
+      do ts <- transl_stmt cenv xenv s;
       OK (Sseq (Sblock body) ts)
   | Csharpminor.LScase _ s ls' =>
-      do ts <- transl_stmt ret cenv xenv s;
-      transl_lblstmt ret cenv (List.tail xenv) ls' (Sseq (Sblock body) ts)
+      do ts <- transl_stmt cenv xenv s;
+      transl_lblstmt cenv (List.tail xenv) ls' (Sseq (Sblock body) ts)
   end.
 
 (** * Stack layout *)
 
-(** Computation of the set of variables whose address is taken in
-  a piece of Csharpminor code. *)
-
-Module Identset := FSetAVL.Make(OrderedPositive).
-
-Fixpoint addr_taken_expr (e: Csharpminor.expr): Identset.t :=
-  match e with
-  | Csharpminor.Evar id => Identset.empty
-  | Csharpminor.Etempvar id => Identset.empty
-  | Csharpminor.Eaddrof id => Identset.add id Identset.empty
-  | Csharpminor.Econst cst => Identset.empty
-  | Csharpminor.Eunop op e1 => addr_taken_expr e1
-  | Csharpminor.Ebinop op e1 e2 =>
-      Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
-  | Csharpminor.Eload chunk e => addr_taken_expr e
-  end.
-
-Fixpoint addr_taken_exprlist (e: list Csharpminor.expr): Identset.t :=
-  match e with
-  | nil => Identset.empty
-  | e1 :: e2 =>
-      Identset.union (addr_taken_expr e1) (addr_taken_exprlist e2)
-  end.
-
-Fixpoint addr_taken_stmt (s: Csharpminor.stmt): Identset.t :=
-  match s with
-  | Csharpminor.Sskip => Identset.empty
-  | Csharpminor.Sassign id e => addr_taken_expr e
-  | Csharpminor.Sset id e => addr_taken_expr e
-  | Csharpminor.Sstore chunk e1 e2 =>
-      Identset.union (addr_taken_expr e1) (addr_taken_expr e2)
-  | Csharpminor.Scall optid sig e el =>
-      Identset.union (addr_taken_expr e) (addr_taken_exprlist el)
-  | Csharpminor.Sbuiltin optid ef el =>
-      addr_taken_exprlist el
-  | Csharpminor.Sseq s1 s2 =>
-      Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2)
-  | Csharpminor.Sifthenelse e s1 s2 =>
-      Identset.union (addr_taken_expr e)
-        (Identset.union (addr_taken_stmt s1) (addr_taken_stmt s2))
-  | Csharpminor.Sloop s => addr_taken_stmt s
-  | Csharpminor.Sblock s => addr_taken_stmt s
-  | Csharpminor.Sexit n => Identset.empty
-  | Csharpminor.Sswitch e ls =>
-      Identset.union (addr_taken_expr e) (addr_taken_lblstmt ls)
-  | Csharpminor.Sreturn None => Identset.empty
-  | Csharpminor.Sreturn (Some e) => addr_taken_expr e
-  | Csharpminor.Slabel lbl s => addr_taken_stmt s
-  | Csharpminor.Sgoto lbl => Identset.empty
-  end
-
-with addr_taken_lblstmt (ls: Csharpminor.lbl_stmt): Identset.t :=
-  match ls with
-  | Csharpminor.LSdefault s => addr_taken_stmt s
-  | Csharpminor.LScase _ s ls' => Identset.union (addr_taken_stmt s) (addr_taken_lblstmt ls')
-  end.
-
 (** Layout of the Cminor stack data block and construction of the 
-  compilation environment.  Csharpminor local variables that are
-  arrays or whose address is taken are allocated a slot in the Cminor
-  stack data.  Sufficient padding is inserted to ensure adequate alignment
-  of addresses. *)
+  compilation environment.  Every Csharpminor local variable is
+  allocated a slot in the Cminor stack data.  Sufficient padding is
+  inserted to ensure adequate alignment of addresses. *)
 
-Definition array_alignment (sz: Z) : Z :=
+Definition block_alignment (sz: Z) : Z :=
   if zlt sz 2 then 1
   else if zlt sz 4 then 2
   else if zlt sz 8 then 4 else 8.
 
 Definition assign_variable
-    (atk: Identset.t)
-    (id_lv: ident * var_kind)
-    (cenv_stacksize: compilenv * Z) : compilenv * Z :=
+    (cenv_stacksize: compilenv * Z) (id_sz: ident * Z) : compilenv * Z :=
+  let (id, sz) := id_sz in
   let (cenv, stacksize) := cenv_stacksize in
-  match id_lv with
-  | (id, Varray sz al) =>
-      let ofs := align stacksize (array_alignment sz) in
-      (PMap.set id (Var_stack_array ofs sz al) cenv, ofs + Zmax 0 sz)
-  | (id, Vscalar chunk) =>
-      if Identset.mem id atk then
-        let sz := size_chunk chunk in
-        let ofs := align stacksize sz in
-        (PMap.set id (Var_stack_scalar chunk ofs) cenv, ofs + sz)
-      else
-        (PMap.set id (Var_local chunk) cenv, stacksize)
-  end.
+  let ofs := align stacksize (block_alignment sz) in
+  (PTree.set id ofs cenv, ofs + Zmax 0 sz).
 
-Fixpoint assign_variables
-    (atk: Identset.t)
-    (id_lv_list: list (ident * var_kind))
-    (cenv_stacksize: compilenv * Z)
-    {struct id_lv_list}: compilenv * Z :=
-  match id_lv_list with
-  | nil => cenv_stacksize
-  | id_lv :: rem =>
-      assign_variables atk rem (assign_variable atk id_lv cenv_stacksize)
-  end.
+Definition assign_variables (cenv_stacksize: compilenv * Z) (vars: list (ident * Z)) : compilenv * Z :=
+  List.fold_left assign_variable vars cenv_stacksize.
 
-Definition build_compilenv
-          (globenv: compilenv) (f: Csharpminor.function) : compilenv * Z :=
-  assign_variables
-    (addr_taken_stmt f.(Csharpminor.fn_body))
-    (fn_variables f)
-    (globenv, 0).
+(** Before allocating stack slots, we sort variables by increasing size 
+  so as to minimize padding. *)
 
-Definition assign_global_def
-     (ce: compilenv) (gdef: ident * globdef Csharpminor.fundef var_kind) : compilenv :=
-  let (id, gd) := gdef in
-  let kind :=
-    match gd with
-    | Gvar (mkglobvar (Vscalar chunk) _ _ _) => Var_global_scalar chunk
-    | Gvar (mkglobvar (Varray _ _) _ _ _) => Var_global_array
-    | Gfun f => Var_global_array
-    end in
-  PMap.set id kind ce.
+Module VarOrder <: TotalLeBool.
+  Definition t := (ident * Z)%type.
+  Definition leb (v1 v2: t) : bool := zle (snd v1) (snd v2).
+  Theorem leb_total: forall v1 v2, leb v1 v2 = true \/ leb v2 v1 = true.
+  Proof.
+    unfold leb; intros. 
+    assert (snd v1 <= snd v2 \/ snd v2 <= snd v1) by omega.
+    unfold proj_sumbool. destruct H; [left|right]; apply zle_true; auto.
+  Qed.
+End VarOrder.
 
-Definition build_global_compilenv (p: Csharpminor.program) : compilenv :=
-  List.fold_left assign_global_def p.(prog_defs) (PMap.init Var_global_array).
+Module VarSort := Mergesort.Sort(VarOrder).
+
+Definition build_compilenv (f: Csharpminor.function) : compilenv * Z :=
+  assign_variables (PTree.empty Z, 0) (VarSort.sort (Csharpminor.fn_vars f)).
 
 (** * Translation of functions *)
-
-(** Function parameters whose address is taken must be stored in their
-  stack slots at function entry.  (Cminor passes these parameters in
-  local variables.) *)
-
-Fixpoint store_parameters
-       (cenv: compilenv) (params: list (ident * var_kind))
-       {struct params} : res stmt :=
-  match params with
-  | nil => OK Sskip
-  | (id, vk) :: rem =>
-      do s <- store_parameters cenv rem;
-      var_set_self cenv id s
-  end.
 
 (** Translation of a Csharpminor function.  We must check that the
   required Cminor stack block is no bigger than [Int.max_signed],
   otherwise address computations within the stack block could
   overflow machine arithmetic and lead to incorrect code. *)
 
-Definition transl_funbody 
-  (cenv: compilenv) (stacksize: Z) (f: Csharpminor.function): res function :=
-    do tbody <- transl_stmt f.(fn_return) cenv nil f.(Csharpminor.fn_body);
-    do sparams <- store_parameters cenv f.(Csharpminor.fn_params);
+Definition transl_funbody
+      (cenv: compilenv) (stacksize: Z) (f: Csharpminor.function): res function :=
+   do tbody <- transl_stmt cenv nil f.(Csharpminor.fn_body);
        OK (mkfunction
               (Csharpminor.fn_sig f)
-              (List.map for_var (Csharpminor.fn_params_names f))
-              (List.map for_var (Csharpminor.fn_vars_names f) ++
-               List.map for_temp (Csharpminor.fn_temps f))
+              (Csharpminor.fn_params f)
+              (Csharpminor.fn_temps f)
               stacksize
-              (Sseq sparams tbody)).
+              tbody).
 
-Definition transl_function
-         (gce: compilenv) (f: Csharpminor.function): res function :=
-  let (cenv, stacksize) := build_compilenv gce f in
+Definition transl_function (f: Csharpminor.function): res function :=
+  let (cenv, stacksize) := build_compilenv f in
   if zle stacksize Int.max_unsigned
   then transl_funbody cenv stacksize f
   else Error(msg "Cminorgen: too many local variables, stack size exceeded").
 
-Definition transl_fundef (gce: compilenv) (f: Csharpminor.fundef): res fundef :=
-  transf_partial_fundef (transl_function gce) f.
-
-Definition transl_globvar (vk: var_kind) := OK tt.
+Definition transl_fundef (f: Csharpminor.fundef): res fundef :=
+  transf_partial_fundef transl_function f.
 
 Definition transl_program (p: Csharpminor.program) : res program :=
-  let gce := build_global_compilenv p in
-  transform_partial_program2 (transl_fundef gce) transl_globvar p.
+  transform_partial_program transl_fundef p.

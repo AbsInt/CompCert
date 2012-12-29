@@ -106,7 +106,9 @@ let extern_atom a =
   try
     Hashtbl.find string_of_atom a
   with Not_found ->
-    Printf.sprintf "<unknown atom %ld>" (camlint_of_positive a)
+    Printf.sprintf "$%ld" (camlint_of_positive a)
+
+let first_unused_ident () = !next_atom
 
 (* Strings *)
 

@@ -25,7 +25,7 @@ let floatlit =
   ('.' ['0'-'9' '_']* )?
   (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
 let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '$' '0'-'9']*
-let temp = "$" ['0'-'9'] ['0'-'9']*
+let temp = "$" ['1'-'9'] ['0'-'9']*
 let intlit = "-"? ( ['0'-'9']+ | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+
                                | "0o" ['0'-'7']+ | "0b" ['0'-'1']+ )
 let stringlit = "\"" [ ^ '"' ] * '"'
@@ -125,10 +125,7 @@ rule token = parse
   | floatlit     { FLOATLIT(float_of_string(Lexing.lexeme lexbuf)) }
   | stringlit { let s = Lexing.lexeme lexbuf in
                 STRINGLIT(intern_string(String.sub s 1 (String.length s - 2))) }
-  | ident    { IDENT(BinPos.Coq_xO (intern_string(Lexing.lexeme lexbuf))) }
-  | temp     { let s = Lexing.lexeme lexbuf in
-               let n = Int32.of_string(String.sub s 1 (String.length s -1)) in
-	       IDENT(if n = 0l then BinPos.Coq_xH else BinPos.Coq_xI (positive_of_camlint n)) }
+  | ident | temp  { IDENT(intern_string(Lexing.lexeme lexbuf)) }
   | eof      { EOF }
   | _        { raise(Error("illegal character `" ^ Char.escaped (Lexing.lexeme_char lexbuf 0) ^ "'")) }
 

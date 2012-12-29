@@ -752,7 +752,7 @@ let string_of_errmsg msg =
   let string_of_err = function
   | Errors.MSG s -> camlstring_of_coqstring s
   | Errors.CTX i -> extern_atom i
-  | Errors.CTXL i -> "" (* should not happen *)
+  | Errors.POS i -> sprintf "%ld" (camlint_of_positive i)
   in String.concat "" (List.map string_of_err msg)
 
 let rec convertInit env init =

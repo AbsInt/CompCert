@@ -269,6 +269,16 @@ Fixpoint create_undef_temps (temps: list (ident * type)) : temp_env :=
   | (id, t) :: temps' => PTree.set id Vundef (create_undef_temps temps')
  end.
 
+(** Initialization of temporary variables that are parameters to a function. *)
+
+Fixpoint bind_parameter_temps (formals: list (ident * type)) (args: list val)
+                              (le: temp_env) : option temp_env :=
+ match formals, args with
+ | nil, nil => Some le
+ | (id, t) :: xl, v :: vl => bind_parameter_temps xl vl (PTree.set id v le)
+ | _, _ => None
+ end. 
+
 (** Return the list of blocks in the codomain of [e], with low and high bounds. *)
 
 Definition block_of_binding (id_b_ty: ident * (block * type)) :=
@@ -500,6 +510,16 @@ with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont)
       end
   end.
 
+(** Semantics for allocation of variables and binding of parameters at
+  function entry.  Two semantics are supported: one where
+  parameters are local variables, reside in memory, and can have their address
+  taken; the other where parameters are temporary variables and do not reside
+  in memory.  We parameterize the [step] transition relation over the
+  parameter binding semantics, then instantiate it later to give the two
+  semantics described above. *)
+
+Variable function_entry: function -> list val -> mem -> env -> temp_env -> mem -> Prop.
+
 (** Transition relation *)
 
 Inductive step: state -> trace -> state -> Prop :=
@@ -580,7 +600,6 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (Returnstate v' (call_cont k) m')
   | step_skip_call: forall f k e le m m',
       is_call_cont k ->
-      f.(fn_return) = Tvoid ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f Sskip k e le m)
         E0 (Returnstate Vundef k m')
@@ -606,12 +625,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sgoto lbl) k e le m)
         E0 (State f s' k' e le m)
 
-  | step_internal_function: forall f vargs k m e m1 m2,
-      list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
-      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+  | step_internal_function: forall f vargs k m e le m1,
+      function_entry f vargs m e le m1 ->
       step (Callstate (Internal f) vargs k m)
-        E0 (State f f.(fn_body) k e (create_undef_temps f.(fn_temps)) m2)
+        E0 (State f f.(fn_body) k e le m1)
 
   | step_external_function: forall ef targs tres vargs k m vres t m',
       external_call ef ge vargs m t vres m' ->
@@ -646,19 +663,47 @@ Inductive final_state: state -> int -> Prop :=
 
 End SEMANTICS.
 
-(** Wrapping up these definitions in a small-step semantics. *)
+(** The two semantics for function parameters.  First, parameters as local variables. *)
 
-Definition semantics (p: program) :=
-  Semantics step (initial_state p) final_state (Genv.globalenv p).
+Inductive function_entry1 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) : Prop :=
+  | function_entry1_intro: forall m1,
+      list_norepet (var_names f.(fn_params) ++ var_names f.(fn_vars)) ->
+      alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) e m1 ->
+      bind_parameters e m1 f.(fn_params) vargs m' ->
+      le = create_undef_temps f.(fn_temps) ->
+      function_entry1 f vargs m e le m'.
+
+Definition step1 (ge: genv) := step ge function_entry1.
+
+(** Second, parameters as temporaries. *)
+
+Inductive function_entry2 (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem) : Prop :=
+  | function_entry2_intro:
+      list_norepet (var_names f.(fn_vars)) ->
+      list_norepet (var_names f.(fn_params)) ->
+      list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps)) ->
+      alloc_variables empty_env m f.(fn_vars) e m' ->
+      bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le ->
+      function_entry2 f vargs m e le m'.
+
+Definition step2 (ge: genv) := step ge function_entry2.
+
+(** Wrapping up these definitions in two small-step semantics. *)
+
+Definition semantics1 (p: program) :=
+  Semantics step1 (initial_state p) final_state (Genv.globalenv p).
+
+Definition semantics2 (p: program) :=
+  Semantics step2 (initial_state p) final_state (Genv.globalenv p).
 
 (** This semantics is receptive to changes in events. *)
 
 Lemma semantics_receptive:
-  forall (p: program), receptive (semantics p).
+  forall (p: program), receptive (semantics1 p).
 Proof.
   intros. constructor; simpl; intros.
 (* receptiveness *)
-  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
+  assert (t1 = E0 -> exists s2, step1 (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
   (* builtin *)

@@ -39,6 +39,7 @@ Require Asm.
 (** Translation passes. *)
 Require Initializers.
 Require SimplExpr.
+Require SimplLocals.
 Require Cshmgen.
 Require Cminorgen.
 Require Selection.
@@ -64,6 +65,7 @@ Require Lineartyping.
 Require Machtyping.
 (** Proofs of semantic preservation and typing preservation. *)
 Require SimplExprproof.
+Require SimplLocalsproof.
 Require Cshmgenproof.
 Require Cminorgenproof.
 Require Selectionproof.
@@ -161,6 +163,7 @@ Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
 Definition transf_clight_program (p: Clight.program) : res Asm.program :=
   OK p 
    @@ print print_Clight
+  @@@ SimplLocals.transf_program
   @@@ Cshmgen.transl_program
   @@@ Cminorgen.transl_program
   @@@ transf_cminor_program.
@@ -288,16 +291,18 @@ Qed.
 Theorem transf_clight_program_correct:
   forall p tp,
   transf_clight_program p = OK tp ->
-  forward_simulation (Clight.semantics p) (Asm.semantics tp)
-  * backward_simulation (Clight.semantics p) (Asm.semantics tp).
+  forward_simulation (Clight.semantics1 p) (Asm.semantics tp)
+  * backward_simulation (Clight.semantics1 p) (Asm.semantics tp).
 Proof.
   intros. 
-  assert (F: forward_simulation (Clight.semantics p) (Asm.semantics tp)).
+  assert (F: forward_simulation (Clight.semantics1 p) (Asm.semantics tp)).
   revert H; unfold transf_clight_program; simpl.
   rewrite print_identity.
-  caseEq (Cshmgen.transl_program p); simpl; try congruence; intros p1 EQ1.
+  caseEq (SimplLocals.transf_program p); simpl; try congruence; intros p0 EQ0.
+  caseEq (Cshmgen.transl_program p0); simpl; try congruence; intros p1 EQ1.
   caseEq (Cminorgen.transl_program p1); simpl; try congruence; intros p2 EQ2.
   intros EQ3.
+  eapply compose_forward_simulation. apply SimplLocalsproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply Cshmgenproof.transl_program_correct. eauto.
   eapply compose_forward_simulation. apply Cminorgenproof.transl_program_correct. eauto.
   exact (fst (transf_cminor_program_correct _ _ EQ3)). 

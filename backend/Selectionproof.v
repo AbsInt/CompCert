@@ -468,8 +468,7 @@ Proof.
   (* skip call *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [A B]].
   left; econstructor; split. 
-  econstructor. inv H10; simpl in H; simpl; auto. 
-  rewrite <- H0; reflexivity.
+  econstructor. inv H9; simpl in H; simpl; auto. 
   eauto. 
   constructor; auto.
   (* assign *)

@@ -901,8 +901,8 @@ Inductive tr_stmt (c: code) (map: mapping):
      tr_expr c map nil a ns n r None ->
      tr_switch c map r nexits t n ->
      tr_stmt c map (Sswitch a cases default) ns nd nexits ngoto nret rret
-  | tr_Sreturn_none: forall nret nd nexits ngoto,
-     tr_stmt c map (Sreturn None) nret nd nexits ngoto nret None
+  | tr_Sreturn_none: forall nret nd nexits ngoto rret,
+     tr_stmt c map (Sreturn None) nret nd nexits ngoto nret rret
   | tr_Sreturn_some: forall a ns nd nexits ngoto nret rret,
      tr_expr c map nil a ns nret rret None ->
      tr_stmt c map (Sreturn (Some a)) ns nd nexits ngoto nret (Some rret)
@@ -1302,12 +1302,12 @@ Proof.
   eapply transl_switch_charact with (s := s0); eauto with rtlg.
   monadInv TR. 
   (* Sreturn *)
-  destruct o; destruct rret; inv TR.
-  inv OK.
+  destruct o. 
+  destruct rret; inv TR. inv OK. 
   econstructor; eauto with rtlg.   
   eapply transl_expr_charact; eauto with rtlg.
   constructor. auto. simpl; tauto. 
-  constructor.
+  monadInv TR. constructor.
   (* Slabel *)
   generalize EQ0; clear EQ0. case_eq (ngoto!l); intros; monadInv EQ0.
   generalize EQ1; clear EQ1. unfold handle_error. 

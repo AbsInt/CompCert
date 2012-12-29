@@ -41,13 +41,9 @@ let rec precedence = function
   | Ebinop(Oor, _, _) -> (6, LtoR)
   | Eload _ -> (15, RtoL)
 
-(* Naming idents.  We assume idents are encoded as in Cminorgen. *)
+(* Naming idents. *)
 
-let ident_name id =
-  match id with
-  | Coq_xO n -> extern_atom n
-  | Coq_xI n -> Printf.sprintf "$%ld" (camlint_of_positive n)
-  | Coq_xH -> "$0"
+let ident_name = Camlcoq.extern_atom
 
 (* Naming operators *)
 

@@ -319,7 +319,7 @@ Fixpoint add_vars (map: mapping) (names: list ident)
 
 Definition find_var (map: mapping) (name: ident) : mon reg :=
   match PTree.get name map.(map_vars) with
-  | None => error (Errors.MSG "RTLgen: unbound variable " :: Errors.CTXL name :: nil)
+  | None => error (Errors.MSG "RTLgen: unbound variable " :: Errors.CTX name :: nil)
   | Some r => ret r
   end.
 
@@ -598,7 +598,7 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
         error (Errors.msg "RTLgen: wrong switch")
   | Sreturn opt_a =>
       match opt_a, rret with
-      | None, None => ret nret
+      | None, _ => ret nret
       | Some a, Some r => transl_expr map a r nret
       | _, _ => error (Errors.msg "RTLgen: type mismatch on return")
       end

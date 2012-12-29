@@ -28,14 +28,8 @@ Require Import Smallstep.
 
 (** Csharpminor is a low-level imperative language structured in expressions,
   statements, functions and programs.  Expressions include
-  reading global or local variables, reading store locations,
-  arithmetic operations, function calls, and conditional expressions
-  (similar to [e1 ? e2 : e3] in C). 
-
-  Unlike in Cminor (the next intermediate language of the back-end),
-  Csharpminor local variables reside in memory, and their addresses can
-  be taken using [Eaddrof] expressions.
-*)
+  reading temporary variables, taking the address of a variable,
+  constants, arithmetic operations, and dereferencing addresses. *)
 
 Inductive constant : Type :=
   | Ointconst: int -> constant          (**r integer constant *)
@@ -45,15 +39,14 @@ Definition unary_operation : Type := Cminor.unary_operation.
 Definition binary_operation : Type := Cminor.binary_operation.
 
 Inductive expr : Type :=
-  | Evar : ident -> expr                (**r reading a scalar variable  *)
-  | Etempvar : ident -> expr            (**r reading a temporary variable *)
+  | Evar : ident -> expr                (**r reading a temporary variable  *)
   | Eaddrof : ident -> expr             (**r taking the address of a variable *)
   | Econst : constant -> expr           (**r constants *)
   | Eunop : unary_operation -> expr -> expr  (**r unary operation *)
   | Ebinop : binary_operation -> expr -> expr -> expr (**r binary operation *)
   | Eload : memory_chunk -> expr -> expr. (**r memory read *)
 
-(** Statements include expression evaluation, variable assignment,
+(** Statements include expression evaluation, temporary variable assignment,
   memory stores, function calls, an if/then/else conditional,
   infinite loops, blocks and early block exits, and early function returns.
   [Sexit n] terminates prematurely the execution of the [n+1] enclosing
@@ -63,7 +56,6 @@ Definition label := ident.
 
 Inductive stmt : Type :=
   | Sskip: stmt
-  | Sassign : ident -> expr -> stmt
   | Sset : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
   | Scall : option ident -> signature -> expr -> list expr -> stmt
@@ -82,50 +74,21 @@ with lbl_stmt : Type :=
   | LSdefault: stmt -> lbl_stmt
   | LScase: int -> stmt -> lbl_stmt -> lbl_stmt.
 
-(** The variables can be either scalar variables
-  (whose type, size and signedness are given by a [memory_chunk]
-  or array variables (of the indicated sizes and alignment).
-  The only operation permitted on an array variable is taking its address. *)
-
-Inductive var_kind : Type :=
-  | Vscalar(chunk: memory_chunk)
-  | Varray(sz al: Z).
-
-Definition sizeof (lv: var_kind) : Z :=
-  match lv with
-  | Vscalar chunk => size_chunk chunk
-  | Varray sz al => Zmax 0 sz
-  end.
-
-Definition type_of_kind (lv: var_kind) : typ :=
-  match lv with
-  | Vscalar chunk => type_of_chunk chunk
-  | Varray _ _ => Tint
-  end.
-
-(** Functions are composed of a return type, a list of parameter names
-  with associated [var_kind] descriptions, a list of
-  local variables with associated [var_kind] descriptions, and a
-  statement representing the function body.  *)
-
-Definition variable_name (v: ident * var_kind) := fst v.
-Definition variable_kind (v: ident * var_kind) := snd v.
+(** Functions are composed of a return type, a list of parameter names,
+  a list of local variables with their sizes, a list of temporary variables,
+  and a statement representing the function body.  *)
 
 Record function : Type := mkfunction {
-  fn_return: option typ;
-  fn_params: list (ident * var_kind);
-  fn_vars: list (ident * var_kind);
+  fn_sig: signature;
+  fn_params: list ident;
+  fn_vars: list (ident * Z);
   fn_temps: list ident;
   fn_body: stmt
 }.
 
 Definition fundef := AST.fundef function.
 
-Definition program : Type := AST.program fundef var_kind.
-
-Definition fn_sig (f: function) :=
-  mksignature (List.map type_of_kind (List.map variable_kind f.(fn_params)))
-              f.(fn_return).
+Definition program : Type := AST.program fundef unit.
 
 Definition funsig (fd: fundef) :=
   match fd with
@@ -133,27 +96,23 @@ Definition funsig (fd: fundef) :=
   | External ef => ef_sig ef
   end.
 
-Definition fn_variables (f: function) := f.(fn_params) ++ f.(fn_vars).
-
-Definition fn_params_names (f: function) := List.map variable_name f.(fn_params).
-Definition fn_vars_names (f: function) := List.map variable_name f.(fn_vars).
-
 (** * Operational semantics *)
 
 (** Three evaluation environments are involved:
 - [genv]: global environments, map symbols and functions to memory blocks,
     and maps symbols to variable informations (type [var_kind])
 - [env]: local environments, map local variables 
-    to pairs (memory block, variable information)
+    to pairs (memory block, size)
 - [temp_env]: local environments, map temporary variables to
     their current values.
 *)
 
-Definition genv := Genv.t fundef var_kind.
-Definition env := PTree.t (block * var_kind).
+Definition genv := Genv.t fundef unit.
+Definition env := PTree.t (block * Z).
 Definition temp_env := PTree.t val.
 
-Definition empty_env : env := PTree.empty (block * var_kind).
+Definition empty_env : env := PTree.empty (block * Z).
+Definition empty_temp_env : temp_env := PTree.empty val.
 
 (** Initialization of temporary variables *)
 
@@ -162,6 +121,16 @@ Fixpoint create_undef_temps (temps: list ident) : temp_env :=
   | nil => PTree.empty val
   | id :: temps' => PTree.set id Vundef (create_undef_temps temps')
  end.
+
+(** Initialization of temporaries that are parameters. *)
+
+Fixpoint bind_parameters (formals: list ident) (args: list val)
+                         (le: temp_env) : option temp_env :=
+ match formals, args with
+ | nil, nil => Some le
+ | id :: xl, v :: vl => bind_parameters xl vl (PTree.set id v le)
+ | _, _ => None
+ end. 
 
 (** Continuations *)
 
@@ -263,7 +232,6 @@ with find_label_ls (lbl: label) (sl: lbl_stmt) (k: cont)
       end
   end.
 
-
 (** Evaluation of operator applications. *)
 
 Definition eval_constant (cst: constant) : option val :=
@@ -280,21 +248,21 @@ Definition eval_binop := Cminor.eval_binop.
   bound to the reference to a fresh block of the appropriate size. *)
 
 Inductive alloc_variables: env -> mem ->
-                           list (ident * var_kind) ->
+                           list (ident * Z) ->
                            env -> mem -> Prop :=
   | alloc_variables_nil:
       forall e m,
       alloc_variables e m nil e m
   | alloc_variables_cons:
-      forall e m id lv vars m1 b1 m2 e2,
-      Mem.alloc m 0 (sizeof lv) = (m1, b1) ->
-      alloc_variables (PTree.set id (b1, lv) e) m1 vars e2 m2 ->
-      alloc_variables e m ((id, lv) :: vars) e2 m2.
+      forall e m id sz vars m1 b1 m2 e2,
+      Mem.alloc m 0 sz = (m1, b1) ->
+      alloc_variables (PTree.set id (b1, sz) e) m1 vars e2 m2 ->
+      alloc_variables e m ((id, sz) :: vars) e2 m2.
 
 (** List of blocks mentioned in an environment, with low and high bounds *)
 
-Definition block_of_binding (id_b_lv: ident * (block * var_kind)) :=
-  match id_b_lv with (id, (b, lv)) => (b, 0, sizeof lv) end.
+Definition block_of_binding (id_b_sz: ident * (block * Z)) :=
+  match id_b_sz with (id, (b, sz)) => (b, 0, sz) end.
 
 Definition blocks_of_env (e: env) : list (block * Z * Z) :=
   List.map block_of_binding (PTree.elements e).
@@ -303,67 +271,20 @@ Section RELSEM.
 
 Variable ge: genv.
 
-(** Initialization of local variables that are parameters.  The value
-  of the corresponding argument is stored into the memory block
-  bound to the parameter. *)
-
-Definition val_normalized (v: val) (chunk: memory_chunk) : Prop :=
-  Val.load_result chunk v = v.
-
-Inductive bind_parameters: env ->
-                           mem -> list (ident * var_kind) -> list val ->
-                           mem -> Prop :=
-  | bind_parameters_nil:
-      forall e m,
-      bind_parameters e m nil nil m
-  | bind_parameters_scalar:
-      forall e m id chunk params v1 vl b m1 m2,
-      PTree.get id e = Some (b, Vscalar chunk) ->
-      val_normalized v1 chunk ->
-      Mem.store chunk m b 0 v1 = Some m1 ->
-      bind_parameters e m1 params vl m2 ->
-      bind_parameters e m ((id, Vscalar chunk) :: params) (v1 :: vl) m2
-  | bind_parameters_array:
-      forall e m id sz al params v1 vl b m1 m2,
-      PTree.get id e = Some (b, Varray sz al) ->
-      extcall_memcpy_sem sz al
-                         ge (Vptr b Int.zero :: v1 :: nil) m E0 Vundef m1 ->
-      bind_parameters e m1 params vl m2 ->
-      bind_parameters e m ((id, Varray sz al) :: params) (v1 :: vl) m2.
-
-
 (* Evaluation of the address of a variable: 
    [eval_var_addr prg ge e id b] states that variable [id] 
    in environment [e] evaluates to block [b]. *)
 
 Inductive eval_var_addr: env -> ident -> block -> Prop :=
   | eval_var_addr_local:
-      forall e id b vi,
-      PTree.get id e = Some (b, vi) ->
+      forall e id b sz,
+      PTree.get id e = Some (b, sz) ->
       eval_var_addr e id b
   | eval_var_addr_global:
       forall e id b,
       PTree.get id e = None ->
       Genv.find_symbol ge id = Some b ->
       eval_var_addr e id b.
-
-(* Evaluation of a reference to a scalar variable:
-   [eval_var_ref prg ge e id b chunk] states
-   that variable [id] in environment [e] evaluates to block [b]
-   and is associated with the memory chunk [chunk]. *)
-
-Inductive eval_var_ref: env -> ident -> block -> memory_chunk -> Prop :=
-  | eval_var_ref_local:
-      forall e id b chunk,
-      PTree.get id e = Some (b, Vscalar chunk) ->
-      eval_var_ref e id b chunk
-  | eval_var_ref_global:
-      forall e id b gv chunk,
-      PTree.get id e = None ->
-      Genv.find_symbol ge id = Some b ->
-      Genv.find_var_info ge b = Some gv ->
-      gvar_info gv = Vscalar chunk ->
-      eval_var_ref e id b chunk.
 
 (** Evaluation of an expression: [eval_expr prg e m a v] states
   that expression [a], in initial memory state [m] and local
@@ -376,13 +297,9 @@ Variable le: temp_env.
 Variable m: mem.
 
 Inductive eval_expr: expr -> val -> Prop :=
-  | eval_Evar: forall id b chunk v,
-      eval_var_ref e id b chunk ->
-      Mem.load chunk m b 0 = Some v ->
-      eval_expr (Evar id) v
-  | eval_Etempvar: forall id v,
+  | eval_Evar: forall id v,
       le!id = Some v ->
-      eval_expr (Etempvar id) v
+      eval_expr (Evar id) v
   | eval_Eaddrof: forall id b,
       eval_var_addr e id b ->
       eval_expr (Eaddrof id) (Vptr b Int.zero)
@@ -417,14 +334,6 @@ Inductive eval_exprlist: list expr -> list val -> Prop :=
 
 End EVAL_EXPR.
 
-(** Execution of an assignment to a variable. *)
-
-Inductive exec_assign: env -> mem -> ident -> val -> mem -> Prop :=
-  exec_assign_intro: forall e m id v b chunk m',
-    eval_var_ref e id b chunk ->
-    val_normalized v chunk ->
-    Mem.store chunk m b 0 v = Some m' ->
-    exec_assign e m id v m'.
 
 (** One step of execution *)
 
@@ -438,16 +347,9 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f Sskip k e le m)
   | step_skip_call: forall f k e le m m',
       is_call_cont k ->
-      f.(fn_return) = None ->
       Mem.free_list m (blocks_of_env e) = Some m' ->
       step (State f Sskip k e le m)
         E0 (Returnstate Vundef k m')
-
-  | step_assign: forall f id a k e le m m' v,
-      eval_expr e le m a v ->
-      exec_assign e m id v m' ->
-      step (State f (Sassign id a) k e le m)
-        E0 (State f Sskip k e le m')
 
   | step_set: forall f id a k e le m v,
       eval_expr e le m a v ->
@@ -526,12 +428,14 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sgoto lbl) k e le m)
         E0 (State f s' k' e le m)
 
-  | step_internal_function: forall f vargs k m m1 m2 e,
-      list_norepet (fn_params_names f ++ fn_vars_names f) ->
-      alloc_variables empty_env m (fn_variables f) e m1 ->
-      bind_parameters e m1 f.(fn_params) vargs m2 ->
+  | step_internal_function: forall f vargs k m m1 e le,
+      list_norepet (map fst f.(fn_vars)) ->
+      list_norepet f.(fn_params) ->
+      list_disjoint f.(fn_params) f.(fn_temps) ->
+      alloc_variables empty_env m (fn_vars f) e m1 ->
+      bind_parameters f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le ->
       step (Callstate (Internal f) vargs k m)
-        E0 (State f f.(fn_body) k e (create_undef_temps f.(fn_temps)) m2)
+        E0 (State f f.(fn_body) k e le m1)
 
   | step_external_function: forall ef vargs k m t vres m',
       external_call ef ge vargs m t vres m' ->

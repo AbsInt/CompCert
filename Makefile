@@ -93,7 +93,8 @@ BACKEND=\
 CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
   SimplExpr.v SimplExprspec.v SimplExprproof.v \
-  Clight.v ClightBigstep.v Cshmgen.v Cshmgenproof.v \
+  Clight.v ClightBigstep.v SimplLocals.v SimplLocalsproof.v \
+  Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
 
 # Putting everything together (in driver/)
@@ -141,7 +142,15 @@ cchecklink.byte: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
         && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
 
-.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte
+clightgen: driver/Configuration.ml
+	$(OCAMLBUILD) $(OCB_OPTIONS) Clightgen.native \
+        && rm -f clightgen && $(SLN) _build/driver/Clightgen.native clightgen
+
+clightgen.byte: driver/Configuration.ml
+	$(OCAMLBUILD) $(OCB_OPTIONS) Clightgen.d.byte \
+        && rm -f clightgen.byte && $(SLN) _build/driver/Clightgen.d.byte clightgen.byte
+
+.PHONY: proof extraction cil ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte clightgen clightgen.byte
 
 all:
 	$(MAKE) proof

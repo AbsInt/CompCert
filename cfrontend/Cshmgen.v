@@ -34,36 +34,6 @@ Require Import Csharpminor.
 Open Local Scope string_scope.
 Open Local Scope error_monad_scope.
 
-(** * Operations on C types *)
-
-Definition chunk_of_type (ty: type): res memory_chunk :=
-  match access_mode ty with
-  | By_value chunk => OK chunk
-  | _ => Error (msg "Cshmgen.chunk_of_type")
-  end.
-
-(** [var_kind_of_type ty] returns the Csharpminor ``variable kind''
-  (scalar or array) that corresponds to the given Clight type [ty]. *)
-
-Definition var_kind_of_type (ty: type): res var_kind :=
-  match ty with
-  | Tint I8 Signed _ => OK(Vscalar Mint8signed)
-  | Tint I8 Unsigned _ => OK(Vscalar Mint8unsigned)
-  | Tint I16 Signed _ => OK(Vscalar Mint16signed)
-  | Tint I16 Unsigned _ => OK(Vscalar Mint16unsigned)
-  | Tint I32 _ _ => OK(Vscalar Mint32)
-  | Tint IBool _ _ => OK(Vscalar Mint8unsigned)
-  | Tfloat F32 _ => OK(Vscalar Mfloat32)
-  | Tfloat F64 _ => OK(Vscalar Mfloat64)
-  | Tvoid => Error (msg "Cshmgen.var_kind_of_type(void)")
-  | Tpointer _ _ => OK(Vscalar Mint32)
-  | Tarray _ _ _ => OK(Varray (Ctypes.sizeof ty) (Ctypes.alignof ty))
-  | Tfunction _ _ => Error (msg "Cshmgen.var_kind_of_type(function)")
-  | Tstruct _ fList _ => OK(Varray (Ctypes.sizeof ty) (Ctypes.alignof ty))
-  | Tunion _ fList _ => OK(Varray (Ctypes.sizeof ty) (Ctypes.alignof ty))
-  | Tcomp_ptr _ _ => OK(Vscalar Mint32)
-end.
-  
 (** * Csharpminor constructors *)
 
 (** The following functions build Csharpminor expressions that compute
@@ -284,42 +254,6 @@ Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
   | _ => Error (msg "Cshmgen.make_store")
   end.
 
-(** * Reading and writing variables *)
-
-(** Determine if a C expression is a variable *)
-
-Definition is_variable (e: Clight.expr) : option ident :=
-  match e with
-  | Clight.Evar id _ => Some id
-  | _ => None
-  end.
-
-(** [var_get id ty] returns Csharpminor code that evaluates to the
-   value of C variable [id] with type [ty].  Note that 
-   C variables of array or function type evaluate to the address
-   of the corresponding Clight memory block, while variables of other types
-   evaluate to the contents of the corresponding C memory block.
-*)
-
-Definition var_get (id: ident) (ty: type) :=
-  match access_mode ty with
-  | By_value chunk => OK (Evar id)
-  | By_reference => OK (Eaddrof id)
-  | By_copy => OK (Eaddrof id)
-  | _ => Error (MSG "Cshmgen.var_get " :: CTX id :: nil)
-  end.
-
-(** Likewise, [var_set id ty rhs] stores the value of the Csharpminor
-   expression [rhs] into the Clight variable [id] of type [ty].
-*)
-
-Definition var_set (id: ident) (ty: type) (rhs: expr) :=
-  match access_mode ty with
-  | By_value chunk => OK (Sassign id rhs)
-  | By_copy => OK (make_memcpy (Eaddrof id) rhs ty)
-  | _ => Error (MSG "Cshmgen.var_set " :: CTX id :: nil)
-  end.
-
 (** ** Translation of operators *)
 
 Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr :=
@@ -364,12 +298,12 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
   | Clight.Econst_float n _ =>
       OK(make_floatconst n)
   | Clight.Evar id ty =>
-      var_get id ty
+      make_load (Eaddrof id) ty
   | Clight.Etempvar id ty =>
-      OK(Etempvar id)
-  | Clight.Ederef b _ =>
+      OK(Evar id)
+  | Clight.Ederef b ty =>
       do tb <- transl_expr b;
-      make_load tb (typeof a)
+      make_load tb ty
   | Clight.Eaddrof b _ =>
       transl_lvalue b
   | Clight.Eunop op b _ =>
@@ -472,15 +406,9 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sskip =>
       OK Sskip
   | Clight.Sassign b c =>
-      match is_variable b with
-      | Some id =>
-          do tc <- transl_expr c;
-          var_set id (typeof b) (make_cast (typeof c) (typeof b) tc)
-      | None =>
-          do tb <- transl_lvalue b;
-          do tc <- transl_expr c;
-          make_store tb (typeof b) (make_cast (typeof c) (typeof b) tc)
-      end 
+      do tb <- transl_lvalue b;
+      do tc <- transl_expr c;
+      make_store tb (typeof b) (make_cast (typeof c) (typeof b) tc)
   | Clight.Sset x b =>
       do tb <- transl_expr b;
       OK(Sset x tb)
@@ -543,29 +471,19 @@ with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
 
 (*** Translation of functions *)
 
-Definition prefix_var_name (id: ident) : errmsg :=
-  MSG "In local variable " :: CTX id :: MSG ": " :: nil.
+Definition transl_var (v: ident * type) := (fst v, sizeof (snd v)).
 
-Fixpoint transl_vars (l: list (ident * type)) : res (list (ident * var_kind)) :=
-  match l with
-  | nil => OK nil
-  | (id, ty) :: l' =>
-      match var_kind_of_type ty with
-      | Error msg => Error (MSG "In local variable " :: CTX id :: MSG ": " :: msg)
-      | OK vk =>
-          do tl' <- transl_vars l'; OK ((id, vk) :: tl')
-      end
-  end.
+Definition signature_of_function (f: Clight.function) :=
+  mksignature (map typ_of_type (map snd (Clight.fn_params f)))
+              (opttyp_of_type (Clight.fn_return f)).
 
 Definition transl_function (f: Clight.function) : res function :=
-  do tparams <- transl_vars (Clight.fn_params f);
-  do tvars <- transl_vars (Clight.fn_vars f);
   do tbody <- transl_statement f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
   OK (mkfunction 
-       (opttyp_of_type (Clight.fn_return f))
-       tparams
-       tvars
-       (List.map (@fst ident type) f.(Clight.fn_temps))
+       (signature_of_function f)
+       (map fst (Clight.fn_params f))
+       (map transl_var (Clight.fn_vars f))
+       (map fst (Clight.fn_temps f))
        tbody).
 
 Definition list_typ_eq:
@@ -587,7 +505,7 @@ Definition transl_fundef (f: Clight.fundef) : res fundef :=
 
 (** ** Translation of programs *)
 
-Definition transl_globvar (ty: type) := var_kind_of_type ty.
+Definition transl_globvar (ty: type) := OK tt.
 
 Definition transl_program (p: Clight.program) : res program :=
   transform_partial_program2 transl_fundef transl_globvar p.

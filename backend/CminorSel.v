@@ -246,7 +246,6 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f Sskip k sp e m)
   | step_skip_call: forall f k sp e m m',
       is_call_cont k ->
-      f.(fn_sig).(sig_res) = None ->
       Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f Sskip k (Vptr sp Int.zero) e m)
         E0 (Returnstate Vundef k m')

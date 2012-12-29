@@ -83,8 +83,10 @@ Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
 
 Local Open Scope gensym_monad_scope.
 
-Definition initial_generator : generator := 
-  mkgenerator 1%positive nil.
+Parameter first_unused_ident: unit -> ident.
+
+Definition initial_generator (x: unit) : generator := 
+  mkgenerator (first_unused_ident x) nil.
 
 Definition gensym (ty: type): mon ident :=
   fun (g: generator) => 
@@ -397,7 +399,8 @@ Definition transl_expr_stmt (r: C.expr) : mon statement :=
 
 (*
 Definition transl_if (r: C.expr) (s1 s2: statement) : mon statement :=
-  do (sl, a) <- transl_expr (For_test nil s1 s2) r; ret (makeseq sl).
+  do (sl, a) <- transl_expr For_val r;
+  ret (makeseq (sl ++ makeif a s1 s2 :: nil)).
 *)
 
 Definition transl_if (r: C.expr) (s1 s2: statement) : mon statement :=
@@ -413,24 +416,6 @@ Definition is_Sskip:
 Proof.
   destruct s; ((left; reflexivity) || (right; congruence)).
 Defined.
-
-(** There are two possible translations for an "if then else" statement.
-  One is more efficient if the condition contains "?" constructors
-  but can duplicate the "then" and "else" branches.
-  The other produces no code duplication.  We choose between the
-  two based on the shape of the "then" and "else" branches. *)
-(*
-Fixpoint small_stmt (s: statement) : bool :=
-  match s with
-  | Sskip => true
-  | Sbreak => true
-  | Scontinue => true
-  | Sgoto _ => true
-  | Sreturn None => true
-  | Ssequence s1 s2 => small_stmt s1 && small_stmt s2
-  | _ => false
-  end.
-*)
 
 Fixpoint transl_stmt (s: C.statement) : mon statement :=
   match s with
@@ -496,7 +481,7 @@ with transl_lblstmt (ls: C.labeled_statements) : mon labeled_statements :=
 (** Translation of a function *)
 
 Definition transl_function (f: C.function) : res function :=
-  match transl_stmt f.(C.fn_body) initial_generator with
+  match transl_stmt f.(C.fn_body) (initial_generator tt) with
   | Err msg =>
       Error msg
   | Res tbody g i =>

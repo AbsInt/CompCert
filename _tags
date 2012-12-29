@@ -1,3 +1,4 @@
 <driver/Driver.*{byte,native}>: use_unix,use_str,use_Cparser
+<driver/Clightgen.*{byte,native}>: use_unix,use_str,use_Cparser
 <checklink/*.ml>: pkg_bitstring,warn_error_A
 <checklink/Validator.*{byte,native}>: pkg_unix,pkg_str,pkg_bitstring,use_Cparser

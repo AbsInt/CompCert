@@ -91,7 +91,7 @@ Lemma function_return_preserved:
   fn_return tf = C.fn_return f.
 Proof.
   intros. unfold transl_function in H.
-  destruct (transl_stmt (C.fn_body f) initial_generator); inv H.
+  destruct (transl_stmt (C.fn_body f) (initial_generator tt)); inv H.
   auto.
 Qed.
 
@@ -751,7 +751,7 @@ Lemma step_makeif:
   forall f a s1 s2 k e le m v1 b,
   eval_expr tge e le m a v1 ->
   bool_val v1 (typeof a) = Some b ->
-  star step tge (State f (makeif a s1 s2) k e le m)
+  star step1 tge (State f (makeif a s1 s2) k e le m)
              E0 (State f (if b then s1 else s2) k e le m).
 Proof.
   intros. functional induction (makeif a s1 s2).
@@ -768,8 +768,8 @@ Lemma step_make_set:
   Csem.deref_loc ge ty m b ofs t v ->
   eval_lvalue tge e le m a b ofs ->
   typeof a = ty ->
-  step tge (State f (make_set id a) k e le m)
-         t (State f Sskip k e (PTree.set id v le) m).
+  step1 tge (State f (make_set id a) k e le m)
+          t (State f Sskip k e (PTree.set id v le) m).
 Proof.
   intros. exploit deref_loc_translated; eauto. rewrite <- H1.
   unfold make_set. destruct (chunk_for_volatile_type (typeof a)) as [chunk|].
@@ -789,8 +789,8 @@ Lemma step_make_assign:
   eval_expr tge e le m a2 v2 ->
   sem_cast v2 (typeof a2) ty = Some v ->
   typeof a1 = ty ->
-  step tge (State f (make_assign a1 a2) k e le m)
-         t (State f Sskip k e le m').
+  step1 tge (State f (make_assign a1 a2) k e le m)
+          t (State f Sskip k e le m').
 Proof.
   intros. exploit assign_loc_translated; eauto. rewrite <- H3.
   unfold make_assign. destruct (chunk_for_volatile_type (typeof a1)) as [chunk|].
@@ -819,8 +819,8 @@ Qed.
 
 Lemma push_seq:
   forall f sl k e le m,
-  star step tge (State f (makeseq sl) k e le m)
-             E0 (State f Sskip (Kseqlist sl k) e le m).
+  star step1 tge (State f (makeseq sl) k e le m)
+              E0 (State f Sskip (Kseqlist sl k) e le m).
 Proof.
   intros. unfold makeseq. generalize Sskip. revert sl k. 
   induction sl; simpl; intros.
@@ -835,8 +835,8 @@ Lemma step_tr_rvalof:
   tr_rvalof ty a sl a' tmp ->
   typeof a = ty ->
   exists le',
-    star step tge (State f Sskip (Kseqlist sl k) e le m)
-               t (State f Sskip k e le' m)
+    star step1 tge (State f Sskip (Kseqlist sl k) e le m)
+                 t (State f Sskip k e le' m)
   /\ eval_expr tge e le' m a' v
   /\ typeof a' = typeof a
   /\ forall x, ~In x tmp -> le'!x = le!x.
@@ -1349,8 +1349,8 @@ Lemma estep_simulation:
   forall S1 t S2, Cstrategy.estep ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   exists S2',
-     (plus step tge S1' t S2' \/
-       (star step tge S1' t S2' /\ measure S2 < measure S1)%nat)
+     (plus step1 tge S1' t S2' \/
+       (star step1 tge S1' t S2' /\ measure S2 < measure S1)%nat)
   /\ match_states S2 S2'.
 Proof.
   induction 1; intros; inv MS.
@@ -1909,8 +1909,8 @@ Lemma sstep_simulation:
   forall S1 t S2, Csem.sstep ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   exists S2',
-     (plus step tge S1' t S2' \/
-       (star step tge S1' t S2' /\ measure S2 < measure S1)%nat)
+     (plus step1 tge S1' t S2' \/
+       (star step1 tge S1' t S2' /\ measure S2 < measure S1)%nat)
   /\ match_states S2 S2'.
 Proof.
   induction 1; intros; inv MS.
@@ -2094,11 +2094,10 @@ Proof.
   eauto. traceEq.
   constructor. apply match_cont_call; auto.
 (* skip return *)
-  inv H9. 
-  assert (is_call_cont tk). inv H10; simpl in *; auto.
+  inv H8. 
+  assert (is_call_cont tk). inv H9; simpl in *; auto.
   econstructor; split.
   left. apply plus_one. apply step_skip_call; eauto.
-  rewrite <- H0. apply function_return_preserved; auto.
   constructor. auto.
 
 (* switch *)
@@ -2146,10 +2145,11 @@ Proof.
   monadInv H7. 
   exploit transl_function_spec; eauto. intros [A [B [C D]]].
   econstructor; split.
-  left; apply plus_one. eapply step_internal_function. 
+  left; apply plus_one. eapply step_internal_function. econstructor.
   rewrite C; rewrite D; auto.
   rewrite C; rewrite D. eapply alloc_variables_preserved; eauto.
   rewrite C. eapply bind_parameters_preserved; eauto.
+  eauto. 
   constructor; auto. 
 
 (* external function *)
@@ -2173,8 +2173,8 @@ Theorem simulation:
   forall S1 t S2, Cstrategy.step ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   exists S2',
-     (plus step tge S1' t S2' \/
-       (star step tge S1' t S2' /\ measure S2 < measure S1)%nat)
+     (plus step1 tge S1' t S2' \/
+       (star step1 tge S1' t S2' /\ measure S2 < measure S1)%nat)
   /\ match_states S2 S2'.
 Proof.
   intros S1 t S2 STEP. destruct STEP. 
@@ -2209,7 +2209,7 @@ Proof.
 Qed.
 
 Theorem transl_program_correct:
-  forward_simulation (Cstrategy.semantics prog) (Clight.semantics tprog).
+  forward_simulation (Cstrategy.semantics prog) (Clight.semantics1 tprog).
 Proof.
   eapply forward_simulation_star_wf with (order := ltof _ measure).
   eexact symbols_preserved.

@@ -360,7 +360,6 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f Sskip k sp e m)
   | step_skip_call: forall f k sp e m m',
       is_call_cont k ->
-      f.(fn_sig).(sig_res) = None ->
       Mem.free m sp 0 f.(fn_stackspace) = Some m' ->
       step (State f Sskip k (Vptr sp Int.zero) e m)
         E0 (Returnstate Vundef k m')
@@ -534,12 +533,12 @@ Definition outcome_block (out: outcome) : outcome :=
 
 Definition outcome_result_value
     (out: outcome) (retsig: option typ) (vres: val) : Prop :=
-  match out, retsig with
-  | Out_normal, None => vres = Vundef
-  | Out_return None, None => vres = Vundef
-  | Out_return (Some v), Some ty => vres = v
-  | Out_tailcall_return v, _ => vres = v
-  | _, _ => False
+  match out with
+  | Out_normal => vres = Vundef
+  | Out_return None => vres = Vundef
+  | Out_return (Some v) => retsig <> None /\ vres = v
+  | Out_tailcall_return v => vres = v
+  | _ => False
   end.
 
 Definition outcome_free_mem
@@ -845,20 +844,12 @@ Proof.
   eapply star_trans. eexact A.
   inversion B; clear B; subst out; simpl in H3; simpl; try contradiction.
   (* Out normal *)
-  assert (f.(fn_sig).(sig_res) = None /\ vres = Vundef).
-    destruct f.(fn_sig).(sig_res). contradiction. auto.
-  destruct H7. subst vres.
-  apply star_one. apply step_skip_call; auto. 
+  subst vres. apply star_one. apply step_skip_call; auto. 
   (* Out_return None *)
-  assert (f.(fn_sig).(sig_res) = None /\ vres = Vundef).
-    destruct f.(fn_sig).(sig_res). contradiction. auto.
-  destruct H8. subst vres.
-  replace k with (call_cont k') by congruence.
+  subst vres. replace k with (call_cont k') by congruence.
   apply star_one. apply step_return_0; auto.
   (* Out_return Some *)
-  assert (f.(fn_sig).(sig_res) <> None /\ vres = v).
-    destruct f.(fn_sig).(sig_res). split; congruence. contradiction.
-  destruct H9. subst vres.
+  destruct H3. subst vres.
   replace k with (call_cont k') by congruence.
   apply star_one. eapply step_return_1; eauto.
   (* Out_tailcall_return *)

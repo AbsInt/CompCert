@@ -43,7 +43,7 @@ let temporaries = ref []
 let mktemp () =
   incr temp_counter;
   let n = Printf.sprintf "__t%d" !temp_counter in
-  let id = Coq_xO (intern_string n) in
+  let id = intern_string n in
   temporaries := id :: !temporaries;
   id
 
