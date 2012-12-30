@@ -13,14 +13,10 @@
 (** Translation from Mach to ARM. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.

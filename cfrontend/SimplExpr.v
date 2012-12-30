@@ -22,8 +22,6 @@ Require Import AST.
 Require Import Ctypes.
 Require Import Cop.
 Require Import Csyntax.
-Require Import Csem.
-Require Cstrategy.
 Require Import Clight.
 
 Module C := Csyntax.

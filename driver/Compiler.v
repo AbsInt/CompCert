@@ -13,12 +13,9 @@
 (** The whole compiler and its proof of semantic preservation *)
 
 (** Libraries. *)
-Require Import Axioms.
 Require Import Coqlib.
-Require Import Maps.
 Require Import Errors.
 Require Import AST.
-Require Import Values.
 Require Import Smallstep.
 (** Languages (syntax and semantics). *)
 Require Csyntax.

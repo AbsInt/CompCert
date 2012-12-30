@@ -19,8 +19,6 @@ Require Import Ordered.
 Require Import FSets.
 Require FSetAVL.
 Require Import AST.
-Require Import Values.
-Require Import Globalenvs.
 Require Import Errors.
 Require Import Op.
 Require Import Locations.

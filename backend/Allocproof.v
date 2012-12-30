@@ -14,7 +14,6 @@
   RTL to LTL). *)
 
 Require Import FSets.
-Require Import SetoidList.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.

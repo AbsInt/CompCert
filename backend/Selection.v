@@ -23,12 +23,8 @@
   The source language is Cminor and the target language is CminorSel. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
 Require Import Globalenvs.
 Require Cminor.
 Require Import Op.

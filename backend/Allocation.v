@@ -17,16 +17,12 @@ Require Import Errors.
 Require Import Maps.
 Require Import Lattice.
 Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
 Require Import RTLtyping.
 Require Import Kildall.
 Require Import Locations.
-Require Import Conventions.
 Require Import Coloring.
 
 (** * Liveness analysis over RTL *)

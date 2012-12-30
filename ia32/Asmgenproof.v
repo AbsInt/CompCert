@@ -13,7 +13,6 @@
 (** Correctness proof for x86 generation: main proof. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Errors.
 Require Import AST.
 Require Import Integers.

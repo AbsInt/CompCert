@@ -17,7 +17,6 @@
     instructions with explicit labels and ``goto'' instructions. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
@@ -28,7 +27,6 @@ Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
 Require Import LTL.
-Require Import Conventions.
 
 (** * Abstract syntax *)
 

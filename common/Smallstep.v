@@ -22,7 +22,6 @@
 Require Import Relations.
 Require Import Wellfounded.
 Require Import Coqlib.
-Require Import AST.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Integers.

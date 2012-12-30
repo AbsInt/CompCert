@@ -18,7 +18,6 @@ Require Import Errors.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Values.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.

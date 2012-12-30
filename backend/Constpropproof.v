@@ -16,7 +16,6 @@ Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Floats.
 Require Import Values.
 Require Import Events.
 Require Import Memory.

@@ -13,7 +13,6 @@
 (** Computation of resource bounds for Linear code. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Op.
 Require Import Locations.

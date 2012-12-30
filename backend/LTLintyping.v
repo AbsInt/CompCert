@@ -13,12 +13,9 @@
 (** Typing rules for LTLin. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Memdata.
 Require Import Op.
-Require Import RTL.
 Require Import Locations.
 Require Import LTLin.
 Require LTLtyping.

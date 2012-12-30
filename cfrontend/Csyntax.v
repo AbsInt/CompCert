@@ -16,7 +16,6 @@
 (** Abstract syntax for the Compcert C language *)
 
 Require Import Coqlib.
-Require Import Errors.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.

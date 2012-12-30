@@ -17,7 +17,6 @@ Require Errors.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Values.
 Require Import Switch.
 Require Import Op.
 Require Import Registers.

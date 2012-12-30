@@ -617,9 +617,10 @@ Proof.
   edestruct Mem.loadv_extends as [v' []]; eauto.
   exists (rs1#rd <- v').
 (* Exec *)
-  split. eapply star_right. eexact EX1. eapply exec_Iload; eauto.
-  rewrite (@eval_addressing_preserved _ _ _ _ ge tge). eauto.
-  exact symbols_preserved. traceEq.
+  split. eapply star_right. eexact EX1. eapply exec_Iload. eauto.
+  instantiate (1 := vaddr'). rewrite <- H3.
+  apply eval_addressing_preserved. exact symbols_preserved.
+  auto. traceEq.
 (* Match-env *)
   split. eauto with rtlg. 
 (* Result *)
@@ -1049,9 +1050,9 @@ Proof.
   edestruct Mem.storev_extends as [tm' []]; eauto.
   econstructor; split.
   left; eapply plus_right. eapply star_trans. eexact A. eexact E. reflexivity.
-  eapply exec_Istore with (a := vaddr'); eauto.
+  eapply exec_Istore with (a := vaddr'). eauto.
   rewrite <- H4. apply eval_addressing_preserved. exact symbols_preserved.
-  traceEq.
+  eauto. traceEq.
   econstructor; eauto. constructor.
 
   (* call *)

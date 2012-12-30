@@ -23,7 +23,6 @@ Require Import Ordered.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
-Require Import Memdata.
 Require Import Csharpminor.
 Require Import Cminor.
 

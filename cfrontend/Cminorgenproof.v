@@ -23,7 +23,6 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
-Require Import Memdata.
 Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.

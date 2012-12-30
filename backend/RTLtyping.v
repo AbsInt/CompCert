@@ -20,10 +20,8 @@ Require Import Op.
 Require Import Registers.
 Require Import Globalenvs.
 Require Import Values.
-Require Import Memory.
 Require Import Integers.
 Require Import Events.
-Require Import Smallstep.
 Require Import RTL.
 Require Import Conventions.
 

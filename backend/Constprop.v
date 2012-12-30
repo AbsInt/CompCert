@@ -19,8 +19,6 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
-Require Import Values.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.

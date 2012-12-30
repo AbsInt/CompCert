@@ -21,10 +21,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
-Require Import Memory.
-Require Import Events.
 Require Import Globalenvs.
-Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
 Require Import Conventions.

@@ -24,7 +24,6 @@
 Require Import Coqlib.
 Require Parmov.
 Require Import Values.
-Require Import Events.
 Require Import AST.
 Require Import Locations.
 Require Import Conventions.

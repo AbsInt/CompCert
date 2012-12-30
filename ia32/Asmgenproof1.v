@@ -13,7 +13,6 @@
 (** Correctness proof for IA32 generation: auxiliary results. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Errors.
 Require Import Integers.

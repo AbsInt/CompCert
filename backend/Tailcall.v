@@ -15,7 +15,6 @@
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
-Require Import Globalenvs.
 Require Import Registers.
 Require Import Op.
 Require Import RTL.

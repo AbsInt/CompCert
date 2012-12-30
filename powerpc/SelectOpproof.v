@@ -19,9 +19,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import Memory.
-Require Import Events.
 Require Import Globalenvs.
-Require Import Smallstep.
 Require Import Cminor.
 Require Import Op.
 Require Import CminorSel.

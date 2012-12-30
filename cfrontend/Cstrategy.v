@@ -15,7 +15,6 @@
 
 (** A deterministic evaluation strategy for C. *)
 
-Require Import Coq.Program.Equality.
 Require Import Axioms.
 Require Import Coqlib.
 Require Import Errors.

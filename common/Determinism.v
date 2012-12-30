@@ -16,7 +16,6 @@
 Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
-Require Import Values.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.

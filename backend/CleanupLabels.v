@@ -21,7 +21,6 @@
   branched to. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Ordered.
 Require Import FSets.
 Require FSetAVL.

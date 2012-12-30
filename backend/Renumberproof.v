@@ -15,10 +15,7 @@
 Require Import Coqlib.
 Require Import Maps.
 Require Import Postorder.
-Require Import AST.
-Require Import Values.
 Require Import Events.
-Require Import Memory.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Op.

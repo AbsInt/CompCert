@@ -15,7 +15,6 @@
 (** This file proves semantic preservation for the [Stacking] pass. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Errors.
 Require Import AST.
 Require Import Integers.

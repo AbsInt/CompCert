@@ -13,7 +13,6 @@
 (** The Mach intermediate language: operational semantics. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.

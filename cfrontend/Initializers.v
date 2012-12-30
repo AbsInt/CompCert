@@ -22,7 +22,6 @@ Require Import Memory.
 Require Import Ctypes.
 Require Import Cop.
 Require Import Csyntax.
-Require Import Csem.
 
 Open Scope error_monad_scope.
 

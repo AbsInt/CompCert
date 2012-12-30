@@ -14,7 +14,6 @@
 
 Require Import Coqlib.
 Require Import Maps.
-Require Import Errors.
 Require Import AST.
 Require Import Op.
 Require Import Locations.

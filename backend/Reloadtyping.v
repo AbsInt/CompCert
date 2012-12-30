@@ -14,7 +14,6 @@
     correctness of computation of stack bounds for Linear. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Op.
 Require Import Locations.

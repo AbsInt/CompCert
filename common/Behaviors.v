@@ -18,7 +18,6 @@
 Require Import Classical.
 Require Import ClassicalEpsilon.
 Require Import Coqlib.
-Require Import AST.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Integers.

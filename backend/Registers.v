@@ -21,7 +21,6 @@ Require Import Coqlib.
 Require Import AST.
 Require Import Maps.
 Require Import Ordered.
-Require Import FSets.
 Require FSetAVL.
 
 Definition reg: Type := positive.

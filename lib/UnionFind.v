@@ -15,7 +15,6 @@
 
 (** A persistent union-find data structure. *)
 
-Require Import Wf.
 Require Recdef.
 Require Setoid.
 Require Coq.Program.Wf.

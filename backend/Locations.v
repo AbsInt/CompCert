@@ -14,7 +14,6 @@
   the results of register allocation (file [Allocation]). *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Values.
 Require Export Machregs.

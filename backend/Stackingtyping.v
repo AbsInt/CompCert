@@ -13,7 +13,6 @@
 (** Type preservation for the [Stacking] pass. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Errors.
 Require Import Integers.
 Require Import AST.

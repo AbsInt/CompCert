@@ -640,7 +640,8 @@ let print_instruction oc = function
       | EF_inline_asm txt ->
           fprintf oc "%s begin inline assembly\n" comment;
           fprintf oc "	%s\n" (extern_atom txt);
-          fprintf oc "%s end inline assembly\n" comment
+          fprintf oc "%s end inline assembly\n" comment;
+          5 (* hoping this is an upper bound...  *)
       | _ ->
           assert false
       end
@@ -754,13 +755,13 @@ let print_var oc name v =
       fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 
 let print_globdef oc (name, gdef) =
+  match gdef with
   | Gfun(Internal f) -> print_function oc name f
   | Gfun(External ef) -> ()
   | Gvar v -> print_var oc name v
 
 let print_program oc p =
 (*  fprintf oc "	.fpu	vfp\n"; *)
-  List.iter (print_var oc) p.prog_vars;
   List.iter (print_globdef oc) p.prog_defs
 
 

@@ -21,7 +21,6 @@ Require Export ZArith.
 Require Export Znumtheory.
 Require Export List.
 Require Export Bool.
-Require Import Wf_nat.
 
 (** * Useful tactics *)
 

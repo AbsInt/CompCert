@@ -13,12 +13,10 @@
 (** Layout of activation records; translation from Linear to Mach. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
-Require Import RTL.
 Require Import Locations.
 Require Import Linear.
 Require Import Bounds.

@@ -13,7 +13,6 @@
 (** Correctness proof for clean-up of labels *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import Ordered.
 Require Import FSets.
 Require Import AST.
@@ -22,7 +21,6 @@ Require Import Values.
 Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
-Require Import Errors.
 Require Import Smallstep.
 Require Import Op.
 Require Import Locations.

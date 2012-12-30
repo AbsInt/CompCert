@@ -36,7 +36,6 @@
 
 Require Recdef.
 Require Import Zwf.
-Require Import Axioms.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.

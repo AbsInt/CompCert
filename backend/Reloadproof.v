@@ -13,7 +13,6 @@
 (** Correctness proof for the [Reload] pass. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
@@ -24,7 +23,6 @@ Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
 Require Import Conventions.
-Require Import Allocproof.
 Require Import RTLtyping.
 Require Import LTLin.
 Require Import LTLintyping.

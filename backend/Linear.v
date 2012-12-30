@@ -18,7 +18,6 @@
     [Lsetstack] are provided to access stack slots. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Values.

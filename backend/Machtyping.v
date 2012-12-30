@@ -13,14 +13,8 @@
 (** Type system for the Mach intermediate language. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
-Require Import Memory.
 Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Conventions.

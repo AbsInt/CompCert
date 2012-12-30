@@ -14,12 +14,10 @@
   during the [CSE] phase. *)
 
 Require Import Coqlib.
-Require Import AST.
 Require Import Integers.
 Require Import Values.
 Require Import Memory.
 Require Import Op.
-Require Import Registers.
 Require Import RTL.
 Require Import CombineOp.
 Require Import CSE.

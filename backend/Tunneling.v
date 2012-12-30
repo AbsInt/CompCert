@@ -16,10 +16,6 @@ Require Import Coqlib.
 Require Import Maps.
 Require Import UnionFind.
 Require Import AST.
-Require Import Values.
-Require Import Globalenvs.
-Require Import Op.
-Require Import Locations.
 Require Import LTL.
 
 (** Branch tunneling shortens sequences of branches (with no intervening

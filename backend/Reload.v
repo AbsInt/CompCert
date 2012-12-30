@@ -13,11 +13,8 @@
 (** Reloading, spilling, and explication of calling conventions. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Integers.
-Require Import Values.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import LTLin.

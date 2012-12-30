@@ -17,14 +17,10 @@
     return addresses that are stored in activation records. *)
 
 Require Import Coqlib.
-Require Import Maps.
 Require Import AST.
 Require Import Errors.
 Require Import Integers.
 Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.

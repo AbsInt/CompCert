@@ -16,7 +16,6 @@
 (** A big-step semantics for the Clight language. *)
 
 Require Import Coqlib.
-Require Import Errors.
 Require Import Maps.
 Require Import Integers.
 Require Import Floats.

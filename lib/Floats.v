@@ -19,7 +19,6 @@
 Require Import Axioms.
 Require Import Coqlib.
 Require Import Integers.
-Require Import Reals.
 Require Import Fappli_IEEE.
 Require Import Fappli_IEEE_bits.
 Require Import Fcore.
@@ -27,7 +26,6 @@ Require Import Fcalc_round.
 Require Import Fcalc_bracket.
 Require Import Fprop_Sterbenz.
 Require Import Program.
-Require Import Omega.
 
 Close Scope R_scope.
 

@@ -21,7 +21,6 @@ Require Import Integers.
 Require Import Floats.
 Require Import Values.
 Require Import Memory.
-Require Import Globalenvs.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.

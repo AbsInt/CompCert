@@ -15,7 +15,6 @@
 Require Import Coqlib.
 Require Import FSets.
 Require Import FSetAVL.
-Require Import Maps.
 Require Import Ordered.
 Require Import Registers.
 Require Import Locations.

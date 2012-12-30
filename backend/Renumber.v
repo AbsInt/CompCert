@@ -15,7 +15,6 @@
 Require Import Coqlib.
 Require Import Maps.
 Require Import Postorder.
-Require Import AST.
 Require Import RTL.
 
 (** CompCert's dataflow analyses (module [Kildall]) are more precise
