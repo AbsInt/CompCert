@@ -241,11 +241,13 @@ distclean:
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
-# Problems with coqchk:
+# Problems with coqchk (coq 8.3pl3):
 #   Integers.one_bits_range takes forever to check
 #   Mach#<>#instruction causes a failure
+#   Asm#<>#instruction causes a failure
+#   UnionFind.UF.elt causes an Anomaly (!)
 check-proof: $(FILES)
-	$(COQCHK) -admit Integers Complements
+	$(COQCHK) -admit Integers -admit Mach -admit Asm -admit UnionFind Complements
 
 include .depend
 

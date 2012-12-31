@@ -10,11 +10,68 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Datatypes
 open Camlcoq
 open Switch
 open CminorSel
 
-let more_likely (c: Op.condition) (ifso: stmt) (ifnot: stmt) = false
+(* Heuristic to orient if-then-else statements.
+   If "false" is returned generates a conditional branch to the "then" branch
+   and a fall-through to the "else" branch.
+   If "true" is returned generates a conditional branch to the "else" branch
+   and a fall-through to the "then" branch.
+   The fall-through behavior is generally slightly more efficient,
+   for average-case execution time as well as for worst-case.
+   The heuristic is based on an estimate of the sizes of the "then" and
+   "else" branches, in terms of rough number of instructions, and on
+   putting the bigger of the two branches in fall-through position. *)
+
+let rec size_expr = function
+  | Evar id -> 0
+  | Eop(op, args) -> 1 + size_exprs args
+  | Eload(chunk, addr, args) -> 1 + size_exprs args
+  | Econdition(cond, args, e1, e2) ->
+      1 + size_exprs args + max (size_expr e1) (size_expr e2)
+  | Elet(e1, e2) -> size_expr e1 + size_expr e2
+  | Eletvar n -> 0
+
+and size_exprs = function
+  | Enil -> 0
+  | Econs(e1, el) -> size_expr e1 + size_exprs el
+
+let rec length_exprs = function
+  | Enil -> 0
+  | Econs(e1, el) -> 1 + length_exprs el
+
+let size_eos = function
+  | Coq_inl e -> size_expr e
+  | Coq_inr id -> 0
+
+let rec size_stmt = function
+  | Sskip -> 0
+  | Sassign(id, a) -> size_expr a
+  | Sstore(chunk, addr, args, src) -> 1 + size_exprs args + size_expr src 
+  | Scall(optid, sg, eos, args) ->
+      3 + size_eos eos + size_exprs args + length_exprs args
+  | Stailcall(sg, eos, args) ->
+      3 + size_eos eos + size_exprs args + length_exprs args
+  | Sbuiltin(optid, ef, args) -> 1 + size_exprs args
+  | Sseq(s1, s2) -> size_stmt s1 + size_stmt s2
+  | Sifthenelse(cond, args, s1, s2) ->
+      1 + size_exprs args + max (size_stmt s1) (size_stmt s2)
+  | Sloop s -> 1 + 4 * size_stmt s
+  | Sblock s -> size_stmt s
+  | Sexit n -> 1
+  | Sswitch(arg, tbl, dfl) -> 2 + size_expr arg
+  | Sreturn None -> 2
+  | Sreturn (Some arg) -> 2 + size_expr arg
+  | Slabel(lbl, s) -> size_stmt s
+  | Sgoto lbl -> 1
+
+let more_likely (c: Op.condition) (ifso: stmt) (ifnot: stmt) = 
+  size_stmt ifso > size_stmt ifnot
+
+(* Compiling a switch table into a decision tree *)
 
 module IntOrd =
   struct
