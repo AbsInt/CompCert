@@ -33,6 +33,9 @@ OCB_OPTIONS_CHECKLINK=\
   $(OCB_OPTIONS) \
   -I checklink \
   -use-ocamlfind
+OCB_OPTIONS_CLIGHTGEN=\
+  $(OCB_OPTIONS) \
+  -I exportclight
 
 VPATH=$(DIRS)
 GPATH=$(DIRS)
@@ -154,13 +157,13 @@ cchecklink.byte: driver/Configuration.ml
 	$(OCAMLBUILD) $(OCB_OPTIONS_CHECKLINK) Validator.d.byte \
         && rm -f cchecklink.byte && $(SLN) _build/checklink/Validator.d.byte cchecklink.byte
 
-clightgen: extraction/STAMP driver/Configuration.ml
-	$(OCAMLBUILD) $(OCB_OPTIONS) Clightgen.native \
-        && rm -f clightgen && $(SLN) _build/driver/Clightgen.native clightgen
+clightgen: extraction/STAMP driver/Configuration.ml exportclight/Clightdefs.vo
+	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.native \
+        && rm -f clightgen && $(SLN) _build/exportclight/Clightgen.native clightgen
 
-clightgen.byte: extraction/STAMP driver/Configuration.ml
-	$(OCAMLBUILD) $(OCB_OPTIONS) Clightgen.d.byte \
-        && rm -f clightgen.byte && $(SLN) _build/driver/Clightgen.d.byte clightgen.byte
+clightgen.byte: extraction/STAMP driver/Configuration.ml exportclight/Clightdefs.vo
+	$(OCAMLBUILD) $(OCB_OPTIONS_CLIGHTGEN) Clightgen.d.byte \
+        && rm -f clightgen.byte && $(SLN) _build/exportclight/Clightgen.d.byte clightgen.byte
 
 .PHONY: proof extraction ccomp ccomp.prof ccomp.byte runtime cchecklink cchecklink.byte clightgen clightgen.byte
 
@@ -222,7 +225,7 @@ endif
 	$(MAKE) -C runtime install
 
 clean:
-	rm -f $(patsubst %, %/*.vo, $(DIRS))
+	rm -f $(patsubst %, %/*.vo, $(DIRS) exportclight)
 	rm -f ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob

@@ -480,44 +480,9 @@ let print_assertions p =
 (* The prologue *)
 
 let prologue = "\
-Require Import List.
-Require Import ZArith.
-Require Import Integers.
-Require Import Floats.
-Require Import AST.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Clight.
+Require Import Clightdefs.
 
 Local Open Scope Z_scope.
-
-Definition tvoid := Tvoid.
-Definition tschar := Tint I8 Signed noattr.
-Definition tuchar := Tint I8 Unsigned noattr.
-Definition tshort := Tint I16 Signed noattr.
-Definition tushort := Tint I16 Unsigned noattr.
-Definition tint := Tint I32 Signed noattr.
-Definition tuint := Tint I32 Unsigned noattr.
-Definition tbool := Tint IBool Unsigned noattr.
-Definition tfloat := Tfloat F32 noattr.
-Definition tdouble := Tfloat F64 noattr.
-Definition tptr (t: type) := Tpointer t noattr.
-Definition tarray (t: type) (sz: Z) := Tarray t sz noattr.
-
-Definition volatile_attr := {| attr_volatile := true |}.
-
-Definition tvolatile (ty: type) :=
-  match ty with
-  | Tvoid => Tvoid
-  | Tint sz si a => Tint sz si volatile_attr
-  | Tfloat sz a => Tfloat sz volatile_attr
-  | Tpointer elt a => Tpointer elt volatile_attr
-  | Tarray elt sz a => Tarray elt sz volatile_attr
-  | Tfunction args res => Tfunction args res 
-  | Tstruct id fld a => Tstruct id fld volatile_attr
-  | Tunion id fld a => Tunion id fld volatile_attr
-  | Tcomp_ptr id a => Tcomp_ptr id volatile_attr
-  end.
 
 "
 
