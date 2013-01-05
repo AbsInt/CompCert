@@ -266,29 +266,33 @@ let rec stmt p = function
   | Ssequence(s1, Sskip) ->
       stmt p s1
   | Ssequence(s1, s2) ->
-      fprintf p "@[<hov 2>(Ssequence@ %a@ %a)@]" stmt s1 stmt s2
+      fprintf p "@[<hv 2>(Ssequence@ %a@ %a)@]" stmt s1 stmt s2
   | Sifthenelse(e, s1, s2) ->
-      fprintf p "@[<v 2>(Sifthenelse %a@ %a@ %a)@]" expr e stmt s1 stmt s2
+      fprintf p "@[<hv 2>(Sifthenelse %a@ %a@ %a)@]" expr e stmt s1 stmt s2
+  | Sloop (Ssequence (Sifthenelse(e, Sskip, Sbreak), s), Sskip) ->
+      fprintf p "@[<hv 2>(Swhile@ %a@ %a)@]" expr e stmt s
+  | Sloop (Ssequence (Ssequence(Sskip, Sifthenelse(e, Sskip, Sbreak)), s), Sskip) ->
+      fprintf p "@[<hv 2>(Swhile@ %a@ %a)@]" expr e stmt s
   | Sloop(s1, s2) ->
-      fprintf p "@[<v 2>(Sloop %a@ %a)@]" stmt s1 stmt s2
+      fprintf p "@[<hv 2>(Sloop@ %a@ %a)@]" stmt s1 stmt s2
   | Sbreak ->
       fprintf p "Sbreak"
   | Scontinue ->
       fprintf p "Scontinue"
   | Sswitch(e, cases) ->
-      fprintf p "@[<v 2>(Sswitch %a@ %a)@]" expr e lblstmts cases
+      fprintf p "@[<hv 2>(Sswitch %a@ %a)@]" expr e lblstmts cases
   | Sreturn e ->
-      fprintf p "@[<hov 2>(Sreturn %a)@]" (print_option expr) e
+      fprintf p "@[<hv 2>(Sreturn %a)@]" (print_option expr) e
   | Slabel(lbl, s1) ->
-      fprintf p "@[<hov 2>(Slabel %a@ %a)@]" ident lbl stmt s1
+      fprintf p "@[<hv 2>(Slabel %a@ %a)@]" ident lbl stmt s1
   | Sgoto lbl ->
       fprintf p "(Sgoto %a)" ident lbl
 
 and lblstmts p = function
   | LSdefault s ->
-      fprintf p "@[<hov 2>(LSdefault@ %a)@]" stmt s
+      fprintf p "@[<hv 2>(LSdefault@ %a)@]" stmt s
   | LScase(lbl, s, ls) ->
-      fprintf p "@[<hov 2>(LScase %a@ %a@ %a)@]" coqint lbl stmt s lblstmts ls
+      fprintf p "@[<hv 2>(LScase %a@ %a@ %a)@]" coqint lbl stmt s lblstmts ls
 
 let print_function p (id, f) =
   fprintf p "Definition f_%s := {|@ " (extern_atom id);
