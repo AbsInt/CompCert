@@ -92,16 +92,6 @@ let name_of_binop = function
   | Ocmpu c -> comparison_name c ^ "u"
   | Ocmpf c -> comparison_name c ^ "f"
 
-let name_of_chunk = function
-  | Mint8signed -> "int8signed"
-  | Mint8unsigned -> "int8unsigned"
-  | Mint16signed -> "int16signed"
-  | Mint16unsigned -> "int16unsigned"
-  | Mint32 -> "int32"
-  | Mfloat32 -> "float32"
-  | Mfloat64 -> "float64"
-  | Mfloat64al32 -> "float64al32"
-
 (* Expressions *)
 
 let rec expr p (prec, e) =
@@ -266,8 +256,8 @@ let print_function p id f =
   fprintf p "@;<0 -2>}@]@ "
 
 let print_extfun p id ef =
-  fprintf p "@[<v 0>extern @[<hov 2>\"%s\":@ %a@]@ "
-    (extern_atom id) print_sig (ef_sig ef)
+  fprintf p "@[<v 0>extern @[<hov 2>\"%s\" =@ %s :@ %a@]@ "
+    (extern_atom id) (name_of_external ef) print_sig (ef_sig ef)
 
 let print_init_data p = function
   | Init_int8 i -> fprintf p "int8 %ld" (camlint_of_coqint i)

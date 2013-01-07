@@ -25,6 +25,45 @@ open Integers
 open AST
 open Cminor
 
+(** Parsing external functions *)
+
+type ef_token =
+  | EFT_tok of string
+  | EFT_int of int32
+  | EFT_string of string
+  | EFT_chunk of memory_chunk
+
+let mkef sg toks =
+  match toks with
+  | [EFT_tok "extern"; EFT_string s] ->
+      EF_external(intern_string s, sg)
+  | [EFT_tok "builtin"; EFT_string s] ->
+      EF_builtin(intern_string s, sg)
+  | [EFT_tok "volatile"; EFT_tok "load"; EFT_chunk c] ->
+      EF_vload c
+  | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c] ->
+      EF_vstore c
+  | [EFT_tok "volatile"; EFT_tok "load"; EFT_chunk c; 
+     EFT_tok "global"; EFT_string s; EFT_int n] ->
+      EF_vload_global(c, intern_string s, z_of_camlint n)
+  | [EFT_tok "volatile"; EFT_tok "store"; EFT_chunk c; 
+     EFT_tok "global"; EFT_string s; EFT_int n] ->
+      EF_vstore_global(c, intern_string s, z_of_camlint n)
+  | [EFT_tok "malloc"] ->
+      EF_malloc
+  | [EFT_tok "free"] ->
+      EF_free
+  | [EFT_tok "memcpy"; EFT_tok "size"; EFT_int sz; EFT_tok "align"; EFT_int al] ->
+      EF_memcpy(z_of_camlint sz, z_of_camlint al)
+  | [EFT_tok "annot"; EFT_string txt] ->
+      EF_annot(intern_string txt, sg.sig_args)
+  | [EFT_tok "annot_val"; EFT_string txt] ->
+      if sg.sig_args = [] then raise Parsing.Parse_error;
+      EF_annot_val(intern_string txt, List.hd sg.sig_args)
+  | [EFT_tok "inline_asm"; EFT_string txt] ->
+      EF_inline_asm(intern_string txt)
+  | _ ->
+      raise Parsing.Parse_error
 
 (** Naming function calls in expressions *)
 
@@ -35,6 +74,7 @@ type rexpr =
   | Rbinop of binary_operation * rexpr * rexpr
   | Rload of memory_chunk * rexpr
   | Rcall of signature * rexpr * rexpr list
+  | Rbuiltin of signature * ef_token list * rexpr list
 
 let temp_counter = ref 0
 
@@ -64,6 +104,12 @@ let rec convert_rexpr = function
       let t = mktemp() in
       convert_accu := Scall(Some t, sg, c1, cl) :: !convert_accu;
       Evar t
+  | Rbuiltin(sg, pef, el) ->
+      let ef = mkef sg pef in
+      let cl = convert_rexpr_list el in
+      let t = mktemp() in
+      convert_accu := Sbuiltin(Some t, ef, cl) :: !convert_accu;
+      Evar t
 
 and convert_rexpr_list = function
   | [] -> []
@@ -84,6 +130,10 @@ let mkeval e =
       let c1 = convert_rexpr e1 in
       let cl = convert_rexpr_list el in
       prepend_seq !convert_accu (Scall(None, sg, c1, cl))
+  | Rbuiltin(sg, pef, el) -> 
+      let ef = mkef sg pef in
+      let cl = convert_rexpr_list el in
+      prepend_seq !convert_accu (Sbuiltin(None, ef, cl))
   | _ ->
       ignore (convert_rexpr e);
       prepend_seq !convert_accu Sskip
@@ -95,6 +145,10 @@ let mkassign id e =
       let c1 = convert_rexpr e1 in
       let cl = convert_rexpr_list el in
       prepend_seq !convert_accu (Scall(Some id, sg, c1, cl))
+  | Rbuiltin(sg, pef, el) ->
+      let ef = mkef sg pef in
+      let cl = convert_rexpr_list el in
+      prepend_seq !convert_accu (Sbuiltin(Some id, ef, cl))
   | _ ->
       let c = convert_rexpr e in
       prepend_seq !convert_accu (Sassign(id, c))
@@ -196,6 +250,7 @@ let mkmatch expr cases =
 %token BANGEQUALF
 %token BANGEQUALU
 %token BAR
+%token BUILTIN
 %token CARET
 %token CASE
 %token COLON
@@ -224,7 +279,7 @@ let mkmatch expr cases =
 %token GREATEREQUALU
 %token GREATERGREATER
 %token GREATERGREATERU
-%token <AST.ident> IDENT
+%token <string> IDENT
 %token IF
 %token IN
 %token INLINE
@@ -273,7 +328,7 @@ let mkmatch expr cases =
 %token STACK
 %token STAR
 %token STARF
-%token <AST.ident> STRINGLIT
+%token <string> STRINGLIT
 %token SWITCH
 %token TILDE
 %token TAILCALL
@@ -321,11 +376,13 @@ global_declaration:
     proc
       { $1 }
   | VAR STRINGLIT LBRACKET INTLIT RBRACKET  /* old style */
-      { ($2, Gvar{gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
-                  gvar_readonly = false; gvar_volatile = false}) }
+      { (intern_string $2,
+         Gvar{gvar_info = (); gvar_init = [Init_space(z_of_camlint $4)];
+              gvar_readonly = false; gvar_volatile = false}) }
   | VAR STRINGLIT is_readonly is_volatile LBRACE init_data_list RBRACE
-       { ($2, Gvar{gvar_info = (); gvar_init = List.rev $6;
-                   gvar_readonly = $3; gvar_volatile = $4; } ) }
+       { (intern_string $2,
+          Gvar{gvar_info = (); gvar_init = List.rev $6;
+               gvar_readonly = $3; gvar_volatile = $4; } ) }
 ;
 
 is_readonly:
@@ -357,7 +414,7 @@ init_data:
    | FLOAT FLOATLIT                              { Init_float64 (coqfloat_of_camlfloat $2) }
    | FLOATLIT                                    { Init_float64 (coqfloat_of_camlfloat $1) }
    | LBRACKET INTLIT RBRACKET                    { Init_space (z_of_camlint $2) }
-   | INTLIT LPAREN STRINGLIT RPAREN              { Init_addrof ($3, coqint_of_camlint $1) }
+   | INTLIT LPAREN STRINGLIT RPAREN              { Init_addrof (intern_string $3, coqint_of_camlint $1) }
  ;
  
 /* Procedures */
@@ -372,14 +429,16 @@ proc:
       { let tmp = !temporaries in
         temporaries := [];
         temp_counter := 0;
-        ($1,
+        (intern_string $1,
         Gfun(Internal { fn_sig = $6;
                         fn_params = List.rev $3;
                         fn_vars = List.rev (tmp @ $9);
                         fn_stackspace = $8;
                         fn_body = $10 })) }
   | EXTERN STRINGLIT COLON signature 
-      { ($2, Gfun(External(EF_external($2,$4)))) }
+      { (intern_string $2, Gfun(External(EF_external(intern_string $2,$4)))) }
+  | EXTERN STRINGLIT EQUAL eftoks COLON signature
+      { (intern_string $2, Gfun(External(mkef $6 $4))) }
 ;
 
 signature:
@@ -397,8 +456,8 @@ parameters:
 ;
 
 parameter_list:
-    IDENT                                       { $1 :: [] }
-  | parameter_list COMMA IDENT                  { $3 :: $1 }
+    IDENT                                       { intern_string $1 :: [] }
+  | parameter_list COMMA IDENT                  { intern_string $3 :: $1 }
 ;
 
 stack_declaration:
@@ -419,7 +478,7 @@ var_declaration:
 
 stmt:
     expr SEMICOLON                              { mkeval $1 }
-  | IDENT EQUAL expr SEMICOLON                  { mkassign $1 $3 }
+  | IDENT EQUAL expr SEMICOLON                  { mkassign (intern_string $1) $3 }
   | memory_chunk LBRACKET expr RBRACKET EQUAL expr SEMICOLON
                                                 { mkstore $1 $3 $6 }
   | IF LPAREN expr RPAREN stmts ELSE stmts      { mkifthenelse $3 $5 $7 }
@@ -437,8 +496,8 @@ stmt:
   | TAILCALL expr LPAREN expr_list RPAREN COLON signature SEMICOLON
                                                 { mktailcall $7 $2 $4 }
   | WHILE LPAREN expr RPAREN stmts              { mkwhile $3 $5 }
-  | IDENT COLON stmts                           { Slabel ($1,$3) }
-  | GOTO IDENT SEMICOLON                        { Sgoto $2 }
+  | IDENT COLON stmts                           { Slabel (intern_string $1,$3) }
+  | GOTO IDENT SEMICOLON                        { Sgoto(intern_string $2) }
 ;
 
 stmts:
@@ -467,10 +526,10 @@ match_cases:
 
 expr:
     LPAREN expr RPAREN                          { $2 }
-  | IDENT                                       { Rvar $1 }
+  | IDENT                                       { Rvar(intern_string $1) }
   | INTLIT                                      { intconst $1 }
   | FLOATLIT                                    { Rconst(Ofloatconst (coqfloat_of_camlfloat $1)) }
-  | STRINGLIT                                   { Rconst(Oaddrsymbol($1, Int.zero)) }
+  | STRINGLIT                                   { Rconst(Oaddrsymbol(intern_string $1, Int.zero)) }
   | AMPERSAND INTLIT                            { Rconst(Oaddrstack(coqint_of_camlint $2)) }
   | MINUS expr    %prec p_uminus                { Runop(Onegint, $2) }
   | MINUSF expr   %prec p_uminus                { Runop(Onegf, $2) }
@@ -523,6 +582,7 @@ expr:
   | expr GREATEREQUALF expr                     { Rbinop(Ocmpf Cge, $1, $3) }
   | memory_chunk LBRACKET expr RBRACKET         { Rload($1, $3) }
   | expr LPAREN expr_list RPAREN COLON signature{ Rcall($6, $1, $3) }
+  | BUILTIN eftoks LPAREN expr_list RPAREN COLON signature{ Rbuiltin($7, $2, $4) }
 ;
 
 expr_list:
@@ -554,3 +614,18 @@ type_:
   | FLOAT                                       { Tfloat }
 ;
 
+/* External functions */
+
+eftok:
+    IDENT                                       { EFT_tok $1 }
+  | STRINGLIT                                   { EFT_string $1 }
+  | INTLIT                                      { EFT_int $1 }
+  | VOLATILE                                    { EFT_tok "volatile" }
+  | EXTERN                                      { EFT_tok "extern" }
+  | BUILTIN                                     { EFT_tok "builtin" }
+;
+
+eftoks:
+    eftok eftoks                                { $1 :: $2 }
+  | /*empty*/                                   { [] }
+;

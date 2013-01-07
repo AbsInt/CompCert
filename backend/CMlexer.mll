@@ -21,10 +21,11 @@ exception Error of string
 
 let blank = [' ' '\009' '\012' '\010' '\013']
 let floatlit = 
-  ['0'-'9'] ['0'-'9' '_']* 
+ ("-"? (['0'-'9'] ['0'-'9' '_']* 
   ('.' ['0'-'9' '_']* )?
-  (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
+  (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)? )) | "inf" | "nan"
 let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '$' '0'-'9']*
+let qident = '\'' [ ^ '\'' ]+ '\''
 let temp = "$" ['1'-'9'] ['0'-'9']*
 let intlit = "-"? ( ['0'-'9']+ | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+
                                | "0o" ['0'-'7']+ | "0b" ['0'-'1']+ )
@@ -40,6 +41,7 @@ rule token = parse
   | "!=f"    { BANGEQUALF }
   | "!=u"    { BANGEQUALU }
   | "|"     { BAR }
+  | "builtin" { BUILTIN }
   | "^"     { CARET }
   | "case"  { CASE }
   | ":"    { COLON }
@@ -124,8 +126,10 @@ rule token = parse
   | intlit    { INTLIT(Int32.of_string(Lexing.lexeme lexbuf)) }
   | floatlit     { FLOATLIT(float_of_string(Lexing.lexeme lexbuf)) }
   | stringlit { let s = Lexing.lexeme lexbuf in
-                STRINGLIT(intern_string(String.sub s 1 (String.length s - 2))) }
-  | ident | temp  { IDENT(intern_string(Lexing.lexeme lexbuf)) }
+                STRINGLIT(String.sub s 1 (String.length s - 2)) }
+  | ident | temp  { IDENT(Lexing.lexeme lexbuf) }
+  | qident    { let s = Lexing.lexeme lexbuf in
+                IDENT(String.sub s 1 (String.length s - 2)) }
   | eof      { EOF }
   | _        { raise(Error("illegal character `" ^ Char.escaped (Lexing.lexeme_char lexbuf 0) ^ "'")) }
 

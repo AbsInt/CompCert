@@ -69,12 +69,12 @@ let print_event p = function
                 print_eventval res
   | Event_vload(chunk, id, ofs, res) ->
       fprintf p "volatile load %s[&%s%+ld] -> %a"
-                (PrintCminor.name_of_chunk chunk)
+                (PrintAST.name_of_chunk chunk)
                 (extern_atom id) (camlint_of_coqint ofs)
                 print_eventval res
   | Event_vstore(chunk, id, ofs, arg) ->
       fprintf p "volatile store %s[&%s%+ld] <- %a"
-                (PrintCminor.name_of_chunk chunk)
+                (PrintAST.name_of_chunk chunk)
                 (extern_atom id) (camlint_of_coqint ofs)
                 print_eventval arg
   | Event_annot(text, args) ->
