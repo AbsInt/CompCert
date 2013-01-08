@@ -1484,6 +1484,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | EF_external(_, _) -> fatal "Unexpected EF_external, please report."
           | EF_free           -> fatal "Unexpected EF_free, please report."
           | EF_malloc         -> fatal "Unexpected EF_malloc, please report."
+          | EF_inline_asm(_)  -> fatal "Unsupported: inline asm statement."
           end
       | Pcmplw(r1, r2) ->
           begin match ecode with
@@ -2830,12 +2831,12 @@ let check_stubs sfw =
   let match_bools = check_eq "match_bools" in
   let match_ints = check_eq "match_ints" in
   let check_stub ident vaddr sfw =
-    let fundef = List.find (fun (i, _) -> i = ident) sfw.program.prog_funct in
+    let fundef = List.find (fun (i, _) -> i = ident) sfw.program.prog_defs in
     let elf = sfw.ef.elf in
     let stub_ecode = from_some (code_at_vaddr elf vaddr 2) in
     let stub_offset = from_some (physical_offset_of_vaddr elf vaddr) in
     begin match fundef with
-    | (_, External(EF_external(dest_ident, _) as ef)) ->
+    | (_, Gfun(External(EF_external(dest_ident, _) as ef))) ->
         let args = (ef_sig ef).sig_args in
         if List.mem Tfloat args
         then
@@ -2920,11 +2921,21 @@ let read_sdump file =
   | Failure msg ->
       close_in ic; Printf.eprintf "Corrupted file %s: %s\n" file msg; exit 2
 
+(** Split program definitions into functions and variables *)
+
+let split_prog_defs p =
+  let rec split fns vars = function
+  | [] -> (List.rev fns, List.rev vars)
+  | (id, Gfun fd) :: defs -> split ((id, fd) :: fns) vars defs
+  | (id, Gvar vd) :: defs -> split fns ((id, vd) :: vars) defs
+  in split [] [] p.prog_defs
+
 (** Processes a .sdump file.
 *)
 let process_sdump efw sdump: e_framework =
   print_debug ("Beginning reading " ^ sdump);
   let (prog, names, atoms) = read_sdump sdump in
+  let (prog_funct, prog_vars) = split_prog_defs prog in
   print_debug ("Constructing mapping from idents to symbol indices");
   let ident_to_sym_ndx =
     Hashtbl.fold
@@ -2944,7 +2955,7 @@ let process_sdump efw sdump: e_framework =
         | Internal _ -> true
         | External _ -> false
       )
-      prog.prog_funct
+      prog_funct
   in
   let wl =
     List.map
@@ -2976,7 +2987,7 @@ let process_sdump efw sdump: e_framework =
     print_debug "Checking data";
     sfw
   )
-  >>> check_data prog.prog_vars
+  >>> check_data prog_vars
   >>> (fun sfw -> sfw.ef)
 
 (** Returns true if [a, b] intersects [ofs, ofs + size - 1]. *)
