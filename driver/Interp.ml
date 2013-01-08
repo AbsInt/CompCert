@@ -40,8 +40,6 @@ type mode = First | Random | All
 
 let mode = ref First
 
-let random_volatiles = ref false
-
 (* Printing events *)
 
 let print_id_ofs p (id, ofs) =
@@ -141,13 +139,6 @@ let print_state p (prog, ge, s) =
               print_val res
   | Stuckstate ->
       fprintf p "stuck after an undefined expression"
-
-let mem_of_state = function
-  | State(f, s, k, e, m) -> m
-  | ExprState(f, r, k, e, m) -> m
-  | Callstate(fd, args, k, m) -> m
-  | Returnstate(res, k, m) -> m
-  | Stuckstate -> assert false
 
 (* Comparing memory states *)
 
@@ -250,7 +241,10 @@ let compare_state s1 s2 =
       compare (rank_state s1) (rank_state s2)
 
 module StateSet =
-  Set.Make(struct type t = state let compare = compare_state end)
+  Set.Make(struct
+             type t = state * Determinism.world
+             let compare (s1,w1) (s2,w2) = compare_state s1 s2
+           end)
 
 (* Extract a string from a global pointer *)
 
@@ -338,56 +332,59 @@ let re_stub = Str.regexp "\\$[if]*$"
 
 let chop_stub name = Str.replace_first re_stub "" name
 
-let rec world = Determinism.World(world_io, world_vload, world_vstore)
+let (>>=) opt f = match opt with None -> None | Some arg -> f arg
 
-and world_io id args =
+let rec world ge m =
+  Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m)
+
+and world_io ge m id args =
   match chop_stub(extern_atom id), args with
   | "printf", EVptr_global(id, ofs) :: args' ->
-      Some(EVint Integers.Int.zero, world)
-  | _, _ ->
-      None
-
-and world_vload chunk id ofs =
-  assert !random_volatiles;
-  let res = match chunk with
-    | Mint8signed -> EVint(coqint_of_camlint(Int32.sub (Random.int32 0x100l) 0x80l))
-    | Mint8unsigned -> EVint(coqint_of_camlint(Random.int32 0x100l))
-    | Mint16signed -> EVint(coqint_of_camlint(Int32.sub (Random.int32 0x10000l) 0x8000l))
-    | Mint16unsigned -> EVint(coqint_of_camlint(Random.int32 0x10000l))
-    | Mint32 -> EVint(coqint_of_camlint(Random.int32 0x7FFF_FFFFl))
-    | Mfloat32 -> EVfloat(
-	Floats.Float.singleoffloat(coqfloat_of_camlfloat(Random.float 1.0)))
-    | Mfloat64 | Mfloat64al32 -> EVfloat(coqfloat_of_camlfloat(Random.float 1.0))
-  in Some(res, world)
-
-and world_vstore chunk id ofs v =
-  assert !random_volatiles;
-  Some world
-
-let do_event p ge time s ev =
-  if !trace >= 1 then
-    fprintf p "@[<hov 2>Time %d: observable event: %a@]@."
-              time print_event ev;
-  match ev with
-  | Event_syscall(name, EVptr_global(id, ofs) :: args', res) 
-    when chop_stub (extern_atom name) = "printf" ->
       flush stderr;
-      let m = mem_of_state s in
       begin match extract_string ge m id ofs with
       | Some fmt -> print_string (do_printf ge m fmt args')
       | None -> print_string "<bad printf>\n"
       end;
-      flush stdout
-  | _ -> ()
+      flush stdout;
+      Some(EVint Integers.Int.zero, world ge m)
+  | _, _ ->
+      None
 
-let do_events p ge time s t =
-  List.iter (do_event p ge time s) t
+and world_vload ge m chunk id ofs =
+  Genv.find_symbol ge id >>= fun b ->
+  Mem.load chunk m b ofs >>= fun v ->
+  Cexec.eventval_of_val ge v (type_of_chunk chunk) >>= fun ev ->
+  Some(ev, world ge m)
+
+and world_vstore ge m chunk id ofs ev =
+  Genv.find_symbol ge id >>= fun b ->
+  Cexec.val_of_eventval ge ev (type_of_chunk chunk) >>= fun v ->
+  Mem.store chunk m b ofs v >>= fun m' ->
+  Some(world ge m')
+
+let do_event p ge time w ev =
+  if !trace >= 1 then
+    fprintf p "@[<hov 2>Time %d: observable event: %a@]@."
+              time print_event ev;
+  (* Return new world after external action *)
+  match ev with
+  | Event_vstore(chunk, id, ofs, v) ->
+      begin match Determinism.nextworld_vstore w chunk id ofs v with
+      | None -> assert false
+      | Some w' -> w'
+      end
+  | _ -> w
+
+let rec do_events p ge time w t =
+  match t with
+  | [] -> w
+  | ev :: t' -> do_events p ge time (do_event p ge time w ev) t'
 
 (* Debugging stuck expressions *)
 
 let (|||) a b = a || b (* strict boolean or *)
 
-let diagnose_stuck_expr p ge f a kont e m =
+let diagnose_stuck_expr p ge w f a kont e m =
   let rec diagnose k a =
   (* diagnose subexpressions first *)
   let found =
@@ -408,7 +405,7 @@ let diagnose_stuck_expr p ge f a kont e m =
     | RV, Ecall(r1, rargs, ty) -> diagnose RV r1 ||| diagnose_list rargs
     | _, _ -> false in
   if found then true else begin
-    let l = Cexec.step_expr ge e world k a m in
+    let l = Cexec.step_expr ge e w k a m in
     if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
       PrintCsyntax.print_pointer_hook := print_pointer ge e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
@@ -424,13 +421,13 @@ let diagnose_stuck_expr p ge f a kont e m =
 
   in diagnose RV a
 
-let diagnose_stuck_state p ge = function
-  | ExprState(f,a,k,e,m) -> ignore(diagnose_stuck_expr p ge f a k e m)
+let diagnose_stuck_state p ge w = function
+  | ExprState(f,a,k,e,m) -> ignore(diagnose_stuck_expr p ge w f a k e m)
   | _ -> ()
 
 (* Exploration *)
 
-let do_step p prog ge time s =
+let do_step p prog ge time (s, w) =
   if !trace >= 2 then
     fprintf p "@[<hov 2>Time %d: %a@]@." time print_state (prog, ge, s);
   match Cexec.at_final_state s with
@@ -443,21 +440,20 @@ let do_step p prog ge time s =
         exit (Int32.to_int (camlint_of_coqint r))
       end
   | None ->
-      let l = Cexec.do_step ge world s in
+      let l = Cexec.do_step ge w s in
       if l = [] || List.exists (fun (t,s) -> s = Stuckstate) l then begin
         pp_set_max_boxes p 1000;
         fprintf p "@[<hov 2>Stuck state: %a@]@." print_state (prog, ge, s);
-        diagnose_stuck_state p ge s;
+        diagnose_stuck_state p ge w s;
         fprintf p "ERROR: Undefined behavior@.";
         exit 126
       end else begin
-        List.iter (fun (t, s') -> do_events p ge time s t) l;
-        List.map snd l
+        List.map (fun (t, s') -> (s', do_events p ge time w t)) l
       end
 
 let rec explore p prog ge time ss =
   let succs =
-    StateSet.fold (fun s l -> do_step p prog ge time s @ l) ss [] in
+    StateSet.fold (fun sw l -> do_step p prog ge time sw @ l) ss [] in
   if succs <> [] then begin
     let ss' =
       match !mode with
@@ -467,16 +463,32 @@ let rec explore p prog ge time ss =
     explore p prog ge (time + 1) ss'
   end
 
-(* Massaging the source program *)
+(* The variant of the source program used to build the world for
+   executing events.  
+   Volatile variables are turned into non-volatile ones, so that
+     reads and writes can be performed.
+   Readonly variables are kept, for string literals in particular.
+   Writable variables are turned into empty vars, so that
+     reads and writes just fail.
+   Functions are preserved, although they are not used. *)
 
-let unvolatile prog =
-  let unvolatile_globdef = function
-  | (id, Gvar gv) ->
-      (id, Gvar(if gv.gvar_volatile
-                then {gv with gvar_readonly = false; gvar_volatile = false}
-                else gv))
-  | idfd -> idfd in
-  {prog with prog_defs = List.map unvolatile_globdef prog.prog_defs}
+let world_program prog =
+  let change_def (id, gd) =
+    match gd with
+    | Gvar gv ->
+        let gv' =
+          if gv.gvar_volatile then
+            {gv with gvar_readonly = false; gvar_volatile = false}
+          else if gv.gvar_readonly then
+            gv
+          else
+            {gv with gvar_init = []} in
+        (id, Gvar gv')
+    | Gfun fd ->
+        (id, gd) in
+ {prog with prog_defs = List.map change_def prog.prog_defs}
+
+(* Massaging the program to get a suitable "main" function *)
 
 let change_main_function p old_main old_main_ty =
   let old_main = Evalof(Evar(old_main, old_main_ty), old_main_ty) in
@@ -521,9 +533,14 @@ let execute prog =
   match fixup_main prog with
   | None -> ()
   | Some prog1 ->
-      let prog2 = if !random_volatiles then prog1 else unvolatile prog1 in
-      match Cexec.do_initial_state prog2 with
+      let wprog = world_program prog1 in
+      let wge = Genv.globalenv wprog in
+      match Genv.init_mem wprog with
+      | None ->
+          fprintf p "ERROR: World memory state undefined@."
+      | Some wm ->
+      match Cexec.do_initial_state prog1 with
       | None ->
           fprintf p "ERROR: Initial state undefined@."
       | Some(ge, s) ->
-          explore p prog2 ge 0 (StateSet.singleton s)
+          explore p prog1 ge 0 (StateSet.singleton (s, world wge wm))
