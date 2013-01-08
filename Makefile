@@ -210,7 +210,7 @@ driver/Configuration.ml: Makefile.config VERSION
          echo let version = "\"$$version\"") \
         > driver/Configuration.ml
 
-depend: $(FILES)
+depend: $(FILES) exportclight/Clightdefs.v
 	$(COQDEP) $^ \
         | sed -e 's|$(ARCH)/$(VARIANT)/|$$(ARCH)/$$(VARIANT)/|g' \
               -e 's|$(ARCH)/|$$(ARCH)/|g' \
@@ -225,7 +225,7 @@ endif
 	$(MAKE) -C runtime install
 
 clean:
-	rm -f $(patsubst %, %/*.vo, $(DIRS) exportclight)
+	rm -f $(patsubst %, %/*.vo, $(DIRS))
 	rm -f ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
 	rm -rf _build
 	rm -rf doc/html doc/*.glob
