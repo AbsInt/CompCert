@@ -43,7 +43,7 @@ let rec precedence = function
 
 (* Naming idents. *)
 
-let ident_name = Camlcoq.extern_atom
+let ident_name id = "'" ^ Camlcoq.extern_atom id ^ "'"
 
 (* Naming operators *)
 
