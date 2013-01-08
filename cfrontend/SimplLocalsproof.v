@@ -340,6 +340,27 @@ Proof.
   destruct a as [id ty]. inv H. constructor; auto. 
 Qed.
 
+(** Correctness of [make_cast] *)
+
+Lemma make_cast_correct:
+  forall e le m a v1 tto v2,
+  eval_expr tge e le m a v1 ->
+  sem_cast v1 (typeof a) tto = Some v2 ->
+  eval_expr tge e le m (make_cast a tto) v2.
+Proof.
+  intros.
+  assert (DFL: eval_expr tge e le m (Ecast a tto) v2).
+    econstructor; eauto.
+  unfold sem_cast, make_cast in *. 
+  destruct (classify_cast (typeof a) tto); auto.
+  destruct v1; inv H0; auto.
+  destruct sz2; auto. destruct v1; inv H0; auto.
+  destruct sz2; auto. destruct v1; inv H0; auto.
+  destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H0; auto.
+  destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H0; auto.
+  inv H0; auto.
+Qed.
+
 (** Preservation by assignment to lifted variable. *)
 
 Lemma match_envs_assign_lifted:
@@ -2009,7 +2030,7 @@ Proof.
   inv H.
   (* local variable *)
   econstructor; split. 
-  apply plus_one. econstructor. econstructor. eexact A. rewrite typeof_simpl_expr. eexact C.
+  apply plus_one. econstructor. eapply make_cast_correct. eexact A. rewrite typeof_simpl_expr. eexact C.
   econstructor; eauto with compat. 
   eapply match_envs_assign_lifted; eauto. eapply cast_val_is_casted; eauto.
   eapply match_cont_assign_loc; eauto. exploit me_range; eauto. omega.

@@ -39,6 +39,19 @@ Definition is_liftable_var (cenv: compilenv) (a: expr) : option ident :=
   | _ => None
   end.
 
+(** Smart constructor for casts *)
+
+Definition make_cast (a: expr) (tto: type) : expr :=
+  match classify_cast (typeof a) tto with
+  | cast_case_neutral => a
+  | cast_case_i2i I32 _ => a
+  | cast_case_f2f F64 => a
+  | cast_case_struct _ _ _ _ => a
+  | cast_case_union _ _ _ _ => a
+  | cast_case_void => a
+  | _ => Ecast a tto
+  end.
+
 (** Rewriting of expressions and statements. *)
 
 Fixpoint simpl_expr (cenv: compilenv) (a: expr) : expr :=
@@ -75,7 +88,7 @@ Fixpoint simpl_stmt (cenv: compilenv) (s: statement) : res statement :=
   | Sassign a1 a2 =>
       match is_liftable_var cenv a1 with
       | Some id =>
-          OK (Sset id (Ecast (simpl_expr cenv a2) (typeof a1)))
+          OK (Sset id (make_cast (simpl_expr cenv a2) (typeof a1)))
       | None =>
           OK (Sassign (simpl_expr cenv a1) (simpl_expr cenv a2))
       end
