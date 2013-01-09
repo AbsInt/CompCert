@@ -24,7 +24,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The Compcert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 1.11, 2012-07-13</H3>
+<H3 align="center">Version 1.12, 2013-01-11</H3>
 
 <H2>Introduction</H2>
 
@@ -63,7 +63,7 @@ written.</P>
 <A HREF="http://compcert.inria.fr/">the Compcert Web site</A>.</P>
 
 <P>This document and the Compcert sources are
-copyright 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012 Institut
+copyright 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Institut
 National de Recherche en Informatique et en Automatique (INRIA) and
 distributed under the terms of the
 following <A HREF="LICENSE">license</A>.
@@ -120,7 +120,6 @@ See also: <A HREF="html/Ctypes.html">type expressions</A> and
 <A HREF="html/Cop.html">operators (syntax and semantics)</A> and
 <A HREF="html/Cexec.html">reference interpreter</A>.
 <LI> <A HREF="html/Clight.html">Clight</A>: a simpler version of CompCert C where expressions contain no side-effects.
-<A HREF="html/Cop.html">operators (syntax and semantics)</A>.
 <LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level
  structured language.
 <LI> <A HREF="html/Cminor.html">Cminor</A>: low-level structured
@@ -164,6 +163,12 @@ code.
   <TD><A HREF="html/SimplExpr.html">SimplExpr</A></TD>
   <TD><A HREF="html/SimplExprspec.html">SimplExprspec</A><br>
       <A HREF="html/SimplExprproof.html">SimplExprproof</A></TD>
+</TR>
+<TR valign="top">
+  <TD>Pulling non-adressable scalar local variables out of memory</TD>
+  <TD>Clight to Clight</TD>
+  <TD><A HREF="html/SimplLocals.html">SimplLocals</A></TD>
+      <A HREF="html/SimplLocalsproof.html">SimplLocalsproof</A></TD>
 </TR>
 <TR valign="top">
   <TD>Simplification of control structures; <br>

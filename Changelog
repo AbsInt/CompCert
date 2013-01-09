@@ -1,4 +1,4 @@
-Release 1.12
+Release 1.12, 2013-01-11
 ========================
 
 Improvements in confidence:
@@ -26,12 +26,22 @@ Performance improvements:
 - More aggressive elimination of conditional branches during constant
   propagation, taking better advantage of inferred constants.
 
-Internal simplifications:
+Language features:
+- By popular demand, "asm" statements for inline assembly are now supported
+  if the flag -finline-asm is set.  Use with extreme caution, as the
+  semantic preservation proof assumes these statements have no effect
+  on the processor state.
+
+Internal simplifications and reorganization:
 - Clight, Csharpminor, Cminor: suppressed the "Econdition" conditional
   expressions, no longer useful.
 - Clight: a single loop form, the three C loops are derived forms.
 - Clight: volatile memory accesses are materialized as builtin operations.
 - Clight: removed dependencies on CompCert C syntax and semantics.
+- New pass SimplLocals over Clight that replaces local scalar variables
+  whose address is never taken by temporary, nonadressable variables.
+  (This used to be done in Cminorgen.)
+- Csharpminor: simplified semantics.
 - Cminor: suppressed the "Oboolval" and "Onotbool" operators,
   which can be expressed in terms of "Ocmpu" at no performance costs.
 - All languages: programs are now presented as a list of global definitions
@@ -42,6 +52,7 @@ Other changes:
 - For compatibility with other C compilers, output files are now generated
   in the current directory, by default; output file name can be controlled
   with the -o option, somewhat like with GCC.
+- Reference interpreter: better handling of volatile memory accesses.
 - IA32/MacOS X: now supports referencing global variables defined in shared
   libraries; old hack for stdio is no longer needed.
 - PowerPC/MacOS X: this port was removed, as recent version of MacOS X
