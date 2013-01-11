@@ -1107,7 +1107,7 @@ Proof. unfold inject_incr. auto. Qed.
 Lemma inject_incr_trans :
   forall f1 f2 f3, 
   inject_incr f1 f2 -> inject_incr f2 f3 -> inject_incr f1 f3 .
-Proof .
+Proof.
   unfold inject_incr; intros. eauto. 
 Qed.
 

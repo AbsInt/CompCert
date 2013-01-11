@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <HTML>
 <HEAD>
-<TITLE>The Compcert verified compiler</TITLE>
+<TITLE>The CompCert verified compiler</TITLE>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
 
 <style type="text/css">
@@ -22,21 +22,21 @@ a:active {color : Red; text-decoration : underline; }
 </HEAD>
 <BODY>
 
-<H1 align="center">The Compcert verified compiler</H1>
+<H1 align="center">The CompCert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
 <H3 align="center">Version 1.12, 2013-01-11</H3>
 
 <H2>Introduction</H2>
 
-<P>Compcert is a compiler that generates PowerPC, ARM and x86 assembly
-code from Compcert C, a large subset of the C programming language.
+<P>CompCert is a compiler that generates PowerPC, ARM and x86 assembly
+code from CompCert C, a large subset of the C programming language.
 The particularity of this compiler is that it is written mostly within
 the specification language of the Coq proof assistant, and its
 correctness --- the fact that the generated assembly code is
 semantically equivalent to its source program --- was entirely proved
 within the Coq proof assistant.</P>
 
-<P>High-level descriptions of the Compcert compiler and its proof of 
+<P>High-level descriptions of the CompCert compiler and its proof of 
 correctness can be found in the following papers (in increasing order of technical details):</P>
 <UL>
 <LI>Xavier Leroy, <A HREF="http://gallium.inria.fr/~xleroy/publi/compcert-CACM.pdf">Formal verification of a realistic compiler</A>.  Communications of the ACM 52(7), July 2009.
@@ -59,10 +59,10 @@ versions can be found in the source distribution.
 substantially changed since the overview papers above were
 written.</P>
 
-<P>The complete sources for Compcert can be downloaded from
-<A HREF="http://compcert.inria.fr/">the Compcert Web site</A>.</P>
+<P>The complete sources for CompCert can be downloaded from
+<A HREF="http://compcert.inria.fr/">the CompCert Web site</A>.</P>
 
-<P>This document and the Compcert sources are
+<P>This document and the CompCert sources are
 copyright 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 Institut
 National de Recherche en Informatique et en Automatique (INRIA) and
 distributed under the terms of the
@@ -112,7 +112,7 @@ semantics.
 <H3>Source, intermediate and target languages: syntax and semantics</H3>
 
 <UL>
-<LI> The Compcert C source language:
+<LI> The CompCert C source language:
 <A HREF="html/Csyntax.html">syntax</A> and
 <A HREF="html/Csem.html">semantics</A> and
 <A HREF="html/Cstrategy.html">determinized semantics</A>.<BR>
@@ -159,7 +159,7 @@ code.
 <TR valign="top">
   <TD>Pulling side-effects out of expressions;<br>
       fixing an evaluation order</TD>
-  <TD>Compcert C to Clight</TD>
+  <TD>CompCert C to Clight</TD>
   <TD><A HREF="html/SimplExpr.html">SimplExpr</A></TD>
   <TD><A HREF="html/SimplExprspec.html">SimplExprspec</A><br>
       <A HREF="html/SimplExprproof.html">SimplExprproof</A></TD>
@@ -168,7 +168,7 @@ code.
   <TD>Pulling non-adressable scalar local variables out of memory</TD>
   <TD>Clight to Clight</TD>
   <TD><A HREF="html/SimplLocals.html">SimplLocals</A></TD>
-      <A HREF="html/SimplLocalsproof.html">SimplLocalsproof</A></TD>
+  <TD><A HREF="html/SimplLocalsproof.html">SimplLocalsproof</A></TD>
 </TR>
 <TR valign="top">
   <TD>Simplification of control structures; <br>

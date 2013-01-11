@@ -249,7 +249,7 @@ let end_html_page () =
 let space = [' ' '\t']
 let ident = ['A'-'Z' 'a'-'z' '_'] ['A'-'Z' 'a'-'z' '0'-'9' '_']*
 let path = ident ("." ident)*
-let start_proof = "Proof." | ("Proof" space+ "with") | ("Next" space+ "Obligation.")
+let start_proof = ("Proof" space* ".") | ("Proof" space+ "with") | ("Next" space+ "Obligation.")
 let end_proof = "Qed." | "Defined." | "Save." | "Admitted." | "Abort."
 
 let xref = ['A'-'Z' 'a'-'z' '0'-'9' '_' '.']+ | "<>"
@@ -370,7 +370,7 @@ and globfile = parse
   | "F" (ident as m) space* "\n"
       { current_module := m; add_module m;
         globfile lexbuf }
-  | "R" (integer as pos)
+  | "R" (integer as pos) ":" (integer as pos2)
     space+ (xref as dp)
     space+ (xref as sp)
     space+ (xref as id)
@@ -379,7 +379,7 @@ and globfile = parse
       { add_reference !current_module (int_of_string pos) dp sp id ty;
         globfile lexbuf }
   | (ident as ty)
-    space+ (integer as pos)
+    space+ (integer as pos) ":" (integer as pos2)
     space+ (xref as sp)
     space+ (xref as id)
     space* "\n"
