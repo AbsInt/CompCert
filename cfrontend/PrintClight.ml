@@ -40,7 +40,7 @@ let register_struct_union id fld =
 
 (* Naming temporaries *)
 
-let temp_name (id: ident) = Z.to_string (Z.Zpos id)
+let temp_name (id: ident) = "$" ^ Z.to_string (Z.Zpos id)
 
 (* Declarator (identifier + type) -- reuse from PrintCsyntax *)
 

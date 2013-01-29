@@ -173,10 +173,10 @@ module Z = struct
     if x = Z0 then () else begin
       let (q, r) = Z.div_eucl x base in
       to_string_rec base buff q;
-      let q' = to_int q in
+      let d = to_int r in
       Buffer.add_char buff (Char.chr
-        (if q' < 10 then Char.code '0' + q'
-                         else Char.code 'A' + q' - 10))
+        (if d < 10 then Char.code '0' + d
+                         else Char.code 'A' + d - 10))
     end
 
   let to_string_aux base x =
