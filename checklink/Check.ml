@@ -1,8 +1,7 @@
+open Camlcoq
 open Asm
 open Asm_printers
 open AST
-open BinInt
-open BinPos
 open Bitstring_utils
 open C2C
 open Camlcoq
@@ -204,7 +203,7 @@ let re_variadic_stub: Str.regexp = Str.regexp "\\(.*\\)\\$[if]*$"
     address, unless the symbol is a stub from CompCert. Otherwise, it filters
     out all symbols whose virtual address does not match [vaddr].
 *)
-let idmap_unify (k: positive) (vaddr: int32) (sfw: s_framework)
+let idmap_unify (k: P.t) (vaddr: int32) (sfw: s_framework)
     : s_framework or_err =
   try (
     (* get the list of possible symbols for ident [k] *)
@@ -438,13 +437,13 @@ let match_csts (cc: constant) (ec: int32): checker = fun ffw ->
       (* sda should be handled separately in places it occurs *)
       fatal "Unhandled Csymbol_sda, please report."
 
-let match_z_int32 (cz: coq_Z) (ei: int32) =
+let match_z_int32 (cz: Z.t) (ei: int32) =
   let cz = z_int32 cz in
   check_eq (
     Printf.sprintf "match_z_int32 %s %s" (string_of_int32 cz) (string_of_int32 ei)
   ) cz ei
 
-let match_z_int (cz: coq_Z) (ei: int) =
+let match_z_int (cz: Z.t) (ei: int) =
   let cz = z_int32 cz in
   let ei = Safe32.of_int ei in
   check_eq (
@@ -452,7 +451,7 @@ let match_z_int (cz: coq_Z) (ei: int) =
   ) cz ei
 
 (* [m] is interpreted as a bitmask, and checked against [ei]. *)
-let match_mask (m: coq_Z) (ei: int32) =
+let match_mask (m: Z.t) (ei: int32) =
   let m = z_int32_lax m in
   check_eq (
     Printf.sprintf "match_mask %s %s"

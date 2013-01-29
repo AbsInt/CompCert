@@ -1122,7 +1122,8 @@ Proof.
   intros. simpl in H2.
   destruct (transl_cond_correct tge tf cond args _ _ rs m' H2)
   as [rs' [A [B C]]]. 
-  unfold PregEq.t in B; rewrite EC in B.
+  rewrite EC in B (* 8.4 *)
+   || (unfold PregEq.t in B; rewrite EC in B) (* 8.3 *).
   destruct (testcond_for_condition cond); simpl in *.
 (* simple jcc *)
   exists (Pjcc c1 lbl); exists k; exists rs'.
@@ -1130,8 +1131,8 @@ Proof.
   split. eapply agree_exten_temps; eauto. 
   simpl. rewrite B. auto.
 (* jcc; jcc *)
-  destruct (eval_testcond c1 rs') as [b1|]_eqn;
-  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct (eval_testcond c1 rs') as [b1|] eqn:?;
+  destruct (eval_testcond c2 rs') as [b2|] eqn:?; inv B.
   destruct b1.   
   (* first jcc jumps *)
   exists (Pjcc c1 lbl); exists (Pjcc c2 lbl :: k); exists rs'.
@@ -1147,8 +1148,8 @@ Proof.
   simpl. rewrite eval_testcond_nextinstr. rewrite Heqo0.
   destruct b2; auto || discriminate.
 (* jcc2 *)
-  destruct (eval_testcond c1 rs') as [b1|]_eqn;
-  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct (eval_testcond c1 rs') as [b1|] eqn:?;
+  destruct (eval_testcond c2 rs') as [b2|] eqn:?; inv B.
   destruct (andb_prop _ _ H4). subst. 
   exists (Pjcc2 c1 c2 lbl); exists k; exists rs'.
   split. eexact A.
@@ -1169,7 +1170,8 @@ Proof.
   left; eapply exec_straight_steps; eauto. intros. simpl in H0. 
   destruct (transl_cond_correct tge tf cond args _ _ rs m' H0)
   as [rs' [A [B C]]]. 
-  unfold PregEq.t in B; rewrite EC in B.
+  rewrite EC in B (* 8.4 *)
+   || (unfold PregEq.t in B; rewrite EC in B) (* 8.3 *).
   destruct (testcond_for_condition cond); simpl in *.
 (* simple jcc *)
   econstructor; split.
@@ -1178,8 +1180,8 @@ Proof.
   split. apply agree_nextinstr. eapply agree_exten_temps; eauto.
   simpl; congruence.
 (* jcc ; jcc *)
-  destruct (eval_testcond c1 rs') as [b1|]_eqn;
-  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct (eval_testcond c1 rs') as [b1|] eqn:?;
+  destruct (eval_testcond c2 rs') as [b2|] eqn:?; inv B.
   destruct (orb_false_elim _ _ H2); subst.
   econstructor; split.
   eapply exec_straight_trans. eexact A. 
@@ -1188,8 +1190,8 @@ Proof.
   split. apply agree_nextinstr. apply agree_nextinstr. eapply agree_exten_temps; eauto.
   simpl; congruence.
 (* jcc2 *)
-  destruct (eval_testcond c1 rs') as [b1|]_eqn;
-  destruct (eval_testcond c2 rs') as [b2|]_eqn; inv B.
+  destruct (eval_testcond c1 rs') as [b1|] eqn:?;
+  destruct (eval_testcond c2 rs') as [b2|] eqn:?; inv B.
   exists (nextinstr rs'); split.
   eapply exec_straight_trans. eexact A. 
   apply exec_straight_one. simpl. 

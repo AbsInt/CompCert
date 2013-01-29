@@ -12,8 +12,6 @@
 
 open Camlcoq
 open Datatypes
-open BinPos
-open BinInt
 open AST
 open Maps
 open Registers
@@ -766,8 +764,8 @@ let rec reuse_slot conflicts n mvlist =
 let find_slot conflicts typ =
   let rec find curr =
     let l = S(Local(curr, typ)) in
-    if Locset.mem l conflicts then find (coq_Zsucc curr) else l
-  in find Z0
+    if Locset.mem l conflicts then find (Z.succ curr) else l
+  in find Z.zero
 
 let assign_color n =
   let conflicts = ref Locset.empty in

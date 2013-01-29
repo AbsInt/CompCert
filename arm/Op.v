@@ -775,8 +775,8 @@ Opaque Int.add.
     Val.cmpu_bool (Mem.valid_pointer m1) c v1 v2 = Some b ->
     Val.cmpu_bool (Mem.valid_pointer m2) c v1' v2' = Some b).
   intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
-  destruct (Mem.valid_pointer m1 b1 (Int.unsigned ofs1)) as []_eqn; try discriminate.
-  destruct (Mem.valid_pointer m1 b0 (Int.unsigned ofs0)) as []_eqn; try discriminate.
+  destruct (Mem.valid_pointer m1 b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (Mem.valid_pointer m1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
   rewrite (valid_pointer_inj _ H2 Heqb4).
   rewrite (valid_pointer_inj _ H Heqb0). simpl.
   destruct (zeq b1 b0); simpl in H1.
@@ -796,8 +796,8 @@ Opaque Int.add.
   eapply CMPU; eauto.
   eapply CMP. eauto. eapply eval_shift_inj. eauto. auto.
   eapply CMPU. eauto. eapply eval_shift_inj. eauto. auto.
-  eapply CMP; eauto. 
-  eapply CMPU; eauto.
+  eapply CMP; try eassumption; eauto.
+  eapply CMPU; try eassumption; eauto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; simpl in H0; inv H0; auto.
@@ -871,7 +871,7 @@ Proof.
   inv H4; simpl in *; inv H1. TrivialExists.
   inv H4; simpl in *; inv H1. TrivialExists.
 
-  subst v1. destruct (eval_condition c vl1 m1) as []_eqn.
+  subst v1. destruct (eval_condition c vl1 m1) eqn:?.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.
   simpl; constructor.
@@ -1005,7 +1005,7 @@ Hypothesis sp_inj: f sp1 = Some(sp2, delta).
 Remark symbol_address_inject:
   forall id ofs, val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
 Proof.
-  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) as []_eqn; auto.
+  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
   exploit (proj1 globals); eauto. intros. 
   econstructor; eauto. rewrite Int.add_zero; auto.
 Qed.

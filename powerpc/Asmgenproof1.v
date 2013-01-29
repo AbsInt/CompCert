@@ -1516,6 +1516,7 @@ Lemma transl_load_correct:
 Proof.
   intros.
   exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto. 
+  unfold PregEq.t.
   intros [a' [A B]]. 
   exploit Mem.loadv_extends; eauto. intros [v' [C D]].
   apply transl_load_store_correct with ms; auto.
@@ -1570,6 +1571,7 @@ Lemma transl_store_correct:
 Proof.
   intros.
   exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto. 
+  unfold PregEq.t.
   intros [a' [A B]].
   assert (Z: Val.lessdef (ms src) (rs (preg_of src))). eapply preg_val; eauto.
   exploit Mem.storev_extends; eauto. intros [m1' [C D]].

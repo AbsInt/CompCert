@@ -620,7 +620,7 @@ Theorem modu_divu:
   modu x y = Some z -> exists v, divu x y = Some v /\ z = sub x (mul v y).
 Proof.
   intros. destruct x; destruct y; simpl in *; try discriminate.
-  destruct (Int.eq i0 Int.zero) as []_eqn; inv H. 
+  destruct (Int.eq i0 Int.zero) eqn:?; inv H. 
   exists (Vint (Int.divu i i0)); split; auto. 
   simpl. rewrite Int.modu_divu. auto.
   generalize (Int.eq_spec i0 Int.zero). rewrite Heqb; auto. 
@@ -731,7 +731,7 @@ Theorem shrx_carry:
   add (shr x y) (shr_carry x y) = z.
 Proof.
   intros. destruct x; destruct y; simpl in H; inv H. 
-  destruct (Int.ltu i0 (Int.repr 31)) as []_eqn; inv H1.
+  destruct (Int.ltu i0 (Int.repr 31)) eqn:?; inv H1.
   exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 31)) with 31. intros.
   assert (Int.ltu i0 Int.iwordsize = true). 
     unfold Int.ltu. apply zlt_true. change (Int.unsigned Int.iwordsize) with 32. omega. 
@@ -746,7 +746,7 @@ Theorem shrx_shr:
     z = shr (if Int.lt p Int.zero then add x (Vint (Int.sub (Int.shl Int.one q) Int.one)) else x) (Vint q).
 Proof.
   intros. destruct x; destruct y; simpl in H; inv H. 
-  destruct (Int.ltu i0 (Int.repr 31)) as []_eqn; inv H1.
+  destruct (Int.ltu i0 (Int.repr 31)) eqn:?; inv H1.
   exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 31)) with 31. intros.
   assert (Int.ltu i0 Int.iwordsize = true). 
     unfold Int.ltu. apply zlt_true. change (Int.unsigned Int.iwordsize) with 32. omega. 
@@ -1030,8 +1030,8 @@ Proof.
   destruct v1; simpl in H2; try discriminate;
   destruct v2; simpl in H2; try discriminate;
   inv H0; inv H1; simpl; auto.
-  destruct (valid_ptr b0 (Int.unsigned i)) as []_eqn; try discriminate.
-  destruct (valid_ptr b1 (Int.unsigned i0)) as []_eqn; try discriminate.
+  destruct (valid_ptr b0 (Int.unsigned i)) eqn:?; try discriminate.
+  destruct (valid_ptr b1 (Int.unsigned i0)) eqn:?; try discriminate.
   rewrite (H _ _ Heqb2). rewrite (H _ _ Heqb0). auto.
 Qed.
 

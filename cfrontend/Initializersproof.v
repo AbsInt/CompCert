@@ -12,7 +12,6 @@
 
 (** Compile-time evaluation of initializers for global C variables. *)
 
-Require Import Coq.Program.Equality.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
@@ -268,42 +267,58 @@ Proof.
   induction 2; simpl; try tauto. 
 Qed.
 
+Lemma compat_eval_steps_aux f r e m r' m' s2 :
+  simple r ->
+  star step ge s2 nil (ExprState f r' Kstop e m') ->
+  estep ge (ExprState f r Kstop e m) nil s2 ->
+  exists r1,
+    s2 = ExprState f r1 Kstop e m /\
+    compat_eval RV e r r1 m /\ simple r1.
+Proof.
+  intros.
+  inv H1.
+  (* lred *)
+  assert (S: simple a) by (eapply simple_context_1; eauto).
+  exploit lred_compat; eauto. intros [A B]. subst m'0.
+  econstructor; split. eauto. split.
+  eapply compat_eval_context; eauto.
+  eapply simple_context_2; eauto. eapply lred_simple; eauto.
+  (* rred *)
+  assert (S: simple a) by (eapply simple_context_1; eauto).
+  exploit rred_compat; eauto. intros [A B]. subst m'0.
+  econstructor; split. eauto. split.
+  eapply compat_eval_context; eauto.
+  eapply simple_context_2; eauto. eapply rred_simple; eauto.
+  (* callred *)
+  assert (S: simple a) by (eapply simple_context_1; eauto).
+  inv H8; simpl in S; contradiction.
+  (* stuckred *)
+  inv H0. destruct H1; inv H0.
+Qed.
+
 Lemma compat_eval_steps:
   forall f r e m  r' m',
   star step ge (ExprState f r Kstop e m) E0 (ExprState f r' Kstop e m') ->
   simple r -> 
   m' = m /\ compat_eval RV e r r' m.
 Proof.
-  intros. dependent induction H.
+  intros. 
+  remember (ExprState f r Kstop e m) as S1.
+  remember E0 as t.
+  remember (ExprState f r' Kstop e m') as S2.
+  revert S1 t S2 H r m r' m' HeqS1 Heqt HeqS2 H0.
+  induction 1; intros; subst.
   (* base case *) 
-  split. auto. red; auto.
+  inv HeqS2. split. auto. red; auto.
   (* inductive case *)
   destruct (app_eq_nil t1 t2); auto. subst. inv H.
   (* expression step *)
-  assert (X: exists r1, s2 = ExprState f r1 Kstop e m /\ compat_eval RV e r r1 m /\ simple r1).
-    inv H3.
-    (* lred *)
-    assert (S: simple a) by (eapply simple_context_1; eauto).
-    exploit lred_compat; eauto. intros [A B]. subst m'0.
-    econstructor; split. eauto. split.
-    eapply compat_eval_context; eauto.
-    eapply simple_context_2; eauto. eapply lred_simple; eauto.
-    (* rred *)
-    assert (S: simple a) by (eapply simple_context_1; eauto).
-    exploit rred_compat; eauto. intros [A B]. subst m'0.
-    econstructor; split. eauto. split.
-    eapply compat_eval_context; eauto.
-    eapply simple_context_2; eauto. eapply rred_simple; eauto.
-    (* callred *)
-    assert (S: simple a) by (eapply simple_context_1; eauto).
-    inv H9; simpl in S; contradiction.
-    (* stuckred *)
-    inv H2. destruct H; inv H. 
-  destruct X as [r1 [A [B C]]]. subst s2. 
-  exploit IHstar; eauto. intros [D E]. 
+  exploit compat_eval_steps_aux; eauto.
+  intros [r1 [A [B C]]]. subst s2.
+  exploit IHstar; eauto. intros [D E].
   split. auto. destruct B; destruct E. split. congruence. auto. 
   (* statement steps *)
-  inv H3.
+  inv H1.
 Qed.
 
 Theorem eval_simple_steps:
@@ -438,7 +453,7 @@ Lemma sem_cast_match:
   forall v1' v2',  match_val v1' v1 -> do_cast v1' ty1 ty2 = OK v2' ->
   match_val v2' v2.
 Proof.
-  intros. unfold do_cast in H1. destruct (sem_cast v1' ty1 ty2) as [v2''|] _eqn; inv H1.
+  intros. unfold do_cast in H1. destruct (sem_cast v1' ty1 ty2) as [v2''|] eqn:?; inv H1.
   unfold sem_cast in H; functional inversion Heqo; subst. 
   rewrite H2 in H. inv H0. inv H. constructor.
   rewrite H2 in H. inv H0. inv H. constructor; auto.
@@ -887,4 +902,5 @@ Proof.
 Qed.
 
 End SOUNDNESS.
+
 

@@ -33,7 +33,7 @@ Ltac caseEq name :=
   generalize (refl_equal name); pattern name at -1 in |- *; case name.
 
 Ltac destructEq name :=
-  destruct name as []_eqn.
+  destruct name eqn:?.
 
 Ltac decEq :=
   match goal with
@@ -393,7 +393,7 @@ Qed.
 Lemma Zmin_spec:
   forall x y, Zmin x y = if zlt x y then x else y.
 Proof.
-  intros. case (zlt x y); unfold Zlt, Zge; intros.
+  intros. case (zlt x y); unfold Zlt, Zge; intro z.
   unfold Zmin. rewrite z. auto.
   unfold Zmin. caseEq (x ?= y); intro. 
   apply Zcompare_Eq_eq. auto.
@@ -404,7 +404,7 @@ Qed.
 Lemma Zmax_spec:
   forall x y, Zmax x y = if zlt y x then x else y.
 Proof.
-  intros. case (zlt y x); unfold Zlt, Zge; intros.
+  intros. case (zlt y x); unfold Zlt, Zge; intro z.
   unfold Zmax. rewrite <- (Zcompare_antisym y x).
   rewrite z. simpl. auto.
   unfold Zmax. rewrite <- (Zcompare_antisym y x).
@@ -565,7 +565,7 @@ Qed.
 Lemma Zdivides_trans:
   forall x y z, (x | y) -> (y | z) -> (x | z).
 Proof.
-  intros. inv H. inv H0. exists (q0 * q). ring.
+  intros x y z [a A] [b B]; subst. exists (a*b); ring.
 Qed.
 
 Definition Zdivide_dec:

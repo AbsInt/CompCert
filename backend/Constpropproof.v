@@ -199,9 +199,9 @@ Lemma eval_static_load_sound:
   val_match_approx ge sp (eval_static_load gapp chunk addr) v.
 Proof.
   intros. unfold eval_static_load. destruct addr; simpl; auto. 
-  destruct (gapp!i) as [il|]_eqn; auto.
+  destruct (gapp!i) as [il|] eqn:?; auto.
   red in H1. subst vaddr. unfold symbol_address in H. 
-  destruct (Genv.find_symbol ge i) as [b'|]_eqn; simpl in H; try discriminate.
+  destruct (Genv.find_symbol ge i) as [b'|] eqn:?; simpl in H; try discriminate.
   exploit H0; eauto. intros [A [B C]]. 
   eapply eval_load_init_sound; eauto. 
   red; auto. 
@@ -290,7 +290,7 @@ Proof.
                \/ id0 <> id /\ ga!id0 = Some il).
   destruct gd.
   rewrite PTree.grspec in H0. destruct (PTree.elt_eq id0 id); [discriminate|auto].
-  destruct (gvar_readonly v && negb (gvar_volatile v)) as []_eqn.
+  destruct (gvar_readonly v && negb (gvar_volatile v)) eqn:?.
   rewrite PTree.gsspec in H0. destruct (peq id0 id).
   inv H0. left. split; auto. 
   destruct v; simpl in *. 
@@ -455,10 +455,10 @@ Lemma match_successor_rec:
 Proof.
   induction n; simpl; intros.
   apply match_pc_base.
-  destruct (fn_code f)!pc as [i|]_eqn; try apply match_pc_base.
+  destruct (fn_code f)!pc as [i|] eqn:?; try apply match_pc_base.
   destruct i; try apply match_pc_base.
   eapply match_pc_nop; eauto. 
-  destruct (eval_static_condition c (approx_regs app l)) as [b|]_eqn.
+  destruct (eval_static_condition c (approx_regs app l)) as [b|] eqn:?.
   eapply match_pc_cond; eauto.
   apply match_pc_base.
 Qed.
@@ -607,7 +607,7 @@ Proof.
   assert (MATCH'': regs_match_approx sp (analyze gapp f) # pc' rs # res <- v).
     eapply analyze_correct_1 with (pc := pc); eauto. simpl; auto.
     unfold transfer; rewrite H. auto.  
-  destruct (const_for_result a) as [cop|]_eqn; intros.
+  destruct (const_for_result a) as [cop|] eqn:?; intros.
   (* constant is propagated *)
   left; econstructor; econstructor; split.
   eapply exec_Iop; eauto. 
@@ -640,7 +640,7 @@ Proof.
     eapply approx_regs_val_list; eauto.
   assert (VM2: val_match_approx ge sp ap2 v).
     eapply eval_static_load_sound; eauto.
-  destruct (const_for_result ap2) as [cop|]_eqn; intros.
+  destruct (const_for_result ap2) as [cop|] eqn:?; intros.
   (* constant-propagated *)
   left; econstructor; econstructor; split.
   eapply exec_Iop; eauto. eapply const_for_result_correct; eauto.
@@ -708,7 +708,7 @@ Proof.
   (* Ibuiltin *)
   rename pc'0 into pc.
 Opaque builtin_strength_reduction.
-  destruct (builtin_strength_reduction ef args (approx_regs (analyze gapp f)#pc args)) as [ef' args']_eqn.
+  destruct (builtin_strength_reduction ef args (approx_regs (analyze gapp f)#pc args)) as [ef' args'] eqn:?.
   generalize (builtin_strength_reduction_correct ge sp (analyze gapp f)!!pc rs
                   MATCH2 ef args (approx_regs (analyze gapp f) # pc args) _ _ _ _ (refl_equal _) H0).
   rewrite Heqp. intros P.
@@ -732,7 +732,7 @@ Opaque builtin_strength_reduction.
   destruct (cond_strength_reduction cond args (approx_regs (analyze gapp f) # pc args)) as [cond' args'].
   intros EV1 TCODE.
   left; exists O; exists (State s' (transf_function gapp f) sp (if b then ifso else ifnot) rs' m'); split. 
-  destruct (eval_static_condition cond (approx_regs (analyze gapp f) # pc args)) as []_eqn.
+  destruct (eval_static_condition cond (approx_regs (analyze gapp f) # pc args)) eqn:?.
   assert (eval_condition cond rs ## args m = Some b0).
     eapply eval_static_condition_correct; eauto. eapply approx_regs_val_list; eauto.
   assert (b = b0) by congruence. subst b0.
@@ -758,7 +758,7 @@ Opaque builtin_strength_reduction.
   rename pc'0 into pc.
   assert (A: (fn_code (transf_function gapp f))!pc = Some(Ijumptable arg tbl)
              \/ (fn_code (transf_function gapp f))!pc = Some(Inop pc')).
-  TransfInstr. destruct (approx_reg (analyze gapp f) # pc arg) as []_eqn; auto.
+  TransfInstr. destruct (approx_reg (analyze gapp f) # pc arg) eqn:?; auto.
   generalize (MATCH2 arg). unfold approx_reg in Heqt. rewrite Heqt. rewrite H0. 
   simpl. intro EQ; inv EQ. rewrite H1. auto.
   assert (B: rs'#arg = Vint n).

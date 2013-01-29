@@ -228,12 +228,12 @@ Proof.
   destruct (shlimm_match a); intros; InvEval.
   exists (Vint (Int.shl n1 n)); split. EvalOp. 
   simpl. destruct (Int.ltu n Int.iwordsize); auto.
-  destruct (Int.ltu (Int.add n n1) Int.iwordsize) as []_eqn.
+  destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   exists (Val.shl v1 (Vint (Int.add n n1))); split. EvalOp.
   subst. destruct v1; simpl; auto. 
   rewrite Heqb.
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; simpl; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; simpl; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl; auto.
   rewrite Int.add_commut. rewrite Int.shl_shl; auto. rewrite Int.add_commut; auto.
   subst. TrivialExists. econstructor. EvalOp. simpl; eauto. constructor. 
   simpl. auto.
@@ -259,12 +259,12 @@ Proof.
   destruct (shruimm_match a); intros; InvEval.
   exists (Vint (Int.shru n1 n)); split. EvalOp. 
   simpl. destruct (Int.ltu n Int.iwordsize); auto.
-  destruct (Int.ltu (Int.add n n1) Int.iwordsize) as []_eqn.
+  destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   exists (Val.shru v1 (Vint (Int.add n n1))); split. EvalOp.
   subst. destruct v1; simpl; auto. 
   rewrite Heqb.
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; simpl; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; simpl; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl; auto.
   rewrite Int.add_commut. rewrite Int.shru_shru; auto. rewrite Int.add_commut; auto.
   subst. TrivialExists. econstructor. EvalOp. simpl; eauto. constructor. 
   simpl. auto.
@@ -281,12 +281,12 @@ Proof.
   destruct (shrimm_match a); intros; InvEval.
   exists (Vint (Int.shr n1 n)); split. EvalOp. 
   simpl. destruct (Int.ltu n Int.iwordsize); auto.
-  destruct (Int.ltu (Int.add n n1) Int.iwordsize) as []_eqn.
+  destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   exists (Val.shr v1 (Vint (Int.add n n1))); split. EvalOp.
   subst. destruct v1; simpl; auto. 
   rewrite Heqb.
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; simpl; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; simpl; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl; auto.
   rewrite Int.add_commut. rewrite Int.shr_shr; auto. rewrite Int.add_commut; auto.
   subst. TrivialExists. econstructor. EvalOp. simpl; eauto. constructor. 
   simpl. auto.
@@ -417,25 +417,25 @@ Proof.
   InvEval. rewrite Val.or_commut. apply eval_orimm; auto. 
   InvEval. apply eval_orimm; auto.
 (* shlimm - shruimm *)
-  destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) as []_eqn.
+  destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0). 
   generalize (Int.eq_spec (Int.add n1 n2) Int.iwordsize); rewrite H1; intros EQ.
   InvEval. exploit eval_same_expr; eauto. intros [EQ1 EQ2]; subst. 
   exists (Val.ror v0 (Vint n2)); split. EvalOp.
   destruct v0; simpl; auto. 
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; auto.
-  destruct (Int.ltu n2 Int.iwordsize) as []_eqn; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; auto.
+  destruct (Int.ltu n2 Int.iwordsize) eqn:?; auto.
   simpl. rewrite <- Int.or_ror; auto.
   TrivialExists. 
 (* shruimm - shlimm *) 
-  destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) as []_eqn.
+  destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0). 
   generalize (Int.eq_spec (Int.add n1 n2) Int.iwordsize); rewrite H1; intros EQ.
   InvEval. exploit eval_same_expr; eauto. intros [EQ1 EQ2]; subst. 
   exists (Val.ror v1 (Vint n2)); split. EvalOp.
   destruct v1; simpl; auto. 
-  destruct (Int.ltu n2 Int.iwordsize) as []_eqn; auto.
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; auto.
+  destruct (Int.ltu n2 Int.iwordsize) eqn:?; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; auto.
   simpl. rewrite Int.or_commut. rewrite <- Int.or_ror; auto.
   TrivialExists. 
 (* default *)
@@ -717,7 +717,7 @@ Theorem eval_intuoffloat:
   exists v, eval_expr ge sp e m le (intuoffloat a) v /\ Val.lessdef y v.
 Proof.
   intros. destruct x; simpl in H0; try discriminate.
-  destruct (Float.intuoffloat f) as [n|]_eqn; simpl in H0; inv H0.
+  destruct (Float.intuoffloat f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
   set (im := Int.repr Int.half_modulus).
   set (fm := Float.floatofintu im).
@@ -729,7 +729,7 @@ Proof.
   econstructor. instantiate (1 := Vfloat fm). EvalOp. 
   eapply eval_Econdition with (vb := Float.cmp Clt f fm).
   eauto with evalexpr. auto.
-  destruct (Float.cmp Clt f fm) as []_eqn.
+  destruct (Float.cmp Clt f fm) eqn:?.
   exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
   EvalOp. simpl. rewrite EQ; auto.
   exploit Float.intuoffloat_intoffloat_2; eauto. 
@@ -763,7 +763,7 @@ Proof.
   eapply eval_Econdition with (vb := Int.ltu i Float.ox8000_0000).
   constructor. eauto. constructor.
   simpl. auto.
-  destruct (Int.ltu i Float.ox8000_0000) as []_eqn.
+  destruct (Int.ltu i Float.ox8000_0000) eqn:?.
   rewrite Float.floatofintu_floatofint_1; auto.
   unfold floatofint. EvalOp. 
   exploit (eval_addimm (Int.neg Float.ox8000_0000) (Vint i :: le) (Eletvar 0)); eauto.

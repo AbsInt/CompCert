@@ -14,6 +14,7 @@
 (* *********************************************************************)
 
 {
+open BinNums
 open Camlcoq
 open CMparser
 exception Error of string

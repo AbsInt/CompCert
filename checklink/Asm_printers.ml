@@ -1,21 +1,10 @@
+open Camlcoq
 open Asm
 open AST
-open BinInt
-open BinPos
 open Library
 
-let rec int_of_pos = function
-  | Coq_xH   -> 1
-  | Coq_xO q -> 2 * int_of_pos q
-  | Coq_xI q -> 2 * int_of_pos q + 1
-
-let string_of_pos p = string_of_int (int_of_pos p)
-
-let string_of_coq_Z = function
-  | Z0 -> "0"
-  | Zpos p -> string_of_pos p
-  | Zneg p -> "-" ^ string_of_pos p
-
+let string_of_pos p = Z.to_string (Z.Zpos p)
+let string_of_coq_Z = Z.to_string
 let string_of_ident = string_of_pos
 let string_of_label = string_of_pos
 let string_of_iint = string_of_coq_Z

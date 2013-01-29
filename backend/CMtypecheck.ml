@@ -64,7 +64,7 @@ let type_var env id =
     raise (Error (sprintf "Unbound variable %s\n" (extern_atom id)))
 
 let type_letvar env n =
-  let n = camlint_of_nat n in
+  let n = Nat.to_int n in
   try
     List.nth env n
   with Not_found ->
@@ -303,8 +303,8 @@ let rec type_stmt env blk ret s =
   | Sblock s1 ->
       type_stmt env (blk + 1) ret s1
   | Sexit n ->
-      if camlint_of_nat n >= blk then
-        raise (Error (sprintf "Bad exit(%d)\n" (camlint_of_nat n)))
+      if Nat.to_int n >= blk then
+        raise (Error (sprintf "Bad exit(%d)\n" (Nat.to_int n)))
   | Sswitch(e, cases, deflt) ->
       unify (type_expr env [] e) tint
   | Sreturn None ->

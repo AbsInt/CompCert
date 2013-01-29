@@ -166,10 +166,10 @@ Lemma classify_call_correct:
   end.
 Proof.
   unfold classify_call; intros. 
-  destruct (expr_is_addrof_ident a) as [id|]_eqn. 
+  destruct (expr_is_addrof_ident a) as [id|] eqn:?. 
   exploit expr_is_addrof_ident_correct; eauto. intros EQ; subst a.
   inv H. inv H2. 
-  destruct (Genv.find_symbol ge id) as [b|]_eqn. 
+  destruct (Genv.find_symbol ge id) as [b|] eqn:?. 
   rewrite Genv.find_funct_find_funct_ptr in H0. 
   rewrite H0. 
   destruct fd. exists b; auto. 
@@ -567,7 +567,7 @@ Proof.
     apply call_cont_commut; eauto.
   rewrite H. 
   destruct (find_label lbl (sel_stmt ge (Cminor.fn_body f)) (call_cont k'0))
-  as [[s'' k'']|]_eqn; intros; try contradiction.
+  as [[s'' k'']|] eqn:?; intros; try contradiction.
   destruct H0. 
   left; econstructor; split.
   econstructor; eauto. 

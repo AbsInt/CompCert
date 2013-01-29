@@ -91,7 +91,7 @@ Proof.
   (* induction *)
   rewrite PTree.gsspec in H2. unfold renum_node. destruct (peq x k). 
   inv H2. rewrite H3. apply PTree.gss. 
-  destruct f!k as [y'|]_eqn. 
+  destruct f!k as [y'|] eqn:?. 
   rewrite PTree.gso. eauto. red; intros; subst y'. elim n. eapply f_inj; eauto. 
   eauto. 
 Qed.
@@ -111,7 +111,7 @@ Proof.
   intros. 
   destruct (postorder_correct (successors f) f.(fn_entrypoint)) as [A B].
   fold (pnum f) in *. 
-  unfold renum_pc. destruct (pnum f)! pc as [pc'|]_eqn.
+  unfold renum_pc. destruct (pnum f)! pc as [pc'|] eqn:?.
   simpl. eapply renum_cfg_nodes; eauto.
   elim (B pc); auto. unfold successors. rewrite PTree.gmap1. rewrite H. simpl. congruence.
 Qed.

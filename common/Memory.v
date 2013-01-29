@@ -1023,7 +1023,7 @@ Proof.
   decEq. rewrite store_mem_contents; simpl.
   rewrite ZMap.gsspec. destruct (ZIndexed.eq b' b). subst b'.
   destruct H. congruence.
-  destruct (zle n 0). 
+  destruct (zle n 0) as [z | n0].
   rewrite (nat_of_Z_neg _ z). auto.
   destruct H. omegaContradiction.
   apply getN_setN_outside. rewrite encode_val_length. rewrite <- size_chunk_conv.
@@ -1108,7 +1108,7 @@ Proof.
     assert (length mvl = sz). 
       generalize (encode_val_length chunk v). rewrite <- H1. rewrite SZ. 
       simpl; congruence.
-    rewrite H4. rewrite size_chunk_conv in z0. omega. 
+    rewrite H4. rewrite size_chunk_conv in *. omega.
   contradiction.
 
 (* 3. ofs > ofs':
@@ -1126,8 +1126,8 @@ Proof.
     rewrite setN_outside. rewrite ZMap.gss. auto. omega.
   assert (~memval_valid_first (c'#ofs)).
     rewrite SZ' in PSHAPE. simpl in PSHAPE. inv PSHAPE. 
-    apply H4. apply getN_in. rewrite size_chunk_conv in z. 
-    rewrite SZ' in z. rewrite inj_S in z. omega. 
+    apply H4. apply getN_in. rewrite size_chunk_conv in *.
+    rewrite SZ' in *. rewrite inj_S in *. omega.
   contradiction.
 Qed.
 
@@ -3632,18 +3632,18 @@ Lemma mem_inj_compose:
 Proof.
   intros. unfold compose_meminj. inv H; inv H0; constructor; intros.
   (* perm *)
-  destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
-  destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
+  destruct (f b1) as [[b' delta'] |] eqn:?; try discriminate.
+  destruct (f' b') as [[b'' delta''] |] eqn:?; inv H. 
   replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
   eauto.
   (* valid access *)
-  destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
-  destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
+  destruct (f b1) as [[b' delta'] |] eqn:?; try discriminate.
+  destruct (f' b') as [[b'' delta''] |] eqn:?; inv H. 
   replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
   eauto.
   (* memval *)
-  destruct (f b1) as [[b' delta'] |]_eqn; try discriminate.
-  destruct (f' b') as [[b'' delta''] |]_eqn; inv H. 
+  destruct (f b1) as [[b' delta'] |] eqn:?; try discriminate.
+  destruct (f' b') as [[b'' delta''] |] eqn:?; inv H. 
   replace (ofs + (delta' + delta'')) with ((ofs + delta') + delta'') by omega.
   eapply memval_inject_compose; eauto.
 Qed. 
@@ -3661,15 +3661,15 @@ Proof.
   intros. erewrite mi_freeblocks0; eauto. 
 (* mapped *)
   intros. 
-  destruct (f b) as [[b1 delta1] |]_eqn; try discriminate.
-  destruct (f' b1) as [[b2 delta2] |]_eqn; inv H. 
+  destruct (f b) as [[b1 delta1] |] eqn:?; try discriminate.
+  destruct (f' b1) as [[b2 delta2] |] eqn:?; inv H. 
   eauto.
 (* no overlap *)
   red; intros. 
-  destruct (f b1) as [[b1x delta1x] |]_eqn; try discriminate.
-  destruct (f' b1x) as [[b1y delta1y] |]_eqn; inv H0. 
-  destruct (f b2) as [[b2x delta2x] |]_eqn; try discriminate.
-  destruct (f' b2x) as [[b2y delta2y] |]_eqn; inv H1.
+  destruct (f b1) as [[b1x delta1x] |] eqn:?; try discriminate.
+  destruct (f' b1x) as [[b1y delta1y] |] eqn:?; inv H0. 
+  destruct (f b2) as [[b2x delta2x] |] eqn:?; try discriminate.
+  destruct (f' b2x) as [[b2y delta2y] |] eqn:?; inv H1.
   exploit mi_no_overlap0; eauto. intros A.
   destruct (eq_block b1x b2x). 
   subst b1x. destruct A. congruence. 
@@ -3680,8 +3680,8 @@ Proof.
   unfold block; omega.
 (* representable *)
   intros. 
-  destruct (f b) as [[b1 delta1] |]_eqn; try discriminate.
-  destruct (f' b1) as [[b2 delta2] |]_eqn; inv H. 
+  destruct (f b) as [[b1 delta1] |] eqn:?; try discriminate.
+  destruct (f' b1) as [[b2 delta2] |] eqn:?; inv H. 
   exploit mi_representable0; eauto. intros [A B].
   set (ofs' := Int.repr (Int.unsigned ofs + delta1)).
   assert (Int.unsigned ofs' = Int.unsigned ofs + delta1). 

@@ -155,7 +155,7 @@ Proof.
   destruct (propagate_float_constants tt); simpl; auto.
 
   unfold eval_static_condition_val, Val.of_optbool.
-  destruct (eval_static_condition c vl0) as []_eqn.
+  destruct (eval_static_condition c vl0) eqn:?.
   rewrite (eval_static_condition_correct _ _ _ m _ H Heqo).
   destruct b; simpl; auto. 
   simpl; auto.
@@ -240,7 +240,7 @@ Proof.
   intros; unfold make_shlimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
   exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shl_zero. auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; intros.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; intros.
   rewrite Val.shl_rolm; auto. econstructor; split; eauto. auto. 
   econstructor; split; eauto. simpl. congruence.
 Qed.
@@ -254,7 +254,7 @@ Proof.
   intros; unfold make_shrimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
   exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shr_zero. auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn.
+  destruct (Int.ltu n Int.iwordsize) eqn:?.
   econstructor; split; eauto. simpl. auto.
   econstructor; split; eauto. simpl. congruence.
 Qed.
@@ -268,7 +268,7 @@ Proof.
   intros; unfold make_shruimm.
   predSpec Int.eq Int.eq_spec n Int.zero; intros. subst.
   exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.shru_zero. auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; intros.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; intros.
   rewrite Val.shru_rolm; auto. econstructor; split; eauto. auto. 
   econstructor; split; eauto. simpl. congruence.
 Qed.
@@ -284,7 +284,7 @@ Proof.
   exists (Vint Int.zero); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.mul_zero; auto.
   predSpec Int.eq Int.eq_spec n Int.one; intros. subst.
   exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.mul_one; auto.
-  destruct (Int.is_power2 n) as []_eqn; intros.
+  destruct (Int.is_power2 n) eqn:?; intros.
   rewrite (Val.mul_pow2 rs#r1 _ _ Heqo). rewrite Val.shl_rolm. 
   econstructor; split; eauto. auto. 
   eapply Int.is_power2_range; eauto.
@@ -299,8 +299,8 @@ Lemma make_divimm_correct:
   exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_divimm.
-  destruct (Int.is_power2 n) as []_eqn. 
-  destruct (Int.ltu i (Int.repr 31)) as []_eqn.
+  destruct (Int.is_power2 n) eqn:?. 
+  destruct (Int.ltu i (Int.repr 31)) eqn:?.
   exists v; split; auto. simpl. eapply Val.divs_pow2; eauto. congruence. 
   exists v; auto.
   exists v; auto.
@@ -314,7 +314,7 @@ Lemma make_divuimm_correct:
   exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_divuimm.
-  destruct (Int.is_power2 n) as []_eqn. 
+  destruct (Int.is_power2 n) eqn:?. 
   econstructor; split. simpl; eauto.
   exploit Int.is_power2_range; eauto. intros RANGE.
   rewrite <- Val.shru_rolm; auto. rewrite H0 in H. 
@@ -439,10 +439,10 @@ Lemma builtin_strength_reduction_correct:
 Proof.
   intros until m'. unfold builtin_strength_reduction.
   destruct (builtin_strength_reduction_match ef args vl); simpl; intros; InvApproxRegs; SimplVMA.
-  unfold symbol_address in H. destruct (Genv.find_symbol ge symb) as [b|]_eqn; rewrite H in H0.
+  unfold symbol_address in H. destruct (Genv.find_symbol ge symb) as [b|] eqn:?; rewrite H in H0.
   rewrite volatile_load_global_charact. exists b; auto. 
   inv H0.
-  unfold symbol_address in H1. destruct (Genv.find_symbol ge symb) as [b|]_eqn; rewrite H1 in H0.
+  unfold symbol_address in H1. destruct (Genv.find_symbol ge symb) as [b|] eqn:?; rewrite H1 in H0.
   rewrite volatile_store_global_charact. exists b; auto. 
   inv H0.
   auto.

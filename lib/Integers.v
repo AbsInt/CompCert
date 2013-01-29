@@ -168,7 +168,7 @@ Lemma Z_mod_two_p_range:
 Proof.
   induction n; simpl; intros.
   rewrite two_power_nat_O. omega.
-  rewrite two_power_nat_S. destruct (Z_bin_decomp x) as [b y]_eqn. 
+  rewrite two_power_nat_S. destruct (Z_bin_decomp x) as [b y] eqn:?. 
   rewrite Z_bin_comp_eq. generalize (IHn y). destruct b; omega.
 Qed.
 
@@ -179,7 +179,7 @@ Proof.
     induction n; simpl; intros.
     rewrite two_power_nat_O. exists x. ring.
     rewrite two_power_nat_S.
-    destruct (Z_bin_decomp x) as [b y]_eqn.
+    destruct (Z_bin_decomp x) as [b y] eqn:?.
     destruct (IHn y) as [z EQ]. 
     exists z. rewrite (Z_bin_comp_decomp2 _ _ _ Heqp). 
     repeat rewrite Z_bin_comp_eq. rewrite EQ at 1. ring.
@@ -1171,7 +1171,7 @@ Proof.
     Z_of_bits n (bits_of_Z n x) 0 = k * two_power_nat n + x).
   induction n; intros; simpl.
   rewrite two_power_nat_O. exists (-x). omega.
-  rewrite two_power_nat_S. destruct (Z_bin_decomp x) as [b y]_eqn.
+  rewrite two_power_nat_S. destruct (Z_bin_decomp x) as [b y] eqn:?.
   rewrite zeq_true. destruct (IHn y) as [k EQ].
   replace (Z_of_bits n (fun i => if zeq i 0 then b else bits_of_Z n y (i - 1)) 1)
      with (Z_of_bits n (bits_of_Z n y) 0).
@@ -1302,7 +1302,7 @@ Proof.
   auto.
   destruct (zlt i 0). apply bits_of_Z_below. auto.
   simpl. 
-  destruct (Z_bin_decomp x) as [b x1]_eqn.
+  destruct (Z_bin_decomp x) as [b x1] eqn:?.
   destruct (zeq i 0).
   subst i. simpl in H. assert (x = 0) by omega. subst x. simpl in Heqp. congruence.
   apply IHn.
@@ -2199,7 +2199,7 @@ Proof.
   simpl. rewrite two_power_nat_O in H0. 
   assert (x = 0). omega. subst x. omega.
   rewrite two_power_nat_S in H0. simpl Z_one_bits.
-  destruct (Z_bin_decomp x) as [b y]_eqn.
+  destruct (Z_bin_decomp x) as [b y] eqn:?.
   rewrite (Z_bin_comp_decomp2 _ _ _ Heqp).
   assert (EQ: y * two_p (i + 1) = powerserie (Z_one_bits n y (i + 1))).
     apply IHn. omega. 

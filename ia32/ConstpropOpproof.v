@@ -158,10 +158,10 @@ Proof.
   destruct (Int.ltu n Int.iwordsize); simpl; auto.
   eapply eval_static_addressing_correct; eauto.
   unfold eval_static_intoffloat.
-  destruct (Float.intoffloat n1) as []_eqn; simpl in H0; inv H0.
+  destruct (Float.intoffloat n1) eqn:?; simpl in H0; inv H0.
   simpl; auto.
   destruct (propagate_float_constants tt); simpl; auto.
-  unfold eval_static_condition_val. destruct (eval_static_condition c vl0) as [b|]_eqn.
+  unfold eval_static_condition_val. destruct (eval_static_condition c vl0) as [b|] eqn:?.
   rewrite (eval_static_condition_correct _ _ _ m _ H Heqo). 
   destruct b; simpl; auto.
   simpl; auto.
@@ -290,7 +290,7 @@ Proof.
   exists (Vint Int.zero); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.mul_zero; auto.
   predSpec Int.eq Int.eq_spec n Int.one; intros. subst.
   exists (rs#r1); split; auto. destruct (rs#r1); simpl; auto. rewrite Int.mul_one; auto.
-  destruct (Int.is_power2 n) as []_eqn; intros.
+  destruct (Int.is_power2 n) eqn:?; intros.
   rewrite (Val.mul_pow2 rs#r1 _ _ Heqo). apply make_shlimm_correct; auto. 
   econstructor; split; eauto. auto. 
 Qed.
@@ -303,8 +303,8 @@ Lemma make_divimm_correct:
   exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_divimm.
-  destruct (Int.is_power2 n) as []_eqn.
-  destruct (Int.ltu i (Int.repr 31)) as []_eqn.
+  destruct (Int.is_power2 n) eqn:?.
+  destruct (Int.ltu i (Int.repr 31)) eqn:?.
   exists v; split; auto. simpl. eapply Val.divs_pow2; eauto. congruence. 
   exists v; auto.
   exists v; auto.
@@ -318,7 +318,7 @@ Lemma make_divuimm_correct:
   exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_divuimm.
-  destruct (Int.is_power2 n) as []_eqn.
+  destruct (Int.is_power2 n) eqn:?.
   replace v with (Val.shru rs#r1 (Vint i)). 
   eapply make_shruimm_correct; eauto.
   eapply Val.divu_pow2; eauto. congruence.
@@ -333,7 +333,7 @@ Lemma make_moduimm_correct:
   exists w, eval_operation ge sp op rs##args m = Some w /\ Val.lessdef v w.
 Proof.
   intros; unfold make_moduimm.
-  destruct (Int.is_power2 n) as []_eqn.
+  destruct (Int.is_power2 n) eqn:?.
   exists v; split; auto. simpl. decEq. eapply Val.modu_pow2; eauto. congruence.
   exists v; auto.
 Qed.
@@ -430,10 +430,10 @@ Lemma builtin_strength_reduction_correct:
 Proof.
   intros until m'. unfold builtin_strength_reduction.
   destruct (builtin_strength_reduction_match ef args vl); simpl; intros; InvApproxRegs; SimplVMA.
-  unfold symbol_address in H. destruct (Genv.find_symbol ge symb) as [b|]_eqn; rewrite H in H0.
+  unfold symbol_address in H. destruct (Genv.find_symbol ge symb) as [b|] eqn:?; rewrite H in H0.
   rewrite volatile_load_global_charact. exists b; auto. 
   inv H0.
-  unfold symbol_address in H1. destruct (Genv.find_symbol ge symb) as [b|]_eqn; rewrite H1 in H0.
+  unfold symbol_address in H1. destruct (Genv.find_symbol ge symb) as [b|] eqn:?; rewrite H1 in H0.
   rewrite volatile_store_global_charact. exists b; auto. 
   inv H0.
   auto.

@@ -18,7 +18,6 @@
 open Format
 open Camlcoq
 open Datatypes
-open BinPos
 open Integers
 open AST
 open PrintAST
@@ -212,15 +211,15 @@ let rec print_stmt p s =
       fprintf p "@[<v 3>{{ %a@;<0 -3>}}@]"
               print_stmt s
   | Sexit n ->
-      fprintf p "exit %d;" (camlint_of_nat n)
+      fprintf p "exit %d;" (Nat.to_int n)
   | Sswitch(e, cases, dfl) ->
       fprintf p "@[<v 2>switch (%a) {" print_expr e;
       List.iter
         (fun (n, x) ->
            fprintf p "@ case %ld: exit %d;\n" 
-                     (camlint_of_coqint n) (camlint_of_nat x))
+                     (camlint_of_coqint n) (Nat.to_int x))
         cases;
-      fprintf p "@ default: exit %d;\n" (camlint_of_nat dfl);
+      fprintf p "@ default: exit %d;\n" (Nat.to_int dfl);
       fprintf p "@;<0 -2>}@]"
   | Sreturn None ->
       fprintf p "return;"
@@ -247,7 +246,7 @@ let print_function p id f =
             print_varlist (f.fn_params, true)
             print_sig f.fn_sig;
   fprintf p "@[<v 2>{@ ";
-  let stksz = camlint_of_z f.fn_stackspace in
+  let stksz = Z.to_int32 f.fn_stackspace in
   if stksz <> 0l then
     fprintf p "stack %ld;@ " stksz;
   if f.fn_vars <> [] then

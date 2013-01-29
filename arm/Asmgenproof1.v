@@ -539,7 +539,7 @@ Proof.
     auto.
     rewrite IHl. rewrite DISTR. decEq. decEq. auto.
   intros. unfold decompose_int. 
-  destruct (decompose_int_rec 12 n Int.zero) as []_eqn. 
+  destruct (decompose_int_rec 12 n Int.zero) eqn:?. 
   simpl. exploit decompose_int_rec_nil; eauto. congruence.
   simpl. rewrite B. decEq.  
   generalize (DECOMP 12%nat n Int.zero Int.zero).
@@ -617,7 +617,7 @@ Lemma iterate_op_correct:
 Proof.
   intros until k; intros SEM2 SEM1.
   unfold iterate_op.
-  destruct (decompose_int n) as [ | i tl] _eqn.
+  destruct (decompose_int n) as [ | i tl] eqn:?.
   unfold decompose_int in Heql. destruct (decompose_int_rec 12%nat n Int.zero); congruence.
   revert k. pattern tl. apply List.rev_ind.
   (* base case *)
@@ -1256,7 +1256,7 @@ Proof.
   eapply exec_straight_trans. eauto. 
   apply exec_straight_two with rs2 m; auto.
   simpl. unfold rs3, v. 
-  destruct (rs2 (crbit_for_cond c)) as []_eqn; auto.
+  destruct (rs2 (crbit_for_cond c)) eqn:?; auto.
   destruct (Int.eq i Int.zero); auto. 
   decEq. decEq. apply extensionality; intros. unfold Pregmap.set.
   destruct (PregEq.eq x (ireg_of res)); auto. subst. 
@@ -1380,6 +1380,7 @@ Lemma transl_load_int_correct:
 Proof.
   intros. unfold transl_load_store_int.
   exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto. 
+  unfold PregEq.t.
   intros [a' [A B]].
   exploit Mem.loadv_extends; eauto. intros [v' [C D]]. 
   apply transl_load_store_correct with ms; auto.
@@ -1421,6 +1422,7 @@ Lemma transl_load_float_correct:
 Proof.
   intros. unfold transl_load_store_int.
   exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto. 
+  unfold PregEq.t.
   intros [a' [A B]].
   exploit Mem.loadv_extends; eauto. intros [v' [C D]]. 
   apply transl_load_store_correct with ms; auto.
@@ -1455,7 +1457,8 @@ Lemma transl_store_int_correct:
     /\ agree (undef_temps ms) sp rs'.
 Proof.
   intros. unfold transl_load_store_int.
-  exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto. 
+  exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto.
+  unfold PregEq.t. 
   intros [a' [A B]].
   exploit preg_val; eauto. instantiate (1 := rd). intros C.
   exploit Mem.storev_extends; eauto. unfold preg_of; rewrite H2. intros [m2' [D E]].
@@ -1498,7 +1501,8 @@ Lemma transl_store_float_correct:
     /\ agree (undef_temps ms) sp rs'.
 Proof.
   intros. unfold transl_load_store_float.
-  exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto. 
+  exploit eval_addressing_lessdef. eapply preg_vals; eauto. eauto.
+  unfold PregEq.t. 
   intros [a' [A B]].
   exploit preg_val; eauto. instantiate (1 := rd). intros C.
   exploit Mem.storev_extends; eauto. unfold preg_of; rewrite H2. intros [m2' [D E]].

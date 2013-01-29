@@ -10,7 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open BinPos
 open Coqlib
 open Datatypes
 open LTL
@@ -33,18 +32,6 @@ let enumerate_aux f reach =
 
 (* More clever enumeration that flattens basic blocks *)
 
-let rec int_of_pos = function
-  | Coq_xI p -> (int_of_pos p lsl 1) + 1
-  | Coq_xO p -> int_of_pos p lsl 1
-  | Coq_xH -> 1
-
-let rec pos_of_int n =
-  if n = 0 then assert false else
-  if n = 1 then Coq_xH else
-  if n land 1 = 0
-  then Coq_xO (pos_of_int (n lsr 1))
-  else Coq_xI (pos_of_int (n lsr 1))
-
 module IntSet = Set.Make(struct type t = int let compare = compare end)
 
 (* Determine join points: reachable nodes that have > 1 predecessor *)
@@ -54,7 +41,7 @@ let join_points f =
   let reached = ref IntSet.empty in
   let reached_twice = ref IntSet.empty in
   let rec traverse pc =
-    let npc = int_of_pos pc in
+    let npc = P.to_int pc in
     if IntSet.mem npc !reached then begin
       if not (IntSet.mem npc !reached_twice) then
         reached_twice := IntSet.add npc !reached_twice
@@ -74,14 +61,14 @@ let basic_blocks f joins =
           or a join point
           or the successor of a conditional test *)
   let rec start_block pc =
-    let npc = int_of_pos pc in
+    let npc = P.to_int pc in
     if not (IntSet.mem npc !visited) then begin
       visited := IntSet.add npc !visited;
       in_block [] max_int pc
     end
   (* in_block: add pc to block and check successors *)
   and in_block blk minpc pc =
-    let npc = int_of_pos pc in
+    let npc = P.to_int pc in
     let blk = pc :: blk in
     let minpc = min npc minpc in
     match PTree.get pc f.fn_code with
@@ -103,7 +90,7 @@ let basic_blocks f joins =
   (* next_in_block: check if join point and either extend block
      or start block *)
   and next_in_block blk minpc pc =
-    let npc = int_of_pos pc in
+    let npc = P.to_int pc in
     if IntSet.mem npc joins
     then (end_block blk minpc; start_block pc)
     else in_block blk minpc pc

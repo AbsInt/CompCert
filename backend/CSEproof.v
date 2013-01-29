@@ -94,7 +94,7 @@ Lemma wf_valnum_reg:
   wf_numbering n' /\ Plt v n'.(num_next) /\ Ple n.(num_next) n'.(num_next).
 Proof.
   intros until v. unfold valnum_reg. intros WF VREG. inversion WF.
-  destruct ((num_reg n)!r) as [v'|]_eqn.
+  destruct ((num_reg n)!r) as [v'|] eqn:?.
 (* found *)
   inv VREG. split. auto. split. eauto. apply Ple_refl.
 (* not found *)
@@ -174,7 +174,7 @@ Lemma wf_forget_reg:
   In r (PMap.get v (forget_reg n rd)) -> r <> rd /\ PTree.get r n.(num_reg) = Some v.
 Proof.
   unfold forget_reg; intros. inversion H. 
-  destruct ((num_reg n)!rd) as [vd|]_eqn. 
+  destruct ((num_reg n)!rd) as [vd|] eqn:?. 
   rewrite PMap.gsspec in H0. destruct (peq v vd). 
   subst vd. rewrite in_remove in H0. destruct H0. split. auto. eauto. 
   split; eauto. exploit VAL; eauto. congruence. 
@@ -201,7 +201,7 @@ Lemma wf_add_rhs:
   wf_numbering (add_rhs n rd rh).
 Proof.
   intros. inversion H. unfold add_rhs. 
-  destruct (find_valnum_rhs rh n.(num_eqs)) as [vres|]_eqn.
+  destruct (find_valnum_rhs rh n.(num_eqs)) as [vres|] eqn:?.
 (* found *)
   exploit find_valnum_rhs_correct; eauto. intros IN. 
   split; simpl; intros. 
@@ -226,16 +226,16 @@ Lemma wf_add_op:
   wf_numbering n ->
   wf_numbering (add_op n rd op rs).
 Proof.
-  intros. unfold add_op. destruct (is_move_operation op rs) as [r|]_eqn.
+  intros. unfold add_op. destruct (is_move_operation op rs) as [r|] eqn:?.
 (* move *)
-  destruct (valnum_reg n r) as [n' v]_eqn.
+  destruct (valnum_reg n r) as [n' v] eqn:?.
   exploit wf_valnum_reg; eauto. intros [A [B C]]. inversion A.
   constructor; simpl; intros.
   eauto.
   rewrite PTree.gsspec in H0. destruct (peq r0 rd). inv H0. auto. eauto.
   eapply wf_update_reg; eauto. 
 (* not a move *)
-  destruct (valnum_regs n rs) as [n' vs]_eqn.
+  destruct (valnum_regs n rs) as [n' vs] eqn:?.
   exploit wf_valnum_regs; eauto. intros [A [B C]].
   eapply wf_add_rhs; eauto.
 Qed.
@@ -270,7 +270,7 @@ Remark kill_eqs_in:
 Proof.
   induction eqs; simpl; intros. 
   tauto.
-  destruct (pred (snd a)) as []_eqn. 
+  destruct (pred (snd a)) eqn:?. 
   exploit IHeqs; eauto. tauto. 
   simpl in H; destruct H. subst a. auto. exploit IHeqs; eauto. tauto. 
 Qed.
@@ -289,7 +289,7 @@ Lemma wf_add_store:
   wf_numbering n -> wf_numbering (add_store n chunk addr rargs rsrc).
 Proof.
   intros. unfold add_store. 
-  destruct (valnum_regs n rargs) as [n1 vargs]_eqn.
+  destruct (valnum_regs n rargs) as [n1 vargs] eqn:?.
   exploit wf_valnum_regs; eauto. intros [A [B C]].
   assert (wf_numbering (kill_equations (filter_after_store chunk addr vargs) n1)).
     apply wf_kill_equations. auto.
@@ -664,7 +664,7 @@ Lemma add_store_satisfiable:
   numbering_satisfiable ge sp rs m' (add_store n chunk addr args src).
 Proof.
   intros. unfold add_store. destruct H0 as [valu A].
-  destruct (valnum_regs n args) as [n1 vargs]_eqn.
+  destruct (valnum_regs n args) as [n1 vargs] eqn:?.
   exploit valnum_regs_holds; eauto. intros [valu' [B [C D]]].
   exploit wf_valnum_regs; eauto. intros [U [V W]].
   set (n2 := kill_equations (filter_after_store chunk addr vargs) n1).
@@ -704,7 +704,7 @@ Lemma reg_valnum_correct:
   forall n v r, wf_numbering n -> reg_valnum n v = Some r -> n.(num_reg)!r = Some v.
 Proof.
   unfold reg_valnum; intros. inv H. 
-  destruct ((num_val n)#v) as [| r1 rl]_eqn; inv H0. 
+  destruct ((num_val n)#v) as [| r1 rl] eqn:?; inv H0. 
   eapply VAL. rewrite Heql. auto with coqlib.
 Qed.
 
@@ -755,8 +755,8 @@ Lemma regs_valnums_correct:
 Proof.
   induction vl; simpl; intros.
   inv H. auto.
-  destruct (reg_valnum n a) as [r1|]_eqn; try discriminate.
-  destruct (regs_valnums n vl) as [rx|]_eqn; try discriminate.
+  destruct (reg_valnum n a) as [r1|] eqn:?; try discriminate.
+  destruct (regs_valnums n vl) as [rx|] eqn:?; try discriminate.
   inv H. simpl; decEq; auto. 
   eapply (proj2 n_holds); eauto. eapply reg_valnum_correct; eauto.
 Qed.
@@ -770,13 +770,13 @@ Proof.
   induction niter; simpl; intros.
   discriminate.
   destruct (f (fun v : valnum => find_valnum_num v (num_eqs n)) op args)
-           as [[op1 args1] | ]_eqn.
+           as [[op1 args1] | ] eqn:?.
   assert (sem op1 (map valu args1) = Some res).
     rewrite <- H0. eapply f_sound; eauto.
     simpl; intros. apply (proj1 n_holds). eapply find_valnum_num_correct; eauto. 
-  destruct (reduce_rec A f n niter op1 args1) as [[op2 rl2] | ]_eqn.
+  destruct (reduce_rec A f n niter op1 args1) as [[op2 rl2] | ] eqn:?.
   inv H. eapply IHniter; eauto.
-  destruct (regs_valnums n args1) as [rl|]_eqn.
+  destruct (regs_valnums n args1) as [rl|] eqn:?.
   inv H. erewrite regs_valnums_correct; eauto.
   discriminate.
   discriminate.
@@ -790,7 +790,7 @@ Lemma reduce_sound:
   sem op' rs##rl' = Some res.
 Proof.
   unfold reduce; intros. 
-  destruct (reduce_rec A f n 4%nat op vl) as [[op1 rl1] | ]_eqn; inv H.
+  destruct (reduce_rec A f n 4%nat op vl) as [[op1 rl1] | ] eqn:?; inv H.
   eapply reduce_rec_sound; eauto. congruence.
   auto.
 Qed.
@@ -973,21 +973,21 @@ Proof.
 
   (* Iop *)
   exists (State s' (transf_function' f approx) sp pc' (rs#res <- v) m); split.
-  destruct (is_trivial_op op) as []_eqn.
+  destruct (is_trivial_op op) eqn:?.
   eapply exec_Iop'; eauto.
   rewrite <- H0. apply eval_operation_preserved. exact symbols_preserved.
-  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
   destruct SAT as [valu1 NH1].
   exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
   assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
-  destruct (find_rhs n1 (Op op vl)) as [r|]_eqn.
+  destruct (find_rhs n1 (Op op vl)) as [r|] eqn:?.
   (* replaced by move *)
   assert (EV: rhs_evals_to ge sp valu2 (Op op vl) m rs#r). eapply find_rhs_correct; eauto.
   assert (RES: rs#r = v). red in EV. congruence.
   eapply exec_Iop'; eauto. simpl. congruence. 
   (* possibly simplified *)
-  destruct (reduce operation combine_op n1 op args vl) as [op' args']_eqn.
+  destruct (reduce operation combine_op n1 op args vl) as [op' args'] eqn:?.
   assert (RES: eval_operation ge sp op' rs##args' m = Some v).
     eapply reduce_sound with (sem := fun op vl => eval_operation ge sp op vl m); eauto. 
     intros; eapply combine_op_sound; eauto.
@@ -1007,18 +1007,18 @@ Proof.
 
   (* Iload *)
   exists (State s' (transf_function' f approx) sp pc' (rs#dst <- v) m); split.
-  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
   destruct SAT as [valu1 NH1].
   exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
   assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
-  destruct (find_rhs n1 (Load chunk addr vl)) as [r|]_eqn.
+  destruct (find_rhs n1 (Load chunk addr vl)) as [r|] eqn:?.
   (* replaced by move *)
   assert (EV: rhs_evals_to ge sp valu2 (Load chunk addr vl) m rs#r). eapply find_rhs_correct; eauto.
   assert (RES: rs#r = v). red in EV. destruct EV as [a' [EQ1 EQ2]]. congruence.
   eapply exec_Iop'; eauto. simpl. congruence. 
   (* possibly simplified *)
-  destruct (reduce addressing combine_addr n1 addr args vl) as [addr' args']_eqn.
+  destruct (reduce addressing combine_addr n1 addr args vl) as [addr' args'] eqn:?.
   assert (ADDR: eval_addressing ge sp addr' rs##args' = Some a).
     eapply reduce_sound with (sem := fun addr vl => eval_addressing ge sp addr vl); eauto. 
     intros; eapply combine_addr_sound; eauto.
@@ -1035,12 +1035,12 @@ Proof.
 
   (* Istore *)
   exists (State s' (transf_function' f approx) sp pc' rs m'); split.
-  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
   destruct SAT as [valu1 NH1].
   exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
   assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
-  destruct (reduce addressing combine_addr n1 addr args vl) as [addr' args']_eqn.
+  destruct (reduce addressing combine_addr n1 addr args vl) as [addr' args'] eqn:?.
   assert (ADDR: eval_addressing ge sp addr' rs##args' = Some a).
     eapply reduce_sound with (sem := fun addr vl => eval_addressing ge sp addr vl); eauto. 
     intros; eapply combine_addr_sound; eauto.
@@ -1093,12 +1093,12 @@ Proof.
   eapply kill_loads_satisfiable; eauto. 
 
   (* Icond *)
-  destruct (valnum_regs approx!!pc args) as [n1 vl]_eqn.
+  destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   assert (wf_numbering approx!!pc). eapply wf_analyze; eauto.
   elim SAT; intros valu1 NH1.
   exploit valnum_regs_holds; eauto. intros [valu2 [NH2 [EQ AG]]]. 
   assert (wf_numbering n1). eapply wf_valnum_regs; eauto. 
-  destruct (reduce condition combine_cond n1 cond args vl) as [cond' args']_eqn.
+  destruct (reduce condition combine_cond n1 cond args vl) as [cond' args'] eqn:?.
   assert (RES: eval_condition cond' rs##args' m = Some b).
     eapply reduce_sound with (sem := fun cond vl => eval_condition cond vl m); eauto. 
     intros; eapply combine_cond_sound; eauto.
@@ -1124,8 +1124,8 @@ Proof.
 
   (* internal function *)
   monadInv H7. unfold transf_function in EQ. 
-  destruct (type_function f) as [tyenv|]_eqn; try discriminate.
-  destruct (analyze f) as [approx|]_eqn; inv EQ. 
+  destruct (type_function f) as [tyenv|] eqn:?; try discriminate.
+  destruct (analyze f) as [approx|] eqn:?; inv EQ. 
   assert (WTF: wt_function f tyenv). apply type_function_correct; auto.
   econstructor; split.
   eapply exec_function_internal; eauto. 

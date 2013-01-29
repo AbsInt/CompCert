@@ -148,8 +148,8 @@ Proof.
   constructor; intros.
   eauto.
   caseEq (s.(map)!root); intros. congruence. exploit GREY; eauto. intros [? ?]; contradiction.
-  destruct (s.(map)!x) as []_eqn; try congruence. 
-  destruct (s.(map)!y) as []_eqn; try congruence.
+  destruct (s.(map)!x) eqn:?; try congruence. 
+  destruct (s.(map)!y) eqn:?; try congruence.
   exploit COLOR; eauto. intros. exploit GREY; eauto. intros [? ?]; contradiction.
   (* not finished *)
   destruct succ_x as [ | y succ_x ].
@@ -189,7 +189,7 @@ Proof.
   exists l'; auto.
 
   (* children y needs traversing *)
-  destruct ((gr s)!y) as [ succs_y | ]_eqn.
+  destruct ((gr s)!y) as [ succs_y | ] eqn:?.
   (* y has children *)
   constructor; simpl; intros. 
   (* sub *)
@@ -241,7 +241,7 @@ Qed.
 Lemma initial_state_spec:
   invariant (init_state ginit root).
 Proof.
-  unfold init_state. destruct (ginit!root) as [succs|]_eqn.
+  unfold init_state. destruct (ginit!root) as [succs|] eqn:?.
   (* root has succs *)
   constructor; simpl; intros.
   (* sub *)
@@ -315,7 +315,7 @@ Proof.
   discriminate.
   destruct succs as [ | y succs ].
   inv H. simpl. apply lex_ord_right. omega.
-  destruct ((gr s)!y) as [succs'|]_eqn.
+  destruct ((gr s)!y) as [succs'|] eqn:?.
   inv H. simpl. apply lex_ord_left. eapply PTree_Properties.cardinal_remove; eauto.
   inv H. simpl. apply lex_ord_right. omega.
 Qed.

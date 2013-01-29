@@ -16,75 +16,206 @@
 (* Library of useful Caml <-> Coq conversions *)
 
 open Datatypes
-open BinPos
+open BinNums
 open BinInt
+open BinPos
 open Floats
 
-(* Integers *)
+(* Coq's [nat] type and some of its operations *)
 
-let rec camlint_of_positive = function
-  | Coq_xI p -> Int32.add (Int32.shift_left (camlint_of_positive p) 1) 1l
-  | Coq_xO p -> Int32.shift_left (camlint_of_positive p) 1
+module Nat = struct
+
+  type t = nat = O | S of t
+
+  let rec to_int = function
+  | O -> 0
+  | S n -> succ (to_int n)
+
+  let rec to_int32 = function
+  | O -> 0l
+  | S n -> Int32.succ(to_int32 n)
+
+  let rec of_int n =
+    assert (n >= 0);
+    if n = 0 then O else S (of_int (pred n))
+
+  let rec of_int32 n =
+    assert (n >= 0l);
+    if n = 0l then O else S (of_int32 (Int32.pred n))
+
+end
+
+
+(* Coq's [positive] type and some of its operations *)
+
+module P = struct
+
+  type t = positive = Coq_xI of t | Coq_xO of t | Coq_xH
+
+  let one = Coq_xH
+  let succ = Pos.succ
+  let pred = Pos.pred
+  let add = Pos.add
+  let sub = Pos.sub
+  let eq x y = (Pos.compare x y = Eq)
+  let lt x y = (Pos.compare x y = Lt)
+  let gt x y = (Pos.compare x y = Gt)
+  let le x y = (Pos.compare x y <> Gt)
+  let ge x y = (Pos.compare x y <> Lt)
+
+  let rec to_int = function
+  | Coq_xI p -> (to_int p lsl 1) + 1
+  | Coq_xO p -> to_int p lsl 1
+  | Coq_xH -> 1
+
+  let rec of_int n =
+    if n = 0 then assert false else
+    if n = 1 then Coq_xH else
+    if n land 1 = 0
+    then Coq_xO (of_int (n lsr 1))
+    else Coq_xI (of_int (n lsr 1))
+
+  let rec to_int32 = function
+  | Coq_xI p -> Int32.add (Int32.shift_left (to_int32 p) 1) 1l
+  | Coq_xO p -> Int32.shift_left (to_int32 p) 1
   | Coq_xH -> 1l
 
-let camlint_of_z = function
-  | Z0 -> 0l
-  | Zpos p -> camlint_of_positive p
-  | Zneg p -> Int32.neg (camlint_of_positive p)
+  let rec of_int32 n =
+    if n = 0l then assert false else
+    if n = 1l then Coq_xH else
+    if Int32.logand n 1l = 0l
+    then Coq_xO (of_int32 (Int32.shift_right_logical n 1))
+    else Coq_xI (of_int32 (Int32.shift_right_logical n 1))
 
-let camlint_of_coqint : Integers.Int.int -> int32 = camlint_of_z
-
-let rec camlint64_of_positive = function
-  | Coq_xI p -> Int64.add (Int64.shift_left (camlint64_of_positive p) 1) 1L
-  | Coq_xO p -> Int64.shift_left (camlint64_of_positive p) 1
+  let rec to_int64 = function
+  | Coq_xI p -> Int64.add (Int64.shift_left (to_int64 p) 1) 1L
+  | Coq_xO p -> Int64.shift_left (to_int64 p) 1
   | Coq_xH -> 1L
 
-let camlint64_of_z = function
+  let rec of_int64 n =
+    if n = 0L then assert false else
+    if n = 1L then Coq_xH else
+    if Int64.logand n 1L = 0L
+    then Coq_xO (of_int64 (Int64.shift_right_logical n 1))
+    else Coq_xI (of_int64 (Int64.shift_right_logical n 1))
+
+  let (+) = add
+  let (-) = sub
+  let (=) = eq
+  let (<) = lt
+  let (<=) = le
+  let (>) = gt
+  let (>=) = ge
+
+end
+
+(* Coq's [Z] type and some of its operations *)
+
+module Z = struct
+
+  type t = coq_Z = Z0 | Zpos of positive | Zneg of positive
+
+  let zero = Z0
+  let one = Zpos Coq_xH
+  let mone = Zneg Coq_xH
+  let succ = Z.succ
+  let pred = Z.pred
+  let neg = Z.opp
+  let add = Z.add
+  let sub = Z.sub
+  let mul = Z.mul
+  let eq x y = (Z.compare x y = Eq)
+  let lt x y = (Z.compare x y = Lt)
+  let gt x y = (Z.compare x y = Gt)
+  let le x y = (Z.compare x y <> Gt)
+  let ge x y = (Z.compare x y <> Lt)
+
+  let to_int = function
+  | Z0 -> 0
+  | Zpos p -> P.to_int p
+  | Zneg p -> - (P.to_int p)
+
+  let of_sint n =
+    if n = 0 then Z0 else
+    if n > 0 then Zpos (P.of_int n)
+    else Zneg (P.of_int (-n))
+
+  let of_uint n =
+    if n = 0 then Z0 else Zpos (P.of_int n)
+
+  let to_int32 = function
+  | Z0 -> 0l
+  | Zpos p -> P.to_int32 p
+  | Zneg p -> Int32.neg (P.to_int32 p)
+
+  let of_sint32 n =
+    if n = 0l then Z0 else
+    if n > 0l then Zpos (P.of_int32 n)
+    else Zneg (P.of_int32 (Int32.neg n))
+
+  let of_uint32 n =
+    if n = 0l then Z0 else Zpos (P.of_int32 n)
+
+  let to_int64 = function
   | Z0 -> 0L
-  | Zpos p -> camlint64_of_positive p
-  | Zneg p -> Int64.neg (camlint64_of_positive p)
+  | Zpos p -> P.to_int64 p
+  | Zneg p -> Int64.neg (P.to_int64 p)
 
-let camlint64_of_coqint : Integers.Int64.int -> int64 = camlint64_of_z
+  let of_sint64 n =
+    if n = 0L then Z0 else
+    if n > 0L then Zpos (P.of_int64 n)
+    else Zneg (P.of_int64 (Int64.neg n))
 
-let rec camlint_of_nat = function
-  | O -> 0
-  | S n -> camlint_of_nat n + 1
+  let of_uint64 n =
+    if n = 0L then Z0 else Zpos (P.of_int64 n)
 
-let rec nat_of_camlint n =
-  assert (n >= 0l);
-  if n = 0l then O else S (nat_of_camlint (Int32.sub n 1l))
+  let rec to_string_rec base buff x =
+    if x = Z0 then () else begin
+      let (q, r) = Z.div_eucl x base in
+      to_string_rec base buff q;
+      let q' = to_int q in
+      Buffer.add_char buff (Char.chr
+        (if q' < 10 then Char.code '0' + q'
+                         else Char.code 'A' + q' - 10))
+    end
 
-let rec positive_of_camlint n =
-  if n = 0l then assert false else
-  if n = 1l then Coq_xH else
-  if Int32.logand n 1l = 0l
-  then Coq_xO (positive_of_camlint (Int32.shift_right_logical n 1))
-  else Coq_xI (positive_of_camlint (Int32.shift_right_logical n 1))
+  let to_string_aux base x =
+    match x with
+    | Z0 -> "0"
+    | Zpos _ ->
+        let buff = Buffer.create 10 in
+        to_string_rec base buff x;
+        Buffer.contents buff
+    | Zneg p ->
+        let buff = Buffer.create 10 in
+        Buffer.add_char buff '-';
+        to_string_rec base buff (Zpos p);
+        Buffer.contents buff
 
-let z_of_camlint n =
-  if n = 0l then Z0 else
-  if n > 0l then Zpos (positive_of_camlint n)
-  else Zneg (positive_of_camlint (Int32.neg n))
+  let dec = to_string_aux (of_uint 10)
 
-let coqint_of_camlint (n: int32) : Integers.Int.int = 
-  (* Interpret n as unsigned so that resulting Z is in range *)
-  if n = 0l then Z0 else Zpos (positive_of_camlint n)
+  let hex = to_string_aux (of_uint 16)
 
-let rec positive_of_camlint64 n =
-  if n = 0L then assert false else
-  if n = 1L then Coq_xH else
-  if Int64.logand n 1L = 0L
-  then Coq_xO (positive_of_camlint64 (Int64.shift_right_logical n 1))
-  else Coq_xI (positive_of_camlint64 (Int64.shift_right_logical n 1))
+  let to_string = dec
 
-let z_of_camlint64 n =
-  if n = 0L then Z0 else
-  if n > 0L then Zpos (positive_of_camlint64 n)
-  else Zneg (positive_of_camlint64 (Int64.neg n))
+  let (+) = add
+  let (-) = sub
+  let ( * ) = mul
+  let (=) = eq
+  let (<) = lt
+  let (<=) = le
+  let (>) = gt
+  let (>=) = ge
+end
 
-let coqint_of_camlint64 (n: int64) : Integers.Int64.int = 
-  (* Interpret n as unsigned so that resulting Z is in range *)
-  if n = 0L then Z0 else Zpos (positive_of_camlint64 n)
+(* Alternate names *)
+
+let camlint_of_coqint : Integers.Int.int -> int32 = Z.to_int32
+let coqint_of_camlint : int32 -> Integers.Int.int = Z.of_uint32
+   (* interpret the int32 as unsigned so that result Z is in range for int *)
+let camlint64_of_coqint : Integers.Int64.int -> int64 = Z.to_int64
+let coqint_of_camlint64 : int64 -> Integers.Int64.int = Z.of_uint64
+   (* interpret the int64 as unsigned so that result Z is in range for int *)
 
 (* Atoms (positive integers representing strings) *)
 
@@ -97,7 +228,7 @@ let intern_string s =
     Hashtbl.find atom_of_string s
   with Not_found ->
     let a = !next_atom in
-    next_atom := coq_Psucc !next_atom;
+    next_atom := Pos.succ !next_atom;
     Hashtbl.add atom_of_string s a;
     Hashtbl.add string_of_atom a s;
     a
@@ -106,7 +237,7 @@ let extern_atom a =
   try
     Hashtbl.find string_of_atom a
   with Not_found ->
-    Printf.sprintf "$%ld" (camlint_of_positive a)
+    Printf.sprintf "$%d" (P.to_int a)
 
 let first_unused_ident () = !next_atom
 

@@ -99,6 +99,15 @@ Extract Inlined Constant Fappli_IEEE.B2R => "fun _ -> assert false".
 Extract Inlined Constant Fappli_IEEE.round_mode => "fun _ -> assert false".
 Extract Inlined Constant Fcalc_bracket.inbetween_loc => "fun _ -> assert false".
 
+(* Needed in Coq 4.00 to avoid problems with Function definitions. *)
+Set Extraction AccessOpaque.
+
 (* Go! *)
 Cd "extraction".
-Recursive Extraction Library Compiler.
+(* Recursive Extraction Library Compiler. *)
+Separate Extraction
+   Compiler.transf_c_program Compiler.transf_cminor_program
+   Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
+   Initializers.transl_init Initializers.constval
+   Csyntax.Eindex Csyntax.Epreincr.
+

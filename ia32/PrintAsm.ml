@@ -787,7 +787,7 @@ let print_init oc = function
 	(camlint64_of_coqint (Floats.Float.bits_of_double n))
 	comment (camlfloat_of_coqfloat n)
   | Init_space n ->
-      let n = camlint_of_z n in
+      let n = Z.to_int32 n in
       if n > 0l then fprintf oc "	.space	%ld\n" n
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.long	%a\n" 

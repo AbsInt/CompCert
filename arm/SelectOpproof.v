@@ -204,10 +204,10 @@ Opaque mk_shift_amount.
   red; intros until x.  unfold shlimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros; subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shl_zero; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; simpl.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl.
   destruct (shlimm_match a); intros.
   InvEval. simpl; rewrite Heqb. TrivialExists.
-  destruct (Int.ltu (Int.add n n1) Int.iwordsize) as []_eqn.
+  destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   InvEval. subst x. exists (Val.shl v1 (Vint (Int.add n n1))); split. EvalOp.
   simpl. rewrite mk_shift_amount_eq; auto. 
   destruct v1; simpl; auto. rewrite s_range. simpl. rewrite Heqb. rewrite Heqb0.
@@ -224,10 +224,10 @@ Proof.
   red; intros until x.  unfold shrimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros; subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shr_zero; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; simpl.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl.
   destruct (shrimm_match a); intros.
   InvEval. simpl; rewrite Heqb. TrivialExists.
-  destruct (Int.ltu (Int.add n n1) Int.iwordsize) as []_eqn.
+  destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   InvEval. subst x. exists (Val.shr v1 (Vint (Int.add n n1))); split. EvalOp.
   simpl. rewrite mk_shift_amount_eq; auto. 
   destruct v1; simpl; auto. rewrite s_range. simpl. rewrite Heqb. rewrite Heqb0.
@@ -244,13 +244,13 @@ Proof.
   red; intros until x.  unfold shruimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros; subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shru_zero; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn; simpl.
+  destruct (Int.ltu n Int.iwordsize) eqn:?; simpl.
   destruct (shruimm_match a); intros.
   InvEval. simpl; rewrite Heqb. TrivialExists.
-  destruct (Int.ltu (Int.add n n1) Int.iwordsize) as []_eqn.
+  destruct (Int.ltu (Int.add n n1) Int.iwordsize) eqn:?.
   InvEval. subst x. exists (Val.shru v1 (Vint (Int.add n n1))); split. EvalOp.
   simpl. rewrite mk_shift_amount_eq; auto. 
-  destruct v1; simpl; auto. destruct (Int.ltu n1 Int.iwordsize) as []_eqn; simpl; auto.
+  destruct v1; simpl; auto. destruct (Int.ltu n1 Int.iwordsize) eqn:?; simpl; auto.
   rewrite Heqb; rewrite Heqb0. rewrite Int.add_commut. rewrite Int.shru_shru; auto. rewrite Int.add_commut; auto.
   TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
   TrivialExists. simpl. rewrite mk_shift_amount_eq; auto. 
@@ -379,27 +379,27 @@ Proof.
   rewrite Val.or_commut. apply eval_orimm; auto.
   apply eval_orimm; auto.
 (* shl - shru *)
-  destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) as []_eqn.
+  destruct (Int.eq (Int.add n1 n2) Int.iwordsize && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0).
   generalize (Int.eq_spec (Int.add n1 n2) Int.iwordsize); rewrite H1; intros.
   exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst. 
   exists (Val.ror v0 (Vint n2)); split. EvalOp.
   destruct v0; simpl; auto. 
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; auto.
-  destruct (Int.ltu n2 Int.iwordsize) as []_eqn; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; auto.
+  destruct (Int.ltu n2 Int.iwordsize) eqn:?; auto.
   simpl. rewrite <- Int.or_ror; auto.
   subst. TrivialExists.
   econstructor. EvalOp. simpl; eauto. econstructor; eauto. constructor.
   simpl. auto.
 (* shru - shr *)
-  destruct (Int.eq (Int.add n2 n1) Int.iwordsize && same_expr_pure t1 t2) as []_eqn.
+  destruct (Int.eq (Int.add n2 n1) Int.iwordsize && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0).
   generalize (Int.eq_spec (Int.add n2 n1) Int.iwordsize); rewrite H1; intros.
   exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst. 
   exists (Val.ror v0 (Vint n1)); split. EvalOp.
   destruct v0; simpl; auto. 
-  destruct (Int.ltu n1 Int.iwordsize) as []_eqn; auto.
-  destruct (Int.ltu n2 Int.iwordsize) as []_eqn; auto.
+  destruct (Int.ltu n1 Int.iwordsize) eqn:?; auto.
+  destruct (Int.ltu n2 Int.iwordsize) eqn:?; auto.
   simpl. rewrite Int.or_commut. rewrite <- Int.or_ror; auto.
   subst. TrivialExists.
   econstructor. EvalOp. simpl; eauto. econstructor; eauto. constructor.
@@ -490,7 +490,7 @@ Theorem eval_divuimm:
   exists v, eval_expr ge sp e m le (divuimm a n) v /\ Val.lessdef z v.
 Proof.
   intros; unfold divuimm. 
-  destruct (Int.is_power2 n) as []_eqn. 
+  destruct (Int.is_power2 n) eqn:?. 
   replace z with (Val.shru x (Vint i)). apply eval_shruimm; auto.
   eapply Val.divu_pow2; eauto.
   TrivialExists. 
@@ -516,7 +516,7 @@ Theorem eval_moduimm:
   exists v, eval_expr ge sp e m le (moduimm a n) v /\ Val.lessdef z v.
 Proof.
   intros; unfold moduimm. 
-  destruct (Int.is_power2 n) as []_eqn.
+  destruct (Int.is_power2 n) eqn:?.
   replace z with (Val.and x (Vint (Int.sub n Int.one))). TrivialExists.
   eapply Val.modu_pow2; eauto.
   exploit Val.modu_divu; eauto. intros [v [A B]].

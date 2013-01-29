@@ -1,6 +1,6 @@
+open Camlcoq
 open Asm
 open AST
-open BinPos
 open ELF_types
 open Lens
 open Library
@@ -62,7 +62,7 @@ type e_framework = {
 }
 
 module PosOT = struct
-  type t = positive
+  type t = P.t
   let compare = Pervasives.compare
 end
 

@@ -25,7 +25,7 @@ open PrintOp
 (* Printing of RTL code *)
 
 let reg pp r =
-  fprintf pp "x%ld" (camlint_of_positive r)
+  fprintf pp "x%ld" (P.to_int32 r)
 
 let rec regs pp = function
   | [] -> ()
@@ -37,14 +37,14 @@ let ros pp = function
   | Coq_inr s -> fprintf pp "\"%s\"" (extern_atom s)
 
 let print_succ pp s dfl =
-  let s = camlint_of_positive s in
+  let s = P.to_int32 s in
   if s <> dfl then fprintf pp "       goto %ld@ " s
 
 let print_instruction pp (pc, i) =
   fprintf pp "%5ld: " pc;
   match i with
   | Inop s ->
-      let s = camlint_of_positive s in
+      let s = P.to_int32 s in
       if s = Int32.pred pc
       then fprintf pp "nop@ "
       else fprintf pp "goto %ld@ " s
@@ -77,12 +77,12 @@ let print_instruction pp (pc, i) =
   | Icond(cond, args, s1, s2) ->
       fprintf pp "if (%a) goto %ld else goto %ld@ "
         (PrintOp.print_condition reg) (cond, args)
-        (camlint_of_positive s1) (camlint_of_positive s2)
+        (P.to_int32 s1) (P.to_int32 s2)
   | Ijumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
       fprintf pp "@[<v 2>jumptable (%a)" reg arg;
       for i = 0 to Array.length tbl - 1 do
-        fprintf pp "@ case %d: goto %ld" i (camlint_of_positive tbl.(i))
+        fprintf pp "@ case %d: goto %ld" i (P.to_int32 tbl.(i))
       done;
       fprintf pp "@]@ "
   | Ireturn None ->
@@ -96,7 +96,7 @@ let print_function pp id f =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
       (List.map
-        (fun (pc, i) -> (camlint_of_positive pc, i))
+        (fun (pc, i) -> (P.to_int32 pc, i))
         (PTree.elements f.fn_code)) in
   print_succ pp f.fn_entrypoint 
     (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1l);

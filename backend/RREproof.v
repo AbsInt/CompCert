@@ -248,7 +248,7 @@ Proof.
   induction ll; intros; simpl.
   apply H. simpl. auto.
   apply IHll. intros. unfold Locmap.set. 
-  destruct (Loc.eq a l). auto. destruct (Loc.overlap a l) as []_eqn. auto. 
+  destruct (Loc.eq a l). auto. destruct (Loc.overlap a l) eqn:?. auto. 
   apply H. simpl. split; auto. apply Loc.diff_sym. apply Loc.non_overlap_diff; auto.
 Qed. 
 
@@ -396,7 +396,7 @@ Opaque destroyed_at_move_regs.
   simpl in SAFE. 
   assert (SAFE': sm = false \/ ~In r destroyed_at_move_regs /\ safe_move_insertion b = true).
     destruct (in_dec mreg_eq r destroyed_at_move_regs); simpl in SAFE; intuition congruence. 
-  destruct (is_incoming sl) as []_eqn.
+  destruct (is_incoming sl) eqn:?.
   (* incoming, stays as getstack *)
   assert (UGS: forall rs, undef_getstack sl rs = Locmap.set (R IT1) Vundef rs).
     destruct sl; simpl in Heqb0; discriminate || auto.
@@ -419,11 +419,11 @@ Opaque destroyed_at_move_regs.
   rewrite <- EQ1; rewrite EQ; rewrite EQ2. rewrite locmap_set_reg_same.
   apply match_states_regular with sm; auto; tauto. 
   (* found an equation *)
-  destruct (find_reg_containing sl eqs) as [r'|]_eqn.
+  destruct (find_reg_containing sl eqs) as [r'|] eqn:?.
   exploit EQH. eapply find_reg_containing_sound; eauto. 
   simpl; intro EQ.
   (* turned into a move *)
-  destruct (safe_move_insertion b) as []_eqn. 
+  destruct (safe_move_insertion b) eqn:?. 
   left; econstructor; split. constructor. simpl; eauto. 
   rewrite UGS. rewrite <- EQ.
   apply match_states_regular with true; auto. 

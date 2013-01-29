@@ -289,7 +289,7 @@ Proof.
   destruct ros. destruct H2 as [A [B C]]. auto 10 with reloadty. 
   auto 10 with reloadty.
 
-  destruct (ef_reloads ef) as [] _eqn.
+  destruct (ef_reloads ef) as [] eqn:?.
   assert (arity_ok (sig_args (ef_sig ef)) = true) by intuition congruence.
   assert (map mreg_type (regs_for args) = map Loc.type args).
     apply wt_regs_for. apply arity_ok_enough. congruence.

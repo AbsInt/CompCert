@@ -398,11 +398,11 @@ Proof.
                                else false
                       end
                  end).
-  destruct (List.existsb pred (PTree.elements e)) as []_eqn.
+  destruct (List.existsb pred (PTree.elements e)) eqn:?.
   (* yes *)
   rewrite List.existsb_exists in Heqb. 
   destruct Heqb as [[id [b sz]] [A B]].
-  simpl in B. destruct (f b) as [[sp' delta] |]_eqn; try discriminate.
+  simpl in B. destruct (f b) as [[sp' delta] |] eqn:?; try discriminate.
   destruct (eq_block sp sp'); try discriminate.
   destruct (andb_prop _ _ B).
   left. apply is_reachable_intro with id b sz delta.
@@ -646,13 +646,13 @@ Proof.
   constructor. auto. auto. 
   eapply match_temps_invariant; eauto.
   eapply match_env_invariant; eauto. 
-  red in SEPARATED. intros. destruct (f1 b) as [[b' delta']|]_eqn. 
+  red in SEPARATED. intros. destruct (f1 b) as [[b' delta']|] eqn:?. 
   exploit INCR; eauto. congruence.
   exploit SEPARATED; eauto. intros [A B]. elim B. red. omega. 
   intros. assert (lo <= hi) by (eapply me_low_high; eauto).
-  destruct (f1 b) as [[b' delta']|]_eqn. 
+  destruct (f1 b) as [[b' delta']|] eqn:?. 
   apply INCR; auto. 
-  destruct (f2 b) as [[b' delta']|]_eqn; auto.
+  destruct (f2 b) as [[b' delta']|] eqn:?; auto.
   exploit SEPARATED; eauto. intros [A B]. elim A. red. omega.
   eapply match_bounds_invariant; eauto. 
   intros. eapply MAXPERMS; eauto. red. exploit me_bounded; eauto. omega. 
@@ -884,7 +884,7 @@ Proof.
   intros. destruct (In_dec peq id (map fst vars)).
   apply cenv_remove_gss; auto.
   rewrite cenv_remove_gso; auto.
-  destruct (cenv!id) as [ofs|]_eqn; auto. elim n; eauto. 
+  destruct (cenv!id) as [ofs|] eqn:?; auto. elim n; eauto. 
   eapply Mem.alloc_right_inject; eauto. 
 Qed.
 
@@ -917,7 +917,7 @@ Proof.
   simpl; intros. inv H. omega.
 Opaque assign_variable.
   destruct a as [id s]. simpl. intros.
-  destruct (assign_variable (cenv, sz) (id, s)) as [cenv1 sz1]_eqn. 
+  destruct (assign_variable (cenv, sz) (id, s)) as [cenv1 sz1] eqn:?. 
   apply Zle_trans with sz1. eapply assign_variable_incr; eauto. eauto.
 Transparent assign_variable.
 Qed.
@@ -1014,7 +1014,7 @@ Proof.
   destruct a as [id sz].
   simpl in H0. inv H0. rewrite in_app in H6.
   rewrite list_norepet_app in H7. destruct H7 as [P [Q R]].
-  destruct (assign_variable (cenv1, sz1) (id, sz)) as [cenv' sz']_eqn.
+  destruct (assign_variable (cenv1, sz1) (id, sz)) as [cenv' sz'] eqn:?.
   exploit assign_variable_sound.
     eauto.
     instantiate (1 := vars). tauto.
@@ -1377,12 +1377,12 @@ Proof.
     intros. apply (val_match_approx_increasing Int1 a v); auto.
 
   intros; unfold Approx.bitwise_and. 
-  destruct (Approx.bge Int1 a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
-  destruct (Approx.bge Int1 a2) as []_eqn. simpl. apply X; eauto. compute; auto.
-  destruct (Approx.bge Int8u a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
-  destruct (Approx.bge Int8u a2) as []_eqn. simpl. apply X; eauto. compute; auto.
-  destruct (Approx.bge Int16u a1) as []_eqn. simpl. apply Y; eauto. compute; auto.
-  destruct (Approx.bge Int16u a2) as []_eqn. simpl. apply X; eauto. compute; auto.
+  destruct (Approx.bge Int1 a1) eqn:?. simpl. apply Y; eauto. compute; auto.
+  destruct (Approx.bge Int1 a2) eqn:?. simpl. apply X; eauto. compute; auto.
+  destruct (Approx.bge Int8u a1) eqn:?. simpl. apply Y; eauto. compute; auto.
+  destruct (Approx.bge Int8u a2) eqn:?. simpl. apply X; eauto. compute; auto.
+  destruct (Approx.bge Int16u a1) eqn:?. simpl. apply Y; eauto. compute; auto.
+  destruct (Approx.bge Int16u a2) eqn:?. simpl. apply X; eauto. compute; auto.
   simpl; auto. 
 Qed.
 
@@ -1404,19 +1404,19 @@ Proof.
 
   unfold Approx.bitwise_or. 
 
-  destruct (Approx.bge Int1 a1 && Approx.bge Int1 a2) as []_eqn.
+  destruct (Approx.bge Int1 a1 && Approx.bge Int1 a2) eqn:?.
   destruct (andb_prop _ _ Heqb).
   simpl. apply X. compute; auto. 
   apply (val_match_approx_increasing Int1 a1 v1); auto.
   apply (val_match_approx_increasing Int1 a2 v2); auto.
 
-  destruct (Approx.bge Int8u a1 && Approx.bge Int8u a2) as []_eqn.
+  destruct (Approx.bge Int8u a1 && Approx.bge Int8u a2) eqn:?.
   destruct (andb_prop _ _ Heqb0).
   simpl. apply X. compute; auto. 
   apply (val_match_approx_increasing Int8u a1 v1); auto.
   apply (val_match_approx_increasing Int8u a2 v2); auto.
 
-  destruct (Approx.bge Int16u a1 && Approx.bge Int16u a2) as []_eqn.
+  destruct (Approx.bge Int16u a1 && Approx.bge Int16u a2) eqn:?.
   destruct (andb_prop _ _ Heqb1).
   simpl. apply X. compute; auto. 
   apply (val_match_approx_increasing Int16u a1 v1); auto.
@@ -1574,8 +1574,8 @@ Proof.
     apply val_inject_val_of_optbool.
 Opaque Int.add.
     unfold Val.cmpu. simpl. 
-    destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) as []_eqn; simpl; auto.
-    destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) as []_eqn; simpl; auto.
+    destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; simpl; auto.
+    destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; simpl; auto.
     exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb. econstructor; eauto. 
     intros V1. rewrite V1.
     exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb0. econstructor; eauto. 
@@ -1859,13 +1859,20 @@ Proof.
     (forall b ofs, Mem.store chunk m1 b ofs v1 = Mem.store chunk m1 b ofs v1') ->
     Mem.storev chunk m1 a1 v1' = Some n1).
   intros. rewrite <- H0. destruct a1; simpl; auto. 
-  inv H2; (eapply Mem.storev_mapped_inject; [eauto|idtac|eauto|eauto]);
-  auto; apply H3; intros.
+  inv H2; eapply Mem.storev_mapped_inject;
+  try eapply H; try eapply H1; try apply H3; intros.
   rewrite <- Mem.store_int8_sign_ext. rewrite H4. apply Mem.store_int8_sign_ext.
+  auto.
   rewrite <- Mem.store_int8_zero_ext. rewrite H4. apply Mem.store_int8_zero_ext.
+  auto.
   rewrite <- Mem.store_int16_sign_ext. rewrite H4. apply Mem.store_int16_sign_ext.
+  auto.
   rewrite <- Mem.store_int16_zero_ext. rewrite H4. apply Mem.store_int16_zero_ext.
+  auto.
   rewrite <- Mem.store_float32_truncate. rewrite H4. apply Mem.store_float32_truncate.
+  auto.
+  eauto.
+  auto.
 Qed.
 
 Lemma make_store_correct:
@@ -2053,7 +2060,7 @@ Proof.
   (* Eunop *)
   exploit IHeval_expr; eauto. intros [tv1 [EVAL1 [INJ1 APP1]]].
   unfold Csharpminor.eval_unop in H0. 
-  destruct (Approx.unop_is_redundant op x0) as []_eqn; inv EQ0.
+  destruct (Approx.unop_is_redundant op x0) eqn:?; inv EQ0.
   (* -- eliminated *)
   exploit approx_unop_is_redundant_sound; eauto. intros. 
   replace v with v1 by congruence.

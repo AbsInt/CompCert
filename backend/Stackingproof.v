@@ -2171,7 +2171,7 @@ Proof.
   exists b; exists tf; split; auto. simpl.
   generalize (AG m0). rewrite EQ. intro INJ. inv INJ.
   inv MG. rewrite DOMAIN in H2. inv H2. simpl. auto. eapply FUNCTIONS; eauto. 
-  destruct (Genv.find_symbol ge i) as [b|]_eqn; try discriminate. 
+  destruct (Genv.find_symbol ge i) as [b|] eqn:?; try discriminate. 
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists b; exists tf; split; auto. simpl. 
   rewrite symbols_preserved. auto.
@@ -2398,7 +2398,7 @@ Proof.
   econstructor; split.
   apply plus_one. eapply exec_Mgetparam; eauto. 
   rewrite (unfold_transf_function _ _ TRANSL). unfold fn_link_ofs. 
-  eapply index_contains_load_stack with (idx := FI_link). eauto. eapply agree_link; eauto. 
+  eapply index_contains_load_stack with (idx := FI_link). eapply TRANSL. eapply agree_link; eauto.
   simpl parent_sp.
   change (offset_of_index (make_env (function_bounds f)) (FI_arg z t))
     with (offset_of_index (make_env (function_bounds f0)) (FI_arg z t)).

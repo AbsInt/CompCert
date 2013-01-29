@@ -125,16 +125,12 @@ let name_for_string_literal env s =
     id
 
 let typeStringLiteral s =
-  Tarray(Tint(I8, Unsigned, noattr),
-         z_of_camlint(Int32.of_int(String.length s + 1)),
-         noattr)
+  Tarray(Tint(I8, Unsigned, noattr), Z.of_uint (String.length s + 1), noattr)
 
 let global_for_string s id =
   let init = ref [] in
   let add_char c =
-    init :=
-       AST.Init_int8(coqint_of_camlint(Int32.of_int(Char.code c)))
-       :: !init in
+    init := AST.Init_int8(Z.of_uint(Char.code c)) :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
   (id, Gvar {gvar_info = typeStringLiteral s; gvar_init = !init;
@@ -344,8 +340,8 @@ let supported_return_type env ty =
 (** Floating point constants *)
 
 let z_of_str hex str fst =
-  let res = ref BinInt.Z0 in
-  let base = if hex then 16l else 10l in
+  let res = ref Z.Z0 in
+  let base = if hex then 16 else 10 in
   for i = fst to String.length str - 1 do
     let d = int_of_char str.[i] in
     let d =
@@ -356,27 +352,25 @@ let z_of_str hex str fst =
       else
 	d - int_of_char '0'
     in
-    let d = Int32.of_int d in
-    assert (d >= 0l && d < base);
-    res := BinInt.coq_Zplus
-      (BinInt.coq_Zmult (z_of_camlint base) !res) (z_of_camlint d)
+    assert (d >= 0 && d < base);
+    res := Z.add (Z.mul (Z.of_uint base) !res) (Z.of_uint d)
   done;
   !res
 
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
   match mant with
-    | BinInt.Z0 -> Float.zero
-    | BinInt.Zpos mant ->
+    | Z.Z0 -> Float.zero
+    | Z.Zpos mant ->
 
       let sgExp = match f.C.exp.[0] with '+' | '-' -> true | _ -> false in
       let exp = z_of_str false f.C.exp (if sgExp then 1 else 0) in
-      let exp = if f.C.exp.[0] = '-' then BinInt.coq_Zopp exp else exp in
+      let exp = if f.C.exp.[0] = '-' then Z.neg exp else exp in
       let shift_exp =
-	Int32.of_int ((if f.C.hex then 4 else 1) * String.length f.C.fracPart) in
-      let exp = BinInt.coq_Zminus exp (z_of_camlint shift_exp) in
+	(if f.C.hex then 4 else 1) * String.length f.C.fracPart in
+      let exp = Z.sub exp (Z.of_uint shift_exp) in
 
-      let base = positive_of_camlint (if f.C.hex then 16l else 10l) in
+      let base = P.of_int (if f.C.hex then 16 else 10) in
 
       begin match kind with
 	| FFloat ->
@@ -384,7 +378,8 @@ let convertFloat f kind =
 	| FDouble | FLongDouble ->
 	  Float.build_from_parsed64 base mant exp
       end
-    | BinInt.Zneg _ -> assert false
+
+    | Z.Zneg _ -> assert false
 
 (** Expressions *)
 
@@ -752,7 +747,7 @@ let string_of_errmsg msg =
   let string_of_err = function
   | Errors.MSG s -> camlstring_of_coqstring s
   | Errors.CTX i -> extern_atom i
-  | Errors.POS i -> sprintf "%ld" (camlint_of_positive i)
+  | Errors.POS i -> Z.to_string (Z.Zpos i)
   in String.concat "" (List.map string_of_err msg)
 
 let rec convertInit env init =

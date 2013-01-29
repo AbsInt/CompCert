@@ -42,7 +42,7 @@ let name_of_external = function
   | EF_malloc -> "malloc"
   | EF_free -> "free"
   | EF_memcpy(sz, al) ->
-      sprintf "memcpy size %ld align %ld " (camlint_of_z sz) (camlint_of_z al)
+      sprintf "memcpy size %s align %s " (Z.to_string sz) (Z.to_string al)
   | EF_annot(text, targs) -> sprintf "annot %S" (extern_atom text)
   | EF_annot_val(text, targ) ->  sprintf "annot_val %S" (extern_atom text)
   | EF_inline_asm text -> sprintf "inline_asm %S" (extern_atom text)

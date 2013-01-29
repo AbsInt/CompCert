@@ -91,9 +91,9 @@ Proof.
   assert (WC: wt_code f c) by (red; auto with coqlib).
   clear H.
   inv WI; auto 10 with linearty.
-  destruct (is_incoming s) as []_eqn. auto with linearty.
+  destruct (is_incoming s) eqn:?. auto with linearty.
   destruct (contains_equation s r eqs). auto with linearty.
-  destruct (find_reg_containing s eqs) as [r'|]_eqn; auto with linearty.
+  destruct (find_reg_containing s eqs) as [r'|] eqn:?; auto with linearty.
   assert (mreg_type r' = mreg_type r).
   exploit H0. eapply find_reg_containing_sound; eauto. simpl. congruence.
   destruct (safe_move_insertion c); auto 10 with linearty.

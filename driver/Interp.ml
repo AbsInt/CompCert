@@ -17,8 +17,6 @@ type caml_float = float
 open Format
 open Camlcoq
 open Datatypes
-open BinPos
-open BinInt
 open AST
 open Integers
 open Floats
@@ -148,7 +146,7 @@ let compare_mem m1 m2 = (* should permissions be taken into account? *)
 
 (* Comparing continuations *)
 
-let some_expr = Evar(Coq_xH, Tvoid)
+let some_expr = Evar(P.one, Tvoid)
 
 let rank_cont = function
   | Kstop -> 0
@@ -258,7 +256,7 @@ let extract_string ge m id ofs =
           Some(Buffer.contents b)
         end else begin
           Buffer.add_char b c; 
-          extract blk (coq_Zsucc ofs)
+          extract blk (Z.succ ofs)
         end
     | _ ->
         None in

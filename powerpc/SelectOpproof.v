@@ -232,7 +232,7 @@ Proof.
   red; intros.  unfold shlimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shl_zero; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn. 
+  destruct (Int.ltu n Int.iwordsize) eqn:?. 
   rewrite Val.shl_rolm; auto. apply eval_rolm; auto. 
   TrivialExists. econstructor. eauto. econstructor. EvalOp. simpl; eauto. constructor. auto.
 Qed.
@@ -244,7 +244,7 @@ Proof.
   red; intros.  unfold shruimm.
   predSpec Int.eq Int.eq_spec n Int.zero.
   subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shru_zero; auto.
-  destruct (Int.ltu n Int.iwordsize) as []_eqn. 
+  destruct (Int.ltu n Int.iwordsize) eqn:?. 
   rewrite Val.shru_rolm; auto. apply eval_rolm; auto. 
   TrivialExists. econstructor. eauto. econstructor. EvalOp. simpl; eauto. constructor. auto.
 Qed.
@@ -257,7 +257,7 @@ Proof.
   predSpec Int.eq Int.eq_spec n Int.zero.
   intros. subst. exists x; split; auto. destruct x; simpl; auto. rewrite Int.shr_zero; auto.
   case (shrimm_match a); intros.
-  destruct (Int.lt mask1 Int.zero) as []_eqn. 
+  destruct (Int.lt mask1 Int.zero) eqn:?. 
   TrivialExists.
   replace (Val.shr x (Vint n)) with (Val.shru x (Vint n)). 
   apply eval_shruimm; auto.
@@ -331,7 +331,7 @@ Proof.
   InvEval. TrivialExists. simpl. rewrite Int.and_commut; auto.
   set (n' := Int.and n n2). 
   destruct (Int.eq (Int.shru (Int.shl n' amount) amount) n' &&
-            Int.ltu amount Int.iwordsize) as []_eqn.
+            Int.ltu amount Int.iwordsize) eqn:?.
   InvEval. destruct (andb_prop _ _ Heqb). 
   generalize (Int.eq_spec (Int.shru (Int.shl n' amount) amount) n'). rewrite H1; intros.
   replace (Val.and x (Vint n))
@@ -349,7 +349,7 @@ Proof.
   destruct v1; auto. simpl. unfold Int.rolm. rewrite Int.and_assoc. 
   decEq. decEq. decEq. apply Int.and_commut.
   destruct (Int.eq (Int.shru (Int.shl n amount) amount) n &&
-            Int.ltu amount Int.iwordsize) as []_eqn.
+            Int.ltu amount Int.iwordsize) eqn:?.
   InvEval. destruct (andb_prop _ _ Heqb). 
   generalize (Int.eq_spec (Int.shru (Int.shl n amount) amount) n). rewrite H0; intros.
   replace (Val.and x (Vint n))
@@ -402,20 +402,20 @@ Theorem eval_or: binary_constructor_sound or Val.or.
 Proof.
   red; intros until y; unfold or; case (or_match a b); intros.
 (* rolm - rolm *)
-  destruct (Int.eq amount1 amount2 && same_expr_pure t1 t2) as []_eqn.
+  destruct (Int.eq amount1 amount2 && same_expr_pure t1 t2) eqn:?.
   destruct (andb_prop _ _ Heqb0).
   generalize (Int.eq_spec amount1 amount2). rewrite H1. intro. subst amount2.
   InvEval. exploit eval_same_expr; eauto. intros [EQ1 EQ2]. subst. 
   rewrite Val.or_rolm. TrivialExists.
   TrivialExists.
 (* andimm - rolm *)
-  destruct (Int.eq mask1 (Int.not mask2) && is_rlw_mask mask2) as []_eqn.
+  destruct (Int.eq mask1 (Int.not mask2) && is_rlw_mask mask2) eqn:?.
   destruct (andb_prop _ _ Heqb0). 
   generalize (Int.eq_spec mask1 (Int.not mask2)); rewrite H1; intros.
   InvEval. subst. TrivialExists. 
   TrivialExists.
 (* rolm - andimm *)
-  destruct (Int.eq mask2 (Int.not mask1) && is_rlw_mask mask1) as []_eqn.
+  destruct (Int.eq mask2 (Int.not mask1) && is_rlw_mask mask1) eqn:?.
   destruct (andb_prop _ _ Heqb0). 
   generalize (Int.eq_spec mask2 (Int.not mask1)); rewrite H1; intros.
   InvEval. subst. rewrite Val.or_commut. TrivialExists.
@@ -507,7 +507,7 @@ Theorem eval_divuimm:
   exists v, eval_expr ge sp e m le (divuimm a n) v /\ Val.lessdef z v.
 Proof.
   intros; unfold divuimm. 
-  destruct (Int.is_power2 n) as []_eqn. 
+  destruct (Int.is_power2 n) eqn:?. 
   replace z with (Val.shru x (Vint i)). apply eval_shruimm; auto.
   eapply Val.divu_pow2; eauto.
   TrivialExists. 
@@ -533,7 +533,7 @@ Theorem eval_moduimm:
   exists v, eval_expr ge sp e m le (moduimm a n) v /\ Val.lessdef z v.
 Proof.
   intros; unfold moduimm. 
-  destruct (Int.is_power2 n) as []_eqn. 
+  destruct (Int.is_power2 n) eqn:?. 
   replace z with (Val.and x (Vint (Int.sub n Int.one))). apply eval_andimm; auto.
   eapply Val.modu_pow2; eauto.
   exploit Val.modu_divu; eauto. intros [v [A B]].
@@ -758,7 +758,7 @@ Theorem eval_intuoffloat:
   exists v, eval_expr ge sp e m le (intuoffloat a) v /\ Val.lessdef y v.
 Proof.
   intros. destruct x; simpl in H0; try discriminate.
-  destruct (Float.intuoffloat f) as [n|]_eqn; simpl in H0; inv H0.
+  destruct (Float.intuoffloat f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
   set (im := Int.repr Int.half_modulus).
   set (fm := Float.floatofintu im).
@@ -770,7 +770,7 @@ Proof.
   econstructor. instantiate (1 := Vfloat fm). EvalOp. 
   eapply eval_Econdition with (vb := Float.cmp Clt f fm).
   eauto with evalexpr. auto.
-  destruct (Float.cmp Clt f fm) as []_eqn.
+  destruct (Float.cmp Clt f fm) eqn:?.
   exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
   EvalOp. simpl. rewrite EQ; auto.
   exploit Float.intuoffloat_intoffloat_2; eauto. 

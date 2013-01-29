@@ -132,7 +132,7 @@ Proof.
   intros. destruct v; destruct t; simpl in H; inv H.
   constructor.
   constructor.
-  destruct (Genv.invert_symbol ge b) as [id|]_eqn; inv H1. 
+  destruct (Genv.invert_symbol ge b) as [id|] eqn:?; inv H1. 
   constructor. apply Genv.invert_find_symbol; auto.
 Qed.
 
@@ -148,8 +148,8 @@ Lemma list_eventval_of_val_sound:
 Proof with try discriminate.
   induction vl; destruct tl; simpl; intros; inv H.
   constructor.
-  destruct (eventval_of_val a t) as [ev1|]_eqn...
-  destruct (list_eventval_of_val vl tl) as [evl'|]_eqn...
+  destruct (eventval_of_val a t) as [ev1|] eqn:?...
+  destruct (list_eventval_of_val vl tl) as [evl'|] eqn:?...
   inv H1. constructor. apply eventval_of_val_sound; auto. eauto.
 Qed.
 
@@ -166,7 +166,7 @@ Proof.
   intros. destruct ev; destruct t; simpl in H; inv H.
   constructor.
   constructor.
-  destruct (Genv.find_symbol ge i) as [b|]_eqn; inv H1.
+  destruct (Genv.find_symbol ge i) as [b|] eqn:?; inv H1.
   constructor. auto.
 Qed.
 
@@ -207,8 +207,8 @@ Ltac mydestr :=
   match goal with
   | [ |- None = Some _ -> _ ] => intro X; discriminate
   | [ |- Some _ = Some _ -> _ ] => intro X; inv X
-  | [ |- match ?x with Some _ => _ | None => _ end = Some _ -> _ ] => destruct x as []_eqn; mydestr
-  | [ |- match ?x with true => _ | false => _ end = Some _ -> _ ] => destruct x as []_eqn; mydestr
+  | [ |- match ?x with Some _ => _ | None => _ end = Some _ -> _ ] => destruct x eqn:?; mydestr
+  | [ |- match ?x with true => _ | false => _ end = Some _ -> _ ] => destruct x eqn:?; mydestr
   | [ |- match ?x with left _ => _ | right _ => _ end = Some _ -> _ ] => destruct x; mydestr
   | _ => idtac
   end.
@@ -331,7 +331,7 @@ Lemma do_deref_loc_sound:
   deref_loc ge ty m b ofs t v /\ possible_trace w t w'.
 Proof.
   unfold do_deref_loc; intros until v.
-  destruct (access_mode ty) as []_eqn; mydestr. 
+  destruct (access_mode ty) eqn:?; mydestr. 
   intros. exploit do_volatile_load_sound; eauto. intuition. eapply deref_loc_volatile; eauto. 
   split. eapply deref_loc_value; eauto. constructor.
   split. eapply deref_loc_reference; eauto. constructor.
@@ -356,7 +356,7 @@ Lemma do_assign_loc_sound:
   assign_loc ge ty m b ofs v t m' /\ possible_trace w t w'.
 Proof.
   unfold do_assign_loc; intros until m'.
-  destruct (access_mode ty) as []_eqn; mydestr. 
+  destruct (access_mode ty) eqn:?; mydestr. 
   intros. exploit do_volatile_store_sound; eauto. intuition. eapply assign_loc_volatile; eauto. 
   split. eapply assign_loc_value; eauto. constructor.
   destruct v; mydestr. destruct a as [P [Q R]]. 
@@ -558,7 +558,7 @@ Proof with try congruence.
   intros. exploit VSTORE; eauto. intros [A B]. split; auto. exists b; auto.
 (* EF_malloc *)
   unfold do_ef_malloc. destruct vargs... destruct v... destruct vargs...
-  destruct (Mem.alloc m (-4) (Int.unsigned i)) as [m1 b]_eqn. mydestr.
+  destruct (Mem.alloc m (-4) (Int.unsigned i)) as [m1 b] eqn:?. mydestr.
   split. econstructor; eauto. constructor.
 (* EF_free *)
   unfold do_ef_free. destruct vargs... destruct v... destruct vargs... 
@@ -1170,7 +1170,7 @@ Definition list_reducts_ok (al: exprlist) (m: mem) (ll: reducts exprlist) : Prop
 Ltac monadInv :=
   match goal with
   | [ H: match ?x with Some _ => _ | None => None end = Some ?y |- _ ] =>
-      destruct x as []_eqn; [monadInv|discriminate]
+      destruct x eqn:?; [monadInv|discriminate]
   | [ H: match ?x with left _ => _ | right _ => None end = Some ?y |- _ ] =>
       destruct x; [monadInv|discriminate]
   | _ => idtac
@@ -1338,8 +1338,8 @@ Lemma is_val_list_all_values:
   forall al vtl, is_val_list al = Some vtl -> exprlist_all_values al.
 Proof.
   induction al; simpl; intros. auto. 
-  destruct (is_val r1) as [[v ty]|]_eqn; try discriminate.
-  destruct (is_val_list al) as [vtl'|]_eqn; try discriminate.
+  destruct (is_val r1) as [[v ty]|] eqn:?; try discriminate.
+  destruct (is_val_list al) as [vtl'|] eqn:?; try discriminate.
   rewrite (is_val_inv _ _ _ Heqo). eauto.
 Qed.
 
@@ -1360,91 +1360,91 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* Eval *)
   split; intros. tauto. simpl; congruence.
 (* Evar *)
-  destruct (e!x) as [[b ty']|]_eqn.
+  destruct (e!x) as [[b ty']|] eqn:?.
   destruct (type_eq ty ty')...
   subst. apply topred_ok; auto. apply red_var_local; auto.
-  destruct (Genv.find_symbol ge x) as [b|]_eqn...
-  destruct (type_of_global ge b) as [ty'|]_eqn...
+  destruct (Genv.find_symbol ge x) as [b|] eqn:?...
+  destruct (type_of_global ge b) as [ty'|] eqn:?...
   destruct (type_eq ty ty')...
   subst. apply topred_ok; auto. apply red_var_global; auto.
 (* Efield *)
-  destruct (is_val a) as [[v ty'] | ]_eqn.
+  destruct (is_val a) as [[v ty'] | ] eqn:?.
   rewrite (is_val_inv _ _ _ Heqo).
   destruct v...
   destruct ty'... 
   (* top struct *)
-  destruct (field_offset f f0) as [delta|]_eqn...
+  destruct (field_offset f f0) as [delta|] eqn:?...
   apply topred_ok; auto. apply red_field_struct; auto.
   (* top union *)
   apply topred_ok; auto. apply red_field_union; auto.
   (* in depth *)
   eapply incontext_ok; eauto. 
 (* Evalof *)
-  destruct (is_loc a) as [[[b ofs] ty'] | ]_eqn. rewrite (is_loc_inv _ _ _ _ Heqo).
+  destruct (is_loc a) as [[[b ofs] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ Heqo).
   (* top *)
   destruct (type_eq ty ty')... subst ty'.
-  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ]_eqn.
+  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ] eqn:?.
   exploit do_deref_loc_sound; eauto. intros [A B].
   apply topred_ok; auto. red. split. apply red_rvalof; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_deref_loc_complete; eauto. congruence.
   (* depth *)
   eapply incontext_ok; eauto.
 (* Ederef *)
-  destruct (is_val a) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo).
+  destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo).
   (* top *)
   destruct v... apply topred_ok; auto. apply red_deref; auto. 
   (* depth *)
   eapply incontext_ok; eauto.
 (* Eaddrof *)
-  destruct (is_loc a) as [[[b ofs] ty'] | ]_eqn. rewrite (is_loc_inv _ _ _ _ Heqo).
+  destruct (is_loc a) as [[[b ofs] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ Heqo).
   (* top *)
   apply topred_ok; auto. split. apply red_addrof; auto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
 (* unop *)
-  destruct (is_val a) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (sem_unary_operation op v ty') as [v'|]_eqn...
+  destruct (sem_unary_operation op v ty') as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_unop; auto. exists w; constructor. 
   (* depth *)
   eapply incontext_ok; eauto.
 (* binop *)
-  destruct (is_val a1) as [[v1 ty1] | ]_eqn. 
-  destruct (is_val a2) as [[v2 ty2] | ]_eqn.
+  destruct (is_val a1) as [[v1 ty1] | ] eqn:?. 
+  destruct (is_val a2) as [[v2 ty2] | ] eqn:?.
   rewrite (is_val_inv _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0). 
   (* top *)
-  destruct (sem_binary_operation op v1 ty1 v2 ty2 m) as [v|]_eqn...
+  destruct (sem_binary_operation op v1 ty1 v2 ty2 m) as [v|] eqn:?...
   apply topred_ok; auto. split. apply red_binop; auto. exists w; constructor.
   (* depth *)
   eapply incontext2_ok; eauto. 
   eapply incontext2_ok; eauto. 
 (* cast *)
-  destruct (is_val a) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (sem_cast v ty' ty) as [v'|]_eqn...
+  destruct (sem_cast v ty' ty) as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_cast; auto. exists w; constructor. 
   (* depth *)
   eapply incontext_ok; eauto.
 (* seqand *)
-  destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (bool_val v ty') as [v'|]_eqn... destruct v'.
+  destruct (bool_val v ty') as [v'|] eqn:?... destruct v'.
   apply topred_ok; auto. split. eapply red_seqand_true; eauto. exists w; constructor.
   apply topred_ok; auto. split. eapply red_seqand_false; eauto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
 (* seqor *)
-  destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (bool_val v ty') as [v'|]_eqn... destruct v'.
+  destruct (bool_val v ty') as [v'|] eqn:?... destruct v'.
   apply topred_ok; auto. split. eapply red_seqor_true; eauto. exists w; constructor.
   apply topred_ok; auto. split. eapply red_seqor_false; eauto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
 (* condition *)
-  destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (bool_val v ty') as [v'|]_eqn...
+  destruct (bool_val v ty') as [v'|] eqn:?...
   apply topred_ok; auto. split. eapply red_condition; eauto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1453,13 +1453,13 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* alignof *)
   apply topred_ok; auto. split. apply red_alignof. exists w; constructor.
 (* assign *)
-  destruct (is_loc a1) as [[[b ofs] ty1] | ]_eqn. 
-  destruct (is_val a2) as [[v2 ty2] | ]_eqn. 
+  destruct (is_loc a1) as [[[b ofs] ty1] | ] eqn:?. 
+  destruct (is_val a2) as [[v2 ty2] | ] eqn:?. 
   rewrite (is_loc_inv _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0).
   (* top *)
   destruct (type_eq ty1 ty)... subst ty1.
-  destruct (sem_cast v2 ty2 ty) as [v|]_eqn...
-  destruct (do_assign_loc w ty m b ofs v) as [[[w' t] m']|]_eqn.
+  destruct (sem_cast v2 ty2 ty) as [v|] eqn:?...
+  destruct (do_assign_loc w ty m b ofs v) as [[[w' t] m']|] eqn:?.
   exploit do_assign_loc_sound; eauto. intros [P Q].
   apply topred_ok; auto. split. apply red_assign; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_assign_loc_complete; eauto. congruence.
@@ -1467,12 +1467,12 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   eapply incontext2_ok; eauto.
   eapply incontext2_ok; eauto.
 (* assignop *)
-  destruct (is_loc a1) as [[[b ofs] ty1] | ]_eqn. 
-  destruct (is_val a2) as [[v2 ty2] | ]_eqn. 
+  destruct (is_loc a1) as [[[b ofs] ty1] | ] eqn:?. 
+  destruct (is_val a2) as [[v2 ty2] | ] eqn:?. 
   rewrite (is_loc_inv _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0). 
   (* top *)
   destruct (type_eq ty1 ty)... subst ty1.
-  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ]_eqn.
+  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ] eqn:?.
   exploit do_deref_loc_sound; eauto. intros [A B].
   apply topred_ok; auto. red. split. apply red_assignop; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_deref_loc_complete; eauto. congruence.
@@ -1480,30 +1480,30 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   eapply incontext2_ok; eauto.
   eapply incontext2_ok; eauto.
 (* postincr *)
-  destruct (is_loc a) as [[[b ofs] ty'] | ]_eqn. rewrite (is_loc_inv _ _ _ _ Heqo). 
+  destruct (is_loc a) as [[[b ofs] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ Heqo). 
   (* top *)
   destruct (type_eq ty' ty)... subst ty'.
-  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ]_eqn.
+  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ] eqn:?.
   exploit do_deref_loc_sound; eauto. intros [A B].
   apply topred_ok; auto. red. split. apply red_postincr; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_deref_loc_complete; eauto. congruence.
   (* depth *)
   eapply incontext_ok; eauto.
 (* comma *)
-  destruct (is_val a1) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a1) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
   destruct (type_eq (typeof a2) ty)... subst ty.
   apply topred_ok; auto. split. apply red_comma; auto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
 (* call *)
-  destruct (is_val a) as [[vf tyf] | ]_eqn.  
-  destruct (is_val_list rargs) as [vtl | ]_eqn. 
+  destruct (is_val a) as [[vf tyf] | ] eqn:?.  
+  destruct (is_val_list rargs) as [vtl | ] eqn:?. 
   rewrite (is_val_inv _ _ _ Heqo). exploit is_val_list_all_values; eauto. intros ALLVAL.
   (* top *)
-  destruct (classify_fun tyf) as [tyargs tyres|]_eqn...
-  destruct (Genv.find_funct ge vf) as [fd|]_eqn...
-  destruct (sem_cast_arguments vtl tyargs) as [vargs|]_eqn... 
+  destruct (classify_fun tyf) as [tyargs tyres|] eqn:?...
+  destruct (Genv.find_funct ge vf) as [fd|] eqn:?...
+  destruct (sem_cast_arguments vtl tyargs) as [vargs|] eqn:?... 
   destruct (type_eq (type_of_fundef fd) (Tfunction tyargs tyres))...
   apply topred_ok; auto. red. split; auto. eapply red_Ecall; eauto. 
   eapply sem_cast_arguments_sound; eauto.
@@ -1516,11 +1516,11 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   eapply incontext2_list_ok; eauto.
   eapply incontext2_list_ok; eauto.
 (* builtin *)
-  destruct (is_val_list rargs) as [vtl | ]_eqn. 
+  destruct (is_val_list rargs) as [vtl | ] eqn:?. 
   exploit is_val_list_all_values; eauto. intros ALLVAL.
   (* top *)
-  destruct (sem_cast_arguments vtl tyargs) as [vargs|]_eqn... 
-  destruct (do_external ef w vargs m) as [[[[? ?] v] m'] | ]_eqn...
+  destruct (sem_cast_arguments vtl tyargs) as [vargs|] eqn:?... 
+  destruct (do_external ef w vargs m) as [[[[? ?] v] m'] | ] eqn:?...
   exploit do_ef_external_sound; eauto. intros [EC PT].
   apply topred_ok; auto. red. split; auto. eapply red_builtin; eauto. 
   eapply sem_cast_arguments_sound; eauto.
@@ -1537,9 +1537,9 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* loc *)
   split; intros. tauto. simpl; congruence.
 (* paren *)
-  destruct (is_val a) as [[v ty'] | ]_eqn. rewrite (is_val_inv _ _ _ Heqo). 
+  destruct (is_val a) as [[v ty'] | ] eqn:?. rewrite (is_val_inv _ _ _ Heqo). 
   (* top *)
-  destruct (sem_cast v ty' ty) as [v'|]_eqn...
+  destruct (sem_cast v ty' ty) as [v'|] eqn:?...
   apply topred_ok; auto. split. apply red_paren; auto. exists w; constructor. 
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1556,8 +1556,8 @@ Lemma step_exprlist_val_list:
 Proof.
   induction al; simpl; intros. 
   auto.
-  destruct (is_val r1) as [[v1 ty1]|]_eqn; try congruence.
-  destruct (is_val_list al) as []_eqn; try congruence.
+  destruct (is_val r1) as [[v1 ty1]|] eqn:?; try congruence.
+  destruct (is_val_list al) eqn:?; try congruence.
   rewrite (is_val_inv _ _ _ Heqo).
   rewrite IHal. auto. congruence.
 Qed.
@@ -1717,75 +1717,78 @@ with step_exprlist_context:
 Proof.
   induction 1; simpl; intros.
 (* top *)
-  red. destruct (step_expr k a m); auto. intros. 
-  replace (fun x => C1 x) with C1; auto. apply extensionality; auto.
+  red. destruct (step_expr k a m); auto.
+  try (* no eta in 8.3 *)
+   (intros;
+    replace (fun x => C1 x) with C1 by (apply extensionality; auto);
+    auto).
 (* deref *)
   eapply reducts_incl_trans with (C' := fun x => Ederef x ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* field *)
   eapply reducts_incl_trans with (C' := fun x => Efield x f ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* valof *)
   eapply reducts_incl_trans with (C' := fun x => Evalof x ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|]_eqn; eauto.
+  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
 (* addrof *)
   eapply reducts_incl_trans with (C' := fun x => Eaddrof x ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|]_eqn; eauto.
+  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
 (* unop *)
   eapply reducts_incl_trans with (C' := fun x => Eunop op x ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* binop left *)
   eapply reducts_incl_trans with (C' := fun x => Ebinop op x e2 ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* binop right *)
   eapply reducts_incl_trans with (C' := fun x => Ebinop op e1 x ty); eauto.
-  destruct (is_val e1) as [[v1 ty1]|]_eqn; eauto.
-  destruct (is_val (C a)) as [[v2 ty2]|]_eqn; eauto.
+  destruct (is_val e1) as [[v1 ty1]|] eqn:?; eauto.
+  destruct (is_val (C a)) as [[v2 ty2]|] eqn:?; eauto.
 (* cast *)
   eapply reducts_incl_trans with (C' := fun x => Ecast x ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* seqand *)
   eapply reducts_incl_trans with (C' := fun x => Eseqand x r2 ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* seqor *)
   eapply reducts_incl_trans with (C' := fun x => Eseqor x r2 ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* condition *)
   eapply reducts_incl_trans with (C' := fun x => Econdition x r2 r3 ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* assign left *)
   eapply reducts_incl_trans with (C' := fun x => Eassign x e2 ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|]_eqn; eauto.
+  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
 (* assign right *)
   eapply reducts_incl_trans with (C' := fun x => Eassign e1 x ty); eauto.
-  destruct (is_loc e1) as [[[b ofs] ty1]|]_eqn; eauto.
-  destruct (is_val (C a)) as [[v2 ty2]|]_eqn; eauto.
+  destruct (is_loc e1) as [[[b ofs] ty1]|] eqn:?; eauto.
+  destruct (is_val (C a)) as [[v2 ty2]|] eqn:?; eauto.
 (* assignop left *)
   eapply reducts_incl_trans with (C' := fun x => Eassignop op x e2 tyres ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|]_eqn; eauto.
+  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
 (* assignop right *)
   eapply reducts_incl_trans with (C' := fun x => Eassignop op e1 x tyres ty); eauto.
-  destruct (is_loc e1) as [[[b ofs] ty1]|]_eqn; eauto.
-  destruct (is_val (C a)) as [[v2 ty2]|]_eqn; eauto.
+  destruct (is_loc e1) as [[[b ofs] ty1]|] eqn:?; eauto.
+  destruct (is_val (C a)) as [[v2 ty2]|] eqn:?; eauto.
 (* postincr *)
   eapply reducts_incl_trans with (C' := fun x => Epostincr id x ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|]_eqn; eauto.
+  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
 (* call left *)
   eapply reducts_incl_trans with (C' := fun x => Ecall x el ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* call right *)
   eapply reducts_incl_trans with (C' := fun x => Ecall e1 x ty). apply step_exprlist_context. auto. 
-  destruct (is_val e1) as [[v1 ty1]|]_eqn; eauto.
-  destruct (is_val_list (C a)) as [vl|]_eqn; eauto.
+  destruct (is_val e1) as [[v1 ty1]|] eqn:?; eauto.
+  destruct (is_val_list (C a)) as [vl|] eqn:?; eauto.
 (* builtin *)
   eapply reducts_incl_trans with (C' := fun x => Ebuiltin ef tyargs x ty). apply step_exprlist_context. auto. 
-  destruct (is_val_list (C a)) as [vl|]_eqn; eauto.
+  destruct (is_val_list (C a)) as [vl|] eqn:?; eauto.
 (* comma *)
   eapply reducts_incl_trans with (C' := fun x => Ecomma x e2 ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* paren *)
   eapply reducts_incl_trans with (C' := fun x => Eparen x ty); eauto.
-  destruct (is_val (C a)) as [[v ty']|]_eqn; eauto.
+  destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 
   induction 1; simpl; intros.
 (* cons left *)
@@ -1804,7 +1807,7 @@ Lemma not_stuckred_imm_safe:
   (forall C, ~In (C, Stuckred) (step_expr k a m)) -> imm_safe_t k a m.
 Proof.
   intros. generalize (step_expr_sound a k m). intros [A B]. 
-  destruct (step_expr k a m) as [|[C rd] res]_eqn.
+  destruct (step_expr k a m) as [|[C rd] res] eqn:?.
   specialize (B (refl_equal _)). destruct k.
   destruct a; simpl in B; try congruence. constructor.
   destruct a; simpl in B; try congruence. constructor.
@@ -1889,7 +1892,7 @@ Lemma do_alloc_variables_sound:
 Proof.
   induction l; intros; simpl. 
   constructor.
-  destruct a as [id ty]. destruct (Mem.alloc m 0 (sizeof ty)) as [m1 b1]_eqn; simpl.
+  destruct a as [id ty]. destruct (Mem.alloc m 0 (sizeof ty)) as [m1 b1] eqn:?; simpl.
   econstructor; eauto.
 Qed.
 
@@ -2053,8 +2056,8 @@ Ltac myinv :=
         [intro EQ; unfold ret in EQ; inv EQ; myinv | myinv]
   | [ |- In _ (_ :: nil) -> _ ] => 
         intro X; elim X; clear X; [intro EQ; inv EQ; myinv | myinv]
-  | [ |- In _ (match ?x with Some _ => _ | None => _ end) -> _ ] => destruct x as []_eqn; myinv
-  | [ |- In _ (match ?x with false => _ | true => _ end) -> _ ] => destruct x as []_eqn; myinv
+  | [ |- In _ (match ?x with Some _ => _ | None => _ end) -> _ ] => destruct x eqn:?; myinv
+  | [ |- In _ (match ?x with false => _ | true => _ end) -> _ ] => destruct x eqn:?; myinv
   | [ |- In _ (match ?x with left _ => _ | right _ => _ end) -> _ ] => destruct x; myinv
   | _ => idtac
   end.
@@ -2078,7 +2081,7 @@ Proof with try (left; right; econstructor; eauto; fail).
   (* goto *)
   destruct p as [s' k']. myinv...
 (* ExprState *)
-  destruct (is_val r) as [[v ty]|]_eqn.
+  destruct (is_val r) as [[v ty]|] eqn:?.
   (* expression is a value *)
   rewrite (is_val_inv _ _ _ Heqo).
   destruct k; myinv...
@@ -2102,7 +2105,7 @@ Proof with try (left; right; econstructor; eauto; fail).
 (* callstate *)
   destruct fd; myinv.
   (* internal *)
-  destruct (do_alloc_variables empty_env m (fn_params f ++ fn_vars f)) as [e m1]_eqn.
+  destruct (do_alloc_variables empty_env m (fn_params f ++ fn_vars f)) as [e m1] eqn:?.
   myinv. left; right; apply step_internal_function with m1. auto. 
   change e with (fst (e,m1)). change m1 with (snd (e,m1)) at 2. rewrite <- Heqp. 
   apply do_alloc_variables_sound. eapply sem_bind_parameters_sound; eauto.

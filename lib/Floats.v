@@ -362,7 +362,7 @@ Proof.
   destruct c, x, y; simpl; try destruct b; try destruct b0; try reflexivity;
   rewrite <- (Zcompare_antisym e e1); destruct (e ?= e1); try reflexivity;
   change Eq with (CompOpp Eq); rewrite <- (Pcompare_antisym m m0 Eq);
-    simpl; destruct ((m ?= m0)%positive Eq); try reflexivity.
+    simpl; destruct (Pcompare m m0 Eq); reflexivity.
 Qed.
 
 Theorem cmp_ne_eq:
@@ -524,6 +524,7 @@ Proof.
   destruct (binary_normalize64_exact (Int.unsigned x)); [now smart_omega|].
   match goal with [|- _ _ _ ?f = _] => destruct f end; intuition.
   exfalso; simpl in H2; change 0%R with (Z2R 0) in H2; apply eq_Z2R in H2; omega.
+  try (change (53 ?= 1024) with Lt in H1).  (* for Coq 8.4 *)
   simpl Zcompare in *.
   match goal with [|- _ _ _ ?f = _] => destruct f end; intuition.
   exfalso; simpl in H0; change 0%R with (Z2R 0) in H0; apply eq_Z2R in H0; omega.
@@ -718,6 +719,8 @@ Proof.
   rewrite (Ztrunc_floor (B2R _ _ x)), <- Zfloor_minus, <- Ztrunc_floor;
     [f_equal; assumption|apply Rle_0_minus; left; assumption|].
   left; eapply Rlt_trans; [|now apply H2]; apply (Z2R_lt 0); reflexivity.
+  try (change (0 ?= 53) with Lt in H6,H8).  (* for Coq 8.4 *)
+  try (change (53 ?= 1024) with Lt in H6,H8).  (* for Coq 8.4 *)
   exfalso; simpl Zcompare in H6, H8; rewrite H6, H8 in H9.
   destruct H9 as [|[]]; [discriminate|..].
   eapply Rle_trans in H9; [|apply Rle_0_minus; left; assumption]; apply (le_Z2R 0) in H9; apply H9; reflexivity.
@@ -761,7 +764,7 @@ unfold Int64.or, Int64.bitwise_binop in H0.
 rewrite Int64.unsigned_repr, Int64.bits_of_Z_of_bits in H0.
 rewrite orb_false_intro in H0; [discriminate|reflexivity|].
 rewrite Int64.sign_bit_of_Z.
-match goal with [|- ((if ?c then _ else _) = _)] => destruct c end.
+match goal with [|- ((if ?c then _ else _) = _)] => destruct c as [z0|z0] end.
 reflexivity.
 rewrite Int64.unsigned_repr in z0; [exfalso|]; now smart_omega.
 vm_compute; split; congruence.
@@ -793,7 +796,7 @@ Proof.
   intros; unfold from_words, double_of_bits, b64_of_bits, binary_float_of_bits. 
   rewrite B2R_FF2B; unfold is_finite; rewrite match_FF2B;
   unfold binary_float_of_bits_aux; rewrite split_bits_or; simpl; pose proof (Int.unsigned_range x).
-  destruct (Int.unsigned x + Zpower_pos 2 52) as []_eqn.
+  destruct (Int.unsigned x + Zpower_pos 2 52) eqn:?.
   exfalso; now smart_omega.
   simpl; rewrite <- Heqz;  unfold F2R; simpl.
   rewrite <- (Z2R_plus 4503599627370496), Rmult_1_r.
@@ -822,6 +825,7 @@ Proof.
   rewrite round_exact in H3 by smart_omega.
   match goal with [H3:if Rlt_bool ?x ?y then _ else _ |- _] => 
     pose proof (Rlt_bool_spec x y); destruct (Rlt_bool x y) end; destruct H3. 
+  try (change (53 ?= 1024) with Lt in H3,H5).  (* for Coq 8.4 *)
   simpl Zcompare in *; apply B2R_inj;
     try match goal with [H':B2R _ _ ?f = _ , H'':is_finite _ _ ?f = true |- is_finite_strict _ _ ?f = true] => 
       destruct f; [
@@ -869,6 +873,8 @@ Proof.
   rewrite round_exact in H3 by smart_omega.
   match goal with [H3:if Rlt_bool ?x ?y then _ else _ |- _] => 
     pose proof (Rlt_bool_spec x y); destruct (Rlt_bool x y) end; destruct H3. 
+  try (change (0 ?= 53) with Lt in H3,H5).  (* for Coq 8.4 *)
+  try (change (53 ?= 1024) with Lt in H3,H5).  (* for Coq 8.4 *)
   simpl Zcompare in *; apply B2R_inj;
     try match goal with [H':B2R _ _ ?f = _ , H'':is_finite _ _ ?f = true |- is_finite_strict _ _ ?f = true] => 
       destruct f; [

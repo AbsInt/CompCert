@@ -1,5 +1,3 @@
-open BinInt
-open BinPos
 open Camlcoq
 
 type bitstring = Bitstring.bitstring
@@ -75,9 +73,9 @@ exception Int32Overflow
 (* Can only return positive numbers 0 <= res < 2^31 *)
 let positive_int32 p =
   let rec positive_int32_unsafe = function
-  | Coq_xI(p) -> Int32.(add (shift_left (positive_int32_unsafe p) 1) 1l)
-  | Coq_xO(p) -> Int32.(shift_left (positive_int32_unsafe p) 1)
-  | Coq_xH    -> 1l
+  | P.Coq_xI(p) -> Int32.(add (shift_left (positive_int32_unsafe p) 1) 1l)
+  | P.Coq_xO(p) -> Int32.(shift_left (positive_int32_unsafe p) 1)
+  | P.Coq_xH    -> 1l
   in
   let res = positive_int32_unsafe p in
   if res >= 0l
@@ -86,27 +84,27 @@ let positive_int32 p =
 
 (* This allows for 1 bit of overflow, effectively returning a negative *)
 let rec positive_int32_lax = function
-| Coq_xI(p) ->
+| P.Coq_xI(p) ->
     let acc = positive_int32_lax p in
     if acc < 0l
     then raise Int32Overflow
     else Int32.(add (shift_left acc 1) 1l)
-| Coq_xO(p) ->
+| P.Coq_xO(p) ->
     let acc = positive_int32_lax p in
     if acc < 0l
     then raise Int32Overflow
     else Int32.shift_left acc 1
-| Coq_xH -> 1l
+| P.Coq_xH -> 1l
 
 let z_int32 = function
-| Z0      -> 0l
-| Zpos(p) -> positive_int32 p
-| Zneg(p) -> Int32.neg (positive_int32 p)
+| Z.Z0      -> 0l
+| Z.Zpos(p) -> positive_int32 p
+| Z.Zneg(p) -> Int32.neg (positive_int32 p)
 
 let z_int32_lax = function
-| Z0      -> 0l
-| Zpos(p) -> positive_int32_lax p
-| Zneg(_) -> raise Int32Overflow
+| Z.Z0      -> 0l
+| Z.Zpos(p) -> positive_int32_lax p
+| Z.Zneg(_) -> raise Int32Overflow
 
 let z_int z = Safe32.to_int (z_int32 z)
 

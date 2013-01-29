@@ -80,18 +80,18 @@ let print_instruction pp i =
   | Mannot(ef, args) ->
       fprintf pp "%s(%a)@ " (name_of_external ef) annot_params args
   | Mlabel lbl ->
-      fprintf pp "%ld:@ " (camlint_of_positive lbl)
+      fprintf pp "%ld:@ " (P.to_int32 lbl)
   | Mgoto lbl ->
-      fprintf pp "goto %ld@ " (camlint_of_positive lbl)
+      fprintf pp "goto %ld@ " (P.to_int32 lbl)
   | Mcond(cond, args, lbl) ->
       fprintf pp "if (%a) goto %ld@ "
         (PrintOp.print_condition reg) (cond, args)
-        (camlint_of_positive lbl)
+        (P.to_int32 lbl)
   | Mjumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
       fprintf pp "@[<v 2>jumptable (%a)" reg arg;
       for i = 0 to Array.length tbl - 1 do
-        fprintf pp "@ case %d: goto %ld" i (camlint_of_positive tbl.(i))
+        fprintf pp "@ case %d: goto %ld" i (P.to_int32 tbl.(i))
       done;
       fprintf pp "@]@ "
   | Mreturn ->

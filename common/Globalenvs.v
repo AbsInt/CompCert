@@ -607,14 +607,14 @@ Proof.
   unfold alloc_global. intros.
   destruct g as [id [f|v]]. 
   (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b]_eqn.
+  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
   erewrite Mem.nextblock_drop; eauto. erewrite Mem.nextblock_alloc; eauto. 
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b]_eqn.
-  destruct (store_zeros m1 b 0 sz) as [m2|]_eqn; try discriminate.
-  destruct (store_init_data_list m2 b 0 init) as [m3|]_eqn; try discriminate.
+  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
+  destruct (store_init_data_list m2 b 0 init) as [m3|] eqn:?; try discriminate.
   erewrite Mem.nextblock_drop; eauto.
   erewrite store_init_data_list_nextblock; eauto.
   erewrite store_zeros_nextblock; eauto.
@@ -629,7 +629,7 @@ Proof.
   induction gl.
   simpl; intros. inv H; unfold block; omega.
   simpl length; rewrite inj_S; simpl; intros.
-  destruct (alloc_global m a) as [m1|]_eqn; try discriminate.
+  destruct (alloc_global m a) as [m1|] eqn:?; try discriminate.
   erewrite IHgl; eauto. erewrite alloc_global_nextblock; eauto. unfold block; omega.
 Qed.
 
@@ -672,7 +672,7 @@ Remark alloc_global_perm:
 Proof.
   intros. destruct idg as [id [f|v]]; simpl in H. 
   (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b]_eqn. 
+  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?. 
   assert (b' <> b). apply Mem.valid_not_valid_diff with m; eauto with mem.
   split; intros.
   eapply Mem.perm_drop_3; eauto. eapply Mem.perm_alloc_1; eauto. 
@@ -680,9 +680,9 @@ Proof.
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b]_eqn.
-  destruct (store_zeros m1 b 0 sz) as [m2|]_eqn; try discriminate.
-  destruct (store_init_data_list m2 b 0 init) as [m3|]_eqn; try discriminate.
+  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
+  destruct (store_init_data_list m2 b 0 init) as [m3|] eqn:?; try discriminate.
   assert (b' <> b). apply Mem.valid_not_valid_diff with m; eauto with mem.
   split; intros.
   eapply Mem.perm_drop_3; eauto.
@@ -703,7 +703,7 @@ Remark alloc_globals_perm:
 Proof.
   induction gl.
   simpl; intros. inv H. tauto.
-  simpl; intros. destruct (alloc_global m a) as [m1|]_eqn; try discriminate.
+  simpl; intros. destruct (alloc_global m a) as [m1|] eqn:?; try discriminate.
   erewrite alloc_global_perm; eauto. eapply IHgl; eauto. 
   unfold Mem.valid_block in *. erewrite alloc_global_nextblock; eauto. omega. 
 Qed.
@@ -734,7 +734,7 @@ Remark store_init_data_list_outside:
 Proof.
   induction il; simpl.
   intros; congruence.
-  intros. destruct (store_init_data m b p a) as [m1|]_eqn; try congruence.
+  intros. destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
   transitivity (Mem.load chunk m1 b' q).
   eapply IHil; eauto. generalize (init_data_size_pos a). intuition omega.
   destruct a; simpl in Heqo;
@@ -784,7 +784,7 @@ Proof.
 
   induction il; simpl.
   auto.
-  intros. destruct (store_init_data m b p a) as [m1|]_eqn; try congruence.
+  intros. destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
   exploit IHil; eauto. intro D. 
   destruct a; simpl in Heqo; intuition.
   eapply (A Mint8unsigned (Vint i)); eauto.
@@ -804,7 +804,7 @@ Remark load_alloc_global:
 Proof.
   intros. destruct g as [f|v]; simpl in H.
   (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b']_eqn. 
+  destruct (Mem.alloc m 0 1) as [m1 b'] eqn:?. 
   assert (b <> b'). apply Mem.valid_not_valid_diff with m; eauto with mem.
   transitivity (Mem.load chunk m1 b p). 
   eapply Mem.load_drop; eauto. 
@@ -812,9 +812,9 @@ Proof.
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b']_eqn.
-  destruct (store_zeros m1 b' 0 sz) as [m2|]_eqn; try discriminate.
-  destruct (store_init_data_list m2 b' 0 init) as [m3|]_eqn; try discriminate.
+  destruct (Mem.alloc m 0 sz) as [m1 b'] eqn:?.
+  destruct (store_zeros m1 b' 0 sz) as [m2|] eqn:?; try discriminate.
+  destruct (store_init_data_list m2 b' 0 init) as [m3|] eqn:?; try discriminate.
   assert (b <> b'). apply Mem.valid_not_valid_diff with m; eauto with mem.
   transitivity (Mem.load chunk m3 b p). 
   eapply Mem.load_drop; eauto.
@@ -833,7 +833,7 @@ Remark load_alloc_globals:
 Proof.
   induction gl; simpl; intros.
   congruence.
-  destruct (alloc_global m a) as [m''|]_eqn; try discriminate.
+  destruct (alloc_global m a) as [m''|] eqn:?; try discriminate.
   transitivity (Mem.load chunk m'' b p). 
   apply IHgl; auto. unfold Mem.valid_block in *. 
   erewrite alloc_global_nextblock; eauto. omega.
@@ -895,9 +895,9 @@ Proof.
   inv H3. simpl in H0.
   set (init := gvar_init gv) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b']_eqn.
-  destruct (store_zeros m1 b' 0 sz) as [m2|]_eqn; try discriminate.
-  destruct (store_init_data_list m2 b' 0 init) as [m3|]_eqn; try discriminate.
+  destruct (Mem.alloc m 0 sz) as [m1 b'] eqn:?.
+  destruct (store_zeros m1 b' 0 sz) as [m2|] eqn:?; try discriminate.
+  destruct (store_init_data_list m2 b' 0 init) as [m3|] eqn:?; try discriminate.
   exploit Mem.alloc_result; eauto. intro RES. 
   replace (genv_next ge0) with b' by congruence.
   split. red; intros. eapply Mem.perm_drop_1; eauto.
@@ -928,7 +928,7 @@ Proof.
   destruct (ZIndexed.eq b (genv_next ge0)).
   (* same *)
   inv H3. simpl in H0. 
-  destruct (Mem.alloc m 0 1) as [m1 b']_eqn. 
+  destruct (Mem.alloc m 0 1) as [m1 b'] eqn:?. 
   exploit Mem.alloc_result; eauto. intro RES. 
   replace (genv_next ge0) with b' by congruence.
   split. eapply Mem.perm_drop_1; eauto. omega. 
@@ -964,7 +964,7 @@ Lemma alloc_globals_initialized:
 Proof.
   induction gl; simpl; intros.
   inv H0; auto.
-  destruct a as [id g]. destruct (alloc_global m (id, g)) as [m1|]_eqn; try discriminate.
+  destruct a as [id g]. destruct (alloc_global m (id, g)) as [m1|] eqn:?; try discriminate.
   exploit alloc_global_initialized; eauto. intros [P [Q R]].
   eapply IHgl; eauto. 
 Qed.
@@ -1099,16 +1099,16 @@ Lemma alloc_global_neutral:
 Proof.
   intros. destruct idg as [id [f|v]]; simpl in H.
   (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b]_eqn.
+  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
   assert (b < thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_inject_neutral; eauto. 
   eapply Mem.alloc_inject_neutral; eauto.
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b]_eqn.
-  destruct (store_zeros m1 b 0 sz) as [m2|]_eqn; try discriminate.
-  destruct (store_init_data_list ge m2 b 0 init) as [m3|]_eqn; try discriminate.
+  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
+  destruct (store_init_data_list ge m2 b 0 init) as [m3|] eqn:?; try discriminate.
   assert (b < thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_inject_neutral; eauto. 
   eapply store_init_data_list_neutral with (m := m2) (b := b); eauto.
@@ -1210,7 +1210,7 @@ Lemma alloc_global_augment:
 Proof.
   intros. destruct idg as [id [f|v]]; simpl in H.
   (* function *)
-  destruct (Mem.alloc m2 0 1) as [m3 b]_eqn.
+  destruct (Mem.alloc m2 0 1) as [m3 b] eqn:?.
   assert (b >= thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_outside_inject. 2: eauto. 
   eapply Mem.alloc_right_inject; eauto.
@@ -1219,9 +1219,9 @@ Proof.
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m2 0 sz) as [m3 b]_eqn.
-  destruct (store_zeros m3 b 0 sz) as [m4|]_eqn; try discriminate.
-  destruct (store_init_data_list ge m4 b 0 init) as [m5|]_eqn; try discriminate.
+  destruct (Mem.alloc m2 0 sz) as [m3 b] eqn:?.
+  destruct (store_zeros m3 b 0 sz) as [m4|] eqn:?; try discriminate.
+  destruct (store_init_data_list ge m4 b 0 init) as [m5|] eqn:?; try discriminate.
   assert (b >= thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_outside_inject. 2: eauto. 
   eapply store_init_data_list_augment. 3: eauto. 2: eauto.
@@ -1497,7 +1497,7 @@ Proof.
   assert (forall m', store_init_data (globalenv p) m b ofs a = Some m' ->
           store_init_data (globalenv p') m b ofs a = Some m').
    destruct a; simpl; auto. rewrite find_symbol_match. auto.
-   simpl in H. destruct (find_symbol (globalenv p) i) as [b'|]_eqn; try discriminate.
+   simpl in H. destruct (find_symbol (globalenv p) i) as [b'|] eqn:?; try discriminate.
    apply new_ids_fresh. congruence.
   case_eq (store_init_data (globalenv p) m b ofs a); intros. 
     rewrite H1 in H. 
@@ -1513,14 +1513,14 @@ Lemma alloc_globals_match:
 Proof.
   induction 1; simpl; intros.
   auto.
-  destruct (alloc_global (globalenv p) m a1) as [m1|]_eqn; try discriminate.
+  destruct (alloc_global (globalenv p) m a1) as [m1|] eqn:?; try discriminate.
   assert (alloc_global (globalenv p') m b1 = Some m1).
     inv H; simpl in *. 
     auto.
     set (sz := init_data_list_size init) in *.
-    destruct (Mem.alloc m 0 sz) as [m2 b]_eqn.
-    destruct (store_zeros m2 b 0 sz) as [m3|]_eqn; try discriminate.
-    destruct (store_init_data_list (globalenv p) m3 b 0 init) as [m4|]_eqn; try discriminate.
+    destruct (Mem.alloc m 0 sz) as [m2 b] eqn:?.
+    destruct (store_zeros m2 b 0 sz) as [m3|] eqn:?; try discriminate.
+    destruct (store_init_data_list (globalenv p) m3 b 0 init) as [m4|] eqn:?; try discriminate.
     erewrite store_init_data_list_match; eauto. 
   rewrite H2. eauto.
 Qed.
@@ -1718,7 +1718,7 @@ Hypothesis transf_OK:
 Remark transf_augment_OK:
   transform_partial_augment_program transf_fun transf_var nil p.(prog_main) p = OK p'.
 Proof.
-  rewrite <- transf_OK. apply symmetry. apply transform_partial_program2_augment.
+  rewrite <- transf_OK. symmetry. apply transform_partial_program2_augment.
 Qed.
 
 Theorem find_funct_ptr_transf_partial2:

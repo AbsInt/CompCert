@@ -33,7 +33,7 @@ Require Import SimplExprspec.
 
 Section PRESERVATION.
 
-Variable prog: C.program.
+Variable prog: Csyntax.program.
 Variable tprog: Clight.program.
 Hypothesis TRANSL: transl_program prog = OK tprog.
 
@@ -76,20 +76,20 @@ Qed.
 
 Lemma type_of_fundef_preserved:
   forall f tf, transl_fundef f = OK tf ->
-  type_of_fundef tf = C.type_of_fundef f.
+  type_of_fundef tf = Csyntax.type_of_fundef f.
 Proof.
   intros. destruct f; monadInv H.
   exploit transl_function_spec; eauto. intros [A [B [C D]]].
-  simpl. unfold type_of_function, C.type_of_function. congruence.
+  simpl. unfold type_of_function, Csyntax.type_of_function. congruence.
   auto.
 Qed.
 
 Lemma function_return_preserved:
   forall f tf, transl_function f = OK tf ->
-  fn_return tf = C.fn_return f.
+  fn_return tf = Csyntax.fn_return f.
 Proof.
   intros. unfold transl_function in H.
-  destruct (transl_stmt (C.fn_body f) (initial_generator tt)); inv H.
+  destruct (transl_stmt (Csyntax.fn_body f) (initial_generator tt)); inv H.
   auto.
 Qed.
 
@@ -190,11 +190,11 @@ Lemma tr_simple:
   forall le dst sl a tmps,
   tr_expr le dst r sl a tmps ->
   match dst with
-  | For_val => sl = nil /\ C.typeof r = typeof a /\ eval_expr tge e le m a v
+  | For_val => sl = nil /\ Csyntax.typeof r = typeof a /\ eval_expr tge e le m a v
   | For_effects => sl = nil
   | For_set tyl t =>
       exists b, sl = do_set t tyl b
-             /\ C.typeof r = typeof b
+             /\ Csyntax.typeof r = typeof b
              /\ eval_expr tge e le m b v
   end)
 /\
@@ -202,7 +202,7 @@ Lemma tr_simple:
   eval_simple_lvalue ge e m l b ofs ->
   forall le sl a tmps,
   tr_expr le For_val l sl a tmps ->
-  sl = nil /\ C.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs).
+  sl = nil /\ Csyntax.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs).
 Proof.
 Opaque makeif.
   intros e m.
@@ -275,11 +275,11 @@ Lemma tr_simple_rvalue:
   forall le dst sl a tmps,
   tr_expr le dst r sl a tmps ->
   match dst with
-  | For_val => sl = nil /\ C.typeof r = typeof a /\ eval_expr tge e le m a v
+  | For_val => sl = nil /\ Csyntax.typeof r = typeof a /\ eval_expr tge e le m a v
   | For_effects => sl = nil
   | For_set tyl t =>
       exists b, sl = do_set t tyl b
-             /\ C.typeof r = typeof b
+             /\ Csyntax.typeof r = typeof b
              /\ eval_expr tge e le m b v
   end.
 Proof.
@@ -291,7 +291,7 @@ Lemma tr_simple_lvalue:
   eval_simple_lvalue ge e m l b ofs ->
   forall le sl a tmps,
   tr_expr le For_val l sl a tmps ->
-  sl = nil /\ C.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs.
+  sl = nil /\ Csyntax.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs.
 Proof.
   intros e m. exact (proj2 (tr_simple e m)).
 Qed.
@@ -315,8 +315,8 @@ Qed.
 
 Lemma typeof_context:
   forall k1 k2 C, leftcontext k1 k2 C ->
-  forall e1 e2, C.typeof e1 = C.typeof e2 ->
-  C.typeof (C e1) = C.typeof (C e2).
+  forall e1 e2, Csyntax.typeof e1 = Csyntax.typeof e2 ->
+  Csyntax.typeof (C e1) = Csyntax.typeof (C e2).
 Proof.
   induction 1; intros; auto. 
 Qed.
@@ -337,7 +337,7 @@ Lemma tr_expr_leftcontext_rec:
   /\ (forall le' e' sl3,
         tr_expr le' dst' e' sl3 a' tmp' ->
         (forall id, ~In id tmp' -> le'!id = le!id) ->
-        C.typeof e' = C.typeof e ->
+        Csyntax.typeof e' = Csyntax.typeof e ->
         tr_expr le' dst (C e') (sl3 ++ sl2) a tmps)
  ) /\ (
   forall from C, leftcontextlist from C ->
@@ -350,7 +350,7 @@ Lemma tr_expr_leftcontext_rec:
   /\ (forall le' e' sl3,
         tr_expr le' dst' e' sl3 a' tmp' ->
         (forall id, ~In id tmp' -> le'!id = le!id) ->
-        C.typeof e' = C.typeof e ->
+        Csyntax.typeof e' = Csyntax.typeof e ->
         tr_exprlist le' (C e') (sl3 ++ sl2) a tmps)
 ).
 Proof.
@@ -695,7 +695,7 @@ Theorem tr_expr_leftcontext:
   /\ (forall le' r' sl3,
         tr_expr le' dst' r' sl3 a' tmp' ->
         (forall id, ~In id tmp' -> le'!id = le!id) ->
-        C.typeof r' = C.typeof r ->
+        Csyntax.typeof r' = Csyntax.typeof r ->
         tr_expr le' dst (C r') (sl3 ++ sl2) a tmps).
 Proof.
   intros. eapply (proj1 tr_expr_leftcontext_rec); eauto.
@@ -714,7 +714,7 @@ Theorem tr_top_leftcontext:
   /\ (forall le' m' r' sl3,
         tr_expr le' dst' r' sl3 a' tmp' ->
         (forall id, ~In id tmp' -> le'!id = le!id) ->
-        C.typeof r' = C.typeof r ->
+        Csyntax.typeof r' = Csyntax.typeof r ->
         tr_top tge e le' m' dst (C r') (sl3 ++ sl2) a tmps).
 Proof.
   induction 1; intros.
@@ -895,7 +895,7 @@ Inductive match_cont : Csem.cont -> cont -> Prop :=
   | match_Kcall: forall f e C ty k optid tf le sl tk a dest tmps,
       transl_function f = Errors.OK tf ->
       leftcontext RV RV C ->
-      (forall v m, tr_top tge e (set_opttemp optid v le) m dest (C (C.Eval v ty)) sl a tmps) ->
+      (forall v m, tr_top tge e (set_opttemp optid v le) m dest (C (Csyntax.Eval v ty)) sl a tmps) ->
       match_cont_exp dest a k tk ->
       match_cont (Csem.Kcall f e C ty k)
                  (Kcall optid tf e le (Kseqlist sl tk))
@@ -1220,10 +1220,10 @@ Proof.
 (* for not skip *)
   rename s' into sr.
   rewrite (tr_find_label_if _ _ H3); auto.
-  exploit (IHs1 (Csem.Kseq (C.Sfor C.Sskip e s2 s3) k)); eauto. 
+  exploit (IHs1 (Csem.Kseq (Csyntax.Sfor Csyntax.Sskip e s2 s3) k)); eauto. 
     econstructor; eauto. econstructor; eauto. 
   destruct (Csem.find_label lbl s1
-               (Csem.Kseq (C.Sfor C.Sskip e s2 s3) k)) as [[s' k'] | ].
+               (Csem.Kseq (Csyntax.Sfor Csyntax.Sskip e s2 s3) k)) as [[s' k'] | ].
   intros [ts' [tk' [A [B C]]]]. rewrite A. exists ts'; exists tk'; intuition.
   intro EQ; rewrite EQ.
   exploit (IHs3 (Csem.Kfor3 e s2 s3 k)); eauto. econstructor; eauto.
@@ -1265,49 +1265,49 @@ End FIND_LABEL.
     Sdo a, k  --->  a, Kdo k ---> rval v, Kdo k ---> Sskip, k
 >>
   but the translation, which is [Sskip], makes no transitions.
-- The reduction [C.Ecomma (C.Eval v) r2 --> r2].
-- The reduction [C.Eparen (C.Eval v) --> C.Eval v] in a [For_effects] context.
+- The reduction [Ecomma (Eval v) r2 --> r2].
+- The reduction [Eparen (Eval v) --> Eval v] in a [For_effects] context.
 
 The following measure decreases for these stuttering steps. *)
 
-Fixpoint esize (a: C.expr) : nat :=
+Fixpoint esize (a: Csyntax.expr) : nat :=
   match a with
-  | C.Eloc _ _ _ => 1%nat
-  | C.Evar _ _ => 1%nat
-  | C.Ederef r1 _ => S(esize r1)
-  | C.Efield l1 _ _ => S(esize l1)
-  | C.Eval _ _ => O
-  | C.Evalof l1 _ => S(esize l1)
-  | C.Eaddrof l1 _ => S(esize l1)
-  | C.Eunop _ r1 _ => S(esize r1)
-  | C.Ebinop _ r1 r2 _ => S(esize r1 + esize r2)%nat
-  | C.Ecast r1 _ => S(esize r1)
-  | C.Eseqand r1 _ _ => S(esize r1)
-  | C.Eseqor r1 _ _ => S(esize r1)
-  | C.Econdition r1 _ _ _ => S(esize r1)
-  | C.Esizeof _ _ => 1%nat
-  | C.Ealignof _ _ => 1%nat
-  | C.Eassign l1 r2 _ => S(esize l1 + esize r2)%nat
-  | C.Eassignop _ l1 r2 _ _ => S(esize l1 + esize r2)%nat
-  | C.Epostincr _ l1 _ => S(esize l1)
-  | C.Ecomma r1 r2 _ => S(esize r1 + esize r2)%nat
-  | C.Ecall r1 rl2 _ => S(esize r1 + esizelist rl2)%nat
-  | C.Ebuiltin ef _ rl _ => S(esizelist rl)%nat
-  | C.Eparen r1 _ => S(esize r1)
+  | Csyntax.Eloc _ _ _ => 1%nat
+  | Csyntax.Evar _ _ => 1%nat
+  | Csyntax.Ederef r1 _ => S(esize r1)
+  | Csyntax.Efield l1 _ _ => S(esize l1)
+  | Csyntax.Eval _ _ => O
+  | Csyntax.Evalof l1 _ => S(esize l1)
+  | Csyntax.Eaddrof l1 _ => S(esize l1)
+  | Csyntax.Eunop _ r1 _ => S(esize r1)
+  | Csyntax.Ebinop _ r1 r2 _ => S(esize r1 + esize r2)%nat
+  | Csyntax.Ecast r1 _ => S(esize r1)
+  | Csyntax.Eseqand r1 _ _ => S(esize r1)
+  | Csyntax.Eseqor r1 _ _ => S(esize r1)
+  | Csyntax.Econdition r1 _ _ _ => S(esize r1)
+  | Csyntax.Esizeof _ _ => 1%nat
+  | Csyntax.Ealignof _ _ => 1%nat
+  | Csyntax.Eassign l1 r2 _ => S(esize l1 + esize r2)%nat
+  | Csyntax.Eassignop _ l1 r2 _ _ => S(esize l1 + esize r2)%nat
+  | Csyntax.Epostincr _ l1 _ => S(esize l1)
+  | Csyntax.Ecomma r1 r2 _ => S(esize r1 + esize r2)%nat
+  | Csyntax.Ecall r1 rl2 _ => S(esize r1 + esizelist rl2)%nat
+  | Csyntax.Ebuiltin ef _ rl _ => S(esizelist rl)%nat
+  | Csyntax.Eparen r1 _ => S(esize r1)
   end
 
-with esizelist (el: C.exprlist) : nat :=
+with esizelist (el: Csyntax.exprlist) : nat :=
   match el with
-  | C.Enil => O
-  | C.Econs r1 rl2 => (esize r1 + esizelist rl2)%nat
+  | Csyntax.Enil => O
+  | Csyntax.Econs r1 rl2 => (esize r1 + esizelist rl2)%nat
   end.
 
 Definition measure (st: Csem.state) : nat :=
   match st with
   | Csem.ExprState _ r _ _ _ => (esize r + 1)%nat
-  | Csem.State _ C.Sskip _ _ _ => 0%nat
-  | Csem.State _ (C.Sdo r) _ _ _ => (esize r + 2)%nat
-  | Csem.State _ (C.Sifthenelse r _ _) _ _ _ => (esize r + 2)%nat
+  | Csem.State _ Csyntax.Sskip _ _ _ => 0%nat
+  | Csem.State _ (Csyntax.Sdo r) _ _ _ => (esize r + 2)%nat
+  | Csem.State _ (Csyntax.Sifthenelse r _ _) _ _ _ => (esize r + 2)%nat
   | _ => 0%nat
   end.
 
@@ -1338,7 +1338,7 @@ Lemma tr_val_gen:
   (forall tge e le' m,
       (forall id, In id tmp -> le'!id = le!id) ->
       eval_expr tge e le' m a v) ->
-  tr_expr le dst (C.Eval v ty) (final dst a) a tmp.
+  tr_expr le dst (Csyntax.Eval v ty) (final dst a) a tmp.
 Proof.
   intros. destruct dst; simpl; econstructor; auto.
 Qed.
@@ -1378,7 +1378,7 @@ Proof.
   econstructor; split.
   left. eapply plus_two. constructor. eapply step_make_set; eauto. traceEq. 
   econstructor; eauto.
-  change (final dst' (Etempvar t0 (C.typeof l)) ++ sl2) with (nil ++ (final dst' (Etempvar t0 (C.typeof l)) ++ sl2)).
+  change (final dst' (Etempvar t0 (Csyntax.typeof l)) ++ sl2) with (nil ++ (final dst' (Etempvar t0 (Csyntax.typeof l)) ++ sl2)).
   apply S. apply tr_val_gen. auto. 
   intros. constructor. rewrite H5; auto. apply PTree.gss.
   intros. apply PTree.gso. red; intros; subst; elim H5; auto. 
@@ -1784,7 +1784,7 @@ Proof.
   left. eapply plus_left. constructor. apply star_one.
   econstructor. econstructor; eauto. rewrite <- TY1; eauto. traceEq.
   econstructor; eauto. 
-  change sl2 with (final For_val (Etempvar t (C.typeof r)) ++ sl2). apply S.
+  change sl2 with (final For_val (Etempvar t (Csyntax.typeof r)) ++ sl2). apply S.
   constructor. auto. intros. constructor. rewrite H2; auto. apply PTree.gss.
   intros. apply PTree.gso. intuition congruence.
   auto. 
@@ -1877,7 +1877,7 @@ Qed.
 
 Lemma tr_top_val_for_val_inv:
   forall e le m v ty sl a tmps,
-  tr_top tge e le m For_val (C.Eval v ty) sl a tmps ->
+  tr_top tge e le m For_val (Csyntax.Eval v ty) sl a tmps ->
   sl = nil /\ typeof a = ty /\ eval_expr tge e le m a v.
 Proof.
   intros. inv H. auto. inv H0. auto. 
@@ -2087,7 +2087,7 @@ Proof.
   inv H9. exploit tr_top_val_for_val_inv; eauto. intros [A [B C]]. subst.
   econstructor; split.
   left. eapply plus_two. constructor. econstructor. eauto.
-  replace (fn_return tf) with (C.fn_return f). eauto.
+  replace (fn_return tf) with (Csyntax.fn_return f). eauto.
   exploit transl_function_spec; eauto. intuition congruence. 
   eauto. traceEq.
   constructor. apply match_cont_call; auto.

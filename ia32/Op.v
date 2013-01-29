@@ -642,8 +642,8 @@ Proof.
   right. apply Int.no_overlap_sound; auto. 
 (* Aglobal *)
   unfold symbol_address in *. 
-  destruct (Genv.find_symbol ge i1) as []_eqn; inv H2.
-  destruct (Genv.find_symbol ge i) as []_eqn; inv H1.
+  destruct (Genv.find_symbol ge i1) eqn:?; inv H2.
+  destruct (Genv.find_symbol ge i) eqn:?; inv H1.
   destruct (ident_eq i i1). subst.
   replace (Int.unsigned n1) with (Int.unsigned (Int.add Int.zero n1)).
   replace (Int.unsigned n2) with (Int.unsigned (Int.add Int.zero n2)).
@@ -653,9 +653,9 @@ Proof.
   left. red; intros; elim n. subst. eapply Genv.genv_vars_inj; eauto.
 (* Abased *)
   unfold symbol_address in *. 
-  destruct (Genv.find_symbol ge i1) as []_eqn; simpl in *; try discriminate.
+  destruct (Genv.find_symbol ge i1) eqn:?; simpl in *; try discriminate.
   destruct v; inv H2.
-  destruct (Genv.find_symbol ge i) as []_eqn; inv H1.
+  destruct (Genv.find_symbol ge i) eqn:?; inv H1.
   destruct (ident_eq i i1). subst.
   rewrite (Int.add_commut i0 i3). rewrite (Int.add_commut i2 i3).
   right. apply Int.no_overlap_sound; auto. 
@@ -776,8 +776,8 @@ Opaque Int.add.
     Val.cmpu_bool (Mem.valid_pointer m1) c v1 v2 = Some b ->
     Val.cmpu_bool (Mem.valid_pointer m2) c v1' v2' = Some b).
   intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
-  destruct (Mem.valid_pointer m1 b1 (Int.unsigned ofs1)) as []_eqn; try discriminate.
-  destruct (Mem.valid_pointer m1 b0 (Int.unsigned ofs0)) as []_eqn; try discriminate.
+  destruct (Mem.valid_pointer m1 b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (Mem.valid_pointer m1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
   rewrite (valid_pointer_inj _ H2 Heqb4).
   rewrite (valid_pointer_inj _ H Heqb0). simpl.
   destruct (zeq b1 b0); simpl in H1.
@@ -878,7 +878,7 @@ Proof.
   inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
   exists (Vint i); auto.
   inv H4; simpl in H1; inv H1. simpl. TrivialExists.
-  subst v1. destruct (eval_condition c vl1 m1) as []_eqn.
+  subst v1. destruct (eval_condition c vl1 m1) eqn:?.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.
   simpl; constructor.
@@ -995,7 +995,7 @@ Hypothesis sp_inj: f sp1 = Some(sp2, delta).
 Remark symbol_address_inject:
   forall id ofs, val_inject f (symbol_address genv id ofs) (symbol_address genv id ofs).
 Proof.
-  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) as []_eqn; auto.
+  intros. unfold symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
   exploit (proj1 globals); eauto. intros. 
   econstructor; eauto. rewrite Int.add_zero; auto.
 Qed.

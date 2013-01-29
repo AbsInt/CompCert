@@ -306,7 +306,7 @@ Lemma range_private_free_left:
   range_private F m1 m' sp base hi.
 Proof.
   intros; red; intros. 
-  destruct (zlt ofs (base + Zmax sz 0)).
+  destruct (zlt ofs (base + Zmax sz 0)) as [z|z].
   red; split. 
   replace ofs with ((ofs - base) + base) by omega.
   eapply Mem.perm_inject; eauto.
@@ -342,7 +342,7 @@ Proof.
   red; intros. exploit RP; eauto. intros [A B].
   destruct UNCH as [U1 U2].
   split. auto. 
-  intros. red in SEP. destruct (F b) as [[sp1 delta1] |]_eqn.
+  intros. red in SEP. destruct (F b) as [[sp1 delta1] |] eqn:?.
   exploit INCR; eauto. intros EQ; rewrite H0 in EQ; inv EQ. 
   red; intros; eelim B; eauto. eapply PERM; eauto. 
   red. destruct (zlt b (Mem.nextblock m1)); auto. 
@@ -710,7 +710,7 @@ Proof.
   induction 1; intros.
   apply match_stacks_nil with bound1; auto. 
     inv MG. constructor; intros; eauto. 
-    destruct (F1 b1) as [[b2' delta']|]_eqn.
+    destruct (F1 b1) as [[b2' delta']|] eqn:?.
     exploit INCR; eauto. intros EQ; rewrite H0 in EQ; inv EQ. eapply IMAGE; eauto. 
     exploit SEP; eauto. intros [A B]. elim B. red. omega. 
   eapply match_stacks_cons; eauto. 
@@ -919,7 +919,7 @@ Proof.
   eapply agree_val_regs; eauto. 
 (* inlined *)
   assert (fd = Internal f0).
-    simpl in H0. destruct (Genv.find_symbol ge id) as [b|]_eqn; try discriminate.
+    simpl in H0. destruct (Genv.find_symbol ge id) as [b|] eqn:?; try discriminate.
     exploit (funenv_program_compat prog); eauto. intros. 
     unfold ge in H0. congruence.
   subst fd.
@@ -973,7 +973,7 @@ Proof.
   eapply Mem.free_left_inject; eauto.
 (* inlined *)
   assert (fd = Internal f0).
-    simpl in H0. destruct (Genv.find_symbol ge id) as [b|]_eqn; try discriminate.
+    simpl in H0. destruct (Genv.find_symbol ge id) as [b|] eqn:?; try discriminate.
     exploit (funenv_program_compat prog); eauto. intros. 
     unfold ge in H0. congruence.
   subst fd.

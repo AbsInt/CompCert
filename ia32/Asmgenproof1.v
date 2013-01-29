@@ -1099,12 +1099,12 @@ Proof.
   rewrite (int_ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
   destruct (Int.ltu i i0); reflexivity.
 (* int ptr *)
-  destruct (Int.eq i Int.zero) as []_eqn; try discriminate.
+  destruct (Int.eq i Int.zero) eqn:?; try discriminate.
   destruct c; simpl in *; inv H1.
   rewrite Heqb1; reflexivity. 
   rewrite Heqb1; reflexivity.
 (* ptr int *)
-  destruct (Int.eq i0 Int.zero) as []_eqn; try discriminate.
+  destruct (Int.eq i0 Int.zero) eqn:?; try discriminate.
   destruct c; simpl in *; inv H1.
   rewrite Heqb1; reflexivity. 
   rewrite Heqb1; reflexivity.
@@ -1396,13 +1396,13 @@ Proof.
 (* comp *)
   simpl. rewrite (ireg_of_eq _ _ EQ). rewrite (ireg_of_eq _ _ EQ1).
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmp_bool c0 (rs x) (rs x0)) as []_eqn; auto.
+  split. destruct (Val.cmp_bool c0 (rs x) (rs x0)) eqn:?; auto.
   eapply testcond_for_signed_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compu *)
   simpl. rewrite (ireg_of_eq _ _ EQ). rewrite (ireg_of_eq _ _ EQ1).
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (rs x0)) as []_eqn; auto.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (rs x0)) eqn:?; auto.
   eapply testcond_for_unsigned_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compimm *)
@@ -1412,13 +1412,13 @@ Proof.
   eapply testcond_for_signed_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
   econstructor; split. apply exec_straight_one. simpl; eauto. auto. 
-  split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) as []_eqn; auto.
+  split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:?; auto.
   eapply testcond_for_signed_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compuimm *)
   simpl. rewrite (ireg_of_eq _ _ EQ).
   econstructor. split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) as []_eqn; auto.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:?; auto.
   eapply testcond_for_unsigned_comparison_correct; eauto. 
   intros. unfold compare_ints. repeat SOther.
 (* compf *)
@@ -1613,22 +1613,22 @@ Proof.
 (* div *)
   apply SAME.
   specialize (divs_mods_exist (rs x0) (rs x1)). rewrite H0. 
-  destruct (Val.mods (rs x0) (rs x1)) as [vr|]_eqn; intros; try contradiction.
+  destruct (Val.mods (rs x0) (rs x1)) as [vr|] eqn:?; intros; try contradiction.
   eapply mk_div_correct with (dsem := Val.divs) (msem := Val.mods); eauto.
 (* divu *)
   apply SAME.
   specialize (divu_modu_exist (rs x0) (rs x1)). rewrite H0. 
-  destruct (Val.modu (rs x0) (rs x1)) as [vr|]_eqn; intros; try contradiction.
+  destruct (Val.modu (rs x0) (rs x1)) as [vr|] eqn:?; intros; try contradiction.
   eapply mk_div_correct with (dsem := Val.divu) (msem := Val.modu); eauto.
 (* mod *)
   apply SAME.
   specialize (divs_mods_exist (rs x0) (rs x1)). rewrite H0. 
-  destruct (Val.divs (rs x0) (rs x1)) as [vq|]_eqn; intros; try contradiction.
+  destruct (Val.divs (rs x0) (rs x1)) as [vq|] eqn:?; intros; try contradiction.
   eapply mk_mod_correct with (dsem := Val.divs) (msem := Val.mods); eauto.
 (* modu *)
   apply SAME.
   specialize (divu_modu_exist (rs x0) (rs x1)). rewrite H0. 
-  destruct (Val.divu (rs x0) (rs x1)) as [vq|]_eqn; intros; try contradiction.
+  destruct (Val.divu (rs x0) (rs x1)) as [vq|] eqn:?; intros; try contradiction.
   eapply mk_mod_correct with (dsem := Val.divu) (msem := Val.modu); eauto.
 (* shl *)
   apply SAME. eapply mk_shift_correct; eauto. 

@@ -171,7 +171,7 @@ Proof.
   intros. unfold iter in H1. rewrite unroll_Fix in H1. unfold iter_step in H1.
   destruct (peq x 1). discriminate.
   specialize (step_prop a H0). 
-  destruct (step a) as [b'|a']_eqn.
+  destruct (step a) as [b'|a'] eqn:?.
   inv H1. auto.
   apply H with (Ppred x) a'. apply Ppred_Plt; auto. auto. auto.
 Qed.

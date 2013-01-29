@@ -11,6 +11,7 @@
 (* *********************************************************************)
 
 open Printf
+open Camlcoq
 open Clflags
 
 (* Location of the compatibility library *)
@@ -37,9 +38,9 @@ let safe_remove file =
 
 let print_error oc msg =
   let print_one_error = function
-  | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
-  | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
-  | Errors.POS i -> fprintf oc "%ld" (Camlcoq.camlint_of_positive i)
+  | Errors.MSG s -> output_string oc (camlstring_of_coqstring s)
+  | Errors.CTX i -> output_string oc (extern_atom i)
+  | Errors.POS i -> fprintf oc "%ld" (P.to_int32 i)
   in
     List.iter print_one_error msg;
     output_char oc '\n'

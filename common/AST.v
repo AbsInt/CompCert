@@ -225,10 +225,10 @@ Proof.
   revert x EQ H0. induction (prog_defs p); simpl; intros.
   inv EQ. contradiction.
   destruct a as [id [f|v]].
-  destruct (transf_fun f) as [tf1|msg]_eqn; monadInv EQ.
+  destruct (transf_fun f) as [tf1|msg] eqn:?; monadInv EQ.
   simpl in H0; destruct H0. inv H. exists f; auto. 
   exploit IHl; eauto. intros [f' [P Q]]; exists f'; auto.
-  destruct (transf_globvar v) as [tv1|msg]_eqn; monadInv EQ.
+  destruct (transf_globvar v) as [tv1|msg] eqn:?; monadInv EQ.
   simpl in H0; destruct H0. inv H.
   exploit IHl; eauto. intros [f' [P Q]]; exists f'; auto.
 Qed.
@@ -245,10 +245,10 @@ Proof.
   revert x EQ H0. induction (prog_defs p); simpl; intros.
   inv EQ. contradiction.
   destruct a as [id [f|v]].
-  destruct (transf_fun f) as [tf1|msg]_eqn; monadInv EQ.
+  destruct (transf_fun f) as [tf1|msg] eqn:?; monadInv EQ.
   simpl in H0; destruct H0. inv H.
   exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
-  destruct (transf_globvar v) as [tv1|msg]_eqn; monadInv EQ.
+  destruct (transf_globvar v) as [tv1|msg] eqn:?; monadInv EQ.
   simpl in H0; destruct H0. inv H.
   monadInv Heqr. simpl. exists (gvar_info v). split. left. destruct v; auto. auto.
   exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
@@ -394,11 +394,11 @@ Proof.
   monadInv EQ. constructor.
   destruct a as [id [f|v]]. 
   (* function *)
-  destruct (transf_fun f) as [tf|?]_eqn; monadInv EQ. 
+  destruct (transf_fun f) as [tf|?] eqn:?; monadInv EQ. 
   constructor; auto. constructor; auto.
   (* variable *)
   unfold transf_globvar in EQ.
-  destruct (transf_var (gvar_info v)) as [tinfo|?]_eqn; simpl in EQ; monadInv EQ.
+  destruct (transf_var (gvar_info v)) as [tinfo|?] eqn:?; simpl in EQ; monadInv EQ.
   constructor; auto. destruct v; simpl in *. constructor; auto.
 Qed.
 

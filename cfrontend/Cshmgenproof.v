@@ -732,10 +732,10 @@ Lemma block_is_volatile_preserved:
   forall b, block_is_volatile tge b = block_is_volatile ge b.
 Proof.
   intros. unfold block_is_volatile.
-  destruct (Genv.find_var_info ge b) as []_eqn.
+  destruct (Genv.find_var_info ge b) eqn:?.
   exploit var_info_translated; eauto. intros [tv [A B]]. rewrite A. 
   unfold transf_globvar in B. monadInv B. auto.
-  destruct (Genv.find_var_info tge b) as []_eqn.
+  destruct (Genv.find_var_info tge b) eqn:?.
   exploit var_info_rev_translated; eauto. intros [tv [A B]]. congruence.
   auto.
 Qed.
@@ -761,7 +761,7 @@ Lemma match_env_globals:
   e!id = None ->
   te!id = None.
 Proof.
-  intros. destruct (te!id) as [[b sz] | ]_eqn; auto.
+  intros. destruct (te!id) as [[b sz] | ] eqn:?; auto.
   exploit me_local_inv; eauto. intros [ty EQ]. congruence.
 Qed.
 
@@ -1284,7 +1284,7 @@ Proof.
   destruct H0. inv MK.
   econstructor; split.
   eapply plus_left.
-  destruct H0; subst ts'; constructor. 
+  destruct H0; subst ts'. 2:constructor. constructor.
   apply star_one. constructor. traceEq.
   econstructor; eauto. constructor. econstructor; eauto. 
 
@@ -1355,7 +1355,7 @@ Proof.
     destruct H; subst x; monadInv TR; inv MTR; auto.
   destruct H0. inv MK.
   econstructor; split.
-  apply plus_one. destruct H0; subst ts'; constructor.
+  apply plus_one. destruct H0; subst ts'. 2:constructor. constructor.
   eapply match_states_skip; eauto.
 
 

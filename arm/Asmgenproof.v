@@ -1087,7 +1087,8 @@ Proof.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros A.
   exploit transl_cond_correct. eauto. eauto. 
-  instantiate (1 := rs). instantiate (1 := m'). unfold PregEq.t. rewrite A. 
+  instantiate (1 := rs). instantiate (1 := m').
+  rewrite A || (unfold PregEq.t; rewrite A).
   intros [rs2 [EX [RES OTH]]]. 
   inv AT. simpl in H5.
   generalize (functions_transl _ _ H4); intro FN.
@@ -1123,7 +1124,8 @@ Proof.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros A.
   exploit transl_cond_correct. eauto. 
-  instantiate (1 := rs). instantiate (1 := m'). unfold PregEq.t. rewrite A. 
+  instantiate (1 := rs). instantiate (1 := m').
+  rewrite A || (unfold PregEq.t; rewrite A).
   intros [rs2 [EX [RES OTH]]].
   left; eapply exec_straight_steps; eauto with coqlib.
   exists m'; split; auto.
