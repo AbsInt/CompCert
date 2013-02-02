@@ -22,9 +22,9 @@ EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
 # Test known to fail
 FAILURES=funct1 varargs1
 
-all_s: $(TESTS:%=%.s) $(EXTRAS:%=%.s)
-
 all: $(TESTS:%=%.compcert) $(EXTRAS:%=%.s)
+
+all_s: $(TESTS:%=%.s) $(EXTRAS:%=%.s)
 
 %.compcert: %.c $(CCOMP)
 	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)

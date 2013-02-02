@@ -17,9 +17,9 @@ PROGS=fib integr qsort fft sha1 aes almabench lists \
 
 PROGS_INTERP=floats
 
-all_s: $(PROGS:%=%.s)
-
 all: $(PROGS:%=%.compcert)
+
+all_s: $(PROGS:%=%.s)
 
 all_gcc: $(PROGS:%=%.gcc)
 

@@ -204,7 +204,6 @@ let sp_adjustment sz =
   let sz = int32_align sz stack_alignment in
   (* The top 4 bytes have already been allocated by the "call" instruction. *)
   let sz = Int32.sub sz 4l in
-  assert (sz >= 0l);
   sz
 
 (* Base-2 log of a Caml integer *)
@@ -787,8 +786,8 @@ let print_init oc = function
 	(camlint64_of_coqint (Floats.Float.bits_of_double n))
 	comment (camlfloat_of_coqfloat n)
   | Init_space n ->
-      let n = Z.to_int32 n in
-      if n > 0l then fprintf oc "	.space	%ld\n" n
+      if Z.gt n Z.zero then
+        fprintf oc "	.space	%s\n" (Z.to_string n)
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.long	%a\n" 
                  symbol_offset (symb, camlint_of_coqint ofs)

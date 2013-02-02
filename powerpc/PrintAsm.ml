@@ -924,8 +924,8 @@ let print_init oc = function
                  (Int64.logand b 0xFFFFFFFFL)
                  comment (camlfloat_of_coqfloat n)
   | Init_space n ->
-      let n = Z.to_int32 n in
-      if n > 0l then fprintf oc "	.space	%ld\n" n
+      if Z.gt n Z.zero then
+        fprintf oc "	.space	%s\n" (Z.to_string n)
   | Init_addrof(symb, ofs) ->
       fprintf oc "	.long	%a\n" 
                  symbol_offset (symb, camlint_of_coqint ofs)
@@ -964,10 +964,10 @@ let print_var oc name v =
       end else begin
         let sz =
           match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
-        fprintf oc "	%s	%a, %ld, %d\n"
+        fprintf oc "	%s	%a, %s, %d\n"
           (if C2C.atom_is_static name then ".lcomm" else ".comm")
           symbol name
-          (camlint_of_coqint sz)
+          (Z.to_string sz)
           (1 lsl align)
       end
 

@@ -779,11 +779,12 @@ let convertInitializer env ty i =
 let convertGlobvar env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
+  let sz = Ctypes.sizeof ty' in
   let attr = Cutil.attributes_of_type env ty in
   let init' =
     match optinit with
     | None ->
-        if sto = C.Storage_extern then [] else [Init_space(Ctypes.sizeof ty')]
+        if sto = C.Storage_extern then [] else [Init_space sz]
     | Some i ->
         convertInitializer env ty i in
   let align =
@@ -792,6 +793,9 @@ let convertGlobvar env (sto, id, ty, optinit) =
     | _            -> Cutil.alignof env ty in
   let (section, near_access) =
     Sections.for_variable env id' ty (optinit <> None) in
+  if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
+    error (sprintf "Variable %s is too big (%s bytes)"
+                   id.name (Z.to_string sz));
   Hashtbl.add decl_atom id'
     { a_storage = sto;
       a_alignment = align;
