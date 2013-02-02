@@ -142,7 +142,7 @@ let print_state p (prog, ge, s) =
 
 let compare_mem m1 m2 = (* should permissions be taken into account? *)
   Pervasives.compare (m1.Mem.nextblock, m1.Mem.mem_contents)
-                     (m2.Mem.nextblock, m1.Mem.mem_contents)
+                     (m2.Mem.nextblock, m2.Mem.mem_contents)
 
 (* Comparing continuations *)
 
