@@ -1398,6 +1398,16 @@ Proof.
   unfold z; auto.
 Qed.
 
+Lemma Z_of_bits_equal:
+  forall f x,
+  (forall i, 0 <= i < Z_of_nat wordsize -> f i = bits_of_Z wordsize (unsigned x) i) ->
+  repr (Z_of_bits wordsize f 0) = x.
+Proof.
+  intros. transitivity (repr (Z_of_bits wordsize (bits_of_Z wordsize (unsigned x)) 0)).
+  f_equal. apply Z_of_bits_exten; intros. apply H. omega. 
+  apply eqm_repr_eq. apply Z_of_bits_of_Z.
+Qed.
+
 (** ** Properties of bitwise and, or, xor *)
 
 Lemma bitwise_binop_commut:
@@ -1427,9 +1437,7 @@ Lemma bitwise_binop_idem:
   forall x,
   bitwise_binop f x x = x.
 Proof.
-  unfold bitwise_binop; intros.
-  apply eqm_repr_eq. eapply eqm_trans. 2: apply Z_of_bits_of_Z. 
-  apply eqm_refl2. apply Z_of_bits_exten. auto. 
+  unfold bitwise_binop; intros. apply Z_of_bits_equal; intros. auto.
 Qed.
 
 Theorem and_commut: forall x y, and x y = and y x.
@@ -1440,19 +1448,25 @@ Proof (bitwise_binop_assoc andb andb_assoc).
 
 Theorem and_zero: forall x, and x zero = zero.
 Proof.
-  intros. unfold and, bitwise_binop.
-  apply eqm_samerepr. eapply eqm_trans. 2: apply Z_of_bits_of_Z. 
-  apply eqm_refl2. apply Z_of_bits_exten. intros. 
+  intros. unfold and, bitwise_binop. apply Z_of_bits_equal; intros.
   rewrite unsigned_zero. rewrite bits_of_Z_zero. apply andb_b_false.
+Qed.
+
+Corollary and_zero_l: forall x, and zero x = zero.
+Proof.
+  intros. rewrite and_commut. apply and_zero.
 Qed.
 
 Theorem and_mone: forall x, and x mone = x.
 Proof.
-  intros. unfold and, bitwise_binop.
-  apply eqm_repr_eq. eapply eqm_trans. 2: apply Z_of_bits_of_Z. 
-  apply eqm_refl2. apply Z_of_bits_exten; intros.
+  intros. unfold and, bitwise_binop. apply Z_of_bits_equal; intros.
   rewrite unsigned_mone. rewrite bits_of_Z_mone. apply andb_b_true.
   omega.
+Qed.
+
+Corollary and_mone_l: forall x, and mone x = x.
+Proof.
+  intros. rewrite and_commut. apply and_mone.
 Qed.
 
 Theorem and_idem: forall x, and x x = x.
@@ -1468,19 +1482,25 @@ Proof (bitwise_binop_assoc orb orb_assoc).
 
 Theorem or_zero: forall x, or x zero = x.
 Proof.
-  intros. unfold or, bitwise_binop. 
-  apply eqm_repr_eq. eapply eqm_trans. 2: apply Z_of_bits_of_Z.
-  apply eqm_refl2. apply Z_of_bits_exten. intros. 
+  intros. unfold or, bitwise_binop. apply Z_of_bits_equal; intros. 
   rewrite unsigned_zero. rewrite bits_of_Z_zero. apply orb_b_false. 
+Qed.
+
+Corollary or_zero_l: forall x, or zero x = x.
+Proof.
+  intros. rewrite or_commut. apply or_zero.
 Qed.
 
 Theorem or_mone: forall x, or x mone = mone.
 Proof.
-  intros. unfold or, bitwise_binop.
-  apply eqm_repr_eq. eapply eqm_trans. 2: apply Z_of_bits_of_Z.
-  apply eqm_refl2. apply Z_of_bits_exten. intros. 
+  intros. unfold or, bitwise_binop. apply Z_of_bits_equal; intros.
   rewrite unsigned_mone. rewrite bits_of_Z_mone. apply orb_b_true. 
   omega.
+Qed.
+
+Corollary or_mone_l: forall x, or mone x = mone.
+Proof.
+  intros. rewrite or_commut. apply or_mone.
 Qed.
 
 Theorem or_idem: forall x, or x x = x.
@@ -1499,6 +1519,49 @@ Proof.
   apply demorgan1.
 Qed.  
 
+Corollary and_or_distrib_l:
+  forall x y z,
+  and (or x y) z = or (and x z) (and y z).
+Proof.
+  intros. rewrite (and_commut (or x y)). rewrite and_or_distrib. f_equal; apply and_commut.
+Qed.
+
+Theorem or_and_distrib:
+  forall x y z,
+  or x (and y z) = and (or x y) (or x z).
+Proof.
+  intros; unfold and, or, bitwise_binop.
+  repeat rewrite unsigned_repr; auto with ints.
+  decEq; apply Z_of_bits_exten; intros.
+  repeat rewrite bits_of_Z_of_bits; repeat rewrite Zplus_0_r; auto.
+  apply orb_andb_distrib_r. 
+Qed.  
+
+Corollary or_and_distrib_l:
+  forall x y z,
+  or (and x y) z = and (or x z) (or y z).
+Proof.
+  intros. rewrite (or_commut (and x y)). rewrite or_and_distrib. f_equal; apply or_commut.
+Qed.
+
+Theorem and_or_absorb: forall x y, and x (or x y) = x.
+Proof.
+  intros; unfold and, or, bitwise_binop. apply Z_of_bits_equal; intros.
+  rewrite unsigned_repr; auto with ints. rewrite bits_of_Z_of_bits.
+  assert (forall a b, a && (a || b) = a) by (destruct a; destruct b; auto).
+  auto.
+  omega.
+Qed.
+
+Theorem or_and_absorb: forall x y, or x (and x y) = x.
+Proof.
+  intros; unfold and, or, bitwise_binop. apply Z_of_bits_equal; intros. 
+  rewrite unsigned_repr; auto with ints. rewrite bits_of_Z_of_bits.
+  assert (forall a b, a || (a && b) = a) by (destruct a; destruct b; auto).
+  auto.
+  omega.
+Qed.
+
 Theorem xor_commut: forall x y, xor x y = xor y x.
 Proof (bitwise_binop_commut xorb xorb_comm).
 
@@ -1510,17 +1573,18 @@ Qed.
 
 Theorem xor_zero: forall x, xor x zero = x.
 Proof.
-  intros. unfold xor, bitwise_binop.
-  apply eqm_repr_eq. eapply eqm_trans. 2: apply Z_of_bits_of_Z.
-  apply eqm_refl2. apply Z_of_bits_exten. intros. 
+  intros. unfold xor, bitwise_binop. apply Z_of_bits_equal; intros.
   rewrite unsigned_zero. rewrite bits_of_Z_zero. apply xorb_false. 
+Qed.
+
+Corollary xor_zero_l: forall x, xor zero x = x.
+Proof.
+  intros. rewrite xor_commut. apply xor_zero.
 Qed.
 
 Theorem xor_idem: forall x, xor x x = zero.
 Proof.
-  intros. unfold xor, bitwise_binop.
-  apply eqm_repr_eq. eapply eqm_trans. 2: apply Z_of_bits_of_Z.
-  apply eqm_refl2. apply Z_of_bits_exten. intros. 
+  intros. unfold xor, bitwise_binop. apply Z_of_bits_equal; intros.
   rewrite unsigned_zero. rewrite bits_of_Z_zero. apply xorb_nilpotent. 
 Qed.
 
@@ -1529,6 +1593,28 @@ Proof. rewrite xor_commut. apply xor_zero. Qed.
 
 Theorem xor_one_one: xor one one = zero.
 Proof. apply xor_idem. Qed.
+
+Theorem xor_zero_equal: forall x y, xor x y = zero -> x = y.
+Proof.
+  unfold xor, bitwise_binop; intros.
+  set (ux := unsigned x) in *. set (uy := unsigned y) in *.
+  set (fx := bits_of_Z wordsize ux) in *. 
+  set (fy := bits_of_Z wordsize uy) in *.
+  assert (forall i, 0 <= i < Z_of_nat wordsize -> fx i = fy i).
+    intros.
+    assert (bits_of_Z wordsize (unsigned (repr (Z_of_bits wordsize (fun i => xorb (fx i) (fy i)) 0))) i = false).
+      rewrite H. rewrite unsigned_zero. apply bits_of_Z_zero.
+    rewrite unsigned_repr in H1; auto with ints.
+    rewrite bits_of_Z_of_bits in H1; auto.
+    destruct (fx i); destruct (fy i); simpl in H1; congruence.
+  rewrite <- (repr_unsigned x); fold ux.
+  rewrite <- (repr_unsigned y); fold uy.
+  apply eqm_samerepr.
+  eapply eqm_trans. apply eqm_sym. apply Z_of_bits_of_Z.
+  eapply eqm_trans. 2: apply Z_of_bits_of_Z.
+  fold fx; fold fy. apply eqm_refl2. 
+  apply Z_of_bits_exten. intros; apply H0; omega.
+Qed.
 
 Theorem and_xor_distrib:
   forall x y z,
