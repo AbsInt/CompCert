@@ -38,12 +38,10 @@ Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
 Proof Plt_ne.
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
-  intros. case (plt x y); intro.
-  apply LT. auto.
-  case (peq x y); intro.
-  apply EQ. auto.
-  apply GT. red; unfold Plt in *. 
-  assert (Zpos x <> Zpos y). congruence. omega.
+  intros. destruct (Pos.compare x y) as [] eqn:E.
+  apply EQ. red. apply Pos.compare_eq_iff. assumption.
+  apply LT. assumption.
+  apply GT. apply Pos.compare_gt_iff. assumption.
 Qed.
 
 Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := peq.

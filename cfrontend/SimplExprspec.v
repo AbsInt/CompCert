@@ -591,7 +591,7 @@ Lemma within_widen:
 Proof.
   intros. destruct H. split. 
   eapply Ple_trans; eauto.
-  unfold Plt, Ple in *. omega. 
+  eapply Plt_Ple_trans; eauto.
 Qed.
 
 Definition contained (l: list ident) (g1 g2: generator) : Prop :=

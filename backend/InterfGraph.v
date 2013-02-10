@@ -119,14 +119,14 @@ Lemma ordered_pair_sym:
   forall x y, ordered_pair y x = ordered_pair x y.
 Proof.
   unfold ordered_pair; intros.
-  case (plt x y); intro.
-  case (plt y x); intro.
-  unfold Plt in *; omegaContradiction.
+  destruct (plt y x); destruct (plt x y).
+  elim (Plt_strict x). eapply Plt_trans; eauto. 
   auto.
-  case (plt y x); intro.
   auto.
-  assert (Zpos x = Zpos y).  unfold Plt in *. omega.
+  destruct (Pos.lt_total x y) as [A | [A | A]]. 
+  elim n0; auto.
   congruence.
+  elim n; auto.
 Qed.
 
 Lemma interfere_sym:

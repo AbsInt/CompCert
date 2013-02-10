@@ -219,8 +219,8 @@ Remark cast_int_int_idem:
   forall sz sg i, cast_int_int sz sg (cast_int_int sz sg i) = cast_int_int sz sg i.
 Proof.
   intros. destruct sz; simpl; auto. 
-  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; auto.
-  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; auto.
+  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; intuition congruence.
+  destruct sg; [apply Int.sign_ext_idem|apply Int.zero_ext_idem]; compute; intuition congruence.
   destruct (Int.eq i Int.zero); auto.
 Qed.
 
@@ -288,7 +288,7 @@ Proof.
   destruct si; inversion H0; clear H0; subst chunk; simpl in *; congruence.
   clear H1. inv H0. auto.
   inversion H0; clear H0; subst chunk. simpl in *. 
-  destruct (Int.eq n Int.zero); subst n; auto.
+  destruct (Int.eq n Int.zero); subst n; reflexivity.
   destruct sz; inversion H0; clear H0; subst chunk; simpl in *; congruence.
   inv H0; auto.
   inv H0; auto.

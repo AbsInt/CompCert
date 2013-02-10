@@ -428,14 +428,14 @@ Theorem cast8unsigned_and:
   forall x, zero_ext 8 x = and x (Vint(Int.repr 255)).
 Proof.
   destruct x; simpl; auto. decEq. 
-  change 255 with (two_p 8 - 1). apply Int.zero_ext_and. vm_compute; auto.
+  change 255 with (two_p 8 - 1). apply Int.zero_ext_and. omega. 
 Qed.
 
 Theorem cast16unsigned_and:
   forall x, zero_ext 16 x = and x (Vint(Int.repr 65535)).
 Proof.
   destruct x; simpl; auto. decEq. 
-  change 65535 with (two_p 16 - 1). apply Int.zero_ext_and. vm_compute; auto.
+  change 65535 with (two_p 16 - 1). apply Int.zero_ext_and. omega.
 Qed.
 
 Theorem bool_of_val_of_bool:
@@ -600,7 +600,7 @@ Theorem mul_pow2:
   mul x (Vint n) = shl x (Vint logn).
 Proof.
   intros; destruct x; simpl; auto.
-  change 32 with (Z_of_nat Int.wordsize).
+  change 32 with Int.zwordsize.
   rewrite (Int.is_power2_range _ _ H). decEq. apply Int.mul_pow2. auto.
 Qed.  
 
@@ -929,17 +929,17 @@ Qed.
 
 Lemma zero_ext_and:
   forall n v, 
-  0 < n < Z_of_nat Int.wordsize ->
+  0 < n < Int.zwordsize ->
   Val.zero_ext n v = Val.and v (Vint (Int.repr (two_p n - 1))).
 Proof.
-  intros. destruct v; simpl; auto. decEq. apply Int.zero_ext_and; auto.
+  intros. destruct v; simpl; auto. decEq. apply Int.zero_ext_and; auto. omega.
 Qed.
 
 Lemma rolm_lt_zero:
   forall v, rolm v Int.one Int.one = cmp Clt v (Vint Int.zero).
 Proof.
   intros. unfold cmp, cmp_bool; destruct v; simpl; auto.
-  transitivity (Vint (Int.shru i (Int.repr (Z_of_nat Int.wordsize - 1)))).
+  transitivity (Vint (Int.shru i (Int.repr (Int.zwordsize - 1)))).
   decEq. symmetry. rewrite Int.shru_rolm. auto. auto. 
   rewrite Int.shru_lt_zero. destruct (Int.lt i Int.zero); auto. 
 Qed.

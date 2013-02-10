@@ -1280,23 +1280,23 @@ Proof.
   assert (A: forall v, v = Val.zero_ext 8 v -> v = Val.zero_ext 16 v).
     intros. rewrite H.
     destruct v; simpl; auto. decEq. symmetry. 
-    apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
+    apply Int.zero_ext_widen. omega. 
   assert (B: forall v, v = Val.sign_ext 8 v -> v = Val.sign_ext 16 v).
     intros. rewrite H.
     destruct v; simpl; auto. decEq. symmetry. 
-    apply Int.sign_ext_widen. compute; auto. split. omega. compute; auto.
+    apply Int.sign_ext_widen. omega.
   assert (C: forall v, v = Val.zero_ext 8 v -> v = Val.sign_ext 16 v).
     intros. rewrite H.
     destruct v; simpl; auto. decEq. symmetry. 
-    apply Int.sign_zero_ext_widen. compute; auto. split. omega. compute; auto.
+    apply Int.sign_zero_ext_widen. omega.
   assert (D: forall v, v = Val.zero_ext 1 v -> v = Val.zero_ext 8 v).
     intros. rewrite H.
     destruct v; simpl; auto. decEq. symmetry. 
-    apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
+    apply Int.zero_ext_widen. omega. 
   assert (E: forall v, v = Val.zero_ext 1 v -> v = Val.sign_ext 8 v).
     intros. rewrite H.
     destruct v; simpl; auto. decEq. symmetry. 
-    apply Int.sign_zero_ext_widen. compute; auto. split. omega. compute; auto.
+    apply Int.sign_zero_ext_widen. omega.
   intros. 
   unfold Approx.bge in H; destruct a1; try discriminate; destruct a2; simpl in *; try discriminate; intuition.
 Qed.
@@ -1309,14 +1309,14 @@ Proof.
   destruct (Int.eq_dec n Int.one); simpl. subst; auto. 
   destruct (Int.eq_dec n (Int.zero_ext 7 n)). simpl.
     split.
-    decEq. rewrite e. symmetry. apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
-    decEq. rewrite e. symmetry. apply Int.sign_zero_ext_widen. compute; auto. compute; auto. 
+    decEq. rewrite e. symmetry. apply Int.zero_ext_widen. omega.
+    decEq. rewrite e. symmetry. apply Int.sign_zero_ext_widen. omega.
   destruct (Int.eq_dec n (Int.zero_ext 8 n)). simpl; congruence.
   destruct (Int.eq_dec n (Int.sign_ext 8 n)). simpl; congruence.
   destruct (Int.eq_dec n (Int.zero_ext 15 n)). simpl.
     split.
-    decEq. rewrite e. symmetry. apply Int.zero_ext_widen. compute; auto. split. omega. compute; auto.
-    decEq. rewrite e. symmetry. apply Int.sign_zero_ext_widen. compute; auto. compute; auto. 
+    decEq. rewrite e. symmetry. apply Int.zero_ext_widen. omega. 
+    decEq. rewrite e. symmetry. apply Int.sign_zero_ext_widen. omega. 
   destruct (Int.eq_dec n (Int.zero_ext 16 n)). simpl; congruence.
   destruct (Int.eq_dec n (Int.sign_ext 16 n)). simpl; congruence.
   exact I.
@@ -1345,10 +1345,10 @@ Lemma approx_of_unop_sound:
   val_match_approx (Approx.unop op a1) v.
 Proof.
   destruct op; simpl; intros; auto; inv H.
-  destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. compute; auto.
-  destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
-  destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. compute; auto.
-  destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. compute; auto.
+  destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. omega. 
+  destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. omega. 
+  destruct v1; simpl; auto. rewrite Int.zero_ext_idem; auto. omega. 
+  destruct v1; simpl; auto. rewrite Int.sign_ext_idem; auto. omega. 
   destruct v1; simpl; auto. rewrite Float.singleoffloat_idem; auto.
 Qed.
 
@@ -1650,10 +1650,11 @@ Proof.
   intros. inversion H; clear H.
   inversion H2. destruct v2; simpl; auto.
   apply val_lessdef_upto_int. rewrite Int.zero_ext_and; auto. 
-  rewrite Int.and_assoc. rewrite H0. auto. 
+  rewrite Int.and_assoc. rewrite H0. auto.
+  omega.
   simpl; auto.
   simpl. apply val_lessdef_upto_int. rewrite Int.zero_ext_and; auto.
-  rewrite Int.and_assoc. rewrite H0. auto.
+  rewrite Int.and_assoc. rewrite H0. auto. omega.
 Qed.
 
 Remark val_lessdef_upto_sign_ext:
@@ -1664,9 +1665,9 @@ Proof.
   intros.
   assert (A: forall x, Int.and (Int.sign_ext p x) m = Int.and x m).
     intros. transitivity (Int.and (Int.zero_ext p (Int.sign_ext p x)) m).
-    rewrite Int.zero_ext_and; auto. rewrite Int.and_assoc. congruence.
+    rewrite Int.zero_ext_and; auto. rewrite Int.and_assoc. congruence. omega.
     rewrite Int.zero_ext_sign_ext.
-    rewrite Int.zero_ext_and; auto. rewrite Int.and_assoc. congruence.
+    rewrite Int.zero_ext_and; auto. rewrite Int.and_assoc. congruence. omega. omega.
   inversion H; clear H.
   inversion H2. destruct v2; simpl; auto.
   apply val_lessdef_upto_int. auto. 
@@ -1811,28 +1812,24 @@ Proof.
   exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v' [A B]].
   exists v'; split; auto.
   inv B; auto. inv H0; auto. constructor.
-  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
-  apply Int.sign_ext_equal_if_zero_equal; auto.
-  repeat rewrite Int.zero_ext_and; auto.
+  apply Int.sign_ext_equal_if_zero_equal; auto. omega.
+  repeat rewrite Int.zero_ext_and; auto. omega. omega.
   (* int8unsigned *)
   exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v' [A B]].
   exists v'; split; auto.
   inv B; auto. inv H0; auto. constructor.
-  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
-  repeat rewrite Int.zero_ext_and; auto.
+  repeat rewrite Int.zero_ext_and; auto. omega. omega.
   (* int16signed *)
   exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v' [A B]].
   exists v'; split; auto.
   inv B; auto. inv H0; auto. constructor.
-  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
-  apply Int.sign_ext_equal_if_zero_equal; auto.
-  repeat rewrite Int.zero_ext_and; auto.
+  apply Int.sign_ext_equal_if_zero_equal; auto. omega.
+  repeat rewrite Int.zero_ext_and; auto. omega. omega.
   (* int16unsigned *)
   exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v' [A B]].
   exists v'; split; auto.
   inv B; auto. inv H0; auto. constructor.
-  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
-  repeat rewrite Int.zero_ext_and; auto.
+  repeat rewrite Int.zero_ext_and; auto. omega. omega.
   (* int32 *)
   exists va; auto.
   (* float32 *)
@@ -1915,30 +1912,30 @@ Proof.
   exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v1 [A B]].
   exists (Val.zero_ext 8 v1); split. econstructor; eauto. 
   inv B. apply Val.zero_ext_lessdef; auto. simpl.
-  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
-  repeat rewrite Int.zero_ext_and; auto. change (two_p 8 - 1) with 255. rewrite H0. auto. 
+  repeat rewrite Int.zero_ext_and; auto.
+  change (two_p 8 - 1) with 255. rewrite H0. auto.
+  omega. omega.
 (* cast8signed *)
   exploit (eval_uncast_int (Int.repr 255)); eauto. intros [v1 [A B]].
   exists (Val.sign_ext 8 v1); split. econstructor; eauto. 
   inv B. apply Val.sign_ext_lessdef; auto. simpl.
-  assert (0 < 8 < Z_of_nat Int.wordsize) by (compute; auto).
   replace (Int.sign_ext 8 n2) with (Int.sign_ext 8 n1). auto.
-  apply Int.sign_ext_equal_if_zero_equal; auto.
-  repeat rewrite Int.zero_ext_and; auto.
+  apply Int.sign_ext_equal_if_zero_equal; auto. omega.
+  repeat rewrite Int.zero_ext_and; auto. omega. omega.
 (* cast16unsigned *)
   exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v1 [A B]].
   exists (Val.zero_ext 16 v1); split. econstructor; eauto. 
   inv B. apply Val.zero_ext_lessdef; auto. simpl.
-  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
-  repeat rewrite Int.zero_ext_and; auto. change (two_p 16 - 1) with 65535. rewrite H0. auto. 
+  repeat rewrite Int.zero_ext_and; auto.
+  change (two_p 16 - 1) with 65535. rewrite H0. auto.
+  omega. omega.
 (* cast16signed *)
   exploit (eval_uncast_int (Int.repr 65535)); eauto. intros [v1 [A B]].
   exists (Val.sign_ext 16 v1); split. econstructor; eauto. 
   inv B. apply Val.sign_ext_lessdef; auto. simpl.
-  assert (0 < 16 < Z_of_nat Int.wordsize) by (compute; auto).
   replace (Int.sign_ext 16 n2) with (Int.sign_ext 16 n1). auto.
-  apply Int.sign_ext_equal_if_zero_equal; auto.
-  repeat rewrite Int.zero_ext_and; auto.
+  apply Int.sign_ext_equal_if_zero_equal; auto. omega.
+  repeat rewrite Int.zero_ext_and; auto. omega. omega.
 (* singleoffloat *)
   exploit eval_uncast_float32; eauto. intros [v1 [A B]].
   exists (Val.singleoffloat v1); split. econstructor; eauto. 

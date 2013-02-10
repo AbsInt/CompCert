@@ -230,7 +230,7 @@ Proof.
   intros. unfold from_words. decEq.
   rewrite Int64.shifted_or_is_add.
   apply Int64.eqm_samerepr. auto with ints.
-  change (Z_of_nat Int64.wordsize) with 64. omega.
+  change Int64.zwordsize with 64. omega.
   generalize (Int.unsigned_range lo). intros [A B]. 
   rewrite Int64.unsigned_repr. assumption. 
   assert (Int.modulus < Int64.max_unsigned). compute; auto. omega.
@@ -753,38 +753,34 @@ Lemma split_bits_or:
       (Int64.shl (Int64.repr (Int.unsigned ox4330_0000)) (Int64.repr 32))
       (Int64.repr (Int.unsigned x)))) = (false, Int.unsigned x, 1075).
 Proof.
-intro; pose proof (Int.unsigned_range x); unfold split_bits; f_equal; f_equal.
-apply Zle_bool_false.
-match goal with [|-_ ?x < _] => 
-  pose proof (Int64.sign_bit_of_Z x);
-  destruct (zlt (Int64.unsigned x) Int64.half_modulus) 
-end.
-assumption.
-unfold Int64.or, Int64.bitwise_binop in H0.
-rewrite Int64.unsigned_repr, Int64.bits_of_Z_of_bits in H0.
-rewrite orb_false_intro in H0; [discriminate|reflexivity|].
-rewrite Int64.sign_bit_of_Z.
-match goal with [|- ((if ?c then _ else _) = _)] => destruct c as [z0|z0] end.
-reflexivity.
-rewrite Int64.unsigned_repr in z0; [exfalso|]; now smart_omega.
-vm_compute; split; congruence.
-now apply Int64.Z_of_bits_range_2.
-change (2^52) with (two_p 52).
-rewrite <- Int64.zero_ext_mod, Int64.zero_ext_and by (vm_compute; intuition).
-rewrite Int64.and_commut, Int64.and_or_distrib.
-match goal with [|- _ (_ ?o _) = _] => change o with Int64.zero end. 
-rewrite Int64.or_commut, Int64.or_zero, Int64.and_commut.
-rewrite <- Int64.zero_ext_and, Int64.zero_ext_mod by (compute; intuition).
-rewrite Int64.unsigned_repr; [apply Zmod_small; compute_this (two_p 52)|]; now smart_omega.
-match goal with [|- ?x mod _ = _] => rewrite <- (Int64.unsigned_repr x) end.
-change (2^52) with (two_p (Int64.unsigned (Int64.repr 52))). rewrite <- Int64.shru_div_two_p.
-change (2^11) with (two_p 11). rewrite <- Int64.or_shru.
-replace (Int64.shru (Int64.repr (Int.unsigned x)) (Int64.repr 52)) with Int64.zero;
-  [vm_compute; reflexivity|].
-rewrite Int64.shru_div_two_p, Int64.unsigned_repr by smart_omega.
-unfold Int64.zero; f_equal; rewrite Zdiv_small; [reflexivity|].
-simpl; compute_this (two_power_pos 52); now smart_omega.
-apply Zdiv_interval_2; try smart_omega; now apply Int64.unsigned_range_2.
+  intros.
+  transitivity (split_bits 52 11 (join_bits 52 11 false (Int.unsigned x) 1075)).
+  - f_equal.
+    assert (Int64.unsigned (Int64.repr (Int.unsigned x)) = Int.unsigned x).
+      apply Int64.unsigned_repr. 
+      generalize (Int.unsigned_range x).
+      compute_this (Int.modulus).
+      compute_this (Int64.max_unsigned). 
+      omega.
+    rewrite Int64.shifted_or_is_add.
+    unfold join_bits.
+    rewrite H. 
+    apply Int64.unsigned_repr.
+    generalize (Int.unsigned_range x). 
+    compute_this ((0 + 1075) * 2 ^ 52).
+    compute_this (Int.modulus).
+    compute_this (Int64.max_unsigned). 
+    omega.
+    compute_this Int64.zwordsize. omega.
+    rewrite H. 
+    generalize (Int.unsigned_range x). 
+    change (two_p 32) with Int.modulus. 
+    omega.
+  - apply split_join_bits. 
+    compute; auto.
+    generalize (Int.unsigned_range x). 
+    compute_this Int.modulus; compute_this (2^52); omega. 
+    compute_this (2^11); omega.
 Qed.
 
 Lemma from_words_value:

@@ -190,7 +190,7 @@ Opaque Byte.wordsize.
   replace (Zsucc (Z_of_nat n) * 8) with (Z_of_nat n * 8 + 8) by omega.
   rewrite two_p_is_exp; try omega. 
   rewrite Zmod_recombine. rewrite IHn. rewrite Zplus_comm. 
-  rewrite Byte.Z_mod_two_p_eq. reflexivity. 
+  rewrite Byte.Z_mod_modulus_eq. reflexivity. 
   apply two_p_gt_ZERO. omega. apply two_p_gt_ZERO. omega.
 Qed.
 
@@ -214,7 +214,7 @@ Lemma decode_encode_int_1:
 Proof.
   intros. rewrite decode_encode_int. 
   rewrite <- (Int.repr_unsigned (Int.zero_ext 8 x)).
-  decEq. symmetry. apply Int.zero_ext_mod. compute; auto. 
+  decEq. symmetry. apply Int.zero_ext_mod. compute. intuition congruence. 
 Qed.
 
 Lemma decode_encode_int_2:
@@ -222,7 +222,7 @@ Lemma decode_encode_int_2:
 Proof.
   intros. rewrite decode_encode_int. 
   rewrite <- (Int.repr_unsigned (Int.zero_ext 16 x)).
-  decEq. symmetry. apply Int.zero_ext_mod. compute; auto. 
+  decEq. symmetry. apply Int.zero_ext_mod. compute; intuition congruence.
 Qed.
 
 Lemma decode_encode_int_4:
@@ -419,14 +419,14 @@ Opaque inj_pointer.
   destruct v; destruct chunk1; simpl; try (apply decode_val_undef);
   destruct chunk2; unfold decode_val; auto; try (rewrite proj_inj_bytes).
   (* int-int *)
-  rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. compute; auto.
-  rewrite decode_encode_int_1. decEq. apply Int.zero_ext_idem. compute; auto.
-  rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. compute; auto.
-  rewrite decode_encode_int_1. decEq. apply Int.zero_ext_idem. compute; auto.
-  rewrite decode_encode_int_2. decEq. apply Int.sign_ext_zero_ext. compute; auto.
-  rewrite decode_encode_int_2. decEq. apply Int.zero_ext_idem. compute; auto.
-  rewrite decode_encode_int_2. decEq. apply Int.sign_ext_zero_ext. compute; auto.
-  rewrite decode_encode_int_2. decEq. apply Int.zero_ext_idem. compute; auto.
+  rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. omega.
+  rewrite decode_encode_int_1. decEq. apply Int.zero_ext_idem. omega.
+  rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. omega.
+  rewrite decode_encode_int_1. decEq. apply Int.zero_ext_idem. omega.
+  rewrite decode_encode_int_2. decEq. apply Int.sign_ext_zero_ext. omega.
+  rewrite decode_encode_int_2. decEq. apply Int.zero_ext_idem. omega.
+  rewrite decode_encode_int_2. decEq. apply Int.sign_ext_zero_ext. omega.
+  rewrite decode_encode_int_2. decEq. apply Int.zero_ext_idem. omega.
   rewrite decode_encode_int_4. auto.
   rewrite decode_encode_int_4. auto.
   rewrite decode_encode_int_4. auto.
@@ -482,7 +482,8 @@ Qed.
 Lemma encode_val_int8_zero_ext:
   forall n, encode_val Mint8unsigned (Vint (Int.zero_ext 8 n)) = encode_val Mint8unsigned (Vint n).
 Proof.
-  intros; unfold encode_val. decEq. apply encode_int_8_mod. apply Int.eqmod_zero_ext. compute; auto.
+  intros; unfold encode_val. decEq. apply encode_int_8_mod. apply Int.eqmod_zero_ext. 
+  compute; intuition congruence.
 Qed.
 
 Lemma encode_val_int8_sign_ext:
@@ -494,7 +495,7 @@ Qed.
 Lemma encode_val_int16_zero_ext:
   forall n, encode_val Mint16unsigned (Vint (Int.zero_ext 16 n)) = encode_val Mint16unsigned (Vint n).
 Proof.
-  intros; unfold encode_val. decEq. apply encode_int_16_mod. apply Int.eqmod_zero_ext. compute; auto.
+  intros; unfold encode_val. decEq. apply encode_int_16_mod. apply Int.eqmod_zero_ext. compute; intuition congruence.
 Qed.
 
 Lemma encode_val_int16_sign_ext:
@@ -516,10 +517,10 @@ Lemma decode_val_cast:
   end.
 Proof.
   unfold decode_val; intros; destruct chunk; auto; destruct (proj_bytes l); auto.
-  unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. compute; auto.
-  unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. compute; auto.
-  unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. compute; auto.
-  unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. compute; auto.
+  unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. omega.
+  unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. omega. 
+  unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. omega.
+  unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. omega.
   simpl. rewrite Float.singleoffloat_of_bits. auto.
 Qed.
 

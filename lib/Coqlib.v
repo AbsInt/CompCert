@@ -90,13 +90,8 @@ Ltac exploit x :=
 
 (** * Definitions and theorems over the type [positive] *)
 
-Definition peq (x y: positive): {x = y} + {x <> y}.
-Proof.
-  intros. caseEq (Pcompare x y Eq).
-  intro. left. apply Pcompare_Eq_eq; auto.
-  intro. right. red. intro. subst y. rewrite (Pcompare_refl x) in H. discriminate.
-  intro. right. red. intro. subst y. rewrite (Pcompare_refl x) in H. discriminate.
-Qed.
+Definition peq: forall (x y: positive), {x = y} + {x <> y} := Pos.eq_dec.
+Global Opaque peq.
 
 Lemma peq_true:
   forall (A: Type) (x: positive) (a b: A), (if peq x x then a else b) = a.
@@ -114,32 +109,23 @@ Proof.
   auto.
 Qed.  
 
-Definition Plt (x y: positive): Prop := Zlt (Zpos x) (Zpos y).
+Definition Plt: positive -> positive -> Prop := Pos.lt.
 
 Lemma Plt_ne:
   forall (x y: positive), Plt x y -> x <> y.
 Proof.
-  unfold Plt; intros. red; intro. subst y. omega.
+  unfold Plt; intros. red; intro. subst y. eelim Pos.lt_irrefl; eauto. 
 Qed.
 Hint Resolve Plt_ne: coqlib.
 
 Lemma Plt_trans:
   forall (x y z: positive), Plt x y -> Plt y z -> Plt x z.
-Proof.
-  unfold Plt; intros; omega.
-Qed.
-
-Remark Psucc_Zsucc:
-  forall (x: positive), Zpos (Psucc x) = Zsucc (Zpos x).
-Proof.
-  intros. rewrite Pplus_one_succ_r. 
-  reflexivity.
-Qed.
+Proof (Pos.lt_trans).
 
 Lemma Plt_succ:
   forall (x: positive), Plt x (Psucc x).
 Proof.
-  intro. unfold Plt. rewrite Psucc_Zsucc. omega.
+  unfold Plt; intros. apply Pos.lt_succ_r. apply Pos.le_refl. 
 Qed.
 Hint Resolve Plt_succ: coqlib.
 
@@ -153,32 +139,29 @@ Hint Resolve Plt_succ: coqlib.
 Lemma Plt_succ_inv:
   forall (x y: positive), Plt x (Psucc y) -> Plt x y \/ x = y.
 Proof.
-  intros x y. unfold Plt. rewrite Psucc_Zsucc. 
-  intro. assert (A: (Zpos x < Zpos y)%Z \/ Zpos x = Zpos y). omega.
-  elim A; intro. left; auto. right; injection H0; auto.
+  unfold Plt; intros. rewrite Pos.lt_succ_r in H. 
+  apply Pos.le_lteq; auto.
 Qed.
 
 Definition plt (x y: positive) : {Plt x y} + {~ Plt x y}.
 Proof.
- intros. unfold Plt. apply Z_lt_dec.
-Qed.
+  unfold Plt, Pos.lt; intros. destruct (Pos.compare x y).
+  - right; congruence.
+  - left; auto.
+  - right; congruence.
+Defined.
+Global Opaque plt.
 
-Definition Ple (p q: positive) := Zle (Zpos p) (Zpos q).
+Definition Ple: positive -> positive -> Prop := Pos.le.
 
 Lemma Ple_refl: forall (p: positive), Ple p p.
-Proof.
-  unfold Ple; intros; omega.
-Qed.
+Proof (Pos.le_refl).
 
 Lemma Ple_trans: forall (p q r: positive), Ple p q -> Ple q r -> Ple p r.
-Proof.
-  unfold Ple; intros; omega.
-Qed.
+Proof (Pos.le_trans).
 
 Lemma Plt_Ple: forall (p q: positive), Plt p q -> Ple p q.
-Proof.
-  unfold Plt, Ple; intros; omega.
-Qed.
+Proof (Pos.lt_le_incl).
 
 Lemma Ple_succ: forall (p: positive), Ple p (Psucc p).
 Proof.
@@ -187,14 +170,10 @@ Qed.
 
 Lemma Plt_Ple_trans:
   forall (p q r: positive), Plt p q -> Ple q r -> Plt p r.
-Proof.
-  unfold Plt, Ple; intros; omega.
-Qed.
+Proof (Pos.lt_le_trans).
 
 Lemma Plt_strict: forall p, ~ Plt p p.
-Proof.
-  unfold Plt; intros. omega.
-Qed.
+Proof (Pos.lt_irrefl).
 
 Hint Resolve Ple_refl Plt_Ple Ple_succ Plt_strict: coqlib.
 
@@ -271,7 +250,7 @@ End POSITIVE_ITERATION.
 
 (** * Definitions and theorems over the type [Z] *)
 
-Definition zeq: forall (x y: Z), {x = y} + {x <> y} := Z_eq_dec.
+Definition zeq: forall (x y: Z), {x = y} + {x <> y} := Z.eq_dec.
 
 Lemma zeq_true:
   forall (A: Type) (x: Z) (a b: A), (if zeq x x then a else b) = a.
@@ -291,7 +270,7 @@ Qed.
 
 Open Scope Z_scope.
 
-Definition zlt: forall (x y: Z), {x < y} + {x >= y} := Z_lt_ge_dec.
+Definition zlt: forall (x y: Z), {x < y} + {x >= y} := Z_lt_dec.
 
 Lemma zlt_true:
   forall (A: Type) (x y: Z) (a b: A), 
@@ -581,31 +560,26 @@ Qed.
 
 (** Conversion from [Z] to [nat]. *)
 
-Definition nat_of_Z (z: Z) : nat :=
-  match z with
-  | Z0 => O
-  | Zpos p => nat_of_P p
-  | Zneg p => O
-  end.
+Definition nat_of_Z: Z -> nat := Z.to_nat.
 
 Lemma nat_of_Z_of_nat:
   forall n, nat_of_Z (Z_of_nat n) = n.
 Proof.
-  intros. unfold Z_of_nat. destruct n. auto.
-  simpl. rewrite nat_of_P_o_P_of_succ_nat_eq_succ. auto.
+  exact Nat2Z.id.
 Qed.
 
 Lemma nat_of_Z_max:
   forall z, Z_of_nat (nat_of_Z z) = Zmax z 0.
 Proof.
-  intros. unfold Zmax. destruct z; simpl; auto.
-  symmetry. apply Zpos_eq_Z_of_nat_o_nat_of_P.
+  intros. unfold Zmax. destruct z; simpl; auto. 
+  change (Z.of_nat (Z.to_nat (Zpos p)) = Zpos p).
+  apply Z2Nat.id. compute; intuition congruence. 
 Qed.
 
 Lemma nat_of_Z_eq:
   forall z, z >= 0 -> Z_of_nat (nat_of_Z z) = z.
 Proof.
-  intros. rewrite nat_of_Z_max. apply Zmax_left. auto.
+  unfold nat_of_Z; intros. apply Z2Nat.id. omega.
 Qed.
 
 Lemma nat_of_Z_neg:
@@ -619,9 +593,7 @@ Lemma nat_of_Z_plus:
   p >= 0 -> q >= 0 ->
   nat_of_Z (p + q) = (nat_of_Z p + nat_of_Z q)%nat.
 Proof.
-  intros. 
-  apply inj_eq_rev. rewrite inj_plus.
-  repeat rewrite nat_of_Z_eq; auto. omega.
+  unfold nat_of_Z; intros. apply Z2Nat.inj_add; omega. 
 Qed.
 
 
