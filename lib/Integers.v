@@ -3058,6 +3058,18 @@ Proof.
   omega. omega. omega.
 Qed.
 
+Theorem sign_ext_narrow:
+  forall x n n', 0 < n <= n' ->
+  sign_ext n (sign_ext n' x) = sign_ext n x.
+Proof.
+  intros. destruct (zlt n zwordsize).
+  bit_solve. destruct (zlt i n); f_equal; apply zlt_true; omega.
+  omega. 
+  destruct (zlt i n); omega.
+  omega. omega.
+  rewrite (sign_ext_above n'). auto. omega.  
+Qed.
+
 Theorem zero_sign_ext_narrow:
   forall x n n', 0 < n <= n' ->
   zero_ext n (sign_ext n' x) = zero_ext n x.
