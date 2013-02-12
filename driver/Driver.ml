@@ -318,17 +318,15 @@ let rec find_action s = function
 
 let parse_cmdline spec usage =
   let acts = List.map (fun (pat, act) -> (Str.regexp pat, act)) spec in
-  let error () =
-    eprintf "%s" usage;
-    exit 2 in
   let rec parse i =
     if i < Array.length Sys.argv then begin
       let s = Sys.argv.(i) in
       match find_action s acts with
       | None ->
           if s <> "-help" && s <> "--help" 
-          then eprintf "Unknown argument `%s'\n" s;
-          error ()
+          then eprintf "Unknown argument `%s'\n" s
+          else printf "%s" usage;
+          exit 2
       | Some(Set r) ->
           r := true; parse (i+1)
       | Some(Unset r) ->
@@ -339,7 +337,7 @@ let parse_cmdline spec usage =
           if i + 1 < Array.length Sys.argv then begin
             fn Sys.argv.(i+1); parse (i+2)
           end else begin
-            eprintf "Option `%s' expects an argument\n" s; error()
+            eprintf "Option `%s' expects an argument\n" s; exit 2
           end
       | Some(Integer fn) ->
           if i + 1 < Array.length Sys.argv then begin
@@ -348,11 +346,11 @@ let parse_cmdline spec usage =
                 int_of_string Sys.argv.(i+1)
               with Failure _ ->
                 eprintf "Argument to option `%s' must be an integer\n" s;
-                error()
+                exit 2
             in
             fn n; parse (i+2)
           end else begin
-            eprintf "Option `%s' expects an argument\n" s; error()
+            eprintf "Option `%s' expects an argument\n" s; exit 2
           end
     end
   in parse 1
