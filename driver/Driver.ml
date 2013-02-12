@@ -391,7 +391,9 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -ffloat-const-prop <n>  Control constant propagation of floats
                    (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
-  -falign_functions <n>  Set alignment (in bytes) of function entry points
+  -falign-functions <n>  Set alignment (in bytes) of function entry points
+  -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
+  -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
   -Wa,<opt>      Pass option <opt> to the assembler
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
@@ -485,6 +487,8 @@ let cmdline_actions =
   "-fsmall-const$", Integer(fun n -> option_small_const := n);
   "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);
   "-falign-functions$", Integer(fun n -> option_falignfunctions := Some n);
+  "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
+  "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
   "-fall$", Self (fun _ ->
               List.iter (fun r -> r := true) language_support_options);
   "-fnone$", Self (fun _ ->

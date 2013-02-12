@@ -75,9 +75,11 @@ Qed.
 Lemma low_high_s:
   forall n, Int.add (Int.shl (high_s n) (Int.repr 16)) (low_s n) = n.
 Proof.
-  intros. rewrite Int.shl_mul_two_p. 
+  intros.
+  rewrite Int.shl_mul_two_p. 
   unfold high_s. 
   rewrite <- (Int.divu_pow2 (Int.sub n (low_s n)) (Int.repr 65536) (Int.repr 16)).
+  2: reflexivity.
   change (two_p (Int.unsigned (Int.repr 16))) with 65536.
   set (x := Int.sub n (low_s n)).
   assert (x = Int.add (Int.mul (Int.divu x (Int.repr 65536)) (Int.repr 65536))
@@ -88,9 +90,10 @@ Proof.
     change 0 with (0 mod 65536).
     change (Int.unsigned (Int.repr 65536)) with 65536.
     apply Int.eqmod_mod_eq. omega. 
-    unfold x, low_s. eapply Int.eqmod_trans. 
-    eapply Int.eqm_eqmod_two_p with (n := 16). compute; auto.
-    unfold Int.sub. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl. 
+    unfold x, low_s. eapply Int.eqmod_trans.
+    apply Int.eqmod_divides with Int.modulus.
+    unfold Int.sub. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl.
+    exists 65536. compute; auto.
     replace 0 with (Int.unsigned n - Int.unsigned n) by omega.
     apply Int.eqmod_sub. apply Int.eqmod_refl. apply Int.eqmod_sign_ext'. 
     compute; auto.
@@ -98,7 +101,6 @@ Proof.
   rewrite <- H. unfold x. rewrite Int.sub_add_opp. rewrite Int.add_assoc.
   rewrite (Int.add_commut (Int.neg (low_s n))). rewrite <- Int.sub_add_opp. 
   rewrite Int.sub_idem. apply Int.add_zero.
-  reflexivity.
 Qed.
 
 (** * Correspondence between Mach registers and PPC registers *)
@@ -998,6 +1000,7 @@ Lemma transl_cond_correct_1:
   /\ forall r, is_data_reg r = true -> rs'#r = rs#r.
 Proof.
   intros.
+Opaque Int.eq.
   destruct cond; simpl in H; TypeInv; simpl; UseTypeInfo.
   (* Ccomp *)
   fold (Val.cmp c (rs (ireg_of m0)) (rs (ireg_of m1))).
@@ -1171,6 +1174,7 @@ Proof.
   rewrite (Int.add_commut  (Int.neg (Int.add i Int.mone))).
   rewrite <- Int.sub_add_opp. rewrite Int.sub_add_r. rewrite Int.sub_idem. 
   rewrite Int.add_zero_l. rewrite Int.add_neg_zero. rewrite Int.add_zero_l.
+Transparent Int.eq.
   unfold Int.add_carry, Int.eq. 
   rewrite Int.unsigned_zero.  rewrite Int.unsigned_mone.
   unfold negb, Val.of_bool, Vtrue, Vfalse.
@@ -1269,6 +1273,7 @@ Proof.
   destruct (mreg_type r1); apply exec_straight_one; auto.
   split. repeat SIMP. intros; repeat SIMP.
   (* Other instructions *)
+Opaque Int.eq.
   destruct op; simpl; simpl in H3; injection H3; clear H3; intros;
   TypeInv; simpl in *; UseTypeInfo; inv EV; try (TranslOpSimpl).
   (* Ointconst *)

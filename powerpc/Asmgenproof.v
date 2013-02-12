@@ -385,6 +385,7 @@ Remark rolm_label:
 Proof.
   intros; unfold rolm. 
   case (is_rlw_mask mask). reflexivity.
+Opaque Int.eq.
   simpl. autorewrite with labels. auto.
 Qed.
 Hint Rewrite rolm_label: labels.

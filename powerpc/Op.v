@@ -1044,8 +1044,7 @@ Fixpoint is_rlw_mask_rec (n: nat) (s: rlw_state) (x: Z) {struct n} : bool :=
   | O =>
       rlw_accepting s
   | S m =>
-      let (b, y) := Int.Z_bin_decomp x in
-      is_rlw_mask_rec m (rlw_transition s b) y
+      is_rlw_mask_rec m (rlw_transition s (Z.odd x)) (Z.div2 x)
   end.
 
 Definition is_rlw_mask (x: int) : bool :=

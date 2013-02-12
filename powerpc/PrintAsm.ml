@@ -219,12 +219,6 @@ let rolm_mask n =
   assert (!count = 2 || (!count = 0 && !last));
   (!mb, !me-1)
 
-(* Base-2 log of a Caml integer *)
-
-let rec log2 n =
-  assert (n > 0);
-  if n = 1 then 0 else 1 + log2 (n lsr 1)
-
 (* Built-ins.  They come in three flavors: 
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
@@ -489,7 +483,7 @@ let short_cond_branch tbl pc lbl_dest =
 let float_literals : (int * int64) list ref = ref []
 let jumptables : (int * label list) list ref = ref []
 
-let print_instruction oc tbl pc = function
+let print_instruction oc tbl pc fallthrough = function
   | Padd(r1, r2, r3) ->
       fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Padde(r1, r2, r3) ->
@@ -529,6 +523,8 @@ let print_instruction oc tbl pc = function
   | Pbctrl ->
       fprintf oc "	bctrl\n"
   | Pbf(bit, lbl) ->
+      if !Clflags.option_faligncondbranchs > 0 then
+        fprintf oc "	.balign	%d\n" !Clflags.option_faligncondbranchs;
       if short_cond_branch tbl pc lbl then
         fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
       else begin
@@ -544,6 +540,8 @@ let print_instruction oc tbl pc = function
   | Pblr ->
       fprintf oc "	blr\n"
   | Pbt(bit, lbl) ->
+      if !Clflags.option_faligncondbranchs > 0 then
+        fprintf oc "	.balign	%d\n" !Clflags.option_faligncondbranchs;
       if short_cond_branch tbl pc lbl then
         fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
       else begin
@@ -729,6 +727,8 @@ let print_instruction oc tbl pc = function
   | Pxoris(r1, r2, c) ->
       fprintf oc "	xoris	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Plabel lbl ->
+      if (not fallthrough) && !Clflags.option_falignbranchtargets > 0 then
+        fprintf oc "	.balign	%d\n" !Clflags.option_falignbranchtargets;
       fprintf oc "%a:\n" label (transl_label lbl)
   | Pbuiltin(ef, args, res) ->
       begin match ef with
@@ -762,6 +762,15 @@ let print_instruction oc tbl pc = function
           assert false
       end
 
+(* Determine if an instruction falls through *)
+
+let instr_fall_through = function
+  | Pb _ -> false
+  | Pbctr -> false
+  | Pbs _ -> false
+  | Pblr -> false
+  | _ -> true
+
 (* Estimate the size of an Asm instruction encoding, in number of actual
    PowerPC instructions.  We can over-approximate. *)
 
@@ -782,6 +791,7 @@ let instr_size = function
       | EF_builtin(name, sg) ->
           begin match extern_atom name with
           | "__builtin_bswap" -> 3
+          | "__builtin_fcti" -> 4
           | _ -> 1
           end
       | EF_vload chunk ->
@@ -813,11 +823,11 @@ let rec label_positions tbl pc = function
 
 (* Emit a sequence of instructions *)
 
-let rec print_instructions oc tbl pc = function
+let rec print_instructions oc tbl pc fallthrough = function
   | [] -> ()
   | i :: c ->
-      print_instruction oc tbl pc i;
-      print_instructions oc tbl (pc + instr_size i) c
+      print_instruction oc tbl pc fallthrough i;
+      print_instructions oc tbl (pc + instr_size i) (instr_fall_through i) c
 
 (* Print the code for a function *)
 
@@ -842,23 +852,23 @@ let print_function oc name code =
     |    _    -> (Section_text, Section_literal, Section_jumptable) in
   section oc text;
   let alignment =
-    match !Clflags.option_falignfunctions with Some n -> log2 n | None -> 2 in
-  fprintf oc "	.align %d\n" alignment;
+    match !Clflags.option_falignfunctions with Some n -> n | None -> 4 in
+  fprintf oc "	.balign %d\n" alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
-  print_instructions oc (label_positions PTree.empty 0 code) 0 code;
+  print_instructions oc (label_positions PTree.empty 0 code) 0 true code;
   fprintf oc "	.type	%a, @function\n" symbol name;
   fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
   if !float_literals <> [] then begin
     section oc lit;
-    fprintf oc "	.align 3\n";
+    fprintf oc "	.balign 8\n";
     List.iter (print_literal oc) !float_literals;
     float_literals := []
   end;
   if !jumptables <> [] then begin
     section oc jmptbl;
-    fprintf oc "	.align 2\n";
+    fprintf oc "	.balign 4\n";
     List.iter (print_jumptable oc) !jumptables;
     jumptables := []
   end
@@ -871,7 +881,7 @@ let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
 
 let variadic_stub oc stub_name fun_name args =
   section oc Section_text;
-  fprintf oc "	.align 2\n";
+  fprintf oc "	.balign 4\n";
   fprintf oc ".L%s$stub:\n" stub_name;
   (* bit 6 must be set if at least one argument is a float; clear otherwise *)
   if List.mem Tfloat args
@@ -948,13 +958,13 @@ let print_var oc name v =
         |  _  -> Section_data true
       and align =
         match C2C.atom_alignof name with
-        | Some a -> log2 a
-        | None -> 3 in (* 8-alignment is a safe default *)
+        | Some a -> a
+        | None -> 8 in (* 8-alignment is a safe default *)
       let name_sec =
         name_of_section sec in
       if name_sec <> "COMM" then begin
         fprintf oc "	%s\n" name_sec;
-        fprintf oc "	.align	%d\n" align;
+        fprintf oc "	.balign	%d\n" align;
         if not (C2C.atom_is_static name) then
           fprintf oc "	.globl	%a\n" symbol name;
         fprintf oc "%a:\n" symbol name;
@@ -976,8 +986,16 @@ let print_globdef oc (name, gdef) =
   | Gfun f -> print_fundef oc name f
   | Gvar v -> print_var oc name v
 
+let print_prologue oc =
+  match target with
+  | Linux ->
+      ()
+  | Diab ->
+      fprintf oc "	.xopt	align-fill-text = 0x60000000\n"
+
 let print_program oc p =
   stubbed_functions := IdentSet.empty;
   List.iter record_extfun p.prog_defs;
+  print_prologue oc;
   List.iter (print_globdef oc) p.prog_defs
 

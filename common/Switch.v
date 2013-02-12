@@ -250,7 +250,7 @@ Proof.
   rewrite Int.sub_add_opp. rewrite Int.add_permut. rewrite Int.add_assoc. 
   replace (Int.add Int.one (Int.neg Int.one)) with Int.zero.
   rewrite Int.add_zero. apply Int.add_commut.
-  apply Int.mkint_eq. reflexivity.
+  rewrite Int.add_neg_zero; auto.
 Qed.
 
 Lemma validate_jumptable_correct:

@@ -816,8 +816,9 @@ Proof.
     pose proof (Bminus_correct 53 1024 eq_refl eq_refl mode_NE x y) end.
   apply (fun f x y => f x y) in H3; try apply (fun x => proj2 (from_words_value x)).
   do 2 rewrite (fun x => proj1 (from_words_value x)) in H3.
+  rewrite Int.unsigned_zero in H3.
   replace (bpow radix2 52 + Z2R (Int.unsigned x) -
-    (bpow radix2 52 + Z2R (Int.unsigned Int.zero)))%R with (Z2R (Int.unsigned x)) in H3 by (simpl; ring).
+    (bpow radix2 52 + Z2R 0))%R with (Z2R (Int.unsigned x)) in H3 by (simpl; ring).
   rewrite round_exact in H3 by smart_omega.
   match goal with [H3:if Rlt_bool ?x ?y then _ else _ |- _] => 
     pose proof (Rlt_bool_spec x y); destruct (Rlt_bool x y) end; destruct H3. 
