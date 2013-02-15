@@ -259,6 +259,22 @@ Axiom valid_pointer_valid_access:
   forall m b ofs,
   valid_pointer m b ofs = true <-> valid_access m Mint8unsigned b ofs Nonempty.
 
+(** C allows pointers one past the last element of an array.  These are not
+  valid according to the previously defined [valid_pointer]. The property
+  [weak_valid_pointer m b ofs] holds if address [b, ofs] is a valid pointer
+  in [m], or a pointer one past a valid block in [m].  *)
+
+Definition weak_valid_pointer (m: mem) (b: block) (ofs: Z) :=
+  valid_pointer m b ofs || valid_pointer m b (ofs - 1).
+
+Axiom weak_valid_pointer_spec:
+  forall m b ofs,
+  weak_valid_pointer m b ofs = true <->
+    valid_pointer m b ofs = true \/ valid_pointer m b (ofs - 1) = true.
+Axiom valid_pointer_implies:
+  forall m b ofs,
+  valid_pointer m b ofs = true -> weak_valid_pointer m b ofs = true.
+
 (** * Properties of the memory operations *)
 
 (** ** Properties of the initial memory state. *)
@@ -899,6 +915,10 @@ Axiom valid_access_extends:
 Axiom valid_pointer_extends:
   forall m1 m2 b ofs,
   extends m1 m2 -> valid_pointer m1 b ofs = true -> valid_pointer m2 b ofs = true.
+Axiom weak_valid_pointer_extends:
+  forall m1 m2 b ofs,
+  extends m1 m2 ->
+  weak_valid_pointer m1 b ofs = true -> weak_valid_pointer m2 b ofs = true.
 
 (** * Memory injections *)
 
@@ -950,19 +970,33 @@ Axiom valid_pointer_inject:
   valid_pointer m1 b1 ofs = true ->
   valid_pointer m2 b2 (ofs + delta) = true.
 
-Axiom address_inject:
-  forall f m1 m2 b1 ofs1 b2 delta,
+Axiom weak_valid_pointer_inject:
+  forall f m1 m2 b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
   inject f m1 m2 ->
-  perm m1 b1 (Int.unsigned ofs1) Max Nonempty ->
+  weak_valid_pointer m1 b1 ofs = true ->
+  weak_valid_pointer m2 b2 (ofs + delta) = true.
+
+Axiom address_inject:
+  forall f m1 m2 b1 ofs1 b2 delta p,
+  inject f m1 m2 ->
+  perm m1 b1 (Int.unsigned ofs1) Cur p ->
   f b1 = Some (b2, delta) ->
   Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 
 Axiom valid_pointer_inject_no_overflow:
-  forall f m1 m2 b ofs b' x,
+  forall f m1 m2 b ofs b' delta,
   inject f m1 m2 ->
   valid_pointer m1 b (Int.unsigned ofs) = true ->
-  f b = Some(b', x) ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr x) <= Int.max_unsigned.
+  f b = Some(b', delta) ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+
+Axiom weak_valid_pointer_inject_no_overflow:
+  forall f m1 m2 b ofs b' delta,
+  inject f m1 m2 ->
+  weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
+  f b = Some(b', delta) ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
 
 Axiom valid_pointer_inject_val:
   forall f m1 m2 b ofs b' ofs',
@@ -970,6 +1004,13 @@ Axiom valid_pointer_inject_val:
   valid_pointer m1 b (Int.unsigned ofs) = true ->
   val_inject f (Vptr b ofs) (Vptr b' ofs') ->
   valid_pointer m2 b' (Int.unsigned ofs') = true.
+
+Axiom weak_valid_pointer_inject_val:
+  forall f m1 m2 b ofs b' ofs',
+  inject f m1 m2 ->
+  weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
+  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  weak_valid_pointer m2 b' (Int.unsigned ofs') = true.
 
 Axiom inject_no_overlap:
   forall f m1 m2 b1 b2 b1' b2' delta1 delta2 ofs1 ofs2,
@@ -1103,7 +1144,7 @@ Axiom alloc_left_mapped_inject:
   alloc m1 lo hi = (m1', b1) ->
   valid_block m2 b2 ->
   0 <= delta <= Int.max_unsigned ->
-  (forall ofs k p, perm m2 b2 ofs k p -> delta = 0 \/ 0 <= ofs <= Int.max_unsigned) ->
+  (forall ofs k p, perm m2 b2 ofs k p -> delta = 0 \/ 0 <= ofs < Int.max_unsigned) ->
   (forall ofs k p, lo <= ofs < hi -> perm m2 b2 (ofs + delta) k p) ->
   inj_offset_aligned delta (hi-lo) ->
   (forall b delta' ofs k p,

@@ -574,7 +574,8 @@ Proof.
   inversion H8. eauto with cshm.
   (* pp ptr ptr *)
   inversion H10. eapply eval_Ebinop; eauto with cshm.
-  simpl. unfold Val.cmpu. simpl. rewrite H3. rewrite H9. auto.
+  simpl. unfold Val.cmpu. simpl. unfold Mem.weak_valid_pointer in *. 
+  rewrite H3. rewrite H9. auto.
   inversion H10. eapply eval_Ebinop; eauto with cshm.
   simpl. unfold Val.cmpu. simpl. rewrite H3. rewrite H9.
   destruct cmp; simpl in *; inv H; auto.

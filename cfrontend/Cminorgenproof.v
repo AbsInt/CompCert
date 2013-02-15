@@ -1573,26 +1573,37 @@ Proof.
     apply val_inject_val_of_optbool.
     apply val_inject_val_of_optbool.
 Opaque Int.add.
-    unfold Val.cmpu. simpl. 
-    destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; simpl; auto.
-    destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; simpl; auto.
-    exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb. econstructor; eauto. 
-    intros V1. rewrite V1.
-    exploit Mem.valid_pointer_inject_val. eauto. eexact Heqb0. econstructor; eauto. 
-    intros V2. rewrite V2. simpl.
-    destruct (zeq b1 b0).
+    unfold Val.cmpu. simpl.
+    destruct (zeq b1 b0); subst.
     (* same blocks *)
-    subst b1. rewrite H in H0; inv H0. rewrite zeq_true. 
-    rewrite Int.translate_cmpu. apply val_inject_val_of_optbool.
-    eapply Mem.valid_pointer_inject_no_overflow; eauto.
-    eapply Mem.valid_pointer_inject_no_overflow; eauto.
+    rewrite H0 in H. inv H. rewrite zeq_true.
+    fold (Mem.weak_valid_pointer m b0 (Int.unsigned ofs1)).
+    fold (Mem.weak_valid_pointer m b0 (Int.unsigned ofs0)).
+    fold (Mem.weak_valid_pointer tm b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+    fold (Mem.weak_valid_pointer tm b2 (Int.unsigned (Int.add ofs0 (Int.repr delta)))).
+    destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs1)) eqn:?; auto.
+    destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; auto.
+    rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb) by eauto.
+    rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb0) by eauto.
+    rewrite Int.translate_cmpu
+      by eauto using Mem.weak_valid_pointer_inject_no_overflow.
+    apply val_inject_val_of_optbool.
     (* different source blocks *)
+    destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; auto.
+    destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; auto.
     destruct (zeq b2 b3).
-    exploit Mem.different_pointers_inject; eauto. intros [A|A]. 
-    congruence.
-    destruct c; simpl; auto. 
+    fold (Mem.weak_valid_pointer tm b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+    fold (Mem.weak_valid_pointer tm b3 (Int.unsigned (Int.add ofs0 (Int.repr delta0)))).
+    rewrite Mem.valid_pointer_implies
+      by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb); eauto).
+    rewrite Mem.valid_pointer_implies
+      by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb0); eauto).
+    exploit Mem.different_pointers_inject; eauto. intros [A|A]; [congruence |].
+    destruct c; simpl; auto.
     rewrite Int.eq_false. constructor. congruence.
     rewrite Int.eq_false. constructor. congruence.
+    rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb) by eauto.
+    rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb0) by eauto.
     apply val_inject_val_of_optbool.
   (* cmpf *)
   inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.

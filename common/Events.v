@@ -1229,7 +1229,7 @@ Proof.
   assert (Mem.range_perm m1 b (Int.unsigned lo - 4) (Int.unsigned lo + Int.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto. 
-    apply Mem.perm_implies with Freeable; auto with mem. apply Mem.perm_cur_max.
+    apply Mem.perm_implies with Freeable; auto with mem.
     apply H0. instantiate (1 := lo). omega. 
   intro EQ.
   assert (Mem.range_perm m1' b2 (Int.unsigned lo + delta - 4) (Int.unsigned lo + delta + Int.unsigned sz) Cur Freeable).
@@ -1357,8 +1357,8 @@ Proof.
     apply RPSRC. omega.
   assert (PDST: Mem.perm m1 bdst (Int.unsigned odst) Cur Nonempty).
     apply RPDST. omega.
-  exploit Mem.address_inject.  eauto. apply Mem.perm_cur_max. eexact PSRC. eauto. intros EQ1.
-  exploit Mem.address_inject.  eauto. apply Mem.perm_cur_max. eexact PDST. eauto. intros EQ2.
+  exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
+  exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
   exploit Mem.loadbytes_inject; eauto. intros [bytes2 [A B]].
   exploit Mem.storebytes_mapped_inject; eauto. intros [m2' [C D]].
   exists f; exists Vundef; exists m2'.

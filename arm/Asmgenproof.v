@@ -348,7 +348,7 @@ Remark loadimm_label:
   forall r n k, find_label lbl (loadimm r n k) = find_label lbl k.
 Proof.
   intros. unfold loadimm.
-  destruct (le_dec (length (decompose_int n)) (length (decompose_int (Int.not n))));
+  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.not n))));
   auto with labels.
 Qed.
 Hint Rewrite loadimm_label: labels.
@@ -357,7 +357,7 @@ Remark addimm_label:
   forall r1 r2 n k, find_label lbl (addimm r1 r2 n k) = find_label lbl k.
 Proof.
   intros; unfold addimm.
-  destruct (le_dec (length (decompose_int n)) (length (decompose_int (Int.neg n))));
+  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.neg n))));
   auto with labels.
 Qed.
 Hint Rewrite addimm_label: labels.

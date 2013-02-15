@@ -349,6 +349,7 @@ Definition divf (v1 v2: val): val :=
 Section COMPARISONS.
 
 Variable valid_ptr: block -> Z -> bool.
+Let weak_valid_ptr (b: block) (ofs: Z) := valid_ptr b ofs || valid_ptr b (ofs - 1).
 
 Definition cmp_bool (c: comparison) (v1 v2: val): option bool :=
   match v1, v2 with
@@ -370,11 +371,16 @@ Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
   | Vint n1, Vptr b2 ofs2 =>
       if Int.eq n1 Int.zero then cmp_different_blocks c else None
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
-      if valid_ptr b1 (Int.unsigned ofs1) && valid_ptr b2 (Int.unsigned ofs2) then
-        if zeq b1 b2
+      if zeq b1 b2 then
+        if weak_valid_ptr b1 (Int.unsigned ofs1)
+           && weak_valid_ptr b2 (Int.unsigned ofs2)
         then Some (Int.cmpu c ofs1 ofs2)
-        else cmp_different_blocks c
-      else None
+        else None
+      else
+        if valid_ptr b1 (Int.unsigned ofs1)
+           && valid_ptr b2 (Int.unsigned ofs2)
+        then cmp_different_blocks c
+        else None
   | Vptr b1 ofs1, Vint n2 =>
       if Int.eq n2 Int.zero then cmp_different_blocks c else None
   | _, _ => None
@@ -802,8 +808,12 @@ Proof.
   rewrite Int.negate_cmpu. auto.
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i0 Int.zero); auto.
+  destruct (zeq b b0).
+  destruct ((valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1)) &&
+            (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1))).
+  rewrite Int.negate_cmpu. auto.
+  auto.
   destruct (valid_ptr b (Int.unsigned i) && valid_ptr b0 (Int.unsigned i0)); auto.
-  destruct (zeq b b0); auto. rewrite Int.negate_cmpu. auto.
 Qed.
 
 Lemma not_of_optbool:
@@ -821,7 +831,8 @@ Qed.
 
 Theorem negate_cmpu:
   forall valid_ptr c x y,
-  cmpu valid_ptr (negate_comparison c) x y = notbool (cmpu valid_ptr c x y).
+  cmpu valid_ptr (negate_comparison c) x y =
+    notbool (cmpu valid_ptr c x y).
 Proof.
   intros. unfold cmpu. rewrite negate_cmpu_bool. apply not_of_optbool.
 Qed.
@@ -835,7 +846,8 @@ Qed.
 
 Theorem swap_cmpu_bool:
   forall valid_ptr c x y,
-  cmpu_bool valid_ptr (swap_comparison c) x y = cmpu_bool valid_ptr c y x.
+  cmpu_bool valid_ptr (swap_comparison c) x y =
+    cmpu_bool valid_ptr c y x.
 Proof.
   assert (forall c, cmp_different_blocks (swap_comparison c) = cmp_different_blocks c).
     destruct c; auto.
@@ -843,10 +855,15 @@ Proof.
   rewrite Int.swap_cmpu. auto.
   case (Int.eq i Int.zero); auto.
   case (Int.eq i0 Int.zero); auto.
-  destruct (valid_ptr b (Int.unsigned i)); destruct (valid_ptr b0 (Int.unsigned i0)); auto.
-  simpl. destruct (zeq b b0); subst. 
-  rewrite zeq_true. rewrite Int.swap_cmpu. auto.
-  rewrite zeq_false; auto.
+  destruct (zeq b b0); subst.
+  rewrite zeq_true.
+  destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1));
+  destruct (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1));
+  simpl; auto.
+  rewrite Int.swap_cmpu. auto.
+  rewrite zeq_false by auto.
+  destruct (valid_ptr b (Int.unsigned i));
+    destruct (valid_ptr b0 (Int.unsigned i0)); simpl; auto.
 Qed.
 
 Theorem negate_cmpf_eq:
@@ -904,25 +921,29 @@ Proof.
 Qed.
 
 Theorem cmpu_ne_0_optbool:
-  forall valid_ptr ob, cmpu valid_ptr Cne (of_optbool ob) (Vint Int.zero) = of_optbool ob.
+  forall valid_ptr ob,
+  cmpu valid_ptr Cne (of_optbool ob) (Vint Int.zero) = of_optbool ob.
 Proof.
   intros. destruct ob; simpl; auto. destruct b; auto. 
 Qed.
 
 Theorem cmpu_eq_1_optbool:
-  forall valid_ptr ob, cmpu valid_ptr Ceq (of_optbool ob) (Vint Int.one) = of_optbool ob.
+  forall valid_ptr ob,
+  cmpu valid_ptr Ceq (of_optbool ob) (Vint Int.one) = of_optbool ob.
 Proof.
   intros. destruct ob; simpl; auto. destruct b; auto. 
 Qed.
 
 Theorem cmpu_eq_0_optbool:
-  forall valid_ptr ob, cmpu valid_ptr Ceq (of_optbool ob) (Vint Int.zero) = of_optbool (option_map negb ob).
+  forall valid_ptr ob,
+  cmpu valid_ptr Ceq (of_optbool ob) (Vint Int.zero) = of_optbool (option_map negb ob).
 Proof.
   intros. destruct ob; simpl; auto. destruct b; auto. 
 Qed.
 
 Theorem cmpu_ne_1_optbool:
-  forall valid_ptr ob, cmpu valid_ptr Cne (of_optbool ob) (Vint Int.one) = of_optbool (option_map negb ob).
+  forall valid_ptr ob,
+  cmpu valid_ptr Cne (of_optbool ob) (Vint Int.one) = of_optbool (option_map negb ob).
 Proof.
   intros. destruct ob; simpl; auto. destruct b; auto. 
 Qed.
@@ -1030,9 +1051,16 @@ Proof.
   destruct v1; simpl in H2; try discriminate;
   destruct v2; simpl in H2; try discriminate;
   inv H0; inv H1; simpl; auto.
+  destruct (zeq b0 b1).
+  assert (forall b ofs, valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
+                        valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
+    intros until ofs. rewrite ! orb_true_iff. intuition. 
+  destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1)) eqn:?; try discriminate.
+  destruct (valid_ptr b1 (Int.unsigned i0) || valid_ptr b1 (Int.unsigned i0 - 1)) eqn:?; try discriminate.
+  erewrite !H0 by eauto. auto.
   destruct (valid_ptr b0 (Int.unsigned i)) eqn:?; try discriminate.
   destruct (valid_ptr b1 (Int.unsigned i0)) eqn:?; try discriminate.
-  rewrite (H _ _ Heqb2). rewrite (H _ _ Heqb0). auto.
+  erewrite !H by eauto. auto.
 Qed.
 
 Lemma of_optbool_lessdef:
@@ -1087,13 +1115,117 @@ Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:=
 
 Hint Resolve val_nil_inject val_cons_inject.
 
+Section VAL_INJ_OPS.
+
+Variable f: meminj.
+
 Lemma val_load_result_inject:
-  forall f chunk v1 v2,
+  forall chunk v1 v2,
   val_inject f v1 v2 ->
   val_inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
 Proof.
   intros. inv H; destruct chunk; simpl; econstructor; eauto.
 Qed.
+
+Remark val_add_inject:
+  forall v1 v1' v2 v2',
+  val_inject f v1 v1' ->
+  val_inject f v2 v2' ->
+  val_inject f (Val.add v1 v2) (Val.add v1' v2').
+Proof.
+  intros. inv H; inv H0; simpl; econstructor; eauto.
+  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+Qed.
+
+Remark val_sub_inject:
+  forall v1 v1' v2 v2',
+  val_inject f v1 v1' ->
+  val_inject f v2 v2' ->
+  val_inject f (Val.sub v1 v2) (Val.sub v1' v2').
+Proof.
+  intros. inv H; inv H0; simpl; auto.
+  econstructor; eauto. rewrite Int.sub_add_l. auto.
+  destruct (zeq b1 b0); auto. subst. rewrite H1 in H. inv H. rewrite zeq_true.
+  rewrite Int.sub_shifted. auto.
+Qed.
+
+Lemma val_cmp_bool_inject:
+  forall c v1 v2 v1' v2' b,
+  val_inject f v1 v1' ->
+  val_inject f v2 v2' ->
+  Val.cmp_bool c v1 v2 = Some b ->
+  Val.cmp_bool c v1' v2' = Some b.
+Proof.
+  intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
+Qed.
+
+Variable (valid_ptr1 valid_ptr2 : block -> Z -> bool).
+
+Let weak_valid_ptr1 b ofs := valid_ptr1 b ofs || valid_ptr1 b (ofs - 1).
+Let weak_valid_ptr2 b ofs := valid_ptr2 b ofs || valid_ptr2 b (ofs - 1).
+
+Hypothesis valid_ptr_inj:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  valid_ptr1 b1 (Int.unsigned ofs) = true ->
+  valid_ptr2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+
+Hypothesis weak_valid_ptr_inj:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  weak_valid_ptr1 b1 (Int.unsigned ofs) = true ->
+  weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+
+Hypothesis weak_valid_ptr_no_overflow:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  weak_valid_ptr1 b1 (Int.unsigned ofs) = true ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+
+Hypothesis valid_different_ptrs_inj:
+  forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
+  b1 <> b2 ->
+  valid_ptr1 b1 (Int.unsigned ofs1) = true ->
+  valid_ptr1 b2 (Int.unsigned ofs2) = true ->
+  f b1 = Some (b1', delta1) ->
+  f b2 = Some (b2', delta2) ->
+  b1' <> b2' \/
+  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+
+Lemma val_cmpu_bool_inject:
+  forall c v1 v2 v1' v2' b,
+  val_inject f v1 v1' ->
+  val_inject f v2 v2' ->
+  Val.cmpu_bool valid_ptr1 c v1 v2 = Some b ->
+  Val.cmpu_bool valid_ptr2 c v1' v2' = Some b.
+Proof.
+  Local Opaque Int.add.
+  intros. inv H; simpl in H1; try discriminate; inv H0; simpl in H1; try discriminate; simpl; auto.
+  fold (weak_valid_ptr1 b1 (Int.unsigned ofs1)) in H1.
+  fold (weak_valid_ptr1 b0 (Int.unsigned ofs0)) in H1.
+  fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
+  fold (weak_valid_ptr2 b3 (Int.unsigned (Int.add ofs0 (Int.repr delta0)))). 
+  destruct (zeq b1 b0); subst.
+  rewrite H in H2. inv H2. rewrite zeq_true.
+  destruct (weak_valid_ptr1 b0 (Int.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (weak_valid_ptr1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
+  erewrite !weak_valid_ptr_inj by eauto. simpl.
+  rewrite <-H1. simpl. decEq. apply Int.translate_cmpu; eauto.
+  destruct (valid_ptr1 b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (valid_ptr1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
+  destruct (zeq b2 b3); subst.
+  assert (valid_ptr_implies: forall b ofs, valid_ptr1 b ofs = true -> weak_valid_ptr1 b ofs = true).
+    intros. unfold weak_valid_ptr1. rewrite H0; auto. 
+  erewrite !weak_valid_ptr_inj by eauto using valid_ptr_implies. simpl.
+  exploit valid_different_ptrs_inj; eauto. intros [?|?]; [congruence |].
+  destruct c; simpl in H1; inv H1.
+  simpl; decEq. rewrite Int.eq_false; auto. congruence.
+  simpl; decEq. rewrite Int.eq_false; auto. congruence.
+  now erewrite !valid_ptr_inj by eauto.
+Qed.
+
+End VAL_INJ_OPS.
 
 (** Monotone evolution of a memory injection. *)
 
@@ -1185,4 +1317,3 @@ Proof.
   unfold compose_meminj; rewrite H1; rewrite H3; eauto. 
   rewrite Int.add_assoc. decEq. unfold Int.add. apply Int.eqm_samerepr. auto with ints.
 Qed. 
-

@@ -480,10 +480,10 @@ Lemma decompose_int_rec_or:
   forall N n p x, List.fold_left Int.or (decompose_int_rec N n p) x = Int.or x n.
 Proof.
   induction N; intros; simpl.
-  destruct (Int.eq_dec n Int.zero); simpl. 
+  predSpec Int.eq Int.eq_spec n Int.zero; simpl.
   subst n. rewrite Int.or_zero. auto.
   auto.
-  destruct (Int.eq_dec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero).
+  predSpec Int.eq Int.eq_spec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero.
   auto.
   simpl. rewrite IHN. rewrite Int.or_assoc. decEq. rewrite <- Int.and_or_distrib.
   rewrite Int.or_not_self. apply Int.and_mone.
@@ -493,10 +493,10 @@ Lemma decompose_int_rec_xor:
   forall N n p x, List.fold_left Int.xor (decompose_int_rec N n p) x = Int.xor x n.
 Proof.
   induction N; intros; simpl.
-  destruct (Int.eq_dec n Int.zero); simpl. 
+  predSpec Int.eq Int.eq_spec n Int.zero; simpl.
   subst n. rewrite Int.xor_zero. auto.
   auto.
-  destruct (Int.eq_dec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero).
+  predSpec Int.eq Int.eq_spec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero.
   auto.
   simpl. rewrite IHN. rewrite Int.xor_assoc. decEq. rewrite <- Int.and_xor_distrib.
   rewrite Int.xor_not_self. apply Int.and_mone.
@@ -506,10 +506,10 @@ Lemma decompose_int_rec_add:
   forall N n p x, List.fold_left Int.add (decompose_int_rec N n p) x = Int.add x n.
 Proof.
   induction N; intros; simpl.
-  destruct (Int.eq_dec n Int.zero); simpl. 
+  predSpec Int.eq Int.eq_spec n Int.zero; simpl.
   subst n. rewrite Int.add_zero. auto.
   auto.
-  destruct (Int.eq_dec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero).
+  predSpec Int.eq Int.eq_spec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero.
   auto.
   simpl. rewrite IHN. rewrite Int.add_assoc. decEq. rewrite Int.add_and. 
   rewrite Int.or_not_self. apply Int.and_mone. apply Int.and_not_self.
@@ -647,7 +647,7 @@ Lemma loadimm_correct:
   /\ forall r': preg, r' <> r -> r' <> PC -> rs'#r' = rs#r'.
 Proof.
   intros. unfold loadimm.
-  destruct (le_dec (length (decompose_int n)) (length (decompose_int (Int.not n)))).
+  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.not n)))).
   (* mov - orr* *)
   replace (Vint n) with (List.fold_left (fun v i => Val.or v (Vint i)) (decompose_int n) Vzero).
   apply iterate_op_correct.
@@ -672,7 +672,7 @@ Lemma addimm_correct:
   /\ forall r': preg, r' <> r1 -> r' <> PC -> rs'#r' = rs#r'.
 Proof.
   intros. unfold addimm.
-  destruct (le_dec (length (decompose_int n)) (length (decompose_int (Int.neg n)))).
+  destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.neg n)))).
   (* add - add* *)
   replace (Val.add (rs r2) (Vint n))
      with (List.fold_left (fun v i => Val.add v (Vint i)) (decompose_int n) (rs r2)).

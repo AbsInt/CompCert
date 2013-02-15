@@ -287,9 +287,8 @@ Proof.
   right; red; intro V; inv V; contradiction.
 Qed.
 
-(** [valid_pointer] is a boolean-valued function that says whether
-    the byte at the given location is nonempty. *)
-
+(** [valid_pointer m b ofs] returns [true] if the address [b, ofs]
+  is nonempty in [m] and [false] if it is empty. *)
 Definition valid_pointer (m: mem) (b: block) (ofs: Z): bool :=
   perm_dec m b ofs Cur Nonempty.
 
@@ -311,6 +310,28 @@ Proof.
   split. simpl; red; intros. replace ofs0 with ofs by omega. auto.
   simpl. apply Zone_divide. 
   destruct H. apply H. simpl. omega.
+Qed.
+
+(** C allows pointers one past the last element of an array.  These are not
+  valid according to the previously defined [valid_pointer]. The property
+  [weak_valid_pointer m b ofs] holds if address [b, ofs] is a valid pointer
+  in [m], or a pointer one past a valid block in [m].  *)
+
+Definition weak_valid_pointer (m: mem) (b: block) (ofs: Z) :=
+  valid_pointer m b ofs || valid_pointer m b (ofs - 1).
+
+Lemma weak_valid_pointer_spec:
+  forall m b ofs,
+  weak_valid_pointer m b ofs = true <->
+    valid_pointer m b ofs = true \/ valid_pointer m b (ofs - 1) = true.
+Proof.
+  intros. unfold weak_valid_pointer. now rewrite orb_true_iff.
+Qed.
+Lemma valid_pointer_implies:
+  forall m b ofs,
+  valid_pointer m b ofs = true -> weak_valid_pointer m b ofs = true.
+Proof.
+  intros. apply weak_valid_pointer_spec. auto.
 Qed.
 
 (** * Operations over memory stores *)
@@ -2887,6 +2908,15 @@ Proof.
   eapply valid_access_extends; eauto.
 Qed.
 
+Theorem weak_valid_pointer_extends:
+  forall m1 m2 b ofs,
+  extends m1 m2 ->
+  weak_valid_pointer m1 b ofs = true -> weak_valid_pointer m2 b ofs = true.
+Proof.
+  intros until 1. unfold weak_valid_pointer. rewrite !orb_true_iff.
+  intros []; eauto using valid_pointer_extends.
+Qed.
+
 (** * Memory injections *)
 
 (** A memory state [m1] injects into another memory state [m2] via the
@@ -2899,7 +2929,8 @@ Qed.
 - if [f b = Some(b', delta)], [b'] must be valid in [m2];
 - distinct blocks in [m1] are mapped to non-overlapping sub-blocks in [m2];
 - the sizes of [m2]'s blocks are representable with unsigned machine integers;
-- the offsets [delta] are representable with unsigned machine integers.
+- pointers that could be represented using unsigned machine integers remain
+  representable after the injection.
 *)
 
 Record inject' (f: meminj) (m1 m2: mem) : Prop :=
@@ -2913,12 +2944,11 @@ Record inject' (f: meminj) (m1 m2: mem) : Prop :=
     mi_no_overlap:
       meminj_no_overlap f m1;
     mi_representable:
-      forall b b' delta ofs k p,
+      forall b b' delta ofs,
       f b = Some(b', delta) ->
-      perm m1 b (Int.unsigned ofs) k p ->
+      weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
       delta >= 0 /\ 0 <= Int.unsigned ofs + delta <= Int.max_unsigned
   }.
-
 Definition inject := inject'.
 
 Local Hint Resolve mi_mappedblocks: mem.
@@ -2987,6 +3017,18 @@ Proof.
   eapply valid_access_inject; eauto.
 Qed.
 
+Theorem weak_valid_pointer_inject:
+  forall f m1 m2 b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  inject f m1 m2 ->
+  weak_valid_pointer m1 b1 ofs = true ->
+  weak_valid_pointer m2 b2 (ofs + delta) = true.
+Proof.
+  intros until 2. unfold weak_valid_pointer. rewrite !orb_true_iff.
+  replace (ofs + delta - 1) with ((ofs - 1) + delta) by omega.
+  intros []; eauto using valid_pointer_inject.
+Qed.
+
 (** The following lemmas establish the absence of machine integer overflow
   during address computations. *)
 
@@ -3006,17 +3048,19 @@ Qed.
 *)
 
 Lemma address_inject:
-  forall f m1 m2 b1 ofs1 b2 delta,
+  forall f m1 m2 b1 ofs1 b2 delta p,
   inject f m1 m2 ->
-  perm m1 b1 (Int.unsigned ofs1) Max Nonempty ->
+  perm m1 b1 (Int.unsigned ofs1) Cur p ->
   f b1 = Some (b2, delta) ->
   Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 Proof.
-  intros.
+  intros. apply (perm_implies _ _ _ _ _ Nonempty) in H0; [| constructor].
+  rewrite <-valid_pointer_nonempty_perm in H0.
+  apply valid_pointer_implies in H0.
   exploit mi_representable; eauto. intros [A B].
   assert (0 <= delta <= Int.max_unsigned).
     generalize (Int.unsigned_range ofs1). omega.
-  unfold Int.add. repeat rewrite Int.unsigned_repr; auto.
+  unfold Int.add. repeat rewrite Int.unsigned_repr; omega.
 Qed.
 
 Lemma address_inject':
@@ -3027,22 +3071,29 @@ Lemma address_inject':
   Int.unsigned (Int.add ofs1 (Int.repr delta)) = Int.unsigned ofs1 + delta.
 Proof.
   intros. destruct H0. eapply address_inject; eauto. 
-  apply perm_cur_max. apply H0. generalize (size_chunk_pos chunk). omega. 
+  apply H0. generalize (size_chunk_pos chunk). omega. 
+Qed.
+
+Theorem weak_valid_pointer_inject_no_overflow:
+  forall f m1 m2 b ofs b' delta,
+  inject f m1 m2 ->
+  weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
+  f b = Some(b', delta) ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+Proof.
+  intros. exploit mi_representable; eauto. intros.
+  pose proof (Int.unsigned_range ofs).
+  rewrite Int.unsigned_repr; omega.
 Qed.
 
 Theorem valid_pointer_inject_no_overflow:
-  forall f m1 m2 b ofs b' x,
+  forall f m1 m2 b ofs b' delta,
   inject f m1 m2 ->
   valid_pointer m1 b (Int.unsigned ofs) = true ->
-  f b = Some(b', x) ->
-  0 <= Int.unsigned ofs + Int.unsigned (Int.repr x) <= Int.max_unsigned.
+  f b = Some(b', delta) ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
 Proof.
-  intros. rewrite valid_pointer_valid_access in H0.
-  assert (perm m1 b (Int.unsigned ofs) Cur Nonempty).
-    apply H0. simpl. omega.
-  exploit mi_representable; eauto. intros [A B].
-  rewrite Int.unsigned_repr; auto.
-  generalize (Int.unsigned_range ofs). omega.
+  eauto using weak_valid_pointer_inject_no_overflow, valid_pointer_implies.
 Qed.
 
 Theorem valid_pointer_inject_val:
@@ -3056,6 +3107,19 @@ Proof.
   erewrite address_inject'; eauto. 
   eapply valid_pointer_inject; eauto.
   rewrite valid_pointer_valid_access in H0. eauto.
+Qed.
+
+Theorem weak_valid_pointer_inject_val:
+  forall f m1 m2 b ofs b' ofs',
+  inject f m1 m2 ->
+  weak_valid_pointer m1 b (Int.unsigned ofs) = true ->
+  val_inject f (Vptr b ofs) (Vptr b' ofs') ->
+  weak_valid_pointer m2 b' (Int.unsigned ofs') = true.
+Proof.
+  intros. inv H1. exploit mi_representable; try eassumption. intros.
+  pose proof (Int.unsigned_range ofs).
+  exploit weak_valid_pointer_inject; eauto.
+  unfold Int.add. repeat rewrite Int.unsigned_repr; auto; omega.
 Qed.
 
 Theorem inject_no_overlap:
@@ -3213,7 +3277,10 @@ Proof.
 (* no overlap *)
   red; intros. eauto with mem.
 (* representable *)
-  eauto with mem. 
+  intros. eapply mi_representable; try eassumption.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H4 |- *.
+  destruct H4; eauto with mem.
 Qed.
 
 Theorem store_unmapped_inject:
@@ -3234,7 +3301,10 @@ Proof.
 (* no overlap *)
   red; intros. eauto with mem.
 (* representable *)
-  eauto with mem.
+  intros. eapply mi_representable; try eassumption.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H3 |- *.
+  destruct H3; eauto with mem.
 Qed.
 
 Theorem store_outside_inject:
@@ -3299,7 +3369,10 @@ Proof.
 (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto. 
 (* representable *)
-  intros. eapply mi_representable0; eauto. eapply perm_storebytes_2; eauto. 
+  intros. eapply mi_representable0; eauto.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H4 |- *.
+  destruct H4; eauto using perm_storebytes_2. 
 Qed.
 
 Theorem storebytes_unmapped_inject:
@@ -3320,7 +3393,10 @@ Proof.
 (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto. 
 (* representable *)
-  intros. eapply mi_representable0; eauto. eapply perm_storebytes_2; eauto. 
+  intros. eapply mi_representable0; eauto.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H3 |- *.
+  destruct H3; eauto using perm_storebytes_2.
 Qed.
 
 Theorem storebytes_outside_inject:
@@ -3406,8 +3482,11 @@ Proof.
   exploit perm_alloc_inv. eauto. eexact H7. rewrite zeq_false; auto. 
 (* representable *)
   unfold f'; intros.
-  exploit perm_alloc_inv; eauto. 
-  destruct (zeq b b1). congruence. eauto with mem.
+  destruct (zeq b b1); try discriminate.
+  eapply mi_representable0; try eassumption.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H4 |- *.
+  destruct H4; eauto using perm_alloc_4.
 (* incr *)
   split. auto. 
 (* image *)
@@ -3422,7 +3501,7 @@ Theorem alloc_left_mapped_inject:
   alloc m1 lo hi = (m1', b1) ->
   valid_block m2 b2 ->
   0 <= delta <= Int.max_unsigned ->
-  (forall ofs k p, perm m2 b2 ofs k p -> delta = 0 \/ 0 <= ofs <= Int.max_unsigned) ->
+  (forall ofs k p, perm m2 b2 ofs k p -> delta = 0 \/ 0 <= ofs < Int.max_unsigned) ->
   (forall ofs k p, lo <= ofs < hi -> perm m2 b2 (ofs + delta) k p) ->
   inj_offset_aligned delta (hi-lo) ->
   (forall b delta' ofs k p,
@@ -3478,11 +3557,20 @@ Proof.
     eapply H6; eauto. omega.
   eauto.
 (* representable *)
-  unfold f'; intros. exploit perm_alloc_inv; eauto. destruct (zeq b b1); intros.
-  inversion H9; subst b' delta0. exploit H3. apply H4 with (k := k) (p := p); eauto.
-  intros [A | A]. generalize (Int.unsigned_range_2 ofs). omega.
-  generalize (Int.unsigned_range_2 ofs). omega.
-  eauto.
+  unfold f'; intros.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H10.
+  destruct (zeq b b1).
+   subst. injection H9; intros; subst b' delta0. destruct H10.
+    exploit perm_alloc_inv; eauto; rewrite zeq_true; intro.
+    exploit H3. apply H4 with (k := Cur) (p := Nonempty); eauto.
+    generalize (Int.unsigned_range_2 ofs). omega.
+   exploit perm_alloc_inv; eauto; rewrite zeq_true; intro.
+   exploit H3. apply H4 with (k := Cur) (p := Nonempty); eauto.
+   generalize (Int.unsigned_range_2 ofs). omega.
+  eapply mi_representable0; try eassumption.
+  rewrite !weak_valid_pointer_spec, !valid_pointer_nonempty_perm.
+  destruct H10; eauto using perm_alloc_4.
 (* incr *)
   split. auto.
 (* image of b1 *)
@@ -3537,7 +3625,10 @@ Proof.
 (* no overlap *)
   red; intros. eauto with mem. 
 (* representable *)
-  eauto with mem. 
+  intros. eapply mi_representable0; try eassumption.
+  rewrite weak_valid_pointer_spec in *.
+  rewrite !valid_pointer_nonempty_perm in H2 |- *.
+  destruct H2; eauto with mem.
 Qed.
 
 Lemma free_list_left_inject:
@@ -3686,9 +3777,13 @@ Proof.
   set (ofs' := Int.repr (Int.unsigned ofs + delta1)).
   assert (Int.unsigned ofs' = Int.unsigned ofs + delta1). 
     unfold ofs'; apply Int.unsigned_repr. auto.
-  exploit mi_representable1. eauto. instantiate (3 := ofs'). 
-  rewrite H. eapply perm_inj; eauto. rewrite H. intros [C D].
-  omega.
+  exploit mi_representable1. eauto. instantiate (1 := ofs').
+  rewrite H.
+  rewrite weak_valid_pointer_spec, !valid_pointer_nonempty_perm in *.
+  replace (Int.unsigned ofs + delta1 - 1) with
+    ((Int.unsigned ofs - 1) + delta1) by omega.
+  destruct H0; eauto using perm_inj.
+  rewrite H. omega.
 Qed.
 
 Lemma val_lessdef_inject_compose:
@@ -3721,7 +3816,9 @@ Proof.
 (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_extends; eauto.
 (* representable *)
-  eapply mi_representable0; eauto. eapply perm_extends; eauto. 
+  eapply mi_representable0; eauto.
+  rewrite weak_valid_pointer_spec, !valid_pointer_nonempty_perm in *.
+  destruct H1; eauto using perm_extends.
 Qed.
 
 Lemma inject_extends_compose:

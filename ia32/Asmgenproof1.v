@@ -1110,10 +1110,11 @@ Proof.
   rewrite Heqb1; reflexivity.
 (* ptr ptr *)
   simpl. 
-  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
-            Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
+  fold (Mem.weak_valid_pointer m b0 (Int.unsigned i)) in *.
+  fold (Mem.weak_valid_pointer m b1 (Int.unsigned i0)) in *.
   destruct (zeq b0 b1).
-  inversion H1.
+  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned i) &&
+            Mem.weak_valid_pointer m b1 (Int.unsigned i0)); inversion H1.
   destruct c; simpl; auto.
   destruct (Int.eq i i0); reflexivity.
   destruct (Int.eq i i0); auto.
@@ -1121,6 +1122,8 @@ Proof.
   rewrite int_not_ltu. destruct (Int.ltu i i0); simpl; destruct (Int.eq i i0); auto.
   rewrite (int_ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
   destruct (Int.ltu i i0); reflexivity.
+  destruct (Mem.valid_pointer m b0 (Int.unsigned i) &&
+            Mem.valid_pointer m b1 (Int.unsigned i0)); try discriminate.
   destruct c; simpl in *; inv H1; reflexivity.
 Qed.
 

@@ -57,9 +57,9 @@ Definition is_immed_mem_float (x: int) : bool :=
 Fixpoint decompose_int_rec (N: nat) (n p: int) : list int :=
   match N with
   | Datatypes.O =>
-      if Int.eq_dec n Int.zero then nil else n :: nil
+      if Int.eq n Int.zero then nil else n :: nil
   | Datatypes.S M =>
-      if Int.eq_dec (Int.and n (Int.shl (Int.repr 3) p)) Int.zero then
+      if Int.eq (Int.and n (Int.shl (Int.repr 3) p)) Int.zero then
         decompose_int_rec M n (Int.add p (Int.repr 2))
       else
         let m := Int.shl (Int.repr 255) p in
@@ -86,14 +86,14 @@ Definition iterate_op (op1 op2: shift_op -> instruction) (l: list int) (k: code)
 Definition loadimm (r: ireg) (n: int) (k: code) :=
   let d1 := decompose_int n in
   let d2 := decompose_int (Int.not n) in
-  if le_dec (List.length d1) (List.length d2)
+  if NPeano.leb (List.length d1) (List.length d2)
   then iterate_op (Pmov r) (Porr r r) d1 k
   else iterate_op (Pmvn r) (Pbic r r) d2 k.
 
 Definition addimm (r1 r2: ireg) (n: int) (k: code) :=
   let d1 := decompose_int n in
   let d2 := decompose_int (Int.neg n) in
-  if le_dec (List.length d1) (List.length d2)
+  if NPeano.leb (List.length d1) (List.length d2)
   then iterate_op (Padd r1 r2) (Padd r1 r1) d1 k
   else iterate_op (Psub r1 r2) (Psub r1 r1) d2 k.
 

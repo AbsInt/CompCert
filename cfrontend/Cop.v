@@ -714,13 +714,6 @@ Definition classify_cmp (ty1: type) (ty2: type) :=
   | _ , _ => cmp_default
   end.
 
-Function sem_cmp_mismatch (c: comparison): option val :=
-  match c with
-  | Ceq =>  Some Vfalse
-  | Cne =>  Some Vtrue
-  | _   => None
-  end.
-
 Function sem_cmp (c:comparison)
                   (v1: val) (t1: type) (v2: val) (t2: type)
                   (m: mem): option val :=
@@ -739,16 +732,24 @@ Function sem_cmp (c:comparison)
       match v1,v2 with
       | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
       | Vptr b1 ofs1,  Vptr b2 ofs2  =>
-          if Mem.valid_pointer m b1 (Int.unsigned ofs1)
-          && Mem.valid_pointer m b2 (Int.unsigned ofs2) then
-            if zeq b1 b2
+          if zeq b1 b2 then
+            if Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)
+               && Mem.weak_valid_pointer m b2 (Int.unsigned ofs2)
             then Some (Val.of_bool (Int.cmpu c ofs1 ofs2))
-            else sem_cmp_mismatch c
-          else None
+            else None
+          else
+            if Mem.valid_pointer m b1 (Int.unsigned ofs1)
+               && Mem.valid_pointer m b2 (Int.unsigned ofs2)
+            then option_map Val.of_bool (Val.cmp_different_blocks c)
+            else None
       | Vptr b ofs, Vint n =>
-          if Int.eq n Int.zero then sem_cmp_mismatch c else None
+          if Int.eq n Int.zero
+          then option_map Val.of_bool (Val.cmp_different_blocks c)
+          else None
       | Vint n, Vptr b ofs =>
-          if Int.eq n Int.zero then sem_cmp_mismatch c else None
+          if Int.eq n Int.zero
+          then option_map Val.of_bool (Val.cmp_different_blocks c)
+          else None
       | _,  _ => None
       end
   | cmp_case_ff =>

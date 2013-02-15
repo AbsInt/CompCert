@@ -7,7 +7,9 @@ Development version
   reductions to be incorrectly merged.
 - Better error and warning messages for declarations of variables
   of size >= 2^32 bits.
-
+- Comparisons involving pointers "one past" the end of a block are
+  now defined.  (They used to be undefined behavior.)
+  (Contributed by Robbert Krebbers).
 
 Release 1.12.1, 2013-01-29
 ==========================

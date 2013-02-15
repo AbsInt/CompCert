@@ -1006,8 +1006,8 @@ Proof.
     apply RPSRC. omega.
   assert (PDST: Mem.perm m bdst (Int.unsigned odst) Cur Nonempty).
     apply RPDST. omega.
-  exploit Mem.address_inject.  eauto. apply Mem.perm_cur_max. eexact PSRC. eauto. intros EQ1.
-  exploit Mem.address_inject.  eauto. apply Mem.perm_cur_max. eexact PDST. eauto. intros EQ2.
+  exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
+  exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
   exploit Mem.loadbytes_inject; eauto. intros [bytes2 [A B]].
   exploit Mem.storebytes_mapped_inject; eauto. intros [tm' [C D]].
   exists tm'. 
@@ -1372,35 +1372,44 @@ Lemma sem_cmp_inject:
   exists tv, sem_cmp cmp tv1 ty1 tv2 ty2 tm = Some tv /\ val_inject f v tv.
 Proof.
   unfold sem_cmp; intros. 
-  assert (MM: sem_cmp_mismatch cmp = Some v ->
-              exists tv, sem_cmp_mismatch cmp = Some tv /\ val_inject f v tv).
+  assert (MM: option_map Val.of_bool (Val.cmp_different_blocks cmp) = Some v ->
+      exists tv, option_map Val.of_bool (Val.cmp_different_blocks cmp) = Some tv /\ val_inject f v tv).
     intros. exists v; split; auto. 
     destruct cmp; simpl in H2; inv H2; auto.
 
   destruct (classify_cmp ty1 ty2); try destruct s; inv H0; try discriminate; inv H1; inv H; TrivialInject.
   destruct (Int.eq i Int.zero); try discriminate; auto.
   destruct (Int.eq i Int.zero); try discriminate; auto.
-  destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
-  destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
-  simpl in H3.
-  rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb).
-  rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0).
-  simpl.
-  destruct (zeq b1 b0).  subst b1. rewrite H0 in H2; inv H2. rewrite zeq_true.
-  replace  (Int.cmpu cmp (Int.add ofs1 (Int.repr delta))
+
+  destruct (zeq b1 b0); subst.
+  rewrite H0 in H2. inv H2. rewrite zeq_true.
+  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
+  simpl H3.
+  rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb) by eauto.
+  rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0) by eauto.
+  simpl. replace  (Int.cmpu cmp (Int.add ofs1 (Int.repr delta))
                          (Int.add ofs0 (Int.repr delta)))
      with  (Int.cmpu cmp ofs1 ofs0).
   inv H3; TrivialInject.
   symmetry. apply Int.translate_cmpu. 
-  eapply Mem.valid_pointer_inject_no_overflow; eauto.
-  eapply Mem.valid_pointer_inject_no_overflow; eauto.
-  destruct (zeq b2 b3).
-  exploit Mem.different_pointers_inject; eauto. intros [A|A]. contradiction.
+  eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
+  eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
+  destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
+  destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
+  destruct (zeq b2 b3); subst.
+  rewrite Mem.valid_pointer_implies
+    by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb); eauto).
+  rewrite Mem.valid_pointer_implies
+    by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0); eauto).
+  simpl.
+  exploit Mem.different_pointers_inject; eauto. intros [[]|A]. easy.
   destruct cmp; simpl in H3; inv H3.
   simpl. unfold Int.eq. rewrite zeq_false; auto.
   simpl. unfold Int.eq. rewrite zeq_false; auto.
-  auto.
-  econstructor; eauto. econstructor; eauto. 
+  rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb) by eauto.
+  rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0) by eauto.
+  simpl in H3 |- *. auto.
 Qed.
 
 Lemma sem_binary_operation_inject:
