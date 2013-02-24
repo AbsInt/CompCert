@@ -307,15 +307,4 @@ Nondetfunction op_strength_reduction
   | _, _, _ => (op, args)
   end.
 
-Nondetfunction builtin_strength_reduction
-               (ef: external_function) (args: list reg) (vl: list approx) :=
-  match ef, args, vl with
-  | EF_vload chunk, r1 :: nil, G symb n1 :: nil =>
-      (EF_vload_global chunk symb n1, nil)
-  | EF_vstore chunk, r1 :: r2 :: nil, G symb n1 :: v2 :: nil =>
-      (EF_vstore_global chunk symb n1, r2 :: nil)
-  | _, _, _ =>
-      (ef, args)
-  end.
-
 End STRENGTH_REDUCTION.

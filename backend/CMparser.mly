@@ -55,7 +55,8 @@ let mkef sg toks =
   | [EFT_tok "memcpy"; EFT_tok "size"; EFT_int sz; EFT_tok "align"; EFT_int al] ->
       EF_memcpy(Z.of_sint32 sz, Z.of_sint32 al)
   | [EFT_tok "annot"; EFT_string txt] ->
-      EF_annot(intern_string txt, sg.sig_args)
+      EF_annot(intern_string txt,
+               List.map (fun t -> AA_arg t) sg.sig_args)
   | [EFT_tok "annot_val"; EFT_string txt] ->
       if sg.sig_args = [] then raise Parsing.Parse_error;
       EF_annot_val(intern_string txt, List.hd sg.sig_args)

@@ -443,7 +443,7 @@ Inductive external_function : Type :=
          Produces no observable event. *)
   | EF_memcpy (sz: Z) (al: Z)
      (** Block copy, of [sz] bytes, between addresses that are [al]-aligned. *)
-  | EF_annot (text: ident) (targs: list typ)
+  | EF_annot (text: ident) (targs: list annot_arg)
      (** A programmer-supplied annotation.  Takes zero, one or several arguments,
          produces an event carrying the text and the values of these arguments,
          and returns no value. *)
@@ -451,14 +451,26 @@ Inductive external_function : Type :=
      (** Another form of annotation that takes one argument, produces
          an event carrying the text and the value of this argument,
          and returns the value of the argument. *)
-  | EF_inline_asm (text: ident).
+  | EF_inline_asm (text: ident)
      (** Inline [asm] statements.  Semantically, treated like an
          annotation with no parameters ([EF_annot text nil]).  To be
          used with caution, as it can invalidate the semantic
          preservation theorem.  Generated only if [-finline-asm] is
          given. *)
 
+with annot_arg : Type :=
+  | AA_arg (ty: typ)
+  | AA_int (n: int)
+  | AA_float (n: float).
+
 (** The type signature of an external function. *)
+
+Fixpoint annot_args_typ (targs: list annot_arg) : list typ :=
+  match targs with
+  | nil => nil
+  | AA_arg ty :: targs' => ty :: annot_args_typ targs'
+  | _ :: targs' => annot_args_typ targs'
+  end.
 
 Definition ef_sig (ef: external_function): signature :=
   match ef with
@@ -471,7 +483,7 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_malloc => mksignature (Tint :: nil) (Some Tint)
   | EF_free => mksignature (Tint :: nil) None
   | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None
-  | EF_annot text targs => mksignature targs None
+  | EF_annot text targs => mksignature (annot_args_typ targs) None
   | EF_annot_val text targ => mksignature (targ :: nil) (Some targ)
   | EF_inline_asm text => mksignature nil None
   end.

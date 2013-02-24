@@ -49,6 +49,15 @@ int h(int a)
   return dd;
 }
 
+const int C1 = 42;
+const double C2 = 3.14;
+
+void k(int arg)
+{
+  __builtin_annot("C1 + 1 is %1 and arg is %2 and C2 * 2 is %3",
+                  C1 + 1, arg, C2 * 2);
+}
+
 int main()
 {
   __builtin_annot("calling f");

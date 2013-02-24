@@ -231,33 +231,13 @@ let rolm_mask n =
 
 (* Handling of annotations *)
 
-let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
-
-let print_annot_text print_arg oc txt args =
-  fprintf oc "%s annotation: " comment;
-  let print_fragment = function
-  | Str.Text s ->
-      output_string oc s
-  | Str.Delim "%%" ->
-      output_char oc '%'
-  | Str.Delim s ->
-      let n = int_of_string (String.sub s 1 (String.length s - 1)) in
-      try
-        print_arg oc (List.nth args (n-1))
-      with Failure _ ->
-        fprintf oc "<bad parameter %s>" s in
-  List.iter print_fragment (Str.full_split re_annot_param txt);
-  fprintf oc "\n"
-
 let print_annot_stmt oc txt args =
-  let print_annot_param oc = function
-  | APreg r -> preg oc r
-  | APstack(chunk, ofs) ->
-      fprintf oc "mem(R1 + %a, %a)" coqint ofs coqint (size_chunk chunk) in
-  print_annot_text print_annot_param oc txt args
+  fprintf oc "%s annotation: " comment;
+  PrintAnnot.print_annot_stmt preg "R1" oc txt args
 
 let print_annot_val oc txt args res =
-  print_annot_text preg oc txt args;
+  fprintf oc "%s annotation: " comment;
+  PrintAnnot.print_annot_val preg oc txt args;
   match args, res with
   | IR src :: _, IR dst ->
       if dst <> src then fprintf oc "	mr	%a, %a\n" ireg dst ireg src 

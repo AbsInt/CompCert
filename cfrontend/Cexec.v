@@ -478,10 +478,10 @@ Definition do_ef_memcpy (sz al: Z)
   | _ => None
   end.
 
-Definition do_ef_annot (text: ident) (targs: list typ)
+Definition do_ef_annot (text: ident) (targs: list annot_arg)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
-  do args <- list_eventval_of_val vargs targs;
-  Some(w, Event_annot text args :: E0, Vundef, m).
+  do args <- list_eventval_of_val vargs (annot_args_typ targs);
+  Some(w, Event_annot text (annot_eventvals targs args) :: E0, Vundef, m).
 
 Definition do_ef_annot_val (text: ident) (targ: typ)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
@@ -578,7 +578,8 @@ Proof with try congruence.
   econstructor. constructor; eauto. constructor.
 (* EF_inline_asm *)
   unfold do_ef_annot. destruct vargs; simpl... mydestr. 
-  split. constructor. constructor. 
+  split. change (Event_annot text nil) with (Event_annot text (annot_eventvals nil nil)).
+  constructor. constructor. 
   econstructor. constructor; eauto. constructor.
 Qed.
 

@@ -1456,23 +1456,32 @@ Proof.
   intros EQ; inv EQ. split; auto. eapply eventval_match_determ_1; eauto.
 Qed.
 
-(** ** Semantics of annotation. *)
+(** ** Semantics of annotations. *)
 
-Inductive extcall_annot_sem (text: ident) (targs: list typ) (F V: Type) (ge: Genv.t F V):
+Fixpoint annot_eventvals (targs: list annot_arg) (vargs: list eventval) : list eventval :=
+  match targs, vargs with
+  | AA_arg ty :: targs', varg :: vargs' => varg :: annot_eventvals targs' vargs'
+  | AA_int n :: targs', _ => EVint n :: annot_eventvals targs' vargs
+  | AA_float n :: targs', _ => EVfloat n :: annot_eventvals targs' vargs
+  | _, _ => vargs
+  end.
+
+Inductive extcall_annot_sem (text: ident) (targs: list annot_arg) (F V: Type) (ge: Genv.t F V):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_annot_sem_intro: forall vargs m args,
-      eventval_list_match ge args targs vargs ->
-      extcall_annot_sem text targs ge vargs m (Event_annot text args :: E0) Vundef m.
+      eventval_list_match ge args (annot_args_typ targs) vargs ->
+      extcall_annot_sem text targs ge vargs m
+           (Event_annot text (annot_eventvals targs args) :: E0) Vundef m.
 
 Lemma extcall_annot_ok:
   forall text targs,
-  extcall_properties (extcall_annot_sem text targs) (mksignature targs None).
+  extcall_properties (extcall_annot_sem text targs) (mksignature (annot_args_typ targs) None).
 Proof.
   intros; constructor; intros.
 (* well typed *)
   inv H. simpl. auto.
 (* arity *)
-  inv H. eapply eventval_list_match_length; eauto.
+  inv H. simpl. eapply eventval_list_match_length; eauto.
 (* symbols *)
   inv H1. econstructor; eauto. 
   eapply eventval_list_match_preserved; eauto.

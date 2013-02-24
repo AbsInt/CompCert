@@ -10,6 +10,10 @@ Development version
 - Comparisons involving pointers "one past" the end of a block are
   now defined.  (They used to be undefined behavior.)
   (Contributed by Robbert Krebbers).
+- Arguments to __builtin_annot() that are compile-time constants
+  are now replaced by their (integer or float) value in the annotation
+  generated in the assembly file.
+
 
 Release 1.12.1, 2013-01-29
 ==========================

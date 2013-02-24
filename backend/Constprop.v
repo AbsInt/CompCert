@@ -296,6 +296,43 @@ Definition num_iter := 10%nat.
 Definition successor (f: function) (app: D.t) (pc: node) : node :=
   successor_rec num_iter f app pc.
 
+Function annot_strength_reduction
+     (app: D.t) (targs: list annot_arg) (args: list reg) :=
+  match targs, args with
+  | AA_arg ty :: targs', arg :: args' =>
+      let (targs'', args'') := annot_strength_reduction app targs' args' in
+      match ty, approx_reg app arg with
+      | Tint, I n => (AA_int n :: targs'', args'')
+      | Tfloat, F n => (AA_float n :: targs'', args'')
+      | _, _ => (AA_arg ty :: targs'', arg :: args'')
+      end
+  | targ :: targs', _ =>
+      let (targs'', args'') := annot_strength_reduction app targs' args in
+      (targ :: targs'', args'')
+  | _, _ =>
+      (targs, args)
+  end.
+
+Function builtin_strength_reduction
+      (app: D.t) (ef: external_function) (args: list reg) :=
+  match ef, args with
+  | EF_vload chunk, r1 :: nil =>
+      match approx_reg app r1 with
+      | G symb n1 => (EF_vload_global chunk symb n1, nil)
+      | _ => (ef, args)
+      end
+  | EF_vstore chunk, r1 :: r2 :: nil =>
+      match approx_reg app r1 with
+      | G symb n1 => (EF_vstore_global chunk symb n1, r2 :: nil)
+      | _ => (ef, args)
+      end
+  | EF_annot text targs, args =>
+      let (targs', args') := annot_strength_reduction app targs args in
+      (EF_annot text targs', args')
+  | _, _ =>
+      (ef, args)
+  end.
+
 Definition transf_instr (gapp: global_approx) (f: function) (apps: PMap.t D.t)
                        (pc: node) (instr: instruction) :=
   let app := apps!!pc in
@@ -328,7 +365,7 @@ Definition transf_instr (gapp: global_approx) (f: function) (apps: PMap.t D.t)
   | Itailcall sig ros args =>
       Itailcall sig (transf_ros app ros) args
   | Ibuiltin ef args res s =>
-      let (ef', args') := builtin_strength_reduction ef args (approx_regs app args) in
+      let (ef', args') := builtin_strength_reduction app ef args in
       Ibuiltin ef' args' res s
   | Icond cond args s1 s2 =>
       match eval_static_condition cond (approx_regs app args) with
