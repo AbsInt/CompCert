@@ -231,9 +231,9 @@ let rolm_mask n =
 
 (* Handling of annotations *)
 
-let print_annot_stmt oc txt args =
+let print_annot_stmt oc txt targs args =
   fprintf oc "%s annotation: " comment;
-  PrintAnnot.print_annot_stmt preg "R1" oc txt args
+  PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
 
 let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
@@ -737,7 +737,7 @@ let print_instruction oc tbl pc fallthrough = function
   | Pannot(ef, args) ->
       begin match ef with
       | EF_annot(txt, targs) ->
-          print_annot_stmt oc (extern_atom txt) args
+          print_annot_stmt oc (extern_atom txt) targs args
       | _ ->
           assert false
       end

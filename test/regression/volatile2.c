@@ -8,6 +8,14 @@
   *((ty *) &x) = v2;                                               \
   printf("%s 2: %s\n", msg, *((volatile ty *) &x) == v2 ? "OK" : "FAILED");
 
+signed char gsc;
+unsigned char guc;
+signed short gss;
+unsigned short gus;
+int gi;
+float gf;
+double gd;
+
 int main()
 {
   signed char sc;
@@ -25,6 +33,13 @@ int main()
   TEST("int", int, i, 0x123456, 0x7890AB);
   TEST("float", float, f, 0.5, 256.0);
   TEST("double", double, d, 3.1415, 2.718);
+  TEST("global signed char", signed char, gsc, 12, 34);
+  TEST("global unsigned char", unsigned char, guc, 56, 78);
+  TEST("global signed short", signed short, gss, 1234, 5678);
+  TEST("global unsigned short", unsigned short, gus, 1357, 2468);
+  TEST("global int", int, gi, 0x123456, 0x7890AB);
+  TEST("global float", float, gf, 0.5, 256.0);
+  TEST("global double", double, gd, 3.1415, 2.718);
   return 0;
 }
 

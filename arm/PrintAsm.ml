@@ -226,9 +226,9 @@ let call_helper oc fn dst arg1 arg2 =
 
 (* Handling of annotations *)
 
-let print_annot_stmt oc txt args =
+let print_annot_stmt oc txt targs args =
   fprintf oc "%s annotation: " comment;
-  PrintAnnot.print_annot_stmt preg "sp" oc txt args
+  PrintAnnot.print_annot_stmt preg "sp" oc txt targs args
 
 let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
@@ -306,49 +306,65 @@ let print_builtin_memcpy oc sz al args =
 
 (* Handling of volatile reads and writes *)
 
+let print_builtin_vload_common oc chunk args res =
+  match chunk, args, res with
+  | Mint8unsigned, [IR addr], IR res ->
+      fprintf oc "	ldrb	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | Mint8signed, [IR addr], IR res ->
+      fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | Mint16unsigned, [IR addr], IR res ->
+      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | Mint16signed, [IR addr], IR res ->
+      fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | Mint32, [IR addr], IR res ->
+      fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg addr; 1
+  | Mfloat32, [IR addr], FR res ->
+      fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr;
+      fprintf oc "	fcvtds	%a, %a\n" freg res freg_single res; 2
+  | (Mfloat64 | Mfloat64al32), [IR addr], FR res ->
+      fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
+  | _ ->
+      assert false
+
 let print_builtin_vload oc chunk args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-  let n = 
-    begin match chunk, args, res with
-    | Mint8unsigned, [IR addr], IR res ->
-        fprintf oc "	ldrb	%a, [%a, #0]\n" ireg res ireg addr; 1
-    | Mint8signed, [IR addr], IR res ->
-        fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg res ireg addr; 1
-    | Mint16unsigned, [IR addr], IR res ->
-        fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg addr; 1
-    | Mint16signed, [IR addr], IR res ->
-        fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg res ireg addr; 1
-    | Mint32, [IR addr], IR res ->
-        fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg addr; 1
-    | Mfloat32, [IR addr], FR res ->
-        fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr;
-        fprintf oc "	fcvtds	%a, %a\n" freg res freg_single res; 2
-    | (Mfloat64 | Mfloat64al32), [IR addr], FR res ->
-        fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
-    | _ ->
-        assert false
-    end in
+  let n = print_builtin_vload_common oc chunk args res in
   fprintf oc "%s end builtin __builtin_volatile_read\n" comment; n
+
+let print_builtin_vload_global oc chunk id ofs args res =
+  fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
+  let lbl = label_symbol id ofs in
+  fprintf oc "	ldr	%a, .L%d @ %a\n" ireg IR14 lbl print_symb_ofs (id, ofs);
+  let n = print_builtin_vload_common oc chunk [IR IR14] res in
+  fprintf oc "%s end builtin __builtin_volatile_read\n" comment; n + 1
+
+let print_builtin_vstore_common oc chunk args =
+  match chunk, args with
+  | (Mint8signed | Mint8unsigned), [IR  addr; IR src] ->
+      fprintf oc "	strb	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | (Mint16signed | Mint16unsigned), [IR  addr; IR src] ->
+      fprintf oc "	strh	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | Mint32, [IR  addr; IR src] ->
+      fprintf oc "	str	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | Mfloat32, [IR  addr; FR src] ->
+      fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg src;
+      fprintf oc "	fsts	%a, [%a, #0]\n" freg_single FR6 ireg addr; 2
+  | (Mfloat64 | Mfloat64al32), [IR  addr; FR src] ->
+      fprintf oc "	fstd	%a, [%a, #0]\n" freg src ireg addr; 1
+  | _ ->
+      assert false
 
 let print_builtin_vstore oc chunk args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
-  let n =
-    begin match chunk, args with
-    | (Mint8signed | Mint8unsigned), [IR addr; IR src] ->
-        fprintf oc "	strb	%a, [%a, #0]\n" ireg src ireg addr; 1
-    | (Mint16signed | Mint16unsigned), [IR addr; IR src] ->
-        fprintf oc "	strh	%a, [%a, #0]\n" ireg src ireg addr; 1
-    | Mint32, [IR addr; IR src] ->
-        fprintf oc "	str	%a, [%a, #0]\n" ireg src ireg addr; 1
-    | Mfloat32, [IR addr; FR src] ->
-        fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg src;
-        fprintf oc "	fsts	%a, [%a, #0]\n" freg_single FR6 ireg addr; 2
-    | (Mfloat64 | Mfloat64al32), [IR addr; FR src] ->
-        fprintf oc "	fstd	%a, [%a, #0]\n" freg src ireg addr; 1
-    | _ ->
-        assert false
-    end in
+  let n = print_builtin_vstore_common oc chunk args in
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n
+
+let print_builtin_vstore_global oc chunk id ofs args =
+  fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
+  let lbl = label_symbol id ofs in
+  fprintf oc "	ldr	%a, .L%d @ %a\n" ireg IR14 lbl print_symb_ofs (id, ofs);
+  let n = print_builtin_vstore_common oc chunk (IR IR14 :: args) in
+  fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n + 1
 
 (* Magic sequence for byte-swapping *)
 
@@ -612,6 +628,10 @@ let print_instruction oc = function
           print_builtin_vload oc chunk args res
       | EF_vstore chunk ->
           print_builtin_vstore oc chunk args
+      | EF_vload_global(chunk, id, ofs) ->
+          print_builtin_vload_global oc chunk id ofs args res
+      | EF_vstore_global(chunk, id, ofs) ->
+          print_builtin_vstore_global oc chunk id ofs args
       | EF_memcpy(sz, al) ->
           print_builtin_memcpy oc (Int32.to_int (camlint_of_coqint sz))
                                   (Int32.to_int (camlint_of_coqint al)) args
@@ -628,7 +648,7 @@ let print_instruction oc = function
   | Pannot(ef, args) ->
       begin match ef with
       | EF_annot(txt, targs) ->
-          print_annot_stmt oc (extern_atom txt) args; 0
+          print_annot_stmt oc (extern_atom txt) targs args; 0
       | _ ->
           assert false
       end

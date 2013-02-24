@@ -231,9 +231,9 @@ let need_masks = ref false
 
 (* Handling of annotations *)
 
-let print_annot_stmt oc txt args =
+let print_annot_stmt oc txt targs args =
   fprintf oc "%s annotation: " comment;
-  PrintAnnot.print_annot_stmt preg "ESP" oc txt args
+  PrintAnnot.print_annot_stmt preg "ESP" oc txt targs args
 
 let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;

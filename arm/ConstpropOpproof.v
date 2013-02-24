@@ -450,19 +450,6 @@ Proof.
   auto.
 Qed.
 
-Lemma builtin_strength_reduction_correct:
-  forall ef args vl m t vres m',
-  vl = approx_regs app args ->
-  external_call ef ge rs##args m t vres m' ->
-  let (ef', args') := builtin_strength_reduction ef args vl in
-  external_call ef' ge rs##args' m t vres m'.
-Proof.
-  (* force MATCH to be used *)
-  assert (val_match_approx (approx_reg app 1%positive) rs#(1%positive))
-    by (apply MATCH).
-  unfold builtin_strength_reduction; intros; simpl; auto.
-Qed.
-
 End STRENGTH_REDUCTION.
 
 End ANALYSIS.
