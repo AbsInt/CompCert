@@ -23,7 +23,6 @@ Require Import Globalenvs.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
-Require Import Machtyping.
 Require Import Asm.
 Require Import Asmgen.
 Require Import Asmgenproof0.
