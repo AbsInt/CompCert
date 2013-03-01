@@ -536,7 +536,8 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "%s jumptable [ " comment;
       List.iter (fun l -> fprintf oc "%a " label (transl_label l)) tbl;
       fprintf oc "]\n";
-      fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg r label_high lbl;
+      fprintf oc "	slwi    %a, %a, 2\n" ireg GPR12 ireg r;
+      fprintf oc "	addis	%a, %a, %a\n" ireg GPR12 ireg GPR12 label_high lbl;
       fprintf oc "	lwz	%a, %a(%a)\n" ireg GPR12 label_low lbl ireg GPR12;
       fprintf oc "	mtctr	%a\n" ireg GPR12;
       fprintf oc "	bctr\n";

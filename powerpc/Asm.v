@@ -84,6 +84,11 @@ End PregEq.
 
 Module Pregmap := EMap(PregEq).
 
+(** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
+
+Notation "'SP'" := GPR1 (only parsing).
+Notation "'RA'" := LR (only parsing).
+
 (** Symbolic constants.  Immediate operands to an arithmetic instruction
   or an indexed memory access can be either integer literals,
   or the low or high 16 bits of a symbolic reference (the address
@@ -291,7 +296,9 @@ lbl:    .long   table[0], table[1], ...
 *)
 
 Definition code := list instruction.
-Definition fundef := AST.fundef code.
+Definition function := code.
+Definition fn_code (f: function) : code := f.
+Definition fundef := AST.fundef function.
 Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
@@ -308,6 +315,14 @@ Definition genv := Genv.t fundef unit.
 
 Notation "a # b" := (a b) (at level 1, only parsing).
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
+
+(** Undefining some registers *)
+
+Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
+  match l with
+  | nil => rs
+  | r :: l' => undef_regs l' (rs#r <- Vundef)
+  end.
 
 Section RELSEM.
 
@@ -428,8 +443,8 @@ Definition const_high (c: constant) :=
   or [Error] if the processor is stuck. *)
 
 Inductive outcome: Type :=
-  | OK: regset -> mem -> outcome
-  | Error: outcome.
+  | Next: regset -> mem -> outcome
+  | Stuck: outcome.
 
 (** Manipulations over the [PC] register: continuing with the next
   instruction ([nextinstr]) or branching to a label ([goto_label]). *)
@@ -439,11 +454,11 @@ Definition nextinstr (rs: regset) :=
 
 Definition goto_label (c: code) (lbl: label) (rs: regset) (m: mem) :=
   match label_pos lbl 0 c with
-  | None => Error
+  | None => Stuck
   | Some pos =>
       match rs#PC with
-      | Vptr b ofs => OK (rs#PC <- (Vptr b (Int.repr pos))) m
-      | _ => Error
+      | Vptr b ofs => Next (rs#PC <- (Vptr b (Int.repr pos))) m
+      | _ => Stuck
     end
   end.
 
@@ -453,29 +468,29 @@ Definition goto_label (c: code) (lbl: label) (rs: regset) (m: mem) :=
 Definition load1 (chunk: memory_chunk) (rd: preg)
                  (cst: constant) (r1: ireg) (rs: regset) (m: mem) :=
   match Mem.loadv chunk m (Val.add (gpr_or_zero rs r1) (const_low cst)) with
-  | None => Error
-  | Some v => OK (nextinstr (rs#rd <- v)) m
+  | None => Stuck
+  | Some v => Next (nextinstr (rs#rd <- v)) m
   end.
 
 Definition load2 (chunk: memory_chunk) (rd: preg) (r1 r2: ireg)
                  (rs: regset) (m: mem) :=
   match Mem.loadv chunk m (Val.add rs#r1 rs#r2) with
-  | None => Error
-  | Some v => OK (nextinstr (rs#rd <- v)) m
+  | None => Stuck
+  | Some v => Next (nextinstr (rs#rd <- v)) m
   end.
 
 Definition store1 (chunk: memory_chunk) (r: preg)
                   (cst: constant) (r1: ireg) (rs: regset) (m: mem) :=
   match Mem.storev chunk m (Val.add (gpr_or_zero rs r1) (const_low cst)) (rs#r) with
-  | None => Error
-  | Some m' => OK (nextinstr rs) m'
+  | None => Stuck
+  | Some m' => Next (nextinstr rs) m'
   end.
 
 Definition store2 (chunk: memory_chunk) (r: preg) (r1 r2: ireg)
                   (rs: regset) (m: mem) :=
   match Mem.storev chunk m (Val.add rs#r1 rs#r2) (rs#r) with
-  | None => Error
-  | Some m' => OK (nextinstr rs) m'
+  | None => Stuck
+  | Some m' => Next (nextinstr rs) m'
   end.
 
 (** Operations over condition bits. *)
@@ -521,127 +536,124 @@ Definition compare_float (rs: regset) (v1 v2: val) :=
 Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome :=
   match i with
   | Padd rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#r2))) m
   | Padde rd r1 r2 =>
-      OK (nextinstr (rs #rd <- (Val.add (Val.add rs#r1 rs#r2) rs#CARRY)
+      Next (nextinstr (rs #rd <- (Val.add (Val.add rs#r1 rs#r2) rs#CARRY)
                         #CARRY <- (Val.add_carry rs#r1 rs#r2 rs#CARRY))) m
   | Paddi rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst)))) m
+      Next (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst)))) m
   | Paddic rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst))
+      Next (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_low cst))
                        #CARRY <- (Val.add_carry (gpr_or_zero rs r1) (const_low cst) Vzero))) m
   | Paddis rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
+      Next (nextinstr (rs#rd <- (Val.add (gpr_or_zero rs r1) (const_high cst)))) m
   | Paddze rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY)
+      Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#CARRY)
                        #CARRY <- (Val.add_carry rs#r1 Vzero rs#CARRY))) m
   | Pallocframe sz ofs =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := Vptr stk Int.zero in
       match Mem.storev Mint32 m1 (Val.add sp (Vint ofs)) rs#GPR1 with
-      | None => Error
-      | Some m2 => OK (nextinstr (rs#GPR1 <- sp #GPR0 <- Vundef)) m2
+      | None => Stuck
+      | Some m2 => Next (nextinstr (rs#GPR1 <- sp #GPR0 <- Vundef)) m2
       end
   | Pand_ rd r1 r2 =>
       let v := Val.and rs#r1 rs#r2 in
-      OK (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
+      Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
   | Pandc rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.and rs#r1 (Val.notint rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.and rs#r1 (Val.notint rs#r2)))) m
   | Pandi_ rd r1 cst =>
       let v := Val.and rs#r1 (const_low cst) in
-      OK (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
+      Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
   | Pandis_ rd r1 cst =>
       let v := Val.and rs#r1 (const_high cst) in
-      OK (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
+      Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
   | Pb lbl =>
       goto_label c lbl rs m
   | Pbctr =>
-      OK (rs#PC <- (rs#CTR)) m
+      Next (rs#PC <- (rs#CTR)) m
   | Pbctrl =>
-      OK (rs#LR <- (Val.add rs#PC Vone) #PC <- (rs#CTR)) m
+      Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (rs#CTR)) m
   | Pbf bit lbl =>
       match rs#(reg_of_crbit bit) with
-      | Vint n => if Int.eq n Int.zero then goto_label c lbl rs m else OK (nextinstr rs) m
-      | _ => Error
+      | Vint n => if Int.eq n Int.zero then goto_label c lbl rs m else Next (nextinstr rs) m
+      | _ => Stuck
       end
   | Pbl ident =>
-      OK (rs#LR <- (Val.add rs#PC Vone) #PC <- (symbol_offset ident Int.zero)) m
+      Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (symbol_offset ident Int.zero)) m
   | Pbs ident =>
-      OK (rs#PC <- (symbol_offset ident Int.zero)) m
+      Next (rs#PC <- (symbol_offset ident Int.zero)) m
   | Pblr =>
-      OK (rs#PC <- (rs#LR)) m
+      Next (rs#PC <- (rs#LR)) m
   | Pbt bit lbl =>
       match rs#(reg_of_crbit bit) with
-      | Vint n => if Int.eq n Int.zero then OK (nextinstr rs) m else goto_label c lbl rs m
-      | _ => Error
+      | Vint n => if Int.eq n Int.zero then Next (nextinstr rs) m else goto_label c lbl rs m
+      | _ => Stuck
       end
   | Pbtbl r tbl =>
-      match gpr_or_zero rs r with
+      match rs r with
       | Vint n => 
-          let pos := Int.unsigned n in
-          if zeq (Zmod pos 4) 0 then
-            match list_nth_z tbl (pos / 4) with
-            | None => Error
-            | Some lbl => goto_label c lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
-            end
-          else Error
-      | _ => Error
+          match list_nth_z tbl (Int.unsigned n) with
+          | None => Stuck
+          | Some lbl => goto_label c lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
+          end
+      | _ => Stuck
       end
   | Pcmplw r1 r2 =>
-      OK (nextinstr (compare_uint rs m rs#r1 rs#r2)) m
+      Next (nextinstr (compare_uint rs m rs#r1 rs#r2)) m
   | Pcmplwi r1 cst =>
-      OK (nextinstr (compare_uint rs m rs#r1 (const_low cst))) m
+      Next (nextinstr (compare_uint rs m rs#r1 (const_low cst))) m
   | Pcmpw r1 r2 =>
-      OK (nextinstr (compare_sint rs rs#r1 rs#r2)) m
+      Next (nextinstr (compare_sint rs rs#r1 rs#r2)) m
   | Pcmpwi r1 cst =>
-      OK (nextinstr (compare_sint rs rs#r1 (const_low cst))) m
+      Next (nextinstr (compare_sint rs rs#r1 (const_low cst))) m
   | Pcror bd b1 b2 =>
-      OK (nextinstr (rs#(reg_of_crbit bd) <- (Val.or rs#(reg_of_crbit b1) rs#(reg_of_crbit b2)))) m
+      Next (nextinstr (rs#(reg_of_crbit bd) <- (Val.or rs#(reg_of_crbit b1) rs#(reg_of_crbit b2)))) m
   | Pdivw rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.maketotal (Val.divs rs#r1 rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.divs rs#r1 rs#r2)))) m
   | Pdivwu rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.maketotal (Val.divu rs#r1 rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.maketotal (Val.divu rs#r1 rs#r2)))) m
   | Peqv rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.notint (Val.xor rs#r1 rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.notint (Val.xor rs#r1 rs#r2)))) m
   | Pextsb rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.sign_ext 8 rs#r1))) m
   | Pextsh rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.sign_ext 16 rs#r1))) m
   | Pfreeframe sz ofs =>
       match Mem.loadv Mint32 m (Val.add rs#GPR1 (Vint ofs)) with
-      | None => Error
+      | None => Stuck
       | Some v =>
           match rs#GPR1 with
           | Vptr stk ofs =>
               match Mem.free m stk 0 sz with
-              | None => Error
-              | Some m' => OK (nextinstr (rs#GPR1 <- v)) m'
+              | None => Stuck
+              | Some m' => Next (nextinstr (rs#GPR1 <- v)) m'
               end
-          | _ => Error
+          | _ => Stuck
           end
       end
   | Pfabs rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.absf rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.absf rs#r1))) m
   | Pfadd rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.addf rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.addf rs#r1 rs#r2))) m
   | Pfcmpu r1 r2 =>
-      OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
+      Next (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfcti rd r1 =>
-      OK (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
+      Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.divf rs#r1 rs#r2))) m
   | Pfmake rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.floatofwords rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.floatofwords rs#r1 rs#r2))) m
   | Pfmr rd r1 =>
-      OK (nextinstr (rs#rd <- (rs#r1))) m
+      Next (nextinstr (rs#rd <- (rs#r1))) m
   | Pfmul rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.mulf rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.mulf rs#r1 rs#r2))) m
   | Pfneg rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.negf rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.negf rs#r1))) m
   | Pfrsp rd r1 =>
-      OK (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) m
+      Next (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) m
   | Pfsub rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.subf rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.subf rs#r1 rs#r2))) m
   | Plbz rd cst r1 =>
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>
@@ -663,50 +675,50 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Plhzx rd r1 r2 =>
       load2 Mint16unsigned rd r1 r2 rs m
   | Plfi rd f =>
-      OK (nextinstr (rs #GPR12 <- Vundef #rd <- (Vfloat f))) m
+      Next (nextinstr (rs #GPR12 <- Vundef #rd <- (Vfloat f))) m
   | Plwz rd cst r1 =>
       load1 Mint32 rd cst r1 rs m
   | Plwzx rd r1 r2 =>
       load2 Mint32 rd r1 r2 rs m
   | Pmfcrbit rd bit =>
-      OK (nextinstr (rs#rd <- (rs#(reg_of_crbit bit)))) m
+      Next (nextinstr (rs#rd <- (rs#(reg_of_crbit bit)))) m
   | Pmflr rd =>
-      OK (nextinstr (rs#rd <- (rs#LR))) m
+      Next (nextinstr (rs#rd <- (rs#LR))) m
   | Pmr rd r1 =>
-      OK (nextinstr (rs#rd <- (rs#r1))) m
+      Next (nextinstr (rs#rd <- (rs#r1))) m
   | Pmtctr r1 =>
-      OK (nextinstr (rs#CTR <- (rs#r1))) m
+      Next (nextinstr (rs#CTR <- (rs#r1))) m
   | Pmtlr r1 =>
-      OK (nextinstr (rs#LR <- (rs#r1))) m
+      Next (nextinstr (rs#LR <- (rs#r1))) m
   | Pmulli rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.mul rs#r1 (const_low cst)))) m
+      Next (nextinstr (rs#rd <- (Val.mul rs#r1 (const_low cst)))) m
   | Pmullw rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.mul rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.mul rs#r1 rs#r2))) m
   | Pnand rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.notint (Val.and rs#r1 rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.notint (Val.and rs#r1 rs#r2)))) m
   | Pnor rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.notint (Val.or rs#r1 rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.notint (Val.or rs#r1 rs#r2)))) m
   | Por rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.or rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.or rs#r1 rs#r2))) m
   | Porc rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.or rs#r1 (Val.notint rs#r2)))) m
+      Next (nextinstr (rs#rd <- (Val.or rs#r1 (Val.notint rs#r2)))) m
   | Pori rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.or rs#r1 (const_low cst)))) m
+      Next (nextinstr (rs#rd <- (Val.or rs#r1 (const_low cst)))) m
   | Poris rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.or rs#r1 (const_high cst)))) m
+      Next (nextinstr (rs#rd <- (Val.or rs#r1 (const_high cst)))) m
   | Prlwinm rd r1 amount mask =>
-      OK (nextinstr (rs#rd <- (Val.rolm rs#r1 amount mask))) m
+      Next (nextinstr (rs#rd <- (Val.rolm rs#r1 amount mask))) m
   | Prlwimi rd r1 amount mask =>
-      OK (nextinstr (rs#rd <- (Val.or (Val.and rs#rd (Vint (Int.not mask)))
+      Next (nextinstr (rs#rd <- (Val.or (Val.and rs#rd (Vint (Int.not mask)))
                                      (Val.rolm rs#r1 amount mask)))) m
   | Pslw rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.shl rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.shl rs#r1 rs#r2))) m
   | Psraw rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.shr rs#r1 rs#r2) #CARRY <- (Val.shr_carry rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.shr rs#r1 rs#r2) #CARRY <- (Val.shr_carry rs#r1 rs#r2))) m
   | Psrawi rd r1 n =>
-      OK (nextinstr (rs#rd <- (Val.shr rs#r1 (Vint n)) #CARRY <- (Val.shr_carry rs#r1 (Vint n)))) m
+      Next (nextinstr (rs#rd <- (Val.shr rs#r1 (Vint n)) #CARRY <- (Val.shr_carry rs#r1 (Vint n)))) m
   | Psrw rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.shru rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.shru rs#r1 rs#r2))) m
   | Pstb rd cst r1 =>
       store1 Mint8unsigned rd cst r1 rs m
   | Pstbx rd r1 r2 =>
@@ -717,13 +729,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       store2 Mfloat64al32 rd r1 r2 rs m
   | Pstfs rd cst r1 =>
       match store1 Mfloat32 rd cst r1 rs m with
-      | OK rs' m' => OK (rs'#FPR13 <- Vundef) m'
-      | Error => Error
+      | Next rs' m' => Next (rs'#FPR13 <- Vundef) m'
+      | Stuck => Stuck
       end
   | Pstfsx rd r1 r2 =>
       match store2 Mfloat32 rd r1 r2 rs m with
-      | OK rs' m' => OK (rs'#FPR13 <- Vundef) m'
-      | Error => Error
+      | Next rs' m' => Next (rs'#FPR13 <- Vundef) m'
+      | Stuck => Stuck
       end
   | Psth rd cst r1 =>
       store1 Mint16unsigned rd cst r1 rs m
@@ -734,41 +746,34 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pstwx rd r1 r2 =>
       store2 Mint32 rd r1 r2 rs m
   | Psubfc rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.sub rs#r2 rs#r1)
+      Next (nextinstr (rs#rd <- (Val.sub rs#r2 rs#r1)
                        #CARRY <- (Val.add_carry rs#r2 (Val.notint rs#r1) Vone))) m
   | Psubfe rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.add (Val.add rs#r2 (Val.notint rs#r1)) rs#CARRY)
+      Next (nextinstr (rs#rd <- (Val.add (Val.add rs#r2 (Val.notint rs#r1)) rs#CARRY)
                        #CARRY <- (Val.add_carry rs#r2 (Val.notint rs#r1) rs#CARRY))) m
   | Psubfic rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.sub (const_low cst) rs#r1)
+      Next (nextinstr (rs#rd <- (Val.sub (const_low cst) rs#r1)
                        #CARRY <- (Val.add_carry (const_low cst) (Val.notint rs#r1) Vone))) m
   | Pxor rd r1 r2 =>
-      OK (nextinstr (rs#rd <- (Val.xor rs#r1 rs#r2))) m
+      Next (nextinstr (rs#rd <- (Val.xor rs#r1 rs#r2))) m
   | Pxori rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.xor rs#r1 (const_low cst)))) m
+      Next (nextinstr (rs#rd <- (Val.xor rs#r1 (const_low cst)))) m
   | Pxoris rd r1 cst =>
-      OK (nextinstr (rs#rd <- (Val.xor rs#r1 (const_high cst)))) m
+      Next (nextinstr (rs#rd <- (Val.xor rs#r1 (const_high cst)))) m
   | Plabel lbl =>
-      OK (nextinstr rs) m
+      Next (nextinstr rs) m
   | Pbuiltin ef args res =>
-      Error    (**r treated specially below *)
+      Stuck    (**r treated specially below *)
   | Pannot ef args =>
-      Error    (**r treated specially below *)
+      Stuck    (**r treated specially below *)
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
-  to the PPC view.  PPC has two different types for registers
-  (integer and float) while LTL et al have only one.  The
-  [ireg_of] and [freg_of] are therefore partial in principle.
-  To keep things simpler, we make them return nonsensical
-  results when applied to a LTL register of the wrong type.
-  The proof in [Asmgenproof] will show that this never happens.
-
-  Note that no LTL register maps to [GPR0].
+  to the PPC view.  Note that no LTL register maps to [GPR0].
   This register is reserved as a temporary to be used
   by the generated PPC code.  *)
 
-Definition ireg_of (r: mreg) : ireg :=
+Definition preg_of (r: mreg) : preg :=
   match r with
   | R3 => GPR3  | R4 => GPR4  | R5 => GPR5  | R6 => GPR6
   | R7 => GPR7  | R8 => GPR8  | R9 => GPR9  | R10 => GPR10
@@ -778,11 +783,6 @@ Definition ireg_of (r: mreg) : ireg :=
   | R25 => GPR25 | R26 => GPR26 | R27 => GPR27 | R28 => GPR28
   | R29 => GPR29 | R30 => GPR30 | R31 => GPR31
   | IT1 => GPR11 | IT2 => GPR12
-  | _ => GPR12 (* should not happen *)
-  end.
-
-Definition freg_of (r: mreg) : freg :=
-  match r with
   | F1 => FPR1  | F2 => FPR2  | F3 => FPR3  | F4 => FPR4
   | F5 => FPR5  | F6 => FPR6  | F7 => FPR7  | F8 => FPR8
   | F9 => FPR9  | F10 => FPR10 | F11 => FPR11
@@ -792,13 +792,6 @@ Definition freg_of (r: mreg) : freg :=
   | F24 => FPR24 | F25 => FPR25 | F26 => FPR26 | F27 => FPR27
   | F28 => FPR28 | F29 => FPR29 | F30 => FPR30 | F31 => FPR31
   | FT1 => FPR0 | FT2 => FPR12 | FT3 => FPR13
-  | _ => FPR0 (* should not happen *)
-  end.
-
-Definition preg_of (r: mreg) :=
-  match mreg_type r with
-  | Tint => IR (ireg_of r)
-  | Tfloat => FR (freg_of r)
   end.
 
 (** Extract the values of the arguments of an external call.
@@ -849,7 +842,7 @@ Inductive step: state -> trace -> state -> Prop :=
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some i ->
-      exec_instr c i rs m = OK rs' m' ->
+      exec_instr c i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs c ef args res rs m t v m',
@@ -968,3 +961,25 @@ Ltac Equalities :=
 (* final states *)
   inv H; inv H0. congruence.
 Qed.
+
+(** Classification functions for processor registers (used in Asmgenproof). *)
+
+Definition data_preg (r: preg) : bool :=
+  match r with
+  | IR GPR0 => false
+  | PC => false    | LR => false    | CTR => false
+  | CR0_0 => false | CR0_1 => false | CR0_2 => false | CR0_3 => false
+  | CARRY => false
+  | _ => true
+  end.
+
+Definition nontemp_preg (r: preg) : bool :=
+  match r with
+  | IR GPR0 => false | IR GPR11 => false | IR GPR12 => false
+  | FR FPR0 => false | FR FPR12 => false | FR FPR13 => false
+  | PC => false      | LR => false       | CTR => false
+  | CR0_0 => false   | CR0_1 => false    | CR0_2 => false    | CR0_3 => false
+  | CARRY => false
+  | _ => true
+  end.
+

@@ -31,7 +31,6 @@ Require LTL.
 Require LTLin.
 Require Linear.
 Require Mach.
-Require Machsem.
 Require Asm.
 (** Translation passes. *)
 Require Initializers.
@@ -59,7 +58,6 @@ Require RTLtyping.
 Require LTLtyping.
 Require LTLintyping.
 Require Lineartyping.
-Require Machtyping.
 (** Proofs of semantic preservation and typing preservation. *)
 Require SimplExprproof.
 Require SimplLocalsproof.
@@ -85,7 +83,6 @@ Require Reloadtyping.
 Require RREproof.
 Require RREtyping.
 Require Stackingproof.
-Require Stackingtyping.
 Require Asmgenproof.
 
 (** Pretty-printers (defined in Caml). *)
@@ -239,8 +236,6 @@ Proof.
   assert(TY3: Lineartyping.wt_program p9).
     eapply RREtyping.program_typing_preserved.
     eapply Reloadtyping.program_typing_preserved; eauto.
-  assert(TY4: Machtyping.wt_program p10).
-    eapply Stackingtyping.program_typing_preserved; eauto.
 
   eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Inliningproof.transf_program_correct. eassumption.

@@ -86,10 +86,9 @@ BACKEND=\
   Linear.v Lineartyping.v \
   Parallelmove.v Reload.v Reloadproof.v Reloadtyping.v \
   RRE.v RREproof.v RREtyping.v \
-  Mach.v Machtyping.v \
-  Bounds.v Stacklayout.v Stacking.v Stackingproof.v Stackingtyping.v \
-  Machsem.v \
-  Asm.v Asmgen.v Asmgenretaddr.v Asmgenproof1.v Asmgenproof.v
+  Mach.v \
+  Bounds.v Stacklayout.v Stacking.v Stackingproof.v \
+  Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v
 
 # C front-end modules (in cfrontend/)
 

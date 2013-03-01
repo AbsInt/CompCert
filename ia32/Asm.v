@@ -68,6 +68,10 @@ Coercion IR: ireg >-> preg.
 Coercion FR: freg >-> preg.
 Coercion CR: crbit >-> preg.
 
+(** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
+
+Notation "'SP'" := ESP (only parsing).
+
 (** ** Instruction set. *)
 
 Definition label := positive.
@@ -197,6 +201,8 @@ with annot_param : Type :=
   | APstack: memory_chunk -> Z -> annot_param.
 
 Definition code := list instruction.
+Definition function := code.
+Definition fn_code (f: function) : code := f.
 Definition fundef := AST.fundef code.
 Definition program := AST.program fundef unit.
 
@@ -863,3 +869,30 @@ Ltac Equalities :=
 (* final states *)
   inv H; inv H0. congruence.
 Qed.
+
+(** Classification functions for processor registers (used in Asmgenproof). *)
+
+Definition data_preg (r: preg) : bool :=
+  match r with
+  | PC => false
+  | IR _ => true
+  | FR _ => true
+  | ST0 => true
+  | CR _ => false
+  | RA => false
+  end.
+
+Definition nontemp_preg (r: preg) : bool :=
+  match r with
+  | PC => false
+  | IR ECX => false
+  | IR EDX => false
+  | IR _ => true
+  | FR XMM6 => false
+  | FR XMM7 => false
+  | FR _ => true
+  | ST0 => false
+  | CR _ => false
+  | RA => false
+  end.
+

@@ -89,8 +89,13 @@ End PregEq.
 
 Module Pregmap := EMap(PregEq).
 
+(** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
+
+Notation "'SP'" := IR13 (only parsing).
+Notation "'RA'" := IR14 (only parsing).
+
 (** The instruction set.  Most instructions correspond exactly to
-  actual instructions of the PowerPC processor. See the PowerPC
+  actual instructions of the ARM processor. See the ARM
   reference manuals for more details.  Some instructions,
   described below, are pseudo-instructions: they expand to
   canned instruction sequences during the printing of the assembly
@@ -202,9 +207,9 @@ lbl:    .word   symbol
   stack pointer to the address of the bottom of this block.
   In the printed ASM assembly code, this allocation is:
 <<
-        mov     r12, sp
+        mov     r10, sp
         sub     sp, sp, #sz
-        str     r12, [sp, #pos]
+        str     r10, [sp, #pos]
 >>
   This cannot be expressed in our memory model, which does not reflect
   the fact that stack frames are adjacent and allocated/freed
@@ -248,6 +253,14 @@ Definition genv := Genv.t fundef unit.
 Notation "a # b" := (a b) (at level 1, only parsing).
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level).
 
+(** Undefining some registers *)
+
+Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
+  match l with
+  | nil => rs
+  | r :: l' => undef_regs l' (rs#r <- Vundef)
+  end.
+
 Section RELSEM.
 
 (** Looking up instructions in a code sequence by position. *)
@@ -285,13 +298,13 @@ Variable ge: genv.
 
 (** The semantics is purely small-step and defined as a function
   from the current state (a register set + a memory state)
-  to either [OK rs' m'] where [rs'] and [m'] are the updated register
+  to either [Next rs' m'] where [rs'] and [m'] are the updated register
   set and memory state after execution of the instruction at [rs#PC],
-  or [Error] if the processor is stuck. *)
+  or [Stuck] if the processor is stuck. *)
 
 Inductive outcome: Type :=
-  | OK: regset -> mem -> outcome
-  | Error: outcome.
+  | Next: regset -> mem -> outcome
+  | Stuck: outcome.
 
 (** Manipulations over the [PC] register: continuing with the next
   instruction ([nextinstr]) or branching to a label ([goto_label]). *)
@@ -299,13 +312,13 @@ Inductive outcome: Type :=
 Definition nextinstr (rs: regset) :=
   rs#PC <- (Val.add rs#PC Vone).
 
-Definition goto_label (c: code) (lbl: label) (rs: regset) (m: mem) :=
-  match label_pos lbl 0 c with
-  | None => Error
+Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
+  match label_pos lbl 0 (fn_code f) with
+  | None => Stuck
   | Some pos =>
       match rs#PC with
-      | Vptr b ofs => OK (rs#PC <- (Vptr b (Int.repr pos))) m
-      | _ => Error
+      | Vptr b ofs => Next (rs#PC <- (Vptr b (Int.repr pos))) m
+      | _ => Stuck
     end
   end.
 
@@ -343,15 +356,15 @@ Definition eval_shift_addr (sa: shift_addr) (rs: regset) :=
 Definition exec_load (chunk: memory_chunk) (addr: val) (r: preg) 
                      (rs: regset) (m: mem) :=
   match Mem.loadv chunk m addr with
-  | None => Error
-  | Some v => OK (nextinstr (rs#r <- v)) m
+  | None => Stuck
+  | Some v => Next (nextinstr (rs#r <- v)) m
   end.
 
 Definition exec_store (chunk: memory_chunk) (addr: val) (r: preg)
                       (rs: regset) (m: mem) :=
   match Mem.storev chunk m addr (rs r) with
-  | None => Error
-  | Some m' => OK (nextinstr rs) m'
+  | None => Stuck
+  | Some m' => Next (nextinstr rs) m'
   end.
 
 (** Operations over condition bits. *)
@@ -411,33 +424,33 @@ Definition symbol_offset (id: ident) (ofs: int) : val :=
   | None => Vundef
   end.
 
-Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome :=
+Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : outcome :=
   match i with
   | Padd r1 r2 so => 
-      OK (nextinstr (rs#r1 <- (Val.add rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr (rs#r1 <- (Val.add rs#r2 (eval_shift_op so rs)))) m
   | Pand r1 r2 so => 
-      OK (nextinstr (rs#r1 <- (Val.and rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr (rs#r1 <- (Val.and rs#r2 (eval_shift_op so rs)))) m
   | Pb lbl =>                      
-      goto_label c lbl rs m
+      goto_label f lbl rs m
   | Pbc bit lbl =>            
       match rs#bit with
-      | Vint n => if Int.eq n Int.zero then OK (nextinstr rs) m else goto_label c lbl rs m
-      | _ => Error
+      | Vint n => if Int.eq n Int.zero then Next (nextinstr rs) m else goto_label f lbl rs m
+      | _ => Stuck
       end
   | Pbsymb id sg =>                  
-      OK (rs#PC <- (symbol_offset id Int.zero)) m
+      Next (rs#PC <- (symbol_offset id Int.zero)) m
   | Pbreg r sg =>                    
-      OK (rs#PC <- (rs#r)) m
+      Next (rs#PC <- (rs#r)) m
   | Pblsymb id sg =>                 
-      OK (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (symbol_offset id Int.zero)) m
+      Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (symbol_offset id Int.zero)) m
   | Pblreg r sg =>                   
-      OK (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (rs#r)) m
+      Next (rs#IR14 <- (Val.add rs#PC Vone) #PC <- (rs#r)) m
   | Pbic r1 r2 so => 
-      OK (nextinstr (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
+      Next (nextinstr (rs#r1 <- (Val.and rs#r2 (Val.notint (eval_shift_op so rs))))) m
   | Pcmp r1 so => 
-      OK (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs) m)) m
+      Next (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs) m)) m
   | Peor r1 r2 so => 
-      OK (nextinstr (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
   | Pldr r1 r2 sa => 
       exec_load Mint32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pldrb r1 r2 sa => 
@@ -449,22 +462,22 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pldrsh r1 r2 sa => 
       exec_load Mint16signed (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pmov r1 so =>          
-      OK (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
+      Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
   | Pmovc bit r1 so =>          
       match rs#bit with
       | Vint n => if Int.eq n Int.zero 
-                  then OK (nextinstr rs) m
-                  else OK (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
-      | _ => OK (nextinstr (rs#r1 <- Vundef)) m
+                  then Next (nextinstr rs) m
+                  else Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
+      | _ => Next (nextinstr (rs#r1 <- Vundef)) m
       end
   | Pmul r1 r2 r3 =>      
-      OK (nextinstr (rs#r1 <- (Val.mul rs#r2 rs#r3))) m
+      Next (nextinstr (rs#r1 <- (Val.mul rs#r2 rs#r3))) m
   | Pmvn r1 so =>          
-      OK (nextinstr (rs#r1 <- (Val.notint (eval_shift_op so rs)))) m
+      Next (nextinstr (rs#r1 <- (Val.notint (eval_shift_op so rs)))) m
   | Porr r1 r2 so =>  
-      OK (nextinstr (rs#r1 <- (Val.or rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr (rs#r1 <- (Val.or rs#r2 (eval_shift_op so rs)))) m
   | Prsb r1 r2 so =>  
-      OK (nextinstr (rs#r1 <- (Val.sub (eval_shift_op so rs) rs#r2))) m
+      Next (nextinstr (rs#r1 <- (Val.sub (eval_shift_op so rs) rs#r2))) m
   | Pstr r1 r2 sa => 
       exec_store Mint32 (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Pstrb r1 r2 sa => 
@@ -473,47 +486,47 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       exec_store Mint16unsigned (Val.add rs#r2 (eval_shift_addr sa rs)) r1 rs m
   | Psdiv rd r1 r2 =>
       match Val.divs rs#r1 rs#r2 with
-      | Some v => OK (nextinstr (rs#rd <- v)) m
-      | None => Error
+      | Some v => Next (nextinstr (rs#rd <- v)) m
+      | None => Stuck
       end
   | Psub r1 r2 so =>  
-      OK (nextinstr (rs#r1 <- (Val.sub rs#r2 (eval_shift_op so rs)))) m
+      Next (nextinstr (rs#r1 <- (Val.sub rs#r2 (eval_shift_op so rs)))) m
   | Pudiv rd r1 r2 =>
       match Val.divu rs#r1 rs#r2 with
-      | Some v => OK (nextinstr (rs#rd <- v)) m
-      | None => Error
+      | Some v => Next (nextinstr (rs#rd <- v)) m
+      | None => Stuck
       end
   (* Floating-point coprocessor instructions *)
   | Pfcpyd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (rs#r2))) m
+      Next (nextinstr (rs#r1 <- (rs#r2))) m
   | Pfabsd r1 r2 => 
-      OK (nextinstr (rs#r1 <- (Val.absf rs#r2))) m
+      Next (nextinstr (rs#r1 <- (Val.absf rs#r2))) m
   | Pfnegd r1 r2 => 
-      OK (nextinstr (rs#r1 <- (Val.negf rs#r2))) m
+      Next (nextinstr (rs#r1 <- (Val.negf rs#r2))) m
   | Pfaddd r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.addf rs#r2 rs#r3))) m
+      Next (nextinstr (rs#r1 <- (Val.addf rs#r2 rs#r3))) m
   | Pfdivd r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.divf rs#r2 rs#r3))) m
+      Next (nextinstr (rs#r1 <- (Val.divf rs#r2 rs#r3))) m
   | Pfmuld r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.mulf rs#r2 rs#r3))) m
+      Next (nextinstr (rs#r1 <- (Val.mulf rs#r2 rs#r3))) m
   | Pfsubd r1 r2 r3 =>     
-      OK (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
+      Next (nextinstr (rs#r1 <- (Val.subf rs#r2 rs#r3))) m
   | Pflid r1 f =>            
-      OK (nextinstr (rs#r1 <- (Vfloat f))) m
+      Next (nextinstr (rs#r1 <- (Vfloat f))) m
   | Pfcmpd r1 r2 =>              
-      OK (nextinstr (compare_float rs rs#r1 rs#r2)) m
+      Next (nextinstr (compare_float rs rs#r1 rs#r2)) m
   | Pfcmpzd r1 =>              
-      OK (nextinstr (compare_float rs rs#r1 (Vfloat Float.zero))) m
+      Next (nextinstr (compare_float rs rs#r1 (Vfloat Float.zero))) m
   | Pfsitod r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofint rs#r2)))) m
+      Next (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofint rs#r2)))) m
   | Pfuitod r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofintu rs#r2)))) m
+      Next (nextinstr (rs#r1 <- (Val.maketotal (Val.floatofintu rs#r2)))) m
   | Pftosizd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.intoffloat rs#r2)))) m
+      Next (nextinstr (rs#r1 <- (Val.maketotal (Val.intoffloat rs#r2)))) m
   | Pftouizd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.maketotal (Val.intuoffloat rs#r2)))) m
+      Next (nextinstr (rs#r1 <- (Val.maketotal (Val.intuoffloat rs#r2)))) m
   | Pfcvtsd r1 r2 =>
-      OK (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
+      Next (nextinstr (rs#r1 <- (Val.singleoffloat rs#r2))) m
   | Pfldd r1 r2 n =>
       exec_load Mfloat64al32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pflds r1 r2 n =>
@@ -522,85 +535,63 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       exec_store Mfloat64al32 (Val.add rs#r2 (Vint n)) r1 rs m
   | Pfsts r1 r2 n =>
       match exec_store Mfloat32 (Val.add rs#r2 (Vint n)) r1 rs m with
-      | OK rs' m' => OK (rs'#FR7 <- Vundef) m'
-      | Error => Error
+      | Next rs' m' => Next (rs'#FR7 <- Vundef) m'
+      | Stuck => Stuck
       end
   (* Pseudo-instructions *)
   | Pallocframe sz pos =>             
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := (Vptr stk Int.zero) in
       match Mem.storev Mint32 m1 (Val.add sp (Vint pos)) rs#IR13 with
-      | None => Error
-      | Some m2 => OK (nextinstr (rs #IR12 <- (rs#IR13) #IR13 <- sp)) m2
+      | None => Stuck
+      | Some m2 => Next (nextinstr (rs #IR10 <- (rs#IR13) #IR13 <- sp)) m2
       end
   | Pfreeframe sz pos =>
       match Mem.loadv Mint32 m (Val.add rs#IR13 (Vint pos)) with
-      | None => Error
+      | None => Stuck
       | Some v =>
           match rs#IR13 with
           | Vptr stk ofs =>
               match Mem.free m stk 0 sz with
-              | None => Error
-              | Some m' => OK (nextinstr (rs#IR13 <- v)) m'
+              | None => Stuck
+              | Some m' => Next (nextinstr (rs#IR13 <- v)) m'
               end
-          | _ => Error
+          | _ => Stuck
           end
       end
   | Plabel lbl =>
-      OK (nextinstr rs) m
+      Next (nextinstr rs) m
   | Ploadsymbol r1 lbl ofs =>
-      OK (nextinstr (rs#r1 <- (symbol_offset lbl ofs))) m
+      Next (nextinstr (rs#r1 <- (symbol_offset lbl ofs))) m
   | Pbtbl r tbl =>
       match rs#r with
       | Vint n => 
-          let pos := Int.unsigned n in
-          if zeq (Zmod pos 4) 0 then
-            match list_nth_z tbl (pos / 4) with
-            | None => Error
-            | Some lbl => goto_label c lbl rs m
-            end
-          else Error
-      | _ => Error
+          match list_nth_z tbl (Int.unsigned n) with
+          | None => Stuck
+          | Some lbl => goto_label f lbl (rs#IR14 <- Vundef) m
+          end
+      | _ => Stuck
       end
-  | Pbuiltin ef args res => Error    (**r treated specially below *)
-  | Pannot ef args => Error          (**r treated specially below *)
+  | Pbuiltin ef args res => Stuck    (**r treated specially below *)
+  | Pannot ef args => Stuck          (**r treated specially below *)
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers
-  to the ARM view.  ARM has two different types for registers
-  (integer and float) while LTL et al have only one.  The
-  [ireg_of] and [freg_of] are therefore partial in principle.
-  To keep things simpler, we make them return nonsensical
-  results when applied to a LTL register of the wrong type.
-  The proof in [ARMgenproof] will show that this never happens.
-
-  Note that no LTL register maps to [IR14].
+  to the ARM view.  Note that no LTL register maps to [IR14].
   This register is reserved as temporary, to be used
   by the generated ARM code.  *)
 
-Definition ireg_of (r: mreg) : ireg :=
+Definition preg_of (r: mreg) : preg :=
   match r with
   | R0 => IR0 | R1 => IR1 | R2 => IR2 | R3 => IR3
   | R4 => IR4 | R5 => IR5 | R6 => IR6 | R7 => IR7
   | R8 => IR8 | R9 => IR9 | R11 => IR11
   | IT1 => IR10 | IT2 => IR12
-  | _ => IR0  (* should not happen *)
-  end.
-
-Definition freg_of (r: mreg) : freg :=
-  match r with
   | F0 => FR0 | F1 => FR1 | F2 => FR2 | F3 => FR3
   | F4 => FR4 | F5 => FR5
   | F8 => FR8 | F9 => FR9 | F10 => FR10 | F11 => FR11
   | F12 => FR12 | F13 => FR13 | F14 => FR14 | F15 => FR15
   | FT1 => FR6 | FT2 => FR7
-  | _ => FR0  (* should not happen *)
-  end.
-
-Definition preg_of (r: mreg) :=
-  match mreg_type r with
-  | Tint => IR (ireg_of r)
-  | Tfloat => FR (freg_of r)
   end.
 
 (** Extract the values of the arguments of an external call.
@@ -651,7 +642,7 @@ Inductive step: state -> trace -> state -> Prop :=
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Int.unsigned ofs) (fn_code f) = Some i ->
-      exec_instr (fn_code f) i rs m = OK rs' m' ->
+      exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs f ef args res rs m t v m',
@@ -765,3 +756,27 @@ Ltac Equalities :=
 (* final states *)
   inv H; inv H0. congruence.
 Qed.
+
+(** Classification functions for processor registers (used in Asmgenproof). *)
+
+Definition data_preg (r: preg) : bool :=
+  match r with
+  | IR IR14 => false
+  | IR _ => true
+  | FR _ => true
+  | CR _ => false
+  | PC => false
+  end.
+
+Definition nontemp_preg (r: preg) : bool :=
+  match r with
+  | IR IR14 => false
+  | IR IR10 => false
+  | IR IR12 => false
+  | IR _ => true
+  | FR FR6 => false
+  | FR FR7 => false
+  | FR _ => true
+  | CR _ => false
+  | PC => false
+  end.

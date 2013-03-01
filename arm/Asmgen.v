@@ -22,6 +22,17 @@ Require Import Locations.
 Require Import Mach.
 Require Import Asm.
 
+Open Local Scope string_scope.
+Open Local Scope error_monad_scope.
+
+(** Extracting integer or float registers. *)
+
+Definition ireg_of (r: mreg) : res ireg :=
+  match preg_of r with IR mr => OK mr | _ => Error(msg "Asmgen.ireg_of") end.
+
+Definition freg_of (r: mreg) : res freg :=
+  match preg_of r with FR mr => OK mr | _ => Error(msg "Asmgen.freg_of") end.
+
 (** Recognition of integer immediate arguments.
 - For arithmetic operations, immediates are
   8-bit quantities zero-extended and rotated right by 0, 2, 4, ... 30 bits.
@@ -130,33 +141,43 @@ Definition transl_cond
               (cond: condition) (args: list mreg) (k: code) :=
   match cond, args with
   | Ccomp c, a1 :: a2 :: nil =>
-      Pcmp (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pcmp r1(SOreg r2) :: k)
   | Ccompu c, a1 :: a2 :: nil =>
-      Pcmp (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pcmp r1 (SOreg r2) :: k)
   | Ccompshift c s, a1 :: a2 :: nil =>
-      Pcmp (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pcmp r1 (transl_shift s r2) :: k)
   | Ccompushift c s, a1 :: a2 :: nil =>
-      Pcmp (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pcmp r1 (transl_shift s r2) :: k)
   | Ccompimm c n, a1 :: nil =>
-      if is_immed_arith n then
-        Pcmp (ireg_of a1) (SOimm n) :: k
-      else
-        loadimm IR14 n (Pcmp (ireg_of a1) (SOreg IR14) :: k)
+      do r1 <- ireg_of a1;
+      OK (if is_immed_arith n then
+            Pcmp r1 (SOimm n) :: k
+          else
+            loadimm IR14 n (Pcmp r1 (SOreg IR14) :: k))
   | Ccompuimm c n, a1 :: nil =>
-      if is_immed_arith n then
-        Pcmp (ireg_of a1) (SOimm n) :: k
-      else
-        loadimm IR14 n (Pcmp (ireg_of a1) (SOreg IR14) :: k)
+      do r1 <- ireg_of a1;
+      OK (if is_immed_arith n then
+            Pcmp r1 (SOimm n) :: k
+          else
+            loadimm IR14 n (Pcmp r1 (SOreg IR14) :: k))
   | Ccompf cmp, a1 :: a2 :: nil =>
-      Pfcmpd (freg_of a1) (freg_of a2) :: k
+      do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfcmpd r1 r2 :: k)
   | Cnotcompf cmp, a1 :: a2 :: nil =>
-      Pfcmpd (freg_of a1) (freg_of a2) :: k
+      do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfcmpd r1 r2 :: k)
   | Ccompfzero cmp, a1 :: nil =>
-      Pfcmpzd (freg_of a1) :: k
+      do r1 <- freg_of a1;
+      OK (Pfcmpzd r1 :: k)
   | Cnotcompfzero cmp, a1 :: nil =>
-      Pfcmpzd (freg_of a1) :: k
+      do r1 <- freg_of a1;
+      OK (Pfcmpzd r1 :: k)
   | _, _ =>
-     k (**r never happens for well-typed code *)
+      Error(msg "Asmgen.transl_cond")
   end.
 
 Definition crbit_for_signed_cmp (cmp: comparison) :=
@@ -217,115 +238,159 @@ Definition crbit_for_cond (cond: condition) :=
   The corresponding instructions are prepended to [k]. *)
 
 Definition transl_op
-              (op: operation) (args: list mreg) (r: mreg) (k: code) :=
+              (op: operation) (args: list mreg) (res: mreg) (k: code) :=
   match op, args with
   | Omove, a1 :: nil =>
-      match mreg_type a1 with
-      | Tint => Pmov (ireg_of r) (SOreg (ireg_of a1)) :: k
-      | Tfloat => Pfcpyd (freg_of r) (freg_of a1) :: k
+      match preg_of res, preg_of a1 with
+      | IR r, IR a => OK (Pmov r (SOreg a) :: k)
+      | FR r, FR a => OK (Pfcpyd r a :: k)
+      |  _  ,  _   => Error(msg "Asmgen.Omove")
       end
   | Ointconst n, nil =>
-      loadimm (ireg_of r) n k
+      do r <- ireg_of res;
+      OK (loadimm r n k)
   | Ofloatconst f, nil =>
-      Pflid (freg_of r) f :: k
+      do r <- freg_of res;
+      OK (Pflid r f :: k)
   | Oaddrsymbol s ofs, nil =>
-      Ploadsymbol (ireg_of r) s ofs :: k
+      do r <- ireg_of res;
+      OK (Ploadsymbol r s ofs :: k)
   | Oaddrstack n, nil =>
-      addimm (ireg_of r) IR13 n k
+      do r <- ireg_of res;
+      OK (addimm r IR13 n k)
   | Oadd, a1 :: a2 :: nil =>
-      Padd (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Padd r r1 (SOreg r2) :: k)
   | Oaddshift s, a1 :: a2 :: nil =>
-      Padd (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Padd r r1 (transl_shift s r2) :: k)
   | Oaddimm n, a1 :: nil =>
-      addimm (ireg_of r) (ireg_of a1) n k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (addimm r r1 n k)
   | Osub, a1 :: a2 :: nil =>
-      Psub (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Psub r r1 (SOreg r2) :: k)
   | Osubshift s, a1 :: a2 :: nil =>
-      Psub (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Psub r r1 (transl_shift s r2) :: k)
   | Orsubshift s, a1 :: a2 :: nil =>
-      Prsb (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Prsb r r1 (transl_shift s r2) :: k)
   | Orsubimm n, a1 :: nil =>
-      rsubimm (ireg_of r) (ireg_of a1) n k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (rsubimm r r1 n k)
   | Omul, a1 :: a2 :: nil =>
-      if ireg_eq (ireg_of r) (ireg_of a1)
-      || ireg_eq (ireg_of r) (ireg_of a2)
-      then Pmul IR14 (ireg_of a1) (ireg_of a2) :: Pmov (ireg_of r) (SOreg IR14) :: k
-      else Pmul (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (if ireg_eq r r1 || ireg_eq r r2
+          then Pmul IR14 r1 r2 :: Pmov r (SOreg IR14) :: k
+          else Pmul r r1 r2 :: k)
   | Odiv, a1 :: a2 :: nil =>
-      Psdiv (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Psdiv r r1 r2 :: k)
   | Odivu, a1 :: a2 :: nil =>
-      Pudiv (ireg_of r) (ireg_of a1) (ireg_of a2) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pudiv r r1 r2 :: k)
   | Oand, a1 :: a2 :: nil =>
-      Pand (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pand r r1 (SOreg r2) :: k)
   | Oandshift s, a1 :: a2 :: nil =>
-      Pand (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pand r r1 (transl_shift s r2) :: k)
   | Oandimm n, a1 :: nil =>
-      andimm (ireg_of r) (ireg_of a1) n k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (andimm r r1 n k)
   | Oor, a1 :: a2 :: nil =>
-      Porr (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Porr r r1 (SOreg r2) :: k)
   | Oorshift s, a1 :: a2 :: nil =>
-      Porr (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Porr r r1 (transl_shift s r2) :: k)
   | Oorimm n, a1 :: nil =>
-      orimm (ireg_of r) (ireg_of a1) n k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (orimm r r1 n k)
   | Oxor, a1 :: a2 :: nil =>
-      Peor (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Peor r r1 (SOreg r2) :: k)
   | Oxorshift s, a1 :: a2 :: nil =>
-      Peor (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Peor r r1 (transl_shift s r2) :: k)
   | Oxorimm n, a1 :: nil =>
-      xorimm (ireg_of r) (ireg_of a1) n k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (xorimm r r1 n k)
   | Obic, a1 :: a2 :: nil =>
-      Pbic (ireg_of r) (ireg_of a1) (SOreg (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pbic r r1 (SOreg r2) :: k)
   | Obicshift s, a1 :: a2 :: nil =>
-      Pbic (ireg_of r) (ireg_of a1) (transl_shift s (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pbic r r1 (transl_shift s r2) :: k)
   | Onot, a1 :: nil =>
-      Pmvn (ireg_of r) (SOreg (ireg_of a1)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (Pmvn r (SOreg r1) :: k)
   | Onotshift s, a1 :: nil =>
-      Pmvn (ireg_of r) (transl_shift s (ireg_of a1)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (Pmvn r (transl_shift s r1) :: k)
   | Oshl, a1 :: a2 :: nil =>
-      Pmov (ireg_of r) (SOlslreg (ireg_of a1) (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pmov r (SOlslreg r1 r2) :: k)
   | Oshr, a1 :: a2 :: nil =>
-      Pmov (ireg_of r) (SOasrreg (ireg_of a1) (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pmov r (SOasrreg r1 r2) :: k)
   | Oshru, a1 :: a2 :: nil =>
-      Pmov (ireg_of r) (SOlsrreg (ireg_of a1) (ireg_of a2)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pmov r (SOlsrreg r1 r2) :: k)
   | Oshift s, a1 :: nil =>
-      Pmov (ireg_of r) (transl_shift s (ireg_of a1)) :: k
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (Pmov r (transl_shift s r1) :: k)
   | Oshrximm n, a1 :: nil =>
-      Pcmp (ireg_of a1) (SOimm Int.zero) ::
-      addimm IR14 (ireg_of a1) (Int.sub (Int.shl Int.one n) Int.one)
-         (Pmovc CRge IR14 (SOreg (ireg_of a1)) ::
-          Pmov (ireg_of r) (SOasrimm IR14 n) :: k)
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (Pcmp r1 (SOimm Int.zero) ::
+          addimm IR14 r1 (Int.sub (Int.shl Int.one n) Int.one)
+             (Pmovc CRge IR14 (SOreg r1) ::
+              Pmov r (SOasrimm IR14 n) :: k))
   | Onegf, a1 :: nil =>
-      Pfnegd (freg_of r) (freg_of a1) :: k
+      do r <- freg_of res; do r1 <- freg_of a1;
+      OK (Pfnegd r r1 :: k)
   | Oabsf, a1 :: nil =>
-      Pfabsd (freg_of r) (freg_of a1) :: k
+      do r <- freg_of res; do r1 <- freg_of a1;
+      OK (Pfabsd r r1 :: k)
   | Oaddf, a1 :: a2 :: nil =>
-      Pfaddd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfaddd r r1 r2 :: k)
   | Osubf, a1 :: a2 :: nil =>
-      Pfsubd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfsubd r r1 r2 :: k)
   | Omulf, a1 :: a2 :: nil =>
-      Pfmuld (freg_of r) (freg_of a1) (freg_of a2) :: k
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfmuld r r1 r2 :: k)
   | Odivf, a1 :: a2 :: nil =>
-      Pfdivd (freg_of r) (freg_of a1) (freg_of a2) :: k
+      do r <- freg_of res; do r1 <- freg_of a1; do r2 <- freg_of a2;
+      OK (Pfdivd r r1 r2 :: k)
   | Osingleoffloat, a1 :: nil =>
-      Pfcvtsd (freg_of r) (freg_of a1) :: k
+      do r <- freg_of res; do r1 <- freg_of a1;
+      OK (Pfcvtsd r r1 :: k)
   | Ointoffloat, a1 :: nil =>
-      Pftosizd (ireg_of r) (freg_of a1) :: k
+      do r <- ireg_of res; do r1 <- freg_of a1;
+      OK (Pftosizd r r1 :: k)
   | Ointuoffloat, a1 :: nil =>
-      Pftouizd (ireg_of r) (freg_of a1) :: k
+      do r <- ireg_of res; do r1 <- freg_of a1;
+      OK (Pftouizd r r1 :: k)
   | Ofloatofint, a1 :: nil =>
-      Pfsitod (freg_of r) (ireg_of a1) :: k
+      do r <- freg_of res; do r1 <- ireg_of a1;
+      OK (Pfsitod r r1 :: k)
   | Ofloatofintu, a1 :: nil =>
-      Pfuitod (freg_of r) (ireg_of a1) :: k
+      do r <- freg_of res; do r1 <- ireg_of a1;
+      OK (Pfuitod r r1 :: k)
   | Ocmp cmp, _ =>
+      do r <- ireg_of res;
       transl_cond cmp args
-        (Pmov (ireg_of r) (SOimm Int.zero) ::
-         Pmovc (crbit_for_cond cmp) (ireg_of r) (SOimm Int.one) ::
+        (Pmov r (SOimm Int.zero) ::
+         Pmovc (crbit_for_cond cmp) r (SOimm Int.one) ::
          k)
   | _, _ =>
-      k (**r never happens for well-typed code *)
+      Error(msg "Asmgen.transl_op")
   end.
 
-(** Common code to translate [Mload] and [Mstore] instructions. *)
+(** Translation of memory accesses: loads and stores. *)
 
 Definition transl_shift_addr (s: shift) (r: ireg) : shift_addr :=
   match s with
@@ -335,61 +400,105 @@ Definition transl_shift_addr (s: shift) (r: ireg) : shift_addr :=
   | Sror n => SAror r (s_amount n)
   end.
 
-Definition transl_load_store
+Definition transl_memory_access
      (mk_instr_imm: ireg -> int -> instruction)
      (mk_instr_gen: option (ireg -> shift_addr -> instruction))
      (is_immed: int -> bool)
-     (addr: addressing) (args: list mreg) (k: code) : code :=
+     (addr: addressing) (args: list mreg) (k: code) :=
   match addr, args with
   | Aindexed n, a1 :: nil =>
-      if is_immed n then
-        mk_instr_imm (ireg_of a1) n :: k
-      else
-        addimm IR14 (ireg_of a1) n
-          (mk_instr_imm IR14 Int.zero :: k)
+      do r1 <- ireg_of a1;
+      OK (if is_immed n then
+            mk_instr_imm r1 n :: k
+          else
+            addimm IR14 r1 n
+              (mk_instr_imm IR14 Int.zero :: k))
   | Aindexed2, a1 :: a2 :: nil =>
-      match mk_instr_gen with
-      | Some f =>
-          f (ireg_of a1) (SAreg (ireg_of a2)) :: k
-      | None =>
-          Padd IR14 (ireg_of a1) (SOreg (ireg_of a2)) ::
-          mk_instr_imm IR14 Int.zero :: k
-      end
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (match mk_instr_gen with
+          | Some f =>
+              f r1 (SAreg r2) :: k
+          | None =>
+              Padd IR14 r1 (SOreg r2) ::
+              mk_instr_imm IR14 Int.zero :: k
+          end)
   | Aindexed2shift s, a1 :: a2 :: nil =>
-      match mk_instr_gen with
-      | Some f =>
-          f (ireg_of a1) (transl_shift_addr s (ireg_of a2)) :: k
-      | None =>
-          Padd IR14 (ireg_of a1) (transl_shift s (ireg_of a2)) ::
-          mk_instr_imm IR14 Int.zero :: k
-      end
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (match mk_instr_gen with
+          | Some f =>
+              f r1 (transl_shift_addr s r2) :: k
+          | None =>
+              Padd IR14 r1 (transl_shift s r2) ::
+              mk_instr_imm IR14 Int.zero :: k
+          end)
   | Ainstack n, nil =>
-      if is_immed n then
-        mk_instr_imm IR13 n :: k
-      else
-        addimm IR14 IR13 n
-          (mk_instr_imm IR14 Int.zero :: k)
+      OK (if is_immed n then
+            mk_instr_imm IR13 n :: k
+          else
+            addimm IR14 IR13 n (mk_instr_imm IR14 Int.zero :: k))
   | _, _ =>
-      (* should not happen *) k
+      Error(msg "Asmgen.transl_memory_access")
   end.
 
-Definition transl_load_store_int
+Definition transl_memory_access_int
      (mk_instr: ireg -> ireg -> shift_addr -> instruction)
      (is_immed: int -> bool)
-     (rd: mreg) (addr: addressing) (args: list mreg) (k: code) :=
-  transl_load_store
-    (fun r n => mk_instr (ireg_of rd) r (SAimm n))
-    (Some (mk_instr (ireg_of rd)))
+     (dst: mreg) (addr: addressing) (args: list mreg) (k: code) :=
+  do rd <- ireg_of dst;
+  transl_memory_access
+    (fun r n => mk_instr rd r (SAimm n))
+    (Some (mk_instr rd))
     is_immed addr args k.
 
-Definition transl_load_store_float
+Definition transl_memory_access_float
      (mk_instr: freg -> ireg -> int -> instruction)
      (is_immed: int -> bool)
-     (rd: mreg) (addr: addressing) (args: list mreg) (k: code) :=
-  transl_load_store
-    (mk_instr (freg_of rd))
+     (dst: mreg) (addr: addressing) (args: list mreg) (k: code) :=
+  do rd <- freg_of dst;
+  transl_memory_access
+    (mk_instr rd)
     None
     is_immed addr args k.
+
+Definition transl_load (chunk: memory_chunk) (addr: addressing)
+                       (args: list mreg) (dst: mreg) (k: code) :=
+  match chunk with
+  | Mint8signed =>
+      transl_memory_access_int Pldrsb is_immed_mem_small dst addr args k
+  | Mint8unsigned =>
+      transl_memory_access_int Pldrb is_immed_mem_word dst addr args k
+  | Mint16signed =>
+      transl_memory_access_int Pldrsh is_immed_mem_small dst addr args k
+  | Mint16unsigned =>
+      transl_memory_access_int Pldrh is_immed_mem_small dst addr args k
+  | Mint32 =>
+      transl_memory_access_int Pldr is_immed_mem_word dst addr args k
+  | Mfloat32 =>
+      transl_memory_access_float Pflds is_immed_mem_float dst addr args k
+  | Mfloat64 | Mfloat64al32 =>
+      transl_memory_access_float Pfldd is_immed_mem_float dst addr args k
+  end.
+
+Definition transl_store (chunk: memory_chunk) (addr: addressing)
+                       (args: list mreg) (src: mreg) (k: code) :=
+  match chunk with
+  | Mint8signed =>
+      transl_memory_access_int Pstrb is_immed_mem_small src addr args k
+  | Mint8unsigned =>
+      transl_memory_access_int Pstrb is_immed_mem_word src addr args k
+  | Mint16signed =>
+      transl_memory_access_int Pstrh is_immed_mem_small src addr args k
+  | Mint16unsigned =>
+      transl_memory_access_int Pstrh is_immed_mem_small src addr args k
+  | Mint32 =>
+      transl_memory_access_int Pstr is_immed_mem_word src addr args k
+  | Mfloat32 =>
+      transl_memory_access_float Pfsts is_immed_mem_float src addr args k
+  | Mfloat64 | Mfloat64al32 =>
+      transl_memory_access_float Pfstd is_immed_mem_float src addr args k
+  end.
+
+(** Accessing data in the stack frame. *)
 
 Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
   if is_immed_mem_word ofs then
@@ -407,8 +516,8 @@ Definition loadind_float (base: ireg) (ofs: int) (dst: freg) (k: code) :=
 
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   match ty with
-  | Tint => loadind_int base ofs (ireg_of dst) k
-  | Tfloat => loadind_float base ofs (freg_of dst) k
+  | Tint   => do r <- ireg_of dst; OK (loadind_int base ofs r k)
+  | Tfloat => do r <- freg_of dst; OK (loadind_float base ofs r k)
   end.
 
 Definition storeind_int (src: ireg) (base: ireg) (ofs: int) (k: code) :=
@@ -427,8 +536,8 @@ Definition storeind_float (src: freg) (base: ireg) (ofs: int) (k: code) :=
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   match ty with
-  | Tint => storeind_int (ireg_of src) base ofs k
-  | Tfloat => storeind_float (freg_of src) base ofs k
+  | Tint   => do r <- ireg_of src; OK (storeind_int r base ofs k)
+  | Tfloat => do r <- freg_of src; OK (storeind_float r base ofs k)
   end.
 
 (** Translation of arguments to annotations *)
@@ -441,80 +550,71 @@ Definition transl_annot_param (p: Mach.annot_param) : Asm.annot_param :=
 
 (** Translation of a Mach instruction. *)
 
-Definition transl_instr (f: Mach.function) (i: Mach.instruction) (k: code) :=
+Definition transl_instr (f: Mach.function) (i: Mach.instruction)
+                        (r10_is_parent: bool) (k: code) :=
   match i with
   | Mgetstack ofs ty dst =>
       loadind IR13 ofs ty dst k
   | Msetstack src ofs ty =>
       storeind src IR13 ofs ty k
   | Mgetparam ofs ty dst =>
-      loadind_int IR13 f.(fn_link_ofs) IR14 (loadind IR14 ofs ty dst k)
+      do c <- loadind IR10 ofs ty dst k;
+      OK (if r10_is_parent
+          then c
+          else loadind_int IR13 f.(fn_link_ofs) IR10 c)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
-      match chunk with
-      | Mint8signed =>
-          transl_load_store_int Pldrsb is_immed_mem_small dst addr args k
-      | Mint8unsigned =>
-          transl_load_store_int Pldrb is_immed_mem_word dst addr args k
-      | Mint16signed =>
-          transl_load_store_int Pldrsh is_immed_mem_small dst addr args k
-      | Mint16unsigned =>
-          transl_load_store_int Pldrh is_immed_mem_small dst addr args k
-      | Mint32 =>
-          transl_load_store_int Pldr is_immed_mem_word dst addr args k
-      | Mfloat32 =>
-          transl_load_store_float Pflds is_immed_mem_float dst addr args k
-      | Mfloat64 | Mfloat64al32 =>
-          transl_load_store_float Pfldd is_immed_mem_float dst addr args k
-      end
+      transl_load chunk addr args dst k
   | Mstore chunk addr args src =>
-      match chunk with
-      | Mint8signed =>
-          transl_load_store_int Pstrb is_immed_mem_small src addr args k
-      | Mint8unsigned =>
-          transl_load_store_int Pstrb is_immed_mem_word src addr args k
-      | Mint16signed =>
-          transl_load_store_int Pstrh is_immed_mem_small src addr args k
-      | Mint16unsigned =>
-          transl_load_store_int Pstrh is_immed_mem_small src addr args k
-      | Mint32 =>
-          transl_load_store_int Pstr is_immed_mem_word src addr args k
-      | Mfloat32 =>
-          transl_load_store_float Pfsts is_immed_mem_float src addr args k
-      | Mfloat64 | Mfloat64al32 =>
-          transl_load_store_float Pfstd is_immed_mem_float src addr args k
-      end
-  | Mcall sig (inl r) =>
-      Pblreg (ireg_of r) sig :: k
+      transl_store chunk addr args src k
+  | Mcall sig (inl arg) =>
+      do r <- ireg_of arg; OK (Pblreg r sig :: k)
   | Mcall sig (inr symb) =>
-      Pblsymb symb sig :: k
-  | Mtailcall sig (inl r) =>
-      loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg (ireg_of r) sig :: k)
+      OK (Pblsymb symb sig :: k)
+  | Mtailcall sig (inl arg) =>
+      do r <- ireg_of arg;
+      OK (loadind_int IR13 f.(fn_retaddr_ofs) IR14
+           (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg r sig :: k))
   | Mtailcall sig (inr symb) =>
-      loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb sig :: k)
+      OK (loadind_int IR13 f.(fn_retaddr_ofs) IR14
+           (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb sig :: k))
   | Mbuiltin ef args res =>
-      Pbuiltin ef (map preg_of args) (preg_of res) :: k
+      OK (Pbuiltin ef (map preg_of args) (preg_of res) :: k)
   | Mannot ef args =>
-      Pannot ef (map transl_annot_param args) :: k
+      OK (Pannot ef (map transl_annot_param args) :: k)
   | Mlabel lbl =>
-      Plabel lbl :: k
+      OK (Plabel lbl :: k)
   | Mgoto lbl =>
-      Pb lbl :: k
+      OK (Pb lbl :: k)
   | Mcond cond args lbl =>
       transl_cond cond args (Pbc (crbit_for_cond cond) lbl :: k)
   | Mjumptable arg tbl =>
-      Pmov IR14 (SOlslimm (ireg_of arg) (Int.repr 2)) ::
-      Pbtbl IR14 tbl :: k
+      do r <- ireg_of arg;
+      OK (Pbtbl r tbl :: k)
   | Mreturn =>
-      loadind_int IR13 f.(fn_retaddr_ofs) IR14
-        (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbreg IR14 f.(Mach.fn_sig) :: k)
+      OK (loadind_int IR13 f.(fn_retaddr_ofs) IR14
+            (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) ::
+             Pbreg IR14 f.(Mach.fn_sig) :: k))
   end.
 
-Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
-  List.fold_right (transl_instr f) nil il.
+(** Translation of a code sequence *)
+
+Definition r10_is_parent (before: bool) (i: Mach.instruction) : bool :=
+  match i with
+  | Msetstack src ofs ty => before
+  | Mgetparam ofs ty dst => negb (mreg_eq dst IT1)
+  | Mop Omove args res => before && negb (mreg_eq res IT1)
+  | _ => false
+  end.
+
+Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction)  (r10p: bool) :=
+  match il with
+  | nil => OK nil
+  | i1 :: il' =>
+      do k <- transl_code f il' (r10_is_parent r10p i1);
+      transl_instr f i1 r10p k
+  end.
 
 (** Translation of a whole function.  Note that we must check
   that the generated code contains less than [2^32] instructions,
@@ -522,24 +622,16 @@ Definition transl_code (f: Mach.function) (il: list Mach.instruction) :=
   around, leading to incorrect executions. *)
 
 Definition transl_function (f: Mach.function) :=
-  mkfunction f.(Mach.fn_sig)
-    (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-     Pstr IR14 IR13 (SAimm f.(fn_retaddr_ofs)) ::
-     transl_code f f.(Mach.fn_code)).
-
-Fixpoint code_size (c: code) : Z :=
-  match c with
-  | nil => 0
-  | instr :: c' => code_size c' + 1
-  end.
-
-Open Local Scope string_scope.
+  do c <- transl_code f f.(Mach.fn_code) true;
+  OK (mkfunction f.(Mach.fn_sig)
+        (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
+         Pstr IR14 IR13 (SAimm f.(fn_retaddr_ofs)) :: c)).
 
 Definition transf_function (f: Mach.function) : res Asm.function :=
-  let tf := transl_function f in
-  if zlt Int.max_unsigned (code_size tf.(fn_code))
-  then Errors.Error (msg "code size exceeded")
-  else Errors.OK tf.
+  do tf <- transl_function f;
+  if zlt Int.max_unsigned (list_length_z tf.(fn_code))
+  then Error (msg "code size exceeded")
+  else OK tf.
 
 Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
   transf_partial_fundef transf_function f.

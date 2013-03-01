@@ -549,7 +549,7 @@ Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction)  (edx_is_par
   around, leading to incorrect executions. *)
 
 Definition transf_function (f: Mach.function) : res Asm.code :=
-  do c <- transl_code f f.(fn_code) true;
+  do c <- transl_code f f.(Mach.fn_code) true;
   if zlt (list_length_z c) Int.max_unsigned 
   then OK (Pallocframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: c)
   else Error (msg "code size exceeded").

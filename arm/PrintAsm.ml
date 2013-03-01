@@ -593,14 +593,14 @@ let print_instruction oc = function
       fprintf oc "	fsts	%a, [%a, #%a]\n" freg_single FR6 ireg r2 coqint n; 2
   (* Pseudo-instructions *)
   | Pallocframe(sz, ofs) ->
-      fprintf oc "	mov	r12, sp\n";
+      fprintf oc "	mov	r10, sp\n";
       let ninstr = ref 0 in
       List.iter
         (fun n ->
            fprintf oc "	sub	sp, sp, #%a\n" coqint n;
            incr ninstr)
         (Asmgen.decompose_int sz);
-      fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
+      fprintf oc "	str	r10, [sp, #%a]\n" coqint ofs;
       2 + !ninstr
   | Pfreeframe(sz, ofs) ->
       if Asmgen.is_immed_arith sz
@@ -614,7 +614,8 @@ let print_instruction oc = function
       fprintf oc "	ldr	%a, .L%d @ %a\n" 
          ireg r1 lbl print_symb_ofs (id, ofs); 1
   | Pbtbl(r, tbl) ->
-      fprintf oc "	ldr	pc, [pc, %a]\n" ireg r;
+      fprintf oc "	mov	r14, %a, lsl #2\n";
+      fprintf oc "	ldr	pc, [pc, r14]\n";
       fprintf oc "	mov	r0, r0\n"; (* no-op *)
       List.iter
         (fun l -> fprintf oc "	.word	%a\n" print_label l)
