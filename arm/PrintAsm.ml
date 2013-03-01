@@ -614,7 +614,7 @@ let print_instruction oc = function
       fprintf oc "	ldr	%a, .L%d @ %a\n" 
          ireg r1 lbl print_symb_ofs (id, ofs); 1
   | Pbtbl(r, tbl) ->
-      fprintf oc "	mov	r14, %a, lsl #2\n";
+      fprintf oc "	mov	r14, %a, lsl #2\n" ireg r;
       fprintf oc "	ldr	pc, [pc, r14]\n";
       fprintf oc "	mov	r0, r0\n"; (* no-op *)
       List.iter
