@@ -1125,26 +1125,33 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           end
       | Pbtbl(reg, table) ->
           begin match ecode with
-          |   ADDIS (rD0, rA0, simm0) ::
-              LWZ   (rD1, rA1, d1)    ::
-              MTSPR (rS2, spr2)       ::
-              BCCTRx(bo3, bi3, rc3)   :: es ->
+          |   RLWINMx(rS0, rA0, sh, mb, me, rc0) ::
+              ADDIS (rD1, rA1, simm1) ::
+              LWZ   (rD2, rA2, d2)    ::
+              MTSPR (rS3, spr3)       ::
+              BCCTRx(bo4, bi4, rc4)   :: es ->
               let tblvaddr = Int32.(
-                add (shift_left (Safe32.of_int simm0) 16) (exts d1)
+                add (shift_left (Safe32.of_int simm1) 16) (exts d2)
               ) in
               let tblsize = Safe32.of_int (32 * List.length table) in
               OK(fw)
-              >>= match_iregs  GPR12 rD0
-              >>= match_iregs  reg   rA0
-              >>= match_iregs  GPR12 rD1
+              >>= match_iregs  GPR12 rA0
+              >>= match_iregs  reg   rS0
+              >>= match_ints   sh    2
+              >>= match_ints   mb    0
+              >>= match_ints   me    29
+              >>= match_bools  false rc0
               >>= match_iregs  GPR12 rA1
-              >>= match_iregs  GPR12 rS2
-              >>= match_ctr    spr2
-              >>= match_bo_ctr bo3
-              >>= match_ints   0     bi3
-              >>= match_bools  false rc3
+              >>= match_iregs  GPR12 rD1
+              >>= match_iregs  GPR12 rA2
+              >>= match_iregs  GPR12 rD2
+              >>= match_iregs  GPR12 rS3
+              >>= match_ctr    spr3
+              >>= match_bo_ctr bo4
+              >>= match_ints   0     bi4
+              >>= match_bools  false rc4
               >>= match_jmptbl table tblvaddr tblsize
-              >>= compare_code cs es (Int32.add 16l pc)
+              >>= compare_code cs es (Int32.add 20l pc)
           | _ -> error
           end
       | Pbuiltin(ef, args, res) ->
@@ -1300,6 +1307,28 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= match_fregs a2 frC
                           >>= match_bools false rc
                           >>= recur_simpl
+                      | _ -> error
+                      end
+                  | "__builtin_fcti", [FR r1], IR rd ->
+                      begin match ecode with
+                      | FCTIWx(frD0, frB0, rc0)   ::
+                        STFDU  (frS1, rA1,  d1)    ::
+                        LWZ    (rD2,  rA2,  d2)    ::
+                        ADDI   (rD3,  rA3,  simm3) :: es ->
+                          OK(fw)
+                          >>= match_fregs  FPR13 frD0
+                          >>= match_fregs  r1    frB0
+                          >>= match_bools  false rc0
+                          >>= match_fregs  FPR13 frS1
+                          >>= match_iregs  GPR1  rA1
+                          >>= match_int32s (-8l) (exts d1)
+                          >>= match_iregs  rd    rD2
+                          >>= match_iregs  GPR1  rA2
+                          >>= match_int32s 4l    (exts d2)
+                          >>= match_iregs  GPR1  rD3
+                          >>= match_iregs  GPR1  rA3
+                          >>= match_int32s 8l    (exts simm3)
+                          >>= compare_code cs es (Int32.add 16l pc)
                       | _ -> error
                       end
                   | "__builtin_read16_reversed", [IR a1], IR res ->
