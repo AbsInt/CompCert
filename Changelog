@@ -13,7 +13,6 @@ Development version
 - Arguments to __builtin_annot() that are compile-time constants
   are now replaced by their (integer or float) value in the annotation
   generated in the assembly file.
-- Revised handling of return addresses in the Stacking and Asmgen passes.
 - ARM and PowerPC ports: more efficient access to function parameters
   that are passed on the call stack.
 

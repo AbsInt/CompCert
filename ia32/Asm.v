@@ -70,7 +70,7 @@ Coercion CR: crbit >-> preg.
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
 
-Notation "'SP'" := ESP (only parsing).
+Notation SP := ESP (only parsing).
 
 (** ** Instruction set. *)
 

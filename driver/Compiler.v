@@ -249,7 +249,8 @@ Proof.
   eapply compose_forward_simulation. apply CleanupLabelsproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Reloadproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply RREproof.transf_program_correct. eauto.
-  eapply compose_forward_simulation. apply Stackingproof.transf_program_correct. eassumption. eauto.
+  eapply compose_forward_simulation. apply Stackingproof.transf_program_correct.
+    eexact Asmgenproof.return_address_exists. eassumption. eauto. 
   apply Asmgenproof.transf_program_correct; eauto.
   split. auto. 
   apply forward_to_backward_simulation. auto. 
