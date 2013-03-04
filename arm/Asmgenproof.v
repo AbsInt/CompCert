@@ -85,8 +85,8 @@ Proof.
 Qed.
 
 Lemma exec_straight_exec:
-  forall f c ep tf tc c' rs m rs' m',
-  transl_code_at_pc ge (rs PC) f c ep tf tc ->
+  forall fb f c ep tf tc c' rs m rs' m',
+  transl_code_at_pc ge (rs PC) fb f c ep tf tc ->
   exec_straight tge tf tc rs m c' rs' m' ->
   plus step tge (State rs m) E0 (State rs' m').
 Proof.
@@ -97,11 +97,11 @@ Proof.
 Qed.
 
 Lemma exec_straight_at:
-  forall f c ep tf tc c' ep' tc' rs m rs' m',
-  transl_code_at_pc ge (rs PC) f c ep tf tc ->
+  forall fb f c ep tf tc c' ep' tc' rs m rs' m',
+  transl_code_at_pc ge (rs PC) fb f c ep tf tc ->
   transl_code f c' ep' = OK tc' ->
   exec_straight tge tf tc rs m tc' rs' m' ->
-  transl_code_at_pc ge (rs' PC) f c' ep' tf tc'.
+  transl_code_at_pc ge (rs' PC) fb f c' ep' tf tc'.
 Proof.
   intros. inv H. 
   exploit exec_straight_steps_2; eauto. 
@@ -162,176 +162,166 @@ Qed.
 
 Section TRANSL_LABEL.
 
-Variable lbl: label.
-
 Remark iterate_op_label:
   forall op1 op2 l k,
-  (forall so, is_label lbl (op1 so) = false) ->
-  (forall so, is_label lbl (op2 so) = false) ->
-  find_label lbl (iterate_op op1 op2 l k) = find_label lbl k.
+  (forall so, nolabel (op1 so)) ->
+  (forall so, nolabel (op2 so)) ->
+  tail_nolabel k (iterate_op op1 op2 l k).
 Proof.
   intros. unfold iterate_op.
   destruct l as [ | hd tl].
-  simpl. rewrite H. auto.
-  simpl. rewrite H.  
-  induction tl; simpl. auto. rewrite H0; auto.
+  TailNoLabel.
+  TailNoLabel. induction tl; simpl; TailNoLabel.
 Qed.
 Hint Resolve iterate_op_label: labels.
 
 Remark loadimm_label:
-  forall r n k, find_label lbl (loadimm r n k) = find_label lbl k.
+  forall r n k, tail_nolabel k (loadimm r n k).
 Proof.
   intros. unfold loadimm.
   destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.not n))));
   auto with labels.
 Qed.
-Hint Rewrite loadimm_label: labels.
+Hint Resolve loadimm_label: labels.
 
 Remark addimm_label:
-  forall r1 r2 n k, find_label lbl (addimm r1 r2 n k) = find_label lbl k.
+  forall r1 r2 n k, tail_nolabel k (addimm r1 r2 n k).
 Proof.
   intros; unfold addimm.
   destruct (NPeano.leb (length (decompose_int n)) (length (decompose_int (Int.neg n))));
   auto with labels.
 Qed.
-Hint Rewrite addimm_label: labels.
+Hint Resolve addimm_label: labels.
 
 Remark andimm_label:
-  forall r1 r2 n k, find_label lbl (andimm r1 r2 n k) = find_label lbl k.
+  forall r1 r2 n k, tail_nolabel k (andimm r1 r2 n k).
 Proof.
   intros; unfold andimm.
-  destruct (is_immed_arith n). reflexivity. auto with labels.
+  destruct (is_immed_arith n); TailNoLabel.
 Qed.
-Hint Rewrite andimm_label: labels.
+Hint Resolve andimm_label: labels.
 
 Remark rsubimm_label:
-  forall r1 r2 n k, find_label lbl (rsubimm r1 r2 n k) = find_label lbl k.
+  forall r1 r2 n k, tail_nolabel k (rsubimm r1 r2 n k).
 Proof.
   intros; unfold rsubimm. auto with labels.
 Qed.
-Hint Rewrite rsubimm_label: labels.
+Hint Resolve rsubimm_label: labels.
 
 Remark orimm_label:
-  forall r1 r2 n k, find_label lbl (orimm r1 r2 n k) = find_label lbl k.
+  forall r1 r2 n k, tail_nolabel k (orimm r1 r2 n k).
 Proof.
   intros; unfold orimm. auto with labels.
 Qed.
-Hint Rewrite orimm_label: labels.
+Hint Resolve orimm_label: labels.
 
 Remark xorimm_label:
-  forall r1 r2 n k, find_label lbl (xorimm r1 r2 n k) = find_label lbl k.
+  forall r1 r2 n k, tail_nolabel k (xorimm r1 r2 n k).
 Proof.
   intros; unfold xorimm. auto with labels.
 Qed.
-Hint Rewrite xorimm_label: labels.
+Hint Resolve xorimm_label: labels.
 
-Remark loadind_int_label:
-  forall base ofs dst k, find_label lbl (loadind_int base ofs dst k) = find_label lbl k.
+Remark indexed_memory_access_label:
+  forall mk_instr mk_immed base ofs k,
+  (forall r n, nolabel (mk_instr r n)) ->
+  tail_nolabel k (indexed_memory_access mk_instr mk_immed base ofs k).
 Proof.
-  intros; unfold loadind_int.
-  destruct (is_immed_mem_word ofs); autorewrite with labels; auto.
+  intros. unfold indexed_memory_access. 
+  destruct (Int.eq ofs (mk_immed ofs)).
+  TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
 Qed.
+Hint Resolve indexed_memory_access_label.
 
 Remark loadind_label:
-  forall base ofs ty dst k c, loadind base ofs ty dst k = OK c -> find_label lbl c = find_label lbl k.
+  forall base ofs ty dst k c, loadind base ofs ty dst k = OK c -> tail_nolabel k c.
 Proof.
-  intros. destruct ty; monadInv H. 
-  apply loadind_int_label.
-  unfold loadind_float.
-  destruct (is_immed_mem_float ofs); autorewrite with labels; auto.
-Qed.
-
-Remark storeind_int_label:
-  forall base ofs src k, find_label lbl (storeind_int src base ofs k) = find_label lbl k.
-Proof.
-  intros; unfold storeind_int.
-  destruct (is_immed_mem_word ofs); autorewrite with labels; auto.
+  intros. destruct ty; monadInv H.
+  unfold loadind_int; TailNoLabel.
+  unfold loadind_float; TailNoLabel.
 Qed.
 
 Remark storeind_label:
-  forall base ofs ty src k c, storeind src base ofs ty k = OK c -> find_label lbl c = find_label lbl k.
+  forall base ofs ty src k c, storeind src base ofs ty k = OK c -> tail_nolabel k c.
 Proof.
-  intros. destruct ty; monadInv H. 
-  apply storeind_int_label.
-  unfold storeind_float.
-  destruct (is_immed_mem_float ofs); autorewrite with labels; auto.
+  intros. destruct ty; monadInv H.
+  unfold storeind_int; TailNoLabel.
+  unfold storeind_float; TailNoLabel.
 Qed.
 
-Hint Rewrite loadind_int_label loadind_label storeind_int_label storeind_label: labels.
-
-Ltac ArgsInv :=
-  repeat (match goal with
-  | [ H: Error _ = OK _ |- _ ] => discriminate
-  | [ H: match ?args with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct args
-  | [ H: bind _ _ = OK _ |- _ ] => monadInv H
-  | [ H: assertion _ = OK _ |- _ ] => monadInv H
-  end).
-
 Remark transl_cond_label:
-  forall cond args k c, transl_cond cond args k = OK c -> find_label lbl c = find_label lbl k.
+  forall cond args k c, transl_cond cond args k = OK c -> tail_nolabel k c.
 Proof.
-  unfold transl_cond; intros; destruct cond; ArgsInv; auto.
-  destruct (is_immed_arith i); autorewrite with labels; auto.
-  destruct (is_immed_arith i); autorewrite with labels; auto.
+  unfold transl_cond; intros; destruct cond; TailNoLabel.
+  destruct (is_immed_arith i). TailNoLabel. eapply tail_nolabel_trans; TailNoLabel.
+  destruct (is_immed_arith i). TailNoLabel. eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 
 Remark transl_op_label:
-  forall op args r k c, transl_op op args r k = OK c -> find_label lbl c = find_label lbl k.
+  forall op args r k c, transl_op op args r k = OK c -> tail_nolabel k c.
 Proof.
-  unfold transl_op; intros; destruct op; ArgsInv; autorewrite with labels; auto.
-  destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; auto.
-  destruct (ireg_eq x x0 || ireg_eq x x1); auto.
-  simpl. autorewrite with labels; auto. 
-  erewrite transl_cond_label by eauto; auto. 
+Opaque Int.repr Int.eq.
+  unfold transl_op; intros; destruct op; TailNoLabel.
+  destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
+  destruct (ireg_eq x x0 || ireg_eq x x1); TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
+  eapply tail_nolabel_trans. eapply transl_cond_label; eauto. TailNoLabel.
 Qed.
 
 Remark transl_memory_access_label:
   forall (mk_instr_imm: ireg -> int -> instruction)
          (mk_instr_gen: option (ireg -> shift_addr -> instruction))
-         (is_immed: int -> bool)
+         (mk_immed: int -> int)
          (addr: addressing) (args: list mreg) c k,
-  transl_memory_access mk_instr_imm mk_instr_gen is_immed addr args k = OK c ->
-  (forall r n, is_label lbl (mk_instr_imm r n) = false) ->
+  transl_memory_access mk_instr_imm mk_instr_gen mk_immed addr args k = OK c ->
+  (forall r n, nolabel (mk_instr_imm r n)) ->
   (match mk_instr_gen with
     | None => True
-    | Some f => forall r sa, is_label lbl (f r sa) = false
+    | Some f => forall r sa, nolabel (f r sa)
    end) ->
-  find_label lbl c = find_label lbl k.
+  tail_nolabel k c.
 Proof.
-  unfold transl_memory_access; intros; destruct addr; ArgsInv; auto.
-  destruct (is_immed i); autorewrite with labels; simpl; rewrite H0; auto.
-  destruct mk_instr_gen. simpl. rewrite H1. auto.
-  simpl. rewrite H0. auto.
-  destruct mk_instr_gen. simpl. rewrite H1. auto.
-  simpl. rewrite H0. auto.
-  destruct (is_immed i); inv H; autorewrite with labels; simpl; rewrite H0; auto.
+  unfold transl_memory_access; intros; destruct addr; TailNoLabel.
+  destruct mk_instr_gen; TailNoLabel.
+  destruct mk_instr_gen; TailNoLabel.
 Qed.
 
 Lemma transl_instr_label:
   forall f i ep k c,
   transl_instr f i ep k = OK c ->
+  match i with Mlabel lbl => c = Plabel lbl :: k | _ => tail_nolabel k c end.
+Proof.
+  unfold transl_instr; intros; destruct i; TailNoLabel.
+  eapply loadind_label; eauto.
+  eapply storeind_label; eauto.
+  destruct ep. eapply loadind_label; eauto.
+    eapply tail_nolabel_trans. 2: eapply loadind_label; eauto. unfold loadind_int; TailNoLabel.  
+  eapply transl_op_label; eauto.
+  unfold transl_load, transl_memory_access_int, transl_memory_access_float in H. 
+  destruct m; monadInv H; eapply transl_memory_access_label; eauto; simpl; auto. 
+  unfold transl_store, transl_memory_access_int, transl_memory_access_float in H. 
+  destruct m; monadInv H; eapply transl_memory_access_label; eauto; simpl; auto. 
+  destruct s0; monadInv H; TailNoLabel.
+  destruct s0; monadInv H; unfold loadind_int; eapply tail_nolabel_trans.
+  eapply indexed_memory_access_label; auto with labels. TailNoLabel.
+  eapply indexed_memory_access_label; auto with labels. TailNoLabel.
+  eapply tail_nolabel_trans. eapply transl_cond_label; eauto. TailNoLabel.
+  eapply tail_nolabel_trans. unfold loadind_int. eapply indexed_memory_access_label; auto with labels. TailNoLabel. 
+Qed.
+
+Lemma transl_instr_label':
+  forall lbl f i ep k c,
+  transl_instr f i ep k = OK c ->
   find_label lbl c = if Mach.is_label lbl i then Some k else find_label lbl k.
 Proof.
-  unfold transl_instr, Mach.is_label; intros. destruct i; try (monadInv H).
-  eapply loadind_label; eauto. 
-  eapply storeind_label; eauto.
-  destruct ep; autorewrite with labels; eapply loadind_label; eauto.
-  eapply transl_op_label; eauto.
-  destruct m; simpl in H; monadInv H; eapply transl_memory_access_label; eauto; simpl; auto.
-  destruct m; simpl in H; monadInv H; eapply transl_memory_access_label; eauto; simpl; auto.
-  destruct s0; monadInv H; auto.
-  destruct s0; monadInv H; autorewrite with labels; auto.
-  auto.
-  auto.
-  simpl. auto.
-  auto.
-  erewrite transl_cond_label. 2: eauto. auto. 
-  auto.
-  autorewrite with labels; auto. 
+  intros. exploit transl_instr_label; eauto.
+  destruct i; try (intros [A B]; apply B). 
+  intros. subst c. simpl. auto.
 Qed.
 
 Lemma transl_code_label:
-  forall f c ep tc,
+  forall lbl f c ep tc,
   transl_code f c ep = OK tc ->
   match Mach.find_label lbl c with
   | None => find_label lbl tc = None
@@ -340,7 +330,7 @@ Lemma transl_code_label:
 Proof.
   induction c; simpl; intros.
   inv H. auto.
-  monadInv H. rewrite (transl_instr_label _ _ _ _ _ EQ0).
+  monadInv H. rewrite (transl_instr_label' lbl _ _ _ _ _ EQ0).
   generalize (Mach.is_label_correct lbl a). 
   destruct (Mach.is_label lbl a); intros.
   subst a. simpl in EQ. exists x; auto.
@@ -348,7 +338,7 @@ Proof.
 Qed.
 
 Lemma transl_find_label:
-  forall f tf,
+  forall lbl f tf,
   transf_function f = OK tf ->
   match Mach.find_label lbl f.(Mach.fn_code) with
   | None => find_label lbl (fn_code tf) = None
@@ -363,9 +353,6 @@ Qed.
 End TRANSL_LABEL.
 
 (** A valid branch in a piece of Mach code translates to a valid ``go to''
-  transition in the generated ARM code. *)
-
-(** A valid branch in a piece of Mach code translates to a valid ``go to''
   transition in the generated PPC code. *)
 
 Lemma find_label_goto_label:
@@ -376,7 +363,7 @@ Lemma find_label_goto_label:
   Mach.find_label lbl f.(Mach.fn_code) = Some c' ->
   exists tc', exists rs',
     goto_label tf lbl rs m = Next rs' m  
-  /\ transl_code_at_pc ge (rs' PC) f c' false tf tc'
+  /\ transl_code_at_pc ge (rs' PC) b f c' false tf tc'
   /\ forall r, r <> PC -> rs'#r = rs#r.
 Proof.
   intros. exploit (transl_find_label lbl f tf); eauto. rewrite H2. 
@@ -390,6 +377,21 @@ Proof.
   auto. omega.
   generalize (transf_function_no_overflow _ _ H0). omega.
   intros. apply Pregmap.gso; auto.
+Qed.
+
+(** Existence of return addresses *)
+
+Lemma return_address_exists:
+  forall f sg ros c, is_tail (Mcall sg ros :: c) f.(Mach.fn_code) ->
+  exists ra, return_address_offset f c ra.
+Proof.
+  intros. eapply Asmgenproof0.return_address_exists; eauto. 
+- intros. exploit transl_instr_label; eauto. 
+  destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
+- intros. monadInv H0. 
+  destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); inv EQ0. monadInv EQ.
+  exists x; exists true; split; auto. repeat constructor.
+- exact transf_function_no_overflow.
 Qed.
 
 (** * Proof of semantic preservation *)
@@ -412,49 +414,49 @@ Qed.
 
 Inductive match_states: Mach.state -> Asm.state -> Prop :=
   | match_states_intro:
-      forall s f sp c ep ms m m' rs tf tc ra
-        (STACKS: match_stack ge s m m' ra sp)
+      forall s fb sp c ep ms m m' rs f tf tc
+        (STACKS: match_stack ge s)
+        (FIND: Genv.find_funct_ptr ge fb = Some (Internal f))
         (MEXT: Mem.extends m m')
-        (AT: transl_code_at_pc ge (rs PC) f c ep tf tc)
-        (AG: agree ms (Vptr sp Int.zero) rs)
-        (RSA: retaddr_stored_at m m' sp (Int.unsigned f.(fn_retaddr_ofs)) ra)
+        (AT: transl_code_at_pc ge (rs PC) fb f c ep tf tc)
+        (AG: agree ms sp rs)
         (DXP: ep = true -> rs#IR10 = parent_sp s),
-      match_states (Mach.State s f (Vptr sp Int.zero) c ms m)
+      match_states (Mach.State s fb sp c ms m)
                    (Asm.State rs m')
   | match_states_call:
-      forall s fd ms m m' rs fb
-        (STACKS: match_stack ge s m m' rs#(IR IR14) (Mem.nextblock m))
+      forall s fb ms m m' rs
+        (STACKS: match_stack ge s)
         (MEXT: Mem.extends m m')
         (AG: agree ms (parent_sp s) rs)
         (ATPC: rs PC = Vptr fb Int.zero)
-        (FUNCT: Genv.find_funct_ptr ge fb = Some fd)
-        (WTRA: Val.has_type rs#(IR IR14) Tint),
-      match_states (Mach.Callstate s fd ms m)
+        (ATLR: rs RA = parent_ra s),
+      match_states (Mach.Callstate s fb ms m)
                    (Asm.State rs m')
   | match_states_return:
       forall s ms m m' rs
-        (STACKS: match_stack ge s m m' (rs PC) (Mem.nextblock m))
+        (STACKS: match_stack ge s)
         (MEXT: Mem.extends m m')
-        (AG: agree ms (parent_sp s) rs),
+        (AG: agree ms (parent_sp s) rs)
+        (ATPC: rs PC = parent_ra s),
       match_states (Mach.Returnstate s ms m)
                    (Asm.State rs m').
 
 Lemma exec_straight_steps:
-  forall s f rs1 i c ep tf tc m1' m2 m2' sp ms2 ra,
-  match_stack ge s m2 m2' ra sp ->
+  forall s fb f rs1 i c ep tf tc m1' m2 m2' sp ms2,
+  match_stack ge s ->
   Mem.extends m2 m2' ->
-  retaddr_stored_at m2 m2' sp (Int.unsigned f.(fn_retaddr_ofs)) ra ->
-  transl_code_at_pc ge (rs1 PC) f (i :: c) ep tf tc ->
+  Genv.find_funct_ptr ge fb = Some (Internal f) ->
+  transl_code_at_pc ge (rs1 PC) fb f (i :: c) ep tf tc ->
   (forall k c (TR: transl_instr f i ep k = OK c),
    exists rs2,
        exec_straight tge tf c rs1 m1' k rs2 m2'
-    /\ agree ms2 (Vptr sp Int.zero) rs2
+    /\ agree ms2 sp rs2
     /\ (r10_is_parent ep i = true -> rs2#IR10 = parent_sp s)) ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
-  match_states (Mach.State s f (Vptr sp Int.zero) c ms2 m2) st'.
+  match_states (Mach.State s fb sp c ms2 m2) st'.
 Proof.
-  intros. inversion H2; subst. monadInv H7. 
+  intros. inversion H2. subst. monadInv H7. 
   exploit H3; eauto. intros [rs2 [A [B C]]]. 
   exists (State rs2 m2'); split.
   eapply exec_straight_exec; eauto. 
@@ -462,23 +464,23 @@ Proof.
 Qed.
 
 Lemma exec_straight_steps_goto:
-  forall s f rs1 i c ep tf tc m1' m2 m2' sp ms2 lbl c' ra,
-  match_stack ge s m2 m2' ra sp ->
+  forall s fb f rs1 i c ep tf tc m1' m2 m2' sp ms2 lbl c',
+  match_stack ge s ->
   Mem.extends m2 m2' ->
-  retaddr_stored_at m2 m2' sp (Int.unsigned f.(fn_retaddr_ofs)) ra ->
+  Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl f.(Mach.fn_code) = Some c' ->
-  transl_code_at_pc ge (rs1 PC) f (i :: c) ep tf tc ->
+  transl_code_at_pc ge (rs1 PC) fb f (i :: c) ep tf tc ->
   r10_is_parent ep i = false ->
   (forall k c (TR: transl_instr f i ep k = OK c),
    exists jmp, exists k', exists rs2,
        exec_straight tge tf c rs1 m1' (jmp :: k') rs2 m2'
-    /\ agree ms2 (Vptr sp Int.zero) rs2
+    /\ agree ms2 sp rs2
     /\ exec_instr tge tf jmp rs2 m2' = goto_label tf lbl rs2 m2') ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
-  match_states (Mach.State s f (Vptr sp Int.zero) c' ms2 m2) st'.
+  match_states (Mach.State s fb sp c' ms2 m2) st'.
 Proof.
-  intros. inversion H3; subst. monadInv H9.
+  intros. inversion H3. subst. monadInv H9.
   exploit H5; eauto. intros [jmp [k' [rs2 [A [B C]]]]].
   generalize (functions_transl _ _ _ H7 H8); intro FN.
   generalize (transf_function_no_overflow _ _ H8); intro NOOV.
@@ -523,7 +525,7 @@ Qed.
 (** This is the simulation diagram.  We prove it by case analysis on the Mach transition. *)
 
 Theorem step_simulation:
-  forall S1 t S2, Mach.step ge S1 t S2 ->
+  forall S1 t S2, Mach.step return_address_offset ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   (exists S2', plus step tge S1' t S2' /\ match_states S2 S2')
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 S1')%nat.
@@ -550,8 +552,6 @@ Proof.
   assert (Val.lessdef (rs src) (rs0 (preg_of src))). eapply preg_val; eauto.
   exploit Mem.storev_extends; eauto. intros [m2' [A B]]. 
   left; eapply exec_straight_steps; eauto.
-  eapply match_stack_storev; eauto. 
-  eapply retaddr_stored_at_storev; eauto. 
   rewrite (sp_val _ _ _ AG) in A. intros. simpl in TR.
   exploit storeind_correct; eauto with asmgen. intros [rs' [P Q]].
   exists rs'; split. eauto.
@@ -559,11 +559,12 @@ Proof.
   simpl; intros. rewrite Q; auto with asmgen.
 
 - (* Mgetparam *)
+  assert (f0 = f) by congruence; subst f0.
   unfold load_stack in *. 
-  exploit Mem.loadv_extends. eauto. eexact H. auto. 
+  exploit Mem.loadv_extends. eauto. eexact H0. auto. 
   intros [parent' [A B]]. rewrite (sp_val _ _ _ AG) in A.
   exploit lessdef_parent_sp; eauto. clear B; intros B; subst parent'.
-  exploit Mem.loadv_extends. eauto. eexact H0. auto. 
+  exploit Mem.loadv_extends. eauto. eexact H1. auto. 
   intros [v' [C D]].
 Opaque loadind.
   left; eapply exec_straight_steps; eauto; intros.
@@ -588,7 +589,7 @@ Opaque loadind.
   apply preg_of_not_R10; auto.
 
 - (* Mop *)
-  assert (eval_operation tge (Vptr sp0 Int.zero) op rs##args m = Some v). 
+  assert (eval_operation tge sp op rs##args m = Some v). 
     rewrite <- H. apply eval_operation_preserved. exact symbols_preserved.
   exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eexact H0.
   intros [v' [A B]]. rewrite (sp_val _ _ _ AG) in A. 
@@ -596,7 +597,7 @@ Opaque loadind.
   exploit transl_op_correct; eauto. intros [rs2 [P [Q R]]].
   assert (S: Val.lessdef v (rs2 (preg_of res))) by (eapply Val.lessdef_trans; eauto).
   exists rs2; split. eauto. split.
-  assert (agree (Regmap.set res v (undef_temps rs)) (Vptr sp0 Int.zero) rs2).
+  assert (agree (Regmap.set res v (undef_temps rs)) sp rs2).
     eapply agree_set_undef_mreg; eauto with asmgen.
   unfold undef_op; destruct op; auto.
   change (undef_move rs) with rs. eapply agree_set_mreg; eauto.
@@ -604,7 +605,7 @@ Opaque loadind.
   rewrite R; auto. apply preg_of_not_R10; auto.
 
 - (* Mload *)
-  assert (eval_addressing tge (Vptr sp0 Int.zero) addr rs##args = Some a). 
+  assert (eval_addressing tge sp addr rs##args = Some a). 
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   exploit eval_addressing_lessdef. eapply preg_vals; eauto. eexact H1.
   intros [a' [A B]]. rewrite (sp_val _ _ _ AG) in A.
@@ -616,15 +617,13 @@ Opaque loadind.
   simpl; congruence.
 
 - (* Mstore *)
-  assert (eval_addressing tge (Vptr sp0 Int.zero) addr rs##args = Some a). 
+  assert (eval_addressing tge sp addr rs##args = Some a). 
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   exploit eval_addressing_lessdef. eapply preg_vals; eauto. eexact H1.
   intros [a' [A B]]. rewrite (sp_val _ _ _ AG) in A.
   assert (Val.lessdef (rs src) (rs0 (preg_of src))). eapply preg_val; eauto.
   exploit Mem.storev_extends; eauto. intros [m2' [C D]].
   left; eapply exec_straight_steps; eauto.
-  eapply match_stack_storev; eauto.
-  eapply retaddr_stored_at_storev; eauto.
   intros. simpl in TR. 
   exploit transl_store_correct; eauto. intros [rs2 [P Q]].
   exists rs2; split. eauto.
@@ -632,73 +631,65 @@ Opaque loadind.
   simpl; congruence.
 
 - (* Mcall *)
+  assert (f0 = f) by congruence.  subst f0.
   inv AT. 
   assert (NOOV: list_length_z (fn_code tf) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
-  destruct ros as [rf|fid]; simpl in H; monadInv H3.
+  destruct ros as [rf|fid]; simpl in H; monadInv H5.
 + (* Indirect call *)
-  exploit Genv.find_funct_inv; eauto. intros [bf EQ2].
-  rewrite EQ2 in H; rewrite  Genv.find_funct_find_funct_ptr in H. 
-  assert (rs0 x0 = Vptr bf Int.zero).
-    exploit ireg_val; eauto. rewrite EQ2; intros LD; inv LD; auto.
-  generalize (code_tail_next_int _ _ _ _ NOOV H4). intro CT1.
-  assert (TCA: transl_code_at_pc ge (Vptr b (Int.add ofs Int.one)) f c false tf x).
-    econstructor; eauto. 
+  assert (rs rf = Vptr f' Int.zero).
+    destruct (rs rf); try discriminate.
+    revert H; predSpec Int.eq Int.eq_spec i Int.zero; intros; congruence.
+  assert (rs0 x0 = Vptr f' Int.zero).
+    exploit ireg_val; eauto. rewrite H5; intros LD; inv LD; auto.
+  generalize (code_tail_next_int _ _ _ _ NOOV H6). intro CT1.
+  assert (TCA: transl_code_at_pc ge (Vptr fb (Int.add ofs Int.one)) fb f c false tf x).
+    econstructor; eauto.
+  exploit return_address_offset_correct; eauto. intros; subst ra.
   left; econstructor; split.
   apply plus_one. eapply exec_step_internal. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto. 
   simpl. eauto.
   econstructor; eauto. 
   econstructor; eauto.
-  Simpl. rewrite <- H0; eexact TCA.
-  change (Mem.valid_block m sp0). eapply retaddr_stored_at_valid; eauto. 
+  eapply agree_sp_def; eauto.
   simpl. eapply agree_exten; eauto. intros. Simpl. 
-  Simpl. rewrite <- H0. exact I.
+  Simpl. rewrite <- H2. auto.
 + (* Direct call *)
-  destruct (Genv.find_symbol ge fid) as [bf|] eqn:FS; try discriminate.
-  generalize (code_tail_next_int _ _ _ _ NOOV H4). intro CT1.
-  assert (TCA: transl_code_at_pc ge (Vptr b (Int.add ofs Int.one)) f c false tf x).
+  generalize (code_tail_next_int _ _ _ _ NOOV H6). intro CT1.
+  assert (TCA: transl_code_at_pc ge (Vptr fb (Int.add ofs Int.one)) fb f c false tf x).
     econstructor; eauto. 
+  exploit return_address_offset_correct; eauto. intros; subst ra.
   left; econstructor; split.
   apply plus_one. eapply exec_step_internal. eauto.
   eapply functions_transl; eauto. eapply find_instr_tail; eauto. 
-  simpl. unfold symbol_offset. rewrite symbols_preserved. rewrite FS. eauto.
+  simpl. unfold symbol_offset. rewrite symbols_preserved. rewrite H. eauto.
   econstructor; eauto. 
   econstructor; eauto.
-  rewrite <- H0. eexact TCA.
-  change (Mem.valid_block m sp0). eapply retaddr_stored_at_valid; eauto. 
+  eapply agree_sp_def; eauto.
   simpl. eapply agree_exten; eauto. intros. Simpl.
-  auto.
-  rewrite <- H0. exact I.
+  Simpl. rewrite <- H2. auto.
 
 - (* Mtailcall *)
+Opaque Int.repr.
+  assert (f0 = f) by congruence.  subst f0.
   inversion AT; subst.
   assert (NOOV: list_length_z (fn_code tf) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
-  rewrite (sp_val _ _ _ AG) in *. unfold load_stack in *.
-  exploit Mem.loadv_extends. eauto. eexact H0. auto. simpl. intros [parent' [A B]]. 
+  exploit Mem.loadv_extends. eauto. eexact H1. auto.
+  unfold chunk_of_type. rewrite (sp_val _ _ _ AG). intros [parent' [A B]].
+  exploit Mem.loadv_extends. eauto. eexact H2. auto.
+  unfold chunk_of_type. rewrite (sp_val _ _ _ AG). intros [ra' [C D]].
   exploit lessdef_parent_sp; eauto. intros. subst parent'. clear B.
-  assert (C: Mem.loadv Mint32 m'0 (Val.add (rs0 SP) (Vint (fn_retaddr_ofs f))) = Some ra).
-Opaque Int.repr.
-    erewrite agree_sp; eauto. simpl. rewrite Int.add_zero_l.
-    eapply rsa_contains; eauto.
-  exploit retaddr_stored_at_can_free; eauto. intros [m2' [E F]].
-  assert (M: match_stack ge s m'' m2' ra (Mem.nextblock m'')).
-    apply match_stack_change_bound with stk.
-    eapply match_stack_free_left; eauto. 
-    eapply match_stack_free_left; eauto. 
-    eapply match_stack_free_right; eauto.
-    omega.
-    apply Z.lt_le_incl. change (Mem.valid_block m'' stk).
-    eapply Mem.valid_block_free_1; eauto. eapply Mem.valid_block_free_1; eauto. 
-    eapply retaddr_stored_at_valid; eauto.
+  exploit lessdef_parent_ra; eauto. intros. subst ra'. clear D.
+  exploit Mem.free_parallel_extends; eauto. intros [m2' [E F]]. 
   assert (X: forall k, exists rs2,
     exec_straight tge tf
        (loadind_int IR13 (fn_retaddr_ofs f) IR14
            (Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: k)) rs0 m'0
        k rs2 m2'
     /\ rs2#SP = parent_sp s
-    /\ rs2#RA = ra
+    /\ rs2#RA = parent_ra s
     /\ forall r, r <> PC -> r <> SP -> r <> IR14 -> rs2#r = rs0#r).
   {
     intros. 
@@ -711,12 +702,13 @@ Opaque Int.repr.
     split. Simpl.
     intros. Simpl. 
   }
-  destruct ros as [rf|fid]; simpl in H; monadInv H6.
+  destruct ros as [rf|fid]; simpl in H; monadInv H7.
 + (* Indirect call *)
-  exploit Genv.find_funct_inv; eauto. intros [bf EQ2].
-  rewrite EQ2 in H; rewrite  Genv.find_funct_find_funct_ptr in H. 
-  assert (rs0 x0 = Vptr bf Int.zero).
-    exploit ireg_val; eauto. rewrite EQ2; intros LD; inv LD; auto.
+  assert (rs rf = Vptr f' Int.zero).
+    destruct (rs rf); try discriminate.
+    revert H; predSpec Int.eq Int.eq_spec i Int.zero; intros; congruence.
+  assert (rs0 x0 = Vptr f' Int.zero).
+    exploit ireg_val; eauto. rewrite H7; intros LD; inv LD; auto.
   destruct (X (Pbreg x0 sig :: x)) as [rs2 [P [Q [R S]]]].
   exploit exec_straight_steps_2. eexact P. eauto. eauto. eapply functions_transl; eauto. eauto. 
   intros [ofs' [Y Z]].
@@ -727,15 +719,12 @@ Opaque Int.repr.
   simpl. reflexivity. 
   traceEq.
   econstructor; eauto. 
-  Simpl. rewrite R; auto. 
-  constructor; intros. Simpl.
-  Simpl. rewrite S; auto with asmgen. eapply preg_val; eauto. 
+  split. Simpl. eapply parent_sp_def; eauto. 
+  intros. Simpl. rewrite S; auto with asmgen. eapply preg_val; eauto. 
   Simpl. rewrite S; auto with asmgen.
   rewrite <- (ireg_of_eq _ _ EQ1); auto with asmgen.
   rewrite <- (ireg_of_eq _ _ EQ1); auto with asmgen.
-  Simpl. rewrite R. eapply retaddr_stored_at_type; eauto. 
 + (* Direct call *)
-  destruct (Genv.find_symbol ge fid) as [bf|] eqn:FS; try discriminate.
   destruct (X (Pbsymb fid sig :: x)) as [rs2 [P [Q [R S]]]].
   exploit exec_straight_steps_2. eexact P. eauto. eauto. eapply functions_transl; eauto. eauto. 
   intros [ofs' [Y Z]].
@@ -743,14 +732,11 @@ Opaque Int.repr.
   eapply plus_right'. eapply exec_straight_exec; eauto. 
   econstructor. eauto. eapply functions_transl; eauto. 
   eapply find_instr_tail; eauto. 
-  simpl. unfold symbol_offset. rewrite symbols_preserved. rewrite FS. reflexivity. 
+  simpl. unfold symbol_offset. rewrite symbols_preserved. rewrite H. reflexivity. 
   traceEq.
-  econstructor; eauto. 
-  Simpl. rewrite R; auto. 
-  constructor; intros. Simpl.
-  Simpl. rewrite S; auto with asmgen. eapply preg_val; eauto. 
-  Simpl.
-  Simpl. rewrite R. eapply retaddr_stored_at_type; eauto. 
+  econstructor; eauto.
+  split. Simpl. eapply parent_sp_def; eauto. 
+  intros. Simpl. rewrite S; auto with asmgen. eapply preg_val; eauto. 
 
 - (* Mbuiltin *)
   inv AT. monadInv H3. 
@@ -764,16 +750,11 @@ Opaque Int.repr.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto.
-  eapply match_stack_extcall; eauto. 
-  intros; eapply external_call_max_perm; eauto. 
-  instantiate (2 := tf); instantiate (1 := x).
   Simpl. rewrite <- H0. simpl. econstructor; eauto.
   eapply code_tail_next_int; eauto.
   apply agree_nextinstr. eapply agree_set_undef_mreg; eauto. 
   rewrite Pregmap.gss. auto. 
   intros. Simpl. 
-  eapply retaddr_stored_at_extcall; eauto. 
-  intros; eapply external_call_max_perm; eauto. 
   congruence.
 
 - (* Mannot *)
@@ -789,18 +770,15 @@ Opaque Int.repr.
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_states_intro with (ep := false); eauto with coqlib.
-  eapply match_stack_extcall; eauto. 
-  intros; eapply external_call_max_perm; eauto. 
   unfold nextinstr. rewrite Pregmap.gss. 
   rewrite <- H1; simpl. econstructor; eauto.
   eapply code_tail_next_int; eauto. 
   apply agree_nextinstr. auto.
-  eapply retaddr_stored_at_extcall; eauto. 
-  intros; eapply external_call_max_perm; eauto. 
   congruence.
 
 - (* Mgoto *)
-  inv AT. monadInv H3. 
+  assert (f0 = f) by congruence. subst f0.
+  inv AT. monadInv H4. 
   exploit find_label_goto_label; eauto. intros [tc' [rs' [GOTO [AT2 INV]]]].
   left; exists (State rs' m'); split.
   apply plus_one. econstructor; eauto.
@@ -812,6 +790,7 @@ Opaque Int.repr.
   congruence.
 
 - (* Mcond true *)
+  assert (f0 = f) by congruence. subst f0.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps_goto; eauto.
   intros. simpl in TR.
@@ -834,9 +813,10 @@ Opaque Int.repr.
   simpl. congruence.
 
 - (* Mjumptable *)
-  inv AT. monadInv H5. 
+  assert (f0 = f) by congruence. subst f0.
+  inv AT. monadInv H6. 
   exploit functions_transl; eauto. intro FN.
-  generalize (transf_function_no_overflow _ _ H4); intro NOOV.
+  generalize (transf_function_no_overflow _ _ H5); intro NOOV.
   exploit find_label_goto_label. eauto. eauto.
   instantiate (2 := rs0#IR14 <- Vundef). 
   Simpl. eauto.
@@ -846,39 +826,30 @@ Opaque Int.repr.
   left; econstructor; split.
   apply plus_one. econstructor; eauto. 
   eapply find_instr_tail; eauto. 
-  simpl. rewrite <- H8. unfold Mach.label in H0; unfold label; rewrite H0. eexact A.
+  simpl. rewrite <- H9. unfold Mach.label in H0; unfold label; rewrite H0. eexact A.
   econstructor; eauto. 
   eapply agree_exten_temps; eauto. intros. rewrite C; auto with asmgen. Simpl. 
   congruence.
 
 - (* Mreturn *)
+  assert (f0 = f) by congruence. subst f0.
   inversion AT; subst. 
   assert (NOOV: list_length_z (fn_code tf) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   rewrite (sp_val _ _ _ AG) in *. unfold load_stack in *.
-  exploit Mem.loadv_extends. eauto. eexact H. auto. simpl. intros [parent' [A B]]. 
+  exploit Mem.loadv_extends. eauto. eexact H0. auto. simpl. intros [parent' [A B]]. 
   exploit lessdef_parent_sp; eauto. intros. subst parent'. clear B.
-  assert (C: Mem.loadv Mint32 m'0 (Val.add (rs0 SP) (Vint (fn_retaddr_ofs f))) = Some ra).
-Opaque Int.repr.
-    erewrite agree_sp; eauto. simpl. rewrite Int.add_zero_l.
-    eapply rsa_contains; eauto.
-  exploit retaddr_stored_at_can_free; eauto. intros [m2' [E F]].
-  assert (M: match_stack ge s m'' m2' ra (Mem.nextblock m'')).
-    apply match_stack_change_bound with stk.
-    eapply match_stack_free_left; eauto.
-    eapply match_stack_free_left; eauto.
-    eapply match_stack_free_right; eauto. omega.
-    apply Z.lt_le_incl. change (Mem.valid_block m'' stk).
-    eapply Mem.valid_block_free_1; eauto. eapply Mem.valid_block_free_1; eauto. 
-    eapply retaddr_stored_at_valid; eauto.
-  monadInv H5.
+  exploit Mem.loadv_extends. eauto. eexact H1. auto. simpl. intros [ra' [C D]]. 
+  exploit lessdef_parent_ra; eauto. intros. subst ra'. clear D.
+  exploit Mem.free_parallel_extends; eauto. intros [m2' [E F]].
+  monadInv H6.
   assert (X: forall k, exists rs2,
     exec_straight tge tf
        (loadind_int IR13 (fn_retaddr_ofs f) IR14
            (Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: k)) rs0 m'0
        k rs2 m2'
     /\ rs2#SP = parent_sp s
-    /\ rs2#RA = ra
+    /\ rs2#RA = parent_ra s
     /\ forall r, r <> PC -> r <> SP -> r <> IR14 -> rs2#r = rs0#r).
   {
     intros. 
@@ -901,9 +872,8 @@ Opaque Int.repr.
   simpl. reflexivity.
   traceEq.
   econstructor; eauto. 
-  Simpl. rewrite R; auto. 
-  constructor; intros. Simpl.
-  Simpl. rewrite S; auto with asmgen. eapply preg_val; eauto.
+  split. Simpl. eapply parent_sp_def; eauto.
+  intros. Simpl. rewrite S; auto with asmgen. eapply preg_val; eauto.
 
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
@@ -913,12 +883,10 @@ Opaque Int.repr.
   unfold store_stack in *. 
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl. 
   intros [m1' [C D]].
-  assert (E: Mem.extends m2 m1') by (eapply Mem.free_left_extends; eauto).
-  exploit Mem.storev_extends. eexact E. eexact H1. eauto. eauto. 
+  exploit Mem.storev_extends. eexact D. eexact H1. eauto. eauto. 
   intros [m2' [F G]].
-  exploit retaddr_stored_at_can_alloc. eexact H. eauto. eauto. eauto. eauto. 
-  auto. auto. auto. auto. eauto. 
-  intros [m3' [P [Q R]]].
+  exploit Mem.storev_extends. eexact G. eexact H2. eauto. eauto. 
+  intros [m3' [P Q]].
   (* Execution of function prologue *)
   set (rs2 := nextinstr (rs0#IR10 <- (parent_sp s) #IR13 <- (Vptr stk Int.zero))).
   set (rs3 := nextinstr rs2).
@@ -932,22 +900,11 @@ Opaque Int.repr.
   rewrite <- (sp_val _ _ _ AG). unfold chunk_of_type in F. rewrite F. auto. 
   simpl. auto.
   simpl. unfold exec_store. change (rs2 IR14) with (rs0 IR14). 
-  rewrite Int.add_zero_l. simpl. rewrite P. auto. auto. auto. 
+  rewrite Int.add_zero_l. simpl. unfold chunk_of_type in P. simpl in P.
+  rewrite Int.add_zero_l in P. rewrite ATLR. rewrite P. auto. auto. auto. 
   left; exists (State rs3 m3'); split.
   eapply exec_straight_steps_1; eauto. omega. constructor. 
   econstructor; eauto. 
-  assert (STK: stk = Mem.nextblock m) by (eapply Mem.alloc_result; eauto).
-  rewrite <- STK in STACKS. simpl in F. simpl in H1.
-  eapply match_stack_invariant; eauto.
-  intros. eapply Mem.perm_alloc_4; eauto. eapply Mem.perm_free_3; eauto. 
-  eapply Mem.perm_store_2; eauto. unfold block; omega.
-  intros. eapply Mem.perm_store_1; eauto. eapply Mem.perm_store_1; eauto. 
-  eapply Mem.perm_alloc_1; eauto. 
-  intros. erewrite Mem.load_store_other. 2: eauto.
-  erewrite Mem.load_store_other. 2: eauto. 
-  eapply Mem.load_alloc_other; eauto.
-  left; unfold block; omega.
-  left; unfold block; omega.
   change (rs3 PC) with (Val.add (Val.add (rs0 PC) Vone) Vone).
   rewrite ATPC. simpl. constructor; eauto.
   subst x. eapply code_tail_next_int. omega. 
@@ -970,19 +927,14 @@ Opaque Int.repr.
   eapply external_call_symbols_preserved; eauto. 
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto.
-  rewrite Pregmap.gss. apply match_stack_change_bound with (Mem.nextblock m). 
-  eapply match_stack_extcall; eauto.
-  intros. eapply external_call_max_perm; eauto.
-  eapply external_call_nextblock; eauto.
-  unfold loc_external_result.
   eapply agree_set_mreg; eauto. 
   rewrite Pregmap.gso; auto with asmgen. rewrite Pregmap.gss. auto. 
   intros; Simpl.
 
 - (* return *)
   inv STACKS. simpl in *.
-  right. split. omega. split. auto. 
-  econstructor; eauto. congruence.
+  right. split. omega. split. auto.
+  rewrite <- ATPC in H5. econstructor; eauto. congruence.
 Qed.
 
 Lemma transf_initial_states:
@@ -990,21 +942,19 @@ Lemma transf_initial_states:
   exists st2, Asm.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
   intros. inversion H. unfold ge0 in *.
-  exploit functions_translated; eauto. intros [tf [A B]]. 
   econstructor; split.
   econstructor.
   eapply Genv.init_mem_transf_partial; eauto.
   replace (symbol_offset (Genv.globalenv tprog) (prog_main tprog) Int.zero)
-     with (Vptr b Int.zero).
+     with (Vptr fb Int.zero).
   econstructor; eauto.
   constructor.
   apply Mem.extends_refl.
-  split. auto. intros. rewrite Regmap.gi. auto. 
-  reflexivity. 
-  exact I.
+  split. auto. simpl. congruence. intros. rewrite Regmap.gi. auto. 
   unfold symbol_offset. 
-  rewrite (transform_partial_program_main _ _ TRANSF). 
-  rewrite symbols_preserved. unfold ge; rewrite H1. auto.
+  rewrite (transform_partial_program_main _ _ TRANSF).
+  rewrite symbols_preserved. 
+  unfold ge; rewrite H1. auto.
 Qed.
 
 Lemma transf_final_states:
@@ -1018,7 +968,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (Mach.semantics prog) (Asm.semantics tprog).
+  forward_simulation (Mach.semantics return_address_offset prog) (Asm.semantics tprog).
 Proof.
   eapply forward_simulation_star with (measure := measure).
   eexact symbols_preserved.

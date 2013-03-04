@@ -130,33 +130,6 @@ Qed.
 
 Section TRANSL_LABEL.
 
-Definition nolabel (i: instruction) :=
-  match i with Plabel _ => False | _ => True end.
-
-Hint Extern 1 (nolabel _) => exact I : labels.
-
-Lemma tail_nolabel_cons:
-  forall i c k,
-  nolabel i -> tail_nolabel k c -> tail_nolabel k (i :: c).
-Proof.
-  intros. destruct H0. split. 
-  constructor; auto.
-  intros. simpl. rewrite <- H1. destruct i; reflexivity || contradiction.
-Qed.
-
-
-Ltac TailNoLabel :=
-  eauto with labels;
-  match goal with
-  | [ |- tail_nolabel _ (_ :: _) ] => apply tail_nolabel_cons; [auto; exact I | TailNoLabel]
-  | [ H: Error _ = OK _ |- _ ] => discriminate
-  | [ H: OK _ = OK _ |- _ ] => inv H; TailNoLabel
-  | [ H: bind _ _ = OK _ |- _ ] => monadInv H;  TailNoLabel
-  | [ H: (if ?x then _ else _) = OK _ |- _ ] => destruct x; TailNoLabel
-  | [ H: match ?x with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct x; TailNoLabel
-  | _ => idtac
-  end.
-
 Remark mk_mov_label:
   forall rd rs k c, mk_mov rd rs k = OK c -> tail_nolabel k c.
 Proof.
@@ -192,7 +165,7 @@ Remark mk_div_label:
   tail_nolabel k c.
 Proof.
   unfold mk_div; intros. TailNoLabel. 
-  eapply tail_nolabel_trans. 2: apply mk_mov2_label. TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 Hint Resolve mk_div_label: labels.
 
@@ -202,7 +175,7 @@ Remark mk_mod_label:
   tail_nolabel k c.
 Proof.
   unfold mk_mod; intros. TailNoLabel. 
-  eapply tail_nolabel_trans. 2: apply mk_mov2_label. TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 Hint Resolve mk_mod_label: labels.
 
@@ -265,16 +238,6 @@ Proof.
   intros. destruct xc; simpl; TailNoLabel.
 Qed.
 
-(*
-Ltac ArgsInv :=
-  match goal with
-  | [ H: Error _ = OK _ |- _ ] => discriminate
-  | [ H: match ?args with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct args; ArgsInv
-  | [ H: bind _ _ = OK _ |- _ ] => monadInv H; ArgsInv
-  | _ => idtac
-  end.
-*)
-
 Remark transl_cond_label:
   forall cond args k c,
   transl_cond cond args k = OK c ->
@@ -295,7 +258,7 @@ Proof.
   unfold transl_op; intros. destruct op; TailNoLabel.
   destruct (Int.eq_dec i Int.zero); TailNoLabel.
   destruct (Float.eq_dec f Float.zero); TailNoLabel.
-  eapply tail_nolabel_trans. eapply mk_setcc_label. eapply transl_cond_label. eauto. 
+  eapply tail_nolabel_trans. eapply transl_cond_label; eauto. eapply mk_setcc_label.  
 Qed.
 
 Remark transl_load_label:
@@ -330,7 +293,7 @@ Opaque loadind.
   eapply transl_store_label; eauto.
   destruct s0; TailNoLabel.
   destruct s0; TailNoLabel.
-  eapply tail_nolabel_trans. eapply mk_jcc_label. eapply transl_cond_label; eauto. 
+  eapply tail_nolabel_trans. eapply transl_cond_label; eauto. eapply mk_jcc_label.  
 Qed.
 
 Lemma transl_instr_label':

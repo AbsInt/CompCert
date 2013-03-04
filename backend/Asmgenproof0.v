@@ -607,7 +607,8 @@ Qed.
 - the "code is tail of" property
 - correct translation of labels. *)
 
-Definition tail_nolabel (k c: code) : Prop := is_tail k c /\ forall lbl, find_label lbl c = find_label lbl k.
+Definition tail_nolabel (k c: code) : Prop :=
+  is_tail k c /\ forall lbl, find_label lbl c = find_label lbl k.
 
 Lemma tail_nolabel_refl:
   forall c, tail_nolabel c c.
@@ -616,17 +617,21 @@ Proof.
 Qed.
 
 Lemma tail_nolabel_trans:
-  forall c1 c2 c3, tail_nolabel c1 c2 -> tail_nolabel c2 c3 -> tail_nolabel c1 c3.
+  forall c1 c2 c3, tail_nolabel c2 c3 -> tail_nolabel c1 c2 -> tail_nolabel c1 c3.
 Proof.
   intros. destruct H; destruct H0; split. 
   eapply is_tail_trans; eauto.
-  intros. rewrite H2; auto.
+  intros. rewrite H1; auto.
 Qed.
+
+Definition nolabel (i: instruction) :=
+  match i with Plabel _ => False | _ => True end.
+
+Hint Extern 1 (nolabel _) => exact I : labels.
 
 Lemma tail_nolabel_cons:
   forall i c k,
-  match i with Plabel _ => False | _ => True end ->
-  tail_nolabel k c -> tail_nolabel k (i :: c).
+  nolabel i -> tail_nolabel k c -> tail_nolabel k (i :: c).
 Proof.
   intros. destruct H0. split. 
   constructor; auto.
@@ -635,15 +640,15 @@ Qed.
 
 Hint Resolve tail_nolabel_refl: labels.
 
-Ltac TailNoLabels :=
+Ltac TailNoLabel :=
   eauto with labels;
   match goal with
-  | [ |- tail_nolabel _ (_ :: _) ] => apply tail_nolabel_cons; [exact I | TailNoLabels]
+  | [ |- tail_nolabel _ (_ :: _) ] => apply tail_nolabel_cons; [auto; exact I | TailNoLabel]
   | [ H: Error _ = OK _ |- _ ] => discriminate
-  | [ H: OK _ = OK _ |- _ ] => inv H; TailNoLabels
-  | [ H: bind _ _ = OK _ |- _ ] => monadInv H;  TailNoLabels
-  | [ H: (if ?x then _ else _) = OK _ |- _ ] => destruct x; TailNoLabels
-  | [ H: match ?x with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct x; TailNoLabels
+  | [ H: OK _ = OK _ |- _ ] => inv H; TailNoLabel
+  | [ H: bind _ _ = OK _ |- _ ] => monadInv H;  TailNoLabel
+  | [ H: (if ?x then _ else _) = OK _ |- _ ] => destruct x; TailNoLabel
+  | [ H: match ?x with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct x; TailNoLabel
   | _ => idtac
   end.
 

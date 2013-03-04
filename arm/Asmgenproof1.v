@@ -12,7 +12,6 @@
 
 (** Correctness proof for ARM code generation: auxiliary results. *)
 
-(*Require Import Axioms.*)
 Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
@@ -363,6 +362,35 @@ Qed.
 
 (** Indexed memory loads. *)
 
+Lemma indexed_memory_access_correct:
+  forall (P: regset -> Prop) (mk_instr: ireg -> int -> instruction)
+         (mk_immed: int -> int) (base: ireg) n k (rs: regset) m m',
+  (forall (r1: ireg) (rs1: regset) n1 k,
+    Val.add rs1#r1 (Vint n1) = Val.add rs#base (Vint n) ->
+    (forall (r: preg), r <> PC -> r <> IR14 -> rs1 r = rs r) ->
+    exists rs',
+    exec_straight ge fn (mk_instr r1 n1 :: k) rs1 m k rs' m' /\ P rs') ->
+  exists rs', 
+     exec_straight ge fn
+        (indexed_memory_access mk_instr mk_immed base n k) rs m
+        k rs' m'
+  /\ P rs'.
+Proof.
+  intros until m'; intros SEM.
+  unfold indexed_memory_access. 
+  destruct (Int.eq n (mk_immed n)).
+- apply SEM; auto.
+- destruct (addimm_correct IR14 base (Int.sub n (mk_immed n)) (mk_instr IR14 (mk_immed n) :: k) rs m)
+  as (rs1 & A & B & C).
+  destruct (SEM IR14 rs1 (mk_immed n) k) as (rs2 & D & E).
+  rewrite B. rewrite Val.add_assoc. f_equal. simpl.
+  rewrite Int.sub_add_opp. rewrite Int.add_assoc.
+  rewrite (Int.add_commut (Int.neg (mk_immed n))). 
+  rewrite Int.add_neg_zero. rewrite Int.add_zero. auto.
+  auto with asmgen. 
+  exists rs2; split; auto. eapply exec_straight_trans; eauto. 
+Qed.
+
 Lemma loadind_int_correct:
   forall (base: ireg) ofs dst (rs: regset) m v k,
   Mem.loadv Mint32 m (Val.add rs#base (Vint ofs)) = Some v ->
@@ -371,18 +399,10 @@ Lemma loadind_int_correct:
   /\ rs'#dst = v
   /\ forall r, r <> PC -> r <> IR14 -> r <> dst -> rs'#r = rs#r.
 Proof.
-  intros; unfold loadind_int. destruct (is_immed_mem_word ofs).
-  exists (nextinstr (rs#dst <- v)).
-  split. apply exec_straight_one. simpl. 
-    unfold exec_load. rewrite H. auto. auto.
-  intuition Simpl.
-  exploit addimm_correct. intros [rs' [A [B C]]].
-  exists (nextinstr (rs'#dst <- v)).
-  split. eapply exec_straight_trans. eauto. apply exec_straight_one.
-    simpl. unfold exec_load. rewrite B.
-    rewrite Val.add_assoc. simpl. rewrite Int.add_zero.
-    rewrite H. auto. auto.
-  intuition Simpl.
+  intros; unfold loadind_int. apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H0; rewrite H; eauto. auto.
+  split. Simpl. intros; Simpl.
 Qed.
 
 Lemma loadind_float_correct:
@@ -393,18 +413,10 @@ Lemma loadind_float_correct:
   /\ rs'#dst = v
   /\ forall r, r <> PC -> r <> IR14 -> r <> dst -> rs'#r = rs#r.
 Proof.
-  intros; unfold loadind_float. destruct (is_immed_mem_float ofs).
-  exists (nextinstr (rs#dst <- v)).
-  split. apply exec_straight_one. simpl. 
-    unfold exec_load. rewrite H. auto. auto.
-  intuition Simpl.
-  exploit addimm_correct. eauto. intros [rs' [A [B C]]].
-  exists (nextinstr (rs'#dst <- v)).
-  split. eapply exec_straight_trans. eauto. apply exec_straight_one.
-    simpl. unfold exec_load. rewrite B.
-    rewrite Val.add_assoc. simpl. 
-    rewrite Int.add_zero. rewrite H. auto. auto.
-  intuition Simpl.
+  intros; unfold loadind_float. apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H0; rewrite H; eauto. auto.
+  split. Simpl. intros; Simpl.
 Qed.
 
 Lemma loadind_correct:
@@ -432,19 +444,11 @@ Lemma storeind_int_correct:
      exec_straight ge fn (storeind_int src base ofs k) rs m k rs' m'
   /\ forall r, r <> PC -> r <> IR14 -> rs'#r = rs#r.
 Proof.
-  intros; unfold storeind_int. destruct (is_immed_mem_word ofs).
-  exists (nextinstr rs).
-  split. apply exec_straight_one. simpl. 
-    unfold exec_store. rewrite H. auto. auto.
-  intuition Simpl.
-  exploit addimm_correct. eauto. intros [rs' [A [B C]]].
-  exists (nextinstr rs').
-  split. eapply exec_straight_trans. eauto. apply exec_straight_one.
-    simpl. unfold exec_store. rewrite B.
-    rewrite C. rewrite Val.add_assoc. simpl. rewrite Int.add_zero. 
-    rewrite H. auto. 
-    congruence. auto with asmgen. auto.
-  intuition Simpl.
+  intros; unfold storeind_int. apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_store. 
+  rewrite H1. rewrite H2; auto with asmgen. rewrite H; eauto. auto.
+  intros; Simpl.
 Qed.
 
 Lemma storeind_float_correct:
@@ -454,20 +458,11 @@ Lemma storeind_float_correct:
      exec_straight ge fn (storeind_float src base ofs k) rs m k rs' m'
   /\ forall r, r <> PC -> r <> IR14 -> rs'#r = rs#r.
 Proof.
-  intros; unfold storeind_float. destruct (is_immed_mem_float ofs).
-  exists (nextinstr rs).
-  split. apply exec_straight_one. simpl. 
-    unfold exec_store. rewrite H. auto. auto.
-  intuition Simpl.
-  exploit addimm_correct. eauto. intros [rs' [A [B C]]].
-  exists (nextinstr rs').
-  split. eapply exec_straight_trans. eauto. apply exec_straight_one.
-    simpl. unfold exec_store. rewrite B. 
-    rewrite C. rewrite Val.add_assoc. simpl. rewrite Int.add_zero. 
-    rewrite H. auto.
-    congruence. congruence. 
-    auto with asmgen.
-  intuition Simpl. 
+  intros; unfold storeind_float. apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_store. 
+  rewrite H0. rewrite H1; auto with asmgen. rewrite H; eauto. auto.
+  intros; Simpl.
 Qed.
 
 Lemma storeind_correct:
@@ -541,8 +536,6 @@ Proof.
   unfold compare_float. Simpl. 
 Qed.
 
-Definition lock {A: Type} (x: A) := x.
-
 Ltac ArgsInv :=
   repeat (match goal with
   | [ H: Error _ = OK _ |- _ ] => discriminate
@@ -552,12 +545,8 @@ Ltac ArgsInv :=
   end);
   subst;
   repeat (match goal with
-  | [ H: ireg_of ?x = OK ?y |- _ ] =>
-         simpl in *; rewrite (ireg_of_eq _ _ H) in *
-(*; change H with (lock (ireg_of x) = OK y)*)
-  | [ H: freg_of ?x = OK ?y |- _ ] =>
-         simpl in *; rewrite (freg_of_eq _ _ H) in *
-(*; change H with (lock (freg_of x) = OK y)*)
+  | [ H: ireg_of ?x = OK ?y |- _ ] => simpl in *; rewrite (ireg_of_eq _ _ H) in *
+  | [ H: freg_of ?x = OK ?y |- _ ] => simpl in *; rewrite (freg_of_eq _ _ H) in *
   end).
 
 Lemma transl_cond_correct:
@@ -833,6 +822,8 @@ Proof.
   unfold rs2. Simpl.
 Qed.
 
+(** Translation of loads and stores. *)
+
 Remark val_add_add_zero:
   forall v1 v2, Val.add v1 v2 = Val.add (Val.add v1 v2) (Vint Int.zero).
 Proof.
@@ -842,9 +833,9 @@ Qed.
 Lemma transl_memory_access_correct:
   forall (P: regset -> Prop) (mk_instr_imm: ireg -> int -> instruction)
          (mk_instr_gen: option (ireg -> shift_addr -> instruction))
-         (is_immed: int -> bool)
+         (mk_immed: int -> int)
          addr args k c (rs: regset) a m m',
-  transl_memory_access mk_instr_imm mk_instr_gen is_immed addr args k = OK c ->
+  transl_memory_access mk_instr_imm mk_instr_gen mk_immed addr args k = OK c ->
   eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
   (forall (r1: ireg) (rs1: regset) n k,
     Val.add rs1#r1 (Vint n) = a ->
@@ -854,11 +845,10 @@ Lemma transl_memory_access_correct:
   match mk_instr_gen with
   | None => True
   | Some mk =>
-      (forall (r1: ireg) (sa: shift_addr) (rs1: regset) k,
-      Val.add rs1#r1 (eval_shift_addr sa rs1) = a ->
-      (forall (r: preg), r <> PC -> r <> IR14 -> rs1 r = rs r) ->
-      exists rs',
-      exec_straight ge fn (mk r1 sa :: k) rs1 m k rs' m' /\ P rs')
+      (forall (r1: ireg) (sa: shift_addr) k,
+      Val.add rs#r1 (eval_shift_addr sa rs) = a ->
+       exists rs',
+      exec_straight ge fn (mk r1 sa :: k) rs m k rs' m' /\ P rs')
   end ->
   exists rs',
     exec_straight ge fn c rs m k rs' m' /\ P rs'.
@@ -866,56 +856,15 @@ Proof.
   intros until m'; intros TR EA MK1 MK2.
   unfold transl_memory_access in TR; destruct addr; ArgsInv; simpl in EA; inv EA.
   (* Aindexed *)
-  case (is_immed i).
-  (* Aindexed, small displacement *)
-  apply MK1; auto.
-  (* Aindexed, large displacement *)
-  destruct (addimm_correct IR14 x i (mk_instr_imm IR14 Int.zero :: k) rs m)
-  as [rs' [A [B C]]].
-  exploit (MK1 IR14 rs' Int.zero); eauto. 
-  rewrite B. rewrite Val.add_assoc. simpl Val.add. rewrite Int.add_zero. reflexivity.
-  intros [rs'' [D E]].
-  exists rs''; split.
-  eapply exec_straight_trans. eexact A. eexact D. auto.
+  apply indexed_memory_access_correct. exact MK1.
   (* Aindexed2 *)
-  destruct mk_instr_gen as [mk | ]. 
-  (* binary form available *)
-  apply MK2; auto.
-  (* binary form not available *)
-  set (rs' := nextinstr (rs#IR14 <- (Val.add (rs x) (rs x0)))).
-  exploit (MK1 IR14 rs' Int.zero); eauto.
-  unfold rs'. Simpl. symmetry. apply val_add_add_zero. 
-  intros. unfold rs'. Simpl. 
-  intros [rs'' [A B]].
-  exists rs''; split.
-  eapply exec_straight_step with (rs2 := rs'); eauto.
-  simpl. auto. auto.
+  destruct mk_instr_gen as [mk | ]; monadInv TR. apply MK2.
+  simpl. erewrite ! ireg_of_eq; eauto.
   (* Aindexed2shift *)
-  destruct mk_instr_gen as [mk | ]. 
-  (* binary form available *)
-  apply MK2; auto. rewrite transl_shift_addr_correct. auto.
-  (* binary form not available *)
-  set (rs' := nextinstr (rs#IR14 <- (Val.add (rs x) (eval_shift s (rs x0))))).
-  exploit (MK1 IR14 rs' Int.zero); eauto.
-  unfold rs'. Simpl. symmetry. apply val_add_add_zero. 
-  intros; unfold rs'; Simpl.
-  intros [rs'' [A B]].
-  exists rs''; split.
-  eapply exec_straight_step with (rs2 := rs'); eauto.
-  simpl. rewrite transl_shift_correct. auto. 
-  auto.
+  destruct mk_instr_gen as [mk | ]; monadInv TR. apply MK2.
+  erewrite ! ireg_of_eq; eauto. rewrite transl_shift_addr_correct. auto. 
   (* Ainstack *)
-  destruct (is_immed i); inv TR.
-  (* Ainstack, short displacement *)
-  apply MK1; auto.
-  (* Ainstack, large displacement *)
-  destruct (addimm_correct IR14 IR13 i (mk_instr_imm IR14 Int.zero :: k) rs m)
-  as [rs' [A [B C]]].
-  exploit (MK1 IR14 rs' Int.zero); eauto.
-  rewrite B. rewrite Val.add_assoc. f_equal. simpl. rewrite Int.add_zero; auto. 
-  intros [rs'' [D E]].
-  exists rs''; split.
-  eapply exec_straight_trans. eexact A. eexact D. auto.
+  inv TR. apply indexed_memory_access_correct. exact MK1.
 Qed.
 
 Lemma transl_load_int_correct:
@@ -983,8 +932,7 @@ Proof.
   intros; Simpl.
   simpl; intros. 
   econstructor; split. apply exec_straight_one. 
-  rewrite H2. unfold exec_store. rewrite H. rewrite H3; eauto with asmgen. 
-  rewrite H1. eauto. auto.
+  rewrite H2. unfold exec_store. rewrite H. rewrite H1. eauto. auto.
   intros; Simpl.
 Qed.
 
@@ -1003,8 +951,7 @@ Proof.
   intros. monadInv H. erewrite freg_of_eq in * by eauto.  
   eapply transl_memory_access_correct; eauto.
   intros; simpl. econstructor; split. apply exec_straight_one. 
-  rewrite H2. unfold exec_store. rewrite H. rewrite H3; eauto with asmgen. 
-  rewrite H1. eauto. auto.
+  rewrite H2. unfold exec_store. rewrite H. rewrite H3; auto with asmgen. rewrite H1. eauto. auto.
   intros; Simpl.
   simpl; auto.
 Qed.

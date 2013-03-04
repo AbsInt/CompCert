@@ -54,13 +54,22 @@ Definition is_immed_arith (x: int) : bool :=
 
 Definition is_immed_mem_word (x: int) : bool :=
   Int.lt x (Int.repr 4096) && Int.lt (Int.repr (-4096)) x.
+
+Definition mk_immed_mem_word (x: int) : int :=
+  Int.sign_ext 13 x.
   
 Definition is_immed_mem_small (x: int) : bool :=
   Int.lt x (Int.repr 256) && Int.lt (Int.repr (-256)) x.
   
+Definition mk_immed_mem_small (x: int) : int :=
+  Int.sign_ext 9 x.
+  
 Definition is_immed_mem_float (x: int) : bool :=
   Int.eq (Int.and x (Int.repr 3)) Int.zero
   && Int.lt x (Int.repr 1024) && Int.lt (Int.repr (-1024)) x.
+  
+Definition mk_immed_mem_float (x: int) : int :=
+  Int.and (Int.sign_ext 11 x) (Int.repr 4294967288).  (**r 0xfffffff8 *)
   
 (** Decomposition of a 32-bit integer into a list of immediate arguments,
     whose sum or "or" or "xor" equals the integer. *)
@@ -390,7 +399,42 @@ Definition transl_op
       Error(msg "Asmgen.transl_op")
   end.
 
-(** Translation of memory accesses: loads and stores. *)
+(** Accessing data in the stack frame. *)
+
+Definition indexed_memory_access
+    (mk_instr: ireg -> int -> instruction)
+    (mk_immed: int -> int)
+    (base: ireg) (n: int) (k: code) :=
+  let n1 := mk_immed n in
+  if Int.eq n n1
+  then mk_instr base n :: k
+  else addimm IR14 base (Int.sub n n1) (mk_instr IR14 n1 :: k).
+
+Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
+  indexed_memory_access (fun base n => Pldr dst base (SAimm n)) mk_immed_mem_word base ofs k.
+
+Definition loadind_float (base: ireg) (ofs: int) (dst: freg) (k: code) :=
+  indexed_memory_access (Pfldd dst) mk_immed_mem_float base ofs k.
+
+Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
+  match ty with
+  | Tint   => do r <- ireg_of dst; OK (loadind_int base ofs r k)
+  | Tfloat => do r <- freg_of dst; OK (loadind_float base ofs r k)
+  end.
+
+Definition storeind_int (src: ireg) (base: ireg) (ofs: int) (k: code) :=
+  indexed_memory_access (fun base n => Pstr src base (SAimm n)) mk_immed_mem_word base ofs k.
+
+Definition storeind_float (src: freg) (base: ireg) (ofs: int) (k: code) :=
+  indexed_memory_access (Pfstd src) mk_immed_mem_float base ofs k.
+
+Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
+  match ty with
+  | Tint   => do r <- ireg_of src; OK (storeind_int r base ofs k)
+  | Tfloat => do r <- freg_of src; OK (storeind_float r base ofs k)
+  end.
+
+(** Translation of memory accesses *)
 
 Definition transl_shift_addr (s: shift) (r: ireg) : shift_addr :=
   match s with
@@ -403,141 +447,90 @@ Definition transl_shift_addr (s: shift) (r: ireg) : shift_addr :=
 Definition transl_memory_access
      (mk_instr_imm: ireg -> int -> instruction)
      (mk_instr_gen: option (ireg -> shift_addr -> instruction))
-     (is_immed: int -> bool)
+     (mk_immed: int -> int)
      (addr: addressing) (args: list mreg) (k: code) :=
   match addr, args with
   | Aindexed n, a1 :: nil =>
       do r1 <- ireg_of a1;
-      OK (if is_immed n then
-            mk_instr_imm r1 n :: k
-          else
-            addimm IR14 r1 n
-              (mk_instr_imm IR14 Int.zero :: k))
+      OK (indexed_memory_access mk_instr_imm mk_immed r1 n k)
   | Aindexed2, a1 :: a2 :: nil =>
-      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (match mk_instr_gen with
-          | Some f =>
-              f r1 (SAreg r2) :: k
-          | None =>
-              Padd IR14 r1 (SOreg r2) ::
-              mk_instr_imm IR14 Int.zero :: k
-          end)
+      match mk_instr_gen with
+      | Some f =>
+          do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+          OK (f r1 (SAreg r2) :: k)
+      | None =>
+          Error (msg "Asmgen.Aindexed2")
+      end
   | Aindexed2shift s, a1 :: a2 :: nil =>
-      do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (match mk_instr_gen with
-          | Some f =>
-              f r1 (transl_shift_addr s r2) :: k
-          | None =>
-              Padd IR14 r1 (transl_shift s r2) ::
-              mk_instr_imm IR14 Int.zero :: k
-          end)
+      match mk_instr_gen with
+      | Some f =>
+          do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+          OK (f r1 (transl_shift_addr s r2) :: k)
+      | None =>
+          Error (msg "Asmgen.Aindexed2shift")
+      end
   | Ainstack n, nil =>
-      OK (if is_immed n then
-            mk_instr_imm IR13 n :: k
-          else
-            addimm IR14 IR13 n (mk_instr_imm IR14 Int.zero :: k))
+      OK (indexed_memory_access mk_instr_imm mk_immed IR13 n k)
   | _, _ =>
       Error(msg "Asmgen.transl_memory_access")
   end.
 
 Definition transl_memory_access_int
      (mk_instr: ireg -> ireg -> shift_addr -> instruction)
-     (is_immed: int -> bool)
+     (mk_immed: int -> int)
      (dst: mreg) (addr: addressing) (args: list mreg) (k: code) :=
   do rd <- ireg_of dst;
   transl_memory_access
     (fun r n => mk_instr rd r (SAimm n))
     (Some (mk_instr rd))
-    is_immed addr args k.
+    mk_immed addr args k.
 
 Definition transl_memory_access_float
      (mk_instr: freg -> ireg -> int -> instruction)
-     (is_immed: int -> bool)
+     (mk_immed: int -> int)
      (dst: mreg) (addr: addressing) (args: list mreg) (k: code) :=
   do rd <- freg_of dst;
   transl_memory_access
     (mk_instr rd)
     None
-    is_immed addr args k.
+    mk_immed addr args k.
 
 Definition transl_load (chunk: memory_chunk) (addr: addressing)
                        (args: list mreg) (dst: mreg) (k: code) :=
   match chunk with
   | Mint8signed =>
-      transl_memory_access_int Pldrsb is_immed_mem_small dst addr args k
+      transl_memory_access_int Pldrsb mk_immed_mem_small dst addr args k
   | Mint8unsigned =>
-      transl_memory_access_int Pldrb is_immed_mem_word dst addr args k
+      transl_memory_access_int Pldrb mk_immed_mem_word dst addr args k
   | Mint16signed =>
-      transl_memory_access_int Pldrsh is_immed_mem_small dst addr args k
+      transl_memory_access_int Pldrsh mk_immed_mem_small dst addr args k
   | Mint16unsigned =>
-      transl_memory_access_int Pldrh is_immed_mem_small dst addr args k
+      transl_memory_access_int Pldrh mk_immed_mem_small dst addr args k
   | Mint32 =>
-      transl_memory_access_int Pldr is_immed_mem_word dst addr args k
+      transl_memory_access_int Pldr mk_immed_mem_word dst addr args k
   | Mfloat32 =>
-      transl_memory_access_float Pflds is_immed_mem_float dst addr args k
+      transl_memory_access_float Pflds mk_immed_mem_float dst addr args k
   | Mfloat64 | Mfloat64al32 =>
-      transl_memory_access_float Pfldd is_immed_mem_float dst addr args k
+      transl_memory_access_float Pfldd mk_immed_mem_float dst addr args k
   end.
 
 Definition transl_store (chunk: memory_chunk) (addr: addressing)
                        (args: list mreg) (src: mreg) (k: code) :=
   match chunk with
   | Mint8signed =>
-      transl_memory_access_int Pstrb is_immed_mem_small src addr args k
+      transl_memory_access_int Pstrb mk_immed_mem_small src addr args k
   | Mint8unsigned =>
-      transl_memory_access_int Pstrb is_immed_mem_word src addr args k
+      transl_memory_access_int Pstrb mk_immed_mem_word src addr args k
   | Mint16signed =>
-      transl_memory_access_int Pstrh is_immed_mem_small src addr args k
+      transl_memory_access_int Pstrh mk_immed_mem_small src addr args k
   | Mint16unsigned =>
-      transl_memory_access_int Pstrh is_immed_mem_small src addr args k
+      transl_memory_access_int Pstrh mk_immed_mem_small src addr args k
   | Mint32 =>
-      transl_memory_access_int Pstr is_immed_mem_word src addr args k
+      transl_memory_access_int Pstr mk_immed_mem_word src addr args k
   | Mfloat32 =>
-      transl_memory_access_float Pfsts is_immed_mem_float src addr args k
+      transl_memory_access_float Pfsts mk_immed_mem_float src addr args k
   | Mfloat64 | Mfloat64al32 =>
-      transl_memory_access_float Pfstd is_immed_mem_float src addr args k
-  end.
-
-(** Accessing data in the stack frame. *)
-
-Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
-  if is_immed_mem_word ofs then
-    Pldr dst base (SAimm ofs) :: k
-  else
-    addimm IR14 base ofs
-      (Pldr dst IR14 (SAimm Int.zero) :: k).
-
-Definition loadind_float (base: ireg) (ofs: int) (dst: freg) (k: code) :=
-  if is_immed_mem_float ofs then
-    Pfldd dst base ofs :: k
-  else
-    addimm IR14 base ofs
-      (Pfldd dst IR14 Int.zero :: k).
-
-Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
-  match ty with
-  | Tint   => do r <- ireg_of dst; OK (loadind_int base ofs r k)
-  | Tfloat => do r <- freg_of dst; OK (loadind_float base ofs r k)
-  end.
-
-Definition storeind_int (src: ireg) (base: ireg) (ofs: int) (k: code) :=
-  if is_immed_mem_word ofs then
-    Pstr src base (SAimm ofs) :: k
-  else
-    addimm IR14 base ofs
-      (Pstr src IR14 (SAimm Int.zero) :: k).
-
-Definition storeind_float (src: freg) (base: ireg) (ofs: int) (k: code) :=
-  if is_immed_mem_float ofs then
-    Pfstd src base ofs :: k
-  else
-    addimm IR14 base ofs
-      (Pfstd src IR14 Int.zero :: k).
-
-Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
-  match ty with
-  | Tint   => do r <- ireg_of src; OK (storeind_int r base ofs k)
-  | Tfloat => do r <- freg_of src; OK (storeind_float r base ofs k)
+      transl_memory_access_float Pfstd mk_immed_mem_float src addr args k
   end.
 
 (** Translation of arguments to annotations *)
