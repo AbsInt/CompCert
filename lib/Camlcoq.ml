@@ -62,6 +62,7 @@ module P = struct
   let gt x y = (Pos.compare x y = Gt)
   let le x y = (Pos.compare x y <> Gt)
   let ge x y = (Pos.compare x y <> Lt)
+  let compare x y = match Pos.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
 
   let rec to_int = function
   | Coq_xI p -> (to_int p lsl 1) + 1
@@ -129,6 +130,7 @@ module Z = struct
   let gt x y = (Z.compare x y = Gt)
   let le x y = (Z.compare x y <> Gt)
   let ge x y = (Z.compare x y <> Lt)
+  let compare x y = match Z.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
 
   let to_int = function
   | Z0 -> 0

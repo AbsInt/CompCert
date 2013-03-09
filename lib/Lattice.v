@@ -16,6 +16,10 @@ Require Import Coqlib.
 Require Import Maps.
 Require Import FSets.
 
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 (** * Signatures of semi-lattices *)
 
 (** A semi-lattice is a type [t] equipped with an equivalence relation [eq],

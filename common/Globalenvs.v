@@ -53,6 +53,23 @@ Local Open Scope error_monad_scope.
 
 Set Implicit Arguments.
 
+(** Auxiliary function for initialization of global variables. *)
+
+Function store_zeros (m: mem) (b: block) (p: Z) (n: Z) {wf (Zwf 0) n}: option mem :=
+  if zle n 0 then Some m else
+    match Mem.store Mint8unsigned m b p Vzero with
+    | Some m' => store_zeros m' b (p + 1) (n - 1)
+    | None => None
+    end.
+Proof.
+  intros. red. omega.
+  apply Zwf_well_founded.
+Qed.
+
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 Module Genv.
 
 (** * Global environments *)
@@ -484,18 +501,6 @@ Lemma init_data_size_pos:
   forall i, init_data_size i >= 0.
 Proof.
   destruct i; simpl; try omega. generalize (Zle_max_r z 0). omega.
-Qed.
-
-Function store_zeros (m: mem) (b: block) (p: Z) (n: Z) {wf (Zwf 0) n}: option mem :=
-  if zle n 0 then Some m else
-    let n' := n - 1 in
-    match Mem.store Mint8unsigned m b p Vzero with
-    | Some m' => store_zeros m' b (p + 1) n'
-    | None => None
-    end.
-Proof.
-  intros. red. omega.
-  apply Zwf_well_founded.
 Qed.
 
 Definition store_init_data (m: mem) (b: block) (p: Z) (id: init_data) : option mem :=

@@ -57,6 +57,10 @@ Module Type WORDSIZE.
   Axiom wordsize_not_zero: wordsize <> 0%nat.
 End WORDSIZE.
 
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 Module Make(WS: WORDSIZE).
 
 Definition wordsize: nat := WS.wordsize.

@@ -17,14 +17,34 @@
     to comparison trees. *)
 
 Require Import EqNat.
-Require Import FMaps.
-Require FMapAVL.
 Require Import Coqlib.
+Require Import Maps.
 Require Import Integers.
-Require Import Ordered.
 
-Module IntMap := FMapAVL.Make(OrderedInt).
-Module IntMapF := FMapFacts.Facts(IntMap).
+Module IntIndexed <: INDEXED_TYPE.
+
+  Definition t := int.
+
+  Definition index (n: int) : positive :=
+    match Int.unsigned n with
+    | Z0 => xH
+    | Zpos p => xO p
+    | Zneg p => xI p  (**r never happens *)
+    end.
+
+  Lemma index_inj: forall n m, index n = index m -> n = m.
+  Proof.
+    unfold index; intros. 
+    rewrite <- (Int.repr_unsigned n). rewrite <- (Int.repr_unsigned m).
+    f_equal. 
+    destruct (Int.unsigned n); destruct (Int.unsigned m); congruence.
+  Qed.
+
+  Definition eq := Int.eq_dec.
+
+End IntIndexed.
+
+Module IntMap := IMap(IntIndexed).
 
 (** A multi-way branch is composed of a list of (key, action) pairs,
   plus a default action.  *)
@@ -93,14 +113,14 @@ Fixpoint split_eq (pivot: int) (cases: table)
       else (same, (key, act) :: others)
   end.
 
-Fixpoint split_between (ofs sz: int) (cases: table)
+Fixpoint split_between (dfl: nat) (ofs sz: int) (cases: table)
                        {struct cases} : IntMap.t nat * table :=
   match cases with
-  | nil => (IntMap.empty nat, nil)
+  | nil => (IntMap.init dfl, nil)
   | (key, act) :: rem =>
-      let (inside, outside) := split_between ofs sz rem in
+      let (inside, outside) := split_between dfl ofs sz rem in
       if Int.ltu (Int.sub key ofs) sz
-      then (IntMap.add key act inside, outside)
+      then (IntMap.set key act inside, outside)
       else (inside, (key, act) :: outside)
   end.
 
@@ -110,13 +130,13 @@ Definition refine_low_bound (v lo: Z) :=
 Definition refine_high_bound (v hi: Z) :=
   if zeq v hi then hi - 1 else hi.
 
-Fixpoint validate_jumptable (cases: IntMap.t nat) (default: nat)
+Fixpoint validate_jumptable (cases: IntMap.t nat) 
                             (tbl: list nat) (n: int) {struct tbl} : bool :=
   match tbl with
   | nil => true
   | act :: rem =>
-      beq_nat act (match IntMap.find n cases with Some a => a | None => default end)
-      && validate_jumptable cases default rem (Int.add n Int.one)
+      beq_nat act (IntMap.get n cases)
+      && validate_jumptable cases rem (Int.add n Int.one)
   end.
 
 Fixpoint validate (default: nat) (cases: table) (t: comptree)
@@ -147,11 +167,11 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
       end
   | CTjumptable ofs sz tbl t' =>
       let tbl_len := list_length_z tbl in
-      match split_between ofs sz cases with
+      match split_between default ofs sz cases with
       | (inside, outside) =>
           zle (Int.unsigned sz) tbl_len
           && zle tbl_len Int.max_signed
-          && validate_jumptable inside default tbl ofs
+          && validate_jumptable inside tbl ofs
           && validate default outside t' lo hi
      end
   end.
@@ -207,33 +227,33 @@ Qed.
 
 Lemma split_between_prop:
   forall v default ofs sz cases inside outside,
-  split_between ofs sz cases = (inside, outside) ->
+  split_between default ofs sz cases = (inside, outside) ->
   switch_target v default cases =
     (if Int.ltu (Int.sub v ofs) sz
-     then match IntMap.find v inside with Some a => a | None => default end
+     then IntMap.get v inside
      else switch_target v default outside).
 Proof.
-  induction cases; intros until outside; simpl.
-  intros. inv H. simpl. destruct (Int.ltu (Int.sub v ofs) sz); auto.
-  destruct a as [key act]. case_eq (split_between ofs sz cases). intros ins outs SEQ.
-  rewrite (IHcases _ _ SEQ). 
-  case_eq (Int.ltu (Int.sub key ofs) sz); intros; inv H0; simpl.
-  rewrite IntMapF.add_o. 
-  predSpec Int.eq Int.eq_spec v key. 
-  subst v. rewrite H. rewrite dec_eq_true. auto.
-  rewrite dec_eq_false; auto.
-  case_eq (Int.ltu (Int.sub v ofs) sz); intros; auto.
-  predSpec Int.eq Int.eq_spec v key. 
-  subst v. congruence.
-  auto.
+  induction cases; intros until outside; simpl; intros SEQ.
+- inv SEQ. destruct (Int.ltu (Int.sub v ofs) sz); auto. rewrite IntMap.gi. auto.
+- destruct a as [key act].
+  destruct (split_between default ofs sz cases) as [ins outs].
+  erewrite IHcases; eauto. 
+  destruct (Int.ltu (Int.sub key ofs) sz) eqn:LT; inv SEQ.
+  + predSpec Int.eq Int.eq_spec v key. 
+    subst v. rewrite LT. rewrite IntMap.gss. auto. 
+    destruct (Int.ltu (Int.sub v ofs) sz). 
+    rewrite IntMap.gso; auto.
+    auto.
+  + simpl. destruct (Int.ltu (Int.sub v ofs) sz) eqn:LT'. 
+    rewrite Int.eq_false. auto. congruence. 
+    auto.
 Qed.
 
 Lemma validate_jumptable_correct_rec:
-  forall cases default tbl base v,
-  validate_jumptable cases default tbl base = true ->
+  forall cases tbl base v,
+  validate_jumptable cases tbl base = true ->
   0 <= Int.unsigned v < list_length_z tbl ->
-  list_nth_z tbl (Int.unsigned v) =
-  Some(match IntMap.find (Int.add base v) cases with Some a => a | None => default end).
+  list_nth_z tbl (Int.unsigned v) = Some(IntMap.get (Int.add base v) cases).
 Proof.
   induction tbl; intros until v; simpl.
   unfold list_length_z; simpl. intros. omegaContradiction.
@@ -254,16 +274,15 @@ Proof.
 Qed.
 
 Lemma validate_jumptable_correct:
-  forall cases default tbl ofs v sz,
-  validate_jumptable cases default tbl ofs = true ->
+  forall cases tbl ofs v sz,
+  validate_jumptable cases tbl ofs = true ->
   Int.ltu (Int.sub v ofs) sz = true ->
   Int.unsigned sz <= list_length_z tbl ->
-  list_nth_z tbl (Int.unsigned (Int.sub v ofs)) =
-  Some(match IntMap.find v cases with Some a => a | None => default end).
+  list_nth_z tbl (Int.unsigned (Int.sub v ofs)) = Some(IntMap.get v cases).
 Proof.
   intros.
   exploit Int.ltu_inv; eauto. intros. 
-  rewrite (validate_jumptable_correct_rec cases default tbl ofs).
+  rewrite (validate_jumptable_correct_rec cases tbl ofs).
   rewrite Int.sub_add_opp. rewrite Int.add_permut. rewrite <- Int.sub_add_opp. 
   rewrite Int.sub_idem. rewrite Int.add_zero. auto. 
   auto.
@@ -312,7 +331,7 @@ Opaque Int.sub.
   eapply IHt1. eauto. omega.
   eapply IHt2. eauto. omega.
   (* jumptable node *)
-  case_eq (split_between i i0 cases). intros ins outs EQ V RANGE.
+  case_eq (split_between default i i0 cases). intros ins outs EQ V RANGE.
   destruct (andb_prop _ _ V). clear V.
   destruct (andb_prop _ _ H). clear H.
   destruct (andb_prop _ _ H1). clear H1.

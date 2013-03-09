@@ -17,6 +17,10 @@ Require Import Iteration.
 Require Import Maps.
 Require Import Lattice.
 
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 (** A forward dataflow problem is a set of inequations of the form
 - [X(s) >= transf n X(n)] 
   if program point [s] is a successor of program point [n]

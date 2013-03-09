@@ -25,6 +25,10 @@ Require Import Coqlib.
 Require Import FSets.
 Require Import Ordered.
 
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 Module SplayHeapSet(E: OrderedType).
 
 (** "Raw" implementation.  The "is a binary search tree" invariant
@@ -36,7 +40,7 @@ Inductive heap: Type :=
   | Empty
   | Node (l: heap) (x: E.t) (r: heap).
 
-Function partition (pivot: E.t) (h: heap) { struct h } : heap * heap :=
+Fixpoint partition (pivot: E.t) (h: heap) { struct h } : heap * heap :=
   match h with
   | Empty => (Empty, Empty)
   | Node a x b =>
@@ -83,7 +87,7 @@ Fixpoint findMin (h: heap) : option E.t :=
   | Node a x b => findMin a
   end.
 
-Function deleteMin (h: heap) : heap :=
+Fixpoint deleteMin (h: heap) : heap :=
   match h with
   | Empty => Empty
   | Node Empty x b => b
@@ -98,13 +102,20 @@ Fixpoint findMax (h: heap) : option E.t :=
   | Node a x b => findMax b
   end.
 
-Function deleteMax (h: heap) : heap :=
+Fixpoint deleteMax (h: heap) : heap :=
   match h with
   | Empty => Empty
   | Node b x Empty => b
   | Node b x (Node c y Empty) => Node b x c
   | Node a x (Node b y c) => Node (Node a x b) y (deleteMax c)
   end.
+
+(** Induction principles for some of the operators. *)
+
+Scheme heap_ind := Induction for heap Sort Prop.
+Functional Scheme partition_ind := Induction for partition Sort Prop.
+Functional Scheme deleteMin_ind := Induction for deleteMin Sort Prop.
+Functional Scheme deleteMax_ind := Induction for deleteMax Sort Prop.
 
 (** Specification *)
 
@@ -191,50 +202,38 @@ Lemma In_partition:
   forall h, bst h -> (In x h <-> In x (fst (partition pivot h)) \/ In x (snd (partition pivot h))).
 Proof.
   intros x pivot NEQ h0. functional induction (partition pivot h0); simpl; intros.
-  tauto.
-  intuition. elim NEQ. eapply E.eq_trans; eauto.
-  intuition.
-  intuition. elim NEQ. eapply E.eq_trans; eauto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
-  rewrite e3 in IHp; simpl in IHp. intuition.
-  intuition. 
-  intuition. elim NEQ. eapply E.eq_trans; eauto. 
-  rewrite e3 in IHp; simpl in IHp. intuition.
-  rewrite e3 in IHp; simpl in IHp. intuition.
+- tauto.
+- tauto.
+- rewrite e3 in *; simpl in *; intuition.
+- intuition. elim NEQ. eapply E.eq_trans; eauto. 
+- rewrite e3 in *; simpl in *; intuition.
+- intuition. elim NEQ. eapply E.eq_trans; eauto. 
+- intuition. 
+- rewrite e3 in *; simpl in *; intuition.
+- intuition. elim NEQ. eapply E.eq_trans; eauto. 
+- rewrite e3 in *; simpl in *; intuition.
 Qed.
 
 Lemma partition_lt:
   forall x pivot h,
   lt_heap h x -> lt_heap (fst (partition pivot h)) x /\ lt_heap (snd (partition pivot h)) x.
 Proof.
-  intros x pivot h0. functional induction (partition pivot h0); simpl.
-  tauto.
-  tauto.
-  tauto.
-  tauto.
-  rewrite e3 in IHp; simpl in IHp. tauto. 
-  rewrite e3 in IHp; simpl in IHp. tauto. 
-  tauto.
-  tauto.
-  rewrite e3 in IHp; simpl in IHp. tauto. 
-  rewrite e3 in IHp; simpl in IHp. tauto. 
+  intros x pivot h0. functional induction (partition pivot h0); simpl; try tauto.
+- rewrite e3 in *; simpl in *; tauto.
+- rewrite e3 in *; simpl in *; tauto.
+- rewrite e3 in *; simpl in *; tauto.
+- rewrite e3 in *; simpl in *; tauto.
 Qed.
  
 Lemma partition_gt:
   forall x pivot h,
   gt_heap h x -> gt_heap (fst (partition pivot h)) x /\ gt_heap (snd (partition pivot h)) x.
 Proof.
-  intros x pivot h0. functional induction (partition pivot h0); simpl.
-  tauto.
-  tauto.
-  tauto.
-  tauto.
-  rewrite e3 in IHp; simpl in IHp. tauto. 
-  rewrite e3 in IHp; simpl in IHp. tauto. 
-  tauto.
-  tauto.
-  rewrite e3 in IHp; simpl in IHp. tauto. 
-  rewrite e3 in IHp; simpl in IHp. tauto. 
+  intros x pivot h0. functional induction (partition pivot h0); simpl; try tauto.
+- rewrite e3 in *; simpl in *; tauto.
+- rewrite e3 in *; simpl in *; tauto.
+- rewrite e3 in *; simpl in *; tauto.
+- rewrite e3 in *; simpl in *; tauto.
 Qed.
 
 Lemma partition_split:
@@ -242,28 +241,32 @@ Lemma partition_split:
   bst h -> lt_heap (fst (partition pivot h)) pivot /\ gt_heap (snd (partition pivot h)) pivot.
 Proof.
   intros pivot h0. functional induction (partition pivot h0); simpl.
-  tauto.
-  intuition. eapply lt_heap_trans; eauto. red; auto. eapply gt_heap_trans; eauto. red; left; apply E.eq_sym; auto. 
-  intuition. eapply lt_heap_trans; eauto. red; auto.
-  intuition. eapply lt_heap_trans; eauto. red; auto. 
-    eapply lt_heap_trans; eauto. red; auto.
-    apply gt_heap_trans with y; auto. red. left; apply E.eq_sym; auto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
-    eapply lt_heap_trans; eauto. red; auto.
-    eapply lt_heap_trans; eauto. red; auto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
-    eapply lt_heap_trans; eauto. red; auto.
-    apply gt_heap_trans with y; eauto. red; auto.
-  intuition. eapply gt_heap_trans; eauto. red; auto.
-  intuition. apply lt_heap_trans with y; eauto. red; auto.
-    eapply gt_heap_trans; eauto. red; left; apply E.eq_sym; auto.
-    eapply gt_heap_trans; eauto. red; auto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
-    apply lt_heap_trans with y; eauto. red; auto.
-    eapply gt_heap_trans; eauto. red; auto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
-    apply gt_heap_trans with y; eauto. red; auto.
-    apply gt_heap_trans with x; eauto. red; auto.
+- tauto.
+- intuition. eapply lt_heap_trans; eauto. red; auto.
+- rewrite e3 in *; simpl in *. intuition.
+  eapply lt_heap_trans; eauto. red; auto.
+  eapply lt_heap_trans; eauto. red; auto.
+- intuition.
+  eapply lt_heap_trans; eauto. red; auto.
+  eapply lt_heap_trans; eauto. red; auto.
+  eapply gt_heap_trans with y; eauto. red. left. apply E.eq_sym; auto. 
+- rewrite e3 in *; simpl in *; intuition.
+  eapply lt_heap_trans; eauto. red; auto.
+  eapply gt_heap_trans with y; eauto. red; auto.
+- intuition. 
+  eapply lt_heap_trans; eauto. red; auto.
+  eapply gt_heap_trans; eauto. red; auto.
+- intuition. eapply gt_heap_trans; eauto. red; auto. 
+- rewrite e3 in *; simpl in *. intuition.
+  eapply lt_heap_trans with y; eauto. red; auto.
+  eapply gt_heap_trans; eauto. red; auto.
+- intuition. 
+  eapply lt_heap_trans with y; eauto. red; auto.
+  eapply gt_heap_trans; eauto. red; auto.
+  eapply gt_heap_trans with x; eauto. red; auto.
+- rewrite e3 in *; simpl in *; intuition.
+  eapply gt_heap_trans; eauto. red; auto.
+  eapply gt_heap_trans; eauto. red; auto.
 Qed.
 
 Lemma partition_bst:
@@ -271,25 +274,19 @@ Lemma partition_bst:
   bst h ->
   bst (fst (partition pivot h)) /\ bst (snd (partition pivot h)).
 Proof.
-  intros pivot h0. functional induction (partition pivot h0); simpl.
-  tauto.
-  tauto.
-  tauto.
-  tauto.
-  rewrite e3 in IHp; simpl in IHp. intuition. 
+  intros pivot h0. functional induction (partition pivot h0); simpl; try tauto.
+- rewrite e3 in *; simpl in *. intuition. 
     apply lt_heap_trans with x; auto. red; auto.
     generalize (partition_gt y pivot b2 H7). rewrite e3; simpl. tauto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
+- rewrite e3 in *; simpl in *. intuition. 
     generalize (partition_gt x pivot b1 H3). rewrite e3; simpl. tauto.
     generalize (partition_lt y pivot b1 H4). rewrite e3; simpl. tauto.
-  tauto.
-  tauto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
+- rewrite e3 in *; simpl in *. intuition.
     generalize (partition_gt y pivot a2 H6). rewrite e3; simpl. tauto.
     generalize (partition_lt x pivot a2 H8). rewrite e3; simpl. tauto.
-  rewrite e3 in IHp; simpl in IHp. intuition.
+- rewrite e3 in *; simpl in *. intuition. 
     generalize (partition_lt y pivot a1 H3). rewrite e3; simpl. tauto.
-    apply gt_heap_trans with x; auto. red. auto.
+    apply gt_heap_trans with x; auto. red; auto.
 Qed.
 
 (** Properties of [insert] *)
@@ -322,11 +319,12 @@ Qed.
 Lemma deleteMin_lt:
   forall x h, lt_heap h x -> lt_heap (deleteMin h) x.
 Proof.
-  intros x h0. functional induction (deleteMin h0); simpl; intros.
+Opaque deleteMin.
+  intros x h0. functional induction (deleteMin h0) ; simpl; intros.
   auto.
   tauto.
-  tauto. 
-  intuition. 
+  tauto.
+  intuition. apply IHh. simpl. tauto.  
 Qed.
 
 Lemma deleteMin_bst:
@@ -337,8 +335,9 @@ Proof.
   tauto.
   tauto.
   intuition.
-    apply deleteMin_lt; auto. 
-    apply gt_heap_trans with y; auto. red; auto. 
+  apply IHh. simpl; auto.
+  apply deleteMin_lt; auto. simpl; auto.  
+  apply gt_heap_trans with y; auto. red; auto. 
 Qed.
 
 Lemma In_deleteMin:
@@ -346,11 +345,12 @@ Lemma In_deleteMin:
   findMin h = Some x ->
   (In y h <-> E.eq y x \/ In y (deleteMin h)).
 Proof.
+Transparent deleteMin.
   intros y x h0. functional induction (deleteMin h0); simpl; intros.
-  congruence.
+  discriminate. 
   inv H. tauto.
   inv H. tauto. 
-  destruct a. contradiction. tauto.
+  destruct _x. inv H. simpl. tauto. generalize (IHh H). simpl. tauto.
 Qed.
 
 Lemma gt_heap_In:
@@ -392,11 +392,12 @@ Qed.
 Lemma deleteMax_gt:
   forall x h, gt_heap h x -> gt_heap (deleteMax h) x.
 Proof.
+Opaque deleteMax.
   intros x h0. functional induction (deleteMax h0); simpl; intros.
   auto.
   tauto.
   tauto. 
-  intuition. 
+  intuition. apply IHh. simpl. tauto.  
 Qed.
 
 Lemma deleteMax_bst:
@@ -407,8 +408,9 @@ Proof.
   tauto.
   tauto.
   intuition.
+    apply IHh. simpl; auto.
     apply lt_heap_trans with x; auto. red; auto.
-    apply deleteMax_gt; auto.
+    apply deleteMax_gt; auto. simpl; auto. 
 Qed.
 
 Lemma In_deleteMax:
@@ -416,11 +418,12 @@ Lemma In_deleteMax:
   findMax h = Some x ->
   (In y h <-> E.eq y x \/ In y (deleteMax h)).
 Proof.
+Transparent deleteMax.
   intros y x h0. functional induction (deleteMax h0); simpl; intros.
   congruence.
   inv H. tauto.
   inv H. tauto. 
-  destruct c. contradiction. tauto.
+  destruct _x1. inv H. simpl. tauto. generalize (IHh H). simpl. tauto.
 Qed.
 
 Lemma lt_heap_In:

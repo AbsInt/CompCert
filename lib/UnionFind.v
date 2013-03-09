@@ -15,13 +15,15 @@
 
 (** A persistent union-find data structure. *)
 
-Require Recdef.
-Require Setoid.
 Require Coq.Program.Wf.
 Require Import Coqlib.
 
 Open Scope nat_scope.
 Set Implicit Arguments.
+
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
 
 Module Type MAP.
   Variable elt: Type.
@@ -151,20 +153,33 @@ Record unionfind : Type := mk { m: M.t elt; mwf: well_founded (order m) }.
 
 Definition t := unionfind.
 
+Definition getlink (m: M.t elt) (a: elt) : {a' | M.get a m = Some a'} + {M.get a m = None}.
+Proof.
+  destruct (M.get a m). left. exists e; auto. right; auto. 
+Defined.
+
 (* The canonical representative of an element *)
 
 Section REPR.
 
 Variable uf: t.
 
-Function repr (a: elt) {wf (order uf.(m)) a} : elt :=
-  match M.get a uf.(m) with
-  | Some a' => repr a'
-  | None => a
+Definition F_repr (a: elt) (rec: forall b, order uf.(m) b a -> elt) : elt :=
+  match getlink uf.(m) a with
+  | inleft (exist a' P) => rec a' P
+  | inright _ => a
   end.
+
+Definition repr (a: elt) : elt := Fix uf.(mwf) (fun _ => elt) F_repr a.
+
+Lemma repr_unroll:
+  forall a, repr a = match M.get a uf.(m) with Some a' => repr a' | None => a end.
 Proof.
-  intros. auto.
-  apply mwf. 
+  intros. unfold repr at 1. rewrite Fix_eq. 
+  unfold F_repr. destruct (getlink uf.(m) a) as [[a' P] | Q]. 
+  rewrite P; auto.
+  rewrite Q; auto.
+  intros. unfold F_repr. destruct (getlink (m uf) x) as [[a' P] | Q]; auto. 
 Qed.
 
 Lemma repr_none:
@@ -172,8 +187,7 @@ Lemma repr_none:
   M.get a uf.(m) = None ->
   repr a = a.
 Proof.
-  intros.
-  functional induction (repr a). congruence. auto.
+  intros. rewrite repr_unroll. rewrite H; auto. 
 Qed.
 
 Lemma repr_some:
@@ -181,14 +195,14 @@ Lemma repr_some:
   M.get a uf.(m) = Some a' ->
   repr a = repr a'.
 Proof.
-  intros.
-  functional induction (repr a). congruence. congruence.
+  intros. rewrite repr_unroll. rewrite H; auto. 
 Qed.
 
 Lemma repr_res_none:
   forall (a: elt), M.get (repr a) uf.(m) = None.
 Proof.
-  intros. functional induction (repr a). auto. auto.
+  apply (well_founded_ind (mwf uf)). intros. 
+  rewrite repr_unroll. destruct (M.get x (m uf)) as [y|] eqn:X; auto.
 Qed.
 
 Lemma repr_canonical:
@@ -308,25 +322,23 @@ Definition identify := mk (M.set a b uf.(m)) identify_wf.
 Lemma repr_identify_1:
   forall x, repr uf x <> a -> repr identify x = repr uf x.
 Proof.
-  intros. functional induction (repr uf x).
-
-  rewrite <- IHe; auto. apply repr_some. simpl. rewrite M.gsspec. 
-  destruct (M.elt_eq a0 a). congruence. auto.
-
-  apply repr_none. simpl. rewrite M.gsspec. rewrite dec_eq_false; auto.
+  intros x0; pattern x0. apply (well_founded_ind (mwf uf)); intros.
+  rewrite (repr_unroll uf) in *. 
+  destruct (M.get x (m uf)) as [a'|] eqn:X.
+  rewrite <- H; auto.
+  apply repr_some. simpl. rewrite M.gsspec. rewrite dec_eq_false; auto. congruence.
+  apply repr_none. simpl. rewrite M.gsspec. rewrite dec_eq_false; auto.  
 Qed.
 
 Lemma repr_identify_2:
   forall x, repr uf x = a -> repr identify x = repr uf b.
 Proof.
-  intros. functional induction (repr uf x).
-
-  rewrite <- IHe; auto. apply repr_some. simpl. rewrite M.gsspec. 
-  rewrite dec_eq_false; auto. congruence. 
-
-  transitivity (repr identify b). apply repr_some. simpl. 
-  rewrite M.gsspec. apply dec_eq_true. 
-  apply repr_identify_1. auto.
+  intros x0; pattern x0. apply (well_founded_ind (mwf uf)); intros.
+  rewrite (repr_unroll uf) in H0. destruct (M.get x (m uf)) as [a'|] eqn:X.
+  rewrite <- (H a'); auto. 
+  apply repr_some. simpl. rewrite M.gsspec. rewrite dec_eq_false; auto. congruence.
+  subst x. rewrite (repr_unroll identify). simpl. rewrite M.gsspec. 
+  rewrite dec_eq_true. apply repr_identify_1. auto.
 Qed.
 
 End IDENTIFY.
@@ -474,14 +486,22 @@ Section PATHLEN.
 
 Variable uf: t.
 
-Function pathlen (a: elt) {wf (order uf.(m)) a} : nat :=
-  match M.get a uf.(m) with
-  | Some a' => S (pathlen a')
-  | None => O
+Definition F_pathlen (a: elt) (rec: forall b, order uf.(m) b a -> nat) : nat :=
+  match getlink uf.(m) a with
+  | inleft (exist a' P) => S (rec a' P)
+  | inright _ => O
   end.
+
+Definition pathlen (a: elt) : nat := Fix uf.(mwf) (fun _ => nat) F_pathlen a.
+
+Lemma pathlen_unroll:
+  forall a, pathlen a = match M.get a uf.(m) with Some a' => S(pathlen a') | None => O end.
 Proof.
-  intros. auto.
-  apply mwf. 
+  intros. unfold pathlen at 1. rewrite Fix_eq. 
+  unfold F_pathlen. destruct (getlink uf.(m) a) as [[a' P] | Q]. 
+  rewrite P; auto.
+  rewrite Q; auto.
+  intros. unfold F_pathlen. destruct (getlink (m uf) x) as [[a' P] | Q]; auto. 
 Qed.
 
 Lemma pathlen_none:
@@ -489,8 +509,7 @@ Lemma pathlen_none:
   M.get a uf.(m) = None ->
   pathlen a = 0.
 Proof.
-  intros.
-  functional induction (pathlen a). congruence. auto.
+  intros. rewrite pathlen_unroll. rewrite H; auto. 
 Qed.
 
 Lemma pathlen_some:
@@ -498,8 +517,7 @@ Lemma pathlen_some:
   M.get a uf.(m) = Some a' ->
   pathlen a = S (pathlen a').
 Proof.
-  intros.
-  functional induction (pathlen a). congruence. congruence.
+  intros. rewrite pathlen_unroll. rewrite H; auto.
 Qed.
 
 Lemma pathlen_zero:
@@ -507,9 +525,8 @@ Lemma pathlen_zero:
 Proof.
   intros; split; intros.
   apply pathlen_none. rewrite <- H. apply repr_res_none. 
-  functional induction (pathlen a).
-  congruence.
-  apply repr_none. auto.
+  apply repr_none. rewrite pathlen_unroll in H. 
+  destruct (M.get a (m uf)); congruence.
 Qed.
 
 End PATHLEN.
@@ -529,23 +546,19 @@ Proof.
   intros. unfold merge. 
   destruct (M.elt_eq (repr uf a) (repr uf b)).
   auto.
-  functional induction (pathlen (identify uf (repr uf a) b (repr_res_none uf a) (sym_not_equal n)) x).
-  simpl in e. rewrite M.gsspec in e. 
-  destruct (M.elt_eq a0 (repr uf a)). 
-  inversion e; subst a'; clear e. 
-  replace (repr uf a0) with (repr uf a). rewrite dec_eq_true.
-  rewrite IHn0. rewrite dec_eq_false; auto. 
-  rewrite (pathlen_none uf a0). omega. subst a0. apply repr_res_none. 
-  subst a0. rewrite repr_canonical; auto.
-  rewrite (pathlen_some uf a0 a'); auto.
-  rewrite IHn0. 
-  replace (repr uf a0) with (repr uf a').
-  destruct (M.elt_eq (repr uf a') (repr uf a)); omega.
-  symmetry. apply repr_some; auto.
-
-  simpl in e. rewrite M.gsspec in e. destruct (M.elt_eq a0 (repr uf a)). 
-  congruence. rewrite (repr_none uf a0); auto. 
-  rewrite dec_eq_false; auto. symmetry. apply pathlen_none; auto.
+  set (uf' := identify uf (repr uf a) b (repr_res_none uf a) (not_eq_sym n)).
+  pattern x. apply (well_founded_ind (mwf uf')); intros.
+  rewrite (pathlen_unroll uf'). destruct (M.get x0 (m uf')) as [x'|] eqn:G.
+  rewrite H; auto. simpl in G. rewrite M.gsspec in G. 
+  destruct (M.elt_eq x0 (repr uf a)). rewrite e. rewrite repr_canonical. rewrite dec_eq_true.
+  inversion G. subst x'. rewrite dec_eq_false; auto. 
+  replace (pathlen uf (repr uf a)) with 0. omega. 
+  symmetry. apply pathlen_none. apply repr_res_none. 
+  rewrite (repr_unroll uf x0), (pathlen_unroll uf x0); rewrite G.
+  destruct (M.elt_eq (repr uf x') (repr uf a)); omega. 
+  simpl in G. rewrite M.gsspec in G. destruct (M.elt_eq x0 (repr uf a)); try discriminate.
+  rewrite (repr_none uf x0) by auto. rewrite dec_eq_false; auto. 
+  symmetry. apply pathlen_zero; auto. apply repr_none; auto. 
 Qed.
 
 Lemma pathlen_gt_merge:
@@ -604,13 +617,16 @@ Definition compress := mk (M.set a b uf.(m)) compress_wf.
 Lemma repr_compress:
   forall x, repr compress x = repr uf x.
 Proof.
-  intros. functional induction (repr compress x).
-  simpl in e. rewrite M.gsspec in e. destruct (M.elt_eq a0 a).
-  subst a0. injection e; intros. subst a'. rewrite IHe. rewrite <- a_repr_b.
-  apply repr_canonical.
-  rewrite IHe. symmetry. apply repr_some; auto.
-  simpl in e. rewrite M.gsspec in e. destruct (M.elt_eq a0 a).
-  congruence. symmetry. apply repr_none. auto.
+  apply (well_founded_ind (mwf compress)); intros.
+  rewrite (repr_unroll compress).
+  destruct (M.get x (m compress)) as [y|] eqn:G.
+  rewrite H; auto. 
+  simpl in G. rewrite M.gsspec in G. destruct (M.elt_eq x a). 
+  inversion G. subst x y. rewrite <- a_repr_b. apply repr_canonical.
+  symmetry; apply repr_some; auto.
+  simpl in G. rewrite M.gsspec in G. destruct (M.elt_eq x a). 
+  congruence.
+  symmetry; apply repr_none; auto.
 Qed.
 
 End COMPRESS.

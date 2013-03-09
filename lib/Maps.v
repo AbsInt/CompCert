@@ -34,6 +34,10 @@
 
 Require Import Coqlib.
 
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 Set Implicit Arguments.
 
 (** * The abstract signatures of trees *)
@@ -42,8 +46,6 @@ Module Type TREE.
   Variable elt: Type.
   Variable elt_eq: forall (a b: elt), {a = b} + {a <> b}.
   Variable t: Type -> Type.
-  Variable eq: forall (A: Type), (forall (x y: A), {x=y} + {x<>y}) ->
-                forall (a b: t A), {a = b} + {a <> b}.
   Variable empty: forall (A: Type), t A.
   Variable get: forall (A: Type), elt -> t A -> option A.
   Variable set: forall (A: Type), elt -> A -> t A -> t A.
@@ -202,17 +204,9 @@ Module PTree <: TREE.
   .
   Implicit Arguments Leaf [A].
   Implicit Arguments Node [A].
+  Scheme tree_ind := Induction for tree Sort Prop.
 
   Definition t := tree.
-
-  Theorem eq : forall (A : Type),
-    (forall (x y: A), {x=y} + {x<>y}) ->
-    forall (a b : t A), {a = b} + {a <> b}.
-  Proof.
-    intros A eqA.
-    decide equality.
-    generalize o o0; decide equality.
-  Qed.
 
   Definition empty (A : Type) := (Leaf : t A).
 
@@ -1084,14 +1078,6 @@ Module PMap <: MAP.
 
   Definition t (A : Type) : Type := (A * PTree.t A)%type.
 
-  Definition eq: forall (A: Type), (forall (x y: A), {x=y} + {x<>y}) ->
-                 forall (a b: t A), {a = b} + {a <> b}.
-  Proof.
-    intros. 
-    generalize (PTree.eq X). intros. 
-    decide equality.
-  Qed.
-
   Definition init (A : Type) (x : A) :=
     (x, PTree.empty A).
 
@@ -1175,8 +1161,6 @@ Module IMap(X: INDEXED_TYPE).
   Definition elt := X.t.
   Definition elt_eq := X.eq.
   Definition t : Type -> Type := PMap.t.
-  Definition eq: forall (A: Type), (forall (x y: A), {x=y} + {x<>y}) ->
-                 forall (a b: t A), {a = b} + {a <> b} := PMap.eq.
   Definition init (A: Type) (x: A) := PMap.init x.
   Definition get (A: Type) (i: X.t) (m: t A) := PMap.get (X.index i) m.
   Definition set (A: Type) (i: X.t) (v: A) (m: t A) := PMap.set (X.index i) v m.

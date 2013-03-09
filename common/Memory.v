@@ -36,6 +36,10 @@ Require Import Values.
 Require Export Memdata.
 Require Export Memtype.
 
+(* To avoid useless definitions of inductors in extracted code. *)
+Local Unset Elimination Schemes.
+Local Unset Case Analysis Schemes.
+
 Local Notation "a # b" := (ZMap.get b a) (at level 1).
 
 Module Mem <: MEM.
