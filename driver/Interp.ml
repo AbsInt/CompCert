@@ -140,13 +140,14 @@ let print_state p (prog, ge, s) =
 
 (* Comparing memory states *)
 
-let compare_mem m1 m2 = (* should permissions be taken into account? *)
-  Pervasives.compare (m1.Mem.nextblock, m1.Mem.mem_contents)
-                     (m2.Mem.nextblock, m2.Mem.mem_contents)
+let compare_mem m1 m2 =
+  (* assumes nextblocks were already compared equal *)
+  (* should permissions be taken into account? *)
+  Pervasives.compare m1.Mem.mem_contents m2.Mem.mem_contents
 
 (* Comparing continuations *)
 
-let some_expr = Evar(P.one, Tvoid)
+let some_expr = Eval(Vptr(Mem.nullptr, Int.zero), Tvoid)
 
 let rank_cont = function
   | Kstop -> 0
@@ -214,10 +215,19 @@ let rank_state = function
   | ExprState _ -> 1
   | Callstate _ -> 2
   | Returnstate _ -> 3
-  | Stuckstate -> 4
+  | Stuckstate -> assert false
+
+let mem_state = function
+  | State(f, s, k, e, m) -> m
+  | ExprState(f, r, k, e, m) -> m
+  | Callstate(fd, args, k, m) -> m
+  | Returnstate(res, k, m) -> m
+  | Stuckstate -> assert false
 
 let compare_state s1 s2 =
   if s1 == s2 then 0 else
+  let c = Z.compare (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock in
+  if c <> 0 then c else begin
   match s1, s2 with
   | State(f1,s1,k1,e1,m1), State(f2,s2,k2,e2,m2) ->
       let c = compare (f1,s1,e1) (f2,s2,e2) in if c <> 0 then c else
@@ -237,12 +247,29 @@ let compare_state s1 s2 =
       compare_mem m1 m2
   | _, _ ->
       compare (rank_state s1) (rank_state s2)
+  end
+
+(* Sets of states already explored *)
 
 module StateSet =
   Set.Make(struct
              type t = state * Determinism.world
              let compare (s1,w1) (s2,w2) = compare_state s1 s2
            end)
+
+(* Purging states that will never be reached again based on their memory
+   next block.  All states with nextblock <= the given nextblock are
+   removed.  We take advantage of the fact that StateSets are sorted
+   by increasing nextblock, cf. the definition of compare_state above. *)
+
+let rec purge_seen nextblock seen =
+  let min = try Some(StateSet.min_elt seen) with Not_found -> None in
+  match min with
+  | None -> seen
+  | Some((s, w) as sw) ->
+      if Z.le (mem_state s).Mem.nextblock nextblock
+      then purge_seen nextblock (StateSet.remove sw seen)
+      else seen
 
 (* Extract a string from a global pointer *)
 
@@ -430,12 +457,12 @@ let do_step p prog ge time (s, w) =
     fprintf p "@[<hov 2>Time %d: %a@]@." time print_state (prog, ge, s);
   match Cexec.at_final_state s with
   | Some r ->
-      if !trace >= 1 then begin
+      if !trace >= 1 then
         fprintf p "Time %d: program terminated (exit code = %ld)@."
                   time (camlint_of_coqint r);
-        []
-      end else begin
-        exit (Int32.to_int (camlint_of_coqint r))
+      begin match !mode with
+      | All -> []
+      | First | Random -> exit (Int32.to_int (camlint_of_coqint r))
       end
   | None ->
       let l = Cexec.do_step ge w s in
@@ -449,17 +476,79 @@ let do_step p prog ge time (s, w) =
         List.map (fun (t, s') -> (s', do_events p ge time w t)) l
       end
 
-let rec explore p prog ge time ss =
-  let succs =
-    StateSet.fold (fun sw l -> do_step p prog ge time sw @ l) ss [] in
+let rec explore_one p prog ge time sw =
+  let succs = do_step p prog ge time sw in
   if succs <> [] then begin
-    let ss' =
+    let sw' =
       match !mode with
-      | First -> StateSet.singleton (List.hd succs)
-      | Random -> StateSet.singleton (List.nth succs (Random.int (List.length succs)))
-      | All -> List.fold_right StateSet.add succs StateSet.empty in
-    explore p prog ge (time + 1) ss'
+      | First -> List.hd succs
+      | Random -> List.nth succs (Random.int (List.length succs))
+      | All -> assert false in
+    explore_one p prog ge (time + 1) sw'
   end
+
+(* A priority queue structure where the priority is inversely proportional
+   to the memory nextblock. *)
+
+module PrioQueue = struct
+
+  type elt = int * StateSet.elt
+
+  type queue = Empty | Node of elt * queue * queue
+
+  let empty = Empty
+
+  let singleton elt = Node(elt, Empty, Empty)
+
+  let higher_prio (time1, (s1, w1)) (time2, (s2, w2)) =
+    Z.lt (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock
+
+  let rec insert queue elt =
+    match queue with
+    | Empty -> Node(elt, Empty, Empty)
+    | Node(e, left, right) ->
+        if higher_prio elt e
+        then Node(elt, insert right e, left)
+        else Node(e, insert right elt, left)
+
+  let rec remove_top = function
+  | Empty -> assert false
+  | Node(elt, left, Empty) -> left
+  | Node(elt, Empty, right) -> right
+  | Node(elt, (Node(lelt, _, _) as left),
+              (Node(relt, _, _) as right)) ->
+      if higher_prio lelt relt
+      then Node(lelt, remove_top left, right)
+      else Node(relt, left, remove_top right)
+
+  let extract = function
+  | Empty -> None
+  | Node(elt, _, _) as queue -> Some(elt, remove_top queue)
+
+  (* Return true if all elements of queue have strictly lower priority
+     than elt. *)
+  let dominate elt queue =
+    match queue with
+    | Empty -> true
+    | Node(e, _, _) -> higher_prio elt e
+end
+
+let rec explore_all p prog ge seen queue =
+  match PrioQueue.extract queue with
+  | None -> ()
+  | Some((time, sw) as tsw, queue') ->
+      if StateSet.mem sw seen then
+        explore_all p prog ge seen queue'
+      else
+        let succs = 
+          List.rev_map (fun sw -> (time + 1, sw)) (do_step p prog ge time sw) in
+        let queue'' = List.fold_left PrioQueue.insert queue' succs in
+        let seen' = StateSet.add sw seen in
+        let seen'' = 
+          if PrioQueue.dominate tsw queue''
+          then purge_seen (mem_state (fst sw)).Mem.nextblock seen'
+          else seen' in
+        explore_all p prog ge seen'' queue''
 
 (* The variant of the source program used to build the world for
    executing events.  
@@ -541,4 +630,9 @@ let execute prog =
       | None ->
           fprintf p "ERROR: Initial state undefined@."
       | Some(ge, s) ->
-          explore p prog1 ge 0 (StateSet.singleton (s, world wge wm))
+          match !mode with
+          | First | Random ->
+              explore_one p prog1 ge 0 (s, world wge wm)
+          | All ->
+              explore_all p prog1 ge StateSet.empty 
+                                (PrioQueue.singleton (0, (s, world wge wm)))
