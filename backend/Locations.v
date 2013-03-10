@@ -89,7 +89,8 @@ Proof.
   decide equality.
   generalize zeq; intro.
   decide equality.
-Qed.
+Defined.
+Global Opaque slot_eq.
 
 Open Scope Z_scope.
 
@@ -122,7 +123,7 @@ Module Loc.
   Lemma eq: forall (p q: loc), {p = q} + {p <> q}.
   Proof.
     decide equality. apply mreg_eq. apply slot_eq.
-  Qed.
+  Defined.
 
 (** As mentioned previously, two locations can be different (in the sense
   of the [<>] mathematical disequality), yet denote 
@@ -286,7 +287,7 @@ Module Loc.
     case_eq (overlap l1 l2); intros.
     right. apply overlap_not_diff; auto.
     left. apply non_overlap_diff; auto.
-  Qed.
+  Defined.
 
 (** We now redefine some standard notions over lists, using the [Loc.diff]
   predicate instead of standard disequality [<>].
@@ -382,6 +383,8 @@ Module Loc.
    forall r, In r l1 -> forall s, In s l2 ->  r = s \/ Loc.diff r s.
 
 End Loc.
+
+Global Opaque Loc.eq Loc.diff_dec.
 
 (** * Mappings from locations to values *)
 

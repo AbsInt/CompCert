@@ -120,14 +120,16 @@ Proof.
   assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
   assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
   decide equality.
-Qed.
+Defined.
 
 Definition eq_addressing (x y: addressing) : {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
   decide equality.
-Qed.
+Defined.
+
+Global Opaque eq_addressing eq_operation.
 
 (** * Evaluation functions *)
 

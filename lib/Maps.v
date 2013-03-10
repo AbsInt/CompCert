@@ -32,6 +32,7 @@
   inefficient implementation of maps as functions is also provided.
 *)
 
+Require Import EquivDec.
 Require Import Coqlib.
 
 (* To avoid useless definitions of inductors in extracted code. *)
@@ -79,9 +80,6 @@ Module Type TREE.
   Hypothesis grspec:
     forall (A: Type) (i j: elt) (m: t A),
     get i (remove j m) = if elt_eq i j then None else get i m.
-  Hypothesis set2:
-    forall (A: Type) (i: elt) (m: t A) (v1 v2: A),
-    set i v2 (set i v1 m) = set i v2 m.
 
   (** Extensional equality between trees. *)
   Variable beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
@@ -144,17 +142,6 @@ Module Type TREE.
   Hypothesis elements_keys_norepet:
     forall (A: Type) (m: t A), 
     list_norepet (List.map (@fst elt A) (elements m)).
-  Hypothesis elements_canonical_order:
-    forall (A B: Type) (R: A -> B -> Prop) (m: t A) (n: t B),
-    (forall i x, get i m = Some x -> exists y, get i n = Some y /\ R x y) ->
-    (forall i y, get i n = Some y -> exists x, get i m = Some x /\ R x y) ->
-    list_forall2
-      (fun i_x i_y => fst i_x = fst i_y /\ R (snd i_x) (snd i_y))
-      (elements m) (elements n).
-  Hypothesis elements_extensional:
-    forall (A: Type) (m n: t A),
-    (forall i, get i m = get i n) ->
-    elements m = elements n.
 
   (** Folding a function over all bindings of a tree. *)
   Variable fold:
@@ -200,8 +187,8 @@ Module PTree <: TREE.
 
   Inductive tree (A : Type) : Type :=
     | Leaf : tree A
-    | Node : tree A -> option A -> tree A -> tree A
-  .
+    | Node : tree A -> option A -> tree A -> tree A.
+
   Implicit Arguments Leaf [A].
   Implicit Arguments Node [A].
   Scheme tree_ind := Induction for tree Sort Prop.
@@ -378,15 +365,6 @@ Module PTree <: TREE.
     Variable A: Type.
     Variable eqA: A -> A -> Prop.
     Variable beqA: A -> A -> bool.
-    Hypothesis beqA_correct: forall x y, beqA x y = true -> eqA x y.
-
-    Definition exteq (m1 m2: t A) : Prop :=
-      forall (x: elt),
-      match get x m1, get x m2 with
-      | None, None => True
-      | Some y1, Some y2 => eqA y1 y2
-      | _, _ => False
-      end.
 
     Fixpoint bempty (m: t A) : bool :=
       match m with
@@ -394,15 +372,6 @@ Module PTree <: TREE.
       | Node l None r => bempty l && bempty r
       | Node l (Some _) r => false
       end.
-
-    Lemma bempty_correct:
-      forall m, bempty m = true -> forall x, get x m = None.
-    Proof.
-      induction m; simpl; intros. 
-      change (@Leaf A) with (empty A). apply gempty.
-      destruct o. congruence. destruct (andb_prop _ _ H). 
-      destruct x; simpl; auto.
-    Qed.
 
     Fixpoint beq (m1 m2: t A) {struct m1} : bool :=
       match m1, m2 with
@@ -415,6 +384,36 @@ Module PTree <: TREE.
           | _, _ => false
           end
           && beq l1 l2 && beq r1 r2
+      end.
+
+    Lemma bempty_correct:
+      forall m, bempty m = true -> forall x, get x m = None.
+    Proof.
+      induction m; simpl; intros. 
+      change (@Leaf A) with (empty A). apply gempty.
+      destruct o. congruence. destruct (andb_prop _ _ H). 
+      destruct x; simpl; auto.
+    Qed.
+
+    Lemma bempty_complete:
+      forall m, (forall x, get x m = None) -> bempty m = true.
+    Proof.
+      induction m; simpl; intros.
+      auto.
+      destruct o. generalize (H xH); simpl; congruence.
+      rewrite IHm1. rewrite IHm2. auto. 
+      intros; apply (H (xI x)).
+      intros; apply (H (xO x)).
+    Qed.
+
+    Hypothesis beqA_correct: forall x y, beqA x y = true -> eqA x y.
+
+    Definition exteq (m1 m2: t A) : Prop :=
+      forall (x: elt),
+      match get x m1, get x m2 with
+      | None, None => True
+      | Some y1, Some y2 => eqA y1 y2
+      | _, _ => False
       end.
 
     Lemma beq_correct:
@@ -438,6 +437,25 @@ Module PTree <: TREE.
       red; intros. destruct x; simpl.
       apply IHm1_2; auto. apply IHm1_1; auto.
       auto.
+    Qed.
+
+    Hypothesis beqA_complete: forall x y, eqA x y -> beqA x y = true.
+
+    Lemma beq_complete:
+      forall m1 m2, exteq m1 m2 -> beq m1 m2 = true.
+    Proof.
+      induction m1; destruct m2; simpl; intros. 
+      auto.
+      change (bempty (Node m2_1 o m2_2) = true).
+      apply bempty_complete. intros. generalize (H x). rewrite gleaf.
+      destruct (get x (Node m2_1 o m2_2)); tauto. 
+      change (bempty (Node m1_1 o m1_2) = true).
+      apply bempty_complete. intros. generalize (H x). rewrite gleaf.
+      destruct (get x (Node m1_1 o m1_2)); tauto.
+      apply andb_true_intro. split. apply andb_true_intro. split. 
+      generalize (H xH); simpl. destruct o; destruct o0; auto.
+      apply IHm1_1. red; intros. apply (H (xO x)). 
+      apply IHm1_2. red; intros. apply (H (xI x)). 
     Qed.
 
   End EXTENSIONAL_EQUALITY.

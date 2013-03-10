@@ -40,7 +40,8 @@ Inductive mreg: Type :=
   | FT1: mreg (* X6 *) | FT2: mreg (* X7 *) | FP0: mreg (* top of FP stack *).
 
 Lemma mreg_eq: forall (r1 r2: mreg), {r1 = r2} + {r1 <> r2}.
-Proof. decide equality. Qed.
+Proof. decide equality. Defined.
+Global Opaque mreg_eq.
 
 Definition mreg_type (r: mreg): typ :=
   match r with

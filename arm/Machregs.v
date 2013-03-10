@@ -45,7 +45,7 @@ Inductive mreg: Type :=
   | FT1: mreg (* F6 *) | FT2: mreg (* F7 *).
 
 Lemma mreg_eq: forall (r1 r2: mreg), {r1 = r2} + {r1 <> r2}.
-Proof. decide equality. Qed.
+Proof. decide equality. Defined.
 
 Definition mreg_type (r: mreg): typ :=
   match r with

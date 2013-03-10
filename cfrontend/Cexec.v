@@ -92,7 +92,7 @@ Fixpoint is_val_list (al: exprlist) : option (list (val * type)) :=
 Definition is_skip (s: statement) : {s = Sskip} + {s <> Sskip}.
 Proof.
   destruct s; (left; congruence) || (right; congruence).
-Qed.
+Defined.
 
 (** * Events, volatile memory accesses, and external functions. *)
 
@@ -303,7 +303,7 @@ Proof with try (right; intuition omega).
   destruct (zle (Int.unsigned ofs + sizeof ty) (Int.unsigned ofs')); auto.
   right; intuition omega.
   destruct Y... left; intuition omega. 
-Qed.
+Defined.
 
 Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: int) (v: val): option (world * trace * mem) :=
   match access_mode ty with
@@ -464,7 +464,7 @@ Proof with try (right; intuition omega).
     destruct (zle (odst + sz) osrc); auto.
     right; intuition omega.
   destruct Y... left; intuition omega.
-Qed.
+Defined.
 
 Definition do_ef_memcpy (sz al: Z)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
@@ -2180,7 +2180,6 @@ Proof with (unfold ret; auto with coqlib).
   rewrite H0...
   rewrite H0...
   rewrite pred_dec_false...
-  rewrite pred_dec_true...
   rewrite H0...
   rewrite H0...
   destruct H0; subst x...

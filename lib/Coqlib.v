@@ -556,7 +556,8 @@ Proof.
   transitivity (p * (q / p)). omega. ring.
   right; red; intros. elim n. apply Z_div_exact_1; auto. 
   inv H0. rewrite Z_div_mult; auto. ring.
-Qed.
+Defined.
+Global Opaque Zdivide_dec.
 
 (** Conversion from [Z] to [nat]. *)
 

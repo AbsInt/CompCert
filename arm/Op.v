@@ -137,7 +137,7 @@ Proof.
   subst x. rewrite (proof_irr Px Py). left; auto.
   right. red; intro. elim n. inversion H0. auto.
   decide equality.
-Qed.
+Defined.
 
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
@@ -148,14 +148,16 @@ Proof.
   assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
   assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
   decide equality.
-Qed.
+Defined.
 
 Definition eq_addressing (x y: addressing) : {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   generalize eq_shift; intro.
   decide equality.
-Qed.
+Defined.
+
+Global Opaque eq_shift eq_operation eq_addressing.
 
 (** * Evaluation functions *)
 

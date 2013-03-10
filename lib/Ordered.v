@@ -42,7 +42,7 @@ Proof.
   apply EQ. red. apply Pos.compare_eq_iff. assumption.
   apply LT. assumption.
   apply GT. apply Pos.compare_gt_iff. assumption.
-Qed.
+Defined.
 
 Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := peq.
 
@@ -80,7 +80,7 @@ Proof.
   assert (Int.unsigned x <> Int.unsigned y).
     red; intros. rewrite <- (Int.repr_unsigned x) in n. rewrite <- (Int.repr_unsigned y) in n. congruence.
   red. omega.
-Qed.
+Defined.
 
 Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := Int.eq_dec.
 
@@ -118,14 +118,14 @@ Proof.
   apply LT. exact l. 
   apply EQ. red; red in e. apply A.index_inj; auto.
   apply GT. exact l.
-Qed.
+Defined.
 
 Lemma eq_dec : forall x y, { eq x y } + { ~ eq x y }.
 Proof.
   intros. case (peq (A.index x) (A.index y)); intros.
   left. apply A.index_inj; auto.
   right; red; unfold eq; intros; subst. congruence. 
-Qed.
+Defined.
 
 End OrderedIndexed.
 
@@ -208,7 +208,7 @@ Proof.
   apply EQ. red. tauto.
   apply GT. red. right. split. apply A.eq_sym. auto. auto.
   apply GT. red. left. auto.
-Qed.
+Defined.
 
 Lemma eq_dec : forall x y, { eq x y } + { ~ eq x y }.
 Proof.
@@ -218,7 +218,7 @@ Proof.
   left; auto.
   right; intuition.
   right; intuition.
-Qed.
+Defined.
 
 End OrderedPair.
 

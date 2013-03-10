@@ -486,11 +486,8 @@ Definition transl_function (f: Clight.function) : res function :=
        (map fst (Clight.fn_temps f))
        tbody).
 
-Definition list_typ_eq:
-  forall (l1 l2: list typ), {l1=l2} + {l1<>l2}.
-Proof.
-  generalize typ_eq; intro. decide equality. 
-Qed.
+Definition list_typ_eq: forall (l1 l2: list typ), {l1=l2} + {l1<>l2}
+                     := list_eq_dec typ_eq.
 
 Definition transl_fundef (f: Clight.fundef) : res fundef :=
   match f with

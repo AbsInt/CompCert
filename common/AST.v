@@ -47,10 +47,12 @@ Lemma typesize_pos: forall ty, typesize ty > 0.
 Proof. destruct ty; simpl; omega. Qed.
 
 Lemma typ_eq: forall (t1 t2: typ), {t1=t2} + {t1<>t2}.
-Proof. decide equality. Qed.
+Proof. decide equality. Defined.
+Global Opaque typ_eq.
 
 Lemma opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}.
-Proof. decide equality. apply typ_eq. Qed.
+Proof. decide equality. apply typ_eq. Defined.
+Global Opaque opt_typ_eq.
 
 (** Additionally, function definitions and function calls are annotated
   by function signatures indicating the number and types of arguments,

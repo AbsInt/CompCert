@@ -267,8 +267,8 @@ Proof.
   destruct s; unfold undef_getstack; unfold loc_acceptable in H; auto.
   apply Locmap.gso. tauto.
   apply Loc.diff_sym. simpl in H0; unfold t; destruct (slot_type s); tauto.
-  rewrite Locmap.gso. unfold undef_getstack. destruct s; auto. 
-  apply Locmap.gso. red; congruence.
+  rewrite Locmap.gso. unfold undef_getstack. 
+  destruct s; simpl in H; reflexivity || contradiction. 
   unfold t; destruct (slot_type s); red; congruence.
 Qed.
 

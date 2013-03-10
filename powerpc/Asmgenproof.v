@@ -642,7 +642,6 @@ Opaque loadind.
   Simpl. rewrite <- H2. auto.
 
 - (* Mtailcall *)
-Opaque Int.repr.
   assert (f0 = f) by congruence.  subst f0.
   inversion AT; subst.
   assert (NOOV: list_length_z tf <= Int.max_unsigned).

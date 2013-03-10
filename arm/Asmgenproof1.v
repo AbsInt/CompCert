@@ -813,8 +813,8 @@ Proof.
   split. unfold rs3. Simpl. 
   replace (rs2 (crbit_for_cond cmp)) with (rs1 (crbit_for_cond cmp)).
   destruct (eval_condition cmp rs##(preg_of##args) m) as [[]|]; simpl in *.
-  rewrite B. simpl. Simpl. 
-  rewrite B. simpl. unfold rs2. Simpl.
+  rewrite B. simpl. rewrite Int.eq_false. Simpl. apply Int.one_not_zero.  
+  rewrite B. simpl. rewrite Int.eq_true. unfold rs2. Simpl.
   auto.
   destruct cmp; reflexivity. 
   intros. transitivity (rs2 r). 

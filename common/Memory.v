@@ -26,6 +26,7 @@
 - [free]: invalidate a memory block.
 *)
 
+Require Import Zwf.
 Require Import Axioms.
 Require Import Coqlib.
 Require Import Maps.
@@ -155,7 +156,7 @@ Remark perm_order_dec:
   forall p1 p2, {perm_order p1 p2} + {~perm_order p1 p2}.
 Proof.
   intros. destruct p1; destruct p2; (left; constructor) || (right; intro PO; inversion PO).
-Qed.
+Defined.
 
 Remark perm_order'_dec:
   forall op p, {perm_order' op p} + {~perm_order' op p}.
@@ -163,14 +164,14 @@ Proof.
   intros. destruct op; unfold perm_order'.
   apply perm_order_dec.
   right; tauto.
-Qed.
+Defined.
 
 Theorem perm_dec:
   forall m b ofs k p, {perm m b ofs k p} + {~ perm m b ofs k p}.
 Proof.
   unfold perm; intros.
   apply perm_order'_dec.
-Qed.
+Defined.
 
 Definition range_perm (m: mem) (b: block) (lo hi: Z) (k: perm_kind) (p: permission) : Prop :=
   forall ofs, lo <= ofs < hi -> perm m b ofs k p.
@@ -202,19 +203,15 @@ Lemma range_perm_dec:
   forall m b lo hi k p, {range_perm m b lo hi k p} + {~ range_perm m b lo hi k p}.
 Proof.
   intros. 
-  assert (forall n, 0 <= n ->
-          {range_perm m b lo (lo + n) k p} + {~ range_perm m b lo (lo + n) k p}).
-    apply natlike_rec2.
-    left. red; intros. omegaContradiction.
-    intros. destruct H0. 
-    destruct (perm_dec m b (lo + z) k p). 
-    left. red; intros. destruct (zeq ofs (lo + z)). congruence. apply r. omega. 
-    right; red; intro. elim n. apply H0. omega. 
-    right; red; intro. elim n. red; intros. apply H0. omega. 
+  induction lo using (well_founded_induction_type (Zwf_up_well_founded hi)).
   destruct (zlt lo hi).
-  replace hi with (lo + (hi - lo)) by omega. apply H. omega.
-  left; red; intros. omegaContradiction. 
-Qed.
+  destruct (perm_dec m b lo k p).
+  destruct (H (lo + 1)). red. omega. 
+  left; red; intros. destruct (zeq lo ofs). congruence. apply r. omega. 
+  right; red; intros. elim n. red; intros; apply H0; omega.
+  right; red; intros. elim n. apply H0. omega. 
+  left; red; intros. omegaContradiction.
+Defined.
 
 (** [valid_access m chunk b ofs p] holds if a memory access
     of the given chunk is possible in [m] at address [b, ofs]
@@ -289,7 +286,7 @@ Proof.
   left; constructor; auto.
   right; red; intro V; inv V; contradiction.
   right; red; intro V; inv V; contradiction.
-Qed.
+Defined.
 
 (** [valid_pointer m b ofs] returns [true] if the address [b, ofs]
   is nonempty in [m] and [false] if it is empty. *)
@@ -877,7 +874,7 @@ Proof.
   destruct (valid_access_dec m1 chunk b ofs Writable).
   eauto.
   contradiction.
-Qed.
+Defined.
 
 Hint Local Resolve valid_access_store: mem.
 
@@ -1363,7 +1360,7 @@ Proof.
   destruct (range_perm_dec m1 b ofs (ofs + Z_of_nat (length bytes)) Cur Writable).
   reflexivity. 
   contradiction.
-Qed.
+Defined.
 
 Theorem storebytes_store:
   forall m1 b ofs chunk v m2,
@@ -1774,7 +1771,7 @@ Theorem range_perm_free:
   { m2: mem | free m1 b lo hi = Some m2 }.
 Proof.
   intros; unfold free. rewrite pred_dec_true; auto. econstructor; eauto.
-Qed.
+Defined.
 
 Section FREE.
 
@@ -1949,7 +1946,7 @@ Theorem range_perm_drop_2:
 Proof.
   unfold drop_perm; intros. 
   destruct (range_perm_dec m b lo hi Cur Freeable). econstructor. eauto. contradiction.
-Qed.
+Defined.
 
 Section DROP.
 

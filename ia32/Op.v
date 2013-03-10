@@ -124,7 +124,7 @@ Proof.
   generalize Int.eq_dec; intro.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
   decide equality.
-Qed.
+Defined.
 
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
@@ -135,7 +135,9 @@ Proof.
   assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
   decide equality.
   apply eq_addressing.
-Qed.
+Defined.
+
+Global Opaque eq_addressing eq_operation.
 
 (** * Evaluation functions *)
 

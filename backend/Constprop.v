@@ -49,7 +49,7 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     apply Int.eq_dec.
     apply ident_eq.
     apply Int.eq_dec.
-  Qed.
+  Defined.
   Definition beq (x y: t) := if eq_dec x y then true else false.
   Lemma beq_correct: forall x y, beq x y = true -> x = y.
   Proof.

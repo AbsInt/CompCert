@@ -48,7 +48,7 @@ Hypothesis step_decr: forall a a', step a = inr _ a' -> ord a' a.
 Definition step_info (a: A) : {b | step a = inl _ b} + {a' | step a = inr _ a' & ord a' a}.
 Proof.
   caseEq (step a); intros. left; exists b; auto. right; exists a0; auto. 
-Qed.
+Defined.
 
 Definition iterate_F (a: A) (rec: forall a', ord a' a -> B) : B :=
   match step_info a with

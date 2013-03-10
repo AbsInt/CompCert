@@ -261,7 +261,7 @@ Qed.
 Remark transl_op_label:
   forall op args r k c, transl_op op args r k = OK c -> tail_nolabel k c.
 Proof.
-Opaque Int.repr Int.eq.
+Opaque Int.eq.
   unfold transl_op; intros; destruct op; TailNoLabel.
   destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
   destruct (ireg_eq x x0 || ireg_eq x x1); TailNoLabel.
@@ -671,7 +671,6 @@ Opaque loadind.
   Simpl. rewrite <- H2. auto.
 
 - (* Mtailcall *)
-Opaque Int.repr.
   assert (f0 = f) by congruence.  subst f0.
   inversion AT; subst.
   assert (NOOV: list_length_z (fn_code tf) <= Int.max_unsigned).

@@ -17,6 +17,9 @@ Development version
   that are passed on the call stack.
 - ARM port; slightly better code generated for some indirect memory
   accesses.
+- Coq cleanups: a number of definitions that were opaque for no good reason
+  are now properly transparent.
+
 
 Release 1.12.1, 2013-01-29
 ==========================

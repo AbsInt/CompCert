@@ -60,9 +60,7 @@ Inductive rhs : Type :=
 Definition eq_valnum: forall (x y: valnum), {x=y}+{x<>y} := peq.
 
 Definition eq_list_valnum (x y: list valnum) : {x=y}+{x<>y}.
-Proof.
-  decide equality. apply eq_valnum.
-Qed.
+Proof. decide equality. apply eq_valnum. Defined.
 
 Definition eq_rhs (x y: rhs) : {x=y}+{x<>y}.
 Proof.
@@ -74,7 +72,7 @@ Proof.
   generalize eq_valnum; intro.
   generalize eq_list_valnum; intro.
   decide equality.
-Qed.
+Defined.
 
 (** A value numbering is a collection of equations between value numbers
   plus a partial map from registers to value numbers.  Additionally,

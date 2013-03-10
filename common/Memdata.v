@@ -190,6 +190,7 @@ Opaque Byte.wordsize.
   replace (Zsucc (Z_of_nat n) * 8) with (Z_of_nat n * 8 + 8) by omega.
   rewrite two_p_is_exp; try omega. 
   rewrite Zmod_recombine. rewrite IHn. rewrite Zplus_comm. 
+  change (Byte.unsigned (Byte.repr x)) with (Byte.Z_mod_modulus x). 
   rewrite Byte.Z_mod_modulus_eq. reflexivity. 
   apply two_p_gt_ZERO. omega. apply two_p_gt_ZERO. omega.
 Qed.

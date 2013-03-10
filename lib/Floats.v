@@ -854,6 +854,7 @@ Theorem floatofint_from_words:
     sub (from_words ox4330_0000 (Int.add x ox8000_0000))
         (from_words ox4330_0000 ox8000_0000).
 Proof.
+Local Transparent Int.repr Int64.repr.
   intros; destruct (Int.eq_dec x Int.zero); [subst; vm_compute; reflexivity|].
   assert (Int.signed x <> 0).
   intro; destruct n; rewrite <- (Int.repr_signed x), H; reflexivity.

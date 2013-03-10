@@ -84,7 +84,7 @@ Proof.
   set (x := Int.sub n (low_s n)).
   assert (x = Int.add (Int.mul (Int.divu x (Int.repr 65536)) (Int.repr 65536))
                       (Int.modu x (Int.repr 65536))).
-    apply Int.modu_divu_Euclid. compute; congruence.
+    apply Int.modu_divu_Euclid. vm_compute; congruence.
   assert (Int.modu x (Int.repr 65536) = Int.zero).
     unfold Int.modu, Int.zero. decEq.
     change 0 with (0 mod 65536).
@@ -710,6 +710,7 @@ Proof.
   assert (Int.unsigned (Int.not i) <> Int.modulus - 1).
     red; intros.
     assert (Int.repr (Int.unsigned (Int.not i)) = Int.mone).
+Local Transparent Int.repr.
       rewrite H1. apply Int.mkint_eq. reflexivity. 
    rewrite Int.repr_unsigned in H2. 
    assert (Int.not (Int.not i) = Int.zero).
@@ -813,7 +814,7 @@ Lemma transl_op_correct_aux:
      match op with Omove => data_preg r = true | _ => nontemp_preg r = true end ->
      r <> preg_of res -> rs'#r = rs#r.
 Proof.
-Opaque Int.eq. Opaque Int.repr.
+Opaque Int.eq.
   intros. unfold transl_op in H; destruct op; ArgsInv; simpl in H0; try (inv H0); try TranslOpSimpl.
   (* Omove *)
   destruct (preg_of res) eqn:RES; destruct (preg_of m0) eqn:ARG; inv H.

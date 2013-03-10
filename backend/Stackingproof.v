@@ -779,9 +779,6 @@ Lemma agree_frame_set_reg:
 Proof.
   intros. inv H; constructor; auto; intros.
   rewrite Locmap.gso. auto. red. intuition congruence.
-  rewrite Locmap.gso; auto. red; auto.
-  rewrite Locmap.gso; auto. red; auto.
-  rewrite Locmap.gso; auto. red; auto.
   apply wt_setloc; auto.
 Qed.
 
@@ -857,8 +854,6 @@ Proof.
   intros. inv H. 
   change (chunk_of_type ty) with (chunk_of_type (type_of_index (FI_local ofs ty))) in H3.
   constructor; auto; intros.
-(* unused *)
-  rewrite Locmap.gso; auto. red; auto.
 (* local *)
   unfold Locmap.set. simpl. destruct (Loc.eq (S (Local ofs ty)) (S (Local ofs0 ty0))).
   inv e. eapply gss_index_contains_inj; eauto. 
@@ -867,8 +862,6 @@ Proof.
 (* outgoing *)
   rewrite Locmap.gso. eapply gso_index_contains_inj; eauto with stacking.
   simpl; auto. red; auto.
-(* incoming *)
-  rewrite Locmap.gso; auto. red; auto.
 (* parent *)
   eapply gso_index_contains; eauto. red; auto.
 (* retaddr *)
@@ -899,8 +892,6 @@ Proof.
   intros. inv H. 
   change (chunk_of_type ty) with (chunk_of_type (type_of_index (FI_arg ofs ty))) in H3.
   constructor; auto; intros.
-(* unused *)
-  rewrite Locmap.gso; auto. red; auto.
 (* local *)
   rewrite Locmap.gso. eapply gso_index_contains_inj; eauto. simpl; auto. red; auto.
 (* outgoing *)
@@ -911,8 +902,6 @@ Proof.
   red; intros. eapply Mem.perm_store_1; eauto.
   eapply gso_index_contains_inj; eauto.
   red. eapply Loc.overlap_aux_false_1; eauto.
-(* incoming *)
-  rewrite Locmap.gso; auto. red; auto.
 (* parent *)
   eapply gso_index_contains; eauto with stacking. red; auto.
 (* retaddr *)

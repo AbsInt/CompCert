@@ -37,7 +37,7 @@ Fixpoint find_reg_containing (s: slot) (eqs: equations) : option mreg :=
 Definition eq_equation (eq1 eq2: equation) : {eq1=eq2} + {eq1<>eq2}.
 Proof.
   generalize slot_eq mreg_eq. decide equality.
-Qed.
+Defined.
 
 Definition contains_equation (s: slot) (r: mreg) (eqs: equations) : bool :=
   In_dec eq_equation (mkeq r s) eqs.

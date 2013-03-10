@@ -227,7 +227,7 @@ Proof.
   intros. destruct x; destruct y. destruct (zeq intval0 intval1).
   left. apply mkint_eq. auto.
   right. red; intro. injection H. exact n.
-Qed.
+Defined.
 
 (** * Arithmetic and logical operations over machine integers *)
 
@@ -3711,4 +3711,4 @@ Module Int64 := Make(Wordsize_64).
 
 Notation int64 := Int64.int.
 
-
+Global Opaque Int.repr Int64.repr Byte.repr.

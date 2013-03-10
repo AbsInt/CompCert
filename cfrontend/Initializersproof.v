@@ -397,13 +397,11 @@ Proof.
 Opaque zeq.
   intros. unfold sem_cmp in *.
   destruct (classify_cmp ty1 ty2); try (destruct s); inv H1; inv H2; inv H; inv H0; auto with mval.
-  destruct (Int.eq n Int.zero); try discriminate. 
+- destruct (Int.eq n Int.zero); try discriminate. 
   unfold Val.cmp_different_blocks in *. destruct c; inv H3; inv H2; constructor.
-  destruct (Int.eq n Int.zero); try discriminate. 
+- destruct (Int.eq n Int.zero); try discriminate. 
   unfold Val.cmp_different_blocks in *. destruct c; inv H2; inv H1; constructor.
-  rewrite (mem_empty_not_valid_pointer (Zpos id) (Int.unsigned ofs)) in H4.
-  rewrite (mem_empty_not_weak_valid_pointer (Zpos id) (Int.unsigned ofs)) in H4. simpl in H4.
-  destruct (zeq (Z.pos id) (Z.pos id0)); discriminate.
+- destruct (zeq (Z.pos id) (Z.pos id0)); discriminate.
 Qed.
 
 Lemma sem_binary_match:

@@ -879,8 +879,8 @@ Opaque loadind.
   intros [m3' [P Q]].
   left; econstructor; split.
   apply plus_one. econstructor; eauto. 
-  subst x; simpl. eauto.
-Opaque Int.repr. 
+  subst x; simpl.
+  rewrite Int.unsigned_zero. simpl. eauto.
   simpl. rewrite C. simpl in F. rewrite (sp_val _ _ _ AG) in F. rewrite F.
   simpl in P. rewrite ATLR. rewrite P. eauto.
   econstructor; eauto.
