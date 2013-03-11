@@ -16,7 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <float.h>
+
+#define DBL_EPSILON 0x1p-52
 
 void  *allocvector(size_t size) 
 {

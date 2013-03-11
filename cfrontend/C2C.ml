@@ -370,7 +370,7 @@ let convertFloat f kind =
 	(if f.C.hex then 4 else 1) * String.length f.C.fracPart in
       let exp = Z.sub exp (Z.of_uint shift_exp) in
 
-      let base = P.of_int (if f.C.hex then 16 else 10) in
+      let base = P.of_int (if f.C.hex then 2 else 10) in
 
       begin match kind with
 	| FFloat ->
