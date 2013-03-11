@@ -17,11 +17,14 @@ Improvements in performance:
 - ARM port; slightly better code generated for some indirect memory
   accesses.
 
+Bug fixing:
+- Fixed a bug in the reference interpreter in -all mode causing some
+  reductions to be incorrectly merged.
+- Wrong parsing of hexadecimal floating-point literals 0xMMMMpEEE.
+
 Improvements in usability:
 - Better error and warning messages for declarations of variables
   of size >= 2^32 bits.
-- Fixed a bug in the reference interpreter in -all mode causing some
-  reductions to be incorrectly merged.
 - Reference interpreter: more efficient exploration of states in -all mode.
 
 Coq development:
