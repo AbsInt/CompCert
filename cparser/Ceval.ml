@@ -21,8 +21,6 @@ open Machine
 
 (* Extra arith on int64 *)
 
-external int64_unsigned_to_float: int64 -> float 
-  = "cparser_int64_unsigned_to_float"
 external int64_unsigned_div: int64 -> int64 -> int64
   = "cparser_int64_unsigned_div"
 external int64_unsigned_mod: int64 -> int64 -> int64

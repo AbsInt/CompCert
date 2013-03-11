@@ -16,11 +16,6 @@
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
 
-value cparser_int64_unsigned_to_float(value v)
-{
-  return caml_copy_double((double)((uint64) Int64_val(v)));
-}
-
 value cparser_int64_unsigned_div(value v1, value v2)
 {
   return caml_copy_int64((uint64) Int64_val(v1) / (uint64) Int64_val(v2));
