@@ -1337,9 +1337,9 @@ Hypothesis H_rec:
   forall m a k v,
   T.get k m = None -> T.get k m_final = Some v -> P m a -> P (T.set k v m) (f a k v).
 
-Definition f' (a: A) (p : T.elt * V) := f a (fst p) (snd p).
+Let f' (a: A) (p : T.elt * V) := f a (fst p) (snd p).
 
-Definition P' (l: list (T.elt * V)) (a: A) : Prop :=
+Let P' (l: list (T.elt * V)) (a: A) : Prop :=
   forall m, list_equiv l (T.elements m) -> P m a.
 
 Remark H_base':
