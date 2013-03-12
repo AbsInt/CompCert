@@ -32,6 +32,7 @@
   inefficient implementation of maps as functions is also provided.
 *)
 
+Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
 (* To avoid useless definitions of inductors in extracted code. *)
@@ -83,15 +84,14 @@ Module Type TREE.
   (** Extensional equality between trees. *)
   Variable beq: forall (A: Type), (A -> A -> bool) -> t A -> t A -> bool.
   Hypothesis beq_correct:
-    forall (A: Type) (P: A -> A -> Prop) (cmp: A -> A -> bool),
-    (forall (x y: A), cmp x y = true -> P x y) ->
-    forall (t1 t2: t A), beq cmp t1 t2 = true ->
-    forall (x: elt),
-    match get x t1, get x t2 with
-    | None, None => True
-    | Some y1, Some y2 => P y1 y2
-    | _, _ => False
-    end.
+    forall (A: Type) (eqA: A -> A -> bool) (t1 t2: t A),
+    beq eqA t1 t2 = true <->
+    (forall (x: elt),
+     match get x t1, get x t2 with
+     | None, None => True
+     | Some y1, Some y2 => eqA y1 y2 = true
+     | _, _ => False
+    end).
 
   (** Applying a function to all data of a tree. *)
   Variable map:
@@ -107,24 +107,16 @@ Module Type TREE.
     forall (A B: Type) (f: A -> B) (i: elt) (m: t A),
     get i (map1 f m) = option_map f (get i m).
 
-  (** Filtering data that match a given predicate. *)
-  Variable filter1:
-    forall (A: Type), (A -> bool) -> t A -> t A.
-  Hypothesis gfilter1:
-    forall (A: Type) (pred: A -> bool) (i: elt) (m: t A),
-    get i (filter1 pred m) =
-    match get i m with None => None | Some x => if pred x then Some x else None end.
-
   (** Applying a function pairwise to all data of two trees. *)
   Variable combine:
-    forall (A: Type), (option A -> option A -> option A) -> t A -> t A -> t A.
+    forall (A B C: Type), (option A -> option B -> option C) -> t A -> t B -> t C.
   Hypothesis gcombine:
-    forall (A: Type) (f: option A -> option A -> option A),
+    forall (A B C: Type) (f: option A -> option B -> option C),
     f None None = None ->
-    forall (m1 m2: t A) (i: elt),
+    forall (m1: t A) (m2: t B) (i: elt),
     get i (combine f m1 m2) = f (get i m1) (get i m2).
   Hypothesis combine_commut:
-    forall (A: Type) (f g: option A -> option A -> option A),
+    forall (A B: Type) (f g: option A -> option A -> option B),
     (forall (i j: option A), f i j = g j i) ->
     forall (m1 m2: t A),
     combine f m1 m2 = combine g m2 m1.
@@ -359,10 +351,9 @@ Module PTree <: TREE.
     intros. destruct (elt_eq i j). subst j. apply grs. apply gro; auto.
   Qed.
 
-  Section EXTENSIONAL_EQUALITY.
+  Section BOOLEAN_EQUALITY.
 
     Variable A: Type.
-    Variable eqA: A -> A -> Prop.
     Variable beqA: A -> A -> bool.
 
     Fixpoint bempty (m: t A) : bool :=
@@ -405,20 +396,19 @@ Module PTree <: TREE.
       intros; apply (H (xO x)).
     Qed.
 
-    Hypothesis beqA_correct: forall x y, beqA x y = true -> eqA x y.
-
-    Definition exteq (m1 m2: t A) : Prop :=
-      forall (x: elt),
-      match get x m1, get x m2 with
-      | None, None => True
-      | Some y1, Some y2 => eqA y1 y2
-      | _, _ => False
-      end.
-
     Lemma beq_correct:
-      forall m1 m2, beq m1 m2 = true -> exteq m1 m2.
+      forall m1 m2,
+      beq m1 m2 = true <->
+      (forall (x: elt),
+       match get x m1, get x m2 with
+       | None, None => True
+       | Some y1, Some y2 => beqA y1 y2 = true
+       | _, _ => False
+       end).
     Proof.
-      induction m1; destruct m2; simpl.
+      intros; split.
+    - (* beq = true -> exteq *)
+      revert m1 m2. induction m1; destruct m2; simpl.
       intros; red; intros. change (@Leaf A) with (empty A). 
       repeat rewrite gempty. auto.
       destruct o; intro. congruence. 
@@ -429,21 +419,14 @@ Module PTree <: TREE.
       rewrite bempty_correct. auto. assumption. 
       destruct o; destruct o0; simpl; intro; try congruence.
       destruct (andb_prop _ _ H). destruct (andb_prop _ _ H0). 
-      red; intros. destruct x; simpl.
-      apply IHm1_2; auto. apply IHm1_1; auto. 
-      apply beqA_correct; auto. 
+      destruct x; simpl.
+      apply IHm1_2; auto. apply IHm1_1; auto. auto. 
       destruct (andb_prop _ _ H).
       red; intros. destruct x; simpl.
       apply IHm1_2; auto. apply IHm1_1; auto.
       auto.
-    Qed.
-
-    Hypothesis beqA_complete: forall x y, eqA x y -> beqA x y = true.
-
-    Lemma beq_complete:
-      forall m1 m2, exteq m1 m2 -> beq m1 m2 = true.
-    Proof.
-      induction m1; destruct m2; simpl; intros. 
+    - (* exteq -> beq = true *)
+      revert m1 m2. induction m1; destruct m2; simpl; intros. 
       auto.
       change (bempty (Node m2_1 o m2_2) = true).
       apply bempty_complete. intros. generalize (H x). rewrite gleaf.
@@ -453,11 +436,11 @@ Module PTree <: TREE.
       destruct (get x (Node m1_1 o m1_2)); tauto.
       apply andb_true_intro. split. apply andb_true_intro. split. 
       generalize (H xH); simpl. destruct o; destruct o0; auto.
-      apply IHm1_1. red; intros. apply (H (xO x)). 
-      apply IHm1_2. red; intros. apply (H (xI x)). 
+      apply IHm1_1. intros. apply (H (xO x)). 
+      apply IHm1_2. intros. apply (H (xI x)). 
     Qed.
 
-  End EXTENSIONAL_EQUALITY.
+  End BOOLEAN_EQUALITY.
 
     Fixpoint append (i j : positive) {struct i} : positive :=
       match i with
@@ -576,11 +559,11 @@ Module PTree <: TREE.
 
   Section COMBINE.
 
-  Variable A: Type.
-  Variable f: option A -> option A -> option A.
+  Variable A B C: Type.
+  Variable f: option A -> option B -> option C.
   Hypothesis f_none_none: f None None = None.
 
-  Fixpoint xcombine_l (m : t A) {struct m} : t A :=
+  Fixpoint xcombine_l (m : t A) {struct m} : t C :=
       match m with
       | Leaf => Leaf
       | Node l o r => Node' (xcombine_l l) (f o None) (xcombine_l r)
@@ -595,14 +578,14 @@ Module PTree <: TREE.
       rewrite gnode'. destruct i; simpl; auto.
     Qed.
 
-  Fixpoint xcombine_r (m : t A) {struct m} : t A :=
+  Fixpoint xcombine_r (m : t B) {struct m} : t C :=
       match m with
       | Leaf => Leaf
       | Node l o r => Node' (xcombine_r l) (f None o) (xcombine_r r)
       end.
 
   Lemma xgcombine_r :
-          forall (m: t A) (i : positive),
+          forall (m: t B) (i : positive),
           get i (xcombine_r m) = f None (get i m).
     Proof.
       induction m; intros; simpl.
@@ -610,7 +593,7 @@ Module PTree <: TREE.
       rewrite gnode'. destruct i; simpl; auto.
     Qed.
 
-  Fixpoint combine (m1 m2 : t A) {struct m1} : t A :=
+  Fixpoint combine (m1: t A) (m2: t B) {struct m1} : t C :=
     match m1 with
     | Leaf => xcombine_r m2
     | Node l1 o1 r1 =>
@@ -621,7 +604,7 @@ Module PTree <: TREE.
     end.
 
   Theorem gcombine:
-      forall (m1 m2: t A) (i: positive),
+      forall (m1: t A) (m2: t B) (i: positive),
       get i (combine m1 m2) = f (get i m1) (get i m2).
   Proof.
     induction m1; intros; simpl.
@@ -634,7 +617,7 @@ Module PTree <: TREE.
   End COMBINE.
 
   Lemma xcombine_lr :
-    forall (A : Type) (f g : option A -> option A -> option A) (m : t A),
+    forall (A B: Type) (f g : option A -> option A -> option B) (m : t A),
     (forall (i j : option A), f i j = g j i) ->
     xcombine_l f m = xcombine_r g m.
     Proof.
@@ -645,12 +628,12 @@ Module PTree <: TREE.
     Qed.
 
   Theorem combine_commut:
-    forall (A: Type) (f g: option A -> option A -> option A),
+    forall (A B: Type) (f g: option A -> option A -> option B),
     (forall (i j: option A), f i j = g j i) ->
     forall (m1 m2: t A),
     combine f m1 m2 = combine g m2 m1.
   Proof.
-    intros A f g EQ1.
+    intros A B f g EQ1.
     assert (EQ2: forall (i j: option A), g i j = f j i).
       intros; auto.
     induction m1; intros; destruct m2; simpl;
@@ -1498,6 +1481,212 @@ Proof.
 Qed.
 
 End MEASURE.
+
+(** Forall and exists *)
+
+Section FORALL_EXISTS.
+
+Variable A: Type.
+
+Definition for_all (m: T.t A) (f: T.elt -> A -> bool) : bool :=
+  T.fold (fun b x a => b && f x a) m true.
+
+Lemma for_all_correct:
+  forall m f,
+  for_all m f = true <-> (forall x a, T.get x m = Some a -> f x a = true).
+Proof.
+  intros m0 f.
+  unfold for_all. apply fold_rec; intros.
+- (* Extensionality *)
+  rewrite H0. split; intros. rewrite <- H in H2; auto. rewrite H in H2; auto. 
+- (* Base case *)
+  split; intros. rewrite T.gempty in H0; congruence. auto.
+- (* Inductive case *)
+  split; intros.
+  destruct (andb_prop _ _ H2). rewrite T.gsspec in H3. destruct (T.elt_eq x k). 
+  inv H3. auto.
+  apply H1; auto.
+  apply andb_true_intro. split. 
+  rewrite H1. intros. apply H2. rewrite T.gso; auto. congruence. 
+  apply H2. apply T.gss.
+Qed.
+
+Definition exists_ (m: T.t A) (f: T.elt -> A -> bool) : bool :=
+  T.fold (fun b x a => b || f x a) m false.
+
+Lemma exists_correct:
+  forall m f,
+  exists_ m f = true <-> (exists x a, T.get x m = Some a /\ f x a = true).
+Proof.
+  intros m0 f.
+  unfold exists_. apply fold_rec; intros.
+- (* Extensionality *)
+  rewrite H0. split; intros (x0 & a0 & P & Q); exists x0; exists a0; split; auto; congruence. 
+- (* Base case *)
+  split; intros. congruence. destruct H as (x & a & P & Q). rewrite T.gempty in P; congruence.
+- (* Inductive case *)
+  split; intros.
+  destruct (orb_true_elim _ _ H2).
+  rewrite H1 in e. destruct e as (x1 & a1 & P & Q).
+  exists x1; exists a1; split; auto. rewrite T.gso; auto. congruence.
+  exists k; exists v; split; auto. apply T.gss. 
+  destruct H2 as (x1 & a1 & P & Q). apply orb_true_intro.
+  rewrite T.gsspec in P. destruct (T.elt_eq x1 k).
+  inv P. right; auto.
+  left. apply H1. exists x1; exists a1; auto.
+Qed.
+
+Remark exists_for_all:
+  forall m f,
+  exists_ m f = negb (for_all m (fun x a => negb (f x a))).
+Proof.
+  intros. unfold exists_, for_all. rewrite ! T.fold_spec. 
+  change false with (negb true). generalize (T.elements m) true. 
+  induction l; simpl; intros.
+  auto.
+  rewrite <- IHl. f_equal. 
+  destruct b; destruct (f (fst a) (snd a)); reflexivity.
+Qed.
+
+Remark for_all_exists:
+  forall m f,
+  for_all m f = negb (exists_ m (fun x a => negb (f x a))).
+Proof.
+  intros. unfold exists_, for_all. rewrite ! T.fold_spec. 
+  change true with (negb false). generalize (T.elements m) false. 
+  induction l; simpl; intros.
+  auto.
+  rewrite <- IHl. f_equal. 
+  destruct b; destruct (f (fst a) (snd a)); reflexivity.
+Qed.
+
+Lemma for_all_false:
+  forall m f,
+  for_all m f = false <-> (exists x a, T.get x m = Some a /\ f x a = false).
+Proof.
+  intros. rewrite for_all_exists. 
+  rewrite negb_false_iff. rewrite exists_correct. 
+  split; intros (x & a & P & Q); exists x; exists a; split; auto. 
+  rewrite negb_true_iff in Q. auto.
+  rewrite Q; auto. 
+Qed.
+
+Lemma exists_false:
+  forall m f,
+  exists_ m f = false <-> (forall x a, T.get x m = Some a -> f x a = false).
+Proof.
+  intros. rewrite exists_for_all. 
+  rewrite negb_false_iff. rewrite for_all_correct.
+  split; intros. apply H in H0. rewrite negb_true_iff in H0. auto. rewrite H; auto. 
+Qed.
+
+End FORALL_EXISTS.
+
+(** More about [beq] *)
+
+Section BOOLEAN_EQUALITY.
+
+Variable A: Type.
+Variable beqA: A -> A -> bool.
+
+Theorem beq_false:
+  forall m1 m2,
+  T.beq beqA m1 m2 = false <->
+  exists x, match T.get x m1, T.get x m2 with
+            | None, None => False
+            | Some a1, Some a2 => beqA a1 a2 = false
+            | _, _ => True
+            end.
+Proof.
+  intros; split; intros.
+- (* beq = false -> existence *)
+  set (p1 := fun x a1 => match T.get x m2 with None => false | Some a2 => beqA a1 a2 end).
+  set (p2 := fun x a2 => match T.get x m1 with None => false | Some a1 => beqA a1 a2 end).
+  destruct (for_all m1 p1) eqn:F1; [destruct (for_all m2 p2) eqn:F2 | idtac].
+  + cut (T.beq beqA m1 m2 = true). congruence. 
+    rewrite for_all_correct in *. rewrite T.beq_correct; intros. 
+    destruct (T.get x m1) as [a1|] eqn:X1. 
+    generalize (F1 _ _ X1). unfold p1. destruct (T.get x m2); congruence.
+    destruct (T.get x m2) as [a2|] eqn:X2; auto.
+    generalize (F2 _ _ X2). unfold p2. rewrite X1. congruence. 
+  + rewrite for_all_false in F2. destruct F2 as (x & a & P & Q).
+    exists x. rewrite P. unfold p2 in Q. destruct (T.get x m1); auto. 
+  + rewrite for_all_false in F1. destruct F1 as (x & a & P & Q).
+    exists x. rewrite P. unfold p1 in Q. destruct (T.get x m2); auto.
+- (* existence -> beq = false *)
+  destruct H as [x P].
+  destruct (T.beq beqA m1 m2) eqn:E; auto. 
+  rewrite T.beq_correct in E. 
+  generalize (E x). destruct (T.get x m1); destruct (T.get x m2); tauto || congruence.
+Qed.
+
+End BOOLEAN_EQUALITY.
+
+(** Extensional equality between trees *)
+
+Section EXTENSIONAL_EQUALITY.
+
+Variable A: Type.
+Variable eqA: A -> A -> Prop.
+Hypothesis eqAeq: Equivalence eqA.
+
+Definition Equal (m1 m2: T.t A) : Prop :=
+  forall x, match T.get x m1, T.get x m2 with
+                | None, None => True
+                | Some a1, Some a2 => a1 === a2
+                | _, _ => False
+            end.
+
+Lemma Equal_refl: forall m, Equal m m.
+Proof.
+  intros; red; intros. destruct (T.get x m); auto. reflexivity. 
+Qed.
+
+Lemma Equal_sym: forall m1 m2, Equal m1 m2 -> Equal m2 m1.
+Proof.
+  intros; red; intros. generalize (H x). destruct (T.get x m1); destruct (T.get x m2); auto. intros; symmetry; auto.
+Qed.
+
+Lemma Equal_trans: forall m1 m2 m3, Equal m1 m2 -> Equal m2 m3 -> Equal m1 m3.
+Proof.
+  intros; red; intros. generalize (H x) (H0 x).
+  destruct (T.get x m1); destruct (T.get x m2); try tauto;
+  destruct (T.get x m3); try tauto. 
+  intros. transitivity a0; auto.
+Qed.
+
+Instance Equal_Equivalence : Equivalence Equal := {
+  Equivalence_Reflexive := Equal_refl;
+  Equivalence_Symmetric := Equal_sym;
+  Equivalence_Transitive := Equal_trans
+}.
+
+Hypothesis eqAdec: EqDec A eqA.
+
+Program Definition Equal_dec (m1 m2: T.t A) : { m1 === m2 } + { m1 =/= m2 } :=
+  match T.beq (fun a1 a2 => proj_sumbool (a1 == a2)) m1 m2 with
+  | true => left _
+  | false => right _
+  end.
+Next Obligation.
+  rename Heq_anonymous into B.
+  symmetry in B. rewrite T.beq_correct in B.
+  red; intros. generalize (B x). 
+  destruct (T.get x m1); destruct (T.get x m2); auto. 
+  intros. eapply proj_sumbool_true; eauto. 
+Qed.
+Next Obligation.
+  assert (T.beq (fun a1 a2 => proj_sumbool (a1 == a2)) m1 m2 = true).
+  apply T.beq_correct; intros. 
+  generalize (H x). 
+  destruct (T.get x m1); destruct (T.get x m2); try tauto. 
+  intros. apply proj_sumbool_is_true; auto.
+  unfold equiv, complement in H0. congruence.
+Qed.
+
+Instance Equal_EqDec : EqDec (T.t A) Equal := Equal_dec.
+
+End EXTENSIONAL_EQUALITY.
 
 End Tree_Properties.
 

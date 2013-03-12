@@ -141,11 +141,15 @@ Lemma beq_correct: forall x y, beq x y = true -> eq x y.
 Proof.
   destruct x; destruct y; simpl; intro; try congruence.
   red; intro; simpl.
-  generalize (PTree.beq_correct L.eq L.beq L.beq_correct t0 t1 H p).
-  destruct (t0!p); destruct (t1!p); intuition. apply L.eq_refl.
+  rewrite PTree.beq_correct in H. generalize (H p).
+  destruct (t0!p); destruct (t1!p); intuition.
+  apply L.beq_correct; auto.
+  apply L.eq_refl. 
   red; intro; simpl.
-  generalize (PTree.beq_correct L.eq L.beq L.beq_correct t0 t1 H p).
-  destruct (t0!p); destruct (t1!p); intuition. apply L.eq_refl.
+  rewrite PTree.beq_correct in H. generalize (H p).
+  destruct (t0!p); destruct (t1!p); intuition.
+  apply L.beq_correct; auto.
+  apply L.eq_refl. 
 Qed.
 
 Definition ge (x y: t) : Prop :=
