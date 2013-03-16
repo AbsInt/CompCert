@@ -255,7 +255,7 @@ let print_function p id f =
   fprintf p "@;<0 -2>}@]@ "
 
 let print_extfun p id ef =
-  fprintf p "@[<v 0>extern @[<hov 2>\"%s\" =@ %s :@ %a@]@ "
+  fprintf p "@[<v 0>extern @[<hov 2>\"%s\" =@ %s :@ %a@]@]@ "
     (extern_atom id) (name_of_external ef) print_sig (ef_sig ef)
 
 let print_init_data p = function

@@ -28,7 +28,9 @@ Require Import Op.
 Require Import Registers.
 Require Import RTL.
 Require Import RTLtyping.
+Require Import Liveness.
 Require Import Locations.
+Require Import LTL.
 Require Import Conventions.
 Require Import Coloring.
 Require Import Coloringproof.
@@ -42,7 +44,7 @@ Require Import Allocation.
 
 Section REGALLOC_PROPERTIES.
 
-Variable f: function.
+Variable f: RTL.function.
 Variable env: regenv.
 Variable live: PMap.t Regset.t.
 Variable alloc: reg -> loc.
@@ -145,7 +147,7 @@ Definition agree (live: Regset.t) (rs: regset) (ls: locset) : Prop :=
 
 Lemma agree_increasing:
   forall live1 live2 rs ls,
-  RegsetLat.ge live1 live2 -> agree live1 rs ls ->
+  Regset.Subset live2 live1 -> agree live1 rs ls ->
   agree live2 rs ls.
 Proof.
   unfold agree; intros. 
@@ -162,9 +164,7 @@ Lemma agree_succ:
 Proof.
   intros.
   apply agree_increasing with (live!!n).
-  eapply DS.fixpoint_solution. unfold analyze in H; eauto.
-  unfold RTL.successors, Kildall.successors_list. 
-  rewrite PTree.gmap1. rewrite H0. simpl. auto.
+  eapply Liveness.analyze_solution; eauto. 
   auto.
 Qed.
 

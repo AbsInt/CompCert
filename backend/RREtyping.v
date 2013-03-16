@@ -83,19 +83,20 @@ Hint Resolve wt_kill_op: linearty.
 
 Lemma wt_transf_code:
   forall f c eqs, wt_code f c -> wt_eqs eqs ->
-  wt_code (transf_function f) (transf_code eqs c).
+  wt_code (transf_function f) (transf_code eqs c nil).
 Proof.
   induction c; intros; simpl.
   red; simpl; tauto.
   assert (WI: wt_instr f a) by auto with coqlib.
   assert (WC: wt_code f c) by (red; auto with coqlib).
   clear H.
-  inv WI; auto 10 with linearty.
+  inv WI; rewrite ? transf_code_eq; auto 10 with linearty.
   destruct (is_incoming s) eqn:?. auto with linearty.
   destruct (contains_equation s r eqs). auto with linearty.
   destruct (find_reg_containing s eqs) as [r'|] eqn:?; auto with linearty.
   assert (mreg_type r' = mreg_type r).
   exploit H0. eapply find_reg_containing_sound; eauto. simpl. congruence.
+  rewrite ! transf_code_eq.
   destruct (safe_move_insertion c); auto 10 with linearty.
 Qed.
 

@@ -1997,6 +1997,12 @@ Proof.
   intro; reflexivity.
 Qed.
 
+Lemma transl_code_eq:
+  forall fe i c, transl_code fe (i :: c) = transl_instr fe i (transl_code fe c).
+Proof.
+  unfold transl_code; intros. rewrite list_fold_right_eq. auto.
+Qed.
+
 Lemma find_label_transl_code:
   forall fe lbl c,
   Mach.find_label lbl (transl_code fe c) =
@@ -2004,6 +2010,7 @@ Lemma find_label_transl_code:
 Proof.
   induction c; simpl; intros.
   auto.
+  rewrite transl_code_eq. 
   destruct a; unfold transl_instr; auto.
   destruct s; simpl; auto.
   destruct s; simpl; auto.
@@ -2089,7 +2096,8 @@ Qed.
 Lemma is_tail_transl_code:
   forall fe c1 c2, is_tail c1 c2 -> is_tail (transl_code fe c1) (transl_code fe c2).
 Proof.
-  induction 1; simpl. auto with coqlib. 
+  induction 1; simpl. auto with coqlib.
+  rewrite transl_code_eq. 
   eapply is_tail_trans. eauto. apply is_tail_transl_instr.
 Qed.
 
@@ -2364,14 +2372,9 @@ Theorem transf_step_correct:
   forall s1' (MS: match_states s1 s1'),
   exists s2', plus step tge s1' t s2' /\ match_states s2 s2'.
 Proof.
-  assert (RED: forall f i c,
-          transl_code (make_env (function_bounds f)) (i :: c) = 
-          transl_instr (make_env (function_bounds f)) i
-                       (transl_code (make_env (function_bounds f)) c)).
-    intros. reflexivity.
   induction 1; intros;
   try inv MS;
-  try rewrite RED;
+  try rewrite transl_code_eq;
   try (generalize (WTF _ (is_tail_in TAIL)); intro WTI);
   try (generalize (function_is_within_bounds f WTF _ (is_tail_in TAIL));
        intro BOUND; simpl in BOUND);
@@ -2512,7 +2515,8 @@ Proof.
 
   (* Lcall *)
   exploit find_function_translated; eauto. intros [bf [tf' [A [B C]]]].
-  exploit is_tail_transf_function; eauto. intros IST. simpl in IST.
+  exploit is_tail_transf_function; eauto. intros IST.
+  rewrite transl_code_eq in IST. simpl in IST.
   exploit return_address_offset_exists. eexact IST.
   intros [ra D].
   econstructor; split.

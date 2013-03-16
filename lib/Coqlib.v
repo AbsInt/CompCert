@@ -854,6 +854,54 @@ Proof.
   exists (a0 :: l1); exists l2; intuition. simpl; congruence.
 Qed.
 
+(** Folding a function over a list *)
+
+Section LIST_FOLD.
+
+Variables A B: Type.
+Variable f: A -> B -> B.
+
+(** This is exactly [List.fold_left] from Coq's standard library,
+  with [f] taking arguments in a different order. *)
+
+Fixpoint list_fold_left (accu: B) (l: list A) : B :=
+  match l with nil => accu | x :: l' => list_fold_left (f x accu) l' end.
+
+(** This is exactly [List.fold_right] from Coq's standard library,
+  except that it runs in constant stack space. *)
+
+Definition list_fold_right (l: list A) (base: B) : B :=
+  list_fold_left base (List.rev' l).
+
+Remark list_fold_left_app:
+  forall l1 l2 accu,
+  list_fold_left accu (l1 ++ l2) = list_fold_left (list_fold_left accu l1) l2.
+Proof.
+  induction l1; simpl; intros. 
+  auto.
+  rewrite IHl1. auto.
+Qed.
+
+Lemma list_fold_right_eq:
+  forall l base,
+  list_fold_right l base =
+  match l with nil => base | x :: l' => f x (list_fold_right l' base) end.
+Proof.
+  unfold list_fold_right; intros. 
+  destruct l.
+  auto.
+  unfold rev'. rewrite <- ! rev_alt. simpl.  
+  rewrite list_fold_left_app. simpl. auto. 
+Qed.
+
+Lemma list_fold_right_spec:
+  forall l base, list_fold_right l base = List.fold_right f base l.
+Proof.
+  induction l; simpl; intros; rewrite list_fold_right_eq; congruence.
+Qed.
+
+End LIST_FOLD.
+
 (** Properties of list membership. *)
 
 Lemma in_cns:

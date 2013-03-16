@@ -837,6 +837,12 @@ Proof.
   destruct o; FL.
 Qed.
 
+Lemma transf_code_cons:
+  forall f i c, transf_code f (i :: c) = transf_instr f i (transf_code f c).
+Proof.
+  unfold transf_code; intros. rewrite list_fold_right_eq; auto. 
+Qed.
+
 Lemma find_label_transf_code:
   forall sg lbl c,
   find_label lbl (transf_code sg c) =
@@ -844,6 +850,7 @@ Lemma find_label_transf_code:
 Proof.
   induction c; simpl.
   auto.
+  rewrite transf_code_cons.
   rewrite find_label_transf_instr.
   destruct (LTLin.is_label lbl a); auto.
 Qed.
@@ -1022,7 +1029,7 @@ Theorem transf_step_correct:
   \/ (measure s2 < measure s1 /\ t = E0 /\ match_states s2 s1')%nat.
 Proof.
   Opaque regs_for. Opaque add_reloads.
-  induction 1; intros; try inv MS; simpl.
+  induction 1; intros; try inv MS; try rewrite transf_code_cons; simpl.
 
   (* Lop *)
   ExploitWT. inv WTI. 

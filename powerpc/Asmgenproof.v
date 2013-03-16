@@ -317,7 +317,8 @@ Lemma transl_find_label:
   end.
 Proof.
   intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z x)); inv EQ0.
-  monadInv EQ. simpl. eapply transl_code_label; eauto. 
+  monadInv EQ. rewrite transl_code'_transl_code in EQ0.
+  simpl. eapply transl_code_label; eauto. 
 Qed.
 
 End TRANSL_LABEL.
@@ -360,6 +361,7 @@ Proof.
   destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
 - intros. monadInv H0. 
   destruct (zlt Int.max_unsigned (list_length_z x)); inv EQ0. monadInv EQ.
+  rewrite transl_code'_transl_code in EQ0.
   exists x; exists false; split; auto. unfold fn_code. repeat constructor.
 - exact transf_function_no_overflow.
 Qed.
@@ -421,7 +423,7 @@ Lemma exec_straight_steps:
    exists rs2,
        exec_straight tge tf c rs1 m1' k rs2 m2'
     /\ agree ms2 sp rs2
-    /\ (r11_is_parent ep i = true -> rs2#GPR11 = parent_sp s)) ->
+    /\ (it1_is_parent ep i = true -> rs2#GPR11 = parent_sp s)) ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c ms2 m2) st'.
@@ -440,7 +442,7 @@ Lemma exec_straight_steps_goto:
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl f.(Mach.fn_code) = Some c' ->
   transl_code_at_pc ge (rs1 PC) fb f (i :: c) ep tf tc ->
-  r11_is_parent ep i = false ->
+  it1_is_parent ep i = false ->
   (forall k c (TR: transl_instr f i ep k = OK c),
    exists jmp, exists k', exists rs2,
        exec_straight tge tf c rs1 m1' (jmp :: k') rs2 m2'
@@ -897,7 +899,7 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   exploit Mem.storev_extends. eexact G. eexact H2. eauto. eauto. 
   intros [m3' [P Q]].
   (* Execution of function prologue *)
-  monadInv EQ0.
+  monadInv EQ0. rewrite transl_code'_transl_code in EQ1.
   set (rs2 := nextinstr (rs0#GPR1 <- sp #GPR0 <- Vundef)).
   set (rs3 := nextinstr (rs2#GPR0 <- (rs0#LR))).
   set (rs4 := nextinstr rs3).

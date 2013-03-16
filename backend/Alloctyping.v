@@ -19,6 +19,7 @@ Require Import AST.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
+Require Import Liveness.
 Require Import Locations.
 Require Import LTL.
 Require Import Coloring.

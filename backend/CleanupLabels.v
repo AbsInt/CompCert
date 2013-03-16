@@ -44,16 +44,16 @@ Definition labels_branched_to (c: code) : Labelset.t :=
 (** Remove label declarations for labels that are not in
     the [bto] (branched-to) set. *)
 
-Fixpoint remove_unused_labels (bto: Labelset.t) (c: code) : code :=
-  match c with
-  | nil => nil
-  | Llabel lbl :: c' =>
-      if Labelset.mem lbl bto
-      then Llabel lbl :: remove_unused_labels bto c'
-      else remove_unused_labels bto c'
-  | i :: c' =>
-      i :: remove_unused_labels bto c'
+Definition remove_unused (bto: Labelset.t) (i: instruction) (k: code) : code :=
+  match i with
+  | Llabel lbl =>
+      if Labelset.mem lbl bto then i :: k else k
+  | _ =>
+      i :: k
   end.
+
+Definition remove_unused_labels (bto: Labelset.t) (c: code) : code :=
+  list_fold_right (remove_unused bto) c nil.
 
 Definition cleanup_labels (c: code) :=
   remove_unused_labels (labels_branched_to c) c.

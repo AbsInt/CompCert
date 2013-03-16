@@ -26,6 +26,7 @@ Require Import Registers.
 Require Import RTL.
 Require Import Lattice.
 Require Import Kildall.
+Require Import Liveness.
 Require Import ConstpropOp.
 Require Import Constprop.
 Require Import ConstpropOpproof.
@@ -95,6 +96,18 @@ Proof.
   constructor. apply H. auto.
 Qed.
 
+Lemma regs_match_approx_forget:
+  forall rs rl ra,
+  regs_match_approx ra rs ->
+  regs_match_approx (List.fold_left (fun a r => D.set r Unknown a) rl ra) rs.
+Proof.
+  induction rl; simpl; intros.
+  auto.
+  apply IHrl. red; intros. destruct (peq r a). 
+  subst a. rewrite D.gss. constructor. 
+  rewrite D.gso; auto. 
+Qed.
+
 (** The correctness of the static analysis follows from the results
   of module [ConstpropOpproof] and the fact that the result of
   the static analysis is a solution of the forward dataflow inequations. *)
@@ -106,13 +119,15 @@ Lemma analyze_correct_1:
   regs_match_approx (transfer gapp f pc (analyze gapp f)!!pc) rs ->
   regs_match_approx (analyze gapp f)!!pc' rs.
 Proof.
-  intros until i. unfold analyze. 
-  caseEq (DS.fixpoint (successors f) (transfer gapp f)
-                      ((fn_entrypoint f, D.top) :: nil)).
-  intros approxs; intros.
-  apply regs_match_approx_increasing with (transfer gapp f pc approxs!!pc).
+  unfold analyze; intros.
+  set (lu := last_uses f) in *.
+  destruct (DS.fixpoint (successors f) (transfer' gapp f lu)
+                        ((fn_entrypoint f, D.top) :: nil)) as [approxs|] eqn:FIX.
+  apply regs_match_approx_increasing with (transfer' gapp f lu pc approxs!!pc).
   eapply DS.fixpoint_solution; eauto.
-  unfold successors_list, successors. rewrite PTree.gmap1. rewrite H0. auto.
+  unfold successors_list, successors. rewrite PTree.gmap1. rewrite H. auto.
+  unfold transfer'. destruct (lu!pc) as [regs|]. 
+  apply regs_match_approx_forget; auto. 
   auto.
   intros. rewrite PMap.gi. apply regs_match_approx_top. 
 Qed.
@@ -122,9 +137,9 @@ Lemma analyze_correct_3:
   regs_match_approx (analyze gapp f)!!(f.(fn_entrypoint)) rs.
 Proof.
   intros. unfold analyze. 
-  caseEq (DS.fixpoint (successors f) (transfer gapp f)
-                      ((fn_entrypoint f, D.top) :: nil)).
-  intros approxs; intros.
+  set (lu := last_uses f) in *.
+  destruct (DS.fixpoint (successors f) (transfer' gapp f lu)
+                        ((fn_entrypoint f, D.top) :: nil)) as [approxs|] eqn:FIX.
   apply regs_match_approx_increasing with D.top.
   eapply DS.fixpoint_entry; eauto. auto with coqlib.
   apply regs_match_approx_top. 

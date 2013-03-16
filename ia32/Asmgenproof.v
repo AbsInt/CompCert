@@ -332,7 +332,7 @@ Lemma transl_find_label:
   end.
 Proof.
   intros. monadInv H. destruct (zlt (list_length_z x) Int.max_unsigned); inv EQ0.
-  simpl. eapply transl_code_label; eauto. 
+  simpl. eapply transl_code_label; eauto. rewrite transl_code'_transl_code in EQ; eauto. 
 Qed.
 
 End TRANSL_LABEL.
@@ -375,6 +375,7 @@ Proof.
   destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
 - intros. monadInv H0. 
   destruct (zlt (list_length_z x) Int.max_unsigned); inv EQ0.
+  rewrite transl_code'_transl_code in EQ.
   exists x; exists true; split; auto. unfold fn_code. repeat constructor.
 - exact transf_function_no_overflow.
 Qed.
@@ -436,7 +437,7 @@ Lemma exec_straight_steps:
    exists rs2,
        exec_straight tge tf c rs1 m1' k rs2 m2'
     /\ agree ms2 sp rs2
-    /\ (edx_preserved ep i = true -> rs2#EDX = parent_sp s)) ->
+    /\ (it1_is_parent ep i = true -> rs2#EDX = parent_sp s)) ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c ms2 m2) st'.
@@ -455,7 +456,7 @@ Lemma exec_straight_steps_goto:
   Genv.find_funct_ptr ge fb = Some (Internal f) ->
   Mach.find_label lbl f.(Mach.fn_code) = Some c' ->
   transl_code_at_pc ge (rs1 PC) fb f (i :: c) ep tf tc ->
-  edx_preserved ep i = false ->
+  it1_is_parent ep i = false ->
   (forall k c (TR: transl_instr f i ep k = OK c),
    exists jmp, exists k', exists rs2,
        exec_straight tge tf c rs1 m1' (jmp :: k') rs2 m2'
@@ -868,7 +869,7 @@ Opaque loadind.
 
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
-  generalize EQ; intros EQ'. monadInv EQ'. 
+  generalize EQ; intros EQ'. monadInv EQ'. rewrite transl_code'_transl_code in EQ0.
   destruct (zlt (list_length_z x0) Int.max_unsigned); inversion EQ1. clear EQ1.
   unfold store_stack in *. 
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl. 

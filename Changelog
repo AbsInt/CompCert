@@ -1,3 +1,11 @@
+Development version
+
+- Reduced stack usage of the compiler by rewriting some key functions
+  in tail-recursive style.
+- Reduced memory requirements of constant propagation pass by forgetting
+  compile-time approximations of dead variables.
+
+
 Release 1.13, 2013-03-12
 ========================
 

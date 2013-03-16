@@ -143,6 +143,20 @@ Qed.
 
 (** Commutation with [find_label]. *)
 
+Lemma remove_unused_labels_cons:
+  forall bto i c,
+  remove_unused_labels bto (i :: c) = 
+  match i with
+  | Llabel lbl =>
+      if Labelset.mem lbl bto then i :: remove_unused_labels bto c else remove_unused_labels bto c
+  | _ =>
+      i :: remove_unused_labels bto c
+  end.
+Proof.
+  unfold remove_unused_labels; intros. rewrite list_fold_right_eq. auto. 
+Qed.
+
+
 Lemma find_label_commut:
   forall lbl bto,
   Labelset.In lbl bto ->
@@ -152,6 +166,7 @@ Lemma find_label_commut:
 Proof.
   induction c; simpl; intros.
   congruence.
+  rewrite remove_unused_labels_cons.
   unfold is_label in H0. destruct a; simpl; auto.
   destruct (peq lbl l). subst l. inv H0.
   rewrite Labelset.mem_1; auto. 
@@ -222,7 +237,7 @@ Theorem transf_step_correct:
   (exists s2', step tge s1' t s2' /\ match_states s2 s2')
   \/ (measure s2 < measure s1 /\ t = E0 /\ match_states s2 s1')%nat.
 Proof.
-  induction 1; intros; inv MS; simpl.
+  induction 1; intros; inv MS; try rewrite remove_unused_labels_cons. 
 (* Lop *)
   left; econstructor; split.
   econstructor; eauto. instantiate (1 := v). rewrite <- H.
@@ -263,7 +278,7 @@ Proof.
   constructor.
   econstructor; eauto with coqlib.
   (* eliminated *)
-  right. split. omega. split. auto. econstructor; eauto with coqlib.
+  right. split. simpl. omega. split. auto. econstructor; eauto with coqlib.
 (* Lgoto *)
   left; econstructor; split.
   econstructor. eapply find_label_translated; eauto. red; auto. 

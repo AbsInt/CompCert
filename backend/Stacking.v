@@ -207,7 +207,7 @@ Definition transl_instr
 
 Definition transl_code
     (fe: frame_env) (il: list Linear.instruction) : Mach.code :=
-  List.fold_right (transl_instr fe) nil il.
+  list_fold_right (transl_instr fe) il nil.
 
 Definition transl_body (f: Linear.function) (fe: frame_env) :=
   save_callee_save fe (transl_code fe f.(Linear.fn_code)).

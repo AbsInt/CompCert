@@ -71,9 +71,9 @@ Lemma wt_linearize_body:
   forall enum,
   wt_code f.(LTL.fn_sig) (linearize_body f enum).
 Proof.
-  induction enum; simpl.
+  unfold linearize_body; induction enum; rewrite list_fold_right_eq.
   red; simpl; intros; contradiction.
-  caseEq ((LTL.fn_code f)!a); intros.
+  unfold linearize_node. caseEq ((LTL.fn_code f)!a); intros.
   apply wt_add_instr. constructor. apply wt_linearize_instr; eauto with coqlib.
   auto.
 Qed.

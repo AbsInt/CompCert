@@ -452,6 +452,28 @@ Inductive transl_code_at_pc (ge: Mach.genv):
     code_tail (Int.unsigned ofs) (fn_code tf) tc ->
     transl_code_at_pc ge (Vptr b ofs) b f c ep tf tc.
 
+(** Equivalence between [transl_code] and [transl_code']. *)
+
+Local Open Scope error_monad_scope.
+
+Lemma transl_code_rec_transl_code:
+  forall f il ep k,
+  transl_code_rec f il ep k = (do c <- transl_code f il ep; k c).
+Proof.
+  induction il; simpl; intros.
+  auto.
+  rewrite IHil.
+  destruct (transl_code f il (it1_is_parent ep a)); simpl; auto.
+Qed.
+
+Lemma transl_code'_transl_code:
+  forall f il ep,
+  transl_code' f il ep = transl_code f il ep.
+Proof.
+  intros. unfold transl_code'. rewrite transl_code_rec_transl_code. 
+  destruct (transl_code f il ep); auto. 
+Qed.
+
 (** Predictor for return addresses in generated Asm code.
 
   The [return_address_offset] predicate defined here is used in the

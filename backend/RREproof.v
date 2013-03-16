@@ -280,18 +280,44 @@ Proof.
   destruct op; exact agree_undef_temps || exact agree_undef_move_2.
 Qed.
 
-Lemma transl_find_label:
-  forall lbl c eqs,
-  find_label lbl (transf_code eqs c) =
-  option_map (transf_code nil) (find_label lbl c).
+Lemma transf_code_cont:
+  forall c eqs k1 k2,
+  transf_code eqs c (k1 ++ k2) = List.rev k2 ++ transf_code eqs c k1.
 Proof.
   induction c; simpl; intros.
+  unfold rev'; rewrite <- ! rev_alt; apply rev_app_distr. 
+  destruct a; try (rewrite <- IHc; reflexivity).
+  destruct (is_incoming s).
+  rewrite <- IHc; reflexivity.
+  destruct (contains_equation s m eqs). 
   auto.
-  destruct a; simpl; auto.
+  destruct (find_reg_containing s eqs).
+  destruct (safe_move_insertion c).
+  rewrite <- IHc; reflexivity.
+  rewrite <- IHc; reflexivity.
+  rewrite <- IHc; reflexivity.
+Qed.
+
+Corollary transf_code_eq:
+  forall eqs c i, transf_code eqs c (i :: nil) = i :: transf_code eqs c nil.
+Proof.
+  intros. change (i :: nil) with (nil ++ (i :: nil)). 
+  rewrite transf_code_cont. auto.
+Qed. 
+
+Lemma transl_find_label:
+  forall lbl c eqs,
+  find_label lbl (transf_code eqs c nil) =
+  option_map (fun c => transf_code nil c nil) (find_label lbl c).
+Proof.
+  induction c; intros.
+  auto.
+  destruct a; simpl; try (rewrite transf_code_eq; simpl; auto).
   destruct (is_incoming s); simpl; auto.
-  destruct (contains_equation s m eqs); auto.
-  destruct (find_reg_containing s eqs); simpl; auto.
-  destruct (safe_move_insertion c); simpl; auto. 
+  destruct (contains_equation s m eqs). auto.
+  destruct (find_reg_containing s eqs); rewrite !transf_code_eq. 
+  destruct (safe_move_insertion c); simpl; auto.
+  simpl; auto.
   destruct (peq lbl l); simpl; auto.
 Qed.
 
@@ -348,7 +374,7 @@ Inductive match_frames: stackframe -> stackframe -> Prop :=
   | match_frames_intro:
       forall f sp rs c,
       match_frames (Stackframe f sp rs c)
-                   (Stackframe (transf_function f) sp rs (transf_code nil c)).
+                   (Stackframe (transf_function f) sp rs (transf_code nil c nil)).
 
 Inductive match_states: state -> state -> Prop :=
   | match_states_regular:
@@ -358,7 +384,7 @@ Inductive match_states: state -> state -> Prop :=
         (AG: agree sm rs rs')
         (SAFE: sm = false \/ safe_move_insertion c = true),
       match_states (State stk f sp c rs m)
-                   (State stk' (transf_function f) sp (transf_code eqs c) rs' m)
+                   (State stk' (transf_function f) sp (transf_code eqs c nil) rs' m)
   | match_states_call:
       forall stk f rs m stk'
         (STK: list_forall2 match_frames stk stk'),
@@ -400,7 +426,8 @@ Opaque destroyed_at_move_regs.
   (* incoming, stays as getstack *)
   assert (UGS: forall rs, undef_getstack sl rs = Locmap.set (R IT1) Vundef rs).
     destruct sl; simpl in Heqb0; discriminate || auto.
-  left; econstructor; split. constructor.
+  left; econstructor; split.
+  rewrite transf_code_eq; constructor.
   repeat rewrite UGS.
   apply match_states_regular with sm. auto.
   apply kill_loc_hold. apply kill_loc_hold; auto.
@@ -424,20 +451,23 @@ Opaque destroyed_at_move_regs.
   simpl; intro EQ.
   (* turned into a move *)
   destruct (safe_move_insertion b) eqn:?. 
-  left; econstructor; split. constructor. simpl; eauto. 
+  left; econstructor; split.
+  rewrite transf_code_eq. constructor. simpl; eauto. 
   rewrite UGS. rewrite <- EQ.
   apply match_states_regular with true; auto. 
   apply eqs_movestack_hold; auto. 
   rewrite (agree_slot _ _ _ sl AG). apply agree_set. eapply agree_undef_move_1; eauto.
   (* left as a getstack *)
-  left; econstructor; split. constructor.
+  left; econstructor; split.
+  rewrite transf_code_eq. constructor.
   repeat rewrite UGS.
   apply match_states_regular with sm. auto. 
   apply eqs_getstack_hold; auto. 
   rewrite (agree_slot _ _ _ sl AG). apply agree_set. auto. 
   intuition congruence. 
   (* no equation, left as a getstack *)
-  left; econstructor; split. constructor.
+  left; econstructor; split.
+  rewrite transf_code_eq; constructor.
   repeat rewrite UGS.
   apply match_states_regular with sm. auto. 
   apply eqs_getstack_hold; auto. 
@@ -445,14 +475,14 @@ Opaque destroyed_at_move_regs.
   tauto.
 
 (* setstack *)
-  left; econstructor; split. constructor.
+  left; econstructor; split. rewrite transf_code_eq; constructor.
   apply match_states_regular with false; auto.
   apply eqs_setstack_hold; auto.
   rewrite (agree_reg _ _ _ r AG). apply agree_set. eapply agree_undef_move_2; eauto. 
   simpl in SAFE. destruct (in_dec mreg_eq r destroyed_at_move_regs); simpl in SAFE; intuition congruence.
 
 (* op *)
-  left; econstructor; split. constructor. 
+  left; econstructor; split. rewrite transf_code_eq; constructor.
   instantiate (1 := v). rewrite <- H.
   rewrite (agree_regs _ _ _ args AG). 
   apply eval_operation_preserved. exact symbols_preserved.
@@ -463,7 +493,7 @@ Opaque destroyed_at_move_regs.
 
 (* load *)
   left; econstructor; split.
-  econstructor.  instantiate (1 := a).  rewrite <- H.
+  rewrite transf_code_eq; econstructor.  instantiate (1 := a).  rewrite <- H.
   rewrite (agree_regs _ _ _ args AG). 
   apply eval_addressing_preserved.  exact symbols_preserved.
   simpl in SAFE. destruct (list_disjoint_dec mreg_eq args destroyed_at_move_regs); simpl in SAFE; intuition congruence.
@@ -480,7 +510,7 @@ Opaque list_disjoint_dec.
     destruct (list_disjoint_dec mreg_eq (src :: args) destroyed_at_move_regs); try discriminate.
     split. eapply list_disjoint_notin; eauto with coqlib. eapply list_disjoint_cons_left; eauto. 
   left; econstructor; split.
-  econstructor.  instantiate (1 := a).  rewrite <- H.
+  rewrite transf_code_eq; econstructor.  instantiate (1 := a).  rewrite <- H.
   rewrite (agree_regs _ _ _ args AG). 
   apply eval_addressing_preserved.  exact symbols_preserved.
   tauto.
@@ -495,7 +525,7 @@ Opaque list_disjoint_dec.
   simpl in SAFE. assert (sm = false) by intuition congruence. 
   subst sm. rewrite agree_false in AG. subst rs'. 
   left; econstructor; split.
-  constructor. eapply find_function_translated; eauto. 
+  rewrite transf_code_eq; constructor. eapply find_function_translated; eauto. 
   symmetry; apply sig_preserved.
   constructor. constructor; auto. constructor. 
 
@@ -503,13 +533,13 @@ Opaque list_disjoint_dec.
   simpl in SAFE. assert (sm = false) by intuition congruence. 
   subst sm. rewrite agree_false in AG. subst rs'. 
   left; econstructor; split.
-  constructor. eapply find_function_translated; eauto. 
+  rewrite transf_code_eq; constructor. eapply find_function_translated; eauto. 
   symmetry; apply sig_preserved. eauto. 
   rewrite (match_parent_locset _ _ STK). constructor; auto.
 
 (* builtin *)
   left; econstructor; split.
-  constructor.
+  rewrite transf_code_eq; constructor.
   rewrite (agree_regs _ _ _ args AG). 
   eapply external_call_symbols_preserved; eauto. 
   exact symbols_preserved. exact varinfo_preserved.
@@ -522,20 +552,20 @@ Opaque list_disjoint_dec.
   simpl in SAFE. assert (sm = false) by intuition congruence. 
   subst sm. rewrite agree_false in AG. subst rs'. 
   left; econstructor; split.
-  econstructor. eapply external_call_symbols_preserved; eauto. 
+  rewrite transf_code_eq; econstructor. eapply external_call_symbols_preserved; eauto. 
   exact symbols_preserved. exact varinfo_preserved.
   apply match_states_regular with false; auto.
   rewrite agree_false; auto. 
 
 (* label *)
-  left; econstructor; split. constructor.
+  left; econstructor; split. rewrite transf_code_eq; constructor.
   apply match_states_regular with false; auto. 
   apply nil_hold.
   simpl in SAFE. destruct SAFE. subst sm. auto. congruence.
 
 (* goto *)
   generalize (transl_find_label lbl (fn_code f) nil).  rewrite H. simpl. intros.
-  left; econstructor; split. constructor; eauto.
+  left; econstructor; split. rewrite transf_code_eq; constructor; eauto.
   apply match_states_regular with false; auto. 
   apply nil_hold.
   simpl in SAFE. destruct SAFE. subst sm. auto. congruence.
@@ -543,7 +573,7 @@ Opaque list_disjoint_dec.
 (* cond true *)
   generalize (transl_find_label lbl (fn_code f) nil).  rewrite H0. simpl. intros.
   left; econstructor; split.
-  apply exec_Lcond_true; auto.
+  rewrite transf_code_eq; apply exec_Lcond_true; auto.
   rewrite (agree_regs _ _ _ args AG). auto.
   simpl in SAFE. destruct (list_disjoint_dec mreg_eq args destroyed_at_move_regs); simpl in SAFE; intuition congruence.
   eauto.
@@ -552,7 +582,7 @@ Opaque list_disjoint_dec.
   eapply agree_undef_temps; eauto.
 
 (* cond false *)
-  left; econstructor; split. apply exec_Lcond_false; auto.
+  left; econstructor; split. rewrite transf_code_eq; apply exec_Lcond_false; auto.
   rewrite (agree_regs _ _ _ args AG). auto.
   simpl in SAFE. destruct (list_disjoint_dec mreg_eq args destroyed_at_move_regs); simpl in SAFE; intuition congruence.
   apply match_states_regular with false; auto.
@@ -561,7 +591,7 @@ Opaque list_disjoint_dec.
 
 (* jumptable *)
   generalize (transl_find_label lbl (fn_code f) nil).  rewrite H1. simpl. intros.
-  left; econstructor; split. econstructor; eauto.
+  left; econstructor; split. rewrite transf_code_eq; econstructor; eauto.
   rewrite (agree_reg _ _ _ arg AG). auto.
   simpl in SAFE. destruct (in_dec mreg_eq arg destroyed_at_move_regs); simpl in SAFE; intuition congruence.
   apply match_states_regular with false; auto.
@@ -571,7 +601,7 @@ Opaque list_disjoint_dec.
 (* return *)
   simpl in SAFE. destruct SAFE; try discriminate. subst sm. rewrite agree_false in AG. subst rs'.
   left; econstructor; split.
-  constructor. simpl. eauto. 
+  rewrite transf_code_eq; constructor. simpl. eauto. 
   rewrite (match_parent_locset _ _ STK). 
   constructor; auto.
 

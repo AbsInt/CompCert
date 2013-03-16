@@ -257,7 +257,7 @@ Definition transf_instr
   end.
 
 Definition transf_code (f: LTLin.function) (c: LTLin.code) : code :=
-  List.fold_right (transf_instr f) nil c.
+  list_fold_right (transf_instr f) c nil.
 
 Definition transf_function (f: LTLin.function) : function :=
   mkfunction

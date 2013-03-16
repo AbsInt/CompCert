@@ -198,16 +198,14 @@ Definition linearize_instr (b: LTL.instruction) (k: code) : code :=
 
 (** Linearize a function body according to an enumeration of its nodes.  *)
 
-Fixpoint linearize_body (f: LTL.function) (enum: list node)
-                        {struct enum} : code :=
-  match enum with
-  | nil => nil
-  | pc :: rem =>
-      match f.(LTL.fn_code)!pc with
-      | None => linearize_body f rem
-      | Some b => Llabel pc :: linearize_instr b (linearize_body f rem)
-      end
+Definition linearize_node (f: LTL.function) (pc: node) (k: code) : code :=
+  match f.(LTL.fn_code)!pc with
+  | None => k
+  | Some b => Llabel pc :: linearize_instr b k
   end.
+
+Definition linearize_body (f: LTL.function) (enum: list node) : code :=
+  list_fold_right (linearize_node f) enum nil.
 
 (** * Entry points for code linearization *)
 

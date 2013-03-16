@@ -109,57 +109,61 @@ Fixpoint safe_move_insertion (c: code) : bool :=
   into register-to-register move whenever possible.  Simultaneously,
   it propagates valid (register, slot) equations across basic blocks. *)
 
-Fixpoint transf_code (eqs: equations) (c: code) : code :=
+(** [transf_code] is written in accumulator-passing style so that it runs
+  in constant stack space.  The [k] parameter accumulates the instructions
+  to be generated, in reverse order, and is then reversed at the end *)
+
+Fixpoint transf_code (eqs: equations) (c: code) (k: code) : code :=
   match c with
-  | nil => nil
+  | nil => List.rev' k
   | Lgetstack s r :: c =>
       if is_incoming s then
-        Lgetstack s r :: transf_code (kill_loc (R r) (kill_loc (R IT1) eqs)) c
+        transf_code (kill_loc (R r) (kill_loc (R IT1) eqs)) c (Lgetstack s r :: k)
       else if contains_equation s r eqs then
-        transf_code eqs c
+        transf_code eqs c k
       else 
         match find_reg_containing s eqs with
         | Some r' => 
             if safe_move_insertion c then
-              Lop Omove (r' :: nil) r :: transf_code (kill_at_move (mkeq r s :: kill_loc (R r) eqs)) c
+              transf_code (kill_at_move (mkeq r s :: kill_loc (R r) eqs)) c (Lop Omove (r' :: nil) r :: k)
             else
-              Lgetstack s r:: transf_code (mkeq r s :: kill_loc (R r) eqs) c
+              transf_code (mkeq r s :: kill_loc (R r) eqs) c (Lgetstack s r :: k)
         | None =>
-            Lgetstack s r:: transf_code (mkeq r s :: kill_loc (R r) eqs) c
+            transf_code (mkeq r s :: kill_loc (R r) eqs) c (Lgetstack s r :: k)
         end
   | Lsetstack r s :: c =>
-      Lsetstack r s :: transf_code (kill_at_move (mkeq r s :: kill_loc (S s) eqs)) c
+      transf_code (kill_at_move (mkeq r s :: kill_loc (S s) eqs)) c (Lsetstack r s :: k)
   | Lop op args res :: c =>
-      Lop op args res :: transf_code (kill_loc (R res) (kill_op op eqs)) c
+      transf_code (kill_loc (R res) (kill_op op eqs)) c (Lop op args res :: k)
   | Lload chunk addr args res :: c =>
-      Lload chunk addr args res :: transf_code (kill_loc (R res) (kill_temps eqs)) c
+      transf_code (kill_loc (R res) (kill_temps eqs)) c (Lload chunk addr args res :: k)
   | Lstore chunk addr args src :: c =>
-      Lstore chunk addr args src :: transf_code (kill_temps eqs) c
+      transf_code (kill_temps eqs) c (Lstore chunk addr args src :: k)
   | Lcall sg ros :: c =>
-      Lcall sg ros :: transf_code nil c
+      transf_code nil c (Lcall sg ros :: k)
   | Ltailcall sg ros :: c =>
-      Ltailcall sg ros :: transf_code nil c
+      transf_code nil c (Ltailcall sg ros :: k)
   | Lbuiltin ef args res :: c =>
-      Lbuiltin ef args res :: transf_code (kill_loc (R res) (kill_temps eqs)) c
+      transf_code (kill_loc (R res) (kill_temps eqs)) c (Lbuiltin ef args res :: k)
   | Lannot ef args :: c =>
-      Lannot ef args :: transf_code eqs c
+      transf_code eqs c (Lannot ef args :: k)
   | Llabel lbl :: c =>
-      Llabel lbl :: transf_code nil c
+      transf_code nil c (Llabel lbl :: k)
   | Lgoto lbl :: c =>
-      Lgoto lbl :: transf_code nil c
+      transf_code nil c (Lgoto lbl :: k)
   | Lcond cond args lbl :: c =>
-      Lcond cond args lbl :: transf_code (kill_temps eqs) c
+      transf_code (kill_temps eqs) c (Lcond cond args lbl :: k)
   | Ljumptable arg lbls :: c =>
-      Ljumptable arg lbls :: transf_code nil c
+      transf_code nil c (Ljumptable arg lbls :: k)
   | Lreturn :: c =>
-      Lreturn :: transf_code nil c
+      transf_code nil c (Lreturn :: k)
   end.
 
 Definition transf_function (f: function) : function :=
   mkfunction
     (fn_sig f)
     (fn_stacksize f)
-    (transf_code nil (fn_code f)).
+    (transf_code nil (fn_code f) nil).
 
 Definition transf_fundef (fd: fundef) : fundef :=
   transf_fundef transf_function fd.

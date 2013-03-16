@@ -317,6 +317,7 @@ Lemma wt_transf_code:
 Proof.
   induction c; simpl; intros.
   red; simpl; tauto.
+  rewrite transf_code_cons.
   apply wt_transf_instr; auto with coqlib. 
   apply IHc. red; auto with coqlib. 
 Qed.

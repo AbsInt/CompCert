@@ -293,6 +293,18 @@ Proof.
   case (starts_with n k); simpl; auto.
 Qed.
 
+Remark linearize_body_cons:
+  forall f pc enum,
+  linearize_body f (pc :: enum) =
+  match f.(LTL.fn_code)!pc with
+  | None => linearize_body f enum
+  | Some b => Llabel pc :: linearize_instr b (linearize_body f enum)
+  end.
+Proof.
+  intros. unfold linearize_body. rewrite list_fold_right_eq. 
+  unfold linearize_node. destruct (LTL.fn_code f)!pc; auto.
+Qed.
+
 Lemma find_label_lin_rec:
   forall f enum pc b,
   In pc enum ->
@@ -301,12 +313,13 @@ Lemma find_label_lin_rec:
 Proof.
   induction enum; intros.
   elim H.
-  case (peq a pc); intro.
+  rewrite linearize_body_cons. 
+  destruct (peq a pc).
   subst a. exists (linearize_body f enum).
-  simpl. rewrite H0. simpl. rewrite peq_true. auto.
+  rewrite H0. simpl. rewrite peq_true. auto.
   assert (In pc enum). simpl in H. tauto.
-  elim (IHenum pc b H1 H0). intros k FIND.
-  exists k. simpl. destruct (LTL.fn_code f)!a. 
+  destruct (IHenum pc b H1 H0) as [k FIND].
+  exists k. destruct (LTL.fn_code f)!a. 
   simpl. rewrite peq_false. rewrite find_label_lin_instr. auto. auto.
   auto.
 Qed.
@@ -377,7 +390,7 @@ Lemma label_in_lin_rec:
 Proof.
   induction enum.
   simpl; auto.
-  simpl. destruct (LTL.fn_code f)!a. 
+  rewrite linearize_body_cons. destruct (LTL.fn_code f)!a. 
   simpl. intros [A|B]. left; congruence. 
   right. apply IHenum. eapply label_in_lin_instr; eauto.
   intro; right; auto.
@@ -406,7 +419,8 @@ Lemma unique_labels_lin_rec:
 Proof.
   induction enum.
   simpl; auto.
-  intro. simpl. destruct (LTL.fn_code f)!a. 
+  rewrite linearize_body_cons.
+  intro. destruct (LTL.fn_code f)!a. 
   simpl. split. red. intro. inversion H. elim H3.
   apply label_in_lin_rec with f. 
   apply label_in_lin_instr with i. auto.

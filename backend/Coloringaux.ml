@@ -91,7 +91,7 @@ let name_of_node n =
                 | Some s -> s
       end
   | Some(S _), _ -> "fixed-slot"
-  | None, Some r -> Printf.sprintf "x%ld" (camlint_of_positive r)
+  | None, Some r -> Printf.sprintf "x%ld" (P.to_int32 r)
   | None, None   -> "unknown-reg"
 *)
 
@@ -602,12 +602,15 @@ let rec getAlias n =
 (* Combine two nodes *)
 
 let combine u v =
-  (*i Printf.printf "Combining %s and %s\n" (name_of_node u) (name_of_node v);*)
+  (*i  Printf.printf "Combining %s and %s\n" (name_of_node u) (name_of_node v); *)
   if v.nstate = FreezeWorklist
   then DLinkNode.move v freezeWorklist coalescedNodes
   else DLinkNode.move v spillWorklist coalescedNodes;
   v.alias <- Some u;
-  u.movelist <- u.movelist @ v.movelist;
+  (* Precolored nodes often have big movelists, and if one of [u] and [v]
+     is precolored, it is []u.  So, append [v.movelist] to [u.movelist]
+     instead of the other way around. *)
+  u.movelist <- List.rev_append v.movelist u.movelist;
   u.spillcost <- u.spillcost +. v.spillcost;
   iterAdjacent (combineEdge u) v;  (*r original code using [decrementDegree] is buggy *)
   enableMoves v;                   (*r added as per Appel's book erratum *)

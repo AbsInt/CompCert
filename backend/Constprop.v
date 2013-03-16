@@ -24,6 +24,7 @@ Require Import Registers.
 Require Import RTL.
 Require Import Lattice.
 Require Import Kildall.
+Require Import Liveness.
 Require Import ConstpropOp.
 
 (** * Static analysis *)
@@ -211,6 +212,18 @@ Definition transfer (gapp: global_approx) (f: function) (pc: node) (before: D.t)
       end
   end.
 
+(** To reduce the size of approximations, we preventively set to [Top]
+  the approximations of registers used for the last time in the
+  current instruction. *)
+
+Definition transfer' (gapp: global_approx) (f: function) (lastuses: PTree.t (list reg))
+                     (pc: node) (before: D.t) :=
+  let after := transfer gapp f pc before in
+  match lastuses!pc with
+  | None => after
+  | Some regs => List.fold_left (fun a r => D.set r Unknown a) regs after
+  end.
+
 (** The static analysis itself is then an instantiation of Kildall's
   generic solver for forward dataflow inequations. [analyze f]
   returns a mapping from program points to mappings of pseudo-registers
@@ -221,7 +234,8 @@ Definition transfer (gapp: global_approx) (f: function) (pc: node) (before: D.t)
 Module DS := Dataflow_Solver(D)(NodeSetForward).
 
 Definition analyze (gapp: global_approx) (f: RTL.function): PMap.t D.t :=
-  match DS.fixpoint (successors f) (transfer gapp f) 
+  let lu := Liveness.last_uses f in
+  match DS.fixpoint (successors f) (transfer' gapp f lu) 
                     ((f.(fn_entrypoint), D.top) :: nil) with
   | None => PMap.init D.top
   | Some res => res

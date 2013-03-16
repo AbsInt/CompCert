@@ -24,9 +24,9 @@ Require Import LTLintyping.
 Lemma in_remove_unused_labels:
   forall bto i c, In i (remove_unused_labels bto c) -> In i c.
 Proof.
-  induction c; simpl.
+  unfold remove_unused_labels, remove_unused. induction c; simpl.
   auto.
-  destruct a; simpl; intuition.
+  rewrite list_fold_right_eq. destruct a; simpl; intuition.
   destruct (Labelset.mem l bto); simpl in H; intuition.
 Qed.
 

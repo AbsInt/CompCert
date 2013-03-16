@@ -593,7 +593,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 
 (** Translation of a code sequence *)
 
-Definition r10_is_parent (before: bool) (i: Mach.instruction) : bool :=
+Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
   | Msetstack src ofs ty => before
   | Mgetparam ofs ty dst => negb (mreg_eq dst IT1)
@@ -601,13 +601,31 @@ Definition r10_is_parent (before: bool) (i: Mach.instruction) : bool :=
   | _ => false
   end.
 
-Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction)  (r10p: bool) :=
+(** This is the naive definition that we no longer use because it
+  is not tail-recursive.  It is kept as specification. *)
+
+Fixpoint transl_code (f: Mach.function) (il: list Mach.instruction) (it1p: bool) :=
   match il with
   | nil => OK nil
   | i1 :: il' =>
-      do k <- transl_code f il' (r10_is_parent r10p i1);
-      transl_instr f i1 r10p k
+      do k <- transl_code f il' (it1_is_parent it1p i1);
+      transl_instr f i1 it1p k
   end.
+
+(** This is an equivalent definition in continuation-passing style
+  that runs in constant stack space. *)
+
+Fixpoint transl_code_rec (f: Mach.function) (il: list Mach.instruction)
+                         (it1p: bool) (k: code -> res code) :=
+  match il with
+  | nil => k nil
+  | i1 :: il' =>
+      transl_code_rec f il' (it1_is_parent it1p i1)
+        (fun c1 => do c2 <- transl_instr f i1 it1p c1; k c2)
+  end.
+
+Definition transl_code' (f: Mach.function) (il: list Mach.instruction) (it1p: bool) :=
+  transl_code_rec f il it1p (fun c => OK c).
 
 (** Translation of a whole function.  Note that we must check
   that the generated code contains less than [2^32] instructions,

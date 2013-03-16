@@ -73,7 +73,7 @@ BACKEND=\
   Inlining.v Inliningspec.v Inliningproof.v \
   Renumber.v Renumberproof.v \
   RTLtyping.v \
-  Kildall.v \
+  Kildall.v Liveness.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v LTLtyping.v \
