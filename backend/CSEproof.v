@@ -307,7 +307,8 @@ Proof.
   apply wf_add_store; auto.
   apply wf_empty_numbering.
   apply wf_empty_numbering.
-  apply wf_add_unknown. apply wf_kill_equations; auto.
+  destruct e; (apply wf_empty_numbering ||
+               apply wf_add_unknown; auto; apply wf_kill_equations; auto).
 Qed.
 
 (** As a consequence, the numberings computed by the static analysis
@@ -1088,9 +1089,17 @@ Proof.
   apply wt_regset_assign; auto. 
   rewrite H6. eapply external_call_well_typed; eauto. 
   eapply analysis_correct_1; eauto. simpl; auto.
-  unfold transfer; rewrite H. 
-  apply add_unknown_satisfiable. apply wf_kill_equations. eapply wf_analyze; eauto.
-  eapply kill_loads_satisfiable; eauto. 
+  unfold transfer; rewrite H.
+  assert (CASE1: numbering_satisfiable ge sp (rs#res <- v) m' empty_numbering).
+  { apply empty_numbering_satisfiable. }
+  assert (CASE2: m' = m -> numbering_satisfiable ge sp (rs#res <- v) m' (add_unknown approx#pc res)).
+  { intros. rewrite H1. apply add_unknown_satisfiable. 
+    eapply wf_analyze; eauto. auto. }
+  assert (CASE3: numbering_satisfiable ge sp (rs#res <- v) m'
+                         (add_unknown (kill_loads approx#pc) res)).
+  { apply add_unknown_satisfiable. apply wf_kill_equations. eapply wf_analyze; eauto.
+    eapply kill_loads_satisfiable; eauto. }
+  destruct ef; auto; apply CASE2; inv H0; auto.
 
   (* Icond *)
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.

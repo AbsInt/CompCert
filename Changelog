@@ -4,6 +4,8 @@ Development version
   in tail-recursive style.
 - Reduced memory requirements of constant propagation pass by forgetting
   compile-time approximations of dead variables.
+- More aggressive common subexpression elimination across some builtin
+  function calls, esp. annotations.
 
 
 Release 1.13, 2013-03-12

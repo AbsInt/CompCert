@@ -420,8 +420,18 @@ Module Solver := BBlock_solver(Numbering).
   common subexpressions across a function call (there is a risk of 
   increasing too much the register pressure across the call), so we
   just forget all equations and start afresh with an empty numbering.
-  Finally, the remaining instructions modify neither registers nor
-  the memory, so we keep the numbering unchanged. *)
+  Finally, for instructions that modify neither registers nor
+  the memory, we keep the numbering unchanged.
+
+  For builtin invocations [Ibuiltin], we have three strategies:
+- Forget all equations.  This is appropriate for builtins that can be
+  turned into function calls ([EF_external], [EF_malloc], [EF_free]).
+- Forget equations involving loads but keep equations over registers.
+  This is appropriate for builtins that modify memory, e.g. [EF_memcpy].
+- Keep all equations, taking advantage of the fact that neither memory
+  nor registers are modified.  This is appropriate for annotations,
+  for inlined builtin functions, and for volatile loads.
+*)
 
 Definition transfer (f: function) (pc: node) (before: numbering) :=
   match f.(fn_code)!pc with
@@ -441,7 +451,15 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
       | Itailcall sig ros args =>
           empty_numbering
       | Ibuiltin ef args res s =>
-          add_unknown (kill_loads before) res
+          match ef with
+          | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ =>
+              empty_numbering
+          | EF_vstore _ | EF_vstore_global _ _ _ | EF_memcpy _ _ =>
+              add_unknown (kill_loads before) res
+          | EF_builtin _ _ | EF_vload _ | EF_vload_global _ _ _
+          | EF_annot _ _ | EF_annot_val _ _ =>
+              add_unknown before res
+          end
       | Icond cond args ifso ifnot =>
           before
       | Ijumptable arg tbl =>
