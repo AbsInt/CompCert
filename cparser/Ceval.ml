@@ -21,12 +21,31 @@ open Machine
 
 (* Extra arith on int64 *)
 
-external int64_unsigned_div: int64 -> int64 -> int64
-  = "cparser_int64_unsigned_div"
-external int64_unsigned_mod: int64 -> int64 -> int64
-  = "cparser_int64_unsigned_mod"
-external int64_unsigned_compare: int64 -> int64 -> int
-  = "cparser_int64_unsigned_compare"
+(* Unsigned comparison: do signed comparison after shifting range *)
+
+let int64_unsigned_compare x y =
+  Int64.compare (Int64.add x Int64.min_int) (Int64.add y Int64.min_int)
+
+(* Unsigned division and modulus: synthesized from signed division
+   as described in "Hacker's Delight", section 9.3. *)
+
+let int64_unsigned_div n d =
+  if d < 0L then
+    if int64_unsigned_compare n d < 0 then 0L else 1L
+  else begin
+    let q = Int64.shift_left (Int64.div (Int64.shift_right_logical n 1) d) 1 in
+    let r = Int64.sub n (Int64.mul q d) in
+    if int64_unsigned_compare r d >= 0 then Int64.succ q else q
+  end
+
+let int64_unsigned_mod n d =
+  if d < 0L then
+    if int64_unsigned_compare n d < 0 then n else Int64.sub n d
+  else begin
+    let q = Int64.shift_left (Int64.div (Int64.shift_right_logical n 1) d) 1 in
+    let r = Int64.sub n (Int64.mul q d) in
+    if int64_unsigned_compare r d >= 0 then Int64.sub r d else r
+  end
 
 exception Notconst
 
