@@ -564,8 +564,12 @@ let print_instruction oc tbl pc fallthrough = function
   | Pextsh(r1, r2) ->
       fprintf oc "	extsh	%a, %a\n" ireg r1 ireg r2
   | Pfreeframe(sz, ofs) ->
-      (* Note: could also do an add on GPR1 using sz *)
-      fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1  (camlint_of_coqint ofs)  ireg GPR1
+      let sz = camlint_of_coqint sz
+      and ofs = camlint_of_coqint ofs in
+      if sz < 0x8000l then
+        fprintf oc "	addi	%a, %a, %ld\n" ireg GPR1 ireg GPR1 sz
+      else
+        fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1 ofs ireg GPR1
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
   | Pfadd(r1, r2, r3) ->

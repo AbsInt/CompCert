@@ -1742,11 +1742,17 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           end
       | Pfreeframe(sz, ofs) ->
           begin match ecode with
+          | ADDI(rD, rA, simm) :: es ->
+              OK(fw)
+              >>= match_iregs   GPR1 rD
+              >>= match_iregs   GPR1 rA
+              >>= match_z_int32 sz (exts simm)
+              >>= recur_simpl
           | LWZ(rD, rA, d) :: es ->
               OK(fw)
               >>= match_iregs   GPR1 rD
               >>= match_iregs   GPR1 rA
-              >>= match_z_int32 ofs  (Int32.neg (exts d))
+              >>= match_z_int32 ofs  (exts d)
               >>= recur_simpl
           | _ -> error
           end
