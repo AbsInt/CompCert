@@ -976,7 +976,7 @@ let print_prologue oc =
   | Linux ->
       ()
   | Diab ->
-      fprintf oc "	.xopt	align-fill-text = 0x60000000\n"
+      fprintf oc "	.xopt	align-fill-text=0x60000000\n"
 
 let print_program oc p =
   stubbed_functions := IdentSet.empty;
