@@ -65,14 +65,14 @@ let ident p id =
     let s = Hashtbl.find string_of_atom id in
     fprintf p "_%s" (sanitize s)
   with Not_found | Not_an_identifier ->
-    fprintf p "%ld%%positive" (camlint_of_positive id)
+    fprintf p "%ld%%positive" (P.to_int32 id)
 
 let define_idents p =
   Hashtbl.iter
     (fun id name ->
       try
         fprintf p "Definition _%s : ident := %ld%%positive.@ "
-                  (sanitize name) (camlint_of_positive id)
+                  (sanitize name) (P.to_int32 id)
       with Not_an_identifier ->
         ())
     string_of_atom;
@@ -122,7 +122,7 @@ and rtyp p = function
   | Tpointer(t, _) ->
       fprintf p "(tptr %a)" typ t
   | Tarray(t, sz, _) ->
-      fprintf p "(tarray %a %ld)" typ t (camlint_of_z sz)
+      fprintf p "(tarray %a %ld)" typ t (Z.to_int32 sz)
   | Tfunction(targs, tres) ->
       fprintf p "@[<hov 2>(Tfunction@ %a@ %a)@]" typlist targs typ tres
   | Tstruct(id, flds, _) ->
@@ -166,7 +166,15 @@ let name_of_chunk = function
 let signatur p sg =
   fprintf p "@[<hov 2>(mksignature@ %a@ %a)@]" (print_list asttype) sg.sig_args (print_option asttype) sg.sig_res
 
-let assertions = ref ([]: (ident * typ list) list)
+let assertions = ref ([]: (ident * annot_arg list) list)
+
+let annot_arg p = function
+  | AA_arg ty ->
+      fprintf p "AA_arg %a" asttype ty
+  | AA_int n ->
+      fprintf p "AA_int %a" coqint n
+  | AA_float n ->
+      fprintf p "AA_float %a" coqfloat n
 
 let external_function p = function
   | EF_external(name, sg) ->
@@ -184,15 +192,15 @@ let external_function p = function
   | EF_malloc -> fprintf p "EF_malloc"
   | EF_free -> fprintf p "EF_free"
   | EF_memcpy(sz, al) ->
-      fprintf p "(EF_memcpy %ld %ld)" (camlint_of_z sz) (camlint_of_z al)
+      fprintf p "(EF_memcpy %ld %ld)" (Z.to_int32 sz) (Z.to_int32 al)
   | EF_annot(text, targs) -> 
       assertions := (text, targs) :: !assertions;
-      fprintf p "(EF_annot %ld%%positive %a)" (camlint_of_positive text) (print_list asttype) targs
+      fprintf p "(EF_annot %ld%%positive %a)" (P.to_int32 text) (print_list annot_arg) targs
   | EF_annot_val(text, targ) ->
-      assertions := (text, [targ]) :: !assertions;
-      fprintf p "(EF_annot_val %ld%%positive %a)" (camlint_of_positive text) asttype targ
+      assertions := (text, [AA_arg targ]) :: !assertions;
+      fprintf p "(EF_annot_val %ld%%positive %a)" (P.to_int32 text) asttype targ
   | EF_inline_asm(text) ->
-      fprintf p "(EF_inline_asm %ld%%positive)" (camlint_of_positive text)
+      fprintf p "(EF_inline_asm %ld%%positive)" (P.to_int32 text)
 
 (* Expressions *)
 
@@ -310,7 +318,7 @@ let init_data p = function
   | Init_int32 n -> fprintf p "Init_int32 %a" coqint n
   | Init_float32 n -> fprintf p "Init_float32 %a" coqfloat n
   | Init_float64 n -> fprintf p "Init_float64 %a" coqfloat n
-  | Init_space n -> fprintf p "Init_space %ld" (camlint_of_z n)
+  | Init_space n -> fprintf p "Init_space %ld" (Z.to_int32 n)
   | Init_addrof(id,ofs) -> fprintf p "Init_addrof %a %a" ident id coqint ofs
 
 let print_variable p (id, v) =
@@ -455,11 +463,21 @@ let print_assertion p (txt, targs) =
      | Text _ -> ()
      | Param n -> max_param := max n !max_param)
     frags;
-  fprintf p "  | %ld%%positive, " (camlint_of_positive txt);
-  for i = 1 to !max_param do
-    fprintf p "_x%d :: " i
-  done;
+  fprintf p "  | %ld%%positive, " (P.to_int32 txt);
+  List.iteri
+    (fun i targ ->
+      match targ with
+      | AA_arg _ -> fprintf p "_x%d :: " (i + 1)
+      | _ -> ())
+    targs;
   fprintf p "nil =>@ ";
+  List.iteri
+    (fun i targ ->
+      match targ with
+      | AA_arg _ -> ()
+      | AA_int n ->  fprintf p "    let _x%d := %a in@ " (i + 1) coqint n
+      | AA_float n ->  fprintf p "    let _x%d := %a in@ " (i + 1) coqfloat n)
+    targs;
   fprintf p "    ";
   List.iter
     (function

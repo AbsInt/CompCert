@@ -39,7 +39,7 @@ let print_error oc msg =
   let print_one_error = function
   | Errors.MSG s -> output_string oc (Camlcoq.camlstring_of_coqstring s)
   | Errors.CTX i -> output_string oc (Camlcoq.extern_atom i)
-  | Errors.POS i -> fprintf oc "%ld" (Camlcoq.camlint_of_positive i)
+  | Errors.POS i -> fprintf oc "%ld" (Camlcoq.P.to_int32 i)
   in
     List.iter print_one_error msg;
     output_char oc '\n'
