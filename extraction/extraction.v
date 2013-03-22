@@ -53,9 +53,6 @@ Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".
 Extraction Inline Inlining.ret Inlining.bind.
 
-(* RTLtyping *)
-Extract Constant RTLtyping.infer_type_environment => "RTLtypingaux.infer_type_environment".
-
 (* Constprop *)
 Extract Constant ConstpropOp.propagate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 1".
