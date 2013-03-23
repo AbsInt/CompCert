@@ -605,7 +605,8 @@ Proof.
   destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
   (* pointer *)
   assert (data = Init_addrof id ofs0 /\ chunk = Mint32).
-    destruct ty; inv EQ2; inv H2. destruct i; inv H5. intuition congruence. auto.
+    destruct ty; inv EQ2; inv H2.
+    destruct i; inv H5. intuition congruence. auto.
   destruct H4; subst. rewrite H. assumption.
   (* undef *)
   discriminate.
@@ -754,13 +755,13 @@ Proof.
   repeat rewrite idlsize_app. 
   simpl in H0. 
   rewrite padding_size.
-  rewrite (transl_init_size _ _ _ EQ). rewrite sizeof_unroll_composite.
+  rewrite (transl_init_size _ _ _ EQ). 
   rewrite <- (B _ _ _ _ _ EQ1). omega.
   auto. apply align_le. apply alignof_pos. 
   (* unions *)
   intros. simpl in H. monadInv H. 
   rewrite idlsize_app.
-  rewrite (transl_init_size _ _ _ EQ). rewrite sizeof_unroll_composite. 
+  rewrite (transl_init_size _ _ _ EQ). 
   rewrite padding_size. omega. auto.
 Qed.
 
@@ -772,8 +773,7 @@ Fixpoint fields_of_struct (id: ident) (ty: type) (fl: fieldlist) (pos: Z) : list
   match fl with
   | Fnil => nil
   | Fcons id1 ty1 fl' =>
-      (align pos (alignof ty1), unroll_composite id ty ty1) 
-      :: fields_of_struct id ty fl' (align pos (alignof ty1) + sizeof ty1)
+      (align pos (alignof ty1), ty1) :: fields_of_struct id ty fl' (align pos (alignof ty1) + sizeof ty1)
   end.
 
 Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
@@ -791,7 +791,7 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
       exec_init_list m b ofs (fields_of_struct id (Tstruct id fl a) fl 0) il m' ->
       exec_init m b ofs (Tstruct id fl a) (Init_compound il) m'
   | exec_init_compound_union: forall m b ofs id id1 ty1 fl a i m',
-      exec_init m b ofs (unroll_composite id (Tunion id (Fcons id1 ty1 fl) a) ty1) i m' ->
+      exec_init m b ofs ty1 i m' ->
       exec_init m b ofs (Tunion id (Fcons id1 ty1 fl) a) (Init_compound (Init_cons i Init_nil)) m'
 
 with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem -> Prop :=
@@ -893,9 +893,7 @@ Proof.
   eapply store_init_data_list_app.
   eauto.
   rewrite (transl_init_size _ _ _ EQ).
-  rewrite <- Zplus_assoc. eapply H2.
-  rewrite sizeof_unroll_composite. eauto. 
-  rewrite sizeof_unroll_composite. eauto. 
+  rewrite <- Zplus_assoc. eapply H2. eauto. eauto.
   apply align_le. apply alignof_pos.
 Qed.
 

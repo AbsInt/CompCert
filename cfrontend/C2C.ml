@@ -204,6 +204,20 @@ let convertInt n = coqint_of_camlint(Int64.to_int32 n)
 
 let convertAttr a = List.mem AVolatile a
 
+let mergeAttr a1 a2 = a1 || a2
+
+let mergeTypAttr ty a2 =
+  match ty with
+  | Tvoid -> ty
+  | Tint(sz, sg, a1) -> Tint(sz, sg, mergeAttr a1 a2)
+  | Tfloat(sz, a1) -> Tfloat(sz, mergeAttr a1 a2)
+  | Tpointer(ty', a1) -> Tpointer(ty', mergeAttr a1 a2)
+  | Tarray(ty', sz, a1) -> Tarray(ty', sz, mergeAttr a1 a2)
+  | Tfunction(targs, tres) -> ty
+  | Tstruct(id, fld, a1) -> Tstruct(id, fld, mergeAttr a1 a2)
+  | Tunion(id, fld, a1) -> Tunion(id, fld, mergeAttr a1 a2)
+  | Tcomp_ptr(id, a1) -> Tcomp_ptr(id, mergeAttr a1 a2)
+
 (** Types *)
 
 let convertIkind = function
@@ -236,6 +250,10 @@ let int64_struct a =
      then Fcons(intern_string "hi", ty, Fcons(intern_string "lo", ty, Fnil))
      else Fcons(intern_string "lo", ty, Fcons(intern_string "hi", ty, Fnil))),
     a)
+
+(** A cache for structs and unions already converted *)
+
+let compositeCache : (C.ident, coq_type) Hashtbl.t = Hashtbl.create 77
 
 let convertTyp env t =
 
@@ -276,19 +294,29 @@ let convertTyp env t =
     | C.TNamed _ ->
         assert false
     | C.TStruct(id, a) ->
-        let flds =
-          try
-            convertFields (id :: seen) (Env.find_struct env id)
-          with Env.Error e ->
-            error (Env.error_message e); Fnil in
-        Tstruct(intern_string("struct " ^ id.name), flds, convertAttr a)
+        let a' = convertAttr a in
+        begin try
+          mergeTypAttr (Hashtbl.find compositeCache id) a'
+        with Not_found ->
+          let flds =
+            try
+              convertFields (id :: seen) (Env.find_struct env id)
+            with Env.Error e ->
+              error (Env.error_message e); Fnil in
+          Tstruct(intern_string("struct " ^ id.name), flds, a')
+        end
     | C.TUnion(id, a) ->
-        let flds =
-          try
-            convertFields (id :: seen) (Env.find_union env id)
-          with Env.Error e ->
-            error (Env.error_message e); Fnil in
-        Tunion(intern_string("union " ^ id.name), flds, convertAttr a)
+        let a' = convertAttr a in
+        begin try
+          mergeTypAttr (Hashtbl.find compositeCache id) a'
+        with Not_found ->
+          let flds =
+            try
+              convertFields (id :: seen) (Env.find_union env id)
+            with Env.Error e ->
+              error (Env.error_message e); Fnil in
+          Tunion(intern_string("union " ^ id.name), flds, a')
+        end
     | C.TEnum(id, a) ->
         let (sg, sz) = convertIkind Cutil.enum_ikind in
         Tint(sz, sg, convertAttr a)
@@ -312,6 +340,12 @@ let convertTyp env t =
 let rec convertTypList env = function
   | [] -> Tnil
   | t1 :: tl -> Tcons(convertTyp env t1, convertTypList env tl)
+
+let cacheCompositeDef env su id attr flds =
+  (* we currently ignore attributes on structs and unions *)
+  let ty =
+    match su with C.Struct -> C.TStruct(id, []) | C.Union -> C.TUnion(id, []) in
+  Hashtbl.add compositeCache id (convertTyp env ty)
 
 let rec projFunType env ty =
   match Cutil.unroll env ty with
@@ -854,6 +888,8 @@ let rec convertGlobdecls env res gl =
       | C.Gcompositedef(su, id, attr, flds) ->
           (* sanity checks on fields *)
           checkComposite env su id attr flds;
+          (* convert it to a CompCert C type and cache this type *)
+          cacheCompositeDef env su id attr flds;
           convertGlobdecls env res gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
@@ -937,6 +973,7 @@ let convertProgram p =
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
+  Hashtbl.clear compositeCache;
   Hashtbl.clear special_externals_table;
   let p = Builtins.declarations() @ p in
   try

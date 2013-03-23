@@ -26,18 +26,6 @@ open Cop
 open PrintCsyntax
 open Clight
 
-(* Collecting the names and fields of structs and unions *)
-
-module StructUnionSet = Set.Make(struct
-  type t = string * fieldlist
-  let compare (n1, _ : t) (n2, _ : t) = compare n1 n2
-end)
-
-let struct_unions = ref StructUnionSet.empty
-
-let register_struct_union id fld =
-  struct_unions := StructUnionSet.add (extern_atom id, fld) !struct_unions
-
 (* Naming temporaries *)
 
 let temp_name (id: ident) = "$" ^ Z.to_string (Z.Zpos id)
@@ -320,25 +308,12 @@ let collect_globdef (id, gd) =
 let collect_program p =
   List.iter collect_globdef p.prog_defs
 
-let declare_struct_or_union p (name, fld) =
-  fprintf p "%s;@ @ " name
-
-let print_struct_or_union p (name, fld) =
-  fprintf p "@[<v 2>%s {" name;
-  let rec print_fields = function
-  | Fnil -> ()
-  | Fcons(id, ty, rem) ->
-      fprintf p "@ %s;" (name_cdecl (extern_atom id) ty);
-      print_fields rem in
-  print_fields fld;
-  fprintf p "@;<0 -2>};@]@ @ "
-
 let print_program p prog =
-  struct_unions := StructUnionSet.empty;
+  struct_unions := StructUnion.empty;
   collect_program prog;
   fprintf p "@[<v 0>";
-  StructUnionSet.iter (declare_struct_or_union p) !struct_unions;
-  StructUnionSet.iter (print_struct_or_union p) !struct_unions;
+  StructUnion.iter (declare_struct_or_union p) !struct_unions;
+  StructUnion.iter (print_struct_or_union p) !struct_unions;
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 

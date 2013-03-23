@@ -6,6 +6,8 @@ Development version
   compile-time approximations of dead variables.
 - More aggressive common subexpression elimination across some builtin
   function calls, esp. annotations.
+- More careful elaboration of C struct and union types into CompCert C
+  types, avoiding behaviors exponential in the nesting of structs.	 
 
 
 Release 1.13, 2013-03-12

@@ -66,15 +66,9 @@ let name_floattype sz =
 
 (* Collecting the names and fields of structs and unions *)
 
-module StructUnionSet = Set.Make(struct
-  type t = string * fieldlist
-  let compare (n1, _ : t) (n2, _ : t) = compare n1 n2
-end)
+module StructUnion = Map.Make(String)
 
-let struct_unions = ref StructUnionSet.empty
-
-let register_struct_union id fld =
-  struct_unions := StructUnionSet.add (extern_atom id, fld) !struct_unions
+let struct_unions = ref StructUnion.empty
 
 (* Declarator (identifier + type) *)
 
@@ -453,8 +447,12 @@ let rec collect_type = function
   | Tpointer(t, _) -> collect_type t
   | Tarray(t, _, _) -> collect_type t
   | Tfunction(args, res) -> collect_type_list args; collect_type res
-  | Tstruct(id, fld, _) -> register_struct_union id fld; collect_fields fld
-  | Tunion(id, fld, _) -> register_struct_union id fld; collect_fields fld
+  | Tstruct(id, fld, _) | Tunion(id, fld, _) ->
+      let s = extern_atom id in
+      if not (StructUnion.mem s !struct_unions) then begin
+        struct_unions := StructUnion.add s fld !struct_unions;
+        collect_fields fld
+      end
   | Tcomp_ptr _ -> ()
 
 and collect_type_list = function
@@ -533,10 +531,10 @@ let collect_globdef (id, gd) =
 let collect_program p =
   List.iter collect_globdef p.prog_defs
 
-let declare_struct_or_union p (name, fld) =
+let declare_struct_or_union p name fld =
   fprintf p "%s;@ @ " name
 
-let print_struct_or_union p (name, fld) =
+let print_struct_or_union p name fld =
   fprintf p "@[<v 2>%s {" name;
   let rec print_fields = function
   | Fnil -> ()
@@ -547,11 +545,11 @@ let print_struct_or_union p (name, fld) =
   fprintf p "@;<0 -2>};@]@ @ "
 
 let print_program p prog =
-  struct_unions := StructUnionSet.empty;
+  struct_unions := StructUnion.empty;
   collect_program prog;
   fprintf p "@[<v 0>";
-  StructUnionSet.iter (declare_struct_or_union p) !struct_unions;
-  StructUnionSet.iter (print_struct_or_union p) !struct_unions;
+  StructUnion.iter (declare_struct_or_union p) !struct_unions;
+  StructUnion.iter (print_struct_or_union p) !struct_unions;
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 
