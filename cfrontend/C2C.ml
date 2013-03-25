@@ -287,7 +287,7 @@ let convertTyp env t =
         if Cutil.is_composite_type env tres then
           unsupported "return type is a struct or union";
         Tfunction(begin match targs with
-                  | None -> warning "un-prototyped function type"; Tnil
+                  | None -> (*warning "un-prototyped function type";*) Tnil
                   | Some tl -> convertParams seen tl
                   end,
                   convertTyp seen tres)
@@ -349,7 +349,7 @@ let cacheCompositeDef env su id attr flds =
 
 let rec projFunType env ty =
   match Cutil.unroll env ty with
-  | TFun(res, args, vararg, attr) -> Some(res, vararg)
+  | TFun(res, args, vararg, attr) -> Some(res, args, vararg)
   | TPtr(ty', attr) -> projFunType env ty'
   | _ -> None
 
@@ -574,10 +574,12 @@ let rec convertExpr env e =
       match projFunType env fn.etyp with
       | None ->
           error "wrong type for function part of a call"; ezero
-      | Some(res, false) ->
+      | Some(tres, targs, false) ->
           (* Non-variadic function *)
+          if targs = None then
+            unsupported "call to non-prototyped function";
           Ecall(convertExpr env fn, convertExprList env args, ty)
-      | Some(res, true) ->
+      | Some(tres, targs, true) ->
           (* Variadic function: generate a call to a stub function with
              the appropriate number and types of arguments.  Works only if
              the function expression e is a global variable. *)
@@ -590,7 +592,7 @@ let rec convertExpr env e =
                 unsupported "call to variadic function";
                 "<error>" in
           let targs = convertTypList env (List.map (fun e -> e.etyp) args) in
-          let tres = convertTyp env res in
+          let tres = convertTyp env tres in
           let (stub_fun_name, stub_fun_typ) =
             register_stub_function fun_name tres targs in
           Ecall(Evalof(Evar(intern_string stub_fun_name, stub_fun_typ),
@@ -872,7 +874,7 @@ let rec convertGlobdecls env res gl =
           | TFun(_, Some _, false, _) ->
               convertGlobdecls env (convertFundecl env d :: res) gl'
           | TFun(_, None, false, _) ->
-              error ("'" ^ id.name ^ "' is declared without a function prototype");
+              unsupported ("'" ^ id.name ^ "' is declared without a function prototype");
               convertGlobdecls env res gl'
           | TFun(_, _, true, _) ->
               convertGlobdecls env res gl'
