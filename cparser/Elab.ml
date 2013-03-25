@@ -66,11 +66,6 @@ let elaborated_program () =
 
 let loc_of_name (_, _, _, loc) = loc
 
-let loc_of_namelist = function [] -> cabslu | name :: _ -> loc_of_name name
-
-let loc_of_init_name_list =
-  function [] -> cabslu | (name, init) :: _ -> loc_of_name name
-
 (* Monadic map for functions env -> 'a -> 'b * env *)
 
 let rec mmap f env = function
@@ -510,9 +505,9 @@ and elab_name env spec (id, decl, attr, loc) =
 
 (* Elaboration of a name group *)
 
-and elab_name_group env (spec, namelist) =
+and elab_name_group loc env (spec, namelist) =
   let (sto, inl, bty, env') =
-    elab_specifier (loc_of_namelist namelist) env spec in
+    elab_specifier loc env spec in
   let elab_one_name env (id, decl, attr, loc) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
@@ -522,9 +517,9 @@ and elab_name_group env (spec, namelist) =
 
 (* Elaboration of an init-name group *)
 
-and elab_init_name_group env (spec, namelist) =
+and elab_init_name_group loc env (spec, namelist) =
   let (sto, inl, bty, env') =
-    elab_specifier (loc_of_init_name_list namelist) env spec in
+    elab_specifier loc env spec in
   let elab_one_name env ((id, decl, attr, loc), init) =
     let (ty, env1) =
       elab_type_declarator loc env bty decl in 
@@ -534,9 +529,9 @@ and elab_init_name_group env (spec, namelist) =
 
 (* Elaboration of a field group *)
 
-and elab_field_group env (spec, fieldlist) =
+and elab_field_group loc env (spec, fieldlist) =
   let (names, env') =
-    elab_name_group env (spec, List.map fst fieldlist) in
+    elab_name_group loc env (spec, List.map fst fieldlist) in
 
   let elab_bitfield ((_, _, _, loc), optbitsize) (id, sto, ty) =
     if sto <> Storage_default then
@@ -579,7 +574,7 @@ and elab_field_group env (spec, fieldlist) =
 (* Elaboration of a struct or union *)
 
 and elab_struct_or_union_info kind loc env members attrs =
-  let (m, env') = mmap elab_field_group env members in
+  let (m, env') = mmap (elab_field_group loc) env members in
   let m = List.flatten m in
   (* Check for incomplete types *)
   let rec check_incomplete = function
@@ -1566,12 +1561,12 @@ let rec elab_definition (local: bool) (env: Env.t) (def: Cabs.definition)
 
   (* "int x = 12, y[10], *z" *)
   | DECDEF(init_name_group, loc) ->
-      let (dl, env1) = elab_init_name_group env init_name_group in
+      let (dl, env1) = elab_init_name_group loc env init_name_group in
       enter_decdefs local loc env1 dl
 
   (* "typedef int * x, y[10]; " *)
   | TYPEDEF(namegroup, loc) ->
-      let (dl, env1) = elab_name_group env namegroup in
+      let (dl, env1) = elab_name_group loc env namegroup in
       let env2 = List.fold_left (enter_typedef loc) env1 dl in
       ([], env2)
 
