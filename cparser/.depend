@@ -1,31 +1,35 @@
 Bitfields.cmi: C.cmi
 Builtins.cmi: Env.cmi C.cmi
+C.cmi:
 Cerrors.cmi:
 Ceval.cmi: Env.cmi C.cmi
 Cleanup.cmi: C.cmi
-C.cmi:
 Cprint.cmi: C.cmi
 Cutil.cmi: Env.cmi C.cmi
 Elab.cmi: C.cmi
 Env.cmi: C.cmi
 GCC.cmi: Builtins.cmi
 Lexer.cmi: Parser.cmi
+Longlong.cmi: C.cmi
 Machine.cmi:
-Parse_aux.cmi:
+PackedStructs.cmi: C.cmi
 Parse.cmi: C.cmi
+Parse_aux.cmi:
 Parser.cmi: Cabs.cmo
 Rename.cmi: C.cmi
 StructReturn.cmi: C.cmi
 Transform.cmi: Env.cmi C.cmi
 Unblock.cmi: C.cmi
-Bitfields.cmo: Transform.cmi Machine.cmi Cutil.cmi C.cmi Bitfields.cmi
-Bitfields.cmx: Transform.cmx Machine.cmx Cutil.cmx C.cmi Bitfields.cmi
+Bitfields.cmo: Transform.cmi Machine.cmi Env.cmi Cutil.cmi Cerrors.cmi C.cmi \
+    Bitfields.cmi
+Bitfields.cmx: Transform.cmx Machine.cmx Env.cmx Cutil.cmx Cerrors.cmx C.cmi \
+    Bitfields.cmi
 Builtins.cmo: Env.cmi Cutil.cmi C.cmi Builtins.cmi
 Builtins.cmx: Env.cmx Cutil.cmx C.cmi Builtins.cmi
-Cabshelper.cmo: Cabs.cmo
-Cabshelper.cmx: Cabs.cmx
 Cabs.cmo:
 Cabs.cmx:
+Cabshelper.cmo: Cabs.cmo
+Cabshelper.cmx: Cabs.cmx
 Cerrors.cmo: Cerrors.cmi
 Cerrors.cmx: Cerrors.cmi
 Ceval.cmo: Machine.cmi Cutil.cmi C.cmi Ceval.cmi
@@ -48,20 +52,22 @@ GCC.cmo: Cutil.cmi C.cmi Builtins.cmi GCC.cmi
 GCC.cmx: Cutil.cmx C.cmi Builtins.cmx GCC.cmi
 Lexer.cmo: Parser.cmi Parse_aux.cmi Cabshelper.cmo Cabs.cmo Lexer.cmi
 Lexer.cmx: Parser.cmx Parse_aux.cmx Cabshelper.cmx Cabs.cmx Lexer.cmi
+Longlong.cmo: Transform.cmi Env.cmi Cutil.cmi Cerrors.cmi C.cmi Longlong.cmi
+Longlong.cmx: Transform.cmx Env.cmx Cutil.cmx Cerrors.cmx C.cmi Longlong.cmi
 Machine.cmo: Machine.cmi
 Machine.cmx: Machine.cmi
 Main.cmo: Parse.cmi GCC.cmi Cprint.cmi Builtins.cmi
 Main.cmx: Parse.cmx GCC.cmx Cprint.cmx Builtins.cmx
 PackedStructs.cmo: Transform.cmi Machine.cmi Env.cmi Cutil.cmi Cprint.cmi \
-    Cerrors.cmi C.cmi Builtins.cmi
+    Cerrors.cmi C.cmi Builtins.cmi PackedStructs.cmi
 PackedStructs.cmx: Transform.cmx Machine.cmx Env.cmx Cutil.cmx Cprint.cmx \
-    Cerrors.cmx C.cmi Builtins.cmx
-Parse_aux.cmo: Cerrors.cmi Cabshelper.cmo Parse_aux.cmi
-Parse_aux.cmx: Cerrors.cmx Cabshelper.cmx Parse_aux.cmi
-Parse.cmo: Unblock.cmi StructReturn.cmi Rename.cmi PackedStructs.cmo Elab.cmi \
+    Cerrors.cmx C.cmi Builtins.cmx PackedStructs.cmi
+Parse.cmo: Unblock.cmi StructReturn.cmi Rename.cmi PackedStructs.cmi Elab.cmi \
     Cerrors.cmi Bitfields.cmi Parse.cmi
 Parse.cmx: Unblock.cmx StructReturn.cmx Rename.cmx PackedStructs.cmx Elab.cmx \
     Cerrors.cmx Bitfields.cmx Parse.cmi
+Parse_aux.cmo: Cerrors.cmi Cabshelper.cmo Parse_aux.cmi
+Parse_aux.cmx: Cerrors.cmx Cabshelper.cmx Parse_aux.cmi
 Parser.cmo: Parse_aux.cmi Cabshelper.cmo Cabs.cmo Parser.cmi
 Parser.cmx: Parse_aux.cmx Cabshelper.cmx Cabs.cmx Parser.cmi
 Rename.cmo: Cutil.cmi Cerrors.cmi C.cmi Builtins.cmi Rename.cmi

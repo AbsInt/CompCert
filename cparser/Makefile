@@ -19,7 +19,6 @@ SRCS=Cerrors.ml Cabs.ml Cabshelper.ml Parse_aux.ml Parser.ml Lexer.ml \
   Bitfields.ml PackedStructs.ml \
   Parse.ml
 
-COBJS=uint64.o
 BOBJS=$(SRCS:.ml=.cmo)
 NOBJS=$(SRCS:.ml=.cmx)
 IOBJS=$(INTFS:.mli=.cmi)
@@ -28,9 +27,9 @@ all: cparser.cma cparser.cmxa cparser cparser.byte
 
 install:
 	mkdir -p $(LIBDIR)
-	cp -p Cparser.cmi cparser.cma cparser.cmxa cparser.a libcparser.a dllcparser.so $(LIBDIR)
+	cp -p Cparser.cmi cparser.cma cparser.cmxa cparser.a $(LIBDIR)
 
-cparser: $(COBJS) $(NOBJS) Main.cmx
+cparser: $(NOBJS) Main.cmx
 	$(OCAMLOPT) -o cparser str.cmxa $(COBJS) $(NOBJS) Main.cmx
 
 clean::
@@ -42,11 +41,11 @@ cparser.byte: $(COBJS) $(BOBJS) Main.cmo
 clean::
 	rm -f cparser.byte
 
-cparser.cma libcparser.a: uint64.o Cparser.cmo 
-	$(OCAMLMKLIB) -o cparser uint64.o Cparser.cmo
+cparser.cma: Cparser.cmo 
+	$(OCAMLC) -a -o cparser.cma Cparser.cmo
 
-cparser.cmxa: uint64.o Cparser.cmx
-	$(OCAMLMKLIB) -o cparser uint64.o Cparser.cmx
+cparser.cmxa: Cparser.cmx
+	$(OCAMLOPT) -a -o cparser.cmxa Cparser.cmx
 
 Cparser.cmo Cparser.cmi: $(IOBJS) $(BOBJS)
 	$(OCAMLC) -pack -o Cparser.cmo $(IOBJS) $(BOBJS)
