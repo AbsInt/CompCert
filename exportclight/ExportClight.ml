@@ -449,6 +449,13 @@ let re_annot_param = Str.regexp "%%\\|%[1-9][0-9]*"
 
 type fragment = Text of string | Param of int
 
+(* For compatibility with OCaml < 4.00 *)
+let list_iteri f l =
+  let rec iteri i = function
+  | [] -> ()
+  | a::l -> f i a; iteri (i + 1) l
+  in iteri 0 l
+
 let print_assertion p (txt, targs) =
   let frags =
     List.map
@@ -464,14 +471,14 @@ let print_assertion p (txt, targs) =
      | Param n -> max_param := max n !max_param)
     frags;
   fprintf p "  | %ld%%positive, " (P.to_int32 txt);
-  List.iteri
+  list_iteri
     (fun i targ ->
       match targ with
       | AA_arg _ -> fprintf p "_x%d :: " (i + 1)
       | _ -> ())
     targs;
   fprintf p "nil =>@ ";
-  List.iteri
+  list_iteri
     (fun i targ ->
       match targ with
       | AA_arg _ -> ()
