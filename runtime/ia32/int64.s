@@ -36,63 +36,6 @@
 	
         .text
 
-# Opposite
-
-        .globl __i64_neg
-        .balign 16
-__i64_neg:
-        movl 4(%esp), %eax
-        movl 8(%esp), %edx
-        negl %eax
-        adcl $0, %edx
-        negl %edx
-        ret
-        .type __i64_neg, @function
-        .size __i64_neg, . - __i64_neg
-
-# Addition
-
-        .globl __i64_add
-        .balign 16
-__i64_add:
-        movl 4(%esp), %eax
-        movl 8(%esp), %edx
-        addl 12(%esp), %eax
-        adcl 16(%esp), %edx
-        ret
-        .type __i64_add, @function
-        .size __i64_add, . - __i64_add
-
-# Subtraction
-
-        .globl __i64_sub
-        .balign 16
-__i64_sub:
-        movl 4(%esp), %eax
-        movl 8(%esp), %edx
-        subl 12(%esp), %eax
-        sbbl 16(%esp), %edx
-        ret
-        .type __i64_sub, @function
-        .size __i64_sub, . - __i64_sub
-
-# Multiplication
-
-        .globl __i64_mul
-        .balign 16
-__i64_mul:
-        movl 4(%esp), %eax
-        mull 12(%esp)            # edx:eax = xlo * ylo 
-        movl 4(%esp), %ecx
-        imull 16(%esp), %ecx     # ecx = xlo * yhi
-        addl %ecx, %edx
-        movl 12(%esp), %ecx      # ecx = xhi * ylo
-        imull 8(%esp), %ecx
-        addl %ecx, %edx
-        ret
-        .type __i64_mul, @function
-        .size __i64_mul, . - __i64_mul
-
 # Division and remainder
 
 # Auxiliary function, not exported.

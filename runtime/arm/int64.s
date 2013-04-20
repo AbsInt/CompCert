@@ -77,36 +77,6 @@ __i64_scmp:
 	.type __i64_scmp, %function
 	.size __i64_scmp, . - __i64_scmp
 	
-@@@ Opposite
-	
-        .global __i64_neg
-__i64_neg:
-        rsbs r0, r0, #0
-        rsc r1, r1, #0
-        bx lr
-	.type __i64_neg, %function
-	.size __i64_neg, . - __i64_neg
-
-@@@ Addition	
-	
-	.global __i64_add
-__i64_add:
-        adds r0, r0, r2
-        adc r1, r1, r3
-        bx lr
-	.type __i64_add, %function
-	.size __i64_add, . - __i64_add
-	
-@@@ Subtraction
-	
-	.global __i64_sub
-__i64_sub:
-        subs r0, r0, r2
-        sbc r1, r1, r3
-        bx lr
-	.type __i64_sub, %function
-	.size __i64_sub, . - __i64_sub
-	
 @ Note on ARM shifts: the shift amount is taken modulo 256.
 @ Therefore, unsigned shifts by 32 bits or more produce 0.        
 	
@@ -166,21 +136,6 @@ __i64_sar:
         bx lr
 	.type __i64_sar, %function
 	.size __i64_sar, . - __i64_sar
-	
-@@@ Multiplication
-	
-	.global __i64_mul
-__i64_mul:
-        push {r4, r5}
-        mov r4, r0              @ save first arg in r4,r5
-        mov r5, r1
-        umull r0, r1, r2, r4    @ 64-bit product of low halves
-        mla r1, r2, r5, r1      @ add 32-bit products low half * high half
-        mla r1, r3, r4, r1      @ to high half of result
-        pop {r4, r5}
-        bx lr
-	.type __i64_mul, %function
-	.size __i64_mul, . - __i64_mul
 	
 @@@ Auxiliary function for division and modulus. Not exported.
 

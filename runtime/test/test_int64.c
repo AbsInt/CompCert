@@ -41,10 +41,6 @@
 typedef unsigned long long u64;
 typedef signed long long s64;
 
-extern s64 __i64_neg(s64 x);
-extern s64 __i64_add(s64 x, s64 y);
-extern s64 __i64_sub(s64 x, s64 y);
-extern s64 __i64_mul(s64 x, s64 y);
 extern u64 __i64_udiv(u64 x, u64 y);
 extern u64 __i64_umod(u64 x, u64 y);
 extern s64 __i64_sdiv(s64 x, s64 y);
@@ -77,21 +73,6 @@ static void test1(u64 x, u64 y)
   s64 t, sy;
   int i;
   double f, g;
-
-  z = __i64_neg(x);
-  if (z != -x) 
-    error++, printf("- %016llx = %016llx, expected %016llx\n", x, z, -x);
-  z = __i64_add(x, y);
-  if (z != x + y) 
-    error++, printf("%016llx + %016llx = %016llx, expected %016llx\n", x, y, z, x + y);
-
-  z = __i64_sub(x, y);
-  if (z != x - y) 
-    error++, printf("%016llx - %016llx = %016llx, expected %016llx\n", x, y, z, x - y);
-
-  z = __i64_mul(x, y);
-  if (z != x * y) 
-    error++, printf("%016llx * %016llx = %016llx, expected %016llx\n", x, y, z, x * y);
 
   if (y != 0) {
 

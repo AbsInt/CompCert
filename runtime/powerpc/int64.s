@@ -45,56 +45,6 @@
 	
 	.text
         
-### Opposite
-
-        .balign 16
-        .globl __i64_neg
-__i64_neg:
-        subfic r4, r4, 0        # RL = -XL and set borrow iff XL != 0
-        subfze r3, r3           # RH = -XH - borrow
-        blr
-        .type __i64_neg, @function
-        .size __i64_neg, .-__i64_neg
-
-### Addition	
-
-        .balign 16
-        .globl __i64_add
-__i64_add:
-        addc r4, r4, r6         # RL = XL + YL and set carry if overflow
-        adde r3, r3, r5         # RH = XH + YH + carry
-        blr
-        .type __i64_add, @function
-        .size __i64_add, .-__i64_add
-
-### Subtraction	
-
-        .balign 16
-        .globl __i64_sub
-__i64_sub:
-        subfc r4, r6, r4        # RL = XL - YL and set borrow if underflow
-        subfe r3, r5, r3        # RH = XH - YH - borrow
-        blr
-        .type __i64_sub, @function
-        .size __i64_sub, .-__i64_sub
-
-### Multiplication	
-
-        .balign 16
-        .globl __i64_mul
-__i64_mul:
-   # Form intermediate products
-        mulhwu r7, r4, r6       # r7 = high half of XL * YL
-        mullw r8, r3, r6        # r8 = low half of XH * YL
-        mullw r9, r4, r5        # r9 = low half of XL * YH
-        mullw r4, r4, r6        # r4 = low half of XL * YL = low half of result
-   # Reconstruct high half of result
-        add r3, r7, r8
-        add r3, r3, r9
-        blr
-        .type __i64_mul, @function
-        .size __i64_mul, .-__i64_mul
-
 ### Helper function for division and modulus.  Not exported.	
 # Input:  numerator N in (r3,r4), divisor D in (r5,r6)
 # Output: quotient Q in (r7,r8),  remainder R in (r3,r4)
