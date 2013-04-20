@@ -2,7 +2,9 @@ include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
 INCLUDES=
-OBJS=int64.o
+OBJS=i64_dtos.o i64_dtou.o i64_sar.o i64_scmp.o i64_sdiv.o i64_shl.o \
+  i64_shr.o i64_smod.o i64_stod.o i64_ucmp.o i64_udivmod.o i64_udiv.o \
+  i64_umod.o i64_utod.o
 LIB=libcompcert.a
 
 all: $(LIB) $(INCLUDES)
@@ -13,6 +15,9 @@ $(LIB): $(OBJS)
 
 %.o: $(ARCH)/%.s
 	$(CASMRUNTIME) $^
+
+%.o: $(ARCH)/%.S
+	$(CASMRUNTIME) -DVARIANT_$(VARIANT) $^
 
 clean::
 	rm -f *.o $(LIB)
