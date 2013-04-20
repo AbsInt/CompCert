@@ -201,6 +201,8 @@ __i64_umod:
 	.type __i64_umod, %function
 	.size __i64_umod, . - __i64_umod
 	
+@@@ Signed division	
+	
 	.global __i64_sdiv
 __i64_sdiv:
         push {r4, r5, r6, r7, r8, r10, lr}

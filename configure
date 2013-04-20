@@ -71,6 +71,7 @@ case "$target" in
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ -E"
     casm="${toolprefix}gcc -c"
+    casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
     clinker="${toolprefix}gcc"
     libmath="-lm"
     cchecklink=true;;
@@ -141,6 +142,8 @@ case "$target" in
     exit 2;;
 esac
 
+if test -z "$casmruntime"; then casmruntime="$casm"; fi
+
 # Additional packages needed for cchecklink
 
 if $cchecklink; then
@@ -169,6 +172,7 @@ SYSTEM=$system
 CC=$cc
 CPREPRO=$cprepro
 CASM=$casm
+CASMRUNTIME=$casmruntime
 CLINKER=$clinker
 LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
@@ -203,7 +207,7 @@ VARIANT=
 # SYSTEM=cygwin
 SYSTEM=
 
-# C compiler for compiling library files
+# C compiler for compiling runtime library files and some tests
 CC=gcc
 
 # Preprocessor for .c files
@@ -211,6 +215,9 @@ CPREPRO=gcc -U__GNUC__ -E
 
 # Assembler for assembling .s files
 CASM=gcc -c
+
+# Assembler for assembling runtime library files
+CASMRUNTIME=gcc -c
 
 # Linker
 CLINKER=gcc
@@ -246,6 +253,7 @@ CompCert configuration:
     C compiler.................... $cc
     C preprocessor................ $cprepro
     Assembler..................... $casm
+    Assembler for runtime lib..... $casmruntime
     Linker........................ $clinker
     Math library.................. $libmath
     Binaries installed in......... $bindirexp

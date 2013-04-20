@@ -12,7 +12,7 @@ $(LIB): $(OBJS)
 	ar rcs $(LIB) $(OBJS)
 
 %.o: $(ARCH)/%.s
-	$(CASM) $^
+	$(CASMRUNTIME) $^
 
 clean::
 	rm -f *.o $(LIB)
