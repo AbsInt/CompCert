@@ -88,13 +88,15 @@ u64 special_values[] = {
   0x8000000000000000LLU
 };
 
+#define NUM_SPECIAL_VALUES (sizeof(special_values) / sizeof(u64))
+
 int main()
 {
   int i, j;
   u64 x, y;
 
-  for (i = 0; i <= 4; i++) {
-    for (j = 0; j <= 4; j++) {
+  for (i = 0; i < NUM_SPECIAL_VALUES; i++) {
+    for (j = 0; j < NUM_SPECIAL_VALUES; j++) {
       test1(special_values[i], special_values[j]);
     }
     test1(special_values[i], rnd64());

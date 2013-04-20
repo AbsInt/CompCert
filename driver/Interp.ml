@@ -294,16 +294,17 @@ let extract_string ge m id ofs =
 
 (* Emulation of printf *)
 
-(* All ISO C 99 formats except size modifiers [ll] (long long) and [L]
-   (long double) *)
+(* All ISO C 99 formats except size modifier [L] (long double) *)
 
 let re_conversion = Str.regexp
-  "%[-+0# ]*[0-9]*\\(\\.[0-9]*\\)?\\([lhjzt]\\|hh\\)?\\([aAcdeEfgGinopsuxX%]\\)"
+  "%[-+0# ]*[0-9]*\\(\\.[0-9]*\\)?\\([lhjzt]\\|hh\\|ll\\)?\\([aAcdeEfgGinopsuxX%]\\)"
 
 external format_float: string -> caml_float -> string
   = "caml_format_float"
 external format_int32: string -> int32 -> string
   = "caml_int32_format"
+external format_int64: string -> int64 -> string
+  = "caml_int64_format"
 
 let do_printf ge m fmt args =
 
@@ -337,6 +338,9 @@ let do_printf ge m fmt args =
         | EVfloat f :: args', ('f'|'e'|'E'|'g'|'G'|'a') ->
             Buffer.add_string b (format_float pat (camlfloat_of_coqfloat f));
             scan pos' args'
+        | EVlong i :: args', ('d'|'i'|'u'|'o'|'x'|'X') ->
+            Buffer.add_string b (format_int64 pat (camlint64_of_coqint i));
+            scan pos' args'
         | EVptr_global(id, ofs) :: args', 's' ->
             Buffer.add_string b
               (match extract_string ge m id ofs with
@@ -354,7 +358,7 @@ let do_printf ge m fmt args =
 
 (* Implementing external functions *)
 
-let re_stub = Str.regexp "\\$[if]*$"
+let re_stub = Str.regexp "\\$[ifl]*$"
 
 let chop_stub name = Str.replace_first re_stub "" name
 
