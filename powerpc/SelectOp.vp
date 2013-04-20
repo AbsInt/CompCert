@@ -200,6 +200,8 @@ Nondetfunction mul (e1: expr) (e2: expr) :=
 (** ** Bitwise and, or, xor *)
 
 Nondetfunction andimm (n1: int) (e2: expr) := 
+  if Int.eq n1 Int.zero then Eop (Ointconst Int.zero) Enil else
+  if Int.eq n1 Int.mone then e2 else
   match e2 with
   | Eop (Ointconst n2) Enil =>
       Eop (Ointconst (Int.and n1 n2)) Enil
@@ -240,6 +242,8 @@ Definition same_expr_pure (e1 e2: expr) :=
   end.
 
 Nondetfunction orimm (n1: int) (e2: expr) :=
+  if Int.eq n1 Int.zero then e2 else
+  if Int.eq n1 Int.mone then Eop (Ointconst Int.mone) Enil else
   match e2 with
   | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.or n1 n2)) Enil
   | Eop (Oorimm n2) (t2:::Enil) => Eop (Oorimm (Int.or n1 n2)) (t2:::Enil)
@@ -268,6 +272,7 @@ Nondetfunction or (e1: expr) (e2: expr) :=
   end.
 
 Nondetfunction xorimm (n1: int) (e2: expr) :=
+  if Int.eq n1 Int.zero then e2 else
   match e2 with
   | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.xor n1 n2)) Enil
   | Eop (Oxorimm n2) (t2:::Enil) => Eop (Oxorimm (Int.xor n1 n2)) (t2:::Enil)
@@ -444,12 +449,18 @@ Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 
 (** ** Recognition of addressing modes for load and store operations *)
 
+Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
+  match chunk with Mint64 => false | _ => true end.
+
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
   | Eop (Oaddrsymbol s n) Enil => (Aglobal s n, Enil)
   | Eop (Oaddrstack n) Enil => (Ainstack n, Enil)
   | Eop Oadd (Eop (Oaddrsymbol s n) Enil ::: e2 ::: Enil) => (Abased s n, e2:::Enil)
   | Eop (Oaddimm n) (e1:::Enil) => (Aindexed n, e1:::Enil)
-  | Eop Oadd (e1:::e2:::Enil) => (Aindexed2, e1:::e2:::Enil)
+  | Eop Oadd (e1:::e2:::Enil) =>
+     if can_use_Aindexed2 chunk
+     then (Aindexed2, e1:::e2:::Enil)
+     else (Aindexed Int.zero, Eop Oadd (e1:::e2:::Enil) ::: Enil)
   | _ => (Aindexed Int.zero, e:::Enil)
   end.

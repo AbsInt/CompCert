@@ -81,6 +81,7 @@ Inductive operation : Type :=
   | Orsubshift: shift -> operation      (**r [rd = shifted r2 - r1] *)
   | Orsubimm: int -> operation          (**r [rd = n - r1] *)
   | Omul: operation                     (**r [rd = r1 * r2] *)
+  | Omla: operation                     (**r [rd = r1 * r2 + r3] *)
   | Odiv: operation                     (**r [rd = r1 / r2] (signed) *)
   | Odivu: operation                    (**r [rd = r1 / r2] (unsigned) *)
   | Oand: operation                     (**r [rd = r1 & r2] *)
@@ -114,6 +115,10 @@ Inductive operation : Type :=
   | Ointuoffloat: operation             (**r [rd = unsigned_int_of_float(r1)] *)
   | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] *)
   | Ofloatofintu: operation             (**r [rd = float_of_unsigned_int(r1)] *)
+(*c Manipulating 64-bit integers: *)
+  | Omakelong: operation                (**r [rd = r1 << 32 | r2] *)
+  | Olowlong: operation                 (**r [rd = low-word(r1)] *)
+  | Ohighlong: operation                (**r [rd = high-word(r1)] *)
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
@@ -213,6 +218,7 @@ Definition eval_operation
   | Orsubshift s, v1 :: v2 :: nil => Some (Val.sub (eval_shift s v2) v1)
   | Orsubimm n, v1 :: nil => Some (Val.sub (Vint n) v1)
   | Omul, v1 :: v2 :: nil => Some (Val.mul v1 v2)
+  | Omla, v1 :: v2 :: v3 :: nil => Some (Val.add (Val.mul v1 v2) v3)
   | Odiv, v1 :: v2 :: nil => Val.divs v1 v2
   | Odivu, v1 :: v2 :: nil => Val.divu v1 v2
   | Oand, v1 :: v2 :: nil => Some (Val.and v1 v2)
@@ -244,6 +250,9 @@ Definition eval_operation
   | Ointuoffloat, v1::nil => Val.intuoffloat v1
   | Ofloatofint, v1::nil => Val.floatofint v1
   | Ofloatofintu, v1::nil => Val.floatofintu v1
+  | Omakelong, v1::v2::nil => Some(Val.longofwords v1 v2)
+  | Olowlong, v1::nil => Some(Val.loword v1)
+  | Ohighlong, v1::nil => Some(Val.hiword v1)
   | Ocmp c, _ => Some(Val.of_optbool (eval_condition c vl m))
   | _, _ => None
   end.
@@ -302,6 +311,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Orsubshift _ => (Tint :: Tint :: nil, Tint)
   | Orsubimm _ => (Tint :: nil, Tint)
   | Omul => (Tint :: Tint :: nil, Tint)
+  | Omla => (Tint :: Tint :: Tint :: nil, Tint)
   | Odiv => (Tint :: Tint :: nil, Tint)
   | Odivu => (Tint :: Tint :: nil, Tint)
   | Oand => (Tint :: Tint :: nil, Tint)
@@ -333,6 +343,9 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Ointuoffloat => (Tfloat :: nil, Tint)
   | Ofloatofint => (Tint :: nil, Tfloat)
   | Ofloatofintu => (Tint :: nil, Tfloat)
+  | Omakelong => (Tint :: Tint :: nil, Tlong)
+  | Olowlong => (Tlong :: nil, Tint)
+  | Ohighlong => (Tlong :: nil, Tint)
   | Ocmp c => (type_of_condition c, Tint)
   end.
 
@@ -374,6 +387,7 @@ Proof with (try exact I).
   generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; intuition. destruct (zeq b0 b)...
   destruct v0...
   destruct v0; destruct v1...
+  destruct v0... destruct v1... destruct v2...
   destruct v0; destruct v1; simpl in H0; inv H0.
     destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2...
   destruct v0; destruct v1; simpl in H0; inv H0. destruct (Int.eq i0 Int.zero); inv H2...
@@ -406,6 +420,9 @@ Proof with (try exact I).
   destruct v0; simpl in H0; inv H0. destruct (Float.intuoffloat f); simpl in H2; inv H2...
   destruct v0; simpl in H0; inv H0...
   destruct v0; simpl in H0; inv H0...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0...
   destruct (eval_condition c vl m)... destruct b...
 Qed.
 
@@ -542,6 +559,29 @@ Lemma eval_shift_stack_operation:
 Proof.
   intros. destruct op; simpl; auto.
   rewrite Val.add_assoc. simpl. auto.
+Qed.
+
+(** Offset an addressing mode [addr] by a quantity [delta], so that
+  it designates the pointer [delta] bytes past the pointer designated
+  by [addr].  May be undefined, in which case [None] is returned. *)
+
+Definition offset_addressing (addr: addressing) (delta: int) : option addressing :=
+  match addr with
+  | Aindexed n => Some(Aindexed (Int.add n delta))
+  | Aindexed2 => None
+  | Aindexed2shift s => None
+  | Ainstack n => Some(Ainstack (Int.add n delta))
+  end.
+
+Lemma eval_offset_addressing:
+  forall (F V: Type) (ge: Genv.t F V) sp addr args delta addr' v,
+  offset_addressing addr delta = Some addr' ->
+  eval_addressing ge sp addr args = Some v ->
+  eval_addressing ge sp addr' args = Some(Val.add v (Vint delta)).
+Proof.
+  intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
+  rewrite Val.add_assoc; auto.
+  rewrite Val.add_assoc. auto. 
 Qed.
 
 (** Transformation of addressing modes with two operands or more
@@ -787,6 +827,7 @@ Proof.
   apply (@Values.val_sub_inject f (Vint i) (Vint i) v v'); auto.
 
   inv H4; inv H2; simpl; auto.
+  apply Values.val_add_inject; auto. inv H4; inv H2; simpl; auto.
   inv H4; inv H3; simpl in H1; inv H1. simpl. 
     destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2. TrivialExists.
   inv H4; inv H3; simpl in H1; inv H1. simpl. 
@@ -827,6 +868,10 @@ Proof.
   exists (Vint i); auto.
   inv H4; simpl in *; inv H1. TrivialExists.
   inv H4; simpl in *; inv H1. TrivialExists.
+
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
 
   subst v1. destruct (eval_condition c vl1 m1) eqn:?.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.

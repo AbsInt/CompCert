@@ -10,8 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Linearization of the control-flow graph: 
-    translation from LTL to LTLin *)
+(** Linearization of the control-flow graph: translation from LTL to Linear *)
 
 Require Import Coqlib.
 Require Import Maps.
@@ -23,26 +22,26 @@ Require Import Errors.
 Require Import Op.
 Require Import Locations.
 Require Import LTL.
-Require Import LTLin.
+Require Import Linear.
 Require Import Kildall.
 Require Import Lattice.
 
 Open Scope error_monad_scope.
 
-(** To translate from LTL to LTLin, we must lay out the nodes
+(** To translate from LTL to Linear, we must lay out the nodes
   of the LTL control-flow graph in some linear order, and insert
   explicit branches and conditional branches to make sure that
   each node jumps to its successors as prescribed by the
   LTL control-flow graph.  However, branches are not necessary
   if the fall-through behaviour of LTLin instructions already
   implements the desired flow of control.  For instance,
-  consider the two LTL instructions
+  consider the two LTL blocks
 <<
-    L1: Lop op args res L2
+    L1: Lop op args res; Lbranch L2
     L2: ...
 >>
   If the instructions [L1] and [L2] are laid out consecutively in the LTLin
-  code, we can generate the following LTLin code:
+  code, we can generate the following Linear code:
 <<
     L1: Lop op args res
     L2: ...
@@ -65,7 +64,7 @@ Open Scope error_monad_scope.
 - Choosing an order for the nodes.  This returns an enumeration of CFG
   nodes stating that they must be laid out in the order shown in the
   list.
-- Generate LTLin code where each node branches explicitly to its
+- Generate Linear code where each node branches explicitly to its
   successors, except if one of these successors is the immediately
   following instruction.
 
@@ -102,7 +101,7 @@ Definition reachable (f: LTL.function) : PMap.t bool :=
   | Some rs => rs
   end.
 
-(** We then enumerate the nodes of reachable instructions.
+(** We then enumerate the nodes of reachable blocks.
   This task is performed by external, untrusted Caml code. *)
 
 Parameter enumerate_aux: LTL.function -> PMap.t bool -> list node.
@@ -126,7 +125,7 @@ Fixpoint nodeset_of_list (l: list node) (s: Nodeset.t)
 
 Definition check_reachable_aux
      (reach: PMap.t bool) (s: Nodeset.t)
-     (ok: bool) (pc: node) (i: LTL.instruction) : bool :=
+     (ok: bool) (pc: node) (bb: LTL.bblock) : bool :=
   if reach!!pc then ok && Nodeset.mem pc s else ok.
 
 Definition check_reachable
@@ -141,10 +140,10 @@ Definition enumerate (f: LTL.function) : res (list node) :=
   then OK enum
   else Error (msg "Linearize: wrong enumeration").
 
-(** * Translation from LTL to LTLin *)
+(** * Translation from LTL to Linear *)
 
 (** We now flatten the structure of the CFG graph, laying out
-  LTL instructions consecutively in the order computed by [enumerate],
+  LTL blocks consecutively in the order computed by [enumerate],
   and inserting branches to the labels of sucessors if necessary.
   Whether to insert a branch or not is determined by
   the [starts_with] function below.
@@ -169,31 +168,38 @@ Fixpoint starts_with (lbl: label) (k: code) {struct k} : bool :=
 Definition add_branch (s: label) (k: code) : code :=
   if starts_with s k then k else Lgoto s :: k.
 
-Definition linearize_instr (b: LTL.instruction) (k: code) : code :=
+Fixpoint linearize_block (b: LTL.bblock) (k: code) : code :=
   match b with
-  | LTL.Lnop s =>
+  | nil => k
+  | LTL.Lop op args res :: b' =>
+      Lop op args res :: linearize_block b' k
+  | LTL.Lload chunk addr args dst :: b' =>
+      Lload chunk addr args dst :: linearize_block b' k
+  | LTL.Lgetstack sl ofs ty dst :: b' =>
+      Lgetstack sl ofs ty dst :: linearize_block b' k
+  | LTL.Lsetstack src sl ofs ty :: b' =>
+      Lsetstack src sl ofs ty :: linearize_block b' k
+  | LTL.Lstore chunk addr args src :: b' =>
+      Lstore chunk addr args src :: linearize_block b' k
+  | LTL.Lcall sig ros :: b' =>
+      Lcall sig ros :: linearize_block b' k
+  | LTL.Ltailcall sig ros :: b' =>
+      Ltailcall sig ros :: k
+  | LTL.Lbuiltin ef args res :: b' =>
+      Lbuiltin ef args res :: linearize_block b' k
+  | LTL.Lannot ef args :: b' =>
+      Lannot ef args :: linearize_block b' k
+  | LTL.Lbranch s :: b' =>
       add_branch s k
-  | LTL.Lop op args res s =>
-      Lop op args res :: add_branch s k
-  | LTL.Lload chunk addr args dst s =>
-      Lload chunk addr args dst :: add_branch s k
-  | LTL.Lstore chunk addr args src s =>
-      Lstore chunk addr args src :: add_branch s k
-  | LTL.Lcall sig ros args res s =>
-      Lcall sig ros args res :: add_branch s k
-  | LTL.Ltailcall sig ros args =>
-      Ltailcall sig ros args :: k
-  | LTL.Lbuiltin ef args res s =>
-      Lbuiltin ef args res :: add_branch s k
-  | LTL.Lcond cond args s1 s2 =>
+  | LTL.Lcond cond args s1 s2 :: b' =>
       if starts_with s1 k then
         Lcond (negate_condition cond) args s2 :: add_branch s1 k
       else
         Lcond cond args s1 :: add_branch s2 k
-  | LTL.Ljumptable arg tbl =>
+  | LTL.Ljumptable arg tbl :: b' =>
       Ljumptable arg tbl :: k
-  | LTL.Lreturn or =>
-      Lreturn or :: k
+  | LTL.Lreturn :: b' =>
+      Lreturn :: k
   end.
 
 (** Linearize a function body according to an enumeration of its nodes.  *)
@@ -201,7 +207,7 @@ Definition linearize_instr (b: LTL.instruction) (k: code) : code :=
 Definition linearize_node (f: LTL.function) (pc: node) (k: code) : code :=
   match f.(LTL.fn_code)!pc with
   | None => k
-  | Some b => Llabel pc :: linearize_instr b k
+  | Some b => Llabel pc :: linearize_block b k
   end.
 
 Definition linearize_body (f: LTL.function) (enum: list node) : code :=
@@ -209,16 +215,15 @@ Definition linearize_body (f: LTL.function) (enum: list node) : code :=
 
 (** * Entry points for code linearization *)
 
-Definition transf_function (f: LTL.function) : res LTLin.function :=
+Definition transf_function (f: LTL.function) : res Linear.function :=
   do enum <- enumerate f;
   OK (mkfunction
        (LTL.fn_sig f)
-       (LTL.fn_params f)
        (LTL.fn_stacksize f)
        (add_branch (LTL.fn_entrypoint f) (linearize_body f enum))).
 
-Definition transf_fundef (f: LTL.fundef) : res LTLin.fundef :=
+Definition transf_fundef (f: LTL.fundef) : res Linear.fundef :=
   AST.transf_partial_fundef transf_function f.
 
-Definition transf_program (p: LTL.program) : res LTLin.program :=
+Definition transf_program (p: LTL.program) : res Linear.program :=
   transform_partial_program transf_fundef p.

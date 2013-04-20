@@ -55,6 +55,7 @@ Require Import Globalenvs.
 
 Inductive eventval: Type :=
   | EVint: int -> eventval
+  | EVlong: int64 -> eventval
   | EVfloat: float -> eventval
   | EVptr_global: ident -> int -> eventval.
 
@@ -267,6 +268,8 @@ Variable ge: Genv.t F V.
 Inductive eventval_match: eventval -> typ -> val -> Prop :=
   | ev_match_int: forall i,
       eventval_match (EVint i) Tint (Vint i)
+  | ev_match_long: forall i,
+      eventval_match (EVlong i) Tlong (Vlong i)
   | ev_match_float: forall f,
       eventval_match (EVfloat f) Tfloat (Vfloat f)
   | ev_match_ptr: forall id b ofs,
@@ -327,7 +330,7 @@ Lemma eventval_match_inject:
   forall ev ty v1 v2,
   eventval_match ev ty v1 -> val_inject f v1 v2 -> eventval_match ev ty v2.
 Proof.
-  intros. inv H; inv H0. constructor. constructor.
+  intros. inv H; inv H0; try constructor.
   destruct glob_pres as [A [B C]].
   exploit A; eauto. intro EQ; rewrite H3 in EQ; inv EQ.
   rewrite Int.add_zero. econstructor; eauto. 
@@ -337,7 +340,7 @@ Lemma eventval_match_inject_2:
   forall ev ty v,
   eventval_match ev ty v -> val_inject f v v.
 Proof.
-  induction 1. constructor. constructor.
+  induction 1; auto.
   destruct glob_pres as [A [B C]].
   exploit A; eauto. intro EQ.
   econstructor; eauto. rewrite Int.add_zero; auto.
@@ -379,6 +382,7 @@ Qed.
 Definition eventval_valid (ev: eventval) : Prop :=
   match ev with
   | EVint _ => True
+  | EVlong _ => True
   | EVfloat _ => True
   | EVptr_global id ofs => exists b, Genv.find_symbol ge id = Some b
   end.
@@ -386,6 +390,7 @@ Definition eventval_valid (ev: eventval) : Prop :=
 Definition eventval_type (ev: eventval) : typ :=
   match ev with
   | EVint _ => Tint
+  | EVlong _ => Tlong
   | EVfloat _ => Tfloat
   | EVptr_global id ofs => Tint
   end.
@@ -396,6 +401,7 @@ Lemma eventval_valid_match:
 Proof.
   intros. subst ty. destruct ev; simpl in *.
   exists (Vint i); constructor.
+  exists (Vlong i); constructor.
   exists (Vfloat f0); constructor.
   destruct H as [b A]. exists (Vptr b i0); constructor; auto.
 Qed.
@@ -1692,4 +1698,191 @@ Lemma external_call_deterministic:
 Proof.
   intros. exploit external_call_determ. eexact H. eexact H0. intuition.
 Qed.
+
+(** Late in the back-end, calling conventions for external calls change:
+  arguments and results of type [Tlong] are passed as two integers.
+  We now wrap [external_call] to adapt to this convention. *)
+
+Fixpoint decode_longs (tyl: list typ) (vl: list val) : list val :=
+  match tyl with
+  | nil => nil
+  | Tlong :: tys =>
+      match vl with
+      | v1 :: v2 :: vs => Val.longofwords v1 v2 :: decode_longs tys vs
+      | _ => nil
+      end
+  | ty :: tys =>
+      match vl with
+      | v1 :: vs => v1 :: decode_longs tys vs
+      | _ => nil
+      end
+  end.
+
+Definition encode_long (oty: option typ) (v: val) : list val :=
+  match oty with
+  | Some Tlong => Val.hiword v :: Val.loword v :: nil
+  | _ => v :: nil
+  end.
+
+Definition proj_sig_res' (s: signature) : list typ :=
+  match s.(sig_res) with
+  | Some Tlong => Tint :: Tint :: nil
+  | Some ty => ty :: nil
+  | None => Tint :: nil
+  end.
+
+Inductive external_call'
+      (ef: external_function) (F V: Type) (ge: Genv.t F V)
+      (vargs: list val) (m1: mem) (t: trace) (vres: list val) (m2: mem) : Prop :=
+  external_call'_intro: forall v,
+    external_call ef ge (decode_longs (sig_args (ef_sig ef)) vargs) m1 t v m2 ->
+    vres = encode_long (sig_res (ef_sig ef)) v ->
+    external_call' ef ge vargs m1 t vres m2.
+
+Lemma decode_longs_lessdef:
+  forall tyl vl1 vl2, Val.lessdef_list vl1 vl2 -> Val.lessdef_list (decode_longs tyl vl1) (decode_longs tyl vl2).
+Proof.
+  induction tyl; simpl; intros. 
+  auto.
+  destruct a; inv H; auto. inv H1; auto. constructor; auto. apply Val.longofwords_lessdef; auto. 
+Qed.
+
+Lemma decode_longs_inject:
+  forall f tyl vl1 vl2, val_list_inject f vl1 vl2 -> val_list_inject f (decode_longs tyl vl1) (decode_longs tyl vl2).
+Proof.
+  induction tyl; simpl; intros. 
+  auto.
+  destruct a; inv H; auto. inv H1; auto. constructor; auto. apply val_longofwords_inject; auto. 
+Qed.
+
+Lemma encode_long_lessdef:
+  forall oty v1 v2, Val.lessdef v1 v2 -> Val.lessdef_list (encode_long oty v1) (encode_long oty v2).
+Proof.
+  intros. destruct oty as [[]|]; simpl; auto. 
+  constructor. apply Val.hiword_lessdef; auto. constructor. apply Val.loword_lessdef; auto. auto.
+Qed.
+
+Lemma encode_long_inject:
+  forall f oty v1 v2, val_inject f v1 v2 -> val_list_inject f (encode_long oty v1) (encode_long oty v2).
+Proof.
+  intros. destruct oty as [[]|]; simpl; auto. 
+  constructor. apply val_hiword_inject; auto. constructor. apply val_loword_inject; auto. auto.
+Qed.
+
+Lemma encode_long_has_type:
+  forall v sg,
+  Val.has_type v (proj_sig_res sg) ->
+  Val.has_type_list (encode_long (sig_res sg) v) (proj_sig_res' sg).
+Proof.
+  unfold proj_sig_res, proj_sig_res', encode_long; intros.
+  destruct (sig_res sg) as [[] | ]; simpl; auto.
+  destruct v; simpl; auto.
+Qed.
+
+Lemma external_call_well_typed':
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m1 t vres m2,
+  external_call' ef ge vargs m1 t vres m2 ->
+  Val.has_type_list vres (proj_sig_res' (ef_sig ef)).
+Proof.
+  intros. inv H. apply encode_long_has_type. 
+  eapply external_call_well_typed; eauto. 
+Qed.
+
+Lemma external_call_symbols_preserved':
+  forall ef F1 F2 V (ge1: Genv.t F1 V) (ge2: Genv.t F2 V) vargs m1 t vres m2,
+  external_call' ef ge1 vargs m1 t vres m2 ->
+  (forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id) ->
+  (forall b, Genv.find_var_info ge2 b = Genv.find_var_info ge1 b) ->
+  external_call' ef ge2 vargs m1 t vres m2.
+Proof.
+  intros. inv H. exists v; auto. eapply external_call_symbols_preserved; eauto.
+Qed.
+
+Lemma external_call_valid_block':
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m1 t vres m2 b,
+  external_call' ef ge vargs m1 t vres m2 ->
+  Mem.valid_block m1 b -> Mem.valid_block m2 b.
+Proof.
+  intros. inv H. eapply external_call_valid_block; eauto.
+Qed.
+
+Lemma external_call_mem_extends':
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m1 t vres m2 m1' vargs',
+  external_call' ef ge vargs m1 t vres m2 ->
+  Mem.extends m1 m1' ->
+  Val.lessdef_list vargs vargs' ->
+  exists vres' m2',
+     external_call' ef ge vargs' m1' t vres' m2'
+  /\ Val.lessdef_list vres vres'
+  /\ Mem.extends m2 m2'
+  /\ mem_unchanged_on (loc_out_of_bounds m1) m1' m2'.
+Proof.
+  intros. inv H. 
+  exploit external_call_mem_extends; eauto.
+  eapply decode_longs_lessdef; eauto. 
+  intros (v' & m2' & A & B & C & D).
+  exists (encode_long (sig_res (ef_sig ef)) v'); exists m2'; intuition.
+  econstructor; eauto.
+  eapply encode_long_lessdef; eauto.
+Qed.
+
+Lemma external_call_mem_inject':
+  forall ef F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
+  meminj_preserves_globals ge f ->
+  external_call' ef ge vargs m1 t vres m2 ->
+  Mem.inject f m1 m1' ->
+  val_list_inject f vargs vargs' ->
+  exists f' vres' m2',
+     external_call' ef ge vargs' m1' t vres' m2'
+  /\ val_list_inject f' vres vres'
+  /\ Mem.inject f' m2 m2'
+  /\ mem_unchanged_on (loc_unmapped f) m1 m2
+  /\ mem_unchanged_on (loc_out_of_reach f m1) m1' m2'
+  /\ inject_incr f f'
+  /\ inject_separated f f' m1 m1'.
+Proof.
+  intros. inv H0. 
+  exploit external_call_mem_inject; eauto.
+  eapply decode_longs_inject; eauto.
+  intros (f' & v' & m2' & A & B & C & D & E & P & Q).
+  exists f'; exists (encode_long (sig_res (ef_sig ef)) v'); exists m2'; intuition.
+  econstructor; eauto.
+  apply encode_long_inject; auto.
+Qed.
+
+Lemma external_call_determ':
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m t1 vres1 m1 t2 vres2 m2,
+  external_call' ef ge vargs m t1 vres1 m1 ->
+  external_call' ef ge vargs m t2 vres2 m2 ->
+  match_traces ge t1 t2 /\ (t1 = t2 -> vres1 = vres2 /\ m1 = m2).
+Proof.
+  intros. inv H; inv H0. exploit external_call_determ. eexact H1. eexact H. 
+  intros [A B]. split. auto. intros. destruct B as [C D]; auto. subst. auto. 
+Qed.
+
+Lemma external_call_match_traces':
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m t1 vres1 m1 t2 vres2 m2,
+  external_call' ef ge vargs m t1 vres1 m1 ->
+  external_call' ef ge vargs m t2 vres2 m2 ->
+  match_traces ge t1 t2.
+Proof.
+  intros. inv H; inv H0. eapply external_call_match_traces; eauto.
+Qed.
+
+Lemma external_call_deterministic':
+  forall ef (F V : Type) (ge : Genv.t F V) vargs m t vres1 m1 vres2 m2,
+  external_call' ef ge vargs m t vres1 m1 ->
+  external_call' ef ge vargs m t vres2 m2 ->
+  vres1 = vres2 /\ m1 = m2.
+Proof.
+  intros. inv H; inv H0. 
+  exploit external_call_deterministic. eexact H1. eexact H. intros [A B].
+  split; congruence.
+Qed.
+
+
+
+
+
+
 

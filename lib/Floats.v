@@ -121,6 +121,26 @@ Definition intuoffloat (f:float): option int := (**r conversion to unsigned 32-b
     | None => None
   end.
 
+Definition longoffloat (f:float): option int64 := (**r conversion to signed 64-bit int *)
+  match Zoffloat f with
+    | Some n =>
+      if Zle_bool Int64.min_signed n && Zle_bool n Int64.max_signed then
+        Some (Int64.repr n)
+      else
+        None
+    | None => None
+  end.
+
+Definition longuoffloat (f:float): option int64 := (**r conversion to unsigned 64-bit int *)
+  match Zoffloat f with
+    | Some n =>
+      if Zle_bool 0 n && Zle_bool n Int64.max_unsigned then
+        Some (Int64.repr n)
+      else
+        None
+    | None => None
+  end.
+
 (* Functions used to parse floats *)
 Program Definition build_from_parsed
   (prec:Z) (emax:Z) (prec_gt_0 :Prec_gt_0 prec) (Hmax:prec < emax)
@@ -154,6 +174,11 @@ Definition floatofint (n:int): float := (**r conversion from signed 32-bit int *
   binary_normalize64 (Int.signed n) 0 false.
 Definition floatofintu (n:int): float:= (**r conversion from unsigned 32-bit int *)
   binary_normalize64 (Int.unsigned n) 0 false.
+Definition floatoflong (n:int64): float := (**r conversion from signed 64-bit int *)
+  binary_normalize64 (Int64.signed n) 0 false.
+Definition floatoflongu (n:int64): float:= (**r conversion from unsigned 64-bit int *)
+  binary_normalize64 (Int64.unsigned n) 0 false.
+
 Definition add: float -> float -> float := b64_plus mode_NE. (**r addition *)
 Definition sub: float -> float -> float := b64_minus mode_NE. (**r subtraction *)
 Definition mul: float -> float -> float := b64_mult mode_NE. (**r multiplication *)
@@ -217,24 +242,7 @@ Definition double_of_bits (b: int64): float := b64_of_bits (Int64.unsigned b).
 Definition bits_of_single (f: float) : int := Int.repr (bits_of_b32 (binary32offloat f)).
 Definition single_of_bits (b: int): float := floatofbinary32 (b32_of_bits (Int.unsigned b)).
 
-Definition from_words (hi lo: int) : float :=
-  double_of_bits
-    (Int64.or (Int64.shl (Int64.repr (Int.unsigned hi)) (Int64.repr 32))
-              (Int64.repr (Int.unsigned lo))).
-
-Lemma from_words_eq:
-  forall lo hi,
-  from_words hi lo =
-  double_of_bits (Int64.repr (Int.unsigned hi * two_p 32 + Int.unsigned lo)).
-Proof.
-  intros. unfold from_words. decEq.
-  rewrite Int64.shifted_or_is_add.
-  apply Int64.eqm_samerepr. auto with ints.
-  change Int64.zwordsize with 64. omega.
-  generalize (Int.unsigned_range lo). intros [A B]. 
-  rewrite Int64.unsigned_repr. assumption. 
-  assert (Int.modulus < Int64.max_unsigned). compute; auto. omega.
-Qed.
+Definition from_words (hi lo: int) : float := double_of_bits (Int64.ofwords hi lo).
 
 (** Below are the only properties of floating-point arithmetic that we
   rely on in the compiler proof. *)
@@ -747,35 +755,11 @@ Definition ox4330_0000 := Int.repr 1127219200.        (**r [0x4330_0000] *)
 
 Lemma split_bits_or:
   forall x,
-  split_bits 52 11
-  (Int64.unsigned
-    (Int64.or
-      (Int64.shl (Int64.repr (Int.unsigned ox4330_0000)) (Int64.repr 32))
-      (Int64.repr (Int.unsigned x)))) = (false, Int.unsigned x, 1075).
+  split_bits 52 11 (Int64.unsigned (Int64.ofwords ox4330_0000 x)) = (false, Int.unsigned x, 1075).
 Proof.
   intros.
   transitivity (split_bits 52 11 (join_bits 52 11 false (Int.unsigned x) 1075)).
-  - f_equal.
-    assert (Int64.unsigned (Int64.repr (Int.unsigned x)) = Int.unsigned x).
-      apply Int64.unsigned_repr. 
-      generalize (Int.unsigned_range x).
-      compute_this (Int.modulus).
-      compute_this (Int64.max_unsigned). 
-      omega.
-    rewrite Int64.shifted_or_is_add.
-    unfold join_bits.
-    rewrite H. 
-    apply Int64.unsigned_repr.
-    generalize (Int.unsigned_range x). 
-    compute_this ((0 + 1075) * 2 ^ 52).
-    compute_this (Int.modulus).
-    compute_this (Int64.max_unsigned). 
-    omega.
-    compute_this Int64.zwordsize. omega.
-    rewrite H. 
-    generalize (Int.unsigned_range x). 
-    change (two_p 32) with Int.modulus. 
-    omega.
+  - f_equal. rewrite Int64.ofwords_add'. reflexivity. 
   - apply split_join_bits. 
     compute; auto.
     generalize (Int.unsigned_range x). 

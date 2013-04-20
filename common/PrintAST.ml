@@ -16,7 +16,7 @@ open Printf
 open Camlcoq
 open AST
 
-let name_of_type = function Tint -> "int" | Tfloat -> "float"
+let name_of_type = function Tint -> "int" | Tfloat -> "float" | Tlong -> "long"
 
 let name_of_chunk = function
   | Mint8signed -> "int8signed"
@@ -24,6 +24,7 @@ let name_of_chunk = function
   | Mint16signed -> "int16signed"
   | Mint16unsigned -> "int16unsigned"
   | Mint32 -> "int32"
+  | Mint64 -> "int64"
   | Mfloat32 -> "float32"
   | Mfloat64 -> "float64"
   | Mfloat64al32 -> "float64al32"

@@ -16,15 +16,15 @@
   control-flow graph.  Many of these labels are never branched to,
   which can complicate further optimizations over linearized code.
   (There are no such optimizations yet.)  In preparation for these
-  further optimizations, and to make the generated LTLin code 
+  further optimizations, and to make the generated Linear code 
   better-looking, the present pass removes labels that cannot be
   branched to. *)
 
-Require Import Coqlib.
-Require Import Ordered.
 Require Import FSets.
 Require FSetAVL.
-Require Import LTLin.
+Require Import Coqlib.
+Require Import Ordered.
+Require Import Linear.
 
 Module Labelset := FSetAVL.Make(OrderedPositive).
 
@@ -63,7 +63,6 @@ Definition cleanup_labels (c: code) :=
 Definition transf_function (f: function) : function :=
   mkfunction
      (fn_sig f)
-     (fn_params f)
      (fn_stacksize f)
      (cleanup_labels (fn_code f)).
 

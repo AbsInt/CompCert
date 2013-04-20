@@ -28,7 +28,6 @@ Require Cminor.
 Require CminorSel.
 Require RTL.
 Require LTL.
-Require LTLin.
 Require Linear.
 Require Mach.
 Require Asm.
@@ -49,16 +48,9 @@ Require Allocation.
 Require Tunneling.
 Require Linearize.
 Require CleanupLabels.
-Require Reload.
-Require RRE.
 Require Stacking.
 Require Asmgen.
-(** Type systems. *)
-Require RTLtyping.
-Require LTLtyping.
-Require LTLintyping.
-Require Lineartyping.
-(** Proofs of semantic preservation and typing preservation. *)
+(** Proofs of semantic preservation. *)
 Require SimplExprproof.
 Require SimplLocalsproof.
 Require Cshmgenproof.
@@ -71,17 +63,9 @@ Require Renumberproof.
 Require Constpropproof.
 Require CSEproof.
 Require Allocproof.
-Require Alloctyping.
 Require Tunnelingproof.
-Require Tunnelingtyping.
 Require Linearizeproof.
-Require Linearizetyping.
 Require CleanupLabelsproof.
-Require CleanupLabelstyping.
-Require Reloadproof.
-Require Reloadtyping.
-Require RREproof.
-Require RREtyping.
 Require Stackingproof.
 Require Asmgenproof.
 
@@ -93,7 +77,7 @@ Parameter print_RTL_tailcall: RTL.program -> unit.
 Parameter print_RTL_inline: RTL.program -> unit.
 Parameter print_RTL_constprop: RTL.program -> unit.
 Parameter print_RTL_cse: RTL.program -> unit.
-Parameter print_LTLin: LTLin.program -> unit.
+Parameter print_LTL: LTL.program -> unit.
 Parameter print_Mach: Mach.program -> unit.
 
 Open Local Scope string_scope.
@@ -137,12 +121,10 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
   @@@ CSE.transf_program
    @@ print print_RTL_cse
   @@@ Allocation.transf_program
+   @@ print print_LTL
    @@ Tunneling.tunnel_program
   @@@ Linearize.transf_program
    @@ CleanupLabels.transf_program
-   @@ print print_LTLin
-   @@ Reload.transf_program
-   @@ RRE.transf_program
   @@@ Stacking.transf_program
    @@ print print_Mach
   @@@ Asmgen.transf_program.
@@ -150,7 +132,7 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    OK p
    @@ print print_Cminor
-   @@ Selection.sel_program
+  @@@ Selection.sel_program
   @@@ RTLgen.transl_program
   @@@ transf_rtl_program.
 
@@ -223,20 +205,7 @@ Proof.
   set (p5 := Tunneling.tunnel_program p4) in *.
   destruct (Linearize.transf_program p5) as [p6|] eqn:?; simpl in H; try discriminate.
   set (p7 := CleanupLabels.transf_program p6) in *.
-  set (p8 := Reload.transf_program p7) in *.
-  set (p9 := RRE.transf_program p8) in *.
-  destruct (Stacking.transf_program p9) as [p10|] eqn:?; simpl in H; try discriminate.
-
-  assert(TY1: LTLtyping.wt_program p5).
-    eapply Tunnelingtyping.program_typing_preserved. 
-    eapply Alloctyping.program_typing_preserved; eauto.
-  assert(TY2: LTLintyping.wt_program p7).
-    eapply CleanupLabelstyping.program_typing_preserved.
-    eapply Linearizetyping.program_typing_preserved; eauto.
-  assert(TY3: Lineartyping.wt_program p9).
-    eapply RREtyping.program_typing_preserved.
-    eapply Reloadtyping.program_typing_preserved; eauto.
-
+  destruct (Stacking.transf_program p7) as [p8|] eqn:?; simpl in H; try discriminate.
   eapply compose_forward_simulation. apply Tailcallproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Inliningproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Renumberproof.transf_program_correct. 
@@ -245,12 +214,10 @@ Proof.
   eapply compose_forward_simulation. apply CSEproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Tunnelingproof.transf_program_correct.
-  eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. eauto. 
+  eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. 
   eapply compose_forward_simulation. apply CleanupLabelsproof.transf_program_correct. 
-  eapply compose_forward_simulation. apply Reloadproof.transf_program_correct. eauto.
-  eapply compose_forward_simulation. apply RREproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply Stackingproof.transf_program_correct.
-    eexact Asmgenproof.return_address_exists. eassumption. eauto. 
+    eexact Asmgenproof.return_address_exists. eassumption.
   apply Asmgenproof.transf_program_correct; eauto.
   split. auto. 
   apply forward_to_backward_simulation. auto. 
@@ -269,9 +236,9 @@ Proof.
   unfold transf_cminor_program in H.
   repeat rewrite compose_print_identity in H.
   simpl in H. 
-  set (p1 := Selection.sel_program p) in *.
+  destruct (Selection.sel_program p) as [p1|] eqn:?; simpl in H; try discriminate.
   destruct (RTLgen.transl_program p1) as [p2|] eqn:?; simpl in H; try discriminate.
-  eapply compose_forward_simulation. apply Selectionproof.transf_program_correct.
+  eapply compose_forward_simulation. apply Selectionproof.transf_program_correct. eauto.
   eapply compose_forward_simulation. apply RTLgenproof.transf_program_correct. eassumption.
   exact (fst (transf_rtl_program_correct _ _ H)).
 

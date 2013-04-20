@@ -160,10 +160,12 @@ let register_stub_function name tres targs =
   let rec letters_of_type = function
     | Tnil -> []
     | Tcons(Tfloat _, tl) -> "f" :: letters_of_type tl
+    | Tcons(Tlong _, tl) -> "l" :: letters_of_type tl
     | Tcons(_, tl) -> "i" :: letters_of_type tl in
   let rec types_of_types = function
     | Tnil -> Tnil
     | Tcons(Tfloat _, tl) -> Tcons(Tfloat(F64, noattr), types_of_types tl)
+    | Tcons(Tlong _, tl) -> Tcons(Tlong(Signed, noattr), types_of_types tl)
     | Tcons(_, tl) -> Tcons(Tpointer(Tvoid, noattr), types_of_types tl) in
   let stub_name =
     name ^ "$" ^ String.concat "" (letters_of_type targs) in
@@ -211,6 +213,7 @@ let mergeTypAttr ty a2 =
   | Tvoid -> ty
   | Tint(sz, sg, a1) -> Tint(sz, sg, mergeAttr a1 a2)
   | Tfloat(sz, a1) -> Tfloat(sz, mergeAttr a1 a2)
+  | Tlong(sg, a1) -> Tlong(sg, mergeAttr a1 a2)
   | Tpointer(ty', a1) -> Tpointer(ty', mergeAttr a1 a2)
   | Tarray(ty', sz, a1) -> Tarray(ty', sz, mergeAttr a1 a2)
   | Tfunction(targs, tres) -> ty
@@ -233,8 +236,7 @@ let convertIkind = function
   | C.ILong -> (Signed, I32)
   | C.IULong -> (Unsigned, I32)
   (* Special-cased in convertTyp below *)
-  | C.ILongLong -> unsupported "'long long' type"; (Signed, I32)
-  | C.IULongLong -> unsupported "'unsigned long long' type"; (Unsigned, I32)
+  | C.ILongLong | C.IULongLong -> assert false
 
 let convertFkind = function
   | C.FFloat -> F32
@@ -242,14 +244,6 @@ let convertFkind = function
   | C.FLongDouble ->
       if not !Clflags.option_flongdouble then unsupported "'long double' type"; 
       F64
-
-let int64_struct a =
-  let ty = Tint(I32,Unsigned,noattr) in
-  Tstruct(intern_string "struct __int64",
-    (if Memdataaux.big_endian
-     then Fcons(intern_string "hi", ty, Fcons(intern_string "lo", ty, Fnil))
-     else Fcons(intern_string "lo", ty, Fcons(intern_string "hi", ty, Fnil))),
-    a)
 
 (** A cache for structs and unions already converted *)
 
@@ -260,8 +254,10 @@ let convertTyp env t =
   let rec convertTyp seen t =
     match Cutil.unroll env t with
     | C.TVoid a -> Tvoid
-    | C.TInt((C.ILongLong|C.IULongLong), a) when !Clflags.option_flonglong ->
-        int64_struct (convertAttr a)
+    | C.TInt(C.ILongLong, a) ->
+        Tlong(Signed, convertAttr a)
+    | C.TInt(C.IULongLong, a) ->
+        Tlong(Unsigned, convertAttr a)
     | C.TInt(ik, a) ->
         let (sg, sz) = convertIkind ik in Tint(sz, sg, convertAttr a)
     | C.TFloat(fk, a) ->
@@ -360,14 +356,8 @@ let string_of_type ty =
   Format.pp_print_flush fb ();
   Buffer.contents b
 
-let first_class_value env ty =
-  match Cutil.unroll env ty with
-  | C.TInt((C.ILongLong|C.IULongLong), _) -> false
-  | _ -> true
-
 let supported_return_type env ty =
   match Cutil.unroll env ty with
-  | C.TInt((C.ILongLong|C.IULongLong), _) -> false
   | C.TStruct _  | C.TUnion _ -> false
   | _ -> true
 
@@ -419,10 +409,6 @@ let convertFloat f kind =
 
 let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
 
-let check_assignop msg env e =
-  if not (first_class_value env e.etyp) then
-    unsupported (msg ^ " on a l-value of type " ^ string_of_type e.etyp)
-
 let rec convertExpr env e =
   let ty = convertTyp env e.etyp in
   match e.edesc with
@@ -430,13 +416,11 @@ let rec convertExpr env e =
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
       let l = convertLvalue env e in
-      if not (first_class_value env e.etyp) then
-        unsupported ("r-value of type " ^ string_of_type e.etyp);
       Evalof(l, ty)
 
+  | C.EConst(C.CInt(i, (ILongLong|IULongLong), _)) ->
+      Eval(Vlong(coqint_of_camlint64 i), ty)
   | C.EConst(C.CInt(i, k, _)) ->
-      if k = C.ILongLong || k = C.IULongLong then
-        unsupported "'long long' integer literal";
       Eval(Vint(convertInt i), ty)
   | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
@@ -465,21 +449,17 @@ let rec convertExpr env e =
   | C.EUnop(C.Oaddrof, e1) ->
       Eaddrof(convertLvalue env e1, ty)
   | C.EUnop(C.Opreincr, e1) ->
-      check_assignop "pre-increment" env e1;
       coq_Epreincr Incr (convertLvalue env e1) ty
   | C.EUnop(C.Opredecr, e1) ->
-      check_assignop "pre-decrement" env e1;
       coq_Epreincr Decr (convertLvalue env e1) ty
   | C.EUnop(C.Opostincr, e1) ->
-      check_assignop "post-increment" env e1;
       Epostincr(Incr, convertLvalue env e1, ty)
   | C.EUnop(C.Opostdecr, e1) ->
-      check_assignop "post-decrement" env e1;
       Epostincr(Decr, convertLvalue env e1, ty)
 
   | C.EBinop((C.Oadd|C.Osub|C.Omul|C.Odiv|C.Omod|C.Oand|C.Oor|C.Oxor|
               C.Oshl|C.Oshr|C.Oeq|C.One|C.Olt|C.Ogt|C.Ole|C.Oge) as op,
-             e1, e2, _) ->
+             e1, e2, tyres) ->
       let op' =
         match op with
         | C.Oadd -> Oadd
@@ -503,7 +483,6 @@ let rec convertExpr env e =
   | C.EBinop(C.Oassign, e1, e2, _) ->
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
-      check_assignop "assignment" env e1;
       Eassign(e1', e2', ty)
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
@@ -525,7 +504,6 @@ let rec convertExpr env e =
         | _ -> assert false in
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
-      check_assignop "assignment-operation" env e1;
       Eassignop(op', e1', e2', tyres, ty)
   | C.EBinop(C.Ocomma, e1, e2, _) ->
       Ecomma(convertExpr env e1, convertExpr env e2, ty)
@@ -537,8 +515,6 @@ let rec convertExpr env e =
   | C.EConditional(e1, e2, e3) ->
       Econdition(convertExpr env e1, convertExpr env e2, convertExpr env e3, ty)
   | C.ECast(ty1, e1) ->
-      if not (first_class_value env ty1) then
-        unsupported ("cast to type " ^ string_of_type ty1);
       Ecast(convertExpr env e1, convertTyp env ty1)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->

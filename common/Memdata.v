@@ -35,6 +35,7 @@ Definition size_chunk (chunk: memory_chunk) : Z :=
   | Mint16signed => 2
   | Mint16unsigned => 2
   | Mint32 => 4
+  | Mint64 => 8
   | Mfloat32 => 4
   | Mfloat64 => 8
   | Mfloat64al32 => 8
@@ -82,6 +83,7 @@ Definition align_chunk (chunk: memory_chunk) : Z :=
   | Mint16signed => 2
   | Mint16unsigned => 2
   | Mint32 => 4
+  | Mint64 => 8
   | Mfloat32 => 4
   | Mfloat64 => 8
   | Mfloat64al32 => 4
@@ -96,7 +98,7 @@ Qed.
 Lemma align_size_chunk_divides:
   forall chunk, (align_chunk chunk | size_chunk chunk).
 Proof.
-  intros. destruct chunk; simpl; try apply Zdivide_refl. exists 2; auto. 
+  intros. destruct chunk; simpl; try apply Zdivide_refl; exists 2; auto. 
 Qed.
 
 Lemma align_le_divides:
@@ -340,6 +342,7 @@ Definition encode_val (chunk: memory_chunk) (v: val) : list memval :=
   | Vint n, (Mint16signed | Mint16unsigned) => inj_bytes (encode_int 2%nat (Int.unsigned n))
   | Vint n, Mint32 => inj_bytes (encode_int 4%nat (Int.unsigned n))
   | Vptr b ofs, Mint32 => inj_pointer 4%nat b ofs
+  | Vlong n, Mint64 => inj_bytes (encode_int 8%nat (Int64.unsigned n))
   | Vfloat n, Mfloat32 => inj_bytes (encode_int 4%nat (Int.unsigned (Float.bits_of_single n)))
   | Vfloat n, (Mfloat64 | Mfloat64al32) => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.bits_of_double n)))
   | _, _ => list_repeat (size_chunk_nat chunk) Undef
@@ -354,6 +357,7 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
       | Mint16signed => Vint(Int.sign_ext 16 (Int.repr (decode_int bl)))
       | Mint16unsigned => Vint(Int.zero_ext 16 (Int.repr (decode_int bl)))
       | Mint32 => Vint(Int.repr(decode_int bl))
+      | Mint64 => Vlong(Int64.repr(decode_int bl))
       | Mfloat32 => Vfloat(Float.single_of_bits (Int.repr (decode_int bl)))
       | Mfloat64 | Mfloat64al32 => Vfloat(Float.double_of_bits (Int64.repr (decode_int bl)))
       end
@@ -394,14 +398,19 @@ Definition decode_encode_val (v1: val) (chunk1 chunk2: memory_chunk) (v2: val) :
   | Vint n, Mint16unsigned, Mint16unsigned => v2 = Vint(Int.zero_ext 16 n)
   | Vint n, Mint32, Mint32 => v2 = Vint n
   | Vint n, Mint32, Mfloat32 => v2 = Vfloat(Float.single_of_bits n)
-  | Vint n, (Mfloat32 | Mfloat64 | Mfloat64al32), _ => v2 = Vundef
+  | Vint n, (Mint64 | Mfloat32 | Mfloat64 | Mfloat64al32), _ => v2 = Vundef
   | Vint n, _, _ => True (**r nothing meaningful to say about v2 *)
   | Vptr b ofs, Mint32, Mint32 => v2 = Vptr b ofs
   | Vptr b ofs, _, _ => v2 = Vundef
+  | Vlong n, Mint64, Mint64 => v2 = Vlong n
+  | Vlong n, Mint64, (Mfloat64 | Mfloat64al32) => v2 = Vfloat(Float.double_of_bits n)
+  | Vlong n, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64|Mfloat64al32), _ => v2 = Vundef
+  | Vlong n, _, _ => True (**r nothing meaningful to say about v2 *)
   | Vfloat f, Mfloat32, Mfloat32 => v2 = Vfloat(Float.singleoffloat f)
   | Vfloat f, Mfloat32, Mint32 => v2 = Vint(Float.bits_of_single f)
   | Vfloat f, (Mfloat64 | Mfloat64al32), (Mfloat64 | Mfloat64al32) => v2 = Vfloat f
-  | Vfloat f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32), _ => v2 = Vundef
+  | Vfloat f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mint64), _ => v2 = Vundef
+  | Vfloat f, (Mfloat64 | Mfloat64al32), Mint64 => v2 = Vlong(Float.bits_of_double f)
   | Vfloat f, _, _ => True   (* nothing interesting to say about v2 *)
   end.
 
@@ -419,7 +428,6 @@ Opaque inj_pointer.
   intros.
   destruct v; destruct chunk1; simpl; try (apply decode_val_undef);
   destruct chunk2; unfold decode_val; auto; try (rewrite proj_inj_bytes).
-  (* int-int *)
   rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. omega.
   rewrite decode_encode_int_1. decEq. apply Int.zero_ext_idem. omega.
   rewrite decode_encode_int_1. decEq. apply Int.sign_ext_zero_ext. omega.
@@ -430,10 +438,15 @@ Opaque inj_pointer.
   rewrite decode_encode_int_2. decEq. apply Int.zero_ext_idem. omega.
   rewrite decode_encode_int_4. auto.
   rewrite decode_encode_int_4. auto.
+  rewrite decode_encode_int_8. auto.
+  rewrite decode_encode_int_8. auto.
+  rewrite decode_encode_int_8. auto.
   rewrite decode_encode_int_4. auto.
-  rewrite decode_encode_int_4. decEq. apply Float.single_of_bits_of_single. 
+  rewrite decode_encode_int_4. decEq. apply Float.single_of_bits_of_single.
+  rewrite decode_encode_int_8. auto.
   rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
   rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
+  rewrite decode_encode_int_8. auto.
   rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
   rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
   change (proj_bytes (inj_pointer 4 b i)) with (@None (list byte)). simpl. 
@@ -815,6 +828,7 @@ Proof.
   intros. inv H; simpl.
   destruct chunk; apply inj_bytes_inject || apply repeat_Undef_inject_self.
   destruct chunk; apply inj_bytes_inject || apply repeat_Undef_inject_self.
+  destruct chunk; apply inj_bytes_inject || apply repeat_Undef_inject_self.
   destruct chunk; try (apply repeat_Undef_inject_self). 
   repeat econstructor; eauto. 
   replace (size_chunk_nat chunk) with (length (encode_val chunk v2)).
@@ -845,3 +859,143 @@ Proof.
   constructor.
 Qed. 
 
+(** * Breaking 64-bit memory accesses into two 32-bit accesses *)
+
+Lemma int_of_bytes_append:
+  forall l2 l1, 
+  int_of_bytes (l1 ++ l2) = int_of_bytes l1 + int_of_bytes l2 * two_p (Z_of_nat (length l1) * 8).
+Proof.
+  induction l1; simpl int_of_bytes; intros.
+  simpl. ring.
+  simpl length. rewrite inj_S. 
+  replace (Z.succ (Z.of_nat (length l1)) * 8) with (Z_of_nat (length l1) * 8 + 8) by omega.
+  rewrite two_p_is_exp. change (two_p 8) with 256. rewrite IHl1. ring.
+  omega. omega.
+Qed.
+
+Lemma int_of_bytes_range:
+  forall l, 0 <= int_of_bytes l < two_p (Z_of_nat (length l) * 8).
+Proof.
+  induction l; intros. 
+  simpl. omega.
+  simpl length. rewrite inj_S. 
+  replace (Z.succ (Z.of_nat (length l)) * 8) with (Z.of_nat (length l) * 8 + 8) by omega.
+  rewrite two_p_is_exp. change (two_p 8) with 256. 
+  simpl int_of_bytes. generalize (Byte.unsigned_range a). 
+  change Byte.modulus with 256. omega. 
+  omega. omega. 
+Qed.
+
+Lemma length_proj_bytes:
+  forall l b, proj_bytes l = Some b -> length b = length l.
+Proof.
+  induction l; simpl; intros. 
+  inv H; auto.
+  destruct a; try discriminate. 
+  destruct (proj_bytes l) eqn:E; inv H. 
+  simpl. f_equal. auto.
+Qed.
+
+Lemma proj_bytes_append:
+  forall l2 l1,
+  proj_bytes (l1 ++ l2) =
+  match proj_bytes l1, proj_bytes l2 with
+  | Some b1, Some b2 => Some (b1 ++ b2)
+  | _, _ => None
+  end.
+Proof.
+  induction l1; simpl.
+  destruct (proj_bytes l2); auto.
+  destruct a; auto. rewrite IHl1. 
+  destruct (proj_bytes l1); auto. destruct (proj_bytes l2); auto. 
+Qed.
+
+Lemma decode_val_int64:
+  forall l1 l2,
+  length l1 = 4%nat -> length l2 = 4%nat ->
+  decode_val Mint64 (l1 ++ l2) =
+  Val.longofwords (decode_val Mint32 (if big_endian then l1 else l2))
+                  (decode_val Mint32 (if big_endian then l2 else l1)).
+Proof.
+  intros. unfold decode_val.
+  assert (PP: forall vl, match proj_pointer vl with Vundef => True | Vptr _ _ => True | _ => False end).
+    intros. unfold proj_pointer. destruct vl; auto. destruct m; auto. 
+    destruct (check_pointer 4 b i (Pointer b i n :: vl)); auto. 
+  assert (PP1: forall vl v2, Val.longofwords (proj_pointer vl) v2 = Vundef).
+    intros. generalize (PP vl). destruct (proj_pointer vl); reflexivity || contradiction.
+  assert (PP2: forall v1 vl, Val.longofwords v1 (proj_pointer vl) = Vundef).
+    intros. destruct v1; simpl; auto. 
+    generalize (PP vl). destruct (proj_pointer vl); reflexivity || contradiction.
+  rewrite proj_bytes_append. 
+  destruct (proj_bytes l1) as [b1|] eqn:B1; destruct (proj_bytes l2) as [b2|] eqn:B2.
+- exploit length_proj_bytes. eexact B1. rewrite H; intro L1.
+  exploit length_proj_bytes. eexact B2. rewrite H0; intro L2.
+  assert (UR: forall l, length l = 4%nat -> Int.unsigned (Int.repr (int_of_bytes l)) = int_of_bytes l).
+    intros. apply Int.unsigned_repr. 
+    generalize (int_of_bytes_range l). rewrite H1. 
+    change (two_p (Z.of_nat 4 * 8)) with (Int.max_unsigned + 1). 
+    omega.
+  unfold decode_int, rev_if_be. destruct big_endian; rewrite B1; rewrite B2.
+  + rewrite <- (rev_length b1) in L1. 
+    rewrite <- (rev_length b2) in L2.
+    rewrite rev_app_distr.
+    set (b1' := rev b1) in *; set (b2' := rev b2) in *.
+    unfold Val.longofwords. f_equal. rewrite Int64.ofwords_add. f_equal.
+    rewrite !UR by auto. rewrite int_of_bytes_append. 
+    rewrite L2. change (Z.of_nat 4 * 8) with 32. ring.
+  + unfold Val.longofwords. f_equal. rewrite Int64.ofwords_add. f_equal.
+    rewrite !UR by auto. rewrite int_of_bytes_append. 
+    rewrite L1. change (Z.of_nat 4 * 8) with 32. ring.
+- destruct big_endian; rewrite B1; rewrite B2; auto.
+- destruct big_endian; rewrite B1; rewrite B2; auto.
+- destruct big_endian; rewrite B1; rewrite B2; auto.
+Qed.
+
+Lemma bytes_of_int_append:
+  forall n2 x2 n1 x1,
+  0 <= x1 < two_p (Z_of_nat n1 * 8) ->
+  bytes_of_int (n1 + n2) (x1 + x2 * two_p (Z_of_nat n1 * 8)) =
+  bytes_of_int n1 x1 ++ bytes_of_int n2 x2.
+Proof.
+  induction n1; intros.
+- simpl in *. f_equal. omega. 
+- assert (E: two_p (Z.of_nat (S n1) * 8) = two_p (Z.of_nat n1 * 8) * 256).
+  {
+    rewrite inj_S. change 256 with (two_p 8). rewrite <- two_p_is_exp. 
+    f_equal. omega. omega. omega. 
+  }
+  rewrite E in *. simpl. f_equal.
+  apply Byte.eqm_samerepr. exists (x2 * two_p (Z.of_nat n1 * 8)). 
+  change Byte.modulus with 256. ring.
+  rewrite Zmult_assoc. rewrite Z_div_plus. apply IHn1.
+  apply Zdiv_interval_1. omega. apply two_p_gt_ZERO; omega. omega. 
+  assumption. omega.
+Qed.
+
+Lemma bytes_of_int64:
+  forall i,
+  bytes_of_int 8 (Int64.unsigned i) =
+  bytes_of_int 4 (Int.unsigned (Int64.loword i)) ++ bytes_of_int 4 (Int.unsigned (Int64.hiword i)).
+Proof.
+  intros. transitivity (bytes_of_int (4 + 4) (Int64.unsigned (Int64.ofwords (Int64.hiword i) (Int64.loword i)))).
+  f_equal. f_equal. rewrite Int64.ofwords_recompose. auto.
+  rewrite Int64.ofwords_add'.
+  change 32 with (Z_of_nat 4 * 8). 
+  rewrite Zplus_comm. apply bytes_of_int_append. apply Int.unsigned_range. 
+Qed.
+
+Lemma encode_val_int64:
+  forall v,
+  encode_val Mint64 v =
+     encode_val Mint32 (if big_endian then Val.hiword v else Val.loword v)
+  ++ encode_val Mint32 (if big_endian then Val.loword v else Val.hiword v).
+Proof.
+  intros. destruct v; destruct big_endian eqn:BI; try reflexivity;
+  unfold Val.loword, Val.hiword, encode_val.
+  unfold inj_bytes. rewrite <- map_app. f_equal. 
+  unfold encode_int, rev_if_be. rewrite BI. rewrite <- rev_app_distr. f_equal.
+  apply bytes_of_int64. 
+  unfold inj_bytes. rewrite <- map_app. f_equal. 
+  unfold encode_int, rev_if_be. rewrite BI.
+  apply bytes_of_int64.
+Qed.

@@ -104,6 +104,7 @@ Definition eventval_of_val (v: val) (t: typ) : option eventval :=
   match v, t with
   | Vint i, AST.Tint => Some (EVint i)
   | Vfloat f, AST.Tfloat => Some (EVfloat f)
+  | Vlong n, AST.Tlong => Some (EVlong n)
   | Vptr b ofs, AST.Tint => do id <- Genv.invert_symbol ge b; Some (EVptr_global id ofs)
   | _, _ => None
   end.
@@ -122,6 +123,7 @@ Definition val_of_eventval (ev: eventval) (t: typ) : option val :=
   match ev, t with
   | EVint i, AST.Tint => Some (Vint i)
   | EVfloat f, AST.Tfloat => Some (Vfloat f)
+  | EVlong n, AST.Tlong => Some (Vlong n)
   | EVptr_global id ofs, AST.Tint => do b <- Genv.find_symbol ge id; Some (Vptr b ofs)
   | _, _ => None
   end.
@@ -130,6 +132,7 @@ Lemma eventval_of_val_sound:
   forall v t ev, eventval_of_val v t = Some ev -> eventval_match ge ev t v.
 Proof.
   intros. destruct v; destruct t; simpl in H; inv H.
+  constructor.
   constructor.
   constructor.
   destruct (Genv.invert_symbol ge b) as [id|] eqn:?; inv H1. 
@@ -164,6 +167,7 @@ Lemma val_of_eventval_sound:
   forall ev t v, val_of_eventval ev t = Some v -> eventval_match ge ev t v.
 Proof.
   intros. destruct ev; destruct t; simpl in H; inv H.
+  constructor.
   constructor.
   constructor.
   destruct (Genv.find_symbol ge i) as [b|] eqn:?; inv H1.

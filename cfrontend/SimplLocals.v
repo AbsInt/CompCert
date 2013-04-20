@@ -46,6 +46,7 @@ Definition make_cast (a: expr) (tto: type) : expr :=
   | cast_case_neutral => a
   | cast_case_i2i I32 _ => a
   | cast_case_f2f F64 => a
+  | cast_case_l2l => a
   | cast_case_struct _ _ _ _ => a
   | cast_case_union _ _ _ _ => a
   | cast_case_void => a
@@ -58,6 +59,7 @@ Fixpoint simpl_expr (cenv: compilenv) (a: expr) : expr :=
   match a with
   | Econst_int _ _ => a
   | Econst_float _ _ => a
+  | Econst_long _ _ => a
   | Evar id ty => if VSet.mem id cenv then Etempvar id ty else Evar id ty
   | Etempvar id ty => Etempvar id ty
   | Ederef a1 ty => Ederef (simpl_expr cenv a1) ty
@@ -156,6 +158,7 @@ Fixpoint addr_taken_expr (a: expr): VSet.t :=
   match a with
   | Econst_int _ _ => VSet.empty
   | Econst_float _ _ => VSet.empty
+  | Econst_long _ _ => VSet.empty
   | Evar id ty => VSet.empty
   | Etempvar id ty => VSet.empty
   | Ederef a1 ty => addr_taken_expr a1
@@ -224,8 +227,7 @@ Definition add_lifted (cenv: compilenv) (vars1 vars2: list (ident * type)) :=
 
 Definition transf_function (f: function) : res function :=
   let cenv := cenv_for f in
-  do x <- assertion (list_disjoint_dec ident_eq (var_names f.(fn_params))
-                                                (var_names f.(fn_temps)));
+  assertion (list_disjoint_dec ident_eq (var_names f.(fn_params)) (var_names f.(fn_temps)));
   do body' <- simpl_stmt cenv f.(fn_body);
   OK {| fn_return := f.(fn_return);
         fn_params := f.(fn_params);

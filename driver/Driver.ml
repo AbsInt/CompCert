@@ -89,6 +89,7 @@ let parse_c_file sourcename ifile =
   (* Simplification options *)
   let simplifs =
     "b" (* blocks: mandatory *)
+(*  ^ (if !option_flonglong then "l" else "") *)
   ^ (if !option_fstruct_return then "s" else "")
   ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
@@ -148,7 +149,8 @@ let compile_c_ast sourcename csyntax ofile =
   set_dest PrintRTL.destination_inlining option_dinlining ".inlining.rtl";
   set_dest PrintRTL.destination_constprop option_dconstprop ".constprop.rtl";
   set_dest PrintRTL.destination_cse option_dcse ".cse.rtl";
-  set_dest PrintLTLin.destination option_dalloc ".alloc.ltl";
+  set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
+  set_dest PrintLTL.destination option_dalloc ".alloc.ltl";
   set_dest PrintMach.destination option_dmach ".mach";
   (* Convert to Asm *)
   let asm =
@@ -451,6 +453,7 @@ let cmdline_actions =
   "-dconstprop$", Set option_dconstprop;
   "-dcse$", Set option_dcse;
   "-dalloc$", Set option_dalloc;
+  "-dalloctrace$", Set option_dalloctrace;
   "-dmach$", Set option_dmach;
   "-dasm$", Set option_dasm;
   "-sdump$", Set option_sdump;

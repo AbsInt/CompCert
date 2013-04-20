@@ -21,21 +21,18 @@ Require Import Locations.
 
 (** Machine registers (type [mreg] in module [Locations]) are divided in
   the following groups:
-- Temporaries used for spilling, reloading, and parallel move operations.
-- Allocatable registers, that can be assigned to RTL pseudo-registers.
-  These are further divided into:
--- Callee-save registers, whose value is preserved across a function call.
--- Caller-save registers that can be modified during a function call.
+- Callee-save registers, whose value is preserved across a function call.
+- Caller-save registers that can be modified during a function call.
 
   We follow the PowerPC/EABI application binary interface (ABI) in our choice
   of callee- and caller-save registers.
 *)
 
 Definition int_caller_save_regs :=
-  R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: nil.
+  R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: R11 :: R12 :: nil.
 
 Definition float_caller_save_regs :=
-  F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: F11 :: nil.
+  F0 :: F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: F9 :: F10 :: F11 :: F12 :: F13 :: nil.
 
 Definition int_callee_save_regs :=
   R31 :: R30 :: R29 :: R28 :: R27 :: R26 :: R25 :: R24 :: R23 ::
@@ -45,26 +42,11 @@ Definition float_callee_save_regs :=
   F31 :: F30 :: F29 :: F28 :: F27 :: F26 :: F25 :: F24 :: F23 ::
   F22 :: F21 :: F20 :: F19 :: F18 :: F17 :: F16 :: F15 :: F14 :: nil.
 
-Definition destroyed_at_call_regs :=
+Definition destroyed_at_call :=
   int_caller_save_regs ++ float_caller_save_regs.
 
-Definition destroyed_at_call :=
-  List.map R destroyed_at_call_regs.
-
-Definition int_temporaries := IT1 :: IT2 :: nil.
-
-Definition float_temporaries := FT1 :: FT2 :: FT3 :: nil.
-  
-Definition temporary_regs := int_temporaries ++ float_temporaries.
-
-Definition temporaries := List.map R temporary_regs.
-
-Definition destroyed_at_move_regs: list mreg := nil.
-
-Definition destroyed_at_move := List.map R destroyed_at_move_regs.
-
 Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
-Definition dummy_float_reg := F1.   (**r Used in [Coloring]. *)
+Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
 
 (** The [index_int_callee_save] and [index_float_callee_save] associate
   a unique positive integer to callee-save registers.  This integer is
@@ -175,34 +157,26 @@ Qed.
 
 Lemma register_classification:
   forall r, 
-  (In (R r) temporaries \/ In (R r) destroyed_at_call) \/
-  (In r int_callee_save_regs \/ In r float_callee_save_regs).
+  In r destroyed_at_call \/ In r int_callee_save_regs \/ In r float_callee_save_regs.
 Proof.
   destruct r; 
-  try (left; left; simpl; OrEq);
-  try (left; right; simpl; OrEq);
+  try (left; simpl; OrEq);
   try (right; left; simpl; OrEq);
   try (right; right; simpl; OrEq).
 Qed.
 
 Lemma int_callee_save_not_destroyed:
   forall r, 
-    In (R r) temporaries \/ In (R r) destroyed_at_call ->
-    ~(In r int_callee_save_regs).
+    In r destroyed_at_call -> In r int_callee_save_regs -> False.
 Proof.
-  intros; red; intros. elim H.
-  generalize H0. simpl; ElimOrEq; NotOrEq.
-  generalize H0. simpl; ElimOrEq; NotOrEq.
+  intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
 Qed.
 
 Lemma float_callee_save_not_destroyed:
   forall r, 
-    In (R r) temporaries \/ In (R r) destroyed_at_call ->
-    ~(In r float_callee_save_regs).
+    In r destroyed_at_call -> In r float_callee_save_regs -> False.
 Proof.
-  intros; red; intros. elim H.
-  generalize H0. simpl; ElimOrEq; NotOrEq.
-  generalize H0. simpl; ElimOrEq; NotOrEq.
+  intros. revert H0 H. simpl. ElimOrEq; NotOrEq.
 Qed.
 
 Lemma int_callee_save_type:
@@ -259,39 +233,27 @@ Qed.
 (** ** Location of function result *)
 
 (** The result value of a function is passed back to the caller in
-  registers [R3] or [F1], depending on the type of the returned value.
+  registers [R3] or [F1] or [R3, R4], depending on the type of the returned value.
   We treat a function without result as a function with one integer result. *)
 
-Definition loc_result (s: signature) : mreg :=
+Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
-  | None => R3
-  | Some Tint => R3
-  | Some Tfloat => F1
+  | None => R3 :: nil
+  | Some Tint => R3 :: nil
+  | Some Tfloat => F1 :: nil
+  | Some Tlong => R3 :: R4 :: nil
   end.
 
-(** The result location has the type stated in the signature. *)
-
-Lemma loc_result_type:
-  forall sig,
-  mreg_type (loc_result sig) =
-  match sig.(sig_res) with None => Tint | Some ty => ty end.
-Proof.
-  intros; unfold loc_result.
-  destruct (sig_res sig). 
-  destruct t; reflexivity.
-  reflexivity.
-Qed.
-
-(** The result location is a caller-save register or a temporary *)
+(** The result location is a caller-save register *)
 
 Lemma loc_result_caller_save:
-  forall (s: signature), 
-  In (R (loc_result s)) destroyed_at_call \/ In (R (loc_result s)) temporaries.
+  forall (s: signature) (r: mreg), 
+  In r (loc_result s) -> In r destroyed_at_call.
 Proof.
-  intros; unfold loc_result. left;
-  destruct (sig_res s). 
-  destruct t; simpl; OrEq.
-  simpl; OrEq.
+  intros.
+  assert (r = R3 \/ r = R4 \/ r = F1).
+    unfold loc_result in H. destruct (sig_res s); [destruct t|idtac]; simpl in H; intuition.
+  destruct H0 as [A | [A | A]]; subst r; simpl; OrEq.
 Qed.
 
 (** ** Location of function arguments *)
@@ -300,213 +262,162 @@ Qed.
   to a function:
 - The first 8 integer arguments are passed in registers [R3] to [R10].
 - The first 8 float arguments are passed in registers [F1] to [F8].
+- The first 4 long integer arguments are passed in register pairs [R3,R4] ... [R9,R10].
 - Extra arguments are passed on the stack, in [Outgoing] slots, consecutively
   assigned (1 word for an integer argument, 2 words for a float),
   starting at word offset 0.
 - No stack space is reserved for the arguments that are passed in registers.
 *)
 
-Fixpoint loc_arguments_rec
-    (tyl: list typ) (iregl: list mreg) (fregl: list mreg)
-    (ofs: Z) {struct tyl} : list loc :=
-  match tyl with
-  | nil => nil
-  | Tint :: tys =>
-      match iregl with
-      | nil =>
-          S (Outgoing ofs Tint) :: loc_arguments_rec tys nil fregl (ofs + 1)
-      | ireg :: iregs =>
-          R ireg :: loc_arguments_rec tys iregs fregl ofs
-      end
-  | Tfloat :: tys =>
-      match fregl with
-      | nil =>
-          S (Outgoing ofs Tfloat) :: loc_arguments_rec tys iregl nil (ofs + 2)
-      | freg :: fregs =>
-          R freg :: loc_arguments_rec tys iregl fregs ofs
-      end
-  end.
-
 Definition int_param_regs :=
   R3 :: R4 :: R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: nil.
 Definition float_param_regs :=
   F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: F8 :: nil.
 
+Fixpoint loc_arguments_rec
+    (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list loc :=
+  match tyl with
+  | nil => nil
+  | Tint :: tys =>
+      match list_nth_z int_param_regs ir with
+      | None =>
+          S Outgoing ofs Tint :: loc_arguments_rec tys ir fr (ofs + 1)
+      | Some ireg =>
+          R ireg :: loc_arguments_rec tys (ir + 1) fr ofs
+      end
+  | Tfloat :: tys =>
+      match list_nth_z float_param_regs fr with
+      | None =>
+          S Outgoing ofs Tfloat :: loc_arguments_rec tys ir fr (ofs + 2)
+      | Some freg =>
+          R freg :: loc_arguments_rec tys ir (fr + 1) ofs
+      end
+  | Tlong :: tys =>
+      let ir := align ir 2 in
+      match list_nth_z int_param_regs ir, list_nth_z int_param_regs (ir + 1) with
+      | Some r1, Some r2 =>
+          R r1 :: R r2 :: loc_arguments_rec tys (ir + 2) fr ofs
+      | _, _ =>
+          S Outgoing ofs Tint :: S Outgoing (ofs + 1) Tint :: loc_arguments_rec tys ir fr (ofs + 2)
+      end
+  end.
+
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list loc :=
-  loc_arguments_rec s.(sig_args) int_param_regs float_param_regs 0.
+  loc_arguments_rec s.(sig_args) 0 0 0.
 
 (** [size_arguments s] returns the number of [Outgoing] slots used
   to call a function with signature [s]. *)
 
-Fixpoint size_arguments_rec
-    (tyl: list typ) (iregl: list mreg) (fregl: list mreg)
-    (ofs: Z) {struct tyl} : Z :=
+Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => ofs
   | Tint :: tys =>
-      match iregl with
-      | nil => size_arguments_rec tys nil fregl (ofs + 1)
-      | ireg :: iregs => size_arguments_rec tys iregs fregl ofs
+      match list_nth_z int_param_regs ir with
+      | None => size_arguments_rec tys ir fr (ofs + 1)
+      | Some ireg => size_arguments_rec tys (ir + 1) fr ofs
       end
   | Tfloat :: tys =>
-      match fregl with
-      | nil => size_arguments_rec tys iregl nil (ofs + 2)
-      | freg :: fregs => size_arguments_rec tys iregl fregs ofs
+      match list_nth_z float_param_regs fr with
+      | None => size_arguments_rec tys ir fr (ofs + 2)
+      | Some freg => size_arguments_rec tys ir (fr + 1) ofs
+      end
+  | Tlong :: tys =>
+      let ir := align ir 2 in
+      match list_nth_z int_param_regs ir, list_nth_z int_param_regs (ir + 1) with
+      | Some r1, Some r2 => size_arguments_rec tys (ir + 2) fr ofs
+      | _, _ => size_arguments_rec tys ir fr (ofs + 2)
       end
   end.
 
+
 Definition size_arguments (s: signature) : Z :=
-  size_arguments_rec s.(sig_args) int_param_regs float_param_regs 0.
+  size_arguments_rec s.(sig_args) 0 0 0.
 
 (** A tail-call is possible for a signature if the corresponding
     arguments are all passed in registers. *)
 
 Definition tailcall_possible (s: signature) : Prop :=
   forall l, In l (loc_arguments s) ->
-  match l with R _ => True | S _ => False end.
+  match l with R _ => True | S _ _ _ => False end.
 
-(** Argument locations are either non-temporary registers or [Outgoing] 
+(** Argument locations are either caller-save registers or [Outgoing] 
   stack slots at nonnegative offsets. *)
 
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
-  | R r => ~(In l temporaries)
-  | S (Outgoing ofs ty) => ofs >= 0
+  | R r => In r destroyed_at_call
+  | S Outgoing ofs ty => ofs >= 0 /\ ty <> Tlong
   | _ => False
   end.
 
 Remark loc_arguments_rec_charact:
-  forall tyl iregl fregl ofs l,
-  In l (loc_arguments_rec tyl iregl fregl ofs) ->
+  forall tyl ir fr ofs l,
+  In l (loc_arguments_rec tyl ir fr ofs) ->
   match l with
-  | R r => In r iregl \/ In r fregl
-  | S (Outgoing ofs' ty) => ofs' >= ofs
-  | S _ => False
+  | R r => In r int_param_regs \/ In r float_param_regs
+  | S Outgoing ofs' ty => ofs' >= ofs /\ ty <> Tlong
+  | S _ _ _ => False
   end.
 Proof.
+Opaque list_nth_z.
   induction tyl; simpl loc_arguments_rec; intros.
   elim H.
-  destruct a. 
-  destruct iregl; elim H; intro. 
-  subst l. omega.
-  generalize (IHtyl _ _ _ _ H0). destruct l; auto. destruct s; auto. omega.
-  subst l. auto with coqlib.
-  generalize (IHtyl _ _ _ _ H0). destruct l; auto. simpl; intuition.
-  destruct fregl; elim H; intro. 
-  subst l. omega.
-  generalize (IHtyl _ _ _ _ H0). destruct l; auto. destruct s; auto. omega.
-  subst l. auto with coqlib.
-  generalize (IHtyl _ _ _ _ H0). destruct l; auto.
-  intros [A|B]. left; auto. right; auto with coqlib.
+  destruct a.
+  destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H. 
+  subst. left. eapply list_nth_z_in; eauto.
+  eapply IHtyl; eauto.
+  subst. split. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+  destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H. 
+  subst. right. eapply list_nth_z_in; eauto.
+  eapply IHtyl; eauto.
+  subst. split. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+  set (ir' := align ir 2) in *.
+  destruct (list_nth_z int_param_regs ir') as [r1|] eqn:E1.
+  destruct (list_nth_z int_param_regs (ir' + 1)) as [r2|] eqn:E2.
+  destruct H. subst; left; eapply list_nth_z_in; eauto.
+  destruct H. subst; left; eapply list_nth_z_in; eauto.
+  eapply IHtyl; eauto.
+  destruct H. subst. split. omega. congruence.
+  destruct H. subst. split. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega. 
+  destruct H. subst. split. omega. congruence. 
+  destruct H. subst. split. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega. 
 Qed.
 
 Lemma loc_arguments_acceptable:
-  forall (s: signature) (r: loc),
-  In r (loc_arguments s) -> loc_argument_acceptable r.
+  forall (s: signature) (l: loc),
+  In l (loc_arguments s) -> loc_argument_acceptable l.
 Proof.
   unfold loc_arguments; intros.
   generalize (loc_arguments_rec_charact _ _ _ _ _ H).
-  destruct r.
-  intro H0; elim H0. simpl. unfold not. ElimOrEq; NotOrEq.
-  simpl. unfold not. ElimOrEq; NotOrEq.
-  destruct s0; try contradiction.
-  simpl. omega. 
+  destruct l.
+  intro H0; elim H0; simpl; ElimOrEq; OrEq.
+  destruct sl; try contradiction. simpl. intuition omega.
 Qed. 
 Hint Resolve loc_arguments_acceptable: locs.
-
-(** Arguments are parwise disjoint (in the sense of [Loc.norepet]). *)
-
-Remark loc_arguments_rec_notin_reg:
-  forall tyl iregl fregl ofs r,
-  ~(In r iregl) -> ~(In r fregl) ->
-  Loc.notin (R r) (loc_arguments_rec tyl iregl fregl ofs).
-Proof.
-  induction tyl; simpl; intros.
-  auto.
-  destruct a. 
-  destruct iregl; simpl. auto.
-  simpl in H. split. apply sym_not_equal. tauto.
-  apply IHtyl. tauto. tauto.
-  destruct fregl; simpl. auto.
-  simpl in H0. split. apply sym_not_equal. tauto.
-  apply IHtyl. 
-  red; intro. apply H. auto.
-  tauto.
-Qed.
-
-Remark loc_arguments_rec_notin_local:
-  forall tyl iregl fregl ofs ofs0 ty0,
-  Loc.notin (S (Local ofs0 ty0)) (loc_arguments_rec tyl iregl fregl ofs).
-Proof.
-  induction tyl; simpl; intros.
-  auto.
-  destruct a.
-  destruct iregl; simpl; auto.
-  destruct fregl; simpl; auto.
-Qed.
-
-Remark loc_arguments_rec_notin_outgoing:
-  forall tyl iregl fregl ofs ofs0 ty0,
-  ofs0 + typesize ty0 <= ofs ->
-  Loc.notin (S (Outgoing ofs0 ty0)) (loc_arguments_rec tyl iregl fregl ofs).
-Proof.
-  induction tyl; simpl; intros.
-  auto.
-  destruct a.
-  destruct iregl; simpl. 
-  split. omega. eapply IHtyl. omega.
-  auto.
-  destruct fregl; simpl. 
-  split. omega. eapply IHtyl. omega.
-  auto.
-Qed.
-
-Lemma loc_arguments_norepet:
-  forall (s: signature), Loc.norepet (loc_arguments s).
-Proof.
-  assert (forall tyl iregl fregl ofs,
-    list_norepet iregl ->
-    list_norepet fregl ->
-    list_disjoint iregl fregl ->
-    Loc.norepet (loc_arguments_rec tyl iregl fregl ofs)).
-  induction tyl; simpl; intros.
-  constructor.
-  destruct a. 
-  destruct iregl; constructor.
-  apply loc_arguments_rec_notin_outgoing. simpl; omega. auto.
-  apply loc_arguments_rec_notin_reg. inversion H. auto.
-  apply list_disjoint_notin with (m :: iregl); auto with coqlib.
-  apply IHtyl. inv H; auto. auto.
-  eapply list_disjoint_cons_left; eauto.
-  destruct fregl; constructor.
-  apply loc_arguments_rec_notin_outgoing. simpl; omega. auto.
-  apply loc_arguments_rec_notin_reg.
-  red; intro. apply (H1 m m). auto. 
-  auto with coqlib. auto. inv H0; auto.
-  apply IHtyl. auto.
-  inv H0; auto. 
-  red; intros. apply H1. auto. auto with coqlib.
-
-  intro. unfold loc_arguments. apply H.
-  unfold int_param_regs. NoRepet.
-  unfold float_param_regs. NoRepet.
-  red; intros x y; simpl. ElimOrEq; ElimOrEq; discriminate.
-Qed.
 
 (** The offsets of [Outgoing] arguments are below [size_arguments s]. *)
 
 Remark size_arguments_rec_above:
-  forall tyl iregl fregl ofs0,
-  ofs0 <= size_arguments_rec tyl iregl fregl ofs0.
+  forall tyl ir fr ofs0,
+  ofs0 <= size_arguments_rec tyl ir fr ofs0.
 Proof.
   induction tyl; simpl; intros.
   omega.
   destruct a.
-  destruct iregl. apply Zle_trans with (ofs0 + 1); auto; omega. auto.
-  destruct fregl. apply Zle_trans with (ofs0 + 2); auto; omega. auto.
+  destruct (list_nth_z int_param_regs ir); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
+  destruct (list_nth_z float_param_regs fr); eauto. apply Zle_trans with (ofs0 + 2); auto; omega.
+  set (ir' := align ir 2).
+  destruct (list_nth_z int_param_regs ir'); eauto.
+  destruct (list_nth_z int_param_regs (ir' + 1)); eauto.
+  apply Zle_trans with (ofs0 + 2); auto; omega.
+  apply Zle_trans with (ofs0 + 2); auto; omega.
 Qed.
 
 Lemma size_arguments_above:
@@ -518,81 +429,39 @@ Qed.
 
 Lemma loc_arguments_bounded:
   forall (s: signature) (ofs: Z) (ty: typ),
-  In (S (Outgoing ofs ty)) (loc_arguments s) ->
+  In (S Outgoing ofs ty) (loc_arguments s) ->
   ofs + typesize ty <= size_arguments s.
 Proof.
   intros.
-  assert (forall tyl iregl fregl ofs0,
-    In (S (Outgoing ofs ty)) (loc_arguments_rec tyl iregl fregl ofs0) ->
-    ofs + typesize ty <= size_arguments_rec tyl iregl fregl ofs0).
+  assert (forall tyl ir fr ofs0,
+    In (S Outgoing ofs ty) (loc_arguments_rec tyl ir fr ofs0) ->
+    ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0).
   induction tyl; simpl; intros.
   elim H0.
-  destruct a. destruct iregl; elim H0; intro.
-  inv H1. simpl. apply size_arguments_rec_above. auto.
-  discriminate. auto. 
-  destruct fregl; elim H0; intro.
-  inv H1. simpl. apply size_arguments_rec_above. auto.
-  discriminate. auto. 
-  unfold size_arguments. eapply H0. unfold loc_arguments in H. eauto.
-Qed.
-
-(** Temporary registers do not overlap with argument locations. *)
-
-Lemma loc_arguments_not_temporaries:
-  forall sig, Loc.disjoint (loc_arguments sig) temporaries.
-Proof.
-  intros; red; intros x1 x2 H.
-  generalize (loc_arguments_rec_charact _ _ _ _ _ H).
-  destruct x1. 
-  intro H0; elim H0; simpl; (ElimOrEq; ElimOrEq; congruence).
-  destruct s; try contradiction. intro.
-  simpl; ElimOrEq; auto.
-Qed.
-Hint Resolve loc_arguments_not_temporaries: locs.
-
-(** Argument registers are caller-save. *)
-
-Lemma arguments_caller_save:
-  forall sig r,
-  In (R r) (loc_arguments sig) -> In (R r) destroyed_at_call.
-Proof.
-  unfold loc_arguments; intros.
-  elim (loc_arguments_rec_charact _ _ _ _ _ H); simpl.
-  ElimOrEq; intuition.
-  ElimOrEq; intuition.
-Qed.
-
-(** Argument locations agree in number with the function signature. *)
-
-Lemma loc_arguments_length:
-  forall sig,
-  List.length (loc_arguments sig) = List.length sig.(sig_args).
-Proof.
-  assert (forall tyl iregl fregl ofs,
-    List.length (loc_arguments_rec tyl iregl fregl ofs) = List.length tyl).
-  induction tyl; simpl; intros.
-  auto.
-  destruct a. 
-  destruct iregl; simpl; decEq; auto.
-  destruct fregl; simpl; decEq; auto.
-  intros. unfold loc_arguments. auto.
-Qed.
-
-(** Argument locations agree in types with the function signature. *)
-
-Lemma loc_arguments_type:
-  forall sig, List.map Loc.type (loc_arguments sig) = sig.(sig_args).
-Proof.
-  assert (forall tyl iregl fregl ofs,
-    (forall r, In r iregl -> mreg_type r = Tint) ->
-    (forall r, In r fregl -> mreg_type r = Tfloat) ->
-    List.map Loc.type (loc_arguments_rec tyl iregl fregl ofs) = tyl).
-  induction tyl; simpl; intros.
-  auto.
-  destruct a; [destruct iregl|destruct fregl]; simpl;
-  f_equal; eauto with coqlib.
-
-  intros. unfold loc_arguments. apply H. 
-  intro; simpl. ElimOrEq; reflexivity.
-  intro; simpl. ElimOrEq; reflexivity.
+  destruct a.
+  destruct (list_nth_z int_param_regs ir); destruct H0. 
+  congruence.
+  eauto.
+  inv H0. apply size_arguments_rec_above.
+  eauto.
+  destruct (list_nth_z float_param_regs fr); destruct H0. 
+  congruence.
+  eauto.
+  inv H0. apply size_arguments_rec_above.
+  eauto.
+  set (ir' := align ir 2) in *.
+  destruct (list_nth_z int_param_regs ir').
+  destruct (list_nth_z int_param_regs (ir' + 1)).
+  destruct H0. congruence. destruct H0. congruence. eauto.
+  destruct H0. inv H0. 
+  transitivity (ofs + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  destruct H0. inv H0.
+  transitivity (ofs0 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  eauto. 
+  destruct H0. inv H0. 
+  transitivity (ofs + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  destruct H0. inv H0.
+  transitivity (ofs0 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  eauto. 
+  eauto.
 Qed.

@@ -64,6 +64,11 @@ let name_floattype sz =
   | F32 -> "float"
   | F64 -> "double"
 
+let name_longtype sg =
+  match sg with
+  | Signed -> "long long"
+  | Unsigned -> "unsigned long long"
+
 (* Collecting the names and fields of structs and unions *)
 
 module StructUnion = Map.Make(String)
@@ -91,6 +96,8 @@ let rec name_cdecl id ty =
       name_inttype sz sg ^ attributes a ^ name_optid id
   | Tfloat(sz, a) ->
       name_floattype sz ^ attributes a ^ name_optid id
+  | Tlong(sg, a) ->
+      name_longtype sg ^ attributes a ^ name_optid id
   | Tpointer(t, a) ->
       let id' =
         match t with
@@ -174,6 +181,7 @@ let print_value p v =
   match v with
   | Vint n -> fprintf p "%ld" (camlint_of_coqint n)
   | Vfloat f -> fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Vlong n -> fprintf p "%Ld" (camlint64_of_coqint n)
   | Vptr(b, ofs) -> fprintf p "<ptr%a>" !print_pointer_hook (b, ofs)
   | Vundef -> fprintf p "<undef>"
 
@@ -397,6 +405,7 @@ let print_init p = function
   | Init_int8 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
   | Init_int16 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
   | Init_int32 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
+  | Init_int64 n -> fprintf p "%Ld,@ " (camlint64_of_coqint n)
   | Init_float32 n -> fprintf p "%F,@ " (camlfloat_of_coqfloat n)
   | Init_float64 n -> fprintf p "%F,@ " (camlfloat_of_coqfloat n)
   | Init_space n -> fprintf p "/* skip %ld, */@ " (camlint_of_coqint n)
@@ -444,6 +453,7 @@ let rec collect_type = function
   | Tvoid -> ()
   | Tint _ -> ()
   | Tfloat _ -> ()
+  | Tlong _ -> ()
   | Tpointer(t, _) -> collect_type t
   | Tarray(t, _, _) -> collect_type t
   | Tfunction(args, res) -> collect_type_list args; collect_type res

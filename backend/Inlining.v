@@ -180,11 +180,17 @@ Next Obligation.
   intros; constructor; simpl; xomega.
 Qed.
 
-Fixpoint mlist_iter2 {A B: Type} (f: A -> B -> mon unit) (l: list (A*B)): mon unit :=
-  match l with
-  | nil => ret tt
-  | (x,y) :: l' => do z <- f x y; mlist_iter2 f l'
-  end.
+Program Definition ptree_mfold {A: Type} (f: positive -> A -> mon unit) (t: PTree.t A): mon unit :=
+  fun s =>
+    R tt 
+      (PTree.fold (fun s1 k v => match f k v s1 return _ with R _ s2 _ => s2 end) t s)
+      _.
+Next Obligation.
+  apply PTree_Properties.fold_rec.
+  auto.
+  apply sincr_refl.
+  intros. destruct (f k v a). eapply sincr_trans; eauto. 
+Qed.
 
 (** ** Inlining contexts *)
 
@@ -422,7 +428,7 @@ Definition expand_instr (ctx: context) (pc: node) (i: instruction): mon unit :=
 
 Definition expand_cfg_rec (ctx: context) (f: function): mon unit :=
   do x <- request_stack (ctx.(dstk) + ctx.(mstk));
-  mlist_iter2 (expand_instr ctx) (PTree.elements f.(fn_code)).
+  ptree_mfold (expand_instr ctx) f.(fn_code).
 
 End EXPAND_CFG.
 

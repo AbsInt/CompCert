@@ -24,15 +24,16 @@ open Cminor
 
 exception Error of string
 
-let name_of_typ = function Tint -> "int" | Tfloat -> "float"
+let name_of_typ = function Tint -> "int" | Tfloat -> "float" | Tlong -> "long"
 
 type ty = Base of typ | Var of ty option ref
 
 let newvar () = Var (ref None)
 let tint = Base Tint
 let tfloat = Base Tfloat
+let tlong = Base Tlong
 
-let ty_of_typ = function Tint -> tint | Tfloat -> tfloat
+let ty_of_typ = function Tint -> tint | Tfloat -> tfloat | Tlong -> tlong
 
 let ty_of_sig_args tyl = List.map ty_of_typ tyl
 
@@ -81,6 +82,7 @@ let name_of_comparison = function
 let type_constant = function
   | Ointconst _ -> tint
   | Ofloatconst _ -> tfloat
+  | Olongconst _ -> tlong
   | Oaddrsymbol _ -> tint
   | Oaddrstack _ -> tint
 
@@ -98,6 +100,15 @@ let type_unary_operation = function
   | Ointuoffloat -> tfloat, tint
   | Ofloatofint -> tint, tfloat
   | Ofloatofintu -> tint, tfloat
+  | Onegl -> tlong, tlong
+  | Onotl -> tlong, tlong
+  | Ointoflong -> tlong, tint
+  | Olongofint -> tint, tlong
+  | Olongofintu -> tint, tlong
+  | Olongoffloat -> tfloat, tlong
+  | Olonguoffloat -> tfloat, tlong
+  | Ofloatoflong -> tlong, tfloat
+  | Ofloatoflongu -> tlong, tfloat
 
 let type_binary_operation = function
   | Oadd -> tint, tint, tint
@@ -117,52 +128,28 @@ let type_binary_operation = function
   | Osubf -> tfloat, tfloat, tfloat
   | Omulf -> tfloat, tfloat, tfloat
   | Odivf -> tfloat, tfloat, tfloat
+  | Oaddl -> tlong, tlong, tlong
+  | Osubl -> tlong, tlong, tlong
+  | Omull -> tlong, tlong, tlong
+  | Odivl -> tlong, tlong, tlong
+  | Odivlu -> tlong, tlong, tlong
+  | Omodl -> tlong, tlong, tlong
+  | Omodlu -> tlong, tlong, tlong
+  | Oandl -> tlong, tlong, tlong
+  | Oorl -> tlong, tlong, tlong
+  | Oxorl -> tlong, tlong, tlong
+  | Oshll -> tlong, tint, tlong
+  | Oshrl -> tlong, tint, tlong
+  | Oshrlu -> tlong, tint, tlong
   | Ocmp _ -> tint, tint, tint
   | Ocmpu _ -> tint, tint, tint
   | Ocmpf _ -> tfloat, tfloat, tint
+  | Ocmpl _ -> tlong, tlong, tint
+  | Ocmplu _ -> tlong, tlong, tint
 
-let name_of_constant = function
-  | Ointconst n -> sprintf "intconst %ld" (camlint_of_coqint n)
-  | Ofloatconst n -> sprintf "floatconst %g" (camlfloat_of_coqfloat n)
-  | Oaddrsymbol (s, ofs) -> sprintf "addrsymbol %s %ld" (extern_atom s) (camlint_of_coqint ofs)
-  | Oaddrstack n -> sprintf "addrstack %ld" (camlint_of_coqint n)
+let name_of_unary_operation = PrintCminor.name_of_unop
 
-let name_of_unary_operation = function
-  | Ocast8signed -> "cast8signed"
-  | Ocast16signed -> "cast16signed"
-  | Ocast8unsigned -> "cast8unsigned"
-  | Ocast16unsigned -> "cast16unsigned"
-  | Onegint -> "negint"
-  | Onotint -> "notint"
-  | Onegf -> "negf"
-  | Oabsf -> "absf"
-  | Osingleoffloat -> "singleoffloat"
-  | Ointoffloat -> "intoffloat"
-  | Ointuoffloat -> "intuoffloat"
-  | Ofloatofint -> "floatofint"
-  | Ofloatofintu -> "floatofintu"
-
-let name_of_binary_operation = function
-  | Oadd -> "add"
-  | Osub -> "sub"
-  | Omul -> "mul"
-  | Odiv -> "div"
-  | Odivu -> "divu"
-  | Omod -> "mod"
-  | Omodu -> "modu"
-  | Oand -> "and"
-  | Oor -> "or"
-  | Oxor -> "xor"
-  | Oshl -> "shl"
-  | Oshr -> "shr"
-  | Oshru -> "shru"
-  | Oaddf -> "addf"
-  | Osubf -> "subf"
-  | Omulf -> "mulf"
-  | Odivf -> "divf"
-  | Ocmp c -> sprintf "cmp %s" (name_of_comparison c)
-  | Ocmpu c -> sprintf "cmpu %s" (name_of_comparison c)
-  | Ocmpf c -> sprintf "cmpf %s" (name_of_comparison c)
+let name_of_binary_operation = PrintCminor.name_of_binop
 
 let type_chunk = function
   | Mint8signed -> tint
@@ -170,19 +157,12 @@ let type_chunk = function
   | Mint16signed -> tint
   | Mint16unsigned -> tint
   | Mint32 -> tint
+  | Mint64 -> tlong
   | Mfloat32 -> tfloat
   | Mfloat64 -> tfloat
   | Mfloat64al32 -> tfloat
 
-let name_of_chunk = function
-  | Mint8signed -> "int8signed"
-  | Mint8unsigned -> "int8unsigned"
-  | Mint16signed -> "int16signed"
-  | Mint16unsigned -> "int16unsigned"
-  | Mint32 -> "int32"
-  | Mfloat32 -> "float32"
-  | Mfloat64 -> "float64"
-  | Mfloat64al32 -> "float64al32"
+let name_of_chunk = PrintAST.name_of_chunk
 
 let rec type_expr env lenv e =
   match e with

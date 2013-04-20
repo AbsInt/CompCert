@@ -54,7 +54,7 @@ Fixpoint constval (a: expr) : res val :=
   match a with
   | Eval v ty =>
       match v with
-      | Vint _ | Vfloat _ => OK v
+      | Vint _ | Vfloat _ | Vlong _ => OK v
       | Vptr _ _ | Vundef => Error(msg "illegal constant")
       end
   | Evalof l ty =>
@@ -152,6 +152,7 @@ Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   | Vint n, Tint I32 sg _ => OK(Init_int32 n)
   | Vint n, Tpointer _ _ => OK(Init_int32 n)
   | Vint n, Tcomp_ptr _ _ => OK(Init_int32 n)
+  | Vlong n, Tlong _ _ => OK(Init_int64 n)
   | Vfloat f, Tfloat F32 _ => OK(Init_float32 f)
   | Vfloat f, Tfloat F64 _ => OK(Init_float64 f)
   | Vptr (Zpos id) ofs, Tint I32 sg _ => OK(Init_addrof id ofs)

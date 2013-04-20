@@ -541,7 +541,8 @@ Ltac ArgsInv :=
   | [ H: Error _ = OK _ |- _ ] => discriminate
   | [ H: match ?args with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct args
   | [ H: bind _ _ = OK _ |- _ ] => monadInv H
-  | [ H: assertion _ = OK _ |- _ ] => monadInv H
+  | [ H: match _ with left _ => _ | right _ => assertion_failed end = OK _ |- _ ] => monadInv H
+  | [ H: match _ with true => _ | false => assertion_failed end = OK _ |- _ ] => monadInv H
   end);
   subst;
   repeat (match goal with
@@ -685,7 +686,7 @@ Lemma transl_op_correct_same:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of res) = v
-  /\ forall r, data_preg r = true -> r <> preg_of res -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs'#r = rs#r.
 Proof.
   intros until v; intros TR EV NOCMP. 
   unfold transl_op in TR; destruct op; ArgsInv; simpl in EV; inv EV; try (TranslOpSimpl; fail).
@@ -713,11 +714,21 @@ Proof.
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
   (* Omul *)
-  destruct (ireg_eq x x0 || ireg_eq x x1).
+  destruct (negb (ireg_eq x x0)).
+  TranslOpSimpl.
+  destruct (negb (ireg_eq x x1)).
+  rewrite Val.mul_commut. TranslOpSimpl.
   econstructor; split.
   eapply exec_straight_two. simpl; eauto. simpl; eauto. auto. auto.
   intuition Simpl.
+  (* Omla *)
+  destruct (negb (ireg_eq x x0)).
   TranslOpSimpl.
+  destruct (negb (ireg_eq x x1)).
+  rewrite Val.mul_commut. TranslOpSimpl.
+  econstructor; split.
+  eapply exec_straight_two. simpl; eauto. simpl; eauto. auto. auto.
+  intuition Simpl.
   (* divs *)
   econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto. 
   intuition Simpl.
@@ -767,10 +778,11 @@ Proof.
     intros. unfold rs4, rs3; Simpl. destruct islt; Simpl; rewrite OTH2; auto with asmgen. 
   (* intoffloat *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
-  intuition Simpl.
+Transparent destroyed_by_op. 
+  simpl. intuition Simpl.
   (* intuoffloat *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
-  intuition Simpl.
+  simpl. intuition Simpl.
   (* floatofint *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   intuition Simpl.
@@ -788,7 +800,7 @@ Lemma transl_op_correct:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef v rs'#(preg_of res)
-  /\ forall r, data_preg r = true -> r <> preg_of res -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs'#r = rs#r.
 Proof.
   intros. 
   assert (EITHER: match op with Ocmp _ => False | _ => True end \/ exists cmp, op = Ocmp cmp).
@@ -878,7 +890,7 @@ Lemma transl_load_int_correct:
   exists rs',
       exec_straight ge fn c rs m k rs' m
    /\ rs'#(preg_of dst) = v
-   /\ forall r, nontemp_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
+   /\ forall r, data_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
 Proof.
   intros. monadInv H. erewrite ireg_of_eq by eauto.  
   eapply transl_memory_access_correct; eauto.
@@ -902,7 +914,7 @@ Lemma transl_load_float_correct:
   exists rs',
       exec_straight ge fn c rs m k rs' m
    /\ rs'#(preg_of dst) = v
-   /\ forall r, nontemp_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
+   /\ forall r, data_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
 Proof.
   intros. monadInv H. erewrite freg_of_eq by eauto.  
   eapply transl_memory_access_correct; eauto.
@@ -913,7 +925,7 @@ Proof.
 Qed.
 
 Lemma transl_store_int_correct:
-  forall mk_instr is_immed src addr args k c (rs: regset) a chunk m m',
+  forall mr mk_instr is_immed src addr args k c (rs: regset) a chunk m m',
   transl_memory_access_int mk_instr is_immed src addr args k = OK c ->
   eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
   Mem.storev chunk m a rs#(preg_of src) = Some m' ->
@@ -922,7 +934,7 @@ Lemma transl_store_int_correct:
     exec_store chunk (Val.add rs1#r2 (eval_shift_addr sa rs1)) r1 rs1 m) ->
   exists rs',
       exec_straight ge fn c rs m k rs' m'
-   /\ forall r, nontemp_preg r = true -> rs'#r = rs#r.
+   /\ forall r, data_preg r = true -> preg_notin r mr -> rs'#r = rs#r.
 Proof.
   intros. monadInv H. erewrite ireg_of_eq in * by eauto.  
   eapply transl_memory_access_correct; eauto.
@@ -937,7 +949,7 @@ Proof.
 Qed.
 
 Lemma transl_store_float_correct:
-  forall mk_instr is_immed src addr args k c (rs: regset) a chunk m m',
+  forall mr mk_instr is_immed src addr args k c (rs: regset) a chunk m m',
   transl_memory_access_float mk_instr is_immed src addr args k = OK c ->
   eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
   Mem.storev chunk m a rs#(preg_of src) = Some m' ->
@@ -946,7 +958,7 @@ Lemma transl_store_float_correct:
     exec_store chunk (Val.add rs1#r2 (Vint n)) r1 rs1 m) ->
   exists rs',
       exec_straight ge fn c rs m k rs' m'
-   /\ forall r, nontemp_preg r = true -> rs'#r = rs#r.
+   /\ forall r, data_preg r = true -> preg_notin r mr -> rs'#r = rs#r.
 Proof.
   intros. monadInv H. erewrite freg_of_eq in * by eauto.  
   eapply transl_memory_access_correct; eauto.
@@ -964,7 +976,7 @@ Lemma transl_load_correct:
   exists rs',
       exec_straight ge fn c rs m k rs' m
    /\ rs'#(preg_of dst) = v
-   /\ forall r, nontemp_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
+   /\ forall r, data_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
 Proof.
   intros. destruct chunk; simpl in H.
   eapply transl_load_int_correct; eauto.
@@ -972,6 +984,7 @@ Proof.
   eapply transl_load_int_correct; eauto.
   eapply transl_load_int_correct; eauto.
   eapply transl_load_int_correct; eauto.
+  discriminate.
   eapply transl_load_float_correct; eauto.
   apply Mem.loadv_float64al32 in H1. eapply transl_load_float_correct; eauto.
   eapply transl_load_float_correct; eauto.
@@ -984,7 +997,7 @@ Lemma transl_store_correct:
   Mem.storev chunk m a rs#(preg_of src) = Some m' ->
   exists rs',
       exec_straight ge fn c rs m k rs' m'
-   /\ forall r, nontemp_preg r = true -> rs'#r = rs#r.
+   /\ forall r, data_preg r = true -> preg_notin r (destroyed_by_store chunk addr) -> rs'#r = rs#r.
 Proof.
   intros. destruct chunk; simpl in H.
 - assert (Mem.storev Mint8unsigned m a (rs (preg_of src)) = Some m').
@@ -996,11 +1009,12 @@ Proof.
   clear H1. eapply transl_store_int_correct; eauto.
 - eapply transl_store_int_correct; eauto.
 - eapply transl_store_int_correct; eauto.
+- discriminate.
 - unfold transl_memory_access_float in H. monadInv H. rewrite (freg_of_eq _ _ EQ) in *. 
   eapply transl_memory_access_correct; eauto. 
   intros. econstructor; split. apply exec_straight_one.
   simpl. unfold exec_store. rewrite H. rewrite H2; eauto with asmgen. 
-  rewrite H1. eauto. auto. intros. Simpl. 
+  rewrite H1. eauto. auto. intros. Simpl.
   simpl; auto.
 - apply Mem.storev_float64al32 in H1. eapply transl_store_float_correct; eauto.
 - eapply transl_store_float_correct; eauto.

@@ -31,13 +31,13 @@ let rec precedence = function
   | Evar _ -> (16, NA)
   | Econst _ -> (16, NA)
   | Eunop _ -> (15, RtoL)
-  | Ebinop((Omul|Odiv|Odivu|Omod|Omodu|Omulf|Odivf), _, _) -> (13, LtoR)
-  | Ebinop((Oadd|Osub|Oaddf|Osubf), _, _) -> (12, LtoR)
-  | Ebinop((Oshl|Oshr|Oshru), _, _) -> (11, LtoR)
-  | Ebinop((Ocmp _|Ocmpu _|Ocmpf _), _, _) -> (10, LtoR)
-  | Ebinop(Oand, _, _) -> (8, LtoR)
-  | Ebinop(Oxor, _, _) -> (7, LtoR)
-  | Ebinop(Oor, _, _) -> (6, LtoR)
+  | Ebinop((Omul|Odiv|Odivu|Omod|Omodu|Omulf|Odivf|Omull|Odivl|Odivlu|Omodl|Omodlu), _, _) -> (13, LtoR)
+  | Ebinop((Oadd|Osub|Oaddf|Osubf|Oaddl|Osubl), _, _) -> (12, LtoR)
+  | Ebinop((Oshl|Oshr|Oshru|Oshll|Oshrl|Oshrlu), _, _) -> (11, LtoR)
+  | Ebinop((Ocmp _|Ocmpu _|Ocmpf _|Ocmpl _|Ocmplu _), _, _) -> (10, LtoR)
+  | Ebinop((Oand|Oandl), _, _) -> (8, LtoR)
+  | Ebinop((Oxor|Oxorl), _, _) -> (7, LtoR)
+  | Ebinop((Oor|Oorl), _, _) -> (6, LtoR)
   | Eload _ -> (15, RtoL)
 
 (* Naming idents. *)
@@ -60,6 +60,15 @@ let name_of_unop = function
   | Ointuoffloat -> "intuoffloat"
   | Ofloatofint -> "floatofint"
   | Ofloatofintu -> "floatofintu"
+  | Onegl -> "-l"
+  | Onotl -> "~l"
+  | Ointoflong -> "intofflong"
+  | Olongofint -> "longofint"
+  | Olongofintu -> "longofintu"
+  | Olongoffloat -> "longoffloat"
+  | Olonguoffloat -> "longuoffloat"
+  | Ofloatoflong -> "floatoflong"
+  | Ofloatoflongu -> "floatoflongu"
 
 let comparison_name = function
   | Ceq -> "=="
@@ -87,9 +96,24 @@ let name_of_binop = function
   | Osubf -> "-f"
   | Omulf -> "*f"
   | Odivf -> "/f"
+  | Oaddl -> "+l"
+  | Osubl -> "-l"
+  | Omull -> "*l"
+  | Odivl -> "/l"
+  | Odivlu -> "/lu"
+  | Omodl -> "%l"
+  | Omodlu -> "%lu"
+  | Oandl -> "&l"
+  | Oorl -> "|l"
+  | Oxorl -> "^l"
+  | Oshll -> "<<l"
+  | Oshrl -> ">>l"
+  | Oshrlu -> ">>lu"
   | Ocmp c -> comparison_name c
   | Ocmpu c -> comparison_name c ^ "u"
   | Ocmpf c -> comparison_name c ^ "f"
+  | Ocmpl c -> comparison_name c ^ "l"
+  | Ocmplu c -> comparison_name c ^ "lu"
 
 (* Expressions *)
 
@@ -109,6 +133,8 @@ let rec expr p (prec, e) =
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst(Ofloatconst f) ->
       fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Econst(Olongconst n) ->
+      fprintf p "%LdLL" (camlint64_of_coqint n)
   | Econst(Oaddrsymbol(id, ofs)) ->
       let ofs = camlint_of_coqint ofs in
       if ofs = 0l
@@ -141,6 +167,7 @@ let rec print_expr_list p (first, rl) =
 let name_of_type = function
   | Tint -> "int"
   | Tfloat -> "float"
+  | Tlong -> "long"
 
 let rec print_sig p = function
   | {sig_args = []; sig_res = None} -> fprintf p "void"
@@ -262,6 +289,7 @@ let print_init_data p = function
   | Init_int8 i -> fprintf p "int8 %ld" (camlint_of_coqint i)
   | Init_int16 i -> fprintf p "int16 %ld" (camlint_of_coqint i)
   | Init_int32 i -> fprintf p "%ld" (camlint_of_coqint i)
+  | Init_int64 i -> fprintf p "%Ld" (camlint64_of_coqint i)
   | Init_float32 f -> fprintf p "float32 %F" (camlfloat_of_coqfloat f)
   | Init_float64 f -> fprintf p "%F" (camlfloat_of_coqfloat f)
   | Init_space i -> fprintf p "[%ld]" (camlint_of_coqint i)

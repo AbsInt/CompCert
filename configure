@@ -61,7 +61,7 @@ done
 # Per-target configuration
 
 cchecklink=false
-has_runtime_lib=false
+has_runtime_lib=true
 
 case "$target" in
   powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
@@ -218,8 +218,8 @@ CLINKER=gcc
 # Math library.  Set to empty under MacOS X
 LIBMATH=-lm
 
-# Obsolete; do not change
-HAS_RUNTIME_LIB=false
+# Do not change
+HAS_RUNTIME_LIB=true
 EOF
 fi
 

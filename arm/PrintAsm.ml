@@ -181,47 +181,11 @@ let emit_constants oc =
     symbol_labels;
   reset_constants ()
 
-(* Simulate instructions by calling helper functions *)
-
-let print_list_ireg oc l =
-  match l with
-  | [] -> assert false
-  | r1 :: rs -> ireg oc r1; List.iter (fun r -> fprintf oc ", %a" ireg r) rs
-
-let rec remove l r =
-  match l with
-  | [] -> []
-  | hd :: tl -> if hd = r then remove tl r else hd :: remove tl r
-
-let call_helper oc fn dst arg1 arg2 =
-  (* Preserve caller-save registers r0...r3 except dst *)
-  let tosave = remove [IR0; IR1; IR2; IR3] dst in
-  fprintf oc "	stmfd	sp!, {%a}\n" print_list_ireg tosave;
-  (* Copy arg1 to R0 and arg2 to R1 *)
-  let moves =
-    Parmov.parmove2 (=) (fun _ -> IR14) [arg1; arg2] [IR0; IR1] in
-  List.iter
-    (fun (s, d) ->
-      fprintf oc "	mov	%a, %a\n" ireg d ireg s)
-    moves;
-  (* Call the helper function *)
-  fprintf oc "	bl	%s\n" fn;
-  (* Move result to dst *)
-  begin match dst with
-  | IR0 -> ()
-  | _   -> fprintf oc "	mov	%a, r0\n" ireg dst
-  end;
-  (* Restore the other caller-save registers *)
-  fprintf oc "	ldmfd	sp!, {%a}\n" print_list_ireg tosave;
-  (* ... for a total of at most 7 instructions *)
-  7
-
 (* Built-ins.  They come in two flavors: 
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
-     registers; preserve all registers the temporaries
-     (IR10, IR12, IR14, FP2, FP4)
+     registers; preserve all registers except IR2, IR3, IR12 and FP6.
 *)
 
 (* Handling of annotations *)
@@ -234,9 +198,9 @@ let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
   PrintAnnot.print_annot_val preg oc txt args;
   match args, res with
-  | IR src :: _, IR dst ->
+  | [IR src], [IR dst] ->
       if dst = src then 0 else (fprintf oc "	mov	%a, %a\n" ireg dst ireg src; 1)
-  | FR src :: _, FR dst ->
+  | [FR src], [FR dst] ->
       if dst = src then 0 else (fprintf oc "	fcpy	%a, %a\n" freg dst freg src; 1)
   | _, _ -> assert false
 
@@ -265,16 +229,12 @@ let print_builtin_memcpy_small oc sz al src dst =
 let print_builtin_memcpy_big oc sz al src dst =
   assert (sz >= al);
   assert (sz mod al = 0);
+  assert (src = IR2);
+  assert (dst = IR3);
   let (load, store, chunksize) =
     if al >= 4 then ("ldr", "str", 4)
     else if al = 2 then ("ldrh", "strh", 2)
     else ("ldrb", "strb", 1) in
-  let tmp =
-    if src <> IR0 && dst <> IR0 then IR0
-    else if src <> IR1 && dst <> IR1 then IR1
-    else IR2 in
-  let tosave = List.sort compare [tmp;src;dst] in
-  fprintf oc "	stmfd	sp!, {%a}\n" print_list_ireg tosave;
   begin match Asmgen.decompose_int
                  (coqint_of_camlint (Int32.of_int (sz / chunksize))) with
   | [] -> assert false
@@ -286,12 +246,11 @@ let print_builtin_memcpy_big oc sz al src dst =
         tl
   end;
   let lbl = new_label() in
-  fprintf oc ".L%d:	%s	%a, [%a], #%d\n" lbl load ireg tmp ireg src chunksize;
+  fprintf oc ".L%d:	%s	%a, [%a], #%d\n" lbl load ireg IR12 ireg src chunksize;
   fprintf oc "	subs	%a, %a, #1\n" ireg IR14 ireg IR14;
-  fprintf oc "	%s	%a, [%a], #%d\n" store ireg tmp ireg dst chunksize;
+  fprintf oc "	%s	%a, [%a], #%d\n" store ireg IR12 ireg dst chunksize;
   fprintf oc "	bne	.L%d\n" lbl;
-  fprintf oc "	ldmfd	sp!, {%a}\n" print_list_ireg tosave;
-  9
+  8
 
 let print_builtin_memcpy oc sz al args =
   let (dst, src) =
@@ -308,20 +267,28 @@ let print_builtin_memcpy oc sz al args =
 
 let print_builtin_vload_common oc chunk args res =
   match chunk, args, res with
-  | Mint8unsigned, [IR addr], IR res ->
+  | Mint8unsigned, [IR addr], [IR res] ->
       fprintf oc "	ldrb	%a, [%a, #0]\n" ireg res ireg addr; 1
-  | Mint8signed, [IR addr], IR res ->
+  | Mint8signed, [IR addr], [IR res] ->
       fprintf oc "	ldrsb	%a, [%a, #0]\n" ireg res ireg addr; 1
-  | Mint16unsigned, [IR addr], IR res ->
+  | Mint16unsigned, [IR addr], [IR res] ->
       fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg addr; 1
-  | Mint16signed, [IR addr], IR res ->
+  | Mint16signed, [IR addr], [IR res] ->
       fprintf oc "	ldrsh	%a, [%a, #0]\n" ireg res ireg addr; 1
-  | Mint32, [IR addr], IR res ->
+  | Mint32, [IR addr], [IR res] ->
       fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg addr; 1
-  | Mfloat32, [IR addr], FR res ->
+  | Mint64, [IR addr], [IR res1; IR res2] ->
+      if addr <> res2 then begin
+        fprintf oc "	ldr	%a, [%a, #0]\n" ireg res2 ireg addr;
+        fprintf oc "	ldr	%a, [%a, #4]\n" ireg res1 ireg addr
+      end else begin
+        fprintf oc "	ldr	%a, [%a, #4]\n" ireg res1 ireg addr;
+        fprintf oc "	ldr	%a, [%a, #0]\n" ireg res2 ireg addr
+      end; 2
+  | Mfloat32, [IR addr], [FR res] ->
       fprintf oc "	flds	%a, [%a, #0]\n" freg_single res ireg addr;
       fprintf oc "	fcvtds	%a, %a\n" freg res freg_single res; 2
-  | (Mfloat64 | Mfloat64al32), [IR addr], FR res ->
+  | (Mfloat64 | Mfloat64al32), [IR addr], [FR res] ->
       fprintf oc "	fldd	%a, [%a, #0]\n" freg res ireg addr; 1
   | _ ->
       assert false
@@ -346,6 +313,9 @@ let print_builtin_vstore_common oc chunk args =
       fprintf oc "	strh	%a, [%a, #0]\n" ireg src ireg addr; 1
   | Mint32, [IR  addr; IR src] ->
       fprintf oc "	str	%a, [%a, #0]\n" ireg src ireg addr; 1
+  | Mint64, [IR  addr; IR src1; IR src2] ->
+      fprintf oc "	str	%a, [%a, #0]\n" ireg src2 ireg addr;
+      fprintf oc "	str	%a, [%a, #4]\n" ireg src1 ireg addr; 2
   | Mfloat32, [IR  addr; FR src] ->
       fprintf oc "	fcvtsd	%a, %a\n" freg_single FR6 freg src;
       fprintf oc "	fsts	%a, [%a, #0]\n" freg_single FR6 ireg addr; 2
@@ -386,22 +356,57 @@ let print_builtin_inline oc name args res =
   fprintf oc "%s begin %s\n" comment name;
   let n = match name, args, res with
   (* Integer arithmetic *)
-  | "__builtin_bswap", [IR a1], IR res ->
+  | "__builtin_bswap", [IR a1], [IR res] ->
       print_bswap oc a1 IR14 res; 4
-  | "__builtin_cntlz", [IR a1], IR res ->
+  | "__builtin_cntlz", [IR a1], [IR res] ->
       fprintf oc "	clz	%a, %a\n" ireg res ireg a1; 1
   (* Float arithmetic *)
-  | "__builtin_fabs", [FR a1], FR res ->
+  | "__builtin_fabs", [FR a1], [FR res] ->
       fprintf oc "	fabsd	%a, %a\n" freg res freg a1; 1
-  | "__builtin_fsqrt", [FR a1], FR res ->
+  | "__builtin_fsqrt", [FR a1], [FR res] ->
       fprintf oc "	fsqrtd	%a, %a\n" freg res freg a1; 1
+  (* 64-bit integer arithmetic *)
+  | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
+      if rl = ah then begin
+        fprintf oc "	rsbs	%a, %a, #0\n" ireg IR14 ireg al;
+        fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah;
+        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14; 3
+      end else begin
+        fprintf oc "	rsbs	%a, %a, #0\n" ireg rl ireg al;
+        fprintf oc "	rsc	%a, %a, #0\n" ireg rh ireg ah; 2
+      end
+  | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+      if rl = ah || rl = bh then begin
+        fprintf oc "	adds	%a, %a, %a\n" ireg IR14 ireg al ireg bl;
+        fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh;
+        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14; 3
+      end else begin
+        fprintf oc "	adds	%a, %a, %a\n" ireg rl ireg al ireg bl;
+        fprintf oc "	adc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2
+      end
+  | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+      if rl = ah || rl = bh then begin
+        fprintf oc "	subs	%a, %a, %a\n" ireg IR14 ireg al ireg bl;
+        fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh;
+        fprintf oc "	mov	%a, %a\n" ireg rl ireg IR14; 3
+      end else begin
+        fprintf oc "	subs	%a, %a, %a\n" ireg rl ireg al ireg bl;
+        fprintf oc "	sbc	%a, %a, %a\n" ireg rh ireg ah ireg bh; 2
+      end
+  | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
+      if rl = a || rh = a then begin
+        fprintf oc "	mov	%a, %a\n" ireg IR14 ireg a;
+        fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg IR14 ireg b; 2
+      end else begin
+        fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
+      end
   (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], IR res ->
+  | "__builtin_read16_reversed", [IR a1], [IR res] ->
       fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
       fprintf oc "	mov	%a, %a, lsl #8\n" ireg IR14 ireg res;
       fprintf oc "	and	%a, %a, #0xFF00\n" ireg IR14 ireg IR14;
       fprintf oc "	orr	%a, %a, %a, lsr #8\n" ireg res ireg IR14 ireg res; 4
-  | "__builtin_read32_reversed", [IR a1], IR res ->
+  | "__builtin_read32_reversed", [IR a1], [IR res] ->
       fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
       print_bswap oc res IR14 res; 5
   | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
@@ -410,9 +415,19 @@ let print_builtin_inline oc name args res =
       fprintf oc "	orr	%a, %a, %a, lsl #8\n" ireg IR14 ireg IR14 ireg a2;
       fprintf oc "	strh	%a, [%a, #0]\n" ireg IR14 ireg a1; 4
   | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
-      let tmp = if a1 = IR10 then IR12 else IR10 in
-      print_bswap oc a2 IR14 tmp;
-      fprintf oc "	str	%a, [%a, #0]\n" ireg tmp ireg a1; 5
+      if a1 <> IR12 then begin
+        print_bswap oc a2 IR14 IR12;
+        fprintf oc "	str	%a, [%a, #0]\n" ireg IR12 ireg a1; 5
+      end else begin
+        fprintf oc "	mov	%a, %a, lsr #24\n" ireg IR14 ireg a2;
+        fprintf oc "	str     %a, [%a, #0]\n" ireg IR14 ireg a1;
+        fprintf oc "	mov	%a, %a, lsr #16\n" ireg IR14 ireg a2;
+        fprintf oc "	str     %a, [%a, #1]\n" ireg IR14 ireg a1;
+        fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg a2;
+        fprintf oc "	str     %a, [%a, #2]\n" ireg IR14 ireg a1;
+        fprintf oc "	str     %a, [%a, #3]\n" ireg IR14 ireg a1;
+        7
+      end
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -516,6 +531,8 @@ let print_instruction oc = function
       fprintf oc "	ldrsb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
   | Pldrsh(r1, r2, sa) ->
       fprintf oc "	ldrsh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+  | Pmla(r1, r2, r3, r4) ->
+      fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
   | Pmov(r1, so) ->
       fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so; 1
   | Pmovc(bit, r1, so) ->
@@ -535,11 +552,13 @@ let print_instruction oc = function
   | Pstrh(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
   | Psdiv(r1, r2, r3) ->
-      call_helper oc "__aeabi_idiv" r1 r2 r3
+      assert (r1 = IR0 && r2 = IR0 && r3 = IR1);
+      fprintf oc "	bl	__aeabi_idiv\n"; 1
   | Psub(r1, r2, so) ->
       fprintf oc "	sub	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
   | Pudiv(r1, r2, r3) ->
-      call_helper oc "__aeabi_uidiv" r1 r2 r3
+      assert (r1 = IR0 && r2 = IR0 && r3 = IR1);
+      fprintf oc "	bl	__aeabi_uidiv\n"; 1
   (* Floating-point coprocessor instructions *)
   | Pfcpyd(r1, r2) ->
       fprintf oc "	fcpyd	%a, %a\n" freg r1 freg r2; 1
@@ -593,14 +612,14 @@ let print_instruction oc = function
       fprintf oc "	fsts	%a, [%a, #%a]\n" freg_single FR6 ireg r2 coqint n; 2
   (* Pseudo-instructions *)
   | Pallocframe(sz, ofs) ->
-      fprintf oc "	mov	r10, sp\n";
+      fprintf oc "	mov	r12, sp\n";
       let ninstr = ref 0 in
       List.iter
         (fun n ->
            fprintf oc "	sub	sp, sp, #%a\n" coqint n;
            incr ninstr)
         (Asmgen.decompose_int sz);
-      fprintf oc "	str	r10, [sp, #%a]\n" coqint ofs;
+      fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
       2 + !ninstr
   | Pfreeframe(sz, ofs) ->
       if Asmgen.is_immed_arith sz
@@ -620,7 +639,7 @@ let print_instruction oc = function
       List.iter
         (fun l -> fprintf oc "	.word	%a\n" print_label l)
         tbl;
-      2 + List.length tbl
+      3 + List.length tbl
   | Pbuiltin(ef, args, res) ->
       begin match ef with
       | EF_builtin(name, sg) ->
@@ -713,6 +732,8 @@ let print_init oc = function
       fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
   | Init_int32 n ->
       fprintf oc "	.word	%ld\n" (camlint_of_coqint n)
+  | Init_int64 n ->
+      fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
   | Init_float32 n ->
       fprintf oc "	.word	0x%lx %s %.15g \n" (camlint_of_coqint (Floats.Float.bits_of_single n))
 	comment (camlfloat_of_coqfloat n)

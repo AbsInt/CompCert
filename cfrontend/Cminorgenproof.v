@@ -1495,6 +1495,8 @@ Ltac TrivialExists :=
       exists (Vint x); split; [eauto with evalexpr | constructor]
   | [ |- exists y, _ /\ val_inject _ (Vfloat ?x) _ ] =>
       exists (Vfloat x); split; [eauto with evalexpr | constructor]
+  | [ |- exists y, _ /\ val_inject _ (Vlong ?x) _ ] =>
+      exists (Vlong x); split; [eauto with evalexpr | constructor]
   | _ => idtac
   end.
 
@@ -1520,6 +1522,15 @@ Proof.
   inv H; inv H0; simpl; TrivialExists.
   inv H0; simpl in H; inv H. simpl. destruct (Float.intoffloat f0); simpl in *; inv H1. TrivialExists.
   inv H0; simpl in H; inv H. simpl. destruct (Float.intuoffloat f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H; inv H0; simpl; TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.longoffloat f0); simpl in *; inv H1. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. destruct (Float.longuoffloat f0); simpl in *; inv H1. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
 Qed.
@@ -1566,46 +1577,43 @@ Proof.
   inv H; inv H0; inv H1; TrivialExists.
   inv H; inv H0; inv H1; TrivialExists.
   inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int64.eq i0 Int64.zero
+      || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H; TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int64.eq i0 Int64.zero); inv H. TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int64.eq i0 Int64.zero
+      || Int64.eq i (Int64.repr Int64.min_signed) && Int64.eq i0 Int64.mone); inv H; TrivialExists.
+  inv H0; try discriminate; inv H1; try discriminate. simpl in *. 
+    destruct (Int64.eq i0 Int64.zero); inv H. TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists.
+  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int64.iwordsize'); auto.
+  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int64.iwordsize'); auto.
+  inv H; inv H0; inv H1; TrivialExists. simpl. destruct (Int.ltu i0 Int64.iwordsize'); auto.
   inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
 (* cmpu *)
-  inv H; inv H0; inv H1; TrivialExists.
-    apply val_inject_val_of_optbool.
-    apply val_inject_val_of_optbool.
-    apply val_inject_val_of_optbool.
-Opaque Int.add.
-    unfold Val.cmpu. simpl.
-    destruct (zeq b1 b0); subst.
-    (* same blocks *)
-    rewrite H0 in H. inv H. rewrite zeq_true.
-    fold (Mem.weak_valid_pointer m b0 (Int.unsigned ofs1)).
-    fold (Mem.weak_valid_pointer m b0 (Int.unsigned ofs0)).
-    fold (Mem.weak_valid_pointer tm b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
-    fold (Mem.weak_valid_pointer tm b2 (Int.unsigned (Int.add ofs0 (Int.repr delta)))).
-    destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs1)) eqn:?; auto.
-    destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; auto.
-    rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb) by eauto.
-    rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb0) by eauto.
-    rewrite Int.translate_cmpu
-      by eauto using Mem.weak_valid_pointer_inject_no_overflow.
-    apply val_inject_val_of_optbool.
-    (* different source blocks *)
-    destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; auto.
-    destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; auto.
-    destruct (zeq b2 b3).
-    fold (Mem.weak_valid_pointer tm b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
-    fold (Mem.weak_valid_pointer tm b3 (Int.unsigned (Int.add ofs0 (Int.repr delta0)))).
-    rewrite Mem.valid_pointer_implies
-      by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb); eauto).
-    rewrite Mem.valid_pointer_implies
-      by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb0); eauto).
-    exploit Mem.different_pointers_inject; eauto. intros [A|A]; [congruence |].
-    destruct c; simpl; auto.
-    rewrite Int.eq_false. constructor. congruence.
-    rewrite Int.eq_false. constructor. congruence.
-    rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb) by eauto.
-    rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ H2 Heqb0) by eauto.
-    apply val_inject_val_of_optbool.
-  (* cmpf *)
+  inv H. econstructor; split; eauto. 
+  unfold Val.cmpu. 
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2) as [b|] eqn:E.
+  replace (Val.cmpu_bool (Mem.valid_pointer tm) c tv1 tv2) with (Some b).
+  destruct b; simpl; constructor.
+  symmetry. eapply val_cmpu_bool_inject; eauto.
+  intros; eapply Mem.valid_pointer_inject_val; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
+  intros; eapply Mem.different_pointers_inject; eauto.
+  simpl; auto.
+(* cmpf *)
+  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
+(* cmpl *)
+  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
+(* cmplu *)
   inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
 Qed.
 
@@ -1843,6 +1851,8 @@ Proof.
   repeat rewrite Int.zero_ext_and; auto. omega. omega.
   (* int32 *)
   exists va; auto.
+  (* int64 *)
+  exists va; auto.
   (* float32 *)
   exploit eval_uncast_float32; eauto. intros [v' [A B]].
   exists v'; split; auto.
@@ -2036,6 +2046,7 @@ Proof.
   destruct cst; simpl; intros; inv H. 
   exists (Vint i); intuition. apply approx_of_int_sound.
   exists (Vfloat f0); intuition. apply approx_of_float_sound.
+  exists (Vlong i); intuition. 
 Qed.
 
 Lemma transl_expr_correct:

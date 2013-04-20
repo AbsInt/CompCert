@@ -85,6 +85,8 @@ Nondetfunction add (e1: expr) (e2: expr) :=
   | t1, Eop (Oaddimm n2) (t2:::Enil) => addimm n2 (Eop Oadd (t1:::t2:::Enil))
   | Eop (Oshift s) (t1:::Enil), t2 => Eop (Oaddshift s) (t2:::t1:::Enil)
   | t1, Eop (Oshift s) (t2:::Enil) => Eop (Oaddshift s) (t1:::t2:::Enil)
+  | Eop Omul (t1:::t2:::Enil), t3 => Eop Omla (t1:::t2:::t3:::Enil)
+  | t1, Eop Omul (t2:::t3:::Enil) => Eop Omla (t2:::t3:::t1:::Enil)
   | _, _ => Eop Oadd (e1:::e2:::Enil)
   end.
 
@@ -185,6 +187,7 @@ Nondetfunction mul (e1: expr) (e2: expr) :=
 
 Nondetfunction andimm (n1: int) (e2: expr) := 
   if Int.eq n1 Int.zero then Eop (Ointconst Int.zero) Enil else
+  if Int.eq n1 Int.mone then e2 else
   match e2 with
   | Eop (Ointconst n2) Enil =>
       Eop (Ointconst (Int.and n1 n2)) Enil
@@ -215,6 +218,7 @@ Definition same_expr_pure (e1 e2: expr) :=
 
 Nondetfunction orimm (n1: int) (e2: expr) :=
   if Int.eq n1 Int.zero then e2 else
+  if Int.eq n1 Int.mone then Eop (Ointconst Int.mone) Enil else
   match e2 with
   | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.or n1 n2)) Enil
   | Eop (Oorimm n2) (t2:::Enil) => Eop (Oorimm (Int.or n1 n2)) (t2:::Enil)
@@ -407,6 +411,7 @@ Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
   | Mint16signed => true
   | Mint16unsigned => true
   | Mint32 => true
+  | Mint64 => false
   | Mfloat32 => false
   | Mfloat64 => false
   | Mfloat64al32 => false
@@ -419,6 +424,7 @@ Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
   | Mint16signed => false
   | Mint16unsigned => false
   | Mint32 => true
+  | Mint64 => false
   | Mfloat32 => false
   | Mfloat64 => false
   | Mfloat64al32 => false

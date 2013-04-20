@@ -80,29 +80,6 @@ Qed.
 
 Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
 
-Lemma nontemp_diff:
-  forall r r',
-  nontemp_preg r = true -> nontemp_preg r' = false -> r <> r'.
-Proof.
-  congruence.
-Qed.
-Hint Resolve nontemp_diff: asmgen.
-
-Lemma temporaries_temp_preg:
-  forall r, In r temporary_regs -> nontemp_preg (preg_of r) = false.
-Proof.
-  assert (List.forallb (fun r => negb (nontemp_preg (preg_of r))) temporary_regs = true) by reflexivity.
-  rewrite List.forallb_forall in H. intros. generalize (H r H0). 
-  destruct (nontemp_preg (preg_of r)); simpl; congruence.
-Qed.
-
-Lemma nontemp_data_preg:
-  forall r, nontemp_preg r = true -> data_preg r = true.
-Proof.
-  destruct r; try (destruct i); try (destruct f); simpl; congruence.
-Qed.
-Hint Resolve nontemp_data_preg: asmgen.
-
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.add rs#PC Vone.
 Proof.
@@ -121,18 +98,64 @@ Proof.
   intros. apply nextinstr_inv. red; intro; subst; discriminate.
 Qed.
 
-Lemma nextinstr_inv2:
-  forall r rs, nontemp_preg r = true -> (nextinstr rs)#r = rs#r.
-Proof.
-  intros. apply nextinstr_inv1; auto with asmgen.
-Qed.
-
 Lemma nextinstr_set_preg:
   forall rs m v,
   (nextinstr (rs#(preg_of m) <- v))#PC = Val.add rs#PC Vone.
 Proof.
   intros. unfold nextinstr. rewrite Pregmap.gss. 
   rewrite Pregmap.gso. auto. apply sym_not_eq. apply preg_of_not_PC. 
+Qed.
+
+Lemma undef_regs_other:
+  forall r rl rs, 
+  (forall r', In r' rl -> r <> r') ->
+  undef_regs rl rs r = rs r.
+Proof.
+  induction rl; simpl; intros. auto. 
+  rewrite IHrl by auto. rewrite Pregmap.gso; auto.
+Qed.
+
+Fixpoint preg_notin (r: preg) (rl: list mreg) : Prop :=
+  match rl with
+  | nil => True
+  | r1 :: nil => r <> preg_of r1
+  | r1 :: rl => r <> preg_of r1 /\ preg_notin r rl
+  end.
+
+Remark preg_notin_charact:
+  forall r rl,
+  preg_notin r rl <-> (forall mr, In mr rl -> r <> preg_of mr).
+Proof.
+  induction rl; simpl; intros.
+  tauto.
+  destruct rl.
+  simpl. split. intros. intuition congruence. auto. 
+  rewrite IHrl. split. 
+  intros [A B]. intros. destruct H. congruence. auto. 
+  auto.
+Qed.
+
+Lemma undef_regs_other_2:
+  forall r rl rs,
+  preg_notin r rl ->
+  undef_regs (map preg_of rl) rs r = rs r.
+Proof.
+  intros. apply undef_regs_other. intros. 
+  exploit list_in_map_inv; eauto. intros [mr [A B]]. subst.
+  rewrite preg_notin_charact in H. auto.
+Qed.
+
+Lemma set_pregs_other_2:
+  forall r rl vl rs,
+  preg_notin r rl ->
+  set_regs (map preg_of rl) vl rs r = rs r.
+Proof.
+  induction rl; simpl; intros. 
+  auto.
+  destruct vl; auto.
+  assert (r <> preg_of a) by (destruct rl; tauto).
+  assert (preg_notin r rl) by (destruct rl; simpl; tauto).
+  rewrite IHrl by auto. apply Pregmap.gso; auto. 
 Qed.
 
 (** * Agreement between Mach registers and processor registers *)
@@ -224,7 +247,21 @@ Proof.
   intros. unfold nextinstr. apply agree_set_other. auto. auto.
 Qed.
 
-Lemma agree_undef_regs:
+Lemma agree_set_mregs:
+  forall sp rl vl vl' ms rs,
+  agree ms sp rs ->
+  Val.lessdef_list vl vl' ->
+  agree (Mach.set_regs rl vl ms) sp (set_regs (map preg_of rl) vl' rs).
+Proof.
+  induction rl; simpl; intros. 
+  auto.
+  inv H0. auto. apply IHrl; auto. 
+  eapply agree_set_mreg. eexact H. 
+  rewrite Pregmap.gss. auto.
+  intros. apply Pregmap.gso; auto. 
+Qed.
+
+Lemma agree_undef_nondata_regs:
   forall ms sp rl rs,
   agree ms sp rs ->
   (forall r, In r rl -> data_preg r = false) ->
@@ -237,31 +274,33 @@ Proof.
   intros. apply H0; auto.
 Qed.
 
-Lemma agree_exten_temps:
-  forall ms sp rs rs',
+Lemma agree_undef_regs:
+  forall ms sp rl rs rs',
   agree ms sp rs ->
-  (forall r, nontemp_preg r = true -> rs'#r = rs#r) ->
-  agree (undef_temps ms) sp rs'.
+  (forall r', data_preg r' = true -> preg_notin r' rl -> rs'#r' = rs#r') ->
+  agree (Mach.undef_regs rl ms) sp rs'.
 Proof.
   intros. destruct H. split; auto.
-  rewrite H0; auto. auto. 
-  intros. unfold undef_temps. 
-  destruct (In_dec mreg_eq r temporary_regs).
-  rewrite Mach.undef_regs_same; auto. 
-  rewrite Mach.undef_regs_other; auto. rewrite H0; auto.
-  simpl in n. destruct r; auto; intuition.
+  rewrite <- agree_sp0. apply H0; auto. 
+  rewrite preg_notin_charact. intros. apply not_eq_sym. apply preg_of_not_SP. 
+  intros. destruct (In_dec mreg_eq r rl).
+  rewrite Mach.undef_regs_same; auto.
+  rewrite Mach.undef_regs_other; auto. rewrite H0; auto. 
+  apply preg_of_data.
+  rewrite preg_notin_charact. intros; red; intros. elim n. 
+  exploit preg_of_injective; eauto. congruence.
 Qed.
 
 Lemma agree_set_undef_mreg:
-  forall ms sp rs r v rs',
+  forall ms sp rs r v rl rs',
   agree ms sp rs ->
   Val.lessdef v (rs'#(preg_of r)) ->
-  (forall r', nontemp_preg r' = true -> r' <> preg_of r -> rs'#r' = rs#r') ->
-  agree (Regmap.set r v (undef_temps ms)) sp rs'.
+  (forall r', data_preg r' = true -> r' <> preg_of r -> preg_notin r' rl -> rs'#r' = rs#r') ->
+  agree (Regmap.set r v (Mach.undef_regs rl ms)) sp rs'.
 Proof.
   intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
-  eapply agree_exten_temps; eauto. 
-  intros. unfold Pregmap.set. destruct (PregEq.eq r0 (preg_of r)). 
+  apply agree_undef_regs with rs; auto. 
+  intros. unfold Pregmap.set. destruct (PregEq.eq r' (preg_of r)). 
   congruence. auto. 
   intros. rewrite Pregmap.gso; auto. 
 Qed.
@@ -291,9 +330,7 @@ Proof.
   exploit Mem.loadv_extends; eauto. intros [v' [A B]].
   rewrite (sp_val _ _ _ H) in A.
   exists v'; split; auto.
-  destruct ty; econstructor.
-  reflexivity. assumption.
-  reflexivity. assumption.
+  econstructor. eauto. assumption. 
 Qed.
 
 Lemma extcall_args_match:
@@ -667,6 +704,7 @@ Ltac TailNoLabel :=
   match goal with
   | [ |- tail_nolabel _ (_ :: _) ] => apply tail_nolabel_cons; [auto; exact I | TailNoLabel]
   | [ H: Error _ = OK _ |- _ ] => discriminate
+  | [ H: assertion_failed = OK _ |- _ ] => discriminate
   | [ H: OK _ = OK _ |- _ ] => inv H; TailNoLabel
   | [ H: bind _ _ = OK _ |- _ ] => monadInv H;  TailNoLabel
   | [ H: (if ?x then _ else _) = OK _ |- _ ] => destruct x; TailNoLabel

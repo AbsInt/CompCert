@@ -333,45 +333,19 @@ Qed.
 
 (** * Soundness of the compile-time evaluator *)
 
-(** [match_val v v'] holds if the compile-time value [v]
-  (with symbolic pointers) matches the run-time value [v']
-  (with concrete pointers). *)
+(** A global environment [ge] induces a memory injection mapping
+  our symbolic pointers [Vptr (Zpos id) ofs] to run-time pointers
+  [Vptr b ofs] where [Genv.find_symbol ge id = Some b]. *)
 
-Inductive match_val: val -> val -> Prop :=
-  | match_vint: forall n,
-      match_val (Vint n) (Vint n)
-  | match_vfloat: forall f,
-      match_val (Vfloat f) (Vfloat f)
-  | match_vptr: forall id b ofs,
-      Genv.find_symbol ge id = Some b ->
-      match_val (Vptr (Zpos id) ofs) (Vptr b ofs)
-  | match_vundef:
-      match_val Vundef Vundef.
-
-Lemma match_val_of_bool:
-  forall b, match_val (Val.of_bool b) (Val.of_bool b).
-Proof.
-  destruct b; constructor.
-Qed.
-
-Hint Constructors match_val: mval.
-Hint Resolve match_val_of_bool: mval.
-
-(** The [match_val] relation commutes with the evaluation functions
-  from [Csem]. *)
-
-Lemma sem_unary_match:
-  forall op ty v1 v v1' v',
-  sem_unary_operation op v1 ty = Some v ->
-  sem_unary_operation op v1' ty = Some v' ->
-  match_val v1 v1' ->
-  match_val v v'.
-Proof.
-  intros. destruct op; simpl in *.
-  unfold sem_notbool in *. destruct (classify_bool ty); inv H1; inv H; inv H0; auto with mval. constructor.
-  unfold sem_notint in *. destruct (classify_notint ty); inv H1; inv H; inv H0; auto with mval.
-  unfold sem_neg in *. destruct (classify_neg ty); inv H1; inv H; inv H0; auto with mval.
-Qed.
+Definition inj (b: block) :=
+  match b with
+  | Zpos id =>
+      match Genv.find_symbol ge id with
+      | Some b' => Some (b', 0)
+      | None => None
+      end
+  | _ => None
+  end.
 
 Lemma mem_empty_not_valid_pointer:
   forall b ofs, Mem.valid_pointer Mem.empty b ofs = false.
@@ -387,104 +361,18 @@ Proof.
   now rewrite !mem_empty_not_valid_pointer.
 Qed.
 
-Lemma sem_cmp_match:
-  forall c v1 ty1 v2 ty2 m v v1' v2' v',
-  sem_cmp c v1 ty1 v2 ty2 Mem.empty = Some v ->
-  sem_cmp c v1' ty1 v2' ty2 m = Some v' ->
-  match_val v1 v1' -> match_val v2 v2' ->
-  match_val v v'.
-Proof.
-Opaque zeq.
-  intros. unfold sem_cmp in *.
-  destruct (classify_cmp ty1 ty2); try (destruct s); inv H1; inv H2; inv H; inv H0; auto with mval.
-- destruct (Int.eq n Int.zero); try discriminate. 
-  unfold Val.cmp_different_blocks in *. destruct c; inv H3; inv H2; constructor.
-- destruct (Int.eq n Int.zero); try discriminate. 
-  unfold Val.cmp_different_blocks in *. destruct c; inv H2; inv H1; constructor.
-- destruct (zeq (Z.pos id) (Z.pos id0)); discriminate.
-Qed.
-
-Lemma sem_binary_match:
-  forall op v1 ty1 v2 ty2 m v v1' v2' v',
-  sem_binary_operation op v1 ty1 v2 ty2 Mem.empty = Some v ->
-  sem_binary_operation op v1' ty1 v2' ty2 m = Some v' ->
-  match_val v1 v1' -> match_val v2 v2' ->
-  match_val v v'.
-Proof.
-  intros. unfold sem_binary_operation in *; destruct op.
-(* add *)
-  unfold sem_add in *. destruct (classify_add ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
-(* sub *)
-  unfold sem_sub in *. destruct (classify_sub ty1 ty2); inv H1; inv H2; try (inv H; inv H0; auto with mval; fail).
-  destruct (zeq (Zpos id) (Zpos id0)); try discriminate.
-  assert (b0 = b) by congruence. subst b0. rewrite zeq_true in H0. 
-  destruct (Int.eq (Int.repr (sizeof ty)) Int.zero); inv H; inv H0; auto with mval.
-(* mul *)
-  unfold sem_mul in *. destruct (classify_mul ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
-(* div *)
-  unfold sem_div in H0. functional inversion H; rewrite H4 in H0; inv H1; inv H2; inv H0.
-  inv H12. rewrite H11 in H2. inv H2. constructor.
-  inv H12. rewrite H11 in H2. inv H2. constructor.
-  inv H11. constructor.
-  inv H11. constructor.
-  inv H11. constructor.
-(* mod *)
-  unfold sem_mod in H0. functional inversion H; rewrite H4 in H0; inv H1; inv H2; inv H0.
-  inv H12. rewrite H11 in H2. inv H2. constructor.
-  inv H12. rewrite H11 in H2. inv H2. constructor.
-(* and *)
-  unfold sem_and in *. destruct (classify_binint ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
-(* or *)
-  unfold sem_or in *. destruct (classify_binint ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
-(* xor *)
-  unfold sem_xor in *. destruct (classify_binint ty1 ty2); inv H1; inv H2; inv H; inv H0; auto with mval.
-(* shl *)
-  unfold sem_shl in *. destruct (classify_shift ty1 ty2); inv H1; inv H2; try discriminate.
-  destruct (Int.ltu n0 Int.iwordsize); inv H0; inv H; constructor.
-(* shr *)
-  unfold sem_shr in *. destruct (classify_shift ty1 ty2); try discriminate;
-  destruct s; inv H1; inv H2; try discriminate.
-  destruct (Int.ltu n0 Int.iwordsize); inv H0; inv H; constructor.
-  destruct (Int.ltu n0 Int.iwordsize); inv H0; inv H; constructor.
-(* comparisons *)
-  eapply sem_cmp_match; eauto.
-  eapply sem_cmp_match; eauto.
-  eapply sem_cmp_match; eauto.
-  eapply sem_cmp_match; eauto.
-  eapply sem_cmp_match; eauto.
-  eapply sem_cmp_match; eauto.
-Qed.
-
 Lemma sem_cast_match:
-  forall v1 ty1 ty2 v2, sem_cast v1 ty1 ty2 = Some v2 ->
-  forall v1' v2',  match_val v1' v1 -> do_cast v1' ty1 ty2 = OK v2' ->
-  match_val v2' v2.
+  forall v1 ty1 ty2 v2 v1' v2',
+  sem_cast v1 ty1 ty2 = Some v2 ->
+  do_cast v1' ty1 ty2 = OK v2' ->
+  val_inject inj v1' v1 ->
+  val_inject inj v2' v2.
 Proof.
-  intros. unfold do_cast in H1. destruct (sem_cast v1' ty1 ty2) as [v2''|] eqn:?; inv H1.
-  unfold sem_cast in H; functional inversion Heqo; subst. 
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor; auto.
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. inv H0. destruct (cast_float_int si2 f); inv H. inv H7. constructor.
-  rewrite H2 in H. inv H0. inv H. rewrite H7. constructor.
-  rewrite H2 in H. inv H0. inv H. rewrite H7. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. inv H0. inv H. constructor.
-  rewrite H2 in H. destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. auto.
-  rewrite H2 in H. destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. auto.
-  rewrite H5 in H. inv H. auto.
+  intros. unfold do_cast in H0. destruct (sem_cast v1' ty1 ty2) as [v2''|] eqn:E; inv H0.
+  exploit sem_cast_inject. eexact E. eauto. 
+  intros [v' [A B]]. congruence.
 Qed.
 
-Lemma bool_val_match:
-  forall v v' ty,
-  match_val v v' ->
-  bool_val v ty = bool_val v' ty.
-Proof.
-  intros. inv H; auto.
-Qed.
-  
 (** Soundness of [constval] with respect to the big-step semantics *)
 
 Lemma constval_rvalue:
@@ -492,13 +380,13 @@ Lemma constval_rvalue:
   eval_simple_rvalue empty_env m a v ->
   forall v',
   constval a = OK v' ->
-  match_val v' v
+  val_inject inj v' v
 with constval_lvalue:
   forall m a b ofs,
   eval_simple_lvalue empty_env m a b ofs ->
   forall v',
   constval a = OK v' ->
-  match_val v' (Vptr b ofs).
+  val_inject inj v' (Vptr b ofs).
 Proof.
   (* rvalue *)
   induction 1; intros vres CV; simpl in CV; try (monadInv CV).
@@ -509,11 +397,18 @@ Proof.
   (* addrof *)
   eauto.
   (* unop *)
-  revert EQ0. caseEq (sem_unary_operation op x (typeof r1)); intros; inv EQ0.
-  eapply sem_unary_match; eauto. 
+  destruct (sem_unary_operation op x (typeof r1)) as [v1'|] eqn:E; inv EQ0.
+  exploit sem_unary_operation_inject. eexact E. eauto. 
+  intros [v' [A B]]. congruence.
   (* binop *)
-  revert EQ2. caseEq (sem_binary_operation op x (typeof r1) x0 (typeof r2) Mem.empty); intros; inv EQ2.
-  eapply sem_binary_match; eauto.
+  destruct (sem_binary_operation op x (typeof r1) x0 (typeof r2) Mem.empty) as [v1'|] eqn:E; inv EQ2.
+  exploit (sem_binary_operation_inj inj Mem.empty m).
+  intros. rewrite mem_empty_not_valid_pointer in H3; discriminate.
+  intros. rewrite mem_empty_not_weak_valid_pointer in H3; discriminate.
+  intros. rewrite mem_empty_not_weak_valid_pointer in H3; discriminate.
+  intros. rewrite mem_empty_not_valid_pointer in H3; discriminate.
+  eauto. eauto. eauto. 
+  intros [v' [A B]]. congruence.
   (* cast *)
   eapply sem_cast_match; eauto. 
   (* sizeof *)
@@ -521,18 +416,26 @@ Proof.
   (* alignof *)
   constructor.
   (* seqand *)
-  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
-  monadInv EQ2. eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
-  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
-  monadInv EQ2. constructor.
+  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_inject. eexact E. eauto. intros E'.
+  assert (b = true) by congruence. subst b. monadInv H5. 
+  eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
+  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_inject. eexact E. eauto. intros E'.
+  assert (b = false) by congruence. subst b. inv H2. auto.
   (* seqor *)
-  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
-  monadInv EQ2. eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
-  rewrite (bool_val_match x v1 (typeof r1)) in EQ2; auto. rewrite H0 in EQ2. 
-  monadInv EQ2. constructor.
+  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_inject. eexact E. eauto. intros E'.
+  assert (b = false) by congruence. subst b. monadInv H5. 
+  eapply sem_cast_match; eauto. eapply sem_cast_match; eauto.
+  destruct (bool_val x (typeof r1)) as [b|] eqn:E; inv EQ2. 
+  exploit bool_val_inject. eexact E. eauto. intros E'.
+  assert (b = true) by congruence. subst b. inv H2. auto.
   (* conditional *)
-  rewrite (bool_val_match x v1 (typeof r1)) in EQ3; auto.
-  rewrite H0 in EQ3. destruct b; eapply sem_cast_match; eauto.
+  destruct (bool_val x (typeof r1)) as [b'|] eqn:E; inv EQ3.
+  exploit bool_val_inject. eexact E. eauto. intros E'.
+  assert (b' = b) by congruence. subst b'. 
+  destruct b; eapply sem_cast_match; eauto.
   (* comma *)
   auto.
   (* paren *)
@@ -543,12 +446,14 @@ Proof.
   (* var local *)
   unfold empty_env in H. rewrite PTree.gempty in H. congruence.
   (* var_global *)
-  constructor; auto.
+  econstructor. unfold inj. rewrite H0. eauto. auto. 
   (* deref *)
   eauto.
   (* field struct *)
   rewrite H0 in CV. monadInv CV. exploit constval_rvalue; eauto. intro MV. inv MV.
-  simpl. replace x with delta by congruence. constructor. auto.
+  simpl. replace x with delta by congruence. econstructor; eauto. 
+  rewrite ! Int.add_assoc. f_equal. apply Int.add_commut. 
+  simpl. auto.
   (* field union *)
   rewrite H0 in CV. eauto.
 Qed.
@@ -569,7 +474,7 @@ Theorem constval_steps:
   forall f r m v v' ty m',
   star step ge (ExprState f r Kstop empty_env m) E0 (ExprState f (Eval v' ty) Kstop empty_env m') ->
   constval r = OK v ->
-  m' = m /\ ty = typeof r /\ match_val v v'.
+  m' = m /\ ty = typeof r /\ val_inject inj v v'.
 Proof.
   intros. exploit eval_simple_steps; eauto. eapply constval_simple; eauto. 
   intros [A [B C]]. intuition. eapply constval_rvalue; eauto.
@@ -595,19 +500,23 @@ Proof.
   inv D. 
   (* int *)
   destruct ty; try discriminate. 
-  destruct i; inv EQ2.
+  destruct i0; inv EQ2.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_8; auto. auto.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_16; auto. auto.
   simpl in H2; inv H2. assumption.
   inv EQ2. simpl in H2; inv H2. assumption.
+  (* long *)
+  destruct ty; inv EQ2. simpl in H2; inv H2. assumption.
   (* float *)
   destruct ty; try discriminate. 
   destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
   (* pointer *)
-  assert (data = Init_addrof id ofs0 /\ chunk = Mint32).
+  unfold inj in H. destruct b1; try discriminate.
+  assert (data = Init_addrof p ofs1 /\ chunk = Mint32).
     destruct ty; inv EQ2; inv H2.
     destruct i; inv H5. intuition congruence. auto.
-  destruct H4; subst. rewrite H. assumption.
+  destruct H4; subst. destruct (Genv.find_symbol ge p); inv H. 
+  rewrite Int.add_zero in H3. auto.
   (* undef *)
   discriminate.
 Qed.
@@ -624,11 +533,14 @@ Proof.
   destruct ty; try discriminate. 
   destruct i0; inv EQ2; reflexivity.
   inv EQ2; reflexivity.
+  inv EQ2; reflexivity.
+  destruct ty; inv EQ2; reflexivity. 
   destruct ty; try discriminate.
   destruct f0; inv EQ2; reflexivity.
   destruct b; try discriminate.
   destruct ty; try discriminate.
   destruct i0; inv EQ2; reflexivity.
+  inv EQ2; reflexivity.
   inv EQ2; reflexivity.
 Qed.
 

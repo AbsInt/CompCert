@@ -546,7 +546,8 @@ Ltac ArgsInv :=
   | [ H: Error _ = OK _ |- _ ] => discriminate
   | [ H: match ?args with nil => _ | _ :: _ => _ end = OK _ |- _ ] => destruct args
   | [ H: bind _ _ = OK _ |- _ ] => monadInv H
-  | [ H: assertion _ = OK _ |- _ ] => monadInv H
+  | [ H: match _ with left _ => _ | right _ => assertion_failed end = OK _ |- _ ] => monadInv H; ArgsInv
+  | [ H: match _ with true => _ | false => assertion_failed end = OK _ |- _ ] => monadInv H; ArgsInv
   end);
   subst;
   repeat (match goal with
@@ -810,9 +811,7 @@ Lemma transl_op_correct_aux:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of res) = v
-  /\ forall r,
-     match op with Omove => data_preg r = true | _ => nontemp_preg r = true end ->
-     r <> preg_of res -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
 Proof.
 Opaque Int.eq.
   intros. unfold transl_op in H; destruct op; ArgsInv; simpl in H0; try (inv H0); try TranslOpSimpl.
@@ -839,7 +838,7 @@ Opaque Val.add.
   rewrite gpr_or_zero_not_zero; eauto with asmgen. Simpl.  
   rewrite (Val.add_commut Vzero). rewrite high_half_zero. 
   rewrite Val.add_commut. rewrite low_high_half. auto.
-  intros; Simpl.
+  intros; Simpl. 
   (* Oaddrstack *)
   destruct (addimm_correct x GPR1 i k rs m) as [rs' [EX [RES OTH]]]; eauto with asmgen.
   exists rs'; auto with asmgen.
@@ -879,12 +878,11 @@ Opaque Val.add.
   intros. rewrite D; auto with asmgen. unfold rs1; Simpl.
   (* Oandimm *)
   destruct (andimm_correct x0 x i k rs m) as [rs' [A [B C]]]; eauto with asmgen.
-  exists rs'; auto with asmgen.
   (* Oorimm *)
-  destruct (orimm_correct x0 x i k rs m) as [rs' [A [B C]]]. 
+  destruct (orimm_correct x0 x i k rs m) as [rs' [A [B C]]].
   exists rs'; auto with asmgen.
   (* Oxorimm *)
-  destruct (xorimm_correct x0 x i k rs m) as [rs' [A [B C]]]. 
+  destruct (xorimm_correct x0 x i k rs m) as [rs' [A [B C]]].
   exists rs'; auto with asmgen.
   (* Onor *)
   replace (Val.notint (rs x))
@@ -898,7 +896,6 @@ Opaque Val.add.
   intros; Simpl.
   (* Orolm *)
   destruct (rolm_correct x0 x i i0 k rs m) as [rs' [A [B C]]]; eauto with asmgen.
-  exists rs'; auto with asmgen.
   (* Ointoffloat *)
   replace v with (Val.maketotal (Val.intoffloat (rs x))).
   TranslOpSimpl.
@@ -916,19 +913,17 @@ Lemma transl_op_correct:
   Mem.extends m m' ->
   exists rs',
      exec_straight ge fn c rs m' k rs' m'
-  /\ agree (Regmap.set res v (undef_op op ms)) sp rs'
-  /\ forall r, op = Omove -> data_preg r = true -> r <> preg_of res -> rs'#r = rs#r.
+  /\ agree (Regmap.set res v (Mach.undef_regs (destroyed_by_op op) ms)) sp rs'
+  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
 Proof.
   intros. 
   exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eauto. 
   intros [v' [A B]].  rewrite (sp_val _ _ _ H0) in A. 
   exploit transl_op_correct_aux; eauto. intros [rs' [P [Q R]]].
   rewrite <- Q in B.
-  exists rs'; split. eexact P. 
-  split. unfold undef_op. destruct op;
-  (apply agree_set_undef_mreg with rs || apply agree_set_mreg with rs);
+  exists rs'; split. eexact P.
+  split. apply agree_set_undef_mreg with rs; auto.
   auto.
-  intros. subst op. auto.
 Qed.
 
 (** Translation of memory accesses *)
@@ -1100,17 +1095,18 @@ Lemma transl_store_correct:
   Mem.storev chunk m a (rs (preg_of src)) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, r <> PC -> r <> GPR11 -> r <> GPR12 -> r <> FPR13 -> rs' r = rs r.
+  /\ forall r, r <> PC -> preg_notin r (destroyed_by_store chunk addr) -> rs' r = rs r.
 Proof.
+Local Transparent destroyed_by_store.
   intros.
   assert (TEMP0: int_temp_for src = GPR11 \/ int_temp_for src = GPR12).
-    unfold int_temp_for. destruct (mreg_eq src IT2); auto.
+    unfold int_temp_for. destruct (mreg_eq src R12); auto.
   assert (TEMP1: int_temp_for src <> GPR0).
     destruct TEMP0; congruence.
   assert (TEMP2: IR (int_temp_for src) <> preg_of src).
-    unfold int_temp_for. destruct (mreg_eq src IT2). 
+    unfold int_temp_for. destruct (mreg_eq src R12). 
     subst src; simpl; congruence.
-    change (IR GPR12) with (preg_of IT2). red; intros; elim n. 
+    change (IR GPR12) with (preg_of R12). red; intros; elim n. 
     eapply preg_of_injective; eauto.
   assert (BASE: forall mk1 mk2 chunk',
   transl_memory_access mk1 mk2 addr args (int_temp_for src) k = OK c ->
@@ -1123,15 +1119,15 @@ Proof.
     store2 chunk' (preg_of src) r1 r2 rs1 m) ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, r <> PC -> r <> GPR11 -> r <> GPR12 -> r <> FPR13 -> rs' r = rs r).
+  /\ forall r, r <> PC -> r <> GPR11 /\ r <> GPR12 -> rs' r = rs r).
   {
   intros. eapply transl_memory_access_correct; eauto.
   intros. econstructor; split. apply exec_straight_one. 
   rewrite H4. unfold store1. rewrite H6. rewrite H7; auto with asmgen. rewrite H3. eauto. auto. 
-  intros; Simpl. apply H7; auto. destruct TEMP0; congruence. 
+  intros; Simpl. apply H7; auto. destruct TEMP0; destruct H9; congruence. 
   intros. econstructor; split. apply exec_straight_one. 
   rewrite H5. unfold store2. rewrite H6. rewrite H7; auto with asmgen. rewrite H3. eauto. auto. 
-  intros; Simpl. apply H7; auto. destruct TEMP0; congruence. 
+  intros; Simpl. apply H7; auto. destruct TEMP0; destruct H9; congruence. 
   }
   destruct chunk; monadInv H.
 - (* Mint8signed *)
@@ -1153,10 +1149,11 @@ Proof.
   eapply transl_memory_access_correct. eauto. eauto. eauto. 
   intros. econstructor; split. apply exec_straight_one. 
   simpl. unfold store1. rewrite H. rewrite H2; auto with asmgen. rewrite H1. eauto. auto. 
-  intros. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
+Local Transparent destroyed_by_store.
+  simpl; intros. destruct H4 as [A [B C]]. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
   intros. econstructor; split. apply exec_straight_one. 
   simpl. unfold store2. rewrite H. rewrite H2; auto with asmgen. rewrite H1. eauto. auto. 
-  intros. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
+  simpl; intros. destruct H4 as [A [B C]]. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
 - (* Mfloat64 *)
   apply Mem.storev_float64al32 in H1. eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 - (* Mfloat64al32 *)

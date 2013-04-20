@@ -221,6 +221,7 @@ let string_of_init_data = function
 | Init_int8(i)    -> "Init_int8("    ^ string_of_int (z_int_lax i)  ^ ")"
 | Init_int16(i)   -> "Init_int16("   ^ string_of_int (z_int_lax i)  ^ ")"
 | Init_int32(i)   -> "Init_int32("   ^ string_of_int32i (z_int32 i) ^ ")"
+| Init_int64(i)   -> "Init_int64("   ^ string_of_int64i (z_int64 i) ^ ")"
 | Init_float32(f) -> "Init_float32(" ^ string_of_ffloat f           ^ ")"
 | Init_float64(f) -> "Init_float64(" ^ string_of_ffloat f           ^ ")"
 | Init_space(z)   -> "Init_space("   ^ string_of_int (z_int z)      ^ ")"

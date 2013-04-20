@@ -13,7 +13,10 @@
 (** Locations are a refinement of RTL pseudo-registers, used to reflect
   the results of register allocation (file [Allocation]). *)
 
+Require Import OrderedType.
 Require Import Coqlib.
+Require Import Maps.
+Require Import Ordered.
 Require Import AST.
 Require Import Values.
 Require Export Machregs.
@@ -42,9 +45,9 @@ Require Export Machregs.
   calling conventions. *)
 
 Inductive slot: Type :=
-  | Local: Z -> typ -> slot
-  | Incoming: Z -> typ -> slot
-  | Outgoing: Z -> typ -> slot.
+  | Local
+  | Incoming
+  | Outgoing.
 
 (** Morally, the [Incoming] slots of a function are the [Outgoing]
 slots of its caller function.
@@ -56,46 +59,17 @@ as 32-bit integers/pointers (type [Tint]) or as 64-bit floats (type [Tfloat]).
 The offset of a slot, combined with its type and its kind, identifies
 uniquely the slot and will determine later where it resides within the
 memory-allocated activation record.  Offsets are always positive.
-
-Conceptually, slots will be mapped to four non-overlapping memory areas
-within activation records:
-- The area for [Local] slots of type [Tint].  The offset is interpreted
-  as a 4-byte word index.
-- The area for [Local] slots of type [Tfloat].  The offset is interpreted
-  as a 8-byte word index.  Thus, two [Local] slots always refer either
-  to the same memory chunk (if they have the same types and offsets)
-  or to non-overlapping memory chunks (if the types or offsets differ).
-- The area for [Outgoing] slots.  The offset is a 4-byte word index.
-  Unlike [Local] slots, the PowerPC calling conventions demand that
-  integer and float [Outgoing] slots reside in the same memory area.
-  Therefore, [Outgoing Tint 0] and [Outgoing Tfloat 0] refer to
-  overlapping memory chunks and cannot be used simultaneously: one will
-  lose its value when the other is assigned.  We will reflect this
-  overlapping behaviour in the environments mapping locations to values
-  defined later in this file.
-- The area for [Incoming] slots.  Same structure as the [Outgoing] slots.
 *)
-
-Definition slot_type (s: slot): typ :=
-  match s with
-  | Local ofs ty => ty
-  | Incoming ofs ty => ty
-  | Outgoing ofs ty => ty
-  end.
 
 Lemma slot_eq: forall (p q: slot), {p = q} + {p <> q}.
 Proof.
-  assert (typ_eq: forall (t1 t2: typ), {t1 = t2} + {t1 <> t2}).
-  decide equality.
-  generalize zeq; intro.
   decide equality.
 Defined.
-Global Opaque slot_eq.
 
 Open Scope Z_scope.
 
 Definition typesize (ty: typ) : Z :=
-  match ty with Tint => 1 | Tfloat => 2 end.
+  match ty with Tint => 1 | Tlong => 2 | Tfloat => 2 end.
 
 Lemma typesize_pos:
   forall (ty: typ), typesize ty > 0.
@@ -109,20 +83,24 @@ Qed.
   activation record slots. *)
 
 Inductive loc : Type :=
-  | R: mreg -> loc
-  | S: slot -> loc.
+  | R (r: mreg)
+  | S (sl: slot) (pos: Z) (ty: typ).
 
 Module Loc.
 
   Definition type (l: loc) : typ :=
     match l with
     | R r => mreg_type r
-    | S s => slot_type s
+    | S sl pos ty => ty
     end.
 
   Lemma eq: forall (p q: loc), {p = q} + {p <> q}.
   Proof.
-    decide equality. apply mreg_eq. apply slot_eq.
+    decide equality.
+    apply mreg_eq.
+    apply typ_eq.
+    apply zeq.
+    apply slot_eq.
   Defined.
 
 (** As mentioned previously, two locations can be different (in the sense
@@ -138,13 +116,10 @@ Module Loc.
 *)
   Definition diff (l1 l2: loc) : Prop :=
     match l1, l2 with
-    | R r1, R r2 => r1 <> r2
-    | S (Local d1 t1), S (Local d2 t2) =>
-        d1 <> d2 \/ t1 <> t2
-    | S (Incoming d1 t1), S (Incoming d2 t2) =>
-        d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1
-    | S (Outgoing d1 t1), S (Outgoing d2 t2) =>
-        d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1
+    | R r1, R r2 => 
+        r1 <> r2
+    | S s1 d1 t1, S s2 d2 t2 =>
+        s1 <> s2 \/ d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1
     | _, _ =>
         True
     end.
@@ -152,11 +127,8 @@ Module Loc.
   Lemma same_not_diff:
     forall l, ~(diff l l).
   Proof.
-    destruct l; unfold diff; try tauto.
-    destruct s.
-    tauto.
-    generalize (typesize_pos t); omega. 
-    generalize (typesize_pos t); omega. 
+    destruct l; unfold diff; auto.
+    red; intros. destruct H; auto. generalize (typesize_pos ty); omega. 
   Qed.
 
   Lemma diff_not_eq:
@@ -169,124 +141,22 @@ Module Loc.
     forall l1 l2, diff l1 l2 -> diff l2 l1.
   Proof.
     destruct l1; destruct l2; unfold diff; auto.
-    destruct s; auto.
-    destruct s; destruct s0; intuition auto.
+    intuition.
   Qed.
 
-  Lemma diff_reg_right:
-    forall l r, l <> R r -> diff (R r) l.
+  Definition diff_dec (l1 l2: loc) : { Loc.diff l1 l2 } + { ~Loc.diff l1 l2 }.
   Proof.
-    intros. simpl. destruct l. congruence. auto.
-  Qed.
-
-  Lemma diff_reg_left:
-    forall l r, l <> R r -> diff l (R r).
-  Proof.
-    intros. apply diff_sym. apply diff_reg_right. auto.
-  Qed.
-
-(** [Loc.overlap l1 l2] returns [false] if [l1] and [l2] are different and
-  non-overlapping, and [true] otherwise: either [l1 = l2] or they partially 
-  overlap. *)
-
-  Definition overlap_aux (t1: typ) (d1 d2: Z) : bool :=
-    if zeq d1 d2 then true else
-    match t1 with
-    | Tint => false
-    | Tfloat => if zeq (d1 + 1) d2 then true else false
-    end.    
-
-  Definition overlap (l1 l2: loc) : bool :=
-    match l1, l2 with
-    | S (Incoming d1 t1), S (Incoming d2 t2) =>
-        overlap_aux t1 d1 d2 || overlap_aux t2 d2 d1
-    | S (Outgoing d1 t1), S (Outgoing d2 t2) =>
-        overlap_aux t1 d1 d2 || overlap_aux t2 d2 d1
-    | _, _ => false
-    end.
-
-  Lemma overlap_aux_true_1:
-    forall d1 t1 d2 t2,
-    overlap_aux t1 d1 d2 = true ->
-    ~(d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1).
-  Proof.
-    intros until t2.
-    generalize (typesize_pos t1); intro.
-    generalize (typesize_pos t2); intro.
-    unfold overlap_aux.
-    case (zeq d1 d2).
-    intros. omega.
-    case t1. intros; discriminate.
-    case (zeq (d1 + 1) d2); intros.
-    subst d2. simpl. omega.
-    discriminate.
-  Qed.
-
-  Lemma overlap_aux_true_2:
-    forall d1 t1 d2 t2,
-    overlap_aux t2 d2 d1 = true ->
-    ~(d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1).
-  Proof.
-    intros. generalize (overlap_aux_true_1 d2 t2 d1 t1 H).
-    tauto.
-  Qed.
-
-  Lemma overlap_not_diff:
-    forall l1 l2, overlap l1 l2 = true -> ~(diff l1 l2).
-  Proof.
-    unfold overlap, diff; destruct l1; destruct l2; intros; try discriminate.
-    destruct s; discriminate.
-    destruct s; destruct s0; try discriminate.
-    elim (orb_true_elim _ _ H); intro.
-    apply overlap_aux_true_1; auto.
-    apply overlap_aux_true_2; auto.
-    elim (orb_true_elim _ _ H); intro.
-    apply overlap_aux_true_1; auto.
-    apply overlap_aux_true_2; auto.
-  Qed.
-
-  Lemma overlap_aux_false_1:
-    forall t1 d1 t2 d2,
-    overlap_aux t1 d1 d2 || overlap_aux t2 d2 d1 = false ->
-    d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1.
-  Proof.
-    intros until d2. intro OV. 
-    generalize (orb_false_elim _ _ OV). intro OV'. elim OV'.
-    unfold overlap_aux. 
-    case (zeq d1 d2); intro.
-    intros; discriminate.
-    case (zeq d2 d1); intro.
-    intros; discriminate.
-    case t1; case t2; simpl.
-    intros; omega.
-    case (zeq (d2 + 1) d1); intros. discriminate. omega.
-    case (zeq (d1 + 1) d2); intros. discriminate. omega.
-    case (zeq (d1 + 1) d2); intros H1 H2. discriminate. 
-    case (zeq (d2 + 1) d1); intros. discriminate. omega.
-  Qed.
-
-  Lemma non_overlap_diff:
-    forall l1 l2, l1 <> l2 -> overlap l1 l2 = false -> diff l1 l2.
-  Proof.
-    intros. unfold diff; destruct l1; destruct l2. 
-    congruence.
-    auto.
-    destruct s; auto.
-    destruct s; destruct s0; auto. 
-    case (zeq z z0); intro.
-    compare t t0; intro.
-    congruence. tauto. tauto.
-    apply overlap_aux_false_1. exact H0.
-    apply overlap_aux_false_1. exact H0.
-  Qed.
-
-  Definition diff_dec (l1 l2: loc) : { Loc.diff l1 l2 } + {~Loc.diff l1 l2}.
-  Proof.
-    intros. case (eq l1 l2); intros. 
-    right. rewrite e. apply same_not_diff.
-    case_eq (overlap l1 l2); intros.
-    right. apply overlap_not_diff; auto.
-    left. apply non_overlap_diff; auto.
+    intros. destruct l1; destruct l2; simpl.
+  - destruct (mreg_eq r r0). right; tauto. left; auto.
+  - left; auto.
+  - left; auto.
+  - destruct (slot_eq sl sl0).
+    destruct (zle (pos + typesize ty) pos0).
+    left; auto.
+    destruct (zle (pos0 + typesize ty0) pos).
+    left; auto.
+    right; red; intros [P | [P | P]]. congruence. omega. omega. 
+    left; auto.
   Defined.
 
 (** We now redefine some standard notions over lists, using the [Loc.diff]
@@ -316,12 +186,16 @@ Module Loc.
     elim (diff_not_eq l l); auto.
   Qed.
 
-  Lemma reg_notin:
-    forall r ll, ~(In (R r) ll) -> notin (R r) ll.
+  Lemma notin_dec (l: loc) (ll: list loc) : {notin l ll} + {~notin l ll}.
   Proof.
-    intros. rewrite notin_iff; intros. 
-    destruct l'; simpl. congruence. auto.
-  Qed.
+    induction ll; simpl.
+    left; auto.
+    destruct (diff_dec l a).
+    destruct IHll.
+    left; auto.
+    right; tauto.
+    right; tauto.
+  Defined.
 
 (** [Loc.disjoint l1 l2] is true if the locations in list [l1]
   are different from all locations in list [l2]. *)
@@ -376,6 +250,17 @@ Module Loc.
   | norepet_cons:
       forall hd tl, notin hd tl -> norepet tl -> norepet (hd :: tl).
 
+  Lemma norepet_dec (ll: list loc) : {norepet ll} + {~norepet ll}.
+  Proof.
+    induction ll.
+    left; constructor.
+    destruct (notin_dec a ll).
+    destruct IHll.
+    left; constructor; auto.
+    right; red; intros P; inv P; contradiction.
+    right; red; intros P; inv P; contradiction.
+  Defined.
+
 (** [Loc.no_overlap l1 l2] holds if elements of [l1] never overlap partially
   with elements of [l2]. *)
 
@@ -383,8 +268,6 @@ Module Loc.
    forall r, In r l1 -> forall s, In s l2 ->  r = s \/ Loc.diff r s.
 
 End Loc.
-
-Global Opaque Loc.eq Loc.diff_dec.
 
 (** * Mappings from locations to values *)
 
@@ -413,20 +296,20 @@ Module Locmap.
 
   Definition set (l: loc) (v: val) (m: t) : t :=
     fun (p: loc) =>
-      if Loc.eq l p then v else if Loc.overlap l p then Vundef else m p.
+      if Loc.eq l p then v else if Loc.diff_dec l p then m p else Vundef.
 
   Lemma gss: forall l v m, (set l v m) l = v.
   Proof.
-    intros. unfold set. case (Loc.eq l l); tauto.
+    intros. unfold set. rewrite dec_eq_true. auto.
   Qed.
 
   Lemma gso: forall l v m p, Loc.diff l p -> (set l v m) p = m p.
   Proof.
-    intros. unfold set. case (Loc.eq l p); intro.
-    subst p. elim (Loc.same_not_diff _ H). 
-    caseEq (Loc.overlap l p); intro.
-    elim (Loc.overlap_not_diff _ _ H0 H).
+    intros. unfold set. destruct (Loc.eq l p).
+    subst p. elim (Loc.same_not_diff _ H).
+    destruct (Loc.diff_dec l p).
     auto.
+    contradiction.
   Qed.
 
   Fixpoint undef (ll: list loc) (m: t) {struct ll} : t :=
@@ -446,10 +329,172 @@ Module Locmap.
     assert (P: forall ll l m, m l = Vundef -> (undef ll m) l = Vundef).
       induction ll; simpl; intros. auto. apply IHll. 
       unfold set. destruct (Loc.eq a l); auto. 
-      destruct (Loc.overlap a l); auto.
+      destruct (Loc.diff_dec a l); auto.
     induction ll; simpl; intros. contradiction. 
     destruct H. apply P. subst a. apply gss. 
     auto.
   Qed.
 
+  Fixpoint setlist (ll: list loc) (vl: list val) (m: t) {struct ll} : t :=
+    match ll, vl with
+    | l1 :: ls, v1 :: vs => setlist ls vs (set l1 v1 m)
+    | _, _ => m
+    end.
+
+  Lemma gsetlisto: forall l ll vl m, Loc.notin l ll -> (setlist ll vl m) l = m l.
+  Proof.
+    induction ll; simpl; intros. 
+    auto.
+    destruct vl; auto. destruct H. rewrite IHll; auto. apply gso; auto. apply Loc.diff_sym; auto.
+  Qed.
+
 End Locmap.
+
+(** * Total ordering over locations *)
+
+Module IndexedTyp <: INDEXED_TYPE.
+  Definition t := typ.
+  Definition index (x: t) :=
+    match x with Tint => 1%positive | Tfloat => 2%positive | Tlong => 3%positive end.
+  Lemma index_inj: forall x y, index x = index y -> x = y.
+  Proof. destruct x; destruct y; simpl; congruence. Qed.
+  Definition eq := typ_eq.
+End IndexedTyp.
+
+Module OrderedTyp := OrderedIndexed(IndexedTyp).
+
+Module IndexedSlot <: INDEXED_TYPE.
+  Definition t := slot.
+  Definition index (x: t) :=
+    match x with Local => 1%positive | Incoming => 2%positive | Outgoing => 3%positive end.
+  Lemma index_inj: forall x y, index x = index y -> x = y.
+  Proof. destruct x; destruct y; simpl; congruence. Qed.
+  Definition eq := slot_eq.
+End IndexedSlot.
+
+Module OrderedSlot := OrderedIndexed(IndexedSlot).
+
+Module OrderedLoc <: OrderedType.
+  Definition t := loc.
+  Definition eq (x y: t) := x = y.
+  Definition lt (x y: t) :=
+    match x, y with
+    | R r1, R r2 => Plt (IndexedMreg.index r1) (IndexedMreg.index r2)
+    | R _, S _ _ _ => True
+    | S _ _ _, R _ => False
+    | S sl1 ofs1 ty1, S sl2 ofs2 ty2 =>
+        OrderedSlot.lt sl1 sl2 \/ (sl1 = sl2 /\
+        (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedTyp.lt ty1 ty2)))
+    end.
+  Lemma eq_refl : forall x : t, eq x x.
+  Proof (@refl_equal t). 
+  Lemma eq_sym : forall x y : t, eq x y -> eq y x.
+  Proof (@sym_equal t).
+  Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
+  Proof (@trans_equal t).
+  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+  Proof.
+    unfold lt; intros. 
+    destruct x; destruct y; destruct z; try tauto.
+    eapply Plt_trans; eauto.
+    destruct H. 
+    destruct H0. left; eapply OrderedSlot.lt_trans; eauto.
+    destruct H0. subst sl0. auto. 
+    destruct H. subst sl.
+    destruct H0. auto.
+    destruct H. 
+    right.  split. auto.
+    intuition.
+    right; split. congruence. eapply OrderedTyp.lt_trans; eauto. 
+  Qed.
+  Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+  Proof.
+    unfold lt, eq; intros; red; intros. subst y. 
+    destruct x. 
+    eelim Plt_strict; eauto.
+    destruct H. eelim OrderedSlot.lt_not_eq; eauto. red; auto. 
+    destruct H. destruct H0. omega. 
+    destruct H0. eelim OrderedTyp.lt_not_eq; eauto. red; auto.
+  Qed.
+  Definition compare : forall x y : t, Compare lt eq x y.
+  Proof.
+    intros. destruct x; destruct y.
+  - destruct (OrderedPositive.compare (IndexedMreg.index r) (IndexedMreg.index r0)).
+    + apply LT. red. auto. 
+    + apply EQ. red. f_equal. apply IndexedMreg.index_inj. auto. 
+    + apply GT. red. auto.
+  - apply LT. red; auto. 
+  - apply GT. red; auto.
+  - destruct (OrderedSlot.compare sl sl0).
+    + apply LT. red; auto.
+    + destruct (OrderedZ.compare pos pos0).
+      * apply LT. red. auto. 
+      * destruct (OrderedTyp.compare ty ty0).
+        apply LT. red; auto.
+        apply EQ. red; red in e; red in e0; red in e1. congruence. 
+        apply GT. red; auto.
+      * apply GT. red. auto. 
+    + apply GT. red; auto.
+  Defined.
+  Definition eq_dec := Loc.eq.
+
+(** Connection between the ordering defined here and the [Loc.diff] predicate. *)
+
+  Definition diff_low_bound (l: loc) : loc :=
+    match l with
+    | R mr => l
+    | S sl ofs ty => S sl (ofs - 1) Tfloat
+    end.
+
+  Definition diff_high_bound (l: loc) : loc :=
+    match l with
+    | R mr => l
+    | S sl ofs ty => S sl (ofs + typesize ty - 1) Tlong
+    end.
+
+  Lemma outside_interval_diff:
+    forall l l', lt l' (diff_low_bound l) \/ lt (diff_high_bound l) l' -> Loc.diff l l'.
+  Proof.
+    intros. 
+    destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
+    - assert (IndexedMreg.index mr <> IndexedMreg.index mr').
+      { destruct H. apply sym_not_equal. apply Plt_ne; auto. apply Plt_ne; auto. }
+      congruence.
+    - assert (RANGE: forall ty, 1 <= typesize ty <= 2).
+      { intros; unfold typesize. destruct ty0; omega.  }
+      destruct H. 
+      + destruct H. left. apply sym_not_equal. apply OrderedSlot.lt_not_eq; auto. 
+        destruct H. right.
+        destruct H0. right. generalize (RANGE ty'); omega. 
+        destruct H0. 
+        assert (ty' = Tint). 
+        { unfold OrderedTyp.lt in H1. destruct ty'; compute in H1; congruence. }
+        subst ty'. right. simpl typesize. omega. 
+      + destruct H. left. apply OrderedSlot.lt_not_eq; auto.
+        destruct H. right.
+        destruct H0. left; omega.
+        destruct H0. exfalso. destruct ty'; compute in H1; congruence.
+  Qed.
+
+  Lemma diff_outside_interval:
+    forall l l', Loc.diff l l' -> lt l' (diff_low_bound l) \/ lt (diff_high_bound l) l'.
+  Proof.
+    intros. 
+    destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
+    - unfold Plt, Pos.lt. destruct (Pos.compare (IndexedMreg.index mr) (IndexedMreg.index mr')) eqn:C.
+      elim H. apply IndexedMreg.index_inj. apply Pos.compare_eq_iff. auto.
+      auto. 
+      rewrite Pos.compare_antisym. rewrite C. auto. 
+    - destruct (OrderedSlot.compare sl sl'); auto.
+      destruct H. contradiction. 
+      destruct H.
+      right; right; split; auto. left; omega. 
+      left; right; split; auto. destruct ty'; simpl in *.
+      destruct (zlt ofs' (ofs - 1)). left; auto. 
+      right; split. omega. compute. auto. 
+      left; omega. 
+      left; omega.
+  Qed.
+
+End OrderedLoc.
+

@@ -32,6 +32,8 @@ Definition tushort := Tint I16 Unsigned noattr.
 Definition tint := Tint I32 Signed noattr.
 Definition tuint := Tint I32 Unsigned noattr.
 Definition tbool := Tint IBool Unsigned noattr.
+Definition tlong := Tlong Signed noattr.
+Definition tulong := Tlong Unsigned noattr.
 Definition tfloat := Tfloat F32 noattr.
 Definition tdouble := Tfloat F64 noattr.
 Definition tptr (t: type) := Tpointer t noattr.
@@ -43,6 +45,7 @@ Definition tvolatile (ty: type) :=
   match ty with
   | Tvoid => Tvoid
   | Tint sz si a => Tint sz si volatile_attr
+  | Tlong si a => Tlong si volatile_attr
   | Tfloat sz a => Tfloat sz volatile_attr
   | Tpointer elt a => Tpointer elt volatile_attr
   | Tarray elt sz a => Tarray elt sz volatile_attr

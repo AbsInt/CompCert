@@ -186,6 +186,11 @@ Proof.
   destruct chunk; simpl; auto.
   congruence.
   eapply IHil; eauto. omega.
+  (* Init_int64 *)
+  destruct H. destruct (zeq pos 0). subst. rewrite Zplus_0_r in H0.
+  destruct chunk; simpl; auto.
+  congruence.
+  eapply IHil; eauto. omega.
   (* Init_float32 *)
   destruct H. destruct (zeq pos 0). subst.  rewrite Zplus_0_r in H0.
   destruct chunk; simpl; auto. destruct (propagate_float_constants tt); simpl; auto.

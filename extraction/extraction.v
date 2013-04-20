@@ -11,13 +11,14 @@
 (* *********************************************************************)
 
 Require Wfsimpl.
+Require AST.
 Require Iteration.
 Require Floats.
+Require SelectLong.
 Require RTLgen.
 Require Inlining.
 Require ConstpropOp.
 Require Constprop.
-Require Coloring.
 Require Allocation.
 Require Compiler.
 
@@ -27,6 +28,10 @@ Require Import ExtrOcamlString.
 
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
+
+(* AST *)
+Extract Constant AST.ident_of_string =>
+  "fun s -> Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s)".
 
 (* Memdata *)
 Extract Constant Memdata.big_endian => "Memdataaux.big_endian".
@@ -44,6 +49,15 @@ Extract Constant Iteration.GenIter.iterate =>
      match f a with Coq_inl b -> Some b | Coq_inr a' -> iter f a'
    in iter".
 
+(* Selection *)
+
+Extract Constant SelectLong.get_helper =>
+  "fun ge s sg ->
+     Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
+Extract Constant SelectLong.get_builtin =>
+  "fun s sg ->
+     Errors.OK (Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s))".
+
 (* RTLgen *)
 Extract Constant RTLgen.compile_switch => "RTLgenaux.compile_switch".
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".
@@ -59,8 +73,15 @@ Extract Constant ConstpropOp.propagate_float_constants =>
 Extract Constant Constprop.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
 
-(* Coloring *)
-Extract Constant Coloring.graph_coloring => "Coloringaux.graph_coloring".
+(* Allocation *)
+Extract Constant Allocation.eq_operation => "(=)".
+Extract Constant Allocation.eq_addressing => "(=)".
+Extract Constant Allocation.eq_opt_addressing => "(=)".
+Extract Constant Allocation.eq_condition => "(=)".
+Extract Constant Allocation.eq_chunk => "(=)".
+Extract Constant Allocation.eq_external_function => "(=)".
+Extract Constant Allocation.eq_signature => "(=)".
+Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
@@ -77,7 +98,7 @@ Extract Constant Compiler.print_RTL_tailcall => "PrintRTL.print_tailcall".
 Extract Constant Compiler.print_RTL_inline => "PrintRTL.print_inlining".
 Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
 Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
-Extract Constant Compiler.print_LTLin => "PrintLTLin.print_if".
+Extract Constant Compiler.print_LTL => "PrintLTL.print_if".
 Extract Constant Compiler.print_Mach => "PrintMach.print_if".
 Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
@@ -106,5 +127,10 @@ Separate Extraction
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
    Initializers.transl_init Initializers.constval
-   Csyntax.Eindex Csyntax.Epreincr.
+   Csyntax.Eindex Csyntax.Epreincr
+   Conventions1.dummy_int_reg Conventions1.dummy_float_reg
+   RTL.instr_defs RTL.instr_uses
+   Machregs.mregs_for_operation Machregs.mregs_for_builtin
+   Machregs.two_address_op.
+
 

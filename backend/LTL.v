@@ -30,27 +30,33 @@ Require Import Conventions.
 
 (** * Abstract syntax *)
 
-(** LTL is close to RTL, but uses locations instead of pseudo-registers. *)
+(** LTL is close to RTL, but uses machine registers and stack slots
+  instead of pseudo-registers.  Also, the nodes of the control-flow
+  graph are basic blocks instead of single instructions. *)
 
 Definition node := positive.
 
 Inductive instruction: Type :=
-  | Lnop: node -> instruction
-  | Lop: operation -> list loc -> loc -> node -> instruction
-  | Lload: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
-  | Lstore: memory_chunk -> addressing -> list loc -> loc -> node -> instruction
-  | Lcall: signature -> loc + ident -> list loc -> loc -> node -> instruction
-  | Ltailcall: signature -> loc + ident -> list loc -> instruction
-  | Lbuiltin: external_function -> list loc -> loc -> node -> instruction
-  | Lcond: condition -> list loc -> node -> node -> instruction
-  | Ljumptable: loc -> list node -> instruction
-  | Lreturn: option loc -> instruction.
+  | Lop (op: operation) (args: list mreg) (res: mreg)
+  | Lload (chunk: memory_chunk) (addr: addressing) (args: list mreg) (dst: mreg)
+  | Lgetstack (sl: slot) (ofs: Z) (ty: typ) (dst: mreg)
+  | Lsetstack (src: mreg) (sl: slot) (ofs: Z) (ty: typ)
+  | Lstore (chunk: memory_chunk) (addr: addressing) (args: list mreg) (src: mreg)
+  | Lcall (sg: signature) (ros: mreg + ident)
+  | Ltailcall (sg: signature) (ros: mreg + ident)
+  | Lbuiltin (ef: external_function) (args: list mreg) (res: list mreg)
+  | Lannot (ef: external_function) (args: list loc)
+  | Lbranch (s: node)
+  | Lcond (cond: condition) (args: list mreg) (s1 s2: node)
+  | Ljumptable (arg: mreg) (tbl: list node)
+  | Lreturn.
 
-Definition code: Type := PTree.t instruction.
+Definition bblock := list instruction.
+
+Definition code: Type := PTree.t bblock.
 
 Record function: Type := mkfunction {
   fn_sig: signature;
-  fn_params: list loc;
   fn_stacksize: Z;
   fn_code: code;
   fn_entrypoint: node
@@ -71,49 +77,56 @@ Definition funsig (fd: fundef) :=
 Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
 
-Definition locmap_optget (ol: option loc) (dfl: val) (ls: locset) : val :=
-  match ol with
-  | None => dfl
-  | Some l => ls l
-  end.
+(** Calling conventions are reflected at the level of location sets
+  (environments mapping locations to values) by the following two 
+  functions.  
 
-Fixpoint init_locs (vl: list val) (rl: list loc) {struct rl} : locset :=
-  match rl, vl with
-  | r1 :: rs, v1 :: vs => Locmap.set r1 v1 (init_locs vs rs)
-  | _, _ => Locmap.init Vundef
-  end.
+  [call_regs caller] returns the location set at function entry,
+  as a function of the location set [caller] of the calling function.
+- Machine registers have the same values as in the caller.
+- Incoming stack slots (used for parameter passing) have the same
+  values as the corresponding outgoing stack slots (used for argument
+  passing) in the caller.
+- Local and outgoing stack slots are initialized to undefined values.
+*) 
 
-(** [postcall_locs ls] returns the location set [ls] after a function
-  call.  Caller-save registers and temporary registers
-  are set to [undef], reflecting the fact that the called
-  function can modify them freely. *)
+Definition call_regs (caller: locset) : locset :=
+  fun (l: loc) =>
+    match l with
+    | R r => caller (R r)
+    | S Local ofs ty => Vundef
+    | S Incoming ofs ty => caller (S Outgoing ofs ty)
+    | S Outgoing ofs ty => Vundef
+    end.
 
-Definition postcall_locs (ls: locset) : locset :=
+(** [return_regs caller callee] returns the location set after
+  a call instruction, as a function of the location set [caller]
+  of the caller before the call instruction and of the location
+  set [callee] of the callee at the return instruction.
+- Callee-save machine registers have the same values as in the caller
+  before the call.
+- Caller-save machine registers have the same values as in the callee.
+- Stack slots have the same values as in the caller.
+*)
+
+Definition return_regs (caller callee: locset) : locset :=
   fun (l: loc) =>
     match l with
     | R r =>
-        if In_dec Loc.eq (R r) temporaries then
-          Vundef
-        else if In_dec Loc.eq (R r) destroyed_at_call then
-          Vundef
-        else
-          ls (R r)
-    | S s => ls (S s)
+        if In_dec mreg_eq r destroyed_at_call
+        then callee (R r)
+        else caller (R r)
+    | S sl ofs ty => caller (S sl ofs ty)
     end.
-
-(** Temporaries destroyed across instructions *)
-
-Definition undef_temps (ls: locset) := Locmap.undef temporaries ls.
 
 (** LTL execution states. *)
 
 Inductive stackframe : Type :=
   | Stackframe:
-      forall (res: loc)         (**r where to store the result *)
-             (f: function)      (**r calling function *)
+      forall (f: function)      (**r calling function *)
              (sp: val)          (**r stack pointer in calling function *)
              (ls: locset)       (**r location state in calling function *)
-             (pc: node),        (**r program point in calling function *)
+             (bb: bblock),      (**r continuation in calling function *)
       stackframe.
 
 Inductive state : Type :=
@@ -125,15 +138,23 @@ Inductive state : Type :=
              (ls: locset)             (**r location state *)
              (m: mem),                (**r memory state *)
       state
+  | Block:
+      forall (stack: list stackframe) (**r call stack *)
+             (f: function)            (**r function currently executing *)
+             (sp: val)                (**r stack pointer *)
+             (bb: bblock)             (**r current basic block *)
+             (ls: locset)             (**r location state *)
+             (m: mem),                (**r memory state *)
+      state
   | Callstate:
       forall (stack: list stackframe) (**r call stack *)
              (f: fundef)              (**r function to call *)
-             (args: list val)         (**r arguments to the call *)
+             (ls: locset)             (**r location state of caller *)
              (m: mem),                (**r memory state *)
       state
   | Returnstate:
       forall (stack: list stackframe) (**r call stack *)
-             (v: val)                 (**r return value for the call *)
+             (ls: locset)             (**r location state of callee *)
              (m: mem),                (**r memory state *)
       state.
 
@@ -142,9 +163,24 @@ Section RELSEM.
 
 Variable ge: genv.
 
-Definition find_function (los: loc + ident) (rs: locset) : option fundef :=
-  match los with
-  | inl l => Genv.find_funct ge (rs l)
+Definition reglist (rs: locset) (rl: list mreg) : list val :=
+  List.map (fun r => rs (R r)) rl.
+
+Fixpoint undef_regs (rl: list mreg) (rs: locset) : locset :=
+  match rl with
+  | nil => rs
+  | r1 :: rl => Locmap.set (R r1) Vundef (undef_regs rl rs)
+  end.
+
+Definition destroyed_by_getstack (s: slot) : list mreg :=
+  match s with
+  | Incoming => temp_for_parent_frame :: nil
+  | _        => nil
+  end.
+
+Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
+  match ros with
+  | inl r => Genv.find_funct ge (rs (R r))
   | inr symb =>
       match Genv.find_symbol ge symb with
       | None => None
@@ -152,95 +188,109 @@ Definition find_function (los: loc + ident) (rs: locset) : option fundef :=
       end
   end.
 
-(** The LTL transition relation is very similar to that of RTL,
-  with locations being used in place of pseudo-registers.
-  The main difference is for the [call] instruction: caller-save
-  registers are set to [Vundef] across the call, using the [postcall_locs]
-  function defined above.  This forces the LTL producer to avoid
-  storing values live across the call in a caller-save register. *)
+(** [parent_locset cs] returns the mapping of values for locations
+  of the caller function. *)
+
+Definition parent_locset (stack: list stackframe) : locset :=
+  match stack with
+  | nil => Locmap.init Vundef
+  | Stackframe f sp ls bb :: stack' => ls
+  end.
+
+(* REVISE
+(** [getslot sl ofs ty rs] looks up the value of location [S sl ofs ty] in [rs],
+  and normalizes it to the type [ty] of this location. *)
+
+Definition getslot (sl: slot) (ofs: Z) (ty: typ) (rs: locset) : val :=
+  Val.load_result
+    (match ty with Tint => Mint32 | Tfloat => Mfloat64 | Tlong => Mint64 end)
+    (rs (S sl ofs ty)).
+*)
 
 Inductive step: state -> trace -> state -> Prop :=
-  | exec_Lnop:
-      forall s f sp pc rs m pc',
-      (fn_code f)!pc = Some(Lnop pc') ->
+  | exec_start_block: forall s f sp pc rs m bb,
+      (fn_code f)!pc = Some bb ->
       step (State s f sp pc rs m)
-        E0 (State s f sp pc' rs m)
-  | exec_Lop:
-      forall s f sp pc rs m op args res pc' v,
-      (fn_code f)!pc = Some(Lop op args res pc') ->
-      eval_operation ge sp op (map rs args) m = Some v ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp pc' (Locmap.set res v (undef_temps rs)) m)
-  | exec_Lload:
-      forall s f sp pc rs m chunk addr args dst pc' a v,
-      (fn_code f)!pc = Some(Lload chunk addr args dst pc') ->
-      eval_addressing ge sp addr (map rs args) = Some a ->
+        E0 (Block s f sp bb rs m)
+  | exec_Lop: forall s f sp op args res bb rs m v rs',
+      eval_operation ge sp op (reglist rs args) m = Some v ->
+      rs' = Locmap.set (R res) v (undef_regs (destroyed_by_op op) rs) ->
+      step (Block s f sp (Lop op args res :: bb) rs m)
+        E0 (Block s f sp bb rs' m)
+  | exec_Lload: forall s f sp chunk addr args dst bb rs m a v rs',
+      eval_addressing ge sp addr (reglist rs args) = Some a ->
       Mem.loadv chunk m a = Some v ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp pc' (Locmap.set dst v (undef_temps rs)) m)
-  | exec_Lstore:
-      forall s f sp pc rs m chunk addr args src pc' a m',
-      (fn_code f)!pc = Some(Lstore chunk addr args src pc') ->
-      eval_addressing ge sp addr (map rs args) = Some a ->
-      Mem.storev chunk m a (rs src) = Some m' ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp pc' (undef_temps rs) m')
-  | exec_Lcall:
-      forall s f sp pc rs m sig ros args res pc' f',
-      (fn_code f)!pc = Some(Lcall sig ros args res pc') ->
-      find_function ros rs = Some f' ->
-      funsig f' = sig ->
-      step (State s f sp pc rs m)
-        E0 (Callstate (Stackframe res f sp (postcall_locs rs) pc' :: s)
-                      f' (List.map rs args) m)
-  | exec_Ltailcall:
-      forall s f stk pc rs m sig ros args f' m',
-      (fn_code f)!pc = Some(Ltailcall sig ros args) ->
-      find_function ros rs = Some f' ->
-      funsig f' = sig ->
-      Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
-      step (State s f (Vptr stk Int.zero) pc rs m)
-        E0 (Callstate s f' (List.map rs args) m')
-  | exec_Lbuiltin:
-      forall s f sp pc rs m ef args res pc' t v m',
-      (fn_code f)!pc = Some(Lbuiltin ef args res pc') ->
-      external_call ef ge (map rs args) m t v m' ->
-      step (State s f sp pc rs m)
-         t (State s f sp pc' (Locmap.set res v rs) m')
-  | exec_Lcond:
-      forall s f sp pc rs m cond args ifso ifnot b pc',
-      (fn_code f)!pc = Some(Lcond cond args ifso ifnot) ->
-      eval_condition cond (map rs args) m = Some b ->
-      pc' = (if b then ifso else ifnot) ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp pc' (undef_temps rs) m)
-  | exec_Ljumptable:
-      forall s f sp pc rs m arg tbl n pc',
-      (fn_code f)!pc = Some(Ljumptable arg tbl) ->
-      rs arg = Vint n ->
-      list_nth_z tbl (Int.unsigned n) = Some pc' ->
-      step (State s f sp pc rs m)
-        E0 (State s f sp pc' (undef_temps rs) m)
-  | exec_Lreturn:
-      forall s f stk pc rs m or m',
-      (fn_code f)!pc = Some(Lreturn or) ->
-      Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
-      step (State s f (Vptr stk Int.zero) pc rs m)
-        E0 (Returnstate s (locmap_optget or Vundef rs) m')
-  | exec_function_internal:
-      forall s f args m m' stk,
-      Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
-      step (Callstate s (Internal f) args m)
-        E0 (State s f (Vptr stk Int.zero) f.(fn_entrypoint) (init_locs args f.(fn_params)) m')
-  | exec_function_external:
-      forall s ef t args res m m',
-      external_call ef ge args m t res m' ->
-      step (Callstate s (External ef) args m)
-         t (Returnstate s res m')
-  | exec_return:
-      forall res f sp rs pc s vres m,
-      step (Returnstate (Stackframe res f sp rs pc :: s) vres m)
-        E0 (State s f sp pc (Locmap.set res vres rs) m).
+      rs' = Locmap.set (R dst) v (undef_regs (destroyed_by_load chunk addr) rs) ->
+      step (Block s f sp (Lload chunk addr args dst :: bb) rs m)
+        E0 (Block s f sp bb rs' m)
+  | exec_Lgetstack: forall s f sp sl ofs ty dst bb rs m rs',
+      rs' = Locmap.set (R dst) (rs (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      step (Block s f sp (Lgetstack sl ofs ty dst :: bb) rs m)
+        E0 (Block s f sp bb rs' m)
+  | exec_Lsetstack: forall s f sp src sl ofs ty bb rs m rs',
+      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_op Omove) rs) ->
+      step (Block s f sp (Lsetstack src sl ofs ty :: bb) rs m)
+        E0 (Block s f sp bb rs' m)
+  | exec_Lstore: forall s f sp chunk addr args src bb rs m a rs' m',
+      eval_addressing ge sp addr (reglist rs args) = Some a ->
+      Mem.storev chunk m a (rs (R src)) = Some m' ->
+      rs' = undef_regs (destroyed_by_store chunk addr) rs ->
+      step (Block s f sp (Lstore chunk addr args src :: bb) rs m)
+        E0 (Block s f sp bb rs' m')
+  | exec_Lcall: forall s f sp sig ros bb rs m fd,
+      find_function ros rs = Some fd ->
+      funsig fd = sig ->
+      step (Block s f sp (Lcall sig ros :: bb) rs m)
+        E0 (Callstate (Stackframe f sp rs bb :: s) fd rs m)
+  | exec_Ltailcall: forall s f sp sig ros bb rs m fd rs' m',
+      rs' = return_regs (parent_locset s) rs ->
+      find_function ros rs' = Some fd ->
+      funsig fd = sig ->
+      Mem.free m sp 0 f.(fn_stacksize) = Some m' ->
+      step (Block s f (Vptr sp Int.zero) (Ltailcall sig ros :: bb) rs m)
+        E0 (Callstate s fd rs' m')
+  | exec_Lbuiltin: forall s f sp ef args res bb rs m t vl rs' m',
+      external_call' ef ge (reglist rs args) m t vl m' ->
+      rs' = Locmap.setlist (map R res) vl (undef_regs (destroyed_by_builtin ef) rs) ->
+      step (Block s f sp (Lbuiltin ef args res :: bb) rs m)
+         t (Block s f sp bb rs' m')
+  | exec_Lannot: forall s f sp ef args bb rs m t vl m',
+      external_call' ef ge (map rs args) m t vl m' ->
+      step (Block s f sp (Lannot ef args :: bb) rs m)
+         t (Block s f sp bb rs m')
+  | exec_Lbranch: forall s f sp pc bb rs m,
+      step (Block s f sp (Lbranch pc :: bb) rs m)
+        E0 (State s f sp pc rs m)
+  | exec_Lcond: forall s f sp cond args pc1 pc2 bb rs b pc rs' m,
+      eval_condition cond (reglist rs args) m = Some b ->
+      pc = (if b then pc1 else pc2) ->
+      rs' = undef_regs (destroyed_by_cond cond) rs ->
+      step (Block s f sp (Lcond cond args pc1 pc2 :: bb) rs m)
+        E0 (State s f sp pc rs' m)
+  | exec_Ljumptable: forall s f sp arg tbl bb rs m n pc rs',
+      rs (R arg) = Vint n ->
+      list_nth_z tbl (Int.unsigned n) = Some pc ->
+      rs' = undef_regs (destroyed_by_jumptable) rs ->
+      step (Block s f sp (Ljumptable arg tbl :: bb) rs m)
+        E0 (State s f sp pc rs' m)
+  | exec_Lreturn: forall s f sp bb rs m m',
+      Mem.free m sp 0 f.(fn_stacksize) = Some m' ->
+      step (Block s f (Vptr sp Int.zero) (Lreturn :: bb) rs m)
+        E0 (Returnstate s (return_regs (parent_locset s) rs) m')
+  | exec_function_internal: forall s f rs m m' sp rs',
+      Mem.alloc m 0 f.(fn_stacksize) = (m', sp) ->
+      rs' = undef_regs destroyed_at_function_entry (call_regs rs) ->
+      step (Callstate s (Internal f) rs m)
+        E0 (State s f (Vptr sp Int.zero) f.(fn_entrypoint) rs' m')
+  | exec_function_external: forall s ef t args res rs m rs' m',
+      args = map rs (loc_arguments (ef_sig ef)) ->
+      external_call' ef ge args m t res m' ->
+      rs' = Locmap.setlist (map R (loc_result (ef_sig ef))) res rs ->
+      step (Callstate s (External ef) rs m)
+         t (Returnstate s rs' m')
+  | exec_return: forall f sp rs1 bb s rs m,
+      step (Returnstate (Stackframe f sp rs1 bb :: s) rs m)
+        E0 (Block s f sp bb rs m).
 
 End RELSEM.
 
@@ -256,33 +306,32 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = mksignature nil (Some Tint) ->
-      initial_state p (Callstate nil f nil m0).
+      initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall n m,
-      final_state (Returnstate nil (Vint n) m) n.
+  | final_state_intro: forall rs m r retcode,
+      loc_result (mksignature nil (Some Tint)) = r :: nil ->
+      rs (R r) = Vint retcode ->
+      final_state (Returnstate nil rs m) retcode.
 
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
 (** * Operations over LTL *)
 
-(** Computation of the possible successors of an instruction.
+(** Computation of the possible successors of a block.
   This is used in particular for dataflow analyses. *)
 
-Definition successors_instr (i: instruction) : list node :=
-  match i with
-  | Lnop s => s :: nil
-  | Lop op args res s => s :: nil
-  | Lload chunk addr args dst s => s :: nil
-  | Lstore chunk addr args src s => s :: nil
-  | Lcall sig ros args res s => s :: nil
-  | Ltailcall sig ros args => nil
-  | Lbuiltin ef args res s => s :: nil
-  | Lcond cond args ifso ifnot => ifso :: ifnot :: nil
-  | Ljumptable arg tbl => tbl
-  | Lreturn optarg => nil
+Fixpoint successors_block (b: bblock) : list node :=
+  match b with
+  | nil => nil                          (**r should never happen *)
+  | Ltailcall _ _ :: _ => nil
+  | Lbranch s :: _ => s :: nil
+  | Lcond _ _ s1 s2 :: _ => s1 :: s2 :: nil
+  | Ljumptable _ tbl :: _ => tbl
+  | Lreturn :: _ => nil
+  | instr :: b' => successors_block b'
   end.
 
 Definition successors (f: function): PTree.t (list node) :=
-  PTree.map1 successors_instr f.(fn_code).
+  PTree.map1 successors_block f.(fn_code).

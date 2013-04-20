@@ -23,6 +23,7 @@ Require Import Bounds.
 Require Import Mach.
 Require Import Conventions.
 Require Import Stacklayout.
+Require Import Lineartyping.
 
 (** * Layout of activation records *)
 
@@ -44,8 +45,7 @@ Definition offset_of_index (fe: frame_env) (idx: frame_index) :=
   match idx with
   | FI_link => fe.(fe_ofs_link)
   | FI_retaddr => fe.(fe_ofs_retaddr)
-  | FI_local x Tint => fe.(fe_ofs_int_local) + 4 * x
-  | FI_local x Tfloat => fe.(fe_ofs_float_local) + 8 * x
+  | FI_local x ty => fe.(fe_ofs_local) + 4 * x
   | FI_arg x ty => fe_ofs_arg + 4 * x
   | FI_saved_int x => fe.(fe_ofs_int_callee_save) + 4 * x
   | FI_saved_float x => fe.(fe_ofs_float_callee_save) + 8 * x
@@ -133,8 +133,8 @@ Definition transl_addr (fe: frame_env) (addr: addressing) :=
 Definition transl_annot_param (fe: frame_env) (l: loc) : annot_param :=
   match l with
   | R r => APreg r
-  | S (Local ofs ty) => APstack (chunk_of_type ty) (offset_of_index fe (FI_local ofs ty))
-  | S _ => APstack Mint32 (-1)     (**r never happens *)
+  | S Local ofs ty => APstack (chunk_of_type ty) (offset_of_index fe (FI_local ofs ty))
+  | S _ _ _ => APstack Mint32 (-1)     (**r never happens *)
   end.
 
 
@@ -150,22 +150,22 @@ Definition transl_annot_param (fe: frame_env) (l: loc) : annot_param :=
 Definition transl_instr
     (fe: frame_env) (i: Linear.instruction) (k: Mach.code) : Mach.code :=
   match i with
-  | Lgetstack s r =>
-      match s with
-      | Local ofs ty =>
+  | Lgetstack sl ofs ty r =>
+      match sl with
+      | Local =>
           Mgetstack (Int.repr (offset_of_index fe (FI_local ofs ty))) ty r :: k
-      | Incoming ofs ty =>
+      | Incoming =>
           Mgetparam (Int.repr (offset_of_index fe (FI_arg ofs ty))) ty r :: k
-      | Outgoing ofs ty =>
+      | Outgoing =>
           Mgetstack (Int.repr (offset_of_index fe (FI_arg ofs ty))) ty r :: k
       end
-  | Lsetstack r s =>
-      match s with
-      | Local ofs ty =>
+  | Lsetstack r sl ofs ty =>
+      match sl with
+      | Local =>
           Msetstack r (Int.repr (offset_of_index fe (FI_local ofs ty))) ty :: k
-      | Incoming ofs ty =>
+      | Incoming =>
           k (* should not happen *)
-      | Outgoing ofs ty =>
+      | Outgoing =>
           Msetstack r (Int.repr (offset_of_index fe (FI_arg ofs ty))) ty :: k
       end
   | Lop op args res =>
@@ -216,7 +216,9 @@ Open Local Scope string_scope.
 
 Definition transf_function (f: Linear.function) : res Mach.function :=
   let fe := make_env (function_bounds f) in
-  if zlt Int.max_unsigned fe.(fe_size) then
+  if negb (wt_function f) then
+    Error (msg "Ill-formed Linear code")
+  else if zlt Int.max_unsigned fe.(fe_size) then
     Error (msg "Too many spilled variables, stack size exceeded")
   else
     OK (Mach.mkfunction

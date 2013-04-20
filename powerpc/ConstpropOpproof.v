@@ -45,6 +45,7 @@ Definition val_match_approx (a: approx) (v: val) : Prop :=
   | Unknown => True
   | I p => v = Vint p
   | F p => v = Vfloat p
+  | L p => v = Vlong p
   | G symb ofs => v = symbol_address ge symb ofs
   | S ofs => v = Val.add sp (Vint ofs)
   | _ => False
@@ -64,6 +65,8 @@ Ltac SimplVMA :=
   | H: (val_match_approx (I _) ?v) |- _ =>
       simpl in H; (try subst v); SimplVMA
   | H: (val_match_approx (F _) ?v) |- _ =>
+      simpl in H; (try subst v); SimplVMA
+  | H: (val_match_approx (L _) ?v) |- _ =>
       simpl in H; (try subst v); SimplVMA
   | H: (val_match_approx (G _ _) ?v) |- _ =>
       simpl in H; (try subst v); SimplVMA

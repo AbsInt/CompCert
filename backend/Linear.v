@@ -12,10 +12,9 @@
 
 (** The Linear intermediate language: abstract syntax and semantcs *)
 
-(** The Linear language is a variant of LTLin where arithmetic
-    instructions operate on machine registers (type [mreg]) instead
-    of arbitrary locations.  Special instructions [Lgetstack] and
-    [Lsetstack] are provided to access stack slots. *)
+(** The Linear language is a variant of LTL where control-flow is not
+    expressed as a graph of basic blocks, but as a linear list of
+    instructions with explicit labels and ``goto'' instructions. *)
 
 Require Import Coqlib.
 Require Import AST.
@@ -35,14 +34,14 @@ Require Import Conventions.
 Definition label := positive.
 
 Inductive instruction: Type :=
-  | Lgetstack: slot -> mreg -> instruction
-  | Lsetstack: mreg -> slot -> instruction
+  | Lgetstack: slot -> Z -> typ -> mreg -> instruction
+  | Lsetstack: mreg -> slot -> Z -> typ -> instruction
   | Lop: operation -> list mreg -> mreg -> instruction
   | Lload: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Lstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Lcall: signature -> mreg + ident -> instruction
   | Ltailcall: signature -> mreg + ident -> instruction
-  | Lbuiltin: external_function -> list mreg -> mreg -> instruction
+  | Lbuiltin: external_function -> list mreg -> list mreg -> instruction
   | Lannot: external_function -> list loc -> instruction
   | Llabel: label -> instruction
   | Lgoto: label -> instruction
@@ -114,73 +113,6 @@ Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
       end
   end.
 
-Definition reglist (rs: locset) (rl: list mreg) : list val :=
-  List.map (fun r => rs (R r)) rl.
-
-(** Calling conventions are reflected at the level of location sets
-  (environments mapping locations to values) by the following two 
-  functions.  
-
-  [call_regs caller] returns the location set at function entry,
-  as a function of the location set [caller] of the calling function.
-- Temporary registers are undefined.
-- Other machine registers have the same values as in the caller.
-- Incoming stack slots (used for parameter passing) have the same
-  values as the corresponding outgoing stack slots (used for argument
-  passing) in the caller.
-- Local and outgoing stack slots are initialized to undefined values.
-*) 
-
-Definition call_regs (caller: locset) : locset :=
-  fun (l: loc) =>
-    match l with
-    | R r => if In_dec Loc.eq (R r) temporaries then Vundef else caller (R r)
-    | S (Local ofs ty) => Vundef
-    | S (Incoming ofs ty) => caller (S (Outgoing ofs ty))
-    | S (Outgoing ofs ty) => Vundef
-    end.
-
-(** [return_regs caller callee] returns the location set after
-  a call instruction, as a function of the location set [caller]
-  of the caller before the call instruction and of the location
-  set [callee] of the callee at the return instruction.
-- Callee-save machine registers have the same values as in the caller
-  before the call.
-- Caller-save machine registers have the same values
-  as in the callee at the return point.
-- Stack slots have the same values as in the caller before the call.
-*)
-
-Definition return_regs (caller callee: locset) : locset :=
-  fun (l: loc) =>
-    match l with
-    | R r =>
-        if In_dec Loc.eq (R r) temporaries then
-          callee (R r)
-        else if In_dec Loc.eq (R r) destroyed_at_call then
-          callee (R r)
-        else
-          caller (R r)
-    | S s => caller (S s)
-    end.
-
-(** Temporaries destroyed across operations *)
-
-Definition undef_op (op: operation) (rs: locset) :=
-  match op with
-  | Omove => Locmap.undef destroyed_at_move rs
-  | _ => Locmap.undef temporaries rs
-  end.
-
-Definition undef_getstack (s: slot) (rs: locset) :=
-  match s with
-  | Incoming _ _ => Locmap.set (R IT1) Vundef rs
-  | _ => rs
-  end.
-
-Definition undef_setstack (rs: locset) :=
-  Locmap.undef destroyed_at_move rs.
-
 (** Linear execution states. *)
 
 Inductive stackframe: Type :=
@@ -214,73 +146,43 @@ Inductive state: Type :=
 
 (** [parent_locset cs] returns the mapping of values for locations
   of the caller function. *)
-
 Definition parent_locset (stack: list stackframe) : locset :=
   match stack with
   | nil => Locmap.init Vundef
   | Stackframe f sp ls c :: stack' => ls
   end.
 
-(** The main difference between the Linear transition relation
-  and the LTL transition relation is the handling of function calls.
-  In LTL, arguments and results to calls are transmitted via
-  [vargs] and [vres] components of [Callstate] and [Returnstate],
-  respectively.  The semantics takes care of transferring these values
-  between the locations of the caller and of the callee.
-  
-  In Linear and lower-level languages (Mach, PPC), arguments and
-  results are transmitted implicitly: the generated code for the
-  caller arranges for arguments to be left in conventional registers
-  and stack locations, as determined by the calling conventions, where
-  the function being called will find them.  Similarly, conventional
-  registers will be used to pass the result value back to the caller.
-  This is reflected in the definition of [Callstate] and [Returnstate] 
-  above, where a whole location state [rs] is passed instead of just
-  the values of arguments or returns as in LTL.
-
-  These location states passed across calls are treated in a way that
-  reflects the callee-save/caller-save convention:
-- The [exec_Lcall] transition from [State] to [Callstate]
-  saves the current location state [ls] in the call stack,
-  and passes it to the callee.
-- The [exec_function_internal] transition from [Callstate] to [State]
-  changes the view of stack slots ([Outgoing] slots slide to
-  [Incoming] slots as per [call_regs]).
-- The [exec_Lreturn] transition from [State] to [Returnstate]
-  restores the values of callee-save locations from
-  the location state of the caller, using [return_regs].
-
-This protocol makes it much easier to later prove the correctness of
-the [Stacking] pass, which inserts actual code that performs the
-saving and restoring of callee-save registers described above.
-*)
-
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Lgetstack:
-      forall s f sp sl r b rs m,
-      step (State s f sp (Lgetstack sl r :: b) rs m)
-        E0 (State s f sp b (Locmap.set (R r) (rs (S sl)) (undef_getstack sl rs)) m)
+      forall s f sp sl ofs ty dst b rs m rs',
+      rs' = Locmap.set (R dst) (rs (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      step (State s f sp (Lgetstack sl ofs ty dst :: b) rs m)
+        E0 (State s f sp b rs' m)
   | exec_Lsetstack:
-      forall s f sp r sl b rs m,
-      step (State s f sp (Lsetstack r sl :: b) rs m)
-        E0 (State s f sp b (Locmap.set (S sl) (rs (R r)) (undef_setstack rs)) m)
+      forall s f sp src sl ofs ty b rs m rs',
+      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_op Omove) rs) ->
+      step (State s f sp (Lsetstack src sl ofs ty :: b) rs m)
+        E0 (State s f sp b rs' m)
   | exec_Lop:
-      forall s f sp op args res b rs m v,
+      forall s f sp op args res b rs m v rs',
       eval_operation ge sp op (reglist rs args) m = Some v ->
+      rs' = Locmap.set (R res) v (undef_regs (destroyed_by_op op) rs) ->
       step (State s f sp (Lop op args res :: b) rs m)
-        E0 (State s f sp b (Locmap.set (R res) v (undef_op op rs)) m)
+        E0 (State s f sp b rs' m)
   | exec_Lload:
-      forall s f sp chunk addr args dst b rs m a v,
+      forall s f sp chunk addr args dst b rs m a v rs',
       eval_addressing ge sp addr (reglist rs args) = Some a ->
       Mem.loadv chunk m a = Some v ->
+      rs' = Locmap.set (R dst) v (undef_regs (destroyed_by_load chunk addr) rs) ->
       step (State s f sp (Lload chunk addr args dst :: b) rs m)
-        E0 (State s f sp b (Locmap.set (R dst) v (undef_temps rs)) m)
+        E0 (State s f sp b rs' m)
   | exec_Lstore:
-      forall s f sp chunk addr args src b rs m m' a,
+      forall s f sp chunk addr args src b rs m m' a rs',
       eval_addressing ge sp addr (reglist rs args) = Some a ->
       Mem.storev chunk m a (rs (R src)) = Some m' ->
+      rs' = undef_regs (destroyed_by_store chunk addr) rs ->
       step (State s f sp (Lstore chunk addr args src :: b) rs m)
-        E0 (State s f sp b (undef_temps rs) m')
+        E0 (State s f sp b rs' m')
   | exec_Lcall:
       forall s f sp sig ros b rs m f',
       find_function ros rs = Some f' ->
@@ -288,20 +190,22 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Lcall sig ros :: b) rs m)
         E0 (Callstate (Stackframe f sp rs b:: s) f' rs m)
   | exec_Ltailcall:
-      forall s f stk sig ros b rs m f' m',
-      find_function ros rs = Some f' ->
+      forall s f stk sig ros b rs m rs' f' m',
+      rs' = return_regs (parent_locset s) rs ->
+      find_function ros rs' = Some f' ->
       sig = funsig f' ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) (Ltailcall sig ros :: b) rs m)
-        E0 (Callstate s f' (return_regs (parent_locset s) rs) m')
+        E0 (Callstate s f' rs' m')
   | exec_Lbuiltin:
-      forall s f sp rs m ef args res b t v m',
-      external_call ef ge (reglist rs args) m t v m' ->
+      forall s f sp rs m ef args res b t vl rs' m',
+      external_call' ef ge (reglist rs args) m t vl m' ->
+      rs' = Locmap.setlist (map R res) vl (undef_regs (destroyed_by_builtin ef) rs) ->
       step (State s f sp (Lbuiltin ef args res :: b) rs m)
-         t (State s f sp b (Locmap.set (R res) v (undef_temps rs)) m')
+         t (State s f sp b rs' m')
   | exec_Lannot:
       forall s f sp rs m ef args b t v m',
-      external_call ef ge (map rs args) m t v m' ->
+      external_call' ef ge (map rs args) m t v m' ->
       step (State s f sp (Lannot ef args :: b) rs m)
          t (State s f sp b rs m')
   | exec_Llabel:
@@ -314,38 +218,42 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Lgoto lbl :: b) rs m)
         E0 (State s f sp b' rs m)
   | exec_Lcond_true:
-      forall s f sp cond args lbl b rs m b',
+      forall s f sp cond args lbl b rs m rs' b',
       eval_condition cond (reglist rs args) m = Some true ->
+      rs' = undef_regs (destroyed_by_cond cond) rs ->
       find_label lbl f.(fn_code) = Some b' ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
-        E0 (State s f sp b' (undef_temps rs) m)
+        E0 (State s f sp b' rs' m)
   | exec_Lcond_false:
-      forall s f sp cond args lbl b rs m,
+      forall s f sp cond args lbl b rs m rs',
       eval_condition cond (reglist rs args) m = Some false ->
+      rs' = undef_regs (destroyed_by_cond cond) rs ->
       step (State s f sp (Lcond cond args lbl :: b) rs m)
-        E0 (State s f sp b (undef_temps rs) m)
+        E0 (State s f sp b rs' m)
   | exec_Ljumptable:
-      forall s f sp arg tbl b rs m n lbl b',
+      forall s f sp arg tbl b rs m n lbl b' rs',
       rs (R arg) = Vint n ->
       list_nth_z tbl (Int.unsigned n) = Some lbl ->
       find_label lbl f.(fn_code) = Some b' ->
+      rs' = undef_regs (destroyed_by_jumptable) rs ->
       step (State s f sp (Ljumptable arg tbl :: b) rs m)
-        E0 (State s f sp b' (undef_temps rs) m)
+        E0 (State s f sp b' rs' m)
   | exec_Lreturn:
       forall s f stk b rs m m',
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
       step (State s f (Vptr stk Int.zero) (Lreturn :: b) rs m)
         E0 (Returnstate s (return_regs (parent_locset s) rs) m')
   | exec_function_internal:
-      forall s f rs m m' stk,
+      forall s f rs m rs' m' stk,
       Mem.alloc m 0 f.(fn_stacksize) = (m', stk) ->
+      rs' = undef_regs destroyed_at_function_entry (call_regs rs) ->
       step (Callstate s (Internal f) rs m)
-        E0 (State s f (Vptr stk Int.zero) f.(fn_code) (call_regs rs) m')
+        E0 (State s f (Vptr stk Int.zero) f.(fn_code) rs' m')
   | exec_function_external:
       forall s ef args res rs1 rs2 m t m',
-      external_call ef ge args m t res m' ->
-      args = List.map rs1 (loc_arguments (ef_sig ef)) ->
-      rs2 = Locmap.set (R (loc_result (ef_sig ef))) res rs1 ->
+      args = map rs1 (loc_arguments (ef_sig ef)) ->
+      external_call' ef ge args m t res m' ->
+      rs2 = Locmap.setlist (map R (loc_result (ef_sig ef))) res rs1 ->
       step (Callstate s (External ef) rs1 m)
          t (Returnstate s rs2 m')
   | exec_return:
@@ -365,9 +273,10 @@ Inductive initial_state (p: program): state -> Prop :=
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m r,
-      rs (R (loc_result (mksignature nil (Some Tint)))) = Vint r ->
-      final_state (Returnstate nil rs m) r.
+  | final_state_intro: forall rs m r retcode,
+      loc_result (mksignature nil (Some Tint)) = r :: nil ->
+      rs (R r) = Vint retcode ->
+      final_state (Returnstate nil rs m) retcode.
 
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).

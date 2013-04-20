@@ -43,6 +43,8 @@ Inductive expr : Type :=
   | Econdition : condition -> exprlist -> expr -> expr -> expr
   | Elet : expr -> expr -> expr
   | Eletvar : nat -> expr
+  | Ebuiltin : external_function -> exprlist -> expr
+  | Eexternal : ident -> signature -> exprlist -> expr
 
 with exprlist : Type :=
   | Enil: exprlist
@@ -171,6 +173,17 @@ Inductive eval_expr: letenv -> expr -> val -> Prop :=
   | eval_Eletvar: forall le n v,
       nth_error le n = Some v ->
       eval_expr le (Eletvar n) v
+  | eval_Ebuiltin: forall le ef al vl v,
+      eval_exprlist le al vl ->
+      external_call ef ge vl m E0 v m ->
+      eval_expr le (Ebuiltin ef al) v
+  | eval_Eexternal: forall le id sg al b ef vl v,
+      Genv.find_symbol ge id = Some b ->
+      Genv.find_funct_ptr ge b = Some (External ef) ->
+      ef_sig ef = sg ->
+      eval_exprlist le al vl ->
+      external_call ef ge vl m E0 v m ->
+      eval_expr le (Eexternal id sg al) v
 
 with eval_exprlist: letenv -> exprlist -> list val -> Prop :=
   | eval_Enil: forall le,
@@ -388,6 +401,8 @@ Fixpoint lift_expr (p: nat) (a: expr) {struct a}: expr :=
   | Elet b c => Elet (lift_expr p b) (lift_expr (S p) c)
   | Eletvar n =>
       if le_gt_dec p n then Eletvar (S n) else Eletvar n
+  | Ebuiltin ef bl => Ebuiltin ef (lift_exprlist p bl)
+  | Eexternal id sg bl => Eexternal id sg (lift_exprlist p bl)
   end
 
 with lift_exprlist (p: nat) (a: exprlist) {struct a}: exprlist :=

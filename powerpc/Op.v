@@ -97,6 +97,10 @@ Inductive operation : Type :=
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
   | Ofloatofwords: operation            (**r [rd = float_of_words(r1,r2)] *)
+(*c Manipulating 64-bit integers: *)
+  | Omakelong: operation                (**r [rd = r1 << 32 | r2] *)
+  | Olowlong: operation                 (**r [rd = low-word(r1)] *)
+  | Ohighlong: operation                (**r [rd = high-word(r1)] *)
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
@@ -205,6 +209,9 @@ Definition eval_operation
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
   | Ointoffloat, v1::nil => Val.intoffloat v1
   | Ofloatofwords, v1::v2::nil => Some(Val.floatofwords v1 v2)
+  | Omakelong, v1::v2::nil => Some(Val.longofwords v1 v2)
+  | Olowlong, v1::nil => Some(Val.loword v1)
+  | Ohighlong, v1::nil => Some(Val.hiword v1)
   | Ocmp c, _ => Some(Val.of_optbool (eval_condition c vl m))
   | _, _ => None
   end.
@@ -225,7 +232,7 @@ Ltac FuncInv :=
   match goal with
   | H: (match ?x with nil => _ | _ :: _ => _ end = Some _) |- _ =>
       destruct x; simpl in H; try discriminate; FuncInv
-  | H: (match ?v with Vundef => _ | Vint _ => _ | Vfloat _ => _ | Vptr _ _ => _ end = Some _) |- _ =>
+  | H: (match ?v with Vundef => _ | Vint _ => _ | Vlong _ => _ | Vfloat _ => _ | Vptr _ _ => _ end = Some _) |- _ =>
       destruct v; simpl in H; try discriminate; FuncInv
   | H: (Some _ = Some _) |- _ =>
       injection H; intros; clear H; FuncInv
@@ -292,6 +299,9 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osingleoffloat => (Tfloat :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
   | Ofloatofwords => (Tint :: Tint :: nil, Tfloat)
+  | Omakelong => (Tint :: Tint :: nil, Tlong)
+  | Olowlong => (Tlong :: nil, Tint)
+  | Ohighlong => (Tlong :: nil, Tint)
   | Ocmp c => (type_of_condition c, Tint)
   end.
 
@@ -366,6 +376,9 @@ Proof with (try exact I).
   destruct v0...
   destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); inv H2...
   destruct v0; destruct v1...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0...
   destruct (eval_condition c vl m); simpl... destruct b... 
 Qed.
 
@@ -481,6 +494,33 @@ Proof.
   rewrite Val.add_assoc. simpl. auto.
 Qed.
 
+(** Offset an addressing mode [addr] by a quantity [delta], so that
+  it designates the pointer [delta] bytes past the pointer designated
+  by [addr].  May be undefined, in which case [None] is returned. *)
+
+Definition offset_addressing (addr: addressing) (delta: int) : option addressing :=
+  match addr with
+  | Aindexed n => Some(Aindexed (Int.add n delta))
+  | Aindexed2 => None
+  | Aglobal s n => Some(Aglobal s (Int.add n delta))
+  | Abased s n => Some(Abased s (Int.add n delta))
+  | Ainstack n => Some(Ainstack (Int.add n delta))
+  end.
+
+Lemma eval_offset_addressing:
+  forall (F V: Type) (ge: Genv.t F V) sp addr args delta addr' v,
+  offset_addressing addr delta = Some addr' ->
+  eval_addressing ge sp addr args = Some v ->
+  eval_addressing ge sp addr' args = Some(Val.add v (Vint delta)).
+Proof.
+  intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
+  rewrite Val.add_assoc; auto.
+  unfold symbol_address. destruct (Genv.find_symbol ge i); auto. 
+  unfold symbol_address. destruct (Genv.find_symbol ge i); auto.
+  rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto. 
+  rewrite Val.add_assoc. auto. 
+Qed.
+
 (** Transformation of addressing modes with two operands or more
   into an equivalent arithmetic operation.  This is used in the [Reload]
   pass when a store instruction cannot be reloaded directly because
@@ -509,14 +549,6 @@ Lemma type_op_for_binary_addressing:
 Proof.
   intros. destruct addr; simpl in H; reflexivity || omegaContradiction.
 Qed.
-
-(** Two-address operations.  There is only one: rotate-mask-insert. *)
-
-Definition two_address_op (op: operation) : bool :=
-  match op with
-  | Oroli _ _ => true
-  | _ => false
-  end.
 
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
 
@@ -767,7 +799,10 @@ Proof.
   inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
   exists (Vint i); auto.
   inv H4; inv H2; simpl; auto.
-  subst v1. destruct (eval_condition c vl1 m1) eqn:?.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
+  subst. destruct (eval_condition c vl1 m1) eqn:?.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.
   simpl; constructor.

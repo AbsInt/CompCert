@@ -12,6 +12,8 @@ float 1: OK
 float 2: OK
 double 1: OK
 double 2: OK
+long long 1: OK
+long long 2: OK
 global signed char 1: OK
 global signed char 2: OK
 global unsigned char 1: OK
@@ -26,3 +28,5 @@ global float 1: OK
 global float 2: OK
 global double 1: OK
 global double 2: OK
+global long long 1: OK
+global long long 2: OK

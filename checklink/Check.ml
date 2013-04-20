@@ -2696,6 +2696,14 @@ let compare_data (l: init_data list) (bs: bitstring) (sfw: s_framework)
               else ERR("Wrong float64")
           | { _ } -> error
         )
+        | Init_int64(i) -> (
+          bitmatch bs with
+          | { j : 64 : int; bs : -1 : bitstring } ->
+              if z_int64 i = j
+              then compare_data_aux l bs (s + 8) sfw
+              else ERR("Wrong int64")
+          | { _ } -> error
+        )
         | Init_space(z) -> (
           let space_size = z_int z in
           bitmatch bs with

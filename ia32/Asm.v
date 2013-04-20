@@ -163,6 +163,7 @@ Inductive instruction: Type :=
   | Pshr_ri (rd: ireg) (n: int)
   | Psar_rcl (rd: ireg)
   | Psar_ri (rd: ireg) (n: int)
+  | Pshld_ri (rd: ireg) (r1: ireg) (n: int)
   | Pror_ri (rd: ireg) (n: int)
   | Pcmp_rr (r1 r2: ireg) 
   | Pcmp_ri (r1: ireg) (n: int)
@@ -193,7 +194,7 @@ Inductive instruction: Type :=
   | Plabel(l: label)
   | Pallocframe(sz: Z)(ofs_ra ofs_link: int)
   | Pfreeframe(sz: Z)(ofs_ra ofs_link: int)
-  | Pbuiltin(ef: external_function)(args: list preg)(res: preg)
+  | Pbuiltin(ef: external_function)(args: list preg)(res: list preg)
   | Pannot(ef: external_function)(args: list annot_param)
 
 with annot_param : Type :=
@@ -230,6 +231,14 @@ Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
   match l with
   | nil => rs
   | r :: l' => undef_regs l' (rs#r <- Vundef)
+  end.
+
+(** Assigning multiple registers *)
+
+Fixpoint set_regs (rl: list preg) (vl: list val) (rs: regset) : regset :=
+  match rl, vl with
+  | r1 :: rl', v1 :: vl' => set_regs rl' vl' (rs#r1 <- v1)
+  | _, _ => rs
   end.
 
 Section RELSEM.
@@ -433,9 +442,10 @@ Definition exec_load (chunk: memory_chunk) (m: mem)
   end.
 
 Definition exec_store (chunk: memory_chunk) (m: mem)
-                      (a: addrmode) (rs: regset) (r1: preg) :=
+                      (a: addrmode) (rs: regset) (r1: preg)
+                      (destroyed: list preg) :=
   match Mem.storev chunk m (eval_addrmode a rs) (rs r1) with
-  | Some m' => Next (nextinstr_nf (if preg_eq r1 ST0 then rs#ST0 <- Vundef else rs)) m'
+  | Some m' => Next (nextinstr_nf (undef_regs destroyed rs)) m'
   | None => Stuck
   end.
 
@@ -470,7 +480,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pmov_rm rd a =>
       exec_load Mint32 m a rs rd
   | Pmov_mr a r1 =>
-      exec_store Mint32 m a rs r1
+      exec_store Mint32 m a rs r1 nil
   | Pmovd_fr rd r1 =>
       Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmovd_rf rd r1 =>
@@ -482,7 +492,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pmovsd_fm rd a =>
       exec_load Mfloat64al32 m a rs rd
   | Pmovsd_mf a r1 =>
-      exec_store Mfloat64al32 m a rs r1
+      exec_store Mfloat64al32 m a rs r1 nil
   | Pfld_f r1 =>
       Next (nextinstr (rs#ST0 <- (rs r1))) m
   | Pfld_m a =>
@@ -490,14 +500,14 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pfstp_f rd =>
       Next (nextinstr (rs#rd <- (rs ST0) #ST0 <- Vundef)) m
   | Pfstp_m a =>
-      exec_store Mfloat64al32 m a rs ST0
+      exec_store Mfloat64al32 m a rs ST0 (ST0 :: nil)
   | Pxchg_rr r1 r2 =>
       Next (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) m
   (** Moves with conversion *)
   | Pmovb_mr a r1 =>
-      exec_store Mint8unsigned m a rs r1
+      exec_store Mint8unsigned m a rs r1 nil
   | Pmovw_mr a r1 =>
-      exec_store Mint16unsigned m a rs r1
+      exec_store Mint16unsigned m a rs r1 nil
   | Pmovzb_rr rd r1 =>
       Next (nextinstr (rs#rd <- (Val.zero_ext 8 rs#r1))) m
   | Pmovzb_rm rd a =>
@@ -519,7 +529,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
   | Pcvtsd2ss_ff rd r1 =>
       Next (nextinstr (rs#rd <- (Val.singleoffloat rs#r1))) m
   | Pcvtsd2ss_mf a r1 =>
-      exec_store Mfloat32 m a rs r1
+      exec_store Mfloat32 m a rs r1 (FR XMM7 :: nil)
   | Pcvttsd2si_rf rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
   | Pcvtsi2sd_fr rd r1 =>
@@ -573,6 +583,10 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr_nf (rs#rd <- (Val.shr rs#rd rs#ECX))) m
   | Psar_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.shr rs#rd (Vint n)))) m
+  | Pshld_ri rd r1 n =>
+      Next (nextinstr_nf
+              (rs#rd <- (Val.or (Val.shl rs#rd (Vint n))
+                                (Val.shru rs#r1 (Vint (Int.sub Int.iwordsize n)))))) m
   | Pror_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.ror rs#rd (Vint n)))) m
   | Pcmp_rr r1 r2 =>
@@ -590,7 +604,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | None => Next (nextinstr (rs#rd <- Vundef)) m
       end
   | Psetcc c rd =>
-      Next (nextinstr (rs#ECX <- Vundef #rd <- (Val.of_optbool (eval_testcond c rs)))) m
+      Next (nextinstr (rs#rd <- (Val.of_optbool (eval_testcond c rs)))) m
   (** Arithmetic operations over floats *)
   | Paddd_ff rd r1 =>
       Next (nextinstr (rs#rd <- (Val.addf rs#rd rs#r1))) m
@@ -632,7 +646,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | Vint n => 
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
-          | Some lbl => goto_label c lbl (rs #ECX <- Vundef #EDX <- Vundef) m
+          | Some lbl => goto_label c lbl rs m
           end
       | _ => Stuck
       end
@@ -686,6 +700,8 @@ Definition preg_of (r: mreg) : preg :=
   match r with
   | AX => IR EAX
   | BX => IR EBX
+  | CX => IR ECX
+  | DX => IR EDX
   | SI => IR ESI
   | DI => IR EDI
   | BP => IR EBP
@@ -695,10 +711,8 @@ Definition preg_of (r: mreg) : preg :=
   | X3 => FR XMM3
   | X4 => FR XMM4
   | X5 => FR XMM5
-  | IT1 => IR EDX
-  | IT2 => IR ECX
-  | FT1 => FR XMM6
-  | FT2 => FR XMM7
+  | X6 => FR XMM6
+  | X7 => FR XMM7
   | FP0 => ST0
   end.
 
@@ -706,24 +720,24 @@ Definition preg_of (r: mreg) : preg :=
     We exploit the calling conventions from module [Conventions], except that
     we use machine registers instead of locations. *)
 
+Definition chunk_of_type (ty: typ) :=
+  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 | Tlong => Mint64 end.
+
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))
-  | extcall_arg_int_stack: forall ofs bofs v,
+  | extcall_arg_stack: forall ofs ty bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mint32 m (Val.add (rs (IR ESP)) (Vint (Int.repr bofs))) = Some v ->
-      extcall_arg rs m (S (Outgoing ofs Tint)) v
-  | extcall_arg_float_stack: forall ofs bofs v,
-      bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mfloat64al32 m (Val.add (rs (IR ESP)) (Vint (Int.repr bofs))) = Some v ->
-      extcall_arg rs m (S (Outgoing ofs Tfloat)) v.
+      Mem.loadv (chunk_of_type ty) m
+                (Val.add (rs (IR ESP)) (Vint (Int.repr bofs))) = Some v ->
+      extcall_arg rs m (S Outgoing ofs ty) v.
 
 Definition extcall_arguments
     (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
   list_forall2 (extcall_arg rs m) (loc_arguments sg) args.
 
-Definition loc_external_result (sg: signature) : preg :=
-  preg_of (loc_result sg).
+Definition loc_external_result (sg: signature) : list preg :=
+  map preg_of (loc_result sg).
 
 (** Extract the values of the arguments of an annotation. *)
 
@@ -753,33 +767,31 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr c i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs c ef args res rs m t v m',
+      forall b ofs c ef args res rs m t vl rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
-      external_call ef ge (map rs args) m t v m' ->
-      step (State rs m) t
-           (State (nextinstr_nf(rs #EDX <- Vundef #ECX <- Vundef
-                                #XMM6 <- Vundef #XMM7 <- Vundef
-                                #ST0 <- Vundef
-                                #res <- v)) m')
+      external_call' ef ge (map rs args) m t vl m' ->
+      rs' = nextinstr_nf 
+             (set_regs res vl
+               (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
+      step (State rs m) t (State rs' m')
   | exec_step_annot:
       forall b ofs c ef args rs m vargs t v m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some (Pannot ef args) ->
       annot_arguments rs m args vargs ->
-      external_call ef ge vargs m t v m' ->
+      external_call' ef ge vargs m t v m' ->
       step (State rs m) t
            (State (nextinstr rs) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
-      external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (rs#(loc_external_result (ef_sig ef)) <- res
-               #PC <- (rs RA)) ->
+      external_call' ef ge args m t res m' ->
+      rs' = (set_regs (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.
@@ -847,21 +859,21 @@ Ltac Equalities :=
   discriminate.
   discriminate.
   inv H11. 
-  exploit external_call_determ. eexact H4. eexact H11. intros [A B].
+  exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   inv H12.
   assert (vargs0 = vargs) by (eapply annot_arguments_determ; eauto). subst vargs0.
-  exploit external_call_determ. eexact H5. eexact H13. intros [A B].
+  exploit external_call_determ'. eexact H5. eexact H13. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
-  exploit external_call_determ. eexact H3. eexact H8. intros [A B].
+  exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
 (* trace length *)
   red; intros; inv H; simpl.
   omega.
-  eapply external_call_trace_length; eauto.
-  eapply external_call_trace_length; eauto.
-  eapply external_call_trace_length; eauto.
+  inv H3. eapply external_call_trace_length; eauto.
+  inv H4. eapply external_call_trace_length; eauto.
+  inv H3. eapply external_call_trace_length; eauto.
 (* initial states *)
   inv H; inv H0. f_equal. congruence.
 (* final no step *)
@@ -878,20 +890,6 @@ Definition data_preg (r: preg) : bool :=
   | IR _ => true
   | FR _ => true
   | ST0 => true
-  | CR _ => false
-  | RA => false
-  end.
-
-Definition nontemp_preg (r: preg) : bool :=
-  match r with
-  | PC => false
-  | IR ECX => false
-  | IR EDX => false
-  | IR _ => true
-  | FR XMM6 => false
-  | FR XMM7 => false
-  | FR _ => true
-  | ST0 => false
   | CR _ => false
   | RA => false
   end.

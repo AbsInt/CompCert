@@ -202,16 +202,22 @@ Inductive val_casted: val -> type -> Prop :=
   | val_casted_float: forall sz attr n,
       cast_float_float sz n = n ->
       val_casted (Vfloat n) (Tfloat sz attr)
+  | val_casted_long: forall si attr n,
+      val_casted (Vlong n) (Tlong si attr)
   | val_casted_ptr_ptr: forall b ofs ty attr,
       val_casted (Vptr b ofs) (Tpointer ty attr)
   | val_casted_int_ptr: forall n ty attr,
       val_casted (Vint n) (Tpointer ty attr)
   | val_casted_ptr_int: forall b ofs si attr,
       val_casted (Vptr b ofs) (Tint I32 si attr)
-  | val_casted_struct: forall id fld attr v,
-      val_casted v (Tstruct id fld attr)
-  | val_casted_union: forall id fld attr v,
-      val_casted v (Tunion id fld attr)
+  | val_casted_ptr_cptr: forall b ofs id attr,
+      val_casted (Vptr b ofs) (Tcomp_ptr id attr)
+  | val_casted_int_cptr: forall n id attr,
+      val_casted (Vint n) (Tcomp_ptr id attr)
+  | val_casted_struct: forall id fld attr b ofs,
+      val_casted (Vptr b ofs) (Tstruct id fld attr)
+  | val_casted_union: forall id fld attr b ofs,
+      val_casted (Vptr b ofs) (Tunion id fld attr)
   | val_casted_void: forall v,
       val_casted v Tvoid.
 
@@ -240,12 +246,15 @@ Proof.
   constructor.
 (* int *)
   destruct i; destruct ty; simpl in H; try discriminate; destruct v; inv H.
-  constructor. apply (cast_int_int_idem I8 s). 
+  constructor. apply (cast_int_int_idem I8 s).
+  constructor. apply (cast_int_int_idem I8 s).
   destruct (cast_float_int s f0); inv H1.   constructor. apply (cast_int_int_idem I8 s). 
-  constructor. apply (cast_int_int_idem I16 s). 
+  constructor. apply (cast_int_int_idem I16 s).
+  constructor. apply (cast_int_int_idem I16 s).
   destruct (cast_float_int s f0); inv H1.   constructor. apply (cast_int_int_idem I16 s). 
   constructor. auto.
-  constructor. 
+  constructor.
+  constructor. auto. 
   destruct (cast_float_int s f0); inv H1. constructor. auto.
   constructor. auto.
   constructor.
@@ -253,7 +262,10 @@ Proof.
   constructor.
   constructor; auto.
   constructor; auto.
+  constructor; auto.
+  constructor; auto.
   constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
+  constructor. simpl. destruct (Int64.eq i Int64.zero); auto.
   constructor. simpl. destruct (Float.cmp Ceq f0 Float.zero); auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
   constructor; auto.
@@ -261,8 +273,16 @@ Proof.
   constructor; auto.
   constructor. simpl. destruct (Int.eq i Int.zero); auto.
   constructor; auto.
+  constructor. simpl. destruct (Int.eq i0 Int.zero); auto.
+  constructor; auto.
+(* long *)
+  destruct ty; try discriminate.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; try discriminate. destruct (cast_float_long s f0); inv H. constructor.
 (* float *)
   destruct ty; simpl in H; try discriminate; destruct v; inv H.
+  constructor. apply cast_float_float_idem.
   constructor. apply cast_float_float_idem.
   constructor. apply cast_float_float_idem.
 (* pointer *)
@@ -270,11 +290,14 @@ Proof.
 (* impossible cases *)
   discriminate.
   discriminate.
-(* structs,unions *)
-  constructor.
-  constructor.
-(* impossible cases *)
-  discriminate.
+(* structs *)
+  destruct ty; try discriminate; destruct v; try discriminate.
+  destruct (ident_eq i0 i && fieldlist_eq f0 f); inv H; constructor.
+(* unions *)
+  destruct ty; try discriminate; destruct v; try discriminate.
+  destruct (ident_eq i0 i && fieldlist_eq f0 f); inv H; constructor.
+(* comp_ptr *)
+  destruct ty; simpl in H; try discriminate; destruct v; inv H; constructor.
 Qed.
 
 Lemma val_casted_load_result:
@@ -293,6 +316,9 @@ Proof.
   inv H0; auto.
   inv H0; auto.
   inv H0; auto.
+  inv H0; auto.
+  discriminate.
+  discriminate.
   discriminate.
   discriminate.
   discriminate.
@@ -301,24 +327,18 @@ Qed.
 Lemma cast_val_casted:
   forall v ty, val_casted v ty -> sem_cast v ty ty = Some v.
 Proof.
-  intros. inversion H; clear H; subst v ty; unfold sem_cast; simpl.
+  intros. inversion H; clear H; subst v ty; unfold sem_cast; simpl; auto.
   destruct sz; congruence.
   congruence.
-  auto.
-  auto.
-  auto.
   unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
   unfold proj_sumbool; repeat rewrite dec_eq_true; auto.
-  auto.
 Qed.
 
 Lemma val_casted_inject:
   forall f v v' ty,
   val_inject f v v' -> val_casted v ty -> val_casted v' ty.
 Proof.
-  intros. inv H.
-  auto.
-  auto.
+  intros. inv H; auto.
   inv H0; constructor.
   inv H0; constructor.
 Qed.
@@ -356,7 +376,10 @@ Proof.
   destruct v1; inv H0; auto.
   destruct sz2; auto. destruct v1; inv H0; auto.
   destruct sz2; auto. destruct v1; inv H0; auto.
+  destruct v1; inv H0; auto.
+  destruct v1; try discriminate.
   destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H0; auto.
+  destruct v1; try discriminate.
   destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H0; auto.
   inv H0; auto.
 Qed.
@@ -1324,176 +1347,6 @@ Proof.
   exists (Vptr loc' ofs'); split; auto. eapply deref_loc_copy; eauto.
 Qed.
 
-Remark val_inject_vtrue: forall f, val_inject f Vtrue Vtrue.
-Proof. unfold Vtrue; auto. Qed.
-
-Remark val_inject_vfalse: forall f, val_inject f Vfalse Vfalse.
-Proof. unfold Vfalse; auto. Qed.
-
-Remark val_inject_of_bool: forall f b, val_inject f (Val.of_bool b) (Val.of_bool b).
-Proof. intros. unfold Val.of_bool. destruct b; [apply val_inject_vtrue|apply val_inject_vfalse]. 
-Qed.
-
-Hint Resolve val_inject_vtrue val_inject_vfalse val_inject_of_bool.
-
-Ltac TrivialInject :=
-  match goal with
-  | |- exists v', Some ?v = Some v' /\ _ => exists v; split; auto
-(*
-  | |- exists v', _ /\ val_inject _ (Vint ?n) _ => exists (Vint n); split; auto
-  | |- exists v', _ /\ val_inject _ (Vfloat ?n) _ => exists (Vfloat n); split; auto
-  | |- exists v', _ /\ val_inject _ Vtrue _ => exists Vtrue; split; auto
-  | |- exists v', _ /\ val_inject _ Vfalse _ => exists Vfalse; split; auto
-  | |- exists v', _ /\ val_inject _ (Val.of_bool ?b) _ => exists (Val.of_bool b); split; auto
-*)
-  | _ => idtac
-  end.
-
-Lemma sem_unary_operation_inject:
-  forall op v1 ty v tv1,
-  sem_unary_operation op v1 ty = Some v ->
-  val_inject f v1 tv1 ->
-  exists tv, sem_unary_operation op tv1 ty = Some tv /\ val_inject f v tv.
-Proof.
-  unfold sem_unary_operation; intros. destruct op.
-  (* notbool *)
-  unfold sem_notbool in *; destruct (classify_bool ty); inv H0; inv H; TrivialInject.
-  (* notint *)
-  unfold sem_notint in *; destruct (classify_notint ty); inv H0; inv H; TrivialInject.
-  (* neg *)
-  unfold sem_neg in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
-Qed.
-
-Lemma sem_cmp_inject:
-  forall cmp v1 tv1 ty1 v2 tv2 ty2 v,
-  sem_cmp cmp v1 ty1 v2 ty2 m = Some v ->
-  val_inject f v1 tv1 ->
-  val_inject f v2 tv2 ->
-  exists tv, sem_cmp cmp tv1 ty1 tv2 ty2 tm = Some tv /\ val_inject f v tv.
-Proof.
-  unfold sem_cmp; intros. 
-  assert (MM: option_map Val.of_bool (Val.cmp_different_blocks cmp) = Some v ->
-      exists tv, option_map Val.of_bool (Val.cmp_different_blocks cmp) = Some tv /\ val_inject f v tv).
-    intros. exists v; split; auto. 
-    destruct cmp; simpl in H2; inv H2; auto.
-
-  destruct (classify_cmp ty1 ty2); try destruct s; inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  destruct (Int.eq i Int.zero); try discriminate; auto.
-  destruct (Int.eq i Int.zero); try discriminate; auto.
-
-  destruct (zeq b1 b0); subst.
-  rewrite H0 in H2. inv H2. rewrite zeq_true.
-  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs1)) eqn:?; try discriminate.
-  destruct (Mem.weak_valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
-  simpl H3.
-  rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb) by eauto.
-  rewrite (Mem.weak_valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0) by eauto.
-  simpl. replace  (Int.cmpu cmp (Int.add ofs1 (Int.repr delta))
-                         (Int.add ofs0 (Int.repr delta)))
-     with  (Int.cmpu cmp ofs1 ofs0).
-  inv H3; TrivialInject.
-  symmetry. apply Int.translate_cmpu. 
-  eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
-  eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
-  destruct (Mem.valid_pointer m b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
-  destruct (Mem.valid_pointer m b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
-  destruct (zeq b2 b3); subst.
-  rewrite Mem.valid_pointer_implies
-    by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb); eauto).
-  rewrite Mem.valid_pointer_implies
-    by (eapply (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0); eauto).
-  simpl.
-  exploit Mem.different_pointers_inject; eauto. intros [[]|A]. easy.
-  destruct cmp; simpl in H3; inv H3.
-  simpl. unfold Int.eq. rewrite zeq_false; auto.
-  simpl. unfold Int.eq. rewrite zeq_false; auto.
-  rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb) by eauto.
-  rewrite (Mem.valid_pointer_inject_val _ _ _ _ _ _ _ MEMINJ Heqb0) by eauto.
-  simpl in H3 |- *. auto.
-Qed.
-
-Lemma sem_binary_operation_inject:
-  forall op v1 ty1 v2 ty2 v tv1 tv2,
-  sem_binary_operation op v1 ty1 v2 ty2 m = Some v ->
-  val_inject f v1 tv1 -> val_inject f v2 tv2 ->
-  exists tv, sem_binary_operation op tv1 ty1 tv2 ty2 tm = Some tv /\ val_inject f v tv.
-Proof.
-  unfold sem_binary_operation; intros. destruct op.
-(* add *)
-  unfold sem_add in *; destruct (classify_add ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-  econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
-(* sub *)
-  unfold sem_sub in *; destruct (classify_sub ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  econstructor. eauto. rewrite Int.sub_add_l. auto. 
-  destruct (zeq b1 b0); try discriminate. subst b1. rewrite H0 in H2; inv H2.
-  rewrite zeq_true. destruct (Int.eq (Int.repr (sizeof ty)) Int.zero); inv H3.
-  rewrite Int.sub_shifted. TrivialInject. 
-(* mul *)
-  unfold sem_mul in *; destruct (classify_mul ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-(* div *)
-  unfold sem_div in *; destruct (classify_div ty1 ty2); try destruct s; inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  destruct ( Int.eq i0 Int.zero
-           || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H1; TrivialInject.
-  destruct (Int.eq i0 Int.zero); inv H1; TrivialInject.
-(* mod *)
-  unfold sem_mod in *; destruct (classify_binint ty1 ty2); try destruct s; inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  destruct ( Int.eq i0 Int.zero
-           || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H1; TrivialInject.
-  destruct (Int.eq i0 Int.zero); inv H1; TrivialInject.
-(* and *)
-  unfold sem_and in *; destruct (classify_binint ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-(* or *)
-  unfold sem_or in *; destruct (classify_binint ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-(* xor *)
-  unfold sem_xor in *; destruct (classify_binint ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-(* shl *)
-  unfold sem_shl in *; destruct (classify_shift ty1 ty2); inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialInject.
-(* shr *)
-  unfold sem_shr in *; destruct (classify_shift ty1 ty2); try destruct s; inv H0; try discriminate; inv H1; inv H; TrivialInject.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialInject.
-  destruct (Int.ltu i0 Int.iwordsize); inv H1; TrivialInject.
-(* comparisons *)
-  eapply sem_cmp_inject; eauto.
-  eapply sem_cmp_inject; eauto.
-  eapply sem_cmp_inject; eauto.
-  eapply sem_cmp_inject; eauto.
-  eapply sem_cmp_inject; eauto.
-  eapply sem_cmp_inject; eauto.
-Qed.
-
-Lemma sem_cast_inject:
-  forall v1 ty1 ty v tv1,
-  sem_cast v1 ty1 ty = Some v ->
-  val_inject f v1 tv1 ->
-  exists tv, sem_cast tv1 ty1 ty = Some tv /\ val_inject f v tv.
-Proof.
-  unfold sem_cast; intros.
-  destruct (classify_cast ty1 ty); try discriminate.
-  inv H0; inv H; TrivialInject. econstructor; eauto.
-  inv H0; inv H; TrivialInject. 
-  inv H0; inv H; TrivialInject. 
-  inv H0; inv H; TrivialInject. 
-  inv H0; try discriminate. destruct (cast_float_int si2 f0); inv H. TrivialInject.
-  inv H0; inv H. TrivialInject.
-  inv H0; inv H. TrivialInject.
-  TrivialInject.
-  destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. TrivialInject.
-  destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H. TrivialInject.
-  inv H; TrivialInject.
-Qed.
-
-Lemma bool_val_inject:
-  forall v ty b tv,
-  bool_val v ty = Some b ->
-  val_inject f v tv ->
-  bool_val tv ty = Some b.
-Proof.
-  unfold bool_val; intros. 
-  destruct (classify_bool ty); inv H0; congruence.
-Qed.
-
 Lemma eval_simpl_expr:
   forall a v,
   eval_expr ge e le m a v ->
@@ -1512,6 +1365,7 @@ Proof.
 (* const *)
   exists (Vint i); split; auto. constructor.
   exists (Vfloat f0); split; auto. constructor.
+  exists (Vlong i); split; auto. constructor.
 (* tempvar *)
   exploit me_temps; eauto. intros [[tv [A B]] C]. 
   exists tv; split; auto. constructor; auto.
@@ -2184,7 +2038,7 @@ Proof.
 
 (* goto *)
   generalize TRF; intros TRF'. monadInv TRF'. 
-  exploit (simpl_find_label j (cenv_for f) m lo tlo lbl (fn_body f) (call_cont k) x0 (call_cont tk)).
+  exploit (simpl_find_label j (cenv_for f) m lo tlo lbl (fn_body f) (call_cont k) x (call_cont tk)).
     eauto. eapply match_cont_call_cont. eauto.  
     apply compat_cenv_for.
   rewrite H. intros [ts' [tk' [A [B [C D]]]]]. 
@@ -2197,12 +2051,10 @@ Proof.
   generalize EQ; intro EQ'; monadInv EQ'.
   assert (list_norepet (var_names (fn_params f ++ fn_vars f))).
     unfold var_names. rewrite map_app. auto.
-  assert (list_disjoint (var_names (fn_params f)) (var_names (fn_temps f))).
-    monadInv EQ0. auto. 
   exploit match_envs_alloc_variables; eauto.
     instantiate (1 := cenv_for_gen (addr_taken_stmt f.(fn_body)) (fn_params f ++ fn_vars f)).
-    intros. eapply cenv_for_gen_by_value; eauto. rewrite VSF.mem_iff. eexact H5.
-    intros. eapply cenv_for_gen_domain. rewrite VSF.mem_iff. eexact H4.
+    intros. eapply cenv_for_gen_by_value; eauto. rewrite VSF.mem_iff. eexact H4.
+    intros. eapply cenv_for_gen_domain. rewrite VSF.mem_iff. eexact H3.
   intros [j' [te [tm0 [A [B [C [D [E F]]]]]]]].
   exploit store_params_correct.
     eauto. 
@@ -2212,7 +2064,7 @@ Proof.
     eexact B. eexact C.
     intros. apply (create_undef_temps_lifted id f). auto.
     intros. destruct (create_undef_temps (fn_temps f))!id as [v|] eqn:?; auto.
-    exploit create_undef_temps_inv; eauto. intros [P Q]. elim (H3 id id); auto.
+    exploit create_undef_temps_inv; eauto. intros [P Q]. elim (l id id); auto.
   intros [tel [tm1 [P [Q [R [S T]]]]]].
   change (cenv_for_gen (addr_taken_stmt (fn_body f)) (fn_params f ++ fn_vars f))
     with (cenv_for f) in *.

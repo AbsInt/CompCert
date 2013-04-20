@@ -34,6 +34,8 @@ let rec size_expr = function
       1 + size_exprs args + max (size_expr e1) (size_expr e2)
   | Elet(e1, e2) -> size_expr e1 + size_expr e2
   | Eletvar n -> 0
+  | Ebuiltin(ef, el) -> 2 + size_exprs el
+  | Eexternal(id, sg, el) -> 5 + size_exprs el
 
 and size_exprs = function
   | Enil -> 0

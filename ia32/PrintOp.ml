@@ -90,6 +90,7 @@ let print_operation reg pp = function
   | Oshru, [r1;r2] -> fprintf pp "%a >>u %a" reg r1 reg r2
   | Oshruimm n, [r1] -> fprintf pp "%a >>u %ld" reg r1 (camlint_of_coqint n)
   | Ororimm n, [r1] -> fprintf pp "%a ror %ld" reg r1 (camlint_of_coqint n)
+  | Oshldimm n, [r1;r2] -> fprintf pp "(%a, %a) << %ld" reg r1 reg r2 (camlint_of_coqint n)
   | Olea addr, args -> print_addressing reg pp (addr, args)
   | Onegf, [r1] -> fprintf pp "negf(%a)" reg r1
   | Oabsf, [r1] -> fprintf pp "absf(%a)" reg r1
@@ -100,6 +101,9 @@ let print_operation reg pp = function
   | Osingleoffloat, [r1] -> fprintf pp "singleoffloat(%a)" reg r1
   | Ointoffloat, [r1] -> fprintf pp "intoffloat(%a)" reg r1
   | Ofloatofint, [r1] -> fprintf pp "floatofint(%a)" reg r1
+  | Omakelong, [r1;r2] -> fprintf pp "makelong(%a,%a)" reg r1 reg r2
+  | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
+  | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1
   | Ocmp c, args -> print_condition reg pp (c, args)
   | _ -> fprintf pp "<bad operator>"
 

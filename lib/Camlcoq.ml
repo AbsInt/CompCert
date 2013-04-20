@@ -252,6 +252,11 @@ let camlstring_of_coqstring (s: char list) =
   | c :: s -> r.[pos] <- c; fill (pos + 1) s
   in fill 0 s
 
+let coqstring_of_camlstring s =
+  let rec cstring accu pos =
+    if pos < 0 then accu else cstring (s.[pos] :: accu) (pos - 1)
+  in cstring [] (String.length s - 1)
+
 (* Floats *)
 
 let coqfloat_of_camlfloat f =

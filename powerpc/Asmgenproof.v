@@ -487,9 +487,9 @@ Definition measure (s: Mach.state) : nat :=
   | Mach.Returnstate _ _ _ => 1%nat
   end.
 
-Remark preg_of_not_GPR11: forall r, negb (mreg_eq r IT1) = true -> IR GPR11 <> preg_of r.
+Remark preg_of_not_GPR11: forall r, negb (mreg_eq r R11) = true -> IR GPR11 <> preg_of r.
 Proof.
-  intros. change (IR GPR11) with (preg_of IT1). red; intros. 
+  intros. change (IR GPR11) with (preg_of R11). red; intros. 
   exploit preg_of_injective; eauto. intros; subst r; discriminate.
 Qed.
 
@@ -526,7 +526,8 @@ Proof.
   rewrite (sp_val _ _ _ AG) in A. intros. simpl in TR.
   exploit storeind_correct; eauto with asmgen. intros [rs' [P Q]].
   exists rs'; split. eauto.
-  split. change (undef_setstack rs) with rs. apply agree_exten with rs0; auto with asmgen.
+  split. change (Mach.undef_regs (destroyed_by_op Omove) rs) with rs. 
+  apply agree_exten with rs0; auto with asmgen.
   simpl; intros. rewrite Q; auto with asmgen.
 
 - (* Mgetparam *)
@@ -568,9 +569,11 @@ Opaque loadind.
   intros [v' [A B]]. rewrite (sp_val _ _ _ AG) in A. 
   left; eapply exec_straight_steps; eauto; intros. simpl in TR.
   exploit transl_op_correct; eauto. intros [rs2 [P [Q R]]].
-  exists rs2; split. eauto. split. auto. 
-  simpl. destruct op; try congruence. destruct ep; simpl; try congruence. intros. 
+  exists rs2; split. eauto. split. auto.
+  destruct op; simpl; try discriminate. intros.
+  destruct (andb_prop _ _ H1); clear H1.
   rewrite R; auto. apply preg_of_not_GPR11; auto.
+  change (destroyed_by_op Omove) with (@nil mreg). simpl; auto.
 
 - (* Mload *)
   assert (eval_addressing tge sp addr rs##args = Some a). 
@@ -595,7 +598,7 @@ Opaque loadind.
   left; eapply exec_straight_steps; eauto.
   intros. simpl in TR. exploit transl_store_correct; eauto. intros [rs2 [P Q]]. 
   exists rs2; split. eauto.
-  split. eapply agree_exten_temps; eauto. intros; auto with asmgen. 
+  split. eapply agree_undef_regs; eauto with asmgen.
   simpl; congruence.
 
 - (* Mcall *)
@@ -741,19 +744,21 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   inv AT. monadInv H3. 
   exploit functions_transl; eauto. intro FN.
   generalize (transf_function_no_overflow _ _ H2); intro NOOV.
-  exploit external_call_mem_extends; eauto. eapply preg_vals; eauto.
+  exploit external_call_mem_extends'; eauto. eapply preg_vals; eauto.
   intros [vres' [m2' [A [B [C D]]]]].
   left. econstructor; split. apply plus_one. 
   eapply exec_step_builtin. eauto. eauto.
   eapply find_instr_tail; eauto.
-  eapply external_call_symbols_preserved; eauto.
+  eapply external_call_symbols_preserved'; eauto.
   exact symbols_preserved. exact varinfo_preserved.
+  eauto.
   econstructor; eauto.
-  Simpl. rewrite <- H0. simpl. econstructor; eauto.
+  Simpl. rewrite set_pregs_other_2. rewrite undef_regs_other_2. rewrite <- H0. simpl. econstructor; eauto.
   eapply code_tail_next_int; eauto.
-  apply agree_nextinstr. eapply agree_set_undef_mreg; eauto. 
-  rewrite Pregmap.gss. auto. 
-  intros. Simpl. 
+  apply preg_notin_charact; auto with asmgen.
+  apply preg_notin_charact; auto with asmgen.
+  apply agree_nextinstr. eapply agree_set_mregs; auto.
+  eapply agree_undef_regs; eauto. intros; apply undef_regs_other_2; auto. 
   congruence.
 
 - (* Mannot *)
@@ -761,12 +766,12 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   exploit functions_transl; eauto. intro FN.
   generalize (transf_function_no_overflow _ _ H3); intro NOOV.
   exploit annot_arguments_match; eauto. intros [vargs' [P Q]]. 
-  exploit external_call_mem_extends; eauto.
+  exploit external_call_mem_extends'; eauto.
   intros [vres' [m2' [A [B [C D]]]]].
   left. econstructor; split. apply plus_one. 
   eapply exec_step_annot. eauto. eauto.
   eapply find_instr_tail; eauto. eauto.
-  eapply external_call_symbols_preserved; eauto.
+  eapply external_call_symbols_preserved'; eauto.
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_states_intro with (ep := false); eauto with coqlib.
   unfold nextinstr. rewrite Pregmap.gss. 
@@ -798,11 +803,11 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   destruct (snd (crbit_for_cond cond)).
   (* Pbt, taken *)
   econstructor; econstructor; econstructor; split. eexact A. 
-  split. eapply agree_exten_temps; eauto with asmgen.
+  split. eapply agree_exten; eauto with asmgen.
   simpl. rewrite B. reflexivity. 
   (* Pbf, taken *)
   econstructor; econstructor; econstructor; split. eexact A. 
-  split. eapply agree_exten_temps; eauto with asmgen.
+  split. eapply agree_exten; eauto with asmgen.
   simpl. rewrite B. reflexivity. 
 
 - (* Mcond false *)
@@ -815,7 +820,7 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   destruct (snd (crbit_for_cond cond)).
   apply exec_straight_one. simpl. rewrite B. reflexivity. auto.
   apply exec_straight_one. simpl. rewrite B. reflexivity. auto.
-  split. eapply agree_exten_temps; eauto with asmgen.
+  split. eapply agree_exten; eauto with asmgen.
   intros; Simpl.
   simpl. congruence.
 
@@ -835,7 +840,9 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   eapply find_instr_tail; eauto. 
   simpl. rewrite <- H9. unfold Mach.label in H0; unfold label; rewrite H0. eexact A.
   econstructor; eauto. 
-  eapply agree_exten_temps; eauto. intros. rewrite C; auto with asmgen. Simpl. 
+  eapply agree_undef_regs; eauto.
+Local Transparent destroyed_by_jumptable. 
+  simpl. intros. rewrite C; auto with asmgen. Simpl. 
   congruence.
 
 - (* Mreturn *)
@@ -896,6 +903,7 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   intros [m1' [C D]].
   exploit Mem.storev_extends. eexact D. eexact H1. eauto. eauto. 
   intros [m2' [F G]].
+  simpl Mach.chunk_of_type in F. 
   exploit Mem.storev_extends. eexact G. eexact H2. eauto. eauto. 
   intros [m3' [P Q]].
   (* Execution of function prologue *)
@@ -910,7 +918,7 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   rewrite <- H5 at 2. 
   apply exec_straight_three with rs2 m2' rs3 m2'.
   unfold exec_instr. rewrite C. fold sp.
-  rewrite <- (sp_val _ _ _ AG). unfold chunk_of_type in F. rewrite F. auto. 
+  rewrite <- (sp_val _ _ _ AG). rewrite F. auto. 
   simpl. auto.
   simpl. unfold store1. rewrite gpr_or_zero_not_zero. 
   change (rs3 GPR1) with sp. change (rs3 GPR0) with (rs0 LR). simpl. 
@@ -928,8 +936,7 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   unfold rs4, rs3, rs2.
   apply agree_nextinstr. apply agree_set_other; auto. apply agree_set_other; auto. 
   apply agree_nextinstr. apply agree_set_other; auto.
-  eapply agree_change_sp; eauto. apply agree_exten_temps with rs0; eauto.
-  unfold sp; congruence.
+  eapply agree_change_sp; eauto. unfold sp; congruence.
   congruence.
 
 - (* external function *)
@@ -937,17 +944,15 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   intros [tf [A B]]. simpl in B. inv B.
   exploit extcall_arguments_match; eauto. 
   intros [args' [C D]].
-  exploit external_call_mem_extends; eauto.
+  exploit external_call_mem_extends'; eauto.
   intros [res' [m2' [P [Q [R S]]]]].
   left; econstructor; split.
   apply plus_one. eapply exec_step_external; eauto. 
-  eapply external_call_symbols_preserved; eauto. 
+  eapply external_call_symbols_preserved'; eauto. 
   exact symbols_preserved. exact varinfo_preserved.
   econstructor; eauto.
   unfold loc_external_result.
-  eapply agree_set_mreg; eauto. 
-  rewrite Pregmap.gso; auto with asmgen. rewrite Pregmap.gss. auto. 
-  intros; Simpl.
+  apply agree_set_other; auto. apply agree_set_mregs; auto.
 
 - (* return *)
   inv STACKS. simpl in *.
@@ -980,10 +985,9 @@ Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> Mach.final_state st1 r -> Asm.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. constructor.
-  auto. 
-  compute in H1. 
-  generalize (preg_val _ _ _ R3 AG). rewrite H1. intros LD; inv LD. auto.
+  intros. inv H0. inv H. constructor. auto. 
+  compute in H1. inv H1.  
+  generalize (preg_val _ _ _ R3 AG). rewrite H2. intros LD; inv LD. auto.
 Qed.
 
 Theorem transf_program_correct:

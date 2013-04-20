@@ -23,7 +23,7 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Locations.
-Require Stacklayout.
+Require Import Stacklayout.
 Require Import Conventions.
 
 (** * Abstract syntax *)
@@ -222,7 +222,7 @@ Inductive instruction : Type :=
   | Pxori: ireg -> ireg -> constant -> instruction            (**r bitwise xor with immediate *)
   | Pxoris: ireg -> ireg -> constant -> instruction           (**r bitwise xor with immediate high *)
   | Plabel: label -> instruction                              (**r define a code label *)
-  | Pbuiltin: external_function -> list preg -> preg -> instruction (**r built-in function *)
+  | Pbuiltin: external_function -> list preg -> list preg -> instruction (**r built-in function *)
   | Pannot: external_function -> list annot_param -> instruction (**r annotation statement *)
 
 with annot_param : Type :=
@@ -322,6 +322,14 @@ Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
   match l with
   | nil => rs
   | r :: l' => undef_regs l' (rs#r <- Vundef)
+  end.
+
+(** Assigning multiple registers *)
+
+Fixpoint set_regs (rl: list preg) (vl: list val) (rs: regset) : regset :=
+  match rl, vl with
+  | r1 :: rl', v1 :: vl' => set_regs rl' vl' (rs#r1 <- v1)
+  | _, _ => rs
   end.
 
 Section RELSEM.
@@ -777,45 +785,45 @@ Definition preg_of (r: mreg) : preg :=
   match r with
   | R3 => GPR3  | R4 => GPR4  | R5 => GPR5  | R6 => GPR6
   | R7 => GPR7  | R8 => GPR8  | R9 => GPR9  | R10 => GPR10
+  | R11 => GPR11 | R12 => GPR12
   | R14 => GPR14 | R15 => GPR15 | R16 => GPR16
   | R17 => GPR17 | R18 => GPR18 | R19 => GPR19 | R20 => GPR20
   | R21 => GPR21 | R22 => GPR22 | R23 => GPR23 | R24 => GPR24
   | R25 => GPR25 | R26 => GPR26 | R27 => GPR27 | R28 => GPR28
   | R29 => GPR29 | R30 => GPR30 | R31 => GPR31
-  | IT1 => GPR11 | IT2 => GPR12
+  | F0 => FPR0
   | F1 => FPR1  | F2 => FPR2  | F3 => FPR3  | F4 => FPR4
   | F5 => FPR5  | F6 => FPR6  | F7 => FPR7  | F8 => FPR8
-  | F9 => FPR9  | F10 => FPR10 | F11 => FPR11
-  | F14 => FPR14 | F15 => FPR15
+  | F9 => FPR9  | F10 => FPR10 | F11 => FPR11 | F12 => FPR12
+  | F13 => FPR13 | F14 => FPR14 | F15 => FPR15
   | F16 => FPR16 | F17 => FPR17 | F18 => FPR18 | F19 => FPR19
   | F20 => FPR20 | F21 => FPR21 | F22 => FPR22 | F23 => FPR23
   | F24 => FPR24 | F25 => FPR25 | F26 => FPR26 | F27 => FPR27
   | F28 => FPR28 | F29 => FPR29 | F30 => FPR30 | F31 => FPR31
-  | FT1 => FPR0 | FT2 => FPR12 | FT3 => FPR13
   end.
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
     we use PPC registers instead of locations. *)
 
+Definition chunk_of_type (ty: typ) :=
+  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 | Tlong => Mint64 end.
+
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))
-  | extcall_arg_int_stack: forall ofs bofs v,
+  | extcall_arg_stack: forall ofs ty bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mint32 m (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
-      extcall_arg rs m (S (Outgoing ofs Tint)) v
-  | extcall_arg_float_stack: forall ofs bofs v,
-      bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
-      Mem.loadv Mfloat64al32 m (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
-      extcall_arg rs m (S (Outgoing ofs Tfloat)) v.
+      Mem.loadv (chunk_of_type ty) m
+                (Val.add (rs (IR GPR1)) (Vint (Int.repr bofs))) = Some v ->
+      extcall_arg rs m (S Outgoing ofs ty) v.
 
 Definition extcall_arguments
     (rs: regset) (m: mem) (sg: signature) (args: list val) : Prop :=
   list_forall2 (extcall_arg rs m) (loc_arguments sg) args.
 
-Definition loc_external_result (sg: signature) : preg :=
-  preg_of (loc_result sg).
+Definition loc_external_result (sg: signature) : list preg :=
+  map preg_of (loc_result sg).
 
 (** Extract the values of the arguments of an annotation. *)
 
@@ -845,33 +853,31 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr c i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs c ef args res rs m t v m',
+      forall b ofs c ef args res rs m t vl rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
-      external_call ef ge (map rs args) m t v m' ->
-      step (State rs m) t
-           (State (nextinstr(rs #GPR11 <- Vundef #GPR12 <- Vundef
-                                #FPR12 <- Vundef #FPR13 <- Vundef
-                                #FPR0 <- Vundef #CTR <- Vundef
-                                #res <- v)) m')
+      external_call' ef ge (map rs args) m t vl m' ->
+      rs' = nextinstr
+              (set_regs res vl
+                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
+      step (State rs m) t (State rs' m')
   | exec_step_annot:
       forall b ofs c ef args rs m vargs t v m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal c) ->
       find_instr (Int.unsigned ofs) c = Some (Pannot ef args) ->
       annot_arguments rs m args vargs ->
-      external_call ef ge vargs m t v m' ->
+      external_call' ef ge vargs m t v m' ->
       step (State rs m) t
            (State (nextinstr rs) m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
       rs PC = Vptr b Int.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
-      external_call ef ge args m t res m' ->
+      external_call' ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (rs#(loc_external_result (ef_sig ef)) <- res
-               #PC <- (rs LR)) ->
+      rs' = (set_regs (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.
@@ -939,21 +945,21 @@ Ltac Equalities :=
   discriminate.
   discriminate.
   inv H11. 
-  exploit external_call_determ. eexact H4. eexact H11. intros [A B].
+  exploit external_call_determ'. eexact H4. eexact H9. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   inv H12.
   assert (vargs0 = vargs) by (eapply annot_arguments_determ; eauto). subst vargs0.
-  exploit external_call_determ. eexact H5. eexact H13. intros [A B].
+  exploit external_call_determ'. eexact H5. eexact H13. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
   assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
-  exploit external_call_determ. eexact H3. eexact H8. intros [A B].
+  exploit external_call_determ'. eexact H3. eexact H8. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
 (* trace length *)
   red; intros. inv H; simpl.
   omega.
-  eapply external_call_trace_length; eauto.
-  eapply external_call_trace_length; eauto.
-  eapply external_call_trace_length; eauto.
+  inv H3; eapply external_call_trace_length; eauto.
+  inv H4; eapply external_call_trace_length; eauto.
+  inv H2; eapply external_call_trace_length; eauto.
 (* initial states *)
   inv H; inv H0. f_equal. congruence.
 (* final no step *)
@@ -973,13 +979,4 @@ Definition data_preg (r: preg) : bool :=
   | _ => true
   end.
 
-Definition nontemp_preg (r: preg) : bool :=
-  match r with
-  | IR GPR0 => false | IR GPR11 => false | IR GPR12 => false
-  | FR FPR0 => false | FR FPR12 => false | FR FPR13 => false
-  | PC => false      | LR => false       | CTR => false
-  | CR0_0 => false   | CR0_1 => false    | CR0_2 => false    | CR0_3 => false
-  | CARRY => false
-  | _ => true
-  end.
 

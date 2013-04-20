@@ -491,6 +491,7 @@ Definition init_data_size (i: init_data) : Z :=
   | Init_int8 _ => 1
   | Init_int16 _ => 2
   | Init_int32 _ => 4
+  | Init_int64 _ => 8
   | Init_float32 _ => 4
   | Init_float64 _ => 8
   | Init_addrof _ _ => 4
@@ -508,6 +509,7 @@ Definition store_init_data (m: mem) (b: block) (p: Z) (id: init_data) : option m
   | Init_int8 n => Mem.store Mint8unsigned m b p (Vint n)
   | Init_int16 n => Mem.store Mint16unsigned m b p (Vint n)
   | Init_int32 n => Mem.store Mint32 m b p (Vint n)
+  | Init_int64 n => Mem.store Mint64 m b p (Vlong n)
   | Init_float32 n => Mem.store Mfloat32 m b p (Vfloat n)
   | Init_float64 n => Mem.store Mfloat64 m b p (Vfloat n)
   | Init_addrof symb ofs =>
@@ -761,6 +763,9 @@ Fixpoint load_store_init_data (m: mem) (b: block) (p: Z) (il: list init_data) {s
   | Init_int32 n :: il' =>
       Mem.load Mint32 m b p = Some(Vint n)
       /\ load_store_init_data m b (p + 4) il'
+  | Init_int64 n :: il' =>
+      Mem.load Mint64 m b p = Some(Vlong n)
+      /\ load_store_init_data m b (p + 8) il'
   | Init_float32 n :: il' =>
       Mem.load Mfloat32 m b p = Some(Vfloat(Float.singleoffloat n))
       /\ load_store_init_data m b (p + 4) il'
@@ -795,6 +800,7 @@ Proof.
   eapply (A Mint8unsigned (Vint i)); eauto.
   eapply (A Mint16unsigned (Vint i)); eauto.
   eapply (A Mint32 (Vint i)); eauto.
+  eapply (A Mint64 (Vlong i)); eauto.
   eapply (A Mfloat32 (Vfloat f)); eauto.
   eapply (A Mfloat64 (Vfloat f)); eauto.
   destruct (find_symbol ge i); try congruence. exists b0; split; auto. 

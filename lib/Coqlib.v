@@ -559,6 +559,16 @@ Proof.
 Defined.
 Global Opaque Zdivide_dec.
 
+Lemma Zdivide_interval:
+  forall a b c,
+  0 < c -> 0 <= a < b -> (c | a) -> (c | b) -> 0 <= a <= b - c.
+Proof.
+  intros. destruct H1 as [x EQ1]. destruct H2 as [y EQ2]. subst. destruct H0.
+  split. omega. exploit Zmult_lt_reg_r; eauto. intros. 
+  replace (y * c - c) with ((y - 1) * c) by ring.
+  apply Zmult_le_compat_r; omega.
+Qed.
+
 (** Conversion from [Z] to [nat]. *)
 
 Definition nat_of_Z: Z -> nat := Z.to_nat.
@@ -1249,6 +1259,17 @@ Lemma proj_sumbool_is_true:
 Proof.
   intros. unfold proj_sumbool. destruct a. auto. contradiction. 
 Qed.
+
+Ltac InvBooleans :=
+  match goal with
+  | [ H: _ && _ = true |- _ ] =>
+      destruct (andb_prop _ _ H); clear H; InvBooleans
+  | [ H: _ || _ = false |- _ ] =>
+      destruct (orb_false_elim _ _ H); clear H; InvBooleans
+  | [ H: proj_sumbool ?x = true |- _ ] =>
+      generalize (proj_sumbool_true _ H); clear H; intro; InvBooleans
+  | _ => idtac
+  end.
 
 Section DECIDABLE_EQUALITY.
 

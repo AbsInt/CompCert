@@ -15,6 +15,7 @@
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
+Require Import Errors.
 Require Import Integers.
 Require Import Values.
 Require Import Memory.
@@ -25,27 +26,114 @@ Require Import Cminor.
 Require Import Op.
 Require Import CminorSel.
 Require Import SelectOp.
+Require Import SelectLong.
 Require Import Selection.
 Require Import SelectOpproof.
+Require Import SelectLongproof.
 
 Open Local Scope cminorsel_scope.
 
+
 (** * Correctness of the instruction selection functions for expressions *)
+
+Section PRESERVATION.
+
+Variable prog: Cminor.program.
+Let ge := Genv.globalenv prog.
+Variable hf: helper_functions.
+Let tprog := transform_program (sel_fundef hf ge) prog.
+Let tge := Genv.globalenv tprog.
+Hypothesis HELPERS: i64_helpers_correct tge hf.
+
+Lemma symbols_preserved:
+  forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
+Proof.
+  intros; unfold ge, tge, tprog. apply Genv.find_symbol_transf.
+Qed.
+
+Lemma function_ptr_translated:
+  forall (b: block) (f: Cminor.fundef),
+  Genv.find_funct_ptr ge b = Some f ->
+  Genv.find_funct_ptr tge b = Some (sel_fundef hf ge f).
+Proof.  
+  intros. 
+  exact (Genv.find_funct_ptr_transf (sel_fundef hf ge) _ _ H).
+Qed.
+
+Lemma functions_translated:
+  forall (v v': val) (f: Cminor.fundef),
+  Genv.find_funct ge v = Some f ->
+  Val.lessdef v v' ->
+  Genv.find_funct tge v' = Some (sel_fundef hf ge f).
+Proof.  
+  intros. inv H0.
+  exact (Genv.find_funct_transf (sel_fundef hf ge) _ _ H).
+  simpl in H. discriminate.
+Qed.
+
+Lemma sig_function_translated:
+  forall f,
+  funsig (sel_fundef hf ge f) = Cminor.funsig f.
+Proof.
+  intros. destruct f; reflexivity.
+Qed.
+
+Lemma varinfo_preserved:
+  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
+Proof.
+  intros; unfold ge, tge, tprog, sel_program. 
+  apply Genv.find_var_info_transf.
+Qed.
+
+Lemma helper_implements_preserved:
+  forall id sg vargs vres,
+  helper_implements ge id sg vargs vres ->
+  helper_implements tge id sg vargs vres.
+Proof.
+  intros. destruct H as (b & ef & A & B & C & D).
+  exploit function_ptr_translated; eauto. simpl. intros. 
+  exists b; exists ef. 
+  split. rewrite symbols_preserved. auto.
+  split. auto.
+  split. auto.
+  intros. eapply external_call_symbols_preserved; eauto. 
+  exact symbols_preserved. exact varinfo_preserved.
+Qed.
+
+Lemma builtin_implements_preserved:
+  forall id sg vargs vres,
+  builtin_implements ge id sg vargs vres ->
+  builtin_implements tge id sg vargs vres.
+Proof.
+  unfold builtin_implements; intros.
+  eapply external_call_symbols_preserved; eauto. 
+  exact symbols_preserved. exact varinfo_preserved.
+Qed.
+
+Lemma helpers_correct_preserved:
+  forall h, i64_helpers_correct ge h -> i64_helpers_correct tge h.
+Proof.
+  unfold i64_helpers_correct; intros.
+  repeat (match goal with [ H: _ /\ _ |- _ /\ _ ] => destruct H; split end);
+  intros; try (eapply helper_implements_preserved; eauto);
+  try (eapply builtin_implements_preserved; eauto).
+  exploit H14; eauto. intros [z [A B]]. exists z; split; eauto. eapply helper_implements_preserved; eauto.
+  exploit H15; eauto. intros [z [A B]]. exists z; split; eauto. eapply helper_implements_preserved; eauto.
+Qed.
 
 Section CMCONSTR.
 
-Variable ge: genv.
 Variable sp: val.
 Variable e: env.
 Variable m: mem.
 
 Lemma eval_condition_of_expr:
   forall le a v b,
-  eval_expr ge sp e m le a v ->
+  eval_expr tge sp e m le a v ->
   Val.bool_of_val v b ->
   match condition_of_expr a with (cond, args) =>
     exists vl,
-    eval_exprlist ge sp e m le args vl /\
+    eval_exprlist tge sp e m le args vl /\
     eval_condition cond vl m = Some b
   end.
 Proof.
@@ -60,9 +148,9 @@ Qed.
 
 Lemma eval_load:
   forall le a v chunk v',
-  eval_expr ge sp e m le a v ->
+  eval_expr tge sp e m le a v ->
   Mem.loadv chunk m v = Some v' ->
-  eval_expr ge sp e m le (load chunk a) v'.
+  eval_expr tge sp e m le (load chunk a) v'.
 Proof.
   intros. generalize H0; destruct v; simpl; intro; try discriminate.
   unfold load. 
@@ -73,11 +161,11 @@ Qed.
 
 Lemma eval_store:
   forall chunk a1 a2 v1 v2 f k m',
-  eval_expr ge sp e m nil a1 v1 ->
-  eval_expr ge sp e m nil a2 v2 ->
+  eval_expr tge sp e m nil a1 v1 ->
+  eval_expr tge sp e m nil a2 v2 ->
   Mem.storev chunk m v1 v2 = Some m' ->
-  step ge (State f (store chunk a1 a2) k sp e m)
-       E0 (State f Sskip k sp e m').
+  step tge (State f (store chunk a1 a2) k sp e m)
+        E0 (State f Sskip k sp e m').
 Proof.
   intros. generalize H1; destruct v1; simpl; intro; try discriminate.
   unfold store.
@@ -90,9 +178,9 @@ Qed.
 
 Lemma eval_sel_unop:
   forall le op a1 v1 v,
-  eval_expr ge sp e m le a1 v1 ->
+  eval_expr tge sp e m le a1 v1 ->
   eval_unop op v1 = Some v ->
-  exists v', eval_expr ge sp e m le (sel_unop op a1) v' /\ Val.lessdef v v'.
+  exists v', eval_expr tge sp e m le (sel_unop hf op a1) v' /\ Val.lessdef v v'.
 Proof.
   destruct op; simpl; intros; FuncInv; try subst v.
   apply eval_cast8unsigned; auto.
@@ -108,14 +196,23 @@ Proof.
   eapply eval_intuoffloat; eauto.
   eapply eval_floatofint; eauto.
   eapply eval_floatofintu; eauto.
+  eapply eval_negl; eauto.
+  eapply eval_notl; eauto.
+  eapply eval_intoflong; eauto.
+  eapply eval_longofint; eauto.
+  eapply eval_longofintu; eauto.
+  eapply eval_longoffloat; eauto.
+  eapply eval_longuoffloat; eauto.
+  eapply eval_floatoflong; eauto.
+  eapply eval_floatoflongu; eauto.
 Qed.
 
 Lemma eval_sel_binop:
   forall le op a1 a2 v1 v2 v,
-  eval_expr ge sp e m le a1 v1 ->
-  eval_expr ge sp e m le a2 v2 ->
+  eval_expr tge sp e m le a1 v1 ->
+  eval_expr tge sp e m le a2 v2 ->
   eval_binop op v1 v2 m = Some v ->
-  exists v', eval_expr ge sp e m le (sel_binop op a1 a2) v' /\ Val.lessdef v v'.
+  exists v', eval_expr tge sp e m le (sel_binop hf op a1 a2) v' /\ Val.lessdef v v'.
 Proof.
   destruct op; simpl; intros; FuncInv; try subst v.
   apply eval_add; auto.
@@ -135,9 +232,24 @@ Proof.
   apply eval_subf; auto.
   apply eval_mulf; auto.
   apply eval_divf; auto.
+  eapply eval_addl; eauto.
+  eapply eval_subl; eauto.
+  eapply eval_mull; eauto.
+  eapply eval_divl; eauto.
+  eapply eval_divlu; eauto.
+  eapply eval_modl; eauto.
+  eapply eval_modlu; eauto.
+  eapply eval_andl; eauto.
+  eapply eval_orl; eauto.
+  eapply eval_xorl; eauto.
+  eapply eval_shll; eauto.
+  eapply eval_shrl; eauto.
+  eapply eval_shrlu; eauto.
   apply eval_comp; auto.
   apply eval_compu; auto.
   apply eval_compf; auto.
+  apply eval_cmpl; auto.
+  apply eval_cmplu; auto.
 Qed.
 
 End CMCONSTR.
@@ -156,7 +268,7 @@ Proof.
 Qed.
 
 Lemma classify_call_correct:
-  forall ge sp e m a v fd,
+  forall sp e m a v fd,
   Cminor.eval_expr ge sp e m a v ->
   Genv.find_funct ge v = Some fd ->
   match classify_call ge a with
@@ -215,57 +327,6 @@ Qed.
 
 (** * Semantic preservation for instruction selection. *)
 
-Section PRESERVATION.
-
-Variable prog: Cminor.program.
-Let tprog := sel_program prog.
-Let ge := Genv.globalenv prog.
-Let tge := Genv.globalenv tprog.
-
-(** Relationship between the global environments for the original
-  Cminor program and the generated CminorSel program. *)
-
-Lemma symbols_preserved:
-  forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof.
-  intros; unfold ge, tge, tprog, sel_program. 
-  apply Genv.find_symbol_transf.
-Qed.
-
-Lemma function_ptr_translated:
-  forall (b: block) (f: Cminor.fundef),
-  Genv.find_funct_ptr ge b = Some f ->
-  Genv.find_funct_ptr tge b = Some (sel_fundef ge f).
-Proof.  
-  intros. 
-  exact (Genv.find_funct_ptr_transf (sel_fundef ge) _ _ H).
-Qed.
-
-Lemma functions_translated:
-  forall (v v': val) (f: Cminor.fundef),
-  Genv.find_funct ge v = Some f ->
-  Val.lessdef v v' ->
-  Genv.find_funct tge v' = Some (sel_fundef ge f).
-Proof.  
-  intros. inv H0.
-  exact (Genv.find_funct_transf (sel_fundef ge) _ _ H).
-  simpl in H. discriminate.
-Qed.
-
-Lemma sig_function_translated:
-  forall f,
-  funsig (sel_fundef ge f) = Cminor.funsig f.
-Proof.
-  intros. destruct f; reflexivity.
-Qed.
-
-Lemma varinfo_preserved:
-  forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof.
-  intros; unfold ge, tge, tprog, sel_program. 
-  apply Genv.find_var_info_transf.
-Qed.
-
 (** Relationship between the local environments. *)
 
 Definition env_lessdef (e1 e2: env) : Prop :=
@@ -305,7 +366,7 @@ Lemma sel_expr_correct:
   Cminor.eval_expr ge sp e m a v ->
   forall e' le m',
   env_lessdef e e' -> Mem.extends m m' ->
-  exists v', eval_expr tge sp e' m' le (sel_expr a) v' /\ Val.lessdef v v'.
+  exists v', eval_expr tge sp e' m' le (sel_expr hf a) v' /\ Val.lessdef v v'.
 Proof.
   induction 1; intros; simpl.
   (* Evar *)
@@ -314,6 +375,9 @@ Proof.
   destruct cst; simpl in *; inv H. 
   exists (Vint i); split; auto. econstructor. constructor. auto. 
   exists (Vfloat f); split; auto. econstructor. constructor. auto.
+  exists (Val.longofwords (Vint (Int64.hiword i)) (Vint (Int64.loword i))); split.
+  eapply eval_Eop. constructor. EvalOp. simpl; eauto. constructor. EvalOp. simpl; eauto. constructor. auto.
+  simpl. rewrite Int64.ofwords_recompose. auto.
   rewrite <- symbols_preserved. fold (symbol_address tge i i0). apply eval_addrsymbol.
   apply eval_addrstack.
   (* Eunop *)
@@ -338,7 +402,7 @@ Lemma sel_exprlist_correct:
   Cminor.eval_exprlist ge sp e m a v ->
   forall e' le m',
   env_lessdef e e' -> Mem.extends m m' ->
-  exists v', eval_exprlist tge sp e' m' le (sel_exprlist a) v' /\ Val.lessdef_list v v'.
+  exists v', eval_exprlist tge sp e' m' le (sel_exprlist hf a) v' /\ Val.lessdef_list v v'.
 Proof.
   induction 1; intros; simpl. 
   exists (@nil val); split; auto. constructor.
@@ -354,30 +418,30 @@ Inductive match_cont: Cminor.cont -> CminorSel.cont -> Prop :=
       match_cont Cminor.Kstop Kstop
   | match_cont_seq: forall s k k',
       match_cont k k' ->
-      match_cont (Cminor.Kseq s k) (Kseq (sel_stmt ge s) k')
+      match_cont (Cminor.Kseq s k) (Kseq (sel_stmt hf ge s) k')
   | match_cont_block: forall k k',
       match_cont k k' ->
       match_cont (Cminor.Kblock k) (Kblock k')
   | match_cont_call: forall id f sp e k e' k',
       match_cont k k' -> env_lessdef e e' ->
-      match_cont (Cminor.Kcall id f sp e k) (Kcall id (sel_function ge f) sp e' k').
+      match_cont (Cminor.Kcall id f sp e k) (Kcall id (sel_function hf ge f) sp e' k').
 
 Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
   | match_state: forall f s k s' k' sp e m e' m',
-      s' = sel_stmt ge s ->
+      s' = sel_stmt hf ge s ->
       match_cont k k' ->
       env_lessdef e e' ->
       Mem.extends m m' ->
       match_states
         (Cminor.State f s k sp e m)
-        (State (sel_function ge f) s' k' sp e' m')
+        (State (sel_function hf ge f) s' k' sp e' m')
   | match_callstate: forall f args args' k k' m m',
       match_cont k k' ->
       Val.lessdef_list args args' ->
       Mem.extends m m' ->
       match_states
         (Cminor.Callstate f args k m)
-        (Callstate (sel_fundef ge f) args' k' m')
+        (Callstate (sel_fundef hf ge f) args' k' m')
   | match_returnstate: forall v v' k k' m m',
       match_cont k k' ->
       Val.lessdef v v' ->
@@ -393,7 +457,7 @@ Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
       eval_exprlist tge sp e' m' nil al args' ->
       match_states
         (Cminor.Callstate (External ef) args (Cminor.Kcall optid f sp e k) m)
-        (State (sel_function ge f) (Sbuiltin optid ef al) k' sp e' m')
+        (State (sel_function hf ge f) (Sbuiltin optid ef al) k' sp e' m')
   | match_builtin_2: forall v v' optid f sp e k m e' m' k',
       match_cont k k' ->
       Val.lessdef v v' ->
@@ -401,7 +465,7 @@ Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
       Mem.extends m m' ->
       match_states
         (Cminor.Returnstate v (Cminor.Kcall optid f sp e k) m)
-        (State (sel_function ge f) Sskip k' sp (set_optvar optid v' e') m').
+        (State (sel_function hf ge f) Sskip k' sp (set_optvar optid v' e') m').
 
 Remark call_cont_commut:
   forall k k', match_cont k k' -> match_cont (Cminor.call_cont k) (call_cont k').
@@ -412,15 +476,15 @@ Qed.
 Remark find_label_commut:
   forall lbl s k k',
   match_cont k k' ->
-  match Cminor.find_label lbl s k, find_label lbl (sel_stmt ge s) k' with
+  match Cminor.find_label lbl s k, find_label lbl (sel_stmt hf ge s) k' with
   | None, None => True
-  | Some(s1, k1), Some(s1', k1') => s1' = sel_stmt ge s1 /\ match_cont k1 k1'
+  | Some(s1, k1), Some(s1', k1') => s1' = sel_stmt hf ge s1 /\ match_cont k1 k1'
   | _, _ => False
   end.
 Proof.
   induction s; intros; simpl; auto.
 (* store *)
-  unfold store. destruct (addressing m (sel_expr e)); simpl; auto.
+  unfold store. destruct (addressing m (sel_expr hf e)); simpl; auto.
 (* call *)
   destruct (classify_call ge e); simpl; auto.
 (* tailcall *)
@@ -428,13 +492,13 @@ Proof.
 (* seq *)
   exploit (IHs1 (Cminor.Kseq s2 k)). constructor; eauto. 
   destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)) as [[sx kx] | ];
-  destruct (find_label lbl (sel_stmt ge s1) (Kseq (sel_stmt ge s2) k')) as [[sy ky] | ];
+  destruct (find_label lbl (sel_stmt hf ge s1) (Kseq (sel_stmt hf ge s2) k')) as [[sy ky] | ];
   intuition. apply IHs2; auto.
 (* ifthenelse *)
-  destruct (condition_of_expr (sel_expr e)) as [cond args]. simpl.
+  destruct (condition_of_expr (sel_expr hf e)) as [cond args]. simpl.
   exploit (IHs1 k); eauto. 
   destruct (Cminor.find_label lbl s1 k) as [[sx kx] | ];
-  destruct (find_label lbl (sel_stmt ge s1) k') as [[sy ky] | ];
+  destruct (find_label lbl (sel_stmt hf ge s1) k') as [[sy ky] | ];
   intuition. apply IHs2; auto.
 (* loop *)
   apply IHs. constructor; auto.
@@ -531,9 +595,9 @@ Proof.
   exploit sel_expr_correct; eauto. intros [v' [A B]].
   assert (Val.bool_of_val v' b). inv B. auto. inv H0.
   exploit eval_condition_of_expr; eauto.
-  destruct (condition_of_expr (sel_expr a)) as [cond args].
+  destruct (condition_of_expr (sel_expr hf a)) as [cond args].
   intros [vl' [C D]].
-  left; exists (State (sel_function ge f) (if b then sel_stmt ge s1 else sel_stmt ge s2) k' sp e' m'); split.
+  left; exists (State (sel_function hf ge f) (if b then sel_stmt hf ge s1 else sel_stmt hf ge s2) k' sp e' m'); split.
   econstructor; eauto. 
   constructor; auto. destruct b; auto.
   (* Sloop *)
@@ -566,7 +630,7 @@ Proof.
   exploit (find_label_commut lbl (Cminor.fn_body f) (Cminor.call_cont k)).
     apply call_cont_commut; eauto.
   rewrite H. 
-  destruct (find_label lbl (sel_stmt ge (Cminor.fn_body f)) (call_cont k'0))
+  destruct (find_label lbl (sel_stmt hf ge (Cminor.fn_body f)) (call_cont k'0))
   as [[s'' k'']|] eqn:?; intros; try contradiction.
   destruct H0. 
   left; econstructor; split.
@@ -623,14 +687,22 @@ Proof.
   intros. inv H0. inv H. inv H3. inv H5. constructor.
 Qed.
 
+End PRESERVATION.
+
+Axiom get_helpers_correct:
+  forall ge hf, get_helpers ge = OK hf -> i64_helpers_correct ge hf.
+
 Theorem transf_program_correct:
+  forall prog tprog,
+  sel_program prog = OK tprog ->
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
+  intros. unfold sel_program in H. 
+  destruct (get_helpers (Genv.globalenv prog)) as [hf|] eqn:E; simpl in H; try discriminate.
+  inv H.
   eapply forward_simulation_opt.
-  eexact symbols_preserved.
-  eexact sel_initial_states.
-  eexact sel_final_states.
-  eexact sel_step_correct. 
+  apply symbols_preserved.
+  apply sel_initial_states.
+  apply sel_final_states.
+  apply sel_step_correct. apply helpers_correct_preserved. apply get_helpers_correct. auto.
 Qed.
-
-End PRESERVATION.

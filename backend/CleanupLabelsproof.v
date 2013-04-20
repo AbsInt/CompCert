@@ -24,7 +24,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Op.
 Require Import Locations.
-Require Import LTLin.
+Require Import Linear.
 Require Import CleanupLabels.
 
 Module LabelsetFacts := FSetFacts.Facts(Labelset).
@@ -103,7 +103,7 @@ Proof.
   intros; red; intros; destruct i; simpl; auto.
   apply Labelset.add_2; auto.
   apply Labelset.add_2; auto.
-  revert H; induction l0; simpl. auto. intros; apply Labelset.add_2; auto.
+  revert H; induction l; simpl. auto. intros; apply Labelset.add_2; auto.
 Qed.
 
 Remark add_label_branched_to_contains:
@@ -114,7 +114,7 @@ Proof.
   destruct i; simpl; intros; try contradiction.
   apply Labelset.add_1; auto.
   apply Labelset.add_1; auto.
-  revert H. induction l0; simpl; intros. 
+  revert H. induction l; simpl; intros. 
   contradiction.
   destruct H. apply Labelset.add_1; auto. apply Labelset.add_2; auto.
 Qed.
@@ -200,11 +200,11 @@ Qed.
 
 Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   | match_stackframe_intro:
-      forall res f sp ls c,
+      forall f sp ls c,
       incl c f.(fn_code) ->
       match_stackframes
-        (Stackframe res f sp ls c)
-        (Stackframe res (transf_function f) sp ls 
+        (Stackframe f sp ls c)
+        (Stackframe (transf_function f) sp ls 
           (remove_unused_labels (labels_branched_to f.(fn_code)) c)).
 
 Inductive match_states: state -> state -> Prop :=
@@ -231,6 +231,14 @@ Definition measure (st: state) : nat :=
   | _ => O
   end.
 
+Lemma match_parent_locset:
+  forall s ts,
+  list_forall2 match_stackframes s ts ->
+  parent_locset ts = parent_locset s.
+Proof.
+  induction 1; simpl. auto. inv H; auto.
+Qed.
+
 Theorem transf_step_correct:
   forall s1 t s2, step ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1'),
@@ -238,19 +246,27 @@ Theorem transf_step_correct:
   \/ (measure s2 < measure s1 /\ t = E0 /\ match_states s2 s1')%nat.
 Proof.
   induction 1; intros; inv MS; try rewrite remove_unused_labels_cons. 
+(* Lgetstack *)
+  left; econstructor; split.
+  econstructor; eauto. 
+  econstructor; eauto with coqlib.
+(* Lsetstack *)
+  left; econstructor; split.
+  econstructor; eauto. 
+  econstructor; eauto with coqlib.
 (* Lop *)
   left; econstructor; split.
   econstructor; eauto. instantiate (1 := v). rewrite <- H.
   apply eval_operation_preserved. exact symbols_preserved.
   econstructor; eauto with coqlib.
 (* Lload *)
-  assert (eval_addressing tge sp addr (map rs args) = Some a).
+  assert (eval_addressing tge sp addr (LTL.reglist rs args) = Some a).
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
   econstructor; eauto. 
   econstructor; eauto with coqlib.
 (* Lstore *)
-  assert (eval_addressing tge sp addr (map rs args) = Some a).
+  assert (eval_addressing tge sp addr (LTL.reglist rs args) = Some a).
     rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
   econstructor; eauto.
@@ -262,13 +278,18 @@ Proof.
   econstructor; eauto. constructor; auto. constructor; eauto with coqlib.
 (* Ltailcall *)
   left; econstructor; split.
-  econstructor. eapply find_function_translated; eauto. 
+  econstructor. erewrite match_parent_locset; eauto. eapply find_function_translated; eauto. 
   symmetry; apply sig_function_translated.
   simpl. eauto. 
   econstructor; eauto.
 (* Lbuiltin *)
   left; econstructor; split.
-  econstructor; eauto. eapply external_call_symbols_preserved; eauto.
+  econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
+  exact symbols_preserved.  exact varinfo_preserved.
+  econstructor; eauto with coqlib.
+(* Lannot *)
+  left; econstructor; split.
+  econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
   exact symbols_preserved.  exact varinfo_preserved.
   econstructor; eauto with coqlib.
 (* Llabel *)
@@ -285,7 +306,7 @@ Proof.
   econstructor; eauto. eapply find_label_incl; eauto.
 (* Lcond taken *)
   left; econstructor; split.
-  econstructor. auto. eapply find_label_translated; eauto. red; auto. 
+  econstructor. auto. eauto. eapply find_label_translated; eauto. red; auto. 
   econstructor; eauto. eapply find_label_incl; eauto.
 (* Lcond not taken *)
   left; econstructor; split.
@@ -294,11 +315,12 @@ Proof.
 (* Ljumptable *)
   left; econstructor; split.
   econstructor. eauto. eauto. eapply find_label_translated; eauto. 
-  red. eapply list_nth_z_in; eauto. 
+  red. eapply list_nth_z_in; eauto. eauto. 
   econstructor; eauto. eapply find_label_incl; eauto.
 (* Lreturn *)
   left; econstructor; split.
   econstructor; eauto.
+  erewrite <- match_parent_locset; eauto.
   econstructor; eauto with coqlib.
 (* internal function *)
   left; econstructor; split.
@@ -306,7 +328,7 @@ Proof.
   econstructor; eauto with coqlib.
 (* external function *)
   left; econstructor; split.
-  econstructor; eauto. eapply external_call_symbols_preserved; eauto.
+  econstructor; eauto. eapply external_call_symbols_preserved'; eauto.
   exact symbols_preserved.  exact varinfo_preserved.
   econstructor; eauto with coqlib.
 (* return *)
@@ -333,11 +355,11 @@ Lemma transf_final_states:
   forall st1 st2 r, 
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H4. constructor.
+  intros. inv H0. inv H. inv H6. econstructor; eauto.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (LTLin.semantics prog) (LTLin.semantics tprog).
+  forward_simulation (Linear.semantics prog) (Linear.semantics tprog).
 Proof.
   eapply forward_simulation_opt.
   eexact symbols_preserved.

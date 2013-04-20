@@ -61,7 +61,7 @@ let raw_symbol oc s =
   | ELF -> fprintf oc "%s" s
   | MacOS | Cygwin -> fprintf oc "_%s" s
 
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
+let re_variadic_stub = Str.regexp "\\(.*\\)\\$[ifl]*$"
 
 let symbol oc symb =
   let s = extern_atom symb in
@@ -239,9 +239,9 @@ let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
   PrintAnnot.print_annot_val preg oc txt args;
   match args, res with
-  | IR src :: _, IR dst ->
+  | [IR src], [IR dst] ->
       if dst <> src then fprintf oc "	movl	%a, %a\n" ireg src ireg dst
-  | FR src :: _, FR dst ->
+  | [FR src], [FR dst] ->
       if dst <> src then fprintf oc "	movsd	%a, %a\n" freg src freg dst
   | _, _ -> assert false
 
@@ -251,98 +251,76 @@ let print_annot_val oc txt args res =
    memory accesses regardless of alignment. *)
 
 let print_builtin_memcpy_small oc sz al src dst =
-  let tmp =
-    if src <> ECX && dst <> ECX then ECX
-    else if src <> EDX && dst <> EDX then EDX
-    else EAX in
-  let need_tmp =
-    sz mod 4 <> 0 || not !Clflags.option_fsse in
+  assert (src = EDX && dst = EAX);
   let rec copy ofs sz =
     if sz >= 8 && !Clflags.option_fsse then begin
-      fprintf oc "	movq	%d(%a), %a\n" ofs ireg src freg XMM6;
-      fprintf oc "	movq	%a, %d(%a)\n" freg XMM6 ofs ireg dst;
+      fprintf oc "	movq	%d(%a), %a\n" ofs ireg src freg XMM7;
+      fprintf oc "	movq	%a, %d(%a)\n" freg XMM7 ofs ireg dst;
       copy (ofs + 8) (sz - 8)
     end else if sz >= 4 then begin
-      if !Clflags.option_fsse then begin
-        fprintf oc "	movd	%d(%a), %a\n" ofs ireg src freg XMM6;
-        fprintf oc "	movd	%a, %d(%a)\n" freg XMM6 ofs ireg dst
-      end else begin
-        fprintf oc "	movl	%d(%a), %a\n" ofs ireg src ireg tmp;
-        fprintf oc "	movl	%a, %d(%a)\n" ireg tmp ofs ireg dst
-      end;
+      fprintf oc "	movl	%d(%a), %a\n" ofs ireg src ireg ECX;
+      fprintf oc "	movl	%a, %d(%a)\n" ireg ECX ofs ireg dst;
       copy (ofs + 4) (sz - 4)
     end else if sz >= 2 then begin
-      fprintf oc "	movw	%d(%a), %a\n" ofs ireg src ireg16 tmp;
-      fprintf oc "	movw	%a, %d(%a)\n" ireg16 tmp ofs ireg dst;
+      fprintf oc "	movw	%d(%a), %a\n" ofs ireg src ireg16 ECX;
+      fprintf oc "	movw	%a, %d(%a)\n" ireg16 ECX ofs ireg dst;
       copy (ofs + 2) (sz - 2)
     end else if sz >= 1 then begin
-      fprintf oc "	movb	%d(%a), %a\n" ofs ireg src ireg8 tmp;
-      fprintf oc "	movb	%a, %d(%a)\n" ireg8 tmp ofs ireg dst;
+      fprintf oc "	movb	%d(%a), %a\n" ofs ireg src ireg8 ECX;
+      fprintf oc "	movb	%a, %d(%a)\n" ireg8 ECX ofs ireg dst;
       copy (ofs + 1) (sz - 1)
     end in
-  if need_tmp && tmp = EAX then
-    fprintf oc "	pushl	%a\n" ireg EAX;
-  copy 0 sz;
-  if need_tmp && tmp = EAX then
-    fprintf oc "	popl	%a\n" ireg EAX
-
-let print_mov2 oc src1 dst1 src2 dst2 =
-  if src1 = dst1 then
-    if src2 = dst2
-    then ()
-    else fprintf oc "	movl	%a, %a\n" ireg src2 ireg dst2
-  else if src2 = dst2 then
-    fprintf oc "	movl	%a, %a\n" ireg src1 ireg dst1
-  else if src2 = dst1 then
-    if src1 = dst2 then
-      fprintf oc "	xchgl	%a, %a\n" ireg src1 ireg src2
-    else begin
-      fprintf oc "	movl	%a, %a\n" ireg src2 ireg dst2;
-      fprintf oc "	movl	%a, %a\n" ireg src1 ireg dst1
-    end
-  else begin
-    fprintf oc "	movl	%a, %a\n" ireg src1 ireg dst1;
-    fprintf oc "	movl	%a, %a\n" ireg src2 ireg dst2
-  end
+  copy 0 sz
 
 let print_builtin_memcpy_big oc sz al src dst =
-  fprintf oc "	pushl	%a\n" ireg ESI;
-  fprintf oc "	pushl	%a\n" ireg EDI;
-  print_mov2 oc src ESI dst EDI;
+  assert (src = ESI && dst = EDI);
   fprintf oc "	movl	$%d, %a\n" (sz / 4) ireg ECX;
   fprintf oc "	rep	movsl\n";
   if sz mod 4 >= 2 then fprintf oc "	movsw\n";
-  if sz mod 2 >= 1 then fprintf oc "	movsb\n";
-  fprintf oc "	popl	%a\n" ireg EDI;
-  fprintf oc "	popl	%a\n" ireg ESI
+  if sz mod 2 >= 1 then fprintf oc "	movsb\n"
 
 let print_builtin_memcpy oc sz al args =
   let (dst, src) =
     match args with [IR d; IR s] -> (d, s) | _ -> assert false in
   fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
           comment sz al;
-  if sz <= 64
+  if sz <= 32
   then print_builtin_memcpy_small oc sz al src dst
   else print_builtin_memcpy_big oc sz al src dst;
   fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment
 
 (* Handling of volatile reads and writes *)
 
+let offset_addressing (Addrmode(base, ofs, cst)) delta =
+  Addrmode(base, ofs,
+           match cst with
+           | Coq_inl n -> Coq_inl(Integers.Int.add n delta)
+           | Coq_inr(id, n) -> Coq_inr(id, Integers.Int.add n delta))
+
 let print_builtin_vload_common oc chunk addr res =
   match chunk, res with
-  | Mint8unsigned, IR res ->
+  | Mint8unsigned, [IR res] ->
       fprintf oc "	movzbl	%a, %a\n" addressing addr ireg res
-  | Mint8signed, IR res ->
+  | Mint8signed, [IR res] ->
       fprintf oc "	movsbl	%a, %a\n" addressing addr ireg res
-  | Mint16unsigned, IR res ->
+  | Mint16unsigned, [IR res] ->
       fprintf oc "	movzwl	%a, %a\n" addressing addr ireg res
-  | Mint16signed, IR res ->
+  | Mint16signed, [IR res] ->
       fprintf oc "	movswl	%a, %a\n" addressing addr ireg res
-  | Mint32, IR res ->
+  | Mint32, [IR res] ->
       fprintf oc "	movl	%a, %a\n" addressing addr ireg res
-  | Mfloat32, FR res ->
+  | Mint64, [IR res1; IR res2] ->
+      let addr' = offset_addressing addr (coqint_of_camlint 4l) in
+      if not (Asmgen.addressing_mentions addr res2) then begin
+        fprintf oc "	movl	%a, %a\n" addressing addr ireg res2;
+        fprintf oc "	movl	%a, %a\n" addressing addr' ireg res1
+      end else begin
+        fprintf oc "	movl	%a, %a\n" addressing addr' ireg res1;
+        fprintf oc "	movl	%a, %a\n" addressing addr ireg res2
+      end
+  | Mfloat32, [FR res] ->
       fprintf oc "	cvtss2sd %a, %a\n" addressing addr freg res
-  | (Mfloat64 | Mfloat64al32), FR res ->
+  | (Mfloat64 | Mfloat64al32), [FR res] ->
       fprintf oc "	movsd	%a, %a\n" addressing addr freg res
   | _ ->
       assert false
@@ -366,21 +344,25 @@ let print_builtin_vload_global oc chunk id ofs args res =
 
 let print_builtin_vstore_common oc chunk addr src tmp =
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), IR src ->
+  | (Mint8signed | Mint8unsigned), [IR src] ->
       if Asmgen.low_ireg src then
         fprintf oc "	movb	%a, %a\n" ireg8 src addressing addr
       else begin
         fprintf oc "	movl	%a, %a\n" ireg src ireg tmp;
         fprintf oc "	movb	%a, %a\n" ireg8 tmp addressing addr
       end
-  | (Mint16signed | Mint16unsigned), IR src ->
+  | (Mint16signed | Mint16unsigned), [IR src] ->
       fprintf oc "	movw	%a, %a\n" ireg16 src addressing addr
-  | Mint32, IR src ->
+  | Mint32, [IR src] ->
       fprintf oc "	movl	%a, %a\n" ireg src addressing addr
-  | Mfloat32, FR src ->
+  | Mint64, [IR src1; IR src2] ->
+      let addr' = offset_addressing addr (coqint_of_camlint 4l) in
+      fprintf oc "	movl	%a, %a\n" ireg src2 addressing addr;
+      fprintf oc "	movl	%a, %a\n" ireg src1 addressing addr'
+  | Mfloat32, [FR src] ->
       fprintf oc "	cvtsd2ss %a, %%xmm7\n" freg src;
       fprintf oc "	movss	%%xmm7, %a\n" addressing addr
-  | (Mfloat64 | Mfloat64al32), FR src ->
+  | (Mfloat64 | Mfloat64al32), [FR src] ->
       fprintf oc "	movsd	%a, %a\n" freg src addressing addr
   | _ ->
       assert false
@@ -388,10 +370,10 @@ let print_builtin_vstore_common oc chunk addr src tmp =
 let print_builtin_vstore oc chunk args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
   begin match args with
-  | [IR addr; src] ->
+  | IR addr :: src ->
       print_builtin_vstore_common oc chunk
                  (Addrmode(Some addr, None, Coq_inl Integers.Int.zero)) src
-                 (if addr = ECX then EDX else ECX)
+                 (if addr = EAX then ECX else EAX)
   | _ ->
       assert false
   end;
@@ -399,13 +381,8 @@ let print_builtin_vstore oc chunk args =
 
 let print_builtin_vstore_global oc chunk id ofs args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
-  begin match args with
-  | [src] ->
-      print_builtin_vstore_common oc chunk
-                       (Addrmode(None, None, Coq_inr(id,ofs))) src EDX
-  | _ ->
-      assert false
-  end;
+  print_builtin_vstore_common oc chunk
+                 (Addrmode(None, None, Coq_inr(id,ofs))) args EAX;
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment
 
 (* Handling of compiler-inlined builtins *)
@@ -414,13 +391,13 @@ let print_builtin_inline oc name args res =
   fprintf oc "%s begin builtin %s\n" comment name;
   begin match name, args, res with
   (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], IR res ->
+  | "__builtin_read16_reversed", [IR a1], [IR res] ->
       let tmp = if Asmgen.low_ireg res then res else ECX in
       fprintf oc "	movzwl	0(%a), %a\n" ireg a1 ireg tmp;
       fprintf oc "	xchg	%a, %a\n" ireg8 tmp high_ireg8 tmp;
       if tmp <> res then
         fprintf oc "	movl	%a, %a\n" ireg tmp ireg res
-  | "__builtin_read32_reversed", [IR a1], IR res ->
+  | "__builtin_read32_reversed", [IR a1], [IR res] ->
       fprintf oc "	movl	0(%a), %a\n" ireg a1 ireg res;
       fprintf oc "	bswap	%a\n" ireg res
   | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
@@ -436,19 +413,19 @@ let print_builtin_inline oc name args res =
       fprintf oc "	bswap	%a\n" ireg tmp;
       fprintf oc "	movl	%a, 0(%a)\n" ireg tmp ireg a1
   (* Integer arithmetic *)
-  | "__builtin_bswap", [IR a1], IR res ->
+  | "__builtin_bswap", [IR a1], [IR res] ->
       if a1 <> res then
         fprintf oc "	movl	%a, %a\n" ireg a1 ireg res;
       fprintf oc "	bswap	%a\n" ireg res
   (* Float arithmetic *)
-  | "__builtin_fabs", [FR a1], FR res ->
+  | "__builtin_fabs", [FR a1], [FR res] ->
       need_masks := true;
       if a1 <> res then
         fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
       fprintf oc "	andpd	%a, %a\n" raw_symbol "__absd_mask" freg res
-  | "__builtin_fsqrt", [FR a1], FR res ->
+  | "__builtin_fsqrt", [FR a1], [FR res] ->
       fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
-  | "__builtin_fmax", [FR a1; FR a2], FR res ->
+  | "__builtin_fmax", [FR a1; FR a2], [FR res] ->
       if res = a1 then
         fprintf oc "	maxsd	%a, %a\n" freg a2 freg res
       else if res = a2 then
@@ -457,7 +434,7 @@ let print_builtin_inline oc name args res =
         fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
         fprintf oc "	maxsd	%a, %a\n" freg a2 freg res
       end
-  | "__builtin_fmin", [FR a1; FR a2], FR res ->
+  | "__builtin_fmin", [FR a1; FR a2], [FR res] ->
       if res = a1 then
         fprintf oc "	minsd	%a, %a\n" freg a2 freg res
       else if res = a2 then
@@ -466,6 +443,23 @@ let print_builtin_inline oc name args res =
         fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
         fprintf oc "	minsd	%a, %a\n" freg a2 freg res
       end
+  (* 64-bit integer arithmetic *)
+  | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
+      assert (ah = EDX && al = EAX && rh = EDX && rl = EAX);
+      fprintf oc "	negl	%a\n" ireg EAX;
+      fprintf oc "	adcl	$0, %a\n" ireg EDX;
+      fprintf oc "	negl	%a\n" ireg EDX
+  | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
+      fprintf oc "	addl	%a, %a\n" ireg EBX ireg EAX;
+      fprintf oc "	adcl	%a, %a\n" ireg ECX ireg EDX
+  | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+      assert (ah = EDX && al = EAX && bh = ECX && bl = EBX && rh = EDX && rl = EAX);
+      fprintf oc "	subl	%a, %a\n" ireg EBX ireg EAX;
+      fprintf oc "	sbbl	%a, %a\n" ireg ECX ireg EDX
+  | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
+      assert (a = EAX && b = EDX && rh = EDX && rl = EAX);
+      fprintf oc "	mull    %a\n" ireg EDX
   (* Catch-all *)  
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -604,6 +598,8 @@ let print_instruction oc = function
       fprintf oc "	sarl	%%cl, %a\n" ireg rd
   | Psar_ri(rd, n) ->
       fprintf oc "	sarl	$%a, %a\n" coqint n ireg rd
+  | Pshld_ri(rd, r1, n) ->
+      fprintf oc "	shldl	$%a, %a, %a\n" coqint n ireg r1 ireg rd
   | Pror_ri(rd, n) ->
       fprintf oc "	rorl	$%a, %a\n" coqint n ireg rd
   | Pcmp_rr(r1, r2) ->
@@ -617,8 +613,8 @@ let print_instruction oc = function
   | Pcmov(c, rd, r1) ->
       fprintf oc "	cmov%s	%a, %a\n" (name_of_condition c) ireg r1 ireg rd
   | Psetcc(c, rd) ->
-      fprintf oc "	set%s	%%cl\n" (name_of_condition c);
-      fprintf oc "	movzbl	%%cl, %a\n" ireg rd
+      fprintf oc "	set%s	%a\n" (name_of_condition c) ireg8 rd;
+      fprintf oc "	movzbl	%a, %a\n" ireg8 rd ireg rd
   (** Arithmetic operations over floats *)
   | Paddd_ff(rd, r1) ->
       fprintf oc "	addsd	%a, %a\n" freg r1 freg rd
@@ -757,6 +753,8 @@ let print_init oc = function
       fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
+  | Init_int64 n ->
+      fprintf oc "	.quad	%Ld\n" (camlint64_of_coqint n)
   | Init_float32 n ->
       fprintf oc "	.long	%ld %s %.18g\n"
 	(camlint_of_coqint (Floats.Float.bits_of_single n))

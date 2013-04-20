@@ -22,6 +22,7 @@ Require Import Registers.
 Require Import Globalenvs.
 Require Import Values.
 Require Import Integers.
+Require Import Memory.
 Require Import Events.
 Require Import RTL.
 Require Import Conventions.
@@ -109,7 +110,6 @@ Inductive wt_instr : instruction -> Prop :=
       forall ef args res s,
       List.map env args = (ef_sig ef).(sig_args) ->
       env res = proj_sig_res (ef_sig ef) ->
-      arity_ok (ef_sig ef).(sig_args) = true \/ ef_reloads ef = false ->
       valid_successor s ->
       wt_instr (Ibuiltin ef args res s)
   | wt_Icond:
@@ -282,10 +282,7 @@ Definition type_instr (e: typenv) (i: instruction) : res typenv :=
       let sig := ef_sig ef in
       do x <- check_successor s;
       do e1 <- type_regs e args sig.(sig_args);
-      do e2 <- type_reg e1 res (proj_sig_res sig);
-      if (negb (ef_reloads ef)) || arity_ok sig.(sig_args)
-      then OK e2
-      else Error(msg "cannot reload builtin")
+      type_reg e1 res (proj_sig_res sig)
   | Icond cond args s1 s2 =>
       do x1 <- check_successor s1;
       do x2 <- check_successor s2;
@@ -518,9 +515,6 @@ Proof.
   destruct (opt_typ_eq (sig_res s) (sig_res (fn_sig f))); try discriminate.
   destruct (tailcall_is_possible s) eqn:TCIP; inv EQ2.
   eauto with ty.
-- (* builtin *)
-  destruct (negb (ef_reloads e0) || arity_ok (sig_args (ef_sig e0))) eqn:E; inv EQ3.
-  eauto with ty.
 - (* jumptable *)
   destruct (zle (list_length_z l * 4) Int.max_unsigned); inv EQ2.
   eauto with ty.
@@ -572,11 +566,9 @@ Proof.
   eapply type_regs_sound; eauto with ty.
   apply tailcall_is_possible_correct; auto.
 - (* builtin *)
-  destruct (negb (ef_reloads e0) || arity_ok (sig_args (ef_sig e0))) eqn:E; inv EQ3.
   constructor.
   eapply type_regs_sound; eauto with ty.
   eapply type_reg_sound; eauto.
-  destruct (ef_reloads e0); auto.
   eauto with ty.
 - (* cond *)
   constructor.
@@ -833,10 +825,7 @@ Proof.
   exploit type_reg_complete. eexact B. eauto. intros [e2 [C D]].
   exists e2; split; auto.
   rewrite check_successor_complete by auto; simpl. 
-  rewrite A; simpl; rewrite C; simpl.
-  destruct H2; rewrite H2. 
-  rewrite orb_true_r. auto. 
-  auto. 
+  rewrite A; simpl; rewrite C; auto.
 - (* cond *)
   exploit type_regs_complete. eauto. eauto. intros [e1 [A B]].
   exists e1; split; auto.
@@ -980,6 +969,34 @@ Proof.
   induction rl; destruct args; simpl; intuition.
   red; intros. rewrite Regmap.gi. simpl; auto. 
   apply wt_regset_assign; auto.
+Qed.
+
+Lemma wt_exec_Iop:
+  forall (ge: genv) env f sp op args res s rs m v,
+  wt_instr env f (Iop op args res s) ->
+  eval_operation ge sp op rs##args m = Some v ->
+  wt_regset env rs ->
+  wt_regset env (rs#res <- v).
+Proof.
+  intros. inv H. 
+  simpl in H0. inv H0. apply wt_regset_assign; auto. rewrite <- H4; apply H1.
+  apply wt_regset_assign; auto. 
+  replace (env res) with (snd (type_of_operation op)).
+  eapply type_of_operation_sound; eauto.
+  rewrite <- H7; auto.
+Qed.
+
+Lemma wt_exec_Iload:
+  forall env f chunk addr args dst s m a v rs,
+  wt_instr env f (Iload chunk addr args dst s) ->
+  Mem.loadv chunk m a = Some v ->
+  wt_regset env rs ->
+  wt_regset env (rs#dst <- v).
+Proof.
+  intros. destruct a; simpl in H0; try discriminate.
+  apply wt_regset_assign; auto. 
+  inv H. rewrite H8. 
+  eapply Mem.load_type; eauto.
 Qed.
 
 Inductive wt_stackframes: list stackframe -> option typ -> Prop :=

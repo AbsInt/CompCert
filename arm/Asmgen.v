@@ -290,9 +290,15 @@ Definition transl_op
       OK (rsubimm r r1 n k)
   | Omul, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (if ireg_eq r r1 || ireg_eq r r2
-          then Pmul IR14 r1 r2 :: Pmov r (SOreg IR14) :: k
-          else Pmul r r1 r2 :: k)
+      OK (if negb (ireg_eq r r1) then Pmul r r1 r2 :: k
+          else if negb (ireg_eq r r2) then Pmul r r2 r1 :: k
+          else Pmul IR14 r1 r2 :: Pmov r (SOreg IR14) :: k)
+  | Omla, a1 :: a2 :: a3 :: nil =>
+      do r <- ireg_of res; do r1 <- ireg_of a1; 
+      do r2 <- ireg_of a2; do r3 <- ireg_of a3;
+      OK (if negb (ireg_eq r r1) then Pmla r r1 r2 r3 :: k
+          else if negb (ireg_eq r r2) then Pmla r r2 r1 r3 :: k
+          else Pmla IR14 r1 r2 r3 :: Pmov r (SOreg IR14) :: k)
   | Odiv, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Psdiv r r1 r2 :: k)
@@ -420,6 +426,7 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   match ty with
   | Tint   => do r <- ireg_of dst; OK (loadind_int base ofs r k)
   | Tfloat => do r <- freg_of dst; OK (loadind_float base ofs r k)
+  | Tlong => Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind_int (src: ireg) (base: ireg) (ofs: int) (k: code) :=
@@ -432,6 +439,7 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   match ty with
   | Tint   => do r <- ireg_of src; OK (storeind_int r base ofs k)
   | Tfloat => do r <- freg_of src; OK (storeind_float r base ofs k)
+  | Tlong => Error (msg "Asmgen.storeind")
   end.
 
 (** Translation of memory accesses *)
@@ -512,6 +520,8 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
       transl_memory_access_float Pflds mk_immed_mem_float dst addr args k
   | Mfloat64 | Mfloat64al32 =>
       transl_memory_access_float Pfldd mk_immed_mem_float dst addr args k
+  | Mint64 =>
+      Error (msg "Asmgen.transl_load")
   end.
 
 Definition transl_store (chunk: memory_chunk) (addr: addressing)
@@ -531,6 +541,8 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
       transl_memory_access_float Pfsts mk_immed_mem_float src addr args k
   | Mfloat64 | Mfloat64al32 =>
       transl_memory_access_float Pfstd mk_immed_mem_float src addr args k
+  | Mint64 =>
+      Error (msg "Asmgen.transl_store")
   end.
 
 (** Translation of arguments to annotations *)
@@ -544,17 +556,17 @@ Definition transl_annot_param (p: Mach.annot_param) : Asm.annot_param :=
 (** Translation of a Mach instruction. *)
 
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
-                        (r10_is_parent: bool) (k: code) :=
+                        (r12_is_parent: bool) (k: code) :=
   match i with
   | Mgetstack ofs ty dst =>
       loadind IR13 ofs ty dst k
   | Msetstack src ofs ty =>
       storeind src IR13 ofs ty k
   | Mgetparam ofs ty dst =>
-      do c <- loadind IR10 ofs ty dst k;
-      OK (if r10_is_parent
+      do c <- loadind IR12 ofs ty dst k;
+      OK (if r12_is_parent
           then c
-          else loadind_int IR13 f.(fn_link_ofs) IR10 c)
+          else loadind_int IR13 f.(fn_link_ofs) IR12 c)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -573,7 +585,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       OK (loadind_int IR13 f.(fn_retaddr_ofs) IR14
            (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: Pbsymb symb sig :: k))
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (map preg_of args) (preg_of res) :: k)
+      OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
   | Mannot ef args =>
       OK (Pannot ef (map transl_annot_param args) :: k)
   | Mlabel lbl =>
@@ -596,8 +608,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
   | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst IT1)
-  | Mop Omove args res => before && negb (mreg_eq res IT1)
+  | Mgetparam ofs ty dst => negb (mreg_eq dst R12)
+  | Mop Omove args res => before && negb (mreg_eq res R12)
   | _ => false
   end.
 

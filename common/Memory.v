@@ -862,6 +862,60 @@ Proof.
   rewrite inj_S. omega.
 Qed.
 
+Theorem load_int64_split:
+  forall m b ofs v,
+  load Mint64 m b ofs = Some v ->
+  exists v1 v2,
+     load Mint32 m b ofs = Some (if big_endian then v1 else v2)
+  /\ load Mint32 m b (ofs + 4) = Some (if big_endian then v2 else v1)
+  /\ v = Val.longofwords v1 v2.
+Proof.
+  intros. 
+  exploit load_valid_access; eauto. intros [A B]. simpl in *.
+  exploit load_loadbytes. eexact H. simpl. intros [bytes [LB EQ]].
+  change 8 with (4 + 4) in LB. 
+  exploit loadbytes_split. eexact LB. omega. omega. 
+  intros (bytes1 & bytes2 & LB1 & LB2 & APP).
+  change 4 with (size_chunk Mint32) in LB1.
+  exploit loadbytes_load. eexact LB1.
+  simpl. apply Zdivides_trans with 8; auto. exists 2; auto.
+  intros L1.
+  change 4 with (size_chunk Mint32) in LB2.
+  exploit loadbytes_load. eexact LB2.
+  simpl. apply Zdivide_plus_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
+  intros L2.
+  exists (decode_val Mint32 (if big_endian then bytes1 else bytes2));
+  exists (decode_val Mint32 (if big_endian then bytes2 else bytes1)).
+  split. destruct big_endian; auto.
+  split. destruct big_endian; auto.
+  rewrite EQ. rewrite APP. apply decode_val_int64.
+  erewrite loadbytes_length; eauto. reflexivity. 
+  erewrite loadbytes_length; eauto. reflexivity. 
+Qed.
+
+Theorem loadv_int64_split:
+  forall m a v,
+  loadv Mint64 m a = Some v ->
+  exists v1 v2,
+     loadv Mint32 m a = Some (if big_endian then v1 else v2)
+  /\ loadv  Mint32 m (Val.add a (Vint (Int.repr 4))) = Some (if big_endian then v2 else v1)
+  /\ v = Val.longofwords v1 v2.
+Proof.
+  intros. destruct a; simpl in H; try discriminate.
+  exploit load_int64_split; eauto. intros (v1 & v2 & L1 & L2 & EQ).
+  assert (NV: Int.unsigned (Int.add i (Int.repr 4)) = Int.unsigned i + 4).
+    rewrite Int.add_unsigned. apply Int.unsigned_repr.
+    exploit load_valid_access. eexact H. intros [P Q]. simpl in Q.
+    exploit (Zdivide_interval (Int.unsigned i) Int.modulus 8).
+    omega. apply Int.unsigned_range. auto. exists (two_p (32-3)); reflexivity. 
+    unfold Int.max_unsigned. omega.
+  exists v1; exists v2.
+Opaque Int.repr.
+  split. auto.
+  split. simpl. rewrite NV. auto. 
+  auto.
+Qed.
+
 (** ** Properties related to [store] *)
 
 Theorem valid_access_store:
@@ -1579,6 +1633,44 @@ Proof.
   rewrite <- H. eapply storebytes_concat; eauto.
   inv H0.
   exists m1; split; auto. 
+Qed.
+
+Theorem store_int64_split:
+  forall m b ofs v m',
+  store Mint64 m b ofs v = Some m' ->
+  exists m1,
+     store Mint32 m b ofs (if big_endian then Val.hiword v else Val.loword v) = Some m1
+  /\ store Mint32 m1 b (ofs + 4) (if big_endian then Val.loword v else Val.hiword v) = Some m'.
+Proof.
+  intros. 
+  exploit store_valid_access_3; eauto. intros [A B]. simpl in *.
+  exploit store_storebytes. eexact H. intros SB.
+  rewrite encode_val_int64 in SB. 
+  exploit storebytes_split. eexact SB. intros [m1 [SB1 SB2]]. 
+  rewrite encode_val_length in SB2. simpl in SB2. 
+  exists m1; split. 
+  apply storebytes_store. exact SB1.
+  simpl. apply Zdivides_trans with 8; auto. exists 2; auto.
+  apply storebytes_store. exact SB2. 
+  simpl. apply Zdivide_plus_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
+Qed.
+
+Theorem storev_int64_split:
+  forall m a v m',
+  storev Mint64 m a v = Some m' ->
+  exists m1,
+     storev Mint32 m a (if big_endian then Val.hiword v else Val.loword v) = Some m1
+  /\ storev Mint32 m1 (Val.add a (Vint (Int.repr 4))) (if big_endian then Val.loword v else Val.hiword v) = Some m'.
+Proof.
+  intros. destruct a; simpl in H; try discriminate.
+  exploit store_int64_split; eauto. intros [m1 [A B]].
+  exists m1; split.
+  exact A.
+  unfold storev, Val.add. rewrite Int.add_unsigned. rewrite Int.unsigned_repr. exact B.
+  exploit store_valid_access_3. eexact H. intros [P Q]. simpl in Q.
+  exploit (Zdivide_interval (Int.unsigned i) Int.modulus 8).
+    omega. apply Int.unsigned_range. auto. exists (two_p (32-3)); reflexivity. 
+  change (Int.unsigned (Int.repr 4)) with 4. unfold Int.max_unsigned. omega. 
 Qed.
 
 (** ** Properties related to [alloc]. *)

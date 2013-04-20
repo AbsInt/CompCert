@@ -48,6 +48,36 @@ Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := peq.
 
 End OrderedPositive.
 
+(** The ordered type of integers *)
+
+Module OrderedZ <: OrderedType.
+
+Definition t := Z.
+Definition eq (x y: t) := x = y.
+Definition lt := Zlt.
+
+Lemma eq_refl : forall x : t, eq x x.
+Proof (@refl_equal t). 
+Lemma eq_sym : forall x y : t, eq x y -> eq y x.
+Proof (@sym_equal t).
+Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
+Proof (@trans_equal t).
+Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
+Proof Zlt_trans.
+Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
+Proof. unfold lt, eq, t; intros. omega. Qed. 
+Lemma compare : forall x y : t, Compare lt eq x y.
+Proof.
+  intros. destruct (Z.compare x y) as [] eqn:E.
+  apply EQ. red. apply Z.compare_eq_iff. assumption.
+  apply LT. assumption.
+  apply GT. apply Z.compare_gt_iff. assumption.
+Defined.
+
+Definition eq_dec : forall x y, { eq x y } + { ~ eq x y } := zeq.
+
+End OrderedZ.
+
 (** The ordered type of machine integers *)
 
 Module OrderedInt <: OrderedType.

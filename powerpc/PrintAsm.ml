@@ -223,8 +223,8 @@ let rolm_mask n =
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
-     registers; preserve all registers except the temporaries
-     (GPR0, GPR11, GPR12,  FPR0, FPR12, FPR13);
+     registers; preserve all registers except the reserved temporaries
+     (GPR0, GPR11, GPR12, FPR13);
    - inlined while printing asm code; take their arguments in
      locations dictated by the calling conventions; preserve
      callee-save regs only. *)
@@ -239,11 +239,12 @@ let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
   PrintAnnot.print_annot_val preg oc txt args;
   match args, res with
-  | IR src :: _, IR dst ->
+  | [IR src], [IR dst] ->
       if dst <> src then fprintf oc "	mr	%a, %a\n" ireg dst ireg src 
-  | FR src :: _, FR dst ->
+  | [FR src], [FR dst] ->
       if dst <> src then fprintf oc "	fmr	%a, %a\n" freg dst freg src 
-  | _, _ -> assert false
+  | _, _ ->
+      assert false
 
 (* Handling of memcpy *)
 
@@ -256,8 +257,8 @@ let print_annot_val oc txt args res =
 let print_builtin_memcpy_small oc sz al src dst =
   let rec copy ofs sz =
     if sz >= 8 && al >= 4 then begin
-      fprintf oc "	lfd	%a, %d(%a)\n" freg FPR0 ofs ireg src;
-      fprintf oc "	stfd	%a, %d(%a)\n" freg FPR0 ofs ireg dst;
+      fprintf oc "	lfd	%a, %d(%a)\n" freg FPR13 ofs ireg src;
+      fprintf oc "	stfd	%a, %d(%a)\n" freg FPR13 ofs ireg dst;
       copy (ofs + 8) (sz - 8)
     end else if sz >= 4 then begin
       fprintf oc "	lwz	%a, %d(%a)\n" ireg GPR0 ofs ireg src;
@@ -326,14 +327,23 @@ let print_builtin_vload_common oc chunk base offset res =
       fprintf oc "	lfs	%a, %a(%a)\n" freg res constant offset ireg base
   | (Mfloat64 | Mfloat64al32), FR res ->
       fprintf oc "	lfd	%a, %a(%a)\n" freg res constant offset ireg base
+  (* Mint64 is special-cased below *)
   | _ ->
       assert false
 
 let print_builtin_vload oc chunk args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-  begin match args with
-  | [IR addr] ->
+  begin match args, res with
+  | [IR addr], [res] when chunk <> Mint64 ->
       print_builtin_vload_common oc chunk addr (Cint Integers.Int.zero) res
+  | [IR addr], [IR res1; IR res2] when chunk = Mint64 ->
+      if addr <> res1 then begin
+        fprintf oc "	lwz	%a, 0(%a)\n" ireg res1 ireg addr;
+        fprintf oc "	lwz	%a, 4(%a)\n" ireg res2 ireg addr
+      end else begin
+        fprintf oc "	lwz	%a, 4(%a)\n" ireg res2 ireg addr;
+        fprintf oc "	lwz	%a, 0(%a)\n" ireg res1 ireg addr
+      end
   | _ ->
       assert false
   end;
@@ -341,9 +351,24 @@ let print_builtin_vload oc chunk args res =
 
 let print_builtin_vload_global oc chunk id ofs args res =
   fprintf oc "%s begin builtin __builtin_volatile_read\n" comment;
-  fprintf oc "	addis	%a, %a, %a\n"
-             ireg GPR11 ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
-  print_builtin_vload_common oc chunk GPR11 (Csymbol_low(id, ofs)) res;
+  begin match res with
+  | [res] when chunk <> Mint64 ->
+      fprintf oc "	addis	%a, %a, %a\n"
+                 ireg GPR11 ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
+      print_builtin_vload_common oc chunk GPR11 (Csymbol_low(id, ofs)) res
+  | [IR res1; IR res2] when chunk = Mint64 ->
+      fprintf oc "	addis	%a, %a, %a\n"
+                 ireg res1 ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
+      fprintf oc "	lwz	%a, %a(%a)\n"
+                 ireg res1 constant (Csymbol_low(id, ofs)) ireg res1;
+      let ofs = Integers.Int.add ofs (coqint_of_camlint 4l) in
+      fprintf oc "	addis	%a, %a, %a\n"
+                 ireg res2 ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
+      fprintf oc "	lwz	%a, %a(%a)\n"
+                 ireg res2 constant (Csymbol_low(id, ofs)) ireg res2
+  | _ ->
+      assert false
+  end;
   fprintf oc "%s end builtin __builtin_volatile_read\n" comment
 
 let print_builtin_vstore_common oc chunk base offset src =
@@ -359,14 +384,18 @@ let print_builtin_vstore_common oc chunk base offset src =
       fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant offset ireg base
   | (Mfloat64 | Mfloat64al32), FR src ->
       fprintf oc "	stfd	%a, %a(%a)\n" freg src constant offset ireg base
+  (* Mint64 is special-cased below *)
   | _ ->
       assert false
 
 let print_builtin_vstore oc chunk args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
   begin match args with
-  | [IR addr; src] ->
+  | [IR addr; src] when chunk <> Mint64 ->
       print_builtin_vstore_common oc chunk addr (Cint Integers.Int.zero) src
+  | [IR addr; IR src1; IR src2] when chunk = Mint64 ->
+      fprintf oc "	stw	%a, 0(%a)\n" ireg src1 ireg addr;
+      fprintf oc "	stw	%a, 4(%a)\n" ireg src2 ireg addr
   | _ ->
       assert false
   end;
@@ -375,11 +404,24 @@ let print_builtin_vstore oc chunk args =
 let print_builtin_vstore_global oc chunk id ofs args =
   fprintf oc "%s begin builtin __builtin_volatile_write\n" comment;
   begin match args with
-  | [src] ->
+  | [src] when chunk <> Mint64 ->
       let tmp = if src = IR GPR11 then GPR12 else GPR11 in
       fprintf oc "	addis	%a, %a, %a\n"
                  ireg tmp ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
       print_builtin_vstore_common oc chunk tmp (Csymbol_low(id, ofs)) src
+  | [IR src1; IR src2] when chunk = Mint64 ->
+      let tmp =
+        if not (List.mem GPR12 [src1; src2]) then GPR12 else
+        if not (List.mem GPR11 [src1; src2]) then GPR11 else GPR10 in
+      fprintf oc "	addis	%a, %a, %a\n"
+                 ireg tmp ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
+      fprintf oc "	stw	%a, %a(%a)\n"
+                 ireg src1 constant (Csymbol_low(id, ofs)) ireg tmp;
+      let ofs = Integers.Int.add ofs (coqint_of_camlint 4l) in
+      fprintf oc "	addis	%a, %a, %a\n"
+                 ireg tmp ireg_or_zero GPR0 constant (Csymbol_high(id, ofs));
+      fprintf oc "	stw	%a, %a(%a)\n"
+                 ireg src2 constant (Csymbol_low(id, ofs)) ireg tmp
   | _ ->
       assert false
   end;
@@ -389,47 +431,84 @@ let print_builtin_vstore_global oc chunk id ofs args =
 
 let print_builtin_inline oc name args res =
   fprintf oc "%s begin builtin %s\n" comment name;
-  (* Can use as temporaries: GPR0, GPR11, GPR12,  FPR0, FPR12, FPR13 *)
+  (* Can use as temporaries: GPR0, FPR13 *)
   begin match name, args, res with
   (* Integer arithmetic *)
-  | "__builtin_mulhw", [IR a1; IR a2], IR res ->
+  | "__builtin_mulhw", [IR a1; IR a2], [IR res] ->
       fprintf oc "	mulhw	%a, %a, %a\n" ireg res ireg a1 ireg a2
-  | "__builtin_mulhwu", [IR a1; IR a2], IR res ->
+  | "__builtin_mulhwu", [IR a1; IR a2], [IR res] ->
       fprintf oc "	mulhwu	%a, %a, %a\n" ireg res ireg a1 ireg a2
-  | "__builtin_cntlz", [IR a1], IR res ->
+  | "__builtin_cntlz", [IR a1], [IR res] ->
       fprintf oc "	cntlzw	%a, %a\n" ireg res ireg a1
-  | "__builtin_bswap", [IR a1], IR res ->
+  | "__builtin_bswap", [IR a1], [IR res] ->
       fprintf oc "	stwu	%a, -8(%a)\n" ireg a1 ireg GPR1;
       fprintf oc "	lwbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
   (* Float arithmetic *)
-  | "__builtin_fmadd", [FR a1; FR a2; FR a3], FR res ->
+  | "__builtin_fmadd", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
-  | "__builtin_fmsub", [FR a1; FR a2; FR a3], FR res ->
+  | "__builtin_fmsub", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fmsub	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
-  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], FR res ->
+  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fnmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
-  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], FR res ->
+  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fnmsub	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
-  | "__builtin_fabs", [FR a1], FR res ->
+  | "__builtin_fabs", [FR a1], [FR res] ->
       fprintf oc "	fabs	%a, %a\n" freg res freg a1
-  | "__builtin_fsqrt", [FR a1], FR res ->
+  | "__builtin_fsqrt", [FR a1], [FR res] ->
       fprintf oc "	fsqrt	%a, %a\n" freg res freg a1
-  | "__builtin_frsqrte", [FR a1], FR res ->
+  | "__builtin_frsqrte", [FR a1], [FR res] ->
       fprintf oc "	frsqrte	%a, %a\n" freg res freg a1
-  | "__builtin_fres", [FR a1], FR res ->
+  | "__builtin_fres", [FR a1], [FR res] ->
       fprintf oc "	fres	%a, %a\n" freg res freg a1
-  | "__builtin_fsel", [FR a1; FR a2; FR a3], FR res ->
+  | "__builtin_fsel", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fsel	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
-  | "__builtin_fcti", [FR a1], IR res ->
+  | "__builtin_fcti", [FR a1], [IR res] ->
       fprintf oc "	fctiw	%a, %a\n" freg FPR13 freg a1;
       fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
       fprintf oc "	lwz	%a, 4(%a)\n" ireg res ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
+  (* 64-bit integer arithmetic *)
+  | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
+      if rl = ah then begin
+        fprintf oc "	subfic	%a, %a, 0\n" ireg GPR0 ireg al;
+        fprintf oc "	subfze	%a, %a\n" ireg rh ireg ah;
+        fprintf oc "	mr	%a, %a\n" ireg rl ireg GPR0
+      end else begin
+        fprintf oc "	subfic	%a, %a, 0\n" ireg rl ireg al;
+        fprintf oc "	subfze	%a, %a\n" ireg rh ireg ah
+      end
+  | "__builtin_addl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+      if rl = ah || rl = bh then begin
+        fprintf oc "	addc	%a, %a, %a\n" ireg GPR0 ireg al ireg bl;
+        fprintf oc "	adde	%a, %a, %a\n" ireg rh ireg ah ireg bh;
+        fprintf oc "	mr	%a, %a\n" ireg rl ireg GPR0
+      end else begin
+        fprintf oc "	addc	%a, %a, %a\n" ireg rl ireg al ireg bl;
+        fprintf oc "	adde	%a, %a, %a\n" ireg rh ireg ah ireg bh
+      end
+  | "__builtin_subl", [IR ah; IR al; IR bh; IR bl], [IR rh; IR rl] ->
+      if rl = ah || rl = bh then begin
+        fprintf oc "	subfc	%a, %a, %a\n" ireg GPR0 ireg bl ireg al;
+        fprintf oc "	subfe	%a, %a, %a\n" ireg rh ireg bh ireg ah;
+        fprintf oc "	mr	%a, %a\n" ireg rl ireg GPR0
+      end else begin
+        fprintf oc "	subfc	%a, %a, %a\n" ireg rl ireg bl ireg al;
+        fprintf oc "	subfe	%a, %a, %a\n" ireg rh ireg bh ireg ah
+      end
+  | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
+      if rl = a || rl = b then begin
+        fprintf oc "	mullw	%a, %a, %a\n" ireg GPR0 ireg a ireg b;
+        fprintf oc "	mulhwu	%a, %a, %a\n" ireg rh ireg a ireg b;
+        fprintf oc "	mr	%a, %a\n" ireg rl ireg GPR0
+      end else begin
+        fprintf oc "	mullw	%a, %a, %a\n" ireg rl ireg a ireg b;
+        fprintf oc "	mulhwu	%a, %a, %a\n" ireg rh ireg a ireg b
+      end
   (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], IR res ->
+  | "__builtin_read16_reversed", [IR a1], [IR res] ->
       fprintf oc "	lhbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1
-  | "__builtin_read32_reversed", [IR a1], IR res ->
+  | "__builtin_read32_reversed", [IR a1], [IR res] ->
       fprintf oc "	lwbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg a1
   | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
       fprintf oc "	sthbrx	%a, %a, %a\n" ireg a2 ireg_or_zero GPR0 ireg a1
@@ -484,9 +563,9 @@ let print_instruction oc tbl pc fallthrough = function
       if adj >= -0x8000l then
         fprintf oc "	stwu	%a, %ld(%a)\n" ireg GPR1 adj ireg GPR1
       else begin
-        fprintf oc "	addis	%a, 0, %ld\n" ireg GPR12 (Int32.shift_right_logical adj 16);
-        fprintf oc "	ori	%a, %a, %ld\n" ireg GPR12 ireg GPR12 (Int32.logand adj 0xFFFFl);
-        fprintf oc "	stwux	%a, %a, %a\n" ireg GPR1 ireg GPR1 ireg GPR12
+        fprintf oc "	addis	%a, 0, %ld\n" ireg GPR0 (Int32.shift_right_logical adj 16);
+        fprintf oc "	ori	%a, %a, %ld\n" ireg GPR0 ireg GPR0 (Int32.logand adj 0xFFFFl);
+        fprintf oc "	stwux	%a, %a, %a\n" ireg GPR1 ireg GPR1 ireg GPR0
       end
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
@@ -860,7 +939,7 @@ let print_function oc name code =
 
 (* Generation of stub functions *)
 
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$[if]*$"
+let re_variadic_stub = Str.regexp "\\(.*\\)\\$[ifl]*$"
 
 (* Stubs for EABI *)
 
@@ -908,6 +987,11 @@ let print_init oc = function
       fprintf oc "	.short	%ld\n" (camlint_of_coqint n)
   | Init_int32 n ->
       fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
+  | Init_int64 n ->
+      let b = camlint64_of_coqint n in
+      fprintf oc "	.long	0x%Lx, 0x%Lx\n"
+                 (Int64.shift_right_logical b 32)
+                 (Int64.logand b 0xFFFFFFFFL)
   | Init_float32 n ->
       fprintf oc "	.long	0x%lx %s %.18g\n"
                  (camlint_of_coqint (Floats.Float.bits_of_single n))

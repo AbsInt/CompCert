@@ -60,7 +60,7 @@ Inductive instruction: Type :=
   | Mstore: memory_chunk -> addressing -> list mreg -> mreg -> instruction
   | Mcall: signature -> mreg + ident -> instruction
   | Mtailcall: signature -> mreg + ident -> instruction
-  | Mbuiltin: external_function -> list mreg -> mreg -> instruction
+  | Mbuiltin: external_function -> list mreg -> list mreg -> instruction
   | Mannot: external_function -> list annot_param -> instruction
   | Mlabel: label -> instruction
   | Mgoto: label -> instruction
@@ -124,7 +124,7 @@ store in the reserved location.
 *)
 
 Definition chunk_of_type (ty: typ) :=
-  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 end.
+  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 | Tlong => Mint64 end.
 
 Definition load_stack (m: mem) (sp: val) (ty: typ) (ofs: int) :=
   Mem.loadv (chunk_of_type ty) m (Val.add sp (Vint ofs)).
@@ -147,37 +147,28 @@ Notation "a # b <- c" := (Regmap.set b c a) (at level 1, b at next level).
 Fixpoint undef_regs (rl: list mreg) (rs: regset) {struct rl} : regset :=
   match rl with
   | nil => rs
-  | r1 :: rl' => undef_regs rl' (Regmap.set r1 Vundef rs)
+  | r1 :: rl' => Regmap.set r1 Vundef (undef_regs rl' rs)
   end.
 
 Lemma undef_regs_other:
   forall r rl rs, ~In r rl -> undef_regs rl rs r = rs r.
 Proof.
-  induction rl; simpl; intros. auto. rewrite IHrl. apply Regmap.gso. intuition. intuition.
+  induction rl; simpl; intros. auto. rewrite Regmap.gso. apply IHrl. intuition. intuition.
 Qed.
 
 Lemma undef_regs_same:
-  forall r rl rs, In r rl \/ rs r = Vundef -> undef_regs rl rs r = Vundef.
+  forall r rl rs, In r rl -> undef_regs rl rs r = Vundef.
 Proof.
   induction rl; simpl; intros. tauto.
-  destruct H. destruct H. apply IHrl. right. subst; apply Regmap.gss.
-  auto.
-  apply IHrl. right. unfold Regmap.set. destruct (RegEq.eq r a); auto. 
+  destruct H. subst a. apply Regmap.gss.
+  unfold Regmap.set. destruct (RegEq.eq r a); auto. 
 Qed.
 
-Definition undef_temps (rs: regset) := 
-  undef_regs temporary_regs rs.
-
-Definition undef_move (rs: regset) := 
-  undef_regs destroyed_at_move_regs rs.
-
-Definition undef_op (op: operation) (rs: regset) :=
-  match op with
-  | Omove => undef_move rs
-  | _ => undef_temps rs
+Fixpoint set_regs (rl: list mreg) (vl: list val) (rs: regset) : regset :=
+  match rl, vl with
+  | r1 :: rl', v1 :: vl' => set_regs rl' vl' (Regmap.set r1 v1 rs)
+  | _, _ => rs
   end.
-
-Definition undef_setstack (rs: regset) := undef_move rs.
 
 Definition is_label (lbl: label) (instr: instruction) : bool :=
   match instr with
@@ -231,7 +222,7 @@ Inductive extcall_arg: regset -> mem -> val -> loc -> val -> Prop :=
       extcall_arg rs m sp (R r) (rs r)
   | extcall_arg_stack: forall rs m sp ofs ty v,
       load_stack m sp ty (Int.repr (Stacklayout.fe_ofs_arg + 4 * ofs)) = Some v ->
-      extcall_arg rs m sp (S (Outgoing ofs ty)) v.
+      extcall_arg rs m sp (S Outgoing ofs ty) v.
 
 Definition extcall_arguments
     (rs: regset) (m: mem) (sp: val) (sg: signature) (args: list val) : Prop :=
@@ -306,34 +297,39 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s f sp (Mgetstack ofs ty dst :: c) rs m)
         E0 (State s f sp c (rs#dst <- v) m)
   | exec_Msetstack:
-      forall s f sp src ofs ty c rs m m',
+      forall s f sp src ofs ty c rs m m' rs',
       store_stack m sp ty ofs (rs src) = Some m' ->
+      rs' = undef_regs (destroyed_by_op Omove) rs ->
       step (State s f sp (Msetstack src ofs ty :: c) rs m)
-        E0 (State s f sp c (undef_setstack rs) m')
+        E0 (State s f sp c rs' m')
   | exec_Mgetparam:
-      forall s fb f sp ofs ty dst c rs m v,
+      forall s fb f sp ofs ty dst c rs m v rs',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       load_stack m sp Tint f.(fn_link_ofs) = Some (parent_sp s) ->
       load_stack m (parent_sp s) ty ofs = Some v ->
+      rs' = (rs # temp_for_parent_frame <- Vundef # dst <- v) ->
       step (State s fb sp (Mgetparam ofs ty dst :: c) rs m)
-        E0 (State s fb sp c (rs # IT1 <- Vundef # dst <- v) m)
+        E0 (State s fb sp c rs' m)
   | exec_Mop:
-      forall s f sp op args res c rs m v,
+      forall s f sp op args res c rs m v rs',
       eval_operation ge sp op rs##args m = Some v ->
+      rs' = ((undef_regs (destroyed_by_op op) rs)#res <- v) ->
       step (State s f sp (Mop op args res :: c) rs m)
-        E0 (State s f sp c ((undef_op op rs)#res <- v) m)
+        E0 (State s f sp c rs' m)
   | exec_Mload:
-      forall s f sp chunk addr args dst c rs m a v,
+      forall s f sp chunk addr args dst c rs m a v rs',
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.loadv chunk m a = Some v ->
+      rs' = ((undef_regs (destroyed_by_load chunk addr) rs)#dst <- v) ->
       step (State s f sp (Mload chunk addr args dst :: c) rs m)
-        E0 (State s f sp c ((undef_temps rs)#dst <- v) m)
+        E0 (State s f sp c rs' m)
   | exec_Mstore:
-      forall s f sp chunk addr args src c rs m m' a,
+      forall s f sp chunk addr args src c rs m m' a rs',
       eval_addressing ge sp addr rs##args = Some a ->
       Mem.storev chunk m a (rs src) = Some m' ->
+      rs' = undef_regs (destroyed_by_store chunk addr) rs ->
       step (State s f sp (Mstore chunk addr args src :: c) rs m)
-        E0 (State s f sp c (undef_temps rs) m')
+        E0 (State s f sp c rs' m')
   | exec_Mcall:
       forall s fb sp sig ros c rs m f f' ra,
       find_function_ptr ge ros rs = Some f' ->
@@ -352,14 +348,15 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s fb (Vptr stk soff) (Mtailcall sig ros :: c) rs m)
         E0 (Callstate s f' rs m')
   | exec_Mbuiltin:
-      forall s f sp rs m ef args res b t v m',
-      external_call ef ge rs##args m t v m' ->
+      forall s f sp rs m ef args res b t vl rs' m',
+      external_call' ef ge rs##args m t vl m' ->
+      rs' = set_regs res vl (undef_regs (destroyed_by_builtin ef) rs) ->
       step (State s f sp (Mbuiltin ef args res :: b) rs m)
-         t (State s f sp b ((undef_temps rs)#res <- v) m')
+         t (State s f sp b rs' m')
   | exec_Mannot:
       forall s f sp rs m ef args b vargs t v m',
       annot_arguments rs m sp args vargs ->
-      external_call ef ge vargs m t v m' ->
+      external_call' ef ge vargs m t v m' ->
       step (State s f sp (Mannot ef args :: b) rs m)
          t (State s f sp b rs m')
   | exec_Mgoto:
@@ -369,25 +366,28 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s fb sp (Mgoto lbl :: c) rs m)
         E0 (State s fb sp c' rs m)
   | exec_Mcond_true:
-      forall s fb f sp cond args lbl c rs m c',
+      forall s fb f sp cond args lbl c rs m c' rs',
       eval_condition cond rs##args m = Some true ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       find_label lbl f.(fn_code) = Some c' ->
+      rs' = undef_regs (destroyed_by_cond cond) rs ->
       step (State s fb sp (Mcond cond args lbl :: c) rs m)
-        E0 (State s fb sp c' (undef_temps rs) m)
+        E0 (State s fb sp c' rs' m)
   | exec_Mcond_false:
-      forall s f sp cond args lbl c rs m,
+      forall s f sp cond args lbl c rs m rs',
       eval_condition cond rs##args m = Some false ->
+      rs' = undef_regs (destroyed_by_cond cond) rs ->
       step (State s f sp (Mcond cond args lbl :: c) rs m)
-        E0 (State s f sp c (undef_temps rs) m)
+        E0 (State s f sp c rs' m)
   | exec_Mjumptable:
-      forall s fb f sp arg tbl c rs m n lbl c',
+      forall s fb f sp arg tbl c rs m n lbl c' rs',
       rs arg = Vint n ->
       list_nth_z tbl (Int.unsigned n) = Some lbl ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       find_label lbl f.(fn_code) = Some c' ->
+      rs' = undef_regs destroyed_by_jumptable rs ->
       step (State s fb sp (Mjumptable arg tbl :: c) rs m)
-        E0 (State s fb sp c' (undef_temps rs) m)
+        E0 (State s fb sp c' rs' m)
   | exec_Mreturn:
       forall s fb stk soff c rs m f m',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
@@ -397,20 +397,21 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State s fb (Vptr stk soff) (Mreturn :: c) rs m)
         E0 (Returnstate s rs m')
   | exec_function_internal:
-      forall s fb rs m f m1 m2 m3 stk,
+      forall s fb rs m f m1 m2 m3 stk rs',
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       Mem.alloc m 0 f.(fn_stacksize) = (m1, stk) ->
       let sp := Vptr stk Int.zero in
       store_stack m1 sp Tint f.(fn_link_ofs) (parent_sp s) = Some m2 ->
       store_stack m2 sp Tint f.(fn_retaddr_ofs) (parent_ra s) = Some m3 ->
+      rs' = undef_regs destroyed_at_function_entry rs ->
       step (Callstate s fb rs m)
-        E0 (State s fb sp f.(fn_code) (undef_temps rs) m3)
+        E0 (State s fb sp f.(fn_code) rs' m3)
   | exec_function_external:
       forall s fb rs m t rs' ef args res m',
       Genv.find_funct_ptr ge fb = Some (External ef) ->
-      external_call ef ge args m t res m' ->
       extcall_arguments rs m (parent_sp s) (ef_sig ef) args ->
-      rs' = (rs#(loc_result (ef_sig ef)) <- res) ->
+      external_call' ef ge args m t res m' ->
+      rs' = set_regs (loc_result (ef_sig ef)) res rs ->
       step (Callstate s fb rs m)
          t (Returnstate s rs' m')
   | exec_return:
@@ -428,9 +429,10 @@ Inductive initial_state (p: program): state -> Prop :=
       initial_state p (Callstate nil fb (Regmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m r,
-      rs (loc_result (mksignature nil (Some Tint))) = Vint r ->
-      final_state (Returnstate nil rs m) r.
+  | final_state_intro: forall rs m r retcode,
+      loc_result (mksignature nil (Some Tint)) = r :: nil ->
+      rs r = Vint retcode ->
+      final_state (Returnstate nil rs m) retcode.
 
 Definition semantics (rao: function -> code -> int -> Prop) (p: program) :=
   Semantics (step rao) (initial_state p) final_state (Genv.globalenv p).

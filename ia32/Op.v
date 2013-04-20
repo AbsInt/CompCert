@@ -96,6 +96,7 @@ Inductive operation : Type :=
   | Oshru: operation                    (**r [rd = r1 >> r2] (unsigned) *)
   | Oshruimm: int -> operation          (**r [rd = r1 >> n] (unsigned) *)
   | Ororimm: int -> operation           (**r rotate right immediate *)
+  | Oshldimm: int -> operation          (**r [rd = r1 << n | r2 >> (32-n)] *)
   | Olea: addressing -> operation       (**r effective address *)
 (*c Floating-point arithmetic: *)
   | Onegf: operation                    (**r [rd = - r1] *)
@@ -108,6 +109,10 @@ Inductive operation : Type :=
 (*c Conversions between int and float: *)
   | Ointoffloat: operation              (**r [rd = signed_int_of_float(r1)] *)
   | Ofloatofint: operation              (**r [rd = float_of_signed_int(r1)] *)
+(*c Manipulating 64-bit integers: *)
+  | Omakelong: operation                (**r [rd = r1 << 32 | r2] *)
+  | Olowlong: operation                 (**r [rd = low-word(r1)] *)
+  | Ohighlong: operation                (**r [rd = high-word(r1)] *)
 (*c Boolean tests: *)
   | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
 
@@ -130,6 +135,7 @@ Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   generalize Float.eq_dec; intro.
+  generalize Int64.eq_dec; intro.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
   assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
   assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
@@ -222,6 +228,8 @@ Definition eval_operation
   | Oshru, v1::v2::nil => Some (Val.shru v1 v2)
   | Oshruimm n, v1::nil => Some (Val.shru v1 (Vint n))
   | Ororimm n, v1::nil => Some (Val.ror v1 (Vint n))
+  | Oshldimm n, v1::v2::nil => Some (Val.or (Val.shl v1 (Vint n))
+                                            (Val.shru v2 (Vint (Int.sub Int.iwordsize n))))
   | Olea addr, _ => eval_addressing genv sp addr vl
   | Onegf, v1::nil => Some(Val.negf v1)
   | Oabsf, v1::nil => Some(Val.absf v1)
@@ -232,6 +240,9 @@ Definition eval_operation
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
   | Ointoffloat, v1::nil => Val.intoffloat v1
   | Ofloatofint, v1::nil => Val.floatofint v1
+  | Omakelong, v1::v2::nil => Some(Val.longofwords v1 v2)
+  | Olowlong, v1::nil => Some(Val.loword v1)
+  | Ohighlong, v1::nil => Some(Val.hiword v1)
   | Ocmp c, _ => Some(Val.of_optbool (eval_condition c vl m))
   | _, _ => None
   end.
@@ -306,6 +317,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Oshru => (Tint :: Tint :: nil, Tint)
   | Oshruimm _ => (Tint :: nil, Tint)
   | Ororimm _ => (Tint :: nil, Tint)
+  | Oshldimm _ => (Tint :: Tint :: nil, Tint)
   | Olea addr => (type_of_addressing addr, Tint)
   | Onegf => (Tfloat :: nil, Tfloat)
   | Oabsf => (Tfloat :: nil, Tfloat)
@@ -316,6 +328,9 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osingleoffloat => (Tfloat :: nil, Tfloat)
   | Ointoffloat => (Tfloat :: nil, Tint)
   | Ofloatofint => (Tint :: nil, Tfloat)
+  | Omakelong => (Tint :: Tint :: nil, Tlong)
+  | Olowlong => (Tlong :: nil, Tint)
+  | Ohighlong => (Tlong :: nil, Tint)
   | Ocmp c => (type_of_condition c, Tint)
   end.
 
@@ -386,6 +401,8 @@ Proof with (try exact I).
   destruct v0; destruct v1; simpl... destruct (Int.ltu i0 Int.iwordsize)...
   destruct v0; simpl... destruct (Int.ltu i Int.iwordsize)...
   destruct v0; simpl... destruct (Int.ltu i Int.iwordsize)...
+  destruct v0; simpl... destruct (Int.ltu i Int.iwordsize)...
+  destruct v1; simpl... destruct (Int.ltu (Int.sub Int.iwordsize i) Int.iwordsize)...
   eapply type_of_addressing_sound; eauto.
   destruct v0...
   destruct v0...
@@ -396,6 +413,9 @@ Proof with (try exact I).
   destruct v0...
   destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); inv H2...
   destruct v0; simpl in H0; inv H0...
+  destruct v0; destruct v1...
+  destruct v0...
+  destruct v0...
   destruct (eval_condition c vl m); simpl... destruct b... 
 Qed.
 
@@ -511,78 +531,40 @@ Proof.
   apply eval_shift_stack_addressing. 
 Qed.
 
-(** Transformation of addressing modes with two operands or more
-  into an equivalent arithmetic operation.  This is used in the [Reload]
-  pass when a store instruction cannot be reloaded directly because
-  it runs out of temporary registers. *)
+(** Offset an addressing mode [addr] by a quantity [delta], so that
+  it designates the pointer [delta] bytes past the pointer designated
+  by [addr].  May be undefined, in which case [None] is returned. *)
 
-Definition op_for_binary_addressing (addr: addressing) : operation := Olea addr.
-
-Lemma eval_op_for_binary_addressing:
-  forall (F V: Type) (ge: Genv.t F V) sp addr args v m,
-  (length args >= 2)%nat ->
-  eval_addressing ge sp addr args = Some v ->
-  eval_operation ge sp (op_for_binary_addressing addr) args m = Some v.
-Proof.
-  intros. simpl. auto.
-Qed.
-
-Lemma type_op_for_binary_addressing:
-  forall addr,
-  (length (type_of_addressing addr) >= 2)%nat ->
-  type_of_operation (op_for_binary_addressing addr) = (type_of_addressing addr, Tint).
-Proof.
-  intros. simpl. auto.
-Qed.
-
-
-(** Two-address operations.  Return [true] if the first argument and
-  the result must be in the same location. *)
-
-Definition two_address_op (op: operation) : bool :=
-  match op with
-  | Omove => false
-  | Ointconst _ => false
-  | Ofloatconst _ => false
-  | Oindirectsymbol _ => false
-  | Ocast8signed => false
-  | Ocast8unsigned => false
-  | Ocast16signed => false
-  | Ocast16unsigned => false
-  | Oneg => true
-  | Osub => true
-  | Omul => true
-  | Omulimm _ => true
-  | Odiv => true
-  | Odivu => true
-  | Omod => true
-  | Omodu => true
-  | Oand => true
-  | Oandimm _ => true
-  | Oor => true
-  | Oorimm _ => true
-  | Oxor => true
-  | Oxorimm _ => true
-  | Oshl => true
-  | Oshlimm _ => true
-  | Oshr => true
-  | Oshrimm _ => true
-  | Oshrximm _ => true
-  | Oshru => true
-  | Oshruimm _ => true
-  | Ororimm _ => true
-  | Olea addr => false
-  | Onegf => true
-  | Oabsf => true
-  | Oaddf => true
-  | Osubf => true
-  | Omulf => true
-  | Odivf => true
-  | Osingleoffloat => false
-  | Ointoffloat => false
-  | Ofloatofint => false
-  | Ocmp c => false
+Definition offset_addressing (addr: addressing) (delta: int) : option addressing :=
+  match addr with
+  | Aindexed n => Some(Aindexed (Int.add n delta))
+  | Aindexed2 n => Some(Aindexed2 (Int.add n delta))
+  | Ascaled sc n => Some(Ascaled sc (Int.add n delta))
+  | Aindexed2scaled sc n => Some(Aindexed2scaled sc (Int.add n delta))
+  | Aglobal s n => Some(Aglobal s (Int.add n delta))
+  | Abased s n => Some(Abased s (Int.add n delta))
+  | Abasedscaled sc s n => Some(Abasedscaled sc s (Int.add n delta))
+  | Ainstack n => Some(Ainstack (Int.add n delta))
   end.
+
+Lemma eval_offset_addressing:
+  forall (F V: Type) (ge: Genv.t F V) sp addr args delta addr' v,
+  offset_addressing addr delta = Some addr' ->
+  eval_addressing ge sp addr args = Some v ->
+  eval_addressing ge sp addr' args = Some(Val.add v (Vint delta)).
+Proof.
+  intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; inv H.
+  rewrite Val.add_assoc; auto.
+  rewrite !Val.add_assoc; auto.
+  rewrite !Val.add_assoc; auto.
+  rewrite !Val.add_assoc; auto.
+  unfold symbol_address. destruct (Genv.find_symbol ge i); auto. 
+  unfold symbol_address. destruct (Genv.find_symbol ge i); auto.
+  rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto. 
+  unfold symbol_address. destruct (Genv.find_symbol ge i0); auto.
+  rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto. 
+  rewrite Val.add_assoc. auto. 
+Qed.
 
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
 
@@ -774,6 +756,8 @@ Proof.
   eauto 3 using val_cmpu_bool_inject, Mem.valid_pointer_implies.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; try discriminate; inv H5; auto.
+  inv H3; try discriminate; inv H5; auto.
 Qed.
 
 Ltac TrivialExists :=
@@ -842,6 +826,8 @@ Proof.
   inv H4; inv H2; simpl; auto. destruct (Int.ltu i0 Int.iwordsize); auto.
   inv H4; simpl; auto. destruct (Int.ltu i Int.iwordsize); auto.
   inv H4; simpl; auto. destruct (Int.ltu i Int.iwordsize); auto.
+  inv H4; simpl; auto. destruct (Int.ltu i Int.iwordsize); auto.
+  inv H2; simpl; auto. destruct (Int.ltu (Int.sub Int.iwordsize i) Int.iwordsize); auto.
   eapply eval_addressing_inj; eauto. 
   inv H4; simpl; auto.
   inv H4; simpl; auto.
@@ -853,6 +839,9 @@ Proof.
   inv H4; simpl in H1; inv H1. simpl. destruct (Float.intoffloat f0); simpl in H2; inv H2.
   exists (Vint i); auto.
   inv H4; simpl in H1; inv H1. simpl. TrivialExists.
+  inv H4; inv H2; simpl; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
   subst v1. destruct (eval_condition c vl1 m1) eqn:?.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.

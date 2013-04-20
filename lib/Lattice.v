@@ -747,3 +747,103 @@ Lemma ge_lub_right: forall x y, ge (lub x y) y.
 Proof. destruct x; destruct y; compute; tauto. Qed.
 
 End LBoolean.
+
+(** * Option semi-lattice *)
+
+(** This lattice adds a top element (represented by [None]) to a given
+  semi-lattice (whose elements are injected via [Some]). *)
+
+Module LOption(L: SEMILATTICE) <: SEMILATTICE_WITH_TOP.
+
+Definition t: Type := option L.t.
+
+Definition eq (x y: t) : Prop :=
+  match x, y with
+  | None, None => True
+  | Some x1, Some y1 => L.eq x1 y1
+  | _, _ => False
+  end.
+
+Lemma eq_refl: forall x, eq x x.
+Proof.
+  unfold eq; intros; destruct x. apply L.eq_refl. auto.
+Qed.
+
+Lemma eq_sym: forall x y, eq x y -> eq y x.
+Proof.
+  unfold eq; intros; destruct x; destruct y; auto. apply L.eq_sym; auto.
+Qed.
+
+Lemma eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
+Proof.
+  unfold eq; intros; destruct x; destruct y; destruct z; auto.
+  eapply L.eq_trans; eauto.
+  contradiction.
+Qed.
+
+Definition beq (x y: t) : bool :=
+  match x, y with
+  | None, None => true
+  | Some x1, Some y1 => L.beq x1 y1
+  | _, _ => false
+  end.
+
+Lemma beq_correct: forall x y, beq x y = true -> eq x y.
+Proof.
+  unfold beq, eq; intros; destruct x; destruct y.
+  apply L.beq_correct; auto.
+  discriminate. discriminate. auto.
+Qed.
+
+Definition ge (x y: t) : Prop :=
+  match x, y with
+  | None, _ => True
+  | _, None => False
+  | Some x1, Some y1 => L.ge x1 y1
+  end.
+
+Lemma ge_refl: forall x y, eq x y -> ge x y.
+Proof.
+  unfold eq, ge; intros; destruct x; destruct y.
+  apply L.ge_refl; auto.
+  auto. elim H. auto.
+Qed.
+
+Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
+Proof.
+  unfold ge; intros; destruct x; destruct y; destruct z; auto.
+  eapply L.ge_trans; eauto. contradiction.
+Qed.
+
+Definition bot : t := Some L.bot.
+
+Lemma ge_bot: forall x, ge x bot.
+Proof.
+  unfold ge, bot; intros. destruct x; auto. apply L.ge_bot.
+Qed.
+
+Definition lub (x y: t) : t :=
+  match x, y with
+  | None, _ => None
+  | _, None => None
+  | Some x1, Some y1 => Some (L.lub x1 y1)
+  end.
+
+Lemma ge_lub_left: forall x y, ge (lub x y) x.
+Proof.
+  unfold ge, lub; intros; destruct x; destruct y; auto. apply L.ge_lub_left.
+Qed.
+
+Lemma ge_lub_right: forall x y, ge (lub x y) y.
+Proof.
+  unfold ge, lub; intros; destruct x; destruct y; auto. apply L.ge_lub_right.
+Qed.
+
+Definition top : t := None.
+
+Lemma ge_top: forall x, ge top x.
+Proof.
+  unfold ge, top; intros. auto.
+Qed.
+
+End LOption.

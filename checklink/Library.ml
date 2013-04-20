@@ -110,6 +110,8 @@ let z_int z = Safe32.to_int (z_int32 z)
 
 let z_int_lax z = Safe32.to_int (z_int32_lax z)
 
+let z_int64 = Camlcoq.Z.to_int64
+
 (* Some more printers *)
 
 let string_of_ffloat f = string_of_float (camlfloat_of_coqfloat f)
@@ -144,6 +146,7 @@ let string_of_int32 = Printf.sprintf "0x%08lx"
 let string_of_int64 = Printf.sprintf "0x%08Lx"
 (* To print counts/indices *)
 let string_of_int32i = Int32.to_string
+let string_of_int64i = Int64.to_string
 
 let string_of_positive p = string_of_int32i (positive_int32 p)
 

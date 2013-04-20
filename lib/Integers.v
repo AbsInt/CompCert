@@ -16,8 +16,8 @@
 (** Formalizations of machine integers modulo $2^N$ #2<sup>N</sup>#. *)
 
 Require Import Eqdep_dec.
+Require Import Zquot.
 Require Import Zwf.
-Require Recdef.
 Require Import Coqlib.
 
 (** * Comparisons *)
@@ -1061,36 +1061,7 @@ Proof.
   apply eqm_mult; apply eqm_sym; apply eqm_signed_unsigned.
 Qed.
 
-(** ** Properties of division and Lemma Ztestbit_same_equal:
-  forall x y,
-  (forall i, 0 <= i -> Z.testbit x i = Z.testbit y i) ->
-  x = y.
-Proof.
-  assert (forall x, 0 <= x ->
-          forall y,
-           (forall i, 0 <= i -> Z.testbit x i = Z.testbit y i) ->
-           x = y).
-  {
-    intros x0 POS0; pattern x0; apply Zdiv2_pos_ind; auto.
-    - intros. symmetry. apply Ztestbit_is_zero. 
-      intros. rewrite <- H; auto. apply Z.testbit_0_l. 
-    - intros. rewrite (Zdecomp x); rewrite (Zdecomp y). f_equal.
-      + exploit (H0 0). omega. rewrite !(Ztestbit_eq 0).
-        rewrite !zeq_true. auto. omega. omega.
-      + intros. apply H; intros.
-        exploit (H0 (Zsucc i)). omega. rewrite !(Ztestbit_eq (Z.succ i)). 
-        rewrite !zeq_false. rewrite !Z.pred_succ. auto. 
-        omega. omega. omega. omega.
-  }
-  intros. destruct (zle 0 x).
-  - apply H; auto.
-  - assert (-x-1 = -y-1). 
-    { apply H. omega. intros. rewrite !Z_one_complement; auto. 
-      rewrite H0; auto. 
-    }
-    omega.
-Qed.
-modulus *)
+(** ** Properties of division and modulus *)
 
 Lemma modu_divu_Euclid:
   forall x y, y <> zero -> x = add (mul (divu x y) y) (modu x y).
@@ -1154,8 +1125,6 @@ Proof.
   intros. rewrite modu_divu. rewrite divu_one. rewrite mul_one. apply sub_idem.
   apply one_not_zero.
 Qed.
-
-Require Import Zquot.
 
 Theorem divs_mone:
   forall x, divs x mone = neg x.
@@ -3707,7 +3676,434 @@ Module Wordsize_64.
   Proof. unfold wordsize; congruence. Qed.
 End Wordsize_64.
 
-Module Int64 := Make(Wordsize_64).
+Module Int64.
+
+Include Make(Wordsize_64).
+
+(** Shifts with amount given as a 32-bit integer *)
+
+Definition iwordsize': Int.int := Int.repr zwordsize.
+
+Definition shl' (x: int) (y: Int.int): int :=
+  repr (Z.shiftl (unsigned x) (Int.unsigned y)).
+Definition shru' (x: int) (y: Int.int): int :=
+  repr (Z.shiftr (unsigned x) (Int.unsigned y)).
+Definition shr' (x: int) (y: Int.int): int :=
+  repr (Z.shiftr (signed x) (Int.unsigned y)).
+
+Lemma bits_shl':
+  forall x y i,
+  0 <= i < zwordsize ->
+  testbit (shl' x y) i =
+  if zlt i (Int.unsigned y) then false else testbit x (i - Int.unsigned y).
+Proof.
+  intros. unfold shl'. rewrite testbit_repr; auto. 
+  destruct (zlt i (Int.unsigned y)). 
+  apply Z.shiftl_spec_low. auto.
+  apply Z.shiftl_spec_high. omega. omega.
+Qed.
+
+Lemma bits_shru':
+  forall x y i,
+  0 <= i < zwordsize ->
+  testbit (shru' x y) i =
+  if zlt (i + Int.unsigned y) zwordsize then testbit x (i + Int.unsigned y) else false.
+Proof.
+  intros. unfold shru'. rewrite testbit_repr; auto. 
+  rewrite Z.shiftr_spec. fold (testbit x (i + Int.unsigned y)).
+  destruct (zlt (i + Int.unsigned y) zwordsize).
+  auto.
+  apply bits_above; auto. 
+  omega.
+Qed.
+
+Lemma bits_shr':
+  forall x y i,
+  0 <= i < zwordsize ->
+  testbit (shr' x y) i =
+  testbit x (if zlt (i + Int.unsigned y) zwordsize then i + Int.unsigned y else zwordsize - 1).
+Proof.
+  intros. unfold shr'. rewrite testbit_repr; auto. 
+  rewrite Z.shiftr_spec. apply bits_signed. 
+  generalize (Int.unsigned_range y); omega.
+  omega.
+Qed.
+
+(** Decomposing 64-bit ints as pairs of 32-bit ints *)
+
+Definition loword (n: int) : Int.int := Int.repr (unsigned n).
+
+Definition hiword (n: int) : Int.int := Int.repr (unsigned (shru n (repr Int.zwordsize))).
+
+Definition ofwords (hi lo: Int.int) : int :=
+  or (shl (repr (Int.unsigned hi)) (repr Int.zwordsize)) (repr (Int.unsigned lo)).
+
+Lemma bits_loword:
+  forall n i, 0 <= i < Int.zwordsize -> Int.testbit (loword n) i = testbit n i.
+Proof.
+  intros. unfold loword. rewrite Int.testbit_repr; auto. 
+Qed.
+
+Lemma bits_hiword:
+  forall n i, 0 <= i < Int.zwordsize -> Int.testbit (hiword n) i = testbit n (i + Int.zwordsize).
+Proof.
+  intros. unfold hiword. rewrite Int.testbit_repr; auto.
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  fold (testbit (shru n (repr Int.zwordsize)) i). rewrite bits_shru.
+  change (unsigned (repr Int.zwordsize)) with Int.zwordsize.
+  apply zlt_true. omega. omega. 
+Qed.
+
+Lemma bits_ofwords:
+  forall hi lo i, 0 <= i < zwordsize ->
+  testbit (ofwords hi lo) i =
+  if zlt i Int.zwordsize then Int.testbit lo i else Int.testbit hi (i - Int.zwordsize).
+Proof.
+  intros. unfold ofwords. rewrite bits_or; auto. rewrite bits_shl; auto. 
+  change (unsigned (repr Int.zwordsize)) with Int.zwordsize. 
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  destruct (zlt i Int.zwordsize).
+  rewrite testbit_repr; auto. 
+  rewrite !testbit_repr; auto.
+  fold (Int.testbit lo i). rewrite Int.bits_above. apply orb_false_r. auto. 
+  omega.
+Qed.
+
+Lemma lo_ofwords:
+  forall hi lo, loword (ofwords hi lo) = lo.
+Proof.
+  intros. apply Int.same_bits_eq; intros. 
+  rewrite bits_loword; auto. rewrite bits_ofwords. apply zlt_true. omega. 
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity. omega.
+Qed.
+
+Lemma hi_ofwords:
+  forall hi lo, hiword (ofwords hi lo) = hi.
+Proof.
+  intros. apply Int.same_bits_eq; intros. 
+  rewrite bits_hiword; auto. rewrite bits_ofwords.
+  rewrite zlt_false. f_equal. omega. omega. 
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity. omega.
+Qed.
+
+Lemma ofwords_recompose:
+  forall n, ofwords (hiword n) (loword n) = n.
+Proof.
+  intros. apply same_bits_eq; intros. rewrite bits_ofwords; auto. 
+  destruct (zlt i Int.zwordsize). 
+  apply bits_loword. omega. 
+  rewrite bits_hiword. f_equal. omega. 
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity. omega.
+Qed.
+
+Lemma ofwords_add:
+  forall lo hi, ofwords hi lo = repr (Int.unsigned hi * two_p 32 + Int.unsigned lo).
+Proof.
+  intros. unfold ofwords. rewrite shifted_or_is_add. 
+  apply eqm_samerepr. apply eqm_add. apply eqm_mult. 
+  apply eqm_sym; apply eqm_unsigned_repr.
+  apply eqm_refl. 
+  apply eqm_sym; apply eqm_unsigned_repr.
+  change Int.zwordsize with 32; change zwordsize with 64; omega.
+  rewrite unsigned_repr. generalize (Int.unsigned_range lo). intros [A B]. exact B. 
+  assert (Int.max_unsigned < max_unsigned) by (compute; auto).
+  generalize (Int.unsigned_range_2 lo); omega.
+Qed.
+
+Lemma ofwords_add':
+  forall lo hi, unsigned (ofwords hi lo) = Int.unsigned hi * two_p 32 + Int.unsigned lo.
+Proof.
+  intros. rewrite ofwords_add. apply unsigned_repr.
+  generalize (Int.unsigned_range hi) (Int.unsigned_range lo). 
+  change (two_p 32) with Int.modulus.
+  change Int.modulus with 4294967296.
+  change max_unsigned with 18446744073709551615.
+  omega.
+Qed.
+
+(** Expressing 64-bit operations in terms of 32-bit operations *)
+
+Lemma decompose_bitwise_binop:
+  forall f f64 f32 xh xl yh yl,
+  (forall x y i, 0 <= i < zwordsize -> testbit (f64 x y) i = f (testbit x i) (testbit y i)) ->
+  (forall x y i, 0 <= i < Int.zwordsize -> Int.testbit (f32 x y) i = f (Int.testbit x i) (Int.testbit y i)) ->
+  f64 (ofwords xh xl) (ofwords yh yl) = ofwords (f32 xh yh) (f32 xl yl).
+Proof.
+  intros. apply Int64.same_bits_eq; intros.
+  rewrite H by auto. rewrite ! bits_ofwords by auto.
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  destruct (zlt i Int.zwordsize); rewrite H0 by omega; auto.
+Qed.
+
+Lemma decompose_and:
+  forall xh xl yh yl,
+  and (ofwords xh xl) (ofwords yh yl) = ofwords (Int.and xh yh) (Int.and xl yl).
+Proof.
+  intros. apply decompose_bitwise_binop with andb.
+  apply bits_and. apply Int.bits_and.
+Qed.
+
+Lemma decompose_or:
+  forall xh xl yh yl,
+  or (ofwords xh xl) (ofwords yh yl) = ofwords (Int.or xh yh) (Int.or xl yl).
+Proof.
+  intros. apply decompose_bitwise_binop with orb.
+  apply bits_or. apply Int.bits_or.
+Qed.
+
+Lemma decompose_xor:
+  forall xh xl yh yl,
+  xor (ofwords xh xl) (ofwords yh yl) = ofwords (Int.xor xh yh) (Int.xor xl yl).
+Proof.
+  intros. apply decompose_bitwise_binop with xorb.
+  apply bits_xor. apply Int.bits_xor.
+Qed.
+
+Lemma decompose_not:
+  forall xh xl,
+  not (ofwords xh xl) = ofwords (Int.not xh) (Int.not xl).
+Proof.
+  intros. unfold not, Int.not. rewrite <- decompose_xor. f_equal. 
+  apply (Int64.eq_spec mone (ofwords Int.mone Int.mone)).
+Qed.
+
+Lemma decompose_shl_1:
+  forall xh xl y,
+  0 <= Int.unsigned y < Int.zwordsize ->
+  shl' (ofwords xh xl) y =
+  ofwords (Int.or (Int.shl xh y) (Int.shru xl (Int.sub Int.iwordsize y)))
+          (Int.shl xl y).
+Proof.
+  intros.
+  assert (Int.unsigned (Int.sub Int.iwordsize y) = Int.zwordsize - Int.unsigned y).
+  { unfold Int.sub. rewrite Int.unsigned_repr. auto. 
+    rewrite Int.unsigned_repr_wordsize. generalize Int.wordsize_max_unsigned; omega. }
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  apply Int64.same_bits_eq; intros.
+  rewrite bits_shl' by auto. symmetry. rewrite bits_ofwords by auto.
+  destruct (zlt i Int.zwordsize). rewrite Int.bits_shl by omega. 
+  destruct (zlt i (Int.unsigned y)). auto. 
+  rewrite bits_ofwords by omega. rewrite zlt_true by omega. auto.
+  rewrite zlt_false by omega. rewrite bits_ofwords by omega. 
+  rewrite Int.bits_or by omega. rewrite Int.bits_shl by omega. 
+  rewrite Int.bits_shru by omega. rewrite H0.
+  destruct (zlt (i - Int.unsigned y) (Int.zwordsize)).
+  rewrite zlt_true by omega. rewrite zlt_true by omega.
+  rewrite orb_false_l. f_equal. omega. 
+  rewrite zlt_false by omega. rewrite zlt_false by omega. 
+  rewrite orb_false_r. f_equal. omega.
+Qed.
+
+Lemma decompose_shl_2:
+  forall xh xl y,
+  Int.zwordsize <= Int.unsigned y < zwordsize ->
+  shl' (ofwords xh xl) y =
+  ofwords (Int.shl xl (Int.sub y Int.iwordsize)) Int.zero.
+Proof.
+  intros.
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  assert (Int.unsigned (Int.sub y Int.iwordsize) = Int.unsigned y - Int.zwordsize).
+  { unfold Int.sub. rewrite Int.unsigned_repr. auto. 
+    rewrite Int.unsigned_repr_wordsize. generalize (Int.unsigned_range_2 y). omega. }
+  apply Int64.same_bits_eq; intros.
+  rewrite bits_shl' by auto. symmetry. rewrite bits_ofwords by auto.
+  destruct (zlt i Int.zwordsize). rewrite zlt_true by omega. apply Int.bits_zero.
+  rewrite Int.bits_shl by omega. 
+  destruct (zlt i (Int.unsigned y)).
+  rewrite zlt_true by omega. auto. 
+  rewrite zlt_false by omega. 
+  rewrite bits_ofwords by omega. rewrite zlt_true by omega. f_equal. omega. 
+Qed.
+
+Lemma decompose_shru_1:
+  forall xh xl y,
+  0 <= Int.unsigned y < Int.zwordsize ->
+  shru' (ofwords xh xl) y =
+  ofwords (Int.shru xh y)
+          (Int.or (Int.shru xl y) (Int.shl xh (Int.sub Int.iwordsize y))).
+Proof.
+  intros.
+  assert (Int.unsigned (Int.sub Int.iwordsize y) = Int.zwordsize - Int.unsigned y).
+  { unfold Int.sub. rewrite Int.unsigned_repr. auto. 
+    rewrite Int.unsigned_repr_wordsize. generalize Int.wordsize_max_unsigned; omega. }
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  apply Int64.same_bits_eq; intros.
+  rewrite bits_shru' by auto. symmetry. rewrite bits_ofwords by auto.
+  destruct (zlt i Int.zwordsize).
+  rewrite zlt_true by omega. 
+  rewrite bits_ofwords by omega.
+  rewrite Int.bits_or by omega. rewrite Int.bits_shl by omega. 
+  rewrite Int.bits_shru by omega. rewrite H0.
+  destruct (zlt (i + Int.unsigned y) (Int.zwordsize)).
+  rewrite zlt_true by omega.
+  rewrite orb_false_r. auto.
+  rewrite zlt_false by omega. 
+  rewrite orb_false_l. f_equal. omega.
+  rewrite Int.bits_shru by omega. 
+  destruct (zlt (i + Int.unsigned y) zwordsize).
+  rewrite bits_ofwords by omega. 
+  rewrite zlt_true by omega. rewrite zlt_false by omega. f_equal. omega. 
+  rewrite zlt_false by omega. auto.
+Qed.
+
+Lemma decompose_shru_2:
+  forall xh xl y,
+  Int.zwordsize <= Int.unsigned y < zwordsize ->
+  shru' (ofwords xh xl) y =
+  ofwords Int.zero (Int.shru xh (Int.sub y Int.iwordsize)).
+Proof.
+  intros.
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  assert (Int.unsigned (Int.sub y Int.iwordsize) = Int.unsigned y - Int.zwordsize).
+  { unfold Int.sub. rewrite Int.unsigned_repr. auto. 
+    rewrite Int.unsigned_repr_wordsize. generalize (Int.unsigned_range_2 y). omega. }
+  apply Int64.same_bits_eq; intros.
+  rewrite bits_shru' by auto. symmetry. rewrite bits_ofwords by auto.
+  destruct (zlt i Int.zwordsize).
+  rewrite Int.bits_shru by omega. rewrite H1.
+  destruct (zlt (i + Int.unsigned y) zwordsize).
+  rewrite zlt_true by omega. rewrite bits_ofwords by omega. 
+  rewrite zlt_false by omega. f_equal; omega. 
+  rewrite zlt_false by omega. auto.
+  rewrite zlt_false by omega. apply Int.bits_zero.
+Qed.
+
+Lemma decompose_shr_1:
+  forall xh xl y,
+  0 <= Int.unsigned y < Int.zwordsize ->
+  shr' (ofwords xh xl) y =
+  ofwords (Int.shr xh y)
+          (Int.or (Int.shru xl y) (Int.shl xh (Int.sub Int.iwordsize y))).
+Proof.
+  intros.
+  assert (Int.unsigned (Int.sub Int.iwordsize y) = Int.zwordsize - Int.unsigned y).
+  { unfold Int.sub. rewrite Int.unsigned_repr. auto. 
+    rewrite Int.unsigned_repr_wordsize. generalize Int.wordsize_max_unsigned; omega. }
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  apply Int64.same_bits_eq; intros.
+  rewrite bits_shr' by auto. symmetry. rewrite bits_ofwords by auto.
+  destruct (zlt i Int.zwordsize).
+  rewrite zlt_true by omega. 
+  rewrite bits_ofwords by omega.
+  rewrite Int.bits_or by omega. rewrite Int.bits_shl by omega. 
+  rewrite Int.bits_shru by omega. rewrite H0.
+  destruct (zlt (i + Int.unsigned y) (Int.zwordsize)).
+  rewrite zlt_true by omega.
+  rewrite orb_false_r. auto.
+  rewrite zlt_false by omega. 
+  rewrite orb_false_l. f_equal. omega.
+  rewrite Int.bits_shr by omega. 
+  destruct (zlt (i + Int.unsigned y) zwordsize).
+  rewrite bits_ofwords by omega. 
+  rewrite zlt_true by omega. rewrite zlt_false by omega. f_equal. omega. 
+  rewrite zlt_false by omega. rewrite bits_ofwords by omega. 
+  rewrite zlt_false by omega. f_equal.
+Qed.
+
+Lemma decompose_shr_2:
+  forall xh xl y,
+  Int.zwordsize <= Int.unsigned y < zwordsize ->
+  shr' (ofwords xh xl) y =
+  ofwords (Int.shr xh (Int.sub Int.iwordsize Int.one))
+          (Int.shr xh (Int.sub y Int.iwordsize)).
+Proof.
+  intros.
+  assert (zwordsize = 2 * Int.zwordsize) by reflexivity.
+  assert (Int.unsigned (Int.sub y Int.iwordsize) = Int.unsigned y - Int.zwordsize).
+  { unfold Int.sub. rewrite Int.unsigned_repr. auto. 
+    rewrite Int.unsigned_repr_wordsize. generalize (Int.unsigned_range_2 y). omega. }
+  apply Int64.same_bits_eq; intros.
+  rewrite bits_shr' by auto. symmetry. rewrite bits_ofwords by auto.
+  destruct (zlt i Int.zwordsize).
+  rewrite Int.bits_shr by omega. rewrite H1.
+  destruct (zlt (i + Int.unsigned y) zwordsize).
+  rewrite zlt_true by omega. rewrite bits_ofwords by omega. 
+  rewrite zlt_false by omega. f_equal; omega. 
+  rewrite zlt_false by omega. rewrite bits_ofwords by omega. 
+  rewrite zlt_false by omega. auto.
+  rewrite Int.bits_shr by omega. 
+  change (Int.unsigned (Int.sub Int.iwordsize Int.one)) with (Int.zwordsize - 1).
+  destruct (zlt (i + Int.unsigned y) zwordsize);
+  rewrite bits_ofwords by omega.
+  symmetry. rewrite zlt_false by omega. f_equal. 
+  destruct (zlt (i - Int.zwordsize + (Int.zwordsize - 1)) Int.zwordsize); omega.
+  symmetry. rewrite zlt_false by omega. f_equal. 
+  destruct (zlt (i - Int.zwordsize + (Int.zwordsize - 1)) Int.zwordsize); omega.
+Qed.
+
+Remark eqm_mul_2p32:
+  forall x y, Int.eqm x y -> eqm (x * two_p 32) (y * two_p 32).
+Proof.
+  intros. destruct H as [k EQ]. exists k. rewrite EQ.
+  change Int.modulus with (two_p 32). 
+  change modulus with (two_p 32 * two_p 32).
+  ring.
+Qed.
+
+Lemma decompose_add:
+  forall xh xl yh yl,
+  add (ofwords xh xl) (ofwords yh yl) =
+  ofwords (Int.add (Int.add xh yh) (Int.add_carry xl yl Int.zero))
+          (Int.add xl yl).
+Proof.
+  intros. symmetry. rewrite ofwords_add. rewrite add_unsigned.
+  apply eqm_samerepr. 
+  rewrite ! ofwords_add'. rewrite (Int.unsigned_add_carry xl yl). 
+  set (cc := Int.add_carry xl yl Int.zero).
+  set (Xl := Int.unsigned xl); set (Xh := Int.unsigned xh);
+  set (Yl := Int.unsigned yl); set (Yh := Int.unsigned yh).
+  change Int.modulus with (two_p 32).
+  replace (Xh * two_p 32 + Xl + (Yh * two_p 32 + Yl))
+     with ((Xh + Yh) * two_p 32 + (Xl + Yl)) by ring.
+  replace (Int.unsigned (Int.add (Int.add xh yh) cc) * two_p 32 +
+              (Xl + Yl - Int.unsigned cc * two_p 32))
+     with ((Int.unsigned (Int.add (Int.add xh yh) cc) - Int.unsigned cc) * two_p 32
+           + (Xl + Yl)) by ring.
+  apply eqm_add. 2: apply eqm_refl. apply eqm_mul_2p32.
+  replace (Xh + Yh) with ((Xh + Yh + Int.unsigned cc) - Int.unsigned cc) by ring.
+  apply Int.eqm_sub. 2: apply Int.eqm_refl.
+  apply Int.eqm_unsigned_repr_l. apply Int.eqm_add. 2: apply Int.eqm_refl. 
+  apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl. 
+Qed.
+
+Definition mul' (x y: Int.int) : int := repr (Int.unsigned x * Int.unsigned y).
+
+Lemma decompose_mul:
+  forall xh xl yh yl,
+  mul (ofwords xh xl) (ofwords yh yl) =
+  ofwords (Int.add (Int.add (hiword (mul' xl yl)) (Int.mul xl yh)) (Int.mul xh yl))
+          (loword (mul' xl yl)).
+Proof.
+  intros. 
+  set (pl := loword (mul' xl yl)); set (ph := hiword (mul' xl yl)).
+  assert (EQ0: unsigned (mul' xl yl) = Int.unsigned ph * two_p 32 + Int.unsigned pl).
+  { rewrite <- (ofwords_recompose (mul' xl yl)). apply ofwords_add'. }
+  symmetry. rewrite ofwords_add. unfold mul. rewrite !ofwords_add'.
+  set (XL := Int.unsigned xl); set (XH := Int.unsigned xh);
+  set (YL := Int.unsigned yl); set (YH := Int.unsigned yh).
+  set (PH := Int.unsigned ph) in *. set (PL := Int.unsigned pl) in *.
+  transitivity (repr (((PH + XL * YH) + XH * YL) * two_p 32 + PL)).
+  apply eqm_samerepr. apply eqm_add. 2: apply eqm_refl. 
+  apply eqm_mul_2p32.
+  rewrite Int.add_unsigned. apply Int.eqm_unsigned_repr_l. apply Int.eqm_add.
+  rewrite Int.add_unsigned. apply Int.eqm_unsigned_repr_l. apply Int.eqm_add.
+  apply Int.eqm_refl.
+  unfold Int.mul. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl.
+  unfold Int.mul. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl.
+  transitivity (repr (unsigned (mul' xl yl) + (XL * YH + XH * YL) * two_p 32)).
+  rewrite EQ0. f_equal. ring.
+  transitivity (repr ((XL * YL + (XL * YH + XH * YL) * two_p 32))).
+  apply eqm_samerepr. apply eqm_add. 2: apply eqm_refl. 
+  unfold mul'. apply eqm_unsigned_repr_l. apply eqm_refl.
+  transitivity (repr (0 + (XL * YL + (XL * YH + XH * YL) * two_p 32))).
+  rewrite Zplus_0_l; auto. 
+  transitivity (repr (XH * YH * (two_p 32 * two_p 32) + (XL * YL + (XL * YH + XH * YL) * two_p 32))).
+  apply eqm_samerepr. apply eqm_add. 2: apply eqm_refl. 
+  change (two_p 32 * two_p 32) with modulus. exists (- XH * YH). ring. 
+  f_equal. ring. 
+Qed.
+
+End Int64.
 
 Notation int64 := Int64.int.
 

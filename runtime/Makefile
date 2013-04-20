@@ -2,26 +2,34 @@ include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
 INCLUDES=
-OBJS=
+OBJS=int64.o
 LIB=libcompcert.a
 
-ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 all: $(LIB) $(INCLUDES)
-else
-all:
-endif
 
 $(LIB): $(OBJS)
 	rm -f $(LIB)
 	ar rcs $(LIB) $(OBJS)
 
-clean:
+%.o: $(ARCH)/%.s
+	$(CASM) $^
+
+clean::
 	rm -f *.o $(LIB)
 
-ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 install:
 	install -d $(LIBDIR)
 	install -c $(LIB) $(INCLUDES) $(LIBDIR)
-else
-install:
-endif
+
+test/test_int64: test/test_int64.c $(LIB)
+	$(CC) -o $@ test/test_int64.c $(LIB)
+
+clean::
+	rm -f test/test_int64
+
+.PHONY: test
+
+test: FORCE test/test_int64
+	test/test_int64
+
+FORCE:

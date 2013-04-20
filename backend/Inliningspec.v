@@ -180,6 +180,35 @@ Ltac monadInv H :=
       ((progress simpl in H) || unfold F in H); monadInv1 H
   end.
 
+Fixpoint mlist_iter2 {A B: Type} (f: A -> B -> mon unit) (l: list (A*B)): mon unit :=
+  match l with
+  | nil => ret tt
+  | (x,y) :: l' => do z <- f x y; mlist_iter2 f l'
+  end.
+
+Remark mlist_iter2_fold:
+  forall (A B: Type) (f: A -> B -> mon unit) l s,
+  exists i,
+  mlist_iter2 f l s =
+  R tt (fold_left (fun a p => match f (fst p) (snd p) a with R _ s2 _ => s2 end) l s) i.
+Proof.
+  induction l; simpl; intros.
+  exists (sincr_refl s); auto.
+  destruct a as [x y]. unfold bind. simpl. destruct (f x y s) as [xx s1 i1].
+  destruct (IHl s1) as [i2 EQ]. rewrite EQ. econstructor; eauto. 
+Qed.
+
+Lemma ptree_mfold_spec:
+  forall (A: Type) (f: positive -> A -> mon unit) t s x s' i,
+  ptree_mfold f t s = R x s' i ->
+  exists i', mlist_iter2 f (PTree.elements t) s = R tt s' i'.
+Proof.
+  intros. 
+  destruct (mlist_iter2_fold _ _ f (PTree.elements t) s) as [i' EQ].
+  unfold ptree_mfold in H. inv H. rewrite PTree.fold_spec.
+  econstructor. eexact EQ.
+Qed.
+
 (** ** Relational specification of the translation of moves *)
 
 Inductive tr_moves (c: code) : node -> list reg -> list reg -> node -> Prop :=
@@ -416,6 +445,7 @@ Lemma expand_cfg_rec_unchanged:
 Proof.
   intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ.
   transitivity ((st_code s0)!pc).
+  exploit ptree_mfold_spec; eauto. intros [INCR' ITER].  
   eapply iter_expand_instr_unchanged; eauto. 
     subst s0; auto. 
     subst s0; simpl. xomega.
@@ -596,7 +626,8 @@ Proof.
   intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ. 
   constructor. 
   intros. rewrite H1. eapply max_def_function_params; eauto. 
-  intros. eapply iter_expand_instr_spec; eauto. 
+  intros. exploit ptree_mfold_spec; eauto. intros [INCR' ITER].
+  eapply iter_expand_instr_spec; eauto. 
     apply PTree.elements_keys_norepet. 
     intros. rewrite H1. eapply max_def_function_instr; eauto. 
     eapply PTree.elements_complete; eauto.

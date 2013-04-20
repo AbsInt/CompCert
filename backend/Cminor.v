@@ -36,6 +36,7 @@ Require Import Switch.
 Inductive constant : Type :=
   | Ointconst: int -> constant     (**r integer constant *)
   | Ofloatconst: float -> constant (**r floating-point constant *)
+  | Olongconst: int64 -> constant  (**r long integer constant *)
   | Oaddrsymbol: ident -> int -> constant (**r address of the symbol plus the offset *)
   | Oaddrstack: int -> constant.   (**r stack pointer plus the given offset *)
 
@@ -52,7 +53,16 @@ Inductive unary_operation : Type :=
   | Ointoffloat: unary_operation           (**r signed integer to float *)
   | Ointuoffloat: unary_operation          (**r unsigned integer to float *)
   | Ofloatofint: unary_operation           (**r float to signed integer *)
-  | Ofloatofintu: unary_operation.         (**r float to unsigned integer *)
+  | Ofloatofintu: unary_operation          (**r float to unsigned integer *)
+  | Onegl: unary_operation                 (**r long integer opposite *)
+  | Onotl: unary_operation                 (**r long bitwise complement *)
+  | Ointoflong: unary_operation            (**r long to int *)
+  | Olongofint: unary_operation            (**r signed int to long *)
+  | Olongofintu: unary_operation           (**r unsigned int to long *)
+  | Olongoffloat: unary_operation          (**r signed long to float *)
+  | Olonguoffloat: unary_operation         (**r unsigned long to float *)
+  | Ofloatoflong: unary_operation          (**r float to signed long *)
+  | Ofloatoflongu: unary_operation.        (**r float to unsigned long *)
 
 Inductive binary_operation : Type :=
   | Oadd: binary_operation                 (**r integer addition *)
@@ -62,19 +72,34 @@ Inductive binary_operation : Type :=
   | Odivu: binary_operation                (**r integer unsigned division *)
   | Omod: binary_operation                 (**r integer signed modulus *)
   | Omodu: binary_operation                (**r integer unsigned modulus *)
-  | Oand: binary_operation                 (**r bitwise ``and'' *)
-  | Oor: binary_operation                  (**r bitwise ``or'' *)
-  | Oxor: binary_operation                 (**r bitwise ``xor'' *)
-  | Oshl: binary_operation                 (**r left shift *)
-  | Oshr: binary_operation                 (**r right signed shift *)
-  | Oshru: binary_operation                (**r right unsigned shift *)
+  | Oand: binary_operation                 (**r integer bitwise ``and'' *)
+  | Oor: binary_operation                  (**r integer bitwise ``or'' *)
+  | Oxor: binary_operation                 (**r integer bitwise ``xor'' *)
+  | Oshl: binary_operation                 (**r integer left shift *)
+  | Oshr: binary_operation                 (**r integer right signed shift *)
+  | Oshru: binary_operation                (**r integer right unsigned shift *)
   | Oaddf: binary_operation                (**r float addition *)
   | Osubf: binary_operation                (**r float subtraction *)
   | Omulf: binary_operation                (**r float multiplication *)
   | Odivf: binary_operation                (**r float division *)
+  | Oaddl: binary_operation                (**r long addition *)
+  | Osubl: binary_operation                (**r long subtraction *)
+  | Omull: binary_operation                (**r long multiplication *)
+  | Odivl: binary_operation                (**r long signed division *)
+  | Odivlu: binary_operation               (**r long unsigned division *)
+  | Omodl: binary_operation                (**r long signed modulus *)
+  | Omodlu: binary_operation               (**r long unsigned modulus *)
+  | Oandl: binary_operation                (**r long bitwise ``and'' *)
+  | Oorl: binary_operation                 (**r long bitwise ``or'' *)
+  | Oxorl: binary_operation                (**r long bitwise ``xor'' *)
+  | Oshll: binary_operation                (**r long left shift *)
+  | Oshrl: binary_operation                (**r long right signed shift *)
+  | Oshrlu: binary_operation               (**r long right unsigned shift *)
   | Ocmp: comparison -> binary_operation   (**r integer signed comparison *)
   | Ocmpu: comparison -> binary_operation  (**r integer unsigned comparison *)
-  | Ocmpf: comparison -> binary_operation. (**r float comparison *)
+  | Ocmpf: comparison -> binary_operation  (**r float comparison *)
+  | Ocmpl: comparison -> binary_operation  (**r long signed comparison *)
+  | Ocmplu: comparison -> binary_operation. (**r long unsigned comparison *)
 
 (** Expressions include reading local variables, constants and
   arithmetic operations, reading store locations, and conditional
@@ -214,6 +239,7 @@ Definition eval_constant (sp: val) (cst: constant) : option val :=
   match cst with
   | Ointconst n => Some (Vint n)
   | Ofloatconst n => Some (Vfloat n)
+  | Olongconst n => Some (Vlong n)
   | Oaddrsymbol s ofs =>
       Some(match Genv.find_symbol ge s with
            | None => Vundef
@@ -236,6 +262,15 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | Ointuoffloat => Val.intuoffloat arg
   | Ofloatofint => Val.floatofint arg
   | Ofloatofintu => Val.floatofintu arg
+  | Onegl => Some (Val.negl arg)
+  | Onotl => Some (Val.notl arg)
+  | Ointoflong => Some (Val.loword arg)
+  | Olongofint => Some (Val.longofint arg)
+  | Olongofintu => Some (Val.longofintu arg)
+  | Olongoffloat => Val.longoffloat arg
+  | Olonguoffloat => Val.longuoffloat arg
+  | Ofloatoflong => Val.floatoflong arg
+  | Ofloatoflongu => Val.floatoflongu arg
   end.
 
 Definition eval_binop
@@ -258,9 +293,24 @@ Definition eval_binop
   | Osubf => Some (Val.subf arg1 arg2)
   | Omulf => Some (Val.mulf arg1 arg2)
   | Odivf => Some (Val.divf arg1 arg2)
+  | Oaddl => Some (Val.addl arg1 arg2)
+  | Osubl => Some (Val.subl arg1 arg2)
+  | Omull => Some (Val.mull arg1 arg2)
+  | Odivl => Val.divls arg1 arg2
+  | Odivlu => Val.divlu arg1 arg2
+  | Omodl => Val.modls arg1 arg2
+  | Omodlu => Val.modlu arg1 arg2
+  | Oandl => Some (Val.andl arg1 arg2)
+  | Oorl => Some (Val.orl arg1 arg2)
+  | Oxorl => Some (Val.xorl arg1 arg2)
+  | Oshll => Some (Val.shll arg1 arg2)
+  | Oshrl => Some (Val.shrl arg1 arg2)
+  | Oshrlu => Some (Val.shrlu arg1 arg2)
   | Ocmp c => Some (Val.cmp c arg1 arg2)
   | Ocmpu c => Some (Val.cmpu (Mem.valid_pointer m) c arg1 arg2)
   | Ocmpf c => Some (Val.cmpf c arg1 arg2)
+  | Ocmpl c => Some (Val.cmpl c arg1 arg2)
+  | Ocmplu c => Some (Val.cmplu c arg1 arg2)
   end.
 
 (** Evaluation of an expression: [eval_expr ge sp e m a v]

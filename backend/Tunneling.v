@@ -64,9 +64,9 @@ Require Import LTL.
 
 Module U := UnionFind.UF(PTree).
 
-Definition record_goto (uf: U.t) (pc: node) (i: instruction) : U.t :=
-  match i with
-  | Lnop s => U.union uf pc s
+Definition record_goto (uf: U.t) (pc: node) (b: bblock) : U.t :=
+  match b with
+  | Lbranch s :: _ => U.union uf pc s
   | _ => uf
   end.
 
@@ -77,37 +77,23 @@ Definition record_gotos (f: LTL.function) : U.t :=
   successor [s] of every instruction by the canonical representative
   of its equivalence class in the union-find data structure. *)
 
-Definition tunnel_instr (uf: U.t) (b: instruction) : instruction :=
-  match b with
-  | Lnop s =>
-      Lnop (U.repr uf s)
-  | Lop op args res s =>
-      Lop op args res (U.repr uf s)
-  | Lload chunk addr args dst s =>
-      Lload chunk addr args dst (U.repr uf s)
-  | Lstore chunk addr args src s =>
-      Lstore chunk addr args src (U.repr uf s)
-  | Lcall sig ros args res s =>
-      Lcall sig ros args res (U.repr uf s)
-  | Ltailcall sig ros args =>
-      Ltailcall sig ros args
-  | Lbuiltin ef args res s =>
-      Lbuiltin ef args res (U.repr uf s)
-  | Lcond cond args s1 s2 =>
-      Lcond cond args (U.repr uf s1) (U.repr uf s2)
-  | Ljumptable arg tbl =>
-      Ljumptable arg (List.map (U.repr uf) tbl)
-  | Lreturn or =>
-      Lreturn or
+Definition tunnel_instr (uf: U.t) (i: instruction) : instruction :=
+  match i with
+  | Lbranch s => Lbranch (U.repr uf s)
+  | Lcond cond args s1 s2 => Lcond cond args (U.repr uf s1) (U.repr uf s2)
+  | Ljumptable arg tbl => Ljumptable arg (List.map (U.repr uf) tbl)
+  | _ => i
   end.
+
+Definition tunnel_block (uf: U.t) (b: bblock) : bblock :=
+  List.map (tunnel_instr uf) b.
 
 Definition tunnel_function (f: LTL.function) : LTL.function :=
   let uf := record_gotos f in
   mkfunction
     (fn_sig f)
-    (fn_params f)
     (fn_stacksize f)
-    (PTree.map (fun pc b => tunnel_instr uf b) (fn_code f))
+    (PTree.map1 (tunnel_block uf) (fn_code f))
     (U.repr uf (fn_entrypoint f)).
 
 Definition tunnel_fundef (f: LTL.fundef) : LTL.fundef :=

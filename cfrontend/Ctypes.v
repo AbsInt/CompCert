@@ -26,7 +26,7 @@ Require Import Errors.
   union).  Numeric types (integers and floats) fully specify the
   bit size of the type.  An integer type is a pair of a signed/unsigned
   flag and a bit size: 8, 16, or 32 bits, or the special [IBool] size
-  standing for the C99 [_Bool] type. *)
+  standing for the C99 [_Bool] type.  64-bit integers are treated separately. *)
 
 Inductive signedness : Type :=
   | Signed: signedness
@@ -92,6 +92,7 @@ Definition noattr := {| attr_volatile := false |}.
 Inductive type : Type :=
   | Tvoid: type                                    (**r the [void] type *)
   | Tint: intsize -> signedness -> attr -> type    (**r integer types *)
+  | Tlong: signedness -> attr -> type              (**r 64-bit integer types *)
   | Tfloat: floatsize -> attr -> type              (**r floating-point types *)
   | Tpointer: type -> attr -> type                 (**r pointer types ([*ty]) *)
   | Tarray: type -> Z -> attr -> type              (**r array types ([ty[len]]) *)
@@ -131,6 +132,7 @@ Definition attr_of_type (ty: type) :=
   match ty with
   | Tvoid => noattr
   | Tint sz si a => a
+  | Tlong si a => a
   | Tfloat sz a => a
   | Tpointer elt a => a
   | Tarray elt sz a => a
@@ -148,8 +150,7 @@ Definition type_bool := Tint IBool Signed noattr.
 
 Definition typeconv (ty: type) : type :=
   match ty with
-  | Tint I32 Unsigned _ => ty
-  | Tint _ _ a          => Tint I32 Signed a
+  | Tint (I8 | I16 | IBool) _ a => Tint I32 Signed a
   | Tarray t sz a       => Tpointer t a
   | Tfunction _ _       => Tpointer ty noattr
   | _                   => ty
@@ -166,6 +167,7 @@ Fixpoint alignof (t: type) : Z :=
   | Tint I16 _ _ => 2
   | Tint I32 _ _ => 4
   | Tint IBool _ _ => 1
+  | Tlong _ _ => 8
   | Tfloat F32 _ => 4
   | Tfloat F64 _ => 8
   | Tpointer _ _ => 4
@@ -218,6 +220,7 @@ Fixpoint sizeof (t: type) : Z :=
   | Tint I16 _ _ => 2
   | Tint I32 _ _ => 4
   | Tint IBool _ _ => 1
+  | Tlong _ _ => 8
   | Tfloat F32 _ => 4
   | Tfloat F64 _ => 8
   | Tpointer _ _ => 4
@@ -425,6 +428,7 @@ Definition access_mode (ty: type) : mode :=
   | Tint I16 Unsigned _ => By_value Mint16unsigned
   | Tint I32 _ _ => By_value Mint32
   | Tint IBool _ _ => By_value Mint8unsigned
+  | Tlong _ _ => By_value Mint64
   | Tfloat F32 _ => By_value Mfloat32
   | Tfloat F64 _ => By_value Mfloat64
   | Tvoid => By_nothing
@@ -458,6 +462,7 @@ Fixpoint unroll_composite (ty: type) : type :=
   match ty with
   | Tvoid => ty
   | Tint _ _ _ => ty
+  | Tlong _ _ => ty
   | Tfloat _ _ => ty
   | Tpointer t1 a => Tpointer (unroll_composite t1) a
   | Tarray t1 sz a => Tarray (unroll_composite t1) sz a
@@ -526,6 +531,7 @@ Fixpoint type_of_params (params: list (ident * type)) : typelist :=
 Definition typ_of_type (t: type) : AST.typ :=
   match t with
   | Tfloat _ _ => AST.Tfloat
+  | Tlong _ _ => AST.Tlong
   | _ => AST.Tint
   end.
 
@@ -533,6 +539,7 @@ Definition opttyp_of_type (t: type) : option AST.typ :=
   match t with
   | Tvoid => None
   | Tfloat _ _ => Some AST.Tfloat
+  | Tlong _ _ => Some AST.Tlong
   | _ => Some AST.Tint
   end.
 

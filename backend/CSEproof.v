@@ -996,12 +996,7 @@ Proof.
   rewrite <- RES. apply eval_operation_preserved. exact symbols_preserved.
   (* state matching *)
   econstructor; eauto.
-  apply wt_regset_assign; auto. 
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
-  simpl in H0. inv H0. rewrite <- H3. apply WTREGS.
-  replace (tyenv res) with (snd (type_of_operation op)).
-  eapply type_of_operation_sound; eauto.
-  rewrite <- H6. reflexivity.
+  eapply wt_exec_Iop; eauto. eapply wt_instrs; eauto.  
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H. 
   eapply add_op_satisfiable; eauto. eapply wf_analyze; eauto.
@@ -1028,8 +1023,7 @@ Proof.
   eapply exec_Iload; eauto.
   (* state matching *)
   econstructor; eauto.
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
-  apply wt_regset_assign. auto. rewrite H8. eapply type_of_chunk_correct; eauto.
+  eapply wt_exec_Iload; eauto. eapply wt_instrs; eauto.
   eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   eapply add_load_satisfiable; eauto. eapply wf_analyze; eauto.

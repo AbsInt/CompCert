@@ -96,30 +96,11 @@ Qed.
 
 (** Assertions *)
 
-Definition assertion (b: bool) : res unit :=
-  if b then OK tt else Error(msg "Assertion failed").
+Definition assertion_failed {A: Type} : res A := Error(msg "Assertion failed").
 
-Remark assertion_inversion:
-  forall b x, assertion b = OK x -> b = true.
-Proof.
-  unfold assertion; intros. destruct b; inv H; auto.
-Qed.
-
-Remark assertion_inversion_1:
-  forall (P Q: Prop) (a: {P}+{Q}) x,
-  assertion (proj_sumbool a) = OK x -> P.
-Proof.
-  intros. exploit assertion_inversion; eauto. 
-  unfold proj_sumbool. destruct a. auto. congruence.
-Qed.
-
-Remark assertion_inversion_2:
-  forall (P Q: Prop) (a: {P}+{Q}) x,
-  assertion (negb(proj_sumbool a)) = OK x -> Q.
-Proof.
-  intros. exploit assertion_inversion; eauto. 
-  unfold proj_sumbool. destruct a; simpl. congruence. auto.
-Qed.
+Notation "'assertion' A ; B" := (if A then B else assertion_failed)
+  (at level 200, A at level 100, B at level 200)
+  : error_monad_scope.
 
 (** This is the familiar monadic map iterator. *)
 
@@ -180,26 +161,19 @@ Ltac monadInv1 H :=
       destruct (bind2_inversion F G H) as [x1 [x2 [EQ1 EQ2]]];
       clear H;
       try (monadInv1 EQ2)))))
-  | (assertion (negb (proj_sumbool ?a)) = OK ?X) =>
-      let A := fresh "A" in (generalize (assertion_inversion_2 _ H); intro A);
-      clear H
-  | (assertion (proj_sumbool ?a) = OK ?X) =>
-      let A := fresh "A" in (generalize (assertion_inversion_1 _ H); intro A);
-      clear H
-  | (assertion ?b = OK ?X) =>
-      let A := fresh "A" in (generalize (assertion_inversion _ H); intro A);
-      clear H
+  | (match ?X with left _ => _ | right _ => assertion_failed end = OK _) =>
+      destruct X; [try (monadInv1 H) | discriminate]
+  | (match (negb ?X) with true => _ | false => assertion_failed end = OK _) =>
+      destruct X as [] eqn:?; [discriminate | try (monadInv1 H)]
+  | (match ?X with true => _ | false => assertion_failed end = OK _) =>
+      destruct X as [] eqn:?; [try (monadInv1 H) | discriminate]
   | (mmap ?F ?L = OK ?M) =>
       generalize (mmap_inversion F L H); intro
   end.
 
 Ltac monadInv H :=
+  monadInv1 H ||
   match type of H with
-  | (OK _ = OK _) => monadInv1 H
-  | (Error _ = OK _) => monadInv1 H
-  | (bind ?F ?G = OK ?X) => monadInv1 H
-  | (bind2 ?F ?G = OK ?X) => monadInv1 H
-  | (assertion _ = OK _) => monadInv1 H
   | (?F _ _ _ _ _ _ _ _ = OK _) => 
       ((progress simpl in H) || unfold F in H); monadInv1 H
   | (?F _ _ _ _ _ _ _ = OK _) => 

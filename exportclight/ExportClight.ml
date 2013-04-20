@@ -92,6 +92,12 @@ let coqfloat p n =
   then fprintf p "(Float.double_of_bits (Int64.repr %Ld))" n
   else fprintf p "(Float.double_of_bits (Int64.repr (%Ld)))" n
 
+let coqint64 p n =
+  let n = camlint64_of_coqint n in
+  if n >= 0L
+  then fprintf p "(Int64.repr %Ld)" n
+  else fprintf p "(Int64.repr (%Ld))" n
+
 (* Types *)
 
 let use_struct_names = ref true
@@ -114,6 +120,11 @@ and rtyp p = function
         | I32, Signed -> "tint"
         | I32, Unsigned -> "tuint"
         | IBool, _ -> "tbool")
+  | Tlong(sg, _) ->
+      fprintf p "%s" (
+        match sg with
+        | Signed -> "tlong"
+        | Unsigned -> "tulong")
   | Tfloat(sz, _) ->
       fprintf p "%s" (
         match sz with
@@ -151,7 +162,8 @@ and fieldlist p = function
 (* External functions *)
 
 let asttype p t =
-  fprintf p "%s" (match t with AST.Tint -> "AST.Tint" | AST.Tfloat -> "AST.Tfloat")
+  fprintf p "%s"
+     (match t with AST.Tint -> "AST.Tint" | AST.Tfloat -> "AST.Tfloat" | AST.Tlong -> "AST.Tlong")
 
 let name_of_chunk = function
   | Mint8signed -> "Mint8signed"
@@ -159,6 +171,7 @@ let name_of_chunk = function
   | Mint16signed -> "Mint16signed"
   | Mint16unsigned -> "Mint16unsigned"
   | Mint32 -> "Mint32"
+  | Mint64 -> "Mint64"
   | Mfloat32 -> "Mfloat32"
   | Mfloat64 -> "Mfloat64"
   | Mfloat64al32 -> "Mfloat64al32"
@@ -240,6 +253,8 @@ let rec expr p = function
       fprintf p "(Econst_int %a %a)" coqint n typ t
   | Econst_float(n, t) ->
       fprintf p "(Econst_float %a %a)" coqfloat n typ t
+  | Econst_long(n, t) ->
+      fprintf p "(Econst_long %a %a)" coqint64 n typ t
   | Eunop(op, a1, t) ->
       fprintf p "@[<hov 2>(Eunop %s@ %a@ %a)@]"
          (name_unop op) expr a1 typ t
@@ -316,6 +331,7 @@ let init_data p = function
   | Init_int8 n -> fprintf p "Init_int8 %a" coqint n
   | Init_int16 n -> fprintf p "Init_int16 %a" coqint n
   | Init_int32 n -> fprintf p "Init_int32 %a" coqint n
+  | Init_int64 n -> fprintf p "Init_int64 %a" coqint64 n
   | Init_float32 n -> fprintf p "Init_float32 %a" coqfloat n
   | Init_float64 n -> fprintf p "Init_float64 %a" coqfloat n
   | Init_space n -> fprintf p "Init_space %ld" (Z.to_int32 n)
@@ -359,6 +375,7 @@ let register_struct_union ty =
 let rec collect_type = function
   | Tvoid -> ()
   | Tint _ -> ()
+  | Tlong _ -> ()
   | Tfloat _ -> ()
   | Tpointer(t, _) -> collect_type t
   | Tarray(t, _, _) -> collect_type t
@@ -382,6 +399,7 @@ let rec collect_expr e =
   match e with
   | Econst_int _ -> ()
   | Econst_float _ -> ()
+  | Econst_long _ -> ()
   | Evar _ -> ()
   | Etempvar _ -> ()
   | Ederef(r, _) -> collect_expr r

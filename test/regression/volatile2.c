@@ -15,6 +15,7 @@ unsigned short gus;
 int gi;
 float gf;
 double gd;
+long long gll;
 
 int main()
 {
@@ -25,6 +26,7 @@ int main()
   int i;
   float f;
   double d;
+  long long ll;
 
   TEST("signed char", signed char, sc, 12, 34);
   TEST("unsigned char", unsigned char, uc, 56, 78);
@@ -33,6 +35,7 @@ int main()
   TEST("int", int, i, 0x123456, 0x7890AB);
   TEST("float", float, f, 0.5, 256.0);
   TEST("double", double, d, 3.1415, 2.718);
+  TEST("long long", long long, ll, 0x123456789ABCDEFLL, 0x789ABCDEF1234567LL);
   TEST("global signed char", signed char, gsc, 12, 34);
   TEST("global unsigned char", unsigned char, guc, 56, 78);
   TEST("global signed short", signed short, gss, 1234, 5678);
@@ -40,6 +43,7 @@ int main()
   TEST("global int", int, gi, 0x123456, 0x7890AB);
   TEST("global float", float, gf, 0.5, 256.0);
   TEST("global double", double, gd, 3.1415, 2.718);
+  TEST("global long long", long long, gll, 0x123456789ABCDEFLL, 0x789ABCDEF1234567LL);
   return 0;
 }
 

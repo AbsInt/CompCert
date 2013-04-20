@@ -15,11 +15,11 @@
 open Machregs
 
 let register_names = [
-  ("AX", AX); ("BX", BX); ("SI", SI); ("DI", DI); ("BP", BP);
+  ("AX", AX); ("BX", BX); ("CX", CX); ("DX", DX);
+  ("SI", SI); ("DI", DI); ("BP", BP);
   ("XMM0", X0); ("XMM1", X1); ("XMM2", X2); ("XMM3", X3);
-  ("XMM4", X4); ("XMM5", X5);
-  ("DX", IT1); ("CX", IT2);
-  ("XMM6", FT1); ("XMM7", FT2); ("ST0", FP0)
+  ("XMM4", X4); ("XMM5", X5); ("XMM6", X6); ("XMM7", X7);
+  ("ST0", FP0)
 ]
 
 let name_of_register r =

@@ -47,8 +47,12 @@ let join_points f =
         reached_twice := IntSet.add npc !reached_twice
     end else begin
       reached := IntSet.add npc !reached;
-      List.iter traverse (Kildall.successors_list succs pc)
+      traverse_succs (Kildall.successors_list succs pc)
     end
+  and traverse_succs = function
+    | [] -> ()
+    | [pc] -> traverse pc
+    | pc :: l -> traverse pc; traverse_succs l
   in traverse f.fn_entrypoint; !reached_twice
 
 (* Cut into reachable basic blocks, annotated with the min value of the PC *)
@@ -73,20 +77,18 @@ let basic_blocks f joins =
     let minpc = min npc minpc in
     match PTree.get pc f.fn_code with
     | None -> assert false
-    | Some i ->
-       match i with
-         | Lnop s -> next_in_block blk minpc s
-         | Lop (op, args, res, s) -> next_in_block blk minpc s
-         | Lload (chunk, addr, args, dst, s) -> next_in_block blk minpc s
-         | Lstore (chunk, addr, args, src, s) -> next_in_block blk minpc s
-         | Lcall (sig0, ros, args, res, s) -> next_in_block blk minpc s
-         | Ltailcall (sig0, ros, args) -> end_block blk minpc
-         | Lbuiltin (ef, args, res, s) -> next_in_block blk minpc s
-         | Lcond (cond, args, ifso, ifnot) ->
+    | Some b ->
+       let rec do_instr_list = function
+       | [] -> assert false
+       | Lbranch s :: _ -> next_in_block blk minpc s
+       | Ltailcall (sig0, ros) :: _ -> end_block blk minpc
+       | Lcond (cond, args, ifso, ifnot) :: _ ->
              end_block blk minpc; start_block ifso; start_block ifnot
-         | Ljumptable(arg, tbl) ->
+       | Ljumptable(arg, tbl) :: _ ->
              end_block blk minpc; List.iter start_block tbl
-         | Lreturn optarg -> end_block blk minpc
+       | Lreturn :: _ -> end_block blk minpc
+       | instr :: b' -> do_instr_list b' in
+       do_instr_list b
   (* next_in_block: check if join point and either extend block
      or start block *)
   and next_in_block blk minpc pc =

@@ -49,6 +49,7 @@ let print_id_ofs p (id, ofs) =
 let print_eventval p = function
   | EVint n -> fprintf p "%ld" (camlint_of_coqint n)
   | EVfloat f -> fprintf p "%F" (camlfloat_of_coqfloat f)
+  | EVlong n -> fprintf p "%Ld" (camlint64_of_coqint n)
   | EVptr_global(id, ofs) -> fprintf p "&%a" print_id_ofs (id, ofs)
 
 let print_eventval_list p = function

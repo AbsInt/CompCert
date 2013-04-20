@@ -36,6 +36,7 @@ Definition eq_block := zeq.
 Inductive val: Type :=
   | Vundef: val
   | Vint: int -> val
+  | Vlong: int64 -> val
   | Vfloat: float -> val
   | Vptr: block -> int -> val.
 
@@ -58,6 +59,7 @@ Definition has_type (v: val) (t: typ) : Prop :=
   match v, t with
   | Vundef, _ => True
   | Vint _, Tint => True
+  | Vlong _, Tlong => True
   | Vfloat _, Tfloat => True
   | Vptr _ _, Tint => True
   | _, _ => False
@@ -68,6 +70,12 @@ Fixpoint has_type_list (vl: list val) (tl: list typ) {struct vl} : Prop :=
   | nil, nil => True
   | v1 :: vs, t1 :: ts => has_type v1 t1 /\ has_type_list vs ts
   | _, _ => False
+  end.
+
+Definition has_opttype (v: val) (ot: option typ) : Prop :=
+  match ot with
+  | None => v = Vundef
+  | Some t => has_type v t
   end.
 
 (** Truth values.  Pointers and non-zero integers are treated as [True].
@@ -125,12 +133,6 @@ Definition floatofintu (v: val) : option val :=
   match v with
   | Vint n => Some (Vfloat (Float.floatofintu n))
   | _ => None
-  end.
-
-Definition floatofwords (v1 v2: val) : val :=
-  match v1, v2 with
-  | Vint n1, Vint n2 => Vfloat (Float.from_words n1 n2)
-  | _, _ => Vundef
   end.
 
 Definition negint (v: val) : val :=
@@ -344,6 +346,183 @@ Definition divf (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition floatofwords (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vfloat (Float.from_words n1 n2)
+  | _, _ => Vundef
+  end.
+
+(** Operations on 64-bit integers *)
+
+Definition longofwords (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vlong (Int64.ofwords n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition loword (v: val) : val :=
+  match v with
+  | Vlong n  => Vint (Int64.loword n)
+  | _ => Vundef
+  end.
+
+Definition hiword (v: val) : val :=
+  match v with
+  | Vlong n  => Vint (Int64.hiword n)
+  | _ => Vundef
+  end.
+
+Definition negl (v: val) : val :=
+  match v with
+  | Vlong n => Vlong (Int64.neg n)
+  | _ => Vundef
+  end.
+
+Definition notl (v: val) : val :=
+  match v with
+  | Vlong n => Vlong (Int64.not n)
+  | _ => Vundef
+  end.
+
+Definition longofint (v: val) : val :=
+  match v with
+  | Vint n => Vlong (Int64.repr (Int.signed n))
+  | _ => Vundef
+  end.
+
+Definition longofintu (v: val) : val :=
+  match v with
+  | Vint n => Vlong (Int64.repr (Int.unsigned n))
+  | _ => Vundef
+  end.
+
+Definition longoffloat (v: val) : option val :=
+  match v with
+  | Vfloat f => option_map Vlong (Float.longoffloat f)
+  | _ => None
+  end.
+
+Definition longuoffloat (v: val) : option val :=
+  match v with
+  | Vfloat f => option_map Vlong (Float.longuoffloat f)
+  | _ => None
+  end.
+
+Definition floatoflong (v: val) : option val :=
+  match v with
+  | Vlong n => Some (Vfloat (Float.floatoflong n))
+  | _ => None
+  end.
+
+Definition floatoflongu (v: val) : option val :=
+  match v with
+  | Vlong n => Some (Vfloat (Float.floatoflongu n))
+  | _ => None
+  end.
+
+Definition addl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.add n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition subl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.sub n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition mull (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.mul n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition mull' (v1 v2: val): val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vlong(Int64.mul' n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition divls (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 =>
+      if Int64.eq n2 Int64.zero
+      || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone
+      then None
+      else Some(Vlong(Int64.divs n1 n2))
+  | _, _ => None
+  end.
+
+Definition modls (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 =>
+      if Int64.eq n2 Int64.zero
+      || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone
+      then None
+      else Some(Vlong(Int64.mods n1 n2))
+  | _, _ => None
+  end.
+
+Definition divlu (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 =>
+      if Int64.eq n2 Int64.zero then None else Some(Vlong(Int64.divu n1 n2))
+  | _, _ => None
+  end.
+
+Definition modlu (v1 v2: val): option val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 =>
+      if Int64.eq n2 Int64.zero then None else Some(Vlong(Int64.modu n1 n2))
+  | _, _ => None
+  end.
+
+Definition andl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.and n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition orl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.or n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition xorl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vlong(Int64.xor n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition shll (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 =>
+     if Int.ltu n2 Int64.iwordsize'
+     then Vlong(Int64.shl' n1 n2)
+     else Vundef
+  | _, _ => Vundef
+  end.
+
+Definition shrl (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 =>
+     if Int.ltu n2 Int64.iwordsize'
+     then Vlong(Int64.shr' n1 n2)
+     else Vundef
+  | _, _ => Vundef
+  end.
+
+Definition shrlu (v1 v2: val): val :=
+  match v1, v2 with
+  | Vlong n1, Vint n2 =>
+     if Int.ltu n2 Int64.iwordsize'
+     then Vlong(Int64.shru' n1 n2)
+     else Vundef
+  | _, _ => Vundef
+  end.
+
 (** Comparisons *)
 
 Section COMPARISONS.
@@ -392,6 +571,18 @@ Definition cmpf_bool (c: comparison) (v1 v2: val): option bool :=
   | _, _ => None
   end.
 
+Definition cmpl_bool (c: comparison) (v1 v2: val): option bool :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Some (Int64.cmp c n1 n2)
+  | _, _ => None
+  end.
+
+Definition cmplu_bool (c: comparison) (v1 v2: val): option bool :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Some (Int64.cmpu c n1 n2)
+  | _, _ => None
+  end.
+
 Definition of_optbool (ob: option bool): val :=
   match ob with Some true => Vtrue | Some false => Vfalse | None => Vundef end.
 
@@ -403,6 +594,12 @@ Definition cmpu (c: comparison) (v1 v2: val): val :=
 
 Definition cmpf (c: comparison) (v1 v2: val): val :=
   of_optbool (cmpf_bool c v1 v2).
+
+Definition cmpl (c: comparison) (v1 v2: val): val :=
+  of_optbool (cmpl_bool c v1 v2).
+
+Definition cmplu (c: comparison) (v1 v2: val): val :=
+  of_optbool (cmplu_bool c v1 v2).
 
 End COMPARISONS.
 
@@ -423,6 +620,7 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | Mint16unsigned, Vint n => Vint (Int.zero_ext 16 n)
   | Mint32, Vint n => Vint n
   | Mint32, Vptr b ofs => Vptr b ofs
+  | Mint64, Vlong n => Vlong n
   | Mfloat32, Vfloat f => Vfloat(Float.singleoffloat f)
   | (Mfloat64 | Mfloat64al32), Vfloat f => Vfloat f
   | _, _ => Vundef
@@ -981,6 +1179,12 @@ Inductive lessdef: val -> val -> Prop :=
   | lessdef_refl: forall v, lessdef v v
   | lessdef_undef: forall v, lessdef Vundef v.
 
+Lemma lessdef_same:
+  forall v1 v2, v1 = v2 -> lessdef v1 v2.
+Proof.
+  intros. subst v2. constructor.
+Qed.
+
 Lemma lessdef_trans:
   forall v1 v2 v3, lessdef v1 v2 -> lessdef v2 v3 -> lessdef v1 v3.
 Proof.
@@ -1071,6 +1275,25 @@ Proof.
   intros. destruct ob; simpl; auto. rewrite (H b); auto. 
 Qed.
 
+Lemma longofwords_lessdef:
+  forall v1 v2 v1' v2',
+  lessdef v1 v1' -> lessdef v2 v2' -> lessdef (longofwords v1 v2) (longofwords v1' v2').
+Proof.
+  intros. unfold longofwords. inv H; auto. inv H0; auto. destruct v1'; auto.
+Qed.
+
+Lemma loword_lessdef:
+  forall v v', lessdef v v' -> lessdef (loword v) (loword v').
+Proof.
+  intros. inv H; auto. 
+Qed.
+
+Lemma hiword_lessdef:
+  forall v v', lessdef v v' -> lessdef (hiword v) (hiword v').
+Proof.
+  intros. inv H; auto. 
+Qed.
+
 End Val.
 
 (** * Values and memory injections *)
@@ -1093,6 +1316,8 @@ Definition meminj : Type := block -> option (block * Z).
 Inductive val_inject (mi: meminj): val -> val -> Prop :=
   | val_inject_int:
       forall i, val_inject mi (Vint i) (Vint i)
+  | val_inject_long:
+      forall i, val_inject mi (Vlong i) (Vlong i)
   | val_inject_float:
       forall f, val_inject mi (Vfloat f) (Vfloat f)
   | val_inject_ptr:
@@ -1103,8 +1328,7 @@ Inductive val_inject (mi: meminj): val -> val -> Prop :=
   | val_inject_undef: forall v,
       val_inject mi Vundef v.
 
-Hint Resolve val_inject_int val_inject_float val_inject_ptr 
-             val_inject_undef.
+Hint Constructors val_inject.
 
 Inductive val_list_inject (mi: meminj): list val -> list val-> Prop:= 
   | val_nil_inject :
@@ -1225,6 +1449,25 @@ Proof.
   now erewrite !valid_ptr_inj by eauto.
 Qed.
 
+Lemma val_longofwords_inject:
+  forall v1 v2 v1' v2',
+  val_inject f v1 v1' -> val_inject f v2 v2' -> val_inject f (Val.longofwords v1 v2) (Val.longofwords v1' v2').
+Proof.
+  intros. unfold Val.longofwords. inv H; auto. inv H0; auto.
+Qed.
+
+Lemma val_loword_inject:
+  forall v v', val_inject f v v' -> val_inject f (Val.loword v) (Val.loword v').
+Proof.
+  intros. unfold Val.loword; inv H; auto. 
+Qed.
+
+Lemma val_hiword_inject:
+  forall v v', val_inject f v v' -> val_inject f (Val.hiword v) (Val.hiword v').
+Proof.
+  intros. unfold Val.hiword; inv H; auto. 
+Qed.
+
 End VAL_INJ_OPS.
 
 (** Monotone evolution of a memory injection. *)
@@ -1288,9 +1531,8 @@ Lemma val_inject_id:
   val_inject inject_id v1 v2 <-> Val.lessdef v1 v2.
 Proof.
   intros; split; intros.
-  inv H. constructor. constructor.
+  inv H; auto. 
   unfold inject_id in H0. inv H0. rewrite Int.add_zero. constructor.
-  constructor.
   inv H. destruct v2; econstructor. unfold inject_id; reflexivity. rewrite Int.add_zero; auto.
   constructor.
 Qed.

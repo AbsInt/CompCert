@@ -264,14 +264,16 @@ Nondetfunction or (e1: expr) (e2: expr) :=
   | Eop (Ointconst n1) Enil, t2 => orimm n1 t2
   | t1, Eop (Ointconst n2) Enil => orimm n2 t1
   | Eop (Oshlimm n1) (t1:::Enil), Eop (Oshruimm n2) (t2:::Enil) =>
-      if Int.eq (Int.add n1 n2) Int.iwordsize
-      && same_expr_pure t1 t2
-      then Eop (Ororimm n2) (t1:::Enil)
+      if Int.eq (Int.add n1 n2) Int.iwordsize then
+        if same_expr_pure t1 t2
+        then Eop (Ororimm n2) (t1:::Enil)
+        else Eop (Oshldimm n1) (t1:::t2:::Enil)
       else Eop Oor (e1:::e2:::Enil)
   | Eop (Oshruimm n2) (t2:::Enil), Eop (Oshlimm n1) (t1:::Enil) =>
-      if Int.eq (Int.add n1 n2) Int.iwordsize
-      && same_expr_pure t1 t2
-      then Eop (Ororimm n2) (t1:::Enil)
+      if Int.eq (Int.add n1 n2) Int.iwordsize then
+        if same_expr_pure t1 t2
+        then Eop (Ororimm n2) (t1:::Enil)
+        else Eop (Oshldimm n1) (t1:::t2:::Enil)
       else Eop Oor (e1:::e2:::Enil)
   | _, _ =>
       Eop Oor (e1:::e2:::Enil)

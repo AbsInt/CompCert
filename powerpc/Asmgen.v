@@ -136,6 +136,8 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
             Plfd r (Cint ofs) base :: k
           else
             loadimm GPR0 ofs (Plfdx r base GPR0 :: k))
+  | Tlong =>
+      Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
@@ -152,6 +154,8 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
             Pstfd r (Cint ofs) base :: k
           else
             loadimm GPR0 ofs (Pstfdx r base GPR0 :: k))
+  | Tlong =>
+      Error (msg "Asmgen.storeind")
   end.
 
 (** Constructor for a floating-point comparison.  The PowerPC has
@@ -336,8 +340,8 @@ Definition transl_op
       OK (if symbol_is_small_data s ofs then
            Paddi r GPR0 (Csymbol_sda s ofs) :: k
          else
-           Paddis GPR12 GPR0 (Csymbol_high s ofs) ::
-           Paddi r GPR12 (Csymbol_low s ofs) :: k)
+           Paddis r GPR0 (Csymbol_high s ofs) ::
+           Paddi r r (Csymbol_low s ofs) :: k)
   | Oaddrstack n, nil =>
       do r <- ireg_of res; OK (addimm r GPR1 n k)
   | Ocast8signed, a1 :: nil =>
@@ -428,7 +432,7 @@ Definition transl_op
       do r1 <- ireg_of a1; do r <- ireg_of res;
       OK (rolm r r1 amount mask k)
   | Oroli amount mask, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r2 <- ireg_of a2; do r <- ireg_of res;
       OK (Prlwimi r r2 amount mask :: k)
   | Onegf, a1 :: nil =>
@@ -467,7 +471,7 @@ Definition transl_op
 (** Translation of memory accesses: loads, and stores. *)
 
 Definition int_temp_for (r: mreg) :=
-  if mreg_eq r IT2 then GPR11 else GPR12.
+  if mreg_eq r R12 then GPR11 else GPR12.
 
 Definition transl_memory_access
      (mk1: constant -> ireg -> instruction)
@@ -529,6 +533,8 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
   | Mfloat64 | Mfloat64al32 =>
       do r <- freg_of dst;
       transl_memory_access (Plfd r) (Plfdx r) addr args GPR12 k
+  | Mint64 =>
+      Error (msg "Asmgen.transl_load")
   end.
 
 Definition transl_store (chunk: memory_chunk) (addr: addressing)
@@ -550,6 +556,8 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
   | Mfloat64 | Mfloat64al32 =>
       do r <- freg_of src;
       transl_memory_access (Pstfd r) (Pstfdx r) addr args temp k
+  | Mint64 =>
+      Error (msg "Asmgen.transl_store")
   end.
 
 (** Translation of arguments to annotations *)
@@ -574,7 +582,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
         loadind GPR11 ofs ty dst k
       else
         (do k1 <- loadind GPR11 ofs ty dst k;
-         loadind GPR1 f.(fn_link_ofs) Tint IT1 k1)
+         loadind GPR1 f.(fn_link_ofs) Tint R11 k1)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -598,7 +606,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
           Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
           Pbs symb :: k)
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (map preg_of args) (preg_of res) :: k)
+      OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
   | Mannot ef args =>
       OK (Pannot ef (map transl_annot_param args) :: k)
   | Mlabel lbl =>
@@ -624,8 +632,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
   | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst IT1)
-  | Mop Omove args res => before && negb (mreg_eq res IT1)
+  | Mgetparam ofs ty dst => negb (mreg_eq dst R11)
+  | Mop Omove args res => before && negb (mreg_eq res R11)
   | _ => false
   end.
 

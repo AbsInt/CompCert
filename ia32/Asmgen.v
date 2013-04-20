@@ -17,6 +17,7 @@ Require Import Errors.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
+Require Import Memdata.
 Require Import Op.
 Require Import Locations.
 Require Import Mach.
@@ -54,59 +55,12 @@ Definition mk_mov (rd rs: preg) (k: code) : res code :=
   | _, _ => Error(msg "Asmgen.mk_mov")
   end.
 
-Definition mk_shift (shift_instr: ireg -> instruction)
-                    (r1 r2: ireg) (k: code) : res code :=
-  if ireg_eq r2 ECX then
-    OK (shift_instr r1 :: k)
-  else if ireg_eq r1 ECX then
-    OK (Pxchg_rr r2 ECX :: shift_instr r2 :: Pxchg_rr r2 ECX :: k)
-  else
-    OK (Pmov_rr ECX r2 :: shift_instr r1 :: k).
-
-Definition mk_mov2 (src1 dst1 src2 dst2: ireg) (k: code) : code :=
-  if ireg_eq src1 dst1 then
-    Pmov_rr dst2 src2 :: k
-  else if ireg_eq src2 dst2 then
-    Pmov_rr dst1 src1 :: k
-  else if ireg_eq src2 dst1 then
-    if ireg_eq src1 dst2 then
-      Pxchg_rr src1 src2 :: k
-    else
-      Pmov_rr dst2 src2 :: Pmov_rr dst1 src1 :: k
-  else
-    Pmov_rr dst1 src1 :: Pmov_rr dst2 src2 :: k.
-
-Definition mk_div (div_instr: ireg -> instruction)
-                  (r1 r2: ireg) (k: code) : res code :=
-  if ireg_eq r1 EAX then
-    if ireg_eq r2 EDX then
-      OK (Pmov_rr ECX EDX :: div_instr ECX :: k)
-    else
-      OK (div_instr r2 :: k)
-  else
-      OK (Pmovd_fr XMM7 EAX ::
-          mk_mov2 r1 EAX r2 ECX 
-            (div_instr ECX :: Pmov_rr r1 EAX :: Pmovd_rf EAX XMM7 :: k)).
-
-Definition mk_mod (div_instr: ireg -> instruction)
-                  (r1 r2: ireg) (k: code) : res code :=
-  if ireg_eq r1 EAX then
-    if ireg_eq r2 EDX then
-      OK (Pmov_rr ECX EDX :: div_instr ECX :: Pmov_rr EAX EDX :: k)
-    else
-      OK (div_instr r2 :: Pmov_rr EAX EDX :: k)
-  else
-      OK (Pmovd_fr XMM7 EAX ::
-          mk_mov2 r1 EAX r2 ECX 
-            (div_instr ECX :: Pmov_rr r1 EDX :: Pmovd_rf EAX XMM7 :: k)).
-
-Definition mk_shrximm (r: ireg) (n: int) (k: code) : res code :=
-  let tmp := if ireg_eq r ECX then EDX else ECX in
+Definition mk_shrximm (n: int) (k: code) : res code :=
   let p := Int.sub (Int.shl Int.one n) Int.one in
-  OK (Ptest_rr r r ::
-      Plea tmp (Addrmode (Some r) None (inl _ p)) ::
-      Pcmov Cond_l r tmp ::
-      Psar_ri r n :: k).
+  OK (Ptest_rr EAX EAX ::
+      Plea ECX (Addrmode (Some EAX) None (inl _ p)) ::
+      Pcmov Cond_l EAX ECX ::
+      Psar_ri EAX n :: k).
 
 Definition low_ireg (r: ireg) : bool :=
   match r with
@@ -118,7 +72,7 @@ Definition mk_intconv (mk: ireg -> ireg -> instruction) (rd rs: ireg) (k: code) 
   if low_ireg rs then
     OK (mk rd rs :: k)
   else
-    OK (Pmov_rr EDX rs :: mk rd EDX :: k).
+    OK (Pmov_rr EAX rs :: mk rd EAX :: k).
 
 Definition addressing_mentions (addr: addrmode) (r: ireg) : bool :=
   match addr with Addrmode base displ const =>
@@ -130,11 +84,11 @@ Definition mk_smallstore (sto: addrmode -> ireg ->instruction)
                          (addr: addrmode) (rs: ireg) (k: code) :=
   if low_ireg rs then
     OK (sto addr rs :: k)
-  else if addressing_mentions addr ECX then
-    OK (Plea ECX addr :: Pmov_rr EDX rs ::
-        sto (Addrmode (Some ECX) None (inl _ Int.zero)) EDX :: k)
+  else if addressing_mentions addr EAX then
+    OK (Plea ECX addr :: Pmov_rr EAX rs ::
+        sto (Addrmode (Some ECX) None (inl _ Int.zero)) EAX :: k)
   else
-    OK (Pmov_rr ECX rs :: sto addr ECX :: k).
+    OK (Pmov_rr EAX rs :: sto addr EAX :: k).
 
 (** Accessing slots in the stack frame.  *)
 
@@ -149,6 +103,8 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
       | ST0  => OK (Pfld_m (Addrmode (Some base) None (inl _ ofs)) :: k)
       | _ => Error (msg "Asmgen.loadind")
       end
+  | Tlong =>
+      Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
@@ -162,6 +118,8 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
       | ST0  => OK (Pfstp_m (Addrmode (Some base) None (inl _ ofs)) :: k)
       | _ => Error (msg "Asmgen.loadind")
       end
+  | Tlong =>
+      Error (msg "Asmgen.storeind")
   end.
 
 (** Translation of addressing modes *)
@@ -284,18 +242,24 @@ Definition testcond_for_condition (cond: condition) : extcond :=
 
 (** Acting upon extended conditions. *)
 
-Definition mk_setcc (cond: extcond) (rd: ireg) (k: code) :=
+Definition mk_setcc_base (cond: extcond) (rd: ireg) (k: code) :=
   match cond with
-  | Cond_base c => Psetcc c rd :: k
+  | Cond_base c =>
+      Psetcc c rd :: k
   | Cond_and c1 c2 =>
-      if ireg_eq rd EDX
-      then Psetcc c1 EDX :: Psetcc c2 ECX :: Pand_rr EDX ECX :: k
-      else Psetcc c1 EDX :: Psetcc c2 rd  :: Pand_rr rd EDX :: k
+      if ireg_eq rd EAX
+      then Psetcc c1 EAX :: Psetcc c2 ECX :: Pand_rr EAX ECX :: k
+      else Psetcc c1 EAX :: Psetcc c2 rd  :: Pand_rr rd EAX :: k
   | Cond_or c1 c2 => 
-      if ireg_eq rd EDX
-      then Psetcc c1 EDX :: Psetcc c2 ECX :: Por_rr EDX ECX :: k
-      else Psetcc c1 EDX :: Psetcc c2 rd  :: Por_rr rd EDX :: k
+      if ireg_eq rd EAX
+      then Psetcc c1 EAX :: Psetcc c2 ECX :: Por_rr EAX ECX :: k
+      else Psetcc c1 EAX :: Psetcc c2 rd  :: Por_rr rd EAX :: k
   end.
+
+Definition mk_setcc (cond: extcond) (rd: ireg) (k: code) :=
+  if low_ireg rd
+  then mk_setcc_base cond rd k
+  else mk_setcc_base cond EAX (Pmov_rr rd EAX :: k).
 
 Definition mk_jcc (cond: extcond) (lbl: label) (k: code) :=
   match cond with
@@ -330,91 +294,106 @@ Definition transl_op
   | Ocast16unsigned, a1 :: nil =>
       do r1 <- ireg_of a1; do r <- ireg_of res; mk_intconv Pmovzw_rr r r1 k
   | Oneg, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pneg r :: k)
   | Osub, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Psub_rr r r2 :: k)
   | Omul, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pimul_rr r r2 :: k)
   | Omulimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pimul_ri r n :: k)
   | Odiv, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_div Pidiv r r2 k
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq a2 CX);
+      assertion (mreg_eq res AX);
+      OK(Pidiv ECX :: k)
   | Odivu, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_div Pdiv r r2 k
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq a2 CX);
+      assertion (mreg_eq res AX);
+      OK(Pdiv ECX :: k)
   | Omod, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_mod Pidiv r r2 k
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq a2 CX);
+      assertion (mreg_eq res DX);
+      OK(Pidiv ECX :: k)
   | Omodu, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_mod Pdiv r r2 k
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq a2 CX);
+      assertion (mreg_eq res DX);
+      OK(Pdiv ECX :: k)
   | Oand, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pand_rr r r2 :: k)
   | Oandimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pand_ri r n :: k)
   | Oor, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Por_rr r r2 :: k)
   | Oorimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Por_ri r n :: k)
   | Oxor, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pxor_rr r r2 :: k)
   | Oxorimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pxor_ri r n :: k)
   | Oshl, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_shift Psal_rcl r r2 k
+      assertion (mreg_eq a1 res);
+      assertion (mreg_eq a2 CX);
+      do r <- ireg_of res; OK (Psal_rcl r :: k)
   | Oshlimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Psal_ri r n :: k)
   | Oshr, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_shift Psar_rcl r r2 k
+      assertion (mreg_eq a1 res);
+      assertion (mreg_eq a2 CX);
+      do r <- ireg_of res; OK (Psar_rcl r :: k)
   | Oshrimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Psar_ri r n :: k)
   | Oshru, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; do r2 <- ireg_of a2; mk_shift Pshr_rcl r r2 k
+      assertion (mreg_eq a1 res);
+      assertion (mreg_eq a2 CX);
+      do r <- ireg_of res; OK (Pshr_rcl r :: k)
   | Oshruimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pshr_ri r n :: k)
   | Oshrximm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
-      do r <- ireg_of res; mk_shrximm r n k
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq res AX);
+      mk_shrximm n k
   | Ororimm n, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pror_ri r n :: k)
+  | Oshldimm n, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pshld_ri r r2 n :: k)
   | Olea addr, _ =>
       do am <- transl_addressing addr args; do r <- ireg_of res;
       OK (Plea r am :: k)
   | Onegf, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- freg_of res; OK (Pnegd r :: k)
   | Oabsf, a1 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- freg_of res; OK (Pabsd r :: k)
   | Oaddf, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- freg_of res; do r2 <- freg_of a2; OK (Paddd_ff r r2 :: k)
   | Osubf, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- freg_of res; do r2 <- freg_of a2; OK (Psubd_ff r r2 :: k)
   | Omulf, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- freg_of res; do r2 <- freg_of a2; OK (Pmuld_ff r r2 :: k)
   | Odivf, a1 :: a2 :: nil =>
-      do x <- assertion (mreg_eq a1 res);
+      assertion (mreg_eq a1 res);
       do r <- freg_of res; do r2 <- freg_of a2; OK (Pdivd_ff r r2 :: k)
   | Osingleoffloat, a1 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1; OK (Pcvtsd2ss_ff r r1 :: k)
@@ -450,6 +429,8 @@ Definition transl_load (chunk: memory_chunk)
       do r <- freg_of dest; OK(Pcvtss2sd_fm r am :: k)
   | Mfloat64 | Mfloat64al32 =>
       do r <- freg_of dest; OK(Pmovsd_fm r am :: k)
+  | Mint64 =>
+      Error (msg "Asmgen.transl_load")
   end.
 
 Definition transl_store (chunk: memory_chunk)
@@ -467,6 +448,8 @@ Definition transl_store (chunk: memory_chunk)
       do r <- freg_of src; OK(Pcvtsd2ss_mf am r :: k)
   | Mfloat64 | Mfloat64al32 =>
       do r <- freg_of src; OK(Pmovsd_mf am r :: k)
+  | Mint64 =>
+      Error (msg "Asmgen.transl_store")
   end.
 
 (** Translation of arguments to annotations *)
@@ -491,7 +474,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
         loadind EDX ofs ty dst k
       else
         (do k1 <- loadind EDX ofs ty dst k;
-         loadind ESP f.(fn_link_ofs) Tint IT1 k1)
+         loadind ESP f.(fn_link_ofs) Tint DX k1)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -521,7 +504,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
           Pret :: k)
   | Mbuiltin ef args res =>
-      OK (Pbuiltin ef (List.map preg_of args) (preg_of res) :: k)
+      OK (Pbuiltin ef (List.map preg_of args) (List.map preg_of res) :: k)
   | Mannot ef args =>
       OK (Pannot ef (map transl_annot_param args) :: k)
   end.
@@ -531,7 +514,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
   | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst IT1)
+  | Mgetparam ofs ty dst => negb (mreg_eq dst DX)
   | _ => false
   end.
 

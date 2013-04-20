@@ -171,6 +171,7 @@ Definition of_chunk (chunk: memory_chunk) :=
   | Mint16signed => Int16s
   | Mint16unsigned => Int16u
   | Mint32 => Any
+  | Mint64 => Any
   | Mfloat32 => Float32
   | Mfloat64 => Any
   | Mfloat64al32 => Any
@@ -239,6 +240,8 @@ Definition transl_constant (cst: Csharpminor.constant): (constant * approx) :=
       (Ointconst n, Approx.of_int n)
   | Csharpminor.Ofloatconst n =>
       (Ofloatconst n, Approx.of_float n)
+  | Csharpminor.Olongconst n =>
+      (Olongconst n, Any)
   end.
 
 (** Translation of expressions.  Return both a Cminor expression and

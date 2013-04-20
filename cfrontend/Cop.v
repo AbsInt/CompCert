@@ -76,23 +76,35 @@ Inductive classify_cast_cases : Type :=
   | cast_case_f2f (sz2:floatsize)                  (**r float -> float *)
   | cast_case_i2f (si1:signedness) (sz2:floatsize) (**r int -> float *)
   | cast_case_f2i (sz2:intsize) (si2:signedness)   (**r float -> int *)
+  | cast_case_l2l                       (**r long -> long *)
+  | cast_case_i2l (si1: signedness)     (**r int -> long *)
+  | cast_case_l2i (sz2: intsize) (si2: signedness) (**r long -> int *)
+  | cast_case_l2f (si1: signedness) (sz2: floatsize) (**r long -> float *)
+  | cast_case_f2l (si2: signedness)     (**r float -> long *)
   | cast_case_f2bool                    (**r float -> bool *)
+  | cast_case_l2bool                    (**r long -> bool *)
   | cast_case_p2bool                    (**r pointer -> bool *)
   | cast_case_struct (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r struct -> struct *)
   | cast_case_union (id1: ident) (fld1: fieldlist) (id2: ident) (fld2: fieldlist) (**r union -> union *)
   | cast_case_void                                 (**r any -> void *)
   | cast_case_default.
 
-Function classify_cast (tfrom tto: type) : classify_cast_cases :=
+Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
-  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
+  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
   | Tint IBool _ _, Tfloat _ _ => cast_case_f2bool
-  | Tint IBool _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_p2bool
+  | Tint IBool _ _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_p2bool
   | Tint sz2 si2 _, Tint sz1 si1 _ => cast_case_i2i sz2 si2
   | Tint sz2 si2 _, Tfloat sz1 _ => cast_case_f2i sz2 si2
   | Tfloat sz2 _, Tfloat sz1 _ => cast_case_f2f sz2
   | Tfloat sz2 _, Tint sz1 si1 _ => cast_case_i2f si1 sz2
-  | Tpointer _ _, (Tint _ _ _ | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
+  | (Tpointer _ _ | Tcomp_ptr _ _), (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
+  | Tlong _ _, Tlong _ _ => cast_case_l2l
+  | Tlong _ _, Tint sz1 si1 _ => cast_case_i2l si1
+  | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
+  | Tint sz2 si2 _, Tlong _ _ => cast_case_l2i sz2 si2
+  | Tlong si2 _, Tfloat sz1 _ => cast_case_f2l si2
+  | Tfloat sz2 _, Tlong si1 _ => cast_case_l2f si1 sz2
   | Tstruct id2 fld2 _, Tstruct id1 fld1 _ => cast_case_struct id1 fld1 id2 fld2
   | Tunion id2 fld2 _, Tunion id1 fld1 _ => cast_case_union id1 fld1 id2 fld2
   | Tvoid, _ => cast_case_void
@@ -131,7 +143,25 @@ Definition cast_float_float (sz: floatsize) (f: float) : float :=
   | F64 => f
   end.
 
-Function sem_cast (v: val) (t1 t2: type) : option val :=
+Definition cast_int_long (si: signedness) (i: int) : int64 :=
+  match si with
+  | Signed => Int64.repr (Int.signed i)
+  | Unsigned => Int64.repr (Int.unsigned i)
+  end.
+
+Definition cast_long_float (si : signedness) (i: int64) : float :=
+  match si with
+  | Signed => Float.floatoflong i
+  | Unsigned => Float.floatoflongu i
+  end.
+
+Definition cast_float_long (si : signedness) (f: float) : option int64 :=
+  match si with
+  | Signed => Float.longoffloat f
+  | Unsigned => Float.longuoffloat f
+  end.
+
+Definition sem_cast (v: val) (t1 t2: type) : option val :=
   match classify_cast t1 t2 with
   | cast_case_neutral =>
       match v with
@@ -174,10 +204,53 @@ Function sem_cast (v: val) (t1 t2: type) : option val :=
       | Vptr _ _ => Some (Vint Int.one)
       | _ => None
       end
+  | cast_case_l2l =>
+      match v with
+      | Vlong n => Some (Vlong n)
+      | _ => None
+      end
+  | cast_case_i2l si =>
+      match v with
+      | Vint n => Some(Vlong (cast_int_long si n))
+      | _ => None
+      end
+  | cast_case_l2i sz si =>
+      match v with
+      | Vlong n => Some(Vint (cast_int_int sz si (Int.repr (Int64.unsigned n))))
+      | _ => None
+      end
+  | cast_case_l2bool =>
+      match v with
+      | Vlong n =>
+          Some(Vint(if Int64.eq n Int64.zero then Int.zero else Int.one))
+      | _ => None
+      end
+  | cast_case_l2f si1 sz2 =>
+      match v with
+      | Vlong i => Some (Vfloat (cast_float_float sz2 (cast_long_float si1 i)))
+      | _ => None
+      end
+  | cast_case_f2l si2 =>
+      match v with
+      | Vfloat f =>
+          match cast_float_long si2 f with
+          | Some i => Some (Vlong i)
+          | None => None
+          end
+      | _ => None
+      end
   | cast_case_struct id1 fld1 id2 fld2 =>
-      if ident_eq id1 id2 && fieldlist_eq fld1 fld2 then Some v else None
+      match v with
+      | Vptr b ofs =>
+          if ident_eq id1 id2 && fieldlist_eq fld1 fld2 then Some v else None
+      | _ => None
+      end
   | cast_case_union id1 fld1 id2 fld2 =>
-      if ident_eq id1 id2 && fieldlist_eq fld1 fld2 then Some v else None
+      match v with
+      | Vptr b ofs =>
+          if ident_eq id1 id2 && fieldlist_eq fld1 fld2 then Some v else None
+      | _ => None
+      end
   | cast_case_void =>
       Some v
   | cast_case_default =>
@@ -192,13 +265,15 @@ Inductive classify_bool_cases : Type :=
   | bool_case_i                           (**r integer *)
   | bool_case_f                           (**r float *)
   | bool_case_p                           (**r pointer *)
+  | bool_case_l                           (**r long *)
   | bool_default.
 
 Definition classify_bool (ty: type) : classify_bool_cases :=
   match typeconv ty with
   | Tint _ _ _ => bool_case_i
-  | Tpointer _ _ => bool_case_p
+  | Tpointer _ _ | Tcomp_ptr _ _ => bool_case_p
   | Tfloat _ _ => bool_case_f
+  | Tlong _ _ => bool_case_l
   | _ => bool_default
   end.
 
@@ -207,7 +282,7 @@ Definition classify_bool (ty: type) : classify_bool_cases :=
   considered as true.  The integer zero (which also represents
   the null pointer) and the float 0.0 are false. *)
 
-Function bool_val (v: val) (t: type) : option bool :=
+Definition bool_val (v: val) (t: type) : option bool :=
   match classify_bool t with
   | bool_case_i =>
       match v with
@@ -225,6 +300,11 @@ Function bool_val (v: val) (t: type) : option bool :=
       | Vptr b ofs => Some true
       | _ => None
       end
+  | bool_case_l =>
+      match v with
+      | Vlong n => Some (negb (Int64.eq n Int64.zero))
+      | _ => None
+      end
   | bool_default => None
   end.
 
@@ -239,25 +319,29 @@ Proof.
   assert (A: classify_bool t =
     match t with
     | Tint _ _ _ => bool_case_i
-    | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ => bool_case_p
+    | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ => bool_case_p
     | Tfloat _ _ => bool_case_f
+    | Tlong _ _ => bool_case_l
     | _ => bool_default
     end).
-  unfold classify_bool; destruct t; simpl; auto. destruct i; auto. destruct s; auto.
-
+  {
+    unfold classify_bool; destruct t; simpl; auto. destruct i; auto.
+  }
   unfold bool_val. rewrite A. unfold sem_cast. destruct t; simpl; auto; destruct v; auto.
-  destruct (Int.eq i0 Int.zero); auto. 
+  destruct (Int.eq i0 Int.zero); auto.
+  destruct (Int64.eq i Int64.zero); auto.
   destruct (Float.cmp Ceq f0 Float.zero); auto.
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i Int.zero); auto. 
+  destruct (Int.eq i0 Int.zero); auto. 
 Qed.
 
 (** ** Unary operators *)
 
 (** *** Boolean negation *)
 
-Function sem_notbool (v: val) (ty: type) : option val :=
+Definition sem_notbool (v: val) (ty: type) : option val :=
   match classify_bool ty with
   | bool_case_i =>
       match v with
@@ -273,6 +357,11 @@ Function sem_notbool (v: val) (ty: type) : option val :=
       match v with
       | Vint n => Some (Val.of_bool (Int.eq n Int.zero))
       | Vptr _ _ => Some Vfalse
+      | _ => None
+      end
+  | bool_case_l =>
+      match v with
+      | Vlong n => Some (Val.of_bool (Int64.eq n Int64.zero))
       | _ => None
       end
   | bool_default => None
@@ -294,6 +383,7 @@ Qed.
 Inductive classify_neg_cases : Type :=
   | neg_case_i(s: signedness)              (**r int *)
   | neg_case_f                             (**r float *)
+  | neg_case_l(s: signedness)              (**r long *)
   | neg_default.
 
 Definition classify_neg (ty: type) : classify_neg_cases :=
@@ -301,10 +391,11 @@ Definition classify_neg (ty: type) : classify_neg_cases :=
   | Tint I32 Unsigned _ => neg_case_i Unsigned
   | Tint _ _ _ => neg_case_i Signed
   | Tfloat _ _ => neg_case_f
+  | Tlong si _ => neg_case_l si
   | _ => neg_default
   end.
 
-Function sem_neg (v: val) (ty: type) : option val :=
+Definition sem_neg (v: val) (ty: type) : option val :=
   match classify_neg ty with
   | neg_case_i sg =>
       match v with
@@ -316,6 +407,11 @@ Function sem_neg (v: val) (ty: type) : option val :=
       | Vfloat f => Some (Vfloat (Float.neg f))
       | _ => None
       end
+  | neg_case_l sg =>
+      match v with
+      | Vlong n => Some (Vlong (Int64.neg n))
+      | _ => None
+      end
   | neg_default => None
   end.
 
@@ -323,20 +419,27 @@ Function sem_neg (v: val) (ty: type) : option val :=
 
 Inductive classify_notint_cases : Type :=
   | notint_case_i(s: signedness)              (**r int *)
+  | notint_case_l(s: signedness)              (**r long *)
   | notint_default.
 
 Definition classify_notint (ty: type) : classify_notint_cases :=
   match ty with
   | Tint I32 Unsigned _ => notint_case_i Unsigned
   | Tint _ _ _ => notint_case_i Signed
+  | Tlong si _ => notint_case_l si
   | _ => notint_default
   end.
 
-Function sem_notint (v: val) (ty: type): option val :=
+Definition sem_notint (v: val) (ty: type): option val :=
   match classify_notint ty with
   | notint_case_i sg =>
       match v with
-      | Vint n => Some (Vint (Int.xor n Int.mone))
+      | Vint n => Some (Vint (Int.not n))
+      | _ => None
+      end
+  | notint_case_l sg =>
+      match v with
+      | Vlong n => Some (Vlong (Int64.not n))
       | _ => None
       end
   | notint_default => None
@@ -351,59 +454,119 @@ Function sem_notint (v: val) (ty: type): option val :=
   (e.g. division, modulus, comparisons), the unsigned operation is selected
   if at least one of the arguments is of type "unsigned int32", otherwise
   the signed operation is performed.
+- Likewise if both arguments are of long integer type.
 - If both arguments are of float type, a float operation is performed.
   We choose to perform all float arithmetic in double precision,
   even if both arguments are single-precision floats.
-- If one argument has integer type and the other has float type,
+- If one argument has integer/long type and the other has float type,
   we convert the integer argument to float, then perform the float operation.
+- If one argument has long integer type and the other integer type,
+  we convert the integer argument to long, then perform the long operation
 *)
+
+Inductive binarith_cases: Type :=
+  | bin_case_ii(s: signedness)         (**r int, int *)
+  | bin_case_ff                        (**r float, float *)
+  | bin_case_if(s: signedness)         (**r int, float *)
+  | bin_case_fi(s: signedness)         (**r float, int *)
+  | bin_case_ll(s: signedness)         (**r long, long *)
+  | bin_case_il(s1 s2: signedness)     (**r int, long *)
+  | bin_case_li(s1 s2: signedness)     (**r long, int *)
+  | bin_case_lf(s: signedness)         (**r long, float *)
+  | bin_case_fl(s: signedness)         (**r float, long *)
+  | bin_default.
+
+Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
+  match typeconv ty1, typeconv ty2 with
+  | Tint I32 Unsigned _, Tint _ _ _ => bin_case_ii Unsigned
+  | Tint _ _ _, Tint I32 Unsigned _ => bin_case_ii Unsigned
+  | Tint _ _ _, Tint _ _ _ => bin_case_ii Signed
+  | Tfloat _ _, Tfloat _ _ => bin_case_ff
+  | Tint _ sg _, Tfloat _ _ => bin_case_if sg
+  | Tfloat _ _, Tint _ sg _ => bin_case_fi sg
+  | Tlong Signed _, Tlong Signed _ => bin_case_ll Signed
+  | Tlong _ _, Tlong _ _ => bin_case_ll Unsigned
+  | Tint _ s1 _, Tlong s2 _ => bin_case_il s1 s2
+  | Tlong s1 _, Tint _ s2 _ => bin_case_li s1 s2
+  | Tlong sg _, Tfloat _ _ => bin_case_lf sg
+  | Tfloat _ _, Tlong sg _ => bin_case_fl sg
+  | _, _ => bin_default
+  end.
+
+Definition sem_binarith
+    (sem_int: signedness -> int -> int -> option val)
+    (sem_long: signedness -> int64 -> int64 -> option val)
+    (sem_float: float -> float -> option val)
+    (v1: val) (t1: type) (v2: val) (t2: type) : option val :=
+  match classify_binarith t1 t2 with
+  | bin_case_ii sg =>
+      match v1, v2 with
+      | Vint n1, Vint n2 => sem_int sg n1 n2
+      | _,  _ => None
+      end
+  | bin_case_ff =>
+      match v1, v2 with
+      | Vfloat n1, Vfloat n2 => sem_float n1 n2
+      | _,  _ => None
+      end
+  | bin_case_if sg =>
+      match v1, v2 with
+      | Vint n1, Vfloat n2 => sem_float (cast_int_float sg n1) n2
+      | _, _ => None
+      end
+  | bin_case_fi sg =>
+      match v1, v2 with
+      | Vfloat n1, Vint n2 => sem_float n1 (cast_int_float sg n2)
+      | _, _ => None
+      end
+  | bin_case_ll sg =>
+      match v1, v2 with
+      | Vlong n1, Vlong n2 => sem_long sg n1 n2
+      | _,  _ => None
+      end
+  | bin_case_il sg1 sg2 =>
+      match v1, v2 with
+      | Vint n1, Vlong n2 => sem_long sg2 (cast_int_long sg1 n1) n2
+      | _,  _ => None
+      end
+  | bin_case_li sg1 sg2 =>
+      match v1, v2 with
+      | Vlong n1, Vint n2 => sem_long sg1 n1 (cast_int_long sg2 n2)
+      | _,  _ => None
+      end
+  | bin_case_lf sg =>
+      match v1, v2 with
+      | Vlong n1, Vfloat n2 => sem_float (cast_long_float sg n1) n2
+      | _, _ => None
+      end
+  | bin_case_fl sg =>
+      match v1, v2 with
+      | Vfloat n1, Vlong n2 => sem_float n1 (cast_long_float sg n2)
+      | _, _ => None
+      end
+  | bin_default => None
+  end.
 
 (** *** Addition *)
 
 Inductive classify_add_cases : Type :=
-  | add_case_ii(s: signedness)         (**r int, int *)
-  | add_case_ff                        (**r float, float *)
-  | add_case_if(s: signedness)         (**r int, float *)
-  | add_case_fi(s: signedness)         (**r float, int *)
   | add_case_pi(ty: type)(a: attr)     (**r pointer, int *)
   | add_case_ip(ty: type)(a: attr)     (**r int, pointer *)
-  | add_default.
+  | add_case_pl(ty: type)(a: attr)     (**r pointer, long *)
+  | add_case_lp(ty: type)(a: attr)     (**r long, pointer *)
+  | add_default.                       (**r numerical type, numerical type *)
 
 Definition classify_add (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned _, Tint _ _ _ => add_case_ii Unsigned
-  | Tint _ _ _, Tint I32 Unsigned _ => add_case_ii Unsigned
-  | Tint _ _ _, Tint _ _ _ => add_case_ii Signed
-  | Tfloat _ _, Tfloat _ _ => add_case_ff
-  | Tint _ sg _, Tfloat _ _ => add_case_if sg
-  | Tfloat _ _, Tint _ sg _ => add_case_fi sg
   | Tpointer ty a, Tint _ _ _ => add_case_pi ty a
   | Tint _ _ _, Tpointer ty a => add_case_ip ty a
+  | Tpointer ty a, Tlong _ _ => add_case_pl ty a
+  | Tlong _ _, Tpointer ty a => add_case_lp ty a
   | _, _ => add_default
   end.
 
-Function sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_add t1 t2 with 
-  | add_case_ii sg =>                   (**r integer addition *)
-      match v1, v2 with
-      | Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
-      | _,  _ => None
-      end
-  | add_case_ff =>                      (**r float addition *)
-      match v1, v2 with
-      | Vfloat n1, Vfloat n2 => Some (Vfloat (Float.add n1 n2))
-      | _,  _ => None
-      end
-  | add_case_if sg =>                   (**r int plus float *)
-      match v1, v2 with
-      | Vint n1, Vfloat n2 => Some (Vfloat (Float.add (cast_int_float sg n1) n2))
-      | _, _ => None
-      end
-  | add_case_fi sg =>                   (**r float plus int *)
-      match v1, v2 with
-      | Vfloat n1, Vint n2 => Some (Vfloat (Float.add n1 (cast_int_float sg n2)))
-      | _, _ => None
-      end
   | add_case_pi ty _ =>                 (**r pointer plus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
@@ -416,59 +579,57 @@ Function sem_add (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
         Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
       | _,  _ => None
       end   
-  | add_default => None
-end.
+  | add_case_pl ty _ =>                 (**r pointer plus long *)
+      match v1,v2 with
+      | Vptr b1 ofs1, Vlong n2 => 
+        let n2 := Int.repr (Int64.unsigned n2) in
+        Some (Vptr b1 (Int.add ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+      | _,  _ => None
+      end   
+  | add_case_lp ty _ =>                 (**r long plus pointer *)
+      match v1,v2 with
+      | Vlong n1, Vptr b2 ofs2 => 
+        let n1 := Int.repr (Int64.unsigned n1) in
+        Some (Vptr b2 (Int.add ofs2 (Int.mul (Int.repr (sizeof ty)) n1)))
+      | _,  _ => None
+      end   
+  | add_default =>
+      sem_binarith
+        (fun sg n1 n2 => Some(Vint(Int.add n1 n2)))
+        (fun sg n1 n2 => Some(Vlong(Int64.add n1 n2)))
+        (fun n1 n2 => Some(Vfloat(Float.add n1 n2)))
+        v1 t1 v2 t2
+  end.
 
 (** *** Subtraction *)
 
 Inductive classify_sub_cases : Type :=
-  | sub_case_ii(s: signedness)          (**r int , int *)
-  | sub_case_ff                         (**r float , float *)
-  | sub_case_if(s: signedness)          (**r int, float *)
-  | sub_case_fi(s: signedness)          (**r float, int *)
-  | sub_case_pi(ty: type)               (**r pointer, int *)
+  | sub_case_pi(ty: type)(a: attr)      (**r pointer, int *)
   | sub_case_pp(ty: type)               (**r pointer, pointer *)
-  | sub_default.
+  | sub_case_pl(ty: type)(a: attr)      (**r pointer, long *)
+  | sub_default.                        (**r numerical type, numerical type *)
 
 Definition classify_sub (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned _, Tint _ _ _ => sub_case_ii Unsigned
-  | Tint _ _ _, Tint I32 Unsigned _ => sub_case_ii Unsigned
-  | Tint _ _ _, Tint _ _ _ => sub_case_ii Signed
-  | Tfloat _ _ , Tfloat _ _ => sub_case_ff
-  | Tint _ sg _, Tfloat _ _ => sub_case_if sg
-  | Tfloat _ _, Tint _ sg _ => sub_case_fi sg
-  | Tpointer ty _, Tint _ _ _ => sub_case_pi ty
+  | Tpointer ty a, Tint _ _ _ => sub_case_pi ty a
   | Tpointer ty _ , Tpointer _ _ => sub_case_pp ty
-  | _ ,_ => sub_default
+  | Tpointer ty a, Tlong _ _ => sub_case_pl ty a
+  | _, _ => sub_default
   end.
 
-Function sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
   match classify_sub t1 t2 with
-  | sub_case_ii sg =>            (**r integer subtraction *)
-      match v1,v2 with
-      | Vint n1, Vint n2 => Some (Vint (Int.sub n1 n2))
-      | _,  _ => None
-      end 
-  | sub_case_ff =>               (**r float subtraction *)
-      match v1,v2 with
-      | Vfloat f1, Vfloat f2 => Some (Vfloat(Float.sub f1 f2))
-      | _,  _ => None
-      end
-  | sub_case_if sg =>            (**r int minus float *)
-      match v1, v2 with
-      | Vint n1, Vfloat n2 => Some (Vfloat (Float.sub (cast_int_float sg n1) n2))
-      | _, _ => None
-      end
-  | sub_case_fi sg =>            (**r float minus int *)
-      match v1, v2 with
-      | Vfloat n1, Vint n2 => Some (Vfloat (Float.sub n1 (cast_int_float sg n2)))
-      | _, _ => None
-      end
-  | sub_case_pi ty =>            (**r pointer minus integer *)
+  | sub_case_pi ty attr =>            (**r pointer minus integer *)
       match v1,v2 with
       | Vptr b1 ofs1, Vint n2 => 
-            Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
+      | _,  _ => None
+      end
+  | sub_case_pl ty attr =>            (**r pointer minus long *)
+      match v1,v2 with
+      | Vptr b1 ofs1, Vlong n2 => 
+          let n2 := Int.repr (Int64.unsigned n2) in
+          Some (Vptr b1 (Int.sub ofs1 (Int.mul (Int.repr (sizeof ty)) n2)))
       | _,  _ => None
       end
   | sub_case_pp ty =>          (**r pointer minus pointer *)
@@ -480,255 +641,187 @@ Function sem_sub (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
           else None
       | _, _ => None
       end
-  | sub_default => None
+  | sub_default =>
+      sem_binarith
+        (fun sg n1 n2 => Some(Vint(Int.sub n1 n2)))
+        (fun sg n1 n2 => Some(Vlong(Int64.sub n1 n2)))
+        (fun n1 n2 => Some(Vfloat(Float.sub n1 n2)))
+        v1 t1 v2 t2
   end.
  
-(** *** Multiplication *)
+(** *** Multiplication, division, modulus *)
 
-Inductive classify_mul_cases : Type:=
-  | mul_case_ii(s: signedness) (**r int , int *)
-  | mul_case_ff                (**r float , float *)
-  | mul_case_if(s: signedness) (**r int, float *)
-  | mul_case_fi(s: signedness) (**r float, int *)
-  | mul_default.
+Definition sem_mul (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_binarith
+    (fun sg n1 n2 => Some(Vint(Int.mul n1 n2)))
+    (fun sg n1 n2 => Some(Vlong(Int64.mul n1 n2)))
+    (fun n1 n2 => Some(Vfloat(Float.mul n1 n2)))
+    v1 t1 v2 t2.
 
-Definition classify_mul (ty1: type) (ty2: type) :=
-  match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned _, Tint _ _ _ => mul_case_ii Unsigned
-  | Tint _ _ _, Tint I32 Unsigned _ => mul_case_ii Unsigned
-  | Tint _ _ _, Tint _ _ _ => mul_case_ii Signed
-  | Tfloat _ _ , Tfloat _ _ => mul_case_ff
-  | Tint _ sg _, Tfloat _ _ => mul_case_if sg
-  | Tfloat _ _, Tint _ sg _ => mul_case_fi sg
-  | _,_  => mul_default
-end.
-
-Function sem_mul (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
- match classify_mul t1 t2 with
-  | mul_case_ii sg =>
-      match v1,v2 with
-      | Vint n1, Vint n2 => Some (Vint (Int.mul n1 n2))
-      | _,  _ => None
-      end
-  | mul_case_ff =>
-      match v1,v2 with
-      | Vfloat f1, Vfloat f2 => Some (Vfloat (Float.mul f1 f2))
-      | _,  _ => None
-      end
-  | mul_case_if sg =>
-      match v1, v2 with
-      | Vint n1, Vfloat n2 => Some (Vfloat (Float.mul (cast_int_float sg n1) n2))
-      | _, _ => None
-      end
-  | mul_case_fi sg =>
-      match v1, v2 with
-      | Vfloat n1, Vint n2 => Some (Vfloat (Float.mul n1 (cast_int_float sg n2)))
-      | _, _ => None
-      end
-  | mul_default =>
-      None
-end.
-
-(** *** Division *)
-
-Inductive classify_div_cases : Type:=
-  | div_case_ii(s: signedness) (**r int , int *)
-  | div_case_ff                (**r float , float *)
-  | div_case_if(s: signedness) (**r int, float *)
-  | div_case_fi(s: signedness) (**r float, int *)
-  | div_default.
-
-Definition classify_div (ty1: type) (ty2: type) :=
-  match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned _, Tint _ _ _ => div_case_ii Unsigned
-  | Tint _ _ _, Tint I32 Unsigned _ => div_case_ii Unsigned
-  | Tint _ _ _, Tint _ _ _ => div_case_ii Signed
-  | Tfloat _ _ , Tfloat _ _ => div_case_ff
-  | Tint _ sg _, Tfloat _ _ => div_case_if sg
-  | Tfloat _ _, Tint _ sg _ => div_case_fi sg
-  | _,_  => div_default
-end.
-
-Function sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
-   match classify_div t1 t2 with
-  | div_case_ii Unsigned =>
-      match v1,v2 with
-      | Vint n1, Vint n2 =>
-          if Int.eq n2 Int.zero then None else Some (Vint (Int.divu n1 n2))
-      | _,_ => None
-      end
-  | div_case_ii Signed =>
-      match v1,v2 with
-       | Vint n1, Vint n2 =>
+Definition sem_div (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_binarith
+    (fun sg n1 n2 =>
+      match sg with
+      | Signed =>
           if Int.eq n2 Int.zero
           || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone
-          then None else Some (Vint(Int.divs n1 n2))
-      | _,_ => None
-      end
-  | div_case_ff =>
-      match v1,v2 with
-      | Vfloat f1, Vfloat f2 => Some (Vfloat(Float.div f1 f2))
-      | _,  _ => None
-      end 
-  | div_case_if sg =>
-      match v1, v2 with
-      | Vint n1, Vfloat n2 => Some (Vfloat (Float.div (cast_int_float sg n1) n2))
-      | _, _ => None
-      end
-  | div_case_fi sg =>
-      match v1, v2 with
-      | Vfloat n1, Vint n2 => Some (Vfloat (Float.div n1 (cast_int_float sg n2)))
-      | _, _ => None
-      end
-  | div_default =>
-      None
-end.
+          then None else Some(Vint(Int.divs n1 n2))
+      | Unsigned =>
+          if Int.eq n2 Int.zero
+          then None else Some(Vint(Int.divu n1 n2))
+      end)
+    (fun sg n1 n2 =>
+      match sg with
+      | Signed =>
+          if Int64.eq n2 Int64.zero
+          || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone
+          then None else Some(Vlong(Int64.divs n1 n2))
+      | Unsigned =>
+          if Int64.eq n2 Int64.zero
+          then None else Some(Vlong(Int64.divu n1 n2))
+      end)
+    (fun n1 n2 => Some(Vfloat(Float.div n1 n2)))
+    v1 t1 v2 t2.
 
-(** *** Integer-only binary operations: modulus, bitwise "and", "or", and "xor" *)
-
-Inductive classify_binint_cases : Type:=
-  | binint_case_ii(s: signedness) (**r int , int *)
-  | binint_default.
-
-Definition classify_binint (ty1: type) (ty2: type) :=
-  match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned _, Tint _ _ _ => binint_case_ii Unsigned
-  | Tint _ _ _, Tint I32 Unsigned _ => binint_case_ii Unsigned
-  | Tint _ _ _, Tint _ _ _ => binint_case_ii Signed
-  | _,_  => binint_default
-end.
-
-Function sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
-  match classify_binint t1 t2 with
-  | binint_case_ii Unsigned =>
-      match v1, v2 with
-      | Vint n1, Vint n2 =>
-          if Int.eq n2 Int.zero then None else Some (Vint (Int.modu n1 n2))
-      | _, _ => None
-      end
-  | binint_case_ii Signed =>
-      match v1,v2 with
-      | Vint n1, Vint n2 =>
+Definition sem_mod (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_binarith
+    (fun sg n1 n2 =>
+      match sg with
+      | Signed =>
           if Int.eq n2 Int.zero
           || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone
-          then None else Some (Vint (Int.mods n1 n2))
-      | _, _ => None
-      end
-  | binint_default =>
-      None
-  end.
+          then None else Some(Vint(Int.mods n1 n2))
+      | Unsigned =>
+          if Int.eq n2 Int.zero
+          then None else Some(Vint(Int.modu n1 n2))
+      end)
+    (fun sg n1 n2 =>
+      match sg with
+      | Signed =>
+          if Int64.eq n2 Int64.zero
+          || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone
+          then None else Some(Vlong(Int64.mods n1 n2))
+      | Unsigned =>
+          if Int64.eq n2 Int64.zero
+          then None else Some(Vlong(Int64.modu n1 n2))
+      end)
+    (fun n1 n2 => None)
+    v1 t1 v2 t2.
 
-Function sem_and (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
-  match classify_binint t1 t2 with
-  | binint_case_ii sg =>
-      match v1, v2 with
-      | Vint n1, Vint n2 => Some (Vint(Int.and n1 n2))
-      | _, _ => None
-      end
-  | binint_default => None
-  end.
+Definition sem_and (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_binarith
+    (fun sg n1 n2 => Some(Vint(Int.and n1 n2)))
+    (fun sg n1 n2 => Some(Vlong(Int64.and n1 n2)))
+    (fun n1 n2 => None)
+    v1 t1 v2 t2.
 
-Function sem_or (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
-  match classify_binint t1 t2 with
-  | binint_case_ii sg =>
-      match v1, v2 with
-      | Vint n1, Vint n2 => Some (Vint(Int.or n1 n2))
-      | _, _ => None
-      end
-  | binint_default => None
-  end.
+Definition sem_or (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_binarith
+    (fun sg n1 n2 => Some(Vint(Int.or n1 n2)))
+    (fun sg n1 n2 => Some(Vlong(Int64.or n1 n2)))
+    (fun n1 n2 => None)
+    v1 t1 v2 t2.
 
-Function sem_xor (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
-  match classify_binint t1 t2 with
-  | binint_case_ii sg =>
-      match v1, v2 with
-      | Vint n1, Vint n2 => Some (Vint(Int.xor n1 n2))
-      | _, _ => None
-      end
-  | binint_default => None
-  end.
+Definition sem_xor (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_binarith
+    (fun sg n1 n2 => Some(Vint(Int.xor n1 n2)))
+    (fun sg n1 n2 => Some(Vlong(Int64.xor n1 n2)))
+    (fun n1 n2 => None)
+    v1 t1 v2 t2.
 
 (** *** Shifts *)
 
+(** Shifts do not perform the usual binary conversions.  Instead,
+  each argument is converted independently, and the signedness
+  of the result is always that of the first argument. *)
+
 Inductive classify_shift_cases : Type:=
-  | shift_case_ii(s: signedness) (**r int , int *)
+  | shift_case_ii(s: signedness)         (**r int , int *)
+  | shift_case_ll(s: signedness)         (**r long, long *)
+  | shift_case_il(s: signedness)         (**r int, long *)
+  | shift_case_li(s: signedness)         (**r long, int *)
   | shift_default.
 
 Definition classify_shift (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with
   | Tint I32 Unsigned _, Tint _ _ _ => shift_case_ii Unsigned
   | Tint _ _ _, Tint _ _ _ => shift_case_ii Signed
+  | Tint I32 Unsigned _, Tlong _ _ => shift_case_il Unsigned
+  | Tint _ _ _, Tlong _ _ => shift_case_il Signed
+  | Tlong s _, Tint _ _ _ => shift_case_li s
+  | Tlong s _, Tlong _ _ => shift_case_ll s
   | _,_  => shift_default
-end.
+  end.
 
-Function sem_shl (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+Definition sem_shift
+    (sem_int: signedness -> int -> int -> int)
+    (sem_long: signedness -> int64 -> int64 -> int64)
+    (v1: val) (t1: type) (v2: val) (t2: type) : option val :=
   match classify_shift t1 t2 with
   | shift_case_ii sg =>
       match v1, v2 with
-      | Vint n1, Vint n2 =>
-         if Int.ltu n2 Int.iwordsize then Some (Vint(Int.shl n1 n2)) else None
+      | Vint n1, Vint n2 => 
+          if Int.ltu n2 Int.iwordsize
+          then Some(Vint(sem_int sg n1 n2)) else None
+      | _, _ => None
+      end
+  | shift_case_il sg =>
+      match v1, v2 with
+      | Vint n1, Vlong n2 => 
+          if Int64.ltu n2 (Int64.repr 32)
+          then Some(Vint(sem_int sg n1 (Int64.loword n2))) else None
+      | _, _ => None
+      end
+  | shift_case_li sg =>
+      match v1, v2 with
+      | Vlong n1, Vint n2 => 
+          if Int.ltu n2 Int64.iwordsize'
+          then Some(Vlong(sem_long sg n1 (Int64.repr (Int.unsigned n2)))) else None
+      | _, _ => None
+      end
+  | shift_case_ll sg =>
+      match v1, v2 with
+      | Vlong n1, Vlong n2 => 
+          if Int64.ltu n2 Int64.iwordsize
+          then Some(Vlong(sem_long sg n1 n2)) else None
       | _, _ => None
       end
   | shift_default => None
   end.
 
-Function sem_shr (v1: val) (t1: type) (v2: val) (t2: type): option val :=
-  match classify_shift t1 t2 with 
-  | shift_case_ii Unsigned =>
-      match v1,v2 with 
-      | Vint n1, Vint n2 =>
-          if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shru n1 n2)) else None
-      | _,_ => None
-      end
-   | shift_case_ii Signed =>
-      match v1,v2 with
-      | Vint n1,  Vint n2 =>
-          if Int.ltu n2 Int.iwordsize then Some (Vint (Int.shr n1 n2)) else None
-      | _,  _ => None
-      end
-   | shift_default =>
-      None
-   end.
+Definition sem_shl (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_shift
+    (fun sg n1 n2 => Int.shl n1 n2)
+    (fun sg n1 n2 => Int64.shl n1 n2)
+    v1 t1 v2 t2.
+
+Definition sem_shr (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
+  sem_shift
+    (fun sg n1 n2 => match sg with Signed => Int.shr n1 n2 | Unsigned => Int.shru n1 n2 end)
+    (fun sg n1 n2 => match sg with Signed => Int64.shr n1 n2 | Unsigned => Int64.shru n1 n2 end)
+    v1 t1 v2 t2.
 
 (** *** Comparisons *)
 
-Inductive classify_cmp_cases : Type:=
-  | cmp_case_ii(s: signedness) (**r int, int *)
-  | cmp_case_pp                (**r pointer, pointer *)
-  | cmp_case_ff                (**r float , float *)
-  | cmp_case_if(s: signedness) (**r int, float *)
-  | cmp_case_fi(s: signedness) (**r float, int *)
-  | cmp_default.
+Inductive classify_cmp_cases : Type :=
+  | cmp_case_pp                       (**r pointer, pointer *)
+  | cmp_default.                      (**r numerical, numerical *)
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
   match typeconv ty1, typeconv ty2 with 
-  | Tint I32 Unsigned _ , Tint _ _ _ => cmp_case_ii Unsigned
-  | Tint _ _ _ , Tint I32 Unsigned _ => cmp_case_ii Unsigned
-  | Tint _ _ _ , Tint _ _ _ => cmp_case_ii Signed
-  | Tfloat _ _ , Tfloat _ _ => cmp_case_ff
-  | Tint _ sg _, Tfloat _ _ => cmp_case_if sg
-  | Tfloat _ _, Tint _ sg _ => cmp_case_fi sg
   | Tpointer _ _ , Tpointer _ _ => cmp_case_pp
   | Tpointer _ _ , Tint _ _ _ => cmp_case_pp
   | Tint _ _ _, Tpointer _ _ => cmp_case_pp
-  | _ , _ => cmp_default
+  | _, _ => cmp_default
   end.
 
-Function sem_cmp (c:comparison)
+Definition sem_cmp (c:comparison)
                   (v1: val) (t1: type) (v2: val) (t2: type)
                   (m: mem): option val :=
   match classify_cmp t1 t2 with
-  | cmp_case_ii Signed =>
-      match v1,v2 with
-      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmp c n1 n2))
-      | _,  _ => None
-      end
-  | cmp_case_ii Unsigned =>
-      match v1,v2 with
-      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
-      | _,  _ => None
-      end
   | cmp_case_pp =>
+     option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2)
+(*
       match v1,v2 with
       | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
       | Vptr b1 ofs1,  Vptr b2 ofs2  =>
@@ -752,22 +845,16 @@ Function sem_cmp (c:comparison)
           else None
       | _,  _ => None
       end
-  | cmp_case_ff =>
-      match v1,v2 with
-      | Vfloat f1, Vfloat f2 => Some (Val.of_bool (Float.cmp c f1 f2))  
-      | _,  _ => None
-      end
-  | cmp_case_if sg =>
-      match v1, v2 with
-      | Vint n1, Vfloat n2 => Some (Val.of_bool (Float.cmp c (cast_int_float sg n1) n2))
-      | _, _ => None
-      end
-  | cmp_case_fi sg =>
-      match v1, v2 with
-      | Vfloat n1, Vint n2 => Some (Val.of_bool (Float.cmp c n1 (cast_int_float sg n2)))
-      | _, _ => None
-      end
-  | cmp_default => None
+*)
+  | cmp_default =>
+      sem_binarith
+        (fun sg n1 n2 =>
+            Some(Val.of_bool(match sg with Signed => Int.cmp c n1 n2 | Unsigned => Int.cmpu c n1 n2 end)))
+        (fun sg n1 n2 =>
+            Some(Val.of_bool(match sg with Signed => Int64.cmp c n1 n2 | Unsigned => Int64.cmpu c n1 n2 end)))
+        (fun n1 n2 =>
+            Some(Val.of_bool(Float.cmp c n1 n2)))
+        v1 t1 v2 t2
   end.
 
 (** ** Function applications *)
@@ -821,3 +908,249 @@ Definition sem_incrdecr (id: incr_or_decr) (v: val) (ty: type) :=
   | Incr => sem_add v ty (Vint Int.one) type_int32s
   | Decr => sem_sub v ty (Vint Int.one) type_int32s
   end.
+
+(** * Compatibility with extensions and injections *)
+
+Section GENERIC_INJECTION.
+
+Variable f: meminj.
+Variables m m': mem.
+
+Hypothesis valid_pointer_inj:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  Mem.valid_pointer m b1 (Int.unsigned ofs) = true ->
+  Mem.valid_pointer m' b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+
+Hypothesis weak_valid_pointer_inj:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  Mem.weak_valid_pointer m b1 (Int.unsigned ofs) = true ->
+  Mem.weak_valid_pointer m' b2 (Int.unsigned (Int.add ofs (Int.repr delta))) = true.
+
+Hypothesis weak_valid_pointer_no_overflow:
+  forall b1 ofs b2 delta,
+  f b1 = Some(b2, delta) ->
+  Mem.weak_valid_pointer m b1 (Int.unsigned ofs) = true ->
+  0 <= Int.unsigned ofs + Int.unsigned (Int.repr delta) <= Int.max_unsigned.
+
+Hypothesis valid_different_pointers_inj:
+  forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
+  b1 <> b2 ->
+  Mem.valid_pointer m b1 (Int.unsigned ofs1) = true ->
+  Mem.valid_pointer m b2 (Int.unsigned ofs2) = true ->
+  f b1 = Some (b1', delta1) ->
+  f b2 = Some (b2', delta2) ->
+  b1' <> b2' \/
+  Int.unsigned (Int.add ofs1 (Int.repr delta1)) <> Int.unsigned (Int.add ofs2 (Int.repr delta2)).
+
+Remark val_inject_vtrue: forall f, val_inject f Vtrue Vtrue.
+Proof. unfold Vtrue; auto. Qed.
+
+Remark val_inject_vfalse: forall f, val_inject f Vfalse Vfalse.
+Proof. unfold Vfalse; auto. Qed.
+
+Remark val_inject_of_bool: forall f b, val_inject f (Val.of_bool b) (Val.of_bool b).
+Proof. intros. unfold Val.of_bool. destruct b; [apply val_inject_vtrue|apply val_inject_vfalse]. 
+Qed.
+
+Hint Resolve val_inject_vtrue val_inject_vfalse val_inject_of_bool.
+
+Ltac TrivialInject :=
+  match goal with
+  | |- exists v', Some ?v = Some v' /\ _ => exists v; split; auto
+  | _ => idtac
+  end.
+
+Lemma sem_unary_operation_inject:
+  forall op v1 ty v tv1,
+  sem_unary_operation op v1 ty = Some v ->
+  val_inject f v1 tv1 ->
+  exists tv, sem_unary_operation op tv1 ty = Some tv /\ val_inject f v tv.
+Proof.
+  unfold sem_unary_operation; intros. destruct op.
+  (* notbool *)
+  unfold sem_notbool in *; destruct (classify_bool ty); inv H0; inv H; TrivialInject.
+  (* notint *)
+  unfold sem_notint in *; destruct (classify_notint ty); inv H0; inv H; TrivialInject.
+  (* neg *)
+  unfold sem_neg in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
+Qed.
+
+Definition optval_self_injects (ov: option val) : Prop :=
+  match ov with
+  | Some (Vptr b ofs) => False
+  | _ => True
+  end.
+
+Remark sem_binarith_inject:
+  forall sem_int sem_long sem_float v1 t1 v2 t2 v v1' v2',
+  sem_binarith sem_int sem_long sem_float v1 t1 v2 t2 = Some v ->
+  val_inject f v1 v1' -> val_inject f v2 v2' ->
+  (forall sg n1 n2, optval_self_injects (sem_int sg n1 n2)) ->
+  (forall sg n1 n2, optval_self_injects (sem_long sg n1 n2)) ->
+  (forall n1 n2, optval_self_injects (sem_float n1 n2)) ->
+  exists v', sem_binarith sem_int sem_long sem_float v1' t1 v2' t2 = Some v' /\ val_inject f v v'.
+Proof.
+  intros. 
+  assert (SELF: forall ov v, ov = Some v -> optval_self_injects ov -> val_inject f v v).
+  {
+    intros. subst ov; simpl in H6. destruct v0; contradiction || constructor.
+  }
+  exists v.
+  unfold sem_binarith in *; destruct (classify_binarith t1 t2); inv H0; inv H1; discriminate || eauto.
+Qed.
+
+Remark sem_shift_inject:
+  forall sem_int sem_long v1 t1 v2 t2 v v1' v2',
+  sem_shift sem_int sem_long v1 t1 v2 t2 = Some v ->
+  val_inject f v1 v1' -> val_inject f v2 v2' ->
+  exists v', sem_shift sem_int sem_long v1' t1 v2' t2 = Some v' /\ val_inject f v v'.
+Proof.
+  intros. exists v.
+  unfold sem_shift in *; destruct (classify_shift t1 t2); inv H0; inv H1; try discriminate.
+  destruct (Int.ltu i0 Int.iwordsize); inv H; auto.
+  destruct (Int64.ltu i0 Int64.iwordsize); inv H; auto.
+  destruct (Int64.ltu i0 (Int64.repr 32)); inv H; auto.
+  destruct (Int.ltu i0 Int64.iwordsize'); inv H; auto.
+Qed.
+
+Remark sem_cmp_inj:
+  forall cmp v1 tv1 ty1 v2 tv2 ty2 v,
+  sem_cmp cmp v1 ty1 v2 ty2 m = Some v ->
+  val_inject f v1 tv1 ->
+  val_inject f v2 tv2 ->
+  exists tv, sem_cmp cmp tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
+Proof.
+  intros.
+  unfold sem_cmp in *; destruct (classify_cmp ty1 ty2).
+- (* pointer - pointer *)
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp v1 v2) as [b|] eqn:E; simpl in H; inv H.
+  replace (Val.cmpu_bool (Mem.valid_pointer m') cmp tv1 tv2) with (Some b).
+  simpl. TrivialInject. 
+  symmetry. eapply val_cmpu_bool_inject; eauto. 
+- (* numerical - numerical *)
+  assert (SELF: forall b, optval_self_injects (Some (Val.of_bool b))).
+  {
+    destruct b; exact I.
+  }
+  eapply sem_binarith_inject; eauto.
+Qed.
+
+Lemma sem_binary_operation_inj:
+  forall op v1 ty1 v2 ty2 v tv1 tv2,
+  sem_binary_operation op v1 ty1 v2 ty2 m = Some v ->
+  val_inject f v1 tv1 -> val_inject f v2 tv2 ->
+  exists tv, sem_binary_operation op tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
+Proof.
+  unfold sem_binary_operation; intros; destruct op.
+- (* add *)
+  unfold sem_add in *; destruct (classify_add ty1 ty2).
+  + inv H0; inv H1; inv H. TrivialInject. 
+    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  + inv H0; inv H1; inv H. TrivialInject. 
+    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  + inv H0; inv H1; inv H. TrivialInject. 
+    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  + inv H0; inv H1; inv H. TrivialInject. 
+    econstructor. eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
+  + eapply sem_binarith_inject; eauto; intros; exact I.
+- (* sub *)
+  unfold sem_sub in *; destruct (classify_sub ty1 ty2).
+  + inv H0; inv H1; inv H. TrivialInject.
+    econstructor. eauto. rewrite Int.sub_add_l. auto.
+  + inv H0; inv H1; inv H. TrivialInject.
+    destruct (zeq b1 b0); try discriminate. subst b1. 
+    rewrite H0 in H2; inv H2. rewrite zeq_true. 
+    destruct (Int.eq (Int.repr (sizeof ty)) Int.zero); inv H3.
+    rewrite Int.sub_shifted. TrivialInject.
+  + inv H0; inv H1; inv H. TrivialInject.
+    econstructor. eauto. rewrite Int.sub_add_l. auto.
+  + eapply sem_binarith_inject; eauto; intros; exact I.
+- (* mul *)
+  eapply sem_binarith_inject; eauto; intros; exact I.
+- (* div *)
+  eapply sem_binarith_inject; eauto; intros.
+  destruct sg.
+  destruct (Int.eq n2 Int.zero
+            || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); exact I.
+  destruct (Int.eq n2 Int.zero); exact I.
+  destruct sg.
+  destruct (Int64.eq n2 Int64.zero
+            || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); exact I.
+  destruct (Int64.eq n2 Int64.zero); exact I.
+  exact I.
+- (* mod *)
+  eapply sem_binarith_inject; eauto; intros.
+  destruct sg.
+  destruct (Int.eq n2 Int.zero
+            || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone); exact I.
+  destruct (Int.eq n2 Int.zero); exact I.
+  destruct sg.
+  destruct (Int64.eq n2 Int64.zero
+            || Int64.eq n1 (Int64.repr Int64.min_signed) && Int64.eq n2 Int64.mone); exact I.
+  destruct (Int64.eq n2 Int64.zero); exact I.
+  exact I.
+- (* and *)
+  eapply sem_binarith_inject; eauto; intros; exact I.
+- (* or *)
+  eapply sem_binarith_inject; eauto; intros; exact I.
+- (* xor *)
+  eapply sem_binarith_inject; eauto; intros; exact I.
+- (* shl *)
+  eapply sem_shift_inject; eauto.
+- (* shr *)
+  eapply sem_shift_inject; eauto.
+  (* comparisons *)
+- eapply sem_cmp_inj; eauto.
+- eapply sem_cmp_inj; eauto.
+- eapply sem_cmp_inj; eauto.
+- eapply sem_cmp_inj; eauto.
+- eapply sem_cmp_inj; eauto.
+- eapply sem_cmp_inj; eauto.
+Qed.
+
+Lemma sem_cast_inject:
+  forall v1 ty1 ty v tv1,
+  sem_cast v1 ty1 ty = Some v ->
+  val_inject f v1 tv1 ->
+  exists tv, sem_cast tv1 ty1 ty = Some tv /\ val_inject f v tv.
+Proof.
+  unfold sem_cast; intros; destruct (classify_cast ty1 ty);
+  inv H0; inv H; TrivialInject.
+- econstructor; eauto. 
+- destruct (cast_float_int si2 f0); inv H1; TrivialInject.
+- destruct (cast_float_long si2 f0); inv H1; TrivialInject.
+- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
+- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
+- econstructor; eauto.
+Qed.
+
+Lemma bool_val_inject:
+  forall v ty b tv,
+  bool_val v ty = Some b ->
+  val_inject f v tv ->
+  bool_val tv ty = Some b.
+Proof.
+  unfold bool_val; intros. 
+  destruct (classify_bool ty); inv H0; congruence.
+Qed.
+
+End GENERIC_INJECTION.
+
+Lemma sem_binary_operation_inject:
+  forall f m m' op v1 ty1 v2 ty2 v tv1 tv2,
+  sem_binary_operation op v1 ty1 v2 ty2 m = Some v ->
+  val_inject f v1 tv1 -> val_inject f v2 tv2 ->
+  Mem.inject f m m' ->
+  exists tv, sem_binary_operation op tv1 ty1 tv2 ty2 m' = Some tv /\ val_inject f v tv.
+Proof.
+  intros. eapply sem_binary_operation_inj; eauto. 
+  intros; eapply Mem.valid_pointer_inject_val; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
+  intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
+  intros; eapply Mem.different_pointers_inject; eauto.
+Qed.
+
+
+

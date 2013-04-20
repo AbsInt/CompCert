@@ -44,13 +44,15 @@ Open Local Scope error_monad_scope.
 -  The C types of the arguments of the operation.  These types
      are used to insert the necessary numeric conversions and to
      resolve operation overloading.
-   Most of these functions return an [option expr], with [None] 
+   Most of these functions return a [res expr], with [Error]
    denoting a case where the operation is not defined at the given types.
 *)
 
 Definition make_intconst (n: int) :=  Econst (Ointconst n).
 
 Definition make_floatconst (f: float) :=  Econst (Ofloatconst f).
+
+Definition make_longconst (f: int64) :=  Econst (Olongconst f).
 
 Definition make_floatofint (e: expr) (sg: signedness) :=
   match sg with
@@ -62,6 +64,24 @@ Definition make_intoffloat (e: expr) (sg: signedness) :=
   match sg with
   | Signed => Eunop Ointoffloat e
   | Unsigned => Eunop Ointuoffloat e
+  end.
+
+Definition make_longofint (e: expr) (sg: signedness) :=
+  match sg with
+  | Signed => Eunop Olongofint e
+  | Unsigned => Eunop Olongofintu e
+  end.
+
+Definition make_floatoflong (e: expr) (sg: signedness) :=
+  match sg with
+  | Signed => Eunop Ofloatoflong e
+  | Unsigned => Eunop Ofloatoflongu e
+  end.
+
+Definition make_longoffloat (e: expr) (sg: signedness) :=
+  match sg with
+  | Signed => Eunop Olongoffloat e
+  | Unsigned => Eunop Olonguoffloat e
   end.
 
 (** [make_boolean e ty] returns a Csharpminor expression that evaluates
@@ -80,6 +100,7 @@ Definition make_boolean (e: expr) (ty: type) :=
   | bool_case_i => make_cmp_ne_zero e
   | bool_case_f => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
   | bool_case_p => Ebinop (Ocmpu Cne) e (make_intconst Int.zero)
+  | bool_case_l => Ebinop (Ocmpl Cne) e (make_longconst Int64.zero)
   | bool_default => e   (**r should not happen *)
   end.
 
@@ -88,6 +109,7 @@ Definition make_notbool (e: expr) (ty: type) :=
   | bool_case_i => OK (Ebinop (Ocmp Ceq) e (make_intconst Int.zero))
   | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
   | bool_case_p => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
+  | bool_case_l => OK (Ebinop (Ocmpl Ceq) e (make_longconst Int64.zero))
   | _ => Error (msg "Cshmgen.make_notbool")
   end.
 
@@ -95,96 +117,144 @@ Definition make_neg (e: expr) (ty: type) :=
   match classify_neg ty with
   | neg_case_i _ => OK (Eunop Onegint e)
   | neg_case_f => OK (Eunop Onegf e)
+  | neg_case_l _ => OK (Eunop Onegl e)
   | _ => Error (msg "Cshmgen.make_neg")
   end.
 
 Definition make_notint (e: expr) (ty: type) :=
-  Eunop Onotint e.
+  match classify_notint ty with
+  | notint_case_i _ => OK (Eunop Onotint e)
+  | notint_case_l _ => OK (Eunop Onotl e)
+  | _ => Error (msg "Cshmgen.make_notint")
+  end.
+
+Definition make_binarith (iop iopu fop lop lopu: binary_operation)
+                         (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
+  match classify_binarith ty1 ty2 with
+  | bin_case_ii Signed => OK (Ebinop iop e1 e2)
+  | bin_case_ii Unsigned => OK (Ebinop iopu e1 e2)
+  | bin_case_ff => OK (Ebinop fop e1 e2)
+  | bin_case_if sg => OK (Ebinop fop (make_floatofint e1 sg) e2)
+  | bin_case_fi sg => OK (Ebinop fop e1 (make_floatofint e2 sg))
+  | bin_case_ll Signed => OK (Ebinop lop e1 e2)
+  | bin_case_ll Unsigned => OK (Ebinop lopu e1 e2)
+  | bin_case_il sg1 Signed => OK (Ebinop lop (make_longofint e1 sg1) e2)
+  | bin_case_il sg1 Unsigned => OK (Ebinop lopu (make_longofint e1 sg1) e2)
+  | bin_case_li Signed sg2 => OK (Ebinop lop e1 (make_longofint e2 sg2))
+  | bin_case_li Unsigned sg2 => OK (Ebinop lopu e1 (make_longofint e2 sg2))
+  | bin_case_lf sg => OK (Ebinop fop (make_floatoflong e1 sg) e2)
+  | bin_case_fl sg => OK (Ebinop fop e1 (make_floatoflong e2 sg))
+  | bin_default => Error (msg "Cshmgen.make_binarith")
+  end.
 
 Definition make_add (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_add ty1 ty2 with
-  | add_case_ii _ => OK (Ebinop Oadd e1 e2)
-  | add_case_ff => OK (Ebinop Oaddf e1 e2)
-  | add_case_if sg => OK (Ebinop Oaddf (make_floatofint e1 sg) e2)
-  | add_case_fi sg => OK (Ebinop Oaddf e1 (make_floatofint e2 sg))
   | add_case_pi ty _ =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e1 (Ebinop Omul n e2))
   | add_case_ip ty _ =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Oadd e2 (Ebinop Omul n e1))
-  | add_default => Error (msg "Cshmgen.make_add")
+  | add_case_pl ty _ =>
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      OK (Ebinop Oadd e1 (Ebinop Omul n (Eunop Ointoflong e2)))
+  | add_case_lp ty _ =>
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      OK (Ebinop Oadd e2 (Ebinop Omul n (Eunop Ointoflong e1)))
+  | add_default =>
+      make_binarith Oadd Oadd Oaddf Oaddl Oaddl e1 ty1 e2 ty2
   end.
 
 Definition make_sub (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_sub ty1 ty2 with
-  | sub_case_ii _ => OK (Ebinop Osub e1 e2)
-  | sub_case_ff => OK (Ebinop Osubf e1 e2)
-  | sub_case_if sg => OK (Ebinop Osubf (make_floatofint e1 sg) e2)
-  | sub_case_fi sg => OK (Ebinop Osubf e1 (make_floatofint e2 sg))
-  | sub_case_pi ty =>
+  | sub_case_pi ty _ =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Osub e1 (Ebinop Omul n e2))
   | sub_case_pp ty =>
       let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
       OK (Ebinop Odivu (Ebinop Osub e1 e2) n)
-  | sub_default => Error (msg "Cshmgen.make_sub")
+  | sub_case_pl ty _ =>
+      let n := make_intconst (Int.repr (Ctypes.sizeof ty)) in
+      OK (Ebinop Osub e1 (Ebinop Omul n (Eunop Ointoflong e2)))
+  | sub_default =>
+      make_binarith Osub Osub Osubf Osubl Osubl e1 ty1 e2 ty2
   end.
 
 Definition make_mul (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_mul ty1 ty2 with
-  | mul_case_ii _ => OK (Ebinop Omul e1 e2)
-  | mul_case_ff => OK (Ebinop Omulf e1 e2)
-  | mul_case_if sg => OK (Ebinop Omulf (make_floatofint e1 sg) e2)
-  | mul_case_fi sg => OK (Ebinop Omulf e1 (make_floatofint e2 sg))
-  | mul_default => Error (msg "Cshmgen.make_mul")
-  end.
+  make_binarith Omul Omul Omulf Omull Omull e1 ty1 e2 ty2.
 
 Definition make_div (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_div ty1 ty2 with
-  | div_case_ii Unsigned => OK (Ebinop Odivu e1 e2)
-  | div_case_ii Signed => OK (Ebinop Odiv e1 e2)
-  | div_case_ff => OK (Ebinop Odivf e1 e2)
-  | div_case_if sg => OK (Ebinop Odivf (make_floatofint e1 sg) e2)
-  | div_case_fi sg => OK (Ebinop Odivf e1 (make_floatofint e2 sg))
-  | div_default => Error (msg "Cshmgen.make_div")
+  make_binarith Odiv Odivu Odivf Odivl Odivlu e1 ty1 e2 ty2.
+
+Definition make_binarith_int (iop iopu lop lopu: binary_operation)
+                             (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
+  match classify_binarith ty1 ty2 with
+  | bin_case_ii Signed => OK (Ebinop iop e1 e2)
+  | bin_case_ii Unsigned => OK (Ebinop iopu e1 e2)
+  | bin_case_ll Signed => OK (Ebinop lop e1 e2)
+  | bin_case_ll Unsigned => OK (Ebinop lopu e1 e2)
+  | bin_case_il sg1 Signed => OK (Ebinop lop (make_longofint e1 sg1) e2)
+  | bin_case_il sg1 Unsigned => OK (Ebinop lopu (make_longofint e1 sg1) e2)
+  | bin_case_li Signed sg2 => OK (Ebinop lop e1 (make_longofint e2 sg2))
+  | bin_case_li Unsigned sg2 => OK (Ebinop lopu e1 (make_longofint e2 sg2))
+  | _ => Error (msg "Cshmgen.make_binarith_int")
   end.
 
 Definition make_mod (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_binint ty1 ty2 with
-  | binint_case_ii Unsigned => OK (Ebinop Omodu e1 e2)
-  | binint_case_ii Signed => OK (Ebinop Omod e1 e2)
-  | mod_default => Error (msg "Cshmgen.make_mod")
-  end.
+  make_binarith_int Omod Omodu Omodl Omodlu e1 ty1 e2 ty2.
 
 Definition make_and (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  OK(Ebinop Oand e1 e2).
+  make_binarith_int Oand Oand Oandl Oandl e1 ty1 e2 ty2.
 
 Definition make_or (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  OK(Ebinop Oor e1 e2).
+  make_binarith_int Oor Oor Oorl Oorl e1 ty1 e2 ty2.
 
 Definition make_xor (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  OK(Ebinop Oxor e1 e2).
+  make_binarith_int Oxor Oxor Oxorl Oxorl e1 ty1 e2 ty2.
+
+(*
+Definition make_shift (iop iopu lop lopu: binary_operation)
+                      (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
+  match classify_shift ty1 ty2 with
+  | shift_case_ii Signed => OK (Ebinop iop e1 e2)
+  | shift_case_ii Unsigned => OK (Ebinop iopu e1 e2)
+  | shift_case_li Signed => OK (Ebinop lop e1 e2)
+  | shift_case_li Unsigned => OK (Ebinop lopu e1 e2)
+  | shift_case_il Signed => OK (Ebinop iop e1 (Eunop Ointoflong e2))
+  | shift_case_il Unsigned => OK (Ebinop iopu e1 (Eunop Ointoflong e2))
+  | shift_case_ll Signed => OK (Ebinop lop e1 (Eunop Ointoflong e2))
+  | shift_case_ll Unsigned => OK (Ebinop lopu e1 (Eunop Ointoflong e2))
+  | shift_default => Error (msg "Cshmgen.make_shift")
+  end.
+*)
 
 Definition make_shl (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  OK(Ebinop Oshl e1 e2).
+  match classify_shift ty1 ty2 with
+  | shift_case_ii _ => OK (Ebinop Oshl e1 e2)
+  | shift_case_li _ => OK (Ebinop Oshll e1 e2)
+  | shift_case_il _ => OK (Ebinop Oshl e1 (Eunop Ointoflong e2))
+  | shift_case_ll _ => OK (Ebinop Oshll e1 (Eunop Ointoflong e2))
+  | shift_default => Error (msg "Cshmgen.make_shl")
+  end.
 
 Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_shift ty1 ty2 with
-  | shift_case_ii Unsigned => OK (Ebinop Oshru e1 e2)
   | shift_case_ii Signed => OK (Ebinop Oshr e1 e2)
-  | shr_default => Error (msg "Cshmgen.make_shr")
+  | shift_case_ii Unsigned => OK (Ebinop Oshru e1 e2)
+  | shift_case_li Signed => OK (Ebinop Oshrl e1 e2)
+  | shift_case_li Unsigned => OK (Ebinop Oshrlu e1 e2)
+  | shift_case_il Signed => OK (Ebinop Oshr e1 (Eunop Ointoflong e2))
+  | shift_case_il Unsigned => OK (Ebinop Oshru e1 (Eunop Ointoflong e2))
+  | shift_case_ll Signed => OK (Ebinop Oshrl e1 (Eunop Ointoflong e2))
+  | shift_case_ll Unsigned => OK (Ebinop Oshrlu e1 (Eunop Ointoflong e2))
+  | shift_default => Error (msg "Cshmgen.make_shr")
   end.
 
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
-  | cmp_case_ii Signed => OK (Ebinop (Ocmp c) e1 e2)
-  | cmp_case_ii Unsigned => OK (Ebinop (Ocmpu c) e1 e2)
   | cmp_case_pp => OK (Ebinop (Ocmpu c) e1 e2)
-  | cmp_case_ff => OK (Ebinop (Ocmpf c) e1 e2)
-  | cmp_case_if sg => OK (Ebinop (Ocmpf c) (make_floatofint e1 sg) e2)
-  | cmp_case_fi sg => OK (Ebinop (Ocmpf c) e1 (make_floatofint e2 sg))
-  | cmp_default => Error (msg "Cshmgen.make_cmp")
+  | cmp_default =>
+      make_binarith (Ocmp c) (Ocmpu c) (Ocmpf c) (Ocmpl c) (Ocmplu c) e1 ty1 e2 ty2
   end.
 
 (** [make_cast from to e] applies to [e] the numeric conversions needed
@@ -208,17 +278,23 @@ Definition make_cast_float (e: expr) (sz: floatsize) :=
 
 Definition make_cast (from to: type) (e: expr) :=
   match classify_cast from to with
-  | cast_case_neutral => e
-  | cast_case_i2i sz2 si2 => make_cast_int e sz2 si2
-  | cast_case_f2f sz2 => make_cast_float e sz2
-  | cast_case_i2f si1 sz2 => make_cast_float (make_floatofint e si1) sz2
-  | cast_case_f2i sz2 si2 => make_cast_int (make_intoffloat e si2) sz2 si2
-  | cast_case_f2bool => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
-  | cast_case_p2bool => Ebinop (Ocmpu Cne) e (make_intconst Int.zero)
-  | cast_case_struct id1 fld1 id2 fld2 => e
-  | cast_case_union id1 fld1 id2 fld2 => e
-  | cast_case_void => e
-  | cast_case_default => e
+  | cast_case_neutral => OK e
+  | cast_case_i2i sz2 si2 => OK (make_cast_int e sz2 si2)
+  | cast_case_f2f sz2 => OK (make_cast_float e sz2)
+  | cast_case_i2f si1 sz2 => OK (make_cast_float (make_floatofint e si1) sz2)
+  | cast_case_f2i sz2 si2 => OK (make_cast_int (make_intoffloat e si2) sz2 si2)
+  | cast_case_l2l => OK e
+  | cast_case_i2l si1 => OK (make_longofint e si1)
+  | cast_case_l2i sz2 si2 => OK (make_cast_int (Eunop Ointoflong e) sz2 si2)
+  | cast_case_l2f si1 sz2 => OK (make_cast_float (make_floatoflong e si1) sz2)
+  | cast_case_f2l si2 => OK (make_longoffloat e si2)
+  | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
+  | cast_case_l2bool => OK (Ebinop (Ocmpl Cne) e (make_longconst Int64.zero))
+  | cast_case_p2bool => OK (Ebinop (Ocmpu Cne) e (make_intconst Int.zero))
+  | cast_case_struct id1 fld1 id2 fld2 => OK e
+  | cast_case_union id1 fld1 id2 fld2 => OK e
+  | cast_case_void => OK e
+  | cast_case_default => Error (msg "Cshmgen.make_cast")
   end.
 
 (** [make_load addr ty_res] loads a value of type [ty_res] from
@@ -259,7 +335,7 @@ Definition make_store (addr: expr) (ty: type) (rhs: expr) :=
 Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr :=
   match op with
   | Cop.Onotbool => make_notbool a ta
-  | Cop.Onotint => OK(make_notint a ta)
+  | Cop.Onotint => make_notint a ta
   | Cop.Oneg => make_neg a ta
   end.
 
@@ -297,6 +373,8 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
       OK(make_intconst n)
   | Clight.Econst_float n _ =>
       OK(make_floatconst n)
+  | Clight.Econst_long n _ =>
+      OK(make_longconst n)
   | Clight.Evar id ty =>
       make_load (Eaddrof id) ty
   | Clight.Etempvar id ty =>
@@ -315,7 +393,7 @@ Fixpoint transl_expr (a: Clight.expr) {struct a} : res expr :=
       transl_binop op tb (typeof b) tc (typeof c)
   | Clight.Ecast b ty =>
       do tb <- transl_expr b;
-      OK (make_cast (typeof b) ty tb)
+      make_cast (typeof b) ty tb
   | Clight.Efield b i ty => 
       match typeof b with
       | Tstruct _ fld _ =>
@@ -369,8 +447,9 @@ Fixpoint transl_arglist (al: list Clight.expr) (tyl: typelist)
   | nil, Tnil => OK nil
   | a1 :: a2, Tcons ty1 ty2 =>
       do ta1 <- transl_expr a1;
-      do ta2 <- transl_arglist a2 ty2;
-      OK (make_cast (typeof a1) ty1 ta1 :: ta2)
+      do ta1' <- make_cast (typeof a1) ty1 ta1;
+      do ta2 <- transl_arglist a2 ty2;      
+      OK (ta1' :: ta2)
   | _, _ =>
       Error(msg "Cshmgen.transl_arglist: arity mismatch")
   end.
@@ -408,7 +487,8 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
   | Clight.Sassign b c =>
       do tb <- transl_lvalue b;
       do tc <- transl_expr c;
-      make_store tb (typeof b) (make_cast (typeof c) (typeof b) tc)
+      do tc' <- make_cast (typeof c) (typeof b) tc;
+      make_store tb (typeof b) tc'
   | Clight.Sset x b =>
       do tb <- transl_expr b;
       OK(Sset x tb)
@@ -442,7 +522,8 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
       OK (Sexit ncnt)
   | Clight.Sreturn (Some e) =>
       do te <- transl_expr e;
-      OK (Sreturn (Some (make_cast (typeof e) tyret te)))
+      do te' <- make_cast (typeof e) tyret te;
+      OK (Sreturn (Some te'))
   | Clight.Sreturn None =>
       OK (Sreturn None)
   | Clight.Sswitch a sl =>
@@ -485,9 +566,6 @@ Definition transl_function (f: Clight.function) : res function :=
        (map transl_var (Clight.fn_vars f))
        (map fst (Clight.fn_temps f))
        tbody).
-
-Definition list_typ_eq: forall (l1 l2: list typ), {l1=l2} + {l1<>l2}
-                     := list_eq_dec typ_eq.
 
 Definition transl_fundef (f: Clight.fundef) : res fundef :=
   match f with

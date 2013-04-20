@@ -55,7 +55,7 @@ FLOCQ=$(FLOCQ_CORE) $(FLOCQ_PROP) $(FLOCQ_CALC) $(FLOCQ_APPLI)
 
 LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Floats.v Parmov.v UnionFind.v Wfsimpl.v \
-  Postorder.v
+  Postorder.v FSetAVLplus.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
@@ -66,7 +66,8 @@ COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
 
 BACKEND=\
   Cminor.v Op.v CminorSel.v \
-  SelectOp.v Selection.v SelectOpproof.v Selectionproof.v \
+  SelectOp.v SelectLong.v Selection.v \
+  SelectOpproof.v SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   Tailcall.v Tailcallproof.v \
@@ -76,16 +77,12 @@ BACKEND=\
   Kildall.v Liveness.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
-  Machregs.v Locations.v Conventions1.v Conventions.v LTL.v LTLtyping.v \
-  InterfGraph.v Coloring.v Coloringproof.v \
-  Allocation.v Allocproof.v Alloctyping.v \
-  Tunneling.v Tunnelingproof.v Tunnelingtyping.v \
-  LTLin.v LTLintyping.v \
-  Linearize.v Linearizeproof.v Linearizetyping.v \
-  CleanupLabels.v CleanupLabelsproof.v CleanupLabelstyping.v \
+  Machregs.v Locations.v Conventions1.v Conventions.v LTL.v \
+  Allocation.v Allocproof.v \
+  Tunneling.v Tunnelingproof.v \
   Linear.v Lineartyping.v \
-  Parallelmove.v Reload.v Reloadproof.v Reloadtyping.v \
-  RRE.v RREproof.v RREtyping.v \
+  Linearize.v Linearizeproof.v \
+  CleanupLabels.v CleanupLabelsproof.v \
   Mach.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v \
   Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v

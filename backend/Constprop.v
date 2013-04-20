@@ -47,6 +47,7 @@ Module Approx <: SEMILATTICE_WITH_TOP.
     decide equality.
     apply Int.eq_dec.
     apply Float.eq_dec.
+    apply Int64.eq_dec.
     apply Int.eq_dec.
     apply ident_eq.
     apply Int.eq_dec.
@@ -139,6 +140,10 @@ Fixpoint eval_load_init (chunk: memory_chunk) (pos: Z) (il: list init_data): app
       if zeq pos 0 
       then match chunk with Mint32 => I n | _ => Unknown end
       else eval_load_init chunk (pos - 4) il'
+  | Init_int64 n :: il' =>
+      if zeq pos 0 
+      then match chunk with Mint64 => L n | _ => Unknown end
+      else eval_load_init chunk (pos - 8) il'
   | Init_float32 n :: il' =>
       if zeq pos 0
       then match chunk with 
