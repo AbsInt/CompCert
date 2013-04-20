@@ -336,28 +336,16 @@ let print_builtin_vstore_global oc chunk id ofs args =
   let n = print_builtin_vstore_common oc chunk (IR IR14 :: args) in
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n + 1
 
-(* Magic sequence for byte-swapping *)
-
-let print_bswap oc src tmp dst =
-  (* tmp <> src, tmp <> dst, but can have dst = src *)
-  (* src = A . B .C . D *)
-  fprintf oc "	eor	%a, %a, %a, ror #16\n" ireg tmp ireg src ireg src;
-  (* tmp = A^C . B^D . C^A . D^B *)
-  fprintf oc "	bic	%a, %a, #0x00FF0000\n" ireg tmp ireg tmp;
-  (* tmp = A^C . 000 . C^A . D^B *)
-  fprintf oc "	mov	%a, %a, ror #8\n" ireg dst ireg src;
-  (* dst = D . A . B . C *)
-  fprintf oc "	eor	%a, %a, %a, lsr #8\n" ireg dst ireg dst ireg tmp
-  (* dst = D . A^A^C . B . C^C^A = D . C . B . A *)
-
 (* Handling of compiler-inlined builtins *)
 
 let print_builtin_inline oc name args res =
   fprintf oc "%s begin %s\n" comment name;
   let n = match name, args, res with
   (* Integer arithmetic *)
-  | "__builtin_bswap", [IR a1], [IR res] ->
-      print_bswap oc a1 IR14 res; 4
+  | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
+      fprintf oc "	rev	%a, %a\n" ireg res ireg a1; 1
+  | "__builtin_bswap16", [IR a1], [IR res] ->
+      fprintf oc "	rev16	%a, %a\n" ireg res ireg a1; 1
   | "__builtin_cntlz", [IR a1], [IR res] ->
       fprintf oc "	clz	%a, %a\n" ireg res ireg a1; 1
   (* Float arithmetic *)
@@ -399,34 +387,6 @@ let print_builtin_inline oc name args res =
         fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg IR14 ireg b; 2
       end else begin
         fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
-      end
-  (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], [IR res] ->
-      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
-      fprintf oc "	mov	%a, %a, lsl #8\n" ireg IR14 ireg res;
-      fprintf oc "	and	%a, %a, #0xFF00\n" ireg IR14 ireg IR14;
-      fprintf oc "	orr	%a, %a, %a, lsr #8\n" ireg res ireg IR14 ireg res; 4
-  | "__builtin_read32_reversed", [IR a1], [IR res] ->
-      fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
-      print_bswap oc res IR14 res; 5
-  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
-      fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg a2;
-      fprintf oc "	and	%a, %a, #0xFF\n" ireg IR14 ireg IR14;
-      fprintf oc "	orr	%a, %a, %a, lsl #8\n" ireg IR14 ireg IR14 ireg a2;
-      fprintf oc "	strh	%a, [%a, #0]\n" ireg IR14 ireg a1; 4
-  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
-      if a1 <> IR12 then begin
-        print_bswap oc a2 IR14 IR12;
-        fprintf oc "	str	%a, [%a, #0]\n" ireg IR12 ireg a1; 5
-      end else begin
-        fprintf oc "	mov	%a, %a, lsr #24\n" ireg IR14 ireg a2;
-        fprintf oc "	str     %a, [%a, #0]\n" ireg IR14 ireg a1;
-        fprintf oc "	mov	%a, %a, lsr #16\n" ireg IR14 ireg a2;
-        fprintf oc "	str     %a, [%a, #1]\n" ireg IR14 ireg a1;
-        fprintf oc "	mov	%a, %a, lsr #8\n" ireg IR14 ireg a2;
-        fprintf oc "	str     %a, [%a, #2]\n" ireg IR14 ireg a1;
-        fprintf oc "	str     %a, [%a, #3]\n" ireg IR14 ireg a1;
-        7
       end
   (* Catch-all *)
   | _ ->

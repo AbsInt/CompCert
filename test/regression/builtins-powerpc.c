@@ -4,19 +4,18 @@
 
 int main(int argc, char ** argv)
 {
-  int x = 0x12345678;
+  unsigned int x = 0x12345678;
   unsigned int y = 0xDEADBEEF;
   double a = 3.14159;
   double b = 2.718;
   double c = 1.414;
   unsigned short s = 0x1234;
 
-#if defined(__PPC__) || defined(__ppc__)
-
   printf("mulhw(%x, %x) = %x\n", x, y, __builtin_mulhw(x, y));
   printf("mulhwu(%x, %x) = %x\n", x, y, __builtin_mulhwu(x, y));
   printf("cntlz(%x) = %d\n", x, __builtin_cntlz(x));
   printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
+  printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
 
   printf("fmadd(%f, %f, %f) = %f\n", a, b, c, __builtin_fmadd(a, b, c));
   printf("fmsub(%f, %f, %f) = %f\n", a, b, c, __builtin_fmsub(a, b, c));
@@ -33,28 +32,6 @@ int main(int argc, char ** argv)
   __builtin_eieio();
   __builtin_sync();
   __builtin_isync();
-
-#endif
-
-#ifdef __arm__
-
-  printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
-  printf("cntlz(%x) = %d\n", x, __builtin_cntlz(x));
-
-  printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
-  
-#endif
-
-#ifdef __i386__
-
-  printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
-
-  printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
-  printf("fmin(%f, %f) = %f\n", a, b, __builtin_fmin(a, b));
-  printf("fmax(%f, %f) = %f\n", a, b, __builtin_fmax(a, b));
-
-#endif
-
   printf ("read_16_rev = %x\n", __builtin_read16_reversed(&s));
   printf ("read_32_rev = %x\n", __builtin_read32_reversed(&y));
   __builtin_write16_reversed(&s, 0x789A);

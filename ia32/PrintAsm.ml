@@ -390,33 +390,15 @@ let print_builtin_vstore_global oc chunk id ofs args =
 let print_builtin_inline oc name args res =
   fprintf oc "%s begin builtin %s\n" comment name;
   begin match name, args, res with
-  (* Memory accesses *)
-  | "__builtin_read16_reversed", [IR a1], [IR res] ->
-      let tmp = if Asmgen.low_ireg res then res else ECX in
-      fprintf oc "	movzwl	0(%a), %a\n" ireg a1 ireg tmp;
-      fprintf oc "	xchg	%a, %a\n" ireg8 tmp high_ireg8 tmp;
-      if tmp <> res then
-        fprintf oc "	movl	%a, %a\n" ireg tmp ireg res
-  | "__builtin_read32_reversed", [IR a1], [IR res] ->
-      fprintf oc "	movl	0(%a), %a\n" ireg a1 ireg res;
-      fprintf oc "	bswap	%a\n" ireg res
-  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
-      let tmp = if a1 = ECX then EDX else ECX in
-      if a2 <> tmp then
-        fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
-      fprintf oc "	xchg	%a, %a\n" ireg8 tmp high_ireg8 tmp;
-      fprintf oc "	movw	%a, 0(%a)\n" ireg16 tmp ireg a1
-  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
-      let tmp = if a1 = ECX then EDX else ECX in
-      if a2 <> tmp then
-        fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
-      fprintf oc "	bswap	%a\n" ireg tmp;
-      fprintf oc "	movl	%a, 0(%a)\n" ireg tmp ireg a1
   (* Integer arithmetic *)
-  | "__builtin_bswap", [IR a1], [IR res] ->
+  | ("__builtin_bswap"| "__builtin_bswap32"), [IR a1], [IR res] ->
       if a1 <> res then
         fprintf oc "	movl	%a, %a\n" ireg a1 ireg res;
       fprintf oc "	bswap	%a\n" ireg res
+  | "__builtin_bswap16", [IR a1], [IR res] ->
+      if a1 <> res then
+        fprintf oc "	movl	%a, %a\n" ireg a1 ireg res;
+      fprintf oc "	rolw	$8, %a\n" ireg16 res
   (* Float arithmetic *)
   | "__builtin_fabs", [FR a1], [FR res] ->
       need_masks := true;

@@ -440,10 +440,14 @@ let print_builtin_inline oc name args res =
       fprintf oc "	mulhwu	%a, %a, %a\n" ireg res ireg a1 ireg a2
   | "__builtin_cntlz", [IR a1], [IR res] ->
       fprintf oc "	cntlzw	%a, %a\n" ireg res ireg a1
-  | "__builtin_bswap", [IR a1], [IR res] ->
+  | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
       fprintf oc "	stwu	%a, -8(%a)\n" ireg a1 ireg GPR1;
       fprintf oc "	lwbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
+  | "__builtin_bswap16", [IR a1], [IR res] ->
+      fprintf oc "	rlwinm	%a, %a, 8, 16, 23\n" ireg GPR0 ireg a1;
+      fprintf oc "	rlwinm	%a, %a, 24, 24, 31\n" ireg res ireg a1;
+      fprintf oc "	or	%a, %a, %a\n" ireg reg ireg GPR0 ireg res
   (* Float arithmetic *)
   | "__builtin_fmadd", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3
@@ -854,7 +858,7 @@ let instr_size = function
       begin match ef with
       | EF_builtin(name, sg) ->
           begin match extern_atom name with
-          | "__builtin_bswap" -> 3
+          | "__builtin_bswap" | "__builtin_bswap32" | "__builtin_bswap16" -> 3
           | "__builtin_fcti" -> 4
           | _ -> 1
           end

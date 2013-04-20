@@ -59,7 +59,7 @@ let align x boundary =
 
 let rec can_byte_swap env ty =
   match unroll env ty with
-  | TInt(ik, _) -> (true, sizeof_ikind ik > 1)
+  | TInt(ik, _) -> (sizeof_ikind ik <= 4, sizeof_ikind ik > 1)
   | TEnum(_, _) -> (true, sizeof_ikind enum_ikind > 1)
   | TPtr(_, _) -> (true, true)          (* tolerance? *)
   | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
@@ -151,12 +151,9 @@ let transf_composite loc env su id attrs ml =
 (* Accessor functions *)
 
 let lookup_function loc env name =
-  try
-    match Env.lookup_ident env name with
-    | (id, II_ident(sto, ty)) -> (id, ty)
-    | (id, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
-  with Env.Error msg ->
-    fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
+  match Env.lookup_ident env name with
+  | (id, II_ident(sto, ty)) -> (id, ty)
+  | (id, II_enum _) -> raise (Env.Error(Env.Unbound_identifier name))
 
 (* Type for the access *)
 
@@ -197,33 +194,56 @@ let arrow_packed_field base pf ty =
      etyp = TArray(TInt(IChar,[]),None,[]) } in
   ederef ty (ecast (TPtr(ty, [])) (eoffset payload pf.fi_offset))
 
-(*  (ty) __builtin_read_NN_reversed(&lval)  *)
+(*  (ty) __builtin_readNN_reversed(&lval)
+ or (ty) __builtin_bswapNN(lval) *)
+
 let bswap_read loc env lval =
   let ty = lval.etyp in
-  let (bsize, aty) =
-    accessor_type loc env ty in
-  if bsize = 8 then lval else begin
+  let (bsize, aty) = accessor_type loc env ty in
+  assert (bsize = 16 || bsize = 32);
+  try
     let (id, fty) =
       lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
     let fn = {edesc = EVar id; etyp = fty} in
     let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lval)] in
     let call = {edesc = ECall(fn, args); etyp = aty} in
     ecast_opt env ty call
-  end
+  with Env.Error _ ->
+  try
+    let (id, fty) =
+      lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
+    let fn = {edesc = EVar id; etyp = fty} in
+    let args = [ecast_opt env aty lval] in
+    let call = {edesc = ECall(fn, args); etyp = aty} in
+    ecast_opt env ty call
+  with Env.Error msg ->
+    fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
 
-(*  __builtin_write_intNN_reversed(&lhs,rhs)  *)
+(*  __builtin_write_intNN_reversed(&lhs,rhs)
+  or  lhs = __builtin_bswapNN(rhs) *)
+
 let bswap_write loc env lhs rhs =
   let ty = lhs.etyp in
   let (bsize, aty) =
     accessor_type loc env ty in
-  if bsize = 8 then eassign lhs rhs else begin
+  assert (bsize = 16 || bsize = 32);
+  try
     let (id, fty) =
       lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
     let fn = {edesc = EVar id; etyp = fty} in
     let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
                 ecast_opt env aty rhs] in
     {edesc = ECall(fn, args); etyp = TVoid[]}
-  end
+  with Env.Error _ ->
+  try
+    let (id, fty) =
+      lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
+    let fn = {edesc = EVar id; etyp = fty} in
+    let args = [ecast_opt env aty rhs] in
+    let call = {edesc = ECall(fn, args); etyp = aty} in
+    eassign lhs (ecast_opt env ty call)
+  with Env.Error msg ->
+    fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
 
 (* Expressions *)
 

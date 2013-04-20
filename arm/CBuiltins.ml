@@ -23,20 +23,15 @@ let builtins = {
     (* Integer arithmetic *)
     "__builtin_bswap",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_bswap32",
+      (TInt(IUInt, []), [TInt(IUInt, [])], false);
+    "__builtin_bswap16",
+      (TInt(IUShort, []), [TInt(IUShort, [])], false);
     "__builtin_cntlz",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     (* Float arithmetic *)
     "__builtin_fsqrt",
-      (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
-    (* Memory accesses *)
-    "__builtin_read16_reversed",
-      (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);
-    "__builtin_read32_reversed",
-      (TInt(IUInt, []), [TPtr(TInt(IUInt, [AConst]), [])], false);
-    "__builtin_write16_reversed",
-      (TVoid [], [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
-    "__builtin_write32_reversed",
-      (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
+      (TFloat(FDouble, []), [TFloat(FDouble, [])], false)
   ]
 }
 

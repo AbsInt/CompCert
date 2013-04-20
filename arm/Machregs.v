@@ -104,7 +104,9 @@ Definition destroyed_by_jumptable: list mreg :=
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al => if zle sz 32 then nil else R2 :: R3 :: R12 :: nil
-  | _ => R12 :: F6 :: nil
+  | EF_vstore Mfloat32 => F6 :: nil
+  | EF_vstore_global Mfloat32 _ _ => F6 :: nil
+  | _ => nil
   end.
 
 Definition destroyed_at_function_entry: list mreg :=

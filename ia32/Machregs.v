@@ -105,11 +105,11 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
-  | EF_vload _ => nil
-  | EF_vload_global _ _ _ => nil
-  | EF_vstore _ => AX :: CX :: X7 :: nil
-  | EF_vstore_global _ _ _ => AX :: X7 :: nil
-  | _ => AX :: CX :: X7 :: FP0 :: nil
+  | EF_vstore (Mint8unsigned|Mint8signed) => AX :: CX :: nil
+  | EF_vstore Mfloat32 => X7 :: nil
+  | EF_vstore_global (Mint8unsigned|Mint8signed) _ _ => AX :: nil
+  | EF_vstore_global Mfloat32 _ _ => X7 :: nil
+  | _ => nil
   end.
 
 Definition destroyed_at_function_entry: list mreg :=
