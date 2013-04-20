@@ -9,7 +9,7 @@ int main()
   _Bool a, b, c, d, e, f, g, h, i;
   a = x;
   b = x >= 100;
-  c = &x;
+  c = (_Bool) &x;
   d = a && b;
   e = a || b;
   f = a & b;
