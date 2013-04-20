@@ -24,7 +24,8 @@ Supported targets:
   ppc-linux        (PowerPC, Linux)
   ppc-eabi         (PowerPC, EABI with GNU/Unix tools)
   ppc-eabi-diab    (PowerPC, EABI with Diab tools)
-  arm-linux        (ARM, Linux EABI)
+  arm-linux        (ARM, EABI)
+  arm-eabi         (ARM, EABI)
   ia32-linux       (x86 32 bits, Linux)
   ia32-bsd         (x86 32 bits, BSD)
   ia32-macosx      (x86 32 bits, MacOS X)
@@ -85,9 +86,9 @@ case "$target" in
     clinker="${toolprefix}dcc"
     libmath="-lm"
     cchecklink=true;;
-  arm-linux)
+  arm-linux|arm-eabi)
     arch="arm"
-    variant="linux"
+    variant="eabi"
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
