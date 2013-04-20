@@ -7,10 +7,10 @@ CFLAGS=-O1 -Wall
 
 LIBS=$(LIBMATH)
 
-TIME=xtime -o /dev/null -mintime 1.0     # Xavier's hack
+TIME=xtime -o /dev/null -mintime 2.0     # Xavier's hack
 #TIME=time >/dev/null                    # Otherwise
 
-PROGS=fib integr qsort fft sha1 aes almabench lists \
+PROGS=fib integr qsort fft fftw sha1 aes almabench lists \
   binarytrees fannkuch knucleotide mandelbrot nbody \
   nsieve nsievebits spectral vmach \
   bisect chomp perlin siphash24
