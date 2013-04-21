@@ -52,7 +52,7 @@ __i64_smod:
         xor r5, r5, r0
         subfc r6, r0, r6
         subfe r5, r0, r5
-        bl __i64_umod           # do unsigned division
+        bl __i64_udivmod        # do unsigned division
         mtlr r11                # restore return address
         xor r4, r4, r12         # apply expected sign to remainder
         xor r3, r3, r12         # RES = R if r12 == 0, -R if r12 == -1

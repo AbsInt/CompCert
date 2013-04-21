@@ -4,6 +4,7 @@
 
 typedef unsigned int u32;
 typedef signed int s32;
+typedef unsigned long long u64;
 
 static u32 rnd32(void)
 {
@@ -60,11 +61,11 @@ static void test1(u32 x, u32 y)
   printf("x cmps y = %s\n",
          x == y ? "eq" : (s32)x < (s32)y ? "lt" : "gt");
   f = (double) x;
-  printf("utod x = %x\n", *((u32*) &f));
+  printf("utod x = %llx\n", *((u64*) &f));
   f = f * 0.0001;
   printf("dtou f = %x\n", (u32) f);
   f = (double) ((s32) x);
-  printf("stod x = %x\n", *((u32*) &f));
+  printf("stod x = %llx\n", *((u64*) &f));
   f = f * 0.0001;
   printf("dtos f = %x\n", (s32) f);
   printf("\n");

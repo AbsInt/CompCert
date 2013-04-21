@@ -36,11 +36,11 @@
 
         .text
 
-### Unsigned comparison        
+### Signed comparison        
 
         .balign 16
-        .globl __i64_ucmp
-__i64_ucmp:
+        .globl __i64_scmp
+__i64_scmp:
         cmpw cr0, r3, r5        # compare high words (signed)
 	cmplw cr1, r4, r6       # compare low words (unsigned)
         mfcr r0
@@ -67,6 +67,6 @@ __i64_ucmp:
 #    = 0 if X = Y
         blr
         .type __i64_scmp, @function
-        .size __i64_scmp, .-__i64_ucmp
+        .size __i64_scmp, .-__i64_scmp
 	
         

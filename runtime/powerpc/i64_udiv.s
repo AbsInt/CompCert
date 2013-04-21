@@ -42,7 +42,7 @@
         .globl __i64_udiv
 __i64_udiv:
         mflr r11                # save return address in r11
-        bl __i64_umod           # unsigned divide
+        bl __i64_udivmod        # unsigned divide
         mtlr r11                # restore return address
         mr r3, r7               # R = quotient
         mr r4, r8

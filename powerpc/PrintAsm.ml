@@ -447,7 +447,7 @@ let print_builtin_inline oc name args res =
   | "__builtin_bswap16", [IR a1], [IR res] ->
       fprintf oc "	rlwinm	%a, %a, 8, 16, 23\n" ireg GPR0 ireg a1;
       fprintf oc "	rlwinm	%a, %a, 24, 24, 31\n" ireg res ireg a1;
-      fprintf oc "	or	%a, %a, %a\n" ireg reg ireg GPR0 ireg res
+      fprintf oc "	or	%a, %a, %a\n" ireg res ireg GPR0 ireg res
   (* Float arithmetic *)
   | "__builtin_fmadd", [FR a1; FR a2; FR a3], [FR res] ->
       fprintf oc "	fmadd	%a, %a, %a, %a\n" freg res freg a1 freg a2 freg a3

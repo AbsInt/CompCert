@@ -339,6 +339,7 @@ let do_printf ge m fmt args =
             Buffer.add_string b (format_float pat (camlfloat_of_coqfloat f));
             scan pos' args'
         | EVlong i :: args', ('d'|'i'|'u'|'o'|'x'|'X') ->
+            let pat = Str.replace_first (Str.regexp "ll") "" pat in
             Buffer.add_string b (format_int64 pat (camlint64_of_coqint i));
             scan pos' args'
         | EVptr_global(id, ofs) :: args', 's' ->

@@ -53,7 +53,7 @@ __i64_sdiv:
         xor r5, r5, r0
         subfc r6, r0, r6
         subfe r5, r0, r5
-        bl __i64_umod           # do unsigned division
+        bl __i64_udivmod        # do unsigned division
         mtlr r11                # restore return address
         srawi r0, r12, 31       # apply expected sign to quotient
         xor r8, r8, r0          # RES = Q if r12 >= 0, -Q if r12 < 0
