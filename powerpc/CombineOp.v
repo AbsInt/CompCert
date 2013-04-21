@@ -81,7 +81,6 @@ Function combine_addr (addr: addressing) (args: list valnum) : option(addressing
   | Aindexed n, x::nil =>
       match get x with
       | Some(Op (Oaddimm m) ys) => Some(Aindexed (Int.add m n), ys)
-      | Some(Op Oadd ys) => if Int.eq_dec n Int.zero then Some(Aindexed2, ys) else None
       | _ => None
       end
   | _, _ => None
