@@ -618,6 +618,9 @@ let rec flattenSwitch = function
       Label(Case e) :: flattenSwitch s1
   | {sdesc = C.Slabeled(C.Sdefault, s1)} ->
       Label Default :: flattenSwitch s1
+  | {sdesc = C.Slabeled(C.Slabel lbl, s1); sloc = loc} ->
+      Stmt {sdesc = C.Slabeled(C.Slabel lbl, Cutil.sskip); sloc = loc}
+      :: flattenSwitch s1
   | s ->
       [Stmt s]
 
