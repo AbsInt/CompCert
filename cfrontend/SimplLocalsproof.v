@@ -280,6 +280,10 @@ Proof.
   destruct v; inv H. constructor.
   destruct v; inv H. constructor.
   destruct v; try discriminate. destruct (cast_float_long s f0); inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
+  destruct v; inv H. constructor.
 (* float *)
   destruct ty; simpl in H; try discriminate; destruct v; inv H.
   constructor. apply cast_float_float_idem.

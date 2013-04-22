@@ -15,7 +15,6 @@
 let prepro_options = ref ([]: string list)
 let linker_options = ref ([]: string list)
 let assembler_options = ref ([]: string list)
-let option_flonglong = ref true
 let option_flongdouble = ref false
 let option_fstruct_return = ref false
 let option_fbitfields = ref false

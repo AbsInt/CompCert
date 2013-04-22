@@ -253,6 +253,8 @@ Definition make_shr (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_cmp ty1 ty2 with
   | cmp_case_pp => OK (Ebinop (Ocmpu c) e1 e2)
+  | cmp_case_pl => OK (Ebinop (Ocmpu c) e1 (Eunop Ointoflong e2))
+  | cmp_case_lp => OK (Ebinop (Ocmpu c) (Eunop Ointoflong e1) e2)
   | cmp_default =>
       make_binarith (Ocmp c) (Ocmpu c) (Ocmpf c) (Ocmpl c) (Ocmplu c) e1 ty1 e2 ty2
   end.

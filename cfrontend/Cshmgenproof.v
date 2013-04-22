@@ -563,6 +563,18 @@ Proof.
 - inv MAKE. destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
   simpl in SEM; inv SEM.
   econstructor; eauto. simpl. unfold Val.cmpu. rewrite E. auto.
+- inv MAKE. destruct vb; try discriminate. 
+  set (vb := Vint (Int.repr (Int64.unsigned i))) in *.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
+  simpl in SEM; inv SEM.
+  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with vb. 
+  unfold Val.cmpu. rewrite E. auto.
+- inv MAKE. destruct va; try discriminate. 
+  set (va := Vint (Int.repr (Int64.unsigned i))) in *.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp va vb) as [bv|] eqn:E;
+  simpl in SEM; inv SEM.
+  econstructor; eauto with cshm. simpl. change (Vint (Int64.loword i)) with va. 
+  unfold Val.cmpu. rewrite E. auto.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.
 

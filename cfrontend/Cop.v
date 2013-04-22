@@ -105,6 +105,8 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   | Tint sz2 si2 _, Tlong _ _ => cast_case_l2i sz2 si2
   | Tlong si2 _, Tfloat sz1 _ => cast_case_f2l si2
   | Tfloat sz2 _, Tlong si1 _ => cast_case_l2f si1 sz2
+  | (Tpointer _ _ | Tcomp_ptr _ _), Tlong _ _ => cast_case_l2i I32 Unsigned
+  | Tlong si2 _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_i2l si2
   | Tstruct id2 fld2 _, Tstruct id1 fld1 _ => cast_case_struct id1 fld1 id2 fld2
   | Tunion id2 fld2 _, Tunion id1 fld1 _ => cast_case_union id1 fld1 id2 fld2
   | Tvoid, _ => cast_case_void
@@ -805,6 +807,8 @@ Definition sem_shr (v1:val) (t1:type) (v2: val) (t2:type) : option val :=
 
 Inductive classify_cmp_cases : Type :=
   | cmp_case_pp                       (**r pointer, pointer *)
+  | cmp_case_pl                       (**r pointer, long *)
+  | cmp_case_lp                       (**r long, pointer *)
   | cmp_default.                      (**r numerical, numerical *)
 
 Definition classify_cmp (ty1: type) (ty2: type) :=
@@ -812,6 +816,8 @@ Definition classify_cmp (ty1: type) (ty2: type) :=
   | Tpointer _ _ , Tpointer _ _ => cmp_case_pp
   | Tpointer _ _ , Tint _ _ _ => cmp_case_pp
   | Tint _ _ _, Tpointer _ _ => cmp_case_pp
+  | Tpointer _ _ , Tlong _ _ => cmp_case_pl
+  | Tlong _ _ , Tpointer _ _ => cmp_case_lp
   | _, _ => cmp_default
   end.
 
@@ -820,32 +826,21 @@ Definition sem_cmp (c:comparison)
                   (m: mem): option val :=
   match classify_cmp t1 t2 with
   | cmp_case_pp =>
-     option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2)
-(*
-      match v1,v2 with
-      | Vint n1, Vint n2 => Some (Val.of_bool (Int.cmpu c n1 n2))
-      | Vptr b1 ofs1,  Vptr b2 ofs2  =>
-          if zeq b1 b2 then
-            if Mem.weak_valid_pointer m b1 (Int.unsigned ofs1)
-               && Mem.weak_valid_pointer m b2 (Int.unsigned ofs2)
-            then Some (Val.of_bool (Int.cmpu c ofs1 ofs2))
-            else None
-          else
-            if Mem.valid_pointer m b1 (Int.unsigned ofs1)
-               && Mem.valid_pointer m b2 (Int.unsigned ofs2)
-            then option_map Val.of_bool (Val.cmp_different_blocks c)
-            else None
-      | Vptr b ofs, Vint n =>
-          if Int.eq n Int.zero
-          then option_map Val.of_bool (Val.cmp_different_blocks c)
-          else None
-      | Vint n, Vptr b ofs =>
-          if Int.eq n Int.zero
-          then option_map Val.of_bool (Val.cmp_different_blocks c)
-          else None
-      | _,  _ => None
+      option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c v1 v2)
+  | cmp_case_pl =>
+      match v2 with
+      | Vlong n2 => 
+          let n2 := Int.repr (Int64.unsigned n2) in
+          option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n2))
+      | _ => None
       end
-*)
+  | cmp_case_lp =>
+      match v1 with
+      | Vlong n1 => 
+          let n1 := Int.repr (Int64.unsigned n1) in
+          option_map Val.of_bool (Val.cmpu_bool (Mem.valid_pointer m) c (Vint n1) v2)
+      | _ => None
+      end
   | cmp_default =>
       sem_binarith
         (fun sg n1 n2 =>
@@ -1029,6 +1024,20 @@ Proof.
   replace (Val.cmpu_bool (Mem.valid_pointer m') cmp tv1 tv2) with (Some b).
   simpl. TrivialInject. 
   symmetry. eapply val_cmpu_bool_inject; eauto. 
+- (* pointer - long *)
+  destruct v2; try discriminate. inv H1. 
+  set (v2 := Vint (Int.repr (Int64.unsigned i))) in *.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp v1 v2) as [b|] eqn:E; simpl in H; inv H.
+  replace (Val.cmpu_bool (Mem.valid_pointer m') cmp tv1 v2) with (Some b).
+  simpl. TrivialInject. 
+  symmetry. eapply val_cmpu_bool_inject with (v2 := v2); eauto. constructor. 
+- (* long - pointer *)
+  destruct v1; try discriminate. inv H0. 
+  set (v1 := Vint (Int.repr (Int64.unsigned i))) in *.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) cmp v1 v2) as [b|] eqn:E; simpl in H; inv H.
+  replace (Val.cmpu_bool (Mem.valid_pointer m') cmp v1 tv2) with (Some b).
+  simpl. TrivialInject. 
+  symmetry. eapply val_cmpu_bool_inject with (v1 := v1); eauto. constructor. 
 - (* numerical - numerical *)
   assert (SELF: forall b, optval_self_injects (Some (Val.of_bool b))).
   {
