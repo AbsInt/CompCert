@@ -42,7 +42,7 @@ FUNCTION(__i64_udiv)
         pushl %ebp
         pushl %esi
         pushl %edi
-        call __i64_udivmod
+        call GLOB(__i64_udivmod)
         movl %esi, %eax
         movl %edi, %edx
         popl %edi
