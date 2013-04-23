@@ -32,25 +32,44 @@
 #
 # *********************************************************************
 
-# Helper functions for 64-bit integer arithmetic.  IA32 version.
-	
-        .text
+# System dependencies
 
-# Unsigned comparison
+#if defined(SYS_linux) || defined(SYS_bsd)
 
-        .globl __i64_ucmp
-        .balign 16
-__i64_ucmp:
-        movl 8(%esp), %eax              # compare high words
-        cmpl 16(%esp), %eax
-        jne 1f                          # if high words equal,
-        movl 4(%esp), %eax              # compare low words
-        cmpl 12(%esp), %eax
-1:      seta %al                        # AL = 1 if >, 0 if <=
-        setb %dl                        # DL = 1 if <, 0 if >=
-        subb %dl, %al                   # AL = 0 if same, 1 if >, -1 if <
-        movsbl %al, %eax
-        ret
-        .type __i64_ucmp, @function
-        .size __i64_ucmp, . - __i64_ucmp
+#define GLOB(x) x
+#define FUNCTION(f) \
+	.text; \
+	.globl f; \
+	.align 16; \
+f:
 
+#define ENDFUNCTION(f) \
+	.type f, @function; .size f, . - f
+
+#endif
+
+#if defined(SYS_macosx)
+
+#define GLOB(x) _##x
+#define FUNCTION(f) \
+	.text; \
+	.globl _##f; \
+	.align 4; \
+_##f:
+
+#define ENDFUNCTION(f)
+
+#endif
+
+#if defined(SYS_cygwin)
+
+#define GLOB(x) _##x
+#define FUNCTION(f) \
+	.text; \
+	.globl _##f; \
+	.align 16; \
+_##f:
+
+#define ENDFUNCTION(f)
+
+#endif

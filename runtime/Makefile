@@ -17,7 +17,7 @@ $(LIB): $(OBJS)
 	$(CASMRUNTIME) $^
 
 %.o: $(ARCH)/%.S
-	$(CASMRUNTIME) -DVARIANT_$(VARIANT) $^
+	$(CASMRUNTIME) -DVARIANT_$(VARIANT) -DSYS_$(SYSTEM) $^
 
 clean::
 	rm -f *.o $(LIB)
