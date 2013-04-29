@@ -92,6 +92,8 @@ Definition make_cmp_ne_zero (e: expr) :=
   | Ebinop (Ocmp c) e1 e2 => e
   | Ebinop (Ocmpu c) e1 e2 => e
   | Ebinop (Ocmpf c) e1 e2 => e
+  | Ebinop (Ocmpl c) e1 e2 => e
+  | Ebinop (Ocmplu c) e1 e2 => e
   | _ => Ebinop (Ocmp Cne) e (make_intconst Int.zero)
   end.
 

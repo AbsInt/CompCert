@@ -1612,9 +1612,11 @@ Proof.
 (* cmpf *)
   inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
 (* cmpl *)
-  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
+  unfold Val.cmpl in *. inv H0; inv H1; simpl in H; inv H.
+  econstructor; split. simpl; eauto. apply val_inject_val_of_bool.
 (* cmplu *)
-  inv H; inv H0; inv H1; TrivialExists. apply val_inject_val_of_optbool.
+  unfold Val.cmplu in *. inv H0; inv H1; simpl in H; inv H.
+  econstructor; split. simpl; eauto. apply val_inject_val_of_bool.
 Qed.
 
 (** * Correctness of Cminor construction functions *)

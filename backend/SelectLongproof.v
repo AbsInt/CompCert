@@ -61,11 +61,7 @@ Definition i64_helpers_correct (hf: helper_functions) : Prop :=
   /\(forall x y z, Val.modlu x y = Some z -> helper_implements hf.(i64_umod) sig_ll_l (x::y::nil) z)
   /\(forall x y, helper_implements hf.(i64_shl) sig_li_l (x::y::nil) (Val.shll x y))
   /\(forall x y, helper_implements hf.(i64_shr) sig_li_l (x::y::nil) (Val.shrlu x y))
-  /\(forall x y, helper_implements hf.(i64_sar) sig_li_l (x::y::nil) (Val.shrl x y))
-  /\(forall c x y, exists z, helper_implements hf.(i64_scmp) sig_ll_i (x::y::nil) z
-                          /\ Val.cmpl c x y = Val.cmp c z Vzero)
-  /\(forall c x y, exists z, helper_implements hf.(i64_ucmp) sig_ll_i (x::y::nil) z
-                          /\ Val.cmplu c x y = Val.cmp c z Vzero).
+  /\(forall x y, helper_implements hf.(i64_sar) sig_li_l (x::y::nil) (Val.shrl x y)).
 
 End HELPERS.
 
@@ -180,6 +176,22 @@ Proof.
   destruct v; try (rewrite UNDEF; auto). erewrite B; simpl; eauto. rewrite Int64.ofwords_recompose. auto.
 Qed.
 
+Lemma eval_splitlong_strict:
+  forall le a f va v,
+  eval_expr ge sp e m le a (Vlong va) ->
+  (forall le a1 a2,
+     eval_expr ge sp e m le a1 (Vint (Int64.hiword va)) ->
+     eval_expr ge sp e m le a2 (Vint (Int64.loword va)) ->
+     eval_expr ge sp e m le (f a1 a2) v) ->
+  eval_expr ge sp e m le (splitlong a f) v.
+Proof.
+  intros until v. 
+  unfold splitlong. case (splitlong_match a); intros.
+- InvEval. destruct v1; simpl in H; try discriminate. destruct v0; inv H. 
+  apply H0. rewrite Int64.hi_ofwords; auto. rewrite Int64.lo_ofwords; auto.
+- EvalOp. apply H0; EvalOp.
+Qed.
+
 Lemma eval_splitlong2:
   forall le a b f va vb sem,
   (forall le a1 a2 b1 b2 x1 x2 y1 y2,
@@ -198,7 +210,7 @@ Lemma eval_splitlong2:
   exists v, eval_expr ge sp e m le (splitlong2 a b f) v /\ Val.lessdef (sem va vb) v.
 Proof.
   intros until sem; intros EXEC UNDEF.
-  unfold splitlong2. case (splitlong2_match a); intros.
+  unfold splitlong2. case (splitlong2_match a b); intros.
 - InvEval. subst va vb.
   exploit (EXEC le h1 l1 h2 l2); eauto. intros [v [A B]].
   exists v; split; auto.
@@ -238,6 +250,35 @@ Proof.
   exists v; split. EvalOp. 
   destruct va; try (rewrite UNDEF; auto); destruct vb; try (rewrite UNDEF; auto).
   erewrite B; simpl; eauto. rewrite ! Int64.ofwords_recompose; auto.
+Qed.
+
+Lemma eval_splitlong2_strict:
+  forall le a b f va vb v,
+  eval_expr ge sp e m le a (Vlong va) ->
+  eval_expr ge sp e m le b (Vlong vb) ->
+  (forall le a1 a2 b1 b2,
+     eval_expr ge sp e m le a1 (Vint (Int64.hiword va)) ->
+     eval_expr ge sp e m le a2 (Vint (Int64.loword va)) ->
+     eval_expr ge sp e m le b1 (Vint (Int64.hiword vb)) ->
+     eval_expr ge sp e m le b2 (Vint (Int64.loword vb)) ->
+     eval_expr ge sp e m le (f a1 a2 b1 b2) v) ->
+  eval_expr ge sp e m le (splitlong2 a b f) v.
+Proof.
+  assert (INV: forall v1 v2 n,
+    Val.longofwords v1 v2 = Vlong n -> v1 = Vint(Int64.hiword n) /\ v2 = Vint(Int64.loword n)).
+  {
+    intros. destruct v1; simpl in H; try discriminate. destruct v2; inv H.
+    rewrite Int64.hi_ofwords; rewrite Int64.lo_ofwords; auto.
+  }
+  intros until v. 
+  unfold splitlong2. case (splitlong2_match a b); intros.
+- InvEval. exploit INV. eexact H. intros [EQ1 EQ2]. exploit INV. eexact H0. intros [EQ3 EQ4]. 
+  subst. auto.
+- InvEval. exploit INV; eauto. intros [EQ1 EQ2]. subst. 
+  econstructor. eauto. apply H1; EvalOp. 
+- InvEval. exploit INV; eauto. intros [EQ1 EQ2]. subst. 
+  econstructor. eauto. apply H1; EvalOp.
+- EvalOp. apply H1; EvalOp.
 Qed.
 
 Lemma is_longconst_sound:
@@ -891,35 +932,49 @@ Proof.
 Qed.
 
 Lemma eval_cmpl_eq_zero:
-  unary_constructor_sound cmpl_eq_zero (fun v => Val.cmpl Ceq v (Vlong Int64.zero)).
+  forall le a x,
+  eval_expr ge sp e m le a (Vlong x) ->
+  eval_expr ge sp e m le (cmpl_eq_zero a) (Val.of_bool (Int64.eq x Int64.zero)).
 Proof.
-  red; intros. unfold cmpl_eq_zero. 
-  apply eval_splitlong with (sem := fun x => Val.cmpl Ceq x (Vlong Int64.zero)); auto.
-- intros. 
-  exploit eval_or. eexact H0. eexact H1. intros [v1 [A1 B1]].
+  intros. unfold cmpl_eq_zero. 
+  eapply eval_splitlong_strict; eauto. intros.
+  exploit eval_or. eexact H0. eexact H1. intros [v1 [A1 B1]]. simpl in B1; inv B1.
   exploit eval_comp. eexact A1. instantiate (2 := Eop (Ointconst Int.zero) Enil). EvalOp.
-  instantiate (1 := Ceq). intros [v2 [A2 B2]].
-  exists v2; split. auto. intros; subst. 
-  simpl in B1; inv B1. unfold Val.cmp in B2; simpl in B2.
-  unfold Val.cmpl; simpl. rewrite decompose_cmpl_eq_zero. 
-  destruct (Int.eq (Int.or p q)); inv B2; auto.
-- destruct x; auto.
+  instantiate (1 := Ceq). intros [v2 [A2 B2]]. 
+  unfold Val.cmp in B2; simpl in B2. 
+  rewrite <- decompose_cmpl_eq_zero in B2. 
+  rewrite Int64.ofwords_recompose in B2. 
+  destruct (Int64.eq x Int64.zero); inv B2; auto.
 Qed.
 
 Lemma eval_cmpl_ne_zero:
-  unary_constructor_sound cmpl_ne_zero (fun v => Val.cmpl Cne v (Vlong Int64.zero)).
+  forall le a x,
+  eval_expr ge sp e m le a (Vlong x) ->
+  eval_expr ge sp e m le (cmpl_ne_zero a) (Val.of_bool (negb (Int64.eq x Int64.zero))).
 Proof.
-  red; intros. unfold cmpl_eq_zero. 
-  apply eval_splitlong with (sem := fun x => Val.cmpl Cne x (Vlong Int64.zero)); auto.
-- intros. 
-  exploit eval_or. eexact H0. eexact H1. intros [v1 [A1 B1]].
+  intros. unfold cmpl_ne_zero. 
+  eapply eval_splitlong_strict; eauto. intros.
+  exploit eval_or. eexact H0. eexact H1. intros [v1 [A1 B1]]. simpl in B1; inv B1.
   exploit eval_comp. eexact A1. instantiate (2 := Eop (Ointconst Int.zero) Enil). EvalOp.
-  instantiate (1 := Cne). intros [v2 [A2 B2]].
-  exists v2; split. auto. intros; subst. 
-  simpl in B1; inv B1. unfold Val.cmp in B2; simpl in B2.
-  unfold Val.cmpl; simpl. rewrite decompose_cmpl_eq_zero. 
-  destruct (Int.eq (Int.or p q)); inv B2; auto.
-- destruct x; auto.
+  instantiate (1 := Cne). intros [v2 [A2 B2]]. 
+  unfold Val.cmp in B2; simpl in B2. 
+  rewrite <- decompose_cmpl_eq_zero in B2. 
+  rewrite Int64.ofwords_recompose in B2. 
+  destruct (negb (Int64.eq x Int64.zero)); inv B2; auto.
+Qed.
+
+Lemma eval_cmplu_gen:
+  forall ch cl a b le x y,
+  eval_expr ge sp e m le a (Vlong x) ->
+  eval_expr ge sp e m le b (Vlong y) ->
+  eval_expr ge sp e m le (cmplu_gen ch cl a b)
+    (Val.of_bool (if Int.eq (Int64.hiword x) (Int64.hiword y)
+                  then Int.cmpu cl (Int64.loword x) (Int64.loword y)
+                  else Int.cmpu ch (Int64.hiword x) (Int64.hiword y))).
+Proof.
+  intros. unfold cmplu_gen. eapply eval_splitlong2_strict; eauto. intros.
+  econstructor. econstructor. EvalOp. simpl. eauto. 
+  destruct (Int.eq (Int64.hiword x) (Int64.hiword y)); EvalOp.
 Qed.
 
 Remark int64_eq_xor:
@@ -933,44 +988,57 @@ Proof.
   auto.
 Qed.
 
-Theorem eval_cmplu: forall c, binary_constructor_sound (cmplu hf c) (Val.cmplu c).
+Theorem eval_cmplu:
+  forall c le a x b y v, 
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.cmplu c x y = Some v ->
+  eval_expr ge sp e m le (cmplu c a b) v.
 Proof.
-  intros; red; intros. unfold cmplu. 
-  set (default := comp c (Eexternal (i64_ucmp hf) sig_ll_i (a ::: b ::: Enil))
-                         (Eop (Ointconst Int.zero) Enil)).
-  assert (DEFAULT:
-    exists v, eval_expr ge sp e m le default v /\ Val.lessdef (Val.cmplu c x y) v).
-  {
-    assert (HELP: exists z, helper_implements ge hf.(i64_ucmp) sig_ll_i (x::y::nil) z
-                            /\ Val.cmplu c x y = Val.cmp c z Vzero)
-    by UseHelper.
-    destruct HELP as [z [A B]].
-    exploit eval_comp. eapply eval_helper_2. eexact H. eexact H0. eauto. 
-    instantiate (2 := Eop (Ointconst Int.zero) Enil). EvalOp. 
-    instantiate (1 := c). fold Vzero. intros [v [C D]].
-    econstructor; split; eauto. congruence.
-  }
-  destruct c; auto.
+  intros. unfold Val.cmplu in H1.
+  destruct x; simpl in H1; try discriminate. destruct y; inv H1. 
+  rename i into x. rename i0 into y.
+  destruct c; simpl.
 - (* Ceq *)
   destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; subst; clear H0.
++ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
   apply eval_cmpl_eq_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v [A B]].
-  exploit eval_cmpl_eq_zero. eexact A. intros [v' [C D]].
-  exists v'; split; auto.
-  eapply Val.lessdef_trans; [idtac|eexact D]. 
-  destruct x; auto. destruct y; auto. simpl in B; inv B. 
-  unfold Val.cmplu, Val.cmpl; simpl. rewrite int64_eq_xor; auto.
++ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B. inv B.
+  rewrite int64_eq_xor. apply eval_cmpl_eq_zero; auto.  
 - (* Cne *)
   destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; subst; clear H0.
++ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
   apply eval_cmpl_ne_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v [A B]].
-  exploit eval_cmpl_ne_zero. eexact A. intros [v' [C D]].
-  exists v'; split; auto.
-  eapply Val.lessdef_trans; [idtac|eexact D]. 
-  destruct x; auto. destruct y; auto. simpl in B; inv B. 
-  unfold Val.cmplu, Val.cmpl; simpl. rewrite int64_eq_xor; auto.
++ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B. inv B.
+  rewrite int64_eq_xor. apply eval_cmpl_ne_zero; auto.  
+- (* Clt *)
+  exploit (eval_cmplu_gen Clt Clt). eexact H. eexact H0. simpl.
+  rewrite <- Int64.decompose_ltu. rewrite ! Int64.ofwords_recompose. auto.
+- (* Cle *)
+  exploit (eval_cmplu_gen Clt Cle). eexact H. eexact H0. intros. 
+  rewrite <- (Int64.ofwords_recompose x). rewrite <- (Int64.ofwords_recompose y).
+  rewrite Int64.decompose_leu. auto. 
+- (* Cgt *)
+  exploit (eval_cmplu_gen Cgt Cgt). eexact H. eexact H0. simpl.
+  rewrite Int.eq_sym. rewrite <- Int64.decompose_ltu. rewrite ! Int64.ofwords_recompose. auto.
+- (* Cge *)
+  exploit (eval_cmplu_gen Cgt Cge). eexact H. eexact H0. intros. 
+  rewrite <- (Int64.ofwords_recompose x). rewrite <- (Int64.ofwords_recompose y).
+  rewrite Int64.decompose_leu. rewrite Int.eq_sym. auto.
+Qed.
+
+Lemma eval_cmpl_gen:
+  forall ch cl a b le x y,
+  eval_expr ge sp e m le a (Vlong x) ->
+  eval_expr ge sp e m le b (Vlong y) ->
+  eval_expr ge sp e m le (cmpl_gen ch cl a b)
+    (Val.of_bool (if Int.eq (Int64.hiword x) (Int64.hiword y)
+                  then Int.cmpu cl (Int64.loword x) (Int64.loword y)
+                  else Int.cmp ch (Int64.hiword x) (Int64.hiword y))).
+Proof.
+  intros. unfold cmpl_gen. eapply eval_splitlong2_strict; eauto. intros.
+  econstructor. econstructor. EvalOp. simpl. eauto. 
+  destruct (Int.eq (Int64.hiword x) (Int64.hiword y)); EvalOp.
 Qed.
 
 Remark decompose_cmpl_lt_zero:
@@ -991,72 +1059,61 @@ Proof.
   vm_compute. intuition congruence.
 Qed.
 
-Theorem eval_cmpl: forall c, binary_constructor_sound (cmpl hf c) (Val.cmpl c).
+Theorem eval_cmpl:
+  forall c le a x b y v, 
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.cmpl c x y = Some v ->
+  eval_expr ge sp e m le (cmpl c a b) v.
 Proof.
-  intros; red; intros. unfold cmpl. 
-  set (default := comp c (Eexternal (i64_scmp hf) sig_ll_i (a ::: b ::: Enil))
-                         (Eop (Ointconst Int.zero) Enil)).
-  assert (DEFAULT:
-    exists v, eval_expr ge sp e m le default v /\ Val.lessdef (Val.cmpl c x y) v).
-  {
-    assert (HELP: exists z, helper_implements ge hf.(i64_scmp) sig_ll_i (x::y::nil) z
-                            /\ Val.cmpl c x y = Val.cmp c z Vzero)
-    by UseHelper.
-    destruct HELP as [z [A B]].
-    exploit eval_comp. eapply eval_helper_2. eexact H. eexact H0. eauto. 
-    instantiate (2 := Eop (Ointconst Int.zero) Enil). EvalOp. 
-    instantiate (1 := c). fold Vzero. intros [v [C D]].
-    econstructor; split; eauto. congruence.
-  }
-  destruct c; auto.
+  intros. unfold Val.cmpl in H1.
+  destruct x; simpl in H1; try discriminate. destruct y; inv H1. 
+  rename i into x. rename i0 into y.
+  destruct c; simpl.
 - (* Ceq *)
   destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; subst; clear H0.
++ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
   apply eval_cmpl_eq_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v [A B]].
-  exploit eval_cmpl_eq_zero. eexact A. intros [v' [C D]].
-  exists v'; split; auto.
-  eapply Val.lessdef_trans; [idtac|eexact D]. 
-  destruct x; auto. destruct y; auto. simpl in B; inv B. 
-  unfold Val.cmpl; simpl. rewrite int64_eq_xor; auto.
++ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B; inv B.
+  rewrite int64_eq_xor. apply eval_cmpl_eq_zero; auto.
 - (* Cne *)
   destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; subst; clear H0.
++ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
   apply eval_cmpl_ne_zero; auto.
-+ exploit eval_xorl. eexact H. eexact H0. intros [v [A B]].
-  exploit eval_cmpl_ne_zero. eexact A. intros [v' [C D]].
-  exists v'; split; auto.
-  eapply Val.lessdef_trans; [idtac|eexact D]. 
-  destruct x; auto. destruct y; auto. simpl in B; inv B. 
-  unfold Val.cmpl; simpl. rewrite int64_eq_xor; auto.
++ exploit eval_xorl. eexact H. eexact H0. intros [v1 [A B]]. simpl in B; inv B.
+  rewrite int64_eq_xor. apply eval_cmpl_ne_zero; auto.
 - (* Clt *)
   destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; subst; clear H0.
-  exploit eval_highlong. eexact H. intros [v1 [A1 B1]].
++ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
+  exploit eval_highlong. eexact H. intros [v1 [A1 B1]]. simpl in B1. inv B1. 
   exploit eval_comp. eexact A1. 
   instantiate (2 := Eop (Ointconst Int.zero) Enil). EvalOp.
   instantiate (1 := Clt). intros [v2 [A2 B2]].
-  econstructor; split. eauto. 
-  destruct x; simpl in *; auto. inv B1.
-  unfold Val.cmp, Val.cmp_bool, Val.of_optbool, Int.cmp in B2.
-  unfold Val.cmpl, Val.cmpl_bool, Val.of_optbool, Int64.cmp.
-  rewrite <- (Int64.ofwords_recompose i). rewrite decompose_cmpl_lt_zero.
-  auto. 
-+ apply DEFAULT.
+  unfold Val.cmp in B2. simpl in B2.
+  rewrite <- (Int64.ofwords_recompose x). rewrite decompose_cmpl_lt_zero.
+  destruct (Int.lt (Int64.hiword x) Int.zero); inv B2; auto.
++ exploit (eval_cmpl_gen Clt Clt). eexact H. eexact H0. simpl.
+  rewrite <- Int64.decompose_lt. rewrite ! Int64.ofwords_recompose. auto.
+- (* Cle *)
+  exploit (eval_cmpl_gen Clt Cle). eexact H. eexact H0. intros. 
+  rewrite <- (Int64.ofwords_recompose x). rewrite <- (Int64.ofwords_recompose y).
+  rewrite Int64.decompose_le. auto. 
+- (* Cgt *)
+  exploit (eval_cmpl_gen Cgt Cgt). eexact H. eexact H0. simpl.
+  rewrite Int.eq_sym. rewrite <- Int64.decompose_lt. rewrite ! Int64.ofwords_recompose. auto.
 - (* Cge *)
   destruct (is_longconst_zero b) eqn:LC.
-+ exploit is_longconst_zero_sound; eauto. intros EQ; subst; clear H0.
-  exploit eval_highlong. eexact H. intros [v1 [A1 B1]].
++ exploit is_longconst_zero_sound; eauto. intros EQ; inv EQ; clear H0.
+  exploit eval_highlong. eexact H. intros [v1 [A1 B1]]. simpl in B1; inv B1.
   exploit eval_comp. eexact A1. 
   instantiate (2 := Eop (Ointconst Int.zero) Enil). EvalOp.
   instantiate (1 := Cge). intros [v2 [A2 B2]].
-  econstructor; split. eauto. 
-  destruct x; simpl in *; auto. inv B1.
-  unfold Val.cmp, Val.cmp_bool, Val.of_optbool, Int.cmp in B2.
-  unfold Val.cmpl, Val.cmpl_bool, Val.of_optbool, Int64.cmp.
-  rewrite <- (Int64.ofwords_recompose i). rewrite decompose_cmpl_lt_zero.
-  auto. 
-+ apply DEFAULT.
+  unfold Val.cmp in B2; simpl in B2. 
+  rewrite <- (Int64.ofwords_recompose x). rewrite decompose_cmpl_lt_zero.
+  destruct (negb (Int.lt (Int64.hiword x) Int.zero)); inv B2; auto.
++ exploit (eval_cmpl_gen Cgt Cge). eexact H. eexact H0. intros. 
+  rewrite <- (Int64.ofwords_recompose x). rewrite <- (Int64.ofwords_recompose y).
+  rewrite Int64.decompose_le. rewrite Int.eq_sym. auto.
 Qed.
 
 End CMCONSTR.

@@ -37,10 +37,12 @@ Open Local Scope cminorsel_scope.
 
 (** Conversion of conditions *)
 
-Function condition_of_expr (e: expr) : condition * exprlist :=
+Function condexpr_of_expr (e: expr) : condexpr :=
   match e with
-  | Eop (Ocmp c) el => (c, el)
-  | _ => (Ccompuimm Cne Int.zero, e ::: Enil)
+  | Eop (Ocmp c) el => CEcond c el
+  | Econdition a b c => CEcondition a (condexpr_of_expr b) (condexpr_of_expr c)
+  | Elet a b => CElet a (condexpr_of_expr b)
+  | _ => CEcond (Ccompuimm Cne Int.zero) (e ::: Enil)
   end.
 
 (** Conversion of loads and stores *)
@@ -133,8 +135,8 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Ocmp c => comp c arg1 arg2
   | Cminor.Ocmpu c => compu c arg1 arg2
   | Cminor.Ocmpf c => compf c arg1 arg2
-  | Cminor.Ocmpl c => cmpl hf c arg1 arg2
-  | Cminor.Ocmplu c => cmplu hf c arg1 arg2
+  | Cminor.Ocmpl c => cmpl c arg1 arg2
+  | Cminor.Ocmplu c => cmplu c arg1 arg2
   end.
 
 (** Conversion from Cminor expression to Cminorsel expressions *)
@@ -205,8 +207,8 @@ Fixpoint sel_stmt (ge: Cminor.genv) (s: Cminor.stmt) : stmt :=
       end
   | Cminor.Sseq s1 s2 => Sseq (sel_stmt ge s1) (sel_stmt ge s2)
   | Cminor.Sifthenelse e ifso ifnot =>
-      let (cond, args) := condition_of_expr (sel_expr e) in
-      Sifthenelse cond args (sel_stmt ge ifso) (sel_stmt ge ifnot)
+      Sifthenelse (condexpr_of_expr (sel_expr e))
+                  (sel_stmt ge ifso) (sel_stmt ge ifnot)
   | Cminor.Sloop body => Sloop (sel_stmt ge body)
   | Cminor.Sblock body => Sblock (sel_stmt ge body)
   | Cminor.Sexit n => Sexit n

@@ -815,6 +815,15 @@ Proof.
   intros. generalize (eq_spec x y); case (eq x y); intros; congruence.
 Qed.
 
+Theorem eq_signed:
+  forall x y, eq x y = if zeq (signed x) (signed y) then true else false.
+Proof.
+  intros. predSpec eq eq_spec x y. 
+  subst x. rewrite zeq_true; auto. 
+  destruct (zeq (signed x) (signed y)); auto.
+  elim H. rewrite <- (repr_signed x). rewrite <- (repr_signed y). congruence.
+Qed. 
+
 (** ** Properties of addition *)
 
 Theorem add_unsigned: forall x y, add x y = repr (unsigned x + unsigned y).
@@ -4121,47 +4130,62 @@ Qed.
 
 Lemma decompose_ltu:
   forall xh xl yh yl,
-  ltu (ofwords xh xl) (ofwords yh yl) = Int.ltu xh yh || Int.eq xh yh && Int.ltu xl yl.
+  ltu (ofwords xh xl) (ofwords yh yl) = if Int.eq xh yh then Int.ltu xl yl else Int.ltu xh yh.
 Proof.
-  intros. unfold ltu. rewrite ! ofwords_add'. unfold Int.ltu. 
+  intros. unfold ltu. rewrite ! ofwords_add'. unfold Int.ltu, Int.eq.
+  destruct (zeq (Int.unsigned xh) (Int.unsigned yh)).
+  rewrite e. destruct (zlt (Int.unsigned xl) (Int.unsigned yl)). 
+  apply zlt_true; omega.
+  apply zlt_false; omega.
+  change (two_p 32) with Int.modulus. 
+  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
+  change Int.modulus with 4294967296. intros.
   destruct (zlt (Int.unsigned xh) (Int.unsigned yh)).
-  simpl. apply zlt_true. 
-  change (two_power_pos 32) with Int.modulus. 
-  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
-  change Int.modulus with 4294967296. omega.
-  unfold Int.eq. destruct (zeq (Int.unsigned xh) (Int.unsigned yh)); simpl.
-  rewrite e. destruct (zlt (Int.unsigned xl) (Int.unsigned yl)).
-  apply zlt_true. omega. 
-  apply zlt_false. omega. 
-  apply zlt_false.
-  change (two_power_pos 32) with Int.modulus. 
-  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
-  change Int.modulus with 4294967296. omega.
+  apply zlt_true; omega.
+  apply zlt_false; omega.
+Qed.
+
+Lemma decompose_leu:
+  forall xh xl yh yl,
+  negb (ltu (ofwords yh yl) (ofwords xh xl)) =
+  if Int.eq xh yh then negb (Int.ltu yl xl) else Int.ltu xh yh.
+Proof.
+  intros. rewrite decompose_ltu. rewrite Int.eq_sym.
+  unfold Int.eq. destruct (zeq (Int.unsigned xh) (Int.unsigned yh)). 
+  auto.
+  unfold Int.ltu. destruct (zlt (Int.unsigned xh) (Int.unsigned yh)). 
+  rewrite zlt_false by omega; auto.
+  rewrite zlt_true by omega; auto.
 Qed.
 
 Lemma decompose_lt:
   forall xh xl yh yl,
-  lt (ofwords xh xl) (ofwords yh yl) = Int.lt xh yh || Int.eq xh yh && Int.ltu xl yl.
+  lt (ofwords xh xl) (ofwords yh yl) = if Int.eq xh yh then Int.ltu xl yl else Int.lt xh yh.
 Proof.
-  intros. unfold lt. rewrite ! ofwords_add''. unfold Int.lt. 
-  destruct (zlt (Int.signed xh) (Int.signed yh)).
-  simpl. apply zlt_true. 
-  change (two_power_pos 32) with Int.modulus. 
+  intros. unfold lt. rewrite ! ofwords_add''. rewrite Int.eq_signed. 
+  destruct (zeq (Int.signed xh) (Int.signed yh)).
+  rewrite e. unfold Int.ltu. destruct (zlt (Int.unsigned xl) (Int.unsigned yl)). 
+  apply zlt_true; omega.
+  apply zlt_false; omega.
+  change (two_p 32) with Int.modulus. 
   generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
-  change Int.modulus with 4294967296. omega.
-  replace (Int.eq xh yh) with (proj_sumbool(zeq (Int.signed xh) (Int.signed yh))).
-  destruct (zeq (Int.signed xh) (Int.signed yh)); simpl.
-  rewrite e. unfold Int.ltu. destruct (zlt (Int.unsigned xl) (Int.unsigned yl)).
-  apply zlt_true. omega. 
-  apply zlt_false. omega. 
-  apply zlt_false.
-  change (two_power_pos 32) with Int.modulus. 
-  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
-  change Int.modulus with 4294967296. omega.
-  predSpec Int.eq Int.eq_spec xh yh. 
-  subst yh. unfold proj_sumbool; apply zeq_true. 
-  destruct (zeq (Int.signed xh) (Int.signed yh)); auto. 
-  elim H. rewrite <- (Int.repr_signed xh). rewrite <- (Int.repr_signed yh). congruence.
+  change Int.modulus with 4294967296. intros.
+  unfold Int.lt. destruct (zlt (Int.signed xh) (Int.signed yh)).
+  apply zlt_true; omega.
+  apply zlt_false; omega.
+Qed.
+
+Lemma decompose_le:
+  forall xh xl yh yl,
+  negb (lt (ofwords yh yl) (ofwords xh xl)) =
+  if Int.eq xh yh then negb (Int.ltu yl xl) else Int.lt xh yh.
+Proof.
+  intros. rewrite decompose_lt. rewrite Int.eq_sym.
+  rewrite Int.eq_signed. destruct (zeq (Int.signed xh) (Int.signed yh)). 
+  auto.
+  unfold Int.lt. destruct (zlt (Int.signed xh) (Int.signed yh)). 
+  rewrite zlt_false by omega; auto.
+  rewrite zlt_true by omega; auto.
 Qed.
 
 End Int64.

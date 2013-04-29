@@ -309,8 +309,8 @@ Definition eval_binop
   | Ocmp c => Some (Val.cmp c arg1 arg2)
   | Ocmpu c => Some (Val.cmpu (Mem.valid_pointer m) c arg1 arg2)
   | Ocmpf c => Some (Val.cmpf c arg1 arg2)
-  | Ocmpl c => Some (Val.cmpl c arg1 arg2)
-  | Ocmplu c => Some (Val.cmplu c arg1 arg2)
+  | Ocmpl c => Val.cmpl c arg1 arg2
+  | Ocmplu c => Val.cmplu c arg1 arg2
   end.
 
 (** Evaluation of an expression: [eval_expr ge sp e m a v]

@@ -50,9 +50,6 @@ extern u64 __i64_shl(u64 x, unsigned amount);
 extern u64 __i64_shr(u64 x, unsigned amount);
 extern s64 __i64_sar(s64 x, unsigned amount);
 
-extern int __i64_ucmp(u64 x, u64 y);
-extern int __i64_scmp(s64 x, s64 y);
-
 extern double __i64_utod(u64 x);
 extern double __i64_stod(s64 x);
 extern u64 __i64_dtou(double d);
@@ -139,32 +136,6 @@ static void test1(u64 x, u64 y)
   t = __i64_sar(x, i);
   if (t != (s64) x >> i) 
     error++, printf("%016llx >>s %d = %016llx, expected %016llx\n", x, i, t, (s64) x >> i);
-
-  i = __i64_ucmp(x, y);
-  if (x == y) {
-    if (! (i == 0))
-      error++, printf("ucmp(%016llx, %016llx) = %d, expected 0\n", x, y, i);
-  }
-  else if (x < y) {
-    if (! (i < 0))
-      error++, printf("ucmp(%016llx, %016llx) = %d, expected < 0\n", x, y, i);
-  } else {
-    if (! (i > 0))
-      error++, printf("ucmp(%016llx, %016llx) = %d, expected > 0\n", x, y, i);
-  }
-
-  i = __i64_scmp(x, y);
-  if (x == y) {
-    if (! (i == 0))
-      error++, printf("scmp(%016llx, %016llx) = %d, expected 0\n", x, y, i);
-  }
-  else if ((s64)x < (s64)y) {
-    if (! (i < 0))
-      error++, printf("scmp(%016llx, %016llx) = %d, expected < 0\n", x, y, i);
-  } else {
-    if (! (i > 0))
-      error++, printf("scmp(%016llx, %016llx) = %d, expected > 0\n", x, y, i);
-  }
 
   f = __i64_utod(x);
   g = (double) x;

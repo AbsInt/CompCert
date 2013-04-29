@@ -595,11 +595,11 @@ Definition cmpu (c: comparison) (v1 v2: val): val :=
 Definition cmpf (c: comparison) (v1 v2: val): val :=
   of_optbool (cmpf_bool c v1 v2).
 
-Definition cmpl (c: comparison) (v1 v2: val): val :=
-  of_optbool (cmpl_bool c v1 v2).
+Definition cmpl (c: comparison) (v1 v2: val): option val :=
+  option_map of_bool (cmpl_bool c v1 v2).
 
-Definition cmplu (c: comparison) (v1 v2: val): val :=
-  of_optbool (cmplu_bool c v1 v2).
+Definition cmplu (c: comparison) (v1 v2: val): option val :=
+  option_map of_bool (cmplu_bool c v1 v2).
 
 End COMPARISONS.
 

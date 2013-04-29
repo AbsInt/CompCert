@@ -546,6 +546,19 @@ Definition transl_exprlist_prop
   /\ (forall r, In r pr -> rs'#r = rs#r)
   /\ Mem.extends m tm'.
 
+Definition transl_condexpr_prop 
+     (le: letenv) (a: condexpr) (v: bool) : Prop :=
+  forall tm cs f map pr ns ntrue nfalse rs
+    (MWF: map_wf map)
+    (TE: tr_condition f.(fn_code) map pr a ns ntrue nfalse)
+    (ME: match_env map e le rs)
+    (EXT: Mem.extends m tm),
+  exists rs', exists tm',
+     plus step tge (State cs f sp ns rs tm) E0 (State cs f sp (if v then ntrue else nfalse) rs' tm')
+  /\ match_env map e le rs'
+  /\ (forall r, In r pr -> rs'#r = rs#r)
+  /\ Mem.extends m tm'.
+
 (** The correctness of the translation is a huge induction over
   the Cminor evaluation derivation for the source program.  To keep
   the proof manageable, we put each case of the proof in a separate
@@ -639,25 +652,22 @@ Proof.
 Qed.
 
 Lemma transl_expr_Econdition_correct:
-  forall (le : letenv) (cond : condition) (al: exprlist) (ifso ifnot : expr)
-         (vl: list val) (vcond : bool) (v : val),
-  eval_exprlist ge sp e m le al vl ->
-  transl_exprlist_prop le al vl ->
-  eval_condition cond vl m = Some vcond ->
-  eval_expr ge sp e m le (if vcond then ifso else ifnot) v ->
-  transl_expr_prop le (if vcond then ifso else ifnot) v ->
-  transl_expr_prop le (Econdition cond al ifso ifnot) v.
+  forall (le : letenv) (a: condexpr) (ifso ifnot : expr)
+         (va : bool) (v : val),
+  eval_condexpr ge sp e m le a va ->
+  transl_condexpr_prop le a va ->
+  eval_expr ge sp e m le (if va then ifso else ifnot) v ->
+  transl_expr_prop le (if va then ifso else ifnot) v ->
+  transl_expr_prop le (Econdition a ifso ifnot) v.
 Proof.
-  intros; red; intros; inv TE. inv H14.
-  exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [RES1 [OTHER1 EXT1]]]]]]. 
-  assert (tr_expr f.(fn_code) map pr (if vcond then ifso else ifnot) (if vcond then ntrue else nfalse) nd rd dst).
-    destruct vcond; auto.
-  exploit H3; eauto. intros [rs2 [tm2 [EX2 [ME2 [RES2 [OTHER2 EXT2]]]]]].
+  intros; red; intros; inv TE.
+  exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [OTHER1 EXT1]]]]]. 
+  assert (tr_expr f.(fn_code) map pr (if va then ifso else ifnot) (if va then ntrue else nfalse) nd rd dst).
+    destruct va; auto.
+  exploit H2; eauto. intros [rs2 [tm2 [EX2 [ME2 [RES2 [OTHER2 EXT2]]]]]].
   exists rs2; exists tm2.
 (* Exec *)
-  split. eapply star_trans. eexact EX1.
-  eapply star_left. eapply exec_Icond. eauto. eapply eval_condition_lessdef; eauto. reflexivity. 
-  eexact EX2. reflexivity. traceEq.
+  split. eapply star_trans. apply plus_star. eexact EX1. eexact EX2. traceEq.
 (* Match-env *)
   split. assumption.
 (* Result value *)
@@ -829,14 +839,85 @@ Proof.
   auto.
 Qed.
 
+Lemma transl_condexpr_CEcond_correct:
+  forall le cond al vl vb,
+  eval_exprlist ge sp e m le al vl ->
+  transl_exprlist_prop le al vl ->
+  eval_condition cond vl m = Some vb ->
+  transl_condexpr_prop le (CEcond cond al) vb.
+Proof.
+  intros; red; intros. inv TE. 
+  exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [RES1 [OTHER1 EXT1]]]]]].
+  exists rs1; exists tm1.
+(* Exec *)
+  split. eapply plus_right. eexact EX1. eapply exec_Icond. eauto. 
+  eapply eval_condition_lessdef; eauto. auto. traceEq.
+(* Match-env *)
+  split. assumption.
+(* Other regs *)
+  split. assumption. 
+(* Mem *)
+  auto.
+Qed.
+
+Lemma transl_condexpr_CEcondition_correct:
+  forall le a b c va v,
+  eval_condexpr ge sp e m le a va ->
+  transl_condexpr_prop le a va ->
+  eval_condexpr ge sp e m le (if va then b else c) v ->
+  transl_condexpr_prop le (if va then b else c) v ->
+  transl_condexpr_prop le (CEcondition a b c) v.
+Proof.
+  intros; red; intros. inv TE. 
+  exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [OTHER1 EXT1]]]]].
+  assert (tr_condition (fn_code f) map pr (if va then b else c) (if va then n2 else n3) ntrue nfalse).
+    destruct va; auto.
+  exploit H2; eauto. intros [rs2 [tm2 [EX2 [ME2 [OTHER2 EXT2]]]]].
+  exists rs2; exists tm2.
+(* Exec *)
+  split. eapply plus_trans. eexact EX1. eexact EX2. traceEq.
+(* Match-env *)
+  split. assumption.
+(* Other regs *)
+  split. intros. rewrite OTHER2; auto. 
+(* Mem *)
+  auto.
+Qed.
+
+Lemma transl_condexpr_CElet_correct:
+  forall le a b v1 v2,
+  eval_expr ge sp e m le a v1 ->
+  transl_expr_prop le a v1 ->
+  eval_condexpr ge sp e m (v1 :: le) b v2 ->
+  transl_condexpr_prop (v1 :: le) b v2 ->
+  transl_condexpr_prop le (CElet a b) v2.
+Proof.
+  intros; red; intros. inv TE. 
+  exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [RES1 [OTHER1 EXT1]]]]]].
+  assert (map_wf (add_letvar map r)).
+    eapply add_letvar_wf; eauto. 
+  exploit H2; eauto. eapply match_env_bind_letvar; eauto. 
+  intros [rs2 [tm2 [EX2 [ME3 [OTHER2 EXT2]]]]].
+  exists rs2; exists tm2.
+(* Exec *)
+  split. eapply star_plus_trans. eexact EX1. eexact EX2. traceEq.
+(* Match-env *)
+  split. eapply match_env_unbind_letvar; eauto.
+(* Other regs *)
+  split. intros. rewrite OTHER2; auto. 
+(* Mem *)
+  auto.
+Qed.
+
 Theorem transl_expr_correct:
   forall le a v,
   eval_expr ge sp e m le a v ->
   transl_expr_prop le a v.
 Proof
-  (eval_expr_ind2 ge sp e m
+  (eval_expr_ind3 ge sp e m
      transl_expr_prop
      transl_exprlist_prop
+     transl_condexpr_prop
      transl_expr_Evar_correct
      transl_expr_Eop_correct
      transl_expr_Eload_correct
@@ -846,16 +927,20 @@ Proof
      transl_expr_Ebuiltin_correct
      transl_expr_Eexternal_correct
      transl_exprlist_Enil_correct
-     transl_exprlist_Econs_correct).
+     transl_exprlist_Econs_correct
+     transl_condexpr_CEcond_correct
+     transl_condexpr_CEcondition_correct
+     transl_condexpr_CElet_correct).
 
 Theorem transl_exprlist_correct:
   forall le a v,
   eval_exprlist ge sp e m le a v ->
   transl_exprlist_prop le a v.
 Proof
-  (eval_exprlist_ind2 ge sp e m
+  (eval_exprlist_ind3 ge sp e m
      transl_expr_prop
      transl_exprlist_prop
+     transl_condexpr_prop
      transl_expr_Evar_correct
      transl_expr_Eop_correct
      transl_expr_Eload_correct
@@ -865,7 +950,33 @@ Proof
      transl_expr_Ebuiltin_correct
      transl_expr_Eexternal_correct
      transl_exprlist_Enil_correct
-     transl_exprlist_Econs_correct).
+     transl_exprlist_Econs_correct
+     transl_condexpr_CEcond_correct
+     transl_condexpr_CEcondition_correct
+     transl_condexpr_CElet_correct).
+
+Theorem transl_condexpr_correct:
+  forall le a v,
+  eval_condexpr ge sp e m le a v ->
+  transl_condexpr_prop le a v.
+Proof
+  (eval_condexpr_ind3 ge sp e m
+     transl_expr_prop
+     transl_exprlist_prop
+     transl_condexpr_prop
+     transl_expr_Evar_correct
+     transl_expr_Eop_correct
+     transl_expr_Eload_correct
+     transl_expr_Econdition_correct
+     transl_expr_Elet_correct
+     transl_expr_Eletvar_correct
+     transl_expr_Ebuiltin_correct
+     transl_expr_Eexternal_correct
+     transl_exprlist_Enil_correct
+     transl_exprlist_Econs_correct
+     transl_condexpr_CEcond_correct
+     transl_condexpr_CEcondition_correct
+     transl_condexpr_CElet_correct).
 
 End CORRECTNESS_EXPR.
 
@@ -877,7 +988,7 @@ Fixpoint size_stmt (s: stmt) : nat :=
   match s with
   | Sskip => 0
   | Sseq s1 s2 => (size_stmt s1 + size_stmt s2 + 1)
-  | Sifthenelse cond el s1 s2 => (size_stmt s1 + size_stmt s2 + 1)
+  | Sifthenelse c s1 s2 => (size_stmt s1 + size_stmt s2 + 1)
   | Sloop s1 => (size_stmt s1 + 1)
   | Sblock s1 => (size_stmt s1 + 1)
   | Sexit n => 0
@@ -1206,11 +1317,10 @@ Proof.
   econstructor; eauto. econstructor; eauto. 
 
   (* ifthenelse *)
-  inv TS. inv H13.
-  exploit transl_exprlist_correct; eauto. intros [rs' [tm' [A [B [C [D E]]]]]].
+  inv TS. 
+  exploit transl_condexpr_correct; eauto. intros [rs' [tm' [A [B [C D]]]]].
   econstructor; split.
-  left. eapply plus_right. eexact A. eapply exec_Icond; eauto.
-  eapply eval_condition_lessdef; eauto. traceEq.
+  left. eexact A.
   destruct b; econstructor; eauto. 
 
   (* loop *)

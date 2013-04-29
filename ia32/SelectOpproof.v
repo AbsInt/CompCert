@@ -735,8 +735,8 @@ Proof.
     constructor. auto.
   econstructor. eauto.
   econstructor. instantiate (1 := Vfloat fm). EvalOp. 
-  eapply eval_Econdition with (vb := Float.cmp Clt f fm).
-  eauto with evalexpr. auto.
+  eapply eval_Econdition with (va := Float.cmp Clt f fm).
+  eauto with evalexpr.
   destruct (Float.cmp Clt f fm) eqn:?.
   exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
   EvalOp. simpl. rewrite EQ; auto.
@@ -768,9 +768,8 @@ Proof.
   set (fm := Float.floatofintu Float.ox8000_0000).
   assert (eval_expr ge sp e m (Vint i :: le) (Eletvar O) (Vint i)).
     constructor. auto. 
-  eapply eval_Econdition with (vb := Int.ltu i Float.ox8000_0000).
-  constructor. eauto. constructor.
-  simpl. auto.
+  eapply eval_Econdition with (va := Int.ltu i Float.ox8000_0000).
+  eauto with evalexpr.
   destruct (Int.ltu i Float.ox8000_0000) eqn:?.
   rewrite Float.floatofintu_floatofint_1; auto.
   unfold floatofint. EvalOp. 

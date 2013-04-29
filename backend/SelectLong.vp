@@ -41,9 +41,7 @@ Record helper_functions : Type := mk_helper_functions {
   i64_umod: ident;                      (**r unsigned remainder *)
   i64_shl: ident;                       (**r shift left *)
   i64_shr: ident;                       (**r shift right unsigned *)
-  i64_sar: ident;                       (**r shift right signed *)
-  i64_scmp: ident;                      (**r signed comparison *)
-  i64_ucmp: ident                       (**r unsigned comparison *)
+  i64_sar: ident                        (**r shift right signed *)
 }.
 
 Definition sig_l_l := mksignature (Tlong :: nil) (Some Tlong).
@@ -51,7 +49,6 @@ Definition sig_l_f := mksignature (Tlong :: nil) (Some Tfloat).
 Definition sig_f_l := mksignature (Tfloat :: nil) (Some Tlong).
 Definition sig_ll_l := mksignature (Tlong :: Tlong :: nil) (Some Tlong).
 Definition sig_li_l := mksignature (Tlong :: Tint :: nil) (Some Tlong).
-Definition sig_ll_i := mksignature (Tlong :: Tlong :: nil) (Some Tint).
 Definition sig_ii_l := mksignature (Tint :: Tint :: nil) (Some Tlong).
 
 Section SELECT.
@@ -291,6 +288,12 @@ Definition cmpl_eq_zero (e: expr) :=
 Definition cmpl_ne_zero (e: expr) :=
   splitlong e (fun h l => comp Cne (or h l) (Eop (Ointconst Int.zero) Enil)).
 
+Definition cmplu_gen (ch cl: comparison) (e1 e2: expr) :=
+  splitlong2 e1 e2 (fun h1 l1 h2 l2 =>
+    Econdition (CEcond (Ccomp Ceq) (h1:::h2:::Enil))
+               (Eop (Ocmp (Ccompu cl)) (l1:::l2:::Enil))
+               (Eop (Ocmp (Ccompu ch)) (h1:::h2:::Enil))).
+
 Definition cmplu (c: comparison) (e1 e2: expr) :=
   match c with
   | Ceq =>
@@ -301,15 +304,23 @@ Definition cmplu (c: comparison) (e1 e2: expr) :=
       if is_longconst_zero e2
       then cmpl_ne_zero e1
       else cmpl_ne_zero (xorl e1 e2)
-  | _ =>
-      comp c (Eexternal hf.(i64_ucmp) sig_ll_i (e1 ::: e2 ::: Enil))
-             (Eop (Ointconst Int.zero) Enil)
+  | Clt =>
+      cmplu_gen Clt Clt e1 e2
+  | Cle =>
+      cmplu_gen Clt Cle e1 e2
+  | Cgt =>
+      cmplu_gen Cgt Cgt e1 e2
+  | Cge =>
+      cmplu_gen Cgt Cge e1 e2
   end.
 
+Definition cmpl_gen (ch cl: comparison) (e1 e2: expr) :=
+  splitlong2 e1 e2 (fun h1 l1 h2 l2 =>
+    Econdition (CEcond (Ccomp Ceq) (h1:::h2:::Enil))
+               (Eop (Ocmp (Ccompu cl)) (l1:::l2:::Enil))
+               (Eop (Ocmp (Ccomp ch)) (h1:::h2:::Enil))).
+
 Definition cmpl (c: comparison) (e1 e2: expr) :=
-  let default := 
-    comp c (Eexternal hf.(i64_scmp) sig_ll_i (e1 ::: e2 ::: Enil))
-           (Eop (Ointconst Int.zero) Enil) in
   match c with
   | Ceq =>
       if is_longconst_zero e2
@@ -322,13 +333,15 @@ Definition cmpl (c: comparison) (e1 e2: expr) :=
   | Clt =>
       if is_longconst_zero e2
       then comp Clt (highlong e1) (Eop (Ointconst Int.zero) Enil)
-      else default
+      else cmpl_gen Clt Clt e1 e2
+  | Cle =>
+      cmpl_gen Clt Cle e1 e2
+  | Cgt =>
+      cmpl_gen Cgt Cgt e1 e2
   | Cge =>
       if is_longconst_zero e2
       then comp Cge (highlong e1) (Eop (Ointconst Int.zero) Enil)
-      else default
-  | _ =>
-      default
+      else cmpl_gen Cgt Cge e1 e2
   end.
 
 End SELECT.
@@ -359,10 +372,7 @@ Definition get_helpers (ge: Cminor.genv): res helper_functions :=
   do i64_shl <- get_helper ge "__i64_shl" sig_li_l ;
   do i64_shr <- get_helper ge "__i64_shr" sig_li_l ;
   do i64_sar <- get_helper ge "__i64_sar" sig_li_l ;
-  do i64_scmp <- get_helper ge "__i64_scmp" sig_ll_i ;
-  do i64_ucmp <- get_helper ge "__i64_ucmp" sig_ll_i ;
   OK (mk_helper_functions
      i64_dtos i64_dtou i64_stod i64_utod
      i64_neg i64_add i64_sub i64_mul i64_sdiv i64_udiv i64_smod i64_umod
-     i64_shl i64_shr i64_sar
-     i64_scmp i64_ucmp).
+     i64_shl i64_shr i64_sar).

@@ -401,12 +401,10 @@ Fixpoint transl_expr (map: mapping) (a: expr) (rd: reg) (nd: node)
       do rl <- alloc_regs map al;
       do no <- add_instr (Iload chunk addr rl rd nd);
          transl_exprlist map al rl no
-  | Econdition cond al b c =>
-      do rl <- alloc_regs map al;
+  | Econdition a b c =>
       do nfalse <- transl_expr map c rd nd;
       do ntrue  <- transl_expr map b rd nd;
-      do nt <- add_instr (Icond cond rl ntrue nfalse);
-         transl_exprlist map al rl nt
+         transl_condexpr map a ntrue nfalse
   | Elet b c =>
       do r  <- new_reg;
       do nc <- transl_expr (add_letvar map r) c rd nd;
@@ -435,6 +433,26 @@ with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
       do no <- transl_exprlist map bs rs nd; transl_expr map b r no
   | _, _ =>
       error (Errors.msg "RTLgen.transl_exprlist")
+  end
+
+(** Translation of a conditional expression.  Branches to [ntrue] or
+  to [nfalse] depending on the truth value of the expression. *)
+
+with transl_condexpr (map: mapping) (a: condexpr) (ntrue nfalse: node)
+                     {struct a} : mon node :=
+  match a with
+  | CEcond c al =>
+      do rl <- alloc_regs map al;
+      do nt <- add_instr (Icond c rl ntrue nfalse);
+         transl_exprlist map al rl nt
+  | CEcondition a b c =>
+      do nc <- transl_condexpr map c ntrue nfalse;
+      do nb <- transl_condexpr map b ntrue nfalse;
+         transl_condexpr map a nb nc
+  | CElet b c =>
+      do r  <- new_reg;
+      do nc <- transl_condexpr (add_letvar map r) c ntrue nfalse;
+         transl_expr map b r nc
   end.
 
 (** Auxiliary for branch prediction.  When compiling an if/then/else
@@ -445,7 +463,7 @@ with transl_exprlist (map: mapping) (al: exprlist) (rl: list reg) (nd: node)
   no impact on program correctness.  We delegate the choice to an
   external heuristic (written in OCaml), declared below.  *)
 
-Parameter more_likely: condition -> stmt -> stmt -> bool.
+Parameter more_likely: condexpr -> stmt -> stmt -> bool.
 
 (** Auxiliary for translating [Sswitch] statements. *)
 
@@ -545,18 +563,15 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
   | Sseq s1 s2 =>
       do ns <- transl_stmt map s2 nd nexits ngoto nret rret;
       transl_stmt map s1 ns nexits ngoto nret rret
-  | Sifthenelse cond al strue sfalse =>
-      do rl <- alloc_regs map al;
-      if more_likely cond strue sfalse then
+  | Sifthenelse c strue sfalse =>
+      if more_likely c strue sfalse then
         do nfalse <- transl_stmt map sfalse nd nexits ngoto nret rret;
         do ntrue  <- transl_stmt map strue  nd nexits ngoto nret rret;
-        do nt <- add_instr (Icond cond rl ntrue nfalse);
-           transl_exprlist map al rl nt
+           transl_condexpr map c ntrue nfalse
       else
         do ntrue  <- transl_stmt map strue  nd nexits ngoto nret rret;
         do nfalse <- transl_stmt map sfalse nd nexits ngoto nret rret;
-        do nt <- add_instr (Icond cond rl ntrue nfalse);
-           transl_exprlist map al rl nt
+           transl_condexpr map c ntrue nfalse
   | Sloop sbody =>
       do n1 <- reserve_instr;
       do n2 <- transl_stmt map sbody n1 nexits ngoto nret rret;
@@ -611,7 +626,7 @@ Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
                         {struct s} : labelmap * state :=
   match s with
   | Sseq s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
-  | Sifthenelse cond al s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
+  | Sifthenelse c s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
   | Sloop s1 => reserve_labels s1 ms
   | Sblock s1 => reserve_labels s1 ms
   | Slabel lbl s1 => alloc_label lbl (reserve_labels s1 ms)

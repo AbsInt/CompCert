@@ -30,8 +30,8 @@ let rec size_expr = function
   | Evar id -> 0
   | Eop(op, args) -> 1 + size_exprs args
   | Eload(chunk, addr, args) -> 1 + size_exprs args
-  | Econdition(cond, args, e1, e2) ->
-      1 + size_exprs args + max (size_expr e1) (size_expr e2)
+  | Econdition(ce, e1, e2) ->
+      1 + size_condexpr ce + max (size_expr e1) (size_expr e2)
   | Elet(e1, e2) -> size_expr e1 + size_expr e2
   | Eletvar n -> 0
   | Ebuiltin(ef, el) -> 2 + size_exprs el
@@ -40,6 +40,13 @@ let rec size_expr = function
 and size_exprs = function
   | Enil -> 0
   | Econs(e1, el) -> size_expr e1 + size_exprs el
+
+and size_condexpr = function
+  | CEcond(c, args) -> size_exprs args
+  | CEcondition(c1, c2, c3) ->
+      1 + size_condexpr c1 + size_condexpr c2 + size_condexpr c3
+  | CElet(a, c) ->
+      size_expr a + size_condexpr c
 
 let rec length_exprs = function
   | Enil -> 0
@@ -59,8 +66,8 @@ let rec size_stmt = function
       3 + size_eos eos + size_exprs args + length_exprs args
   | Sbuiltin(optid, ef, args) -> 1 + size_exprs args
   | Sseq(s1, s2) -> size_stmt s1 + size_stmt s2
-  | Sifthenelse(cond, args, s1, s2) ->
-      1 + size_exprs args + max (size_stmt s1) (size_stmt s2)
+  | Sifthenelse(ce, s1, s2) ->
+      size_condexpr ce + max (size_stmt s1) (size_stmt s2)
   | Sloop s -> 1 + 4 * size_stmt s
   | Sblock s -> size_stmt s
   | Sexit n -> 1
@@ -70,7 +77,7 @@ let rec size_stmt = function
   | Slabel(lbl, s) -> size_stmt s
   | Sgoto lbl -> 1
 
-let more_likely (c: Op.condition) (ifso: stmt) (ifnot: stmt) = 
+let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) = 
   size_stmt ifso > size_stmt ifnot
 
 (* Compiling a switch table into a decision tree *)

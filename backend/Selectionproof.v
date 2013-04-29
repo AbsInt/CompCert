@@ -117,8 +117,6 @@ Proof.
   repeat (match goal with [ H: _ /\ _ |- _ /\ _ ] => destruct H; split end);
   intros; try (eapply helper_implements_preserved; eauto);
   try (eapply builtin_implements_preserved; eauto).
-  exploit H14; eauto. intros [z [A B]]. exists z; split; eauto. eapply helper_implements_preserved; eauto.
-  exploit H15; eauto. intros [z [A B]]. exists z; split; eauto. eapply helper_implements_preserved; eauto.
 Qed.
 
 Section CMCONSTR.
@@ -127,22 +125,22 @@ Variable sp: val.
 Variable e: env.
 Variable m: mem.
 
-Lemma eval_condition_of_expr:
-  forall le a v b,
+Lemma eval_condexpr_of_expr:
+  forall a le v b,
   eval_expr tge sp e m le a v ->
   Val.bool_of_val v b ->
-  match condition_of_expr a with (cond, args) =>
-    exists vl,
-    eval_exprlist tge sp e m le args vl /\
-    eval_condition cond vl m = Some b
-  end.
+  eval_condexpr tge sp e m le (condexpr_of_expr a) b.
 Proof.
-  intros until a. functional induction (condition_of_expr a); intros.
+  intros until a. functional induction (condexpr_of_expr a); intros.
 (* compare *)
-  inv H. exists vl; split; auto.
+  inv H. econstructor; eauto. 
   simpl in H6. inv H6. apply Val.bool_of_val_of_optbool. auto.
+(* condition *)
+  inv H. econstructor; eauto. destruct va; eauto.
+(* let *)
+  inv H. econstructor; eauto.
 (* default *)
-  exists (v :: nil); split. constructor. auto. constructor.
+  econstructor. constructor. eauto. constructor. 
   simpl. inv H0. auto. auto. 
 Qed.
 
@@ -248,8 +246,8 @@ Proof.
   apply eval_comp; auto.
   apply eval_compu; auto.
   apply eval_compf; auto.
-  apply eval_cmpl; auto.
-  apply eval_cmplu; auto.
+  exists v; split; auto. eapply eval_cmpl; eauto.
+  exists v; split; auto. eapply eval_cmplu; eauto.
 Qed.
 
 End CMCONSTR.
@@ -495,7 +493,6 @@ Proof.
   destruct (find_label lbl (sel_stmt hf ge s1) (Kseq (sel_stmt hf ge s2) k')) as [[sy ky] | ];
   intuition. apply IHs2; auto.
 (* ifthenelse *)
-  destruct (condition_of_expr (sel_expr hf e)) as [cond args]. simpl.
   exploit (IHs1 k); eauto. 
   destruct (Cminor.find_label lbl s1 k) as [[sx kx] | ];
   destruct (find_label lbl (sel_stmt hf ge s1) k') as [[sy ky] | ];
@@ -594,11 +591,8 @@ Proof.
   (* Sifthenelse *)
   exploit sel_expr_correct; eauto. intros [v' [A B]].
   assert (Val.bool_of_val v' b). inv B. auto. inv H0.
-  exploit eval_condition_of_expr; eauto.
-  destruct (condition_of_expr (sel_expr hf a)) as [cond args].
-  intros [vl' [C D]].
   left; exists (State (sel_function hf ge f) (if b then sel_stmt hf ge s1 else sel_stmt hf ge s2) k' sp e' m'); split.
-  econstructor; eauto. 
+  econstructor; eauto. eapply eval_condexpr_of_expr; eauto. 
   constructor; auto. destruct b; auto.
   (* Sloop *)
   left; econstructor; split. constructor. constructor; auto. constructor; auto.

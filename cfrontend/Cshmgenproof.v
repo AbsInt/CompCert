@@ -220,6 +220,12 @@ Proof.
   simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
   inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
   simpl in H6. inv H6. unfold Val.cmp in H0. eauto.
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  simpl in H6. unfold Val.cmpl in H6.
+  destruct (Val.cmpl_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
+  inv H. econstructor; eauto. rewrite H6. decEq. decEq. 
+  simpl in H6. unfold Val.cmplu in H6.
+  destruct (Val.cmplu_bool c v1 v2) as [[]|]; inv H6; reflexivity. 
 Qed.
 
 Lemma make_cast_int_correct:
@@ -300,8 +306,7 @@ Proof.
   destruct (Int.eq i Int.zero); simpl; constructor.
   exists Vtrue; split. econstructor; eauto with cshm. constructor.
 (* long *)
-  econstructor; split. econstructor; eauto with cshm. simpl. eauto. 
-  unfold Val.cmpl, Val.cmpl_bool. simpl. 
+  econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmpl. simpl. eauto. 
   destruct (Int64.eq i Int64.zero); simpl; constructor. 
 Qed.
 
