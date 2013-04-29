@@ -3821,6 +3821,31 @@ Proof.
   omega.
 Qed.
 
+Remark eqm_mul_2p32:
+  forall x y, Int.eqm x y -> eqm (x * two_p 32) (y * two_p 32).
+Proof.
+  intros. destruct H as [k EQ]. exists k. rewrite EQ.
+  change Int.modulus with (two_p 32). 
+  change modulus with (two_p 32 * two_p 32).
+  ring.
+Qed.
+
+Lemma ofwords_add'':
+  forall lo hi, signed (ofwords hi lo) = Int.signed hi * two_p 32 + Int.unsigned lo.
+Proof.
+  intros. rewrite ofwords_add.
+  replace (repr (Int.unsigned hi * two_p 32 + Int.unsigned lo))
+     with (repr (Int.signed hi * two_p 32 + Int.unsigned lo)).
+  apply signed_repr.
+  generalize (Int.signed_range hi) (Int.unsigned_range lo). 
+  change (two_p 32) with Int.modulus.
+  change min_signed with (Int.min_signed * Int.modulus).
+  change max_signed with (Int.max_signed * Int.modulus + Int.modulus - 1).
+  change Int.modulus with 4294967296.
+  omega.
+  apply eqm_samerepr. apply eqm_add. apply eqm_mul_2p32. apply Int.eqm_signed_unsigned. apply eqm_refl.
+Qed.
+
 (** Expressing 64-bit operations in terms of 32-bit operations *)
 
 Lemma decompose_bitwise_binop:
@@ -4031,15 +4056,6 @@ Proof.
   destruct (zlt (i - Int.zwordsize + (Int.zwordsize - 1)) Int.zwordsize); omega.
 Qed.
 
-Remark eqm_mul_2p32:
-  forall x y, Int.eqm x y -> eqm (x * two_p 32) (y * two_p 32).
-Proof.
-  intros. destruct H as [k EQ]. exists k. rewrite EQ.
-  change Int.modulus with (two_p 32). 
-  change modulus with (two_p 32 * two_p 32).
-  ring.
-Qed.
-
 Lemma decompose_add:
   forall xh xl yh yl,
   add (ofwords xh xl) (ofwords yh yl) =
@@ -4101,6 +4117,51 @@ Proof.
   apply eqm_samerepr. apply eqm_add. 2: apply eqm_refl. 
   change (two_p 32 * two_p 32) with modulus. exists (- XH * YH). ring. 
   f_equal. ring. 
+Qed.
+
+Lemma decompose_ltu:
+  forall xh xl yh yl,
+  ltu (ofwords xh xl) (ofwords yh yl) = Int.ltu xh yh || Int.eq xh yh && Int.ltu xl yl.
+Proof.
+  intros. unfold ltu. rewrite ! ofwords_add'. unfold Int.ltu. 
+  destruct (zlt (Int.unsigned xh) (Int.unsigned yh)).
+  simpl. apply zlt_true. 
+  change (two_power_pos 32) with Int.modulus. 
+  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
+  change Int.modulus with 4294967296. omega.
+  unfold Int.eq. destruct (zeq (Int.unsigned xh) (Int.unsigned yh)); simpl.
+  rewrite e. destruct (zlt (Int.unsigned xl) (Int.unsigned yl)).
+  apply zlt_true. omega. 
+  apply zlt_false. omega. 
+  apply zlt_false.
+  change (two_power_pos 32) with Int.modulus. 
+  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
+  change Int.modulus with 4294967296. omega.
+Qed.
+
+Lemma decompose_lt:
+  forall xh xl yh yl,
+  lt (ofwords xh xl) (ofwords yh yl) = Int.lt xh yh || Int.eq xh yh && Int.ltu xl yl.
+Proof.
+  intros. unfold lt. rewrite ! ofwords_add''. unfold Int.lt. 
+  destruct (zlt (Int.signed xh) (Int.signed yh)).
+  simpl. apply zlt_true. 
+  change (two_power_pos 32) with Int.modulus. 
+  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
+  change Int.modulus with 4294967296. omega.
+  replace (Int.eq xh yh) with (proj_sumbool(zeq (Int.signed xh) (Int.signed yh))).
+  destruct (zeq (Int.signed xh) (Int.signed yh)); simpl.
+  rewrite e. unfold Int.ltu. destruct (zlt (Int.unsigned xl) (Int.unsigned yl)).
+  apply zlt_true. omega. 
+  apply zlt_false. omega. 
+  apply zlt_false.
+  change (two_power_pos 32) with Int.modulus. 
+  generalize (Int.unsigned_range xl) (Int.unsigned_range yl). 
+  change Int.modulus with 4294967296. omega.
+  predSpec Int.eq Int.eq_spec xh yh. 
+  subst yh. unfold proj_sumbool; apply zeq_true. 
+  destruct (zeq (Int.signed xh) (Int.signed yh)); auto. 
+  elim H. rewrite <- (Int.repr_signed xh). rewrite <- (Int.repr_signed yh). congruence.
 Qed.
 
 End Int64.
