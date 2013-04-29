@@ -101,6 +101,11 @@ Definition destroyed_by_cond (cond: condition): list mreg :=
 Definition destroyed_by_jumptable: list mreg :=
   nil.
 
+Local Open Scope string_scope.
+
+Definition builtin_write16_reversed := ident_of_string "__builtin_write16_reversed".
+Definition builtin_write32_reversed := ident_of_string "__builtin_write32_reversed".
+
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al =>
@@ -109,6 +114,10 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | EF_vstore Mfloat32 => X7 :: nil
   | EF_vstore_global (Mint8unsigned|Mint8signed) _ _ => AX :: nil
   | EF_vstore_global Mfloat32 _ _ => X7 :: nil
+  | EF_builtin id sg =>
+      if ident_eq id builtin_write16_reversed
+      || ident_eq id builtin_write32_reversed
+      then CX :: DX :: nil else nil
   | _ => nil
   end.
 
@@ -130,8 +139,6 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
   | Oshrximm _ => (Some AX :: nil, Some AX)
   | _ => (nil, None)
   end.
-
-Local Open Scope string_scope.
 
 Definition builtin_negl := ident_of_string "__builtin_negl".
 Definition builtin_addl := ident_of_string "__builtin_addl".

@@ -16,6 +16,7 @@
 (* Machine-dependent aspects *)
 
 type t = {
+  name: string;
   char_signed: bool;
   sizeof_ptr: int;
   sizeof_short: int;
@@ -45,6 +46,7 @@ type t = {
 }
 
 let ilp32ll64 = {
+  name = "ilp32ll64";
   char_signed = false;
   sizeof_ptr = 4;
   sizeof_short = 2;
@@ -74,6 +76,7 @@ let ilp32ll64 = {
 }
 
 let i32lpll64 = {
+  name = "i32lpll64";
   char_signed = false;
   sizeof_ptr = 8;
   sizeof_short = 2;
@@ -103,6 +106,7 @@ let i32lpll64 = {
 }
 
 let il32pll64 = {
+  name = "il32pll64";
   char_signed = false;
   sizeof_ptr = 8;
   sizeof_short = 2;
@@ -133,11 +137,15 @@ let il32pll64 = {
 
 (* Canned configurations for some ABIs *)
 
-let x86_32 = { ilp32ll64 with char_signed = true }
-let x86_64 = { i32lpll64 with char_signed = true }
-let win64 = { il32pll64 with char_signed = true }
-let ppc_32_bigendian = { ilp32ll64 with bigendian = true; bitfields_msb_first = true }
-let arm_littleendian = ilp32ll64
+let x86_32 =
+  { ilp32ll64 with char_signed = true; name = "x86_32" }
+let x86_64 =
+  { i32lpll64 with char_signed = true; name = "x86_64" }
+let win64 =
+  { il32pll64 with char_signed = true; name = "x86_64" }
+let ppc_32_bigendian =
+  { ilp32ll64 with bigendian = true; bitfields_msb_first = true; name = "powerpc" }
+let arm_littleendian = { ilp32ll64 with name = "arm" }
 
 (* Add GCC extensions re: sizeof and alignof *)
 

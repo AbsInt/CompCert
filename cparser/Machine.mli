@@ -16,6 +16,7 @@
 (* Machine-dependent aspects *)
 
 type t = {
+  name: string;
   char_signed: bool;
   sizeof_ptr: int;
   sizeof_short: int;

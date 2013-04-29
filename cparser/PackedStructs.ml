@@ -197,25 +197,31 @@ let arrow_packed_field base pf ty =
 (*  (ty) __builtin_readNN_reversed(&lval)
  or (ty) __builtin_bswapNN(lval) *)
 
+let use_reversed =
+  match !Machine.config.Machine.name with
+  | "powerpc" -> true
+  | _ -> false
+
 let bswap_read loc env lval =
   let ty = lval.etyp in
   let (bsize, aty) = accessor_type loc env ty in
   assert (bsize = 16 || bsize = 32);
   try
-    let (id, fty) =
-      lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
-    let fn = {edesc = EVar id; etyp = fty} in
-    let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lval)] in
-    let call = {edesc = ECall(fn, args); etyp = aty} in
-    ecast_opt env ty call
-  with Env.Error _ ->
-  try
-    let (id, fty) =
-      lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
-    let fn = {edesc = EVar id; etyp = fty} in
-    let args = [ecast_opt env aty lval] in
-    let call = {edesc = ECall(fn, args); etyp = aty} in
-    ecast_opt env ty call
+    if use_reversed then begin
+      let (id, fty) =
+        lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
+      let fn = {edesc = EVar id; etyp = fty} in
+      let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lval)] in
+      let call = {edesc = ECall(fn, args); etyp = aty} in
+      ecast_opt env ty call
+    end else begin
+      let (id, fty) =
+        lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
+      let fn = {edesc = EVar id; etyp = fty} in
+      let args = [ecast_opt env aty lval] in
+      let call = {edesc = ECall(fn, args); etyp = aty} in
+      ecast_opt env ty call
+    end
   with Env.Error msg ->
     fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
 
@@ -228,20 +234,21 @@ let bswap_write loc env lhs rhs =
     accessor_type loc env ty in
   assert (bsize = 16 || bsize = 32);
   try
-    let (id, fty) =
-      lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
-    let fn = {edesc = EVar id; etyp = fty} in
-    let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
-                ecast_opt env aty rhs] in
-    {edesc = ECall(fn, args); etyp = TVoid[]}
-  with Env.Error _ ->
-  try
-    let (id, fty) =
-      lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
-    let fn = {edesc = EVar id; etyp = fty} in
-    let args = [ecast_opt env aty rhs] in
-    let call = {edesc = ECall(fn, args); etyp = aty} in
-    eassign lhs (ecast_opt env ty call)
+    if use_reversed then begin
+      let (id, fty) =
+        lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
+      let fn = {edesc = EVar id; etyp = fty} in
+      let args = [ecast_opt env (TPtr(aty,[])) (eaddrof lhs); 
+                  ecast_opt env aty rhs] in
+      {edesc = ECall(fn, args); etyp = TVoid[]}
+    end else begin
+      let (id, fty) =
+        lookup_function loc env (sprintf "__builtin_bswap%d" bsize) in
+      let fn = {edesc = EVar id; etyp = fty} in
+      let args = [ecast_opt env aty rhs] in
+      let call = {edesc = ECall(fn, args); etyp = aty} in
+      eassign lhs (ecast_opt env ty call)
+    end
   with Env.Error msg ->
     fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
 

@@ -442,6 +442,25 @@ let print_builtin_inline oc name args res =
   | "__builtin_mull", [IR a; IR b], [IR rh; IR rl] ->
       assert (a = EAX && b = EDX && rh = EDX && rl = EAX);
       fprintf oc "	mull    %a\n" ireg EDX
+  (* Memory accesses *)
+  | "__builtin_read16_reversed", [IR a1], [IR res] ->
+      fprintf oc "	movzwl	0(%a), %a\n" ireg a1 ireg res;
+      fprintf oc "	rolw	$8, %a\n" ireg16 res
+  | "__builtin_read32_reversed", [IR a1], [IR res] ->
+      fprintf oc "	movl	0(%a), %a\n" ireg a1 ireg res;
+      fprintf oc "	bswap	%a\n" ireg res
+  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
+      let tmp = if a1 = ECX then EDX else ECX in
+      if a2 <> tmp then
+        fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
+      fprintf oc "	xchg	%a, %a\n" ireg8 tmp high_ireg8 tmp;
+      fprintf oc "	movw	%a, 0(%a)\n" ireg16 tmp ireg a1
+  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
+      let tmp = if a1 = ECX then EDX else ECX in
+      if a2 <> tmp then
+        fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
+      fprintf oc "	bswap	%a\n" ireg tmp;
+      fprintf oc "	movl	%a, 0(%a)\n" ireg tmp ireg a1
   (* Catch-all *)  
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)

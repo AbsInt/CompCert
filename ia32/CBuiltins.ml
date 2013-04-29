@@ -33,6 +33,15 @@ let builtins = {
     "__builtin_fmax",
       (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
     "__builtin_fmin",
-      (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false)
+      (TFloat(FDouble, []), [TFloat(FDouble, []); TFloat(FDouble, [])], false);
+    (* Memory accesses *)
+    "__builtin_read16_reversed",
+      (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);
+    "__builtin_read32_reversed",
+      (TInt(IUInt, []), [TPtr(TInt(IUInt, [AConst]), [])], false);
+    "__builtin_write16_reversed",
+      (TVoid [], [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
+    "__builtin_write32_reversed",
+      (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
   ]
 }

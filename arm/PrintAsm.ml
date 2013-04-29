@@ -388,6 +388,19 @@ let print_builtin_inline oc name args res =
       end else begin
         fprintf oc "	umull   %a, %a, %a, %a\n" ireg rl ireg rh ireg a ireg b; 1
       end
+  (* Memory accesses *)
+  | "__builtin_read16_reversed", [IR a1], [IR res] ->
+      fprintf oc "	ldrh	%a, [%a, #0]\n" ireg res ireg a1;
+      fprintf oc "	rev16	%a, %a\n" ireg res ireg res; 2
+  | "__builtin_read32_reversed", [IR a1], [IR res] ->
+      fprintf oc "	ldr	%a, [%a, #0]\n" ireg res ireg a1;
+      fprintf oc "	rev	%a, %a\n" ireg res ireg res; 2
+  | "__builtin_write16_reversed", [IR a1; IR a2], _ ->
+      fprintf oc "	rev16	%a, %a\n" ireg IR14 ireg a2;
+      fprintf oc "	strh	%a, [%a, #0]\n" ireg IR14 ireg a1; 2
+  | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
+      fprintf oc "	rev	%a, %a\n" ireg IR14 ireg a2;
+      fprintf oc "	str	%a, [%a, #0]\n" ireg IR14 ireg a1; 2
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
