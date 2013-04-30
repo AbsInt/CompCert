@@ -1191,7 +1191,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_bswap", [IR a1], [IR res] ->
+                  | ("__builtin_bswap"|"__builtin_bswap32"), [IR a1], [IR res] ->
                       begin match ecode with
                       |   STWU (rS0, rA0, d0)    ::
                           LWBRX(rD1, rA1, rB1)   ::
@@ -1206,6 +1206,28 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= match_iregs  GPR1  rD2
                           >>= match_iregs  GPR1  rA2
                           >>= match_int32s 8l    (exts simm2)
+                          >>= compare_code cs es (Int32.add 12l pc)
+                      | _ -> error
+                      end
+                  | "__builtin_bswap16", [IR a1], [IR res] ->
+                      begin match ecode with
+                      |   RLWINMx(rS1, rA1, sh1, mb1, me1, rc1) ::
+                          RLWINMx(rS2, rA2, sh2, mb2, me2, rc2) ::
+                          ORx(rS3, rA3, rB3, rc3) :: es ->
+                          OK(fw)
+                          >>= match_iregs  GPR0  rS1
+                          >>= match_iregs  a1    rA1
+                          >>= check_eq "bswap16-1" sh1 8
+                          >>= check_eq "bswap16-2" mb1 16
+                          >>= check_eq "bswap16-3" me1 23
+                          >>= match_iregs  res   rS2
+                          >>= match_iregs  a1    rA2
+                          >>= check_eq "bswap16-4" sh2 24
+                          >>= check_eq "bswap16-5" mb2 24
+                          >>= check_eq "bswap16-6" me2 31
+                          >>= match_iregs  res   rS3
+                          >>= match_iregs  GPR0  rA3
+                          >>= match_iregs  res   rB3
                           >>= compare_code cs es (Int32.add 12l pc)
                       | _ -> error
                       end
