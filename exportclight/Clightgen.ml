@@ -221,7 +221,6 @@ Preprocessing options:
   -Wp,<opt>      Pass option <opt> to the preprocessor
 Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fbitfields    Emulate bit fields in structs [off]
-  -flonglong     Partial emulation of 'long long' types [on]
   -flongdouble   Treat 'long double' as 'double' [off]
   -fstruct-return  Emulate returning structs and unions by value [off]
   -fvararg-calls Emulate calls to variable-argument functions [on]
@@ -237,7 +236,7 @@ General options:
 "
 
 let language_support_options = [
-  option_fbitfields; option_flonglong; option_flongdouble;
+  option_fbitfields; option_flongdouble;
   option_fstruct_return; option_fvararg_calls; option_fpacked_structs
 ]
 
@@ -261,7 +260,6 @@ let cmdline_actions =
   "-fnone$", Self (fun _ ->
               List.iter (fun r -> r := false) language_support_options);
   ]
-  @ f_opt "longlong" option_flonglong
   @ f_opt "longdouble" option_flongdouble
   @ f_opt "struct-return" option_fstruct_return
   @ f_opt "bitfields" option_fbitfields
