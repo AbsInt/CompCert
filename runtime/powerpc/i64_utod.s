@@ -52,9 +52,9 @@ __i64_utod:
         lfd f2, 8(r1)
         fsub f1, f1, f2         # f1 is (double) XL
         lis r5, 0x4530
-        stw r5, 0(r1)           # 0(r1) = 2^84 + (double) XL * 2^32
+        stw r5, 0(r1)           # 0(r1) = 2^84 + (double) XH * 2^32
         stw r3, 4(r1)
-        stw r5, 8(r1)           # 1(r1) = 2^84
+        stw r5, 8(r1)           # 8(r1) = 2^84
         lfd f2, 0(r1)
         lfd f3, 8(r1)
         fsub f2, f2, f3         # f2 is XH * 2^32 as a double

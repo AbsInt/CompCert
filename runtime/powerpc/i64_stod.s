@@ -51,7 +51,7 @@ __i64_stod:
         fsub f1, f1, f2         # f1 is XL (unsigned) as a double
         lis r5, 0x4530
         lis r6, 0x8000
-        stw r5, 0(r1)           # 0(r1) = 2^84 + ((double)XL - 2^31) * 2^32
+        stw r5, 0(r1)           # 0(r1) = 2^84 + ((double)XH - 2^31) * 2^32
         add r3, r3, r6
         stw r3, 4(r1)
         stw r5, 8(r1)           # 8(r1) = 2^84 + 2^31 * 2^32
