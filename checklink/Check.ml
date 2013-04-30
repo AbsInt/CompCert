@@ -1159,7 +1159,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | EF_builtin(name, sg) ->
               begin match Hashtbl.find
                   (fw |. ff_sf).ident_to_name name, args, res with
-                  | "__builtin_mulhw", [IR a1; IR a2], IR res ->
+                  | "__builtin_mulhw", [IR a1; IR a2], [IR res] ->
                       begin match ecode with
                       | MULHWx(rD, rA, rB, rc) :: es ->
                           OK(fw)
@@ -1170,7 +1170,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_mulhwu", [IR a1; IR a2], IR res ->
+                  | "__builtin_mulhwu", [IR a1; IR a2], [IR res] ->
                       begin match ecode with
                       | MULHWUx(rD, rA, rB, rc) :: es ->
                           OK(fw)
@@ -1181,7 +1181,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_cntlz", [IR a1], IR res ->
+                  | "__builtin_cntlz", [IR a1], [IR res] ->
                       begin match ecode with
                       | CNTLZWx(rS, rA, rc) :: es ->
                           OK(fw)
@@ -1191,7 +1191,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_bswap", [IR a1], IR res ->
+                  | "__builtin_bswap", [IR a1], [IR res] ->
                       begin match ecode with
                       |   STWU (rS0, rA0, d0)    ::
                           LWBRX(rD1, rA1, rB1)   ::
@@ -1209,7 +1209,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= compare_code cs es (Int32.add 12l pc)
                       | _ -> error
                       end
-                  | "__builtin_fmadd", [FR a1; FR a2; FR a3], FR res ->
+                  | "__builtin_fmadd", [FR a1; FR a2; FR a3], [FR res] ->
                       begin match ecode with
                       | FMADDx(frD, frA, frB, frC, rc) :: es ->
                           OK(fw)
@@ -1221,7 +1221,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fmsub", [FR a1; FR a2; FR a3], FR res ->
+                  | "__builtin_fmsub", [FR a1; FR a2; FR a3], [FR res] ->
                       begin match ecode with
                       | FMSUBx(frD, frA, frB, frC, rc) :: es ->
                           OK(fw)
@@ -1233,7 +1233,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], FR res ->
+                  | "__builtin_fnmadd", [FR a1; FR a2; FR a3], [FR res] ->
                       begin match ecode with
                       | FNMADDx(frD, frA, frB, frC, rc) :: es ->
                           OK(fw)
@@ -1245,7 +1245,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], FR res ->
+                  | "__builtin_fnmsub", [FR a1; FR a2; FR a3], [FR res] ->
                       begin match ecode with
                       | FNMSUBx(frD, frA, frB, frC, rc) :: es ->
                           OK(fw)
@@ -1257,7 +1257,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fabs", [FR a1], FR res ->
+                  | "__builtin_fabs", [FR a1], [FR res] ->
                       begin match ecode with
                       | FABSx(frD, frB, rc) :: es ->
                           OK(fw)
@@ -1267,7 +1267,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fsqrt", [FR a1], FR res ->
+                  | "__builtin_fsqrt", [FR a1], [FR res] ->
                       begin match ecode with
                       | FSQRTx(frD, frB, rc) :: es ->
                           OK(fw)
@@ -1277,7 +1277,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_frsqrte", [FR a1], FR res ->
+                  | "__builtin_frsqrte", [FR a1], [FR res] ->
                       begin match ecode with
                       | FRSQRTEx(frD, frB, rc) :: es ->
                           OK(fw)
@@ -1287,7 +1287,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fres", [FR a1], FR res ->
+                  | "__builtin_fres", [FR a1], [FR res] ->
                       begin match ecode with
                       | FRESx(frD, frB, rc) :: es ->
                           OK(fw)
@@ -1297,7 +1297,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fsel", [FR a1; FR a2; FR a3], FR res ->
+                  | "__builtin_fsel", [FR a1; FR a2; FR a3], [FR res] ->
                       begin match ecode with
                       | FSELx(frD, frA, frB, frC, rc) :: es ->
                           OK(fw)
@@ -1309,7 +1309,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_fcti", [FR r1], IR rd ->
+                  | "__builtin_fcti", [FR r1], [IR rd] ->
                       begin match ecode with
                       | FCTIWx(frD0, frB0, rc0)   ::
                         STFDU  (frS1, rA1,  d1)    ::
@@ -1331,7 +1331,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= compare_code cs es (Int32.add 16l pc)
                       | _ -> error
                       end
-                  | "__builtin_read16_reversed", [IR a1], IR res ->
+                  | "__builtin_read16_reversed", [IR a1], [IR res] ->
                       begin match ecode with
                       | LHBRX(rD, rA, rB):: es ->
                           OK(fw)
@@ -1341,7 +1341,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                           >>= recur_simpl
                       | _ -> error
                       end
-                  | "__builtin_read32_reversed", [IR a1], IR res ->
+                  | "__builtin_read32_reversed", [IR a1], [IR res] ->
                       begin match ecode with
                       | LWBRX(rD, rA, rB) :: es ->
                           OK(fw)
@@ -1479,7 +1479,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               end
           | EF_annot_val(text, targ) ->
               begin match args, res with
-              | IR src :: _, IR dst ->
+              | IR src :: _, [IR dst] ->
                   if dst <> src
                   then (
                     match ecode with
@@ -1493,7 +1493,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
                     | _ -> error
                   )
                   else compare_code cs ecode pc fw
-              | FR src :: _, FR dst ->
+              | FR src :: _, [FR dst] ->
                   if dst <> src
                   then (
                     match ecode with
@@ -2391,7 +2391,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
   let error = ERR("Non-matching instructions") in
   let recur_simpl = compare_code ccode (List.tl ecode) (Int32.add pc 4l) in
   begin match chunk, res with
-  | Mint8unsigned, IR res ->
+  | Mint8unsigned, [IR res] ->
       begin match ecode with
       | LBZ(rD, rA, d) :: es ->
           OK(fw)
@@ -2401,7 +2401,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= recur_simpl
       | _ -> error
       end
-  | Mint8signed, IR res ->
+  | Mint8signed, [IR res] ->
       begin match ecode with
       |   LBZ   (rD0, rA0, d0)  ::
           EXTSBx(rS1, rA1, rc1) :: es ->
@@ -2415,7 +2415,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= compare_code ccode es (Int32.add 8l pc)
       | _ -> error
       end
-  | Mint16unsigned, IR res ->
+  | Mint16unsigned, [IR res] ->
       begin match ecode with
       | LHZ(rD, rA, d) :: es ->
           OK(fw)
@@ -2425,7 +2425,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= recur_simpl
       | _ -> error
       end
-  | Mint16signed, IR res ->
+  | Mint16signed, [IR res] ->
       begin match ecode with
       | LHA(rD, rA, d) :: es ->
           OK(fw)
@@ -2435,7 +2435,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= recur_simpl
       | _ -> error
       end
-  | Mint32, IR res ->
+  | Mint32, [IR res] ->
       begin match ecode with
       | LWZ(rD, rA, d) :: es ->
           OK(fw)
@@ -2445,7 +2445,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= recur_simpl
       | _ -> error
       end
-  | Mfloat32, FR res ->
+  | Mfloat32, [FR res] ->
       begin match ecode with
       | LFS(frD, rA, d) :: es ->
           OK(fw)
@@ -2455,7 +2455,7 @@ and check_builtin_vload_common ccode ecode pc chunk addr offset res fw =
           >>= recur_simpl
       | _ -> error
       end
-  | (Mfloat64 | Mfloat64al32), FR res ->
+  | (Mfloat64 | Mfloat64al32), [FR res] ->
       begin match ecode with
       | LFD(frD, rA, d) :: es ->
           OK(fw)
