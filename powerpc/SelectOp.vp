@@ -432,7 +432,7 @@ Definition intoffloat (e: expr) := Eop Ointoffloat (e ::: Enil).
 Definition intuoffloat (e: expr) :=
   Elet e
   (Elet (Eop (Ofloatconst (Float.floatofintu Float.ox8000_0000)) Enil)
-    (Econdition (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil)
+    (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
       (intoffloat (Eletvar 1))
       (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
 

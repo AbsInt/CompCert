@@ -782,8 +782,8 @@ Proof.
     constructor. auto.
   econstructor. eauto.
   econstructor. instantiate (1 := Vfloat fm). EvalOp. 
-  eapply eval_Econdition with (vb := Float.cmp Clt f fm).
-  eauto with evalexpr. auto.
+  eapply eval_Econdition with (va := Float.cmp Clt f fm).
+  eauto with evalexpr.
   destruct (Float.cmp Clt f fm) eqn:?.
   exploit Float.intuoffloat_intoffloat_1; eauto. intro EQ.
   EvalOp. simpl. rewrite EQ; auto.
