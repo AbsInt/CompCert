@@ -144,14 +144,21 @@ Proof.
   decide equality.
 Defined.
 
+Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
+Proof.
+  generalize Int.eq_dec; intro.
+  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  generalize eq_shift; intro.
+  decide equality.
+Defined.
+
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   generalize Float.eq_dec; intro.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
   generalize eq_shift; intro.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
-  assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
+  generalize eq_condition; intro.
   decide equality.
 Defined.
 
@@ -162,7 +169,7 @@ Proof.
   decide equality.
 Defined.
 
-Global Opaque eq_shift eq_operation eq_addressing.
+Global Opaque eq_shift eq_condition eq_operation eq_addressing.
 
 (** * Evaluation functions *)
 

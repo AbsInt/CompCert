@@ -116,13 +116,20 @@ Inductive addressing: Type :=
 
 (** Comparison functions (used in module [CSE]). *)
 
+Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
+Proof.
+  generalize Int.eq_dec; intro.
+  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  decide equality.
+Defined.
+
+
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
 Proof.
   generalize Int.eq_dec; intro.
   generalize Float.eq_dec; intro.
   assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
-  assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
+  generalize eq_condition; intro.
   decide equality.
 Defined.
 
@@ -133,7 +140,7 @@ Proof.
   decide equality.
 Defined.
 
-Global Opaque eq_addressing eq_operation.
+Global Opaque eq_condition eq_addressing eq_operation.
 
 (** * Evaluation functions *)
 
