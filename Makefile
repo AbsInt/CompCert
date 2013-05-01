@@ -236,8 +236,7 @@ clean:
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli
 	rm -f tools/ndfun
 	$(MAKE) -C runtime clean
-	$(MAKE) -C test/cminor clean
-	$(MAKE) -C test/c clean
+	$(MAKE) -C test clean
 
 distclean:
 	$(MAKE) clean
