@@ -35,9 +35,11 @@ let path sp id =
   | _   , _    -> sp ^ "." ^ id
 
 let add_module m =
+  (*eprintf "add_module %s\n" m;*)
   Hashtbl.add xref_modules m ()
 
 let add_reference curmod pos dp sp id ty =
+  (*eprintf "add_reference %s %d %s %s %s %s\n" curmod pos dp sp id ty;*)
   if not (Hashtbl.mem xref_table (curmod, pos))
   then Hashtbl.add xref_table (curmod, pos) (Ref(dp, path sp id, ty))
 
@@ -51,15 +53,19 @@ let coqlib_url = "http://coq.inria.fr/library/"
 
 let re_coqlib = Str.regexp "Coq\\."
 let re_sane_path = Str.regexp "[A-Za-z0-9_.]+$"
+let re_shortname = Str.regexp "^.*\\."
+
+let shortname m = Str.replace_first re_shortname "" m
 
 let crossref m pos =
+  (*eprintf "crossref %s %d\n" m pos;*)
   try match Hashtbl.find xref_table (m, pos) with
   | Def(p, ty) ->
       Anchor p
   | Ref(m', p, ty) ->
       let url =
         if Hashtbl.mem xref_modules m' then
-          m' ^ ".html"
+          shortname m' ^ ".html"
         else if Str.string_match re_coqlib m' 0 then
           coqlib_url ^ m' ^ ".html"
         else
@@ -367,7 +373,7 @@ and verbatim = parse
 and globfile = parse
   | eof
       { () }
-  | "F" (ident as m) space* "\n"
+  | "F" (path as m) space* "\n"
       { current_module := m; add_module m;
         globfile lexbuf }
   | "R" (integer as pos) ":" (integer as pos2)
@@ -394,14 +400,16 @@ let output_name = ref "-"
 
 let process_file f =
   if Filename.check_suffix f ".v" then begin
-    current_module := Filename.chop_suffix (Filename.basename f) ".v";
+    let pref_f = Filename.chop_suffix f ".v" in
+    let base_f = Filename.basename pref_f in
+    current_module := 
+      "compcert." ^ Str.global_replace (Str.regexp "/") "." pref_f;
     let ic = open_in f in
     if !output_name = "-" then
       oc := stdout
     else
-      oc := open_out (Str.global_replace (Str.regexp "%") !current_module
-                                                          !output_name);
-    start_html_page !current_module;
+      oc := open_out (Str.global_replace (Str.regexp "%") base_f !output_name);
+    start_html_page base_f;
     coq_bol (Lexing.from_channel ic);
     end_html_page();
     if !output_name <> "-" then (close_out !oc; oc := stdout);

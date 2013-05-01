@@ -13,22 +13,28 @@
 include Makefile.config
 
 DIRS=lib common $(ARCH)/$(VARIANT) $(ARCH) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/Appli
+  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight
 
-INCLUDES=$(patsubst %,-I %, $(DIRS))
+RECDIRS=lib common backend cfrontend driver flocq exportclight
 
-COQC=coqc -q $(INCLUDES)
-COQDEP=coqdep $(INCLUDES)
+COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) -as compcert.$(d)) \
+  -I $(ARCH)/$(VARIANT) -as compcert.$(ARCH).$(VARIANT) \
+  -I $(ARCH) -as compcert.$(ARCH)
+
+CAMLINCLUDES=$(patsubst %,-I %, $(DIRS)) -I extraction -I cparser
+
+COQC=coqc -q $(COQINCLUDES)
+COQDEP=coqdep $(COQINCLUDES)
 COQDOC=coqdoc
-COQEXEC=coqtop $(INCLUDES) -batch -load-vernac-source
-COQCHK=coqchk $(INCLUDES)
+COQEXEC=coqtop $(COQINCLUDES) -batch -load-vernac-source
+COQCHK=coqchk $(COQINCLUDES)
 
 OCAMLBUILD=ocamlbuild
 OCB_OPTIONS=\
   -j 2 \
   -no-hygiene \
   -no-links \
-  -I extraction -I cparser $(INCLUDES)
+  $(CAMLINCLUDES)
 OCB_OPTIONS_CHECKLINK=\
   $(OCB_OPTIONS) \
   -I checklink \
@@ -250,6 +256,9 @@ check-admitted: $(FILES)
 
 check-proof: $(FILES)
 	$(COQCHK) -admit Integers -admit Floats -admit AST -admit Asm -admit Mach -admit UnionFind Complements 
+
+print-includes:
+	@echo $(COQINCLUDES)
 
 include .depend
 
