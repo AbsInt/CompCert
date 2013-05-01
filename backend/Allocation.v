@@ -127,14 +127,6 @@ Definition check_succ (s: node) (b: LTL.bblock) : bool :=
   | _ => false
   end.
 
-Parameter eq_operation: forall (x y: operation), {x=y} + {x<>y}.
-Parameter eq_addressing: forall (x y: addressing), {x=y} + {x<>y}.
-Parameter eq_opt_addressing: forall (x y: option addressing), {x=y} + {x<>y}.
-Parameter eq_condition: forall (x y: condition), {x=y} + {x<>y}.
-Parameter eq_chunk: forall (x y: memory_chunk), {x=y} + {x<>y}.
-Parameter eq_external_function: forall (x y: external_function), {x=y} + {x<>y}.
-Parameter eq_signature: forall (x y: signature), {x=y} + {x<>y}.
-
 Notation "'do' X <- A ; B" := (match A with Some X => B | None => None end)
          (at level 200, X ident, A at level 100, B at level 200)
          : option_monad_scope.
@@ -205,15 +197,15 @@ Definition pair_instr_block
       let (mv1, b1) := extract_moves nil b in
       match b1 with
       | Lload chunk' addr' args' dst' :: b2 =>
-          if eq_chunk chunk Mint64 then
-            assertion (eq_chunk chunk' Mint32);
+          if chunk_eq chunk Mint64 then
+            assertion (chunk_eq chunk' Mint32);
             let (mv2, b3) := extract_moves nil b2 in
             match b3 with
             | Lload chunk'' addr'' args'' dst'' :: b4 =>
                 let (mv3, b5) := extract_moves nil b4 in
-                assertion (eq_chunk chunk'' Mint32);
+                assertion (chunk_eq chunk'' Mint32);
                 assertion (eq_addressing addr addr');
-                assertion (eq_opt_addressing (offset_addressing addr (Int.repr 4)) (Some addr''));
+                assertion (option_eq eq_addressing (offset_addressing addr (Int.repr 4)) (Some addr''));
                 assertion (check_succ s b5);
                 Some(BSload2 addr addr'' args dst mv1 args' dst' mv2 args'' dst'' mv3 s)
             | _ =>
@@ -221,12 +213,12 @@ Definition pair_instr_block
                 if (eq_addressing addr addr') then
                   Some(BSload2_1 addr args dst mv1 args' dst' mv2 s)
                 else
-                 (assertion (eq_opt_addressing (offset_addressing addr (Int.repr 4)) (Some addr'));
+                 (assertion (option_eq eq_addressing (offset_addressing addr (Int.repr 4)) (Some addr'));
                   Some(BSload2_2 addr addr' args dst mv1 args' dst' mv2 s))
             end
           else (
             let (mv2, b3) := extract_moves nil b2 in
-            assertion (eq_chunk chunk chunk');
+            assertion (chunk_eq chunk chunk');
             assertion (eq_addressing addr addr');
             assertion (check_succ s b3);
             Some(BSload chunk addr args dst mv1 args' dst' mv2 s))
@@ -238,20 +230,20 @@ Definition pair_instr_block
       let (mv1, b1) := extract_moves nil b in
       match b1 with
       | Lstore chunk' addr' args' src' :: b2 =>
-          if eq_chunk chunk Mint64 then
+          if chunk_eq chunk Mint64 then
             let (mv2, b3) := extract_moves nil b2 in
             match b3 with
             | Lstore chunk'' addr'' args'' src'' :: b4 =>
-                assertion (eq_chunk chunk' Mint32);
-                assertion (eq_chunk chunk'' Mint32);
+                assertion (chunk_eq chunk' Mint32);
+                assertion (chunk_eq chunk'' Mint32);
                 assertion (eq_addressing addr addr');
-                assertion (eq_opt_addressing (offset_addressing addr (Int.repr 4)) (Some addr''));
+                assertion (option_eq eq_addressing (offset_addressing addr (Int.repr 4)) (Some addr''));
                 assertion (check_succ s b4);
                 Some(BSstore2 addr addr'' args src mv1 args' src' mv2 args'' src'' s)
             | _ => None
             end
           else (
-            assertion (eq_chunk chunk chunk');
+            assertion (chunk_eq chunk chunk');
             assertion (eq_addressing addr addr');
             assertion (check_succ s b2);
             Some(BSstore chunk addr args src mv1 args' src' s))
@@ -262,7 +254,7 @@ Definition pair_instr_block
       match b1 with
       | Lcall sg' ros' :: b2 =>
           let (mv2, b3) := extract_moves nil b2 in
-          assertion (eq_signature sg sg');
+          assertion (signature_eq sg sg');
           assertion (check_succ s b3);
           Some(BScall sg ros args res mv1 ros' mv2 s)
       | _ => None
@@ -271,7 +263,7 @@ Definition pair_instr_block
       let (mv1, b1) := extract_moves nil b in
       match b1 with
       | Ltailcall sg' ros' :: b2 =>
-          assertion (eq_signature sg sg');
+          assertion (signature_eq sg sg');
           Some(BStailcall sg ros args mv1 ros')
       | _ => None
       end
@@ -280,11 +272,11 @@ Definition pair_instr_block
       match b1 with
       | Lbuiltin ef' args' res' :: b2 =>
           let (mv2, b3) := extract_moves nil b2 in
-          assertion (eq_external_function ef ef');
+          assertion (external_function_eq ef ef');
           assertion (check_succ s b3);
           Some(BSbuiltin ef args res mv1 args' res' mv2 s)
       | Lannot ef' args' :: b2 =>
-          assertion (eq_external_function ef ef');
+          assertion (external_function_eq ef ef');
           assertion (check_succ s b2);
           match ef with
           | EF_annot txt typ => Some(BSannot txt typ args res mv1 args' s)
@@ -1132,7 +1124,7 @@ Definition check_entrypoints_aux (rtl: RTL.function) (ltl: LTL.function) (e1: eq
                           (loc_parameters (RTL.fn_sig rtl)) e2);
   assertion (can_undef destroyed_at_function_entry e2);
   assertion (zeq (RTL.fn_stacksize rtl) (LTL.fn_stacksize ltl));
-  assertion (eq_signature (RTL.fn_sig rtl) (LTL.fn_sig ltl));
+  assertion (signature_eq (RTL.fn_sig rtl) (LTL.fn_sig ltl));
   Some tt.
 
 Local Close Scope option_monad_scope.

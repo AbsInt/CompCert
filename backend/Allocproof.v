@@ -297,7 +297,7 @@ Proof.
   destruct b0.
   MonadInv; UseParsingLemmas.
   destruct i; MonadInv; UseParsingLemmas.
-  destruct (eq_chunk m Mint64).
+  destruct (chunk_eq m Mint64).
   MonadInv; UseParsingLemmas. 
   destruct b; MonadInv; UseParsingLemmas. destruct i; MonadInv; UseParsingLemmas. 
   eapply ebs_load2; eauto.
@@ -308,7 +308,7 @@ Proof.
   inv H. eapply ebs_load_dead; eauto.
 (* store *)
   destruct b0; MonadInv. destruct i; MonadInv; UseParsingLemmas.
-  destruct (eq_chunk m Mint64).
+  destruct (chunk_eq m Mint64).
   MonadInv; UseParsingLemmas.
   destruct b; MonadInv. destruct i; MonadInv; UseParsingLemmas.
   eapply ebs_store2; eauto.

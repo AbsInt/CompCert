@@ -122,7 +122,14 @@ Definition Oaddrsymbol (id: ident) (ofs: int) : operation := Olea (Aglobal id of
 Definition Oaddrstack (ofs: int) : operation := Olea (Ainstack ofs).
 Definition Oaddimm (n: int) : operation := Olea (Aindexed n).
 
-(** Comparison functions (used in module [CSE]). *)
+(** Comparison functions (used in modules [CSE] and [Allocation]). *)
+
+Definition eq_condition (x y: condition) : {x=y} + {x<>y}.
+Proof.
+  generalize Int.eq_dec; intro.
+  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
+  decide equality.
+Defined.
 
 Definition eq_addressing (x y: addressing) : {x=y} + {x<>y}.
 Proof.
@@ -136,14 +143,13 @@ Proof.
   generalize Int.eq_dec; intro.
   generalize Float.eq_dec; intro.
   generalize Int64.eq_dec; intro.
-  assert (forall (x y: ident), {x=y}+{x<>y}). exact peq.
-  assert (forall (x y: comparison), {x=y}+{x<>y}). decide equality.
-  assert (forall (x y: condition), {x=y}+{x<>y}). decide equality.
   decide equality.
+  apply peq.
   apply eq_addressing.
+  apply eq_condition.
 Defined.
 
-Global Opaque eq_addressing eq_operation.
+Global Opaque eq_condition eq_addressing eq_operation.
 
 (** * Evaluation functions *)
 

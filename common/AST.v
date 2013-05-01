@@ -54,9 +54,8 @@ Lemma typ_eq: forall (t1 t2: typ), {t1=t2} + {t1<>t2}.
 Proof. decide equality. Defined.
 Global Opaque typ_eq.
 
-Lemma opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}.
-Proof. decide equality. apply typ_eq. Defined.
-Global Opaque opt_typ_eq.
+Definition opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}
+                     := option_eq typ_eq.
 
 Definition list_typ_eq: forall (l1 l2: list typ), {l1=l2} + {l1<>l2}
                      := list_eq_dec typ_eq.
@@ -78,6 +77,10 @@ Definition proj_sig_res (s: signature) : typ :=
   | Some t => t
   end.
 
+Definition signature_eq: forall (s1 s2: signature), {s1=s2} + {s1<>s2}.
+Proof. generalize opt_typ_eq, list_typ_eq; intros; decide equality. Defined.
+Global Opaque signature_eq.
+
 (** Memory accesses (load and store instructions) are annotated by
   a ``memory chunk'' indicating the type, size and signedness of the
   chunk of memory being accessed. *)
@@ -92,6 +95,10 @@ Inductive memory_chunk : Type :=
   | Mfloat32        (**r 32-bit single-precision float *)
   | Mfloat64        (**r 64-bit double-precision float *)
   | Mfloat64al32.   (**r 64-bit double-precision float, 4-aligned *)
+
+Definition chunk_eq: forall (c1 c2: memory_chunk), {c1=c2} + {c1<>c2}.
+Proof. decide equality. Defined.
+Global Opaque chunk_eq.
 
 (** The type (integer/pointer or float) of a chunk. *)
 
@@ -525,6 +532,16 @@ Definition ef_reloads (ef: external_function) : bool :=
   | EF_annot text targs => false
   | _ => true
   end.
+
+(** Equality between external functions.  Used in module [Allocation]. *)
+
+Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
+Proof.
+  generalize ident_eq signature_eq chunk_eq typ_eq zeq Int.eq_dec; intros.
+  decide equality.
+  apply list_eq_dec. decide equality. apply Float.eq_dec. 
+Defined.
+Global Opaque external_function_eq.
 
 (** Function definitions are the union of internal and external functions. *)
 

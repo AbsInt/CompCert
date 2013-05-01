@@ -633,6 +633,13 @@ Qed.
 
 Set Implicit Arguments.
 
+(** Comparing option types. *)
+
+Definition option_eq (A: Type) (eqA: forall (x y: A), {x=y} + {x<>y}):
+  forall (x y: option A), {x=y} + {x<>y}.
+Proof. decide equality. Defined.
+Global Opaque option_eq.
+
 (** Mapping a function over an option type. *)
 
 Definition option_map (A B: Type) (f: A -> B) (x: option A) : option B :=

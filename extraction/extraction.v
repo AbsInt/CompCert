@@ -19,7 +19,6 @@ Require RTLgen.
 Require Inlining.
 Require ConstpropOp.
 Require Constprop.
-Require Allocation.
 Require Compiler.
 
 (* Standard lib *)
@@ -72,16 +71,6 @@ Extract Constant ConstpropOp.propagate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 1".
 Extract Constant Constprop.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
-
-(* Allocation *)
-Extract Constant Allocation.eq_operation => "(=)".
-Extract Constant Allocation.eq_addressing => "(=)".
-Extract Constant Allocation.eq_opt_addressing => "(=)".
-Extract Constant Allocation.eq_condition => "(=)".
-Extract Constant Allocation.eq_chunk => "(=)".
-Extract Constant Allocation.eq_external_function => "(=)".
-Extract Constant Allocation.eq_signature => "(=)".
-Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
