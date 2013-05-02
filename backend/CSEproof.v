@@ -696,6 +696,8 @@ Proof.
   destruct chunk; auto; apply N3. 
   simpl in H3. destruct (rs#src); auto || contradiction.
   simpl in H3. destruct (rs#src); auto || contradiction.
+  simpl in H3. destruct (rs#src); auto || contradiction.
+  simpl in H3. destruct (rs#src); auto || contradiction.
 Qed.
 
 (** Correctness of [reg_valnum]: if it returns a register [r],

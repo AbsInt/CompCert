@@ -254,7 +254,7 @@ Definition kill_loads (n: numbering) : numbering :=
   can prove that the store does not invalidate them.
   Then, an equations [rsrc = Load chunk addr rargs] is added to reflect
   the known content of the stored memory area, but only if [chunk] is
-  a "full-size" quantity ([Mint32] or [Mfloat64]). *)
+  a "full-size" quantity ([Mint32] or [Mfloat64] or [Mint64]). *)
 
 Definition filter_after_store (chunk: memory_chunk) (addr: addressing) (vl: list valnum) (r: rhs) : bool :=
   match r with
@@ -268,7 +268,7 @@ Definition add_store (n: numbering) (chunk: memory_chunk) (addr: addressing)
   let (n1, vargs) := valnum_regs n rargs in
   let n2 := kill_equations (filter_after_store chunk addr vargs) n1 in
   match chunk with
-  | Mint32 | Mfloat64 => add_rhs n2 rsrc (Load chunk addr vargs)
+  | Mint32 | Mint64 | Mfloat64 | Mfloat64al32 => add_rhs n2 rsrc (Load chunk addr vargs)
   | _ => n2
   end.
 
