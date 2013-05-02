@@ -288,6 +288,7 @@ Fixpoint loc_arguments_rec
   | Tfloat :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
+          let ofs := align ofs 2 in
           S Outgoing ofs Tfloat :: loc_arguments_rec tys ir fr (ofs + 2)
       | Some freg =>
           R freg :: loc_arguments_rec tys ir (fr + 1) ofs
@@ -298,6 +299,7 @@ Fixpoint loc_arguments_rec
       | Some r1, Some r2 =>
           R r1 :: R r2 :: loc_arguments_rec tys (ir + 2) fr ofs
       | _, _ =>
+          let ofs := align ofs 2 in
           S Outgoing ofs Tint :: S Outgoing (ofs + 1) Tint :: loc_arguments_rec tys ir fr (ofs + 2)
       end
   end.
@@ -321,17 +323,16 @@ Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
       end
   | Tfloat :: tys =>
       match list_nth_z float_param_regs fr with
-      | None => size_arguments_rec tys ir fr (ofs + 2)
+      | None => size_arguments_rec tys ir fr (align ofs 2 + 2)
       | Some freg => size_arguments_rec tys ir (fr + 1) ofs
       end
   | Tlong :: tys =>
       let ir := align ir 2 in
       match list_nth_z int_param_regs ir, list_nth_z int_param_regs (ir + 1) with
       | Some r1, Some r2 => size_arguments_rec tys (ir + 2) fr ofs
-      | _, _ => size_arguments_rec tys ir fr (ofs + 2)
+      | _, _ => size_arguments_rec tys ir fr (align ofs 2 + 2)
       end
   end.
-
 
 Definition size_arguments (s: signature) : Z :=
   size_arguments_rec s.(sig_args) 0 0 0.
@@ -366,25 +367,32 @@ Opaque list_nth_z.
   induction tyl; simpl loc_arguments_rec; intros.
   elim H.
   destruct a.
-  destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H. 
+- (* int *)
+  destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
   subst. split. omega. congruence.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+- (* float *)
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H. 
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. congruence.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
+  assert (ofs <= align ofs 2) by (apply align_le; omega). 
+  intuition omega.
+- (* long *)
   set (ir' := align ir 2) in *.
   destruct (list_nth_z int_param_regs ir') as [r1|] eqn:E1.
   destruct (list_nth_z int_param_regs (ir' + 1)) as [r2|] eqn:E2.
   destruct H. subst; left; eapply list_nth_z_in; eauto.
   destruct H. subst; left; eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
+  assert (ofs <= align ofs 2) by (apply align_le; omega). 
   destruct H. subst. split. omega. congruence.
   destruct H. subst. split. omega. congruence.
-  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega. 
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+  assert (ofs <= align ofs 2) by (apply align_le; omega). 
   destruct H. subst. split. omega. congruence. 
   destruct H. subst. split. omega. congruence.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega. 
@@ -412,12 +420,16 @@ Proof.
   omega.
   destruct a.
   destruct (list_nth_z int_param_regs ir); eauto. apply Zle_trans with (ofs0 + 1); auto; omega.
-  destruct (list_nth_z float_param_regs fr); eauto. apply Zle_trans with (ofs0 + 2); auto; omega.
+  destruct (list_nth_z float_param_regs fr); eauto.
+  apply Zle_trans with (align ofs0 2). apply align_le; omega.
+  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
   set (ir' := align ir 2).
   destruct (list_nth_z int_param_regs ir'); eauto.
   destruct (list_nth_z int_param_regs (ir' + 1)); eauto.
-  apply Zle_trans with (ofs0 + 2); auto; omega.
-  apply Zle_trans with (ofs0 + 2); auto; omega.
+  apply Zle_trans with (align ofs0 2). apply align_le; omega.
+  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Zle_trans with (align ofs0 2). apply align_le; omega.
+  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
 Qed.
 
 Lemma size_arguments_above:
@@ -436,32 +448,36 @@ Proof.
   assert (forall tyl ir fr ofs0,
     In (S Outgoing ofs ty) (loc_arguments_rec tyl ir fr ofs0) ->
     ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0).
+{
   induction tyl; simpl; intros.
   elim H0.
   destruct a.
+- (* int *)
   destruct (list_nth_z int_param_regs ir); destruct H0. 
   congruence.
   eauto.
   inv H0. apply size_arguments_rec_above.
   eauto.
+- (* float *)
   destruct (list_nth_z float_param_regs fr); destruct H0. 
   congruence.
   eauto.
-  inv H0. apply size_arguments_rec_above.
-  eauto.
+  inv H0. apply size_arguments_rec_above. eauto. 
+- (* long *)
   set (ir' := align ir 2) in *.
   destruct (list_nth_z int_param_regs ir').
   destruct (list_nth_z int_param_regs (ir' + 1)).
   destruct H0. congruence. destruct H0. congruence. eauto.
   destruct H0. inv H0. 
-  transitivity (ofs + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
   destruct H0. inv H0.
-  transitivity (ofs0 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
   eauto. 
   destruct H0. inv H0. 
-  transitivity (ofs + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
   destruct H0. inv H0.
-  transitivity (ofs0 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
+  transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
   eauto. 
+}
   eauto.
 Qed.
