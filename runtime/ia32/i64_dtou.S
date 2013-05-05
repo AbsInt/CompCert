@@ -40,12 +40,6 @@
 
 FUNCTION(__i64_dtou)
         subl $4, %esp
-  // Change rounding mode to "round towards zero"
-        fnstcw 0(%esp)
-        movw 0(%esp), %ax
-        movb $12, %ah
-        movw %ax, 2(%esp)
-        fldcw 2(%esp)
   // Compare argument with 2^63
         fldl 8(%esp)
         flds LC1
@@ -54,18 +48,36 @@ FUNCTION(__i64_dtou)
         sahf
         jbe 1f                  // branch if not (ARG < 2^63)
   // Argument < 2^63: convert as is
+  // Change rounding mode to "round towards zero"
+        fnstcw 0(%esp)
+        movw 0(%esp), %ax
+        movb $12, %ah
+        movw %ax, 2(%esp)
+        fldcw 2(%esp)
+  // Convert
         fistpll 8(%esp)
         movl 8(%esp), %eax
         movl 12(%esp), %edx
-        jmp 2f
+  // Restore rounding mode
+        fldcw 0(%esp)
+        addl $4, %esp
+        ret
   // Argument > 2^63: offset ARG by -2^63, then convert, then offset RES by 2^63
 1:      fsubs LC1
+  // Change rounding mode to "round towards zero"
+        fnstcw 0(%esp)
+        movw 0(%esp), %ax
+        movb $12, %ah
+        movw %ax, 2(%esp)
+        fldcw 2(%esp)
+  // Convert
         fistpll 8(%esp)
         movl 8(%esp), %eax
         movl 12(%esp), %edx
+  // Offset result by 2^63
         addl $0x80000000, %edx
   // Restore rounding mode
-2:      fldcw 0(%esp)
+        fldcw 0(%esp)
         addl $4, %esp
         ret
 

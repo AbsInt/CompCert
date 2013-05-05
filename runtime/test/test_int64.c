@@ -147,6 +147,16 @@ static void test1(u64 x, u64 y)
   if (f != g)
     error++, printf("(double) %lld (s) = %a, expected %a\n", x, f, g);
 
+  f = (double) x;
+  z = __i64_dtou(f);
+  if (z != (u64) (double) f)
+    error++, printf("(u64) %a = %llu, expected %llu\n", f, z, (u64) f);
+
+  f = (double) ((s64) x);
+  t = __i64_dtos(f);
+  if (t != (s64) (double) f)
+    error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
+
   f = ((double) x) * 0.0001;
   z = __i64_dtou(f);
   if (z != (u64) f)

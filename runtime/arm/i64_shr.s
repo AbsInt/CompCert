@@ -38,19 +38,34 @@
 
 @@@ Shift right unsigned	
 
+@ Note on ARM shifts: the shift amount is taken modulo 256.
+@ If shift amount mod 256 >= 32, the shift produces 0.
+
+@ Algorithm:
+@    RL = (XL >> N) | (XH << (32-N) | (XH >> (N-32))
+@    RH = XH >> N        
+@ If N = 0:
+@    RL = XL | 0 | 0
+@    RH = XH
+@ If 1 <= N <= 31:  1 <= 32-N <= 31  and  255 <= N-32 mod 256 <= 255
+@    RL = (XL >> N) | (XH >> (32-N) | 0
+@    RH = XH >> N        
+@ If N = 32:
+@    RL = 0 | XH | 0
+@    RH = 0
+@ If 33 <= N <= 63: 255 <= 32-N mod 256 <= 255 and 1 <= N-32 <= 31
+@    RL = 0 | 0 | (XH >> (N-32))
+@    RH = 0
+
 	.global __i64_shr
 __i64_shr:
         and r2, r2, #63         @ normalize amount to 0...63
-        rsbs r3, r2, #32        @ r3 = 32 - amount
-        ble 1f                  @ branch if <= 0, namely if amount >= 32
+        rsb r3, r2, #32         @ r3 = 32 - amount
         mov r0, r0, lsr r2
-        orr r0, r1, lsl r3
+        orr r0, r0, r1, lsl r3
+	sub r3, r2, #32         @ r3 = amount - 32
+	orr r0, r0, r1, lsr r3
         mov r1, r1, lsr r2
-        bx lr
-1:
-        sub r2, r2, #32
-        mov r0, r1, lsr r2
-        mov r1, #0
         bx lr
 	.type __i64_shr, %function
 	.size __i64_shr, . - __i64_shr

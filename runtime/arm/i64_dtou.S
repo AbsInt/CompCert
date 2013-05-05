@@ -60,9 +60,22 @@ __i64_dtou:
         orr r1, r1, #0x00100000 @ HI |= 0x00100000
   @ shift it appropriately
         cmp r2, #0
-        bge __i64_shl           @ if EXP >= 0, shift left by EXP
-        rsb r2, r2, #0
-        b __i64_shr             @ otherwise, shift right by -EXP
+        blt 3f
+  @ EXP >= 0: shift left by EXP.  Note that EXP < 12        
+        rsb r3, r2, #32         @ r3 = 32 - amount
+        mov r1, r1, lsl r2
+        orr r1, r1, r0, lsr r3
+        mov r0, r0, lsl r2
+	bx lr
+  @ EXP < 0: shift right by -EXP.  Note that -EXP <= 52 but can be >= 32        
+3:      rsb r2, r2, #0          @ r2 = -EXP - shift amount
+        rsb r3, r2, #32         @ r3 = 32 - amount
+        mov r0, r0, lsr r2
+        orr r0, r0, r1, lsl r3
+	sub r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
+	orr r0, r0, r1, lsr r3
+        mov r1, r1, lsr r2
+        bx lr
   @ special cases
 1:      mov r0, #0              @ result is 0
         mov r1, #0

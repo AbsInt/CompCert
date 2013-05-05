@@ -40,8 +40,7 @@
 	
 	.global __i64_dtos
 __i64_dtos:
-        push {r4, lr}
-        mov r4, r1, asr #31     @ save sign in r4
+        mov r12, r1, asr #31    @ save sign of result in r12
   @ extract unbiased exponent ((HI & 0x7FF00000) >> 20) - (1023 + 52) in r2
   @ note: 1023 + 52 = 1075 = 1024 + 51
   @ note: (HI & 0x7FF00000) >> 20 = (HI << 1) >> 21
@@ -61,31 +60,37 @@ __i64_dtos:
   @ shift it appropriately
         cmp r2, #0
         blt 3f
-        bl __i64_shl            @ if EXP >= 0, shift left by EXP
-        b 4f
-3:      rsb r2, r2, #0
-        bl __i64_shr            @ otherwise, shift right by -EXP
+  @ EXP >= 0: shift left by EXP.  Note that EXP < 12        
+        rsb r3, r2, #32         @ r3 = 32 - amount
+        mov r1, r1, lsl r2
+        orr r1, r1, r0, lsr r3
+        mov r0, r0, lsl r2
+	b 4f
+  @ EXP < 0: shift right by -EXP.  Note that -EXP <= 52 but can be >= 32        
+3:      rsb r2, r2, #0          @ r2 = -EXP - shift amount
+        rsb r3, r2, #32         @ r3 = 32 - amount
+        mov r0, r0, lsr r2
+        orr r0, r0, r1, lsl r3
+	sub r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
+	orr r0, r0, r1, lsr r3
+        mov r1, r1, lsr r2
   @ apply sign to result
-4:      eor r0, r0, r4
-        eor r1, r1, r4
-        subs r0, r0, r4
-        sbc r1, r1, r4
-        pop {r4, lr}
+4:      eor r0, r0, r12
+        eor r1, r1, r12
+        subs r0, r0, r12
+        sbc r1, r1, r12
         bx lr
   @ special cases
 1:      mov r0, #0 @ result is 0
         mov r1, #0
-        pop {r4, lr}
         bx lr
 2:      cmp r4, #0
         blt 6f
         mvn r0, #0              @ result is 0x7F....FF (MAX_SINT)
         mov r1, r0, lsr #1
-        pop {r4, lr}
         bx lr
 6:      mov r0, #0              @ result is 0x80....00 (MIN_SINT)
         mov r1, #0x80000000
-        pop {r4, lr}
         bx lr
 	.type __i64_dtos, %function
         .size __i64_dtos, . - __i64_dtos

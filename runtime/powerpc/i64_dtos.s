@@ -58,16 +58,27 @@ __i64_dtos:
         rlwinm r3, r3, 0, 12, 31  # HI &= ~0xFFF00000
         oris r3, r3, 0x10         # HI |=  0x00100000
   # shift it appropriately
-        mflr r9                 # save retaddr in r9
         cmpwi r5, 0
         blt 3f
-        bl __i64_shl            # if EXP >= 0, shift left by EXP
+  # if EXP >= 0, shift left by EXP.  Note that EXP < 11.
+        subfic r6, r5, 32       # r6 = 32 - EXP
+        slw r3, r3, r5
+        srw r0, r4, r6
+        or r3, r3, r0
+        slw r4, r4, r5
         b 4f
-3:      subfic r5, r5, 0
-        bl __i64_shr            # if EXP < 0, shift right by -EXP
+  # if EXP < 0, shift right by -EXP.  Note that -EXP <= 52 but can be >= 32.
+3:      subfic r5, r5, 0        # r5 = -EXP = shift amount
+        subfic r6, r5, 32       # r6 = 32 - amount
+        addi r7, r5, -32        # r7 = amount - 32  (see i64_shr.s)
+        srw r4, r4, r5
+        slw r0, r3, r6
+        or r4, r4, r0
+        srw r0, r3, r7
+        or r4, r4, r0
+        srw r3, r3, r5
   # apply sign to result	
-4:      mtlr r9
-        xor r4, r4, r10
+4:      xor r4, r4, r10
         xor r3, r3, r10
         subfc r4, r10, r4
         subfe r3, r10, r3
@@ -76,7 +87,7 @@ __i64_dtos:
 1:      li r3, 0                # result is 0
         li r4, 0
         blr
-2:      cmpwi r10, 0            # result is MAX_SINT or MIN_SINT
+2:      li r4, -1               # result is MAX_SINT or MIN_SINT
         bge 5f                  # depending on sign
         li r4, -1               # result is MAX_SINT =  0x7FFF_FFFF
         srwi r3, r4, 1
