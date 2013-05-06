@@ -52,6 +52,8 @@ extern s64 __i64_sar(s64 x, unsigned amount);
 
 extern double __i64_utod(u64 x);
 extern double __i64_stod(s64 x);
+extern float __i64_utof(u64 x);
+extern float __i64_stof(s64 x);
 extern u64 __i64_dtou(double d);
 extern s64 __i64_dtos(double d);
 
@@ -70,6 +72,7 @@ static void test1(u64 x, u64 y)
   s64 t, sy;
   int i;
   double f, g;
+  float u, v;
 
   if (y != 0) {
 
@@ -147,14 +150,24 @@ static void test1(u64 x, u64 y)
   if (f != g)
     error++, printf("(double) %lld (s) = %a, expected %a\n", x, f, g);
 
+  u = __i64_utof(x);
+  v = (float) x;
+  if (u != v)
+    error++, printf("(float) %llu (u) = %a, expected %a\n", x, u, v);
+
+  u = __i64_stof(x);
+  v = (float) (s64) x;
+  if (u != v)
+    error++, printf("(double) %lld (s) = %a, expected %a\n", x, u, v);
+
   f = (double) x;
   z = __i64_dtou(f);
-  if (z != (u64) (double) f)
+  if (z != (u64) f)
     error++, printf("(u64) %a = %llu, expected %llu\n", f, z, (u64) f);
 
-  f = (double) ((s64) x);
+  f = (double) (s64) x;
   t = __i64_dtos(f);
-  if (t != (s64) (double) f)
+  if (t != (s64) f)
     error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
 
   f = ((double) x) * 0.0001;

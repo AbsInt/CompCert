@@ -36,20 +36,20 @@
 	
 #include "sysdeps.h"
 
-// Conversion unsigned long -> double-precision float
+// Conversion unsigned long -> single-precision float
 
-FUNCTION(__i64_utod)
+FUNCTION(__i64_utof)
         fildll 4(%esp)                  // convert as if signed
         cmpl $0, 8(%esp)                // is argument >= 2^63?
         jns 1f
         fadds LC1                       // adjust by 2^64
-1:      ret
-    // The result is in extended precision (80 bits) and therefore
-    // exact (64 bits of mantissa).  It will be rounded to double
-    // precision by the caller, when transferring the result
-    // to an XMM register or a 64-bit stack slot.
+  // The TOS is in extended precision and therefore exact.
+  // Force rounding to single precision
+1:      fstps  4(%esp)
+        flds   4(%esp)
+        ret
 
         .p2align 2
 LC1:    .long 0x5f800000                // 2^64 in single precision
 
-ENDFUNCTION(__i64_utod)       
+ENDFUNCTION(__i64_utof)       

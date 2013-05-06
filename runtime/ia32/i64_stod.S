@@ -36,10 +36,14 @@
 	
 #include "sysdeps.h"
 
-// Conversion signed long -> float
+// Conversion signed long -> double-precision float
 
 FUNCTION(__i64_stod)
         fildll 4(%esp)
         ret
+    // The result is in extended precision (80 bits) and therefore
+    // exact (64 bits of mantissa).  It will be rounded to double
+    // precision by the caller, when transferring the result
+    // to an XMM register or a 64-bit stack slot.
 ENDFUNCTION(__i64_stod)
 
