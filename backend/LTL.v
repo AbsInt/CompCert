@@ -197,16 +197,6 @@ Definition parent_locset (stack: list stackframe) : locset :=
   | Stackframe f sp ls bb :: stack' => ls
   end.
 
-(* REVISE
-(** [getslot sl ofs ty rs] looks up the value of location [S sl ofs ty] in [rs],
-  and normalizes it to the type [ty] of this location. *)
-
-Definition getslot (sl: slot) (ofs: Z) (ty: typ) (rs: locset) : val :=
-  Val.load_result
-    (match ty with Tint => Mint32 | Tfloat => Mfloat64 | Tlong => Mint64 end)
-    (rs (S sl ofs ty)).
-*)
-
 Inductive step: state -> trace -> state -> Prop :=
   | exec_start_block: forall s f sp pc rs m bb,
       (fn_code f)!pc = Some bb ->

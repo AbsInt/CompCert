@@ -115,6 +115,16 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
   | Mfloat64al32 => Tfloat
   end.
 
+(** The chunk that is appropriate to store and reload a value of
+  the given type, without losing information. *)
+
+Definition chunk_of_type (ty: typ) :=
+  match ty with
+  | Tint => Mint32
+  | Tfloat => Mfloat64al32
+  | Tlong => Mint64
+  end.
+
 (** Initialization data for global variables. *)
 
 Inductive init_data: Type :=

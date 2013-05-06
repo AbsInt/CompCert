@@ -806,9 +806,6 @@ Definition preg_of (r: mreg) : preg :=
     We exploit the calling conventions from module [Conventions], except that
     we use PPC registers instead of locations. *)
 
-Definition chunk_of_type (ty: typ) :=
-  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 | Tlong => Mint64 end.
-
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
       extcall_arg rs m (R r) (rs (preg_of r))

@@ -123,9 +123,6 @@ value of the return address that the Asm code generated later will
 store in the reserved location.
 *)
 
-Definition chunk_of_type (ty: typ) :=
-  match ty with Tint => Mint32 | Tfloat => Mfloat64al32 | Tlong => Mint64 end.
-
 Definition load_stack (m: mem) (sp: val) (ty: typ) (ofs: int) :=
   Mem.loadv (chunk_of_type ty) m (Val.add sp (Vint ofs)).
 
