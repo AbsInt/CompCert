@@ -84,9 +84,6 @@ Definition make_longoffloat (e: expr) (sg: signedness) :=
   | Unsigned => Eunop Olonguoffloat e
   end.
 
-(** [make_boolean e ty] returns a Csharpminor expression that evaluates
-   to the boolean value of [e].  *)
-
 Definition make_cmp_ne_zero (e: expr) :=
   match e with
   | Ebinop (Ocmp c) e1 e2 => e
@@ -97,6 +94,49 @@ Definition make_cmp_ne_zero (e: expr) :=
   | _ => Ebinop (Ocmp Cne) e (make_intconst Int.zero)
   end.
 
+(** [make_cast from to e] applies to [e] the numeric conversions needed
+   to transform a result of type [from] to a result of type [to]. *)
+
+Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
+  match sz, si with
+  | I8, Signed => Eunop Ocast8signed e  
+  | I8, Unsigned => Eunop Ocast8unsigned e  
+  | I16, Signed => Eunop Ocast16signed e  
+  | I16, Unsigned => Eunop Ocast16unsigned e  
+  | I32, _ => e
+  | IBool, _ => make_cmp_ne_zero e
+  end.
+
+Definition make_cast_float (e: expr) (sz: floatsize) :=
+  match sz with
+  | F32 => Eunop Osingleoffloat e
+  | F64 => e
+  end.
+
+Definition make_cast (from to: type) (e: expr) :=
+  match classify_cast from to with
+  | cast_case_neutral => OK e
+  | cast_case_i2i sz2 si2 => OK (make_cast_int e sz2 si2)
+  | cast_case_f2f sz2 => OK (make_cast_float e sz2)
+  | cast_case_i2f si1 sz2 => OK (make_cast_float (make_floatofint e si1) sz2)
+  | cast_case_f2i sz2 si2 => OK (make_cast_int (make_intoffloat e si2) sz2 si2)
+  | cast_case_l2l => OK e
+  | cast_case_i2l si1 => OK (make_longofint e si1)
+  | cast_case_l2i sz2 si2 => OK (make_cast_int (Eunop Ointoflong e) sz2 si2)
+  | cast_case_l2f si1 sz2 => OK (make_cast_float (make_floatoflong e si1) sz2)
+  | cast_case_f2l si2 => OK (make_longoffloat e si2)
+  | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
+  | cast_case_l2bool => OK (Ebinop (Ocmpl Cne) e (make_longconst Int64.zero))
+  | cast_case_p2bool => OK (Ebinop (Ocmpu Cne) e (make_intconst Int.zero))
+  | cast_case_struct id1 fld1 id2 fld2 => OK e
+  | cast_case_union id1 fld1 id2 fld2 => OK e
+  | cast_case_void => OK e
+  | cast_case_default => Error (msg "Cshmgen.make_cast")
+  end.
+
+(** [make_boolean e ty] returns a Csharpminor expression that evaluates
+   to the boolean value of [e].  *)
+
 Definition make_boolean (e: expr) (ty: type) :=
   match classify_bool ty with
   | bool_case_i => make_cmp_ne_zero e
@@ -105,6 +145,8 @@ Definition make_boolean (e: expr) (ty: type) :=
   | bool_case_l => Ebinop (Ocmpl Cne) e (make_longconst Int64.zero)
   | bool_default => e   (**r should not happen *)
   end.
+
+(** Unary operators *)
 
 Definition make_notbool (e: expr) (ty: type) :=
   match classify_bool ty with
@@ -130,22 +172,20 @@ Definition make_notint (e: expr) (ty: type) :=
   | _ => Error (msg "Cshmgen.make_notint")
   end.
 
+(** Binary operators *)
+
 Definition make_binarith (iop iopu fop lop lopu: binary_operation)
                          (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_binarith ty1 ty2 with
-  | bin_case_ii Signed => OK (Ebinop iop e1 e2)
-  | bin_case_ii Unsigned => OK (Ebinop iopu e1 e2)
-  | bin_case_ff => OK (Ebinop fop e1 e2)
-  | bin_case_if sg => OK (Ebinop fop (make_floatofint e1 sg) e2)
-  | bin_case_fi sg => OK (Ebinop fop e1 (make_floatofint e2 sg))
-  | bin_case_ll Signed => OK (Ebinop lop e1 e2)
-  | bin_case_ll Unsigned => OK (Ebinop lopu e1 e2)
-  | bin_case_il sg1 Signed => OK (Ebinop lop (make_longofint e1 sg1) e2)
-  | bin_case_il sg1 Unsigned => OK (Ebinop lopu (make_longofint e1 sg1) e2)
-  | bin_case_li Signed sg2 => OK (Ebinop lop e1 (make_longofint e2 sg2))
-  | bin_case_li Unsigned sg2 => OK (Ebinop lopu e1 (make_longofint e2 sg2))
-  | bin_case_lf sg => OK (Ebinop fop (make_floatoflong e1 sg) e2)
-  | bin_case_fl sg => OK (Ebinop fop e1 (make_floatoflong e2 sg))
+  let c := classify_binarith ty1 ty2 in
+  let ty := binarith_type c in
+  do e1' <- make_cast ty1 ty e1;
+  do e2' <- make_cast ty2 ty e2;
+  match c with
+  | bin_case_i Signed => OK (Ebinop iop e1' e2')
+  | bin_case_i Unsigned => OK (Ebinop iopu e1' e2')
+  | bin_case_f => OK (Ebinop fop e1' e2')
+  | bin_case_l Signed => OK (Ebinop lop e1' e2')
+  | bin_case_l Unsigned => OK (Ebinop lopu e1' e2')
   | bin_default => Error (msg "Cshmgen.make_binarith")
   end.
 
@@ -190,16 +230,16 @@ Definition make_div (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 
 Definition make_binarith_int (iop iopu lop lopu: binary_operation)
                              (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_binarith ty1 ty2 with
-  | bin_case_ii Signed => OK (Ebinop iop e1 e2)
-  | bin_case_ii Unsigned => OK (Ebinop iopu e1 e2)
-  | bin_case_ll Signed => OK (Ebinop lop e1 e2)
-  | bin_case_ll Unsigned => OK (Ebinop lopu e1 e2)
-  | bin_case_il sg1 Signed => OK (Ebinop lop (make_longofint e1 sg1) e2)
-  | bin_case_il sg1 Unsigned => OK (Ebinop lopu (make_longofint e1 sg1) e2)
-  | bin_case_li Signed sg2 => OK (Ebinop lop e1 (make_longofint e2 sg2))
-  | bin_case_li Unsigned sg2 => OK (Ebinop lopu e1 (make_longofint e2 sg2))
-  | _ => Error (msg "Cshmgen.make_binarith_int")
+  let c := classify_binarith ty1 ty2 in
+  let ty := binarith_type c in
+  do e1' <- make_cast ty1 ty e1;
+  do e2' <- make_cast ty2 ty e2;
+  match c with
+  | bin_case_i Signed => OK (Ebinop iop e1' e2')
+  | bin_case_i Unsigned => OK (Ebinop iopu e1' e2')
+  | bin_case_l Signed => OK (Ebinop lop e1' e2')
+  | bin_case_l Unsigned => OK (Ebinop lopu e1' e2')
+  | bin_case_f | bin_default => Error (msg "Cshmgen.make_binarith_int")
   end.
 
 Definition make_mod (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
@@ -213,22 +253,6 @@ Definition make_or (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
 
 Definition make_xor (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   make_binarith_int Oxor Oxor Oxorl Oxorl e1 ty1 e2 ty2.
-
-(*
-Definition make_shift (iop iopu lop lopu: binary_operation)
-                      (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
-  match classify_shift ty1 ty2 with
-  | shift_case_ii Signed => OK (Ebinop iop e1 e2)
-  | shift_case_ii Unsigned => OK (Ebinop iopu e1 e2)
-  | shift_case_li Signed => OK (Ebinop lop e1 e2)
-  | shift_case_li Unsigned => OK (Ebinop lopu e1 e2)
-  | shift_case_il Signed => OK (Ebinop iop e1 (Eunop Ointoflong e2))
-  | shift_case_il Unsigned => OK (Ebinop iopu e1 (Eunop Ointoflong e2))
-  | shift_case_ll Signed => OK (Ebinop lop e1 (Eunop Ointoflong e2))
-  | shift_case_ll Unsigned => OK (Ebinop lopu e1 (Eunop Ointoflong e2))
-  | shift_default => Error (msg "Cshmgen.make_shift")
-  end.
-*)
 
 Definition make_shl (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
   match classify_shift ty1 ty2 with
@@ -259,46 +283,6 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
   | cmp_case_lp => OK (Ebinop (Ocmpu c) (Eunop Ointoflong e1) e2)
   | cmp_default =>
       make_binarith (Ocmp c) (Ocmpu c) (Ocmpf c) (Ocmpl c) (Ocmplu c) e1 ty1 e2 ty2
-  end.
-
-(** [make_cast from to e] applies to [e] the numeric conversions needed
-   to transform a result of type [from] to a result of type [to]. *)
-
-Definition make_cast_int (e: expr) (sz: intsize) (si: signedness) :=
-  match sz, si with
-  | I8, Signed => Eunop Ocast8signed e  
-  | I8, Unsigned => Eunop Ocast8unsigned e  
-  | I16, Signed => Eunop Ocast16signed e  
-  | I16, Unsigned => Eunop Ocast16unsigned e  
-  | I32, _ => e
-  | IBool, _ => make_cmp_ne_zero e
-  end.
-
-Definition make_cast_float (e: expr) (sz: floatsize) :=
-  match sz with
-  | F32 => Eunop Osingleoffloat e
-  | F64 => e
-  end.
-
-Definition make_cast (from to: type) (e: expr) :=
-  match classify_cast from to with
-  | cast_case_neutral => OK e
-  | cast_case_i2i sz2 si2 => OK (make_cast_int e sz2 si2)
-  | cast_case_f2f sz2 => OK (make_cast_float e sz2)
-  | cast_case_i2f si1 sz2 => OK (make_cast_float (make_floatofint e si1) sz2)
-  | cast_case_f2i sz2 si2 => OK (make_cast_int (make_intoffloat e si2) sz2 si2)
-  | cast_case_l2l => OK e
-  | cast_case_i2l si1 => OK (make_longofint e si1)
-  | cast_case_l2i sz2 si2 => OK (make_cast_int (Eunop Ointoflong e) sz2 si2)
-  | cast_case_l2f si1 sz2 => OK (make_cast_float (make_floatoflong e si1) sz2)
-  | cast_case_f2l si2 => OK (make_longoffloat e si2)
-  | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
-  | cast_case_l2bool => OK (Ebinop (Ocmpl Cne) e (make_longconst Int64.zero))
-  | cast_case_p2bool => OK (Ebinop (Ocmpu Cne) e (make_intconst Int.zero))
-  | cast_case_struct id1 fld1 id2 fld2 => OK e
-  | cast_case_union id1 fld1 id2 fld2 => OK e
-  | cast_case_void => OK e
-  | cast_case_default => Error (msg "Cshmgen.make_cast")
   end.
 
 (** [make_load addr ty_res] loads a value of type [ty_res] from

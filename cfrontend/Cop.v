@@ -449,50 +449,39 @@ Definition sem_notint (v: val) (ty: type): option val :=
 
 (** ** Binary operators *)
 
-(** For binary operations, the "usual binary conversions", adapted to a 32-bit
-  platform, state that:
-- If both arguments are of integer type, an integer operation is performed.
-  For operations that behave differently at unsigned and signed types
-  (e.g. division, modulus, comparisons), the unsigned operation is selected
-  if at least one of the arguments is of type "unsigned int32", otherwise
-  the signed operation is performed.
-- Likewise if both arguments are of long integer type.
-- If both arguments are of float type, a float operation is performed.
-  We choose to perform all float arithmetic in double precision,
-  even if both arguments are single-precision floats.
-- If one argument has integer/long type and the other has float type,
-  we convert the integer argument to float, then perform the float operation.
-- If one argument has long integer type and the other integer type,
-  we convert the integer argument to long, then perform the long operation
+(** For binary operations, the "usual binary conversions" consist in
+- determining the type at which the operation is to be performed
+  (a form of least upper bound of the types of the two arguments);
+- casting the two arguments to this common type;
+- performing the operation at that type.
 *)
 
 Inductive binarith_cases: Type :=
-  | bin_case_ii(s: signedness)         (**r int, int *)
-  | bin_case_ff                        (**r float, float *)
-  | bin_case_if(s: signedness)         (**r int, float *)
-  | bin_case_fi(s: signedness)         (**r float, int *)
-  | bin_case_ll(s: signedness)         (**r long, long *)
-  | bin_case_il(s1 s2: signedness)     (**r int, long *)
-  | bin_case_li(s1 s2: signedness)     (**r long, int *)
-  | bin_case_lf(s: signedness)         (**r long, float *)
-  | bin_case_fl(s: signedness)         (**r float, long *)
-  | bin_default.
+  | bin_case_i (s: signedness)         (**r at int type *)
+  | bin_case_l (s: signedness)         (**r at long int type *)
+  | bin_case_f                         (**r at float type *)
+  | bin_default.                       (**r error *)
 
 Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
-  match typeconv ty1, typeconv ty2 with
-  | Tint I32 Unsigned _, Tint _ _ _ => bin_case_ii Unsigned
-  | Tint _ _ _, Tint I32 Unsigned _ => bin_case_ii Unsigned
-  | Tint _ _ _, Tint _ _ _ => bin_case_ii Signed
-  | Tfloat _ _, Tfloat _ _ => bin_case_ff
-  | Tint _ sg _, Tfloat _ _ => bin_case_if sg
-  | Tfloat _ _, Tint _ sg _ => bin_case_fi sg
-  | Tlong Signed _, Tlong Signed _ => bin_case_ll Signed
-  | Tlong _ _, Tlong _ _ => bin_case_ll Unsigned
-  | Tint _ s1 _, Tlong s2 _ => bin_case_il s1 s2
-  | Tlong s1 _, Tint _ s2 _ => bin_case_li s1 s2
-  | Tlong sg _, Tfloat _ _ => bin_case_lf sg
-  | Tfloat _ _, Tlong sg _ => bin_case_fl sg
+  match ty1, ty2 with
+  | Tint I32 Unsigned _, Tint _ _ _ => bin_case_i Unsigned
+  | Tint _ _ _, Tint I32 Unsigned _ => bin_case_i Unsigned
+  | Tint _ _ _, Tint _ _ _ => bin_case_i Signed
+  | Tlong Signed _, Tlong Signed _ => bin_case_l Signed
+  | Tlong _ _, Tlong _ _ => bin_case_l Unsigned
+  | Tlong sg _, Tint _ _ _ => bin_case_l sg
+  | Tint _ _ _, Tlong sg _ => bin_case_l sg
+  | Tfloat _ _, (Tint _ _ _ | Tlong _ _ | Tfloat _ _) => bin_case_f
+  | (Tint _ _ _ | Tlong _ _), Tfloat _ _ => bin_case_f
   | _, _ => bin_default
+  end.
+
+Definition binarith_type (c: binarith_cases) : type :=
+  match c with
+  | bin_case_i sg => Tint I32 sg noattr
+  | bin_case_l sg => Tlong sg noattr
+  | bin_case_f    => Tfloat F64 noattr
+  | bin_default   => Tvoid
   end.
 
 Definition sem_binarith
@@ -500,54 +489,32 @@ Definition sem_binarith
     (sem_long: signedness -> int64 -> int64 -> option val)
     (sem_float: float -> float -> option val)
     (v1: val) (t1: type) (v2: val) (t2: type) : option val :=
+  let c := classify_binarith t1 t2 in
+  let t := binarith_type c in
+  match sem_cast v1 t1 t with
+  | None => None
+  | Some v1' =>
+  match sem_cast v2 t2 t with
+  | None => None
+  | Some v2' =>
   match classify_binarith t1 t2 with
-  | bin_case_ii sg =>
-      match v1, v2 with
+  | bin_case_i sg =>
+      match v1', v2' with
       | Vint n1, Vint n2 => sem_int sg n1 n2
       | _,  _ => None
       end
-  | bin_case_ff =>
-      match v1, v2 with
+  | bin_case_f =>
+      match v1', v2' with
       | Vfloat n1, Vfloat n2 => sem_float n1 n2
       | _,  _ => None
       end
-  | bin_case_if sg =>
-      match v1, v2 with
-      | Vint n1, Vfloat n2 => sem_float (cast_int_float sg n1) n2
-      | _, _ => None
-      end
-  | bin_case_fi sg =>
-      match v1, v2 with
-      | Vfloat n1, Vint n2 => sem_float n1 (cast_int_float sg n2)
-      | _, _ => None
-      end
-  | bin_case_ll sg =>
-      match v1, v2 with
+  | bin_case_l sg =>
+      match v1', v2' with
       | Vlong n1, Vlong n2 => sem_long sg n1 n2
       | _,  _ => None
       end
-  | bin_case_il sg1 sg2 =>
-      match v1, v2 with
-      | Vint n1, Vlong n2 => sem_long sg2 (cast_int_long sg1 n1) n2
-      | _,  _ => None
-      end
-  | bin_case_li sg1 sg2 =>
-      match v1, v2 with
-      | Vlong n1, Vint n2 => sem_long sg1 n1 (cast_int_long sg2 n2)
-      | _,  _ => None
-      end
-  | bin_case_lf sg =>
-      match v1, v2 with
-      | Vlong n1, Vfloat n2 => sem_float (cast_long_float sg n1) n2
-      | _, _ => None
-      end
-  | bin_case_fl sg =>
-      match v1, v2 with
-      | Vfloat n1, Vlong n2 => sem_float n1 (cast_long_float sg n2)
-      | _, _ => None
-      end
   | bin_default => None
-  end.
+  end end end.
 
 (** *** Addition *)
 
@@ -957,6 +924,22 @@ Ltac TrivialInject :=
   | _ => idtac
   end.
 
+Lemma sem_cast_inject:
+  forall v1 ty1 ty v tv1,
+  sem_cast v1 ty1 ty = Some v ->
+  val_inject f v1 tv1 ->
+  exists tv, sem_cast tv1 ty1 ty = Some tv /\ val_inject f v tv.
+Proof.
+  unfold sem_cast; intros; destruct (classify_cast ty1 ty);
+  inv H0; inv H; TrivialInject.
+- econstructor; eauto. 
+- destruct (cast_float_int si2 f0); inv H1; TrivialInject.
+- destruct (cast_float_long si2 f0); inv H1; TrivialInject.
+- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
+- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
+- econstructor; eauto.
+Qed.
+
 Lemma sem_unary_operation_inject:
   forall op v1 ty v tv1,
   sem_unary_operation op v1 ty = Some v ->
@@ -992,8 +975,15 @@ Proof.
   {
     intros. subst ov; simpl in H6. destruct v0; contradiction || constructor.
   }
-  exists v.
-  unfold sem_binarith in *; destruct (classify_binarith t1 t2); inv H0; inv H1; discriminate || eauto.
+  unfold sem_binarith in *.
+  set (c := classify_binarith t1 t2) in *.
+  set (t := binarith_type c) in *.
+  destruct (sem_cast v1 t1 t) as [w1|] eqn:C1; try discriminate.
+  destruct (sem_cast v2 t2 t) as [w2|] eqn:C2; try discriminate.
+  exploit (sem_cast_inject v1); eauto. intros (w1' & C1' & INJ1).
+  exploit (sem_cast_inject v2); eauto. intros (w2' & C2' & INJ2).
+  rewrite C1'; rewrite C2'.
+  destruct c; inv INJ1; inv INJ2; discriminate || eauto.
 Qed.
 
 Remark sem_shift_inject:
@@ -1117,22 +1107,6 @@ Proof.
 - eapply sem_cmp_inj; eauto.
 - eapply sem_cmp_inj; eauto.
 - eapply sem_cmp_inj; eauto.
-Qed.
-
-Lemma sem_cast_inject:
-  forall v1 ty1 ty v tv1,
-  sem_cast v1 ty1 ty = Some v ->
-  val_inject f v1 tv1 ->
-  exists tv, sem_cast tv1 ty1 ty = Some tv /\ val_inject f v tv.
-Proof.
-  unfold sem_cast; intros; destruct (classify_cast ty1 ty);
-  inv H0; inv H; TrivialInject.
-- econstructor; eauto. 
-- destruct (cast_float_int si2 f0); inv H1; TrivialInject.
-- destruct (cast_float_long si2 f0); inv H1; TrivialInject.
-- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
-- destruct (ident_eq id1 id2 && fieldlist_eq fld1 fld2); inv H2; TrivialInject. econstructor; eauto.
-- econstructor; eauto.
 Qed.
 
 Lemma bool_val_inject:

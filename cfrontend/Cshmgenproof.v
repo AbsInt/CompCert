@@ -377,21 +377,19 @@ Lemma make_binarith_correct:
     (sem_binarith sem_int sem_long sem_float).
 Proof.
   red; unfold make_binarith, sem_binarith;
-  intros until m; intros SEM MAKE EV1 EV2;
-  destruct (classify_binarith tya tyb); inv MAKE;
-  destruct va; try discriminate; destruct vb; try discriminate.
+  intros until m; intros SEM MAKE EV1 EV2.
+  set (cls := classify_binarith tya tyb) in *.
+  set (ty := binarith_type cls) in *.
+  monadInv MAKE.
+  destruct (sem_cast va tya ty) as [va'|] eqn:Ca; try discriminate.
+  destruct (sem_cast vb tyb ty) as [vb'|] eqn:Cb; try discriminate.
+  exploit make_cast_correct. eexact EQ. eauto. eauto. intros EV1'.
+  exploit make_cast_correct. eexact EQ1. eauto. eauto. intros EV2'.
+  destruct cls; inv EQ2; destruct va'; try discriminate; destruct vb'; try discriminate.
 - destruct s; inv H0; econstructor; eauto with cshm. 
   rewrite iop_ok; auto. rewrite iopu_ok; auto.
-- erewrite <- fop_ok in SEM; eauto with cshm.
-- erewrite <- fop_ok in SEM; eauto with cshm.
-- erewrite <- fop_ok in SEM; eauto with cshm.
 - destruct s; inv H0; econstructor; eauto with cshm. 
   rewrite lop_ok; auto. rewrite lopu_ok; auto.
-- destruct s2; inv H0; econstructor; eauto with cshm. 
-  rewrite lop_ok; auto. rewrite lopu_ok; auto.
-- destruct s1; inv H0; econstructor; eauto with cshm. 
-  rewrite lop_ok; auto. rewrite lopu_ok; auto.
-- erewrite <- fop_ok in SEM; eauto with cshm.
 - erewrite <- fop_ok in SEM; eauto with cshm.
 Qed.
 
@@ -401,16 +399,18 @@ Lemma make_binarith_int_correct:
     (sem_binarith sem_int sem_long (fun x y => None)).
 Proof.
   red; unfold make_binarith_int, sem_binarith;
-  intros until m; intros SEM MAKE EV1 EV2;
-  destruct (classify_binarith tya tyb); inv MAKE;
-  destruct va; try discriminate; destruct vb; try discriminate.
+  intros until m; intros SEM MAKE EV1 EV2.
+  set (cls := classify_binarith tya tyb) in *.
+  set (ty := binarith_type cls) in *.
+  monadInv MAKE.
+  destruct (sem_cast va tya ty) as [va'|] eqn:Ca; try discriminate.
+  destruct (sem_cast vb tyb ty) as [vb'|] eqn:Cb; try discriminate.
+  exploit make_cast_correct. eexact EQ. eauto. eauto. intros EV1'.
+  exploit make_cast_correct. eexact EQ1. eauto. eauto. intros EV2'.
+  destruct cls; inv EQ2; destruct va'; try discriminate; destruct vb'; try discriminate.
 - destruct s; inv H0; econstructor; eauto with cshm. 
   rewrite iop_ok; auto. rewrite iopu_ok; auto.
 - destruct s; inv H0; econstructor; eauto with cshm. 
-  rewrite lop_ok; auto. rewrite lopu_ok; auto.
-- destruct s2; inv H0; econstructor; eauto with cshm. 
-  rewrite lop_ok; auto. rewrite lopu_ok; auto.
-- destruct s1; inv H0; econstructor; eauto with cshm. 
   rewrite lop_ok; auto. rewrite lopu_ok; auto.
 Qed.
 
