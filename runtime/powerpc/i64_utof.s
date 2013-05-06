@@ -43,7 +43,7 @@
 __i64_utof:
 	mflr r9
    # Check whether X < 2^53	
-        srlwi. r0, r3, 21       # test if X >> 53 == 0
+        andis. r0, r3, 0xFFE0       # test bits 53...63 of X
         beq 1f
    # X is large enough that double rounding can occur.
    # Avoid it by nudging X away from the points where double rounding
