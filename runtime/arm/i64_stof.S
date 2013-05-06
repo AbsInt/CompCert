@@ -40,34 +40,34 @@
 	
 	.global __i64_stof
 __i64_stof:
-    # Check whether -2^53 <= X < 2^53
+    @ Check whether -2^53 <= X < 2^53
         mov r2, r1, asr #21
         mov r3, r1, asr #31     @ (r2,r3) = X >> 53
         adds r2, r2, #1
         adc r3, r3, #0          @ (r2,r3) = X >> 53 + 1
         cmp r3, #2
-        blo 1b
-   # X is large enough that double rounding can occur.
-   # Avoid it by nudging X away from the points where double rounding
-   # occurs (the "round to odd" technique)
+        blo 1f
+   @ X is large enough that double rounding can occur.
+   @ Avoid it by nudging X away from the points where double rounding
+   @ occurs (the "round to odd" technique)
 	mov r2, #0x700
-        orr r2, r2, #0xFF       # r2 = 0x7FF
-        and r3, r0, r2          # extract bits 0 to 11 of X
-        add r3, r3, r2          # r3 = (X & 0x7FF) + 0x7FF
-   # bit 12 of r3 is 0 if all low 12 bits of X are 0, 1 otherwise
-   # bits 13-31 of r3 are 0
-        orr r0, r0, r3          # correct bit number 12 of X
-	bic r0, r0, r2          # set to 0 bits 0 to 11 of X
-   # Convert to double
+        orr r2, r2, #0xFF       @ r2 = 0x7FF
+        and r3, r0, r2          @ extract bits 0 to 11 of X
+        add r3, r3, r2          @ r3 = (X & 0x7FF) + 0x7FF
+   @ bit 12 of r3 is 0 if all low 12 bits of X are 0, 1 otherwise
+   @ bits 13-31 of r3 are 0
+        orr r0, r0, r3          @ correct bit number 12 of X
+	bic r0, r0, r2          @ set to 0 bits 0 to 11 of X
+   @ Convert to double
 1:      fmsr s0, r0
         fuitod d0, s0           @ convert low half to double (unsigned)
         fmsr s2, r1
         fsitod d1, s2           @ convert high half to double (signed)
         fldd d2, .LC1           @ d2 = 2^32
         fmacd d0, d1, d2        @ d0 = d0 + d1 * d2 = double value of int64
-   # Round to single
+   @ Round to single
         fcvtsd s0, d0
-   # Return result in r0
+   @ Return result in r0
 	fmrs r0, s0
         bx lr
 	.type __i64_stof, %function
