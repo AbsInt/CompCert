@@ -314,8 +314,11 @@ let dce_instr instr after k =
       then instr :: k
       else k
   | Xparmove(srcs, dsts, itmp, ftmp) ->
-      let (srcs', dsts') = dce_parmove srcs dsts after in
-      Xparmove(srcs', dsts', itmp, ftmp) :: k
+      begin match dce_parmove srcs dsts after with
+      | ([], []) -> k
+      | ([src], [dst]) -> Xmove(src, dst) :: k
+      | (srcs', dsts') -> Xparmove(srcs', dsts', itmp, ftmp) :: k
+      end
   | Xop(op, args, res) ->
       if VSet.mem res after
       then instr :: k
@@ -537,6 +540,9 @@ let find_coloring f liveness =
   PTree.fold
     (fun () pc blk -> ignore (add_interfs_block g blk (PMap.get pc liveness)))
     f.fn_code ();
+  add_interfs_destroyed g
+    (transfer_live f f.fn_entrypoint (PMap.get f.fn_entrypoint liveness))
+    destroyed_at_function_entry;
   IRC.coloring g
 
 
