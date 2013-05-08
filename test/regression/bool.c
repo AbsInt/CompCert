@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 int x = 42;
+_Bool y = 777;
 
 int main()
 {
@@ -25,5 +26,6 @@ int main()
   printf("g = %d\n", g);
   printf("h = %d\n", h);
   printf("i = %d\n", i);
+  printf("y = %d\n", y);
   return 0;
 }

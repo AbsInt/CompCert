@@ -11,7 +11,7 @@ LIBS=$(LIBMATH)
 TESTS=int32 int64 floats floats-basics \
   expr1 expr6 funptr2 initializers volatile1 volatile2 volatile3 \
   funct3 expr5 struct7 struct8 struct11 casts1 casts2 char1 \
-  sizeof1 sizeof2 binops
+  sizeof1 sizeof2 binops bool
 
 # Can run, but only in compiled mode, and have reference output in Results
 

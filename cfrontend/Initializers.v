@@ -147,7 +147,7 @@ Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   do v1 <- constval a;
   do v2 <- do_cast v1 (typeof a) ty;
   match v2, ty with
-  | Vint n, Tint I8 sg _ => OK(Init_int8 n)
+  | Vint n, Tint (I8|IBool) sg _ => OK(Init_int8 n)
   | Vint n, Tint I16 sg _ => OK(Init_int16 n)
   | Vint n, Tint I32 sg _ => OK(Init_int32 n)
   | Vint n, Tpointer _ _ => OK(Init_int32 n)

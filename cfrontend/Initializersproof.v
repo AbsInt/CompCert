@@ -504,6 +504,7 @@ Proof.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_8; auto. auto.
   destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_16; auto. auto.
   simpl in H2; inv H2. assumption.
+  simpl in H2; inv H2. assumption. 
   inv EQ2. simpl in H2; inv H2. assumption.
   (* long *)
   destruct ty; inv EQ2. simpl in H2; inv H2. assumption.
