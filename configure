@@ -120,7 +120,12 @@ case "$target" in
     cc="${toolprefix}gcc -arch i386"
     cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
     casm="${toolprefix}gcc -arch i386 -c"
-    clinker="${toolprefix}gcc -arch i386"
+    case `uname -r` in
+      [1-9].*|10.*|11.*)    # up to MacOS 10.7 included
+        clinker="${toolprefix}gcc -arch i386";;
+      *)                    # MacOS 10.8 and up
+        clinker="${toolprefix}gcc -arch i386 -Wl,-no-pie";;
+    esac
     libmath="";;
   ia32-cygwin)
     arch="ia32"
