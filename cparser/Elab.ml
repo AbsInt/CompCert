@@ -254,9 +254,12 @@ exception Wrong_attr_arg
 let elab_attr_arg loc env a =
   match a with
   | VARIABLE s ->
-      begin match wrap Env.lookup_ident loc env s with
-      | (id, II_ident(sto, ty)) ->  AIdent s
-      | (id, II_enum v) -> AInt v
+      begin try
+        match Env.lookup_ident env s with
+        | (id, II_ident(sto, ty)) ->  AIdent s
+        | (id, II_enum v) -> AInt v
+      with Env.Error _ ->
+        AIdent s
       end
   | _ ->
       let b = !elab_expr_f loc env a in
