@@ -588,7 +588,7 @@ and convertLvalue env e =
       let e1' = convertExpr env e1 in
       let ty1 =
         match typeof e1' with
-        | Tpointer(t, _) -> t
+        | Tpointer(t, _) | Tarray(t, _, _) -> t
         | _ -> error ("wrong type for ->" ^ id ^ " access"); Tvoid in
       Efield(Evalof(Ederef(e1', ty1), ty1), intern_string id, ty)
   | C.EBinop(C.Oindex, e1, e2, _) ->
