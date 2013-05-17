@@ -95,10 +95,13 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
   end.
 
 (** A function is transformed only if its stack block is empty,
-  as explained above. *)
+  as explained above.  Moreover, we can turn tail calls off
+  using a compilation option. *)
+
+Parameter eliminate_tailcalls: unit -> bool.
 
 Definition transf_function (f: function) : function :=
-  if zeq f.(fn_stacksize) 0
+  if zeq f.(fn_stacksize) 0 && eliminate_tailcalls tt
   then RTL.transf_function (transf_instr f) f
   else f.
 

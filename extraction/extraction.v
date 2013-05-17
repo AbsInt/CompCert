@@ -19,6 +19,7 @@ Require RTLgen.
 Require Inlining.
 Require ConstpropOp.
 Require Constprop.
+Require Tailcall.
 Require Allocation.
 Require Compiler.
 
@@ -72,6 +73,10 @@ Extract Constant ConstpropOp.propagate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 1".
 Extract Constant Constprop.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
+
+(* Tailcall *)
+Extract Constant Tailcall.eliminate_tailcalls =>
+  "fun _ -> !Clflags.option_ftailcalls".
 
 (* Allocation *)
 Extract Constant Allocation.regalloc => "Regalloc.regalloc".

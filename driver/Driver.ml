@@ -392,6 +392,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -ffloat-const-prop <n>  Control constant propagation of floats
                    (<n>=0: none, <n>=1: limited, <n>=2: full; default is full)
+  -ftailcalls    Optimize function calls in tail position [on]
   -falign-functions <n>  Set alignment (in bytes) of function entry points
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
@@ -500,6 +501,7 @@ let cmdline_actions =
   "-fnone$", Self (fun _ ->
               List.iter (fun r -> r := false) language_support_options);
   ]
+  @ f_opt "tailcalls" option_ftailcalls
   @ f_opt "longdouble" option_flongdouble
   @ f_opt "struct-return" option_fstruct_return
   @ f_opt "bitfields" option_fbitfields

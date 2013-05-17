@@ -716,8 +716,7 @@ let print_instruction oc = function
       fprintf oc "	movl	%%edx, %ld(%%esp)\n" ofs_link
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
       let sz = sp_adjustment sz in
-      fprintf oc "	addl	$%ld, %%esp\n" sz;
-      cfi_adjust oc (Int32.neg sz)
+      fprintf oc "	addl	$%ld, %%esp\n" sz
   | Pbuiltin(ef, args, res) ->
       begin match ef with
       | EF_builtin(name, sg) ->

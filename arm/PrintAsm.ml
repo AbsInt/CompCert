@@ -648,9 +648,7 @@ let print_instruction oc = function
   | Pfreeframe(sz, ofs) ->
       if Asmgen.is_immed_arith sz
       then fprintf oc "	add	sp, sp, #%a\n" coqint sz
-      else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs;
-      cfi_adjust oc (Int32.neg (camlint_of_coqint sz));
-      1
+      else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1
   | Plabel lbl ->
       fprintf oc "%a:\n" print_label lbl; 0
   | Ploadsymbol(r1, id, ofs) ->

@@ -715,8 +715,7 @@ let print_instruction oc tbl pc fallthrough = function
       if sz < 0x8000l then
         fprintf oc "	addi	%a, %a, %ld\n" ireg GPR1 ireg GPR1 sz
       else
-        fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1 ofs ireg GPR1;
-      cfi_adjust oc (Int32.neg sz)
+        fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1 ofs ireg GPR1
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
   | Pfadd(r1, r2, r3) ->
