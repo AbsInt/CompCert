@@ -230,25 +230,25 @@ let print_location oc loc =
 
 let cfi_startproc oc =
   if Configuration.asm_supports_cfi then
-    match config with
+    match target with
     | Linux -> fprintf oc "	.cfi_startproc\n"
     | Diab  -> assert false
 
 let cfi_endproc oc =
   if Configuration.asm_supports_cfi then
-    match config with
+    match target with
     | Linux -> fprintf oc "	.cfi_endproc\n"
     | Diab  -> assert false
 
 let cfi_adjust oc delta =
   if Configuration.asm_supports_cfi then
-    match config with
+    match target with
     | Linux -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
     | Diab  -> assert false
 
 let cfi_rel_offset oc reg ofs =
   if Configuration.asm_supports_cfi then
-    match config with
+    match target with
     | Linux -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
     | Diab  -> assert false
 
@@ -283,9 +283,15 @@ let rolm_mask n =
 
 (* Handling of annotations *)
 
+let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
+
 let print_annot_stmt oc txt targs args =
-  fprintf oc "%s annotation: " comment;
-  PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
+  if Str.string_match re_file_line txt 0 then begin
+    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+  end else begin
+    fprintf oc "%s annotation: " comment;
+    PrintAnnot.print_annot_stmt preg "R1" oc txt targs args
+  end
 
 let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
@@ -526,7 +532,7 @@ let print_builtin_inline oc name args res =
       fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
       cfi_adjust oc 8l;
       fprintf oc "	lwz	%a, 4(%a)\n" ireg res ireg GPR1;
-      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1;
       cfi_adjust oc (-8l)
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->

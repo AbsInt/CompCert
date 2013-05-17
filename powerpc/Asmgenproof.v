@@ -903,7 +903,7 @@ Local Transparent destroyed_by_jumptable.
   intros [m1' [C D]].
   exploit Mem.storev_extends. eexact D. eexact H1. eauto. eauto. 
   intros [m2' [F G]].
-  simpl Mach.chunk_of_type in F. 
+  simpl chunk_of_type in F. 
   exploit Mem.storev_extends. eexact G. eexact H2. eauto. eauto. 
   intros [m3' [P Q]].
   (* Execution of function prologue *)
