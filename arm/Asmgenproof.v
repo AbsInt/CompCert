@@ -693,7 +693,7 @@ Opaque loadind.
     exploit loadind_int_correct. eexact C. intros [rs1 [P [Q R]]]. 
     econstructor; split.
     eapply exec_straight_trans. eexact P. apply exec_straight_one. 
-    simpl. rewrite R; auto with asmgen. unfold Mach.chunk_of_type in A. rewrite A. 
+    simpl. rewrite R; auto with asmgen. unfold chunk_of_type in A. rewrite A. 
     rewrite <- (sp_val _ _ _ AG). rewrite E. eauto. auto. 
     split. Simpl.
     split. Simpl.
@@ -896,7 +896,7 @@ Opaque loadind.
   rewrite <- H5 at 2; unfold fn_code.
   apply exec_straight_two with rs2 m2'.
   unfold exec_instr. rewrite C. fold sp.
-  rewrite <- (sp_val _ _ _ AG). unfold Mach.chunk_of_type in F. rewrite F. auto. 
+  rewrite <- (sp_val _ _ _ AG). unfold chunk_of_type in F. rewrite F. auto. 
   simpl. auto.
   simpl. unfold exec_store. change (rs2 IR14) with (rs0 IR14). 
   rewrite Int.add_zero_l. simpl. unfold chunk_of_type in P. simpl in P.

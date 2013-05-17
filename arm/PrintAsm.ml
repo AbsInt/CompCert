@@ -206,27 +206,19 @@ let print_location oc loc =
 
 let cfi_startproc oc =
   if Configuration.asm_supports_cfi then
-    match config with
-    | Linux -> fprintf oc "	.cfi_startproc\n"
-    | Diab  -> assert false
+    fprintf oc "	.cfi_startproc\n"
 
 let cfi_endproc oc =
   if Configuration.asm_supports_cfi then
-    match config with
-    | Linux -> fprintf oc "	.cfi_endproc\n"
-    | Diab  -> assert false
+    fprintf oc "	.cfi_endproc\n"
 
 let cfi_adjust oc delta =
   if Configuration.asm_supports_cfi then
-    match config with
-    | Linux -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
-    | Diab  -> assert false
+    fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
 
 let cfi_rel_offset oc reg ofs =
   if Configuration.asm_supports_cfi then
-    match config with
-    | Linux -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
-    | Diab  -> assert false
+    fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
 
 (* Built-ins.  They come in two flavors: 
    - annotation statements: take their arguments in registers or stack
@@ -237,9 +229,15 @@ let cfi_rel_offset oc reg ofs =
 
 (* Handling of annotations *)
 
+let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
+
 let print_annot_stmt oc txt targs args =
-  fprintf oc "%s annotation: " comment;
-  PrintAnnot.print_annot_stmt preg "sp" oc txt targs args
+  if Str.string_match re_file_line txt 0 then begin
+    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+  end else begin
+    fprintf oc "%s annotation: " comment;
+    PrintAnnot.print_annot_stmt preg "sp" oc txt targs args
+  end
 
 let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
