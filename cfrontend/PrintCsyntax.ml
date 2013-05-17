@@ -242,11 +242,11 @@ let rec expr p (prec, e) =
                 (camlint_of_coqint sz) (camlint_of_coqint al)
                 exprlist (true, args)
   | Ebuiltin(EF_annot(txt, _), _, args, _) ->
-      fprintf p "__builtin_annot@[<hov 1>(%S,@ %a)@]"
-                (extern_atom txt) exprlist (true, args)
+      fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
+                (extern_atom txt) exprlist (false, args)
   | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
-      fprintf p "__builtin_annot_val@[<hov 1>(%S,@ %a)@]"
-                (extern_atom txt) exprlist (true, args)
+      fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
+                (extern_atom txt) exprlist (false, args)
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
   | Eparen(a1, ty) ->

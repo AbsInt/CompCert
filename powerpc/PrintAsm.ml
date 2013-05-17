@@ -200,6 +200,58 @@ let section oc sec =
   assert (name <> "COMM");
   fprintf oc "	%s\n" name
 
+(* Emit .file / .loc debugging directives *)
+
+let file_dir =
+  match target with Linux -> ".file" | Diab -> ".d2file"
+let loc_dir =
+  match target with Linux -> ".loc"  | Diab -> ".d2line"
+
+let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
+
+let print_file_line oc file line =
+  if !Clflags.option_g && file <> "" then begin
+    let filenum = 
+      try
+        Hashtbl.find filename_num file
+      with Not_found ->
+        let n = Hashtbl.length filename_num + 1 in
+        Hashtbl.add filename_num file n;
+        fprintf oc "	%s	%d %S\n" file_dir n file;
+        n
+    in fprintf oc "	%s	%d %s\n" loc_dir filenum line
+  end
+
+let print_location oc loc =
+  if loc <> Cutil.no_loc then
+    print_file_line oc (fst loc) (string_of_int (snd loc))
+
+(* Emit .cfi directives *)
+
+let cfi_startproc oc =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_startproc\n"
+    | Diab  -> assert false
+
+let cfi_endproc oc =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_endproc\n"
+    | Diab  -> assert false
+
+let cfi_adjust oc delta =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
+    | Diab  -> assert false
+
+let cfi_rel_offset oc reg ofs =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
+    | Diab  -> assert false
+
 (* Encoding masks for rlwinm instructions *)
 
 let rolm_mask n =
@@ -442,8 +494,10 @@ let print_builtin_inline oc name args res =
       fprintf oc "	cntlzw	%a, %a\n" ireg res ireg a1
   | ("__builtin_bswap" | "__builtin_bswap32"), [IR a1], [IR res] ->
       fprintf oc "	stwu	%a, -8(%a)\n" ireg a1 ireg GPR1;
+      cfi_adjust oc 8l;
       fprintf oc "	lwbrx	%a, %a, %a\n" ireg res ireg_or_zero GPR0 ireg GPR1;
-      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
+      fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1;
+      cfi_adjust oc (-8l)
   | "__builtin_bswap16", [IR a1], [IR res] ->
       fprintf oc "	rlwinm	%a, %a, 8, 16, 23\n" ireg GPR0 ireg a1;
       fprintf oc "	rlwinm	%a, %a, 24, 24, 31\n" ireg res ireg a1;
@@ -470,8 +524,10 @@ let print_builtin_inline oc name args res =
   | "__builtin_fcti", [FR a1], [IR res] ->
       fprintf oc "	fctiw	%a, %a\n" freg FPR13 freg a1;
       fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
+      cfi_adjust oc 8l;
       fprintf oc "	lwz	%a, 4(%a)\n" ireg res ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1
+      cfi_adjust oc (-8l)
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [IR ah; IR al], [IR rh; IR rl] ->
       if rl = ah then begin
@@ -570,7 +626,8 @@ let print_instruction oc tbl pc fallthrough = function
         fprintf oc "	addis	%a, 0, %ld\n" ireg GPR0 (Int32.shift_right_logical adj 16);
         fprintf oc "	ori	%a, %a, %ld\n" ireg GPR0 ireg GPR0 (Int32.logand adj 0xFFFFl);
         fprintf oc "	stwux	%a, %a, %a\n" ireg GPR1 ireg GPR1 ireg GPR0
-      end
+      end;
+      cfi_adjust oc sz
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandc(r1, r2, r3) ->
@@ -652,7 +709,8 @@ let print_instruction oc tbl pc fallthrough = function
       if sz < 0x8000l then
         fprintf oc "	addi	%a, %a, %ld\n" ireg GPR1 ireg GPR1 sz
       else
-        fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1 ofs ireg GPR1
+        fprintf oc "	lwz	%a, %ld(%a)\n" ireg GPR1 ofs ireg GPR1;
+      cfi_adjust oc (Int32.neg sz)
   | Pfabs(r1, r2) ->
       fprintf oc "	fabs	%a, %a\n" freg r1 freg r2
   | Pfadd(r1, r2, r3) ->
@@ -663,8 +721,10 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "%s begin pseudoinstr %a = fcti(%a)\n" comment ireg r1 freg r2;
       fprintf oc "	fctiwz	%a, %a\n" freg FPR13 freg r2;
       fprintf oc "	stfdu	%a, -8(%a)\n" freg FPR13 ireg GPR1;
+      cfi_adjust oc 8l;
       fprintf oc "	lwz	%a, 4(%a)\n" ireg r1 ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1;
+      cfi_adjust oc (-8l);
       fprintf oc "%s end pseudoinstr fcti\n" comment
   | Pfdiv(r1, r2, r3) ->
       fprintf oc "	fdiv	%a, %a, %a\n" freg r1 freg r2 freg r3
@@ -672,9 +732,11 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "%s begin pseudoinstr %a = fmake(%a, %a)\n"
               comment freg rd ireg r1 ireg r2;
       fprintf oc "	stwu	%a, -8(%a)\n" ireg r1 ireg GPR1;
+      cfi_adjust oc 8l;
       fprintf oc "	stw	%a, 4(%a)\n" ireg r2 ireg GPR1;
       fprintf oc "	lfd	%a, 0(%a)\n" freg rd ireg GPR1;
       fprintf oc "	addi	%a, %a, 8\n" ireg GPR1 ireg GPR1;
+      cfi_adjust oc (-8l);
       fprintf oc "%s end pseudoinstr fmake\n" comment
   | Pfmr(r1, r2) ->
       fprintf oc "	fmr	%a, %a\n" freg r1 freg r2
@@ -719,7 +781,8 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	mfcr	%a\n" ireg r1;
       fprintf oc "	rlwinm	%a, %a, %d, 31, 31\n" ireg r1  ireg r1 (1 + num_crbit bit)
   | Pmflr(r1) ->
-      fprintf oc "	mflr	%a\n" ireg r1
+      fprintf oc "	mflr	%a\n" ireg r1;
+      cfi_rel_offset oc "lr" 8l
   | Pmr(r1, r2) ->
       fprintf oc "	mr	%a, %a\n" ireg r1 ireg r2
   | Pmtctr(r1) ->
@@ -925,7 +988,10 @@ let print_function oc name code =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
+  print_location oc (C2C.atom_location name);
+  cfi_startproc oc;
   print_instructions oc (label_positions PTree.empty 0 code) 0 true code;
+  cfi_endproc oc;
   fprintf oc "	.type	%a, @function\n" symbol name;
   fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;
   if !float_literals <> [] then begin

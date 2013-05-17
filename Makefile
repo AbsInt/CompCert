@@ -208,6 +208,7 @@ driver/Configuration.ml: Makefile.config VERSION
          echo let variant = "\"$(VARIANT)\""; \
          echo let system = "\"$(SYSTEM)\""; \
          echo let has_runtime_lib = $(HAS_RUNTIME_LIB); \
+         echo let asm_supports_cfi = $(ASM_SUPPORTS_CFI); \
          version=`cat VERSION`; \
          echo let version = "\"$$version\"") \
         > driver/Configuration.ml

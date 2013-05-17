@@ -221,6 +221,39 @@ let print_align oc n =
 
 let need_masks = ref false
 
+(* Emit .file / .loc debugging directives *)
+
+let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
+
+let print_file_line oc file line =
+  if !Clflags.option_g && file <> "" then begin
+    let filenum = 
+      try
+        Hashtbl.find filename_num file
+      with Not_found ->
+        let n = Hashtbl.length filename_num + 1 in
+        Hashtbl.add filename_num file n;
+        fprintf oc "	.file	%d %S\n" n file;
+        n
+    in fprintf oc "	.loc	%d %s\n" filenum line
+  end
+
+let print_location oc loc =
+  if loc <> Cutil.no_loc then
+    print_file_line oc (fst loc) (string_of_int (snd loc))
+
+(* Emit .cfi directives *)
+
+let cfi_startproc oc =
+  if Configuration.asm_supports_cfi then fprintf oc "	.cfi_startproc\n"
+
+let cfi_endproc oc =
+  if Configuration.asm_supports_cfi then fprintf oc "	.cfi_endproc\n"
+
+let cfi_adjust oc delta =
+  if Configuration.asm_supports_cfi then
+    fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
+
 (* Built-in functions *)
 
 (* Built-ins.  They come in two flavors: 
@@ -231,9 +264,15 @@ let need_masks = ref false
 
 (* Handling of annotations *)
 
+let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"
+
 let print_annot_stmt oc txt targs args =
-  fprintf oc "%s annotation: " comment;
-  PrintAnnot.print_annot_stmt preg "ESP" oc txt targs args
+  if Str.string_match re_file_line txt 0 then begin
+    print_file_line oc (Str.matched_group 1 txt) (Str.matched_group 2 txt)
+  end else begin
+    fprintf oc "%s annotation: " comment;
+    PrintAnnot.print_annot_stmt preg "ESP" oc txt targs args
+  end
 
 let print_annot_val oc txt args res =
   fprintf oc "%s annotation: " comment;
@@ -509,16 +548,20 @@ let print_instruction oc = function
       fprintf oc "	movsd	%a, %a\n" freg r1 addressing a
   | Pfld_f(r1) ->
       fprintf oc "	subl	$8, %%esp\n";
+      cfi_adjust oc 8l;
       fprintf oc "	movsd	%a, 0(%%esp)\n" freg r1;
       fprintf oc "	fldl	0(%%esp)\n";
-      fprintf oc "	addl	$8, %%esp\n"
+      fprintf oc "	addl	$8, %%esp\n";
+      cfi_adjust oc (-8l)
   | Pfld_m(a) ->
       fprintf oc "	fldl	%a\n" addressing a
   | Pfstp_f(rd) ->
       fprintf oc "	subl	$8, %%esp\n";
+      cfi_adjust oc 8l;
       fprintf oc "	fstpl	0(%%esp)\n";
       fprintf oc "	movsd	0(%%esp), %a\n" freg rd;
-      fprintf oc "	addl	$8, %%esp\n"
+      fprintf oc "	addl	$8, %%esp\n";
+      cfi_adjust oc (-8l)
   | Pfstp_m(a) ->
       fprintf oc "	fstpl	%a\n" addressing a
   | Pxchg_rr(r1, r2) ->
@@ -668,11 +711,13 @@ let print_instruction oc = function
       let sz = sp_adjustment sz in
       let ofs_link = camlint_of_coqint ofs_link in
       fprintf oc "	subl	$%ld, %%esp\n" sz;
+      cfi_adjust oc sz;
       fprintf oc "	leal	%ld(%%esp), %%edx\n" (Int32.add sz 4l);
       fprintf oc "	movl	%%edx, %ld(%%esp)\n" ofs_link
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
       let sz = sp_adjustment sz in
-      fprintf oc "	addl	$%ld, %%esp\n" sz
+      fprintf oc "	addl	$%ld, %%esp\n" sz;
+      cfi_adjust oc (Int32.neg sz)
   | Pbuiltin(ef, args, res) ->
       begin match ef with
       | EF_builtin(name, sg) ->
@@ -729,7 +774,10 @@ let print_function oc name code =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.globl %a\n" symbol name;
   fprintf oc "%a:\n" symbol name;
+  print_location oc (C2C.atom_location name);
+  cfi_startproc oc;
   List.iter (print_instruction oc) code;
+  cfi_endproc oc;
   if target = ELF then begin
     fprintf oc "	.type	%a, @function\n" symbol name;
     fprintf oc "	.size	%a, . - %a\n" symbol name symbol name

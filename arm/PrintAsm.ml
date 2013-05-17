@@ -181,6 +181,53 @@ let emit_constants oc =
     symbol_labels;
   reset_constants ()
 
+(* Emit .file / .loc debugging directives *)
+
+let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
+
+let print_file_line oc file line =
+  if !Clflags.option_g && file <> "" then begin
+    let filenum = 
+      try
+        Hashtbl.find filename_num file
+      with Not_found ->
+        let n = Hashtbl.length filename_num + 1 in
+        Hashtbl.add filename_num file n;
+        fprintf oc "	.file	%d %S\n" n file;
+        n
+    in fprintf oc "	.loc	%d %s\n" filenum line
+  end
+
+let print_location oc loc =
+  if loc <> Cutil.no_loc then
+    print_file_line oc (fst loc) (string_of_int (snd loc))
+
+(* Emit .cfi directives *)
+
+let cfi_startproc oc =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_startproc\n"
+    | Diab  -> assert false
+
+let cfi_endproc oc =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_endproc\n"
+    | Diab  -> assert false
+
+let cfi_adjust oc delta =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
+    | Diab  -> assert false
+
+let cfi_rel_offset oc reg ofs =
+  if Configuration.asm_supports_cfi then
+    match config with
+    | Linux -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
+    | Diab  -> assert false
+
 (* Built-ins.  They come in two flavors: 
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
@@ -519,7 +566,12 @@ let print_instruction oc = function
   | Prsb(r1, r2, so) ->
       fprintf oc "	rsb	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
   | Pstr(r1, r2, sa) ->
-      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
+      fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa;
+      begin match r1, r2, sa with
+      | IR14, IR13, SAimm n -> cfi_rel_offset oc "lr" (camlint_of_coqint n)
+      | _ -> ()
+      end;
+      1
   | Pstrb(r1, r2, sa) ->
       fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
   | Pstrh(r1, r2, sa) ->
@@ -592,12 +644,14 @@ let print_instruction oc = function
            fprintf oc "	sub	sp, sp, #%a\n" coqint n;
            incr ninstr)
         (Asmgen.decompose_int sz);
+      cfi_adjust oc (camlint_of_coqint sz);
       fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
       2 + !ninstr
   | Pfreeframe(sz, ofs) ->
       if Asmgen.is_immed_arith sz
       then fprintf oc "	add	sp, sp, #%a\n" coqint sz
       else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs;
+      cfi_adjust oc (Int32.neg (camlint_of_coqint sz));
       1
   | Plabel lbl ->
       fprintf oc "%a:\n" print_label lbl; 0
@@ -690,9 +744,12 @@ let print_function oc name fn =
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
+  print_location oc (C2C.atom_location name);
+  cfi_startproc oc;
   ignore (fixup_arguments oc Incoming fn.fn_sig);
   print_instructions oc fn.fn_code;
   emit_constants oc;
+  cfi_endproc oc;
   fprintf oc "	.type	%a, %%function\n" print_symb name;
   fprintf oc "	.size	%a, . - %a\n" print_symb name print_symb name
 

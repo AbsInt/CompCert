@@ -396,6 +396,12 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>) :
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
   -Wa,<opt>      Pass option <opt> to the assembler
+Debugging options:
+  -g             Generate debugging information
+Linking options:
+  -l<lib>        Link library <lib>
+  -L<dir>        Add <dir> to search path for libraries
+  -Wl,<opt>      Pass option <opt> to the linker
 Tracing options:
   -dparse        Save C file after parsing and elaboration in <file>.parse.c
   -dc            Save generated Compcert C in <file>.compcert.c
@@ -410,10 +416,6 @@ Tracing options:
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
   -sdump         Save info for post-linking validation in <file>.sdump
-Linking options:
-  -l<lib>        Link library <lib>
-  -L<dir>        Add <dir> to search path for libraries
-  -Wl,<opt>      Pass option <opt> to the linker
 General options:
   -stdlib <dir>  Set the path of the Compcert run-time library
   -v             Print external commands before invoking them
@@ -441,6 +443,12 @@ let cmdline_actions =
   "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
   "-[lL].", Self(fun s -> linker_options := s :: !linker_options);
   "-o$", String(fun s -> option_o := Some s);
+  "-E$", Set option_E;
+  "-S$", Set option_S;
+  "-c$", Set option_c;
+  "-v$", Set option_v;
+  "-g$", Self (fun s ->
+      option_g := true; linker_options := s :: !linker_options);
   "-stdlib$", String(fun s -> stdlib_path := s);
   "-dparse$", Set option_dparse;
   "-dc$", Set option_dcmedium;
@@ -456,10 +464,6 @@ let cmdline_actions =
   "-dmach$", Set option_dmach;
   "-dasm$", Set option_dasm;
   "-sdump$", Set option_sdump;
-  "-E$", Set option_E;
-  "-S$", Set option_S;
-  "-c$", Set option_c;
-  "-v$", Set option_v;
   "-interp$", Set option_interp;
   "-quiet$", Self (fun _ -> Interp.trace := 0);
   "-trace$", Self (fun _ -> Interp.trace := 2);

@@ -63,6 +63,8 @@ done
 
 cchecklink=false
 has_runtime_lib=true
+casmruntime=""
+asm_supports_cfi=""
 
 case "$target" in
   powerpc-linux|ppc-linux|powerpc-eabi|ppc-eabi)
@@ -83,6 +85,7 @@ case "$target" in
     cc="${toolprefix}dcc"
     cprepro="${toolprefix}dcc -E"
     casm="${toolprefix}das"
+    asm_supports_cfi=false
     clinker="${toolprefix}dcc"
     libmath="-lm"
     cchecklink=true;;
@@ -150,6 +153,27 @@ esac
 
 if test -z "$casmruntime"; then casmruntime="$casm"; fi
 
+# Test assembler support for CFI directives
+
+if test "$target" != "manual" && test -z "$asm_supports_cfi"; then
+  echo "Testing assembler support for CFI directives..."
+  f=/tmp/compcert-configure-$$.s
+  rm -f $f
+  cat >> $f <<EOF
+testfun:
+	.file 1 "testfun.c"
+	.loc 1 1
+	.cfi_startproc
+	.cfi_adjust_cfa_offset 16
+	.cfi_endproc
+EOF
+  if $casm -o /dev/null $f 2>/dev/null
+  then asm_supports_cfi=true
+  else asm_supports_cfi=false
+  fi
+  rm -f $f
+fi
+
 # Additional packages needed for cchecklink
 
 if $cchecklink; then
@@ -183,6 +207,7 @@ CLINKER=$clinker
 LIBMATH=$libmath
 HAS_RUNTIME_LIB=$has_runtime_lib
 CCHECKLINK=$cchecklink
+ASM_SUPPORTS_CFI=$asm_supports_cfi
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -233,7 +258,13 @@ LIBMATH=-lm
 
 # Do not change
 HAS_RUNTIME_LIB=true
+
+# Whether the assembler $(CASM) supports .cfi debug directives
+ASM_SUPPORTS_CFI=false
+#ASM_SUPPORTS_CFI=true
+
 EOF
+
 fi
 
 # Summarize configuration
@@ -259,6 +290,7 @@ CompCert configuration:
     C compiler.................... $cc
     C preprocessor................ $cprepro
     Assembler..................... $casm
+    Assembler supports CFI........ $asm_supports_cfi
     Assembler for runtime lib..... $casmruntime
     Linker........................ $clinker
     Math library.................. $libmath

@@ -37,7 +37,8 @@ type atom_info =
     a_sections: Sections.section_name list; (* in which section to put it *)
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
     a_small_data: bool;                (* data in a small data area? *)
-    a_inline: bool                     (* function declared inline? *)
+    a_inline: bool;                    (* function declared inline? *)
+    a_loc: location                    (* source location *)
 }
 
 let decl_atom : (AST.ident, atom_info) Hashtbl.t = Hashtbl.create 103
@@ -120,7 +121,8 @@ let name_for_string_literal env s =
         a_alignment = Some 1;
         a_sections = [Sections.for_stringlit()];
         a_small_data = false;
-        a_inline = false };
+        a_inline = false;
+        a_loc = Cutil.no_loc };
     Hashtbl.add stringTable s id;
     id
 
@@ -634,29 +636,44 @@ let rec groupSwitch = function
       let (fst, cases) = groupSwitch rem in
       (Cutil.sseq s.sloc s fst, cases)
 
-(* Statement *)
+(** Annotations for line numbers *)
 
-let rec convertStmt env s =
+let add_lineno prev_loc this_loc s =
+  if !Clflags.option_g && prev_loc <> this_loc && this_loc <> Cutil.no_loc
+  then begin
+    let txt = sprintf "#line:%s:%d" (fst this_loc) (snd this_loc) in
+     Ssequence(Sdo(Ebuiltin(EF_annot(intern_string txt, []),
+                            Tnil, Enil, Tvoid)),
+               s)
+  end else
+    s
+
+(** Statements *)
+
+let rec convertStmt ploc env s =
   updateLoc s.sloc;
   match s.sdesc with
   | C.Sskip ->
       Sskip
   | C.Sdo e ->
-      Sdo(convertExpr env e)
+      add_lineno ploc s.sloc (Sdo(convertExpr env e))
   | C.Sseq(s1, s2) ->
-      Ssequence(convertStmt env s1, convertStmt env s2)
+      Ssequence(convertStmt ploc env s1, convertStmt s1.sloc env s2)
   | C.Sif(e, s1, s2) ->
       let te = convertExpr env e in
-      Sifthenelse(te, convertStmt env s1, convertStmt env s2)
+      add_lineno ploc s.sloc 
+        (Sifthenelse(te, convertStmt s.sloc env s1, convertStmt s.sloc env s2))
   | C.Swhile(e, s1) ->
       let te = convertExpr env e in
-      Swhile(te, convertStmt env s1)
+      add_lineno ploc s.sloc (Swhile(te, convertStmt s.sloc env s1))
   | C.Sdowhile(s1, e) ->
       let te = convertExpr env e in
-      Sdowhile(te, convertStmt env s1)
+      add_lineno ploc s.sloc (Sdowhile(te, convertStmt s.sloc env s1))
   | C.Sfor(s1, e, s2, s3) ->
       let te = convertExpr env e in
-      Sfor(convertStmt env s1, te, convertStmt env s2, convertStmt env s3)
+      add_lineno ploc s.sloc
+        (Sfor(convertStmt s.sloc env s1, te,
+              convertStmt s.sloc env s2, convertStmt s.sloc env s3))
   | C.Sbreak ->
       Sbreak
   | C.Scontinue ->
@@ -668,19 +685,20 @@ let rec convertStmt env s =
       if init.sdesc <> C.Sskip then
         warning "ignored code at beginning of 'switch'";
       let te = convertExpr env e in
-      Sswitch(te, convertSwitch env cases)
+      add_lineno ploc s.sloc (Sswitch(te, convertSwitch s.sloc env cases))
   | C.Slabeled(C.Slabel lbl, s1) ->
-      Slabel(intern_string lbl, convertStmt env s1)
+      add_lineno ploc s.sloc
+        (Slabel(intern_string lbl, convertStmt s.sloc env s1))
   | C.Slabeled(C.Scase _, _) ->
       unsupported "'case' outside of 'switch'"; Sskip
   | C.Slabeled(C.Sdefault, _) ->
       unsupported "'default' outside of 'switch'"; Sskip
   | C.Sgoto lbl ->
-      Sgoto(intern_string lbl)
+      add_lineno ploc s.sloc (Sgoto(intern_string lbl))
   | C.Sreturn None ->
-      Sreturn None
+      add_lineno ploc s.sloc (Sreturn None)
   | C.Sreturn(Some e) ->
-      Sreturn(Some(convertExpr env e))
+      add_lineno ploc s.sloc (Sreturn(Some(convertExpr env e)))
   | C.Sblock _ ->
       unsupported "nested blocks"; Sskip
   | C.Sdecl _ ->
@@ -688,13 +706,14 @@ let rec convertStmt env s =
   | C.Sasm txt ->
       if not !Clflags.option_finline_asm then
         unsupported "inline 'asm' statement (consider adding option -finline-asm)";
-      Sdo (Ebuiltin (EF_inline_asm (intern_string txt), Tnil, Enil, Tvoid))
+      add_lineno ploc s.sloc
+        (Sdo (Ebuiltin (EF_inline_asm (intern_string txt), Tnil, Enil, Tvoid)))
 
-and convertSwitch env = function
+and convertSwitch ploc env = function
   | [] ->
       LSdefault Sskip
   | [Default, s] ->
-      LSdefault (convertStmt env s)
+      LSdefault (convertStmt ploc env s)
   | (Default, s) :: _ ->
       updateLoc s.sloc;
       unsupported "'default' case must occur last";
@@ -706,12 +725,12 @@ and convertSwitch env = function
         | None -> unsupported "'case' label is not a compile-time integer"; 0L
         | Some v -> v in
       LScase(convertInt v,
-             convertStmt env s,
-             convertSwitch env rem)
+             convertStmt ploc env s,
+             convertSwitch s.sloc env rem)
 
 (** Function definitions *)
 
-let convertFundef env fd =
+let convertFundef loc env fd =
   if Cutil.is_composite_type env fd.fd_ret then
     unsupported "function returning a struct or union";
   let ret =
@@ -730,14 +749,15 @@ let convertFundef env fd =
           unsupported "initialized local variable";
         (intern_string id.name, convertTyp env ty))
       fd.fd_locals in
-  let body' = convertStmt env fd.fd_body in
+  let body' = convertStmt loc env fd.fd_body in
   let id' = intern_string fd.fd_name.name in
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
       a_alignment = None;
       a_sections = Sections.for_function env id' fd.fd_ret;
       a_small_data = false;
-      a_inline = fd.fd_inline };
+      a_inline = fd.fd_inline;
+      a_loc = loc };
   (id', Gfun(Internal {fn_return = ret; fn_params = params;
                        fn_vars = vars; fn_body = body'}))
 
@@ -793,7 +813,7 @@ let convertInitializer env ty i =
 
 (** Global variable *)
 
-let convertGlobvar env (sto, id, ty, optinit) =
+let convertGlobvar loc env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
   let sz = Ctypes.sizeof ty' in
@@ -818,7 +838,8 @@ let convertGlobvar env (sto, id, ty, optinit) =
       a_alignment = align;
       a_sections = [section];
       a_small_data = near_access;
-      a_inline = false };
+      a_inline = false;
+      a_loc = loc };
   let volatile = List.mem C.AVolatile attr in
   let readonly = List.mem C.AConst attr && not volatile in
   (id', Gvar {gvar_info = ty'; gvar_init = init';
@@ -858,10 +879,10 @@ let rec convertGlobdecls env res gl =
           | TFun(_, _, true, _) ->
               convertGlobdecls env res gl'
           | _ ->
-              convertGlobdecls env (convertGlobvar env d :: res) gl'
+              convertGlobdecls env (convertGlobvar g.gloc env d :: res) gl'
           end
       | C.Gfundef fd ->
-          convertGlobdecls env (convertFundef env fd :: res) gl'
+          convertGlobdecls env (convertFundef g.gloc env fd :: res) gl'
       | C.Gcompositedecl _ | C.Gtypedef _ | C.Genumdef _ ->
           (* typedefs are unrolled, structs are expanded inline, and
              enum tags are folded.  So we just skip their declarations. *)
@@ -1008,3 +1029,9 @@ let atom_is_inline a =
     (Hashtbl.find decl_atom a).a_inline
   with Not_found ->
     false
+
+let atom_location a =
+  try
+    (Hashtbl.find decl_atom a).a_loc
+  with Not_found ->
+    Cutil.no_loc
