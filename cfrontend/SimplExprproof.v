@@ -192,8 +192,8 @@ Lemma tr_simple:
   match dst with
   | For_val => sl = nil /\ Csyntax.typeof r = typeof a /\ eval_expr tge e le m a v
   | For_effects => sl = nil
-  | For_set tyl t =>
-      exists b, sl = do_set t tyl b
+  | For_set sd =>
+      exists b, sl = do_set sd b
              /\ Csyntax.typeof r = typeof b
              /\ eval_expr tge e le m b v
   end)
@@ -277,8 +277,8 @@ Lemma tr_simple_rvalue:
   match dst with
   | For_val => sl = nil /\ Csyntax.typeof r = typeof a /\ eval_expr tge e le m a v
   | For_effects => sl = nil
-  | For_set tyl t =>
-      exists b, sl = do_set t tyl b
+  | For_set sd =>
+      exists b, sl = do_set sd b
              /\ Csyntax.typeof r = typeof b
              /\ eval_expr tge e le m b v
   end.
@@ -1063,9 +1063,9 @@ Proof.
 Qed.
 
 Lemma nolabel_do_set:
-  forall tmp tyl a, nolabel_list (do_set tmp tyl a).
+  forall sd a, nolabel_list (do_set sd a).
 Proof.
-  induction tyl; intros; simpl; split; auto; red; auto.
+  induction sd; intros; simpl; split; auto; red; auto.
 Qed.
 
 Lemma nolabel_final:
@@ -1418,8 +1418,9 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_set with (a1 := dummy_expr); auto. econstructor; eauto. 
-  apply tr_expr_monotone with tmp2; eauto. auto. auto.
+  apply S. apply tr_paren_set with (a1 := dummy_expr) (t := sd_temp sd); auto.
+  apply tr_paren_set with (a1 := a2) (t := sd_temp sd).
+  apply tr_expr_monotone with tmp2; eauto. auto. auto. auto.
 (* seqand false *)
   exploit tr_top_leftcontext; eauto. clear H9. 
   intros [dst' [sl1 [sl2 [a' [tmp' [P [Q [R S]]]]]]]].
@@ -1527,7 +1528,8 @@ Proof.
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_set with (a1 := dummy_expr); auto. econstructor; eauto. 
+  apply S. apply tr_paren_set with (a1 := dummy_expr) (t := sd_temp sd); auto.
+  apply tr_paren_set with (a1 := a2) (t := sd_temp sd); auto.
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
 (* condition *)
   exploit tr_top_leftcontext; eauto. clear H9. 

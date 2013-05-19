@@ -85,3 +85,9 @@ int mixed4l(int x, int y, int z, int u) { return ((f(x) && f(y)) || f(z)) && f(u
 int mixed4r(int x, int y, int z, int u) { return f(x) && (f(y) || (f(z) && f(u))); }
 
 int mixed4b(int x, int y, int z, int u) { return (f(x) && f(y)) || (f(z) && f(u)); }
+
+/* This caused a RTL type error in CompCert 1.11 and 1.12 */
+double cond2(int x)
+{
+  return x == 0 ? 3.1415 : (x > 0 ? 1 : -1);
+}

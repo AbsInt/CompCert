@@ -187,25 +187,36 @@ Definition make_assign (l r: expr) : statement :=
   assignment.  In this case, [a] is meaningless.
 *)
 
+Inductive set_destination : Type :=
+  | SDbase (ty: type) (tmp: ident)
+  | SDcons (ty: type) (tmp: ident) (sd: set_destination).
+
 Inductive destination : Type := 
   | For_val
   | For_effects
-  | For_set (tyl: list type) (tmp: ident).
+  | For_set (sd: set_destination).
 
 Definition dummy_expr := Econst_int Int.zero type_int32s.
 
-Fixpoint do_set (tmp: ident) (tyl: list type) (a: expr) : list statement :=
-  match tyl with
-  | nil => nil
-  | ty1 :: tys => Sset tmp (Ecast a ty1) :: do_set tmp tys (Etempvar tmp ty1)
+Fixpoint do_set (sd: set_destination) (a: expr) : list statement :=
+  match sd with
+  | SDbase ty tmp => Sset tmp (Ecast a ty) :: nil
+  | SDcons ty tmp sd' => Sset tmp (Ecast a ty) :: do_set sd' (Etempvar tmp ty)
   end.
 
 Definition finish (dst: destination) (sl: list statement) (a: expr) :=
   match dst with
   | For_val => (sl, a)
   | For_effects => (sl, a)
-  | For_set tyl tmp => (sl ++ do_set tmp tyl a, a)
+  | For_set sd => (sl ++ do_set sd a, a)
   end.
+
+Definition sd_temp (sd: set_destination) :=
+  match sd with SDbase _ tmp => tmp | SDcons _ tmp _ => tmp end.
+Definition sd_seqbool_val (tmp: ident) (ty: type) :=
+  SDcons type_bool tmp (SDbase ty tmp).
+Definition sd_seqbool_set (ty: type) (sd: set_destination) :=
+  let tmp :=  sd_temp sd in SDcons type_bool tmp (SDcons ty tmp sd).
 
 Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement * expr) :=
   match a with
@@ -253,17 +264,17 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val =>
           do t <- gensym ty;
-          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: nil) t) r2;
+          do (sl2, a2) <- transl_expr (For_set (sd_seqbool_val t ty)) r2;
           ret (sl1 ++ 
                makeif a1 (makeseq sl2) (Sset t (Econst_int Int.zero ty)) :: nil,
                Etempvar t ty)
       | For_effects =>
           do (sl2, a2) <- transl_expr For_effects r2;
           ret (sl1 ++ makeif a1 (makeseq sl2) Sskip :: nil, dummy_expr)
-      | For_set tyl t =>
-          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: tyl) t) r2;
+      | For_set sd =>
+          do (sl2, a2) <- transl_expr (For_set (sd_seqbool_set ty sd)) r2;
           ret (sl1 ++ 
-               makeif a1 (makeseq sl2) (makeseq (do_set t tyl (Econst_int Int.zero ty))) :: nil,
+               makeif a1 (makeseq sl2) (makeseq (do_set sd (Econst_int Int.zero ty))) :: nil,
                dummy_expr)
       end
   | Csyntax.Eseqor r1 r2 ty =>
@@ -271,17 +282,17 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val =>
           do t <- gensym ty;
-          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: nil) t) r2;
+          do (sl2, a2) <- transl_expr (For_set (sd_seqbool_val t ty)) r2;
           ret (sl1 ++ 
                makeif a1 (Sset t (Econst_int Int.one ty)) (makeseq sl2) :: nil,
                Etempvar t ty)
       | For_effects =>
           do (sl2, a2) <- transl_expr For_effects r2;
           ret (sl1 ++ makeif a1 Sskip (makeseq sl2) :: nil, dummy_expr)
-      | For_set tyl t =>
-          do (sl2, a2) <- transl_expr (For_set (type_bool :: ty :: tyl) t) r2;
+      | For_set sd =>
+          do (sl2, a2) <- transl_expr (For_set (sd_seqbool_set ty sd)) r2;
           ret (sl1 ++ 
-               makeif a1 (makeseq (do_set t tyl (Econst_int Int.one ty))) (makeseq sl2) :: nil,
+               makeif a1 (makeseq (do_set sd (Econst_int Int.one ty))) (makeseq sl2) :: nil,
                dummy_expr)
       end
   | Csyntax.Econdition r1 r2 r3 ty =>
@@ -289,8 +300,8 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val =>
           do t <- gensym ty;
-          do (sl2, a2) <- transl_expr (For_set (ty::nil) t) r2;
-          do (sl3, a3) <- transl_expr (For_set (ty::nil) t) r3;
+          do (sl2, a2) <- transl_expr (For_set (SDbase ty t)) r2;
+          do (sl3, a3) <- transl_expr (For_set (SDbase ty t)) r3;
           ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
                Etempvar t ty)
       | For_effects =>
@@ -298,9 +309,10 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
           do (sl3, a3) <- transl_expr For_effects r3;
           ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
                dummy_expr)
-      | For_set tyl t =>
-          do (sl2, a2) <- transl_expr (For_set (ty::tyl) t) r2;
-          do (sl3, a3) <- transl_expr (For_set (ty::tyl) t) r3;
+      | For_set sd =>
+          do t <- gensym ty;
+          do (sl2, a2) <- transl_expr (For_set (SDcons ty t sd)) r2;
+          do (sl3, a3) <- transl_expr (For_set (SDcons ty t sd)) r3;
           ret (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil,
                dummy_expr)
       end
@@ -310,7 +322,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       let ty1 := Csyntax.typeof l1 in
       let ty2 := Csyntax.typeof r2 in
       match dst with
-      | For_val | For_set _ _ =>
+      | For_val | For_set _ =>
           do t <- gensym ty2;
           ret (finish dst 
                  (sl1 ++ sl2 ++ Sset t a2 :: make_assign a1 (Etempvar t ty2) :: nil)
@@ -325,7 +337,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       do (sl2, a2) <- transl_expr For_val r2;
       do (sl3, a3) <- transl_valof ty1 a1;
       match dst with
-      | For_val | For_set _ _ =>
+      | For_val | For_set _ =>
           do t <- gensym tyres;
           ret (finish dst
                  (sl1 ++ sl2 ++ sl3 ++
@@ -340,7 +352,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       let ty1 := Csyntax.typeof l1 in
       do (sl1, a1) <- transl_expr For_val l1;
       match dst with
-      | For_val | For_set _ _ =>
+      | For_val | For_set _ =>
           do t <- gensym ty1;
           ret (finish dst
                  (sl1 ++ make_set t a1 ::
@@ -359,7 +371,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       do (sl1, a1) <- transl_expr For_val r1;
       do (sl2, al2) <- transl_exprlist rl2;
       match dst with
-      | For_val | For_set _ _ =>
+      | For_val | For_set _ =>
           do t <- gensym ty;
           ret (finish dst (sl1 ++ sl2 ++ Scall (Some t) a1 al2 :: nil)
                           (Etempvar t ty))
@@ -369,7 +381,7 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
   | Csyntax.Ebuiltin ef tyargs rl ty =>
       do (sl, al) <- transl_exprlist rl;
       match dst with
-      | For_val | For_set _ _ =>
+      | For_val | For_set _ =>
           do t <- gensym ty;
           ret (finish dst (sl ++ Sbuiltin (Some t) ef tyargs al :: nil)
                           (Etempvar t ty))
