@@ -156,7 +156,7 @@ if test -z "$casmruntime"; then casmruntime="$casm"; fi
 # Test assembler support for CFI directives
 
 if test "$target" != "manual" && test -z "$asm_supports_cfi"; then
-  echo "Testing assembler support for CFI directives..."
+  echo "Testing assembler support for CFI directives... " | tr -d '\n'
   f=/tmp/compcert-configure-$$.s
   rm -f $f
   cat >> $f <<EOF
@@ -168,8 +168,8 @@ testfun:
 	.cfi_endproc
 EOF
   if $casm -o /dev/null $f 2>/dev/null
-  then asm_supports_cfi=true
-  else asm_supports_cfi=false
+  then echo "yes"; asm_supports_cfi=true
+  else echo "no";  asm_supports_cfi=false
   fi
   rm -f $f
 fi
@@ -177,9 +177,12 @@ fi
 # Additional packages needed for cchecklink
 
 if $cchecklink; then
+  echo "Testing availability of ocaml-bitstring... " | tr -d '\n'
   if ocamlfind query bitstring > /dev/null
-  then :
+  then
+    echo "yes"
   else 
+    echo "no"
     echo "ocamlfind or ocaml-bitstring missing, cchecklink will not be built"
     cchecklink=false
   fi
