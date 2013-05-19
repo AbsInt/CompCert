@@ -15,16 +15,17 @@
 
 (* A type-checker for Cminor *)
 
+(* FIXME: proper support for type Tsingle *)
+
 open Printf
 open Datatypes
 open Camlcoq
 open AST
+open PrintAST
 open Integers
 open Cminor
 
 exception Error of string
-
-let name_of_typ = function Tint -> "int" | Tfloat -> "float" | Tlong -> "long"
 
 type ty = Base of typ | Var of ty option ref
 
@@ -32,8 +33,13 @@ let newvar () = Var (ref None)
 let tint = Base Tint
 let tfloat = Base Tfloat
 let tlong = Base Tlong
+let tsingle = Base Tsingle
 
-let ty_of_typ = function Tint -> tint | Tfloat -> tfloat | Tlong -> tlong
+let ty_of_typ = function
+  | Tint -> tint
+  | Tfloat -> tfloat
+  | Tlong -> tlong
+  | Tsingle -> tsingle
 
 let ty_of_sig_args tyl = List.map ty_of_typ tyl
 
@@ -47,7 +53,7 @@ let unify t1 t2 =
   | Base b1, Base b2 ->
       if b1 <> b2 then
         raise (Error (sprintf "Expected type %s, actual type %s\n"
-                              (name_of_typ b1) (name_of_typ b2)))
+                              (name_of_type b1) (name_of_type b2)))
   | Base b, Var r -> r := Some (Base b)
   | Var r, Base b -> r := Some (Base b)
   | Var r1, Var r2 -> r1 := Some (Var r2)

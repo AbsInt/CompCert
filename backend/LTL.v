@@ -172,7 +172,7 @@ Fixpoint undef_regs (rl: list mreg) (rs: locset) : locset :=
   | r1 :: rl => Locmap.set (R r1) Vundef (undef_regs rl rs)
   end.
 
-Definition destroyed_by_getstack (s: slot) : list mreg :=
+Definition destroyed_by_getstack (s: slot): list mreg :=
   match s with
   | Incoming => temp_for_parent_frame :: nil
   | _        => nil
@@ -218,7 +218,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Block s f sp (Lgetstack sl ofs ty dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lsetstack: forall s f sp src sl ofs ty bb rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_op Omove) rs) ->
+      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
       step (Block s f sp (Lsetstack src sl ofs ty :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lstore: forall s f sp chunk addr args src bb rs m a rs' m',

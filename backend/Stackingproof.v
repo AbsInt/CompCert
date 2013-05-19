@@ -413,7 +413,8 @@ Lemma gss_index_contains:
 Proof.
   intros. exploit gss_index_contains_base; eauto. intros [v' [A B]].
   assert (v' = v).
-    destruct v; destruct (type_of_index idx); simpl in *; intuition congruence.
+    destruct v; destruct (type_of_index idx); simpl in *;
+    try contradiction; auto. rewrite Floats.Float.singleoffloat_of_single in B; auto. 
   subst v'. auto.
 Qed.
 
@@ -513,6 +514,20 @@ Proof.
   intros. exploit gss_index_contains_base; eauto. intros [v'' [A B]].
   exists v''; split; auto.
   inv H2; destruct (type_of_index idx); simpl in *; try contradiction; subst; auto.
+  rewrite Floats.Float.singleoffloat_of_single; auto. 
+  econstructor; eauto.
+Qed.
+
+Lemma gss_index_contains_inj':
+  forall j idx m m' sp v v',
+  Mem.store (chunk_of_type (type_of_index idx)) m sp (offset_of_index fe idx) v' = Some m' ->
+  index_valid idx ->
+  val_inject j v v' ->
+  index_contains_inj j m' sp idx (Val.load_result (chunk_of_type (type_of_index idx)) v).
+Proof.
+  intros. exploit gss_index_contains_base; eauto. intros [v'' [A B]].
+  exists v''; split; auto.
+  inv H1; destruct (type_of_index idx); simpl in *; try contradiction; subst; auto. 
   econstructor; eauto.
 Qed.
 
@@ -783,7 +798,7 @@ Lemma agree_frame_set_reg:
 Proof.
   intros. inv H; constructor; auto; intros.
   rewrite Locmap.gso. auto. red. intuition congruence.
-  apply wt_setloc; auto.
+  apply wt_setreg; auto.
 Qed.
 
 Lemma agree_frame_set_regs:
@@ -838,17 +853,16 @@ Lemma agree_frame_set_local:
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   slot_within_bounds b Local ofs ty -> slot_valid f Local ofs ty = true ->
   val_inject j v v' ->
-  Val.has_type v ty ->
   Mem.store (chunk_of_type ty) m' sp' (offset_of_index fe (FI_local ofs ty)) v' = Some m'' ->
   agree_frame j (Locmap.set (S Local ofs ty) v ls) ls0 m sp m'' sp' parent retaddr.
 Proof.
   intros. inv H. 
-  change (chunk_of_type ty) with (chunk_of_type (type_of_index (FI_local ofs ty))) in H4.
+  change (chunk_of_type ty) with (chunk_of_type (type_of_index (FI_local ofs ty))) in H3.
   constructor; auto; intros.
 (* local *)
   unfold Locmap.set.
   destruct (Loc.eq (S Local ofs ty) (S Local ofs0 ty0)).
-  inv e. eapply gss_index_contains_inj; eauto with stacking.
+  inv e. eapply gss_index_contains_inj'; eauto with stacking.
   destruct (Loc.diff_dec (S Local ofs ty) (S Local ofs0 ty0)).
   eapply gso_index_contains_inj. eauto. eauto with stacking. eauto. 
   simpl. simpl in d. intuition.
@@ -870,7 +884,7 @@ Proof.
 (* perm *)
   red; intros. eapply Mem.perm_store_1; eauto.
 (* wt *)
-  apply wt_setloc; auto. 
+  apply wt_setstack; auto. 
 Qed.
 
 (** Preservation by assignment to outgoing slot *)
@@ -880,19 +894,18 @@ Lemma agree_frame_set_outgoing:
   agree_frame j ls ls0 m sp m' sp' parent retaddr ->
   slot_within_bounds b Outgoing ofs ty -> slot_valid f Outgoing ofs ty = true ->
   val_inject j v v' ->
-  Val.has_type v ty ->
   Mem.store (chunk_of_type ty) m' sp' (offset_of_index fe (FI_arg ofs ty)) v' = Some m'' ->
   agree_frame j (Locmap.set (S Outgoing ofs ty) v ls) ls0 m sp m'' sp' parent retaddr.
 Proof.
   intros. inv H. 
-  change (chunk_of_type ty) with (chunk_of_type (type_of_index (FI_arg ofs ty))) in H4.
+  change (chunk_of_type ty) with (chunk_of_type (type_of_index (FI_arg ofs ty))) in H3.
   constructor; auto; intros.
 (* local *)
   rewrite Locmap.gso. eapply gso_index_contains_inj; eauto with stacking. red; auto.
   red; left; congruence.
 (* outgoing *)
   unfold Locmap.set. destruct (Loc.eq (S Outgoing ofs ty) (S Outgoing ofs0 ty0)).
-  inv e. eapply gss_index_contains_inj; eauto with stacking.
+  inv e. eapply gss_index_contains_inj'; eauto with stacking.
   destruct (Loc.diff_dec (S Outgoing ofs ty) (S Outgoing ofs0 ty0)).
   eapply gso_index_contains_inj; eauto with stacking.
   red. red in d. intuition. 
@@ -911,7 +924,7 @@ Proof.
 (* perm *)
   red; intros. eapply Mem.perm_store_1; eauto.
 (* wt *)
-  apply wt_setloc; auto. 
+  apply wt_setstack; auto. 
 Qed.
 
 (** General invariance property with respect to memory changes. *)
@@ -1131,6 +1144,12 @@ Proof.
   apply check_mreg_list_incl; compute; auto.
 Qed.
 
+Remark destroyed_by_setstack_caller_save:
+  forall ty, incl (destroyed_by_setstack ty) destroyed_at_call.
+Proof.
+  destruct ty; apply check_mreg_list_incl; compute; auto.
+Qed.
+
 Remark destroyed_at_function_entry_caller_save:
   incl destroyed_at_function_entry destroyed_at_call.
 Proof.
@@ -1226,7 +1245,7 @@ Hypothesis csregs_typ:
   forall r, In r csregs -> mreg_type r = ty.
 
 Hypothesis ls_temp_undef:
-  forall r, In r (destroyed_by_op Omove) -> ls (R r) = Vundef.
+  forall r, In r (destroyed_by_setstack ty) -> ls (R r) = Vundef.
 
 Hypothesis wt_ls: wt_locset ls.
 
@@ -1269,10 +1288,10 @@ Proof.
   (* a store takes place *)
   exploit store_index_succeeds. apply (mkindex_valid a); auto with coqlib. 
   eauto. instantiate (1 := rs a). intros [m1 ST].
-  exploit (IHl k (undef_regs (destroyed_by_op Omove) rs) m1).  auto with coqlib. auto. 
+  exploit (IHl k (undef_regs (destroyed_by_setstack ty) rs) m1).  auto with coqlib. auto. 
   red; eauto with mem.
   apply agree_regs_exten with ls rs. auto.
-  intros. destruct (In_dec mreg_eq r (destroyed_by_op Omove)).
+  intros. destruct (In_dec mreg_eq r (destroyed_by_setstack ty)).
   left. apply ls_temp_undef; auto. 
   right; split. auto. apply undef_regs_other; auto.
   intros [rs' [m' [A [B [C [D [E F]]]]]]].
@@ -1370,7 +1389,8 @@ Proof.
   intros; congruence.
   intros; simpl. destruct idx; auto. congruence.
   intros. apply int_callee_save_type. auto.
-  auto.
+Local Transparent destroyed_by_setstack.
+  simpl. tauto.
   auto.
   apply incl_refl. 
   apply int_callee_save_norepet.
@@ -1388,8 +1408,8 @@ Proof.
   intros; congruence.
   intros; simpl. destruct idx; auto. congruence.
   intros. apply float_callee_save_type. auto.
+  simpl. tauto. 
   auto. 
-  auto.
   apply incl_refl. 
   apply float_callee_save_norepet.
   eexact E.
@@ -2491,7 +2511,7 @@ Proof.
   eapply index_contains_load_stack; eauto.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
-  apply agree_frame_set_reg; auto. simpl. rewrite <- H. eapply agree_wt_ls; eauto.
+  apply agree_frame_set_reg; auto. simpl. eapply Val.has_subtype; eauto. eapply agree_wt_ls; eauto.
   (* Lgetstack, incoming *)
   unfold slot_valid in H0. InvBooleans.
   exploit incoming_slot_in_parameters; eauto. intros IN_ARGS.
@@ -2517,7 +2537,7 @@ Proof.
   eapply agree_frame_set_reg; eauto. eapply agree_frame_set_reg; eauto. 
   apply caller_save_reg_within_bounds. 
   apply temp_for_parent_frame_caller_save.
-  subst ty. simpl. eapply agree_wt_ls; eauto.
+  simpl. eapply Val.has_subtype; eauto. eapply agree_wt_ls; eauto.
   (* Lgetstack, outgoing *)
   exploit agree_outgoing; eauto. intros [v [A B]].
   econstructor; split.
@@ -2525,7 +2545,8 @@ Proof.
   eapply index_contains_load_stack; eauto.
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
-  apply agree_frame_set_reg; auto. simpl; rewrite <- H; eapply agree_wt_ls; eauto.
+  apply agree_frame_set_reg; auto.
+  simpl. eapply Val.has_subtype; eauto. eapply agree_wt_ls; eauto.
 
   (* Lsetstack *)
   set (idx := match sl with
@@ -2548,23 +2569,21 @@ Proof.
   econstructor. 
   eapply Mem.store_outside_inject; eauto. 
     intros. exploit agree_inj_unique; eauto. intros [EQ1 EQ2]; subst b' delta.
-    rewrite size_type_chunk in H5.
+    rewrite size_type_chunk in H4.
     exploit offset_of_index_disj_stack_data_2; eauto.
     exploit agree_bounds. eauto. apply Mem.perm_cur_max. eauto. 
     omega.
   apply match_stacks_change_mach_mem with m'; auto.
-  eauto with mem. eauto with mem. intros. rewrite <- H4; eapply Mem.load_store_other; eauto. left; unfold block; omega.
+  eauto with mem. eauto with mem. intros. rewrite <- H3; eapply Mem.load_store_other; eauto. left; unfold block; omega.
   eauto. eauto. auto. 
   apply agree_regs_set_slot. apply agree_regs_undef_regs; auto. 
   destruct sl.
     eapply agree_frame_set_local. eapply agree_frame_undef_locs; eauto.
-    apply destroyed_by_op_caller_save. auto. auto. apply AGREGS. 
-    rewrite H; eapply agree_wt_ls; eauto.
+    apply destroyed_by_setstack_caller_save. auto. auto. apply AGREGS. 
     assumption. 
     simpl in H0; discriminate.
     eapply agree_frame_set_outgoing. eapply agree_frame_undef_locs; eauto.
-    apply destroyed_by_op_caller_save. auto. auto. apply AGREGS. 
-    rewrite H; eapply agree_wt_ls; eauto.
+    apply destroyed_by_setstack_caller_save. auto. auto. apply AGREGS.
     assumption. 
   eauto with coqlib.
 
@@ -2572,12 +2591,14 @@ Proof.
   assert (Val.has_type v (mreg_type res)).
     destruct (is_move_operation op args) as [arg|] eqn:?.
     exploit is_move_operation_correct; eauto. intros [EQ1 EQ2]; subst op args. 
-    InvBooleans. simpl in H. inv H. rewrite <- H0. eapply agree_wt_ls; eauto. 
-    replace (mreg_type res) with (snd (type_of_operation op)).
+    eapply Val.has_subtype; eauto. simpl in H; inv H. eapply agree_wt_ls; eauto. 
+    destruct (type_of_operation op) as [targs tres] eqn:TYOP. 
+    eapply Val.has_subtype; eauto. 
+    replace tres with (snd (type_of_operation op)).
     eapply type_of_operation_sound; eauto.
     red; intros. subst op. simpl in Heqo.
     destruct args; simpl in H. discriminate. destruct args. discriminate. simpl in H. discriminate.
-    destruct (type_of_operation op) as [targs tres]. InvBooleans. auto. 
+    rewrite TYOP; auto. 
   assert (exists v',
           eval_operation ge (Vptr sp' Int.zero) (transl_op (make_env (function_bounds f)) op) rs0##args m' = Some v'
        /\ val_inject j v v').
@@ -2602,7 +2623,7 @@ Proof.
   eapply eval_addressing_inject; eauto. 
   eapply match_stacks_preserves_globals; eauto.
   eapply agree_inj; eauto. eapply agree_reglist; eauto.
-  destruct H2 as [a' [A B]].
+  destruct H1 as [a' [A B]].
   exploit Mem.loadv_inject; eauto. intros [v' [C D]].
   econstructor; split. 
   apply plus_one. econstructor. 
@@ -2612,7 +2633,7 @@ Proof.
   apply agree_regs_set_reg. rewrite transl_destroyed_by_load. apply agree_regs_undef_regs; auto. auto. 
   apply agree_frame_set_reg. apply agree_frame_undef_locs; auto.
   apply destroyed_by_load_caller_save. auto. 
-  simpl. rewrite H1. destruct a; simpl in H0; try discriminate. eapply Mem.load_type; eauto.
+  simpl. eapply Val.has_subtype; eauto. destruct a; simpl in H0; try discriminate. eapply Mem.load_type; eauto.
 
   (* Lstore *)
   assert (exists a',
@@ -2698,7 +2719,7 @@ Proof.
   eapply agree_valid_mach; eauto.
   simpl. rewrite list_map_compose.
   change (fun x => Loc.type (R x)) with mreg_type.
-  rewrite H0. eapply external_call_well_typed'; eauto.
+  eapply Val.has_subtype_list; eauto. eapply external_call_well_typed'; eauto.
 
   (* Lannot *)
   exploit transl_annot_params_correct; eauto.

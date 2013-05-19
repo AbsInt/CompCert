@@ -136,7 +136,7 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
             Plfd r (Cint ofs) base :: k
           else
             loadimm GPR0 ofs (Plfdx r base GPR0 :: k))
-  | Tlong =>
+  | Tlong | Tsingle =>
       Error (msg "Asmgen.loadind")
   end.
 
@@ -154,7 +154,7 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
             Pstfd r (Cint ofs) base :: k
           else
             loadimm GPR0 ofs (Pstfdx r base GPR0 :: k))
-  | Tlong =>
+  | Tlong | Tsingle =>
       Error (msg "Asmgen.storeind")
   end.
 

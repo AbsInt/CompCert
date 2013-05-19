@@ -405,6 +405,7 @@ Proof.
   split. Simpl. intros; Simpl.
 Qed.
 
+(*
 Lemma loadind_float_correct:
   forall (base: ireg) ofs dst (rs: regset) m v k,
   Mem.loadv Mfloat64al32 m (Val.add rs#base (Vint ofs)) = Some v ->
@@ -418,6 +419,7 @@ Proof.
   apply exec_straight_one. simpl. unfold exec_load. rewrite H0; rewrite H; eauto. auto.
   split. Simpl. intros; Simpl.
 Qed.
+*)
 
 Lemma loadind_correct:
   forall (base: ireg) ofs ty dst k c (rs: regset) m v,
@@ -430,12 +432,25 @@ Lemma loadind_correct:
 Proof.
   unfold loadind; intros.
   destruct ty; monadInv H.
+- (* int *)
   erewrite ireg_of_eq by eauto. apply loadind_int_correct; auto. 
-  erewrite freg_of_eq by eauto. apply loadind_float_correct; auto. 
+- (* float *)
+  erewrite freg_of_eq by eauto. simpl in H0.
+  apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H. rewrite H0. eauto. auto. 
+  split. Simpl. intros; Simpl.
+- (* single *)
+  erewrite freg_of_eq by eauto. simpl in H0.
+  apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H. rewrite H0. eauto. auto. 
+  split. Simpl. intros; Simpl.
 Qed.
 
 (** Indexed memory stores. *)
 
+(*
 Lemma storeind_int_correct:
   forall (base: ireg) ofs (src: ireg) (rs: regset) m m' k,
   Mem.storev Mint32 m (Val.add rs#base (Vint ofs)) (rs#src) = Some m' ->
@@ -464,6 +479,7 @@ Proof.
   rewrite H0. rewrite H1; auto with asmgen. rewrite H; eauto. auto.
   intros; Simpl.
 Qed.
+*)
 
 Lemma storeind_correct:
   forall (base: ireg) ofs ty src k c (rs: regset) m m',
@@ -471,13 +487,32 @@ Lemma storeind_correct:
   Mem.storev (chunk_of_type ty) m (Val.add rs#base (Vint ofs)) (rs#(preg_of src)) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, r <> PC -> r <> IR14 -> rs'#r = rs#r.
+  /\ forall r, r <> PC -> r <> IR14 -> preg_notin r (destroyed_by_setstack ty) -> rs'#r = rs#r.
 Proof.
   unfold storeind; intros.
-  destruct ty; monadInv H.
-  erewrite ireg_of_eq  in H0 by eauto. apply storeind_int_correct; auto.
+  destruct ty; monadInv H; simpl in H0.
+- (* int *)
+  erewrite ireg_of_eq  in H0 by eauto.
+  apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_store. 
+  rewrite H. rewrite H1; auto with asmgen. rewrite H0; eauto.
   assert (IR x <> IR IR14) by eauto with asmgen. congruence.
-  erewrite freg_of_eq in H0 by eauto. apply storeind_float_correct; auto. 
+  auto. intros; Simpl.
+- (* float *)
+  erewrite freg_of_eq  in H0 by eauto.
+  apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_store. 
+  rewrite H. rewrite H1; auto with asmgen. rewrite H0; eauto.
+  auto. intros; Simpl.
+- (* single *)
+  erewrite freg_of_eq  in H0 by eauto.
+  apply indexed_memory_access_correct; intros.
+  econstructor; split. 
+  apply exec_straight_one. simpl. unfold exec_store. 
+  rewrite H. rewrite H1; auto with asmgen. rewrite H0; eauto.
+  auto. intros; Simpl.
 Qed.
 
 (** Translation of shift immediates *)

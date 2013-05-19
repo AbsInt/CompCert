@@ -296,7 +296,7 @@ Inductive step: state -> trace -> state -> Prop :=
   | exec_Msetstack:
       forall s f sp src ofs ty c rs m m' rs',
       store_stack m sp ty ofs (rs src) = Some m' ->
-      rs' = undef_regs (destroyed_by_op Omove) rs ->
+      rs' = undef_regs (destroyed_by_setstack ty) rs ->
       step (State s f sp (Msetstack src ofs ty :: c) rs m)
         E0 (State s f sp c rs' m')
   | exec_Mgetparam:

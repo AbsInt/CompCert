@@ -236,7 +236,7 @@ Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => R0 :: nil
   | Some Tint => R0 :: nil
-  | Some Tfloat => F0 :: nil
+  | Some (Tfloat | Tsingle) => F0 :: nil
   | Some Tlong => R1 :: R0 :: nil
   end.
 
@@ -256,15 +256,23 @@ Qed.
 
 (** We use the following calling conventions, adapted from the ARM EABI:
 - The first 4 integer arguments are passed in registers [R0] to [R3].
-- The first 2 float arguments are passed in registers [F0] and [F1].
+- The first 2 float arguments are passed in registers [F0] and [F2].
+- The first 4 float arguments are passed in registers [F0] to [F3].
+- The first 2 integer arguments are passed in an aligned pair of two integer
+  registers.
 - Each float argument passed in a float register ``consumes'' an aligned pair
   of two integer registers.
-- Each long integer argument is passed in an aligned pair of two integer
-  registers.
+- Each single argument passed in a float register ``consumes'' an integer
+  register.
 - Extra arguments are passed on the stack, in [Outgoing] slots, consecutively
-  assigned (1 word for an integer argument, 2 words for a float or a long),
-  starting at word offset 0.
-*)
+  assigned (1 word for an integer or single argument, 2 words for a float
+  or a long), starting at word offset 0.
+
+This convention is not quite that of the ARM EABI, whereas every float
+argument are passed in one or two integer registers.  Unfortunately,
+this does not fit the data model of CompCert.  In [PrintAsm.ml]
+we insert additional code around function calls and returns that moves
+data appropriately. *)
 
 Definition ireg_param (n: Z) : mreg :=
   if zeq n (-4) then R0
@@ -273,7 +281,13 @@ Definition ireg_param (n: Z) : mreg :=
   else R3.
 
 Definition freg_param (n: Z) : mreg :=
-  if zeq n (-4) then F0 else F1.
+  if zeq n (-4) then F0 else F2.
+
+Definition sreg_param (n: Z) : mreg :=
+  if zeq n (-4) then F0
+  else if zeq n (-3) then F1
+  else if zeq n (-2) then F2
+  else F3.
 
 Fixpoint loc_arguments_rec (tyl: list typ) (ofs: Z) {struct tyl} : list loc :=
   match tyl with
@@ -285,6 +299,9 @@ Fixpoint loc_arguments_rec (tyl: list typ) (ofs: Z) {struct tyl} : list loc :=
       let ofs := align ofs 2 in
       (if zle 0 ofs then S Outgoing ofs Tfloat else R (freg_param ofs))
       :: loc_arguments_rec tys (ofs + 2)
+  | Tsingle :: tys =>
+      (if zle 0 ofs then S Outgoing ofs Tsingle else R (sreg_param ofs))
+      :: loc_arguments_rec tys (ofs + 1)
   | Tlong :: tys =>
       let ofs := align ofs 2 in
       (if zle 0 ofs then S Outgoing (ofs + 1) Tint else R (ireg_param (ofs + 1)))
@@ -304,7 +321,7 @@ Definition loc_arguments (s: signature) : list loc :=
 Fixpoint size_arguments_rec (tyl: list typ) (ofs: Z) {struct tyl} : Z :=
   match tyl with
   | nil => ofs
-  | Tint :: tys => size_arguments_rec tys (ofs + 1)
+  | (Tint | Tsingle) :: tys => size_arguments_rec tys (ofs + 1)
   | (Tfloat | Tlong) :: tys => size_arguments_rec tys (align ofs 2 + 2)
   end.
 
@@ -321,15 +338,6 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
   | _ => False
   end.
 
-(*
-Lemma align_monotone:
-  forall x1 x2 y, y > 0 -> x1 <= x2 -> align x1 y <= align x2 y.
-Proof.
-  intros. unfold align. apply Zmult_le_compat_r. apply Z_div_le. 
-  omega. omega. omega.
-Qed.
-*)
-
 Remark ireg_param_caller_save:
   forall n, In (ireg_param n) destroyed_at_call.
 Proof.
@@ -343,6 +351,15 @@ Remark freg_param_caller_save:
   forall n, In (freg_param n) destroyed_at_call.
 Proof.
   unfold freg_param; intros. destruct (zeq n (-4)); simpl; OrEq.
+Qed.
+
+Remark sreg_param_caller_save:
+  forall n, In (sreg_param n) destroyed_at_call.
+Proof.
+  unfold sreg_param; intros.
+  destruct (zeq n (-4)). simpl; tauto. 
+  destruct (zeq n (-3)). simpl; tauto. 
+  destruct (zeq n (-2)); simpl; tauto.
 Qed.
 
 Remark loc_arguments_rec_charact:
@@ -381,6 +398,12 @@ Proof.
   split. omega. split. omega. congruence.
   apply ireg_param_caller_save.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
+- (* Tsingle *)
+  destruct H.
+  subst l. destruct (zle 0 ofs).
+  split. omega. split. omega. congruence.
+  apply sreg_param_caller_save.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -409,6 +432,7 @@ Proof.
   apply Zle_trans with (align ofs 2 + 2); auto; omega.
   assert (ofs <= align ofs 2) by (apply align_le; omega).
   apply Zle_trans with (align ofs 2 + 2); auto; omega.
+  apply Zle_trans with (ofs + 1); auto; omega.
 Qed.
 
 Lemma size_arguments_above:
@@ -448,6 +472,8 @@ Proof.
     destruct H1; auto.
     destruct (zle 0 (align ofs0 2)); inv H1.
     eapply Zle_trans. 2: apply H0. simpl typesize; omega. omega.
+  - (* Tsingle *)
+    destruct H1; auto. destruct (zle 0 ofs0); inv H1. apply H0. omega. 
   }
   unfold size_arguments. apply H1. auto.  
 Qed.

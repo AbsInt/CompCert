@@ -115,8 +115,6 @@ Inductive instruction: Type :=
   | Pmov_ra (rd: ireg) (id: ident)
   | Pmov_rm (rd: ireg) (a: addrmode)
   | Pmov_mr (a: addrmode) (rs: ireg)
-  | Pmovd_fr (rd: freg) (r1: ireg)      (**r [movd] (32-bit int) *)
-  | Pmovd_rf (rd: ireg) (rd: freg)
   | Pmovsd_ff (rd: freg) (r1: freg)     (**r [movsd] (single 64-bit float) *)
   | Pmovsd_fi (rd: freg) (n: float)     (**r (pseudo-instruction) *)
   | Pmovsd_fm (rd: freg) (a: addrmode)
@@ -129,16 +127,16 @@ Inductive instruction: Type :=
   (** Moves with conversion *)
   | Pmovb_mr (a: addrmode) (rs: ireg)   (**r [mov] (8-bit int) *)
   | Pmovw_mr (a: addrmode) (rs: ireg)   (**r [mov] (16-bit int) *)
-  | Pmovzb_rr (rd: ireg) (rs: ireg)    (**r [movzb] (8-bit zero-extension) *)
+  | Pmovzb_rr (rd: ireg) (rs: ireg)     (**r [movzb] (8-bit zero-extension) *)
   | Pmovzb_rm (rd: ireg) (a: addrmode)
-  | Pmovsb_rr (rd: ireg) (rs: ireg)    (**r [movsb] (8-bit sign-extension) *)
+  | Pmovsb_rr (rd: ireg) (rs: ireg)     (**r [movsb] (8-bit sign-extension) *)
   | Pmovsb_rm (rd: ireg) (a: addrmode)
-  | Pmovzw_rr (rd: ireg) (rs: ireg)    (**r [movzw] (16-bit zero-extension) *)
+  | Pmovzw_rr (rd: ireg) (rs: ireg)     (**r [movzw] (16-bit zero-extension) *)
   | Pmovzw_rm (rd: ireg) (a: addrmode)
-  | Pmovsw_rr (rd: ireg) (rs: ireg)    (**r [movsw] (16-bit sign-extension) *)
+  | Pmovsw_rr (rd: ireg) (rs: ireg)     (**r [movsw] (16-bit sign-extension) *)
   | Pmovsw_rm (rd: ireg) (a: addrmode)
   | Pcvtss2sd_fm (rd: freg) (a: addrmode) (**r [cvtss2sd] (single float load) *)
-  | Pcvtsd2ss_ff (rd: freg) (r1: freg) (**r pseudo (single conversion) *)
+  | Pcvtsd2ss_ff (rd: freg) (r1: freg)  (**r conversion to single (pseudo) *)
   | Pcvtsd2ss_mf (a: addrmode) (r1: freg) (**r [cvtsd2ss] (single float store *)
   | Pcvttsd2si_rf (rd: ireg) (r1: freg) (**r double to signed int *)
   | Pcvtsi2sd_fr (rd: freg) (r1: ireg)  (**r signed int to double *)
@@ -185,7 +183,7 @@ Inductive instruction: Type :=
   | Pjmp_s (symb: ident)
   | Pjmp_r (r: ireg)
   | Pjcc (c: testcond)(l: label)
-  | Pjcc2 (c1 c2: testcond)(l: label)
+  | Pjcc2 (c1 c2: testcond)(l: label)   (**r pseudo *)
   | Pjmptbl (r: ireg) (tbl: list label) (**r pseudo *)
   | Pcall_s (symb: ident)
   | Pcall_r (r: ireg)
@@ -481,10 +479,6 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       exec_load Mint32 m a rs rd
   | Pmov_mr a r1 =>
       exec_store Mint32 m a rs r1 nil
-  | Pmovd_fr rd r1 =>
-      Next (nextinstr (rs#rd <- (rs r1))) m
-  | Pmovd_rf rd r1 =>
-      Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmovsd_ff rd r1 =>
       Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmovsd_fi rd n =>

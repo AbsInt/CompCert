@@ -103,6 +103,9 @@ Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
       | ST0  => OK (Pfld_m (Addrmode (Some base) None (inl _ ofs)) :: k)
       | _ => Error (msg "Asmgen.loadind")
       end
+  | Tsingle =>
+      do r <- freg_of dst;
+      OK (Pcvtss2sd_fm r (Addrmode (Some base) None (inl _ ofs)) :: k)
   | Tlong =>
       Error (msg "Asmgen.loadind")
   end.
@@ -118,6 +121,9 @@ Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
       | ST0  => OK (Pfstp_m (Addrmode (Some base) None (inl _ ofs)) :: k)
       | _ => Error (msg "Asmgen.loadind")
       end
+  | Tsingle =>
+      do r <- freg_of src;
+      OK (Pcvtsd2ss_mf (Addrmode (Some base) None (inl _ ofs)) r :: k)
   | Tlong =>
       Error (msg "Asmgen.storeind")
   end.

@@ -319,6 +319,28 @@ Proof.
   intros; unfold singleoffloat; rewrite binary32offloatofbinary32; reflexivity.
 Qed.
 
+Definition is_single (f: float) : Prop := exists s, f = floatofbinary32 s.
+
+Theorem singleoffloat_is_single:
+  forall f, is_single (singleoffloat f).
+Proof.
+  intros. exists (binary32offloat f); auto.
+Qed.
+
+Theorem singleoffloat_of_single:
+  forall f, is_single f -> singleoffloat f = f.
+Proof.
+  intros. destruct H as [s EQ]. subst f. unfold singleoffloat. 
+  rewrite binary32offloatofbinary32; reflexivity.
+Qed.
+
+Theorem is_single_dec: forall f, {is_single f} + {~is_single f}.
+Proof.
+  intros. case (eq_dec (singleoffloat f) f); intros.
+  unfold singleoffloat in e. left. exists (binary32offloat f). auto.
+  right; red; intros; elim n. apply singleoffloat_of_single; auto.
+Defined.
+
 (** Properties of comparisons. *)
 
 Theorem order_float_finite_correct:
@@ -468,6 +490,12 @@ Theorem singleoffloat_of_bits:
   forall b, singleoffloat (single_of_bits b) = single_of_bits b.
 Proof.
   intro; unfold singleoffloat, single_of_bits; rewrite binary32offloatofbinary32; reflexivity.
+Qed.
+
+Theorem single_of_bits_is_single:
+  forall b, is_single (single_of_bits b).
+Proof.
+  intros. exists (b32_of_bits (Int.unsigned b)); auto.
 Qed.
 
 (** Conversions between floats and unsigned ints can be defined

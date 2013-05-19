@@ -481,7 +481,17 @@ let add_interfs_instr g instr live =
       add_interfs_list g ftmp srcs; add_interfs_list g ftmp dsts;
       (* Take into account destroyed reg when accessing Incoming param *)
       if List.exists (function (L(S(Incoming, _, _))) -> true | _ -> false) srcs
-      then add_interfs_list g (vmreg temp_for_parent_frame) dsts
+      then add_interfs_list g (vmreg temp_for_parent_frame) dsts;
+      (* Take into account destroyed reg when initializing Outgoing
+         arguments of type Tsingle *)
+      if List.exists
+           (function (L(S(Outgoing, _, Tsingle))) -> true | _ -> false) dsts
+      then
+        List.iter
+          (fun mr ->
+            add_interfs_list g (vmreg mr) srcs;
+            IRC.add_interf g (vmreg mr) ftmp)
+          (destroyed_by_setstack Tsingle)
   | Xop(op, args, res) ->
       begin match is_two_address op args with
       | None ->
@@ -825,7 +835,7 @@ let make_parmove srcs dsts itmp ftmp k =
   assert (Array.length dst = n);
   let status = Array.make n To_move in
   let temp_for =
-    function Tint -> itmp | Tfloat -> ftmp | Tlong -> assert false in
+    function Tint -> itmp | (Tfloat|Tsingle) -> ftmp | Tlong -> assert false in
   let code = ref [] in
   let add_move s d =
     match s, d with

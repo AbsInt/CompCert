@@ -240,7 +240,7 @@ Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => R3 :: nil
   | Some Tint => R3 :: nil
-  | Some Tfloat => F1 :: nil
+  | Some (Tfloat | Tsingle) => F1 :: nil
   | Some Tlong => R3 :: R4 :: nil
   end.
 
@@ -285,7 +285,7 @@ Fixpoint loc_arguments_rec
       | Some ireg =>
           R ireg :: loc_arguments_rec tys (ir + 1) fr ofs
       end
-  | Tfloat :: tys =>
+  | (Tfloat | Tsingle) :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
           let ofs := align ofs 2 in
@@ -321,7 +321,7 @@ Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
       | None => size_arguments_rec tys ir fr (ofs + 1)
       | Some ireg => size_arguments_rec tys (ir + 1) fr ofs
       end
-  | Tfloat :: tys =>
+  | (Tfloat | Tsingle) :: tys =>
       match list_nth_z float_param_regs fr with
       | None => size_arguments_rec tys ir fr (align ofs 2 + 2)
       | Some freg => size_arguments_rec tys ir (fr + 1) ofs
@@ -396,6 +396,14 @@ Opaque list_nth_z.
   destruct H. subst. split. omega. congruence. 
   destruct H. subst. split. omega. congruence.
   exploit IHtyl; eauto. destruct l; auto. destruct sl; auto. intuition omega. 
+- (* single *)
+  destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H. 
+  subst. right. eapply list_nth_z_in; eauto.
+  eapply IHtyl; eauto.
+  subst. split. apply Zle_ge. apply align_le. omega. congruence.
+  exploit IHtyl; eauto. destruct l; auto. destruct sl; auto.
+  assert (ofs <= align ofs 2) by (apply align_le; omega). 
+  intuition omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -428,6 +436,9 @@ Proof.
   destruct (list_nth_z int_param_regs (ir' + 1)); eauto.
   apply Zle_trans with (align ofs0 2). apply align_le; omega.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  apply Zle_trans with (align ofs0 2). apply align_le; omega.
+  apply Zle_trans with (align ofs0 2 + 2); auto; omega.
+  destruct (list_nth_z float_param_regs fr); eauto.
   apply Zle_trans with (align ofs0 2). apply align_le; omega.
   apply Zle_trans with (align ofs0 2 + 2); auto; omega.
 Qed.
@@ -477,7 +488,12 @@ Proof.
   transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
   destruct H0. inv H0.
   transitivity (align ofs0 2 + 2). simpl; omega. eauto.  apply size_arguments_rec_above.
-  eauto. 
-}
+  eauto.
+- (* single *)
+  destruct (list_nth_z float_param_regs fr); destruct H0. 
+  congruence.
+  eauto.
+  inv H0. apply size_arguments_rec_above. eauto. 
+  }
   eauto.
 Qed.

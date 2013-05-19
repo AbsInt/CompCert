@@ -124,6 +124,13 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
 Definition destroyed_at_function_entry: list mreg :=
   DX :: FP0 :: nil.   (* must include destroyed_by_op Omove *)
 
+Definition destroyed_by_setstack (ty: typ): list mreg :=
+  match ty with
+  | Tfloat => FP0 :: nil
+  | Tsingle => X7 :: FP0 :: nil
+  | _ => nil
+  end.
+
 Definition temp_for_parent_frame: mreg :=
   DX.
 
@@ -164,7 +171,7 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list 
 Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store
     destroyed_by_cond destroyed_by_jumptable destroyed_by_builtin
-    destroyed_at_function_entry temp_for_parent_frame
+    destroyed_by_setstack destroyed_at_function_entry temp_for_parent_frame
     mregs_for_operation mregs_for_builtin.
 
 (** Two-address operations.  Return [true] if the first argument and

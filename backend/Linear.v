@@ -160,7 +160,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State s f sp b rs' m)
   | exec_Lsetstack:
       forall s f sp src sl ofs ty b rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_op Omove) rs) ->
+      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
       step (State s f sp (Lsetstack src sl ofs ty :: b) rs m)
         E0 (State s f sp b rs' m)
   | exec_Lop:

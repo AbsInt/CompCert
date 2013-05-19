@@ -661,7 +661,7 @@ Lemma add_store_satisfiable:
   numbering_satisfiable ge sp rs m n ->
   eval_addressing ge sp addr rs##args = Some a ->
   Mem.storev chunk m a (rs#src) = Some m' ->
-  Val.has_type (rs#src) (type_of_chunk chunk) ->
+  Val.has_type (rs#src) (type_of_chunk_use chunk) ->
   numbering_satisfiable ge sp rs m' (add_store n chunk addr args src).
 Proof.
   intros. unfold add_store. destruct H0 as [valu A].
@@ -916,7 +916,7 @@ Inductive match_stackframes: list stackframe -> list stackframe -> typ -> Prop :
            (ANALYZE: analyze f = Some approx)
            (WTF: wt_function f tyenv)
            (WTREGS: wt_regset tyenv rs)
-           (TYRES: tyenv res = ty)
+           (TYRES: subtype ty (tyenv res) = true)
            (SAT: forall v m, numbering_satisfiable ge sp (rs#res <- v) m approx!!pc)
            (STACKS: match_stackframes s s' (proj_sig_res (fn_sig f))),
     match_stackframes
@@ -998,7 +998,7 @@ Proof.
   rewrite <- RES. apply eval_operation_preserved. exact symbols_preserved.
   (* state matching *)
   econstructor; eauto.
-  eapply wt_exec_Iop; eauto. eapply wt_instrs; eauto.  
+  eapply wt_exec_Iop; eauto. eapply wt_instr_at; eauto.  
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H. 
   eapply add_op_satisfiable; eauto. eapply wf_analyze; eauto.
@@ -1025,7 +1025,7 @@ Proof.
   eapply exec_Iload; eauto.
   (* state matching *)
   econstructor; eauto.
-  eapply wt_exec_Iload; eauto. eapply wt_instrs; eauto.
+  eapply wt_exec_Iload; eauto. eapply wt_instr_at; eauto.
   eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   eapply add_load_satisfiable; eauto. eapply wf_analyze; eauto.
@@ -1048,42 +1048,40 @@ Proof.
   eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H.
   eapply add_store_satisfiable; eauto. eapply wf_analyze; eauto.
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
-  rewrite <- H8. auto.
+  exploit wt_instr_at; eauto. intros WTI; inv WTI.
+  eapply Val.has_subtype; eauto. 
 
   (* Icall *)
   exploit find_function_translated; eauto. intros [tf [FIND' TRANSF']]. 
   econstructor; split.
   eapply exec_Icall; eauto.
   apply sig_preserved; auto.
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
+  exploit wt_instr_at; eauto. intros WTI; inv WTI.
   econstructor; eauto. 
   econstructor; eauto. 
   intros. eapply analysis_correct_1; eauto. simpl; auto. 
   unfold transfer; rewrite H. 
   apply empty_numbering_satisfiable.
-  rewrite <- H7. apply wt_regset_list; auto. 
+  eapply Val.has_subtype_list; eauto. apply wt_regset_list; auto. 
 
   (* Itailcall *)
   exploit find_function_translated; eauto. intros [tf [FIND' TRANSF']]. 
   econstructor; split.
   eapply exec_Itailcall; eauto.
   apply sig_preserved; auto.
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
+  exploit wt_instr_at; eauto. intros WTI; inv WTI.
   econstructor; eauto. 
   replace (proj_sig_res (funsig fd)) with (proj_sig_res (fn_sig f)). auto. 
   unfold proj_sig_res. rewrite H6; auto.
-  rewrite <- H7. apply wt_regset_list; auto.
+  eapply Val.has_subtype_list; eauto. apply wt_regset_list; auto.
 
   (* Ibuiltin *)
   econstructor; split.
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved; eauto.
   exact symbols_preserved. exact varinfo_preserved.
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
   econstructor; eauto.
-  apply wt_regset_assign; auto. 
-  rewrite H6. eapply external_call_well_typed; eauto. 
+  eapply wt_exec_Ibuiltin; eauto. eapply wt_instr_at; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H.
   assert (CASE1: numbering_satisfiable ge sp (rs#res <- v) m' empty_numbering).
@@ -1124,8 +1122,9 @@ Proof.
   econstructor; split.
   eapply exec_Ireturn; eauto.
   econstructor; eauto.
-  generalize (wt_instrs _ _ WTF pc _ H); intro WTI; inv WTI.
-  unfold proj_sig_res. rewrite <- H2. destruct or; simpl; auto. 
+  exploit wt_instr_at; eauto. intros WTI; inv WTI; simpl.
+  auto.
+  unfold proj_sig_res; rewrite H2. eapply Val.has_subtype; eauto.
 
   (* internal function *)
   monadInv H7. unfold transf_function in EQ. 
@@ -1135,7 +1134,7 @@ Proof.
   econstructor; split.
   eapply exec_function_internal; eauto. 
   simpl. econstructor; eauto.
-  apply wt_init_regs. inv WTF. rewrite wt_params; auto.
+  apply wt_init_regs. inv WTF. eapply Val.has_subtype_list; eauto.
   apply analysis_correct_entry; auto.
 
   (* external function *)
@@ -1152,7 +1151,7 @@ Proof.
   econstructor; split.
   eapply exec_return; eauto.
   econstructor; eauto.
-  apply wt_regset_assign; auto. 
+  apply wt_regset_assign; auto. eapply Val.has_subtype; eauto.  
 Qed.
 
 Lemma transf_initial_states:

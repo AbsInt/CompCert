@@ -104,6 +104,7 @@ Definition eventval_of_val (v: val) (t: typ) : option eventval :=
   match v, t with
   | Vint i, AST.Tint => Some (EVint i)
   | Vfloat f, AST.Tfloat => Some (EVfloat f)
+  | Vfloat f, AST.Tsingle => if Float.is_single_dec f then Some (EVfloatsingle f) else None
   | Vlong n, AST.Tlong => Some (EVlong n)
   | Vptr b ofs, AST.Tint => do id <- Genv.invert_symbol ge b; Some (EVptr_global id ofs)
   | _, _ => None
@@ -123,6 +124,7 @@ Definition val_of_eventval (ev: eventval) (t: typ) : option val :=
   match ev, t with
   | EVint i, AST.Tint => Some (Vint i)
   | EVfloat f, AST.Tfloat => Some (Vfloat f)
+  | EVfloatsingle f, AST.Tsingle => if Float.is_single_dec f then Some (Vfloat f) else None
   | EVlong n, AST.Tlong => Some (Vlong n)
   | EVptr_global id ofs, AST.Tint => do b <- Genv.find_symbol ge id; Some (Vptr b ofs)
   | _, _ => None
@@ -135,6 +137,7 @@ Proof.
   constructor.
   constructor.
   constructor.
+  destruct (Float.is_single_dec f); inv H1. constructor; auto.
   destruct (Genv.invert_symbol ge b) as [id|] eqn:?; inv H1. 
   constructor. apply Genv.invert_find_symbol; auto.
 Qed.
@@ -143,6 +146,7 @@ Lemma eventval_of_val_complete:
   forall ev t v, eventval_match ge ev t v -> eventval_of_val v t = Some ev.
 Proof.
   induction 1; simpl; auto.
+  rewrite pred_dec_true; auto.
   rewrite (Genv.find_invert_symbol _ _ H). auto. 
 Qed.
 
@@ -170,6 +174,7 @@ Proof.
   constructor.
   constructor.
   constructor.
+  destruct (Float.is_single_dec f); inv H1. constructor; auto.
   destruct (Genv.find_symbol ge i) as [b|] eqn:?; inv H1.
   constructor. auto.
 Qed.
@@ -177,7 +182,7 @@ Qed.
 Lemma val_of_eventval_complete:
   forall ev t v, eventval_match ge ev t v -> val_of_eventval ev t = Some v.
 Proof.
-  induction 1; simpl; auto. rewrite H; auto.
+  induction 1; simpl; auto. rewrite pred_dec_true; auto. rewrite H; auto.
 Qed.
 
 (** Volatile memory accesses. *)

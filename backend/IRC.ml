@@ -245,7 +245,13 @@ type graph = {
 
 let num_register_classes = 2
 
-let class_of_type = function Tint -> 0 | Tfloat -> 1 | Tlong -> assert false
+let class_of_type = function
+  | Tint -> 0
+  | Tfloat | Tsingle -> 1
+  | Tlong -> assert false
+
+let type_of_class c =
+  if c = 0 then Tint else Tfloat
 
 let reserved_registers = ref ([]: mreg list)
 
@@ -860,7 +866,7 @@ let assign_color g n =
           n.color <- Some loc
       | None ->
           (* Last, pick a Local stack slot *)
-          n.color <- Some (find_slot slot_conflicts n.typ)
+          n.color <- Some (find_slot slot_conflicts (type_of_class n.regclass))
 
 (* Extract the location of a variable *)
 
@@ -877,7 +883,7 @@ let location_of_var g v =
       with Not_found ->
         match ty with
         | Tint -> R dummy_int_reg
-        | Tfloat -> R dummy_float_reg
+        | Tfloat | Tsingle -> R dummy_float_reg
         | Tlong -> assert false
 
 (* The exported interface *)

@@ -29,7 +29,11 @@ let mreg pp r =
   | Some s -> fprintf pp "%s" s
   | None -> fprintf pp "<unknown machreg>"
 
-let short_name_of_type = function Tint -> 'i' | Tfloat -> 'f' | Tlong -> 'l'
+let short_name_of_type = function
+  | Tint -> 'i'
+  | Tfloat -> 'f'
+  | Tlong -> 'l'
+  | Tsingle -> 's'
 
 let loc pp = function
   | R r -> mreg pp r

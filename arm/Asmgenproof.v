@@ -239,15 +239,14 @@ Remark loadind_label:
 Proof.
   intros. destruct ty; monadInv H.
   unfold loadind_int; TailNoLabel.
-  unfold loadind_float; TailNoLabel.
+  TailNoLabel.
+  TailNoLabel.
 Qed.
 
 Remark storeind_label:
   forall base ofs ty src k c, storeind src base ofs ty k = OK c -> tail_nolabel k c.
 Proof.
-  intros. destruct ty; monadInv H.
-  unfold storeind_int; TailNoLabel.
-  unfold storeind_float; TailNoLabel.
+  intros. destruct ty; monadInv H; TailNoLabel.
 Qed.
 
 Remark transl_cond_label:
@@ -556,8 +555,10 @@ Proof.
   rewrite (sp_val _ _ _ AG) in A. intros. simpl in TR.
   exploit storeind_correct; eauto with asmgen. intros [rs' [P Q]].
   exists rs'; split. eauto.
-  split. change (Mach.undef_regs (destroyed_by_op Omove) rs) with rs. apply agree_exten with rs0; auto with asmgen.
+  split. eapply agree_undef_regs; eauto with asmgen.
   simpl; intros. rewrite Q; auto with asmgen.
+Local Transparent destroyed_by_setstack.
+  destruct ty; simpl; auto with asmgen.
 
 - (* Mgetparam *)
   assert (f0 = f) by congruence; subst f0.

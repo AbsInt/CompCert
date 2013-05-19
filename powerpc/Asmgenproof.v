@@ -526,9 +526,8 @@ Proof.
   rewrite (sp_val _ _ _ AG) in A. intros. simpl in TR.
   exploit storeind_correct; eauto with asmgen. intros [rs' [P Q]].
   exists rs'; split. eauto.
-  split. change (Mach.undef_regs (destroyed_by_op Omove) rs) with rs. 
-  apply agree_exten with rs0; auto with asmgen.
-  simpl; intros. rewrite Q; auto with asmgen.
+  split. eapply agree_undef_regs; eauto with asmgen.
+  simpl; intros. rewrite Q; auto with asmgen. 
 
 - (* Mgetparam *)
   assert (f0 = f) by congruence; subst f0.

@@ -473,7 +473,7 @@ Lemma decode_val_type:
 Proof.
   intros. unfold decode_val. 
   destruct (proj_bytes cl). 
-  destruct chunk; simpl; auto. 
+  destruct chunk; simpl; auto. apply Float.single_of_bits_is_single.
   destruct chunk; simpl; auto.
   unfold proj_pointer. destruct cl; try (exact I).
   destruct m; try (exact I).

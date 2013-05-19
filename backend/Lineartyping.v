@@ -45,7 +45,7 @@ Definition slot_valid (sl: slot) (ofs: Z) (ty: typ): bool :=
   | Incoming => In_dec Loc.eq (S Incoming ofs ty) (loc_parameters funct.(fn_sig))
   end &&
   match ty with
-  | Tint | Tfloat => true
+  | Tint | Tfloat | Tsingle => true
   | Tlong => false
   end.
 
@@ -66,23 +66,23 @@ Definition loc_valid (l: loc) : bool :=
 Definition wt_instr (i: instruction) : bool :=
   match i with
   | Lgetstack sl ofs ty r =>
-      typ_eq ty (mreg_type r) && slot_valid sl ofs ty
+      subtype ty (mreg_type r) && slot_valid sl ofs ty
   | Lsetstack r sl ofs ty =>
-      typ_eq ty (mreg_type r) && slot_valid sl ofs ty && slot_writable sl
+      slot_valid sl ofs ty && slot_writable sl
   | Lop op args res =>
       match is_move_operation op args with
       | Some arg =>
-          typ_eq (mreg_type arg) (mreg_type res)
+          subtype (mreg_type arg) (mreg_type res)
       | None => 
           let (targs, tres) := type_of_operation op in
-          typ_eq (mreg_type res) tres
+          subtype tres (mreg_type res)
       end
   | Lload chunk addr args dst =>
-      typ_eq (mreg_type dst) (type_of_chunk chunk)
+      subtype (type_of_chunk chunk) (mreg_type dst)
   | Ltailcall sg ros =>
       zeq (size_arguments sg) 0
   | Lbuiltin ef args res =>
-      list_typ_eq (map mreg_type res) (proj_sig_res' (ef_sig ef))
+      subtype_list (proj_sig_res' (ef_sig ef)) (map mreg_type res) 
   | Lannot ef args =>
       forallb loc_valid args
   | _ =>
@@ -104,28 +104,35 @@ Require Import Values.
 Definition wt_locset (ls: locset) : Prop :=
   forall l, Val.has_type (ls l) (Loc.type l).
 
-Lemma wt_setloc:
-  forall ls l v,
-  Val.has_type v (Loc.type l) -> wt_locset ls -> wt_locset (Locmap.set l v ls).
+Lemma wt_setreg:
+  forall ls r v,
+  Val.has_type v (mreg_type r) -> wt_locset ls -> wt_locset (Locmap.set (R r) v ls).
 Proof.
   intros; red; intros.
   unfold Locmap.set. 
-  destruct (Loc.eq l l0). congruence.
-  destruct (Loc.diff_dec l l0). auto. red. auto.
+  destruct (Loc.eq (R r) l).
+  subst l; auto.
+  destruct (Loc.diff_dec (R r) l). auto. red. auto.
 Qed.
 
-Lemma wt_setlocs:
-  forall ll vl ls,
-  Val.has_type_list vl (map Loc.type ll) -> wt_locset ls -> wt_locset (Locmap.setlist ll vl ls).
+Lemma wt_setstack:
+  forall ls sl ofs ty v,
+  wt_locset ls -> wt_locset (Locmap.set (S sl ofs ty) v ls).
 Proof.
-  induction ll; destruct vl; simpl; intuition. 
-  apply IHll; auto. apply wt_setloc; auto.
+  intros; red; intros.
+  unfold Locmap.set. 
+  destruct (Loc.eq (S sl ofs ty) l).
+  subst l. simpl. 
+  generalize (Val.load_result_type (chunk_of_type ty) v). 
+  replace (type_of_chunk (chunk_of_type ty)) with ty. auto.
+  destruct ty; reflexivity.
+  destruct (Loc.diff_dec (S sl ofs ty) l). auto. red. auto.
 Qed.
 
 Lemma wt_undef_regs:
   forall rs ls, wt_locset ls -> wt_locset (undef_regs rs ls).
 Proof.
-  induction rs; simpl; intros. auto. apply wt_setloc; auto. red; auto.
+  induction rs; simpl; intros. auto. apply wt_setreg; auto. red; auto.
 Qed.
 
 Lemma wt_call_regs:
@@ -161,10 +168,11 @@ Lemma wt_setlist_result:
 Proof.
   unfold loc_result, encode_long, proj_sig_res; intros.
   destruct (sig_res sg) as [[] | ]; simpl.
-  apply wt_setloc; auto.
-  apply wt_setloc; auto.
-  destruct v; simpl in H; try contradiction;
-  simpl; apply wt_setloc; auto; apply wt_setloc; auto.
-  apply wt_setloc; auto.
+- apply wt_setreg; auto.
+- apply wt_setreg; auto.
+- destruct v; simpl in H; try contradiction;
+  simpl; apply wt_setreg; auto; apply wt_setreg; auto.
+- apply wt_setreg; auto. apply Val.has_subtype with Tsingle; auto. 
+- apply wt_setreg; auto.
 Qed.
 

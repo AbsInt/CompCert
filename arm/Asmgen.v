@@ -419,27 +419,33 @@ Definition indexed_memory_access
 Definition loadind_int (base: ireg) (ofs: int) (dst: ireg) (k: code) :=
   indexed_memory_access (fun base n => Pldr dst base (SAimm n)) mk_immed_mem_word base ofs k.
 
-Definition loadind_float (base: ireg) (ofs: int) (dst: freg) (k: code) :=
-  indexed_memory_access (Pfldd dst) mk_immed_mem_float base ofs k.
-
 Definition loadind (base: ireg) (ofs: int) (ty: typ) (dst: mreg) (k: code) :=
   match ty with
-  | Tint   => do r <- ireg_of dst; OK (loadind_int base ofs r k)
-  | Tfloat => do r <- freg_of dst; OK (loadind_float base ofs r k)
-  | Tlong => Error (msg "Asmgen.loadind")
+  | Tint =>
+      do r <- ireg_of dst; OK (loadind_int base ofs r k)
+  | Tfloat =>
+      do r <- freg_of dst;
+      OK (indexed_memory_access (Pfldd r) mk_immed_mem_float base ofs k)
+  | Tsingle =>
+      do r <- freg_of dst;
+      OK (indexed_memory_access (Pflds r) mk_immed_mem_float base ofs k)
+  | Tlong =>
+      Error (msg "Asmgen.loadind")
   end.
-
-Definition storeind_int (src: ireg) (base: ireg) (ofs: int) (k: code) :=
-  indexed_memory_access (fun base n => Pstr src base (SAimm n)) mk_immed_mem_word base ofs k.
-
-Definition storeind_float (src: freg) (base: ireg) (ofs: int) (k: code) :=
-  indexed_memory_access (Pfstd src) mk_immed_mem_float base ofs k.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: int) (ty: typ) (k: code) :=
   match ty with
-  | Tint   => do r <- ireg_of src; OK (storeind_int r base ofs k)
-  | Tfloat => do r <- freg_of src; OK (storeind_float r base ofs k)
-  | Tlong => Error (msg "Asmgen.storeind")
+  | Tint =>
+      do r <- ireg_of src;
+      OK (indexed_memory_access (fun base n => Pstr r base (SAimm n)) mk_immed_mem_word base ofs k)
+  | Tfloat =>
+      do r <- freg_of src;
+      OK (indexed_memory_access (Pfstd r) mk_immed_mem_float base ofs k)
+  | Tsingle =>
+      do r <- freg_of src;
+      OK (indexed_memory_access (Pfsts r) mk_immed_mem_float base ofs k)
+  | Tlong =>
+      Error (msg "Asmgen.storeind")
   end.
 
 (** Translation of memory accesses *)

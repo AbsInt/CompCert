@@ -69,7 +69,7 @@ Defined.
 Open Scope Z_scope.
 
 Definition typesize (ty: typ) : Z :=
-  match ty with Tint => 1 | Tlong => 2 | Tfloat => 2 end.
+  match ty with Tint => 1 | Tlong => 2 | Tfloat => 2 | Tsingle => 1 end.
 
 Lemma typesize_pos:
   forall (ty: typ), typesize ty > 0.
@@ -292,15 +292,36 @@ Module Locmap.
       maps location [l] to value [v], locations that overlap with [l]
       to [Vundef], and locations that are different (and non-overlapping)
       from [l] to their previous values in [m].  This is apparent in the
-      ``good variables'' properties [Locmap.gss] and [Locmap.gso]. *)
+      ``good variables'' properties [Locmap.gss] and [Locmap.gso].
+
+      Additionally, the [set] operation also anticipates the fact that
+      abstract stack slots are mapped to concrete memory locations
+      in the [Stacking] phase.  Hence, values stored in stack slots
+      are normalized according to the type of the slot. *)
 
   Definition set (l: loc) (v: val) (m: t) : t :=
     fun (p: loc) =>
-      if Loc.eq l p then v else if Loc.diff_dec l p then m p else Vundef.
+      if Loc.eq l p then
+        match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end
+      else if Loc.diff_dec l p then
+        m p
+      else Vundef.
 
-  Lemma gss: forall l v m, (set l v m) l = v.
+  Lemma gss: forall l v m,
+    (set l v m) l = 
+    match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end.
+  Proof.
+    intros. unfold set. apply dec_eq_true.
+  Qed.
+
+  Lemma gss_reg: forall r v m, (set (R r) v m) (R r) = v.
   Proof.
     intros. unfold set. rewrite dec_eq_true. auto.
+  Qed.
+
+  Lemma gss_typed: forall l v m, Val.has_type v (Loc.type l) -> (set l v m) l = v.
+  Proof.
+    intros. rewrite gss. destruct l. auto. apply Val.load_result_same; auto. 
   Qed.
 
   Lemma gso: forall l v m p, Loc.diff l p -> (set l v m) p = m p.
@@ -328,10 +349,11 @@ Module Locmap.
   Proof.
     assert (P: forall ll l m, m l = Vundef -> (undef ll m) l = Vundef).
       induction ll; simpl; intros. auto. apply IHll. 
-      unfold set. destruct (Loc.eq a l); auto. 
+      unfold set. destruct (Loc.eq a l).
+      destruct a. auto. destruct ty; reflexivity. 
       destruct (Loc.diff_dec a l); auto.
     induction ll; simpl; intros. contradiction. 
-    destruct H. apply P. subst a. apply gss. 
+    destruct H. apply P. subst a. apply gss_typed. exact I. 
     auto.
   Qed.
 
@@ -355,7 +377,12 @@ End Locmap.
 Module IndexedTyp <: INDEXED_TYPE.
   Definition t := typ.
   Definition index (x: t) :=
-    match x with Tint => 1%positive | Tfloat => 2%positive | Tlong => 3%positive end.
+    match x with
+    | Tint => 1%positive
+    | Tsingle => 2%positive
+    | Tfloat => 3%positive
+    | Tlong => 4%positive
+    end.
   Lemma index_inj: forall x y, index x = index y -> x = y.
   Proof. destruct x; destruct y; simpl; congruence. Qed.
   Definition eq := typ_eq.
@@ -467,9 +494,9 @@ Module OrderedLoc <: OrderedType.
         destruct H. right.
         destruct H0. right. generalize (RANGE ty'); omega. 
         destruct H0. 
-        assert (ty' = Tint). 
-        { unfold OrderedTyp.lt in H1. destruct ty'; compute in H1; congruence. }
-        subst ty'. right. simpl typesize. omega. 
+        assert (ty' = Tint \/ ty' = Tsingle). 
+        { unfold OrderedTyp.lt in H1. destruct ty'; auto; compute in H1; congruence. }
+        right. destruct H2; subst ty'; simpl typesize; omega. 
       + destruct H. left. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
         destruct H0. left; omega.
@@ -494,6 +521,8 @@ Module OrderedLoc <: OrderedType.
       right; split. omega. compute. auto. 
       left; omega. 
       left; omega.
+      destruct (zlt ofs' (ofs - 1)). left; auto. 
+      right; split. omega. compute. auto. 
   Qed.
 
 End OrderedLoc.

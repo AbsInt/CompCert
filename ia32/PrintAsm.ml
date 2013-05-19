@@ -281,7 +281,7 @@ let print_annot_val oc txt args res =
   | [IR src], [IR dst] ->
       if dst <> src then fprintf oc "	movl	%a, %a\n" ireg src ireg dst
   | [FR src], [FR dst] ->
-      if dst <> src then fprintf oc "	movsd	%a, %a\n" freg src freg dst
+      if dst <> src then fprintf oc "	movapd	%a, %a\n" freg src freg dst
   | _, _ -> assert false
 
 (* Handling of memcpy *)
@@ -442,7 +442,7 @@ let print_builtin_inline oc name args res =
   | "__builtin_fabs", [FR a1], [FR res] ->
       need_masks := true;
       if a1 <> res then
-        fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
+        fprintf oc "	movapd	%a, %a\n" freg a1 freg res;
       fprintf oc "	andpd	%a, %a\n" raw_symbol "__absd_mask" freg res
   | "__builtin_fsqrt", [FR a1], [FR res] ->
       fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
@@ -452,7 +452,7 @@ let print_builtin_inline oc name args res =
       else if res = a2 then
         fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
       else begin
-        fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
+        fprintf oc "	movapd	%a, %a\n" freg a1 freg res;
         fprintf oc "	maxsd	%a, %a\n" freg a2 freg res
       end
   | "__builtin_fmin", [FR a1; FR a2], [FR res] ->
@@ -461,7 +461,7 @@ let print_builtin_inline oc name args res =
       else if res = a2 then
         fprintf oc "	minsd	%a, %a\n" freg a1 freg res
       else begin
-        fprintf oc "	movsd	%a, %a\n" freg a1 freg res;
+        fprintf oc "	movapd	%a, %a\n" freg a1 freg res;
         fprintf oc "	minsd	%a, %a\n" freg a2 freg res
       end
   (* 64-bit integer arithmetic *)
@@ -531,10 +531,6 @@ let print_instruction oc = function
       fprintf oc "	movl	%a, %a\n" addressing a ireg rd
   | Pmov_mr(a, r1) ->
       fprintf oc "	movl	%a, %a\n" ireg r1 addressing a
-  | Pmovd_fr(rd, r1) ->
-      fprintf oc "	movd	%a, %a\n" ireg r1 freg rd
-  | Pmovd_rf(rd, r1) ->
-      fprintf oc "	movd	%a, %a\n" freg r1 ireg rd
   | Pmovsd_ff(rd, r1) ->
       fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
   | Pmovsd_fi(rd, n) ->

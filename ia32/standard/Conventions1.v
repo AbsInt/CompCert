@@ -220,7 +220,7 @@ Definition loc_result (s: signature) : list mreg :=
   match s.(sig_res) with
   | None => AX :: nil
   | Some Tint => AX :: nil
-  | Some Tfloat => FP0 :: nil
+  | Some (Tfloat | Tsingle) => FP0 :: nil
   | Some Tlong => DX :: AX :: nil
   end.
 
@@ -261,6 +261,7 @@ Fixpoint loc_arguments_rec
   | nil => nil
   | Tint :: tys => S Outgoing ofs Tint :: loc_arguments_rec tys (ofs + 1)
   | Tfloat :: tys => S Outgoing ofs Tfloat :: loc_arguments_rec tys (ofs + 2)
+  | Tsingle :: tys => S Outgoing ofs Tsingle :: loc_arguments_rec tys (ofs + 1)
   | Tlong :: tys => S Outgoing (ofs + 1) Tint :: S Outgoing ofs Tint :: loc_arguments_rec tys (ofs + 2)
   end.
 
@@ -314,6 +315,9 @@ Proof.
   destruct H. subst l; split; [omega|congruence].
   exploit IHtyl; eauto.
   destruct l; auto. destruct sl; auto. intuition omega.
+- destruct H. subst l. split. omega. congruence.
+  exploit IHtyl; eauto.
+  destruct l; auto. destruct sl; auto. intuition omega.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -362,6 +366,7 @@ Proof.
   destruct H. inv H. 
   simpl typesize. apply Zle_trans with (ofs + 2). omega. apply size_arguments_rec_above. 
   auto.
+  destruct H. inv H. apply size_arguments_rec_above. auto.
 Qed.
 
 

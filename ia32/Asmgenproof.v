@@ -172,6 +172,7 @@ Proof.
   TailNoLabel.
   destruct (preg_of dst); TailNoLabel.
   discriminate.
+  TailNoLabel.
 Qed.
 
 Remark storeind_label:
@@ -183,6 +184,7 @@ Proof.
   TailNoLabel.
   destruct (preg_of src); TailNoLabel.
   discriminate.
+  TailNoLabel.
 Qed.
 
 Remark mk_setcc_base_label:
@@ -506,6 +508,8 @@ Proof.
   exists rs'; split. eauto.
   split. eapply agree_undef_regs; eauto. 
   simpl; intros. rewrite Q; auto with asmgen.
+Local Transparent destroyed_by_setstack.
+  destruct ty; simpl; intuition congruence.
 
 - (* Mgetparam *)
   assert (f0 = f) by congruence; subst f0.

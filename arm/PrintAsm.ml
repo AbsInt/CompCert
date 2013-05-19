@@ -457,22 +457,47 @@ let print_builtin_inline oc name args res =
 
 type direction = Incoming | Outgoing
 
+let ireg_param = function
+  | 0 -> IR0 | 1 -> IR1 | 2 -> IR2 | 3 -> IR3 | _ -> assert false
+
+let freg_param = function
+  | 0 -> FR0 | 1 -> FR1 | 2 -> FR2 | 3 -> FR3 | _ -> assert false
+
+let fixup_double oc dir f i1 i2 =
+  match dir with
+  | Incoming ->     (* f <- (i1, i2)  *)
+      fprintf oc "	fmdrr	%a, %a, %a\n" freg f ireg i1 ireg i2
+  | Outgoing ->     (* (i1, i2) <- f *)
+      fprintf oc "	fmrrd	%a, %a, %a\n" ireg i1 ireg i2 freg f
+
+let fixup_single oc dir f i =
+  match dir with
+  | Incoming ->     (* f <- i; f <- double_of_single f *)
+      fprintf oc "	fmsr	%a, %a\n" freg_single f ireg i;
+      fprintf oc "	fcvtds	%a, %a\n" freg f freg_single f
+  | Outgoing ->     (* f <- single_of_double f; i <- f *)
+      fprintf oc "	fcvtsd	%a, %a\n" freg_single f freg f;
+      fprintf oc "	fmrs	%a, %a\n" ireg i freg_single f
+
 let fixup_conventions oc dir tyl =
-  let fixup f i1 i2 =
-    match dir with
-    | Incoming ->     (* f <- (i1, i2)  *)
-        fprintf oc "	fmdrr	%a, %a, %a\n" freg f ireg i1 ireg i2
-    | Outgoing ->      (* (i1, i2) <- f *)
-        fprintf oc "	fmrrd	%a, %a, %a\n" ireg i1 ireg i2 freg f in
-  match tyl with
-  | Tfloat :: Tfloat :: _ ->
-      fixup FR0 IR0 IR1; fixup FR1 IR2 IR3; 4
-  | Tfloat :: _ ->
-      fixup FR0 IR0 IR1; 2
-  | Tint :: Tfloat :: _ | Tint :: Tint :: Tfloat :: _ ->
-      fixup FR1 IR2 IR3; 2
-  | _ ->
-      0
+  let rec fixup i tyl =
+    if i >= 4 then 0 else
+      match tyl with
+      | [] -> 0
+      | Tint :: tyl' ->
+          fixup (i+1) tyl'
+      | Tlong :: tyl' ->
+          fixup (((i + 1) land (-2)) + 2) tyl'
+      | Tfloat :: tyl' ->
+          let i = (i + 1) land (-2) in
+          if i >= 4 then 0 else begin
+            fixup_double oc dir (freg_param i) (ireg_param i) (ireg_param (i+1));
+            1 + fixup (i+2) tyl'
+          end
+      | Tsingle :: tyl' ->
+          fixup_single oc dir (freg_param i) (ireg_param i);
+          2 + fixup (i+1) tyl'
+  in fixup 0 tyl
 
 let fixup_arguments oc dir sg =
   fixup_conventions oc dir sg.sig_args

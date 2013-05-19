@@ -10,8 +10,8 @@ LIBS=$(LIBMATH)
 TIME=xtime -o /dev/null -mintime 2.0     # Xavier's hack
 #TIME=time >/dev/null                    # Otherwise
 
-PROGS=fib integr qsort fft fftw sha1 sha3 aes almabench lists \
-  binarytrees fannkuch knucleotide mandelbrot nbody \
+PROGS=fib integr qsort fft fftsp fftw sha1 sha3 aes almabench \
+  lists binarytrees fannkuch knucleotide mandelbrot nbody \
   nsieve nsievebits spectral vmach \
   bisect chomp perlin siphash24
 

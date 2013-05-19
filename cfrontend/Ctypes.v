@@ -530,6 +530,7 @@ Fixpoint type_of_params (params: list (ident * type)) : typelist :=
 
 Definition typ_of_type (t: type) : AST.typ :=
   match t with
+  | Tfloat F32 _ => AST.Tsingle
   | Tfloat _ _ => AST.Tfloat
   | Tlong _ _ => AST.Tlong
   | _ => AST.Tint
@@ -538,6 +539,7 @@ Definition typ_of_type (t: type) : AST.typ :=
 Definition opttyp_of_type (t: type) : option AST.typ :=
   match t with
   | Tvoid => None
+  | Tfloat F32 _ => Some AST.Tsingle
   | Tfloat _ _ => Some AST.Tfloat
   | Tlong _ _ => Some AST.Tlong
   | _ => Some AST.Tint

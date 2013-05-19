@@ -265,7 +265,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   match op with
   | Omove => (nil, Tint)   (* treated specially *)
   | Ointconst _ => (nil, Tint)
-  | Ofloatconst _ => (nil, Tfloat)
+  | Ofloatconst f => (nil, if Float.is_single_dec f then Tsingle else Tfloat)
   | Oaddrsymbol _ _ => (nil, Tint)
   | Oaddrstack _ => (nil, Tint)
   | Ocast8signed => (Tint :: nil, Tint)
@@ -303,7 +303,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osubf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Omulf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Odivf => (Tfloat :: Tfloat :: nil, Tfloat)
-  | Osingleoffloat => (Tfloat :: nil, Tfloat)
+  | Osingleoffloat => (Tfloat :: nil, Tsingle)
   | Ointoffloat => (Tfloat :: nil, Tint)
   | Ofloatofwords => (Tint :: Tint :: nil, Tfloat)
   | Omakelong => (Tint :: Tint :: nil, Tlong)
@@ -340,7 +340,7 @@ Proof with (try exact I).
   destruct op; simpl in H0; FuncInv; subst; simpl.
   congruence.
   exact I.
-  exact I.
+  destruct (Float.is_single_dec f); auto. 
   unfold symbol_address. destruct (Genv.find_symbol genv i)...
   destruct sp...
   destruct v0...
@@ -380,26 +380,13 @@ Proof with (try exact I).
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
-  destruct v0...
+  destruct v0... simpl. apply Float.singleoffloat_is_single.
   destruct v0; simpl in H0; inv H0. destruct (Float.intoffloat f); inv H2...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0...
   destruct v0...
   destruct (eval_condition c vl m); simpl... destruct b... 
-Qed.
-
-Lemma type_of_chunk_correct:
-  forall chunk m addr v,
-  Mem.loadv chunk m addr = Some v ->
-  Val.has_type v (type_of_chunk chunk).
-Proof.
-  intro chunk.
-  assert (forall v, Val.has_type (Val.load_result chunk v) (type_of_chunk chunk)).
-  destruct v; destruct chunk; exact I.
-  intros until v. unfold Mem.loadv. 
-  destruct addr; intros; try discriminate.
-  eapply Mem.load_type; eauto.
 Qed.
 
 End SOUNDNESS.

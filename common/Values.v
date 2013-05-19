@@ -61,6 +61,7 @@ Definition has_type (v: val) (t: typ) : Prop :=
   | Vint _, Tint => True
   | Vlong _, Tlong => True
   | Vfloat _, Tfloat => True
+  | Vfloat f, Tsingle => Float.is_single f
   | Vptr _ _, Tint => True
   | _, _ => False
   end.
@@ -77,6 +78,23 @@ Definition has_opttype (v: val) (ot: option typ) : Prop :=
   | None => v = Vundef
   | Some t => has_type v t
   end.
+
+Lemma has_subtype:
+  forall ty1 ty2 v,
+  subtype ty1 ty2 = true -> has_type v ty1 -> has_type v ty2.
+Proof.
+  intros. destruct ty1; destruct ty2; simpl in H; discriminate || assumption || idtac.
+  unfold has_type in *. destruct v; auto. 
+Qed.
+
+Lemma has_subtype_list:
+  forall tyl1 tyl2 vl,
+  subtype_list tyl1 tyl2 = true -> has_type_list vl tyl1 -> has_type_list vl tyl2.
+Proof.
+  induction tyl1; intros; destruct tyl2; try discriminate; destruct vl; try contradiction.
+  red; auto.
+  simpl in *. InvBooleans. destruct H0. split; auto. eapply has_subtype; eauto.
+Qed.
 
 (** Truth values.  Pointers and non-zero integers are treated as [True].
   The integer 0 (also used to represent the null pointer) is [False].
@@ -603,14 +621,14 @@ Definition cmplu (c: comparison) (v1 v2: val): option val :=
 
 End COMPARISONS.
 
-(** [load_result] is used in the memory model (library [Mem])
-  to post-process the results of a memory read.  For instance,
-  consider storing the integer value [0xFFF] on 1 byte at a
-  given address, and reading it back.  If it is read back with
+(** [load_result] reflects the effect of storing a value with a given
+  memory chunk, then reading it back with the same chunk.  Depending
+  on the chunk and the type of the value, some normalization occurs.
+  For instance, consider storing the integer value [0xFFF] on 1 byte
+  at a given address, and reading it back.  If it is read back with
   chunk [Mint8unsigned], zero-extension must be performed, resulting
-  in [0xFF].  If it is read back as a [Mint8signed], sign-extension
-  is performed and [0xFFFFFFFF] is returned.   Type mismatches
-  (e.g. reading back a float as a [Mint32]) read back as [Vundef]. *)
+  in [0xFF].  If it is read back as a [Mint8signed], sign-extension is
+  performed and [0xFFFFFFFF] is returned. *)
 
 Definition load_result (chunk: memory_chunk) (v: val) :=
   match chunk, v with
@@ -625,6 +643,19 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | (Mfloat64 | Mfloat64al32), Vfloat f => Vfloat f
   | _, _ => Vundef
   end.
+
+Lemma load_result_type:
+  forall chunk v, has_type (load_result chunk v) (type_of_chunk chunk).
+Proof.
+  intros. destruct chunk; destruct v; simpl; auto. apply Float.singleoffloat_is_single.
+Qed.
+
+Lemma load_result_same:
+  forall v ty, has_type v ty -> load_result (chunk_of_type ty) v = v.
+Proof.
+  unfold has_type; intros. destruct v; destruct ty; try contradiction; auto.
+  simpl. rewrite Float.singleoffloat_of_single; auto. 
+Qed.
 
 (** Theorems on arithmetic operations. *)
 

@@ -168,6 +168,7 @@ let name_of_type = function
   | Tint -> "int"
   | Tfloat -> "float"
   | Tlong -> "long"
+  | Tsingle -> "single"
 
 let rec print_sig p = function
   | {sig_args = []; sig_res = None} -> fprintf p "void"

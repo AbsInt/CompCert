@@ -341,6 +341,12 @@ Proof.
   intuition Simplifs.
   (* long *)
   inv H.
+  (* single *)
+  monadInv H.
+  rewrite (freg_of_eq _ _ EQ). econstructor.
+  split. apply exec_straight_one. simpl. unfold exec_load. rewrite H1. rewrite H0.
+  eauto. auto.
+  intuition Simplifs.
 Qed.
 
 Lemma storeind_correct:
@@ -349,7 +355,7 @@ Lemma storeind_correct:
   Mem.storev (chunk_of_type ty) m (Val.add rs#base (Vint ofs)) (rs#(preg_of src)) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, data_preg r = true -> r <> ST0 -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> preg_notin r (destroyed_by_setstack ty) -> rs'#r = rs#r.
 Proof.
   unfold storeind; intros.
   set (addr := Addrmode (Some base) None (inl (ident * int) ofs)) in *.
@@ -372,6 +378,12 @@ Proof.
   intros. simpl. Simplifs.
   (* long *)
   inv H.
+  (* single *)
+  monadInv H.
+  rewrite (freg_of_eq _ _ EQ) in H0. econstructor.
+  split. apply exec_straight_one. simpl. unfold exec_store. rewrite H1. rewrite H0.
+  simpl. eauto. auto.
+  intros. destruct H2. Simplifs.
 Qed.
 
 (** Translation of addressing modes *)

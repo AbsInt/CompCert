@@ -57,6 +57,7 @@ Inductive eventval: Type :=
   | EVint: int -> eventval
   | EVlong: int64 -> eventval
   | EVfloat: float -> eventval
+  | EVfloatsingle: float -> eventval
   | EVptr_global: ident -> int -> eventval.
 
 Inductive event: Type :=
@@ -272,6 +273,9 @@ Inductive eventval_match: eventval -> typ -> val -> Prop :=
       eventval_match (EVlong i) Tlong (Vlong i)
   | ev_match_float: forall f,
       eventval_match (EVfloat f) Tfloat (Vfloat f)
+  | ev_match_single: forall f,
+      Float.is_single f ->
+      eventval_match (EVfloatsingle f) Tsingle (Vfloat f)
   | ev_match_ptr: forall id b ofs,
       Genv.find_symbol ge id = Some b ->
       eventval_match (EVptr_global id ofs) Tint (Vptr b ofs).
@@ -291,7 +295,7 @@ Lemma eventval_match_type:
   forall ev ty v,
   eventval_match ev ty v -> Val.has_type v ty.
 Proof.
-  intros. inv H; constructor.
+  intros. inv H; simpl; auto. 
 Qed.
 
 Lemma eventval_list_match_length:
@@ -330,7 +334,7 @@ Lemma eventval_match_inject:
   forall ev ty v1 v2,
   eventval_match ev ty v1 -> val_inject f v1 v2 -> eventval_match ev ty v2.
 Proof.
-  intros. inv H; inv H0; try constructor.
+  intros. inv H; inv H0; try constructor; auto.
   destruct glob_pres as [A [B C]].
   exploit A; eauto. intro EQ; rewrite H3 in EQ; inv EQ.
   rewrite Int.add_zero. econstructor; eauto. 
@@ -384,6 +388,7 @@ Definition eventval_valid (ev: eventval) : Prop :=
   | EVint _ => True
   | EVlong _ => True
   | EVfloat _ => True
+  | EVfloatsingle f => Float.is_single f
   | EVptr_global id ofs => exists b, Genv.find_symbol ge id = Some b
   end.
 
@@ -392,25 +397,37 @@ Definition eventval_type (ev: eventval) : typ :=
   | EVint _ => Tint
   | EVlong _ => Tlong
   | EVfloat _ => Tfloat
+  | EVfloatsingle _ => Tsingle
   | EVptr_global id ofs => Tint
   end.
 
-Lemma eventval_valid_match:
-  forall ev ty,
-  eventval_valid ev -> eventval_type ev = ty -> exists v, eventval_match ev ty v.
+Lemma eventval_match_receptive:
+  forall ev1 ty v1 ev2,
+  eventval_match ev1 ty v1 ->
+  eventval_valid ev1 -> eventval_valid ev2 -> eventval_type ev1 = eventval_type ev2 ->
+  exists v2, eventval_match ev2 ty v2.
 Proof.
-  intros. subst ty. destruct ev; simpl in *.
+  intros. inv H; destruct ev2; simpl in H2; try discriminate.
+  exists (Vint i0); constructor.
+  destruct H1 as [b EQ]. exists (Vptr b i1); constructor; auto.
+  exists (Vlong i0); constructor.
+  exists (Vfloat f1); constructor.
+  exists (Vfloat f1); constructor; auto.
   exists (Vint i); constructor.
-  exists (Vlong i); constructor.
-  exists (Vfloat f0); constructor.
-  destruct H as [b A]. exists (Vptr b i0); constructor; auto.
+  destruct H1 as [b' EQ]. exists (Vptr b' i0); constructor; auto.
 Qed.
 
 Lemma eventval_match_valid:
-  forall ev ty v,
-  eventval_match ev ty v -> eventval_valid ev /\ eventval_type ev = ty.
+  forall ev ty v, eventval_match ev ty v -> eventval_valid ev.
 Proof.
-  induction 1; simpl; auto. split; auto. exists b; auto.
+  destruct 1; simpl; auto. exists b; auto.
+Qed.
+
+Lemma eventval_match_same_type:
+  forall ev1 ty v1 ev2 v2,
+  eventval_match ev1 ty v1 -> eventval_match ev2 ty v2 -> eventval_type ev1 = eventval_type ev2.
+Proof.
+  destruct 1; intros EV; inv EV; auto. 
 Qed.
 
 End EVENTVAL.
@@ -430,7 +447,7 @@ Lemma eventval_match_preserved:
   forall ev ty v,
   eventval_match ge1 ev ty v -> eventval_match ge2 ev ty v.
 Proof.
-  induction 1; constructor. rewrite symbols_preserved; auto. 
+  induction 1; constructor; auto. rewrite symbols_preserved; auto. 
 Qed.
 
 Lemma eventval_list_match_preserved:
@@ -753,9 +770,8 @@ Lemma volatile_load_receptive:
   exists v2, volatile_load ge chunk m b ofs t2 v2.
 Proof.
   intros. inv H; inv H0.
-  exploit eventval_match_valid; eauto. intros [A B]. 
-  exploit eventval_valid_match. eexact H9. rewrite <- H10; eauto. 
-  intros [v' EVM]. exists (Val.load_result chunk v'). constructor; auto.
+  exploit eventval_match_receptive; eauto. intros [v' EM].
+  exists (Val.load_result chunk v'). constructor; auto.
   exists v1; constructor; auto.
 Qed.
 
@@ -766,8 +782,7 @@ Lemma volatile_load_ok:
 Proof.
   intros; constructor; intros.
 (* well typed *)
-  unfold proj_sig_res; simpl. inv H. inv H0.
-  destruct chunk; destruct v; simpl; constructor.
+  unfold proj_sig_res; simpl. inv H. inv H0. apply Val.load_result_type. 
   eapply Mem.load_type; eauto. 
 (* arity *)
   inv H; inv H0; auto.
@@ -796,14 +811,16 @@ Proof.
 (* determ *)
   inv H; inv H0. inv H1; inv H7; try congruence.
   assert (id = id0) by (eapply Genv.genv_vars_inj; eauto). subst id0.
-  exploit eventval_match_valid. eexact H2. intros [V1 T1].
-  exploit eventval_match_valid. eexact H4. intros [V2 T2].
-  split. constructor; auto. congruence.
+  split. constructor. 
+  eapply eventval_match_valid; eauto.
+  eapply eventval_match_valid; eauto.
+  eapply eventval_match_same_type; eauto.
   intros EQ; inv EQ. 
   assert (v = v0) by (eapply eventval_match_determ_1; eauto). subst v0.
   auto.
   split. constructor. intuition congruence.
 Qed.
+
 
 Inductive volatile_load_global_sem (chunk: memory_chunk) (id: ident) (ofs: int)
                                    (F V: Type) (ge: Genv.t F V):
@@ -830,8 +847,7 @@ Lemma volatile_load_global_ok:
 Proof.
   intros; constructor; intros.
 (* well typed *)
-  unfold proj_sig_res; simpl. inv H. inv H1.
-  destruct chunk; destruct v; simpl; constructor.
+  unfold proj_sig_res; simpl. inv H. inv H1. apply Val.load_result_type.
   eapply Mem.load_type; eauto. 
 (* arity *)
   inv H; inv H1; auto.
@@ -1450,15 +1466,15 @@ Proof.
   inv H; simpl; omega.
 (* receptive *)
   inv H; inv H0.
-  exploit eventval_match_valid; eauto. intros [A B]. 
-  exploit eventval_valid_match. eexact H7. rewrite <- H8; eauto. 
-  intros [v' EVM]. exists v'; exists m1. econstructor; eauto. 
+  exploit eventval_match_receptive; eauto. intros [v' EVM].
+  exists v'; exists m1. econstructor; eauto. 
 (* determ *)
   inv H; inv H0.
   assert (args = args0). eapply eventval_list_match_determ_2; eauto. subst args0.
-  exploit eventval_match_valid. eexact H2. intros [V1 T1].
-  exploit eventval_match_valid. eexact H3. intros [V2 T2].
-  split. constructor; auto. congruence.
+  split. constructor.
+  eapply eventval_match_valid; eauto.
+  eapply eventval_match_valid; eauto.
+  eapply eventval_match_same_type; eauto.
   intros EQ; inv EQ. split; auto. eapply eventval_match_determ_1; eauto.
 Qed.
 

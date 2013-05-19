@@ -35,17 +35,19 @@ Definition ident_eq := peq.
 
 Parameter ident_of_string : String.string -> ident.
 
-(** The intermediate languages are weakly typed, using only three
+(** The intermediate languages are weakly typed, using only four
   types: [Tint] for 32-bit integers and pointers, [Tfloat] for 64-bit
-  floating-point numbers, [Tlong] for 64-bit integers. *)
+  floating-point numbers, [Tlong] for 64-bit integers, [Tsingle]
+  for 32-bit floating-point numbers. *)
 
 Inductive typ : Type :=
   | Tint
   | Tfloat
-  | Tlong.
+  | Tlong
+  | Tsingle.
 
 Definition typesize (ty: typ) : Z :=
-  match ty with Tint => 4 | Tfloat => 8 | Tlong => 8 end.
+  match ty with Tint => 4 | Tfloat => 8 | Tlong => 8 | Tsingle => 4 end.
 
 Lemma typesize_pos: forall ty, typesize ty > 0.
 Proof. destruct ty; simpl; omega. Qed.
@@ -59,6 +61,26 @@ Definition opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}
 
 Definition list_typ_eq: forall (l1 l2: list typ), {l1=l2} + {l1<>l2}
                      := list_eq_dec typ_eq.
+
+(** All values of type [Tsingle] are also of type [Tfloat].  This
+  corresponds to the following subtyping relation over types. *)
+
+Definition subtype (ty1 ty2: typ) : bool :=
+  match ty1, ty2 with
+  | Tint, Tint => true
+  | Tlong, Tlong => true
+  | Tfloat, Tfloat => true
+  | Tsingle, Tsingle => true
+  | Tsingle, Tfloat => true
+  | _, _ => false
+  end.
+
+Fixpoint subtype_list (tyl1 tyl2: list typ) : bool :=
+  match tyl1, tyl2 with
+  | nil, nil => true
+  | ty1::tys1, ty2::tys2 => subtype ty1 ty2 && subtype_list tys1 tys2
+  | _, _ => false
+  end.
 
 (** Additionally, function definitions and function calls are annotated
   by function signatures indicating the number and types of arguments,
@@ -110,6 +132,19 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
   | Mint16unsigned => Tint
   | Mint32 => Tint
   | Mint64 => Tlong
+  | Mfloat32 => Tsingle
+  | Mfloat64 => Tfloat
+  | Mfloat64al32 => Tfloat
+  end.
+
+Definition type_of_chunk_use (c: memory_chunk) : typ :=
+  match c with
+  | Mint8signed => Tint
+  | Mint8unsigned => Tint
+  | Mint16signed => Tint
+  | Mint16unsigned => Tint
+  | Mint32 => Tint
+  | Mint64 => Tlong
   | Mfloat32 => Tfloat
   | Mfloat64 => Tfloat
   | Mfloat64al32 => Tfloat
@@ -123,6 +158,7 @@ Definition chunk_of_type (ty: typ) :=
   | Tint => Mint32
   | Tfloat => Mfloat64al32
   | Tlong => Mint64
+  | Tsingle => Mfloat32
   end.
 
 (** Initialization data for global variables. *)
@@ -283,6 +319,25 @@ Proof.
   exploit IHl; eauto. intros [v' [P Q]]; exists v'; auto.
 Qed.
 
+Lemma transform_partial_program2_succeeds:
+  forall p tp i g,
+  transform_partial_program2 p = OK tp ->
+  In (i, g) p.(prog_defs) ->
+  match g with
+  | Gfun fd => exists tfd, transf_fun fd = OK tfd
+  | Gvar gv => exists tv, transf_var gv.(gvar_info) = OK tv
+  end.
+Proof.
+  intros. monadInv H. 
+  revert x EQ H0. induction (prog_defs p); simpl; intros.
+  contradiction.
+  destruct a as [id1 g1]. destruct g1.
+  destruct (transf_fun f) eqn:TF; try discriminate. monadInv EQ. 
+  destruct H0. inv H. econstructor; eauto. eapply IHl; eauto.
+  destruct (transf_globvar v) eqn:TV; try discriminate. monadInv EQ.
+  destruct H0. inv H. monadInv TV. econstructor; eauto. eapply IHl; eauto.
+Qed.
+
 Lemma transform_partial_program2_main:
   forall p tp,
   transform_partial_program2 p = OK tp ->
@@ -351,6 +406,16 @@ Lemma transform_partial_program_function:
   exists f, In (i, Gfun f) p.(prog_defs) /\ transf_partial f = OK tf.
 Proof.
   apply transform_partial_program2_function. 
+Qed.
+
+Lemma transform_partial_program_succeeds:
+  forall p tp i fd,
+  transform_partial_program p = OK tp ->
+  In (i, Gfun fd) p.(prog_defs) ->
+  exists tfd, transf_partial fd = OK tfd.
+Proof.
+  unfold transform_partial_program; intros. 
+  exploit transform_partial_program2_succeeds; eauto. 
 Qed.
 
 End TRANSF_PARTIAL_PROGRAM.
