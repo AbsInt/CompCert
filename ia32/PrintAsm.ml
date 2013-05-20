@@ -855,6 +855,7 @@ let print_globdef oc (name, gdef) =
 let print_program oc p =
   need_masks := false;
   indirect_symbols := StringSet.empty;
+  Hashtbl.clear filename_num;
   List.iter (print_globdef oc) p.prog_defs;
   if !need_masks then begin
     section oc Section_const;  (* not Section_literal because not 8-bytes *)

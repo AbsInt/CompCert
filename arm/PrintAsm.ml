@@ -835,6 +835,7 @@ let print_globdef oc (name, gdef) =
 
 let print_program oc p =
 (*  fprintf oc "	.fpu	vfp\n"; *)
+  Hashtbl.clear filename_num;
   List.iter (print_globdef oc) p.prog_defs
 
 

@@ -202,29 +202,49 @@ let section oc sec =
 
 (* Emit .file / .loc debugging directives *)
 
-let file_dir =
-  match target with Linux -> ".file" | Diab -> ".d2file"
-let loc_dir =
-  match target with Linux -> ".loc"  | Diab -> ".d2line"
+module DebugLinux = struct
+  let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
+  let reset () = Hashtbl.clear filename_num
+  let print_file_line oc file line =
+    if !Clflags.option_g && file <> "" then begin
+      let filenum = 
+        try
+          Hashtbl.find filename_num file
+        with Not_found ->
+          let n = Hashtbl.length filename_num + 1 in
+          Hashtbl.add filename_num file n;
+          fprintf oc "	.file	%d %S\n" n file;
+          n
+      in fprintf oc "	.loc	%d %s\n" filenum line
+    end
+end
 
-let filename_num : (string, int) Hashtbl.t = Hashtbl.create 7
+module DebugDiab = struct
+  let last_file = ref ""
+  let reset () = last_file := ""
+  let print_file_line oc file line =
+    if !Clflags.option_g && file <> "" then begin
+      if file <> !last_file then begin
+        fprintf oc "	.d1file	%S\n" file;
+        last_file := file
+      end;
+      fprintf oc "	.d1line	%s\n" line
+    end
+end
 
-let print_file_line oc file line =
-  if !Clflags.option_g && file <> "" then begin
-    let filenum = 
-      try
-        Hashtbl.find filename_num file
-      with Not_found ->
-        let n = Hashtbl.length filename_num + 1 in
-        Hashtbl.add filename_num file n;
-        fprintf oc "	%s	%d %S\n" file_dir n file;
-        n
-    in fprintf oc "	%s	%d %s\n" loc_dir filenum line
-  end
+let print_file_line =
+  match target with
+  | Linux -> DebugLinux.print_file_line
+  | Diab  -> DebugDiab.print_file_line
 
 let print_location oc loc =
   if loc <> Cutil.no_loc then
     print_file_line oc (fst loc) (string_of_int (snd loc))
+
+let reset_file_line =
+  match target with
+  | Linux -> DebugLinux.reset
+  | Diab  -> DebugDiab.reset
 
 (* Emit .cfi directives *)
 
@@ -232,25 +252,25 @@ let cfi_startproc oc =
   if Configuration.asm_supports_cfi then
     match target with
     | Linux -> fprintf oc "	.cfi_startproc\n"
-    | Diab  -> assert false
+    | Diab  -> ()
 
 let cfi_endproc oc =
   if Configuration.asm_supports_cfi then
     match target with
     | Linux -> fprintf oc "	.cfi_endproc\n"
-    | Diab  -> assert false
+    | Diab  -> ()
 
 let cfi_adjust oc delta =
   if Configuration.asm_supports_cfi then
     match target with
     | Linux -> fprintf oc "	.cfi_adjust_cfa_offset	%ld\n" delta
-    | Diab  -> assert false
+    | Diab  -> ()
 
 let cfi_rel_offset oc reg ofs =
   if Configuration.asm_supports_cfi then
     match target with
     | Linux -> fprintf oc "	.cfi_rel_offset	%s, %ld\n" reg ofs
-    | Diab  -> assert false
+    | Diab  -> ()
 
 (* Encoding masks for rlwinm instructions *)
 
@@ -1135,11 +1155,14 @@ let print_prologue oc =
   | Linux ->
       ()
   | Diab ->
-      fprintf oc "	.xopt	align-fill-text=0x60000000\n"
+      fprintf oc "	.xopt	align-fill-text=0x60000000\n";
+      if !Clflags.option_g then
+        fprintf oc "	.xopt	asm-debug-on\n"
 
 let print_program oc p =
   stubbed_functions := IdentSet.empty;
   List.iter record_extfun p.prog_defs;
+  reset_file_line();
   print_prologue oc;
   List.iter (print_globdef oc) p.prog_defs
 
