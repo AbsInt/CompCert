@@ -640,13 +640,15 @@ let combine g u v =
   else DLinkNode.move v g.spillWorklist g.coalescedNodes;
   v.alias <- Some u;
   (* Precolored nodes often have big movelists, and if one of [u] and [v]
-     is precolored, it is []u.  So, append [v.movelist] to [u.movelist]
+     is precolored, it is [u].  So, append [v.movelist] to [u.movelist]
      instead of the other way around. *)
   u.movelist <- List.rev_append v.movelist u.movelist;
   u.spillcost <- u.spillcost +. v.spillcost;
   iterAdjacent (combineEdge g u) v;  (*r original code using [decrementDegree] is buggy *)
-  u.extra_adj <- u.extra_adj @ v.extra_adj;
-  u.extra_pref <- u.extra_pref @ v.extra_pref;
+  if u.nstate <> Colored then begin
+    u.extra_adj <- List.rev_append v.extra_adj u.extra_adj;
+    u.extra_pref <- List.rev_append v.extra_pref u.extra_pref
+  end;
   enableMoves g v;                   (*r added as per Appel's book erratum *)
   if u.degree >= g.num_available_registers.(u.regclass)
   && u.nstate = FreezeWorklist

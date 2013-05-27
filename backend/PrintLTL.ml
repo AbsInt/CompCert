@@ -117,7 +117,7 @@ let print_function pp id f =
   let instrs =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
-      (List.map
+      (List.rev_map
         (fun (pc, i) -> (P.to_int32 pc, i))
         (PTree.elements f.fn_code)) in
   print_succ pp f.fn_entrypoint 
