@@ -14,10 +14,10 @@ $(LIB): $(OBJS)
 	ar rcs $(LIB) $(OBJS)
 
 %.o: $(ARCH)/%.s
-	$(CASMRUNTIME) $^
+	$(CASMRUNTIME) -o $@ $^
 
 %.o: $(ARCH)/%.S
-	$(CASMRUNTIME) -DVARIANT_$(VARIANT) -DSYS_$(SYSTEM) $^
+	$(CASMRUNTIME) -DVARIANT_$(VARIANT) -DSYS_$(SYSTEM) -o $@ $^
 
 clean::
 	rm -f *.o $(LIB)

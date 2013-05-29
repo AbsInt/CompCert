@@ -122,7 +122,9 @@ all:
 	$(MAKE) proof
 	$(MAKE) extraction
 	$(MAKE) ccomp
+ifeq ($(HAS_RUNTIME_LIB),true)
 	$(MAKE) runtime
+endif
 ifeq ($(CCHECKLINK),true)
 	$(MAKE) cchecklink
 endif
@@ -225,7 +227,9 @@ install:
 ifeq ($(CCHECKLINK),true)
 	install ./cchecklink $(BINDIR)
 endif
+ifeq ($(HAS_RUNTIME_LIB),true)
 	$(MAKE) -C runtime install
+endif
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
