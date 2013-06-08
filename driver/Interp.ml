@@ -86,13 +86,19 @@ let name_of_fundef prog fd =
   let rec find_name = function
   | [] -> "<unknown function>"
   | (id, Gfun fd') :: rem ->
-      if fd = fd' then extern_atom id else find_name rem
+      if fd == fd' then extern_atom id else find_name rem
   | (id, Gvar v) :: rem ->
       find_name rem
   in find_name prog.prog_defs
 
 let name_of_function prog fn =
-  name_of_fundef prog (Internal fn)
+  let rec find_name = function
+  | [] -> "<unknown function>"
+  | (id, Gfun(Internal fn')) :: rem ->
+      if fn == fn' then extern_atom id else find_name rem
+  | (id, _) :: rem ->
+      find_name rem
+  in find_name prog.prog_defs
 
 let invert_local_variable e b =
   Maps.PTree.fold 
