@@ -90,6 +90,14 @@ Definition gensym (ty: type): mon ident :=
         (mkgenerator (Psucc (gen_next g)) ((gen_next g, ty) :: gen_trail g))
         (Ple_succ (gen_next g)).
 
+Definition reset_trail: mon unit :=
+  fun (g: generator) =>
+    Res tt (mkgenerator (gen_next g) nil) (Ple_refl (gen_next g)).
+
+Definition get_trail: mon (list (ident * type)) :=
+  fun (g: generator) =>
+    Res (gen_trail g) g (Ple_refl (gen_next g)).
+
 (** Construct a sequence from a list of statements.  To facilitate the
    proof, the sequence is nested to the left and starts with a [Sskip]. *)
 
@@ -491,34 +499,43 @@ with transl_lblstmt (ls: Csyntax.labeled_statements) : mon labeled_statements :=
 
 (** Translation of a function *)
 
-Definition transl_function (f: Csyntax.function) : res function :=
-  match transl_stmt f.(Csyntax.fn_body) (initial_generator tt) with
-  | Err msg =>
-      Error msg
-  | Res tbody g i =>
-      OK (mkfunction
+Definition transl_function (f: Csyntax.function) : mon function :=
+  do x <- reset_trail;
+  do tbody <- transl_stmt f.(Csyntax.fn_body);
+  do temps <- get_trail;
+  ret (mkfunction
               f.(Csyntax.fn_return)
               f.(Csyntax.fn_params)
               f.(Csyntax.fn_vars)
-              g.(gen_trail)
-              tbody)
+              temps
+              tbody).
+
+Definition transl_fundef (fd: Csyntax.fundef) : mon fundef :=
+  match fd with
+  | Csyntax.Internal f =>
+      do tf <- transl_function f; ret (Internal tf)
+  | Csyntax.External ef targs tres =>
+      ret (External ef targs tres)
   end.
 
 Local Open Scope error_monad_scope.
 
-Definition transl_fundef (fd: Csyntax.fundef) : res fundef :=
-  match fd with
-  | Csyntax.Internal f =>
-      do tf <- transl_function f; OK (Internal tf)
-  | Csyntax.External ef targs tres =>
-      OK (External ef targs tres)
+Fixpoint transl_globdefs
+    (l: list (ident * globdef Csyntax.fundef type))
+    (g: generator) : res (list (ident * globdef Clight.fundef type)) :=
+  match l with
+  | nil => OK nil
+  | (id, Gfun f) :: l' =>
+      match transl_fundef f g with
+      | Err msg =>
+          Error (MSG "In function " :: CTX id :: MSG ": " :: msg)
+      | Res tf g' _ =>
+          do tl' <- transl_globdefs l' g'; OK ((id, Gfun tf) :: tl')
+      end
+  | (id, Gvar v) :: l' =>
+      do tl' <- transl_globdefs l' g; OK ((id, Gvar v) :: tl')
   end.
 
 Definition transl_program (p: Csyntax.program) : res program :=
-  transform_partial_program transl_fundef p.
-
-
-
-      
-
-
+  do gl' <- transl_globdefs p.(prog_defs) (initial_generator tt);
+  OK (mkprogram gl' p.(prog_main)).

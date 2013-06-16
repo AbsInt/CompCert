@@ -689,7 +689,7 @@ Inductive initial_state (p: program): state -> Prop :=
         (Pregmap.init Vundef)
         # PC <- (symbol_offset ge p.(prog_main) Int.zero)
         # IR14 <- Vzero
-        # IR13 <- (Vptr Mem.nullptr Int.zero) in
+        # IR13 <- Vzero in
       Genv.init_mem p = Some m0 ->
       initial_state p (State rs0 m0).
 

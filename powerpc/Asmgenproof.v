@@ -973,7 +973,7 @@ Proof.
   econstructor; eauto.
   constructor.
   apply Mem.extends_refl.
-  split. auto. simpl. congruence. intros. rewrite Regmap.gi. auto. 
+  split. auto. simpl. unfold Vzero; congruence. intros. rewrite Regmap.gi. auto. 
   unfold symbol_offset. 
   rewrite (transform_partial_program_main _ _ TRANSF).
   rewrite symbols_preserved. 

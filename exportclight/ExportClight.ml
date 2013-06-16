@@ -60,11 +60,20 @@ let sanitize s =
   done;
   s'
 
+module StringSet = Set.Make(String)
+
+let temp_names : (ident, string) Hashtbl.t = Hashtbl.create 17
+let all_temp_names : StringSet.t ref = ref StringSet.empty
+
 let ident p id =
   try
     let s = Hashtbl.find string_of_atom id in
     fprintf p "_%s" (sanitize s)
   with Not_found | Not_an_identifier ->
+  try
+    let s = Hashtbl.find temp_names id in
+    fprintf p "%s" s
+  with Not_found ->
     fprintf p "%ld%%positive" (P.to_int32 id)
 
 let define_idents p =
@@ -76,7 +85,32 @@ let define_idents p =
       with Not_an_identifier ->
         ())
     string_of_atom;
+  Hashtbl.iter
+    (fun id name ->
+      fprintf p "Definition %s : ident := %ld%%positive.@ "
+                name (P.to_int32 id))
+    temp_names;
   fprintf p "@ "
+
+let rec find_temp_name name counter =
+  let name' =
+    if counter = 0 then name ^ "'" else sprintf "%s'%d" name counter in
+  if StringSet.mem name' !all_temp_names
+  then find_temp_name name (counter + 1)
+  else name'
+
+let name_temporary t v =
+  (* Try to give "t" a name that is the name of "v" with a prime
+     plus a number to disambiguate if needed. *)
+  if not (Hashtbl.mem string_of_atom t || Hashtbl.mem temp_names t) then begin
+    try
+      let vname = "_" ^ sanitize (Hashtbl.find string_of_atom v) in
+      let tname = find_temp_name vname 0 in
+      Hashtbl.add temp_names t tname;
+      all_temp_names := StringSet.add tname !all_temp_names
+    with Not_found | Not_an_identifier ->
+      ()
+  end
 
 (* Numbers *)
 
@@ -163,7 +197,11 @@ and fieldlist p = function
 
 let asttype p t =
   fprintf p "%s"
-     (match t with AST.Tint -> "AST.Tint" | AST.Tfloat -> "AST.Tfloat" | AST.Tlong -> "AST.Tlong")
+     (match t with
+      | AST.Tint -> "AST.Tint"
+      | AST.Tfloat -> "AST.Tfloat"
+      | AST.Tlong -> "AST.Tlong"
+      | AST.Tsingle -> "AST.Tsingle")
 
 let name_of_chunk = function
   | Mint8signed -> "Mint8signed"
@@ -413,10 +451,20 @@ let rec collect_exprlist = function
   | [] -> ()
   | r1 :: rl -> collect_expr r1; collect_exprlist rl
 
+let rec temp_of_expr = function
+  | Etempvar(tmp, _) -> Some tmp
+  | Ecast(e, _) -> temp_of_expr e
+  | _ -> None
+
 let rec collect_stmt = function
   | Sskip -> ()
   | Sassign(e1, e2) -> collect_expr e1; collect_expr e2
-  | Sset(id, e2) -> collect_expr e2
+  | Sset(id, e2) ->
+      begin match temp_of_expr e2 with
+      | Some tmp -> name_temporary tmp id
+      | None -> ()
+      end;
+      collect_expr e2
   | Scall(optid, e1, el) -> collect_expr e1; collect_exprlist el
   | Sbuiltin(optid, ef, tyl, el) -> collect_exprlist el
   | Ssequence(s1, s2) -> collect_stmt s1; collect_stmt s2
@@ -454,8 +502,6 @@ let define_struct p ty =
   | _ -> assert false
 
 let define_structs p prog =
-  struct_unions := TypeSet.empty;
-  List.iter collect_globdef prog.prog_defs;
   use_struct_names := false;
   TypeSet.iter (define_struct p) !struct_unions;
   use_struct_names := true;
@@ -534,6 +580,10 @@ Local Open Scope Z_scope.
 let print_program p prog =
   fprintf p "@[<v 0>";
   fprintf p "%s" prologue;
+  Hashtbl.clear temp_names;
+  all_temp_names := StringSet.empty;
+  struct_unions := TypeSet.empty;
+  List.iter collect_globdef prog.prog_defs;
   define_idents p;
   define_structs p prog;
   List.iter (print_globdef p) prog.prog_defs;

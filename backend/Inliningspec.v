@@ -46,17 +46,17 @@ Proof.
   (* same *)
   subst id0. inv H1. destruct gd. destruct f0. 
   destruct (should_inline id f0).
-  rewrite PTree.gss in H0. rewrite ZMap.gss. inv H0; auto.
+  rewrite PTree.gss in H0. rewrite PTree.gss. inv H0; auto.
   rewrite PTree.grs in H0; discriminate.
   rewrite PTree.grs in H0; discriminate.
   rewrite PTree.grs in H0; discriminate.
   (* different *)
-  destruct gd. rewrite ZMap.gso. eapply H; eauto. 
+  destruct gd. rewrite PTree.gso. eapply H; eauto. 
   destruct f0. destruct (should_inline id f0).
   rewrite PTree.gso in H0; auto.
   rewrite PTree.gro in H0; auto.
   rewrite PTree.gro in H0; auto.
-  exploit Genv.genv_symb_range; eauto. intros [A B]. unfold ZIndexed.t; omega.
+  red; intros; subst b. eelim Plt_strict. eapply Genv.genv_symb_range; eauto.
   rewrite PTree.gro in H0; auto. eapply H; eauto. 
 Qed.
 

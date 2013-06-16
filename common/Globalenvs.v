@@ -83,15 +83,14 @@ Variable V: Type.  (**r The type of information attached to variables *)
 
 Record t: Type := mkgenv {
   genv_symb: PTree.t block;             (**r mapping symbol -> block *)
-  genv_funs: ZMap.t (option F);         (**r mapping function pointer -> definition *)
-  genv_vars: ZMap.t (option (globvar V)); (**r mapping variable pointer -> info *)
+  genv_funs: PTree.t F;                 (**r mapping function pointer -> definition *)
+  genv_vars: PTree.t (globvar V);       (**r mapping variable pointer -> info *)
   genv_next: block;                     (**r next symbol pointer *)
-  genv_next_pos: genv_next > 0;
-  genv_symb_range: forall id b, PTree.get id genv_symb = Some b -> 0 < b < genv_next;
-  genv_funs_range: forall b f, ZMap.get b genv_funs = Some f -> 0 < b < genv_next;
-  genv_vars_range: forall b v, ZMap.get b genv_vars = Some v -> 0 < b < genv_next;
+  genv_symb_range: forall id b, PTree.get id genv_symb = Some b -> Plt b genv_next;
+  genv_funs_range: forall b f, PTree.get b genv_funs = Some f -> Plt b genv_next;
+  genv_vars_range: forall b v, PTree.get b genv_vars = Some v -> Plt b genv_next;
   genv_funs_vars: forall b1 b2 f v,
-    ZMap.get b1 genv_funs = Some f -> ZMap.get b2 genv_vars = Some v -> b1 <> b2;
+    PTree.get b1 genv_funs = Some f -> PTree.get b2 genv_vars = Some v -> b1 <> b2;
   genv_vars_inj: forall id1 id2 b, 
     PTree.get id1 genv_symb = Some b -> PTree.get id2 genv_symb = Some b -> id1 = id2
 }.
@@ -107,7 +106,7 @@ Definition find_symbol (ge: t) (id: ident) : option block :=
     the given address. *)
 
 Definition find_funct_ptr (ge: t) (b: block) : option F :=
-  ZMap.get b ge.(genv_funs).
+  PTree.get b ge.(genv_funs).
 
 (** [find_funct] is similar to [find_funct_ptr], but the function address
     is given as a value, which must be a pointer with offset 0. *)
@@ -129,7 +128,7 @@ Definition invert_symbol (ge: t) (b: block) : option ident :=
    at address [b]. *)
 
 Definition find_var_info (ge: t) (b: block) : option (globvar V) :=
-  ZMap.get b ge.(genv_vars).
+  PTree.get b ge.(genv_vars).
 
 (** ** Constructing the global environment *)
 
@@ -137,48 +136,46 @@ Program Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
   @mkgenv
     (PTree.set idg#1 ge.(genv_next) ge.(genv_symb))
     (match idg#2 with
-     | Gfun f => ZMap.set ge.(genv_next) (Some f) ge.(genv_funs)
+     | Gfun f => PTree.set ge.(genv_next) f ge.(genv_funs)
      | Gvar v => ge.(genv_funs)
      end)
     (match idg#2 with
      | Gfun f => ge.(genv_vars)
-     | Gvar v => ZMap.set ge.(genv_next) (Some v) ge.(genv_vars)
+     | Gvar v => PTree.set ge.(genv_next) v ge.(genv_vars)
      end)
-    (ge.(genv_next) + 1)
-    _ _ _ _ _ _.
+    (Psucc ge.(genv_next))
+    _ _ _ _ _.
 Next Obligation.
-  destruct ge; simpl; omega.
+  destruct ge; simpl in *.
+  rewrite PTree.gsspec in H. destruct (peq id i). inv H. apply Plt_succ.
+  apply Plt_trans_succ; eauto.
+Qed.
+Next Obligation.
+  destruct ge; simpl in *. 
+  destruct g. 
+  rewrite PTree.gsspec in H. 
+  destruct (peq b genv_next0). inv H. apply Plt_succ.
+  apply Plt_trans_succ; eauto.
+  apply Plt_trans_succ; eauto.
+Qed.
+Next Obligation.
+  destruct ge; simpl in *. 
+  destruct g.
+  apply Plt_trans_succ; eauto.
+  rewrite PTree.gsspec in H. 
+  destruct (peq b genv_next0). inv H. apply Plt_succ.
+  apply Plt_trans_succ; eauto.
 Qed.
 Next Obligation.
   destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. destruct (peq id i). inv H. unfold block; omega.
-  exploit genv_symb_range0; eauto. unfold block; omega.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *. 
-  destruct g. 
-  rewrite ZMap.gsspec in H. 
-  destruct (ZIndexed.eq b genv_next0). subst; omega. 
-  exploit genv_funs_range0; eauto. omega.
-  exploit genv_funs_range0; eauto. omega.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *. 
-  destruct g. 
-  exploit genv_vars_range0; eauto. omega.
-  rewrite ZMap.gsspec in H. 
-  destruct (ZIndexed.eq b genv_next0). subst; omega. 
-  exploit genv_vars_range0; eauto. omega.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *. destruct g.
-  rewrite ZMap.gsspec in H.
-  destruct (ZIndexed.eq b1 genv_next0). inv H. 
-  exploit genv_vars_range0; eauto. unfold ZIndexed.t; omega.
+  destruct g.
+  rewrite PTree.gsspec in H.
+  destruct (peq b1 genv_next0). inv H.
+  apply sym_not_equal; apply Plt_ne; eauto.
   eauto.
-  rewrite ZMap.gsspec in H0.
-  destruct (ZIndexed.eq b2 genv_next0). inv H. 
-  exploit genv_funs_range0; eauto. unfold ZIndexed.t; omega.
+  rewrite PTree.gsspec in H0.
+  destruct (peq b2 genv_next0). inv H0.
+  apply Plt_ne; eauto.
   eauto.
 Qed.
 Next Obligation.
@@ -186,8 +183,8 @@ Next Obligation.
   rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0. 
   destruct (peq id1 i); destruct (peq id2 i).
   congruence.
-  exploit genv_symb_range0; eauto. intros [A B]. inv H. omegaContradiction.
-  exploit genv_symb_range0; eauto. intros [A B]. inv H0. omegaContradiction.
+  inv H. eelim Plt_strict. eapply genv_symb_range0; eauto.
+  inv H0. eelim Plt_strict. eapply genv_symb_range0; eauto.
   eauto.
 Qed.
 
@@ -202,21 +199,18 @@ Proof.
 Qed.
 
 Program Definition empty_genv : t :=
-  @mkgenv (PTree.empty block) (ZMap.init None) (ZMap.init None) 1 _ _ _ _ _ _.
+  @mkgenv (PTree.empty _) (PTree.empty _) (PTree.empty _) 1%positive _ _ _ _ _.
 Next Obligation.
-  omega.
+  rewrite PTree.gempty in H. discriminate.
 Qed.
 Next Obligation.
   rewrite PTree.gempty in H. discriminate.
 Qed.
 Next Obligation.
-  rewrite ZMap.gi in H. discriminate.
+  rewrite PTree.gempty in H. discriminate.
 Qed.
 Next Obligation.
-  rewrite ZMap.gi in H. discriminate.
-Qed.
-Next Obligation.
-  rewrite ZMap.gi in H. discriminate.
+  rewrite PTree.gempty in H. discriminate.
 Qed.
 Next Obligation.
   rewrite PTree.gempty in H. discriminate.
@@ -317,12 +311,12 @@ Proof.
   intros. unfold find_symbol, find_funct_ptr in *; simpl.
   destruct H1 as [b [A B]]. exists b; split.
   rewrite PTree.gso; auto.
-  destruct g1 as [f1 | v1]. rewrite ZMap.gso. auto. 
-  exploit genv_funs_range; eauto. unfold ZIndexed.t; omega.
+  destruct g1 as [f1 | v1]. rewrite PTree.gso. auto.
+  apply Plt_ne. eapply genv_funs_range; eauto.
   auto. 
 (* ensures *)
   intros. unfold find_symbol, find_funct_ptr in *; simpl.
-  exists (genv_next ge); split. apply PTree.gss. apply ZMap.gss. 
+  exists (genv_next ge); split. apply PTree.gss. apply PTree.gss.
 Qed.
 
 Theorem find_var_exists:
@@ -338,11 +332,11 @@ Proof.
   intros. unfold find_symbol, find_var_info in *; simpl.
   destruct H1 as [b [A B]]. exists b; split.
   rewrite PTree.gso; auto.
-  destruct g1 as [f1 | v1]. auto. rewrite ZMap.gso. auto. 
-  exploit genv_vars_range; eauto. unfold ZIndexed.t; omega.
+  destruct g1 as [f1 | v1]. auto. rewrite PTree.gso. auto.
+  apply Plt_ne. eapply genv_vars_range; eauto.
 (* ensures *)
   intros. unfold find_symbol, find_var_info in *; simpl.
-  exists (genv_next ge); split. apply PTree.gss. apply ZMap.gss. 
+  exists (genv_next ge); split. apply PTree.gss. apply PTree.gss. 
 Qed.
 
 Lemma find_symbol_inversion : forall p x b,
@@ -366,11 +360,11 @@ Proof.
   intros until f. unfold globalenv. apply add_globals_preserves. 
 (* preserves *)
   unfold find_funct_ptr; simpl; intros. destruct g; auto. 
-  rewrite ZMap.gsspec in H1. destruct (ZIndexed.eq b (genv_next ge)).
+  rewrite PTree.gsspec in H1. destruct (peq b (genv_next ge)).
   inv H1. exists id; auto.
   auto.
 (* base *)
-  unfold find_funct_ptr; simpl; intros. rewrite ZMap.gi in H. discriminate.
+  unfold find_funct_ptr; simpl; intros. rewrite PTree.gempty in H. discriminate.
 Qed.
 
 Theorem find_funct_inversion:
@@ -410,22 +404,15 @@ Proof.
   intros until f. unfold globalenv, find_symbol, find_funct_ptr. apply add_globals_preserves. 
 (* preserves *)
   intros. simpl in *. rewrite PTree.gsspec in H1. destruct (peq id id0). 
-  inv H1. destruct g as [f1|v1]. rewrite ZMap.gss in H2. inv H2. auto. 
-  exploit genv_funs_range; eauto. intros. omegaContradiction.
-  destruct g as [f1|v1]. rewrite ZMap.gso in H2. auto. 
-  exploit genv_symb_range; eauto. unfold ZIndexed.t; omega. 
+  inv H1. destruct g as [f1|v1]. rewrite PTree.gss in H2. inv H2. auto.
+  eelim Plt_strict. eapply genv_funs_range; eauto.
+  destruct g as [f1|v1]. rewrite PTree.gso in H2. auto.
+  apply Plt_ne. eapply genv_symb_range; eauto.
   auto.
 (* initial *)
   intros. simpl in *. rewrite PTree.gempty in H. discriminate.
 Qed.
 
-Theorem find_symbol_not_nullptr:
-  forall p id b,
-  find_symbol (globalenv p) id = Some b -> b <> Mem.nullptr.
-Proof.
-  intros until b. unfold find_symbol. destruct (globalenv p); simpl. 
-  intros. exploit genv_symb_range0; eauto. unfold Mem.nullptr, block. omega. 
-Qed.
 
 Theorem global_addresses_distinct:
   forall ge id1 id2 b1 b2,
@@ -470,14 +457,16 @@ Proof.
   congruence.
 Qed.
 
+Definition advance_next (gl: list (ident * globdef F V)) (x: positive) :=
+  List.fold_left (fun n g => Psucc n) gl x.
+
 Remark genv_next_add_globals:
   forall gl ge,
-  genv_next (add_globals ge gl) = genv_next ge + Z_of_nat (length gl).
+  genv_next (add_globals ge gl) = advance_next gl (genv_next ge).
 Proof.
-  induction gl; intros.
-  simpl. unfold block; omega.
-  simpl add_globals; simpl length; rewrite inj_S. 
-  rewrite IHgl. simpl. unfold block; omega.
+  induction gl; simpl; intros.
+  auto.
+  rewrite IHgl. auto. 
 Qed.
 
 (** * Construction of the initial memory state *)
@@ -609,7 +598,7 @@ Qed.
 Remark alloc_global_nextblock:
   forall g m m',
   alloc_global m g = Some m' ->
-  Mem.nextblock m' = Zsucc(Mem.nextblock m).
+  Mem.nextblock m' = Psucc(Mem.nextblock m).
 Proof.
   unfold alloc_global. intros.
   destruct g as [id [f|v]]. 
@@ -631,13 +620,12 @@ Qed.
 Remark alloc_globals_nextblock:
   forall gl m m',
   alloc_globals m gl = Some m' ->
-  Mem.nextblock m' = Mem.nextblock m + Z_of_nat(List.length gl).
+  Mem.nextblock m' = advance_next gl (Mem.nextblock m).
 Proof.
-  induction gl.
-  simpl; intros. inv H; unfold block; omega.
-  simpl length; rewrite inj_S; simpl; intros.
+  induction gl; simpl; intros.
+  congruence.
   destruct (alloc_global m a) as [m1|] eqn:?; try discriminate.
-  erewrite IHgl; eauto. erewrite alloc_global_nextblock; eauto. unfold block; omega.
+  erewrite IHgl; eauto. erewrite alloc_global_nextblock; eauto.
 Qed.
 
 (** Permissions *)
@@ -712,7 +700,8 @@ Proof.
   simpl; intros. inv H. tauto.
   simpl; intros. destruct (alloc_global m a) as [m1|] eqn:?; try discriminate.
   erewrite alloc_global_perm; eauto. eapply IHgl; eauto. 
-  unfold Mem.valid_block in *. erewrite alloc_global_nextblock; eauto. omega. 
+  unfold Mem.valid_block in *. erewrite alloc_global_nextblock; eauto.
+  apply Plt_trans_succ; auto.
 Qed.
 
 (** Data preservation properties *)
@@ -727,8 +716,8 @@ Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
   inv H; auto.
   transitivity (Mem.load chunk m' b' p'). 
-  apply IHo. auto. unfold block in *; omega. 
-  eapply Mem.load_store_other; eauto. simpl. unfold block in *; omega.
+  apply IHo. auto. intuition omega. 
+  eapply Mem.load_store_other; eauto. simpl. intuition omega. 
   discriminate.
 Qed.
 
@@ -847,7 +836,8 @@ Proof.
   destruct (alloc_global m a) as [m''|] eqn:?; try discriminate.
   transitivity (Mem.load chunk m'' b p). 
   apply IHgl; auto. unfold Mem.valid_block in *. 
-  erewrite alloc_global_nextblock; eauto. omega.
+  erewrite alloc_global_nextblock; eauto. 
+  apply Plt_trans with (Mem.nextblock m); auto. apply Plt_succ.
   destruct a as [id g]. eapply load_alloc_global; eauto. 
 Qed.
 
@@ -894,14 +884,14 @@ Proof.
   red; intros. unfold find_var_info in H3. simpl in H3. 
   exploit H1; eauto. intros [A [B C]].
   assert (D: Mem.valid_block m b). 
-    red. exploit genv_vars_range; eauto. rewrite H; omega. 
+    red. exploit genv_vars_range; eauto. rewrite H; auto.
   split. red; intros. erewrite <- alloc_global_perm; eauto. 
   split. intros. eapply B. erewrite alloc_global_perm; eauto. 
   intros. apply load_store_init_data_invariant with m; auto. 
   intros. eapply load_alloc_global; eauto. 
 (* variable *)
-  red; intros. unfold find_var_info in H3. simpl in H3. rewrite ZMap.gsspec in H3.
-  destruct (ZIndexed.eq b (genv_next ge0)).
+  red; intros. unfold find_var_info in H3. simpl in H3. rewrite PTree.gsspec in H3.
+  destruct (peq b (genv_next ge0)).
   (* same *)
   inv H3. simpl in H0.
   set (init := gvar_init gv) in *.
@@ -927,7 +917,7 @@ Proof.
   (* older var *)
   exploit H1; eauto. intros [A [B C]].
   assert (D: Mem.valid_block m b). 
-    red. exploit genv_vars_range; eauto. rewrite H; omega. 
+    red. exploit genv_vars_range; eauto. rewrite H; auto. 
   split. red; intros. erewrite <- alloc_global_perm; eauto. 
   split. intros. eapply B. erewrite alloc_global_perm; eauto. 
   intros. apply load_store_init_data_invariant with m; auto. 
@@ -935,8 +925,8 @@ Proof.
 (* functions-initialized *)
   split. destruct g as [f|v].
 (* function *)
-  red; intros. unfold find_funct_ptr in H3. simpl in H3. rewrite ZMap.gsspec in H3.
-  destruct (ZIndexed.eq b (genv_next ge0)).
+  red; intros. unfold find_funct_ptr in H3. simpl in H3. rewrite PTree.gsspec in H3.
+  destruct (peq b (genv_next ge0)).
   (* same *)
   inv H3. simpl in H0. 
   destruct (Mem.alloc m 0 1) as [m1 b'] eqn:?. 
@@ -951,18 +941,18 @@ Proof.
   (* older function *)
   exploit H2; eauto. intros [A B].
   assert (D: Mem.valid_block m b). 
-    red. exploit genv_funs_range; eauto. rewrite H; omega. 
+    red. exploit genv_funs_range; eauto. rewrite H; auto.
   split. erewrite <- alloc_global_perm; eauto. 
   intros. eapply B. erewrite alloc_global_perm; eauto.
 (* variables *)
   red; intros. unfold find_funct_ptr in H3. simpl in H3. 
   exploit H2; eauto. intros [A B].
   assert (D: Mem.valid_block m b). 
-    red. exploit genv_funs_range; eauto. rewrite H; omega. 
+    red. exploit genv_funs_range; eauto. rewrite H; auto.
   split. erewrite <- alloc_global_perm; eauto. 
   intros. eapply B. erewrite alloc_global_perm; eauto.
 (* nextblock *)
-  rewrite NB. simpl. rewrite H. unfold block; omega. 
+  rewrite NB. simpl. rewrite H. auto.
 Qed.
 
 Lemma alloc_globals_initialized:
@@ -1001,7 +991,7 @@ Theorem find_symbol_not_fresh:
   find_symbol (globalenv p) id = Some b -> Mem.valid_block m b.
 Proof.
   intros. red. erewrite <- init_mem_genv_next; eauto. 
-  exploit genv_symb_range; eauto. omega.
+  eapply genv_symb_range; eauto.
 Qed.
 
 Theorem find_funct_ptr_not_fresh:
@@ -1010,7 +1000,7 @@ Theorem find_funct_ptr_not_fresh:
   find_funct_ptr (globalenv p) b = Some f -> Mem.valid_block m b.
 Proof.
   intros. red. erewrite <- init_mem_genv_next; eauto. 
-  exploit genv_funs_range; eauto. omega.
+  eapply genv_funs_range; eauto.
 Qed.
 
 Theorem find_var_info_not_fresh:
@@ -1019,7 +1009,7 @@ Theorem find_var_info_not_fresh:
   find_var_info (globalenv p) b = Some gv -> Mem.valid_block m b.
 Proof.
   intros. red. erewrite <- init_mem_genv_next; eauto. 
-  exploit genv_vars_range; eauto. omega.
+  eapply genv_vars_range; eauto.
 Qed.
 
 Theorem init_mem_characterization:
@@ -1033,8 +1023,8 @@ Theorem init_mem_characterization:
 Proof.
   intros. eapply alloc_globals_initialized; eauto.
   rewrite Mem.nextblock_empty. auto. 
-  red; intros. exploit genv_vars_range; eauto. simpl. intros. omegaContradiction.
-  red; intros. exploit genv_funs_range; eauto. simpl. intros. omegaContradiction.
+  red; intros. unfold find_var_info in H1. simpl in H1. rewrite PTree.gempty in H1. congruence.
+  red; intros. unfold find_funct_ptr in H1. simpl in H1. rewrite PTree.gempty in H1. congruence.
 Qed.
 
 Theorem init_mem_characterization_2:
@@ -1045,9 +1035,9 @@ Theorem init_mem_characterization_2:
   /\ (forall ofs k p, Mem.perm m b ofs k p -> ofs = 0 /\ perm_order Nonempty p).
 Proof.
   intros. unfold init_mem in H0. eapply alloc_globals_initialized; eauto.
-  rewrite Mem.nextblock_empty. auto. 
-  red; intros. exploit genv_vars_range; eauto. simpl. intros. omegaContradiction.
-  red; intros. exploit genv_funs_range; eauto. simpl. intros. omegaContradiction.
+  rewrite Mem.nextblock_empty. auto.
+  red; intros. unfold find_var_info in H1. simpl in H1. rewrite PTree.gempty in H1. congruence.
+  red; intros. unfold find_funct_ptr in H1. simpl in H1. rewrite PTree.gempty in H1. congruence.
 Qed.
 
 (** ** Compatibility with memory injections *)
@@ -1056,12 +1046,12 @@ Section INITMEM_INJ.
 
 Variable ge: t.
 Variable thr: block.
-Hypothesis symb_inject: forall id b, find_symbol ge id = Some b -> b < thr.
+Hypothesis symb_inject: forall id b, find_symbol ge id = Some b -> Plt b thr.
 
 Lemma store_zeros_neutral:
   forall m b p n m',
   Mem.inject_neutral thr m ->
-  b < thr ->
+  Plt b thr ->
   store_zeros m b p n = Some m' ->
   Mem.inject_neutral thr m'.
 Proof.
@@ -1074,30 +1064,29 @@ Qed.
 Lemma store_init_data_neutral:
   forall m b p id m',
   Mem.inject_neutral thr m ->
-  b < thr ->
+  Plt b thr ->
   store_init_data ge m b p id = Some m' ->
   Mem.inject_neutral thr m'.
 Proof.
   intros.
   destruct id; simpl in H1; try (eapply Mem.store_inject_neutral; eauto; fail).
   congruence.
-  revert H1. caseEq (find_symbol ge i); try congruence. intros b' FS ST. 
+  destruct (find_symbol ge i) as [b'|] eqn:E; try discriminate.
   eapply Mem.store_inject_neutral; eauto. 
-  econstructor. unfold Mem.flat_inj. apply zlt_true; eauto. 
+  econstructor. unfold Mem.flat_inj. apply pred_dec_true; auto. eauto.  
   rewrite Int.add_zero. auto. 
 Qed.
 
 Lemma store_init_data_list_neutral:
   forall b idl m p m',
   Mem.inject_neutral thr m ->
-  b < thr ->
+  Plt b thr ->
   store_init_data_list ge m b p idl = Some m' ->
   Mem.inject_neutral thr m'.
 Proof.
-  induction idl; simpl.
-  intros; congruence.
-  intros until m'; intros INJ FB.
-  caseEq (store_init_data ge m b p a); try congruence. intros. 
+  induction idl; simpl; intros.
+  congruence.
+  destruct (store_init_data ge m b p a) as [m1|] eqn:E; try discriminate.
   eapply IHidl. eapply store_init_data_neutral; eauto. auto. eauto. 
 Qed.
 
@@ -1105,13 +1094,13 @@ Lemma alloc_global_neutral:
   forall idg m m',
   alloc_global ge m idg = Some m' ->
   Mem.inject_neutral thr m ->
-  Mem.nextblock m < thr ->
+  Plt (Mem.nextblock m) thr ->
   Mem.inject_neutral thr m'.
 Proof.
   intros. destruct idg as [id [f|v]]; simpl in H.
   (* function *)
   destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
-  assert (b < thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
+  assert (Plt b thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_inject_neutral; eauto. 
   eapply Mem.alloc_inject_neutral; eauto.
   (* variable *)
@@ -1120,27 +1109,35 @@ Proof.
   destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
   destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
   destruct (store_init_data_list ge m2 b 0 init) as [m3|] eqn:?; try discriminate.
-  assert (b < thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
+  assert (Plt b thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_inject_neutral; eauto. 
   eapply store_init_data_list_neutral with (m := m2) (b := b); eauto.
   eapply store_zeros_neutral with (m := m1); eauto. 
   eapply Mem.alloc_inject_neutral; eauto.
 Qed.
 
+Remark advance_next_le: forall gl x, Ple x (advance_next gl x).
+Proof.
+  induction gl; simpl; intros.
+  apply Ple_refl.
+  apply Ple_trans with (Psucc x). apply Ple_succ. eauto.
+Qed.
+
 Lemma alloc_globals_neutral:
   forall gl m m',
   alloc_globals ge m gl = Some m' ->
   Mem.inject_neutral thr m ->
-  Mem.nextblock m' <= thr ->
+  Ple (Mem.nextblock m') thr ->
   Mem.inject_neutral thr m'.
 Proof.
-  induction gl; simpl.
-  intros. congruence.
-  intros until m'. caseEq (alloc_global ge m a); try congruence. intros.
-  assert (Mem.nextblock m' = Mem.nextblock m + Z_of_nat(length (a :: gl))).
-  eapply alloc_globals_nextblock with ge. simpl. rewrite H. auto. 
-  simpl length in H3. rewrite inj_S in H3. 
-  exploit alloc_global_neutral; eauto. unfold block in *; omega.
+  induction gl; intros.
+  simpl in *. congruence.
+  exploit alloc_globals_nextblock; eauto. intros EQ. 
+  simpl in *. destruct (alloc_global ge m a) as [m1|] eqn:E; try discriminate.
+  exploit alloc_global_neutral; eauto.
+  assert (Ple (Psucc (Mem.nextblock m)) (Mem.nextblock m')).
+  { rewrite EQ. apply advance_next_le. }
+  unfold Plt, Ple in *; zify; omega.
 Qed.
 
 End INITMEM_INJ.
@@ -1155,7 +1152,7 @@ Proof.
   eapply alloc_globals_neutral; eauto. 
   intros. exploit find_symbol_not_fresh; eauto.
   apply Mem.empty_inject_neutral.
-  omega.
+  apply Ple_refl.
 Qed.
 
 Section INITMEM_AUGMENT_INJ. 
@@ -1166,23 +1163,23 @@ Variable thr: block.
 Lemma store_zeros_augment:
   forall m1 m2 b p n m2',
   Mem.inject (Mem.flat_inj thr) m1 m2 ->
-  b >= thr ->
+  Ple thr b ->
   store_zeros m2 b p n = Some m2' ->
   Mem.inject (Mem.flat_inj thr) m1 m2'.
 Proof.
   intros until n. functional induction (store_zeros m2 b p n); intros.
   inv H1; auto.
   apply IHo; auto. exploit Mem.store_outside_inject; eauto. simpl. 
-  intros. exfalso. unfold Mem.flat_inj in H2. destruct (zlt b' thr). 
-    inversion H2; subst; omega.  
-    discriminate.
-  inv H1.
+  intros. exfalso. unfold Mem.flat_inj in H2. destruct (plt b' thr). 
+  inv H2. unfold Plt, Ple in *. zify; omega.
+  discriminate.
+  discriminate.
 Qed.
 
 Lemma store_init_data_augment: 
   forall m1 m2 b p id m2', 
   Mem.inject (Mem.flat_inj thr) m1 m2 -> 
-  b >= thr -> 
+  Ple thr b -> 
   store_init_data ge m2 b p id = Some m2' ->
   Mem.inject (Mem.flat_inj thr) m1 m2'.
 Proof. 
@@ -1192,7 +1189,7 @@ Proof.
              Mem.inject (Mem.flat_inj thr) m1 m2'). 
     intros. eapply Mem.store_outside_inject; eauto. 
     intros. unfold Mem.flat_inj in H0.
-    destruct (zlt b' thr); inversion H0; subst. omega. 
+    destruct (plt b' thr); inv H0. unfold Plt, Ple in *. zify; omega.
   destruct id; simpl in ST; try (eapply P; eauto; fail).
   congruence.
   revert ST.  caseEq (find_symbol ge i); try congruence. intros; eapply P; eauto. 
@@ -1201,7 +1198,7 @@ Qed.
 Lemma store_init_data_list_augment:
   forall b idl m1 m2 p m2', 
   Mem.inject (Mem.flat_inj thr) m1 m2 -> 
-  b >= thr -> 
+  Ple thr b -> 
   store_init_data_list ge m2 b p idl = Some m2' ->
   Mem.inject (Mem.flat_inj thr) m1 m2'.
 Proof. 
@@ -1216,37 +1213,37 @@ Lemma alloc_global_augment:
   forall idg m1 m2 m2',
   alloc_global ge m2 idg = Some m2' ->
   Mem.inject (Mem.flat_inj thr) m1 m2 -> 
-  Mem.nextblock m2 >= thr -> 
+  Ple thr (Mem.nextblock m2) -> 
   Mem.inject (Mem.flat_inj thr) m1 m2'.
 Proof.
   intros. destruct idg as [id [f|v]]; simpl in H.
   (* function *)
   destruct (Mem.alloc m2 0 1) as [m3 b] eqn:?.
-  assert (b >= thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
+  assert (Ple thr b). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_outside_inject. 2: eauto. 
   eapply Mem.alloc_right_inject; eauto.
-  intros. unfold Mem.flat_inj in H3. destruct (zlt b' thr); inversion H3. 
-     subst; exfalso; omega.
+  intros. unfold Mem.flat_inj in H3. destruct (plt b' thr); inv H3.
+  unfold Plt, Ple in *. zify; omega.
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
   destruct (Mem.alloc m2 0 sz) as [m3 b] eqn:?.
   destruct (store_zeros m3 b 0 sz) as [m4|] eqn:?; try discriminate.
   destruct (store_init_data_list ge m4 b 0 init) as [m5|] eqn:?; try discriminate.
-  assert (b >= thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
+  assert (Ple thr b). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
   eapply Mem.drop_outside_inject. 2: eauto. 
   eapply store_init_data_list_augment. 3: eauto. 2: eauto.
   eapply store_zeros_augment. 3: eauto. 2: eauto.
   eapply Mem.alloc_right_inject; eauto.
-  intros. unfold Mem.flat_inj in H3. destruct (zlt b' thr); inversion H3. 
-     subst; exfalso; omega.
+  intros. unfold Mem.flat_inj in H3. destruct (plt b' thr); inv H3.
+  unfold Plt, Ple in *. zify; omega.
 Qed.
 
 Lemma alloc_globals_augment:
   forall gl m1 m2 m2',
   alloc_globals ge m2 gl = Some m2' ->
   Mem.inject (Mem.flat_inj thr) m1 m2 ->
-  Mem.nextblock m2 >= thr ->
+  Ple thr (Mem.nextblock m2) ->
   Mem.inject (Mem.flat_inj thr) m1 m2'.
 Proof.
   induction gl; simpl.
@@ -1255,7 +1252,7 @@ Proof.
   eapply IHgl with (m2 := m); eauto.  
     eapply alloc_global_augment; eauto. 
     rewrite (alloc_global_nextblock _ _ _ H). 
-    unfold block in *; omega. 
+    apply Ple_trans with (Mem.nextblock m2); auto. apply Ple_succ.
 Qed.
 
 End INITMEM_AUGMENT_INJ. 
@@ -1280,26 +1277,26 @@ Inductive match_globvar: globvar V -> globvar W -> Prop :=
 Record match_genvs (new_globs : list (ident * globdef B W)) 
                    (ge1: t A V) (ge2: t B W): Prop := {
   mge_next:
-    genv_next ge2 = genv_next ge1 + Z_of_nat(length new_globs);
+    genv_next ge2 = advance_next new_globs (genv_next ge1);
   mge_symb:
     forall id, ~ In id (map fst new_globs) ->
                    PTree.get id (genv_symb ge2) = PTree.get id (genv_symb ge1);
   mge_funs:
-    forall b f, ZMap.get b (genv_funs ge1) = Some f ->
-    exists tf, ZMap.get b (genv_funs ge2) = Some tf /\ match_fun f tf;
+    forall b f, PTree.get b (genv_funs ge1) = Some f ->
+    exists tf, PTree.get b (genv_funs ge2) = Some tf /\ match_fun f tf;
   mge_rev_funs:
-    forall b tf, ZMap.get b (genv_funs ge2) = Some tf ->
-    if zlt b (genv_next ge1) then 
-      exists f, ZMap.get b (genv_funs ge1) = Some f /\ match_fun f tf
+    forall b tf, PTree.get b (genv_funs ge2) = Some tf ->
+    if plt b (genv_next ge1) then 
+      exists f, PTree.get b (genv_funs ge1) = Some f /\ match_fun f tf
     else 
       In (Gfun tf) (map snd new_globs);
   mge_vars:
-    forall b v, ZMap.get b (genv_vars ge1) = Some v ->
-    exists tv, ZMap.get b (genv_vars ge2) = Some tv /\ match_globvar v tv;
+    forall b v, PTree.get b (genv_vars ge1) = Some v ->
+    exists tv, PTree.get b (genv_vars ge2) = Some tv /\ match_globvar v tv;
   mge_rev_vars:
-    forall b tv, ZMap.get b (genv_vars ge2) = Some tv ->
-    if zlt b (genv_next ge1) then
-      exists v, ZMap.get b (genv_vars ge1) = Some v /\ match_globvar v tv
+    forall b tv, PTree.get b (genv_vars ge2) = Some tv ->
+    if plt b (genv_next ge1) then
+      exists v, PTree.get b (genv_vars ge1) = Some v /\ match_globvar v tv
     else
       In (Gvar tv) (map snd new_globs)
 }.
@@ -1310,50 +1307,49 @@ Lemma add_global_match:
   match_globdef match_fun match_varinfo idg1 idg2 ->
   match_genvs nil (add_global ge1 idg1) (add_global ge2 idg2).
 Proof.
-  intros. destruct H. 
-     simpl in mge_next0. rewrite Zplus_0_r in mge_next0.
+  intros. destruct H. simpl in mge_next0.
   inv H0.
 (* two functions *)
   constructor; simpl.
-  rewrite Zplus_0_r. congruence.
+  congruence.
   intros. rewrite mge_next0. 
     repeat rewrite PTree.gsspec. destruct (peq id0 id); auto.
-  rewrite mge_next0. intros. rewrite ZMap.gsspec in H0. rewrite ZMap.gsspec. 
-    destruct (ZIndexed.eq b (genv_next ge1)). 
+  rewrite mge_next0. intros. rewrite PTree.gsspec in H0. rewrite PTree.gsspec. 
+    destruct (peq b (genv_next ge1)). 
      exists f2; split; congruence.
      eauto.
-  rewrite mge_next0. intros. rewrite ZMap.gsspec in H0. rewrite ZMap.gsspec. 
-   destruct (ZIndexed.eq b (genv_next ge1)). 
-    subst b. rewrite zlt_true. exists f1; split; congruence. omega.
+  rewrite mge_next0. intros. rewrite PTree.gsspec in H0. rewrite PTree.gsspec. 
+   destruct (peq b (genv_next ge1)). 
+    subst b. rewrite pred_dec_true. exists f1; split; congruence. apply Plt_succ.
     pose proof (mge_rev_funs0 b tf H0). 
-    destruct (zlt b (genv_next ge1)). rewrite zlt_true. auto. omega. 
+    destruct (plt b (genv_next ge1)). rewrite pred_dec_true. auto. apply Plt_trans_succ; auto.
     contradiction.
   eauto.
   intros.
     pose proof (mge_rev_vars0 b tv H0). 
-    destruct (zlt b (genv_next ge1)). rewrite zlt_true. auto. omega. 
+    destruct (plt b (genv_next ge1)). rewrite pred_dec_true. auto.
+    apply Plt_trans with (genv_next ge1); auto. apply Plt_succ.
     contradiction.
 (* two variables *)
   constructor; simpl.
-  rewrite Zplus_0_r. congruence.
+  congruence.
   intros. rewrite mge_next0. 
     repeat rewrite PTree.gsspec. destruct (peq id0 id); auto.
   eauto.
   intros.
     pose proof (mge_rev_funs0 b tf H0). 
-    destruct (zlt b (genv_next ge1)). rewrite zlt_true. auto. omega. 
+    destruct (plt b (genv_next ge1)). rewrite pred_dec_true. auto. apply Plt_trans_succ; auto.
     contradiction.
-  rewrite mge_next0. intros. rewrite ZMap.gsspec in H0. rewrite ZMap.gsspec. 
-    destruct (ZIndexed.eq b (genv_next ge1)).
+  rewrite mge_next0. intros. rewrite PTree.gsspec in H0. rewrite PTree.gsspec. 
+    destruct (peq b (genv_next ge1)).
     econstructor; split. eauto. inv H0. constructor; auto. 
     eauto.
-  rewrite mge_next0. intros. rewrite ZMap.gsspec in H0. rewrite ZMap.gsspec. 
-   destruct (ZIndexed.eq b (genv_next ge1)). 
-    subst b. rewrite zlt_true.
-    econstructor; split. eauto. inv H0. constructor; auto.
-    omega.
+  rewrite mge_next0. intros. rewrite PTree.gsspec in H0. rewrite PTree.gsspec. 
+   destruct (peq b (genv_next ge1)). 
+    subst b. rewrite pred_dec_true.
+    econstructor; split. eauto. inv H0. constructor; auto. apply Plt_succ.
     pose proof (mge_rev_vars0 b tv H0). 
-    destruct (zlt b (genv_next ge1)). rewrite zlt_true. auto. omega. 
+    destruct (plt b (genv_next ge1)). rewrite pred_dec_true. auto. apply Plt_trans_succ; auto.
     contradiction.
 Qed.
 
@@ -1372,31 +1368,36 @@ Lemma add_global_augment_match:
   match_genvs new_globs ge1 ge2 ->
   match_genvs (new_globs ++ (idg :: nil)) ge1 (add_global ge2 idg).
 Proof.
-  intros. destruct H. constructor; simpl. 
-  rewrite mge_next0. rewrite app_length. 
-    simpl. rewrite inj_plus. change (Z_of_nat 1) with 1. unfold block; omega.
+  intros. destruct H. 
+  assert (LE: Ple (genv_next ge1) (genv_next ge2)).
+  { rewrite mge_next0; apply advance_next_le. }
+  constructor; simpl.
+  rewrite mge_next0. unfold advance_next. rewrite fold_left_app. simpl. auto.
   intros. rewrite map_app in H. rewrite in_app in H. simpl in H. 
     destruct (peq id idg#1). subst. intuition. rewrite PTree.gso. 
     apply mge_symb0. intuition. auto. 
   intros. destruct idg as [id1 [f1|v1]]; simpl; eauto.
-    rewrite ZMap.gso. eauto. exploit genv_funs_range; eauto. rewrite mge_next0. unfold ZIndexed.t; omega. 
+    rewrite PTree.gso. eauto.
+    exploit genv_funs_range; eauto. intros.
+    unfold Plt, Ple in *; zify; omega.
   intros. rewrite map_app. destruct idg as [id1 [f1|v1]]; simpl in H.
-    rewrite ZMap.gsspec in H. destruct (ZIndexed.eq b (genv_next ge2)). 
-    rewrite zlt_false. rewrite in_app. simpl; right; left. congruence.
-    subst b. rewrite mge_next0. omega.
-    exploit mge_rev_funs0; eauto. destruct (zlt b (genv_next ge1)); auto. 
+    rewrite PTree.gsspec in H. destruct (peq b (genv_next ge2)). 
+    rewrite pred_dec_false. rewrite in_app. simpl; right; left. congruence.
+    subst b. unfold Plt, Ple in *; zify; omega.
+    exploit mge_rev_funs0; eauto. destruct (plt b (genv_next ge1)); auto. 
     rewrite in_app. tauto.
-    exploit mge_rev_funs0; eauto. destruct (zlt b (genv_next ge1)); auto. 
+    exploit mge_rev_funs0; eauto. destruct (plt b (genv_next ge1)); auto. 
     rewrite in_app. tauto.
   intros. destruct idg as [id1 [f1|v1]]; simpl; eauto.
-    rewrite ZMap.gso. eauto. exploit genv_vars_range; eauto. rewrite mge_next0. unfold ZIndexed.t; omega. 
+    rewrite PTree.gso. eauto. exploit genv_vars_range; eauto. 
+    unfold Plt, Ple in *; zify; omega.
   intros. rewrite map_app. destruct idg as [id1 [f1|v1]]; simpl in H.
-    exploit mge_rev_vars0; eauto. destruct (zlt b (genv_next ge1)); auto. 
+    exploit mge_rev_vars0; eauto. destruct (plt b (genv_next ge1)); auto. 
     rewrite in_app. tauto.
-    rewrite ZMap.gsspec in H. destruct (ZIndexed.eq b (genv_next ge2)). 
-    rewrite zlt_false. rewrite in_app. simpl; right; left. congruence.
-    subst b. rewrite mge_next0. omega.
-    exploit mge_rev_vars0; eauto. destruct (zlt b (genv_next ge1)); auto. 
+    rewrite PTree.gsspec in H. destruct (peq b (genv_next ge2)). 
+    rewrite pred_dec_false. rewrite in_app. simpl; right; left. congruence.
+    subst b. unfold Plt, Ple in *; zify; omega.
+    exploit mge_rev_vars0; eauto. destruct (plt b (genv_next ge1)); auto. 
     rewrite in_app. tauto.
 Qed.
 
@@ -1427,7 +1428,7 @@ Proof.
   change new_globs with (nil ++ new_globs) at 1. 
   apply add_globals_augment_match.
   apply add_globals_match; auto.
-  constructor; simpl; auto; intros; rewrite ZMap.gi in H; congruence.
+  constructor; simpl; auto; intros; rewrite PTree.gempty in H; congruence.
 Qed.
 
 Theorem find_funct_ptr_match:
@@ -1440,7 +1441,7 @@ Proof (mge_funs globalenvs_match).
 Theorem find_funct_ptr_rev_match:
   forall (b : block) (tf : B),
   find_funct_ptr (globalenv p') b = Some tf ->
-  if zlt b (genv_next (globalenv p)) then 
+  if plt b (genv_next (globalenv p)) then 
       exists f, find_funct_ptr (globalenv p) b = Some f /\ match_fun f tf
   else 
       In (Gfun tf) (map snd new_globs).
@@ -1467,7 +1468,7 @@ Proof.
   rewrite find_funct_find_funct_ptr in H. 
   rewrite find_funct_find_funct_ptr.
   apply find_funct_ptr_rev_match in H. 
-   destruct (zlt b (genv_next (globalenv p))); auto.
+   destruct (plt b (genv_next (globalenv p))); auto.
 Qed.
 
 Theorem find_var_info_match:
@@ -1480,7 +1481,7 @@ Proof (mge_vars globalenvs_match).
 Theorem find_var_info_rev_match:
   forall (b : block) (tv : globvar W),
   find_var_info (globalenv p') b = Some tv ->
-  if zlt b (genv_next (globalenv p)) then 
+  if plt b (genv_next (globalenv p)) then 
     exists v, find_var_info (globalenv p) b = Some v /\ match_globvar v tv
   else
     In (Gvar tv) (map snd new_globs).
@@ -1597,18 +1598,18 @@ Proof.
   intros. unfold find_symbol, find_funct_ptr in *; simpl.
   destruct H1 as [b [X Y]]. exists b; split.
   rewrite PTree.gso; auto.
-  destruct g1 as [f1 | v1]. rewrite ZMap.gso. auto. 
-  exploit genv_funs_range; eauto. unfold ZIndexed.t; omega.
+  destruct g1 as [f1 | v1]. rewrite PTree.gso. auto.
+  apply Plt_ne. eapply genv_funs_range; eauto.
   auto. 
 (* ensures *)
   intros. unfold find_symbol, find_funct_ptr in *; simpl.
-  exists (genv_next ge); split. apply PTree.gss. apply ZMap.gss. 
+  exists (genv_next ge); split. apply PTree.gss. apply PTree.gss. 
 Qed.
 
 Theorem find_funct_ptr_rev_transf_augment:
   forall (b: block) (tf: B),
   find_funct_ptr (globalenv p') b = Some tf ->
-  if zlt b (genv_next (globalenv p)) then
+  if plt b (genv_next (globalenv p)) then
    (exists f, find_funct_ptr (globalenv p) b = Some f /\ transf_fun f = OK tf)
   else 
    In (Gfun tf) (map snd new_globs).
@@ -1662,24 +1663,24 @@ Proof.
   intros. unfold find_symbol, find_var_info in *; simpl.
   destruct H1 as [b [X Y]]. exists b; split.
   rewrite PTree.gso; auto.
-  destruct g1 as [f1 | v1]. auto. rewrite ZMap.gso. auto. 
-  exploit genv_vars_range; eauto. unfold ZIndexed.t; omega.
+  destruct g1 as [f1 | v1]. auto. rewrite PTree.gso. auto.
+  red; intros; subst b. eelim Plt_strict. eapply genv_vars_range; eauto.
 (* ensures *)
   intros. unfold find_symbol, find_var_info in *; simpl.
-  exists (genv_next ge); split. apply PTree.gss. apply ZMap.gss. 
+  exists (genv_next ge); split. apply PTree.gss. apply PTree.gss. 
 Qed.
 
 Theorem find_var_info_rev_transf_augment:
   forall (b: block) (v': globvar W),
   find_var_info (globalenv p') b = Some v' ->
-  if zlt b (genv_next (globalenv p)) then
+  if plt b (genv_next (globalenv p)) then
     (exists v, find_var_info (globalenv p) b = Some v /\ transf_globvar transf_var v = OK v')
   else
     (In (Gvar v') (map snd new_globs)).
 Proof.
   intros. 
   exploit find_var_info_rev_match. eexact prog_match. eauto.
-  destruct (zlt b (genv_next (globalenv p))); auto.
+  destruct (plt b (genv_next (globalenv p))); auto.
   intros [v [X Y]]. exists v; split; auto. inv Y. unfold transf_globvar; simpl. 
   rewrite H0; simpl. auto.
 Qed.
@@ -1711,7 +1712,7 @@ Proof.
   intros. 
   pose proof (initmem_inject p H0). 
   erewrite init_mem_transf_augment in H1; eauto. 
-  eapply alloc_globals_augment; eauto. omega.
+  eapply alloc_globals_augment; eauto. apply Ple_refl. 
 Qed.
 
 End TRANSF_PROGRAM_AUGMENT.
@@ -1748,7 +1749,7 @@ Theorem find_funct_ptr_rev_transf_partial2:
 Proof.
   pose proof (@find_funct_ptr_rev_transf_augment _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
   intros.  pose proof (H b tf H0). 
-  destruct (zlt b (genv_next (globalenv p))).  auto. contradiction.
+  destruct (plt b (genv_next (globalenv p))).  auto. contradiction.
 Qed.
 
 Theorem find_funct_transf_partial2:
@@ -1787,7 +1788,7 @@ Theorem find_var_info_rev_transf_partial2:
 Proof.
   pose proof (@find_var_info_rev_transf_augment _ _ _ _ _ _ _ _ _ _ transf_augment_OK).
   intros.  pose proof (H b v' H0). 
-  destruct (zlt b (genv_next (globalenv p))).  auto. contradiction.
+  destruct (plt b (genv_next (globalenv p))).  auto. contradiction.
 Qed.
 
 Theorem find_symbol_transf_partial2:

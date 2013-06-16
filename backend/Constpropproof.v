@@ -255,7 +255,7 @@ Proof.
   intros. eapply Mem.load_alloc_unchanged; eauto. 
   split. eauto with mem.
   intros; red; intros. exploit Mem.perm_alloc_inv; eauto. 
-  rewrite zeq_false. apply C. eapply Mem.valid_not_valid_diff; eauto with mem.
+  rewrite dec_eq_false. apply C. eapply Mem.valid_not_valid_diff; eauto with mem.
 Qed.
 
 Lemma mem_match_approx_free:
@@ -267,7 +267,7 @@ Proof.
   intros; red; intros. exploit H; eauto. intros [A [B C]].
   split. apply Genv.load_store_init_data_invariant with m; auto.
   intros. eapply Mem.load_free; eauto.
-  destruct (zeq b0 b); auto. subst b0.
+  destruct (eq_block b0 b); auto. subst b0.
   right. destruct (zlt lo hi); auto. 
   elim (C lo). apply Mem.perm_cur_max. 
   exploit Mem.free_range_perm; eauto. instantiate (1 := lo); omega. 
@@ -323,10 +323,10 @@ Proof.
   unfold Genv.add_global, Genv.find_symbol, Genv.find_var_info in *;
   simpl in *.
   destruct EITHER as [[A B] | [A B]].
-  subst id0. rewrite PTree.gss in H1. inv H1. rewrite ZMap.gss. auto.
+  subst id0. rewrite PTree.gss in H1. inv H1. rewrite PTree.gss. auto.
   rewrite PTree.gso in H1; auto. destruct gd. eapply H; eauto. 
-  rewrite ZMap.gso. eapply H; eauto.
-  exploit Genv.genv_symb_range; eauto. unfold ZIndexed.t. omega.
+  rewrite PTree.gso. eapply H; eauto.
+  red; intros; subst b. eelim Plt_strict; eapply Genv.genv_symb_range; eauto.
 Qed.
 
 Theorem mem_match_approx_init:

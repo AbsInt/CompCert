@@ -21,8 +21,8 @@ Require Import AST.
 Require Import Integers.
 Require Import Floats.
 
-Definition block : Type := Z.
-Definition eq_block := zeq.
+Definition block : Type := positive.
+Definition eq_block := peq.
 
 (** A value is either:
 - a machine integer;
@@ -212,7 +212,7 @@ Definition sub (v1 v2: val): val :=
   | Vint n1, Vint n2 => Vint(Int.sub n1 n2)
   | Vptr b1 ofs1, Vint n2 => Vptr b1 (Int.sub ofs1 n2)
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
-      if zeq b1 b2 then Vint(Int.sub ofs1 ofs2) else Vundef
+      if eq_block b1 b2 then Vint(Int.sub ofs1 ofs2) else Vundef
   | _, _ => Vundef
   end.
 
@@ -568,7 +568,7 @@ Definition cmpu_bool (c: comparison) (v1 v2: val): option bool :=
   | Vint n1, Vptr b2 ofs2 =>
       if Int.eq n1 Int.zero then cmp_different_blocks c else None
   | Vptr b1 ofs1, Vptr b2 ofs2 =>
-      if zeq b1 b2 then
+      if eq_block b1 b2 then
         if weak_valid_ptr b1 (Int.unsigned ofs1)
            && weak_valid_ptr b2 (Int.unsigned ofs2)
         then Some (Int.cmpu c ofs1 ofs2)
@@ -785,7 +785,7 @@ Proof.
   destruct v1; destruct v2; intros; simpl; auto.
   rewrite Int.sub_add_l. auto.
   rewrite Int.sub_add_l. auto.
-  case (zeq b b0); intro. rewrite Int.sub_add_l. auto. reflexivity.
+  case (eq_block b b0); intro. rewrite Int.sub_add_l. auto. reflexivity.
 Qed.
 
 Theorem sub_add_r:
@@ -797,7 +797,7 @@ Proof.
   repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
   decEq. repeat rewrite Int.sub_add_opp. 
   rewrite Int.add_assoc. decEq. apply Int.neg_add_distr.
-  case (zeq b b0); intro. simpl. decEq. 
+  case (eq_block b b0); intro. simpl. decEq. 
   repeat rewrite Int.sub_add_opp. rewrite Int.add_assoc. decEq.
   apply Int.neg_add_distr.
   reflexivity.
@@ -1037,7 +1037,7 @@ Proof.
   rewrite Int.negate_cmpu. auto.
   destruct (Int.eq i Int.zero); auto. 
   destruct (Int.eq i0 Int.zero); auto.
-  destruct (zeq b b0).
+  destruct (eq_block b b0).
   destruct ((valid_ptr b (Int.unsigned i) || valid_ptr b (Int.unsigned i - 1)) &&
             (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1))).
   rewrite Int.negate_cmpu. auto.
@@ -1084,13 +1084,13 @@ Proof.
   rewrite Int.swap_cmpu. auto.
   case (Int.eq i Int.zero); auto.
   case (Int.eq i0 Int.zero); auto.
-  destruct (zeq b b0); subst.
-  rewrite zeq_true.
+  destruct (eq_block b b0); subst.
+  rewrite dec_eq_true.
   destruct (valid_ptr b0 (Int.unsigned i) || valid_ptr b0 (Int.unsigned i - 1));
   destruct (valid_ptr b0 (Int.unsigned i0) || valid_ptr b0 (Int.unsigned i0 - 1));
   simpl; auto.
   rewrite Int.swap_cmpu. auto.
-  rewrite zeq_false by auto.
+  rewrite dec_eq_false by auto.
   destruct (valid_ptr b (Int.unsigned i));
     destruct (valid_ptr b0 (Int.unsigned i0)); simpl; auto.
 Qed.
@@ -1286,7 +1286,7 @@ Proof.
   destruct v1; simpl in H2; try discriminate;
   destruct v2; simpl in H2; try discriminate;
   inv H0; inv H1; simpl; auto.
-  destruct (zeq b0 b1).
+  destruct (eq_block b0 b1).
   assert (forall b ofs, valid_ptr b ofs || valid_ptr b (ofs - 1) = true ->
                         valid_ptr' b ofs || valid_ptr' b (ofs - 1) = true).
     intros until ofs. rewrite ! orb_true_iff. intuition. 
@@ -1401,7 +1401,7 @@ Remark val_sub_inject:
 Proof.
   intros. inv H; inv H0; simpl; auto.
   econstructor; eauto. rewrite Int.sub_add_l. auto.
-  destruct (zeq b1 b0); auto. subst. rewrite H1 in H. inv H. rewrite zeq_true.
+  destruct (eq_block b1 b0); auto. subst. rewrite H1 in H. inv H. rewrite dec_eq_true. 
   rewrite Int.sub_shifted. auto.
 Qed.
 
@@ -1461,15 +1461,15 @@ Proof.
   fold (weak_valid_ptr1 b0 (Int.unsigned ofs0)) in H1.
   fold (weak_valid_ptr2 b2 (Int.unsigned (Int.add ofs1 (Int.repr delta)))).
   fold (weak_valid_ptr2 b3 (Int.unsigned (Int.add ofs0 (Int.repr delta0)))). 
-  destruct (zeq b1 b0); subst.
-  rewrite H in H2. inv H2. rewrite zeq_true.
+  destruct (eq_block b1 b0); subst.
+  rewrite H in H2. inv H2. rewrite dec_eq_true.
   destruct (weak_valid_ptr1 b0 (Int.unsigned ofs1)) eqn:?; try discriminate.
   destruct (weak_valid_ptr1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
   erewrite !weak_valid_ptr_inj by eauto. simpl.
   rewrite <-H1. simpl. decEq. apply Int.translate_cmpu; eauto.
   destruct (valid_ptr1 b1 (Int.unsigned ofs1)) eqn:?; try discriminate.
   destruct (valid_ptr1 b0 (Int.unsigned ofs0)) eqn:?; try discriminate.
-  destruct (zeq b2 b3); subst.
+  destruct (eq_block b2 b3); subst.
   assert (valid_ptr_implies: forall b ofs, valid_ptr1 b ofs = true -> weak_valid_ptr1 b ofs = true).
     intros. unfold weak_valid_ptr1. rewrite H0; auto. 
   erewrite !weak_valid_ptr_inj by eauto using valid_ptr_implies. simpl.

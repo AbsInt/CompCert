@@ -22,8 +22,6 @@ Require Import Op.
 Require Import Registers.
 Require Import RTL.
 
-Ltac xomega := unfold Plt, Ple in *; zify; omega.
-
 (** ** Environment of inlinable functions *)
 
 (** We maintain a mapping from function names to their definitions.

@@ -550,7 +550,7 @@ Proof.
   simpl. 
   fold (Mem.weak_valid_pointer m b0 (Int.unsigned i)) in *.
   fold (Mem.weak_valid_pointer m b1 (Int.unsigned i0)) in *.
-  destruct (zeq b0 b1).
+  destruct (eq_block b0 b1).
   destruct (Mem.weak_valid_pointer m b0 (Int.unsigned i) &&
             Mem.weak_valid_pointer m b1 (Int.unsigned i0)); inversion H1.
   destruct c; simpl; auto.

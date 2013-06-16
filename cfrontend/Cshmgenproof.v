@@ -437,8 +437,8 @@ Proof.
   destruct (classify_sub tya tyb); inv MAKE.
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - destruct va; try discriminate; destruct vb; inv SEM.
-  destruct (zeq b0 b1); try discriminate. destruct (Int.eq (Int.repr (sizeof ty)) Int.zero) eqn:E; inv H0.
-  econstructor; eauto with cshm. rewrite zeq_true. simpl. rewrite E; auto. 
+  destruct (eq_block b0 b1); try discriminate. destruct (Int.eq (Int.repr (sizeof ty)) Int.zero) eqn:E; inv H0.
+  econstructor; eauto with cshm. rewrite dec_eq_true. simpl. rewrite E; auto. 
 - destruct va; try discriminate; destruct vb; inv SEM; eauto with cshm.
 - eapply make_binarith_correct; eauto; intros; auto.
 Qed.

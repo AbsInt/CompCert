@@ -30,7 +30,7 @@ Open Scope error_monad_scope.
 (** To evaluate constant expressions at compile-time, we use the same [value]
   type and the same [sem_*] functions that are used in CompCert C's semantics
   (module [Csem]).  However, we interpret pointer values symbolically:
-  [Vptr (Zpos id) ofs] represents the address of global variable [id]
+  [Vptr id ofs] represents the address of global variable [id]
   plus byte offset [ofs]. *)
 
 (** [constval a] evaluates the constant expression [a].
@@ -111,7 +111,7 @@ Fixpoint constval (a: expr) : res val :=
   | Ecomma r1 r2 ty =>
       do v1 <- constval r1; constval r2
   | Evar x ty =>
-      OK(Vptr (Zpos x) Int.zero)
+      OK(Vptr x Int.zero)
   | Ederef r ty =>
       constval r
   | Efield l f ty =>
@@ -155,9 +155,9 @@ Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   | Vlong n, Tlong _ _ => OK(Init_int64 n)
   | Vfloat f, Tfloat F32 _ => OK(Init_float32 f)
   | Vfloat f, Tfloat F64 _ => OK(Init_float64 f)
-  | Vptr (Zpos id) ofs, Tint I32 sg _ => OK(Init_addrof id ofs)
-  | Vptr (Zpos id) ofs, Tpointer _ _ => OK(Init_addrof id ofs)
-  | Vptr (Zpos id) ofs, Tcomp_ptr _ _ => OK(Init_addrof id ofs)
+  | Vptr id ofs, Tint I32 sg _ => OK(Init_addrof id ofs)
+  | Vptr id ofs, Tpointer _ _ => OK(Init_addrof id ofs)
+  | Vptr id ofs, Tcomp_ptr _ _ => OK(Init_addrof id ofs)
   | Vundef, _ => Error(msg "undefined operation in initializer")
   | _, _ => Error (msg "type mismatch in initializer")
   end.

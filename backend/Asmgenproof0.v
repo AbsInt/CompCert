@@ -844,10 +844,10 @@ Inductive match_stack: list Mach.stackframe -> Prop :=
       match_stack (Stackframe fb sp ra c :: s).
 
 Lemma parent_sp_def: forall s, match_stack s -> parent_sp s <> Vundef.
-Proof. induction 1; simpl. congruence. auto. Qed.
+Proof. induction 1; simpl. unfold Vzero; congruence. auto. Qed.
 
 Lemma parent_ra_def: forall s, match_stack s -> parent_ra s <> Vundef.
-Proof. induction 1; simpl. unfold Vzero. congruence. inv H0. congruence. Qed.
+Proof. induction 1; simpl. unfold Vzero; congruence. inv H0. congruence. Qed.
 
 Lemma lessdef_parent_sp:
   forall s v,

@@ -177,6 +177,9 @@ Proof (Pos.lt_irrefl).
 
 Hint Resolve Ple_refl Plt_Ple Ple_succ Plt_strict: coqlib.
 
+Ltac xomega := unfold Plt, Ple in *; zify; omega.
+Ltac xomegaContradiction := exfalso; xomega.
+
 (** Peano recursion over positive numbers. *)
 
 Section POSITIVE_ITERATION.

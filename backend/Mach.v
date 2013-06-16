@@ -273,7 +273,7 @@ Inductive state: Type :=
 
 Definition parent_sp (s: list stackframe) : val :=
   match s with
-  | nil => Vptr Mem.nullptr Int.zero
+  | nil => Vzero
   | Stackframe f sp ra c :: s' => sp
   end.
 

@@ -44,29 +44,44 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof
-  (Genv.find_symbol_transf_partial transl_fundef _ TRANSL).
+Proof.
+  intros. eapply Genv.find_symbol_match. eapply transl_program_spec; eauto. 
+  simpl. tauto.
+Qed.
 
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
-  Genv.find_funct_ptr tge b = Some tf /\ transl_fundef f = OK tf.
-Proof
-  (Genv.find_funct_ptr_transf_partial transl_fundef _ TRANSL).
+  Genv.find_funct_ptr tge b = Some tf /\ tr_fundef f tf.
+Proof.
+  intros. eapply Genv.find_funct_ptr_match.
+  eapply transl_program_spec; eauto.
+  assumption.
+Qed.
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   exists tf,
-  Genv.find_funct tge v = Some tf /\ transl_fundef f = OK tf.
-Proof
-  (Genv.find_funct_transf_partial transl_fundef _ TRANSL).
+  Genv.find_funct tge v = Some tf /\ tr_fundef f tf.
+Proof.
+  intros. eapply Genv.find_funct_match.
+  eapply transl_program_spec; eauto.
+  assumption.
+Qed.
 
 Lemma varinfo_preserved:
   forall b, Genv.find_var_info tge b = Genv.find_var_info ge b.
-Proof
-  (Genv.find_var_info_transf_partial transl_fundef _ TRANSL).
+Proof.
+  intros. destruct (Genv.find_var_info ge b) as [v|] eqn:V. 
+- exploit Genv.find_var_info_match. eapply transl_program_spec; eauto. eassumption. 
+  intros [tv [A B]]. inv B. assumption.
+- destruct (Genv.find_var_info tge b) as [v'|] eqn:V'; auto.
+  exploit Genv.find_var_info_rev_match. eapply transl_program_spec; eauto. eassumption. 
+  simpl. destruct (plt b (Genv.genv_next (Genv.globalenv prog))); try tauto.
+  intros [v [A B]]. inv B. fold ge in A. congruence.
+Qed.
 
 Lemma block_is_volatile_preserved:
   forall b, block_is_volatile tge b = block_is_volatile ge b.
@@ -75,22 +90,19 @@ Proof.
 Qed.
 
 Lemma type_of_fundef_preserved:
-  forall f tf, transl_fundef f = OK tf ->
+  forall f tf, tr_fundef f tf ->
   type_of_fundef tf = Csyntax.type_of_fundef f.
 Proof.
-  intros. destruct f; monadInv H.
-  exploit transl_function_spec; eauto. intros [A [B [C D]]].
-  simpl. unfold type_of_function, Csyntax.type_of_function. congruence.
+  intros. inv H.
+  inv H0; simpl. unfold type_of_function, Csyntax.type_of_function. congruence.
   auto.
 Qed.
 
 Lemma function_return_preserved:
-  forall f tf, transl_function f = OK tf ->
+  forall f tf, tr_function f tf ->
   fn_return tf = Csyntax.fn_return f.
 Proof.
-  intros. unfold transl_function in H.
-  destruct (transl_stmt (Csyntax.fn_body f) (initial_generator tt)); inv H.
-  auto.
+  intros. inv H; auto. 
 Qed.
 
 Lemma type_of_global_preserved:
@@ -893,7 +905,7 @@ Inductive match_cont : Csem.cont -> cont -> Prop :=
       match_cont k tk ->
       match_cont (Csem.Kswitch2 k) (Kswitch tk)
   | match_Kcall: forall f e C ty k optid tf le sl tk a dest tmps,
-      transl_function f = Errors.OK tf ->
+      tr_function f tf ->
       leftcontext RV RV C ->
       (forall v m, tr_top tge e (set_opttemp optid v le) m dest (C (Csyntax.Eval v ty)) sl a tmps) ->
       match_cont_exp dest a k tk ->
@@ -961,19 +973,19 @@ Qed.
 
 Inductive match_states: Csem.state -> state -> Prop :=
   | match_exprstates: forall f r k e m tf sl tk le dest a tmps,
-      transl_function f = Errors.OK tf ->
+      tr_function f tf ->
       tr_top tge e le m dest r sl a tmps ->
       match_cont_exp dest a k tk ->
       match_states (Csem.ExprState f r k e m)
                    (State tf Sskip (Kseqlist sl tk) e le m)
   | match_regularstates: forall f s k e m tf ts tk le,
-      transl_function f = Errors.OK tf ->
+      tr_function f tf ->
       tr_stmt s ts ->
       match_cont k tk ->
       match_states (Csem.State f s k e m)
                    (State tf ts tk e le m)
   | match_callstates: forall fd args k m tfd tk,
-      transl_fundef fd = Errors.OK tfd ->
+      tr_fundef fd tfd ->
       match_cont k tk ->
       match_states (Csem.Callstate fd args k m)
                    (Callstate tfd args tk m)
@@ -2089,8 +2101,7 @@ Proof.
   inv H9. exploit tr_top_val_for_val_inv; eauto. intros [A [B C]]. subst.
   econstructor; split.
   left. eapply plus_two. constructor. econstructor. eauto.
-  replace (fn_return tf) with (Csyntax.fn_return f). eauto.
-  exploit transl_function_spec; eauto. intuition congruence. 
+  erewrite function_return_preserved; eauto. 
   eauto. traceEq.
   constructor. apply match_cont_call; auto.
 (* skip return *)
@@ -2133,8 +2144,8 @@ Proof.
 
 (* goto *)
   inv H7.
-  exploit transl_function_spec; eauto. intros [A [B [C D]]].
-  exploit tr_find_label. eexact A. apply match_cont_call. eauto. 
+  inversion H6; subst. 
+  exploit tr_find_label. eauto. apply match_cont_call. eauto. 
   instantiate (1 := lbl). rewrite H. 
   intros [ts' [tk' [P [Q R]]]]. 
   econstructor; split. 
@@ -2142,18 +2153,17 @@ Proof.
   econstructor; eauto. 
 
 (* internal function *)
-  monadInv H7. 
-  exploit transl_function_spec; eauto. intros [A [B [C D]]].
+  inv H7. inversion H3; subst.
   econstructor; split.
   left; apply plus_one. eapply step_internal_function. econstructor.
-  rewrite C; rewrite D; auto.
-  rewrite C; rewrite D. eapply alloc_variables_preserved; eauto.
-  rewrite C. eapply bind_parameters_preserved; eauto.
+  rewrite H5; rewrite H6; auto.
+  rewrite H5; rewrite H6. eapply alloc_variables_preserved; eauto.
+  rewrite H5. eapply bind_parameters_preserved; eauto.
   eauto. 
   constructor; auto. 
 
 (* external function *)
-  monadInv H5. 
+  inv H5.
   econstructor; split.
   left; apply plus_one. econstructor; eauto.
   eapply external_call_symbols_preserved; eauto. 
@@ -2188,14 +2198,13 @@ Lemma transl_initial_states:
   exists S', Clight.initial_state tprog S' /\ match_states S S'.
 Proof.
   intros. inv H. 
+  exploit transl_program_spec; eauto. intros MP.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   econstructor.
-  apply (Genv.init_mem_transf_partial _ _ TRANSL). eauto. 
+  exploit Genv.init_mem_match; eauto.  
   simpl. fold tge. rewrite symbols_preserved.
-  replace (prog_main tprog) with (prog_main prog). eexact H1.
-  symmetry. unfold transl_program in TRANSL.
-  eapply transform_partial_program_main; eauto.
+  destruct MP as [A B]. rewrite B; eexact H1.
   eexact FIND.
   rewrite <- H3. apply type_of_fundef_preserved. auto.
   constructor. auto. constructor.

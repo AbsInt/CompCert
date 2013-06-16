@@ -334,17 +334,13 @@ Qed.
 (** * Soundness of the compile-time evaluator *)
 
 (** A global environment [ge] induces a memory injection mapping
-  our symbolic pointers [Vptr (Zpos id) ofs] to run-time pointers
+  our symbolic pointers [Vptr id ofs] to run-time pointers
   [Vptr b ofs] where [Genv.find_symbol ge id = Some b]. *)
 
 Definition inj (b: block) :=
-  match b with
-  | Zpos id =>
-      match Genv.find_symbol ge id with
-      | Some b' => Some (b', 0)
-      | None => None
-      end
-  | _ => None
+  match Genv.find_symbol ge b with
+  | Some b' => Some (b', 0)
+  | None => None
   end.
 
 Lemma mem_empty_not_valid_pointer:
@@ -512,11 +508,11 @@ Proof.
   destruct ty; try discriminate. 
   destruct f1; inv EQ2; simpl in H2; inv H2; assumption.
   (* pointer *)
-  unfold inj in H. destruct b1; try discriminate.
-  assert (data = Init_addrof p ofs1 /\ chunk = Mint32).
+  unfold inj in H.
+  assert (data = Init_addrof b1 ofs1 /\ chunk = Mint32).
     destruct ty; inv EQ2; inv H2.
     destruct i; inv H5. intuition congruence. auto.
-  destruct H4; subst. destruct (Genv.find_symbol ge p); inv H. 
+  destruct H4; subst. destruct (Genv.find_symbol ge b1); inv H. 
   rewrite Int.add_zero in H3. auto.
   (* undef *)
   discriminate.
@@ -538,7 +534,6 @@ Proof.
   destruct ty; inv EQ2; reflexivity. 
   destruct ty; try discriminate.
   destruct f0; inv EQ2; reflexivity.
-  destruct b; try discriminate.
   destruct ty; try discriminate.
   destruct i0; inv EQ2; reflexivity.
   inv EQ2; reflexivity.

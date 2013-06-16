@@ -1085,17 +1085,67 @@ Opaque transl_expression transl_expr_stmt.
   monadInv TR; constructor; eauto.
 Qed.
 
-Theorem transl_function_spec:
-  forall f tf,
-  transl_function f = OK tf ->
-  tr_stmt f.(Csyntax.fn_body) tf.(fn_body)
-  /\ fn_return tf = Csyntax.fn_return f
-  /\ fn_params tf = Csyntax.fn_params f
-  /\ fn_vars tf = Csyntax.fn_vars f.
+(** Relational presentation for the transformation of functions, fundefs, and variables. *)
+
+Inductive tr_function: Csyntax.function -> Clight.function -> Prop :=
+  | tr_function_intro: forall f tf,
+      tr_stmt f.(Csyntax.fn_body) tf.(fn_body) ->
+      fn_return tf = Csyntax.fn_return f ->
+      fn_params tf = Csyntax.fn_params f ->
+      fn_vars tf = Csyntax.fn_vars f ->
+      tr_function f tf.
+
+Inductive tr_fundef: Csyntax.fundef -> Clight.fundef -> Prop :=
+  | tr_internal: forall f tf,
+      tr_function f tf ->
+      tr_fundef (Csyntax.Internal f) (Clight.Internal tf)
+  | tr_external: forall ef targs tres,
+      tr_fundef (Csyntax.External ef targs tres) (External ef targs tres).
+
+Lemma transl_function_spec:
+  forall f tf g g' i,
+  transl_function f g = Res tf g' i ->
+  tr_function f tf.
 Proof.
-  intros until tf. unfold transl_function.
-  case_eq (transl_stmt (Csyntax.fn_body f) (initial_generator tt)); intros; inv H0.
-  simpl. intuition. eapply transl_stmt_meets_spec; eauto.
+  unfold transl_function; intros. monadInv H.
+  constructor; auto. simpl. eapply transl_stmt_meets_spec; eauto. 
+Qed.
+
+Lemma transl_fundef_spec:
+  forall fd tfd g g' i,
+  transl_fundef fd g = Res tfd g' i ->
+  tr_fundef fd tfd.
+Proof.
+  unfold transl_fundef; intros.
+  destruct fd; monadInv H.
++ constructor. eapply transl_function_spec; eauto. 
++ constructor.
+Qed.
+
+Lemma transl_globdefs_spec:
+  forall l g l',
+  transl_globdefs l g = OK l' ->
+  list_forall2 (match_globdef tr_fundef (fun v1 v2 => v1 = v2)) l l'.
+Proof.
+  induction l; simpl; intros.
+- inv H. constructor.
+- destruct a as [id gd]. destruct gd.
+  + destruct (transl_fundef f g) as [? | tf g' ?] eqn:E1; try discriminate.
+    destruct (transl_globdefs l g') eqn:E2; simpl in H; inv H.
+    constructor; eauto. constructor. eapply transl_fundef_spec; eauto.
+  + destruct (transl_globdefs l g) eqn:E2; simpl in H; inv H.
+    constructor; eauto. destruct v; constructor; auto.
+Qed.
+
+Theorem transl_program_spec:
+  forall p tp,
+  transl_program p = OK tp ->
+  match_program tr_fundef (fun v1 v2 => v1 = v2) nil p.(prog_main) p tp.
+Proof.
+  unfold transl_program; intros. 
+  destruct (transl_globdefs (prog_defs p) (initial_generator tt)) eqn:E; simpl in H; inv H.
+  split; auto. exists l; split. eapply transl_globdefs_spec; eauto. 
+  rewrite <- app_nil_end; auto.
 Qed.
 
 End SPEC.

@@ -155,7 +155,7 @@ let compare_mem m1 m2 =
 
 (* Comparing continuations *)
 
-let some_expr = Eval(Vptr(Mem.nullptr, Int.zero), Tvoid)
+let some_expr = Eval(Vint Int.zero, Tvoid)
 
 let rank_cont = function
   | Kstop -> 0
@@ -234,7 +234,7 @@ let mem_state = function
 
 let compare_state s1 s2 =
   if s1 == s2 then 0 else
-  let c = Z.compare (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock in
+  let c = P.compare (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock in
   if c <> 0 then c else begin
   match s1, s2 with
   | State(f1,s1,k1,e1,m1), State(f2,s2,k2,e2,m2) ->
@@ -275,7 +275,7 @@ let rec purge_seen nextblock seen =
   match min with
   | None -> seen
   | Some((s, w) as sw) ->
-      if Z.le (mem_state s).Mem.nextblock nextblock
+      if P.le (mem_state s).Mem.nextblock nextblock
       then purge_seen nextblock (StateSet.remove sw seen)
       else seen
 
@@ -514,7 +514,7 @@ module PrioQueue = struct
   let singleton elt = Node(elt, Empty, Empty)
 
   let higher_prio (time1, (s1, w1)) (time2, (s2, w2)) =
-    Z.lt (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock
+    P.lt (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock
 
   let rec insert queue elt =
     match queue with
