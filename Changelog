@@ -1,13 +1,70 @@
-Development version
+Release 2.00, 2013-06-XX
+========================
 
+Major improvements:
+
+- Support for C types "long long" and "unsigned long long", that is,
+  64-bit integers.  Regarding arithmetic operations on 64-bit integers,
+  . simple operations are expanded in-line and proved correct;
+  . more complex operations (division, modulus, conversions to/from floats)
+    call into library functions written in assembly, heavily tested
+    but not yet proved correct.
+
+- The register allocator was completely rewritten to use an "end-to-end"
+  translation validation approach, using a validation algorithm
+  described in the paper "Validating register allocation and spilling"
+  by Silvain Rideau and Xavier Leroy, Compiler Construction 2010,
+  http://dx.doi.org/10.1007/978-3-642-11970-5_13
+  This validation-based approach enables better register allocation, esp:
+  . live-range splitting is implemented
+  . two-address operations are treated more efficiently
+  . no need to reserve processor registers for spilling and reloading.
+  The improvements in quality of generated code is significant for
+  IA32 (because of its paucity of registers) and barely noticeable
+  for ARM and PowerPC.
+
+- Preliminary support for debugging information.  The "-g" flag
+  causes DWARF debugging information to be generated for line numbers
+  and stack structure (Call Frame Information).  With a debugger like
+  GDB, this makes it possible to step through the code, put breakpoints
+  by line number, and print stack backtraces.  However, no information
+  is generated yet for C type definitions nor for variables; therefore,
+  it is not possible to print the values of variables.
+
+Improvements in ABI conformance:
+- For IA32 and ARM, function arguments of type "float"
+  (single-precision FP) were incorrectly passed as "double".
+- For PowerPC, fixed alignment of "double" and "long long" arguments
+  passed on stack.
+
+Improvements in code generation:
+- More aggressive common subexpression elimination across some builtin
+  function calls, esp. annotations.
+
+Improvements in compiler usability:
+- Option -fno-taillcalls to turn off tail-call elimination.
+  (Some static analysis tools are confused by this optimization.)
 - Reduced stack usage of the compiler by rewriting some key functions
   in tail-recursive style.
 - Reduced memory requirements of constant propagation pass by forgetting
   compile-time approximations of dead variables.
-- More aggressive common subexpression elimination across some builtin
-  function calls, esp. annotations.
 - More careful elaboration of C struct and union types into CompCert C
   types, avoiding behaviors exponential in the nesting of structs.	 
+
+Bug fixing:
+- Fixed parsing of labeled statements inside "switch" constructs,
+  which were causing syntax errors.
+- The "->" operator applied to an array type was causing a type error.
+- Nested conditional expressions "a ? (b ? c : d) : e" were causing
+  a compile-time error if "c", "d" and "e" had different types.
+
+Coq development:
+- Adapted the memory model to the needs of the VST project at Princeton:
+  . Memory block identifiers are now of type "positive" instead of "Z"
+  . Strengthened preconditions in the definition of memory injections
+    and the specification of external calls.
+- The LTL intermediate language is now a CFG of basic blocks.
+- Suppressed the LTLin intermediate language, no longer used.
 
 
 Release 1.13, 2013-03-12
