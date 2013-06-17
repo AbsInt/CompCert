@@ -10,7 +10,6 @@
 (*  the Free Software Foundation, either version 2 of the License, or  *)
 (*  (at your option) any later version.  This file is also distributed *)
 (*  under the terms of the INRIA Non-Commercial License Agreement.     *)
-(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
 (*                                                                     *)
 (* *********************************************************************)
 
