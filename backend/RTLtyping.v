@@ -394,7 +394,7 @@ Definition type_code (e: S.typenv): res S.typenv :=
        end)
     f.(fn_code) (OK e).
 
-(** S remaining constraints *)
+(** Solve remaining constraints *)
 
 Definition check_params_norepet (params: list reg): res unit :=
   if list_norepet_dec Reg.eq params then OK tt else Error(msg "duplicate parameters").
