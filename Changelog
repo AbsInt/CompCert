@@ -1,4 +1,4 @@
-Release 2.00, 2013-06-XX
+Release 2.00, 2013-06-21
 ========================
 
 Major improvements:
@@ -20,8 +20,7 @@ Major improvements:
   . two-address operations are treated more efficiently
   . no need to reserve processor registers for spilling and reloading.
   The improvements in quality of generated code is significant for
-  IA32 (because of its paucity of registers) and barely noticeable
-  for ARM and PowerPC.
+  IA32 (because of its paucity of registers) but less so for ARM and PowerPC.
 
 - Preliminary support for debugging information.  The "-g" flag
   causes DWARF debugging information to be generated for line numbers
@@ -49,7 +48,7 @@ Improvements in compiler usability:
 - Reduced memory requirements of constant propagation pass by forgetting
   compile-time approximations of dead variables.
 - More careful elaboration of C struct and union types into CompCert C
-  types, avoiding behaviors exponential in the nesting of structs.	 
+  types, avoiding behaviors exponential in the nesting of structs.
 
 Bug fixing:
 - Fixed parsing of labeled statements inside "switch" constructs,
@@ -61,7 +60,7 @@ Bug fixing:
 Coq development:
 - Adapted the memory model to the needs of the VST project at Princeton:
   . Memory block identifiers are now of type "positive" instead of "Z"
-  . Strengthened preconditions in the definition of memory injections
+  . Strengthened invariants in the definition of memory injections
     and the specification of external calls.
 - The LTL intermediate language is now a CFG of basic blocks.
 - Suppressed the LTLin intermediate language, no longer used.
