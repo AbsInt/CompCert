@@ -963,6 +963,8 @@ let instr_size = function
           if sz <= 64 then (sz / 4) * 2 + 6 else 11
       | EF_annot_val(txt, targ) ->
           0
+      | EF_inline_asm txt ->
+          8 (* reasonable? default *)
       | _ ->
           assert false
       end
