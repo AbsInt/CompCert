@@ -44,6 +44,8 @@ val remove_attributes_type : Env.t -> attributes -> typ -> typ
   (* Remove the given set of attributes to those of the given type. *)
 val erase_attributes_type : Env.t -> typ -> typ
   (* Erase the attributes of the given type. *)
+val attr_is_type_related: attribute -> bool
+(* Is an attribute type-related (true) or variable-related (false)? *)
 
 (* Type compatibility *)
 val compatible_types : ?noattrs: bool -> Env.t -> typ -> typ -> bool

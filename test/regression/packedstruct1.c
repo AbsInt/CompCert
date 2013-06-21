@@ -111,6 +111,20 @@ void test5(void)
   printf("s5 = {x = %d, y = %d, z = %.5f}\n\n", s5.x, s5.y, s5.z);
 }
 
+/* Yet another, with packed attribute after the struct decl */
+
+struct s6 { unsigned short x; int y; double z; }  __attribute((packed)) const s61;
+
+void test6(void)
+{
+  struct s6 s62;
+  printf("sizeof(struct s6) = %d\n", sizeof(struct s6));
+  printf("offsetof(x) = %d, offsetof(y) = %d, offsetof(z) = %d\n",
+         offsetof(s6,x), offsetof(s6,y), offsetof(s6,z));
+  s62.x = 123; s62.y = -456; s62.z = 3.14159;
+  printf("s62 = {x = %d, y = %d, z = %.5f}\n\n", s62.x, s62.y, s62.z);
+}
+
 
 /* Test harness */
 
@@ -121,5 +135,6 @@ int main(int argc, char ** argv)
   test3();
   test4();
   test5();
+  test6();
   return 0;
 }

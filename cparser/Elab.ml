@@ -354,6 +354,17 @@ let rec elab_specifier ?(only = false) loc env specifier =
 
   let simple ty = (!sto, !inline, add_attributes_type !attr ty, env) in
 
+  (* As done in CIL, partition !attr into type-related attributes,
+     which are returned, and other attributes, which are left in !attr.
+     The returned type-related attributes are applied to the
+     struct/union/enum being defined.
+     The leftover non-type-related attributes will be applied
+     to the variable being defined. *)
+  let get_type_attrs () =
+    let (ta, nta) = List.partition attr_is_type_related !attr in
+    attr := nta;
+    ta in
+
   (* Now interpret the list of type specifiers.  Much of this code
      is stolen from CIL. *)
   match List.stable_sort typespec_order (List.rev !tyspecs) with
@@ -413,18 +424,24 @@ let rec elab_specifier ?(only = false) loc env specifier =
         simple (TNamed(id', []))
 
     | [Cabs.Tstruct(id, optmembers, a)] ->
+        let a' =
+          add_attributes (get_type_attrs()) (elab_attributes loc env a) in
         let (id', env') =
-          elab_struct_or_union only Struct loc id optmembers a env in
+          elab_struct_or_union only Struct loc id optmembers a' env in
         (!sto, !inline, TStruct(id', !attr), env')
 
     | [Cabs.Tunion(id, optmembers, a)] ->
+        let a' =
+          add_attributes (get_type_attrs()) (elab_attributes loc env a) in
         let (id', env') =
-          elab_struct_or_union only Union loc id optmembers a env in
+          elab_struct_or_union only Union loc id optmembers a' env in
         (!sto, !inline, TUnion(id', !attr), env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
+        let a' =
+          add_attributes (get_type_attrs()) (elab_attributes loc env a) in
         let (id', env') = 
-          elab_enum loc id optmembers a env in
+          elab_enum loc id optmembers a' env in
         (!sto, !inline, TEnum(id', !attr), env')
 
     | [Cabs.TtypeofE _] ->
@@ -594,10 +611,8 @@ and elab_struct_or_union_info kind loc env members attrs =
 (* Elaboration of a struct or union *)
 
 and elab_struct_or_union only kind loc tag optmembers attrs env =
-  let attrs' =
-    elab_attributes loc env attrs in
   let warn_attrs () =
-    if attrs' <> [] then
+    if attrs <> [] then
       warning loc "attributes over struct/union ignored in this context" in
   let optbinding =
     if tag = "" then None else Env.lookup_composite env tag in
@@ -616,10 +631,10 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       if ci.ci_kind <> kind then
         error loc "struct/union mismatch on tag '%s'" tag;
       (* finishing the definition of an incomplete struct or union *)
-      let (ci', env') = elab_struct_or_union_info kind loc env members attrs' in
+      let (ci', env') = elab_struct_or_union_info kind loc env members attrs in
       (* Emit a global definition for it *)
       emit_elab (elab_loc loc)
-                (Gcompositedef(kind, tag', attrs', ci'.ci_members));
+                (Gcompositedef(kind, tag', attrs, ci'.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env' tag' ci')
   | Some(tag', {ci_sizeof = Some _}), Some _
@@ -630,27 +645,27 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* declaration of an incomplete struct or union *)
       if tag = "" then
         error loc "anonymous, incomplete struct or union";
-      let ci = composite_info_decl env kind attrs' in
+      let ci = composite_info_decl env kind attrs in
       (* enter it with a new name *)
       let (tag', env') = Env.enter_composite env tag ci in
       (* emit it *)
       emit_elab (elab_loc loc)
-                (Gcompositedecl(kind, tag', attrs'));
+                (Gcompositedecl(kind, tag', attrs));
       (tag', env')
   | _, Some members ->
       (* definition of a complete struct or union *)
-      let ci1 = composite_info_decl env kind attrs' in
+      let ci1 = composite_info_decl env kind attrs in
       (* enter it, incomplete, with a new name *)
       let (tag', env') = Env.enter_composite env tag ci1 in
       (* emit a declaration so that inner structs and unions can refer to it *)
       emit_elab (elab_loc loc)
-                (Gcompositedecl(kind, tag', attrs'));
+                (Gcompositedecl(kind, tag', attrs));
       (* elaborate the members *)
       let (ci2, env'') =
-        elab_struct_or_union_info kind loc env' members attrs' in
+        elab_struct_or_union_info kind loc env' members attrs in
       (* emit a definition *)
       emit_elab (elab_loc loc)
-                (Gcompositedef(kind, tag', attrs', ci2.ci_members));
+                (Gcompositedef(kind, tag', attrs, ci2.ci_members));
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 
@@ -680,8 +695,6 @@ and elab_enum_item env (s, exp, loc) nextval =
 (* Elaboration of an enumeration declaration *)
 
 and elab_enum loc tag optmembers attrs env =
-  let attrs' =
-    elab_attributes loc env attrs in
   match optmembers with
   | None ->
       let (tag', info) = wrap Env.lookup_enum loc env tag in (tag', env)
@@ -694,9 +707,9 @@ and elab_enum loc tag optmembers attrs env =
           let (dcl2, env2) = elab_members env1 nextval1 tl in
           (dcl1 :: dcl2, env2) in
       let (dcls, env') = elab_members env 0L members in
-      let info = { ei_members = dcls; ei_attr = attrs' } in
+      let info = { ei_members = dcls; ei_attr = attrs } in
       let (tag', env'') = Env.enter_enum env' tag info in
-      emit_elab (elab_loc loc) (Genumdef(tag', attrs', dcls));
+      emit_elab (elab_loc loc) (Genumdef(tag', attrs, dcls));
       (tag', env'')
 
 (* Elaboration of a naked type, e.g. in a cast *)

@@ -19,3 +19,7 @@ sizeof(struct s5) = 14
 offsetof(x) = 0, offsetof(y) = 2, offsetof(z) = 6
 s5 = {x = 123, y = -456, z = 3.14159}
 
+sizeof(struct s6) = 14
+offsetof(x) = 0, offsetof(y) = 2, offsetof(z) = 6
+s62 = {x = 123, y = -456, z = 3.14159}
+

@@ -141,6 +141,12 @@ let remove_attributes_type env attr t =
 let erase_attributes_type env t =
   change_attributes_type env (fun a -> []) t
 
+(* Is an attribute type-related (true) or variable-related (false)? *)
+
+let attr_is_type_related = function
+  | Attr(("packed" | "__packed__"), _) -> true
+  | _ -> false
+
 (* Type compatibility *)
 
 exception Incompat
