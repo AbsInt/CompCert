@@ -69,6 +69,8 @@ let name_of_unop = function
   | Olonguoffloat -> "longuoffloat"
   | Ofloatoflong -> "floatoflong"
   | Ofloatoflongu -> "floatoflongu"
+  | Osingleoflong -> "singleoflong"
+  | Osingleoflongu -> "singleoflongu"
 
 let comparison_name = function
   | Ceq -> "=="

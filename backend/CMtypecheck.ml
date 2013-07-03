@@ -115,6 +115,8 @@ let type_unary_operation = function
   | Olonguoffloat -> tfloat, tlong
   | Ofloatoflong -> tlong, tfloat
   | Ofloatoflongu -> tlong, tfloat
+  | Osingleoflong -> tlong, tfloat
+  | Osingleoflongu -> tlong, tfloat
 
 let type_binary_operation = function
   | Oadd -> tint, tint, tint

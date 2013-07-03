@@ -72,10 +72,12 @@ Definition make_longofint (e: expr) (sg: signedness) :=
   | Unsigned => Eunop Olongofintu e
   end.
 
-Definition make_floatoflong (e: expr) (sg: signedness) :=
-  match sg with
-  | Signed => Eunop Ofloatoflong e
-  | Unsigned => Eunop Ofloatoflongu e
+Definition make_floatoflong (e: expr) (sg: signedness) (sz: floatsize) :=
+  match sg, sz with
+  | Signed, F64 => Eunop Ofloatoflong e
+  | Unsigned, F64 => Eunop Ofloatoflongu e
+  | Signed, F32 => Eunop Osingleoflong e
+  | Unsigned, F32 => Eunop Osingleoflongu e
   end.
 
 Definition make_longoffloat (e: expr) (sg: signedness) :=
@@ -123,7 +125,7 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_l2l => OK e
   | cast_case_i2l si1 => OK (make_longofint e si1)
   | cast_case_l2i sz2 si2 => OK (make_cast_int (Eunop Ointoflong e) sz2 si2)
-  | cast_case_l2f si1 sz2 => OK (make_cast_float (make_floatoflong e si1) sz2)
+  | cast_case_l2f si1 sz2 => OK (make_floatoflong e si1 sz2)
   | cast_case_f2l si2 => OK (make_longoffloat e si2)
   | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
   | cast_case_l2bool => OK (Ebinop (Ocmpl Cne) e (make_longconst Int64.zero))

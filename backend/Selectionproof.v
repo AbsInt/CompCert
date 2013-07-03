@@ -203,6 +203,8 @@ Proof.
   eapply eval_longuoffloat; eauto.
   eapply eval_floatoflong; eauto.
   eapply eval_floatoflongu; eauto.
+  eapply eval_singleoflong; eauto.
+  eapply eval_singleoflongu; eauto.
 Qed.
 
 Lemma eval_sel_binop:

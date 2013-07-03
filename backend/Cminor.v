@@ -49,7 +49,7 @@ Inductive unary_operation : Type :=
   | Onotint: unary_operation               (**r bitwise complement  *)
   | Onegf: unary_operation                 (**r float opposite *)
   | Oabsf: unary_operation                 (**r float absolute value *)
-  | Osingleoffloat: unary_operation        (**r float truncation *)
+  | Osingleoffloat: unary_operation        (**r float truncation to float32 *)
   | Ointoffloat: unary_operation           (**r signed integer to float *)
   | Ointuoffloat: unary_operation          (**r unsigned integer to float *)
   | Ofloatofint: unary_operation           (**r float to signed integer *)
@@ -59,10 +59,12 @@ Inductive unary_operation : Type :=
   | Ointoflong: unary_operation            (**r long to int *)
   | Olongofint: unary_operation            (**r signed int to long *)
   | Olongofintu: unary_operation           (**r unsigned int to long *)
-  | Olongoffloat: unary_operation          (**r signed long to float *)
-  | Olonguoffloat: unary_operation         (**r unsigned long to float *)
-  | Ofloatoflong: unary_operation          (**r float to signed long *)
-  | Ofloatoflongu: unary_operation.        (**r float to unsigned long *)
+  | Olongoffloat: unary_operation          (**r float to signed long *)
+  | Olonguoffloat: unary_operation         (**r float to unsigned long *)
+  | Ofloatoflong: unary_operation          (**r signed long to float *)
+  | Ofloatoflongu: unary_operation         (**r unsigned long to float *)
+  | Osingleoflong: unary_operation         (**r signed long to float32 *)
+  | Osingleoflongu: unary_operation.       (**r unsigned long to float32 *)
 
 Inductive binary_operation : Type :=
   | Oadd: binary_operation                 (**r integer addition *)
@@ -271,6 +273,8 @@ Definition eval_unop (op: unary_operation) (arg: val) : option val :=
   | Olonguoffloat => Val.longuoffloat arg
   | Ofloatoflong => Val.floatoflong arg
   | Ofloatoflongu => Val.floatoflongu arg
+  | Osingleoflong => Val.singleoflong arg
+  | Osingleoflongu => Val.singleoflongu arg
   end.
 
 Definition eval_binop

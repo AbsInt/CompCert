@@ -98,6 +98,8 @@ Definition sel_unop (op: Cminor.unary_operation) (arg: expr) : expr :=
   | Cminor.Olonguoffloat => longuoffloat hf arg
   | Cminor.Ofloatoflong => floatoflong hf arg
   | Cminor.Ofloatoflongu => floatoflongu hf arg
+  | Cminor.Osingleoflong => singleoflong hf arg
+  | Cminor.Osingleoflongu => singleoflongu hf arg
   end.
 
 Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=

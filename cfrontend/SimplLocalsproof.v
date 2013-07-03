@@ -287,7 +287,8 @@ Proof.
 (* float *)
   destruct ty; simpl in H; try discriminate; destruct v; inv H.
   constructor. apply cast_float_float_idem.
-  constructor. apply cast_float_float_idem.
+  constructor. unfold cast_float_float, cast_long_float.
+  destruct f; destruct s; auto. apply Float.singleoflong_idem. apply Float.singleoflongu_idem.
   constructor. apply cast_float_float_idem.
 (* pointer *)
   destruct ty; simpl in H; try discriminate; destruct v; inv H; try constructor.

@@ -174,10 +174,16 @@ Definition floatofint (n:int): float := (**r conversion from signed 32-bit int *
   binary_normalize64 (Int.signed n) 0 false.
 Definition floatofintu (n:int): float:= (**r conversion from unsigned 32-bit int *)
   binary_normalize64 (Int.unsigned n) 0 false.
+
 Definition floatoflong (n:int64): float := (**r conversion from signed 64-bit int *)
   binary_normalize64 (Int64.signed n) 0 false.
 Definition floatoflongu (n:int64): float:= (**r conversion from unsigned 64-bit int *)
   binary_normalize64 (Int64.unsigned n) 0 false.
+
+Definition singleoflong (n:int64): float := (**r conversion from signed 64-bit int to single-precision float *)
+  floatofbinary32 (binary_normalize32 (Int64.signed n) 0 false).
+Definition singleoflongu (n:int64): float:= (**r conversion from unsigned 64-bit int to single-precision float *)
+  floatofbinary32 (binary_normalize32 (Int64.unsigned n) 0 false).
 
 Definition add: float -> float -> float := b64_plus mode_NE. (**r addition *)
 Definition sub: float -> float -> float := b64_minus mode_NE. (**r subtraction *)
@@ -317,6 +323,18 @@ Theorem singleoffloat_idem:
   forall f, singleoffloat (singleoffloat f) = singleoffloat f.
 Proof.
   intros; unfold singleoffloat; rewrite binary32offloatofbinary32; reflexivity.
+Qed.
+
+Theorem singleoflong_idem:
+  forall n, singleoffloat (singleoflong n) = singleoflong n.
+Proof.
+  intros; unfold singleoffloat, singleoflong; rewrite binary32offloatofbinary32; reflexivity.
+Qed.
+
+Theorem singleoflongu_idem:
+  forall n, singleoffloat (singleoflongu n) = singleoflongu n.
+Proof.
+  intros; unfold singleoffloat, singleoflongu; rewrite binary32offloatofbinary32; reflexivity.
 Qed.
 
 Definition is_single (f: float) : Prop := exists s, f = floatofbinary32 s.

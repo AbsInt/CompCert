@@ -438,6 +438,18 @@ Definition floatoflongu (v: val) : option val :=
   | _ => None
   end.
 
+Definition singleoflong (v: val) : option val :=
+  match v with
+  | Vlong n => Some (Vfloat (Float.singleoflong n))
+  | _ => None
+  end.
+
+Definition singleoflongu (v: val) : option val :=
+  match v with
+  | Vlong n => Some (Vfloat (Float.singleoflongu n))
+  | _ => None
+  end.
+
 Definition addl (v1 v2: val): val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Vlong(Int64.add n1 n2)

@@ -1,3 +1,11 @@
+Development trunk:
+==================
+
+- Avoid double rounding issues in conversion from 64-bit integers
+  to single-precision floats.
+- PowerPC: more efficient implementation of division on 64-bit integers.
+
+
 Release 2.0, 2013-06-21
 =======================
 

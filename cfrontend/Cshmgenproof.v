@@ -172,12 +172,12 @@ Proof.
 Qed.
 
 Lemma make_floatoflong_correct:
-  forall a n sg e le m,
+  forall a n sg sz e le m,
   eval_expr ge e le m a (Vlong n) ->
-  eval_expr ge e le m (make_floatoflong a sg) (Vfloat(cast_long_float sg n)).
+  eval_expr ge e le m (make_floatoflong a sg sz) (Vfloat(cast_long_float sg sz n)).
 Proof.
   intros. unfold make_floatoflong, cast_int_long. 
-  destruct sg; econstructor; eauto. 
+  destruct sg; destruct sz; econstructor; eauto. 
 Qed.
 
 Lemma make_longoffloat_correct:

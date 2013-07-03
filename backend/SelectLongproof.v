@@ -51,6 +51,8 @@ Definition i64_helpers_correct (hf: helper_functions) : Prop :=
   /\(forall x z, Val.longuoffloat x = Some z -> helper_implements hf.(i64_dtou) sig_f_l (x::nil) z)
   /\(forall x z, Val.floatoflong x = Some z -> helper_implements hf.(i64_stod) sig_l_f (x::nil) z)
   /\(forall x z, Val.floatoflongu x = Some z -> helper_implements hf.(i64_utod) sig_l_f (x::nil) z)
+  /\(forall x z, Val.singleoflong x = Some z -> helper_implements hf.(i64_stof) sig_l_s (x::nil) z)
+  /\(forall x z, Val.singleoflongu x = Some z -> helper_implements hf.(i64_utof) sig_l_s (x::nil) z)
   /\(forall x, builtin_implements hf.(i64_neg) sig_l_l (x::nil) (Val.negl x))
   /\(forall x y, builtin_implements hf.(i64_add) sig_ll_l (x::y::nil) (Val.addl x y))
   /\(forall x y, builtin_implements hf.(i64_sub) sig_ll_l (x::y::nil) (Val.subl x y))
@@ -429,6 +431,28 @@ Theorem eval_floatoflongu:
   exists v, eval_expr ge sp e m le (floatoflongu hf a) v /\ Val.lessdef y v.
 Proof.
   intros; unfold floatoflongu. econstructor; split. 
+  eapply eval_helper_1; eauto. UseHelper. 
+  auto.
+Qed.
+
+Theorem eval_singleoflong:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.singleoflong x = Some y ->
+  exists v, eval_expr ge sp e m le (singleoflong hf a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold singleoflong. econstructor; split. 
+  eapply eval_helper_1; eauto. UseHelper. 
+  auto.
+Qed.
+
+Theorem eval_singleoflongu:
+  forall le a x y,
+  eval_expr ge sp e m le a x ->
+  Val.singleoflongu x = Some y ->
+  exists v, eval_expr ge sp e m le (singleoflongu hf a) v /\ Val.lessdef y v.
+Proof.
+  intros; unfold singleoflongu. econstructor; split. 
   eapply eval_helper_1; eauto. UseHelper. 
   auto.
 Qed.

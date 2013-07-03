@@ -1532,6 +1532,8 @@ Proof.
   inv H0; simpl in H; inv H. simpl. destruct (Float.longuoffloat f0); simpl in *; inv H1. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
   inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
+  inv H0; simpl in H; inv H. simpl. TrivialExists.
 Qed.
 
 (** Compatibility of [eval_binop] with respect to [val_inject]. *)

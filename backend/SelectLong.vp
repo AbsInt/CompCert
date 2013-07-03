@@ -31,6 +31,8 @@ Record helper_functions : Type := mk_helper_functions {
   i64_dtou: ident;                      (**r float -> unsigned long *)
   i64_stod: ident;                      (**r signed long -> float *)
   i64_utod: ident;                      (**r unsigned long -> float *)
+  i64_stof: ident;                      (**r signed long -> float32 *)
+  i64_utof: ident;                      (**r unsigned long -> float32 *)
   i64_neg: ident;                       (**r opposite *)
   i64_add: ident;                       (**r addition *)
   i64_sub: ident;                       (**r subtraction *)
@@ -46,6 +48,7 @@ Record helper_functions : Type := mk_helper_functions {
 
 Definition sig_l_l := mksignature (Tlong :: nil) (Some Tlong).
 Definition sig_l_f := mksignature (Tlong :: nil) (Some Tfloat).
+Definition sig_l_s := mksignature (Tlong :: nil) (Some Tsingle).
 Definition sig_f_l := mksignature (Tfloat :: nil) (Some Tlong).
 Definition sig_ll_l := mksignature (Tlong :: Tlong :: nil) (Some Tlong).
 Definition sig_li_l := mksignature (Tlong :: Tint :: nil) (Some Tlong).
@@ -135,6 +138,10 @@ Definition floatoflong (arg: expr) :=
   Eexternal hf.(i64_stod) sig_l_f (arg ::: Enil).
 Definition floatoflongu (arg: expr) :=
   Eexternal hf.(i64_utod) sig_l_f (arg ::: Enil).
+Definition singleoflong (arg: expr) :=
+  Eexternal hf.(i64_stof) sig_l_s (arg ::: Enil).
+Definition singleoflongu (arg: expr) :=
+  Eexternal hf.(i64_utof) sig_l_s (arg ::: Enil).
 
 Definition andl (e1 e2: expr) :=
   splitlong2 e1 e2 (fun h1 l1 h2 l2 => makelong (and h1 h2) (and l1 l2)).
@@ -361,6 +368,8 @@ Definition get_helpers (ge: Cminor.genv): res helper_functions :=
   do i64_dtou <- get_helper ge "__i64_dtou" sig_f_l ;
   do i64_stod <- get_helper ge "__i64_stod" sig_l_f ;
   do i64_utod <- get_helper ge "__i64_utod" sig_l_f ;
+  do i64_stof <- get_helper ge "__i64_stof" sig_l_s ;
+  do i64_utof <- get_helper ge "__i64_utof" sig_l_s ;
   do i64_neg <- get_builtin "__builtin_negl" sig_l_l ;
   do i64_add <- get_builtin "__builtin_addl" sig_ll_l ;
   do i64_sub <- get_builtin "__builtin_subl" sig_ll_l ;
@@ -373,6 +382,6 @@ Definition get_helpers (ge: Cminor.genv): res helper_functions :=
   do i64_shr <- get_helper ge "__i64_shr" sig_li_l ;
   do i64_sar <- get_helper ge "__i64_sar" sig_li_l ;
   OK (mk_helper_functions
-     i64_dtos i64_dtou i64_stod i64_utod
+     i64_dtos i64_dtou i64_stod i64_utod i64_stof i64_utof
      i64_neg i64_add i64_sub i64_mul i64_sdiv i64_udiv i64_smod i64_umod
      i64_shl i64_shr i64_sar).

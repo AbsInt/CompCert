@@ -38,6 +38,7 @@ static void test1(u64 x, u64 y)
   s64 y3;
   int i;
   double f;
+  float s;
 
   printf("x = %llx\n", x);
   printf("y = %llx\n", y);
@@ -75,6 +76,10 @@ static void test1(u64 x, u64 y)
   printf("stod x = %llx\n", *((u64*) &f));
   f = f * 0.0001;
   printf("dtos f = %llx\n", (s64) f);
+  s = (float) x;
+  printf("utof x = %x\n", *((unsigned*) &s));
+  s = (float) ((s64) x);
+  printf("stof x = %x\n", *((unsigned*) &s));
   printf("\n");
 }
 

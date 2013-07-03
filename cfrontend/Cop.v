@@ -151,10 +151,12 @@ Definition cast_int_long (si: signedness) (i: int) : int64 :=
   | Unsigned => Int64.repr (Int.unsigned i)
   end.
 
-Definition cast_long_float (si : signedness) (i: int64) : float :=
-  match si with
-  | Signed => Float.floatoflong i
-  | Unsigned => Float.floatoflongu i
+Definition cast_long_float (si: signedness) (sz: floatsize) (i: int64) : float :=
+  match si, sz with
+  | Signed, F64 => Float.floatoflong i
+  | Unsigned, F64 => Float.floatoflongu i
+  | Signed, F32 => Float.singleoflong i
+  | Unsigned, F32 => Float.singleoflongu i
   end.
 
 Definition cast_float_long (si : signedness) (f: float) : option int64 :=
@@ -229,7 +231,7 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
       end
   | cast_case_l2f si1 sz2 =>
       match v with
-      | Vlong i => Some (Vfloat (cast_float_float sz2 (cast_long_float si1 i)))
+      | Vlong i => Some (Vfloat (cast_long_float si1 sz2 i))
       | _ => None
       end
   | cast_case_f2l si2 =>
