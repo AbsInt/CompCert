@@ -85,7 +85,8 @@ u64 special_values[] = {
   0x7FFFFFFFLLU,
   0x80000000LLU,
   0x7FFFFFFFFFFFFFFFLLU,
-  0x8000000000000000LLU
+  0x8000000000000000LLU,
+  0x100000003LLU
 };
 
 #define NUM_SPECIAL_VALUES (sizeof(special_values) / sizeof(u64))
