@@ -181,11 +181,11 @@ static void test1(u64 x, u64 y)
     error++, printf("(s64) %a = %lld, expected %lld\n", f, z, (s64) f);
 }
 
-#define NSPECIFIC 8
+#define NSPECIFIC 9
 
 unsigned long long specific[NSPECIFIC] = {
   0, 1, -1, 0x7FFFFFFFULL, 0x80000000ULL, 0xFFFFFFFFULL,
-  0x7FFFFFFFFFFFULL, 0x8000000000000000ULL
+  0x7FFFFFFFFFFFULL, 0x8000000000000000ULL, 0x100000003ULL
 };
 
 int main()

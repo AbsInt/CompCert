@@ -41,11 +41,13 @@
         .balign 16
         .globl __i64_udiv
 __i64_udiv:
-        mflr r11                # save return address in r11
+	mflr r0
+        stw r0, 4(r1)           # save return address in caller's frame
         bl __i64_udivmod        # unsigned divide
-        mtlr r11                # restore return address
-        mr r3, r7               # R = quotient
-        mr r4, r8
+        lwz r0, 4(r1)
+        mtlr r0                 # restore return address
+        mr r3, r5               # result = quotient
+        mr r4, r6
         blr
         .type __i64_udiv, @function
         .size __i64_udiv, .-__i64_udiv

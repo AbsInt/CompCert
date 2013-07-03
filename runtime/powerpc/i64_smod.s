@@ -41,23 +41,28 @@
         .balign 16
         .globl __i64_smod
 __i64_smod:
-        mflr r11                # save return address
-        srawi r12, r3, 31       # save sign of result in r12 (sign of N)
-        xor r4, r4, r12         # and take absolute value of N
-        xor r3, r3, r12
-        subfc r4, r12, r4
-        subfe r3, r12, r3
+	mflr r0
+        stw r0, 4(r1)           # save return address in caller's frame
+	mtctr r3                # save sign of result in CTR (sign of N)
+        srawi r0, r3, 31        # take absolute value of N
+        xor r4, r4, r0          # (i.e.  N = N ^ r0 - r0,
+        xor r3, r3, r0          #  where r0 = 0 if N >= 0 and r0 = -1 if N < 0)
+        subfc r4, r0, r4
+        subfe r3, r0, r3
         srawi r0, r5, 31        # take absolute value of D
-        xor r6, r6, r0
+        xor r6, r6, r0          # (same trick)
         xor r5, r5, r0
         subfc r6, r0, r6
         subfe r5, r0, r5
         bl __i64_udivmod        # do unsigned division
-        mtlr r11                # restore return address
-        xor r4, r4, r12         # apply expected sign to remainder
-        xor r3, r3, r12         # RES = R if r12 == 0, -R if r12 == -1
-        subfc r4, r12, r4
-        subfe r3, r12, r3
+        lwz r0, 4(r1)
+        mtlr r0                 # restore return address
+        mfctr r0
+        srawi r0, r0, 31        # apply expected sign to remainder
+        xor r4, r4, r0          # RES = R if CTR >= 0, -Q if CTR < 0
+        xor r3, r3, r0
+        subfc r4, r0, r4
+        subfe r3, r0, r3
         blr
         .type __i64_smod, @function
         .size __i64_smod, .-__i64_smod

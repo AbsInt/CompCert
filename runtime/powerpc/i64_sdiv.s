@@ -41,8 +41,10 @@
         .balign 16
         .globl __i64_sdiv
 __i64_sdiv:
-        mflr r11                # save return address
-        xor r12, r3, r5         # save sign of result in r12 (top bit)
+	mflr r0
+        stw r0, 4(r1)           # save return address in caller's frame
+        xor r0, r3, r5          # compute sign of result (top bit)
+	mtctr r0                # save it in CTR (why not?)
         srawi r0, r3, 31        # take absolute value of N
         xor r4, r4, r0          # (i.e.  N = N ^ r0 - r0,
         xor r3, r3, r0          #  where r0 = 0 if N >= 0 and r0 = -1 if N < 0)
@@ -54,12 +56,14 @@ __i64_sdiv:
         subfc r6, r0, r6
         subfe r5, r0, r5
         bl __i64_udivmod        # do unsigned division
-        mtlr r11                # restore return address
-        srawi r0, r12, 31       # apply expected sign to quotient
-        xor r8, r8, r0          # RES = Q if r12 >= 0, -Q if r12 < 0
-        xor r7, r7, r0
-        subfc r4, r0, r8
-        subfe r3, r0, r7
+        lwz r0, 4(r1)
+        mtlr r0                 # restore return address
+        mfctr r0
+        srawi r0, r0, 31        # apply expected sign to quotient
+        xor r6, r6, r0          # RES = Q if CTR >= 0, -Q if CTR < 0
+        xor r5, r5, r0
+        subfc r4, r0, r6
+        subfe r3, r0, r5
         blr
         .type __i64_sdiv, @function
         .size __i64_sdiv, .-__i64_sdiv
