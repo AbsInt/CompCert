@@ -1144,7 +1144,7 @@ let print_var oc name v =
           (if C2C.atom_is_static name then ".lcomm" else ".comm")
           symbol name
           (Z.to_string sz)
-          (1 lsl align)
+          align
       end
 
 let print_globdef oc (name, gdef) =

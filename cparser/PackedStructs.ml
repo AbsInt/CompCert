@@ -525,9 +525,9 @@ let rec transf_globdecls env accu = function
             (Env.add_typedef env id ty)
             (g :: accu)
             gl
-      | Genumdef _  ->
+      | Genumdef(id, attr, el) ->
           transf_globdecls
-            env
+            (Env.add_enum env id {ei_members =  el; ei_attr = attr})
             (g :: accu)
             gl
       | Gpragma p ->

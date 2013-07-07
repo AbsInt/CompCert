@@ -37,9 +37,13 @@ let process_section_pragma classname istring ustring addrmode accmode =
 
 (* #pragma use_section *)
 
+let re_c_ident = Str.regexp "[A-Za-z_][A-Za-z_0-9]*$"
+
 let process_use_section_pragma classname id =
-  if not (Sections.use_section_for (intern_string id) classname)
-  then C2C.error (sprintf "unknown section name `%s'" classname)
+  if not (Str.string_match re_c_ident id 0) then
+    C2C.error (sprintf "bad identifier `%s' in #pragma use_section" id);
+  if not (Sections.use_section_for (intern_string id) classname) then
+    C2C.error (sprintf "unknown section name `%s'" classname)
 
 (* #pragma reserve_register *)
 
