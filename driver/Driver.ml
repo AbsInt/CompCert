@@ -512,6 +512,7 @@ let cmdline_actions =
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
+  Printexc.record_backtrace true;
   Machine.config :=
     begin match Configuration.arch with
     | "powerpc" -> Machine.ppc_32_bigendian

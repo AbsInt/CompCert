@@ -1,3 +1,5 @@
+<**/*.cmx>: debug
+<**/*.native>: debug
 <driver/Driver.*{byte,native}>: use_unix,use_str,use_Cparser
 <exportclight/Clightgen.*{byte,native}>: use_unix,use_str,use_Cparser
 <checklink/*.ml>: pkg_bitstring,warn_error_A
