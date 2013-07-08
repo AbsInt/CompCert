@@ -54,10 +54,12 @@ Definition make_floatconst (f: float) :=  Econst (Ofloatconst f).
 
 Definition make_longconst (f: int64) :=  Econst (Olongconst f).
 
-Definition make_floatofint (e: expr) (sg: signedness) :=
-  match sg with
-  | Signed => Eunop Ofloatofint e
-  | Unsigned => Eunop Ofloatofintu e
+Definition make_floatofint (e: expr) (sg: signedness) (sz: floatsize) :=
+  match sg, sz with
+  | Signed, F64 => Eunop Ofloatofint e
+  | Unsigned, F64 => Eunop Ofloatofintu e
+  | Signed, F32 => Eunop Osingleoffloat (Eunop Ofloatofint e)
+  | Unsigned, F32 => Eunop Osingleoffloat (Eunop Ofloatofintu e)
   end.
 
 Definition make_intoffloat (e: expr) (sg: signedness) :=
@@ -120,7 +122,7 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_neutral => OK e
   | cast_case_i2i sz2 si2 => OK (make_cast_int e sz2 si2)
   | cast_case_f2f sz2 => OK (make_cast_float e sz2)
-  | cast_case_i2f si1 sz2 => OK (make_cast_float (make_floatofint e si1) sz2)
+  | cast_case_i2f si1 sz2 => OK (make_floatofint e si1 sz2)
   | cast_case_f2i sz2 si2 => OK (make_cast_int (make_intoffloat e si2) sz2 si2)
   | cast_case_l2l => OK e
   | cast_case_i2l si1 => OK (make_longofint e si1)

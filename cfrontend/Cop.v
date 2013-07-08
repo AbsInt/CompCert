@@ -127,10 +127,12 @@ Definition cast_int_int (sz: intsize) (sg: signedness) (i: int) : int :=
   | IBool, _ => if Int.eq i Int.zero then Int.zero else Int.one
   end.
 
-Definition cast_int_float (si : signedness) (i: int) : float :=
-  match si with
-  | Signed => Float.floatofint i
-  | Unsigned => Float.floatofintu i
+Definition cast_int_float (si: signedness) (sz: floatsize) (i: int) : float :=
+  match si, sz with
+  | Signed, F64 => Float.floatofint i
+  | Unsigned, F64 => Float.floatofintu i
+  | Signed, F32 => Float.singleofint i
+  | Unsigned, F32 => Float.singleofintu i
   end.
 
 Definition cast_float_int (si : signedness) (f: float) : option int :=
@@ -184,7 +186,7 @@ Definition sem_cast (v: val) (t1 t2: type) : option val :=
       end
   | cast_case_i2f si1 sz2 =>
       match v with
-      | Vint i => Some (Vfloat (cast_float_float sz2 (cast_int_float si1 i)))
+      | Vint i => Some (Vfloat (cast_int_float si1 sz2 i))
       | _ => None
       end
   | cast_case_f2i sz2 si2 =>

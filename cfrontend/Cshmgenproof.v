@@ -144,11 +144,15 @@ Proof.
 Qed.
 
 Lemma make_floatofint_correct:
-  forall a n sg e le m,
+  forall a n sg sz e le m,
   eval_expr ge e le m a (Vint n) ->
-  eval_expr ge e le m (make_floatofint a sg) (Vfloat(cast_int_float sg n)).
+  eval_expr ge e le m (make_floatofint a sg sz) (Vfloat(cast_int_float sg sz n)).
 Proof.
-  intros. unfold make_floatofint, cast_int_float. 
+  intros. unfold make_floatofint, cast_int_float.
+  destruct sz.
+  destruct sg. 
+  rewrite Float.singleofint_floatofint. econstructor. econstructor; eauto. simpl; reflexivity. auto.
+  rewrite Float.singleofintu_floatofintu. econstructor. econstructor; eauto. simpl; reflexivity. auto.
   destruct sg; econstructor; eauto. 
 Qed.
 

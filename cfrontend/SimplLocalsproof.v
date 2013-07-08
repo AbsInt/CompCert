@@ -286,7 +286,10 @@ Proof.
   destruct v; inv H. constructor.
 (* float *)
   destruct ty; simpl in H; try discriminate; destruct v; inv H.
-  constructor. apply cast_float_float_idem.
+  constructor. unfold cast_float_float, cast_int_float.
+  destruct f; destruct s; auto.
+  rewrite Float.singleofint_floatofint. apply Float.singleoffloat_idem.
+  rewrite Float.singleofintu_floatofintu. apply Float.singleoffloat_idem.
   constructor. unfold cast_float_float, cast_long_float.
   destruct f; destruct s; auto. apply Float.singleoflong_idem. apply Float.singleoflongu_idem.
   constructor. apply cast_float_float_idem.

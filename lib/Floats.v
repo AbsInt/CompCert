@@ -180,6 +180,11 @@ Definition floatoflong (n:int64): float := (**r conversion from signed 64-bit in
 Definition floatoflongu (n:int64): float:= (**r conversion from unsigned 64-bit int *)
   binary_normalize64 (Int64.unsigned n) 0 false.
 
+Definition singleofint (n:int): float := (**r conversion from signed 32-bit int to single-precision float *)
+  floatofbinary32 (binary_normalize32 (Int.signed n) 0 false).
+Definition singleofintu (n:int): float:= (**r conversion from unsigned 32-bit int to single-precision float *)
+  floatofbinary32 (binary_normalize32 (Int.unsigned n) 0 false).
+
 Definition singleoflong (n:int64): float := (**r conversion from signed 64-bit int to single-precision float *)
   floatofbinary32 (binary_normalize32 (Int64.signed n) 0 false).
 Definition singleoflongu (n:int64): float:= (**r conversion from unsigned 64-bit int to single-precision float *)
@@ -524,7 +529,7 @@ Qed.
 Definition ox8000_0000 := Int.repr Int.half_modulus.  (**r [0x8000_0000] *)
 
 Lemma round_exact:
-  forall n, -2^52 < n < 2^52 ->
+  forall n, -2^53 < n < 2^53 ->
     round radix2 (FLT_exp (3 - 1024 - 53) 53)
       (round_mode mode_NE) (Z2R n) = Z2R n.
 Proof.
@@ -535,7 +540,7 @@ Proof.
 Qed.
 
 Lemma binary_normalize64_exact:
-  forall n, -2^52 < n < 2^52 ->
+  forall n, -2^53 < n < 2^53 ->
     B2R _ _ (binary_normalize64 n 0 false) = Z2R n /\
     is_finite _ _ (binary_normalize64 n 0 false) = true.
 Proof.
@@ -588,7 +593,7 @@ Proof.
   exfalso; now smart_omega.
 Qed.
 
-Theorem Zoffloat_correct:
+Lemma Zoffloat_correct:
   forall f,
     match Zoffloat f with
       | Some n =>
@@ -913,6 +918,79 @@ Local Transparent Int.repr Int64.repr.
   rewrite H3; assumption.
   inversion H4; unfold bpow in H6; rewrite <- Z2R_abs in H6; 
     apply le_Z2R in H6; pose proof (Zabs_spec (Int.signed x)); exfalso; now smart_omega.
+Qed.
+
+(** Conversions from 32-bit integers to single-precision floats can
+  be decomposed into a conversion to a double-precision float,
+  followed by a [singleoffloat] normalization.  No double rounding occurs. *)
+
+Lemma is_finite_strict_ge_1:
+  forall (f: binary32),
+  is_finite _ _ f = true ->
+  (1 <= Rabs (B2R _ _ f))%R ->
+  is_finite_strict _ _ f = true.
+Proof.
+  intros. destruct f; auto. simpl in H0. 
+  change 0%R with (Z2R 0) in H0.
+  change 1%R with (Z2R 1) in H0.
+  rewrite <- Z2R_abs in H0. 
+  exploit le_Z2R; eauto.
+Qed.
+
+Lemma single_float_of_int:
+  forall n,
+  -2^53 < n < 2^53 ->
+  singleoffloat (binary_normalize64 n 0 false) = floatofbinary32 (binary_normalize32 n 0 false).
+Proof.
+  intros. unfold singleoffloat. f_equal.
+  assert (EITHER: n = 0 \/ Z.abs n > 0) by (destruct n; compute; auto).
+  destruct EITHER as [EQ|GT].
+  subst n; reflexivity.
+  exploit binary_normalize64_exact; eauto. intros [A B].
+  destruct (binary_normalize64 n 0 false) as [ | | | s m e] eqn:B64; simpl in *.
+- assert (0 = n) by (apply eq_Z2R; auto). subst n. simpl in GT. omegaContradiction. 
+- discriminate.
+- discriminate.
+- set (n1 := cond_Zopp s (Z.pos m)) in *.
+  generalize (binary_normalize32_correct n1 e s). 
+  fold (binary_normalize32 n1 e s). intros C.
+  generalize (binary_normalize32_correct n 0 false). 
+  fold (binary_normalize32 n 0 false). intros D.
+  assert (A': @F2R radix2 {| Fnum := n; Fexp := 0 |} = Z2R n).
+  {
+    unfold F2R. apply Rmult_1_r.
+  }
+  rewrite A in C. rewrite A' in D. 
+  destruct (Rlt_bool
+         (Rabs
+            (round radix2 (FLT_exp (3 - 128 - 24) 24) (round_mode mode_NE)
+               (Z2R n))) (bpow radix2 128)).
++ destruct C as [C1 C2]; destruct D as [D1 D2].
+  assert (1 <= Rabs (round radix2 (FLT_exp (3 - 128 - 24) 24) (round_mode mode_NE) (Z2R n)))%R.
+  { apply abs_round_ge_generic. 
+    apply fexp_correct. red. omega.
+    apply valid_rnd_round_mode.
+    apply generic_format_bpow with (e := 0). compute. congruence. 
+    rewrite <- Z2R_abs. change 1%R with (Z2R 1). apply Z2R_le. omega. }
+  apply B2R_inj.
+  apply is_finite_strict_ge_1; auto. rewrite C1; auto.
+  apply is_finite_strict_ge_1; auto. rewrite D1; auto.
+  congruence.
++ apply B2FF_inj. congruence.
+Qed.
+
+Theorem singleofint_floatofint:
+  forall n, singleofint n = singleoffloat (floatofint n).
+Proof.
+  intros. symmetry. apply single_float_of_int. 
+  generalize (Int.signed_range n). smart_omega.
+Qed.
+
+Theorem singleofintu_floatofintu:
+  forall n, singleofintu n = singleoffloat (floatofintu n).
+Proof.
+  intros. symmetry. apply single_float_of_int. 
+  generalize (Int.unsigned_range n). smart_omega.
 Qed.
 
 Global Opaque
