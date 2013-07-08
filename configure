@@ -17,6 +17,7 @@ bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
 toolprefix=''
 target=''
+has_runtime_lib=true
 
 usage='Usage: ./configure [options] target
 
@@ -37,6 +38,7 @@ Options:
   -bindir <dir>    Install binaries in <dir>
   -libdir <dir>    Install libraries in <dir>
   -toolprefix <pref>  Prefix names of tools ("gcc", etc) with <pref>
+  -no-runtime-lib  Do not compile nor install the runtime support library
 '
 
 # Parse command-line arguments
@@ -52,6 +54,8 @@ while : ; do
         libdir="$2"; shift;;
     -toolprefix|--toolprefix)
         toolprefix="$2"; shift;;
+    -no-runtime-lib)
+        has_runtime_lib=false; shift;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -62,7 +66,6 @@ done
 # Per-target configuration
 
 cchecklink=false
-has_runtime_lib=true
 casmruntime=""
 asm_supports_cfi=""
 
