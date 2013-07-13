@@ -189,58 +189,58 @@ Definition transl_cond
       Error(msg "Asmgen.transl_cond")
   end.
 
-Definition crbit_for_signed_cmp (cmp: comparison) :=
+Definition cond_for_signed_cmp (cmp: comparison) :=
   match cmp with
-  | Ceq => CReq
-  | Cne => CRne
-  | Clt => CRlt
-  | Cle => CRle
-  | Cgt => CRgt
-  | Cge => CRge
+  | Ceq => TCeq
+  | Cne => TCne
+  | Clt => TClt
+  | Cle => TCle
+  | Cgt => TCgt
+  | Cge => TCge
   end.
 
-Definition crbit_for_unsigned_cmp (cmp: comparison) :=
+Definition cond_for_unsigned_cmp (cmp: comparison) :=
   match cmp with
-  | Ceq => CReq
-  | Cne => CRne
-  | Clt => CRlo
-  | Cle => CRls
-  | Cgt => CRhi
-  | Cge => CRhs
+  | Ceq => TCeq
+  | Cne => TCne
+  | Clt => TClo
+  | Cle => TCls
+  | Cgt => TChi
+  | Cge => TChs
   end.
 
-Definition crbit_for_float_cmp (cmp: comparison) :=
+Definition cond_for_float_cmp (cmp: comparison) :=
   match cmp with
-  | Ceq => CReq
-  | Cne => CRne
-  | Clt => CRmi
-  | Cle => CRls
-  | Cgt => CRgt
-  | Cge => CRge
+  | Ceq => TCeq
+  | Cne => TCne
+  | Clt => TCmi
+  | Cle => TCls
+  | Cgt => TCgt
+  | Cge => TCge
   end.
 
-Definition crbit_for_float_not_cmp (cmp: comparison) :=
+Definition cond_for_float_not_cmp (cmp: comparison) :=
   match cmp with
-  | Ceq => CRne
-  | Cne => CReq
-  | Clt => CRpl
-  | Cle => CRhi
-  | Cgt => CRle
-  | Cge => CRlt
+  | Ceq => TCne
+  | Cne => TCeq
+  | Clt => TCpl
+  | Cle => TChi
+  | Cgt => TCle
+  | Cge => TClt
   end.
 
-Definition crbit_for_cond (cond: condition) :=
+Definition cond_for_cond (cond: condition) :=
   match cond with
-  | Ccomp cmp => crbit_for_signed_cmp cmp
-  | Ccompu cmp => crbit_for_unsigned_cmp cmp
-  | Ccompshift cmp s => crbit_for_signed_cmp cmp
-  | Ccompushift cmp s => crbit_for_unsigned_cmp cmp
-  | Ccompimm cmp n => crbit_for_signed_cmp cmp
-  | Ccompuimm cmp n => crbit_for_unsigned_cmp cmp
-  | Ccompf cmp => crbit_for_float_cmp cmp
-  | Cnotcompf cmp => crbit_for_float_not_cmp cmp
-  | Ccompfzero cmp => crbit_for_float_cmp cmp
-  | Cnotcompfzero cmp => crbit_for_float_not_cmp cmp
+  | Ccomp cmp => cond_for_signed_cmp cmp
+  | Ccompu cmp => cond_for_unsigned_cmp cmp
+  | Ccompshift cmp s => cond_for_signed_cmp cmp
+  | Ccompushift cmp s => cond_for_unsigned_cmp cmp
+  | Ccompimm cmp n => cond_for_signed_cmp cmp
+  | Ccompuimm cmp n => cond_for_unsigned_cmp cmp
+  | Ccompf cmp => cond_for_float_cmp cmp
+  | Cnotcompf cmp => cond_for_float_not_cmp cmp
+  | Ccompfzero cmp => cond_for_float_cmp cmp
+  | Cnotcompfzero cmp => cond_for_float_not_cmp cmp
   end.
 
 (** Translation of the arithmetic operation [r <- op(args)].
@@ -360,7 +360,7 @@ Definition transl_op
       do r <- ireg_of res; do r1 <- ireg_of a1;
       OK (Pcmp r1 (SOimm Int.zero) ::
           addimm IR14 r1 (Int.sub (Int.shl Int.one n) Int.one)
-             (Pmovc CRge IR14 (SOreg r1) ::
+             (Pmovc TCge IR14 (SOreg r1) ::
               Pmov r (SOasrimm IR14 n) :: k))
   | Onegf, a1 :: nil =>
       do r <- freg_of res; do r1 <- freg_of a1;
@@ -399,7 +399,7 @@ Definition transl_op
       do r <- ireg_of res;
       transl_cond cmp args
         (Pmov r (SOimm Int.zero) ::
-         Pmovc (crbit_for_cond cmp) r (SOimm Int.one) ::
+         Pmovc (cond_for_cond cmp) r (SOimm Int.one) ::
          k)
   | _, _ =>
       Error(msg "Asmgen.transl_op")
@@ -599,7 +599,7 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mgoto lbl =>
       OK (Pb lbl :: k)
   | Mcond cond args lbl =>
-      transl_cond cond args (Pbc (crbit_for_cond cond) lbl :: k)
+      transl_cond cond args (Pbc (cond_for_cond cond) lbl :: k)
   | Mjumptable arg tbl =>
       do r <- ireg_of arg;
       OK (Pbtbl r tbl :: k)

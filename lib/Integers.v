@@ -257,11 +257,6 @@ Definition divu (x y: int) : int :=
 Definition modu (x y: int) : int :=
   repr ((unsigned x) mod (unsigned y)).
 
-Definition add_carry (x y cin: int): int :=
-  if zlt (unsigned x + unsigned y + unsigned cin) modulus
-  then zero
-  else one.
-
 (** Bitwise boolean operations. *)
 
 Definition and (x y: int): int := repr (Z.land (unsigned x) (unsigned y)).
@@ -291,10 +286,30 @@ Definition rolm (x a m: int): int := and (rol x a) m.
 Definition shrx (x y: int): int :=
   divs x (shl one y).
 
+(** Condition flags *)
+
+Definition negative (x: int): int :=
+  if lt x zero then one else zero.
+
+Definition add_carry (x y cin: int): int :=
+  if zlt (unsigned x + unsigned y + unsigned cin) modulus then zero else one.
+
+Definition add_overflow (x y cin: int): int :=
+  let s := signed x + signed y + signed cin in
+  if zle min_signed s && zle s max_signed then zero else one.
+
+Definition sub_borrow (x y bin: int): int :=
+  if zlt (unsigned x - unsigned y - unsigned bin) 0 then one else zero.
+
+Definition sub_overflow (x y bin: int): int :=
+  let s := signed x - signed y - signed bin in
+  if zle min_signed s && zle s max_signed then zero else one.
+
 (** [shr_carry x y] is 1 if [x] is negative and at least one 1 bit is shifted away. *)
 
-Definition shr_carry (x y: int) :=
-  if lt x zero && negb (eq (and x (sub (shl one y) one)) zero) then one else zero.
+Definition shr_carry (x y: int) : int :=
+  if lt x zero && negb (eq (and x (sub (shl one y) one)) zero)
+  then one else zero.
 
 (** Zero and sign extensions *)
 
@@ -882,7 +897,7 @@ Proof.
   unfold add, add_carry. rewrite unsigned_zero. rewrite Zplus_0_r.
   rewrite unsigned_repr_eq.
   generalize (unsigned_range x) (unsigned_range y). intros. 
-  destruct (zlt (unsigned x + unsigned y) modulus). 
+  destruct (zlt (unsigned x + unsigned y) modulus).
   rewrite unsigned_zero. apply Zmod_unique with 0. omega. omega. 
   rewrite unsigned_one. apply Zmod_unique with 1. omega. omega. 
 Qed. 
@@ -982,6 +997,21 @@ Proof.
   intros. unfold sub. apply eqm_samerepr.
   apply eqm_sub; apply eqm_sym; apply eqm_signed_unsigned.
 Qed.
+
+Theorem unsigned_sub_borrow:
+  forall x y,
+  unsigned (sub x y) = unsigned x - unsigned y + unsigned (sub_borrow x y zero) * modulus.
+Proof.
+  intros.
+  unfold sub, sub_borrow. rewrite unsigned_zero. rewrite Zminus_0_r.
+  rewrite unsigned_repr_eq.
+  generalize (unsigned_range x) (unsigned_range y). intros. 
+  destruct (zlt (unsigned x - unsigned y) 0).
+  rewrite unsigned_one. apply Zmod_unique with (-1). omega. omega. 
+  rewrite unsigned_zero. apply Zmod_unique with 0. omega. omega. 
+Qed. 
+
+
 
 (** ** Properties of multiplication *)
 
@@ -1783,6 +1813,16 @@ Proof.
   bit_solve. destruct (testbit x i); auto. 
 Qed.
 
+Lemma unsigned_not:
+  forall x, unsigned (not x) = max_unsigned - unsigned x.
+Proof.
+  intros. transitivity (unsigned (repr(-unsigned x - 1))).
+  f_equal. bit_solve. rewrite testbit_repr; auto. symmetry. apply Z_one_complement. omega.
+  rewrite unsigned_repr_eq. apply Zmod_unique with (-1).
+  unfold max_unsigned. omega. 
+  generalize (unsigned_range x). unfold max_unsigned. omega.
+Qed.
+
 Theorem not_neg:
   forall x, not x = add (neg x) mone.
 Proof.
@@ -1805,6 +1845,23 @@ Proof.
   replace (add mone one) with zero. rewrite add_zero. auto. 
   apply eqm_samerepr. rewrite unsigned_mone. rewrite unsigned_one. 
   exists (-1). ring. 
+Qed.
+
+Theorem sub_borrow_add_carry:
+  forall x y b,
+  b = zero \/ b = one ->
+  sub_borrow x y b = xor (add_carry x (not y) (xor b one)) one.
+Proof.
+  intros. unfold sub_borrow, add_carry. rewrite unsigned_not. 
+  replace (unsigned (xor b one)) with (1 - unsigned b).
+  destruct (zlt (unsigned x - unsigned y - unsigned b)).
+  rewrite zlt_true. rewrite xor_zero_l; auto.
+  unfold max_unsigned; omega.
+  rewrite zlt_false. rewrite xor_idem; auto.
+  unfold max_unsigned; omega. 
+  destruct H; subst b.
+  rewrite xor_zero_l. rewrite unsigned_one, unsigned_zero; auto.
+  rewrite xor_idem. rewrite unsigned_one, unsigned_zero; auto.
 Qed.
 
 (** Connections between [add] and bitwise logical operations. *)
@@ -3382,6 +3439,23 @@ Proof.
   generalize wordsize_max_unsigned; omega.
 Qed.
 
+Theorem shr_lt_zero:
+  forall x,
+  shr x (repr (zwordsize - 1)) = if lt x zero then mone else zero.
+Proof.
+  intros. apply same_bits_eq; intros.
+  rewrite bits_shr; auto.
+  rewrite unsigned_repr.
+  transitivity (testbit x (zwordsize - 1)).
+  f_equal. destruct (zlt (i + (zwordsize - 1)) zwordsize); omega.
+  rewrite sign_bit_of_unsigned. 
+  unfold lt. rewrite signed_zero. unfold signed. 
+  destruct (zlt (unsigned x) half_modulus).
+  rewrite zlt_false. rewrite bits_zero; auto. generalize (unsigned_range x); omega. 
+  rewrite zlt_true. rewrite bits_mone; auto. generalize (unsigned_range x); omega.
+  generalize wordsize_max_unsigned; omega.
+Qed.
+
 Theorem ltu_range_test:
   forall x y,
   ltu x y = true -> unsigned y <= max_signed ->
@@ -3391,6 +3465,43 @@ Proof.
   unfold ltu in H. destruct (zlt (unsigned x) (unsigned y)); try discriminate.
   rewrite signed_eq_unsigned.
   generalize (unsigned_range x). omega. omega.
+Qed.
+
+Theorem lt_sub_overflow:
+  forall x y,
+  xor (sub_overflow x y zero) (negative (sub x y)) = if lt x y then one else zero.
+Proof.
+  intros. unfold negative, sub_overflow, lt. rewrite sub_signed. 
+  rewrite signed_zero. rewrite Zminus_0_r.
+  generalize (signed_range x) (signed_range y).
+  set (X := signed x); set (Y := signed y). intros RX RY.
+  unfold min_signed, max_signed in *.
+  generalize half_modulus_pos half_modulus_modulus; intros HM MM.
+  destruct (zle 0 (X - Y)).
+- unfold proj_sumbool at 1; rewrite zle_true at 1 by omega. simpl.
+  rewrite (zlt_false _ X) by omega.
+  destruct (zlt (X - Y) half_modulus).
+  + unfold proj_sumbool; rewrite zle_true by omega.
+    rewrite signed_repr. rewrite zlt_false by omega. apply xor_idem.
+    unfold min_signed, max_signed; omega.
+  + unfold proj_sumbool; rewrite zle_false by omega. 
+    replace (signed (repr (X - Y))) with (X - Y - modulus).
+    rewrite zlt_true by omega. apply xor_idem. 
+    rewrite signed_repr_eq. replace ((X - Y) mod modulus) with (X - Y). 
+    rewrite zlt_false; auto. 
+    symmetry. apply Zmod_unique with 0; omega.
+- unfold proj_sumbool at 2. rewrite zle_true at 1 by omega. rewrite andb_true_r.
+  rewrite (zlt_true _ X) by omega.
+  destruct (zlt (X - Y) (-half_modulus)).
+  + unfold proj_sumbool; rewrite zle_false by omega. 
+    replace (signed (repr (X - Y))) with (X - Y + modulus).
+    rewrite zlt_false by omega. apply xor_zero.
+    rewrite signed_repr_eq. replace ((X - Y) mod modulus) with (X - Y + modulus). 
+    rewrite zlt_true by omega; auto.
+    symmetry. apply Zmod_unique with (-1); omega.
+  + unfold proj_sumbool; rewrite zle_true by omega.
+    rewrite signed_repr. rewrite zlt_true by omega. apply xor_zero_l.
+    unfold min_signed, max_signed; omega.
 Qed.
 
 (** Non-overlapping test *)

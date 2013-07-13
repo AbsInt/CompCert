@@ -453,6 +453,12 @@ Proof.
   now apply cmp_le_lt_eq.
 Qed.
 
+Theorem cmp_lt_gt_false:
+  forall f1 f2, cmp Clt f1 f2 = true -> cmp Cgt f1 f2 = true -> False.
+Proof.
+  unfold cmp; intros; destruct (order_float f1 f2) as [ [] | ]; discriminate.
+Qed.
+
 (** Properties of conversions to/from in-memory representation.
   The double-precision conversions are bijective (one-to-one).
   The single-precision conversions lose precision exactly

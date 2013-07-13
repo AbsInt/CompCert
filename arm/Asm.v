@@ -51,18 +51,10 @@ Proof. decide equality. Defined.
 (** Bits in the condition register. *)
 
 Inductive crbit: Type :=
-  | CReq: crbit    (**r equal *)
-  | CRne: crbit    (**r not equal *)
-  | CRhs: crbit    (**r unsigned higher or same *)
-  | CRlo: crbit    (**r unsigned lower *)
-  | CRmi: crbit    (**r negative *)
-  | CRpl: crbit    (**r positive *)
-  | CRhi: crbit    (**r unsigned higher *)
-  | CRls: crbit    (**r unsigned lower or same *)
-  | CRge: crbit    (**r signed greater or equal *)
-  | CRlt: crbit    (**r signed less than *)
-  | CRgt: crbit    (**r signed greater *)
-  | CRle: crbit.   (**r signed less than or equal *)
+  | CN: crbit    (**r negative *)
+  | CZ: crbit    (**r zero *)
+  | CC: crbit    (**r carry *)
+  | CV: crbit.   (**r overflow *)
 
 Lemma crbit_eq: forall (x y: crbit), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
@@ -123,12 +115,26 @@ Inductive shift_addr : Type :=
   | SAasr: ireg -> int -> shift_addr
   | SAror: ireg -> int -> shift_addr.
 
+Inductive testcond : Type :=
+  | TCeq: testcond    (**r equal *)
+  | TCne: testcond    (**r not equal *)
+  | TChs: testcond    (**r unsigned higher or same *)
+  | TClo: testcond    (**r unsigned lower *)
+  | TCmi: testcond    (**r negative *)
+  | TCpl: testcond    (**r positive *)
+  | TChi: testcond    (**r unsigned higher *)
+  | TCls: testcond    (**r unsigned lower or same *)
+  | TCge: testcond    (**r signed greater or equal *)
+  | TClt: testcond    (**r signed less than *)
+  | TCgt: testcond    (**r signed greater *)
+  | TCle: testcond.   (**r signed less than or equal *)
+
 Inductive instruction : Type :=
   (* Core instructions *)
   | Padd: ireg -> ireg -> shift_op -> instruction (**r integer addition *)
   | Pand: ireg -> ireg -> shift_op -> instruction (**r bitwise and *)
   | Pb: label -> instruction                      (**r branch to label *)
-  | Pbc: crbit -> label -> instruction            (**r conditional branch to label *)
+  | Pbc: testcond -> label -> instruction            (**r conditional branch to label *)
   | Pbsymb: ident -> signature -> instruction                  (**r branch to symbol *)
   | Pbreg: ireg -> signature -> instruction                    (**r computed branch *)
   | Pblsymb: ident -> signature -> instruction                 (**r branch and link to symbol *)
@@ -143,7 +149,7 @@ Inductive instruction : Type :=
   | Pldrsh: ireg -> ireg -> shift_addr -> instruction (**r unsigned int16 load *)
   | Pmla: ireg -> ireg -> ireg -> ireg -> instruction      (**r integer multiply-add *)
   | Pmov: ireg -> shift_op -> instruction          (**r integer move *)
-  | Pmovc: crbit -> ireg -> shift_op -> instruction (**r integer conditional move *)
+  | Pmovc: testcond -> ireg -> shift_op -> instruction (**r integer conditional move *)
   | Pmul: ireg -> ireg -> ireg -> instruction      (**r integer multiplication *)
   | Pmvn: ireg -> shift_op -> instruction          (**r integer complement *)
   | Porr: ireg -> ireg -> shift_op -> instruction  (**r bitwise or *)
@@ -376,44 +382,102 @@ Definition exec_store (chunk: memory_chunk) (addr: val) (r: preg)
   | Some m' => Next (nextinstr rs) m'
   end.
 
-(** Operations over condition bits. *)
+(** Comparisons. *)
 
 Definition compare_int (rs: regset) (v1 v2: val) (m: mem) :=
-  rs#CReq <- (Val.cmpu (Mem.valid_pointer m) Ceq v1 v2)
-    #CRne <- (Val.cmpu (Mem.valid_pointer m) Cne v1 v2)
-    #CRhs <- (Val.cmpu (Mem.valid_pointer m) Cge v1 v2)
-    #CRlo <- (Val.cmpu (Mem.valid_pointer m) Clt v1 v2)
-    #CRmi <- Vundef
-    #CRpl <- Vundef
-    #CRhi <- (Val.cmpu (Mem.valid_pointer m) Cgt v1 v2)
-    #CRls <- (Val.cmpu (Mem.valid_pointer m) Cle v1 v2)
-    #CRge <- (Val.cmp Cge v1 v2)
-    #CRlt <- (Val.cmp Clt v1 v2)
-    #CRgt <- (Val.cmp Cgt v1 v2)
-    #CRle <- (Val.cmp Cle v1 v2).
+  rs#CN <- (Val.negative (Val.sub v1 v2))
+    #CZ <- (Val.cmpu (Mem.valid_pointer m) Ceq v1 v2)
+    #CC <- (Val.cmpu (Mem.valid_pointer m) Cge v1 v2)
+    #CV <- (Val.sub_overflow v1 v2).
 
 (** Semantics of [fcmpd] instruction:
 <<
-==	EQ=1 NE=0 HS=1 LO=0 MI=0 PL=1 VS=0 VC=1 HI=0 LS=1 GE=1 LT=0 GT=0 LE=1 
-<	EQ=0 NE=1 HS=0 LO=1 MI=1 PL=0 VS=0 VC=1 HI=0 LS=1 GE=0 LT=1 GT=0 LE=1 
->	EQ=0 NE=1 HS=1 LO=0 MI=0 PL=1 VS=0 VC=1 HI=1 LS=0 GE=1 LT=0 GT=1 LE=0 
-unord	EQ=0 NE=1 HS=1 LO=0 MI=0 PL=1 VS=1 VC=0 HI=1 LS=0 GE=0 LT=1 GT=0 LE=1 
+==	N=0 Z=1 C=1 V=0
+<	N=1 Z=0 C=0 V=0
+>	N=0 Z=0 C=1 V=0
+unord	N=0 Z=0 C=1 V=1
 >>
 *)
 
 Definition compare_float (rs: regset) (v1 v2: val) :=
-  rs#CReq <- (Val.cmpf Ceq v1 v2)
-    #CRne <- (Val.cmpf Cne v1 v2)
-    #CRhs <- (Val.notbool (Val.cmpf Clt v1 v2))      (**r not lt *)
-    #CRlo <- (Val.cmpf Clt v1 v2)                    (**r lt *)
-    #CRmi <- (Val.cmpf Clt v1 v2)                    (**r lt *)
-    #CRpl <- (Val.notbool (Val.cmpf Clt v1 v2))      (**r not lt *)
-    #CRhi <- (Val.notbool (Val.cmpf Cle v1 v2))      (**r not le *)
-    #CRls <- (Val.cmpf Cle v1 v2)                    (**r le *)
-    #CRge <- (Val.cmpf Cge v1 v2)                    (**r ge *)
-    #CRlt <- (Val.notbool (Val.cmpf Cge v1 v2))      (**r not ge *)
-    #CRgt <- (Val.cmpf Cgt v1 v2)                    (**r gt *)
-    #CRle <- (Val.notbool (Val.cmpf Cgt v1 v2)).     (**r not gt *)
+  match v1, v2 with
+  | Vfloat f1, Vfloat f2 =>
+      rs#CN <- (Val.of_bool (Float.cmp Clt f1 f2))
+        #CZ <- (Val.of_bool (Float.cmp Ceq f1 f2))
+        #CC <- (Val.of_bool (negb (Float.cmp Clt f1 f2)))
+        #CV <- (Val.of_bool (negb (Float.cmp Ceq f1 f2 || Float.cmp Clt f1 f2 || Float.cmp Cgt f1 f2)))
+  | _, _ =>
+      rs#CN <- Vundef
+        #CZ <- Vundef
+        #CC <- Vundef
+        #CV <- Vundef
+  end.
+
+(** Testing a condition *)
+
+Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
+  match c with
+  | TCeq =>                             (**r equal *)
+      match rs CZ with
+      | Vint n => Some (Int.eq n Int.one)
+      | _ => None
+      end
+  | TCne =>                             (**r not equal *)
+      match rs CZ with
+      | Vint n => Some (Int.eq n Int.zero)
+      | _ => None
+      end
+  | TClo =>                             (**r unsigned less than  *)
+      match rs CC with
+      | Vint n => Some (Int.eq n Int.zero)
+      | _ => None
+      end
+  | TCls =>                             (**r unsigned less or equal *)
+      match rs CC, rs CZ with
+      | Vint c, Vint z => Some (Int.eq c Int.zero || Int.eq z Int.one)
+      | _, _ => None
+      end
+  | TChs =>                             (**r unsigned greater or equal *)
+      match rs CC with
+      | Vint n => Some (Int.eq n Int.one)
+      | _ => None
+      end
+  | TChi =>                             (**r unsigned greater *)
+      match rs CC, rs CZ with
+      | Vint c, Vint z => Some (Int.eq c Int.one && Int.eq z Int.zero)
+      | _, _ => None
+      end
+  | TClt =>                             (**r signed less than *)
+      match rs CV, rs CN with
+      | Vint o, Vint s => Some (Int.eq (Int.xor o s) Int.one)
+      | _, _ => None
+      end
+  | TCle =>                             (**r signed less or equal *)
+      match rs CV, rs CN, rs CZ with
+      | Vint o, Vint s, Vint z => Some (Int.eq (Int.xor o s) Int.one || Int.eq z Int.one)
+      | _, _, _ => None
+      end
+  | TCge =>                             (**r signed greater or equal *)
+      match rs CV, rs CN with
+      | Vint o, Vint s => Some (Int.eq (Int.xor o s) Int.zero)
+      | _, _ => None
+      end
+  | TCgt =>                             (**r signed greater *)
+      match rs CV, rs CN, rs CZ with
+      | Vint o, Vint s, Vint z => Some (Int.eq (Int.xor o s) Int.zero && Int.eq z Int.zero)
+      | _, _, _ => None
+      end
+  | TCpl =>                             (**r positive *)
+      match rs CN with
+      | Vint n => Some (Int.eq n Int.zero)
+      | _ => None
+      end
+  | TCmi =>                             (**r negative *)
+      match rs CN with
+      | Vint n => Some (Int.eq n Int.one)
+      | _ => None
+      end
+  end.
 
 (** Execution of a single instruction [i] in initial state
     [rs] and [m].  Return updated state.  For instructions
@@ -441,10 +505,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#r1 <- (Val.and rs#r2 (eval_shift_op so rs)))) m
   | Pb lbl =>                      
       goto_label f lbl rs m
-  | Pbc bit lbl =>            
-      match rs#bit with
-      | Vint n => if Int.eq n Int.zero then Next (nextinstr rs) m else goto_label f lbl rs m
-      | _ => Stuck
+  | Pbc cond lbl =>            
+      match eval_testcond cond rs with
+      | Some true => goto_label f lbl rs m
+      | Some false => Next (nextinstr rs) m
+      | None => Stuck
       end
   | Pbsymb id sg =>                  
       Next (rs#PC <- (symbol_offset id Int.zero)) m
@@ -474,12 +539,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#r1 <- (Val.add (Val.mul rs#r2 rs#r3) rs#r4))) m
   | Pmov r1 so =>          
       Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
-  | Pmovc bit r1 so =>          
-      match rs#bit with
-      | Vint n => if Int.eq n Int.zero 
-                  then Next (nextinstr rs) m
-                  else Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
-      | _ => Next (nextinstr (rs#r1 <- Vundef)) m
+  | Pmovc cond r1 so =>          
+      match eval_testcond cond rs with
+      | Some true => Next (nextinstr (rs#r1 <- (eval_shift_op so rs))) m
+      | Some false => Next (nextinstr rs) m
+      | None => Next (nextinstr (rs#r1 <- Vundef)) m
       end
   | Pmul r1 r2 r3 =>      
       Next (nextinstr (rs#r1 <- (Val.mul rs#r2 rs#r3))) m

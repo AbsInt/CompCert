@@ -41,39 +41,6 @@ Proof.
   intro. simpl. ElimOrEq; auto. 
 Qed.
 
-(*
-Lemma agree_undef_move:
-  forall ms sp rs rs',
-  agree ms sp rs ->
-  (forall r, data_preg r = true -> r <> ST0 -> rs'#r = rs#r) ->
-  agree (undef_move ms) sp rs'.
-Proof.
-  intros. destruct H. split. 
-  rewrite H0; auto. congruence. auto. 
-  intros. unfold undef_move. 
-  destruct (In_dec mreg_eq r destroyed_at_move_regs).
-  rewrite Mach.undef_regs_same; auto. 
-  rewrite Mach.undef_regs_other; auto.
-  assert (data_preg (preg_of r) = true /\ preg_of r <> ST0).
-    simpl in n. destruct r; simpl; auto; intuition congruence.
-  destruct H. rewrite H0; auto.
-Qed.
-
-Lemma agree_set_undef_move_mreg:
-  forall ms sp rs r v rs',
-  agree ms sp rs ->
-  Val.lessdef v (rs'#(preg_of r)) ->
-  (forall r', data_preg r' = true /\ r' <> ST0 -> r' <> preg_of r -> rs'#r' = rs#r') ->
-  agree (Regmap.set r v (undef_move ms)) sp rs'.
-Proof.
-  intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
-  eapply agree_undef_move; eauto. 
-  intros. unfold Pregmap.set. destruct (PregEq.eq r0 (preg_of r)). 
-  congruence. auto. 
-  intros. rewrite Pregmap.gso; auto. 
-Qed.
-*)
-
 (** Useful properties of the PC register. *)
 
 Lemma nextinstr_nf_inv:
@@ -82,10 +49,7 @@ Lemma nextinstr_nf_inv:
   (nextinstr_nf rs)#r = rs#r.
 Proof.
   intros. unfold nextinstr_nf. rewrite nextinstr_inv. 
-  simpl. repeat rewrite Pregmap.gso; auto.
-  red; intro; subst; contradiction.
-  red; intro; subst; contradiction.
-  red; intro; subst; contradiction.
+  simpl. repeat rewrite Pregmap.gso; auto;
   red; intro; subst; contradiction.
   red; intro; subst; contradiction.
 Qed.
@@ -214,10 +178,8 @@ Proof.
   apply exec_straight_step with rs3 m. simpl. 
   change (rs2 EAX) with (rs1 EAX). rewrite A. simpl. 
   rewrite (Int.add_commut Int.zero tnm1). rewrite Int.add_zero. auto. auto.
-  apply exec_straight_step with rs4 m. simpl. 
-  change (rs3 SOF) with (rs2 SOF). unfold rs2. rewrite nextinstr_inv; auto with asmgen. 
-  unfold compare_ints. rewrite Pregmap.gso; auto with asmgen. rewrite Pregmap.gss.
-  unfold Val.cmp. simpl. unfold rs4. destruct (Int.lt x Int.zero); simpl; auto.
+  apply exec_straight_step with rs4 m. simpl.
+  rewrite Int.lt_sub_overflow. unfold rs4. destruct (Int.lt x Int.zero); simpl; auto.
   unfold rs4. destruct (Int.lt x Int.zero); simpl; auto.
   apply exec_straight_one. auto. auto.
   split. unfold rs5. Simplifs. unfold rs4. rewrite nextinstr_inv; auto with asmgen.
@@ -441,11 +403,13 @@ Lemma compare_ints_spec:
   let rs' := nextinstr (compare_ints v1 v2 rs m) in
      rs'#ZF = Val.cmpu (Mem.valid_pointer m) Ceq v1 v2
   /\ rs'#CF = Val.cmpu (Mem.valid_pointer m) Clt v1 v2
-  /\ rs'#SOF = Val.cmp Clt v1 v2
+  /\ rs'#SF = Val.negative (Val.sub v1 v2)
+  /\ rs'#OF = Val.sub_overflow v1 v2
   /\ (forall r, data_preg r = true -> rs'#r = rs#r).
 Proof.
   intros. unfold rs'; unfold compare_ints.
   split. auto. 
+  split. auto.
   split. auto.
   split. auto.
   intros. Simplifs.
@@ -505,9 +469,11 @@ Lemma testcond_for_signed_comparison_correct:
 Proof.
   intros. generalize (compare_ints_spec rs v1 v2 m).
   set (rs' := nextinstr (compare_ints v1 v2 rs m)).
-  intros [A [B [C D]]].
+  intros [A [B [C [D E]]]].
   destruct v1; destruct v2; simpl in H; inv H.
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C. unfold Val.cmp, Val.cmpu.
+  unfold eval_testcond. rewrite A; rewrite B; rewrite C; rewrite D.
+  simpl. unfold Val.cmp, Val.cmpu.
+  rewrite Int.lt_sub_overflow.
   destruct c; simpl.
   destruct (Int.eq i i0); auto.
   destruct (Int.eq i i0); auto.
@@ -525,8 +491,8 @@ Lemma testcond_for_unsigned_comparison_correct:
 Proof.
   intros. generalize (compare_ints_spec rs v1 v2 m).
   set (rs' := nextinstr (compare_ints v1 v2 rs m)).
-  intros [A [B [C D]]].
-  unfold eval_testcond. rewrite A; rewrite B; rewrite C. unfold Val.cmpu, Val.cmp.
+  intros [A [B [C [D E]]]].
+  unfold eval_testcond. rewrite A; rewrite B. unfold Val.cmpu, Val.cmp.
   destruct v1; destruct v2; simpl in H; inv H.
 (* int int *)
   destruct c; simpl; auto.
@@ -706,11 +672,11 @@ Qed.
 
 Remark compare_floats_inv:
   forall vx vy rs r,
-  r <> CR ZF -> r <> CR CF -> r <> CR PF -> r <> CR SOF ->
+  r <> CR ZF -> r <> CR CF -> r <> CR PF -> r <> CR SF -> r <> CR OF ->
   compare_floats vx vy rs r = rs r.
 Proof.
   intros. 
-  assert (DFL: undef_regs (CR ZF :: CR CF :: CR PF :: CR SOF :: nil) rs r = rs r).
+  assert (DFL: undef_regs (CR ZF :: CR CF :: CR PF :: CR SF :: CR OF :: nil) rs r = rs r).
     simpl. Simplifs. 
   unfold compare_floats; destruct vx; destruct vy; auto. Simplifs. 
 Qed.  

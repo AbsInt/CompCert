@@ -262,6 +262,18 @@ Definition add_carry (v1 v2 cin: val): val :=
   | _, _, _ => Vundef
   end.
 
+Definition sub_overflow (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vint(Int.sub_overflow n1 n2 Int.zero)
+  | _, _ => Vundef
+  end.
+
+Definition negative (v: val) : val :=
+  match v with
+  | Vint n => Vint (Int.negative n)
+  | _ => Vundef
+  end.
+
 Definition and (v1 v2: val): val :=
   match v1, v2 with
   | Vint n1, Vint n2 => Vint(Int.and n1 n2)

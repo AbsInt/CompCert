@@ -48,11 +48,10 @@ Proof. decide equality. Defined.
 Lemma freg_eq: forall (x y: freg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
-(** Bits of the flags register.  [SOF] is a pseudo-bit representing
-  the "xor" of the [OF] and [SF] bits. *)
+(** Bits of the flags register. *)
 
 Inductive crbit: Type := 
-  | ZF | CF | PF | SOF.
+  | ZF | CF | PF | SF | OF.
 
 (** All registers modeled here. *)
 
@@ -304,22 +303,23 @@ Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
 (** Integer comparison between x and y:
 -       ZF = 1 if x = y, 0 if x != y
 -       CF = 1 if x <u y, 0 if x >=u y
--       SOF = 1 if x <s y, 0 if x >=s y
+-       SF = 1 if x - y is negative, 0 if x - y is positive
+-       OF = 1 if x - y overflows (signed), 0 if not
 -       PF is undefined
-
-SOF is (morally) the XOR of the SF and OF flags of the processor. *)
+*)
 
 Definition compare_ints (x y: val) (rs: regset) (m: mem): regset :=
   rs #ZF  <- (Val.cmpu (Mem.valid_pointer m) Ceq x y)
      #CF  <- (Val.cmpu (Mem.valid_pointer m) Clt x y)
-     #SOF <- (Val.cmp Clt x y)
+     #SF  <- (Val.negative (Val.sub x y))
+     #OF  <- (Val.sub_overflow x y)
      #PF  <- Vundef.
 
 (** Floating-point comparison between x and y:
 -       ZF = 1 if x=y or unordered, 0 if x<>y
 -       CF = 1 if x<y or unordered, 0 if x>=y
 -       PF = 1 if unordered, 0 if ordered.
--       SOF is undefined
+-       SF and 0F are undefined
 *)
 
 Definition compare_floats (vx vy: val) (rs: regset) : regset :=
@@ -328,9 +328,10 @@ Definition compare_floats (vx vy: val) (rs: regset) : regset :=
       rs #ZF  <- (Val.of_bool (negb (Float.cmp Cne x y)))
          #CF  <- (Val.of_bool (negb (Float.cmp Cge x y)))
          #PF  <- (Val.of_bool (negb (Float.cmp Ceq x y || Float.cmp Clt x y || Float.cmp Cgt x y)))
-         #SOF <- Vundef
+         #SF  <- Vundef
+         #OF  <- Vundef
   | _, _ =>
-      undef_regs (CR ZF :: CR CF :: CR PF :: CR SOF :: nil) rs
+      undef_regs (CR ZF :: CR CF :: CR PF :: CR SF :: CR OF :: nil) rs
   end.
 
 (** Testing a condition *)
@@ -368,24 +369,24 @@ Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
       | _, _ => None
       end
   | Cond_l =>
-      match rs SOF with
-      | Vint n => Some (Int.eq n Int.one)
-      | _ => None
+      match rs OF, rs SF with
+      | Vint o, Vint s => Some (Int.eq (Int.xor o s) Int.one)
+      | _, _ => None
       end
   | Cond_le =>
-      match rs SOF, rs ZF with
-      | Vint s, Vint z => Some (Int.eq s Int.one || Int.eq z Int.one)
-      | _, _ => None
+      match rs OF, rs SF, rs ZF with
+      | Vint o, Vint s, Vint z => Some (Int.eq (Int.xor o s) Int.one || Int.eq z Int.one)
+      | _, _, _ => None
       end
   | Cond_ge =>
-      match rs SOF with
-      | Vint n => Some (Int.eq n Int.zero)
-      | _ => None
+      match rs OF, rs SF with
+      | Vint o, Vint s => Some (Int.eq (Int.xor o s) Int.zero)
+      | _, _ => None
       end
   | Cond_g =>
-      match rs SOF, rs ZF with
-      | Vint s, Vint z => Some (Int.eq s Int.zero && Int.eq z Int.zero)
-      | _, _ => None
+      match rs OF, rs SF, rs ZF with
+      | Vint o, Vint s, Vint z => Some (Int.eq (Int.xor o s) Int.zero && Int.eq z Int.zero)
+      | _, _, _ => None
       end
   | Cond_p =>
       match rs PF with
@@ -418,7 +419,7 @@ Definition nextinstr (rs: regset) :=
   rs#PC <- (Val.add rs#PC Vone).
 
 Definition nextinstr_nf (rs: regset) : regset :=
-  nextinstr (undef_regs (CR ZF :: CR CF :: CR PF :: CR SOF :: nil) rs).
+  nextinstr (undef_regs (CR ZF :: CR CF :: CR PF :: CR SF :: CR OF :: nil) rs).
 
 Definition goto_label (c: code) (lbl: label) (rs: regset) (m: mem) :=
   match label_pos lbl 0 c with

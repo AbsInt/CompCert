@@ -93,18 +93,18 @@ let preg oc = function
   | _    -> assert false
 
 let condition_name = function
-  | CReq -> "eq"
-  | CRne -> "ne"
-  | CRhs -> "hs"
-  | CRlo -> "lo"
-  | CRmi -> "mi"
-  | CRpl -> "pl"
-  | CRhi -> "hi"
-  | CRls -> "ls"
-  | CRge -> "ge"
-  | CRlt -> "lt"
-  | CRgt -> "gt"
-  | CRle -> "le"
+  | TCeq -> "eq"
+  | TCne -> "ne"
+  | TChs -> "hs"
+  | TClo -> "lo"
+  | TCmi -> "mi"
+  | TCpl -> "pl"
+  | TChi -> "hi"
+  | TCls -> "ls"
+  | TCge -> "ge"
+  | TClt -> "lt"
+  | TCgt -> "gt"
+  | TCle -> "le"
 
 (* Names of sections *)
 
@@ -744,12 +744,6 @@ let rec print_instructions oc instrs =
       end;
       print_instructions oc il
 
-(* Base-2 log of a Caml integer *)
-
-let rec log2 n =
-  assert (n > 0);
-  if n = 1 then 0 else 1 + log2 (n lsr 1)
-
 let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   reset_constants();
@@ -760,8 +754,8 @@ let print_function oc name fn =
     |   _    -> Section_text in
   section oc text;
   let alignment =
-    match !Clflags.option_falignfunctions with Some n -> log2 n | None -> 2 in
-  fprintf oc "	.align %d\n" alignment;
+    match !Clflags.option_falignfunctions with Some n -> n | None -> 4 in
+  fprintf oc "	.balign %d\n" alignment;
   if not (C2C.atom_is_static name) then
     fprintf oc "	.global	%a\n" print_symb name;
   fprintf oc "%a:\n" print_symb name;
@@ -815,11 +809,11 @@ let print_var oc name v =
         |  _  -> Section_data true
       and align =
         match C2C.atom_alignof name with
-        | Some a -> log2 a
-        | None -> 3 (* 8-alignment is a safe default *)
+        | Some a -> a
+        | None -> 8 (* 8-alignment is a safe default *)
       in
       section oc sec;
-      fprintf oc "	.align	%d\n" align;
+      fprintf oc "	.balign	%d\n" align;
       if not (C2C.atom_is_static name) then
         fprintf oc "	.global	%a\n" print_symb name;
       fprintf oc "%a:\n" print_symb name;
