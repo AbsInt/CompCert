@@ -1847,6 +1847,24 @@ Proof.
   exists (-1). ring. 
 Qed.
 
+Theorem sub_add_not:
+  forall x y, sub x y = add (add x (not y)) one.
+Proof.
+  intros. rewrite sub_add_opp. rewrite neg_not. 
+  rewrite ! add_assoc. auto.
+Qed.
+
+Theorem sub_add_not_3:
+  forall x y b,
+  b = zero \/ b = one ->
+  sub (sub x y) b = add (add x (not y)) (xor b one).
+Proof.
+  intros. rewrite ! sub_add_not. rewrite ! add_assoc. f_equal. f_equal.
+  rewrite <- neg_not. rewrite <- sub_add_opp. destruct H; subst b.
+  rewrite xor_zero_l. rewrite sub_zero_l. auto.
+  rewrite xor_idem. rewrite sub_idem. auto.
+Qed.
+
 Theorem sub_borrow_add_carry:
   forall x y b,
   b = zero \/ b = one ->
@@ -2897,24 +2915,6 @@ Proof.
 Qed.
 
 (** ** Properties of integer zero extension and sign extension. *)
-
-(*
-Lemma Ziter_ind:
-  forall (A: Type) (f: A -> A) (P: Z -> A -> Prop) n x,
-  (n <= 0 -> P n x) ->
-  (forall n x, 0 <= n -> P n x -> P (Z.succ n) (f x)) ->
-  P n (Z.iter n f x).
-Proof.
-  intros until x; intros BASE SUCC. intros. 
-  unfold Z.iter. destruct n. 
-  - apply BASE. omega.
-  - induction p using Pos.peano_ind.
-    + simpl Pos.iter. apply (SUCC 0). omega. apply BASE. omega. 
-    + rewrite Pos2Z.inj_succ. rewrite Pos.iter_succ. 
-      apply SUCC. compute; intuition congruence. auto.
-  - apply BASE. compute; intuition congruence.
-Qed.
-*)
 
 Lemma Ziter_base:
   forall (A: Type) n (f: A -> A) x, n <= 0 -> Z.iter n f x = x.
@@ -4200,6 +4200,47 @@ Proof.
   apply Int.eqm_sub. 2: apply Int.eqm_refl.
   apply Int.eqm_unsigned_repr_l. apply Int.eqm_add. 2: apply Int.eqm_refl. 
   apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl. 
+Qed.
+
+Lemma decompose_sub:
+  forall xh xl yh yl,
+  sub (ofwords xh xl) (ofwords yh yl) =
+  ofwords (Int.sub (Int.sub xh yh) (Int.sub_borrow xl yl Int.zero))
+          (Int.sub xl yl).
+Proof.
+  intros. symmetry. rewrite ofwords_add.
+  apply eqm_samerepr. 
+  rewrite ! ofwords_add'. rewrite (Int.unsigned_sub_borrow xl yl). 
+  set (bb := Int.sub_borrow xl yl Int.zero).
+  set (Xl := Int.unsigned xl); set (Xh := Int.unsigned xh);
+  set (Yl := Int.unsigned yl); set (Yh := Int.unsigned yh).
+  change Int.modulus with (two_p 32).
+  replace (Xh * two_p 32 + Xl - (Yh * two_p 32 + Yl))
+     with ((Xh - Yh) * two_p 32 + (Xl - Yl)) by ring.
+  replace (Int.unsigned (Int.sub (Int.sub xh yh) bb) * two_p 32 +
+              (Xl - Yl + Int.unsigned bb * two_p 32))
+     with ((Int.unsigned (Int.sub (Int.sub xh yh) bb) + Int.unsigned bb) * two_p 32
+           + (Xl - Yl)) by ring.
+  apply eqm_add. 2: apply eqm_refl. apply eqm_mul_2p32.
+  replace (Xh - Yh) with ((Xh - Yh - Int.unsigned bb) + Int.unsigned bb) by ring.
+  apply Int.eqm_add. 2: apply Int.eqm_refl.
+  apply Int.eqm_unsigned_repr_l. apply Int.eqm_add. 2: apply Int.eqm_refl. 
+  apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl. 
+Qed.
+
+Lemma decompose_sub':
+  forall xh xl yh yl,
+  sub (ofwords xh xl) (ofwords yh yl) =
+  ofwords (Int.add (Int.add xh (Int.not yh)) (Int.add_carry xl (Int.not yl) Int.one))
+          (Int.sub xl yl).
+Proof.
+  intros. rewrite decompose_sub. f_equal. 
+  rewrite Int.sub_borrow_add_carry by auto.
+  rewrite Int.sub_add_not_3. rewrite Int.xor_assoc. rewrite Int.xor_idem. 
+  rewrite Int.xor_zero. auto.
+  rewrite Int.xor_zero_l. unfold Int.add_carry.
+  destruct (zlt (Int.unsigned xl + Int.unsigned (Int.not yl) + Int.unsigned Int.one) Int.modulus);
+  compute; [right|left]; apply Int.mkint_eq; auto.
 Qed.
 
 Definition mul' (x y: Int.int) : int := repr (Int.unsigned x * Int.unsigned y).
