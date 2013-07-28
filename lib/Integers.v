@@ -2209,6 +2209,48 @@ Proof.
   rewrite and_shru. rewrite and_shr_shru. auto.
 Qed.
 
+Theorem shru_lt_zero:
+  forall x,
+  shru x (repr (zwordsize - 1)) = if lt x zero then one else zero.
+Proof.
+  intros. apply same_bits_eq; intros.
+  rewrite bits_shru; auto.
+  rewrite unsigned_repr. 
+  destruct (zeq i 0).
+  subst i. rewrite Zplus_0_l. rewrite zlt_true.
+  rewrite sign_bit_of_unsigned.
+  unfold lt. rewrite signed_zero. unfold signed. 
+  destruct (zlt (unsigned x) half_modulus).
+  rewrite zlt_false. auto. generalize (unsigned_range x); omega. 
+  rewrite zlt_true. unfold one; rewrite testbit_repr; auto. 
+  generalize (unsigned_range x); omega. 
+  omega.
+  rewrite zlt_false.
+  unfold testbit. rewrite Ztestbit_eq. rewrite zeq_false. 
+  destruct (lt x zero). 
+  rewrite unsigned_one. simpl Z.div2. rewrite Z.testbit_0_l; auto.
+  rewrite unsigned_zero. simpl Z.div2. rewrite Z.testbit_0_l; auto.
+  auto. omega. omega.
+  generalize wordsize_max_unsigned; omega.
+Qed.
+
+Theorem shr_lt_zero:
+  forall x,
+  shr x (repr (zwordsize - 1)) = if lt x zero then mone else zero.
+Proof.
+  intros. apply same_bits_eq; intros.
+  rewrite bits_shr; auto.
+  rewrite unsigned_repr.
+  transitivity (testbit x (zwordsize - 1)).
+  f_equal. destruct (zlt (i + (zwordsize - 1)) zwordsize); omega.
+  rewrite sign_bit_of_unsigned. 
+  unfold lt. rewrite signed_zero. unfold signed. 
+  destruct (zlt (unsigned x) half_modulus).
+  rewrite zlt_false. rewrite bits_zero; auto. generalize (unsigned_range x); omega. 
+  rewrite zlt_true. rewrite bits_mone; auto. generalize (unsigned_range x); omega.
+  generalize wordsize_max_unsigned; omega.
+Qed.
+
 (** ** Properties of rotations *)
 
 Lemma bits_rol:
@@ -2815,6 +2857,36 @@ Proof.
   assert (two_p uy - 1 <= max_signed). unfold max_signed. omega. omega.
 Qed.
 
+Theorem shrx_shr_2:
+  forall x y,
+  ltu y (repr (zwordsize - 1)) = true ->
+  shrx x y = shr (add x (shru (shr x (repr (zwordsize - 1))) (sub iwordsize y))) y.
+Proof.
+  intros. 
+  rewrite shrx_shr by auto. f_equal.
+  rewrite shr_lt_zero. destruct (lt x zero).
+- set (uy := unsigned y).
+  generalize (unsigned_range y); fold uy; intros.
+  assert (0 <= uy < zwordsize - 1).
+    exploit ltu_inv; eauto. rewrite unsigned_repr. auto. 
+    generalize wordsize_pos wordsize_max_unsigned; omega.
+  assert (two_p uy < modulus).
+    rewrite modulus_power. apply two_p_monotone_strict. omega. 
+  f_equal. rewrite shl_mul_two_p. fold uy. rewrite mul_commut. rewrite mul_one.
+  unfold sub. rewrite unsigned_one. rewrite unsigned_repr. 
+  rewrite unsigned_repr_wordsize. fold uy. 
+  apply same_bits_eq; intros. rewrite bits_shru by auto. 
+  rewrite testbit_repr by auto. rewrite Ztestbit_two_p_m1 by omega.
+  rewrite unsigned_repr by (generalize wordsize_max_unsigned; omega).
+  destruct (zlt i uy). 
+  rewrite zlt_true by omega. rewrite bits_mone by omega. auto.
+  rewrite zlt_false by omega. auto.
+  assert (two_p uy > 0) by (apply two_p_gt_ZERO; omega). unfold max_unsigned; omega.
+- replace (shru zero (sub iwordsize y)) with zero. 
+  rewrite add_zero; auto.
+  bit_solve. destruct (zlt (i + unsigned (sub iwordsize y)) zwordsize); auto.
+Qed.
+
 Lemma Zdiv_shift:
   forall x y, y > 0 ->
   (x + (y - 1)) / y = x / y + if zeq (Zmod x y) 0 then 0 else 1.
@@ -3412,48 +3484,6 @@ Proof.
   unfold is_false, is_true, notbool; intros.
   generalize (eq_spec x zero). case (eq x zero); intro.
   contradiction. auto.
-Qed.
-
-Theorem shru_lt_zero:
-  forall x,
-  shru x (repr (zwordsize - 1)) = if lt x zero then one else zero.
-Proof.
-  intros. apply same_bits_eq; intros.
-  rewrite bits_shru; auto.
-  rewrite unsigned_repr. 
-  destruct (zeq i 0).
-  subst i. rewrite Zplus_0_l. rewrite zlt_true.
-  rewrite sign_bit_of_unsigned.
-  unfold lt. rewrite signed_zero. unfold signed. 
-  destruct (zlt (unsigned x) half_modulus).
-  rewrite zlt_false. auto. generalize (unsigned_range x); omega. 
-  rewrite zlt_true. unfold one; rewrite testbit_repr; auto. 
-  generalize (unsigned_range x); omega. 
-  omega.
-  rewrite zlt_false.
-  unfold testbit. rewrite Ztestbit_eq. rewrite zeq_false. 
-  destruct (lt x zero). 
-  rewrite unsigned_one. simpl Z.div2. rewrite Z.testbit_0_l; auto.
-  rewrite unsigned_zero. simpl Z.div2. rewrite Z.testbit_0_l; auto.
-  auto. omega. omega.
-  generalize wordsize_max_unsigned; omega.
-Qed.
-
-Theorem shr_lt_zero:
-  forall x,
-  shr x (repr (zwordsize - 1)) = if lt x zero then mone else zero.
-Proof.
-  intros. apply same_bits_eq; intros.
-  rewrite bits_shr; auto.
-  rewrite unsigned_repr.
-  transitivity (testbit x (zwordsize - 1)).
-  f_equal. destruct (zlt (i + (zwordsize - 1)) zwordsize); omega.
-  rewrite sign_bit_of_unsigned. 
-  unfold lt. rewrite signed_zero. unfold signed. 
-  destruct (zlt (unsigned x) half_modulus).
-  rewrite zlt_false. rewrite bits_zero; auto. generalize (unsigned_range x); omega. 
-  rewrite zlt_true. rewrite bits_mone; auto. generalize (unsigned_range x); omega.
-  generalize wordsize_max_unsigned; omega.
 Qed.
 
 Theorem ltu_range_test:
