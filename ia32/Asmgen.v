@@ -311,6 +311,14 @@ Definition transl_op
   | Omulimm n, a1 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pimul_ri r n :: k)
+  | Omulhs, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq res DX);
+      do r2 <- ireg_of a2; OK (Pimul_r r2 :: k)
+  | Omulhu, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 AX);
+      assertion (mreg_eq res DX);
+      do r2 <- ireg_of a2; OK (Pmul_r r2 :: k)
   | Odiv, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);

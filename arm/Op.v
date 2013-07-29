@@ -82,6 +82,8 @@ Inductive operation : Type :=
   | Orsubimm: int -> operation          (**r [rd = n - r1] *)
   | Omul: operation                     (**r [rd = r1 * r2] *)
   | Omla: operation                     (**r [rd = r1 * r2 + r3] *)
+  | Omulhs: operation                   (**r [rd = high part of r1 * r2, signed] *)
+  | Omulhu: operation                   (**r [rd = high part of r1 * r2, unsigned] *)
   | Odiv: operation                     (**r [rd = r1 / r2] (signed) *)
   | Odivu: operation                    (**r [rd = r1 / r2] (unsigned) *)
   | Oand: operation                     (**r [rd = r1 & r2] *)
@@ -226,6 +228,8 @@ Definition eval_operation
   | Orsubimm n, v1 :: nil => Some (Val.sub (Vint n) v1)
   | Omul, v1 :: v2 :: nil => Some (Val.mul v1 v2)
   | Omla, v1 :: v2 :: v3 :: nil => Some (Val.add (Val.mul v1 v2) v3)
+  | Omulhs, v1::v2::nil => Some (Val.mulhs v1 v2)
+  | Omulhu, v1::v2::nil => Some (Val.mulhu v1 v2)
   | Odiv, v1 :: v2 :: nil => Val.divs v1 v2
   | Odivu, v1 :: v2 :: nil => Val.divu v1 v2
   | Oand, v1 :: v2 :: nil => Some (Val.and v1 v2)
@@ -319,6 +323,8 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Orsubimm _ => (Tint :: nil, Tint)
   | Omul => (Tint :: Tint :: nil, Tint)
   | Omla => (Tint :: Tint :: Tint :: nil, Tint)
+  | Omulhs => (Tint :: Tint :: nil, Tint)
+  | Omulhu => (Tint :: Tint :: nil, Tint)
   | Odiv => (Tint :: Tint :: nil, Tint)
   | Odivu => (Tint :: Tint :: nil, Tint)
   | Oand => (Tint :: Tint :: nil, Tint)
@@ -396,6 +402,8 @@ Proof with (try exact I).
   destruct v0...
   destruct v0; destruct v1...
   destruct v0... destruct v1... destruct v2...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
   destruct v0; destruct v1; simpl in H0; inv H0.
     destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2...
   destruct v0; destruct v1; simpl in H0; inv H0. destruct (Int.eq i0 Int.zero); inv H2...
@@ -823,6 +831,8 @@ Proof.
 
   inv H4; inv H2; simpl; auto.
   apply Values.val_add_inject; auto. inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
   inv H4; inv H3; simpl in H1; inv H1. simpl. 
     destruct (Int.eq i0 Int.zero || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone); inv H2. TrivialExists.
   inv H4; inv H3; simpl in H1; inv H1. simpl. 

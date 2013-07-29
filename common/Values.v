@@ -222,6 +222,18 @@ Definition mul (v1 v2: val): val :=
   | _, _ => Vundef
   end.
 
+Definition mulhs (v1 v2: val): val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vint(Int.mulhs n1 n2)
+  | _, _ => Vundef
+  end.
+
+Definition mulhu (v1 v2: val): val :=
+  match v1, v2 with
+  | Vint n1, Vint n2 => Vint(Int.mulhu n1 n2)
+  | _, _ => Vundef
+  end.
+
 Definition divs (v1 v2: val): option val :=
   match v1, v2 with
   | Vint n1, Vint n2 =>

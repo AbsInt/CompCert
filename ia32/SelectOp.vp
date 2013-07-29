@@ -299,10 +299,13 @@ Nondetfunction xor (e1: expr) (e2: expr) :=
 
 (** ** Integer division and modulus *)
 
-Definition divu (e1: expr) (e2: expr) := Eop Odivu (e1:::e2:::Enil).
-Definition modu (e1: expr) (e2: expr) := Eop Omodu (e1:::e2:::Enil).
-Definition divs (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
-Definition mods (e1: expr) (e2: expr) := Eop Omod (e1:::e2:::Enil).
+Definition divu_base (e1: expr) (e2: expr) := Eop Odivu (e1:::e2:::Enil).
+Definition modu_base (e1: expr) (e2: expr) := Eop Omodu (e1:::e2:::Enil).
+Definition divs_base (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
+Definition mods_base (e1: expr) (e2: expr) := Eop Omod (e1:::e2:::Enil).
+
+Definition shrximm (e1: expr) (n2: int) :=
+  if Int.eq n2 Int.zero then e1 else Eop (Oshrximm n2) (e1:::Enil).
 
 (** ** General shifts *)
 

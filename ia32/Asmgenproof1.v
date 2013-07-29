@@ -922,6 +922,10 @@ Transparent destroyed_by_op.
   apply SAME. eapply mk_intconv_correct; eauto.
 (* cast16unsigned *)
   apply SAME. eapply mk_intconv_correct; eauto.
+(* mulhs *)
+  apply SAME. TranslOp. destruct H1. Simplifs. 
+(* mulhu *)
+  apply SAME. TranslOp. destruct H1. Simplifs. 
 (* div *)
   apply SAME.
   specialize (divs_mods_exist (rs EAX) (rs ECX)). rewrite H0. 

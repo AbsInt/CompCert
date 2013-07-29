@@ -471,44 +471,61 @@ Proof.
   TrivialExists.
 Qed.
 
-Theorem eval_divs:
+Theorem eval_divs_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divs x y = Some z ->
-  exists v, eval_expr ge sp e m le (divs a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divs_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold divs. exists z; split. EvalOp. auto.
+  intros. unfold divs_base. exists z; split. EvalOp. auto.
 Qed.
 
-Theorem eval_divu:
+Theorem eval_divu_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divu x y = Some z ->
-  exists v, eval_expr ge sp e m le (divu a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold divu. exists z; split. EvalOp. auto.
+  intros. unfold divu_base. exists z; split. EvalOp. auto.
 Qed.
 
-Theorem eval_mods:
+Theorem eval_mods_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.mods x y = Some z ->
-  exists v, eval_expr ge sp e m le (mods a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (mods_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold mods. exists z; split. EvalOp. auto.
+  intros. unfold mods_base. exists z; split. EvalOp. auto.
 Qed.
 
-Theorem eval_modu:
+Theorem eval_modu_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.modu x y = Some z ->
-  exists v, eval_expr ge sp e m le (modu a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (modu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold modu. exists z; split. EvalOp. auto.
+  intros. unfold modu_base. exists z; split. EvalOp. auto.
+Qed.
+
+Theorem eval_shrximm:
+  forall le a n x z,
+  eval_expr ge sp e m le a x ->
+  Val.shrx x (Vint n) = Some z ->
+  exists v, eval_expr ge sp e m le (shrximm a n) v /\ Val.lessdef z v.
+Proof.
+  intros. unfold shrximm. 
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  subst n. exists x; split; auto. 
+  destruct x; simpl in H0; try discriminate.
+  destruct (Int.ltu Int.zero (Int.repr 31)); inv H0.
+  replace (Int.shrx i Int.zero) with i. auto. 
+  unfold Int.shrx, Int.divs. rewrite Int.shl_zero. 
+  change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed; auto.
+  econstructor; split. EvalOp. auto.
 Qed.
 
 Theorem eval_shl: binary_constructor_sound shl Val.shl.

@@ -145,6 +145,8 @@ Inductive instruction: Type :=
   | Psub_rr (rd: ireg) (r1: ireg)
   | Pimul_rr (rd: ireg) (r1: ireg)
   | Pimul_ri (rd: ireg) (n: int)
+  | Pimul_r (r1: ireg)
+  | Pmul_r (r1: ireg)
   | Pdiv (r1: ireg)
   | Pidiv (r1: ireg)
   | Pand_rr (rd: ireg) (r1: ireg)
@@ -540,6 +542,12 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr_nf (rs#rd <- (Val.mul rs#rd rs#r1))) m
   | Pimul_ri rd n =>
       Next (nextinstr_nf (rs#rd <- (Val.mul rs#rd (Vint n)))) m
+  | Pimul_r r1 =>
+      Next (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
+                            #EDX <- (Val.mulhs rs#EAX rs#r1))) m
+  | Pmul_r r1 =>
+      Next (nextinstr_nf (rs#EAX <- (Val.mul rs#EAX rs#r1)
+                            #EDX <- (Val.mulhu rs#EAX rs#r1))) m
   | Pdiv r1 =>
       let vn := rs#EAX in let vd := (rs#EDX <- Vundef)#r1 in
       match Val.divu vn vd, Val.modu vn vd with

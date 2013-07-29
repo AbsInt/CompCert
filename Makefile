@@ -75,8 +75,8 @@ COMMON=Errors.v AST.v Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
 
 BACKEND=\
   Cminor.v Op.v CminorSel.v \
-  SelectOp.v SelectLong.v Selection.v \
-  SelectOpproof.v SelectLongproof.v Selectionproof.v \
+  SelectOp.v SelectDiv.v SelectLong.v Selection.v \
+  SelectOpproof.v SelectDivproof.v SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   Tailcall.v Tailcallproof.v \

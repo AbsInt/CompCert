@@ -371,6 +371,12 @@ Definition transl_op
            Pmulli r r1 (Cint n) :: k
          else
            loadimm GPR0 n (Pmullw r r1 GPR0 :: k))
+  | Omulhs, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pmulhw r r1 r2 :: k)
+  | Omulhu, a1 :: a2 :: nil =>
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      OK (Pmulhwu r r1 r2 :: k)
   | Odiv, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
       OK (Pdivw r r1 r2 :: k)

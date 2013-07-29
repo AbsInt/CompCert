@@ -75,6 +75,8 @@ Definition destroyed_by_op (op: operation): list mreg :=
   match op with
   | Omove => FP0 :: nil
   | Ocast8signed | Ocast8unsigned | Ocast16signed | Ocast16unsigned => AX :: nil
+  | Omulhs => AX :: DX :: nil
+  | Omulhu => AX :: DX :: nil
   | Odiv => AX :: DX :: nil
   | Odivu => AX :: DX :: nil
   | Omod => AX :: DX :: nil
@@ -136,6 +138,8 @@ Definition temp_for_parent_frame: mreg :=
 
 Definition mregs_for_operation (op: operation): list (option mreg) * option mreg :=
   match op with
+  | Omulhs => (Some AX :: None :: nil, Some DX)
+  | Omulhu => (Some AX :: None :: nil, Some DX)
   | Odiv => (Some AX :: Some CX :: nil, Some AX)
   | Odivu => (Some AX :: Some CX :: nil, Some AX)
   | Omod => (Some AX :: Some CX :: nil, Some DX)
@@ -192,6 +196,8 @@ Definition two_address_op (op: operation) : bool :=
   | Osub => true
   | Omul => true
   | Omulimm _ => true
+  | Omulhs => false
+  | Omulhu => false
   | Odiv => false
   | Odivu => false
   | Omod => false

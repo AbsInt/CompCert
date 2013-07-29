@@ -193,6 +193,8 @@ Inductive instruction : Type :=
   | Pmtlr: ireg -> instruction                                (**r move ireg to LR *)
   | Pmulli: ireg -> ireg -> constant -> instruction           (**r integer multiply immediate *)
   | Pmullw: ireg -> ireg -> ireg -> instruction               (**r integer multiply *)
+  | Pmulhw: ireg -> ireg -> ireg -> instruction               (**r multiply high signed *)
+  | Pmulhwu: ireg -> ireg -> ireg -> instruction               (**r multiply high signed *)
   | Pnand: ireg -> ireg -> ireg -> instruction                (**r bitwise not-and *)
   | Pnor: ireg -> ireg -> ireg -> instruction                 (**r bitwise not-or *)
   | Por: ireg -> ireg -> ireg -> instruction                  (**r bitwise or *)
@@ -702,6 +704,10 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr (rs#rd <- (Val.mul rs#r1 (const_low cst)))) m
   | Pmullw rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.mul rs#r1 rs#r2))) m
+  | Pmulhw rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.mulhs rs#r1 rs#r2))) m
+  | Pmulhwu rd r1 r2 =>
+      Next (nextinstr (rs#rd <- (Val.mulhu rs#r1 rs#r2))) m
   | Pnand rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.notint (Val.and rs#r1 rs#r2)))) m
   | Pnor rd r1 r2 =>

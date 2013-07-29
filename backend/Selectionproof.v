@@ -26,9 +26,11 @@ Require Import Cminor.
 Require Import Op.
 Require Import CminorSel.
 Require Import SelectOp.
+Require Import SelectDiv.
 Require Import SelectLong.
 Require Import Selection.
 Require Import SelectOpproof.
+Require Import SelectDivproof.
 Require Import SelectLongproof.
 
 Open Local Scope cminorsel_scope.

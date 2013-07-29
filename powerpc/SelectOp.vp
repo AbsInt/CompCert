@@ -290,8 +290,6 @@ Nondetfunction xor (e1: expr) (e2: expr) :=
 
 (** ** Integer division and modulus *)
 
-Definition divs (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
-
 Definition mod_aux (divop: operation) (e1 e2: expr) :=
   Elet e1
     (Elet (lift e2)
@@ -301,31 +299,13 @@ Definition mod_aux (divop: operation) (e1 e2: expr) :=
                            Enil) :::
                  Enil))).
 
-Definition mods := mod_aux Odiv.
+Definition divs_base (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
+Definition mods_base := mod_aux Odiv.
+Definition divu_base (e1: expr) (e2: expr) := Eop Odivu (e1:::e2:::Enil).
+Definition modu_base := mod_aux Odivu.
 
-Definition divuimm (e: expr) (n: int) :=
-  match Int.is_power2 n with
-  | Some l => shruimm e l
-  | None   => Eop Odivu (e ::: Eop (Ointconst n) Enil ::: Enil)
-  end.
-
-Nondetfunction divu (e1: expr) (e2: expr) :=
-  match e2 with
-  | Eop (Ointconst n2) Enil => divuimm e1 n2
-  | _ => Eop Odivu (e1:::e2:::Enil)
-  end.
-
-Definition moduimm (e: expr) (n: int) :=
-  match Int.is_power2 n with
-  | Some l => andimm (Int.sub n Int.one) e
-  | None   => mod_aux Odivu e (Eop (Ointconst n) Enil)
-  end.
-
-Nondetfunction modu (e1: expr) (e2: expr) :=
-  match e2 with
-  | Eop (Ointconst n2) Enil => moduimm e1 n2
-  | _ => mod_aux Odivu e1 e2
-  end.
+Definition shrximm (e1: expr) (n2: int) :=
+  if Int.eq n2 Int.zero then e1 else Eop (Oshrximm n2) (e1:::Enil).
 
 (** ** General shifts *)
 

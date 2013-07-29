@@ -286,6 +286,11 @@ Definition rolm (x a m: int): int := and (rol x a) m.
 Definition shrx (x y: int): int :=
   divs x (shl one y).
 
+(** High half of full multiply. *)
+
+Definition mulhu (x y: int): int := repr ((unsigned x * unsigned y) / modulus).
+Definition mulhs (x y: int): int := repr ((signed x * signed y) / modulus).
+
 (** Condition flags *)
 
 Definition negative (x: int): int :=
@@ -4275,6 +4280,19 @@ Qed.
 
 Definition mul' (x y: Int.int) : int := repr (Int.unsigned x * Int.unsigned y).
 
+Lemma mul'_mulhu:
+  forall x y, mul' x y = ofwords (Int.mulhu x y) (Int.mul x y).
+Proof.
+  intros. 
+  rewrite ofwords_add. unfold mul', Int.mulhu, Int.mul. 
+  set (p := Int.unsigned x * Int.unsigned y).
+  set (ph := p / Int.modulus). set (pl := p mod Int.modulus). 
+  transitivity (repr (ph * Int.modulus + pl)).
+- f_equal. rewrite Zmult_comm. apply Z_div_mod_eq. apply Int.modulus_pos. 
+- apply eqm_samerepr. apply eqm_add. apply eqm_mul_2p32. auto with ints.
+  rewrite Int.unsigned_repr_eq. apply eqm_refl.
+Qed.
+
 Lemma decompose_mul:
   forall xh xl yh yl,
   mul (ofwords xh xl) (ofwords yh yl) =
@@ -4308,6 +4326,16 @@ Proof.
   apply eqm_samerepr. apply eqm_add. 2: apply eqm_refl. 
   change (two_p 32 * two_p 32) with modulus. exists (- XH * YH). ring. 
   f_equal. ring. 
+Qed.
+
+Lemma decompose_mul_2:
+  forall xh xl yh yl,
+  mul (ofwords xh xl) (ofwords yh yl) =
+  ofwords (Int.add (Int.add (Int.mulhu xl yl) (Int.mul xl yh)) (Int.mul xh yl))
+          (Int.mul xl yl).
+Proof.
+  intros. rewrite decompose_mul. rewrite mul'_mulhu. 
+  rewrite hi_ofwords, lo_ofwords. auto.
 Qed.
 
 Lemma decompose_ltu:

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Correctness of instruction selection for 64-bit integer operations *)
+(** Correctness of instruction selection for integer division *)
 
 Require Import Coqlib.
 Require Import AST.

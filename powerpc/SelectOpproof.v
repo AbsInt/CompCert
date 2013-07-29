@@ -465,14 +465,14 @@ Proof.
   TrivialExists.
 Qed.
 
-Theorem eval_divs:
+Theorem eval_divs_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divs x y = Some z ->
-  exists v, eval_expr ge sp e m le (divs a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divs_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold divs. exists z; split. EvalOp. auto.
+  intros. unfold divs_base. exists z; split. EvalOp. auto.
 Qed.
 
 Lemma eval_mod_aux:
@@ -501,73 +501,57 @@ Proof.
   reflexivity.
 Qed.
 
-Theorem eval_mods:
+Theorem eval_mods_base:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.mods x y = Some z ->
-  exists v, eval_expr ge sp e m le (mods a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (mods_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros; unfold mods. 
+  intros; unfold mods_base. 
   exploit Val.mods_divs; eauto. intros [v [A B]].
   subst. econstructor; split; eauto.
   apply eval_mod_aux with (semdivop := Val.divs); auto.
 Qed.
 
-Theorem eval_divuimm:
-  forall le n a x z,
-  eval_expr ge sp e m le a x ->
-  Val.divu x (Vint n) = Some z ->
-  exists v, eval_expr ge sp e m le (divuimm a n) v /\ Val.lessdef z v.
-Proof.
-  intros; unfold divuimm. 
-  destruct (Int.is_power2 n) eqn:?. 
-  replace z with (Val.shru x (Vint i)). apply eval_shruimm; auto.
-  eapply Val.divu_pow2; eauto.
-  TrivialExists. 
-  econstructor. eauto. econstructor. EvalOp. simpl; eauto. constructor. auto.
-Qed.
-
-Theorem eval_divu:
-  forall le a x b y z,
+Theorem eval_divu_base:
+  forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.divu x y = Some z ->
-  exists v, eval_expr ge sp e m le (divu a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (divu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros until z. unfold divu; destruct (divu_match b); intros; InvEval.
-  eapply eval_divuimm; eauto.
-  TrivialExists. 
+  intros. unfold divu_base. exists z; split. EvalOp. auto.
 Qed.
 
-Theorem eval_moduimm:
-  forall le n a x z,
-  eval_expr ge sp e m le a x ->
-  Val.modu x (Vint n) = Some z ->
-  exists v, eval_expr ge sp e m le (moduimm a n) v /\ Val.lessdef z v.
-Proof.
-  intros; unfold moduimm. 
-  destruct (Int.is_power2 n) eqn:?. 
-  replace z with (Val.and x (Vint (Int.sub n Int.one))). apply eval_andimm; auto.
-  eapply Val.modu_pow2; eauto.
-  exploit Val.modu_divu; eauto. intros [v [A B]].
-  subst. econstructor; split; eauto.
-  apply eval_mod_aux with (semdivop := Val.divu); auto.
-  EvalOp.
-Qed.
-
-Theorem eval_modu:
-  forall le a x b y z,
+Theorem eval_modu_base:
+  forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
   Val.modu x y = Some z ->
-  exists v, eval_expr ge sp e m le (modu a b) v /\ Val.lessdef z v.
+  exists v, eval_expr ge sp e m le (modu_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros until y; unfold modu; case (modu_match b); intros; InvEval.
-  eapply eval_moduimm; eauto.
+  intros; unfold modu_base. 
   exploit Val.modu_divu; eauto. intros [v [A B]].
   subst. econstructor; split; eauto.
   apply eval_mod_aux with (semdivop := Val.divu); auto.
+Qed.
+
+Theorem eval_shrximm:
+  forall le a n x z,
+  eval_expr ge sp e m le a x ->
+  Val.shrx x (Vint n) = Some z ->
+  exists v, eval_expr ge sp e m le (shrximm a n) v /\ Val.lessdef z v.
+Proof.
+  intros. unfold shrximm. 
+  predSpec Int.eq Int.eq_spec n Int.zero.
+  subst n. exists x; split; auto. 
+  destruct x; simpl in H0; try discriminate.
+  destruct (Int.ltu Int.zero (Int.repr 31)); inv H0.
+  replace (Int.shrx i Int.zero) with i. auto. 
+  unfold Int.shrx, Int.divs. rewrite Int.shl_zero. 
+  change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed; auto.
+  econstructor; split. EvalOp. auto.
 Qed.
 
 Theorem eval_shl: binary_constructor_sound shl Val.shl.

@@ -942,11 +942,12 @@ Proof.
   eapply exec_straight_two. simpl; eauto. simpl; eauto. auto. auto.
   intuition Simpl.
   (* divs *)
-  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto. 
-  intuition Simpl.
+Local Transparent destroyed_by_op.
+  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto.
+  split. Simpl. simpl; intros. intuition Simpl. 
   (* divu *)
   econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto.
-  intuition Simpl.
+  split. Simpl. simpl; intros. intuition Simpl. 
   (* Oandimm *)
   generalize (andimm_correct x x0 i k rs m). 
   intros [rs' [A [B C]]]. 

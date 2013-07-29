@@ -299,12 +299,22 @@ Definition transl_op
       OK (if negb (ireg_eq r r1) then Pmla r r1 r2 r3 :: k
           else if negb (ireg_eq r r2) then Pmla r r2 r1 r3 :: k
           else Pmla IR14 r1 r2 r3 :: Pmov r (SOreg IR14) :: k)
+  | Omulhs, a1 :: a2 :: nil =>
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Psmull IR14 r r1 r2 :: k)
+  | Omulhu, a1 :: a2 :: nil =>
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      OK (Pumull IR14 r r1 r2 :: k)
   | Odiv, a1 :: a2 :: nil =>
-      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (Psdiv r r1 r2 :: k)
+      assertion (mreg_eq res R0);
+      assertion (mreg_eq a1 R0);
+      assertion (mreg_eq a2 R1);
+      OK (Psdiv :: k)
   | Odivu, a1 :: a2 :: nil =>
-      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (Pudiv r r1 r2 :: k)
+      assertion (mreg_eq res R0);
+      assertion (mreg_eq a1 R0);
+      assertion (mreg_eq a2 R1);
+      OK (Pudiv :: k)
   | Oand, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Pand r r1 (SOreg r2) :: k)

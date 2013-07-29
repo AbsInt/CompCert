@@ -606,6 +606,10 @@ let print_instruction oc = function
       fprintf oc "	imull	%a, %a\n" ireg r1 ireg rd
   | Pimul_ri(rd, n) ->
       fprintf oc "	imull	$%a, %a\n" coqint n ireg rd
+  | Pimul_r(r1) ->
+      fprintf oc "	imull	%a\n" ireg r1
+  | Pmul_r(r1) ->
+      fprintf oc "	mull	%a\n" ireg r1
   | Pdiv(r1) ->
       fprintf oc "	xorl	%%edx, %%edx\n";
       fprintf oc "	divl	%a\n" ireg r1

@@ -818,6 +818,10 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	mulli	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pmullw(r1, r2, r3) ->
       fprintf oc "	mullw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+  | Pmulhw(r1, r2, r3) ->
+      fprintf oc "	mulhw	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
+  | Pmulhwu(r1, r2, r3) ->
+      fprintf oc "	mulhwu	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pnand(r1, r2, r3) ->
       fprintf oc "	nand	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pnor(r1, r2, r3) ->

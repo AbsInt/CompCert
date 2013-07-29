@@ -599,14 +599,16 @@ let print_instruction oc = function
       fprintf oc "	strb	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
   | Pstrh(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a, %a]\n" ireg r1 ireg r2 shift_addr sa; 1
-  | Psdiv(r1, r2, r3) ->
-      assert (r1 = IR0 && r2 = IR0 && r3 = IR1);
+  | Psdiv ->
       fprintf oc "	bl	__aeabi_idiv\n"; 1
+  | Psmull(r1, r2, r3, r4) ->
+      fprintf oc "	smull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
   | Psub(r1, r2, so) ->
       fprintf oc "	sub	%a, %a, %a\n" ireg r1 ireg r2 shift_op so; 1
-  | Pudiv(r1, r2, r3) ->
-      assert (r1 = IR0 && r2 = IR0 && r3 = IR1);
+  | Pudiv ->
       fprintf oc "	bl	__aeabi_uidiv\n"; 1
+  | Pumull(r1, r2, r3, r4) ->
+      fprintf oc "	umull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4; 1
   (* Floating-point coprocessor instructions *)
   | Pfcpyd(r1, r2) ->
       fprintf oc "	fcpyd	%a, %a\n" freg r1 freg r2; 1
