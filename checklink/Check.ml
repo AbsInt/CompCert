@@ -2104,6 +2104,28 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
+      | Pmulhw(rd, r1, r2) ->
+          begin match ecode with
+          | MULHWx(rD, rA, rB, rc) :: es ->
+              OK(fw)
+              >>= match_iregs rd    rD
+              >>= match_iregs r1    rA
+              >>= match_iregs r2    rB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
+      | Pmulhwu(rd, r1, r2) ->
+          begin match ecode with
+          | MULHWUx(rD, rA, rB, rc) :: es ->
+              OK(fw)
+              >>= match_iregs rd    rD
+              >>= match_iregs r1    rA
+              >>= match_iregs r2    rB
+              >>= match_bools false rc
+              >>= recur_simpl
+          | _ -> error
+          end
       | Pnand(rd, r1, r2) ->
           begin match ecode with
           | NANDx(rS, rA, rB, rc) :: es ->

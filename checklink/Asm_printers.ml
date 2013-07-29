@@ -185,6 +185,8 @@ let string_of_instruction = function
 | Pmtlr     (i0)                -> "Pmtlr(" ^ string_of_ireg i0 ^ ")"
 | Pmulli    (i0, i1, c2)        -> "Pmulli(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_constant c2 ^ ")"
 | Pmullw    (i0, i1, i2)        -> "Pmullw(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
+| Pmulhw    (i0, i1, i2)        -> "Pmulhw(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
+| Pmulhwu    (i0, i1, i2)        -> "Pmulhwu(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Pnand     (i0, i1, i2)        -> "Pnand(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Pnor      (i0, i1, i2)        -> "Pnor(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
 | Por       (i0, i1, i2)        -> "Por(" ^ string_of_ireg i0 ^ ", " ^ string_of_ireg i1 ^ ", " ^ string_of_ireg i2 ^ ")"
