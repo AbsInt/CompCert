@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2011 Sylvie Boldo
+Copyright (C) 2010-2013 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2011 Guillaume Melquiond
+Copyright (C) 2010-2013 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -120,6 +120,18 @@ intros r r1 r2.
 rewrite <- 3!(Rmult_comm r).
 apply Rmult_minus_distr_l.
 Qed.
+
+Lemma Rmult_neq_reg_r: forall  r1 r2 r3:R, (r2 * r1 <> r3 * r1)%R -> r2 <> r3.
+intros r1 r2 r3 H1 H2.
+apply H1; rewrite H2; ring.
+Qed.
+
+Lemma Rmult_neq_compat_r: forall  r1 r2 r3:R, (r1 <> 0)%R -> (r2 <> r3)%R
+   -> (r2 *r1 <> r3*r1)%R.
+intros r1 r2 r3 H H1 H2.
+now apply H1, Rmult_eq_reg_r with r1.
+Qed.
+
 
 Theorem Rmult_min_distr_r :
   forall r r1 r2 : R,

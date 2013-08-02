@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2011 Sylvie Boldo
+Copyright (C) 2010-2013 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2011 Guillaume Melquiond
+Copyright (C) 2010-2013 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -497,6 +497,25 @@ rewrite Bool.negb_involutive.
 rewrite Zeven_opp.
 rewrite Zeven_plus.
 now rewrite eqb_sym.
+Qed.
+
+Lemma round_NE_abs:
+  forall x : R,
+  round beta fexp ZnearestE (Rabs x) = Rabs (round beta fexp ZnearestE x).
+Proof with auto with typeclass_instances.
+intros x.
+apply sym_eq.
+unfold Rabs at 2.
+destruct (Rcase_abs x) as [Hx|Hx].
+rewrite round_NE_opp.
+apply Rabs_left1.
+rewrite <- (round_0 beta fexp ZnearestE).
+apply round_le...
+now apply Rlt_le.
+apply Rabs_pos_eq.
+rewrite <- (round_0 beta fexp ZnearestE).
+apply round_le...
+now apply Rge_le.
 Qed.
 
 Theorem round_NE_pt :

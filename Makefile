@@ -50,20 +50,22 @@ VPATH=$(DIRS)
 GPATH=$(DIRS)
 
 # Flocq
-FLOCQ_CORE=Fcore_float_prop.v Fcore_Zaux.v Fcore_rnd_ne.v Fcore_FTZ.v \
-  Fcore_FLT.v Fcore_defs.v Fcore_Raux.v Fcore_ulp.v Fcore_rnd.v Fcore_FLX.v \
-  Fcore_FIX.v Fcore_digits.v Fcore_generic_fmt.v Fcore.v
-FLOCQ_PROP=Fprop_Sterbenz.v Fprop_mult_error.v Fprop_relative.v \
-  Fprop_div_sqrt_error.v Fprop_plus_error.v
-FLOCQ_CALC=Fcalc_ops.v Fcalc_bracket.v Fcalc_sqrt.v Fcalc_div.v Fcalc_round.v \
-  Fcalc_digits.v
-FLOCQ_APPLI=Fappli_IEEE_bits.v Fappli_IEEE.v
-FLOCQ=$(FLOCQ_CORE) $(FLOCQ_PROP) $(FLOCQ_CALC) $(FLOCQ_APPLI)
+
+FLOCQ=\
+  Fcore_Raux.v Fcore_Zaux.v Fcore_defs.v Fcore_digits.v                     \
+  Fcore_float_prop.v Fcore_FIX.v Fcore_FLT.v Fcore_FLX.v                    \
+  Fcore_FTZ.v Fcore_generic_fmt.v Fcore_rnd.v Fcore_rnd_ne.v                \
+  Fcore_ulp.v Fcore.v                                                       \
+  Fcalc_bracket.v Fcalc_digits.v Fcalc_div.v Fcalc_ops.v                    \
+  Fcalc_round.v Fcalc_sqrt.v                                                \
+  Fprop_div_sqrt_error.v Fprop_mult_error.v Fprop_plus_error.v              \
+  Fprop_relative.v Fprop_Sterbenz.v                                         \
+  Fappli_rnd_odd.v Fappli_IEEE.v Fappli_IEEE_bits.v
 
 # General-purpose libraries (in lib/)
 
 LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
-  Iteration.v Integers.v Floats.v Parmov.v UnionFind.v Wfsimpl.v \
+  Iteration.v Integers.v Floats.v Nan.v Parmov.v UnionFind.v Wfsimpl.v \
   Postorder.v FSetAVLplus.v
 
 # Parts common to the front-ends and the back-end (in common/)

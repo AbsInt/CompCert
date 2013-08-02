@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2011 Sylvie Boldo
+Copyright (C) 2010-2013 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2011 Guillaume Melquiond
+Copyright (C) 2010-2013 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1138,5 +1138,279 @@ now apply pred_ge_0.
 apply le_pred_lt_aux ; try easy.
 now split.
 Qed.
+
+
+Theorem pred_succ : forall { monotone_exp : Monotone_exp fexp },
+  forall x, F x -> (0 < x)%R -> pred (x + ulp x)=x.
+Proof.
+intros L x Fx Hx.
+assert (x <= pred (x + ulp x))%R.
+apply le_pred_lt.
+assumption.
+now apply generic_format_succ.
+replace 0%R with (0+0)%R by ring; apply Rplus_lt_compat; try apply Hx.
+apply bpow_gt_0.
+apply Rplus_lt_reg_r with (-x)%R; ring_simplify.
+apply bpow_gt_0.
+apply Rle_antisym; trivial.
+apply Rplus_le_reg_r with (ulp (pred (x + ulp x))).
+rewrite pred_plus_ulp.
+apply Rplus_le_compat_l.
+now apply ulp_le.
+replace 0%R with (0+0)%R by ring; apply Rplus_lt_compat; try apply Hx.
+apply bpow_gt_0.
+now apply generic_format_succ.
+apply Rgt_not_eq.
+now apply Rlt_le_trans with x.
+Qed.
+
+
+Theorem lt_UP_le_DN :
+  forall x y, F y ->
+  (y < round beta fexp Zceil x -> y <= round beta fexp Zfloor x)%R.
+Proof with auto with typeclass_instances.
+intros x y Fy Hlt.
+apply round_DN_pt...
+apply Rnot_lt_le.
+contradict Hlt.
+apply RIneq.Rle_not_lt.
+apply round_UP_pt...
+now apply Rlt_le.
+Qed.
+
+Theorem pred_UP_le_DN :
+  forall x, (0 < round beta fexp Zceil x)%R ->
+  (pred (round beta fexp Zceil x) <= round beta fexp Zfloor x)%R.
+Proof with auto with typeclass_instances.
+intros x Pxu.
+destruct (generic_format_EM beta fexp x) as [Fx|Fx].
+rewrite !round_generic...
+now apply Rlt_le; apply pred_lt_id.
+assert (let u := round beta fexp Zceil x in pred u < u)%R as Hup.
+  now apply pred_lt_id.
+apply lt_UP_le_DN...
+apply generic_format_pred...
+now apply round_UP_pt.
+Qed.
+
+Theorem pred_UP_eq_DN :
+  forall x, (0 < round beta fexp Zceil x)%R -> ~ F x ->
+  (pred (round beta fexp Zceil x) = round beta fexp Zfloor x)%R.
+Proof with auto with typeclass_instances.
+intros x Px Fx.
+apply Rle_antisym.
+now apply pred_UP_le_DN.
+apply le_pred_lt; try apply generic_format_round...
+pose proof round_DN_UP_lt _ _ _ Fx as HE.
+now apply Rlt_trans with (1 := proj1 HE) (2 := proj2 HE).
+Qed.
+
+
+
+
+
+(** Properties of rounding to nearest and ulp *)
+
+Theorem rnd_N_le_half_an_ulp: forall choice u v,
+  F u -> (0 < u)%R -> (v < u + (ulp u)/2)%R
+      -> (round beta fexp (Znearest choice)  v <= u)%R.
+Proof with auto with typeclass_instances.
+intros choice u v Fu Hu H.
+(* . *)
+assert (0 < ulp u / 2)%R.
+unfold Rdiv; apply Rmult_lt_0_compat.
+unfold ulp; apply bpow_gt_0.
+auto with real.
+(* . *)
+assert (ulp u / 2 < ulp u)%R.
+apply Rlt_le_trans with (ulp u *1)%R;[idtac|right; ring].
+unfold Rdiv; apply Rmult_lt_compat_l.
+apply bpow_gt_0.
+apply Rmult_lt_reg_l with 2%R.
+auto with real.
+apply Rle_lt_trans with 1%R.
+right; field.
+rewrite Rmult_1_r; auto with real.
+(* *)
+apply Rnd_N_pt_monotone with F v (u + ulp u / 2)%R...
+apply round_N_pt...
+apply Rnd_DN_pt_N with (u+ulp u)%R.
+pattern u at 3; replace u with (round beta fexp Zfloor (u + ulp u / 2)).
+apply round_DN_pt...
+apply round_DN_succ; try assumption.
+split; try left; assumption.
+replace (u+ulp u)%R with (round beta fexp Zceil (u + ulp u / 2)).
+apply round_UP_pt...
+apply round_UP_succ; try assumption...
+split; try left; assumption.
+right; field.
+Qed.
+
+
+Theorem rnd_N_ge_half_an_ulp_pred: forall choice u v,
+ F u -> (0 < pred u)%R -> (u - (ulp (pred u))/2 < v)%R
+      -> (u <= round beta fexp (Znearest choice)  v)%R.
+Proof with auto with typeclass_instances.
+intros choice u v Fu Hu H.
+(* . *)
+assert (0 < u)%R.
+apply Rlt_trans with (1:= Hu).
+apply pred_lt_id.
+assert (0 < ulp (pred u) / 2)%R.
+unfold Rdiv; apply Rmult_lt_0_compat.
+unfold ulp; apply bpow_gt_0.
+auto with real.
+assert (ulp (pred u) / 2 < ulp (pred u))%R.
+apply Rlt_le_trans with (ulp (pred u) *1)%R;[idtac|right; ring].
+unfold Rdiv; apply Rmult_lt_compat_l.
+apply bpow_gt_0.
+apply Rmult_lt_reg_l with 2%R.
+auto with real.
+apply Rle_lt_trans with 1%R.
+right; field.
+rewrite Rmult_1_r; auto with real.
+(* *)
+apply Rnd_N_pt_monotone with F (u - ulp (pred u) / 2)%R v...
+2: apply round_N_pt...
+apply Rnd_UP_pt_N with (pred u).
+pattern (pred u) at 2; replace (pred u) with (round beta fexp Zfloor (u - ulp (pred u) / 2)).
+apply round_DN_pt...
+replace  (u - ulp (pred u) / 2)%R  with (pred u + ulp (pred u) / 2)%R.
+apply round_DN_succ; try assumption.
+apply generic_format_pred; assumption.
+split; [left|idtac]; assumption.
+pattern u at 3; rewrite <- (pred_plus_ulp u); try assumption.
+field.
+now apply Rgt_not_eq.
+pattern u at 3; replace u with (round beta fexp Zceil (u - ulp (pred u) / 2)).
+apply round_UP_pt...
+replace  (u - ulp (pred u) / 2)%R  with (pred u + ulp (pred u) / 2)%R.
+apply trans_eq with (pred u +ulp(pred u))%R.
+apply round_UP_succ; try assumption...
+apply generic_format_pred; assumption.
+split; [idtac|left]; assumption.
+apply pred_plus_ulp; try assumption.
+now apply Rgt_not_eq.
+pattern u at 3; rewrite <- (pred_plus_ulp u); try assumption.
+field.
+now apply Rgt_not_eq.
+pattern u at 4; rewrite <- (pred_plus_ulp u); try assumption.
+right; field.
+now apply Rgt_not_eq.
+Qed.
+
+
+Theorem rnd_N_ge_half_an_ulp: forall choice u v,
+  F u -> (0 < u)%R -> (u <> bpow (ln_beta beta u - 1))%R
+        -> (u - (ulp u)/2 < v)%R
+        -> (u <= round beta fexp (Znearest choice) v)%R.
+Proof with auto with typeclass_instances.
+intros choice u v Fu Hupos Hu H.
+(* *)
+assert (bpow (ln_beta beta u-1) <= pred u)%R.
+apply le_pred_lt; try assumption.
+apply generic_format_bpow.
+assert (canonic_exp beta fexp u < ln_beta beta u)%Z.
+apply ln_beta_generic_gt; try assumption.
+now apply Rgt_not_eq.
+unfold canonic_exp in H0.
+ring_simplify (ln_beta beta u - 1 + 1)%Z.
+omega.
+destruct ln_beta as (e,He); simpl in *.
+assert (bpow (e - 1) <= Rabs u)%R.
+apply He.
+now apply Rgt_not_eq.
+rewrite Rabs_right in H0.
+case H0; auto.
+intros T; contradict T.
+now apply sym_not_eq.
+apply Rle_ge; now left.
+assert (Hu2:(ulp (pred u) = ulp u)).
+unfold ulp, canonic_exp.
+apply f_equal; apply f_equal.
+apply ln_beta_unique.
+rewrite Rabs_right.
+split.
+assumption.
+apply Rlt_trans with (1:=pred_lt_id _).
+destruct ln_beta as (e,He); simpl in *.
+rewrite Rabs_right in He.
+apply He.
+now apply Rgt_not_eq.
+apply Rle_ge; now left.
+apply Rle_ge, pred_ge_0; assumption.
+apply rnd_N_ge_half_an_ulp_pred; try assumption.
+apply Rlt_le_trans with (2:=H0).
+apply bpow_gt_0.
+rewrite Hu2; assumption.
+Qed.
+
+
+Lemma round_N_DN_betw: forall choice x d u,
+   Rnd_DN_pt (generic_format beta fexp) x d ->
+   Rnd_UP_pt (generic_format beta fexp) x u ->
+     (d<=x<(d+u)/2)%R ->
+     round beta fexp (Znearest choice) x = d.
+Proof with auto with typeclass_instances.
+intros choice x d u Hd Hu H.
+apply Rnd_N_pt_unicity with (generic_format beta fexp) x d u; try assumption.
+intros Y.
+absurd (x < (d+u)/2)%R; try apply H.
+apply Rle_not_lt; right.
+apply Rplus_eq_reg_r with (-x)%R.
+apply trans_eq with (- (x-d)/2 + (u-x)/2)%R.
+field.
+rewrite Y; field.
+apply round_N_pt...
+apply Rnd_DN_UP_pt_N with d u...
+apply Hd.
+right; apply trans_eq with (-(d-x))%R;[idtac|ring].
+apply Rabs_left1.
+apply Rplus_le_reg_l with x; ring_simplify.
+apply H.
+rewrite Rabs_left1.
+apply Rplus_le_reg_l with (d+x)%R.
+apply Rmult_le_reg_l with (/2)%R.
+auto with real.
+apply Rle_trans with x.
+right; field.
+apply Rle_trans with ((d+u)/2)%R.
+now left.
+right; field.
+apply Rplus_le_reg_l with x; ring_simplify.
+apply H.
+Qed.
+
+
+Lemma round_N_UP_betw: forall choice x d u,
+   Rnd_DN_pt (generic_format beta fexp) x d ->
+   Rnd_UP_pt (generic_format beta fexp) x u ->
+     ((d+u)/2 < x <= u)%R ->
+     round beta fexp (Znearest choice) x = u.
+Proof with auto with typeclass_instances.
+intros choice x d u Hd Hu H.
+rewrite <- (Ropp_involutive (round beta fexp (Znearest choice) x )),
+  <- (Ropp_involutive u) .
+apply f_equal.
+rewrite <- (Ropp_involutive x) .
+rewrite round_N_opp, Ropp_involutive.
+apply round_N_DN_betw with (-d)%R.
+replace u with (round beta fexp Zceil x).
+rewrite <- round_DN_opp.
+apply round_DN_pt...
+apply Rnd_UP_pt_unicity with (generic_format beta fexp) x...
+apply round_UP_pt...
+replace d with (round beta fexp Zfloor x).
+rewrite <- round_UP_opp.
+apply round_UP_pt...
+apply Rnd_DN_pt_unicity with (generic_format beta fexp) x...
+apply round_DN_pt...
+split.
+apply Ropp_le_contravar, H.
+apply Rlt_le_trans with (-((d + u) / 2))%R.
+apply Ropp_lt_contravar, H.
+unfold Rdiv; right; ring.
+Qed.
+
 
 End Fcore_ulp.

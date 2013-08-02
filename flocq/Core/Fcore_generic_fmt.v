@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2011 Sylvie Boldo
+Copyright (C) 2010-2013 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2011 Guillaume Melquiond
+Copyright (C) 2010-2013 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -165,6 +165,22 @@ now rewrite Ztrunc_Z2R.
 now apply Zle_left.
 Qed.
 
+Lemma generic_format_F2R': forall (x:R) (f:float beta),
+       F2R f = x -> ((x <> 0)%R ->
+       (canonic_exp x <= Fexp f)%Z) ->
+       generic_format x.
+Proof.
+intros x f H1 H2.
+rewrite <- H1; destruct f as (m,e).
+apply  generic_format_F2R.
+simpl in *; intros H3.
+rewrite H1; apply H2.
+intros Y; apply H3.
+apply F2R_eq_0_reg with beta e.
+now rewrite H1.
+Qed.
+
+
 Theorem canonic_opp :
   forall m e,
   canonic (Float beta m e) ->
@@ -174,6 +190,26 @@ intros m e H.
 unfold canonic.
 now rewrite F2R_Zopp, canonic_exp_opp.
 Qed.
+
+Theorem canonic_abs :
+  forall m e,
+  canonic (Float beta m e) ->
+  canonic (Float beta (Zabs m) e).
+Proof.
+intros m e H.
+unfold canonic.
+now rewrite F2R_Zabs, canonic_exp_abs.
+Qed.
+
+Theorem canonic_0: canonic (Float beta 0 (fexp (ln_beta beta 0%R))).
+Proof.
+unfold canonic; simpl; unfold canonic_exp.
+replace (F2R {| Fnum := 0; Fexp := fexp (ln_beta beta 0) |}) with 0%R.
+reflexivity.
+unfold F2R; simpl; ring.
+Qed.
+
+
 
 Theorem canonic_unicity :
   forall f1 f2,
@@ -756,6 +792,24 @@ refine (let H := _ in conj (proj1 H) (Rlt_le _ _ (proj2 H))).
 now apply mantissa_small_pos.
 Qed.
 
+
+Theorem exp_small_round_0_pos :
+  forall x ex,
+ (bpow (ex - 1) <= x < bpow ex)%R ->
+   round x =R0 -> (ex <= fexp ex)%Z .
+Proof.
+intros x ex H H1.
+case (Zle_or_lt ex (fexp ex)); trivial; intros V.
+contradict H1.
+apply Rgt_not_eq.
+apply Rlt_le_trans with (bpow (ex-1)).
+apply bpow_gt_0.
+apply  (round_bounded_large_pos); assumption.
+Qed.
+
+
+
+
 Theorem generic_format_round_pos :
   forall x,
   (0 < x)%R ->
@@ -1013,6 +1067,24 @@ clear rnd Hr x.
 intros rnd' Hr x.
 apply round_bounded_large_pos...
 Qed.
+
+Theorem exp_small_round_0 :
+  forall rnd {Hr : Valid_rnd rnd} x ex,
+  (bpow (ex - 1) <= Rabs x < bpow ex)%R ->
+   round rnd x =R0 -> (ex <= fexp ex)%Z .
+Proof.
+intros rnd Hr x ex H1 H2.
+generalize Rabs_R0.
+rewrite <- H2 at 1.
+apply (round_abs_abs' (fun t rt => forall (ex : Z),
+(bpow (ex - 1) <= t < bpow ex)%R ->
+rt = 0%R -> (ex <= fexp ex)%Z)); trivial.
+clear; intros rnd Hr x Hx.
+now apply exp_small_round_0_pos.
+Qed.
+
+
+
 
 Section monotone_abs.
 
@@ -1282,6 +1354,33 @@ rewrite <- (F2R_0 beta (canonic_exp x)).
 rewrite <- mantissa_DN_small_pos with (1 := Hx) (2 := He).
 now rewrite <- canonic_exp_fexp_pos with (1 := Hx).
 Qed.
+
+
+Theorem round_DN_UP_lt :
+  forall x, ~ generic_format x ->
+  (round Zfloor x < x < round Zceil x)%R.
+Proof with auto with typeclass_instances.
+intros x Fx.
+assert (Hx:(round  Zfloor x <= x <= round Zceil x)%R).
+split.
+apply round_DN_pt.
+apply round_UP_pt.
+split.
+  destruct Hx as [Hx _].
+  apply Rnot_le_lt; intro Hle.
+  assert (x = round Zfloor x) by now apply Rle_antisym.
+  rewrite H in Fx.
+  contradict Fx.
+  apply generic_format_round...
+destruct Hx as [_ Hx].
+apply Rnot_le_lt; intro Hle.
+assert (x = round Zceil x) by now apply Rle_antisym.
+rewrite H in Fx.
+contradict Fx.
+apply generic_format_round...
+Qed.
+
+
 
 Theorem round_UP_small_pos :
   forall x ex,

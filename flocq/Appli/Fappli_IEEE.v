@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2011 Sylvie Boldo
+Copyright (C) 2010-2013 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2011 Guillaume Melquiond
+Copyright (C) 2010-2013 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -33,7 +33,7 @@ Section AnyRadix.
 Inductive full_float :=
   | F754_zero : bool -> full_float
   | F754_infinity : bool -> full_float
-  | F754_nan : full_float
+  | F754_nan : bool -> positive -> full_float
   | F754_finite : bool -> positive -> Z -> full_float.
 
 Definition FF2R beta x :=
@@ -67,16 +67,20 @@ Definition bounded m e :=
 Definition valid_binary x :=
   match x with
   | F754_finite _ m e => bounded m e
+  | F754_nan _ pl => (Z_of_nat' (S (digits2_Pnat pl)) <? prec)%Z
   | _ => true
   end.
 
 (** Basic type used for representing binary FP numbers.
     Note that there is exactly one such object per FP datum.
     NaNs do not have any payload. They cannot be distinguished. *)
+
+Definition nan_pl := {pl | (Z_of_nat' (S (digits2_Pnat pl)) <? prec)%Z  = true}.
+
 Inductive binary_float :=
   | B754_zero : bool -> binary_float
   | B754_infinity : bool -> binary_float
-  | B754_nan : binary_float
+  | B754_nan : bool -> nan_pl -> binary_float
   | B754_finite : bool ->
     forall (m : positive) (e : Z), bounded m e = true -> binary_float.
 
@@ -85,7 +89,7 @@ Definition FF2B x :=
   | F754_finite s m e => B754_finite s m e
   | F754_infinity s => fun _ => B754_infinity s
   | F754_zero s => fun _ => B754_zero s
-  | F754_nan => fun _ => B754_nan
+  | F754_nan b pl => fun H => B754_nan b (exist _ pl H)
   end.
 
 Definition B2FF x :=
@@ -93,7 +97,7 @@ Definition B2FF x :=
   | B754_finite s m e _ => F754_finite s m e
   | B754_infinity s => F754_infinity s
   | B754_zero s => F754_zero s
-  | B754_nan => F754_nan
+  | B754_nan b (exist pl _) => F754_nan b pl
   end.
 
 Definition radix2 := Build_radix 2 (refl_equal true).
@@ -108,30 +112,30 @@ Theorem FF2R_B2FF :
   forall x,
   FF2R radix2 (B2FF x) = B2R x.
 Proof.
-now intros [sx|sx| |sx mx ex Hx].
+now intros [sx|sx|sx [plx Hplx]|sx mx ex Hx].
 Qed.
 
 Theorem B2FF_FF2B :
   forall x Hx,
   B2FF (FF2B x Hx) = x.
 Proof.
-now intros [sx|sx| |sx mx ex] Hx.
+now intros [sx|sx|sx plx|sx mx ex] Hx.
 Qed.
 
 Theorem valid_binary_B2FF :
   forall x,
   valid_binary (B2FF x) = true.
 Proof.
-now intros [sx|sx| |sx mx ex Hx].
+now intros [sx|sx|sx [plx Hplx]|sx mx ex Hx].
 Qed.
 
 Theorem FF2B_B2FF :
   forall x H,
   FF2B (B2FF x) H = x.
 Proof.
-intros [sx|sx| |sx mx ex Hx] H ; try easy.
-apply f_equal.
-apply eqbool_irrelevance.
+intros [sx|sx|sx [plx Hplx]|sx mx ex Hx] H ; try easy.
+simpl. apply f_equal, f_equal, eqbool_irrelevance.
+apply f_equal, eqbool_irrelevance.
 Qed.
 
 Theorem FF2B_B2FF_valid :
@@ -146,7 +150,7 @@ Theorem B2R_FF2B :
   forall x Hx,
   B2R (FF2B x Hx) = FF2R radix2 x.
 Proof.
-now intros [sx|sx| |sx mx ex] Hx.
+now intros [sx|sx|sx plx|sx mx ex] Hx.
 Qed.
 
 Theorem match_FF2B :
@@ -154,17 +158,17 @@ Theorem match_FF2B :
   match FF2B x Hx return T with
   | B754_zero sx => fz sx
   | B754_infinity sx => fi sx
-  | B754_nan => fn
+  | B754_nan b (exist p _) => fn b p
   | B754_finite sx mx ex _ => ff sx mx ex
   end =
   match x with
   | F754_zero sx => fz sx
   | F754_infinity sx => fi sx
-  | F754_nan => fn
+  | F754_nan b p => fn b p
   | F754_finite sx mx ex => ff sx mx ex
   end.
 Proof.
-now intros T fz fi fn ff [sx|sx| |sx mx ex] Hx.
+now intros T fz fi fn ff [sx|sx|sx plx|sx mx ex] Hx.
 Qed.
 
 Theorem canonic_canonic_mantissa :
@@ -189,11 +193,20 @@ Theorem generic_format_B2R :
   forall x,
   generic_format radix2 fexp (B2R x).
 Proof.
-intros [sx|sx| |sx mx ex Hx] ; try apply generic_format_0.
+intros [sx|sx|sx plx|sx mx ex Hx] ; try apply generic_format_0.
 simpl.
 apply generic_format_canonic.
 apply canonic_canonic_mantissa.
 now destruct (andb_prop _ _ Hx) as (H, _).
+Qed.
+
+Theorem FLT_format_B2R :
+  forall x,
+  FLT_format radix2 emin prec (B2R x).
+Proof with auto with typeclass_instances.
+intros x.
+apply FLT_format_generic...
+apply generic_format_B2R.
 Qed.
 
 Theorem B2FF_inj :
@@ -201,7 +214,7 @@ Theorem B2FF_inj :
   B2FF x = B2FF y ->
   x = y.
 Proof.
-intros [sx|sx| |sx mx ex Hx] [sy|sy| |sy my ey Hy] ; try easy.
+intros [sx|sx|sx [plx Hplx]|sx mx ex Hx] [sy|sy|sy [ply Hply]|sy my ey Hy] ; try easy.
 (* *)
 intros H.
 now inversion H.
@@ -212,11 +225,18 @@ now inversion H.
 intros H.
 inversion H.
 clear H.
+revert Hplx.
+rewrite H2.
+intros Hx.
+apply f_equal, f_equal, eqbool_irrelevance.
+(* *)
+intros H.
+inversion H.
+clear H.
 revert Hx.
 rewrite H2, H3.
 intros Hx.
-apply f_equal.
-apply eqbool_irrelevance.
+apply f_equal, eqbool_irrelevance.
 Qed.
 
 Definition is_finite_strict f :=
@@ -265,6 +285,29 @@ apply f_equal.
 apply eqbool_irrelevance.
 Qed.
 
+Definition Bsign x :=
+  match x with
+  | B754_nan s _ => s
+  | B754_zero s => s
+  | B754_infinity s => s
+  | B754_finite s _ _ _ => s
+  end.
+
+Definition sign_FF x :=
+  match x with
+  | F754_nan s _ => s
+  | F754_zero s => s
+  | F754_infinity s => s
+  | F754_finite s _ _ => s
+  end.
+
+Theorem Bsign_FF2B :
+  forall x H,
+  Bsign (FF2B x H) = sign_FF x.
+Proof.
+now intros [sx|sx|sx plx|sx mx ex] H.
+Qed.
+
 Definition is_finite f :=
   match f with
   | B754_finite _ _ _ _ => true
@@ -290,41 +333,92 @@ Theorem is_finite_FF_B2FF :
   forall x,
   is_finite_FF (B2FF x) = is_finite x.
 Proof.
+now intros [| |? []|].
+Qed.
+
+Theorem B2R_Bsign_inj:
+  forall x y : binary_float,
+    is_finite x = true ->
+    is_finite y = true ->
+    B2R x = B2R y ->
+    Bsign x = Bsign y ->
+    x = y.
+Proof.
+intros. destruct x, y; try (apply B2R_inj; now eauto).
+- simpl in H2. congruence.
+- symmetry in H1. apply Rmult_integral in H1.
+  destruct H1. apply eq_Z2R with (n:=0%Z) in H1. destruct b0; discriminate H1.
+  simpl in H1. pose proof (bpow_gt_0 radix2 e).
+  rewrite H1 in H3. apply Rlt_irrefl in H3. destruct H3.
+- apply Rmult_integral in H1.
+  destruct H1. apply eq_Z2R with (n:=0%Z) in H1. destruct b; discriminate H1.
+  simpl in H1. pose proof (bpow_gt_0 radix2 e).
+  rewrite H1 in H3. apply Rlt_irrefl in H3. destruct H3.
+Qed.
+
+Definition is_nan f :=
+  match f with
+  | B754_nan _ _ => true
+  | _ => false
+  end.
+
+Definition is_nan_FF f :=
+  match f with
+  | F754_nan _ _ => true
+  | _ => false
+  end.
+
+Theorem is_nan_FF2B :
+  forall x Hx,
+  is_nan (FF2B x Hx) = is_nan_FF x.
+Proof.
 now intros [| | |].
 Qed.
 
-Definition Bopp x :=
+Theorem is_nan_FF_B2FF :
+  forall x,
+  is_nan_FF (B2FF x) = is_nan x.
+Proof.
+now intros [| |? []|].
+Qed.
+
+Definition Bopp opp_nan x :=
   match x with
-  | B754_nan => x
+  | B754_nan sx plx =>
+    let '(sres, plres) := opp_nan sx plx in B754_nan sres plres
   | B754_infinity sx => B754_infinity (negb sx)
   | B754_finite sx mx ex Hx => B754_finite (negb sx) mx ex Hx
   | B754_zero sx => B754_zero (negb sx)
   end.
 
 Theorem Bopp_involutive :
-  forall x, Bopp (Bopp x) = x.
+  forall opp_nan x,
+  is_nan x = false ->
+  Bopp opp_nan (Bopp opp_nan x) = x.
 Proof.
-now intros [sx|sx| |sx mx ex Hx] ; simpl ; try rewrite Bool.negb_involutive.
+now intros opp_nan [sx|sx|sx plx|sx mx ex Hx] ; simpl ; try rewrite Bool.negb_involutive.
 Qed.
 
 Theorem B2R_Bopp :
-  forall x,
-  B2R (Bopp x) = (- B2R x)%R.
+  forall opp_nan x,
+  B2R (Bopp opp_nan x) = (- B2R x)%R.
 Proof.
-intros [sx|sx| |sx mx ex Hx] ; apply sym_eq ; try apply Ropp_0.
+intros opp_nan [sx|sx|sx plx|sx mx ex Hx]; apply sym_eq ; try apply Ropp_0.
+simpl. destruct opp_nan. apply Ropp_0.
 simpl.
 rewrite <- F2R_opp.
 now case sx.
 Qed.
 
-
-Theorem is_finite_Bopp: forall x,
-  is_finite (Bopp x) = is_finite x.
+Theorem is_finite_Bopp :
+  forall opp_nan x,
+  is_finite (Bopp opp_nan x) = is_finite x.
 Proof.
-now intros [| | |].
+intros opp_nan [| | |] ; try easy.
+intros s pl.
+simpl.
+now case opp_nan.
 Qed.
-
-
 
 Theorem bounded_lt_emax :
   forall mx ex,
@@ -361,7 +455,7 @@ Theorem abs_B2R_lt_emax :
   forall x,
   (Rabs (B2R x) < bpow radix2 emax)%R.
 Proof.
-intros [sx|sx| |sx mx ex Hx] ; simpl ; try ( rewrite Rabs_R0 ; apply bpow_gt_0 ).
+intros [sx|sx|sx plx|sx mx ex Hx] ; simpl ; try ( rewrite Rabs_R0 ; apply bpow_gt_0 ).
 rewrite <- F2R_Zabs, abs_cond_Zopp.
 now apply bounded_lt_emax.
 Qed.
@@ -638,7 +732,7 @@ Definition binary_round_aux mode sx mx ex lx :=
   match shr_m mrs'' with
   | Z0 => F754_zero sx
   | Zpos m => if Zle_bool e'' (emax - prec) then F754_finite sx m e'' else binary_overflow mode sx
-  | _ => F754_nan (* dummy *)
+  | _ => F754_nan false xH (* dummy *)
   end.
 
 Theorem binary_round_aux_correct :
@@ -649,7 +743,7 @@ Theorem binary_round_aux_correct :
   valid_binary z = true /\
   if Rlt_bool (Rabs (round radix2 fexp (round_mode mode) x)) (bpow radix2 emax) then
     FF2R radix2 z = round radix2 fexp (round_mode mode) x /\
-    is_finite_FF z = true
+    is_finite_FF z = true /\ sign_FF z = Rlt_bool x 0
   else
     z = binary_overflow mode (Rlt_bool x 0).
 Proof with auto with typeclass_instances.
@@ -818,29 +912,6 @@ exact inbetween_int_UP_sign.
 exact inbetween_int_NA_sign.
 Qed.
 
-Definition Bsign x :=
-  match x with
-  | B754_nan => false
-  | B754_zero s => s
-  | B754_infinity s => s
-  | B754_finite s _ _ _ => s
-  end.
-
-Definition sign_FF x :=
-  match x with
-  | F754_nan => false
-  | F754_zero s => s
-  | F754_infinity s => s
-  | F754_finite s _ _ => s
-  end.
-
-Theorem Bsign_FF2B :
-  forall x H,
-  Bsign (FF2B x H) = sign_FF x.
-Proof.
-now intros [sx|sx| |sx mx ex] H.
-Qed.
-
 (** Multiplication *)
 
 Lemma Bmult_correct_aux :
@@ -851,7 +922,7 @@ Lemma Bmult_correct_aux :
   valid_binary z = true /\
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (x * y))) (bpow radix2 emax) then
     FF2R radix2 z = round radix2 fexp (round_mode m) (x * y) /\
-    is_finite_FF z = true
+    is_finite_FF z = true /\ sign_FF z = xorb sx sy
   else
     z = binary_overflow m (xorb sx sy).
 Proof.
@@ -896,15 +967,15 @@ apply Rlt_bool_false.
 now apply F2R_ge_0_compat.
 Qed.
 
-Definition Bmult m x y :=
+Definition Bmult mult_nan m x y :=
+  let f pl := B754_nan (fst pl) (snd pl) in
   match x, y with
-  | B754_nan, _ => x
-  | _, B754_nan => y
+  | B754_nan _ _, _ | _, B754_nan _ _ => f (mult_nan x y)
   | B754_infinity sx, B754_infinity sy => B754_infinity (xorb sx sy)
   | B754_infinity sx, B754_finite sy _ _ _ => B754_infinity (xorb sx sy)
   | B754_finite sx _ _ _, B754_infinity sy => B754_infinity (xorb sx sy)
-  | B754_infinity _, B754_zero _ => B754_nan
-  | B754_zero _, B754_infinity _ => B754_nan
+  | B754_infinity _, B754_zero _ => f (mult_nan x y)
+  | B754_zero _, B754_infinity _ => f (mult_nan x y)
   | B754_finite sx _ _ _, B754_zero sy => B754_zero (xorb sx sy)
   | B754_zero sx, B754_finite sy _ _ _ => B754_zero (xorb sx sy)
   | B754_zero sx, B754_zero sy => B754_zero (xorb sx sy)
@@ -913,36 +984,40 @@ Definition Bmult m x y :=
   end.
 
 Theorem Bmult_correct :
-  forall m x y,
+  forall mult_nan m x y,
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (B2R x * B2R y))) (bpow radix2 emax) then
-    B2R (Bmult m x y) = round radix2 fexp (round_mode m) (B2R x * B2R y) /\
-    is_finite (Bmult m x y) = andb (is_finite x) (is_finite y)
+    B2R (Bmult mult_nan m x y) = round radix2 fexp (round_mode m) (B2R x * B2R y) /\
+    is_finite (Bmult mult_nan m x y) = andb (is_finite x) (is_finite y) /\
+    (is_nan (Bmult mult_nan m x y) = false ->
+      Bsign (Bmult mult_nan m x y) = xorb (Bsign x) (Bsign y))
   else
-    B2FF (Bmult m x y) = binary_overflow m (xorb (Bsign x) (Bsign y)).
+    B2FF (Bmult mult_nan m x y) = binary_overflow m (xorb (Bsign x) (Bsign y)).
 Proof.
-intros m [sx|sx| |sx mx ex Hx] [sy|sy| |sy my ey Hy] ;
-  try ( rewrite ?Rmult_0_r, ?Rmult_0_l, round_0, Rabs_R0, Rlt_bool_true ; [ split ; apply refl_equal | apply bpow_gt_0 | auto with typeclass_instances ] ).
+intros mult_nan m [sx|sx|sx plx|sx mx ex Hx] [sy|sy|sy ply|sy my ey Hy] ;
+  try ( rewrite ?Rmult_0_r, ?Rmult_0_l, round_0, Rabs_R0, Rlt_bool_true ; [ now repeat constructor | apply bpow_gt_0 | now auto with typeclass_instances ] ).
 simpl.
 case Bmult_correct_aux.
 intros H1.
 case Rlt_bool.
-intros (H2, H3).
+intros (H2, (H3, H4)).
 split.
 now rewrite B2R_FF2B.
+split.
 now rewrite is_finite_FF2B.
+rewrite Bsign_FF2B. auto.
 intros H2.
 now rewrite B2FF_FF2B.
 Qed.
 
-Definition Bmult_FF m x y :=
+Definition Bmult_FF mult_nan m x y :=
+  let f pl := F754_nan (fst pl) (snd pl) in
   match x, y with
-  | F754_nan, _ => x
-  | _, F754_nan => y
+  | F754_nan _ _, _ | _, F754_nan _ _ => f (mult_nan x y)
   | F754_infinity sx, F754_infinity sy => F754_infinity (xorb sx sy)
   | F754_infinity sx, F754_finite sy _ _ => F754_infinity (xorb sx sy)
   | F754_finite sx _ _, F754_infinity sy => F754_infinity (xorb sx sy)
-  | F754_infinity _, F754_zero _ => F754_nan
-  | F754_zero _, F754_infinity _ => F754_nan
+  | F754_infinity _, F754_zero _ => f (mult_nan x y)
+  | F754_zero _, F754_infinity _ => f (mult_nan x y)
   | F754_finite sx _ _, F754_zero sy => F754_zero (xorb sx sy)
   | F754_zero sx, F754_finite sy _ _ => F754_zero (xorb sx sy)
   | F754_zero sx, F754_zero sy => F754_zero (xorb sx sy)
@@ -951,13 +1026,19 @@ Definition Bmult_FF m x y :=
   end.
 
 Theorem B2FF_Bmult :
+  forall mult_nan mult_nan_ff,
   forall m x y,
-  B2FF (Bmult m x y) = Bmult_FF m (B2FF x) (B2FF y).
+  mult_nan_ff (B2FF x) (B2FF y) = (let '(sr, exist plr _) := mult_nan x y in (sr, plr)) ->
+  B2FF (Bmult mult_nan m x y) = Bmult_FF mult_nan_ff m (B2FF x) (B2FF y).
 Proof.
-intros m [sx|sx| |sx mx ex Hx] [sy|sy| |sy my ey Hy] ; try easy.
+intros mult_nan mult_nan_ff m x y Hmult_nan.
+unfold Bmult_FF. rewrite Hmult_nan.
+destruct x as [sx|sx|sx [plx Hplx]|sx mx ex Hx], y as [sy|sy|sy [ply Hply]|sy my ey Hy] ;
+  simpl; try match goal with |- context [mult_nan ?x ?y] =>
+               destruct (mult_nan x y) as [? []] end;
+  try easy.
 apply B2FF_FF2B.
 Qed.
-
 
 Definition shl_align mx ex ex' :=
   match (ex' - ex)%Z with
@@ -1049,7 +1130,8 @@ Theorem binary_round_correct :
   let x := F2R (Float radix2 (cond_Zopp sx (Zpos mx)) ex) in
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) x)) (bpow radix2 emax) then
     FF2R radix2 z = round radix2 fexp (round_mode m) x /\
-    is_finite_FF z = true
+    is_finite_FF z = true /\
+    sign_FF z = sx
   else
     z = binary_overflow m sx.
 Proof.
@@ -1084,22 +1166,35 @@ Theorem binary_normalize_correct :
   forall m mx ex szero,
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (F2R (Float radix2 mx ex)))) (bpow radix2 emax) then
     B2R (binary_normalize m mx ex szero) = round radix2 fexp (round_mode m) (F2R (Float radix2 mx ex)) /\
-    is_finite (binary_normalize m mx ex szero) = true
+    is_finite (binary_normalize m mx ex szero) = true /\
+    Bsign (binary_normalize m mx ex szero) =
+      match Rcompare (F2R (Float radix2 mx ex)) 0 with
+        | Eq => szero
+        | Lt => true
+        | Gt => false
+      end
   else
     B2FF (binary_normalize m mx ex szero) = binary_overflow m (Rlt_bool (F2R (Float radix2 mx ex)) 0).
 Proof with auto with typeclass_instances.
 intros m mx ez szero.
 destruct mx as [|mz|mz] ; simpl.
 rewrite F2R_0, round_0, Rabs_R0, Rlt_bool_true...
+split... split...
+rewrite Rcompare_Eq...
 apply bpow_gt_0.
 (* . mz > 0 *)
 generalize (binary_round_correct m false mz ez).
 simpl.
 case Rlt_bool_spec.
-intros _ (Vz, (Rz, Rz')).
+intros _ (Vz, (Rz, (Rz', Rz''))).
 split.
 now rewrite B2R_FF2B.
+split.
 now rewrite is_finite_FF2B.
+rewrite Bsign_FF2B, Rz''.
+rewrite Rcompare_Gt...
+apply F2R_gt_0_compat.
+simpl. zify; omega.
 intros Hz' (Vz, Rz).
 rewrite B2FF_FF2B, Rz.
 apply f_equal.
@@ -1110,10 +1205,15 @@ now apply F2R_ge_0_compat.
 generalize (binary_round_correct m true mz ez).
 simpl.
 case Rlt_bool_spec.
-intros _ (Vz, (Rz, Rz')).
+intros _ (Vz, (Rz, (Rz', Rz''))).
 split.
 now rewrite B2R_FF2B.
+split.
 now rewrite is_finite_FF2B.
+rewrite Bsign_FF2B, Rz''.
+rewrite Rcompare_Lt...
+apply F2R_lt_0_compat.
+simpl. zify; omega.
 intros Hz' (Vz, Rz).
 rewrite B2FF_FF2B, Rz.
 apply f_equal.
@@ -1123,12 +1223,12 @@ now apply F2R_lt_0_compat.
 Qed.
 
 (** Addition *)
-Definition Bplus m x y :=
+Definition Bplus plus_nan m x y :=
+  let f pl := B754_nan (fst pl) (snd pl) in
   match x, y with
-  | B754_nan, _ => x
-  | _, B754_nan => y
+  | B754_nan _ _, _ | _, B754_nan _ _ => f (plus_nan x y)
   | B754_infinity sx, B754_infinity sy =>
-    if Bool.eqb sx sy then x else B754_nan
+    if Bool.eqb sx sy then x else f (plus_nan x y)
   | B754_infinity _, _ => x
   | _, B754_infinity _ => y
   | B754_zero sx, B754_zero sy =>
@@ -1143,28 +1243,47 @@ Definition Bplus m x y :=
   end.
 
 Theorem Bplus_correct :
-  forall m x y,
+  forall plus_nan m x y,
   is_finite x = true ->
   is_finite y = true ->
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (B2R x + B2R y))) (bpow radix2 emax) then
-    B2R (Bplus m x y) = round radix2 fexp (round_mode m) (B2R x + B2R y) /\
-    is_finite (Bplus m x y) = true
+    B2R (Bplus plus_nan m x y) = round radix2 fexp (round_mode m) (B2R x + B2R y) /\
+    is_finite (Bplus plus_nan m x y) = true /\
+    Bsign (Bplus plus_nan m x y) =
+      match Rcompare (B2R x + B2R y) 0 with
+        | Eq => match m with mode_DN => orb (Bsign x) (Bsign y)
+                                 | _ => andb (Bsign x) (Bsign y) end
+        | Lt => true
+        | Gt => false
+      end
   else
-    (B2FF (Bplus m x y) = binary_overflow m (Bsign x) /\ Bsign x = Bsign y).
+    (B2FF (Bplus plus_nan m x y) = binary_overflow m (Bsign x) /\ Bsign x = Bsign y).
 Proof with auto with typeclass_instances.
-intros m [sx|sx| |sx mx ex Hx] [sy|sy| |sy my ey Hy] Fx Fy ; try easy.
+intros plus_nan m [sx|sx| |sx mx ex Hx] [sy|sy| |sy my ey Hy] Fx Fy ; try easy.
 (* *)
 rewrite Rplus_0_r, round_0, Rabs_R0, Rlt_bool_true...
 simpl.
-case (Bool.eqb sx sy) ; try easy.
-now case m.
+rewrite Rcompare_Eq by auto.
+destruct sx, sy; try easy; now case m.
 apply bpow_gt_0.
 (* *)
 rewrite Rplus_0_l, round_generic, Rlt_bool_true...
+split... split...
+simpl. unfold F2R.
+erewrite <- Rmult_0_l, Rcompare_mult_r.
+rewrite Rcompare_Z2R with (y:=0%Z).
+destruct sy...
+apply bpow_gt_0.
 apply abs_B2R_lt_emax.
 apply generic_format_B2R.
 (* *)
 rewrite Rplus_0_r, round_generic, Rlt_bool_true...
+split... split...
+simpl. unfold F2R.
+erewrite <- Rmult_0_l, Rcompare_mult_r.
+rewrite Rcompare_Z2R with (y:=0%Z).
+destruct sx...
+apply bpow_gt_0.
 apply abs_B2R_lt_emax.
 apply generic_format_B2R.
 (* *)
@@ -1264,7 +1383,19 @@ now apply F2R_le_0_compat.
 (* . *)
 generalize (binary_normalize_correct m mz ez szero).
 case Rlt_bool_spec.
-easy.
+split; try easy. split; try easy.
+destruct (Rcompare_spec (F2R (beta:=radix2) {| Fnum := mz; Fexp := ez |}) 0); try easy.
+rewrite H1 in Hp.
+apply Rplus_opp_r_uniq in Hp.
+rewrite <- F2R_Zopp in Hp.
+eapply canonic_unicity in Hp.
+inversion Hp. destruct sy, sx, m; try discriminate H3; easy.
+apply canonic_canonic_mantissa.
+apply Bool.andb_true_iff in Hy. easy.
+replace (-cond_Zopp sx (Z.pos mx))%Z with  (cond_Zopp (negb sx) (Z.pos mx))
+  by (destruct sx; auto).
+apply canonic_canonic_mantissa.
+apply Bool.andb_true_iff in Hx. easy.
 intros Hz' Vz.
 specialize (Sz Hz').
 split.
@@ -1273,26 +1404,32 @@ now apply f_equal.
 apply Sz.
 Qed.
 
-Definition Bminus m x y := Bplus m x (Bopp y).
+Definition Bminus minus_nan m x y := Bplus minus_nan m x (Bopp pair y).
 
 Theorem Bminus_correct :
-  forall m x y,
+  forall minus_nan m x y,
   is_finite x = true ->
   is_finite y = true ->
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (B2R x - B2R y))) (bpow radix2 emax) then
-    B2R (Bminus m x y) = round radix2 fexp (round_mode m) (B2R x - B2R y) /\
-    is_finite (Bminus m x y) = true
+    B2R (Bminus minus_nan m x y) = round radix2 fexp (round_mode m) (B2R x - B2R y) /\
+    is_finite (Bminus minus_nan m x y) = true /\
+    Bsign (Bminus minus_nan m x y) =
+      match Rcompare (B2R x - B2R y) 0 with
+        | Eq => match m with mode_DN => orb (Bsign x) (negb (Bsign y))
+                                 | _ => andb (Bsign x) (negb (Bsign y)) end
+        | Lt => true
+        | Gt => false
+      end
   else
-    (B2FF (Bminus m x y) = binary_overflow m (Bsign x) /\ Bsign x = negb (Bsign y)).
+    (B2FF (Bminus minus_nan m x y) = binary_overflow m (Bsign x) /\ Bsign x = negb (Bsign y)).
 Proof with auto with typeclass_instances.
-intros m x y Fx Fy.
-replace (negb (Bsign y)) with (Bsign (Bopp y)).
+intros m minus_nan x y Fx Fy.
+replace (negb (Bsign y)) with (Bsign (Bopp pair y)).
 unfold Rminus.
-rewrite <- B2R_Bopp.
+erewrite <- B2R_Bopp.
 apply Bplus_correct.
 exact Fx.
-now rewrite is_finite_Bopp.
-now destruct y as [ | | | ].
+rewrite is_finite_Bopp. auto. now destruct y as [ | | | ].
 Qed.
 
 (** Division *)
@@ -1316,12 +1453,12 @@ Lemma Bdiv_correct_aux :
     let '(mz, ez, lz) := Fdiv_core_binary (Zpos mx) ex (Zpos my) ey in
     match mz with
     | Zpos mz => binary_round_aux m (xorb sx sy) mz ez lz
-    | _ => F754_nan (* dummy *)
+    | _ => F754_nan false xH (* dummy *)
     end in
   valid_binary z = true /\
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (x / y))) (bpow radix2 emax) then
     FF2R radix2 z = round radix2 fexp (round_mode m) (x / y) /\
-    is_finite_FF z = true
+    is_finite_FF z = true /\ sign_FF z = xorb sx sy
   else
     z = binary_overflow m (xorb sx sy).
 Proof.
@@ -1406,45 +1543,49 @@ apply Rinv_0_lt_compat.
 now apply F2R_gt_0_compat.
 Qed.
 
-Definition Bdiv m x y :=
+Definition Bdiv div_nan m x y :=
+  let f pl := B754_nan (fst pl) (snd pl) in
   match x, y with
-  | B754_nan, _ => x
-  | _, B754_nan => y
-  | B754_infinity sx, B754_infinity sy => B754_nan
+  | B754_nan _ _, _ | _, B754_nan _ _ => f (div_nan x y)
+  | B754_infinity sx, B754_infinity sy => f (div_nan x y)
   | B754_infinity sx, B754_finite sy _ _ _ => B754_infinity (xorb sx sy)
   | B754_finite sx _ _ _, B754_infinity sy => B754_zero (xorb sx sy)
   | B754_infinity sx, B754_zero sy => B754_infinity (xorb sx sy)
   | B754_zero sx, B754_infinity sy => B754_zero (xorb sx sy)
   | B754_finite sx _ _ _, B754_zero sy => B754_infinity (xorb sx sy)
   | B754_zero sx, B754_finite sy _ _ _ => B754_zero (xorb sx sy)
-  | B754_zero sx, B754_zero sy => B754_nan
+  | B754_zero sx, B754_zero sy => f (div_nan x y)
   | B754_finite sx mx ex _, B754_finite sy my ey _ =>
     FF2B _ (proj1 (Bdiv_correct_aux m sx mx ex sy my ey))
   end.
 
 Theorem Bdiv_correct :
-  forall m x y,
+  forall div_nan m x y,
   B2R y <> R0 ->
   if Rlt_bool (Rabs (round radix2 fexp (round_mode m) (B2R x / B2R y))) (bpow radix2 emax) then
-    B2R (Bdiv m x y) = round radix2 fexp (round_mode m) (B2R x / B2R y) /\
-    is_finite (Bdiv m x y) = is_finite x
+    B2R (Bdiv div_nan m x y) = round radix2 fexp (round_mode m) (B2R x / B2R y) /\
+    is_finite (Bdiv div_nan m x y) = is_finite x /\
+    (is_nan (Bdiv div_nan m x y) = false ->
+      Bsign (Bdiv div_nan m x y) = xorb (Bsign x) (Bsign y))
   else
-    B2FF (Bdiv m x y) = binary_overflow m (xorb (Bsign x) (Bsign y)).
+    B2FF (Bdiv div_nan m x y) = binary_overflow m (xorb (Bsign x) (Bsign y)).
 Proof.
-intros m x [sy|sy| |sy my ey Hy] Zy ; try now elim Zy.
+intros div_nan m x [sy|sy|sy ply|sy my ey Hy] Zy ; try now elim Zy.
 revert x.
 unfold Rdiv.
-intros [sx|sx| |sx mx ex Hx] ;
-  try ( rewrite Rmult_0_l, round_0, Rabs_R0, Rlt_bool_true ; [ split ; apply refl_equal | apply bpow_gt_0 | auto with typeclass_instances ] ).
+intros [sx|sx|sx plx|sx mx ex Hx] ;
+  try ( rewrite Rmult_0_l, round_0, Rabs_R0, Rlt_bool_true ; [ now repeat constructor | apply bpow_gt_0 | auto with typeclass_instances ] ).
 simpl.
 case Bdiv_correct_aux.
 intros H1.
 unfold Rdiv.
 case Rlt_bool.
-intros (H2, H3).
+intros (H2, (H3, H4)).
 split.
 now rewrite B2R_FF2B.
+split.
 now rewrite is_finite_FF2B.
+rewrite Bsign_FF2B. congruence.
 intros H2.
 now rewrite B2FF_FF2B.
 Qed.
@@ -1473,11 +1614,11 @@ Lemma Bsqrt_correct_aux :
     let '(mz, ez, lz) := Fsqrt_core_binary (Zpos mx) ex in
     match mz with
     | Zpos mz => binary_round_aux m false mz ez lz
-    | _ => F754_nan (* dummy *)
+    | _ => F754_nan false xH (* dummy *)
     end in
   valid_binary z = true /\
   FF2R radix2 z = round radix2 fexp (round_mode m) (sqrt x) /\
-  is_finite_FF z = true.
+  is_finite_FF z = true /\ sign_FF z = false.
 Proof with auto with typeclass_instances.
 intros m mx ex Hx.
 replace (Fsqrt_core_binary (Zpos mx) ex) with (Fsqrt_core radix2 prec (Zpos mx) ex).
@@ -1578,28 +1719,30 @@ now case mz.
 apply sqrt_ge_0.
 Qed.
 
-Definition Bsqrt m x :=
+Definition Bsqrt sqrt_nan m x :=
+  let f pl := B754_nan (fst pl) (snd pl) in
   match x with
-  | B754_nan => x
+  | B754_nan sx plx => f (sqrt_nan x)
   | B754_infinity false => x
-  | B754_infinity true => B754_nan
-  | B754_finite true _ _ _ => B754_nan
+  | B754_infinity true => f (sqrt_nan x)
+  | B754_finite true _ _ _ => f (sqrt_nan x)
   | B754_zero _ => x
   | B754_finite sx mx ex Hx =>
     FF2B _ (proj1 (Bsqrt_correct_aux m mx ex Hx))
   end.
 
 Theorem Bsqrt_correct :
-  forall m x,
-  B2R (Bsqrt m x) = round radix2 fexp (round_mode m) (sqrt (B2R x)) /\
-  is_finite (Bsqrt m x) = match x with B754_zero _ => true | B754_finite false _ _ _ => true | _ => false end.
+  forall sqrt_nan m x,
+  B2R (Bsqrt sqrt_nan m x) = round radix2 fexp (round_mode m) (sqrt (B2R x)) /\
+  is_finite (Bsqrt sqrt_nan m x) = match x with B754_zero _ => true | B754_finite false _ _ _ => true | _ => false end /\
+  (is_nan (Bsqrt sqrt_nan m x) = false -> Bsign (Bsqrt sqrt_nan m x) = Bsign x).
 Proof.
-intros m [sx|[|]| |sx mx ex Hx] ; try ( now simpl ; rewrite sqrt_0, round_0 ; auto with typeclass_instances ).
+intros sqrt_nan m [sx|[|]| |sx mx ex Hx] ; try ( now simpl ; rewrite sqrt_0, round_0 ; intuition auto with typeclass_instances ).
 simpl.
 case Bsqrt_correct_aux.
-intros H1 (H2, H3).
+intros H1 (H2, (H3, H4)).
 case sx.
-refine (conj _ (refl_equal false)).
+refine (conj _ (conj (refl_equal false) _)).
 apply sym_eq.
 unfold sqrt.
 case Rcase_abs.
@@ -1609,9 +1752,12 @@ auto with typeclass_instances.
 intros H.
 elim Rge_not_lt with (1 := H).
 now apply F2R_lt_0_compat.
+easy.
 split.
 now rewrite B2R_FF2B.
+split.
 now rewrite is_finite_FF2B.
+intro. rewrite Bsign_FF2B. auto.
 Qed.
 
 End Binary.

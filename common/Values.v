@@ -1051,11 +1051,6 @@ Proof.
   intros; destruct x; simpl; auto. decEq. apply Int.rolm_zero.
 Qed.
 
-Theorem addf_commut: forall x y, addf x y = addf y x.
-Proof.
-  destruct x; destruct y; simpl; auto. decEq. apply Float.addf_commut.
-Qed.
-
 Theorem negate_cmp_bool:
   forall c x y, cmp_bool (negate_comparison c) x y = option_map negb (cmp_bool c x y).
 Proof.

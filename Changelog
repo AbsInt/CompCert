@@ -1,6 +1,8 @@
 Development trunk:
 ==================
 
+- More precise modeling of not-a-numbers (NaNs) in floating-point
+  arithmetic.
 - Optimize integer divisions by positive constants, turning them into
   multiply-high and shifts.
 - Avoid double rounding issues in conversion from 64-bit integers

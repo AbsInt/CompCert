@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2011 Sylvie Boldo
+Copyright (C) 2011-2013 Sylvie Boldo
 #<br />#
-Copyright (C) 2011 Guillaume Melquiond
+Copyright (C) 2011-2013 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,4 +28,4 @@ Definition Flocq_version := Eval vm_compute in
     | String h t => parse t major (minor + N_of_ascii h - N_of_ascii "0"%char)%N
     | Empty_string => (major * 100 + minor)%N
     end in
-  parse "2.1.0"%string N0 N0.
+  parse "2.2.0"%string N0 N0.
