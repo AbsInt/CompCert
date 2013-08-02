@@ -17,7 +17,12 @@ TESTS=int32 int64 floats floats-basics \
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 bitfields8 \
-  builtins-$(ARCH) packedstruct1 packedstruct2 \
+  builtins-$(ARCH) packedstruct1 packedstruct2
+
+# Can run, both in compiled mode and in interpreter mode,
+# but produce processor-dependent results, so no reference output in Results
+
+TESTS_DIFF=NaNs
 
 # Other tests: should compile to .s without errors (but expect warnings)
 
@@ -28,9 +33,9 @@ EXTRAS=annot1 commaprec expr2 expr3 expr4 extern1 funct2 funptr1 init1 \
 # Test known to fail
 FAILURES=funct1 varargs1
 
-all: $(TESTS:%=%.compcert) $(TESTS_COMP:%=%.compcert) $(EXTRAS:%=%.s)
+all: $(TESTS:%=%.compcert) $(TESTS_COMP:%=%.compcert) $(TESTS_DIFF:%=%.compcert) $(EXTRAS:%=%.s)
 
-all_s: $(TESTS:%=%.s) $(TESTS_COMP:%=%.s) $(EXTRAS:%=%.s)
+all_s: $(TESTS:%=%.s) $(TESTS_COMP:%=%.s) $(TESTS_DIFF:%=%.s) $(EXTRAS:%=%.s)
 
 %.compcert: %.c $(CCOMP)
 	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)
@@ -48,12 +53,23 @@ test:
            then echo "$$i: passed"; \
            else echo "$$i: FAILED"; \
 	   fi; \
-         done;
+         done
 	@for i in $(TESTS); do \
            if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \
              if cmp -s _cinterp.log Results/$$i; \
              then echo "$$i: interpreter passed"; \
              else echo "$$i: interpreter FAILED"; \
+             fi; \
+           else \
+             echo "$$i: interpreter undefined behavior"; \
+           fi; \
+           rm -f _cinterp.log; \
+         done
+	@for i in $(TESTS_DIFF); do \
+           if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \
+             if ./$$i.compcert | cmp -s _cinterp.log -; \
+             then echo "$$i: compiler and interpreter agree"; \
+             else echo "$$i: compiler and interpreter DISAGREE"; \
              fi; \
            else \
              echo "$$i: interpreter undefined behavior"; \
