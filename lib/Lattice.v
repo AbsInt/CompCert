@@ -73,47 +73,39 @@ Set Implicit Arguments.
 Module LPMap(L: SEMILATTICE_WITH_TOP) <: SEMILATTICE_WITH_TOP.
 
 Inductive t' : Type :=
-  | Bot_except: PTree.t L.t -> t'
+  | Bot: t'
   | Top_except: PTree.t L.t -> t'.
 
 Definition t: Type := t'.
 
 Definition get (p: positive) (x: t) : L.t :=
   match x with
-  | Bot_except m =>
-      match m!p with None => L.bot | Some x => x end
-  | Top_except m =>
-      match m!p with None => L.top | Some x => x end
+  | Bot => L.bot
+  | Top_except m => match m!p with None => L.top | Some x => x end
   end.
 
 Definition set (p: positive) (v: L.t) (x: t) : t :=
   match x with
-  | Bot_except m =>
-      Bot_except (if L.beq v L.bot then PTree.remove p m else PTree.set p v m)
+  | Bot => Bot
   | Top_except m =>
-      Top_except (if L.beq v L.top then PTree.remove p m else PTree.set p v m)
+      if L.beq v L.bot
+      then Bot
+      else Top_except (if L.beq v L.top then PTree.remove p m else PTree.set p v m)
   end.
 
-Lemma gss:
-  forall p v x,
-  L.eq (get p (set p v x)) v.
+Lemma gsspec:
+  forall p v x q,
+  x <> Bot -> ~L.eq v L.bot ->
+  L.eq (get q (set p v x)) (if peq q p then v else get q x).
 Proof.
-  intros. destruct x; simpl. 
-  case_eq (L.beq v L.bot); intros.
-  rewrite PTree.grs. apply L.eq_sym. apply L.beq_correct; auto. 
-  rewrite PTree.gss. apply L.eq_refl.
-  case_eq (L.beq v L.top); intros.
-  rewrite PTree.grs. apply L.eq_sym. apply L.beq_correct; auto. 
-  rewrite PTree.gss. apply L.eq_refl.
-Qed.
-
-Lemma gso:
-  forall p q v x,
-  p <> q -> get p (set q v x) = get p x.
-Proof.
-  intros. destruct x; simpl.
-  destruct (L.beq v L.bot). rewrite PTree.gro; auto. rewrite PTree.gso; auto.
-  destruct (L.beq v L.top). rewrite PTree.gro; auto. rewrite PTree.gso; auto.
+  intros. unfold set. destruct x. congruence. 
+  destruct (L.beq v L.bot) eqn:EBOT. 
+  elim H0. apply L.beq_correct; auto.
+  destruct (L.beq v L.top) eqn:ETOP; simpl.
+  rewrite PTree.grspec. unfold PTree.elt_eq. destruct (peq q p). 
+  apply L.eq_sym. apply L.beq_correct; auto.
+  apply L.eq_refl.
+  rewrite PTree.gsspec. destruct (peq q p); apply L.eq_refl.
 Qed.
 
 Definition eq (x y: t) : Prop :=
@@ -136,7 +128,7 @@ Qed.
 
 Definition beq (x y: t) : bool :=
   match x, y with
-  | Bot_except m, Bot_except n => PTree.beq L.beq m n
+  | Bot, Bot => true
   | Top_except m, Top_except n => PTree.beq L.beq m n
   | _, _ => false
   end.
@@ -144,16 +136,12 @@ Definition beq (x y: t) : bool :=
 Lemma beq_correct: forall x y, beq x y = true -> eq x y.
 Proof.
   destruct x; destruct y; simpl; intro; try congruence.
+  apply eq_refl.
   red; intro; simpl.
   rewrite PTree.beq_correct in H. generalize (H p).
   destruct (t0!p); destruct (t1!p); intuition.
   apply L.beq_correct; auto.
-  apply L.eq_refl. 
-  red; intro; simpl.
-  rewrite PTree.beq_correct in H. generalize (H p).
-  destruct (t0!p); destruct (t1!p); intuition.
-  apply L.beq_correct; auto.
-  apply L.eq_refl. 
+  apply L.eq_refl.
 Qed.
 
 Definition ge (x y: t) : Prop :=
@@ -169,11 +157,11 @@ Proof.
   unfold ge; intros. apply L.ge_trans with (get p y); auto.
 Qed.
 
-Definition bot := Bot_except (PTree.empty L.t).
+Definition bot := Bot.
 
 Lemma get_bot: forall p, get p bot = L.bot.
 Proof.
-  unfold bot; intros; simpl. rewrite PTree.gempty. auto.
+  unfold bot; intros; simpl. auto.
 Qed.
 
 Lemma ge_bot: forall x, ge x bot.
@@ -425,36 +413,8 @@ Definition opt_lub (x y: L.t) : option L.t :=
 
 Definition lub (x y: t) : t :=
   match x, y with
-  | Bot_except m, Bot_except n =>
-      Bot_except
-        (combine
-           (fun a b =>
-              match a, b with
-              | Some u, Some v => Some (L.lub u v)
-              | None, _ => b
-              | _, None => a
-              end)
-           m n)
-  | Bot_except m, Top_except n =>
-      Top_except
-        (combine
-           (fun a b =>
-              match a, b with
-              | Some u, Some v => opt_lub u v
-              | None, _ => b
-              | _, None => None
-              end)
-        m n)             
-  | Top_except m, Bot_except n =>
-      Top_except
-        (combine
-           (fun a b =>
-              match a, b with
-              | Some u, Some v => opt_lub u v
-              | None, _ => None
-              | _, None => a
-              end)
-        m n)             
+  | Bot, _ => y
+  | _, Bot => x
   | Top_except m, Top_except n =>
       Top_except
         (combine
@@ -477,91 +437,33 @@ Proof.
   auto. contradiction. contradiction. intros; apply L.eq_refl.
 Qed.
 
-Lemma gcombine_bot:
-  forall f t1 t2 p,
-  f None None = None ->
-  L.eq (get p (Bot_except (combine f t1 t2)))
-       (match f t1!p t2!p with Some x => x | None => L.bot end).
-Proof.
-  intros. simpl. generalize (gcombine f H t1 t2 p). unfold opt_eq. 
-  destruct ((combine f t1 t2)!p); destruct (f t1!p t2!p).
-  auto. contradiction. contradiction. intros; apply L.eq_refl.
-Qed.
-
 Lemma ge_lub_left:
   forall x y, ge (lub x y) x.
 Proof.
-  assert (forall u v,
-    L.ge (match opt_lub u v with Some x => x | None => L.top end) u).
-  intros; unfold opt_lub. 
-  case_eq (L.beq (L.lub u v) L.top); intros. apply L.ge_top. apply L.ge_lub_left.
-
   unfold ge, lub; intros. destruct x; destruct y.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_bot. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  apply L.ge_lub_left.
-  apply L.ge_refl. apply L.eq_refl. 
-  apply L.ge_bot.
+  rewrite get_bot. apply L.ge_bot.
+  rewrite get_bot. apply L.ge_bot.
   apply L.ge_refl. apply L.eq_refl.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  auto.
-  apply L.ge_top.
-  apply L.ge_bot.
-  apply L.ge_top.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  auto.
-  apply L.ge_refl. apply L.eq_refl.
-  apply L.ge_top.
-  apply L.ge_top.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  auto.
-  apply L.ge_top.
-  apply L.ge_top.
+  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top; auto.
+  unfold get. destruct t0!p. destruct t1!p. 
+  unfold opt_lub. destruct (L.beq (L.lub t2 t3) L.top) eqn:E.
+  apply L.ge_top. apply L.ge_lub_left. 
+  apply L.ge_top. 
   apply L.ge_top.
 Qed.
 
 Lemma ge_lub_right:
   forall x y, ge (lub x y) y.
 Proof.
-  assert (forall u v,
-    L.ge (match opt_lub u v with Some x => x | None => L.top end) v).
-  intros; unfold opt_lub. 
-  case_eq (L.beq (L.lub u v) L.top); intros. apply L.ge_top. apply L.ge_lub_right.
-
   unfold ge, lub; intros. destruct x; destruct y.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_bot. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  apply L.ge_lub_right.
-  apply L.ge_bot.
-  apply L.ge_refl. apply L.eq_refl. 
+  rewrite get_bot. apply L.ge_bot.
   apply L.ge_refl. apply L.eq_refl.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  auto.
-  apply L.ge_top.
-  apply L.ge_refl. apply L.eq_refl.
-  apply L.ge_top.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  auto.
-  apply L.ge_bot.
-  apply L.ge_top.
-  apply L.ge_top.
-
-  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top. auto. 
-  simpl. destruct t0!p; destruct t1!p.
-  auto.
-  apply L.ge_top.
+  rewrite get_bot. apply L.ge_bot.
+  eapply L.ge_trans. apply L.ge_refl. apply gcombine_top; auto.
+  unfold get. destruct t0!p; destruct t1!p. 
+  unfold opt_lub. destruct (L.beq (L.lub t2 t3) L.top) eqn:E.
+  apply L.ge_top. apply L.ge_lub_right. 
+  apply L.ge_top. 
   apply L.ge_top.
   apply L.ge_top.
 Qed.

@@ -80,10 +80,10 @@ Lemma regs_match_approx_update:
   regs_match_approx ra rs ->
   regs_match_approx (D.set r a ra) (rs#r <- v).
 Proof.
-  intros; red; intros. rewrite Regmap.gsspec. 
-  case (peq r0 r); intro.
-  subst r0. rewrite D.gss. auto.
-  rewrite D.gso; auto. 
+  intros; red; intros.
+  rewrite D.gsspec. rewrite Regmap.gsspec. destruct (peq r0 r); auto. 
+  red; intros; subst ra. specialize (H0 xH). rewrite D.get_bot in H0. inv H0.
+  unfold Approx.eq. red; intros; subst a. inv H.
 Qed.
 
 Lemma approx_regs_val_list:
@@ -103,9 +103,10 @@ Lemma regs_match_approx_forget:
 Proof.
   induction rl; simpl; intros.
   auto.
-  apply IHrl. red; intros. destruct (peq r a). 
-  subst a. rewrite D.gss. constructor. 
-  rewrite D.gso; auto. 
+  apply IHrl.
+  red; intros. rewrite D.gsspec. destruct (peq r a). constructor. auto. 
+  red; intros; subst ra. specialize (H xH). inv H. 
+  unfold Approx.eq, Approx.bot. congruence.
 Qed.
 
 (** The correctness of the static analysis follows from the results
