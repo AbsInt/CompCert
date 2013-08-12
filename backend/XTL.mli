@@ -84,7 +84,6 @@ exception Type_error_at of node
 (* Successors for dataflow analysis *)
 
 val successors_block: block -> node list
-val successors: xfunction -> node list PTree.t
 
 (* A generic framework for transforming extended basic blocks *)
 

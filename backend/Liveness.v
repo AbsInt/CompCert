@@ -110,7 +110,7 @@ Module RegsetLat := LFSet(Regset).
 Module DS := Backward_Dataflow_Solver(RegsetLat)(NodeSetBackward).
 
 Definition analyze (f: function): option (PMap.t Regset.t) :=
-  DS.fixpoint (successors f)  (transfer f) nil.
+  DS.fixpoint f.(fn_code) successors_instr (transfer f) nil.
 
 (** Basic property of the liveness information computed by [analyze]. *)
 
@@ -122,7 +122,6 @@ Lemma analyze_solution:
   Regset.Subset (transfer f s live!!s) live!!n.
 Proof.
   unfold analyze; intros. eapply DS.fixpoint_solution; eauto. 
-  unfold successors_list, successors. rewrite PTree.gmap1. rewrite H0. simpl. auto.
 Qed.
 
 (** Given an RTL function, compute (for every PC) the list of 

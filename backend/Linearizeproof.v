@@ -126,9 +126,7 @@ Proof.
   unfold reachable_aux. intro reach; intros.
   assert (LBoolean.ge reach!!pc' reach!!pc).
   change (reach!!pc) with ((fun pc r => r) pc (reach!!pc)).
-  eapply DS.fixpoint_solution. eexact H.
-  unfold Kildall.successors_list, successors. rewrite PTree.gmap1.
-  rewrite H0; auto.
+  eapply DS.fixpoint_solution; eauto.
   elim H3; intro. congruence. auto.
   intros. apply PMap.gi.
 Qed.

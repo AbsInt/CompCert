@@ -240,7 +240,7 @@ Module DS := Dataflow_Solver(D)(NodeSetForward).
 
 Definition analyze (gapp: global_approx) (f: RTL.function): PMap.t D.t :=
   let lu := Liveness.last_uses f in
-  match DS.fixpoint (successors f) (transfer' gapp f lu) 
+  match DS.fixpoint f.(fn_code) successors_instr (transfer' gapp f lu) 
                     ((f.(fn_entrypoint), D.top) :: nil) with
   | None => PMap.init D.top
   | Some res => res

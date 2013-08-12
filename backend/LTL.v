@@ -322,6 +322,3 @@ Fixpoint successors_block (b: bblock) : list node :=
   | Lreturn :: _ => nil
   | instr :: b' => successors_block b'
   end.
-
-Definition successors (f: function): PTree.t (list node) :=
-  PTree.map1 successors_block f.(fn_code).

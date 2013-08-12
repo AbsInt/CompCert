@@ -100,9 +100,6 @@ let rec successors_block = function
   | instr :: blk -> successors_block blk
   | [] -> assert false
 
-let successors fn =
-  PTree.map1 successors_block fn.fn_code
-
 (**** Type checking for XTL *)
 
 exception Type_error

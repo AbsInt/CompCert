@@ -121,11 +121,10 @@ Lemma analyze_correct_1:
 Proof.
   unfold analyze; intros.
   set (lu := last_uses f) in *.
-  destruct (DS.fixpoint (successors f) (transfer' gapp f lu)
+  destruct (DS.fixpoint (fn_code f) successors_instr (transfer' gapp f lu)
                         ((fn_entrypoint f, D.top) :: nil)) as [approxs|] eqn:FIX.
   apply regs_match_approx_increasing with (transfer' gapp f lu pc approxs!!pc).
   eapply DS.fixpoint_solution; eauto.
-  unfold successors_list, successors. rewrite PTree.gmap1. rewrite H. auto.
   unfold transfer'. destruct (lu!pc) as [regs|]. 
   apply regs_match_approx_forget; auto. 
   auto.
@@ -138,7 +137,7 @@ Lemma analyze_correct_3:
 Proof.
   intros. unfold analyze. 
   set (lu := last_uses f) in *.
-  destruct (DS.fixpoint (successors f) (transfer' gapp f lu)
+  destruct (DS.fixpoint (fn_code f) successors_instr (transfer' gapp f lu)
                         ((fn_entrypoint f, D.top) :: nil)) as [approxs|] eqn:FIX.
   apply regs_match_approx_increasing with D.top.
   eapply DS.fixpoint_entry; eauto. auto with coqlib.

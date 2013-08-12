@@ -65,7 +65,7 @@ Definition renum_cfg (c: code) : code :=
 End RENUMBER.
 
 Definition transf_function (f: function) : function :=
-  let pnum := postorder (successors f) f.(fn_entrypoint) in
+  let pnum := postorder (successors_map f) f.(fn_entrypoint) in
   mkfunction
     f.(fn_sig)
     f.(fn_params)

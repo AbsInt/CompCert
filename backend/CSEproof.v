@@ -320,7 +320,7 @@ Proof.
   unfold analyze; intros.
   eapply Solver.fixpoint_invariant with (P := wf_numbering); eauto.
   exact wf_empty_numbering.   
-  exact (wf_transfer f).
+  intros. eapply wf_transfer; eauto. 
 Qed.
 
 (** ** Properties of satisfiability of numberings *)
@@ -818,8 +818,6 @@ Proof.
   intros.
   assert (Numbering.ge approx!!pc' (transfer f pc approx!!pc)).
     eapply Solver.fixpoint_solution; eauto.
-    unfold successors_list, successors. rewrite PTree.gmap1.
-    rewrite H0. auto.
   apply H3. auto.
 Qed.
 

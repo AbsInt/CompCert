@@ -384,7 +384,7 @@ Definition successors_instr (i: instruction) : list node :=
   | Ireturn optarg => nil
   end.
 
-Definition successors (f: function) : PTree.t (list node) :=
+Definition successors_map (f: function) : PTree.t (list node) :=
   PTree.map1 successors_instr f.(fn_code).
 
 (** The registers used by an instruction *)

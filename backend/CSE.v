@@ -475,7 +475,7 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
   a mapping from program points to numberings. *)
 
 Definition analyze (f: RTL.function): option (PMap.t numbering) :=
-  Solver.fixpoint (successors f) (transfer f) f.(fn_entrypoint).
+  Solver.fixpoint (fn_code f) successors_instr (transfer f) f.(fn_entrypoint).
 
 (** * Code transformation *)
 

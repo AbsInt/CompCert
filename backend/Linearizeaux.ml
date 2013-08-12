@@ -37,7 +37,6 @@ module IntSet = Set.Make(struct type t = int let compare = compare end)
 (* Determine join points: reachable nodes that have > 1 predecessor *)
 
 let join_points f =
-  let succs = LTL.successors f in
   let reached = ref IntSet.empty in
   let reached_twice = ref IntSet.empty in
   let rec traverse pc =
@@ -47,7 +46,9 @@ let join_points f =
         reached_twice := IntSet.add npc !reached_twice
     end else begin
       reached := IntSet.add npc !reached;
-      traverse_succs (Kildall.successors_list succs pc)
+      match PTree.get pc f.fn_code with
+      | None -> ()
+      | Some b -> traverse_succs (successors_block b)
     end
   and traverse_succs = function
     | [] -> ()

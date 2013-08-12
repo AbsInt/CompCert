@@ -1104,7 +1104,7 @@ Definition successors_block_shape (bsh: block_shape) : list node :=
   end.
 
 Definition analyze (f: RTL.function) (env: regenv) (bsh: PTree.t block_shape) :=
-  DS.fixpoint (PTree.map1 successors_block_shape bsh) (transfer f env bsh) nil.
+  DS.fixpoint bsh successors_block_shape (transfer f env bsh) nil.
 
 (** * Validating and translating functions and programs *)
 

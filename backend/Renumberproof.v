@@ -98,9 +98,9 @@ Qed.
 
 End RENUMBER.
 
-Definition pnum (f: function) := postorder (successors f) f.(fn_entrypoint).
+Definition pnum (f: function) := postorder (successors_map f) f.(fn_entrypoint).
 
-Definition reach (f: function) (pc: node) := reachable (successors f) f.(fn_entrypoint) pc.
+Definition reach (f: function) (pc: node) := reachable (successors_map f) f.(fn_entrypoint) pc.
 
 Lemma transf_function_at:
   forall f pc i,
@@ -109,11 +109,11 @@ Lemma transf_function_at:
   (transf_function f).(fn_code)!(renum_pc (pnum f) pc) = Some(renum_instr (pnum f) i).
 Proof.
   intros. 
-  destruct (postorder_correct (successors f) f.(fn_entrypoint)) as [A B].
+  destruct (postorder_correct (successors_map f) f.(fn_entrypoint)) as [A B].
   fold (pnum f) in *. 
   unfold renum_pc. destruct (pnum f)! pc as [pc'|] eqn:?.
   simpl. eapply renum_cfg_nodes; eauto.
-  elim (B pc); auto. unfold successors. rewrite PTree.gmap1. rewrite H. simpl. congruence.
+  elim (B pc); auto. unfold successors_map. rewrite PTree.gmap1. rewrite H. simpl. congruence.
 Qed.
 
 Ltac TR_AT :=
@@ -128,7 +128,7 @@ Lemma reach_succ:
   reach f pc -> reach f s.
 Proof.
   unfold reach; intros. econstructor; eauto. 
-  unfold successors. rewrite PTree.gmap1. rewrite H. auto. 
+  unfold successors_map. rewrite PTree.gmap1. rewrite H. auto. 
 Qed.
   
 Inductive match_frames: RTL.stackframe -> RTL.stackframe -> Prop :=
