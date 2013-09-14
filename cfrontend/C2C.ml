@@ -522,7 +522,10 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
       begin match args with
       | {edesc = C.EConst(CStr txt)} :: args1 ->
-          let targs1 = convertTypList env (List.map (fun e -> e.etyp) args1) in
+          let targs1 =
+            convertTypList env
+              (List.map (fun e -> Cutil.default_argument_conversion env e.etyp)
+                        args1) in
           Ebuiltin(
             EF_annot(intern_string txt,
                      List.map (fun t -> AA_arg t) (typlist_of_typelist targs1)),
@@ -535,7 +538,8 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_annot_intval"}}, args) ->
       begin match args with
       | [ {edesc = C.EConst(CStr txt)}; arg ] ->
-          let targ = convertTyp env arg.etyp in
+          let targ = convertTyp env
+                         (Cutil.default_argument_conversion env arg.etyp) in
           Ebuiltin(EF_annot_val(intern_string txt, typ_of_type targ),
                    Tcons(targ, Tnil), convertExprList env [arg], ty)
       | _ ->
