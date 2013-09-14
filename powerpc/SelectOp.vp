@@ -334,7 +334,6 @@ Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
 Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
-Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
 
 (** ** Comparisons *)
 

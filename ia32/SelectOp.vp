@@ -334,7 +334,18 @@ Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
 Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
 Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
 Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
-Definition divf (e1 e2: expr) :=  Eop Odivf (e1 ::: e2 ::: Enil).
+
+Definition divfimm (e: expr) (n: float) :=
+  match Float.exact_inverse n with
+  | Some n' => Eop Omulf (e ::: Eop (Ofloatconst n') Enil ::: Enil)
+  | None    => Eop Odivf (e ::: Eop (Ofloatconst n) Enil ::: Enil)
+  end.
+
+Nondetfunction divf (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ofloatconst n2) Enil => divfimm e1 n2
+  | _ => Eop Odivf (e1 ::: e2 ::: Enil)
+  end.
 
 (** ** Comparisons *)
 

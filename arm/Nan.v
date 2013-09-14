@@ -1,34 +1,29 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the GNU General Public License as published by  *)
+(*  the Free Software Foundation, either version 2 of the License, or  *)
+(*  (at your option) any later version.  This file is also distributed *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
 Require Import Fappli_IEEE.
 Require Import Fappli_IEEE_bits.
 Require Import Floats.
 Require Import ZArith.
 Require Import Integers.
 
-(* Needed to break a circular reference after extraction *)
-Definition transform_quiet_pl :=
-  Eval unfold Float.transform_quiet_pl in Float.transform_quiet_pl.
-
 Program Definition default_pl : bool * nan_pl 53 := (false, nat_iter 51 xO xH).
 
-Definition binop_pl (pl1 pl2:binary64) : bool*nan_pl 53 :=
-  match pl1, pl2 with
-    | B754_nan s1 pl1, B754_nan s2 pl2 =>
-      if (Pos.testbit (proj1_sig pl1) 51 && (* pl2 is sNan but pl1 is qNan *)
-         negb (Pos.testbit (proj1_sig pl2) 51))%bool
-      then (s2, transform_quiet_pl pl2)
-      else (s1, transform_quiet_pl pl1)
-    | B754_nan s1 pl1, _ => (s1, transform_quiet_pl pl1)
-    | _, B754_nan s2 pl2 => (s2, transform_quiet_pl pl2)
-    | _, _ => default_pl
-  end.
-
-Theorem binop_propagate1: Float.binop_propagate1_prop binop_pl.
-Proof.
-  repeat intro. destruct f1, f2; try discriminate; simpl;
-  destruct Pos.testbit; reflexivity.
-Qed.
-
-Theorem binop_propagate2: Float.binop_propagate2_prop binop_pl.
-Proof.
-  repeat intro. destruct f1, f2, f3; try discriminate; simpl; reflexivity.
-Qed.
+Definition choose_binop_pl (s1: bool) (pl1: nan_pl 53) (s2: bool) (pl2: nan_pl 53) :=
+  (** Choose second NaN if pl2 is sNaN but pl1 is qNan.
+      In all other cases, choose first NaN *)
+  (Pos.testbit (proj1_sig pl1) 51 &&
+   negb (Pos.testbit (proj1_sig pl2) 51))%bool.

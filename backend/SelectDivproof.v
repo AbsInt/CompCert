@@ -544,4 +544,22 @@ Proof.
 - eapply eval_mods_base; eauto. 
 Qed.
 
+(** * Floating-point division *)
+
+Theorem eval_divf:
+  forall le a b x y,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  exists v, eval_expr ge sp e m le (divf a b) v /\ Val.lessdef (Val.divf x y) v.
+Proof.
+  intros until y. unfold divf. destruct (divf_match b); intros.
+- unfold divfimm. destruct (Float.exact_inverse n2) as [n2' | ] eqn:EINV.
+  + inv H0. inv H4. simpl in H6. inv H6. econstructor; split.
+    EvalOp. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. 
+    simpl; eauto. 
+    destruct x; simpl; auto. erewrite Float.div_mul_inverse; eauto. 
+  + TrivialExists. 
+- TrivialExists.
+Qed.
+
 End CMCONSTRS.

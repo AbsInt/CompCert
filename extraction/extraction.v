@@ -32,8 +32,8 @@ Require Import ExtrOcamlString.
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
 (* Floats *)
-Extract Constant Floats.Float.binop_pl =>
-  "Nan.binop_pl".
+Extract Constant Floats.Float.default_pl => "Nan.default_pl".
+Extract Constant Floats.Float.choose_binop_pl => "Nan.choose_binop_pl".
 
 (* AST *)
 Extract Constant AST.ident_of_string =>
@@ -135,4 +135,4 @@ Separate Extraction
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
    Machregs.two_address_op
-   Nan.binop_pl.
+   Nan.default_pl Nan.choose_binop_pl.

@@ -600,11 +600,6 @@ Proof.
   red; intros; TrivialExists.
 Qed.
 
-Theorem eval_divf: binary_constructor_sound divf Val.divf.
-Proof.
-  red; intros; TrivialExists.
-Qed.
-
 Section COMP_IMM.
 
 Variable default: comparison -> int -> condition.

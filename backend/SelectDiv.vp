@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Instruction selection for integer division and modulus *)
+(** Instruction selection for division and modulus *)
 
 Require Import Coqlib.
 Require Import AST.
@@ -153,4 +153,20 @@ Nondetfunction mods (e1: expr) (e2: expr) :=
   | Eop (Ointconst n2) Enil => modsimm e1 n2
   | _ => mods_base e1 e2
   end.
+
+(** Floating-point division by a constant can also be turned into a FP
+    multiplication by the inverse constant, but only for powers of 2. *)
+
+Definition divfimm (e: expr) (n: float) :=
+  match Float.exact_inverse n with
+  | Some n' => Eop Omulf (e ::: Eop (Ofloatconst n') Enil ::: Enil)
+  | None    => Eop Odivf (e ::: Eop (Ofloatconst n) Enil ::: Enil)
+  end.
+
+Nondetfunction divf (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ofloatconst n2) Enil => divfimm e1 n2
+  | _ => Eop Odivf (e1 ::: e2 ::: Enil)
+  end.
+
 

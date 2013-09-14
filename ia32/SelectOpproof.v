@@ -576,7 +576,14 @@ Qed.
 
 Theorem eval_divf: binary_constructor_sound divf Val.divf.
 Proof.
-  red; intros; TrivialExists.
+  red. intros until y. unfold divf. destruct (divf_match b); intros.
+- unfold divfimm. destruct (Float.exact_inverse n2) as [n2' | ] eqn:EINV.
+  + inv H0. inv H4. simpl in H6. inv H6. econstructor; split.
+    EvalOp. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor. 
+    simpl; eauto. 
+    destruct x; simpl; auto. erewrite Float.div_mul_inverse; eauto. 
+  + TrivialExists. 
+- TrivialExists.
 Qed.
 
 Section COMP_IMM.

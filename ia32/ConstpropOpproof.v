@@ -380,6 +380,33 @@ Proof.
   econstructor; split; eauto. auto. 
 Qed.
 
+Lemma make_mulfimm_correct:
+  forall n r1 r2,
+  rs#r2 = Vfloat n ->
+  let (op, args) := make_mulfimm n r1 r1 r2 in
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.mulf rs#r1 rs#r2) v.
+Proof.
+  intros; unfold make_mulfimm. 
+  destruct (Float.eq_dec n (Float.floatofint (Int.repr 2))); intros. 
+  simpl. econstructor; split. eauto. rewrite H; subst n.
+  destruct (rs#r1); simpl; auto. rewrite Float.mul2_add; auto. 
+  simpl. econstructor; split; eauto. 
+Qed.
+
+Lemma make_mulfimm_correct_2:
+  forall n r1 r2,
+  rs#r1 = Vfloat n ->
+  let (op, args) := make_mulfimm n r2 r1 r2 in
+  exists v, eval_operation ge sp op rs##args m = Some v /\ Val.lessdef (Val.mulf rs#r1 rs#r2) v.
+Proof.
+  intros; unfold make_mulfimm. 
+  destruct (Float.eq_dec n (Float.floatofint (Int.repr 2))); intros. 
+  simpl. econstructor; split. eauto. rewrite H; subst n.
+  destruct (rs#r2); simpl; auto. rewrite Float.mul2_add; auto. 
+  rewrite Float.mul_commut; auto. 
+  simpl. econstructor; split; eauto. 
+Qed.
+
 Lemma op_strength_reduction_correct:
   forall op args vl v,
   vl = approx_regs app args ->
@@ -392,6 +419,7 @@ Proof.
 (* sub *)
   InvApproxRegs. SimplVMA. inv H0; rewrite H. rewrite Val.sub_add_opp. apply make_addimm_correct; auto. 
 (* mul *)
+  InvApproxRegs. SimplVMA. inv H0; rewrite H1. rewrite Val.mul_commut. apply make_mulimm_correct; auto.
   InvApproxRegs. SimplVMA. inv H0; rewrite H. apply make_mulimm_correct; auto.
 (* divs *) 
   assert (rs#r2 = Vint n2). clear H0. InvApproxRegs; SimplVMA; auto.
@@ -403,10 +431,13 @@ Proof.
   assert (rs#r2 = Vint n2). clear H0. InvApproxRegs; SimplVMA; auto.
   apply make_moduimm_correct; auto.
 (* and *)
+  InvApproxRegs. SimplVMA. inv H0; rewrite H1. rewrite Val.and_commut. apply make_andimm_correct; auto.
   InvApproxRegs. SimplVMA. inv H0; rewrite H. apply make_andimm_correct; auto.
 (* or *)
+  InvApproxRegs. SimplVMA. inv H0; rewrite H1. rewrite Val.or_commut. apply make_orimm_correct; auto.
   InvApproxRegs. SimplVMA. inv H0; rewrite H. apply make_orimm_correct; auto.
 (* xor *)
+  InvApproxRegs. SimplVMA. inv H0; rewrite H1. rewrite Val.xor_commut. apply make_xorimm_correct; auto.
   InvApproxRegs. SimplVMA. inv H0; rewrite H. apply make_xorimm_correct; auto.
 (* shl *)
   InvApproxRegs. SimplVMA. inv H0; rewrite H. apply make_shlimm_correct; auto.
@@ -422,6 +453,11 @@ Proof.
   generalize (cond_strength_reduction_correct c args0 vl0 H). 
   destruct (cond_strength_reduction c args0 vl0) as [c' args']; intros.
   rewrite <- H1 in H0; auto. econstructor; split; eauto.
+(* mulf *)
+  inv H0. assert (rs#r2 = Vfloat n2). InvApproxRegs; SimplVMA; auto.
+  apply make_mulfimm_correct; auto.
+  inv H0. assert (rs#r1 = Vfloat n1). InvApproxRegs; SimplVMA; auto.
+  apply make_mulfimm_correct_2; auto.
 (* default *)
   exists v; auto.
 Qed.

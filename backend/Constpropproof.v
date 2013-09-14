@@ -517,10 +517,14 @@ Proof.
       exists (ev1 :: eargs''); split.
       simpl; constructor; auto. simpl. congruence.
     }
-    destruct ty; destruct (approx_reg app arg) as [] eqn:E2; inv H; auto;
-    exists eargs''; split; auto; simpl; f_equal; auto;
-    generalize (MATCH arg); rewrite E2; simpl; intros E3;
-    rewrite E3 in H5; inv H5; auto.
+    destruct ty; destruct (approx_reg app arg) as [] eqn:E2; inv H; auto.
+    * exists eargs''; split; auto; simpl; f_equal; auto.
+      generalize (MATCH arg); rewrite E2; simpl; intros E3;
+      rewrite E3 in H5; inv H5; auto.
+    * destruct (generate_float_constants tt); inv H1; auto. 
+      exists eargs''; split; auto; simpl; f_equal; auto.
+      generalize (MATCH arg); rewrite E2; simpl; intros E3;
+      rewrite E3 in H5; inv H5; auto.
   + destruct (annot_strength_reduction app targs args) as [targs'' args''] eqn:E.
     inv H.
     exploit IHtargs; eauto. intros [eargs'' [A B]].

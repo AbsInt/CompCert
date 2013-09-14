@@ -260,23 +260,27 @@ Definition singleoflong (n:int64): float := (**r conversion from signed 64-bit i
 Definition singleoflongu (n:int64): float:= (**r conversion from unsigned 64-bit int to single-precision float *)
   floatofbinary32 (binary_normalize32 (Int64.unsigned n) 0 false).
 
-Parameter binop_pl: binary64 -> binary64 -> bool*nan_pl 53.
+(* The Nan payload operations for two-argument arithmetic operations are not part of
+   the IEEE754 standard, but all architectures of Compcert share a similar
+   NaN behavior, parameterized by:
+- a "default" payload which occurs when an operation generates a NaN from
+  non-NaN arguments;
+- a choice function determining which of the payload arguments to choose,
+  when an operation is given two NaN arguments. *)
 
-Definition binop_propagate1_prop binop_pl :=
-  forall f1 f2:float, is_nan _ _ f1 = true -> is_nan _ _ f2 = false ->
-    binop_pl f1 f1 = (binop_pl f1 f2 : bool*nan_pl 53).
+Parameter default_pl : bool*nan_pl 53.
+Parameter choose_binop_pl : bool -> nan_pl 53 -> bool -> nan_pl 53 -> bool.
 
-
-(* Proved in Nan.v for different architectures *)
-Hypothesis binop_propagate1: binop_propagate1_prop binop_pl.
-
-Definition binop_propagate2_prop binop_pl :=
-  forall f1 f2 f3:float, is_nan _ _ f1 = true ->
-                         is_nan _ _ f2 = false -> is_nan _ _ f3 = false ->
-    binop_pl f1 f2 = (binop_pl f1 f3 : bool*nan_pl 53).
-
-(* Proved in Nan.v for different architectures *)
-Hypothesis binop_propagate2: binop_propagate2_prop binop_pl.
+Definition binop_pl (x y: binary64) : bool*nan_pl 53 :=
+  match x, y with
+  | B754_nan s1 pl1, B754_nan s2 pl2 =>
+      if choose_binop_pl s1 pl1 s2 pl2
+      then (s2, transform_quiet_pl pl2)
+      else (s1, transform_quiet_pl pl1)
+  | B754_nan s1 pl1, _ => (s1, transform_quiet_pl pl1)
+  | _, B754_nan s2 pl2 => (s2, transform_quiet_pl pl2)
+  | _, _ => default_pl
+  end.
 
 Definition add: float -> float -> float := b64_plus binop_pl mode_NE. (**r addition *)
 Definition sub: float -> float -> float := b64_minus binop_pl mode_NE. (**r subtraction *)
@@ -495,6 +499,57 @@ Proof.
   unfold singleoffloat in e. left. exists (binary32offloat f). auto.
   right; red; intros; elim n. apply singleoffloat_of_single; auto.
 Defined.
+
+(** Commutativity properties of addition and multiplication. *)
+
+Theorem add_commut:
+  forall x y, is_nan _ _ x = false \/ is_nan _ _ y = false -> add x y = add y x.
+Proof.
+  intros x y NAN. unfold add, b64_plus. 
+  pose proof (Bplus_correct 53 1024 eq_refl eq_refl binop_pl mode_NE x y).
+  pose proof (Bplus_correct 53 1024 eq_refl eq_refl binop_pl mode_NE y x).
+  unfold Bplus in *; destruct x; destruct y; auto.
+- rewrite (eqb_sym b0 b). destruct (eqb b b0) eqn:EQB; auto. f_equal; apply eqb_prop; auto.
+- rewrite (eqb_sym b0 b). destruct (eqb b b0) eqn:EQB.
+  f_equal; apply eqb_prop; auto.
+  auto.
+- simpl in NAN; intuition congruence.
+- exploit H; auto. clear H. exploit H0; auto. clear H0. 
+  set (x := B754_finite 53 1024 b0 m0 e1 e2). 
+  set (rx := B2R 53 1024 x).
+  set (y := B754_finite 53 1024 b m e e0).
+  set (ry := B2R 53 1024 y).
+  rewrite (Rplus_comm ry rx). destruct Rlt_bool. 
+  intros (A1 & A2 & A3) (B1 & B2 & B3).
+  apply B2R_Bsign_inj; auto. rewrite <- B1 in A1. auto. 
+  rewrite Z.add_comm. rewrite Z.min_comm. auto.
+  intros (A1 & A2) (B1 & B2). apply B2FF_inj. rewrite B2 in B1. rewrite <- B1 in A1. auto. 
+Qed.
+
+Theorem mul_commut:
+  forall x y, is_nan _ _ x = false \/ is_nan _ _ y = false -> mul x y = mul y x.
+Proof.
+  intros x y NAN. unfold mul, b64_mult. 
+  pose proof (Bmult_correct 53 1024 eq_refl eq_refl binop_pl mode_NE x y).
+  pose proof (Bmult_correct 53 1024 eq_refl eq_refl binop_pl mode_NE y x).
+  unfold Bmult in *; destruct x; destruct y; auto.
+- f_equal. apply xorb_comm. 
+- f_equal. apply xorb_comm. 
+- f_equal. apply xorb_comm. 
+- f_equal. apply xorb_comm. 
+- simpl in NAN. intuition congruence.
+- f_equal. apply xorb_comm. 
+- f_equal. apply xorb_comm. 
+- set (x := B754_finite 53 1024 b0 m0 e1 e2) in *. 
+  set (rx := B2R 53 1024 x) in *.
+  set (y := B754_finite 53 1024 b m e e0) in *.
+  set (ry := B2R 53 1024 y) in *.
+  rewrite (Rmult_comm ry rx) in *. destruct Rlt_bool. 
+  destruct H as (A1 & A2 & A3); destruct H0 as (B1 & B2 & B3).
+  apply B2R_Bsign_inj; auto. rewrite <- B1 in A1. auto. 
+  rewrite ! Bsign_FF2B. f_equal. f_equal. apply xorb_comm. apply Pos.mul_comm. apply Z.add_comm.
+  apply B2FF_inj. etransitivity. eapply H. rewrite xorb_comm. auto. 
+Qed.
 
 (** Properties of comparisons. *)
 
@@ -1181,7 +1236,7 @@ Proof.
       symmetry. etransitivity. apply H0.
       f_equal. destruct Bsign; reflexivity.
   - destruct f as [[]|[]| |]; try discriminate; try reflexivity.
-    simpl. erewrite binop_propagate1; reflexivity.
+    simpl. destruct (choose_binop_pl b n b n); auto.
 Qed.
 
 Program Definition pow2_float (b:bool) (e:Z) (H:-1023 < e < 1023) : float :=
@@ -1216,9 +1271,7 @@ Proof.
     + apply B2FF_inj.
       etransitivity. apply H0. symmetry. etransitivity. apply H1.
       reflexivity.
-  - destruct f; try discriminate EQFIN. reflexivity.
-    simpl. erewrite binop_propagate2. reflexivity.
-    reflexivity. reflexivity. reflexivity.
+  - destruct f; try discriminate EQFIN; auto. 
   - simpl.
     assert ((4503599627370496 * bpow radix2 (e - 52))%R =
             (/ (4503599627370496 * bpow radix2 (- e - 52)))%R).
@@ -1231,6 +1284,51 @@ Proof.
     apply H2.
   - simpl. intro. apply F2R_eq_0_reg in H2.
     destruct b; simpl in H2; omega.
+Qed.
+
+Definition exact_inverse_mantissa := nat_iter 52 xO xH.
+
+Program Definition exact_inverse (f: float) : option float :=
+  match f with
+  | B754_finite s m e B =>
+      if peq m exact_inverse_mantissa then
+      if zlt (-1023) (e + 52) then
+      if zlt (e + 52) 1023 then
+        Some(B754_finite _ _ s m (-e - 104) _)
+      else None else None else None
+  | _ => None
+  end.
+Next Obligation.
+  unfold Fappli_IEEE.bounded, canonic_mantissa. apply andb_true_iff; split.
+  simpl Z.of_nat. apply Zeq_bool_true. unfold FLT_exp. apply Z.max_case_strong; omega.
+  apply Zle_bool_true. omega.  
+Qed.
+
+Remark B754_finite_eq:
+  forall s1 m1 e1 B1 s2 m2 e2 B2,
+  s1 = s2 -> m1 = m2 -> e1 = e2 ->
+  B754_finite _ _ s1 m1 e1 B1 = (B754_finite _ _ s2 m2 e2 B2 : float).
+Proof.
+  intros. subst. f_equal. apply proof_irrelevance. 
+Qed.
+
+Theorem div_mul_inverse:
+  forall x y z, exact_inverse y = Some z -> div x y = mul x z.
+Proof with (try discriminate).
+  unfold exact_inverse; intros. destruct y...
+  destruct (peq m exact_inverse_mantissa)...
+  destruct (zlt (-1023) (e + 52))...
+  destruct (zlt (e + 52) 1023)...
+  inv H.
+  set (n := - e - 52).
+  assert (RNG1: -1023 < n < 1023) by (unfold n; omega).
+  assert (RNG2: -1023 < -n < 1023) by (unfold n; omega).
+  symmetry. 
+  transitivity (mul x (pow2_float b n RNG1)).
+  f_equal. apply B754_finite_eq; auto. unfold n; omega.
+  transitivity (div x (pow2_float b (-n) RNG2)).
+  apply mul_div_pow2. 
+  f_equal. apply B754_finite_eq; auto. unfold n; omega.
 Qed.
 
 Global Opaque

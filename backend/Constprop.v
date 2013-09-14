@@ -322,7 +322,9 @@ Function annot_strength_reduction
       let (targs'', args'') := annot_strength_reduction app targs' args' in
       match ty, approx_reg app arg with
       | Tint, I n => (AA_int n :: targs'', args'')
-      | Tfloat, F n => (AA_float n :: targs'', args'')
+      | Tfloat, F n => if generate_float_constants tt
+                       then (AA_float n :: targs'', args'')
+                       else (AA_arg ty :: targs'', arg :: args'')
       | _, _ => (AA_arg ty :: targs'', arg :: args'')
       end
   | targ :: targs', _ =>

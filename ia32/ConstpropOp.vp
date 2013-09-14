@@ -291,20 +291,25 @@ Definition make_moduimm n (r1 r2: reg) :=
   | None   => (Omodu, r1 :: r2 :: nil)
   end.
 
-(** We must be careful to preserve 2-address constraints over the
-    RTL code, which means that commutative operations cannot
-    be specialized if their first argument is a constant. *)
+Definition make_mulfimm (n: float) (r r1 r2: reg) :=
+  if Float.eq_dec n (Float.floatofint (Int.repr 2))
+  then (Oaddf, r :: r :: nil)
+  else (Omulf, r1 :: r2 :: nil).
 
 Nondetfunction op_strength_reduction 
               (op: operation) (args: list reg) (vl: list approx) :=
   match op, args, vl with
   | Osub, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (Int.neg n2) r1
+  | Omul, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_mulimm n1 r2
   | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1
   | Odiv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divimm n2 r1 r2
   | Odivu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divuimm n2 r1 r2
   | Omodu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_moduimm n2 r1 r2
+  | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2
   | Oand, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm n2 r1
+  | Oor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_orimm n1 r2
   | Oor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm n2 r1
+  | Oxor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_xorimm n1 r2
   | Oxor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm n2 r1
   | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1
   | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1
@@ -315,6 +320,8 @@ Nondetfunction op_strength_reduction
   | Ocmp c, args, vl =>
       let (c', args') := cond_strength_reduction c args vl in 
       (Ocmp c', args')
+  | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
+  | Omulf, r1 :: r2 :: nil, F n1 :: v2 :: nil => make_mulfimm n1 r2 r1 r2
   | _, _, _ => (op, args)
   end.
 
