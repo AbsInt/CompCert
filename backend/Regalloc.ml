@@ -424,8 +424,8 @@ let spill_costs f =
 
   let charge_block blk = List.iter charge_instr blk in
 
-  PTree.fold
-    (fun () pc blk -> charge_block blk)
+  PTree.fold1
+    (fun () blk -> charge_block blk)
     f.fn_code ();
   if !option_dalloctrace then begin
     fprintf !pp "------------------ Unspillable variables --------------@ @.";
@@ -615,8 +615,8 @@ let rec tospill_block alloc blk ts =
   | instr :: blk' -> tospill_block alloc blk' (tospill_instr alloc instr ts)
 
 let tospill_function f alloc =
-  PTree.fold
-    (fun ts pc blk -> tospill_block alloc blk ts)
+  PTree.fold1
+    (fun ts blk -> tospill_block alloc blk ts)
     f.fn_code VSet.empty
 
 

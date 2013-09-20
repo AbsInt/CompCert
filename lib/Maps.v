@@ -141,6 +141,13 @@ Module Type TREE.
     forall (A B: Type) (f: B -> elt -> A -> B) (v: B) (m: t A),
     fold f m v =
     List.fold_left (fun a p => f a (fst p) (snd p)) (elements m) v.
+  (** Same as [fold], but the function does not receive the [elt] argument. *)
+  Variable fold1:
+    forall (A B: Type), (B -> A -> B) -> t A -> B -> B.
+  Hypothesis fold1_spec:
+    forall (A B: Type) (f: B -> A -> B) (v: B) (m: t A),
+    fold1 f m v =
+    List.fold_left (fun a p => f a (snd p)) (elements m) v.
 End TREE.
 
 (** * The abstract signatures of maps *)
@@ -930,6 +937,38 @@ Module PTree <: TREE.
     List.fold_left (fun a p => f a (fst p) (snd p)) (elements m) v.
   Proof.
     intros. unfold fold, elements. rewrite <- xfold_xelements. auto. 
+  Qed.
+
+  Fixpoint fold1 (A B: Type) (f: B -> A -> B) (m: t A) (v: B) {struct m} : B :=
+    match m with
+    | Leaf => v
+    | Node l None r =>
+        let v1 := fold1 f l v in
+        fold1 f r v1
+    | Node l (Some x) r =>
+        let v1 := fold1 f l v in
+        let v2 := f v1 x in
+        fold1 f r v2
+    end.
+
+  Lemma fold1_xelements:
+    forall (A B: Type) (f: B -> A -> B) m i v l,
+    List.fold_left (fun a p => f a (snd p)) l (fold1 f m v) =
+    List.fold_left (fun a p => f a (snd p)) (xelements m i l) v.
+  Proof.
+    induction m; intros.
+    simpl. auto.
+    destruct o; simpl.
+    rewrite <- IHm1. simpl. rewrite <- IHm2. auto.
+    rewrite <- IHm1. rewrite <- IHm2. auto. 
+  Qed.
+
+  Theorem fold1_spec:
+    forall (A B: Type) (f: B -> A -> B) (v: B) (m: t A),
+    fold1 f m v =
+    List.fold_left (fun a p => f a (snd p)) (elements m) v.
+  Proof.
+    intros. apply fold1_xelements with (l := @nil (positive * A)). 
   Qed.
 
 End PTree.

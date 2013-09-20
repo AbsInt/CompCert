@@ -267,7 +267,7 @@ let camlfloat_of_coqfloat f =
 (* Timing facility *)
 
 (*
-let timers = (Hashtbl.create 9 : (string, float) Hashtbl.t)
+let timers = Hashtbl.create 9
 
 let add_to_timer name time =
   let old = try Hashtbl.find timers name with Not_found -> 0.0 in
@@ -277,6 +277,26 @@ let time name fn arg =
   let start = Unix.gettimeofday() in
   try
     let res = fn arg in
+    add_to_timer name (Unix.gettimeofday() -. start);
+    res
+  with x ->
+    add_to_timer name (Unix.gettimeofday() -. start);
+    raise x
+
+let time2 name fn arg1 arg2 =
+  let start = Unix.gettimeofday() in
+  try
+    let res = fn arg1 arg2 in
+    add_to_timer name (Unix.gettimeofday() -. start);
+    res
+  with x ->
+    add_to_timer name (Unix.gettimeofday() -. start);
+    raise x
+
+let time3 name fn arg1 arg2 arg3 =
+  let start = Unix.gettimeofday() in
+  try
+    let res = fn arg1 arg2 arg3 in
     add_to_timer name (Unix.gettimeofday() -. start);
     res
   with x ->

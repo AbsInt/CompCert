@@ -176,9 +176,9 @@ let type_function f =
 let basic_blocks_map f = (* return mapping pc -> number of predecessors *)
   let add_successor map s =
     PMap.set s (1 + PMap.get s map) map in
-  let add_successors_block map pc blk =
+  let add_successors_block map blk =
     List.fold_left add_successor map (successors_block blk) in
-  PTree.fold add_successors_block f.fn_code
+  PTree.fold1 add_successors_block f.fn_code
     (PMap.set f.fn_entrypoint 2 (PMap.init 0))
 
 let transform_basic_blocks

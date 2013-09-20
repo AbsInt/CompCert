@@ -14,6 +14,8 @@ Development trunk:
   of small integer or FP types.
 - PowerPC: more efficient implementation of division on 64-bit integers.
 - Minor simplifications in the generic solvers for dataflow analysis.
+- Small improvements in compilation times for the register allocation pass.
+
 
 Release 2.0, 2013-06-21
 =======================

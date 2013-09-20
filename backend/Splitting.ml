@@ -65,22 +65,24 @@ let reg_for lr =
    a live range to the reg if it is live, and no live range if it
    is dead. *)
 
+module RMap = Map.Make(P)
+
 module LRMap = struct
 
-  type t = live_range PTree.t   (* live register -> live range *)
+  type t = live_range RMap.t   (* live register -> live range *)
 
-  let beq m1 m2 = PTree.beq same_range m1 m2
+  let beq m1 m2 = RMap.equal same_range m1 m2
 
-  let bot : t = PTree.empty
+  let bot : t = RMap.empty
 
-  let lub_opt_range olr1 olr2 =
+  let lub_opt_range r olr1 olr2 =
     match olr1, olr2 with
     | Some lr1, Some lr2 -> unify lr1 lr2; olr1
     | Some _, None -> olr1
     | None, _ -> olr2
 
   let lub m1 m2 =
-    PTree.combine lub_opt_range m1 m2
+    RMap.merge lub_opt_range m1 m2
 
 end
 
@@ -89,11 +91,11 @@ module Solver = Backward_Dataflow_Solver(LRMap)(NodeSetBackward)
 (* A cache of live ranges associated to (pc, used reg) pairs. *)
 
 let live_range_cache =
-  (Hashtbl.create 123 : (int32 * int32, live_range) Hashtbl.t)
+  (Hashtbl.create 123 : (int * int, live_range) Hashtbl.t)
 
 let live_range_for pc r =
-  let pc' = P.to_int32 pc
-  and r' = P.to_int32 r in
+  let pc' = P.to_int pc
+  and r' = P.to_int r in
   try
     Hashtbl.find live_range_cache (pc',r')
   with Not_found ->
@@ -104,14 +106,14 @@ let live_range_for pc r =
 (* The transfer function *)
 
 let reg_live pc r map =
-  match PTree.get r map with
-  | Some lr -> map                                     (* already live *)
-  | None    -> PTree.set r (live_range_for pc r) map   (* becomes live *)
+  if RMap.mem r map
+  then map                                    (* already live *)
+  else RMap.add r (live_range_for pc r) map   (* becomes live *)
 
 let reg_list_live pc rl map = List.fold_right (reg_live pc) rl map
 
 let reg_dead r map =
-  PTree.remove r map
+  RMap.remove r map
 
 let transfer f pc after =
   match PTree.get pc f.fn_code with
@@ -131,9 +133,10 @@ let analysis f = Solver.fixpoint f.fn_code successors_instr (transfer f) []
 (* Produce renamed registers for each instruction. *)
 
 let ren_reg map r =
-  match PTree.get r map with
-  | Some lr -> reg_for lr
-  | None -> XTL.new_reg()
+  try
+    reg_for (RMap.find r map)
+  with Not_found ->
+    XTL.new_reg()
 
 let ren_regs map rl =
   List.map (ren_reg map) rl
