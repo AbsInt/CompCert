@@ -12,7 +12,7 @@
 
 (** Pretty-printer for XTL *)
 
-open Format
+open Printf
 open Camlcoq
 open Datatypes
 open Maps
@@ -49,8 +49,8 @@ let current_liveness = ref (None: VSet.t PMap.t option)
 
 let reg pp r ty =
   match !current_alloc with
-  | None -> fprintf pp "x%ld" (P.to_int32 r)
-  | Some alloc -> fprintf pp "x%ld{%a}" (P.to_int32 r) loc (alloc (V(r, ty)))
+  | None -> fprintf pp "x%d" (P.to_int r)
+  | Some alloc -> fprintf pp "x%d{%a}" (P.to_int r) loc (alloc (V(r, ty)))
 
 let var pp = function
   | V(r, ty) -> reg pp r ty
@@ -66,53 +66,52 @@ let ros pp = function
   | Coq_inr s -> fprintf pp "\"%s\"" (extern_atom s)
 
 let liveset pp lv =
-  fprintf pp "@[<hov 2>{";
-  VSet.iter (function V(r, ty) -> fprintf pp "@ x%ld" (P.to_int32 r)
+  fprintf pp "{";
+  VSet.iter (function V(r, ty) -> fprintf pp " x%d" (P.to_int r)
                     | L l -> ())
     lv;                  
-  fprintf pp " }@]"
+  fprintf pp " }"
 
 let print_succ pp s dfl =
-  let s = P.to_int32 s in
-  if s <> dfl then fprintf pp "goto %ld" s
+  let s = P.to_int s in
+  if s <> dfl then fprintf pp "goto %d" s
 
 let print_instruction pp succ = function
   | Xmove(src, dst) ->
-      fprintf pp "%a = %a;" var dst var src
+      fprintf pp "%a = %a" var dst var src
   | Xreload(src, dst) ->
-      fprintf pp "%a =r %a;" var dst var src
+      fprintf pp "%a =r %a" var dst var src
   | Xspill(src, dst) ->
-      fprintf pp "%a =s %a;" var dst var src
+      fprintf pp "%a =s %a" var dst var src
   | Xparmove(srcs, dsts, t1, t2) ->
-      fprintf pp "(%a) = (%a) using %a, %a;" vars dsts vars srcs var t1 var t2
+      fprintf pp "(%a) = (%a) using %a, %a" vars dsts vars srcs var t1 var t2
   | Xop(op, args, res) ->
-      fprintf pp "%a = %a;" var res (print_operation var) (op, args)
+      fprintf pp "%a = %a" var res (print_operation var) (op, args)
   | Xload(chunk, addr, args, dst) ->
-      fprintf pp "%a = %s[%a];"
+      fprintf pp "%a = %s[%a]"
          var dst (name_of_chunk chunk) (print_addressing var) (addr, args)
   | Xstore(chunk, addr, args, src) ->
-      fprintf pp "%s[%a] = %a;"
+      fprintf pp "%s[%a] = %a"
          (name_of_chunk chunk) (print_addressing var) (addr, args) var src
   | Xcall(sg, fn, args, res) ->
-      fprintf pp "%a = call %a(%a);" vars res ros fn vars args
+      fprintf pp "%a = call %a(%a)" vars res ros fn vars args
   | Xtailcall(sg, fn, args) ->
-      fprintf pp "tailcall %a(%a);" ros fn vars args
+      fprintf pp "tailcall %a(%a)" ros fn vars args
   | Xbuiltin(ef, args, res) ->
-      fprintf pp "%a = builtin %s(%a);"
+      fprintf pp "%a = %s(%a)"
         vars res (name_of_external ef) vars args
   | Xbranch s ->
       print_succ pp s succ
   | Xcond(cond, args, s1, s2) ->
-      fprintf pp "if (%a) goto %ld else goto %ld"
+      fprintf pp "if (%a) goto %d else goto %d"
         (print_condition var) (cond, args)
-        (P.to_int32 s1) (P.to_int32 s2)
+        (P.to_int s1) (P.to_int s2)
   | Xjumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
-      fprintf pp "@[<v 2>jumptable (%a)" var arg;
+      fprintf pp "jumptable (%a)" var arg;
       for i = 0 to Array.length tbl - 1 do
-        fprintf pp "@ case %d: goto %ld" i (P.to_int32 tbl.(i))
-      done;
-      fprintf pp "@]"
+        fprintf pp "\n\t\tcase %d: goto %d" i (P.to_int tbl.(i))
+      done
   | Xreturn args ->
       fprintf pp "return %a" vars args
 
@@ -121,31 +120,31 @@ let rec print_instructions pp succ = function
   | [i] -> print_instruction pp succ i
   | i :: il ->
       print_instruction pp succ i;
-      fprintf pp "@ ";
+      fprintf pp "; ";
       print_instructions pp succ il
 
 let print_block pp (pc, blk) =
-  fprintf pp "%5ld: @[<hov 0>" pc;
-  print_instructions pp (Int32.pred pc) blk;
-  fprintf pp "@]@ ";
+  fprintf pp "%5d:\t" pc;
+  print_instructions pp (pc - 1) blk;
+  fprintf pp "\n";
   match !current_liveness with
   | None -> ()
-  | Some liveness -> fprintf pp "%a@ " liveset (PMap.get (P.of_int32 pc) liveness)
+  | Some liveness -> fprintf pp "%a\n" liveset (PMap.get (P.of_int pc) liveness)
 
 let print_function pp ?alloc ?live f =
   current_alloc := alloc;
   current_liveness := live;
-  fprintf pp "@[<v 2>f() {@ ";
+  fprintf pp "f() {\n";
   let instrs =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
       (List.map
-        (fun (pc, i) -> (P.to_int32 pc, i))
+        (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
   print_succ pp f.fn_entrypoint 
-    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1l);
+    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1);
   List.iter (print_block pp) instrs;
-  fprintf pp "@;<0 -2>}@]@.";
+  fprintf pp "}\n\n";
   current_alloc := None;
   current_liveness := None
 

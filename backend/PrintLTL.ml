@@ -12,7 +12,7 @@
 
 (** Pretty-printers for RTL code *)
 
-open Format
+open Printf
 open Camlcoq
 open Datatypes
 open Maps
@@ -57,73 +57,72 @@ let ros pp = function
   | Coq_inr s -> fprintf pp "\"%s\"" (extern_atom s)
 
 let print_succ pp s dfl =
-  let s = P.to_int32 s in
-  if s <> dfl then fprintf pp "goto %ld" s
+  let s = P.to_int s in
+  if s <> dfl then fprintf pp "goto %d" s
 
 let print_instruction pp succ = function
   | Lop(op, args, res) ->
-      fprintf pp "%a = %a;" mreg res (print_operation mreg) (op, args)
+      fprintf pp "%a = %a" mreg res (print_operation mreg) (op, args)
   | Lload(chunk, addr, args, dst) ->
-      fprintf pp "%a = %s[%a];"
+      fprintf pp "%a = %s[%a]"
          mreg dst (name_of_chunk chunk) (print_addressing mreg) (addr, args)
   | Lgetstack(sl, ofs, ty, dst) ->
-      fprintf pp "%a = %a;" mreg dst slot (sl, ofs, ty)
+      fprintf pp "%a = %a" mreg dst slot (sl, ofs, ty)
   | Lsetstack(src, sl, ofs, ty) ->
-      fprintf pp "%a = %a;" slot (sl, ofs, ty) mreg src
+      fprintf pp "%a = %a" slot (sl, ofs, ty) mreg src
   | Lstore(chunk, addr, args, src) ->
-      fprintf pp "%s[%a] = %a;"
+      fprintf pp "%s[%a] = %a"
          (name_of_chunk chunk) (print_addressing mreg) (addr, args) mreg src
   | Lcall(sg, fn) ->
-      fprintf pp "call %a;" ros fn
+      fprintf pp "call %a" ros fn
   | Ltailcall(sg, fn) ->
-      fprintf pp "tailcall %a;" ros fn
+      fprintf pp "tailcall %a" ros fn
   | Lbuiltin(ef, args, res) ->
-      fprintf pp "%a = builtin %s(%a);"
+      fprintf pp "%a = %s(%a)"
         mregs res (name_of_external ef) mregs args
   | Lannot(ef, args) ->
-      fprintf pp "builtin %s(%a);"
+      fprintf pp "%s(%a)"
         (name_of_external ef) locs args
   | Lbranch s ->
       print_succ pp s succ
   | Lcond(cond, args, s1, s2) ->
-      fprintf pp "if (%a) goto %ld else goto %ld"
+      fprintf pp "if (%a) goto %d else goto %d"
         (print_condition mreg) (cond, args)
-        (P.to_int32 s1) (P.to_int32 s2)
+        (P.to_int s1) (P.to_int s2)
   | Ljumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
-      fprintf pp "@[<v 2>jumptable (%a)" mreg arg;
+      fprintf pp "jumptable (%a)" mreg arg;
       for i = 0 to Array.length tbl - 1 do
-        fprintf pp "@ case %d: goto %ld" i (P.to_int32 tbl.(i))
-      done;
-      fprintf pp "@]"
+        fprintf pp "\n\t\tcase %d: goto %d" i (P.to_int tbl.(i))
+      done
   | Lreturn ->
       fprintf pp "return"
 
 let rec print_instructions pp succ = function
   | [] -> ()
-  | [i] -> print_instruction pp succ i
+  | [i] ->  print_instruction pp succ i
   | i :: il ->
       print_instruction pp succ i;
-      fprintf pp "@ ";
+      fprintf pp "; ";
       print_instructions pp succ il
 
 let print_block pp (pc, blk) =
-  fprintf pp "%5ld: @[<hov 0>" pc;
-  print_instructions pp (Int32.pred pc) blk;
-  fprintf pp "@]@ "
+  fprintf pp "%5d:\t" pc;
+  print_instructions pp (pc - 1) blk;
+  fprintf pp "\n"
 
 let print_function pp id f =
-  fprintf pp "@[<v 2>%s() {@ " (extern_atom id);
+  fprintf pp "%s() {\n" (extern_atom id);
   let instrs =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
       (List.rev_map
-        (fun (pc, i) -> (P.to_int32 pc, i))
+        (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
-  print_succ pp f.fn_entrypoint 
-    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1l);
+  print_succ pp f.fn_entrypoint
+    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1);
   List.iter (print_block pp) instrs;
-  fprintf pp "@;<0 -2>}@]@."
+  fprintf pp "}\n\n"
 
 let print_globdef pp (id, gd) =
   match gd with
@@ -140,6 +139,5 @@ let print_if prog =
   | None -> ()
   | Some f ->
       let oc = open_out f in
-      let pp = formatter_of_out_channel oc in
-      print_program pp prog;
+      print_program oc prog;
       close_out oc

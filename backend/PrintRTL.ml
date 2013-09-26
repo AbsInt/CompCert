@@ -12,7 +12,7 @@
 
 (** Pretty-printers for RTL code *)
 
-open Format
+open Printf
 open Camlcoq
 open Datatypes
 open Maps
@@ -25,7 +25,7 @@ open PrintOp
 (* Printing of RTL code *)
 
 let reg pp r =
-  fprintf pp "x%ld" (P.to_int32 r)
+  fprintf pp "x%d" (P.to_int r)
 
 let rec regs pp = function
   | [] -> ()
@@ -37,71 +37,70 @@ let ros pp = function
   | Coq_inr s -> fprintf pp "\"%s\"" (extern_atom s)
 
 let print_succ pp s dfl =
-  let s = P.to_int32 s in
-  if s <> dfl then fprintf pp "       goto %ld@ " s
+  let s = P.to_int s in
+  if s <> dfl then fprintf pp "\tgoto %d\n" s
 
 let print_instruction pp (pc, i) =
-  fprintf pp "%5ld: " pc;
+  fprintf pp "%5d:\t" pc;
   match i with
   | Inop s ->
-      let s = P.to_int32 s in
-      if s = Int32.pred pc
-      then fprintf pp "nop@ "
-      else fprintf pp "goto %ld@ " s
+      let s = P.to_int s in
+      if s = pc - 1
+      then fprintf pp "nop\n"
+      else fprintf pp "goto %d\n" s
   | Iop(op, args, res, s) ->
-      fprintf pp "%a = %a@ "
+      fprintf pp "%a = %a\n"
          reg res (PrintOp.print_operation reg) (op, args);
-      print_succ pp s (Int32.pred pc)
+      print_succ pp s (pc - 1)
   | Iload(chunk, addr, args, dst, s) ->
-      fprintf pp "%a = %s[%a]@ "
+      fprintf pp "%a = %s[%a]\n"
          reg dst (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args);
-      print_succ pp s (Int32.pred pc)
+      print_succ pp s (pc - 1)
   | Istore(chunk, addr, args, src, s) ->
-      fprintf pp "%s[%a] = %a@ "
+      fprintf pp "%s[%a] = %a\n"
          (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
          reg src;
-      print_succ pp s (Int32.pred pc)
+      print_succ pp s (pc - 1)
   | Icall(sg, fn, args, res, s) ->
-      fprintf pp "%a = %a(%a)@ "
+      fprintf pp "%a = %a(%a)\n"
         reg res ros fn regs args;
-      print_succ pp s (Int32.pred pc)
+      print_succ pp s (pc - 1)
   | Itailcall(sg, fn, args) ->
-      fprintf pp "tailcall %a(%a)@ "
+      fprintf pp "tailcall %a(%a)\n"
         ros fn regs args
   | Ibuiltin(ef, args, res, s) ->
-      fprintf pp "%a = builtin %s(%a)@ "
+      fprintf pp "%a = %s(%a)\n"
         reg res (name_of_external ef) regs args;
-      print_succ pp s (Int32.pred pc)
+      print_succ pp s (pc - 1)
   | Icond(cond, args, s1, s2) ->
-      fprintf pp "if (%a) goto %ld else goto %ld@ "
+      fprintf pp "if (%a) goto %d else goto %d\n"
         (PrintOp.print_condition reg) (cond, args)
-        (P.to_int32 s1) (P.to_int32 s2)
+        (P.to_int s1) (P.to_int s2)
   | Ijumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
-      fprintf pp "@[<v 2>jumptable (%a)" reg arg;
+      fprintf pp "jumptable (%a)\n" reg arg;
       for i = 0 to Array.length tbl - 1 do
-        fprintf pp "@ case %d: goto %ld" i (P.to_int32 tbl.(i))
-      done;
-      fprintf pp "@]@ "
+        fprintf pp "\t\tcase %d: goto %d\n" i (P.to_int tbl.(i))
+      done
   | Ireturn None ->
-      fprintf pp "return@ "
+      fprintf pp "return\n"
   | Ireturn (Some arg) ->
-      fprintf pp "return %a@ " reg arg
+      fprintf pp "return %a\n" reg arg
 
 let print_function pp id f =
-  fprintf pp "@[<v 2>%s(%a) {@ " (extern_atom id) regs f.fn_params;
+  fprintf pp "%s(%a) {\n" (extern_atom id) regs f.fn_params;
   let instrs =
     List.sort
       (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
       (List.rev_map
-        (fun (pc, i) -> (P.to_int32 pc, i))
+        (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
   print_succ pp f.fn_entrypoint 
-    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1l);
+    (match instrs with (pc1, _) :: _ -> pc1 | [] -> -1);
   List.iter (print_instruction pp) instrs;
-  fprintf pp "@;<0 -2>}@]@."
+  fprintf pp "}\n\n"
 
 let print_globdef pp (id, gd) =
   match gd with
@@ -116,8 +115,7 @@ let print_if optdest prog =
   | None -> ()
   | Some f ->
       let oc = open_out f in
-      let pp = formatter_of_out_channel oc in
-      print_program pp prog;
+      print_program oc prog;
       close_out oc
 
 let destination_rtl : string option ref = ref None

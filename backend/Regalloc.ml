@@ -26,7 +26,7 @@
      End Repeat
 *)
 
-open Format
+open Printf
 open Clflags
 open Camlcoq
 open Datatypes
@@ -56,13 +56,13 @@ let is_two_address op args =
 (* For tracing *)
 
 let destination_alloctrace : string option ref = ref None
-let pp = ref std_formatter
+let pp = ref stdout
 
 let init_trace () =
-  if !option_dalloctrace && !pp == std_formatter then begin
+  if !option_dalloctrace && !pp == stdout then begin
     match !destination_alloctrace with
     | None -> ()  (* should not happen *)
-    | Some f -> pp := formatter_of_out_channel (open_out f)
+    | Some f -> pp := open_out f
   end
 
 
@@ -428,13 +428,12 @@ let spill_costs f =
     (fun () blk -> charge_block blk)
     f.fn_code ();
   if !option_dalloctrace then begin
-    fprintf !pp "------------------ Unspillable variables --------------@ @.";
-    fprintf !pp "@[<hov 1>";
+    fprintf !pp "------------------ Unspillable variables --------------\n\n";
     PTree.fold
       (fun () r st ->
-        if st.cost = max_int then fprintf !pp "@ x%ld" (P.to_int32 r))
+        if st.cost = max_int then fprintf !pp "x%d " (P.to_int r))
       !costs ();
-    fprintf !pp "@]@ @."
+    fprintf !pp "\n\n"
   end;
   (* Result is cost function: pseudoreg -> stats *)
   get_stats
@@ -938,7 +937,7 @@ exception Timeout
 let rec first_round f liveness =
   let alloc = find_coloring f liveness in
   if !option_dalloctrace then begin
-    fprintf !pp "-------------- After initial register allocation@ @.";
+    fprintf !pp "-------------- After initial register allocation\n\n";
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f
   end;
   let ts = tospill_function f alloc in
@@ -950,7 +949,7 @@ and more_rounds f ts count =
   let liveness = liveness_analysis f' in
   let alloc = find_coloring f' liveness in
   if !option_dalloctrace then begin
-    fprintf !pp "-------------- After register allocation (round %d)@ @." count;
+    fprintf !pp "-------------- After register allocation (round %d)\n\n" count;
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f'
   end;
   let ts' = tospill_function f' alloc in
@@ -958,9 +957,9 @@ and more_rounds f ts count =
   then success f' alloc
   else begin
     if !option_dalloctrace then begin
-      fprintf !pp "--- Remain to be spilled:@ @.";
+      fprintf !pp "--- Remain to be spilled:\n";
       VSet.iter (fun v -> fprintf !pp "%a " PrintXTL.var v) ts';
-      fprintf !pp "@ @."
+      fprintf !pp "\n\n"
     end;      
     more_rounds f (VSet.union ts ts') (count + 1)
   end
@@ -968,7 +967,7 @@ and more_rounds f ts count =
 and success f alloc =
   let f' = transl_function f alloc in
   if !option_dalloctrace then begin
-    fprintf !pp "-------------- Candidate allocation@ @.";
+    fprintf !pp "-------------- Candidate allocation\n\n";
     PrintLTL.print_function !pp P.one f'
   end;
   f'
@@ -987,12 +986,12 @@ let regalloc f =
       let liveness = liveness_analysis f2 in
       let f3 = dead_code_elimination f2 liveness in
       if !option_dalloctrace then begin
-        fprintf !pp "-------------- Initial XTL@ @.";
+        fprintf !pp "-------------- Initial XTL\n\n";
         PrintXTL.print_function !pp f3
       end;
       try
         OK(first_round f3 liveness)
-      with 
+      with
       | Timeout ->
           Error(msg (coqstring_of_camlstring "Spilling fails to converge"))
       | Type_error_at pc ->

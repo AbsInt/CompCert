@@ -12,7 +12,7 @@
 
 (** Pretty-printer for Mach code *)
 
-open Format
+open Printf
 open Camlcoq
 open Datatypes
 open Maps
@@ -50,57 +50,56 @@ let ros pp = function
 let print_instruction pp i =
   match i with
   | Mgetstack(ofs, ty, res) ->
-      fprintf pp "%a = stack(%ld, %s)@ "
+      fprintf pp "\t%a = stack(%ld, %s)\n"
               reg res (camlint_of_coqint ofs) (name_of_type ty)
   | Msetstack(arg, ofs, ty) ->
-      fprintf pp "stack(%ld, %s) = %a@ "
+      fprintf pp "\tstack(%ld, %s) = %a\n"
               (camlint_of_coqint ofs) (name_of_type ty) reg arg
   | Mgetparam(ofs, ty, res) ->
-      fprintf pp "%a = param(%ld, %s)@ "
+      fprintf pp "\t%a = param(%ld, %s)\n"
               reg res (camlint_of_coqint ofs) (name_of_type ty)
   | Mop(op, args, res) ->
-      fprintf pp "%a = %a@ "
+      fprintf pp "\t%a = %a\n"
          reg res (PrintOp.print_operation reg) (op, args)
   | Mload(chunk, addr, args, dst) ->
-      fprintf pp "%a = %s[%a]@ "
+      fprintf pp "\t%a = %s[%a]\n"
          reg dst (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
   | Mstore(chunk, addr, args, src) ->
-      fprintf pp "%s[%a] = %a@ "
+      fprintf pp "\t%s[%a] = %a\n"
          (name_of_chunk chunk)
          (PrintOp.print_addressing reg) (addr, args)
          reg src
   | Mcall(sg, fn) ->
-      fprintf pp "call %a@ " ros fn
+      fprintf pp "\tcall %a\n" ros fn
   | Mtailcall(sg, fn) ->
-      fprintf pp "tailcall %a@ " ros fn
+      fprintf pp "\ttailcall %a\n" ros fn
   | Mbuiltin(ef, args, res) ->
-      fprintf pp "%a = builtin %s(%a)@ "
+      fprintf pp "\t%a = %s(%a)\n"
         regs res (name_of_external ef) regs args
   | Mannot(ef, args) ->
-      fprintf pp "%s(%a)@ " (name_of_external ef) annot_params args
+      fprintf pp "\t%s(%a)\n" (name_of_external ef) annot_params args
   | Mlabel lbl ->
-      fprintf pp "%ld:@ " (P.to_int32 lbl)
+      fprintf pp "%5d:" (P.to_int lbl)
   | Mgoto lbl ->
-      fprintf pp "goto %ld@ " (P.to_int32 lbl)
+      fprintf pp "\tgoto %d\n" (P.to_int lbl)
   | Mcond(cond, args, lbl) ->
-      fprintf pp "if (%a) goto %ld@ "
+      fprintf pp "\tif (%a) goto %d\n"
         (PrintOp.print_condition reg) (cond, args)
-        (P.to_int32 lbl)
+        (P.to_int lbl)
   | Mjumptable(arg, tbl) ->
       let tbl = Array.of_list tbl in
-      fprintf pp "@[<v 2>jumptable (%a)" reg arg;
+      fprintf pp "\tjumptable (%a)\n" reg arg;
       for i = 0 to Array.length tbl - 1 do
-        fprintf pp "@ case %d: goto %ld" i (P.to_int32 tbl.(i))
-      done;
-      fprintf pp "@]@ "
+        fprintf pp "\t\tcase %d: goto %d\n" i (P.to_int tbl.(i))
+      done
   | Mreturn ->
-      fprintf pp "return@ "
+      fprintf pp "\treturn\n"
 
 let print_function pp id f =
-  fprintf pp "@[<v 2>%s() {@ " (extern_atom id);
+  fprintf pp "%s() {\n" (extern_atom id);
   List.iter (print_instruction pp) f.fn_code;
-  fprintf pp "@;<0 -2>}@]@."
+  fprintf pp "}\n\n"
 
 let print_globdef pp (id, gd) =
   match gd with
@@ -117,6 +116,5 @@ let print_if prog =
   | None -> ()
   | Some f ->
       let oc = open_out f in
-      let pp = formatter_of_out_channel oc in
-      print_program pp prog;
+      print_program oc prog;
       close_out oc
