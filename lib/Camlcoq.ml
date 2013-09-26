@@ -65,16 +65,15 @@ module P = struct
   let compare x y = match Pos.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
 
   let rec to_int = function
-  | Coq_xI p -> (to_int p lsl 1) + 1
-  | Coq_xO p -> to_int p lsl 1
+  | Coq_xI p -> let n = to_int p in n + n + 1
+  | Coq_xO p -> let n = to_int p in n + n
   | Coq_xH -> 1
 
   let rec of_int n =
-    if n = 0 then assert false else
-    if n = 1 then Coq_xH else
-    if n land 1 = 0
-    then Coq_xO (of_int (n lsr 1))
-    else Coq_xI (of_int (n lsr 1))
+    if n land 1 = 0 then
+      if n = 0 then assert false else Coq_xO (of_int (n lsr 1))
+    else
+      if n = 1 then Coq_xH else Coq_xI (of_int (n lsr 1))
 
   let rec to_int32 = function
   | Coq_xI p -> Int32.add (Int32.shift_left (to_int32 p) 1) 1l
@@ -82,11 +81,14 @@ module P = struct
   | Coq_xH -> 1l
 
   let rec of_int32 n =
-    if n = 0l then assert false else
-    if n = 1l then Coq_xH else
-    if Int32.logand n 1l = 0l
-    then Coq_xO (of_int32 (Int32.shift_right_logical n 1))
-    else Coq_xI (of_int32 (Int32.shift_right_logical n 1))
+    if Int32.logand n 1l = 0l then
+      if n = 0l
+      then assert false
+      else Coq_xO (of_int32 (Int32.shift_right_logical n 1))
+    else 
+      if n = 1l
+      then Coq_xH
+      else Coq_xI (of_int32 (Int32.shift_right_logical n 1))
 
   let rec to_int64 = function
   | Coq_xI p -> Int64.add (Int64.shift_left (to_int64 p) 1) 1L
@@ -94,11 +96,14 @@ module P = struct
   | Coq_xH -> 1L
 
   let rec of_int64 n =
-    if n = 0L then assert false else
-    if n = 1L then Coq_xH else
-    if Int64.logand n 1L = 0L
-    then Coq_xO (of_int64 (Int64.shift_right_logical n 1))
-    else Coq_xI (of_int64 (Int64.shift_right_logical n 1))
+    if Int64.logand n 1L = 0L then
+      if n = 0L
+      then assert false
+      else Coq_xO (of_int64 (Int64.shift_right_logical n 1))
+    else 
+      if n = 1L
+      then Coq_xH
+      else Coq_xI (of_int64 (Int64.shift_right_logical n 1))
 
   let (+) = add
   let (-) = sub
