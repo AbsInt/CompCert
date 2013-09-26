@@ -12,7 +12,7 @@
 
 (** Pretty-printing of operators, conditions, addressing modes *)
 
-open Format
+open Printf
 open Camlcoq
 open Integers
 open Op
