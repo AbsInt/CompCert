@@ -510,6 +510,8 @@ and elab_parameter env (spec, name) =
   if sto <> Storage_default && sto <> Storage_register then
     error (loc_of_name name)
       "'extern' or 'static' storage not supported for function parameter";
+  if redef Env.lookup_ident env id <> None then
+    error (loc_of_name name) "redefinition of parameter '%s'" id;
   (* replace array and function types by pointer types *)
   let ty1 = argument_conversion env1 ty in
   let (id', env2) = Env.enter_ident env1 id sto ty1 in
@@ -565,28 +567,31 @@ and elab_field_group loc env (spec, fieldlist) =
             | TInt(ik, _) -> ik
             | TEnum(_, _) -> enum_ikind
             | _ -> ILongLong (* trigger next error message *) in
-          if integer_rank ik > integer_rank IInt then
-              error loc
-                "the type of '%s' must be an integer type \
-                 no bigger than 'int'" id;
-          match Ceval.integer_expr env' (!elab_expr_f loc env sz) with
-          | Some n ->
-              if n < 0L then begin
-                error loc "bit size of '%s' (%Ld) is negative" id n;
+          if integer_rank ik > integer_rank IInt then begin
+            error loc
+              "the type of bitfield '%s' must be an integer type \
+               no bigger than 'int'" id;
+            None
+          end else begin
+            match Ceval.integer_expr env' (!elab_expr_f loc env sz) with
+            | Some n ->
+                if n < 0L then begin
+                  error loc "bit size of '%s' (%Ld) is negative" id n;
+                  None
+                end else
+                if n > Int64.of_int(sizeof_ikind ik * 8) then begin
+                  error loc "bit size of '%s' (%Ld) exceeds its type" id n;
+                  None
+                end else
+                if n = 0L && id <> "" then begin
+                  error loc "member '%s' has zero size" id;
+                  None
+                end else
+                  Some(Int64.to_int n)
+            | None ->
+                error loc "bit size of '%s' is not a compile-time constant" id;
                 None
-              end else
-              if n > Int64.of_int(sizeof_ikind ik * 8) then begin
-                error loc "bit size of '%s' (%Ld) exceeds its type" id n;
-                None
-              end else
-              if n = 0L && id <> "" then begin
-                error loc "member '%s' has zero size" id;
-                None
-              end else
-                Some(Int64.to_int n)
-          | None ->
-              error loc "bit size of '%s' is not a compile-time constant" id;
-              None in
+          end in
     { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize' } 
   in
   (List.map2 elab_bitfield fieldlist names, env')
@@ -1460,7 +1465,7 @@ let enter_typedef loc env (s, sto, ty) =
   if sto <> Storage_default then
     error loc "Non-default storage on 'typedef' definition";
   if redef Env.lookup_typedef env s <> None then
-    error loc "Redefinition of typedef '%s'" s;
+    error loc "redefinition of typedef '%s'" s;
   let (id, env') =
     Env.enter_typedef env s ty in
   emit_elab (elab_loc loc) (Gtypedef(id, ty));

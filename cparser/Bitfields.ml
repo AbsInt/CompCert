@@ -183,15 +183,13 @@ let bitfield_extract bf carrier =
     {edesc = EBinop(Oshl, carrier, left_shift_count bf, TInt(IUInt, []));
      etyp = carrier.etyp} in
   let ty = TInt((if bf.bf_signed then IInt else IUInt), []) in
-  let e2 =
-    {edesc = ECast(ty, e1); etyp = ty} in
+  let e2 = ecast ty e1 in
   let e3 =
     {edesc = EBinop(Oshr, e2, right_shift_count bf, e2.etyp);
      etyp = ty} in
-  if bf.bf_signed_res = bf.bf_signed then e3 else begin
-    let ty' = TInt((if bf.bf_signed_res then IInt else IUInt), []) in
-    {edesc = ECast(ty', e3); etyp = ty'}
-  end
+  if bf.bf_signed_res = bf.bf_signed
+  then e3
+  else ecast (TInt((if bf.bf_signed_res then IInt else IUInt), [])) e3
 
 (* Assign a bitfield within a carrier *)
 
@@ -208,8 +206,10 @@ unsigned int bitfield_insert(unsigned int x, int ofs, int sz, unsigned int y)
 let bitfield_assign bf carrier newval =
   let msk = insertion_mask bf in
   let notmsk = {edesc = EUnop(Onot, msk); etyp = msk.etyp} in
+  let newval_casted =
+    ecast (TInt(IUInt,[])) newval in
   let newval_shifted =
-    {edesc = EBinop(Oshl, newval, intconst (Int64.of_int bf.bf_pos) IUInt,
+    {edesc = EBinop(Oshl, newval_casted, intconst (Int64.of_int bf.bf_pos) IUInt,
                     TInt(IUInt,[]));
      etyp = TInt(IUInt,[])} in
   let newval_masked =
