@@ -123,6 +123,7 @@ let init_lexicon _ =
       ("for", fun loc -> FOR loc);
       ("if", fun loc -> IF loc);
       ("else", fun _ -> ELSE);
+      ("sizeof", fun loc -> SIZEOF loc);
       (*** Implementation specific keywords ***)
       ("__signed__", fun loc -> SIGNED loc);
       ("__inline__", fun loc -> INLINE loc);
@@ -150,6 +151,7 @@ let init_lexicon _ =
       ("_Alignof", fun loc -> ALIGNOF loc);
       ("__alignof", fun loc -> ALIGNOF loc);
       ("__alignof__", fun loc -> ALIGNOF loc);
+      ("_Alignas", fun loc -> ALIGNAS loc);
       ("__volatile__", fun loc -> VOLATILE loc);
       ("__volatile", fun loc -> VOLATILE loc);
 
@@ -160,6 +162,7 @@ let init_lexicon _ =
       (*** weimer: GCC arcana ***)
       ("__restrict", fun loc -> RESTRICT loc);
       ("restrict", fun loc -> RESTRICT loc);
+      ("__packed__", fun loc -> PACKED loc);
 (*      ("__extension__", EXTENSION); *)
       (**** MS VC ***)
       ("__int64", fun loc -> INT64 loc);
@@ -487,7 +490,9 @@ rule initial =
 |		';'		       { (SEMICOLON (currentLoc lexbuf)) }
 |		','				{COMMA}
 |		'.'				{DOT}
+(* XL: redundant? 
 |		"sizeof"		{SIZEOF (currentLoc lexbuf)}
+*)
 |               "__asm"                 { if !msvcMode then 
                                              MSASM (msasm lexbuf, currentLoc lexbuf) 
                                           else (ASM (currentLoc lexbuf)) }

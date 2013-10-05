@@ -307,7 +307,7 @@ Definition make_load (addr: expr) (ty_res: type) :=
   by-copy assignment of a value of Clight type [ty]. *)
 
 Definition make_memcpy (dst src: expr) (ty: type) :=
-  Sbuiltin None (EF_memcpy (Ctypes.sizeof ty) (Ctypes.alignof ty))
+  Sbuiltin None (EF_memcpy (Ctypes.sizeof ty) (Ctypes.alignof_blockcopy ty))
                 (dst :: src :: nil).
 
 (** [make_store addr ty rhs] stores the value of the

@@ -17,6 +17,7 @@
 
 open Datatypes
 open BinNums
+open BinNat
 open BinInt
 open BinPos
 open Floats
@@ -115,6 +116,57 @@ module P = struct
 
 end
 
+(* Coq's [N] type and some of its operations *)
+
+module N = struct
+
+  type t = coq_N = N0 | Npos of positive
+
+  let zero = N0
+  let one = Npos Coq_xH
+  let succ = N.succ
+  let pred = N.pred
+  let add = N.add
+  let sub = N.sub
+  let mul = N.mul
+  let eq x y = (N.compare x y = Eq)
+  let lt x y = (N.compare x y = Lt)
+  let gt x y = (N.compare x y = Gt)
+  let le x y = (N.compare x y <> Gt)
+  let ge x y = (N.compare x y <> Lt)
+  let compare x y = match N.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
+
+  let to_int = function
+  | N0 -> 0
+  | Npos p -> P.to_int p
+
+  let of_int n =
+    if n = 0 then N0 else Npos (P.of_int n)
+
+  let to_int32 = function
+  | N0 -> 0l
+  | Npos p -> P.to_int32 p
+
+  let of_int32 n =
+    if n = 0l then N0 else Npos (P.of_int32 n)
+
+  let to_int64 = function
+  | N0 -> 0L
+  | Npos p -> P.to_int64 p
+
+  let of_int64 n =
+    if n = 0L then N0 else Npos (P.of_int64 n)
+
+  let (+) = add
+  let (-) = sub
+  let ( * ) = mul
+  let (=) = eq
+  let (<) = lt
+  let (<=) = le
+  let (>) = gt
+  let (>=) = ge
+end
+
 (* Coq's [Z] type and some of its operations *)
 
 module Z = struct
@@ -176,6 +228,8 @@ module Z = struct
   let of_uint64 n =
     if n = 0L then Z0 else Zpos (P.of_int64 n)
 
+  let of_N = Z.of_N
+
   let rec to_string_rec base buff x =
     if x = Z0 then () else begin
       let (q, r) = Z.div_eucl x base in
@@ -214,6 +268,7 @@ module Z = struct
   let (>) = gt
   let (>=) = ge
 end
+
 
 (* Alternate names *)
 

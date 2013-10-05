@@ -137,10 +137,15 @@ let coqint64 p n =
 let use_struct_names = ref true
 
 let rec typ p t =
-  let a = attr_of_type t in
-  if a (*.attr_volatile*)
-  then fprintf p "(tvolatile %a)" rtyp t
-  else rtyp p t
+  match attr_of_type t with
+  | { attr_volatile = false; attr_alignas = None} ->
+        rtyp p t
+  | { attr_volatile = true; attr_alignas = None} ->
+        fprintf p "(tvolatile %a)" rtyp t
+  | { attr_volatile = false; attr_alignas = Some n} ->
+        fprintf p "(talignas %ld%%N %a)" (N.to_int32 n) rtyp t
+  | { attr_volatile = true; attr_alignas = Some n} ->
+        fprintf p "(tvolatile_alignas %ld%%N %a)" (N.to_int32 n) rtyp t
 
 and rtyp p = function
   | Tvoid -> fprintf p "tvoid"

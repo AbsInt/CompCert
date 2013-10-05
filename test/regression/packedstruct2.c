@@ -4,9 +4,7 @@
 
 /* Simple packing */
 
-#pragma pack(1)
-
-struct s1 { unsigned short x; int y; char z; };
+struct __packed__ s1 { unsigned short x; int y; char z; };
 
 struct s1 s1 = { 2345, -12345678, 'x' };
 
@@ -17,9 +15,7 @@ void test1(void)
 
 /* Now with byte-swapped fields */
 
-#pragma pack(1,1,1)
-
-struct s3 {
+struct __packed__(1,1,1) s3 {
   unsigned char x; 
   unsigned short y;
   unsigned int z;
@@ -46,8 +42,6 @@ void test3(void)
 }
 
 /* Back to normal */
-
-#pragma pack()
 
 struct s4 { unsigned short x; int y; double z; };
 

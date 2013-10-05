@@ -657,9 +657,9 @@ Proof.
   econstructor.
   econstructor. eauto. econstructor. eauto. constructor. 
   econstructor; eauto. 
-  apply alignof_1248.
+  apply alignof_blockcopy_1248.
   apply sizeof_pos. 
-  apply sizeof_alignof_compat.
+  eapply Zdivide_trans. apply alignof_blockcopy_divides. apply sizeof_alignof_compat.
 Qed.
  
 Lemma make_store_correct:

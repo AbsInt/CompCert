@@ -45,14 +45,15 @@ Inductive floatsize : Type :=
   | F32: floatsize
   | F64: floatsize.
 
-(** Every type carries a set of attributes.  Currently, only one
-  attribute is modeled: [volatile]. *)
+(** Every type carries a set of attributes.  Currently, only two
+  attributes are modeled: [volatile] and [_Alignas(n)] (from ISO C 2011). *)
 
 Record attr : Type := mk_attr {
-  attr_volatile: bool
+  attr_volatile: bool;
+  attr_alignas: option N         (**r log2 of required alignment *)
 }.
 
-Definition noattr := {| attr_volatile := false |}.
+Definition noattr := {| attr_volatile := false; attr_alignas := None |}.
 
 (** The syntax of type expressions.  Some points to note:
 - Array types [Tarray n] carry the size [n] of the array.
@@ -113,10 +114,11 @@ Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}
 with typelist_eq: forall (tyl1 tyl2: typelist), {tyl1=tyl2} + {tyl1<>tyl2}
 with fieldlist_eq: forall (fld1 fld2: fieldlist), {fld1=fld2} + {fld1<>fld2}.
 Proof.
-  assert (forall (x y: intsize), {x=y} + {x<>y}). decide equality.
-  assert (forall (x y: signedness), {x=y} + {x<>y}). decide equality.
-  assert (forall (x y: floatsize), {x=y} + {x<>y}). decide equality.
-  assert (forall (x y: attr), {x=y} + {x<>y}). decide equality. apply bool_dec.
+  assert (forall (x y: intsize), {x=y} + {x<>y}) by decide equality.
+  assert (forall (x y: signedness), {x=y} + {x<>y}) by decide equality.
+  assert (forall (x y: floatsize), {x=y} + {x<>y}) by decide equality.
+  assert (forall (x y: attr), {x=y} + {x<>y}).
+  { decide equality. decide equality. apply N.eq_dec. apply bool_dec. }
   generalize ident_eq zeq. intros E1 E2. 
   decide equality.
   decide equality.
@@ -161,21 +163,25 @@ Definition typeconv (ty: type) : type :=
 (** Natural alignment of a type, in bytes. *)
 
 Fixpoint alignof (t: type) : Z :=
-  match t with
-  | Tvoid => 1
-  | Tint I8 _ _ => 1
-  | Tint I16 _ _ => 2
-  | Tint I32 _ _ => 4
-  | Tint IBool _ _ => 1
-  | Tlong _ _ => 8
-  | Tfloat F32 _ => 4
-  | Tfloat F64 _ => 8
-  | Tpointer _ _ => 4
-  | Tarray t' _ _ => alignof t'
-  | Tfunction _ _ => 1
-  | Tstruct _ fld _ => alignof_fields fld
-  | Tunion _ fld _ => alignof_fields fld
-  | Tcomp_ptr _ _ => 4
+  match attr_alignas (attr_of_type t) with
+  | Some l => two_p (Z.of_N l)
+  | None =>
+      match t with
+      | Tvoid => 1
+      | Tint I8 _ _ => 1
+      | Tint I16 _ _ => 2
+      | Tint I32 _ _ => 4
+      | Tint IBool _ _ => 1
+      | Tlong _ _ => 8
+      | Tfloat F32 _ => 4
+      | Tfloat F64 _ => 8
+      | Tpointer _ _ => 4
+      | Tarray t' _ _ => alignof t'
+      | Tfunction _ _ => 1
+      | Tstruct _ fld _ => alignof_fields fld
+      | Tunion _ fld _ => alignof_fields fld
+      | Tcomp_ptr _ _ => 4
+      end
   end
 
 with alignof_fields (f: fieldlist) : Z :=
@@ -187,49 +193,72 @@ with alignof_fields (f: fieldlist) : Z :=
 Scheme type_ind2 := Induction for type Sort Prop
   with fieldlist_ind2 := Induction for fieldlist Sort Prop.
 
-Lemma alignof_1248:
-  forall t, alignof t = 1 \/ alignof t = 2 \/ alignof t = 4 \/ alignof t = 8
-with alignof_fields_1248:
-  forall f, alignof_fields f = 1 \/ alignof_fields f = 2 \/ alignof_fields f = 4 \/ alignof_fields f = 8.
+Lemma alignof_two_p:
+  forall t, exists n, alignof t = two_power_nat n
+with alignof_fields_two_p:
+  forall f, exists n, alignof_fields f = two_power_nat n.
 Proof.
-  induction t; simpl; auto.
-  destruct i; auto.
-  destruct f; auto.
-  induction f; simpl; auto.
-  rewrite Zmax_spec. destruct (zlt (alignof_fields f) (alignof t)); auto.
+  assert (X: forall t a,
+    (exists n, a = two_power_nat n) ->
+    exists n,
+    match attr_alignas (attr_of_type t) with
+    | Some l => two_p (Z.of_N l)
+    | None => a
+    end = two_power_nat n).
+  {
+    intros.  
+    destruct (attr_alignas (attr_of_type t)).
+    exists (N.to_nat n). rewrite two_power_nat_two_p. rewrite N_nat_Z. auto.
+    auto.
+  }
+  induction t; apply X; simpl; auto.
+  exists 0%nat; auto.
+  destruct i.
+    exists 0%nat; auto. exists 1%nat; auto. exists 2%nat; auto.
+    exists 0%nat; auto. exists 3%nat; auto.
+  destruct f.
+    exists 2%nat; auto. exists 3%nat; auto.
+  exists 2%nat; auto.
+  exists 0%nat; auto.
+  exists 2%nat; auto.
+  induction f; simpl.
+  exists 0%nat; auto.
+  apply Z.max_case; auto.
 Qed.
 
 Lemma alignof_pos:
   forall t, alignof t > 0.
 Proof.
-  intros. generalize (alignof_1248 t). omega.
+  intros. destruct (alignof_two_p t) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 Qed.
 
 Lemma alignof_fields_pos:
   forall f, alignof_fields f > 0.
 Proof.
-  intros. generalize (alignof_fields_1248 f). omega.
+  intros. destruct (alignof_fields_two_p f) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
 Qed.
 
 (** Size of a type, in bytes. *)
 
 Fixpoint sizeof (t: type) : Z :=
-  match t with
-  | Tvoid => 1
-  | Tint I8 _ _ => 1
-  | Tint I16 _ _ => 2
-  | Tint I32 _ _ => 4
-  | Tint IBool _ _ => 1
-  | Tlong _ _ => 8
-  | Tfloat F32 _ => 4
-  | Tfloat F64 _ => 8
-  | Tpointer _ _ => 4
-  | Tarray t' n _ => sizeof t' * Zmax 1 n
-  | Tfunction _ _ => 1
-  | Tstruct _ fld _ => align (Zmax 1 (sizeof_struct fld 0)) (alignof t)
-  | Tunion _ fld _ => align (Zmax 1 (sizeof_union fld)) (alignof t)
-  | Tcomp_ptr _ _ => 4
-  end
+  let sz :=
+    match t with
+    | Tvoid => 1
+    | Tint I8 _ _ => 1
+    | Tint I16 _ _ => 2
+    | Tint I32 _ _ => 4
+    | Tint IBool _ _ => 1
+    | Tlong _ _ => 8
+    | Tfloat F32 _ => 4
+    | Tfloat F64 _ => 8
+    | Tpointer _ _ => 4
+    | Tarray t' n _ => sizeof t' * Zmax 1 n
+    | Tfunction _ _ => 1
+    | Tstruct _ fld _ => Zmax 1 (sizeof_struct fld 0)
+    | Tunion _ fld _ => Zmax 1 (sizeof_union fld)
+    | Tcomp_ptr _ _ => 4
+    end
+  in align sz (alignof t)
 
 with sizeof_struct (fld: fieldlist) (pos: Z) {struct fld} : Z :=
   match fld with
@@ -246,23 +275,15 @@ with sizeof_union (fld: fieldlist) : Z :=
 Lemma sizeof_pos:
   forall t, sizeof t > 0.
 Proof.
-  intro t0.
-  apply (type_ind2 (fun t => sizeof t > 0)
-                   (fun f => sizeof_union f >= 0 /\ forall pos, pos >= 0 -> sizeof_struct f pos >= 0));
-  intros; simpl; auto; try omega.
+  assert (X: forall t sz, sz > 0 -> align sz (alignof t) > 0).
+  {
+    intros. generalize (align_le sz (alignof t) (alignof_pos t)). omega. 
+  }
+Local Opaque alignof.
+  induction t; simpl; apply X; try xomega.
   destruct i; omega.
   destruct f; omega.
-  apply Zmult_gt_0_compat. auto. generalize (Zmax1 1 z); omega.
-  destruct H. 
-  generalize (align_le (Zmax 1 (sizeof_struct f 0)) (alignof_fields f) (alignof_fields_pos f)). 
-  generalize (Zmax1 1 (sizeof_struct f 0)). omega. 
-  generalize (align_le (Zmax 1 (sizeof_union f)) (alignof_fields f) (alignof_fields_pos f)). 
-  generalize (Zmax1 1 (sizeof_union f)). omega. 
-  split. omega. auto.
-  destruct H0. split; intros.
-  generalize (Zmax2 (sizeof t) (sizeof_union f)). omega.
-  apply H1. 
-  generalize (align_le pos (alignof t) (alignof_pos t)). omega.
+  apply Zmult_gt_0_compat. auto. xomega.
 Qed.
 
 Lemma sizeof_struct_incr:
@@ -271,17 +292,14 @@ Proof.
   induction fld; intros; simpl. omega. 
   eapply Zle_trans. 2: apply IHfld.
   apply Zle_trans with (align pos (alignof t)). 
-  apply align_le. apply alignof_pos. 
-  assert (sizeof t > 0) by apply sizeof_pos. omega.
+  apply align_le. apply alignof_pos.
+  generalize (sizeof_pos t); omega.
 Qed.
 
 Lemma sizeof_alignof_compat:
   forall t, (alignof t | sizeof t).
 Proof.
-  induction t; simpl; try (apply Zdivide_refl).
-  apply Zdivide_mult_l. auto.
-  apply align_divides. apply alignof_fields_pos.
-  apply align_divides. apply alignof_fields_pos.
+  intros. destruct t; apply align_divides; apply alignof_pos.
 Qed.
 
 (** Byte offset for a field in a struct or union.
@@ -333,7 +351,7 @@ Lemma field_offset_in_range:
 Proof.
   intros. exploit field_offset_rec_in_range; eauto. intros [A B].
   split. auto.  simpl. eapply Zle_trans. eauto.
-  eapply Zle_trans. eapply Zle_max_r. apply align_le. apply alignof_fields_pos.
+  eapply Zle_trans. eapply Zle_max_r. apply align_le. apply alignof_pos.
 Qed.
 
 (** Second, two distinct fields do not overlap *)
@@ -484,39 +502,82 @@ with unroll_composite_fields (fld: fieldlist) : fieldlist :=
   | Fcons id ty fld' => Fcons id (unroll_composite ty) (unroll_composite_fields fld')
   end.
 
+Lemma attr_of_type_unroll_composite:
+  forall ty, attr_of_type (unroll_composite ty) = attr_of_type ty.
+Proof.
+  intros. destruct ty; simpl; auto; destruct (ident_eq i cid); auto.
+Qed.
+
 Lemma alignof_unroll_composite:
   forall ty, alignof (unroll_composite ty) = alignof ty.
 Proof.
+Local Transparent alignof.
   apply (type_ind2 (fun ty => alignof (unroll_composite ty) = alignof ty)
                    (fun fld => alignof_fields (unroll_composite_fields fld) = alignof_fields fld));
   simpl; intros; auto.
-  destruct (ident_eq i cid); auto. 
-  destruct (ident_eq i cid); auto. 
-  destruct (ident_eq i cid); auto.
-  decEq; auto.
+  rewrite H; auto.
+  destruct (ident_eq i cid); auto. simpl. rewrite H; auto.
+  destruct (ident_eq i cid); auto. simpl. rewrite H; auto.
+  destruct (ident_eq i cid); auto. congruence.
 Qed.
 
 Lemma sizeof_unroll_composite:
   forall ty, sizeof (unroll_composite ty) = sizeof ty.
 Proof.
-Opaque alignof.
+Local Opaque alignof.
   apply (type_ind2 (fun ty => sizeof (unroll_composite ty) = sizeof ty)
                    (fun fld => 
                       sizeof_union (unroll_composite_fields fld) = sizeof_union fld
                    /\ forall pos,
                       sizeof_struct (unroll_composite_fields fld) pos = sizeof_struct fld pos));
   simpl; intros; auto.
-  congruence.
-  destruct H. rewrite <- (alignof_unroll_composite (Tstruct i f a)).
-  simpl. destruct (ident_eq i cid); simpl. auto. rewrite H0; auto.
-  destruct H. rewrite <- (alignof_unroll_composite (Tunion i f a)).
-  simpl. destruct (ident_eq i cid); simpl. auto. rewrite H; auto.
-  destruct (ident_eq i cid); auto.
-  destruct H0. split. congruence.
-  intros. rewrite alignof_unroll_composite. rewrite H1. rewrite H. auto.
+- rewrite H. rewrite <- (alignof_unroll_composite (Tarray t z a)). auto.
+- rewrite <- (alignof_unroll_composite (Tstruct i f a)). simpl.
+  destruct H. destruct (ident_eq i cid). auto. simpl. rewrite H0. auto.
+- rewrite <- (alignof_unroll_composite (Tunion i f a)). simpl.
+  destruct H. destruct (ident_eq i cid). auto. simpl. rewrite H. auto.
+- destruct (ident_eq i cid); auto. 
+- destruct H0. split. 
+  + congruence.
+  + intros. rewrite H1. rewrite H. rewrite alignof_unroll_composite. auto.
 Qed.
 
 End UNROLL_COMPOSITE.
+
+(** A variatn of [alignof] for use in block copy operations
+  (which do not support alignments greater than 8). *)
+
+Definition alignof_blockcopy (ty: type) := Zmin 8 (alignof ty).
+
+Lemma alignof_blockcopy_1248:
+  forall ty, let a := alignof_blockcopy ty in a = 1 \/ a = 2 \/ a = 4 \/ a = 8.
+Proof.
+  intros. unfold a, alignof_blockcopy. 
+  destruct (alignof_two_p ty) as [n EQ]. rewrite EQ.
+  destruct n; auto.
+  destruct n; auto.
+  destruct n; auto.
+  right; right; right. apply Z.min_l.
+  rewrite two_power_nat_two_p. rewrite ! inj_S. 
+  change 8 with (two_p 3). 
+  apply two_p_monotone. omega.
+Qed.
+
+Lemma alignof_blockcopy_divides:
+  forall ty, (alignof_blockcopy ty | alignof ty).
+Proof.
+  intros. unfold alignof_blockcopy. 
+  destruct (alignof_two_p ty) as [n EQ]. rewrite EQ.
+  destruct n. apply Zdivide_refl.
+  destruct n. apply Zdivide_refl.
+  destruct n. apply Zdivide_refl.
+  replace (two_power_nat (S(S(S n)))) with (two_p (3 + Z.of_nat n)).
+  rewrite two_p_is_exp by omega. change (two_p 3) with 8.
+  apply Z.min_case. 
+  exists (two_p (Z.of_nat n)). ring.
+  apply Zdivide_refl.
+  rewrite two_power_nat_two_p. rewrite !inj_S. f_equal. omega.
+Qed.
 
 (** Extracting a type list from a function parameter declaration. *)
 

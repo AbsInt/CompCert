@@ -220,7 +220,7 @@ let transformOffsetOf (speclist, dtype) member =
 %token<Cabs.cabsloc> VOLATILE EXTERN STATIC CONST RESTRICT AUTO REGISTER
 %token<Cabs.cabsloc> THREAD
 
-%token<Cabs.cabsloc> SIZEOF ALIGNOF
+%token<Cabs.cabsloc> SIZEOF ALIGNOF ALIGNAS
 
 %token EQ PLUS_EQ MINUS_EQ STAR_EQ SLASH_EQ PERCENT_EQ
 %token AND_EQ PIPE_EQ CIRC_EQ INF_INF_EQ SUP_SUP_EQ
@@ -252,7 +252,7 @@ let transformOffsetOf (speclist, dtype) member =
 
 %token<Cabs.cabsloc> ATTRIBUTE INLINE ASM TYPEOF FUNCTION__ PRETTY_FUNCTION__
 %token LABEL__
-%token<Cabs.cabsloc> BUILTIN_VA_ARG ATTRIBUTE_USED
+%token<Cabs.cabsloc> BUILTIN_VA_ARG ATTRIBUTE_USED PACKED
 %token BUILTIN_VA_LIST
 %token BLOCKATTRIBUTE 
 %token<Cabs.cabsloc> BUILTIN_TYPES_COMPAT BUILTIN_OFFSETOF
@@ -1244,6 +1244,13 @@ attribute_nocv:
 |   ATTRIBUTE_USED                      { ("__attribute__", 
                                              [ VARIABLE "used" ]), $1 }
 *)*/
+|   ALIGNAS paren_comma_expression
+          { ("_Alignas", [smooth_expression(fst $2)]), $1 }
+|   ALIGNAS LPAREN type_name RPAREN
+          { let (b, d) = $3 in
+            ("_Alignas", [TYPE_ALIGNOF(b, d)]), $1 }
+|   PACKED LPAREN attr_list RPAREN      { ("__packed__", $3), $1 }
+|   PACKED                              { ("__packed__", []), $1 }
 |   DECLSPEC paren_attr_list_ne         { ("__declspec", $2), $1 }
 |   MSATTR                              { (fst $1, []), snd $1 }
                                         /* ISO 6.7.3 */
@@ -1265,10 +1272,17 @@ attribute:
 
 /* (* sm: I need something that just includes __attribute__ and nothing more,
  *  to support them appearing between the 'struct' keyword and the type name. 
- * Actually, a declspec can appear there as well (on MSVC) *)  */
+ * Actually, a declspec can appear there as well (on MSVC).
+ * XL: ... and so does _Alignas(). *)  */
 just_attribute:
     ATTRIBUTE LPAREN paren_attr_list RPAREN
                                         { ("__attribute__", $3) }
+|   ALIGNAS paren_comma_expression
+          { ("_Alignas", [smooth_expression(fst $2)]) }
+|   ALIGNAS LPAREN type_name RPAREN
+          { let (b, d) = $3 in ("_Alignas", [TYPE_ALIGNOF(b, d)]) }
+|   PACKED LPAREN attr_list RPAREN      { ("__packed__", $3) }
+|   PACKED                              { ("__packed__", []) }
 |   DECLSPEC paren_attr_list_ne         { ("__declspec", $2) }
 ;
 

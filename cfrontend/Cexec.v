@@ -285,7 +285,7 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: int) : o
   end.
 
 Definition assign_copy_ok (ty: type) (b: block) (ofs: int) (b': block) (ofs': int) : Prop :=
-  (alignof ty | Int.unsigned ofs') /\ (alignof ty | Int.unsigned ofs) /\
+  (alignof_blockcopy ty | Int.unsigned ofs') /\ (alignof_blockcopy ty | Int.unsigned ofs) /\
   (b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
            \/ Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs
            \/ Int.unsigned ofs + sizeof ty <= Int.unsigned ofs').
@@ -295,9 +295,10 @@ Remark check_assign_copy:
   { assign_copy_ok ty b ofs b' ofs' } + {~ assign_copy_ok ty b ofs b' ofs' }.
 Proof with try (right; intuition omega).
   intros. unfold assign_copy_ok. 
-  assert (alignof ty > 0). apply alignof_pos; auto.
-  destruct (Zdivide_dec (alignof ty) (Int.unsigned ofs')); auto...
-  destruct (Zdivide_dec (alignof ty) (Int.unsigned ofs)); auto...
+  assert (alignof_blockcopy ty > 0).
+  { unfold alignof_blockcopy. apply Z.min_case. omega. apply alignof_pos. }
+  destruct (Zdivide_dec (alignof_blockcopy ty) (Int.unsigned ofs')); auto...
+  destruct (Zdivide_dec (alignof_blockcopy ty) (Int.unsigned ofs)); auto...
   assert (Y: {b' <> b \/
               Int.unsigned ofs' = Int.unsigned ofs \/
               Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs \/

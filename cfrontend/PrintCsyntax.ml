@@ -78,7 +78,11 @@ let struct_unions = ref StructUnion.empty
 (* Declarator (identifier + type) *)
 
 let attributes a =
-  if attr_volatile a then " volatile" else ""
+  let s1 = if a.attr_volatile then " volatile" else "" in
+  match a.attr_alignas with
+  | None -> s1
+  | Some l ->
+      sprintf " _Alignas(%Ld)%s" (Int64.shift_left 1L (N.to_int l)) s1
 
 let name_optid id =
   if id = "" then "" else " " ^ id

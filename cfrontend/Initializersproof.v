@@ -523,21 +523,22 @@ Qed.
 Lemma transl_init_single_size:
   forall ty a data,
   transl_init_single ty a = OK data ->
-  Genv.init_data_size data = sizeof ty.
-Proof.
+  Genv.init_data_size data <= sizeof ty.
+Proof with (simpl; apply align_le; apply alignof_pos).
+Local Opaque alignof.
   intros. monadInv H. destruct x0. 
   monadInv EQ2.
   destruct ty; try discriminate. 
-  destruct i0; inv EQ2; reflexivity.
-  inv EQ2; reflexivity.
-  inv EQ2; reflexivity.
-  destruct ty; inv EQ2; reflexivity. 
+  destruct i0; inv EQ2...
+  inv EQ2...
+  inv EQ2...
+  destruct ty; inv EQ2...
   destruct ty; try discriminate.
-  destruct f0; inv EQ2; reflexivity.
+  destruct f0; inv EQ2...
   destruct ty; try discriminate.
-  destruct i0; inv EQ2; reflexivity.
-  inv EQ2; reflexivity.
-  inv EQ2; reflexivity.
+  destruct i0; inv EQ2...
+  inv EQ2...
+  inv EQ2...
 Qed.
 
 Notation idlsize := Genv.init_data_list_size.
@@ -616,25 +617,31 @@ with transl_init_list_size:
 Proof.
   induction i; intros. 
   (* single *)
-  monadInv H. simpl. rewrite (transl_init_single_size _ _ _ EQ). omega.
+  monadInv H. simpl. rewrite padding_size. omega. eapply transl_init_single_size; eauto.
   (* compound *)
   simpl in H. destruct ty; try discriminate.
   (* compound array *)
-  destruct (zle z 0). 
-  monadInv H. simpl. repeat rewrite Zmax_spec. rewrite zlt_true. rewrite zlt_true. ring.
-  omega. generalize (sizeof_pos ty); omega.
-  simpl. rewrite Zmax_spec. rewrite zlt_false.
-  eapply (proj1 (transl_init_list_size il)). auto. omega.
+  set (sz := sizeof (Tarray ty z a)) in *.
+  destruct (zle z 0). inv H. simpl. rewrite Z.max_l. omega. 
+  generalize (sizeof_pos (Tarray ty z a)). unfold sz; omega.
+  monadInv H. exploit (proj1 (transl_init_list_size il)); eauto. intros SX.
+  assert (sizeof ty * z <= sz).
+  { unfold sz. simpl. rewrite Z.max_r. apply align_le; apply alignof_pos. omega. }
+  destruct (zle (sz - sizeof ty * z)).
+  omega.
+  rewrite idlsize_app. simpl. rewrite Z.max_l by omega. omega. 
   (* compound struct *)
-  destruct f. 
-  inv H. reflexivity.
+  set (sz := sizeof (Tstruct i f a)) in *.
+  destruct f.
+  inv H. simpl. rewrite Z.max_l. omega. generalize (sizeof_pos (Tstruct i Fnil a)); unfold sz; omega. 
   replace (idlsize data) with (idlsize data + 0) by omega.
   eapply (proj1 (proj2 (transl_init_list_size il))). eauto.
   rewrite sizeof_struct_eq. 2: congruence. 
   apply align_le. apply alignof_pos.
   (* compound union *)
+  set (sz := sizeof (Tunion i f a)) in *.
   destruct f.
-  inv H. reflexivity.
+  inv H. simpl. rewrite Z.max_l. omega. generalize (sizeof_pos (Tunion i Fnil a)); unfold sz; omega. 
   eapply (proj2 (proj2 (transl_init_list_size il))). eauto. 
   rewrite sizeof_union_eq. 2: congruence. 
   eapply Zle_trans. 2: apply align_le. simpl. apply Zmax_bound_l. omega. 
@@ -767,12 +774,17 @@ Proof.
   (* single *)
   monadInv H3.
   exploit transl_init_single_steps; eauto. intros. 
-  simpl. rewrite H3. auto.
+  simpl. rewrite H3. apply store_init_data_list_padding. 
   (* array *)
   destruct (zle sz 0).
   exploit exec_init_array_length; eauto. destruct il; intros.
   subst. inv H. inv H1. auto. omegaContradiction.
+  monadInv H1.
+  change (align (sizeof ty * Z.max 1 sz) (alignof (Tarray ty sz a)))
+    with (sizeof (Tarray ty sz a)). 
+  destruct (zle (sizeof (Tarray ty sz a) - sizeof ty * sz) 0).
   eauto.
+  eapply store_init_data_list_app; eauto. 
   (* struct *)
   destruct fl.
   inv H. inv H1. auto.

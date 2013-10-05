@@ -91,7 +91,8 @@ Inductive assign_loc {F V: Type} (ge: Genv.t F V) (ty: type) (m: mem) (b: block)
       assign_loc ge ty m b ofs v t m'
   | assign_loc_copy: forall b' ofs' bytes m',
       access_mode ty = By_copy ->
-      (alignof ty | Int.unsigned ofs') -> (alignof ty | Int.unsigned ofs) ->
+      (alignof_blockcopy ty | Int.unsigned ofs') ->
+      (alignof_blockcopy ty | Int.unsigned ofs) ->
       b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
               \/ Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs
               \/ Int.unsigned ofs + sizeof ty <= Int.unsigned ofs' ->

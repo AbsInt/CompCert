@@ -761,10 +761,12 @@ Qed.
 
 Lemma sizeof_by_value:
   forall ty chunk,
-  access_mode ty = By_value chunk -> sizeof ty = size_chunk chunk.
+  access_mode ty = By_value chunk -> size_chunk chunk <= sizeof ty.
 Proof.
-  unfold access_mode; intros. 
-  destruct ty; try destruct i; try destruct s; try destruct f; inv H; auto.
+  unfold access_mode; intros.
+Local Opaque alignof. 
+  destruct ty; try destruct i; try destruct s; try destruct f; inv H;
+  apply align_le; apply alignof_pos.
 Qed.
 
 Definition env_initial_value (e: env) (m: mem) :=
@@ -782,7 +784,7 @@ Proof.
   apply IHalloc_variables. red; intros. rewrite PTree.gsspec in H2. 
   destruct (peq id0 id). inv H2. 
   eapply Mem.load_alloc_same'; eauto. 
-  omega. erewrite sizeof_by_value; eauto. omega. 
+  omega. rewrite Zplus_0_l. eapply sizeof_by_value; eauto. 
   apply Zdivide_0. 
   eapply Mem.load_alloc_other; eauto. 
 Qed.
@@ -1044,10 +1046,10 @@ Proof.
   exploit Mem.storebytes_mapped_inject; eauto. intros [tm' [C D]].
   exists tm'. 
   split. eapply assign_loc_copy; try rewrite EQ1; try rewrite EQ2; eauto. 
-  eapply Mem.aligned_area_inject with (m := m); eauto. apply alignof_1248.
-  apply sizeof_alignof_compat.
-  eapply Mem.aligned_area_inject with (m := m); eauto. apply alignof_1248.
-  apply sizeof_alignof_compat.
+  eapply Mem.aligned_area_inject with (m := m); eauto. apply alignof_blockcopy_1248.
+  eapply Zdivide_trans. apply alignof_blockcopy_divides. apply sizeof_alignof_compat.
+  eapply Mem.aligned_area_inject with (m := m); eauto. apply alignof_blockcopy_1248.
+  eapply Zdivide_trans. apply alignof_blockcopy_divides. apply sizeof_alignof_compat.
   eapply Mem.disjoint_or_equal_inject with (m := m); eauto.
   apply Mem.range_perm_max with Cur; auto.
   apply Mem.range_perm_max with Cur; auto.

@@ -15,6 +15,11 @@ Development trunk:
 - PowerPC: more efficient implementation of division on 64-bit integers.
 - Minor simplifications in the generic solvers for dataflow analysis.
 - Small improvements in compilation times for the register allocation pass.
+- Support for _Alignas(N) attribute from ISO C 2011.
+- Revised implementation of packed structs, taking advantage of _Alignas.
+- Suppressed the pragma "packed", replaced by a struct-level attribute
+  __packed__(params) or __attribute__(packed(params)).
+- Fixed compile-time error when assigning a long long RHS to a bitfield.
 
 
 Release 2.0, 2013-06-21

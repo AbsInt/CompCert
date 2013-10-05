@@ -71,6 +71,14 @@ let rec find_custom_attributes (names: string list)  (al: attributes) =
   | _ :: tl ->
       find_custom_attributes names tl
 
+let rec remove_custom_attributes (names: string list)  (al: attributes) =
+  match al with
+  | [] -> []
+  | Attr(name, args) :: tl when List.mem name names ->
+      remove_custom_attributes names tl
+  | a :: tl ->
+      a :: remove_custom_attributes names tl
+
 (* Adding top-level attributes to a type.  Doesn't need to unroll defns. *)
 (* Array types cannot carry attributes, so add them to the element type. *)
 
@@ -146,6 +154,15 @@ let erase_attributes_type env t =
 let attr_is_type_related = function
   | Attr(("packed" | "__packed__"), _) -> true
   | _ -> false
+
+(* Extracting alignment value from a set of attributes.  Return 0 if none. *)
+
+let alignas_attribute al =
+  let rec alignas_attr accu = function
+  | [] -> accu
+  | AAlignas n :: al -> alignas_attr (max n accu) al
+  | a :: al -> alignas_attr accu al
+  in alignas_attr 0 al
 
 (* Type compatibility *)
 
@@ -266,6 +283,8 @@ let alignof_fkind = function
 let enum_ikind = IInt
 
 let rec alignof env t =
+  let a = alignas_attribute (attributes_of_type env t) in
+  if a > 0 then Some a else
   match t with
   | TVoid _ -> !config.alignof_void
   | TInt(ik, _) -> Some(alignof_ikind ik)
@@ -325,6 +344,13 @@ let cautious_mul (a: int64) (b: int) =
 (* Return size of type, in bytes, or [None] if the type is incomplete *)
 
 let rec sizeof env t =
+  match sizeof_aux env t with
+  | None -> None
+  | Some sz ->
+      let a = alignas_attribute (attributes_of_type env t) in
+      Some (if a > 0 then align sz a else sz)
+
+and sizeof_aux env t =      
   match t with
   | TVoid _ -> !config.sizeof_void
   | TInt(ik, _) -> Some(sizeof_ikind ik)

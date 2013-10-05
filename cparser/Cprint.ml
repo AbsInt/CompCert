@@ -91,6 +91,7 @@ let attribute pp = function
   | AConst -> fprintf pp "const"
   | AVolatile -> fprintf pp "volatile"
   | ARestrict -> fprintf pp "restrict"
+  | AAlignas n -> fprintf pp "_Alignas(%d)" n
   | Attr(name, []) -> fprintf pp "__attribute__((%s))" name
   | Attr(name, arg1 :: args) ->
       fprintf pp "__attribute__((%s(" name;

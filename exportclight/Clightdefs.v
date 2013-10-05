@@ -39,18 +39,26 @@ Definition tdouble := Tfloat F64 noattr.
 Definition tptr (t: type) := Tpointer t noattr.
 Definition tarray (t: type) (sz: Z) := Tarray t sz noattr.
 
-Definition volatile_attr := {| attr_volatile := true |}.
+Definition volatile_attr := {| attr_volatile := true; attr_alignas := None |}.
 
-Definition tvolatile (ty: type) :=
+Definition tattr (a: attr) (ty: type) :=
   match ty with
   | Tvoid => Tvoid
-  | Tint sz si a => Tint sz si volatile_attr
-  | Tlong si a => Tlong si volatile_attr
-  | Tfloat sz a => Tfloat sz volatile_attr
-  | Tpointer elt a => Tpointer elt volatile_attr
-  | Tarray elt sz a => Tarray elt sz volatile_attr
+  | Tint sz si _ => Tint sz si a
+  | Tlong si _ => Tlong si a
+  | Tfloat sz _ => Tfloat sz a
+  | Tpointer elt _ => Tpointer elt a
+  | Tarray elt sz _ => Tarray elt sz a
   | Tfunction args res => Tfunction args res 
-  | Tstruct id fld a => Tstruct id fld volatile_attr
-  | Tunion id fld a => Tunion id fld volatile_attr
-  | Tcomp_ptr id a => Tcomp_ptr id volatile_attr
+  | Tstruct id fld _ => Tstruct id fld a
+  | Tunion id fld _ => Tunion id fld a
+  | Tcomp_ptr id _ => Tcomp_ptr id a
   end.
+
+Definition tvolatile (ty: type) := tattr volatile_attr ty.
+
+Definition talignas (n: N) (ty: type) :=
+  tattr {| attr_volatile := false; attr_alignas := Some n |} ty.
+
+Definition tvolatile_alignas (n: N) (ty: type) :=
+  tattr {| attr_volatile := true; attr_alignas := Some n |} ty.

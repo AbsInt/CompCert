@@ -33,8 +33,14 @@ val remove_attributes : attributes -> attributes -> attributes
   (* Difference [attr1 \ attr2] between two sets of attributes *)
 val incl_attributes : attributes -> attributes -> bool
   (* Check that first set of attributes is a subset of second set. *)
+val alignas_attribute : attributes -> int
+  (* Extract the value of the [_Alignas] attributes, if any.
+     Return 0 if none, a (positive) power of two alignment if some. *)
 val find_custom_attributes : string list -> attributes -> attr_arg list list
   (* Extract arguments of custom [Attr] attributes whose names appear
+     in the given list of names. *)
+val remove_custom_attributes : string list -> attributes -> attributes
+  (* Remove all [Attr] attributes whose names appear
      in the given list of names. *)
 val attributes_of_type : Env.t -> typ -> attributes
   (* Return the attributes of the given type, expanding typedefs if needed. *)
@@ -44,6 +50,8 @@ val remove_attributes_type : Env.t -> attributes -> typ -> typ
   (* Remove the given set of attributes to those of the given type. *)
 val erase_attributes_type : Env.t -> typ -> typ
   (* Erase the attributes of the given type. *)
+val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
+  (* Apply the given function to the top-level attributes of the given type *)
 val attr_is_type_related: attribute -> bool
 (* Is an attribute type-related (true) or variable-related (false)? *)
 

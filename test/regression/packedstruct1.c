@@ -6,9 +6,7 @@
 
 /* Simple packing */
 
-#pragma pack(1)
-
-struct s1 { unsigned short x; int y; double z; };
+struct __packed__ s1 { unsigned short x; int y; double z; };
 
 void test1(void)
 {
@@ -22,9 +20,7 @@ void test1(void)
 
 /* Packing plus alignment */
 
-#pragma pack(2,16)
-
-struct s2 { unsigned char x; int y; double z; };
+struct __packed__(2,16) s2 { unsigned char x; int y; double z; };
 
 char filler1;
 
@@ -42,8 +38,6 @@ void test2(void)
 
 /* Now with byte-swapped fields */
 
-#pragma pack(1,1,1)
-
 struct s3 {
   unsigned char x; 
   unsigned short y;
@@ -53,7 +47,7 @@ struct s3 {
   char * p;
   unsigned int t[3];
   unsigned char s[2];
-};
+} __packed__(1,1,1);
 
 struct s3 s3;
 
@@ -82,8 +76,6 @@ void test3(void)
 }
 
 /* Back to normal */
-
-#pragma pack()
 
 struct s4 { unsigned short x; int y; double z; };
 

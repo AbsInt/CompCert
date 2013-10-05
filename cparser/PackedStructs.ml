@@ -23,37 +23,11 @@ open Env
 open Cerrors
 open Transform
 
-type field_info = {
-  fi_offset: int;                       (* byte offset within struct *)
-  fi_swap: bool                         (* true if byte-swapped *)
-}
+(* The set of struct fields that are byte-swapped.
+   A field is identified by a pair (struct name, field name). *)
 
-(* Mapping from struct name to size.
-   Only packed structs are mentioned in this table. *)
-
-let packed_structs : (ident, int) Hashtbl.t = Hashtbl.create 17
-
-(* Mapping from (struct name, field name) to field_info.
-   Only fields of packed structs are mentioned in this table. *)
-
-let packed_fields : (ident * string, field_info) Hashtbl.t
-                  = Hashtbl.create 57
-
-(* The current packing parameters.  The first two are 0 if packing is
-   turned off. *)
-
-let max_field_align = ref 0
-let min_struct_align = ref 0
-let byte_swap_fields = ref false
-
-(* Alignment *)
-
-let is_pow2 n =
-  n > 0 && n land (n - 1) = 0
-
-let align x boundary =
-  assert (is_pow2 boundary);
-  (x + boundary - 1) land (lnot (boundary - 1))
+let byteswapped_fields : (ident * string, unit) Hashtbl.t
+                       = Hashtbl.create 57
 
 (* What are the types that can be byte-swapped? *)
 
@@ -65,88 +39,87 @@ let rec can_byte_swap env ty =
   | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
   | _ -> (false, false)
 
-(* Compute size and alignment of a type, taking "aligned" attributes
-   into account *)
+(* "Safe" [alignof] function, with detection of incomplete types. *)
 
-let sizeof_alignof loc env ty =
-  match sizeof env ty, alignof env ty with
-  | Some sz, Some al ->
-      begin match find_custom_attributes ["aligned"; "__aligned__"]
-                                      (attributes_of_type env ty) with
-      | [] ->
-          (sz, al)
-      | [[AInt n]] when is_pow2 (Int64.to_int n) ->
-          let al' = max al (Int64.to_int n) in
-          (align sz al', al')
-      | _ ->
-          warning "%a: Warning: Ill-formed 'aligned' attribute, ignored"
-                  formatloc loc;
-          (sz, al)
-      end
-  | _, _ ->
-      error "%a: Error: struct field has incomplete type" formatloc loc;
-      (0, 1)
+let safe_alignof loc env ty =
+  match alignof env ty with
+  | Some al -> al
+  | None ->
+      error "%a: Error: incomplete type for a struct field" formatloc loc; 1
 
-(* Layout algorithm *)
+(* Remove existing [_Alignas] attributes and add the given [_Alignas] attr. *)
 
-let layout_struct mfa msa swapped loc env struct_id fields =
-  let rec layout max_al pos = function
-  | [] ->
-      (max_al, pos)
-  | f :: rem -> 
-      if f.fld_bitfield <> None then
-        error "%a: Error: bitfields in packed structs not allowed"
-              formatloc loc;
-      let (sz, al) = sizeof_alignof loc env f.fld_typ in
-      let swap =
-        if swapped then begin
-          let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
-          if not can_swap then
-            error "%a: Error: cannot byte-swap field of type '%a'"
-                  formatloc loc Cprint.typ f.fld_typ;
-          must_swap
-        end else false in
-      let al1 = min al mfa in
-      let pos1 = align pos al1 in
-      Hashtbl.add packed_fields
-         (struct_id, f.fld_name)
-         {fi_offset = pos1; fi_swap = swap};
-      let pos2 = pos1 + sz in
-      layout (max max_al al1) pos2 rem in
-  let (al, sz) = layout 1 0 fields in
-  if al >= msa then
-    (0, sz)
+let remove_alignas_attr attrs =
+  List.filter (function AAlignas _ -> false | _ -> true) attrs
+let set_alignas_attr al attrs =
+  add_attributes [AAlignas al] (remove_alignas_attr attrs)
+
+(* Rewriting field declarations *)
+
+let transf_field_decl mfa swapped loc env struct_id f =
+  if f.fld_bitfield <> None then
+    error "%a: Error: bitfields in packed structs not allowed"
+          formatloc loc;
+  (* Register as byte-swapped if needed *)
+  if swapped then begin
+    let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
+    if not can_swap then
+      error "%a: Error: cannot byte-swap field of type '%a'"
+            formatloc loc Cprint.typ f.fld_typ;
+    if must_swap then
+      Hashtbl.add byteswapped_fields (struct_id, f.fld_name) ()
+  end;
+  (* Reduce alignment if requested *)
+  if mfa = 0 then f else begin
+    let al = safe_alignof loc env f.fld_typ in
+    { f with fld_typ =
+         change_attributes_type env (set_alignas_attr (min mfa al)) f.fld_typ }
+  end
+
+(* Rewriting struct declarations *)
+
+let transf_struct_decl mfa msa swapped loc env struct_id attrs ml =
+  let ml' =
+    List.map (transf_field_decl mfa swapped loc env struct_id) ml in
+  if msa = 0 then (attrs, ml') else begin
+    let al' = (* natural alignment of the transformed struct *)
+      List.fold_left
+        (fun a f' -> max a (safe_alignof loc env f'.fld_typ))
+        1 ml' in
+      (set_alignas_attr (max msa al') attrs, ml')
+  end
+
+(* Rewriting composite declarations *)
+
+let is_pow2 n = n > 0 && n land (n - 1) = 0
+
+let packed_param_value loc n =
+  let m = Int64.to_int n in
+  if n <> Int64.of_int m then
+    (error "%a: __packed__ parameter `%Ld' is too large" formatloc loc n; 0)
+  else if m = 0 || is_pow2 m then
+    m
   else
-    (msa, align sz msa)
-
-(* Rewriting of struct declarations *)
-
-let payload_field sz =
-  { fld_name = "__payload";
-    fld_typ = TArray(TInt(IUChar, []), Some(Int64.of_int sz), []);
-    fld_bitfield = None}
+    (error "%a: __packed__ parameter `%Ld' must be a power of 2" formatloc loc n; 0)
 
 let transf_composite loc env su id attrs ml =
   match su with
   | Union -> (attrs, ml)
   | Struct ->
       let (mfa, msa, swapped) =
-        if !max_field_align > 0 then
-          (!max_field_align, !min_struct_align, !byte_swap_fields)
-        else if find_custom_attributes ["packed";"__packed__"] attrs <> [] then
-          (1, 0, false)
-        else
-          (0, 0, false) in
-      if mfa = 0 then (attrs, ml) else begin
-        let (al, sz) = layout_struct mfa msa swapped loc env id ml in
-        Hashtbl.add packed_structs id sz;
-        let attrs =
-          if al = 0 then attrs else
-            add_attributes [Attr("__aligned__", [AInt(Int64.of_int al)])] attrs
-        and field =
-          payload_field sz
-        in (attrs, [field])
-      end
+        match find_custom_attributes ["packed";"__packed__"] attrs with
+        | [] -> (0L, 0L, false)
+        | [[]] -> (1L, 0L, false)
+        | [[AInt n]] -> (n, 0L, false)
+        | [[AInt n; AInt p]] -> (n, p, false)
+        | [[AInt n; AInt p; AInt q]] -> (n, p, q <> 0L)
+        | _ ->
+          error "%a: ill-formed or ambiguous __packed__ attribute"
+                formatloc loc;
+          (0L, 0L, false) in
+      let mfa = packed_param_value loc mfa in
+      let msa = packed_param_value loc msa in
+      transf_struct_decl mfa msa swapped loc env id attrs ml
 
 (* Accessor functions *)
 
@@ -171,28 +144,6 @@ let ecast ty e = {edesc = ECast(ty, e); etyp = ty}
 
 let ecast_opt env ty e =
   if compatible_types env ty e.etyp then e else ecast ty e
-
-(*  *e  *)
-let ederef ty e = {edesc = EUnop(Oderef, e); etyp = ty}
-
-(*  e + n *)
-let eoffset e n =
-  {edesc = EBinop(Oadd, e, intconst (Int64.of_int n) IInt, e.etyp);
-   etyp = e.etyp}
-
-(*  *((ty * ) (base.__payload + offset))  *)
-let dot_packed_field base pf ty =
-  let payload =
-    {edesc = EUnop(Odot "__payload", base);
-     etyp = TArray(TInt(IChar,[]),None,[]) } in
-  ederef ty (ecast (TPtr(ty, [])) (eoffset payload pf.fi_offset))
-
-(*  *((ty * ) (base->__payload + offset))  *)
-let arrow_packed_field base pf ty =
-  let payload =
-    {edesc = EUnop(Oarrow "__payload", base);
-     etyp = TArray(TInt(IChar,[]),None,[]) } in
-  ederef ty (ecast (TPtr(ty, [])) (eoffset payload pf.fi_offset))
 
 (*  (ty) __builtin_readNN_reversed(&lval)
  or (ty) __builtin_bswapNN(lval) *)
@@ -256,38 +207,26 @@ let bswap_write loc env lhs rhs =
 
 let transf_expr loc env ctx e =
 
-  let is_packed_access ty fieldname =
+  let is_byteswapped ty fieldname =
     match unroll env ty with
-    | TStruct(id, _) ->
-        (try Some(Hashtbl.find packed_fields (id, fieldname))
-         with Not_found -> None)
-    | _ -> None in
+    | TStruct(id, _) -> Hashtbl.mem byteswapped_fields (id, fieldname)
+    | _ -> false in
 
-  let is_packed_access_ptr ty fieldname =
+  let is_byteswapped_ptr ty fieldname =
     match unroll env ty with
-    | TPtr(ty', _) -> is_packed_access ty' fieldname
-    | _ -> None in 
+    | TPtr(ty', _) -> is_byteswapped ty' fieldname
+    | _ -> false in 
 
   (* Transformation of l-values.  Return transformed expr plus
      [true] if l-value is a byte-swapped field and [false] otherwise. *)
   let rec lvalue e =
     match e.edesc with
     | EUnop(Odot fieldname, e1) ->
-        let e1' = texp Val e1 in
-        begin match is_packed_access e1.etyp fieldname with
-        | None ->
-            ({edesc = EUnop(Odot fieldname, e1'); etyp = e.etyp}, false)
-        | Some pf ->
-            (dot_packed_field e1' pf e.etyp, pf.fi_swap)
-        end
+        ({edesc = EUnop(Odot fieldname, texp Val e1); etyp = e.etyp},
+         is_byteswapped e1.etyp fieldname)
     | EUnop(Oarrow fieldname, e1) ->
-        let e1' = texp Val e1 in
-        begin match is_packed_access_ptr e1.etyp fieldname with
-        | None ->
-            ({edesc = EUnop(Oarrow fieldname, e1'); etyp = e.etyp}, false)
-        | Some pf ->
-            (arrow_packed_field e1' pf e.etyp, pf.fi_swap)
-        end
+        ({edesc = EUnop(Oarrow fieldname, texp Val e1); etyp = e.etyp},
+         is_byteswapped_ptr e1.etyp fieldname)
     | EBinop(Oindex, e1, e2, tyres) ->
         let (e1', swap) = lvalue e1 in
         ({edesc = EBinop(Oindex, e1', e2, tyres); etyp = e.etyp}, swap)
@@ -383,74 +322,52 @@ let transf_fundef env f =
 
 (* Initializers *)
 
-let extract_byte env e i =
-  let ty = unary_conversion env e.etyp in
-  let e1 =
-    if i = 0 then e else
-      { edesc = EBinop(Oshr, e, intconst (Int64.of_int (i*8)) IInt, ty);
-        etyp = ty } in
-  { edesc = EBinop(Oand, e1, intconst 0xFFL IInt, ty); etyp = ty }
+let extract_byte n i =
+  Int64.(logand (shift_right_logical n (i * 8)) 0xFFL)
 
-let init_packed_struct loc env struct_id struct_sz initdata =
-
-  let new_initdata = Array.make struct_sz (Init_single (intconst 0L IUChar)) in
-
-  let enter_scalar pos e sz bigendian =
-    for i = 0 to sz - 1 do
-      let bytenum = if bigendian then sz - 1 - i else i in
-      new_initdata.(pos + i) <- Init_single(extract_byte env e bytenum)
-    done in
-
-  let rec enter_init pos ty init bigendian =
-    match (unroll env ty, init) with
-    | (TInt(ik, _), Init_single e) ->
-        enter_scalar pos e (sizeof_ikind ik) bigendian
-    | (TEnum(_, _), Init_single e) ->
-        enter_scalar pos e (sizeof_ikind enum_ikind) bigendian
-    | (TPtr _, Init_single e) ->
-        enter_scalar pos e ((!Machine.config).sizeof_ptr) bigendian
-    | (TArray(ty_elt, _, _), Init_array il) ->
-        begin match sizeof env ty_elt with
-        | Some sz -> enter_init_array pos ty_elt sz il bigendian
-        | None -> fatal_error "%a: Internal error: incomplete type in init data" formatloc loc
-        end
-    | (_, _) ->
-        error "%a: Unsupported initializer for packed struct" formatloc loc
-  and enter_init_array pos ty sz il bigendian =
-    match il with
-    | [] -> ()
-    | i1 :: il' ->
-        enter_init pos ty i1 bigendian;
-        enter_init_array (pos + sz) ty sz il' bigendian in
-
-  let enter_field (fld, init) =
-    let finfo =
-      try Hashtbl.find packed_fields (struct_id, fld.fld_name)
-      with Not_found ->
-        fatal_error "%a: Internal error: non-packed field in packed struct"
-                    formatloc loc in
-    enter_init finfo.fi_offset fld.fld_typ init
-               ((!Machine.config).bigendian <> finfo.fi_swap) in
-
-  List.iter enter_field initdata;
-
-  Init_struct(struct_id, [
-    (payload_field struct_sz, Init_array (Array.to_list new_initdata))
-  ])
+let byteswap_int nbytes n =
+  let res = ref 0L in
+  for i = 0 to nbytes - 1 do
+    res := Int64.(logor (shift_left !res 8) (extract_byte n i))
+  done;
+  !res
 
 let transf_init loc env i =
-  let rec trinit = function
-  | Init_single e as i -> i
-  | Init_array il -> Init_array (List.map trinit il)
-  | Init_struct(id, fld_init_list) ->
-      begin try
-        let sz = Hashtbl.find packed_structs id in
-        init_packed_struct loc env id sz fld_init_list
-      with Not_found ->
-        Init_struct(id, List.map (fun (f,i) -> (f, trinit i)) fld_init_list)
+  (* [swap] is [None] if no byte swapping needed, [Some ty] if
+     byte-swapping is needed, with target type [ty] *)
+  let rec trinit swap = function
+  | Init_single e as i ->
+      begin match swap with
+      | None -> i
+      | Some ty ->
+          match Ceval.constant_expr env ty e with
+          | Some(CInt(n, ik, _)) ->
+              let n' = byteswap_int (sizeof_ikind ik) n in
+              Init_single {edesc = EConst(CInt(n', ik, "")); etyp = e.etyp}
+          | _ ->
+              error "%a: Error: initializer for byte-swapped field is not \
+                         a compile-time integer constant" formatloc loc; i
       end
-  | Init_union(id, fld, i) -> Init_union(id, fld, trinit i)
-  in trinit i
+  | Init_array il ->
+      let swap_elt =
+        match swap with
+        | None -> None
+        | Some ty ->
+            match unroll env ty with
+            | TArray(ty_elt, _, _) -> Some ty_elt
+            | _ -> assert false in
+      Init_array (List.map (trinit swap_elt) il)
+  | Init_struct(id, fld_init_list) ->
+      let trinit_field (f, i) =
+        let swap_f =
+          if Hashtbl.mem byteswapped_fields (id, f.fld_name)
+          then Some f.fld_typ
+          else None in
+        (f, trinit swap_f i) in
+      Init_struct(id, List.map trinit_field fld_init_list)
+  | Init_union(id, fld, i) ->
+      Init_union(id, fld, trinit None i)
+  in trinit None i
 
 (* Declarations *)
 
@@ -459,39 +376,6 @@ let transf_decl loc env (sto, id, ty, init_opt) =
    match init_opt with
    | None -> None
    | Some i -> Some (transf_init loc env i))
-
-(* Pragmas *)
-
-let re_pack = Str.regexp "pack\\b"
-let re_pack_1 = Str.regexp "pack[ \t]*(\\([ \t0-9,]*\\))[ \t]*$"
-let re_comma = Str.regexp ",[ \t]*"
-
-let process_pragma loc s =
-  if Str.string_match re_pack s 0 then begin
-    if Str.string_match re_pack_1 s 0 then begin
-      let arg = Str.matched_group 1 s in
-      let (mfa, msa, bs) =
-        match List.map int_of_string (Str.split re_comma arg) with
-        | [] -> (0, 0, false)
-        | [x] -> (x, 0, false)
-        | [x;y] -> (x, y, false)
-        | x :: y :: z :: _ -> (x, y, z = 1) in
-      if mfa = 0 || is_pow2 mfa then
-        max_field_align := mfa
-      else
-        error "%a: Error: In #pragma pack, max field alignment must be a power of 2" formatloc loc;
-      if msa = 0 || is_pow2 msa then
-        min_struct_align := msa
-      else
-        error "%a: Error: In #pragma pack, min struct alignment must be a power of 2" formatloc loc;
-      byte_swap_fields := bs;
-      true
-    end else begin
-      warning "%a: Warning: Ill-formed #pragma pack, ignored" formatloc loc;
-      false
-    end
-  end else
-    false
 
 (* Global declarations *)
 
@@ -531,14 +415,10 @@ let rec transf_globdecls env accu = function
             (g :: accu)
             gl
       | Gpragma p ->
-          if process_pragma g.gloc p
-          then transf_globdecls env accu gl
-          else transf_globdecls env (g :: accu) gl
+          transf_globdecls env (g :: accu) gl
 
 (* Program *)
 
 let program p =
-  min_struct_align := 0;
-  max_field_align := 0;
-  byte_swap_fields := false;
+  Hashtbl.clear byteswapped_fields;
   transf_globdecls (Builtins.environment()) [] p

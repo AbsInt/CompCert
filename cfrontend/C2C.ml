@@ -206,9 +206,21 @@ let convertInt n = coqint_of_camlint(Int64.to_int32 n)
 
 (** Attributes *)
 
-let convertAttr a = List.mem AVolatile a
+let rec log2 n = if n = 1 then 0 else 1 + log2 (n lsr 1)
 
-let mergeAttr a1 a2 = a1 || a2
+let convertAttr a =
+  { attr_volatile = List.mem AVolatile a;
+    attr_alignas = 
+      let n = Cutil.alignas_attribute a in
+      if n > 0 then Some (N.of_int (log2 n)) else None }
+
+let mergeAttr a1 a2 =
+  { attr_volatile = a1.attr_volatile || a2.attr_volatile;
+    attr_alignas =
+      match a1.attr_alignas, a2.attr_alignas with
+      | None, aa -> aa
+      | aa, None -> aa
+      | Some n1, Some n2 -> Some (if N.le n1 n2 then n1 else n2) }
 
 let mergeTypAttr ty a2 =
   match ty with
@@ -340,9 +352,10 @@ let rec convertTypList env = function
   | t1 :: tl -> Tcons(convertTyp env t1, convertTypList env tl)
 
 let cacheCompositeDef env su id attr flds =
-  (* we currently ignore attributes on structs and unions *)
   let ty =
-    match su with C.Struct -> C.TStruct(id, []) | C.Union -> C.TUnion(id, []) in
+    match su with
+    | C.Struct -> C.TStruct(id, attr)
+    | C.Union  -> C.TUnion(id, attr) in
   Hashtbl.add compositeCache id (convertTyp env ty)
 
 let rec projFunType env ty =
@@ -821,6 +834,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   let id' = intern_string id.name in
   let ty' = convertTyp env ty in 
   let sz = Ctypes.sizeof ty' in
+  let al = Ctypes.alignof ty' in
   let attr = Cutil.attributes_of_type env ty in
   let init' =
     match optinit with
@@ -828,10 +842,6 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
         if sto = C.Storage_extern then [] else [Init_space sz]
     | Some i ->
         convertInitializer env ty i in
-  let align =
-    match Cutil.find_custom_attributes ["aligned"; "__aligned__"] attr with
-    | [[C.AInt n]] -> Some(Int64.to_int n)
-    | _            -> Cutil.alignof env ty in
   let (section, near_access) =
     Sections.for_variable env id' ty (optinit <> None) in
   if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
@@ -839,7 +849,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
                    id.name (Z.to_string sz));
   Hashtbl.add decl_atom id'
     { a_storage = sto;
-      a_alignment = align;
+      a_alignment = Some (Z.to_int al);
       a_sections = [section];
       a_small_data = near_access;
       a_inline = false;

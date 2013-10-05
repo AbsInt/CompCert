@@ -280,12 +280,31 @@ let elab_gcc_attr loc env = function
   | _ ->
       warning loc "ill-formed attribute, ignored"; []
 
+let is_power_of_two n = n > 0L && Int64.(logand n (pred n)) = 0L
+
+let extract_alignas loc a =
+  match a with
+  | Attr(("aligned"|"__aligned__"), args) ->
+      begin match args with
+      | [AInt n] when is_power_of_two n -> AAlignas (Int64.to_int n)
+      | _ -> warning loc "bad 'aligned' attribute, ignored"; a
+      end
+  | _ -> a
+
 let elab_attribute loc env = function
   | ("const", []) -> [AConst]
   | ("restrict", []) -> [ARestrict]
   | ("volatile", []) -> [AVolatile]
+  | ("_Alignas", [a]) ->
+      begin match elab_attr_arg loc env a with
+      | AInt n when is_power_of_two n -> [AAlignas (Int64.to_int n)]
+      | _ -> warning loc "bad _Alignas value, ignored"; []
+      end
   | (("__attribute" | "__attribute__"), l) ->
-        List.flatten (List.map (elab_gcc_attr loc env) l)
+        List.map (extract_alignas loc)
+          (List.flatten (List.map (elab_gcc_attr loc env) l))
+  | ("__packed__", args) ->
+        [Attr("__packed__", List.map (elab_attr_arg loc env) args)]
   | ("__asm__", _) -> []    (* MacOS X noise *)
   | (name, _) -> warning loc "`%s' annotation ignored" name; []
 
