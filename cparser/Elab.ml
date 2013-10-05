@@ -510,7 +510,7 @@ and elab_parameter env (spec, name) =
   if sto <> Storage_default && sto <> Storage_register then
     error (loc_of_name name)
       "'extern' or 'static' storage not supported for function parameter";
-  if redef Env.lookup_ident env id <> None then
+  if id <> "" && redef Env.lookup_ident env id <> None then
     error (loc_of_name name) "redefinition of parameter '%s'" id;
   (* replace array and function types by pointer types *)
   let ty1 = argument_conversion env1 ty in
