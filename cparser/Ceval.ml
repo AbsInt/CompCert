@@ -272,7 +272,7 @@ let constant_expr env ty e =
   try
     match unroll env ty, cast env ty e.etyp (expr env e) with
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
-    | TPtr(_, _), I 0L -> Some(CInt(0L, IInt, ""))
+    | TPtr(_, _), I n -> Some(CInt(n, IInt, ""))
     | TPtr(_, _), S s -> Some(CStr s)
     | TPtr(_, _), WS s -> Some(CWStr s)
     | TEnum(_, _), I n -> Some(CInt(n, enum_ikind, ""))

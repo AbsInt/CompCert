@@ -45,7 +45,7 @@ let safe_alignof loc env ty =
   match alignof env ty with
   | Some al -> al
   | None ->
-      error "%a: Error: incomplete type for a struct field" formatloc loc; 1
+      error "%aError: incomplete type for a struct field" formatloc loc; 1
 
 (* Remove existing [_Alignas] attributes and add the given [_Alignas] attr. *)
 
@@ -58,13 +58,13 @@ let set_alignas_attr al attrs =
 
 let transf_field_decl mfa swapped loc env struct_id f =
   if f.fld_bitfield <> None then
-    error "%a: Error: bitfields in packed structs not allowed"
+    error "%aError: bitfields in packed structs not allowed"
           formatloc loc;
   (* Register as byte-swapped if needed *)
   if swapped then begin
     let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
     if not can_swap then
-      error "%a: Error: cannot byte-swap field of type '%a'"
+      error "%aError: cannot byte-swap field of type '%a'"
             formatloc loc Cprint.typ f.fld_typ;
     if must_swap then
       Hashtbl.add byteswapped_fields (struct_id, f.fld_name) ()
@@ -143,22 +143,19 @@ let accessor_type loc env ty =
 let ecast ty e = {edesc = ECast(ty, e); etyp = ty}
 
 let ecast_opt env ty e =
-  if compatible_types env ty e.etyp then e else ecast ty e
+  if compatible_types ~noattrs:true env ty e.etyp then e else ecast ty e
 
 (*  (ty) __builtin_readNN_reversed(&lval)
  or (ty) __builtin_bswapNN(lval) *)
 
-let use_reversed =
-  match !Machine.config.Machine.name with
-  | "powerpc" -> true
-  | _ -> false
+let use_reversed = ref false
 
 let bswap_read loc env lval =
   let ty = lval.etyp in
   let (bsize, aty) = accessor_type loc env ty in
   assert (bsize = 16 || bsize = 32);
   try
-    if use_reversed then begin
+    if !use_reversed then begin
       let (id, fty) =
         lookup_function loc env (sprintf "__builtin_read%d_reversed" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
@@ -174,7 +171,7 @@ let bswap_read loc env lval =
       ecast_opt env ty call
     end
   with Env.Error msg ->
-    fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
+    fatal_error "%aError: %s" formatloc loc (Env.error_message msg)
 
 (*  __builtin_write_intNN_reversed(&lhs,rhs)
   or  lhs = __builtin_bswapNN(rhs) *)
@@ -185,7 +182,7 @@ let bswap_write loc env lhs rhs =
     accessor_type loc env ty in
   assert (bsize = 16 || bsize = 32);
   try
-    if use_reversed then begin
+    if !use_reversed then begin
       let (id, fty) =
         lookup_function loc env (sprintf "__builtin_write%d_reversed" bsize) in
       let fn = {edesc = EVar id; etyp = fty} in
@@ -201,7 +198,7 @@ let bswap_write loc env lhs rhs =
       eassign lhs (ecast_opt env ty call)
     end
   with Env.Error msg ->
-    fatal_error "%a: Error: %s" formatloc loc (Env.error_message msg)
+    fatal_error "%aError: %s" formatloc loc (Env.error_message msg)
 
 (* Expressions *)
 
@@ -247,7 +244,7 @@ let transf_expr loc env ctx e =
     | EUnop(Oaddrof, e1) ->
         let (e1', swap) = lvalue e1 in
         if swap then
-          error "%a: Error: & over byte-swapped field" formatloc loc;
+          error "%aError: & over byte-swapped field" formatloc loc;
         {edesc = EUnop(Oaddrof, e1'); etyp = e.etyp}
 
     | EUnop((Opreincr|Opredecr) as op, e1) ->
@@ -345,7 +342,7 @@ let transf_init loc env i =
               let n' = byteswap_int (sizeof_ikind ik) n in
               Init_single {edesc = EConst(CInt(n', ik, "")); etyp = e.etyp}
           | _ ->
-              error "%a: Error: initializer for byte-swapped field is not \
+              error "%aError: initializer for byte-swapped field is not \
                          a compile-time integer constant" formatloc loc; i
       end
   | Init_array il ->
@@ -420,5 +417,10 @@ let rec transf_globdecls env accu = function
 (* Program *)
 
 let program p =
+  use_reversed :=
+    begin match !Machine.config.Machine.name with
+    | "powerpc" -> true
+    | _ -> false
+    end;
   Hashtbl.clear byteswapped_fields;
   transf_globdecls (Builtins.environment()) [] p
