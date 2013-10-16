@@ -23,10 +23,10 @@ let name_of_type = function
   | Tsingle -> "single"
 
 let name_of_chunk = function
-  | Mint8signed -> "int8signed"
-  | Mint8unsigned -> "int8unsigned"
-  | Mint16signed -> "int16signed"
-  | Mint16unsigned -> "int16unsigned"
+  | Mint8signed -> "int8s"
+  | Mint8unsigned -> "int8u"
+  | Mint16signed -> "int16s"
+  | Mint16unsigned -> "int16u"
   | Mint32 -> "int32"
   | Mint64 -> "int64"
   | Mfloat32 -> "float32"

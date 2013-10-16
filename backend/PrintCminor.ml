@@ -62,7 +62,7 @@ let name_of_unop = function
   | Ofloatofintu -> "floatofintu"
   | Onegl -> "-l"
   | Onotl -> "~l"
-  | Ointoflong -> "intofflong"
+  | Ointoflong -> "intoflong"
   | Olongofint -> "longofint"
   | Olongofintu -> "longofintu"
   | Olongoffloat -> "longoffloat"
@@ -179,6 +179,13 @@ let rec print_sig p = function
       fprintf p "%s ->@ " (name_of_type t1);
       print_sig p {sig_args = tl; sig_res = tres}
 
+let rec just_skips s =
+  match s with
+  | Sskip -> true
+  | Sseq(s1,s2) -> just_skips s1 && just_skips s2
+  | _ -> false
+
+
 (* Statements *)
 
 let rec print_stmt p s =
@@ -207,17 +214,21 @@ let rec print_stmt p s =
                 print_expr_list (true, el)
                 print_sig sg
   | Sbuiltin(None, ef, el) ->
-      fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@])@;@]"
+      fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@])@ : @[<hov 0>%a@];@]"
                 (name_of_external ef)
                 print_expr_list (true, el)
+	        print_sig (ef_sig ef)
   | Sbuiltin(Some id, ef, el) ->
-      fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]);@]@]"
+      fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]) : @[<hov 0>%a@];@]" 
                 (ident_name id)
                 (name_of_external ef)
                 print_expr_list (true, el)
-  | Sseq(Sskip, s2) ->
+	        print_sig (ef_sig ef)
+  | Sseq(s1,s2) when just_skips s1 && just_skips s2 ->
+      ()
+  | Sseq(s1, s2) when just_skips s1 -> 
       print_stmt p s2
-  | Sseq(s1, Sskip) ->
+  | Sseq(s1, s2) when just_skips s2 ->
       print_stmt p s1
   | Sseq(s1, s2) ->
       fprintf p "%a@ %a" print_stmt s1 print_stmt s2
@@ -225,10 +236,10 @@ let rec print_stmt p s =
       fprintf p "@[<v 2>if (%a) {@ %a@;<0 -2>}@]"
               print_expr e
               print_stmt s1
-  | Sifthenelse(e, Sskip, s2) ->
+(*  | Sifthenelse(e, Sskip, s2) ->
       fprintf p "@[<v 2>if (! %a) {@ %a@;<0 -2>}@]"
               expr (15, e)
-              print_stmt s2
+              print_stmt s2 *)
   | Sifthenelse(e, s1, s2) ->
       fprintf p "@[<v 2>if (%a) {@ %a@;<0 -2>} else {@ %a@;<0 -2>}@]"
               print_expr e
@@ -292,7 +303,7 @@ let print_init_data p = function
   | Init_int8 i -> fprintf p "int8 %ld" (camlint_of_coqint i)
   | Init_int16 i -> fprintf p "int16 %ld" (camlint_of_coqint i)
   | Init_int32 i -> fprintf p "%ld" (camlint_of_coqint i)
-  | Init_int64 i -> fprintf p "%Ld" (camlint64_of_coqint i)
+  | Init_int64 i -> fprintf p "%LdLL" (camlint64_of_coqint i)
   | Init_float32 f -> fprintf p "float32 %F" (camlfloat_of_coqfloat f)
   | Init_float64 f -> fprintf p "%F" (camlfloat_of_coqfloat f)
   | Init_space i -> fprintf p "[%ld]" (camlint_of_coqint i)
@@ -326,6 +337,8 @@ let print_globdef p (id, gd) =
 
 let print_program p prog =
   fprintf p "@[<v 0>";
+  if extern_atom prog.prog_main <> "main" then
+    fprintf p "= \"%s\"\n" (extern_atom prog.prog_main);
   List.iter (print_globdef p) prog.prog_defs;
   fprintf p "@]@."
 

@@ -69,6 +69,7 @@ let print_operation reg pp = function
   | Ocast8unsigned, [r1] -> fprintf pp "int8unsigned(%a)" reg r1
   | Ocast16signed, [r1] -> fprintf pp "int16signed(%a)" reg r1
   | Ocast16unsigned, [r1] -> fprintf pp "int16unsigned(%a)" reg r1
+  | Oneg, [r1] -> fprintf pp "(- %a)" reg r1
   | Osub, [r1;r2] -> fprintf pp "%a - %a" reg r1 reg r2
   | Omul, [r1;r2] -> fprintf pp "%a * %a" reg r1 reg r2
   | Omulimm n, [r1] -> fprintf pp "%a * %ld" reg r1 (camlint_of_coqint n)

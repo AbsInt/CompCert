@@ -39,7 +39,7 @@ let ty_of_typ = function
   | Tint -> tint
   | Tfloat -> tfloat
   | Tlong -> tlong
-  | Tsingle -> tsingle
+  | Tsingle -> tfloat (* should be tsingle when supported *)
 
 let ty_of_sig_args tyl = List.map ty_of_typ tyl
 
@@ -56,7 +56,7 @@ let unify t1 t2 =
                               (name_of_type b1) (name_of_type b2)))
   | Base b, Var r -> r := Some (Base b)
   | Var r, Base b -> r := Some (Base b)
-  | Var r1, Var r2 -> r1 := Some (Var r2)
+  | Var r1, Var r2 -> if r1 != r2 then r1 := Some (Var r2)
 
 let unify_list l1 l2 =
   let ll1 = List.length l1 and ll2 = List.length l2 in

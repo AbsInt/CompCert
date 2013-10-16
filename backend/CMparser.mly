@@ -183,6 +183,9 @@ let mkwhile expr body =
 let intconst n =
   Rconst(Ointconst(coqint_of_camlint n))
 
+let longconst n =
+  Rconst(Olongconst(coqint_of_camlint64 n))
+
 let exitnum n = Nat.of_int32 n
 
 let mkswitch expr (cases, dfl) =
@@ -245,13 +248,18 @@ let mkmatch expr cases =
 
 %token ABSF
 %token AMPERSAND
+%token AMPERSANDL
 %token BANG
 %token BANGEQUAL
 %token BANGEQUALF
 %token BANGEQUALU
+%token BANGEQUALL
+%token BANGEQUALLU
 %token BAR
+%token BARL
 %token BUILTIN
 %token CARET
+%token CARETL
 %token CASE
 %token COLON
 %token COMMA
@@ -261,24 +269,35 @@ let mkmatch expr cases =
 %token EQUALEQUAL
 %token EQUALEQUALF
 %token EQUALEQUALU
+%token EQUALEQUALL
+%token EQUALEQUALLU
 %token EOF
 %token EXIT
 %token EXTERN
 %token FLOAT
 %token FLOAT32
 %token FLOAT64
+%token FLOAT64AL32
 %token <float> FLOATLIT
 %token FLOATOFINT
 %token FLOATOFINTU
+%token FLOATOFLONG
+%token FLOATOFLONGU
 %token GOTO
 %token GREATER
 %token GREATERF
 %token GREATERU
+%token GREATERL
+%token GREATERLU
 %token GREATEREQUAL
 %token GREATEREQUALF
 %token GREATEREQUALU
+%token GREATEREQUALL
+%token GREATEREQUALLU
 %token GREATERGREATER
 %token GREATERGREATERU
+%token GREATERGREATERL
+%token GREATERGREATERLU
 %token <string> IDENT
 %token IF
 %token IN
@@ -288,33 +307,50 @@ let mkmatch expr cases =
 %token INT16S
 %token INT16U
 %token INT32
+%token INT64
 %token INT8
 %token INT8S
 %token INT8U
 %token <int32> INTLIT
 %token INTOFFLOAT
 %token INTUOFFLOAT
+%token INTOFLONG
 %token LBRACE
 %token LBRACELBRACE
 %token LBRACKET
 %token LESS
 %token LESSU
 %token LESSF
+%token LESSL
+%token LESSLU
 %token LESSEQUAL
 %token LESSEQUALU
 %token LESSEQUALF
+%token LESSEQUALL
+%token LESSEQUALLU
 %token LESSLESS
+%token LESSLESSL
 %token LET
+%token LONG
+%token <int64> LONGLIT
+%token LONGOFINT 
+%token LONGOFINTU
+%token LONGOFFLOAT 
+%token LONGUOFFLOAT
 %token LOOP
 %token LPAREN
 %token MATCH
 %token MINUS
 %token MINUSF
+%token MINUSL
 %token MINUSGREATER
 %token PERCENT
 %token PERCENTU
+%token PERCENTL
+%token PERCENTLU
 %token PLUS
 %token PLUSF
+%token PLUSL
 %token RBRACE
 %token RBRACERBRACE
 %token RBRACKET
@@ -322,15 +358,20 @@ let mkmatch expr cases =
 %token RETURN
 %token RPAREN
 %token SEMICOLON
+%token SINGLE
 %token SLASH
 %token SLASHF
 %token SLASHU
+%token SLASHL
+%token SLASHLU
 %token STACK
 %token STAR
 %token STARF
+%token STARL
 %token <string> STRINGLIT
 %token SWITCH
 %token TILDE
+%token TILDEL
 %token TAILCALL
 %token VAR
 %token VOID
@@ -342,14 +383,14 @@ let mkmatch expr cases =
 %left COMMA
 %left p_let
 %right EQUAL
-%left BAR
-%left CARET
-%left AMPERSAND
-%left EQUALEQUAL BANGEQUAL LESS LESSEQUAL GREATER GREATEREQUAL EQUALEQUALU BANGEQUALU LESSU LESSEQUALU GREATERU GREATEREQUALU EQUALEQUALF BANGEQUALF LESSF LESSEQUALF GREATERF GREATEREQUALF 
-%left LESSLESS GREATERGREATER GREATERGREATERU
-%left PLUS PLUSF MINUS MINUSF
-%left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU
-%nonassoc BANG TILDE p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 ALLOC
+%left BAR BARL
+%left CARET CARETL
+%left AMPERSAND AMPERSANDL
+%left EQUALEQUAL BANGEQUAL LESS LESSEQUAL GREATER GREATEREQUAL EQUALEQUALU BANGEQUALU LESSU LESSEQUALU GREATERU GREATEREQUALU EQUALEQUALF BANGEQUALF LESSF LESSEQUALF GREATERF GREATEREQUALF EQUALEQUALL BANGEQUALL LESSL LESSEQUALL GREATERL GREATEREQUALL EQUALEQUALLU BANGEQUALLU LESSLU LESSEQUALLU GREATERLU GREATEREQUALLU
+%left LESSLESS GREATERGREATER GREATERGREATERU LESSLESSL GREATERGREATERL GREATERGREATERLU 
+%left PLUS PLUSF PLUSL MINUS MINUSF MINUSL
+%left STAR SLASH PERCENT STARF SLASHF SLASHU PERCENTU STARL SLASHL SLASHLU PERCENTL PERCENTLU
+%nonassoc BANG TILDE TILDEL p_uminus ABSF INTOFFLOAT INTUOFFLOAT FLOATOFINT FLOATOFINTU INT8S INT8U INT16S INT16U FLOAT32 ALLOC INTOFLONG LONGOFINT LONGOFINTU LONGOFFLOAT LONGUOFFLOAT FLOATOFLONG FLOATOFLONGU
 %left LPAREN
 
 /* Entry point */
@@ -362,7 +403,11 @@ let mkmatch expr cases =
 /* Programs */
 
 prog:
-    global_declarations EOF
+   EQUAL STRINGLIT global_declarations EOF
+      { { prog_defs = List.rev $3;
+          prog_main = intern_string $2; } }
+
+|  global_declarations EOF
       { { prog_defs = List.rev $1;
           prog_main = intern_string "main" } }
 ;
@@ -409,6 +454,8 @@ init_data:
    | INT32 INTLIT                                { Init_int32 (coqint_of_camlint $2) }
    | INT INTLIT                                  { Init_int32 (coqint_of_camlint $2) }
    | INTLIT                                      { Init_int32 (coqint_of_camlint $1) }
+   | LONGLIT                                     { Init_int64 (coqint_of_camlint64 $1) }
+   | INT64 LONGLIT                               { Init_int64 (coqint_of_camlint64 $2) }
    | FLOAT32 FLOATLIT                            { Init_float32 (coqfloat_of_camlfloat $2) }
    | FLOAT64 FLOATLIT                            { Init_float64 (coqfloat_of_camlfloat $2) }
    | FLOAT FLOATLIT                              { Init_float64 (coqfloat_of_camlfloat $2) }
@@ -528,6 +575,7 @@ expr:
     LPAREN expr RPAREN                          { $2 }
   | IDENT                                       { Rvar(intern_string $1) }
   | INTLIT                                      { intconst $1 }
+  | LONGLIT                                     { longconst $1 }
   | FLOATLIT                                    { Rconst(Ofloatconst (coqfloat_of_camlfloat $1)) }
   | STRINGLIT                                   { Rconst(Oaddrsymbol(intern_string $1, Int.zero)) }
   | AMPERSAND INTLIT                            { Rconst(Oaddrstack(coqint_of_camlint $2)) }
@@ -545,6 +593,15 @@ expr:
   | INT16S expr                                 { Runop(Ocast16signed, $2) }
   | INT16U expr                                 { Runop(Ocast16unsigned, $2) }
   | FLOAT32 expr                                { Runop(Osingleoffloat, $2) }
+  | MINUSL expr %prec p_uminus                  { Runop(Onegl, $2) }
+  | TILDEL expr                                 { Runop(Onotl, $2) }
+  | INTOFLONG expr                              { Runop(Ointoflong, $2) }
+  | LONGOFINT expr                              { Runop(Olongofint, $2) }
+  | LONGOFINTU expr                             { Runop(Olongofintu, $2) }
+  | LONGOFFLOAT expr                            { Runop(Olongoffloat, $2) }
+  | LONGUOFFLOAT expr                           { Runop(Olonguoffloat, $2) }
+  | FLOATOFLONG expr                            { Runop(Ofloatoflong, $2) }
+  | FLOATOFLONGU expr                           { Runop(Ofloatoflongu, $2) }
   | expr PLUS expr                              { Rbinop(Oadd, $1, $3) }
   | expr MINUS expr                             { Rbinop(Osub, $1, $3) }
   | expr STAR expr                              { Rbinop(Omul, $1, $3) }
@@ -558,6 +615,19 @@ expr:
   | expr LESSLESS expr                          { Rbinop(Oshl, $1, $3) }
   | expr GREATERGREATER expr                    { Rbinop(Oshr, $1, $3) }
   | expr GREATERGREATERU expr                   { Rbinop(Oshru, $1, $3) }
+  | expr PLUSL expr                             { Rbinop(Oaddl, $1, $3) }
+  | expr MINUSL expr                            { Rbinop(Osubl, $1, $3) }
+  | expr STARL expr                             { Rbinop(Omull, $1, $3) }
+  | expr SLASHL expr                            { Rbinop(Odivl, $1, $3) }
+  | expr PERCENTL expr                          { Rbinop(Omodl, $1, $3) }
+  | expr SLASHLU expr                           { Rbinop(Odivlu, $1, $3) }
+  | expr PERCENTLU expr                         { Rbinop(Omodlu, $1, $3) }
+  | expr AMPERSANDL expr                        { Rbinop(Oandl, $1, $3) }
+  | expr BARL expr                              { Rbinop(Oorl, $1, $3) }
+  | expr CARETL expr                            { Rbinop(Oxorl, $1, $3) }
+  | expr LESSLESSL expr                         { Rbinop(Oshll, $1, $3) }
+  | expr GREATERGREATERL expr                   { Rbinop(Oshrl, $1, $3) }
+  | expr GREATERGREATERLU expr                  { Rbinop(Oshrlu, $1, $3) }
   | expr PLUSF expr                             { Rbinop(Oaddf, $1, $3) }
   | expr MINUSF expr                            { Rbinop(Osubf, $1, $3) }
   | expr STARF expr                             { Rbinop(Omulf, $1, $3) }
@@ -574,6 +644,18 @@ expr:
   | expr LESSEQUALU expr                        { Rbinop(Ocmpu Cle, $1, $3) }
   | expr GREATERU expr                          { Rbinop(Ocmpu Cgt, $1, $3) }
   | expr GREATEREQUALU expr                     { Rbinop(Ocmpu Cge, $1, $3) }
+  | expr EQUALEQUALL expr                       { Rbinop(Ocmpl Ceq, $1, $3) }
+  | expr BANGEQUALL expr                        { Rbinop(Ocmpl Cne, $1, $3) }
+  | expr LESSL expr                             { Rbinop(Ocmpl Clt, $1, $3) }
+  | expr LESSEQUALL expr                        { Rbinop(Ocmpl Cle, $1, $3) }
+  | expr GREATERL expr                          { Rbinop(Ocmpl Cgt, $1, $3) }
+  | expr GREATEREQUALL expr                     { Rbinop(Ocmpl Cge, $1, $3) }
+  | expr EQUALEQUALLU expr                      { Rbinop(Ocmplu Ceq, $1, $3) }
+  | expr BANGEQUALLU expr                       { Rbinop(Ocmplu Cne, $1, $3) }
+  | expr LESSLU expr                            { Rbinop(Ocmplu Clt, $1, $3) }
+  | expr LESSEQUALLU expr                       { Rbinop(Ocmplu Cle, $1, $3) }
+  | expr GREATERLU expr                         { Rbinop(Ocmplu Cgt, $1, $3) }
+  | expr GREATEREQUALLU expr                    { Rbinop(Ocmplu Cge, $1, $3) }
   | expr EQUALEQUALF expr                       { Rbinop(Ocmpf Ceq, $1, $3) }
   | expr BANGEQUALF expr                        { Rbinop(Ocmpf Cne, $1, $3) }
   | expr LESSF expr                             { Rbinop(Ocmpf Clt, $1, $3) }
@@ -601,9 +683,11 @@ memory_chunk:
   | INT16S                                      { Mint16signed }
   | INT16U                                      { Mint16unsigned }
   | INT32                                       { Mint32 }
+  | INT64                                       { Mint64 }
   | INT                                         { Mint32 }
   | FLOAT32                                     { Mfloat32 }
   | FLOAT64                                     { Mfloat64 }
+  | FLOAT64AL32                                 { Mfloat64al32 }
   | FLOAT                                       { Mfloat64 }
 ;
 
@@ -612,6 +696,8 @@ memory_chunk:
 type_:
     INT                                         { Tint }
   | FLOAT                                       { Tfloat }
+  | LONG                                        { Tlong }
+  | SINGLE                                      { Tsingle }
 ;
 
 /* External functions */
@@ -623,6 +709,7 @@ eftok:
   | VOLATILE                                    { EFT_tok "volatile" }
   | EXTERN                                      { EFT_tok "extern" }
   | BUILTIN                                     { EFT_tok "builtin" }
+  | memory_chunk                                { EFT_chunk $1 }
 ;
 
 eftoks:
