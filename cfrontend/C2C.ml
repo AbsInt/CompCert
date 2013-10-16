@@ -431,6 +431,10 @@ let rec convertExpr env e =
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
       let l = convertLvalue env e in
+      if Cutil.is_composite_type env e.etyp
+      && List.mem AVolatile (Cutil.attributes_of_type env e.etyp) then
+        warning "access to a l-value of volatile composite type. \
+                 The 'volatile' qualifier is ignored.";
       Evalof(l, ty)
 
   | C.EConst(C.CInt(i, (ILongLong|IULongLong), _)) ->
@@ -498,6 +502,10 @@ let rec convertExpr env e =
   | C.EBinop(C.Oassign, e1, e2, _) ->
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
+      if Cutil.is_composite_type env e1.etyp
+      && List.mem AVolatile (Cutil.attributes_of_type env e1.etyp) then
+        warning "assignment to a l-value of volatile composite type. \
+                 The 'volatile' qualifier is ignored.";
       Eassign(e1', e2', ty)
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
