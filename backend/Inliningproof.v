@@ -72,23 +72,33 @@ Qed.
 (** ** Properties of contexts and relocations *)
 
 Remark sreg_below_diff:
-  forall ctx r r', Ple r' ctx.(dreg) -> sreg ctx r <> r'.
+  forall ctx r r', Plt r' ctx.(dreg) -> sreg ctx r <> r'.
 Proof.
-  intros. unfold sreg. xomega. 
+  intros. zify. unfold sreg; rewrite shiftpos_eq. xomega. 
 Qed.
 
 Remark context_below_diff:
   forall ctx1 ctx2 r1 r2,
   context_below ctx1 ctx2 -> Ple r1 ctx1.(mreg) -> sreg ctx1 r1 <> sreg ctx2 r2.
 Proof.
-  intros. red in H. unfold sreg. xomega. 
+  intros. red in H. zify. unfold sreg; rewrite ! shiftpos_eq. xomega.
 Qed.
 
+Remark context_below_lt:
+  forall ctx1 ctx2 r, context_below ctx1 ctx2 -> Ple r ctx1.(mreg) -> Plt (sreg ctx1 r) ctx2.(dreg).
+Proof.
+  intros. red in H. unfold Plt; zify. unfold sreg; rewrite shiftpos_eq. 
+  xomega.
+Qed.
+
+(*
 Remark context_below_le:
   forall ctx1 ctx2 r, context_below ctx1 ctx2 -> Ple r ctx1.(mreg) -> Ple (sreg ctx1 r) ctx2.(dreg).
 Proof.
-  intros. red in H. unfold sreg. xomega.
+  intros. red in H. unfold Ple; zify. unfold sreg; rewrite shiftpos_eq. 
+  xomega.
 Qed.
+*)
 
 (** ** Agreement between register sets before and after inlining. *)
 
@@ -145,7 +155,7 @@ Proof.
   unfold agree_regs; intros. destruct H. split; intros.
   repeat rewrite Regmap.gsspec. 
   destruct (peq r0 r). subst r0. rewrite peq_true. auto.
-  rewrite peq_false. auto. unfold sreg; xomega. 
+  rewrite peq_false. auto. apply shiftpos_diff; auto. 
   rewrite Regmap.gso. auto. xomega. 
 Qed.
 
@@ -157,7 +167,7 @@ Proof.
   unfold agree_regs; intros. destruct H. split; intros.
   repeat rewrite Regmap.gsspec. 
   destruct (peq r0 r). subst r0. rewrite peq_true. auto.
-  rewrite peq_false. auto. unfold sreg; xomega.
+  rewrite peq_false. auto. apply shiftpos_diff; auto. 
   rewrite Regmap.gsspec. destruct (peq r0 r); auto. 
 Qed.
 
@@ -175,11 +185,13 @@ Qed.
 Lemma agree_regs_invariant:
   forall F ctx rs rs1 rs2,
   agree_regs F ctx rs rs1 ->
-  (forall r, Plt ctx.(dreg) r -> Ple r (ctx.(dreg) + ctx.(mreg)) -> rs2#r = rs1#r) ->
+  (forall r, Ple ctx.(dreg) r -> Plt r (ctx.(dreg) + ctx.(mreg)) -> rs2#r = rs1#r) ->
   agree_regs F ctx rs rs2.
 Proof.
   unfold agree_regs; intros. destruct H. split; intros.
-  rewrite H0. auto. unfold sreg; xomega. unfold sreg; xomega. 
+  rewrite H0. auto. 
+  apply shiftpos_above.
+  eapply Plt_le_trans. apply shiftpos_below. xomega.
   apply H1; auto.
 Qed.
 
@@ -222,7 +234,7 @@ Lemma tr_moves_init_regs:
     star step tge (State stk f sp pc1 rs1 m)
                E0 (State stk f sp pc2 rs2 m)
   /\ agree_regs F ctx2 (init_regs vl rdsts) rs2
-  /\ forall r, Ple r ctx2.(dreg) -> rs2#r = rs1#r.
+  /\ forall r, Plt r ctx2.(dreg) -> rs2#r = rs1#r.
 Proof.
   induction rdsts; simpl; intros.
 (* rdsts = nil *)
@@ -236,7 +248,7 @@ Proof.
   split. eapply star_right. eauto. eapply exec_Iop; eauto. traceEq.
   split. destruct H3 as [[P Q] | [P Q]].
   subst a1. eapply agree_set_reg_undef; eauto.
-  eapply agree_set_reg; eauto. rewrite C; auto. apply context_below_le; auto.
+  eapply agree_set_reg; eauto. rewrite C; auto.  apply context_below_lt; auto.
   intros. rewrite Regmap.gso. auto. apply sym_not_equal. eapply sreg_below_diff; eauto.
   destruct H2; discriminate.
 Qed.
@@ -502,7 +514,7 @@ with match_stacks_inside_invariant:
   forall stk stk' f' ctx sp' rs1, 
   match_stacks_inside F m m' stk stk' f' ctx sp' rs1 ->
   forall rs2
-         (RS: forall r, Ple r ctx.(dreg) -> rs2#r = rs1#r)
+         (RS: forall r, Plt r ctx.(dreg) -> rs2#r = rs1#r)
          (INJ: forall b1 b2 delta, 
                F1 b1 = Some(b2, delta) -> Ple b2 sp' -> F b1 = Some(b2, delta))
          (PERM1: forall b1 b2 delta ofs,
@@ -585,7 +597,7 @@ Lemma match_stacks_inside_set_reg:
   match_stacks_inside F m m' stk stk' f' ctx sp' (rs'#(sreg ctx r) <- v).
 Proof.
   intros. eapply match_stacks_inside_invariant; eauto. 
-  intros. apply Regmap.gso. unfold sreg. xomega. 
+  intros. apply Regmap.gso. zify. unfold sreg; rewrite shiftpos_eq. xomega.
 Qed.
 
 (** Preservation by a memory store *)

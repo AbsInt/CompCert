@@ -127,6 +127,55 @@ Proof.
   eapply Ple_trans. 2: eapply Pmax_r. eauto. 
 Qed.
 
+(** ** Properties of shifting *)
+
+Lemma shiftpos_eq: forall x y, Zpos (shiftpos x y) = (Zpos x + Zpos y) - 1.
+Proof.
+  intros. unfold shiftpos. zify.  rewrite Pos2Z.inj_sub. auto.
+  zify. omega.
+Qed.
+
+Lemma shiftpos_inj: 
+  forall x y n, shiftpos x n = shiftpos y n -> x = y.
+Proof.
+  intros.
+  assert (Zpos (shiftpos x n) = Zpos (shiftpos y n)) by congruence.
+  rewrite ! shiftpos_eq in H0. 
+  assert (Z.pos x = Z.pos y) by omega.
+  congruence.
+Qed.
+
+Lemma shiftpos_diff:
+  forall x y n, x <> y -> shiftpos x n <> shiftpos y n.
+Proof.
+  intros; red; intros. elim H. eapply shiftpos_inj; eauto.
+Qed.
+
+Lemma shiftpos_above:
+  forall x n, Ple n (shiftpos x n).
+Proof.
+  intros. unfold Ple; zify. rewrite shiftpos_eq. xomega. 
+Qed.
+
+Lemma shiftpos_not_below:
+  forall x n, Plt (shiftpos x n) n -> False.
+Proof.
+  intros. generalize (shiftpos_above x n). xomega. 
+Qed.
+
+Lemma shiftpos_below:
+  forall x n, Plt (shiftpos x n) (Pplus x n).
+Proof.
+  intros. unfold Plt; zify. rewrite shiftpos_eq. omega. 
+Qed.
+
+Lemma shiftpos_le:
+  forall x y n, Ple x y -> Ple (shiftpos x n) (shiftpos y n).
+Proof.
+  intros. unfold Ple in *; zify. rewrite ! shiftpos_eq. omega. 
+Qed.
+
+
 (** ** Working with the state monad *)
 
 Remark bind_inversion:
@@ -223,7 +272,7 @@ Inductive tr_moves (c: code) : node -> list reg -> list reg -> node -> Prop :=
 Lemma add_moves_unchanged:
   forall srcs dsts pc2 s pc1 s' i pc,
   add_moves srcs dsts pc2 s = R pc1 s' i ->
-  Ple pc s.(st_nextnode) \/ Plt s'.(st_nextnode) pc ->
+  Plt pc s.(st_nextnode) \/ Ple s'.(st_nextnode) pc ->
   s'.(st_code)!pc = s.(st_code)!pc.
 Proof.
   induction srcs; simpl; intros. 
@@ -237,7 +286,7 @@ Qed.
 Lemma add_moves_spec:
   forall srcs dsts pc2 s pc1 s' i c,
   add_moves srcs dsts pc2 s = R pc1 s' i ->
-  (forall pc, Plt s.(st_nextnode) pc -> Ple pc s'.(st_nextnode) -> c!pc = s'.(st_code)!pc) ->
+  (forall pc, Ple s.(st_nextnode) pc -> Plt pc s'.(st_nextnode) -> c!pc = s'.(st_code)!pc) ->
   tr_moves c pc1 srcs dsts pc2.
 Proof.
   induction srcs; simpl; intros. 
@@ -360,7 +409,7 @@ Hypothesis rec_unchanged:
   forall fe' (L: (size_fenv fe' < size_fenv fe)%nat) ctx f s x s' i pc,
   rec fe' L ctx f s = R x s' i ->
   Ple ctx.(dpc) s.(st_nextnode) ->
-  Ple pc ctx.(dpc) ->
+  Plt pc ctx.(dpc) ->
   s'.(st_code)!pc = s.(st_code)!pc.
 
 Remark set_instr_other:
@@ -385,7 +434,7 @@ Lemma expand_instr_unchanged:
   forall ctx pc instr s x s' i pc',
   expand_instr fe rec ctx pc instr s = R x s' i ->
   Ple ctx.(dpc) s.(st_nextnode) ->
-  Ple pc' s.(st_nextnode) ->
+  Plt pc' s.(st_nextnode) ->
   pc' <> spc ctx pc ->
   s'.(st_code)!pc' = s.(st_code)!pc'.
 Proof.
@@ -420,7 +469,7 @@ Lemma iter_expand_instr_unchanged:
   forall ctx pc l s x s' i,
   mlist_iter2 (expand_instr fe rec ctx) l s = R x s' i ->
   Ple ctx.(dpc) s.(st_nextnode) ->
-  Ple pc s.(st_nextnode) ->
+  Plt pc s.(st_nextnode) ->
   ~In pc (List.map (spc ctx) (List.map (@fst _ _) l)) ->
   list_norepet (List.map (@fst _ _) l) ->
   s'.(st_code)!pc = s.(st_code)!pc.
@@ -440,7 +489,7 @@ Lemma expand_cfg_rec_unchanged:
   forall ctx f s x s' i pc,
   expand_cfg_rec fe rec ctx f s = R x s' i ->
   Ple ctx.(dpc) s.(st_nextnode) ->
-  Ple pc ctx.(dpc) ->
+  Plt pc ctx.(dpc) ->
   s'.(st_code)!pc = s.(st_code)!pc.
 Proof.
   intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ.
@@ -450,7 +499,7 @@ Proof.
     subst s0; auto. 
     subst s0; simpl. xomega.
     red; intros. exploit list_in_map_inv; eauto. intros [pc1 [A B]]. 
-    subst pc. unfold spc in H1. xomega.
+    subst pc. unfold spc in H1. eapply shiftpos_not_below; eauto. 
     apply PTree.elements_keys_norepet.
   subst s0; auto.
 Qed.
@@ -461,13 +510,13 @@ Hypothesis rec_spec:
   fenv_agree fe' ->
   Ple (ctx.(dpc) + max_pc_function f) s.(st_nextnode) ->
   ctx.(mreg) = max_def_function f ->
-  Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
+  Ple (Pplus ctx.(dreg) ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> 
   ctx.(mstk) = Zmax (fn_stacksize f) 0 ->
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
-  (forall pc, Plt ctx.(dpc) pc -> Ple pc s'.(st_nextnode) -> c!pc = s'.(st_code)!pc) ->
+  (forall pc, Ple ctx.(dpc) pc -> Plt pc s'.(st_nextnode) -> c!pc = s'.(st_code)!pc) ->
   tr_funbody ctx f c.
 
 Remark min_alignment_pos:
@@ -487,11 +536,11 @@ Lemma expand_instr_spec:
   forall ctx pc instr s x s' i c,
   expand_instr fe rec ctx pc instr s = R x s' i ->
   Ple (max_def_instr instr) ctx.(mreg) ->
-  Ple (spc ctx pc) s.(st_nextnode) ->
+  Plt (spc ctx pc) s.(st_nextnode) ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
-  (forall pc', Plt s.(st_nextnode) pc' -> Ple pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
+  (forall pc', Ple s.(st_nextnode) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
   c!(spc ctx pc) = s'.(st_code)!(spc ctx pc) ->
   tr_instr ctx pc instr c.
 Proof.
@@ -511,7 +560,8 @@ Proof.
   apply tr_call_inlined with (pc1 := x0) (ctx' := ctx') (f := f); auto.
   eapply BASE; eauto. 
   eapply add_moves_spec; eauto.
-    intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega. xomega. xomega.
+    intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega.
+    xomega. xomega.
   eapply rec_spec; eauto.
     red; intros. rewrite PTree.grspec in H. destruct (PTree.elt_eq id0 id); try discriminate. auto.
     simpl. subst s2; simpl in *; xomega.
@@ -523,7 +573,7 @@ Proof.
     intros. simpl in H. rewrite S1.
     transitivity s1.(st_code)!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
     eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega. 
-  red; simpl. subst s2; simpl in *; xomega.
+  red; simpl. subst s2; simpl in *. xomega. 
   red; simpl. split. auto. apply align_le. apply min_alignment_pos.
 (* tailcall *)
   destruct (can_inline fe s1) as [|id f P Q].
@@ -544,7 +594,7 @@ Proof.
     intros. rewrite S1. eapply set_instr_other; eauto. unfold node; xomega. xomega. xomega.
   eapply rec_spec; eauto.
     red; intros. rewrite PTree.grspec in H. destruct (PTree.elt_eq id0 id); try discriminate. auto.
-    simpl. subst s2; simpl in *; xomega.
+    simpl. subst s3; simpl in *. subst s2; simpl in *. xomega.
     simpl. subst s3; simpl in *; xomega.
     simpl. xomega.
     simpl. apply align_divides. apply min_alignment_pos.
@@ -553,7 +603,8 @@ Proof.
     intros. simpl in H. rewrite S1.
     transitivity s1.(st_code)!pc0. eapply set_instr_other; eauto. unfold node in *; xomega.
     eapply add_moves_unchanged; eauto. unfold node in *; xomega. xomega. 
-  red; simpl. subst s2; simpl in *; xomega.
+  red; simpl. 
+subst s2; simpl in *; xomega.
   red; auto.
 (* return *)
   destruct (retinfo ctx) as [[rpc rreg] | ] eqn:?. 
@@ -568,11 +619,11 @@ Lemma iter_expand_instr_spec:
   mlist_iter2 (expand_instr fe rec ctx) l s = R x s' i ->
   list_norepet (List.map (@fst _ _) l) ->
   (forall pc instr, In (pc, instr) l -> Ple (max_def_instr instr) ctx.(mreg)) ->
-  (forall pc instr, In (pc, instr) l -> Ple (spc ctx pc) s.(st_nextnode)) ->
+  (forall pc instr, In (pc, instr) l -> Plt (spc ctx pc) s.(st_nextnode)) ->
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 -> ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
-  (forall pc', Plt s.(st_nextnode) pc' -> Ple pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
+  (forall pc', Ple s.(st_nextnode) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
   (forall pc instr, In (pc, instr) l -> c!(spc ctx pc) = s'.(st_code)!(spc ctx pc)) ->
   forall pc instr, In (pc, instr) l -> tr_instr ctx pc instr c.
 Proof.
@@ -582,7 +633,8 @@ Proof.
   (* inductive case *)
   destruct a as [pc1 instr1]; simpl in *. inv H0. monadInv H. inv_incr.
   assert (A: Ple ctx.(dpc) s0.(st_nextnode)).
-    assert (B: Ple (spc ctx pc) (st_nextnode s)) by eauto. unfold spc in B; xomega.
+    assert (B: Plt (spc ctx pc) (st_nextnode s)) by eauto. 
+    unfold spc in B. generalize (shiftpos_above pc (dpc ctx)). xomega.
   destruct H9. inv H.
   (* same pc *)
   eapply expand_instr_spec; eauto.
@@ -593,18 +645,18 @@ Proof.
     eapply iter_expand_instr_unchanged; eauto. 
     red; intros. rewrite list_map_compose in H9. exploit list_in_map_inv; eauto. 
     intros [[pc0 instr0] [P Q]]. simpl in P. 
-    assert (Ple (spc ctx pc0) (st_nextnode s)) by eauto. xomega.
+    assert (Plt (spc ctx pc0) (st_nextnode s)) by eauto. xomega.
   transitivity ((st_code s')!(spc ctx pc)). 
     eapply H8; eauto. 
     eapply iter_expand_instr_unchanged; eauto. 
-    assert (Ple (spc ctx pc) (st_nextnode s)) by eauto. xomega.
+    assert (Plt (spc ctx pc) (st_nextnode s)) by eauto. xomega.
     red; intros. rewrite list_map_compose in H. exploit list_in_map_inv; eauto. 
-    intros [[pc0 instr0] [P Q]]. simpl in P. unfold spc in P. 
-    assert (pc = pc0) by (unfold node; xomega). subst pc0.
+    intros [[pc0 instr0] [P Q]]. simpl in P.
+    assert (pc = pc0) by (eapply shiftpos_inj; eauto). subst pc0.
     elim H12. change pc with (fst (pc, instr0)). apply List.in_map; auto.
   (* older pc *)
   inv_incr. eapply IHl; eauto. 
-  intros. eapply Ple_trans; eauto. 
+  intros. eapply Plt_le_trans. eapply H2. right; eauto. xomega.
   intros; eapply Ple_trans; eauto.
   intros. apply H7; auto. xomega.
 Qed.
@@ -620,7 +672,7 @@ Lemma expand_cfg_rec_spec:
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
-  (forall pc', Plt ctx.(dpc) pc' -> Ple pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
+  (forall pc', Ple ctx.(dpc) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
   tr_funbody ctx f c.
 Proof.
   intros. unfold expand_cfg_rec in H. monadInv H. inversion EQ. 
@@ -633,14 +685,14 @@ Proof.
     eapply PTree.elements_complete; eauto.
   intros.
     assert (Ple pc0 (max_pc_function f)).
-      eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.  
-    unfold spc. subst s0; simpl; xomega.
+      eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.
+      eapply Plt_le_trans. apply shiftpos_below. subst s0; simpl; xomega.
   subst s0; simpl; auto.
   intros. apply H8; auto. subst s0; simpl in H11; xomega.
-  intros. apply H8. unfold spc; xomega. 
-    assert (Ple pc0 (max_pc_function f)).
-      eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.  
-    unfold spc. inversion i; xomega.
+  intros. apply H8. apply shiftpos_above. 
+  assert (Ple pc0 (max_pc_function f)).
+    eapply max_pc_function_sound. eapply PTree.elements_complete; eauto.  
+  eapply Plt_le_trans. apply shiftpos_below. inversion i; xomega. 
   apply PTree.elements_correct; auto.
   auto. auto. auto.
   inversion INCR0. subst s0; simpl in STKSIZE; xomega.
@@ -652,7 +704,7 @@ Lemma expand_cfg_unchanged:
   forall fe ctx f s x s' i pc,
   expand_cfg fe ctx f s = R x s' i ->
   Ple ctx.(dpc) s.(st_nextnode) ->
-  Ple pc ctx.(dpc) ->
+  Plt pc ctx.(dpc) ->
   s'.(st_code)!pc = s.(st_code)!pc.
 Proof.
   intros fe0; pattern fe0. apply well_founded_ind with (R := ltof _ size_fenv).
@@ -673,7 +725,7 @@ Lemma expand_cfg_spec:
   (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
-  (forall pc', Plt ctx.(dpc) pc' -> Ple pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
+  (forall pc', Ple ctx.(dpc) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
   tr_funbody ctx f c.
 Proof.
   intros fe0; pattern fe0. apply well_founded_ind with (R := ltof _ size_fenv).

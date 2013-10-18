@@ -143,9 +143,9 @@ Qed.
 
 Program Definition add_instr (i: instruction): mon node :=
   fun s =>
-    let pc := Psucc s.(st_nextnode) in
+    let pc := s.(st_nextnode) in
     R pc
-      (mkstate s.(st_nextreg) pc (PTree.set pc i s.(st_code)) s.(st_stksize))
+      (mkstate s.(st_nextreg) (Psucc pc) (PTree.set pc i s.(st_code)) s.(st_stksize))
       _.
 Next Obligation.
   intros; constructor; simpl; xomega.
@@ -213,9 +213,11 @@ Record context: Type := mkcontext {
 
 (** The following functions "shift" (relocate) PCs, registers, operations, etc. *)
 
-Definition spc (ctx: context) (pc: node) := Pplus pc ctx.(dpc).
+Definition shiftpos (p amount: positive) := Ppred (Pplus p amount).
 
-Definition sreg (ctx: context) (r: reg) := Pplus r ctx.(dreg).
+Definition spc (ctx: context) (pc: node) := shiftpos pc ctx.(dpc).
+
+Definition sreg (ctx: context) (r: reg) := shiftpos r ctx.(dreg).
 
 Definition sregs (ctx: context) (rl: list reg) := List.map (sreg ctx) rl.
 
