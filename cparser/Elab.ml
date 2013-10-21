@@ -15,6 +15,8 @@
 
 (* Elaboration from Cabs parse tree to C simplified, typed syntax tree *)
 
+(* Numbered references are to sections of the ISO C99 standard *)
+
 open Format
 open Cerrors
 open Machine
@@ -93,7 +95,7 @@ let elab_funbody_f : (cabsloc -> C.typ -> Env.t -> Cabs.block -> C.stmt) ref
   = ref (fun _ _ _ _ -> assert false)
 
 
-(** * Elaboration of constants *)
+(** * Elaboration of constants - C99 section 6.4.4 *)
 
 let has_suffix s suff = 
   let ls = String.length s and lsuff = String.length suff in
@@ -162,7 +164,7 @@ let elab_int_constant loc s0 =
       (chop_last s 1, [IUInt; IULong; IULongLong],
                       [IUInt; IULong; IULongLong])
     else
-      (s, [IInt; ILong; IULong; ILongLong],
+      (s, [IInt; ILong; ILongLong],
           [IInt; IUInt; ILong; IULong; ILongLong; IULongLong])
   in
   (* Determine base *)
@@ -333,6 +335,7 @@ let typespec_order t1 t2 = compare (typespec_rank t1) (typespec_rank t2)
      (storage class, "inline" flag, elaborated type, new env)
    Optional argument "only" is true if this is a standalone
    struct or union declaration, without variable names.
+   C99 section 6.7.2.
 *)
 
 let rec elab_specifier ?(only = false) loc env specifier =
@@ -472,7 +475,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
     | _ ->
         fatal_error loc "illegal combination of type specifiers"
 
-(* Elaboration of a type declarator.  *)
+(* Elaboration of a type declarator.  C99 section 6.7.5. *)
 
 and elab_type_declarator loc env ty = function
   | Cabs.JUSTBASE ->
@@ -544,7 +547,7 @@ and elab_name env spec (id, decl, attr, loc) =
   let a = elab_attributes loc env attr in
   (id, sto, inl, add_attributes_type a ty, env'')
 
-(* Elaboration of a name group *)
+(* Elaboration of a name group.  C99 section 6.7.6 *)
 
 and elab_name_group loc env (spec, namelist) =
   let (sto, inl, bty, env') =
@@ -615,7 +618,7 @@ and elab_field_group loc env (spec, fieldlist) =
   in
   (List.map2 elab_bitfield fieldlist names, env')
 
-(* Elaboration of a struct or union *)
+(* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
 and elab_struct_or_union_info kind loc env members attrs =
   let (m, env') = mmap (elab_field_group loc) env members in
@@ -631,8 +634,6 @@ and elab_struct_or_union_info kind loc env members attrs =
       check_incomplete rem in
   check_incomplete m;
   (composite_info_def env' kind attrs m, env')
-
-(* Elaboration of a struct or union *)
 
 and elab_struct_or_union only kind loc tag optmembers attrs env =
   let warn_attrs () =
@@ -693,7 +694,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
       (* Replace infos but keep same ident *)
       (tag', Env.add_composite env'' tag' ci2)
 
-(* Elaboration of an enum item *)
+(* Elaboration of an enum item.  C99 section 6.7.2.2 *)
 
 and elab_enum_item env (s, exp, loc) nextval =
   let (v, exp') =
@@ -716,7 +717,7 @@ and elab_enum_item env (s, exp, loc) nextval =
   let (id, env') = Env.enter_enum_item env s v in
   ((id, v, exp'), Int64.succ v, env')
 
-(* Elaboration of an enumeration declaration *)
+(* Elaboration of an enumeration declaration.   C99 section 6.7.2.2  *)
 
 and elab_enum loc tag optmembers attrs env =
   match optmembers with
@@ -759,7 +760,7 @@ let elab_expr loc env a =
   | NOTHING ->
       error "empty expression"
 
-(* 7.3 Primary expressions *)
+(* 6.5.1 Primary expressions *)
 
   | VARIABLE s ->
       begin match wrap Env.lookup_ident loc env s with
@@ -776,7 +777,7 @@ let elab_expr loc env a =
   | PAREN e ->
       elab e
 
-(* 7.4 Postfix expressions *)
+(* 6.5.2 Postfix expressions *)
 
   | INDEX(a1, a2) ->            (* e1[e2] *)
       let b1 = elab a1 in let b2 = elab a2 in
@@ -875,7 +876,7 @@ let elab_expr loc env a =
   | UNARY(POSDECR, a1) ->
       elab_pre_post_incr_decr Opostdecr "postfix '--'" a1
 
-(* 7.5 Unary expressions *)
+(* 6.5.3 Unary expressions *)
 
   | CAST ((spec, dcl), SINGLE_INIT a1) ->
       let ty = elab_type loc env spec dcl in
@@ -968,7 +969,7 @@ let elab_expr loc env a =
   | UNARY(PREDECR, a1) ->
       elab_pre_post_incr_decr Opredecr "prefix '--'" a1
 
-(* 7.6 Binary operator expressions *)
+(* 6.5.5 to 6.5.12  Binary operator expressions *)
 
   | BINARY(MUL, a1, a2) ->
       elab_binary_arithmetic "*" Omul a1 a2
@@ -1051,14 +1052,14 @@ let elab_expr loc env a =
   | BINARY(XOR, a1, a2) ->
       elab_binary_integer "^" Oxor a1 a2
 
-(* 7.7 Logical operator expressions *)
+(* 6.5.13 and 6.5.14 Logical operator expressions *)
 
   | BINARY(AND, a1, a2) ->
       elab_logical_operator "&&" Ologand a1 a2
   | BINARY(OR, a1, a2) ->
       elab_logical_operator "||" Ologor a1 a2
 
-(* 7.8 Conditional expressions *)
+(* 6.5.15 Conditional expressions *)
   | QUESTION(a1, a2, a3) ->
       let b1 = elab a1 in
       let b2 = elab a2 in
@@ -1094,7 +1095,7 @@ let elab_expr loc env a =
               { edesc = EConditional(b1, b2, b3); etyp = tyres }
       end
 
-(* 7.9 Assignment expressions *)
+(* 6.5.16 Assignment expressions *)
 
   | BINARY(ASSIGN, a1, a2) ->
       let b1 = elab a1 in
@@ -1147,7 +1148,7 @@ let elab_expr loc env a =
       | _ -> assert false
       end
 
-(* 7.10 Sequential expressions *)
+(* 6.5.17 Sequential expressions *)
 
   | COMMA [] ->
       error "empty sequential expression"
@@ -1288,7 +1289,7 @@ let elab_for_expr loc env = function
   | a -> { sdesc = Sdo (elab_expr loc env a); sloc = elab_loc loc }
 
 
-(* Elaboration of initializers *)
+(* Elaboration of initializers. C99 section 6.7.8 *)
 
 let project_init loc il =
   List.map
@@ -1690,12 +1691,12 @@ let rec elab_stmt env ctx s =
 
   match s with
 
-(* 8.2 Expression statements *)
+(* 6.8.3 Expression statements *)
 
   | COMPUTATION(a, loc) ->
       { sdesc = Sdo (elab_expr loc env a); sloc = elab_loc loc }
 
-(* 8.3 Labeled statements *)
+(* 6.8.1 Labeled statements *)
 
   | LABEL(lbl, s1, loc) ->
       { sdesc = Slabeled(Slabel lbl, elab_stmt env ctx s1); sloc = elab_loc loc }
@@ -1716,12 +1717,12 @@ let rec elab_stmt env ctx s =
   | DEFAULT(s1, loc) ->
       { sdesc = Slabeled(Sdefault, elab_stmt env ctx s1); sloc = elab_loc loc }
 
-(* 8.4 Compound statements *)
+(* 6.8.2 Compound statements *)
 
   | BLOCK(b, loc) ->
       elab_block loc env ctx b
 
-(* 8.5 Conditional statements *)
+(* 6.8.4 Conditional statements *)
 
   | IF(a, s1, s2, loc) ->
       let a' = elab_expr loc env a in
@@ -1731,7 +1732,7 @@ let rec elab_stmt env ctx s =
       let s2' = elab_stmt env ctx s2 in
       { sdesc = Sif(a', s1', s2'); sloc = elab_loc loc }
 
-(* 8.6 Iterative statements *)
+(* 6.8.5 Iterative statements *)
 
   | WHILE(a, s1, loc) ->
       let a' = elab_expr loc env a in
@@ -1765,7 +1766,7 @@ let rec elab_stmt env ctx s =
       let s1' = elab_stmt env (ctx_loop ctx) s1 in
       { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc }
 
-(* 8.7 Switch statement *)
+(* 6.8.4 Switch statement *)
   | SWITCH(a, s1, loc) ->
       let a' = elab_expr loc env a in
       if not (is_integer_type env a'.etyp) then
@@ -1773,7 +1774,7 @@ let rec elab_stmt env ctx s =
       let s1' = elab_stmt env (ctx_switch ctx) s1 in
       { sdesc = Sswitch(a', s1'); sloc = elab_loc loc }
 
-(* 8,8 Break and continue statements *)
+(* 6.8.6 Break and continue statements *)
   | BREAK loc ->
       if not ctx.ctx_break then
         error loc "'break' outside of a loop or a 'switch'";
@@ -1783,7 +1784,7 @@ let rec elab_stmt env ctx s =
         error loc "'continue' outside of a loop";
       { sdesc = Scontinue; sloc = elab_loc loc }
 
-(* 8.9 Return statements *)
+(* 6.8.6 Return statements *)
   | RETURN(a, loc) ->
       let a' = elab_opt_expr loc env a in
       begin match (unroll env ctx.ctx_return_typ, a') with
@@ -1811,13 +1812,13 @@ let rec elab_stmt env ctx s =
       end;
       { sdesc = Sreturn a'; sloc = elab_loc loc }
 
-(* 8.10 Goto statements *)
+(* 6.8.6 Goto statements *)
   | GOTO(lbl, loc) ->
       if not (StringSet.mem lbl ctx.ctx_labels) then
         error loc "unknown 'goto' label %s" lbl;
       { sdesc = Sgoto lbl; sloc = elab_loc loc }
 
-(* 8.11 Null statements *)
+(* 6.8.3 Null statements *)
   | NOP loc ->
       { sdesc = Sskip; sloc = elab_loc loc }
 
