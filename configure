@@ -76,7 +76,8 @@ case "$target" in
     system="linux"
     cc="${toolprefix}gcc"
     cprepro="${toolprefix}gcc -U__GNUC__ -E"
-    casm="${toolprefix}gcc -c -Wa,-mregnames"
+    casm="${toolprefix}gcc -c"
+    casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
     clinker="${toolprefix}gcc"
     libmath="-lm"
     cchecklink=true;;

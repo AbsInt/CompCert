@@ -111,36 +111,46 @@ let crbit oc bit =
   fprintf oc "%d" (num_crbit bit)
 
 let int_reg_name = function
-  | GPR0 -> "r0"  | GPR1 -> "r1"  | GPR2 -> "r2"  | GPR3 -> "r3"
-  | GPR4 -> "r4"  | GPR5 -> "r5"  | GPR6 -> "r6"  | GPR7 -> "r7"
-  | GPR8 -> "r8"  | GPR9 -> "r9"  | GPR10 -> "r10" | GPR11 -> "r11"
-  | GPR12 -> "r12" | GPR13 -> "r13" | GPR14 -> "r14" | GPR15 -> "r15"
-  | GPR16 -> "r16" | GPR17 -> "r17" | GPR18 -> "r18" | GPR19 -> "r19"
-  | GPR20 -> "r20" | GPR21 -> "r21" | GPR22 -> "r22" | GPR23 -> "r23"
-  | GPR24 -> "r24" | GPR25 -> "r25" | GPR26 -> "r26" | GPR27 -> "r27"
-  | GPR28 -> "r28" | GPR29 -> "r29" | GPR30 -> "r30" | GPR31 -> "r31"
+  | GPR0 -> "0"  | GPR1 -> "1"  | GPR2 -> "2"  | GPR3 -> "3"
+  | GPR4 -> "4"  | GPR5 -> "5"  | GPR6 -> "6"  | GPR7 -> "7"
+  | GPR8 -> "8"  | GPR9 -> "9"  | GPR10 -> "10" | GPR11 -> "11"
+  | GPR12 -> "12" | GPR13 -> "13" | GPR14 -> "14" | GPR15 -> "15"
+  | GPR16 -> "16" | GPR17 -> "17" | GPR18 -> "18" | GPR19 -> "19"
+  | GPR20 -> "20" | GPR21 -> "21" | GPR22 -> "22" | GPR23 -> "23"
+  | GPR24 -> "24" | GPR25 -> "25" | GPR26 -> "26" | GPR27 -> "27"
+  | GPR28 -> "28" | GPR29 -> "29" | GPR30 -> "30" | GPR31 -> "31"
 
 let float_reg_name = function
-  | FPR0 -> "f0"  | FPR1 -> "f1"  | FPR2 -> "f2"  | FPR3 -> "f3"
-  | FPR4 -> "f4"  | FPR5 -> "f5"  | FPR6 -> "f6"  | FPR7 -> "f7"
-  | FPR8 -> "f8"  | FPR9 -> "f9"  | FPR10 -> "f10" | FPR11 -> "f11"
-  | FPR12 -> "f12" | FPR13 -> "f13" | FPR14 -> "f14" | FPR15 -> "f15"
-  | FPR16 -> "f16" | FPR17 -> "f17" | FPR18 -> "f18" | FPR19 -> "f19"
-  | FPR20 -> "f20" | FPR21 -> "f21" | FPR22 -> "f22" | FPR23 -> "f23"
-  | FPR24 -> "f24" | FPR25 -> "f25" | FPR26 -> "f26" | FPR27 -> "f27"
-  | FPR28 -> "f28" | FPR29 -> "f29" | FPR30 -> "f30" | FPR31 -> "f31"
+  | FPR0 -> "0"  | FPR1 -> "1"  | FPR2 -> "2"  | FPR3 -> "3"
+  | FPR4 -> "4"  | FPR5 -> "5"  | FPR6 -> "6"  | FPR7 -> "7"
+  | FPR8 -> "8"  | FPR9 -> "9"  | FPR10 -> "10" | FPR11 -> "11"
+  | FPR12 -> "12" | FPR13 -> "13" | FPR14 -> "14" | FPR15 -> "15"
+  | FPR16 -> "16" | FPR17 -> "17" | FPR18 -> "18" | FPR19 -> "19"
+  | FPR20 -> "20" | FPR21 -> "21" | FPR22 -> "22" | FPR23 -> "23"
+  | FPR24 -> "24" | FPR25 -> "25" | FPR26 -> "26" | FPR27 -> "27"
+  | FPR28 -> "28" | FPR29 -> "29" | FPR30 -> "30" | FPR31 -> "31"
 
 let ireg oc r =
+  begin match target with
+  | Diab  -> output_char oc 'r'
+  | Linux -> ()
+  end;
   output_string oc (int_reg_name r)
 
 let ireg_or_zero oc r =
   if r = GPR0 then output_string oc "0" else ireg oc r
 
 let freg oc r =
+  begin match target with
+  | Diab  -> output_char oc 'f'
+  | Linux -> ()
+  end;
   output_string oc (float_reg_name r)
 
 let creg oc r =
-  fprintf oc "cr%d" r
+  match target with
+  | Diab  -> fprintf oc "cr%d" r
+  | Linux -> fprintf oc "%d" r
 
 let preg oc = function
   | IR r -> ireg oc r
