@@ -101,8 +101,12 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
       end
   | Oandimm n, x :: nil =>
       match get x with
-      | Some(Op (Oandimm m) ys) => Some(Oandimm (Int.and m n), ys)
-      | Some(Op (Orolm amount m) ys) => Some(Orolm amount (Int.and m n), ys)
+      | Some(Op (Oandimm m) ys) => 
+          Some(let p := Int.and m n in
+               if Int.eq p m then (Omove, x :: nil) else (Oandimm p, ys))
+      | Some(Op (Orolm amount m) ys) =>
+          Some(let p := Int.and m n in
+               if Int.eq p m then (Omove, x :: nil) else (Orolm amount p, ys))
       | _ => None
       end
   | Oorimm n, x :: nil =>

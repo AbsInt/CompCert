@@ -147,9 +147,16 @@ Transparent Val.sub.
   destruct v; simpl; auto. repeat rewrite Int.sub_add_opp. rewrite Int.add_assoc.
   rewrite Int.neg_add_distr. decEq. decEq. decEq. apply Int.add_commut.
 (* andimm - andimm *)
+  generalize (Int.eq_spec p m0); rewrite H7; intros. 
+  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
+  rewrite <- H2. rewrite Val.and_assoc. simpl. fold p. rewrite H0. auto.
   exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
   rewrite <- H1. rewrite Val.and_assoc. auto.
 (* andimm - rolm *)
+  generalize (Int.eq_spec p m0); rewrite H7; intros. 
+  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
+  rewrite <- H2. destruct v; simpl; auto. unfold Int.rolm. 
+  rewrite Int.and_assoc. fold p; rewrite H0. auto.
   exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
   rewrite <- H1. destruct v; simpl; auto. unfold Int.rolm. rewrite Int.and_assoc. auto.
 (* orimm *)
