@@ -215,20 +215,23 @@ let elab_float_constant loc f =
 let elab_char_constant loc sz cl =
   let nbits = 8 * sz in
   (* Treat multi-char constants as a number in base 2^nbits *)
+  let max_digit = Int64.shift_left 1L nbits in
   let max_val = Int64.shift_left 1L (64 - nbits) in
   let v =
     List.fold_left 
       (fun acc d ->
-        if acc >= max_val then begin
-          error loc "character literal overflows";
-        end;
+        if acc >= max_val then
+          error loc "character constant overflows";
+        if d >= max_digit then
+          warning loc "escape sequence out of range";
         Int64.add (Int64.shift_left acc nbits) d)
       0L cl in
-  let ty =
-    if v < 256L then IInt
-    else if v < Int64.shift_left 1L (8 * sizeof_ikind IULong) then IULong
-    else IULongLong in
-  (v, ty)
+  if not (integer_representable v IInt) then
+    error loc "character constant cannot be represented at type 'int'";
+  (* C99 6.4.4.4 item 10: single character -> represent at type char *)
+  if List.length cl = 1
+  then Ceval.normalize_int v IChar
+  else v
 
 let elab_constant loc = function
   | CONST_INT s ->
@@ -238,11 +241,9 @@ let elab_constant loc = function
       let (v, fk) = elab_float_constant loc f in
       CFloat(v, fk)
   | CONST_CHAR cl ->
-      let (v, ik) = elab_char_constant loc 1 cl in
-      CInt(v, ik, "")
+      CInt(elab_char_constant loc 1 cl, IInt, "")
   | CONST_WCHAR cl -> 
-      let (v, ik) = elab_char_constant loc !config.sizeof_wchar cl in
-      CInt(v, ik, "")
+      CInt(elab_char_constant loc !config.sizeof_wchar cl, IInt, "")
   | CONST_STRING s -> CStr s
   | CONST_WSTRING s -> CWStr s
 

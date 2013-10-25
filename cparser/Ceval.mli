@@ -15,3 +15,4 @@
 
 val integer_expr : Env.t -> C.exp -> int64 option
 val constant_expr : Env.t -> C.typ -> C.exp -> C.constant option
+val normalize_int : int64 -> C.ikind -> int64
