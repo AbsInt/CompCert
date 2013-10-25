@@ -256,16 +256,16 @@ Qed.
 
 (** We use the following calling conventions, adapted from the ARM EABI:
 - The first 4 integer arguments are passed in registers [R0] to [R3].
-- The first 2 float arguments are passed in registers [F0] and [F2].
-- The first 4 float arguments are passed in registers [F0] to [F3].
-- The first 2 integer arguments are passed in an aligned pair of two integer
-  registers.
-- Each float argument passed in a float register ``consumes'' an aligned pair
+- The first 2 double float arguments are passed in registers [F0] and [F2].
+- The first 4 single float arguments are passed in registers [F0] to [F3].
+- The first 2 long integer arguments are passed in an aligned pair of
+  two integer registers.
+- Each double argument passed in a float register ``consumes'' an aligned pair
   of two integer registers.
 - Each single argument passed in a float register ``consumes'' an integer
   register.
 - Extra arguments are passed on the stack, in [Outgoing] slots, consecutively
-  assigned (1 word for an integer or single argument, 2 words for a float
+  assigned (1 word for an integer or single argument, 2 words for a double
   or a long), starting at word offset 0.
 
 This convention is not quite that of the ARM EABI, whereas every float
