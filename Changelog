@@ -1,25 +1,40 @@
-Development trunk:
-==================
+Release 2.1, 2013-10-28
+=======================
 
+Language semantics:
 - More precise modeling of not-a-numbers (NaNs) in floating-point
   arithmetic.
+- The CompCert C language is now defined with reference to ISO C99
+  instead of ISO C90 ("ANSI C") as before.  This affects mostly the
+  wording of the reference manual.  However, the parsing of integer
+  constants and character constants was revised to follow the ISO C99
+  standard.
+
+Language features:
+- Support for _Alignas(N) attribute from ISO C 2011.
+- Revised implementation of packed structs, taking advantage of _Alignas.
+- Suppressed the pragma "packed", replaced by a struct-level attribute
+  __packed__(params) or __attribute__(packed(params)).
+- Fixed typing rules for __builtin_annot() to avoid casting arguments
+  of small integer or FP types.
+
+Performance improvements:
 - Optimize integer divisions by positive constants, turning them into
   multiply-high and shifts.
 - Optimize floating-point divisions by powers of 2, turning them
   into multiplications.
 - Optimize "x * 2.0" and "2.0 * x" into "x + x".
+- PowerPC: more efficient implementation of division on 64-bit integers.
+
+Bug fixing:
+- Fixed compile-time error when assigning a long long RHS to a bitfield.
 - Avoid double rounding issues in conversion from 64-bit integers
   to single-precision floats.
-- Fixed typing rules for __builtin_annot() to avoid casting arguments
-  of small integer or FP types.
-- PowerPC: more efficient implementation of division on 64-bit integers.
+
+Miscellaneous:
 - Minor simplifications in the generic solvers for dataflow analysis.
 - Small improvements in compilation times for the register allocation pass.
-- Support for _Alignas(N) attribute from ISO C 2011.
-- Revised implementation of packed structs, taking advantage of _Alignas.
-- Suppressed the pragma "packed", replaced by a struct-level attribute
-  __packed__(params) or __attribute__(packed(params)).
-- Fixed compile-time error when assigning a long long RHS to a bitfield.
+- MacOS X port updated to the latest XCode (version 5.0).
 
 
 Release 2.0, 2013-06-21
