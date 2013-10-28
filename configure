@@ -124,7 +124,7 @@ case "$target" in
     variant="standard"
     system="macosx"
     cc="${toolprefix}gcc -arch i386"
-    cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__BLOCKS__ -E"
+    cprepro="${toolprefix}gcc -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' -E"
     casm="${toolprefix}gcc -arch i386 -c"
     case `uname -r` in
       [1-9].*|10.*|11.*)    # up to MacOS 10.7 included
