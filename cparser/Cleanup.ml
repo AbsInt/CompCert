@@ -125,7 +125,7 @@ let rec add_init_globdecls accu = function
       match g.gdesc with
       | Gdecl decl when visible_decl decl ->
           add_decl decl; add_init_globdecls accu rem
-      | Gfundef({fd_storage = Storage_default} as f) ->
+      | Gfundef f when f.fd_storage = Storage_default && not f.fd_inline ->
           add_fundef f; add_init_globdecls accu rem
       | Gdecl _ | Gfundef _ | Gcompositedef _ | Gtypedef _ | Genumdef _ ->
           (* Keep for later iterations *)
@@ -178,7 +178,9 @@ let rec simpl_globdecls accu = function
       let need =
         match g.gdesc with
         | Gdecl((sto, id, ty, init) as decl) -> visible_decl decl || needed id
-        | Gfundef f -> f.fd_storage = Storage_default || needed f.fd_name
+        | Gfundef f -> 
+            (f.fd_storage = Storage_default && not f.fd_inline)
+            || needed f.fd_name
         | Gcompositedecl(_, id, _) -> needed id
         | Gcompositedef(_, id, _, flds) -> needed id
         | Gtypedef(id, ty) -> needed id
