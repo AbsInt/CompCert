@@ -376,6 +376,11 @@ let supported_return_type env ty =
   | C.TStruct _  | C.TUnion _ -> false
   | _ -> true
 
+let is_longlong env ty =
+  match Cutil.unroll env ty with
+  | C.TInt((C.ILongLong|C.IULongLong), _) -> true
+  | _ -> false
+
 (** Floating point constants *)
 
 let z_of_str hex str fst =
@@ -704,6 +709,8 @@ let rec convertStmt ploc env s =
   | C.Scontinue ->
       Scontinue
   | C.Sswitch(e, s1) ->
+      if is_longlong env e.etyp then
+        unsupported "'switch' on an argument of type 'long long'";
       let (init, cases) = groupSwitch (flattenSwitch s1) in
       if cases = [] then
         unsupported "ill-formed 'switch' statement";
