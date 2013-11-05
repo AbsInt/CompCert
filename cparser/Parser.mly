@@ -1312,6 +1312,7 @@ primary_attr:
                                             * attribute lists, is translated 
                                             * to aconst *)*/
 |   CONST                                { VARIABLE "aconst" }
+|   PACKED                               { VARIABLE "__packed__" }
 
 |   IDENT COLON CST_INT                  { VARIABLE (fst $1 ^ ":" ^ fst $3) }
 
