@@ -764,9 +764,11 @@ Lemma sizeof_by_value:
   access_mode ty = By_value chunk -> size_chunk chunk <= sizeof ty.
 Proof.
   unfold access_mode; intros.
-Local Opaque alignof. 
-  destruct ty; try destruct i; try destruct s; try destruct f; inv H;
-  apply align_le; apply alignof_pos.
+  assert (size_chunk chunk = sizeof ty).
+  {
+    destruct ty; try destruct i; try destruct s; try destruct f; inv H; auto.
+  }
+  omega.
 Qed.
 
 Definition env_initial_value (e: env) (m: mem) :=
@@ -1046,10 +1048,12 @@ Proof.
   exploit Mem.storebytes_mapped_inject; eauto. intros [tm' [C D]].
   exists tm'. 
   split. eapply assign_loc_copy; try rewrite EQ1; try rewrite EQ2; eauto. 
-  eapply Mem.aligned_area_inject with (m := m); eauto. apply alignof_blockcopy_1248.
-  eapply Zdivide_trans. apply alignof_blockcopy_divides. apply sizeof_alignof_compat.
-  eapply Mem.aligned_area_inject with (m := m); eauto. apply alignof_blockcopy_1248.
-  eapply Zdivide_trans. apply alignof_blockcopy_divides. apply sizeof_alignof_compat.
+  eapply Mem.aligned_area_inject with (m := m); eauto.
+  apply alignof_blockcopy_1248.
+  apply sizeof_alignof_blockcopy_compat.
+  eapply Mem.aligned_area_inject with (m := m); eauto.
+  apply alignof_blockcopy_1248.
+  apply sizeof_alignof_blockcopy_compat.
   eapply Mem.disjoint_or_equal_inject with (m := m); eauto.
   apply Mem.range_perm_max with Cur; auto.
   apply Mem.range_perm_max with Cur; auto.

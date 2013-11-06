@@ -53,7 +53,7 @@ val erase_attributes_type : Env.t -> typ -> typ
 val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
   (* Apply the given function to the top-level attributes of the given type *)
 val attr_is_type_related: attribute -> bool
-(* Is an attribute type-related (true) or variable-related (false)? *)
+  (* Is an attribute type-related (true) or variable-related (false)? *)
 
 (* Type compatibility *)
 val compatible_types : ?noattrs: bool -> Env.t -> typ -> typ -> bool

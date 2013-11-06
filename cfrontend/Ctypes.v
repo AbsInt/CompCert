@@ -160,7 +160,7 @@ Definition typeconv (ty: type) : type :=
 
 (** * Operations over types *)
 
-(** Natural alignment of a type, in bytes. *)
+(** Alignment of a type, in bytes. *)
 
 Fixpoint alignof (t: type) : Z :=
   match attr_alignas (attr_of_type t) with
@@ -241,24 +241,22 @@ Qed.
 (** Size of a type, in bytes. *)
 
 Fixpoint sizeof (t: type) : Z :=
-  let sz :=
-    match t with
-    | Tvoid => 1
-    | Tint I8 _ _ => 1
-    | Tint I16 _ _ => 2
-    | Tint I32 _ _ => 4
-    | Tint IBool _ _ => 1
-    | Tlong _ _ => 8
-    | Tfloat F32 _ => 4
-    | Tfloat F64 _ => 8
-    | Tpointer _ _ => 4
-    | Tarray t' n _ => sizeof t' * Zmax 1 n
-    | Tfunction _ _ => 1
-    | Tstruct _ fld _ => Zmax 1 (sizeof_struct fld 0)
-    | Tunion _ fld _ => Zmax 1 (sizeof_union fld)
-    | Tcomp_ptr _ _ => 4
-    end
-  in align sz (alignof t)
+  match t with
+  | Tvoid => 1
+  | Tint I8 _ _ => 1
+  | Tint I16 _ _ => 2
+  | Tint I32 _ _ => 4
+  | Tint IBool _ _ => 1
+  | Tlong _ _ => 8
+  | Tfloat F32 _ => 4
+  | Tfloat F64 _ => 8
+  | Tpointer _ _ => 4
+  | Tarray t' n _ => sizeof t' * Zmax 1 n
+  | Tfunction _ _ => 1
+  | Tstruct _ fld _ => align (Zmax 1 (sizeof_struct fld 0)) (alignof t)
+  | Tunion _ fld _ => align (Zmax 1 (sizeof_union fld)) (alignof t)
+  | Tcomp_ptr _ _ => 4
+  end
 
 with sizeof_struct (fld: fieldlist) (pos: Z) {struct fld} : Z :=
   match fld with
@@ -275,15 +273,17 @@ with sizeof_union (fld: fieldlist) : Z :=
 Lemma sizeof_pos:
   forall t, sizeof t > 0.
 Proof.
-  assert (X: forall t sz, sz > 0 -> align sz (alignof t) > 0).
-  {
-    intros. generalize (align_le sz (alignof t) (alignof_pos t)). omega. 
-  }
 Local Opaque alignof.
-  induction t; simpl; apply X; try xomega.
+  assert (X: forall n t, n > 0 -> align n (alignof t) > 0).
+  {
+    intros. generalize (align_le n (alignof t) (alignof_pos t)). omega.
+  }
+  induction t; simpl; try xomega.
   destruct i; omega.
   destruct f; omega.
   apply Zmult_gt_0_compat. auto. xomega.
+  apply X. xomega. 
+  apply X. xomega.
 Qed.
 
 Lemma sizeof_struct_incr:
@@ -296,10 +296,33 @@ Proof.
   generalize (sizeof_pos t); omega.
 Qed.
 
+Fixpoint naturally_aligned (t: type) : Prop :=
+  match t with
+  | Tint _ _ a | Tlong _ a | Tfloat _ a | Tpointer _ a | Tcomp_ptr _ a =>
+      attr_alignas a = None
+  | Tarray t' _ a =>
+      attr_alignas a = None /\ naturally_aligned t'
+  | Tvoid | Tfunction _ _ | Tstruct _ _ _ | Tunion _ _ _ =>
+      True
+  end.
+
 Lemma sizeof_alignof_compat:
-  forall t, (alignof t | sizeof t).
+  forall t, naturally_aligned t -> (alignof t | sizeof t).
 Proof.
-  intros. destruct t; apply align_divides; apply alignof_pos.
+Local Transparent alignof.
+  induction t; simpl; intros.
+- apply Zdivide_refl.
+- rewrite H. destruct i; apply Zdivide_refl.
+- rewrite H; apply Zdivide_refl.
+- rewrite H. destruct f; apply Zdivide_refl.
+- rewrite H; apply Zdivide_refl.
+- destruct H. rewrite H. apply Z.divide_mul_l; auto. 
+- apply Zdivide_refl.
+- change (alignof (Tstruct i f a) | align (Z.max 1 (sizeof_struct f 0)) (alignof (Tstruct i f a))).
+  apply align_divides. apply alignof_pos.
+- change (alignof (Tunion i f a) | align (Z.max 1 (sizeof_union f)) (alignof (Tunion i f a))).
+  apply align_divides. apply alignof_pos.
+- rewrite H; apply Zdivide_refl.
 Qed.
 
 (** Byte offset for a field in a struct or union.
@@ -350,8 +373,11 @@ Lemma field_offset_in_range:
   0 <= ofs /\ ofs + sizeof ty <= sizeof (Tstruct sid fld a).
 Proof.
   intros. exploit field_offset_rec_in_range; eauto. intros [A B].
-  split. auto.  simpl. eapply Zle_trans. eauto.
-  eapply Zle_trans. eapply Zle_max_r. apply align_le. apply alignof_pos.
+  split. auto.
+Local Opaque alignof. 
+  simpl. eapply Zle_trans; eauto. 
+  apply Zle_trans with (Z.max 1 (sizeof_struct fld 0)). xomega. 
+  apply align_le. apply alignof_pos. 
 Qed.
 
 (** Second, two distinct fields do not overlap *)
@@ -531,7 +557,7 @@ Local Opaque alignof.
                    /\ forall pos,
                       sizeof_struct (unroll_composite_fields fld) pos = sizeof_struct fld pos));
   simpl; intros; auto.
-- rewrite H. rewrite <- (alignof_unroll_composite (Tarray t z a)). auto.
+- rewrite H. auto.
 - rewrite <- (alignof_unroll_composite (Tstruct i f a)). simpl.
   destruct H. destruct (ident_eq i cid). auto. simpl. rewrite H0. auto.
 - rewrite <- (alignof_unroll_composite (Tunion i f a)). simpl.
@@ -544,39 +570,82 @@ Qed.
 
 End UNROLL_COMPOSITE.
 
-(** A variatn of [alignof] for use in block copy operations
-  (which do not support alignments greater than 8). *)
+(** A variant of [alignof] for use in block copy operations.
+  Block copy operations do not support alignments greater than 8,
+  and require the size to be an integral multiple of the alignment. *)
 
-Definition alignof_blockcopy (ty: type) := Zmin 8 (alignof ty).
+Fixpoint alignof_blockcopy (t: type) : Z :=
+  match t with
+  | Tvoid => 1
+  | Tint I8 _ _ => 1
+  | Tint I16 _ _ => 2
+  | Tint I32 _ _ => 4
+  | Tint IBool _ _ => 1
+  | Tlong _ _ => 8
+  | Tfloat F32 _ => 4
+  | Tfloat F64 _ => 8
+  | Tpointer _ _ => 4
+  | Tarray t' _ _ => alignof_blockcopy t'
+  | Tfunction _ _ => 1
+  | Tstruct _ fld _ => Zmin 8 (alignof t)
+  | Tunion _ fld _ => Zmin 8 (alignof t)
+  | Tcomp_ptr _ _ => 4
+  end.
 
 Lemma alignof_blockcopy_1248:
   forall ty, let a := alignof_blockcopy ty in a = 1 \/ a = 2 \/ a = 4 \/ a = 8.
 Proof.
-  intros. unfold a, alignof_blockcopy. 
-  destruct (alignof_two_p ty) as [n EQ]. rewrite EQ.
-  destruct n; auto.
-  destruct n; auto.
-  destruct n; auto.
-  right; right; right. apply Z.min_l.
-  rewrite two_power_nat_two_p. rewrite ! inj_S. 
-  change 8 with (two_p 3). 
-  apply two_p_monotone. omega.
+  assert (X: forall ty, let a := Zmin 8 (alignof ty) in
+             a = 1 \/ a = 2 \/ a = 4 \/ a = 8).
+  {
+    intros. destruct (alignof_two_p ty) as [n EQ]. unfold a; rewrite EQ. 
+    destruct n; auto.
+    destruct n; auto.
+    destruct n; auto.
+    right; right; right. apply Z.min_l.
+    rewrite two_power_nat_two_p. rewrite ! inj_S. 
+    change 8 with (two_p 3). apply two_p_monotone. omega.
+  }
+  induction ty; simpl; auto.
+  destruct i; auto.
+  destruct f; auto.
 Qed.
 
-Lemma alignof_blockcopy_divides:
-  forall ty, (alignof_blockcopy ty | alignof ty).
+Lemma alignof_blockcopy_pos:
+  forall ty, alignof_blockcopy ty > 0.
 Proof.
-  intros. unfold alignof_blockcopy. 
-  destruct (alignof_two_p ty) as [n EQ]. rewrite EQ.
-  destruct n. apply Zdivide_refl.
-  destruct n. apply Zdivide_refl.
-  destruct n. apply Zdivide_refl.
-  replace (two_power_nat (S(S(S n)))) with (two_p (3 + Z.of_nat n)).
-  rewrite two_p_is_exp by omega. change (two_p 3) with 8.
-  apply Z.min_case. 
-  exists (two_p (Z.of_nat n)). ring.
+  intros. generalize (alignof_blockcopy_1248 ty). simpl. intuition omega.
+Qed.
+
+Lemma sizeof_alignof_blockcopy_compat:
+  forall ty, (alignof_blockcopy ty | sizeof ty).
+Proof.
+  assert (X: forall ty sz, (alignof ty | sz) -> (Zmin 8 (alignof ty) | sz)).
+  {
+    intros. destruct (alignof_two_p ty) as [n EQ]. rewrite EQ in *.
+    destruct n; auto.
+    destruct n; auto.
+    destruct n; auto.
+    eapply Zdivide_trans; eauto. 
+    apply Z.min_case. 
+    replace (two_power_nat (S(S(S n)))) with (two_p (3 + Z.of_nat n)).
+    rewrite two_p_is_exp by omega. change (two_p 3) with 8.
+    exists (two_p (Z.of_nat n)). ring.
+    rewrite two_power_nat_two_p. rewrite !inj_S. f_equal. omega.
+    apply Zdivide_refl.
+  }
+  Local Opaque alignof.
+  induction ty; simpl.
   apply Zdivide_refl.
-  rewrite two_power_nat_two_p. rewrite !inj_S. f_equal. omega.
+  destruct i; apply Zdivide_refl.
+  apply Zdivide_refl.
+  destruct f; apply Zdivide_refl.
+  apply Zdivide_refl.
+  apply Z.divide_mul_l. auto.
+  apply Zdivide_refl.
+  apply X. apply align_divides. apply alignof_pos.
+  apply X. apply align_divides. apply alignof_pos.
+  apply Zdivide_refl.
 Qed.
 
 (** Extracting a type list from a function parameter declaration. *)

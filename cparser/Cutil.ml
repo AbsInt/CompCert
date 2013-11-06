@@ -79,8 +79,21 @@ let rec remove_custom_attributes (names: string list)  (al: attributes) =
   | a :: tl ->
       a :: remove_custom_attributes names tl
 
+(* Is an attribute type-related (true) or variable-related (false)? *)
+
+let attr_is_type_related = function
+  | Attr(("packed" | "__packed__"), _) -> true
+  | _ -> false
+
+(* Is an attribute applicable to a whole array (true) or only to 
+   array elements (false)? *)
+
+let attr_array_applicable = function
+  | AConst | AVolatile | ARestrict | AAlignas _ -> false
+  | Attr _ -> true
+
 (* Adding top-level attributes to a type.  Doesn't need to unroll defns. *)
-(* Array types cannot carry attributes, so add them to the element type. *)
+(* For array types, standard attrs are pushed to the element type. *)
 
 let rec add_attributes_type attr t =
   match t with
@@ -88,7 +101,9 @@ let rec add_attributes_type attr t =
   | TInt(ik, a) -> TInt(ik, add_attributes attr a)
   | TFloat(fk, a) -> TFloat(fk, add_attributes attr a)
   | TPtr(ty, a) -> TPtr(ty, add_attributes attr a)
-  | TArray(ty, sz, a) -> TArray(add_attributes_type attr ty, sz, a)
+  | TArray(ty, sz, a) -> 
+      let (attr_arr, attr_elt) = List.partition attr_array_applicable attr in
+      TArray(add_attributes_type attr_elt ty, sz, add_attributes attr_arr a)
   | TFun(ty, params, vararg, a) -> TFun(ty, params, vararg, add_attributes attr 
 a)
   | TNamed(s, a) -> TNamed(s, add_attributes attr a)
@@ -133,7 +148,7 @@ let rec change_attributes_type env (f: attributes -> attributes) t =
   | TFloat(fk, a) -> TFloat(fk, f a)
   | TPtr(ty, a) -> TPtr(ty, f a)
   | TArray(ty, sz, a) ->
-      TArray(change_attributes_type env f ty, sz, a)
+      TArray(change_attributes_type env f ty, sz, f a)
   | TFun(ty, params, vararg, a) -> TFun(ty, params, vararg, f a)
   | TNamed(s, a) ->
       let t1 = unroll env t in
@@ -148,12 +163,6 @@ let remove_attributes_type env attr t =
 
 let erase_attributes_type env t =
   change_attributes_type env (fun a -> []) t
-
-(* Is an attribute type-related (true) or variable-related (false)? *)
-
-let attr_is_type_related = function
-  | Attr(("packed" | "__packed__"), _) -> true
-  | _ -> false
 
 (* Extracting alignment value from a set of attributes.  Return 0 if none. *)
 

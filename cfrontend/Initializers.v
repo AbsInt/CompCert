@@ -167,22 +167,18 @@ Definition transl_init_single (ty: type) (a: expr) : res init_data :=
   Return the corresponding list of initialization data. *)
 
 Definition padding (frm to: Z) : list init_data :=
-  let n := to - frm in
-  if zle n 0 then nil else Init_space n :: nil.
+  if zlt frm to then Init_space (to - frm) :: nil else nil.
 
 Fixpoint transl_init (ty: type) (i: initializer)
                      {struct i} : res (list init_data) :=
   match i, ty with
   | Init_single a, _ =>
-      do d <- transl_init_single ty a; 
-      OK (d :: padding (Genv.init_data_size d) (sizeof ty))
-  | Init_compound il, Tarray tyelt sz _ =>
-      if zle sz 0 then
+      do d <- transl_init_single ty a; OK (d :: nil)
+  | Init_compound il, Tarray tyelt nelt _ =>
+      if zle nelt 0 then
         OK (Init_space(sizeof ty) :: nil)
       else
-        do dl <- transl_init_array tyelt il sz;
-        OK(let n := sizeof ty - sizeof tyelt * sz in
-           if zle n 0 then dl else dl ++ Init_space n :: nil)
+        transl_init_array tyelt il nelt
   | Init_compound il, Tstruct _ Fnil _ =>
       OK (Init_space (sizeof ty) :: nil)
   | Init_compound il, Tstruct id fl _ =>

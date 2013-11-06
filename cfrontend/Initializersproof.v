@@ -523,35 +523,36 @@ Qed.
 Lemma transl_init_single_size:
   forall ty a data,
   transl_init_single ty a = OK data ->
-  Genv.init_data_size data <= sizeof ty.
-Proof with (simpl; apply align_le; apply alignof_pos).
-Local Opaque alignof.
+  Genv.init_data_size data = sizeof ty.
+Proof.
   intros. monadInv H. destruct x0. 
   monadInv EQ2.
   destruct ty; try discriminate. 
-  destruct i0; inv EQ2...
-  inv EQ2...
-  inv EQ2...
-  destruct ty; inv EQ2...
+  destruct i0; inv EQ2; auto.
+  inv EQ2; auto.
+  inv EQ2; auto.
+  destruct ty; inv EQ2; auto.
   destruct ty; try discriminate.
-  destruct f0; inv EQ2...
+  destruct f0; inv EQ2; auto.
   destruct ty; try discriminate.
-  destruct i0; inv EQ2...
-  inv EQ2...
-  inv EQ2...
+  destruct i0; auto.
+  inv EQ2.
+  inv EQ2.
+  inv EQ2; auto.
+  inv EQ2.
+  inv EQ2; auto.
+  inv EQ2; auto.
 Qed.
 
 Notation idlsize := Genv.init_data_list_size.
 
 Remark padding_size:
-  forall frm to,
-  frm <= to -> idlsize (padding frm to) = to - frm.
+  forall frm to, frm <= to -> idlsize (padding frm to) = to - frm.
 Proof.
-  intros. unfold padding. 
-  destruct (zle (to - frm) 0). 
+  unfold padding; intros. destruct (zlt frm to). 
+  simpl. xomega. 
   simpl. omega.
-  simpl. rewrite Zmax_spec. rewrite zlt_true. omega. omega.
-Qed. 
+Qed.
 
 Remark idlsize_app:
   forall d1 d2, idlsize (d1 ++ d2) = idlsize d1 + idlsize d2.
@@ -615,22 +616,19 @@ with transl_init_list_size:
    idlsize data = sizeof ty).
 
 Proof.
-  induction i; intros. 
-  (* single *)
-  monadInv H. simpl. rewrite padding_size. omega. eapply transl_init_single_size; eauto.
-  (* compound *)
+- induction i; intros. 
++ (* single *)
+  monadInv H. simpl. erewrite transl_init_single_size by eauto. omega. 
++ (* compound *)
   simpl in H. destruct ty; try discriminate.
-  (* compound array *)
+* (* compound array *)
   set (sz := sizeof (Tarray ty z a)) in *.
-  destruct (zle z 0). inv H. simpl. rewrite Z.max_l. omega. 
+  destruct (zle z 0).
+  inv H. simpl. rewrite Z.max_l. omega.
   generalize (sizeof_pos (Tarray ty z a)). unfold sz; omega.
-  monadInv H. exploit (proj1 (transl_init_list_size il)); eauto. intros SX.
-  assert (sizeof ty * z <= sz).
-  { unfold sz. simpl. rewrite Z.max_r. apply align_le; apply alignof_pos. omega. }
-  destruct (zle (sz - sizeof ty * z)).
-  omega.
-  rewrite idlsize_app. simpl. rewrite Z.max_l by omega. omega. 
-  (* compound struct *)
+  unfold sz; simpl. rewrite Z.max_r by omega. 
+  eapply (proj1 (transl_init_list_size il)); eauto.
+* (* compound struct *)
   set (sz := sizeof (Tstruct i f a)) in *.
   destruct f.
   inv H. simpl. rewrite Z.max_l. omega. generalize (sizeof_pos (Tstruct i Fnil a)); unfold sz; omega. 
@@ -638,7 +636,7 @@ Proof.
   eapply (proj1 (proj2 (transl_init_list_size il))). eauto.
   rewrite sizeof_struct_eq. 2: congruence. 
   apply align_le. apply alignof_pos.
-  (* compound union *)
+* (* compound union *)
   set (sz := sizeof (Tunion i f a)) in *.
   destruct f.
   inv H. simpl. rewrite Z.max_l. omega. generalize (sizeof_pos (Tunion i Fnil a)); unfold sz; omega. 
@@ -647,33 +645,33 @@ Proof.
   eapply Zle_trans. 2: apply align_le. simpl. apply Zmax_bound_l. omega. 
   apply alignof_pos.
 
-  induction il.
-  (* base cases *)
+- induction il.
++ (* base cases *)
   simpl. intuition. 
-  (* arrays *)
+* (* arrays *)
   destruct (zeq sz 0); inv H. simpl. ring. 
-  (* structs *)
+* (* structs *)
   destruct fl; inv H.
-  simpl in H0. generalize (padding_size pos (sizeof ty) H0). omega.
-  (* unions *)
+  simpl in H0. rewrite padding_size by omega. omega. 
+* (* unions *)
   inv H.
-  (* inductive cases *)
-  destruct IHil as [A [B C]]. split.
-  (* arrays *)
++ (* inductive cases *)
+  destruct IHil as [A [B C]]. split; [idtac|split].
+* (* arrays *)
   intros. monadInv H.
-  rewrite idlsize_app. 
+  rewrite idlsize_app.
   rewrite (transl_init_size _ _ _ EQ). 
   rewrite (A _ _ _ EQ1).
   ring.
-  (* structs *)
-  split. intros. simpl in H. destruct fl; monadInv H.
-  repeat rewrite idlsize_app. 
+* (* structs *)
+  intros. simpl in H. destruct fl; monadInv H.
+  rewrite ! idlsize_app. 
   simpl in H0. 
   rewrite padding_size.
   rewrite (transl_init_size _ _ _ EQ). 
   rewrite <- (B _ _ _ _ _ EQ1). omega.
   auto. apply align_le. apply alignof_pos. 
-  (* unions *)
+* (* unions *)
   intros. simpl in H. monadInv H. 
   rewrite idlsize_app.
   rewrite (transl_init_size _ _ _ EQ). 
@@ -754,7 +752,7 @@ Remark store_init_data_list_padding:
   forall frm to b ofs m,
   Genv.store_init_data_list ge m b ofs (padding frm to) = Some m.
 Proof.
-  intros. unfold padding. destruct (zle (to - frm) 0); auto.
+  intros. unfold padding. destruct (zlt frm to); auto. 
 Qed.
 
 Lemma transl_init_sound_gen:
@@ -770,40 +768,34 @@ Lemma transl_init_sound_gen:
    transl_init_struct id ty fl il pos = OK data ->
    Genv.store_init_data_list ge m b (ofs + pos) data = Some m').
 Proof.
+Local Opaque sizeof.
   apply exec_init_scheme; simpl; intros.
-  (* single *)
-  monadInv H3.
-  exploit transl_init_single_steps; eauto. intros. 
-  simpl. rewrite H3. apply store_init_data_list_padding. 
-  (* array *)
+- (* single *)
+  monadInv H3. simpl. erewrite transl_init_single_steps by eauto. auto.
+- (* array *)
   destruct (zle sz 0).
   exploit exec_init_array_length; eauto. destruct il; intros.
   subst. inv H. inv H1. auto. omegaContradiction.
-  monadInv H1.
-  change (align (sizeof ty * Z.max 1 sz) (alignof (Tarray ty sz a)))
-    with (sizeof (Tarray ty sz a)). 
-  destruct (zle (sizeof (Tarray ty sz a) - sizeof ty * sz) 0).
   eauto.
-  eapply store_init_data_list_app; eauto. 
-  (* struct *)
+- (* struct *)
   destruct fl.
   inv H. inv H1. auto.
   replace ofs with (ofs + 0) by omega. eauto.
-  (* union *)
-  monadInv H1. eapply store_init_data_list_app. eauto. apply store_init_data_list_padding. 
+- (* union *)
+  monadInv H1. eapply store_init_data_list_app. eauto.
+  apply store_init_data_list_padding. 
 
-  (* array, empty *)
+- (* array, empty *)
   inv H. auto.
-  (* array, nonempty *)
+- (* array, nonempty *)
   monadInv H3. 
   eapply store_init_data_list_app.
   eauto.
   rewrite (transl_init_size _ _ _ EQ). eauto.
-
-  (* struct, empty *)
+- (* struct, empty *)
   destruct fl; simpl in H; inv H. 
   inv H0. apply store_init_data_list_padding.
-  (* struct, nonempty *)
+- (* struct, nonempty *)
   destruct fl; simpl in H3; inv H3.
   monadInv H4. 
   eapply store_init_data_list_app. apply store_init_data_list_padding.
