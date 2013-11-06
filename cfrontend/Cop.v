@@ -28,7 +28,8 @@ Require Import Ctypes.
 Inductive unary_operation : Type :=
   | Onotbool : unary_operation          (**r boolean negation ([!] in C) *)
   | Onotint : unary_operation           (**r integer complement ([~] in C) *)
-  | Oneg : unary_operation.             (**r opposite (unary [-]) *)
+  | Oneg : unary_operation              (**r opposite (unary [-]) *)
+  | Oabsfloat : unary_operation.        (**r floating-point absolute value *)
 
 Inductive binary_operation : Type :=
   | Oadd : binary_operation             (**r addition (binary [+]) *)
@@ -451,6 +452,12 @@ Definition sem_notint (v: val) (ty: type): option val :=
   | notint_default => None
   end.
 
+Definition sem_absfloat (v: val) (ty: type): option val :=
+  match v with
+  | Vfloat f => Some (Vfloat (Float.abs f))
+  | _ => None
+  end.
+
 (** ** Binary operators *)
 
 (** For binary operations, the "usual binary conversions" consist in
@@ -844,6 +851,7 @@ Definition sem_unary_operation
   | Onotbool => sem_notbool v ty
   | Onotint => sem_notint v ty
   | Oneg => sem_neg v ty
+  | Oabsfloat => sem_absfloat v ty
   end.
 
 Definition sem_binary_operation
@@ -957,6 +965,8 @@ Proof.
   unfold sem_notint in *; destruct (classify_notint ty); inv H0; inv H; TrivialInject.
   (* neg *)
   unfold sem_neg in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
+  (* absfloat *)
+  unfold sem_absfloat in *; inv H0; inv H; TrivialInject.
 Qed.
 
 Definition optval_self_injects (ov: option val) : Prop :=

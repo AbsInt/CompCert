@@ -82,6 +82,8 @@ let rec expr p (prec, e) =
       fprintf p "%F" (camlfloat_of_coqfloat f)
   | Econst_long(n, _) ->
       fprintf p "%LdLL" (camlint64_of_coqint n)
+  | Eunop(Oabsfloat, a1, _) ->
+      fprintf p "__builtin_fabs(%a)" expr (2, a1)
   | Eunop(op, a1, _) ->
       fprintf p "%s%a" (name_unop op) expr (prec', a1)
   | Eaddrof(a1, _) ->

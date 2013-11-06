@@ -38,6 +38,9 @@ int main(int argc, char ** argv)
   printf ("after write_16_rev: %x\n", s);
   __builtin_write32_reversed(&y, 0x12345678);
   printf ("after write_32_rev: %x\n", y);
+  y = 0;
+  __builtin_write32_reversed(&y, 0x12345678);
+  printf ("CSE write_32_rev: %s\n", y == 0x78563412 ? "ok" : "ERROR");
 
   return 0;
 }

@@ -427,10 +427,11 @@ Module Solver := BBlock_solver(Numbering).
 - Forget all equations.  This is appropriate for builtins that can be
   turned into function calls ([EF_external], [EF_malloc], [EF_free]).
 - Forget equations involving loads but keep equations over registers.
-  This is appropriate for builtins that modify memory, e.g. [EF_memcpy].
+  This is appropriate for builtins that can modify memory,
+  e.g. volatile stores, or [EF_memcpy], or [EF_builtin]
 - Keep all equations, taking advantage of the fact that neither memory
-  nor registers are modified.  This is appropriate for annotations,
-  for inlined builtin functions, and for volatile loads.
+  nor registers are modified.  This is appropriate for annotations
+  and for volatile loads.
 *)
 
 Definition transfer (f: function) (pc: node) (before: numbering) :=
@@ -454,9 +455,10 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           match ef with
           | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ =>
               empty_numbering
-          | EF_vstore _ | EF_vstore_global _ _ _ | EF_memcpy _ _ =>
+          | EF_vstore _ | EF_vstore_global _ _ _
+          | EF_builtin _ _ |  EF_memcpy _ _ =>
               add_unknown (kill_loads before) res
-          | EF_builtin _ _ | EF_vload _ | EF_vload_global _ _ _
+          | EF_vload _ | EF_vload_global _ _ _
           | EF_annot _ _ | EF_annot_val _ _ =>
               add_unknown before res
           end

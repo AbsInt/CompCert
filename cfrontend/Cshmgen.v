@@ -329,6 +329,7 @@ Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr
   | Cop.Onotbool => make_notbool a ta
   | Cop.Onotint => make_notint a ta
   | Cop.Oneg => make_neg a ta
+  | Cop.Oabsfloat => OK (Eunop Oabsf a)
   end.
 
 Definition transl_binop (op: Cop.binary_operation)

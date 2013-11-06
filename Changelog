@@ -1,3 +1,13 @@
+- Revised semantics and implementation of _Alignas(N) attribute
+  to better match those of GCC and Clang.
+- Recognize __builtin_fabs as an operator, not just a builtin,
+  enabling more aggressive optimizations.
+- Fixed incorrect hypothesis on __builtin_write{16,32}_reversed.
+- Fixed syntax error in __attribute__((__packed__)).
+- Emit clean compile-time error for 'switch' over a value of 64-bit
+  integer type (currently not supported).
+
+
 Release 2.1, 2013-10-28
 =======================
 

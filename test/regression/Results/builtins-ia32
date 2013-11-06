@@ -7,3 +7,4 @@ read_16_rev = 3412
 read_32_rev = efbeadde
 after write_16_rev: 9a78
 after write_32_rev: 78563412
+CSE write_32_rev: ok

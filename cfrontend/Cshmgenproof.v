@@ -598,6 +598,7 @@ Proof.
   eapply make_notbool_correct; eauto. 
   eapply make_notint_correct; eauto. 
   eapply make_neg_correct; eauto.
+  inv H. unfold sem_absfloat in H0. destruct va; inv H0. eauto with cshm.
 Qed.
 
 Lemma transl_binop_correct:

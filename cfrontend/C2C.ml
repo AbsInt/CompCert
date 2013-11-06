@@ -576,6 +576,9 @@ let rec convertExpr env e =
  | C.ECall({edesc = C.EVar {name = "__builtin_memcpy_aligned"}}, args) ->
       make_builtin_memcpy (convertExprList env args)
 
+  | C.ECall({edesc = C.EVar {name = "__builtin_fabs"}}, [arg]) ->
+      Eunop(Oabsfloat, convertExpr env arg, ty)
+
   | C.ECall(fn, args) ->
       if not (supported_return_type env e.etyp) then
         unsupported ("function returning a result of type " ^ string_of_type e.etyp);

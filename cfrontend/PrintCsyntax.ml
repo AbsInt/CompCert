@@ -30,6 +30,7 @@ let name_unop = function
   | Onotbool -> "!"
   | Onotint  -> "~"
   | Oneg     -> "-"
+  | Oabsfloat -> "__builtin_fabs"
 
 let name_binop = function
   | Oadd -> "+"
@@ -215,6 +216,8 @@ let rec expr p (prec, e) =
       fprintf p "sizeof(%s)" (name_type ty)
   | Ealignof(ty, _) ->
       fprintf p "__alignof__(%s)" (name_type ty)
+  | Eunop(Oabsfloat, a1, _) ->
+      fprintf p "__builtin_fabs(%a)" expr (2, a1)
   | Eunop(op, a1, _) ->
       fprintf p "%s%a" (name_unop op) expr (prec', a1)
   | Eaddrof(a1, _) ->
