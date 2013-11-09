@@ -409,43 +409,52 @@ let chop_last_nul id =
   | _ -> id
 
 let print_init p = function
-  | Init_int8 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
-  | Init_int16 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
-  | Init_int32 n -> fprintf p "%ld,@ " (camlint_of_coqint n)
-  | Init_int64 n -> fprintf p "%Ld,@ " (camlint64_of_coqint n)
-  | Init_float32 n -> fprintf p "%F,@ " (camlfloat_of_coqfloat n)
-  | Init_float64 n -> fprintf p "%F,@ " (camlfloat_of_coqfloat n)
-  | Init_space n -> fprintf p "/* skip %ld, */@ " (camlint_of_coqint n)
+  | Init_int8 n -> fprintf p "%ld" (camlint_of_coqint n)
+  | Init_int16 n -> fprintf p "%ld" (camlint_of_coqint n)
+  | Init_int32 n -> fprintf p "%ld" (camlint_of_coqint n)
+  | Init_int64 n -> fprintf p "%Ld" (camlint64_of_coqint n)
+  | Init_float32 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
+  | Init_float64 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
+  | Init_space n -> fprintf p "/* skip %ld */@ " (camlint_of_coqint n)
   | Init_addrof(symb, ofs) ->
       let ofs = camlint_of_coqint ofs in
       if ofs = 0l
-      then fprintf p "&%s,@ " (extern_atom symb)
-      else fprintf p "(void *)((char *)&%s + %ld),@ " (extern_atom symb) ofs
+      then fprintf p "&%s" (extern_atom symb)
+      else fprintf p "(void *)((char *)&%s + %ld)" (extern_atom symb) ofs
+
+let print_composite_init p il =
+  fprintf p "{@ ";
+  List.iter
+    (fun i ->
+      print_init p i;
+      match i with Init_space _ -> () | _ -> fprintf p ",@ ")
+    il;
+  fprintf p "}"
 
 let re_string_literal = Str.regexp "__stringlit_[0-9]+"
 
 let print_globvar p id v =
   let name1 = extern_atom id in
   let name2 = if v.gvar_readonly then "const " ^ name1 else name1 in
-  let name3 = if v.gvar_volatile then "volatile " ^ name2 else name2 in
   match v.gvar_init with
   | [] ->
       fprintf p "extern %s;@ @ "
-              (name_cdecl name3 v.gvar_info)
+              (name_cdecl name2 v.gvar_info)
   | [Init_space _] ->
       fprintf p "%s;@ @ "
-              (name_cdecl name3 v.gvar_info)
+              (name_cdecl name2 v.gvar_info)
   | _ ->
       fprintf p "@[<hov 2>%s = "
-              (name_cdecl name3 v.gvar_info);
-      if Str.string_match re_string_literal (extern_atom id) 0
-      && List.for_all (function Init_int8 _ -> true | _ -> false) v.gvar_init
-      then
-        fprintf p "\"%s\"" (string_of_init (chop_last_nul v.gvar_init))
-      else begin
-        fprintf p "{@ ";
-        List.iter (print_init p) v.gvar_init;
-        fprintf p "}"
+              (name_cdecl name2 v.gvar_info);
+      begin match v.gvar_info, v.gvar_init with
+      | (Tint _ | Tlong _ | Tfloat _ | Tpointer _ | Tfunction _ | Tcomp_ptr _),
+        [i1] ->
+          print_init p i1
+      | _, il ->
+          if Str.string_match re_string_literal (extern_atom id) 0
+          && List.for_all (function Init_int8 _ -> true | _ -> false) il
+          then fprintf p "\"%s\"" (string_of_init (chop_last_nul il))
+          else print_composite_init p il
       end;
       fprintf p ";@]@ @ "
 
