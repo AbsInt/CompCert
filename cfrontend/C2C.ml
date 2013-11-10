@@ -436,10 +436,6 @@ let rec convertExpr env e =
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
       let l = convertLvalue env e in
-      if Cutil.is_composite_type env e.etyp
-      && List.mem AVolatile (Cutil.attributes_of_type env e.etyp) then
-        warning "access to a l-value of volatile composite type. \
-                 The 'volatile' qualifier is ignored.";
       Evalof(l, ty)
 
   | C.EConst(C.CInt(i, (ILongLong|IULongLong), _)) ->
