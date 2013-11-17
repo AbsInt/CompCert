@@ -152,6 +152,13 @@ Proof.
   TrivialExists. 
 Qed.
 
+Remark symbol_address_shift:
+  forall s ofs n,
+  symbol_address ge s (Int.add ofs n) = Val.add (symbol_address ge s ofs) (Vint n).
+Proof.
+  unfold symbol_address; intros. destruct (Genv.find_symbol ge s); auto. 
+Qed.
+
 Theorem eval_addimm:
   forall n, unary_constructor_sound (addimm n) (fun x => Val.add x (Vint n)).
 Proof.
@@ -164,34 +171,50 @@ Proof.
   unfold symbol_address. destruct (Genv.find_symbol ge s); simpl; auto. rewrite Int.add_commut; auto.
   rewrite Val.add_assoc. rewrite Int.add_commut. auto.
   subst. rewrite Val.add_assoc. rewrite Int.add_commut. auto.
+  subst. rewrite Int.add_commut. rewrite symbol_address_shift. rewrite ! Val.add_assoc. f_equal. f_equal. apply Val.add_commut.
 Qed. 
+
+Theorem eval_addsymbol:
+  forall s ofs, unary_constructor_sound (addsymbol s ofs) (Val.add (symbol_address ge s ofs)).
+Proof.
+  red; unfold addsymbol; intros until x.
+  case (addsymbol_match a); intros; InvEval; simpl; TrivialExists; simpl.
+  rewrite symbol_address_shift. auto. 
+  rewrite symbol_address_shift. subst x. rewrite Val.add_assoc. f_equal. f_equal. 
+  apply Val.add_commut.
+Qed.
 
 Theorem eval_add: binary_constructor_sound add Val.add.
 Proof.
   red; intros until y.
   unfold add; case (add_match a b); intros; InvEval.
-  rewrite Val.add_commut. apply eval_addimm; auto.
-  apply eval_addimm; auto.
-  subst. 
+- rewrite Val.add_commut. apply eval_addimm; auto.
+- apply eval_addimm; auto.
+- apply eval_addsymbol; auto.
+- rewrite Val.add_commut. apply eval_addsymbol; auto.
+- subst. 
   replace (Val.add (Val.add v1 (Vint n1)) (Val.add v0 (Vint n2)))
      with (Val.add (Val.add v1 v0) (Val.add (Vint n1) (Vint n2))).
   apply eval_addimm. EvalOp.
   repeat rewrite Val.add_assoc. decEq. apply Val.add_permut.
-  subst. 
+- subst. 
   replace (Val.add (Val.add v1 (Vint n1)) y)
      with (Val.add (Val.add v1 y) (Vint n1)).
   apply eval_addimm. EvalOp.
   repeat rewrite Val.add_assoc. decEq. apply Val.add_commut.
-  subst. TrivialExists. 
-    econstructor. EvalOp. simpl. reflexivity. econstructor. eauto. constructor. 
-    simpl. rewrite (Val.add_commut v1). rewrite <- Val.add_assoc. decEq; decEq. 
-    unfold symbol_address. destruct (Genv.find_symbol ge s); auto.
-  subst. TrivialExists.
-    econstructor. EvalOp. simpl. reflexivity. econstructor. eauto. constructor. 
+- subst. TrivialExists. 
+    econstructor. EvalOp. simpl. reflexivity. econstructor. eauto. constructor.
     simpl. repeat rewrite Val.add_assoc. decEq; decEq.
     rewrite Val.add_commut. rewrite Val.add_permut. auto.
-  subst. rewrite <- Val.add_assoc. apply eval_addimm. EvalOp.
-  TrivialExists. 
+- replace (Val.add x y) with
+    (Val.add (symbol_address ge s (Int.add ofs n)) (Val.add v1 v0)).
+  apply eval_addsymbol; auto. EvalOp. 
+  subst. rewrite symbol_address_shift. rewrite ! Val.add_assoc. f_equal. 
+  rewrite Val.add_permut. f_equal. apply Val.add_commut.
+- subst. rewrite Val.add_assoc. apply eval_addsymbol. EvalOp. 
+- subst. rewrite <- Val.add_assoc. apply eval_addimm. EvalOp.
+- subst. rewrite Val.add_permut. apply eval_addsymbol. EvalOp. 
+- TrivialExists. 
 Qed.
 
 Theorem eval_sub: binary_constructor_sound sub Val.sub.
@@ -834,7 +857,7 @@ Proof.
   intros until v. unfold addressing; case (addressing_match a); intros; InvEval.
   exists (@nil val). split. eauto with evalexpr. simpl. auto.
   exists (@nil val). split. eauto with evalexpr. simpl. auto.
-  exists (v0 :: nil). split. eauto with evalexpr. simpl. congruence.
+  exists (v1 :: nil). split. eauto with evalexpr. simpl. congruence.
   exists (v1 :: nil). split. eauto with evalexpr. simpl. congruence.
   destruct (can_use_Aindexed2 chunk). 
   exists (v1 :: v0 :: nil). split. eauto with evalexpr. simpl. congruence.

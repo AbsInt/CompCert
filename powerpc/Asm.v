@@ -101,7 +101,9 @@ Inductive constant: Type :=
   | Cint: int -> constant
   | Csymbol_low: ident -> int -> constant
   | Csymbol_high: ident -> int -> constant
-  | Csymbol_sda: ident -> int -> constant.
+  | Csymbol_sda: ident -> int -> constant
+  | Csymbol_rel_low: ident -> int -> constant
+  | Csymbol_rel_high: ident -> int -> constant.
 
 (** A note on constants: while immediate operands to PowerPC
   instructions must be representable in 16 bits (with
@@ -422,6 +424,8 @@ Axiom small_data_area_addressing:
   symbol_is_small_data id ofs = true ->
   small_data_area_offset ge id ofs = symbol_offset id ofs.
 
+Parameter symbol_is_rel_data: ident -> int -> bool.
+
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.
   Note that for [const_high], integer constants
@@ -436,6 +440,8 @@ Definition const_low (c: constant) :=
   | Csymbol_low id ofs => low_half (symbol_offset id ofs)
   | Csymbol_high id ofs => Vundef
   | Csymbol_sda id ofs => small_data_area_offset ge id ofs
+  | Csymbol_rel_low id ofs => low_half (symbol_offset id ofs)
+  | Csymbol_rel_high id ofs => Vundef
   end.
 
 Definition const_high (c: constant) :=
@@ -444,6 +450,8 @@ Definition const_high (c: constant) :=
   | Csymbol_low id ofs => Vundef
   | Csymbol_high id ofs => high_half (symbol_offset id ofs)
   | Csymbol_sda id ofs => Vundef
+  | Csymbol_rel_low id ofs => Vundef
+  | Csymbol_rel_high id ofs => high_half (symbol_offset id ofs)
   end.
 
 (** The semantics is purely small-step and defined as a function

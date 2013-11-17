@@ -109,6 +109,8 @@ let string_of_constant = function
 | Csymbol_low   (i0, i1)    -> "Csymbol_low(" ^ string_of_ident i0 ^ ", " ^ string_of_iint i1 ^ ")"
 | Csymbol_high  (i0, i1)    -> "Csymbol_high(" ^ string_of_ident i0 ^ ", " ^ string_of_iint i1 ^ ")"
 | Csymbol_sda   (i0, i1)    -> "Csymbol_sda(" ^ string_of_ident i0 ^ ", " ^ string_of_iint i1 ^ ")"
+| Csymbol_rel_low  (i0, i1) -> "Csymbol_rel_low(" ^ string_of_ident i0 ^ ", " ^ string_of_iint i1 ^ ")"
+| Csymbol_rel_high (i0, i1) -> "Csymbol_rel_high(" ^ string_of_ident i0 ^ ", " ^ string_of_iint i1 ^ ")"
 
 let string_of_crbit = function
 | CRbit_0    -> "CRbit_0"

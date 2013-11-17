@@ -61,6 +61,7 @@ Inductive operation : Type :=
   | Ocast16signed: operation            (**r [rd] is 16-bit sign extension of [r1] *)
   | Oadd: operation                     (**r [rd = r1 + r2] *)
   | Oaddimm: int -> operation           (**r [rd = r1 + n] *)
+  | Oaddsymbol: ident -> int -> operation (**r [rd = addr(id + ofs) + r1] *)
   | Osub: operation                     (**r [rd = r1 - r2] *)
   | Osubimm: int -> operation           (**r [rd = n - r1] *)
   | Omul: operation                     (**r [rd = r1 * r2] *)
@@ -183,6 +184,7 @@ Definition eval_operation
   | Ocast16signed, v1::nil => Some (Val.sign_ext 16 v1)
   | Oadd, v1::v2::nil => Some (Val.add v1 v2)
   | Oaddimm n, v1::nil => Some (Val.add v1 (Vint n))
+  | Oaddsymbol s ofs, v1::nil => Some (Val.add (symbol_address genv s ofs) v1)
   | Osub, v1::v2::nil => Some (Val.sub v1 v2)
   | Osubimm n, v1::nil => Some (Val.sub (Vint n) v1)
   | Omul, v1::v2::nil => Some (Val.mul v1 v2)
@@ -276,6 +278,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Ocast16signed => (Tint :: nil, Tint)
   | Oadd => (Tint :: Tint :: nil, Tint)
   | Oaddimm _ => (Tint :: nil, Tint)
+  | Oaddsymbol _ _ => (Tint :: nil, Tint)
   | Osub => (Tint :: Tint :: nil, Tint)
   | Osubimm _ => (Tint :: nil, Tint)
   | Omul => (Tint :: Tint :: nil, Tint)
@@ -353,6 +356,7 @@ Proof with (try exact I).
   destruct v0...
   destruct v0; destruct v1...
   destruct v0...
+  unfold symbol_address. destruct (Genv.find_symbol genv i)... destruct v0...
   destruct v0; destruct v1... simpl. destruct (eq_block b b0)...
   destruct v0...
   destruct v0; destruct v1...
@@ -650,19 +654,24 @@ Variable ge2: Genv.t F2 V2.
 Hypothesis agree_on_symbols:
   forall (s: ident), Genv.find_symbol ge2 s = Genv.find_symbol ge1 s.
 
+Remark symbol_address_preserved:
+  forall s ofs, symbol_address ge2 s ofs = symbol_address ge1 s ofs.
+Proof.
+  unfold symbol_address; intros. rewrite agree_on_symbols; auto.
+Qed.
+ 
 Lemma eval_operation_preserved:
   forall sp op vl m,
   eval_operation ge2 sp op vl m = eval_operation ge1 sp op vl m.
 Proof.
-  intros. destruct op; simpl; auto. 
-  destruct vl; auto. decEq. unfold symbol_address. rewrite agree_on_symbols. auto.
+  intros. destruct op; simpl; auto; rewrite symbol_address_preserved; auto.
 Qed.
 
 Lemma eval_addressing_preserved:
   forall sp addr vl,
   eval_addressing ge2 sp addr vl = eval_addressing ge1 sp addr vl.
 Proof.
-  intros. destruct addr; simpl; auto; unfold symbol_address; rewrite agree_on_symbols; auto.
+  intros. destruct addr; simpl; auto; rewrite symbol_address_preserved; auto.
 Qed.
 
 End GENV_TRANSF.
@@ -758,6 +767,7 @@ Proof.
   inv H; simpl; econstructor; eauto. repeat rewrite Int.add_assoc. decEq. apply Int.add_commut.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
+  apply Values.val_add_inject; auto.
   apply Values.val_add_inject; auto.
   apply Values.val_add_inject; auto.
   inv H4; inv H2; simpl; auto. econstructor; eauto. 

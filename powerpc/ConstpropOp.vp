@@ -89,6 +89,7 @@ Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
   | Oaddimm n, I n1 :: nil => I (Int.add n1 n)
   | Oaddimm n, G s1 n1 :: nil => G s1 (Int.add n1 n)
   | Oaddimm n, S n1 :: nil => S (Int.add n1 n)
+  | Oaddsymbol s ofs, I n :: nil => G s (Int.add ofs n)
   | Osub, I n1 :: I n2 :: nil => I(Int.sub n1 n2)
   | Osub, G s1 n1 :: I n2 :: nil => G s1 (Int.sub n1 n2)
   | Osub, S n1 :: I n2 :: nil => S (Int.sub n1 n2)

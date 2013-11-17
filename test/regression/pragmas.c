@@ -13,6 +13,7 @@ double g(void) { return a + b; }
 #pragma section MYDATA ".mydata_i" ".mydata_u" far-absolute RW
 #pragma section MYCONST ".myconst" ".myconst" far-absolute R
 #pragma section MYSDA ".mysda_i" ".mysda_u" near-data RW
+#pragma section MYRDA ".myrda_i" ".myrda_u" far-data RW
 
 #pragma use_section MYDATA x, y
 int x;
@@ -24,11 +25,15 @@ char z[4] = { 'a', 'b', 'c', 'd' };
 #pragma use_section MYSDA u
 int u;
 
+#pragma use_section MYRDA s
+int s = 42;
+
 #pragma use_section MYCODE f
 int f(int n)
 {
   x += n;
   u -= n;
+  s += n;
   return z[n];
 }
 

@@ -138,7 +138,7 @@ proof: $(FILES:.v=.vo)
 
 extraction: extraction/STAMP
 
-extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v
+extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMachdep.v
 	rm -f extraction/*.ml extraction/*.mli
 	$(COQEXEC) extraction/extraction.v
 	touch extraction/STAMP

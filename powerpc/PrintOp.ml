@@ -57,6 +57,8 @@ let print_operation reg pp = function
   | Ocast16signed, [r1] -> fprintf pp "int16signed(%a)" reg r1
   | Oadd, [r1;r2] -> fprintf pp "%a + %a" reg r1 reg r2
   | Oaddimm n, [r1] -> fprintf pp "%a + %ld" reg r1 (camlint_of_coqint n)
+  | Oaddsymbol(id, ofs), [r1] ->
+      fprintf pp "\"%s\" + %ld + %a" (extern_atom id) (camlint_of_coqint ofs) reg r1
   | Osub, [r1;r2] -> fprintf pp "%a - %a" reg r1 reg r2
   | Osubimm n, [r1] -> fprintf pp "%ld - %a" (camlint_of_coqint n) reg r1
   | Omul, [r1;r2] -> fprintf pp "%a * %a" reg r1 reg r2

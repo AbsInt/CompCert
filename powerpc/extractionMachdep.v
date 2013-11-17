@@ -17,6 +17,7 @@ Extract Constant Asm.low_half => "fun _ -> assert false".
 Extract Constant Asm.high_half => "fun _ -> assert false".
 Extract Constant Asm.symbol_is_small_data => "C2C.atom_is_small_data".
 Extract Constant Asm.small_data_area_offset => "fun _ _ _ -> assert false".
+Extract Constant Asm.symbol_is_rel_data => "C2C.atom_is_rel_data".
 
 (* Suppression of stupidly big equality functions *)
 Extract Constant Asm.ireg_eq => "fun (x: ireg) (y: ireg) -> x = y".

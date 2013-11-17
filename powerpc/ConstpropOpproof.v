@@ -138,6 +138,8 @@ Proof.
 
   rewrite Val.add_assoc; auto.
 
+  rewrite shift_symbol_address; auto. 
+  
   unfold symbol_address. destruct (Genv.find_symbol ge s1); auto. 
 
   rewrite Val.sub_add_opp. rewrite Val.add_assoc. simpl. rewrite Int.sub_add_opp. auto.

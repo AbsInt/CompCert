@@ -21,6 +21,8 @@ let referenced_constant = function
   | Csymbol_low(s, ofs) -> [s]
   | Csymbol_high(s, ofs) -> [s]
   | Csymbol_sda(s, ofs) -> [s]
+  | Csymbol_rel_low(s, ofs) -> [s]
+  | Csymbol_rel_high(s, ofs) -> [s]
 
 let referenced_builtin ef =
   match ef with

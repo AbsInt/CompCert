@@ -79,7 +79,15 @@ Nondetfunction addimm (n: int) (e: expr) :=
   | Eop (Oaddrsymbol s m) Enil   => Eop (Oaddrsymbol s (Int.add n m)) Enil
   | Eop (Oaddrstack m) Enil      => Eop (Oaddrstack (Int.add n m)) Enil
   | Eop (Oaddimm m) (t ::: Enil) => Eop (Oaddimm(Int.add n m)) (t ::: Enil)
+  | Eop (Oaddsymbol s m) (t ::: Enil) => Eop (Oaddsymbol s (Int.add n m)) (t ::: Enil)
   | _                            => Eop (Oaddimm n) (e ::: Enil)
+  end.
+
+Nondetfunction addsymbol (s: ident) (ofs: int) (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Oaddrsymbol s (Int.add ofs n)) Enil
+  | Eop (Oaddimm n) (t ::: Enil) => Eop (Oaddsymbol s (Int.add ofs n)) (t ::: Enil)
+  | _ => Eop (Oaddsymbol s ofs) (e ::: Enil)
   end.
 
 Nondetfunction add (e1: expr) (e2: expr) :=
@@ -88,16 +96,24 @@ Nondetfunction add (e1: expr) (e2: expr) :=
       addimm n1 t2
   | t1, Eop (Ointconst n2) Enil =>
       addimm n2 t1
+  | Eop (Oaddrsymbol s ofs) Enil, t2 =>
+      addsymbol s ofs t2
+  | t1, Eop (Oaddrsymbol s ofs) Enil =>
+      addsymbol s ofs t1
   | Eop (Oaddimm n1) (t1:::Enil), Eop (Oaddimm n2) (t2:::Enil) =>
       addimm (Int.add n1 n2) (Eop Oadd (t1:::t2:::Enil))
   | Eop (Oaddimm n1) (t1:::Enil), t2 =>
       addimm n1 (Eop Oadd (t1:::t2:::Enil))
-  | Eop (Oaddrsymbol s n1) Enil, Eop (Oaddimm n2) (t2:::Enil) =>
-      Eop Oadd (Eop (Oaddrsymbol s (Int.add n1 n2)) Enil ::: t2 ::: Enil)
   | Eop (Oaddrstack n1) Enil, Eop (Oaddimm n2) (t2:::Enil) =>
       Eop Oadd (Eop (Oaddrstack (Int.add n1 n2)) Enil ::: t2 ::: Enil)
+  | Eop (Oaddsymbol s ofs) (t1:::Enil), Eop (Oaddimm n) (t2:::Enil) =>
+      addsymbol s (Int.add ofs n) (Eop Oadd (t1:::t2:::Enil))
+  | Eop (Oaddsymbol s ofs) (t1:::Enil), t2 =>
+      addsymbol s ofs (Eop Oadd (t1:::t2:::Enil))
   | t1, Eop (Oaddimm n2) (t2:::Enil) =>
       addimm n2 (Eop Oadd (t1:::t2:::Enil))
+  | t1, Eop (Oaddsymbol s ofs) (t2:::Enil) =>
+      addsymbol s ofs (Eop Oadd (t1:::t2:::Enil))
   | _, _ =>
       Eop Oadd (e1:::e2:::Enil)
   end.
@@ -435,7 +451,7 @@ Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
   | Eop (Oaddrsymbol s n) Enil => (Aglobal s n, Enil)
   | Eop (Oaddrstack n) Enil => (Ainstack n, Enil)
-  | Eop Oadd (Eop (Oaddrsymbol s n) Enil ::: e2 ::: Enil) => (Abased s n, e2:::Enil)
+  | Eop (Oaddsymbol s n) (e1:::Enil) => (Abased s n, e1:::Enil)
   | Eop (Oaddimm n) (e1:::Enil) => (Aindexed n, e1:::Enil)
   | Eop Oadd (e1:::e2:::Enil) =>
      if can_use_Aindexed2 chunk

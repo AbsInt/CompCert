@@ -36,7 +36,7 @@ type atom_info =
     a_alignment: int option;           (* alignment *)
     a_sections: Sections.section_name list; (* in which section to put it *)
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
-    a_small_data: bool;                (* data in a small data area? *)
+    a_access: Sections.access_mode;    (* access mode, e.g. small data area *)
     a_inline: bool;                    (* function declared inline? *)
     a_loc: location                    (* source location *)
 }
@@ -120,7 +120,7 @@ let name_for_string_literal env s =
       { a_storage = C.Storage_static;
         a_alignment = Some 1;
         a_sections = [Sections.for_stringlit()];
-        a_small_data = false;
+        a_access = Sections.Access_default;
         a_inline = false;
         a_loc = Cutil.no_loc };
     Hashtbl.add stringTable s id;
@@ -786,7 +786,7 @@ let convertFundef loc env fd =
     { a_storage = fd.fd_storage;
       a_alignment = None;
       a_sections = Sections.for_function env id' fd.fd_ret;
-      a_small_data = false;
+      a_access = Sections.Access_default;
       a_inline = fd.fd_inline;
       a_loc = loc };
   (id', Gfun(Internal {fn_return = ret; fn_params = params;
@@ -856,7 +856,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
         if sto = C.Storage_extern then [] else [Init_space sz]
     | Some i ->
         convertInitializer env ty i in
-  let (section, near_access) =
+  let (section, access) =
     Sections.for_variable env id' ty (optinit <> None) in
   if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
     error (sprintf "Variable %s is too big (%s bytes)"
@@ -865,7 +865,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
     { a_storage = sto;
       a_alignment = Some (Z.to_int al);
       a_sections = [section];
-      a_small_data = near_access;
+      a_access = access;
       a_inline = false;
       a_loc = loc };
   let volatile = List.mem C.AVolatile attr in
@@ -1048,7 +1048,13 @@ let atom_sections a =
 
 let atom_is_small_data a ofs =
   try
-    (Hashtbl.find decl_atom a).a_small_data
+    (Hashtbl.find decl_atom a).a_access = Sections.Access_near
+  with Not_found ->
+    false
+
+let atom_is_rel_data a ofs =
+  try
+    (Hashtbl.find decl_atom a).a_access = Sections.Access_far
   with Not_found ->
     false
 

@@ -436,6 +436,12 @@ let match_csts (cc: constant) (ec: int32): checker = fun ffw ->
   | Csymbol_sda (ident, i) ->
       (* sda should be handled separately in places it occurs *)
       fatal "Unhandled Csymbol_sda, please report."
+  | Csymbol_rel_low (ident, i) | Csymbol_rel_high (ident, i) ->
+      (* not checked yet *)
+      OK((ff_ef ^%=
+           (add_log (WARNING("Cannot check access to far-data symbol " ^
+                              Hashtbl.find ffw.sf.ident_to_name ident))))
+         ffw)
 
 let match_z_int32 (cz: Z.t) (ei: int32) =
   let cz = z_int32 cz in

@@ -28,12 +28,17 @@ type section_name =
   | Section_jumptable
   | Section_user of string * bool (*writable*) * bool (*executable*)
 
+type access_mode =
+  | Access_default
+  | Access_near
+  | Access_far
+
 type section_info = {
   sec_name_init: section_name;
   sec_name_uninit: section_name;
   sec_writable: bool;
   sec_executable: bool;
-  sec_near_access: bool
+  sec_access: access_mode
 }
 
 let default_section_info = {
@@ -41,7 +46,7 @@ let default_section_info = {
   sec_name_uninit = Section_data false;
   sec_writable = true;
   sec_executable = false;
-  sec_near_access = false
+  sec_access = Access_default
 }
 
 (* Built-in sections *)
@@ -51,42 +56,42 @@ let builtin_sections = [
      {sec_name_init = Section_text; 
       sec_name_uninit = Section_text;
       sec_writable = false; sec_executable = true;
-      sec_near_access = false};
+      sec_access = Access_default};
   "DATA",
      {sec_name_init = Section_data true;
       sec_name_uninit = Section_data false;
       sec_writable = true; sec_executable = false;
-      sec_near_access = false};
+      sec_access = Access_default};
   "SDATA",
      {sec_name_init = Section_small_data true;
       sec_name_uninit = Section_small_data false;
       sec_writable = true; sec_executable = false;
-      sec_near_access = true};
+      sec_access = Access_near};
   "CONST",
      {sec_name_init = Section_const;
       sec_name_uninit = Section_const;
       sec_writable = false; sec_executable = false;
-      sec_near_access = false};
+      sec_access = Access_default};
   "SCONST",
      {sec_name_init = Section_small_const;
       sec_name_uninit = Section_small_const;
       sec_writable = false; sec_executable = false;
-      sec_near_access = true};
+      sec_access = Access_near};
   "STRING",
      {sec_name_init = Section_string;
       sec_name_uninit = Section_string;
       sec_writable = false; sec_executable = false;
-      sec_near_access = false};
+      sec_access = Access_default};
   "LITERAL",
      {sec_name_init = Section_literal;
       sec_name_uninit = Section_literal;
       sec_writable = false; sec_executable = false;
-      sec_near_access = false};
+      sec_access = Access_default};
   "JUMPTABLE",
      {sec_name_init = Section_jumptable;
       sec_name_uninit = Section_jumptable;
       sec_writable = false; sec_executable = false;
-      sec_near_access = false}
+      sec_access = Access_default}
 ]
 
 (* The current mapping from section names to section info *)
@@ -108,7 +113,7 @@ let initialize () =
 
 (* Define or update a given section. *)
 
-let define_section name ?iname ?uname ?writable ?executable ?near () =
+let define_section name ?iname ?uname ?writable ?executable ?access () =
   let si = 
     try Hashtbl.find current_section_table name
     with Not_found -> default_section_info in
@@ -116,8 +121,8 @@ let define_section name ?iname ?uname ?writable ?executable ?near () =
     match writable with Some b -> b | None -> si.sec_writable
   and executable =
     match executable with Some b -> b | None -> si.sec_executable
-  and near =
-    match near with Some b -> b | None -> si.sec_near_access in
+  and access =
+    match access with Some b -> b | None -> si.sec_access in
   let iname =
     match iname with Some s -> Section_user(s, writable, executable)
                    | None -> si.sec_name_init in
@@ -129,7 +134,7 @@ let define_section name ?iname ?uname ?writable ?executable ?near () =
       sec_name_uninit = uname;
       sec_writable = writable;
       sec_executable = executable;
-      sec_near_access = near } in
+      sec_access = access } in
   Hashtbl.replace current_section_table name new_si
 
 (* Explicitly associate a section to a global symbol *)
@@ -148,7 +153,7 @@ let gcc_section name readonly exec =
   let sn = Section_user(name, not readonly, exec) in
   { sec_name_init = sn; sec_name_uninit = sn;
     sec_writable = not readonly; sec_executable = exec;
-    sec_near_access = false }
+    sec_access = Access_default }
 
 (* Determine section for a variable definition *)
 
@@ -176,7 +181,7 @@ let for_variable env id ty init =
           Hashtbl.find current_section_table name
         with Not_found ->
           assert false in
-  ((if init then si.sec_name_init else si.sec_name_uninit), si.sec_near_access)
+  ((if init then si.sec_name_init else si.sec_name_uninit), si.sec_access)
 
 (* Determine sections for a function definition *)
 

@@ -100,6 +100,10 @@ let constant oc cst =
       | Diab ->
           fprintf oc "(%a)@sdarx" symbol_offset (s, camlint_of_coqint n)
       end
+  | Csymbol_rel_low(s, n) ->
+      fprintf oc "(%a)@sdax@l" symbol_offset (s, camlint_of_coqint n)
+  | Csymbol_rel_high(s, n) ->
+      fprintf oc "(%a)@sdarx@ha" symbol_offset (s, camlint_of_coqint n)
 
 let num_crbit = function
   | CRbit_0 -> 0
