@@ -385,16 +385,20 @@ Proof.
   elim n. red; tauto. 
 Qed.
 
-(** System calls and library functions *)
+(** External calls *)
+
+Parameter do_external_function: ident -> signature -> list val -> mem -> option val.
+
+Axiom do_external_function_correct:
+  forall id sg (ge: genv) vargs m t vres m',
+  external_functions_sem id sg ge vargs m t vres m' <->
+  do_external_function id sg vargs m = Some vres /\ t = E0 /\ m' = m.
 
 Definition do_ef_external (name: ident) (sg: signature)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
-  do args <- list_eventval_of_val vargs (sig_args sg);
-  match nextworld_io w name args with
+  match do_external_function name sg vargs m with
   | None => None
-  | Some(res, w') =>
-      do vres <- val_of_eventval res (proj_sig_res sg);
-      Some(w', Event_syscall name args res :: E0, vres, m)
+  | Some vres => Some(w, E0, vres, m)
   end.
 
 Definition do_ef_volatile_load (chunk: memory_chunk)
@@ -524,13 +528,11 @@ Lemma do_ef_external_sound:
   external_call ef ge vargs m t vres m' /\ possible_trace w t w'.
 Proof with try congruence.
   intros until m'.
-  assert (IO: forall name sg,
+  assert (EXT: forall name sg,
              do_ef_external name sg w vargs m = Some(w', t, vres, m') ->
-             extcall_io_sem name sg ge vargs m t vres m' /\ possible_trace w t w').
-    intros until sg. unfold do_ef_external. mydestr. destruct p as [res w'']; mydestr.
-    split. econstructor. apply list_eventval_of_val_sound; auto. 
-    apply val_of_eventval_sound; auto. 
-    econstructor. constructor; eauto. constructor.
+             external_functions_sem name sg ge vargs m t vres m' /\ possible_trace w t w').
+    intros until sg. unfold do_ef_external. mydestr.
+    split. rewrite do_external_function_correct. auto. constructor. 
 
   assert (VLOAD: forall chunk vargs,
     do_ef_volatile_load chunk w vargs m = Some (w', t, vres, m') ->
@@ -598,12 +600,11 @@ Lemma do_ef_external_complete:
   do_external ef w vargs m = Some(w', t, vres, m').
 Proof.
   intros.
-  assert (IO: forall name sg,
-             extcall_io_sem name sg ge vargs m t vres m' ->
+  assert (EXT: forall name sg,
+             external_functions_sem name sg ge vargs m t vres m' ->
              do_ef_external name sg w vargs m = Some (w', t, vres, m')).
-    intros. inv H1. inv H0. inv H8. inv H6. 
-    unfold do_ef_external. rewrite (list_eventval_of_val_complete _ _ _ H2). rewrite H8. 
-    rewrite (val_of_eventval_complete _ _ _ H3). auto.
+    intros. rewrite do_external_function_correct in H1. destruct H1 as (A & B & C). 
+    subst. unfold do_ef_external. rewrite A. inv H0. auto.
  
   assert (VLOAD: forall chunk vargs,
              volatile_load_sem chunk ge vargs m t vres m' ->

@@ -606,12 +606,6 @@ Record extcall_properties (sem: extcall_sem)
     sem F V ge vargs m1 t vres m2 ->
     Val.has_type vres (proj_sig_res sg);
 
-(** The number of arguments of an external call must agree with its signature. *)
-  ec_arity:
-    forall F V (ge: Genv.t F V) vargs m1 t vres m2,
-    sem F V ge vargs m1 t vres m2 ->
-    List.length vargs = List.length sg.(sig_args);
-
 (** The semantics is invariant under change of global environment that preserves symbols. *)
   ec_symbols_preserved:
     forall F1 V1 (ge1: Genv.t F1 V1) F2 V2 (ge2: Genv.t F2 V2) vargs m1 t vres m2,
@@ -776,8 +770,6 @@ Proof.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H. inv H0. apply Val.load_result_type. 
   eapply Mem.load_type; eauto. 
-(* arity *)
-  inv H; inv H0; auto.
 (* symbols *)
   inv H1. constructor. eapply volatile_load_preserved; eauto. 
 (* valid blocks *)
@@ -840,8 +832,6 @@ Proof.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H. inv H1. apply Val.load_result_type.
   eapply Mem.load_type; eauto. 
-(* arity *)
-  inv H; inv H1; auto.
 (* symbols *)
   inv H1. econstructor. rewrite H; eauto. eapply volatile_load_preserved; eauto. 
 (* valid blocks *)
@@ -989,8 +979,6 @@ Proof.
   intros; constructor; intros.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H; constructor.
-(* arity *)
-  inv H; simpl; auto.
 (* symbols preserved *)
   inv H1. constructor. eapply volatile_store_preserved; eauto. 
 (* valid block *)
@@ -1046,8 +1034,6 @@ Proof.
   intros; constructor; intros.
 (* well typed *)
   unfold proj_sig_res; simpl. inv H; constructor.
-(* arity *)
-  inv H; simpl; auto.
 (* symbols preserved *)
   inv H1. econstructor. rewrite H; eauto. eapply volatile_store_preserved; eauto. 
 (* valid block *)
@@ -1110,8 +1096,6 @@ Proof.
   constructor; intros.
 (* well typed *)
   inv H. unfold proj_sig_res; simpl. auto.
-(* arity *)
-  inv H. auto.
 (* symbols preserved *)
   inv H1; econstructor; eauto.
 (* valid block *)
@@ -1173,30 +1157,9 @@ Lemma extcall_free_ok:
   extcall_properties extcall_free_sem 
                      (mksignature (Tint :: nil) None).
 Proof.
-(*
-  assert (UNCHANGED:
-    forall (P: block -> Z -> Prop) m b lo hi m',
-    Mem.free m b lo hi = Some m' ->
-    lo < hi ->
-    (forall b' ofs, P b' ofs -> b' <> b \/ ofs < lo \/ hi <= ofs) ->
-    mem_unchanged_on P m m').
-  intros; split; intros.
-  split; intros.
-  eapply Mem.perm_free_1; eauto.
-  eapply Mem.perm_free_3; eauto.
-  rewrite <- H3. eapply Mem.load_free; eauto. 
-  destruct (eq_block b0 b); auto. right. right. 
-  apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk) (lo, hi)).
-  red; intros. apply Intv.notin_range. simpl. exploit H1; eauto. intuition. 
-  simpl; generalize (size_chunk_pos chunk); omega.
-  simpl; omega.
-*)
-
   constructor; intros.
 (* well typed *)
   inv H. unfold proj_sig_res. simpl. auto.
-(* arity *)
-  inv H. auto.
 (* symbols preserved *)
   inv H1; econstructor; eauto.
 (* valid block *)
@@ -1301,8 +1264,6 @@ Proof.
   intros. constructor.
 (* return type *)
   intros. inv H. constructor. 
-(* arity *)
-  intros. inv H. auto.
 (* change of globalenv *)
   intros. inv H1. econstructor; eauto.
 (* valid blocks *)
@@ -1383,62 +1344,6 @@ Proof.
   intros; inv H; inv H0. split. constructor. intros; split; congruence.
 Qed.
 
-(** ** Semantics of system calls. *)
-
-Inductive extcall_io_sem (name: ident) (sg: signature) (F V: Type) (ge: Genv.t F V):
-              list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_io_sem_intro: forall vargs m args res vres,
-      eventval_list_match ge args (sig_args sg) vargs ->
-      eventval_match ge res (proj_sig_res sg) vres ->
-      extcall_io_sem name sg ge vargs m (Event_syscall name args res :: E0) vres m.
-
-Lemma extcall_io_ok:
-  forall name sg,
-  extcall_properties (extcall_io_sem name sg) sg.
-Proof.
-  intros; constructor; intros.
-(* well typed *)
-  inv H. eapply eventval_match_type; eauto.
-(* arity *)
-  inv H. eapply eventval_list_match_length; eauto.
-(* symbols preserved *)
-  inv H1. econstructor; eauto. 
-  eapply eventval_list_match_preserved; eauto.
-  eapply eventval_match_preserved; eauto. 
-(* valid block *)
-  inv H; auto.
-(* perms *)
-  inv H; auto.
-(* readonly *)
-  inv H; auto.
-(* mem extends *)
-  inv H.
-  exists vres; exists m1'; intuition.
-  econstructor; eauto.
-  eapply eventval_list_match_lessdef; eauto.
-(* mem injects *)
-  inv H0.
-  exists f; exists vres; exists m1'; intuition.
-  econstructor; eauto.
-  eapply eventval_list_match_inject; eauto.
-  eapply eventval_match_inject_2; eauto.
-  red; intros; congruence.
-(* trace length *)
-  inv H; simpl; omega.
-(* receptive *)
-  inv H; inv H0.
-  exploit eventval_match_receptive; eauto. intros [v' EVM].
-  exists v'; exists m1. econstructor; eauto. 
-(* determ *)
-  inv H; inv H0.
-  assert (args = args0). eapply eventval_list_match_determ_2; eauto. subst args0.
-  split. constructor.
-  eapply eventval_match_valid; eauto.
-  eapply eventval_match_valid; eauto.
-  eapply eventval_match_same_type; eauto.
-  intros EQ; inv EQ. split; auto. eapply eventval_match_determ_1; eauto.
-Qed.
-
 (** ** Semantics of annotations. *)
 
 Fixpoint annot_eventvals (targs: list annot_arg) (vargs: list eventval) : list eventval :=
@@ -1463,8 +1368,6 @@ Proof.
   intros; constructor; intros.
 (* well typed *)
   inv H. simpl. auto.
-(* arity *)
-  inv H. simpl. eapply eventval_list_match_length; eauto.
 (* symbols *)
   inv H1. econstructor; eauto. 
   eapply eventval_list_match_preserved; eauto.
@@ -1507,40 +1410,49 @@ Lemma extcall_annot_val_ok:
   extcall_properties (extcall_annot_val_sem text targ) (mksignature (targ :: nil) (Some targ)).
 Proof.
   intros; constructor; intros.
-
+(* well typed *)
   inv H. unfold proj_sig_res; simpl. eapply eventval_match_type; eauto.
-
-  inv H. auto.
-
+(* symbols *)
   inv H1. econstructor; eauto. 
   eapply eventval_match_preserved; eauto.
-
+(* valid blocks *)
   inv H; auto.
-
+(* perms *)
   inv H; auto.
-
+(* readonly *)
   inv H; auto.
-
+(* mem extends *)
   inv H. inv H1. inv H6. 
   exists v2; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_match_lessdef; eauto.
-
+(* mem inject *)
   inv H0. inv H2. inv H7.
   exists f; exists v'; exists m1'; intuition.
   econstructor; eauto.
   eapply eventval_match_inject; eauto.
   red; intros; congruence.
-
+(* trace length *)
   inv H; simpl; omega.
-
+(* receptive *)
   assert (t1 = t2). inv H; inv H0; auto. subst t2.
   exists vres1; exists m1; auto.
-
+(* determ *)
   inv H; inv H0.
   assert (arg = arg0). eapply eventval_match_determ_2; eauto. subst arg0.
   split. constructor. auto.
 Qed.
+
+(** ** Semantics of external functions. *)
+
+(** For functions defined outside the program ([EF_external] and [EF_builtin]),
+  we simply axiomatize their semantics as a predicate that satisfies
+  [extcall_properties]. *)
+
+Parameter external_functions_sem: ident -> signature -> extcall_sem.
+
+Axiom external_functions_properties:
+  forall id sg, extcall_properties (external_functions_sem id sg) sg.
 
 (** ** Combined semantics of external calls *)
 
@@ -1557,8 +1469,8 @@ This predicate is used in the semantics of all CompCert languages. *)
 
 Definition external_call (ef: external_function): extcall_sem :=
   match ef with
-  | EF_external name sg  => extcall_io_sem name sg
-  | EF_builtin name sg   => extcall_io_sem name sg
+  | EF_external name sg  => external_functions_sem name sg
+  | EF_builtin name sg   => external_functions_sem name sg
   | EF_vload chunk       => volatile_load_sem chunk
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_vload_global chunk id ofs => volatile_load_global_sem chunk id ofs
@@ -1576,8 +1488,8 @@ Theorem external_call_spec:
   extcall_properties (external_call ef) (ef_sig ef).
 Proof.
   intros. unfold external_call, ef_sig. destruct ef.
-  apply extcall_io_ok.
-  apply extcall_io_ok.
+  apply external_functions_properties.
+  apply external_functions_properties.
   apply volatile_load_ok.
   apply volatile_store_ok.
   apply volatile_load_global_ok.
@@ -1591,7 +1503,6 @@ Proof.
 Qed.
 
 Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).
-Definition external_call_arity ef := ec_arity (external_call_spec ef).
 Definition external_call_symbols_preserved_gen ef := ec_symbols_preserved (external_call_spec ef).
 Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef).
 Definition external_call_max_perm ef := ec_max_perm (external_call_spec ef).

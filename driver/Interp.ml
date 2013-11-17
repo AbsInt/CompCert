@@ -364,11 +364,7 @@ let do_printf ge m fmt args =
     end
   in scan 0 args; Buffer.contents b
 
-(* Implementing external functions *)
-
-let re_stub = Str.regexp "\\$[ifl]*$"
-
-let chop_stub name = Str.replace_first re_stub "" name
+(* Implementing external functions producing observable events *)
 
 let (>>=) opt f = match opt with None -> None | Some arg -> f arg
 
@@ -376,17 +372,7 @@ let rec world ge m =
   Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m)
 
 and world_io ge m id args =
-  match chop_stub(extern_atom id), args with
-  | "printf", EVptr_global(id, ofs) :: args' ->
-      flush stderr;
-      begin match extract_string ge m id ofs with
-      | Some fmt -> print_string (do_printf ge m fmt args')
-      | None -> print_string "<bad printf>\n"
-      end;
-      flush stdout;
-      Some(EVint Integers.Int.zero, world ge m)
-  | _, _ ->
-      None
+  None
 
 and world_vload ge m chunk id ofs =
   Genv.find_symbol ge id >>= fun b ->
@@ -567,8 +553,7 @@ let rec explore_all p prog ge seen queue =
    executing events.  
    Volatile variables are turned into non-volatile ones, so that
      reads and writes can be performed.
-   Readonly variables are kept, for string literals in particular.
-   Writable variables are turned into empty vars, so that
+   Other variables are turned into empty vars, so that
      reads and writes just fail.
    Functions are preserved, although they are not used. *)
 
@@ -579,8 +564,6 @@ let world_program prog =
         let gv' =
           if gv.gvar_volatile then
             {gv with gvar_readonly = false; gvar_volatile = false}
-          else if gv.gvar_readonly then
-            gv
           else
             {gv with gvar_init = []} in
         (id, Gvar gv')
