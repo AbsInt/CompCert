@@ -23,7 +23,6 @@ Require Constprop.
 Require Tailcall.
 Require Allocation.
 Require Compiler.
-Require Cexec.
 
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
@@ -106,9 +105,6 @@ Extract Constant Compiler.print_LTL => "PrintLTL.print_if".
 Extract Constant Compiler.print_Mach => "PrintMach.print_if".
 Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
 (*Extraction Inline Compiler.apply_total Compiler.apply_partial.*)
-
-(* Reference interpreter *)
-Extract Constant Cexec.do_external_function => "Interp_ext.do_external_function".
 
 (* Processor-specific extraction directives *)
 

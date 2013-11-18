@@ -387,19 +387,33 @@ Qed.
 
 (** External calls *)
 
-Parameter do_external_function: ident -> signature -> list val -> mem -> option val.
+Variable do_external_function:
+  ident -> signature -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
 
-Axiom do_external_function_correct:
-  forall id sg (ge: genv) vargs m t vres m',
-  external_functions_sem id sg ge vargs m t vres m' <->
-  do_external_function id sg vargs m = Some vres /\ t = E0 /\ m' = m.
+Hypothesis do_external_function_sound:
+  forall id sg ge vargs m t vres m' w w',
+  do_external_function id sg ge w vargs m = Some(w', t, vres, m') ->
+  external_functions_sem id sg ge vargs m t vres m' /\ possible_trace w t w'.
 
-Definition do_ef_external (name: ident) (sg: signature)
-       (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
-  match do_external_function name sg vargs m with
-  | None => None
-  | Some vres => Some(w, E0, vres, m)
-  end.
+Hypothesis do_external_function_complete:
+  forall id sg ge vargs m t vres m' w w',
+  external_functions_sem id sg ge vargs m t vres m' ->
+  possible_trace w t w' ->
+  do_external_function id sg ge w vargs m = Some(w', t, vres, m').
+
+Variable do_inline_assembly:
+  ident -> genv -> world -> list val -> mem -> option (world * trace * val * mem).
+
+Hypothesis do_inline_assembly_sound:
+  forall txt ge vargs m t vres m' w w',
+  do_inline_assembly txt ge w vargs m = Some(w', t, vres, m') ->
+  inline_assembly_sem txt ge vargs m t vres m' /\ possible_trace w t w'.
+
+Hypothesis do_inline_assembly_complete:
+  forall txt ge vargs m t vres m' w w',
+  inline_assembly_sem txt ge vargs m t vres m' ->
+  possible_trace w t w' ->
+  do_inline_assembly txt ge w vargs m = Some(w', t, vres, m').
 
 Definition do_ef_volatile_load (chunk: memory_chunk)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
@@ -508,8 +522,8 @@ Definition do_ef_annot_val (text: ident) (targ: typ)
 Definition do_external (ef: external_function):
        world -> list val -> mem -> option (world * trace * val * mem) :=
   match ef with
-  | EF_external name sg => do_ef_external name sg
-  | EF_builtin name sg => do_ef_external name sg
+  | EF_external name sg => do_external_function name sg ge
+  | EF_builtin name sg => do_external_function name sg ge
   | EF_vload chunk => do_ef_volatile_load chunk
   | EF_vstore chunk => do_ef_volatile_store chunk
   | EF_vload_global chunk id ofs => do_ef_volatile_load_global chunk id ofs
@@ -519,7 +533,7 @@ Definition do_external (ef: external_function):
   | EF_memcpy sz al => do_ef_memcpy sz al
   | EF_annot text targs => do_ef_annot text targs
   | EF_annot_val text targ => do_ef_annot_val text targ
-  | EF_inline_asm text => do_ef_annot text nil
+  | EF_inline_asm text => do_inline_assembly text ge
   end.
 
 Lemma do_ef_external_sound:
@@ -528,11 +542,6 @@ Lemma do_ef_external_sound:
   external_call ef ge vargs m t vres m' /\ possible_trace w t w'.
 Proof with try congruence.
   intros until m'.
-  assert (EXT: forall name sg,
-             do_ef_external name sg w vargs m = Some(w', t, vres, m') ->
-             external_functions_sem name sg ge vargs m t vres m' /\ possible_trace w t w').
-    intros until sg. unfold do_ef_external. mydestr.
-    split. rewrite do_external_function_correct. auto. constructor. 
 
   assert (VLOAD: forall chunk vargs,
     do_ef_volatile_load chunk w vargs m = Some (w', t, vres, m') ->
@@ -552,9 +561,9 @@ Proof with try congruence.
 
   destruct ef; simpl.
 (* EF_external *)
-  auto. 
+  eapply do_external_function_sound; eauto. 
 (* EF_builtin *)
-  auto.
+  eapply do_external_function_sound; eauto. 
 (* EF_vload *)
   auto.
 (* EF_vstore *)
@@ -588,10 +597,7 @@ Proof with try congruence.
   split. constructor. apply eventval_of_val_sound; auto.
   econstructor. constructor; eauto. constructor.
 (* EF_inline_asm *)
-  unfold do_ef_annot. destruct vargs; simpl... mydestr. 
-  split. change (Event_annot text nil) with (Event_annot text (annot_eventvals nil nil)).
-  constructor. constructor. 
-  econstructor. constructor; eauto. constructor.
+  eapply do_inline_assembly_sound; eauto.
 Qed.
 
 Lemma do_ef_external_complete:
@@ -600,11 +606,6 @@ Lemma do_ef_external_complete:
   do_external ef w vargs m = Some(w', t, vres, m').
 Proof.
   intros.
-  assert (EXT: forall name sg,
-             external_functions_sem name sg ge vargs m t vres m' ->
-             do_ef_external name sg w vargs m = Some (w', t, vres, m')).
-    intros. rewrite do_external_function_correct in H1. destruct H1 as (A & B & C). 
-    subst. unfold do_ef_external. rewrite A. inv H0. auto.
  
   assert (VLOAD: forall chunk vargs,
              volatile_load_sem chunk ge vargs m t vres m' ->
@@ -620,9 +621,9 @@ Proof.
 
   destruct ef; simpl in *.
 (* EF_external *)
-  auto.
+  eapply do_external_function_complete; eauto.
 (* EF_builtin *)
-  auto.
+  eapply do_external_function_complete; eauto.
 (* EF_vload *)
   auto.
 (* EF_vstore *)
@@ -650,7 +651,7 @@ Proof.
   inv H; unfold do_ef_annot_val. inv H0. inv H6. inv H4. 
   rewrite (eventval_of_val_complete _ _ _ H1). auto.
 (* EF_inline_asm *)
-  inv H; unfold do_ef_annot. inv H0. inv H6. inv H4. inv H1. simpl. auto.
+  eapply do_inline_assembly_complete; eauto.
 Qed.
 
 (** * Reduction of expressions *)

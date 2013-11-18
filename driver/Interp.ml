@@ -12,14 +12,11 @@
 
 (* Interpreting CompCert C sources *)
 
-type caml_float = float
-
 open Format
 open Camlcoq
 open Datatypes
 open AST
 open Integers
-open Floats
 open Values
 open Memory
 open Globalenvs
@@ -281,12 +278,12 @@ let rec purge_seen nextblock seen =
 
 (* Extract a string from a global pointer *)
 
-let extract_string ge m id ofs =
+let extract_string m blk ofs =
   let b = Buffer.create 80 in
   let rec extract blk ofs =
-    match Memory.Mem.load Mint8unsigned m blk ofs with
+    match Mem.load Mint8unsigned m blk ofs with
     | Some(Vint n) ->
-        let c = Char.chr (Int32.to_int (camlint_of_coqint n)) in
+        let c = Char.chr (Z.to_int n) in
         if c = '\000' then begin
           Some(Buffer.contents b)
         end else begin
@@ -295,9 +292,7 @@ let extract_string ge m id ofs =
         end
     | _ ->
         None in
-  match Genv.find_symbol ge id with
-  | None -> None
-  | Some blk -> extract blk ofs
+  extract blk ofs
 
 (* Emulation of printf *)
 
@@ -306,14 +301,14 @@ let extract_string ge m id ofs =
 let re_conversion = Str.regexp
   "%[-+0# ]*[0-9]*\\(\\.[0-9]*\\)?\\([lhjzt]\\|hh\\|ll\\)?\\([aAcdeEfgGinopsuxX%]\\)"
 
-external format_float: string -> caml_float -> string
+external format_float: string -> float -> string
   = "caml_format_float"
 external format_int32: string -> int32 -> string
   = "caml_int32_format"
 external format_int64: string -> int64 -> string
   = "caml_int64_format"
 
-let do_printf ge m fmt args =
+let do_printf m fmt args =
 
   let b = Buffer.create 80 in
   let len = String.length fmt in
@@ -339,24 +334,24 @@ let do_printf ge m fmt args =
         | [], _ ->
             Buffer.add_string b "<missing argument>";
             scan pos' []
-        | EVint i :: args', ('d'|'i'|'u'|'o'|'x'|'X'|'c') ->
+        | Vint i :: args', ('d'|'i'|'u'|'o'|'x'|'X'|'c') ->
             Buffer.add_string b (format_int32 pat (camlint_of_coqint i));
             scan pos' args'
-        | EVfloat f :: args', ('f'|'e'|'E'|'g'|'G'|'a') ->
+        | Vfloat f :: args', ('f'|'e'|'E'|'g'|'G'|'a') ->
             Buffer.add_string b (format_float pat (camlfloat_of_coqfloat f));
             scan pos' args'
-        | EVlong i :: args', ('d'|'i'|'u'|'o'|'x'|'X') ->
+        | Vlong i :: args', ('d'|'i'|'u'|'o'|'x'|'X') ->
             let pat = Str.replace_first (Str.regexp "ll") "" pat in
             Buffer.add_string b (format_int64 pat (camlint64_of_coqint i));
             scan pos' args'
-        | EVptr_global(id, ofs) :: args', 's' ->
+        | Vptr(blk, ofs) :: args', 's' ->
             Buffer.add_string b
-              (match extract_string ge m id ofs with
+              (match extract_string m blk ofs with
                | Some s -> s
                | None -> "<bad string>");
             scan pos' args'
-        | EVptr_global(id, ofs) :: args', 'p' ->
-            Printf.bprintf b "<&%s%+ld>" (extern_atom id) (camlint_of_coqint ofs);
+        | Vptr(blk, ofs) :: args', 'p' ->
+            Printf.bprintf b "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs);
             scan pos' args'
         | _ :: args', _ ->
             Buffer.add_string b "<formatting error>";
@@ -364,9 +359,28 @@ let do_printf ge m fmt args =
     end
   in scan 0 args; Buffer.contents b
 
-(* Implementing external functions producing observable events *)
+(* Implementation of external functions *)
+
+let re_stub = Str.regexp "\\$[ifl]*$"
+
+let chop_stub name = Str.replace_first re_stub "" name
 
 let (>>=) opt f = match opt with None -> None | Some arg -> f arg
+
+let do_external_function id sg ge w args m =
+  match chop_stub(extern_atom id), args with
+  | "printf", Vptr(b, ofs) :: args' ->
+      extract_string m b ofs >>= fun fmt ->
+      print_string (do_printf m fmt args');
+      flush stdout;
+      Cexec.list_eventval_of_val ge args sg.sig_args >>= fun eargs ->
+      Some(((w, [Event_syscall(id, eargs, EVint Int.zero)]), Vint Int.zero), m)
+  | _ ->
+      None
+
+let do_inline_assembly txt ge w args m = None
+
+(* Implementing external functions producing observable events *)
 
 let rec world ge m =
   Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m)
@@ -388,7 +402,7 @@ and world_vstore ge m chunk id ofs ev =
 
 let do_event p ge time w ev =
   if !trace >= 1 then
-    fprintf p "@[<hov 2>Time %d: observable event: %a@]@."
+    fprintf p "@[<hov 2>Time %d: observable event:@ @[<hov 2>%a@]@]@."
               time print_event ev;
   (* Return new world after external action *)
   match ev with
@@ -429,7 +443,7 @@ let diagnose_stuck_expr p ge w f a kont e m =
     | RV, Ecall(r1, rargs, ty) -> diagnose RV r1 ||| diagnose_list rargs
     | _, _ -> false in
   if found then true else begin
-    let l = Cexec.step_expr ge e w k a m in
+    let l = Cexec.step_expr ge do_external_function do_inline_assembly e w k a m in
     if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
       PrintCsyntax.print_pointer_hook := print_pointer ge e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
@@ -464,7 +478,7 @@ let do_step p prog ge time (s, w) =
       | First | Random -> exit (Int32.to_int (camlint_of_coqint r))
       end
   | None ->
-      let l = Cexec.do_step ge w s in
+      let l = Cexec.do_step ge do_external_function do_inline_assembly w s in
       if l = [] || List.exists (fun (t,s) -> s = Stuckstate) l then begin
         pp_set_max_boxes p 1000;
         fprintf p "@[<hov 2>Stuck state: %a@]@." print_state (prog, ge, s);

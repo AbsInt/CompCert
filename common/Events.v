@@ -1446,13 +1446,20 @@ Qed.
 (** ** Semantics of external functions. *)
 
 (** For functions defined outside the program ([EF_external] and [EF_builtin]),
-  we simply axiomatize their semantics as a predicate that satisfies
+  we do not define their semantics, but only assume that it satisfies
   [extcall_properties]. *)
 
 Parameter external_functions_sem: ident -> signature -> extcall_sem.
 
 Axiom external_functions_properties:
   forall id sg, extcall_properties (external_functions_sem id sg) sg.
+
+(** We treat inline assembly similarly. *)
+
+Parameter inline_assembly_sem: ident -> extcall_sem.
+
+Axiom inline_assembly_properties:
+  forall id, extcall_properties (inline_assembly_sem id) (mksignature nil None).
 
 (** ** Combined semantics of external calls *)
 
@@ -1480,7 +1487,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_memcpy sz al      => extcall_memcpy_sem sz al
   | EF_annot txt targs   => extcall_annot_sem txt targs
   | EF_annot_val txt targ=> extcall_annot_val_sem txt targ
-  | EF_inline_asm txt    => extcall_annot_sem txt nil
+  | EF_inline_asm txt    => inline_assembly_sem txt
   end.
 
 Theorem external_call_spec:
@@ -1499,7 +1506,7 @@ Proof.
   apply extcall_memcpy_ok.
   apply extcall_annot_ok.
   apply extcall_annot_val_ok.
-  apply extcall_annot_ok.
+  apply inline_assembly_properties.
 Qed.
 
 Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).
