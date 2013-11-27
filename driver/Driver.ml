@@ -387,7 +387,7 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
 Code generation options: (use -fno-<opt> to turn off -f<opt>) :
-  -fsse          (IA32) Use SSE2 instructions for some integer operations [on]
+  -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
   -ffloat-const-prop <n>  Control constant propagation of floats
@@ -508,7 +508,8 @@ let cmdline_actions =
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "packed-structs" option_fpacked_structs
   @ f_opt "inline-asm" option_finline_asm
-  @ f_opt "sse" option_fsse
+  @ f_opt "fpu" option_ffpu
+  @ f_opt "sse" option_ffpu (* backward compatibility *)
 
 let _ =
   Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };

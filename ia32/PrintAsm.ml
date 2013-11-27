@@ -292,7 +292,7 @@ let print_annot_val oc txt args res =
 let print_builtin_memcpy_small oc sz al src dst =
   assert (src = EDX && dst = EAX);
   let rec copy ofs sz =
-    if sz >= 8 && !Clflags.option_fsse then begin
+    if sz >= 8 && !Clflags.option_ffpu then begin
       fprintf oc "	movq	%d(%a), %a\n" ofs ireg src freg XMM7;
       fprintf oc "	movq	%a, %d(%a)\n" freg XMM7 ofs ireg dst;
       copy (ofs + 8) (sz - 8)

@@ -338,7 +338,7 @@ let print_annot_val oc txt args res =
 
 let print_builtin_memcpy_small oc sz al src dst =
   let rec copy ofs sz =
-    if sz >= 8 && al >= 4 then begin
+    if sz >= 8 && al >= 4 && !Clflags.option_ffpu then begin
       fprintf oc "	lfd	%a, %d(%a)\n" freg FPR13 ofs ireg src;
       fprintf oc "	stfd	%a, %d(%a)\n" freg FPR13 ofs ireg dst;
       copy (ofs + 8) (sz - 8)
