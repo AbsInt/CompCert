@@ -385,7 +385,7 @@ let print_builtin_memcpy oc sz al args =
     match args with [IR d; IR s] -> (d, s) | _ -> assert false in
   fprintf oc "%s begin builtin __builtin_memcpy_aligned, size = %d, alignment = %d\n"
           comment sz al;
-  if sz <= 64
+  if sz <= (if !Clflags.option_ffpu then 48 else 24)
   then print_builtin_memcpy_small oc sz al src dst
   else print_builtin_memcpy_big oc sz al src dst;
   fprintf oc "%s end builtin __builtin_memcpy_aligned\n" comment
