@@ -1492,17 +1492,13 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               let al = z_int al in
               begin match args with
               | [IR dst; IR src] ->
-                  if sz <= 64
-                  then (
-                    match match_memcpy_small ecode pc sz al src dst fw with
-                    | ERR(s) -> ERR(s)
-                    | OK(fw, es, pc) -> compare_code cs es pc fw
-                  )
-                  else (
+                  begin match match_memcpy_small ecode pc sz al src dst fw with
+                  | OK(fw, es, pc) -> compare_code cs es pc fw
+                  | ERR(s) -> 
                     match match_memcpy_big ecode pc sz al src dst fw with
                     | ERR(s) -> ERR(s)
                     | OK(fw, es, pc) -> compare_code cs es pc fw
-                  )
+                  end
               | _ -> error
               end
           | EF_annot_val(text, targ) ->
