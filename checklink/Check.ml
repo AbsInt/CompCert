@@ -610,10 +610,10 @@ let match_memcpy_small ecode pc sz al src dst (fw: f_framework)
       |   LFD (frD0, rA0, d0) ::
           STFD(frS1, rA1, d1) :: es ->
           OK(fw)
-          >>= match_fregs  FPR0  frD0
+          >>= match_fregs  FPR13 frD0
           >>= match_iregs  src   rA0
           >>= match_int32s ofs32 (exts d0)
-          >>= match_fregs  FPR0  frS1
+          >>= match_fregs  FPR13 frS1
           >>= match_iregs  dst   rA1
           >>= match_int32s ofs32 (exts d1)
           >>= match_memcpy_small_aux (ofs + 8) (sz - 8) es (Int32.add 8l pc)
@@ -1492,13 +1492,17 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               let al = z_int al in
               begin match args with
               | [IR dst; IR src] ->
-                  begin match match_memcpy_small ecode pc sz al src dst fw with
-                  | OK(fw, es, pc) -> compare_code cs es pc fw
-                  | ERR(s) -> 
+                  if sz <= 48
+                  then (
+                    match match_memcpy_small ecode pc sz al src dst fw with
+                    | ERR(s) -> ERR(s)
+                    | OK(fw, es, pc) -> compare_code cs es pc fw
+                  )
+                  else (
                     match match_memcpy_big ecode pc sz al src dst fw with
                     | ERR(s) -> ERR(s)
                     | OK(fw, es, pc) -> compare_code cs es pc fw
-                  end
+                  )
               | _ -> error
               end
           | EF_annot_val(text, targ) ->
