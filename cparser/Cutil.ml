@@ -353,13 +353,6 @@ let cautious_mul (a: int64) (b: int) =
 (* Return size of type, in bytes, or [None] if the type is incomplete *)
 
 let rec sizeof env t =
-  match sizeof_aux env t with
-  | None -> None
-  | Some sz ->
-      let a = alignas_attribute (attributes_of_type env t) in
-      Some (if a > 0 then align sz a else sz)
-
-and sizeof_aux env t =      
   match t with
   | TVoid _ -> !config.sizeof_void
   | TInt(ik, _) -> Some(sizeof_ikind ik)
@@ -383,16 +376,13 @@ and sizeof_aux env t =
   | TEnum(_, _) -> Some(sizeof_ikind enum_ikind)
 
 (* Compute the size of a union.
-   It is the size is the max of the sizes of fields, rounded up to the
-   natural alignment. *)
+   It is the size is the max of the sizes of fields.    
+   Not done here but in composite_info_decl: rounding size to alignment. *)
 
 let sizeof_union env members =
   let rec sizeof_rec sz = function
   | [] ->
-      begin match alignof_struct_union env members with
-      | None -> None                    (* should not happen? *)
-      | Some al -> Some (align sz al)
-      end
+      Some sz
   | m :: rem ->
       begin match sizeof env m.fld_typ with
       | None -> None
@@ -402,16 +392,14 @@ let sizeof_union env members =
 
 (* Compute the size of a struct.
    We lay out fields consecutively, inserting padding to preserve
-   their natural alignment. *)
+   their alignment.
+   Not done here but in composite_info_decl: rounding size to alignment. *)
 
 let sizeof_struct env members =
   let rec sizeof_rec ofs = function
   | [] | [ { fld_typ = TArray(_, None, _) } ] ->
       (* C99: ty[] allowed as last field *)
-      begin match alignof_struct_union env members with
-      | None -> None                    (* should not happen? *)
-      | Some al -> Some (align ofs al)
-      end
+      Some ofs
   | m :: rem as ml ->
       if m.fld_bitfield = None then begin
         match alignof env m.fld_typ, sizeof env m.fld_typ with
@@ -436,12 +424,20 @@ let composite_info_decl env su attr =
     ci_attr = attr }
 
 let composite_info_def env su attr m =
+  let al =
+    let a = alignas_attribute attr in
+    if a > 0 then Some a else alignof_struct_union env m
+  and sz =
+    match su with
+    | Struct -> sizeof_struct env m
+    | Union -> sizeof_union env m
+  in
   { ci_kind = su; ci_members = m;
-    ci_alignof = alignof_struct_union env m;
+    ci_alignof = al;
     ci_sizeof =
-      begin match su with
-      | Struct -> sizeof_struct env m
-      | Union -> sizeof_union env m
+      begin match sz, al with
+      | Some s, Some a -> Some (align s a)
+      | _, _ -> None
       end;
     ci_attr = attr }
 
