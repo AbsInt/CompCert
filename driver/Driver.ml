@@ -149,6 +149,7 @@ let compile_c_ast sourcename csyntax ofile =
   set_dest PrintRTL.destination_inlining option_dinlining ".inlining.rtl";
   set_dest PrintRTL.destination_constprop option_dconstprop ".constprop.rtl";
   set_dest PrintRTL.destination_cse option_dcse ".cse.rtl";
+  set_dest PrintRTL.destination_deadcode option_ddeadcode ".deadcode.rtl";
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
   set_dest PrintLTL.destination option_dalloc ".alloc.ltl";
   set_dest PrintMach.destination option_dmach ".mach";
@@ -413,6 +414,7 @@ Tracing options:
   -dinlining     Save RTL after inlining optimization in <file>.inlining.rtl
   -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
   -dcse          Save RTL after CSE optimization in <file>.cse.rtl
+  -ddeadcode     Save RTL after dead code removal in <file>.deadcode.rtl
   -dalloc        Save LTL after register allocation in <file>.alloc.ltl
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
@@ -460,6 +462,7 @@ let cmdline_actions =
   "-dinlining$", Set option_dinlining;
   "-dconstprop$", Set option_dconstprop;
   "-dcse$", Set option_dcse;
+  "-ddeadcode$", Set option_ddeadcode;
   "-dalloc$", Set option_dalloc;
   "-dalloctrace$", Set option_dalloctrace;
   "-dmach$", Set option_dmach;

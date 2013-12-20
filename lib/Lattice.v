@@ -66,42 +66,28 @@ End SEMILATTICE_WITH_TOP.
 
 Set Implicit Arguments.
 
-(** Given a semi-lattice with top [L], the following functor implements
+(** Given a semi-lattice (without top) [L], the following functor implements
   a semi-lattice structure over finite maps from positive numbers to [L.t].
-  The default value for these maps is either [L.top] or [L.bot]. *)
+  The default value for these maps is [L.bot].  Bottom elements are not smashed. *)
 
-Module LPMap(L: SEMILATTICE_WITH_TOP) <: SEMILATTICE_WITH_TOP.
+Module LPMap1(L: SEMILATTICE) <: SEMILATTICE.
 
-Inductive t' : Type :=
-  | Bot: t'
-  | Top_except: PTree.t L.t -> t'.
-
-Definition t: Type := t'.
+Definition t := PTree.t L.t.
 
 Definition get (p: positive) (x: t) : L.t :=
-  match x with
-  | Bot => L.bot
-  | Top_except m => match m!p with None => L.top | Some x => x end
-  end.
+  match x!p with None => L.bot | Some x => x end.
 
 Definition set (p: positive) (v: L.t) (x: t) : t :=
-  match x with
-  | Bot => Bot
-  | Top_except m =>
-      if L.beq v L.bot
-      then Bot
-      else Top_except (if L.beq v L.top then PTree.remove p m else PTree.set p v m)
-  end.
+  if L.beq v L.bot
+  then PTree.remove p x
+  else PTree.set p v x.
 
 Lemma gsspec:
   forall p v x q,
-  x <> Bot -> ~L.eq v L.bot ->
   L.eq (get q (set p v x)) (if peq q p then v else get q x).
 Proof.
-  intros. unfold set. destruct x. congruence. 
-  destruct (L.beq v L.bot) eqn:EBOT. 
-  elim H0. apply L.beq_correct; auto.
-  destruct (L.beq v L.top) eqn:ETOP; simpl.
+  intros. unfold set, get. 
+  destruct (L.beq v L.bot) eqn:EBOT.
   rewrite PTree.grspec. unfold PTree.elt_eq. destruct (peq q p). 
   apply L.eq_sym. apply L.beq_correct; auto.
   apply L.eq_refl.
@@ -126,20 +112,13 @@ Proof.
   unfold eq; intros. eapply L.eq_trans; eauto.
 Qed.
 
-Definition beq (x y: t) : bool :=
-  match x, y with
-  | Bot, Bot => true
-  | Top_except m, Top_except n => PTree.beq L.beq m n
-  | _, _ => false
-  end.
+Definition beq (x y: t) : bool := PTree.beq L.beq x y.
 
 Lemma beq_correct: forall x y, beq x y = true -> eq x y.
 Proof.
-  destruct x; destruct y; simpl; intro; try congruence.
-  apply eq_refl.
-  red; intro; simpl.
-  rewrite PTree.beq_correct in H. generalize (H p).
-  destruct (t0!p); destruct (t1!p); intuition.
+  unfold beq; intros; red; intros. unfold get.
+  rewrite PTree.beq_correct in H. specialize (H p). 
+  destruct (x!p); destruct (y!p); intuition.
   apply L.beq_correct; auto.
   apply L.eq_refl.
 Qed.
@@ -157,28 +136,16 @@ Proof.
   unfold ge; intros. apply L.ge_trans with (get p y); auto.
 Qed.
 
-Definition bot := Bot.
+Definition bot : t := PTree.empty _.
 
 Lemma get_bot: forall p, get p bot = L.bot.
 Proof.
-  unfold bot; intros; simpl. auto.
+  unfold bot, get; intros; simpl. rewrite PTree.gempty. auto.
 Qed.
 
 Lemma ge_bot: forall x, ge x bot.
 Proof.
   unfold ge; intros. rewrite get_bot. apply L.ge_bot.
-Qed.
-
-Definition top := Top_except (PTree.empty L.t).
-
-Lemma get_top: forall p, get p top = L.top.
-Proof.
-  unfold top; intros; simpl. rewrite PTree.gempty. auto.
-Qed.
-
-Lemma ge_top: forall x, ge top x.
-Proof.
-  unfold ge; intros. rewrite get_top. apply L.ge_top.
 Qed.
 
 (** A [combine] operation over the type [PTree.t L.t] that attempts
@@ -407,6 +374,168 @@ Qed.
 
 End COMBINE.
 
+Definition lub (x y: t) : t :=
+  combine
+    (fun a b =>
+       match a, b with
+       | Some u, Some v => Some (L.lub u v)
+       | None, _ => b
+       | _, None => a
+       end)
+    x y.
+
+Lemma gcombine_bot:
+  forall f t1 t2 p,
+  f None None = None ->
+  L.eq (get p (combine f t1 t2))
+       (match f t1!p t2!p with Some x => x | None => L.bot end).
+Proof.
+  intros. unfold get. generalize (gcombine f H t1 t2 p). unfold opt_eq. 
+  destruct ((combine f t1 t2)!p); destruct (f t1!p t2!p).
+  auto. contradiction. contradiction. intros; apply L.eq_refl.
+Qed.
+
+Lemma ge_lub_left:
+  forall x y, ge (lub x y) x.
+Proof.
+  unfold ge, lub; intros. 
+  eapply L.ge_trans. apply L.ge_refl. apply gcombine_bot; auto.
+  unfold get. destruct x!p. destruct y!p. 
+  apply L.ge_lub_left.
+  apply L.ge_refl. apply L.eq_refl.
+  apply L.ge_bot.
+Qed.
+
+Lemma ge_lub_right:
+  forall x y, ge (lub x y) y.
+Proof.
+  unfold ge, lub; intros. 
+  eapply L.ge_trans. apply L.ge_refl. apply gcombine_bot; auto.
+  unfold get. destruct y!p. destruct x!p. 
+  apply L.ge_lub_right.
+  apply L.ge_refl. apply L.eq_refl.
+  apply L.ge_bot.
+Qed.
+
+End LPMap1.
+
+(** Given a semi-lattice with top [L], the following functor implements
+  a semi-lattice-with-top structure over finite maps from positive numbers to [L.t].
+  The default value for these maps is [L.top].  Bottom elements are smashed. *)
+
+Module LPMap(L: SEMILATTICE_WITH_TOP) <: SEMILATTICE_WITH_TOP.
+
+Inductive t' : Type :=
+  | Bot: t'
+  | Top_except: PTree.t L.t -> t'.
+
+Definition t: Type := t'.
+
+Definition get (p: positive) (x: t) : L.t :=
+  match x with
+  | Bot => L.bot
+  | Top_except m => match m!p with None => L.top | Some x => x end
+  end.
+
+Definition set (p: positive) (v: L.t) (x: t) : t :=
+  match x with
+  | Bot => Bot
+  | Top_except m =>
+      if L.beq v L.bot
+      then Bot
+      else Top_except (if L.beq v L.top then PTree.remove p m else PTree.set p v m)
+  end.
+
+Lemma gsspec:
+  forall p v x q,
+  x <> Bot -> ~L.eq v L.bot ->
+  L.eq (get q (set p v x)) (if peq q p then v else get q x).
+Proof.
+  intros. unfold set. destruct x. congruence. 
+  destruct (L.beq v L.bot) eqn:EBOT. 
+  elim H0. apply L.beq_correct; auto.
+  destruct (L.beq v L.top) eqn:ETOP; simpl.
+  rewrite PTree.grspec. unfold PTree.elt_eq. destruct (peq q p). 
+  apply L.eq_sym. apply L.beq_correct; auto.
+  apply L.eq_refl.
+  rewrite PTree.gsspec. destruct (peq q p); apply L.eq_refl.
+Qed.
+
+Definition eq (x y: t) : Prop :=
+  forall p, L.eq (get p x) (get p y).
+
+Lemma eq_refl: forall x, eq x x.
+Proof.
+  unfold eq; intros. apply L.eq_refl.
+Qed.
+
+Lemma eq_sym: forall x y, eq x y -> eq y x.
+Proof.
+  unfold eq; intros. apply L.eq_sym; auto.
+Qed.
+
+Lemma eq_trans: forall x y z, eq x y -> eq y z -> eq x z.
+Proof.
+  unfold eq; intros. eapply L.eq_trans; eauto.
+Qed.
+
+Definition beq (x y: t) : bool :=
+  match x, y with
+  | Bot, Bot => true
+  | Top_except m, Top_except n => PTree.beq L.beq m n
+  | _, _ => false
+  end.
+
+Lemma beq_correct: forall x y, beq x y = true -> eq x y.
+Proof.
+  destruct x; destruct y; simpl; intro; try congruence.
+  apply eq_refl.
+  red; intro; simpl.
+  rewrite PTree.beq_correct in H. generalize (H p).
+  destruct (t0!p); destruct (t1!p); intuition.
+  apply L.beq_correct; auto.
+  apply L.eq_refl.
+Qed.
+
+Definition ge (x y: t) : Prop :=
+  forall p, L.ge (get p x) (get p y).
+
+Lemma ge_refl: forall x y, eq x y -> ge x y.
+Proof.
+  unfold ge, eq; intros. apply L.ge_refl. auto.
+Qed.
+
+Lemma ge_trans: forall x y z, ge x y -> ge y z -> ge x z.
+Proof.
+  unfold ge; intros. apply L.ge_trans with (get p y); auto.
+Qed.
+
+Definition bot := Bot.
+
+Lemma get_bot: forall p, get p bot = L.bot.
+Proof.
+  unfold bot; intros; simpl. auto.
+Qed.
+
+Lemma ge_bot: forall x, ge x bot.
+Proof.
+  unfold ge; intros. rewrite get_bot. apply L.ge_bot.
+Qed.
+
+Definition top := Top_except (PTree.empty L.t).
+
+Lemma get_top: forall p, get p top = L.top.
+Proof.
+  unfold top; intros; simpl. rewrite PTree.gempty. auto.
+Qed.
+
+Lemma ge_top: forall x, ge top x.
+Proof.
+  unfold ge; intros. rewrite get_top. apply L.ge_top.
+Qed.
+
+Module LM := LPMap1(L).
+
 Definition opt_lub (x y: L.t) : option L.t :=
   let z := L.lub x y in
   if L.beq z L.top then None else Some z.
@@ -417,7 +546,7 @@ Definition lub (x y: t) : t :=
   | _, Bot => x
   | Top_except m, Top_except n =>
       Top_except
-        (combine
+        (LM.combine
            (fun a b =>
               match a, b with
               | Some u, Some v => opt_lub u v
@@ -429,11 +558,11 @@ Definition lub (x y: t) : t :=
 Lemma gcombine_top:
   forall f t1 t2 p,
   f None None = None ->
-  L.eq (get p (Top_except (combine f t1 t2)))
+  L.eq (get p (Top_except (LM.combine f t1 t2)))
        (match f t1!p t2!p with Some x => x | None => L.top end).
 Proof.
-  intros. simpl. generalize (gcombine f H t1 t2 p). unfold opt_eq. 
-  destruct ((combine f t1 t2)!p); destruct (f t1!p t2!p).
+  intros. simpl. generalize (LM.gcombine f H t1 t2 p). unfold LM.opt_eq. 
+  destruct ((LM.combine f t1 t2)!p); destruct (f t1!p t2!p).
   auto. contradiction. contradiction. intros; apply L.eq_refl.
 Qed.
 

@@ -166,8 +166,8 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem): option bool
   | Ccompuimm c n, v1 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n)
   | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
   | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
-  | Cmaskzero n, Vint n1 :: nil => Some (Int.eq (Int.and n1 n) Int.zero)
-  | Cmasknotzero n, Vint n1 :: nil => Some (negb (Int.eq (Int.and n1 n) Int.zero))
+  | Cmaskzero n, v1 :: nil => Val.maskzero_bool v1 n
+  | Cmasknotzero n, v1 :: nil => option_map negb (Val.maskzero_bool v1 n)
   | _, _ => None
   end.
 
@@ -452,8 +452,8 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
   repeat (destruct vl; auto). 
   repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
-  destruct vl; auto. destruct v; auto. destruct vl; auto. 
-  destruct vl; auto. destruct v; auto. destruct vl; auto. simpl. rewrite negb_involutive. auto.
+  repeat (destruct vl; auto). 
+  repeat (destruct vl; auto). destruct (Val.maskzero_bool v i) as [[]|]; auto.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -747,6 +747,8 @@ Proof.
   eauto 3 using val_cmpu_bool_inject, Mem.valid_pointer_implies.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
+  inv H3; try discriminate; auto.
+  inv H3; try discriminate; auto.
 Qed.
 
 Ltac TrivialExists :=

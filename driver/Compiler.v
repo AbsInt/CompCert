@@ -44,6 +44,7 @@ Require Inlining.
 Require Renumber.
 Require Constprop.
 Require CSE.
+Require Deadcode.
 Require Allocation.
 Require Tunneling.
 Require Linearize.
@@ -62,6 +63,7 @@ Require Inliningproof.
 Require Renumberproof.
 Require Constpropproof.
 Require CSEproof.
+Require Deadcodeproof.
 Require Allocproof.
 Require Tunnelingproof.
 Require Linearizeproof.
@@ -77,6 +79,7 @@ Parameter print_RTL_tailcall: RTL.program -> unit.
 Parameter print_RTL_inline: RTL.program -> unit.
 Parameter print_RTL_constprop: RTL.program -> unit.
 Parameter print_RTL_cse: RTL.program -> unit.
+Parameter print_RTL_deadcode: RTL.program -> unit.
 Parameter print_LTL: LTL.program -> unit.
 Parameter print_Mach: Mach.program -> unit.
 
@@ -120,6 +123,8 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print print_RTL_constprop
   @@@ CSE.transf_program
    @@ print print_RTL_cse
+  @@@ Deadcode.transf_program
+   @@ print print_RTL_deadcode
   @@@ Allocation.transf_program
    @@ print print_LTL
    @@ Tunneling.tunnel_program
@@ -201,7 +206,8 @@ Proof.
   set (p2 := Constprop.transf_program p12) in *.
   set (p21 := Renumber.transf_program p2) in *.
   destruct (CSE.transf_program p21) as [p3|] eqn:?; simpl in H; try discriminate.
-  destruct (Allocation.transf_program p3) as [p4|] eqn:?; simpl in H; try discriminate.
+  destruct (Deadcode.transf_program p3) as [p31|] eqn:?; simpl in H; try discriminate.
+  destruct (Allocation.transf_program p31) as [p4|] eqn:?; simpl in H; try discriminate.
   set (p5 := Tunneling.tunnel_program p4) in *.
   destruct (Linearize.transf_program p5) as [p6|] eqn:?; simpl in H; try discriminate.
   set (p7 := CleanupLabels.transf_program p6) in *.
@@ -212,6 +218,7 @@ Proof.
   eapply compose_forward_simulation. apply Constpropproof.transf_program_correct. 
   eapply compose_forward_simulation. apply Renumberproof.transf_program_correct. 
   eapply compose_forward_simulation. apply CSEproof.transf_program_correct. eassumption.
+  eapply compose_forward_simulation. apply Deadcodeproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Allocproof.transf_program_correct. eassumption.
   eapply compose_forward_simulation. apply Tunnelingproof.transf_program_correct.
   eapply compose_forward_simulation. apply Linearizeproof.transf_program_correct. eassumption. 

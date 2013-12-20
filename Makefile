@@ -66,7 +66,7 @@ FLOCQ=\
 
 LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
   Iteration.v Integers.v Floats.v Nan.v Parmov.v UnionFind.v Wfsimpl.v \
-  Postorder.v FSetAVLplus.v
+  Postorder.v FSetAVLplus.v IntvSets.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
@@ -86,8 +86,10 @@ BACKEND=\
   Renumber.v Renumberproof.v \
   RTLtyping.v \
   Kildall.v Liveness.v \
+  ValueDomain.v ValueAOp.v ValueAnalysis.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
-  CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
+  CSEdomain.v CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
+  NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v \
   Allocation.v Allocproof.v \
   Tunneling.v Tunnelingproof.v \

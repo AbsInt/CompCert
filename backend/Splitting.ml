@@ -128,7 +128,7 @@ let transfer f pc after =
 
 (* The live range analysis *)
 
-let analysis f = Solver.fixpoint f.fn_code successors_instr (transfer f) []
+let analysis f = Solver.fixpoint f.fn_code successors_instr (transfer f)
 
 (* Produce renamed registers for each instruction. *)
 

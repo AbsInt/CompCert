@@ -655,6 +655,12 @@ Definition cmpl (c: comparison) (v1 v2: val): option val :=
 Definition cmplu (c: comparison) (v1 v2: val): option val :=
   option_map of_bool (cmplu_bool c v1 v2).
 
+Definition maskzero_bool (v: val) (mask: int): option bool :=
+  match v with
+  | Vint n => Some (Int.eq (Int.and n mask) Int.zero)
+  | _ => None
+  end.
+
 End COMPARISONS.
 
 (** [load_result] reflects the effect of storing a value with a given

@@ -278,7 +278,7 @@ end
 module Liveness_Solver = Backward_Dataflow_Solver(VSetLat)(NodeSetBackward)
 
 let liveness_analysis f =
-  match Liveness_Solver.fixpoint f.fn_code successors_block (transfer_live f) [] with
+  match Liveness_Solver.fixpoint f.fn_code successors_block (transfer_live f) with
   | None -> assert false
   | Some lv -> lv
 

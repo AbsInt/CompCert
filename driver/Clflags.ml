@@ -36,6 +36,7 @@ let option_dtailcall = ref false
 let option_dinlining = ref false
 let option_dconstprop = ref false
 let option_dcse = ref false
+let option_ddeadcode = ref false
 let option_dalloc = ref false
 let option_dalloctrace = ref false
 let option_dmach = ref false

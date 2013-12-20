@@ -24,11 +24,11 @@ Require Import Memory.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
-Require Import RTLtyping.
+Require Import ValueDomain.
+Require Import ValueAnalysis.
+Require Import CSEdomain.
 Require Import Kildall.
 Require Import CombineOp.
-
-(** * Value numbering *)
 
 (** The idea behind value numbering algorithms is to associate
   abstract identifiers (``value numbers'') to the contents of registers
@@ -45,49 +45,10 @@ Require Import CombineOp.
   [r1 = add(r2, r3)] by a move instruction [r1 = r4], therefore eliminating
   a common subexpression and reusing the result of an earlier addition.
 
-  Abstract identifiers / value numbers are represented by positive integers.
-  Equations are of the form [valnum = rhs], where the right-hand sides
-  [rhs] are either arithmetic operations or memory loads. *)
+  The representation of value numbers and equations is described in
+  module [CSEdomain]. *)
 
-(*
-Definition valnum := positive.
-
-Inductive rhs : Type :=
-  | Op: operation -> list valnum -> rhs
-  | Load: memory_chunk -> addressing -> list valnum -> rhs.
-*)
-
-Definition eq_valnum: forall (x y: valnum), {x=y}+{x<>y} := peq.
-
-Definition eq_list_valnum (x y: list valnum) : {x=y}+{x<>y}.
-Proof. decide equality. apply eq_valnum. Defined.
-
-Definition eq_rhs (x y: rhs) : {x=y}+{x<>y}.
-Proof.
-  generalize Int.eq_dec; intro.
-  generalize Float.eq_dec; intro.
-  generalize eq_operation; intro.
-  generalize eq_addressing; intro.
-  assert (forall (x y: memory_chunk), {x=y}+{x<>y}). decide equality.
-  generalize eq_valnum; intro.
-  generalize eq_list_valnum; intro.
-  decide equality.
-Defined.
-
-(** A value numbering is a collection of equations between value numbers
-  plus a partial map from registers to value numbers.  Additionally,
-  we maintain the next unused value number, so as to easily generate
-  fresh value numbers. *)
-
-Record numbering : Type := mknumbering {
-  num_next: valnum;                  (**r first unused value number *)
-  num_eqs: list (valnum * rhs);       (**r valid equations *)
-  num_reg: PTree.t valnum;           (**r mapping register to valnum *)
-  num_val: PMap.t (list reg)         (**r reverse mapping valnum to regs containing it *)
-}.
-
-Definition empty_numbering :=
-  mknumbering 1%positive nil (PTree.empty valnum) (PMap.init nil).
+(** * Operations on value numberings *)
 
 (** [valnum_reg n r] returns the value number for the contents of
   register [r].  If none exists, a fresh value number is returned
@@ -100,10 +61,10 @@ Definition valnum_reg (n: numbering) (r: reg) : numbering * valnum :=
   | Some v => (n, v)
   | None   =>
       let v := n.(num_next) in
-      (mknumbering (Psucc v)
-                   n.(num_eqs)
-                   (PTree.set r v n.(num_reg))
-                   (PMap.set v (r :: nil) n.(num_val)),
+      ( {| num_next := Psucc v;
+           num_eqs  := n.(num_eqs);
+           num_reg  := PTree.set r v n.(num_reg);
+           num_val  := PMap.set v (r :: nil) n.(num_val) |},
        v)
   end.
 
@@ -122,24 +83,67 @@ Fixpoint valnum_regs (n: numbering) (rl: list reg)
   for an equation of the form [vn = rhs] for some value number [vn].
   If found, [Some vn] is returned, otherwise [None] is returned. *)
 
-Fixpoint find_valnum_rhs (r: rhs) (eqs: list (valnum * rhs))
+Fixpoint find_valnum_rhs (r: rhs) (eqs: list equation)
                          {struct eqs} : option valnum :=
   match eqs with
   | nil => None
-  | (v, r') :: eqs1 =>
-      if eq_rhs r r' then Some v else find_valnum_rhs r eqs1
+  | Eq v str r' :: eqs1 =>
+      if str && eq_rhs r r' then Some v else find_valnum_rhs r eqs1
+  end.
+
+(** [find_valnum_rhs' rhs eqs] is similar, but also accepts equations
+  of the form [vn >= rhs]. *)
+
+Fixpoint find_valnum_rhs' (r: rhs) (eqs: list equation)
+                          {struct eqs} : option valnum :=
+  match eqs with
+  | nil => None
+  | Eq v str r' :: eqs1 =>
+      if eq_rhs r r' then Some v else find_valnum_rhs' r eqs1
   end.
 
 (** [find_valnum_num vn eqs] searches the list of equations [eqs]
   for an equation of the form [vn = rhs] for some equation [rhs].
   If found, [Some rhs] is returned, otherwise [None] is returned. *)
 
-Fixpoint find_valnum_num (v: valnum) (eqs: list (valnum * rhs))
+Fixpoint find_valnum_num (v: valnum) (eqs: list equation)
                          {struct eqs} : option rhs :=
   match eqs with
   | nil => None
-  | (v', r') :: eqs1 =>
-      if peq v v' then Some r' else find_valnum_num v eqs1
+  | Eq v' str r' :: eqs1 =>
+      if str && peq v v' then Some r' else find_valnum_num v eqs1
+  end.
+
+(** [reg_valnum n vn] returns a register that is mapped to value number
+    [vn], or [None] if no such register exists. *)
+
+Definition reg_valnum (n: numbering) (vn: valnum) : option reg :=
+  match PMap.get vn n.(num_val) with
+  | nil => None
+  | r :: rs => Some r
+  end.
+
+(** [regs_valnums] is similar, for a list of value numbers. *)
+
+Fixpoint regs_valnums (n: numbering) (vl: list valnum) : option (list reg) :=
+  match vl with
+  | nil => Some nil
+  | v1 :: vs =>
+      match reg_valnum n v1, regs_valnums n vs with
+      | Some r1, Some rs => Some (r1 :: rs)
+      | _, _ => None
+      end
+  end.
+
+(** [find_rhs] return a register that already holds the result of the
+    given arithmetic operation or memory load, or a value more defined
+    than this result, according to the given
+    numbering.  [None] is returned if no such register exists. *)
+
+Definition find_rhs (n: numbering) (rh: rhs) : option reg :=
+  match find_valnum_rhs' rh n.(num_eqs) with
+  | None => None
+  | Some vres => reg_valnum n vres
   end.
 
 (** Update the [num_val] mapping prior to a redefinition of register [r]. *)
@@ -163,14 +167,15 @@ Definition update_reg (n: numbering) (rd: reg) (vn: valnum) : PMap.t (list reg) 
 Definition add_rhs (n: numbering) (rd: reg) (rh: rhs) : numbering :=
   match find_valnum_rhs rh n.(num_eqs) with
   | Some vres =>
-      mknumbering n.(num_next) n.(num_eqs)
-                  (PTree.set rd vres n.(num_reg))
-                  (update_reg n rd vres)
+      {| num_next := n.(num_next);
+         num_eqs  := n.(num_eqs);
+         num_reg  := PTree.set rd vres n.(num_reg);
+         num_val  := update_reg n rd vres |}
   | None =>
-      mknumbering (Psucc n.(num_next))
-                  ((n.(num_next), rh) :: n.(num_eqs))
-                  (PTree.set rd n.(num_next) n.(num_reg))
-                  (update_reg n rd n.(num_next))
+      {| num_next := Psucc n.(num_next);
+         num_eqs  := Eq n.(num_next) true rh :: n.(num_eqs);
+         num_reg  := PTree.set rd n.(num_next) n.(num_reg);
+         num_val  := update_reg n rd n.(num_next) |}
   end.
 
 (** [add_op n rd op rs] specializes [add_rhs] for the case of an
@@ -193,8 +198,10 @@ Definition add_op (n: numbering) (rd: reg) (op: operation) (rs: list reg) :=
   match is_move_operation op rs with
   | Some r =>
       let (n1, v) := valnum_reg n r in
-      mknumbering n1.(num_next) n1.(num_eqs)
-                 (PTree.set rd v n1.(num_reg)) (update_reg n1 rd v)
+      {| num_next := n1.(num_next);
+         num_eqs  := n1.(num_eqs);
+         num_reg  := PTree.set rd v n1.(num_reg);
+         num_val  := update_reg n1 rd v |}
   | None =>
       let (n1, vs) := valnum_regs n rs in
       add_rhs n1 rd (Op op vs)
@@ -211,30 +218,32 @@ Definition add_load (n: numbering) (rd: reg)
   let (n1, vs) := valnum_regs n rs in
   add_rhs n1 rd (Load chunk addr vs).
 
-(** [add_unknown n rd] returns a numbering where [rd] is mapped to a
-   fresh value number, and no equations are added.  This is useful
-   to model instructions with unpredictable results such as [Ibuiltin]. *)
+(** [set_unknown n rd] returns a numbering where [rd] is mapped to 
+  no value number, and no equations are added.  This is useful
+  to model instructions with unpredictable results such as [Ibuiltin]. *)
 
-Definition add_unknown (n: numbering) (rd: reg) :=
-  mknumbering (Psucc n.(num_next))
-              n.(num_eqs)
-              (PTree.set rd n.(num_next) n.(num_reg))
-              (forget_reg n rd).
+Definition set_unknown (n: numbering) (rd: reg) :=
+  {| num_next := n.(num_next);
+     num_eqs  := n.(num_eqs);
+     num_reg  := PTree.remove rd n.(num_reg);
+     num_val  := forget_reg n rd |}.
 
 (** [kill_equations pred n] remove all equations satisfying predicate [pred]. *)
 
-Fixpoint kill_eqs (pred: rhs -> bool) (eqs: list (valnum * rhs)) : list (valnum * rhs) :=
+Fixpoint kill_eqs (pred: rhs -> bool) (eqs: list equation) : list equation :=
   match eqs with
   | nil => nil
-  | eq :: rem => if pred (snd eq) then kill_eqs pred rem else eq :: kill_eqs pred rem
+  | (Eq l strict r) as eq :: rem =>
+      if pred r then kill_eqs pred rem else eq :: kill_eqs pred rem
   end.
 
 Definition kill_equations (pred: rhs -> bool) (n: numbering) : numbering :=
-  mknumbering n.(num_next)
-              (kill_eqs pred n.(num_eqs))
-              n.(num_reg) n.(num_val).
+  {| num_next := n.(num_next);
+     num_eqs  := kill_eqs pred n.(num_eqs);
+     num_reg  := n.(num_reg);
+     num_val  := n.(num_val) |}.
 
-(** [kill_loads n] removes all equations involving memory loads,
+(** [kill_all_loads n] removes all equations involving memory loads,
   as well as those involving memory-dependent operators.
   It is used to reflect the effect of a builtin operation, which can
   change memory in unpredictable ways and potentially invalidate all such equations. *)
@@ -245,63 +254,121 @@ Definition filter_loads (r: rhs) : bool :=
   | Load _ _ _ => true
   end.
 
-Definition kill_loads (n: numbering) : numbering :=
+Definition kill_all_loads (n: numbering) : numbering :=
   kill_equations filter_loads n.
 
-(** [add_store n chunk addr rargs rsrc] updates the numbering [n] to reflect
-  the effect of a store instruction [Istore chunk addr rargs rsrc].
-  Equations involving the memory state are removed from [n], unless we
-  can prove that the store does not invalidate them.
-  Then, an equations [rsrc = Load chunk addr rargs] is added to reflect
-  the known content of the stored memory area, but only if [chunk] is
-  a "full-size" quantity ([Mint32] or [Mfloat64] or [Mint64]). *)
+(** [kill_loads_after_store app n chunk addr args] removes all equations
+  involving loads that could be invalidated by a store of quantity [chunk]
+  at address determined by [addr] and [args].  Loads that are disjoint
+  from this store are preserved.  Equations involving memory-dependent
+  operators are also removed. *)
 
-Definition filter_after_store (chunk: memory_chunk) (addr: addressing) (vl: list valnum) (r: rhs) : bool :=
+Definition filter_after_store (app: VA.t) (n: numbering) (p: aptr) (sz: Z) (r: rhs) :=
   match r with
-  | Op op vl' => op_depends_on_memory op
-  | Load chunk' addr' vl' =>
-      negb(eq_list_valnum vl vl' && addressing_separated chunk addr chunk' addr')
-  end.
-
-Definition add_store (n: numbering) (chunk: memory_chunk) (addr: addressing)
-                                   (rargs: list reg) (rsrc: reg) : numbering :=
-  let (n1, vargs) := valnum_regs n rargs in
-  let n2 := kill_equations (filter_after_store chunk addr vargs) n1 in
-  match chunk with
-  | Mint32 | Mint64 | Mfloat64 | Mfloat64al32 => add_rhs n2 rsrc (Load chunk addr vargs)
-  | _ => n2
-  end.
-
-(** [reg_valnum n vn] returns a register that is mapped to value number
-    [vn], or [None] if no such register exists. *)
-
-Definition reg_valnum (n: numbering) (vn: valnum) : option reg :=
-  match PMap.get vn n.(num_val) with
-  | nil => None
-  | r :: rs => Some r
-  end.
-
-Fixpoint regs_valnums (n: numbering) (vl: list valnum) : option (list reg) :=
-  match vl with
-  | nil => Some nil
-  | v1 :: vs =>
-      match reg_valnum n v1, regs_valnums n vs with
-      | Some r1, Some rs => Some (r1 :: rs)
-      | _, _ => None
+  | Op op vl =>
+      op_depends_on_memory op
+  | Load chunk addr vl =>
+      match regs_valnums n vl with
+      | None => true
+      | Some rl =>
+          negb (pdisjoint (aaddressing app addr rl) (size_chunk chunk) p sz)
       end
   end.
 
-(** [find_rhs] return a register that already holds the result of the given arithmetic
-    operation or memory load, according to the given numbering.
-    [None] is returned if no such register exists. *)
+Definition kill_loads_after_store
+             (app: VA.t) (n: numbering)
+             (chunk: memory_chunk) (addr: addressing) (args: list reg) :=
+  let p := aaddressing app addr args in
+  kill_equations (filter_after_store app n p (size_chunk chunk)) n.
 
-Definition find_rhs (n: numbering) (rh: rhs) : option reg :=
-  match find_valnum_rhs rh n.(num_eqs) with
-  | None => None
-  | Some vres => reg_valnum n vres
+(** [add_store_result n chunk addr rargs rsrc] updates the numbering [n]
+  to reflect the knowledge gained after executing an instruction
+  [Istore chunk addr rargs rsrc].  An equation [vsrc >= Load chunk addr vargs]
+  is added, but only if the value of [rsrc] is known to be normalized
+  with respect to [chunk]. *)
+
+Definition store_normalized_range (chunk: memory_chunk) : aval :=
+  match chunk with
+  | Mint8signed => Sgn 8
+  | Mint8unsigned => Uns 8
+  | Mint16signed => Sgn 16
+  | Mint16unsigned => Uns 16
+  | Mfloat32 => Fsingle
+  | _ => Vtop
   end.
 
-(** Experimental: take advantage of known equations to select more efficient
+Definition add_store_result (app: VA.t) (n: numbering) (chunk: memory_chunk) (addr: addressing)
+                            (rargs: list reg) (rsrc: reg) :=
+  if vincl (avalue app rsrc) (store_normalized_range chunk) then
+    let (n1, vsrc) := valnum_reg n rsrc in
+    let (n2, vargs) := valnum_regs n1 rargs in
+    {| num_next := n2.(num_next);
+       num_eqs  := Eq vsrc false (Load chunk addr vargs) :: n2.(num_eqs);
+       num_reg  := n2.(num_reg);
+       num_val  := n2.(num_val) |}
+  else n.
+
+(** [kill_loads_after_storebyte app n dst sz] removes all equations
+  involving loads that could be invalidated by a store of [sz] bytes
+  starting at address [dst]. Loads that are disjoint from this
+  store-bytes are preserved.  Equations involving memory-dependent
+  operators are also removed. *)
+
+Definition kill_loads_after_storebytes
+             (app: VA.t) (n: numbering) (dst: reg) (sz: Z) :=
+  let p := aaddr app dst in
+  kill_equations (filter_after_store app n p sz) n.
+
+(** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that 
+  represent the effect of a [memcpy] block copy operation of [sz] bytes
+  from the address denoted by [rsrc] to the address denoted by [rdst].
+  [n2] is the numbering returned by [kill_loads_after_storebytes]
+  and [n1] is the original numbering before the [memcpy] operation.
+  Valid equations (found in [n1]) involving loads within the source
+  area of the [memcpy] are translated as equations involving loads
+  within the destination area, and added to numbering [n2].
+  Currently, we only track [memcpy] operations between stack
+  locations, as often occur when compiling assignments between local C
+  variables of struct type. *)
+
+Definition shift_memcpy_eq (src sz delta: Z) (e: equation) :=
+  match e with
+  | Eq l strict (Load chunk (Ainstack i) _) =>
+      let i := Int.unsigned i in
+      let j := i + delta in
+      if zle src i
+      && zle (i + size_chunk chunk) (src + sz)
+      && zeq (Zmod delta (align_chunk chunk)) 0
+      && zle 0 j
+      && zle j Int.max_unsigned
+      then Some(Eq l strict (Load chunk (Ainstack (Int.repr j)) nil))
+      else None
+  | _ => None
+  end.
+
+Fixpoint add_memcpy_eqs (src sz delta: Z) (eqs1 eqs2: list equation) :=
+  match eqs1 with
+  | nil => eqs2
+  | e :: eqs =>
+      match shift_memcpy_eq src sz delta e with
+      | None => add_memcpy_eqs src sz delta eqs eqs2
+      | Some e' => e' :: add_memcpy_eqs src sz delta eqs eqs2
+      end
+  end.
+
+Definition add_memcpy (app: VA.t) (n1 n2: numbering) (rsrc rdst: reg) (sz: Z) :=
+  match aaddr app rsrc, aaddr app rdst with
+  | Stk src, Stk dst =>
+      {| num_next := n2.(num_next);
+         num_eqs  := add_memcpy_eqs (Int.unsigned src) sz
+                                    (Int.unsigned dst - Int.unsigned src)
+                                    n1.(num_eqs) n2.(num_eqs);
+         num_reg  := n2.(num_reg);
+         num_val  := n2.(num_val) |}
+  | _, _ => n2
+  end.
+
+(** Take advantage of known equations to select more efficient
   forms of operations, addressing modes, and conditions. *)
 
 Section REDUCE.
@@ -336,52 +403,6 @@ End REDUCE.
 
 (** * The static analysis *)
 
-(** We now define a notion of satisfiability of a numbering.  This semantic
-  notion plays a central role in the correctness proof (see [CSEproof]),
-  but is defined here because we need it to define the ordering over
-  numberings used in the static analysis. 
-
-  A numbering is satisfiable in a given register environment and memory
-  state if there exists a valuation, mapping value numbers to actual values,
-  that validates both the equations and the association of registers
-  to value numbers. *)
-
-Definition equation_holds
-     (valuation: valnum -> val)
-     (ge: genv) (sp: val) (m: mem) 
-     (vres: valnum) (rh: rhs) : Prop :=
-  match rh with
-  | Op op vl =>
-      eval_operation ge sp op (List.map valuation vl) m =
-      Some (valuation vres)
-  | Load chunk addr vl =>
-      exists a,
-      eval_addressing ge sp addr (List.map valuation vl) = Some a /\
-      Mem.loadv chunk m a = Some (valuation vres)
-  end.
-
-Definition numbering_holds
-   (valuation: valnum -> val)
-   (ge: genv) (sp: val) (rs: regset) (m: mem) (n: numbering) : Prop :=
-     (forall vn rh,
-       In (vn, rh) n.(num_eqs) ->
-       equation_holds valuation ge sp m vn rh)
-  /\ (forall r vn,
-       PTree.get r n.(num_reg) = Some vn -> rs#r = valuation vn).
-
-Definition numbering_satisfiable
-   (ge: genv) (sp: val) (rs: regset) (m: mem) (n: numbering) : Prop :=
-  exists valuation, numbering_holds valuation ge sp rs m n.
-
-Lemma empty_numbering_satisfiable:
-  forall ge sp rs m, numbering_satisfiable ge sp rs m empty_numbering.
-Proof.
-  intros; red. 
-  exists (fun (vn: valnum) => Vundef). split; simpl; intros.
-  elim H.
-  rewrite PTree.gempty in H. discriminate. 
-Qed. 
-
 (** We now equip the type [numbering] with a partial order and a greatest
   element.  The partial order is based on entailment: [n1] is greater
   than [n2] if [n1] is satisfiable whenever [n2] is.  The greatest element
@@ -390,13 +411,13 @@ Qed.
 Module Numbering.
   Definition t := numbering.
   Definition ge (n1 n2: numbering) : Prop :=
-    forall ge sp rs m, 
-    numbering_satisfiable ge sp rs m n2 ->
-    numbering_satisfiable ge sp rs m n1.
+    forall valu ge sp rs m, 
+    numbering_holds valu ge sp rs m n2 ->
+    numbering_holds valu ge sp rs m n1.
   Definition top := empty_numbering.
   Lemma top_ge: forall x, ge top x.
   Proof.
-    intros; red; intros. unfold top. apply empty_numbering_satisfiable.
+    intros; red; intros. unfold top. apply empty_numbering_holds.
   Qed.
   Lemma refl_ge: forall x, ge x x.
   Proof.
@@ -414,8 +435,9 @@ Module Solver := BBlock_solver(Numbering).
   numbering ``before''.  For [Iop] and [Iload] instructions, we add
   equations or reuse existing value numbers as described for
   [add_op] and [add_load].  For [Istore] instructions, we forget
-  all equations involving memory loads.  For [Icall] instructions,
-  we could simply associate a fresh, unconstrained by equations value number
+  equations involving memory loads at possibly overlapping locations,
+  then add an equation for loads from the same location stored to.
+  For [Icall] instructions, we could simply associate a fresh, unconstrained by equations value number
   to the result register.  However, it is often undesirable to eliminate
   common subexpressions across a function call (there is a risk of 
   increasing too much the register pressure across the call), so we
@@ -428,13 +450,13 @@ Module Solver := BBlock_solver(Numbering).
   turned into function calls ([EF_external], [EF_malloc], [EF_free]).
 - Forget equations involving loads but keep equations over registers.
   This is appropriate for builtins that can modify memory,
-  e.g. volatile stores, or [EF_memcpy], or [EF_builtin]
+  e.g. volatile stores, or [EF_builtin]
 - Keep all equations, taking advantage of the fact that neither memory
   nor registers are modified.  This is appropriate for annotations
   and for volatile loads.
 *)
 
-Definition transfer (f: function) (pc: node) (before: numbering) :=
+Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numbering) :=
   match f.(fn_code)!pc with
   | None => before
   | Some i =>
@@ -446,7 +468,9 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
       | Iload chunk addr args dst s =>
           add_load before dst chunk addr args
       | Istore chunk addr args src s =>
-          add_store before chunk addr args src
+          let app := approx!!pc in
+          let n := kill_loads_after_store app before chunk addr args in
+          add_store_result app n chunk addr args src
       | Icall sig ros args res s =>
           empty_numbering
       | Itailcall sig ros args =>
@@ -455,12 +479,19 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
           match ef with
           | EF_external _ _ | EF_malloc | EF_free | EF_inline_asm _ =>
               empty_numbering
-          | EF_vstore _ | EF_vstore_global _ _ _
-          | EF_builtin _ _ |  EF_memcpy _ _ =>
-              add_unknown (kill_loads before) res
-          | EF_vload _ | EF_vload_global _ _ _
-          | EF_annot _ _ | EF_annot_val _ _ =>
-              add_unknown before res
+          | EF_builtin _ _ | EF_vstore _ | EF_vstore_global _ _ _ =>
+              set_unknown (kill_all_loads before) res
+          | EF_memcpy sz al =>
+              match args with
+              | rdst :: rsrc :: nil =>
+                  let app := approx!!pc in
+                  let n := kill_loads_after_storebytes app before rdst sz in
+                  set_unknown (add_memcpy app before n rsrc rdst sz) res
+              | _ =>
+                  empty_numbering
+              end
+          | EF_vload _ | EF_vload_global _ _ _ | EF_annot _ _ | EF_annot_val _ _ =>
+              set_unknown before res
           end
       | Icond cond args ifso ifnot =>
           before
@@ -476,8 +507,8 @@ Definition transfer (f: function) (pc: node) (before: numbering) :=
   which produces sub-optimal solutions quickly.  The result is
   a mapping from program points to numberings. *)
 
-Definition analyze (f: RTL.function): option (PMap.t numbering) :=
-  Solver.fixpoint (fn_code f) successors_instr (transfer f) f.(fn_entrypoint).
+Definition analyze (f: RTL.function) (approx: PMap.t VA.t): option (PMap.t numbering) :=
+  Solver.fixpoint (fn_code f) successors_instr (transfer f approx) f.(fn_entrypoint).
 
 (** * Code transformation *)
 
@@ -526,25 +557,24 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
 Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
   PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
 
-Definition transf_function (f: function) : res function :=
-  match type_function f with
-  | Error msg => Error msg
-  | OK tyenv =>
-      match analyze f with
-      | None => Error (msg "CSE failure")
-      | Some approxs =>
-          OK(mkfunction
-               f.(fn_sig)
-               f.(fn_params)
-               f.(fn_stacksize)
-               (transf_code approxs f.(fn_code))
-               f.(fn_entrypoint))
-      end
+Definition vanalyze := ValueAnalysis.analyze.
+
+Definition transf_function (rm: romem) (f: function) : res function :=
+  let approx := vanalyze rm f in
+  match analyze f approx with
+  | None => Error (msg "CSE failure")
+  | Some approxs =>
+      OK(mkfunction
+           f.(fn_sig)
+           f.(fn_params)
+           f.(fn_stacksize)
+           (transf_code approxs f.(fn_code))
+           f.(fn_entrypoint))
   end.
 
-Definition transf_fundef (f: fundef) : res fundef :=
-  AST.transf_partial_fundef transf_function f.
+Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
+  AST.transf_partial_fundef (transf_function rm) f.
 
 Definition transf_program (p: program) : res program :=
-  transform_partial_program transf_fundef p.
+  transform_partial_program (transf_fundef (romem_for_program p)) p.
 

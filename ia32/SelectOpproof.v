@@ -145,22 +145,6 @@ Proof.
   intros. unfold symbol_address. destruct (Genv.find_symbol); auto. 
 Qed.
 
-Lemma eval_offset_addressing:
-  forall addr n args v,
-  eval_addressing ge sp addr args = Some v ->
-  eval_addressing ge sp (offset_addressing addr n) args = Some (Val.add v (Vint n)).
-Proof.
-  intros. destruct addr; simpl in *; FuncInv; subst; simpl.
-  rewrite Val.add_assoc. auto. 
-  repeat rewrite Val.add_assoc. auto.
-  rewrite Val.add_assoc. auto.
-  repeat rewrite Val.add_assoc. auto.
-  rewrite shift_symbol_address. auto. 
-  rewrite shift_symbol_address. repeat rewrite Val.add_assoc. decEq; decEq. apply Val.add_commut.
-  rewrite shift_symbol_address. repeat rewrite Val.add_assoc. decEq; decEq. apply Val.add_commut.
-  rewrite Val.add_assoc. auto.
-Qed.
-
 Theorem eval_addimm:
   forall n, unary_constructor_sound (addimm n) (fun x => Val.add x (Vint n)).
 Proof.
@@ -170,7 +154,7 @@ Proof.
   destruct x; simpl; auto. rewrite Int.add_zero. auto. rewrite Int.add_zero. auto.
   case (addimm_match a); intros; InvEval; simpl.
   TrivialExists; simpl. rewrite Int.add_commut. auto.
-  inv H0. simpl in H6. TrivialExists. simpl. eapply eval_offset_addressing; eauto.
+  inv H0. simpl in H6. TrivialExists. simpl. eapply eval_offset_addressing_total; eauto.
   TrivialExists. 
 Qed.
 

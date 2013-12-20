@@ -174,8 +174,8 @@ Definition eval_condition (cond: condition) (vl: list val) (m: mem): option bool
   | Ccompuimm c n, v1 :: nil => Val.cmpu_bool (Mem.valid_pointer m) c v1 (Vint n)
   | Ccompf c, v1 :: v2 :: nil => Val.cmpf_bool c v1 v2
   | Cnotcompf c, v1 :: v2 :: nil => option_map negb (Val.cmpf_bool c v1 v2)
-  | Cmaskzero n, Vint n1 :: nil => Some (Int.eq (Int.and n1 n) Int.zero)
-  | Cmasknotzero n, Vint n1 :: nil => Some (negb (Int.eq (Int.and n1 n) Int.zero))
+  | Cmaskzero n, v1 :: nil => Val.maskzero_bool v1 n
+  | Cmasknotzero n, v1 :: nil => option_map negb (Val.maskzero_bool v1 n)
   | _, _ => None
   end.
 
@@ -483,9 +483,9 @@ Proof.
   repeat (destruct vl; auto). apply Val.negate_cmp_bool.
   repeat (destruct vl; auto). apply Val.negate_cmpu_bool.
   repeat (destruct vl; auto). 
-  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0); auto. destruct b; auto.
-  destruct vl; auto. destruct v; auto. destruct vl; auto. 
-  destruct vl; auto. destruct v; auto. destruct vl; auto. simpl. rewrite negb_involutive. auto.
+  repeat (destruct vl; auto). destruct (Val.cmpf_bool c v v0) as [[]|]; auto.
+  destruct vl; auto. destruct vl; auto.
+  destruct vl; auto. destruct vl; auto. destruct (Val.maskzero_bool v i) as [[]|]; auto.
 Qed.
 
 (** Shifting stack-relative references.  This is used in [Stacking]. *)
@@ -534,27 +534,32 @@ Qed.
 
 (** Offset an addressing mode [addr] by a quantity [delta], so that
   it designates the pointer [delta] bytes past the pointer designated
-  by [addr].  May be undefined, in which case [None] is returned. *)
+  by [addr].  On PowerPC and ARM, this may be undefined, in which case
+  [None] is returned.  On IA32, it is always defined, but we keep the
+  same interface. *)
 
-Definition offset_addressing (addr: addressing) (delta: int) : option addressing :=
+Definition offset_addressing_total (addr: addressing) (delta: int) : addressing :=
   match addr with
-  | Aindexed n => Some(Aindexed (Int.add n delta))
-  | Aindexed2 n => Some(Aindexed2 (Int.add n delta))
-  | Ascaled sc n => Some(Ascaled sc (Int.add n delta))
-  | Aindexed2scaled sc n => Some(Aindexed2scaled sc (Int.add n delta))
-  | Aglobal s n => Some(Aglobal s (Int.add n delta))
-  | Abased s n => Some(Abased s (Int.add n delta))
-  | Abasedscaled sc s n => Some(Abasedscaled sc s (Int.add n delta))
-  | Ainstack n => Some(Ainstack (Int.add n delta))
+  | Aindexed n => Aindexed (Int.add n delta)
+  | Aindexed2 n => Aindexed2 (Int.add n delta)
+  | Ascaled sc n => Ascaled sc (Int.add n delta)
+  | Aindexed2scaled sc n => Aindexed2scaled sc (Int.add n delta)
+  | Aglobal s n => Aglobal s (Int.add n delta)
+  | Abased s n => Abased s (Int.add n delta)
+  | Abasedscaled sc s n => Abasedscaled sc s (Int.add n delta)
+  | Ainstack n => Ainstack (Int.add n delta)
   end.
 
-Lemma eval_offset_addressing:
-  forall (F V: Type) (ge: Genv.t F V) sp addr args delta addr' v,
-  offset_addressing addr delta = Some addr' ->
+Definition offset_addressing (addr: addressing) (delta: int) : option addressing :=
+  Some(offset_addressing_total addr delta).
+
+Lemma eval_offset_addressing_total:
+  forall (F V: Type) (ge: Genv.t F V) sp addr args delta v,
   eval_addressing ge sp addr args = Some v ->
-  eval_addressing ge sp addr' args = Some(Val.add v (Vint delta)).
+  eval_addressing ge sp (offset_addressing_total addr delta) args =
+    Some(Val.add v (Vint delta)).
 Proof.
-  intros. destruct addr; simpl in H; inv H; simpl in *; FuncInv; inv H.
+  intros. destruct addr; simpl in *; FuncInv; subst.
   rewrite Val.add_assoc; auto.
   rewrite !Val.add_assoc; auto.
   rewrite !Val.add_assoc; auto.
@@ -565,6 +570,16 @@ Proof.
   unfold symbol_address. destruct (Genv.find_symbol ge i0); auto.
   rewrite Val.add_assoc. rewrite Val.add_permut. rewrite Val.add_commut. auto. 
   rewrite Val.add_assoc. auto. 
+Qed.
+
+Lemma eval_offset_addressing:
+  forall (F V: Type) (ge: Genv.t F V) sp addr args delta addr' v,
+  offset_addressing addr delta = Some addr' ->
+  eval_addressing ge sp addr args = Some v ->
+  eval_addressing ge sp addr' args = Some(Val.add v (Vint delta)).
+Proof.
+  intros. unfold offset_addressing in H; inv H. 
+  eapply eval_offset_addressing_total; eauto.
 Qed.
 
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
@@ -757,8 +772,8 @@ Proof.
   eauto 3 using val_cmpu_bool_inject, Mem.valid_pointer_implies.
   inv H3; inv H2; simpl in H0; inv H0; auto.
   inv H3; inv H2; simpl in H0; inv H0; auto.
-  inv H3; try discriminate; inv H5; auto.
-  inv H3; try discriminate; inv H5; auto.
+  inv H3; try discriminate; auto.
+  inv H3; try discriminate; auto.
 Qed.
 
 Ltac TrivialExists :=

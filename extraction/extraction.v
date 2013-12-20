@@ -10,6 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+Require Coqlib.
 Require Wfsimpl.
 Require Nan.
 Require AST.
@@ -18,8 +19,7 @@ Require Floats.
 Require SelectLong.
 Require RTLgen.
 Require Inlining.
-Require ConstpropOp.
-Require Constprop.
+Require ValueDomain.
 Require Tailcall.
 Require Allocation.
 Require Compiler.
@@ -27,6 +27,9 @@ Require Compiler.
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
+
+(* Coqlib *)
+Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
@@ -73,10 +76,12 @@ Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".
 Extraction Inline Inlining.ret Inlining.bind.
 
-(* Constprop *)
-Extract Constant ConstpropOp.propagate_float_constants =>
+(* ValueDomain *)
+Extract Constant ValueDomain.strict =>
+  "false".
+Extract Constant ValueDomain.propagate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 1".
-Extract Constant Constprop.generate_float_constants =>
+Extract Constant ValueDomain.generate_float_constants =>
   "fun _ -> !Clflags.option_ffloatconstprop >= 2".
 
 (* Tailcall *)
@@ -101,6 +106,7 @@ Extract Constant Compiler.print_RTL_tailcall => "PrintRTL.print_tailcall".
 Extract Constant Compiler.print_RTL_inline => "PrintRTL.print_inlining".
 Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
 Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
+Extract Constant Compiler.print_RTL_deadcode => "PrintRTL.print_deadcode".
 Extract Constant Compiler.print_LTL => "PrintLTL.print_if".
 Extract Constant Compiler.print_Mach => "PrintMach.print_if".
 Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".

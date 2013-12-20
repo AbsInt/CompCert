@@ -17,13 +17,9 @@ Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
-Require SelectOp.
+Require Import CSEdomain.
 
 Definition valnum := positive.
-
-Inductive rhs : Type :=
-  | Op: operation -> list valnum -> rhs
-  | Load: memory_chunk -> addressing -> list valnum -> rhs.
 
 Section COMBINE.
 
@@ -80,7 +76,7 @@ Function combine_addr (addr: addressing) (args: list valnum) : option(addressing
   match addr, args with
   | Aindexed n, x::nil =>
       match get x with
-      | Some(Op (Olea a) ys) => Some(SelectOp.offset_addressing a n, ys)
+      | Some(Op (Olea a) ys) => Some(offset_addressing_total a n, ys)
       | _ => None
       end
   | _, _ => None
@@ -92,6 +88,21 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
       match combine_addr addr args with
       | Some(addr', args') => Some(Olea addr', args')
       | None => None
+      end
+  | Oandimm n, x :: nil =>
+      match get x with
+      | Some(Op (Oandimm m) ys) => Some(Oandimm (Int.and m n), ys)
+      | _ => None
+      end
+  | Oorimm n, x :: nil =>
+      match get x with
+      | Some(Op (Oorimm m) ys) => Some(Oorimm (Int.or m n), ys)
+      | _ => None
+      end
+  | Oxorimm n, x :: nil =>
+      match get x with
+      | Some(Op (Oxorimm m) ys) => Some(Oxorimm (Int.xor m n), ys)
+      | _ => None
       end
   | Ocmp cond, _ =>
       match combine_cond cond args with

@@ -205,7 +205,7 @@ Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block
                              : option (world * trace * mem) :=
   if block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
-    do ev <- eventval_of_val v (type_of_chunk chunk);
+    do ev <- eventval_of_val (Val.load_result chunk v) (type_of_chunk chunk);
     do w' <- nextworld_vstore w chunk id ofs ev;
     Some(w', Event_vstore chunk id ofs ev :: nil, m)
   else

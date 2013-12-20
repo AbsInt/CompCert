@@ -108,7 +108,7 @@ Proof.
   caseEq (reachable_aux f).
   unfold reachable_aux; intros reach A.
   assert (LBoolean.ge reach!!(f.(fn_entrypoint)) true).
-  eapply DS.fixpoint_entry. eexact A. auto with coqlib.
+  eapply DS.fixpoint_entry. eexact A. auto. 
   unfold LBoolean.ge in H. tauto.
   intros. apply PMap.gi.
 Qed.
@@ -126,7 +126,7 @@ Proof.
   unfold reachable_aux. intro reach; intros.
   assert (LBoolean.ge reach!!pc' reach!!pc).
   change (reach!!pc) with ((fun pc r => r) pc (reach!!pc)).
-  eapply DS.fixpoint_solution; eauto.
+  eapply DS.fixpoint_solution; eauto. intros; apply DS.L.eq_refl.  
   elim H3; intro. congruence. auto.
   intros. apply PMap.gi.
 Qed.

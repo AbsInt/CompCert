@@ -363,6 +363,16 @@ let time3 name fn arg1 arg2 arg3 =
     add_to_timer name (Unix.gettimeofday() -. start);
     raise x
 
+let time4 name fn arg1 arg2 arg3 arg4 =
+  let start = Unix.gettimeofday() in
+  try
+    let res = fn arg1 arg2 arg3 arg4 in
+    add_to_timer name (Unix.gettimeofday() -. start);
+    res
+  with x ->
+    add_to_timer name (Unix.gettimeofday() -. start);
+    raise x
+
 let print_timers () =
   Hashtbl.iter
     (fun name time -> Printf.printf "%-20s %.3f\n" name time)

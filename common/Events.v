@@ -557,7 +557,7 @@ Inductive volatile_store (F V: Type) (ge: Genv.t F V):
   | volatile_store_vol: forall chunk m b ofs id ev v,
       block_is_volatile ge b = true ->
       Genv.find_symbol ge id = Some b ->
-      eventval_match ge ev (type_of_chunk chunk) v ->
+      eventval_match ge ev (type_of_chunk chunk) (Val.load_result chunk v) ->
       volatile_store ge chunk m b ofs v
                       (Event_vstore chunk id ofs ev :: nil)
                       m
@@ -584,6 +584,9 @@ Definition extcall_sem : Type :=
 
 Definition loc_out_of_bounds (m: mem) (b: block) (ofs: Z) : Prop :=
   ~Mem.perm m b ofs Max Nonempty.
+
+Definition loc_not_writable (m: mem) (b: block) (ofs: Z) : Prop :=
+  ~Mem.perm m b ofs Max Writable.
 
 Definition loc_unmapped (f: meminj) (b: block) (ofs: Z): Prop :=
   f b = None.
@@ -631,12 +634,9 @@ Record extcall_properties (sem: extcall_sem)
 (** External call cannot modify memory unless they have [Max, Writable]
    permissions. *)
   ec_readonly:
-    forall F V (ge: Genv.t F V) vargs m1 t vres m2 chunk b ofs,
+    forall F V (ge: Genv.t F V) vargs m1 t vres m2,
     sem F V ge vargs m1 t vres m2 ->
-    Mem.valid_block m1 b ->
-    (forall ofs', ofs <= ofs' < ofs + size_chunk chunk ->
-                          ~(Mem.perm m1 b ofs' Max Writable)) ->
-    Mem.load chunk m2 b ofs = Mem.load chunk m1 b ofs;
+    Mem.unchanged_on (loc_not_writable m1) m1 m2;
 
 (** External calls must commute with memory extensions, in the
   following sense. *)
@@ -777,7 +777,7 @@ Proof.
 (* max perms *)
   inv H; auto.
 (* readonly *)
-  inv H; auto.
+  inv H. apply Mem.unchanged_on_refl.
 (* mem extends *)
   inv H. inv H1. inv H6. inv H4. 
   exploit volatile_load_extends; eauto. intros [v' [A B]].
@@ -839,7 +839,7 @@ Proof.
 (* max perm *)
   inv H; auto.
 (* readonly *)
-  inv H; auto.
+  inv H. apply Mem.unchanged_on_refl.
 (* extends *)
   inv H. inv H1. exploit volatile_load_extends; eauto. intros [v' [A B]].
   exists v'; exists m1'; intuition. econstructor; eauto.
@@ -885,25 +885,16 @@ Proof.
 Qed.
 
 Lemma volatile_store_readonly:
-  forall F V (ge: Genv.t F V) chunk1 m1 b1 ofs1 v t m2 chunk ofs b,
+  forall F V (ge: Genv.t F V) chunk1 m1 b1 ofs1 v t m2,
   volatile_store ge chunk1 m1 b1 ofs1 v t m2 ->
-  Mem.valid_block m1 b ->
-  (forall ofs', ofs <= ofs' < ofs + size_chunk chunk ->
-                        ~(Mem.perm m1 b ofs' Max Writable)) ->
-  Mem.load chunk m2 b ofs = Mem.load chunk m1 b ofs.
+  Mem.unchanged_on (loc_not_writable m1) m1 m2.
 Proof.
   intros. inv H.
-  auto.
-  eapply Mem.load_store_other; eauto.
-  destruct (eq_block b b1); auto. subst b1. right.
-  apply (Intv.range_disjoint' (ofs, ofs + size_chunk chunk)
-                              (Int.unsigned ofs1, Int.unsigned ofs1 + size_chunk chunk1)).
-  red; intros; red; intros. 
-  elim (H1 x); auto. 
-  exploit Mem.store_valid_access_3; eauto. intros [A B].
-  apply Mem.perm_cur_max. apply A. auto.
-  simpl. generalize (size_chunk_pos chunk); omega.
-  simpl. generalize (size_chunk_pos chunk1); omega.
+  apply Mem.unchanged_on_refl.
+  eapply Mem.store_unchanged_on; eauto. 
+  exploit Mem.store_valid_access_3; eauto. intros [P Q]. 
+  intros. unfold loc_not_writable. red; intros. elim H2. 
+  apply Mem.perm_cur_max. apply P. auto. 
 Qed.
 
 Lemma volatile_store_extends:
@@ -917,7 +908,8 @@ Lemma volatile_store_extends:
   /\ Mem.unchanged_on (loc_out_of_bounds m1) m1' m2'.
 Proof.
   intros. inv H.
-- econstructor; split. econstructor; eauto. eapply eventval_match_lessdef; eauto.
+- econstructor; split. econstructor; eauto.
+  eapply eventval_match_lessdef; eauto. apply Val.load_result_lessdef; auto. 
   auto with mem.
 - exploit Mem.store_within_extends; eauto. intros [m2' [A B]].
   exists m2'; intuition.
@@ -946,7 +938,8 @@ Proof.
   intros. inv H0.
 - inv H1. exploit (proj1 H); eauto. intros EQ; rewrite H9 in EQ; inv EQ.
   rewrite Int.add_zero. exists m1'. intuition. 
-  constructor; auto.  eapply eventval_match_inject; eauto.
+  constructor; auto.
+  eapply eventval_match_inject; eauto. apply val_load_result_inject; auto.
 - assert (Mem.storev chunk m1 (Vptr b ofs) v = Some m2). simpl; auto.
   exploit Mem.storev_mapped_inject; eauto. intros [m2' [A B]].
   inv H1. exists m2'; intuition. 
@@ -1105,10 +1098,7 @@ Proof.
   rewrite dec_eq_false. auto. 
   apply Mem.valid_not_valid_diff with m1; eauto with mem.
 (* readonly *)
-  inv H. transitivity (Mem.load chunk m' b ofs).
-  eapply Mem.load_store_other; eauto. 
-  left. apply Mem.valid_not_valid_diff with m1; eauto with mem.
-  eapply Mem.load_alloc_unchanged; eauto.
+  inv H. eapply UNCHANGED; eauto. 
 (* mem extends *)
   inv H. inv H1. inv H5. inv H7. 
   exploit Mem.alloc_extends; eauto. apply Zle_refl. apply Zle_refl.
@@ -1167,18 +1157,10 @@ Proof.
 (* perms *)
   inv H. eapply Mem.perm_free_3; eauto. 
 (* readonly *)
-  inv H. eapply Mem.load_free; eauto.
-  destruct (eq_block b b0); auto.
-  subst b0. right; right. 
-  apply (Intv.range_disjoint'
-           (ofs, ofs + size_chunk chunk)
-           (Int.unsigned lo - 4, Int.unsigned lo + Int.unsigned sz)).
-  red; intros; red; intros.
-  elim (H1 x). auto. apply Mem.perm_cur_max. 
-  apply Mem.perm_implies with Freeable; auto with mem.
-  exploit Mem.free_range_perm; eauto. 
-  simpl. generalize (size_chunk_pos chunk); omega.
-  simpl. omega.
+  inv H. eapply Mem.free_unchanged_on; eauto. 
+  intros. red; intros. elim H3. 
+  apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem. 
+  eapply Mem.free_range_perm; eauto. 
 (* mem extends *)
   inv H. inv H1. inv H8. inv H6. 
   exploit Mem.load_extends; eauto. intros [vsz [A B]]. inv B. 
@@ -1271,17 +1253,9 @@ Proof.
 (* perms *)
   intros. inv H. eapply Mem.perm_storebytes_2; eauto. 
 (* readonly *)
-  intros. inv H. eapply Mem.load_storebytes_other; eauto.
-  destruct (eq_block b bdst); auto.   subst b. right.
-  apply (Intv.range_disjoint'
-          (ofs, ofs + size_chunk chunk)
-          (Int.unsigned odst, Int.unsigned odst + Z_of_nat (length bytes))).
-  red; intros; red; intros. elim (H1 x); auto.
-  apply Mem.perm_cur_max. 
-  eapply Mem.storebytes_range_perm; eauto. 
-  simpl. generalize (size_chunk_pos chunk); omega.
-  simpl. rewrite (Mem.loadbytes_length _ _ _ _ _ H8). rewrite nat_of_Z_eq.
-  omega. omega.
+  intros. inv H. eapply Mem.storebytes_unchanged_on; eauto. 
+  intros; red; intros. elim H8. 
+  apply Mem.perm_cur_max. eapply Mem.storebytes_range_perm; eauto. 
 (* extensions *)
   intros. inv H. 
   inv H1. inv H13. inv H14. inv H10. inv H11.
@@ -1376,7 +1350,7 @@ Proof.
 (* perms *)
   inv H; auto.
 (* readonly *)
-  inv H; auto.
+  inv H. apply Mem.unchanged_on_refl.
 (* mem extends *)
   inv H.
   exists Vundef; exists m1'; intuition.
@@ -1420,7 +1394,7 @@ Proof.
 (* perms *)
   inv H; auto.
 (* readonly *)
-  inv H; auto.
+  inv H. apply Mem.unchanged_on_refl.
 (* mem extends *)
   inv H. inv H1. inv H6. 
   exists v2; exists m1'; intuition.

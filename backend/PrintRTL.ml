@@ -133,3 +133,6 @@ let print_constprop = print_if destination_constprop
 let destination_cse : string option ref = ref None
 let print_cse = print_if destination_cse
 
+let destination_deadcode : string option ref = ref None
+let print_deadcode = print_if destination_deadcode
+

@@ -17,13 +17,7 @@ Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
-Require SelectOp.
-
-Definition valnum := positive.
-
-Inductive rhs : Type :=
-  | Op: operation -> list valnum -> rhs
-  | Load: memory_chunk -> addressing -> list valnum -> rhs.
+Require Import CSEdomain.
 
 Section COMBINE.
 

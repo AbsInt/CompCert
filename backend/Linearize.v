@@ -93,7 +93,7 @@ Definition reachable_aux (f: LTL.function) : option (PMap.t bool) :=
   DS.fixpoint
     (LTL.fn_code f) successors_block
     (fun pc r => r)
-    ((f.(fn_entrypoint), true) :: nil).
+    f.(fn_entrypoint) true.
 
 Definition reachable (f: LTL.function) : PMap.t bool :=
   match reachable_aux f with  

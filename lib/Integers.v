@@ -2454,6 +2454,19 @@ Proof.
   generalize wordsize_pos; generalize wordsize_max_unsigned; omega. 
 Qed.
 
+Theorem ror_rol_neg:
+  forall x y, (zwordsize | modulus) -> ror x y = rol x (neg y).
+Proof.
+  intros. apply same_bits_eq; intros.
+  rewrite bits_ror by auto. rewrite bits_rol by auto. 
+  f_equal. apply eqmod_mod_eq. omega. 
+  apply eqmod_trans with (i - (- unsigned y)). 
+  apply eqmod_refl2; omega. 
+  apply eqmod_sub. apply eqmod_refl.
+  apply eqmod_divides with modulus. 
+  apply eqm_unsigned_repr. auto.
+Qed.
+
 Theorem or_ror:
   forall x y z,
   ltu y iwordsize = true ->

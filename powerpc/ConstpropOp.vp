@@ -10,8 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Static analysis and strength reduction for operators 
-  and conditions.  This is the machine-dependent part of [Constprop]. *)
+(** Strength reduction for operators and conditions.
+    This is the machine-dependent part of [Constprop]. *)
 
 Require Import Coqlib.
 Require Import AST.
@@ -19,138 +19,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Op.
 Require Import Registers.
-
-(** * Static analysis *)
-
-(** To each pseudo-register at each program point, the static analysis 
-  associates a compile-time approximation taken from the following set. *)
-
-Inductive approx : Type :=
-  | Novalue: approx      (** No value possible, code is unreachable. *)
-  | Unknown: approx      (** All values are possible,
-                             no compile-time information is available. *)
-  | I: int -> approx     (** A known integer value. *)
-  | F: float -> approx   (** A known floating-point value. *)
-  | L: int64 -> approx   (** A know 64-bit integer value. *)
-  | G: ident -> int -> approx
-                         (** The value is the address of the given global
-                             symbol plus the given integer offset. *)
-  | S: int -> approx.    (** The value is the stack pointer plus the offset. *)
-
-(** We now define the abstract interpretations of conditions and operators
-  over this set of approximations.  For instance, the abstract interpretation
-  of the operator [Oaddf] applied to two expressions [a] and [b] is
-  [F(Float.add f g)] if [a] and [b] have static approximations [Vfloat f]
-  and [Vfloat g] respectively, and [Unknown] otherwise.
-
-  The static approximations are defined by large pattern-matchings over
-  the approximations of the results.  We write these matchings in the
-  indirect style described in file [SelectOp] to avoid excessive
-  duplication of cases in proofs. *)
-
-Nondetfunction eval_static_condition (cond: condition) (vl: list approx) :=
-  match cond, vl with
-  | Ccomp c, I n1 :: I n2 :: nil => Some(Int.cmp c n1 n2)
-  | Ccompu c, I n1 :: I n2 :: nil => Some(Int.cmpu c n1 n2)
-  | Ccompimm c n, I n1 :: nil => Some(Int.cmp c n1 n)
-  | Ccompuimm c n, I n1 :: nil => Some(Int.cmpu c n1 n)
-  | Ccompf c, F n1 :: F n2 :: nil => Some(Float.cmp c n1 n2)
-  | Cnotcompf c, F n1 :: F n2 :: nil => Some(negb(Float.cmp c n1 n2))
-  | Cmaskzero n, I n1 :: nil => Some(Int.eq (Int.and n1 n) Int.zero)
-  | Cmasknotzero n, I n1::nil => Some(negb(Int.eq (Int.and n1 n) Int.zero))
-  | _, _ => None
-  end.
-
-Definition eval_static_condition_val (cond: condition) (vl: list approx) :=
-  match eval_static_condition cond vl with
-  | None => Unknown
-  | Some b => I(if b then Int.one else Int.zero)
-  end.
-
-Definition eval_static_intoffloat (f: float) :=
-  match Float.intoffloat f with Some x => I x | None => Unknown end.
-
-Parameter propagate_float_constants: unit -> bool.
-
-Nondetfunction eval_static_operation (op: operation) (vl: list approx) :=
-  match op, vl with
-  | Omove, v1::nil => v1
-  | Ointconst n, nil => I n
-  | Ofloatconst n, nil => if propagate_float_constants tt then F n else Unknown
-  | Oaddrsymbol s n, nil => G s n
-  | Oaddrstack n, nil => S n
-  | Ocast8signed, I n1 :: nil => I(Int.sign_ext 8 n1)
-  | Ocast16signed, I n1 :: nil => I(Int.sign_ext 16 n1)
-  | Oadd, I n1 :: I n2 :: nil => I(Int.add n1 n2)
-  | Oadd, G s1 n1 :: I n2 :: nil => G s1 (Int.add n1 n2)
-  | Oadd, I n1 :: G s2 n2 :: nil => G s2 (Int.add n1 n2)
-  | Oadd, S n1 :: I n2 :: nil => S (Int.add n1 n2)
-  | Oadd, I n1 :: S n2 :: nil => S (Int.add n1 n2)
-  | Oaddimm n, I n1 :: nil => I (Int.add n1 n)
-  | Oaddimm n, G s1 n1 :: nil => G s1 (Int.add n1 n)
-  | Oaddimm n, S n1 :: nil => S (Int.add n1 n)
-  | Oaddsymbol s ofs, I n :: nil => G s (Int.add ofs n)
-  | Osub, I n1 :: I n2 :: nil => I(Int.sub n1 n2)
-  | Osub, G s1 n1 :: I n2 :: nil => G s1 (Int.sub n1 n2)
-  | Osub, S n1 :: I n2 :: nil => S (Int.sub n1 n2)
-  | Osubimm n, I n1 :: nil => I (Int.sub n n1)
-  | Omul, I n1 :: I n2 :: nil => I(Int.mul n1 n2)
-  | Omulimm n, I n1 :: nil => I(Int.mul n1 n)
-  | Omulhs, I n1 :: I n2 :: nil => I(Int.mulhs n1 n2)
-  | Omulhu, I n1 :: I n2 :: nil => I(Int.mulhu n1 n2)
-  | Odiv, I n1 :: I n2 :: nil =>
-      if Int.eq n2 Int.zero then Unknown else
-      if Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone then Unknown
-      else I(Int.divs n1 n2)
-  | Odivu, I n1 :: I n2 :: nil =>
-      if Int.eq n2 Int.zero then Unknown else I(Int.divu n1 n2)
-  | Oand, I n1 :: I n2 :: nil => I(Int.and n1 n2)
-  | Oandimm n, I n1 :: nil => I(Int.and n1 n)
-  | Oor, I n1 :: I n2 :: nil => I(Int.or n1 n2)
-  | Oorimm n, I n1 :: nil => I(Int.or n1 n)
-  | Oxor, I n1 :: I n2 :: nil => I(Int.xor n1 n2)
-  | Oxorimm n, I n1 :: nil => I(Int.xor n1 n)
-  | Onand, I n1 :: I n2 :: nil => I(Int.xor (Int.and n1 n2) Int.mone)
-  | Onor, I n1 :: I n2 :: nil => I(Int.xor (Int.or n1 n2) Int.mone)
-  | Onxor, I n1 :: I n2 :: nil => I(Int.xor (Int.xor n1 n2) Int.mone)
-  | Oshl, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shl n1 n2) else Unknown
-  | Oshr, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shr n1 n2) else Unknown
-  | Oshrimm n, I n1 :: nil => if Int.ltu n Int.iwordsize then I(Int.shr n1 n) else Unknown
-  | Oshrximm n, I n1 :: nil => if Int.ltu n (Int.repr 31) then I(Int.shrx n1 n) else Unknown
-  | Oshru, I n1 :: I n2 :: nil => if Int.ltu n2 Int.iwordsize then I(Int.shru n1 n2) else Unknown
-  | Orolm amount mask, I n1 :: nil => I(Int.rolm n1 amount mask)
-  | Oroli amount mask, I n1 :: I n2 :: nil => I(Int.or (Int.and n1 (Int.not mask)) (Int.rolm n2 amount mask))
-  | Onegf, F n1 :: nil => F(Float.neg n1)
-  | Oabsf, F n1 :: nil => F(Float.abs n1)
-  | Oaddf, F n1 :: F n2 :: nil => F(Float.add n1 n2)
-  | Osubf, F n1 :: F n2 :: nil => F(Float.sub n1 n2)
-  | Omulf, F n1 :: F n2 :: nil => F(Float.mul n1 n2)
-  | Odivf, F n1 :: F n2 :: nil => F(Float.div n1 n2)
-  | Osingleoffloat, F n1 :: nil => F(Float.singleoffloat n1)
-  | Ointoffloat, F n1 :: nil => eval_static_intoffloat n1
-  | Ofloatofwords, I n1 :: I n2 :: nil => if propagate_float_constants tt then F(Float.from_words n1 n2) else Unknown
-  | Omakelong, I n1 :: I n2 :: nil => L(Int64.ofwords n1 n2)
-  | Olowlong, L n :: nil => I(Int64.loword n)
-  | Ohighlong, L n :: nil => I(Int64.hiword n)
-  | Ocmp c, vl => eval_static_condition_val c vl
-  | _, _ => Unknown
-  end.
-
-Nondetfunction eval_static_addressing (addr: addressing) (vl: list approx) :=
-  match addr, vl with
-  | Aindexed n, I n1::nil => I (Int.add n1 n)
-  | Aindexed n, G id ofs::nil => G id (Int.add ofs n)
-  | Aindexed n, S ofs::nil => S (Int.add ofs n)
-  | Aindexed2, I n1::I n2::nil => I (Int.add n1 n2)
-  | Aindexed2, G id ofs::I n2::nil => G id (Int.add ofs n2)
-  | Aindexed2, I n1::G id ofs::nil => G id (Int.add ofs n1)
-  | Aindexed2, S ofs::I n2::nil => S (Int.add ofs n2)
-  | Aindexed2, I n1::S ofs::nil => S (Int.add ofs n1)
-  | Aglobal id ofs, nil => G id ofs
-  | Abased id ofs, I n1::nil => G id (Int.add ofs n1)
-  | Ainstack ofs, nil => S ofs
-  | _, _ => Unknown
-  end.
+Require Import ValueDomain.
 
 (** * Operator strength reduction *)
 
@@ -162,7 +31,7 @@ Nondetfunction eval_static_addressing (addr: addressing) (vl: list approx) :=
 Section STRENGTH_REDUCTION.
 
 Nondetfunction cond_strength_reduction 
-              (cond: condition) (args: list reg) (vl: list approx) :=
+              (cond: condition) (args: list reg) (vl: list aval) :=
   match cond, args, vl with
   | Ccomp c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
       (Ccompimm (swap_comparison c) n1, r2 :: nil)
@@ -230,10 +99,12 @@ Definition make_divuimm (n: int) (r1 r2: reg) :=
   | None   => (Odivu, r1 :: r2 :: nil)
   end.
 
-Definition make_andimm (n: int) (r: reg) :=
-  if Int.eq n Int.zero
-  then (Ointconst Int.zero, nil)
+Definition make_andimm (n: int) (r: reg) (a: aval) :=
+  if Int.eq n Int.zero then (Ointconst Int.zero, nil)
   else if Int.eq n Int.mone then (Omove, r :: nil)
+  else if match a with Uns m => Int.eq (Int.zero_ext m (Int.not n)) Int.zero
+                     | _ => false end
+  then (Omove, r :: nil)
   else (Oandimm n, r :: nil).
 
 Definition make_orimm (n: int) (r: reg) :=
@@ -251,19 +122,33 @@ Definition make_mulfimm (n: float) (r r1 r2: reg) :=
   then (Oaddf, r :: r :: nil)
   else (Omulf, r1 :: r2 :: nil).
 
+Definition make_cast8signed (r: reg) (a: aval) :=
+  if vincl a (Sgn 8) then (Omove, r :: nil) else (Ocast8signed, r :: nil).
+Definition make_cast16signed (r: reg) (a: aval) :=
+  if vincl a (Sgn 16) then (Omove, r :: nil) else (Ocast16signed, r :: nil).
+Definition make_singleoffloat (r: reg) (a: aval) :=
+  if vincl a Fsingle && generate_float_constants tt
+  then (Omove, r :: nil)
+  else (Osingleoffloat, r :: nil).
+
 Nondetfunction op_strength_reduction 
-              (op: operation) (args: list reg) (vl: list approx) :=
+              (op: operation) (args: list reg) (vl: list aval) :=
   match op, args, vl with
+  | Ocast8signed, r1 :: nil, v1 :: nil => make_cast8signed r1 v1
+  | Ocast16signed, r1 :: nil, v1 :: nil => make_cast16signed r1 v1
   | Oadd, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_addimm n1 r2
   | Oadd, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm n2 r1
+  | Oadd, r1 :: r2 :: nil, Ptr(Gl s n1) :: v2 :: nil => (Oaddsymbol s n1, r2 :: nil)
+  | Oadd, r1 :: r2 :: nil, v1 :: Ptr(Gl s n1) :: nil => (Oaddsymbol s n1, r1 :: nil)
   | Osub, r1 :: r2 :: nil, I n1 :: v2 :: nil => (Osubimm n1, r2 :: nil)
   | Osub, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (Int.neg n2) r1
   | Omul, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_mulimm n1 r2 r1
   | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1 r2
   | Odiv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divimm n2 r1 r2
   | Odivu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divuimm n2 r1 r2
-  | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2
-  | Oand, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm n2 r1
+  | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2 v2
+  | Oand, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm n2 r1 v1
+  | Oandimm n, r1 :: nil, v1 :: nil => make_andimm n r1 v1
   | Oor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_orimm n1 r2
   | Oor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm n2 r1
   | Oxor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_xorimm n1 r2
@@ -271,6 +156,7 @@ Nondetfunction op_strength_reduction
   | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1 r2
   | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
   | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
+  | Osingleoffloat, r1 :: nil, v1 :: nil => make_singleoffloat r1 v1
   | Ocmp c, args, vl =>
       let (c', args') := cond_strength_reduction c args vl in (Ocmp c', args')
   | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
@@ -279,19 +165,19 @@ Nondetfunction op_strength_reduction
   end.
 
 Nondetfunction addr_strength_reduction
-                (addr: addressing) (args: list reg) (vl: list approx) :=
+                (addr: addressing) (args: list reg) (vl: list aval) :=
   match addr, args, vl with
-  | Aindexed2, r1 :: r2 :: nil, G symb n1 :: I n2 :: nil =>
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Gl symb n1) :: I n2 :: nil =>
       (Aglobal symb (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, I n1 :: G symb n2 :: nil =>
+  | Aindexed2, r1 :: r2 :: nil, I n1 :: Ptr(Gl symb n2) :: nil =>
       (Aglobal symb (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, S n1 :: I n2 :: nil =>
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Stk n1) :: I n2 :: nil =>
       (Ainstack (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, I n1 :: S n2 :: nil =>
+  | Aindexed2, r1 :: r2 :: nil, I n1 :: Ptr(Stk n2) :: nil =>
       (Ainstack (Int.add n1 n2), nil)
-  | Aindexed2, r1 :: r2 :: nil, G symb n1 :: v2 :: nil =>
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Gl symb n1) :: v2 :: nil =>
       (Abased symb n1, r2 :: nil)
-  | Aindexed2, r1 :: r2 :: nil, v1 :: G symb n2 :: nil =>
+  | Aindexed2, r1 :: r2 :: nil, v1 :: Ptr(Gl symb n2) :: nil =>
       (Abased symb n2, r1 :: nil)
   | Aindexed2, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
       (Aindexed n1, r2 :: nil)
@@ -299,9 +185,9 @@ Nondetfunction addr_strength_reduction
       (Aindexed n2, r1 :: nil)
   | Abased symb ofs, r1 :: nil, I n1 :: nil =>
       (Aglobal symb (Int.add ofs n1), nil)
-  | Aindexed n, r1 :: nil, G symb n1 :: nil =>
+  | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil =>
       (Aglobal symb (Int.add n1 n), nil)
-  | Aindexed n, r1 :: nil, S n1 :: nil =>
+  | Aindexed n, r1 :: nil, Ptr(Stk n1) :: nil =>
       (Ainstack (Int.add n1 n), nil)
   | _, _, _ =>
       (addr, args)

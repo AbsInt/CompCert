@@ -71,24 +71,12 @@ Definition notint (e: expr) := Eop (Oxorimm Int.mone) (e ::: Enil).
 
 (** ** Integer addition and pointer addition *)
 
-Definition offset_addressing (a: addressing) (ofs: int) : addressing :=
-  match a with
-  | Aindexed n => Aindexed (Int.add n ofs)
-  | Aindexed2 n => Aindexed2 (Int.add n ofs)
-  | Ascaled sc n => Ascaled sc (Int.add n ofs)
-  | Aindexed2scaled sc n => Aindexed2scaled sc (Int.add n ofs)
-  | Aglobal id n => Aglobal id (Int.add n ofs)
-  | Abased id n => Abased id (Int.add n ofs)
-  | Abasedscaled sc id n => Abasedscaled sc id (Int.add n ofs)
-  | Ainstack n => Ainstack (Int.add n ofs)
-  end.
-
 Nondetfunction addimm (n: int) (e: expr) :=
   if Int.eq n Int.zero then e else
   match e with
-  | Eop (Ointconst m) Enil       => Eop (Ointconst(Int.add n m)) Enil
-  | Eop (Olea addr) args         => Eop (Olea (offset_addressing addr n)) args
-  | _                            => Eop (Olea (Aindexed n)) (e ::: Enil)
+  | Eop (Ointconst m) Enil => Eop (Ointconst(Int.add n m)) Enil
+  | Eop (Olea addr) args   => Eop (Olea (offset_addressing_total addr n)) args
+  | _                      => Eop (Olea (Aindexed n)) (e ::: Enil)
   end.
 
 Nondetfunction add (e1: expr) (e2: expr) :=

@@ -19,8 +19,8 @@ Require Import Values.
 Require Import Memory.
 Require Import Op.
 Require Import RTL.
+Require Import CSEdomain.
 Require Import CombineOp.
-Require Import CSE.
 
 Section COMBINE.
 
@@ -29,8 +29,20 @@ Variable sp: val.
 Variable m: mem.
 Variable get: valnum -> option rhs.
 Variable valu: valnum -> val.
-Hypothesis get_sound: forall v rhs, get v = Some rhs -> equation_holds valu ge sp m v rhs.
+Hypothesis get_sound: forall v rhs, get v = Some rhs -> rhs_eval_to valu ge sp m rhs (valu v).
 
+Lemma get_op_sound:
+  forall v op vl, get v = Some (Op op vl) -> eval_operation ge sp op (map valu vl) m = Some (valu v).
+Proof.
+  intros. exploit get_sound; eauto. intros REV; inv REV; auto. 
+Qed.
+
+Ltac UseGetSound :=
+  match goal with
+  | [ H: get _ = Some _ |- _ ] =>
+      let x := fresh "EQ" in (generalize (get_op_sound _ _ _ H); intros x; simpl in x; FuncInv)
+  end.
+  
 Lemma combine_compimm_ne_0_sound:
   forall x cond args,
   combine_compimm_ne_0 get x = Some(cond, args) ->
@@ -39,12 +51,11 @@ Lemma combine_compimm_ne_0_sound:
 Proof.
   intros until args. functional induction (combine_compimm_ne_0 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
   (* of and *)
-  exploit get_sound; eauto. unfold equation_holds; simpl. 
-  destruct args; try discriminate. destruct args; try discriminate. simpl. 
-  intros EQ; inv EQ. destruct (valu v); simpl; auto. 
+  UseGetSound. rewrite <- H. 
+  destruct v; simpl; auto. 
 Qed.
 
 Lemma combine_compimm_eq_0_sound:
@@ -55,13 +66,11 @@ Lemma combine_compimm_eq_0_sound:
 Proof.
   intros until args. functional induction (combine_compimm_eq_0 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H.
   rewrite eval_negate_condition. 
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
   (* of and *)
-  exploit get_sound; eauto. unfold equation_holds; simpl. 
-  destruct args; try discriminate. destruct args; try discriminate. simpl. 
-  intros EQ; inv EQ. destruct (valu v); simpl; auto. 
+  UseGetSound. rewrite <- H. destruct v; auto. 
 Qed.
 
 Lemma combine_compimm_eq_1_sound:
@@ -72,7 +81,7 @@ Lemma combine_compimm_eq_1_sound:
 Proof.
   intros until args. functional induction (combine_compimm_eq_1 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
 
@@ -84,7 +93,7 @@ Lemma combine_compimm_ne_1_sound:
 Proof.
   intros until args. functional induction (combine_compimm_ne_1 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   rewrite eval_negate_condition.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
@@ -119,22 +128,8 @@ Theorem combine_addr_sound:
   eval_addressing ge sp addr' (map valu args') = eval_addressing ge sp addr (map valu args).
 Proof.
   intros. functional inversion H; subst.
-  exploit get_sound; eauto. unfold equation_holds; simpl; intro EQ.
-  assert (forall vl,
-         eval_addressing ge sp (SelectOp.offset_addressing a n) vl =
-         option_map (fun v => Val.add v (Vint n)) (eval_addressing ge sp a vl)).
-    intros. destruct a; simpl; repeat (destruct vl; auto); simpl. 
-    rewrite Val.add_assoc. auto. 
-    repeat rewrite Val.add_assoc. auto.
-    rewrite Val.add_assoc. auto.
-    repeat rewrite Val.add_assoc. auto.
-    unfold symbol_address. destruct (Globalenvs.Genv.find_symbol ge i); auto. 
-    unfold symbol_address. destruct (Globalenvs.Genv.find_symbol ge i); auto.
-      repeat rewrite <- (Val.add_commut v). rewrite Val.add_assoc. auto. 
-    unfold symbol_address. destruct (Globalenvs.Genv.find_symbol ge i0); auto.
-      repeat rewrite <- (Val.add_commut (Val.mul v (Vint i))). rewrite Val.add_assoc. auto.
-    rewrite Val.add_assoc; auto.
-  rewrite H0. rewrite EQ. auto. 
+  (* indexed - lea *)
+  UseGetSound. simpl. eapply eval_offset_addressing_total; eauto. 
 Qed.
 
 Theorem combine_op_sound:
@@ -143,8 +138,14 @@ Theorem combine_op_sound:
   eval_operation ge sp op' (map valu args') m = eval_operation ge sp op (map valu args) m.
 Proof.
   intros. functional inversion H; subst.
-(* lea *)
+(* lea-lea *)
   simpl. eapply combine_addr_sound; eauto. 
+(* andimm - andimm *)
+  UseGetSound; simpl. rewrite <- H0. rewrite Val.and_assoc. auto.
+(* orimm - orimm *)
+  UseGetSound; simpl. rewrite <- H0. rewrite Val.or_assoc. auto.
+(* xorimm - xorimm *)
+  UseGetSound; simpl. rewrite <- H0. rewrite Val.xor_assoc. auto.
 (* cmp *)
   simpl. decEq; decEq. eapply combine_cond_sound; eauto.
 Qed.

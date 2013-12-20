@@ -1866,6 +1866,34 @@ Proof.
   eapply load_alloc_same; eauto.
 Qed.
 
+Theorem loadbytes_alloc_unchanged:
+  forall b' ofs n,
+  valid_block m1 b' ->
+  loadbytes m2 b' ofs n = loadbytes m1 b' ofs n.
+Proof.
+  intros. unfold loadbytes. 
+  destruct (range_perm_dec m1 b' ofs (ofs + n) Cur Readable).
+  rewrite pred_dec_true.
+  injection ALLOC; intros A B. rewrite <- B; simpl. 
+  rewrite PMap.gso. auto. rewrite A. eauto with mem.
+  red; intros. eapply perm_alloc_1; eauto. 
+  rewrite pred_dec_false; auto.
+  red; intros; elim n0. red; intros. eapply perm_alloc_4; eauto. eauto with mem. 
+Qed.
+
+Theorem loadbytes_alloc_same:
+  forall n ofs bytes byte,
+  loadbytes m2 b ofs n = Some bytes ->
+  In byte bytes -> byte = Undef.
+Proof.
+  unfold loadbytes; intros. destruct (range_perm_dec m2 b ofs (ofs + n) Cur Readable); inv H.
+  revert H0.
+  injection ALLOC; intros A B. rewrite <- A; rewrite <- B; simpl. rewrite PMap.gss. 
+  generalize (nat_of_Z n) ofs. induction n0; simpl; intros. 
+  contradiction. 
+  rewrite ZMap.gi in H0. destruct H0; eauto.
+Qed.
+
 End ALLOC.
 
 Local Hint Resolve valid_block_alloc fresh_block_alloc valid_new_block: mem.
@@ -2033,6 +2061,40 @@ Proof.
   red; intro; elim n. eapply valid_access_free_1; eauto. 
 Qed.
 
+Theorem load_free_2:
+  forall chunk b ofs v,
+  load chunk m2 b ofs = Some v -> load chunk m1 b ofs = Some v.
+Proof.
+  intros. unfold load. rewrite pred_dec_true. 
+  rewrite (load_result _ _ _ _ _ H). rewrite free_result; auto. 
+  apply valid_access_free_inv_1. eauto with mem.
+Qed.
+
+Theorem loadbytes_free:
+  forall b ofs n,
+  b <> bf \/ lo >= hi \/ ofs + n <= lo \/ hi <= ofs ->
+  loadbytes m2 b ofs n = loadbytes m1 b ofs n.
+Proof.
+  intros. unfold loadbytes. 
+  destruct (range_perm_dec m2 b ofs (ofs + n) Cur Readable).
+  rewrite pred_dec_true. 
+  rewrite free_result; auto. 
+  red; intros. eapply perm_free_3; eauto. 
+  rewrite pred_dec_false; auto. 
+  red; intros. elim n0; red; intros. 
+  eapply perm_free_1; eauto. destruct H; auto. right; omega. 
+Qed.
+
+Theorem loadbytes_free_2:
+  forall b ofs n bytes,
+  loadbytes m2 b ofs n = Some bytes -> loadbytes m1 b ofs n = Some bytes.
+Proof.
+  intros. unfold loadbytes in *.
+  destruct (range_perm_dec m2 b ofs (ofs + n) Cur Readable); inv H.
+  rewrite pred_dec_true. rewrite free_result; auto.
+  red; intros. apply perm_free_3; auto. 
+Qed.
+
 End FREE.
 
 Local Hint Resolve valid_block_free_1 valid_block_free_2
@@ -2162,6 +2224,27 @@ Proof.
   eapply valid_access_drop_1; eauto. 
   rewrite pred_dec_false. auto.
   red; intros; elim n. eapply valid_access_drop_2; eauto.
+Qed.
+
+Theorem loadbytes_drop:
+  forall b' ofs n, 
+  b' <> b \/ ofs + n <= lo \/ hi <= ofs \/ perm_order p Readable ->
+  loadbytes m' b' ofs n = loadbytes m b' ofs n.
+Proof.
+  intros.
+  unfold loadbytes.
+  destruct (range_perm_dec m b' ofs (ofs + n) Cur Readable).
+  rewrite pred_dec_true.
+  unfold drop_perm in DROP. destruct (range_perm_dec m b lo hi Cur Freeable); inv DROP. simpl. auto.
+  red; intros.
+  destruct (eq_block b' b). subst b'.
+  destruct (zlt ofs0 lo). eapply perm_drop_3; eauto. 
+  destruct (zle hi ofs0). eapply perm_drop_3; eauto.
+  apply perm_implies with p. eapply perm_drop_1; eauto. omega. intuition.
+  eapply perm_drop_3; eauto. 
+  rewrite pred_dec_false; eauto. 
+  red; intros; elim n0; red; intros. 
+  eapply perm_drop_4; eauto. 
 Qed.
 
 End DROP.
@@ -4061,6 +4144,26 @@ Proof.
   intros. destruct H. apply unchanged_on_perm0; auto. 
 Qed.
 
+Lemma loadbytes_unchanged_on_1:
+  forall m m' b ofs n,
+  unchanged_on m m' ->
+  valid_block m b ->
+  (forall i, ofs <= i < ofs + n -> P b i) ->
+  loadbytes m' b ofs n = loadbytes m b ofs n.
+Proof.
+  intros. 
+  destruct (zle n 0).
++ erewrite ! loadbytes_empty by assumption. auto.
++ unfold loadbytes. destruct H.
+  destruct (range_perm_dec m b ofs (ofs + n) Cur Readable).
+  rewrite pred_dec_true. f_equal.
+  apply getN_exten. intros. rewrite nat_of_Z_eq in H by omega.
+  apply unchanged_on_contents0; auto.
+  red; intros. apply unchanged_on_perm0; auto. 
+  rewrite pred_dec_false. auto.
+  red; intros; elim n0; red; intros. apply <- unchanged_on_perm0; auto.
+Qed.
+
 Lemma loadbytes_unchanged_on:
   forall m m' b ofs n bytes,
   unchanged_on m m' ->
@@ -4071,15 +4174,24 @@ Proof.
   intros. 
   destruct (zle n 0).
 + erewrite loadbytes_empty in * by assumption. auto.
-+ unfold loadbytes in *. destruct H.
-  destruct (range_perm_dec m b ofs (ofs + n) Cur Readable); inv H1.
-  assert (valid_block m b). 
-  { eapply perm_valid_block. apply (r ofs). omega. } 
-  assert (range_perm m' b ofs (ofs + n) Cur Readable).
-  { red; intros. apply unchanged_on_perm0; auto. } 
-  rewrite pred_dec_true by assumption. f_equal.
-  apply getN_exten. intros. rewrite nat_of_Z_eq in H2 by omega.
-  apply unchanged_on_contents0; auto.
++ rewrite <- H1. apply loadbytes_unchanged_on_1; auto. 
+  exploit loadbytes_range_perm; eauto. instantiate (1 := ofs). omega. 
+  intros. eauto with mem.
+Qed.
+
+Lemma load_unchanged_on_1:
+  forall m m' chunk b ofs,
+  unchanged_on m m' ->
+  valid_block m b ->
+  (forall i, ofs <= i < ofs + size_chunk chunk -> P b i) ->
+  load chunk m' b ofs = load chunk m b ofs.
+Proof.
+  intros. unfold load. destruct (valid_access_dec m chunk b ofs Readable).
+  destruct v. rewrite pred_dec_true. f_equal. f_equal. apply getN_exten. intros. 
+  rewrite <- size_chunk_conv in H4. eapply unchanged_on_contents; eauto.
+  split; auto. red; intros. eapply perm_unchanged_on; eauto.
+  rewrite pred_dec_false. auto. 
+  red; intros [A B]; elim n; split; auto. red; intros; eapply perm_unchanged_on_2; eauto. 
 Qed.
 
 Lemma load_unchanged_on:
@@ -4089,10 +4201,7 @@ Lemma load_unchanged_on:
   load chunk m b ofs = Some v ->
   load chunk m' b ofs = Some v.
 Proof.
-  intros. 
-  exploit load_valid_access; eauto. intros [A B].
-  exploit load_loadbytes; eauto. intros [bytes [C D]].
-  subst v. apply loadbytes_load; auto. eapply loadbytes_unchanged_on; eauto.
+  intros. rewrite <- H1. eapply load_unchanged_on_1; eauto with mem.
 Qed.
 
 Lemma store_unchanged_on:
