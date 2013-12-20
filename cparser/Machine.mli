@@ -42,7 +42,8 @@ type t = {
   alignof_void: int option;
   alignof_fun: int option;
   bigendian: bool;
-  bitfields_msb_first: bool
+  bitfields_msb_first: bool;
+  struct_return_as_int: int
 }
 
 val ilp32ll64 : t

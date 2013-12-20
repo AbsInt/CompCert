@@ -42,7 +42,8 @@ type t = {
   alignof_void: int option;
   alignof_fun: int option;
   bigendian: bool;
-  bitfields_msb_first: bool
+  bitfields_msb_first: bool;
+  struct_return_as_int: int
 }
 
 let ilp32ll64 = {
@@ -72,7 +73,8 @@ let ilp32ll64 = {
   alignof_void = None;
   alignof_fun = None;
   bigendian = false;
-  bitfields_msb_first = false
+  bitfields_msb_first = false;
+  struct_return_as_int = 0
 }
 
 let i32lpll64 = {
@@ -102,7 +104,8 @@ let i32lpll64 = {
   alignof_void = None;
   alignof_fun = None;
   bigendian = false;
-  bitfields_msb_first = false
+  bitfields_msb_first = false;
+  struct_return_as_int = 0
 }
 
 let il32pll64 = {
@@ -132,20 +135,26 @@ let il32pll64 = {
   alignof_void = None;
   alignof_fun = None;
   bigendian = false;
-  bitfields_msb_first = false
+  bitfields_msb_first = false;
+  struct_return_as_int = 0
 }
 
 (* Canned configurations for some ABIs *)
 
 let x86_32 =
-  { ilp32ll64 with char_signed = true; name = "x86_32" }
+  { ilp32ll64 with name = "x86_32"; char_signed = true }
 let x86_64 =
-  { i32lpll64 with char_signed = true; name = "x86_64" }
+  { i32lpll64 with name = "x86_64"; char_signed = true }
 let win64 =
-  { il32pll64 with char_signed = true; name = "x86_64" }
+  { il32pll64 with name = "x86_64"; char_signed = true }
 let ppc_32_bigendian =
-  { ilp32ll64 with bigendian = true; bitfields_msb_first = true; name = "powerpc" }
-let arm_littleendian = { ilp32ll64 with name = "arm" }
+  { ilp32ll64 with name = "powerpc";
+                   bigendian = true;
+                   bitfields_msb_first = true;
+                   struct_return_as_int = 8 }
+let arm_littleendian =
+  { ilp32ll64 with name = "arm";
+                   struct_return_as_int = 4 }
 
 (* Add GCC extensions re: sizeof and alignof *)
 
