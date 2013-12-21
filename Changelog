@@ -12,6 +12,7 @@
 - New optimization: removal of partially dead code.
 - A "default" case can now appear anywhere in a "switch", not just as
   the last case.
+- Revised parsing of command-line options, more GCC-like.
 
 Release 2.1, 2013-10-28
 =======================

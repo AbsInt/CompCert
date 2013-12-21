@@ -31,6 +31,9 @@ let command cmd =
 let quote_options opts =
   String.concat " " (List.rev_map Filename.quote opts)
 
+let quote_arguments args =
+  String.concat " " (List.map Filename.quote args)
+
 let safe_remove file =
   try Sys.remove file with Sys_error _ -> ()
 
@@ -51,7 +54,7 @@ let print_error oc msg =
 
 let output_filename ?(final = false) source_file source_suffix output_suffix =
   match !option_o with
-  | Some file when final -> option_o := None; file
+  | Some file when final -> file
   | _ -> 
     Filename.basename (Filename.chop_suffix source_file source_suffix)
     ^ output_suffix
@@ -60,7 +63,7 @@ let output_filename ?(final = false) source_file source_suffix output_suffix =
 
 let output_filename_default default_file =
   match !option_o with
-  | Some file -> option_o := None; file
+  | Some file -> file
   | None -> default_file
 
 (* From C to preprocessed C *)
@@ -223,7 +226,7 @@ let linker exe_name files =
     sprintf "%s -o %s %s %s"
       Configuration.linker
       (Filename.quote exe_name)
-      (quote_options files)
+      (quote_arguments files)
       (if Configuration.has_runtime_lib
        then sprintf "-L%s -lcompcert" !stdlib_path
        else "") in
@@ -299,6 +302,22 @@ let process_S_file sourcename =
     safe_remove preproname;
     objname
   end
+
+(* Record actions to be performed after parsing the command line *)
+
+let actions : ((string -> string) * string) list ref = ref []
+
+let push_action fn arg =
+  actions := (fn, arg) :: !actions
+
+let push_linker_arg arg =
+  push_action (fun s -> s) arg
+
+let perform_actions () =
+  let rec perform = function
+  | [] -> []
+  | (fn, arg) :: rem -> let res = fn arg in res :: perform rem
+  in perform (List.rev !actions)
 
 (* Command-line parsing *)
 
@@ -414,7 +433,6 @@ Tracing options:
   -dinlining     Save RTL after inlining optimization in <file>.inlining.rtl
   -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
   -dcse          Save RTL after CSE optimization in <file>.cse.rtl
-  -ddeadcode     Save RTL after dead code removal in <file>.deadcode.rtl
   -dalloc        Save LTL after register allocation in <file>.alloc.ltl
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
@@ -436,6 +454,8 @@ let language_support_options = [
   option_finline_asm
 ]
 
+let num_source_files = ref 0
+
 let cmdline_actions =
   let f_opt name ref =
     ["-f" ^ name ^ "$", Set ref; "-fno-" ^ name ^ "$", Unset ref] in
@@ -444,14 +464,13 @@ let cmdline_actions =
   "-D$", String(fun s -> prepro_options := s :: "-D" :: !prepro_options);
   "-U$", String(fun s -> prepro_options := s :: "-U" :: !prepro_options);
   "-[IDU].", Self(fun s -> prepro_options := s :: !prepro_options);
-  "-[lL].", Self(fun s -> linker_options := s :: !linker_options);
+  "-[lL].", Self(fun s -> push_linker_arg s);
   "-o$", String(fun s -> option_o := Some s);
   "-E$", Set option_E;
   "-S$", Set option_S;
   "-c$", Set option_c;
   "-v$", Set option_v;
-  "-g$", Self (fun s ->
-      option_g := true; linker_options := s :: !linker_options);
+  "-g$", Self (fun s -> option_g := true; push_linker_arg s);
   "-stdlib$", String(fun s -> stdlib_path := s);
   "-dparse$", Set option_dparse;
   "-dc$", Set option_dcmedium;
@@ -474,25 +493,25 @@ let cmdline_actions =
   "-random$", Self (fun _ -> Interp.mode := Interp.Random);
   "-all$", Self (fun _ -> Interp.mode := Interp.All);
   ".*\\.c$", Self (fun s ->
-      let objfile = process_c_file s in
-      linker_options := objfile :: !linker_options);
+      push_action process_c_file s;
+      incr num_source_files);
   ".*\\.cm$", Self (fun s ->
-      let objfile = process_cminor_file s in
-      linker_options := objfile :: !linker_options);
+      push_action process_cminor_file s;
+      incr num_source_files);
   ".*\\.s$", Self (fun s ->
-      let objfile = process_s_file s in
-      linker_options := objfile :: !linker_options);
+      push_action process_s_file s;
+      incr num_source_files);
   ".*\\.S$", Self (fun s ->
-      let objfile = process_S_file s in
-      linker_options := objfile :: !linker_options);
+      push_action process_S_file s;
+      incr num_source_files);
   ".*\\.[oa]$", Self (fun s ->
-      linker_options := s :: !linker_options);
+      push_linker_arg s);
   "-Wp,", Self (fun s ->
       prepro_options := List.rev_append (explode_comma_option s) !prepro_options);
   "-Wa,", Self (fun s ->
       assembler_options := s :: !assembler_options);
   "-Wl,", Self (fun s ->
-      linker_options := s :: !linker_options);
+      push_linker_arg s);
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
   "-fsmall-const$", Integer(fun n -> option_small_const := n);
   "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);
@@ -527,8 +546,12 @@ let _ =
   Builtins.set C2C.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string;
-  if !linker_options <> [] 
-  && not (!option_c || !option_S || !option_E || !option_interp)
-  then begin
-    linker (output_filename_default "a.out") !linker_options
+  let nolink = !option_c || !option_S || !option_E || !option_interp in
+  if nolink && !option_o <> None && !num_source_files >= 2 then begin
+    eprintf "Ambiguous '-o' option (multiple source files)\n";
+    exit 2
+  end;
+  let linker_args = perform_actions () in
+  if (not nolink) && linker_args <> [] then begin
+    linker (output_filename_default "a.out") linker_args
   end
