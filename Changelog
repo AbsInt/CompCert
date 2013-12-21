@@ -6,7 +6,12 @@
 - Fixed syntax error in __attribute__((__packed__)).
 - Emit clean compile-time error for 'switch' over a value of 64-bit
   integer type (currently not supported).
-
+- More precise static analysis of RTL: value analysis (including alias
+  analysis) and neededness analysis.
+- Improved optimizations: constant propagation and CSE.
+- New optimization: removal of partially dead code.
+- A "default" case can now appear anywhere in a "switch", not just as
+  the last case.
 
 Release 2.1, 2013-10-28
 =======================

@@ -129,13 +129,12 @@ Fixpoint simpl_stmt (cenv: compilenv) (s: statement) : res statement :=
 
 with simpl_lblstmt (cenv: compilenv) (ls: labeled_statements) : res labeled_statements :=
   match ls with
-  | LSdefault s =>
-      do s' <- simpl_stmt cenv s;
-      OK (LSdefault s')
-  | LScase n s ls1 =>
+  | LSnil =>
+      OK LSnil
+  | LScons c s ls1 =>
       do s' <- simpl_stmt cenv s;
       do ls1' <- simpl_lblstmt cenv ls1;
-      OK (LScase n s' ls1')
+      OK (LScons c s' ls1')
   end.
 
 (** Function parameters that are not lifted to temporaries must be
@@ -198,8 +197,8 @@ Fixpoint addr_taken_stmt (s: statement) : VSet.t :=
 
 with addr_taken_lblstmt (ls: labeled_statements) : VSet.t :=
   match ls with
-  | LSdefault s => addr_taken_stmt s
-  | LScase n s ls' => VSet.union (addr_taken_stmt s) (addr_taken_lblstmt ls')
+  | LSnil => VSet.empty
+  | LScons c s ls' => VSet.union (addr_taken_stmt s) (addr_taken_lblstmt ls')
   end.
 
 (** The compilation environment for a function is the set of local variables

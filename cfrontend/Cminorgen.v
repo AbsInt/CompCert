@@ -140,16 +140,20 @@ Fixpoint shift_exit (e: exit_env) (n: nat) {struct e} : nat :=
   | true :: e', S m => S (shift_exit e' m)
   end.
 
-Fixpoint switch_table (ls: lbl_stmt) (k: nat) {struct ls} : list (int * nat) :=
+Fixpoint switch_table (ls: lbl_stmt) (k: nat) {struct ls} : list (int * nat) * nat :=
   match ls with
-  | LSdefault _ => nil
-  | LScase ni _ rem => (ni, k) :: switch_table rem (S k)
+  | LSnil =>
+      (nil, k)
+  | LScons None _ rem =>
+      let (tbl, dfl) := switch_table rem (S k) in (tbl, k)
+  | LScons (Some ni) _ rem =>
+      let (tbl, dfl) := switch_table rem (S k) in ((ni, k) :: tbl, dfl)
   end.
 
 Fixpoint switch_env (ls: lbl_stmt) (e: exit_env) {struct ls}: exit_env :=
   match ls with
-  | LSdefault _ => e
-  | LScase _ _ ls' => false :: switch_env ls' e
+  | LSnil => e
+  | LScons _ _ ls' => false :: switch_env ls' e
   end.
 
 (** Translation of statements.  The nonobvious part is
@@ -192,10 +196,9 @@ Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
   | Csharpminor.Sexit n =>
       OK (Sexit (shift_exit xenv n))
   | Csharpminor.Sswitch e ls =>
-      let cases := switch_table ls O in
-      let default := length cases in
+      let (tbl, dfl) := switch_table ls O in
       do te <- transl_expr cenv e;
-      transl_lblstmt cenv (switch_env ls xenv) ls (Sswitch te cases default)
+      transl_lblstmt cenv (switch_env ls xenv) ls (Sswitch te tbl dfl)
   | Csharpminor.Sreturn None =>
       OK (Sreturn None)
   | Csharpminor.Sreturn (Some e) =>
@@ -210,10 +213,9 @@ Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
 with transl_lblstmt (cenv: compilenv) (xenv: exit_env) (ls: Csharpminor.lbl_stmt) (body: stmt)
                     {struct ls}: res stmt :=
   match ls with
-  | Csharpminor.LSdefault s =>
-      do ts <- transl_stmt cenv xenv s;
-      OK (Sseq (Sblock body) ts)
-  | Csharpminor.LScase _ s ls' =>
+  | Csharpminor.LSnil =>
+      OK (Sseq (Sblock body) Sskip)
+  | Csharpminor.LScons _ s ls' =>
       do ts <- transl_stmt cenv xenv s;
       transl_lblstmt cenv (List.tail xenv) ls' (Sseq (Sblock body) ts)
   end.

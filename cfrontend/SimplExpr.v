@@ -488,13 +488,12 @@ Fixpoint transl_stmt (s: Csyntax.statement) : mon statement :=
 
 with transl_lblstmt (ls: Csyntax.labeled_statements) : mon labeled_statements :=
   match ls with
-  | Csyntax.LSdefault s =>
-      do ts <- transl_stmt s;
-      ret (LSdefault ts)
-  | Csyntax.LScase n s ls1 =>
+  | Csyntax.LSnil =>
+      ret LSnil
+  | Csyntax.LScons c s ls1 =>
       do ts <- transl_stmt s;
       do tls1 <- transl_lblstmt ls1;
-      ret (LScase n ts tls1)
+      ret (LScons c ts tls1)
   end.
 
 (** Translation of a function *)

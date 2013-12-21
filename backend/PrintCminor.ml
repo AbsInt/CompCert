@@ -257,7 +257,7 @@ let rec print_stmt p s =
       fprintf p "@[<v 2>switch (%a) {" print_expr e;
       List.iter
         (fun (n, x) ->
-           fprintf p "@ case %ld: exit %d;\n" 
+           fprintf p "@ case %ld: exit %d;" 
                      (camlint_of_coqint n) (Nat.to_int x))
         cases;
       fprintf p "@ default: exit %d;\n" (Nat.to_int dfl);

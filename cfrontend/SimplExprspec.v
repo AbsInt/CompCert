@@ -479,13 +479,12 @@ Inductive tr_stmt: Csyntax.statement -> statement -> Prop :=
       tr_stmt (Csyntax.Sgoto lbl) (Sgoto lbl)
 
 with tr_lblstmts: Csyntax.labeled_statements -> labeled_statements -> Prop :=
-  | tr_default: forall s ts,
-      tr_stmt s ts ->
-      tr_lblstmts (Csyntax.LSdefault s) (LSdefault ts)
-  | tr_case: forall n s ls ts tls,
+  | tr_ls_nil:
+      tr_lblstmts Csyntax.LSnil LSnil
+  | tr_ls_cons: forall c s ls ts tls,
       tr_stmt s ts ->
       tr_lblstmts ls tls ->
-      tr_lblstmts (Csyntax.LScase n s ls) (LScase n ts tls).
+      tr_lblstmts (Csyntax.LScons c s ls) (LScons c ts tls).
 
 (** * Correctness proof with respect to the specification. *)
 

@@ -534,13 +534,12 @@ with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
                      (sl: Clight.labeled_statements)
                      {struct sl}: res lbl_stmt :=
   match sl with
-  | Clight.LSdefault s =>
-      do ts <- transl_statement tyret nbrk ncnt s;
-      OK (LSdefault ts)
-  | Clight.LScase n s sl' =>
+  | Clight.LSnil =>
+      OK LSnil
+  | Clight.LScons n s sl' =>
       do ts <- transl_statement tyret nbrk ncnt s;
       do tsl' <- transl_lbl_stmt tyret nbrk ncnt sl';
-      OK (LScase n ts tsl')
+      OK (LScons n ts tsl')
   end.
 
 (*** Translation of functions *)

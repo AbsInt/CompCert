@@ -148,19 +148,32 @@ Definition blocks_of_env (e: env) : list (block * Z * Z) :=
 (** Selection of the appropriate case of a [switch], given the value [n]
   of the selector expression. *)
 
-Fixpoint select_switch (n: int) (sl: labeled_statements)
-                       {struct sl}: labeled_statements :=
+Fixpoint select_switch_default (sl: labeled_statements): labeled_statements :=
   match sl with
-  | LSdefault _ => sl
-  | LScase c s sl' => if Int.eq c n then sl else select_switch n sl'
+  | LSnil => sl
+  | LScons None s sl' => sl
+  | LScons (Some i) s sl' => select_switch_default sl'
+  end.
+
+Fixpoint select_switch_case (n: int) (sl: labeled_statements): option labeled_statements :=
+  match sl with
+  | LSnil => None
+  | LScons None s sl' => select_switch_case n sl'
+  | LScons (Some c) s sl' => if Int.eq c n then Some sl else select_switch_case n sl'
+  end.
+
+Definition select_switch (n: int) (sl: labeled_statements): labeled_statements :=
+  match select_switch_case n sl with
+  | Some sl' => sl'
+  | None => select_switch_default sl
   end.
 
 (** Turn a labeled statement into a sequence *)
 
 Fixpoint seq_of_labeled_statement (sl: labeled_statements) : statement :=
   match sl with
-  | LSdefault s => s
-  | LScase c s sl' => Ssequence s (seq_of_labeled_statement sl')
+  | LSnil => Sskip
+  | LScons _ s sl' => Ssequence s (seq_of_labeled_statement sl')
   end.
 
 (** Extract the values from a list of function arguments *)
@@ -559,8 +572,8 @@ Fixpoint find_label (lbl: label) (s: statement) (k: cont)
 with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont) 
                     {struct sl}: option (statement * cont) :=
   match sl with
-  | LSdefault s => find_label lbl s k
-  | LScase _ s sl' =>
+  | LSnil => None
+  | LScons _ s sl' =>
       match find_label lbl s (Kseq (seq_of_labeled_statement sl') k) with
       | Some sk => Some sk
       | None => find_label_ls lbl sl' k

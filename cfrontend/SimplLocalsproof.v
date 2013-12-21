@@ -1747,11 +1747,37 @@ Remark simpl_select_switch:
   simpl_lblstmt cenv ls = OK tls ->
   simpl_lblstmt cenv (select_switch n ls) = OK (select_switch n tls).
 Proof.
-  induction ls; simpl; intros.
-  monadInv H. rewrite EQ; auto.
-  monadInv H. simpl. destruct (Int.eq i n). 
-  simpl. rewrite EQ; rewrite EQ1. auto. 
-  eauto.
+  intros cenv n.
+  assert (DFL:
+    forall ls tls, 
+    simpl_lblstmt cenv ls = OK tls ->
+    simpl_lblstmt cenv (select_switch_default ls) = OK (select_switch_default tls)).
+  {
+    induction ls; simpl; intros; monadInv H. 
+    auto.
+    simpl. destruct o. eauto. simpl; rewrite EQ, EQ1. auto.  
+  }
+  assert (CASE:
+    forall ls tls,
+    simpl_lblstmt cenv ls = OK tls ->
+    match select_switch_case n ls with
+    | None => select_switch_case n tls = None
+    | Some ls' =>
+        exists tls', select_switch_case n tls = Some tls' /\ simpl_lblstmt cenv ls' = OK tls'
+    end).
+  {
+    induction ls; simpl; intros; monadInv H; simpl.
+    auto.
+    destruct o. 
+    destruct (Int.eq i n).
+    econstructor; split; eauto. simpl; rewrite EQ, EQ1; auto.
+    apply IHls. auto. 
+    apply IHls. auto.
+  }
+  intros; unfold select_switch. 
+  specialize (CASE _ _ H). destruct (select_switch_case n ls) as [ls'|]. 
+  destruct CASE as [tls' [P Q]]. rewrite P, Q. auto.
+  rewrite CASE. apply DFL; auto.
 Qed.
 
 Remark simpl_seq_of_labeled_statement:
@@ -1759,9 +1785,9 @@ Remark simpl_seq_of_labeled_statement:
   simpl_lblstmt cenv ls = OK tls ->
   simpl_stmt cenv (seq_of_labeled_statement ls) = OK (seq_of_labeled_statement tls).
 Proof.
-  induction ls; simpl; intros.
-  monadInv H. auto. 
-  monadInv H. rewrite EQ; simpl. erewrite IHls; eauto. simpl. auto.
+  induction ls; simpl; intros; monadInv H; simpl.
+  auto.
+  rewrite EQ; simpl. erewrite IHls; eauto. simpl. auto.
 Qed.
 
 Remark compat_cenv_select_switch:
@@ -1769,7 +1795,27 @@ Remark compat_cenv_select_switch:
   compat_cenv (addr_taken_lblstmt ls) cenv ->
   compat_cenv (addr_taken_lblstmt (select_switch n ls)) cenv.
 Proof.
-  induction ls; simpl; intros. auto. destruct (Int.eq i n); simpl; eauto with compat.
+  intros cenv n.
+  assert (DFL: forall ls,
+    compat_cenv (addr_taken_lblstmt ls) cenv ->
+    compat_cenv (addr_taken_lblstmt (select_switch_default ls)) cenv).
+  {
+    induction ls; simpl; intros. 
+    eauto with compat.
+    destruct o; simpl; eauto with compat.
+  }
+  assert (CASE: forall ls ls',
+    compat_cenv (addr_taken_lblstmt ls) cenv ->
+    select_switch_case n ls = Some ls' ->
+    compat_cenv (addr_taken_lblstmt ls') cenv).
+  {
+    induction ls; simpl; intros.
+    discriminate.
+    destruct o. destruct (Int.eq i n). inv H0. auto. eauto with compat. 
+    eauto with compat.
+  }
+  intros. specialize (CASE ls). unfold select_switch. 
+  destruct (select_switch_case n ls) as [ls'|]; eauto. 
 Qed.
 
 Remark addr_taken_seq_of_labeled_statement:
@@ -1868,9 +1914,9 @@ Proof.
   monadInv TS; auto.
 
   induction ls; simpl; intros.
-  (* default *)
-  monadInv H. apply simpl_find_label; auto. 
-  (* case *)
+  (* nil *)
+  monadInv H. auto.
+  (* cons *)
   monadInv H.
   exploit (simpl_find_label s (Kseq (seq_of_labeled_statement ls) k)).
     eauto. constructor. eapply simpl_seq_of_labeled_statement; eauto. eauto.

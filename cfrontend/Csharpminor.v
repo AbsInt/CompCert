@@ -72,8 +72,8 @@ Inductive stmt : Type :=
   | Sgoto: label -> stmt
 
 with lbl_stmt : Type :=
-  | LSdefault: stmt -> lbl_stmt
-  | LScase: int -> stmt -> lbl_stmt -> lbl_stmt.
+  | LSnil: lbl_stmt
+  | LScons: option int -> stmt -> lbl_stmt -> lbl_stmt.
 
 (** Functions are composed of a return type, a list of parameter names,
   a list of local variables with their sizes, a list of temporary variables,
@@ -183,16 +183,30 @@ Definition is_call_cont (k: cont) : Prop :=
 
 (** Resolve [switch] statements. *)
 
-Fixpoint select_switch (n: int) (sl: lbl_stmt) {struct sl} : lbl_stmt :=
+Fixpoint select_switch_default (sl: lbl_stmt): lbl_stmt :=
   match sl with
-  | LSdefault _ => sl
-  | LScase c s sl' => if Int.eq c n then sl else select_switch n sl'
+  | LSnil => sl
+  | LScons None s sl' => sl
+  | LScons (Some i) s sl' => select_switch_default sl'
+  end.
+
+Fixpoint select_switch_case (n: int) (sl: lbl_stmt): option lbl_stmt :=
+  match sl with
+  | LSnil => None
+  | LScons None s sl' => select_switch_case n sl'
+  | LScons (Some c) s sl' => if Int.eq c n then Some sl else select_switch_case n sl'
+  end.
+
+Definition select_switch (n: int) (sl: lbl_stmt): lbl_stmt :=
+  match select_switch_case n sl with
+  | Some sl' => sl'
+  | None => select_switch_default sl
   end.
 
 Fixpoint seq_of_lbl_stmt (sl: lbl_stmt) : stmt :=
   match sl with
-  | LSdefault s => s
-  | LScase c s sl' => Sseq s (seq_of_lbl_stmt sl')
+  | LSnil => Sskip
+  | LScons c s sl' => Sseq s (seq_of_lbl_stmt sl')
   end.
 
 (** Find the statement and manufacture the continuation 
@@ -225,8 +239,8 @@ Fixpoint find_label (lbl: label) (s: stmt) (k: cont)
 with find_label_ls (lbl: label) (sl: lbl_stmt) (k: cont) 
                    {struct sl}: option (stmt * cont) :=
   match sl with
-  | LSdefault s => find_label lbl s k
-  | LScase _ s sl' =>
+  | LSnil => None
+  | LScons _ s sl' =>
       match find_label lbl s (Kseq (seq_of_lbl_stmt sl') k) with
       | Some sk => Some sk
       | None => find_label_ls lbl sl' k

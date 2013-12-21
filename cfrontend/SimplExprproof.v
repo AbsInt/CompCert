@@ -1003,9 +1003,27 @@ Lemma tr_select_switch:
   tr_lblstmts ls tls ->
   tr_lblstmts (Csem.select_switch n ls) (select_switch n tls).
 Proof.
-  induction 1; simpl.
-  constructor; auto.
-  destruct (Int.eq n0 n). constructor; auto. auto.
+  assert (DFL: forall ls tls,
+      tr_lblstmts ls tls ->
+      tr_lblstmts (Csem.select_switch_default ls) (select_switch_default tls)).
+  { induction 1; simpl. constructor. destruct c; auto. constructor; auto. }
+  assert (CASE: forall n ls tls,
+      tr_lblstmts ls tls ->
+      match Csem.select_switch_case n ls with
+      | None =>
+          select_switch_case n tls = None
+      | Some ls' =>
+          exists tls', select_switch_case n tls = Some tls' /\ tr_lblstmts ls' tls'
+      end).
+  { induction 1; simpl; intros. 
+    auto.
+    destruct c; auto. destruct (Int.eq i n); auto. 
+    econstructor; split; eauto. constructor; auto. }
+  intros. unfold Csem.select_switch, select_switch.
+  specialize (CASE n ls tls H). 
+  destruct (Csem.select_switch_case n ls) as [ls'|]. 
+  destruct CASE as [tls' [P Q]]. rewrite P. auto. 
+  rewrite CASE. apply DFL; auto.
 Qed.
 
 Lemma tr_seq_of_labeled_statement:
@@ -1013,7 +1031,7 @@ Lemma tr_seq_of_labeled_statement:
   tr_lblstmts ls tls ->
   tr_stmt (Csem.seq_of_labeled_statement ls) (seq_of_labeled_statement tls).
 Proof.
-  induction 1; simpl. auto. constructor; auto.
+  induction 1; simpl; constructor; auto.
 Qed.
 
 (** Commutation between translation and the "find label" operation. *)
@@ -1085,14 +1103,6 @@ Lemma nolabel_final:
 Proof.
   destruct dst; simpl; intros. auto. auto. apply nolabel_do_set. 
 Qed. 
-
-(*
-Lemma nolabel_dest_cast:
-  forall ty dst, nolabel_dest dst -> nolabel_dest (cast_destination ty dst).
-Proof.
-  unfold nolabel_dest; intros; destruct dst; auto.
-Qed.
-*)
 
 Ltac NoLabelTac :=
   match goal with
@@ -1255,8 +1265,8 @@ Proof.
   auto.
 
   induction s; intros; inversion TR; subst; clear TR; simpl.
-(* default *)
-  apply tr_find_label; auto. 
+(* nil *)
+  auto.
 (* case *)
   exploit (tr_find_label s (Csem.Kseq (Csem.seq_of_labeled_statement s0) k)); eauto.
   econstructor; eauto. apply tr_seq_of_labeled_statement; eauto.

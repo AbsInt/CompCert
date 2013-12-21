@@ -100,10 +100,37 @@ Lemma transl_lbl_stmt_1:
   transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
   transl_lbl_stmt tyret nbrk ncnt (Clight.select_switch n sl) = OK (select_switch n tsl).
 Proof.
-  induction sl; intros.
-  monadInv H. simpl. rewrite EQ. auto.
-  generalize H; intro TR. monadInv TR. simpl. 
-  destruct (Int.eq i n). auto. auto. 
+  intros until n.
+  assert (DFL: forall sl tsl,
+    transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
+    transl_lbl_stmt tyret nbrk ncnt (Clight.select_switch_default sl) = OK (select_switch_default tsl)).
+  {
+    induction sl; simpl; intros. 
+    inv H; auto.
+    monadInv H. simpl. destruct o; eauto. simpl; rewrite EQ; simpl; rewrite EQ1; auto.
+  }
+  assert (CASE: forall sl tsl,
+    transl_lbl_stmt tyret nbrk ncnt sl = OK tsl ->
+    match Clight.select_switch_case n sl with
+    | None =>
+        select_switch_case n tsl = None
+    | Some sl' =>
+        exists tsl',
+           select_switch_case n tsl = Some tsl'
+        /\ transl_lbl_stmt tyret nbrk ncnt sl' = OK tsl'
+    end).
+  {
+    induction sl; simpl; intros.
+    inv H; auto. 
+    monadInv H; simpl. destruct o. destruct (Int.eq i n). 
+    econstructor; split; eauto. simpl; rewrite EQ; simpl; rewrite EQ1; auto.
+    apply IHsl; auto.
+    apply IHsl; auto.
+  }
+  intros. specialize (CASE _ _ H). unfold Clight.select_switch, select_switch. 
+  destruct (Clight.select_switch_case n sl) as [sl'|]. 
+  destruct CASE as [tsl' [P Q]]. rewrite P, Q. auto.
+  rewrite CASE. auto. 
 Qed.
 
 Lemma transl_lbl_stmt_2:
@@ -112,7 +139,7 @@ Lemma transl_lbl_stmt_2:
   transl_statement tyret nbrk ncnt (seq_of_labeled_statement sl) = OK (seq_of_lbl_stmt tsl).
 Proof.
   induction sl; intros.
-  monadInv H. simpl. auto.
+  monadInv H. auto. 
   monadInv H. simpl. rewrite EQ; simpl. rewrite (IHsl _ EQ1). simpl. auto.
 Qed.
 
@@ -1140,9 +1167,9 @@ Proof.
   auto.
 
   intro ls; case ls; intros; monadInv TR; simpl.
-(* default *)
-  eapply transl_find_label; eauto.
-(* case *)
+(* nil *)
+  auto.
+(* cons *)
   exploit (transl_find_label s nbrk ncnt (Clight.Kseq (seq_of_labeled_statement l) k)); eauto. 
   econstructor; eauto. apply transl_lbl_stmt_2; eauto.
   destruct (Clight.find_label lbl s (Clight.Kseq (seq_of_labeled_statement l) k)) as [[s' k'] | ].

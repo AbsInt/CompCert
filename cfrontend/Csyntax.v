@@ -165,9 +165,9 @@ Inductive statement : Type :=
   | Sgoto : label -> statement
 
 with labeled_statements : Type :=            (**r cases of a [switch] *)
-  | LSdefault: statement -> labeled_statements
-  | LScase: int -> statement -> labeled_statements -> labeled_statements.
-
+  | LSnil: labeled_statements
+  | LScons: option int -> statement -> labeled_statements -> labeled_statements.
+                      (**r [None] is [default], [Some x] is [case x] *)
 (** ** Functions *)
 
 (** A function definition is composed of its return type ([fn_return]),

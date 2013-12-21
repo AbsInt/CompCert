@@ -179,19 +179,21 @@ let rec print_stmt p s =
 
 and print_cases p cases =
   match cases with
-  | LSdefault Sskip ->
+  | LSnil ->
       ()
-  | LSdefault s ->
-      fprintf p "@[<v 2>default:@ %a@]" print_stmt s
-  | LScase(lbl, Sskip, rem) ->
-      fprintf p "case %ld:@ %a"
-              (camlint_of_coqint lbl)
+  | LScons(lbl, Sskip, rem) ->
+      fprintf p "%a:@ %a"
+              print_case_label lbl
               print_cases rem
-  | LScase(lbl, s, rem) ->
-      fprintf p "@[<v 2>case %ld:@ %a@]@ %a"
-              (camlint_of_coqint lbl)
+  | LScons(lbl, s, rem) ->
+      fprintf p "@[<v 2>%a:@ %a@]@ %a"
+              print_case_label lbl
               print_stmt s
               print_cases rem
+
+and print_case_label p = function
+  | None -> fprintf p "default"
+  | Some lbl -> fprintf p "case %ld" (camlint_of_coqint lbl)
 
 and print_stmt_for p s =
   match s with
@@ -295,8 +297,8 @@ let rec collect_stmt = function
   | Sgoto lbl -> ()
 
 and collect_cases = function
-  | LSdefault s -> collect_stmt s
-  | LScase(lbl, s, rem) -> collect_stmt s; collect_cases rem
+  | LSnil -> ()
+  | LScons(lbl, s, rem) -> collect_stmt s; collect_cases rem
 
 let collect_function f =
   collect_type f.fn_return;

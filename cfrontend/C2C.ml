@@ -742,22 +742,20 @@ let rec convertStmt ploc env s =
 
 and convertSwitch ploc env = function
   | [] ->
-      LSdefault Sskip
-  | [Default, s] ->
-      LSdefault (convertStmt ploc env s)
-  | (Default, s) :: _ ->
+      LSnil
+  | (lbl, s) :: rem ->
       updateLoc s.sloc;
-      unsupported "'default' case must occur last";
-      LSdefault Sskip
-  | (Case e, s) :: rem ->
-      updateLoc s.sloc;
-      let v =
-        match Ceval.integer_expr env e with
-        | None -> unsupported "'case' label is not a compile-time integer"; 0L
-        | Some v -> v in
-      LScase(convertInt v,
-             convertStmt ploc env s,
-             convertSwitch s.sloc env rem)
+      let lbl' =
+        match lbl with
+        | Default ->
+            None
+        | Case e ->    
+            match Ceval.integer_expr env e with
+            | None -> unsupported "'case' label is not a compile-time integer";
+                      None
+            | Some v -> Some (convertInt v)
+      in
+      LScons(lbl', convertStmt ploc env s, convertSwitch s.sloc env rem)
 
 (** Function definitions *)
 
