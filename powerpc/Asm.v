@@ -145,11 +145,11 @@ Inductive instruction : Type :=
   | Pandi_: ireg -> ireg -> constant -> instruction           (**r and immediate and set conditions *)
   | Pandis_: ireg -> ireg -> constant -> instruction          (**r and immediate high and set conditions *)
   | Pb: label -> instruction                                  (**r unconditional branch *)
-  | Pbctr: instruction                                        (**r branch to contents of register CTR *)
-  | Pbctrl: instruction                                       (**r branch to contents of CTR and link *)
+  | Pbctr: signature -> instruction                           (**r branch to contents of register CTR *)
+  | Pbctrl: signature -> instruction                          (**r branch to contents of CTR and link *)
   | Pbf: crbit -> label -> instruction                        (**r branch if false *)
-  | Pbl: ident -> instruction                                 (**r branch and link *)
-  | Pbs: ident -> instruction                                 (**r branch to symbol *)
+  | Pbl: ident -> signature -> instruction                    (**r branch and link *)
+  | Pbs: ident -> signature -> instruction                    (**r branch to symbol *)
   | Pblr: instruction                                         (**r branch to contents of register LR *)
   | Pbt: crbit -> label -> instruction                        (**r branch if true *)
   | Pbtbl: ireg -> list label -> instruction                  (**r N-way branch through a jump table *)
@@ -300,8 +300,7 @@ lbl:    .long   table[0], table[1], ...
 *)
 
 Definition code := list instruction.
-Definition function := code.
-Definition fn_code (f: function) : code := f.
+Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
 Definition fundef := AST.fundef function.
 Definition program := AST.program fundef unit.
 
@@ -470,8 +469,8 @@ Inductive outcome: Type :=
 Definition nextinstr (rs: regset) :=
   rs#PC <- (Val.add rs#PC Vone).
 
-Definition goto_label (c: code) (lbl: label) (rs: regset) (m: mem) :=
-  match label_pos lbl 0 c with
+Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
+  match label_pos lbl 0 (fn_code f) with
   | None => Stuck
   | Some pos =>
       match rs#PC with
@@ -551,7 +550,7 @@ Definition compare_float (rs: regset) (v1 v2: val) :=
     must survive the execution of the pseudo-instruction.
 *)
 
-Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome :=
+Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : outcome :=
   match i with
   | Padd rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.add rs#r1 rs#r2))) m
@@ -587,25 +586,25 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       let v := Val.and rs#r1 (const_high cst) in
       Next (nextinstr (compare_sint (rs#rd <- v) v Vzero)) m
   | Pb lbl =>
-      goto_label c lbl rs m
-  | Pbctr =>
+      goto_label f lbl rs m
+  | Pbctr sg =>
       Next (rs#PC <- (rs#CTR)) m
-  | Pbctrl =>
+  | Pbctrl sg =>
       Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (rs#CTR)) m
   | Pbf bit lbl =>
       match rs#(reg_of_crbit bit) with
-      | Vint n => if Int.eq n Int.zero then goto_label c lbl rs m else Next (nextinstr rs) m
+      | Vint n => if Int.eq n Int.zero then goto_label f lbl rs m else Next (nextinstr rs) m
       | _ => Stuck
       end
-  | Pbl ident =>
+  | Pbl ident sg =>
       Next (rs#LR <- (Val.add rs#PC Vone) #PC <- (symbol_offset ident Int.zero)) m
-  | Pbs ident =>
+  | Pbs ident sg =>
       Next (rs#PC <- (symbol_offset ident Int.zero)) m
   | Pblr =>
       Next (rs#PC <- (rs#LR)) m
   | Pbt bit lbl =>
       match rs#(reg_of_crbit bit) with
-      | Vint n => if Int.eq n Int.zero then Next (nextinstr rs) m else goto_label c lbl rs m
+      | Vint n => if Int.eq n Int.zero then Next (nextinstr rs) m else goto_label f lbl rs m
       | _ => Stuck
       end
   | Pbtbl r tbl =>
@@ -613,7 +612,7 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | Vint n => 
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
-          | Some lbl => goto_label c lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
+          | Some lbl => goto_label f lbl (rs #GPR12 <- Vundef #CTR <- Vundef) m
           end
       | _ => Stuck
       end
@@ -857,27 +856,27 @@ Inductive state: Type :=
 
 Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
-      forall b ofs c i rs m rs' m',
+      forall b ofs f i rs m rs' m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some i ->
-      exec_instr c i rs m = Next rs' m' ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some i ->
+      exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs c ef args res rs m t vl rs' m',
+      forall b ofs f ef args res rs m t vl rs' m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
       external_call' ef ge (map rs args) m t vl m' ->
       rs' = nextinstr
               (set_regs res vl
                 (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
   | exec_step_annot:
-      forall b ofs c ef args rs m vargs t v m',
+      forall b ofs f ef args rs m vargs t v m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some (Pannot ef args) ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pannot ef args) ->
       annot_arguments rs m args vargs ->
       external_call' ef ge vargs m t v m' ->
       step (State rs m) t

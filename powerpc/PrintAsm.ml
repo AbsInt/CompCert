@@ -668,9 +668,9 @@ let print_instruction oc tbl pc fallthrough = function
       fprintf oc "	andis.	%a, %a, %a\n" ireg r1 ireg r2 constant c
   | Pb lbl ->
       fprintf oc "	b	%a\n" label (transl_label lbl)
-  | Pbctr ->
+  | Pbctr sg ->
       fprintf oc "	bctr\n"
-  | Pbctrl ->
+  | Pbctrl sg ->
       fprintf oc "	bctrl\n"
   | Pbf(bit, lbl) ->
       if !Clflags.option_faligncondbranchs > 0 then
@@ -683,9 +683,9 @@ let print_instruction oc tbl pc fallthrough = function
         fprintf oc "	b	%a\n" label (transl_label lbl);
         fprintf oc "%a:\n" label next
       end
-  | Pbl s ->
+  | Pbl(s, sg) ->
       fprintf oc "	bl	%a\n" symbol s
-  | Pbs s ->
+  | Pbs(s, sg) ->
       fprintf oc "	b	%a\n" symbol s
   | Pblr ->
       fprintf oc "	blr\n"
@@ -930,7 +930,7 @@ let print_instruction oc tbl pc fallthrough = function
 
 let instr_fall_through = function
   | Pb _ -> false
-  | Pbctr -> false
+  | Pbctr _ -> false
   | Pbs _ -> false
   | Pblr -> false
   | _ -> true
@@ -1008,7 +1008,7 @@ let print_jumptable oc (lbl, tbl) =
     (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
     tbl
 
-let print_function oc name code =
+let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
@@ -1025,7 +1025,8 @@ let print_function oc name code =
   fprintf oc "%a:\n" symbol name;
   print_location oc (C2C.atom_location name);
   cfi_startproc oc;
-  print_instructions oc (label_positions PTree.empty 0 code) 0 true code;
+  print_instructions oc (label_positions PTree.empty 0 fn.fn_code) 
+                        0 true fn.fn_code;
   cfi_endproc oc;
   fprintf oc "	.type	%a, @function\n" symbol name;
   fprintf oc "	.size	%a, . - %a\n" symbol name symbol name;

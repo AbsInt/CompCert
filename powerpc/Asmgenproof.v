@@ -79,9 +79,9 @@ Qed.
 
 Lemma transf_function_no_overflow:
   forall f tf,
-  transf_function f = OK tf -> list_length_z tf <= Int.max_unsigned.
+  transf_function f = OK tf -> list_length_z tf.(fn_code) <= Int.max_unsigned.
 Proof.
-  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z x)); inv EQ0. 
+  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z x.(fn_code))); inv EQ0. 
   omega.
 Qed.
 
@@ -316,11 +316,11 @@ Lemma transl_find_label:
   forall lbl f tf,
   transf_function f = OK tf ->
   match Mach.find_label lbl f.(Mach.fn_code) with
-  | None => find_label lbl tf = None
-  | Some c => exists tc, find_label lbl tf = Some tc /\ transl_code f c false = OK tc
+  | None => find_label lbl tf.(fn_code) = None
+  | Some c => exists tc, find_label lbl tf.(fn_code) = Some tc /\ transl_code f c false = OK tc
   end.
 Proof.
-  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z x)); inv EQ0.
+  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z x.(fn_code))); inv EQ0.
   monadInv EQ. rewrite transl_code'_transl_code in EQ0.
   simpl. eapply transl_code_label; eauto. 
 Qed.
@@ -364,7 +364,7 @@ Proof.
 - intros. exploit transl_instr_label; eauto. 
   destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
 - intros. monadInv H0. 
-  destruct (zlt Int.max_unsigned (list_length_z x)); inv EQ0. monadInv EQ.
+  destruct (zlt Int.max_unsigned (list_length_z x.(fn_code))); inv EQ0. monadInv EQ.
   rewrite transl_code'_transl_code in EQ0.
   exists x; exists false; split; auto. unfold fn_code. repeat constructor.
 - exact transf_function_no_overflow.
@@ -607,7 +607,7 @@ Opaque loadind.
 - (* Mcall *)
   assert (f0 = f) by congruence.  subst f0.
   inv AT. 
-  assert (NOOV: list_length_z tf <= Int.max_unsigned).
+  assert (NOOV: list_length_z tf.(fn_code) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   destruct ros as [rf|fid]; simpl in H; monadInv H5.
 + (* Indirect call *)
@@ -652,7 +652,7 @@ Opaque loadind.
 - (* Mtailcall *)
   assert (f0 = f) by congruence.  subst f0.
   inversion AT; subst.
-  assert (NOOV: list_length_z tf <= Int.max_unsigned).
+  assert (NOOV: list_length_z tf.(fn_code) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.  exploit Mem.loadv_extends. eauto. eexact H1. auto. simpl. intros [parent' [A B]].
   exploit Mem.loadv_extends. eauto. eexact H2. auto. simpl. intros [ra' [C D]].
   exploit lessdef_parent_sp; eauto. intros. subst parent'. clear B.
@@ -672,9 +672,9 @@ Opaque loadind.
   set (rs6 := rs5#PC <- (rs5 CTR)).
   assert (exec_straight tge tf
             (Pmtctr x0 :: Plwz GPR0 (Cint (fn_retaddr_ofs f)) GPR1 :: Pmtlr GPR0
-              :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pbctr :: x)
+              :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pbctr sig :: x)
             rs0 m'0
-            (Pbctr :: x) rs5 m2').
+            (Pbctr sig :: x) rs5 m2').
   apply exec_straight_step with rs2 m'0. 
   simpl. rewrite H9. auto. auto.
   apply exec_straight_step with rs3 m'0.
@@ -713,9 +713,9 @@ Hint Resolve agree_nextinstr agree_set_other: asmgen.
   set (rs5 := rs4#PC <- (Vptr f' Int.zero)).
   assert (exec_straight tge tf
             (Plwz GPR0 (Cint (fn_retaddr_ofs f)) GPR1 :: Pmtlr GPR0
-             :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pbs fid :: x)
+             :: Pfreeframe (fn_stacksize f) (fn_link_ofs f) :: Pbs fid sig :: x)
             rs0 m'0
-            (Pbs fid :: x) rs4 m2').
+            (Pbs fid sig :: x) rs4 m2').
   apply exec_straight_step with rs2 m'0. 
   simpl. unfold load1. rewrite gpr_or_zero_not_zero. unfold const_low.
   rewrite <- (sp_val _ _ _ AG). simpl. rewrite C. auto. congruence. auto.
@@ -851,7 +851,7 @@ Local Transparent destroyed_by_jumptable.
 - (* Mreturn *)
   assert (f0 = f) by congruence. subst f0.
   inversion AT; subst.
-  assert (NOOV: list_length_z tf <= Int.max_unsigned).
+  assert (NOOV: list_length_z tf.(fn_code) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   rewrite (sp_val _ _ _ AG) in *. unfold load_stack in *.
   exploit Mem.loadv_extends. eauto. eexact H0. auto. simpl. intros [parent' [A B]]. 
@@ -900,7 +900,7 @@ Local Transparent destroyed_by_jumptable.
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
   generalize EQ; intros EQ'. monadInv EQ'. 
-  destruct (zlt Int.max_unsigned (list_length_z x0)); inversion EQ1. clear EQ1.
+  destruct (zlt Int.max_unsigned (list_length_z x0.(fn_code))); inversion EQ1. clear EQ1.
   unfold store_stack in *. 
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl. 
   intros [m1' [C D]].
@@ -916,9 +916,9 @@ Local Transparent destroyed_by_jumptable.
   set (rs4 := nextinstr rs3).
   assert (EXEC_PROLOGUE:
             exec_straight tge x
-              x rs0 m'
+              x.(fn_code) rs0 m'
               x1 rs4 m3').
-  rewrite <- H5 at 2. 
+  rewrite <- H5 at 2. simpl. 
   apply exec_straight_three with rs2 m2' rs3 m2'.
   unfold exec_instr. rewrite C. fold sp.
   rewrite <- (sp_val _ _ _ AG). rewrite F. auto. 
@@ -928,11 +928,11 @@ Local Transparent destroyed_by_jumptable.
   rewrite Int.add_zero_l. simpl in P. rewrite Int.add_zero_l in P. rewrite ATLR. rewrite P. auto. congruence.
   auto. auto. auto.
   left; exists (State rs4 m3'); split.
-  eapply exec_straight_steps_1; eauto. unfold fn_code; omega. constructor. 
+  eapply exec_straight_steps_1; eauto. omega. constructor. 
   econstructor; eauto. 
   change (rs4 PC) with (Val.add (Val.add (Val.add (rs0 PC) Vone) Vone) Vone). 
   rewrite ATPC. simpl. constructor; eauto.
-  subst x. unfold fn_code. eapply code_tail_next_int. omega. 
+  subst x; simpl in g. unfold fn_code. eapply code_tail_next_int. omega. 
   eapply code_tail_next_int. omega. 
   eapply code_tail_next_int. omega. 
   constructor.

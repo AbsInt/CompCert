@@ -35,10 +35,10 @@ let referenced_instr = function
   | Pmovzb_rm (_, a) | Pmovsb_rm (_, a)
   | Pmovzw_rm (_, a) | Pmovsw_rm (_, a)
   | Pcvtss2sd_fm (_, a) | Pcvtsd2ss_mf (a, _) | Plea (_, a) -> referenced_addr a
-  | Pjmp_s s -> [s]
-  | Pcall_s s -> [s]
+  | Pjmp_s(s, _) -> [s]
+  | Pcall_s(s, _) -> [s]
   | Pbuiltin(ef, args, res) -> referenced_builtin ef
   | _ -> []
 
-let code_of_function f = f
+let code_of_function f = f.fn_code
 

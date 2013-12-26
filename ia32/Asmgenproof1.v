@@ -97,7 +97,7 @@ Ltac Simplifs := repeat Simplif.
 Section CONSTRUCTORS.
 
 Variable ge: genv.
-Variable fn: code.
+Variable fn: function.
 
 (** Smart constructor for moves. *)
 

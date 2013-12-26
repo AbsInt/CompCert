@@ -31,8 +31,8 @@ let referenced_builtin ef =
   | _ -> []
 
 let referenced_instr = function
-  | Pbl s -> [s]
-  | Pbs s -> [s]
+  | Pbl(s, _) -> [s]
+  | Pbs(s, _) -> [s]
   | Paddi(_, _, c)
   | Paddic(_, _, c)
   | Paddis(_, _, c)
@@ -60,4 +60,4 @@ let referenced_instr = function
   | Pbuiltin(ef, _, _) -> referenced_builtin ef
   | _ -> []
 
-let code_of_function f = f
+let code_of_function f = f.fn_code

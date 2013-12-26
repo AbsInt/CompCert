@@ -681,9 +681,9 @@ let print_instruction oc = function
   (** Branches and calls *)
   | Pjmp_l(l) ->
       fprintf oc "	jmp	%a\n" label (transl_label l)
-  | Pjmp_s(f) ->
+  | Pjmp_s(f, sg) ->
       fprintf oc "	jmp	%a\n" symbol f
-  | Pjmp_r(r) ->
+  | Pjmp_r(r, sg) ->
       fprintf oc "	jmp	*%a\n" ireg r
   | Pjcc(c, l) ->
       let l = transl_label l in
@@ -698,9 +698,9 @@ let print_instruction oc = function
       let l = new_label() in
       fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r;
       jumptables := (l, tbl) :: !jumptables
-  | Pcall_s(f) ->
+  | Pcall_s(f, sg) ->
       fprintf oc "	call	%a\n" symbol f
-  | Pcall_r(r) ->
+  | Pcall_r(r, sg) ->
       fprintf oc "	call	*%a\n" ireg r
   | Pret ->
       fprintf oc "	ret\n"
@@ -758,7 +758,7 @@ let print_jumptable oc (lbl, tbl) =
     (fun l -> fprintf oc "	.long	%a\n" label (transl_label l))
     tbl
 
-let print_function oc name code =
+let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
@@ -775,7 +775,7 @@ let print_function oc name code =
   fprintf oc "%a:\n" symbol name;
   print_location oc (C2C.atom_location name);
   cfi_startproc oc;
-  List.iter (print_instruction oc) code;
+  List.iter (print_instruction oc) fn.fn_code;
   cfi_endproc oc;
   if target = ELF then begin
     fprintf oc "	.type	%a, @function\n" symbol name;

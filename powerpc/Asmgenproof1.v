@@ -183,7 +183,7 @@ Ltac Simpl := repeat Simplif.
 Section CONSTRUCTORS.
 
 Variable ge: genv.
-Variable fn: code.
+Variable fn: function.
 
 (** Properties of comparisons. *)
 

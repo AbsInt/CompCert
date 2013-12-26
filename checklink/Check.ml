@@ -38,7 +38,7 @@ let exhaustivity = ref true
 let list_missing = ref false
 
 (** CompCert Asm *)
-type ccode = Asm.instruction list
+type ccode = Asm.coq_function
 
 let print_debug s =
   if !debug then print_endline (string_of_log_entry true (DEBUG(s)))
@@ -1021,7 +1021,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pbctr ->
+      | Pbctr sg ->
           begin match ecode with
           | BCCTRx(bo, bi, lk) :: es ->
               OK(fw)
@@ -1031,7 +1031,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pbctrl ->
+      | Pbctrl sg ->
           begin match ecode with
           | BCCTRx(bo, bi, lk) :: es ->
               OK(fw)
@@ -1069,7 +1069,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= compare_code cs es (Int32.add 8l pc)
           | _ -> error
           end
-      | Pbl(ident) ->
+      | Pbl(ident, sg) ->
           begin match ecode with
           | Bx(li, aa, lk) :: es ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
@@ -1090,7 +1090,7 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
               >>= recur_simpl
           | _ -> error
           end
-      | Pbs(ident) ->
+      | Pbs(ident, sg) ->
           begin match ecode with
           | Bx(li, aa, lk) :: es ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
@@ -2637,7 +2637,7 @@ let rec worklist_process (wl: worklist) sfw: s_framework =
                 label_list = [];
               }
             )
-            >>> compare_code ccode ecode pc
+            >>> compare_code ccode.fn_code ecode pc
             >>^ mark_covered_fun_sym_ndx ndx
       ) in
       begin match candidates with

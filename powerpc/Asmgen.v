@@ -623,21 +623,21 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mstore chunk addr args src =>
       transl_store chunk addr args src k
   | Mcall sig (inl r) =>
-      do r1 <- ireg_of r; OK (Pmtctr r1 :: Pbctrl :: k)
+      do r1 <- ireg_of r; OK (Pmtctr r1 :: Pbctrl sig :: k)
   | Mcall sig (inr symb) =>
-      OK (Pbl symb :: k)
+      OK (Pbl symb sig :: k)
   | Mtailcall sig (inl r) =>
       do r1 <- ireg_of r;
       OK (Pmtctr r1 ::
           Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
           Pmtlr GPR0 ::
           Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
-          Pbctr :: k)
+          Pbctr sig :: k)
   | Mtailcall sig (inr symb) =>
       OK (Plwz GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 ::
           Pmtlr GPR0 ::
           Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: 
-          Pbs symb :: k)
+          Pbs symb sig :: k)
   | Mbuiltin ef args res =>
       OK (Pbuiltin ef (map preg_of args) (map preg_of res) :: k)
   | Mannot ef args =>
@@ -703,15 +703,16 @@ Definition transl_code' (f: Mach.function) (il: list Mach.instruction) (it1p: bo
 
 Definition transl_function (f: Mach.function) :=
   do c <- transl_code' f f.(Mach.fn_code) false;
-  OK (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
-      Pmflr GPR0 ::
-      Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 :: c).
+  OK (mkfunction f.(Mach.fn_sig)
+       (Pallocframe f.(fn_stacksize) f.(fn_link_ofs) ::
+        Pmflr GPR0 ::
+        Pstw GPR0 (Cint f.(fn_retaddr_ofs)) GPR1 :: c)).
 
-Definition transf_function (f: Mach.function) : res Asm.code :=
-  do c <- transl_function f;
-  if zlt Int.max_unsigned (list_length_z c)
+Definition transf_function (f: Mach.function) : res Asm.function :=
+  do tf <- transl_function f;
+  if zlt Int.max_unsigned (list_length_z tf.(fn_code))
   then Error (msg "code size exceeded")
-  else OK c.
+  else OK tf.
 
 Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
   transf_partial_fundef transf_function f.

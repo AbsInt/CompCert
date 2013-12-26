@@ -181,13 +181,13 @@ Inductive instruction: Type :=
   | Pxorpd_f (rd: freg)	              (**r [xor] with self = set to zero *)
   (** Branches and calls *)
   | Pjmp_l (l: label)
-  | Pjmp_s (symb: ident)
-  | Pjmp_r (r: ireg)
+  | Pjmp_s (symb: ident) (sg: signature)
+  | Pjmp_r (r: ireg) (sg: signature)
   | Pjcc (c: testcond)(l: label)
   | Pjcc2 (c1 c2: testcond)(l: label)   (**r pseudo *)
   | Pjmptbl (r: ireg) (tbl: list label) (**r pseudo *)
-  | Pcall_s (symb: ident)
-  | Pcall_r (r: ireg)
+  | Pcall_s (symb: ident) (sg: signature)
+  | Pcall_r (r: ireg) (sg: signature)
   | Pret
   (** Pseudo-instructions *)
   | Plabel(l: label)
@@ -201,9 +201,8 @@ with annot_param : Type :=
   | APstack: memory_chunk -> Z -> annot_param.
 
 Definition code := list instruction.
-Definition function := code.
-Definition fn_code (f: function) : code := f.
-Definition fundef := AST.fundef code.
+Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
+Definition fundef := AST.fundef function.
 Definition program := AST.program fundef unit.
 
 (** * Operational semantics *)
@@ -423,8 +422,8 @@ Definition nextinstr (rs: regset) :=
 Definition nextinstr_nf (rs: regset) : regset :=
   nextinstr (undef_regs (CR ZF :: CR CF :: CR PF :: CR SF :: CR OF :: nil) rs).
 
-Definition goto_label (c: code) (lbl: label) (rs: regset) (m: mem) :=
-  match label_pos lbl 0 c with
+Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
+  match label_pos lbl 0 (fn_code f) with
   | None => Stuck
   | Some pos =>
       match rs#PC with
@@ -469,7 +468,7 @@ Definition exec_store (chunk: memory_chunk) (m: mem)
     but we do not need to model this precisely.
 *)
 
-Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome :=
+Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : outcome :=
   match i with
   (** Moves *)
   | Pmov_rr rd r1 =>
@@ -627,20 +626,20 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       Next (nextinstr_nf (rs#rd <- (Vfloat Float.zero))) m
   (** Branches and calls *)
   | Pjmp_l lbl =>
-      goto_label c lbl rs m
-  | Pjmp_s id =>
+      goto_label f lbl rs m
+  | Pjmp_s id sg =>
       Next (rs#PC <- (symbol_offset id Int.zero)) m
-  | Pjmp_r r =>
+  | Pjmp_r r sg =>
       Next (rs#PC <- (rs r)) m
   | Pjcc cond lbl =>
       match eval_testcond cond rs with
-      | Some true => goto_label c lbl rs m
+      | Some true => goto_label f lbl rs m
       | Some false => Next (nextinstr rs) m
       | None => Stuck
       end
   | Pjcc2 cond1 cond2 lbl =>
       match eval_testcond cond1 rs, eval_testcond cond2 rs with
-      | Some true, Some true => goto_label c lbl rs m
+      | Some true, Some true => goto_label f lbl rs m
       | Some _, Some _ => Next (nextinstr rs) m
       | _, _ => Stuck
       end
@@ -649,13 +648,13 @@ Definition exec_instr (c: code) (i: instruction) (rs: regset) (m: mem) : outcome
       | Vint n => 
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
-          | Some lbl => goto_label c lbl rs m
+          | Some lbl => goto_label f lbl rs m
           end
       | _ => Stuck
       end
-  | Pcall_s id =>
+  | Pcall_s id sg =>
       Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (symbol_offset id Int.zero)) m
-  | Pcall_r r =>
+  | Pcall_r r sg =>
       Next (rs#RA <- (Val.add rs#PC Vone) #PC <- (rs r)) m
   | Pret =>
       Next (rs#PC <- (rs#RA)) m
@@ -760,27 +759,27 @@ Inductive state: Type :=
 
 Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
-      forall b ofs c i rs m rs' m',
+      forall b ofs f i rs m rs' m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some i ->
-      exec_instr c i rs m = Next rs' m' ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some i ->
+      exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs c ef args res rs m t vl rs' m',
+      forall b ofs f ef args res rs m t vl rs' m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some (Pbuiltin ef args res) ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
       external_call' ef ge (map rs args) m t vl m' ->
       rs' = nextinstr_nf 
              (set_regs res vl
                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
   | exec_step_annot:
-      forall b ofs c ef args rs m vargs t v m',
+      forall b ofs f ef args rs m vargs t v m',
       rs PC = Vptr b ofs ->
-      Genv.find_funct_ptr ge b = Some (Internal c) ->
-      find_instr (Int.unsigned ofs) c = Some (Pannot ef args) ->
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      find_instr (Int.unsigned ofs) f.(fn_code) = Some (Pannot ef args) ->
       annot_arguments rs m args vargs ->
       external_call' ef ge vargs m t v m' ->
       step (State rs m) t

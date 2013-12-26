@@ -77,10 +77,10 @@ Qed.
 
 Lemma transf_function_no_overflow:
   forall f tf,
-  transf_function f = OK tf -> list_length_z tf <= Int.max_unsigned.
+  transf_function f = OK tf -> list_length_z (fn_code tf) <= Int.max_unsigned.
 Proof.
-  intros. monadInv H. destruct (zlt (list_length_z x) Int.max_unsigned); monadInv EQ0.
-  rewrite list_length_z_cons. omega. 
+  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); monadInv EQ0.
+  omega. 
 Qed.
 
 Lemma exec_straight_exec:
@@ -299,12 +299,12 @@ Lemma transl_find_label:
   forall lbl f tf,
   transf_function f = OK tf ->
   match Mach.find_label lbl f.(Mach.fn_code) with
-  | None => find_label lbl tf = None
-  | Some c => exists tc, find_label lbl tf = Some tc /\ transl_code f c false = OK tc
+  | None => find_label lbl tf.(fn_code) = None
+  | Some c => exists tc, find_label lbl tf.(fn_code) = Some tc /\ transl_code f c false = OK tc
   end.
 Proof.
-  intros. monadInv H. destruct (zlt (list_length_z x) Int.max_unsigned); inv EQ0.
-  simpl. eapply transl_code_label; eauto. rewrite transl_code'_transl_code in EQ; eauto. 
+  intros. monadInv H. destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); inv EQ0.
+  monadInv EQ. simpl. eapply transl_code_label; eauto. rewrite transl_code'_transl_code in EQ0; eauto. 
 Qed.
 
 End TRANSL_LABEL.
@@ -346,8 +346,8 @@ Proof.
 - intros. exploit transl_instr_label; eauto. 
   destruct i; try (intros [A B]; apply A). intros. subst c0. repeat constructor.
 - intros. monadInv H0. 
-  destruct (zlt (list_length_z x) Int.max_unsigned); inv EQ0.
-  rewrite transl_code'_transl_code in EQ.
+  destruct (zlt Int.max_unsigned (list_length_z (fn_code x))); inv EQ0.
+  monadInv EQ. rewrite transl_code'_transl_code in EQ0.
   exists x; exists true; split; auto. unfold fn_code. repeat constructor.
 - exact transf_function_no_overflow.
 Qed.
@@ -583,7 +583,7 @@ Opaque loadind.
 - (* Mcall *)
   assert (f0 = f) by congruence.  subst f0.
   inv AT. 
-  assert (NOOV: list_length_z tf <= Int.max_unsigned).
+  assert (NOOV: list_length_z tf.(fn_code) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   destruct ros as [rf|fid]; simpl in H; monadInv H5.
 + (* Indirect call *)
@@ -623,7 +623,7 @@ Opaque loadind.
 - (* Mtailcall *)
   assert (f0 = f) by congruence.  subst f0.
   inv AT. 
-  assert (NOOV: list_length_z tf <= Int.max_unsigned).
+  assert (NOOV: list_length_z tf.(fn_code) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   rewrite (sp_val _ _ _ AG) in *. unfold load_stack in *.
   exploit Mem.loadv_extends. eauto. eexact H1. auto. simpl. intros [parent' [A B]].
@@ -820,7 +820,7 @@ Transparent destroyed_by_jumptable.
 - (* Mreturn *)
   assert (f0 = f) by congruence. subst f0.
   inv AT. 
-  assert (NOOV: list_length_z tf <= Int.max_unsigned).
+  assert (NOOV: list_length_z tf.(fn_code) <= Int.max_unsigned).
     eapply transf_function_no_overflow; eauto.
   rewrite (sp_val _ _ _ AG) in *. unfold load_stack in *.
   exploit Mem.loadv_extends. eauto. eexact H0. auto. simpl. intros [parent' [A B]]. 
@@ -844,8 +844,9 @@ Transparent destroyed_by_jumptable.
 
 - (* internal function *)
   exploit functions_translated; eauto. intros [tf [A B]]. monadInv B.
-  generalize EQ; intros EQ'. monadInv EQ'. rewrite transl_code'_transl_code in EQ0.
-  destruct (zlt (list_length_z x0) Int.max_unsigned); inversion EQ1. clear EQ1.
+  generalize EQ; intros EQ'. monadInv EQ'.
+  destruct (zlt Int.max_unsigned (list_length_z (fn_code x0))); inv EQ1.
+  monadInv EQ0. rewrite transl_code'_transl_code in EQ1.
   unfold store_stack in *. 
   exploit Mem.alloc_extends. eauto. eauto. apply Zle_refl. apply Zle_refl. 
   intros [m1' [C D]].
@@ -855,14 +856,13 @@ Transparent destroyed_by_jumptable.
   intros [m3' [P Q]].
   left; econstructor; split.
   apply plus_one. econstructor; eauto. 
-  subst x; simpl.
-  rewrite Int.unsigned_zero. simpl. eauto.
+  simpl. rewrite Int.unsigned_zero. simpl. eauto.
   simpl. rewrite C. simpl in F. rewrite (sp_val _ _ _ AG) in F. rewrite F.
   simpl in P. rewrite ATLR. rewrite P. eauto.
   econstructor; eauto.
   unfold nextinstr. rewrite Pregmap.gss. repeat rewrite Pregmap.gso; auto with asmgen. 
   rewrite ATPC. simpl. constructor; eauto.
-  subst x. unfold fn_code. eapply code_tail_next_int. rewrite list_length_z_cons. omega. 
+  unfold fn_code. eapply code_tail_next_int. simpl in g. omega. 
   constructor. 
   apply agree_nextinstr. eapply agree_change_sp; eauto.
 Transparent destroyed_at_function_entry.

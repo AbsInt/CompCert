@@ -496,16 +496,16 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
   | Mstore chunk addr args src =>
       transl_store chunk addr args src k
   | Mcall sig (inl reg) =>
-      do r <- ireg_of reg; OK (Pcall_r r :: k)
+      do r <- ireg_of reg; OK (Pcall_r r sig :: k)
   | Mcall sig (inr symb) =>
-      OK (Pcall_s symb :: k)
+      OK (Pcall_s symb sig :: k)
   | Mtailcall sig (inl reg) =>
       do r <- ireg_of reg; 
       OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
-          Pjmp_r r :: k)
+          Pjmp_r r sig :: k)
   | Mtailcall sig (inr symb) =>
       OK (Pfreeframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: 
-          Pjmp_s symb :: k)
+          Pjmp_s symb sig :: k)
   | Mlabel lbl =>
       OK(Plabel lbl :: k)
   | Mgoto lbl =>
@@ -563,11 +563,16 @@ Definition transl_code' (f: Mach.function) (il: list Mach.instruction) (it1p: bo
   otherwise the offset part of the [PC] code pointer could wrap
   around, leading to incorrect executions. *)
 
-Definition transf_function (f: Mach.function) : res Asm.code :=
+Definition transl_function (f: Mach.function) :=
   do c <- transl_code' f f.(Mach.fn_code) true;
-  if zlt (list_length_z c) Int.max_unsigned 
-  then OK (Pallocframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: c)
-  else Error (msg "code size exceeded").
+  OK (mkfunction f.(Mach.fn_sig)
+        (Pallocframe f.(fn_stacksize) f.(fn_retaddr_ofs) f.(fn_link_ofs) :: c)).
+
+Definition transf_function (f: Mach.function) : res Asm.function :=
+  do tf <- transl_function f;
+  if zlt Int.max_unsigned (list_length_z tf.(fn_code))
+  then Error (msg "code size exceeded")
+  else OK tf.
 
 Definition transf_fundef (f: Mach.fundef) : res Asm.fundef :=
   transf_partial_fundef transf_function f.
