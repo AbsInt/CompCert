@@ -48,12 +48,6 @@ let transl_label lbl =
     Hashtbl.add current_function_labels lbl lbl';
     lbl'
 
-(* Record identifiers of functions that need a special stub *)
-
-module IdentSet = Set.Make(struct type t = ident let compare = compare end)
-
-let stubbed_functions = ref IdentSet.empty
-
 (* Basic printing functions *)
 
 let coqint oc n =
@@ -63,9 +57,7 @@ let raw_symbol oc s =
   fprintf oc "%s" s
 
 let symbol oc symb =
-  if IdentSet.mem symb !stubbed_functions
-  then fprintf oc ".L%s$stub" (extern_atom symb)
-  else fprintf oc "%s" (extern_atom symb)
+  fprintf oc "%s" (extern_atom symb)
 
 let symbol_offset oc (symb, ofs) =
   symbol oc symb;
@@ -619,6 +611,16 @@ let print_builtin_inline oc name args res =
   end;
   fprintf oc "%s end builtin %s\n" comment name
 
+(* Calls to variadic functions: condition bit 6 must be set
+   if at least one argument is a float; clear otherwise *)
+
+let set_cr6 oc sg =
+  if sg.sig_cc.cc_vararg then begin
+    if List.mem Tfloat sg.sig_args
+    then fprintf oc "	creqv	6, 6, 6\n"
+    else fprintf oc "	crxor	6, 6, 6\n"
+  end
+
 (* Determine if the displacement of a conditional branch fits the short form *)
 
 let short_cond_branch tbl pc lbl_dest =
@@ -669,8 +671,10 @@ let print_instruction oc tbl pc fallthrough = function
   | Pb lbl ->
       fprintf oc "	b	%a\n" label (transl_label lbl)
   | Pbctr sg ->
+      set_cr6 oc sg;
       fprintf oc "	bctr\n"
   | Pbctrl sg ->
+      set_cr6 oc sg;
       fprintf oc "	bctrl\n"
   | Pbf(bit, lbl) ->
       if !Clflags.option_faligncondbranchs > 0 then
@@ -684,8 +688,10 @@ let print_instruction oc tbl pc fallthrough = function
         fprintf oc "%a:\n" label next
       end
   | Pbl(s, sg) ->
+      set_cr6 oc sg;
       fprintf oc "	bl	%a\n" symbol s
   | Pbs(s, sg) ->
+      set_cr6 oc sg;
       fprintf oc "	b	%a\n" symbol s
   | Pblr ->
       fprintf oc "	blr\n"
@@ -1043,48 +1049,14 @@ let print_function oc name fn =
     jumptables := []
   end
 
-(* Generation of stub functions *)
-
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$[ifl]*$"
-
-(* Stubs for EABI *)
-
-let variadic_stub oc stub_name fun_name args =
-  section oc Section_text;
-  fprintf oc "	.balign 4\n";
-  fprintf oc ".L%s$stub:\n" stub_name;
-  (* bit 6 must be set if at least one argument is a float; clear otherwise *)
-  if List.mem Tfloat args
-  then fprintf oc "	creqv	6, 6, 6\n"
-  else fprintf oc "	crxor	6, 6, 6\n";
-  fprintf oc "	b	%s\n" fun_name
-
-let stub_function oc name sg =
-  let name = extern_atom name in
-  (* Only variadic functions need a stub *)
-  if Str.string_match re_variadic_stub name 0
-  then variadic_stub oc name (Str.matched_group 1 name) sg.sig_args
-
-let function_needs_stub name =
-  Str.string_match re_variadic_stub (extern_atom name) 0
-
 (* Generation of whole programs *)
 
 let print_fundef oc name defn =
   match defn with
   | Internal code ->
       print_function oc name code
-  | External ((EF_external _ | EF_malloc | EF_free) as ef) ->
-      if function_needs_stub name then stub_function oc name (ef_sig ef)
   | External _ ->
       ()
-
-let record_extfun (name, gd) =
-  match gd with
-  | Gfun(External (EF_external _ | EF_malloc | EF_free)) ->
-      if function_needs_stub name then
-        stubbed_functions := IdentSet.add name !stubbed_functions
-  | _ -> ()
 
 let print_init oc = function
   | Init_int8 n ->
@@ -1171,8 +1143,6 @@ let print_prologue oc =
         fprintf oc "	.xopt	asm-debug-on\n"
 
 let print_program oc p =
-  stubbed_functions := IdentSet.empty;
-  List.iter record_extfun p.prog_defs;
   reset_file_line();
   print_prologue oc;
   List.iter (print_globdef oc) p.prog_defs

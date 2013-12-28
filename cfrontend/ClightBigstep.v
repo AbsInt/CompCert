@@ -89,12 +89,12 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
       eval_expr ge e le m a v ->
       exec_stmt e le m (Sset id a)
                E0 (PTree.set id v le) m Out_normal 
-  | exec_Scall:   forall e le m optid a al tyargs tyres vf vargs f t m' vres,
-      classify_fun (typeof a) = fun_case_f tyargs tyres ->
+  | exec_Scall:   forall e le m optid a al tyargs tyres cconv vf vargs f t m' vres,
+      classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->
       eval_expr ge e le m a vf ->
       eval_exprlist ge e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = Tfunction tyargs tyres ->
+      type_of_fundef f = Tfunction tyargs tyres cconv ->
       eval_funcall m f vargs t m' vres ->
       exec_stmt e le m (Scall optid a al)
                 t (set_opttemp optid vres le) m' Out_normal
@@ -170,9 +170,9 @@ with eval_funcall: mem -> fundef -> list val -> trace -> mem -> val -> Prop :=
       outcome_result_value out f.(fn_return) vres ->
       Mem.free_list m3 (blocks_of_env e) = Some m4 ->
       eval_funcall m (Internal f) vargs t m4 vres
-  | eval_funcall_external: forall m ef targs tres vargs t vres m',
+  | eval_funcall_external: forall m ef targs tres cconv vargs t vres m',
       external_call ef ge vargs m t vres m' ->
-      eval_funcall m (External ef targs tres) vargs t m' vres.
+      eval_funcall m (External ef targs tres cconv) vargs t m' vres.
 
 Scheme exec_stmt_ind2 := Minimality for exec_stmt Sort Prop
   with eval_funcall_ind2 := Minimality for eval_funcall Sort Prop.
@@ -186,12 +186,12 @@ Combined Scheme exec_stmt_funcall_ind from exec_stmt_ind2, eval_funcall_ind2.
   trace of observable events performed during the execution. *)
 
 CoInductive execinf_stmt: env -> temp_env -> mem -> statement -> traceinf -> Prop :=
-  | execinf_Scall:   forall e le m optid a al vf tyargs tyres vargs f t,
-      classify_fun (typeof a) = fun_case_f tyargs tyres ->
+  | execinf_Scall:   forall e le m optid a al vf tyargs tyres cconv vargs f t,
+      classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->
       eval_expr ge e le m a vf ->
       eval_exprlist ge e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some f ->
-      type_of_fundef f = Tfunction tyargs tyres ->
+      type_of_fundef f = Tfunction tyargs tyres cconv ->
       evalinf_funcall m f vargs t ->
       execinf_stmt e le m (Scall optid a al) t
   | execinf_Sseq_1:   forall e le m s1 s2 t,
@@ -246,7 +246,7 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s ->
+      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       eval_funcall ge m0 f nil t m1 (Vint r) ->
       bigstep_program_terminates p t r.
 
@@ -256,7 +256,7 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s ->
+      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
 

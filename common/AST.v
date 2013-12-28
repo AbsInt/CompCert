@@ -83,14 +83,26 @@ Fixpoint subtype_list (tyl1 tyl2: list typ) : bool :=
   end.
 
 (** Additionally, function definitions and function calls are annotated
-  by function signatures indicating the number and types of arguments,
-  as well as the type of the returned value if any.  These signatures
-  are used in particular to determine appropriate calling conventions
-  for the function. *)
+  by function signatures indicating:
+- the number and types of arguments;
+- the type of the returned value, if any;
+- additional information on which calling convention to use.
+
+These signatures are used in particular to determine appropriate
+calling conventions for the function. *)
+
+Record calling_convention : Type := mkcallconv {
+  cc_vararg: bool;
+  cc_structret: bool
+}.
+
+Definition cc_default :=
+  {| cc_vararg := false; cc_structret := false |}.
 
 Record signature : Type := mksignature {
   sig_args: list typ;
-  sig_res: option typ
+  sig_res: option typ;
+  sig_cc: calling_convention
 }.
 
 Definition proj_sig_res (s: signature) : typ :=
@@ -100,8 +112,14 @@ Definition proj_sig_res (s: signature) : typ :=
   end.
 
 Definition signature_eq: forall (s1 s2: signature), {s1=s2} + {s1<>s2}.
-Proof. generalize opt_typ_eq, list_typ_eq; intros; decide equality. Defined.
+Proof.
+  generalize opt_typ_eq, list_typ_eq; intros; decide equality.
+  generalize bool_dec; intros. decide equality. 
+Defined.
 Global Opaque signature_eq.
+
+Definition signature_main :=
+  {| sig_args := nil; sig_res := Some Tint; sig_cc := cc_default |}.
 
 (** Memory accesses (load and store instructions) are annotated by
   a ``memory chunk'' indicating the type, size and signedness of the
@@ -570,16 +588,16 @@ Definition ef_sig (ef: external_function): signature :=
   match ef with
   | EF_external name sg => sg
   | EF_builtin name sg => sg
-  | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk))
-  | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None
-  | EF_vload_global chunk _ _ => mksignature nil (Some (type_of_chunk chunk))
-  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk chunk :: nil) None
-  | EF_malloc => mksignature (Tint :: nil) (Some Tint)
-  | EF_free => mksignature (Tint :: nil) None
-  | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None
-  | EF_annot text targs => mksignature (annot_args_typ targs) None
-  | EF_annot_val text targ => mksignature (targ :: nil) (Some targ)
-  | EF_inline_asm text => mksignature nil None
+  | EF_vload chunk => mksignature (Tint :: nil) (Some (type_of_chunk chunk)) cc_default
+  | EF_vstore chunk => mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default
+  | EF_vload_global chunk _ _ => mksignature nil (Some (type_of_chunk chunk)) cc_default
+  | EF_vstore_global chunk _ _ => mksignature (type_of_chunk chunk :: nil) None cc_default
+  | EF_malloc => mksignature (Tint :: nil) (Some Tint) cc_default
+  | EF_free => mksignature (Tint :: nil) None cc_default
+  | EF_memcpy sz al => mksignature (Tint :: Tint :: nil) None cc_default
+  | EF_annot text targs => mksignature (annot_args_typ targs) None cc_default
+  | EF_annot_val text targ => mksignature (targ :: nil) (Some targ) cc_default
+  | EF_inline_asm text => mksignature nil None cc_default
   end.
 
 (** Whether an external function should be inlined by the compiler. *)

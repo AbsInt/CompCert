@@ -361,14 +361,10 @@ let do_printf m fmt args =
 
 (* Implementation of external functions *)
 
-let re_stub = Str.regexp "\\$[ifl]*$"
-
-let chop_stub name = Str.replace_first re_stub "" name
-
 let (>>=) opt f = match opt with None -> None | Some arg -> f arg
 
 let do_external_function id sg ge w args m =
-  match chop_stub(extern_atom id), args with
+  match extern_atom id, args with
   | "printf", Vptr(b, ofs) :: args' ->
       extract_string m b ofs >>= fun fmt ->
       print_string (do_printf m fmt args');
@@ -594,7 +590,8 @@ let change_main_function p old_main old_main_ty =
   let body =
     Sreturn(Some(Ecall(old_main, Econs(arg1, Econs(arg2, Enil)), type_int32s))) in
   let new_main_fn =
-    { fn_return = type_int32s; fn_params = []; fn_vars = []; fn_body = body } in
+    { fn_return = type_int32s; fn_callconv = cc_default;
+      fn_params = []; fn_vars = []; fn_body = body } in
   let new_main_id = intern_string "___main" in
   { prog_main = new_main_id;
     prog_defs = (new_main_id, Gfun(Internal new_main_fn)) :: p.prog_defs }
@@ -611,10 +608,10 @@ let fixup_main p =
       None
   | Some main_fd ->
       match type_of_fundef main_fd with
-      | Tfunction(Tnil, Tint(I32, Signed, _)) ->
+      | Tfunction(Tnil, Tint(I32, Signed, _), _) ->
           Some p
       | Tfunction(Tcons(Tint _, Tcons(Tpointer(Tpointer(Tint(I8,_,_),_),_), Tnil)),
-                  Tint _) as ty ->
+                  Tint _, _) as ty ->
           Some (change_main_function p p.prog_main ty)
       | _ ->
           fprintf err_formatter "ERROR: wrong type for main() function";

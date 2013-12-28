@@ -680,7 +680,7 @@ Qed.
 
 (** A semantics for general initializers *)
 
-Definition dummy_function := mkfunction Tvoid nil nil Sskip.
+Definition dummy_function := mkfunction Tvoid cc_default nil nil Sskip.
 
 Fixpoint fields_of_struct (id: ident) (ty: type) (fl: fieldlist) (pos: Z) : list (Z * type) :=
   match fl with

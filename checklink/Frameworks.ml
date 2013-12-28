@@ -84,9 +84,6 @@ type s_framework = {
       as we learn more about the contents of the symbol.
   *)
   ident_to_sym_ndx: (int list) PosMap.t;
-  (** CompCert generates stubs for some functions, which we will aggregate as we
-      discover them. *)
-  stub_ident_to_vaddr: int32 PosMap.t;
   (** This structure is imported from CompCert's .sdump, and describes each
       atom. *)
   atoms: (ident, C2C.atom_info) Hashtbl.t;
@@ -138,11 +135,6 @@ let sda_map = {
 let ident_to_sym_ndx = {
   get = (fun sf -> sf.ident_to_sym_ndx);
   set = (fun i sf -> { sf with ident_to_sym_ndx = i });
-}
-
-let stub_ident_to_vaddr = {
-  get = (fun sf -> sf.stub_ident_to_vaddr);
-  set = (fun i sf -> { sf with stub_ident_to_vaddr = i });
 }
 
 (** Adds a range to the checked bytes list.

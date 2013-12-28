@@ -234,8 +234,6 @@ let linker exe_name files =
 
 (* Processing of a .c file *)
 
-let option_interp = ref false
-
 let process_c_file sourcename =
   if !option_E then begin
     preprocess sourcename (output_filename_default "-");

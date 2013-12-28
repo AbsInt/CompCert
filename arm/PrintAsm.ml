@@ -39,12 +39,8 @@ let label_for_label lbl =
 
 (* Basic printing functions *)
 
-let strip_variadic_suffix name =
-  try String.sub name 0 (String.index name '$')
-  with Not_found -> name
-
 let print_symb oc symb =
-  fprintf oc "%s" (strip_variadic_suffix (extern_atom symb))
+  fprintf oc "%s" (extern_atom symb)
 
 let print_label oc lbl =
   fprintf oc ".L%d" (label_for_label lbl)

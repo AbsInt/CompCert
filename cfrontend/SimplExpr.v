@@ -504,6 +504,7 @@ Definition transl_function (f: Csyntax.function) : mon function :=
   do temps <- get_trail;
   ret (mkfunction
               f.(Csyntax.fn_return)
+              f.(Csyntax.fn_callconv)
               f.(Csyntax.fn_params)
               f.(Csyntax.fn_vars)
               temps
@@ -513,8 +514,8 @@ Definition transl_fundef (fd: Csyntax.fundef) : mon fundef :=
   match fd with
   | Csyntax.Internal f =>
       do tf <- transl_function f; ret (Internal tf)
-  | Csyntax.External ef targs tres =>
-      ret (External ef targs tres)
+  | Csyntax.External ef targs tres cconv =>
+      ret (External ef targs tres cconv)
   end.
 
 Local Open Scope error_monad_scope.

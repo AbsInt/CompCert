@@ -453,7 +453,7 @@ let int_representable v nbits sgn =
 (* Type of a function definition *)
 
 let fundef_typ fd =
-  TFun(fd.fd_ret, Some fd.fd_params, fd.fd_vararg, [])
+  TFun(fd.fd_ret, Some fd.fd_params, fd.fd_vararg, fd.fd_attrib)
 
 (* Signedness of integer kinds *)
 

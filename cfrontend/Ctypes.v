@@ -97,7 +97,7 @@ Inductive type : Type :=
   | Tfloat: floatsize -> attr -> type              (**r floating-point types *)
   | Tpointer: type -> attr -> type                 (**r pointer types ([*ty]) *)
   | Tarray: type -> Z -> attr -> type              (**r array types ([ty[len]]) *)
-  | Tfunction: typelist -> type -> type            (**r function types *)
+  | Tfunction: typelist -> type -> calling_convention -> type    (**r function types *)
   | Tstruct: ident -> fieldlist -> attr -> type    (**r struct types *)
   | Tunion: ident -> fieldlist -> attr -> type     (**r union types *)
   | Tcomp_ptr: ident -> attr -> type               (**r pointer to named struct or union *)
@@ -119,11 +119,11 @@ Proof.
   assert (forall (x y: floatsize), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: attr), {x=y} + {x<>y}).
   { decide equality. decide equality. apply N.eq_dec. apply bool_dec. }
-  generalize ident_eq zeq. intros E1 E2. 
+  generalize ident_eq zeq bool_dec. intros E1 E2 E3.
   decide equality.
   decide equality.
-  generalize ident_eq. intros E1.
   decide equality.
+  generalize ident_eq. intros E1. decide equality.
 Defined.
 
 Opaque type_eq typelist_eq fieldlist_eq.
@@ -138,7 +138,7 @@ Definition attr_of_type (ty: type) :=
   | Tfloat sz a => a
   | Tpointer elt a => a
   | Tarray elt sz a => a
-  | Tfunction args res => noattr
+  | Tfunction args res cc => noattr
   | Tstruct id fld a => a
   | Tunion id fld a => a
   | Tcomp_ptr id a => a
@@ -154,7 +154,7 @@ Definition typeconv (ty: type) : type :=
   match ty with
   | Tint (I8 | I16 | IBool) _ a => Tint I32 Signed a
   | Tarray t sz a       => Tpointer t a
-  | Tfunction _ _       => Tpointer ty noattr
+  | Tfunction _ _ _     => Tpointer ty noattr
   | _                   => ty
   end.
 
@@ -177,7 +177,7 @@ Fixpoint alignof (t: type) : Z :=
       | Tfloat F64 _ => 8
       | Tpointer _ _ => 4
       | Tarray t' _ _ => alignof t'
-      | Tfunction _ _ => 1
+      | Tfunction _ _ _ => 1
       | Tstruct _ fld _ => alignof_fields fld
       | Tunion _ fld _ => alignof_fields fld
       | Tcomp_ptr _ _ => 4
@@ -252,7 +252,7 @@ Fixpoint sizeof (t: type) : Z :=
   | Tfloat F64 _ => 8
   | Tpointer _ _ => 4
   | Tarray t' n _ => sizeof t' * Zmax 1 n
-  | Tfunction _ _ => 1
+  | Tfunction _ _ _ => 1
   | Tstruct _ fld _ => align (Zmax 1 (sizeof_struct fld 0)) (alignof t)
   | Tunion _ fld _ => align (Zmax 1 (sizeof_union fld)) (alignof t)
   | Tcomp_ptr _ _ => 4
@@ -302,7 +302,7 @@ Fixpoint naturally_aligned (t: type) : Prop :=
       attr_alignas a = None
   | Tarray t' _ a =>
       attr_alignas a = None /\ naturally_aligned t'
-  | Tvoid | Tfunction _ _ | Tstruct _ _ _ | Tunion _ _ _ =>
+  | Tvoid | Tfunction _ _ _ | Tstruct _ _ _ | Tunion _ _ _ =>
       True
   end.
 
@@ -478,7 +478,7 @@ Definition access_mode (ty: type) : mode :=
   | Tvoid => By_nothing
   | Tpointer _ _ => By_value Mint32
   | Tarray _ _ _ => By_reference
-  | Tfunction _ _ => By_reference
+  | Tfunction _ _ _ => By_reference
   | Tstruct _ _ _ => By_copy
   | Tunion _ _ _ => By_copy
   | Tcomp_ptr _ _ => By_nothing
@@ -510,7 +510,7 @@ Fixpoint unroll_composite (ty: type) : type :=
   | Tfloat _ _ => ty
   | Tpointer t1 a => Tpointer (unroll_composite t1) a
   | Tarray t1 sz a => Tarray (unroll_composite t1) sz a
-  | Tfunction t1 t2 => Tfunction (unroll_composite_list t1) (unroll_composite t2)
+  | Tfunction t1 t2 a => Tfunction (unroll_composite_list t1) (unroll_composite t2) a
   | Tstruct id fld a => if ident_eq id cid then ty else Tstruct id (unroll_composite_fields fld) a
   | Tunion id fld a => if ident_eq id cid then ty else Tunion id (unroll_composite_fields fld) a
   | Tcomp_ptr id a => if ident_eq id cid then Tpointer comp a else ty
@@ -586,7 +586,7 @@ Fixpoint alignof_blockcopy (t: type) : Z :=
   | Tfloat F64 _ => 8
   | Tpointer _ _ => 4
   | Tarray t' _ _ => alignof_blockcopy t'
-  | Tfunction _ _ => 1
+  | Tfunction _ _ _ => 1
   | Tstruct _ fld _ => Zmin 8 (alignof t)
   | Tunion _ fld _ => Zmin 8 (alignof t)
   | Tcomp_ptr _ _ => 4
@@ -681,5 +681,15 @@ Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
   | Tcons hd tl => typ_of_type hd :: typlist_of_typelist tl
   end.
 
-Definition signature_of_type (args: typelist) (res: type) : signature :=
-  mksignature (typlist_of_typelist args) (opttyp_of_type res).
+Definition signature_of_type (args: typelist) (res: type) (cc: calling_convention): signature :=
+  mksignature (typlist_of_typelist args) (opttyp_of_type res) cc.
+
+(** Like [typ_of_type], but apply default argument promotion. *)
+
+Definition typ_of_type_default (t: type) : AST.typ :=
+  match t with
+  | Tfloat _ _ => AST.Tfloat
+  | Tlong _ _ => AST.Tlong
+  | _ => AST.Tint
+  end.
+

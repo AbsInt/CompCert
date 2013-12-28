@@ -195,13 +195,10 @@ let mark_covered_fun_sym_ndx (ndx: int) ffw: f_framework =
   )
   >>> (ff_sf ^%= check_fun_symtab ffw.this_ident ndx)
 
-(** Taken from CompCert *)
-let re_variadic_stub: Str.regexp = Str.regexp "\\(.*\\)\\$[if]*$"
-
 (** Tries to refine the mapping for key [k] in [ident_to_sym_ndx] so that it is
     mapped to [vaddr]. Fails if no symbol in [k]'s mapping has that virtual
-    address, unless the symbol is a stub from CompCert. Otherwise, it filters
-    out all symbols whose virtual address does not match [vaddr].
+    address. Otherwise, it filters out all symbols whose virtual
+    address does not match [vaddr].
 *)
 let idmap_unify (k: P.t) (vaddr: int32) (sfw: s_framework)
     : s_framework or_err =
@@ -215,39 +212,16 @@ let idmap_unify (k: P.t) (vaddr: int32) (sfw: s_framework)
     with
     | [] ->
         (* no symbol has that virtual address *)
-        let ident_name = Hashtbl.find sfw.ident_to_name k in
-        if Str.string_match re_variadic_stub ident_name 0
-        then (* this ident needs a stub, whose address is [vaddr] *)
-          try (
-            (* fetch the registered virtual address for this stub *)
-            let v = PosMap.find k sfw.stub_ident_to_vaddr in
-            (* if there is one, we're good if it's the same as [vaddr] *)
-            if vaddr = v
-            then OK(sfw)
-            else ERR(
-              Printf.sprintf
-                "Incoherent constraints for stub: %s"
-                (Hashtbl.find sfw.ident_to_name k)
+        ERR(
+          Printf.sprintf
+            "Incoherent constraints for ident %s with value %s and candidates [%s]"
+            (Hashtbl.find sfw.ident_to_name k)
+            (string_of_int32 vaddr)
+            (string_of_list
+               (fun ndx -> string_of_int32 sfw.ef.elf.e_symtab.(ndx).st_value)
+               ", " id_ndxes
             )
-          )
-          with Not_found ->
-            (* if the stub has no previously registered virtual address,
-               register [vaddr] *)
-            OK(
-              sfw
-              >>> (stub_ident_to_vaddr ^%= PosMap.add k vaddr)
-            )
-        else (* not a stub, so this is a real error *)
-          ERR(
-            Printf.sprintf
-              "Incoherent constraints for ident %s with value %s and candidates [%s]"
-              (Hashtbl.find sfw.ident_to_name k)
-              (string_of_int32 vaddr)
-              (string_of_list
-                 (fun ndx -> string_of_int32 sfw.ef.elf.e_symtab.(ndx).st_value)
-                 ", " id_ndxes
-              )
-          )
+        )
     | ndxes ->
         if id_ndxes = ndxes
         then OK(sfw)
@@ -594,6 +568,20 @@ let rec match_jmptbl lbllist vaddr size ffw =
           )
       end
   end
+
+(** Matches [ecode] against the expected CR6 magic before a function call.
+*)
+let match_set_cr6 sg ecode =
+  if sg.sig_cc.cc_vararg then
+    if List.mem Tfloat sg.sig_args then
+      match ecode with
+      | CREQV(6, 6, 6) :: ecode' -> Some ecode'
+      | _ -> None
+    else
+      match ecode with
+      | CRXOR(6, 6, 6) :: ecode' -> Some ecode'
+      | _ -> None
+  else Some ecode
 
 (** Matches [ecode] agains the expected code for a small memory copy
     pseudo-instruction. Returns a triple containing the updated framework,
@@ -1022,8 +1010,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbctr sg ->
-          begin match ecode with
-          | BCCTRx(bo, bi, lk) :: es ->
+          begin match match_set_cr6 sg ecode with
+          | Some(BCCTRx(bo, bi, lk) :: es) ->
               OK(fw)
               >>= match_bo_ctr bo
               >>= match_ints  0     bi
@@ -1032,8 +1020,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbctrl sg ->
-          begin match ecode with
-          | BCCTRx(bo, bi, lk) :: es ->
+          begin match match_set_cr6 sg ecode with
+          | Some(BCCTRx(bo, bi, lk) :: es) ->
               OK(fw)
               >>= match_bo_ctr bo
               >>= match_ints  0    bi
@@ -1070,8 +1058,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbl(ident, sg) ->
-          begin match ecode with
-          | Bx(li, aa, lk) :: es ->
+          begin match match_set_cr6 sg ecode with
+          | Some(Bx(li, aa, lk) :: es) ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
               OK(fw)
               >>= (ff_sf ^%=? idmap_unify ident dest)
@@ -1091,8 +1079,8 @@ let rec compare_code ccode ecode pc: checker = fun fw ->
           | _ -> error
           end
       | Pbs(ident, sg) ->
-          begin match ecode with
-          | Bx(li, aa, lk) :: es ->
+          begin match match_set_cr6 sg ecode with
+          | Some(Bx(li, aa, lk) :: es) ->
               let dest = Int32.(add pc (mul 4l (exts li))) in
               OK(fw)
               >>= match_bools false aa
@@ -2911,87 +2899,6 @@ let check_data (pv: (ident * unit globvar) list) (sfw: s_framework)
     (* Empty lists mean the symbol is external, no need for check *)
     (List.filter (fun (_, gv) -> gv.gvar_init <> []) pv)
 
-(** Checks that everything that has been assimiled as a stub during checks
-    indeed looks like a stub.
-*)
-let check_stubs sfw =
-  let check cond msg sfw =
-    sfw
-    >>> (if cond then id else (sf_ef ^%= add_log (ERROR(msg))))
-  in
-  let check_eq msg a b = check (a = b) msg in
-  let match_bools = check_eq "match_bools" in
-  let match_ints = check_eq "match_ints" in
-  let check_stub ident vaddr sfw =
-    let fundef = List.find (fun (i, _) -> i = ident) sfw.program.prog_defs in
-    let elf = sfw.ef.elf in
-    let stub_ecode = from_some (code_at_vaddr elf vaddr 2) in
-    let stub_offset = from_some (physical_offset_of_vaddr elf vaddr) in
-    begin match fundef with
-    | (_, Gfun(External(EF_external(dest_ident, _) as ef))) ->
-        let args = (ef_sig ef).sig_args in
-        if List.mem Tfloat args
-        then
-          begin match stub_ecode with
-          |   CREQV(crbD, crbA, crbB) :: (* vaddr *)
-              Bx(li, aa, lk)          :: (* vaddr + 4 *)
-              [] ->
-              let dest_vaddr = Int32.(add (add vaddr 4l) (mul 4l (exts li))) in
-              begin match idmap_unify dest_ident dest_vaddr sfw with
-              | ERR(s) ->
-                  sfw
-                  >>> (sf_ef ^%= add_log (ERROR(
-                    "Couldn't match stub, " ^ s
-                  )))
-              | OK(sfw) ->
-                  sfw
-                  >>> match_ints 6 crbD
-                  >>> match_ints 6 crbA
-                  >>> match_ints 6 crbB
-                  >>> match_bools false aa
-                  >>> match_bools false lk
-                  >>> (sf_ef ^%=
-                      add_range stub_offset 8l 4
-                        (Stub(Hashtbl.find sfw.ident_to_name ident))
-                  )
-              end
-          | _ ->
-              sfw
-              >>> (sf_ef ^%= add_log (ERROR("Couldn't match stub")))
-          end
-        else
-          begin match stub_ecode with
-          |   CRXOR(crbD, crbA, crbB) :: (* vaddr *)
-              Bx(li, aa, lk)          :: (* vaddr + 4 *)
-              [] ->
-              let dest_vaddr = Int32.(add (add vaddr 4l) (mul 4l (exts li))) in
-              begin match idmap_unify dest_ident dest_vaddr sfw with
-              | ERR(s) ->
-                  sfw
-                  >>> (sf_ef ^%= add_log (ERROR(
-                    "Couldn't match stub, " ^ s
-                  )))
-              | OK(sfw) ->
-                  sfw
-                  >>> match_ints 6 crbD
-                  >>> match_ints 6 crbA
-                  >>> match_ints 6 crbB
-                  >>> match_bools false aa
-                  >>> match_bools false lk
-                  >>> (sf_ef ^%=
-                      add_range stub_offset 8l 4
-                        (Stub(Hashtbl.find sfw.ident_to_name ident))
-                  )
-              end
-          | _ ->
-              sfw
-              >>> (sf_ef ^%= add_log (ERROR("Couldn't match stub")))
-          end
-    | _ -> fatal "Unexpected fundef in check_stubs, please report."
-    end
-  in
-  PosMap.fold check_stub sfw.stub_ident_to_vaddr sfw
-
 (** Read a .sdump file *)
 
 let sdump_magic_number = "CompCertSDUMP" ^ Configuration.version
@@ -3065,16 +2972,10 @@ let process_sdump efw sdump: e_framework =
     ; program             = prog
     ; ident_to_name       = names
     ; ident_to_sym_ndx    = ident_to_sym_ndx
-    ; stub_ident_to_vaddr = PosMap.empty
     ; atoms               = atoms
     }
   )
   >>> worklist_process wl
-  >>> (fun sfw ->
-    print_debug "Checking stubs";
-    sfw
-  )
-  >>> check_stubs
   >>> (fun sfw ->
     print_debug "Checking data";
     sfw

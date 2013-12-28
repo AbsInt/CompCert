@@ -269,12 +269,12 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      funsig f = mksignature nil (Some Tint) ->
+      funsig f = signature_main ->
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,
-      loc_result (mksignature nil (Some Tint)) = r :: nil ->
+      loc_result signature_main = r :: nil ->
       rs (R r) = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 

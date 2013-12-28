@@ -132,6 +132,7 @@ Definition Sfor (s1: statement) (e2: expr) (s3: statement) (s4: statement) :=
 
 Record function : Type := mkfunction {
   fn_return: type;
+  fn_callconv: calling_convention;
   fn_params: list (ident * type);
   fn_vars: list (ident * type);
   fn_temps: list (ident * type);
@@ -146,17 +147,17 @@ Definition var_names (vars: list(ident * type)) : list ident :=
 
 Inductive fundef : Type :=
   | Internal: function -> fundef
-  | External: external_function -> typelist -> type -> fundef.
+  | External: external_function -> typelist -> type -> calling_convention -> fundef.
 
 (** The type of a function definition. *)
 
 Definition type_of_function (f: function) : type :=
-  Tfunction (type_of_params (fn_params f)) (fn_return f).
+  Tfunction (type_of_params (fn_params f)) (fn_return f) (fn_callconv f).
 
 Definition type_of_fundef (f: fundef) : type :=
   match f with
   | Internal fd => type_of_function fd
-  | External id args res => Tfunction args res
+  | External id args res cc => Tfunction args res cc
   end.
 
 (** ** Programs *)
@@ -556,12 +557,12 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sset id a) k e le m)
         E0 (State f Sskip k e (PTree.set id v le) m)
 
-  | step_call:   forall f optid a al k e le m tyargs tyres vf vargs fd,
-      classify_fun (typeof a) = fun_case_f tyargs tyres ->
+  | step_call:   forall f optid a al k e le m tyargs tyres cconv vf vargs fd,
+      classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->
       eval_expr e le m a vf ->
       eval_exprlist e le m al tyargs vargs ->
       Genv.find_funct ge vf = Some fd ->
-      type_of_fundef fd = Tfunction tyargs tyres ->
+      type_of_fundef fd = Tfunction tyargs tyres cconv ->
       step (State f (Scall optid a al) k e le m)
         E0 (Callstate fd vargs (Kcall optid f e le k) m)
 
@@ -649,9 +650,9 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k e le m1)
 
-  | step_external_function: forall ef targs tres vargs k m vres t m',
+  | step_external_function: forall ef targs tres cconv vargs k m vres t m',
       external_call ef ge vargs m t vres m' ->
-      step (Callstate (External ef targs tres) vargs k m)
+      step (Callstate (External ef targs tres cconv) vargs k m)
          t (Returnstate vres k m')
 
   | step_returnstate: forall v optid f e le k m,
@@ -671,7 +672,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s ->
+      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
 
 (** A final state is a [Returnstate] with an empty continuation. *)

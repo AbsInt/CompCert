@@ -887,10 +887,10 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_val r1, is_val_list rargs with
       | Some(vf, tyf), Some vtl =>
           match classify_fun tyf with
-          | fun_case_f tyargs tyres =>
+          | fun_case_f tyargs tyres cconv =>
               do fd <- Genv.find_funct ge vf;
               do vargs <- sem_cast_arguments vtl tyargs;
-              check type_eq (type_of_fundef fd) (Tfunction tyargs tyres);
+              check type_eq (type_of_fundef fd) (Tfunction tyargs tyres cconv);
               topred (Callred fd vargs ty m)
           | _ => stuck
           end
@@ -1020,14 +1020,14 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists v, sem_cast v1 ty1 ty = Some v
   | Ecall (Eval vf tyf) rargs ty =>
       exprlist_all_values rargs ->
-      exists tyargs, exists tyres, exists fd, exists vl,
-         classify_fun tyf = fun_case_f tyargs tyres
+      exists tyargs tyres cconv fd vl,
+         classify_fun tyf = fun_case_f tyargs tyres cconv
       /\ Genv.find_funct ge vf = Some fd
       /\ cast_arguments rargs tyargs vl
-      /\ type_of_fundef fd = Tfunction tyargs tyres
+      /\ type_of_fundef fd = Tfunction tyargs tyres cconv
   | Ebuiltin ef tyargs rargs ty =>
       exprlist_all_values rargs ->
-      exists vargs, exists t, exists vres, exists m', exists w',
+      exists vargs t vres m' w',
          cast_arguments rargs tyargs vargs
       /\ external_call ef ge vargs m t vres m'
       /\ possible_trace w t w'
@@ -1069,7 +1069,7 @@ Lemma callred_invert:
   invert_expr_prop r m.
 Proof.
   intros. inv H. simpl.
-  intros. exists tyargs; exists tyres; exists fd; exists args; auto.
+  intros. exists tyargs, tyres, cconv, fd, args; auto.
 Qed.
 
 Scheme context_ind2 := Minimality for context Sort Prop
@@ -1513,10 +1513,10 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct (is_val_list rargs) as [vtl | ] eqn:?. 
   rewrite (is_val_inv _ _ _ Heqo). exploit is_val_list_all_values; eauto. intros ALLVAL.
   (* top *)
-  destruct (classify_fun tyf) as [tyargs tyres|] eqn:?...
+  destruct (classify_fun tyf) as [tyargs tyres cconv|] eqn:?...
   destruct (Genv.find_funct ge vf) as [fd|] eqn:?...
   destruct (sem_cast_arguments vtl tyargs) as [vargs|] eqn:?... 
-  destruct (type_eq (type_of_fundef fd) (Tfunction tyargs tyres))...
+  destruct (type_eq (type_of_fundef fd) (Tfunction tyargs tyres cconv))...
   apply topred_ok; auto. red. split; auto. eapply red_Ecall; eauto. 
   eapply sem_cast_arguments_sound; eauto.
   apply not_invert_ok; simpl; intros; myinv. specialize (H ALLVAL). myinv. congruence.
@@ -2049,7 +2049,7 @@ Definition do_step (w: world) (s: state) : list (trace * state) :=
       let (e,m1) := do_alloc_variables empty_env m (f.(fn_params) ++ f.(fn_vars)) in
       do m2 <- sem_bind_parameters w e m1 f.(fn_params) vargs;
       ret (State f f.(fn_body) k e m2)
-  | Callstate (External ef _ _) vargs k m =>
+  | Callstate (External ef _ _ _) vargs k m =>
       match do_external ef w vargs m with
       | None => nil
       | Some(w',t,v,m') => (t, Returnstate v k m') :: nil
@@ -2215,7 +2215,7 @@ Definition do_initial_state (p: program): option (genv * state) :=
   do m0 <- Genv.init_mem p;
   do b <- Genv.find_symbol ge p.(prog_main);
   do f <- Genv.find_funct_ptr ge b;
-  check (type_eq (type_of_fundef f) (Tfunction Tnil type_int32s));
+  check (type_eq (type_of_fundef f) (Tfunction Tnil type_int32s cc_default));
   Some (ge, Callstate f nil Kstop m0).
 
 Definition at_final_state (S: state): option int :=

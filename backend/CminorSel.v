@@ -390,7 +390,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      funsig f = mksignature nil (Some Tint) ->
+      funsig f = signature_main ->
       initial_state p (Callstate f nil Kstop m0).
 
 Inductive final_state: state -> int -> Prop :=

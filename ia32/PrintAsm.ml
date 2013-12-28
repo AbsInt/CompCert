@@ -61,13 +61,8 @@ let raw_symbol oc s =
   | ELF -> fprintf oc "%s" s
   | MacOS | Cygwin -> fprintf oc "_%s" s
 
-let re_variadic_stub = Str.regexp "\\(.*\\)\\$[ifl]*$"
-
 let symbol oc symb =
-  let s = extern_atom symb in
-  if Str.string_match re_variadic_stub s 0
-  then raw_symbol oc (Str.matched_group 1 s)
-  else raw_symbol oc s
+  raw_symbol oc (extern_atom symb)
 
 let symbol_offset oc (symb, ofs) =
   symbol oc symb;

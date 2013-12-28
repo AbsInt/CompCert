@@ -458,7 +458,8 @@ let fundef pp f =
   fprintf pp "@[<hov 2>%s%a"
     (if f.fd_inline then "inline " else "")
     storage f.fd_storage;
-  simple_decl pp (f.fd_name, TFun(f.fd_ret, Some f.fd_params, f.fd_vararg, []));
+  simple_decl pp (f.fd_name,
+                  TFun(f.fd_ret, Some f.fd_params, f.fd_vararg, f.fd_attrib));
   fprintf pp "@]@ @[<v 2>{@ ";
   List.iter (fun d -> fprintf pp "%a@ " full_decl d) f.fd_locals;
   stmt_block pp f.fd_body;

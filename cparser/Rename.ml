@@ -190,6 +190,7 @@ let fundef env f =
   ( { fd_storage = f.fd_storage;
       fd_inline = f.fd_inline;
       fd_name = name';
+      fd_attrib = f.fd_attrib;
       fd_ret = typ env0 f.fd_ret;
       fd_params = params';
       fd_vararg = f.fd_vararg;

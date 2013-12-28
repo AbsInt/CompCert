@@ -40,28 +40,24 @@ Proof.
 Qed.
 
 Lemma transl_fundef_sig1:
-  forall f tf args res,
+  forall f tf args res cc,
   transl_fundef f = OK tf ->
-  classify_fun (type_of_fundef f) = fun_case_f args res ->
-  funsig tf = signature_of_type args res.
+  classify_fun (type_of_fundef f) = fun_case_f args res cc ->
+  funsig tf = signature_of_type args res cc.
 Proof.
   intros. destruct f; simpl in *. 
   monadInv H. monadInv EQ. simpl. inversion H0.    
   unfold signature_of_function, signature_of_type.
   f_equal. apply transl_params_types.
-  destruct (list_typ_eq (sig_args (ef_sig e)) (typlist_of_typelist t)); simpl in H.
-  destruct (opt_typ_eq (sig_res (ef_sig e)) (opttyp_of_type t0)); simpl in H.
-  inv H. simpl. destruct (ef_sig e); simpl in *. inv H0.
-  unfold signature_of_type. auto.
-  congruence.
-  congruence.
+  destruct (signature_eq (ef_sig e) (signature_of_type t t0 c)); inv H.
+  simpl. congruence.
 Qed.
 
 Lemma transl_fundef_sig2:
-  forall f tf args res,
+  forall f tf args res cc,
   transl_fundef f = OK tf ->
-  type_of_fundef f = Tfunction args res ->
-  funsig tf = signature_of_type args res.
+  type_of_fundef f = Tfunction args res cc ->
+  funsig tf = signature_of_type args res cc.
 Proof.
   intros. eapply transl_fundef_sig1; eauto.
   rewrite H0; reflexivity.
@@ -982,6 +978,16 @@ Proof.
   eapply make_cast_correct; eauto. eapply transl_expr_correct; eauto. auto. 
 Qed.
 
+Lemma typlist_of_arglist_eq:
+  forall al tyl vl,
+  Clight.eval_exprlist ge e le m al tyl vl ->
+  typlist_of_arglist al tyl = typlist_of_typelist tyl.
+Proof.
+  induction 1; simpl.
+  auto.
+  f_equal; auto.
+Qed.
+
 End EXPR.
 
 (** ** Semantic preservation for statements *)
@@ -1064,11 +1070,11 @@ Inductive match_states: Clight.state -> Csharpminor.state -> Prop :=
       match_states (Clight.State f s k e le m)
                    (State tf ts' tk' te le m)
   | match_callstate:
-      forall fd args k m tfd tk targs tres
+      forall fd args k m tfd tk targs tres cconv
           (TR: transl_fundef fd = OK tfd)
           (MK: match_cont Tvoid 0%nat 0%nat k tk)
           (ISCC: Clight.is_call_cont k)
-          (TY: type_of_fundef fd = Tfunction targs tres),
+          (TY: type_of_fundef fd = Tfunction targs tres cconv),
       match_states (Clight.Callstate fd args k m)
                    (Callstate tfd args tk m)
   | match_returnstate:
@@ -1232,13 +1238,14 @@ Proof.
 
 (* call *)
   revert TR. simpl. case_eq (classify_fun (typeof a)); try congruence.
-  intros targs tres CF TR. monadInv TR. inv MTR. 
+  intros targs tres cc CF TR. monadInv TR. inv MTR. 
   exploit functions_translated; eauto. intros [tfd [FIND TFD]].
   rewrite H in CF. simpl in CF. inv CF.
   econstructor; split.
   apply plus_one. econstructor; eauto. 
   exploit transl_expr_correct; eauto.
   exploit transl_arglist_correct; eauto.
+  erewrite typlist_of_arglist_eq by eauto. 
   eapply transl_fundef_sig1; eauto.
   rewrite H3. auto.
   econstructor; eauto.  
@@ -1422,9 +1429,7 @@ Proof.
 
 (* external function *)
   simpl in TR. 
-  destruct (list_typ_eq (sig_args (ef_sig ef)) (typlist_of_typelist targs) &&
-            opt_typ_eq (sig_res (ef_sig ef)) (opttyp_of_type tres));
-  monadInv TR. 
+  destruct (signature_eq (ef_sig ef) (signature_of_type targs tres cconv)); inv TR.
   exploit match_cont_is_call_cont; eauto. intros [A B].
   econstructor; split.
   apply plus_one. constructor. eauto. 
@@ -1451,7 +1456,7 @@ Proof.
     rewrite symbols_preserved. replace (prog_main tprog) with (prog_main prog).
     auto. symmetry. unfold transl_program in TRANSL. 
     eapply transform_partial_program2_main; eauto.
-  assert (funsig tf = signature_of_type Tnil type_int32s).
+  assert (funsig tf = signature_of_type Tnil type_int32s cc_default).
     eapply transl_fundef_sig2; eauto. 
   econstructor; split.
   econstructor; eauto. eapply Genv.init_mem_transf_partial2; eauto. 

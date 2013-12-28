@@ -229,6 +229,7 @@ Definition transf_function (f: function) : res function :=
   assertion (list_disjoint_dec ident_eq (var_names f.(fn_params)) (var_names f.(fn_temps)));
   do body' <- simpl_stmt cenv f.(fn_body);
   OK {| fn_return := f.(fn_return);
+        fn_callconv := f.(fn_callconv);
         fn_params := f.(fn_params);
         fn_vars := remove_lifted cenv (f.(fn_params) ++ f.(fn_vars));
         fn_temps := add_lifted cenv f.(fn_vars) f.(fn_temps);
@@ -239,7 +240,7 @@ Definition transf_function (f: function) : res function :=
 Definition transf_fundef (fd: fundef) : res fundef :=
   match fd with
   | Internal f => do tf <- transf_function f; OK (Internal tf)
-  | External ef targs tres => OK (External ef targs tres)
+  | External ef targs tres cconv => OK (External ef targs tres cconv)
   end.
 
 Definition transf_program (p: program) : res program :=

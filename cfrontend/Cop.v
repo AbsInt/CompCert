@@ -92,14 +92,14 @@ Inductive classify_cast_cases : Type :=
 
 Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
-  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
+  | Tint I32 si2 _, (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
   | Tint IBool _ _, Tfloat _ _ => cast_case_f2bool
-  | Tint IBool _ _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_p2bool
+  | Tint IBool _ _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_p2bool
   | Tint sz2 si2 _, Tint sz1 si1 _ => cast_case_i2i sz2 si2
   | Tint sz2 si2 _, Tfloat sz1 _ => cast_case_f2i sz2 si2
   | Tfloat sz2 _, Tfloat sz1 _ => cast_case_f2f sz2
   | Tfloat sz2 _, Tint sz1 si1 _ => cast_case_i2f si1 sz2
-  | (Tpointer _ _ | Tcomp_ptr _ _), (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_neutral
+  | (Tpointer _ _ | Tcomp_ptr _ _), (Tint _ _ _ | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_neutral
   | Tlong _ _, Tlong _ _ => cast_case_l2l
   | Tlong _ _, Tint sz1 si1 _ => cast_case_i2l si1
   | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
@@ -107,7 +107,7 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   | Tlong si2 _, Tfloat sz1 _ => cast_case_f2l si2
   | Tfloat sz2 _, Tlong si1 _ => cast_case_l2f si1 sz2
   | (Tpointer _ _ | Tcomp_ptr _ _), Tlong _ _ => cast_case_l2i I32 Unsigned
-  | Tlong si2 _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _) => cast_case_i2l si2
+  | Tlong si2 _, (Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _) => cast_case_i2l si2
   | Tstruct id2 fld2 _, Tstruct id1 fld1 _ => cast_case_struct id1 fld1 id2 fld2
   | Tunion id2 fld2 _, Tunion id1 fld1 _ => cast_case_union id1 fld1 id2 fld2
   | Tvoid, _ => cast_case_void
@@ -326,7 +326,7 @@ Proof.
   assert (A: classify_bool t =
     match t with
     | Tint _ _ _ => bool_case_i
-    | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ => bool_case_p
+    | Tpointer _ _ | Tcomp_ptr _ _ | Tarray _ _ _ | Tfunction _ _ _ => bool_case_p
     | Tfloat _ _ => bool_case_f
     | Tlong _ _ => bool_case_l
     | _ => bool_default
@@ -833,13 +833,13 @@ Definition sem_cmp (c:comparison)
 (** ** Function applications *)
 
 Inductive classify_fun_cases : Type:=
-  | fun_case_f (targs: typelist) (tres: type) (**r (pointer to) function *)
+  | fun_case_f (targs: typelist) (tres: type) (cc: calling_convention) (**r (pointer to) function *)
   | fun_default.
 
 Definition classify_fun (ty: type) :=
   match ty with 
-  | Tfunction args res => fun_case_f args res
-  | Tpointer (Tfunction args res) _ => fun_case_f args res
+  | Tfunction args res cc => fun_case_f args res cc
+  | Tpointer (Tfunction args res cc) _ => fun_case_f args res cc
   | _ => fun_default
   end.
 

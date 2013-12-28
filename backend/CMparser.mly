@@ -490,9 +490,9 @@ proc:
 
 signature:
     type_ 
-               { {sig_args = []; sig_res = Some $1} }
+               { {sig_args = []; sig_res = Some $1; sig_cc = cc_default} }
   | VOID
-               { {sig_args = []; sig_res = None} }
+               { {sig_args = []; sig_res = None; sig_cc = cc_default} }
   | type_ MINUSGREATER signature
                { let s = $3 in {s with sig_args = $1 :: s.sig_args} }
 ;

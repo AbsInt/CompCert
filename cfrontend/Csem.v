@@ -322,11 +322,11 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
     (More exactly, identification of function calls that can reduce.) *)
 
 Inductive callred: expr -> fundef -> list val -> type -> Prop :=
-  | red_Ecall: forall vf tyf tyargs tyres el ty fd vargs,
+  | red_Ecall: forall vf tyf tyargs tyres cconv el ty fd vargs,
       Genv.find_funct ge vf = Some fd ->
       cast_arguments el tyargs vargs ->
-      type_of_fundef fd = Tfunction tyargs tyres ->
-      classify_fun tyf = fun_case_f tyargs tyres ->
+      type_of_fundef fd = Tfunction tyargs tyres cconv ->
+      classify_fun tyf = fun_case_f tyargs tyres cconv ->
       callred (Ecall (Eval vf tyf) el ty)
               fd vargs ty.
 
@@ -754,9 +754,9 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (Callstate (Internal f) vargs k m)
          E0 (State f f.(fn_body) k e m2)
 
-  | step_external_function: forall ef targs tres vargs k m vres t m',
+  | step_external_function: forall ef targs tres cc vargs k m vres t m',
       external_call ef  ge vargs m t vres m' ->
-      sstep (Callstate (External ef targs tres) vargs k m)
+      sstep (Callstate (External ef targs tres cc) vargs k m)
           t (Returnstate vres k m')
 
   | step_returnstate: forall v f e C ty k m,
@@ -781,7 +781,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s ->
+      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
 
 (** A final state is a [Returnstate] with an empty continuation. *)

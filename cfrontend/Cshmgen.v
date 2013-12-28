@@ -443,8 +443,26 @@ Fixpoint transl_arglist (al: list Clight.expr) (tyl: typelist)
       do ta1' <- make_cast (typeof a1) ty1 ta1;
       do ta2 <- transl_arglist a2 ty2;      
       OK (ta1' :: ta2)
+  | a1 :: a2, Tnil =>
+      (* Tolerance for calls to K&R or variadic functions *)
+      do ta1 <- transl_expr a1;
+      do ta2 <- transl_arglist a2 Tnil;
+      OK (ta1 :: ta2)
   | _, _ =>
       Error(msg "Cshmgen.transl_arglist: arity mismatch")
+  end.
+
+(** Compute the argument signature that corresponds to a function application. *)
+
+Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: typelist)
+                            {struct al}: list AST.typ :=
+  match al, tyl with
+  | nil, _ => nil
+  | a1 :: a2, Tcons ty1 ty2 =>
+      typ_of_type ty1 :: typlist_of_arglist a2 ty2
+  | a1 :: a2, Tnil =>
+      (* Tolerance for calls to K&R or variadic functions *)
+      typ_of_type_default (typeof a1) :: typlist_of_arglist a2 Tnil
   end.
 
 (** * Translation of statements *)
@@ -487,10 +505,13 @@ Fixpoint transl_statement (tyret: type) (nbrk ncnt: nat)
       OK(Sset x tb)
   | Clight.Scall x b cl =>
       match classify_fun (typeof b) with
-      | fun_case_f args res =>
+      | fun_case_f args res cconv =>
           do tb <- transl_expr b;
           do tcl <- transl_arglist cl args;
-          OK(Scall x (signature_of_type args res) tb tcl)
+          OK(Scall x {| sig_args := typlist_of_arglist cl args;
+                        sig_res  := opttyp_of_type res;
+                        sig_cc   := cconv |}
+                   tb tcl)
       | _ => Error(msg "Cshmgen.transl_stmt(call)")
       end
   | Clight.Sbuiltin x ef tyargs bl =>
@@ -547,8 +568,9 @@ with transl_lbl_stmt (tyret: type) (nbrk ncnt: nat)
 Definition transl_var (v: ident * type) := (fst v, sizeof (snd v)).
 
 Definition signature_of_function (f: Clight.function) :=
-  mksignature (map typ_of_type (map snd (Clight.fn_params f)))
-              (opttyp_of_type (Clight.fn_return f)).
+  {| sig_args := map typ_of_type (map snd (Clight.fn_params f));
+     sig_res  := opttyp_of_type (Clight.fn_return f);
+     sig_cc   := Clight.fn_callconv f |}.
 
 Definition transl_function (f: Clight.function) : res function :=
   do tbody <- transl_statement f.(Clight.fn_return) 1%nat 0%nat (Clight.fn_body f);
@@ -563,9 +585,8 @@ Definition transl_fundef (f: Clight.fundef) : res fundef :=
   match f with
   | Clight.Internal g => 
       do tg <- transl_function g; OK(AST.Internal tg)
-  | Clight.External ef args res =>
-      if list_typ_eq (sig_args (ef_sig ef)) (typlist_of_typelist args)
-      && opt_typ_eq (sig_res (ef_sig ef)) (opttyp_of_type res)
+  | Clight.External ef args res cconv =>
+      if signature_eq (ef_sig ef) (signature_of_type args res cconv)
       then OK(AST.External ef)
       else Error(msg "Cshmgen.transl_fundef: wrong external signature")
   end.

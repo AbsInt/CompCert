@@ -427,7 +427,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,
-      loc_result (mksignature nil (Some Tint)) = r :: nil ->
+      loc_result signature_main = r :: nil ->
       rs r = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 

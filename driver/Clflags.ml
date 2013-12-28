@@ -48,6 +48,7 @@ let option_E = ref false
 let option_S = ref false
 let option_c = ref false
 let option_v = ref false
+let option_interp = ref false
 let option_small_data = 
   ref (if Configuration.arch = "powerpc"
        && Configuration.variant = "eabi"

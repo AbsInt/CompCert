@@ -1090,6 +1090,7 @@ Inductive tr_function: Csyntax.function -> Clight.function -> Prop :=
   | tr_function_intro: forall f tf,
       tr_stmt f.(Csyntax.fn_body) tf.(fn_body) ->
       fn_return tf = Csyntax.fn_return f ->
+      fn_callconv tf = Csyntax.fn_callconv f ->
       fn_params tf = Csyntax.fn_params f ->
       fn_vars tf = Csyntax.fn_vars f ->
       tr_function f tf.
@@ -1098,8 +1099,8 @@ Inductive tr_fundef: Csyntax.fundef -> Clight.fundef -> Prop :=
   | tr_internal: forall f tf,
       tr_function f tf ->
       tr_fundef (Csyntax.Internal f) (Clight.Internal tf)
-  | tr_external: forall ef targs tres,
-      tr_fundef (Csyntax.External ef targs tres) (External ef targs tres).
+  | tr_external: forall ef targs tres cconv,
+      tr_fundef (Csyntax.External ef targs tres cconv) (External ef targs tres cconv).
 
 Lemma transl_function_spec:
   forall f tf g g' i,

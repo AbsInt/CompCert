@@ -143,39 +143,6 @@ let globals_for_strings globs =
     (fun s id l -> global_for_string s id :: l)
     stringTable globs
 
-(** ** Declaration of special external functions *)
-
-let special_externals_table : (string, fundef) Hashtbl.t = Hashtbl.create 47
-
-let register_special_external name ef targs tres =
-  if not (Hashtbl.mem special_externals_table name) then
-    Hashtbl.add special_externals_table name (External(ef, targs, tres))
-
-let declare_special_externals k =
-  Hashtbl.fold
-    (fun name fd k -> (intern_string name, Gfun fd) :: k)
-    special_externals_table k
-
-(** ** Handling of stubs for variadic functions *)
-
-let register_stub_function name tres targs =
-  let rec letters_of_type = function
-    | Tnil -> []
-    | Tcons(Tfloat _, tl) -> "f" :: letters_of_type tl
-    | Tcons(Tlong _, tl) -> "l" :: letters_of_type tl
-    | Tcons(_, tl) -> "i" :: letters_of_type tl in
-  let rec types_of_types = function
-    | Tnil -> Tnil
-    | Tcons(Tfloat _, tl) -> Tcons(Tfloat(F64, noattr), types_of_types tl)
-    | Tcons(Tlong _, tl) -> Tcons(Tlong(Signed, noattr), types_of_types tl)
-    | Tcons(_, tl) -> Tcons(Tpointer(Tvoid, noattr), types_of_types tl) in
-  let stub_name =
-    name ^ "$" ^ String.concat "" (letters_of_type targs) in
-  let targs = types_of_types targs in
-  let ef = EF_external(intern_string stub_name, signature_of_type targs tres) in
-  register_special_external stub_name ef targs tres;
-  (stub_name, Tfunction (targs, tres))
-
 (** ** Handling of inlined memcpy functions *)
 
 let make_builtin_memcpy args =
@@ -230,10 +197,15 @@ let mergeTypAttr ty a2 =
   | Tlong(sg, a1) -> Tlong(sg, mergeAttr a1 a2)
   | Tpointer(ty', a1) -> Tpointer(ty', mergeAttr a1 a2)
   | Tarray(ty', sz, a1) -> Tarray(ty', sz, mergeAttr a1 a2)
-  | Tfunction(targs, tres) -> ty
+  | Tfunction(targs, tres, cc) -> ty
   | Tstruct(id, fld, a1) -> Tstruct(id, fld, mergeAttr a1 a2)
   | Tunion(id, fld, a1) -> Tunion(id, fld, mergeAttr a1 a2)
   | Tcomp_ptr(id, a1) -> Tcomp_ptr(id, mergeAttr a1 a2)
+
+let convertCallconv va attr =
+  let sr =
+    Cutil.find_custom_attributes ["structreturn"; "__structreturn"] attr in
+  { cc_vararg = va; cc_structret = sr <> [] }
 
 (** Types *)
 
@@ -293,14 +265,15 @@ let convertTyp env t =
     | C.TArray(ty, Some sz, a) ->
         Tarray(convertTyp seen ty, convertInt sz, convertAttr a)
     | C.TFun(tres, targs, va, a) ->
-        if va then unsupported "variadic function type";
+        (* if va then unsupported "variadic function type"; *)
         if Cutil.is_composite_type env tres then
           unsupported "return type is a struct or union";
         Tfunction(begin match targs with
                   | None -> (*warning "un-prototyped function type";*) Tnil
                   | Some tl -> convertParams seen tl
                   end,
-                  convertTyp seen tres)
+                  convertTyp seen tres,
+                  convertCallconv va a)
     | C.TNamed _ ->
         assert false
     | C.TStruct(id, a) ->
@@ -347,9 +320,20 @@ let convertTyp env t =
 
   in convertTyp [] t
 
+(*
 let rec convertTypList env = function
   | [] -> Tnil
   | t1 :: tl -> Tcons(convertTyp env t1, convertTypList env tl)
+*)
+
+let rec convertTypArgs env tl el =
+  match tl, el with
+  | _, [] -> Tnil
+  | [], e1 :: el ->
+      Tcons(convertTyp env (Cutil.default_argument_conversion env e1.etyp),
+            convertTypArgs env [] el)
+  | (id, t1) :: tl, e1 :: el ->
+      Tcons(convertTyp env t1, convertTypArgs env tl el)
 
 let cacheCompositeDef env su id attr flds =
   let ty =
@@ -357,12 +341,6 @@ let cacheCompositeDef env su id attr flds =
     | C.Struct -> C.TStruct(id, attr)
     | C.Union  -> C.TUnion(id, attr) in
   Hashtbl.add compositeCache id (convertTyp env ty)
-
-let rec projFunType env ty =
-  match Cutil.unroll env ty with
-  | TFun(res, args, vararg, attr) -> Some(res, args, vararg)
-  | TPtr(ty', attr) -> projFunType env ty'
-  | _ -> None
 
 let string_of_type ty =
   let b = Buffer.create 20 in
@@ -544,10 +522,7 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
       begin match args with
       | {edesc = C.EConst(CStr txt)} :: args1 ->
-          let targs1 =
-            convertTypList env
-              (List.map (fun e -> Cutil.default_argument_conversion env e.etyp)
-                        args1) in
+          let targs1 = convertTypArgs env [] args1 in
           Ebuiltin(
             EF_annot(intern_string txt,
                      List.map (fun t -> AA_arg t) (typlist_of_typelist targs1)),
@@ -575,36 +550,19 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_fabs"}}, [arg]) ->
       Eunop(Oabsfloat, convertExpr env arg, ty)
 
+  | C.ECall({edesc = C.EVar {name = "printf"}}, args)
+    when !Clflags.option_interp ->
+      let targs =
+        convertTypArgs env [] args in
+      let sg =
+        signature_of_type targs ty {cc_vararg = true; cc_structret = false} in
+      Ebuiltin(EF_external(intern_string "printf", sg), 
+               targs, convertExprList env args, ty)
+ 
   | C.ECall(fn, args) ->
       if not (supported_return_type env e.etyp) then
         unsupported ("function returning a result of type " ^ string_of_type e.etyp);
-      match projFunType env fn.etyp with
-      | None ->
-          error "wrong type for function part of a call"; ezero
-      | Some(tres, targs, false) ->
-          (* Non-variadic function *)
-          if targs = None then
-            unsupported "call to non-prototyped function";
-          Ecall(convertExpr env fn, convertExprList env args, ty)
-      | Some(tres, targs, true) ->
-          (* Variadic function: generate a call to a stub function with
-             the appropriate number and types of arguments.  Works only if
-             the function expression e is a global variable. *)
-          let fun_name =
-            match fn with
-            | {edesc = C.EVar id} when !Clflags.option_fvararg_calls ->
-                (*warning "emulating call to variadic function"; *)
-                id.name
-            | _ ->
-                unsupported "call to variadic function";
-                "<error>" in
-          let targs = convertTypList env (List.map (fun e -> e.etyp) args) in
-          let tres = convertTyp env tres in
-          let (stub_fun_name, stub_fun_typ) =
-            register_stub_function fun_name tres targs in
-          Ecall(Evalof(Evar(intern_string stub_fun_name, stub_fun_typ),
-                       stub_fun_typ),
-                convertExprList env args, ty)
+      Ecall(convertExpr env fn, convertExprList env args, ty)
 
 and convertLvalue env e =
   let ty = convertTyp env e.etyp in
@@ -787,25 +745,28 @@ let convertFundef loc env fd =
       a_access = Sections.Access_default;
       a_inline = fd.fd_inline;
       a_loc = loc };
-  (id', Gfun(Internal {fn_return = ret; fn_params = params;
-                       fn_vars = vars; fn_body = body'}))
+  (id', Gfun(Internal {fn_return = ret;
+                       fn_callconv = convertCallconv fd.fd_vararg fd.fd_attrib;
+                       fn_params = params;
+                       fn_vars = vars;
+                       fn_body = body'}))
 
 (** External function declaration *)
 
 let convertFundecl env (sto, id, ty, optinit) =
-  let (args, res) =
+  let (args, res, cconv) =
     match convertTyp env ty with
-    | Tfunction(args, res) -> (args, res)
+    | Tfunction(args, res, cconv) -> (args, res, cconv)
     | _ -> assert false in
   let id' = intern_string id.name in
-  let sg = signature_of_type args res in
+  let sg = signature_of_type args res cconv in
   let ef =
     if id.name = "malloc" then EF_malloc else
     if id.name = "free" then EF_free else
     if List.mem_assoc id.name builtins.functions
     then EF_builtin(id', sg)
     else EF_external(id', sg) in
-  (id', Gfun(External(ef, args, res)))
+  (id', Gfun(External(ef, args, res, cconv)))
 
 (** Initializers *)
 
@@ -894,15 +855,12 @@ let rec convertGlobdecls env res gl =
       match g.gdesc with
       | C.Gdecl((sto, id, ty, optinit) as d) ->
           (* Prototyped functions become external declarations.
-             Variadic functions are skipped.
              Other types become variable declarations. *)
           begin match Cutil.unroll env ty with
-          | TFun(_, Some _, false, _) ->
+          | TFun(_, Some _, _, _) ->
               convertGlobdecls env (convertFundecl env d :: res) gl'
-          | TFun(_, None, false, _) ->
+          | TFun(_, None, _, _) ->
               unsupported ("'" ^ id.name ^ "' is declared without a function prototype");
-              convertGlobdecls env res gl'
-          | TFun(_, _, true, _) ->
               convertGlobdecls env res gl'
           | _ ->
               convertGlobdecls env (convertGlobvar g.gloc env d :: res) gl'
@@ -1002,15 +960,13 @@ let convertProgram p =
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
   Hashtbl.clear compositeCache;
-  Hashtbl.clear special_externals_table;
   let p = Builtins.declarations() @ p in
   try
     let gl1 = convertGlobdecls (translEnv Env.empty p) [] (cleanupGlobals p) in
-    let gl2 = declare_special_externals gl1 in
-    let gl3 = globals_for_strings gl2 in
+    let gl2 = globals_for_strings gl1 in
     if !numErrors > 0
     then None
-    else Some { AST.prog_defs = gl3;
+    else Some { AST.prog_defs = gl2;
                 AST.prog_main = intern_string "main" }
   with Env.Error msg ->
     error (Env.error_message msg); None

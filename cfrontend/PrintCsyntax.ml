@@ -88,11 +88,6 @@ let attributes a =
 let name_optid id =
   if id = "" then "" else " " ^ id
 
-(*
-let parenthesize_if_pointer id =
-  if String.length id > 0 && id.[0] = '*' then "(" ^ id ^ ")" else id
-*)
-
 let rec name_cdecl id ty =
   match ty with
   | Tvoid ->
@@ -111,24 +106,26 @@ let rec name_cdecl id ty =
       name_cdecl id' t
   | Tarray(t, n, a) ->
       name_cdecl (sprintf "%s[%ld]" id (camlint_of_coqint n)) t
-  | Tfunction(args, res) ->
+  | Tfunction(args, res, cconv) ->
       let b = Buffer.create 20 in
       if id = ""
       then Buffer.add_string b "(*)"
       else Buffer.add_string b id;
       Buffer.add_char b '(';
-      begin match args with
+      let rec add_args first = function
       | Tnil ->
-          Buffer.add_string b "void"
-      | _ ->
-          let rec add_args first = function
-          | Tnil -> ()
-          | Tcons(t1, tl) ->
-              if not first then Buffer.add_string b ", ";
-              Buffer.add_string b (name_cdecl "" t1);
-              add_args false tl in
-          add_args true args
-      end;
+          if first then
+            Buffer.add_string b
+               (if cconv.cc_vararg then "..." else "void")
+          else if cconv.cc_vararg then
+            Buffer.add_string b ", ..."
+          else
+            ()
+      | Tcons(t1, tl) ->
+          if not first then Buffer.add_string b ", ";
+          Buffer.add_string b (name_cdecl "" t1);
+          add_args false tl in
+      add_args true args;
       Buffer.add_char b ')';
       name_cdecl (Buffer.contents b) res
   | Tstruct(name, fld, a) ->
@@ -351,16 +348,17 @@ and print_stmt_for p s =
   | _ ->
       fprintf p "({ %a })" print_stmt s
 
-let name_function_parameters fun_name params =
+let name_function_parameters fun_name params cconv =
   let b = Buffer.create 20 in
   Buffer.add_string b fun_name;
   Buffer.add_char b '(';
   begin match params with
   | [] ->
-      Buffer.add_string b "void"
+      Buffer.add_string b (if cconv.cc_vararg then "..." else "void")
   | _ ->
       let rec add_params first = function
-      | [] -> ()
+      | [] ->
+          if cconv.cc_vararg then Buffer.add_string b "..."
       | (id, ty) :: rem ->
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl (extern_atom id) ty);
@@ -373,7 +371,7 @@ let name_function_parameters fun_name params =
 let print_function p id f =
   fprintf p "%s@ "
             (name_cdecl (name_function_parameters (extern_atom id)
-                                                  f.fn_params)
+                                                  f.fn_params f.fn_callconv)
                         f.fn_return);
   fprintf p "@[<v 2>{@ ";
   List.iter
@@ -385,10 +383,10 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | External(EF_external(_,_), args, res) ->
+  | External(EF_external(_,_), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
-                (name_cdecl (extern_atom id) (Tfunction(args, res)))
-  | External(_, _, _) ->
+                (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
+  | External(_, _, _, _) ->
       ()
   | Internal f ->
       print_function p id f
@@ -474,7 +472,7 @@ let rec collect_type = function
   | Tlong _ -> ()
   | Tpointer(t, _) -> collect_type t
   | Tarray(t, _, _) -> collect_type t
-  | Tfunction(args, res) -> collect_type_list args; collect_type res
+  | Tfunction(args, res, _) -> collect_type_list args; collect_type res
   | Tstruct(id, fld, _) | Tunion(id, fld, _) ->
       let s = extern_atom id in
       if not (StructUnion.mem s !struct_unions) then begin
@@ -552,7 +550,7 @@ let collect_function f =
 
 let collect_globdef (id, gd) =
   match gd with
-  | Gfun(External(_, args, res)) -> collect_type_list args; collect_type res
+  | Gfun(External(_, args, res, _)) -> collect_type_list args; collect_type res
   | Gfun(Internal f) -> collect_function f
   | Gvar v -> collect_type v.gvar_info
 

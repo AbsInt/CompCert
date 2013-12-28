@@ -229,7 +229,7 @@ and print_stmt_for p s =
 let print_function p id f =
   fprintf p "%s@ "
             (name_cdecl (name_function_parameters (extern_atom id)
-                                                  f.fn_params)
+                                                  f.fn_params f.fn_callconv)
                         f.fn_return);
   fprintf p "@[<v 2>{@ ";
   List.iter
@@ -245,10 +245,10 @@ let print_function p id f =
 
 let print_fundef p id fd =
   match fd with
-  | External(EF_external(_,_), args, res) ->
+  | External(EF_external(_,_), args, res, cconv) ->
       fprintf p "extern %s;@ @ "
-                (name_cdecl (extern_atom id) (Tfunction(args, res)))
-  | External(_, _, _) ->
+                (name_cdecl (extern_atom id) (Tfunction(args, res, cconv)))
+  | External(_, _, _, _) ->
       ()
   | Internal f ->
       print_function p id f
@@ -309,7 +309,7 @@ let collect_function f =
 
 let collect_globdef (id, gd) =
   match gd with
-  | Gfun(External(_, args, res)) -> collect_type_list args; collect_type res
+  | Gfun(External(_, args, res, _)) -> collect_type_list args; collect_type res
   | Gfun(Internal f) -> collect_function f
   | Gvar v -> collect_type v.gvar_info
 

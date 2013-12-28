@@ -172,12 +172,13 @@ let name_of_type = function
   | Tlong -> "long"
   | Tsingle -> "single"
 
-let rec print_sig p = function
-  | {sig_args = []; sig_res = None} -> fprintf p "void"
-  | {sig_args = []; sig_res = Some ty} -> fprintf p "%s" (name_of_type ty)
-  | {sig_args = t1 :: tl; sig_res = tres} ->
-      fprintf p "%s ->@ " (name_of_type t1);
-      print_sig p {sig_args = tl; sig_res = tres}
+let print_sig p sg =
+  List.iter
+    (fun t -> fprintf p "%s ->@ " (name_of_type t))
+    sg.sig_args;
+  match sg.sig_res with
+  | None -> fprintf p "void"
+  | Some ty -> fprintf p "%s" (name_of_type ty)
 
 let rec just_skips s =
   match s with

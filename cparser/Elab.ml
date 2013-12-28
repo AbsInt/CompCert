@@ -1567,9 +1567,9 @@ let elab_fundef env (spec, name) body loc1 loc2 =
     | TFun(ty_ret, None, vararg, attr) -> TFun(ty_ret, Some [], vararg, attr)
     | _ -> ty in
   (* Extract info from type *)
-  let (ty_ret, params, vararg) =
+  let (ty_ret, params, vararg, attr) =
     match ty with
-    | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg)
+    | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
     | _ -> fatal_error loc1 "wrong type for function definition" in
   (* Enter function in the environment, for recursive references *)
   let (fun_id, env1) = enter_or_refine_ident false loc1 env s sto ty in
@@ -1584,6 +1584,7 @@ let elab_fundef env (spec, name) body loc1 loc2 =
     { fd_storage = sto;
       fd_inline = inline;
       fd_name = fun_id;
+      fd_attrib = attr;
       fd_ret = ty_ret;
       fd_params = params;
       fd_vararg = vararg;
