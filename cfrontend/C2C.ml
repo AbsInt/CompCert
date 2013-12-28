@@ -836,8 +836,10 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
 let checkComposite env si id attr flds =
   let checkField f =
     if f.fld_bitfield <> None then
-      unsupported "bit field in struct or union (consider adding option -fbitfields)"
-  in List.iter checkField flds
+      unsupported "bit field in struct or union (consider adding option -fbitfields)" in
+  List.iter checkField flds;
+  if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then
+    unsupported "packed struct (consider adding option -fpacked-struct)"
 
 (** Convert a list of global declarations.
   Result is a list of CompCert C global declarations (functions +

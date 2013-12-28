@@ -119,7 +119,8 @@ let transf_composite loc env su id attrs ml =
           (0L, 0L, false) in
       let mfa = packed_param_value loc mfa in
       let msa = packed_param_value loc msa in
-      transf_struct_decl mfa msa swapped loc env id attrs ml
+      let attrs' = remove_custom_attributes  ["packed";"__packed__"] attrs in
+      transf_struct_decl mfa msa swapped loc env id attrs' ml
 
 (* Accessor functions *)
 
@@ -391,9 +392,13 @@ let rec transf_globdecls env accu = function
             ({g with gdesc = Gfundef(transf_fundef env f)} :: accu)
             gl
       | Gcompositedecl(su, id, attr) ->
+          let attr' =
+            match su with
+            | Union -> attr
+            | Struct -> remove_custom_attributes  ["packed";"__packed__"] attr in 
           transf_globdecls
-            (Env.add_composite env id (composite_info_decl env su attr))
-            (g :: accu)
+            (Env.add_composite env id (composite_info_decl env su attr'))
+            ({g with gdesc = Gcompositedecl(su, id, attr')} :: accu)
             gl
       | Gcompositedef(su, id, attr, fl) ->
           let (attr', fl') = transf_composite g.gloc env su id attr fl in
