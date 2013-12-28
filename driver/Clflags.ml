@@ -19,6 +19,7 @@ let option_flongdouble = ref false
 let option_fstruct_return = ref false
 let option_fbitfields = ref false
 let option_fvararg_calls = ref true
+let option_funprototyped = ref true
 let option_fpacked_structs = ref false
 let option_ffpu = ref true
 let option_ffloatconstprop = ref 2

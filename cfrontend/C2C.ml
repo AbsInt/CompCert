@@ -268,7 +268,7 @@ let convertTyp env t =
         if Cutil.is_composite_type env tres then
           unsupported "return type is a struct or union (consider adding option -fstruct-return)";
         Tfunction(begin match targs with
-                  | None -> (*warning "un-prototyped function type";*) Tnil
+                  | None -> Tnil
                   | Some tl -> convertParams seen tl
                   end,
                   convertTyp seen tres,
@@ -340,6 +340,12 @@ let cacheCompositeDef env su id attr flds =
     | C.Struct -> C.TStruct(id, attr)
     | C.Union  -> C.TUnion(id, attr) in
   Hashtbl.add compositeCache id (convertTyp env ty)
+
+let rec projFunType env ty =
+  match Cutil.unroll env ty with
+  | TFun(res, args, vararg, attr) -> Some(res, args, vararg)
+  | TPtr(ty', attr) -> projFunType env ty'
+  | _ -> None
 
 let string_of_type ty =
   let b = Buffer.create 20 in
@@ -561,6 +567,15 @@ let rec convertExpr env e =
   | C.ECall(fn, args) ->
       if not (supported_return_type env e.etyp) then
         unsupported ("function returning a result of type " ^ string_of_type e.etyp ^ " (consider adding option -fstruct-return)");
+      begin match projFunType env fn.etyp with
+      | None ->
+          error "wrong type for function part of a call"
+      | Some(tres, targs, va) ->
+          if targs = None && not !Clflags.option_funprototyped then
+            unsupported "call to unprototyped function (consider adding option -funprototyped)";
+          if va && not !Clflags.option_fvararg_calls then
+            unsupported "call to variable-argument function (consider adding option -fvararg-calls)"
+      end;
       Ecall(convertExpr env fn, convertExprList env args, ty)
 
 and convertLvalue env e =
@@ -719,6 +734,8 @@ and convertSwitch ploc env = function
 let convertFundef loc env fd =
   if Cutil.is_composite_type env fd.fd_ret then
     unsupported "function returning a struct or union (consider adding option -fstruct-return)";
+  if fd.fd_vararg && not !Clflags.option_fvararg_calls then
+    unsupported "variable-argument function (consider adding option -fvararg-calls)";
   let ret =
     convertTyp env fd.fd_ret in
   let params =
@@ -852,14 +869,13 @@ let rec convertGlobdecls env res gl =
       updateLoc g.gloc;
       match g.gdesc with
       | C.Gdecl((sto, id, ty, optinit) as d) ->
-          (* Prototyped functions become external declarations.
+          (* Functions become external declarations.
              Other types become variable declarations. *)
           begin match Cutil.unroll env ty with
-          | TFun(_, Some _, _, _) ->
+          | TFun(tres, targs, va, a) ->
+              if targs = None then
+                warning ("'" ^ id.name ^ "' is declared without a function prototype");
               convertGlobdecls env (convertFundecl env d :: res) gl'
-          | TFun(_, None, _, _) ->
-              unsupported ("'" ^ id.name ^ "' is declared without a function prototype");
-              convertGlobdecls env res gl'
           | _ ->
               convertGlobdecls env (convertGlobvar g.gloc env d :: res) gl'
           end
