@@ -265,9 +265,8 @@ let convertTyp env t =
     | C.TArray(ty, Some sz, a) ->
         Tarray(convertTyp seen ty, convertInt sz, convertAttr a)
     | C.TFun(tres, targs, va, a) ->
-        (* if va then unsupported "variadic function type"; *)
         if Cutil.is_composite_type env tres then
-          unsupported "return type is a struct or union";
+          unsupported "return type is a struct or union (consider adding option -fstruct-return)";
         Tfunction(begin match targs with
                   | None -> (*warning "un-prototyped function type";*) Tnil
                   | Some tl -> convertParams seen tl
@@ -561,7 +560,7 @@ let rec convertExpr env e =
  
   | C.ECall(fn, args) ->
       if not (supported_return_type env e.etyp) then
-        unsupported ("function returning a result of type " ^ string_of_type e.etyp);
+        unsupported ("function returning a result of type " ^ string_of_type e.etyp ^ " (consider adding option -fstruct-return)");
       Ecall(convertExpr env fn, convertExprList env args, ty)
 
 and convertLvalue env e =
@@ -719,7 +718,7 @@ and convertSwitch ploc env = function
 
 let convertFundef loc env fd =
   if Cutil.is_composite_type env fd.fd_ret then
-    unsupported "function returning a struct or union";
+    unsupported "function returning a struct or union (consider adding option -fstruct-return)";
   let ret =
     convertTyp env fd.fd_ret in
   let params =
@@ -837,10 +836,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
 let checkComposite env si id attr flds =
   let checkField f =
     if f.fld_bitfield <> None then
-      unsupported "bit field in struct or union";
-    if Cutil.find_custom_attributes ["aligned"; "__aligned__"] 
-          (Cutil.attributes_of_type env f.fld_typ) <> [] then
-      warning ("ignoring 'aligned' attribute on field " ^ f.fld_name)
+      unsupported "bit field in struct or union (consider adding option -fbitfields)"
   in List.iter checkField flds
 
 (** Convert a list of global declarations.
