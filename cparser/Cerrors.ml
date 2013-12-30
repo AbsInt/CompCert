@@ -31,7 +31,7 @@ let fatal_error fmt =
   kfprintf
     (fun _ -> raise Abort)
     err_formatter
-    ("@[<hov 2>" ^^ fmt ^^ ".@]@.@[<hov 0>Fatal error.@]@.")
+    ("@[<hov 2>" ^^ fmt ^^ ".@]@.@[<hov 0>Fatal error; compilation aborted.@]@.")
 
 let error fmt =
   incr num_errors;

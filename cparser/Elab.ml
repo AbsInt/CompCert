@@ -631,7 +631,7 @@ and elab_struct_or_union_info kind loc env members attrs =
   | [ { fld_typ = TArray(ty_elt, None, _) } ] when kind = Struct -> ()
         (* C99: ty[] allowed as last field of a struct *)
   | fld :: rem ->
-      if incomplete_type env' fld.fld_typ then
+      if wrap incomplete_type loc env' fld.fld_typ then
         error loc "member '%s' has incomplete type" fld.fld_name;
       check_incomplete rem in
   check_incomplete m;
@@ -895,7 +895,7 @@ let elab_expr loc env a =
 
   | EXPR_SIZEOF a1 ->
       let b1 = elab a1 in
-      if sizeof env b1.etyp = None then
+      if wrap incomplete_type loc env b1.etyp then
         err "incomplete type %a" Cprint.typ b1.etyp;
       let bdesc =
         (* Catch special cases sizeof("string literal") *)
@@ -912,19 +912,19 @@ let elab_expr loc env a =
 
   | TYPE_SIZEOF (spec, dcl) ->
       let ty = elab_type loc env spec dcl in
-      if sizeof env ty = None then
+      if wrap incomplete_type loc env ty then
         err "incomplete type %a" Cprint.typ ty;
       { edesc = ESizeof ty; etyp = TInt(size_t_ikind, []) }
 
   | EXPR_ALIGNOF a1 ->
       let b1 = elab a1 in
-      if sizeof env b1.etyp = None then
+      if wrap incomplete_type loc env b1.etyp then
         err "incomplete type %a" Cprint.typ b1.etyp;
       { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind, []) }
 
   | TYPE_ALIGNOF (spec, dcl) ->
       let ty = elab_type loc env spec dcl in
-      if sizeof env ty = None then
+      if wrap incomplete_type loc env ty then
         err "incomplete type %a" Cprint.typ ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind, []) }
 
@@ -1026,7 +1026,7 @@ let elab_expr loc env a =
                 err "mismatch between pointer types in binary '-'";
               if not (pointer_arithmetic_ok env ty1) then
                 err "illegal pointer arithmetic in binary '-'";
-              if sizeof env ty1 = Some 0 then
+              if wrap sizeof loc env ty1 = Some 0 then
                 err "subtraction between two pointers to zero-sized objects";
               (TPtr(ty1, []), TInt(ptrdiff_t_ikind, []))
           | _, _ -> error "type error in binary '-'"
@@ -1553,7 +1553,8 @@ let rec enter_decdefs local loc env = function
       (* update environment with refined type *)
       let env2 = Env.add_ident env1 id sto' ty' in
       (* check for incomplete type *)
-      if local && sto' <> Storage_extern && incomplete_type env ty' then
+      if local && sto' <> Storage_extern
+               && wrap incomplete_type loc env ty' then
         error loc "'%s' has incomplete type" s;
       if local && sto' <> Storage_extern && sto' <> Storage_static then begin
         (* Local definition *)
