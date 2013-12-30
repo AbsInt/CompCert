@@ -465,8 +465,9 @@ Definition do_ef_free
 Definition memcpy_args_ok
   (sz al: Z) (bdst: block) (odst: Z) (bsrc: block) (osrc: Z) : Prop :=
       (al = 1 \/ al = 2 \/ al = 4 \/ al = 8)
-   /\ sz > 0
-   /\ (al | sz) /\ (al | osrc) /\ (al | odst)
+   /\ sz >= 0 /\ (al | sz)
+   /\ (sz > 0 -> (al | osrc))
+   /\ (sz > 0 -> (al | odst))
    /\ (bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc).
 
 Remark memcpy_check_args:
@@ -479,10 +480,14 @@ Proof with try (right; intuition omega).
     destruct (zeq al 4); auto. destruct (zeq al 8); auto...
   unfold memcpy_args_ok. destruct X...
   assert (al > 0) by (intuition omega).
-  destruct (zlt 0 sz)...
+  destruct (zle 0 sz)...
   destruct (Zdivide_dec al sz); auto...
-  destruct (Zdivide_dec al osrc); auto...
-  destruct (Zdivide_dec al odst); auto...
+  assert(U: forall x, {sz > 0 -> (al | x)} + {~(sz > 0 -> (al | x))}).
+    intros. destruct (zeq sz 0). 
+    left; intros; omegaContradiction.
+    destruct (Zdivide_dec al x); auto. right; red; intros. elim n0. apply H0. omega. 
+  destruct (U osrc); auto...
+  destruct (U odst); auto...
   assert (Y: {bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc}
            +{~(bsrc <> bdst \/ osrc = odst \/ osrc + sz <= odst \/ odst + sz <= osrc)}).
     destruct (eq_block bsrc bdst); auto.

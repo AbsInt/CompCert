@@ -1230,8 +1230,9 @@ Qed.
 
 Inductive extcall_memcpy_sem (sz al: Z) (F V: Type) (ge: Genv.t F V): list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_memcpy_sem_intro: forall bdst odst bsrc osrc m bytes m',
-      al = 1 \/ al = 2 \/ al = 4 \/ al = 8 -> sz > 0 ->
-      (al | sz) -> (al | Int.unsigned osrc) -> (al | Int.unsigned odst) ->
+      al = 1 \/ al = 2 \/ al = 4 \/ al = 8 -> sz >= 0 -> (al | sz) ->
+      (sz > 0 -> (al | Int.unsigned osrc)) ->
+      (sz > 0 -> (al | Int.unsigned odst)) ->
       bsrc <> bdst \/ Int.unsigned osrc = Int.unsigned odst
                    \/ Int.unsigned osrc + sz <= Int.unsigned odst
                    \/ Int.unsigned odst + sz <= Int.unsigned osrc ->
@@ -1244,19 +1245,19 @@ Lemma extcall_memcpy_ok:
   extcall_properties (extcall_memcpy_sem sz al) (mksignature (Tint :: Tint :: nil) None cc_default).
 Proof.
   intros. constructor.
-(* return type *)
+- (* return type *)
   intros. inv H. constructor. 
-(* change of globalenv *)
+- (* change of globalenv *)
   intros. inv H1. econstructor; eauto.
-(* valid blocks *)
+- (* valid blocks *)
   intros. inv H. eauto with mem. 
-(* perms *)
+- (* perms *)
   intros. inv H. eapply Mem.perm_storebytes_2; eauto. 
-(* readonly *)
+- (* readonly *)
   intros. inv H. eapply Mem.storebytes_unchanged_on; eauto. 
   intros; red; intros. elim H8. 
   apply Mem.perm_cur_max. eapply Mem.storebytes_range_perm; eauto. 
-(* extensions *)
+- (* extensions *)
   intros. inv H. 
   inv H1. inv H13. inv H14. inv H10. inv H11.
   exploit Mem.loadbytes_length; eauto. intros LEN.
@@ -1272,8 +1273,31 @@ Proof.
   eapply Mem.storebytes_range_perm; eauto. 
   erewrite list_forall2_length; eauto. 
   tauto.
-(* injections *)
+- (* injections *)
   intros. inv H0. inv H2. inv H14. inv H15. inv H11. inv H12.
+  destruct (zeq sz 0).
++ (* special case sz = 0 *)
+  assert (bytes = nil). 
+  { exploit (Mem.loadbytes_empty m1 bsrc (Int.unsigned osrc) sz). omega. congruence. }
+  subst.
+  destruct (Mem.range_perm_storebytes m1' b0 (Int.unsigned (Int.add odst (Int.repr delta0))) nil)
+  as [m2' SB].
+  simpl. red; intros; omegaContradiction.
+  exists f, Vundef, m2'. 
+  split. econstructor; eauto. 
+  intros; omegaContradiction.
+  intros; omegaContradiction.
+  right; omega. 
+  apply Mem.loadbytes_empty. omega. 
+  split. auto.
+  split. eapply Mem.storebytes_empty_inject; eauto.
+  split. eapply Mem.storebytes_unchanged_on; eauto. unfold loc_unmapped; intros.
+  congruence.
+  split. eapply Mem.storebytes_unchanged_on; eauto.
+  simpl; intros; omegaContradiction.
+  split. apply inject_incr_refl.
+  red; intros; congruence.
++ (* general case sz > 0 *)
   exploit Mem.loadbytes_length; eauto. intros LEN.
   assert (RPSRC: Mem.range_perm m1 bsrc (Int.unsigned osrc) (Int.unsigned osrc + sz) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
@@ -1291,11 +1315,11 @@ Proof.
   exploit Mem.storebytes_mapped_inject; eauto. intros [m2' [C D]].
   exists f; exists Vundef; exists m2'.
   split. econstructor; try rewrite EQ1; try rewrite EQ2; eauto. 
-  eapply Mem.aligned_area_inject with (m := m1); eauto.
-  eapply Mem.aligned_area_inject with (m := m1); eauto.
+  intros; eapply Mem.aligned_area_inject with (m := m1); eauto.
+  intros; eapply Mem.aligned_area_inject with (m := m1); eauto.
   eapply Mem.disjoint_or_equal_inject with (m := m1); eauto.
   apply Mem.range_perm_max with Cur; auto.
-  apply Mem.range_perm_max with Cur; auto.
+  apply Mem.range_perm_max with Cur; auto. omega.
   split. constructor.
   split. auto.
   split. eapply Mem.storebytes_unchanged_on; eauto. unfold loc_unmapped; intros.
@@ -1308,13 +1332,13 @@ Proof.
   omega.
   split. apply inject_incr_refl.
   red; intros; congruence.
-(* trace length *)
+- (* trace length *)
   intros; inv H. simpl; omega.
-(* receptive *)
+- (* receptive *)
   intros. 
   assert (t1 = t2). inv H; inv H0; auto. subst t2.
   exists vres1; exists m1; auto.
-(* determ *)
+- (* determ *)
   intros; inv H; inv H0. split. constructor. intros; split; congruence.
 Qed.
 

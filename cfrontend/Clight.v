@@ -220,8 +220,8 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: int):
       assign_loc ty m b ofs v m'
   | assign_loc_copy: forall b' ofs' bytes m',
       access_mode ty = By_copy ->
-      (alignof_blockcopy ty | Int.unsigned ofs') ->
-      (alignof_blockcopy ty | Int.unsigned ofs) ->
+      (sizeof ty > 0 -> (alignof_blockcopy ty | Int.unsigned ofs')) ->
+      (sizeof ty > 0 -> (alignof_blockcopy ty | Int.unsigned ofs)) ->
       b' <> b \/ Int.unsigned ofs' = Int.unsigned ofs
               \/ Int.unsigned ofs' + sizeof ty <= Int.unsigned ofs
               \/ Int.unsigned ofs + sizeof ty <= Int.unsigned ofs' ->

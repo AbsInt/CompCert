@@ -1135,7 +1135,6 @@ Proof.
     inv SOUND. eapply add_memcpy_holds; eauto. 
     eapply kill_loads_after_storebytes_holds; eauto. 
     eapply Mem.loadbytes_length; eauto. 
-    omega. 
     simpl. apply Ple_refl. 
   + apply CASE2; inv H0; auto.
   + apply CASE2; inv H0; auto.

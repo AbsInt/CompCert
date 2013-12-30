@@ -175,12 +175,7 @@ Fixpoint transl_init (ty: type) (i: initializer)
   | Init_single a, _ =>
       do d <- transl_init_single ty a; OK (d :: nil)
   | Init_compound il, Tarray tyelt nelt _ =>
-      if zle nelt 0 then
-        OK (Init_space(sizeof ty) :: nil)
-      else
-        transl_init_array tyelt il nelt
-  | Init_compound il, Tstruct _ Fnil _ =>
-      OK (Init_space (sizeof ty) :: nil)
+      transl_init_array tyelt il (Zmax 0 nelt)
   | Init_compound il, Tstruct id fl _ =>
       transl_init_struct id ty fl il 0
   | Init_compound il, Tunion _ Fnil _ =>

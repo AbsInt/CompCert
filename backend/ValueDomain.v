@@ -2727,16 +2727,14 @@ Qed.
 Lemma romatch_storebytes:
   forall m b ofs bytes m' rm,
   Mem.storebytes m b ofs bytes = Some m' ->
-  bytes <> nil ->
   romatch m rm ->
   romatch m' rm.
 Proof.
-  intros; red; intros. exploit H1; eauto. intros (A & B & C). split; auto. split.
+  intros; red; intros. exploit H0; eauto. intros (A & B & C). split; auto. split.
 - apply bmatch_inv with m; auto.
-  intros. eapply Mem.loadbytes_storebytes_other; eauto. 
-  left. red; intros; subst b0. elim (C ofs). apply Mem.perm_cur_max.
-  eapply Mem.storebytes_range_perm; eauto. 
-  destruct bytes. congruence. simpl length. rewrite inj_S. omega.
+  intros. eapply Mem.loadbytes_storebytes_disjoint; eauto. 
+  destruct (eq_block b0 b); auto. subst b0. right; red; unfold Intv.In; simpl; red; intros.
+  elim (C x). apply Mem.perm_cur_max. eapply Mem.storebytes_range_perm; eauto.
 - intros; red; intros; elim (C ofs0). eauto with mem.
 Qed.
 

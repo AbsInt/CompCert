@@ -29,6 +29,7 @@
 Require Import Zwf.
 Require Import Axioms.
 Require Import Coqlib.
+Require Intv.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.
@@ -513,12 +514,21 @@ Proof.
   apply H. omega. apply IHn. intros. apply H. omega.
 Qed.
 
+Remark getN_setN_disjoint:
+  forall vl q c n p,
+  Intv.disjoint (p, p + Z_of_nat n) (q, q + Z_of_nat (length vl)) ->
+  getN n p (setN vl q c) = getN n p c.
+Proof.
+  intros. apply getN_exten. intros. apply setN_other.
+  intros; red; intros; subst r. eelim H; eauto. 
+Qed.
+
 Remark getN_setN_outside:
   forall vl q c n p,
   p + Z_of_nat n <= q \/ q + Z_of_nat (length vl) <= p ->
   getN n p (setN vl q c) = getN n p c.
 Proof.
-  intros. apply getN_exten. intros. apply setN_outside. omega. 
+  intros. apply getN_setN_disjoint. apply Intv.disjoint_range. auto. 
 Qed.
 
 Remark setN_default:
@@ -1559,6 +1569,24 @@ Proof.
   red; eauto with mem. 
 Qed.
 
+Theorem loadbytes_storebytes_disjoint:
+  forall b' ofs' len,
+  len >= 0 ->
+  b' <> b \/ Intv.disjoint (ofs', ofs' + len) (ofs, ofs + Z_of_nat (length bytes)) ->
+  loadbytes m2 b' ofs' len = loadbytes m1 b' ofs' len.
+Proof.
+  intros. unfold loadbytes.
+  destruct (range_perm_dec m1 b' ofs' (ofs' + len) Cur Readable).
+  rewrite pred_dec_true. 
+  rewrite storebytes_mem_contents. decEq. 
+  rewrite PMap.gsspec. destruct (peq b' b). subst b'. 
+  apply getN_setN_disjoint. rewrite nat_of_Z_eq; auto. intuition congruence.
+  auto.
+  red; auto with mem.
+  apply pred_dec_false. 
+  red; intros; elim n. red; auto with mem.
+Qed.
+
 Theorem loadbytes_storebytes_other:
   forall b' ofs' len,
   len >= 0 ->
@@ -1567,16 +1595,8 @@ Theorem loadbytes_storebytes_other:
   \/ ofs + Z_of_nat (length bytes) <= ofs' ->
   loadbytes m2 b' ofs' len = loadbytes m1 b' ofs' len.
 Proof.
-  intros. unfold loadbytes.
-  destruct (range_perm_dec m1 b' ofs' (ofs' + len) Cur Readable).
-  rewrite pred_dec_true. 
-  rewrite storebytes_mem_contents. decEq. 
-  rewrite PMap.gsspec. destruct (peq b' b). subst b'. 
-  apply getN_setN_outside. rewrite nat_of_Z_eq; auto. intuition congruence.
-  auto.
-  red; auto with mem.
-  apply pred_dec_false. 
-  red; intros; elim n. red; auto with mem.
+  intros. apply loadbytes_storebytes_disjoint; auto. 
+  destruct H0; auto. right. apply Intv.disjoint_range; auto. 
 Qed.
 
 Theorem load_storebytes_other:
@@ -2599,6 +2619,31 @@ Proof.
   eauto with mem.
 Qed.
 
+Lemma storebytes_empty_inj:
+  forall f m1 b1 ofs1 m1' m2 b2 ofs2 m2',
+  mem_inj f m1 m2 ->
+  storebytes m1 b1 ofs1 nil = Some m1' ->
+  storebytes m2 b2 ofs2 nil = Some m2' ->
+  mem_inj f m1' m2'.
+Proof.
+  intros. destruct H. constructor. 
+(* perm *)
+  intros.
+  eapply perm_storebytes_1; eauto. 
+  eapply mi_perm0; eauto.
+  eapply perm_storebytes_2; eauto.
+(* align *)
+  intros. eapply mi_align0 with (ofs := ofs) (p := p); eauto.
+  red; intros. eapply perm_storebytes_2; eauto. 
+(* mem_contents *)
+  intros.
+  assert (perm m1 b0 ofs Cur Readable). eapply perm_storebytes_2; eauto. 
+  rewrite (storebytes_mem_contents _ _ _ _ _ H0).
+  rewrite (storebytes_mem_contents _ _ _ _ _ H1).
+  simpl. rewrite ! PMap.gsspec. 
+  destruct (peq b0 b1); destruct (peq b3 b2); subst; eapply mi_memval0; eauto.
+Qed.
+
 (** Preservation of allocations *)
 
 Lemma alloc_right_inj:
@@ -3581,6 +3626,27 @@ Proof.
   auto.
 (* representable *)
   auto.
+Qed.
+
+Theorem storebytes_empty_inject:
+  forall f m1 b1 ofs1 m1' m2 b2 ofs2 m2',
+  inject f m1 m2 ->
+  storebytes m1 b1 ofs1 nil = Some m1' ->
+  storebytes m2 b2 ofs2 nil = Some m2' ->
+  inject f m1' m2'.
+Proof.
+  intros. inversion H. constructor; intros.
+(* inj *)
+  eapply storebytes_empty_inj; eauto.
+(* freeblocks *)
+  intros. apply mi_freeblocks0. red; intros; elim H2; eapply storebytes_valid_block_1; eauto.
+(* mappedblocks *)
+  intros. eapply storebytes_valid_block_1; eauto. 
+(* no overlap *)
+  red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto. 
+(* representable *)
+  intros. eapply mi_representable0; eauto.
+  destruct H3; eauto using perm_storebytes_2. 
 Qed.
 
 (* Preservation of allocations *)

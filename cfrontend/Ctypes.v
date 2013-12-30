@@ -251,10 +251,10 @@ Fixpoint sizeof (t: type) : Z :=
   | Tfloat F32 _ => 4
   | Tfloat F64 _ => 8
   | Tpointer _ _ => 4
-  | Tarray t' n _ => sizeof t' * Zmax 1 n
+  | Tarray t' n _ => sizeof t' * Zmax 0 n
   | Tfunction _ _ _ => 1
-  | Tstruct _ fld _ => align (Zmax 1 (sizeof_struct fld 0)) (alignof t)
-  | Tunion _ fld _ => align (Zmax 1 (sizeof_union fld)) (alignof t)
+  | Tstruct _ fld _ => align (sizeof_struct fld 0) (alignof t)
+  | Tunion _ fld _ => align (sizeof_union fld) (alignof t)
   | Tcomp_ptr _ _ => 4
   end
 
@@ -271,25 +271,23 @@ with sizeof_union (fld: fieldlist) : Z :=
   end.
 
 Lemma sizeof_pos:
-  forall t, sizeof t > 0.
+  forall t, sizeof t >= 0
+with sizeof_struct_incr:
+  forall fld pos, pos <= sizeof_struct fld pos.
 Proof.
-Local Opaque alignof.
-  assert (X: forall n t, n > 0 -> align n (alignof t) > 0).
+- Local Opaque alignof.
+  assert (X: forall n t, n >= 0 -> align n (alignof t) >= 0).
   {
     intros. generalize (align_le n (alignof t) (alignof_pos t)). omega.
   }
   induction t; simpl; try xomega.
   destruct i; omega.
   destruct f; omega.
-  apply Zmult_gt_0_compat. auto. xomega.
-  apply X. xomega. 
-  apply X. xomega.
-Qed.
-
-Lemma sizeof_struct_incr:
-  forall fld pos, pos <= sizeof_struct fld pos.
-Proof.
-  induction fld; intros; simpl. omega. 
+  change 0 with (0 * Z.max 0 z) at 2. apply Zmult_ge_compat_r. auto. xomega. 
+  apply X. apply Zle_ge. apply sizeof_struct_incr. 
+  apply X. induction f; simpl; xomega.
+- induction fld; intros; simpl.
+  omega. 
   eapply Zle_trans. 2: apply IHfld.
   apply Zle_trans with (align pos (alignof t)). 
   apply align_le. apply alignof_pos.
@@ -318,9 +316,9 @@ Local Transparent alignof.
 - rewrite H; apply Zdivide_refl.
 - destruct H. rewrite H. apply Z.divide_mul_l; auto. 
 - apply Zdivide_refl.
-- change (alignof (Tstruct i f a) | align (Z.max 1 (sizeof_struct f 0)) (alignof (Tstruct i f a))).
+- change (alignof (Tstruct i f a) | align (sizeof_struct f 0) (alignof (Tstruct i f a))).
   apply align_divides. apply alignof_pos.
-- change (alignof (Tunion i f a) | align (Z.max 1 (sizeof_union f)) (alignof (Tunion i f a))).
+- change (alignof (Tunion i f a) | align (sizeof_union f) (alignof (Tunion i f a))).
   apply align_divides. apply alignof_pos.
 - rewrite H; apply Zdivide_refl.
 Qed.
@@ -376,7 +374,6 @@ Proof.
   split. auto.
 Local Opaque alignof. 
   simpl. eapply Zle_trans; eauto. 
-  apply Zle_trans with (Z.max 1 (sizeof_struct fld 0)). xomega. 
   apply align_le. apply alignof_pos. 
 Qed.
 

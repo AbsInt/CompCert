@@ -1271,9 +1271,6 @@ Proof.
   eapply Mem.loadbytes_length; eauto. 
   intros. eapply loadbytes_sound; eauto. apply match_aptr_of_aval; auto. 
   eapply romatch_storebytes; eauto. 
-  exploit Mem.loadbytes_length; eauto. 
-  intros. exploit (nat_of_Z_eq sz). omega. rewrite <- H1; intros. 
-  destruct bytes. simpl in H2. omegaContradiction. congruence.
   eapply sound_stack_storebytes; eauto. 
 + (* annot *)
   intros (A & B); subst. 

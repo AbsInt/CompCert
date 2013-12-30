@@ -1019,19 +1019,39 @@ Lemma assign_loc_inject:
       f b = None -> Mem.load chunk m b 0 = Some v -> Mem.load chunk m' b 0 = Some v).
 Proof.
   intros. inv H.
-  (* by value *)
+- (* by value *)
   exploit Mem.storev_mapped_inject; eauto. intros [tm' [A B]].
   exists tm'; split. eapply assign_loc_value; eauto. 
   split. auto.
   intros. rewrite <- H5. eapply Mem.load_store_other; eauto.
   left. inv H0. congruence.
-  (* by copy *)
+- (* by copy *)
   inv H0. inv H1.
   rename b' into bsrc. rename ofs'0 into osrc. 
   rename loc into bdst. rename ofs into odst.
   rename loc' into bdst'. rename b2 into bsrc'.
+  destruct (zeq (sizeof ty) 0).
++ (* special case size = 0 *)
+  assert (bytes = nil).
+  { exploit (Mem.loadbytes_empty m bsrc (Int.unsigned osrc) (sizeof ty)).
+    omega. congruence. }
+  subst.
+  destruct (Mem.range_perm_storebytes tm bdst' (Int.unsigned (Int.add odst (Int.repr delta))) nil)
+  as [tm' SB].
+  simpl. red; intros; omegaContradiction.
+  exists tm'.
+  split. eapply assign_loc_copy; eauto. 
+  intros; omegaContradiction.
+  intros; omegaContradiction.
+  rewrite e; right; omega.
+  apply Mem.loadbytes_empty. omega. 
+  split. eapply Mem.storebytes_empty_inject; eauto. 
+  intros. rewrite <- H0. eapply Mem.load_storebytes_other; eauto. 
+  left. congruence.
++ (* general case size > 0 *)
   exploit Mem.loadbytes_length; eauto. intros LEN.
-  assert (SZPOS: sizeof ty > 0) by apply sizeof_pos.
+  assert (SZPOS: sizeof ty > 0).
+  { generalize (sizeof_pos ty); omega. }
   assert (RPSRC: Mem.range_perm m bsrc (Int.unsigned osrc) (Int.unsigned osrc + sizeof ty) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
   assert (RPDST: Mem.range_perm m bdst (Int.unsigned odst) (Int.unsigned odst + sizeof ty) Cur Nonempty).
@@ -1048,10 +1068,10 @@ Proof.
   exploit Mem.storebytes_mapped_inject; eauto. intros [tm' [C D]].
   exists tm'. 
   split. eapply assign_loc_copy; try rewrite EQ1; try rewrite EQ2; eauto. 
-  eapply Mem.aligned_area_inject with (m := m); eauto.
+  intros; eapply Mem.aligned_area_inject with (m := m); eauto.
   apply alignof_blockcopy_1248.
   apply sizeof_alignof_blockcopy_compat.
-  eapply Mem.aligned_area_inject with (m := m); eauto.
+  intros; eapply Mem.aligned_area_inject with (m := m); eauto.
   apply alignof_blockcopy_1248.
   apply sizeof_alignof_blockcopy_compat.
   eapply Mem.disjoint_or_equal_inject with (m := m); eauto.
@@ -1218,22 +1238,64 @@ Proof.
   apply in_map. apply PTree.elements_correct. auto.
 Qed.
 
+Fixpoint freelist_no_overlap (l: list (block * Z * Z)) : Prop :=
+  match l with
+  | nil => True
+  | (b, lo, hi) :: l' =>
+      freelist_no_overlap l' /\
+      (forall b' lo' hi', In (b', lo', hi') l' ->
+       b' <> b \/ hi' <= lo \/ hi <= lo')
+  end.
+
 Lemma can_free_list:
   forall l m,
   (forall b lo hi, In (b, lo, hi) l -> Mem.range_perm m b lo hi Cur Freeable) ->
-  list_norepet (map (fun b_lo_hi => fst(fst b_lo_hi)) l) ->
+  freelist_no_overlap l ->
   exists m', Mem.free_list m l = Some m'.
 Proof.
   induction l; simpl; intros.
-  exists m; auto.
-  destruct a as [[b lo] hi]. simpl in H0. inv H0. 
+- exists m; auto.
+- destruct a as [[b lo] hi]. destruct H0.
   destruct (Mem.range_perm_free m b lo hi) as [m1 A]; auto. 
-  rewrite A. apply IHl; auto. intros. 
-  red; intros. eapply Mem.perm_free_1; eauto. 
-  left; red; intros. subst b0. elim H3.
-  set (F := fun b_lo_hi : block * Z * Z => fst (fst b_lo_hi)).
-  change b with (F (b,lo0,hi0)). eapply in_map; auto.
+  rewrite A. apply IHl; auto.
+  intros. red; intros. eapply Mem.perm_free_1; eauto. 
+  exploit H1; eauto. intros [B|B]. auto. right; omega.   
   eapply H; eauto. 
+Qed.
+
+Lemma blocks_of_env_no_overlap:
+  forall j cenv e le m lo hi te tle tlo thi tm,
+  match_envs j cenv e le m lo hi te tle tlo thi ->
+  Mem.inject j m tm ->
+  (forall id b ty, 
+   e!id = Some(b, ty) -> Mem.range_perm m b 0 (sizeof ty) Cur Freeable) ->
+  forall l,
+  list_norepet (List.map fst l) ->
+  (forall id bty, In (id, bty) l -> te!id = Some bty) ->
+  freelist_no_overlap (List.map block_of_binding l).
+Proof.
+  intros until tm; intros ME MINJ PERMS. induction l; simpl; intros.
+- auto.
+- destruct a as [id [b ty]]. simpl in *. inv H. split.
+  + apply IHl; auto.
+  + intros. exploit list_in_map_inv; eauto. intros [[id' [b'' ty']] [A B]].
+    simpl in A. inv A. rename b'' into b'. 
+    assert (TE: te!id = Some(b, ty)) by eauto. 
+    assert (TE': te!id' = Some(b', ty')) by eauto. 
+    exploit me_mapped. eauto. eexact TE. intros [b0 [INJ E]]. 
+    exploit me_mapped. eauto. eexact TE'. intros [b0' [INJ' E']]. 
+    destruct (zle (sizeof ty) 0); auto. 
+    destruct (zle (sizeof ty') 0); auto. 
+    assert (b0 <> b0').
+    { eapply me_inj; eauto. red; intros; subst; elim H3.
+      change id' with (fst (id', (b', ty'))). apply List.in_map; auto. }
+    assert (Mem.perm m b0 0 Max Nonempty). 
+    { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable.
+      eapply PERMS; eauto. omega. auto with mem. }
+    assert (Mem.perm m b0' 0 Max Nonempty). 
+    { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable.
+      eapply PERMS; eauto. omega. auto with mem. }
+    exploit Mem.mi_no_overlap; eauto. intros [A|A]. auto. omegaContradiction.
 Qed.
 
 Lemma free_list_right_inject:
@@ -1262,8 +1324,10 @@ Theorem match_envs_free_blocks:
   /\ Mem.inject j m' tm'.
 Proof.
   intros. 
-  assert (exists tm', Mem.free_list tm (blocks_of_env te) = Some tm').
+  assert (X: exists tm', Mem.free_list tm (blocks_of_env te) = Some tm').
+  {
     apply can_free_list.
+  - (* permissions *)
     intros. unfold blocks_of_env in H2.
     exploit list_in_map_inv; eauto. intros [[id [b' ty]] [EQ IN]].
     simpl in EQ; inv EQ. 
@@ -1272,30 +1336,13 @@ Proof.
     change 0 with (0 + 0). replace (sizeof ty) with (sizeof ty + 0) by omega.
     eapply Mem.range_perm_inject; eauto. 
     eapply free_blocks_of_env_perm_2; eauto.
-    (* no repetitions *)
-    set (F := fun id => match te!id with Some(b, ty) => b | None => xH end).
-    replace (map (fun b_lo_hi : block * Z * Z => fst (fst b_lo_hi)) (blocks_of_env te))
-       with (map F (map (fun x => fst x) (PTree.elements te))).
-    apply list_map_norepet. apply PTree.elements_keys_norepet. 
-    intros. 
-    exploit list_in_map_inv. eexact H2. intros [[id1 [b1' ty1]] [EQ1 IN1]].
-    exploit list_in_map_inv. eexact H3. intros [[id2 [b2' ty2]] [EQ2 IN2]].
-    simpl in *. subst x y.
-    assert (te!id1 = Some(b1', ty1)) by (apply PTree.elements_complete; auto).
-    assert (te!id2 = Some(b2', ty2)) by (apply PTree.elements_complete; auto).
-    exploit me_mapped. eauto. eexact H5. intros [b1 [P1 Q1]].
-    exploit me_mapped. eauto. eexact H6. intros [b2 [P2 Q2]].
-    assert (b1 <> b2) by (eapply me_inj; eauto). 
-    exploit Mem.mi_no_overlap; eauto. 
-    instantiate (1 := 0). apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    eapply free_blocks_of_env_perm_2; eauto. generalize (sizeof_pos ty1); omega.
-    instantiate (1 := 0). apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    eapply free_blocks_of_env_perm_2; eauto. generalize (sizeof_pos ty2); omega.
-    intros [A | A]; try omegaContradiction. 
-    unfold F. rewrite H5; rewrite H6. auto.
-    unfold blocks_of_env. repeat rewrite list_map_compose. apply list_map_exten; intros. 
-    unfold F. destruct x as [id [b ty]]. simpl. erewrite PTree.elements_complete; eauto. auto.
-  destruct H2 as [tm' FREE].
+  - (* no overlap *)
+    unfold blocks_of_env; eapply blocks_of_env_no_overlap; eauto. 
+    intros. eapply free_blocks_of_env_perm_2; eauto.
+    apply PTree.elements_keys_norepet.
+    intros. apply PTree.elements_complete; auto. 
+  }
+  destruct X as [tm' FREE].
   exists tm'; split; auto.
   eapply free_list_right_inject; eauto. 
   eapply Mem.free_list_left_inject; eauto. 
