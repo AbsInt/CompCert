@@ -635,6 +635,9 @@ and elab_struct_or_union_info kind loc env members attrs =
         error loc "member '%s' has incomplete type" fld.fld_name;
       check_incomplete rem in
   check_incomplete m;
+  (* Warn for empty structs or unions *)
+  if m = [] then
+    warning loc "empty %s" (if kind = Struct then "struct" else "union");
   (composite_info_def env' kind attrs m, env')
 
 and elab_struct_or_union only kind loc tag optmembers attrs env =
@@ -928,25 +931,25 @@ let elab_expr loc env a =
   | UNARY(PLUS, a1) ->
       let b1 = elab a1 in
       if not (is_arith_type env b1.etyp) then
-        error "argument of unary '+' is not an arithmetic type";
+        err "argument of unary '+' is not an arithmetic type";
       { edesc = EUnop(Oplus, b1); etyp = unary_conversion env b1.etyp }
 
   | UNARY(MINUS, a1) ->
       let b1 = elab a1 in
       if not (is_arith_type env b1.etyp) then
-        error "argument of unary '-' is not an arithmetic type";
+        err "argument of unary '-' is not an arithmetic type";
       { edesc = EUnop(Ominus, b1); etyp = unary_conversion env b1.etyp }
 
   | UNARY(BNOT, a1) ->
       let b1 = elab a1 in
       if not (is_integer_type env b1.etyp) then
-        error "argument of '~' is not an integer type";
+        err "argument of '~' is not an integer type";
       { edesc = EUnop(Onot, b1); etyp = unary_conversion env b1.etyp }
 
   | UNARY(NOT, a1) ->
       let b1 = elab a1 in
       if not (is_scalar_type env b1.etyp) then
-        error "argument of '!' is not a scalar type";
+        err "argument of '!' is not a scalar type";
       { edesc = EUnop(Olognot, b1); etyp = TInt(IInt, []) }
 
   | UNARY(ADDROF, a1) ->
@@ -1023,6 +1026,8 @@ let elab_expr loc env a =
                 err "mismatch between pointer types in binary '-'";
               if not (pointer_arithmetic_ok env ty1) then
                 err "illegal pointer arithmetic in binary '-'";
+              if sizeof env ty1 = Some 0 then
+                err "subtraction between two pointers to zero-sized objects";
               (TPtr(ty1, []), TInt(ptrdiff_t_ikind, []))
           | _, _ -> error "type error in binary '-'"
         end in

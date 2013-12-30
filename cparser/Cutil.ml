@@ -397,9 +397,14 @@ let sizeof_union env members =
 
 let sizeof_struct env members =
   let rec sizeof_rec ofs = function
-  | [] | [ { fld_typ = TArray(_, None, _) } ] ->
-      (* C99: ty[] allowed as last field *)
+  | [] ->
       Some ofs
+  | [ { fld_typ = TArray(_, None, _) } as m ] ->
+      (* C99: ty[] allowed as last field *)
+      begin match alignof env m.fld_typ with
+      | Some a -> Some (align ofs a)
+      | None -> None
+      end
   | m :: rem as ml ->
       if m.fld_bitfield = None then begin
         match alignof env m.fld_typ, sizeof env m.fld_typ with
