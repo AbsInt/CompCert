@@ -495,6 +495,7 @@ and elab_type_declarator loc env ty = function
             match Ceval.integer_expr env (!elab_expr_f loc env sz) with
             | Some n ->
                 if n < 0L then error loc "array size is negative";
+                if n = 0L then warning loc "array of size 0";
                 Some n
             | None ->
                 error loc "array size is not a compile-time constant";
@@ -1293,6 +1294,8 @@ let elab_for_expr loc env = function
 (* Elaboration of initializers. C99 section 6.7.8 *)
 
 let project_init loc il =
+  if il = [] then
+    warning loc "empty initializer braces";
   List.map
    (fun (what, i) ->
       if what <> NEXT_INIT then
@@ -1464,9 +1467,10 @@ let elab_initial loc env ty ie =
 (* Complete an array type with the size obtained from the initializer:
    "int x[] = { 1, 2, 3 }" becomes "int x[3] = ..." *)
 
-let fixup_typ env ty init =
+let fixup_typ loc env ty init =
   match unroll env ty, init with
   | TArray(ty_elt, None, attr), Init_array il ->
+      if il = [] then warning loc "array of size 0";
       TArray(ty_elt, Some(Int64.of_int(List.length il)), attr)
   | _ -> ty
 
@@ -1477,7 +1481,7 @@ let elab_initializer loc env ty ie =
   | None ->
       (ty, None)
   | Some init ->
-      (fixup_typ env ty init, Some init)
+      (fixup_typ loc env ty init, Some init)
 
 
 (* Elaboration of top-level and local definitions *)
@@ -1544,8 +1548,8 @@ let rec enter_decdefs local loc env = function
       (* update environment with refined type *)
       let env2 = Env.add_ident env1 id sto' ty' in
       (* check for incomplete type *)
-      if sto' <> Storage_extern && incomplete_type env ty' then
-        warning loc "'%s' has incomplete type" s;
+      if local && sto' <> Storage_extern && incomplete_type env ty' then
+        error loc "'%s' has incomplete type" s;
       if local && sto' <> Storage_extern && sto' <> Storage_static then begin
         (* Local definition *)
         let (decls, env3) = enter_decdefs local loc env2 rem in
@@ -1884,3 +1888,4 @@ let elab_preprocessed_file name ic =
                                  (Parser.file Lexer.initial lb));
   Lexer.finish();
   elaborated_program()
+

@@ -834,8 +834,10 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   let (section, access) =
     Sections.for_variable env id' ty (optinit <> None) in
   if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
-    error (sprintf "Variable %s is too big (%s bytes)"
+    error (sprintf "'%s' is too big (%s bytes)"
                    id.name (Z.to_string sz));
+  if Cutil.incomplete_type env ty then
+    error (sprintf "'%s' has incomplete type" id.name);
   Hashtbl.add decl_atom id'
     { a_storage = sto;
       a_alignment = Some (Z.to_int al);
