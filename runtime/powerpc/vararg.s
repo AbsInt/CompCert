@@ -60,15 +60,15 @@ __compcert_va_int32:
   # Next argument was passed in an integer register
         lwz     r5, 8(r3)       # r5 = ap->regs = base of saved register area
         rlwinm  r6, r4, 2, 0, 29 # r6 = r4 * 4
-        lwzx    r3, r5, r6      # load argument in r3
 	addi    r4, r4, 1       # increment ap->ireg
         stb     r4, 0(r3)
+        lwzx    r3, r5, r6      # load argument in r3
         blr
   # Next argument was passed on stack
 1:      lwz     r5, 4(r3)       # r5 = ap->stk = next argument passed on stack
-	lwz     r3, 0(r5)       # load argument in r3
         addi    r5, r5, 4       # advance ap->stk by 4
         stw     r5, 4(r3)
+	lwz     r3, -4(r5)      # load argument in r3
         blr
         .type   __compcert_va_int32, @function
         .size   __compcert_va_int32, .-__compcert_va_int32
@@ -86,19 +86,19 @@ __compcert_va_int64:
         rlwinm  r4, r4, 0, 0, 30 
         rlwinm  r6, r4, 2, 0, 29 # r6 = r4 * 4
 	add     r5, r5, r6      # r5 = address of argument + 8
-        stb     r4, 8(r3)       # update ap->ireg
+        stb     r4, 0(r3)       # update ap->ireg
         lwz     r3, -8(r5)      # load argument in r3:r4
         lwz     r4, -4(r5)
         blr
   # Next argument was passed on stack
 1:      lwz     r5, 4(r3)       # r5 = ap->stk = next argument passed on stack
 	li      r4, 8
-        stb     r4, 8(r3)       # set ap->ireg = 8 so that no ireg is left
+        stb     r4, 0(r3)       # set ap->ireg = 8 so that no ireg is left
 	addi    r5, r5, 15      # round r5 to a multiple of 8 and add 8
         rlwinm  r5, r5, 0, 0, 28
+	stw     r5, 4(r3)       # update ap->stk
         lwz     r3, -8(r5)      # load argument in r3:r4
         lwz     r4, -4(r5)
-	stw     r5, 4(r3)       # update ap->stk
         blr
         .type   __compcert_va_int64, @function
         .size   __compcert_va_int64, .-__compcert_va_int64

@@ -535,7 +535,8 @@ let print_builtin_va_start oc r =
   fprintf oc "	li	%a, %d\n" ireg GPR0 fr;
   fprintf oc "	stb     %a, 1(%a)\n" ireg GPR0 ireg r;
   fprintf oc "	addi	%a, %a, %ld\n" ireg GPR0 ireg GPR1
-                             Int32.(add !current_function_stacksize 8l);
+                             Int32.(add (add !current_function_stacksize 8l)
+                                        (of_int ofs));
   fprintf oc "	stw	%a, 4(%a)\n" ireg GPR0 ireg r;
   fprintf oc "	addi	%a, %a, %ld\n" ireg GPR0 ireg GPR1
                              Int32.(sub !current_function_stacksize 96l);
@@ -709,7 +710,7 @@ let print_instruction oc tbl pc fallthrough = function
       cfi_adjust oc sz;
       if (!current_function_sig).sig_cc.cc_vararg then begin
         fprintf oc "	mflr	%a\n" ireg GPR0;
-        fprintf oc "	blr	__compcert_va_saveregs\n";
+        fprintf oc "	bl	__compcert_va_saveregs\n";
         fprintf oc "	mtlr	%a\n" ireg GPR0
       end;
       current_function_stacksize := sz
