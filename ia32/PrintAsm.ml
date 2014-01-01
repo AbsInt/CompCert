@@ -419,6 +419,22 @@ let print_builtin_vstore_global oc chunk id ofs args =
                  (Addrmode(None, None, Coq_inr(id,ofs))) args EAX;
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment
 
+(* Handling of varargs *)
+
+let current_function_stacksize = ref 0l
+let current_function_sig =
+  ref { sig_args = []; sig_res = None; sig_cc = cc_default }
+
+let print_builtin_va_start oc r =
+  if not (!current_function_sig).sig_cc.cc_vararg then
+    invalid_arg "Fatal error: va_start used in non-vararg function";
+  let ofs =
+    Int32.(add (add !current_function_stacksize 4l)
+               (mul 4l (Z.to_int32 (Conventions1.size_arguments
+                                           !current_function_sig)))) in
+  fprintf oc "	movl	%%esp, 0(%a)\n" ireg r;
+  fprintf oc "	addl	$%ld, 0(%a)\n" ofs ireg r
+
 (* Handling of compiler-inlined builtins *)
 
 let print_builtin_inline oc name args res =
@@ -495,6 +511,9 @@ let print_builtin_inline oc name args res =
         fprintf oc "	movl	%a, %a\n" ireg a2 ireg tmp;
       fprintf oc "	bswap	%a\n" ireg tmp;
       fprintf oc "	movl	%a, 0(%a)\n" ireg tmp ireg a1
+  (* Vararg stuff *)
+  | "__builtin_va_start", [IR a], _ ->
+      print_builtin_va_start oc a
   (* Catch-all *)  
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -708,7 +727,8 @@ let print_instruction oc = function
       fprintf oc "	subl	$%ld, %%esp\n" sz;
       cfi_adjust oc sz;
       fprintf oc "	leal	%ld(%%esp), %%edx\n" (Int32.add sz 4l);
-      fprintf oc "	movl	%%edx, %ld(%%esp)\n" ofs_link
+      fprintf oc "	movl	%%edx, %ld(%%esp)\n" ofs_link;
+      current_function_stacksize := sz
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
       let sz = sp_adjustment sz in
       fprintf oc "	addl	$%ld, %%esp\n" sz
@@ -757,6 +777,7 @@ let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
+  current_function_sig := fn.fn_sig;
   let (text, lit, jmptbl) =
     match C2C.atom_sections name with
     | [t;l;j] -> (t, l, j)

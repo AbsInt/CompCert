@@ -18,7 +18,9 @@
 open C
 
 let builtins = {
-  Builtins.typedefs = [];
+  Builtins.typedefs = [
+    "__builtin_va_list", TPtr(TVoid [], [])
+  ];
   Builtins.functions = [
     (* Integer arithmetic *)
     "__builtin_bswap",
@@ -44,3 +46,4 @@ let builtins = {
   ]
 }
 
+let size_va_list = 4

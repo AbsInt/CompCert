@@ -102,6 +102,36 @@ let condition_name = function
   | TCgt -> "gt"
   | TCle -> "le"
 
+let movimm oc dst n =
+  match Asmgen.decompose_int n with
+  | [] -> assert false
+  | hd::tl as l ->
+      fprintf oc "	mov	%s, #%a\n" dst coqint hd
+      List.iter
+        (fun n -> fprintf oc "	orr	%s, %s, #%a" dst dst coqint n)
+        tl;
+      List.length l
+
+let addimm oc dst src n =
+  match Asmgen.decompose_int n with
+  | [] -> assert false
+  | hd::tl as l ->
+      fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd
+      List.iter
+        (fun n -> fprintf oc "	add	%s, %s, #%a" dst dst coqint n)
+        tl;
+      List.length l
+
+let subimm oc dst src n =
+  match Asmgen.decompose_int n with
+  | [] -> assert false
+  | hd::tl as l ->
+      fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd
+      List.iter
+        (fun n -> fprintf oc "	sub	%s, %s, #%a" dst dst coqint n)
+        tl;
+      List.length l
+
 (* Names of sections *)
 
 let name_of_section_ELF = function
@@ -276,22 +306,13 @@ let print_builtin_memcpy_big oc sz al src dst =
     if al >= 4 then ("ldr", "str", 4)
     else if al = 2 then ("ldrh", "strh", 2)
     else ("ldrb", "strb", 1) in
-  begin match Asmgen.decompose_int
-                 (coqint_of_camlint (Int32.of_int (sz / chunksize))) with
-  | [] -> assert false
-  | hd::tl ->
-      fprintf oc "	mov	%a, #%a\n" ireg IR14 coqint hd;
-      List.iter
-        (fun n ->
-           fprintf oc "	orr	%a, %a, #%a\n" ireg IR14 ireg IR14 coqint n)
-        tl
-  end;
+  let n = movimm oc "r14" (coqint_of_camlint (Int32.of_int (sz / chunksize))) in
   let lbl = new_label() in
   fprintf oc ".L%d:	%s	%a, [%a], #%d\n" lbl load ireg IR12 ireg src chunksize;
   fprintf oc "	subs	%a, %a, #1\n" ireg IR14 ireg IR14;
   fprintf oc "	%s	%a, [%a], #%d\n" store ireg IR12 ireg dst chunksize;
   fprintf oc "	bne	.L%d\n" lbl;
-  8
+  n + 4
 
 let print_builtin_memcpy oc sz al args =
   let (dst, src) =
@@ -377,6 +398,37 @@ let print_builtin_vstore_global oc chunk id ofs args =
   let n = print_builtin_vstore_common oc chunk (IR IR14 :: args) in
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment; n + 1
 
+(* Handling of varargs *)
+
+let current_function_stacksize = ref 0l
+let current_function_sig =
+  ref { sig_args = []; sig_res = None; sig_cc = cc_default }
+
+let align n a = (n + a - 1) land (-a)
+
+let rec next_arg_location ir ofs = function
+  | [] ->
+      Int32.of_int (ir * 4 + ofs)
+  | (Tint | Tsingle) :: l ->
+      if ir < 4
+      then next_arg_location (ir + 1) ofs l
+      else next_arg_location ir (ofs + 4) l
+  | (Tfloat | Tlong) :: l ->
+      if ir < 3
+      then next_arg_location (align ir 2 + 2) ofs l
+      else next_arg_location ir (align ofs 8 + 8) l
+
+let print_builtin_va_start oc r =
+  if not (!current_function_sig).sig_cc.cc_vararg then
+    invalid_arg "Fatal error: va_start used in non-vararg function";
+  let ofs =
+    Int32.add
+      (next_arg_location 0 0 (!current_function_sig).sig_args)
+      !current_function_stacksize in
+  let n = addimm oc "r14" "sp" (coqint_of_camlint ofs);
+  fprintf oc "	str	r14, [%a, #0]\n" ireg r;
+  n + 1
+
 (* Handling of compiler-inlined builtins *)
 
 let print_builtin_inline oc name args res =
@@ -442,6 +494,9 @@ let print_builtin_inline oc name args res =
   | "__builtin_write32_reversed", [IR a1; IR a2], _ ->
       fprintf oc "	rev	%a, %a\n" ireg IR14 ireg a2;
       fprintf oc "	str	%a, [%a, #0]\n" ireg IR14 ireg a1; 2
+  (* Vararg stuff *)
+  | "__builtin_va_start", [IR a], _ ->
+      print_builtin_va_start oc a
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -659,16 +714,21 @@ let print_instruction oc = function
   (* Pseudo-instructions *)
   | Pallocframe(sz, ofs) ->
       fprintf oc "	mov	r12, sp\n";
-      let ninstr = ref 0 in
-      List.iter
-        (fun n ->
-           fprintf oc "	sub	sp, sp, #%a\n" coqint n;
-           incr ninstr)
-        (Asmgen.decompose_int sz);
-      cfi_adjust oc (camlint_of_coqint sz);
+      if (!current_function_sig).sig_cc.cc_vararg then begin
+        fprintf oc "	push	{r0, r1, r2, r3}\n";
+        cfi_adjust oc 16
+      end;
+      let sz' = camlint_of_coqint sz in
+      let ninstr = subimm "sp" "sp" sz in
+      cfi_adjust oc sz';
       fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
-      2 + !ninstr
+      current_function_stacksize := rsz;
+      ninstr + (if (!current_function_sig).sig_cc.cc_vararg then 3 else 2)
   | Pfreeframe(sz, ofs) ->
+      let sz =
+        if (!current_function_sig).sig_cc.cc_vararg
+        then coqint_of_camlint (Int32.add 16l (camlint_of_coqint sz)
+        else sz in
       if Asmgen.is_immed_arith sz
       then fprintf oc "	add	sp, sp, #%a\n" coqint sz
       else fprintf oc "	ldr	sp, [sp, #%a]\n" coqint ofs; 1

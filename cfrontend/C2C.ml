@@ -70,10 +70,7 @@ let warning msg =
 (** ** The builtin environment *)
 
 let builtins_generic = {
-  typedefs = [
-    (* keeps GCC-specific headers happy, harmless for others *)
-    "__builtin_va_list", C.TPtr(C.TVoid [], [])
-  ];
+  typedefs = [];
   functions = [
     (* Floating-point absolute value *)
     "__builtin_fabs",
@@ -94,6 +91,41 @@ let builtins_generic = {
     "__builtin_annot_intval",
         (TInt(IInt, []),
           [TPtr(TInt(IChar, [AConst]), []); TInt(IInt, [])],
+          false);
+    (* Variable arguments *)
+(* va_start(ap,n)
+      (preprocessing) --> __builtin_va_start(ap, arg)
+      (elaboration)   --> __builtin_va_start(ap) *)
+    "__builtin_va_start",
+        (TVoid [],
+          [TPtr(TVoid [], [])],
+          false);
+(* va_arg(ap, ty)
+      (preprocessing) --> __builtin_va_arg(ap, ty)
+      (parsing)       --> __builtin_va_arg(ap, sizeof(ty)) *)
+    "__builtin_va_arg",
+        (TVoid [],
+          [TPtr(TVoid [], []); TInt(IUInt, [])],
+          false);
+    "__builtin_va_copy",
+        (TVoid [],
+          [TPtr(TVoid [], []); TPtr(TVoid [], [])],
+          false);
+    "__builtin_va_end",
+        (TVoid [],
+          [TPtr(TVoid [], [])],
+          false);
+    "__compcert_va_int32",
+        (TInt(IUInt, []),
+          [TPtr(TVoid [], [])],
+          false);
+    "__compcert_va_int64",
+        (TInt(IULongLong, []),
+          [TPtr(TVoid [], [])],
+          false);
+    "__compcert_va_int64",
+        (TFloat(FDouble, []),
+          [TPtr(TVoid [], [])],
           false)
   ]
 }
@@ -164,6 +196,31 @@ a constant)"; Integers.Int.one in
                Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->
     assert false
+
+(** ** Translation of [va_arg] for variadic functions. *)
+
+let eaddrof e = Eaddrof(e, Tpointer(typeof e, noattr))
+
+let make_builtin_va_arg env ty e =
+  let (helper, ty_ret) =
+    match ty with
+    | Tint _ | Tpointer _ | Tcomp_ptr _ ->
+        ("__compcert_va_int32", Tint(I32, Unsigned, noattr))
+    | Tlong _ ->
+        ("__compcert_va_int64", Tlong(Unsigned, noattr))
+    | Tfloat _ ->
+        ("__compcert_va_float64", Tfloat(F64, noattr))
+    | _ ->
+        unsupported "va_arg at this type";
+        ("", Tvoid)
+  in
+    Ecast 
+      (Ecall(Evar (intern_string helper, 
+                   Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret, 
+                             cc_default)),
+             Econs(eaddrof e, Enil),
+             ty_ret),
+       ty)
 
 (** ** Translation functions *)
 
@@ -555,6 +612,24 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_fabs"}}, [arg]) ->
       Eunop(Oabsfloat, convertExpr env arg, ty)
 
+  | C.ECall({edesc = C.EVar {name = "__builtin_va_start"}} as fn, [arg]) ->
+      Ecall(convertExpr env fn, Econs(eaddrof(convertExpr env arg), Enil), ty)
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_va_arg"}}, [arg1; arg2]) ->
+      make_builtin_va_arg env ty (convertExpr env arg1)
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_va_end"}}, _) ->
+      Ecast (ezero, Tvoid)
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_va_copy"}}, [arg1; arg2]) ->
+      let dst = convertExpr env arg1 in
+      let src = convertExpr env arg2 in
+      Ebuiltin(EF_memcpy(Z.of_uint CBuiltins.size_va_list, Z.of_uint 4),
+               Tcons(Tpointer(Tvoid, noattr),
+                 Tcons(Tpointer(Tvoid, noattr), Tnil)),
+               Econs(eaddrof dst, Econs(eaddrof src, Enil)),
+               Tvoid)
+
   | C.ECall({edesc = C.EVar {name = "printf"}}, args)
     when !Clflags.option_interp ->
       let targs =
@@ -769,6 +844,8 @@ let convertFundef loc env fd =
 
 (** External function declaration *)
 
+let re_builtin = Str.regexp "__builtin_"
+
 let convertFundecl env (sto, id, ty, optinit) =
   let (args, res, cconv) =
     match convertTyp env ty with
@@ -779,7 +856,7 @@ let convertFundecl env (sto, id, ty, optinit) =
   let ef =
     if id.name = "malloc" then EF_malloc else
     if id.name = "free" then EF_free else
-    if List.mem_assoc id.name builtins.functions
+    if Str.string_match re_builtin id.name 0
     then EF_builtin(id', sg)
     else EF_external(id', sg) in
   (id', Gfun(External(ef, args, res, cconv)))

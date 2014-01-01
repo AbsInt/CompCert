@@ -1,0 +1,11 @@
+An int: 42
+A long long: 123456789012345
+A string: Hello world
+A double: 3.141592654
+A char: x and A string: Hello, world! and An int: 42 and A long: 123456789012345 and A double: 3.141592654 and A float: 2.718281746
+Twice: -1 1.23
+Twice: -1 1.23
+With va_copy: -1 1.23
+With va_copy: -1 1.23
+With extra args: A char: x and A string: Hello, world! and An int: 42 and A long: 123456789012345 and A double: 3.141592654 and A float: 2.718281746
+va_list compatibility: A char: x and A string: Hello, world! and An int: 42 and A long: 123456789012345 and A double: 3.141592654 and A float: 2.718281746

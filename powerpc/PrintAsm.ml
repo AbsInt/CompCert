@@ -501,6 +501,44 @@ let print_builtin_vstore_global oc chunk id ofs args =
   end;
   fprintf oc "%s end builtin __builtin_volatile_write\n" comment
 
+(* Handling of varargs *)
+
+let current_function_sig =
+  ref { sig_args = []; sig_res = None; sig_cc = cc_default }
+
+let align n a = (n + a - 1) land (-a)
+
+let rec next_arg_locations ir fr ofs = function
+  | [] ->
+      (ir, fr, ofs)
+  | Tint :: l ->
+      if ir < 8
+      then next_arg_locations (ir + 1) fr ofs l
+      else next_arg_locations ir fr (ofs + 4) l
+  | (Tfloat | Tsingle) :: l ->
+      if fr < 8
+      then next_arg_locations ir (fr + 1) ofs l
+      else next_arg_locations ir fr (align ofs 8 + 8) l
+  | Tlong :: l ->
+      if ir < 7
+      then next_arg_locations (align ir 2 + 2) fr ofs l
+      else next_arg_locations ir fr (align ofs 8 + 8) l
+
+let print_builtin_va_start oc r =
+  if not (!current_function_sig).sig_cc.cc_vararg then
+    invalid_arg "Fatal error: va_start used in non-vararg function";
+  let (ir, fr, ofs) =
+    next_arg_locations 0 0 0 (!current_function_sig).sig_args in
+  fprintf oc "	li	%a, %d\n" ireg GPR0 ir;
+  fprintf oc "	stb     %a, 0(%a)\n" ireg GPR0 ireg r;
+  fprintf oc "	li	%a, %d\n" ireg GPR0 fr;
+  fprintf oc "	stb     %a, 1(%a)\n" ireg GPR0 ireg r;
+  fprintf oc "	lwz     %a, 0(%a)\n" ireg GPR0 ireg GPR1;
+  fprintf oc "	addi	%a, %a, -96\n" ireg GPR0 ireg GPR0;
+  fprintf oc "	stw	%a, 8(%a)\n" ireg GPR0 ireg r;
+  fprintf oc "	addi	%a, %a, %d\n" ireg GPR0 ireg GPR0 (96 + 8 + ofs);
+  fprintf oc "	stw	%a, 4(%a)\n" ireg GPR0 ireg r
+
 (* Handling of compiler-inlined builtins *)
 
 let print_builtin_inline oc name args res =
@@ -605,6 +643,9 @@ let print_builtin_inline oc name args res =
       fprintf oc "	isync\n"
   | "__builtin_trap", [], _ ->
       fprintf oc "	trap\n"
+  (* Vararg stuff *)
+  | "__builtin_va_start", [IR a], _ ->
+      print_builtin_va_start oc a
   (* Catch-all *)
   | _ ->
       invalid_arg ("unrecognized builtin " ^ name)
@@ -651,6 +692,10 @@ let print_instruction oc tbl pc fallthrough = function
       let sz = camlint_of_coqint sz
       and ofs = camlint_of_coqint ofs in
       assert (ofs = 0l);
+      let sz = 
+        if (!current_function_sig).sig_cc.cc_vararg
+        then Int32.add sz 96l
+        else sz in
       let adj = Int32.neg sz in
       if adj >= -0x8000l then
         fprintf oc "	stwu	%a, %ld(%a)\n" ireg GPR1 adj ireg GPR1
@@ -659,7 +704,12 @@ let print_instruction oc tbl pc fallthrough = function
         fprintf oc "	ori	%a, %a, %ld\n" ireg GPR0 ireg GPR0 (Int32.logand adj 0xFFFFl);
         fprintf oc "	stwux	%a, %a, %a\n" ireg GPR1 ireg GPR1 ireg GPR0
       end;
-      cfi_adjust oc sz
+      cfi_adjust oc sz;
+      if (!current_function_sig).sig_cc.cc_vararg then begin
+        fprintf oc "	mflr	%a\n" ireg GPR0;
+        fprintf oc "	blr	__compcert_va_saveregs\n";
+        fprintf oc "	mtlr	%a\n" ireg GPR0
+      end
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandc(r1, r2, r3) ->
@@ -742,6 +792,10 @@ let print_instruction oc tbl pc fallthrough = function
   | Pfreeframe(sz, ofs) ->
       let sz = camlint_of_coqint sz
       and ofs = camlint_of_coqint ofs in
+      let sz = 
+        if (!current_function_sig).sig_cc.cc_vararg
+        then Int32.add sz 96l
+        else sz in
       if sz < 0x8000l then
         fprintf oc "	addi	%a, %a, %ld\n" ireg GPR1 ireg GPR1 sz
       else
@@ -1018,6 +1072,7 @@ let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   float_literals := [];
   jumptables := [];
+  current_function_sig := fn.fn_sig;
   let (text, lit, jmptbl) =
     match C2C.atom_sections name with
     | [t;l;j] -> (t, l, j)

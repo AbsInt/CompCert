@@ -828,20 +828,24 @@ let elab_expr loc env a =
 (* Hack to treat vararg.h functions the GCC way.  Helps with testing.
     va_start(ap,n)
       (preprocessing) --> __builtin_va_start(ap, arg)
-      (elaboration)   --> __builtin_va_start(ap, &arg)
+      (elaboration)   --> __builtin_va_start(ap)
     va_arg(ap, ty)
       (preprocessing) --> __builtin_va_arg(ap, ty)
       (parsing)       --> __builtin_va_arg(ap, sizeof(ty))
 *)
   | CALL((VARIABLE "__builtin_va_start" as a1), [a2; a3]) ->
-      let b1 = elab a1 and b2 = elab a2 and b3 = elab a3 in
-      { edesc = ECall(b1, [b2; {edesc = EUnop(Oaddrof, b3);
-                                etyp = TPtr(b3.etyp, [])}]);
+      let b1 = elab a1 and b2 = elab a2 and _b3 = elab a3 in
+      { edesc = ECall(b1, [b2]);
         etyp = TVoid [] }
   | CALL((VARIABLE "__builtin_va_arg" as a1),
          [a2; (TYPE_SIZEOF _) as a3]) ->
       let b1 = elab a1 and b2 = elab a2 and b3 = elab a3 in
       let ty = match b3.edesc with ESizeof ty -> ty | _ -> assert false in
+      let ty' = default_argument_conversion env ty in
+      if not (compatible_types env ty ty') then
+        warning "'%a' is promoted to '%a' when passed through '...'.@ You should pass '%a', not '%a', to 'va_arg'"
+                Cprint.typ ty Cprint.typ ty'
+                Cprint.typ ty' Cprint.typ ty;
       { edesc = ECall(b1, [b2; b3]); etyp = ty }
 
   | CALL(a1, al) ->

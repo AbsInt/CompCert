@@ -18,7 +18,10 @@
 open C
 
 let builtins = {
-  Builtins.typedefs = [];
+  Builtins.typedefs = [
+    "__builtin_va_list", 
+    TArray(TInt(IUInt, []), Some 3L, [])
+  ];
   Builtins.functions = [
     (* Integer arithmetic *)
     "__builtin_mulhw",
@@ -84,3 +87,5 @@ let builtins = {
       (TVoid [], [], false)
   ]
 }
+
+let size_va_list = 12
