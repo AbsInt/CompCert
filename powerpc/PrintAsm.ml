@@ -503,6 +503,7 @@ let print_builtin_vstore_global oc chunk id ofs args =
 
 (* Handling of varargs *)
 
+let current_function_stacksize = ref 0l
 let current_function_sig =
   ref { sig_args = []; sig_res = None; sig_cc = cc_default }
 
@@ -533,11 +534,12 @@ let print_builtin_va_start oc r =
   fprintf oc "	stb     %a, 0(%a)\n" ireg GPR0 ireg r;
   fprintf oc "	li	%a, %d\n" ireg GPR0 fr;
   fprintf oc "	stb     %a, 1(%a)\n" ireg GPR0 ireg r;
-  fprintf oc "	lwz     %a, 0(%a)\n" ireg GPR0 ireg GPR1;
-  fprintf oc "	addi	%a, %a, -96\n" ireg GPR0 ireg GPR0;
-  fprintf oc "	stw	%a, 8(%a)\n" ireg GPR0 ireg r;
-  fprintf oc "	addi	%a, %a, %d\n" ireg GPR0 ireg GPR0 (96 + 8 + ofs);
-  fprintf oc "	stw	%a, 4(%a)\n" ireg GPR0 ireg r
+  fprintf oc "	addi	%a, %a, %ld\n" ireg GPR0 ireg GPR1
+                             Int32.(add !current_function_stacksize 8l);
+  fprintf oc "	stw	%a, 4(%a)\n" ireg GPR0 ireg r;
+  fprintf oc "	addi	%a, %a, %ld\n" ireg GPR0 ireg GPR1
+                             Int32.(sub !current_function_stacksize 96l);
+  fprintf oc "	stw	%a, 8(%a)\n" ireg GPR0 ireg r
 
 (* Handling of compiler-inlined builtins *)
 
@@ -709,7 +711,8 @@ let print_instruction oc tbl pc fallthrough = function
         fprintf oc "	mflr	%a\n" ireg GPR0;
         fprintf oc "	blr	__compcert_va_saveregs\n";
         fprintf oc "	mtlr	%a\n" ireg GPR0
-      end
+      end;
+      current_function_stacksize := sz
   | Pand_(r1, r2, r3) ->
       fprintf oc "	and.	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
   | Pandc(r1, r2, r3) ->

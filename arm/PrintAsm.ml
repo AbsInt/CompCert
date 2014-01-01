@@ -722,7 +722,7 @@ let print_instruction oc = function
       let ninstr = subimm "sp" "sp" sz in
       cfi_adjust oc sz';
       fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
-      current_function_stacksize := rsz;
+      current_function_stacksize := sz';
       ninstr + (if (!current_function_sig).sig_cc.cc_vararg then 3 else 2)
   | Pfreeframe(sz, ofs) ->
       let sz =
