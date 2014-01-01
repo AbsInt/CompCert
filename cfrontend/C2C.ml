@@ -199,7 +199,10 @@ a constant)"; Integers.Int.one in
 
 (** ** Translation of [va_arg] for variadic functions. *)
 
-let eaddrof e = Eaddrof(e, Tpointer(typeof e, noattr))
+let va_list_ptr e =
+  if CBuiltins.va_list_scalar
+  then Eaddrof(e, Tpointer(typeof e, noattr))
+  else e
 
 let make_builtin_va_arg env ty e =
   let (helper, ty_ret) =
@@ -218,7 +221,7 @@ let make_builtin_va_arg env ty e =
       (Ecall(Evar (intern_string helper, 
                    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret, 
                              cc_default)),
-             Econs(eaddrof e, Enil),
+             Econs(va_list_ptr e, Enil),
              ty_ret),
        ty)
 
@@ -613,7 +616,9 @@ let rec convertExpr env e =
       Eunop(Oabsfloat, convertExpr env arg, ty)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_va_start"}} as fn, [arg]) ->
-      Ecall(convertExpr env fn, Econs(eaddrof(convertExpr env arg), Enil), ty)
+      Ecall(convertExpr env fn,
+            Econs(va_list_ptr(convertExpr env arg), Enil),
+            ty)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_va_arg"}}, [arg1; arg2]) ->
       make_builtin_va_arg env ty (convertExpr env arg1)
@@ -627,7 +632,7 @@ let rec convertExpr env e =
       Ebuiltin(EF_memcpy(Z.of_uint CBuiltins.size_va_list, Z.of_uint 4),
                Tcons(Tpointer(Tvoid, noattr),
                  Tcons(Tpointer(Tvoid, noattr), Tnil)),
-               Econs(eaddrof dst, Econs(eaddrof src, Enil)),
+               Econs(va_list_ptr dst, Econs(va_list_ptr src, Enil)),
                Tvoid)
 
   | C.ECall({edesc = C.EVar {name = "printf"}}, args)

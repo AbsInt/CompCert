@@ -89,3 +89,4 @@ let builtins = {
 }
 
 let size_va_list = 12
+let va_list_scalar = false
