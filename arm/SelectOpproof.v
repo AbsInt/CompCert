@@ -716,12 +716,7 @@ Qed.
 
 Theorem eval_cast8signed: unary_constructor_sound cast8signed (Val.sign_ext 8).
 Proof.
-  red; intros. unfold cast8signed.
-  exploit (eval_shlimm (Int.repr 24)); eauto. intros [v1 [A1 B1]].
-  exploit (eval_shrimm (Int.repr 24)). eexact A1. intros [v2 [A2 B2]].
-  exists v2; split; auto. 
-  destruct x; simpl; auto. simpl in *. inv B1. simpl in *. inv B2. 
-  rewrite Int.sign_ext_shr_shl. auto. compute; auto.
+  red; intros. unfold cast8signed. TrivialExists.
 Qed.
 
 Theorem eval_cast8unsigned: unary_constructor_sound cast8unsigned (Val.zero_ext 8).
@@ -732,12 +727,7 @@ Qed.
 
 Theorem eval_cast16signed: unary_constructor_sound cast16signed (Val.sign_ext 16).
 Proof.
-  red; intros. unfold cast16signed.
-  exploit (eval_shlimm (Int.repr 16)); eauto. intros [v1 [A1 B1]].
-  exploit (eval_shrimm (Int.repr 16)). eexact A1. intros [v2 [A2 B2]].
-  exists v2; split; auto. 
-  destruct x; simpl; auto. simpl in *. inv B1. simpl in *. inv B2. 
-  rewrite Int.sign_ext_shr_shl. auto. compute; auto.
+  red; intros. unfold cast16signed. TrivialExists.
 Qed.
 
 Theorem eval_cast16unsigned: unary_constructor_sound cast16unsigned (Val.zero_ext 16).

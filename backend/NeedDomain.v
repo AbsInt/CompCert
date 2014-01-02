@@ -82,19 +82,28 @@ Qed.
 
 Hint Resolve vagree_same vagree_lessdef lessdef_vagree: na.
 
-Definition vagree_list (vl1 vl2: list val) (nv: nval) : Prop :=
-  list_forall2 (fun v1 v2 => vagree v1 v2 nv) vl1 vl2.
+Inductive vagree_list: list val -> list val -> list nval -> Prop :=
+  | vagree_list_nil: forall nvl,
+      vagree_list nil nil nvl
+  | vagree_list_default: forall v1 vl1 v2 vl2,
+      vagree v1 v2 All -> vagree_list vl1 vl2 nil ->
+      vagree_list (v1 :: vl1) (v2 :: vl2) nil
+  | vagree_list_cons: forall v1 vl1 v2 vl2 nv1 nvl,
+      vagree v1 v2 nv1 -> vagree_list vl1 vl2 nvl ->
+      vagree_list (v1 :: vl1) (v2 :: vl2) (nv1 :: nvl).
 
 Lemma lessdef_vagree_list:
-  forall vl1 vl2, vagree_list vl1 vl2 All -> Val.lessdef_list vl1 vl2.
+  forall vl1 vl2, vagree_list vl1 vl2 nil -> Val.lessdef_list vl1 vl2.
 Proof.
-  induction 1; constructor; auto with na.
+  induction vl1; intros; inv H; constructor; auto with na.
 Qed.
 
 Lemma vagree_lessdef_list:
-  forall x vl1 vl2, Val.lessdef_list vl1 vl2 -> vagree_list vl1 vl2 x.
+  forall vl1 vl2, Val.lessdef_list vl1 vl2 -> forall nvl, vagree_list vl1 vl2 nvl.
 Proof.
-  induction 1; constructor; auto with na.
+  induction 1; intros.
+  constructor.
+  destruct nvl; constructor; auto with na.
 Qed.
 
 Hint Resolve lessdef_vagree_list vagree_lessdef_list: na.
@@ -621,14 +630,6 @@ Proof.
   destruct nv; simpl; auto. f_equal; apply complete_mask_idem.
 Qed.
 
-Lemma add_sound_2:
-  forall v1 w1 v2 w2 x,
-  vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
-  vagree (Val.add v1 v2) (Val.add w1 w2) (modarith x).
-Proof.
-  intros. apply add_sound; rewrite modarith_idem; auto.
-Qed.
-
 Lemma mul_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
@@ -639,14 +640,6 @@ Proof.
 - unfold Val.mul; InvAgree. apply eqmod_iagree. apply Int.eqmod_mult; apply iagree_eqmod; auto. 
 - unfold Val.mul; destruct v1, w1; auto; destruct v2, w2; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto. 
-Qed.
-
-Lemma mul_sound_2:
-  forall v1 w1 v2 w2 x,
-  vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
-  vagree (Val.mul v1 v2) (Val.mul w1 w2) (modarith x).
-Proof.
-  intros. apply mul_sound; rewrite modarith_idem; auto.
 Qed.
 
 (** Conversions: zero extension, sign extension, single-of-float *)
@@ -880,7 +873,7 @@ Qed.
 Lemma default_needs_of_condition_sound:
   forall cond args1 b args2,
   eval_condition cond args1 m1 = Some b ->
-  vagree_list args1 args2 All ->
+  vagree_list args1 args2 nil ->
   eval_condition cond args2 m2 = Some b.
 Proof.
   intros. apply eval_condition_inj with (f := inject_id) (m1 := m1) (vl1 := args1); auto.
@@ -890,7 +883,9 @@ Qed.
 Lemma default_needs_of_operation_sound:
   forall op args1 v1 args2 nv,
   eval_operation ge (Vptr sp Int.zero) op args1 m1 = Some v1 ->
-  vagree_list args1 args2 (default nv) ->
+  vagree_list args1 args2 nil 
+  \/ vagree_list args1 args2 (default nv :: nil)
+  \/ vagree_list args1 args2 (default nv :: default nv :: nil) ->
   nv <> Nothing ->
   exists v2,
      eval_operation ge (Vptr sp Int.zero) op args2 m2 = Some v2
@@ -898,11 +893,17 @@ Lemma default_needs_of_operation_sound:
 Proof.
   intros. assert (default nv = All) by (destruct nv; simpl; congruence). 
   rewrite H2 in H0.
+  assert (Val.lessdef_list args1 args2).
+  {
+    destruct H0. auto with na. 
+    destruct H0. inv H0; constructor; auto with na. 
+    inv H0; constructor; auto with na. inv H8; constructor; auto with na.
+  }
   exploit (@eval_operation_inj _ _ ge inject_id).
   intros. apply val_inject_lessdef. auto.
   eassumption. auto. auto. auto.
   apply val_inject_lessdef. instantiate (1 := Vptr sp Int.zero). instantiate (1 := Vptr sp Int.zero). auto.
-  apply val_list_inject_lessdef. apply lessdef_vagree_list. eauto.
+  apply val_list_inject_lessdef. eauto.
   eauto. 
   intros (v2 & A & B). exists v2; split; auto.
   apply vagree_lessdef. apply val_inject_lessdef. auto. 

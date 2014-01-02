@@ -917,6 +917,26 @@ Proof.
   generalize (addimm_correct x IR13 i k rs m). 
   intros [rs' [EX [RES OTH]]].
   exists rs'; auto with asmgen. 
+  (* Ocast8signed *)
+  set (rs1 := nextinstr (rs#x <- (Val.shl rs#x0 (Vint (Int.repr 24))))).
+  set (rs2 := nextinstr (rs1#x <- (Val.shr rs1#x (Vint (Int.repr 24))))).
+  exists rs2.
+  split. apply exec_straight_two with rs1 m; auto. 
+  split. unfold rs2; Simpl. unfold rs1; Simpl.
+  unfold Val.shr, Val.shl; destruct (rs x0); auto. 
+  change (Int.ltu (Int.repr 24) Int.iwordsize) with true; simpl.
+  f_equal. symmetry. apply (Int.sign_ext_shr_shl 8). compute; auto.
+  intros. unfold rs2, rs1; Simpl. 
+  (* Ocast16signed *)
+  set (rs1 := nextinstr (rs#x <- (Val.shl rs#x0 (Vint (Int.repr 16))))).
+  set (rs2 := nextinstr (rs1#x <- (Val.shr rs1#x (Vint (Int.repr 16))))).
+  exists rs2.
+  split. apply exec_straight_two with rs1 m; auto. 
+  split. unfold rs2; Simpl. unfold rs1; Simpl.
+  unfold Val.shr, Val.shl; destruct (rs x0); auto. 
+  change (Int.ltu (Int.repr 16) Int.iwordsize) with true; simpl.
+  f_equal. symmetry. apply (Int.sign_ext_shr_shl 16). compute; auto.
+  intros. unfold rs2, rs1; Simpl. 
   (* Oaddimm *)
   generalize (addimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]]. 

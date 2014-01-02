@@ -106,9 +106,9 @@ let movimm oc dst n =
   match Asmgen.decompose_int n with
   | [] -> assert false
   | hd::tl as l ->
-      fprintf oc "	mov	%s, #%a\n" dst coqint hd
+      fprintf oc "	mov	%s, #%a\n" dst coqint hd;
       List.iter
-        (fun n -> fprintf oc "	orr	%s, %s, #%a" dst dst coqint n)
+        (fun n -> fprintf oc "	orr	%s, %s, #%a\n" dst dst coqint n)
         tl;
       List.length l
 
@@ -116,9 +116,9 @@ let addimm oc dst src n =
   match Asmgen.decompose_int n with
   | [] -> assert false
   | hd::tl as l ->
-      fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd
+      fprintf oc "	add	%s, %s, #%a\n" dst src coqint hd;
       List.iter
-        (fun n -> fprintf oc "	add	%s, %s, #%a" dst dst coqint n)
+        (fun n -> fprintf oc "	add	%s, %s, #%a\n" dst dst coqint n)
         tl;
       List.length l
 
@@ -126,9 +126,9 @@ let subimm oc dst src n =
   match Asmgen.decompose_int n with
   | [] -> assert false
   | hd::tl as l ->
-      fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd
+      fprintf oc "	sub	%s, %s, #%a\n" dst src coqint hd;
       List.iter
-        (fun n -> fprintf oc "	sub	%s, %s, #%a" dst dst coqint n)
+        (fun n -> fprintf oc "	sub	%s, %s, #%a\n" dst dst coqint n)
         tl;
       List.length l
 
@@ -425,7 +425,7 @@ let print_builtin_va_start oc r =
     Int32.add
       (next_arg_location 0 0 (!current_function_sig).sig_args)
       !current_function_stacksize in
-  let n = addimm oc "r14" "sp" (coqint_of_camlint ofs);
+  let n = addimm oc "r14" "sp" (coqint_of_camlint ofs) in
   fprintf oc "	str	r14, [%a, #0]\n" ireg r;
   n + 1
 
@@ -716,10 +716,10 @@ let print_instruction oc = function
       fprintf oc "	mov	r12, sp\n";
       if (!current_function_sig).sig_cc.cc_vararg then begin
         fprintf oc "	push	{r0, r1, r2, r3}\n";
-        cfi_adjust oc 16
+        cfi_adjust oc 16l
       end;
       let sz' = camlint_of_coqint sz in
-      let ninstr = subimm "sp" "sp" sz in
+      let ninstr = subimm oc "sp" "sp" sz in
       cfi_adjust oc sz';
       fprintf oc "	str	r12, [sp, #%a]\n" coqint ofs;
       current_function_stacksize := sz';
@@ -727,7 +727,7 @@ let print_instruction oc = function
   | Pfreeframe(sz, ofs) ->
       let sz =
         if (!current_function_sig).sig_cc.cc_vararg
-        then coqint_of_camlint (Int32.add 16l (camlint_of_coqint sz)
+        then coqint_of_camlint (Int32.add 16l (camlint_of_coqint sz))
         else sz in
       if Asmgen.is_immed_arith sz
       then fprintf oc "	add	sp, sp, #%a\n" coqint sz
@@ -805,6 +805,7 @@ let rec print_instructions oc instrs =
 let print_function oc name fn =
   Hashtbl.clear current_function_labels;
   reset_constants();
+  current_function_sig := fn.fn_sig;
   currpos := 0;
   let text =
     match C2C.atom_sections name with

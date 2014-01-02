@@ -267,6 +267,14 @@ Definition transl_op
   | Oaddrstack n, nil =>
       do r <- ireg_of res;
       OK (addimm r IR13 n k)
+  | Ocast8signed, a1 :: nil =>
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (Pmov r (SOlslimm r1 (Int.repr 24)) ::
+          Pmov r (SOasrimm r (Int.repr 24)) :: k)
+  | Ocast16signed, a1 :: nil =>
+      do r <- ireg_of res; do r1 <- ireg_of a1;
+      OK (Pmov r (SOlslimm r1 (Int.repr 16)) ::
+          Pmov r (SOasrimm r (Int.repr 16)) :: k)
   | Oadd, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Padd r r1 (SOreg r2) :: k)

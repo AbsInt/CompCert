@@ -21,8 +21,8 @@ Require Import Memory.
 Require Import Op.
 Require Import Registers.
 Require Import RTL.
+Require Import CSEdomain.
 Require Import CombineOp.
-Require Import CSE.
 
 Section COMBINE.
 
@@ -31,8 +31,20 @@ Variable sp: val.
 Variable m: mem.
 Variable get: valnum -> option rhs.
 Variable valu: valnum -> val.
-Hypothesis get_sound: forall v rhs, get v = Some rhs -> equation_holds valu ge sp m v rhs.
+Hypothesis get_sound: forall v rhs, get v = Some rhs -> rhs_eval_to valu ge sp m rhs (valu v).
 
+Lemma get_op_sound:
+  forall v op vl, get v = Some (Op op vl) -> eval_operation ge sp op (map valu vl) m = Some (valu v).
+Proof.
+  intros. exploit get_sound; eauto. intros REV; inv REV; auto. 
+Qed.
+
+Ltac UseGetSound :=
+  match goal with
+  | [ H: get _ = Some _ |- _ ] =>
+      let x := fresh "EQ" in (generalize (get_op_sound _ _ _ H); intros x; simpl in x; FuncInv)
+  end.
+  
 Lemma combine_compimm_ne_0_sound:
   forall x cond args,
   combine_compimm_ne_0 get x = Some(cond, args) ->
@@ -41,7 +53,7 @@ Lemma combine_compimm_ne_0_sound:
 Proof.
   intros until args. functional induction (combine_compimm_ne_0 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
 
@@ -53,7 +65,7 @@ Lemma combine_compimm_eq_0_sound:
 Proof.
   intros until args. functional induction (combine_compimm_eq_0 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   rewrite eval_negate_condition. 
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
@@ -66,7 +78,7 @@ Lemma combine_compimm_eq_1_sound:
 Proof.
   intros until args. functional induction (combine_compimm_eq_1 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
 
@@ -78,7 +90,7 @@ Lemma combine_compimm_ne_1_sound:
 Proof.
   intros until args. functional induction (combine_compimm_ne_1 get x); intros EQ; inv EQ.
   (* of cmp *)
-  exploit get_sound; eauto. unfold equation_holds. simpl. intro EQ; inv EQ. 
+  UseGetSound. rewrite <- H. 
   rewrite eval_negate_condition.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
 Qed.
@@ -114,8 +126,7 @@ Theorem combine_addr_sound:
 Proof.
   intros. functional inversion H; subst.
   (* indexed - addimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intro EQ. FuncInv.
-  rewrite <- H0. rewrite Val.add_assoc. auto. 
+  UseGetSound. simpl. rewrite <- H0. rewrite Val.add_assoc. auto. 
 Qed.
 
 Theorem combine_op_sound:
@@ -125,28 +136,28 @@ Theorem combine_op_sound:
 Proof.
   intros. functional inversion H; subst.
 (* addimm - addimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.add_assoc. auto.
+  UseGetSound. FuncInv. simpl.
+  rewrite <- H0. rewrite Val.add_assoc. auto.
 (* addimm - subimm *)
 Opaque Val.sub.
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. change (Vint (Int.add m0 n)) with (Val.add (Vint m0) (Vint n)).
-  rewrite Val.sub_add_l. auto.
+  UseGetSound. FuncInv. simpl.
+  change (Vint (Int.add m0 n)) with (Val.add (Vint m0) (Vint n)).
+  rewrite <- H0. rewrite Val.sub_add_l. auto.
 (* subimm - addimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1.
+  UseGetSound. FuncInv. simpl. rewrite <- H0.
 Transparent Val.sub.
   destruct v; simpl; auto. repeat rewrite Int.sub_add_opp. rewrite Int.add_assoc.
   rewrite Int.neg_add_distr. decEq. decEq. decEq. apply Int.add_commut.
 (* andimm - andimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.and_assoc. auto.
+  UseGetSound; simpl. 
+  generalize (Int.eq_spec p m0); rewrite H7; intros. 
+  rewrite <- H0. rewrite Val.and_assoc. simpl. fold p. rewrite H1. auto.
+  UseGetSound; simpl. 
+  rewrite <- H0. rewrite Val.and_assoc. auto.
 (* orimm - orimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.or_assoc. auto.
+  UseGetSound. simpl. rewrite <- H0. rewrite Val.or_assoc. auto.
 (* xorimm - xorimm *)
-  exploit get_sound; eauto. unfold equation_holds; simpl; intros. FuncInv.
-  rewrite <- H1. rewrite Val.xor_assoc. auto.
+  UseGetSound. simpl. rewrite <- H0. rewrite Val.xor_assoc. auto.
 (* cmp *)
   simpl. decEq; decEq. eapply combine_cond_sound; eauto.
 Qed.

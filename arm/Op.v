@@ -73,6 +73,8 @@ Inductive operation : Type :=
   | Oaddrsymbol: ident -> int -> operation (**r [rd] is set to the the address of the symbol plus the offset *)
   | Oaddrstack: int -> operation        (**r [rd] is set to the stack pointer plus the given offset *)
 (*c Integer arithmetic: *)
+  | Ocast8signed: operation             (**r [rd] is 8-bit sign extension of [r1] *)
+  | Ocast16signed: operation            (**r [rd] is 16-bit sign extension of [r1] *)
   | Oadd: operation                     (**r [rd = r1 + r2] *)
   | Oaddshift: shift -> operation       (**r [rd = r1 + shifted r2] *)
   | Oaddimm: int -> operation           (**r [rd = r1 + n] *)
@@ -219,6 +221,8 @@ Definition eval_operation
   | Ofloatconst n, nil => Some (Vfloat n)
   | Oaddrsymbol s ofs, nil => Some (symbol_address genv s ofs)
   | Oaddrstack ofs, nil => Some (Val.add sp (Vint ofs))
+  | Ocast8signed, v1::nil => Some (Val.sign_ext 8 v1)
+  | Ocast16signed, v1::nil => Some (Val.sign_ext 16 v1)
   | Oadd, v1 :: v2 :: nil => Some (Val.add v1 v2)
   | Oaddshift s, v1 :: v2 :: nil => Some (Val.add v1 (eval_shift s v2))
   | Oaddimm n, v1 :: nil => Some (Val.add v1 (Vint n))
@@ -314,6 +318,8 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Ofloatconst f => (nil, if Float.is_single_dec f then Tsingle else Tfloat)
   | Oaddrsymbol _ _ => (nil, Tint)
   | Oaddrstack _ => (nil, Tint)
+  | Ocast8signed => (Tint :: nil, Tint)
+  | Ocast16signed => (Tint :: nil, Tint)
   | Oadd => (Tint :: Tint :: nil, Tint)
   | Oaddshift _ => (Tint :: Tint :: nil, Tint)
   | Oaddimm _ => (Tint :: nil, Tint)
@@ -393,6 +399,8 @@ Proof with (try exact I).
   destruct (Float.is_single_dec f); red; auto. 
   unfold symbol_address. destruct (Genv.find_symbol genv i)...
   destruct sp...
+  destruct v0...
+  destruct v0...
   destruct v0; destruct v1...
   generalize (S s v1). destruct v0; destruct (eval_shift s v1); simpl; tauto.
   destruct v0...
@@ -820,6 +828,8 @@ Lemma eval_operation_inj:
 Proof.
   intros. destruct op; simpl in H1; simpl; FuncInv; InvInject; TrivialExists.
   apply Values.val_add_inject; auto.
+  inv H4; simpl; auto.
+  inv H4; simpl; auto.
   apply Values.val_add_inject; auto.
   apply Values.val_add_inject; auto. apply eval_shift_inj; auto.
   apply Values.val_add_inject; auto.

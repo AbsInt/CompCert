@@ -369,11 +369,11 @@ Definition compf (c: comparison) (e1: expr) (e2: expr) :=
 
 Definition cast8unsigned (e: expr) := andimm (Int.repr 255) e.
 
-Definition cast8signed (e: expr) := shrimm (shlimm e (Int.repr 24)) (Int.repr 24).
+Definition cast8signed (e: expr) := Eop Ocast8signed (e ::: Enil).
 
 Definition cast16unsigned (e: expr) := andimm (Int.repr 65535) e.
 
-Definition cast16signed (e: expr) := shrimm (shlimm e (Int.repr 16)) (Int.repr 16).
+Definition cast16signed (e: expr) := Eop Ocast16signed (e ::: Enil).
 
 (** ** Floating-point conversions *)
 

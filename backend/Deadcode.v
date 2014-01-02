@@ -31,24 +31,34 @@ Require Import NeedOp.
 
 (** * Part 1: the static analysis *)
 
+Definition add_need_all (r: reg) (ne: nenv) : nenv :=
+  NE.set r All ne.
+
 Definition add_need (r: reg) (nv: nval) (ne: nenv) : nenv :=
   NE.set r (nlub nv (NE.get r ne)) ne.
 
-Fixpoint add_needs (rl: list reg) (nv: nval) (ne: nenv) : nenv :=
+Fixpoint add_needs_all (rl: list reg) (ne: nenv) : nenv :=
   match rl with
   | nil => ne
-  | r1 :: rs => add_need r1 nv (add_needs rs nv ne)
+  | r1 :: rs => add_need_all r1 (add_needs_all rs ne)
   end.
 
-Definition add_ros_need (ros: reg + ident) (ne: nenv) : nenv :=
+Fixpoint add_needs (rl: list reg) (nvl: list nval) (ne: nenv) : nenv :=
+  match rl, nvl with
+  | nil, _ => ne
+  | r1 :: rs, nil => add_needs_all rl ne
+  | r1 :: rs, nv1 :: nvs => add_need r1 nv1 (add_needs rs nvs ne)
+  end.
+
+Definition add_ros_need_all (ros: reg + ident) (ne: nenv) : nenv :=
   match ros with
-  | inl r => add_need r All ne
+  | inl r => add_need_all r ne
   | inr s => ne
   end.
 
-Definition add_opt_need (or: option reg) (ne: nenv) : nenv :=
+Definition add_opt_need_all (or: option reg) (ne: nenv) : nenv :=
   match or with
-  | Some r => add_need r All ne
+  | Some r => add_need_all r ne
   | None => ne
   end.
 
@@ -64,26 +74,26 @@ Function transfer_builtin (app: VA.t) (ef: external_function) (args: list reg) (
                           (ne: NE.t) (nm: nmem) : NA.t :=
   match ef, args with
   | EF_vload chunk, a1::nil =>
-      (add_needs args All (kill res ne),
+      (add_needs_all args (kill res ne),
        nmem_add nm (aaddr app a1) (size_chunk chunk))
   | EF_vload_global chunk id ofs, nil =>
-      (add_needs args All (kill res ne),
+      (add_needs_all args (kill res ne),
        nmem_add nm (Gl id ofs) (size_chunk chunk))
   | EF_vstore chunk, a1::a2::nil =>
-      (add_need a1 All (add_need a2 (store_argument chunk) (kill res ne)), nm)
+      (add_need_all a1 (add_need a2 (store_argument chunk) (kill res ne)), nm)
   | EF_vstore_global chunk id ofs, a1::nil =>
       (add_need a1 (store_argument chunk) (kill res ne), nm)
   | EF_memcpy sz al, dst::src::nil =>
       if nmem_contains nm (aaddr app dst) sz then
-       (add_needs args All (kill res ne),
+       (add_needs_all args (kill res ne),
         nmem_add (nmem_remove nm (aaddr app dst) sz) (aaddr app src) sz)
       else (ne, nm)
   | EF_annot txt targs, _ =>
-      (add_needs args All (kill res ne), nm)
+      (add_needs_all args (kill res ne), nm)
   | EF_annot_val txt targ, _ =>
-      (add_needs args All (kill res ne), nm)
+      (add_needs_all args (kill res ne), nm)
   | _, _ =>
-      (add_needs args All (kill res ne), nmem_all) 
+      (add_needs_all args (kill res ne), nmem_all) 
   end.
 
 Definition transfer (f: function) (approx: PMap.t VA.t)
@@ -103,27 +113,27 @@ Definition transfer (f: function) (approx: PMap.t VA.t)
       let ndst := nreg ne dst in
       if is_dead ndst then after
       else if is_int_zero ndst then (kill dst ne, nm)
-      else (add_needs args All (kill dst ne),
+      else (add_needs_all args (kill dst ne),
             nmem_add nm (aaddressing approx!!pc addr args) (size_chunk chunk))
   | Some (Istore chunk addr args src s) =>
       let p := aaddressing approx!!pc addr args in
       if nmem_contains nm p (size_chunk chunk)
-      then (add_needs args All (add_need src (store_argument chunk) ne),
+      then (add_needs_all args (add_need src (store_argument chunk) ne),
             nmem_remove nm p (size_chunk chunk))
       else after
   | Some(Icall sig ros args res s) =>
-      (add_needs args All (add_ros_need ros (kill res ne)), nmem_all)
+      (add_needs_all args (add_ros_need_all ros (kill res ne)), nmem_all)
   | Some(Itailcall sig ros args) =>
-      (add_needs args All (add_ros_need ros NE.bot),
+      (add_needs_all args (add_ros_need_all ros NE.bot),
        nmem_dead_stack f.(fn_stacksize))
   | Some(Ibuiltin ef args res s) =>
       transfer_builtin approx!!pc ef args res ne nm
   | Some(Icond cond args s1 s2) =>
       (add_needs args (needs_of_condition cond) ne, nm)
   | Some(Ijumptable arg tbl) =>
-      (add_need arg All ne, nm)
+      (add_need_all arg ne, nm)
   | Some(Ireturn optarg) =>
-      (add_opt_need optarg ne, nmem_dead_stack f.(fn_stacksize))
+      (add_opt_need_all optarg ne, nmem_dead_stack f.(fn_stacksize))
   end.
 
 Module DS := Backward_Dataflow_Solver(NA)(NodeSetBackward).
@@ -144,7 +154,10 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
       else if is_int_zero nres then
         Iop (Ointconst Int.zero) nil res s
       else if operation_is_redundant op nres then 
-        match args with arg :: _ => Iop Omove (arg :: nil) res s | nil => instr end
+        match args with
+        | arg :: _ => Iop Omove (arg :: nil) res s
+        | nil => instr
+        end
       else
         instr
   | Iload chunk addr args dst s =>

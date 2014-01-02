@@ -111,12 +111,7 @@ int main()
   miniprintf("A long long: %l\n", 123456789012345LL);
   miniprintf("A string: %s\n", "Hello world");
   miniprintf("A double: %e\n", 3.141592654);
-  miniprintf("A char: %c and "
-             "A string: %s and "
-             "An int: %d and "
-             "A long: %l and "
-             "A double: %e and "
-             "A float: %f\n",
+  miniprintf("A mixture: %c & %s & %d & %l & %e & %f\n",
              'x',
              "Hello, world!",
              42,
@@ -127,26 +122,14 @@ int main()
   miniprintf3("With va_copy: %d %e\n", -1, 1.23);
   miniprintf_extra(0, 1, 2, 3, 4, 5, 6, 7,
                    0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
-             "With extra args: "
-             "A char: %c and "
-             "A string: %s and "
-             "An int: %d and "
-             "A long: %l and "
-             "A double: %e and "
-             "A float: %f\n",
-             'x',
-             "Hello, world!",
-             42,
-             123456789012345LL,
-             3.141592654,
-             2.71828182);
-  printf_compat("va_list compatibility: "  
-                "A char: %c and "
-                "A string: %s and "
-                "An int: %d and "
-                "A long: %lld and "
-                "A double: %.10g and "
-                "A float: %.10g\n",
+                   "With extra args: %c & %s & %d & %l & %e & %f\n",
+                   'x',
+                   "Hello, world!",
+                   42,
+                   123456789012345LL,
+                   3.141592654,
+                   2.71828182);
+  printf_compat("va_list compatibility: %c & %s & %d & %lld & %.10g & %.10g\n",
                 'x',
                 "Hello, world!",
                 42,

@@ -264,83 +264,90 @@ Qed.
 
 (** * Properties of the need environment *)
 
-Lemma add_need_ge:
-  forall r nv ne,
-  nge (NE.get r (add_need r nv ne)) nv /\ NE.ge (add_need r nv ne) ne.
+Lemma add_need_all_eagree:
+  forall e e' r ne,
+  eagree e e' (add_need_all r ne) -> eagree e e' ne.
 Proof.
-  intros. unfold add_need. split. 
-  rewrite NE.gsspec; rewrite peq_true. apply nge_lub_l. 
-  red. intros. rewrite NE.gsspec. destruct (peq p r).
-  subst. apply NVal.ge_lub_right. 
-  apply NVal.ge_refl. apply NVal.eq_refl. 
+  intros; red; intros. generalize (H r0). unfold add_need_all. 
+  rewrite NE.gsspec. destruct (peq r0 r); auto with na. 
 Qed.
 
-Lemma add_needs_ge:
-  forall rl nv ne,
-  (forall r, In r rl -> nge (NE.get r (add_needs rl nv ne)) nv)
-  /\ NE.ge (add_needs rl nv ne) ne.
+Lemma add_need_all_lessdef:
+  forall e e' r ne,
+  eagree e e' (add_need_all r ne) -> Val.lessdef e#r e'#r.
 Proof.
-  induction rl; simpl; intros. 
-  split. tauto. apply NE.ge_refl. apply NE.eq_refl.
-  destruct (IHrl nv ne) as [A B].
-  split; intros. 
-  destruct H. subst a. apply add_need_ge. 
-  apply nge_trans with (NE.get r (add_needs rl nv ne)). 
-  apply add_need_ge. apply A; auto.
-  eapply NE.ge_trans; eauto. apply add_need_ge.
+  intros. generalize (H r); unfold add_need_all. 
+  rewrite NE.gsspec, peq_true. auto with na.
 Qed.
 
 Lemma add_need_eagree:
-  forall e e' r nv ne, eagree e e' (add_need r nv ne) -> eagree e e' ne.
+  forall e e' r nv ne,
+  eagree e e' (add_need r nv ne) -> eagree e e' ne.
 Proof.
-  intros. eapply eagree_ge; eauto. apply add_need_ge. 
+  intros; red; intros. generalize (H r0); unfold add_need.
+  rewrite NE.gsspec. destruct (peq r0 r); auto.
+  subst r0. intros. eapply nge_agree; eauto. apply nge_lub_r.
 Qed.
 
 Lemma add_need_vagree:
-  forall e e' r nv ne, eagree e e' (add_need r nv ne) -> vagree e#r e'#r nv.
+  forall e e' r nv ne,
+  eagree e e' (add_need r nv ne) -> vagree e#r e'#r nv.
 Proof.
-  intros. eapply nge_agree. eapply add_need_ge. apply H. 
+  intros. generalize (H r); unfold add_need.
+  rewrite NE.gsspec, peq_true. intros. eapply nge_agree; eauto. apply nge_lub_l.
+Qed.
+
+Lemma add_needs_all_eagree:
+  forall rl e e' ne,
+  eagree e e' (add_needs_all rl ne) -> eagree e e' ne.
+Proof.
+  induction rl; simpl; intros.
+  auto.
+  apply IHrl. eapply add_need_all_eagree; eauto. 
+Qed.
+
+Lemma add_needs_all_lessdef:
+  forall rl e e' ne,
+  eagree e e' (add_needs_all rl ne) -> Val.lessdef_list e##rl e'##rl.
+Proof.
+  induction rl; simpl; intros. 
+  constructor.
+  constructor. eapply add_need_all_lessdef; eauto. 
+  eapply IHrl. eapply add_need_all_eagree; eauto. 
 Qed.
 
 Lemma add_needs_eagree:
-  forall nv rl e e' ne, eagree e e' (add_needs rl nv ne) -> eagree e e' ne.
+  forall rl nvl e e' ne,
+  eagree e e' (add_needs rl nvl ne) -> eagree e e' ne.
 Proof.
-  intros. eapply eagree_ge; eauto. apply add_needs_ge. 
+  induction rl; simpl; intros.
+  auto.
+  destruct nvl. apply add_needs_all_eagree with (a :: rl); auto.
+  eapply IHrl. eapply add_need_eagree; eauto. 
 Qed.
 
 Lemma add_needs_vagree:
-  forall nv rl e e' ne, eagree e e' (add_needs rl nv ne) -> vagree_list e##rl e'##rl nv.
+  forall rl nvl e e' ne,
+  eagree e e' (add_needs rl nvl ne) -> vagree_list e##rl e'##rl nvl.
 Proof.
-  intros. destruct (add_needs_ge rl nv ne) as [A B].
-  set (ne' := add_needs rl nv ne) in *. 
-  revert A; generalize rl. induction rl0; simpl; intros.
+  induction rl; simpl; intros.
   constructor.
-  constructor. eapply nge_agree; eauto. apply IHrl0. auto. 
-Qed.
-
-Lemma add_need_lessdef:
-  forall e e' r ne, eagree e e' (add_need r All ne) -> Val.lessdef e#r e'#r.
-Proof.
-  intros. apply lessdef_vagree. eapply add_need_vagree; eauto. 
-Qed.
-
-Lemma add_needs_lessdef:
-  forall e e' rl ne, eagree e e' (add_needs rl All ne) -> Val.lessdef_list e##rl e'##rl.
-Proof.
-  intros. exploit add_needs_vagree; eauto. 
-  generalize rl. induction rl0; simpl; intros V; inv V. 
-  constructor.
-  constructor; auto.
+  destruct nvl.
+  apply vagree_lessdef_list. eapply add_needs_all_lessdef with (rl := a :: rl); eauto.
+  constructor. eapply add_need_vagree; eauto. 
+  eapply IHrl. eapply add_need_eagree; eauto. 
 Qed.
 
 Lemma add_ros_need_eagree:
-  forall e e' ros ne, eagree e e' (add_ros_need ros ne) -> eagree e e' ne.
+  forall e e' ros ne, eagree e e' (add_ros_need_all ros ne) -> eagree e e' ne.
 Proof.
-  intros. destruct ros; simpl in *. eapply add_need_eagree; eauto. auto. 
+  intros. destruct ros; simpl in *. eapply add_need_all_eagree; eauto. auto. 
 Qed.
 
-Hint Resolve add_need_eagree add_need_vagree add_need_lessdef
-             add_needs_eagree add_needs_vagree add_needs_lessdef
+Hint Resolve add_need_all_eagree add_need_all_lessdef
+             add_need_eagree add_need_vagree
+             add_needs_all_eagree add_needs_all_lessdef
+             add_needs_eagree add_needs_vagree
              add_ros_need_eagree: na.
 
 Lemma eagree_init_regs:
@@ -449,7 +456,7 @@ Qed.
 Lemma find_function_translated:
   forall ros rs fd trs ne,
   find_function ge ros rs = Some fd ->
-  eagree rs trs (add_ros_need ros ne) ->
+  eagree rs trs (add_ros_need_all ros ne) ->
   exists tfd, find_function tge ros trs = Some tfd /\ transf_fundef rm fd = OK tfd.
 Proof.
   intros. destruct ros as [r|id]; simpl in *.
@@ -659,22 +666,23 @@ Ltac UseTransfer :=
   eapply match_succ_states; eauto. simpl; auto. 
   apply eagree_update; auto.
   * (* turned into a move *)
-  simpl in *. 
-  exploit operation_is_redundant_sound. eauto. eauto. eapply add_need_vagree. eauto. 
-  intros VA.
+  unfold fst in ENV. unfold snd in MEM. simpl in H0.
+  assert (VA: vagree v te#r (nreg ne res)).
+  { eapply operation_is_redundant_sound with (arg1' := te#r) (args' := te##args).
+    eauto. eauto. exploit add_needs_vagree; eauto. }
   econstructor; split.
   eapply exec_Iop; eauto. simpl; reflexivity. 
   eapply match_succ_states; eauto. simpl; auto. 
-  eapply eagree_update; eauto with na. 
+  eapply eagree_update; eauto 2 with na. 
 + (* preserved operation *)
   simpl in *.
-  exploit needs_of_operation_sound. eapply ma_perm; eauto. eauto. eauto with na. eauto with na.
+  exploit needs_of_operation_sound. eapply ma_perm; eauto. eauto. eauto 2 with na. eauto with na.
   intros [tv [A B]].
   econstructor; split. 
   eapply exec_Iop with (v := tv); eauto.
   rewrite <- A. apply eval_operation_preserved. exact symbols_preserved.
   eapply match_succ_states; eauto. simpl; auto. 
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 2 with na.
 
 - (* load *)
   TransfInstr; UseTransfer.
@@ -694,7 +702,7 @@ Ltac UseTransfer :=
   rewrite is_int_zero_sound by auto.
   destruct v; simpl; auto. apply iagree_zero.
 + (* preserved *)
-  exploit eval_addressing_lessdef. eapply add_needs_lessdef; eauto. eauto. 
+  exploit eval_addressing_lessdef. eapply add_needs_all_lessdef; eauto. eauto. 
   intros (ta & U & V). inv V; try discriminate.
   destruct ta; simpl in H1; try discriminate.
   exploit magree_load; eauto. 
@@ -702,10 +710,11 @@ Ltac UseTransfer :=
   intros. apply nlive_add with bc i; assumption. 
   intros (tv & P & Q).
   econstructor; split.
-  eapply exec_Iload with (a := Vptr b i); eauto.
+  eapply exec_Iload with (a := Vptr b i). eauto. 
   rewrite <- U. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto. 
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na. 
+  apply eagree_update; eauto 2 with na. 
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
 
 - (* store *)
@@ -714,7 +723,7 @@ Ltac UseTransfer :=
              (size_chunk chunk)) eqn:CONTAINS.
 + (* preserved *)
   simpl in *. 
-  exploit eval_addressing_lessdef. eapply add_needs_lessdef; eauto. eauto. 
+  exploit eval_addressing_lessdef. eapply add_needs_all_lessdef; eauto. eauto. 
   intros (ta & U & V). inv V; try discriminate.
   destruct ta; simpl in H1; try discriminate.
   exploit magree_store_parallel. eauto. eauto. instantiate (1 := te#src). eauto with na.
@@ -723,10 +732,11 @@ Ltac UseTransfer :=
   intros. apply nlive_remove with bc b i; assumption. 
   intros (tm' & P & Q).
   econstructor; split.
-  eapply exec_Istore with (a := Vptr b i); eauto.
+  eapply exec_Istore with (a := Vptr b i). eauto. 
   rewrite <- U. apply eval_addressing_preserved. exact symbols_preserved.
+  eauto.
   eapply match_succ_states; eauto. simpl; auto.
-  eauto with na. 
+  eauto 3 with na. 
 + (* dead instruction, turned into a nop *)
   destruct a; simpl in H1; try discriminate.
   econstructor; split.
@@ -738,7 +748,7 @@ Ltac UseTransfer :=
 
 - (* call *)
   TransfInstr; UseTransfer.
-  exploit find_function_translated; eauto with na. intros (tfd & A & B).
+  exploit find_function_translated; eauto 2 with na. intros (tfd & A & B).
   econstructor; split.
   eapply exec_Icall; eauto. apply sig_function_translated; auto. 
   constructor. 
@@ -747,25 +757,25 @@ Ltac UseTransfer :=
   edestruct analyze_successors; eauto. simpl; eauto. 
   eapply eagree_ge; eauto. rewrite ANPC. simpl. 
   apply eagree_update; eauto with na.
-  auto. eauto with na. eapply magree_extends; eauto. apply nlive_all. 
+  auto. eauto 2 with na. eapply magree_extends; eauto. apply nlive_all. 
 
 - (* tailcall *)
   TransfInstr; UseTransfer.
-  exploit find_function_translated; eauto with na. intros (tfd & A & B).
+  exploit find_function_translated; eauto 2 with na. intros (tfd & A & B).
   exploit magree_free. eauto. eauto. instantiate (1 := nlive ge stk nmem_all). 
   intros; eapply nlive_dead_stack; eauto. 
   intros (tm' & C & D). 
   econstructor; split.
   eapply exec_Itailcall; eauto. apply sig_function_translated; auto. 
   erewrite stacksize_translated by eauto. eexact C.
-  constructor; eauto with na. eapply magree_extends; eauto. apply nlive_all.
+  constructor; eauto 2 with na. eapply magree_extends; eauto. apply nlive_all.
 
 - (* builtin *)
   TransfInstr; UseTransfer. revert ENV MEM TI. 
   functional induction (transfer_builtin (vanalyze rm f)#pc ef args res ne nm);
   simpl in *; intros.
 + (* volatile load *)
-  assert (LD: Val.lessdef rs#a1 te#a1) by eauto with na.
+  assert (LD: Val.lessdef rs#a1 te#a1) by eauto 2 with na.
   inv H0. rewrite <- H1 in LD; inv LD.
   assert (X: exists tv, volatile_load ge chunk tm b ofs t tv /\ Val.lessdef v tv).
   {
@@ -784,7 +794,7 @@ Ltac UseTransfer :=
   simpl. rewrite <- H4. constructor. eauto.   
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 2 with na.
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
 + (* volatile global load *)
   inv H0. 
@@ -804,12 +814,12 @@ Ltac UseTransfer :=
   simpl. econstructor; eauto.   
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 2 with na.
   eapply magree_monotone; eauto. intros. apply incl_nmem_add; auto. 
 + (* volatile store *)
   exploit transf_volatile_store. eauto. 
-  instantiate (1 := te#a1). eauto with na.
-  instantiate (1 := te#a2). eauto with na. 
+  instantiate (1 := te#a1). eauto 3 with na.
+  instantiate (1 := te#a2). eauto 3 with na. 
   eauto.
   intros (EQ & tm' & A & B). subst v. 
   econstructor; split.
@@ -817,11 +827,11 @@ Ltac UseTransfer :=
   eapply external_call_symbols_preserved. simpl; eauto. 
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 3 with na.
 + (* volatile global store *)
   rewrite volatile_store_global_charact in H0. destruct H0 as (b & P & Q).
   exploit transf_volatile_store. eauto. eauto. 
-  instantiate (1 := te#a1). eauto with na. 
+  instantiate (1 := te#a1). eauto 2 with na. 
   eauto.
   intros (EQ & tm' & A & B). subst v. 
   econstructor; split.
@@ -830,7 +840,7 @@ Ltac UseTransfer :=
   rewrite volatile_store_global_charact. exists b; split; eauto. 
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 2 with na.
 + (* memcpy *)
   rewrite e1 in TI.
   inv H0. 
@@ -854,15 +864,15 @@ Ltac UseTransfer :=
   rewrite nat_of_Z_eq in H10 by omega. auto.
   eauto. 
   intros (tm' & A & B).
-  assert (LD1: Val.lessdef rs#src te#src) by eauto with na. rewrite <- H2 in LD1.
-  assert (LD2: Val.lessdef rs#dst te#dst) by eauto with na. rewrite <- H1 in LD2.
+  assert (LD1: Val.lessdef rs#src te#src) by eauto 3 with na. rewrite <- H2 in LD1.
+  assert (LD2: Val.lessdef rs#dst te#dst) by eauto 3 with na. rewrite <- H1 in LD2.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply external_call_symbols_preserved. simpl.
   inv LD1. inv LD2. econstructor; eauto.  
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 3 with na.
 + (* memcpy eliminated *)
   rewrite e1 in TI. inv H0.
   set (adst := aaddr (vanalyze rm f) # pc dst) in *.
@@ -882,26 +892,26 @@ Ltac UseTransfer :=
   econstructor; split. 
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved. simpl; constructor. 
-  eapply eventval_list_match_lessdef; eauto with na.
+  eapply eventval_list_match_lessdef; eauto 2 with na.
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 2 with na.
 + (* annot val *)  
   inv H0. destruct _x; inv H1. destruct _x; inv H4.
   econstructor; split. 
   eapply exec_Ibuiltin; eauto. 
   eapply external_call_symbols_preserved. simpl; constructor. 
-  eapply eventval_match_lessdef; eauto with na.
+  eapply eventval_match_lessdef; eauto 2 with na.
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 3 with na.
 + (* all other builtins *)
   assert ((fn_code tf)!pc = Some(Ibuiltin _x _x0 res pc')).
   {
     destruct _x; auto. destruct _x0; auto. destruct _x0; auto. destruct _x0; auto. contradiction. 
   }
   clear y TI. 
-  exploit external_call_mem_extends; eauto with na. 
+  exploit external_call_mem_extends; eauto 2 with na. 
   eapply magree_extends; eauto. intros. apply nlive_all. 
   intros (v' & tm' & A & B & C & D & E). 
   econstructor; split.
@@ -909,7 +919,7 @@ Ltac UseTransfer :=
   eapply external_call_symbols_preserved. eauto.
   exact symbols_preserved. exact varinfo_preserved.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_update; eauto with na.
+  apply eagree_update; eauto 3 with na.
   eapply mextends_agree; eauto. 
 
 - (* conditional *)
@@ -917,16 +927,16 @@ Ltac UseTransfer :=
   econstructor; split.
   eapply exec_Icond; eauto. 
   eapply needs_of_condition_sound. eapply ma_perm; eauto. eauto. eauto with na. 
-  eapply match_succ_states; eauto with na. 
+  eapply match_succ_states; eauto 2 with na. 
   simpl; destruct b; auto. 
 
 - (* jumptable *)
   TransfInstr; UseTransfer.
-  assert (LD: Val.lessdef rs#arg te#arg) by eauto with na. 
+  assert (LD: Val.lessdef rs#arg te#arg) by eauto 2 with na. 
   rewrite H0 in LD. inv LD. 
   econstructor; split.
   eapply exec_Ijumptable; eauto. 
-  eapply match_succ_states; eauto with na. 
+  eapply match_succ_states; eauto 2 with na. 
   simpl. eapply list_nth_z_in; eauto. 
 
 - (* return *)
@@ -938,7 +948,7 @@ Ltac UseTransfer :=
   eapply exec_Ireturn; eauto. 
   erewrite stacksize_translated by eauto. eexact A. 
   constructor; auto.
-  destruct or; simpl; eauto with na.
+  destruct or; simpl; eauto 2 with na.
   eapply magree_extends; eauto. apply nlive_all.
 
 - (* internal function *)
