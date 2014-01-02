@@ -918,7 +918,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
     error (sprintf "'%s' is too big (%s bytes)"
                    id.name (Z.to_string sz));
-  if Cutil.incomplete_type env ty then
+  if sto <> C.Storage_extern && Cutil.incomplete_type env ty then
     error (sprintf "'%s' has incomplete type" id.name);
   Hashtbl.add decl_atom id'
     { a_storage = sto;
