@@ -11,41 +11,65 @@ Require Import RTL.
 
 (** Neededness analysis for IA32 operators *)
 
-Definition needs_of_condition (cond: condition): nval :=
+Definition op1 (nv: nval) := nv :: nil.
+Definition op2 (nv: nval) := nv :: nv :: nil.
+
+Definition needs_of_condition (cond: condition): list nval :=
   match cond with
-  | Cmaskzero n | Cmasknotzero n => maskzero n
-  | _ => All
+  | Cmaskzero n | Cmasknotzero n => op1 (maskzero n)
+  | _ => nil
   end.
 
-Definition needs_of_addressing (addr: addressing) (nv: nval): nval :=
-  modarith nv.
+Definition needs_of_addressing (addr: addressing) (nv: nval): list nval :=
+  match addr with
+  | Aindexed n => op1 (modarith nv)
+  | Aindexed2 n => op2 (modarith nv)
+  | Ascaled sc ofs => op1 (modarith (modarith nv))
+  | Aindexed2scaled sc ofs => op2 (modarith nv)
+  | Aglobal s ofs => nil
+  | Abased s ofs => op1 (modarith nv)
+  | Abasedscaled sc s ofs => op1 (modarith (modarith nv))
+  | Ainstack ofs => nil
+  end.
 
-Definition needs_of_operation (op: operation) (nv: nval): nval :=
+Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   match op with
-  | Omove => nv
-  | Ointconst n => Nothing
-  | Ofloatconst n => Nothing
-  | Oindirectsymbol id => Nothing
-  | Ocast8signed => sign_ext 8 nv
-  | Ocast8unsigned => zero_ext 8 nv
-  | Ocast16signed => sign_ext 16 nv
-  | Ocast16unsigned => zero_ext 16 nv
-  | Omul => modarith nv
-  | Omulimm n => modarith nv
-  | Oand => bitwise nv
-  | Oandimm n => andimm nv n
-  | Oor => bitwise nv
-  | Oorimm n => orimm nv n
-  | Oxor => bitwise nv
-  | Oxorimm n => bitwise nv
-  | Oshlimm n => shlimm nv n
-  | Oshrimm n => shrimm nv n
-  | Oshruimm n => shruimm nv n
-  | Ororimm n => ror nv n
+  | Omove => op1 nv
+  | Ointconst n => nil
+  | Ofloatconst n => nil
+  | Oindirectsymbol id => nil
+  | Ocast8signed => op1 (sign_ext 8 nv)
+  | Ocast8unsigned => op1 (zero_ext 8 nv)
+  | Ocast16signed => op1 (sign_ext 16 nv)
+  | Ocast16unsigned => op1 (zero_ext 16 nv)
+  | Oneg => op1 (modarith nv)
+  | Osub => op2 (default nv)
+  | Omul => op2 (modarith nv)
+  | Omulimm n => op1 (modarith nv)
+  | Omulhs | Omulhu | Odiv | Odivu | Omod | Omodu => op2 (default nv)
+  | Oand => op2 (bitwise nv)
+  | Oandimm n => op1 (andimm nv n)
+  | Oor => op2 (bitwise nv)
+  | Oorimm n => op1 (orimm nv n)
+  | Oxor => op2 (bitwise nv)
+  | Oxorimm n => op1 (bitwise nv)
+  | Oshl => op2 (default nv)
+  | Oshlimm n => op1 (shlimm nv n)
+  | Oshr => op2 (default nv)
+  | Oshrimm n => op1 (shrimm nv n)
+  | Oshrximm n => op1 (default nv)
+  | Oshru => op2 (default nv)
+  | Oshruimm n => op1 (shruimm nv n)
+  | Ororimm n => op1 (ror nv n)
+  | Oshldimm n => op1 (default nv)
   | Olea addr => needs_of_addressing addr nv
+  | Onegf | Oabsf => op1 (default nv)
+  | Oaddf | Osubf | Omulf | Odivf => op2 (default nv)
+  | Osingleoffloat => op1 (singleoffloat nv)
+  | Ointoffloat | Ofloatofint => op1 (default nv)
+  | Omakelong => op2 (default nv)
+  | Olowlong | Ohighlong => op1 (default nv)
   | Ocmp c => needs_of_condition c
-  | Osingleoffloat => singleoffloat nv
-  | _ => default nv
   end.
 
 Definition operation_is_redundant (op: operation) (nv: nval): bool :=
@@ -64,8 +88,6 @@ Ltac InvAgree :=
   match goal with
   | [H: vagree_list nil _ _ |- _ ] => inv H; InvAgree
   | [H: vagree_list (_::_) _ _ |- _ ] => inv H; InvAgree
-  | [H: list_forall2 _ nil _ |- _ ] => inv H; InvAgree
-  | [H: list_forall2 _ (_::_) _ |- _ ] => inv H; InvAgree
   | _ => idtac
   end.
 
@@ -106,7 +128,10 @@ Lemma needs_of_addressing_sound:
 Proof.
   unfold needs_of_addressing; intros.
   destruct addr; simpl in *; FuncInv; InvAgree; TrivialExists;
-  auto using add_sound, add_sound_2, mul_sound, mul_sound_2 with na.
+  auto using add_sound, mul_sound with na.
+  apply add_sound; auto with na. apply add_sound; rewrite modarith_idem; auto. 
+  apply add_sound; auto. apply add_sound; rewrite modarith_idem; auto with na. 
+  apply mul_sound; rewrite modarith_idem; auto with na.
 Qed.
 
 Lemma needs_of_operation_sound:
@@ -120,13 +145,11 @@ Lemma needs_of_operation_sound:
 Proof.
   unfold needs_of_operation; intros; destruct op; try (eapply default_needs_of_operation_sound; eauto; fail);
   simpl in *; FuncInv; InvAgree; TrivialExists.
-- auto with na.
-- auto with na.
-- auto with na.
 - apply sign_ext_sound; auto. compute; auto. 
 - apply zero_ext_sound; auto. omega.
 - apply sign_ext_sound; auto. compute; auto. 
 - apply zero_ext_sound; auto. omega.
+- apply neg_sound; auto.
 - apply mul_sound; auto.
 - apply mul_sound; auto with na.
 - apply and_sound; auto.
@@ -148,13 +171,13 @@ Proof.
 Qed.
 
 Lemma operation_is_redundant_sound:
-  forall op nv arg1 args v arg1',
+  forall op nv arg1 args v arg1' args',
   operation_is_redundant op nv = true ->
   eval_operation ge (Vptr sp Int.zero) op (arg1 :: args) m = Some v ->
-  vagree arg1 arg1' (needs_of_operation op nv) ->
+  vagree_list (arg1 :: args) (arg1' :: args') (needs_of_operation op nv) ->
   vagree v arg1' nv.
 Proof.
-  intros. destruct op; simpl in *; try discriminate; FuncInv; subst.
+  intros. destruct op; simpl in *; try discriminate; inv H1; FuncInv; subst.
 - apply sign_ext_redundant_sound; auto. omega.
 - apply zero_ext_redundant_sound; auto. omega.
 - apply sign_ext_redundant_sound; auto. omega.

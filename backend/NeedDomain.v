@@ -603,7 +603,7 @@ Proof.
 - destruct v; auto with na.
 Qed.
 
-(** Modular arithmetic operations: add, mul.  
+(** Modular arithmetic operations: add, mul, opposite.  
     (But not subtraction because of the pointer - pointer case. *)
 
 Definition modarith (x: nval) :=
@@ -640,6 +640,19 @@ Proof.
 - unfold Val.mul; InvAgree. apply eqmod_iagree. apply Int.eqmod_mult; apply iagree_eqmod; auto. 
 - unfold Val.mul; destruct v1, w1; auto; destruct v2, w2; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto. 
+Qed.
+
+Lemma neg_sound:
+  forall v w x,
+  vagree v w (modarith x) ->
+  vagree (Val.neg v) (Val.neg w) x.
+Proof.
+  intros; destruct x; simpl in *.
+- auto.
+- unfold Val.neg; InvAgree. 
+  apply eqmod_iagree. apply Int.eqmod_neg. apply iagree_eqmod; auto. 
+- destruct v, w; simpl; auto. 
+- inv H; simpl; auto.
 Qed.
 
 (** Conversions: zero extension, sign extension, single-of-float *)
