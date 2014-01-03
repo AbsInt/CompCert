@@ -26,6 +26,7 @@ Require Import Fcalc_round.
 Require Import Fcalc_bracket.
 Require Import Fprop_Sterbenz.
 Require Import Program.
+Require Archi.
 
 Close Scope R_scope.
 
@@ -268,18 +269,15 @@ Definition singleoflongu (n:int64): float:= (**r conversion from unsigned 64-bit
 - a choice function determining which of the payload arguments to choose,
   when an operation is given two NaN arguments. *)
 
-Parameter default_pl : bool*nan_pl 53.
-Parameter choose_binop_pl : bool -> nan_pl 53 -> bool -> nan_pl 53 -> bool.
-
 Definition binop_pl (x y: binary64) : bool*nan_pl 53 :=
   match x, y with
   | B754_nan s1 pl1, B754_nan s2 pl2 =>
-      if choose_binop_pl s1 pl1 s2 pl2
+      if Archi.choose_binop_pl s1 pl1 s2 pl2
       then (s2, transform_quiet_pl pl2)
       else (s1, transform_quiet_pl pl1)
   | B754_nan s1 pl1, _ => (s1, transform_quiet_pl pl1)
   | _, B754_nan s2 pl2 => (s2, transform_quiet_pl pl2)
-  | _, _ => default_pl
+  | _, _ => Archi.default_pl
   end.
 
 Definition add: float -> float -> float := b64_plus binop_pl mode_NE. (**r addition *)
@@ -1235,8 +1233,9 @@ Proof.
       etransitivity. apply H.
       symmetry. etransitivity. apply H0.
       f_equal. destruct Bsign; reflexivity.
-  - destruct f as [[]|[]| |]; try discriminate; try reflexivity.
-    simpl. destruct (choose_binop_pl b n b n); auto.
+  - destruct f as [[]|[]| |]; try discriminate; simpl. 
+    auto. auto. auto. auto.
+    destruct (Archi.choose_binop_pl b n b n); auto.
 Qed.
 
 Program Definition pow2_float (b:bool) (e:Z) (H:-1023 < e < 1023) : float :=

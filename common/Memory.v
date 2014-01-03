@@ -31,6 +31,7 @@ Require Import Axioms.
 Require Import Coqlib.
 Require Intv.
 Require Import Maps.
+Require Archi.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -891,8 +892,8 @@ Theorem load_int64_split:
   forall m b ofs v,
   load Mint64 m b ofs = Some v ->
   exists v1 v2,
-     load Mint32 m b ofs = Some (if big_endian then v1 else v2)
-  /\ load Mint32 m b (ofs + 4) = Some (if big_endian then v2 else v1)
+     load Mint32 m b ofs = Some (if Archi.big_endian then v1 else v2)
+  /\ load Mint32 m b (ofs + 4) = Some (if Archi.big_endian then v2 else v1)
   /\ v = Val.longofwords v1 v2.
 Proof.
   intros. 
@@ -909,10 +910,10 @@ Proof.
   exploit loadbytes_load. eexact LB2.
   simpl. apply Zdivide_plus_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
   intros L2.
-  exists (decode_val Mint32 (if big_endian then bytes1 else bytes2));
-  exists (decode_val Mint32 (if big_endian then bytes2 else bytes1)).
-  split. destruct big_endian; auto.
-  split. destruct big_endian; auto.
+  exists (decode_val Mint32 (if Archi.big_endian then bytes1 else bytes2));
+  exists (decode_val Mint32 (if Archi.big_endian then bytes2 else bytes1)).
+  split. destruct Archi.big_endian; auto.
+  split. destruct Archi.big_endian; auto.
   rewrite EQ. rewrite APP. apply decode_val_int64.
   erewrite loadbytes_length; eauto. reflexivity. 
   erewrite loadbytes_length; eauto. reflexivity. 
@@ -922,8 +923,8 @@ Theorem loadv_int64_split:
   forall m a v,
   loadv Mint64 m a = Some v ->
   exists v1 v2,
-     loadv Mint32 m a = Some (if big_endian then v1 else v2)
-  /\ loadv  Mint32 m (Val.add a (Vint (Int.repr 4))) = Some (if big_endian then v2 else v1)
+     loadv Mint32 m a = Some (if Archi.big_endian then v1 else v2)
+  /\ loadv  Mint32 m (Val.add a (Vint (Int.repr 4))) = Some (if Archi.big_endian then v2 else v1)
   /\ v = Val.longofwords v1 v2.
 Proof.
   intros. destruct a; simpl in H; try discriminate.
@@ -1674,8 +1675,8 @@ Theorem store_int64_split:
   forall m b ofs v m',
   store Mint64 m b ofs v = Some m' ->
   exists m1,
-     store Mint32 m b ofs (if big_endian then Val.hiword v else Val.loword v) = Some m1
-  /\ store Mint32 m1 b (ofs + 4) (if big_endian then Val.loword v else Val.hiword v) = Some m'.
+     store Mint32 m b ofs (if Archi.big_endian then Val.hiword v else Val.loword v) = Some m1
+  /\ store Mint32 m1 b (ofs + 4) (if Archi.big_endian then Val.loword v else Val.hiword v) = Some m'.
 Proof.
   intros. 
   exploit store_valid_access_3; eauto. intros [A B]. simpl in *.
@@ -1694,8 +1695,8 @@ Theorem storev_int64_split:
   forall m a v m',
   storev Mint64 m a v = Some m' ->
   exists m1,
-     storev Mint32 m a (if big_endian then Val.hiword v else Val.loword v) = Some m1
-  /\ storev Mint32 m1 (Val.add a (Vint (Int.repr 4))) (if big_endian then Val.loword v else Val.hiword v) = Some m'.
+     storev Mint32 m a (if Archi.big_endian then Val.hiword v else Val.loword v) = Some m1
+  /\ storev Mint32 m1 (Val.add a (Vint (Int.repr 4))) (if Archi.big_endian then Val.loword v else Val.hiword v) = Some m'.
 Proof.
   intros. destruct a; simpl in H; try discriminate.
   exploit store_int64_split; eauto. intros [m1 [A B]].

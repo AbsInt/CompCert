@@ -14,6 +14,7 @@
   RTL to LTL). *)
 
 Require Import FSets.
+Require Archi.
 Require Import Coqlib.
 Require Import Ordered.
 Require Import Errors.
@@ -1745,8 +1746,8 @@ Proof.
 (* load pair *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
   exploit Mem.loadv_int64_split; eauto. intros (v1 & v2 & LOAD1 & LOAD2 & V12).
-  set (v2' := if big_endian then v2 else v1) in *.
-  set (v1' := if big_endian then v1 else v2) in *.
+  set (v2' := if Archi.big_endian then v2 else v1) in *.
+  set (v1' := if Archi.big_endian then v1 else v2) in *.
   exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]]. 
   assert (LD1: Val.lessdef_list rs##args (reglist ls1 args1')).
   { eapply add_equations_lessdef; eauto. }
@@ -1759,7 +1760,7 @@ Proof.
     eapply add_equations_satisf; eauto. assumption.
     rewrite Regmap.gss. apply Val.lessdef_trans with v1'; auto. 
     subst v. unfold v1', kind_first_word.
-    destruct big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
+    destruct Archi.big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
   }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]]. 
   assert (LD3: Val.lessdef_list rs##args (reglist ls3 args2')).
@@ -1777,7 +1778,7 @@ Proof.
     eapply add_equations_satisf; eauto. assumption.
     apply Val.lessdef_trans with v2'; auto. 
     rewrite Regmap.gss. subst v. unfold v2', kind_second_word.
-    destruct big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
+    destruct Archi.big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
   }
   exploit (exec_moves mv3); eauto. intros [ls5 [A5 B5]].
   econstructor; split.
@@ -1799,8 +1800,8 @@ Proof.
 (* load first word of a pair *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
   exploit Mem.loadv_int64_split; eauto. intros (v1 & v2 & LOAD1 & LOAD2 & V12).
-  set (v2' := if big_endian then v2 else v1) in *.
-  set (v1' := if big_endian then v1 else v2) in *.
+  set (v2' := if Archi.big_endian then v2 else v1) in *.
+  set (v1' := if Archi.big_endian then v1 else v2) in *.
   exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]]. 
   assert (LD1: Val.lessdef_list rs##args (reglist ls1 args')).
   { eapply add_equations_lessdef; eauto. }
@@ -1811,7 +1812,7 @@ Proof.
   { eapply parallel_assignment_satisf; eauto.
     apply Val.lessdef_trans with v1'; auto. 
     subst v. unfold v1', kind_first_word.
-    destruct big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
+    destruct Archi.big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
     eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]]. 
@@ -1830,8 +1831,8 @@ Proof.
 (* load second word of a pair *)
 - generalize (wt_exec_Iload _ _ _ _ _ _ _ _ _ _ _ WTI H1 WTRS). intros WTRS'.
   exploit Mem.loadv_int64_split; eauto. intros (v1 & v2 & LOAD1 & LOAD2 & V12).
-  set (v2' := if big_endian then v2 else v1) in *.
-  set (v1' := if big_endian then v1 else v2) in *.
+  set (v2' := if Archi.big_endian then v2 else v1) in *.
+  set (v1' := if Archi.big_endian then v1 else v2) in *.
   exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]]. 
   assert (LD1: Val.lessdef_list rs##args (reglist ls1 args')).
   { eapply add_equations_lessdef; eauto. }
@@ -1843,7 +1844,7 @@ Proof.
   { eapply parallel_assignment_satisf; eauto.
     apply Val.lessdef_trans with v2'; auto. 
     subst v. unfold v2', kind_second_word.
-    destruct big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
+    destruct Archi.big_endian; apply val_hiword_longofwords || apply val_loword_longofwords.
     eapply can_undef_satisf. eauto. eapply add_equations_satisf; eauto.
   }
   exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]]. 
@@ -1888,12 +1889,12 @@ Proof.
 
 (* store 2 *)
 - exploit Mem.storev_int64_split; eauto. 
-  replace (if big_endian then Val.hiword rs#src else Val.loword rs#src)
+  replace (if Archi.big_endian then Val.hiword rs#src else Val.loword rs#src)
      with (sel_val kind_first_word rs#src)
-       by (unfold kind_first_word; destruct big_endian; reflexivity).
-  replace (if big_endian then Val.loword rs#src else Val.hiword rs#src)
+       by (unfold kind_first_word; destruct Archi.big_endian; reflexivity).
+  replace (if Archi.big_endian then Val.loword rs#src else Val.hiword rs#src)
      with (sel_val kind_second_word rs#src)
-       by (unfold kind_second_word; destruct big_endian; reflexivity).
+       by (unfold kind_second_word; destruct Archi.big_endian; reflexivity).
   intros [m1 [STORE1 STORE2]].
   exploit (exec_moves mv1); eauto. intros [ls1 [X Y]].
   exploit add_equations_lessdef. eexact Heqo1. eexact Y. intros LD1.

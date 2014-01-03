@@ -12,7 +12,6 @@
 
 Require Coqlib.
 Require Wfsimpl.
-Require Nan.
 Require AST.
 Require Iteration.
 Require Floats.
@@ -34,16 +33,9 @@ Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 (* Wfsimpl *)
 Extraction Inline Wfsimpl.Fix Wfsimpl.Fixm.
 
-(* Floats *)
-Extract Constant Floats.Float.default_pl => "Nan.default_pl".
-Extract Constant Floats.Float.choose_binop_pl => "Nan.choose_binop_pl".
-
 (* AST *)
 Extract Constant AST.ident_of_string =>
   "fun s -> Camlcoq.intern_string (Camlcoq.camlstring_of_coqstring s)".
-
-(* Memdata *)
-Extract Constant Memdata.big_endian => "Memdataaux.big_endian".
 
 (* Memory - work around an extraction bug. *)
 Extraction NoInline Memory.Mem.valid_pointer.
@@ -140,5 +132,4 @@ Separate Extraction
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
-   Machregs.two_address_op
-   Nan.default_pl Nan.choose_binop_pl.
+   Machregs.two_address_op.

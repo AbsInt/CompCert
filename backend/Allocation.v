@@ -14,6 +14,7 @@
 
 Require Import FSets.
 Require FSetAVLplus.
+Require Archi.
 Require Import Coqlib.
 Require Import Ordered.
 Require Import Errors.
@@ -814,8 +815,8 @@ Definition transfer_use_def (args: list reg) (res: reg) (args': list mreg) (res'
   assertion (can_undef undefs e1);
   add_equations args args' e1.
 
-Definition kind_first_word := if big_endian then High else Low.
-Definition kind_second_word := if big_endian then Low else High.
+Definition kind_first_word := if Archi.big_endian then High else Low.
+Definition kind_second_word := if Archi.big_endian then Low else High.
 
 (** The core transfer function.  It takes a set [e] of equations that must
   hold "after" and a block shape [shape] representing a matching pair

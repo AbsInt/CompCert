@@ -65,7 +65,7 @@ FLOCQ=\
 # General-purpose libraries (in lib/)
 
 LIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
-  Iteration.v Integers.v Floats.v Nan.v Parmov.v UnionFind.v Wfsimpl.v \
+  Iteration.v Integers.v Archi.v Floats.v Parmov.v UnionFind.v Wfsimpl.v \
   Postorder.v FSetAVLplus.v IntvSets.v
 
 # Parts common to the front-ends and the back-end (in common/)

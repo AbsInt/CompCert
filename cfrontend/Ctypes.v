@@ -18,6 +18,7 @@
 Require Import Coqlib.
 Require Import AST.
 Require Import Errors.
+Require Archi.
 
 (** * Syntax of types *)
 
@@ -172,9 +173,9 @@ Fixpoint alignof (t: type) : Z :=
       | Tint I16 _ _ => 2
       | Tint I32 _ _ => 4
       | Tint IBool _ _ => 1
-      | Tlong _ _ => 8
+      | Tlong _ _ => Archi.align_int64
       | Tfloat F32 _ => 4
-      | Tfloat F64 _ => 8
+      | Tfloat F64 _ => Archi.align_float64
       | Tpointer _ _ => 4
       | Tarray t' _ _ => alignof t'
       | Tfunction _ _ _ => 1
@@ -214,10 +215,14 @@ Proof.
   induction t; apply X; simpl; auto.
   exists 0%nat; auto.
   destruct i.
-    exists 0%nat; auto. exists 1%nat; auto. exists 2%nat; auto.
-    exists 0%nat; auto. exists 3%nat; auto.
+    exists 0%nat; auto.
+    exists 1%nat; auto.
+    exists 2%nat; auto.
+    exists 0%nat; auto.
+    (exists 2%nat; reflexivity) || (exists 3%nat; reflexivity).
   destruct f.
-    exists 2%nat; auto. exists 3%nat; auto.
+    exists 2%nat; auto.
+    (exists 2%nat; reflexivity) || (exists 3%nat; reflexivity).
   exists 2%nat; auto.
   exists 0%nat; auto.
   exists 2%nat; auto.
@@ -311,8 +316,8 @@ Local Transparent alignof.
   induction t; simpl; intros.
 - apply Zdivide_refl.
 - rewrite H. destruct i; apply Zdivide_refl.
-- rewrite H; apply Zdivide_refl.
-- rewrite H. destruct f; apply Zdivide_refl.
+- rewrite H. exists (8 / Archi.align_int64); reflexivity. 
+- rewrite H. destruct f. apply Zdivide_refl. exists (8 / Archi.align_float64); reflexivity. 
 - rewrite H; apply Zdivide_refl.
 - destruct H. rewrite H. apply Z.divide_mul_l; auto. 
 - apply Zdivide_refl.

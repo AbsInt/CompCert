@@ -150,9 +150,9 @@ let block_of_RTL_instr funsig tyenv = function
         | None -> assert false
         | Some addr' ->
             [Xload(Mint32, addr, vregs tyenv args,
-                   V((if big_endian then dst else twin_reg dst), Tint));
+                   V((if Archi.big_endian then dst else twin_reg dst), Tint));
              Xload(Mint32, addr', vregs tyenv args,
-                   V((if big_endian then twin_reg dst else dst), Tint));
+                   V((if Archi.big_endian then twin_reg dst else dst), Tint));
              Xbranch s]
       end else
         [Xload(chunk, addr, vregs tyenv args, vreg tyenv dst); Xbranch s]
@@ -162,9 +162,9 @@ let block_of_RTL_instr funsig tyenv = function
         | None -> assert false
         | Some addr' ->
             [Xstore(Mint32, addr, vregs tyenv args,
-                   V((if big_endian then src else twin_reg src), Tint));
+                   V((if Archi.big_endian then src else twin_reg src), Tint));
              Xstore(Mint32, addr', vregs tyenv args,
-                   V((if big_endian then twin_reg src else src), Tint));
+                   V((if Archi.big_endian then twin_reg src else src), Tint));
              Xbranch s]
       end else
         [Xstore(chunk, addr, vregs tyenv args, vreg tyenv src); Xbranch s]

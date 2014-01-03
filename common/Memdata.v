@@ -17,6 +17,7 @@
 (** In-memory representation of values. *)
 
 Require Import Coqlib.
+Require Archi.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -146,10 +147,8 @@ Fixpoint int_of_bytes (l: list byte): Z :=
   | b :: l' => Byte.unsigned b + int_of_bytes l' * 256
   end.
 
-Parameter big_endian: bool.
-
 Definition rev_if_be (l: list byte) : list byte :=
-  if big_endian then List.rev l else l.
+  if Archi.big_endian then List.rev l else l.
 
 Definition encode_int (sz: nat) (x: Z) : list byte :=
   rev_if_be (bytes_of_int sz x).
@@ -168,7 +167,7 @@ Qed.
 Lemma rev_if_be_length:
   forall l, length (rev_if_be l) = length l.
 Proof.
-  intros; unfold rev_if_be; destruct big_endian.
+  intros; unfold rev_if_be; destruct Archi.big_endian.
   apply List.rev_length.
   auto.
 Qed.
@@ -200,7 +199,7 @@ Qed.
 Lemma rev_if_be_involutive:
   forall l, rev_if_be (rev_if_be l) = l.
 Proof.
-  intros; unfold rev_if_be; destruct big_endian. 
+  intros; unfold rev_if_be; destruct Archi.big_endian. 
   apply List.rev_involutive. 
   auto.
 Qed.
@@ -914,8 +913,8 @@ Lemma decode_val_int64:
   forall l1 l2,
   length l1 = 4%nat -> length l2 = 4%nat ->
   decode_val Mint64 (l1 ++ l2) =
-  Val.longofwords (decode_val Mint32 (if big_endian then l1 else l2))
-                  (decode_val Mint32 (if big_endian then l2 else l1)).
+  Val.longofwords (decode_val Mint32 (if Archi.big_endian then l1 else l2))
+                  (decode_val Mint32 (if Archi.big_endian then l2 else l1)).
 Proof.
   intros. unfold decode_val.
   assert (PP: forall vl, match proj_pointer vl with Vundef => True | Vptr _ _ => True | _ => False end).
@@ -935,7 +934,7 @@ Proof.
     generalize (int_of_bytes_range l). rewrite H1. 
     change (two_p (Z.of_nat 4 * 8)) with (Int.max_unsigned + 1). 
     omega.
-  unfold decode_int, rev_if_be. destruct big_endian; rewrite B1; rewrite B2.
+  unfold decode_int, rev_if_be. destruct Archi.big_endian; rewrite B1; rewrite B2.
   + rewrite <- (rev_length b1) in L1. 
     rewrite <- (rev_length b2) in L2.
     rewrite rev_app_distr.
@@ -946,9 +945,9 @@ Proof.
   + unfold Val.longofwords. f_equal. rewrite Int64.ofwords_add. f_equal.
     rewrite !UR by auto. rewrite int_of_bytes_append. 
     rewrite L1. change (Z.of_nat 4 * 8) with 32. ring.
-- destruct big_endian; rewrite B1; rewrite B2; auto.
-- destruct big_endian; rewrite B1; rewrite B2; auto.
-- destruct big_endian; rewrite B1; rewrite B2; auto.
+- destruct Archi.big_endian; rewrite B1; rewrite B2; auto.
+- destruct Archi.big_endian; rewrite B1; rewrite B2; auto.
+- destruct Archi.big_endian; rewrite B1; rewrite B2; auto.
 Qed.
 
 Lemma bytes_of_int_append:
@@ -987,10 +986,10 @@ Qed.
 Lemma encode_val_int64:
   forall v,
   encode_val Mint64 v =
-     encode_val Mint32 (if big_endian then Val.hiword v else Val.loword v)
-  ++ encode_val Mint32 (if big_endian then Val.loword v else Val.hiword v).
+     encode_val Mint32 (if Archi.big_endian then Val.hiword v else Val.loword v)
+  ++ encode_val Mint32 (if Archi.big_endian then Val.loword v else Val.hiword v).
 Proof.
-  intros. destruct v; destruct big_endian eqn:BI; try reflexivity;
+  intros. destruct v; destruct Archi.big_endian eqn:BI; try reflexivity;
   unfold Val.loword, Val.hiword, encode_val.
   unfold inj_bytes. rewrite <- map_app. f_equal. 
   unfold encode_int, rev_if_be. rewrite BI. rewrite <- rev_app_distr. f_equal.
