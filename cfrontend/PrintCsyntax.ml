@@ -179,13 +179,24 @@ let print_pointer_hook
    : (formatter -> Values.block * Integers.Int.int -> unit) ref
    = ref (fun p (b, ofs) -> ())
 
-let print_value p v =
-  match v with
-  | Vint n -> fprintf p "%ld" (camlint_of_coqint n)
-  | Vfloat f -> fprintf p "%F" (camlfloat_of_coqfloat f)
-  | Vlong n -> fprintf p "%Ld" (camlint64_of_coqint n)
-  | Vptr(b, ofs) -> fprintf p "<ptr%a>" !print_pointer_hook (b, ofs)
-  | Vundef -> fprintf p "<undef>"
+let print_typed_value p v ty =
+  match v, ty with
+  | Vint n, Tint(I32, Unsigned, _) ->
+      fprintf p "%luU" (camlint_of_coqint n)
+  | Vint n, _ ->
+      fprintf p "%ld" (camlint_of_coqint n)
+  | Vfloat f, _ ->
+      fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Vlong n, Tlong(Unsigned, _) ->
+      fprintf p "%LuLLU" (camlint64_of_coqint n)
+  | Vlong n, _ ->
+      fprintf p "%LdLL" (camlint64_of_coqint n)
+  | Vptr(b, ofs), _ ->
+      fprintf p "<ptr%a>" !print_pointer_hook (b, ofs)
+  | Vundef, _ ->
+      fprintf p "<undef>"
+
+let print_value p v = print_typed_value p v Tvoid
 
 let rec expr p (prec, e) =
   let (prec', assoc) = precedence e in
@@ -207,8 +218,8 @@ let rec expr p (prec, e) =
       fprintf p "%a.%s" expr (prec', a1) (extern_atom f)
   | Evalof(l, _) ->
       expr p (prec, l)
-  | Eval(v, _) ->
-      print_value p (v)
+  | Eval(v, ty) ->
+      print_typed_value p v ty
   | Esizeof(ty, _) ->
       fprintf p "sizeof(%s)" (name_type ty)
   | Ealignof(ty, _) ->
@@ -251,6 +262,8 @@ let rec expr p (prec, e) =
   | Ebuiltin(EF_annot_val(txt, _), _, args, _) ->
       fprintf p "__builtin_annot_val@[<hov 1>(%S%a)@]"
                 (extern_atom txt) exprlist (false, args)
+  | Ebuiltin(EF_external(id, sg), _, args, _) ->
+      fprintf p "%s@[<hov 1>(%a)@]" (extern_atom id) exprlist (true, args)
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
   | Eparen(a1, ty) ->

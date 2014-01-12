@@ -76,10 +76,14 @@ let rec expr p (prec, e) =
       fprintf p "*%a" expr (prec', a1)
   | Efield(a1, f, _) ->
       fprintf p "%a.%s" expr (prec', a1) (extern_atom f)
+  | Econst_int(n, Tint(I32, Unsigned, _)) ->
+      fprintf p "%luU" (camlint_of_coqint n)
   | Econst_int(n, _) ->
       fprintf p "%ld" (camlint_of_coqint n)
   | Econst_float(f, _) ->
       fprintf p "%F" (camlfloat_of_coqfloat f)
+  | Econst_long(n, Tlong(Unsigned, _)) ->
+      fprintf p "%LuLLU" (camlint64_of_coqint n)
   | Econst_long(n, _) ->
       fprintf p "%LdLL" (camlint64_of_coqint n)
   | Eunop(Oabsfloat, a1, _) ->
