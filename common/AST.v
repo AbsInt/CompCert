@@ -133,8 +133,7 @@ Inductive memory_chunk : Type :=
   | Mint32          (**r 32-bit integer, or pointer *)
   | Mint64          (**r 64-bit integer *)
   | Mfloat32        (**r 32-bit single-precision float *)
-  | Mfloat64        (**r 64-bit double-precision float *)
-  | Mfloat64al32.   (**r 64-bit double-precision float, 4-aligned *)
+  | Mfloat64.        (**r 64-bit double-precision float *)
 
 Definition chunk_eq: forall (c1 c2: memory_chunk), {c1=c2} + {c1<>c2}.
 Proof. decide equality. Defined.
@@ -152,7 +151,6 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
   | Mint64 => Tlong
   | Mfloat32 => Tsingle
   | Mfloat64 => Tfloat
-  | Mfloat64al32 => Tfloat
   end.
 
 Definition type_of_chunk_use (c: memory_chunk) : typ :=
@@ -165,7 +163,6 @@ Definition type_of_chunk_use (c: memory_chunk) : typ :=
   | Mint64 => Tlong
   | Mfloat32 => Tfloat
   | Mfloat64 => Tfloat
-  | Mfloat64al32 => Tfloat
   end.
 
 (** The chunk that is appropriate to store and reload a value of
@@ -174,7 +171,7 @@ Definition type_of_chunk_use (c: memory_chunk) : typ :=
 Definition chunk_of_type (ty: typ) :=
   match ty with
   | Tint => Mint32
-  | Tfloat => Mfloat64al32
+  | Tfloat => Mfloat64
   | Tlong => Mint64
   | Tsingle => Mfloat32
   end.

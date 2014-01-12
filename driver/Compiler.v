@@ -74,12 +74,7 @@ Require Asmgenproof.
 (** Pretty-printers (defined in Caml). *)
 Parameter print_Clight: Clight.program -> unit.
 Parameter print_Cminor: Cminor.program -> unit.
-Parameter print_RTL: RTL.program -> unit.
-Parameter print_RTL_tailcall: RTL.program -> unit.
-Parameter print_RTL_inline: RTL.program -> unit.
-Parameter print_RTL_constprop: RTL.program -> unit.
-Parameter print_RTL_cse: RTL.program -> unit.
-Parameter print_RTL_deadcode: RTL.program -> unit.
+Parameter print_RTL: Z -> RTL.program -> unit.
 Parameter print_LTL: LTL.program -> unit.
 Parameter print_Mach: Mach.program -> unit.
 
@@ -112,19 +107,21 @@ Definition print {A: Type} (printer: A -> unit) (prog: A) : A :=
 
 Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    OK f
-   @@ print print_RTL
+   @@ print (print_RTL 0)
    @@ Tailcall.transf_program
-   @@ print print_RTL_tailcall
+   @@ print (print_RTL 1)
   @@@ Inlining.transf_program
+   @@ print (print_RTL 2)
    @@ Renumber.transf_program
-   @@ print print_RTL_inline
+   @@ print (print_RTL 3)
    @@ Constprop.transf_program
+   @@ print (print_RTL 4)
    @@ Renumber.transf_program
-   @@ print print_RTL_constprop
+   @@ print (print_RTL 5)
   @@@ CSE.transf_program
-   @@ print print_RTL_cse
+   @@ print (print_RTL 6)
   @@@ Deadcode.transf_program
-   @@ print print_RTL_deadcode
+   @@ print (print_RTL 7)
   @@@ Allocation.transf_program
    @@ print print_LTL
    @@ Tunneling.tunnel_program

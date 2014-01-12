@@ -65,7 +65,6 @@ rule token = parse
   | "float"    { FLOAT }
   | "float32"    { FLOAT32 }
   | "float64"    { FLOAT64 }
-  | "float64al32" { FLOAT64AL32 }
   | "floatofint"    { FLOATOFINT }
   | "floatofintu"    { FLOATOFINTU }
   | "floatoflong"  { FLOATOFLONG }

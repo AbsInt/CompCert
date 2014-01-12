@@ -486,17 +486,17 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmovsd_fi rd n =>
       Next (nextinstr (rs#rd <- (Vfloat n))) m
   | Pmovsd_fm rd a =>
-      exec_load Mfloat64al32 m a rs rd
+      exec_load Mfloat64 m a rs rd
   | Pmovsd_mf a r1 =>
-      exec_store Mfloat64al32 m a rs r1 nil
+      exec_store Mfloat64 m a rs r1 nil
   | Pfld_f r1 =>
       Next (nextinstr (rs#ST0 <- (rs r1))) m
   | Pfld_m a =>
-      exec_load Mfloat64al32 m a rs ST0
+      exec_load Mfloat64 m a rs ST0
   | Pfstp_f rd =>
       Next (nextinstr (rs#rd <- (rs ST0) #ST0 <- Vundef)) m
   | Pfstp_m a =>
-      exec_store Mfloat64al32 m a rs ST0 (ST0 :: nil)
+      exec_store Mfloat64 m a rs ST0 (ST0 :: nil)
   | Pxchg_rr r1 r2 =>
       Next (nextinstr (rs#r1 <- (rs r2) #r2 <- (rs r1))) m
   (** Moves with conversion *)

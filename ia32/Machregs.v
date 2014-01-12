@@ -94,7 +94,7 @@ Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mre
   | Mint8signed | Mint8unsigned => AX :: CX :: nil
   | Mint16signed | Mint16unsigned | Mint32 | Mint64 => nil
   | Mfloat32 => X7 :: nil
-  | Mfloat64 | Mfloat64al32 => FP0 :: nil
+  | Mfloat64 => FP0 :: nil
   end.
 
 Definition destroyed_by_cond (cond: condition): list mreg :=

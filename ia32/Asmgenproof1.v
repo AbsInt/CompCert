@@ -997,10 +997,6 @@ Proof.
     auto. decEq. apply Pregmap.gso; auto with asmgen.
   exists rs2. split. 
   destruct chunk; ArgsInv; apply exec_straight_one; auto.
-  (* Mfloat64 -> Mfloat64al32 *)
-  rewrite <- H. simpl. unfold exec_load. rewrite H1.
-  destruct (eval_addrmode ge x rs); simpl in *; try discriminate.
-  erewrite Mem.load_float64al32; eauto. 
   split. unfold rs2. rewrite nextinstr_nf_inv1. Simplifs. apply preg_of_data.
   intros. unfold rs2. Simplifs. 
 Qed.
@@ -1046,10 +1042,6 @@ Proof.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.
   intros. Transparent destroyed_by_store. simpl in H2. simpl. Simplifs.
 (* float64 *)
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. erewrite Mem.storev_float64al32; eauto. auto.
-  intros. Simplifs.
-(* float64al32 *)
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.
   intros. Simplifs.

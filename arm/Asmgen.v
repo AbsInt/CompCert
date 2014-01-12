@@ -542,7 +542,7 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
       transl_memory_access_int Pldr mk_immed_mem_word dst addr args k
   | Mfloat32 =>
       transl_memory_access_float Pflds mk_immed_mem_float dst addr args k
-  | Mfloat64 | Mfloat64al32 =>
+  | Mfloat64 =>
       transl_memory_access_float Pfldd mk_immed_mem_float dst addr args k
   | Mint64 =>
       Error (msg "Asmgen.transl_load")
@@ -563,7 +563,7 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
       transl_memory_access_int Pstr mk_immed_mem_word src addr args k
   | Mfloat32 =>
       transl_memory_access_float Pfsts mk_immed_mem_float src addr args k
-  | Mfloat64 | Mfloat64al32 =>
+  | Mfloat64 =>
       transl_memory_access_float Pfstd mk_immed_mem_float src addr args k
   | Mint64 =>
       Error (msg "Asmgen.transl_store")

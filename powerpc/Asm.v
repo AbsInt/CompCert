@@ -676,9 +676,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Plbzx rd r1 r2 =>
       load2 Mint8unsigned rd r1 r2 rs m
   | Plfd rd cst r1 =>
-      load1 Mfloat64al32 rd cst r1 rs m
+      load1 Mfloat64 rd cst r1 rs m
   | Plfdx rd r1 r2 =>
-      load2 Mfloat64al32 rd r1 r2 rs m
+      load2 Mfloat64 rd r1 r2 rs m
   | Plfs rd cst r1 =>
       load1 Mfloat32 rd cst r1 rs m
   | Plfsx rd r1 r2 =>
@@ -745,9 +745,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pstbx rd r1 r2 =>
       store2 Mint8unsigned rd r1 r2 rs m
   | Pstfd rd cst r1 =>
-      store1 Mfloat64al32 rd cst r1 rs m
+      store1 Mfloat64 rd cst r1 rs m
   | Pstfdx rd r1 r2 =>
-      store2 Mfloat64al32 rd r1 r2 rs m
+      store2 Mfloat64 rd r1 r2 rs m
   | Pstfs rd cst r1 =>
       match store1 Mfloat32 rd cst r1 rs m with
       | Next rs' m' => Next (rs'#FPR13 <- Vundef) m'

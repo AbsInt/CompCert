@@ -147,14 +147,9 @@ let compile_c_ast sourcename csyntax ofile =
                    else None in
   set_dest PrintClight.destination option_dclight ".light.c";
   set_dest PrintCminor.destination option_dcminor ".cm";
-  set_dest PrintRTL.destination_rtl option_drtl ".rtl";
-  set_dest PrintRTL.destination_tailcall option_dtailcall ".tailcall.rtl";
-  set_dest PrintRTL.destination_inlining option_dinlining ".inlining.rtl";
-  set_dest PrintRTL.destination_constprop option_dconstprop ".constprop.rtl";
-  set_dest PrintRTL.destination_cse option_dcse ".cse.rtl";
-  set_dest PrintRTL.destination_deadcode option_ddeadcode ".deadcode.rtl";
+  set_dest PrintRTL.destination option_drtl ".rtl";
   set_dest Regalloc.destination_alloctrace option_dalloctrace ".alloctrace";
-  set_dest PrintLTL.destination option_dalloc ".alloc.ltl";
+  set_dest PrintLTL.destination option_dltl ".ltl";
   set_dest PrintMach.destination option_dmach ".mach";
   (* Convert to Asm *)
   let asm =
@@ -427,12 +422,8 @@ Tracing options:
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
   -dcminor       Save generated Cminor in <file>.cm
-  -drtl          Save unoptimized generated RTL in <file>.rtl
-  -dtailcall     Save RTL after tail call optimization in <file>.tailcall.rtl
-  -dinlining     Save RTL after inlining optimization in <file>.inlining.rtl
-  -dconstprop    Save RTL after constant propagation in <file>.constprop.rtl
-  -dcse          Save RTL after CSE optimization in <file>.cse.rtl
-  -dalloc        Save LTL after register allocation in <file>.alloc.ltl
+  -drtl          Save RTL at various optimization points in <file>.rtl.<n>
+  -dltl          Save LTL after register allocation in <file>.ltl
   -dmach         Save generated Mach code in <file>.mach
   -dasm          Save generated assembly in <file>.s
   -sdump         Save info for post-linking validation in <file>.sdump
@@ -476,12 +467,7 @@ let cmdline_actions =
   "-dclight$", Set option_dclight;
   "-dcminor", Set option_dcminor;
   "-drtl$", Set option_drtl;
-  "-dtailcall$", Set option_dtailcall;
-  "-dinlining$", Set option_dinlining;
-  "-dconstprop$", Set option_dconstprop;
-  "-dcse$", Set option_dcse;
-  "-ddeadcode$", Set option_ddeadcode;
-  "-dalloc$", Set option_dalloc;
+  "-dltl$", Set option_dltl;
   "-dalloctrace$", Set option_dalloctrace;
   "-dmach$", Set option_dmach;
   "-dasm$", Set option_dasm;
@@ -534,7 +520,10 @@ let cmdline_actions =
   @ f_opt "sse" option_ffpu (* backward compatibility *)
 
 let _ =
-  Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
+  Gc.set { (Gc.get()) with
+              Gc.minor_heap_size = 524288; (* 512k *)
+              Gc.major_heap_increment = 4194304 (* 4M *)
+         };
   Printexc.record_backtrace true;
   Machine.config :=
     begin match Configuration.arch with

@@ -168,7 +168,6 @@ let type_chunk = function
   | Mint64 -> tlong
   | Mfloat32 -> tfloat
   | Mfloat64 -> tfloat
-  | Mfloat64al32 -> tfloat
 
 let name_of_chunk = PrintAST.name_of_chunk
 

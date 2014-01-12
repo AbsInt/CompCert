@@ -563,7 +563,7 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
   | Mfloat32 =>
       do r <- freg_of dst;
       transl_memory_access (Plfs r) (Plfsx r) addr args GPR12 k
-  | Mfloat64 | Mfloat64al32 =>
+  | Mfloat64 =>
       do r <- freg_of dst;
       transl_memory_access (Plfd r) (Plfdx r) addr args GPR12 k
   | Mint64 =>
@@ -586,7 +586,7 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
   | Mfloat32 =>
       do r <- freg_of src;
       transl_memory_access (Pstfs r) (Pstfsx r) addr args temp k
-  | Mfloat64 | Mfloat64al32 =>
+  | Mfloat64 =>
       do r <- freg_of src;
       transl_memory_access (Pstfd r) (Pstfdx r) addr args temp k
   | Mint64 =>

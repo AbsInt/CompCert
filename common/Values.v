@@ -682,7 +682,7 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | Mint32, Vptr b ofs => Vptr b ofs
   | Mint64, Vlong n => Vlong n
   | Mfloat32, Vfloat f => Vfloat(Float.singleoffloat f)
-  | (Mfloat64 | Mfloat64al32), Vfloat f => Vfloat f
+  | Mfloat64, Vfloat f => Vfloat f
   | _, _ => Vundef
   end.
 

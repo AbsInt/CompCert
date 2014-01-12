@@ -277,7 +277,6 @@ let mkmatch expr cases =
 %token FLOAT
 %token FLOAT32
 %token FLOAT64
-%token FLOAT64AL32
 %token <float> FLOATLIT
 %token FLOATOFINT
 %token FLOATOFINTU
@@ -687,7 +686,6 @@ memory_chunk:
   | INT                                         { Mint32 }
   | FLOAT32                                     { Mfloat32 }
   | FLOAT64                                     { Mfloat64 }
-  | FLOAT64AL32                                 { Mfloat64al32 }
   | FLOAT                                       { Mfloat64 }
 ;
 

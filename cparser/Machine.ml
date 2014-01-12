@@ -142,7 +142,10 @@ let il32pll64 = {
 (* Canned configurations for some ABIs *)
 
 let x86_32 =
-  { ilp32ll64 with name = "x86_32"; char_signed = true }
+  { ilp32ll64 with name = "x86_32";
+                   char_signed = true;
+                   alignof_longlong = 4; alignof_double = 4;
+                   sizeof_longdouble = 12; alignof_longdouble = 4 }
 let x86_64 =
   { i32lpll64 with name = "x86_64"; char_signed = true }
 let win64 =

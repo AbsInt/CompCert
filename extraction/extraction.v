@@ -93,12 +93,7 @@ Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
 (* Compiler *)
 Extract Constant Compiler.print_Clight => "PrintClight.print_if".
 Extract Constant Compiler.print_Cminor => "PrintCminor.print_if".
-Extract Constant Compiler.print_RTL => "PrintRTL.print_rtl".
-Extract Constant Compiler.print_RTL_tailcall => "PrintRTL.print_tailcall".
-Extract Constant Compiler.print_RTL_inline => "PrintRTL.print_inlining".
-Extract Constant Compiler.print_RTL_constprop => "PrintRTL.print_constprop".
-Extract Constant Compiler.print_RTL_cse => "PrintRTL.print_cse".
-Extract Constant Compiler.print_RTL_deadcode => "PrintRTL.print_deadcode".
+Extract Constant Compiler.print_RTL => "PrintRTL.print_if".
 Extract Constant Compiler.print_LTL => "PrintLTL.print_if".
 Extract Constant Compiler.print_Mach => "PrintMach.print_if".
 Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
@@ -118,12 +113,13 @@ Extract Inlined Constant Fappli_IEEE.B2R => "fun _ -> assert false".
 Extract Inlined Constant Fappli_IEEE.round_mode => "fun _ -> assert false".
 Extract Inlined Constant Fcalc_bracket.inbetween_loc => "fun _ -> assert false".
 
-(* Needed in Coq 4.00 to avoid problems with Function definitions. *)
+(* Needed in Coq 8.4 to avoid problems with Function definitions. *)
 Set Extraction AccessOpaque.
 
 (* Go! *)
+
 Cd "extraction".
-(* Recursive Extraction Library Compiler. *)
+
 Separate Extraction
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state

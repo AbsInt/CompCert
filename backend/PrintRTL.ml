@@ -110,29 +110,13 @@ let print_globdef pp (id, gd) =
 let print_program pp (prog: RTL.program) =
   List.iter (print_globdef pp) prog.prog_defs
 
-let print_if optdest prog =
-  match !optdest with
+let destination : string option ref = ref None
+
+let print_if passno prog =
+  match !destination with
   | None -> ()
   | Some f ->
-      let oc = open_out f in
+      let oc = open_out (f ^ "." ^ Z.to_string passno) in
       print_program oc prog;
       close_out oc
-
-let destination_rtl : string option ref = ref None
-let print_rtl = print_if destination_rtl
-
-let destination_tailcall : string option ref = ref None
-let print_tailcall = print_if destination_tailcall
-
-let destination_inlining : string option ref = ref None
-let print_inlining = print_if destination_inlining
-
-let destination_constprop : string option ref = ref None
-let print_constprop = print_if destination_constprop
-
-let destination_cse : string option ref = ref None
-let print_cse = print_if destination_cse
-
-let destination_deadcode : string option ref = ref None
-let print_deadcode = print_if destination_deadcode
 

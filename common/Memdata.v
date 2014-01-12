@@ -39,7 +39,6 @@ Definition size_chunk (chunk: memory_chunk) : Z :=
   | Mint64 => 8
   | Mfloat32 => 4
   | Mfloat64 => 8
-  | Mfloat64al32 => 8
   end.
 
 Lemma size_chunk_pos:
@@ -86,8 +85,7 @@ Definition align_chunk (chunk: memory_chunk) : Z :=
   | Mint32 => 4
   | Mint64 => 8
   | Mfloat32 => 4
-  | Mfloat64 => 8
-  | Mfloat64al32 => 4
+  | Mfloat64 => 4
   end.
 
 Lemma align_chunk_pos:
@@ -343,7 +341,7 @@ Definition encode_val (chunk: memory_chunk) (v: val) : list memval :=
   | Vptr b ofs, Mint32 => inj_pointer 4%nat b ofs
   | Vlong n, Mint64 => inj_bytes (encode_int 8%nat (Int64.unsigned n))
   | Vfloat n, Mfloat32 => inj_bytes (encode_int 4%nat (Int.unsigned (Float.bits_of_single n)))
-  | Vfloat n, (Mfloat64 | Mfloat64al32) => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.bits_of_double n)))
+  | Vfloat n, Mfloat64 => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.bits_of_double n)))
   | _, _ => list_repeat (size_chunk_nat chunk) Undef
   end.
 
@@ -358,7 +356,7 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
       | Mint32 => Vint(Int.repr(decode_int bl))
       | Mint64 => Vlong(Int64.repr(decode_int bl))
       | Mfloat32 => Vfloat(Float.single_of_bits (Int.repr (decode_int bl)))
-      | Mfloat64 | Mfloat64al32 => Vfloat(Float.double_of_bits (Int64.repr (decode_int bl)))
+      | Mfloat64 => Vfloat(Float.double_of_bits (Int64.repr (decode_int bl)))
       end
   | None =>
       match chunk with
@@ -397,19 +395,19 @@ Definition decode_encode_val (v1: val) (chunk1 chunk2: memory_chunk) (v2: val) :
   | Vint n, Mint16unsigned, Mint16unsigned => v2 = Vint(Int.zero_ext 16 n)
   | Vint n, Mint32, Mint32 => v2 = Vint n
   | Vint n, Mint32, Mfloat32 => v2 = Vfloat(Float.single_of_bits n)
-  | Vint n, (Mint64 | Mfloat32 | Mfloat64 | Mfloat64al32), _ => v2 = Vundef
+  | Vint n, (Mint64 | Mfloat32 | Mfloat64), _ => v2 = Vundef
   | Vint n, _, _ => True (**r nothing meaningful to say about v2 *)
   | Vptr b ofs, Mint32, Mint32 => v2 = Vptr b ofs
   | Vptr b ofs, _, _ => v2 = Vundef
   | Vlong n, Mint64, Mint64 => v2 = Vlong n
-  | Vlong n, Mint64, (Mfloat64 | Mfloat64al32) => v2 = Vfloat(Float.double_of_bits n)
-  | Vlong n, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64|Mfloat64al32), _ => v2 = Vundef
+  | Vlong n, Mint64, Mfloat64 => v2 = Vfloat(Float.double_of_bits n)
+  | Vlong n, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64), _ => v2 = Vundef
   | Vlong n, _, _ => True (**r nothing meaningful to say about v2 *)
   | Vfloat f, Mfloat32, Mfloat32 => v2 = Vfloat(Float.singleoffloat f)
   | Vfloat f, Mfloat32, Mint32 => v2 = Vint(Float.bits_of_single f)
-  | Vfloat f, (Mfloat64 | Mfloat64al32), (Mfloat64 | Mfloat64al32) => v2 = Vfloat f
+  | Vfloat f, Mfloat64, Mfloat64 => v2 = Vfloat f
   | Vfloat f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mint64), _ => v2 = Vundef
-  | Vfloat f, (Mfloat64 | Mfloat64al32), Mint64 => v2 = Vlong(Float.bits_of_double f)
+  | Vfloat f, Mfloat64, Mint64 => v2 = Vlong(Float.bits_of_double f)
   | Vfloat f, _, _ => True   (* nothing interesting to say about v2 *)
   end.
 
@@ -439,14 +437,9 @@ Opaque inj_pointer.
   rewrite decode_encode_int_4. auto.
   rewrite decode_encode_int_8. auto.
   rewrite decode_encode_int_8. auto.
-  rewrite decode_encode_int_8. auto.
   rewrite decode_encode_int_4. auto.
   rewrite decode_encode_int_4. decEq. apply Float.single_of_bits_of_single.
   rewrite decode_encode_int_8. auto.
-  rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
-  rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
-  rewrite decode_encode_int_8. auto.
-  rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
   rewrite decode_encode_int_8. decEq. apply Float.double_of_bits_of_double.
   change (proj_bytes (inj_pointer 4 b i)) with (@None (list byte)). simpl. 
   unfold proj_pointer. generalize (check_inj_pointer b i 4%nat).

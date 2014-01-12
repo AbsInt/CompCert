@@ -727,6 +727,7 @@ Proof.
   rewrite pred_dec_false; auto.
 Qed.
 
+(*
 Theorem load_float64al32:
   forall m b ofs v,
   load Mfloat64 m b ofs = Some v -> load Mfloat64al32 m b ofs = Some v.
@@ -742,6 +743,7 @@ Theorem loadv_float64al32:
 Proof.
   unfold loadv; intros. destruct a; auto. apply load_float64al32; auto.
 Qed.
+*)
 
 (** ** Properties related to [loadbytes] *)
 
@@ -1411,6 +1413,7 @@ Proof.
   auto.
 Qed.
 
+(*
 Theorem store_float64al32:
   forall m b ofs v m',
   store Mfloat64 m b ofs v = Some m' -> store Mfloat64al32 m b ofs v = Some m'.
@@ -1428,6 +1431,7 @@ Theorem storev_float64al32:
 Proof.
   unfold storev; intros. destruct a; auto. apply store_float64al32; auto.
 Qed.
+*)
 
 (** ** Properties related to [storebytes]. *)
 
@@ -3422,7 +3426,7 @@ Proof.
     destruct H0. subst; exists Mint8unsigned; auto.
     destruct H0. subst; exists Mint16unsigned; auto.
     destruct H0. subst; exists Mint32; auto.
-    subst; exists Mfloat64; auto.
+    subst; exists Mint64; auto.
   destruct R as [chunk [A B]].
   assert (valid_access m chunk b ofs Nonempty).
     split. red; intros; apply H3. omega. congruence.

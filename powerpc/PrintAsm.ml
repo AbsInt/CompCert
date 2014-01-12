@@ -399,7 +399,7 @@ let print_builtin_vload_common oc chunk base offset res =
       fprintf oc "	lwz	%a, %a(%a)\n" ireg res constant offset ireg base
   | Mfloat32, FR res ->
       fprintf oc "	lfs	%a, %a(%a)\n" freg res constant offset ireg base
-  | (Mfloat64 | Mfloat64al32), FR res ->
+  | Mfloat64, FR res ->
       fprintf oc "	lfd	%a, %a(%a)\n" freg res constant offset ireg base
   (* Mint64 is special-cased below *)
   | _ ->
@@ -456,7 +456,7 @@ let print_builtin_vstore_common oc chunk base offset src =
   | Mfloat32, FR src ->
       fprintf oc "	frsp	%a, %a\n" freg FPR13 freg src;
       fprintf oc "	stfs	%a, %a(%a)\n" freg FPR13 constant offset ireg base
-  | (Mfloat64 | Mfloat64al32), FR src ->
+  | Mfloat64, FR src ->
       fprintf oc "	stfd	%a, %a(%a)\n" freg src constant offset ireg base
   (* Mint64 is special-cased below *)
   | _ ->

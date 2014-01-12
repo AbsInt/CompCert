@@ -103,9 +103,8 @@ Inductive binary_operation : Type :=
   | Ocmpl: comparison -> binary_operation  (**r long signed comparison *)
   | Ocmplu: comparison -> binary_operation. (**r long unsigned comparison *)
 
-(** Expressions include reading local variables, constants and
-  arithmetic operations, reading store locations, and conditional
-  expressions (similar to [e1 ? e2 : e3] in C). *)
+(** Expressions include reading local variables, constants,
+  arithmetic operations, and memory loads. *)
 
 Inductive expr : Type :=
   | Evar : ident -> expr

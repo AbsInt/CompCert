@@ -217,7 +217,6 @@ let name_of_chunk = function
   | Mint64 -> "Mint64"
   | Mfloat32 -> "Mfloat32"
   | Mfloat64 -> "Mfloat64"
-  | Mfloat64al32 -> "Mfloat64al32"
 
 let signatur p sg =
   fprintf p "@[<hov 2>(mksignature@ %a@ %a)@]" (print_list asttype) sg.sig_args (print_option asttype) sg.sig_res

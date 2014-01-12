@@ -1933,7 +1933,7 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Mint64, L _ => v
   | Mfloat32, F f => F (Float.singleoffloat f)
   | Mfloat32, _ => Fsingle
-  | (Mfloat64 | Mfloat64al32), F f => v
+  | Mfloat64, F f => v
   | _, _ => Ifptr Pbot
   end.
 
@@ -1985,8 +1985,6 @@ Proof.
   destruct v; try contradiction; constructor.
 - (* float32 *)
   rewrite H2. destruct v; simpl; constructor. apply Float.singleoffloat_is_single. 
-- (* float64 *)
-  destruct v; try contradiction; constructor.
 - (* float64 *)
   destruct v; try contradiction; constructor.
 Qed.
@@ -2057,8 +2055,7 @@ Definition chunk_compat (chunk chunk': memory_chunk) : bool :=
   | Mint32, Mint32 => true
   | Mfloat32, Mfloat32 => true
   | Mint64, Mint64 => true
-  | (Mfloat64 | Mfloat64al32), Mfloat64 => true
-  | Mfloat64al32, Mfloat64al32 => true
+  | Mfloat64, Mfloat64 => true
   | _, _ => false
   end.
 

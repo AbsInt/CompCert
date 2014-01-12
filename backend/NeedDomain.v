@@ -786,7 +786,6 @@ Proof.
   rewrite <- (Float.bits_of_singleoffloat f0).
   congruence. 
 - apply encode_val_inject. rewrite val_inject_id; auto.
-- apply encode_val_inject. rewrite val_inject_id; auto.
 Qed.
 
 Lemma store_argument_load_result:
