@@ -1161,8 +1161,6 @@ Proof.
 - (* Mfloat32 *)
   eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 - (* Mfloat64 *)
-  apply Mem.loadv_float64al32 in H1. eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
-- (* Mfloat64al32 *)
   eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 Qed.
 
@@ -1235,8 +1233,6 @@ Local Transparent destroyed_by_store.
   simpl. unfold store2. rewrite H. rewrite H2; auto with asmgen. rewrite H1. eauto. auto. 
   simpl; intros. destruct H5 as [A [B C]]. Simpl. apply H2; auto with asmgen. destruct TEMP0; congruence.
 - (* Mfloat64 *)
-  apply Mem.storev_float64al32 in H1. eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
-- (* Mfloat64al32 *)
   eapply BASE; eauto; erewrite freg_of_eq by eauto; auto.
 Qed.
 

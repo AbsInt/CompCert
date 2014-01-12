@@ -1216,7 +1216,6 @@ Proof.
   eapply transl_load_int_correct; eauto.
   discriminate.
   eapply transl_load_float_correct; eauto.
-  apply Mem.loadv_float64al32 in H1. eapply transl_load_float_correct; eauto.
   eapply transl_load_float_correct; eauto.
 Qed.
 
@@ -1246,7 +1245,6 @@ Proof.
   simpl. unfold exec_store. rewrite H. rewrite H2; eauto with asmgen. 
   rewrite H1. eauto. auto. intros. Simpl.
   simpl; auto.
-- apply Mem.storev_float64al32 in H1. eapply transl_store_float_correct; eauto.
 - eapply transl_store_float_correct; eauto.
 Qed.
 

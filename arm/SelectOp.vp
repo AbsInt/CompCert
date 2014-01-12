@@ -401,7 +401,6 @@ Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
   | Mint64 => false
   | Mfloat32 => false
   | Mfloat64 => false
-  | Mfloat64al32 => false
   end.
 
 Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
@@ -414,7 +413,6 @@ Definition can_use_Aindexed2shift (chunk: memory_chunk): bool :=
   | Mint64 => false
   | Mfloat32 => false
   | Mfloat64 => false
-  | Mfloat64al32 => false
   end.
 
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
