@@ -296,10 +296,13 @@ let extract_string m blk ofs =
 
 (* Emulation of printf *)
 
-(* All ISO C 99 formats except size modifier [L] (long double) *)
+(* All ISO C 99 formats *)
 
-let re_conversion = Str.regexp
-  "%[-+0# ]*[0-9]*\\(\\.[0-9]*\\)?\\([lhjzt]\\|hh\\|ll\\)?\\([aAcdeEfgGinopsuxX%]\\)"
+let re_conversion = Str.regexp (
+  "\\(%[-+0# ]*[0-9]*\\(\\.[0-9]*\\)?\\)" (* group 1: flags, width, precision *)
+^ "\\(\\|[lhjztL]\\|hh\\|ll\\)"            (* group 3: length modifier *)
+^ "\\([aAcdeEfgGinopsuxX%]\\)"            (* group 4: conversion specifier *)
+)
 
 external format_float: string -> float -> string
   = "caml_format_float"
@@ -307,6 +310,36 @@ external format_int32: string -> int32 -> string
   = "caml_int32_format"
 external format_int64: string -> int64 -> string
   = "caml_int64_format"
+
+let format_value m flags length conv arg =
+  match conv.[0], length, arg with
+  | ('d'|'i'|'u'|'o'|'x'|'X'|'c'), (""|"h"|"hh"|"l"|"z"|"t"), Vint i ->
+      format_int32 (flags ^ conv) (camlint_of_coqint i)
+  | ('d'|'i'|'u'|'o'|'x'|'X'|'c'), (""|"h"|"hh"|"l"|"z"|"t"), _ ->
+      "<int argument expected>"
+  | ('d'|'i'|'u'|'o'|'x'|'X'), ("ll"|"j"), Vlong i ->
+      format_int64 (flags ^ conv) (camlint64_of_coqint i)
+  | ('d'|'i'|'u'|'o'|'x'|'X'), ("ll"|"j"), _ ->
+      "<long long argument expected"
+  | ('f'|'e'|'E'|'g'|'G'|'a'), "", Vfloat f ->
+      format_float (flags ^ conv) (camlfloat_of_coqfloat f)
+  | ('f'|'e'|'E'|'g'|'G'|'a'), "", _ ->
+      "<float argument expected"
+  | 's', "", Vptr(blk, ofs) ->
+      begin match extract_string m blk ofs with
+      | Some s -> s
+      | None -> "<bad string>"
+      end
+  | 's', "", _ ->
+      "<pointer argument expected>"
+  | 'p', "", Vptr(blk, ofs) ->
+      Printf.sprintf "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs)
+  | 'p', "", Vint i ->
+      format_int32 (flags ^ "x") (camlint_of_coqint i)
+  | 'p', "", _ ->
+      "<int or pointer argument expected>"
+  | _, _, _ ->
+      "<unrecognized format>"      
 
 let do_printf m fmt args =
 
@@ -324,38 +357,22 @@ let do_printf m fmt args =
         Buffer.add_substring b fmt pos (len - pos)
     | Some pos1 ->
         Buffer.add_substring b fmt pos (pos1 - pos);
-        let pat = Str.matched_string fmt
-        and conv = Str.matched_group 3 fmt
+        let flags = Str.matched_group 1 fmt
+        and length = Str.matched_group 3 fmt
+        and conv = Str.matched_group 4 fmt
         and pos' = Str.match_end() in
-        match args, conv.[0] with
-        | _, '%' ->
-            Buffer.add_char b '%';
-            scan pos' args
-        | [], _ ->
-            Buffer.add_string b "<missing argument>";
-            scan pos' []
-        | Vint i :: args', ('d'|'i'|'u'|'o'|'x'|'X'|'c') ->
-            Buffer.add_string b (format_int32 pat (camlint_of_coqint i));
-            scan pos' args'
-        | Vfloat f :: args', ('f'|'e'|'E'|'g'|'G'|'a') ->
-            Buffer.add_string b (format_float pat (camlfloat_of_coqfloat f));
-            scan pos' args'
-        | Vlong i :: args', ('d'|'i'|'u'|'o'|'x'|'X') ->
-            let pat = Str.replace_first (Str.regexp "ll") "" pat in
-            Buffer.add_string b (format_int64 pat (camlint64_of_coqint i));
-            scan pos' args'
-        | Vptr(blk, ofs) :: args', 's' ->
-            Buffer.add_string b
-              (match extract_string m blk ofs with
-               | Some s -> s
-               | None -> "<bad string>");
-            scan pos' args'
-        | Vptr(blk, ofs) :: args', 'p' ->
-            Printf.bprintf b "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs);
-            scan pos' args'
-        | _ :: args', _ ->
-            Buffer.add_string b "<formatting error>";
-            scan pos' args'
+        if conv = "%" then begin
+          Buffer.add_char b '%';
+          scan pos' args
+        end else begin
+          match args with
+          | [] ->
+              Buffer.add_string b "<missing argument>";
+              scan pos' []
+          | arg :: args' ->
+              Buffer.add_string b (format_value m flags length conv arg);
+              scan pos' args'
+        end
     end
   in scan 0 args; Buffer.contents b
 

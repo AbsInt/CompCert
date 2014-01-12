@@ -2,18 +2,18 @@
 
 struct s {
   char c;
-  union { int i[3]; double d; } n;
+  union { short i[3]; int d; } n;
   struct { struct s * hd; struct s * tl; } l;
 };
 
 char tbl[sizeof(struct s)];
 /* Should be 32:
       char c  at 0
-      union n at 8 because alignment = 8; sizeof = 12
-      struct l at 8+12=20 with alignment = 4; sizeof = 8
-      end of struct at 20+8=28
-      alignment of whole struct is 8 because of d
-      28 aligned to 8 -> 32
+      union n at 4 because alignment = 4; sizeof = 8
+      struct l at 4+8=12 with alignment = 4; sizeof = 8
+      end of struct at 12+8=20
+      alignment of whole struct is 4
+      20 aligned to 4 -> 20
 */
 
 struct bits1 {
