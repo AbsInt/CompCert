@@ -17,7 +17,8 @@
 - More tolerance for functions declared without a prototype
   (option -funprototyped, on by default).
 - Option -drtl.
-
+- Recognize source files with .i or .p extension as C sources that
+  should not be preprocessed.
 
 Release 2.1, 2013-10-28
 =======================

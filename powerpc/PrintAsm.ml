@@ -1203,6 +1203,7 @@ let print_prologue oc =
 
 let print_program oc p =
   reset_file_line();
+  PrintAnnot.print_version_and_options oc comment;
   print_prologue oc;
   List.iter (print_globdef oc) p.prog_defs
 

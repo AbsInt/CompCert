@@ -102,8 +102,6 @@ let parse_c_file sourcename ifile =
     match Parse.preprocessed_file simplifs sourcename ifile with
     | None -> exit 2
     | Some p -> p in
-  (* Remove preprocessed file (always a temp file) *)
-  safe_remove ifile;
   (* Save C AST if requested *)
   if !option_dparse then begin
     let ofile = output_filename sourcename ".c" ".parsed.c" in
@@ -238,11 +236,13 @@ let process_c_file sourcename =
     preprocess sourcename preproname;
     if !option_interp then begin
       let csyntax = parse_c_file sourcename preproname in
+      safe_remove preproname;
       Interp.execute csyntax;
       ""
     end else if !option_S then begin
       compile_c_file sourcename preproname
                      (output_filename ~final:true sourcename ".c" ".s");
+      safe_remove preproname;
       ""
     end else begin
       let asmname =
@@ -250,11 +250,35 @@ let process_c_file sourcename =
         then output_filename sourcename ".c" ".s"
         else Filename.temp_file "compcert" ".s" in
       compile_c_file sourcename preproname asmname;
+      safe_remove preproname;
       let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
       assemble asmname objname;
       if not !option_dasm then safe_remove asmname;
       objname
     end
+  end
+
+(* Processing of a .i / .p file (preprocessed C) *)
+
+let process_i_file sourcename =
+  if !option_interp then begin
+    let csyntax = parse_c_file sourcename sourcename in
+    Interp.execute csyntax;
+    ""
+  end else if !option_S then begin
+    compile_c_file sourcename sourcename
+                   (output_filename ~final:true sourcename ".c" ".s");
+    ""
+  end else begin
+    let asmname =
+      if !option_dasm
+      then output_filename sourcename ".c" ".s"
+      else Filename.temp_file "compcert" ".s" in
+    compile_c_file sourcename sourcename asmname;
+    let objname = output_filename ~final: !option_c sourcename ".c" ".o" in
+    assemble asmname objname;
+    if not !option_dasm then safe_remove asmname;
+    objname
   end
 
 (* Processing of a .cm file *)
@@ -375,9 +399,10 @@ let usage_string =
 Usage: ccomp [options] <source files>
 Recognized source files:
   .c             C source file
+  .i or .p       C source file that should not be preprocessed
   .cm            Cminor source file
   .s             Assembly file
-  .S             Assembly file, to be run through the preprocessor
+  .S             Assembly file that must be preprocessed
   .o             Object file
   .a             Library file
 Processing options:
@@ -479,6 +504,9 @@ let cmdline_actions =
   "-all$", Self (fun _ -> Interp.mode := Interp.All);
   ".*\\.c$", Self (fun s ->
       push_action process_c_file s;
+      incr num_source_files);
+  ".*\\.[ip]$", Self (fun s ->
+      push_action process_i_file s;
       incr num_source_files);
   ".*\\.cm$", Self (fun s ->
       push_action process_cminor_file s;

@@ -873,6 +873,7 @@ let print_globdef oc (name, gdef) =
   | Gvar v -> print_var oc name v
 
 let print_program oc p =
+  PrintAnnot.print_version_and_options oc comment;
   need_masks := false;
   indirect_symbols := StringSet.empty;
   Hashtbl.clear filename_num;
