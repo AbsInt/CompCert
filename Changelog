@@ -1,24 +1,85 @@
+Release 2.2
+===========
+
+Major improvements:
+
+- Two new static analyses are performed on the RTL intermediate form:
+    . Value analysis, tracking constants, some integer range information,
+      and pointer aliasing information.
+    . Neededness analysis, generalizing liveness analysis to individual
+      bits of integer values and to stack memory locations.
+
+- Improved RTL optimizations, exploiting the results of these analyses:
+    . Constant propagation can track constants across memory stores and loads.
+    . Common subexpression elimination exploits nonaliasing information.
+    . Dead code elimination can eliminate useless memory writes and 
+      block copies, as well as integer operations that do not change
+      the needed bits.
+    . Redundant cast elimination is now performed globally (at
+      function level) rather than locally on individual expressions.
+
+- Experimental support for defining and calling variable-argument functions,
+  including support for the <stdarg.h> interface.
+  (Option -fvararg-calls, "on" by default.)
+
+Language features:
+- In "switch" statements, "default" cases can now appear anywhere, not
+  just as the last case.
+- Support for incomplete array as last field of a struct,
+  as specified in ISO C 99.
 - Revised semantics and implementation of _Alignas(N) attribute
   to better match those of GCC and Clang.
-- Recognize __builtin_fabs as an operator, not just a builtin,
-  enabling more aggressive optimizations.
+- Better tolerance for functions declared without prototypes
+  (option -funprototyped, "on" by default).
+- On PowerPC, support "far-data" sections
+  (register-relative addressing with 32-bit offsets).
+
+Improvements in ABI conformance:
+- For x86/IA32, align struct fields of types "double" or "long long" to 4
+  instead of 8, as prescribed by the x86 ELF ABI.
+- For PowerPC and ARM, structs and unions returned as function results
+  are now passed in integer registers if their sizes are small enough
+  (<= 8 bytes for PowerPC, <= 4 bytes for ARM).
+
+Usability:
+- Revised parsing of command-line arguments to be closer to GCC and Clang.
+  In particular, "ccomp -c foo.c -o obj/foo.o" now works as expected,
+  instead of ignoring the "-o" option as in earlier CompCert versions.
+- Warn for uses of the following GCC extensions to ISO C:
+  zero-sized arrays, empty structs/unions, empty initializer braces.
+- Option "-fno-fpu" to prevent the use of FP registers for some
+  integer operations such as block copies.  (Replaces the previous
+  "-fno-sse" option which was x86/IA32-specific, and extends it to
+  PowerPC and ARM.)
+- Option "-drtl" to record the RTL intermediate representation
+  at every stage of optimization.  (Replaces "-dtailcall", "-dinlining",
+  "-dconstprop", and "-dcse".)
+- Add CompCert version number and command-line arguments as comments
+  in the generated assembly files.
+
+Other performance improvements:
+- Recognize __builtin_fabs as a primitive unary operator instead of
+  a built-in function, enabling more optimizations.
+- PowerPC: shorter code generated for "&global_variable + expr".
+
+Improvements in compilation times:
+- More efficient implementation of Kildall's dataflow equation solver,
+  reduces size of worklist and nomber of times a node is visited.
+- Better OCaml GC settings significantly reduce compilation times
+  for very large source functions.
+
+Bug fixing:
 - Fixed incorrect hypothesis on __builtin_write{16,32}_reversed.
 - Fixed syntax error in __attribute__((__packed__)).
 - Emit clean compile-time error for 'switch' over a value of 64-bit
   integer type (currently not supported).
-- More precise static analysis of RTL: value analysis (including alias
-  analysis) and neededness analysis.
-- Improved optimizations: constant propagation and CSE.
-- New optimization: removal of partially dead code.
-- A "default" case can now appear anywhere in a "switch", not just as
-  the last case.
-- Revised parsing of command-line options, more GCC-like.
-- Simpler and more robust handling of calls to variadic functions.
-- More tolerance for functions declared without a prototype
-  (option -funprototyped, on by default).
-- Option -drtl.
 - Recognize source files with .i or .p extension as C sources that
   should not be preprocessed.
+
+Coq development:
+- Removed propositional extensionality axiom (prop_ext).
+- Suppressed the Mfloat64al32 memory_chunk, no longer needed.
+
 
 Release 2.1, 2013-10-28
 =======================
