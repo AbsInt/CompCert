@@ -45,6 +45,8 @@ Usability:
 - Revised parsing of command-line arguments to be closer to GCC and Clang.
   In particular, "ccomp -c foo.c -o obj/foo.o" now works as expected,
   instead of ignoring the "-o" option as in earlier CompCert versions.
+- Recognize input files ending in .i and .p as C source files that
+  must not be preprocessed.
 - Warn for uses of the following GCC extensions to ISO C:
   zero-sized arrays, empty structs/unions, empty initializer braces.
 - Option "-fno-fpu" to prevent the use of FP registers for some
