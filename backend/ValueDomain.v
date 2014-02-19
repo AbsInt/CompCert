@@ -13,6 +13,7 @@
 Require Import Coqlib.
 Require Import Zwf.
 Require Import Maps.
+Require Import Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -24,10 +25,6 @@ Require Import Lattice.
 Require Import Kildall.
 Require Import Registers.
 Require Import RTL.
-
-Parameter strict: bool.
-Parameter propagate_float_constants: unit -> bool.
-Parameter generate_float_constants : unit -> bool.
 
 Inductive block_class : Type :=
   | BCinvalid
@@ -819,7 +816,7 @@ Definition vlub (v w: aval) : aval :=
   | I i, Sgn n | Sgn n, I i =>
       sgn (Z.max (ssize i) n)
   | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i =>
-      if strict || Int.eq i Int.zero then Ifptr p else Vtop
+      if va_strict tt || Int.eq i Int.zero then Ifptr p else Vtop
   | Uns n1, Uns n2 => Uns (Z.max n1 n2)
   | Uns n1, Sgn n2 => sgn (Z.max (n1 + 1) n2)
   | Sgn n1, Uns n2 => sgn (Z.max n1 (n2 + 1))
@@ -837,7 +834,7 @@ Definition vlub (v w: aval) : aval :=
   | Ptr p1, Ifptr p2 => Ifptr(plub p1 p2)
   | Ifptr p1, Ptr p2 => Ifptr(plub p1 p2)
   | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
-  | _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), _ => if strict then Ifptr p else Vtop
+  | _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), _ => if va_strict tt then Ifptr p else Vtop
   | _, _ => Vtop
   end.
 
@@ -989,8 +986,8 @@ Lemma pmatch_vplub:
   forall b ofs x p, pmatch b ofs p -> pmatch b ofs (vplub x p).
 Proof.
   intros. 
-  assert (DFL: pmatch b ofs (if strict then p else Ptop)).
-  { destruct strict; auto. eapply pmatch_top'; eauto. }
+  assert (DFL: pmatch b ofs (if va_strict tt then p else Ptop)).
+  { destruct (va_strict tt); auto. eapply pmatch_top'; eauto. }
   unfold vplub; destruct x; auto; apply pmatch_lub_r; auto.
 Qed.
 
@@ -1495,7 +1492,7 @@ Definition divs (v w: aval) :=
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
-      then if strict then Vbot else itop
+      then if va_strict tt then Vbot else itop
       else I (Int.divs i1 i2)
   | _, _ => itop
   end.
@@ -1513,7 +1510,7 @@ Definition divu (v w: aval) :=
   match w, v with
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
-       then if strict then Vbot else itop
+       then if va_strict tt then Vbot else itop
       else I (Int.divu i1 i2)
   | _, _ => itop
   end.
@@ -1531,7 +1528,7 @@ Definition mods (v w: aval) :=
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
-      then if strict then Vbot else itop
+      then if va_strict tt then Vbot else itop
       else I (Int.mods i1 i2)
   | _, _ => itop
   end.
@@ -1549,7 +1546,7 @@ Definition modu (v w: aval) :=
   match w, v with
   | I i2, I i1 =>
       if Int.eq i2 Int.zero
-      then if strict then Vbot else itop
+      then if va_strict tt then Vbot else itop
       else I (Int.modu i1 i2)
   | I i2, _ => uns (usize i2)
   | _, _ => itop
@@ -1693,7 +1690,7 @@ Definition intoffloat (x: aval) :=
   | F f =>
       match Float.intoffloat f with
       | Some i => I i
-      | None => if strict then Vbot else itop
+      | None => if va_strict tt then Vbot else itop
       end
   | _ => itop
   end.
@@ -1711,7 +1708,7 @@ Definition intuoffloat (x: aval) :=
   | F f =>
       match Float.intuoffloat f with
       | Some i => I i
-      | None => if strict then Vbot else itop
+      | None => if va_strict tt then Vbot else itop
       end
   | _ => itop
   end.
@@ -2823,7 +2820,7 @@ Definition mtop := minit Ptop.
 
 Definition load (chunk: memory_chunk) (rm: romem) (m: amem) (p: aptr) : aval :=
   match p with
-  | Pbot => if strict then Vbot else Vtop
+  | Pbot => if va_strict tt then Vbot else Vtop
   | Gl id ofs =>
       match rm!id with
       | Some ab => ablock_load chunk ab (Int.unsigned ofs)
@@ -2882,7 +2879,7 @@ Definition storev (chunk: memory_chunk) (m: amem) (addr: aval) (v: aval): amem :
 
 Definition loadbytes (m: amem) (rm: romem) (p: aptr) : aptr :=
   match p with
-  | Pbot => if strict then Pbot else Ptop
+  | Pbot => if va_strict tt then Pbot else Ptop
   | Gl id _ | Glo id =>
       match rm!id with
       | Some ab => ablock_loadbytes ab

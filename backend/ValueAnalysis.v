@@ -12,6 +12,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -74,7 +75,7 @@ Definition transfer_builtin (ae: aenv) (am: amem) (rm: romem) (ef: external_func
   match classify_builtin ef args ae with
   | Builtin_vload chunk aaddr => 
       let a :=
-        if strict
+        if va_strict tt
         then vlub (loadv chunk rm am aaddr) (vnormalize chunk (Ifptr Glob))
         else vnormalize chunk Vtop in
       VA.State (AE.set res a ae) am
@@ -1255,11 +1256,11 @@ Proof.
   * (* true volatile access *)
     assert (V: vmatch bc v0 (Ifptr Glob)).
     { inv H4; constructor. econstructor. eapply GE; eauto. }
-    destruct strict. apply vmatch_lub_r. apply vnormalize_sound. auto. 
+    destruct (va_strict tt). apply vmatch_lub_r. apply vnormalize_sound. auto. 
     apply vnormalize_sound. eapply vmatch_ge; eauto. constructor. constructor.
   * (* normal memory access *)
     exploit loadv_sound; eauto. simpl; eauto. intros V.
-    destruct strict. 
+    destruct (va_strict tt). 
     apply vmatch_lub_l. auto.
     eapply vnormalize_cast; eauto. eapply vmatch_top; eauto. 
 + (* volatile store *)

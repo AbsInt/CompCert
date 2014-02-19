@@ -454,6 +454,7 @@ let diagnose_stuck_expr p ge w f a kont e m =
     | RV, Ecomma(r1, r2, ty) -> diagnose RV r1
     | RV, Eparen(r1, ty) -> diagnose RV r1
     | RV, Ecall(r1, rargs, ty) -> diagnose RV r1 ||| diagnose_list rargs
+    | RV, Ebuiltin(ef, tyargs, rargs, ty) -> diagnose_list rargs
     | _, _ -> false in
   if found then true else begin
     let l = Cexec.step_expr ge do_external_function do_inline_assembly e w k a m in

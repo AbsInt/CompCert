@@ -13,6 +13,7 @@
 (** Instruction selection for division and modulus *)
 
 Require Import Coqlib.
+Require Import Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -77,10 +78,13 @@ Definition divuimm (e1: expr) (n2: int) :=
   match Int.is_power2 n2 with
   | Some l => shruimm e1 l
   | None =>
-      match divu_mul_params (Int.unsigned n2) with
-      | None => divu_base e1 (Eop (Ointconst n2) Enil)
-      | Some(p, m) => Elet e1 (divu_mul p m)
-      end
+      if optim_for_size tt then
+        divu_base e1 (Eop (Ointconst n2) Enil)
+      else
+        match divu_mul_params (Int.unsigned n2) with
+        | None => divu_base e1 (Eop (Ointconst n2) Enil)
+        | Some(p, m) => Elet e1 (divu_mul p m)
+        end
   end.
 
 Nondetfunction divu (e1: expr) (e2: expr) := 
@@ -96,10 +100,13 @@ Definition moduimm (e1: expr) (n2: int) :=
   match Int.is_power2 n2 with
   | Some l => andimm (Int.sub n2 Int.one) e1
   | None =>
-      match divu_mul_params (Int.unsigned n2) with
-      | None => modu_base e1 (Eop (Ointconst n2) Enil)
-      | Some(p, m) => Elet e1 (mod_from_div (divu_mul p m) n2)
-      end
+      if optim_for_size tt then
+        modu_base e1 (Eop (Ointconst n2) Enil)
+      else
+        match divu_mul_params (Int.unsigned n2) with
+        | None => modu_base e1 (Eop (Ointconst n2) Enil)
+        | Some(p, m) => Elet e1 (mod_from_div (divu_mul p m) n2)
+        end
   end.
 
 Nondetfunction modu (e1: expr) (e2: expr) := 
@@ -123,10 +130,13 @@ Definition divsimm (e1: expr) (n2: int) :=
       then shrximm e1 l
       else divs_base e1 (Eop (Ointconst n2) Enil)
   | None =>
-      match divs_mul_params (Int.signed n2) with
-      | None => divs_base e1 (Eop (Ointconst n2) Enil)
-      | Some(p, m) => Elet e1 (divs_mul p m)
-      end
+      if optim_for_size tt then
+        divs_base e1 (Eop (Ointconst n2) Enil)
+      else
+        match divs_mul_params (Int.signed n2) with
+        | None => divs_base e1 (Eop (Ointconst n2) Enil)
+        | Some(p, m) => Elet e1 (divs_mul p m)
+        end
   end.
 
 Nondetfunction divs (e1: expr) (e2: expr) := 
@@ -142,10 +152,13 @@ Definition modsimm (e1: expr) (n2: int) :=
       then Elet e1 (mod_from_div (shrximm (Eletvar O) l) n2)
       else mods_base e1 (Eop (Ointconst n2) Enil)
   | None =>
-      match divs_mul_params (Int.signed n2) with
-      | None => mods_base e1 (Eop (Ointconst n2) Enil)
-      | Some(p, m) => Elet e1 (mod_from_div (divs_mul p m) n2)
-      end
+      if optim_for_size tt then
+        mods_base e1 (Eop (Ointconst n2) Enil)
+      else
+        match divs_mul_params (Int.signed n2) with
+        | None => mods_base e1 (Eop (Ointconst n2) Enil)
+        | Some(p, m) => Elet e1 (mod_from_div (divs_mul p m) n2)
+        end
   end.
 
 Nondetfunction mods (e1: expr) (e2: expr) := 

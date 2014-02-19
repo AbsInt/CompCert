@@ -14,6 +14,7 @@
   and conditions.  This is the machine-dependent part of [Constprop]. *)
 
 Require Import Coqlib.
+Require Import Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.

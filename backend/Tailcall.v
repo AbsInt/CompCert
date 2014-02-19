@@ -14,6 +14,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Compopts.
 Require Import AST.
 Require Import Registers.
 Require Import Op.
@@ -97,8 +98,6 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
 (** A function is transformed only if its stack block is empty,
   as explained above.  Moreover, we can turn tail calls off
   using a compilation option. *)
-
-Parameter eliminate_tailcalls: unit -> bool.
 
 Definition transf_function (f: function) : function :=
   if zeq f.(fn_stacksize) 0 && eliminate_tailcalls tt

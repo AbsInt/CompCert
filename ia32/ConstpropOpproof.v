@@ -13,6 +13,7 @@
 (** Correctness proof for operator strength reduction. *)
 
 Require Import Coqlib.
+Require Import Compopts.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.

@@ -68,18 +68,6 @@ Extraction Inline RTLgen.ret RTLgen.error RTLgen.bind RTLgen.bind2.
 Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".
 Extraction Inline Inlining.ret Inlining.bind.
 
-(* ValueDomain *)
-Extract Constant ValueDomain.strict =>
-  "false".
-Extract Constant ValueDomain.propagate_float_constants =>
-  "fun _ -> !Clflags.option_ffloatconstprop >= 1".
-Extract Constant ValueDomain.generate_float_constants =>
-  "fun _ -> !Clflags.option_ffloatconstprop >= 2".
-
-(* Tailcall *)
-Extract Constant Tailcall.eliminate_tailcalls =>
-  "fun _ -> !Clflags.option_ftailcalls".
-
 (* Allocation *)
 Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 
@@ -89,6 +77,18 @@ Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 (* SimplExpr *)
 Extract Constant SimplExpr.first_unused_ident => "Camlcoq.first_unused_ident".
 Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
+
+(* Compopts *)
+Extract Constant Compopts.optim_for_size =>
+  "fun _ -> !Clflags.option_Osize".
+Extract Constant Compopts.va_strict =>
+  "fun _ -> false".
+Extract Constant Compopts.propagate_float_constants =>
+  "fun _ -> !Clflags.option_ffloatconstprop >= 1".
+Extract Constant Compopts.generate_float_constants =>
+  "fun _ -> !Clflags.option_ffloatconstprop >= 2".
+Extract Constant Compopts.eliminate_tailcalls =>
+  "fun _ -> !Clflags.option_ftailcalls".
 
 (* Compiler *)
 Extract Constant Compiler.print_Clight => "PrintClight.print_if".

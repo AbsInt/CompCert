@@ -74,7 +74,7 @@ Definition transf_ros (ae: AE.t) (ros: reg + ident) : reg + ident :=
 Definition const_for_result (a: aval) : option operation :=
   match a with
   | I n => Some(Ointconst n)
-  | F n => if generate_float_constants tt then Some(Ofloatconst n) else None
+  | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
   | Ptr(Gl symb ofs) => Some(Oaddrsymbol symb ofs)
   | Ptr(Stk ofs) => Some(Oaddrstack ofs)
   | _ => None
@@ -108,7 +108,7 @@ Fixpoint annot_strength_reduction
       let (targs'', args'') := annot_strength_reduction ae targs' args' in
       match ty, areg ae arg with
       | Tint, I n => (AA_int n :: targs'', args'')
-      | Tfloat, F n => if generate_float_constants tt
+      | Tfloat, F n => if Compopts.generate_float_constants tt
                        then (AA_float n :: targs'', args'')
                        else (AA_arg ty :: targs'', arg :: args'')
       | _, _ => (AA_arg ty :: targs'', arg :: args'')

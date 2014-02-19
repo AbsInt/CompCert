@@ -1765,22 +1765,28 @@ let rec elab_stmt env ctx s =
       { sdesc = Sdowhile(s1', a'); sloc = elab_loc loc }
 
   | FOR(fc, a2, a3, s1, loc) ->
-      let a1' =
+      let (a1', env', decls') =
         match fc with
         | FC_EXP a1 ->
-            elab_for_expr loc env a1
+            (elab_for_expr loc env a1, env, None)
         | FC_DECL def ->
-            error loc "C99 declaration within `for' not supported";
-            sskip in
+            let (dcl, env') = elab_definition true (Env.new_scope env) def in
+            let loc = elab_loc (get_definitionloc def) in
+            (sskip, env', 
+             Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
       let a2' =
         if a2 = NOTHING
         then intconst 1L IInt
-        else elab_expr loc env a2 in
-      if not (is_scalar_type env a2'.etyp) then
+        else elab_expr loc env' a2 in
+      if not (is_scalar_type env' a2'.etyp) then
         error loc "the condition of 'for' does not have scalar type";
-      let a3' = elab_for_expr loc env a3 in
-      let s1' = elab_stmt env (ctx_loop ctx) s1 in
-      { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc }
+      let a3' = elab_for_expr loc env' a3 in
+      let s1' = elab_stmt env' (ctx_loop ctx) s1 in
+      let sfor = { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc } in
+      begin match decls' with
+      | None -> sfor
+      | Some sl -> { sdesc = Sblock (sl @ [sfor]); sloc = elab_loc loc }
+      end
 
 (* 6.8.4 Switch statement *)
   | SWITCH(a, s1, loc) ->

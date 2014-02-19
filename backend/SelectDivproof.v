@@ -369,10 +369,12 @@ Proof.
   replace (Vint (Int.shru i l)) with (Val.shru (Vint i) (Vint l)). 
   apply eval_shruimm; auto.
   simpl. erewrite Int.is_power2_range; eauto. 
-- destruct (divu_mul_params (Int.unsigned n2)) as [[p M] | ] eqn:PARAMS.
-  + exists (Vint (Int.divu i n2)); split; auto.
-    econstructor; eauto. eapply eval_divu_mul; eauto. 
+- destruct (Compopts.optim_for_size tt).
   + eapply eval_divu_base; eauto. EvalOp.
+  + destruct (divu_mul_params (Int.unsigned n2)) as [[p M] | ] eqn:PARAMS.
+    * exists (Vint (Int.divu i n2)); split; auto.
+      econstructor; eauto. eapply eval_divu_mul; eauto. 
+    * eapply eval_divu_base; eauto. EvalOp.
 Qed.
 
 Theorem eval_divu:
@@ -412,13 +414,15 @@ Proof.
   change (Vint (Int.and i (Int.sub n2 Int.one)))
     with (Val.and (Vint i) (Vint (Int.sub n2 Int.one))).
   apply eval_andimm. auto.
-- destruct (divu_mul_params (Int.unsigned n2)) as [[p M] | ] eqn:PARAMS.
-  + econstructor; split. 
-    econstructor; eauto. eapply eval_mod_from_div. 
-    eapply eval_divu_mul; eauto. simpl; eauto. simpl; eauto. 
-    rewrite Int.modu_divu. auto. 
-    red; intros; subst n2; discriminate.
+- destruct (Compopts.optim_for_size tt).
   + eapply eval_modu_base; eauto. EvalOp.
+  + destruct (divu_mul_params (Int.unsigned n2)) as [[p M] | ] eqn:PARAMS.
+    * econstructor; split. 
+      econstructor; eauto. eapply eval_mod_from_div. 
+      eapply eval_divu_mul; eauto. simpl; eauto. simpl; eauto. 
+      rewrite Int.modu_divu. auto. 
+      red; intros; subst n2; discriminate.
+    * eapply eval_modu_base; eauto. EvalOp.
 Qed.
 
 Theorem eval_modu:
@@ -485,10 +489,12 @@ Proof.
 - destruct (Int.ltu l (Int.repr 31)) eqn:LT31.
   + eapply eval_shrximm; eauto. eapply Val.divs_pow2; eauto.
   + eapply eval_divs_base; eauto. EvalOp.
-- destruct (divs_mul_params (Int.signed n2)) as [[p M] | ] eqn:PARAMS.
-  + exists (Vint (Int.divs i n2)); split; auto.
-    econstructor; eauto. eapply eval_divs_mul; eauto. 
+- destruct (Compopts.optim_for_size tt).
   + eapply eval_divs_base; eauto. EvalOp.
+  + destruct (divs_mul_params (Int.signed n2)) as [[p M] | ] eqn:PARAMS.
+    * exists (Vint (Int.divs i n2)); split; auto.
+      econstructor; eauto. eapply eval_divs_mul; eauto. 
+    * eapply eval_divs_base; eauto. EvalOp.
 Qed.
 
 Theorem eval_divs:
@@ -524,12 +530,14 @@ Proof.
     apply eval_mod_from_div. eexact X. simpl; eauto. 
     simpl. auto.
   + eapply eval_mods_base; eauto. EvalOp.
-- destruct (divs_mul_params (Int.signed n2)) as [[p M] | ] eqn:PARAMS.
-  + econstructor; split. 
-    econstructor. eauto. apply eval_mod_from_div with (x := i); auto.
-    eapply eval_divs_mul with (x := i); eauto.
-    simpl. auto.
+- destruct (Compopts.optim_for_size tt).
   + eapply eval_mods_base; eauto. EvalOp.
+  + destruct (divs_mul_params (Int.signed n2)) as [[p M] | ] eqn:PARAMS.
+    * econstructor; split. 
+      econstructor. eauto. apply eval_mod_from_div with (x := i); auto.
+      eapply eval_divs_mul with (x := i); eauto.
+      simpl. auto.
+    * eapply eval_mods_base; eauto. EvalOp.
 Qed.
 
 Theorem eval_mods:

@@ -27,6 +27,8 @@ Language features:
   just as the last case.
 - Support for incomplete array as last field of a struct,
   as specified in ISO C 99.
+- Support for declarations within 'for' loops, as specified in ISO C 99.
+  (E.g. "for (int i = 0; i < 4; i++) ...")
 - Revised semantics and implementation of _Alignas(N) attribute
   to better match those of GCC and Clang.
 - Better tolerance for functions declared without prototypes

@@ -14,6 +14,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Import Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -304,7 +305,8 @@ Proof.
   replace (Vint (Int.shl Int.one i)) with (Val.shl Vone (Vint i)). rewrite Val.shl_mul.
   apply eval_shlimm. auto. simpl. rewrite H0; auto with coqlib.
   destruct l.
-  intros. rewrite H1. simpl.
+  intros. destruct (optim_for_size tt). TrivialExists.
+  rewrite H1. simpl.
   exploit (eval_shlimm i (x :: le) (Eletvar 0) x). constructor; auto. intros [v1 [A1 B1]].
   exploit (eval_shlimm i0 (x :: le) (Eletvar 0) x). constructor; auto. intros [v2 [A2 B2]].
   exists (Val.add v1 v2); split.

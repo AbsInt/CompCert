@@ -426,6 +426,8 @@ Language support options (use -fno-<opt> to turn off -f<opt>) :
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
 Code generation options: (use -fno-<opt> to turn off -f<opt>) :
+  -O             Optimize for speed [on by default]
+  -Os            Optimize for code size
   -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
@@ -525,6 +527,8 @@ let cmdline_actions =
       assembler_options := s :: !assembler_options);
   "-Wl,", Self (fun s ->
       push_linker_arg s);
+  "-Os$", Set option_Osize;
+  "-O$", Unset option_Osize;
   "-fsmall-data$", Integer(fun n -> option_small_data := n);
   "-fsmall-const$", Integer(fun n -> option_small_const := n);
   "-ffloat-const-prop$", Integer(fun n -> option_ffloatconstprop := n);

@@ -111,7 +111,7 @@ CFRONTEND=Ctypes.v Cop.v Csyntax.v Csem.v Cstrategy.v Cexec.v \
 
 # Putting everything together (in driver/)
 
-DRIVER=Compiler.v Complements.v
+DRIVER=Compopts.v Compiler.v Complements.v
 
 # All source files
 

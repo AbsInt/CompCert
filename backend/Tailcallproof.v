@@ -13,6 +13,7 @@
 (** Recognition of tail calls: correctness proof *)
 
 Require Import Coqlib.
+Require Import Compopts.
 Require Import Maps.
 Require Import AST.
 Require Import Integers.

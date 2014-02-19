@@ -14,6 +14,7 @@
 
 Require Import Coqlib.
 Require Import Maps.
+Require Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Values.
@@ -157,7 +158,7 @@ Proof.
 - (* integer *)
   inv H. inv H0. exists (Vint n); auto.
 - (* float *)
-  destruct (generate_float_constants tt); inv H. inv H0. exists (Vfloat f); auto.
+  destruct (Compopts.generate_float_constants tt); inv H. inv H0. exists (Vfloat f); auto.
 - (* pointer *)
   destruct p; try discriminate.
   + (* global *)
@@ -235,7 +236,7 @@ Proof.
     * exists eargs''; split; auto; simpl; f_equal; auto. 
       generalize (MATCH arg); fold (areg ae arg); rewrite E2; intros VM.
       inv VM. rewrite <- H0 in *. inv H5; auto.
-    * destruct (generate_float_constants tt); inv H1; auto. 
+    * destruct (Compopts.generate_float_constants tt); inv H1; auto. 
       exists eargs''; split; auto; simpl; f_equal; auto. 
       generalize (MATCH arg); fold (areg ae arg); rewrite E2; intros VM.
       inv VM. rewrite <- H0 in *. inv H5; auto.

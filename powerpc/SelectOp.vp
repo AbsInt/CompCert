@@ -37,6 +37,7 @@
 *)
 
 Require Import Coqlib.
+Require Import Compopts.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
@@ -190,9 +191,12 @@ Definition mulimm_base (n1: int) (e2: expr) :=
   | i :: nil =>
       shlimm e2 i
   | i :: j :: nil =>
-      Elet e2
-        (Eop Oadd (shlimm (Eletvar 0) i :::
-                   shlimm (Eletvar 0) j ::: Enil))
+      if optim_for_size tt then
+        Eop (Omulimm n1) (e2:::Enil)
+      else
+        Elet e2
+          (Eop Oadd (shlimm (Eletvar 0) i :::
+                     shlimm (Eletvar 0) j ::: Enil))
   | _ =>
       Eop (Omulimm n1) (e2:::Enil)
   end.
