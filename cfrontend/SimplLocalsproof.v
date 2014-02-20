@@ -78,16 +78,6 @@ Proof.
   monadInv EQ. simpl; unfold type_of_function; simpl. auto.  
 Qed.
 
-Lemma type_of_global_preserved:
-  forall id ty, type_of_global ge id = Some ty -> type_of_global tge id = Some ty.
-Proof.
-  unfold type_of_global; intros.
-  rewrite varinfo_preserved. destruct (Genv.find_var_info ge id). auto. 
-  destruct (Genv.find_funct_ptr ge id) as [fd|] eqn:?; inv H.
-  exploit function_ptr_translated; eauto. intros [tf [A B]]. rewrite A. 
-  decEq. apply type_of_fundef_preserved; auto.
-Qed.
-
 (** Matching between environments before and after *)
 
 Inductive match_var (f: meminj) (cenv: compilenv) (e: env) (m: mem) (te: env) (tle: temp_env) (id: ident) : Prop :=
@@ -1481,11 +1471,10 @@ Proof.
   apply eval_Evar_local; auto.
   econstructor; eauto.
 (* global var *)
-  rewrite H3.
+  rewrite H2.
   exploit me_vars; eauto. instantiate (1 := id). intros MV. inv MV; try congruence.
   exists l; exists Int.zero; split.
   apply eval_Evar_global. auto. rewrite <- H0. apply symbols_preserved. 
-  eapply type_of_global_preserved; eauto. 
   destruct GLOB as [bound GLOB1]. inv GLOB1.
   econstructor; eauto. 
 (* deref *)

@@ -86,7 +86,6 @@ Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
   | esl_var_global: forall x ty b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
-      type_of_global ge b = Some ty ->
       eval_simple_lvalue (Evar x ty) b Int.zero
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->

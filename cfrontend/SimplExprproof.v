@@ -105,19 +105,6 @@ Proof.
   intros. inv H; auto. 
 Qed.
 
-Lemma type_of_global_preserved:
-  forall b ty,
-  Csem.type_of_global ge b = Some ty ->
-  type_of_global tge b = Some ty.
-Proof.
-  intros until ty. unfold Csem.type_of_global, type_of_global.
-  rewrite varinfo_preserved. destruct (Genv.find_var_info ge b). auto. 
-  case_eq (Genv.find_funct_ptr ge b); intros. 
-  inv H0. exploit function_ptr_translated; eauto. intros [tf [A B]]. 
-  rewrite A. decEq. apply type_of_fundef_preserved; auto.
-  congruence.
-Qed.
-
 (** Translation of simple expressions. *)
 
 Lemma tr_simple_nil:
@@ -269,7 +256,6 @@ Opaque makeif.
 (* var global *)
   split; auto. split; auto. apply eval_Evar_global; auto.
     rewrite symbols_preserved; auto.
-    eapply type_of_global_preserved; eauto. 
 (* deref *)
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split; auto. constructor; auto.

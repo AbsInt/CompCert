@@ -189,19 +189,6 @@ Section SEMANTICS.
 
 Variable ge: genv.
 
-(** [type_of_global b] returns the type of the global variable or function
-  at address [b]. *)
-
-Definition type_of_global (b: block) : option type :=
-  match Genv.find_var_info ge b with
-  | Some gv => Some gv.(gvar_info)
-  | None =>
-      match Genv.find_funct_ptr ge b with
-      | Some fd => Some(type_of_fundef fd)
-      | None => None
-      end
-  end.
-
 (** ** Reduction semantics for expressions *)
 
 Section EXPR.
@@ -223,7 +210,6 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
   | red_var_global: forall x ty m b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
-      type_of_global b = Some ty ->
       lred (Evar x ty) m
            (Eloc b Int.zero ty) m
   | red_deref: forall b ofs ty1 ty m,

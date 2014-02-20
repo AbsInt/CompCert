@@ -93,7 +93,6 @@ Inductive eval_simple_lvalue: expr -> block -> int -> Prop :=
   | esl_var_global: forall x ty b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
-      type_of_global ge b = Some ty ->
       eval_simple_lvalue (Evar x ty) b Int.zero
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
@@ -520,7 +519,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Evar x ty =>
       exists b,
       e!x = Some(b, ty)
-      \/ (e!x = None /\ Genv.find_symbol ge x = Some b /\ type_of_global ge b = Some ty)
+      \/ (e!x = None /\ Genv.find_symbol ge x = Some b)
   | Ederef (Eval v ty1) ty =>
       exists b, exists ofs, v = Vptr b ofs
   | Efield (Eval v ty1) f ty =>

@@ -732,8 +732,6 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
           topred (Lred (Eloc b Int.zero ty) m)
       | None =>
           do b <- Genv.find_symbol ge x;
-          do ty' <- type_of_global ge b;
-          check type_eq ty ty';
           topred (Lred (Eloc b Int.zero ty) m)
       end
   | LV, Ederef r ty =>
@@ -985,7 +983,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Evar x ty =>
       exists b,
       e!x = Some(b, ty)
-      \/ (e!x = None /\ Genv.find_symbol ge x = Some b /\ type_of_global ge b = Some ty)
+      \/ (e!x = None /\ Genv.find_symbol ge x = Some b)
   | Ederef (Eval v ty1) ty =>
       exists b, exists ofs, v = Vptr b ofs
   | Efield (Eval v ty1) f ty =>
@@ -1381,9 +1379,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct (type_eq ty ty')...
   subst. apply topred_ok; auto. apply red_var_local; auto.
   destruct (Genv.find_symbol ge x) as [b|] eqn:?...
-  destruct (type_of_global ge b) as [ty'|] eqn:?...
-  destruct (type_eq ty ty')...
-  subst. apply topred_ok; auto. apply red_var_global; auto.
+  apply topred_ok; auto. apply red_var_global; auto.
 (* Efield *)
   destruct (is_val a) as [[v ty'] | ] eqn:?.
   rewrite (is_val_inv _ _ _ Heqo).
@@ -1590,7 +1586,7 @@ Proof.
 (* var local *)
   rewrite H. rewrite dec_eq_true; auto.
 (* var global *)
-  rewrite H; rewrite H0; rewrite H1. rewrite dec_eq_true; auto.
+  rewrite H; rewrite H0. auto.
 (* deref *) 
   auto.
 (* field struct *)

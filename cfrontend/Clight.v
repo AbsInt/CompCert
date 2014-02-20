@@ -335,19 +335,6 @@ Section SEMANTICS.
 
 Variable ge: genv.
 
-(** [type_of_global b] returns the type of the global variable or function
-  at address [b]. *)
-
-Definition type_of_global (b: block) : option type :=
-  match Genv.find_var_info ge b with
-  | Some gv => Some gv.(gvar_info)
-  | None =>
-      match Genv.find_funct_ptr ge b with
-      | Some fd => Some(type_of_fundef fd)
-      | None => None
-      end
-  end.
-
 (** ** Evaluation of expressions *)
 
 Section EXPR.
@@ -402,7 +389,6 @@ with eval_lvalue: expr -> block -> int -> Prop :=
   | eval_Evar_global: forall id l ty,
       e!id = None ->
       Genv.find_symbol ge id = Some l ->
-      type_of_global l = Some ty ->
       eval_lvalue (Evar id ty) l Int.zero
   | eval_Ederef: forall a ty l ofs,
       eval_expr a (Vptr l ofs) ->
