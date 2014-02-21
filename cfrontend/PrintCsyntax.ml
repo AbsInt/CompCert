@@ -85,6 +85,10 @@ let attributes a =
   | Some l ->
       sprintf " _Alignas(%Ld)%s" (Int64.shift_left 1L (N.to_int l)) s1
 
+let attributes_space a =
+  let s = attributes a in 
+  if String.length s = 0 then s else s ^ " "
+
 let name_optid id =
   if id = "" then "" else " " ^ id
 
@@ -101,8 +105,8 @@ let rec name_cdecl id ty =
   | Tpointer(t, a) ->
       let id' =
         match t with
-        | Tfunction _ | Tarray _ -> sprintf "(*%s%s)" (attributes a) id
-        | _                      -> sprintf "*%s%s" (attributes a) id in
+        | Tfunction _ | Tarray _ -> sprintf "(*%s%s)" (attributes_space a) id
+        | _                      -> sprintf "*%s%s" (attributes_space a) id in
       name_cdecl id' t
   | Tarray(t, n, a) ->
       name_cdecl (sprintf "%s[%ld]" id (camlint_of_coqint n)) t
@@ -425,7 +429,7 @@ let print_init p = function
   | Init_int8 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int16 n -> fprintf p "%ld" (camlint_of_coqint n)
   | Init_int32 n -> fprintf p "%ld" (camlint_of_coqint n)
-  | Init_int64 n -> fprintf p "%Ld" (camlint64_of_coqint n)
+  | Init_int64 n -> fprintf p "%LdLL" (camlint64_of_coqint n)
   | Init_float32 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
   | Init_float64 n -> fprintf p "%F" (camlfloat_of_coqfloat n)
   | Init_space n -> fprintf p "/* skip %ld */@ " (camlint_of_coqint n)
