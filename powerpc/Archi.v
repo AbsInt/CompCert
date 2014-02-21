@@ -20,13 +20,13 @@ Require Import ZArith.
 Require Import Fappli_IEEE.
 Require Import Fappli_IEEE_bits.
 
-Definition big_endian := false.
+Definition big_endian := true.
 
 Notation align_int64 := 8%Z (only parsing).
 Notation align_float64 := 8%Z (only parsing).
 
 Program Definition default_pl : bool * nan_pl 53 := 
-  (true, nat_iter 51 xO xH).
+  (false, nat_iter 51 xO xH).
 
 Definition choose_binop_pl (s1: bool) (pl1: nan_pl 53) (s2: bool) (pl2: nan_pl 53) :=
   false.                        (**r always choose first NaN *)
