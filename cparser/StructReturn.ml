@@ -97,7 +97,7 @@ let rec transf_expr env ctx e =
       {edesc = EVar x; etyp = newty}
   | EUnop(op, e1) ->
       {edesc = EUnop(op, transf_expr env Val e1); etyp = newty}
-  | EBinop(Oassign, lhs, {edesc = ECall(fn, args)}, ty) ->
+  | EBinop(Oassign, lhs, {edesc = ECall(fn, args); etyp = ty}, _) ->
       transf_call env ctx (Some lhs) fn args ty
   | EBinop(Ocomma, e1, e2, ty) ->
       ecomma (transf_expr env Effects e1) (transf_expr env ctx e2)
