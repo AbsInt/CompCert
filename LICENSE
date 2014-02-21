@@ -1,7 +1,7 @@
 All files in this distribution are part of the CompCert verified compiler.
 
 The CompCert verified compiler is Copyright 2004, 2005, 2006, 2007,
-2008, 2009, 2010, 2011, 2012, 2013 Institut National de Recherche en
+2008, 2009, 2010, 2011, 2012, 2013, 2014 Institut National de Recherche en
 Informatique et en Automatique (INRIA).
 
 The CompCert verified compiler is distributed under the terms of the
@@ -60,13 +60,13 @@ Public License.
 
 The files contained in the flocq/ directory and its subdirectories are
 taken from the Flocq project, http://flocq.gforge.inria.fr/
-These files are Copyright 2010-2012 INRIA and distributed under the
+These files are Copyright 2010-2013 INRIA and distributed under the
 terms of the GNU Lesser General Public Licence, either version 3 of
 the licence, or (at your option) any later version.  A copy of the GNU
 Lesser General Public Licence version 3 is included below.
 
 The files contained in the runtime/ directory and its subdirectories
-are Copyright 2013 INRIA and distributed under the terms of the BSD
+are Copyright 2013-2014 INRIA and distributed under the terms of the BSD
 license, included below.
 
 Finally, the following files are taken from the CIL library:

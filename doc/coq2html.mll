@@ -230,7 +230,7 @@ let start_html_page modname =
 <html xmlns=\"http://www.w3.org/1999/xhtml\">
 
 <head>
-<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />
+<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />
 <title>Module %s</title>
 <meta name=\"description\" content=\"Documentation of Coq module %s\" />
 <link href=\"coq2html.css\" rel=\"stylesheet\" type=\"text/css\" />
