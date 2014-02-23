@@ -105,6 +105,8 @@ Module IndexedMreg <: INDEXED_TYPE.
   Qed.
 End IndexedMreg.
 
+Definition is_stack_reg (r: mreg) : bool := false.
+
 (** ** Destroyed registers, preferred registers *)
 
 Definition destroyed_by_op (op: operation): list mreg :=

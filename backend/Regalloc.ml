@@ -228,7 +228,7 @@ let vset_addros vos after =
 let live_before instr after =
   match instr with
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
-      if VSet.mem dst after
+      if VSet.mem dst after || is_stack_reg src
       then VSet.add src (VSet.remove dst after)
       else after
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -302,7 +302,7 @@ let rec dce_parmove srcs dsts after =
   | [], [] -> [], []
   | src1 :: srcs, dst1 :: dsts ->
       let (srcs', dsts') = dce_parmove srcs dsts after in
-      if VSet.mem dst1 after
+      if VSet.mem dst1 after || is_stack_reg src1
       then (src1 :: srcs', dst1 :: dsts')
       else (srcs', dsts')
   | _, _ -> assert false
@@ -310,7 +310,7 @@ let rec dce_parmove srcs dsts after =
 let dce_instr instr after k =
   match instr with
   | Xmove(src, dst) ->
-      if VSet.mem dst after
+      if VSet.mem dst after || is_stack_reg src
       then instr :: k
       else k
   | Xparmove(srcs, dsts, itmp, ftmp) ->

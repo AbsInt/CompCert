@@ -128,4 +128,4 @@ Separate Extraction
    Conventions1.dummy_int_reg Conventions1.dummy_float_reg
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
-   Machregs.two_address_op.
+   Machregs.two_address_op Machregs.is_stack_reg.

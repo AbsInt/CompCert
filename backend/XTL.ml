@@ -64,6 +64,12 @@ let vlocs ll = List.map vloc ll
 let vmreg mr = L(R mr)
 let vmregs mrl = List.map vmreg mrl
 
+(* Tests over variables *)
+
+let is_stack_reg = function
+  | L(R r) -> Machregs.is_stack_reg r
+  | _      -> false
+
 (* Sets of variables *)
 
 module VSet = Set.Make(struct type t = var let compare = compare end)
