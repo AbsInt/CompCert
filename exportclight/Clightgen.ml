@@ -270,7 +270,11 @@ let cmdline_actions =
   @ f_opt "packed-structs" option_fpacked_structs
 
 let _ =
-  Gc.set { (Gc.get()) with Gc.minor_heap_size = 524288 };
+  Gc.set { (Gc.get()) with
+              Gc.minor_heap_size = 524288; (* 512k *)
+              Gc.major_heap_increment = 4194304 (* 4M *)
+         };
+  Printexc.record_backtrace true;
   Machine.config :=
     begin match Configuration.arch with
     | "powerpc" -> Machine.ppc_32_bigendian
@@ -278,6 +282,6 @@ let _ =
     | "ia32"    -> Machine.x86_32
     | _         -> assert false
     end;
-  Builtins.set C2C.builtins_generic;
+  Builtins.set C2C.builtins;
   CPragmas.initialize();
   parse_cmdline cmdline_actions usage_string

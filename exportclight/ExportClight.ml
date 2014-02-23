@@ -173,8 +173,9 @@ and rtyp p = function
       fprintf p "(tptr %a)" typ t
   | Tarray(t, sz, _) ->
       fprintf p "(tarray %a %ld)" typ t (Z.to_int32 sz)
-  | Tfunction(targs, tres) ->
-      fprintf p "@[<hov 2>(Tfunction@ %a@ %a)@]" typlist targs typ tres
+  | Tfunction(targs, tres, cc) ->
+      fprintf p "@[<hov 2>(Tfunction@ %a@ %a@ %a)@]"
+                typlist targs typ tres callconv cc
   | Tstruct(id, flds, _) ->
       if !use_struct_names
       then fprintf p "t%a" ident id
@@ -198,6 +199,11 @@ and fieldlist p = function
   | Fcons(id, t, fl) ->
       fprintf p "@[<hov 2>(Fcons %a@ %a@ %a)@]" ident id typ t fieldlist fl
 
+and callconv p cc =
+  if cc = cc_default
+  then fprintf p "cc_default"
+  else fprintf p "{|cc_vararg:=%b; cc_structret:=%b|}" cc.cc_vararg cc.cc_structret
+
 (* External functions *)
 
 let asttype p t =
@@ -219,7 +225,10 @@ let name_of_chunk = function
   | Mfloat64 -> "Mfloat64"
 
 let signatur p sg =
-  fprintf p "@[<hov 2>(mksignature@ %a@ %a)@]" (print_list asttype) sg.sig_args (print_option asttype) sg.sig_res
+  fprintf p "@[<hov 2>(mksignature@ %a@ %a@ %a)@]" 
+     (print_list asttype) sg.sig_args
+     (print_option asttype) sg.sig_res 
+     callconv sg.sig_cc
 
 let assertions = ref ([]: (ident * annot_arg list) list)
 
@@ -263,6 +272,7 @@ let name_unop = function
   | Onotbool -> "Onotbool"
   | Onotint -> "Onotint"
   | Oneg -> "Oneg"
+  | Oabsfloat -> "Oabsfloat"
 
 let name_binop = function
   | Oadd -> "Oadd"
@@ -354,14 +364,16 @@ let rec stmt p = function
       fprintf p "(Sgoto %a)" ident lbl
 
 and lblstmts p = function
-  | LSdefault s ->
-      fprintf p "@[<hv 2>(LSdefault@ %a)@]" stmt s
-  | LScase(lbl, s, ls) ->
-      fprintf p "@[<hv 2>(LScase %a@ %a@ %a)@]" coqint lbl stmt s lblstmts ls
+  | LSnil ->
+      ()
+  | LScons(lbl, s, ls) ->
+      fprintf p "@[<hv 2>(LScase %a@ %a@ %a)@]"
+              (print_option coqint) lbl stmt s lblstmts ls
 
 let print_function p (id, f) =
   fprintf p "Definition f_%s := {|@ " (extern_atom id);
   fprintf p "  fn_return := %a;@ " typ f.fn_return;
+  fprintf p "  fn_callconv := %a;@ " callconv f.fn_callconv;
   fprintf p "  fn_params := %a;@ " (print_list (print_pair ident typ)) f.fn_params;
   fprintf p "  fn_vars := %a;@ " (print_list (print_pair ident typ)) f.fn_vars;
   fprintf p "  fn_temps := %a;@ " (print_list (print_pair ident typ)) f.fn_temps;
@@ -396,9 +408,9 @@ let print_globdef p (id, gd) =
 let print_ident_globdef p = function
   | (id, Gfun(Internal f)) -> 
       fprintf p "(%a, Gfun(Internal f_%s))" ident id (extern_atom id)
-  | (id, Gfun(External(ef, targs, tres))) ->
-      fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a))@]@]"
-        ident id external_function ef typlist targs typ tres
+  | (id, Gfun(External(ef, targs, tres, cc))) ->
+      fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"
+        ident id external_function ef typlist targs typ tres callconv cc
   | (id, Gvar v) ->
       fprintf p "(%a, Gvar v_%s)" ident id (extern_atom id)
 
@@ -421,7 +433,7 @@ let rec collect_type = function
   | Tfloat _ -> ()
   | Tpointer(t, _) -> collect_type t
   | Tarray(t, _, _) -> collect_type t
-  | Tfunction(args, res) -> collect_type_list args; collect_type res
+  | Tfunction(args, res, _) -> collect_type_list args; collect_type res
   | Tstruct(id, fld, _) ->
       register_struct_union (Tstruct(id, fld, noattr)) (*; collect_fields fld*)
   | Tunion(id, fld, _) ->
@@ -483,8 +495,8 @@ let rec collect_stmt = function
   | Sgoto lbl -> ()
 
 and collect_cases = function
-  | LSdefault s -> collect_stmt s
-  | LScase(lbl, s, rem) -> collect_stmt s; collect_cases rem
+  | LSnil -> ()
+  | LScons(lbl, s, rem) -> collect_stmt s; collect_cases rem
 
 let collect_function f =
   collect_type f.fn_return;
@@ -495,7 +507,7 @@ let collect_function f =
 
 let collect_globdef (id, gd) =
   match gd with
-  | Gfun(External(_, args, res)) -> collect_type_list args; collect_type res
+  | Gfun(External(_, args, res, _)) -> collect_type_list args; collect_type res
   | Gfun(Internal f) -> collect_function f
   | Gvar v -> collect_type v.gvar_info
 
