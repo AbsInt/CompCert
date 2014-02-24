@@ -136,37 +136,43 @@ and transf_call env ctx opt_lhs fn args ty =
     match opt_lhs with
     | None -> e
     | Some lhs -> eassign (transf_expr env Val lhs) e in
-  match classify_return env ty with
-  | Ret_scalar ->
-      opt_eassign {edesc = ECall(fn', args'); etyp = ty'}
-  | Ret_ref ->
-      begin match ctx, opt_lhs with
-      | Effects, None ->
-          let tmp = new_temp ~name:"_res" ty in
-          {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-      | Effects, Some lhs ->
-          let lhs' = transf_expr env Val lhs in
-          {edesc = ECall(fn', eaddrof lhs' :: args'); etyp = TVoid []}
-      | Val, None ->
-          let tmp = new_temp ~name:"_res" ty in
-          ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []} tmp
-      | Val, Some lhs ->
-          let lhs' = transf_expr env Val lhs in
-          let tmp = new_temp ~name:"_res" ty in
-          ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
-                 (eassign lhs' tmp)
-      end
-  | Ret_value ty_ret ->
-      let ecall = {edesc = ECall(fn', args'); etyp = ty_ret} in
-      begin match ctx, opt_lhs with
-      | Effects, None ->
-          ecall
-      | _, _ ->
-          let tmp = new_temp ~name:"_res" ty_ret in
-          opt_eassign
-            (ecomma (eassign tmp ecall)
-                    (ereinterpret ty' tmp))
-      end
+  match fn with
+  | {edesc = EVar {name = "__builtin_va_arg"}} ->
+      (* Do not transform the call in this case *)
+      opt_eassign {edesc = ECall(fn, args'); etyp = ty}
+  | _ ->
+    match classify_return env ty with
+    | Ret_scalar ->
+        opt_eassign {edesc = ECall(fn', args'); etyp = ty'}
+    | Ret_ref ->
+        begin match ctx, opt_lhs with
+        | Effects, None ->
+            let tmp = new_temp ~name:"_res" ty in
+            {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
+        | Effects, Some lhs ->
+            let lhs' = transf_expr env Val lhs in
+            {edesc = ECall(fn', eaddrof lhs' :: args'); etyp = TVoid []}
+        | Val, None ->
+            let tmp = new_temp ~name:"_res" ty in
+            ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
+                   tmp
+        | Val, Some lhs ->
+            let lhs' = transf_expr env Val lhs in
+            let tmp = new_temp ~name:"_res" ty in
+            ecomma {edesc = ECall(fn', eaddrof tmp :: args'); etyp = TVoid []}
+                   (eassign lhs' tmp)
+        end
+    | Ret_value ty_ret ->
+        let ecall = {edesc = ECall(fn', args'); etyp = ty_ret} in
+        begin match ctx, opt_lhs with
+        | Effects, None ->
+            ecall
+        | _, _ ->
+            let tmp = new_temp ~name:"_res" ty_ret in
+            opt_eassign
+              (ecomma (eassign tmp ecall)
+                      (ereinterpret ty' tmp))
+        end
 
 (* Initializers *)
 
