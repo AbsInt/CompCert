@@ -950,7 +950,7 @@ Qed.
   and returns a sequence of elementary moves [tau] that is semantically
   equivalent.  We start by defining a number of auxiliary functions. *)
 
-Function split_move (m: moves) (r: reg) {struct m} : option (moves * reg * moves) :=
+Fixpoint split_move (m: moves) (r: reg) {struct m} : option (moves * reg * moves) :=
   match m with
   | nil => None
   | (s, d) :: tl =>
@@ -962,7 +962,7 @@ Function split_move (m: moves) (r: reg) {struct m} : option (moves * reg * moves
            end
   end.
 
-Function is_last_source (r: reg) (m: moves) {struct m} : bool :=
+Fixpoint is_last_source (r: reg) (m: moves) {struct m} : bool :=
   match m with
   | nil => false
   | (s, d) :: nil =>
@@ -971,7 +971,7 @@ Function is_last_source (r: reg) (m: moves) {struct m} : bool :=
       is_last_source r tl
   end.
 
-Function replace_last_source (r: reg) (m: moves) {struct m} : moves :=
+Fixpoint replace_last_source (r: reg) (m: moves) {struct m} : moves :=
   match m with
   | nil => nil
   | (s, d) :: nil => (r, d) :: nil
@@ -1015,12 +1015,13 @@ Lemma split_move_charact:
   | None => no_read m r
   end.
 Proof.
-  unfold no_read. intros m r. functional induction (split_move m r).
-  red; simpl. tauto.
-  split. reflexivity. simpl; auto.
-  rewrite e1 in IHo. simpl. intuition.
-  rewrite e1 in IHo. destruct IHo. split. rewrite H. reflexivity.
-  simpl. intuition.
+  unfold no_read. induction m; simpl; intros.
+- tauto.
+- destruct a as [s d]. destruct (reg_eq s r). 
+  + subst s. auto.
+  + specialize (IHm r). destruct (split_move m r) as [[[before d'] after] | ].
+    * destruct IHm. subst m. simpl. intuition. 
+    * simpl; intuition.
 Qed.
 
 Lemma is_last_source_charact:
