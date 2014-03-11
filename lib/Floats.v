@@ -1330,6 +1330,244 @@ Proof with (try discriminate).
   f_equal. apply B754_finite_eq; auto. unfold n; omega.
 Qed.
 
+Theorem floatoflongu_decomp:
+  forall l, floatoflongu l =
+    add (mul (floatofintu (Int64.hiword l)) (pow2_float false 32 (conj eq_refl eq_refl)))
+        (floatofintu (Int64.loword l)).
+Proof.
+  intros.
+  unfold floatofintu.
+  destruct (binary_normalize64_exact (Int.unsigned (Int64.hiword l))).
+  { pose proof (Int.unsigned_range (Int64.hiword l)).
+    revert H. generalize (Int.unsigned (Int64.hiword l)).
+    change (forall z : Z, 0 <= z < 4294967296 -> - 9007199254740992 < z < 9007199254740992).
+    intros. omega. }
+  destruct (binary_normalize64_exact (Int.unsigned (Int64.loword l))).
+  { pose proof (Int.unsigned_range (Int64.loword l)).
+    revert H1. generalize (Int.unsigned (Int64.loword l)).
+    change (forall z : Z, 0 <= z < 4294967296 -> - 9007199254740992 < z < 9007199254740992).
+    intros. omega. }
+  unfold mul, b64_mult.
+  pose proof (Bmult_correct 53 1024 eq_refl eq_refl binop_pl mode_NE
+                            (binary_normalize64 (Int.unsigned (Int64.hiword l)) 0 false)
+                            (pow2_float false 32 (conj eq_refl eq_refl))).
+  rewrite H in H3.
+  remember (B2R 53 1024 (pow2_float false 32 (conj eq_refl eq_refl))).
+  compute in Heqr.
+  change 4503599627370496%R with (Z2R (1048576*4294967296)) in Heqr.
+  change 1048576%R with (Z2R 1048576) in Heqr.
+  rewrite Z2R_mult in Heqr.
+  assert (r = Z2R 4294967296).
+  { rewrite Heqr. field. change 0%R with (Z2R 0). intro. apply eq_Z2R in H4. discriminate. }
+  clear Heqr. subst.
+  pose proof (Int.unsigned_range (Int64.hiword l)).
+  change Int.modulus with 4294967296 in H4.
+  rewrite <- Z2R_mult in H3.
+  rewrite round_generic in H3.
+  - destruct (Rlt_bool_spec (Rabs (Z2R (Int.unsigned (Int64.hiword l) * 4294967296)))
+                            (bpow radix2 1024)).
+    + rewrite H0 in H3.
+      destruct H3 as [? [? ?]].
+      { unfold add, b64_plus.
+        pose proof (Bplus_correct 53 1024 eq_refl eq_refl binop_pl mode_NE
+                      (Bmult 53 1024 eq_refl eq_refl binop_pl mode_NE
+                         (binary_normalize64 (Int.unsigned (Int64.hiword l)) 0 false)
+                            (pow2_float false 32 (conj eq_refl eq_refl)))
+                            (binary_normalize64 (Int.unsigned (Int64.loword l)) 0 false) H6 H2).
+        rewrite H3, H1, <- Z2R_plus in H8.
+        change 4294967296 with (two_p 32) in H8.
+        rewrite <- Int64.ofwords_add', Int64.ofwords_recompose in H8.
+        destruct (Rlt_bool_spec
+                    (Rabs
+                       (round radix2 (FLT_exp (3 - 1024 - 53) 53)
+                              (round_mode mode_NE) (Z2R (Int64.unsigned l))))
+                    (bpow radix2 1024)).
+        - unfold floatoflongu. unfold binary_normalize64.
+          pose proof (binary_normalize64_correct (Int64.unsigned l) 0 false).
+          replace (F2R (beta:=radix2) {| Fnum := Int64.unsigned l; Fexp := 0 |})
+          with (Z2R (Int64.unsigned l)) in H10
+          by (unfold F2R, Fexp, Fnum, bpow; field).
+          rewrite Rlt_bool_true in H10 by auto.
+          destruct (Int64.eq_dec l Int64.zero). subst. reflexivity.
+          destruct H10, H8.
+          assert (1 <= round radix2 (FLT_exp (3 - 1024 - 53) 53) (round_mode mode_NE)
+                             (Z2R (Int64.unsigned l)))%R.
+          { erewrite <- round_generic with (x:=1%R).
+            apply round_le. apply fexp_correct. reflexivity. apply valid_rnd_round_mode.
+            assert (Int64.unsigned l <> 0).
+            { contradict n. rewrite <- (Int64.repr_unsigned l), n. auto. }
+            change 1%R with (Z2R 1). apply Z2R_le.
+            destruct (Int64.unsigned_range l). omega.
+            apply valid_rnd_round_mode.
+            apply (generic_format_bpow _ _ 0). compute. discriminate. }
+          unfold binary_normalize64 in *.
+          apply B2R_inj.
+          + destruct H11, (binary_normalize 53 1024 eq_refl eq_refl mode_NE (Int64.unsigned l) 0 false); try discriminate.
+            unfold B2R in H10. rewrite <- H10 in H13. apply (le_Z2R 1 0) in H13. omega.
+            auto.
+          + destruct H12; match goal with Hf0:is_finite _ _ ?f0 = true,
+                            Hf1:B2R _ _ ?f1 = _ |-
+                            is_finite_strict _ _ ?f = true =>
+                            change f0 with f in Hf0; change f1 with f in Hf1;
+                            destruct f
+            end; try discriminate.
+            unfold B2R in H8. rewrite <- H8 in H13. apply (le_Z2R 1 0) in H13. omega.
+            auto.
+          + rewrite H10. symmetry. apply H8.
+        - exfalso.
+          eapply Rle_trans with (r3:=round radix2 (FLT_exp (3 - 1024 - 53) 53)
+                                           (round_mode mode_NE) (bpow radix2 64)) in H9.
+          rewrite round_generic in H9.
+          + eapply le_bpow in H9. omega.
+          + apply valid_rnd_round_mode.
+          + apply generic_format_bpow. compute. discriminate.
+          + rewrite <- round_NE_abs. 2:apply fexp_correct; reflexivity.
+            apply round_le. apply fexp_correct; reflexivity. apply valid_rnd_round_mode.
+            rewrite <- Z2R_abs. change (bpow radix2 64)%R with (Z2R Int64.modulus).
+            apply Z2R_le.
+            destruct (Int64.unsigned_range l). zify; omega. }
+    + exfalso.
+      rewrite <- Z2R_abs in H5.
+      change (bpow radix2 1024) with (Z2R (radix2 ^ 1024)) in H5.
+      apply le_Z2R in H5. assert (radix2 ^ 1024 < 18446744073709551616) by (zify; omega).
+      discriminate.
+  - apply valid_rnd_round_mode.
+  - destruct (Z.eq_dec (Int.unsigned (Int64.hiword l)) 0).
+    rewrite e. apply generic_format_0.
+    apply generic_format_FLT_FLX.
+    + apply Rle_trans with (bpow radix2 0). apply bpow_le. omega.
+      change (bpow radix2 0) with (Z2R 1). rewrite <- Z2R_abs. apply Z2R_le.
+      clear - n H4. zify; omega.
+    + apply generic_format_FLX.
+      eexists {| Fnum := Int.unsigned (Int64.hiword l); Fexp := 32 |}.
+      unfold F2R, Fnum, Fexp. split.
+      rewrite Z2R_mult. auto.
+      change (radix2 ^ 53) with 9007199254740992.
+      clear -n H4. zify; omega.
+Qed.
+
+Theorem floatoflong_decomp:
+  forall l, floatoflong l =
+    add (mul (floatofint (Int64.hiword l)) (pow2_float false 32 (conj eq_refl eq_refl)))
+        (floatofintu (Int64.loword l)).
+Proof.
+  intros.
+  unfold floatofintu, floatofint.
+  destruct (binary_normalize64_exact (Int.signed (Int64.hiword l))).
+  { pose proof (Int.signed_range (Int64.hiword l)).
+    revert H. generalize (Int.signed (Int64.hiword l)).
+    change (forall z : Z, -2147483648 <= z <= 2147483647 -> - 9007199254740992 < z < 9007199254740992).
+    intros. omega. }
+  destruct (binary_normalize64_exact (Int.unsigned (Int64.loword l))).
+  { pose proof (Int.unsigned_range (Int64.loword l)).
+    revert H1. generalize (Int.unsigned (Int64.loword l)).
+    change (forall z : Z, 0 <= z < 4294967296 -> - 9007199254740992 < z < 9007199254740992).
+    intros. omega. }
+  unfold mul, b64_mult.
+  pose proof (Bmult_correct 53 1024 eq_refl eq_refl binop_pl mode_NE
+                            (binary_normalize64 (Int.signed (Int64.hiword l)) 0 false)
+                            (pow2_float false 32 (conj eq_refl eq_refl))).
+  rewrite H in H3.
+  remember (B2R 53 1024 (pow2_float false 32 (conj eq_refl eq_refl))).
+  compute in Heqr.
+  change 4503599627370496%R with (Z2R (1048576*4294967296)) in Heqr.
+  change 1048576%R with (Z2R 1048576) in Heqr.
+  rewrite Z2R_mult in Heqr.
+  assert (r = Z2R 4294967296).
+  { rewrite Heqr. field. change 0%R with (Z2R 0). intro. apply eq_Z2R in H4. discriminate. }
+  clear Heqr. subst.
+  pose proof (Int.signed_range (Int64.hiword l)).
+  change Int.min_signed with (-2147483648) in H4.
+  change Int.max_signed with 2147483647 in H4.
+  rewrite <- Z2R_mult in H3.
+  rewrite round_generic in H3.
+  - destruct (Rlt_bool_spec (Rabs (Z2R (Int.signed (Int64.hiword l) * 4294967296)))
+                            (bpow radix2 1024)).
+    + rewrite H0 in H3.
+      destruct H3 as [? [? ?]].
+      { unfold add, b64_plus.
+        pose proof (Bplus_correct 53 1024 eq_refl eq_refl binop_pl mode_NE
+                      (Bmult 53 1024 eq_refl eq_refl binop_pl mode_NE
+                         (binary_normalize64 (Int.signed (Int64.hiword l)) 0 false)
+                            (pow2_float false 32 (conj eq_refl eq_refl)))
+                            (binary_normalize64 (Int.unsigned (Int64.loword l)) 0 false) H6 H2).
+        rewrite H3, H1, <- Z2R_plus in H8.
+        change 4294967296 with (two_p 32) in H8.
+        rewrite <- Int64.ofwords_add'', Int64.ofwords_recompose in H8.
+        destruct (Rlt_bool_spec
+                    (Rabs
+                       (round radix2 (FLT_exp (3 - 1024 - 53) 53)
+                              (round_mode mode_NE) (Z2R (Int64.signed l))))
+                    (bpow radix2 1024)).
+        - unfold floatoflong. unfold binary_normalize64.
+          pose proof (binary_normalize64_correct (Int64.signed l) 0 false).
+          replace (F2R (beta:=radix2) {| Fnum := Int64.signed l; Fexp := 0 |})
+          with (Z2R (Int64.signed l)) in H10
+          by (unfold F2R, Fexp, Fnum, bpow; field).
+          rewrite Rlt_bool_true in H10 by auto.
+          destruct (Int64.eq_dec l Int64.zero). subst. reflexivity.
+          destruct H10, H8.
+          assert (1 <= round radix2 (FLT_exp (3 - 1024 - 53) 53) (round_mode mode_NE)
+                             (Z2R (Zabs (Int64.signed l))))%R.
+          { erewrite <- round_generic with (x:=1%R).
+            apply round_le. apply fexp_correct. reflexivity. apply valid_rnd_round_mode.
+            assert (Int64.signed l <> 0).
+            { contradict n. rewrite <- (Int64.repr_signed l), n. auto. }
+            change 1%R with (Z2R 1). apply Z2R_le.
+            zify. omega. apply valid_rnd_round_mode.
+            apply (generic_format_bpow _ _ 0). compute. discriminate. }
+          rewrite Z2R_abs in H13.
+          rewrite round_NE_abs in H13 by (apply fexp_correct; reflexivity).
+          change ZnearestE with (round_mode mode_NE) in H13.
+          unfold binary_normalize64 in *.
+          apply B2R_inj.
+          + destruct H11, (binary_normalize 53 1024 eq_refl eq_refl mode_NE (Int64.signed l) 0 false); try discriminate.
+            unfold B2R in H10. rewrite <- H10, Rabs_R0 in H13. apply (le_Z2R 1 0) in H13. omega.
+            auto.
+          + destruct H12; match goal with Hf0:is_finite _ _ ?f0 = true,
+                            Hf1:B2R _ _ ?f1 = _ |-
+                            is_finite_strict _ _ ?f = true =>
+                            change f0 with f in Hf0; change f1 with f in Hf1;
+                            destruct f
+            end; try discriminate.
+            unfold B2R in H8. rewrite <- H8, Rabs_R0 in H13. apply (le_Z2R 1 0) in H13. omega.
+            auto.
+          + rewrite H10. symmetry. apply H8.
+        - exfalso.
+          eapply Rle_trans with (r3:=round radix2 (FLT_exp (3 - 1024 - 53) 53)
+                                           (round_mode mode_NE) (bpow radix2 64)) in H9.
+          rewrite round_generic in H9.
+          + eapply le_bpow in H9. omega.
+          + apply valid_rnd_round_mode.
+          + apply generic_format_bpow. compute. discriminate.
+          + rewrite <- round_NE_abs. 2:apply fexp_correct; reflexivity.
+            apply round_le. apply fexp_correct; reflexivity. apply valid_rnd_round_mode.
+            rewrite <- Z2R_abs. change (bpow radix2 64)%R with (Z2R Int64.modulus).
+            apply Z2R_le.
+            destruct (Int64.signed_range l).
+            assert (-Int64.modulus < Int64.min_signed) by reflexivity.
+            assert (Int64.max_signed < Int64.modulus) by reflexivity.
+            zify. omega. }
+    + exfalso.
+      rewrite <- Z2R_abs in H5.
+      change (bpow radix2 1024) with (Z2R (radix2 ^ 1024)) in H5.
+      apply le_Z2R in H5. assert (radix2 ^ 1024 < 18446744073709551616) by (zify; omega).
+      discriminate.
+  - apply valid_rnd_round_mode.
+  - destruct (Z.eq_dec (Int.signed (Int64.hiword l)) 0).
+    rewrite e. apply generic_format_0.
+    apply generic_format_FLT_FLX.
+    + apply Rle_trans with (bpow radix2 0). apply bpow_le. omega.
+      change (bpow radix2 0) with (Z2R 1). rewrite <- Z2R_abs. apply Z2R_le.
+      clear - n H4. zify; omega.
+    + apply generic_format_FLX.
+      eexists {| Fnum := Int.signed (Int64.hiword l); Fexp := 32 |}.
+      unfold F2R, Fnum, Fexp. split.
+      rewrite Z2R_mult. auto.
+      change (radix2 ^ 53) with 9007199254740992.
+      clear -n H4. zify; omega.
+Qed.
+
 Global Opaque
   zero eq_dec neg abs singleoffloat intoffloat intuoffloat floatofint floatofintu
   add sub mul div cmp bits_of_double double_of_bits bits_of_single single_of_bits from_words.
