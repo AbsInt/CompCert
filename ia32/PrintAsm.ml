@@ -140,7 +140,7 @@ let name_of_neg_condition = function
 
 let name_of_section_ELF = function
   | Section_text -> ".text"
-  | Section_data i | Section_small_data i -> if i then ".data" else ".bss"
+  | Section_data i | Section_small_data i -> if i then ".data" else "COMM"
   | Section_const | Section_small_const -> ".section	.rodata"
   | Section_string -> ".section	.rodata"
   | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
@@ -853,17 +853,29 @@ let print_var oc name v =
       and align =
         match C2C.atom_alignof name with
         | Some a -> a
-        | None -> 8 (* 8-alignment is a safe default *)
-      in
-      section oc sec;
-      print_align oc align;
-      if not (C2C.atom_is_static name) then
-        fprintf oc "	.globl	%a\n" symbol name;
-      fprintf oc "%a:\n" symbol name;
-      print_init_data oc name v.gvar_init;
-      if target = ELF then begin
-        fprintf oc "	.type	%a, @object\n" symbol name;
-        fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+        | None -> 8 in (* 8-alignment is a safe default *)
+      let name_sec =
+        name_of_section sec in
+      if name_sec <> "COMM" then begin
+        fprintf oc "	%s\n" name_sec;
+        print_align oc align;
+        if not (C2C.atom_is_static name) then
+          fprintf oc "	.globl	%a\n" symbol name;
+        fprintf oc "%a:\n" symbol name;
+        print_init_data oc name v.gvar_init;
+        if target = ELF then begin
+          fprintf oc "	.type	%a, @object\n" symbol name;
+          fprintf oc "	.size	%a, . - %a\n" symbol name symbol name
+        end
+      end else begin
+        let sz =
+          match v.gvar_init with [Init_space sz] -> sz | _ -> assert false in
+        if C2C.atom_is_static name then
+          fprintf oc "	.local	%a\n" symbol name;
+        fprintf oc "	.comm	%a, %s, %d\n"
+          symbol name
+          (Z.to_string sz)
+          align
       end
 
 let print_globdef oc (name, gdef) =
