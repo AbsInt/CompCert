@@ -606,7 +606,12 @@ Local Opaque alignof.
 + (* base cases *)
   simpl. intuition. 
 * (* arrays *)
-  destruct (zeq sz 0); inv H. simpl. ring. 
+  destruct (zeq sz 0).  inv H.  simpl; ring. 
+  destruct (zle 0 sz);  inv H.  simpl. 
+  rewrite Z.mul_comm. 
+  assert (0 <= sizeof ty * sz).
+  { apply Zmult_gt_0_le_0_compat. omega. generalize (sizeof_pos ty); omega. }
+  zify; omega.
 * (* structs *)
   destruct fl; inv H.
   simpl in H0. rewrite padding_size by omega. omega. 
@@ -665,8 +670,9 @@ Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
       exec_init m b ofs (Tunion id (Fcons id1 ty1 fl) a) (Init_compound (Init_cons i Init_nil)) m'
 
 with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem -> Prop :=
-  | exec_init_array_nil: forall m b ofs ty,
-      exec_init_array m b ofs ty 0 Init_nil m
+  | exec_init_array_nil: forall m b ofs ty sz,
+      sz >= 0 ->
+      exec_init_array m b ofs ty sz Init_nil m
   | exec_init_array_cons: forall m b ofs ty sz i1 il m' m'',
       exec_init m b ofs ty i1 m' ->
       exec_init_array m' b (ofs + sizeof ty) ty (sz - 1) il m'' ->
@@ -738,7 +744,9 @@ Local Opaque sizeof.
   apply store_init_data_list_padding. 
 
 - (* array, empty *)
-  inv H. auto.
+  destruct (zeq sz 0).
+  inv H0. auto.
+  rewrite zle_true in H0 by omega. inv H0. auto.
 - (* array, nonempty *)
   monadInv H3. 
   eapply store_init_data_list_app.

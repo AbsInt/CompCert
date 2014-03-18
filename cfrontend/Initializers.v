@@ -190,8 +190,8 @@ with transl_init_array (ty: type) (il: initializer_list) (sz: Z)
                        {struct il} : res (list init_data) :=
   match il with
   | Init_nil =>
-      if zeq sz 0
-      then OK nil
+      if zeq sz 0 then OK nil
+      else if zle 0 sz then OK (Init_space (sz * sizeof ty) :: nil)
       else Error (msg "wrong number of elements in array initializer")
   | Init_cons i1 il' =>
       do d1 <- transl_init ty i1;
