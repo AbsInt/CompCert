@@ -622,7 +622,7 @@ let rec find_main_function name = function
 let fixup_main p =
   match find_main_function p.prog_main p.prog_defs with
   | None ->
-      fprintf err_formatter "ERROR: no main() function";
+      fprintf err_formatter "ERROR: no main() function@.";
       None
   | Some main_fd ->
       match type_of_fundef main_fd with
@@ -632,7 +632,7 @@ let fixup_main p =
                   Tint _, _) as ty ->
           Some (change_main_function p p.prog_main ty)
       | _ ->
-          fprintf err_formatter "ERROR: wrong type for main() function";
+          fprintf err_formatter "ERROR: wrong type for main() function@.";
           None
 
 (* Execution of a whole program *)
@@ -643,17 +643,17 @@ let execute prog =
   pp_set_max_indent p 30;
   pp_set_max_boxes p 10;
   match fixup_main prog with
-  | None -> ()
+  | None -> exit 126
   | Some prog1 ->
       let wprog = world_program prog1 in
       let wge = Genv.globalenv wprog in
       match Genv.init_mem wprog with
       | None ->
-          fprintf p "ERROR: World memory state undefined@."
+          fprintf p "ERROR: World memory state undefined@."; exit 126
       | Some wm ->
       match Cexec.do_initial_state prog1 with
       | None ->
-          fprintf p "ERROR: Initial state undefined@."
+          fprintf p "ERROR: Initial state undefined@."; exit 126
       | Some(ge, s) ->
           match !mode with
           | First | Random ->
