@@ -967,7 +967,7 @@ Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk) 
-                     (mksignature (Tint :: type_of_chunk chunk :: nil) None cc_default).
+                     (mksignature (Tint :: type_of_chunk_use chunk :: nil) None cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -1022,7 +1022,7 @@ Qed.
 Lemma volatile_store_global_ok:
   forall chunk id ofs,
   extcall_properties (volatile_store_global_sem chunk id ofs) 
-                     (mksignature (type_of_chunk chunk :: nil) None cc_default).
+                     (mksignature (type_of_chunk_use chunk :: nil) None cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
