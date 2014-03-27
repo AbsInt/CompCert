@@ -838,6 +838,16 @@ Proof.
   rewrite H3. constructor.
 Qed.
 
+Lemma wt_instr_inv:
+  forall s f sp pc rs m i,
+  wt_state (State s f sp pc rs m) ->
+  f.(fn_code)!pc = Some i ->
+  exists env, wt_instr f env i /\ wt_regset env rs.
+Proof.
+  intros. inv H. exists env; split; auto. 
+  inv WT_FN. eauto. 
+Qed.
+
 End SUBJECT_REDUCTION.
 
   

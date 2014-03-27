@@ -1606,16 +1606,6 @@ Proof.
   red; intros; subst r. rewrite H in H8; discriminate.
 Qed.
 
-Lemma wt_instr_inv:
-  forall s f sp pc rs m i,
-  wt_state (RTL.State s f sp pc rs m) ->
-  f.(RTL.fn_code)!pc = Some i ->
-  exists env, wt_instr f env i /\ wt_regset env rs.
-Proof.
-  intros. inv H. exists env; split; auto. 
-  inv WT_FN. eauto. 
-Qed.
-
 (** The proof of semantic preservation is a simulation argument of the
     "plus" kind. *)
 
