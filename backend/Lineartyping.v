@@ -39,6 +39,13 @@ Require Import Linear.
 
 (** * Tracking the flow of single-precision floats *)
 
+(** At each program point, we infer a set of machine registers
+  that are guaranteed to contain single-precision floats.
+  The inference is a simple forward dataflow analysis, iterating on the 
+  list of instructions until a fixpoint is reached.  The result of
+  the analysis is a map from labels to sets of machine registers
+  containing single-precision floats.  *)
+
 Module OrderedMreg := OrderedIndexed(IndexedMreg).
 Module Regset := FSetAVL.Make(OrderedMreg).
 
