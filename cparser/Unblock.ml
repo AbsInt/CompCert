@@ -35,19 +35,23 @@ let rec local_initializer loc env path init k =
         { edesc = EBinop(Oassign, path, e, path.etyp); etyp = path.etyp }
         k
   | Init_array il ->
-      let ty_elt =
+      let (ty_elt, sz) =
         match unroll env path.etyp with
-        | TArray(ty_elt, _, _) -> ty_elt
+        | TArray(ty_elt, Some sz, _) -> (ty_elt, sz)
         | _ -> fatal_error "%aWrong type for array initializer" 
                            formatloc loc in
-      let rec array_init pos = function
-        | [] -> k
-        | i :: il ->
-            local_initializer loc env
-              { edesc = EBinop(Oindex, path, intconst pos IInt, TPtr(ty_elt, []));
-                etyp = ty_elt }
-              i
-              (array_init (Int64.succ pos) il) in
+      let rec array_init pos il =
+        if pos >= sz then k else begin
+          let (i1, il') =
+            match il with
+            | [] -> (default_init env ty_elt, [])
+            | i1 :: il' -> (i1, il') in
+          local_initializer loc env
+            { edesc = EBinop(Oindex, path, intconst pos IInt, TPtr(ty_elt, []));
+              etyp = ty_elt }
+            i1
+            (array_init (Int64.succ pos) il')
+        end in
       array_init 0L il
   | Init_struct(id, fil) ->
       let field_init (fld, i) k =

@@ -342,7 +342,7 @@ let rec init pp = function
       List.iter (fun (fld, i) -> fprintf pp "%a,@ " init i) il;
       fprintf pp "}@]"
   | Init_union(id, fld, i) ->
-      fprintf pp "@[<hov 1>{%a}@]" init i
+      fprintf pp "@[<hov 2>{.%s =@ %a}@]" fld.fld_name init i
 
 let simple_decl pp (id, ty) =
   dcl pp ty (fun pp -> fprintf pp " %a" ident id)

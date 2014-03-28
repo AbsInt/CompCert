@@ -840,4 +840,32 @@ let printloc oc (filename, lineno) =
 let formatloc pp (filename, lineno) =
   if filename <> "" then Format.fprintf pp "%s:%d: " filename lineno
 
+(* Generate the default initializer for the given type *)
 
+let rec default_init env ty =
+  match unroll env ty with
+  | TInt _ | TEnum _ ->
+      Init_single (intconst 0L IInt)
+  | TFloat(fk, _) ->
+      Init_single floatconst0
+  | TPtr(ty, _) ->
+      Init_single nullconst
+  | TArray(ty, sz, _) ->
+      Init_array []
+  | TStruct(id, _) ->
+      let rec default_init_fields = function
+      | [] -> []
+      | f1 :: fl ->
+          if f1.fld_name = ""
+          then default_init_fields fl
+          else (f1, default_init env f1.fld_typ) :: default_init_fields fl in
+      let ci = Env.find_struct env id in
+      Init_struct(id, default_init_fields ci.ci_members)
+  | TUnion(id, _) ->
+      let ci = Env.find_union env id in
+      begin match ci.ci_members with
+      | [] -> assert false
+      | fld :: _ -> Init_union(id, fld, default_init env fld.fld_typ)
+      end
+  | _ ->
+      assert false

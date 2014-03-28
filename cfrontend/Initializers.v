@@ -136,7 +136,9 @@ Fixpoint constval (a: expr) : res val :=
 
 Inductive initializer :=
   | Init_single (a: expr)
-  | Init_compound (il: initializer_list)
+  | Init_array (il: initializer_list)
+  | Init_struct (il: initializer_list)
+  | Init_union (f: ident) (i: initializer)
 with initializer_list :=
   | Init_nil
   | Init_cons (i: initializer) (il: initializer_list).
@@ -174,14 +176,14 @@ Fixpoint transl_init (ty: type) (i: initializer)
   match i, ty with
   | Init_single a, _ =>
       do d <- transl_init_single ty a; OK (d :: nil)
-  | Init_compound il, Tarray tyelt nelt _ =>
+  | Init_array il, Tarray tyelt nelt _ =>
       transl_init_array tyelt il (Zmax 0 nelt)
-  | Init_compound il, Tstruct id fl _ =>
+  | Init_struct il, Tstruct id fl _ =>
       transl_init_struct id ty fl il 0
-  | Init_compound il, Tunion _ Fnil _ =>
-      OK (Init_space (sizeof ty) :: nil)
-  | Init_compound il, Tunion id (Fcons _ ty1 _) _ =>
-      transl_init_union id ty ty1 il
+  | Init_union f i1, Tunion id fl _ =>
+      do ty1 <- field_type f fl;
+      do d <- transl_init ty1 i1;
+      OK (d ++ padding (sizeof ty1) (sizeof ty))
   | _, _ =>
       Error (msg "wrong type for compound initializer")
   end
@@ -212,16 +214,6 @@ with transl_init_struct (id: ident) (ty: type)
       OK (padding pos pos1 ++ d1 ++ d2)
   | _, _ =>
       Error (msg "wrong number of elements in struct initializer")
-  end
-
-with transl_init_union (id: ident) (ty ty1: type) (il: initializer_list)
-                       {struct il} : res (list init_data) :=
-  match il with
-  | Init_nil =>
-      Error (msg "empty union initializer")
-  | Init_cons i1 _ =>
-      do d <- transl_init ty1 i1;
-      OK (d ++ padding (sizeof ty1) (sizeof ty))
   end.
 
 

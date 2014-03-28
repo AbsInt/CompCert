@@ -123,7 +123,7 @@ let builtins_generic = {
         (TInt(IULongLong, []),
           [TPtr(TVoid [], [])],
           false);
-    "__compcert_va_int64",
+    "__compcert_va_float64",
         (TFloat(FDouble, []),
           [TPtr(TVoid [], [])],
           false)
@@ -880,11 +880,11 @@ let rec convertInit env init =
   | C.Init_single e ->
       Init_single (convertExpr env e)
   | C.Init_array il ->
-      Init_compound (convertInitList env il)
+      Init_array (convertInitList env il)
   | C.Init_struct(_, flds) ->
-      Init_compound (convertInitList env (List.map snd flds))
+      Init_struct (convertInitList env (List.map snd flds))
   | C.Init_union(_, fld, i) ->
-      Init_compound (Init_cons(convertInit env i, Init_nil))
+      Init_union (intern_string fld.fld_name, convertInit env i)
 
 and convertInitList env il =
   match il with

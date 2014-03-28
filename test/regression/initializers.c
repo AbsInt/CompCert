@@ -54,6 +54,9 @@ char x21[10] = "Hello!";
 
 char * x22 = &(x10.u.y);
 
+/* Initializer can refer to ident just declared */
+struct list { int hd; struct list * tl; } x23 = { sizeof(x23), &x23 };
+
 static void print_chars(char * s, int sz)
 {
   int i;
@@ -115,6 +118,8 @@ int main()
     printf("x22 ok\n");
   else
     printf("x22 error\n");
+  printf("x23 = { hd = %d, tl = %s }\n",
+         x23.hd, x23.tl == &x23 ? "ok" : "ERROR");
   return 0;
 }
 

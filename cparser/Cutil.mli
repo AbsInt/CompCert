@@ -207,3 +207,8 @@ val printloc: out_channel -> location -> unit
 val formatloc: Format.formatter -> location -> unit
   (* Printer for locations (for Format) *)
 
+(* Initializers *)
+
+val default_init: Env.t -> typ -> init
+  (* Return a default initializer for the given type
+     (with zero numbers, null pointers, etc). *)
