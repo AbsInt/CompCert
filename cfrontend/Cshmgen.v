@@ -164,9 +164,17 @@ Definition make_notbool (e: expr) (ty: type) :=
 Definition make_neg (e: expr) (ty: type) :=
   match classify_neg ty with
   | neg_case_i _ => OK (Eunop Onegint e)
-  | neg_case_f => OK (Eunop Onegf e)
+  | neg_case_f _ => OK (Eunop Onegf e)
   | neg_case_l _ => OK (Eunop Onegl e)
   | _ => Error (msg "Cshmgen.make_neg")
+  end.
+
+Definition make_absfloat (e: expr) (ty: type) :=
+  match classify_neg ty with
+  | neg_case_i sg => OK (Eunop Oabsf (make_floatofint e sg F64))
+  | neg_case_f _ => OK (Eunop Oabsf e)
+  | neg_case_l sg => OK (Eunop Oabsf (make_floatoflong e sg F64))
+  | _ => Error (msg "Cshmgen.make_absfloat")
   end.
 
 Definition make_notint (e: expr) (ty: type) :=
@@ -187,7 +195,7 @@ Definition make_binarith (iop iopu fop lop lopu: binary_operation)
   match c with
   | bin_case_i Signed => OK (Ebinop iop e1' e2')
   | bin_case_i Unsigned => OK (Ebinop iopu e1' e2')
-  | bin_case_f => OK (Ebinop fop e1' e2')
+  | bin_case_f _ => OK (Ebinop fop e1' e2')
   | bin_case_l Signed => OK (Ebinop lop e1' e2')
   | bin_case_l Unsigned => OK (Ebinop lopu e1' e2')
   | bin_default => Error (msg "Cshmgen.make_binarith")
@@ -243,7 +251,7 @@ Definition make_binarith_int (iop iopu lop lopu: binary_operation)
   | bin_case_i Unsigned => OK (Ebinop iopu e1' e2')
   | bin_case_l Signed => OK (Ebinop lop e1' e2')
   | bin_case_l Unsigned => OK (Ebinop lopu e1' e2')
-  | bin_case_f | bin_default => Error (msg "Cshmgen.make_binarith_int")
+  | bin_case_f _ | bin_default => Error (msg "Cshmgen.make_binarith_int")
   end.
 
 Definition make_mod (e1: expr) (ty1: type) (e2: expr) (ty2: type) :=
@@ -329,7 +337,7 @@ Definition transl_unop (op: Cop.unary_operation) (a: expr) (ta: type) : res expr
   | Cop.Onotbool => make_notbool a ta
   | Cop.Onotint => make_notint a ta
   | Cop.Oneg => make_neg a ta
-  | Cop.Oabsfloat => OK (Eunop Oabsf a)
+  | Cop.Oabsfloat => make_absfloat a ta
   end.
 
 Definition transl_binop (op: Cop.binary_operation)

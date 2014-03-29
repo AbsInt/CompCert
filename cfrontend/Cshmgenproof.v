@@ -348,6 +348,17 @@ Proof.
   destruct (classify_neg tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
 Qed.
 
+Lemma make_absfloat_correct:
+  forall a tya c va v e le m,
+  sem_absfloat va tya = Some v ->
+  make_absfloat a tya = OK c ->  
+  eval_expr ge e le m a va ->
+  eval_expr ge e le m c v.
+Proof.
+  unfold sem_absfloat, make_absfloat; intros until m; intros SEM MAKE EV1;
+  destruct (classify_neg tya); inv MAKE; destruct va; inv SEM; eauto with cshm.
+Qed.
+
 Lemma make_notbool_correct:
   forall a tya c va v e le m,
   sem_notbool va tya = Some v ->
@@ -621,7 +632,7 @@ Proof.
   eapply make_notbool_correct; eauto. 
   eapply make_notint_correct; eauto. 
   eapply make_neg_correct; eauto.
-  inv H. unfold sem_absfloat in H0. destruct va; inv H0. eauto with cshm.
+  eapply make_absfloat_correct; eauto.
 Qed.
 
 Lemma transl_binop_correct:

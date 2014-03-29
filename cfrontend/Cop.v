@@ -385,11 +385,11 @@ Proof.
   destruct (classify_bool t); auto; destruct v; auto; rewrite negb_involutive; auto.
 Qed.
 
-(** *** Opposite *)
+(** *** Opposite and absolute value *)
 
 Inductive classify_neg_cases : Type :=
   | neg_case_i(s: signedness)              (**r int *)
-  | neg_case_f                             (**r float *)
+  | neg_case_f(sz: floatsize)              (**r float *)
   | neg_case_l(s: signedness)              (**r long *)
   | neg_default.
 
@@ -397,7 +397,7 @@ Definition classify_neg (ty: type) : classify_neg_cases :=
   match ty with
   | Tint I32 Unsigned _ => neg_case_i Unsigned
   | Tint _ _ _ => neg_case_i Signed
-  | Tfloat _ _ => neg_case_f
+  | Tfloat sz _ => neg_case_f sz
   | Tlong si _ => neg_case_l si
   | _ => neg_default
   end.
@@ -409,7 +409,7 @@ Definition sem_neg (v: val) (ty: type) : option val :=
       | Vint n => Some (Vint (Int.neg n))
       | _ => None
       end
-  | neg_case_f =>
+  | neg_case_f sz =>
       match v with
       | Vfloat f => Some (Vfloat (Float.neg f))
       | _ => None
@@ -417,6 +417,26 @@ Definition sem_neg (v: val) (ty: type) : option val :=
   | neg_case_l sg =>
       match v with
       | Vlong n => Some (Vlong (Int64.neg n))
+      | _ => None
+      end
+  | neg_default => None
+  end.
+
+Definition sem_absfloat (v: val) (ty: type) : option val :=
+  match classify_neg ty with
+  | neg_case_i sg =>
+      match v with
+      | Vint n => Some (Vfloat (Float.abs (cast_int_float sg F64 n)))
+      | _ => None
+      end
+  | neg_case_f sz =>
+      match v with
+      | Vfloat f => Some (Vfloat (Float.abs f))
+      | _ => None
+      end
+  | neg_case_l sg =>
+      match v with
+      | Vlong n => Some (Vfloat (Float.abs (cast_long_float sg F64 n)))
       | _ => None
       end
   | neg_default => None
@@ -452,12 +472,6 @@ Definition sem_notint (v: val) (ty: type): option val :=
   | notint_default => None
   end.
 
-Definition sem_absfloat (v: val) (ty: type): option val :=
-  match v with
-  | Vfloat f => Some (Vfloat (Float.abs f))
-  | _ => None
-  end.
-
 (** ** Binary operators *)
 
 (** For binary operations, the "usual binary conversions" consist in
@@ -470,7 +484,7 @@ Definition sem_absfloat (v: val) (ty: type): option val :=
 Inductive binarith_cases: Type :=
   | bin_case_i (s: signedness)         (**r at int type *)
   | bin_case_l (s: signedness)         (**r at long int type *)
-  | bin_case_f                         (**r at float type *)
+  | bin_case_f (sz: floatsize)         (**r at float type *)
   | bin_default.                       (**r error *)
 
 Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
@@ -482,16 +496,21 @@ Definition classify_binarith (ty1: type) (ty2: type) : binarith_cases :=
   | Tlong _ _, Tlong _ _ => bin_case_l Unsigned
   | Tlong sg _, Tint _ _ _ => bin_case_l sg
   | Tint _ _ _, Tlong sg _ => bin_case_l sg
-  | Tfloat _ _, (Tint _ _ _ | Tlong _ _ | Tfloat _ _) => bin_case_f
-  | (Tint _ _ _ | Tlong _ _), Tfloat _ _ => bin_case_f
+  | Tfloat F32 _, Tfloat F32 _ => bin_case_f F32
+  | Tfloat _ _, Tfloat _ _ => bin_case_f F64
+  | Tfloat sz _, (Tint _ _ _ | Tlong _ _) => bin_case_f sz
+  | (Tint _ _ _ | Tlong _ _), Tfloat sz _ => bin_case_f sz
   | _, _ => bin_default
   end.
+
+(** The type at which the computation is done.  Both arguments are
+  converted to this type before the actual computation.  *)
 
 Definition binarith_type (c: binarith_cases) : type :=
   match c with
   | bin_case_i sg => Tint I32 sg noattr
   | bin_case_l sg => Tlong sg noattr
-  | bin_case_f    => Tfloat F64 noattr
+  | bin_case_f sz => Tfloat F64 noattr
   | bin_default   => Tvoid
   end.
 
@@ -508,13 +527,13 @@ Definition sem_binarith
   match sem_cast v2 t2 t with
   | None => None
   | Some v2' =>
-  match classify_binarith t1 t2 with
+  match c with
   | bin_case_i sg =>
       match v1', v2' with
       | Vint n1, Vint n2 => sem_int sg n1 n2
       | _,  _ => None
       end
-  | bin_case_f =>
+  | bin_case_f sz =>
       match v1', v2' with
       | Vfloat n1, Vfloat n2 => sem_float n1 n2
       | _,  _ => None
@@ -966,7 +985,7 @@ Proof.
   (* neg *)
   unfold sem_neg in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
   (* absfloat *)
-  unfold sem_absfloat in *; inv H0; inv H; TrivialInject.
+  unfold sem_absfloat in *; destruct (classify_neg ty); inv H0; inv H; TrivialInject.
 Qed.
 
 Definition optval_self_injects (ov: option val) : Prop :=
